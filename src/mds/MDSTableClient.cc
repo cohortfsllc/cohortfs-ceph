@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #include <iostream>
@@ -47,7 +47,7 @@ void MDSTableClient::handle_request(class MMDSTableRequest *m)
   case TABLESERVER_OP_QUERY_REPLY:
     handle_query_result(m);
     break;
-    
+
   case TABLESERVER_OP_AGREE:
     if (pending_prepare.count(reqid)) {
       dout(10) << "got agree on " << reqid << " atid " << tid << dendl;
@@ -61,7 +61,7 @@ void MDSTableClient::handle_request(class MMDSTableRequest *m)
       pending_prepare.erase(reqid);
       prepared_update[tid] = reqid;
       if (onfinish) {
-        onfinish->complete(0);
+	onfinish->complete(0);
       }
     }
     else if (prepared_update.count(tid)) {
@@ -88,9 +88,9 @@ void MDSTableClient::handle_request(class MMDSTableRequest *m)
     if (pending_commit.count(tid) &&
 	pending_commit[tid]->pending_commit_tids[table].count(tid)) {
       dout(10) << "got ack on tid " << tid << ", logging" << dendl;
-      
+
       assert(g_conf->mds_kill_mdstable_at != 7);
-      
+
       // remove from committing list
       pending_commit[tid]->pending_commit_tids[table].erase(tid);
       pending_commit.erase(tid);

@@ -118,17 +118,17 @@ namespace gtest_internal {
 template <typename T>
 struct ByRef { typedef const T& type; };  // NOLINT
 template <typename T>
-struct ByRef<T&> { typedef T& type; };  // NOLINT
+struct ByRef<T&> { typedef T& type; };	// NOLINT
 
 // A handy wrapper for ByRef.
 #define GTEST_BY_REF_(T) typename ::std::tr1::gtest_internal::ByRef<T>::type
 
-// AddRef<T>::type is T if T is a reference; otherwise it's T&.  This
+// AddRef<T>::type is T if T is a reference; otherwise it's T&.	 This
 // is the same as tr1::add_reference<T>::type.
 template <typename T>
 struct AddRef { typedef T& type; };  // NOLINT
 template <typename T>
-struct AddRef<T&> { typedef T& type; };  // NOLINT
+struct AddRef<T&> { typedef T& type; };	 // NOLINT
 
 // A handy wrapper for AddRef.
 #define GTEST_ADD_REF_(T) typename ::std::tr1::gtest_internal::AddRef<T>::type
@@ -956,7 +956,7 @@ struct SameSizeTuplePrefixComparator<k, k> {
   template <class Tuple1, class Tuple2>
   static bool Eq(const Tuple1& t1, const Tuple2& t2) {
     return SameSizeTuplePrefixComparator<k - 1, k - 1>::Eq(t1, t2) &&
-        ::std::tr1::get<k - 1>(t1) == ::std::tr1::get<k - 1>(t2);
+	::std::tr1::get<k - 1>(t1) == ::std::tr1::get<k - 1>(t2);
   }
 };
 
@@ -964,7 +964,7 @@ struct SameSizeTuplePrefixComparator<k, k> {
 
 template <GTEST_10_TYPENAMES_(T), GTEST_10_TYPENAMES_(U)>
 inline bool operator==(const GTEST_10_TUPLE_(T)& t,
-                       const GTEST_10_TUPLE_(U)& u) {
+		       const GTEST_10_TUPLE_(U)& u) {
   return gtest_internal::SameSizeTuplePrefixComparator<
       tuple_size<GTEST_10_TUPLE_(T) >::value,
       tuple_size<GTEST_10_TUPLE_(U) >::value>::Eq(t, u);
@@ -972,7 +972,7 @@ inline bool operator==(const GTEST_10_TUPLE_(T)& t,
 
 template <GTEST_10_TYPENAMES_(T), GTEST_10_TYPENAMES_(U)>
 inline bool operator!=(const GTEST_10_TUPLE_(T)& t,
-                       const GTEST_10_TUPLE_(U)& u) { return !(t == u); }
+		       const GTEST_10_TUPLE_(U)& u) { return !(t == u); }
 
 // 6.1.4 Pairs.
 // Unimplemented.
@@ -1009,4 +1009,4 @@ inline bool operator!=(const GTEST_10_TUPLE_(T)& t,
 #undef GTEST_ADD_REF_
 #undef GTEST_TUPLE_ELEMENT_
 
-#endif  // GTEST_INCLUDE_GTEST_INTERNAL_GTEST_TUPLE_H_
+#endif	// GTEST_INCLUDE_GTEST_INTERNAL_GTEST_TUPLE_H_

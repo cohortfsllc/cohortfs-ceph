@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #include <iostream>
@@ -74,9 +74,9 @@ int dupstore(ObjectStore* src, ObjectStore* dst)
       dst->apply_transaction(t);
     }
   }
-  
+
   src->umount();
-  dst->umount();  
+  dst->umount();
   return 0;
 }
 
@@ -96,16 +96,16 @@ int main(int argc, const char **argv)
   common_init_finish(g_ceph_context);
 
   // args
-  if (args.size() != 4) 
+  if (args.size() != 4)
     usage();
 
   ObjectStore *src = 0, *dst = 0;
 
-  if (strcmp(args[0], "filestore") == 0) 
+  if (strcmp(args[0], "filestore") == 0)
     src = new FileStore(args[1], NULL);
   else usage();
 
-  if (strcmp(args[2], "filestore") == 0) 
+  if (strcmp(args[2], "filestore") == 0)
     dst = new FileStore(args[3], NULL);
   else usage();
 

@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #ifndef CEPH_RGW_USAGE_H
 #define CEPH_RGW_USAGE_H
 
@@ -14,13 +16,12 @@ class RGWUsage
 {
 public:
   static int show(RGWRados *store, std::string& uid, uint64_t start_epoch,
-	          uint64_t end_epoch, bool show_log_entries, bool show_log_sum,
+		  uint64_t end_epoch, bool show_log_entries, bool show_log_sum,
 		  std::map<std::string, bool> *categories,
-	          RGWFormatterFlusher& flusher);
+		  RGWFormatterFlusher& flusher);
 
   static int trim(RGWRados *store, std::string& uid, uint64_t start_epoch,
-	          uint64_t end_epoch);
+		  uint64_t end_epoch);
 };
-
 
 #endif

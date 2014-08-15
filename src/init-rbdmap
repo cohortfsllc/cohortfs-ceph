@@ -74,7 +74,7 @@ do_unmap() {
 	MNTDEP=$(findmnt --mtab | awk '$2 ~ /^\/dev\/rbd[0-9]*$/ {print $1}' | sort -r)
 	for MNT in $MNTDEP; do
 		umount $MNT
-	done 
+	done
 	# Unmap all rbd device
 	if ls /dev/rbd[0-9]* >/dev/null 2>&1; then
 		for DEV in /dev/rbd[0-9]*; do

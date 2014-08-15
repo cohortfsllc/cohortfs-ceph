@@ -144,8 +144,8 @@ bool OpTracker::check_ops_in_flight(std::vector<string> &warning_vector)
   utime_t oldest_secs = now - ops_in_flight.front()->get_arrived();
 
   dout(10) << "ops_in_flight.size: " << ops_in_flight.size()
-           << "; oldest is " << oldest_secs
-           << " seconds old" << dendl;
+	   << "; oldest is " << oldest_secs
+	   << " seconds old" << dendl;
 
   if (oldest_secs < complaint_time)
     return false;
@@ -166,7 +166,7 @@ bool OpTracker::check_ops_in_flight(std::vector<string> &warning_vector)
 	warning_vector.push_back("");
       warned++;
       if (warned > log_threshold)
-        break;
+	break;
 
       utime_t age = now - (*i)->get_arrived();
       std::stringstream ss;

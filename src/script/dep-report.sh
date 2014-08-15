@@ -54,7 +54,7 @@ done
 autoconf --trace PKG_CHECK_MODULES | cut -d: -f5 | cut -d' ' -f1 | while read PKG
 do
     LIBLIST=`pkg-config --libs $PKG 2> /dev/null`
-    for LIB in $LIBLIST ; do 
+    for LIB in $LIBLIST ; do
         LIB=${LIB#-l}
         for PATH in $LIB_PATHS
         do
@@ -82,12 +82,12 @@ do
     NAME=`rpm -q --qf %{NAME} $PACKAGE`
     NAME=${NAME%-devel}
     #echo "looking for matching $NAME ... " >&2
-    LPACKAGE=`rpm -q $NAME 2> /dev/null` 
+    LPACKAGE=`rpm -q $NAME 2> /dev/null`
     if [ $? -eq 0 ] ; then
         #echo "Found $LPACKAGE ... " >&2
         echo $LPACKAGE >> $TMPFILE1
     else
-        LPACKAGE=`rpm -q $NAME-libs 2> /dev/null` 
+        LPACKAGE=`rpm -q $NAME-libs 2> /dev/null`
         if [ $? -eq 0 ] ; then
             #echo "Found $LPACKAGE ... " >&2
             echo $LPACKAGE >> $TMPFILE1

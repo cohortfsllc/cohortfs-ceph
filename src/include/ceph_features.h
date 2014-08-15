@@ -4,33 +4,33 @@
 /*
  * feature bits
  */
-#define CEPH_FEATURE_UID            (1ULL<<0)
-#define CEPH_FEATURE_NOSRCADDR      (1ULL<<1)
+#define CEPH_FEATURE_UID	    (1ULL<<0)
+#define CEPH_FEATURE_NOSRCADDR	    (1ULL<<1)
 #define CEPH_FEATURE_MONCLOCKCHECK  (1ULL<<2)
-#define CEPH_FEATURE_FLOCK          (1ULL<<3)
-#define CEPH_FEATURE_SUBSCRIBE2     (1ULL<<4)
-#define CEPH_FEATURE_MONNAMES       (1ULL<<5)
+#define CEPH_FEATURE_FLOCK	    (1ULL<<3)
+#define CEPH_FEATURE_SUBSCRIBE2	    (1ULL<<4)
+#define CEPH_FEATURE_MONNAMES	    (1ULL<<5)
 #define CEPH_FEATURE_RECONNECT_SEQ  (1ULL<<6)
 #define CEPH_FEATURE_DIRLAYOUTHASH  (1ULL<<7)
 #define CEPH_FEATURE_INCSUBOSDMAP   (1ULL<<10)
 #define CEPH_FEATURE_OSDREPLYMUX    (1ULL<<12)
-#define CEPH_FEATURE_OSDENC         (1ULL<<13)
-#define CEPH_FEATURE_OMAP           (1ULL<<14)
-#define CEPH_FEATURE_MONENC         (1ULL<<15)
-#define CEPH_FEATURE_QUERY_T        (1ULL<<16)
+#define CEPH_FEATURE_OSDENC	    (1ULL<<13)
+#define CEPH_FEATURE_OMAP	    (1ULL<<14)
+#define CEPH_FEATURE_MONENC	    (1ULL<<15)
+#define CEPH_FEATURE_QUERY_T	    (1ULL<<16)
 #define CEPH_FEATURE_MON_NULLROUTE  (1ULL<<20)
-#define CEPH_FEATURE_MON_GV         (1ULL<<21)
+#define CEPH_FEATURE_MON_GV	    (1ULL<<21)
 #define CEPH_FEATURE_MSG_AUTH	    (1ULL<<23)
 #define CEPH_FEATURE_RECOVERY_RESERVATION (1ULL<<24)
-#define CEPH_FEATURE_REPLY_CREATE_INODE   (1ULL<<27)
-#define CEPH_FEATURE_OSD_HBMSGS     (1ULL<<28)
-#define CEPH_FEATURE_MDSENC         (1ULL<<29)
+#define CEPH_FEATURE_REPLY_CREATE_INODE	  (1ULL<<27)
+#define CEPH_FEATURE_OSD_HBMSGS	    (1ULL<<28)
+#define CEPH_FEATURE_MDSENC	    (1ULL<<29)
 #define CEPH_FEATURE_MON_SINGLE_PAXOS (1ULL<<31)
-#define CEPH_FEATURE_MON_SCRUB      (1ULL<<33)
+#define CEPH_FEATURE_MON_SCRUB	    (1ULL<<33)
 /* The process supports new-style OSDMap encoding. Monitors also use
    this bit to determine if peers support NAK messages. */
-#define CEPH_FEATURE_OSDMAP_ENC    (1ULL<<39)
-#define CEPH_FEATURE_MDS_INLINE_DATA     (1ULL<<40)
+#define CEPH_FEATURE_OSDMAP_ENC	   (1ULL<<39)
+#define CEPH_FEATURE_MDS_INLINE_DATA	 (1ULL<<40)
 #define CEPH_FEATURE_MSGR_KEEPALIVE2   (1ULL<<42)
 
 /*
@@ -42,7 +42,7 @@
 #define CEPH_FEATURE_RESERVED (1ULL<<63)
 
 /*
- * Features supported.  Should be everything above.
+ * Features supported.	Should be everything above.
  */
 #define CEPH_FEATURES_ALL			\
 	(CEPH_FEATURE_UID |			\
@@ -71,7 +71,7 @@
 	 CEPH_FEATURE_MSGR_KEEPALIVE2 |		\
 	 0ULL)
 
-#define CEPH_FEATURES_SUPPORTED_DEFAULT  CEPH_FEATURES_ALL
+#define CEPH_FEATURES_SUPPORTED_DEFAULT	 CEPH_FEATURES_ALL
 
 /*
  * crush related features

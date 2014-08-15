@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_MDS_ETABLESERVER_H
@@ -42,17 +42,17 @@ struct ETableServer : public LogEvent {
   static void generate_test_instances(list<ETableServer*>& ls);
 
   void print(ostream& out) const {
-    out << "ETableServer " << get_mdstable_name(table) 
+    out << "ETableServer " << get_mdstable_name(table)
 	<< " " << get_mdstableserver_opname(op);
     if (reqid) out << " reqid " << reqid;
     if (bymds >= 0) out << " mds." << bymds;
     if (tid) out << " tid " << tid;
     if (version) out << " version " << version;
     if (mutation.length()) out << " mutation=" << mutation.length() << " bytes";
-  }  
+  }
 
   void update_segment();
-  void replay(MDS *mds);  
+  void replay(MDS *mds);
 };
 
 #endif

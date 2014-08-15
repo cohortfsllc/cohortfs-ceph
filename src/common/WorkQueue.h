@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_WORKQUEUE_H
@@ -237,7 +237,7 @@ public:
   template<class T>
   class WorkQueue : public WorkQueue_ {
     ThreadPool *pool;
-    
+
     virtual bool _enqueue(T *) = 0;
     virtual void _dequeue(T *) = 0;
     virtual T *_dequeue() = 0;
@@ -246,7 +246,7 @@ public:
       _process(t);
     }
     virtual void _process_finish(T *) {}
-    
+
     void *_void_dequeue() {
       return (void *)_dequeue();
     }
@@ -264,7 +264,7 @@ public:
     ~WorkQueue() {
       pool->remove_work_queue(this);
     }
-    
+
     bool queue(T *item) {
       pool->_lock.Lock();
       bool r = _enqueue(item);
@@ -344,7 +344,7 @@ public:
     unsigned i = 0;
     while (work_queues[i] != wq)
       i++;
-    for (i++; i < work_queues.size(); i++) 
+    for (i++; i < work_queues.size(); i++)
       work_queues[i-1] = work_queues[i];
     assert(i == work_queues.size());
     work_queues.resize(i-1);

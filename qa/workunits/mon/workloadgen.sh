@@ -163,7 +163,7 @@ if [[ $l -gt $f ]]; then
 fi
 
 args="$EXTRA_ARGS --duration $duration $stub_id_args"
-  
+
 d "running: $args"
 
 $bin_test --keyring $keyring $args

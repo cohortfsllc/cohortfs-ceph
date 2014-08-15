@@ -34,7 +34,7 @@ struct ceph_timespec {
 /*
  * object layout - how objects are mapped into PGs
  */
-#define CEPH_OBJECT_LAYOUT_HASH     1
+#define CEPH_OBJECT_LAYOUT_HASH	    1
 #define CEPH_OBJECT_LAYOUT_LINEAR   2
 #define CEPH_OBJECT_LAYOUT_HASHINO  3
 
@@ -54,8 +54,8 @@ struct ceph_timespec {
  */
 struct ceph_pg {
 	__le16 preferred; /* preferred primary osd */
-	__le16 ps;        /* placement seed */
-	__le32 pool;      /* object pool */
+	__le16 ps;	  /* placement seed */
+	__le32 pool;	  /* object pool */
 } __attribute__ ((packed));
 
 /*
@@ -65,13 +65,13 @@ struct ceph_pg {
  * duplicated here only for CrushCompiler's benefit.
  */
 #define CEPH_PG_TYPE_REPLICATED 1
-/* #define CEPH_PG_TYPE_RAID4   2   never implemented */
+/* #define CEPH_PG_TYPE_RAID4	2   never implemented */
 #define CEPH_PG_TYPE_ERASURE 3
 
 /*
  * stable_mod func is used to control number of placement groups.
  * similar to straight-up modulo, but produces a stable mapping as b
- * increases over time.  b is the number of bins, and bmask is the
+ * increases over time.	 b is the number of bins, and bmask is the
  * containing power of 2 minus 1.
  *
  * b <= bmask and bmask=(2**n)-1
@@ -89,7 +89,7 @@ static inline int ceph_stable_mod(int x, int b, int bmask)
  * object layout - how a given object should be stored.
  */
 struct ceph_object_layout {
-	__le32 ol_stripe_unit;    /* for per-object parity, if any */
+	__le32 ol_stripe_unit;	  /* for per-object parity, if any */
 } __attribute__ ((packed));
 
 /*
@@ -105,14 +105,14 @@ struct ceph_eversion {
  */
 
 /* status bits */
-#define CEPH_OSD_EXISTS  (1<<0)
-#define CEPH_OSD_UP      (1<<1)
-#define CEPH_OSD_AUTOOUT (1<<2)  /* osd was automatically marked out */
-#define CEPH_OSD_NEW     (1<<3)  /* osd is new, never marked in */
+#define CEPH_OSD_EXISTS	 (1<<0)
+#define CEPH_OSD_UP	 (1<<1)
+#define CEPH_OSD_AUTOOUT (1<<2)	 /* osd was automatically marked out */
+#define CEPH_OSD_NEW	 (1<<3)	 /* osd is new, never marked in */
 
 extern const char *ceph_osd_state_name(int s);
 
-/* osd weights.  fixed point value: 0x10000 == 1.0 ("in"), 0 == "out" */
+/* osd weights.	 fixed point value: 0x10000 == 1.0 ("in"), 0 == "out" */
 #define CEPH_OSD_IN  0x10000
 #define CEPH_OSD_OUT 0
 
@@ -142,7 +142,7 @@ extern const char *ceph_osd_state_name(int s);
 /*
  * osd ops
  *
- * WARNING: do not use these op codes directly.  Use the helpers
+ * WARNING: do not use these op codes directly.	 Use the helpers
  * defined below instead.  In certain cases, op code behavior was
  * redefined, resulting in special-cases in the helpers.
  */
@@ -167,7 +167,7 @@ enum {
 	CEPH_OSD_OP_MAPEXT    = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_DATA | 3,
 
 	/* fancy read */
-	CEPH_OSD_OP_MASKTRUNC   = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_DATA | 4,
+	CEPH_OSD_OP_MASKTRUNC	= CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_DATA | 4,
 	CEPH_OSD_OP_SPARSE_READ = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_DATA | 5,
 
 	CEPH_OSD_OP_NOTIFY    = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_DATA | 6,
@@ -203,16 +203,16 @@ enum {
 	CEPH_OSD_OP_WATCH   = CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_DATA | 15,
 
 	/* omap */
-	CEPH_OSD_OP_OMAPGETKEYS   = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_DATA | 17,
-	CEPH_OSD_OP_OMAPGETVALS   = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_DATA | 18,
+	CEPH_OSD_OP_OMAPGETKEYS	  = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_DATA | 17,
+	CEPH_OSD_OP_OMAPGETVALS	  = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_DATA | 18,
 	CEPH_OSD_OP_OMAPGETHEADER = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_DATA | 19,
 	CEPH_OSD_OP_OMAPGETVALSBYKEYS  =
 	  CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_DATA | 20,
-	CEPH_OSD_OP_OMAPSETVALS   = CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_DATA | 21,
+	CEPH_OSD_OP_OMAPSETVALS	  = CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_DATA | 21,
 	CEPH_OSD_OP_OMAPSETHEADER = CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_DATA | 22,
-	CEPH_OSD_OP_OMAPCLEAR     = CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_DATA | 23,
-	CEPH_OSD_OP_OMAPRMKEYS    = CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_DATA | 24,
-	CEPH_OSD_OP_OMAP_CMP      = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_DATA | 25,
+	CEPH_OSD_OP_OMAPCLEAR	  = CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_DATA | 23,
+	CEPH_OSD_OP_OMAPRMKEYS	  = CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_DATA | 24,
+	CEPH_OSD_OP_OMAP_CMP	  = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_DATA | 25,
 
 	/* convert tmap to omap */
 	CEPH_OSD_OP_TMAP2OMAP = CEPH_OSD_OP_MODE_RMW | CEPH_OSD_OP_TYPE_DATA | 34,
@@ -237,15 +237,15 @@ enum {
 	CEPH_OSD_OP_RMXATTR   = CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_ATTR | 4,
 
 	/** subop **/
-	CEPH_OSD_OP_PULL            = CEPH_OSD_OP_MODE_SUB | 1,
-	CEPH_OSD_OP_PUSH            = CEPH_OSD_OP_MODE_SUB | 2,
+	CEPH_OSD_OP_PULL	    = CEPH_OSD_OP_MODE_SUB | 1,
+	CEPH_OSD_OP_PUSH	    = CEPH_OSD_OP_MODE_SUB | 2,
 	CEPH_OSD_OP_BALANCEREADS    = CEPH_OSD_OP_MODE_SUB | 3,
 	CEPH_OSD_OP_UNBALANCEREADS  = CEPH_OSD_OP_MODE_SUB | 4,
-	CEPH_OSD_OP_SCRUB           = CEPH_OSD_OP_MODE_SUB | 5,
+	CEPH_OSD_OP_SCRUB	    = CEPH_OSD_OP_MODE_SUB | 5,
 	CEPH_OSD_OP_SCRUB_RESERVE   = CEPH_OSD_OP_MODE_SUB | 6,
 	CEPH_OSD_OP_SCRUB_UNRESERVE = CEPH_OSD_OP_MODE_SUB | 7,
-	CEPH_OSD_OP_SCRUB_STOP      = CEPH_OSD_OP_MODE_SUB | 8,
-	CEPH_OSD_OP_SCRUB_MAP     = CEPH_OSD_OP_MODE_SUB | 9,
+	CEPH_OSD_OP_SCRUB_STOP	    = CEPH_OSD_OP_MODE_SUB | 8,
+	CEPH_OSD_OP_SCRUB_MAP	  = CEPH_OSD_OP_MODE_SUB | 9,
 
 	/** lock **/
 	CEPH_OSD_OP_WRLOCK    = CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_LOCK | 1,
@@ -313,34 +313,34 @@ extern const char *ceph_osd_op_name(int op);
  * An op may be READ, WRITE, or READ|WRITE.
  */
 enum {
-	CEPH_OSD_FLAG_ACK =            0x0001,  /* want (or is) "ack" ack */
-	CEPH_OSD_FLAG_ONNVRAM =        0x0002,  /* want (or is) "onnvram" ack */
-	CEPH_OSD_FLAG_ONDISK =         0x0004,  /* want (or is) "ondisk" ack */
-	CEPH_OSD_FLAG_RETRY =          0x0008,  /* resend attempt */
-	CEPH_OSD_FLAG_READ =           0x0010,  /* op may read */
-	CEPH_OSD_FLAG_WRITE =          0x0020,  /* op may write */
-	CEPH_OSD_FLAG_PEERSTAT_OLD =   0x0080,  /* DEPRECATED msg includes osd_peer_stat */
-	CEPH_OSD_FLAG_PARALLELEXEC =   0x0200,  /* execute op in parallel */
-	CEPH_OSD_FLAG_EXEC =           0x0800,  /* op may exec */
-	CEPH_OSD_FLAG_EXEC_PUBLIC =    0x1000,  /* DEPRECATED op may exec (public) */
-	CEPH_OSD_FLAG_RWORDERED =      0x4000,  /* order wrt concurrent reads */
-	CEPH_OSD_FLAG_SKIPRWLOCKS =   0x10000,  /* skip rw locks */
+	CEPH_OSD_FLAG_ACK =	       0x0001,	/* want (or is) "ack" ack */
+	CEPH_OSD_FLAG_ONNVRAM =	       0x0002,	/* want (or is) "onnvram" ack */
+	CEPH_OSD_FLAG_ONDISK =	       0x0004,	/* want (or is) "ondisk" ack */
+	CEPH_OSD_FLAG_RETRY =	       0x0008,	/* resend attempt */
+	CEPH_OSD_FLAG_READ =	       0x0010,	/* op may read */
+	CEPH_OSD_FLAG_WRITE =	       0x0020,	/* op may write */
+	CEPH_OSD_FLAG_PEERSTAT_OLD =   0x0080,	/* DEPRECATED msg includes osd_peer_stat */
+	CEPH_OSD_FLAG_PARALLELEXEC =   0x0200,	/* execute op in parallel */
+	CEPH_OSD_FLAG_EXEC =	       0x0800,	/* op may exec */
+	CEPH_OSD_FLAG_EXEC_PUBLIC =    0x1000,	/* DEPRECATED op may exec (public) */
+	CEPH_OSD_FLAG_RWORDERED =      0x4000,	/* order wrt concurrent reads */
+	CEPH_OSD_FLAG_SKIPRWLOCKS =   0x10000,	/* skip rw locks */
 };
 
 enum {
-	CEPH_OSD_OP_FLAG_EXCL = 1,      /* EXCL object create */
-	CEPH_OSD_OP_FLAG_FAILOK = 2,    /* continue despite failure */
+	CEPH_OSD_OP_FLAG_EXCL = 1,	/* EXCL object create */
+	CEPH_OSD_OP_FLAG_FAILOK = 2,	/* continue despite failure */
 };
 
 #define EBLACKLISTED 108 /* blacklisted */
 
 /* xattr comparison */
 enum {
-	CEPH_OSD_CMPXATTR_OP_EQ  = 1,
-	CEPH_OSD_CMPXATTR_OP_NE  = 2,
-	CEPH_OSD_CMPXATTR_OP_GT  = 3,
+	CEPH_OSD_CMPXATTR_OP_EQ	 = 1,
+	CEPH_OSD_CMPXATTR_OP_NE	 = 2,
+	CEPH_OSD_CMPXATTR_OP_GT	 = 3,
 	CEPH_OSD_CMPXATTR_OP_GTE = 4,
-	CEPH_OSD_CMPXATTR_OP_LT  = 5,
+	CEPH_OSD_CMPXATTR_OP_LT	 = 5,
 	CEPH_OSD_CMPXATTR_OP_LTE = 6
 };
 
@@ -358,8 +358,8 @@ enum {
  * payload
  */
 struct ceph_osd_op {
-	__le16 op;           /* CEPH_OSD_OP_* */
-	__le32 flags;        /* CEPH_OSD_FLAG_* */
+	__le16 op;	     /* CEPH_OSD_OP_* */
+	__le32 flags;	     /* CEPH_OSD_FLAG_* */
 	union {
 		struct {
 			__le64 offset, length;
@@ -369,7 +369,7 @@ struct ceph_osd_op {
 		struct {
 			__le32 name_len;
 			__le32 value_len;
-			uint8_t cmp_op;       /* CEPH_OSD_CMPXATTR_OP_* */
+			uint8_t cmp_op;	      /* CEPH_OSD_CMPXATTR_OP_* */
 			uint8_t cmp_mode;     /* CEPH_OSD_CMPXATTR_MODE_* */
 		} __attribute__ ((packed)) xattr;
 		struct {
@@ -392,7 +392,7 @@ struct ceph_osd_op {
 			__le64 ver;
 		} __attribute__ ((packed)) assert_ver;
 		struct {
-			__le64 max;     /* max data in reply */
+			__le64 max;	/* max data in reply */
 		} __attribute__ ((packed)) copy_get;
 		struct {
 			__le64 src_version;
@@ -413,15 +413,15 @@ struct ceph_osd_op {
 } __attribute__ ((packed));
 
 struct ceph_osd_reply_head {
-	__le32 client_inc;                /* client incarnation */
+	__le32 client_inc;		  /* client incarnation */
 	__le32 flags;
 	struct ceph_object_layout layout;
 	__le32 osdmap_epoch;
 	struct ceph_eversion reassert_version; /* for replaying uncommitted */
 
-	__le32 result;                    /* result code */
+	__le32 result;			  /* result code */
 
-	__le32 object_len;                /* length of object name */
+	__le32 object_len;		  /* length of object name */
 	__le32 num_ops;
 	struct ceph_osd_op ops[0];  /* ops[], object */
 } __attribute__ ((packed));

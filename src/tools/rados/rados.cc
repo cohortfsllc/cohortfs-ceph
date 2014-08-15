@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -57,83 +57,83 @@ void usage(ostream& out)
   out <<					\
 "usage: rados [options] [commands]\n"
 "OBJECT COMMANDS\n"
-"   get <obj-name> [outfile]         fetch object\n"
-"   put <obj-name> [infile]          write object\n"
-"   truncate <obj-name> length       truncate object\n"
-"   create <obj-name>                create object\n"
-"   rm <obj-name> ...                remove object(s)\n"
-"   cp <obj-name> [target-obj]       copy object\n"
+"   get <obj-name> [outfile]	     fetch object\n"
+"   put <obj-name> [infile]	     write object\n"
+"   truncate <obj-name> length	     truncate object\n"
+"   create <obj-name>		     create object\n"
+"   rm <obj-name> ...		     remove object(s)\n"
+"   cp <obj-name> [target-obj]	     copy object\n"
 "   listxattr <obj-name>\n"
 "   getxattr <obj-name> attr\n"
 "   setxattr <obj-name> attr val\n"
 "   rmxattr <obj-name> attr\n"
-"   stat objname                     stat the named object\n"
+"   stat objname		     stat the named object\n"
 "   mapext <obj-name>\n"
 "   bench <seconds> write|seq|rand [-t concurrent_operations] [--no-cleanup] [--run-name run_name]\n"
-"                                    default is 16 concurrent IOs and 4 MB ops\n"
-"                                    default is to clean up after write benchmark\n"
-"                                    default run-name is 'benchmark_last_metadata'\n"
+"				     default is 16 concurrent IOs and 4 MB ops\n"
+"				     default is to clean up after write benchmark\n"
+"				     default run-name is 'benchmark_last_metadata'\n"
 "   cleanup [--run-name run_name] [--prefix prefix]\n"
-"                                    clean up a previous benchmark operation\n"
-"                                    default run-name is 'benchmark_last_metadata'\n"
-"   load-gen [options]               generate load on the cluster\n"
-"   listomapkeys <obj-name>          list the keys in the object map\n"
-"   listomapvals <obj-name>          list the keys and vals in the object map \n"
+"				     clean up a previous benchmark operation\n"
+"				     default run-name is 'benchmark_last_metadata'\n"
+"   load-gen [options]		     generate load on the cluster\n"
+"   listomapkeys <obj-name>	     list the keys in the object map\n"
+"   listomapvals <obj-name>	     list the keys and vals in the object map \n"
 "   getomapval <obj-name> <key> [file] show the value for the specified key\n"
-"                                    in the object's object map\n"
+"				     in the object's object map\n"
 "   setomapval <obj-name> <key> <val>\n"
 "   rmomapkey <obj-name> <key>\n"
 "   getomapheader <obj-name> [file]\n"
 "   setomapheader <obj-name> <val>\n"
-"   tmap-to-omap <obj-name>          convert tmap keys/values to omap\n"
-"   listwatchers <obj-name>          list the watchers of this object\n"
+"   tmap-to-omap <obj-name>	     convert tmap keys/values to omap\n"
+"   listwatchers <obj-name>	     list the watchers of this object\n"
 "   set-alloc-hint <obj-name> <expected-object-size> <expected-write-size>\n"
-"                                    set allocation hint for an object\n"
+"				     set allocation hint for an object\n"
 "\n"
 "ADVISORY LOCKS\n"
 "   lock list <obj-name>\n"
-"       List all advisory locks on an object\n"
+"	List all advisory locks on an object\n"
 "   lock get <obj-name> <lock-name>\n"
-"       Try to acquire a lock\n"
+"	Try to acquire a lock\n"
 "   lock break <obj-name> <lock-name> <locker-name>\n"
-"       Try to break a lock acquired by another client\n"
+"	Try to break a lock acquired by another client\n"
 "   lock info <obj-name> <lock-name>\n"
-"       Show lock information\n"
+"	Show lock information\n"
 "   options:\n"
-"       --lock-tag                   Lock tag, all locks operation should use\n"
-"                                    the same tag\n"
-"       --lock-cookie                Locker cookie\n"
-"       --lock-description           Description of lock\n"
-"       --lock-duration              Lock duration (in seconds)\n"
-"       --lock-type                  Lock type (shared, exclusive)\n"
+"	--lock-tag		     Lock tag, all locks operation should use\n"
+"				     the same tag\n"
+"	--lock-cookie		     Locker cookie\n"
+"	--lock-description	     Description of lock\n"
+"	--lock-duration		     Lock duration (in seconds)\n"
+"	--lock-type		     Lock type (shared, exclusive)\n"
 "\n"
 "GLOBAL OPTIONS:\n"
 "   -v volume\n"
 "   --volume=volume\n"
-"        select given volume by name or UUID\n"
+"	 select given volume by name or UUID\n"
 "   --target-volume=volume\n"
-"        select target volume by name or UUID\n"
+"	 select target volume by name or UUID\n"
 "   -b op_size\n"
-"        set the size of write ops for put or benchmarking\n"
+"	 set the size of write ops for put or benchmarking\n"
 "   -i infile\n"
 "\n"
 "BENCH OPTIONS:\n"
 "   -t N\n"
 "   --concurrent-ios=N\n"
-"        Set number of concurrent I/O operations\n"
+"	 Set number of concurrent I/O operations\n"
 "   --show-time\n"
-"        prefix output with date/time\n"
+"	 prefix output with date/time\n"
 "\n"
 "LOAD GEN OPTIONS:\n"
-"   --num-objects                    total number of objects\n"
-"   --min-object-size                min object size\n"
-"   --max-object-size                max object size\n"
-"   --min-ops                        min number of operations\n"
-"   --max-ops                        max number of operations\n"
-"   --max-backlog                    max backlog (in MB)\n"
-"   --percent                        percent of operations that are read\n"
-"   --target-throughput              target throughput (in MB)\n"
-"   --run-length                     total time (in seconds)\n"
+"   --num-objects		     total number of objects\n"
+"   --min-object-size		     min object size\n"
+"   --max-object-size		     max object size\n"
+"   --min-ops			     min number of operations\n"
+"   --max-ops			     max number of operations\n"
+"   --max-backlog		     max backlog (in MB)\n"
+"   --percent			     percent of operations that are read\n"
+"   --target-throughput		     target throughput (in MB)\n"
+"   --run-length		     total time (in seconds)\n"
     ;
 }
 
@@ -263,7 +263,7 @@ static int do_copy(IoCtx& io_ctx, const string& objname,
   while (outdata.length() == COPY_CHUNK_SIZE) {
     off += outdata.length();
     outdata.clear();
-    ret = io_ctx.read(oid, outdata, COPY_CHUNK_SIZE, off); 
+    ret = io_ctx.read(oid, outdata, COPY_CHUNK_SIZE, off);
     if (ret < 0)
       goto err;
 
@@ -274,7 +274,7 @@ static int do_copy(IoCtx& io_ctx, const string& objname,
 
   /* iterate through source omap and update target. This is not atomic */
   while (omap.size() == OMAP_CHUNK) {
-    /* now start_after should point at the last entry */    
+    /* now start_after should point at the last entry */
     map<string, bufferlist>::iterator iter = omap.end();
     --iter;
     start_after = iter->first;
@@ -600,7 +600,7 @@ void LoadGen::run_op(LoadGenOp *op)
     bufferptr p = buffer::create(op->len);
     memset(p.c_str(), 0, op->len);
     op->bl.push_back(p);
-    
+
     io_ctx.aio_write(op->oid, op->completion, op->bl, op->len, op->off);
     break;
   }
@@ -668,7 +668,7 @@ int LoadGen::run()
     if (now > end_time)
       break;
 
-    uint64_t expected = total_expected();  
+    uint64_t expected = total_expected();
     lock.Lock();
     uint64_t sent = total_sent;
     uint64_t completed = total_completed;
@@ -792,8 +792,8 @@ public:
 };
 
 static int do_lock_cmd(std::vector<const char*> &nargs,
-                       const std::map < std::string, std::string > &opts,
-                       IoCtx *ioctx,
+		       const std::map < std::string, std::string > &opts,
+		       IoCtx *ioctx,
 		       Formatter *formatter)
 {
   if (nargs.size() < 3)
@@ -896,7 +896,7 @@ static int do_lock_cmd(std::vector<const char*> &nargs,
     formatter->close_section();
     formatter->close_section();
     formatter->flush(cout);
-    
+
     return ret;
   } else if (cmd.compare("get") == 0) {
     rados::cls::lock::Lock l(lock_name);
@@ -1234,7 +1234,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     }
 
     for (map<std::string, bufferlist>::iterator iter = attrset.begin();
-         iter != attrset.end(); ++iter) {
+	 iter != attrset.end(); ++iter) {
       cout << iter->first << std::endl;
     }
   } else if (strcmp(nargs[0], "getomapheader") == 0) {
@@ -1674,7 +1674,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     io_ctx.operate(nargs[1], &read, NULL);
     if (ret < 0) {
       cerr << "error getting omap key set " << vol_name << "/"
-	   << nargs[1] << ": "  << cpp_strerror(ret) << std::endl;
+	   << nargs[1] << ": "	<< cpp_strerror(ret) << std::endl;
       goto out;
     }
 
@@ -1804,7 +1804,7 @@ int main(int argc, const char **argv)
       opts["xio"] = "true";
     } else {
       if (val[0] == '-')
-        usage_exit();
+	usage_exit();
       ++i;
     }
   }

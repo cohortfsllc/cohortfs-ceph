@@ -37,5 +37,5 @@ for my $t (sort {$a <=> $b} keys %v) {
     for my $sum (@v) {
 	print "\t" . ($sum / $c);
     }
-    print "\n";    
+    print "\n";
 }

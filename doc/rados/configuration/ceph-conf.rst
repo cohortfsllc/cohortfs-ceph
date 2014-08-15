@@ -3,8 +3,8 @@
 ==================
 
 When you start the Ceph service, the initialization process activates a series
-of daemons that run in the background. A :term:`Ceph Storage Cluster` runs 
-two types of daemons: 
+of daemons that run in the background. A :term:`Ceph Storage Cluster` runs
+two types of daemons:
 
 - :term:`Ceph Monitor` (``ceph-mon``)
 - :term:`Ceph OSD Daemon` (``ceph-osd``)
@@ -41,7 +41,7 @@ reference. The Ceph configuration file defines:
 
 The default Ceph configuration file locations in sequential order include:
 
-#. ``$CEPH_CONF`` (*i.e.,* the path following the ``$CEPH_CONF`` 
+#. ``$CEPH_CONF`` (*i.e.,* the path following the ``$CEPH_CONF``
    environment variable)
 #. ``-c path/path``  (*i.e.,* the ``-c`` command line argument)
 #. ``/etc/ceph/ceph.conf``
@@ -49,13 +49,13 @@ The default Ceph configuration file locations in sequential order include:
 #. ``./ceph.conf`` (*i.e.,* in the current working directory)
 
 
-The Ceph configuration file uses an *ini* style syntax. You can add comments 
+The Ceph configuration file uses an *ini* style syntax. You can add comments
 by preceding comments with a pound sign (#) or a semi-colon (;).  For example:
 
 .. code-block:: ini
 
 	# <--A number (#) sign precedes a comment.
-	; A comment may be anything. 
+	; A comment may be anything.
 	# Comments always follow a semi-colon (;) or a pound (#) on each line.
 	# The end of the line terminates a comment.
 	# We recommend that you provide comments in your configuration file(s).
@@ -63,33 +63,33 @@ by preceding comments with a pound sign (#) or a semi-colon (;).  For example:
 
 .. _ceph-conf-settings:
 
-Config Sections 
+Config Sections
 ===============
 
 The configuration file can configure all Ceph daemons in a Ceph Storage Cluster,
 or all Ceph daemons of a particular type. To configure a series of daemons, the
 settings must be included under the processes that will receive the
-configuration as follows: 
+configuration as follows:
 
 ``[global]``
 
 :Description: Settings under ``[global]`` affect all daemons in a Ceph Storage
               Cluster.
-              
+
 :Example: ``auth supported = cephx``
 
 ``[osd]``
 
-:Description: Settings under ``[osd]`` affect all ``ceph-osd`` daemons in 
-              the Ceph Storage Cluster, and override the same setting in 
+:Description: Settings under ``[osd]`` affect all ``ceph-osd`` daemons in
+              the Ceph Storage Cluster, and override the same setting in
               ``[global]``.
 
 :Example: ``osd journal size = 1000``
 
 ``[mon]``
 
-:Description: Settings under ``[mon]`` affect all ``ceph-mon`` daemons in 
-              the Ceph Storage Cluster, and override the same setting in 
+:Description: Settings under ``[mon]`` affect all ``ceph-mon`` daemons in
+              the Ceph Storage Cluster, and override the same setting in
               ``[global]``.
 
 :Example: ``mon addr = 10.0.0.101:6789``
@@ -97,16 +97,16 @@ configuration as follows:
 
 ``[mds]``
 
-:Description: Settings under ``[mds]`` affect all ``ceph-mds`` daemons in 
-              the Ceph Storage Cluster, and override the same setting in 
-              ``[global]``. 
+:Description: Settings under ``[mds]`` affect all ``ceph-mds`` daemons in
+              the Ceph Storage Cluster, and override the same setting in
+              ``[global]``.
 
 :Example: ``host = myserver01``
 
 ``[client]``
 
-:Description: Settings under ``[client]`` affect all Ceph Clients 
-              (e.g., mounted Ceph Filesystems, mounted Ceph Block Devices, 
+:Description: Settings under ``[client]`` affect all Ceph Clients
+              (e.g., mounted Ceph Filesystems, mounted Ceph Block Devices,
               etc.).
 
 :Example: ``log file = /var/log/ceph/radosgw.log``
@@ -116,13 +116,13 @@ Global settings affect all instances of all daemon in the Ceph Storage Cluster.
 Use the ``[global]`` setting for values that are common for all daemons in the
 Ceph Storage Cluster. You can override each ``[global]`` setting by:
 
-#. Changing the setting in a particular process type 
+#. Changing the setting in a particular process type
    (*e.g.,* ``[osd]``, ``[mon]``, ``[mds]`` ).
 
 #. Changing the setting in a particular process (*e.g.,* ``[osd.1]`` ).
 
 Overriding a global setting affects all child processes, except those that
-you specifically override in a particular daemon. 
+you specifically override in a particular daemon.
 
 A typical global setting involves activating authentication. For example:
 
@@ -132,7 +132,7 @@ A typical global setting involves activating authentication. For example:
 		#Enable authentication between hosts within the cluster.
 		#v 0.54 and earlier
 		auth supported = cephx
-		
+
 		#v 0.55 and after
 		auth cluster required = cephx
 		auth service required = cephx
@@ -163,10 +163,10 @@ alphanumeric for Ceph Monitors and Ceph Metadata Servers.
 
 	[osd.1]
 		# settings affect osd.1 only.
-		
-	[mon.a]	
+
+	[mon.a]
 		# settings affect mon.a only.
-		
+
 	[mds.b]
 		# settings affect mds.b only.
 
@@ -182,12 +182,12 @@ a concrete value. Metavariables are very powerful when used within the
 ``[global]``, ``[osd]``, ``[mon]`` or ``[mds]`` sections of your configuration
 file. Ceph metavariables are similar to Bash shell expansion.
 
-Ceph supports the following metavariables: 
+Ceph supports the following metavariables:
 
 
 ``$cluster``
 
-:Description: Expands to the Ceph Storage Cluster name. Useful when running 
+:Description: Expands to the Ceph Storage Cluster name. Useful when running
               multiple Ceph Storage Clusters on the same hardware.
 
 :Example: ``/etc/ceph/$cluster.keyring``
@@ -196,7 +196,7 @@ Ceph supports the following metavariables:
 
 ``$type``
 
-:Description: Expands to one of ``mds``, ``osd``, or ``mon``, depending on the 
+:Description: Expands to one of ``mds``, ``osd``, or ``mon``, depending on the
               type of the instant daemon.
 
 :Example: ``/var/lib/ceph/$type``
@@ -204,7 +204,7 @@ Ceph supports the following metavariables:
 
 ``$id``
 
-:Description: Expands to the daemon identifier. For ``osd.0``, this would be 
+:Description: Expands to the daemon identifier. For ``osd.0``, this would be
               ``0``; for ``mds.a``, it would be ``a``.
 
 :Example: ``/var/lib/ceph/$type/$cluster-$id``
@@ -229,9 +229,9 @@ Common Settings
 The `Hardware Recommendations`_ section provides some hardware guidelines for
 configuring a Ceph Storage Cluster. It is possible for a single :term:`Ceph
 Node` to run multiple daemons. For example, a single node with multiple drives
-or RAIDs may run one ``ceph-osd`` for each drive or RAID. Ideally, you will 
+or RAIDs may run one ``ceph-osd`` for each drive or RAID. Ideally, you will
 have a node for a particular type of process. For example, some nodes may run
-``ceph-osd`` daemons, other nodes may run ``ceph-mds`` daemons, and still 
+``ceph-osd`` daemons, other nodes may run ``ceph-mds`` daemons, and still
 other nodes may run ``ceph-mon`` daemons.
 
 Each node has a name identified by the ``host`` setting. Monitors also specify
@@ -244,13 +244,13 @@ minimal settings for each instance of a daemon. For example:
 	[mon.a]
 		host = hostName
 		mon addr = 150.140.130.120:6789
-		
+
 	[osd.0]
 		host = hostName
 
-.. important:: The ``host`` setting is the short name of the node (i.e., not 
-   an fqdn). It is **NOT** an IP address either.  Enter ``hostname -s`` on 
-   the command line to retrieve the name of the node. Also, this setting is 
+.. important:: The ``host`` setting is the short name of the node (i.e., not
+   an fqdn). It is **NOT** an IP address either.  Enter ``hostname -s`` on
+   the command line to retrieve the name of the node. Also, this setting is
    **ONLY** for ``mkcephfs`` and manual deployment. It **MUST NOT**
    be used with ``chef`` or ``ceph-deploy``, as those tools will enter the
    appropriate values for you.
@@ -279,7 +279,7 @@ Monitors in the quorum.
 
 Ceph Monitors typically listen on port ``6789``. For example:
 
-.. code-block:: ini 
+.. code-block:: ini
 
 	[mon.a]
 		host = hostName
@@ -289,13 +289,13 @@ By default, Ceph expects that you will store a monitor's data under the
 following path::
 
 	/var/lib/ceph/mon/$cluster-$id
-	
+
 You or a deployment tool (e.g., ``ceph-deploy``) must create the corresponding
 directory. With metavariables fully  expressed and a cluster named "ceph", the
-foregoing directory would evaluate to:: 
+foregoing directory would evaluate to::
 
 	/var/lib/ceph/mon/ceph-a
-	
+
 For additional details, see the `Monitor Config Reference`_.
 
 .. _Monitor Config Reference: ../mon-config-ref
@@ -317,10 +317,10 @@ authentication in the ``[global]`` section of your Ceph configuration file. ::
 		auth client required = cephx
 
 Additionally, you should enable message signing. See `Cephx Config Reference`_
-and  `Cephx Authentication`_ for details. 
+and  `Cephx Authentication`_ for details.
 
-.. important:: When upgrading, we recommend expressly disabling authentication 
-   first, then perform the upgrade. Once the upgrade is complete, re-enable 
+.. important:: When upgrading, we recommend expressly disabling authentication
+   first, then perform the upgrade. Once the upgrade is complete, re-enable
    authentication.
 
 .. _Cephx Authentication: ../../operations/authentication
@@ -344,41 +344,41 @@ filesystem). For example:
 	[osd]
 		osd journal size = 10000
 		filestore xattr use omap = true #enables the object map. Only if running ext4.
-		
+
 	[osd.0]
 		host = {hostname}
 
 
-By default, Ceph expects that you will store a Ceph OSD Daemon's data with the 
-following path:: 
+By default, Ceph expects that you will store a Ceph OSD Daemon's data with the
+following path::
 
 	/var/lib/ceph/osd/$cluster-$id
-	
+
 You or a deployment tool (e.g., ``ceph-deploy``) must create the corresponding
 directory. With metavariables fully  expressed and a cluster named "ceph", the
-foregoing directory would evaluate to:: 
+foregoing directory would evaluate to::
 
 	/var/lib/ceph/osd/ceph-0
-	
-You may override this path using the ``osd data`` setting. We don't recommend 
+
+You may override this path using the ``osd data`` setting. We don't recommend
 changing the default location. Create the default directory on your OSD host.
 
-:: 
+::
 
 	ssh {osd-host}
-	sudo mkdir /var/lib/ceph/osd/ceph-{osd-number}	
+	sudo mkdir /var/lib/ceph/osd/ceph-{osd-number}
 
 The ``osd data`` path ideally leads to a mount point with a hard disk that is
 separate from the hard disk storing and running the operating system and
 daemons. If the OSD is for a disk other than the OS disk, prepare it for
-use with Ceph, and mount it to the directory you just created:: 
+use with Ceph, and mount it to the directory you just created::
 
 	ssh {new-osd-host}
 	sudo mkfs -t {fstype} /dev/{disk}
 	sudo mount -o user_xattr /dev/{hdd} /var/lib/ceph/osd/ceph-{osd-number}
 
-We recommend using the ``xfs`` file system or the ``btrfs`` file system when 
-running :command:mkfs. 
+We recommend using the ``xfs`` file system or the ``btrfs`` file system when
+running :command:mkfs.
 
 See the `OSD Config Reference`_ for additional configuration details.
 
@@ -389,7 +389,7 @@ Heartbeats
 During runtime operations, Ceph OSD Daemons check up on other Ceph OSD Daemons
 and report their  findings to the Ceph Monitor. You do not have to provide any
 settings. However, if you have network latency issues, you may wish to modify
-the settings. 
+the settings.
 
 See `Configuring Monitor/OSD Interaction`_ for additional details.
 
@@ -424,7 +424,7 @@ settings, and even for runtime optimization. The following reflects runtime
 configuration usage::
 
 	ceph {daemon-type} tell {id or *} injectargs '--{name} {value} [--{name} {value}]'
-	
+
 Replace ``{daemon-type}`` with one of ``osd``, ``mon`` or ``mds``. You may apply
 the  runtime setting to all daemons of a particular type with ``*``, or specify
 a specific  daemon's ID (i.e., its number or letter). For example, to increase
@@ -442,16 +442,16 @@ Viewing a Configuration at Runtime
 ==================================
 
 If your Ceph Storage Cluster is running, and you would like to see the
-configuration settings from a running daemon, execute the following:: 
+configuration settings from a running daemon, execute the following::
 
 	ceph --admin-daemon {/path/to/admin/socket} config show | less
-	
-The default path for the admin socket for each daemon is:: 
+
+The default path for the admin socket for each daemon is::
 
 	/var/run/ceph/$cluster-$name.asok
-	
+
 At real time, the metavariables will evaluate to the actual cluster name and
-daemon name. For example, if the cluster name is ``ceph`` (it is by default) 
+daemon name. For example, if the cluster name is ``ceph`` (it is by default)
 and you want to retrieve the configuration for ``osd.0``, use the following::
 
 	ceph --admin-daemon /var/run/ceph/ceph-osd.0.asok config show | less
@@ -461,10 +461,10 @@ Running Multiple Clusters
 =========================
 
 With Ceph, you can run multiple Ceph Storage Clusters on the same hardware.
-Running multiple clusters provides a higher level of isolation compared to 
-using different pools on the same cluster with different CRUSH rulesets. A 
-separate cluster will have separate monitor, OSD and metadata server processes. 
-When running Ceph with  default settings, the default cluster name is ``ceph``, 
+Running multiple clusters provides a higher level of isolation compared to
+using different pools on the same cluster with different CRUSH rulesets. A
+separate cluster will have separate monitor, OSD and metadata server processes.
+When running Ceph with  default settings, the default cluster name is ``ceph``,
 which means you would  save your Ceph configuration file with the file name
 ``ceph.conf`` in the  ``/etc/ceph`` default directory.
 
@@ -473,14 +473,14 @@ See `ceph-deploy new` for details.
 When you run multiple clusters, you must name your cluster and save the Ceph
 configuration file with the name of the cluster. For example, a cluster named
 ``openstack`` will have a Ceph configuration file with the file name
-``openstack.conf`` in the  ``/etc/ceph`` default directory. 
+``openstack.conf`` in the  ``/etc/ceph`` default directory.
 
 .. important:: Cluster names must consist of letters a-z and digits 0-9 only.
 
 Separate clusters imply separate data disks and journals, which are not shared
 between clusters. Referring to `Metavariables`_, the ``$cluster``  metavariable
 evaluates to the cluster name (i.e., ``openstack`` in the  foregoing example).
-Various settings use the ``$cluster`` metavariable, including: 
+Various settings use the ``$cluster`` metavariable, including:
 
 - ``keyring``
 - ``admin socket``
@@ -493,8 +493,8 @@ Various settings use the ``$cluster`` metavariable, including:
 - ``mds data``
 - ``rgw data``
 
-See `General Settings`_, `OSD Settings`_, `Monitor Settings`_, `MDS Settings`_, 
-`RGW Settings`_ and `Log Settings`_ for relevant path defaults that use the 
+See `General Settings`_, `OSD Settings`_, `Monitor Settings`_, `MDS Settings`_,
+`RGW Settings`_ and `Log Settings`_ for relevant path defaults that use the
 ``$cluster`` metavariable.
 
 .. _General Settings: ../general-config-ref
@@ -506,17 +506,17 @@ See `General Settings`_, `OSD Settings`_, `Monitor Settings`_, `MDS Settings`_,
 
 
 When creating default directories or files, you should use the cluster
-name at the appropriate places in the path. For example:: 
+name at the appropriate places in the path. For example::
 
 	sudo mkdir /var/lib/ceph/osd/openstack-0
 	sudo mkdir /var/lib/ceph/mon/openstack-a
-	
-.. important:: When running monitors on the same host, you should use 
-   different ports. By default, monitors use port 6789. If you already 
-   have monitors using port 6789, use a different port for your other cluster(s). 
 
-To invoke a cluster other than the default ``ceph`` cluster, use the 
-``-c {filename}.conf`` option with the ``ceph`` command. For example:: 
+.. important:: When running monitors on the same host, you should use
+   different ports. By default, monitors use port 6789. If you already
+   have monitors using port 6789, use a different port for your other cluster(s).
+
+To invoke a cluster other than the default ``ceph`` cluster, use the
+``-c {filename}.conf`` option with the ``ceph`` command. For example::
 
 	ceph -c {cluster-name}.conf health
 	ceph -c openstack.conf health

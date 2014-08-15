@@ -3,12 +3,12 @@
  * operations of configurable size.
  *
  *  Created on: May 21, 2012
- *      Author: Eleanor Cawthon
+ *	Author: Eleanor Cawthon
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  */
 
 #include "include/rados/librados.hpp"
@@ -64,28 +64,28 @@ int OmapBench::setup(int argc, const char** argv) {
 	   << "key value pair operations of\n"
 	   << "configurable size.\n\n"
 	   << "OPTIONS\n"
-	   << "	-t              number of threads to use (default "<<threads;
+	   << "	-t		number of threads to use (default "<<threads;
       cout << ")\n"
-	   << "	-o              number of objects to write (default "<<objects;
+	   << "	-o		number of objects to write (default "<<objects;
       cout << ")\n"
-	   << "	--entries       number of entries per (default "
+	   << "	--entries	number of entries per (default "
 	   << entries_per_omap;
       cout <<")\n"
-	   << "	--keysize       number of characters per key "
+	   << "	--keysize	number of characters per key "
 	   << "(default "<<key_size;
       cout << ")\n"
-      	   << "	--valsize       number of characters per value "
-      	   << "(default "<<value_size;
+	   << "	--valsize	number of characters per value "
+	   << "(default "<<value_size;
       cout << ")\n"
-      	   << "	--inc           specify the increment to use in the displayed "
-      	   << "histogram (default "<<increment;
+	   << "	--inc		specify the increment to use in the displayed "
+	   << "histogram (default "<<increment;
       cout << ")\n"
-      	   << "	--omaptype      specify how omaps should be generated - "
-      	   << "rand for random sizes between\n"
-      	   << "                        0 and max size, uniform for all sizes"
-      	   << " to be specified size.\n"
-      	   << "                        (default "<<value_size;
-      cout <<"\n  --name          the rados id to use (default "<<rados_id;
+	   << "	--omaptype	specify how omaps should be generated - "
+	   << "rand for random sizes between\n"
+	   << "			       0 and max size, uniform for all sizes"
+	   << " to be specified size.\n"
+	   << "			       (default "<<value_size;
+      cout <<"\n  --name	  the rados id to use (default "<<rados_id;
       cout<<")\n";
       exit(1);
     }

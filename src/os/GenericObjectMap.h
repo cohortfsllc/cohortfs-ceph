@@ -10,7 +10,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -40,17 +40,17 @@
  * Prefix space structure:
  *
  * - HOBJECT_TO_SEQ: Contains leaf mapping from hobject_t->Header(including
- *                    hobj.seq and related metadata)
+ *		      hobj.seq and related metadata)
  * - INTERN_PREFIX: GLOBAL_STATE_KEY - contains the global state
- *                                  @see State
- *                                  @see write_state
- *                                  @see init
- *                                  @see generate_new_header
+ *				    @see State
+ *				    @see write_state
+ *				    @see init
+ *				    @see generate_new_header
  * - INTERN_PREFIX + header_key(header->seq) + COMPLETE_PREFIX: see below
  * - INTERN_PREFIX + header_key(header->seq) + PARENT_KEY
- *              : used to store parent header(same as headers in HOBJECT_TO_SEQ)
+ *		: used to store parent header(same as headers in HOBJECT_TO_SEQ)
  * - USER_PREFIX + header_key(header->seq) + [CUSTOM_PREFIX]
- *              : key->value which set by callers
+ *		: key->value which set by callers
  *
  * For each node (represented by a header), we
  * store three mappings: the key mapping, the complete mapping, and the parent.
@@ -123,12 +123,12 @@ class GenericObjectMap {
 
   /// Util, list all objects, there must be no other concurrent access
   int list_objects(const coll_t &cid, hobject_t start, int max,
-                   vector<hobject_t> *objs, ///< [out] objects
-                   hobject_t *next);
+		   vector<hobject_t> *objs, ///< [out] objects
+		   hobject_t *next);
 
   ObjectMap::ObjectMapIterator get_iterator(const coll_t &cid,
-                                            const hobject_t &oid,
-                                            const string &prefix);
+					    const hobject_t &oid,
+					    const string &prefix);
 
   KeyValueDB::Transaction get_transaction() { return db->get_transaction(); }
   int submit_transaction(KeyValueDB::Transaction t) {
@@ -333,8 +333,8 @@ private:
     string prefix;
 
     GenericObjectMapIteratorImpl(GenericObjectMap *map, Header header,
-        const string &_prefix) : map(map), header(header), r(0), ready(false),
-                                 invalid(true), prefix(_prefix) { }
+	const string &_prefix) : map(map), header(header), r(0), ready(false),
+				 invalid(true), prefix(_prefix) { }
     int seek_to_first();
     int seek_to_last();
     int upper_bound(const string &after);
@@ -354,8 +354,8 @@ private:
 
     /// Tests whether to_test is in complete region
     int in_complete_region(const string &to_test, ///[in] key to test
-                           string *begin,         ///[out] beginning of region
-                           string *end            ///[out] end of region
+			   string *begin,	  ///[out] beginning of region
+			   string *end		  ///[out] end of region
       ); ///< @returns true if to_test is in the complete region, else false
 
   private:
@@ -372,7 +372,7 @@ protected:
 
   // Scan keys in header into out_keys and out_values (if nonnull)
   int scan(Header header, const string &prefix, const set<string> &in_keys,
-           set<string> *out_keys, map<string, bufferlist> *out_values);
+	   set<string> *out_keys, map<string, bufferlist> *out_values);
 
  private:
 
@@ -392,7 +392,7 @@ protected:
    * Has the side effect of syncronously saving the new GenericObjectMap state
    */
   Header _generate_new_header(const coll_t &cid, const hobject_t &oid,
-                              Header parent, KeyValueDB::Transaction t);
+			      Header parent, KeyValueDB::Transaction t);
   Header generate_new_header(const coll_t &cid, const hobject_t &oid,
 			     Header parent, KeyValueDB::Transaction t) {
     Mutex::Locker l(header_lock);
@@ -423,9 +423,9 @@ protected:
 
   // Sets header @see set_header
   void _set_header(Header header, const bufferlist &bl,
-                   KeyValueDB::Transaction t);
+		   KeyValueDB::Transaction t);
 
-  /** 
+  /**
    * Removes header seq lock once Header is out of scope
    * @see _lookup_header
    * @see lookup_parent

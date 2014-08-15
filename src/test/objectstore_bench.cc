@@ -24,16 +24,16 @@
 static void usage()
 {
   derr << "usage: objectstore-bench [flags]\n"
-      "  --size\n"
-      "        total size in bytes\n"
-      "  --block-size\n"
-      "        block size in bytes for each write\n"
-      "  --repeats\n"
-      "        number of times to repeat the write cycle\n"
-      "  --threads\n"
-      "        number of threads to carry out this workload\n"
-      "  --multi-object\n"
-      "        have each thread write to a separate object\n" << dendl;
+      "	 --size\n"
+      "	       total size in bytes\n"
+      "	 --block-size\n"
+      "	       block size in bytes for each write\n"
+      "	 --repeats\n"
+      "	       number of times to repeat the write cycle\n"
+      "	 --threads\n"
+      "	       number of threads to carry out this workload\n"
+      "	 --multi-object\n"
+      "	       have each thread write to a separate object\n" << dendl;
   generic_server_usage();
 }
 
@@ -76,7 +76,7 @@ bool byte_units::parse(const string &val)
     case 'K':
       lshift += 10;
       if (*++endptr)
-        return false;
+	return false;
     case 0:
       break;
 
@@ -131,7 +131,7 @@ class OBS_Worker : public Thread
     data.append(buffer::create(block_size));
 
     dout(0) << "Writing " << size << " in blocks of " << block_size
-        << dendl;
+	<< dendl;
 
     // use a sequencer for each thread so they don't serialize each other
     ObjectStore::Sequencer seq("osbench worker");
@@ -144,15 +144,15 @@ class OBS_Worker : public Thread
 
       std::cout << "Write cycle " << ix << std::endl;
       while (len) {
-        size_t count = len < block_size ? len : (size_t)block_size;
+	size_t count = len < block_size ? len : (size_t)block_size;
 
-        ObjectStore::Transaction *t = new ObjectStore::Transaction;
-        t->write(coll_t(), hobject_t(poid), offset, count, data);
+	ObjectStore::Transaction *t = new ObjectStore::Transaction;
+	t->write(coll_t(), hobject_t(poid), offset, count, data);
 
-        tls.push_back(t);
+	tls.push_back(t);
 
-        offset += count;
-        len -= count;
+	offset += count;
+	len -= count;
       }
 
       // set up the finisher
@@ -161,17 +161,17 @@ class OBS_Worker : public Thread
       bool done = false;
 
       fs->queue_transactions(&seq, tls, NULL,
-                             new C_SafeCond(&lock, &cond, &done));
+			     new C_SafeCond(&lock, &cond, &done));
 
       lock.Lock();
       while (!done)
-        cond.Wait(lock);
+	cond.Wait(lock);
       lock.Unlock();
 
       while (!tls.empty()) {
-        ObjectStore::Transaction *t = tls.front();
-        tls.pop_front();
-        delete t;
+	ObjectStore::Transaction *t = tls.front();
+	tls.pop_front();
+	delete t;
       }
     }
 
@@ -187,7 +187,7 @@ int main(int argc, const char *argv[])
   env_to_vec(args);
 
   global_init(NULL, args, CEPH_ENTITY_TYPE_OSD,
-              CODE_ENVIRONMENT_UTILITY, 0);
+	      CODE_ENVIRONMENT_UTILITY, 0);
 
   string val;
   vector<const char*>::iterator i = args.begin();
@@ -197,13 +197,13 @@ int main(int argc, const char *argv[])
 
     if (ceph_argparse_witharg(args, i, &val, "--size", (char*)NULL)) {
       if (!size.parse(val)) {
-        derr << "error parsing size: It must be an int." << dendl;
-        usage();
+	derr << "error parsing size: It must be an int." << dendl;
+	usage();
       }
     } else if (ceph_argparse_witharg(args, i, &val, "--block-size", (char*)NULL)) {
       if (!block_size.parse(val)) {
-        derr << "error parsing block-size: It must be an int." << dendl;
-        usage();
+	derr << "error parsing block-size: It must be an int." << dendl;
+	usage();
       }
     } else if (ceph_argparse_witharg(args, i, &val, "--repeats", (char*)NULL)) {
       repeats = atoi(val.c_str());
@@ -213,7 +213,7 @@ int main(int argc, const char *argv[])
       multi_object = true;
     } else {
       derr << "Error: can't understand argument: " << *i <<
-          "\n" << dendl;
+	  "\n" << dendl;
       usage();
     }
   }
@@ -229,9 +229,9 @@ int main(int argc, const char *argv[])
   dout(0) << "repeats " << repeats << dendl;
 
   fs = ObjectStore::create(g_ceph_context,
-                           g_conf->osd_objectstore,
-                           g_conf->osd_data,
-                           g_conf->osd_journal);
+			   g_conf->osd_objectstore,
+			   g_conf->osd_data,
+			   g_conf->osd_journal);
   if (fs == NULL) {
     derr << "bad objectstore type " << g_conf->osd_objectstore << dendl;
     return 1;

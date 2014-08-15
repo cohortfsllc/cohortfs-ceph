@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #include "gtest/gtest.h"
 
 #include "common/WorkQueue.h"
@@ -24,7 +26,7 @@ TEST(WorkQueue, StartStop)
 TEST(WorkQueue, Resize)
 {
   ThreadPool tp(g_ceph_context, "bar", 2, "osd_op_threads");
-  
+
   tp.start();
 
   sleep(1);

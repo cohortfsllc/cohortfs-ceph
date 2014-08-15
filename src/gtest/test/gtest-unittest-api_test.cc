@@ -57,25 +57,25 @@ class UnitTestHelper {
   static TestCase const** const GetSortedTestCases() {
     UnitTest& unit_test = *UnitTest::GetInstance();
     TestCase const** const test_cases =
-        new const TestCase*[unit_test.total_test_case_count()];
+	new const TestCase*[unit_test.total_test_case_count()];
 
     for (int i = 0; i < unit_test.total_test_case_count(); ++i)
       test_cases[i] = unit_test.GetTestCase(i);
 
     std::sort(test_cases,
-              test_cases + unit_test.total_test_case_count(),
-              LessByName<TestCase>());
+	      test_cases + unit_test.total_test_case_count(),
+	      LessByName<TestCase>());
     return test_cases;
   }
 
-  // Returns the test case by its name.  The caller doesn't own the returned
+  // Returns the test case by its name.	 The caller doesn't own the returned
   // pointer.
   static const TestCase* FindTestCase(const char* name) {
     UnitTest& unit_test = *UnitTest::GetInstance();
     for (int i = 0; i < unit_test.total_test_case_count(); ++i) {
       const TestCase* test_case = unit_test.GetTestCase(i);
       if (0 == strcmp(test_case->name(), name))
-        return test_case;
+	return test_case;
     }
     return NULL;
   }
@@ -85,13 +85,13 @@ class UnitTestHelper {
   // array.
   static TestInfo const** const GetSortedTests(const TestCase* test_case) {
     TestInfo const** const tests =
-        new const TestInfo*[test_case->total_test_count()];
+	new const TestInfo*[test_case->total_test_count()];
 
     for (int i = 0; i < test_case->total_test_count(); ++i)
       tests[i] = test_case->GetTestInfo(i);
 
     std::sort(tests, tests + test_case->total_test_count(),
-              LessByName<TestInfo>());
+	      LessByName<TestInfo>());
     return tests;
   }
 };
@@ -106,7 +106,7 @@ const int kTypedTests = 1;
 #else
 const int kTypedTestCases = 0;
 const int kTypedTests = 0;
-#endif  // GTEST_HAS_TYPED_TEST
+#endif	// GTEST_HAS_TYPED_TEST
 
 // We can only test the accessors that do not change value while tests run.
 // Since tests can be run in any order, the values the accessors that track
@@ -126,7 +126,7 @@ TEST(ApiTest, UnitTestImmutableAccessorsWork) {
   EXPECT_STREQ("DISABLED_Test", test_cases[1]->name());
 #if GTEST_HAS_TYPED_TEST
   EXPECT_STREQ("TestCaseWithCommentTest/0", test_cases[2]->name());
-#endif  // GTEST_HAS_TYPED_TEST
+#endif	// GTEST_HAS_TYPED_TEST
 
   delete[] test_cases;
 
@@ -204,7 +204,7 @@ TEST(ApiTest, TestCaseImmutableAccessorsWork) {
   EXPECT_TRUE(tests[0]->should_run());
 
   delete[] tests;
-#endif  // GTEST_HAS_TYPED_TEST
+#endif	// GTEST_HAS_TYPED_TEST
 }
 
 TEST(ApiTest, TestCaseDisabledAccessorsWork) {
@@ -274,7 +274,7 @@ class FinalSuccessChecker : public Environment {
     EXPECT_EQ(0, test_cases[2]->failed_test_count());
     EXPECT_TRUE(test_cases[2]->Passed());
     EXPECT_FALSE(test_cases[2]->Failed());
-#endif  // GTEST_HAS_TYPED_TEST
+#endif	// GTEST_HAS_TYPED_TEST
 
     const TestCase* test_case = UnitTestHelper::FindTestCase("ApiTest");
     const TestInfo** tests = UnitTestHelper::GetSortedTests(test_case);
@@ -324,7 +324,7 @@ class FinalSuccessChecker : public Environment {
     EXPECT_EQ(0, tests[0]->result()->test_property_count());
 
     delete[] tests;
-#endif  // GTEST_HAS_TYPED_TEST
+#endif	// GTEST_HAS_TYPED_TEST
     delete[] test_cases;
   }
 };

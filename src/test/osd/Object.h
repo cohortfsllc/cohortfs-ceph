@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 #include "include/interval_set.h"
 #include "include/buffer.h"
 #include "include/encoding.h"
@@ -145,7 +145,7 @@ public:
     RandWrap rand;
     RandGenerator *cont_gen;
     char current;
-    iterator_impl(const ContDesc &cont, RandGenerator *cont_gen) : 
+    iterator_impl(const ContDesc &cont, RandGenerator *cont_gen) :
       pos(0), cont(cont), rand(cont.seqnum), cont_gen(cont_gen) {
       current = rand();
     }
@@ -296,7 +296,7 @@ public:
     uint64_t limit;
     list<pair<std::shared_ptr<ContentsGenerator>,
 	      ContDesc> >::iterator cur_cont;
-    
+
     iterator(ObjectDesc &obj) :
       pos(0), obj(obj) {
       limit = obj.layers.begin()->first->get_length(obj.layers.begin()->second);
@@ -334,7 +334,7 @@ public:
       }
     }
   };
-    
+
   iterator begin() {
     return iterator(*this);
   }

@@ -2,7 +2,7 @@
  Object Store Manpages
 =======================
 
-.. toctree:: 
+.. toctree::
    :maxdepth: 1
 
    ../../man/8/ceph.rst
@@ -25,5 +25,5 @@
 
 .. toctree::
 	:hidden:
-	
+
 	../../man/8/ceph-post-file.rst

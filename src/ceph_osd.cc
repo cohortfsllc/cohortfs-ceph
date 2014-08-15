@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -61,7 +61,7 @@ void handle_osd_signal(int signum)
     osd->handle_signal(signum);
 }
 
-void usage() 
+void usage()
 {
   derr << "usage: ceph-osd -i osdid [--osd-data=path] [--osd-journal=path] "
        << "[--mkfs] [--mkjournal]" << dendl;
@@ -69,7 +69,7 @@ void usage()
   generic_server_usage();
 }
 
-int main(int argc, const char **argv) 
+int main(int argc, const char **argv)
 {
   vector<const char*> args;
   argv_to_vec(argc, argv, args);
@@ -256,7 +256,7 @@ int main(int argc, const char **argv)
 	 << g_conf->osd_data << ": " << cpp_strerror(-r)
 	 << TEXT_NORMAL << dendl;
     if (r == -ENOTSUP) {
-      derr << TEXT_RED << " **        please verify that underlying storage "
+      derr << TEXT_RED << " **	      please verify that underlying storage "
 	   << "supports xattrs" << TEXT_NORMAL << dendl;
     }
     exit(1);
@@ -281,12 +281,12 @@ int main(int argc, const char **argv)
   }
 
   pick_addresses(g_ceph_context, CEPH_PICK_ADDRESS_PUBLIC
-                                |CEPH_PICK_ADDRESS_CLUSTER);
+				|CEPH_PICK_ADDRESS_CLUSTER);
 
   if (g_conf->public_addr.is_blank_ip() && !g_conf->cluster_addr.is_blank_ip()) {
     derr << TEXT_YELLOW
 	 << " ** WARNING: specified cluster addr but not public addr; we recommend **\n"
-	 << " **          you specify neither or both.                             **"
+	 << " **	  you specify neither or both.				   **"
 	 << TEXT_NORMAL << dendl;
   }
 
@@ -596,7 +596,7 @@ int main(int argc, const char **argv)
   err = osd->init();
   if (err < 0) {
     derr << TEXT_RED << " ** ERROR: osd init failed: " << cpp_strerror(-err)
-         << TEXT_NORMAL << dendl;
+	 << TEXT_NORMAL << dendl;
     return 1;
   }
 

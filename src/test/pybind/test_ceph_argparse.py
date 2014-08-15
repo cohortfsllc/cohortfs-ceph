@@ -586,7 +586,7 @@ class TestOSD(TestArgparse):
         self.assert_valid_command(['osd', 'crush', 'dump'])
         assert_equal({}, validate_command(sigdict, ['osd', 'crush']))
         assert_equal({}, validate_command(sigdict, ['osd', 'crush',
-                                                    'dump', 
+                                                    'dump',
                                                     'toomany']))
 
     def test_setcrushmap(self):
@@ -1123,7 +1123,7 @@ class TestConfigKey(TestArgparse):
     def test_list(self):
         self.check_no_arg('config-key', 'list')
 # Local Variables:
-# compile-command: "cd ../.. ; make -j4 && 
+# compile-command: "cd ../.. ; make -j4 &&
 #  PYTHONPATH=pybind nosetests --stop \
 #  test/pybind/test_ceph_argparse.py # test_ceph_argparse.py:TestOSD.test_rm"
 # End:

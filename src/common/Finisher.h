@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_FINISHER_H
@@ -31,17 +31,17 @@ enum {
 
 class Finisher {
   CephContext *cct;
-  Mutex          finisher_lock;
-  Cond           finisher_cond, finisher_empty_cond;
-  bool           finisher_stop, finisher_running;
+  Mutex		 finisher_lock;
+  Cond		 finisher_cond, finisher_empty_cond;
+  bool		 finisher_stop, finisher_running;
   vector<Context*> finisher_queue;
   list<pair<Context*,int> > finisher_queue_rval;
   PerfCounters *logger;
-  
+
   void *finisher_thread_entry();
 
   struct FinisherThread : public Thread {
-    Finisher *fin;    
+    Finisher *fin;
     FinisherThread(Finisher *f) : fin(f) {}
     void* entry() { return (void*)fin->finisher_thread_entry(); }
   } finisher_thread;
@@ -77,7 +77,7 @@ class Finisher {
     if (logger)
       logger->inc(l_finisher_queue_len);
   }
-  
+
   void start();
   void stop();
 

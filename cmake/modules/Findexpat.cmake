@@ -11,7 +11,7 @@ FIND_PATH(EXPAT_INCLUDE_DIR NAMES expat.h)
 # Look for the library.
 FIND_LIBRARY(EXPAT_LIBRARY NAMES expat)
 
-# handle the QUIETLY and REQUIRED arguments and set EXPAT_FOUND to TRUE if 
+# handle the QUIETLY and REQUIRED arguments and set EXPAT_FOUND to TRUE if
 # all listed variables are TRUE
 INCLUDE(FindPackageHandleStandardArgs)
 FIND_PACKAGE_HANDLE_STANDARD_ARGS(EXPAT DEFAULT_MSG EXPAT_LIBRARY EXPAT_INCLUDE_DIR)

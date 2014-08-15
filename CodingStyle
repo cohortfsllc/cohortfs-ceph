@@ -52,7 +52,7 @@ by section.
          private:
           int m_foo;
    	};
-   
+
 * Naming > Constant Names:
 
    Google uses kSomeThing for constants.  We prefer SOME_THING.

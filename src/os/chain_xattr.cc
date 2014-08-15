@@ -75,10 +75,10 @@ static int translate_raw_name(const char *raw_name, char *name, int name_len, bo
     case '@': /* escape it */
       raw_name++;
       if (!*raw_name)
-        break;
+	break;
       if (*raw_name != '@') {
-        *is_first = false;
-        goto done;
+	*is_first = false;
+	goto done;
       }
 
     /* fall through */
@@ -155,7 +155,7 @@ int chain_getxattr(const char *fn, const char *name, void *val, size_t size)
       get_raw_xattr_name(name, i, raw_name, sizeof(raw_name));
       r = sys_getxattr(fn, raw_name, 0, 0);
       if (r > 0) { // there's another chunk.. the original buffer was too small
-        ret = -ERANGE;
+	ret = -ERANGE;
       }
     }
   }
@@ -218,7 +218,7 @@ int chain_fgetxattr(int fd, const char *name, void *val, size_t size)
       get_raw_xattr_name(name, i, raw_name, sizeof(raw_name));
       r = sys_fgetxattr(fd, raw_name, 0, 0);
       if (r > 0) { // there's another chunk.. the original buffer was too small
-        ret = -ERANGE;
+	ret = -ERANGE;
       }
     }
   }
@@ -245,7 +245,7 @@ int chain_setxattr(const char *fn, const char *name, const void *val, size_t siz
       ret = r;
       break;
     }
-    pos  += chunk_size;
+    pos	 += chunk_size;
     ret = pos;
     i++;
   } while (size);
@@ -258,7 +258,7 @@ int chain_setxattr(const char *fn, const char *name, const void *val, size_t siz
     if (r < 0 && r != -ENODATA)
       ret = r;
   }
-  
+
   return ret;
 }
 
@@ -279,7 +279,7 @@ int chain_fsetxattr(int fd, const char *name, const void *val, size_t size)
       ret = r;
       break;
     }
-    pos  += chunk_size;
+    pos	 += chunk_size;
     ret = pos;
     i++;
   } while (size);
@@ -292,7 +292,7 @@ int chain_fsetxattr(int fd, const char *name, const void *val, size_t size)
     if (r < 0 && r != -ENODATA)
       ret = r;
   }
-  
+
   return ret;
 }
 
@@ -369,8 +369,8 @@ int chain_listxattr(const char *fn, char *names, size_t len) {
     int name_len = translate_raw_name(p, name, sizeof(name), &is_first);
     if (is_first)  {
       if (dest + name_len > dest_end) {
-        r = -ERANGE;
-        goto done;
+	r = -ERANGE;
+	goto done;
       }
       strcpy(dest, name);
       dest += name_len + 1;
@@ -419,8 +419,8 @@ int chain_flistxattr(int fd, char *names, size_t len) {
     int name_len = translate_raw_name(p, name, sizeof(name), &is_first);
     if (is_first)  {
       if (dest + name_len > dest_end) {
-        r = -ERANGE;
-        goto done;
+	r = -ERANGE;
+	goto done;
       }
       strcpy(dest, name);
       dest += name_len + 1;

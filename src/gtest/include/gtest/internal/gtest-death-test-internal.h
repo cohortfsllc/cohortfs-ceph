@@ -32,7 +32,7 @@
 // The Google C++ Testing Framework (Google Test)
 //
 // This header file defines internal utilities needed for implementing
-// death tests.  They are subject to change without notice.
+// death tests.	 They are subject to change without notice.
 
 #ifndef GTEST_INCLUDE_GTEST_INTERNAL_GTEST_DEATH_TEST_INTERNAL_H_
 #define GTEST_INCLUDE_GTEST_INTERNAL_GTEST_DEATH_TEST_INTERNAL_H_
@@ -62,10 +62,10 @@ const char kInternalRunDeathTestFlag[] = "internal_run_death_test";
 // In describing the results of death tests, these terms are used with
 // the corresponding definitions:
 //
-// exit status:  The integer exit information in the format specified
-//               by wait(2)
-// exit code:    The integer code passed to exit(3), _exit(2), or
-//               returned from main()
+// exit status:	 The integer exit information in the format specified
+//		 by wait(2)
+// exit code:	 The integer code passed to exit(3), _exit(2), or
+//		 returned from main()
 class GTEST_API_ DeathTest {
  public:
   // Create returns false if there was an error determining the
@@ -77,7 +77,7 @@ class GTEST_API_ DeathTest {
   // is set to NULL; otherwise, it is set to the address of a new concrete
   // DeathTest object that controls the execution of the current test.
   static bool Create(const char* statement, const RE* regex,
-                     const char* file, int line, DeathTest** test);
+		     const char* file, int line, DeathTest** test);
   DeathTest();
   virtual ~DeathTest() { }
 
@@ -141,14 +141,14 @@ class DeathTestFactory {
  public:
   virtual ~DeathTestFactory() { }
   virtual bool Create(const char* statement, const RE* regex,
-                      const char* file, int line, DeathTest** test) = 0;
+		      const char* file, int line, DeathTest** test) = 0;
 };
 
 // A concrete DeathTestFactory implementation for normal use.
 class DefaultDeathTestFactory : public DeathTestFactory {
  public:
   virtual bool Create(const char* statement, const RE* regex,
-                      const char* file, int line, DeathTest** test);
+		      const char* file, int line, DeathTest** test);
 };
 
 // Returns true if exit_status describes a process that was terminated
@@ -163,11 +163,11 @@ GTEST_API_ bool ExitedUnsuccessfully(int exit_status);
     GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement); \
   } catch (const ::std::exception& gtest_exception) { \
     fprintf(\
-        stderr, \
-        "\n%s: Caught std::exception-derived exception escaping the " \
-        "death test statement. Exception message: %s\n", \
-        ::testing::internal::FormatFileLocation(__FILE__, __LINE__).c_str(), \
-        gtest_exception.what()); \
+	stderr, \
+	"\n%s: Caught std::exception-derived exception escaping the " \
+	"death test statement. Exception message: %s\n", \
+	::testing::internal::FormatFileLocation(__FILE__, __LINE__).c_str(), \
+	gtest_exception.what()); \
     fflush(stderr); \
     death_test->Abort(::testing::internal::DeathTest::TEST_THREW_EXCEPTION); \
   } catch (...) { \
@@ -188,27 +188,27 @@ GTEST_API_ bool ExitedUnsuccessfully(int exit_status);
     const ::testing::internal::RE& gtest_regex = (regex); \
     ::testing::internal::DeathTest* gtest_dt; \
     if (!::testing::internal::DeathTest::Create(#statement, &gtest_regex, \
-        __FILE__, __LINE__, &gtest_dt)) { \
+	__FILE__, __LINE__, &gtest_dt)) { \
       goto GTEST_CONCAT_TOKEN_(gtest_label_, __LINE__); \
     } \
     if (gtest_dt != NULL) { \
       ::testing::internal::scoped_ptr< ::testing::internal::DeathTest> \
-          gtest_dt_ptr(gtest_dt); \
+	  gtest_dt_ptr(gtest_dt); \
       switch (gtest_dt->AssumeRole()) { \
-        case ::testing::internal::DeathTest::OVERSEE_TEST: \
-          if (!gtest_dt->Passed(predicate(gtest_dt->Wait()))) { \
-            goto GTEST_CONCAT_TOKEN_(gtest_label_, __LINE__); \
-          } \
-          break; \
-        case ::testing::internal::DeathTest::EXECUTE_TEST: { \
-          ::testing::internal::DeathTest::ReturnSentinel \
-              gtest_sentinel(gtest_dt); \
-          GTEST_EXECUTE_DEATH_TEST_STATEMENT_(statement, gtest_dt); \
-          gtest_dt->Abort(::testing::internal::DeathTest::TEST_DID_NOT_DIE); \
-          break; \
-        } \
-        default: \
-          break; \
+	case ::testing::internal::DeathTest::OVERSEE_TEST: \
+	  if (!gtest_dt->Passed(predicate(gtest_dt->Wait()))) { \
+	    goto GTEST_CONCAT_TOKEN_(gtest_label_, __LINE__); \
+	  } \
+	  break; \
+	case ::testing::internal::DeathTest::EXECUTE_TEST: { \
+	  ::testing::internal::DeathTest::ReturnSentinel \
+	      gtest_sentinel(gtest_dt); \
+	  GTEST_EXECUTE_DEATH_TEST_STATEMENT_(statement, gtest_dt); \
+	  gtest_dt->Abort(::testing::internal::DeathTest::TEST_DID_NOT_DIE); \
+	  break; \
+	} \
+	default: \
+	  break; \
       } \
     } \
   } else \
@@ -234,11 +234,11 @@ GTEST_API_ bool ExitedUnsuccessfully(int exit_status);
 class InternalRunDeathTestFlag {
  public:
   InternalRunDeathTestFlag(const std::string& a_file,
-                           int a_line,
-                           int an_index,
-                           int a_write_fd)
+			   int a_line,
+			   int an_index,
+			   int a_write_fd)
       : file_(a_file), line_(a_line), index_(an_index),
-        write_fd_(a_write_fd) {}
+	write_fd_(a_write_fd) {}
 
   ~InternalRunDeathTestFlag() {
     if (write_fd_ >= 0)
@@ -276,20 +276,20 @@ InternalRunDeathTestFlag* ParseInternalRunDeathTestFlag();
 //
 // Parameters:
 //   statement -  A statement that a macro such as EXPECT_DEATH would test
-//                for program termination. This macro has to make sure this
-//                statement is compiled but not executed, to ensure that
-//                EXPECT_DEATH_IF_SUPPORTED compiles with a certain
-//                parameter iff EXPECT_DEATH compiles with it.
+//		  for program termination. This macro has to make sure this
+//		  statement is compiled but not executed, to ensure that
+//		  EXPECT_DEATH_IF_SUPPORTED compiles with a certain
+//		  parameter iff EXPECT_DEATH compiles with it.
 //   regex     -  A regex that a macro such as EXPECT_DEATH would use to test
-//                the output of statement.  This parameter has to be
-//                compiled but not evaluated by this macro, to ensure that
-//                this macro only accepts expressions that a macro such as
-//                EXPECT_DEATH would accept.
+//		  the output of statement.  This parameter has to be
+//		  compiled but not evaluated by this macro, to ensure that
+//		  this macro only accepts expressions that a macro such as
+//		  EXPECT_DEATH would accept.
 //   terminator - Must be an empty statement for EXPECT_DEATH_IF_SUPPORTED
-//                and a return statement for ASSERT_DEATH_IF_SUPPORTED.
-//                This ensures that ASSERT_DEATH_IF_SUPPORTED will not
-//                compile inside functions where ASSERT_DEATH doesn't
-//                compile.
+//		  and a return statement for ASSERT_DEATH_IF_SUPPORTED.
+//		  This ensures that ASSERT_DEATH_IF_SUPPORTED will not
+//		  compile inside functions where ASSERT_DEATH doesn't
+//		  compile.
 //
 //  The branch that has an always false condition is used to ensure that
 //  statement and regex are compiled (and thus syntactically correct) but
@@ -302,8 +302,8 @@ InternalRunDeathTestFlag* ParseInternalRunDeathTestFlag();
     GTEST_AMBIGUOUS_ELSE_BLOCKER_ \
     if (::testing::internal::AlwaysTrue()) { \
       GTEST_LOG_(WARNING) \
-          << "Death tests are not supported on this platform.\n" \
-          << "Statement '" #statement "' cannot be verified."; \
+	  << "Death tests are not supported on this platform.\n" \
+	  << "Statement '" #statement "' cannot be verified."; \
     } else if (::testing::internal::AlwaysFalse()) { \
       ::testing::internal::RE::PartialMatch(".*", (regex)); \
       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement); \
@@ -311,9 +311,9 @@ InternalRunDeathTestFlag* ParseInternalRunDeathTestFlag();
     } else \
       ::testing::Message()
 
-#endif  // GTEST_HAS_DEATH_TEST
+#endif	// GTEST_HAS_DEATH_TEST
 
 }  // namespace internal
 }  // namespace testing
 
-#endif  // GTEST_INCLUDE_GTEST_INTERNAL_GTEST_DEATH_TEST_INTERNAL_H_
+#endif	// GTEST_INCLUDE_GTEST_INTERNAL_GTEST_DEATH_TEST_INTERNAL_H_

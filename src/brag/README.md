@@ -124,7 +124,7 @@ Run 'ceph-brag -h' to get the usage information of this tool.
 # Server
 
 ## Info
-The ceph-brag server code is a python based web application. 
+The ceph-brag server code is a python based web application.
 
 ## How to use
 
@@ -142,16 +142,16 @@ Following are the REST urls that are implemented with 'url-prefix' being the mou
 ### GET
 
 ##### * GET /url-prefix/
-Returns the list of clusters that are registered so far. 
+Returns the list of clusters that are registered so far.
 Outputs - On success application/json of the following format is returned
 
     [
       {
-       "num_versions": 3, 
-       "cluster_creation_date": "2014-01-16 13:38:41.928551", 
-       "uuid": "20679d0e-04b1-4004-8ee9-45ac271510e9", 
-       "cluster_name": "Cluster1", 
-       "organization": "eNovance", 
+       "num_versions": 3,
+       "cluster_creation_date": "2014-01-16 13:38:41.928551",
+       "uuid": "20679d0e-04b1-4004-8ee9-45ac271510e9",
+       "cluster_name": "Cluster1",
+       "organization": "eNovance",
        "email": "mail@enovance.com"
       },
       ...
@@ -163,7 +163,7 @@ Outputs - On success application/json of the following format is returned
 
     [
       {
-        "version_number": 1, 
+        "version_number": 1,
         "version_date": "2014-02-10 10:17:56.283499"
       },
       ...

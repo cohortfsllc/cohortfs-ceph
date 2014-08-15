@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_DISPATCHQUEUE_H
@@ -63,7 +63,7 @@ class DispatchQueue {
       return con.get();
     }
   };
-    
+
   CephContext *cct;
   SimpleMessenger *msgr;
   Mutex lock;
@@ -90,7 +90,7 @@ class DispatchQueue {
   }
 
   uint64_t next_pipe_id;
-    
+
   enum { D_CONNECT = 1, D_ACCEPT, D_BAD_REMOTE_RESET, D_BAD_RESET, D_NUM_CODES };
 
   /**
@@ -116,7 +116,7 @@ class DispatchQueue {
     Mutex::Locker l(lock);
     return mqueue.length();
   }
-    
+
   void queue_connect(Connection *con) {
     Mutex::Locker l(lock);
     if (stop)

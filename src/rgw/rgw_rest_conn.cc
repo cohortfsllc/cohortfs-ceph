@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #include "rgw_rados.h"
 #include "rgw_rest_conn.h"
 
@@ -53,7 +55,7 @@ public:
 };
 
 int RGWRESTConn::put_obj_init(const string& uid, rgw_obj& obj, uint64_t obj_size,
-                                      map<string, bufferlist>& attrs, RGWRESTStreamWriteRequest **req)
+				      map<string, bufferlist>& attrs, RGWRESTStreamWriteRequest **req)
 {
   string url;
   int ret = get_url(url);
@@ -76,7 +78,7 @@ int RGWRESTConn::complete_request(RGWRESTStreamWriteRequest *req, string& etag, 
 }
 
 int RGWRESTConn::get_obj(const string& uid, req_info *info /* optional */, rgw_obj& obj, bool prepend_metadata,
-                                 RGWGetDataCB *cb, RGWRESTStreamReadRequest **req)
+				 RGWGetDataCB *cb, RGWRESTStreamReadRequest **req)
 {
   string url;
   int ret = get_url(url);
@@ -99,9 +101,9 @@ int RGWRESTConn::get_obj(const string& uid, req_info *info /* optional */, rgw_o
     for (map<string, string>::iterator iter = orig_map.lower_bound(SEARCH_AMZ_PREFIX); iter != orig_map.end(); ++iter) {
       const string& name = iter->first;
       if (name == "HTTP_X_AMZ_DATE") /* dont forward date from original request */
-        continue;
+	continue;
       if (name.compare(0, sizeof(SEARCH_AMZ_PREFIX) - 1, "HTTP_X_AMZ_") != 0)
-        break;
+	break;
       extra_headers[iter->first] = iter->second;
     }
   }
@@ -115,5 +117,3 @@ int RGWRESTConn::complete_request(RGWRESTStreamReadRequest *req, string& etag, t
 
   return ret;
 }
-
-

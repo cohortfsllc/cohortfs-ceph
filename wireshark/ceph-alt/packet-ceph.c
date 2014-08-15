@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 /* packet-ceph.c
  * Routines for Ceph Protocols
  * http://www.ceph.com
@@ -6,21 +8,21 @@
  *
  * This file contains parts of the original dissector code found in
  * the CEPH source tree. The author of that code was not marked.
- * 
+ *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
  * of the License, or (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
- * 
+ *
  * $Id$
  */
 
@@ -36,10 +38,10 @@
 #include "../../epan/report_err.h"
 #include "../../epan/conversation.h"
 #include "../../epan/expert.h"
-#include "../../epan/dissectors/packet-tcp.h" 
+#include "../../epan/dissectors/packet-tcp.h"
 
 /* Protocol name */
-#define PROTO_TAG_CEPH    "CEPHalt"
+#define PROTO_TAG_CEPH	  "CEPHalt"
 
 /****************************************************************************
  * Global handles
@@ -51,7 +53,7 @@ static int g_proto_ceph = -1;
 /* The registered dissector handle */
 static dissector_handle_t g_ceph_handle;
 
-/* 
+/*
  * The following hf_* variables are used to hold the Wireshark IDs of
  * our header fields; they are filled out when we call
  * proto_register_field_array() in proto_register_ceph()
@@ -160,26 +162,26 @@ static gint ett_incompat = -1;
 /****************************************************************************
  * Conversation helper - to find exact matches only
  ****************************************************************************/
-static conversation_t* 
+static conversation_t*
 conv_find_exact(guint32 frame, const address* addr1, guint32 port1,
-                        const address* addr2, guint32 port2) {
+			const address* addr2, guint32 port2) {
     conversation_t* conv;
     conv = find_conversation(frame, addr1, addr2,PT_TCP, port1, port2, 0);
     if (conv != NULL) {
-        if (ADDRESSES_EQUAL(&conv->key_ptr->addr1, addr1) &&
-            ADDRESSES_EQUAL(&conv->key_ptr->addr2, addr2) &&
-            conv->key_ptr->port1 == port1 &&
-            conv->key_ptr->port2 == port2)
-        {
-            return conv;
-        }
-        if (ADDRESSES_EQUAL(&conv->key_ptr->addr1, addr2) &&
-            ADDRESSES_EQUAL(&conv->key_ptr->addr2, addr1) &&
-            conv->key_ptr->port1 == port2 &&
-            conv->key_ptr->port2 == port1)
-        {
-            return conv;
-        }
+	if (ADDRESSES_EQUAL(&conv->key_ptr->addr1, addr1) &&
+	    ADDRESSES_EQUAL(&conv->key_ptr->addr2, addr2) &&
+	    conv->key_ptr->port1 == port1 &&
+	    conv->key_ptr->port2 == port2)
+	{
+	    return conv;
+	}
+	if (ADDRESSES_EQUAL(&conv->key_ptr->addr1, addr2) &&
+	    ADDRESSES_EQUAL(&conv->key_ptr->addr2, addr1) &&
+	    conv->key_ptr->port1 == port2 &&
+	    conv->key_ptr->port2 == port1)
+	{
+	    return conv;
+	}
     }
     return NULL;
 }
@@ -200,7 +202,7 @@ typedef enum _entity_type {
 
 /*
  * This is what we record (within conv state) about each known endpoint.
- * Beware that conv_data maintains a pointer to these records so that should 
+ * Beware that conv_data maintains a pointer to these records so that should
  * not be reallocated, see get_entity() for obtaining them. They are shared
  * this way so conversations may pass info to each other about endpoints.
  */
@@ -214,21 +216,21 @@ typedef struct _entity_data {
 /*
  * Map a entity type to a display string
  */
-static const char* 
+static const char*
 entityTypeDescription(entity_type type) {
     switch (type) {
-        case ENTITY_TYPE_UNKNOWN:
-            return "?";
-        case ENTITY_TYPE_MON:
-            return "mon";
-        case ENTITY_TYPE_MDS:
-            return "mds";
-        case ENTITY_TYPE_OSD:
-            return "osd";
-        case ENTITY_TYPE_CLIENT:
-            return "client";
-        case ENTITY_TYPE_AUTH:
-            return "auth";
+	case ENTITY_TYPE_UNKNOWN:
+	    return "?";
+	case ENTITY_TYPE_MON:
+	    return "mon";
+	case ENTITY_TYPE_MDS:
+	    return "mds";
+	case ENTITY_TYPE_OSD:
+	    return "osd";
+	case ENTITY_TYPE_CLIENT:
+	    return "client";
+	case ENTITY_TYPE_AUTH:
+	    return "auth";
     }
     assert(FALSE);
     return NULL;
@@ -237,15 +239,15 @@ entityTypeDescription(entity_type type) {
 /*
  * Test for a valid entity type
  */
-static gboolean 
+static gboolean
 isEntityType(guint32 type) {
     switch (type) {
-        case ENTITY_TYPE_MON:
-        case ENTITY_TYPE_MDS:
-        case ENTITY_TYPE_OSD:
-        case ENTITY_TYPE_CLIENT:
-        case ENTITY_TYPE_AUTH:
-            return TRUE;
+	case ENTITY_TYPE_MON:
+	case ENTITY_TYPE_MDS:
+	case ENTITY_TYPE_OSD:
+	case ENTITY_TYPE_CLIENT:
+	case ENTITY_TYPE_AUTH:
+	    return TRUE;
     }
     return FALSE;
 }
@@ -256,33 +258,33 @@ isEntityType(guint32 type) {
 static entity_data*
 conv_get_entity(const address* addr, guint32 port) {
     conversation_t *conv=NULL;
-    entity_data *edata; 
+    entity_data *edata;
 
-    /* 
+    /*
      * Have we seen this conversation before? We record this as a conversation
      * to the same address/port. This is just to help keep the data together.
      */
     conv = conv_find_exact(-1, addr, port, addr, port);
     if (conv == NULL) {
-        edata = (entity_data*)se_alloc(sizeof(entity_data));
-        edata->type = ENTITY_TYPE_UNKNOWN;
-        edata->name = NULL;
-        SE_COPY_ADDRESS(&edata->addr,addr);
-        edata->port = port;
-        conv = conversation_new(0, addr, addr, PT_TCP, port, port, 0);
-        conversation_add_proto_data(conv, g_proto_ceph, edata);
+	edata = (entity_data*)se_alloc(sizeof(entity_data));
+	edata->type = ENTITY_TYPE_UNKNOWN;
+	edata->name = NULL;
+	SE_COPY_ADDRESS(&edata->addr,addr);
+	edata->port = port;
+	conv = conversation_new(0, addr, addr, PT_TCP, port, port, 0);
+	conversation_add_proto_data(conv, g_proto_ceph, edata);
     } else {
-        edata=(entity_data*)conversation_get_proto_data(conv, g_proto_ceph);
+	edata=(entity_data*)conversation_get_proto_data(conv, g_proto_ceph);
     }
     return edata;
 }
 
 /****************************************************************************
  * Data for tracking messages
- * This is mainly to track the startup handling which was confusing in the 
+ * This is mainly to track the startup handling which was confusing in the
  * old dissector because the connect_reply would appear before its matching
- * request. Here we track in finer granularity and allow for some 
- * interweaving of messages. Of course the code also needs to handle traces 
+ * request. Here we track in finer granularity and allow for some
+ * interweaving of messages. Of course the code also needs to handle traces
  * which have conversations already running.
  ****************************************************************************/
 enum msg_type {
@@ -292,33 +294,33 @@ enum msg_type {
     CLIENT_ADDRESS =0x8,    /* Client sends it own address to server */
     CONNECT_REQUEST=0x10,    /* Client send connection request to server */
     CONNECT_REPLY  =0x20,    /* Server responds to connect request */
-    CONVERSING     =0x40    /* All other messages */
+    CONVERSING	   =0x40    /* All other messages */
 };
-#define MSG_ANY        0xFF    /* Accept any type of message */
+#define MSG_ANY	       0xFF    /* Accept any type of message */
 
 /*
- * Per message data, we record these during conversation startup 
+ * Per message data, we record these during conversation startup
  */
 typedef struct _pdu_data {
-    guint32 position;        /* The stream position msg seen at */
-    guint32 toserver;        /* To/from the server */
-    enum msg_type type;     /* The type of this message */
-    guint32 seen;           /* Cumulative flags of previous messages */
+    guint32 position;	     /* The stream position msg seen at */
+    guint32 toserver;	     /* To/from the server */
+    enum msg_type type;	    /* The type of this message */
+    guint32 seen;	    /* Cumulative flags of previous messages */
 } pdu_data;
 
 /*
  * Per conversation data, there should be one of these for every detected
  * conversation between ceph entities. The to/from direction is arbitrary,
- * we probably don't know who the entities are when we establish the 
+ * we probably don't know who the entities are when we establish the
  * conversation.
  */
 typedef struct _conv_data {
     emem_tree_t *pdu_table;    /* Message tree, stores accumulated pdu_data */
-    entity_data* to;        /* Who is this to */
-    entity_data* from;        /* Who is this from */
+    entity_data* to;	    /* Who is this to */
+    entity_data* from;	      /* Who is this from */
     guint direction_set;    /* Do we know to/from set correctly */
-    char* displayT2F;        /* Cached 'to' to 'from' display string */
-    char* displayF2T;        /* Cached 'from' to 'to' display string */
+    char* displayT2F;	     /* Cached 'to' to 'from' display string */
+    char* displayF2T;	     /* Cached 'from' to 'to' display string */
 } conv_data;
 
 /*
@@ -330,26 +332,26 @@ conv_get(packet_info *pinfo) {
     conv_data* cdata;
 
     /* Have we seen this conversation before? */
-    conv = conv_find_exact(pinfo->fd->num, &pinfo->src, pinfo->srcport, 
-                &pinfo->dst, pinfo->destport);
+    conv = conv_find_exact(pinfo->fd->num, &pinfo->src, pinfo->srcport,
+		&pinfo->dst, pinfo->destport);
     if (conv == NULL) {
-        conv = conversation_new(pinfo->fd->num, &pinfo->src,
-                    &pinfo->dst, pinfo->ptype,
-                    pinfo->srcport, pinfo->destport, 0);
-        conv = conv_find_exact(pinfo->fd->num, &pinfo->src, pinfo->srcport, 
-                    &pinfo->dst, pinfo->destport);
+	conv = conversation_new(pinfo->fd->num, &pinfo->src,
+		    &pinfo->dst, pinfo->ptype,
+		    pinfo->srcport, pinfo->destport, 0);
+	conv = conv_find_exact(pinfo->fd->num, &pinfo->src, pinfo->srcport,
+		    &pinfo->dst, pinfo->destport);
     }
 
     cdata=(conv_data*)conversation_get_proto_data(conv, g_proto_ceph);
     if (cdata==NULL) {
-        cdata = (conv_data*)se_alloc(sizeof(conv_data));
-        cdata->pdu_table = se_tree_create(EMEM_TREE_TYPE_RED_BLACK, "ceph_pdu");
-        cdata->to = conv_get_entity(&pinfo->dst, pinfo->destport);
-        cdata->from = conv_get_entity(&pinfo->src, pinfo->srcport);
-        cdata->direction_set = FALSE;
-        cdata->displayT2F=NULL;
-        cdata->displayF2T=NULL;
-        conversation_add_proto_data(conv, g_proto_ceph, cdata);
+	cdata = (conv_data*)se_alloc(sizeof(conv_data));
+	cdata->pdu_table = se_tree_create(EMEM_TREE_TYPE_RED_BLACK, "ceph_pdu");
+	cdata->to = conv_get_entity(&pinfo->dst, pinfo->destport);
+	cdata->from = conv_get_entity(&pinfo->src, pinfo->srcport);
+	cdata->direction_set = FALSE;
+	cdata->displayT2F=NULL;
+	cdata->displayF2T=NULL;
+	conversation_add_proto_data(conv, g_proto_ceph, cdata);
     }
     return cdata;
 }
@@ -366,44 +368,44 @@ conv_fixup(guint clientSrc, packet_info *pinfo) {
     pdu_data* pdata;
     guint position;
 
-    conv = conv_find_exact(pinfo->fd->num, &pinfo->src, pinfo->srcport, 
-                &pinfo->dst, pinfo->destport);
+    conv = conv_find_exact(pinfo->fd->num, &pinfo->src, pinfo->srcport,
+		&pinfo->dst, pinfo->destport);
     if (conv != NULL) {
-        /* Do we need to reverse because from & to mixup */
-        cdata=(conv_data*)conversation_get_proto_data(conv, g_proto_ceph);
-        if (cdata->direction_set==FALSE) {
-            cdata->direction_set=TRUE;
-            fromClient = ADDRESSES_EQUAL(&pinfo->src, &cdata->from->addr) && 
-                            pinfo->srcport == cdata->from->port;
-            if (clientSrc != fromClient) {
-                edata = cdata->from;
-                cdata->from = cdata->to;
-                cdata->to = edata;
-                cdata->displayF2T = NULL;
-                cdata->displayT2F = NULL;
-            }
+	/* Do we need to reverse because from & to mixup */
+	cdata=(conv_data*)conversation_get_proto_data(conv, g_proto_ceph);
+	if (cdata->direction_set==FALSE) {
+	    cdata->direction_set=TRUE;
+	    fromClient = ADDRESSES_EQUAL(&pinfo->src, &cdata->from->addr) &&
+			    pinfo->srcport == cdata->from->port;
+	    if (clientSrc != fromClient) {
+		edata = cdata->from;
+		cdata->from = cdata->to;
+		cdata->to = edata;
+		cdata->displayF2T = NULL;
+		cdata->displayT2F = NULL;
+	    }
 
-            /* & Reverse pdata as well correcting SERVER_BANNER if needed */
-            position = 0xFFFFFFFF;
-            while ((pdata = (pdu_data*)se_tree_lookup32_le(
-                    cdata->pdu_table, position))!=NULL) {
-                if (clientSrc != fromClient)
-                    pdata->toserver = !pdata->toserver;
-                if (pdata->toserver && pdata->type == SERVER_BANNER) {
-                    pdata->type = CLIENT_BANNER;
-                    pdata->seen &= (~SERVER_BANNER);
-                    pdata->seen |= CLIENT_BANNER;
-                }
-                position = pdata->position -1;
-            }
-        }
+	    /* & Reverse pdata as well correcting SERVER_BANNER if needed */
+	    position = 0xFFFFFFFF;
+	    while ((pdata = (pdu_data*)se_tree_lookup32_le(
+		    cdata->pdu_table, position))!=NULL) {
+		if (clientSrc != fromClient)
+		    pdata->toserver = !pdata->toserver;
+		if (pdata->toserver && pdata->type == SERVER_BANNER) {
+		    pdata->type = CLIENT_BANNER;
+		    pdata->seen &= (~SERVER_BANNER);
+		    pdata->seen |= CLIENT_BANNER;
+		}
+		position = pdata->position -1;
+	    }
+	}
     }
 }
 
 /*
  * Calculate the stream index for a given offset
  */
-static guint32 
+static guint32
 conv_position(packet_info *pinfo, tvbuff_t *tvb, guint32 offset) {
     return pinfo->fd->cum_bytes - tvb_reported_length_remaining (tvb, offset);
 }
@@ -416,25 +418,25 @@ conv_expecting(packet_info *pinfo, tvbuff_t *tvb, guint32 offset) {
     guint32 position;
 
     cdata = conv_get(pinfo);
-    
+
     /*
      * Return what should be happening next
      */
     position = conv_position(pinfo, tvb, offset);
     pdata = (pdu_data*)se_tree_lookup32_le(cdata->pdu_table, position);
-    
+
     /*
      * If new may see any message type
      */
-    if (pdata == 0) 
-        return MSG_ANY;
+    if (pdata == 0)
+	return MSG_ANY;
 
     /*
      * If exact match, return what we actually saw in previous dissect
      */
-    if (pdata->position == position) 
-        return pdata->type;
-    
+    if (pdata->position == position)
+	return pdata->type;
+
     /*
      * Otherwise, work out what could be next, the difficulty here is that
      * the client banner may appear before or after the server sends its
@@ -443,27 +445,27 @@ conv_expecting(packet_info *pinfo, tvbuff_t *tvb, guint32 offset) {
      */
     allowed = 0;
     switch (pdata->type) {
-        case SERVER_BANNER:
-            return (CLIENT_BANNER | SERVER_ADDRESS | CLIENT_ADDRESS);
-        case CLIENT_BANNER:
-            if ((pdata->seen & SERVER_ADDRESS) == 0)
-                allowed = SERVER_ADDRESS;
-            allowed |= CLIENT_ADDRESS;
-            break;
-        case SERVER_ADDRESS:
-            if ((pdata->seen & CLIENT_BANNER) == 0)
-                allowed = CLIENT_BANNER;
-            allowed |= CLIENT_ADDRESS;
-            break;
-        case CLIENT_ADDRESS:
-            allowed = CONNECT_REQUEST;
-            break;
-        case CONNECT_REQUEST:
-            allowed = CONNECT_REPLY;
-            break;
-        case CONNECT_REPLY:
-        default:
-            allowed = CONVERSING;
+	case SERVER_BANNER:
+	    return (CLIENT_BANNER | SERVER_ADDRESS | CLIENT_ADDRESS);
+	case CLIENT_BANNER:
+	    if ((pdata->seen & SERVER_ADDRESS) == 0)
+		allowed = SERVER_ADDRESS;
+	    allowed |= CLIENT_ADDRESS;
+	    break;
+	case SERVER_ADDRESS:
+	    if ((pdata->seen & CLIENT_BANNER) == 0)
+		allowed = CLIENT_BANNER;
+	    allowed |= CLIENT_ADDRESS;
+	    break;
+	case CLIENT_ADDRESS:
+	    allowed = CONNECT_REQUEST;
+	    break;
+	case CONNECT_REQUEST:
+	    allowed = CONNECT_REPLY;
+	    break;
+	case CONNECT_REPLY:
+	default:
+	    allowed = CONVERSING;
     }
     return allowed;
 }
@@ -471,9 +473,9 @@ conv_expecting(packet_info *pinfo, tvbuff_t *tvb, guint32 offset) {
 /*
  * Tag a position in a conversation as a specific type
  */
-static void 
-conv_tag(packet_info *pinfo, tvbuff_t *tvb, 
-        guint32 offset, enum msg_type type) {
+static void
+conv_tag(packet_info *pinfo, tvbuff_t *tvb,
+	guint32 offset, enum msg_type type) {
     conv_data* cdata;
     pdu_data* pdata;
     pdu_data* previous_pdata;
@@ -487,41 +489,41 @@ conv_tag(packet_info *pinfo, tvbuff_t *tvb,
     pdata = (pdu_data*)se_tree_lookup32(cdata->pdu_table, position);
 
     if (pdata == 0) {
-        pdata = (pdu_data*)se_alloc(sizeof(pdu_data));
-        pdata->position = position;
-        pdata->toserver = (ADDRESSES_EQUAL(&cdata->to->addr, &pinfo->dst) &&
-            cdata->to->port == pinfo->destport);
-        pdata->type = type;
-        pdata->seen = type;
-        
-        /*
-         * If new we have to carry forward previously seen to allow for
-         * checking on interleaving of messages, a pain I know..
-         */
-        previous_pdata = (pdu_data*)se_tree_lookup32_le(cdata->pdu_table, 
-                position-1);
-        if (previous_pdata != 0) {
-            pdata->seen |= previous_pdata->seen;
-        }
+	pdata = (pdu_data*)se_alloc(sizeof(pdu_data));
+	pdata->position = position;
+	pdata->toserver = (ADDRESSES_EQUAL(&cdata->to->addr, &pinfo->dst) &&
+	    cdata->to->port == pinfo->destport);
+	pdata->type = type;
+	pdata->seen = type;
 
-        /*
-         * Insert new record
-         */
-        se_tree_insert32(cdata->pdu_table, position, pdata);
-        
+	/*
+	 * If new we have to carry forward previously seen to allow for
+	 * checking on interleaving of messages, a pain I know..
+	 */
+	previous_pdata = (pdu_data*)se_tree_lookup32_le(cdata->pdu_table,
+		position-1);
+	if (previous_pdata != 0) {
+	    pdata->seen |= previous_pdata->seen;
+	}
+
+	/*
+	 * Insert new record
+	 */
+	se_tree_insert32(cdata->pdu_table, position, pdata);
+
     } else {
-        /*
-         * Just update the existing record
-         */
-        pdata->type = type;
-        pdata->seen |= type;
+	/*
+	 * Just update the existing record
+	 */
+	pdata->type = type;
+	pdata->seen |= type;
     }
 }
 
 static void
 conv_setfrom(packet_info *pinfo, entity_type type) {
     conv_data* cdata;
-    
+
     cdata = conv_get(pinfo);
     cdata->from->type = type;
     cdata->displayT2F = NULL;
@@ -535,14 +537,14 @@ conv_format(const entity_data* from, const entity_data* to) {
 
     from_name = entityTypeDescription(from->type);
     if (from->name) {
-        from_name = se_strdup_printf("%s.%s", 
-            entityTypeDescription(from->type), from->name);
+	from_name = se_strdup_printf("%s.%s",
+	    entityTypeDescription(from->type), from->name);
     }
 
     to_name = entityTypeDescription(to->type);
     if (to->name) {
-        to_name = se_strdup_printf("%s.%s", 
-            entityTypeDescription(to->type), to->name);
+	to_name = se_strdup_printf("%s.%s",
+	    entityTypeDescription(to->type), to->name);
     }
 
     return se_strdup_printf("%s -> %s", from_name, to_name);
@@ -555,21 +557,21 @@ static char*
 conv_display(packet_info *pinfo) {
     conv_data* cdata;
     guint to;
-    
+
     cdata = conv_get(pinfo);
     to = ADDRESSES_EQUAL(&cdata->to->addr, &pinfo->dst) &&
-        cdata->to->port == pinfo->destport;
+	cdata->to->port == pinfo->destport;
 
     if (to) {
-        if (cdata->displayF2T == NULL) {
-            cdata->displayF2T = conv_format(cdata->from, cdata->to);
-        }
-        return cdata->displayF2T;
+	if (cdata->displayF2T == NULL) {
+	    cdata->displayF2T = conv_format(cdata->from, cdata->to);
+	}
+	return cdata->displayF2T;
     } else {
-        if (cdata->displayT2F == NULL) {
-            cdata->displayT2F = conv_format(cdata->to, cdata->from);
-        }
-        return cdata->displayT2F;
+	if (cdata->displayT2F == NULL) {
+	    cdata->displayT2F = conv_format(cdata->to, cdata->from);
+	}
+	return cdata->displayT2F;
     }
 }
 
@@ -608,20 +610,20 @@ conv_get_entity_frominfo(entity_info* info) {
  * nameOffset is offset into tvb of where to find FT_UINT_STRING
  */
 static void
-conv_set_entity_name(entity_data* edata, tvbuff_t *tvb, 
-        guint32 nameOffset, entity_type type) {
+conv_set_entity_name(entity_data* edata, tvbuff_t *tvb,
+	guint32 nameOffset, entity_type type) {
     guint32 len;
 
     if (type != ENTITY_TYPE_UNKNOWN)
-        edata->type = type;
+	edata->type = type;
 
     /* Same name? */
     len = tvb_get_letohl(tvb, nameOffset);
     if (edata->name) {
-        if (strlen(edata->name) == len &&
-            tvb_memeql(tvb, nameOffset+4, edata->name, len)) {
-                return;
-        }
+	if (strlen(edata->name) == len &&
+	    tvb_memeql(tvb, nameOffset+4, edata->name, len)) {
+		return;
+	}
     }
     edata->name = (char*)se_alloc(len+1);
     tvb_memcpy(tvb, edata->name, nameOffset+4,len);
@@ -644,16 +646,16 @@ static guint g_firstPdu;
 static void
 setPDUInfo(packet_info *pinfo, const char* info) {
 
-    /* 
+    /*
      * Reset info column, with a fence to stop being changed by other PDUs that
      * might be contained in the same packet.
      */
     if(check_col(pinfo->cinfo,COL_INFO)){
-        if (g_firstPdu == TRUE)
-            col_add_fstr(pinfo->cinfo, COL_INFO, " %s", info);
-        else
-            col_add_fstr(pinfo->cinfo, COL_INFO, ", %s", info);
-        col_set_fence(pinfo->cinfo,COL_INFO);
+	if (g_firstPdu == TRUE)
+	    col_add_fstr(pinfo->cinfo, COL_INFO, " %s", info);
+	else
+	    col_add_fstr(pinfo->cinfo, COL_INFO, ", %s", info);
+	col_set_fence(pinfo->cinfo,COL_INFO);
     }
 }
 
@@ -667,65 +669,65 @@ setPDUInfo(packet_info *pinfo, const char* info) {
  * decoding so that is what we do. I have included structures in comments
  * just to make it easier to understand what the code is pulling apart.
  *
- * The dissector functions *may* check the data contents for sanity to allow 
+ * The dissector functions *may* check the data contents for sanity to allow
  * them to be used where the content type is ambiguous. If the data provided
  * can not be for that dissector the return will be 0. If there is not enough
  * data then they return -1. Otherwise they return the number of bytes they
- * consumed so they can be used to dissect multiple PDUs per packet. 
+ * consumed so they can be used to dissect multiple PDUs per packet.
  *
  ****************************************************************************/
 
 /*
  * Message tag types, numbers must match protocol
- * There are two types of tags here, most are used with connect_reply to 
+ * There are two types of tags here, most are used with connect_reply to
  * indicate status, but CLOSE, MSG, ACK & KEEPALIVE tags are used for
  * standalone messages. TAG_SEQ is another oddball, it indicates the server
  * is requesting an exhachange of sequence numbers following the connect_reply.
  */
 enum msg_tag {
     MSGR_TAG_MIN=1,
-    MSGR_TAG_READY=1,            /* S->C: ready for messages */
-    MSGR_TAG_RESETSESSION=2,    /* S->C: reset, try again */
-    MSGR_TAG_WAIT=3,            /* S->C: wait for racing incoming connection */
-    MSGR_TAG_RETRY_SESSION=4,    /* S->C + cseq: try again with higher cseq */
-    MSGR_TAG_RETRY_GLOBAL=5,    /* S->C + gseq: try again with higher gseq */
-    MSGR_TAG_CLOSE=6,            /* closing pipe */
-    MSGR_TAG_MSG=7,                /* message */
-    MSGR_TAG_ACK=8,                /* message ack */
-    MSGR_TAG_KEEPALIVE=9,        /* just a keepalive byte! */
-    MSGR_TAG_BADPROTOVER=10,    /* bad protocol version */
-    MSGR_TAG_BADAUTHORIZER=11,    /* bad authorizer */
-    MSGR_TAG_FEATURES=12,        /* insufficient features */
-    MSGR_TAG_SEQ=13,            /* 64-bit int follows with seen seq number */
+    MSGR_TAG_READY=1,		 /* S->C: ready for messages */
+    MSGR_TAG_RESETSESSION=2,	/* S->C: reset, try again */
+    MSGR_TAG_WAIT=3,		/* S->C: wait for racing incoming connection */
+    MSGR_TAG_RETRY_SESSION=4,	 /* S->C + cseq: try again with higher cseq */
+    MSGR_TAG_RETRY_GLOBAL=5,	/* S->C + gseq: try again with higher gseq */
+    MSGR_TAG_CLOSE=6,		 /* closing pipe */
+    MSGR_TAG_MSG=7,		   /* message */
+    MSGR_TAG_ACK=8,		   /* message ack */
+    MSGR_TAG_KEEPALIVE=9,	 /* just a keepalive byte! */
+    MSGR_TAG_BADPROTOVER=10,	/* bad protocol version */
+    MSGR_TAG_BADAUTHORIZER=11,	  /* bad authorizer */
+    MSGR_TAG_FEATURES=12,	 /* insufficient features */
+    MSGR_TAG_SEQ=13,		/* 64-bit int follows with seen seq number */
     MSGR_TAG_MAX=13
 };
 
-static guint 
+static guint
 isMsgrTag(guint tag) {
     return (tag>=MSGR_TAG_MIN && tag<=MSGR_TAG_MAX);
 }
 
-static guint 
+static guint
 isMsgrConnectTag(guint tag) {
-    return isMsgrTag(tag) && 
-        (tag != MSGR_TAG_CLOSE) &&
-        (tag != MSGR_TAG_MSG) &&
-        (tag != MSGR_TAG_ACK) &&
-        (tag != MSGR_TAG_KEEPALIVE);
+    return isMsgrTag(tag) &&
+	(tag != MSGR_TAG_CLOSE) &&
+	(tag != MSGR_TAG_MSG) &&
+	(tag != MSGR_TAG_ACK) &&
+	(tag != MSGR_TAG_KEEPALIVE);
 }
 
-static const char* 
+static const char*
 replyTagDescription(guint tag) {
     switch (tag) {
-        case MSGR_TAG_READY: return "Ready";
-        case MSGR_TAG_RESETSESSION: return "Reset Session";
-        case MSGR_TAG_WAIT: return "Wait";
-        case MSGR_TAG_RETRY_SESSION: return "Retry Session";
-        case MSGR_TAG_RETRY_GLOBAL: return "Retry Global";
-        case MSGR_TAG_BADPROTOVER: return "Bad Protocol";
-        case MSGR_TAG_BADAUTHORIZER: return "Bad Authorizer";
-        case MSGR_TAG_FEATURES: return "Missing Features";
-        case MSGR_TAG_SEQ: return "Sequence";
+	case MSGR_TAG_READY: return "Ready";
+	case MSGR_TAG_RESETSESSION: return "Reset Session";
+	case MSGR_TAG_WAIT: return "Wait";
+	case MSGR_TAG_RETRY_SESSION: return "Retry Session";
+	case MSGR_TAG_RETRY_GLOBAL: return "Retry Global";
+	case MSGR_TAG_BADPROTOVER: return "Bad Protocol";
+	case MSGR_TAG_BADAUTHORIZER: return "Bad Authorizer";
+	case MSGR_TAG_FEATURES: return "Missing Features";
+	case MSGR_TAG_SEQ: return "Sequence";
     }
     return NULL;
 }
@@ -742,33 +744,33 @@ replyTagDescription(guint tag) {
  * Dissect a banner, this can be used in either direction, client to server
  * or server to client.
  */
-static gint 
-dissect_banner(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
-        guint offset, guint client)
+static gint
+dissect_banner(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
+	guint offset, guint client)
 {
     proto_tree *ceph_banner_tree = NULL;
     proto_item *ceph_sub_item = NULL;
 
     if (tvb_strneql(tvb, offset, CEPH_BANNER, CEPH_BANNER_LEN) == 0) {
-        
-        /* All OK, just show the banner */
-        setPDUInfo(pinfo, client?"Client Banner":"Server Banner");
-        ceph_sub_item = proto_tree_add_item( tree, hf_banner, tvb, offset, 
-                CEPH_BANNER_LEN, TRUE );
-        ceph_banner_tree = proto_item_add_subtree(ceph_sub_item, ett_banner);
-        proto_tree_add_item(ceph_banner_tree, hf_banner_magic, tvb, offset, 
-            CEPH_BANNER_MAGIC_LEN, TRUE);
-        proto_tree_add_item(ceph_banner_tree, hf_banner_version, tvb, offset+
-            CEPH_BANNER_MAGIC_LEN, CEPH_BANNER_LEN-CEPH_BANNER_MAGIC_LEN, TRUE);
 
-        return CEPH_BANNER_LEN;
-    } else if (tvb_reported_length_remaining (tvb, offset) >= 
-            (gint)CEPH_BANNER_LEN) {
-        /* Enough data, but not a banner */
-        return 0;
+	/* All OK, just show the banner */
+	setPDUInfo(pinfo, client?"Client Banner":"Server Banner");
+	ceph_sub_item = proto_tree_add_item( tree, hf_banner, tvb, offset,
+		CEPH_BANNER_LEN, TRUE );
+	ceph_banner_tree = proto_item_add_subtree(ceph_sub_item, ett_banner);
+	proto_tree_add_item(ceph_banner_tree, hf_banner_magic, tvb, offset,
+	    CEPH_BANNER_MAGIC_LEN, TRUE);
+	proto_tree_add_item(ceph_banner_tree, hf_banner_version, tvb, offset+
+	    CEPH_BANNER_MAGIC_LEN, CEPH_BANNER_LEN-CEPH_BANNER_MAGIC_LEN, TRUE);
+
+	return CEPH_BANNER_LEN;
+    } else if (tvb_reported_length_remaining (tvb, offset) >=
+	    (gint)CEPH_BANNER_LEN) {
+	/* Enough data, but not a banner */
+	return 0;
     } else {
-        /* Not enough data */
-        return -1;
+	/* Not enough data */
+	return -1;
     }
 }
 
@@ -785,11 +787,11 @@ isFamily(guint32 family) {
     return ((family==CEPH_AF_INET) || (family==CEPH_AF_INET6));
 }
 
-static const char* 
+static const char*
 familyDescription(guint family) {
     switch (family) {
-        case CEPH_AF_INET: return "inet V4";
-        case CEPH_AF_INET6: return "inet V6";
+	case CEPH_AF_INET: return "inet V4";
+	case CEPH_AF_INET6: return "inet V6";
     }
     return NULL;
 }
@@ -799,9 +801,9 @@ familyDescription(guint family) {
  * but this is the structure used by the protocol.
  *
 struct ceph_sockaddr_storage {
-    guint16 ss_family;  
+    guint16 ss_family;
     guint8 __ss_pad1[6];
-    guint64 __ss_align; 
+    guint64 __ss_align;
     guint8 __ss_pad2[112];
 }
 */
@@ -811,36 +813,36 @@ struct ceph_sockaddr_storage {
  * Dissect a sockaddr_storage. This may be a IPv4 or IPv6 format but currently
  * only IPv4 is handled.
  */
-static gint 
-dissect_sockaddr_in(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
-        guint offset, sockaddr_info* info)
+static gint
+dissect_sockaddr_in(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
+	guint offset, sockaddr_info* info)
 {
     proto_tree *ceph_sockaddr_tree;
     proto_item *ceph_sub_item = NULL;
     guint16 family;
 
-    ceph_sub_item = proto_tree_add_item( tree, hf_sockaddr_in, tvb, offset, 
-            16, TRUE );
+    ceph_sub_item = proto_tree_add_item( tree, hf_sockaddr_in, tvb, offset,
+	    16, TRUE );
     ceph_sockaddr_tree = proto_item_add_subtree(ceph_sub_item, ett_sockaddr_in);
 
     family = tvb_get_ntohs(tvb, offset);
     if (family == CEPH_AF_INET6) {
-        expert_add_info_format(pinfo, ceph_sub_item, PI_UNDECODED, PI_WARN, 
-            "Address using IPv6 addressing, dissecting is not yet supported");
+	expert_add_info_format(pinfo, ceph_sub_item, PI_UNDECODED, PI_WARN,
+	    "Address using IPv6 addressing, dissecting is not yet supported");
     } else if (family == CEPH_AF_INET) {
-        proto_tree_add_uint_format_value(ceph_sockaddr_tree, hf_sin_family, tvb,
-            offset, 2,     family, "%d (%s)", family, familyDescription(family));
-        proto_tree_add_item(ceph_sockaddr_tree, hf_sin_port, tvb, offset+2, 
-            2, ENC_BIG_ENDIAN);
-        proto_tree_add_item(ceph_sockaddr_tree, hf_sin_addr, tvb, offset+4, 
-            4, FALSE);
-        if (info) {
-            info->port = tvb_get_ntohs(tvb, offset+2);
-            info->addr = tvb_get_letohl(tvb, offset+4);
-        }
+	proto_tree_add_uint_format_value(ceph_sockaddr_tree, hf_sin_family, tvb,
+	    offset, 2,	   family, "%d (%s)", family, familyDescription(family));
+	proto_tree_add_item(ceph_sockaddr_tree, hf_sin_port, tvb, offset+2,
+	    2, ENC_BIG_ENDIAN);
+	proto_tree_add_item(ceph_sockaddr_tree, hf_sin_addr, tvb, offset+4,
+	    4, FALSE);
+	if (info) {
+	    info->port = tvb_get_ntohs(tvb, offset+2);
+	    info->addr = tvb_get_letohl(tvb, offset+4);
+	}
     } else {
-        expert_add_info_format(pinfo, ceph_sub_item, PI_UNDECODED, PI_WARN, 
-            "Unknown family (%d) being used in address", family);
+	expert_add_info_format(pinfo, ceph_sub_item, PI_UNDECODED, PI_WARN,
+	    "Unknown family (%d) being used in address", family);
     }
     offset += 16;
     return offset;
@@ -851,7 +853,7 @@ dissect_sockaddr_in(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
  *
 struct ceph_entity_addr {
     guint32 type;
-    guint32 nonce;                            // unique id for process (e.g. pid) 
+    guint32 nonce;			      // unique id for process (e.g. pid)
     struct ceph_sockaddr_storage in_addr;
 };
 */
@@ -860,42 +862,42 @@ struct ceph_entity_addr {
 /*
  * Dissect an entity address, just a type
  */
-static gint 
-dissect_entity_addr(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
-        guint offset, entity_info* info)
+static gint
+dissect_entity_addr(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
+	guint offset, entity_info* info)
 {
     proto_tree *ceph_entity_tree = NULL;
     proto_item *ceph_sub_item = NULL;
     guint16 family;
 
     /* Check the sockaddr_in looks sane before full decoding */
-    if (tvb_reported_length_remaining (tvb, offset) < SIZE_OF_ENTITY_ADDR) 
-        return -1;
+    if (tvb_reported_length_remaining (tvb, offset) < SIZE_OF_ENTITY_ADDR)
+	return -1;
 
     /* TODO: Could really do with better sanity checking here */
     family = tvb_get_ntohs(tvb, offset+8);
     if (family != CEPH_AF_INET && family!= CEPH_AF_INET6) {
-        return 0;
+	return 0;
     }
 
     /* Decode it */
     if (tree) {
-        ceph_sub_item = proto_tree_add_item( tree, hf_entity_addr, tvb, offset, 
-                SIZE_OF_ENTITY_ADDR, TRUE );
-        ceph_entity_tree = proto_item_add_subtree(ceph_sub_item, 
-                ett_entity_addr);
-        proto_tree_add_item(ceph_entity_tree, hf_entity_erank, tvb, offset, 
-                4, TRUE);
-        proto_tree_add_item(ceph_entity_tree, hf_entity_nonce, tvb, offset+4, 
-                4, TRUE);
+	ceph_sub_item = proto_tree_add_item( tree, hf_entity_addr, tvb, offset,
+		SIZE_OF_ENTITY_ADDR, TRUE );
+	ceph_entity_tree = proto_item_add_subtree(ceph_sub_item,
+		ett_entity_addr);
+	proto_tree_add_item(ceph_entity_tree, hf_entity_erank, tvb, offset,
+		4, TRUE);
+	proto_tree_add_item(ceph_entity_tree, hf_entity_nonce, tvb, offset+4,
+		4, TRUE);
     }
 
-    dissect_sockaddr_in(tvb, pinfo, ceph_entity_tree, offset+8, 
-            info? &info->addr:NULL);
+    dissect_sockaddr_in(tvb, pinfo, ceph_entity_tree, offset+8,
+	    info? &info->addr:NULL);
 
     if (info) {
-        info->erank = tvb_get_letohl(tvb, offset);
-        info->nonce = tvb_get_letohl(tvb, offset+4);
+	info->erank = tvb_get_letohl(tvb, offset);
+	info->nonce = tvb_get_letohl(tvb, offset+4);
     }
 
     return SIZE_OF_ENTITY_ADDR;
@@ -910,21 +912,21 @@ struct ceph_server_address {
 };
 */
 static gint
-dissect_server_address(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
-        guint offset) {
+dissect_server_address(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
+	guint offset) {
     gint len1;
     gint len2;
-    
+
     len1 = dissect_entity_addr(tvb, pinfo, tree, offset, NULL);
     if (len1 > 0) {
-        offset += len1;
-        len2 = dissect_entity_addr(tvb, pinfo, tree, offset, NULL);
-        if (len2>0) {
-            setPDUInfo(pinfo, "Server Addresses");
-            conv_fixup(FALSE, pinfo);
-            return len1+len2;
-        }
-        return len2;
+	offset += len1;
+	len2 = dissect_entity_addr(tvb, pinfo, tree, offset, NULL);
+	if (len2>0) {
+	    setPDUInfo(pinfo, "Server Addresses");
+	    conv_fixup(FALSE, pinfo);
+	    return len1+len2;
+	}
+	return len2;
     }
     return len1;
 }
@@ -937,26 +939,26 @@ struct ceph_client_address {
 };
 */
 static gint
-dissect_client_address(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
-        guint offset) {
+dissect_client_address(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
+	guint offset) {
     gint len;
 
-    /* To avoid identifying a server address as a client address we rely on the 
-     * server sending its data un-fragmented after a banner, so either we have 
+    /* To avoid identifying a server address as a client address we rely on the
+     * server sending its data un-fragmented after a banner, so either we have
      * data for two valid addresses or this must be a client address.
      */
     if (tvb_reported_length_remaining (tvb, offset) >= 2*SIZE_OF_ENTITY_ADDR) {
-        /* Might be a server address, peek to see */
-        if (isFamily(tvb_get_ntohs(tvb, offset+8)) && 
-            isFamily(tvb_get_ntohs(tvb, offset+SIZE_OF_ENTITY_ADDR+8)))
-            return 0;
+	/* Might be a server address, peek to see */
+	if (isFamily(tvb_get_ntohs(tvb, offset+8)) &&
+	    isFamily(tvb_get_ntohs(tvb, offset+SIZE_OF_ENTITY_ADDR+8)))
+	    return 0;
     }
 
     /* Is it just a client addr */
     len=dissect_entity_addr(tvb, pinfo, tree, offset, NULL);
     if (len>0) {
-        setPDUInfo(pinfo,"Client Address");
-        conv_fixup(TRUE, pinfo);
+	setPDUInfo(pinfo,"Client Address");
+	conv_fixup(TRUE, pinfo);
     }
     return len;
 }
@@ -970,85 +972,85 @@ dissect_client_address(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
  * msg_connect - Client->Server connection request
  *
 struct ceph_msg_connect {
-    guint64 features;            // supported feature bits 
-    guint32 host_type;            // CEPH_ENTITY_TYPE_*
-    guint32 global_seq;            // count connections initiated by this host 
-    guint32 connect_seq;        // count connections initiated in this session 
+    guint64 features;		 // supported feature bits
+    guint32 host_type;		  // CEPH_ENTITY_TYPE_*
+    guint32 global_seq;		   // count connections initiated by this host
+    guint32 connect_seq;	// count connections initiated in this session
     guint32 protocol_version;
     guint32 authorizer_protocol;
     guint32 authorizer_len;
-    guint8  flags;                // CEPH_MSG_CONNECT_* 
+    guint8  flags;		  // CEPH_MSG_CONNECT_*
 }
 */
 #define SIZE_OF_MSG_CONNECT    (8+4+4+4+4+4+4+1)
 
-#define FEATURE_UID                        G_GINT64_CONSTANT(1<<0)
-#define FEATURE_NOSRCADDR                G_GINT64_CONSTANT(1<<1)
-#define FEATURE_MONCLOCKCHECK            G_GINT64_CONSTANT(1<<2)
-#define FEATURE_FLOCK                    G_GINT64_CONSTANT(1<<3)
-#define FEATURE_SUBSCRIBE2                G_GINT64_CONSTANT(1<<4)
-#define FEATURE_MONNAMES                G_GINT64_CONSTANT(1<<5)
-#define FEATURE_RECONNECT_SEQ            G_GINT64_CONSTANT(1<<6)
-#define FEATURE_DIRLAYOUTHASH            G_GINT64_CONSTANT(1<<7)
-#define FEATURE_OBJECTLOCATOR            G_GINT64_CONSTANT(1<<8)
-#define FEATURE_PGID64                    G_GINT64_CONSTANT(1<<9)
-#define FEATURE_INCSUBOSDMAP            G_GINT64_CONSTANT(1<<10)
-#define FEATURE_PGPOOL3                    G_GINT64_CONSTANT(1<<11)
-#define FEATURE_OSDREPLYMUX                G_GINT64_CONSTANT(1<<12)
-#define FEATURE_OSDENC                    G_GINT64_CONSTANT(1<<13)
-#define FEATURE_OMAP                    G_GINT64_CONSTANT(1<<14)
-#define FEATURE_MONENC                    G_GINT64_CONSTANT(1<<15)
-#define FEATURE_QUERY_T                    G_GINT64_CONSTANT(1<<16)
-#define FEATURE_INDEP_PG_MAP            G_GINT64_CONSTANT(1<<17)
-#define FEATURE_CRUSH_TUNABLES            G_GINT64_CONSTANT(1<<18)
-#define FEATURE_CHUNKY_SCRUB            G_GINT64_CONSTANT(1<<19)
-#define FEATURE_MON_NULLROUTE            G_GINT64_CONSTANT(1<<20)
-#define FEATURE_MON_GV                    G_GINT64_CONSTANT(1<<21)
-#define FEATURE_BACKFILL_RESERVATION    G_GINT64_CONSTANT(1<<22)
-#define FEATURE_MSG_AUTH                G_GINT64_CONSTANT(1<<23)
-#define FEATURE_RECOVERY_RESERVATION    G_GINT64_CONSTANT(1<<24)
-#define FEATURE_CRUSH_TUNABLES2            G_GINT64_CONSTANT(1<<25)
-#define FEATURE_CREATEPOOLID            G_GINT64_CONSTANT(1<<26)
-#define FEATURE_REPLY_CREATE_INODE        G_GINT64_CONSTANT(1<<27)
-#define FEATURE_OSD_HBMSGS                G_GINT64_CONSTANT(1<<28)
-#define FEATURE_MDSENC                    G_GINT64_CONSTANT(1<<29)
-#define FEATURE_OSDHASHPSPOOL            G_GINT64_CONSTANT(1<<30)
-#define FEATURE_MON_SINGLE_PAXOS        G_GINT64_CONSTANT(1<<31)
-#define FEATURE_OSD_SNAPMAPPER            G_GINT64_CONSTANT(0x100000000)
+#define FEATURE_UID			   G_GINT64_CONSTANT(1<<0)
+#define FEATURE_NOSRCADDR		 G_GINT64_CONSTANT(1<<1)
+#define FEATURE_MONCLOCKCHECK		 G_GINT64_CONSTANT(1<<2)
+#define FEATURE_FLOCK			 G_GINT64_CONSTANT(1<<3)
+#define FEATURE_SUBSCRIBE2		  G_GINT64_CONSTANT(1<<4)
+#define FEATURE_MONNAMES		G_GINT64_CONSTANT(1<<5)
+#define FEATURE_RECONNECT_SEQ		 G_GINT64_CONSTANT(1<<6)
+#define FEATURE_DIRLAYOUTHASH		 G_GINT64_CONSTANT(1<<7)
+#define FEATURE_OBJECTLOCATOR		 G_GINT64_CONSTANT(1<<8)
+#define FEATURE_PGID64			  G_GINT64_CONSTANT(1<<9)
+#define FEATURE_INCSUBOSDMAP		G_GINT64_CONSTANT(1<<10)
+#define FEATURE_PGPOOL3			   G_GINT64_CONSTANT(1<<11)
+#define FEATURE_OSDREPLYMUX		   G_GINT64_CONSTANT(1<<12)
+#define FEATURE_OSDENC			  G_GINT64_CONSTANT(1<<13)
+#define FEATURE_OMAP			G_GINT64_CONSTANT(1<<14)
+#define FEATURE_MONENC			  G_GINT64_CONSTANT(1<<15)
+#define FEATURE_QUERY_T			   G_GINT64_CONSTANT(1<<16)
+#define FEATURE_INDEP_PG_MAP		G_GINT64_CONSTANT(1<<17)
+#define FEATURE_CRUSH_TUNABLES		  G_GINT64_CONSTANT(1<<18)
+#define FEATURE_CHUNKY_SCRUB		G_GINT64_CONSTANT(1<<19)
+#define FEATURE_MON_NULLROUTE		 G_GINT64_CONSTANT(1<<20)
+#define FEATURE_MON_GV			  G_GINT64_CONSTANT(1<<21)
+#define FEATURE_BACKFILL_RESERVATION	G_GINT64_CONSTANT(1<<22)
+#define FEATURE_MSG_AUTH		G_GINT64_CONSTANT(1<<23)
+#define FEATURE_RECOVERY_RESERVATION	G_GINT64_CONSTANT(1<<24)
+#define FEATURE_CRUSH_TUNABLES2		   G_GINT64_CONSTANT(1<<25)
+#define FEATURE_CREATEPOOLID		G_GINT64_CONSTANT(1<<26)
+#define FEATURE_REPLY_CREATE_INODE	  G_GINT64_CONSTANT(1<<27)
+#define FEATURE_OSD_HBMSGS		  G_GINT64_CONSTANT(1<<28)
+#define FEATURE_MDSENC			  G_GINT64_CONSTANT(1<<29)
+#define FEATURE_OSDHASHPSPOOL		 G_GINT64_CONSTANT(1<<30)
+#define FEATURE_MON_SINGLE_PAXOS	G_GINT64_CONSTANT(1<<31)
+#define FEATURE_OSD_SNAPMAPPER		  G_GINT64_CONSTANT(0x100000000)
 
-#define FEATURES_ALL           \
-    (FEATURE_UID |             \
-    FEATURE_NOSRCADDR |        \
+#define FEATURES_ALL	       \
+    (FEATURE_UID |	       \
+    FEATURE_NOSRCADDR |	       \
     FEATURE_MONCLOCKCHECK |    \
-    FEATURE_FLOCK |            \
+    FEATURE_FLOCK |	       \
     FEATURE_SUBSCRIBE2 |       \
-    FEATURE_MONNAMES |         \
+    FEATURE_MONNAMES |	       \
     FEATURE_RECONNECT_SEQ |    \
     FEATURE_DIRLAYOUTHASH |    \
     FEATURE_OBJECTLOCATOR |    \
-    FEATURE_PGID64 |           \
+    FEATURE_PGID64 |	       \
     FEATURE_INCSUBOSDMAP |     \
-    FEATURE_PGPOOL3 |          \
+    FEATURE_PGPOOL3 |	       \
     FEATURE_OSDREPLYMUX |      \
-    FEATURE_OSDENC |           \
-    FEATURE_OMAP |             \
-    FEATURE_QUERY_T |          \
-    FEATURE_MONENC |           \
+    FEATURE_OSDENC |	       \
+    FEATURE_OMAP |	       \
+    FEATURE_QUERY_T |	       \
+    FEATURE_MONENC |	       \
     FEATURE_INDEP_PG_MAP |     \
     FEATURE_CRUSH_TUNABLES |   \
     FEATURE_CHUNKY_SCRUB |     \
     FEATURE_MON_NULLROUTE |    \
-    FEATURE_MON_GV |           \
+    FEATURE_MON_GV |	       \
     FEATURE_BACKFILL_RESERVATION | \
-    FEATURE_MSG_AUTH |             \
+    FEATURE_MSG_AUTH |		   \
     FEATURE_RECOVERY_RESERVATION | \
-    FEATURE_CRUSH_TUNABLES2 |      \
-    FEATURE_CREATEPOOLID |         \
+    FEATURE_CRUSH_TUNABLES2 |	   \
+    FEATURE_CREATEPOOLID |	   \
     FEATURE_REPLY_CREATE_INODE |   \
-    FEATURE_OSD_HBMSGS |           \
-    FEATURE_MDSENC |               \
-    FEATURE_OSDHASHPSPOOL |        \
-    FEATURE_MON_SINGLE_PAXOS |     \
+    FEATURE_OSD_HBMSGS |	   \
+    FEATURE_MDSENC |		   \
+    FEATURE_OSDHASHPSPOOL |	   \
+    FEATURE_MON_SINGLE_PAXOS |	   \
     FEATURE_OSD_SNAPMAPPER)
 
 struct feature_description {
@@ -1099,17 +1101,17 @@ static char* featureDescription(guint64 features) {
     char *next;
 
     if (features == (guint64)FEATURES_ALL) {
-        return g_strdup("All features");
+	return g_strdup("All features");
     } else {
-        desc=g_strdup("");
-        for (i=0; i< FEATURE_COUNT; i++) {
-            if (features & fdesc[i].feature) {
-                next = g_strconcat(desc, fdesc[i].description, " ", NULL);
-                g_free(desc);
-                desc = next;
-            }
-        }
-        return desc;
+	desc=g_strdup("");
+	for (i=0; i< FEATURE_COUNT; i++) {
+	    if (features & fdesc[i].feature) {
+		next = g_strconcat(desc, fdesc[i].description, " ", NULL);
+		g_free(desc);
+		desc = next;
+	    }
+	}
+	return desc;
     }
 }
 
@@ -1123,17 +1125,17 @@ typedef enum _connect_flags {
     MSG_CONNECT_MAX=1
 } connect_flags;
 
-static const char* 
+static const char*
 connectFlagDescription(guint flag) {
     switch (flag) {
-        case MSG_CONNECT_LOSSY: return "Lossy";
+	case MSG_CONNECT_LOSSY: return "Lossy";
     }
     return "No Flags";
 }
 
 static void
-format_connect_features(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
-        guint offset) {
+format_connect_features(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
+	guint offset) {
     proto_item* item;
     guint64 features;
     char* desc;
@@ -1144,77 +1146,77 @@ format_connect_features(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     desc = featureDescription(features);
     len = strlen(desc);
     if (len < 150) {
-        /* Short description on one line */
-        item = proto_tree_add_uint64_format_value(tree, hf_connect_features, 
-            tvb, offset, 8, features, "0x%" G_GINT64_MODIFIER "x (%s)", 
-            features, desc);
+	/* Short description on one line */
+	item = proto_tree_add_uint64_format_value(tree, hf_connect_features,
+	    tvb, offset, 8, features, "0x%" G_GINT64_MODIFIER "x (%s)",
+	    features, desc);
     } else {
 
-        /* Format as multi-line entry */
-        item = proto_tree_add_uint64_format_value(tree, hf_connect_features, 
-            tvb, offset, 8, features, "0x%" G_GINT64_MODIFIER "x", features);
+	/* Format as multi-line entry */
+	item = proto_tree_add_uint64_format_value(tree, hf_connect_features,
+	    tvb, offset, 8, features, "0x%" G_GINT64_MODIFIER "x", features);
 
-        start = 0;
-        while (start < len) {
-            end = start + (strlen(&desc[start])>200 ? 200 : 
-                strlen(&desc[start]));
-            while (end>len || desc[end-1] != ' ') 
-                end--;
-            strncpy(linebuf, &desc[start], end-start);
-            linebuf[end-start]=0;
-            proto_tree_add_uint64_format_value(tree, hf_connect_features, tvb, 
-                offset, 8, features, "%s", linebuf);
-            start = end;
-        }
+	start = 0;
+	while (start < len) {
+	    end = start + (strlen(&desc[start])>200 ? 200 :
+		strlen(&desc[start]));
+	    while (end>len || desc[end-1] != ' ')
+		end--;
+	    strncpy(linebuf, &desc[start], end-start);
+	    linebuf[end-start]=0;
+	    proto_tree_add_uint64_format_value(tree, hf_connect_features, tvb,
+		offset, 8, features, "%s", linebuf);
+	    start = end;
+	}
     }
     g_free(desc);
 
     if ((features & (~FEATURES_ALL)) != 0) {
-        expert_add_info_format(pinfo, item, PI_UNDECODED, PI_WARN, 
-            "Unexpected feature flags seen, dissector may need updating");
+	expert_add_info_format(pinfo, item, PI_UNDECODED, PI_WARN,
+	    "Unexpected feature flags seen, dissector may need updating");
     }
 }
 
 static gint
-dissect_connect_request(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
-        guint offset) {
+dissect_connect_request(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
+	guint offset) {
 
     gint auth_len;
     entity_type host_type;
     guint flags;
 
-    if (tvb_reported_length_remaining (tvb, offset) < SIZE_OF_MSG_CONNECT) 
-        return -1;
+    if (tvb_reported_length_remaining (tvb, offset) < SIZE_OF_MSG_CONNECT)
+	return -1;
 
     host_type = (entity_type)tvb_get_letohl(tvb, offset+8);
     if (!isEntityType(host_type))
-        return 0;
+	return 0;
 
     auth_len = tvb_get_letohl(tvb, offset+28);
-    if (tvb_reported_length_remaining (tvb, offset) < 
-            SIZE_OF_MSG_CONNECT+auth_len) 
-        return -1;
+    if (tvb_reported_length_remaining (tvb, offset) <
+	    SIZE_OF_MSG_CONNECT+auth_len)
+	return -1;
 
     /* All here, just decode */
     setPDUInfo(pinfo, "Connect Request");
     format_connect_features(tvb, pinfo, tree, offset);
-    proto_tree_add_uint_format_value(tree, hf_connect_host_type, tvb, offset+8, 
-        4, host_type, "%d (%s)", host_type, entityTypeDescription(host_type));
+    proto_tree_add_uint_format_value(tree, hf_connect_host_type, tvb, offset+8,
+	4, host_type, "%d (%s)", host_type, entityTypeDescription(host_type));
     proto_tree_add_item(tree, hf_connect_global_seq, tvb, offset+12, 4, TRUE);
     proto_tree_add_item(tree, hf_connect_connect_seq, tvb, offset+16, 4, TRUE);
-    proto_tree_add_item(tree, hf_connect_protocol_version, tvb, offset+20, 
-        4, TRUE);
-    proto_tree_add_item(tree, hf_connect_authorizer_protocol, tvb, offset+24, 
-        4, TRUE);
-    proto_tree_add_item(tree, hf_connect_authorizer_len, tvb, offset+28, 
-        4, TRUE);
+    proto_tree_add_item(tree, hf_connect_protocol_version, tvb, offset+20,
+	4, TRUE);
+    proto_tree_add_item(tree, hf_connect_authorizer_protocol, tvb, offset+24,
+	4, TRUE);
+    proto_tree_add_item(tree, hf_connect_authorizer_len, tvb, offset+28,
+	4, TRUE);
     flags = tvb_get_guint8(tvb, offset+32);
-    proto_tree_add_uint_format_value(tree, hf_connect_flags, tvb, offset+32, 1, 
-        flags, "%d (%s)", flags, connectFlagDescription(flags));
+    proto_tree_add_uint_format_value(tree, hf_connect_flags, tvb, offset+32, 1,
+	flags, "%d (%s)", flags, connectFlagDescription(flags));
 
     if (auth_len >0)
-        proto_tree_add_item(tree, hf_connect_authentication_key, tvb, offset+33, 
-                auth_len, TRUE);
+	proto_tree_add_item(tree, hf_connect_authentication_key, tvb, offset+33,
+		auth_len, TRUE);
 
     /* Tag it in conv */
     conv_fixup(TRUE, pinfo);
@@ -1237,43 +1239,43 @@ dissect_connect_request(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     guint8 flags;
 }
 */
-#define SIZE_OF_MSG_CONNECT_REPLY    (1+8+4+4+4+4+1)   
+#define SIZE_OF_MSG_CONNECT_REPLY    (1+8+4+4+4+4+1)
 
 static gint
-dissect_connect_reply(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
-        guint offset) {
+dissect_connect_reply(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
+	guint offset) {
 
     gint auth_len;
     guint tag;
     guint flags;
 
     /* Test we have enough data including auth */
-    if (tvb_reported_length_remaining (tvb, offset) < SIZE_OF_MSG_CONNECT_REPLY) 
-        return -1;
+    if (tvb_reported_length_remaining (tvb, offset) < SIZE_OF_MSG_CONNECT_REPLY)
+	return -1;
 
     /* TODO: This isn't an ideal test but we need something :-( */
     tag = tvb_get_guint8(tvb, offset);
     if (!isMsgrConnectTag(tag))
-        return 0;
+	return 0;
 
     auth_len = tvb_get_letohl(tvb, offset+21);
-    if (tvb_reported_length_remaining (tvb, offset) < 
-            SIZE_OF_MSG_CONNECT_REPLY+auth_len) 
-        return -1;
+    if (tvb_reported_length_remaining (tvb, offset) <
+	    SIZE_OF_MSG_CONNECT_REPLY+auth_len)
+	return -1;
 
     setPDUInfo(pinfo, "Connect Reply");
-    proto_tree_add_uint_format_value(tree, hf_connect_tag, tvb, offset, 1, 
-        tag, "%d (%s)", tag, replyTagDescription(tag));
+    proto_tree_add_uint_format_value(tree, hf_connect_tag, tvb, offset, 1,
+	tag, "%d (%s)", tag, replyTagDescription(tag));
     format_connect_features(tvb, pinfo, tree, offset+1);
     proto_tree_add_item(tree, hf_connect_global_seq, tvb, offset+9, 4, TRUE);
     proto_tree_add_item(tree, hf_connect_connect_seq, tvb, offset+13, 4, TRUE);
-    proto_tree_add_item(tree, hf_connect_protocol_version, tvb, offset+17, 
-        4, TRUE);
-    proto_tree_add_item(tree, hf_connect_authorizer_len, tvb, offset+21, 
-        4, TRUE);
+    proto_tree_add_item(tree, hf_connect_protocol_version, tvb, offset+17,
+	4, TRUE);
+    proto_tree_add_item(tree, hf_connect_authorizer_len, tvb, offset+21,
+	4, TRUE);
     flags = tvb_get_guint8(tvb, offset+25);
-    proto_tree_add_uint_format_value(tree, hf_connect_flags, tvb, offset+25, 1, 
-        flags, "%d (%s)", flags, connectFlagDescription(flags));
+    proto_tree_add_uint_format_value(tree, hf_connect_flags, tvb, offset+25, 1,
+	flags, "%d (%s)", flags, connectFlagDescription(flags));
 
     /* Tag it in conversation */
     conv_fixup(FALSE, pinfo);
@@ -1286,21 +1288,21 @@ dissect_connect_reply(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
  *
  struct ceph_msg_ack {
     guint8 tag;
-    guint64 seq;    
+    guint64 seq;
 }
 */
-#define SIZE_OF_MSG_ACK    (1+8)   
+#define SIZE_OF_MSG_ACK	   (1+8)
 
-static guint 
+static guint
 dissect_ack(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, int offset)
 {
-    if (tvb_reported_length_remaining (tvb, offset) < SIZE_OF_MSG_ACK) 
-        return -1;
+    if (tvb_reported_length_remaining (tvb, offset) < SIZE_OF_MSG_ACK)
+	return -1;
 
     if (tree) {
-        setPDUInfo(pinfo, "Ack");
-        proto_tree_add_item(tree, hf_hdr_tag, tvb, offset, 1, TRUE);
-        proto_tree_add_item(tree, hf_hdr_seq_ack, tvb, offset+1, 8, TRUE);
+	setPDUInfo(pinfo, "Ack");
+	proto_tree_add_item(tree, hf_hdr_tag, tvb, offset, 1, TRUE);
+	proto_tree_add_item(tree, hf_hdr_seq_ack, tvb, offset+1, 8, TRUE);
     }
     return SIZE_OF_MSG_ACK;
 }
@@ -1313,55 +1315,55 @@ struct ceph_entity_name {
     guint64 num;
 }
 */
-#define SIZE_OF_ENTITY_NAME    (1+8)   
+#define SIZE_OF_ENTITY_NAME    (1+8)
 
-static guint 
+static guint
 dissect_entity_name(tvbuff_t *tvb, proto_tree *tree, gint hf, int offset) {
     proto_item *entity_name_item;
     proto_tree *entity_name_tree;
 
-    if (tvb_reported_length_remaining (tvb, offset) < SIZE_OF_ENTITY_NAME) 
-        return -1;
+    if (tvb_reported_length_remaining (tvb, offset) < SIZE_OF_ENTITY_NAME)
+	return -1;
 
     if (tree) {
-        entity_name_item = proto_tree_add_item( tree, hf, tvb, offset, 
-            SIZE_OF_ENTITY_NAME, TRUE );
-        entity_name_tree = proto_item_add_subtree(entity_name_item, 
-            ett_entity_name);
+	entity_name_item = proto_tree_add_item( tree, hf, tvb, offset,
+	    SIZE_OF_ENTITY_NAME, TRUE );
+	entity_name_tree = proto_item_add_subtree(entity_name_item,
+	    ett_entity_name);
 
-        proto_tree_add_item(entity_name_tree, hf_entity_type, tvb, offset, 
-            1, TRUE);
-        proto_tree_add_item(entity_name_tree, hf_entity_num, tvb, offset+1, 
-            8, TRUE);
+	proto_tree_add_item(entity_name_tree, hf_entity_type, tvb, offset,
+	    1, TRUE);
+	proto_tree_add_item(entity_name_tree, hf_entity_num, tvb, offset+1,
+	    8, TRUE);
     }
     return SIZE_OF_ENTITY_NAME;
 }
 
 /*
- * msg_header 
+ * msg_header
  *
  struct ceph_msg_header {
-    guint64 seq;        // message seq# for this session 
-    guint64 tid;        // transaction id
-    guint16 type;       // message type
-    guint16 priority;   // priority.  higher value == higher priority
-    guint16 version;    // version of message encoding 
+    guint64 seq;	// message seq# for this session
+    guint64 tid;	// transaction id
+    guint16 type;	// message type
+    guint16 priority;	// priority.  higher value == higher priority
+    guint16 version;	// version of message encoding
 
-    guint32 front_len;    // bytes in main payload 
-    guint32 middle_len;    // bytes in middle payload
-    guint32 data_len;    // bytes of data payload
-    guint16 data_off;    // sender: include full offset; 
-                        // receiver: mask against ~PAGE_MASK 
+    guint32 front_len;	  // bytes in main payload
+    guint32 middle_len;	   // bytes in middle payload
+    guint32 data_len;	 // bytes of data payload
+    guint16 data_off;	 // sender: include full offset;
+			// receiver: mask against ~PAGE_MASK
 
     struct ceph_entity_name src;
     guint32 reserved;
-    guint32 crc;        // header crc32c
+    guint32 crc;	// header crc32c
 }
 */
-#define SIZE_OF_MSG_HEADER    (8+8+2+2+2 +4+4+4+2 +SIZE_OF_ENTITY_NAME+4+4)   
+#define SIZE_OF_MSG_HEADER    (8+8+2+2+2 +4+4+4+2 +SIZE_OF_ENTITY_NAME+4+4)
 #define HEADER_TYPE_OFFSET    (8+8)
-#define HEADER_ETYPE_OFFSET    (8+8+2+2+2 +4+4+4+2)   
-#define HEADER_CRC_OFFSET    (SIZE_OF_MSG_HEADER-4) 
+#define HEADER_ETYPE_OFFSET    (8+8+2+2+2 +4+4+4+2)
+#define HEADER_CRC_OFFSET    (SIZE_OF_MSG_HEADER-4)
 
 typedef struct _header_info {
     guint32 type;
@@ -1370,54 +1372,54 @@ typedef struct _header_info {
     guint32 data_len;
 } header_info;
 
-static gint 
-dissect_msg_header(tvbuff_t *tvb, proto_tree *tree, int offset, 
-        header_info* info) {
+static gint
+dissect_msg_header(tvbuff_t *tvb, proto_tree *tree, int offset,
+	header_info* info) {
     proto_item *header_item;
     proto_tree *header_tree;
 
-    if (tvb_reported_length_remaining (tvb, offset) < SIZE_OF_MSG_HEADER) 
-        return -1;
+    if (tvb_reported_length_remaining (tvb, offset) < SIZE_OF_MSG_HEADER)
+	return -1;
 
     if (info) {
-        info->type = tvb_get_letohs(tvb, offset+16);
-        info->front_len = tvb_get_letohl(tvb, offset+22);
-        info->middle_len = tvb_get_letohl(tvb, offset+26);
-        info->data_len = tvb_get_letohl(tvb, offset+30);
+	info->type = tvb_get_letohs(tvb, offset+16);
+	info->front_len = tvb_get_letohl(tvb, offset+22);
+	info->middle_len = tvb_get_letohl(tvb, offset+26);
+	info->data_len = tvb_get_letohl(tvb, offset+30);
     }
 
     if (tree) {
-        header_item = proto_tree_add_item( tree, hf_header, tvb, offset, 
-                SIZE_OF_MSG_HEADER, TRUE );
-        header_tree = proto_item_add_subtree(header_item, ett_header);
+	header_item = proto_tree_add_item( tree, hf_header, tvb, offset,
+		SIZE_OF_MSG_HEADER, TRUE );
+	header_tree = proto_item_add_subtree(header_item, ett_header);
 
-        proto_tree_add_item(header_tree, hf_hdr_seq, tvb, offset+0, 8, TRUE);
-        proto_tree_add_item(header_tree, hf_hdr_tid, tvb, offset+8, 8, TRUE);
-        proto_tree_add_item(header_tree, hf_hdr_type, tvb, offset+16, 2, TRUE);
-        proto_tree_add_item(header_tree, hf_hdr_priority, tvb, offset+18, 
-            2, TRUE);
-        proto_tree_add_item(header_tree, hf_hdr_version, tvb, offset+20, 
-            2, TRUE);
+	proto_tree_add_item(header_tree, hf_hdr_seq, tvb, offset+0, 8, TRUE);
+	proto_tree_add_item(header_tree, hf_hdr_tid, tvb, offset+8, 8, TRUE);
+	proto_tree_add_item(header_tree, hf_hdr_type, tvb, offset+16, 2, TRUE);
+	proto_tree_add_item(header_tree, hf_hdr_priority, tvb, offset+18,
+	    2, TRUE);
+	proto_tree_add_item(header_tree, hf_hdr_version, tvb, offset+20,
+	    2, TRUE);
 
-        proto_tree_add_item(header_tree, hf_hdr_front_len, tvb, offset+22, 
-            4, TRUE);
-        proto_tree_add_item(header_tree, hf_hdr_middle_len, tvb, offset+26, 
-            4, TRUE);
-        proto_tree_add_item(header_tree, hf_hdr_data_len, tvb, offset+30, 
-            4, TRUE);
-        proto_tree_add_item(header_tree, hf_hdr_data_off, tvb, offset+34, 
-            2, TRUE);
-        
-        dissect_entity_name(tvb, header_tree, hf_hdr_src, offset+36);
+	proto_tree_add_item(header_tree, hf_hdr_front_len, tvb, offset+22,
+	    4, TRUE);
+	proto_tree_add_item(header_tree, hf_hdr_middle_len, tvb, offset+26,
+	    4, TRUE);
+	proto_tree_add_item(header_tree, hf_hdr_data_len, tvb, offset+30,
+	    4, TRUE);
+	proto_tree_add_item(header_tree, hf_hdr_data_off, tvb, offset+34,
+	    2, TRUE);
 
-        proto_tree_add_item(header_tree, hf_hdr_crc, tvb, 
-            offset+36+4+SIZE_OF_ENTITY_NAME, 4, TRUE);
+	dissect_entity_name(tvb, header_tree, hf_hdr_src, offset+36);
+
+	proto_tree_add_item(header_tree, hf_hdr_crc, tvb,
+	    offset+36+4+SIZE_OF_ENTITY_NAME, 4, TRUE);
     }
     return SIZE_OF_MSG_HEADER;
 }
 
 /*
- * msg_footer 
+ * msg_footer
  *
  struct ceph_msg_footer {
     guint32 front_crc;
@@ -1427,45 +1429,45 @@ dissect_msg_header(tvbuff_t *tvb, proto_tree *tree, int offset,
     guint8 flags;
 }
 */
-#define SIZE_OF_MSG_FOOTER    (4+4+4+8+1)   
+#define SIZE_OF_MSG_FOOTER    (4+4+4+8+1)
 
-static guint32 
+static guint32
 dissect_footer(tvbuff_t *tvb, proto_tree *tree, guint32 offset)
 {
     proto_item *footer_item;
     proto_tree *footer_tree;
 
-    if (tvb_reported_length_remaining (tvb, offset) < SIZE_OF_MSG_FOOTER) 
-        return -1;
+    if (tvb_reported_length_remaining (tvb, offset) < SIZE_OF_MSG_FOOTER)
+	return -1;
 
     if (tree) {
-        footer_item = proto_tree_add_item( tree, hf_footer, tvb, offset, 
-            SIZE_OF_MSG_FOOTER, TRUE );
-        footer_tree = proto_item_add_subtree(footer_item, ett_footer);
+	footer_item = proto_tree_add_item( tree, hf_footer, tvb, offset,
+	    SIZE_OF_MSG_FOOTER, TRUE );
+	footer_tree = proto_item_add_subtree(footer_item, ett_footer);
 
-        proto_tree_add_item(footer_tree, hf_footer_front_crc, tvb, offset, 
-            4, TRUE);
-        proto_tree_add_item(footer_tree, hf_footer_middle_crc, tvb, offset+4, 
-            4, TRUE);
-        proto_tree_add_item(footer_tree, hf_footer_data_crc, tvb, offset+8, 
-            4, TRUE);
-        proto_tree_add_item(footer_tree, hf_footer_sig, tvb, offset+12, 
-            8, TRUE);
-        proto_tree_add_item(footer_tree, hf_footer_flags, tvb, offset+20, 
-            1, TRUE);
+	proto_tree_add_item(footer_tree, hf_footer_front_crc, tvb, offset,
+	    4, TRUE);
+	proto_tree_add_item(footer_tree, hf_footer_middle_crc, tvb, offset+4,
+	    4, TRUE);
+	proto_tree_add_item(footer_tree, hf_footer_data_crc, tvb, offset+8,
+	    4, TRUE);
+	proto_tree_add_item(footer_tree, hf_footer_sig, tvb, offset+12,
+	    8, TRUE);
+	proto_tree_add_item(footer_tree, hf_footer_flags, tvb, offset+20,
+	    1, TRUE);
     }
 
     return SIZE_OF_MSG_FOOTER;
 }
 
-static guint32 
+static guint32
 dissect_fsid(tvbuff_t *tvb, proto_tree *tree, guint32 offset)
 {
     guint32 fsid[4];
 
     tvb_memcpy(tvb, &fsid, offset, sizeof(fsid));
-    proto_tree_add_text(tree, tvb, offset, sizeof(fsid), "fsid: %x-%x-%x-%x", 
-        g_ntohl(fsid[0]), g_ntohl(fsid[1]), g_ntohl(fsid[2]), g_ntohl(fsid[3]));
+    proto_tree_add_text(tree, tvb, offset, sizeof(fsid), "fsid: %x-%x-%x-%x",
+	g_ntohl(fsid[0]), g_ntohl(fsid[1]), g_ntohl(fsid[2]), g_ntohl(fsid[3]));
     return sizeof(fsid);
 }
 
@@ -1704,7 +1706,7 @@ isMsgCType(guint32 type) {
     return (try_val_to_str(type, msg_ctype_values)!=NULL);
 }
 
-static const char* 
+static const char*
 msgCTypeDescription(msg_ctype type) {
 	return val_to_str(type, msg_ctype_values, "Unknown Message Type: %d");
 }
@@ -1718,9 +1720,9 @@ struct {
     guint64 deprecated_session_mon_tid;
 }
 */
-#define SIZE_OF_PAXOS    (8+2+8)   
+#define SIZE_OF_PAXOS	 (8+2+8)
 
-static guint32 
+static guint32
 dissect_paxos(tvbuff_t *tvb, proto_tree *tree, guint32 offset){
 
     proto_tree_add_item(tree, hf_paxos_version, tvb, offset, 8, TRUE);
@@ -1735,9 +1737,9 @@ struct {
     map <uint64_t,string> names;
 }
 */
-static guint32 
-dissect_featureset(tvbuff_t *tvb, proto_tree *tree, guint32 offset, int hinfo, 
-        gint ett) {
+static guint32
+dissect_featureset(tvbuff_t *tvb, proto_tree *tree, guint32 offset, int hinfo,
+	gint ett) {
     proto_item *litem;
     proto_tree *ltree;
     guint32 i, items;
@@ -1750,16 +1752,16 @@ dissect_featureset(tvbuff_t *tvb, proto_tree *tree, guint32 offset, int hinfo,
     proto_tree_add_item(ltree, hf_featureset_mask, tvb, at, 8, TRUE); at += 8;
     items = tvb_get_letohl(tvb, at); at+=4;
     for (i=0; i<items; i++) {
-        proto_tree_add_item(ltree, hf_featureset_id, tvb, at, 8, TRUE);    at += 8;
-        proto_tree_add_item(ltree, hf_featureset_name, tvb, at, 4, TRUE);
-        at += tvb_get_letohl(tvb, at)+ 4;
+	proto_tree_add_item(ltree, hf_featureset_id, tvb, at, 8, TRUE);	   at += 8;
+	proto_tree_add_item(ltree, hf_featureset_name, tvb, at, 4, TRUE);
+	at += tvb_get_letohl(tvb, at)+ 4;
     }
 
     proto_item_set_len(litem, (at-offset));
     return (at-offset);
 }
 
-static guint32 
+static guint32
 dissect_compatset(tvbuff_t *tvb, proto_tree *tree, guint32 offset) {
 
     guint32 at;
@@ -1783,9 +1785,9 @@ dissect_compatset(tvbuff_t *tvb, proto_tree *tree, guint32 offset) {
     guint32 monmap_epoch;
 }
 */
-#define SIZE_OF_MSG_AUTH    (SIZE_OF_PAXOS+4+4+0+4)   
+#define SIZE_OF_MSG_AUTH    (SIZE_OF_PAXOS+4+4+0+4)
 
-static guint32 
+static guint32
 dissect_auth(tvbuff_t *tvb, proto_tree *tree, guint32 offset){
     proto_item *auth_item;
     proto_tree *auth_tree;
@@ -1795,19 +1797,19 @@ dissect_auth(tvbuff_t *tvb, proto_tree *tree, guint32 offset){
     auth_len = tvb_get_letohl(tvb, offset+SIZE_OF_PAXOS+4);
 
     if (tree) {
-        auth_item = proto_tree_add_item( tree, hf_auth, tvb, offset, 
-            SIZE_OF_MSG_AUTH+auth_len, TRUE );
-        auth_tree = proto_item_add_subtree(auth_item, ett_front);
+	auth_item = proto_tree_add_item( tree, hf_auth, tvb, offset,
+	    SIZE_OF_MSG_AUTH+auth_len, TRUE );
+	auth_tree = proto_item_add_subtree(auth_item, ett_front);
 
-        offset += dissect_paxos(tvb, auth_tree, offset);
-        proto_tree_add_item(auth_tree, hf_auth_protocol, tvb, offset, 4, TRUE);
-        proto_tree_add_item(auth_tree, hf_auth_authlen, tvb, offset+4, 4, TRUE);
-        auth_bytes = (guint8*)tvb_memdup(tvb, offset+8, auth_len);
-        proto_tree_add_bytes(auth_tree, hf_auth_authbytes, tvb, offset+8, 
-            auth_len, auth_bytes);
-        g_free(auth_bytes);
-        proto_tree_add_item(auth_tree, hf_auth_monmapepoch, tvb, 
-            offset+8+auth_len, 4, TRUE);
+	offset += dissect_paxos(tvb, auth_tree, offset);
+	proto_tree_add_item(auth_tree, hf_auth_protocol, tvb, offset, 4, TRUE);
+	proto_tree_add_item(auth_tree, hf_auth_authlen, tvb, offset+4, 4, TRUE);
+	auth_bytes = (guint8*)tvb_memdup(tvb, offset+8, auth_len);
+	proto_tree_add_bytes(auth_tree, hf_auth_authbytes, tvb, offset+8,
+	    auth_len, auth_bytes);
+	g_free(auth_bytes);
+	proto_tree_add_item(auth_tree, hf_auth_monmapepoch, tvb,
+	    offset+8+auth_len, 4, TRUE);
     }
     return SIZE_OF_MSG_AUTH+auth_len;
 }
@@ -1825,9 +1827,9 @@ dissect_auth(tvbuff_t *tvb, proto_tree *tree, guint32 offset){
     char msg[];
 }
 */
-#define SIZE_OF_MSG_AUTH_REPLY    (4+4+8+4+0+4+0)   
+#define SIZE_OF_MSG_AUTH_REPLY	  (4+4+8+4+0+4+0)
 
-static guint32 
+static guint32
 dissect_auth_reply(tvbuff_t *tvb, proto_tree *tree, guint32 offset){
     proto_item *auth_item;
     proto_tree *auth_tree;
@@ -1840,30 +1842,30 @@ dissect_auth_reply(tvbuff_t *tvb, proto_tree *tree, guint32 offset){
     msg_len = tvb_get_letohl(tvb, offset+20+auth_len);
 
     if (tree) {
-        auth_item = proto_tree_add_item( tree, hf_authreply, tvb, offset, 
-            SIZE_OF_MSG_AUTH_REPLY+auth_len+msg_len, TRUE );
-        auth_tree = proto_item_add_subtree(auth_item, ett_front);
+	auth_item = proto_tree_add_item( tree, hf_authreply, tvb, offset,
+	    SIZE_OF_MSG_AUTH_REPLY+auth_len+msg_len, TRUE );
+	auth_tree = proto_item_add_subtree(auth_item, ett_front);
 
-        proto_tree_add_item(auth_tree, hf_authreply_protocol, tvb, offset+0, 
-            4, TRUE);
-        proto_tree_add_item(auth_tree, hf_authreply_result, tvb, offset+4, 
-            4, TRUE);
-        proto_tree_add_item(auth_tree, hf_authreply_globalid, tvb, offset+8, 
-            8, TRUE);
-        proto_tree_add_item(auth_tree, hf_authreply_authlen, tvb, offset+16, 
-            4, TRUE);
-        
-        auth_bytes = (guint8*)tvb_memdup(tvb, offset+20, auth_len);
-        proto_tree_add_bytes(auth_tree, hf_authreply_authbytes, tvb, offset+20, 
-            auth_len, auth_bytes);
-        g_free(auth_bytes);
-        
-        proto_tree_add_item(auth_tree, hf_authreply_msglen, tvb, 
-            offset+20+auth_len, 4, TRUE);
-        msg_string = (char*)tvb_memdup(tvb, offset+20+auth_len+4, msg_len);
-        proto_tree_add_string(auth_tree, hf_authreply_msgstring, tvb, 
-            offset+20+auth_len+4, msg_len, msg_string);
-        g_free(msg_string);
+	proto_tree_add_item(auth_tree, hf_authreply_protocol, tvb, offset+0,
+	    4, TRUE);
+	proto_tree_add_item(auth_tree, hf_authreply_result, tvb, offset+4,
+	    4, TRUE);
+	proto_tree_add_item(auth_tree, hf_authreply_globalid, tvb, offset+8,
+	    8, TRUE);
+	proto_tree_add_item(auth_tree, hf_authreply_authlen, tvb, offset+16,
+	    4, TRUE);
+
+	auth_bytes = (guint8*)tvb_memdup(tvb, offset+20, auth_len);
+	proto_tree_add_bytes(auth_tree, hf_authreply_authbytes, tvb, offset+20,
+	    auth_len, auth_bytes);
+	g_free(auth_bytes);
+
+	proto_tree_add_item(auth_tree, hf_authreply_msglen, tvb,
+	    offset+20+auth_len, 4, TRUE);
+	msg_string = (char*)tvb_memdup(tvb, offset+20+auth_len+4, msg_len);
+	proto_tree_add_string(auth_tree, hf_authreply_msgstring, tvb,
+	    offset+20+auth_len+4, msg_len, msg_string);
+	g_free(msg_string);
     }
     return SIZE_OF_MSG_AUTH_REPLY+auth_len+msg_len;
 }
@@ -1888,9 +1890,9 @@ dissect_auth_reply(tvbuff_t *tvb, proto_tree *tree, guint32 offset){
 }
 */
 
-static guint32 
-dissect_mon_map(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
-        guint32 offset) {
+static guint32
+dissect_mon_map(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
+	guint32 offset) {
     proto_item *litem = NULL;
     proto_tree *ltree = NULL;
     guint32 i, at, name_at;
@@ -1908,31 +1910,31 @@ dissect_mon_map(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     entries_len = tvb_get_letohl(tvb, offset+6);
     offset += 10;
     while (entries_len>0) {
-        at = offset;
-        at += dissect_fsid(tvb, ltree, at);
-        proto_tree_add_item(ltree, hf_monmap_epoch, tvb, at, 4, TRUE); at+=4;
+	at = offset;
+	at += dissect_fsid(tvb, ltree, at);
+	proto_tree_add_item(ltree, hf_monmap_epoch, tvb, at, 4, TRUE); at+=4;
 
-        addr_len = tvb_get_letohl(tvb, at); at+=4;
-        for (i=0; i< addr_len; i++) {
-            name_at = at;
-            proto_tree_add_item(ltree, hf_monmap_name, tvb, at, 4, TRUE); 
-            at += tvb_get_letohl(tvb, at)+ 4;
-            at += dissect_entity_addr(tvb, pinfo, ltree, at, &einfo);
-            conv_set_entity_name(conv_get_entity_frominfo(&einfo),
-                tvb, name_at, ENTITY_TYPE_MON);
-        }
+	addr_len = tvb_get_letohl(tvb, at); at+=4;
+	for (i=0; i< addr_len; i++) {
+	    name_at = at;
+	    proto_tree_add_item(ltree, hf_monmap_name, tvb, at, 4, TRUE);
+	    at += tvb_get_letohl(tvb, at)+ 4;
+	    at += dissect_entity_addr(tvb, pinfo, ltree, at, &einfo);
+	    conv_set_entity_name(conv_get_entity_frominfo(&einfo),
+		tvb, name_at, ENTITY_TYPE_MON);
+	}
 
-        proto_tree_add_item(ltree, hf_monmap_lastchanged, tvb, at, 8, TRUE); 
-        at+=8;
-        proto_tree_add_item(ltree, hf_monmap_created, tvb, at, 8, TRUE); 
-        at+=8;
+	proto_tree_add_item(ltree, hf_monmap_lastchanged, tvb, at, 8, TRUE);
+	at+=8;
+	proto_tree_add_item(ltree, hf_monmap_created, tvb, at, 8, TRUE);
+	at+=8;
 
-        entries_len -= (at-offset);
-        offset = at;
+	entries_len -= (at-offset);
+	offset = at;
     }
     if (entries_len !=0 )
-        expert_add_info_format(pinfo, tree, PI_UNDECODED, PI_WARN, 
-            "Length mismatch in decoding mon map entries");
+	expert_add_info_format(pinfo, tree, PI_UNDECODED, PI_WARN,
+	    "Length mismatch in decoding mon map entries");
 
     return map_len;
 }
@@ -1949,28 +1951,28 @@ struct ceph_msg_monsubscribe {
     map<string, ceph_mon_subscribe_item> what
 };
 */
-static guint32 
-dissect_mon_subscribe(tvbuff_t *tvb, proto_tree *tree, guint32 offset, 
-        guint32 length) {
+static guint32
+dissect_mon_subscribe(tvbuff_t *tvb, proto_tree *tree, guint32 offset,
+	guint32 length) {
     proto_item *litem = NULL;
     proto_tree *ltree = NULL;
     guint32 i, items;
     guint32 at;
 
-    litem = proto_tree_add_item( tree, hf_monsubscribe, tvb, offset, 
-        length, TRUE );
+    litem = proto_tree_add_item( tree, hf_monsubscribe, tvb, offset,
+	length, TRUE );
     ltree = proto_item_add_subtree(litem, ett_front);
 
     items = tvb_get_letohl(tvb, offset);
     at = offset +4;
     for (i=0; i< items; i++) {
-        proto_tree_add_item(ltree, hf_monsubscribe_name, tvb, at, 4, TRUE); 
-        at += tvb_get_letohl(tvb, at)+ 4;
+	proto_tree_add_item(ltree, hf_monsubscribe_name, tvb, at, 4, TRUE);
+	at += tvb_get_letohl(tvb, at)+ 4;
 
-        proto_tree_add_item(ltree, hf_monsubscribe_start, tvb, at, 8, TRUE); 
-        at += 8;
-        proto_tree_add_item(ltree, hf_monsubscribe_flags, tvb, at, 1, TRUE); 
-        at += 1;
+	proto_tree_add_item(ltree, hf_monsubscribe_start, tvb, at, 8, TRUE);
+	at += 8;
+	proto_tree_add_item(ltree, hf_monsubscribe_flags, tvb, at, 1, TRUE);
+	at += 1;
     }
 
     return (at-offset);
@@ -1984,18 +1986,18 @@ struct ceph_msg_mon_subscribeack {
     guint8 fsid[16];
 };
 */
-static guint32 
-dissect_mon_subscribeack(tvbuff_t *tvb, proto_tree *tree, guint32 offset, 
-        guint32 length) {
+static guint32
+dissect_mon_subscribeack(tvbuff_t *tvb, proto_tree *tree, guint32 offset,
+	guint32 length) {
     proto_item *litem = NULL;
     proto_tree *ltree = NULL;
 
-    litem = proto_tree_add_item( tree, hf_monsubscribeack, tvb, offset, 
-        length, TRUE );
+    litem = proto_tree_add_item( tree, hf_monsubscribeack, tvb, offset,
+	length, TRUE );
     ltree = proto_item_add_subtree(litem, ett_front);
 
-    proto_tree_add_item(ltree, hf_monsubscribeack_interval, tvb, offset, 
-        4, TRUE); 
+    proto_tree_add_item(ltree, hf_monsubscribeack_interval, tvb, offset,
+	4, TRUE);
     dissect_fsid(tvb, ltree, offset+4);
     return 20;
 }
@@ -2015,9 +2017,9 @@ struct mds_beacon {
     CompatSet compat;
 };
 */
-static guint32 
-dissect_mdsbeacon(tvbuff_t *tvb, proto_tree *tree, 
-        guint32 offset, guint32 length) {
+static guint32
+dissect_mdsbeacon(tvbuff_t *tvb, proto_tree *tree,
+	guint32 offset, guint32 length) {
     proto_item *litem = NULL;
     proto_tree *ltree = NULL;
     guint32 at;
@@ -2031,11 +2033,11 @@ dissect_mdsbeacon(tvbuff_t *tvb, proto_tree *tree,
     proto_tree_add_item(ltree, hf_mdsbeacon_globalid, tvb, at, 8, TRUE); at+=8;
     proto_tree_add_item(ltree, hf_mdsbeacon_state, tvb, at, 4, TRUE); at+=4;
     proto_tree_add_item(ltree, hf_mdsbeacon_seq, tvb, at, 8, TRUE); at+=8;
-    proto_tree_add_item(ltree, hf_mdsbeacon_name, tvb, at, 4, TRUE); 
+    proto_tree_add_item(ltree, hf_mdsbeacon_name, tvb, at, 4, TRUE);
     at += tvb_get_letohl(tvb, at)+ 4;
     proto_tree_add_item(ltree, hf_mdsbeacon_standbyforrank, tvb, at, 4, TRUE);
-    at+=4; 
-    proto_tree_add_item(ltree, hf_mdsbeacon_standbyforname, tvb, at, 4, TRUE); 
+    at+=4;
+    proto_tree_add_item(ltree, hf_mdsbeacon_standbyforname, tvb, at, 4, TRUE);
     at += tvb_get_letohl(tvb, at)+ 4;
     at += dissect_compatset(tvb, ltree, at);
 
@@ -2048,43 +2050,43 @@ dissect_mdsbeacon(tvbuff_t *tvb, proto_tree *tree,
  * many bytes they actually consumed.
  */
 static guint
-dissect_msg_ctype(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
-        int offset, msg_ctype type, guint32 length)
+dissect_msg_ctype(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
+	int offset, msg_ctype type, guint32 length)
 {
     tvbuff_t* ltvb;
     guint32 len=0;
 
-    /* Create a subset to isolate the dissectors 
+    /* Create a subset to isolate the dissectors
     so they don't really need to length check */
-     
+
     ltvb = tvb_new_subset_length(tvb, offset, length);
 
     switch (type) {
-        case MSG_MON_MAP:
-            len = dissect_mon_map(ltvb, pinfo, tree, 0);
-            break;
-        case MSG_AUTH:
-            len = dissect_auth(ltvb, tree, 0);
-            break;
-        case MSG_AUTH_REPLY:    
-            len = dissect_auth_reply(ltvb, tree, 0);
-            break;
-        case MSG_MON_SUBSCRIBE:
-            len = dissect_mon_subscribe(ltvb, tree, 0, length);
-            break;
-        case MSG_MON_SUBSCRIBE_ACK:
-            len = dissect_mon_subscribeack(ltvb, tree, 0, length);
-            break;
-        case MSG_MDS_BEACON:
-            len = dissect_mdsbeacon(ltvb, tree, 0, length);
-            break;
-        default:
-            break;
+	case MSG_MON_MAP:
+	    len = dissect_mon_map(ltvb, pinfo, tree, 0);
+	    break;
+	case MSG_AUTH:
+	    len = dissect_auth(ltvb, tree, 0);
+	    break;
+	case MSG_AUTH_REPLY:
+	    len = dissect_auth_reply(ltvb, tree, 0);
+	    break;
+	case MSG_MON_SUBSCRIBE:
+	    len = dissect_mon_subscribe(ltvb, tree, 0, length);
+	    break;
+	case MSG_MON_SUBSCRIBE_ACK:
+	    len = dissect_mon_subscribeack(ltvb, tree, 0, length);
+	    break;
+	case MSG_MDS_BEACON:
+	    len = dissect_mdsbeacon(ltvb, tree, 0, length);
+	    break;
+	default:
+	    break;
     }
     return len;
 }
 
-static guint 
+static guint
 dissect_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, int offset) {
     guint start;
     gint len=0;
@@ -2096,20 +2098,20 @@ dissect_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, int offset) {
     offset += len;
 
     if (info.front_len) {
-        if ((guint)tvb_reported_length_remaining (tvb, offset) < info.front_len) 
-            return -1;
+	if ((guint)tvb_reported_length_remaining (tvb, offset) < info.front_len)
+	    return -1;
 
-        len = dissect_msg_ctype(tvb, pinfo, tree, offset, 
-                (msg_ctype)info.type, info.front_len);
-        if (len <0 ) return len;
-        else if (len == 0) 
-            expert_add_info_format(pinfo, tree, PI_UNDECODED, PI_WARN, 
-                "Undecoded: %s", msgCTypeDescription((msg_ctype)info.type));
-        else if ((guint32)len != info.front_len)
-            expert_add_info_format(pinfo, tree, PI_UNDECODED, PI_WARN, 
-                "Header front length (%u) does not match message length (%u)", 
-                info.front_len, len);
-        offset += info.front_len;
+	len = dissect_msg_ctype(tvb, pinfo, tree, offset,
+		(msg_ctype)info.type, info.front_len);
+	if (len <0 ) return len;
+	else if (len == 0)
+	    expert_add_info_format(pinfo, tree, PI_UNDECODED, PI_WARN,
+		"Undecoded: %s", msgCTypeDescription((msg_ctype)info.type));
+	else if ((guint32)len != info.front_len)
+	    expert_add_info_format(pinfo, tree, PI_UNDECODED, PI_WARN,
+		"Header front length (%u) does not match message length (%u)",
+		info.front_len, len);
+	offset += info.front_len;
     }
 
     offset += info.middle_len;
@@ -2125,8 +2127,8 @@ dissect_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, int offset) {
 /*
  * Create an expert warning that part of the packet could not be decoded.
  */
-static void 
-undecodedWarning(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
+static void
+undecodedWarning(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     guint32 offset, guint32 expecting) {
 
     /*
@@ -2134,26 +2136,26 @@ undecodedWarning(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
      */
     setPDUInfo(pinfo, "Undecoded data");
     if ((expecting & SERVER_BANNER) != 0)
-        expert_add_info_format(pinfo, tree, PI_UNDECODED, PI_WARN, 
-        "Expected server to send banner, ignoring packet");
+	expert_add_info_format(pinfo, tree, PI_UNDECODED, PI_WARN,
+	"Expected server to send banner, ignoring packet");
     if ((expecting & CLIENT_BANNER) != 0)
-        expert_add_info_format(pinfo, tree, PI_UNDECODED, PI_WARN, 
-        "Expected client to send banner, ignoring packet");
+	expert_add_info_format(pinfo, tree, PI_UNDECODED, PI_WARN,
+	"Expected client to send banner, ignoring packet");
     if ((expecting & SERVER_ADDRESS) != 0)
-        expert_add_info_format(pinfo, tree, PI_UNDECODED, PI_WARN, 
-        "Expected server to send addresses, ignoring packet");
+	expert_add_info_format(pinfo, tree, PI_UNDECODED, PI_WARN,
+	"Expected server to send addresses, ignoring packet");
     if ((expecting & CLIENT_ADDRESS) != 0)
-        expert_add_info_format(pinfo, tree, PI_UNDECODED, PI_WARN, 
-        "Expected client to send addresses, ignoring packet");
+	expert_add_info_format(pinfo, tree, PI_UNDECODED, PI_WARN,
+	"Expected client to send addresses, ignoring packet");
     if ((expecting & CONNECT_REQUEST) != 0)
-        expert_add_info_format(pinfo, tree, PI_UNDECODED, PI_WARN, 
-        "Expected client to send connection request, ignoring packet");
+	expert_add_info_format(pinfo, tree, PI_UNDECODED, PI_WARN,
+	"Expected client to send connection request, ignoring packet");
     if ((expecting & CONNECT_REPLY) != 0)
-        expert_add_info_format(pinfo, tree, PI_UNDECODED, PI_WARN, 
-        "Expected server to send connection reply, ignoring packet");
+	expert_add_info_format(pinfo, tree, PI_UNDECODED, PI_WARN,
+	"Expected server to send connection reply, ignoring packet");
 
     /*
-     * Assume we jumped into middle of conversation 
+     * Assume we jumped into middle of conversation
      */
     conv_tag(pinfo, tvb, offset, CONVERSING);
 }
@@ -2171,13 +2173,13 @@ static void dissect_ceph(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree){
 
     /* Tag as CEPH & prep info */
     if (check_col(pinfo->cinfo, COL_PROTOCOL))
-        col_set_str(pinfo->cinfo, COL_PROTOCOL, PROTO_TAG_CEPH);
+	col_set_str(pinfo->cinfo, COL_PROTOCOL, PROTO_TAG_CEPH);
     if(check_col(pinfo->cinfo,COL_INFO)){
-        col_clear(pinfo->cinfo,COL_INFO);
-        col_add_fstr(pinfo->cinfo, COL_INFO, "[%s]",conv_display(pinfo));
-        col_set_fence(pinfo->cinfo,COL_INFO);
+	col_clear(pinfo->cinfo,COL_INFO);
+	col_add_fstr(pinfo->cinfo, COL_INFO, "[%s]",conv_display(pinfo));
+	col_set_fence(pinfo->cinfo,COL_INFO);
     }
-    
+
     /*
      * Loop reading PDUs
      */
@@ -2186,130 +2188,130 @@ static void dissect_ceph(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree){
     pduNum=0;
     while (tvb_reported_length_remaining (tvb, offset) != 0) {
 
-        /* Flag if this is first PDU in packet, helps formating info */
-        g_firstPdu = (pduNum++ == 0);
+	/* Flag if this is first PDU in packet, helps formating info */
+	g_firstPdu = (pduNum++ == 0);
 
-        /* Create a new tree for it */
-        if (tree) { 
-            ceph_item = proto_tree_add_item(tree, g_proto_ceph, tvb, 0, 
-                -1, TRUE);
-            ceph_tree = proto_item_add_subtree(ceph_item, ett_ceph);
-        } else {
-            ceph_tree = NULL;
-        }
-        
-        /*
-         * Recover what type of message we are expecting to see both for 
-         * error checking and guiding the dissector to do the right thing
-         */
-        expecting = conv_expecting(pinfo, tvb, offset);
-        
-        /*
-         * Try decode something
-         */
-        if ((expecting & SERVER_BANNER) != 0) {
-            len = dissect_banner(tvb, pinfo, ceph_tree, offset, FALSE);
-            if (len == -1) needMore = TRUE;
-            else if (len>0) {
-                conv_tag(pinfo, tvb, offset, SERVER_BANNER);
-                offset += len;
-                continue;
-            }
-        } 
-        
-        if ((expecting & CLIENT_BANNER) != 0) {
-            len = dissect_banner(tvb, pinfo, ceph_tree, offset, TRUE);
-            if (len == -1) needMore = TRUE;
-            else if (len>0) {
-                conv_tag(pinfo, tvb, offset, CLIENT_BANNER);
-                offset += len;
-                continue;
-            }
-        }
+	/* Create a new tree for it */
+	if (tree) {
+	    ceph_item = proto_tree_add_item(tree, g_proto_ceph, tvb, 0,
+		-1, TRUE);
+	    ceph_tree = proto_item_add_subtree(ceph_item, ett_ceph);
+	} else {
+	    ceph_tree = NULL;
+	}
 
-        if ((expecting & CLIENT_ADDRESS) != 0) {
-            len = dissect_client_address(tvb, pinfo, ceph_tree, offset);
-            if (len == -1) needMore = TRUE;
-            else if (len>0) {
-                conv_tag(pinfo, tvb, offset, CLIENT_ADDRESS);
-                offset += len;
-                continue;
-            }
-        }
+	/*
+	 * Recover what type of message we are expecting to see both for
+	 * error checking and guiding the dissector to do the right thing
+	 */
+	expecting = conv_expecting(pinfo, tvb, offset);
 
-        if ((expecting & SERVER_ADDRESS) != 0) {
-            len = dissect_server_address(tvb, pinfo, ceph_tree, offset);
-            if (len == -1) needMore = TRUE;
-            else if (len>0) {
-                conv_tag(pinfo, tvb, offset, SERVER_ADDRESS);
-                offset += len;
-                continue;
-            }
-        }
+	/*
+	 * Try decode something
+	 */
+	if ((expecting & SERVER_BANNER) != 0) {
+	    len = dissect_banner(tvb, pinfo, ceph_tree, offset, FALSE);
+	    if (len == -1) needMore = TRUE;
+	    else if (len>0) {
+		conv_tag(pinfo, tvb, offset, SERVER_BANNER);
+		offset += len;
+		continue;
+	    }
+	}
 
-        if ((expecting & CONNECT_REQUEST) != 0) {
-            len = dissect_connect_request(tvb, pinfo, ceph_tree, offset);
-            if (len == -1) needMore = TRUE;
-            else if (len>0) {
-                conv_tag(pinfo, tvb, offset, CONNECT_REQUEST);
-                offset += len;
-                continue;
-            }
-        }
+	if ((expecting & CLIENT_BANNER) != 0) {
+	    len = dissect_banner(tvb, pinfo, ceph_tree, offset, TRUE);
+	    if (len == -1) needMore = TRUE;
+	    else if (len>0) {
+		conv_tag(pinfo, tvb, offset, CLIENT_BANNER);
+		offset += len;
+		continue;
+	    }
+	}
 
-        if ((expecting & CONNECT_REPLY) != 0) {
-            len = dissect_connect_reply(tvb, pinfo, ceph_tree, offset);
-            if (len == -1) needMore = TRUE;
-            else if (len>0) {
-                conv_tag(pinfo, tvb, offset, CONNECT_REPLY);
-                offset += len;
-                continue;
-            }
-        }
+	if ((expecting & CLIENT_ADDRESS) != 0) {
+	    len = dissect_client_address(tvb, pinfo, ceph_tree, offset);
+	    if (len == -1) needMore = TRUE;
+	    else if (len>0) {
+		conv_tag(pinfo, tvb, offset, CLIENT_ADDRESS);
+		offset += len;
+		continue;
+	    }
+	}
 
-        if ((expecting & CONVERSING) != 0) {
-            type = tvb_get_guint8(tvb, offset);
+	if ((expecting & SERVER_ADDRESS) != 0) {
+	    len = dissect_server_address(tvb, pinfo, ceph_tree, offset);
+	    if (len == -1) needMore = TRUE;
+	    else if (len>0) {
+		conv_tag(pinfo, tvb, offset, SERVER_ADDRESS);
+		offset += len;
+		continue;
+	    }
+	}
 
-            if(type == MSGR_TAG_CLOSE){
-                setPDUInfo(pinfo, "Close");
-                conv_tag(pinfo, tvb, offset, CONVERSING);
-                offset++;
-            }
-            else if (type == MSGR_TAG_KEEPALIVE){
-                setPDUInfo(pinfo, "Keep Alive");
-                conv_tag(pinfo, tvb, offset, CONVERSING);
-                offset++;
-            } 
-            else if (type == MSGR_TAG_ACK) {
-                len = dissect_ack(tvb, pinfo, ceph_tree, offset);
-                if (len == -1) needMore = TRUE;
-                if (len>0) {
-                    conv_tag(pinfo, tvb, offset, CONVERSING);
-                    offset += len;
-                    continue;
-                }
-            }
-            else if (type == MSGR_TAG_MSG) {
-                len = dissect_msg(tvb, pinfo, ceph_tree, offset+1);
-                if (len == -1) needMore = TRUE;
-                if (len>0) {
-                    conv_tag(pinfo, tvb, offset+1, CONVERSING);
-                    offset += (1+len);
-                    continue;
-                }
-            }
-        }
+	if ((expecting & CONNECT_REQUEST) != 0) {
+	    len = dissect_connect_request(tvb, pinfo, ceph_tree, offset);
+	    if (len == -1) needMore = TRUE;
+	    else if (len>0) {
+		conv_tag(pinfo, tvb, offset, CONNECT_REQUEST);
+		offset += len;
+		continue;
+	    }
+	}
 
-        /* We have fallen through without decoding something */
-        if (needMore) {
-            /* One of decoders wants to see more data, so request it */
-            pinfo->desegment_offset = offset;
-            pinfo->desegment_len=DESEGMENT_ONE_MORE_SEGMENT; 
-        } else {
-            /* Throw data away, we don't know what it is */
-            undecodedWarning(tvb, pinfo, ceph_tree, offset, expecting);
-        }
-        return;
+	if ((expecting & CONNECT_REPLY) != 0) {
+	    len = dissect_connect_reply(tvb, pinfo, ceph_tree, offset);
+	    if (len == -1) needMore = TRUE;
+	    else if (len>0) {
+		conv_tag(pinfo, tvb, offset, CONNECT_REPLY);
+		offset += len;
+		continue;
+	    }
+	}
+
+	if ((expecting & CONVERSING) != 0) {
+	    type = tvb_get_guint8(tvb, offset);
+
+	    if(type == MSGR_TAG_CLOSE){
+		setPDUInfo(pinfo, "Close");
+		conv_tag(pinfo, tvb, offset, CONVERSING);
+		offset++;
+	    }
+	    else if (type == MSGR_TAG_KEEPALIVE){
+		setPDUInfo(pinfo, "Keep Alive");
+		conv_tag(pinfo, tvb, offset, CONVERSING);
+		offset++;
+	    }
+	    else if (type == MSGR_TAG_ACK) {
+		len = dissect_ack(tvb, pinfo, ceph_tree, offset);
+		if (len == -1) needMore = TRUE;
+		if (len>0) {
+		    conv_tag(pinfo, tvb, offset, CONVERSING);
+		    offset += len;
+		    continue;
+		}
+	    }
+	    else if (type == MSGR_TAG_MSG) {
+		len = dissect_msg(tvb, pinfo, ceph_tree, offset+1);
+		if (len == -1) needMore = TRUE;
+		if (len>0) {
+		    conv_tag(pinfo, tvb, offset+1, CONVERSING);
+		    offset += (1+len);
+		    continue;
+		}
+	    }
+	}
+
+	/* We have fallen through without decoding something */
+	if (needMore) {
+	    /* One of decoders wants to see more data, so request it */
+	    pinfo->desegment_offset = offset;
+	    pinfo->desegment_len=DESEGMENT_ONE_MORE_SEGMENT;
+	} else {
+	    /* Throw data away, we don't know what it is */
+	    undecodedWarning(tvb, pinfo, ceph_tree, offset, expecting);
+	}
+	return;
     }
 }
 
@@ -2318,27 +2320,27 @@ static void dissect_ceph(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree){
  ****************************************************************************/
 
 static gboolean
-dissect_ceph_heur(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
-        void *data) {
+dissect_ceph_heur(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
+	void *data) {
 
     conversation_t* conversation;
     (void)data; /* unused but required */
-    
+
     if (tvb_memeql(tvb,0, "ceph",4)!=0) {
-        if (tvb_reported_length_remaining (tvb, 0) >= 1+SIZE_OF_MSG_HEADER) {
-            if (!isMsgrTag(tvb_get_guint8(tvb, 0)))
-                return FALSE;
+	if (tvb_reported_length_remaining (tvb, 0) >= 1+SIZE_OF_MSG_HEADER) {
+	    if (!isMsgrTag(tvb_get_guint8(tvb, 0)))
+		return FALSE;
 
-            if (!isEntityType(tvb_get_guint8(tvb, 1+HEADER_ETYPE_OFFSET)))
-                return FALSE;
+	    if (!isEntityType(tvb_get_guint8(tvb, 1+HEADER_ETYPE_OFFSET)))
+		return FALSE;
 
-            if (!isMsgCType(tvb_get_letohs(tvb, 1+HEADER_TYPE_OFFSET)))
-                return FALSE;
+	    if (!isMsgCType(tvb_get_letohs(tvb, 1+HEADER_TYPE_OFFSET)))
+		return FALSE;
 
 
-        } else {
-            return FALSE;
-        }
+	} else {
+	    return FALSE;
+	}
     }
 
     /* This is for us */
@@ -2363,288 +2365,288 @@ void proto_reg_handoff_ceph(void)
 
 /*
  * This is the first part of the two-part registration for the plugin,
- * see proto_reg_handoff_ceph() for part 2. 
+ * see proto_reg_handoff_ceph() for part 2.
  */
 void proto_register_ceph (void)
 {
     /* A header field is something you can search/filter on.
-    * 
+    *
     * We create a structure to register our fields. It consists of an
     * array of hf_register_info structures, each of which are of the format
     * {&(field id), {name, abbrev, type, display, strings, bitmask, blurb, HFILL}}.
     */
     static hf_register_info hf[] = {
-        { &hf_paxos_version,
-            { "version", "ceph.paxosservicemessage.version", FT_UINT64 , 
-                BASE_HEX, NULL, 0, NULL, HFILL }},
-        { &hf_featureset_mask,
-            { "mask", "ceph.featureset.mask", FT_UINT64 , 
-                BASE_HEX, NULL, 0, NULL, HFILL }},
-        { &hf_featureset_id,
-            { "id", "ceph.featureset.id", FT_UINT64 , 
-                BASE_HEX, NULL, 0, NULL, HFILL }},
-        { &hf_featureset_name,
-            { "name", "ceph.featureset.name", FT_UINT_STRING , 
-                BASE_NONE, NULL, 0, NULL, HFILL }},
-        { &hf_compatset_compat,
-            { "Compat", "ceph.compat", FT_NONE , 
-                BASE_NONE, NULL, 0, NULL, HFILL }},
-        { &hf_compatset_rocompat,
-            { "RO Compat", "ceph.rocompat", FT_NONE , 
-                BASE_NONE, NULL, 0, NULL, HFILL }},
-        { &hf_compatset_incompat,
-            { "Incompat", "ceph.incompat", FT_NONE , 
-                BASE_NONE, NULL, 0, NULL, HFILL }},
-        { &hf_monmap,
-            { "MON map", "ceph.monmap", FT_NONE , 
-                BASE_NONE, NULL, 0, NULL, HFILL }},
-        { &hf_monmap_version,
-            { "version", "ceph.monmap.version", FT_UINT8 , 
-                BASE_DEC, NULL, 0, NULL, HFILL }},
-        { &hf_monmap_compat,
-            { "compat", "ceph.monmap.compat", FT_UINT8 , 
-                BASE_DEC, NULL, 0, NULL, HFILL }},
-        { &hf_monmap_epoch,
-            { "epoch", "ceph.monmap.epoch", FT_UINT32 , 
-                BASE_DEC, NULL, 0, NULL, HFILL }},
-        { &hf_monmap_name,
-            { "name", "ceph.monmap.name", FT_UINT_STRING , 
-                BASE_NONE, NULL, 0, NULL, HFILL }},
-        { &hf_monmap_lastchanged,
-            { "last changed", "ceph.monmap.lastchanged", FT_UINT64 , 
-                BASE_HEX, NULL, 0, NULL, HFILL }},
-        { &hf_monmap_created,
-            { "created", "ceph.monmap.created", FT_UINT64 , 
-                BASE_HEX, NULL, 0, NULL, HFILL }},
-        { &hf_monsubscribe,
-            { "MON subscribe", "ceph.monsubscribe", FT_NONE , 
-                BASE_NONE, NULL, 0, NULL, HFILL }},
-        { &hf_monsubscribe_name,
-            { "name", "ceph.monsubscribe.name", FT_UINT_STRING , 
-                BASE_NONE, NULL, 0, NULL, HFILL }},
-        { &hf_monsubscribe_start,
-            { "start", "ceph.monsubscribe.start", FT_UINT64 , 
-                BASE_HEX, NULL, 0, NULL, HFILL }},
-        { &hf_monsubscribe_flags,
-            { "flags", "ceph.monsubscribe.flags", FT_UINT8 , 
-                BASE_HEX, NULL, 0, NULL, HFILL }},
-        { &hf_monsubscribeack,
-            { "MON subscribe ack", "ceph.monsubscribeack", FT_NONE , 
-                BASE_NONE, NULL, 0,    NULL, HFILL }},
-        { &hf_monsubscribeack_interval,
-            { "interval", "ceph.monsubscribeack.interval", FT_UINT32 , 
-                BASE_DEC, NULL, 0, NULL, HFILL }},
-        { &hf_mdsbeacon,
-            { "MDS Beacon", "ceph.mdsbeacon", FT_NONE , 
-                BASE_NONE, NULL, 0,    NULL, HFILL }},
-        { &hf_mdsbeacon_globalid,
-            { "global_id", "ceph.mdsbeason.globalid", FT_UINT64 , 
-                BASE_HEX, NULL, 0, NULL, HFILL }},
-        { &hf_mdsbeacon_state,
-            { "state", "ceph.mdsbeason.state", FT_UINT32 , 
-                BASE_HEX, NULL, 0, NULL, HFILL }},
-        { &hf_mdsbeacon_seq,
-            { "seq", "ceph.mdsbeason.seq", FT_UINT64 , 
-                BASE_DEC, NULL, 0, NULL, HFILL }},
-        { &hf_mdsbeacon_name,
-            { "name", "ceph.mdsbeason.name", FT_UINT_STRING , 
-                BASE_NONE, NULL, 0,    NULL, HFILL }},
-        { &hf_mdsbeacon_standbyforrank,
-            { "standby for rank", "ceph.mdsbeason.standbyforrank", FT_INT32 , 
-                BASE_DEC, NULL, 0, NULL, HFILL }},
-        { &hf_mdsbeacon_standbyforname,
-            { "standby for name", "ceph.mdsbeason.standbyforname", FT_UINT_STRING , 
-                BASE_NONE, NULL, 0,    NULL, HFILL }},
-        { &hf_auth,
-            { "Authentication Request", "ceph.auth.request", FT_NONE , 
-                BASE_NONE, NULL, 0,    NULL, HFILL }},
-        { &hf_auth_protocol,
-            { "protocol", "ceph.auth.protocol", FT_UINT32, 
-                BASE_DEC, NULL, 0x0, NULL, HFILL }},
-        { &hf_auth_authlen,
-            { "auth len", "ceph.auth.authlen", FT_UINT32, 
-                BASE_DEC, NULL, 0x0, NULL, HFILL }},
-        { &hf_auth_authbytes,
-            { "auth bytes", "ceph.auth.authbytes", FT_BYTES, 
-                BASE_NONE, NULL, 0x0, NULL, HFILL }},
-        { &hf_auth_monmapepoch,
-            { "monmap epoch", "ceph.auth.monmapepoch", FT_UINT32, 
-                BASE_DEC, NULL, 0x0, NULL, HFILL }},
-        { &hf_authreply,
-            { "Authentication reply", "ceph.auth.reply", FT_NONE , 
-                BASE_NONE, NULL, 0,    NULL, HFILL }},
-        { &hf_authreply_protocol,
-            { "protocol", "ceph.authreply.protocol", FT_UINT32 , 
-                BASE_DEC, NULL, 0, NULL, HFILL }},
-        { &hf_authreply_result,
-            { "result", "ceph.authreply.result", FT_INT32 , 
-                BASE_DEC, NULL, 0, NULL, HFILL }},
-        { &hf_authreply_globalid,
-            { "global_id", "ceph.authreply.global_id", FT_UINT64 , 
-                BASE_HEX, NULL, 0, NULL, HFILL }},
-        { &hf_authreply_authlen,
-            { "auth len", "ceph.authreply.authlen", FT_UINT32, 
-                BASE_DEC, NULL, 0x0, NULL, HFILL }},
-        { &hf_authreply_authbytes,
-            { "auth bytes", "ceph.authreply.authbytes", FT_BYTES, 
-                BASE_NONE, NULL, 0x0, NULL, HFILL }},
-        { &hf_authreply_msglen,
-            { "msg len", "ceph.authreply.msglen", FT_UINT32, 
-                BASE_DEC, NULL, 0x0, NULL, HFILL }},
-        { &hf_authreply_msgstring,
-            { "msg bytes", "ceph.authreply.msgbytes", FT_STRINGZ, 
-                BASE_NONE, NULL, 0x0, NULL, HFILL }},
-        { &hf_header,
-            { "Header", "ceph.header", FT_NONE, 
-                BASE_NONE, NULL, 0x0, NULL, HFILL }},
-        { &hf_banner,
-            { "Banner", "ceph.connect.banner", FT_STRING, 
-                BASE_NONE, NULL, 0x0, NULL, HFILL }},
-        { &hf_entity_type,
-            { "entity type", "ceph.entity.type", FT_UINT32, 
-                BASE_DEC, NULL, 0x0, NULL, HFILL }},
-        { &hf_entity_num,
-            { "entity num", "ceph.entity.num", FT_UINT64, 
-                BASE_DEC, NULL, 0x0, NULL, HFILL }},
-        { &hf_entity_addr,
-            { "Entity Addr", "ceph.entity.addr", FT_NONE, 
-                BASE_NONE, NULL, 0x0, NULL, HFILL }},
-        { &hf_banner_magic,
-            { "Banner Magic", "ceph.connect.banner.magic", FT_STRING, 
-                BASE_NONE, NULL, 0x0, NULL, HFILL }},
-        { &hf_banner_version,
-            { "Banner Version", "ceph.connect.banner.ver", FT_STRING, 
-                BASE_NONE, NULL, 0x0, NULL, HFILL }},
-        { &hf_entity_erank,
-            { "erank", "ceph.entity.erank", FT_UINT32, 
-                BASE_HEX, NULL, 0x0, NULL, HFILL }},
-        { &hf_entity_nonce,
-            { "nonce", "ceph.entity.nonce", FT_UINT32, 
-                BASE_HEX, NULL, 0x0, NULL, HFILL }},
-        { &hf_sockaddr_in,
-            { "sockaddr_in", "ceph.sockaddr_in", FT_NONE, 
-                BASE_NONE, NULL, 0x0, NULL, HFILL }},
-        { &hf_sin_family,
-            { "sin_family", "ceph.sin_family", FT_UINT16, 
-                BASE_HEX, NULL, 0x0, NULL, HFILL }},
-        { &hf_sin_port,
-            { "sin_port", "ceph.sin_port", FT_UINT16, 
-                BASE_DEC, NULL, 0x0, NULL, HFILL }},
-        { &hf_sin_addr,
-            { "ip addr", "ceph.addr", FT_IPv4, 
-                BASE_NONE, NULL, 0x0, NULL, HFILL }},
-        { &hf_connect_features,
-            { "features", "ceph.connect.features", FT_UINT64, 
-                BASE_HEX, NULL, 0x0, NULL, HFILL }},
-        { &hf_connect_host_type,
-            { "host_type", "ceph.connect.host_type", FT_UINT32, 
-                BASE_DEC, NULL, 0x0, NULL, HFILL }},
-        { &hf_connect_tag,
-            { "tag", "ceph.connect.tag", FT_UINT8, 
-                BASE_DEC, NULL, 0x0, NULL, HFILL }},
-        { &hf_connect_global_seq,
-            { "global_seq", "ceph.connect.global_seq", FT_UINT32, 
-                BASE_DEC, NULL, 0x0, NULL, HFILL }},
-        { &hf_connect_connect_seq,
-            { "connect_seq", "ceph.connect.connect_seq", FT_UINT32, 
-                BASE_DEC, NULL, 0x0, NULL, HFILL }},
-        { &hf_connect_protocol_version,
-            { "protocol_version", "ceph.connect.protocol_version", FT_UINT32, 
-                BASE_DEC, NULL, 0x0, NULL, HFILL }},
-        { &hf_connect_authorizer_protocol,
-            { "authorizer_protocol", "ceph.connect.authorizer_protocol", FT_UINT32, 
-                BASE_DEC, NULL, 0x0, NULL, HFILL }},
-        { &hf_connect_authorizer_len,
-            { "authorizer_len", "ceph.connect.authorizer_len", FT_UINT32, 
-                BASE_DEC, NULL, 0x0, NULL, HFILL }},
-        { &hf_connect_flags,
-            { "flags", "ceph.connect.flags", FT_UINT8, 
-                BASE_HEX, NULL, 0x0, NULL, HFILL }},
-        { &hf_connect_authentication_key,
-            { "authentication_key", "ceph.connect.authentication_key", FT_BYTES, 
-                BASE_NONE, NULL, 0x0, NULL, HFILL }},
-        { &hf_hdr_tag,
-            { "tag", "ceph.tag", FT_UINT8, 
-                BASE_DEC, NULL, 0x0, NULL, HFILL }},
-        { &hf_hdr_seq_ack,
-            { "ack seq", "ceph.ack.seq", FT_UINT64, 
-                BASE_DEC, NULL, 0x0, NULL, HFILL }},
-        { &hf_hdr_seq,
-            { "seq", "ceph.seq", FT_UINT64, 
-                BASE_DEC, NULL, 0x0, NULL, HFILL }},
-        { &hf_hdr_tid,
-            { "tid", "ceph.tid", FT_UINT64, 
-                BASE_DEC, NULL, 0x0, NULL, HFILL }},
-        { &hf_hdr_type,
-            { "type", "ceph.type", FT_UINT16, 
-                BASE_HEX, NULL, 0x0, NULL, HFILL }},
-        { &hf_hdr_priority,
-            { "priority", "ceph.priority", FT_UINT16, 
-                BASE_DEC, NULL, 0x0, NULL, HFILL }},
-        { &hf_hdr_version,
-            { "version", "ceph.version", FT_UINT16, 
-                BASE_DEC, NULL, 0x0, NULL, HFILL }},
-        { &hf_hdr_mon_protocol,
-            { "mon_protocol", "ceph.mon_protocol", FT_UINT16, 
-                BASE_DEC, NULL, 0x0, NULL, HFILL }},
-        { &hf_hdr_osd_protocol,
-            { "osd_protocol", "ceph.osd_protocol", FT_UINT16, 
-                BASE_DEC, NULL, 0x0, NULL, HFILL }},
-        { &hf_hdr_mds_protocol,
-            { "mds_protocol", "ceph.mds_protocol", FT_UINT16, 
-                BASE_DEC, NULL, 0x0, NULL, HFILL }},
-        { &hf_hdr_client_protocol,
-            { "client_protocol", "ceph.client_protocol", FT_UINT16, 
-                BASE_DEC, NULL, 0x0, NULL, HFILL }},
-        { &hf_hdr_front_len,
-            { "front_len", "ceph.front_len", FT_UINT32, 
-                BASE_DEC, NULL, 0x0, NULL, HFILL }},
-        { &hf_hdr_middle_len,
-            { "middle_len", "ceph.middle_len", FT_UINT32, 
-                BASE_DEC, NULL, 0x0, NULL, HFILL }},
-        { &hf_hdr_data_off,
-            { "data_off", "ceph.data_off", FT_UINT32, 
-                BASE_DEC, NULL, 0x0, NULL, HFILL }},
-        { &hf_hdr_data_len,
-            { "data_len", "ceph.data_len", FT_UINT32, 
-                BASE_DEC, NULL, 0x0, NULL, HFILL }},
-        { &hf_hdr_src,
-            { "src entity name", "ceph.src", FT_NONE, 
-                BASE_NONE, NULL, 0x0, NULL, HFILL }},
-        { &hf_hdr_crc,
-            { "crc", "ceph.crc", FT_UINT32, 
-                BASE_HEX, NULL, 0x0, NULL, HFILL }},
-        { &hf_footer,
-            { "Footer", "ceph.footer", FT_NONE, 
-                BASE_NONE, NULL, 0x0, NULL, HFILL }},
-        { &hf_footer_front_crc,
-            { "front_crc", "ceph.footer.front_crc", FT_UINT32, 
-                BASE_HEX, NULL, 0x0, NULL, HFILL }},
-        { &hf_footer_middle_crc,
-            { "middle_crc", "ceph.footer.middle_crc", FT_UINT32, 
-                BASE_HEX, NULL, 0x0, NULL, HFILL }},
-        { &hf_footer_data_crc,
-            { "data_crc", "ceph.footer.data_crc", FT_UINT32, 
-                BASE_HEX, NULL, 0x0, NULL, HFILL }},
-        { &hf_footer_sig,
-            { "sig", "ceph.footer.sig", FT_UINT64, 
-                BASE_HEX, NULL, 0x0, NULL, HFILL }},
-        { &hf_footer_flags,
-            { "flags", "ceph.footer.flags", FT_UINT8, 
-                BASE_HEX, NULL, 0x0, NULL, HFILL }},
+	{ &hf_paxos_version,
+	    { "version", "ceph.paxosservicemessage.version", FT_UINT64 ,
+		BASE_HEX, NULL, 0, NULL, HFILL }},
+	{ &hf_featureset_mask,
+	    { "mask", "ceph.featureset.mask", FT_UINT64 ,
+		BASE_HEX, NULL, 0, NULL, HFILL }},
+	{ &hf_featureset_id,
+	    { "id", "ceph.featureset.id", FT_UINT64 ,
+		BASE_HEX, NULL, 0, NULL, HFILL }},
+	{ &hf_featureset_name,
+	    { "name", "ceph.featureset.name", FT_UINT_STRING ,
+		BASE_NONE, NULL, 0, NULL, HFILL }},
+	{ &hf_compatset_compat,
+	    { "Compat", "ceph.compat", FT_NONE ,
+		BASE_NONE, NULL, 0, NULL, HFILL }},
+	{ &hf_compatset_rocompat,
+	    { "RO Compat", "ceph.rocompat", FT_NONE ,
+		BASE_NONE, NULL, 0, NULL, HFILL }},
+	{ &hf_compatset_incompat,
+	    { "Incompat", "ceph.incompat", FT_NONE ,
+		BASE_NONE, NULL, 0, NULL, HFILL }},
+	{ &hf_monmap,
+	    { "MON map", "ceph.monmap", FT_NONE ,
+		BASE_NONE, NULL, 0, NULL, HFILL }},
+	{ &hf_monmap_version,
+	    { "version", "ceph.monmap.version", FT_UINT8 ,
+		BASE_DEC, NULL, 0, NULL, HFILL }},
+	{ &hf_monmap_compat,
+	    { "compat", "ceph.monmap.compat", FT_UINT8 ,
+		BASE_DEC, NULL, 0, NULL, HFILL }},
+	{ &hf_monmap_epoch,
+	    { "epoch", "ceph.monmap.epoch", FT_UINT32 ,
+		BASE_DEC, NULL, 0, NULL, HFILL }},
+	{ &hf_monmap_name,
+	    { "name", "ceph.monmap.name", FT_UINT_STRING ,
+		BASE_NONE, NULL, 0, NULL, HFILL }},
+	{ &hf_monmap_lastchanged,
+	    { "last changed", "ceph.monmap.lastchanged", FT_UINT64 ,
+		BASE_HEX, NULL, 0, NULL, HFILL }},
+	{ &hf_monmap_created,
+	    { "created", "ceph.monmap.created", FT_UINT64 ,
+		BASE_HEX, NULL, 0, NULL, HFILL }},
+	{ &hf_monsubscribe,
+	    { "MON subscribe", "ceph.monsubscribe", FT_NONE ,
+		BASE_NONE, NULL, 0, NULL, HFILL }},
+	{ &hf_monsubscribe_name,
+	    { "name", "ceph.monsubscribe.name", FT_UINT_STRING ,
+		BASE_NONE, NULL, 0, NULL, HFILL }},
+	{ &hf_monsubscribe_start,
+	    { "start", "ceph.monsubscribe.start", FT_UINT64 ,
+		BASE_HEX, NULL, 0, NULL, HFILL }},
+	{ &hf_monsubscribe_flags,
+	    { "flags", "ceph.monsubscribe.flags", FT_UINT8 ,
+		BASE_HEX, NULL, 0, NULL, HFILL }},
+	{ &hf_monsubscribeack,
+	    { "MON subscribe ack", "ceph.monsubscribeack", FT_NONE ,
+		BASE_NONE, NULL, 0,    NULL, HFILL }},
+	{ &hf_monsubscribeack_interval,
+	    { "interval", "ceph.monsubscribeack.interval", FT_UINT32 ,
+		BASE_DEC, NULL, 0, NULL, HFILL }},
+	{ &hf_mdsbeacon,
+	    { "MDS Beacon", "ceph.mdsbeacon", FT_NONE ,
+		BASE_NONE, NULL, 0,    NULL, HFILL }},
+	{ &hf_mdsbeacon_globalid,
+	    { "global_id", "ceph.mdsbeason.globalid", FT_UINT64 ,
+		BASE_HEX, NULL, 0, NULL, HFILL }},
+	{ &hf_mdsbeacon_state,
+	    { "state", "ceph.mdsbeason.state", FT_UINT32 ,
+		BASE_HEX, NULL, 0, NULL, HFILL }},
+	{ &hf_mdsbeacon_seq,
+	    { "seq", "ceph.mdsbeason.seq", FT_UINT64 ,
+		BASE_DEC, NULL, 0, NULL, HFILL }},
+	{ &hf_mdsbeacon_name,
+	    { "name", "ceph.mdsbeason.name", FT_UINT_STRING ,
+		BASE_NONE, NULL, 0,    NULL, HFILL }},
+	{ &hf_mdsbeacon_standbyforrank,
+	    { "standby for rank", "ceph.mdsbeason.standbyforrank", FT_INT32 ,
+		BASE_DEC, NULL, 0, NULL, HFILL }},
+	{ &hf_mdsbeacon_standbyforname,
+	    { "standby for name", "ceph.mdsbeason.standbyforname", FT_UINT_STRING ,
+		BASE_NONE, NULL, 0,    NULL, HFILL }},
+	{ &hf_auth,
+	    { "Authentication Request", "ceph.auth.request", FT_NONE ,
+		BASE_NONE, NULL, 0,    NULL, HFILL }},
+	{ &hf_auth_protocol,
+	    { "protocol", "ceph.auth.protocol", FT_UINT32,
+		BASE_DEC, NULL, 0x0, NULL, HFILL }},
+	{ &hf_auth_authlen,
+	    { "auth len", "ceph.auth.authlen", FT_UINT32,
+		BASE_DEC, NULL, 0x0, NULL, HFILL }},
+	{ &hf_auth_authbytes,
+	    { "auth bytes", "ceph.auth.authbytes", FT_BYTES,
+		BASE_NONE, NULL, 0x0, NULL, HFILL }},
+	{ &hf_auth_monmapepoch,
+	    { "monmap epoch", "ceph.auth.monmapepoch", FT_UINT32,
+		BASE_DEC, NULL, 0x0, NULL, HFILL }},
+	{ &hf_authreply,
+	    { "Authentication reply", "ceph.auth.reply", FT_NONE ,
+		BASE_NONE, NULL, 0,    NULL, HFILL }},
+	{ &hf_authreply_protocol,
+	    { "protocol", "ceph.authreply.protocol", FT_UINT32 ,
+		BASE_DEC, NULL, 0, NULL, HFILL }},
+	{ &hf_authreply_result,
+	    { "result", "ceph.authreply.result", FT_INT32 ,
+		BASE_DEC, NULL, 0, NULL, HFILL }},
+	{ &hf_authreply_globalid,
+	    { "global_id", "ceph.authreply.global_id", FT_UINT64 ,
+		BASE_HEX, NULL, 0, NULL, HFILL }},
+	{ &hf_authreply_authlen,
+	    { "auth len", "ceph.authreply.authlen", FT_UINT32,
+		BASE_DEC, NULL, 0x0, NULL, HFILL }},
+	{ &hf_authreply_authbytes,
+	    { "auth bytes", "ceph.authreply.authbytes", FT_BYTES,
+		BASE_NONE, NULL, 0x0, NULL, HFILL }},
+	{ &hf_authreply_msglen,
+	    { "msg len", "ceph.authreply.msglen", FT_UINT32,
+		BASE_DEC, NULL, 0x0, NULL, HFILL }},
+	{ &hf_authreply_msgstring,
+	    { "msg bytes", "ceph.authreply.msgbytes", FT_STRINGZ,
+		BASE_NONE, NULL, 0x0, NULL, HFILL }},
+	{ &hf_header,
+	    { "Header", "ceph.header", FT_NONE,
+		BASE_NONE, NULL, 0x0, NULL, HFILL }},
+	{ &hf_banner,
+	    { "Banner", "ceph.connect.banner", FT_STRING,
+		BASE_NONE, NULL, 0x0, NULL, HFILL }},
+	{ &hf_entity_type,
+	    { "entity type", "ceph.entity.type", FT_UINT32,
+		BASE_DEC, NULL, 0x0, NULL, HFILL }},
+	{ &hf_entity_num,
+	    { "entity num", "ceph.entity.num", FT_UINT64,
+		BASE_DEC, NULL, 0x0, NULL, HFILL }},
+	{ &hf_entity_addr,
+	    { "Entity Addr", "ceph.entity.addr", FT_NONE,
+		BASE_NONE, NULL, 0x0, NULL, HFILL }},
+	{ &hf_banner_magic,
+	    { "Banner Magic", "ceph.connect.banner.magic", FT_STRING,
+		BASE_NONE, NULL, 0x0, NULL, HFILL }},
+	{ &hf_banner_version,
+	    { "Banner Version", "ceph.connect.banner.ver", FT_STRING,
+		BASE_NONE, NULL, 0x0, NULL, HFILL }},
+	{ &hf_entity_erank,
+	    { "erank", "ceph.entity.erank", FT_UINT32,
+		BASE_HEX, NULL, 0x0, NULL, HFILL }},
+	{ &hf_entity_nonce,
+	    { "nonce", "ceph.entity.nonce", FT_UINT32,
+		BASE_HEX, NULL, 0x0, NULL, HFILL }},
+	{ &hf_sockaddr_in,
+	    { "sockaddr_in", "ceph.sockaddr_in", FT_NONE,
+		BASE_NONE, NULL, 0x0, NULL, HFILL }},
+	{ &hf_sin_family,
+	    { "sin_family", "ceph.sin_family", FT_UINT16,
+		BASE_HEX, NULL, 0x0, NULL, HFILL }},
+	{ &hf_sin_port,
+	    { "sin_port", "ceph.sin_port", FT_UINT16,
+		BASE_DEC, NULL, 0x0, NULL, HFILL }},
+	{ &hf_sin_addr,
+	    { "ip addr", "ceph.addr", FT_IPv4,
+		BASE_NONE, NULL, 0x0, NULL, HFILL }},
+	{ &hf_connect_features,
+	    { "features", "ceph.connect.features", FT_UINT64,
+		BASE_HEX, NULL, 0x0, NULL, HFILL }},
+	{ &hf_connect_host_type,
+	    { "host_type", "ceph.connect.host_type", FT_UINT32,
+		BASE_DEC, NULL, 0x0, NULL, HFILL }},
+	{ &hf_connect_tag,
+	    { "tag", "ceph.connect.tag", FT_UINT8,
+		BASE_DEC, NULL, 0x0, NULL, HFILL }},
+	{ &hf_connect_global_seq,
+	    { "global_seq", "ceph.connect.global_seq", FT_UINT32,
+		BASE_DEC, NULL, 0x0, NULL, HFILL }},
+	{ &hf_connect_connect_seq,
+	    { "connect_seq", "ceph.connect.connect_seq", FT_UINT32,
+		BASE_DEC, NULL, 0x0, NULL, HFILL }},
+	{ &hf_connect_protocol_version,
+	    { "protocol_version", "ceph.connect.protocol_version", FT_UINT32,
+		BASE_DEC, NULL, 0x0, NULL, HFILL }},
+	{ &hf_connect_authorizer_protocol,
+	    { "authorizer_protocol", "ceph.connect.authorizer_protocol", FT_UINT32,
+		BASE_DEC, NULL, 0x0, NULL, HFILL }},
+	{ &hf_connect_authorizer_len,
+	    { "authorizer_len", "ceph.connect.authorizer_len", FT_UINT32,
+		BASE_DEC, NULL, 0x0, NULL, HFILL }},
+	{ &hf_connect_flags,
+	    { "flags", "ceph.connect.flags", FT_UINT8,
+		BASE_HEX, NULL, 0x0, NULL, HFILL }},
+	{ &hf_connect_authentication_key,
+	    { "authentication_key", "ceph.connect.authentication_key", FT_BYTES,
+		BASE_NONE, NULL, 0x0, NULL, HFILL }},
+	{ &hf_hdr_tag,
+	    { "tag", "ceph.tag", FT_UINT8,
+		BASE_DEC, NULL, 0x0, NULL, HFILL }},
+	{ &hf_hdr_seq_ack,
+	    { "ack seq", "ceph.ack.seq", FT_UINT64,
+		BASE_DEC, NULL, 0x0, NULL, HFILL }},
+	{ &hf_hdr_seq,
+	    { "seq", "ceph.seq", FT_UINT64,
+		BASE_DEC, NULL, 0x0, NULL, HFILL }},
+	{ &hf_hdr_tid,
+	    { "tid", "ceph.tid", FT_UINT64,
+		BASE_DEC, NULL, 0x0, NULL, HFILL }},
+	{ &hf_hdr_type,
+	    { "type", "ceph.type", FT_UINT16,
+		BASE_HEX, NULL, 0x0, NULL, HFILL }},
+	{ &hf_hdr_priority,
+	    { "priority", "ceph.priority", FT_UINT16,
+		BASE_DEC, NULL, 0x0, NULL, HFILL }},
+	{ &hf_hdr_version,
+	    { "version", "ceph.version", FT_UINT16,
+		BASE_DEC, NULL, 0x0, NULL, HFILL }},
+	{ &hf_hdr_mon_protocol,
+	    { "mon_protocol", "ceph.mon_protocol", FT_UINT16,
+		BASE_DEC, NULL, 0x0, NULL, HFILL }},
+	{ &hf_hdr_osd_protocol,
+	    { "osd_protocol", "ceph.osd_protocol", FT_UINT16,
+		BASE_DEC, NULL, 0x0, NULL, HFILL }},
+	{ &hf_hdr_mds_protocol,
+	    { "mds_protocol", "ceph.mds_protocol", FT_UINT16,
+		BASE_DEC, NULL, 0x0, NULL, HFILL }},
+	{ &hf_hdr_client_protocol,
+	    { "client_protocol", "ceph.client_protocol", FT_UINT16,
+		BASE_DEC, NULL, 0x0, NULL, HFILL }},
+	{ &hf_hdr_front_len,
+	    { "front_len", "ceph.front_len", FT_UINT32,
+		BASE_DEC, NULL, 0x0, NULL, HFILL }},
+	{ &hf_hdr_middle_len,
+	    { "middle_len", "ceph.middle_len", FT_UINT32,
+		BASE_DEC, NULL, 0x0, NULL, HFILL }},
+	{ &hf_hdr_data_off,
+	    { "data_off", "ceph.data_off", FT_UINT32,
+		BASE_DEC, NULL, 0x0, NULL, HFILL }},
+	{ &hf_hdr_data_len,
+	    { "data_len", "ceph.data_len", FT_UINT32,
+		BASE_DEC, NULL, 0x0, NULL, HFILL }},
+	{ &hf_hdr_src,
+	    { "src entity name", "ceph.src", FT_NONE,
+		BASE_NONE, NULL, 0x0, NULL, HFILL }},
+	{ &hf_hdr_crc,
+	    { "crc", "ceph.crc", FT_UINT32,
+		BASE_HEX, NULL, 0x0, NULL, HFILL }},
+	{ &hf_footer,
+	    { "Footer", "ceph.footer", FT_NONE,
+		BASE_NONE, NULL, 0x0, NULL, HFILL }},
+	{ &hf_footer_front_crc,
+	    { "front_crc", "ceph.footer.front_crc", FT_UINT32,
+		BASE_HEX, NULL, 0x0, NULL, HFILL }},
+	{ &hf_footer_middle_crc,
+	    { "middle_crc", "ceph.footer.middle_crc", FT_UINT32,
+		BASE_HEX, NULL, 0x0, NULL, HFILL }},
+	{ &hf_footer_data_crc,
+	    { "data_crc", "ceph.footer.data_crc", FT_UINT32,
+		BASE_HEX, NULL, 0x0, NULL, HFILL }},
+	{ &hf_footer_sig,
+	    { "sig", "ceph.footer.sig", FT_UINT64,
+		BASE_HEX, NULL, 0x0, NULL, HFILL }},
+	{ &hf_footer_flags,
+	    { "flags", "ceph.footer.flags", FT_UINT8,
+		BASE_HEX, NULL, 0x0, NULL, HFILL }},
     };
     static gint *ett[] = {
-        &ett_ceph,
-        &ett_header,
-        &ett_banner,
-        &ett_entity_addr,
-        &ett_front,
-        &ett_footer,
-        &ett_sockaddr_in,
-        &ett_entity_name,
-        &ett_compat,
-        &ett_rocompat,
-        &ett_incompat,
+	&ett_ceph,
+	&ett_header,
+	&ett_banner,
+	&ett_entity_addr,
+	&ett_front,
+	&ett_footer,
+	&ett_sockaddr_in,
+	&ett_entity_name,
+	&ett_compat,
+	&ett_rocompat,
+	&ett_incompat,
     };
 
     /*

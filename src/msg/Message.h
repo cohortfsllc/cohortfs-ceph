@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -33,87 +33,87 @@
 #include "common/config.h"
 
 // monitor internal
-#define MSG_MON_SCRUB              64
-#define MSG_MON_ELECTION           65
-#define MSG_MON_PAXOS              66
-#define MSG_MON_PROBE              67
-#define MSG_MON_JOIN               68
+#define MSG_MON_SCRUB		   64
+#define MSG_MON_ELECTION	   65
+#define MSG_MON_PAXOS		   66
+#define MSG_MON_PROBE		   67
+#define MSG_MON_JOIN		   68
 #define MSG_MON_SYNC		   69
 
 /* monitor <-> mon admin tool */
-#define MSG_MON_COMMAND            50
-#define MSG_MON_COMMAND_ACK        51
-#define MSG_LOG                    52
-#define MSG_LOGACK                 53
-//#define MSG_MON_OBSERVE            54
+#define MSG_MON_COMMAND		   50
+#define MSG_MON_COMMAND_ACK	   51
+#define MSG_LOG			   52
+#define MSG_LOGACK		   53
+//#define MSG_MON_OBSERVE	     54
 //#define MSG_MON_OBSERVE_NOTIFY     55
-#define MSG_CLASS                  56
-#define MSG_CLASS_ACK              57
+#define MSG_CLASS		   56
+#define MSG_CLASS_ACK		   57
 
-#define MSG_MON_GLOBAL_ID          60
+#define MSG_MON_GLOBAL_ID	   60
 
-#define MSG_ROUTE                  47
-#define MSG_FORWARD                46
+#define MSG_ROUTE		   47
+#define MSG_FORWARD		   46
 
-#define MSG_PAXOS                  40
+#define MSG_PAXOS		   40
 
 
 // osd internal
-#define MSG_OSD_PING         70
-#define MSG_OSD_BOOT         71
-#define MSG_OSD_FAILURE      72
-#define MSG_OSD_ALIVE        73
+#define MSG_OSD_PING	     70
+#define MSG_OSD_BOOT	     71
+#define MSG_OSD_FAILURE	     72
+#define MSG_OSD_ALIVE	     73
 #define MSG_OSD_MARK_ME_DOWN 74
 
 // *** MDS ***
 
-#define MSG_MDS_BEACON             100  // to monitor
-#define MSG_MDS_SLAVE_REQUEST      101
-#define MSG_MDS_TABLE_REQUEST      102
+#define MSG_MDS_BEACON		   100	// to monitor
+#define MSG_MDS_SLAVE_REQUEST	   101
+#define MSG_MDS_TABLE_REQUEST	   102
 
-                                // 150 already in use (MSG_OSD_RECOVERY_RESERVE)
+				// 150 already in use (MSG_OSD_RECOVERY_RESERVE)
 
-#define MSG_MDS_RESOLVE            0x200
-#define MSG_MDS_RESOLVEACK         0x201
-#define MSG_MDS_CACHEREJOIN        0x202
-#define MSG_MDS_DISCOVER           0x203
-#define MSG_MDS_DISCOVERREPLY      0x204
-#define MSG_MDS_INODEUPDATE        0x205
-#define MSG_MDS_DIRUPDATE          0x206
-#define MSG_MDS_CACHEEXPIRE        0x207
-#define MSG_MDS_DENTRYUNLINK       0x208
-#define MSG_MDS_FRAGMENTNOTIFY     0x209
-#define MSG_MDS_OFFLOAD_TARGETS    0x20a
-#define MSG_MDS_DENTRYLINK         0x20c
-#define MSG_MDS_FINDINO            0x20d
-#define MSG_MDS_FINDINOREPLY       0x20e
-#define MSG_MDS_OPENINO            0x20f
-#define MSG_MDS_OPENINOREPLY       0x210
+#define MSG_MDS_RESOLVE		   0x200
+#define MSG_MDS_RESOLVEACK	   0x201
+#define MSG_MDS_CACHEREJOIN	   0x202
+#define MSG_MDS_DISCOVER	   0x203
+#define MSG_MDS_DISCOVERREPLY	   0x204
+#define MSG_MDS_INODEUPDATE	   0x205
+#define MSG_MDS_DIRUPDATE	   0x206
+#define MSG_MDS_CACHEEXPIRE	   0x207
+#define MSG_MDS_DENTRYUNLINK	   0x208
+#define MSG_MDS_FRAGMENTNOTIFY	   0x209
+#define MSG_MDS_OFFLOAD_TARGETS	   0x20a
+#define MSG_MDS_DENTRYLINK	   0x20c
+#define MSG_MDS_FINDINO		   0x20d
+#define MSG_MDS_FINDINOREPLY	   0x20e
+#define MSG_MDS_OPENINO		   0x20f
+#define MSG_MDS_OPENINOREPLY	   0x210
 
-#define MSG_MDS_LOCK               0x300
-#define MSG_MDS_INODEFILECAPS      0x301
+#define MSG_MDS_LOCK		   0x300
+#define MSG_MDS_INODEFILECAPS	   0x301
 
 #define MSG_MDS_EXPORTDIRDISCOVER     0x449
 #define MSG_MDS_EXPORTDIRDISCOVERACK  0x450
-#define MSG_MDS_EXPORTDIRCANCEL       0x451
-#define MSG_MDS_EXPORTDIRPREP         0x452
+#define MSG_MDS_EXPORTDIRCANCEL	      0x451
+#define MSG_MDS_EXPORTDIRPREP	      0x452
 #define MSG_MDS_EXPORTDIRPREPACK      0x453
 #define MSG_MDS_EXPORTDIRWARNING      0x454
 #define MSG_MDS_EXPORTDIRWARNINGACK   0x455
-#define MSG_MDS_EXPORTDIR             0x456
-#define MSG_MDS_EXPORTDIRACK          0x457
-#define MSG_MDS_EXPORTDIRNOTIFY       0x458
+#define MSG_MDS_EXPORTDIR	      0x456
+#define MSG_MDS_EXPORTDIRACK	      0x457
+#define MSG_MDS_EXPORTDIRNOTIFY	      0x458
 #define MSG_MDS_EXPORTDIRNOTIFYACK    0x459
-#define MSG_MDS_EXPORTDIRFINISH       0x460
+#define MSG_MDS_EXPORTDIRFINISH	      0x460
 
-#define MSG_MDS_EXPORTCAPS            0x470
-#define MSG_MDS_EXPORTCAPSACK         0x471
+#define MSG_MDS_EXPORTCAPS	      0x470
+#define MSG_MDS_EXPORTCAPSACK	      0x471
 
-#define MSG_MDS_HEARTBEAT          0x500  // for mds load balancer
+#define MSG_MDS_HEARTBEAT	   0x500  // for mds load balancer
 
 // *** generic ***
-#define MSG_TIMECHECK             0x600
-#define MSG_MON_HEALTH            0x601
+#define MSG_TIMECHECK		  0x600
+#define MSG_MON_HEALTH		  0x601
 
 // Xio Testing
 #define MSG_DATA_PING		  0x602
@@ -126,12 +126,12 @@
 
 // abstract Message class
 
-#define MSG_MAGIC_XIO          0x0002
+#define MSG_MAGIC_XIO	       0x0002
 #define MSG_MAGIC_TRACE_XCON   0x0004
 #define MSG_MAGIC_TRACE_DTOR   0x0008
 #define MSG_MAGIC_TRACE_HDR    0x0010
 #define MSG_MAGIC_TRACE_XIO    0x0020
-#define MSG_MAGIC_TRACE_XMSGR    0x0040
+#define MSG_MAGIC_TRACE_XMSGR	 0x0040
 #define MSG_MAGIC_TRACE_CTR    0x0080
 
 #define MSG_SPECIAL_HANDLING_REDUPE	1
@@ -140,12 +140,12 @@ namespace bi = boost::intrusive;
 
 class Message : public RefCountedObject {
 protected:
-  ceph_msg_header  header;      // headerelope
+  ceph_msg_header  header;	// headerelope
   ceph_msg_footer  footer;
-  bufferlist       payload;  // "front" unaligned blob
-  bufferlist       middle;   // "middle" unaligned blob
-  bufferlist       data;     // data payload (page-alignment will be preserved where possible)
- 
+  bufferlist	   payload;  // "front" unaligned blob
+  bufferlist	   middle;   // "middle" unaligned blob
+  bufferlist	   data;     // data payload (page-alignment will be preserved where possible)
+
   /* recv_stamp is set when the Messenger starts reading the
    * Message off the wire */
   utime_t recv_stamp;
@@ -418,6 +418,6 @@ inline std::ostream& operator<<(std::ostream& out, Message& m) {
 
 extern void encode_message(Message *m, uint64_t features, bufferlist& bl);
 extern Message *decode_message(CephContext *cct, int crcflags,
-                               bufferlist::iterator& bl);
+			       bufferlist::iterator& bl);
 
 #endif

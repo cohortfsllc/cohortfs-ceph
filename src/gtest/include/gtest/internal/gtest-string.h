@@ -32,7 +32,7 @@
 // The Google C++ Testing Framework (Google Test)
 //
 // This header file declares the String class and functions used internally by
-// Google Test.  They are subject to change without notice. They should not used
+// Google Test.	 They are subject to change without notice. They should not used
 // by code external to Google Test.
 //
 // This header file is #included by <gtest/internal/gtest-internal.h>.
@@ -61,7 +61,7 @@ class GTEST_API_ String {
 
   // Clones a 0-terminated C string, allocating memory using new.  The
   // caller is responsible for deleting the return value using
-  // delete[].  Returns the cloned string, or NULL if the input is
+  // delete[].	Returns the cloned string, or NULL if the input is
   // NULL.
   //
   // This is different from strdup() in string.h, which allocates
@@ -122,7 +122,7 @@ class GTEST_API_ String {
   // A NULL C string is considered different to any non-NULL C string,
   // including the empty string.
   static bool CaseInsensitiveCStringEquals(const char* lhs,
-                                           const char* rhs);
+					   const char* rhs);
 
   // Compares two wide C strings, ignoring case.  Returns true iff they
   // have the same content.
@@ -137,7 +137,7 @@ class GTEST_API_ String {
   // On MacOS X, it uses towlower, which also uses LC_CTYPE category of the
   // current locale.
   static bool CaseInsensitiveWideCStringEquals(const wchar_t* lhs,
-                                               const wchar_t* rhs);
+					       const wchar_t* rhs);
 
   // Returns true iff the given string ends with the given suffix, ignoring
   // case. Any string is considered to end with an empty suffix.
@@ -164,4 +164,4 @@ GTEST_API_ std::string StringStreamToString(::std::stringstream* stream);
 }  // namespace internal
 }  // namespace testing
 
-#endif  // GTEST_INCLUDE_GTEST_INTERNAL_GTEST_STRING_H_
+#endif	// GTEST_INCLUDE_GTEST_INTERNAL_GTEST_STRING_H_

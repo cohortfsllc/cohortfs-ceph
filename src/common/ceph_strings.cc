@@ -105,30 +105,30 @@ const char *ceph_osd_state_name(int s)
 		return "new";
 	default:
 		return "???";
-	}	
+	}
 }
 
 const char *ceph_mds_state_name(int s)
 {
 	switch (s) {
 		/* down and out */
-	case CEPH_MDS_STATE_DNE:        return "down:dne";
-	case CEPH_MDS_STATE_STOPPED:    return "down:stopped";
+	case CEPH_MDS_STATE_DNE:	return "down:dne";
+	case CEPH_MDS_STATE_STOPPED:	return "down:stopped";
 		/* up and out */
-	case CEPH_MDS_STATE_BOOT:       return "up:boot";
-	case CEPH_MDS_STATE_STANDBY:    return "up:standby";
+	case CEPH_MDS_STATE_BOOT:	return "up:boot";
+	case CEPH_MDS_STATE_STANDBY:	return "up:standby";
 	case CEPH_MDS_STATE_STANDBY_REPLAY:    return "up:standby-replay";
 	case CEPH_MDS_STATE_REPLAYONCE: return "up:oneshot-replay";
-	case CEPH_MDS_STATE_CREATING:   return "up:creating";
-	case CEPH_MDS_STATE_STARTING:   return "up:starting";
+	case CEPH_MDS_STATE_CREATING:	return "up:creating";
+	case CEPH_MDS_STATE_STARTING:	return "up:starting";
 		/* up and in */
-	case CEPH_MDS_STATE_REPLAY:     return "up:replay";
-	case CEPH_MDS_STATE_RESOLVE:    return "up:resolve";
-	case CEPH_MDS_STATE_RECONNECT:  return "up:reconnect";
-	case CEPH_MDS_STATE_REJOIN:     return "up:rejoin";
+	case CEPH_MDS_STATE_REPLAY:	return "up:replay";
+	case CEPH_MDS_STATE_RESOLVE:	return "up:resolve";
+	case CEPH_MDS_STATE_RECONNECT:	return "up:reconnect";
+	case CEPH_MDS_STATE_REJOIN:	return "up:rejoin";
 	case CEPH_MDS_STATE_CLIENTREPLAY: return "up:clientreplay";
-	case CEPH_MDS_STATE_ACTIVE:     return "up:active";
-	case CEPH_MDS_STATE_STOPPING:   return "up:stopping";
+	case CEPH_MDS_STATE_ACTIVE:	return "up:active";
+	case CEPH_MDS_STATE_STOPPING:	return "up:stopping";
 	}
 	return "???";
 }
@@ -155,7 +155,7 @@ const char *ceph_mds_op_name(int op)
 	switch (op) {
 	case CEPH_MDS_OP_LOOKUP:  return "lookup";
 	case CEPH_MDS_OP_LOOKUPHASH:  return "lookuphash";
-	case CEPH_MDS_OP_LOOKUPPARENT:  return "lookupparent";
+	case CEPH_MDS_OP_LOOKUPPARENT:	return "lookupparent";
 	case CEPH_MDS_OP_LOOKUPINO:  return "lookupino";
 	case CEPH_MDS_OP_LOOKUPNAME:  return "lookupname";
 	case CEPH_MDS_OP_GETATTR:  return "getattr";

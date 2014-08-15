@@ -143,18 +143,18 @@ int ClassHandler::_load_class(ClassData *cls)
       cls->status = ClassData::CLASS_MISSING_DEPS;
       return r;
     }
-    
+
     dout(10) << "_load_class " << cls->name << " satisfied dependency " << dc->name << dendl;
     cls->missing_dependencies.erase(p++);
   }
-  
+
   // initialize
   void (*cls_init)() = (void (*)())dlsym(cls->handle, "__cls_init");
   if (cls_init) {
     cls->status = ClassData::CLASS_INITIALIZING;
     cls_init();
   }
-  
+
   dout(10) << "_load_class " << cls->name << " success" << dendl;
   cls->status = ClassData::CLASS_OPEN;
   return 0;
@@ -182,7 +182,7 @@ void ClassHandler::unregister_class(ClassHandler::ClassData *cls)
 }
 
 ClassHandler::ClassMethod *ClassHandler::ClassData::register_method(const char *mname,
-                                                                    int flags,
+								    int flags,
 								    cls_method_call_t func)
 {
   /* no need for locking, called under the class_init mutex */
@@ -201,7 +201,7 @@ ClassHandler::ClassMethod *ClassHandler::ClassData::register_method(const char *
 }
 
 ClassHandler::ClassMethod *ClassHandler::ClassData::register_cxx_method(const char *mname,
-                                                                        int flags,
+									int flags,
 									cls_method_cxx_call_t func)
 {
   /* no need for locking, called under the class_init mutex */
@@ -264,4 +264,3 @@ int ClassHandler::ClassMethod::exec(cls_method_context_t ctx, bufferlist& indata
   }
   return ret;
 }
-

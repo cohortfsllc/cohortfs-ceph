@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -50,7 +50,7 @@ void get_str_list(const string& str, const char *delims, list<string>& str_list)
   while (pos < str.size()) {
     if (get_next_token(str, pos, delims, token)) {
       if (token.size() > 0) {
-        str_list.push_back(token);
+	str_list.push_back(token);
       }
     }
   }
@@ -71,7 +71,7 @@ void get_str_vec(const string& str, const char *delims, vector<string>& str_vec)
   while (pos < str.size()) {
     if (get_next_token(str, pos, delims, token)) {
       if (token.size() > 0) {
-        str_vec.push_back(token);
+	str_vec.push_back(token);
       }
     }
   }
@@ -93,7 +93,7 @@ void get_str_set(const string& str, const char *delims, set<string>& str_set)
   while (pos < str.size()) {
     if (get_next_token(str, pos, delims, token)) {
       if (token.size() > 0) {
-        str_set.insert(token);
+	str_set.insert(token);
       }
     }
   }

@@ -13,9 +13,9 @@
 
 	'start' => 20,
 	'end' => 40,
-	'until' => 40,  
+	'until' => 40,
 	'kill_after' => 60,
-	
+
 	'makedirs' => 1,
 	'makedirs_dirs' => 10,
 	'makedirs_files' => 10,
@@ -23,7 +23,7 @@
 
 	'mds_local_osd' => [ 0, 1 ],
 	'meta_log_layout_num_rep' => [ 0, 1, 2, 3, 4],
-		
+
 	'custom' => '--tcp_skip_rank0',
 
 	'comb' => {

@@ -1,7 +1,7 @@
 #ifndef JSON_SPIRIT_READER
 #define JSON_SPIRIT_READER
 
-//          Copyright John W. Wilkinson 2007 - 2011
+// Copyright John W. Wilkinson 2007 - 2011
 // Distributed under the MIT License, see accompanying file LICENSE.txt
 
 // json spirit version 4.05
@@ -23,7 +23,7 @@ namespace json_spirit
     bool read( std::istream& is,     Value& value );
     bool read( std::string::const_iterator& begin, std::string::const_iterator end, Value& value );
 
-    void read_or_throw( const std::string& s, Value& value );  
+    void read_or_throw( const std::string& s, Value& value );
     void read_or_throw( std::istream& is,     Value& value );
     void read_or_throw( std::string::const_iterator& begin, std::string::const_iterator end, Value& value );
 #endif
@@ -31,7 +31,7 @@ namespace json_spirit
 #if defined( JSON_SPIRIT_WVALUE_ENABLED ) && !defined( BOOST_NO_STD_WSTRING )
     bool read( const std::wstring& s, wValue& value );
     bool read( std::wistream&  is,    wValue& value );
-    bool read( std::wstring::const_iterator& begin, std::wstring::const_iterator end, wValue& value );    
+    bool read( std::wstring::const_iterator& begin, std::wstring::const_iterator end, wValue& value );
 
     void read_or_throw( const std::wstring& s, wValue& value );
     void read_or_throw( std::wistream& is,     wValue& value );
@@ -43,7 +43,7 @@ namespace json_spirit
     bool read( std::istream& is,     mValue& value );
     bool read( std::string::const_iterator& begin, std::string::const_iterator end, mValue& value );
 
-    void read_or_throw( const std::string& s, mValue& value );  
+    void read_or_throw( const std::string& s, mValue& value );
     void read_or_throw( std::istream& is,     mValue& value );
     void read_or_throw( std::string::const_iterator& begin, std::string::const_iterator end, mValue& value );
 #endif
@@ -51,7 +51,7 @@ namespace json_spirit
 #if defined( JSON_SPIRIT_WMVALUE_ENABLED ) && !defined( BOOST_NO_STD_WSTRING )
     bool read( const std::wstring& s, wmValue& value );
     bool read( std::wistream& is,     wmValue& value );
-    bool read( std::wstring::const_iterator& begin, std::wstring::const_iterator end, wmValue& value );    
+    bool read( std::wstring::const_iterator& begin, std::wstring::const_iterator end, wmValue& value );
 
     void read_or_throw( const std::wstring& s, wmValue& value );
     void read_or_throw( std::wistream& is,     wmValue& value );

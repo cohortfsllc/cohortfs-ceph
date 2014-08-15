@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -79,7 +79,7 @@ void MDLog::init_journaler()
 {
   // inode
   ino = MDS_INO_LOG_OFFSET + mds->get_nodeid();
-  
+
   // log streamer
   if (journaler) delete journaler;
   journaler = new Journaler(ino, mds->get_metadata_volume(), CEPH_FS_ONDISK_MAGIC, mds->objecter,
@@ -100,24 +100,24 @@ void MDLog::handle_journaler_write_error(int r)
   }
 }
 
-void MDLog::write_head(Context *c) 
+void MDLog::write_head(Context *c)
 {
   journaler->write_head(c);
 }
 
 uint64_t MDLog::get_read_pos()
 {
-  return journaler->get_read_pos(); 
+  return journaler->get_read_pos();
 }
 
 uint64_t MDLog::get_write_pos()
 {
-  return journaler->get_write_pos(); 
+  return journaler->get_write_pos();
 }
 
 uint64_t MDLog::get_safe_pos()
 {
-  return journaler->get_write_safe_pos(); 
+  return journaler->get_write_safe_pos();
 }
 
 
@@ -148,7 +148,7 @@ void MDLog::append()
   dout(5) << "append positioning at end and marking writeable" << dendl;
   journaler->set_read_pos(journaler->get_write_pos());
   journaler->set_expire_pos(journaler->get_write_pos());
-  
+
   journaler->set_writeable();
 
   logger->set(l_mdl_expos, journaler->get_write_pos());
@@ -165,7 +165,7 @@ void MDLog::start_entry(LogEvent *e)
   e->set_start_off(get_write_pos());
 }
 
-void MDLog::submit_entry(LogEvent *le, Context *c) 
+void MDLog::submit_entry(LogEvent *le, Context *c)
 {
   assert(!mds->is_any_replay());
   assert(le == cur_event);
@@ -186,10 +186,10 @@ void MDLog::submit_entry(LogEvent *le, Context *c)
   le->update_segment();
 
   le->set_stamp(ceph_clock_now(g_ceph_context));
-  
+
   num_events++;
   assert(!capped);
-  
+
   // encode it, with event type
   {
     bufferlist bl;
@@ -197,7 +197,7 @@ void MDLog::submit_entry(LogEvent *le, Context *c)
 
     dout(5) << "submit_entry " << journaler->get_write_pos() << "~" << bl.length()
 	    << " : " << *le << dendl;
-      
+
     // journal it.
     journaler->append_entry(bl);  // bl is destroyed.
   }
@@ -214,7 +214,7 @@ void MDLog::submit_entry(LogEvent *le, Context *c)
 
   if (c)
     journaler->wait_for_flush(c);
-  
+
   // start a new segment?
   //  FIXME: should this go elsewhere?
   uint64_t last_seg = get_last_segment_offset();
@@ -262,7 +262,7 @@ void MDLog::flush()
 }
 
 void MDLog::cap()
-{ 
+{
   dout(5) << "cap" << dendl;
   capped = true;
 }
@@ -291,7 +291,7 @@ void MDLog::prepare_new_segment()
   logger->set(l_mdl_seg, segments.size());
 
   // Adjust to next stray dir
-  dout(10) << "Advancing to next stray directory on mds " << mds->get_nodeid() 
+  dout(10) << "Advancing to next stray directory on mds " << mds->get_nodeid()
 	   << dendl;
   mds->mdcache->advance_stray();
 }
@@ -310,8 +310,8 @@ void MDLog::trim(int m)
     max_events = m;
 
   // trim!
-  dout(10) << "trim " 
-	   << segments.size() << " / " << max_segments << " segments, " 
+  dout(10) << "trim "
+	   << segments.size() << " / " << max_segments << " segments, "
 	   << num_events << " / " << max_events << " events"
 	   << ", " << expiring_segments.size() << " (" << expiring_events << ") expiring"
 	   << ", " << expired_segments.size() << " (" << expired_events << ") expired"
@@ -325,12 +325,12 @@ void MDLog::trim(int m)
   stop += 2.0;
 
   map<uint64_t,LogSegment*>::iterator p = segments.begin();
-  while (p != segments.end() && 
+  while (p != segments.end() &&
 	 ((max_events >= 0 &&
 	   num_events - expiring_events - expired_events > max_events) ||
 	  (max_segments >= 0 &&
 	   segments.size() - expiring_segments.size() - expired_segments.size() > (unsigned)max_segments))) {
-    
+
     if (stop < ceph_clock_now(g_ceph_context))
       break;
 
@@ -346,7 +346,7 @@ void MDLog::trim(int m)
     LogSegment *ls = p->second;
     assert(ls);
     ++p;
-    
+
     if (ls->end > journaler->get_write_safe_pos()) {
       dout(5) << "trim segment " << ls->offset << ", not fully flushed yet, safe "
 	      << journaler->get_write_safe_pos() << " < end " << ls->end << dendl;
@@ -381,7 +381,7 @@ void MDLog::try_expire(LogSegment *ls, int op_prio)
     dout(10) << "try_expire expired segment " << ls->offset << dendl;
     _expired(ls);
   }
-  
+
   logger->set(l_mdl_segexg, expiring_segments.size());
   logger->set(l_mdl_evexg, expiring_events);
 }
@@ -405,25 +405,25 @@ void MDLog::_trim_expired_segments()
       dout(10) << "_trim_expired_segments waiting for " << ls->offset << " to expire" << dendl;
       break;
     }
-    
+
     dout(10) << "_trim_expired_segments trimming expired " << ls->offset << dendl;
     expired_events -= ls->num_events;
     expired_segments.erase(ls);
     num_events -= ls->num_events;
-      
+
     // this was the oldest segment, adjust expire pos
     if (journaler->get_expire_pos() < ls->offset)
       journaler->set_expire_pos(ls->offset);
-    
+
     logger->set(l_mdl_expos, ls->offset);
     logger->inc(l_mdl_segtrm);
     logger->inc(l_mdl_evtrm, ls->num_events);
-    
+
     segments.erase(ls->offset);
     delete ls;
     trimmed = true;
   }
-  
+
   if (trimmed)
     journaler->write_head(0);
 }
@@ -438,7 +438,7 @@ void MDLog::_expired(LogSegment *ls)
     // expired.
     expired_segments.insert(ls);
     expired_events += ls->num_events;
-    
+
     logger->inc(l_mdl_evex, ls->num_events);
     logger->inc(l_mdl_segex);
   }
@@ -484,7 +484,7 @@ class C_MDL_Replay : public Context {
   MDLog *mdlog;
 public:
   C_MDL_Replay(MDLog *l) : mdlog(l) {}
-  void finish(int r) { 
+  void finish(int r) {
     mdlog->replay_cond.Signal();
   }
 };
@@ -515,49 +515,49 @@ void MDLog::_replay_thread()
 	assert(journaler->is_readonly());
 	r = -EAGAIN;
       } else if (r == -EINVAL) {
-        if (journaler->get_read_pos() < journaler->get_expire_pos()) {
-          // this should only happen if you're following somebody else
-          assert(journaler->is_readonly());
-          dout(0) << "expire_pos is higher than read_pos, returning EAGAIN" << dendl;
-          r = -EAGAIN;
-        } else {
-          /* re-read head and check it
-           * Given that replay happens in a separate thread and
-           * the MDS is going to either shut down or restart when
-           * we return this error, doing it synchronously is fine
-           * -- as long as we drop the main mds lock--. */
+	if (journaler->get_read_pos() < journaler->get_expire_pos()) {
+	  // this should only happen if you're following somebody else
+	  assert(journaler->is_readonly());
+	  dout(0) << "expire_pos is higher than read_pos, returning EAGAIN" << dendl;
+	  r = -EAGAIN;
+	} else {
+	  /* re-read head and check it
+	   * Given that replay happens in a separate thread and
+	   * the MDS is going to either shut down or restart when
+	   * we return this error, doing it synchronously is fine
+	   * -- as long as we drop the main mds lock--. */
 	  Mutex mylock;
-          Cond cond;
-          bool done = false;
-          int err = 0;
-          journaler->reread_head(new C_SafeCond(&mylock, &cond, &done, &err));
-          mds->mds_lock.Unlock();
+	  Cond cond;
+	  bool done = false;
+	  int err = 0;
+	  journaler->reread_head(new C_SafeCond(&mylock, &cond, &done, &err));
+	  mds->mds_lock.Unlock();
 	  mylock.Lock();
-          while (!done)
-            cond.Wait(mylock);
+	  while (!done)
+	    cond.Wait(mylock);
 	  mylock.Unlock();
-          if (err) { // well, crap
-            dout(0) << "got error while reading head: " << cpp_strerror(err)
-                    << dendl;
-            mds->suicide();
-          }
-          mds->mds_lock.Lock();
+	  if (err) { // well, crap
+	    dout(0) << "got error while reading head: " << cpp_strerror(err)
+		    << dendl;
+	    mds->suicide();
+	  }
+	  mds->mds_lock.Lock();
 	  standby_trim_segments();
-          if (journaler->get_read_pos() < journaler->get_expire_pos()) {
-            dout(0) << "expire_pos is higher than read_pos, returning EAGAIN" << dendl;
-            r = -EAGAIN;
-          }
-        }
+	  if (journaler->get_read_pos() < journaler->get_expire_pos()) {
+	    dout(0) << "expire_pos is higher than read_pos, returning EAGAIN" << dendl;
+	    r = -EAGAIN;
+	  }
+	}
       }
       break;
     }
-    
+
     if (!journaler->is_readable() &&
 	journaler->get_read_pos() == journaler->get_write_pos())
       break;
-    
+
     assert(journaler->is_readable());
-    
+
     // read it
     uint64_t pos = journaler->get_read_pos();
     bufferlist bl;
@@ -565,11 +565,11 @@ void MDLog::_replay_thread()
     if (!r && journaler->get_error())
       continue;
     assert(r);
-    
+
     // unpack event
     LogEvent *le = LogEvent::decode(bl);
     if (!le) {
-      dout(0) << "_replay " << pos << "~" << bl.length() << " / " << journaler->get_write_pos() 
+      dout(0) << "_replay " << pos << "~" << bl.length() << " / " << journaler->get_write_pos()
 	      << " -- unable to decode event" << dendl;
       dout(0) << "dump of unknown or corrupt event:\n";
       bl.hexdump(*_dout);
@@ -589,10 +589,10 @@ void MDLog::_replay_thread()
 
     // have we seen an import map yet?
     if (segments.empty()) {
-      dout(10) << "_replay " << pos << "~" << bl.length() << " / " << journaler->get_write_pos() 
+      dout(10) << "_replay " << pos << "~" << bl.length() << " / " << journaler->get_write_pos()
 	       << " " << le->get_stamp() << " -- waiting for subtree_map.  (skipping " << *le << ")" << dendl;
     } else {
-      dout(10) << "_replay " << pos << "~" << bl.length() << " / " << journaler->get_write_pos() 
+      dout(10) << "_replay " << pos << "~" << bl.length() << " / " << journaler->get_write_pos()
 	       << " " << le->get_stamp() << ": " << *le << dendl;
       le->_segment = get_current_segment();    // replay may need this
       le->_segment->num_events++;
@@ -620,7 +620,7 @@ void MDLog::_replay_thread()
   }
 
   dout(10) << "_replay_thread kicking waiters" << dendl;
-  finish_contexts(g_ceph_context, waitfor_replay, r);  
+  finish_contexts(g_ceph_context, waitfor_replay, r);
 
   dout(10) << "_replay_thread finish" << dendl;
   mds->mds_lock.Unlock();

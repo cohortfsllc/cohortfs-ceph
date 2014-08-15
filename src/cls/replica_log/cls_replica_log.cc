@@ -1,11 +1,13 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  * Copyright Inktank 2013
  */
 
@@ -47,7 +49,7 @@ static int get_bounds(cls_method_context_t hctx, cls_replica_log_bound& bound)
 }
 
 static int write_bounds(cls_method_context_t hctx,
-                        const cls_replica_log_bound& bound)
+			const cls_replica_log_bound& bound)
 {
   bufferlist bounds_bl;
   ::encode(bound, bounds_bl);
@@ -55,7 +57,7 @@ static int write_bounds(cls_method_context_t hctx,
 }
 
 static int cls_replica_log_set(cls_method_context_t hctx,
-                               bufferlist *in, bufferlist *out)
+			       bufferlist *in, bufferlist *out)
 {
   bufferlist::iterator in_iter = in->begin();
 
@@ -82,7 +84,7 @@ static int cls_replica_log_set(cls_method_context_t hctx,
 }
 
 static int cls_replica_log_delete(cls_method_context_t hctx,
-                                  bufferlist *in, bufferlist *out)
+				  bufferlist *in, bufferlist *out)
 {
   bufferlist::iterator in_iter = in->begin();
 
@@ -109,7 +111,7 @@ static int cls_replica_log_delete(cls_method_context_t hctx,
 }
 
 static int cls_replica_log_get(cls_method_context_t hctx,
-                               bufferlist *in, bufferlist *out)
+			       bufferlist *in, bufferlist *out)
 {
   bufferlist::iterator in_iter = in->begin();
 
@@ -143,9 +145,9 @@ void __cls_init()
   cls_register("replica_log", &h_class);
 
   cls_register_cxx_method(h_class, "set", CLS_METHOD_RD | CLS_METHOD_WR,
-                          cls_replica_log_set, &h_replica_log_set);
+			  cls_replica_log_set, &h_replica_log_set);
   cls_register_cxx_method(h_class, "get", CLS_METHOD_RD,
-                          cls_replica_log_get, &h_replica_log_get);
+			  cls_replica_log_get, &h_replica_log_get);
   cls_register_cxx_method(h_class, "delete", CLS_METHOD_RD | CLS_METHOD_WR,
-                          cls_replica_log_delete, &h_replica_log_delete);
+			  cls_replica_log_delete, &h_replica_log_delete);
 }

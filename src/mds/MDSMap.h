@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -40,18 +40,18 @@ using namespace std;
  boot  --> standby, creating, or starting.
 
 
- dne  ---->   creating  ----->   active*
- ^ ^___________/                /  ^ ^
- |                             /  /  |
- destroying                   /  /   |
-   ^                         /  /    |
-   |                        /  /     |
- stopped <---- stopping* <-/  /      |
-      \                      /       |
-        ----- starting* ----/        |
-                                     |
- failed                              |
-    \                                |
+ dne  ---->   creating	----->	 active*
+ ^ ^___________/		/  ^ ^
+ |			       /  /  |
+ destroying		      /	 /   |
+   ^			     /	/    |
+   |			    /  /     |
+ stopped <---- stopping* <-/  /	     |
+      \			     /	     |
+	----- starting* ----/	     |
+				     |
+ failed				     |
+    \				     |
      \--> replay*  --> reconnect* --> rejoin*
 
      * = can fail
@@ -86,7 +86,7 @@ public:
   static const int STATE_STOPPED = CEPH_MDS_STATE_STOPPED;
   // up, boot announcement.  destiny unknown.
   static const int STATE_BOOT = CEPH_MDS_STATE_BOOT;
-  // up, idle.  waiting for assignment by monitor.
+  // up, idle.	waiting for assignment by monitor.
   static const int STATE_STANDBY = CEPH_MDS_STATE_STANDBY;
   // up, replaying active node; ready to take over.
   static const int STATE_STANDBY_REPLAY = CEPH_MDS_STATE_STANDBY_REPLAY;
@@ -190,12 +190,12 @@ protected:
 
   /*
    * in: the set of logical mds #'s that define the cluster.  this is the set
-   *     of mds's the metadata may be distributed over.
+   *	 of mds's the metadata may be distributed over.
    * up: map from logical mds #'s to the addrs filling those roles.
    * failed: subset of @in that are failed.
    * stopped: set of nodes that have been initialized, but are not active.
    *
-   *    @up + @failed = @in.  @in * @stopped = {}.
+   *	@up + @failed = @in.  @in * @stopped = {}.
    */
 
   /* The maximum number of active MDSes. Also, the maximum rank. */
@@ -441,11 +441,11 @@ public:
   bool is_in(int m) const { return up.count(m) || failed.count(m); }
   bool is_out(int m) const { return !is_in(m); }
 
-  bool is_failed(int m) const   { return failed.count(m); }
-  bool is_stopped(int m) const    { return stopped.count(m); }
+  bool is_failed(int m) const	{ return failed.count(m); }
+  bool is_stopped(int m) const	  { return stopped.count(m); }
 
-  bool is_dne(int m) const      { return in.count(m) == 0; }
-  bool is_dne_gid(uint64_t gid) const     { return mds_info.count(gid) == 0; }
+  bool is_dne(int m) const	{ return in.count(m) == 0; }
+  bool is_dne_gid(uint64_t gid) const	  { return mds_info.count(gid) == 0; }
 
   int get_state(int m) const {
     map<int32_t,uint64_t>::const_iterator u = up.find(m);
@@ -466,10 +466,10 @@ public:
   bool is_boot(int m) const { return get_state(m) == STATE_BOOT; }
   bool is_creating(int m) const { return get_state(m) == STATE_CREATING; }
   bool is_starting(int m) const { return get_state(m) == STATE_STARTING; }
-  bool is_replay(int m) const   { return get_state(m) == STATE_REPLAY; }
-  bool is_resolve(int m) const  { return get_state(m) == STATE_RESOLVE; }
+  bool is_replay(int m) const	{ return get_state(m) == STATE_REPLAY; }
+  bool is_resolve(int m) const	{ return get_state(m) == STATE_RESOLVE; }
   bool is_reconnect(int m) const { return get_state(m) == STATE_RECONNECT; }
-  bool is_rejoin(int m) const   { return get_state(m) == STATE_REJOIN; }
+  bool is_rejoin(int m) const	{ return get_state(m) == STATE_REJOIN; }
   bool is_clientreplay(int m) const { return get_state(m) == STATE_CLIENTREPLAY; }
   bool is_active(int m) const  { return get_state(m) == STATE_ACTIVE; }
   bool is_stopping(int m) const { return get_state(m) == STATE_STOPPING; }
@@ -501,7 +501,7 @@ public:
   bool is_full() const {
     return in.size() >= max_mds;
   }
-  bool is_degraded() const {   // degraded = some recovery in process.  fixes active membership and recovery_set.
+  bool is_degraded() const {   // degraded = some recovery in process.	fixes active membership and recovery_set.
     if (!failed.empty())
       return true;
     for (map<uint64_t,mds_info_t>::const_iterator p = mds_info.begin();
@@ -520,9 +520,9 @@ public:
       get_num_mds(STATE_REPLAY) == 0 &&
       failed.empty();
   }
-  bool is_rejoining() {  
+  bool is_rejoining() {
     // nodes are rejoining cache state
-    return 
+    return
       get_num_mds(STATE_REJOIN) > 0 &&
       get_num_mds(STATE_REPLAY) == 0 &&
       get_num_mds(STATE_RECONNECT) == 0 &&
@@ -545,14 +545,14 @@ public:
     assert(up.count(m));
     return mds_info[up[m]].addr;
   }
-  bool get_inst(int m, entity_inst_t& inst) { 
+  bool get_inst(int m, entity_inst_t& inst) {
     if (up.count(m)) {
       inst = get_inst(m);
       return true;
-    } 
+    }
     return false;
   }
-  
+
   int get_rank_gid(uint64_t gid) {
     if (mds_info.count(gid))
       return mds_info[gid].rank;
@@ -560,7 +560,7 @@ public:
   }
 
   int get_inc(int m) {
-    if (up.count(m)) 
+    if (up.count(m))
       return mds_info[up[m]].inc;
     return 0;
   }

@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 #include "common/Mutex.h"
 #include "common/Cond.h"
 #include "include/rados/librados.hpp"
@@ -12,8 +12,8 @@ class TestOpStat {
 public:
   Mutex stat_lock;
 
-  TestOpStat()  {}
-    
+  TestOpStat()	{}
+
   static uint64_t gettime()
   {
     timeval t;

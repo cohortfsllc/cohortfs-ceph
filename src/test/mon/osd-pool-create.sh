@@ -66,7 +66,7 @@ function TEST_default_deprectated_2() {
 function TEST_erasure_crush_rule() {
     local dir=$1
     run_mon $dir a --public-addr 127.0.0.1
-    # 
+    #
     # choose the crush ruleset used with an erasure coded pool
     #
     local crush_ruleset=myruleset

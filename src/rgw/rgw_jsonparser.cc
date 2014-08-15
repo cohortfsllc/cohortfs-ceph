@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #include <errno.h>
 #include <string.h>
 
@@ -20,13 +22,13 @@ void dump_array(JSONObj *obj)
 
   JSONObjIter iter = obj->find_first();
 
-  for (; !iter.end(); ++iter) { 
+  for (; !iter.end(); ++iter) {
     JSONObj *o = *iter;
     cout << "data=" << o->get_data() << std::endl;
   }
 
 }
-                                  
+
 struct Key {
   string user;
   string access_key;
@@ -83,7 +85,7 @@ int main(int argc, char **argv) {
 
   JSONObjIter iter = parser.find_first();
 
-  for (; !iter.end(); ++iter) { 
+  for (; !iter.end(); ++iter) {
     JSONObj *obj = *iter;
     cout << "is_object=" << obj->is_object() << std::endl;
     cout << "is_array=" << obj->is_array() << std::endl;
@@ -101,7 +103,7 @@ int main(int argc, char **argv) {
       cout << "is_object=" << child->is_object() << std::endl;
       cout << "is_array=" << child->is_array() << std::endl;
       if (child->is_array()) {
-        dump_array(child);
+	dump_array(child);
       }
       cout << "name=" << child->get_name() <<std::endl;
       cout << "data=" << child->get_data() <<std::endl;
@@ -127,4 +129,3 @@ int main(int argc, char **argv) {
 
   std::cout << std::endl;
 }
-

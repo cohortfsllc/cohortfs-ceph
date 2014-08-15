@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 #ifndef CEPH_AUTHCLIENTHANDLER_H
@@ -45,7 +45,7 @@ public:
   virtual ~AuthClientHandler() {}
 
   void init(EntityName& n) { name = n; }
-  
+
   void set_want_keys(uint32_t keys) {
     RWLock::WLocker l(lock);
     want = keys | CEPH_ENTITY_TYPE_AUTH;
@@ -55,7 +55,7 @@ public:
     RWLock::WLocker l(lock);
     want |= keys;
     validate_tickets();
-  }   
+  }
 
   virtual int get_protocol() const = 0;
 

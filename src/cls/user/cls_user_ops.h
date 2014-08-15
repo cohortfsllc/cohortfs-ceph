@@ -60,7 +60,7 @@ WRITE_CLASS_ENCODER(cls_user_remove_bucket_op)
 struct cls_user_list_buckets_op {
   string marker;
   int max_entries; /* upperbound to returned num of entries
-                      might return less than that and still be truncated */
+		      might return less than that and still be truncated */
 
   cls_user_list_buckets_op()
     : max_entries(0) {}

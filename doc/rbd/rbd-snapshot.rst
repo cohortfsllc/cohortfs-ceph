@@ -8,8 +8,8 @@ A snapshot is a read-only copy of the state of an image at a particular point in
 time. One of the advanced features of Ceph block devices is that you can create
 snapshots of the images to retain a history of an image's state. Ceph also
 supports snapshot layering, which allows you to clone images (e.g., a VM image)
-quickly and easily. Ceph supports block device snapshots using the ``rbd`` 
-command and many higher level interfaces, including `QEMU`_, `libvirt`_, 
+quickly and easily. Ceph supports block device snapshots using the ``rbd``
+command and many higher level interfaces, including `QEMU`_, `libvirt`_,
 `OpenStack`_ and `CloudStack`_.
 
 .. important:: To use use RBD snapshots, you must have a running Ceph cluster.
@@ -17,7 +17,7 @@ command and many higher level interfaces, including `QEMU`_, `libvirt`_,
 .. note:: **STOP I/O BEFORE** snapshotting an image.
    If the image contains a filesystem, the filesystem must be in a
    consistent state **BEFORE** snapshotting.
-   
+
 .. ditaa:: +------------+         +-------------+
            | {s}        |         | {s} c999    |
            |   Active   |<-------*|   Snapshot  |
@@ -35,11 +35,11 @@ to avoid re-entry of the following parameters. ::
 
 	rbd --id {user-name} --keyring=/path/to/secret [commands]
 
-For example:: 
+For example::
 
 	rbd --id client.admin --keyring=/etc/ceph/ceph.keyring [commands]
 
-.. tip:: Add the user and secret to the ``CEPH_ARGS`` environment 
+.. tip:: Add the user and secret to the ``CEPH_ARGS`` environment
    variable so that you don't need to enter them each time.
 
 
@@ -58,23 +58,23 @@ name and the image name.  ::
 	rbd --pool {pool-name} snap create --snap {snap-name} {image-name}
 	rbd snap create {pool-name}/{image-name}@{snap-name}
 
-For example:: 
+For example::
 
 	rbd --pool rbd snap create --snap snapname foo
 	rbd snap create rbd/foo@snapname
-	
+
 
 List Snapshots
 --------------
 
 To list snapshots of an image, specify the pool name and the image name. ::
 
-	rbd --pool {pool-name} snap ls {image-name} 
+	rbd --pool {pool-name} snap ls {image-name}
 	rbd snap ls {pool-name}/{image-name}
 
 For example::
 
-	rbd --pool rbd snap ls foo 
+	rbd --pool rbd snap ls foo
 	rbd snap ls rbd/foo
 
 
@@ -93,10 +93,10 @@ For example::
 	rbd snap rollback rbd/foo@snapname
 
 
-.. note:: Rolling back an image to a snapshot means overwriting 
-   the current version of the image with data from a snapshot. The 
-   time it takes to execute a rollback increases with the size of the 
-   image. It is **faster to clone** from a snapshot **than to rollback** 
+.. note:: Rolling back an image to a snapshot means overwriting
+   the current version of the image with data from a snapshot. The
+   time it takes to execute a rollback increases with the size of the
+   image. It is **faster to clone** from a snapshot **than to rollback**
    an image to a snapshot, and it is the preferred method of returning
    to a pre-existing state.
 
@@ -109,14 +109,14 @@ name, the image name and the username. ::
 
 	rbd --pool {pool-name} snap rm --snap {snap-name} {image-name}
 	rbd snap rm {pool-name}/{image-name}@{snap-name}
-	
-For example:: 
+
+For example::
 
 	rbd --pool rbd snap rm --snap snapname foo
 	rbd snap rm rbd/foo@snapname
 
 
-.. note:: Ceph OSDs delete data asynchronously, so deleting a snapshot 
+.. note:: Ceph OSDs delete data asynchronously, so deleting a snapshot
    doesn't free up the disk space immediately.
 
 Purge Snapshots
@@ -128,7 +128,7 @@ option and the image name. ::
 	rbd --pool {pool-name} snap purge {image-name}
 	rbd snap purge {pool-name}/{image-name}
 
-For example:: 
+For example::
 
 	rbd --pool rbd snap purge foo
 	rbd snap purge rbd/foo
@@ -143,7 +143,7 @@ Ceph supports the ability to create many copy-on-write (COW) clones of a block
 device shapshot. Snapshot layering enables Ceph block device clients to create
 images very quickly. For example, you might create a block device image with a
 Linux VM written to it; then, snapshot the image, protect the snapshot, and
-create as many copy-on-write clones as you like. A snapshot is read-only, 
+create as many copy-on-write clones as you like. A snapshot is read-only,
 so cloning a snapshot simplifies semantics--making it possible to create
 clones rapidly.
 
@@ -155,15 +155,15 @@ clones rapidly.
            |             |  to Parent   |             |
            | (read only) |              | (writable)  |
            +-------------+              +-------------+
-           
+
                Parent                        Child
 
 .. note:: The terms "parent" and "child" mean a Ceph block device snapshot (parent),
    and the corresponding image cloned from the snapshot (child). These terms are
    important for the command line usage below.
-   
+
 Each cloned image (child) stores a reference to its parent image, which enables
-the cloned image to open the parent snapshot and read it.   
+the cloned image to open the parent snapshot and read it.
 
 A COW clone of a snapshot behaves exactly like any other Ceph block device
 image. You can read to, write from, clone, and resize cloned images. There are
@@ -171,8 +171,8 @@ no special restrictions with cloned images. However, the copy-on-write clone of
 a snapshot refers to the snapshot, so you **MUST** protect the snapshot before
 you clone it. The following diagram depicts the process.
 
-.. note:: Ceph only supports cloning for ``format 2`` images (i.e., created with 
-  ``rbd create --image-format 2``), and is not yet supported by the kernel ``rbd`` module. 
+.. note:: Ceph only supports cloning for ``format 2`` images (i.e., created with
+  ``rbd create --image-format 2``), and is not yet supported by the kernel ``rbd`` module.
   So you MUST use QEMU/KVM or ``librbd`` directly to access clones in the current
   release.
 
@@ -180,7 +180,7 @@ Getting Started with Layering
 -----------------------------
 
 Ceph block device layering is a simple process. You must have an image. You must
-create a snapshot of the image. You must protect the snapshot. Once you have 
+create a snapshot of the image. You must protect the snapshot. Once you have
 performed these steps, you can begin cloning the snapshot.
 
 .. ditaa:: +----------------------------+        +-----------------------------+
@@ -189,7 +189,7 @@ performed these steps, you can begin cloning the snapshot.
            |                            |        |                             |
            +----------------------------+        +-----------------------------+
                                                                 |
-                         +--------------------------------------+ 
+                         +--------------------------------------+
                          |
                          v
            +----------------------------+        +-----------------------------+
@@ -205,8 +205,8 @@ clone snapshots  from one pool to images in another pool.
 
 
 #. **Image Template:** A common use case for block device layering is to create a
-   a master image and a snapshot that serves as a template for clones. For example, 
-   a user may create an image for a Linux distribution (e.g., Ubuntu 12.04), and 
+   a master image and a snapshot that serves as a template for clones. For example,
+   a user may create an image for a Linux distribution (e.g., Ubuntu 12.04), and
    create a snapshot for it. Periodically, the user may update the image and create
    a new snapshot (e.g., ``sudo apt-get update``, ``sudo apt-get upgrade``,
    ``sudo apt-get dist-upgrade`` followed by ``	rbd snap create``). As the image
@@ -215,12 +215,12 @@ clone snapshots  from one pool to images in another pool.
 #. **Extended Template:** A more advanced use case includes extending a template
    image that provides more information than a base image. For example, a user may
    clone an image (e.g., a VM template) and install other software (e.g., a database,
-   a content management system, an analytics system, etc.) and then snapshot the 
+   a content management system, an analytics system, etc.) and then snapshot the
    extended image, which itself may be updated just like the base image.
 
-#. **Template Pool:** One way to use block device layering is to create a 
+#. **Template Pool:** One way to use block device layering is to create a
    pool that contains master images that act as templates, and snapshots of those
-   templates. You may then extend read-only priveleges to users so that they 
+   templates. You may then extend read-only priveleges to users so that they
    may clone the snapshots without the ability to write or execute within the pool.
 
 #. **Image Migration/Recovery:** One way to use block device layering is to migrate
@@ -229,11 +229,11 @@ clone snapshots  from one pool to images in another pool.
 Protecting a Snapshot
 ---------------------
 
-Clones access the parent snapshots. All clones would break if a user inadvertantly 
+Clones access the parent snapshots. All clones would break if a user inadvertantly
 deleted the parent snapshot. To prevent data loss, you **MUST** protect the
 snapshot before you can clone it. ::
 
-	rbd --pool {pool-name} snap protect --image {image-name} --snap {snapshot-name}	
+	rbd --pool {pool-name} snap protect --image {image-name} --snap {snapshot-name}
 	rbd snap protect {pool-name}/{image-name}@{snapshot-name}
 
 For example::
@@ -252,12 +252,12 @@ before  you can clone it. ::
 
    rbd --pool {pool-name} --image {parent-image} --snap {snap-name} --dest-pool {pool-name} --dest {child-image}
 	rbd clone {pool-name}/{parent-image}@{snap-name} {pool-name}/{child-image-name}
-	
-For example:: 
+
+For example::
 
 	rbd clone rbd/my-image@my-snapshot rbd/new-image
-	
-.. note:: You may clone a snapshot from one pool to an image in another pool. For example, 
+
+.. note:: You may clone a snapshot from one pool to an image in another pool. For example,
    you may maintain read-only images and snapshots as templates in one pool, and writeable
    clones in another pool.
 
@@ -266,7 +266,7 @@ Unprotecting a Snapshot
 
 Before you can delete a snapshot, you must unprotect it first. Additionally,
 you may *NOT* delete snapshots that have references from clones. You must
-flatten each clone of a snapshot, before you can delete the snapshot. :: 
+flatten each clone of a snapshot, before you can delete the snapshot. ::
 
 	rbd --pool {pool-name} snap unprotect --image {image-name} --snap {snapshot-name}
 	rbd snap unprotect {pool-name}/{image-name}@{snapshot-name}
@@ -297,18 +297,18 @@ Flattening a Cloned Image
 Cloned images retain a reference to the parent snapshot. When you remove the
 reference from the child clone to the parent snapshot, you effectively "flatten"
 the image by copying the information from the snapshot to the clone. The time
-it takes to flatten a clone increases with the size of the snapshot. To delete 
+it takes to flatten a clone increases with the size of the snapshot. To delete
 a snapshot, you must flatten the child images first. ::
 
 	rbd --pool {pool-name} flatten --image {image-name}
 	rbd flatten {pool-name}/{image-name}
 
-For example:: 
+For example::
 
-	rbd --pool rbd flatten --image my-image 
+	rbd --pool rbd flatten --image my-image
 	rbd flatten rbd/my-image
 
-.. note:: Since a flattened image contains all the information from the snapshot, 
+.. note:: Since a flattened image contains all the information from the snapshot,
    a flattened image will take up more storage space than a layered clone.
 
 

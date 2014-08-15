@@ -42,7 +42,7 @@ http://www.usenix.org/events/fast05/wips/slides/welch.pdf
   ssize_t writex(int fd, const struct iovec *iov, size_t iov_count, struct xtvec *xtv, size_t xtv_count);
 
  * like readv/writev, but serial
- * 
+ *
 
 
 int lockg(int fd, int cmd, lgid_t *lgid)

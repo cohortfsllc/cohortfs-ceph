@@ -6,7 +6,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  * Copyright 2013 Inktank
  */
 
@@ -60,7 +60,7 @@ int main(int argc, const char **argv)
 	  if (ret < 0) {
 	    // This could fail if the config file is malformed, but it'd be hard.
 	    std::cerr << "failed to parse config file " << argv[i+1]
-	              << "! error" << ret << std::endl;
+		      << "! error" << ret << std::endl;
 	    ret = EXIT_FAILURE;
 	    goto out;
 	  }
@@ -141,7 +141,7 @@ int main(int argc, const char **argv)
       goto out;
     } else {
       std::cout << "we just wrote new object " << object_name
-	        << ", with contents\n" << hello << std::endl;
+		<< ", with contents\n" << hello << std::endl;
     }
   }
 
@@ -272,8 +272,8 @@ int main(int argc, const char **argv)
       goto out;
     } else {
       std::cout << "we overwrote our object " << object_name
-	        << " following an xattr test with contents\n" << bl.c_str()
-	        << std::endl;
+		<< " following an xattr test with contents\n" << bl.c_str()
+		<< std::endl;
     }
   }
 

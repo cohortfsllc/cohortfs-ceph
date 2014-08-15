@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -36,33 +36,33 @@ void usage(ostream& out)
 {
   out <<					\
 "usage: rest-bench [options] <write|seq>\n"
-"       rest-bench [options] cleanup [--run-name run_name] [--prefix prefix]\n"
+"	rest-bench [options] cleanup [--run-name run_name] [--prefix prefix]\n"
 "BENCHMARK OPTIONS\n"
 "   --seconds\n"
-"        benchmak length (default: 60)\n"
+"	 benchmak length (default: 60)\n"
 "   -t concurrent_operations\n"
 "   --concurrent-ios=concurrent_operations\n"
-"        select bucket by name\n"
+"	 select bucket by name\n"
 "   -b op-size\n"
 "   --block-size=op-size\n"
-"        set the size of write ops for put or benchmarking\n"
+"	 set the size of write ops for put or benchmarking\n"
 "   --show-time\n"
-"        prefix output lines with date and time\n"
+"	 prefix output lines with date and time\n"
 "   --no-cleanup\n"
-"        do not clean up data after write bench\n"
+"	 do not clean up data after write bench\n"
 "REST CONFIG OPTIONS\n"
 "   --api-host=bhost\n"
-"        host name\n"
+"	 host name\n"
 "   --bucket=bucket\n"
-"        select bucket by name\n"
+"	 select bucket by name\n"
 "   --access-key=access_key\n"
-"        access key to RESTful storage provider\n"
+"	 access key to RESTful storage provider\n"
 "   --secret=secret_key\n"
-"        secret key for the specified access key\n"
+"	 secret key for the specified access key\n"
 "   --protocol=<http|https>\n"
-"        protocol to be used (default: http)\n"
+"	 protocol to be used (default: http)\n"
 "   --uri_style=<path|vhost>\n"
-"        uri style in requests (default: path)\n";
+"	 uri style in requests (default: path)\n";
 }
 
 static void usage_exit()
@@ -155,7 +155,7 @@ static void complete_callback(S3Status status, const S3ErrorDetails *details, vo
 }
 
 static S3Status get_obj_callback(int size, const char *buf,
-                                 void *cb_data)
+				 void *cb_data)
 {
   if (!cb_data)
     return S3StatusOK;
@@ -168,7 +168,7 @@ static S3Status get_obj_callback(int size, const char *buf,
 }
 
 static int put_obj_callback(int size, char *buf,
-                            void *cb_data)
+			    void *cb_data)
 {
   if (!cb_data)
     return 0;
@@ -190,9 +190,9 @@ static int put_obj_callback(int size, char *buf,
 }
 
 static S3Status list_bucket_callback(int is_truncated, const char *next_marker,
-                                int count, const S3ListBucketContent *objects,
-                                int prefix_count, const char **prefixes,
-                                void *cb_data)
+				int count, const S3ListBucketContent *objects,
+				int prefix_count, const char **prefixes,
+				void *cb_data)
 {
   if (!cb_data)
     return S3StatusOK;
@@ -247,12 +247,12 @@ class RESTDispatcher {
     void _dump_queue() {
       deque<req_context *>::iterator iter;
       if (dispatcher->m_req_queue.empty()) {
-        generic_dout(20) << "DispatcherWQ: empty" << dendl;
-        return;
+	generic_dout(20) << "DispatcherWQ: empty" << dendl;
+	return;
       }
       generic_dout(20) << "DispatcherWQ:" << dendl;
       for (iter = dispatcher->m_req_queue.begin(); iter != dispatcher->m_req_queue.end(); ++iter) {
-        generic_dout(20) << "req: " << hex << *iter << dec << dendl;
+	generic_dout(20) << "req: " << hex << *iter << dec << dendl;
       }
     }
     void _clear() {
@@ -265,7 +265,7 @@ public:
   RESTDispatcher(CephContext *cct_, int num_threads)
     : m_tp(cct_, "RESTDispatcher::m_tp", num_threads),
       req_wq(this, cct_->_conf->rgw_op_thread_timeout,
-        cct_->_conf->rgw_op_thread_suicide_timeout, &m_tp),
+	cct_->_conf->rgw_op_thread_suicide_timeout, &m_tp),
       cct(cct_) {
 
 
@@ -338,32 +338,32 @@ void RESTDispatcher::process_context(req_context *ctx)
 void RESTDispatcher::put_obj(req_context *ctx)
 {
   S3_put_object(ctx->bucket_ctx, ctx->oid.c_str(),
-                ctx->out_bl.length(),
-                NULL,
-                ctx->ctx,
-                &put_obj_handler, ctx);
+		ctx->out_bl.length(),
+		NULL,
+		ctx->ctx,
+		&put_obj_handler, ctx);
 }
 
 void RESTDispatcher::get_obj(req_context *ctx)
 {
   S3_get_object(ctx->bucket_ctx, ctx->oid.c_str(), NULL, 0, ctx->len, ctx->ctx,
-                &get_obj_handler, ctx);
+		&get_obj_handler, ctx);
 }
 
 void RESTDispatcher::delete_obj(req_context *ctx)
 {
 
   S3_delete_object(ctx->bucket_ctx, ctx->oid.c_str(),
-                   ctx->ctx, &response_handler, ctx);
+		   ctx->ctx, &response_handler, ctx);
 }
 
 void RESTDispatcher::list_bucket(req_context *ctx)
 {
   S3_list_bucket(ctx->bucket_ctx,
-                 NULL, ctx->list_start,
-                 NULL, ctx->list_count,
-                 ctx->ctx,
-                 &list_bucket_handler, ctx);
+		 NULL, ctx->list_start,
+		 NULL, ctx->list_count,
+		 ctx->ctx,
+		 &list_bucket_handler, ctx);
 }
 
 class RESTBencher : public ObjBencher {
@@ -402,8 +402,8 @@ protected:
       completions[i] = NULL;
       S3Status status = S3_create_request_context(&handles[i]);
       if (status != S3StatusOK) {
-        cerr << "failed to create context: " << S3_get_status_name(status) << std::endl;
-        return -EINVAL;
+	cerr << "failed to create context: " << S3_get_status_name(status) << std::endl;
+	return -EINVAL;
       }
     }
     return 0;
@@ -601,7 +601,7 @@ public:
   ~RESTBencher() { }
 
   int init(string& _agent, string& _host, string& _bucket, S3Protocol _protocol,
-           S3UriStyle uri_style, string& _access_key, string& _secret) {
+	   S3UriStyle uri_style, string& _access_key, string& _secret) {
     user_agent = _agent;
     host = _host;
     bucket = _bucket;
@@ -615,7 +615,7 @@ public:
     bucket_ctx.accessKeyId = access_key.c_str();
     bucket_ctx.secretAccessKey = secret.c_str();
     bucket_ctx.uriStyle = uri_style;
-    
+
     struct req_context *ctx = new req_context;
 
     int ret = rest_init();
@@ -635,11 +635,11 @@ public:
     response_handler.completeCallback = complete_callback;
 
     S3_create_bucket(protocol, access_key.c_str(), secret.c_str(), NULL,
-                     bucket.c_str(), S3CannedAclPrivate,
-                     NULL, /* locationConstraint */
-                     NULL, /* requestContext */
-                     &response_handler, /* handler */
-                     (void *)ctx  /* callbackData */);
+		     bucket.c_str(), S3CannedAclPrivate,
+		     NULL, /* locationConstraint */
+		     NULL, /* requestContext */
+		     &response_handler, /* handler */
+		     (void *)ctx  /* callbackData */);
 
     ret = ctx->ret();
     if (ret < 0) {
@@ -705,22 +705,22 @@ int main(int argc, const char **argv)
       /* nothing */
     } else if (ceph_argparse_witharg(args, i, &proto_str, "--protocol", (char*)NULL)) {
       if (strcasecmp(proto_str.c_str(), "http") == 0) {
-        protocol = S3ProtocolHTTP;
+	protocol = S3ProtocolHTTP;
       } else if (strcasecmp(proto_str.c_str(), "http") == 0) {
-        protocol = S3ProtocolHTTPS;
+	protocol = S3ProtocolHTTPS;
       } else {
-        cerr << "bad protocol" << std::endl;
-        usage_exit();
+	cerr << "bad protocol" << std::endl;
+	usage_exit();
       }
       /* nothing */
     } else if (ceph_argparse_witharg(args, i, &proto_str, "--uri-style", (char*)NULL)) {
       if (strcasecmp(proto_str.c_str(), "vhost") == 0) {
-        uri_style = S3UriStyleVirtualHost;
+	uri_style = S3UriStyleVirtualHost;
       } else if (strcasecmp(proto_str.c_str(), "path") == 0) {
-        uri_style = S3UriStylePath;
+	uri_style = S3UriStylePath;
       } else {
-        cerr << "bad protocol" << std::endl;
-        usage_exit();
+	cerr << "bad protocol" << std::endl;
+	usage_exit();
       }
     } else if (ceph_argparse_witharg(args, i, &val, "-t", "--concurrent-ios", (char*)NULL)) {
       concurrent_ios = strtol(val.c_str(), NULL, 10);
@@ -734,7 +734,7 @@ int main(int argc, const char **argv)
       op_size = strtol(val.c_str(), NULL, 10);
     } else {
       if (val[0] == '-')
-        usage_exit();
+	usage_exit();
       ++i;
     }
   }
@@ -793,7 +793,7 @@ int main(int argc, const char **argv)
     ret = bencher.aio_bench(operation, seconds, 0,
 			    concurrent_ios, op_size, cleanup, run_name.c_str());
     if (ret != 0) {
-        cerr << "error during benchmark: " << ret << std::endl;
+	cerr << "error during benchmark: " << ret << std::endl;
     }
   }
 

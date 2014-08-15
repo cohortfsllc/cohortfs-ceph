@@ -153,8 +153,8 @@ bool DeterministicOpSequence::do_touch(rngen_t& gen)
     map<int, coll_entry_t*>::iterator it = m_collections.begin();
     for (; it != m_collections.end(); ++it) {
       if (it->second->check_for_obj(obj_id)) {
-        assert(it->first != coll_id);
-        other_found = true;
+	assert(it->first != coll_id);
+	other_found = true;
       }
     }
     if (other_found) {
@@ -226,7 +226,7 @@ static void gen_attrs(rngen_t &gen,
   }
 }
 
-bool DeterministicOpSequence::do_set_attrs(rngen_t& gen) 
+bool DeterministicOpSequence::do_set_attrs(rngen_t& gen)
 {
   int coll_id = _gen_coll_id(gen);
 
@@ -374,7 +374,7 @@ bool DeterministicOpSequence::_prepare_colls(rngen_t& gen,
 
   if (!orig_coll->m_objects.size()) {
     dout(0) << "_prepare_colls coll " << orig_coll->m_coll.to_str()
-        << " has no objects to use" << dendl;
+	<< " has no objects to use" << dendl;
     return false;
   }
 
@@ -420,18 +420,18 @@ bool DeterministicOpSequence::do_coll_add(rngen_t& gen)
   hobject_t *obj = orig_coll->get_obj_at(obj_pos, &obj_key);
   if (!obj) {
     dout(0) << "do_coll_add coll " << orig_coll->m_coll.to_str()
-        << " has no object as pos #" << obj_pos << " (key " << obj_key << ")"
-        << dendl;
+	<< " has no object as pos #" << obj_pos << " (key " << obj_key << ")"
+	<< dendl;
     return false;
   }
   if (new_coll->check_for_obj(obj_key)) {
     dout(0) << "do_coll_add coll " << orig_coll->m_coll.to_str()
-        << " already has object as pos #" << obj_pos << " (key " << obj_key << ")"
-        << dendl;
+	<< " already has object as pos #" << obj_pos << " (key " << obj_key << ")"
+	<< dendl;
     return false;
   }
   dout(0) << "do_coll_add " << orig_coll->m_coll.to_str() << "/" << obj->oid.name
-        << " => " << new_coll->m_coll.to_str() << "/" << obj->oid.name << dendl;
+	<< " => " << new_coll->m_coll.to_str() << "/" << obj->oid.name << dendl;
   new_coll->touch_obj(obj_key);
 
   _do_coll_add(orig_coll->m_coll, new_coll->m_coll, *obj);
@@ -493,12 +493,12 @@ void DeterministicOpSequence::_do_clone_range(coll_t coll,
 }
 
 void DeterministicOpSequence::_do_write_and_clone_range(coll_t coll,
-                                                        hobject_t& orig_obj,
-                                                        hobject_t& new_obj,
-                                                        uint64_t srcoff,
-                                                        uint64_t srclen,
-                                                        uint64_t dstoff,
-                                                        bufferlist& bl)
+							hobject_t& orig_obj,
+							hobject_t& new_obj,
+							uint64_t srcoff,
+							uint64_t srclen,
+							uint64_t dstoff,
+							bufferlist& bl)
 {
   ObjectStore::Transaction t;
   note_txn(&t);

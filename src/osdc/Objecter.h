@@ -451,7 +451,7 @@ struct ObjectOperation {
     ::encode(attrs, bl);
     add_xattr(CEPH_OSD_OP_RESETXATTRS, prefix, bl);
   }
-  
+
   // trivialmap
   void tmap_update(bufferlist& bl) {
     add_data(CEPH_OSD_OP_TMAPUP, 0, 0, bl);
@@ -702,7 +702,7 @@ private:
   SafeTimer &timer;
 
   PerfCounters *logger;
-  
+
   class C_Tick : public Context {
     Objecter *ob;
   public:
@@ -932,7 +932,7 @@ public:
       objecter->_linger_ack(info, r);
     }
   };
-  
+
   struct C_Linger_Commit : public Context {
     Objecter *objecter;
     LingerOp *info;
@@ -1541,7 +1541,7 @@ public:
   // ---------------------------
   // some scatter/gather hackery
 
-  void _sg_read_finish(vector<ObjectExtent>& extents, vector<bufferlist>& resultbl, 
+  void _sg_read_finish(vector<ObjectExtent>& extents, vector<bufferlist>& resultbl,
 		       bufferlist *bl, Context *onfinish);
 
   struct C_SGRead : public Context {

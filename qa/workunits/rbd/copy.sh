@@ -139,7 +139,7 @@ test_ls() {
     rbd ls -l | grep 'test1.*1024k.*2'
     rbd ls -l | grep 'test2.*1024k.*1'
     remove_images
-	
+
     # test that many images can be shown by ls
     for i in $(seq -w 00 99); do
 	rbd create image.$i -s 1
@@ -147,7 +147,7 @@ test_ls() {
     rbd ls | wc -l | grep 100
     rbd ls -l | grep image | wc -l | grep 100
     for i in $(seq -w 00 99); do
-	rbd rm image.$i 
+	rbd rm image.$i
     done
 
     for i in $(seq -w 00 99); do
@@ -156,7 +156,7 @@ test_ls() {
     rbd ls | wc -l | grep 100
     rbd ls -l | grep image |  wc -l | grep 100
     for i in $(seq -w 00 99); do
-	rbd rm image.$i 
+	rbd rm image.$i
     done
 }
 

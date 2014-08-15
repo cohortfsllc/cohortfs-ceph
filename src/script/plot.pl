@@ -42,7 +42,7 @@ if (scalar(@files) > 30) { print "set key off\n"; }
     for my $f (@files) {
 	my ($lastbit) = $f =~ /\/([^\/]+)$/;
 	push(@p, "\"$f\" u 1:$fields{$var} $rest t \"$lastbit\"");
-    } 
+    }
     print "plot " . join(',', @p) . "\n";
 #}
 #print "pause 60000\n";

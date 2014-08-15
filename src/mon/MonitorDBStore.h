@@ -432,12 +432,12 @@ class MonitorDBStore
     int err = get(prefix, key, bl);
     if (err < 0) {
       if (err == -ENOENT) // if key doesn't exist, assume its value is 0
-        return 0;
+	return 0;
       // we're not expecting any other negative return value, and we can't
       // just return a negative value if we're returning a version_t
       generic_dout(0) << "MonitorDBStore::get() error obtaining"
-                      << " (" << prefix << ":" << key << "): "
-                      << cpp_strerror(err) << dendl;
+		      << " (" << prefix << ":" << key << "): "
+		      << cpp_strerror(err) << dendl;
       assert(0 == "error obtaining key");
     }
 

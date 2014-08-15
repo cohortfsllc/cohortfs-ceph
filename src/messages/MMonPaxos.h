@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 
@@ -27,12 +27,12 @@ class MMonPaxos : public Message {
 
  public:
   // op types
-  const static int OP_COLLECT =   1; // proposer: propose round
-  const static int OP_LAST =      2; // voter:    accept proposed round
-  const static int OP_BEGIN =     3; // proposer: value proposed for this round
-  const static int OP_ACCEPT =    4; // voter:    accept propsed value
-  const static int OP_COMMIT =    5; // proposer: notify learners of agreed value
-  const static int OP_LEASE =     6; // leader: extend peon lease
+  const static int OP_COLLECT =	  1; // proposer: propose round
+  const static int OP_LAST =	  2; // voter:	  accept proposed round
+  const static int OP_BEGIN =	  3; // proposer: value proposed for this round
+  const static int OP_ACCEPT =	  4; // voter:	  accept propsed value
+  const static int OP_COMMIT =	  5; // proposer: notify learners of agreed value
+  const static int OP_LEASE =	  6; // leader: extend peon lease
   const static int OP_LEASE_ACK = 7; // peon: lease ack
   const static char *get_opname(int op) {
     switch (op) {
@@ -48,13 +48,13 @@ class MMonPaxos : public Message {
   }
 
   epoch_t epoch;   // monitor epoch
-  int32_t op;          // paxos op
+  int32_t op;	       // paxos op
 
   version_t first_committed;  // i've committed to
   version_t last_committed;  // i've committed to
-  version_t pn_from;         // i promise to accept after
-  version_t pn;              // with with proposal
-  version_t uncommitted_pn;     // previous pn, if we are a LAST with an uncommitted value
+  version_t pn_from;	     // i promise to accept after
+  version_t pn;		     // with with proposal
+  version_t uncommitted_pn;	// previous pn, if we are a LAST with an uncommitted value
   utime_t lease_timestamp;
   utime_t sent_timestamp;
 
@@ -64,7 +64,7 @@ class MMonPaxos : public Message {
   map<version_t,bufferlist> values;
 
   MMonPaxos() : Message(MSG_MON_PAXOS, HEAD_VERSION, COMPAT_VERSION) { }
-  MMonPaxos(epoch_t e, int o, utime_t now) : 
+  MMonPaxos(epoch_t e, int o, utime_t now) :
     Message(MSG_MON_PAXOS, HEAD_VERSION, COMPAT_VERSION),
     epoch(e),
     op(o),
@@ -76,11 +76,11 @@ class MMonPaxos : public Message {
 private:
   ~MMonPaxos() {}
 
-public:  
+public:
   const char *get_type_name() const { return "paxos"; }
-  
+
   void print(ostream& out) const {
-    out << "paxos(" << get_opname(op) 
+    out << "paxos(" << get_opname(op)
 	<< " lc " << last_committed
 	<< " fc " << first_committed
 	<< " pn " << pn << " opn " << uncommitted_pn;
@@ -112,8 +112,8 @@ public:
     ::decode(op, p);
     ::decode(first_committed, p);
     ::decode(last_committed, p);
-    ::decode(pn_from, p);   
-    ::decode(pn, p);   
+    ::decode(pn_from, p);
+    ::decode(pn, p);
     ::decode(uncommitted_pn, p);
     ::decode(lease_timestamp, p);
     if (header.version >= 1)

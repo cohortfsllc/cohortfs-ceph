@@ -183,8 +183,8 @@ int main(int argc, char **argv) {
     if ((fd = open(out_path.c_str(), O_WRONLY|O_CREAT|O_TRUNC, 0666)) < 0) {
       int _err = errno;
       if (_err != EISDIR) {
-        std::cerr << "Couldn't open " << out_path << ": " << cpp_strerror(_err) << std::endl; 
-        return 1;
+	std::cerr << "Couldn't open " << out_path << ": " << cpp_strerror(_err) << std::endl;
+	return 1;
       }
     }
   } else {
@@ -349,13 +349,13 @@ int main(int argc, char **argv) {
     }
     if (!out_path.size()) {
       std::cerr << "need mon store path to copy to (--out <mon_data_dir>)"
-                << std::endl;
+		<< std::endl;
       std::cerr << desc << std::endl;
       goto done;
     }
     if (fd > 0) {
       std::cerr << "supplied out path '" << out_path << "' is not a directory"
-                << std::endl;
+		<< std::endl;
       goto done;
     }
 
@@ -364,8 +364,8 @@ int main(int argc, char **argv) {
       stringstream ss;
       int r = out_store.create_and_open(ss);
       if (r < 0) {
-        std::cerr << ss.str() << std::endl;
-        goto done;
+	std::cerr << ss.str() << std::endl;
+	goto done;
       }
     }
 
@@ -381,32 +381,32 @@ int main(int argc, char **argv) {
       MonitorDBStore::Transaction tx;
 
       while (it->valid() && num_keys < 128) {
-        pair<string,string> k = it->raw_key();
-        bufferlist v = it->value();
-        tx.put(k.first, k.second, v);
+	pair<string,string> k = it->raw_key();
+	bufferlist v = it->value();
+	tx.put(k.first, k.second, v);
 
-        num_keys ++;
-        total_tx ++;
-        total_size += v.length();
+	num_keys ++;
+	total_tx ++;
+	total_size += v.length();
 
-        it->next();
+	it->next();
       }
 
       total_keys += num_keys;
 
       if (!tx.empty())
-        out_store.apply_transaction(tx);
+	out_store.apply_transaction(tx);
 
       std::cout << "copied " << total_keys << " keys so far ("
-                << stringify(si_t(total_size)) << ")" << std::endl;
+		<< stringify(si_t(total_size)) << ")" << std::endl;
 
     } while (it->valid());
 
     std::cout << "summary: copied " << total_keys << " keys, using "
-              << total_tx << " transactions, totalling "
-              << stringify(si_t(total_size)) << std::endl;
+	      << total_tx << " transactions, totalling "
+	      << stringify(si_t(total_size)) << std::endl;
     std::cout << "from '" << store_path << "' to '" << out_path << "'"
-              << std::endl;
+	      << std::endl;
   } else {
     std::cerr << "Unrecognized command: " << cmd << std::endl;
     goto done;

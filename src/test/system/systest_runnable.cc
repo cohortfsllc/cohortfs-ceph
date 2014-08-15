@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -186,7 +186,7 @@ run_until_finished(std::vector < SysTestRunnable * > &runnables)
     std::string rstr = (*r)->join();
     if (!rstr.empty()) {
       ostringstream oss;
-      oss << "run_until_finished: runnable " << (*r)->get_id_str() 
+      oss << "run_until_finished: runnable " << (*r)->get_id_str()
 	  << ": got error: " << rstr;
       return oss.str();
     }

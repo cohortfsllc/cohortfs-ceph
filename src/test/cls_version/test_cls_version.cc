@@ -43,7 +43,7 @@ TEST(cls_rgw, test_version_inc_read)
   ASSERT_EQ(0, cls_version_read(ioctx, oid, &ver));
   ASSERT_EQ(0, (long long)ver.ver);
   ASSERT_EQ(0, (int)ver.tag.size());
-  
+
 
   /* inc version */
   librados::ObjectWriteOperation *op = new_op();
@@ -146,7 +146,7 @@ TEST(cls_rgw, test_version_inc_cond)
   ASSERT_EQ(0, cls_version_read(ioctx, oid, &ver));
   ASSERT_EQ(0, (long long)ver.ver);
   ASSERT_EQ(0, (int)ver.tag.size());
-  
+
   /* inc version */
   librados::ObjectWriteOperation *op = new_op();
   cls_version_inc(*op);
@@ -252,7 +252,7 @@ TEST(cls_rgw, test_version_inc_check)
   ASSERT_EQ(0, cls_version_read(ioctx, oid, &ver));
   ASSERT_EQ(0, (long long)ver.ver);
   ASSERT_EQ(0, (int)ver.tag.size());
-  
+
   /* inc version */
   librados::ObjectWriteOperation *op = new_op();
   cls_version_inc(*op);

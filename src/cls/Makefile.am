@@ -18,7 +18,7 @@ radoslib_LTLIBRARIES += libcls_lock.la
 libcls_refcount_la_SOURCES = \
 	cls/refcount/cls_refcount.cc \
 	cls/refcount/cls_refcount_ops.cc \
-	common/ceph_json.cc 
+	common/ceph_json.cc
 libcls_refcount_la_LIBADD = libjson_spirit.la $(PTHREAD_LIBS) $(EXTRALIBS)
 libcls_refcount_la_LDFLAGS = ${AM_LDFLAGS} -module -avoid-version -shared -export-symbols-regex '.*__cls_.*'
 radoslib_LTLIBRARIES += libcls_refcount.la

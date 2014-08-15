@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -36,13 +36,13 @@ public:
   inodeno_t ino;      // anchored ino
   inodeno_t dirino;
   uint32_t     dn_hash;
-  int       nref;     // reference count
+  int	    nref;     // reference count
   version_t updated;
 
   Anchor() : dn_hash(0), nref(0), updated(0) {}
   Anchor(inodeno_t i, inodeno_t di, uint32_t hash, int nr, version_t u) :
     ino(i), dirino(di), dn_hash(hash), nref(nr), updated(u) { }
-  
+
   void encode(bufferlist &bl) const;
   void decode(bufferlist::iterator &bl);
   void dump(Formatter *f) const;

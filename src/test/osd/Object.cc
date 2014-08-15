@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 #include "include/interval_set.h"
 #include "include/buffer.h"
 #include <list>
@@ -172,7 +172,7 @@ bool ObjectDesc::check(bufferlist &to_check) {
       return false;
     }
   }
-  uint64_t size = layers.empty() ? 0 : 
+  uint64_t size = layers.empty() ? 0 :
     most_recent_gen()->get_length(most_recent());
   if (pos != size) {
     std::cout << "only read " << pos << " out of size " << size << std::endl;

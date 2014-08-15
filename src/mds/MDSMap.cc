@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -70,7 +70,7 @@ void MDSMap::mds_info_t::dump(Formatter *f) const
   f->dump_stream("addr") << addr;
   if (laggy_since != utime_t())
     f->dump_stream("laggy_since") << laggy_since;
-  
+
   f->dump_int("standby_for_rank", standby_for_rank);
   f->dump_string("standby_for_name", standby_for_name);
   f->open_array_section("export_targets");
@@ -168,7 +168,7 @@ void MDSMap::generate_test_instances(list<MDSMap*>& ls)
   ls.push_back(m);
 }
 
-void MDSMap::print(ostream& out) 
+void MDSMap::print(ostream& out)
 {
   out << "epoch\t" << epoch << "\n";
   out << "flags\t" << hex << flags << dec << "\n";
@@ -203,7 +203,7 @@ void MDSMap::print(ostream& out)
        p != foo.end();
        ++p) {
     mds_info_t& info = mds_info[p->second];
-    
+
     out << p->second << ":\t"
 	<< info.addr
 	<< " '" << info.name << "'"
@@ -224,7 +224,7 @@ void MDSMap::print(ostream& out)
     }
     if (!info.export_targets.empty())
       out << " export_targets=" << info.export_targets;
-    out << "\n";    
+    out << "\n";
   }
 }
 

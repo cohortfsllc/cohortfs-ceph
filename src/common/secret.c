@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -113,7 +113,7 @@ int get_secret_option(const char *secret, const char *key_name,
 	ret = 0;
 	use_key = 0;
       } else {
-        char error_buf[80];
+	char error_buf[80];
 	fprintf(stderr, "adding ceph secret key to kernel failed: %s.\n",
 		strerror_r(-ret, error_buf, sizeof(error_buf)));
 	return ret;

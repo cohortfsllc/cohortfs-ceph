@@ -34,14 +34,14 @@ Ceph configuration file, the default value will be set automatically.
 :Description: The number of entries in the Ceph Object Gateway cache.
 :Type: Integer
 :Default: ``10000``
-	
+
 
 ``rgw socket path``
 
-:Description: The socket path for the domain socket. ``FastCgiExternalServer`` 
-              uses this socket. If you do not specify a socket path, Ceph 
-              Object Gateway will not run as an external server. The path you 
-              specify here must be the same as the path specified in the 
+:Description: The socket path for the domain socket. ``FastCgiExternalServer``
+              uses this socket. If you do not specify a socket path, Ceph
+              Object Gateway will not run as an external server. The path you
+              specify here must be the same as the path specified in the
               ``rgw.conf`` file.
 
 :Type: String
@@ -50,7 +50,7 @@ Ceph configuration file, the default value will be set automatically.
 
 ``rgw host``
 
-:Description: The host for the Ceph Object Gateway instance. Can be an IP 
+:Description: The host for the Ceph Object Gateway instance. Can be an IP
               address or a hostname.
 
 :Type: String
@@ -59,9 +59,9 @@ Ceph configuration file, the default value will be set automatically.
 
 ``rgw port``
 
-:Description: Port the instance listens for requests. If not specified, 
+:Description: Port the instance listens for requests. If not specified,
               Ceph Object Gateway runs external FastCGI.
-              
+
 :Type: String
 :Default: None
 
@@ -69,9 +69,9 @@ Ceph configuration file, the default value will be set automatically.
 ``rgw dns name``
 
 :Description: The DNS name of the served domain.
-:Type: String 
+:Type: String
 :Default: None
-	
+
 
 ``rgw script uri``
 
@@ -100,8 +100,8 @@ Ceph configuration file, the default value will be set automatically.
 
 ``rgw remote addr param``
 
-:Description: The remote address parameter. For example, the HTTP field 
-              containing the remote address, or the ``X-Forwarded-For`` 
+:Description: The remote address parameter. For example, the HTTP field
+              containing the remote address, or the ``X-Forwarded-For``
               address if a reverse proxy is operational.
 
 :Type: String
@@ -109,25 +109,25 @@ Ceph configuration file, the default value will be set automatically.
 
 
 ``rgw op thread timeout``
-	
+
 :Description: The timeout in seconds for open threads.
 :Type: Integer
 :Default: 600
-	
+
 
 ``rgw op thread suicide timeout``
-	
-:Description: The time ``timeout`` in seconds before a Ceph Object Gateway 
+
+:Description: The time ``timeout`` in seconds before a Ceph Object Gateway
               process dies. Disabled if set to ``0``.
 
-:Type: Integer 
+:Type: Integer
 :Default: ``0``
 
 
 ``rgw thread pool size``
 
 :Description: The size of the thread pool.
-:Type: Integer 
+:Type: Integer
 :Default: 100 threads.
 
 
@@ -142,7 +142,7 @@ Ceph configuration file, the default value will be set automatically.
 
 ``rgw init timeout``
 
-:Description: The number of seconds before Ceph Object Gateway gives up on 
+:Description: The number of seconds before Ceph Object Gateway gives up on
               initialization.
 
 :Type: Integer
@@ -151,7 +151,7 @@ Ceph configuration file, the default value will be set automatically.
 
 ``rgw mime types file``
 
-:Description: The path and location of the MIME types. Used for Swift 
+:Description: The path and location of the MIME types. Used for Swift
               auto-detection of object types.
 
 :Type: String
@@ -160,7 +160,7 @@ Ceph configuration file, the default value will be set automatically.
 
 ``rgw gc max objs``
 
-:Description: The maximum number of objects that may be handled by 
+:Description: The maximum number of objects that may be handled by
               garbage collection in one garbage collection processing cycle.
 
 :Type: Integer
@@ -169,16 +169,16 @@ Ceph configuration file, the default value will be set automatically.
 
 ``rgw gc obj min wait``
 
-:Description: The minimum wait time before the object may be removed 
+:Description: The minimum wait time before the object may be removed
               and handled by garbage collection processing.
-              
+
 :Type: Integer
 :Default: ``2 * 3600``
 
 
 ``rgw gc processor max time``
 
-:Description: The maximum time between the beginning of two consecutive garbage 
+:Description: The maximum time between the beginning of two consecutive garbage
               collection processing cycles.
 
 :Type: Integer
@@ -201,7 +201,7 @@ Ceph configuration file, the default value will be set automatically.
 
 ``rgw resolve cname``
 
-:Description: Whether ``rgw`` should use DNS CNAME record of the request 
+:Description: Whether ``rgw`` should use DNS CNAME record of the request
               hostname field (if hostname is not equal to ``rgw dns name``).
 
 :Type: Boolean
@@ -219,9 +219,9 @@ Ceph configuration file, the default value will be set automatically.
 
 ``rgw extended http attrs``
 
-:Description: Add new set of attributes that could be set on an object. These 
-              extra attributes can be set through HTTP header fields when 
-              putting the objects. If set, these attributes will return as HTTP 
+:Description: Add new set of attributes that could be set on an object. These
+              extra attributes can be set through HTTP header fields when
+              putting the objects. If set, these attributes will return as HTTP
               fields when doing GET/HEAD on the object.
 
 :Type: String
@@ -231,7 +231,7 @@ Ceph configuration file, the default value will be set automatically.
 
 ``rgw exit timeout secs``
 
-:Description: Number of seconds to wait for a process before exiting 
+:Description: Number of seconds to wait for a process before exiting
               unconditionally.
 
 :Type: Integer
@@ -253,7 +253,7 @@ Ceph configuration file, the default value will be set automatically.
 :Type: Integer
 :Default: ``4 << 20``
 
- 
+
 ``rgw relaxed s3 bucket names``
 
 :Description: Enables relaxed S3 bucket names rules for US region buckets.
@@ -272,7 +272,7 @@ Ceph configuration file, the default value will be set automatically.
 
 ``rgw num zone opstate shards``
 
-:Description: The maximum number of shards for keeping inter-region copy 
+:Description: The maximum number of shards for keeping inter-region copy
               progress information.
 
 :Type: Integer
@@ -281,7 +281,7 @@ Ceph configuration file, the default value will be set automatically.
 
 ``rgw opstate ratelimit sec``
 
-:Description: The minimum time between opstate updates on a single upload. 
+:Description: The minimum time between opstate updates on a single upload.
               ``0`` disables the ratelimit.
 
 :Type: Integer
@@ -290,7 +290,7 @@ Ceph configuration file, the default value will be set automatically.
 
 ``rgw curl wait timeout ms``
 
-:Description: The timeout in milliseconds for certain ``curl`` calls. 
+:Description: The timeout in milliseconds for certain ``curl`` calls.
 :Type: Integer
 :Default: ``1000``
 
@@ -305,7 +305,7 @@ Ceph configuration file, the default value will be set automatically.
 ``rgw copy obj progress every bytes``
 
 :Description: The minimum bytes between copy progress output.
-:Type: Integer 
+:Type: Integer
 :Default: ``1024 * 1024``
 
 
@@ -321,7 +321,7 @@ Regions
 
 In Ceph v0.67 and beyond, Ceph Object Gateway supports federated deployments and
 a global namespace via the notion of regions. A region defines the geographic
-location of one or more Ceph Object Gateway instances within one or more zones. 
+location of one or more Ceph Object Gateway instances within one or more zones.
 
 
 Configuring regions differs from typical configuration procedures, because not
@@ -333,27 +333,27 @@ configuration.
 List Regions
 ------------
 
-A Ceph cluster contains a list of regions. To list the regions, execute:: 
+A Ceph cluster contains a list of regions. To list the regions, execute::
 
 	sudo radosgw-admin regions list
 
-The ``radosgw-admin`` returns a JSON formatted list of regions. 
+The ``radosgw-admin`` returns a JSON formatted list of regions.
 
 .. code-block:: javascript
 
 	{ "default_info": { "default_region": "default"},
 	  "regions": [
 	        "default"]}
-	        
+
 
 Get a Region Map
 ----------------
 
-To list the details of each region, execute:: 
+To list the details of each region, execute::
 
 	sudo radosgw-admin region-map get
-	
-	
+
+
 .. note:: If you receive a ``failed to read region map`` error, run
    ``sudo radosgw-admin region-map update`` first.
 
@@ -361,7 +361,7 @@ To list the details of each region, execute::
 Get a Region
 ------------
 
-To view the configuration of a region, execute:: 
+To view the configuration of a region, execute::
 
 	radosgw-admin region get [--rgw-region=<region>]
 
@@ -398,28 +398,28 @@ required settings:
 #. ``is_master``: Determines if the region is the master region.  Required.
    **note:** You can only have one master region.
 
-#. ``endpoints``: A list of all the endpoints in the region. For example, 
-   you may use multiple domain names to refer to the same region. Remember to 
-   escape the forward slashes (``\/``). You may also specify a 
+#. ``endpoints``: A list of all the endpoints in the region. For example,
+   you may use multiple domain names to refer to the same region. Remember to
+   escape the forward slashes (``\/``). You may also specify a
    port (``fgdn:port``) for each endpoint. Optional.
 
 #. ``master_zone``: The master zone for the region. Optional. Uses the default
-   zone if not specified. **note:** You can only have one master zone per 
+   zone if not specified. **note:** You can only have one master zone per
    region.
 
-#. ``zones``: A list of all zones within the region. Each zone has a 
-   name (required), a list of endpoints (optional), and whether or not the 
+#. ``zones``: A list of all zones within the region. Each zone has a
+   name (required), a list of endpoints (optional), and whether or not the
    gateway will log metadata and data operations (false by default).
 
-#. ``placement_targets``: A list of placement targets (optional). Each 
-   placement target contains a name (required) for the placement target 
+#. ``placement_targets``: A list of placement targets (optional). Each
+   placement target contains a name (required) for the placement target
    and a list of tags (optional) so that only users with the tag can use
-   the placement target (i.e., the user's ``placement_tags`` field in the 
-   user info). 
+   the placement target (i.e., the user's ``placement_tags`` field in the
+   user info).
 
-#. ``default_placement``: The default placement target for the object 
-   index and object data. Set to ``default-placement`` by default. You 
-   may also set a per-user default placement in the user info for each 
+#. ``default_placement``: The default placement target for the object
+   index and object data. Set to ``default-placement`` by default. You
+   may also set a per-user default placement in the user info for each
    user.
 
 To set a region, create a JSON object consisting of the required fields, save
@@ -433,11 +433,11 @@ Where ``region.json`` is the JSON file you created.
 
 .. important:: The ``default`` region ``is_master`` setting is ``true`` by
    default. If you create a new region and want to make it the master region,
-   you must either set the ``default`` region ``is_master`` setting to 
+   you must either set the ``default`` region ``is_master`` setting to
    ``false``, or delete the ``default`` region.
 
 
-Finally, update the map. :: 
+Finally, update the map. ::
 
 	sudo radosgw-admin region-map update
 
@@ -446,9 +446,9 @@ Set a Region Map
 ----------------
 
 Setting a region map consists of creating a JSON object consisting of one or more
-regions, and setting the ``master_region`` for the cluster. Each region in the 
+regions, and setting the ``master_region`` for the cluster. Each region in the
 region map consists of a key/value pair, where the ``key`` setting is equivalent to
-the ``name`` setting for an individual region configuration, and the ``val`` is 
+the ``name`` setting for an individual region configuration, and the ``val`` is
 a JSON object consisting of an individual region configuration.
 
 You may only have one region with ``is_master`` equal to ``true``, and it must be
@@ -480,7 +480,7 @@ JSON object is an example of a default region map.
         "master_region": "default"
      }
 
-To set a region map, execute the following:: 
+To set a region map, execute the following::
 
 	sudo radosgw-admin region-map set --infile regionmap.json
 
@@ -515,7 +515,7 @@ To list the zones in a cluster, execute::
 Get a Zone
 ----------
 
-To get the configuration of a zone, execute:: 
+To get the configuration of a zone, execute::
 
 	sudo radosgw-admin zone get [--rgw-zone=<zone>]
 
@@ -590,7 +590,7 @@ file under each ``[client.radosgw.{instance-name}]`` instance.
 
 :Description: The OID for storing the default region. We do not recommend
               changing this setting.
-              
+
 :Type: String
 :Default: ``default.region``
 
@@ -599,20 +599,20 @@ file under each ``[client.radosgw.{instance-name}]`` instance.
 Pools
 =====
 
-Ceph zones map to a series of Ceph Storage Cluster pools. 
+Ceph zones map to a series of Ceph Storage Cluster pools.
 
 .. topic:: Manually Created Pools vs. Generated Pools
 
-   If you provide write capabilities to the user key for your Ceph Object 
-   Gateway, the gateway has the ability to create pools automatically. This 
-   is convenient, but the Ceph Object Storage Cluster uses the default 
-   values for the number of placement groups (which may not be ideal) or the 
-   values you specified in your Ceph configuration file. If you allow the 
-   Ceph Object Gateway to create pools automatically, ensure that you have 
-   reasonable defaults for the number of placement groups. See 
-   `Pool Configuration`_ for details. See `Cluster Pools`_ for details on 
+   If you provide write capabilities to the user key for your Ceph Object
+   Gateway, the gateway has the ability to create pools automatically. This
+   is convenient, but the Ceph Object Storage Cluster uses the default
+   values for the number of placement groups (which may not be ideal) or the
+   values you specified in your Ceph configuration file. If you allow the
+   Ceph Object Gateway to create pools automatically, ensure that you have
+   reasonable defaults for the number of placement groups. See
+   `Pool Configuration`_ for details. See `Cluster Pools`_ for details on
    creating pools.
-   
+
 The default pools for the Ceph Object Gateway's default zone include:
 
 - ``.rgw``
@@ -657,7 +657,7 @@ configuration.
 
 ``rgw cluster root pool``
 
-:Description: The Ceph Storage Cluster pool to store ``radosgw`` metadata for 
+:Description: The Ceph Storage Cluster pool to store ``radosgw`` metadata for
               this instance. Not used in Ceph version v.67 and later. Use
               ``rgw zone root pool`` instead.
 
@@ -694,8 +694,8 @@ Swift Settings
 :Description: Enforces the Swift Access Control List (ACL) settings.
 :Type: Boolean
 :Default: ``true``
-	
-	
+
+
 ``rgw swift token expiration``
 
 :Description: The time in seconds for expiring a Swift token.
@@ -708,18 +708,18 @@ Swift Settings
 :Description: The URL for the Ceph Object Gateway Swift API.
 :Type: String
 :Default: None
-	
+
 
 ``rgw swift url prefix``
 
-:Description: The URL prefix for the Swift API. 
+:Description: The URL prefix for the Swift API.
 :Default: ``swift``
 :Example: http://fqdn.com/swift
-	
+
 
 ``rgw swift auth url``
 
-:Description: Default URL for verifying v1 auth tokens (if not using internal 
+:Description: Default URL for verifying v1 auth tokens (if not using internal
               Swift auth).
 
 :Type: String
@@ -740,7 +740,7 @@ Logging Settings
 
 ``rgw log nonexistent bucket``
 
-:Description: Enables Ceph Object Gateway to log a request for a non-existent 
+:Description: Enables Ceph Object Gateway to log a request for a non-existent
               bucket.
 
 :Type: Boolean
@@ -749,7 +749,7 @@ Logging Settings
 
 ``rgw log object name``
 
-:Description: The logging format for an object name. See manpage 
+:Description: The logging format for an object name. See manpage
               :manpage:`date` for details about format specifiers.
 
 :Type: Date
@@ -758,7 +758,7 @@ Logging Settings
 
 ``rgw log object name utc``
 
-:Description: Whether a logged object name includes a UTC time. 
+:Description: Whether a logged object name includes a UTC time.
               If ``false``, it uses the local time.
 
 :Type: Boolean
@@ -774,7 +774,7 @@ Logging Settings
 
 ``rgw usage max user shards``
 
-:Description: The maximum number of shards used for a single user's 
+:Description: The maximum number of shards used for a single user's
               usage logging.
 
 :Type: Integer
@@ -797,7 +797,7 @@ Logging Settings
 
 ``rgw ops log rados``
 
-:Description: Whether the operations log should be written to the 
+:Description: Whether the operations log should be written to the
               Ceph Storage Cluster backend.
 
 :Type: Boolean
@@ -822,7 +822,7 @@ Logging Settings
 
 ``rgw usage log flush threshold``
 
-:Description: The number of dirty merged entries in the usage log before 
+:Description: The number of dirty merged entries in the usage log before
               flushing synchronously.
 
 :Type: Integer
@@ -838,7 +838,7 @@ Logging Settings
 
 ``rgw intent log object name``
 
-:Description: The logging format for the intent log object name. See manpage 
+:Description: The logging format for the intent log object name. See manpage
               :manpage:`date` for details about format specifiers.
 
 :Type: Date
@@ -847,7 +847,7 @@ Logging Settings
 
 ``rgw intent log object name utc``
 
-:Description: Whether the intent log object name includes a UTC time. 
+:Description: Whether the intent log object name includes a UTC time.
               If ``false``, it uses the local time.
 
 :Type: Boolean
@@ -870,7 +870,7 @@ Logging Settings
 
 ``rgw data log num shards``
 
-:Description: The number of shards (objects) on which to keep the 
+:Description: The number of shards (objects) on which to keep the
               data changes log.
 
 :Type: Integer

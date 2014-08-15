@@ -1,4 +1,5 @@
-
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 
 #include "rgw_gc.h"
 #include "include/rados/librados.hpp"
@@ -177,45 +178,45 @@ int RGWGC::process(int index, int max_secs)
 
       utime_t now = ceph_clock_now(g_ceph_context);
       if (now >= end)
-        goto done;
+	goto done;
 
       remove_tag = true;
       for (liter = chain.objs.begin(); liter != chain.objs.end(); ++liter) {
-        cls_rgw_obj& obj = *liter;
+	cls_rgw_obj& obj = *liter;
 
-        if (obj.pool != last_pool) {
-          delete ctx;
-          ctx = new IoCtx;
+	if (obj.pool != last_pool) {
+	  delete ctx;
+	  ctx = new IoCtx;
 	  ret = store->rados->ioctx_create(obj.pool.c_str(), *ctx);
 	  if (ret < 0) {
 	    dout(0) << "ERROR: failed to create ioctx pool=" << obj.pool << dendl;
 	    continue;
 	  }
-          last_pool = obj.pool;
-        }
+	  last_pool = obj.pool;
+	}
 
-        ctx->locator_set_key(obj.key);
+	ctx->locator_set_key(obj.key);
 	dout(0) << "gc::process: removing " << obj.pool << ":" << obj.oid << dendl;
 	ObjectWriteOperation op;
 	cls_refcount_put(op, info.tag, true);
-        ret = ctx->operate(obj.oid, &op);
+	ret = ctx->operate(obj.oid, &op);
 	if (ret == -ENOENT)
 	  ret = 0;
-        if (ret < 0) {
-          remove_tag = false;
-          dout(0) << "failed to remove " << obj.pool << ":" << obj.oid << "@" << obj.key << dendl;
-        }
+	if (ret < 0) {
+	  remove_tag = false;
+	  dout(0) << "failed to remove " << obj.pool << ":" << obj.oid << "@" << obj.key << dendl;
+	}
 
-        if (going_down()) // leave early, even if tag isn't removed, it's ok
-          goto done;
+	if (going_down()) // leave early, even if tag isn't removed, it's ok
+	  goto done;
       }
       if (remove_tag) {
-        remove_tags.push_back(info.tag);
+	remove_tags.push_back(info.tag);
 #define MAX_REMOVE_CHUNK 16
-        if (remove_tags.size() > MAX_REMOVE_CHUNK) {
-          remove(index, remove_tags);
-          remove_tags.clear();
-        }
+	if (remove_tags.size() > MAX_REMOVE_CHUNK) {
+	  remove(index, remove_tags);
+	  remove_tags.clear();
+	}
       }
     }
   } while (truncated);

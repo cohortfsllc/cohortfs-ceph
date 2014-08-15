@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 #ifndef CEPH_MDSTYPES_H
 #define CEPH_MDSTYPES_H
@@ -24,32 +24,32 @@ using namespace std;
 #define CEPH_FS_ONDISK_MAGIC "ceph fs volume v011"
 
 
-#define MDS_REF_SET      // define me for improved debug output, sanity checking
+#define MDS_REF_SET	 // define me for improved debug output, sanity checking
 //#define MDS_AUTHPIN_SET  // define me for debugging auth pin leaks
-//#define MDS_VERIFY_FRAGSTAT    // do do (slow) sanity checking on frags
+//#define MDS_VERIFY_FRAGSTAT	 // do do (slow) sanity checking on frags
 
-#define MDS_PORT_CACHE   0x200
-#define MDS_PORT_LOCKER  0x300
+#define MDS_PORT_CACHE	 0x200
+#define MDS_PORT_LOCKER	 0x300
 #define MDS_PORT_MIGRATOR 0x400
 
 // FIXME: this should not be hardcoded
 #define MDS_DATA_POOL		0
 #define MDS_METADATA_POOL	1
 
-#define MAX_MDS                   0x100
-#define NUM_STRAY                 10
+#define MAX_MDS			  0x100
+#define NUM_STRAY		  10
 
-#define MDS_INO_ROOT              1
+#define MDS_INO_ROOT		  1
 
 // No longer created but recognised in existing filesystems
 // so that we don't try to fragment it.
-#define MDS_INO_CEPH              2
+#define MDS_INO_CEPH		  2
 
-#define MDS_INO_MDSDIR_OFFSET     (1*MAX_MDS)
-#define MDS_INO_LOG_OFFSET        (2*MAX_MDS)
-#define MDS_INO_STRAY_OFFSET      (6*MAX_MDS)
+#define MDS_INO_MDSDIR_OFFSET	  (1*MAX_MDS)
+#define MDS_INO_LOG_OFFSET	  (2*MAX_MDS)
+#define MDS_INO_STRAY_OFFSET	  (6*MAX_MDS)
 
-#define MDS_INO_SYSTEM_BASE       ((6*MAX_MDS) + (MAX_MDS * NUM_STRAY))
+#define MDS_INO_SYSTEM_BASE	  ((6*MAX_MDS) + (MAX_MDS * NUM_STRAY))
 
 #define MDS_INO_STRAY(x,i)  (MDS_INO_STRAY_OFFSET+((((unsigned)(x))*NUM_STRAY)+((unsigned)(i))))
 #define MDS_INO_MDSDIR(x) (MDS_INO_MDSDIR_OFFSET+((unsigned)x))
@@ -60,9 +60,9 @@ using namespace std;
 #define MDS_INO_STRAY_OWNER(i) (signed (((unsigned (i)) - MDS_INO_STRAY_OFFSET) / NUM_STRAY))
 #define MDS_INO_STRAY_INDEX(i) (((unsigned (i)) - MDS_INO_STRAY_OFFSET) % NUM_STRAY)
 
-#define MDS_TRAVERSE_FORWARD       1
-#define MDS_TRAVERSE_DISCOVER      2    // skips permissions checks etc.
-#define MDS_TRAVERSE_DISCOVERXLOCK 3    // succeeds on (foreign?) null, xlocked dentries.
+#define MDS_TRAVERSE_FORWARD	   1
+#define MDS_TRAVERSE_DISCOVER	   2	// skips permissions checks etc.
+#define MDS_TRAVERSE_DISCOVERXLOCK 3	// succeeds on (foreign?) null, xlocked dentries.
 
 
 extern long g_num_ino, g_num_dir, g_num_dn, g_num_cap;
@@ -75,7 +75,7 @@ extern long g_num_inos, g_num_dirs, g_num_dns, g_num_caps;
 inline string gcap_string(int cap)
 {
   string s;
-  if (cap & CEPH_CAP_GSHARED) s += "s";  
+  if (cap & CEPH_CAP_GSHARED) s += "s";
   if (cap & CEPH_CAP_GEXCL) s += "x";
   if (cap & CEPH_CAP_GCACHE) s += "c";
   if (cap & CEPH_CAP_GRD) s += "r";
@@ -117,8 +117,8 @@ struct scatter_info_t {
 struct frag_info_t : public scatter_info_t {
   // this frag
   utime_t mtime;
-  int64_t nfiles;        // files
-  int64_t nsubdirs;      // subdirs
+  int64_t nfiles;	 // files
+  int64_t nsubdirs;	 // subdirs
 
   frag_info_t() : nfiles(0), nsubdirs(0) {}
 
@@ -301,18 +301,18 @@ struct inode_t {
 
   // perm (namespace permissions)
   uint32_t   mode;
-  uid_t      uid;
-  gid_t      gid;
+  uid_t	     uid;
+  gid_t	     gid;
 
   // nlink
-  int32_t    nlink;  
-  bool       anchored;          // auth only?
+  int32_t    nlink;
+  bool	     anchored;		// auth only?
 
   // file (data access)
-  ceph_dir_layout  dir_layout;    // [dir only]
+  ceph_dir_layout  dir_layout;	  // [dir only]
   ceph_file_layout layout;
   vector <uuid_d> old_volumes;
-  uint64_t   size;        // on directory, # dentries
+  uint64_t   size;	  // on directory, # dentries
   uint64_t   max_size_ever; // max size the file has ever been
   uint32_t   truncate_seq;
   uint64_t   truncate_size, truncate_from;
@@ -323,15 +323,15 @@ struct inode_t {
   bufferlist inline_data;
   version_t  inline_version;
 
-  map<client_t,client_writeable_range_t> client_ranges;  // client(s) can write to these ranges
+  map<client_t,client_writeable_range_t> client_ranges;	 // client(s) can write to these ranges
 
   // dirfrag, recursive accountin
-  frag_info_t dirstat;         // protected by my filelock
-  nest_info_t rstat;           // protected by my nestlock
+  frag_info_t dirstat;	       // protected by my filelock
+  nest_info_t rstat;	       // protected by my nestlock
   nest_info_t accounted_rstat; // protected by parent's nestlock
- 
+
   // special stuff
-  version_t version;           // auth only
+  version_t version;	       // auth only
   version_t file_data_version; // auth only
   version_t xattr_version;
 
@@ -352,7 +352,7 @@ struct inode_t {
 
   // file type
   bool is_symlink() const { return (mode & S_IFMT) == S_IFLNK; }
-  bool is_dir()     const { return (mode & S_IFMT) == S_IFDIR; }
+  bool is_dir()	    const { return (mode & S_IFMT) == S_IFDIR; }
   bool is_file()    const { return (mode & S_IFMT) == S_IFREG; }
 
   bool is_truncating() const { return (truncate_pending > 0); }
@@ -451,7 +451,7 @@ struct session_info_t {
   entity_inst_t inst;
   map<ceph_tid_t,inodeno_t> completed_requests;
   interval_set<inodeno_t> prealloc_inos;   // preallocated, ready to use.
-  interval_set<inodeno_t> used_inos;       // journaling use
+  interval_set<inodeno_t> used_inos;	   // journaling use
 
   client_t get_client() const { return client_t(inst.name.num()); }
 
@@ -518,7 +518,7 @@ inline bool operator!=(const metareqid_t& l, const metareqid_t& r) {
   return (l.name != r.name) || (l.tid != r.tid);
 }
 inline bool operator<(const metareqid_t& l, const metareqid_t& r) {
-  return (l.name < r.name) || 
+  return (l.name < r.name) ||
     (l.name == r.name && l.tid < r.tid);
 }
 inline bool operator<=(const metareqid_t& l, const metareqid_t& r) {
@@ -530,7 +530,7 @@ inline bool operator>=(const metareqid_t& l, const metareqid_t& r) { return !(l 
 
 namespace std {
   template<> struct hash<metareqid_t> {
-    size_t operator()(const metareqid_t &r) const { 
+    size_t operator()(const metareqid_t &r) const {
       hash<uint64_t> H;
       return H(r.name.num()) ^ H(r.name.type()) ^ H(r.tid);
     }
@@ -650,7 +650,7 @@ inline bool operator==(dirfrag_t l, dirfrag_t r) {
 
 namespace std {
   template<> struct hash<dirfrag_t> {
-    size_t operator()(const dirfrag_t &df) const { 
+    size_t operator()(const dirfrag_t &df) const {
       static rjhash<uint64_t> H;
       static rjhash<uint32_t> I;
       return H(df.ino) ^ I(df.frag);
@@ -662,12 +662,12 @@ namespace std {
 
 // ================================================================
 
-#define META_POP_IRD     0
-#define META_POP_IWR     1
+#define META_POP_IRD	 0
+#define META_POP_IWR	 1
 #define META_POP_READDIR 2
-#define META_POP_FETCH   3
-#define META_POP_STORE   4
-#define META_NPOP        5
+#define META_POP_FETCH	 3
+#define META_POP_STORE	 4
+#define META_NPOP	 5
 
 class inode_load_vec_t {
   static const int NUM = 2;
@@ -680,12 +680,12 @@ public:
   inode_load_vec_t() :
     vec(NUM, DecayCounter())
   {}
-  DecayCounter &get(int t) { 
+  DecayCounter &get(int t) {
     assert(t < NUM);
-    return vec[t]; 
+    return vec[t];
   }
   void zero(utime_t now) {
-    for (int i=0; i<NUM; i++) 
+    for (int i=0; i<NUM; i++)
       vec[i].reset(now);
   }
   void encode(bufferlist &bl) const;
@@ -731,29 +731,29 @@ public:
   void dump(Formatter *f) const;
   static void generate_test_instances(list<dirfrag_load_vec_t*>& ls);
 
-  DecayCounter &get(int t) { 
+  DecayCounter &get(int t) {
     assert(t < NUM);
-    return vec[t]; 
+    return vec[t];
   }
   void adjust(utime_t now, const DecayRate& rate, double d) {
-    for (int i=0; i<NUM; i++) 
+    for (int i=0; i<NUM; i++)
       vec[i].adjust(now, rate, d);
   }
   void zero(utime_t now) {
-    for (int i=0; i<NUM; i++) 
+    for (int i=0; i<NUM; i++)
       vec[i].reset(now);
   }
   double meta_load(utime_t now, const DecayRate& rate) {
-    return 
-      1*vec[META_POP_IRD].get(now, rate) + 
+    return
+      1*vec[META_POP_IRD].get(now, rate) +
       2*vec[META_POP_IWR].get(now, rate) +
       1*vec[META_POP_READDIR].get(now, rate) +
       2*vec[META_POP_FETCH].get(now, rate) +
       4*vec[META_POP_STORE].get(now, rate);
   }
   double meta_load() {
-    return 
-      1*vec[META_POP_IRD].get_last() + 
+    return
+      1*vec[META_POP_IRD].get_last() +
       2*vec[META_POP_IWR].get_last() +
       1*vec[META_POP_READDIR].get_last() +
       2*vec[META_POP_FETCH].get_last() +
@@ -784,7 +784,7 @@ inline ostream& operator<<(ostream& out, dirfrag_load_vec_t& dl)
   // ugliness!
   utime_t now = ceph_clock_now(g_ceph_context);
   DecayRate rate(g_conf->mds_decay_halflife);
-  return out << "[" << dl.vec[0].get(now, rate) << "," << dl.vec[1].get(now, rate) 
+  return out << "[" << dl.vec[0].get(now, rate) << "," << dl.vec[1].get(now, rate)
 	     << " " << dl.meta_load(now, rate)
 	     << "]";
 }
@@ -808,7 +808,7 @@ struct mds_load_t {
 
   double cpu_load_avg;
 
-  mds_load_t(const utime_t &t) : 
+  mds_load_t(const utime_t &t) :
     auth(t), all(t), req_rate(0), cache_hit_rate(0),
     queue_len(0), cpu_load_avg(0)
   {}
@@ -817,7 +817,7 @@ struct mds_load_t {
     auth(), all(),
     req_rate(0), cache_hit_rate(0), queue_len(0), cpu_load_avg(0)
   {}
-  
+
   double mds_load();  // defiend in MDBalancer.cc
   void encode(bufferlist& bl) const;
   void decode(const utime_t& now, bufferlist::iterator& bl);
@@ -834,11 +834,11 @@ inline void decode(mds_load_t &c, const utime_t &t, bufferlist::iterator &p) {
 inline ostream& operator<<( ostream& out, mds_load_t& load )
 {
   return out << "mdsload<" << load.auth << "/" << load.all
-             << ", req " << load.req_rate 
-             << ", hr " << load.cache_hit_rate
-             << ", qlen " << load.queue_len
+	     << ", req " << load.req_rate
+	     << ", hr " << load.cache_hit_rate
+	     << ", qlen " << load.queue_len
 	     << ", cpu " << load.cpu_load_avg
-             << ">";
+	     << ">";
 }
 
 class load_spread_t {
@@ -853,11 +853,11 @@ public:
   {
     for (int i=0; i<MAX; i++)
       last[i] = -1;
-  } 
+  }
 
   double hit(utime_t now, const DecayRate& rate, int who) {
     for (int i=0; i<n; i++)
-      if (last[i] == who) 
+      if (last[i] == who)
 	return count.get_last();
 
     // we're new(ish)
@@ -878,7 +878,7 @@ public:
 
 // ================================================================
 
-//#define MDS_PIN_REPLICATED     1
+//#define MDS_PIN_REPLICATED	 1
 //#define MDS_STATE_AUTH     (1<<0)
 
 class MLock;
@@ -889,10 +889,10 @@ class MDSCacheObject;
 // -- authority delegation --
 // directory authority types
 //  >= 0 is the auth mds
-#define CDIR_AUTH_PARENT   -1   // default
+#define CDIR_AUTH_PARENT   -1	// default
 #define CDIR_AUTH_UNKNOWN  -2
 #define CDIR_AUTH_DEFAULT   pair<int,int>(-1, -2)
-#define CDIR_AUTH_UNDEF     pair<int,int>(-2, -2)
+#define CDIR_AUTH_UNDEF	    pair<int,int>(-2, -2)
 //#define CDIR_AUTH_ROOTINODE pair<int,int>( 0, -2)
 
 
@@ -906,9 +906,9 @@ struct ClientLease {
   ceph_seq_t seq;
   utime_t ttl;
   xlist<ClientLease*>::item item_session_lease; // per-session list
-  xlist<ClientLease*>::item item_lease;         // global list
+  xlist<ClientLease*>::item item_lease;		// global list
 
-  ClientLease(client_t c, MDSCacheObject *p) : 
+  ClientLease(client_t c, MDSCacheObject *p) :
     client(c), parent(p), seq(0),
     item_session_lease(this),
     item_lease(this) { }
@@ -954,12 +954,12 @@ class MDSCacheObject {
  public:
   // -- pins --
   const static int PIN_REPLICATED =  1000;
-  const static int PIN_DIRTY      =  1001;
-  const static int PIN_LOCK       = -1002;
-  const static int PIN_REQUEST    = -1003;
-  const static int PIN_WAITER     =  1004;
+  const static int PIN_DIRTY	  =  1001;
+  const static int PIN_LOCK	  = -1002;
+  const static int PIN_REQUEST	  = -1003;
+  const static int PIN_WAITER	  =  1004;
   const static int PIN_DIRTYSCATTERED = -1005;
-  static const int PIN_AUTHPIN    =  1006;
+  static const int PIN_AUTHPIN	  =  1006;
   static const int PIN_PTRWAITER  = -1007;
   const static int PIN_TEMPEXPORTING = 1008;  // temp pin between encode_ and finish_export
   static const int PIN_CLIENTLEASE = 1009;
@@ -981,33 +981,33 @@ class MDSCacheObject {
   }
 
   // -- state --
-  const static int STATE_AUTH      = (1<<30);
-  const static int STATE_DIRTY     = (1<<29);
+  const static int STATE_AUTH	   = (1<<30);
+  const static int STATE_DIRTY	   = (1<<29);
   const static int STATE_NOTIFYREF = (1<<28); // notify dropping ref drop through _put()
   const static int STATE_REJOINING = (1<<27);  // replica has not joined w/ primary copy
-  const static int STATE_REJOINUNDEF = (1<<26);  // contents undefined.
+  const static int STATE_REJOINUNDEF = (1<<26);	 // contents undefined.
 
 
   // -- wait --
-  const static uint64_t WAIT_SINGLEAUTH  = (1ull<<60);
-  const static uint64_t WAIT_UNFREEZE    = (1ull<<59); // pka AUTHPINNABLE
+  const static uint64_t WAIT_SINGLEAUTH	 = (1ull<<60);
+  const static uint64_t WAIT_UNFREEZE	 = (1ull<<59); // pka AUTHPINNABLE
 
 
   // ============================================
   // cons
  public:
   MDSCacheObject() :
-    state(0), 
+    state(0),
     ref(0),
     replica_nonce(0) {}
   virtual ~MDSCacheObject() {}
 
   // printing
   virtual void print(ostream& out) = 0;
-  virtual ostream& print_db_line_prefix(ostream& out) { 
-    return out << "mdscacheobject(" << this << ") "; 
+  virtual ostream& print_db_line_prefix(ostream& out) {
+    return out << "mdscacheobject(" << this << ") ";
   }
-  
+
   // --------------------------------------------
   // state
  protected:
@@ -1035,7 +1035,7 @@ class MDSCacheObject {
   // --------------------------------------------
   // pins
 protected:
-  int32_t      ref;       // reference count
+  int32_t      ref;	  // reference count
 #ifdef MDS_REF_SET
   map<int,int> ref_map;
 #endif
@@ -1147,14 +1147,14 @@ protected:
   bool is_replica(int mds) { return replica_map.count(mds); }
   int num_replicas() { return replica_map.size(); }
   unsigned add_replica(int mds) {
-    if (replica_map.count(mds)) 
+    if (replica_map.count(mds))
       return ++replica_map[mds];  // inc nonce
-    if (replica_map.empty()) 
+    if (replica_map.empty())
       get(PIN_REPLICATED);
     return replica_map[mds] = 1;
   }
   void add_replica(int mds, unsigned nonce) {
-    if (replica_map.empty()) 
+    if (replica_map.empty())
       get(PIN_REPLICATED);
     replica_map[mds] = nonce;
   }
@@ -1179,7 +1179,7 @@ protected:
   void list_replicas(set<int>& ls) {
     for (map<int,unsigned>::const_iterator p = replica_map.begin();
 	 p != replica_map.end();
-	 ++p) 
+	 ++p)
       ls.insert(p->first);
   }
 
@@ -1190,14 +1190,14 @@ protected:
   // ---------------------------------------------
   // waiting
  protected:
-  multimap<uint64_t, Context*>  waiting;
+  multimap<uint64_t, Context*>	waiting;
 
  public:
   bool is_waiter_for(uint64_t mask, uint64_t min=0) {
     if (!min) {
       min = mask;
       while (min & (min-1))  // if more than one bit is set
-	min &= min-1;        //  clear LSB
+	min &= min-1;	     //	 clear LSB
     }
     for (multimap<uint64_t,Context*>::iterator p = waiting.lower_bound(min);
 	 p != waiting.end();
@@ -1211,11 +1211,11 @@ protected:
     if (waiting.empty())
       get(PIN_WAITER);
     waiting.insert(pair<uint64_t,Context*>(mask, c));
-//    pdout(10,g_conf->debug_mds) << (mdsco_db_line_prefix(this)) 
+//    pdout(10,g_conf->debug_mds) << (mdsco_db_line_prefix(this))
 //			       << "add_waiter " << hex << mask << dec << " " << c
 //			       << " on " << *this
 //			       << dendl;
-    
+
   }
   virtual void take_waiting(uint64_t mask, list<Context*>& ls) {
     if (waiting.empty()) return;
@@ -1232,7 +1232,7 @@ protected:
       } else {
 //	pdout(10,g_conf->debug_mds) << "take_waiting mask " << hex << mask << dec << " SKIPPING " << it->second
 //				   << " tag " << hex << it->first << dec
-//				   << " on " << *this 
+//				   << " on " << *this
 //				   << dendl;
 	++it;
       }

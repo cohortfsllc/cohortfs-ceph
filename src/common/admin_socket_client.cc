@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -71,7 +71,7 @@ static std::string asok_connect(const std::string &path, int *fd)
   address.sun_family = AF_UNIX;
   snprintf(address.sun_path, sizeof(address.sun_path), "%s", path.c_str());
 
-  if (::connect(socket_fd, (struct sockaddr *) &address, 
+  if (::connect(socket_fd, (struct sockaddr *) &address,
 	sizeof(struct sockaddr_un)) != 0) {
     int err = errno;
     ostringstream oss;

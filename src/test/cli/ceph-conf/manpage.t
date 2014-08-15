@@ -3,10 +3,10 @@
   > ; ---------------------
   > [group cephnet]
   > 	addr = 10.3.14.0/24
-  > 
+  >
   > [global]
   > 	pid file = /home/sage/ceph/src/out/$name.pid
-  > 
+  >
   > [osd]
   > 	osd data = /mnt/osd$id
   > [osd.3]

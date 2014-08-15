@@ -10,7 +10,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -331,7 +331,7 @@ int GenericObjectMap::GenericObjectMapIteratorImpl::in_complete_region(
 }
 
 /**
- * Moves parent_iter to the next position both out of the complete_region and 
+ * Moves parent_iter to the next position both out of the complete_region and
  * not equal to key_iter.  Then, we set cur_iter to parent_iter if valid and
  * less than key_iter and key_iter otherwise.
  */
@@ -341,11 +341,11 @@ int GenericObjectMap::GenericObjectMapIteratorImpl::adjust()
   while (parent_iter && parent_iter->valid()) {
     if (in_complete_region(parent_iter->key(), &begin, &end)) {
       if (end.size() == 0) {
-        parent_iter->seek_to_last();
-        if (parent_iter->valid())
-          parent_iter->next();
+	parent_iter->seek_to_last();
+	if (parent_iter->valid())
+	  parent_iter->next();
       } else {
-        parent_iter->lower_bound(end);
+	parent_iter->lower_bound(end);
       }
     } else if (key_iter->valid() && key_iter->key() == parent_iter->key()) {
       parent_iter->next();
@@ -383,15 +383,15 @@ int GenericObjectMap::GenericObjectMapIteratorImpl::status()
 // ============== GenericObjectMap Public API =================
 
 void GenericObjectMap::set_keys(const Header header,
-                                const string &prefix,
-                                const map<string, bufferlist> &set,
-                                KeyValueDB::Transaction t)
+				const string &prefix,
+				const map<string, bufferlist> &set,
+				KeyValueDB::Transaction t)
 {
   t->set(user_prefix(header, prefix), set);
 }
 
 int GenericObjectMap::clear(const Header header,
-                            KeyValueDB::Transaction t)
+			    KeyValueDB::Transaction t)
 {
   remove_header(header->cid, header->oid, header, t);
   assert(header->num_children > 0);
@@ -403,9 +403,9 @@ int GenericObjectMap::clear(const Header header,
 }
 
 int GenericObjectMap::rm_keys(const Header header,
-                              const string &prefix,
-                              const set<string> &to_clear,
-                              KeyValueDB::Transaction t)
+			      const string &prefix,
+			      const set<string> &to_clear,
+			      KeyValueDB::Transaction t)
 {
   t->rmkeys(user_prefix(header, prefix), to_clear);
   if (!header->parent) {
@@ -420,34 +420,34 @@ int GenericObjectMap::rm_keys(const Header header,
     map<string, string> new_complete;
     map<string, bufferlist> to_write;
     for(set<string>::const_iterator i = to_clear.begin();
-        i != to_clear.end(); ) {
+	i != to_clear.end(); ) {
       unsigned copied = 0;
       iter->lower_bound(*i);
       ++i;
       if (!iter->valid())
-        break;
+	break;
       string begin = iter->key();
       if (!iter->on_parent())
-        iter->next_parent();
+	iter->next_parent();
       if (new_complete.size() && new_complete.rbegin()->second == begin) {
-        begin = new_complete.rbegin()->first;
+	begin = new_complete.rbegin()->first;
       }
       while (iter->valid() && copied < 20) {
-        if (!to_clear.count(iter->key()))
-          to_write[iter->key()].append(iter->value());
-        if (i != to_clear.end() && *i <= iter->key()) {
-          ++i;
-          copied = 0;
-        }
+	if (!to_clear.count(iter->key()))
+	  to_write[iter->key()].append(iter->value());
+	if (i != to_clear.end() && *i <= iter->key()) {
+	  ++i;
+	  copied = 0;
+	}
 
-        iter->next_parent();
-        copied++;
+	iter->next_parent();
+	copied++;
       }
       if (iter->valid()) {
-        new_complete[begin] = iter->key();
+	new_complete[begin] = iter->key();
       } else {
-        new_complete[begin] = "";
-        break;
+	new_complete[begin] = "";
+	break;
       }
     }
     t->set(user_prefix(header, prefix), to_write);
@@ -472,8 +472,8 @@ int GenericObjectMap::rm_keys(const Header header,
 }
 
 int GenericObjectMap::get(const coll_t &cid, const hobject_t &oid,
-                          const string &prefix,
-                          map<string, bufferlist> *out)
+			  const string &prefix,
+			  map<string, bufferlist> *out)
 {
   Header header = lookup_header(cid, oid);
   if (!header)
@@ -490,8 +490,8 @@ int GenericObjectMap::get(const coll_t &cid, const hobject_t &oid,
 }
 
 int GenericObjectMap::get_keys(const coll_t &cid, const hobject_t &oid,
-                               const string &prefix,
-                               set<string> *keys)
+			       const string &prefix,
+			       set<string> *keys)
 {
   Header header = lookup_header(cid, oid);
   if (!header)
@@ -507,9 +507,9 @@ int GenericObjectMap::get_keys(const coll_t &cid, const hobject_t &oid,
 }
 
 int GenericObjectMap::get_values(const coll_t &cid, const hobject_t &oid,
-                                 const string &prefix,
-                                 const set<string> &keys,
-                                 map<string, bufferlist> *out)
+				 const string &prefix,
+				 const set<string> &keys,
+				 map<string, bufferlist> *out)
 {
   Header header = lookup_header(cid, oid);
   if (!header)
@@ -518,9 +518,9 @@ int GenericObjectMap::get_values(const coll_t &cid, const hobject_t &oid,
 }
 
 int GenericObjectMap::check_keys(const coll_t &cid, const hobject_t &oid,
-                                 const string &prefix,
-                                 const set<string> &keys,
-                                 set<string> *out)
+				 const string &prefix,
+				 const set<string> &keys,
+				 set<string> *out)
 {
   Header header = lookup_header(cid, oid);
   if (!header)
@@ -529,9 +529,9 @@ int GenericObjectMap::check_keys(const coll_t &cid, const hobject_t &oid,
 }
 
 void GenericObjectMap::clone(const Header parent, const coll_t &cid,
-                             const hobject_t &target,
-                             KeyValueDB::Transaction t,
-                             Header *old_header, Header *new_header)
+			     const hobject_t &target,
+			     KeyValueDB::Transaction t,
+			     Header *old_header, Header *new_header)
 {
   {
     Header destination = lookup_header(cid, target);
@@ -560,8 +560,8 @@ void GenericObjectMap::clone(const Header parent, const coll_t &cid,
 }
 
 void GenericObjectMap::rename(const Header old_header, const coll_t &cid,
-                              const hobject_t &target,
-                              KeyValueDB::Transaction t)
+			      const hobject_t &target,
+			      KeyValueDB::Transaction t)
 {
   if (old_header->oid == target && old_header->cid == cid)
     return ;
@@ -587,14 +587,14 @@ int GenericObjectMap::init(bool do_upgrade)
     state.decode(bliter);
     if (state.v < 1) { // Needs upgrade
       if (!do_upgrade) {
-        dout(1) << "GenericObjbectMap requires an upgrade,"
-                << " set filestore_update_to"
-                << dendl;
-        return -ENOTSUP;
+	dout(1) << "GenericObjbectMap requires an upgrade,"
+		<< " set filestore_update_to"
+		<< dendl;
+	return -ENOTSUP;
       } else {
-        r = upgrade();
-        if (r < 0)
-          return r;
+	r = upgrade();
+	if (r < 0)
+	  return r;
       }
     }
   } else {
@@ -631,26 +631,26 @@ bool GenericObjectMap::check(std::ostream &out)
       bufferlist::iterator bliter = bl.begin();
       header.decode(bliter);
       if (header.seq != 0)
-        parent_to_actual_num_children[header.seq] = header.num_children;
+	parent_to_actual_num_children[header.seq] = header.num_children;
       if (header.parent == 0)
-        break;
+	break;
 
       if (!parent_to_num_children.count(header.parent))
-        parent_to_num_children[header.parent] = 0;
+	parent_to_num_children[header.parent] = 0;
       parent_to_num_children[header.parent]++;
       if (parent_to_actual_num_children.count(header.parent))
-        break;
+	break;
 
       set<string> to_get;
       map<string, bufferlist> got;
       to_get.insert(PARENT_KEY);
       db->get(parent_seq_prefix(header.parent), to_get, &got);
       if (got.empty()) {
-        out << "Missing: seq " << header.parent << std::endl;
-        retval = false;
-        break;
+	out << "Missing: seq " << header.parent << std::endl;
+	retval = false;
+	break;
       } else {
-        bl = got.begin()->second;
+	bl = got.begin()->second;
       }
     }
   }
@@ -662,8 +662,8 @@ bool GenericObjectMap::check(std::ostream &out)
       continue;
     if (parent_to_actual_num_children[i->first] != i->second) {
       out << "Invalid: seq " << i->first << " recorded children: "
-          << parent_to_actual_num_children[i->first] << " found: "
-          << i->second << std::endl;
+	  << parent_to_actual_num_children[i->first] << " found: "
+	  << i->second << std::endl;
       retval = false;
     }
     parent_to_actual_num_children.erase(i->first);
@@ -675,10 +675,10 @@ bool GenericObjectMap::check(std::ostream &out)
 // ============== GenericObjectMap Intern Implementation =================
 
 int GenericObjectMap::scan(Header header,
-                           const string &prefix,
-                           const set<string> &in_keys,
-                           set<string> *out_keys,
-                           map<string, bufferlist> *out_values)
+			   const string &prefix,
+			   const set<string> &in_keys,
+			   set<string> *out_keys,
+			   map<string, bufferlist> *out_values)
 {
   ObjectMap::ObjectMapIterator db_iter = _get_iterator(header, prefix);
   for (set<string>::const_iterator key_iter = in_keys.begin();
@@ -690,9 +690,9 @@ int GenericObjectMap::scan(Header header,
 
     if (db_iter->valid() && db_iter->key() == *key_iter) {
       if (out_keys)
-        out_keys->insert(*key_iter);
+	out_keys->insert(*key_iter);
       if (out_values)
-        out_values->insert(make_pair(db_iter->key(), db_iter->value()));
+	out_values->insert(make_pair(db_iter->key(), db_iter->value()));
     }
   }
   return 0;
@@ -745,20 +745,20 @@ int GenericObjectMap::merge_new_complete(
     ++i;
     while (i != new_complete.end()) {
       if (!new_end.size() || i->first <= new_end) {
-        if (!new_end.size() && i->second > new_end) {
-          new_end = i->second;
-        }
-        ++i;
-        continue;
+	if (!new_end.size() && i->second > new_end) {
+	  new_end = i->second;
+	}
+	++i;
+	continue;
       }
 
       r = iter->in_complete_region(new_end, &begin, &end);
       if (r < 0)
-        return r;
+	return r;
       if (r) {
-        to_remove.insert(begin);
-        new_end = end;
-        continue;
+	to_remove.insert(begin);
+	new_end = end;
+	continue;
       }
       break;
     }
@@ -885,7 +885,7 @@ GenericObjectMap::Header GenericObjectMap::lookup_parent(Header input)
   bufferlist::iterator iter = out.begin()->second.begin();
   header->decode(iter);
   dout(20) << "lookup_parent: parent seq is " << header->seq << " with parent "
-           << header->parent << dendl;
+	   << header->parent << dendl;
   in_use.insert(header->seq);
   return header;
 }
@@ -922,22 +922,22 @@ void GenericObjectMap::clear_header(Header header, KeyValueDB::Transaction t)
 
 // only remove HOBJECT_TO_SEQ
 void GenericObjectMap::remove_header(const coll_t &cid,
-                                     const hobject_t &oid, Header header,
-                                     KeyValueDB::Transaction t)
+				     const hobject_t &oid, Header header,
+				     KeyValueDB::Transaction t)
 {
   dout(20) << __func__ << " removing " << header->seq
-           << " cid " << cid << " oid " << oid << dendl;
+	   << " cid " << cid << " oid " << oid << dendl;
   set<string> to_remove;
   to_remove.insert(header_key(cid, oid));
   t->rmkeys(HOBJECT_TO_SEQ_PREFIX, to_remove);
 }
 
 void GenericObjectMap::set_header(const coll_t &cid, const hobject_t &oid,
-                                  _Header header, KeyValueDB::Transaction t)
+				  _Header header, KeyValueDB::Transaction t)
 {
   dout(20) << __func__ << " setting " << header.seq
-           << " cid " << cid << " oid " << oid << " parent seq "
-           << header.parent << dendl;
+	   << " cid " << cid << " oid " << oid << " parent seq "
+	   << header.parent << dendl;
   map<string, bufferlist> to_set;
   header.encode(to_set[header_key(cid, oid)]);
   t->set(HOBJECT_TO_SEQ_PREFIX, to_set);
@@ -963,7 +963,7 @@ int GenericObjectMap::list_objects(const coll_t &cid, hobject_t start, int max,
 
     if (max && size >= max) {
       if (next)
-        *next = header.oid;
+	*next = header.oid;
       break;
     }
 

@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_AUTHMONITOR_H
@@ -61,7 +61,7 @@ public:
 	  ::encode(auth_data, bl);
 	}
 	return;
-      } 
+      }
       ENCODE_START(2, 2, bl);
       uint32_t _type = (uint32_t)inc_type;
       ::encode(_type, bl);
@@ -155,8 +155,8 @@ private:
   {}
 
   void pre_auth(MAuth *m);
-  
-  void tick();  // check state, take actions
+
+  void tick();	// check state, take actions
 
   void dump_info(Formatter *f);
 };

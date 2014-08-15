@@ -11,15 +11,15 @@ restarting a cluster with the ``ceph`` service;  checking the cluster's health;
 and, monitoring an operating cluster.
 
 .. toctree::
-	:maxdepth: 1 
-	
+	:maxdepth: 1
+
 	operating
 	monitoring
 	monitoring-osd-pg
 	Authentication Overview <auth-intro>
 	Cephx Authentication <authentication>
 
-.. raw:: html 
+.. raw:: html
 
 	</td><td><h3>Data Placement</h3>
 
@@ -56,7 +56,7 @@ with new hardware.
 	add-or-rm-mons
 	Command Reference <control>
 
-	
+
 
 .. raw:: html
 
@@ -67,7 +67,7 @@ you to evaluate your Ceph configuration and modify your logging and debugging
 settings to identify and remedy issues you are encountering with your cluster.
 
 .. toctree::
-	:maxdepth: 1 
+	:maxdepth: 1
 
 	../troubleshooting/community
 	../troubleshooting/troubleshooting-mon

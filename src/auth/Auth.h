@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 #ifndef CEPH_AUTHTYPES_H
@@ -145,7 +145,7 @@ struct AuthAuthorizer {
 
 /*
  * Key management
- */ 
+ */
 #define KEY_ROTATE_NUM 3   /* prev, current, next */
 
 struct ExpiringCryptoKey {
@@ -176,9 +176,9 @@ static inline std::ostream& operator<<(std::ostream& out,
 struct RotatingSecrets {
   std::map<uint64_t, ExpiringCryptoKey> secrets;
   version_t max_ver;
-  
+
   RotatingSecrets() : max_ver(0) {}
-  
+
   void encode(bufferlist& bl) const {
     uint8_t struct_v = 1;
     ::encode(struct_v, bl);
@@ -191,14 +191,14 @@ struct RotatingSecrets {
     ::decode(secrets, bl);
     ::decode(max_ver, bl);
   }
-  
+
   uint64_t add(ExpiringCryptoKey& key) {
     secrets[++max_ver] = key;
     while (secrets.size() > KEY_ROTATE_NUM)
       secrets.erase(secrets.begin());
     return max_ver;
   }
-  
+
   bool need_new_secrets() const {
     return secrets.size() < KEY_ROTATE_NUM;
   }

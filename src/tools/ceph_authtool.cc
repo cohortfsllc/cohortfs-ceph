@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #include "common/config.h"
@@ -32,25 +32,25 @@ void usage()
 {
   cout << "usage: ceph-authtool keyringfile [OPTIONS]...\n"
        << "where the options are:\n"
-       << "  -l, --list                    will list all keys and capabilities present in\n"
-       << "                                the keyring\n"
-       << "  -p, --print-key               will print an encoded key for the specified\n"
-       << "                                entityname. This is suitable for the\n"
-       << "                                'mount -o secret=..' argument\n"
-       << "  -C, --create-keyring          will create a new keyring, overwriting any\n"
-       << "                                existing keyringfile\n"
-       << "  -g, --gen-key                 will generate a new secret key for the\n"
-       << "                                specified entityname\n"
-       << "  --gen-print-key               will generate a new secret key without set it\n"
-       << "                                to the keyringfile, prints the secret to stdout\n"
-       << "  --import-keyring              will import the content of a given keyring\n"
-       << "                                into the keyringfile\n"
-       << "  -u, --set-uid                 sets the auid (authenticated user id) for the\n"
-       << "                                specified entityname\n"
-       << "  -a, --add-key                 will add an encoded key to the keyring\n"
-       << "  --cap subsystem capability    will set the capability for given subsystem\n"
-       << "  --caps capsfile               will set all of capabilities associated with a\n"
-       << "                                given key, for all subsystems"
+       << "  -l, --list			   will list all keys and capabilities present in\n"
+       << "				   the keyring\n"
+       << "  -p, --print-key		   will print an encoded key for the specified\n"
+       << "				   entityname. This is suitable for the\n"
+       << "				   'mount -o secret=..' argument\n"
+       << "  -C, --create-keyring	   will create a new keyring, overwriting any\n"
+       << "				   existing keyringfile\n"
+       << "  -g, --gen-key		   will generate a new secret key for the\n"
+       << "				   specified entityname\n"
+       << "  --gen-print-key		   will generate a new secret key without set it\n"
+       << "				   to the keyringfile, prints the secret to stdout\n"
+       << "  --import-keyring		   will import the content of a given keyring\n"
+       << "				   into the keyringfile\n"
+       << "  -u, --set-uid		   sets the auid (authenticated user id) for the\n"
+       << "				   specified entityname\n"
+       << "  -a, --add-key		   will add an encoded key to the keyring\n"
+       << "  --cap subsystem capability	   will set the capability for given subsystem\n"
+       << "  --caps capsfile		   will set all of capabilities associated with a\n"
+       << "				   given key, for all subsystems"
        << std::endl;
   exit(1);
 }
@@ -141,7 +141,7 @@ int main(int argc, const char **argv)
   if (gen_key && (!add_key.empty())) {
     cerr << "can't both gen_key and add_key" << std::endl;
     usage();
-  }	
+  }
 
   common_init_finish(g_ceph_context);
   EntityName ename(g_conf->name);
@@ -149,7 +149,7 @@ int main(int argc, const char **argv)
   if (gen_print_key) {
     CryptoKey key;
     key.create(g_ceph_context, CEPH_CRYPTO_AES);
-    cout << key << std::endl;    
+    cout << key << std::endl;
     return 0;
   }
 
@@ -193,7 +193,7 @@ int main(int argc, const char **argv)
 	cerr << "error reading file " << import_keyring << std::endl;
 	exit(1);
       }
-      
+
       cout << "importing contents of " << import_keyring << " into " << fn << std::endl;
       //other.print(cout);
       keyring.import(g_ceph_context, other);
@@ -234,10 +234,10 @@ int main(int argc, const char **argv)
     for (int i=0; key_names[i]; i++) {
       std::string val;
       if (cf.read("global", key_names[i], val) == 0) {
-        bufferlist bl;
-        ::encode(val, bl);
-        string s(key_names[i]);
-        caps[s] = bl; 
+	bufferlist bl;
+	::encode(val, bl);
+	string s(key_names[i]);
+	caps[s] = bl;
       }
     }
     keyring.set_caps(ename, caps);

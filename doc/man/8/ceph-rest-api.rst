@@ -32,7 +32,7 @@ Options
     * /etc/ceph/${cluster}.conf
     * ~/.ceph/${cluster}.conf
     * ${cluster}.conf (in the current directory)
-  
+
     so you can also pass this option in the environment as CEPH_CONF.
 
 .. option:: --cluster clustername
@@ -46,7 +46,7 @@ Options
     client-specific configuration options in the config file, and
     also is the name used for authentication when connecting
     to the cluster (the entity name appearing in ceph auth list output,
-    for example).  The default is 'client.restapi'. 
+    for example).  The default is 'client.restapi'.
 
 .. option:: -i/--id id
 
@@ -55,7 +55,7 @@ Options
    set, that takes precedence.
 
    Also, global Ceph options are supported.
- 
+
 
 Configuration parameters
 ========================

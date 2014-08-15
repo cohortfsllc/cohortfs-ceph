@@ -14,7 +14,7 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
  * GNU Library Public License for more details.
  *
  */
@@ -33,8 +33,8 @@ static void usage(ostream &out)
   out << "Monitor.cc::get_command_descriptions function.\n";
   out << "Designed as a helper for ceph_argparse.py unit tests.\n";
   out << "\n";
-  out << "  --all               all of mon/MonCommands.h \n";
-  out << "  --pull585           reproduce the bug fixed by #585\n";
+  out << "  --all		all of mon/MonCommands.h \n";
+  out << "  --pull585		reproduce the bug fixed by #585\n";
   out << "\n";
   out << "Examples:\n";
   out << "  get_command_descriptions --all\n";
@@ -67,11 +67,11 @@ static void all()
 static void pull585()
 {
   MonCommand mon_commands[] = {
-    { "osd pool create "		       
-      "name=pool,type=CephPoolname " 
-      "name=pg_num,type=CephInt,range=0 " 
+    { "osd pool create "
+      "name=pool,type=CephPoolname "
+      "name=pg_num,type=CephInt,range=0 "
       "name=pgp_num,type=CephInt,range=0,req=false" // !!! missing trailing space
-      "name=properties,type=CephString,n=N,req=false,goodchars=[A-Za-z0-9-_.=]", 
+      "name=properties,type=CephString,n=N,req=false,goodchars=[A-Za-z0-9-_.=]",
       "create pool", "osd", "rw", "cli,rest" }
   };
 
@@ -100,13 +100,13 @@ int main(int argc, char **argv) {
     } else if (*i == string("--pull585")) {
       pull585();
     }
-  }  
+  }
 }
 
 /*
  * Local Variables:
- * compile-command: "cd ../.. ; 
- *   make get_command_descriptions && 
+ * compile-command: "cd ../.. ;
+ *   make get_command_descriptions &&
  *   ./get_command_descriptions --all --pull585"
  * End:
  */

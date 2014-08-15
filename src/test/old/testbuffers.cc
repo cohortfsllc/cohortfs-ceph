@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 
 #include <iostream>
 using namespace std;
@@ -14,7 +16,7 @@ int main()
   cout << "it is '" << p1.c_str() << "'" << endl;
 
   bufferptr p3 = new buffer("abcdef",6);
-  
+
   cout << "p3 is " << p3 << endl;
 
   bufferlist bl;
@@ -35,6 +37,6 @@ int main()
   bufferlist bl2;
   bl2.substr_of(bl, 3, 5);
   cout << "bl2 is " << bl2 << endl;
-  
+
 
 }

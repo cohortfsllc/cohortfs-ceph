@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #include <iostream>
@@ -48,7 +48,7 @@ int total_num = 0;
 void pr(off_t off)
 {
   io &i = writes[off];
-  if (false) cout << off << "\t" 
+  if (false) cout << off << "\t"
        << (i.ack - i.start) << "\t"
        << (i.commit - i.start) << std::endl;
   total_num++;
@@ -127,17 +127,17 @@ int main(int argc, const char **argv)
   bl.push_back(bp);
 
   //float interval = 1.0 / 1000;
-  
+
   cout << "#dev " << filename
        << ", " << seconds << " seconds, " << bytes << " bytes per write" << std::endl;
 
   ObjectStore *fs = new FileStore(filename, journal);
-  
+
   if (fs->mkfs() < 0) {
     cout << "mkfs failed" << std::endl;
     return -1;
   }
-  
+
   if (fs->mount() < 0) {
     cout << "mount failed" << std::endl;
     return -1;
@@ -173,7 +173,7 @@ int main(int argc, const char **argv)
     next += interval;
     if (now < next) {
       float s = next - now;
-      s *= 1000 * 1000;  // s -> us
+      s *= 1000 * 1000;	 // s -> us
       //cout << "sleeping for " << s << " us" << std::endl;
       usleep((int)s);
     }

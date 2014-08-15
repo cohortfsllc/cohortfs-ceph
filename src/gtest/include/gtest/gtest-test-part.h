@@ -49,7 +49,7 @@ class GTEST_API_ TestPartResult {
   // The possible outcomes of a test part (i.e. an assertion or an
   // explicit SUCCEED(), FAIL(), or ADD_FAILURE()).
   enum Type {
-    kSuccess,          // Succeeded.
+    kSuccess,	       // Succeeded.
     kNonFatalFailure,  // Failed but the test can continue.
     kFatalFailure      // Failed and the test should be terminated.
   };
@@ -58,14 +58,14 @@ class GTEST_API_ TestPartResult {
   // Always use this constructor (with parameters) to create a
   // TestPartResult object.
   TestPartResult(Type a_type,
-                 const char* a_file_name,
-                 int a_line_number,
-                 const char* a_message)
+		 const char* a_file_name,
+		 int a_line_number,
+		 const char* a_message)
       : type_(a_type),
-        file_name_(a_file_name == NULL ? "" : a_file_name),
-        line_number_(a_line_number),
-        summary_(ExtractSummary(a_message)),
-        message_(a_message) {
+	file_name_(a_file_name == NULL ? "" : a_file_name),
+	line_number_(a_line_number),
+	summary_(ExtractSummary(a_message)),
+	message_(a_message) {
   }
 
   // Gets the outcome of the test part.
@@ -112,8 +112,8 @@ class GTEST_API_ TestPartResult {
   // The line in the source file where the test part took place, or -1
   // if the line number is unknown.
   int line_number_;
-  std::string summary_;  // The test failure summary.
-  std::string message_;  // The test failure message.
+  std::string summary_;	 // The test failure summary.
+  std::string message_;	 // The test failure message.
 };
 
 // Prints a TestPartResult object.
@@ -176,4 +176,4 @@ class GTEST_API_ HasNewFatalFailureHelper
 
 }  // namespace testing
 
-#endif  // GTEST_INCLUDE_GTEST_GTEST_TEST_PART_H_
+#endif	// GTEST_INCLUDE_GTEST_GTEST_TEST_PART_H_

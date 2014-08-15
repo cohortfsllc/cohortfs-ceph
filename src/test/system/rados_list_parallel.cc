@@ -215,7 +215,7 @@ int main(int argc, const char **argv)
   const char *num_objects = getenv("NUM_OBJECTS");
   std::string pool = "foo." + stringify(getpid());
   if (num_objects) {
-    g_num_objects = atoi(num_objects); 
+    g_num_objects = atoi(num_objects);
     if (g_num_objects == 0)
       return 100;
   }
@@ -335,6 +335,6 @@ int main(int argc, const char **argv)
   rados_connect(cl);
   rados_pool_delete(cl, pool.c_str());
 
-  printf("******* SUCCESS **********\n"); 
+  printf("******* SUCCESS **********\n");
   return EXIT_SUCCESS;
 }

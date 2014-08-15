@@ -324,7 +324,7 @@ TEST(cls_rgw, index_suggest)
 
   bufferlist updates;
 
-  for (int i = 0; i < num_objs; i += 2) { 
+  for (int i = 0; i < num_objs; i += 2) {
     string obj = str_int("obj", i);
     string tag = str_int("tag-rm", i);
     string loc = str_int("loc", i);
@@ -374,8 +374,8 @@ static void create_obj(cls_rgw_obj& obj, int i, int j)
 static bool cmp_objs(cls_rgw_obj& obj1, cls_rgw_obj& obj2)
 {
   return (obj1.pool == obj2.pool) &&
-         (obj1.oid == obj2.oid) &&
-         (obj1.key == obj2.key);
+	 (obj1.oid == obj2.oid) &&
+	 (obj1.key == obj2.key);
 }
 
 
@@ -419,7 +419,7 @@ TEST(cls_rgw, gc_set)
   ASSERT_EQ(0, cls_rgw_gc_list(ioctx, oid, marker, 10, true, entries, &truncated));
   ASSERT_EQ(10, (int)entries.size());
   ASSERT_EQ(0, truncated);
- 
+
   /* verify all chains are valid */
   list<cls_rgw_gc_obj_info>::iterator iter = entries.begin();
   for (int i = 0; i < 10; i++, ++iter) {

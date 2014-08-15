@@ -6,7 +6,7 @@ my %buffers;
 my $l = 1;
 while (<>) {
     #print "$l: $_";
-    
+
     if (/^raw_(\w+) alloc (\S+)/) {
 	#print "alloc $2\n";
 	$buffers{$2} = "$l: $_";

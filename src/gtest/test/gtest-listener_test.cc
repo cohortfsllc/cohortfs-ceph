@@ -62,10 +62,10 @@ class EventRecordingListener : public TestEventListener {
   }
 
   virtual void OnTestIterationStart(const UnitTest& /*unit_test*/,
-                                    int iteration) {
+				    int iteration) {
     Message message;
     message << GetFullMethodName("OnTestIterationStart")
-            << "(" << iteration << ")";
+	    << "(" << iteration << ")";
     g_events->push_back(message.GetString());
   }
 
@@ -106,10 +106,10 @@ class EventRecordingListener : public TestEventListener {
   }
 
   virtual void OnTestIterationEnd(const UnitTest& /*unit_test*/,
-                                  int iteration) {
+				  int iteration) {
     Message message;
     message << GetFullMethodName("OnTestIterationEnd")
-            << "("  << iteration << ")";
+	    << "("  << iteration << ")";
     g_events->push_back(message.GetString());
   }
 
@@ -175,8 +175,8 @@ using ::testing::internal::EnvironmentInvocationCatcher;
 using ::testing::internal::EventRecordingListener;
 
 void VerifyResults(const std::vector<std::string>& data,
-                   const char* const* expected_data,
-                   int expected_data_size) {
+		   const char* const* expected_data,
+		   int expected_data_size) {
   const int actual_size = data.size();
   // If the following assertion fails, a new entry will be appended to
   // data.  Hence we save data.size() first.
@@ -188,7 +188,7 @@ void VerifyResults(const std::vector<std::string>& data,
   int i = 0;
   for (; i < shorter_size; ++i) {
     ASSERT_STREQ(expected_data[i], data[i].c_str())
-        << "at position " << i;
+	<< "at position " << i;
   }
 
   // Prints extra elements in the actual data.
@@ -298,8 +298,8 @@ int main(int argc, char **argv) {
     "1st.OnTestProgramEnd"
   };
   VerifyResults(events,
-                expected_events,
-                sizeof(expected_events)/sizeof(expected_events[0]));
+		expected_events,
+		sizeof(expected_events)/sizeof(expected_events[0]));
 
   // We need to check manually for ad hoc test failures that happen after
   // RUN_ALL_TESTS finishes.

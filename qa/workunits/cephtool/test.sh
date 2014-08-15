@@ -43,7 +43,7 @@ function check_response()
 		exit 1
 	fi
 
-	if ! grep "$expected_stderr_string" $TMPFILE >/dev/null 2>&1 ; then 
+	if ! grep "$expected_stderr_string" $TMPFILE >/dev/null 2>&1 ; then
 		echo "Didn't find $expected_stderr_string in stderr output" >&2
 		echo "Stderr: " >&2
 		cat $TMPFILE >&2
@@ -420,7 +420,7 @@ ceph -s
 # ceph sync force
 
 ceph tell osd.0 version
-expect_false ceph tell osd.9999 version 
+expect_false ceph tell osd.9999 version
 expect_false ceph tell osd.foo version
 
 ceph tell osd.0 dump_pg_recovery_stats | grep Started
@@ -513,7 +513,7 @@ set +e
 ceph osd map 2>$TMPFILE; check_response 'pool' $? 22
 
 # expect error about unused argument foo
-ceph osd ls foo 2>$TMPFILE; check_response 'unused' $? 22 
+ceph osd ls foo 2>$TMPFILE; check_response 'unused' $? 22
 
 # expect "not in range" for invalid full ratio
 ceph pg set_full_ratio 95 2>$TMPFILE; check_response 'not in range' $? 22

@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -25,11 +25,11 @@
 
 void RGWOp_Opstate_List::execute() {
   string client_id = s->info.args.get("client-id"),
-         op_id = s->info.args.get("op-id"),
-         object = s->info.args.get("object"),
-         max_entries_str = s->info.args.get("max-entries");
+	 op_id = s->info.args.get("op-id"),
+	 object = s->info.args.get("object"),
+	 max_entries_str = s->info.args.get("max-entries");
   unsigned max_entries = OPSTATE_LIST_MAX_ENTRIES;
-  
+
   if (!max_entries_str.empty()) {
     string err;
     max_entries = (unsigned)strict_strtol(max_entries_str.c_str(), 10, &err);
@@ -38,8 +38,8 @@ void RGWOp_Opstate_List::execute() {
       http_ret = -EINVAL;
       return;
     }
-  } 
-  
+  }
+
   RGWOpState oc = RGWOpState(store);
   void *handle;
   bool done;
@@ -59,7 +59,7 @@ void RGWOp_Opstate_List::execute() {
       return;
     }
 
-    if (!max_entries_str.empty()) 
+    if (!max_entries_str.empty())
       max_entries -= entries.size();
 
     send_response(entries);
@@ -101,9 +101,9 @@ void RGWOp_Opstate_List::send_response_end() {
 
 void RGWOp_Opstate_Set::execute() {
   string client_id = s->info.args.get("client-id"),
-         op_id = s->info.args.get("op-id"),
-         object = s->info.args.get("object"),
-         state_str = s->info.args.get("state");
+	 op_id = s->info.args.get("op-id"),
+	 object = s->info.args.get("object"),
+	 state_str = s->info.args.get("state");
 
   if (client_id.empty() ||
       op_id.empty() ||
@@ -132,9 +132,9 @@ void RGWOp_Opstate_Set::execute() {
 
 void RGWOp_Opstate_Renew::execute() {
   string client_id = s->info.args.get("client-id"),
-         op_id = s->info.args.get("op-id"),
-         object = s->info.args.get("object"),
-         state_str = s->info.args.get("state");
+	 op_id = s->info.args.get("op-id"),
+	 object = s->info.args.get("object"),
+	 state_str = s->info.args.get("state");
 
   if (client_id.empty() ||
       op_id.empty() ||
@@ -162,8 +162,8 @@ void RGWOp_Opstate_Renew::execute() {
 
 void RGWOp_Opstate_Delete::execute() {
   string client_id = s->info.args.get("client-id"),
-         op_id = s->info.args.get("op-id"),
-         object = s->info.args.get("object");
+	 op_id = s->info.args.get("op-id"),
+	 object = s->info.args.get("object");
 
   if (client_id.empty() ||
       op_id.empty() ||
@@ -172,7 +172,7 @@ void RGWOp_Opstate_Delete::execute() {
     http_ret = -EINVAL;
     return;
   }
-  
+
   RGWOpState oc(store);
 
   http_ret = oc.remove_entry(client_id, op_id, object);
@@ -184,6 +184,6 @@ void RGWOp_Opstate_Delete::execute() {
 RGWOp *RGWHandler_Opstate::op_post() {
   if (s->info.args.exists("renew")) {
     return new RGWOp_Opstate_Renew;
-  } 
+  }
   return new RGWOp_Opstate_Set;
 }

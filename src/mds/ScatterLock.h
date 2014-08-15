@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 
@@ -55,13 +55,13 @@ class ScatterLock : public SimpleLock {
   enum flag_values {  // flag values for more_bits_t state
     SCATTER_WANTED   = 1 << 0,
     UNSCATTER_WANTED = 1 << 1,
-    DIRTY            = 1 << 2,
-    FLUSHING         = 1 << 3,
-    FLUSHED          = 1 << 4,
+    DIRTY	     = 1 << 2,
+    FLUSHING	     = 1 << 3,
+    FLUSHED	     = 1 << 4,
   };
 
 public:
-  ScatterLock(MDSCacheObject *o, LockType *lt) : 
+  ScatterLock(MDSCacheObject *o, LockType *lt) :
     SimpleLock(o, lt), _more(NULL)
   {}
   ~ScatterLock() {
@@ -77,7 +77,7 @@ public:
 
   bool is_sync_and_unlocked() const {
     return
-      SimpleLock::is_sync_and_unlocked() && 
+      SimpleLock::is_sync_and_unlocked() &&
       !is_dirty() &&
       !is_flushing();
   }
@@ -90,7 +90,7 @@ public:
 
       MIX  : okay, replica can stall before sending AC_SYNCACK
       SYNC : okay, replica can stall before sending AC_MIXACK or AC_LOCKACK
-    */   
+    */
     return
       get_state() == LOCK_SYNC ||
       get_state() == LOCK_MIX;
@@ -140,7 +140,7 @@ public:
     return have_more() ? (is_dirty() || is_flushing()) : false;
   }
 
-  void mark_dirty() { 
+  void mark_dirty() {
     if (!is_dirty()) {
       if (!is_flushing())
 	parent->get(MDSCacheObject::PIN_DIRTYSCATTERED);
@@ -180,7 +180,7 @@ public:
   }
 
   void infer_state_from_strong_rejoin(int rstate, bool locktoo) {
-    if (rstate == LOCK_MIX || 
+    if (rstate == LOCK_MIX ||
 	rstate == LOCK_MIX_LOCK || // replica still has wrlocks?
 	rstate == LOCK_MIX_SYNC || // "
 	rstate == LOCK_MIX_TSYN)  // "

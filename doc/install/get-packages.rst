@@ -3,22 +3,22 @@
 ==============
 
 To install Ceph and other enabling software, you need to retrieve packages from
-the Ceph repository. Follow this guide to get packages; then, proceed to the 
+the Ceph repository. Follow this guide to get packages; then, proceed to the
 `Install Ceph Object Storage`_.
 
 
 Getting Packages
 ================
 
-There are two ways to get packages: 
+There are two ways to get packages:
 
-- **Add Repositories:** Adding repositories is the easiest way to get packages, 
+- **Add Repositories:** Adding repositories is the easiest way to get packages,
   because package management tools will retrieve the packages and all enabling
-  software for you in most cases. However, to use this approach, each 
+  software for you in most cases. However, to use this approach, each
   :term:`Ceph Node` in your cluster must have internet access.
-  
+
 - **Download Packages Manually:** Retrieving packages to install Ceph provides
-  high security environments that do not allow a :term:`Ceph Node` to access 
+  high security environments that do not allow a :term:`Ceph Node` to access
   the internet to download packages. You may also download packages to mirror
   the Ceph repository. This approach is not as convenient, but provides a means
   of installing Ceph in high security environments (e.g., banking, health care,
@@ -28,39 +28,39 @@ There are two ways to get packages:
 Requirements
 ============
 
-All Ceph deployments require Ceph packages (except for development). You should 
-also add keys and recommended packages. 
+All Ceph deployments require Ceph packages (except for development). You should
+also add keys and recommended packages.
 
-- **Keys: (Recommended)** Whether you add repositories or download packages 
+- **Keys: (Recommended)** Whether you add repositories or download packages
   manually, you should download keys to verify the packages. If you do not get
-  the keys, you may encounter security warnings. There are two keys: one for 
-  releases (common) and one for development (programmers and QA only). Choose 
+  the keys, you may encounter security warnings. There are two keys: one for
+  releases (common) and one for development (programmers and QA only). Choose
   the key that suits your needs. See `Add Keys`_ for details.
 
-- **Ceph Extras: (Required)** The Ceph Extras repository provides newer 
-  Ceph-enabled versions of packages which are already provided in your Linux 
-  distribution, but where newer versions are required to support Ceph. Examples 
-  of newer versions of available packages include QEMU for CentOS/RHEL 
-  distribution and iSCSI among others. If you intend to use any of the 
-  foregoing packages, you must add the Ceph Extras repository or download the 
+- **Ceph Extras: (Required)** The Ceph Extras repository provides newer
+  Ceph-enabled versions of packages which are already provided in your Linux
+  distribution, but where newer versions are required to support Ceph. Examples
+  of newer versions of available packages include QEMU for CentOS/RHEL
+  distribution and iSCSI among others. If you intend to use any of the
+  foregoing packages, you must add the Ceph Extras repository or download the
   packages manually. This repository also contains Ceph dependencies for those
   who intend to install Ceph manually.  See `Add Ceph Extras`_ for details.
 
-- **Ceph: (Required)** All Ceph deployments require Ceph release packages, 
-  except for deployments that use development packages (development, QA, and 
+- **Ceph: (Required)** All Ceph deployments require Ceph release packages,
+  except for deployments that use development packages (development, QA, and
   bleeding edge deployments only). See `Add Ceph`_ for details.
 
-- **Ceph Development: (Optional)** If you are developing for Ceph, testing Ceph 
-  development builds, or if you want features from the bleeding edge of Ceph 
-  development, you may get Ceph development packages. See 
+- **Ceph Development: (Optional)** If you are developing for Ceph, testing Ceph
+  development builds, or if you want features from the bleeding edge of Ceph
+  development, you may get Ceph development packages. See
   `Add Ceph Development`_ for details.
 
-- **Apache/FastCGI: (Optional)** If you are deploying a 
-  :term:`Ceph Object Storage` service, you must install Apache and FastCGI. 
-  Ceph provides Apache and FastCGI builds that are identical to those available 
-  from Apache, but with 100-continue support. If you want to enable 
-  :term:`Ceph Object Gateway` daemons with 100-continue support, you must 
-  retrieve Apache/FastCGI packages from the Ceph repository. 
+- **Apache/FastCGI: (Optional)** If you are deploying a
+  :term:`Ceph Object Storage` service, you must install Apache and FastCGI.
+  Ceph provides Apache and FastCGI builds that are identical to those available
+  from Apache, but with 100-continue support. If you want to enable
+  :term:`Ceph Object Gateway` daemons with 100-continue support, you must
+  retrieve Apache/FastCGI packages from the Ceph repository.
   See `Add Apache/FastCGI`_ for details.
 
 
@@ -85,8 +85,8 @@ To install the ``release.asc`` key, execute the following::
 	wget -q -O- 'https://ceph.com/git/?p=ceph.git;a=blob_plain;f=keys/release.asc' | sudo apt-key add -
 
 
-To install the ``autobuild.asc`` key, execute the following 
-(QA and developers only):: 
+To install the ``autobuild.asc`` key, execute the following
+(QA and developers only)::
 
 	wget -q -O- 'https://ceph.com/git/?p=ceph.git;a=blob_plain;f=keys/autobuild.asc' | sudo apt-key add -
 
@@ -99,7 +99,7 @@ To install the ``release.asc`` key, execute the following::
 	sudo rpm --import 'https://ceph.com/git/?p=ceph.git;a=blob_plain;f=keys/release.asc'
 
 To install the ``autobuild.asc`` key, execute the following
-(QA and developers only):: 
+(QA and developers only)::
 
 	sudo rpm --import 'https://ceph.com/git/?p=ceph.git;a=blob_plain;f=keys/autobuild.asc'
 
@@ -128,7 +128,7 @@ RPM Packages
 ------------
 
 For RPM packages, add our package repository to your ``/etc/yum.repos.d`` repos (e.g.,
-``ceph-extras.repo``). Some Ceph packages (e.g., QEMU) must take priority over standard 
+``ceph-extras.repo``). Some Ceph packages (e.g., QEMU) must take priority over standard
 packages, so you must ensure that you set ``priority=2``. ::
 
 	[ceph-extras]
@@ -166,20 +166,20 @@ Release repositories use the ``release.asc`` key to verify packages.
 To install Ceph packages with the Advanced Package Tool (APT) or
 Yellowdog Updater, Modified (YUM), you must add Ceph repositories.
 
-You may find releases for Debian/Ubuntu (installed with APT) at:: 
+You may find releases for Debian/Ubuntu (installed with APT) at::
 
 	http://ceph.com/debian-{release-name}
 
-You may find releases for CentOS/RHEL and others (installed with YUM) at:: 
+You may find releases for CentOS/RHEL and others (installed with YUM) at::
 
 	http://ceph.com/rpm-{release-name}
 
-The major releases of Ceph include: 
+The major releases of Ceph include:
 
 - **Emperor:** Emperor is the most recent major release of Ceph. These packages
-  are recommended for anyone deploying Ceph in a production environment. 
+  are recommended for anyone deploying Ceph in a production environment.
   Critical bug fixes are backported and point releases are made as necessary.
-  
+
 - **Dumpling:** Dumpling is the fourth major release of Ceph. These packages
   are recommended for anyone deploying Ceph in a production environment.
   Critical bug fixes are backported as necessary.
@@ -197,19 +197,19 @@ The major releases of Ceph include:
   and are not yet ready to upgrade.
 
 .. tip:: For European users, there is also a mirror in the Netherlands at:
-   http://eu.ceph.com/ 
+   http://eu.ceph.com/
 
 
 Debian Packages
 ---------------
 
 Add a Ceph package repository to your system's list of APT sources. For newer
-versions of Debian/Ubuntu, call ``lsb_release -sc`` on the command line to 
-get the short codename, and replace ``{codename}`` in the following command. :: 
+versions of Debian/Ubuntu, call ``lsb_release -sc`` on the command line to
+get the short codename, and replace ``{codename}`` in the following command. ::
 
 	sudo apt-add-repository 'deb http://ceph.com/debian-emperor/ {codename} main'
 
-For early Linux distributions, you may execute the following command:: 
+For early Linux distributions, you may execute the following command::
 
 	echo deb http://ceph.com/debian-emperor/ $(lsb_release -sc) main | sudo tee /etc/apt/sources.list.d/ceph.list
 
@@ -221,7 +221,7 @@ to get the short codename, and replace ``{codename}`` in the following command.
 	sudo apt-add-repository 'deb http://ceph.com/debian-{release-name}/ {codename} main'
 
 For older Linux distributions, replace ``{release-name}`` with the name of the
-release:: 
+release::
 
 	echo deb http://ceph.com/debian-{release-name}/ $(lsb_release -sc) main | sudo tee /etc/apt/sources.list.d/ceph.list
 
@@ -309,7 +309,7 @@ Development packages have new features integrated quickly, while still
 undergoing several weeks of QA prior to release.
 
 The repository package installs the repository details on your local system for
-use with ``yum`` or ``up2date``. Replace ``{distro}`` with your Linux distribution, 
+use with ``yum`` or ``up2date``. Replace ``{distro}`` with your Linux distribution,
 and ``{release}`` with the specific release of Ceph::
 
     su -c 'rpm -Uvh http://ceph.com/rpms/{distro}/x86_64/ceph-{release}.el6.noarch.rpm'
@@ -328,7 +328,7 @@ ensure that you remove repository entries for major releases first.
 
 
 Debian Packages
---------------- 
+---------------
 
 We automatically build Debian and Ubuntu packages for current
 development branches in the Ceph source code repository.  These
@@ -361,7 +361,7 @@ install. ::
 	gpgkey=https://ceph.com/git/?p=ceph.git;a=blob_plain;f=keys/autobuild.asc
 
 
-You may view http://gitbuilder.ceph.com directory to see which distributions 
+You may view http://gitbuilder.ceph.com directory to see which distributions
 Ceph supports.
 
 
@@ -377,7 +377,7 @@ Debian Packages
 ---------------
 
 Add our Apache and FastCGI packages to your system's list of APT sources if you intend to
-use 100-continue. :: 
+use 100-continue. ::
 
 	echo deb http://gitbuilder.ceph.com/apache2-deb-$(lsb_release -sc)-x86_64-basic/ref/master $(lsb_release -sc) main | sudo tee /etc/apt/sources.list.d/ceph-apache.list
 	echo deb http://gitbuilder.ceph.com/libapache-mod-fastcgi-deb-$(lsb_release -sc)-x86_64-basic/ref/master $(lsb_release -sc) main | sudo tee /etc/apt/sources.list.d/ceph-fastcgi.list
@@ -445,14 +445,14 @@ Repeat the forgoing process by creating a ``ceph-fastcgi.repo`` file. ::
 Download Packages
 =================
 
-If you are attempting to install behind a firewall in an environment without internet 
-access, you must retrieve the packages (mirrored with all the necessary dependencies) 
+If you are attempting to install behind a firewall in an environment without internet
+access, you must retrieve the packages (mirrored with all the necessary dependencies)
 before attempting an install.
 
 Debian Packages
 ---------------
 
-Ceph requires additional additional third party libraries.  
+Ceph requires additional additional third party libraries.
 
 - libaio1
 - libsnappy1
@@ -476,8 +476,8 @@ your Linux distribution codename. Replace ``{arch}`` with the CPU architecture.
 RPM Packages
 ------------
 
-Ceph requires additional additional third party libraries.  
-To add the EPEL repository, execute the following:: 
+Ceph requires additional additional third party libraries.
+To add the EPEL repository, execute the following::
 
    su -c 'rpm -Uvh http://dl.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-8.noarch.rpm'
 
@@ -507,8 +507,8 @@ You can download the RPMs directly from::
 	http://ceph.com/rpm-emperor
 
 
-For earlier Ceph releases, replace ``{release-name}`` with the name 
-with the name of the Ceph release. You may call ``lsb_release -sc`` on the command 
+For earlier Ceph releases, replace ``{release-name}`` with the name
+with the name of the Ceph release. You may call ``lsb_release -sc`` on the command
 line to get the short codename. ::
 
 	su -c 'rpm -Uvh http://ceph.com/rpm-{release-name}/{distro}/noarch/ceph-{version}.{distro}.noarch.rpm'

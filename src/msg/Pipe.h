@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_MSGR_PIPE_H
@@ -142,7 +142,7 @@ class DispatchQueue;
     int peer_type;
     entity_addr_t peer_addr;
     Messenger::Policy policy;
-    
+
     Mutex pipe_lock;
     int state;
     atomic_t state_closed; // non-zero iff state = STATE_CLOSED
@@ -155,7 +155,7 @@ class DispatchQueue;
     friend class SimpleMessenger;
     PipeConnectionRef connection_state;
 
-    utime_t backoff;         // backoff time
+    utime_t backoff;	     // backoff time
 
     bool reader_running, reader_needs_join;
     bool writer_running;
@@ -169,11 +169,11 @@ class DispatchQueue;
     utime_t keepalive_ack_stamp;
     bool halt_delivery; //if a pipe's queue is destroyed, stop adding to it
     bool close_on_empty;
-    
+
     uint32_t connect_seq, peer_global_seq;
     uint64_t out_seq;
     uint64_t in_seq, in_seq_acked;
-    
+
     void set_socket_options();
 
     int accept();   // server handshake
@@ -231,7 +231,7 @@ class DispatchQueue;
 
     void set_peer_addr(const entity_addr_t& a) {
       if (&peer_addr != &a)  // shut up valgrind
-        peer_addr = a;
+	peer_addr = a;
       connection_state->set_peer_addr(a);
     }
     void set_peer_type(int t) {
@@ -258,13 +258,13 @@ class DispatchQueue;
       assert(pipe_lock.is_locked());
       Message *m = 0;
       while (!m && !out_q.empty()) {
-        map<int, list<Message*> >::reverse_iterator p = out_q.rbegin();
-        if (!p->second.empty()) {
-          m = p->second.front();
-          p->second.pop_front();
-        }
-        if (p->second.empty())
-          out_q.erase(p->first);
+	map<int, list<Message*> >::reverse_iterator p = out_q.rbegin();
+	if (!p->second.empty()) {
+	  m = p->second.front();
+	  p->second.pop_front();
+	}
+	if (p->second.empty())
+	  out_q.erase(p->first);
       }
       return m;
     }
@@ -277,7 +277,7 @@ class DispatchQueue;
 
     void shutdown_socket() {
       if (sd >= 0)
-        ::shutdown(sd, SHUT_RDWR);
+	::shutdown(sd, SHUT_RDWR);
     }
 
     /**
@@ -318,6 +318,5 @@ class DispatchQueue;
     int tcp_write(const char *buf, int len);
 
   };
-
 
 #endif

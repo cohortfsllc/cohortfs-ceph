@@ -189,7 +189,7 @@ void usage()
   generic_server_usage();
 }
 
-int main(int argc, const char **argv) 
+int main(int argc, const char **argv)
 {
   int err;
 

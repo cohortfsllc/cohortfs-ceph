@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #include <sstream>
@@ -87,7 +87,7 @@ void ThreadPool::worker(WorkThread *wt)
 {
   _lock.Lock();
   ldout(cct,10) << "worker start" << dendl;
-  
+
   std::stringstream ss;
   ss << name << " thread " << (void*)pthread_self();
   heartbeat_handle_d *hb = cct->get_heartbeat_map()->add_worker(ss.str());
@@ -111,7 +111,7 @@ void ThreadPool::worker(WorkThread *wt)
 	last_work_queue++;
 	last_work_queue %= work_queues.size();
 	wq = work_queues[last_work_queue];
-	
+
 	void *item = wq->_void_dequeue();
 	if (item) {
 	  processing++;
@@ -209,7 +209,7 @@ void ThreadPool::stop(bool clear_after)
   for (unsigned i=0; i<work_queues.size(); i++)
     work_queues[i]->_clear();
   _stop = false;
-  _lock.Unlock();    
+  _lock.Unlock();
   ldout(cct,15) << "stopped" << dendl;
 }
 

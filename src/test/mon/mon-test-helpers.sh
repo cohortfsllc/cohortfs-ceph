@@ -32,7 +32,7 @@ function run_mon() {
     local id=$1
     shift
     dir+=/$id
-    
+
     ./ceph-mon \
         --id $id \
         --mkfs \

@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_MDS_EFRAGMENT_H
@@ -32,13 +32,13 @@ public:
   uint8_t op;
   inodeno_t ino;
   frag_t basefrag;
-  int32_t bits;         // positive for split (from basefrag), negative for merge (to basefrag)
+  int32_t bits;		// positive for split (from basefrag), negative for merge (to basefrag)
   list<frag_t> orig_frags;
   bufferlist rollback;
 
   EFragment() : LogEvent(EVENT_FRAGMENT) { }
   EFragment(MDLog *mdlog, int o, dirfrag_t df, int b) :
-    LogEvent(EVENT_FRAGMENT), metablob(mdlog), 
+    LogEvent(EVENT_FRAGMENT), metablob(mdlog),
     op(o), ino(df.ino), basefrag(df.frag), bits(b) { }
 
   void print(ostream& out) const {

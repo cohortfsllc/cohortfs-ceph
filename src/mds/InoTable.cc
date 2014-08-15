@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #include "InoTable.h"
@@ -40,7 +40,7 @@ void InoTable::reset_state()
   projected_free = free;
 }
 
-inodeno_t InoTable::project_alloc_id(inodeno_t id) 
+inodeno_t InoTable::project_alloc_id(inodeno_t id)
 {
   dout(10) << "project_alloc_id " << id << " to " << projected_free << "/" << free << dendl;
   assert(is_active());
@@ -57,7 +57,7 @@ void InoTable::apply_alloc_id(inodeno_t id)
   ++version;
 }
 
-void InoTable::project_alloc_ids(interval_set<inodeno_t>& ids, int want) 
+void InoTable::project_alloc_ids(interval_set<inodeno_t>& ids, int want)
 {
   assert(is_active());
   while (want > 0) {
@@ -81,13 +81,13 @@ void InoTable::apply_alloc_ids(interval_set<inodeno_t>& ids)
 }
 
 
-void InoTable::project_release_ids(interval_set<inodeno_t>& ids) 
+void InoTable::project_release_ids(interval_set<inodeno_t>& ids)
 {
   dout(10) << "project_release_ids " << ids << " to " << projected_free << "/" << free << dendl;
   projected_free.insert(ids);
   ++projected_version;
 }
-void InoTable::apply_release_ids(interval_set<inodeno_t>& ids) 
+void InoTable::apply_release_ids(interval_set<inodeno_t>& ids)
 {
   dout(10) << "apply_release_ids " << ids << " to " << projected_free << "/" << free << dendl;
   free.insert(ids);
@@ -97,7 +97,7 @@ void InoTable::apply_release_ids(interval_set<inodeno_t>& ids)
 
 //
 
-void InoTable::replay_alloc_id(inodeno_t id) 
+void InoTable::replay_alloc_id(inodeno_t id)
 {
   dout(10) << "replay_alloc_id " << id << dendl;
   if (free.contains(id)) {
@@ -109,7 +109,7 @@ void InoTable::replay_alloc_id(inodeno_t id)
   }
   projected_version = ++version;
 }
-void InoTable::replay_alloc_ids(interval_set<inodeno_t>& ids) 
+void InoTable::replay_alloc_ids(interval_set<inodeno_t>& ids)
 {
   dout(10) << "replay_alloc_ids " << ids << dendl;
   interval_set<inodeno_t> is;
@@ -125,7 +125,7 @@ void InoTable::replay_alloc_ids(interval_set<inodeno_t>& ids)
   }
   projected_version = ++version;
 }
-void InoTable::replay_release_ids(interval_set<inodeno_t>& ids) 
+void InoTable::replay_release_ids(interval_set<inodeno_t>& ids)
 {
   dout(10) << "replay_release_ids " << ids << dendl;
   free.insert(ids);

@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_MCLIENTCAPS_H
@@ -32,9 +32,9 @@ class MClientCaps : public Message {
   version_t  inline_version;
   bufferlist inline_data;
 
-  int      get_caps() { return head.caps; }
-  int      get_wanted() { return head.wanted; }
-  int      get_dirty() { return head.dirty; }
+  int	   get_caps() { return head.caps; }
+  int	   get_wanted() { return head.wanted; }
+  int	   get_dirty() { return head.dirty; }
   ceph_seq_t get_seq() { return head.seq; }
   ceph_seq_t get_issue_seq() { return head.issue_seq; }
   ceph_seq_t get_mseq() { return head.migrate_seq; }
@@ -55,8 +55,8 @@ class MClientCaps : public Message {
   ceph_file_layout& get_layout() { return head.layout; }
 #endif
 
-  int       get_migrate_seq() { return head.migrate_seq; }
-  int       get_op() { return head.op; }
+  int	    get_migrate_seq() { return head.migrate_seq; }
+  int	    get_op() { return head.op; }
 
   uint64_t get_client_tid() { return get_tid(); }
   void set_client_tid(uint64_t s) { set_tid(s); }
@@ -148,7 +148,7 @@ public:
 
     out << ")";
   }
-  
+
   void decode_payload() {
     bufferlist::iterator p = payload.begin();
     ::decode(head, p);

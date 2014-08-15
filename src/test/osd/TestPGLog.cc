@@ -14,7 +14,7 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
  * GNU Library Public License for more details.
  *
  */
@@ -147,7 +147,7 @@ public:
   struct LogHandler : public PGLog::LogEntryHandler {
     set<hobject_t> removed;
     list<pg_log_entry_t> rolledback;
-    
+
     void rollback(
       const pg_log_entry_t &entry) {
       rolledback.push_back(entry);
@@ -285,22 +285,22 @@ TEST_F(PGLogTest, rewind_divergent_log) {
 		 FailedAssertion);
   }
 
-  /*        +----------------+
-            |  log           |
-            +--------+-------+
-            |        |object |
-            |version | hash  |
-            |        |       |
-       tail > (1,1)  |  x5   |
-            |        |       |
-            |        |       |
-            | (1,4)  |  x9   < newhead
-            | MODIFY |       |
-            |        |       |
-       head > (1,5)  |  x9   |
-            | DELETE |       |
-            |        |       |
-            +--------+-------+
+  /*	    +----------------+
+	    |  log	     |
+	    +--------+-------+
+	    |	     |object |
+	    |version | hash  |
+	    |	     |	     |
+       tail > (1,1)  |	x5   |
+	    |	     |	     |
+	    |	     |	     |
+	    | (1,4)  |	x9   < newhead
+	    | MODIFY |	     |
+	    |	     |	     |
+       head > (1,5)  |	x9   |
+	    | DELETE |	     |
+	    |	     |	     |
+	    +--------+-------+
 
   */
   {
@@ -371,19 +371,19 @@ TEST_F(PGLogTest, rewind_divergent_log) {
     EXPECT_TRUE(dirty_big_info);
   }
 
-  /*        +----------------+
-            |  log           |
-            +--------+-------+
-            |        |object |
-            |version | hash  |
-            |        |       |
+  /*	    +----------------+
+	    |  log	     |
+	    +--------+-------+
+	    |	     |object |
+	    |version | hash  |
+	    |	     |	     |
        tail > (1,1)  | NULL  |
-            |        |       |
-            | (1,4)  | NULL  < newhead
-            |        |       |
-       head > (1,5)  |  x9   |
-            |        |       |
-            +--------+-------+
+	    |	     |	     |
+	    | (1,4)  | NULL  < newhead
+	    |	     |	     |
+       head > (1,5)  |	x9   |
+	    |	     |	     |
+	    +--------+-------+
 
   */
   {
@@ -637,7 +637,7 @@ TEST_F(PGLogTest, merge_old_entry) {
   // the old entry (from the log entry given in argument) is not a CLONE and
   // the old entry (from the log entry given in argument) is not a DELETE and
   // the old entry prior_version is lower than the tail of the log :
-  //   add the old object to the remove_snap list and 
+  //   add the old object to the remove_snap list and
   //   add the old object to divergent priors and
   //   add or update the prior_version of the object to missing and
   //   return false
@@ -787,7 +787,7 @@ TEST_F(PGLogTest, merge_log) {
 
     TestHandler h(remove_snap);
     merge_log(t, oinfo, olog, fromosd, info, &h,
-              dirty_info, dirty_big_info);
+	      dirty_info, dirty_big_info);
 
     EXPECT_FALSE(missing.have_missing());
     EXPECT_EQ(0U, log.log.size());
@@ -839,7 +839,7 @@ TEST_F(PGLogTest, merge_log) {
 
     TestHandler h(remove_snap);
     merge_log(t, oinfo, olog, fromosd, info, &h,
-              dirty_info, dirty_big_info);
+	      dirty_info, dirty_big_info);
 
     EXPECT_FALSE(missing.have_missing());
     EXPECT_EQ(0U, log.log.size());
@@ -854,41 +854,41 @@ TEST_F(PGLogTest, merge_log) {
     EXPECT_FALSE(dirty_big_info);
   }
 
-  /*         Before
-            +--------------------------+
-            |  log              olog   |
-            +--------+-------+---------+
-            |        |object |         |
-            |version | hash  | version |
-            |        |       |         |
-            |        |  x5   |  (1,1)  < tail
-            |        |       |         |
-            |        |       |         |
-       tail > (1,4)  |  x7   |         |
-            |        |       |         |
-            |        |       |         |
-       head > (1,5)  |  x9   |  (1,5)  < head
-            |        |       |         |
-            |        |       |         |
-            +--------+-------+---------+
+  /*	     Before
+	    +--------------------------+
+	    |  log		olog   |
+	    +--------+-------+---------+
+	    |	     |object |	       |
+	    |version | hash  | version |
+	    |	     |	     |	       |
+	    |	     |	x5   |	(1,1)  < tail
+	    |	     |	     |	       |
+	    |	     |	     |	       |
+       tail > (1,4)  |	x7   |	       |
+	    |	     |	     |	       |
+	    |	     |	     |	       |
+       head > (1,5)  |	x9   |	(1,5)  < head
+	    |	     |	     |	       |
+	    |	     |	     |	       |
+	    +--------+-------+---------+
 
-             After
-            +-----------------
-            |  log           |
-            +--------+-------+
-            |        |object |
-            |version | hash  |
-            |        |       |
-       tail > (1,1)  |  x5   |
-            |        |       |
-            |        |       |
-            | (1,4)  |  x7   |
-            |        |       |
-            |        |       |
-       head > (1,5)  |  x9   |
-            |        |       |
-            |        |       |
-            +--------+-------+
+	     After
+	    +-----------------
+	    |  log	     |
+	    +--------+-------+
+	    |	     |object |
+	    |version | hash  |
+	    |	     |	     |
+       tail > (1,1)  |	x5   |
+	    |	     |	     |
+	    |	     |	     |
+	    | (1,4)  |	x7   |
+	    |	     |	     |
+	    |	     |	     |
+       head > (1,5)  |	x9   |
+	    |	     |	     |
+	    |	     |	     |
+	    +--------+-------+
   */
   {
     clear();
@@ -946,7 +946,7 @@ TEST_F(PGLogTest, merge_log) {
 
     TestHandler h(remove_snap);
     merge_log(t, oinfo, olog, fromosd, info, &h,
-              dirty_info, dirty_big_info);
+	      dirty_info, dirty_big_info);
 
     EXPECT_FALSE(missing.have_missing());
     EXPECT_EQ(3U, log.log.size());
@@ -959,27 +959,27 @@ TEST_F(PGLogTest, merge_log) {
     EXPECT_TRUE(dirty_big_info);
   }
 
-  /*        +--------------------------+
-            |  log              olog   |
-            +--------+-------+---------+
-            |        |object |         |
-            |version | hash  | version |
-            |        |       |         |
-       tail > (1,1)  |  x5   |  (1,1)  < tail
-            |        |       |         |
-            |        |       |         |
-            | (1,2)  |  x3   |  (1,2)  < lower_bound
-            |        |       |         |
-            |        |       |         |
-       head > (1,3)  |  x9   |         |
-            | DELETE |       |         |
-            |        |       |         |
-            |        |  x9   |  (2,3)  |
-            |        |       |  MODIFY |
-            |        |       |         |
-            |        |  x7   |  (2,4)  < head
-            |        |       |  DELETE |
-            +--------+-------+---------+
+  /*	    +--------------------------+
+	    |  log		olog   |
+	    +--------+-------+---------+
+	    |	     |object |	       |
+	    |version | hash  | version |
+	    |	     |	     |	       |
+       tail > (1,1)  |	x5   |	(1,1)  < tail
+	    |	     |	     |	       |
+	    |	     |	     |	       |
+	    | (1,2)  |	x3   |	(1,2)  < lower_bound
+	    |	     |	     |	       |
+	    |	     |	     |	       |
+       head > (1,3)  |	x9   |	       |
+	    | DELETE |	     |	       |
+	    |	     |	     |	       |
+	    |	     |	x9   |	(2,3)  |
+	    |	     |	     |	MODIFY |
+	    |	     |	     |	       |
+	    |	     |	x7   |	(2,4)  < head
+	    |	     |	     |	DELETE |
+	    +--------+-------+---------+
 
       The log entry (1,3) deletes the object x9 but the olog entry (2,3) modifies
       it and is authoritative : the log entry (1,3) is divergent.
@@ -1057,7 +1057,7 @@ TEST_F(PGLogTest, merge_log) {
 
     TestHandler h(remove_snap);
     merge_log(t, oinfo, olog, fromosd, info, &h,
-              dirty_info, dirty_big_info);
+	      dirty_info, dirty_big_info);
 
     /* When the divergent entry is a DELETE and the authoritative
        entry is a MODIFY, the object will be added to missing : it is
@@ -1079,22 +1079,22 @@ TEST_F(PGLogTest, merge_log) {
     EXPECT_TRUE(dirty_big_info);
   }
 
-  /*        +--------------------------+
-            |  log              olog   |
-            +--------+-------+---------+
-            |        |object |         |
-            |version | hash  | version |
-            |        |       |         |
-       tail > (1,1)  |  x5   |  (1,1)  < tail
-            |        |       |         |
-            |        |       |         |
-            | (1,4)  |  x7   |  (1,4)  < head
-            |        |       |         |
-            |        |       |         |
-       head > (1,5)  |  x9   |         |
-            |        |       |         |
-            |        |       |         |
-            +--------+-------+---------+
+  /*	    +--------------------------+
+	    |  log		olog   |
+	    +--------+-------+---------+
+	    |	     |object |	       |
+	    |version | hash  | version |
+	    |	     |	     |	       |
+       tail > (1,1)  |	x5   |	(1,1)  < tail
+	    |	     |	     |	       |
+	    |	     |	     |	       |
+	    | (1,4)  |	x7   |	(1,4)  < head
+	    |	     |	     |	       |
+	    |	     |	     |	       |
+       head > (1,5)  |	x9   |	       |
+	    |	     |	     |	       |
+	    |	     |	     |	       |
+	    +--------+-------+---------+
 
       The head of the log entry (1,5) is divergent because it is greater than the
       head of olog.
@@ -1159,7 +1159,7 @@ TEST_F(PGLogTest, merge_log) {
 
     TestHandler h(remove_snap);
     merge_log(t, oinfo, olog, fromosd, info, &h,
-              dirty_info, dirty_big_info);
+	      dirty_info, dirty_big_info);
 
     EXPECT_FALSE(missing.have_missing());
     EXPECT_EQ(2U, log.log.size());
@@ -1190,26 +1190,26 @@ TEST_F(PGLogTest, merge_log) {
 
     TestHandler h(remove_snap);
     ASSERT_THROW(merge_log(t, oinfo, olog, fromosd, info, &h,
-                           dirty_info, dirty_big_info), FailedAssertion);
+			   dirty_info, dirty_big_info), FailedAssertion);
   }
 
-  /*        +--------------------------+
-            |  log              olog   |
-            +--------+-------+---------+
-            |        |object |         |
-            |version | hash  | version |
-       tail > (0,0)  |       |         |
-            | (1,1)  |  x5   |         |
-            |        |       |         |
-            |        |       |         |
-       head > (1,2)  |  x3   |         |
-            |        |       |         |
-            |        |       |  (2,3)  < tail
-            |        |  x9   |  (2,4)  |
-            |        |       |         |
-            |        |  x5   |  (2,5)  < head
-            |        |       |         |
-            +--------+-------+---------+
+  /*	    +--------------------------+
+	    |  log		olog   |
+	    +--------+-------+---------+
+	    |	     |object |	       |
+	    |version | hash  | version |
+       tail > (0,0)  |	     |	       |
+	    | (1,1)  |	x5   |	       |
+	    |	     |	     |	       |
+	    |	     |	     |	       |
+       head > (1,2)  |	x3   |	       |
+	    |	     |	     |	       |
+	    |	     |	     |	(2,3)  < tail
+	    |	     |	x9   |	(2,4)  |
+	    |	     |	     |	       |
+	    |	     |	x5   |	(2,5)  < head
+	    |	     |	     |	       |
+	    +--------+-------+---------+
 
       If the logs do not overlap, throw an exception.
 
@@ -1254,7 +1254,7 @@ TEST_F(PGLogTest, merge_log) {
 
     TestHandler h(remove_snap);
     EXPECT_THROW(merge_log(t, oinfo, olog, fromosd, info, &h,
-                           dirty_info, dirty_big_info), FailedAssertion);
+			   dirty_info, dirty_big_info), FailedAssertion);
   }
 }
 
@@ -1287,30 +1287,30 @@ TEST_F(PGLogTest, proc_replica_log) {
     EXPECT_EQ(last_update, oinfo.last_complete);
   }
 
-  /*        +--------------------------+
-            |  log              olog   |
-            +--------+-------+---------+
-            |        |object |         |
-            |version | hash  | version |
-            |        |       |         |
-            |        |  x3   |  (1,1)  < tail
-            |        |       |         |
-            |        |       |         |
-       tail > (1,2)  |  x5   |         |
-            |        |       |         |
-            |        |       |         |
-       head > (1,3)  |  x9   |         |
-            | DELETE |       |         |
-            |        |       |         |
-            |        |  x9   |  (2,3)  < head
-            |        |       |  DELETE |
-            |        |       |         |
-            +--------+-------+---------+
-	    
+  /*	    +--------------------------+
+	    |  log		olog   |
+	    +--------+-------+---------+
+	    |	     |object |	       |
+	    |version | hash  | version |
+	    |	     |	     |	       |
+	    |	     |	x3   |	(1,1)  < tail
+	    |	     |	     |	       |
+	    |	     |	     |	       |
+       tail > (1,2)  |	x5   |	       |
+	    |	     |	     |	       |
+	    |	     |	     |	       |
+       head > (1,3)  |	x9   |	       |
+	    | DELETE |	     |	       |
+	    |	     |	     |	       |
+	    |	     |	x9   |	(2,3)  < head
+	    |	     |	     |	DELETE |
+	    |	     |	     |	       |
+	    +--------+-------+---------+
+
       The log entry (1,3) deletes the object x9 and the olog entry
       (2,3) also deletes it : do nothing. The olog tail is ignored
       because it is before the log tail.
-      
+
   */
   {
     clear();
@@ -1469,25 +1469,25 @@ TEST_F(PGLogTest, proc_replica_log) {
     EXPECT_EQ(eversion_t(1, 1), oinfo.last_complete);
   }
 
-  /*        +--------------------------+
-            |  log              olog   |
-            +--------+-------+---------+
-            |        |object |         |
-            |version | hash  | version |
-            |        |       |         |
-       tail > (1,1)  |  x5   |  (1,1)  < tail
-            |        |       |         |
-            |        |       |         |
-            | (1,2)  |  x3   |  (1,2)  |
-            |        |       |         |
-            |        |       |         |
-       head > (1,3)  |  x9   |         |
-            | DELETE |       |         |
-            |        |       |         |
-            |        |  x9   |  (2,3)  < head
-            |        |       |  DELETE |
-            |        |       |         |
-            +--------+-------+---------+
+  /*	    +--------------------------+
+	    |  log		olog   |
+	    +--------+-------+---------+
+	    |	     |object |	       |
+	    |version | hash  | version |
+	    |	     |	     |	       |
+       tail > (1,1)  |	x5   |	(1,1)  < tail
+	    |	     |	     |	       |
+	    |	     |	     |	       |
+	    | (1,2)  |	x3   |	(1,2)  |
+	    |	     |	     |	       |
+	    |	     |	     |	       |
+       head > (1,3)  |	x9   |	       |
+	    | DELETE |	     |	       |
+	    |	     |	     |	       |
+	    |	     |	x9   |	(2,3)  < head
+	    |	     |	     |	DELETE |
+	    |	     |	     |	       |
+	    +--------+-------+---------+
 
       The log entry (1,3) deletes the object x9 and the olog entry
       (2,3) also deletes it : do nothing.
@@ -1552,25 +1552,25 @@ TEST_F(PGLogTest, proc_replica_log) {
     EXPECT_EQ(last_update, oinfo.last_complete);
   }
 
-  /*        +--------------------------+
-            |  log              olog   |
-            +--------+-------+---------+
-            |        |object |         |
-            |version | hash  | version |
-            |        |       |         |
-       tail > (1,1)  |  x5   |  (1,1)  < tail
-            |        |       |         |
-            |        |       |         |
-            | (1,2)  |  x3   |  (1,2)  |
-            |        |       |         |
-            |        |       |         |
-       head > (1,3)  |  x9   |         |
-            | DELETE |       |         |
-            |        |       |         |
-            |        |  x9   |  (2,3)  < head
-            |        |       |  MODIFY |
-            |        |       |         |
-            +--------+-------+---------+
+  /*	    +--------------------------+
+	    |  log		olog   |
+	    +--------+-------+---------+
+	    |	     |object |	       |
+	    |version | hash  | version |
+	    |	     |	     |	       |
+       tail > (1,1)  |	x5   |	(1,1)  < tail
+	    |	     |	     |	       |
+	    |	     |	     |	       |
+	    | (1,2)  |	x3   |	(1,2)  |
+	    |	     |	     |	       |
+	    |	     |	     |	       |
+       head > (1,3)  |	x9   |	       |
+	    | DELETE |	     |	       |
+	    |	     |	     |	       |
+	    |	     |	x9   |	(2,3)  < head
+	    |	     |	     |	MODIFY |
+	    |	     |	     |	       |
+	    +--------+-------+---------+
 
       The log entry (1,3) deletes the object x9 but the olog entry
       (2,3) modifies it : remove it from omissing.
@@ -1640,25 +1640,25 @@ TEST_F(PGLogTest, proc_replica_log) {
     EXPECT_EQ(last_update, oinfo.last_complete);
   }
 
-  /*        +--------------------------+
-            |  log              olog   |
-            +--------+-------+---------+
-            |        |object |         |
-            |version | hash  | version |
-            |        |       |         |
-       tail > (1,1)  |  x9   |  (1,1)  < tail
-            |        |       |         |
-            |        |       |         |
-            | (1,2)  |  x3   |  (1,2)  |
-            |        |       |         |
-            |        |       |         |
-            |        |  x9   |  (1,3)  < head
-            |        |       |  MODIFY |
-            |        |       |         |
-       head > (2,3)  |  x9   |         |
-            | DELETE |       |         |
-            |        |       |         |
-            +--------+-------+---------+
+  /*	    +--------------------------+
+	    |  log		olog   |
+	    +--------+-------+---------+
+	    |	     |object |	       |
+	    |version | hash  | version |
+	    |	     |	     |	       |
+       tail > (1,1)  |	x9   |	(1,1)  < tail
+	    |	     |	     |	       |
+	    |	     |	     |	       |
+	    | (1,2)  |	x3   |	(1,2)  |
+	    |	     |	     |	       |
+	    |	     |	     |	       |
+	    |	     |	x9   |	(1,3)  < head
+	    |	     |	     |	MODIFY |
+	    |	     |	     |	       |
+       head > (2,3)  |	x9   |	       |
+	    | DELETE |	     |	       |
+	    |	     |	     |	       |
+	    +--------+-------+---------+
 
       The log entry (2,3) deletes the object x9 but the olog entry
       (1,3) modifies it : proc_replica_log should adjust missing to

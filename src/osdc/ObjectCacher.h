@@ -102,9 +102,9 @@ class ObjectCacher {
 
   public:
     Object *ob;
-    bufferlist  bl;
-    ceph_tid_t last_write_tid;  // version of bh (if non-zero)
-    ceph_tid_t last_read_tid;   // tid of last read op (if any)
+    bufferlist	bl;
+    ceph_tid_t last_write_tid;	// version of bh (if non-zero)
+    ceph_tid_t last_read_tid;	// tid of last read op (if any)
     utime_t last_write;
     int error; // holds return value for failed reads
 
@@ -178,9 +178,9 @@ class ObjectCacher {
     bool exists;
 
   public:
-    map<loff_t, BufferHead*>     data;
+    map<loff_t, BufferHead*>	 data;
 
-    ceph_tid_t last_write_tid;  // version of bh (if non-zero)
+    ceph_tid_t last_write_tid;	// version of bh (if non-zero)
     ceph_tid_t last_commit_tid; // last update commited.
 
     int dirty_or_tx;
@@ -245,9 +245,9 @@ class ObjectCacher {
       map<loff_t,BufferHead*>::iterator p = data.lower_bound(offset);
       if (p != data.begin() &&
 	  (p == data.end() || p->first > offset)) {
-	--p;     // might overlap!
+	--p;	 // might overlap!
 	if (p->first + p->second->length() <= offset)
-	  ++p;   // doesn't overlap.
+	  ++p;	 // doesn't overlap.
       }
       return p;
     }
@@ -340,8 +340,8 @@ class ObjectCacher {
   ceph_tid_t last_read_tid;
 
   set<BufferHead*>    dirty_bh;
-  LRU   bh_lru_dirty, bh_lru_rest;
-  LRU   ob_lru;
+  LRU	bh_lru_dirty, bh_lru_rest;
+  LRU	ob_lru;
 
   Cond flusher_cond;
   bool flusher_stop;
@@ -371,7 +371,7 @@ class ObjectCacher {
   void close_object(Object *ob);
 
   // bh stats
-  Cond  stat_cond;
+  Cond	stat_cond;
 
   loff_t stat_clean;
   loff_t stat_zero;
@@ -406,7 +406,7 @@ class ObjectCacher {
 
   // bh states
   void bh_set_state(BufferHead *bh, int s);
-  void copy_bh_state(BufferHead *bh1, BufferHead *bh2) { 
+  void copy_bh_state(BufferHead *bh1, BufferHead *bh2) {
     bh_set_state(bh2, bh1->get_state());
   }
 
@@ -416,8 +416,8 @@ class ObjectCacher {
   void mark_rx(BufferHead *bh) { bh_set_state(bh, BufferHead::STATE_RX); };
   void mark_tx(BufferHead *bh) { bh_set_state(bh, BufferHead::STATE_TX); };
   void mark_error(BufferHead *bh) { bh_set_state(bh, BufferHead::STATE_ERROR); };
-  void mark_dirty(BufferHead *bh) { 
-    bh_set_state(bh, BufferHead::STATE_DIRTY); 
+  void mark_dirty(BufferHead *bh) {
+    bh_set_state(bh, BufferHead::STATE_DIRTY);
     bh_lru_dirty.lru_touch(bh);
     //bh->set_dirty_stamp(ceph_clock_now(g_ceph_context));
   };

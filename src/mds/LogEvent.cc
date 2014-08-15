@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #include "common/config.h"
@@ -66,12 +66,12 @@ LogEvent *LogEvent::decode_event(bufferlist& bl, bufferlist::iterator& p, uint32
 {
   int length = bl.length() - p.get_off();
   generic_dout(15) << "decode_log_event type " << type << ", size " << length << dendl;
-  
+
   // create event
   LogEvent *le;
   switch (type) {
   case EVENT_SUBTREEMAP: le = new ESubtreeMap; break;
-  case EVENT_SUBTREEMAP_TEST: 
+  case EVENT_SUBTREEMAP_TEST:
     le = new ESubtreeMap;
     le->set_type(type);
     break;

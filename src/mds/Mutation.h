@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_MDS_MUTATION_H
@@ -35,12 +35,12 @@ class MMDSSlaveRequest;
 
 struct MutationImpl {
   metareqid_t reqid;
-  uint32_t attempt;      // which attempt for this request
+  uint32_t attempt;	 // which attempt for this request
   LogSegment *ls;  // the log segment i'm committing to
   utime_t now;
 
   // flag mutation as slave
-  int slave_to_mds;                // this is a slave request if >= 0.
+  int slave_to_mds;		   // this is a slave request if >= 0.
 
   // -- my pins and locks --
   // cache pins (so things don't expire)
@@ -50,13 +50,13 @@ struct MutationImpl {
   // auth pins
   set< MDSCacheObject* > remote_auth_pins;
   set< MDSCacheObject* > auth_pins;
-  
+
   // held locks
   set< SimpleLock* > rdlocks;  // always local.
   set< SimpleLock* > wrlocks;  // always local.
   map< SimpleLock*, int > remote_wrlocks;
   set< SimpleLock* > xlocks;   // local or remote.
-  set< SimpleLock*, SimpleLock::ptr_lt > locks;  // full ordering
+  set< SimpleLock*, SimpleLock::ptr_lt > locks;	 // full ordering
 
   // lock we are currently trying to acquire.  if we give up for some reason,
   // be sure to eval() this.
@@ -65,7 +65,7 @@ struct MutationImpl {
 
   // if this flag is set, do not attempt to acquire further locks.
   //  (useful for wrlock, which may be a moving auth target)
-  bool done_locking; 
+  bool done_locking;
   bool committing;
   bool aborted;
   bool killed;
@@ -88,7 +88,7 @@ struct MutationImpl {
   MutationImpl(metareqid_t ri, uint32_t att=0, int slave_to=-1)
     : reqid(ri), attempt(att),
       ls(0),
-      slave_to_mds(slave_to), 
+      slave_to_mds(slave_to),
       locking(NULL),
       locking_target_mds(-1),
       done_locking(false), committing(false), aborted(false), killed(false) { }
@@ -170,17 +170,17 @@ struct MDRequestImpl : public MutationImpl {
   CInode *tracei;
   CDentry *tracedn;
 
-  inodeno_t alloc_ino, used_prealloc_ino;  
+  inodeno_t alloc_ino, used_prealloc_ino;
   interval_set<inodeno_t> prealloc_inos;
 
   bool did_early_reply;
-  bool o_trunc;           ///< request is an O_TRUNC mutation
-  int getattr_caps;       ///< caps requested by getattr
+  bool o_trunc;		  ///< request is an O_TRUNC mutation
+  int getattr_caps;	  ///< caps requested by getattr
 
   bufferlist reply_extra_bl;
 
   // inos we did a embedded cap release on, and may need to eval if we haven't since reissued
-  map<vinodeno_t, ceph_seq_t> cap_releases;  
+  map<vinodeno_t, ceph_seq_t> cap_releases;
 
   // -- i am a slave request
   MMDSSlaveRequest *slave_request; // slave request (if one is pending; implies slave == true)
@@ -194,16 +194,16 @@ struct MDRequestImpl : public MutationImpl {
   // indicator for vxattr osdmap update
   bool waited_for_osdmap;
 
-  // break rarely-used fields into a separately allocated structure 
+  // break rarely-used fields into a separately allocated structure
   // to save memory for most ops
   struct More {
-    set<int> slaves;           // mds nodes that have slave requests to me (implies client_request)
-    set<int> waiting_on_slave; // peers i'm waiting for slavereq replies from. 
+    set<int> slaves;	       // mds nodes that have slave requests to me (implies client_request)
+    set<int> waiting_on_slave; // peers i'm waiting for slavereq replies from.
 
     // for rename/link/unlink
-    set<int> witnessed;       // nodes who have journaled a RenamePrepare
+    set<int> witnessed;	      // nodes who have journaled a RenamePrepare
     map<MDSCacheObject*,version_t> pvmap;
-    
+
     // for rename
     set<int> extra_witnesses; // replica list from srcdn auth (rename)
     int srcdn_auth_mds;
@@ -220,7 +220,7 @@ struct MDRequestImpl : public MutationImpl {
     map<client_t,entity_inst_t> imported_client_map;
     map<client_t,uint64_t> sseq_map;
     map<CInode*, map<client_t,Capability::Export> > cap_imports;
-    
+
     // for lock/flock
     bool flock_was_waiting;
 
@@ -234,7 +234,7 @@ struct MDRequestImpl : public MutationImpl {
     CDir* export_dir;
     dirfrag_t fragment_base;
 
-    More() : 
+    More() :
       srcdn_auth_mds(-1),
       src_reanchor_atid(0), dst_reanchor_atid(0), inode_import_v(0),
       rename_inode(0), is_freeze_authpin(false), is_ambiguous_auth(false),
@@ -283,10 +283,10 @@ struct MDRequestImpl : public MutationImpl {
     retry(0),
     waited_for_osdmap(false),
     _more(0) {
-    in[0] = in[1] = 0; 
+    in[0] = in[1] = 0;
   }
   ~MDRequestImpl();
-  
+
   More* more();
   bool has_more();
   bool are_slaves();

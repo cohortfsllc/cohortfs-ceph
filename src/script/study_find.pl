@@ -13,7 +13,7 @@ my %ino_nlinks;
 my %names;
 my %dirsize;
 
-my %fnlen;  
+my %fnlen;
 
 my %hdepth;
 
@@ -78,14 +78,14 @@ while (<>) {
     $bytes += $size;
     $ebytes += $esize;
 
-    $nfiles++; 
+    $nfiles++;
     $numindir{$dir}++;
 
     $hdepth{$depth}++;
 
     my $fnlen = length($f);
     $fnlen{$fnlen}++;
-    
+
     if ($mode =~ /^d/) {
 	# find does depth-first search, so assume we descend, so that on empty dir we "back out" above and &finish_dir.
 	$numindir{$file} = 0;
@@ -139,7 +139,7 @@ for my $ino (keys %names) {
     my @dirs = keys %{$names{$ino}};
     next unless (scalar(@dirs) > 1);
     my $n = 0;
-    my $np = 0;	
+    my $np = 0;
     for (my $i=0; $i<$#dirs; $i++) {
 	for (my $j=$i+1; $j <= $#dirs; $j++) {
 	    $np++;

@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 #include <ctype.h>
 #include <sstream>
@@ -677,7 +677,7 @@ void ObjectStore::Transaction::generate_test_instances(list<ObjectStore::Transac
   t->collection_rmattr(c, "foo");
   t->collection_setattrs(c, m);
   t->collection_rename(c, c2);
-  o.push_back(t);  
+  o.push_back(t);
 }
 
 int ObjectStore::collection_list(const coll_t &c, vector<hobject_t>& o)
@@ -709,7 +709,7 @@ int ObjectStore::collection_list_partial(const coll_t &c, hobject_t start,
 }
 
 int ObjectStore::collection_list_range(const coll_t &c, hobject_t start,
-                                       hobject_t end, vector<hobject_t> *ls)
+				       hobject_t end, vector<hobject_t> *ls)
 {
   vector<hobject_t> go;
   hobject_t gstart(start), gend(end);

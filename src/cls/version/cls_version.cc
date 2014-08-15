@@ -169,7 +169,7 @@ static int cls_version_inc(cls_method_context_t hctx, bufferlist *in, bufferlist
   int ret = read_version(hctx, &objv, true);
   if (ret < 0)
     return ret;
-  
+
   if (!check_conds(op.conds, objv)) {
     return -ECANCELED;
   }
@@ -199,7 +199,7 @@ static int cls_version_check(cls_method_context_t hctx, bufferlist *in, bufferli
   if (ret < 0)
     return ret;
   CLS_LOG(20, "cls_version: read_version %s:%d", objv.tag.c_str(), (int)objv.ver);
-  
+
   if (!check_conds(op.conds, objv)) {
     CLS_LOG(20, "cls_version: failed condition check");
     return -ECANCELED;

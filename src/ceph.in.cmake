@@ -190,7 +190,7 @@ def do_extended_help(parser, args):
 
     def help_for_target(target, partial=None):
         ret, outbuf, outs = json_command(cluster_handle, target=target,
-                                         prefix='get_command_descriptions', 
+                                         prefix='get_command_descriptions',
                                          timeout=10)
         if ret:
             print >> sys.stderr, \
@@ -420,7 +420,7 @@ def new_style_command(parsed_args, cmdargs, target, sigdict, inbuf, verbose):
 def complete(sigdict, args, target):
     """
     Command completion.  Match as much of [args] as possible,
-    and print every possible match separated by newlines. 
+    and print every possible match separated by newlines.
     Return exitcode.
     """
     # XXX this looks a lot like the front of validate_command().  Refactor?

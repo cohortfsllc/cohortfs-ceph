@@ -23,7 +23,7 @@ while read line ; do
   if ! test/vstart_wrapper.sh $line ; then
       code=1
   fi
-  echo "================ STOP ================="  
+  echo "================ STOP ================="
 done <<EOF
 ../qa/workunits/cephtool/test.sh
 EOF

@@ -28,7 +28,7 @@ sub get_status {
     my $cmd = "pgrep $service";
     my $status = get_cmd_op($cmd);
     if ($status =~ /\d+/ ){
-        return 0;
+	return 0;
     }
     return 1;
 }
@@ -92,15 +92,15 @@ sub get_user_info
     my $cmd = "sudo radosgw-admin user create --uid=$rgw_user --display-name=$rgw_user";
     my $cmd_op = get_command_output($cmd);
     if ($cmd_op !~ /keys/){
-        return (0,0);
+	return (0,0);
     }
     my @get_user = (split/,/,$cmd_op);
     foreach (@get_user) {
-        if ($_ =~ /access_key/ ){
-            $get_acc_key = $_;
-        } elsif ($_ =~ /secret_key/ ){
-            $get_sec_key = $_;
-        }
+	if ($_ =~ /access_key/ ){
+	    $get_acc_key = $_;
+	} elsif ($_ =~ /secret_key/ ){
+	    $get_sec_key = $_;
+	}
     }
     my $access_key = $get_acc_key;
     my $acc_key = (split /:/, $access_key)[1];
@@ -117,17 +117,17 @@ sub get_user_info
     return ($acc_key, $sec_key);
 }
 
-# Function that deletes the given user and all associated user data 
+# Function that deletes the given user and all associated user data
 sub purge_data
 {
     my ($rgw_user) = @_;
     my $cmd = "sudo radosgw-admin user rm --uid=$rgw_user --purge-data";
     my $cmd_op = get_command_output($cmd);
     if ($cmd_op !~ /./){
-        print "user $rgw_user deleted\n";
+	print "user $rgw_user deleted\n";
     } else {
-        print "user $rgw_user NOT deleted\n";
-        return 1;
+	print "user $rgw_user NOT deleted\n";
+	return 1;
     }
     return 0;
 }
@@ -135,32 +135,32 @@ sub purge_data
 # Function to get the Ceph and distro info
 sub ceph_os_info
 {
-        my $ceph_v = get_command_output ( "ceph -v" );
-        my @ceph_arr = split(" ",$ceph_v);
-        $ceph_v = "Ceph Version:   $ceph_arr[2]";
-        my $os_distro = get_command_output ( "lsb_release -d" );
-        my @os_arr = split(":",$os_distro);
-        $os_distro = "Linux Flavor:$os_arr[1]";
-        return ($ceph_v, $os_distro);
+	my $ceph_v = get_command_output ( "ceph -v" );
+	my @ceph_arr = split(" ",$ceph_v);
+	$ceph_v = "Ceph Version:   $ceph_arr[2]";
+	my $os_distro = get_command_output ( "lsb_release -d" );
+	my @os_arr = split(":",$os_distro);
+	$os_distro = "Linux Flavor:$os_arr[1]";
+	return ($ceph_v, $os_distro);
 }
 
 # Execute the test case based on the input to the script
 sub create_file {
     my ($file_size, $part) = @_;
     my $cnt;
-    $mytestfilename = "$file_size.$part"; 
+    $mytestfilename = "$file_size.$part";
     $testfileloc = "/tmp/".$mytestfilename;
     if ($file_size == '10Mb'){
-        $cnt = 1;
+	$cnt = 1;
     } elsif ($file_size == '100Mb'){
-        $cnt = 10;
+	$cnt = 10;
     } elsif ($file_size == '500Mb'){
-        $cnt = 50;
+	$cnt = 50;
     } elsif ($file_size == '1Gb'){
-        $cnt = 100;
+	$cnt = 100;
     } elsif ($file_size == '2Gb'){
-        $cnt = 200;
-    } 
+	$cnt = 200;
+    }
     my $ret = system("dd if=/dev/zero of=$testfileloc bs=10485760 count=$cnt");
     if ($ret) { exit 1 };
     return 0;
@@ -174,13 +174,13 @@ sub run_s3
     our ( $access_key, $secret_key ) = get_user_info($user);
     if ( ($access_key) && ($secret_key) ) {
        $s3 = Amazon::S3->new(
-            {
-                aws_access_key_id     => $access_key,
-                aws_secret_access_key => $secret_key,
-                host                  => $hostname,
-                secure                => 0,
-                retry                 => 1,
-            }
+	    {
+		aws_access_key_id     => $access_key,
+		aws_secret_access_key => $secret_key,
+		host		      => $hostname,
+		secure		      => 0,
+		retry		      => 1,
+	    }
       );
     }
 
@@ -197,13 +197,13 @@ sub delete_keys {
    (($bucket->delete_key($_[0])) and return 0) or return 1;
 }
 
-# Readd the file back to bucket 
+# Readd the file back to bucket
 sub readd_file {
     system("dd if=/dev/zero of=/tmp/10MBfile1 bs=10485760 count=1");
     $mytestfilename1 = '10MBfile1';
     print "readding file to bucket: $mytestfilename1\n";
     ((($bucket->add_key_filename( $mytestfilename1, $testfileloc,
-        { content_type => 'text/plain', },
+	{ content_type => 'text/plain', },
     )) and (print "readding file success\n") and return 0) or (return 1));
 }
 
@@ -212,7 +212,7 @@ sub check
 {
     my $state = get_status();
     if ($state) {
-        exit 1;
+	exit 1;
     }
 }
 1

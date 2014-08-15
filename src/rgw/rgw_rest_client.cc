@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #include "rgw_common.h"
 #include "rgw_rest_client.h"
 #include "rgw_auth_s3.h"
@@ -30,34 +32,34 @@ int RGWRESTSimpleRequest::receive_header(void *ptr, size_t len)
       char *l = line;
       char *tok = strsep(&l, " \t:");
       if (tok && l) {
-        while (*l == ' ')
-          l++;
- 
-        if (strcmp(tok, "HTTP") == 0 || strncmp(tok, "HTTP/", 5) == 0) {
-          http_status = atoi(l);
-          if (http_status == 100) /* 100-continue response */
-            continue;
-          status = rgw_http_error_to_errno(http_status);
-        } else {
-          /* convert header field name to upper case  */
-          char *src = tok;
-          char buf[len + 1];
-          size_t i;
-          for (i = 0; i < len && *src; ++i, ++src) {
-            switch (*src) {
-              case '-':
-                buf[i] = '_';
-                break;
-              default:
-                buf[i] = toupper(*src);
-            }
-          }
-          buf[i] = '\0';
-          out_headers[buf] = l;
-          int r = handle_header(buf, l);
-          if (r < 0)
-            return r;
-        }
+	while (*l == ' ')
+	  l++;
+
+	if (strcmp(tok, "HTTP") == 0 || strncmp(tok, "HTTP/", 5) == 0) {
+	  http_status = atoi(l);
+	  if (http_status == 100) /* 100-continue response */
+	    continue;
+	  status = rgw_http_error_to_errno(http_status);
+	} else {
+	  /* convert header field name to upper case  */
+	  char *src = tok;
+	  char buf[len + 1];
+	  size_t i;
+	  for (i = 0; i < len && *src; ++i, ++src) {
+	    switch (*src) {
+	      case '-':
+		buf[i] = '_';
+		break;
+	      default:
+		buf[i] = toupper(*src);
+	    }
+	  }
+	  buf[i] = '\0';
+	  out_headers[buf] = l;
+	  int r = handle_header(buf, l);
+	  if (r < 0)
+	    return r;
+	}
       }
     }
     if (s != end)
@@ -95,8 +97,8 @@ int RGWRESTSimpleRequest::execute(RGWAccessKey& key, const char *method, const c
   map<string, string> meta_map;
   map<string, string> sub_resources;
   rgw_create_s3_canonical_header(method, NULL, NULL, date_str.c_str(),
-                            meta_map, new_url.c_str(), sub_resources,
-                            canonical_header);
+			    meta_map, new_url.c_str(), sub_resources,
+			    canonical_header);
 
   string digest;
   int ret = rgw_get_s3_header_digest(canonical_header, key.key, digest);
@@ -194,7 +196,7 @@ int RGWRESTSimpleRequest::sign_request(RGWAccessKey& key, RGWEnv& env, req_info&
 
   string auth_hdr = "AWS " + key.id + ":" + digest;
   ldout(cct, 15) << "generated auth header: " << auth_hdr << dendl;
-  
+
   m["AUTHORIZATION"] = auth_hdr;
 
   return 0;
@@ -338,10 +340,10 @@ struct grant_type_to_header {
 
 struct grant_type_to_header grants_headers_def[] = {
   { RGW_PERM_FULL_CONTROL, "x-amz-grant-full-control"},
-  { RGW_PERM_READ,         "x-amz-grant-read"},
-  { RGW_PERM_WRITE,        "x-amz-grant-write"},
-  { RGW_PERM_READ_ACP,     "x-amz-grant-read-acp"},
-  { RGW_PERM_WRITE_ACP,    "x-amz-grant-write-acp"},
+  { RGW_PERM_READ,	   "x-amz-grant-read"},
+  { RGW_PERM_WRITE,	   "x-amz-grant-write"},
+  { RGW_PERM_READ_ACP,	   "x-amz-grant-read-acp"},
+  { RGW_PERM_WRITE_ACP,	   "x-amz-grant-write-acp"},
   { 0, NULL}
 };
 
@@ -389,7 +391,7 @@ int RGWRESTStreamWriteRequest::put_obj_init(RGWAccessKey& key, rgw_obj& obj, uin
 
   RGWEnv new_env;
   req_info new_info(cct, &new_env);
-  
+
   string params_str;
   map<string, string>& args = new_info.args.get_params();
   get_params_str(args, params_str);
@@ -474,7 +476,7 @@ int RGWRESTStreamWriteRequest::send_data(void *ptr, size_t len)
   list<bufferlist>::iterator iter = pending_send.begin();
   while (iter != pending_send.end() && len > 0) {
     bufferlist& bl = *iter;
-    
+
     list<bufferlist>::iterator next_iter = iter;
     ++next_iter;
     lock.Unlock();
@@ -553,7 +555,7 @@ int RGWRESTStreamReadRequest::get_obj(RGWAccessKey& key, map<string, string>& ex
 
   RGWEnv new_env;
   req_info new_info(cct, &new_env);
-  
+
   string params_str;
   map<string, string>& args = new_info.args.get_params();
   get_params_str(args, params_str);
@@ -605,8 +607,8 @@ int RGWRESTStreamReadRequest::complete(string& etag, time_t *mtime, map<string, 
       string err;
       long t = strict_strtol(mtime_str.c_str(), 10, &err);
       if (!err.empty()) {
-        ldout(cct, 0) << "ERROR: failed converting mtime (" << mtime_str << ") to int " << dendl;
-        return -EINVAL;
+	ldout(cct, 0) << "ERROR: failed converting mtime (" << mtime_str << ") to int " << dendl;
+	return -EINVAL;
       }
       *mtime = (time_t)t;
     }
@@ -621,13 +623,13 @@ int RGWRESTStreamReadRequest::complete(string& etag, time_t *mtime, map<string, 
       char buf[name.size() + 1];
       char *dest = buf;
       for (; *src; ++src, ++dest) {
-        switch(*src) {
-          case '_':
-            *dest = '-';
-            break;
-          default:
-            *dest = tolower(*src);
-        }
+	switch(*src) {
+	  case '_':
+	    *dest = '-';
+	    break;
+	  default:
+	    *dest = tolower(*src);
+	}
       }
       *dest = '\0';
       attrs[buf] = iter->second;

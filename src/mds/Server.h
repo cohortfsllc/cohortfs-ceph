@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_MDS_SERVER_H
@@ -50,8 +50,8 @@ public:
 
   bool terminating_sessions;
 
-  Server(MDS *m) : 
-    mds(m), 
+  Server(MDS *m) :
+    mds(m),
     mdcache(mds->mdcache), mdlog(mds->mdlog),
     messenger(mds->messenger),
     logger(0),
@@ -75,7 +75,7 @@ public:
 
   Session *get_session(Message *m);
   void handle_client_session(class MClientSession *m);
-  void _session_logged(Session *session, uint64_t state_seq, 
+  void _session_logged(Session *session, uint64_t state_seq,
 		       bool open, version_t pv, interval_set<inodeno_t>& inos,version_t piv);
   version_t prepare_force_open_sessions(map<client_t,entity_inst_t> &cm,
 					map<client_t,uint64_t>& sseqmap);
@@ -135,8 +135,8 @@ public:
 			      ceph_file_layout **layout=NULL,
 			      bool no_lookup=false);
   CDentry* rdlock_path_xlock_dentry(MDRequestRef& mdr, int n,
-                                    set<SimpleLock*>& rdlocks,
-                                    set<SimpleLock*>& wrlocks,
+				    set<SimpleLock*>& rdlocks,
+				    set<SimpleLock*>& wrlocks,
 				    set<SimpleLock*>& xlocks, bool okexist,
 				    bool mustexist, bool alwaysxlock,
 				    ceph_file_layout **layout=NULL);
@@ -174,8 +174,8 @@ public:
 
   // open
   void handle_client_open(MDRequestRef& mdr);
-  void handle_client_openc(MDRequestRef& mdr);  // O_CREAT variant.
-  void do_open_truncate(MDRequestRef& mdr, int cmode);  // O_TRUNC variant.
+  void handle_client_openc(MDRequestRef& mdr);	// O_CREAT variant.
+  void do_open_truncate(MDRequestRef& mdr, int cmode);	// O_TRUNC variant.
 
   // namespace changes
   void handle_client_mknod(MDRequestRef& mdr);

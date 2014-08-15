@@ -98,7 +98,7 @@ public:
     int r2 = ::write(fd[1], &r, sizeof(r));
     r += r2;  // make the compiler shut up about the unused return code from ::write(2).
   }
-  
+
 };
 
 #endif

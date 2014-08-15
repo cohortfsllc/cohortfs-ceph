@@ -27,7 +27,7 @@ void cls_statelog_add(librados::ObjectWriteOperation& op, cls_statelog_entry& en
 }
 
 void cls_statelog_add_prepare_entry(cls_statelog_entry& entry, const string& client_id, const string& op_id,
-                 const string& object, const utime_t& timestamp, uint32_t state, bufferlist& bl)
+		 const string& object, const utime_t& timestamp, uint32_t state, bufferlist& bl)
 {
   entry.client_id = client_id;
   entry.op_id = op_id;
@@ -38,7 +38,7 @@ void cls_statelog_add_prepare_entry(cls_statelog_entry& entry, const string& cli
 }
 
 void cls_statelog_add(librados::ObjectWriteOperation& op, const string& client_id, const string& op_id,
-                 const string& object, const utime_t& timestamp, uint32_t state, bufferlist& bl)
+		 const string& object, const utime_t& timestamp, uint32_t state, bufferlist& bl)
 
 {
   cls_statelog_entry entry;
@@ -73,30 +73,30 @@ class StateLogListCtx : public ObjectOperationCompletion {
   bool *truncated;
 public:
   StateLogListCtx(list<cls_statelog_entry> *_entries, string *_marker, bool *_truncated) :
-                                      entries(_entries), marker(_marker), truncated(_truncated) {}
+				      entries(_entries), marker(_marker), truncated(_truncated) {}
   void handle_completion(int r, bufferlist& outbl) {
     if (r >= 0) {
       cls_statelog_list_ret ret;
       try {
-        bufferlist::iterator iter = outbl.begin();
-        ::decode(ret, iter);
-        if (entries)
+	bufferlist::iterator iter = outbl.begin();
+	::decode(ret, iter);
+	if (entries)
 	  *entries = ret.entries;
-        if (truncated)
-          *truncated = ret.truncated;
-        if (marker)
-          *marker = ret.marker;
+	if (truncated)
+	  *truncated = ret.truncated;
+	if (marker)
+	  *marker = ret.marker;
       } catch (buffer::error& err) {
-        // nothing we can do about it atm
+	// nothing we can do about it atm
       }
     }
   }
 };
 
 void cls_statelog_list(librados::ObjectReadOperation& op,
-                       const string& client_id, const string& op_id, const string& object, /* op_id may be empty, also one of client_id, object*/
-                       const string& in_marker, int max_entries, list<cls_statelog_entry>& entries,
-                       string *out_marker, bool *truncated)
+		       const string& client_id, const string& op_id, const string& object, /* op_id may be empty, also one of client_id, object*/
+		       const string& in_marker, int max_entries, list<cls_statelog_entry>& entries,
+		       string *out_marker, bool *truncated)
 {
   bufferlist inbl;
   cls_statelog_list_op call;

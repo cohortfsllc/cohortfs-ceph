@@ -58,7 +58,7 @@ class QueueNode {
   const QueueNode* next() const { return next_; }
 
  private:
-  // Creates a node with a given element value.  The next pointer is
+  // Creates a node with a given element value.	 The next pointer is
   // set to NULL.
   explicit QueueNode(const E& an_element) : element_(an_element), next_(NULL) {}
 
@@ -86,10 +86,10 @@ class Queue {
       QueueNode<E>* node = head_;
       QueueNode<E>* next = node->next();
       for (; ;) {
-        delete node;
-        node = next;
-        if (node == NULL) break;
-        next = node->next();
+	delete node;
+	node = next;
+	if (node == NULL) break;
+	next = node->next();
       }
 
       // 2. Resets the member variables.
@@ -147,7 +147,7 @@ class Queue {
   }
 
   // Applies a function/functor on each element of the queue, and
-  // returns the result in a new queue.  The original queue is not
+  // returns the result in a new queue.	 The original queue is not
   // affected.
   template <typename F>
   Queue* Map(F function) const {
@@ -160,13 +160,13 @@ class Queue {
   }
 
  private:
-  QueueNode<E>* head_;  // The first node of the queue.
-  QueueNode<E>* last_;  // The last node of the queue.
-  size_t size_;  // The number of elements in the queue.
+  QueueNode<E>* head_;	// The first node of the queue.
+  QueueNode<E>* last_;	// The last node of the queue.
+  size_t size_;	 // The number of elements in the queue.
 
   // We disallow copying a queue.
   Queue(const Queue&);
   const Queue& operator = (const Queue&);
 };
 
-#endif  // GTEST_SAMPLES_SAMPLE3_INL_H_
+#endif	// GTEST_SAMPLES_SAMPLE3_INL_H_

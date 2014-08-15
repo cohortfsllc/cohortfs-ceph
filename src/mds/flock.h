@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 #ifndef CEPH_MDS_FLOCK_H
 #define CEPH_MDS_FLOCK_H
@@ -38,7 +38,7 @@ inline bool operator==(ceph_filelock& l, ceph_filelock& r) {
 
 class ceph_lock_state_t {
 public:
-  multimap<uint64_t, ceph_filelock> held_locks;    // current locks
+  multimap<uint64_t, ceph_filelock> held_locks;	   // current locks
   multimap<uint64_t, ceph_filelock> waiting_locks; // locks waiting for other locks
   // both of the above are keyed by starting offset
   map<client_t, int> client_held_lock_counts;
@@ -90,14 +90,14 @@ public:
    * @param activated_locks A return parameter, holding activated wait locks.
    */
   void remove_lock(ceph_filelock removal_lock,
-                   list<ceph_filelock>& activated_locks);
+		   list<ceph_filelock>& activated_locks);
 
   bool remove_all_from(client_t client);
 private:
   /**
    * Adjust old locks owned by a single process so that process can set
    * a new lock of different type. Handle any changes needed to the old locks
-   * (and the new lock) so that once the new lock is inserted into the 
+   * (and the new lock) so that once the new lock is inserted into the
    * held_locks list the process has a coherent, non-fragmented set of lock
    * ranges. Make sure any overlapping locks are combined, trimmed, and removed
    * as needed.
@@ -109,27 +109,27 @@ private:
    *
    * @param new_lock The new lock the process has requested.
    * @param old_locks list of all locks currently held by same
-   *    client/process that overlap new_lock.
+   *	client/process that overlap new_lock.
    * @param neighbor_locks locks owned by same process that neighbor new_lock on
-   *    left or right side.
+   *	left or right side.
    */
   void adjust_locks(list<multimap<uint64_t, ceph_filelock>::iterator> old_locks,
-                    ceph_filelock& new_lock,
-                    list<multimap<uint64_t, ceph_filelock>::iterator>
-                      neighbor_locks);
+		    ceph_filelock& new_lock,
+		    list<multimap<uint64_t, ceph_filelock>::iterator>
+		      neighbor_locks);
 
   //this won't reset the counter map value, do that yourself
   void remove_all_from(client_t client,
-                       multimap<uint64_t, ceph_filelock>& locks);
+		       multimap<uint64_t, ceph_filelock>& locks);
 
   //get last lock prior to start position
   multimap<uint64_t, ceph_filelock>::iterator
   get_lower_bound(uint64_t start,
-                  multimap<uint64_t, ceph_filelock>& lock_map);
+		  multimap<uint64_t, ceph_filelock>& lock_map);
   //get latest-starting lock that goes over the byte "end"
   multimap<uint64_t, ceph_filelock>::iterator
   get_last_before(uint64_t end,
-                  multimap<uint64_t, ceph_filelock>& lock_map);
+		  multimap<uint64_t, ceph_filelock>& lock_map);
 
   /*
    * See if an iterator's lock covers any of the same bounds as a given range
@@ -139,9 +139,9 @@ private:
    */
   bool share_space(multimap<uint64_t, ceph_filelock>::iterator& iter,
 		   uint64_t start, uint64_t end);
-  
+
   bool share_space(multimap<uint64_t, ceph_filelock>::iterator& iter,
-                   ceph_filelock &lock) {
+		   ceph_filelock &lock) {
     uint64_t end = lock.start;
     if (lock.length) {
       end += lock.length - 1;
@@ -157,12 +157,12 @@ private:
    * Returns: true if at least one lock overlaps.
    */
   bool get_overlapping_locks(ceph_filelock& lock,
-                             list<multimap<uint64_t,
-                                 ceph_filelock>::iterator> & overlaps,
-                             list<multimap<uint64_t,
-                                 ceph_filelock>::iterator> *self_neighbors);
+			     list<multimap<uint64_t,
+			     ceph_filelock>::iterator> & overlaps,
+			     list<multimap<uint64_t,
+			     ceph_filelock>::iterator> *self_neighbors);
 
-  
+
   bool get_overlapping_locks(ceph_filelock& lock,
 			     list<multimap<uint64_t, ceph_filelock>::iterator>& overlaps) {
     return get_overlapping_locks(lock, overlaps, NULL);
@@ -175,24 +175,24 @@ private:
    * Returns: true if at least one waiting_lock overlaps
    */
   bool get_waiting_overlaps(ceph_filelock& lock,
-                            list<multimap<uint64_t,
-                                ceph_filelock>::iterator>& overlaps);
+			    list<multimap<uint64_t,
+				ceph_filelock>::iterator>& overlaps);
   /*
    * split a list of locks up by whether they're owned by same
    * process as given lock
    * owner: the owning lock
    * locks: the list of locks (obtained from get_overlapping_locks, probably)
-   *        Will have all locks owned by owner removed
+   *	    Will have all locks owned by owner removed
    * owned_locks: an empty list, to be filled with the locks owned by owner
    */
   void split_by_owner(ceph_filelock& owner,
 		      list<multimap<uint64_t,
-		          ceph_filelock>::iterator> & locks,
+			  ceph_filelock>::iterator> & locks,
 		      list<multimap<uint64_t,
-		          ceph_filelock>::iterator> & owned_locks);
+			  ceph_filelock>::iterator> & owned_locks);
 
   ceph_filelock *contains_exclusive_lock(list<multimap<uint64_t,
-                                         ceph_filelock>::iterator>& locks);
+					 ceph_filelock>::iterator>& locks);
 
 public:
   void encode(bufferlist& bl) const {
@@ -224,13 +224,13 @@ inline ostream& operator<<(ostream& out, ceph_lock_state_t& l) {
       << "\n client_waiting_lock_counts -- " << l.client_waiting_lock_counts
       << "\n held_locks -- ";
     for (multimap<uint64_t, ceph_filelock>::iterator iter = l.held_locks.begin();
-         iter != l.held_locks.end();
-         ++iter)
+	 iter != l.held_locks.end();
+	 ++iter)
       out << iter->second;
     out << "\n waiting_locks -- ";
     for (multimap<uint64_t, ceph_filelock>::iterator iter =l.waiting_locks.begin();
-         iter != l.waiting_locks.end();
-         ++iter)
+	 iter != l.waiting_locks.end();
+	 ++iter)
       out << iter->second << "\n";
   return out;
 }

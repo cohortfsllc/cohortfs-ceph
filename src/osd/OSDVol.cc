@@ -1033,7 +1033,7 @@ int OSDVol::do_tmapup(OpContext *ctx, bufferlist::iterator& bp, OSDOp& osd_op)
       last_in_key = key;
 
       dout(10) << "tmapup op " << (int)op << " key " << key << dendl;
-	  
+
       // skip existing intervening keys
       bool key_exists = false;
       while (have_next && !key_exists) {
@@ -1913,7 +1913,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 
 
       // -- object attrs --
-      
+
     case CEPH_OSD_OP_SETXATTR:
       ++ctx->num_write;
       {
@@ -2184,7 +2184,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	for (map<string, pair<bufferlist, int> >::iterator i = assertions.begin();
 	     i != assertions.end();
 	     ++i) {
-	  bufferlist &bl = out.count(i->first) ? 
+	  bufferlist &bl = out.count(i->first) ?
 	    out[i->first] : empty;
 	  switch (i->second.second) {
 	  case CEPH_OSD_CMPXATTR_OP_EQ:

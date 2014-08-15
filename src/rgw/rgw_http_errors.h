@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #ifndef RGW_HTTP_ERRORS_H_
 #define RGW_HTTP_ERRORS_H_
 
@@ -128,11 +130,11 @@ static inline int rgw_http_error_to_errno(int http_err)
     case 401:
       return -EPERM;
     case 403:
-        return -EACCES;
+	return -EACCES;
     case 404:
-        return -ENOENT;
+	return -ENOENT;
     default:
-        return -EIO;
+	return -EIO;
   }
 
   return 0; /* unreachable */

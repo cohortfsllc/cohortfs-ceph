@@ -10,7 +10,7 @@ recommend** overridding some of the defaults. Specifically, we recommend setting
 a pool's replica size and overriding the default number of placement groups. You
 can specifically set these values when running `pool`_ commands. You can also
 override the defaults by adding new ones in the ``[global]`` section of  your
-Ceph configuration file. 
+Ceph configuration file.
 
 
 .. literalinclude:: pool-pg.conf
@@ -25,32 +25,32 @@ Ceph configuration file.
 :Default: ``65536``
 
 
-``mon pg create interval`` 
+``mon pg create interval``
 
-:Description: Number of seconds between PG creation in the same 
+:Description: Number of seconds between PG creation in the same
               Ceph OSD Daemon.
 
 :Type: Float
 :Default: ``30.0``
 
 
-``mon pg stuck threshold`` 
+``mon pg stuck threshold``
 
-:Description: Number of seconds after which PGs can be considered as 
+:Description: Number of seconds after which PGs can be considered as
               being stuck.
 
 :Type: 32-bit Integer
 :Default: ``300``
 
 
-``osd pg bits`` 
+``osd pg bits``
 
 :Description: Placement group bits per Ceph OSD Daemon.
 :Type: 32-bit Integer
-:Default: ``6`` 
+:Default: ``6``
 
 
-``osd pgp bits`` 
+``osd pgp bits``
 
 :Description: The number of bits per Ceph OSD Daemon for PGPs.
 :Type: 32-bit Integer
@@ -59,66 +59,66 @@ Ceph configuration file.
 
 ``osd crush chooseleaf type``
 
-:Description: The bucket type to use for ``chooseleaf`` in a CRUSH rule. Uses 
+:Description: The bucket type to use for ``chooseleaf`` in a CRUSH rule. Uses
               ordinal rank rather than name.
 
 :Type: 32-bit Integer
 :Default: ``1``. Typically a host containing one or more Ceph OSD Daemons.
 
 
-``osd pool default crush replicated ruleset`` 
+``osd pool default crush replicated ruleset``
 
 :Description: The default CRUSH ruleset to use when creating a replicated pool.
 :Type: 8-bit Integer
 :Default: ``0``
 
 
-``osd pool erasure code stripe width`` 
+``osd pool erasure code stripe width``
 
 :Description: Sets the desired size, in bytes, of an object stripe on every
-              erasure coded pools. Every object if size S will be stored as 
+              erasure coded pools. Every object if size S will be stored as
               N stripes and each stripe will be encoded/decoded individually.
 
 :Type: Unsigned 32-bit Integer
-:Default: ``4096`` 
+:Default: ``4096``
 
 
-``osd pool default size`` 
+``osd pool default size``
 
-:Description: Sets the number of replicas for objects in the pool. The default 
-              value is the same as 
+:Description: Sets the number of replicas for objects in the pool. The default
+              value is the same as
               ``ceph osd pool set {pool-name} size {size}``.
 
 :Type: 32-bit Integer
-:Default: ``2`` 
+:Default: ``2``
 
 
 ``osd pool default min size``
 
-:Descrption: Sets the minimum number of written replicas for objects in the 
-             pool in order to acknowledge a write operation to the client. 
-             If minimum is not met, Ceph will not acknowledge the write to the 
-             client. This setting ensures a minimum number of replicas when 
+:Descrption: Sets the minimum number of written replicas for objects in the
+             pool in order to acknowledge a write operation to the client.
+             If minimum is not met, Ceph will not acknowledge the write to the
+             client. This setting ensures a minimum number of replicas when
              operating in ``degraded`` mode.
 
 :Type: 32-bit Integer
-:Default: ``0``, which means no particular minimum. If ``0``, 
+:Default: ``0``, which means no particular minimum. If ``0``,
           minimum is ``size - (size / 2)``.
 
 
-``osd pool default pg num`` 
+``osd pool default pg num``
 
-:Description: The default number of placement groups for a pool. The default 
+:Description: The default number of placement groups for a pool. The default
               value is the same as ``pg_num`` with ``mkpool``.
 
 :Type: 32-bit Integer
-:Default: ``8`` 
+:Default: ``8``
 
 
-``osd pool default pgp num`` 
+``osd pool default pgp num``
 
-:Description: The default number of placement groups for placement for a pool. 
-              The default value is the same as ``pgp_num`` with ``mkpool``. 
+:Description: The default number of placement groups for placement for a pool.
+              The default value is the same as ``pgp_num`` with ``mkpool``.
               PG and PGP should be equal (for now).
 
 :Type: 32-bit Integer
@@ -127,14 +127,14 @@ Ceph configuration file.
 
 ``osd pool default flags``
 
-:Description: The default flags for new pools. 
+:Description: The default flags for new pools.
 :Type: 32-bit Integer
 :Default: ``0``
 
 
 ``osd max pgls``
 
-:Description: The maximum number of placement groups to list. A client 
+:Description: The maximum number of placement groups to list. A client
               requesting a large number can tie up the Ceph OSD Daemon.
 
 :Type: Unsigned 64-bit Integer
@@ -142,9 +142,9 @@ Ceph configuration file.
 :Note: Default should be fine.
 
 
-``osd min pg log entries`` 
+``osd min pg log entries``
 
-:Description: The minimum number of placement group logs to maintain 
+:Description: The minimum number of placement group logs to maintain
               when trimming log files.
 
 :Type: 32-bit Int Unsigned

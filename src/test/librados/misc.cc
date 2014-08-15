@@ -43,7 +43,7 @@ TEST_F(LibRadosMisc, ClusterFSID) {
   char fsid[37];
   ASSERT_EQ(-ERANGE, rados_cluster_fsid(cluster, fsid, sizeof(fsid) - 1));
   ASSERT_EQ(sizeof(fsid) - 1,
-            (size_t)rados_cluster_fsid(cluster, fsid, sizeof(fsid)));
+	    (size_t)rados_cluster_fsid(cluster, fsid, sizeof(fsid)));
 }
 
 TEST_F(LibRadosMiscPP, WaitOSDMapPP) {
@@ -221,7 +221,7 @@ TEST_F(LibRadosMiscPP, TmapUpdateMisorderedPutPP) {
   ::encode(string("aval"), bl);
   ::encode(string("c"), bl);
   ::encode(string("cval"), bl);
-  bufferlist orig = bl;  // tmap_put steals bl content
+  bufferlist orig = bl;	 // tmap_put steals bl content
   ASSERT_EQ(0, ioctx.tmap_put("foo", bl));
 
   // check

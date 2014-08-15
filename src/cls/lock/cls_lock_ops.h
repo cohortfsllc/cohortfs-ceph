@@ -140,7 +140,7 @@ struct cls_lock_get_info_reply
     ::decode(lockers, bl);
     uint8_t t;
     ::decode(t, bl);
-    lock_type = (ClsLockType)t; 
+    lock_type = (ClsLockType)t;
     ::decode(tag, bl);
     DECODE_FINISH(bl);
   }

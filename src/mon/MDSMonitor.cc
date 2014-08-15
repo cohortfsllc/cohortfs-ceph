@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -84,7 +84,7 @@ void MDSMonitor::create_initial()
 {
   dout(10) << "create_initial" << dendl;
 #if 0
-// XXX who calls this?  what volume do i use?  does this even make sense?
+// XXX who calls this?	what volume do i use?  does this even make sense?
   create_new_fs(pending_mdsmap, MDS_METADATA_POOL, MDS_DATA_POOL);
 #endif
 }
@@ -150,7 +150,7 @@ version_t MDSMonitor::get_trim_to()
       g_conf->mon_mds_force_trim_to < (int)get_last_committed()) {
     floor = g_conf->mon_mds_force_trim_to;
     dout(10) << __func__ << " explicit mon_mds_force_trim_to = "
-             << floor << dendl;
+	     << floor << dendl;
   }
 
   unsigned max = g_conf->mon_max_mdsmap_epochs;
@@ -176,10 +176,10 @@ bool MDSMonitor::preprocess_query(PaxosServiceMessage *m)
   dout(10) << "preprocess_query " << *m << " from " << m->get_orig_source_inst() << dendl;
 
   switch (m->get_type()) {
-    
+
   case MSG_MDS_BEACON:
     return preprocess_beacon(static_cast<MMDSBeacon*>(m));
-    
+
   case MSG_MON_COMMAND:
     return preprocess_command(static_cast<MMonCommand*>(m));
 
@@ -199,7 +199,7 @@ void MDSMonitor::_note_beacon(MMDSBeacon *m)
   version_t seq = m->get_seq();
 
   dout(15) << "_note_beacon " << *m << " noting time" << dendl;
-  last_beacon[gid].stamp = ceph_clock_now(g_ceph_context);  
+  last_beacon[gid].stamp = ceph_clock_now(g_ceph_context);
   last_beacon[gid].seq = seq;
 }
 
@@ -284,7 +284,7 @@ bool MDSMonitor::preprocess_beacon(MMDSBeacon *m)
     goto out;
   }
   // is there a state change here?
-  if (info.state != state) {    
+  if (info.state != state) {
     // legal state change?
     if ((info.state == MDSMap::STATE_STANDBY ||
 	 info.state == MDSMap::STATE_STANDBY_REPLAY ||
@@ -293,7 +293,7 @@ bool MDSMonitor::preprocess_beacon(MMDSBeacon *m)
 	       << " -> " << ceph_mds_state_name(state) << ")" << dendl;
       goto ignore;
     }
-    
+
     if (info.state == MDSMap::STATE_STANDBY &&
 	(state == MDSMap::STATE_STANDBY_REPLAY ||
 	    state == MDSMap::STATE_ONESHOT_REPLAY) &&
@@ -302,7 +302,7 @@ bool MDSMonitor::preprocess_beacon(MMDSBeacon *m)
 	     pending_mdsmap.get_state(m->get_standby_for_rank()) < MDSMap::STATE_ACTIVE))) {
       dout(10) << "mds_beacon can't standby-replay mds." << m->get_standby_for_rank() << " at this time (cluster degraded, or mds not active)" << dendl;
       dout(10) << "pending_mdsmap.is_degraded()==" << pending_mdsmap.is_degraded()
-          << " rank state: " << ceph_mds_state_name(pending_mdsmap.get_state(m->get_standby_for_rank())) << dendl;
+	  << " rank state: " << ceph_mds_state_name(pending_mdsmap.get_state(m->get_standby_for_rank())) << dendl;
       goto ignore;
     }
     _note_beacon(m);
@@ -315,7 +315,7 @@ bool MDSMonitor::preprocess_beacon(MMDSBeacon *m)
   mon->send_reply(m,
 		  new MMDSBeacon(mon->monmap->fsid, m->get_global_id(), m->get_name(),
 				 mdsmap.get_epoch(), state, seq));
-  
+
   // done
  out:
   m->put();
@@ -326,7 +326,7 @@ bool MDSMonitor::preprocess_offload_targets(MMDSLoadTargets* m)
 {
   dout(10) << "preprocess_offload_targets " << *m << " from " << m->get_orig_source() << dendl;
   uint64_t gid;
-  
+
   // check privileges, ignore message if fails
   MonSession *session = m->get_session();
   if (!session)
@@ -355,7 +355,7 @@ bool MDSMonitor::prepare_update(PaxosServiceMessage *m)
   dout(7) << "prepare_update " << *m << dendl;
 
   switch (m->get_type()) {
-    
+
   case MSG_MDS_BEACON:
     return prepare_beacon(static_cast<MMDSBeacon*>(m));
 
@@ -364,7 +364,7 @@ bool MDSMonitor::prepare_update(PaxosServiceMessage *m)
 
   case MSG_MDS_OFFLOAD_TARGETS:
     return prepare_offload_targets(static_cast<MMDSLoadTargets*>(m));
-  
+
   default:
     assert(0);
     m->put();
@@ -390,16 +390,16 @@ bool MDSMonitor::prepare_beacon(MMDSBeacon *m)
     if (g_conf->mds_enforce_unique_name) {
       bool failed_mds = false;
       while (uint64_t existing = pending_mdsmap.find_mds_gid_by_name(m->get_name())) {
-        if (!mon->osdmon()->is_writeable()) {
-          mon->osdmon()->wait_for_writeable(new C_RetryMessage(this, m));
-          return false;
-        }
+	if (!mon->osdmon()->is_writeable()) {
+	  mon->osdmon()->wait_for_writeable(new C_RetryMessage(this, m));
+	  return false;
+	}
 	fail_mds_gid(existing);
-        failed_mds = true;
+	failed_mds = true;
       }
       if (failed_mds) {
-        assert(mon->osdmon()->is_writeable());
-        request_proposal(mon->osdmon());
+	assert(mon->osdmon()->is_writeable());
+	request_proposal(mon->osdmon());
       }
     }
 
@@ -417,11 +417,11 @@ bool MDSMonitor::prepare_beacon(MMDSBeacon *m)
     if (!info.standby_for_name.empty()) {
       const MDSMap::mds_info_t *leaderinfo = mdsmap.find_by_name(info.standby_for_name);
       if (leaderinfo && (leaderinfo->rank >= 0)) {
-        info.standby_for_rank =
-            mdsmap.find_by_name(info.standby_for_name)->rank;
-        if (mdsmap.is_followable(info.standby_for_rank)) {
-          info.state = MDSMap::STATE_STANDBY_REPLAY;
-        }
+	info.standby_for_rank =
+	    mdsmap.find_by_name(info.standby_for_name)->rank;
+	if (mdsmap.is_followable(info.standby_for_rank)) {
+	  info.state = MDSMap::STATE_STANDBY_REPLAY;
+	}
       }
     }
 
@@ -445,7 +445,7 @@ bool MDSMonitor::prepare_beacon(MMDSBeacon *m)
       dout(10) << "prepare_beacon clearing laggy flag on " << addr << dendl;
       info.clear_laggy();
     }
-  
+
     dout(10) << "prepare_beacon mds." << info.rank
 	     << " " << ceph_mds_state_name(info.state)
 	     << " -> " << ceph_mds_state_name(state)
@@ -459,33 +459,33 @@ bool MDSMonitor::prepare_beacon(MMDSBeacon *m)
       last_beacon.erase(gid);
     } else if (state == MDSMap::STATE_STANDBY_REPLAY) {
       if (m->get_standby_for_rank() == MDSMap::MDS_STANDBY_NAME) {
-        /* convert name to rank. If we don't have it, do nothing. The
+	/* convert name to rank. If we don't have it, do nothing. The
 	 mds will stay in standby and keep requesting the state change */
-        dout(20) << "looking for mds " << m->get_standby_for_name()
-                  << " to STANDBY_REPLAY for" << dendl;
-        const MDSMap::mds_info_t *found_mds = NULL;
-        if ((found_mds = mdsmap.find_by_name(m->get_standby_for_name())) &&
-            (found_mds->rank >= 0) &&
+	dout(20) << "looking for mds " << m->get_standby_for_name()
+		  << " to STANDBY_REPLAY for" << dendl;
+	const MDSMap::mds_info_t *found_mds = NULL;
+	if ((found_mds = mdsmap.find_by_name(m->get_standby_for_name())) &&
+	    (found_mds->rank >= 0) &&
 	    mdsmap.is_followable(found_mds->rank)) {
-          info.standby_for_rank = found_mds->rank;
-          dout(10) <<" found mds " << m->get_standby_for_name()
-                       << "; it has rank " << info.standby_for_rank << dendl;
-          info.state = MDSMap::STATE_STANDBY_REPLAY;
-          info.state_seq = seq;
-        } else {
-          m->put();
-          return false;
-        }
+	  info.standby_for_rank = found_mds->rank;
+	  dout(10) <<" found mds " << m->get_standby_for_name()
+		       << "; it has rank " << info.standby_for_rank << dendl;
+	  info.state = MDSMap::STATE_STANDBY_REPLAY;
+	  info.state_seq = seq;
+	} else {
+	  m->put();
+	  return false;
+	}
       } else if (m->get_standby_for_rank() >= 0 &&
 		 mdsmap.is_followable(m->get_standby_for_rank())) {
-        /* switch to standby-replay for this MDS*/
-        info.state = MDSMap::STATE_STANDBY_REPLAY;
-        info.state_seq = seq;
-        info.standby_for_rank = m->get_standby_for_rank();
+	/* switch to standby-replay for this MDS*/
+	info.state = MDSMap::STATE_STANDBY_REPLAY;
+	info.state_seq = seq;
+	info.standby_for_rank = m->get_standby_for_rank();
       } else { //it's a standby for anybody, and is already in the list
-        assert(pending_mdsmap.get_mds_info().count(info.global_id));
-        m->put();
-        return false;
+	assert(pending_mdsmap.get_mds_info().count(info.global_id));
+	m->put();
+	return false;
       }
     } else {
       info.state = state;
@@ -495,7 +495,7 @@ bool MDSMonitor::prepare_beacon(MMDSBeacon *m)
 
   dout(7) << "prepare_beacon pending map now:" << dendl;
   print_map(pending_mdsmap);
-  
+
   wait_for_finished_proposal(new C_Updated(this, m));
 
   return true;
@@ -625,7 +625,7 @@ bool MDSMonitor::preprocess_command(MMonCommand *m)
       } else {
 	p->print(ds);
 	r = 0;
-      } 
+      }
       if (r == 0) {
 	rdata.append(ds);
 	ss << "dumped mdsmap epoch " << p->get_epoch();
@@ -812,7 +812,7 @@ bool MDSMonitor::prepare_command(MMonCommand *m)
       goto out;
     if (!pending_mdsmap.is_active(who)) {
       r = -EEXIST;
-      ss << "mds." << who << " not active (" 
+      ss << "mds." << who << " not active ("
 	 << ceph_mds_state_name(pending_mdsmap.get_state(who)) << ")";
     } else if ((pending_mdsmap.get_root() == who ||
 		pending_mdsmap.get_tableserver() == who) &&
@@ -850,7 +850,7 @@ bool MDSMonitor::prepare_command(MMonCommand *m)
     int64_t n = 0;
     if (!cmd_getval(g_ceph_context, cmdmap, "val", val))
       goto out;
-    // we got a string.  see if it contains an int.
+    // we got a string.	 see if it contains an int.
     n = strict_strtoll(val.c_str(), 10, &interr);
     if (var == "max_mds") {
       // NOTE: see also "mds set_max_mds", which can modify the same field.
@@ -903,7 +903,7 @@ bool MDSMonitor::prepare_command(MMonCommand *m)
       e = epochnum;
 
     if (pending_mdsmap.epoch == e) {
-      map.epoch = pending_mdsmap.epoch;  // make sure epoch is correct
+      map.epoch = pending_mdsmap.epoch;	 // make sure epoch is correct
       pending_mdsmap = map;
       string rs = "set mds map";
       wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs,
@@ -917,14 +917,14 @@ bool MDSMonitor::prepare_command(MMonCommand *m)
     int64_t gid;
     if (!cmd_getval(g_ceph_context, cmdmap, "gid", gid)) {
       ss << "error parsing 'gid' value '"
-         << cmd_vartype_stringify(cmdmap["gid"]) << "'";
+	 << cmd_vartype_stringify(cmdmap["gid"]) << "'";
       r = -EINVAL;
       goto out;
     }
     int64_t state;
     if (!cmd_getval(g_ceph_context, cmdmap, "state", state)) {
       ss << "error parsing 'state' string value '"
-         << cmd_vartype_stringify(cmdmap["state"]) << "'";
+	 << cmd_vartype_stringify(cmdmap["state"]) << "'";
       r = -EINVAL;
       goto out;
     }
@@ -953,7 +953,7 @@ bool MDSMonitor::prepare_command(MMonCommand *m)
     int64_t gid;
     if (!cmd_getval(g_ceph_context, cmdmap, "gid", gid)) {
       ss << "error parsing 'gid' value '"
-         << cmd_vartype_stringify(cmdmap["gid"]) << "'";
+	 << cmd_vartype_stringify(cmdmap["gid"]) << "'";
       r = -EINVAL;
       goto out;
     }
@@ -979,7 +979,7 @@ bool MDSMonitor::prepare_command(MMonCommand *m)
     int64_t w;
     if (!cmd_getval(g_ceph_context, cmdmap, "who", w)) {
       ss << "error parsing 'who' value '"
-         << cmd_vartype_stringify(cmdmap["who"]) << "'";
+	 << cmd_vartype_stringify(cmdmap["who"]) << "'";
       r = -EINVAL;
       goto out;
     }
@@ -1011,7 +1011,7 @@ bool MDSMonitor::prepare_command(MMonCommand *m)
     int64_t f;
     if (!cmd_getval(g_ceph_context, cmdmap, "feature", f)) {
       ss << "error parsing feature value '"
-         << cmd_vartype_stringify(cmdmap["feature"]) << "'";
+	 << cmd_vartype_stringify(cmdmap["feature"]) << "'";
       r = -EINVAL;
       goto out;
     }
@@ -1027,7 +1027,7 @@ bool MDSMonitor::prepare_command(MMonCommand *m)
     int64_t f;
     if (!cmd_getval(g_ceph_context, cmdmap, "feature", f)) {
       ss << "error parsing feature value '"
-         << cmd_vartype_stringify(cmdmap["feature"]) << "'";
+	 << cmd_vartype_stringify(cmdmap["feature"]) << "'";
       r = -EINVAL;
       goto out;
     }
@@ -1052,14 +1052,14 @@ bool MDSMonitor::prepare_command(MMonCommand *m)
     }
     if (!cmd_getval(g_ceph_context, cmdmap, "data", data)) {
       ss << "error parsing 'data' value '"
-         << cmd_vartype_stringify(cmdmap["data"]) << "'";
+	 << cmd_vartype_stringify(cmdmap["data"]) << "'";
       r = -EINVAL;
       goto out;
     }
     string sure;
     cmd_getval(g_ceph_context, cmdmap, "sure", sure);
     if (sure != "--yes-i-really-mean-it") {
-      ss << "this is DANGEROUS and will wipe out the mdsmap's fs, and may clobber data in the new volumes you specify.  add --yes-i-really-mean-it if you do.";
+      ss << "this is DANGEROUS and will wipe out the mdsmap's fs, and may clobber data in the new volumes you specify.	add --yes-i-really-mean-it if you do.";
       r = -EPERM;
       goto out;
     }
@@ -1135,7 +1135,7 @@ void MDSMonitor::tick()
   if (!is_active()) return;
 
   dout(10) << mdsmap << dendl;
-  
+
   bool do_propose = false;
 
   if (!mon->is_leader()) return;
@@ -1153,7 +1153,7 @@ void MDSMonitor::tick()
 
     MDSMap::mds_info_t& info = pending_mdsmap.mds_info[newgid];
     dout(1) << "adding standby " << info.addr << " as mds." << mds << dendl;
-    
+
     info.rank = mds;
     if (pending_mdsmap.stopped.count(mds)) {
       info.state = MDSMap::STATE_STARTING;
@@ -1195,7 +1195,7 @@ void MDSMonitor::tick()
       utime_t since = p->second.stamp;
       uint64_t seq = p->second.seq;
       ++p;
-      
+
       if (pending_mdsmap.mds_info.count(gid) == 0) {
 	// clean it out
 	last_beacon.erase(gid);
@@ -1210,7 +1210,7 @@ void MDSMonitor::tick()
       dout(10) << "no beacon from " << gid << " " << info.addr << " mds." << info.rank << "." << info.inc
 	       << " " << ceph_mds_state_name(info.state)
 	       << " since " << since << dendl;
-      
+
       // are we in?
       // and is there a non-laggy standby that can take over for us?
       uint64_t sgid;
@@ -1321,7 +1321,7 @@ void MDSMonitor::tick()
 	 j != pending_mdsmap.mds_info.end();
 	 ++j) {
       MDSMap::mds_info_t& info = j->second;
-      
+
       if (info.state != MDSMap::STATE_STANDBY)
 	continue;
 
@@ -1330,7 +1330,7 @@ void MDSMonitor::tick()
        * See if we can find it somebody to shadow
        */
       dout(20) << "gid " << j->first << " is standby and following nobody" << dendl;
-      
+
       // standby for someone specific?
       if (info.standby_for_rank >= 0) {
 	if (pending_mdsmap.is_followable(info.standby_for_rank) &&
@@ -1346,7 +1346,7 @@ void MDSMonitor::tick()
 	if (i->second.rank >= 0 && pending_mdsmap.is_followable(i->second.rank)) {
 	  if ((info.standby_for_name.length() && info.standby_for_name != i->second.name) ||
 	      info.standby_for_rank >= 0)
-	    continue;   // we're supposed to follow someone else
+	    continue;	// we're supposed to follow someone else
 
 	  if (info.standby_for_rank == MDSMap::MDS_STANDBY_ANY &&
 	      try_standby_replay(info, i->second)) {
@@ -1381,7 +1381,7 @@ bool MDSMonitor::try_standby_replay(MDSMap::mds_info_t& finfo, MDSMap::mds_info_
 
   // hey, we found an MDS without a standby. Pair them!
   finfo.standby_for_rank = ainfo.rank;
-  dout(10) << "  setting to shadow mds rank " << finfo.standby_for_rank << dendl;
+  dout(10) << "	 setting to shadow mds rank " << finfo.standby_for_rank << dendl;
   finfo.state = MDSMap::STATE_STANDBY_REPLAY;
   return true;
 }

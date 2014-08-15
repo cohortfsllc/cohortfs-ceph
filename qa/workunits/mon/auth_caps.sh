@@ -48,7 +48,7 @@ read_ops() {
   has_exec=1
   ( echo $caps | grep 'r' ) || has_read=0
   ( echo $caps | grep 'x' ) || has_exec=0
-  
+
   if [[ "$caps" == "all" ]]; then
     has_read=1
     has_exec=1
@@ -60,7 +60,7 @@ read_ops() {
   fi
 
   args="--id $caps --key ${keymap[$caps]}"
- 
+
   expect $ret ceph auth get client.admin $args
   expect $ret ceph auth get-key client.admin $args
   expect $ret ceph auth export $args

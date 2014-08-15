@@ -51,7 +51,7 @@ bool FileStoreDiff::diff_attrs(std::map<std::string,bufferptr>& b,
   for (; b_it != b.end(); ++b_it, ++a_it) {
     if (b_it->first != a_it->first) {
       dout(0) << "diff_attrs name mismatch (verify: " << b_it->first
-          << ", store: " << a_it->first << ")" << dendl;
+	  << ", store: " << a_it->first << ")" << dendl;
       ret = true;
       continue;
     }
@@ -74,7 +74,7 @@ static bool diff_omap(std::map<std::string,bufferlist>& b,
   for (; b_it != b.end(); ++b_it, ++a_it) {
     if (b_it->first != a_it->first) {
       dout(0) << "diff_attrs name mismatch (verify: " << b_it->first
-          << ", store: " << a_it->first << ")" << dendl;
+	  << ", store: " << a_it->first << ")" << dendl;
       ret = true;
       continue;
     }
@@ -94,31 +94,31 @@ bool FileStoreDiff::diff_objects_stat(struct stat& a, struct stat& b)
 
   if (a.st_uid != b.st_uid) {
     dout(0) << "diff_objects_stat uid mismatch (A: "
-        << a.st_uid << " != B: " << b.st_uid << ")" << dendl;
+	<< a.st_uid << " != B: " << b.st_uid << ")" << dendl;
     ret = true;
   }
 
   if (a.st_gid != b.st_gid) {
     dout(0) << "diff_objects_stat gid mismatch (A: "
-        << a.st_gid << " != B: " << b.st_gid << ")" << dendl;
+	<< a.st_gid << " != B: " << b.st_gid << ")" << dendl;
     ret = true;
   }
 
   if (a.st_mode != b.st_mode) {
     dout(0) << "diff_objects_stat mode mismatch (A: "
-        << a.st_mode << " != B: " << b.st_mode << ")" << dendl;
+	<< a.st_mode << " != B: " << b.st_mode << ")" << dendl;
     ret = true;
   }
 
   if (a.st_nlink != b.st_nlink) {
     dout(0) << "diff_objects_stat nlink mismatch (A: "
-        << a.st_nlink << " != B: " << b.st_nlink << ")" << dendl;
+	<< a.st_nlink << " != B: " << b.st_nlink << ")" << dendl;
     ret = true;
   }
 
   if (a.st_size != b.st_size) {
     dout(0) << "diff_objects_stat size mismatch (A: "
-        << a.st_size << " != B: " << b.st_size << ")" << dendl;
+	<< a.st_size << " != B: " << b.st_size << ")" << dendl;
     ret = true;
   }
   return ret;
@@ -141,13 +141,13 @@ bool FileStoreDiff::diff_objects(FileStore *a_store, FileStore *b_store, coll_t 
   err = a_store->collection_list(coll, a_objects);
   if (err < 0) {
     dout(0) << "diff_objects list on store coll " << coll.to_str()
-              << " returns " << err << dendl;
+	      << " returns " << err << dendl;
     return true;
   }
 
   if (b_objects.size() != a_objects.size()) {
     dout(0) << "diff_objects num objs mismatch (A: " << a_objects.size()
-        << ", B: " << b_objects.size() << ")" << dendl;
+	<< ", B: " << b_objects.size() << ")" << dendl;
     ret = true;
   }
 
@@ -157,8 +157,8 @@ bool FileStoreDiff::diff_objects(FileStore *a_store, FileStore *b_store, coll_t 
     hobject_t b_obj = *b_it, a_obj = *a_it;
     if (b_obj.oid.name != a_obj.oid.name) {
       dout(0) << "diff_objects name mismatch on A object "
-          << coll << "/" << a_obj << " and B object "
-          << coll << "/" << b_obj << dendl;
+	  << coll << "/" << a_obj << " and B object "
+	  << coll << "/" << b_obj << dendl;
       ret = true;
       continue;
     }
@@ -173,13 +173,13 @@ bool FileStoreDiff::diff_objects(FileStore *a_store, FileStore *b_store, coll_t 
     err = a_store->stat(coll, a_obj, &a_stat);
     if (err < 0) {
       dout(0) << "diff_objects error stating A object "
-          << coll << "/" << a_obj << dendl;
+	  << coll << "/" << a_obj << dendl;
       ret = true;
     }
 
     if (diff_objects_stat(a_stat, b_stat)) {
       dout(0) << "diff_objects stat mismatch on "
-          << coll << "/" << b_obj << dendl;
+	  << coll << "/" << b_obj << dendl;
       ret = true;
     }
 
@@ -189,7 +189,7 @@ bool FileStoreDiff::diff_objects(FileStore *a_store, FileStore *b_store, coll_t 
 
     if (!a_obj_bl.contents_equal(b_obj_bl)) {
       dout(0) << "diff_objects content mismatch on "
-          << coll << "/" << b_obj << dendl;
+	  << coll << "/" << b_obj << dendl;
       ret = true;
     }
 
@@ -197,20 +197,20 @@ bool FileStoreDiff::diff_objects(FileStore *a_store, FileStore *b_store, coll_t 
     err = a_store->getattrs(coll, a_obj, a_obj_attrs_map);
     if (err < 0) {
       dout(0) << "diff_objects getattrs on A object " << coll << "/" << a_obj
-              << " returns " << err << dendl;
+	      << " returns " << err << dendl;
       ret = true;
     }
     err = b_store->getattrs(coll, b_obj, b_obj_attrs_map);
     if (err < 0) {
       dout(0) << "diff_objects getattrs on B object " << coll << "/" << b_obj
-              << "returns " << err << dendl;
+	      << "returns " << err << dendl;
       ret = true;
     }
 
     if (diff_attrs(b_obj_attrs_map, a_obj_attrs_map)) {
       dout(0) << "diff_objects attrs mismatch on A object "
-          << coll << "/" << a_obj << " and B object "
-          << coll << "/" << b_obj << dendl;
+	  << coll << "/" << a_obj << " and B object "
+	  << coll << "/" << b_obj << dendl;
       ret = true;
     }
 
@@ -219,25 +219,25 @@ bool FileStoreDiff::diff_objects(FileStore *a_store, FileStore *b_store, coll_t 
     err = a_store->omap_get_keys(coll, a_obj, &a_omap_keys);
     if (err < 0) {
       dout(0) << "diff_objects getomap on A object " << coll << "/" << a_obj
-              << " returns " << err << dendl;
+	      << " returns " << err << dendl;
       ret = true;
     }
     err = a_store->omap_get_values(coll, a_obj, a_omap_keys, &a_obj_omap);
     if (err < 0) {
       dout(0) << "diff_objects getomap on A object " << coll << "/" << a_obj
-              << " returns " << err << dendl;
+	      << " returns " << err << dendl;
       ret = true;
     }
     err = b_store->omap_get_keys(coll, b_obj, &b_omap_keys);
     if (err < 0) {
       dout(0) << "diff_objects getomap on A object " << coll << "/" << b_obj
-              << " returns " << err << dendl;
+	      << " returns " << err << dendl;
       ret = true;
     }
     err = b_store->omap_get_values(coll, b_obj, b_omap_keys, &b_obj_omap);
     if (err < 0) {
       dout(0) << "diff_objects getomap on A object " << coll << "/" << b_obj
-              << " returns " << err << dendl;
+	      << " returns " << err << dendl;
       ret = true;
     }
     if (diff_omap(a_obj_omap, b_obj_omap)) {
@@ -260,19 +260,19 @@ bool FileStoreDiff::diff_coll_attrs(FileStore *a_store, FileStore *b_store, coll
   err = b_store->collection_getattrs(coll, b_coll_attrs);
   if (err < 0) {
     dout(0) << "diff_attrs getattrs on verify coll " << coll.to_str()
-        << "returns " << err << dendl;
+	<< "returns " << err << dendl;
     ret = true;
   }
   err = a_store->collection_getattrs(coll, a_coll_attrs);
   if (err < 0) {
     dout(0) << "diff_attrs getattrs on A coll " << coll.to_str()
-              << "returns " << err << dendl;
+	      << "returns " << err << dendl;
     ret = true;
   }
 
   if (b_coll_attrs.size() != a_coll_attrs.size()) {
     dout(0) << "diff_attrs size mismatch (A: " << a_coll_attrs.size()
-        << ", B: " << a_coll_attrs.size() << ")" << dendl;
+	<< ", B: " << a_coll_attrs.size() << ")" << dendl;
     ret = true;
   }
 

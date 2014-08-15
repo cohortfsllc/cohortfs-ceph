@@ -36,7 +36,7 @@ For general object store configuration, refer to the following:
    ceph-conf
 
 
-.. raw:: html 
+.. raw:: html
 
 	</td><td><h3>Reference</h3>
 
@@ -53,10 +53,10 @@ To optimize the performance of your cluster, refer to the following:
 	Filestore Settings <filestore-config-ref>
 	Journal Settings <journal-ref>
 	Pool, PG & CRUSH Settings <pool-pg-config-ref.rst>
-	Messaging Settings <ms-ref>	
+	Messaging Settings <ms-ref>
 	General Settings <general-config-ref>
 
-   
+
 .. raw:: html
 
 	</td></tr></tbody></table>

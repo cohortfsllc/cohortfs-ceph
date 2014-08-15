@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #include <sys/types.h>
@@ -101,7 +101,7 @@ int main(int argc, const char **argv)
     usage();
   }
   fn = args[0];
-  
+
   MonMap monmap;
 
   cout << me << ": monmap file " << fn << std::endl;
@@ -119,7 +119,7 @@ int main(int argc, const char **argv)
   if (!create && r < 0) {
     cerr << me << ": couldn't open " << fn << ": " << cpp_strerror(r) << std::endl;
     return -1;
-  }    
+  }
   else if (create && !clobber && r == 0) {
     cerr << me << ": " << fn << " exists, --clobber to overwrite" << std::endl;
     return -1;
@@ -187,14 +187,14 @@ int main(int argc, const char **argv)
   if (!print && !modified)
     usage();
 
-  if (print) 
+  if (print)
     monmap.print(cout);
 
   if (modified) {
     // write it out
     cout << me << ": writing epoch " << monmap.epoch
 	 << " to " << fn
-	 << " (" << monmap.size() << " monitors)" 
+	 << " (" << monmap.size() << " monitors)"
 	 << std::endl;
     int r = monmap.write(fn.c_str());
     if (r < 0) {
@@ -202,7 +202,7 @@ int main(int argc, const char **argv)
       return 1;
     }
   }
-  
+
 
   return 0;
 }

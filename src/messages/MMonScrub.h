@@ -23,8 +23,8 @@ class MMonScrub : public Message
 
 public:
   typedef enum {
-    OP_SCRUB = 1,         // leader->peon: scrub (a range of) keys
-    OP_RESULT = 2,        // peon->leader: result of a scrub
+    OP_SCRUB = 1,	  // leader->peon: scrub (a range of) keys
+    OP_RESULT = 2,	  // peon->leader: result of a scrub
   } op_type_t;
 
   static const char *get_opname(op_type_t op) {

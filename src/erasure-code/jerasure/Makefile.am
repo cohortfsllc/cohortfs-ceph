@@ -99,7 +99,7 @@ erasure_codelib_LTLIBRARIES += libec_jerasure_sse4.la
 
 libec_jerasure_la_SOURCES = \
 	erasure-code/jerasure/ErasureCodePluginSelectJerasure.cc
-libec_jerasure_la_CFLAGS = ${AM_CFLAGS} 
+libec_jerasure_la_CFLAGS = ${AM_CFLAGS}
 libec_jerasure_la_CXXFLAGS= ${AM_CXXFLAGS}
 libec_jerasure_la_LIBADD = $(LIBCRUSH) $(PTHREAD_LIBS) $(EXTRALIBS)
 libec_jerasure_la_LDFLAGS = ${AM_LDFLAGS} -version-info 2:0:0

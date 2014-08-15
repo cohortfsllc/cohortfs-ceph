@@ -63,29 +63,29 @@ class TersePrinter : public EmptyTestEventListener {
   // Called before a test starts.
   virtual void OnTestStart(const TestInfo& test_info) {
     fprintf(stdout,
-            "*** Test %s.%s starting.\n",
-            test_info.test_case_name(),
-            test_info.name());
+	    "*** Test %s.%s starting.\n",
+	    test_info.test_case_name(),
+	    test_info.name());
     fflush(stdout);
   }
 
   // Called after a failed assertion or a SUCCEED() invocation.
   virtual void OnTestPartResult(const TestPartResult& test_part_result) {
     fprintf(stdout,
-            "%s in %s:%d\n%s\n",
-            test_part_result.failed() ? "*** Failure" : "Success",
-            test_part_result.file_name(),
-            test_part_result.line_number(),
-            test_part_result.summary());
+	    "%s in %s:%d\n%s\n",
+	    test_part_result.failed() ? "*** Failure" : "Success",
+	    test_part_result.file_name(),
+	    test_part_result.line_number(),
+	    test_part_result.summary());
     fflush(stdout);
   }
 
   // Called after a test ends.
   virtual void OnTestEnd(const TestInfo& test_info) {
     fprintf(stdout,
-            "*** Test %s.%s ending.\n",
-            test_info.test_case_name(),
-            test_info.name());
+	    "*** Test %s.%s ending.\n",
+	    test_info.test_case_name(),
+	    test_info.name());
     fflush(stdout);
   }
 };  // class TersePrinter
@@ -113,7 +113,7 @@ int main(int argc, char **argv) {
     terse_output = true;
   else
     printf("%s\n", "Run this program with --terse_output to change the way "
-           "it prints its output.");
+	   "it prints its output.");
 
   UnitTest& unit_test = *UnitTest::GetInstance();
 
@@ -146,8 +146,8 @@ int main(int argc, char **argv) {
       // Counts failed tests that were not meant to fail (those without
       // 'Fails' in the name).
       if (test_info.result()->Failed() &&
-          strcmp(test_info.name(), "Fails") != 0) {
-        unexpectedly_failed_tests++;
+	  strcmp(test_info.name(), "Fails") != 0) {
+	unexpectedly_failed_tests++;
       }
     }
   }

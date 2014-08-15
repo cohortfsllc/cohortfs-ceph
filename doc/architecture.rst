@@ -11,7 +11,7 @@ commodity hardware and intelligent daemons, and a :term:`Ceph Storage Cluster`
 accommodates large numbers of nodes, which communicate with each other to
 replicate and redistribute data dynamically. A :term:`Ceph Monitor` can also be
 placed into a cluster of Ceph monitors to oversee the Ceph nodes in the Ceph
-Storage Cluster (a monitor cluster ensures high availability). 
+Storage Cluster (a monitor cluster ensures high availability).
 
 .. image:: images/stack.png
 
@@ -46,7 +46,7 @@ OSD Daemons handle the read/write operations on the storage disks.
 .. ditaa:: /-----\       +-----+       +-----+
            | obj |------>| {d} |------>| {s} |
            \-----/       +-----+       +-----+
-   
+
             Object         File         Disk
 
 Ceph OSD Daemons store all data as objects in a flat namespace (e.g., no
@@ -60,10 +60,10 @@ forth.
 .. ditaa:: /------+------------------------------+----------------\
            | ID   | Binary Data                  | Metadata       |
            +------+------------------------------+----------------+
-           | 1234 | 0101010101010100110101010010 | name1 = value1 | 
+           | 1234 | 0101010101010100110101010010 | name1 = value1 |
            |      | 0101100001010100110101010010 | name2 = value2 |
            |      | 0101100001010100110101010010 | nameN = valueN |
-           \------+------------------------------+----------------/    
+           \------+------------------------------+----------------/
 
 .. note:: An object ID is unique across the entire cluster, not just the local
    filesystem.
@@ -80,10 +80,10 @@ complex subsystem. This imposes a limit to both performance and scalability,
 while introducing a single point of failure (i.e., if the centralized component
 goes down, the whole system goes down, too).
 
-Ceph eliminates the centralized gateway to enable clients to interact with 
+Ceph eliminates the centralized gateway to enable clients to interact with
 Ceph OSD Daemons directly. Ceph OSD Daemons create object replicas on other
-Ceph Nodes to ensure data safety and high availabilty. Ceph also uses a cluster 
-of monitors to ensure high availability. To eliminate centralization, Ceph 
+Ceph Nodes to ensure data safety and high availabilty. Ceph also uses a cluster
+of monitors to ensure high availability. To eliminate centralization, Ceph
 uses an algorithm called CRUSH.
 
 
@@ -112,30 +112,30 @@ Ceph depends upon Ceph Clients and Ceph OSD Daemons having knowledge of the
 cluster topology, which is inclusive of 5 maps collectively referred to as the
 "Cluster Map":
 
-#. **The Monitor Map:** Contains the cluster ``fsid``, the position, name 
-   address and port of each monitor. It also indicates the current epoch, 
+#. **The Monitor Map:** Contains the cluster ``fsid``, the position, name
+   address and port of each monitor. It also indicates the current epoch,
    when the map was created, and the last time it changed. To view a monitor
-   map, execute ``ceph mon dump``.   
-   
+   map, execute ``ceph mon dump``.
+
 #. **The OSD Map:** Contains the cluster ``fsid``, when the map was created and
    last modified, a list of pools, replica sizes, PG numbers, a list of OSDs
    and their status (e.g., ``up``, ``in``). To view an OSD map, execute
-   ``ceph osd dump``. 
-   
+   ``ceph osd dump``.
+
 #. **The PG Map:** Contains the PG version, its time stamp, the last OSD
    map epoch, the full ratios, and details on each placement group such as
-   the PG ID, the `Up Set`, the `Acting Set`, the state of the PG (e.g., 
+   the PG ID, the `Up Set`, the `Acting Set`, the state of the PG (e.g.,
    ``active + clean``), and data usage statistics for each pool.
 
 #. **The CRUSH Map:** Contains a list of storage devices, the failure domain
-   hierarchy (e.g., device, host, rack, row, room, etc.), and rules for 
+   hierarchy (e.g., device, host, rack, row, room, etc.), and rules for
    traversing the hierarchy when storing data. To view a CRUSH map, execute
    ``ceph osd getcrushmap -o {filename}``; then, decompile it by executing
    ``crushtool -d {comp-crushmap-filename} -o {decomp-crushmap-filename}``.
-   You can view the decompiled map in a text editor or with ``cat``. 
+   You can view the decompiled map in a text editor or with ``cat``.
 
-#. **The MDS Map:** Contains the current MDS map epoch, when the map was 
-   created, and the last time it changed. It also contains the pool for 
+#. **The MDS Map:** Contains the current MDS map epoch, when the map was
+   created, and the last time it changed. It also contains the pool for
    storing metadata, a list of metadata servers, and which metadata servers
    are ``up`` and ``in``. To view an MDS map, execute ``ceph mds dump``.
 
@@ -150,7 +150,7 @@ High Availability Monitors
 
 Before Ceph Clients can read or write data, they must contact a Ceph Monitor
 to obtain the most recent copy of the cluster map. A Ceph Storage Cluster
-can operate with a single monitor; however, this introduces a single 
+can operate with a single monitor; however, this introduces a single
 point of failure (i.e., if the monitor goes down, Ceph Clients cannot
 read or write data).
 
@@ -181,7 +181,7 @@ from Kerberos, see `Ceph Authentication and Authorization`_.
 Smart Daemons Enable Hyperscale
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-In many clustered architectures, the primary purpose of cluster membership is 
+In many clustered architectures, the primary purpose of cluster membership is
 so that a centralized interface knows which nodes it can access. Then the
 centralized interface provides services to the client through a double
 dispatch--which is a **huge** bottleneck at the petabyte-to-exabyte scale.
@@ -197,52 +197,52 @@ each other means that Ceph OSD Daemons can utilize the CPU and RAM of the Ceph
 nodes to easily perform tasks that would bog down a centralized server. The
 ability to leverage this computing power leads to several major benefits:
 
-#. **OSDs Service Clients Directly:** Since any network device has a limit to 
-   the number of concurrent connections it can support, a centralized system 
-   has a low physical limit at high scales. By enabling Ceph Clients to contact 
-   Ceph OSD Daemons directly, Ceph increases both performance and total system 
-   capacity simultaneously, while removing a single point of failure. Ceph 
-   Clients can maintain a session when they need to, and with a particular Ceph 
+#. **OSDs Service Clients Directly:** Since any network device has a limit to
+   the number of concurrent connections it can support, a centralized system
+   has a low physical limit at high scales. By enabling Ceph Clients to contact
+   Ceph OSD Daemons directly, Ceph increases both performance and total system
+   capacity simultaneously, while removing a single point of failure. Ceph
+   Clients can maintain a session when they need to, and with a particular Ceph
    OSD Daemon instead of a centralized server.
 
-#. **OSD Membership and Status**: Ceph OSD Daemons join a cluster and report 
-   on their status. At the lowest level, the Ceph OSD Daemon status is ``up`` 
-   or ``down`` reflecting whether or not it is running and able to service 
-   Ceph Client requests. If a Ceph OSD Daemon is ``down`` and ``in`` the Ceph 
-   Storage Cluster, this status may indicate the failure of the Ceph OSD 
-   Daemon. If a Ceph OSD Daemon is not running (e.g., it crashes), the Ceph OSD 
-   Daemon cannot notify the Ceph Monitor that it is ``down``. The Ceph Monitor 
-   can ping a Ceph OSD Daemon periodically to ensure that it is running. 
-   However, Ceph also empowers Ceph OSD Daemons to determine if a neighboring 
-   OSD is ``down``, to update the cluster map and to report it to the Ceph 
-   monitor(s). This means that Ceph monitors can remain light weight processes. 
+#. **OSD Membership and Status**: Ceph OSD Daemons join a cluster and report
+   on their status. At the lowest level, the Ceph OSD Daemon status is ``up``
+   or ``down`` reflecting whether or not it is running and able to service
+   Ceph Client requests. If a Ceph OSD Daemon is ``down`` and ``in`` the Ceph
+   Storage Cluster, this status may indicate the failure of the Ceph OSD
+   Daemon. If a Ceph OSD Daemon is not running (e.g., it crashes), the Ceph OSD
+   Daemon cannot notify the Ceph Monitor that it is ``down``. The Ceph Monitor
+   can ping a Ceph OSD Daemon periodically to ensure that it is running.
+   However, Ceph also empowers Ceph OSD Daemons to determine if a neighboring
+   OSD is ``down``, to update the cluster map and to report it to the Ceph
+   monitor(s). This means that Ceph monitors can remain light weight processes.
    See `Monitoring OSDs`_ and `Heartbeats`_ for additional details.
-   
-#. **Data Scrubbing:** As part of maintaining data consistency and cleanliness, 
-   Ceph OSD Daemons can scrub objects within placement groups. That is, Ceph 
-   OSD Daemons can compare object metadata in one placement group with its 
-   replicas in placement groups stored on other OSDs. Scrubbing (usually 
-   performed daily) catches bugs or filesystem errors. Ceph OSD Daemons also 
-   perform deeper scrubbing by comparing data in objects bit-for-bit. Deep 
-   scrubbing (usually performed weekly) finds bad sectors on a drive that 
-   weren't apparent in a light scrub. See `Data Scrubbing`_ for details on 
+
+#. **Data Scrubbing:** As part of maintaining data consistency and cleanliness,
+   Ceph OSD Daemons can scrub objects within placement groups. That is, Ceph
+   OSD Daemons can compare object metadata in one placement group with its
+   replicas in placement groups stored on other OSDs. Scrubbing (usually
+   performed daily) catches bugs or filesystem errors. Ceph OSD Daemons also
+   perform deeper scrubbing by comparing data in objects bit-for-bit. Deep
+   scrubbing (usually performed weekly) finds bad sectors on a drive that
+   weren't apparent in a light scrub. See `Data Scrubbing`_ for details on
    configuring scrubbing.
 
-#. **Replication:** Like Ceph Clients, Ceph OSD Daemons use the CRUSH 
-   algorithm, but the Ceph OSD Daemon uses it to compute where replicas of 
-   objects should be stored (and for rebalancing). In a typical write scenario, 
-   a client uses the CRUSH algorithm to compute where to store an object, maps 
-   the object to a pool and placement group, then looks at the CRUSH map to 
+#. **Replication:** Like Ceph Clients, Ceph OSD Daemons use the CRUSH
+   algorithm, but the Ceph OSD Daemon uses it to compute where replicas of
+   objects should be stored (and for rebalancing). In a typical write scenario,
+   a client uses the CRUSH algorithm to compute where to store an object, maps
+   the object to a pool and placement group, then looks at the CRUSH map to
    identify the primary OSD for the placement group.
-   
-   The client writes the object to the identified placement group in the 
-   primary OSD. Then, the primary OSD with its own copy of the CRUSH map 
-   identifies the secondary and tertiary OSDs for replication purposes, and 
-   replicates the object to the appropriate placement groups in the secondary 
+
+   The client writes the object to the identified placement group in the
+   primary OSD. Then, the primary OSD with its own copy of the CRUSH map
+   identifies the secondary and tertiary OSDs for replication purposes, and
+   replicates the object to the appropriate placement groups in the secondary
    and tertiary OSDs (as many OSDs as additional replicas), and responds to the
    client once it has confirmed the object was stored successfully.
 
-.. ditaa:: 
+.. ditaa::
              +----------+
              |  Client  |
              |          |
@@ -259,7 +259,7 @@ ability to leverage this computing power leads to several major benefits:
     Write (2) |  |   |  |  Write (3)
        +------+  |   |  +------+
        |  +------+   +------+  |
-       |  | Ack (4)  Ack (5)|  | 
+       |  | Ack (4)  Ack (5)|  |
        v  *                 *  v
  +---------------+   +---------------+
  | Secondary OSD |   | Tertiary OSD  |
@@ -290,14 +290,14 @@ partitions for storing objects. Pools set the following parameters:
 
 - Ownership/Access to Objects
 - The Number of Object Replicas
-- The Number of Placement Groups, and 
+- The Number of Placement Groups, and
 - The CRUSH Ruleset to Use.
 
 Ceph Clients retrieve a `Cluster Map`_ from a Ceph Monitor, and write objects to
 pools. The pool's ``size`` or number of replicas, the CRUSH ruleset and the
 number of placement groups determine how Ceph will place the data.
 
-.. ditaa:: 
+.. ditaa::
             +--------+  Retrieves  +---------------+
             | Client |------------>|  Cluster Map  |
             +--------+             +---------------+
@@ -311,7 +311,7 @@ number of placement groups determine how Ceph will place the data.
             +--------+           +---------------+
             |  Pool  |---------->| CRUSH Ruleset |
             +--------+  Selects  +---------------+
-                 
+
 
 .. index: architecture; placement group mapping
 
@@ -333,7 +333,7 @@ rebalance dynamically when new Ceph OSD Daemons and the underlying OSD devices
 come online. The following diagram depicts how CRUSH maps objects to placement
 groups, and placement groups to OSDs.
 
-.. ditaa:: 
+.. ditaa::
            /-----\  /-----\  /-----\  /-----\  /-----\
            | obj |  | obj |  | obj |  | obj |  | obj |
            \-----/  \-----/  \-----/  \-----/  \-----/
@@ -350,11 +350,11 @@ groups, and placement groups to OSDs.
         +------+------+-------------+             |
         |             |             |             |
         v             v             v             v
-   /----------\  /----------\  /----------\  /----------\ 
+   /----------\  /----------\  /----------\  /----------\
    |          |  |          |  |          |  |          |
    |  OSD #1  |  |  OSD #2  |  |  OSD #3  |  |  OSD #4  |
    |          |  |          |  |          |  |          |
-   \----------/  \----------/  \----------/  \----------/  
+   \----------/  \----------/  \----------/  \----------/
 
 With a copy of the cluster map and the CRUSH algorithm, the client can compute
 exactly which OSD to use when reading or writing a particular object.
@@ -367,9 +367,9 @@ Calculating PG IDs
 When a Ceph Client binds to a Ceph Monitor, it retrieves the latest copy of the
 `Cluster Map`_. With the cluster map, the client knows about all of the monitors,
 OSDs, and metadata servers in the cluster. **However, it doesn't know anything
-about object locations.** 
+about object locations.**
 
-.. epigraph:: 
+.. epigraph::
 
 	Object locations get computed.
 
@@ -381,10 +381,10 @@ it calculates a placement group using the object name, a hash code, the
 number of OSDs in the cluster and the pool name. Ceph clients use the following
 steps to compute PG IDs.
 
-#. The client inputs the pool ID and the object ID. (e.g., pool = "liverpool" 
+#. The client inputs the pool ID and the object ID. (e.g., pool = "liverpool"
    and object-id = "john")
 #. CRUSH takes the object ID and hashes it.
-#. CRUSH calculates the hash modulo the number of OSDs. (e.g., ``0x58``) to get 
+#. CRUSH calculates the hash modulo the number of OSDs. (e.g., ``0x58``) to get
    a PG ID.
 #. CRUSH gets the pool ID given the pool name (e.g., "liverpool" = ``4``)
 #. CRUSH prepends the pool ID to the PG ID (e.g., ``4.0x58``).
@@ -414,15 +414,15 @@ themselves; however, if the problem persists, you may need to refer to the
 The Ceph Storage Cluster was designed to store at least two copies of an object
 (i.e., ``size = 2``), which is the minimum requirement for data safety. For high
 availability, a Ceph Storage Cluster should store more than two copies of an object
-(e.g., ``size = 3`` and ``min size = 2``) so that it can continue to run in a 
+(e.g., ``size = 3`` and ``min size = 2``) so that it can continue to run in a
 ``degraded`` state while maintaining data safety.
 
-Referring back to the diagram in `Smart Daemons Enable Hyperscale`_, we do not 
-name the Ceph OSD Daemons specifically (e.g., ``osd.0``, ``osd.1``, etc.), but 
-rather refer to them as *Primary*, *Secondary*, and so forth. By convention, 
-the *Primary* is the first OSD in the *Acting Set*, and is responsible for 
-coordinating the peering process for each placement group where it acts as 
-the *Primary*, and is the **ONLY** OSD that that will accept client-initiated 
+Referring back to the diagram in `Smart Daemons Enable Hyperscale`_, we do not
+name the Ceph OSD Daemons specifically (e.g., ``osd.0``, ``osd.1``, etc.), but
+rather refer to them as *Primary*, *Secondary*, and so forth. By convention,
+the *Primary* is the first OSD in the *Acting Set*, and is responsible for
+coordinating the peering process for each placement group where it acts as
+the *Primary*, and is the **ONLY** OSD that that will accept client-initiated
 writes to objects for a given placement group where it acts as the *Primary*.
 
 When a series of OSDs are responsible for a placement group, that series of
@@ -434,11 +434,11 @@ epoch.
 The Ceph OSD daemons that are part of an *Acting Set* may not always be  ``up``.
 When an OSD in the *Acting Set* is ``up``, it is part of the  *Up Set*. The *Up
 Set* is an important distinction, because Ceph can remap PGs to other Ceph OSD
-Daemons when an OSD fails. 
+Daemons when an OSD fails.
 
-.. note:: In an *Acting Set* for a PG containing ``osd.25``, ``osd.32`` and 
+.. note:: In an *Acting Set* for a PG containing ``osd.25``, ``osd.32`` and
    ``osd.61``, the first OSD, ``osd.25``, is the *Primary*. If that OSD fails,
-   the Secondary, ``osd.32``, becomes the *Primary*, and ``osd.25`` will be 
+   the Secondary, ``osd.32``, becomes the *Primary*, and ``osd.25`` will be
    removed from the *Up Set*.
 
 
@@ -455,11 +455,11 @@ process (albeit rather crudely, since it is substantially less impactful with
 large clusters) where some, but not all of the PGs migrate from existing OSDs
 (OSD 1, and OSD 2) to the new OSD (OSD 3). Even when rebalancing, CRUSH is
 stable. Many of the placement groups remain in their original configuration,
-and each OSD gets some added capacity, so there are no load spikes on the 
+and each OSD gets some added capacity, so there are no load spikes on the
 new OSD after rebalancing is complete.
 
 
-.. ditaa:: 
+.. ditaa::
            +--------+     +--------+
    Before  |  OSD 1 |     |  OSD 2 |
            +--------+     +--------+
@@ -520,11 +520,11 @@ operations on the outbound data and return the data to the client.
 
    A Ceph class for a content management system that presents pictures of a
    particular size and aspect ratio could take an inbound bitmap image, crop it
-   to a particular aspect ratio, resize it and embed an invisible copyright or 
-   watermark to help protect the intellectual property; then, save the 
+   to a particular aspect ratio, resize it and embed an invisible copyright or
+   watermark to help protect the intellectual property; then, save the
    resulting bitmap image to the object store.
 
-See ``src/objclass/objclass.h``, ``src/fooclass.cc`` and ``src/barclass`` for 
+See ``src/objclass/objclass.h``, ``src/fooclass.cc`` and ``src/barclass`` for
 exemplary implementations.
 
 
@@ -550,7 +550,7 @@ Cluster. Ceph packages this functionality into the ``librados`` library so that
 you can create your own custom Ceph Clients. The following diagram depicts the
 basic architecture.
 
-.. ditaa::  
+.. ditaa::
             +---------------------------------+
             |  Ceph Storage Cluster Protocol  |
             |           (librados)            |
@@ -598,7 +598,7 @@ synchronization/communication channel.
            +----------+     +----------+     +----------+     +---------------+
                  |                |                |                  |
                  |                |                |                  |
-                 |                |  Watch Object  |                  |               
+                 |                |  Watch Object  |                  |
                  |--------------------------------------------------->|
                  |                |                |                  |
                  |<---------------------------------------------------|
@@ -614,7 +614,7 @@ synchronization/communication channel.
                  |                |                |                  |
                  |                |                |<-----------------|
                  |                |                |    Ack/Commit    |
-                 |                |     Notify     |                  |               
+                 |                |     Notify     |                  |
                  |--------------------------------------------------->|
                  |                |                |                  |
                  |<---------------------------------------------------|
@@ -624,7 +624,7 @@ synchronization/communication channel.
                  |                |     Notify     |                  |
                  |                |                |<-----------------|
                  |                |                |      Notify      |
-                 |                |       Ack      |                  |               
+                 |                |       Ack      |                  |
                  |----------------+---------------------------------->|
                  |                |                |                  |
                  |                |       Ack      |                  |
@@ -632,7 +632,7 @@ synchronization/communication channel.
                  |                |                |                  |
                  |                |                |        Ack       |
                  |                |                |----------------->|
-                 |                |                |                  | 
+                 |                |                |                  |
                  |<---------------+----------------+------------------|
                  |                     Complete
 
@@ -650,14 +650,14 @@ throughput and performance. The most common form of data striping comes from
 the reliability of n-way RAID mirroring and faster recovery.
 
 Ceph provides three types of clients: Ceph Block Device, Ceph Filesystem, and
-Ceph Object Storage. A Ceph Client converts its data from the representation 
+Ceph Object Storage. A Ceph Client converts its data from the representation
 format it provides to its users (a block device image, RESTful objects, CephFS
-filesystem directories) into objects for storage in the Ceph Storage Cluster. 
+filesystem directories) into objects for storage in the Ceph Storage Cluster.
 
-.. tip:: The objects Ceph stores in the Ceph Storage Cluster are not striped. 
-   Ceph Object Storage, Ceph Block Device, and the Ceph Filesystem stripe their 
-   data over multiple Ceph Storage Cluster objects. Ceph Clients that write 
-   directly to the Ceph Storage Cluster via ``librados`` must perform the the 
+.. tip:: The objects Ceph stores in the Ceph Storage Cluster are not striped.
+   Ceph Object Storage, Ceph Block Device, and the Ceph Filesystem stripe their
+   data over multiple Ceph Storage Cluster objects. Ceph Clients that write
+   directly to the Ceph Storage Cluster via ``librados`` must perform the the
    striping (and parallel I/O) for themselves to obtain these benefits.
 
 The simplest Ceph striping format involves a stripe count of 1 object. Ceph
@@ -669,7 +669,7 @@ take maximum advantage of Ceph's ability to distribute data across placement
 groups, and consequently doesn't improve performance very much. The following
 diagram depicts the simplest form of striping:
 
-.. ditaa::              
+.. ditaa::
                         +---------------+
                         |  Client Data  |
                         |     Format    |
@@ -698,7 +698,7 @@ diagram depicts the simplest form of striping:
                  | End cCCC  |    | End cCCC  |
                  | Object 0  |    | Object 1  |
                  \-----------/    \-----------/
-   
+
 
 If you anticipate large images sizes, large S3 or Swift objects (e.g., video),
 or large CephFS directories, you may see considerable read/write performance
@@ -727,7 +727,7 @@ set (``object set 2`` in the following diagram), and begins writing to the first
 stripe (``stripe unit 16``) in the first object in the new object set (``object
 4`` in the diagram below).
 
-.. ditaa::                 
+.. ditaa::
                           +---------------+
                           |  Client Data  |
                           |     Format    |
@@ -737,16 +737,16 @@ stripe (``stripe unit 16``) in the first object in the new object set (``object
        +-----------------+--------+--------+-----------------+
        |                 |                 |                 |     +--\
        v                 v                 v                 v        |
- /-----------\     /-----------\     /-----------\     /-----------\  |   
+ /-----------\     /-----------\     /-----------\     /-----------\  |
  | Begin cCCC|     | Begin cCCC|     | Begin cCCC|     | Begin cCCC|  |
  | Object 0  |     | Object  1 |     | Object  2 |     | Object  3 |  |
  +-----------+     +-----------+     +-----------+     +-----------+  |
  |  stripe   |     |  stripe   |     |  stripe   |     |  stripe   |  |
  |  unit 0   |     |  unit 1   |     |  unit 2   |     |  unit 3   |  |
  +-----------+     +-----------+     +-----------+     +-----------+  |
- |  stripe   |     |  stripe   |     |  stripe   |     |  stripe   |  +-\ 
+ |  stripe   |     |  stripe   |     |  stripe   |     |  stripe   |  +-\
  |  unit 4   |     |  unit 5   |     |  unit 6   |     |  unit 7   |    | Object
- +-----------+     +-----------+     +-----------+     +-----------+    +- Set 
+ +-----------+     +-----------+     +-----------+     +-----------+    +- Set
  |  stripe   |     |  stripe   |     |  stripe   |     |  stripe   |    |   1
  |  unit 8   |     |  unit 9   |     |  unit 10  |     |  unit 11  |  +-/
  +-----------+     +-----------+     +-----------+     +-----------+  |
@@ -754,36 +754,36 @@ stripe (``stripe unit 16``) in the first object in the new object set (``object
  |  unit 12  |     |  unit 13  |     |  unit 14  |     |  unit 15  |  |
  +-----------+     +-----------+     +-----------+     +-----------+  |
  | End cCCC  |     | End cCCC  |     | End cCCC  |     | End cCCC  |  |
- | Object 0  |     | Object 1  |     | Object 2  |     | Object 3  |  |  
+ | Object 0  |     | Object 1  |     | Object 2  |     | Object 3  |  |
  \-----------/     \-----------/     \-----------/     \-----------/  |
                                                                       |
                                                                    +--/
-  
+
                                                                    +--\
                                                                       |
- /-----------\     /-----------\     /-----------\     /-----------\  |   
+ /-----------\     /-----------\     /-----------\     /-----------\  |
  | Begin cCCC|     | Begin cCCC|     | Begin cCCC|     | Begin cCCC|  |
- | Object  4 |     | Object  5 |     | Object  6 |     | Object  7 |  |  
+ | Object  4 |     | Object  5 |     | Object  6 |     | Object  7 |  |
  +-----------+     +-----------+     +-----------+     +-----------+  |
  |  stripe   |     |  stripe   |     |  stripe   |     |  stripe   |  |
  |  unit 16  |     |  unit 17  |     |  unit 18  |     |  unit 19  |  |
  +-----------+     +-----------+     +-----------+     +-----------+  |
- |  stripe   |     |  stripe   |     |  stripe   |     |  stripe   |  +-\ 
+ |  stripe   |     |  stripe   |     |  stripe   |     |  stripe   |  +-\
  |  unit 20  |     |  unit 21  |     |  unit 22  |     |  unit 23  |    | Object
  +-----------+     +-----------+     +-----------+     +-----------+    +- Set
- |  stripe   |     |  stripe   |     |  stripe   |     |  stripe   |    |   2 
+ |  stripe   |     |  stripe   |     |  stripe   |     |  stripe   |    |   2
  |  unit 24  |     |  unit 25  |     |  unit 26  |     |  unit 27  |  +-/
  +-----------+     +-----------+     +-----------+     +-----------+  |
  |  stripe   |     |  stripe   |     |  stripe   |     |  stripe   |  |
  |  unit 28  |     |  unit 29  |     |  unit 30  |     |  unit 31  |  |
  +-----------+     +-----------+     +-----------+     +-----------+  |
  | End cCCC  |     | End cCCC  |     | End cCCC  |     | End cCCC  |  |
- | Object 4  |     | Object 5  |     | Object 6  |     | Object 7  |  |  
+ | Object 4  |     | Object 5  |     | Object 6  |     | Object 7  |  |
  \-----------/     \-----------/     \-----------/     \-----------/  |
                                                                       |
                                                                    +--/
 
-Three important variables determine how Ceph stripes data: 
+Three important variables determine how Ceph stripes data:
 
 - **Object Size:** Objects in the Ceph Storage Cluster have a maximum
   configurable size (e.g., 2MB, 4MB, etc.). The object size should be large
@@ -791,24 +791,24 @@ Three important variables determine how Ceph stripes data:
   the stripe unit.
 
 - **Stripe Width:** Stripes have a configurable unit size (e.g., 64kb).
-  The Ceph Client divides the data it will write to objects into equally 
-  sized stripe units, except for the last stripe unit. A stripe width, 
-  should be a fraction of the Object Size so that an object may contain 
+  The Ceph Client divides the data it will write to objects into equally
+  sized stripe units, except for the last stripe unit. A stripe width,
+  should be a fraction of the Object Size so that an object may contain
   many stripe units.
 
 - **Stripe Count:** The Ceph Client writes a sequence of stripe units
-  over a series of objects determined by the stripe count. The series 
-  of objects is called an object set. After the Ceph Client writes to 
+  over a series of objects determined by the stripe count. The series
+  of objects is called an object set. After the Ceph Client writes to
   the last object in the object set, it returns to the first object in
   the object set.
-  
+
 .. important:: Test the performance of your striping configuration before
    putting your cluster into production. You CANNOT change these striping
    parameters after you stripe the data and write it to objects.
 
 Once the Ceph Client has striped data to stripe units and mapped the stripe
 units to objects, Ceph's CRUSH algorithm maps the objects to placement groups,
-and the placement groups to Ceph OSD Daemons before the objects are stored as 
+and the placement groups to Ceph OSD Daemons before the objects are stored as
 files on a storage disk.
 
 .. note:: Since a client writes to a single pool, all data striped into objects
@@ -823,29 +823,29 @@ Ceph Clients
 
 Ceph Clients include a number of service interfaces. These include:
 
-- **Block Devices:** The :term:`Ceph Block Device` (a.k.a., RBD) service 
+- **Block Devices:** The :term:`Ceph Block Device` (a.k.a., RBD) service
   provides resizable, thin-provisioned block devices with snapshotting and
   cloning. Ceph stripes a block device across the cluster for high
-  performance. Ceph supports both kernel objects (KO) and a QEMU hypervisor 
-  that uses ``librbd`` directly--avoiding the kernel object overhead for 
+  performance. Ceph supports both kernel objects (KO) and a QEMU hypervisor
+  that uses ``librbd`` directly--avoiding the kernel object overhead for
   virtualized systems.
 
-- **Object Storage:** The :term:`Ceph Object Storage` (a.k.a., RGW) service 
+- **Object Storage:** The :term:`Ceph Object Storage` (a.k.a., RGW) service
   provides RESTful APIs with interfaces that are compatible with Amazon S3
-  and OpenStack Swift. 
-  
-- **Filesystem**: The :term:`Ceph Filesystem` (CephFS) service provides 
-  a POSIX compliant filesystem usable with ``mount`` or as 
-  a filesytem in user space (FUSE).      
+  and OpenStack Swift.
+
+- **Filesystem**: The :term:`Ceph Filesystem` (CephFS) service provides
+  a POSIX compliant filesystem usable with ``mount`` or as
+  a filesytem in user space (FUSE).
 
 Ceph can run additional instances of OSDs, MDSs, and monitors for scalability
 and high availability. The following diagram depicts the high-level
-architecture. 
+architecture.
 
 .. ditaa::
             +--------------+  +----------------+  +-------------+
             | Block Device |  | Object Storage |  |   Ceph FS   |
-            +--------------+  +----------------+  +-------------+            
+            +--------------+  +----------------+  +-------------+
 
             +--------------+  +----------------+  +-------------+
             |    librbd    |  |     librgw     |  |  libcephfs  |
@@ -877,10 +877,10 @@ another application.
 .. topic:: S3/Swift Objects and Store Cluster Objects Compared
 
    Ceph's Object Storage uses the term *object* to describe the data it stores.
-   S3 and Swift objects are not the same as the objects that Ceph writes to the 
+   S3 and Swift objects are not the same as the objects that Ceph writes to the
    Ceph Storage Cluster. Ceph Object Storage objects are mapped to Ceph Storage
-   Cluster objects. The S3 and Swift objects do not necessarily 
-   correspond in a 1:1 manner with an object stored in the storage cluster. It 
+   Cluster objects. The S3 and Swift objects do not necessarily
+   correspond in a 1:1 manner with an object stored in the storage cluster. It
    is possible for an S3 or Swift object to map to multiple Ceph objects.
 
 See `Ceph Object Storage`_ for details.
@@ -896,7 +896,7 @@ Ceph Storage Cluster, where each object gets mapped to a placement group and
 distributed, and the placement groups are spread across separate ``ceph-osd``
 daemons throughout the cluster.
 
-.. important:: Striping allows RBD block devices to perform better than a single 
+.. important:: Striping allows RBD block devices to perform better than a single
    server could!
 
 Thin-provisioned snapshottable Ceph Block Devices are an attractive option for
@@ -918,7 +918,7 @@ Device kernel object(s). This is done with the  command-line tool ``rbd``.
 Ceph Filesystem
 ---------------
 
-The Ceph Filesystem (Ceph FS) provides a POSIX-compliant filesystem as a 
+The Ceph Filesystem (Ceph FS) provides a POSIX-compliant filesystem as a
 service that is layered on top of the object-based Ceph Storage Cluster.
 Ceph FS files get mapped to objects that Ceph stores in the Ceph Storage
 Cluster. Ceph Clients mount a CephFS filesystem as a kernel object or as
@@ -927,7 +927,7 @@ a Filesystem in User Space (FUSE).
 .. ditaa::
             +-----------------------+  +------------------------+
             | CephFS Kernel Object  |  |      CephFS FUSE       |
-            +-----------------------+  +------------------------+            
+            +-----------------------+  +------------------------+
 
             +---------------------------------------------------+
             |            Ceph FS Library (libcephfs)            |
@@ -952,13 +952,13 @@ would tax the Ceph OSD Daemons unnecessarily. So separating the metadata from
 the data means that the Ceph Filesystem can provide high performance services
 without taxing the Ceph Storage Cluster.
 
-Ceph FS separates the metadata from the data, storing the metadata in the MDS, 
+Ceph FS separates the metadata from the data, storing the metadata in the MDS,
 and storing the file data in one or more objects in the Ceph Storage Cluster.
 The Ceph filesystem aims for POSIX compatibility. ``ceph-mds`` can run as a
 single process, or it can be distributed out to multiple physical machines,
-either for high availability or for scalability. 
+either for high availability or for scalability.
 
-- **High Availability**: The extra ``ceph-mds`` instances can be `standby`, 
+- **High Availability**: The extra ``ceph-mds`` instances can be `standby`,
   ready to take over the duties of any failed ``ceph-mds`` that was
   `active`. This is easy because all the data, including the journal, is
   stored on RADOS. The transition is triggered automatically by ``ceph-mon``.
@@ -990,7 +990,7 @@ instance for high availability.
 .. _Network Config Reference: ../rados/configuration/network-config-ref
 .. _Data Scrubbing: ../rados/configuration/osd-config-ref#scrubbing
 .. _striping: http://en.wikipedia.org/wiki/Data_striping
-.. _RAID: http://en.wikipedia.org/wiki/RAID 
+.. _RAID: http://en.wikipedia.org/wiki/RAID
 .. _RAID 0: http://en.wikipedia.org/wiki/RAID_0#RAID_0
 .. _Ceph Object Storage: ../radosgw/
 .. _RESTful: http://en.wikipedia.org/wiki/RESTful

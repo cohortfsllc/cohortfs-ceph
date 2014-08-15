@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 #include <memory>
@@ -47,20 +47,20 @@
 #undef dout_prefix
 #define dout_prefix _prefix(_dout, mon, this)
 static ostream& _prefix(std::ostream *_dout, const Monitor *mon,
-                        const DataHealthService *svc) {
+			const DataHealthService *svc) {
   assert(mon != NULL);
   assert(svc != NULL);
   return *_dout << "mon." << mon->name << "@" << mon->rank
 		<< "(" << mon->get_state_name() << ")." << svc->get_name()
-                << "(" << svc->get_epoch() << ") ";
+		<< "(" << svc->get_epoch() << ") ";
 }
 
 void DataHealthService::start_epoch()
 {
   dout(10) << __func__ << " epoch " << get_epoch() << dendl;
   // we are not bound by election epochs, but we should clear the stats
-  // everytime an election is triggerd.  As far as we know, a monitor might
-  // have been running out of disk space and someone fixed it.  We don't want
+  // everytime an election is triggerd.	 As far as we know, a monitor might
+  // have been running out of disk space and someone fixed it.	We don't want
   // to hold the cluster back, even confusing the user, due to some possibly
   // outdated stats.
   stats.clear();
@@ -96,13 +96,13 @@ health_status_t DataHealthService::get_health(
 
     if (stats.store_stats.bytes_total >= g_conf->mon_leveldb_size_warn) {
       if (health_status > HEALTH_WARN)
-        health_status = HEALTH_WARN;
+	health_status = HEALTH_WARN;
       if (!health_detail.empty())
-        health_detail.append("; ");
+	health_detail.append("; ");
       stringstream ss;
       ss << "store is getting too big! "
-         << prettybyte_t(stats.store_stats.bytes_total)
-         << " >= " << prettybyte_t(g_conf->mon_leveldb_size_warn);
+	 << prettybyte_t(stats.store_stats.bytes_total)
+	 << " >= " << prettybyte_t(g_conf->mon_leveldb_size_warn);
       health_detail.append(ss.str());
     }
 
@@ -112,8 +112,8 @@ health_status_t DataHealthService::get_health(
     if (detail && health_status != HEALTH_OK) {
       stringstream ss;
       ss << "mon." << mon_name << " addr " << it->first.addr
-          << " has " << stats.latest_avail_percent
-          << "\% avail disk space -- " << health_detail;
+	  << " has " << stats.latest_avail_percent
+	  << "\% avail disk space -- " << health_detail;
       detail->push_back(make_pair(health_status, ss.str()));
     }
 
@@ -124,7 +124,7 @@ health_status_t DataHealthService::get_health(
       stats.dump(f);
       f->dump_stream("health") << health_status;
       if (health_status != HEALTH_OK)
-        f->dump_string("health_detail", health_detail);
+	f->dump_string("health_detail", health_detail);
       f->close_section();
     }
   }
@@ -170,8 +170,8 @@ int DataHealthService::update_stats()
   ours.kb_avail = stbuf.f_bavail * stbuf.f_bsize / 1024;
   ours.latest_avail_percent = (((float)ours.kb_avail/ours.kb_total)*100);
   dout(0) << __func__ << " avail " << ours.latest_avail_percent << "%"
-          << " total " << ours.kb_total << " used " << ours.kb_used << " avail " << ours.kb_avail
-          << dendl;
+	  << " total " << ours.kb_total << " used " << ours.kb_used << " avail " << ours.kb_avail
+	  << dendl;
   ours.last_update = ceph_clock_now(g_ceph_context);
 
   return update_store_stats(ours);
@@ -194,7 +194,7 @@ void DataHealthService::share_stats()
       continue;
     entity_inst_t inst = mon->monmap->get_inst(*it);
     MMonHealth *m = new MMonHealth(HealthService::SERVICE_HEALTH_DATA,
-                                   MMonHealth::OP_TELL);
+				   MMonHealth::OP_TELL);
     m->data_stats = ours;
     dout(20) << __func__ << " send " << *m << " to " << inst << dendl;
     mon->messenger->send_message(m, inst);
@@ -208,7 +208,7 @@ void DataHealthService::service_tick()
   int err = update_stats();
   if (err < 0) {
     derr << "something went wrong obtaining our disk stats: "
-         << cpp_strerror(err) << dendl;
+	 << cpp_strerror(err) << dendl;
     force_shutdown();
     return;
   }
@@ -219,7 +219,7 @@ void DataHealthService::service_tick()
 
   if (ours.latest_avail_percent <= g_conf->mon_data_avail_crit) {
     derr << "reached critical levels of available space on local monitor storage"
-         << " -- shutdown!" << dendl;
+	 << " -- shutdown!" << dendl;
     force_shutdown();
     return;
   }

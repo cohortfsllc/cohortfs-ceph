@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 #ifndef CEPH_COMMON_CMDPARSE_H
 #define CEPH_COMMON_CMDPARSE_H
@@ -26,12 +26,12 @@ void dump_cmd_and_help_to_json(ceph::Formatter *f,
 			       const std::string& cmd,
 			       const std::string& helptext);
 void dump_cmddesc_to_json(ceph::Formatter *jf,
-		          const std::string& secname,
-		          const std::string& cmdsig,
-		          const std::string& helptext,
-		          const std::string& module,
-		          const std::string& perm,
-		          const std::string& avail);
+			  const std::string& secname,
+			  const std::string& cmdsig,
+			  const std::string& helptext,
+			  const std::string& module,
+			  const std::string& perm,
+			  const std::string& avail);
 bool cmdmap_from_json(std::vector<std::string> cmd, cmdmap_t *mapp,
 		      std::stringstream &ss);
 void handle_bad_get(CephContext *cct, std::string k, const char *name);

@@ -427,7 +427,7 @@ You can clear the flags with::
 
 Two other flags are supported, ``noin`` and ``noout``, which prevent
 booting OSDs from being marked ``in`` (allocated data) or protect OSDs
-from eventually being marked ``out`` (regardless of what the current value for 
+from eventually being marked ``out`` (regardless of what the current value for
 ``mon osd down out interval`` is).
 
 .. note:: ``noup``, ``noout``, and ``nodown`` are temporary in the

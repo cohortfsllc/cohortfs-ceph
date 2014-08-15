@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_COMMON_ADMIN_SOCKET_H
@@ -44,7 +44,7 @@ public:
   /**
    * register an admin socket command
    *
-   * The command is registered under a command string.  Incoming
+   * The command is registered under a command string.	Incoming
    * commands are split by space and matched against the longest
    * registered command.  For example, if 'foo' and 'foo bar' are
    * registered, and an incoming command is 'foo bar baz', it is
@@ -71,7 +71,7 @@ public:
   int unregister_command(std::string command);
 
   bool init(const std::string &path);
-  
+
 private:
   AdminSocket(const AdminSocket& rhs);
   AdminSocket& operator=(const AdminSocket &rhs);
@@ -90,7 +90,7 @@ private:
   int m_shutdown_rd_fd;
   int m_shutdown_wr_fd;
 
-  Mutex m_lock;    // protects m_hooks, m_descs, m_help
+  Mutex m_lock;	   // protects m_hooks, m_descs, m_help
   AdminSocketHook *m_version_hook, *m_help_hook, *m_getdescs_hook;
 
   std::map<std::string,AdminSocketHook*> m_hooks;

@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_CEPHXPROTOCOL_H
@@ -33,9 +33,9 @@
  ...authenticator does lookup in database...
 
   a->p : A= {principal/auth session key, validity}^principal_secret (*)
-         B= {principal ticket, validity, principal/auth session key}^authsecret
+	 B= {principal ticket, validity, principal/auth session key}^authsecret
 
-  
+
   [principal/auth session key, validity] = service ticket
   [principal ticket, validity, principal/auth session key] = service ticket info
 
@@ -48,9 +48,9 @@
   2. Obtaining principal/service session key
 
   p->a : B, {principal_addr, timestamp}^principal/auth session key.  authorize
-         me!
+	 me!
   a->p : E= {service ticket}^svcsecret
-         F= {principal/service session key, validity}^principal/auth session key
+	 F= {principal/service session key, validity}^principal/auth session key
 
   principal_addr, timestamp = authenticator
 
@@ -76,11 +76,11 @@
 */
 
 /* authenticate requests */
-#define CEPHX_GET_AUTH_SESSION_KEY      0x0100
+#define CEPHX_GET_AUTH_SESSION_KEY	0x0100
 #define CEPHX_GET_PRINCIPAL_SESSION_KEY 0x0200
-#define CEPHX_GET_ROTATING_KEY          0x0400
+#define CEPHX_GET_ROTATING_KEY		0x0400
 
-#define CEPHX_REQUEST_TYPE_MASK            0x0F00
+#define CEPHX_REQUEST_TYPE_MASK		   0x0F00
 #define CEPHX_CRYPT_ERR			1
 
 #include "../Auth.h"
@@ -190,7 +190,7 @@ WRITE_CLASS_ENCODER(CephXAuthenticate)
 
 struct CephXChallengeBlob {
   uint64_t server_challenge, client_challenge;
-  
+
   void encode(bufferlist& bl) const {
     ::encode(server_challenge, bl);
     ::encode(client_challenge, bl);
@@ -202,7 +202,7 @@ struct CephXChallengeBlob {
 };
 WRITE_CLASS_ENCODER(CephXChallengeBlob)
 
-void cephx_calc_client_server_challenge(CephContext *cct, 
+void cephx_calc_client_server_challenge(CephContext *cct,
 					CryptoKey& secret, uint64_t server_challenge, uint64_t client_challenge,
 					uint64_t *key, std::string &error);
 
@@ -223,7 +223,7 @@ struct CephXSessionAuthInfo {
 extern bool cephx_build_service_ticket_blob(CephContext *cct,
 					    CephXSessionAuthInfo& ticket_info, CephXTicketBlob& blob);
 
-extern void cephx_build_service_ticket_request(CephContext *cct, 
+extern void cephx_build_service_ticket_request(CephContext *cct,
 					       uint32_t keys,
 					       bufferlist& request);
 
@@ -292,7 +292,7 @@ public:
 struct CephXTicketHandler {
   uint32_t service_id;
   CryptoKey session_key;
-  CephXTicketBlob ticket;        // opaque to us
+  CephXTicketBlob ticket;	 // opaque to us
   utime_t renew_after, expires;
   bool have_key_flag;
 
@@ -427,7 +427,7 @@ extern bool cephx_verify_authorizer(CephContext *cct, KeyStore *keys,
 #define AUTH_ENC_MAGIC 0xff009cad8826aa55ull
 
 template <typename T>
-void decode_decrypt_enc_bl(CephContext *cct, T& t, CryptoKey key, bufferlist& bl_enc, 
+void decode_decrypt_enc_bl(CephContext *cct, T& t, CryptoKey key, bufferlist& bl_enc,
 			   std::string &error)
 {
   uint64_t magic;

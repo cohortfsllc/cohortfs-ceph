@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -32,7 +32,7 @@
   << ".cache.den(" << dir->dirfrag() << " " << name << ") "
 
 
-ostream& CDentry::print_db_line_prefix(ostream& out) 
+ostream& CDentry::print_db_line_prefix(ostream& out)
 {
   return out << ceph_clock_now(g_ceph_context) << " mds." << dir->cache->mds->get_nodeid() << ".cache.den(" << dir->ino() << " " << name << ") ";
 }
@@ -124,7 +124,7 @@ void CDentry::print(ostream& out)
 /*
 inodeno_t CDentry::get_ino()
 {
-  if (get_inode()) 
+  if (get_inode())
     return get_inode()->ino();
   return inodeno_t();
 }
@@ -164,11 +164,11 @@ void CDentry::_mark_dirty(LogSegment *ls)
     get(PIN_DIRTY);
     assert(ls);
   }
-  if (ls) 
+  if (ls)
     ls->dirty_dentries.push_back(&item_dirty);
 }
 
-void CDentry::mark_dirty(version_t pv, LogSegment *ls) 
+void CDentry::mark_dirty(version_t pv, LogSegment *ls)
 {
   dout(10) << " mark_dirty " << *this << dendl;
 
@@ -182,7 +182,7 @@ void CDentry::mark_dirty(version_t pv, LogSegment *ls)
 }
 
 
-void CDentry::mark_clean() 
+void CDentry::mark_clean()
 {
   dout(10) << " mark_clean " << *this << dendl;
   assert(is_dirty());
@@ -194,13 +194,13 @@ void CDentry::mark_clean()
   state_clear(STATE_DIRTY);
   dir->dec_num_dirty();
   put(PIN_DIRTY);
-  
+
   item_dirty.remove_myself();
 
   clear_new();
-}    
+}
 
-void CDentry::mark_new() 
+void CDentry::mark_new()
 {
   dout(10) << " mark_new " << *this << dendl;
   state_set(STATE_NEW);
@@ -221,11 +221,11 @@ void CDentry::make_path(filepath& fp)
 {
   assert(dir);
   if (dir->inode->is_base())
-    fp = filepath(dir->inode->ino());               // base case
+    fp = filepath(dir->inode->ino());		    // base case
   else if (dir->inode->get_parent_dn())
-    dir->inode->get_parent_dn()->make_path(fp);  // recurse
+    dir->inode->get_parent_dn()->make_path(fp);	 // recurse
   else
-    fp = filepath(dir->inode->ino());               // relative but not base?  hrm!
+    fp = filepath(dir->inode->ino());		    // relative but not base?  hrm!
   fp.push_dentry(name);
 }
 
@@ -233,10 +233,10 @@ void CDentry::make_path(filepath& fp)
 void CDentry::make_path(string& s, inodeno_t tobase)
 {
   assert(dir);
-  
+
   if (dir->inode->is_root()) {
     s += "/";  // make it an absolute path (no matter what) if we hit the root.
-  } 
+  }
   else if (dir->inode->get_parent_dn() &&
 	   dir->inode->ino() != tobase) {
     dir->inode->get_parent_dn()->make_path(s, tobase);
@@ -279,7 +279,7 @@ void CDentry::unlink_remote(CDentry::linkage_t *dnl)
 {
   assert(dnl->is_remote());
   assert(dnl->inode);
-  
+
   if (dnl == &linkage)
     dnl->inode->remove_remote_parent(this);
 
@@ -303,11 +303,11 @@ void CDentry::push_projected_linkage(CInode *inode)
 CDentry::linkage_t *CDentry::pop_projected_linkage()
 {
   assert(projected.size());
-  
+
   linkage_t& n = projected.front();
 
   /*
-   * the idea here is that the link_remote_inode(), link_primary_inode(), 
+   * the idea here is that the link_remote_inode(), link_primary_inode(),
    * etc. calls should make linkage identical to &n (and we assert as
    * much).
    */
@@ -361,7 +361,7 @@ void CDentry::auth_pin(void *by)
   auth_pin_set.insert(by);
 #endif
 
-  dout(10) << "auth_pin by " << by << " on " << *this 
+  dout(10) << "auth_pin by " << by << " on " << *this
 	   << " now " << auth_pins << "+" << nested_auth_pins
 	   << dendl;
 
@@ -392,7 +392,7 @@ void CDentry::adjust_nested_auth_pins(int adjustment, int diradj, void *by)
 {
   nested_auth_pins += adjustment;
 
-  dout(35) << "adjust_nested_auth_pins by " << by 
+  dout(35) << "adjust_nested_auth_pins by " << by
 	   << ", change " << adjustment << " yields "
 	   << auth_pins << "+" << nested_auth_pins
 	   << dendl;
@@ -444,7 +444,7 @@ void CDentry::decode_replica(bufferlist::iterator& p, bool is_new)
 // ----------------------------
 // locking
 
-void CDentry::set_object_info(MDSCacheObjectInfo &info) 
+void CDentry::set_object_info(MDSCacheObjectInfo &info)
 {
   info.dirfrag = dir->dirfrag();
   info.dname = name;
@@ -495,16 +495,16 @@ void CDentry::decode_lock_state(int type, bufferlist& bl)
       //assert(get_num_ref() == 0);
     } else {
       // verify?
-      
+
     }
     break;
-  default: 
+  default:
     assert(0);
   }
 }
 
 
-ClientLease *CDentry::add_client_lease(client_t c, Session *session) 
+ClientLease *CDentry::add_client_lease(client_t c, Session *session)
 {
   ClientLease *l;
   if (client_lease_map.count(c))
@@ -515,14 +515,14 @@ ClientLease *CDentry::add_client_lease(client_t c, Session *session)
       get(PIN_CLIENTLEASE);
     l = client_lease_map[c] = new ClientLease(c, this);
     l->seq = ++session->lease_seq;
-  
+
     lock.get_client_lease();
   }
-  
+
   return l;
 }
 
-void CDentry::remove_client_lease(ClientLease *l, Locker *locker) 
+void CDentry::remove_client_lease(ClientLease *l, Locker *locker)
 {
   assert(l->parent == this);
 

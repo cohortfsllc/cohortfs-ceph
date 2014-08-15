@@ -10,17 +10,17 @@
 extern void get_str_list(const std::string& str,
 			 std::list<std::string>& str_list);
 extern void get_str_list(const std::string& str,
-                         const char *delims,
+			 const char *delims,
 			 std::list<std::string>& str_list);
 extern void get_str_vec(const std::string& str,
 			 std::vector<std::string>& str_vec);
 extern void get_str_vec(const std::string& str,
-                         const char *delims,
+			 const char *delims,
 			 std::vector<std::string>& str_vec);
 extern void get_str_set(const std::string& str,
 			std::set<std::string>& str_list);
 extern void get_str_set(const std::string& str,
-                        const char *delims,
+			const char *delims,
 			std::set<std::string>& str_list);
 
 inline std::string str_join(const std::vector<std::string>& v, std::string sep)

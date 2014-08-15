@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -22,7 +22,7 @@ class MInodeFileCaps : public Message {
 
  public:
   inodeno_t get_ino() { return ino; }
-  int       get_caps() { return caps; }
+  int	    get_caps() { return caps; }
 
   MInodeFileCaps() : Message(MSG_MDS_INODEFILECAPS) {}
   MInodeFileCaps(inodeno_t ino, int caps) :
@@ -38,7 +38,7 @@ public:
   void print(ostream& out) const {
     out << "inode_file_caps(" << ino << " " << ccap_string(caps) << ")";
   }
-  
+
   void encode_payload(uint64_t features) {
     ::encode(ino, payload);
     ::encode(caps, payload);

@@ -322,7 +322,7 @@ int OSD::write_meta(ObjectStore *store, uuid_d& cluster_fsid, uuid_d& osd_fsid, 
 {
   char val[80];
   int r;
-  
+
   snprintf(val, sizeof(val), "%s", CEPH_OSD_ONDISK_MAGIC);
   r = store->write_meta("magic", val);
   if (r < 0)
@@ -463,7 +463,7 @@ int OSD::pre_init()
   Mutex::Locker lock(osd_lock);
   if (is_stopping())
     return 0;
-  
+
   if (store->test_mount_in_use()) {
     derr << "OSD::pre_init: object store '" << dev_path << "' is "
 	 << "currently in use. (Is ceph-osd already running?)" << dendl;
@@ -1558,7 +1558,7 @@ void OSD::_maybe_boot(epoch_t oldest, epoch_t newest)
     _send_boot();
     return;
   }
-  
+
   // get all the latest maps
   if (osdmap->get_epoch() > oldest)
     osdmap_subscribe(osdmap->get_epoch() + 1, true);
@@ -1745,7 +1745,7 @@ void OSD::queue_want_up_thru(epoch_t want)
   map_lock.get_read();
   epoch_t cur = osdmap->get_up_thru(whoami);
   if (want > up_thru_wanted) {
-    dout(10) << "queue_want_up_thru now " << want << " (was " << up_thru_wanted << ")" 
+    dout(10) << "queue_want_up_thru now " << want << " (was " << up_thru_wanted << ")"
 	     << ", currently " << cur
 	     << dendl;
     up_thru_wanted = want;
@@ -1753,7 +1753,7 @@ void OSD::queue_want_up_thru(epoch_t want)
     // expedite, a bit.	 WARNING this will somewhat delay other mon queries.
     send_alive();
   } else {
-    dout(10) << "queue_want_up_thru want " << want << " <= queued " << up_thru_wanted 
+    dout(10) << "queue_want_up_thru want " << want << " <= queued " << up_thru_wanted
 	     << ", currently " << cur
 	     << dendl;
   }
@@ -1880,8 +1880,8 @@ epoch_t OSD::note_peer_epoch(int peer, epoch_t e)
     return e;
   }
 }
- 
-void OSD::forget_peer_epoch(int peer, epoch_t as_of) 
+
+void OSD::forget_peer_epoch(int peer, epoch_t as_of)
 {
   Mutex::Locker l(peer_map_epoch_lock);
   map<int,epoch_t>::iterator p = peer_map_epoch.find(peer);
@@ -2402,7 +2402,7 @@ void OSD::handle_osd_map(MOSDMap *m)
       dout(10) << "handle_osd_map  got full map for epoch " << e << dendl;
       OSDMap *o = new OSDMap;
       bufferlist& bl = p->second;
-      
+
       o->decode(bl);
       if (o->test_flag(CEPH_OSDMAP_FULL))
 	last_marked_full = e;
@@ -2477,7 +2477,7 @@ void OSD::handle_osd_map(MOSDMap *m)
 
   if (last_marked_full > superblock.last_map_marked_full)
     superblock.last_map_marked_full = last_marked_full;
- 
+
   map_lock.get_write();
 
   C_Contexts *fin = new C_Contexts(cct);
@@ -2502,7 +2502,7 @@ void OSD::handle_osd_map(MOSDMap *m)
 	note_down_osd(*p);
       }
     }
-    
+
     osdmap = newmap;
 
     superblock.current_epoch = cur;
@@ -2563,7 +2563,7 @@ void OSD::handle_osd_map(MOSDMap *m)
 	clog.error() << "map e" << osdmap->get_epoch()
 		    << " had wrong hb front addr (" << osdmap->get_hb_front_addr(whoami)
 		     << " != my " << hb_front_server_messenger->get_myaddr() << ")";
-      
+
       if (!service.is_stopping()) {
 	up_epoch = 0;
 	do_restart = true;
@@ -2765,7 +2765,7 @@ MOSDMap *OSD::build_incremental_map_msg(epoch_t since, epoch_t to)
   MOSDMap *m = new MOSDMap(monc->get_fsid());
   m->oldest_map = superblock.oldest_map;
   m->newest_map = superblock.newest_map;
-  
+
   for (epoch_t e = to; e > since; e--) {
     bufferlist bl;
     if (e > m->oldest_map && get_inc_map_bl(e, bl)) {

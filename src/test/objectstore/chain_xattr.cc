@@ -14,7 +14,7 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
  * GNU Library Public License for more details.
  *
  */
@@ -35,7 +35,7 @@ TEST(chain_xattr, get_and_set) {
   ::unlink(file);
   int fd = ::open(file, O_CREAT|O_WRONLY|O_TRUNC, 0700);
   const string user("user.");
-  
+
   {
     const string name = user + string(CHAIN_XATTR_MAX_NAME_LEN - user.size(), '@');
     const string x(LARGE_BLOCK_LEN, 'X');
@@ -61,7 +61,7 @@ TEST(chain_xattr, get_and_set) {
 
   //
   // when chain_setxattr is used to store value that is
-  // CHAIN_XATTR_MAX_BLOCK_LEN * 2 + 10 bytes long it 
+  // CHAIN_XATTR_MAX_BLOCK_LEN * 2 + 10 bytes long it
   //
   // add user.foo => CHAIN_XATTR_MAX_BLOCK_LEN bytes
   // add user.foo@1 => CHAIN_XATTR_MAX_BLOCK_LEN bytes
@@ -74,8 +74,8 @@ TEST(chain_xattr, get_and_set) {
   // replace user.foo => CHAIN_XATTR_MAX_BLOCK_LEN bytes
   // remove user.foo@1 => CHAIN_XATTR_MAX_BLOCK_LEN bytes
   // leak user.foo@2 => 10 bytes
-  // 
-  // see http://marc.info/?l=ceph-devel&m=136027076615853&w=4 for the 
+  //
+  // see http://marc.info/?l=ceph-devel&m=136027076615853&w=4 for the
   // discussion
   //
   {
@@ -149,7 +149,7 @@ TEST(chain_xattr, listxattr) {
   const string name2 = user + string(CHAIN_XATTR_MAX_NAME_LEN - user.size(), '@');
   const string x(LARGE_BLOCK_LEN, 'X');
   const int y = 1234;
-  
+
   ASSERT_EQ(LARGE_BLOCK_LEN, chain_setxattr(file, name1.c_str(), x.c_str(), LARGE_BLOCK_LEN));
   ASSERT_EQ((int)sizeof(y), chain_setxattr(file, name2.c_str(), &y, sizeof(y)));
 

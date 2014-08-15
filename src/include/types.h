@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 #ifndef CEPH_TYPES_H
@@ -246,7 +246,7 @@ WRITE_RAW_ENCODER(ceph_mon_statfs_reply)
 // NOTE: these must match ceph_fs.h typedefs
 typedef uint64_t ceph_tid_t; // transaction id
 typedef uint64_t version_t;
-typedef uint32_t epoch_t;       // map epoch  (32bits -> 13 epochs/second for 10 years)
+typedef uint32_t epoch_t;	// map epoch  (32bits -> 13 epochs/second for 10 years)
 
 // --------------------------------------
 // identify individual mount clients by 64bit value
@@ -255,7 +255,7 @@ struct client_t {
   int64_t v;
 
   client_t(int64_t _v = -2) : v(_v) {}
-  
+
   void encode(bufferlist& bl) const {
     ::encode(v, bl);
   }
@@ -351,11 +351,11 @@ inline std::ostream& operator<<(std::ostream& out, const prettybyte_t& b)
   if (b.v > bump_after << 50)
     return out << (b.v >> 50) << " PB";
   if (b.v > bump_after << 40)
-    return out << (b.v >> 40) << " TB";    
+    return out << (b.v >> 40) << " TB";
   if (b.v > bump_after << 30)
-    return out << (b.v >> 30) << " GB";    
+    return out << (b.v >> 30) << " GB";
   if (b.v > bump_after << 20)
-    return out << (b.v >> 20) << " MB";    
+    return out << (b.v >> 20) << " MB";
   if (b.v > bump_after << 10)
     return out << (b.v >> 10) << " kB";
   return out << b.v << " bytes";
@@ -420,7 +420,7 @@ inline std::ostream& operator<<(std::ostream& out, const kb_t& kb)
   if (kb.v > bump_after << 30)
     return out << (kb.v >> 30) << " TB";
   if (kb.v > bump_after << 20)
-    return out << (kb.v >> 20) << " GB";    
+    return out << (kb.v >> 20) << " GB";
   if (kb.v > bump_after << 10)
     return out << (kb.v >> 10) << " MB";
   return out << kb.v << " kB";

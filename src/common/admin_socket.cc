@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 
@@ -143,7 +143,7 @@ std::string AdminSocket::create_shutdown_pipe(int *pipe_rd, int *pipe_wr)
     oss << "AdminSocket::create_shutdown_pipe error: " << cpp_strerror(ret);
     return oss.str();
   }
-  
+
   *pipe_rd = pipefd[0];
   *pipe_wr = pipefd[1];
   return "";
@@ -347,7 +347,7 @@ bool AdminSocket::do_accept()
     p = m_hooks.find(match);
     if (p != m_hooks.end())
       break;
-    
+
     // drop right-most word
     size_t pos = match.rfind(' ');
     if (pos == std::string::npos) {
@@ -404,7 +404,7 @@ int AdminSocket::register_command(std::string command, std::string cmddesc, Admi
     m_descs[command] = cmddesc;
     m_help[command] = help;
     ret = 0;
-  }  
+  }
   m_lock.Unlock();
   return ret;
 }
@@ -422,7 +422,7 @@ int AdminSocket::unregister_command(std::string command)
   } else {
     ldout(m_cct, 5) << "unregister_command " << command << " ENOENT" << dendl;
     ret = -ENOENT;
-  }  
+  }
   m_lock.Unlock();
   return ret;
 }

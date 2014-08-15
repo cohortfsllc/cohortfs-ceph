@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -48,10 +48,10 @@ void MDSTable::save(Context *onfinish, version_t v)
     waitfor_save[v].push_back(onfinish);
     return;
   }
-  
+
   dout(10) << "save v " << version << dendl;
   assert(is_active());
-  
+
   bufferlist bl;
   ::encode(version, bl);
   encode_state(bl);
@@ -82,7 +82,7 @@ void MDSTable::save_2(int r, version_t v)
   }
   assert(r >= 0);
   committed_version = v;
-  
+
   list<Context*> ls;
   while (!waitfor_save.empty()) {
     if (waitfor_save.begin()->first > v) break;
@@ -125,7 +125,7 @@ object_t MDSTable::get_object_name()
 }
 
 void MDSTable::load(Context *onfinish)
-{ 
+{
   dout(10) << "load" << dendl;
 
   assert(is_undef());

@@ -48,7 +48,7 @@ int CephxSessionHandler::sign_message(Message *m)
     ldout(cct, 0) << "error encrypting message signature: " << error << dendl;
     ldout(cct, 0) << "no signature put on message" << dendl;
     return SESSION_SIGNATURE_FAILURE;
-  } 
+  }
 
   bufferlist::iterator ci = bl_encrypted.begin();
   // Skip the magic number up front. PLR
@@ -97,7 +97,7 @@ int CephxSessionHandler::check_message_signature(Message *m)
   if (encode_encrypt(cct, bl_plaintext, key, bl_ciphertext, sig_error)) {
     ldout(cct, 0) << "error in encryption for checking message signature: " << sig_error << dendl;
     return (SESSION_SIGNATURE_FAILURE);
-  } 
+  }
 
   bufferlist::iterator ci = bl_ciphertext.begin();
   // Skip the magic number at the front. PLR

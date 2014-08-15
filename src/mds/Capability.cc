@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  */
 
 #include "Capability.h"
@@ -158,7 +158,7 @@ void Capability::decode(bufferlist::iterator &bl)
   ::decode(_pending, bl);
   ::decode(_revokes, bl);
   DECODE_FINISH(bl);
-  
+
   _calc_issued();
 }
 

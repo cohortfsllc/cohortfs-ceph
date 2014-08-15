@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -11,7 +11,7 @@
  *  modify it under the terms of the GNU Lesser General Public
  *  License as published by the Free Software Foundation; either
  *  version 2.1 of the License, or (at your option) any later version.
- * 
+ *
  */
 
 #ifndef CEPH_STRMAP_H
@@ -35,15 +35,15 @@
  * containing white space separated key=value pairs. A white space is
  * either space, tab or newline. The value is optional, in which case
  * it defaults to an empty string. For example:
- * 
- *     insert your own=political    statement=here 
+ *
+ *     insert your own=political    statement=here
  *
  * will be parsed into:
  *
- *     { "insert": "", 
- *       "your": "", 
- *       "own": "policital",
- *       "statement": "here" }
+ *     { "insert": "",
+ *	 "your": "",
+ *	 "own": "policital",
+ *	 "statement": "here" }
  *
  * Returns 0 on success.
  *

@@ -16,7 +16,7 @@ multi-dump.sh: dumps out ceph maps
 -h                         This help message
 -s <start-epoch>           What epoch to start with. Defaults to 1.
 -t <map-type>              What type of map to dump. Defaults to osdmap.
-                           Valid map types are: osdmap, 
+                           Valid map types are: osdmap,
 EOF
 }
 

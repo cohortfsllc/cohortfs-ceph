@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -172,7 +172,7 @@ struct SignalHandler : public Thread {
 
   void queue_signal(int signum) {
     // If this signal handler is registered, the callback must be
-    // defined.  We can do this without the lock because we will never
+    // defined.	 We can do this without the lock because we will never
     // have the signal handler defined without the handlers entry also
     // being filled in.
     assert(handlers[signum]);
@@ -211,7 +211,7 @@ void SignalHandler::register_handler(int signum, signal_handler_t handler, bool 
 
   // signal thread so that it sees our new handler
   signal_thread();
-  
+
   // install our handler
   struct sigaction oldact;
   struct sigaction act;
@@ -285,6 +285,3 @@ void unregister_async_signal_handler(int signum, signal_handler_t handler)
   assert(g_signal_handler);
   g_signal_handler->unregister_handler(signum, handler);
 }
-
-
-

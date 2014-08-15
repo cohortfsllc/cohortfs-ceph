@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -226,7 +226,7 @@ void Objecter::init_locked()
   initialized = true;
 }
 
-void Objecter::shutdown_locked() 
+void Objecter::shutdown_locked()
 {
   assert(client_lock.is_locked());
   assert(initialized);
@@ -305,7 +305,7 @@ void Objecter::send_linger(LingerOp *info)
   logger->inc(l_osdc_linger_send);
 }
 
-void Objecter::_linger_ack(LingerOp *info, int r) 
+void Objecter::_linger_ack(LingerOp *info, int r)
 {
   ldout(cct, 10) << "_linger_ack " << info->linger_id << dendl;
   if (info->on_reg_ack) {
@@ -314,7 +314,7 @@ void Objecter::_linger_ack(LingerOp *info, int r)
   }
 }
 
-void Objecter::_linger_commit(LingerOp *info, int r) 
+void Objecter::_linger_commit(LingerOp *info, int r)
 {
   ldout(cct, 10) << "_linger_commit " << info->linger_id << dendl;
   if (info->on_reg_commit) {
@@ -479,15 +479,15 @@ void Objecter::handle_osd_map(MOSDMap *m)
   map<ceph_tid_t, Op*> need_resend;
 
   if (m->get_last() <= osdmap->get_epoch()) {
-    ldout(cct, 3) << "handle_osd_map ignoring epochs [" 
-            << m->get_first() << "," << m->get_last() 
-            << "] <= " << osdmap->get_epoch() << dendl;
-  } 
+    ldout(cct, 3) << "handle_osd_map ignoring epochs ["
+	    << m->get_first() << "," << m->get_last()
+	    << "] <= " << osdmap->get_epoch() << dendl;
+  }
   else {
-    ldout(cct, 3) << "handle_osd_map got epochs [" 
-            << m->get_first() << "," << m->get_last() 
-            << "] > " << osdmap->get_epoch()
-            << dendl;
+    ldout(cct, 3) << "handle_osd_map got epochs ["
+	    << m->get_first() << "," << m->get_last()
+	    << "] > " << osdmap->get_epoch()
+	    << dendl;
 
     if (osdmap->get_epoch()) {
       bool skipped_map = false;
@@ -495,7 +495,7 @@ void Objecter::handle_osd_map(MOSDMap *m)
       for (epoch_t e = osdmap->get_epoch() + 1;
 	   e <= m->get_last();
 	   e++) {
- 
+
 	if (osdmap->get_epoch() == e-1 &&
 	    m->incremental_maps.count(e)) {
 	  ldout(cct, 3) << "handle_osd_map decoding incremental epoch " << e << dendl;
@@ -540,7 +540,7 @@ void Objecter::handle_osd_map(MOSDMap *m)
 
 	assert(e == osdmap->get_epoch());
       }
-      
+
     } else {
       // first map.  we want the full thing.
       if (m->maps.count(m->get_last())) {
@@ -906,7 +906,7 @@ void Objecter::tick()
       messenger->send_message(new MPing, (*i)->con);
     }
   }
-    
+
   // reschedule
   schedule_tick();
 }
@@ -967,7 +967,7 @@ ceph_tid_t Objecter::op_submit(Op *op)
     timer.add_event_after(osd_timeout, op->ontimeout);
   }
 
-  // throttle.  before we look at any state, because
+  // throttle.	before we look at any state, because
   // take_op_budget() may drop our lock while it blocks.
   take_op_budget(op);
 
@@ -1302,7 +1302,7 @@ void Objecter::send_op(Op *op)
   m->set_retry_attempt(op->attempts++);
 
   if (op->replay_version != eversion_t())
-    m->set_version(op->replay_version);  // we're replaying this op!
+    m->set_version(op->replay_version);	 // we're replaying this op!
 
   if (op->priority)
     m->set_priority(op->priority);
@@ -1325,10 +1325,10 @@ int Objecter::calc_op_budget(Op *op)
       op_budget += i->indata.length();
     } else if (ceph_osd_op_mode_read(i->op.op)) {
       if (ceph_osd_op_type_data(i->op.op)) {
-        if ((int64_t)i->op.extent.length > 0)
+	if ((int64_t)i->op.extent.length > 0)
 	  op_budget += (int64_t)i->op.extent.length;
       } else if (ceph_osd_op_type_attr(i->op.op)) {
-        op_budget += i->op.xattr.name_len + i->op.xattr.value_len;
+	op_budget += i->op.xattr.name_len + i->op.xattr.value_len;
       }
     }
   }
@@ -1421,7 +1421,7 @@ void Objecter::handle_osd_op_reply(MOSDOpReply *m)
   // per-op result demuxing
   vector<OSDOp> out_ops;
   m->claim_ops(out_ops);
-  
+
   if (out_ops.size() != op->ops.size())
     ldout(cct, 0) << "WARNING: tid " << op->tid << " reply ops " << out_ops
 		  << " != request ops " << op->ops
@@ -1481,7 +1481,7 @@ void Objecter::handle_osd_op_reply(MOSDOpReply *m)
     ldout(cct, 15) << "handle_osd_op_reply completed tid " << tid << dendl;
     finish_op(op);
   }
-  
+
   ldout(cct, 5) << num_unacked << " unacked, " << num_uncommitted << " uncommitted" << dendl;
 
   // do callbacks
@@ -1593,7 +1593,7 @@ void Objecter::finish_statfs_op(StatfsOp *op)
 
 // scatter/gather
 
-void Objecter::_sg_read_finish(vector<ObjectExtent>& extents, vector<bufferlist>& resultbl, 
+void Objecter::_sg_read_finish(vector<ObjectExtent>& extents, vector<bufferlist>& resultbl,
 			       bufferlist *bl, Context *onfinish)
 {
   // all done
@@ -1610,7 +1610,7 @@ void Objecter::_sg_read_finish(vector<ObjectExtent>& extents, vector<bufferlist>
     bl->clear();
     r.assemble_result(cct, *bl, false);
   } else {
-    ldout(cct, 15) << "  only one frag" << dendl;
+    ldout(cct, 15) << "	 only one frag" << dendl;
     bl->claim(resultbl[0]);
   }
 
@@ -1775,7 +1775,7 @@ void Objecter::blacklist_self(bool set)
   vector<string> cmd;
   cmd.push_back("{\"prefix\":\"osd blacklist\", ");
   if (set)
-    cmd.push_back("\"blacklistop\":\"add\","); 
+    cmd.push_back("\"blacklistop\":\"add\",");
   else
     cmd.push_back("\"blacklistop\":\"rm\",");
   stringstream ss;

@@ -20,13 +20,13 @@ while (<>) {
 		!(/FAILED/)) {
 		delete $op{$bio};
 	}
-	
+
 	# finish
 	#bdev(./ebofsdev/3).complete_thread finishing bio(wr 1131~1 write_cnode 0x832c1f8)
 	if (my ($bio) = /complete_thread finishing bio\(.*(0x\w+)\)/) {
 		delete $op{$bio};
 	}
-	
+
 }
 
 for my $bio (keys %op) {

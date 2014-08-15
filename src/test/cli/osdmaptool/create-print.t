@@ -11,12 +11,12 @@
   tunable choose_local_fallback_tries 0
   tunable choose_total_tries 50
   tunable chooseleaf_descend_once 1
-  
+
   # devices
   device 0 osd.0
   device 1 osd.1
   device 2 osd.2
-  
+
   # types
   type 0 osd
   type 1 host
@@ -29,7 +29,7 @@
   type 8 datacenter
   type 9 region
   type 10 root
-  
+
   # buckets
   host localhost {
   \tid -2\t\t# do not change unnecessarily (esc)
@@ -54,7 +54,7 @@
   \thash 0\t# rjenkins1 (esc)
   \titem localrack weight 3.000 (esc)
   }
-  
+
   # rules
   rule replicated_ruleset {
   \truleset 0 (esc)
@@ -65,7 +65,7 @@
   \tstep chooseleaf firstn 0 type host (esc)
   \tstep emit (esc)
   }
-  
+
   # end crush map
   $ osdmaptool --print myosdmap
   osdmaptool: osdmap file 'myosdmap'
@@ -73,14 +73,14 @@
   fsid [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12} (re)
   created \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+ (re)
   modified \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+ (re)
-  flags 
-  
+  flags
+
   pool 0 'data' replicated size 3 min_size 2 crush_ruleset 0 object_hash rjenkins pg_num 192 pgp_num 192 last_change 0 owner 0 flags hashpspool crash_replay_interval 45 stripe_width 0
   pool 1 'metadata' replicated size 3 min_size 2 crush_ruleset 0 object_hash rjenkins pg_num 192 pgp_num 192 last_change 0 owner 0 flags hashpspool stripe_width 0
   pool 2 'rbd' replicated size 3 min_size 2 crush_ruleset 0 object_hash rjenkins pg_num 192 pgp_num 192 last_change 0 owner 0 flags hashpspool stripe_width 0
-  
+
   max_osd 3
-  
+
   $ osdmaptool --clobber --createsimple 3 --osd_pool_default_crush_replicated_ruleset 66 myosdmap
   osdmaptool: osdmap file 'myosdmap'
   osdmaptool: writing epoch 1 to myosdmap

@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_PAXOSSERVICE_H
@@ -68,7 +68,7 @@ class PaxosService {
 
  private:
   /**
-   * Event callback responsible for proposing our pending value once a timer 
+   * Event callback responsible for proposing our pending value once a timer
    * runs out and fires.
    */
   Context *proposal_timer;
@@ -76,7 +76,7 @@ class PaxosService {
    * If the implementation class has anything pending to be proposed to Paxos,
    * then have_pending should be true; otherwise, false.
    */
-  bool have_pending; 
+  bool have_pending;
 
 protected:
 
@@ -182,7 +182,7 @@ protected:
    * @}
    */
   friend class C_Propose;
-  
+
 
 public:
   /**
@@ -190,7 +190,7 @@ public:
    * @param p A Paxos instance
    * @parem name Our service's name.
    */
-  PaxosService(Monitor *mn, Paxos *p, string name) 
+  PaxosService(Monitor *mn, Paxos *p, string name)
     : mon(mn), paxos(p), service_name(name),
       proposing(false),
       service_version(0), proposal_timer(0), have_pending(false),
@@ -217,7 +217,7 @@ public:
   virtual void get_store_prefixes(set<string>& s) {
     s.insert(service_name);
   }
-  
+
   // i implement and you ignore
   /**
    * Informs this instance that it should consider itself restarted.
@@ -233,7 +233,7 @@ public:
    * we will then make sure we obtain a new state.
    *
    * Our state shall be updated by PaxosService::_active if the Paxos is
-   * active; otherwise, we will wait for it to become active by adding a 
+   * active; otherwise, we will wait for it to become active by adding a
    * PaxosService::C_Active callback to it.
    */
   void election_finished();
@@ -267,7 +267,7 @@ public:
   /**
    * Propose a new value through Paxos.
    *
-   * This function should be called by the classes implementing 
+   * This function should be called by the classes implementing
    * PaxosService, in order to propose a new value through Paxos.
    *
    * @pre The implementation class implements the encode_pending function.
@@ -399,7 +399,7 @@ public:
    *
    * @param m A query message
    * @returns 'true' if the query was handled (e.g., was a read that got
-   *	      answered, was a state change that has no effect); 'false' 
+   *	      answered, was a state change that has no effect); 'false'
    *	      otherwise.
    */
   virtual bool preprocess_query(PaxosServiceMessage *m) = 0;
@@ -507,12 +507,12 @@ public:
 
   /**
    * @defgroup PaxosService_h_version_cache Variables holding cached values
-   *                                        for the most used versions (first
-   *                                        and last committed); we only have
-   *                                        to read them when the store is
-   *                                        updated, so in-between updates we
-   *                                        may very well use cached versions
-   *                                        and avoid the overhead.
+   *					    for the most used versions (first
+   *					    and last committed); we only have
+   *					    to read them when the store is
+   *					    updated, so in-between updates we
+   *					    may very well use cached versions
+   *					    and avoid the overhead.
    * @{
    */
   version_t cached_first_committed;
@@ -826,7 +826,7 @@ public:
 
   /**
    * @defgroup PaxosService_h_version_cache Obtain cached versions for this
-   *                                        service.
+   *					    service.
    * @{
    */
   /**

@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 
@@ -71,9 +71,9 @@ public:
     /// If true, we will try to detect session resets
     bool resetcheck;
     /**
-     *  The throttler is used to limit how much data is held by Messages from
-     *  the associated Connection(s). When reading in a new Message, the Messenger
-     *  will call throttler->throttle() for the size of the new Message.
+     *	The throttler is used to limit how much data is held by Messages from
+     *	the associated Connection(s). When reading in a new Message, the Messenger
+     *	will call throttler->throttle() for the size of the new Message.
      */
     Throttle *throttler_bytes;
     Throttle *throttler_messages;
@@ -145,9 +145,9 @@ public:
    * @param nonce nonce value to uniquely identify this instance on the current host
    */
   static Messenger *create(CephContext *cct,
-                           entity_name_t name,
+			   entity_name_t name,
 			   string lname,
-                           uint64_t nonce);
+			   uint64_t nonce);
 
   /**
    * @defgroup Accessors
@@ -305,7 +305,7 @@ public:
    *
    * @param d The Dispatcher to insert into the list.
    */
-  void add_dispatcher_head(Dispatcher *d) { 
+  void add_dispatcher_head(Dispatcher *d) {
     bool first = dispatchers.empty();
     dispatchers.push_front(d);
     if (first)
@@ -318,7 +318,7 @@ public:
    *
    * @param d The Dispatcher to insert into the list.
    */
-  void add_dispatcher_tail(Dispatcher *d) { 
+  void add_dispatcher_tail(Dispatcher *d) {
     bool first = dispatchers.empty();
     dispatchers.push_back(d);
     if (first)
@@ -709,7 +709,5 @@ public:
    * @} // Dispatcher Interfacing
    */
 };
-
-
 
 #endif

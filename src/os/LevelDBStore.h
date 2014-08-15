@@ -226,9 +226,9 @@ public:
       dbiter->Seek(slice_limit);
 
       if (!dbiter->Valid()) {
-        dbiter->SeekToLast();
+	dbiter->SeekToLast();
       } else {
-        dbiter->Prev();
+	dbiter->Prev();
       }
       return dbiter->status().ok() ? 0 : -1;
     }
@@ -310,7 +310,7 @@ public:
     DIR *store_dir = opendir(path.c_str());
     if (!store_dir) {
       lderr(cct) << __func__ << " something happened opening the store: "
-                 << cpp_strerror(errno) << dendl;
+		 << cpp_strerror(errno) << dendl;
       return 0;
     }
 
@@ -324,7 +324,7 @@ public:
       string n(entry->d_name);
 
       if (n == "." || n == "..")
-        continue;
+	continue;
 
       string fpath = path + '/' + n;
       struct stat s;
@@ -336,24 +336,24 @@ public:
       // and files get removed, in which case there's not much of a problem
       // as we'll get to them next time around.
       if ((err < 0) && (err != -ENOENT)) {
-        lderr(cct) << __func__ << " error obtaining stats for " << fpath
-                   << ": " << cpp_strerror(err) << dendl;
-        goto err;
+	lderr(cct) << __func__ << " error obtaining stats for " << fpath
+		   << ": " << cpp_strerror(err) << dendl;
+	goto err;
       }
 
       size_t pos = n.find_last_of('.');
       if (pos == string::npos) {
-        misc_size += s.st_size;
-        continue;
+	misc_size += s.st_size;
+	continue;
       }
 
       string ext = n.substr(pos+1);
       if (ext == "sst") {
-        sst_size += s.st_size;
+	sst_size += s.st_size;
       } else if (ext == "log") {
-        log_size += s.st_size;
+	log_size += s.st_size;
       } else {
-        misc_size += s.st_size;
+	misc_size += s.st_size;
       }
     }
 

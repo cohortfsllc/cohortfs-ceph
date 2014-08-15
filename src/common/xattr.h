@@ -6,7 +6,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  */
 
 #ifndef CEPH_EXTATTR_H
@@ -19,13 +19,13 @@ extern "C" {
 #endif
 
 int ceph_os_setxattr(const char *path, const char *name,
-                  const void *value, size_t size);
+		  const void *value, size_t size);
 int ceph_os_fsetxattr(int fd, const char *name, const void *value,
-                   size_t size);
+		   size_t size);
 ssize_t ceph_os_getxattr(const char *path, const char *name,
-                         void *value, size_t size);
+			 void *value, size_t size);
 ssize_t ceph_os_fgetxattr(int fd, const char *name, void *value,
-                          size_t size);
+			  size_t size);
 ssize_t ceph_os_listxattr(const char *path, char *list, size_t size);
 ssize_t ceph_os_flistxattr(int fd, char *list, size_t size);
 int ceph_os_removexattr(const char *path, const char *name);

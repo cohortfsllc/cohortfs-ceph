@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 
@@ -27,7 +27,7 @@ class MOSDFailure : public PaxosServiceMessage {
   uuid_d fsid;
   entity_inst_t target_osd;
   uint8_t is_failed;
-  epoch_t       epoch;
+  epoch_t	epoch;
   int32_t failed_for;  // known to be failed since at least this long
 
   MOSDFailure() : PaxosServiceMessage(MSG_OSD_FAILURE, 0, HEAD_VERSION) { }
@@ -37,7 +37,7 @@ class MOSDFailure : public PaxosServiceMessage {
 private:
   ~MOSDFailure() {}
 
-public: 
+public:
   entity_inst_t get_target() { return target_osd; }
   bool if_osd_failed() { return is_failed; }
   epoch_t get_epoch() { return epoch; }

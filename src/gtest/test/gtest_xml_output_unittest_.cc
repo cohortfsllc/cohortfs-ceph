@@ -85,7 +85,7 @@ TEST(MixedResultTest, DISABLED_test) {
 
 TEST(XmlQuotingTest, OutputsCData) {
   FAIL() << "XML output: "
-            "<?xml encoding=\"utf-8\"><top><![CDATA[cdata text]]></top>";
+	    "<?xml encoding=\"utf-8\"><top><![CDATA[cdata text]]></top>";
 }
 
 // Helps to test that invalid characters produced by test code do not make
@@ -128,7 +128,7 @@ void ExternalUtilityThatCallsRecordProperty(const std::string& key, int value) {
 }
 
 void ExternalUtilityThatCallsRecordProperty(const std::string& key,
-                                            const std::string& value) {
+					    const std::string& value) {
   testing::Test::RecordProperty(key, value);
 }
 
@@ -165,8 +165,8 @@ TYPED_TEST_P(TypeParameterizedTestCase, HasTypeParamAttribute) {}
 REGISTER_TYPED_TEST_CASE_P(TypeParameterizedTestCase, HasTypeParamAttribute);
 typedef testing::Types<int, long> TypeParameterizedTestCaseTypes;
 INSTANTIATE_TYPED_TEST_CASE_P(Single,
-                              TypeParameterizedTestCase,
-                              TypeParameterizedTestCaseTypes);
+			      TypeParameterizedTestCase,
+			      TypeParameterizedTestCaseTypes);
 #endif
 
 int main(int argc, char** argv) {

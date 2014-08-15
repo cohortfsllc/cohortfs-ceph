@@ -278,7 +278,7 @@ FORCE:
 .git_version: FORCE
 	$(srcdir)/check_version $(srcdir)/.git_version
 
-# if NO_VERSION is set, only generate a new ceph_ver.h if there currently 
+# if NO_VERSION is set, only generate a new ceph_ver.h if there currently
 # is none, and call "make_version -n" to fill it with a fixed string.
 # Otherwise, set it from the contents of .git_version.
 
@@ -322,7 +322,7 @@ ceph: ceph.in ./ceph_ver.h Makefile
 # cleaning
 
 clean-local:
-	rm -f *.so 
+	rm -f *.so
 	find . -name '*.gcno' -o -name '*.gcda' -o -name '*.lcov' | xargs rm -f
 	rm -f ceph java/java/com/ceph/crush/Bucket.class
 

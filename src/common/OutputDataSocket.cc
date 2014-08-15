@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -139,7 +139,7 @@ std::string OutputDataSocket::create_shutdown_pipe(int *pipe_rd, int *pipe_wr)
     oss << "OutputDataSocket::create_shutdown_pipe error: " << cpp_strerror(ret);
     return oss.str();
   }
-  
+
   *pipe_rd = pipefd[0];
   *pipe_wr = pipefd[1];
   return "";
@@ -313,7 +313,7 @@ void OutputDataSocket::handle_connection(int fd)
 
 int OutputDataSocket::dump_data(int fd)
 {
-  m_lock.Lock(); 
+  m_lock.Lock();
   list<bufferlist> l;
   l = data;
   data.clear();
@@ -328,7 +328,7 @@ int OutputDataSocket::dump_data(int fd)
     }
     if (ret < 0) {
       for (; iter != l.end(); ++iter) {
-        bufferlist& bl = *iter;
+	bufferlist& bl = *iter;
 	data.push_back(bl);
 	data_size += bl.length();
       }

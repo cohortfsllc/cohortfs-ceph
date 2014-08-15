@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -50,7 +50,7 @@ public:
   /* Returns 0 on success; error code otherwise. */
   virtual int run() = 0;
 
-  /* Return a string identifying the runnable. */ 
+  /* Return a string identifying the runnable. */
   const char* get_id_str(void) const;
 
   /* Start the Runnable */

@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #include <map>
@@ -35,7 +35,7 @@
 static int set_version(const char *path, uint32_t version) {
   bufferlist bl;
   ::encode(version, bl);
-  return chain_setxattr(path, "user.cephos.collection_version", bl.c_str(), 
+  return chain_setxattr(path, "user.cephos.collection_version", bl.c_str(),
 		     bl.length());
 }
 

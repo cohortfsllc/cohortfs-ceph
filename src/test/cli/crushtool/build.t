@@ -18,9 +18,9 @@
   -6\t1\t\track rack2 (esc)
   -3\t1\t\t\tnode node2 (esc)
   4\t1\t\t\t\tosd.4\t1\t (esc)
-  
 
-#  
+
+#
 # silence all messages with --debug-crush 0
 #
   $ CEPH_ARGS="--debug-crush 0" crushtool --outfn "$map" --build --num_osds 5 node straw 2 rack straw 1 root straw 0
@@ -28,7 +28,7 @@
 #
 # display a warning if there is more than one root
 #
-  $ crushtool --outfn "$map" --build --num_osds 5 node straw 2 rack straw 1 
+  $ crushtool --outfn "$map" --build --num_osds 5 node straw 2 rack straw 1
   .* (re)
   # id\tweight\ttype name\treweight (esc)
   -6\t1\track rack2 (esc)
@@ -42,13 +42,13 @@
   -1\t2\t\tnode node0 (esc)
   0\t1\t\t\tosd.0\t1\t (esc)
   1\t1\t\t\tosd.1\t1\t (esc)
-  
+
   .* The crush rulesets will use the root rack0 (re)
   and ignore the others.
   There are 3 roots, they can be
   grouped into a single root by appending something like:
     root straw 0
-  
+
 #
 # crush rulesets are generated using the OSDMap helpers
 #
@@ -60,14 +60,14 @@
   tunable choose_local_fallback_tries 0
   tunable choose_total_tries 50
   tunable chooseleaf_descend_once 1
-  
+
   # devices
   device 0 device0
-  
+
   # types
   type 0 device
   type 1 root
-  
+
   # buckets
   root root {
   \tid -1\t\t# do not change unnecessarily (esc)
@@ -76,7 +76,7 @@
   \thash 0\t# rjenkins1 (esc)
   \titem device0 weight 1.000 (esc)
   }
-  
+
   # rules
   rule replicated_ruleset {
   \truleset 0 (esc)
@@ -87,12 +87,12 @@
   \tstep chooseleaf firstn 0 type root (esc)
   \tstep emit (esc)
   }
-  
+
   # end crush map
   $ rm "$map" "$map.txt"
 
 #
-# Wrong number of arguments 
+# Wrong number of arguments
 #
   $ crushtool --outfn "$map" --debug-crush 0 --build --num_osds 5 node straw 0
   remaining args: [--debug-crush,0,node,straw,0]

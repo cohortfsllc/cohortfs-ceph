@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -20,7 +20,7 @@ class RGWOp_OBJLog_GetBounds : public RGWRESTOp {
   RGWReplicaBounds bounds;
 
 public:
-  RGWOp_OBJLog_GetBounds(const char *_prefix, const char *type) 
+  RGWOp_OBJLog_GetBounds(const char *_prefix, const char *type)
     : prefix(_prefix), obj_type(type){}
   ~RGWOp_OBJLog_GetBounds() {}
 
@@ -44,7 +44,7 @@ class RGWOp_OBJLog_SetBounds : public RGWRESTOp {
   string prefix;
   string obj_type;
 public:
-  RGWOp_OBJLog_SetBounds(const char *_prefix, const char *type) 
+  RGWOp_OBJLog_SetBounds(const char *_prefix, const char *type)
     : prefix(_prefix), obj_type(type){}
   ~RGWOp_OBJLog_SetBounds() {}
 
@@ -64,7 +64,7 @@ class RGWOp_OBJLog_DeleteBounds : public RGWRESTOp {
   string prefix;
   string obj_type;
 public:
-  RGWOp_OBJLog_DeleteBounds(const char *_prefix, const char *type) 
+  RGWOp_OBJLog_DeleteBounds(const char *_prefix, const char *type)
     : prefix(_prefix), obj_type(type){}
   ~RGWOp_OBJLog_DeleteBounds() {}
 

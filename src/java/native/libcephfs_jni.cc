@@ -85,7 +85,7 @@
  */
 #define JAVA_XATTR_CREATE   1
 #define JAVA_XATTR_REPLACE  2
-#define JAVA_XATTR_NONE     3
+#define JAVA_XATTR_NONE	    3
 
 /* Map JAVA_O_* open flags to values in libc */
 static inline int fixup_open_flags(jint jflags)
@@ -2787,7 +2787,7 @@ out:
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *	http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -2800,17 +2800,17 @@ jobject sockaddrToInetAddress(JNIEnv* env, const sockaddr_storage& ss, jint* por
     // The RI states "Java will never return an IPv4-mapped address".
     const sockaddr_in6& sin6 = reinterpret_cast<const sockaddr_in6&>(ss);
     if (ss.ss_family == AF_INET6 && IN6_IS_ADDR_V4MAPPED(&sin6.sin6_addr)) {
-        // Copy the IPv6 address into the temporary sockaddr_storage.
-        sockaddr_storage tmp;
-        memset(&tmp, 0, sizeof(tmp));
-        memcpy(&tmp, &ss, sizeof(sockaddr_in6));
-        // Unmap it into an IPv4 address.
-        sockaddr_in& sin = reinterpret_cast<sockaddr_in&>(tmp);
-        sin.sin_family = AF_INET;
-        sin.sin_port = sin6.sin6_port;
-        memcpy(&sin.sin_addr.s_addr, &sin6.sin6_addr.s6_addr[12], 4);
-        // Do the regular conversion using the unmapped address.
-        return sockaddrToInetAddress(env, tmp, port);
+	// Copy the IPv6 address into the temporary sockaddr_storage.
+	sockaddr_storage tmp;
+	memset(&tmp, 0, sizeof(tmp));
+	memcpy(&tmp, &ss, sizeof(sockaddr_in6));
+	// Unmap it into an IPv4 address.
+	sockaddr_in& sin = reinterpret_cast<sockaddr_in&>(tmp);
+	sin.sin_family = AF_INET;
+	sin.sin_port = sin6.sin6_port;
+	memcpy(&sin.sin_addr.s_addr, &sin6.sin6_addr.s6_addr[12], 4);
+	// Do the regular conversion using the unmapped address.
+	return sockaddrToInetAddress(env, tmp, port);
     }
 
     const void* rawAddress;
@@ -2818,68 +2818,68 @@ jobject sockaddrToInetAddress(JNIEnv* env, const sockaddr_storage& ss, jint* por
     int sin_port = 0;
     int scope_id = 0;
     if (ss.ss_family == AF_INET) {
-        const sockaddr_in& sin = reinterpret_cast<const sockaddr_in&>(ss);
-        rawAddress = &sin.sin_addr.s_addr;
-        addressLength = 4;
-        sin_port = ntohs(sin.sin_port);
+	const sockaddr_in& sin = reinterpret_cast<const sockaddr_in&>(ss);
+	rawAddress = &sin.sin_addr.s_addr;
+	addressLength = 4;
+	sin_port = ntohs(sin.sin_port);
     } else if (ss.ss_family == AF_INET6) {
-        const sockaddr_in6& sin6 = reinterpret_cast<const sockaddr_in6&>(ss);
-        rawAddress = &sin6.sin6_addr.s6_addr;
-        addressLength = 16;
-        sin_port = ntohs(sin6.sin6_port);
-        scope_id = sin6.sin6_scope_id;
+	const sockaddr_in6& sin6 = reinterpret_cast<const sockaddr_in6&>(ss);
+	rawAddress = &sin6.sin6_addr.s6_addr;
+	addressLength = 16;
+	sin_port = ntohs(sin6.sin6_port);
+	scope_id = sin6.sin6_scope_id;
     } else if (ss.ss_family == AF_UNIX) {
-        const sockaddr_un& sun = reinterpret_cast<const sockaddr_un&>(ss);
-        rawAddress = &sun.sun_path;
-        addressLength = strlen(sun.sun_path);
+	const sockaddr_un& sun = reinterpret_cast<const sockaddr_un&>(ss);
+	rawAddress = &sun.sun_path;
+	addressLength = strlen(sun.sun_path);
     } else {
-        // We can't throw SocketException. We aren't meant to see bad addresses, so seeing one
-        // really does imply an internal error.
-        //jniThrowExceptionFmt(env, "java/lang/IllegalArgumentException",
-        //                     "sockaddrToInetAddress unsupported ss_family: %i", ss.ss_family);
-        cephThrowIllegalArg(env, "sockaddrToInetAddress unsupposed ss_family");
-        return NULL;
+	// We can't throw SocketException. We aren't meant to see bad addresses, so seeing one
+	// really does imply an internal error.
+	//jniThrowExceptionFmt(env, "java/lang/IllegalArgumentException",
+	//		       "sockaddrToInetAddress unsupported ss_family: %i", ss.ss_family);
+	cephThrowIllegalArg(env, "sockaddrToInetAddress unsupposed ss_family");
+	return NULL;
     }
     if (port != NULL) {
-        *port = sin_port;
+	*port = sin_port;
     }
 
     ScopedLocalRef<jbyteArray> byteArray(env, env->NewByteArray(addressLength));
     if (byteArray.get() == NULL) {
-        return NULL;
+	return NULL;
     }
     env->SetByteArrayRegion(byteArray.get(), 0, addressLength,
-            reinterpret_cast<const jbyte*>(rawAddress));
+	    reinterpret_cast<const jbyte*>(rawAddress));
 
     if (ss.ss_family == AF_UNIX) {
-        // Note that we get here for AF_UNIX sockets on accept(2). The unix(7) man page claims
-        // that the peer's sun_path will contain the path, but in practice it doesn't, and the
-        // peer length is returned as 2 (meaning only the sun_family field was set).
-        //
-        // Ceph Note: this isn't supported. inetUnixAddress appears to just be
-        // something in Dalvik/Android stuff.
-        cephThrowInternal(env, "OSD address should never be a UNIX socket");
-        return NULL;
-        //static jmethodID ctor = env->GetMethodID(JniConstants::inetUnixAddressClass, "<init>", "([B)V");
-        //return env->NewObject(JniConstants::inetUnixAddressClass, ctor, byteArray.get());
+	// Note that we get here for AF_UNIX sockets on accept(2). The unix(7) man page claims
+	// that the peer's sun_path will contain the path, but in practice it doesn't, and the
+	// peer length is returned as 2 (meaning only the sun_family field was set).
+	//
+	// Ceph Note: this isn't supported. inetUnixAddress appears to just be
+	// something in Dalvik/Android stuff.
+	cephThrowInternal(env, "OSD address should never be a UNIX socket");
+	return NULL;
+	//static jmethodID ctor = env->GetMethodID(JniConstants::inetUnixAddressClass, "<init>", "([B)V");
+	//return env->NewObject(JniConstants::inetUnixAddressClass, ctor, byteArray.get());
     }
 
     if (addressLength == 4) {
       static jmethodID getByAddressMethod = env->GetStaticMethodID(JniConstants::inetAddressClass,
-          "getByAddress", "(Ljava/lang/String;[B)Ljava/net/InetAddress;");
+	  "getByAddress", "(Ljava/lang/String;[B)Ljava/net/InetAddress;");
       if (getByAddressMethod == NULL) {
-        return NULL;
+	return NULL;
       }
       return env->CallStaticObjectMethod(JniConstants::inetAddressClass, getByAddressMethod,
-          NULL, byteArray.get());
+	  NULL, byteArray.get());
     } else if (addressLength == 16) {
       static jmethodID getByAddressMethod = env->GetStaticMethodID(JniConstants::inet6AddressClass,
-          "getByAddress", "(Ljava/lang/String;[BI)Ljava/net/Inet6Address;");
+	  "getByAddress", "(Ljava/lang/String;[BI)Ljava/net/Inet6Address;");
       if (getByAddressMethod == NULL) {
-        return NULL;
+	return NULL;
       }
       return env->CallStaticObjectMethod(JniConstants::inet6AddressClass, getByAddressMethod,
-          NULL, byteArray.get(), scope_id);
+	  NULL, byteArray.get(), scope_id);
     } else {
       abort();
       return NULL;

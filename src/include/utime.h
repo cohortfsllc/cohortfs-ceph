@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -70,7 +70,7 @@ public:
   }
 
   // accessors
-  time_t sec()  const { return tv.tv_sec; }
+  time_t sec()	const { return tv.tv_sec; }
   long usec() const { return tv.tv_nsec/1000; }
   int nsec() const { return tv.tv_nsec; }
 
@@ -159,7 +159,7 @@ public:
       struct tm bdt;
       time_t tt = sec();
       gmtime_r(&tt, &bdt);
-      out << std::setw(4) << (bdt.tm_year+1900)  // 2007 -> '07'
+      out << std::setw(4) << (bdt.tm_year+1900)	 // 2007 -> '07'
 	  << '-' << std::setw(2) << (bdt.tm_mon+1)
 	  << '-' << std::setw(2) << bdt.tm_mday
 	  << ' '
@@ -214,7 +214,7 @@ public:
       struct tm bdt;
       time_t tt = sec();
       localtime_r(&tt, &bdt);
-      out << std::setw(4) << (bdt.tm_year+1900)  // 2007 -> '07'
+      out << std::setw(4) << (bdt.tm_year+1900)	 // 2007 -> '07'
 	  << '-' << std::setw(2) << (bdt.tm_mon+1)
 	  << '-' << std::setw(2) << bdt.tm_mday
 	  << ' '
@@ -255,23 +255,23 @@ public:
 	p = strptime(p, " %H:%M:%S", &tm);
 	if (!p)
 	  return -EINVAL;
-        if (nsec && *p == '.') {
-          ++p;
-          unsigned i;
-          char buf[10]; /* 9 digit + null termination */
-          for (i = 0; (i < sizeof(buf) - 1) && isdigit(*p); ++i, ++p) {
-            buf[i] = *p;
-          }
-          for (; i < sizeof(buf) - 1; ++i) {
-            buf[i] = '0';
-          }
-          buf[i] = '\0';
-          string err;
-          *nsec = (uint64_t)strict_strtol(buf, 10, &err);
-          if (!err.empty()) {
-            return -EINVAL;
-          }
-        }
+	if (nsec && *p == '.') {
+	  ++p;
+	  unsigned i;
+	  char buf[10]; /* 9 digit + null termination */
+	  for (i = 0; (i < sizeof(buf) - 1) && isdigit(*p); ++i, ++p) {
+	    buf[i] = *p;
+	  }
+	  for (; i < sizeof(buf) - 1; ++i) {
+	    buf[i] = '0';
+	  }
+	  buf[i] = '\0';
+	  string err;
+	  *nsec = (uint64_t)strict_strtol(buf, 10, &err);
+	  if (!err.empty()) {
+	    return -EINVAL;
+	  }
+	}
       }
     } else {
       return -EINVAL;

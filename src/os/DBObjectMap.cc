@@ -362,7 +362,7 @@ int DBObjectMap::DBObjectMapIteratorImpl::in_complete_region(const string &to_te
 }
 
 /**
- * Moves parent_iter to the next position both out of the complete_region and 
+ * Moves parent_iter to the next position both out of the complete_region and
  * not equal to key_iter.  Then, we set cur_iter to parent_iter if valid and
  * less than key_iter and key_iter otherwise.
  */
@@ -935,7 +935,7 @@ int DBObjectMap::upgrade()
       return r;
   }
 
-  
+
   while (1) {
     KeyValueDB::Transaction t = db->get_transaction();
     KeyValueDB::Iterator iter = db->get_iterator(REVERSE_LEAF_PREFIX);
@@ -1030,7 +1030,7 @@ DBObjectMap::Header DBObjectMap::_lookup_map_header(const hobject_t &oid)
     return Header();
   if (out.empty())
     return Header();
-  
+
   Header ret(new _Header(), RemoveMapHeaderOnDelete(this, oid));
   bufferlist::iterator iter = out.begin()->second.begin();
   ret->decode(iter);

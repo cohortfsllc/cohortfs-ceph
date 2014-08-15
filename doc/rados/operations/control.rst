@@ -56,14 +56,14 @@ To list the cluster's keys and their capabilities, execute the following::
 Placement Group Subsystem
 =========================
 
-To display the statistics for all placement groups, execute the following:: 
+To display the statistics for all placement groups, execute the following::
 
 	ceph pg dump [--format {format}]
 
 The valid formats are ``plain`` (default) and ``json``.
 
-To display the statistics for all placement groups stuck in a specified state, 
-execute the following:: 
+To display the statistics for all placement groups stuck in a specified state,
+execute the following::
 
 	ceph pg dump_stuck inactive|unclean|stale [--format {format}] [-t|--threshold {seconds}]
 
@@ -240,7 +240,7 @@ Creates/deletes/renames a storage pool. ::
 	ceph osd pool delete {pool-name} [{pool-name} --yes-i-really-really-mean-it]
 	ceph osd pool rename {old-name} {new-name}
 
-Changes a pool setting. :: 
+Changes a pool setting. ::
 
 	ceph osd pool set {pool-name} {field} {value}
 
@@ -310,7 +310,7 @@ Mon Subsystem
 Show monitor stats::
 
 	ceph mon stat
-	
+
 	2011-12-14 10:40:59.044395 mon {- [mon,stat]
 	2011-12-14 10:40:59.057111 mon.1 -} 'e3: 5 mons at {a=10.1.2.3:6789/0,b=10.1.2.4:6789/0,c=10.1.2.5:6789/0,d=10.1.2.6:6789/0,e=10.1.2.7:6789/0}, election epoch 16, quorum 0,1,2,3' (0)
 
@@ -319,13 +319,13 @@ The ``quorum`` list at the end lists monitor nodes that are part of the current 
 This is also available more directly::
 
 	$ ./ceph quorum_status
-	
-	2011-12-14 10:44:20.417705 mon {- [quorum_status]
-	2011-12-14 10:44:20.431890 mon.0 -} 
 
-.. code-block:: javascript	
-	
-	'{ "election_epoch": 10,	
+	2011-12-14 10:44:20.417705 mon {- [quorum_status]
+	2011-12-14 10:44:20.431890 mon.0 -}
+
+.. code-block:: javascript
+
+	'{ "election_epoch": 10,
 	  "quorum": [
 	        0,
 	        1,
@@ -351,13 +351,13 @@ For a status of just the monitor you connect to (use ``-m HOST:PORT``
 to select)::
 
 	ceph mon_status
-	
-	
+
+
 	2011-12-14 10:45:30.644414 mon {- [mon_status]
-	2011-12-14 10:45:30.644632 mon.0 -} 
+	2011-12-14 10:45:30.644632 mon.0 -}
 
 .. code-block:: javascript
-	
+
 	'{ "name": "a",
 	  "rank": 0,
 	  "state": "leader",

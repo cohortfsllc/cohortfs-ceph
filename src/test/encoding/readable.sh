@@ -52,7 +52,7 @@ do
 		if ! ./ceph-dencoder type $type import $vdir/objects/$type/$f decode dump_json > $tmp1; then
 		    echo "**** failed to decode $vdir/objects/$type/$f ****"
 		    failed=$(($failed + 1))
-		    continue	    
+		    continue
 		fi
 		if ! ./ceph-dencoder type $type import $vdir/objects/$type/$f decode encode decode dump_json > $tmp2; then
 		    echo "**** failed to decode+encode+decode $vdir/objects/$type/$f ****"

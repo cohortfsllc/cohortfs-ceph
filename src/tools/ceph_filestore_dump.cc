@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -87,7 +87,7 @@ const mymagic_t endmagic = (0xecff << 16) | shortmagic;
 const int fd_none = INT_MIN;
 
 //The first FIXED_LENGTH bytes are a fixed
-//portion of the export output.  This includes the overall
+//portion of the export output.	 This includes the overall
 //version number, and size of header and footer.
 //THIS STRUCTURE CAN ONLY BE APPENDED TO.  If it needs to expand,
 //the version can be bumped and then anything
@@ -376,7 +376,7 @@ static void invalid_path(string &path)
 
 int get_log(ObjectStore *fs, coll_t coll, spg_t pgid, const pg_info_t &info,
    PGLog::IndexedLog &log, pg_missing_t &missing)
-{ 
+{
   map<eversion_t, hobject_t> divergent_priors;
   try {
     ostringstream oss;
@@ -421,15 +421,15 @@ void remove_coll(ObjectStore *store, const coll_t &coll)
       cout << "remove " << *i << std::endl;
       int r = mapper.remove_oid(i->hobj, &_t);
       if (r != 0 && r != -ENOENT) {
-        assert(0);
+	assert(0);
       }
 
       t->remove(coll, *i);
       if (num >= 30) {
-        store->apply_transaction(*t);
-        delete t;
-        t = new ObjectStore::Transaction;
-        num = 0;
+	store->apply_transaction(*t);
+	delete t;
+	t = new ObjectStore::Transaction;
+	num = 0;
       }
     }
   }
@@ -490,7 +490,7 @@ int initiate_new_remove_pg(ObjectStore *store, spg_t r_pgid,
       coll_t to_remove = coll_t::make_removal_coll((*next_removal_seq)++, r_pgid);
       cout << "collection rename " << coll_t(r_pgid)
 	   << " to " << to_remove
-        << std::endl;
+	<< std::endl;
       rmt->collection_rename(coll_t(r_pgid), to_remove);
   } else {
     delete rmt;
@@ -687,7 +687,7 @@ int export_files(ObjectStore *store, coll_t coll)
 	 ++i) {
       r = export_file(store, coll, *i);
       if (r < 0)
-        return r;
+	return r;
     }
   }
   return 0;
@@ -831,10 +831,10 @@ int get_attrs(ObjectStore *store, coll_t coll, ghobject_t hoid,
       bufferlist attr_bl;
       attr_bl.push_back(mi->second);
       object_info_t oi(attr_bl);
-  
+
       if (debug)
-        cout << "object_info " << oi << std::endl;
-  
+	cout << "object_info " << oi << std::endl;
+
       OSDriver::OSTransaction _t(driver.get_transaction(t));
       set<snapid_t> oi_snaps(oi.snaps.begin(), oi.snaps.end());
       snap_mapper.add_oid(hoid.hobj, oi_snaps, &_t);
@@ -949,7 +949,7 @@ int get_pg_metadata(ObjectStore *store, coll_t coll, bufferlist &bl)
   formatter->close_section();
   formatter->flush(cout);
   cout << std::endl;
-  
+
   formatter->open_object_section("log");
   ms.log.dump(formatter);
   formatter->close_section();
@@ -1104,7 +1104,7 @@ int main(int argc, char **argv)
     cout << desc << std::endl;
     exit(1);
   }
-     
+
   if (vm.count("help")) {
     cout << desc << std::endl;
     return 1;
@@ -1114,22 +1114,22 @@ int main(int argc, char **argv)
     cout << "Must provide filestore-path" << std::endl
 	 << desc << std::endl;
     return 1;
-  } 
+  }
   if (!vm.count("journal-path")) {
     cout << "Must provide journal-path" << std::endl
 	 << desc << std::endl;
     return 1;
-  } 
+  }
   if (!vm.count("type")) {
     cout << "Must provide type (info, log, remove, export, import)"
       << std::endl << desc << std::endl;
     return 1;
-  } 
+  }
   if (type != "import" && !vm.count("pgid")) {
     cout << "Must provide pgid" << std::endl
 	 << desc << std::endl;
     return 1;
-  } 
+  }
 
   file_fd = fd_none;
   if (type == "export") {
@@ -1155,10 +1155,10 @@ int main(int argc, char **argv)
     perror("open");
     return 1;
   }
-  
+
   if ((fspath.length() == 0 || jpath.length() == 0) ||
       (type != "info" && type != "log" && type != "remove" && type != "export"
-        && type != "import") ||
+	&& type != "import") ||
       (type != "import" && pgidstr.length() == 0)) {
     cerr << "Invalid params" << std::endl;
     exit(1);
@@ -1229,7 +1229,7 @@ int main(int argc, char **argv)
   }
 
   ObjectStore *fs = new FileStore(fspath, jpath);
-  
+
   int r = fs->mount();
   if (r < 0) {
     if (r == -EBUSY) {
@@ -1337,9 +1337,9 @@ int main(int argc, char **argv)
 
   epoch_t map_epoch;
   if (it != ls.end()) {
-  
+
     coll_t coll = *it;
-  
+
     bufferlist bl;
     map_epoch = PG::peek_map_epoch(fs, coll, infos_oid, &bl);
     if (debug)
@@ -1349,7 +1349,7 @@ int main(int argc, char **argv)
     map<epoch_t,pg_interval_t> past_intervals;
     hobject_t biginfo_oid = OSD::make_pg_biginfo_oid(pgid);
     interval_set<snapid_t> snap_collections;
-  
+
     uint8_t struct_ver;
     r = PG::read_info(fs, coll, bl, info, past_intervals, biginfo_oid,
       infos_oid, snap_collections, struct_ver);
@@ -1364,7 +1364,7 @@ int main(int argc, char **argv)
     if (type == "export") {
       ret = do_export(fs, coll, pgid, info, map_epoch, struct_ver, superblock);
       if (ret == 0 && file_fd != STDOUT_FILENO)
-        cout << "Export successful" << std::endl;
+	cout << "Export successful" << std::endl;
     } else if (type == "info") {
       formatter->open_object_section("info");
       info.dump(formatter);
@@ -1376,8 +1376,8 @@ int main(int argc, char **argv)
       pg_missing_t missing;
       ret = get_log(fs, coll, pgid, info, log, missing);
       if (ret > 0)
-          goto out;
-  
+	  goto out;
+
       formatter->open_object_section("log");
       log.dump(formatter);
       formatter->close_section();

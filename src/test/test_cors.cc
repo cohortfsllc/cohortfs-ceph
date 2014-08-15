@@ -1,3 +1,5 @@
+// -*- mode:C; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,11 +20,11 @@ extern "C"{
 #else
 #define TEST(x, y) void y()
 #define ASSERT_EQ(v, s) if(v != s)cout << "Error at " << __LINE__ << "(" << #v << "!= " << #s << "\n"; \
-                                else cout << "(" << #v << "==" << #s << ") PASSED\n";
+				else cout << "(" << #v << "==" << #s << ") PASSED\n";
 #define EXPECT_EQ(v, s) ASSERT_EQ(v, s)
 #define ASSERT_TRUE(c) if(c)cout << "Error at " << __LINE__ << "(" << #c << ")" << "\n"; \
-                          else cout << "(" << #c << ") PASSED\n";
-#define EXPECT_TRUE(c) ASSERT_TRUE(c) 
+			  else cout << "(" << #c << ") PASSED\n";
+#define EXPECT_TRUE(c) ASSERT_TRUE(c)
 #endif
 #include "common/code_environment.h"
 #include "common/ceph_argparse.h"
@@ -37,8 +39,8 @@ using namespace std;
 #define HTTP_RESPONSE_STR "RespCode"
 #define CEPH_CRYPTO_HMACSHA1_DIGESTSIZE 20
 
-extern "C" int ceph_armor(char *dst, const char *dst_end, 
-                          const char *src, const char *end);
+extern "C" int ceph_armor(char *dst, const char *dst_end,
+			  const char *src, const char *end);
 enum key_type {
   KEY_TYPE_UNDEFINED = 0,
   KEY_TYPE_SWIFT,
@@ -48,11 +50,11 @@ enum key_type {
 static void print_usage(char *exec){
   cout << "Usage: " << exec << " <Options>\n";
   cout << "Options:\n"
-          "-g <gw-ip> - The ip address of the gateway\n"
-          "-p <gw-port> - The port number of the gateway\n"
-          "-k <SWIFT|S3> - The key type, either SWIFT or S3\n"
-          "-s3 <AWSAccessKeyId:SecretAccessKeyID> - Only, if the key type is S3, gives S3 credentials\n"
-          "-swift <Auth-Token> - Only if the key type is SWIFT, and gives the SWIFT credentials\n";
+	  "-g <gw-ip> - The ip address of the gateway\n"
+	  "-p <gw-port> - The port number of the gateway\n"
+	  "-k <SWIFT|S3> - The key type, either SWIFT or S3\n"
+	  "-s3 <AWSAccessKeyId:SecretAccessKeyID> - Only, if the key type is S3, gives S3 credentials\n"
+	  "-swift <Auth-Token> - Only if the key type is SWIFT, and gives the SWIFT credentials\n";
 }
 class test_cors_helper {
   private:
@@ -72,9 +74,9 @@ class test_cors_helper {
     ~test_cors_helper(){
       curl_global_cleanup();
     }
-    int send_request(string method, string uri, 
-                     size_t (*function)(void *,size_t,size_t,void *) = 0,
-                     void *ud = 0, size_t length = 0);
+    int send_request(string method, string uri,
+		     size_t (*function)(void *,size_t,size_t,void *) = 0,
+		     void *ud = 0, size_t length = 0);
     int extract_input(unsigned argc, char *argv[]);
     string& get_response(string hdr){
       return response[hdr];
@@ -159,13 +161,13 @@ static inline void buf_to_hex(const unsigned char *buf, int len, char *str)
 }
 
 static void calc_hmac_sha1(const char *key, int key_len,
-                    const char *msg, int msg_len, char *dest)
+		    const char *msg, int msg_len, char *dest)
 /* destination should be CEPH_CRYPTO_HMACSHA1_DIGESTSIZE bytes long */
 {
   ceph::crypto::HMACSHA1 hmac((const unsigned char *)key, key_len);
   hmac.Update((const unsigned char *)msg, msg_len);
   hmac.Final((unsigned char *)dest);
-  
+
   char hex_str[(CEPH_CRYPTO_HMACSHA1_DIGESTSIZE * 2) + 1];
   buf_to_hex((unsigned char *)dest, CEPH_CRYPTO_HMACSHA1_DIGESTSIZE, hex_str);
 }
@@ -184,7 +186,7 @@ static int get_s3_auth(string method, string creds, string date, string res, str
     auth_hdr.append(method + string("\n\n\n") + date + string("\n") + res);
     calc_hmac_sha1(secret.c_str(), secret.length(), auth_hdr.c_str(), auth_hdr.length(), hmac_sha1);
     int ret = ceph_armor(b64, b64 + 64, hmac_sha1,
-                         hmac_sha1 + CEPH_CRYPTO_HMACSHA1_DIGESTSIZE);
+			 hmac_sha1 + CEPH_CRYPTO_HMACSHA1_DIGESTSIZE);
     if (ret < 0) {
       cout << "ceph_armor failed\n";
       return -1;
@@ -200,26 +202,26 @@ void get_date(string& d){
   char date[64];
   struct tm tm;
   char *days[] = {(char *)"Sun", (char *)"Mon", (char *)"Tue",
-                  (char *)"Wed", (char *)"Thu", (char *)"Fri", 
-                  (char *)"Sat"};
-  char *months[] = {(char *)"Jan", (char *)"Feb", (char *)"Mar", 
-                    (char *)"Apr", (char *)"May", (char *)"Jun",
-                    (char *)"Jul",(char *) "Aug", (char *)"Sep", 
-                    (char *)"Oct", (char *)"Nov", (char *)"Dec"};
+		  (char *)"Wed", (char *)"Thu", (char *)"Fri",
+		  (char *)"Sat"};
+  char *months[] = {(char *)"Jan", (char *)"Feb", (char *)"Mar",
+		    (char *)"Apr", (char *)"May", (char *)"Jun",
+		    (char *)"Jul",(char *) "Aug", (char *)"Sep",
+		    (char *)"Oct", (char *)"Nov", (char *)"Dec"};
   gettimeofday(&tv, NULL);
   gmtime_r(&tv.tv_sec, &tm);
-  sprintf(date, "%s, %d %s %d %d:%d:%d GMT", 
-          days[tm.tm_wday], 
-          tm.tm_mday, months[tm.tm_mon], 
-          tm.tm_year + 1900,
-          tm.tm_hour, tm.tm_min, 0 /*tm.tm_sec*/);
+  sprintf(date, "%s, %d %s %d %d:%d:%d GMT",
+	  days[tm.tm_wday],
+	  tm.tm_mday, months[tm.tm_mon],
+	  tm.tm_year + 1900,
+	  tm.tm_hour, tm.tm_min, 0 /*tm.tm_sec*/);
   d = date;
 }
 
-int test_cors_helper::send_request(string method, string res, 
-                                   size_t (*read_function)( void *,size_t,size_t,void *),
-                                   void *ud,
-                                   size_t length){
+int test_cors_helper::send_request(string method, string res,
+				   size_t (*read_function)( void *,size_t,size_t,void *),
+				   void *ud,
+				   size_t length){
   string url;
   string auth, date;
   url.append(string("http://") + host);
@@ -259,19 +261,19 @@ int test_cors_helper::send_request(string method, string res,
     slist = curl_slist_append(slist, auth.c_str());
     slist = curl_slist_append(slist, http_date.c_str());
     for(list<string>::iterator it = extra_hdrs.begin();
-        it != extra_hdrs.end(); ++it){
+	it != extra_hdrs.end(); ++it){
       slist = curl_slist_append(slist, (*it).c_str());
     }
     if(read_function)
       curl_slist_append(slist, "Expect:");
-    curl_easy_setopt(curl_inst, CURLOPT_HTTPHEADER, slist); 
+    curl_easy_setopt(curl_inst, CURLOPT_HTTPHEADER, slist);
 
     response.erase(response.begin(), response.end());
     extra_hdrs.erase(extra_hdrs.begin(), extra_hdrs.end());
     CURLcode res = curl_easy_perform(curl_inst);
     if(res != CURLE_OK){
-      cout << "Curl perform failed for " << url << ", res: " << 
-        curl_easy_strerror(res) << "\n";
+      cout << "Curl perform failed for " << url << ", res: " <<
+	curl_easy_strerror(res) << "\n";
       return -1;
     }
     curl_slist_free_all(slist);
@@ -346,8 +348,8 @@ size_t cors_read_xml(void *ptr, size_t s, size_t n, void *ud){
 }
 
 void send_cors(set<string> o, set<string> h,
-               list<string> e, uint8_t flags, 
-               unsigned max_age){
+	       list<string> e, uint8_t flags,
+	       unsigned max_age){
   if(g_test->get_key_type() == KEY_TYPE_S3){
     RGWCORSRule rule(o, h, e, flags, max_age);
     RGWCORSConfiguration config;
@@ -357,8 +359,8 @@ void send_cors(set<string> o, set<string> h,
     s3 = static_cast<RGWCORSConfiguration_S3 *>(&config);
     s3->to_xml(ss);
 
-    g_test->send_request(string("PUT"), string("/"S3_BUCKET_NAME"?cors"), cors_read_xml, 
-                         (void *)&ss, ss.str().length());
+    g_test->send_request(string("PUT"), string("/"S3_BUCKET_NAME"?cors"), cors_read_xml,
+			 (void *)&ss, ss.str().length());
   }else if(g_test->get_key_type() == KEY_TYPE_SWIFT){
     set<string>::iterator it;
     string a_o;
@@ -371,16 +373,16 @@ void send_cors(set<string> o, set<string> h,
     if(!h.empty()){
       string a_h;
       for(it = h.begin(); it != h.end(); ++it){
-        if(a_h.length() > 0)a_h.append(" ");
-        a_h.append(*it);
+	if(a_h.length() > 0)a_h.append(" ");
+	a_h.append(*it);
       }
       g_test->set_extra_header(string("X-Container-Meta-Access-Control-Allow-Headers: ") + a_h);
     }
     if(!e.empty()){
       string e_h;
       for(list<string>::iterator lit = e.begin(); lit != e.end(); ++lit){
-        if(e_h.length() > 0)e_h.append(" ");
-        e_h.append(*lit);
+	if(e_h.length() > 0)e_h.append(" ");
+	e_h.append(*lit);
       }
       g_test->set_extra_header(string("X-Container-Meta-Access-Control-Expose-Headers: ") + e_h);
     }
@@ -392,8 +394,8 @@ void send_cors(set<string> o, set<string> h,
     //const char *data = "1";
     stringstream ss;
     ss << "1";
-    g_test->send_request(string("POST"), string("/swift/v1/"SWIFT_BUCKET_NAME), cors_read_xml, 
-                         (void *)&ss, 1);
+    g_test->send_request(string("POST"), string("/swift/v1/"SWIFT_BUCKET_NAME), cors_read_xml,
+			 (void *)&ss, 1);
   }
 }
 
@@ -426,7 +428,7 @@ TEST(TestCORS, putcors_firsttime){
     if(!r)return;
 
     EXPECT_TRUE((r->get_allowed_methods() & (RGW_CORS_GET | RGW_CORS_PUT))
-                == (RGW_CORS_GET | RGW_CORS_PUT));
+		== (RGW_CORS_GET | RGW_CORS_PUT));
   }
   ASSERT_EQ(0, delete_bucket());
 }
@@ -441,7 +443,7 @@ TEST(TestCORS, putcors_invalid_hostname){
   send_cors(origins, h, e, flags, CORS_MAX_AGE_INVALID);
   EXPECT_EQ((400U), g_test->get_resp_code());
   origins.erase(origins.begin(), origins.end());
- 
+
   if((g_test->get_key_type() != KEY_TYPE_SWIFT)){
     origins.insert(origins.end(), "");
     send_cors(origins, h, e, flags, CORS_MAX_AGE_INVALID);
@@ -462,7 +464,7 @@ TEST(TestCORS, putcors_invalid_headers){
   send_cors(origins, h, e, flags, CORS_MAX_AGE_INVALID);
   EXPECT_EQ((400U), g_test->get_resp_code());
   h.erase(h.begin(), h.end());
- 
+
   if((g_test->get_key_type() != KEY_TYPE_SWIFT)){
     h.insert(h.end(), "");
     flags = RGW_CORS_GET | RGW_CORS_PUT;
@@ -512,7 +514,7 @@ TEST(TestCORS, optionscors_test_options_2){
 
   origins.insert(origins.end(), "*.example.com");
   uint8_t flags = RGW_CORS_GET | RGW_CORS_PUT | RGW_CORS_DELETE | RGW_CORS_HEAD;
-  
+
   send_cors(origins, h, e, flags, CORS_MAX_AGE_INVALID);
   EXPECT_EQ(((g_test->get_key_type() == KEY_TYPE_SWIFT)?202U:200U), g_test->get_resp_code());
 
@@ -547,7 +549,7 @@ TEST(TestCORS, optionscors_test_options_3){
 
   origins.insert(origins.end(), "*");
   uint8_t flags = RGW_CORS_GET | RGW_CORS_PUT | RGW_CORS_DELETE | RGW_CORS_HEAD;
-  
+
   send_cors(origins, h, e, flags, CORS_MAX_AGE_INVALID);
   EXPECT_EQ(((g_test->get_key_type() == KEY_TYPE_SWIFT)?202U:200U), g_test->get_resp_code());
 
@@ -616,10 +618,10 @@ TEST(TestCORS, optionscors_test_options_4){
   h.insert(h.end(), "Header2");
   h.insert(h.end(), "*");
   uint8_t flags = RGW_CORS_GET | RGW_CORS_PUT;
-  
+
   send_cors(origins, h, e, flags, CORS_MAX_AGE_INVALID);
   EXPECT_EQ(((g_test->get_key_type() == KEY_TYPE_SWIFT)?202U:200U), g_test->get_resp_code());
-  
+
   g_test->set_extra_header(string("Origin: example.com"));
   g_test->set_extra_header(string("Access-Control-Request-Method: GET"));
   g_test->send_request(string("OPTIONS"), BUCKET_URL);
@@ -709,10 +711,10 @@ TEST(TestCORS, optionscors_test_options_5){
   e.insert(e.end(), "Expose1");
   e.insert(e.end(), "Expose2");
   uint8_t flags = RGW_CORS_GET | RGW_CORS_PUT;
-  
+
   send_cors(origins, h, e, flags, CORS_MAX_AGE_INVALID);
   EXPECT_EQ(((g_test->get_key_type() == KEY_TYPE_SWIFT)?202U:200U), g_test->get_resp_code());
-  
+
   g_test->set_extra_header(string("Origin: example.com"));
   g_test->set_extra_header(string("Access-Control-Request-Method: GET"));
   g_test->send_request(string("OPTIONS"), BUCKET_URL);
@@ -736,25 +738,25 @@ TEST(TestCORS, optionscors_test_options_6){
 
   origins.insert(origins.end(), "http://www.example.com");
   uint8_t flags = RGW_CORS_GET | RGW_CORS_PUT;
-  
+
   send_cors(origins, h, e, flags, CORS_MAX_AGE_INVALID);
   EXPECT_EQ(((g_test->get_key_type() == KEY_TYPE_SWIFT)?202U:200U), g_test->get_resp_code());
-  
+
   g_test->set_extra_header(string("Origin: example.com"));
   g_test->set_extra_header(string("Access-Control-Request-Method: GET"));
   g_test->send_request(string("OPTIONS"), BUCKET_URL);
   EXPECT_EQ(err, g_test->get_resp_code());
-  
+
   g_test->set_extra_header(string("Origin: http://example.com"));
   g_test->set_extra_header(string("Access-Control-Request-Method: GET"));
   g_test->send_request(string("OPTIONS"), BUCKET_URL);
   EXPECT_EQ(err, g_test->get_resp_code());
-  
+
   g_test->set_extra_header(string("Origin: www.example.com"));
   g_test->set_extra_header(string("Access-Control-Request-Method: GET"));
   g_test->send_request(string("OPTIONS"), BUCKET_URL);
   EXPECT_EQ(err, g_test->get_resp_code());
-  
+
   g_test->set_extra_header(string("Origin: http://www.example.com"));
   g_test->set_extra_header(string("Access-Control-Request-Method: GET"));
   g_test->send_request(string("OPTIONS"), BUCKET_URL);
@@ -769,17 +771,17 @@ TEST(TestCORS, optionscors_test_options_6){
   g_test->set_extra_header(string("Access-Control-Request-Method: GET"));
   g_test->send_request(string("OPTIONS"), BUCKET_URL);
   EXPECT_EQ(200U, g_test->get_resp_code());
-  
+
   g_test->set_extra_header(string("Origin: http://example.com"));
   g_test->set_extra_header(string("Access-Control-Request-Method: GET"));
   g_test->send_request(string("OPTIONS"), BUCKET_URL);
   EXPECT_EQ(err, g_test->get_resp_code());
-  
+
   g_test->set_extra_header(string("Origin: www.example.com"));
   g_test->set_extra_header(string("Access-Control-Request-Method: GET"));
   g_test->send_request(string("OPTIONS"), BUCKET_URL);
   EXPECT_EQ(200U, g_test->get_resp_code());
-  
+
   g_test->set_extra_header(string("Origin: http://www.example.com"));
   g_test->set_extra_header(string("Access-Control-Request-Method: GET"));
   g_test->send_request(string("OPTIONS"), BUCKET_URL);
@@ -799,12 +801,12 @@ TEST(TestCORS, optionscors_test_options_6){
   g_test->set_extra_header(string("Access-Control-Request-Method: GET"));
   g_test->send_request(string("OPTIONS"), BUCKET_URL);
   EXPECT_EQ(200U, g_test->get_resp_code());
-  
+
   g_test->set_extra_header(string("Origin: http://example.com"));
   g_test->set_extra_header(string("Access-Control-Request-Method: GET"));
   g_test->send_request(string("OPTIONS"), BUCKET_URL);
   EXPECT_EQ(err, g_test->get_resp_code());
-  
+
   g_test->set_extra_header(string("Origin: www.example.com"));
   g_test->set_extra_header(string("Access-Control-Request-Method: GET"));
   g_test->send_request(string("OPTIONS"), BUCKET_URL);
@@ -829,14 +831,14 @@ TEST(TestCORS, optionscors_test_options_7){
   h.insert(h.end(), "*-Length");
   h.insert(h.end(), "foo*foo");
   uint8_t flags = RGW_CORS_GET | RGW_CORS_PUT;
-  
+
   send_cors(origins, h, e, flags, CORS_MAX_AGE_INVALID);
   EXPECT_EQ(((g_test->get_key_type() == KEY_TYPE_SWIFT)?202U:200U), g_test->get_resp_code());
-  
+
   g_test->set_extra_header(string("Origin: example.com"));
   g_test->set_extra_header(string("Access-Control-Request-Method: GET"));
   g_test->set_extra_header(string("Access-Control-Allow-Headers: Header1, Header2, Header3, "
-                                  "Hdr--Length, Hdr-1-Length, Header-Length, Content-Length, foofoofoo"));
+				  "Hdr--Length, Hdr-1-Length, Header-Length, Content-Length, foofoofoo"));
   g_test->send_request(string("OPTIONS"), BUCKET_URL);
   EXPECT_EQ(200U, g_test->get_resp_code());
   if(g_test->get_resp_code() == 200){
@@ -846,7 +848,7 @@ TEST(TestCORS, optionscors_test_options_7){
     EXPECT_EQ(0, s.compare("GET"));
     s = g_test->get_response(string("Access-Control-Allow-Headers"));
     EXPECT_EQ(0, s.compare("Header1,Header2,Header3,"
-                           "Hdr--Length,Hdr-1-Length,Header-Length,Content-Length,foofoofoo"));
+			   "Hdr--Length,Hdr-1-Length,Header-Length,Content-Length,foofoofoo"));
   }
   ASSERT_EQ(0, delete_bucket());
 }
@@ -866,7 +868,7 @@ TEST(TestCORS, deletecors_test){
   ASSERT_EQ(0, create_bucket());
   origins.insert(origins.end(), "example.com");
   uint8_t flags = RGW_CORS_GET | RGW_CORS_PUT;
-  
+
   send_cors(origins, h, e, flags, CORS_MAX_AGE_INVALID);
   EXPECT_EQ(((g_test->get_key_type() == KEY_TYPE_SWIFT)?202U:200U), g_test->get_resp_code());
 

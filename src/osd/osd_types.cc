@@ -11,7 +11,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -762,7 +762,7 @@ void object_info_t::dump(Formatter *f) const
   f->dump_unsigned("truncate_size", truncate_size);
   f->open_object_section("watchers");
   for (map<pair<uint64_t, entity_name_t>,watch_info_t>::const_iterator p =
-         watchers.begin(); p != watchers.end(); ++p) {
+	 watchers.begin(); p != watchers.end(); ++p) {
     stringstream ss;
     ss << p->first.second;
     f->open_object_section(ss.str().c_str());
@@ -775,7 +775,7 @@ void object_info_t::dump(Formatter *f) const
 void object_info_t::generate_test_instances(list<object_info_t*>& o)
 {
   o.push_back(new object_info_t());
-  
+
   // fixme
 }
 

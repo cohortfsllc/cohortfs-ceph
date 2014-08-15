@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #include <errno.h>
 
 #include "json_spirit/json_spirit.h"
@@ -126,7 +128,7 @@ void req_info::rebuild_from(req_info& src)
 
 req_state::req_state(CephContext *_cct, class RGWEnv *e) : cct(_cct), cio(NULL), op(OP_UNKNOWN),
 							   has_acl_header(false),
-                                                           os_auth_token(NULL), info(_cct, e)
+							   os_auth_token(NULL), info(_cct, e)
 {
   enable_ops_log = e->conf->enable_ops_log;
   enable_usage_log = e->conf->enable_usage_log;
@@ -176,12 +178,12 @@ struct str_len {
 #define STR_LEN_ENTRY(s) { s, sizeof(s) - 1 }
 
 struct str_len meta_prefixes[] = { STR_LEN_ENTRY("HTTP_X_AMZ"),
-                                   STR_LEN_ENTRY("HTTP_X_GOOG"),
-                                   STR_LEN_ENTRY("HTTP_X_DHO"),
-                                   STR_LEN_ENTRY("HTTP_X_RGW"),
-                                   STR_LEN_ENTRY("HTTP_X_OBJECT"),
-                                   STR_LEN_ENTRY("HTTP_X_CONTAINER"),
-                                   {NULL, 0} };
+				   STR_LEN_ENTRY("HTTP_X_GOOG"),
+				   STR_LEN_ENTRY("HTTP_X_DHO"),
+				   STR_LEN_ENTRY("HTTP_X_RGW"),
+				   STR_LEN_ENTRY("HTTP_X_OBJECT"),
+				   STR_LEN_ENTRY("HTTP_X_CONTAINER"),
+				   {NULL, 0} };
 
 
 void req_info::init_meta_info(bool *found_bad_meta)
@@ -198,36 +200,36 @@ void req_info::init_meta_info(bool *found_bad_meta)
       int len = meta_prefixes[prefix_num].len;
       const char *p = header_name.c_str();
       if (strncmp(p, prefix, len) == 0) {
-        dout(10) << "meta>> " << p << dendl;
-        const char *name = p+len; /* skip the prefix */
-        int name_len = header_name.size() - len;
+	dout(10) << "meta>> " << p << dendl;
+	const char *name = p+len; /* skip the prefix */
+	int name_len = header_name.size() - len;
 
-        if (found_bad_meta && strncmp(name, "_META_", name_len) == 0)
-          *found_bad_meta = true;
+	if (found_bad_meta && strncmp(name, "_META_", name_len) == 0)
+	  *found_bad_meta = true;
 
-        char name_low[meta_prefixes[0].len + name_len + 1];
-        snprintf(name_low, meta_prefixes[0].len - 5 + name_len + 1, "%s%s", meta_prefixes[0].str + 5 /* skip HTTP_ */, name); // normalize meta prefix
-        int j;
-        for (j = 0; name_low[j]; j++) {
-          if (name_low[j] != '_')
-            name_low[j] = tolower(name_low[j]);
-          else
-            name_low[j] = '-';
-        }
-        name_low[j] = 0;
+	char name_low[meta_prefixes[0].len + name_len + 1];
+	snprintf(name_low, meta_prefixes[0].len - 5 + name_len + 1, "%s%s", meta_prefixes[0].str + 5 /* skip HTTP_ */, name); // normalize meta prefix
+	int j;
+	for (j = 0; name_low[j]; j++) {
+	  if (name_low[j] != '_')
+	    name_low[j] = tolower(name_low[j]);
+	  else
+	    name_low[j] = '-';
+	}
+	name_low[j] = 0;
 
-        map<string, string>::iterator iter;
-        iter = x_meta_map.find(name_low);
-        if (iter != x_meta_map.end()) {
-          string old = iter->second;
-          int pos = old.find_last_not_of(" \t"); /* get rid of any whitespaces after the value */
-          old = old.substr(0, pos + 1);
-          old.append(",");
-          old.append(val);
-          x_meta_map[name_low] = old;
-        } else {
-          x_meta_map[name_low] = val;
-        }
+	map<string, string>::iterator iter;
+	iter = x_meta_map.find(name_low);
+	if (iter != x_meta_map.end()) {
+	  string old = iter->second;
+	  int pos = old.find_last_not_of(" \t"); /* get rid of any whitespaces after the value */
+	  old = old.substr(0, pos + 1);
+	  old.append(",");
+	  old.append(val);
+	  x_meta_map[name_low] = old;
+	} else {
+	  x_meta_map[name_low] = val;
+	}
       }
     }
   }
@@ -396,13 +398,13 @@ int parse_time(const char *time_str, time_t *time)
  * calculate the sha1 value of a given msg and key
  */
 void calc_hmac_sha1(const char *key, int key_len,
-                    const char *msg, int msg_len, char *dest)
+		    const char *msg, int msg_len, char *dest)
 /* destination should be CEPH_CRYPTO_HMACSHA1_DIGESTSIZE bytes long */
 {
   HMACSHA1 hmac((const unsigned char *)key, key_len);
   hmac.Update((const unsigned char *)msg, msg_len);
   hmac.Final((unsigned char *)dest);
-  
+
   char hex_str[(CEPH_CRYPTO_HMACSHA1_DIGESTSIZE * 2) + 1];
   buf_to_hex((unsigned char *)dest, CEPH_CRYPTO_HMACSHA1_DIGESTSIZE, hex_str);
 }
@@ -488,21 +490,21 @@ int NameVal::parse()
     val = str.substr(delim_pos + 1);
   }
 
-  return ret; 
+  return ret;
 }
 
 int XMLArgs::parse()
 {
   int pos = 0, fpos;
   bool end = false;
-  bool admin_subresource_added = false; 
+  bool admin_subresource_added = false;
   if (str[pos] == '?') pos++;
 
   while (!end) {
     fpos = str.find('&', pos);
     if (fpos  < pos) {
        end = true;
-       fpos = str.size(); 
+       fpos = str.size();
     }
     string substr, nameval;
     substr = str.substr(pos, fpos - pos);
@@ -514,48 +516,48 @@ int XMLArgs::parse()
       string& val = nv.get_val();
 
       if (name.compare(0, sizeof(RGW_SYS_PARAM_PREFIX) - 1, RGW_SYS_PARAM_PREFIX) == 0) {
-        sys_val_map[name] = val;
+	sys_val_map[name] = val;
       } else {
-        val_map[name] = val;
+	val_map[name] = val;
       }
 
       if ((name.compare("acl") == 0) ||
-          (name.compare("cors") == 0) ||
-          (name.compare("location") == 0) ||
-          (name.compare("logging") == 0) ||
-          (name.compare("delete") == 0) ||
-          (name.compare("uploads") == 0) ||
-          (name.compare("partNumber") == 0) ||
-          (name.compare("uploadId") == 0) ||
-          (name.compare("versionId") == 0) ||
-          (name.compare("torrent") == 0)) {
-        sub_resources[name] = val;
+	  (name.compare("cors") == 0) ||
+	  (name.compare("location") == 0) ||
+	  (name.compare("logging") == 0) ||
+	  (name.compare("delete") == 0) ||
+	  (name.compare("uploads") == 0) ||
+	  (name.compare("partNumber") == 0) ||
+	  (name.compare("uploadId") == 0) ||
+	  (name.compare("versionId") == 0) ||
+	  (name.compare("torrent") == 0)) {
+	sub_resources[name] = val;
       } else if (name[0] == 'r') { // root of all evil
-        if ((name.compare("response-content-type") == 0) ||
-           (name.compare("response-content-language") == 0) ||
-           (name.compare("response-expires") == 0) ||
-           (name.compare("response-cache-control") == 0) ||
-           (name.compare("response-content-disposition") == 0) ||
-           (name.compare("response-content-encoding") == 0)) {
-          sub_resources[name] = val;
-          has_resp_modifier = true;
-        }
-      } else if  ((name.compare("subuser") == 0) ||
-          (name.compare("key") == 0) ||
-          (name.compare("caps") == 0) ||
-          (name.compare("index") == 0) ||
-          (name.compare("policy") == 0) ||
-          (name.compare("quota") == 0) ||
-          (name.compare("object") == 0)) {
+	if ((name.compare("response-content-type") == 0) ||
+	   (name.compare("response-content-language") == 0) ||
+	   (name.compare("response-expires") == 0) ||
+	   (name.compare("response-cache-control") == 0) ||
+	   (name.compare("response-content-disposition") == 0) ||
+	   (name.compare("response-content-encoding") == 0)) {
+	  sub_resources[name] = val;
+	  has_resp_modifier = true;
+	}
+      } else if	 ((name.compare("subuser") == 0) ||
+	  (name.compare("key") == 0) ||
+	  (name.compare("caps") == 0) ||
+	  (name.compare("index") == 0) ||
+	  (name.compare("policy") == 0) ||
+	  (name.compare("quota") == 0) ||
+	  (name.compare("object") == 0)) {
 
-        if (!admin_subresource_added) {
-          sub_resources[name] = "";
-          admin_subresource_added = true;
-        }
+	if (!admin_subresource_added) {
+	  sub_resources[name] = "";
+	  admin_subresource_added = true;
+	}
       }
     }
 
-    pos = fpos + 1;  
+    pos = fpos + 1;
   }
 
   return 0;
@@ -708,16 +710,16 @@ bool url_decode(string& src_str, string& dest_str)
     } else {
       src++;
       if (!*src)
-        break;
+	break;
       char c1 = hex_to_num(*src++);
       if (!*src)
-        break;
+	break;
       c = c1 << 4;
       if (c1 < 0)
-        return false;
+	return false;
       c1 = hex_to_num(*src++);
       if (c1 < 0)
-        return false;
+	return false;
       c |= c1;
       dest[pos++] = c;
     }
@@ -835,7 +837,7 @@ struct rgw_name_to_flag {
 };
 
 static int parse_list_of_flags(struct rgw_name_to_flag *mapping,
-                               const string& str, uint32_t *perm)
+			       const string& str, uint32_t *perm)
 {
   list<string> strs;
   get_str_list(str, strs);
@@ -845,7 +847,7 @@ static int parse_list_of_flags(struct rgw_name_to_flag *mapping,
     string& s = *iter;
     for (int i = 0; mapping[i].type_name; i++) {
       if (s.compare(mapping[i].type_name) == 0)
-        v |= mapping[i].flag;
+	v |= mapping[i].flag;
     }
   }
 
@@ -853,8 +855,8 @@ static int parse_list_of_flags(struct rgw_name_to_flag *mapping,
   return 0;
 }
 
-static struct rgw_name_to_flag cap_names[] = { {"*",     RGW_CAP_ALL},
-                  {"read",  RGW_CAP_READ},
+static struct rgw_name_to_flag cap_names[] = { {"*",	 RGW_CAP_ALL},
+		  {"read",  RGW_CAP_READ},
 		  {"write", RGW_CAP_WRITE},
 		  {NULL, 0} };
 
@@ -1032,7 +1034,7 @@ int RGWUserCaps::check_cap(const string& cap, uint32_t perm)
 
 
 static struct rgw_name_to_flag op_type_mapping[] = { {"*",  RGW_OP_TYPE_ALL},
-                  {"read",  RGW_OP_TYPE_READ},
+		  {"read",  RGW_OP_TYPE_READ},
 		  {"write", RGW_OP_TYPE_WRITE},
 		  {"delete", RGW_OP_TYPE_DELETE},
 		  {NULL, 0} };

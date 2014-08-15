@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -52,18 +52,18 @@ public:
       Mutex::Locker l(_lock);
 
       if (_cct->_conf->heartbeat_interval) {
-        utime_t interval(_cct->_conf->heartbeat_interval, 0);
-        _cond.WaitInterval(_cct, _lock, interval);
+	utime_t interval(_cct->_conf->heartbeat_interval, 0);
+	_cond.WaitInterval(_cct, _lock, interval);
       } else
-        _cond.Wait(_lock);
+	_cond.Wait(_lock);
 
       if (_exit_thread) {
-        break;
+	break;
       }
 
       if (_reopen_logs) {
-        _cct->_log->reopen_log_file();
-        _reopen_logs = false;
+	_cct->_log->reopen_log_file();
+	_reopen_logs = false;
       }
       _cct->_heartbeat_map->check_touch_file();
     }
@@ -97,7 +97,7 @@ private:
  * observe logging config changes
  *
  * The logging subsystem sits below most of the ceph code, including
- * the config subsystem, to keep it simple and self-contained.  Feed
+ * the config subsystem, to keep it simple and self-contained.	Feed
  * logging-related config changes to the log.
  */
 class LogObs : public md_config_obs_t {
@@ -121,7 +121,7 @@ public:
   }
 
   void handle_conf_change(const md_config_t *conf,
-                          const std::set <std::string> &changed) {
+			  const std::set <std::string> &changed) {
     // stderr
     if (changed.count("log_to_stderr") || changed.count("err_to_stderr")) {
       int l = conf->log_to_stderr ? 99 : (conf->err_to_stderr ? -1 : -2);
@@ -198,8 +198,8 @@ void CephContext::do_command(std::string command, cmdmap_t& cmdmap,
       std::vector<std::string> val;
 
       if (!(cmd_getval(this, cmdmap, "var", var)) ||
-          !(cmd_getval(this, cmdmap, "val", val))) {
-        f->dump_string("error", "syntax error: 'config set <var> <value>'");
+	  !(cmd_getval(this, cmdmap, "val", val))) {
+	f->dump_string("error", "syntax error: 'config set <var> <value>'");
       } else {
 	// val may be multiple words
 	string valstr = str_join(val, " ");
@@ -208,9 +208,9 @@ void CephContext::do_command(std::string command, cmdmap_t& cmdmap,
 	  f->dump_stream("error") << "error setting '" << var << "' to '" << valstr << "': " << cpp_strerror(r);
 	} else {
 	  ostringstream ss;
-          _conf->apply_changes(&ss);
-          f->dump_string("success", ss.str());
-        }
+	  _conf->apply_changes(&ss);
+	  f->dump_string("success", ss.str());
+	}
       }
     } else if (command == "config get") {
       std::string var;
@@ -237,14 +237,14 @@ void CephContext::do_command(std::string command, cmdmap_t& cmdmap,
       _log->reopen_log_file();
     }
     else {
-      assert(0 == "registered under wrong command?");    
+      assert(0 == "registered under wrong command?");
     }
     f->close_section();
   }
   f->flush(*out);
   delete f;
   lgeneric_dout(this, 1) << "do_command '" << command << "' '" << ss.str()
-		         << "result is " << out->length() << " bytes" << dendl;
+			 << "result is " << out->length() << " bytes" << dendl;
 };
 
 

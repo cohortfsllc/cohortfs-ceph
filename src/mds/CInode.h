@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -74,7 +74,7 @@ class CInode : public MDSCacheObject {
 private:
   static boost::pool<> pool;
 public:
-  static void *operator new(size_t num_bytes) { 
+  static void *operator new(size_t num_bytes) {
     void *n = pool.malloc();
     if (!n)
       throw std::bad_alloc();
@@ -89,7 +89,7 @@ public:
   // -- pins --
   static const int PIN_DIRFRAG = -1;
   static const int PIN_CAPS = 2;  // client caps
-  static const int PIN_IMPORTING = -4;  // importing
+  static const int PIN_IMPORTING = -4;	// importing
   static const int PIN_ANCHORING = 5;
   static const int PIN_UNANCHORING = 6;
   static const int PIN_OPENINGDIR = 7;
@@ -160,7 +160,7 @@ public:
   // -- waiters --
   static const uint64_t WAIT_DIR = (1<<0);
   static const uint64_t WAIT_ANCHORED = (1<<1);
-  static const uint64_t WAIT_UNANCHORED  = (1<<2);
+  static const uint64_t WAIT_UNANCHORED	 = (1<<2);
   static const uint64_t WAIT_FROZEN = (1<<3);
   static const uint64_t WAIT_TRUNC = (1<<4);
   static const uint64_t WAIT_FLOCK = (1<<5);
@@ -358,7 +358,7 @@ public:
   int auth_pin_freeze_allowance;
 
 private:
-  int nested_anchors;   // _NOT_ including me!
+  int nested_anchors;	// _NOT_ including me!
 
  public:
   inode_load_vec_t pop;
@@ -415,7 +415,7 @@ private:
   // -- accessors --
   bool is_file()    { return inode.is_file(); }
   bool is_symlink() { return inode.is_symlink(); }
-  bool is_dir()     { return inode.is_dir(); }
+  bool is_dir()	    { return inode.is_dir(); }
 
   bool is_anchored() { return inode.anchored; }
   bool is_anchoring() { return state_test(STATE_ANCHORING); }
@@ -496,14 +496,14 @@ private:
 
   void encode_replica(int rep, bufferlist& bl) {
     assert(is_auth());
-    
+
     // relax locks?
     if (!is_replicated())
       replicate_relax_locks();
-    
+
     uint32_t nonce = add_replica(rep);
     ::encode(nonce, bl);
-    
+
     _encode_base(bl);
     _encode_locks_state_for_replica(bl);
   }
@@ -511,7 +511,7 @@ private:
     uint32_t nonce;
     ::decode(nonce, p);
     replica_nonce = nonce;
-    
+
     _decode_base(p);
     _decode_locks_state(p, is_new);
   }
@@ -549,7 +549,7 @@ public:
     put(PIN_EXPORTINGCAPS);
   }
   void decode_import(bufferlist::iterator& p, LogSegment *ls);
-  
+
 
   // for giving to clients
   int encode_inodestat(bufferlist& bl, Session *session,
@@ -637,8 +637,8 @@ public:
   int count_nonstale_caps() {
     int n = 0;
     for (map<client_t,Capability*>::iterator it = client_caps.begin();
-         it != client_caps.end();
-         ++it) 
+	 it != client_caps.end();
+	 ++it)
       if (!it->second->is_stale())
 	n++;
     return n;
@@ -646,8 +646,8 @@ public:
   bool multiple_nonstale_caps() {
     int n = 0;
     for (map<client_t,Capability*>::iterator it = client_caps.begin();
-         it != client_caps.end();
-         ++it) 
+	 it != client_caps.end();
+	 ++it)
       if (!it->second->is_stale()) {
 	if (n)
 	  return true;
@@ -770,7 +770,7 @@ public:
   void add_remote_parent(CDentry *p);
   void remove_remote_parent(CDentry *p);
   int num_remote_parents() {
-    return remote_parents.size(); 
+    return remote_parents.size();
   }
 
   void push_projected_parent(CDentry *dn) {

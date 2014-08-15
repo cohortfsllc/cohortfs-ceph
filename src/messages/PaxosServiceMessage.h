@@ -13,7 +13,7 @@ class PaxosServiceMessage : public Message {
   // track which epoch the leader received a forwarded request in, so we can
   // discard forwarded requests appropriately on election boundaries.
   epoch_t rx_election_epoch;
-  
+
   PaxosServiceMessage()
     : Message(MSG_PAXOS),
       version(0), deprecated_session_mon(-1), deprecated_session_mon_tid(0),
@@ -49,7 +49,7 @@ class PaxosServiceMessage : public Message {
     paxos_decode(p);
   }
 
-  /** 
+  /**
    * These messages are only used by the monitors and clients,
    * and the client doesn't care, so we're creating a monitor-specific
    * function here. Note that this function explicitly exists to bypass
@@ -63,7 +63,7 @@ class PaxosServiceMessage : public Message {
       session->put();
     return session;
   }
-  
+
   const char *get_type_name() const { return "PaxosServiceMessage"; }
 };
 

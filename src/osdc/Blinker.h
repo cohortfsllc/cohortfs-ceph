@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -60,7 +60,7 @@ private:
 
 
   // cache information about tree structure.
-  
+
 
 
 public:
@@ -78,15 +78,15 @@ public:
   void listkeys(inode_t& inode, list<bufferptr>* pkeys, Context *onfinish);
   void listvals(inode_t& inode, list<bufferptr>* pkeys, list<bufferlist>* pvals, Context *onfinish);
 
-  // fetch *at least* key, but also anything else that is convenient. 
+  // fetch *at least* key, but also anything else that is convenient.
   // include lexical bounds for which this is a complete result.
   //  (if *start and *end are empty, it's the entire table)
-  void prefetch(inode_t& inode, bufferptr& key, 
-		list<bufferptr>* pkeys, list<bufferlist>* pvals, 
+  void prefetch(inode_t& inode, bufferptr& key,
+		list<bufferptr>* pkeys, list<bufferlist>* pvals,
 		bufferptr *start, bufferptr *end,
 		Context *onfinish);
 
-  
+
 };
 
 #endif

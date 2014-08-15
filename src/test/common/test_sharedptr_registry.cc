@@ -14,7 +14,7 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
  * GNU Library Public License for more details.
  *
  */
@@ -49,18 +49,18 @@ public:
     shared_ptr<int> ptr;
     enum in_method_t { LOOKUP, LOOKUP_OR_CREATE } in_method;
 
-    Thread_wait(SharedPtrRegistryTest& _registry, unsigned int _key, int _value, in_method_t _in_method) : 
+    Thread_wait(SharedPtrRegistryTest& _registry, unsigned int _key, int _value, in_method_t _in_method) :
       registry(_registry),
       key(_key),
       value(_value),
       in_method(_in_method)
     {
     }
-    
+
     virtual void *entry() {
       switch(in_method) {
       case LOOKUP_OR_CREATE:
-	if (value) 
+	if (value)
 	  ptr = registry.lookup_or_create<int>(key, value);
 	else
 	  ptr = registry.lookup_or_create(key);
@@ -82,15 +82,15 @@ public:
     do {
       //
       // the delay variable is supposed to be initialized to zero. It would be fine
-      // to usleep(0) but we take this opportunity to test the loop. It will try 
+      // to usleep(0) but we take this opportunity to test the loop. It will try
       // again and therefore show that the logic ( increasing the delay ) actually
-      // works. 
+      // works.
       //
       if (delay > 0)
 	usleep(delay);
       {
 	Mutex::Locker l(registry.get_lock());
-	if (registry.waiting == waiting) 
+	if (registry.waiting == waiting)
 	  break;
       }
       if (delay > 0)
@@ -251,12 +251,12 @@ TEST_F(SharedPtrRegistry_all, get_next) {
     shared_ptr<int> *ptr1 = new shared_ptr<int>(registry.lookup_or_create(key1));
     const unsigned int key2 = 222;
     shared_ptr<int> ptr2 = registry.lookup_or_create(key2);
-    
+
     pair<unsigned int, shared_ptr<int> > i;
     EXPECT_TRUE(registry.get_next(i.first, &i));
     EXPECT_EQ(key1, i.first);
     delete ptr1;
-    EXPECT_TRUE(registry.get_next(i.first, &i));    
+    EXPECT_TRUE(registry.get_next(i.first, &i));
     EXPECT_EQ(key2, i.first);
   }
 }
@@ -303,7 +303,7 @@ public:
   struct TellDie {
     TellDie() { died = NO; }
     ~TellDie() { died = YES; }
-    
+
     int value;
   };
 

@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 
 #include <string.h>
 
@@ -11,7 +13,7 @@
 
 using namespace std;
 
-#define SWIFT_PERM_READ  RGW_PERM_READ_OBJS
+#define SWIFT_PERM_READ	 RGW_PERM_READ_OBJS
 #define SWIFT_PERM_WRITE RGW_PERM_WRITE_OBJS
 
 #define SWIFT_GROUP_ALL_USERS ".r:*"
@@ -50,8 +52,8 @@ static bool uid_is_public(string& uid)
     return false;
 
   return sub.compare(".r") == 0 ||
-         sub.compare(".referer") == 0 ||
-         sub.compare(".referrer") == 0;
+	 sub.compare(".referer") == 0 ||
+	 sub.compare(".referrer") == 0;
 }
 
 void RGWAccessControlPolicy_SWIFT::add_grants(RGWRados *store, vector<string>& uids, int perm)
@@ -114,16 +116,16 @@ void RGWAccessControlPolicy_SWIFT::to_str(string& read, string& write)
     string id;
     if (!grant.get_id(id)) {
       if (grant.get_group() != ACL_GROUP_ALL_USERS)
-        continue;
+	continue;
       id = SWIFT_GROUP_ALL_USERS;
     }
     if (perm & SWIFT_PERM_READ) {
       if (!read.empty())
-        read.append(", ");
+	read.append(", ");
       read.append(id);
     } else if (perm & SWIFT_PERM_WRITE) {
       if (!write.empty())
-        write.append(", ");
+	write.append(", ");
       write.append(id);
     }
   }

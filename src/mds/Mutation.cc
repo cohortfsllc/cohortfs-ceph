@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #include "Mutation.h"
@@ -27,7 +27,7 @@ void MutationImpl::pin(MDSCacheObject *o)
   if (pins.count(o) == 0) {
     o->get(MDSCacheObject::PIN_REQUEST);
     pins.insert(o);
-  }      
+  }
 }
 
 void MutationImpl::unpin(MDSCacheObject *o)
@@ -49,7 +49,7 @@ void MutationImpl::drop_pins()
 {
   for (set<MDSCacheObject*>::iterator it = pins.begin();
        it != pins.end();
-       ++it) 
+       ++it)
     (*it)->put(MDSCacheObject::PIN_REQUEST);
   pins.clear();
 }
@@ -72,8 +72,8 @@ void MutationImpl::finish_locking(SimpleLock *lock)
 
 // auth pins
 bool MutationImpl::is_auth_pinned(MDSCacheObject *object)
-{ 
-  return auth_pins.count(object) || remote_auth_pins.count(object); 
+{
+  return auth_pins.count(object) || remote_auth_pins.count(object);
 }
 
 void MutationImpl::auth_pin(MDSCacheObject *object)
@@ -151,16 +151,16 @@ void MutationImpl::apply()
 {
   pop_and_dirty_projected_inodes();
   pop_and_dirty_projected_fnodes();
-  
+
   for (list<CInode*>::iterator p = dirty_cow_inodes.begin();
        p != dirty_cow_inodes.end();
-       ++p) 
+       ++p)
     (*p)->_mark_dirty(ls);
   for (list<pair<CDentry*,version_t> >::iterator p = dirty_cow_dentries.begin();
        p != dirty_cow_dentries.end();
        ++p)
     p->first->mark_dirty(p->second, ls);
-  
+
   for (list<ScatterLock*>::iterator p = updated_locks.begin();
        p != updated_locks.end();
        ++p)
@@ -186,7 +186,7 @@ MDRequestImpl::~MDRequestImpl()
 }
 
 MDRequestImpl::More* MDRequestImpl::more()
-{ 
+{
   if (!_more)
     _more = new More();
   return _more;
@@ -210,7 +210,7 @@ bool MDRequestImpl::slave_did_prepare()
 bool MDRequestImpl::did_ino_allocation()
 {
   return alloc_ino || used_prealloc_ino || prealloc_inos.size();
-}      
+}
 
 bool MDRequestImpl::freeze_auth_pin(CInode *inode)
 {
@@ -266,7 +266,7 @@ void MDRequestImpl::clear_ambiguous_auth()
 bool MDRequestImpl::can_auth_pin(MDSCacheObject *object)
 {
   return object->can_auth_pin() ||
-         (is_auth_pinned(object) && has_more() &&
+	 (is_auth_pinned(object) && has_more() &&
 	  more()->is_freeze_authpin &&
 	  more()->rename_inode == object);
 }
@@ -287,4 +287,3 @@ void MDRequestImpl::print(ostream &out)
   if (slave_request) out << " sr=" << slave_request;
   out << ")";
 }
-

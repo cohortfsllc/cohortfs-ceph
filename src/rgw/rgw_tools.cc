@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #include <errno.h>
 
 #include "common/errno.h"
@@ -15,7 +17,7 @@
 static map<string, string> ext_mime_map;
 
 int rgw_put_system_obj(RGWRados *rgwstore, rgw_bucket& bucket, string& oid, const char *data, size_t size, bool exclusive,
-                       RGWObjVersionTracker *objv_tracker, time_t set_mtime, map<string, bufferlist> *pattrs)
+		       RGWObjVersionTracker *objv_tracker, time_t set_mtime, map<string, bufferlist> *pattrs)
 {
   map<string,bufferlist> no_attrs;
   if (!pattrs)
@@ -35,7 +37,7 @@ int rgw_put_system_obj(RGWRados *rgwstore, rgw_bucket& bucket, string& oid, cons
 }
 
 int rgw_get_system_obj(RGWRados *rgwstore, void *ctx, rgw_bucket& bucket, const string& key, bufferlist& bl,
-                       RGWObjVersionTracker *objv_tracker, time_t *pmtime, map<string, bufferlist> *pattrs)
+		       RGWObjVersionTracker *objv_tracker, time_t *pmtime, map<string, bufferlist> *pattrs)
 {
   struct rgw_err err;
   void *handle = NULL;
@@ -45,8 +47,8 @@ int rgw_get_system_obj(RGWRados *rgwstore, void *ctx, rgw_bucket& bucket, const 
 
   do {
     int ret = rgwstore->prepare_get_obj(ctx, obj, NULL, NULL, pattrs, NULL,
-                                        NULL, pmtime, NULL, NULL, NULL, NULL,
-                                        objv_tracker, &handle, &err);
+					NULL, pmtime, NULL, NULL, NULL, NULL,
+					objv_tracker, &handle, &err);
     if (ret < 0)
       return ret;
 

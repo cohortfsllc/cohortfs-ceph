@@ -73,7 +73,7 @@ static int cms_verbose = 0;
 
 static SECStatus
 DigestFile(PLArenaPool *poolp, SECItem ***digests, SECItem *input,
-           SECAlgorithmID **algids)
+	   SECAlgorithmID **algids)
 {
     NSSCMSDigestContext *digcx;
     SECStatus rv;
@@ -96,12 +96,12 @@ struct optionsStr {
 
 struct decodeOptionsStr {
     struct optionsStr *options;
-    SECItem            content;
+    SECItem	       content;
     int headerLevel;
     PRBool suppressContent;
     NSSCMSGetDecryptKeyCallback dkcb;
     PK11SymKey *bulkkey;
-    PRBool      keepCerts;
+    PRBool	keepCerts;
 };
 
 static NSSCMSMessage *
@@ -118,11 +118,11 @@ decode(CephContext *cct, SECItem *input, const struct decodeOptionsStr *decodeOp
     memset(&sitem, 0, sizeof(sitem));
 
     PORT_SetError(0);
-    dcx = NSS_CMSDecoder_Start(NULL, 
-                               NULL, NULL,         /* content callback     */
-                               NULL, NULL,         /* password callback    */
+    dcx = NSS_CMSDecoder_Start(NULL,
+			       NULL, NULL,	   /* content callback	   */
+			       NULL, NULL,	   /* password callback	   */
 			       decodeOptions->dkcb, /* decrypt key callback */
-                               decodeOptions->bulkkey);
+			       decodeOptions->bulkkey);
     if (dcx == NULL) {
 	ldout(cct, 0) << "ERROR: failed to set up message decoder" << dendl;
 	return NULL;
@@ -170,9 +170,9 @@ decode(CephContext *cct, SECItem *input, const struct decodeOptionsStr *decodeOp
 	    }
 
 	    /* if we have a content file, but no digests for this signedData */
-	    if (decodeOptions->content.data != NULL && 
-	        !NSS_CMSSignedData_HasDigests(sigd)) {
-		PLArenaPool     *poolp;
+	    if (decodeOptions->content.data != NULL &&
+		!NSS_CMSSignedData_HasDigests(sigd)) {
+		PLArenaPool	*poolp;
 		SECAlgorithmID **digestalgs;
 
 		/* detached content: grab content file */
@@ -183,13 +183,13 @@ decode(CephContext *cct, SECItem *input, const struct decodeOptionsStr *decodeOp
 		    goto loser;
 		}
 		digestalgs = NSS_CMSSignedData_GetDigestAlgs(sigd);
-		if (DigestFile (poolp, &digests, &sitem, digestalgs) 
+		if (DigestFile (poolp, &digests, &sitem, digestalgs)
 		      != SECSuccess) {
 		    ldout(cct, 0) << "ERROR: problem computing message digest" << dendl;
 		    PORT_FreeArena(poolp, PR_FALSE);
 		    goto loser;
 		}
-		if (NSS_CMSSignedData_SetDigests(sigd, digestalgs, digests) 
+		if (NSS_CMSSignedData_SetDigests(sigd, digestalgs, digests)
 		    != SECSuccess) {
 		    ldout(cct, 0) << "ERROR: problem setting message digests" << dendl;
 		    PORT_FreeArena(poolp, PR_FALSE);
@@ -199,11 +199,11 @@ decode(CephContext *cct, SECItem *input, const struct decodeOptionsStr *decodeOp
 	    }
 
 	    /* import the certificates */
-	    if (NSS_CMSSignedData_ImportCerts(sigd, 
-	                                   decodeOptions->options->certHandle, 
-	                                   decodeOptions->options->certUsage, 
-	                                   decodeOptions->keepCerts) 
-	          != SECSuccess) {
+	    if (NSS_CMSSignedData_ImportCerts(sigd,
+					   decodeOptions->options->certHandle,
+					   decodeOptions->options->certUsage,
+					   decodeOptions->keepCerts)
+		  != SECSuccess) {
 		ldout(cct, 0) << "ERROR: cert import failed" << dendl;
 		goto loser;
 	    }
@@ -218,9 +218,9 @@ decode(CephContext *cct, SECItem *input, const struct decodeOptionsStr *decodeOp
 		** or a message from an attacker.
 		*/
 		SECStatus rv;
-		rv = NSS_CMSSignedData_VerifyCertsOnly(sigd, 
-		                            decodeOptions->options->certHandle, 
-		                            decodeOptions->options->certUsage);
+		rv = NSS_CMSSignedData_VerifyCertsOnly(sigd,
+					    decodeOptions->options->certHandle,
+					    decodeOptions->options->certUsage);
 		if (rv != SECSuccess) {
 		    ldout(cct, 0) << "ERROR: Verify certs-only failed!" << dendl;
 		    goto loser;
@@ -250,11 +250,11 @@ decode(CephContext *cct, SECItem *input, const struct decodeOptionsStr *decodeOp
 			signercn = empty;
 		    ldout(cct, 20) << "\t\tsigner" << j << ".id=" << signercn << dendl;
 		    if (signercn != empty)
-		        PORT_Free(signercn);
+			PORT_Free(signercn);
 		}
-		bad = NSS_CMSSignedData_VerifySignerInfo(sigd, j, 
-		                           decodeOptions->options->certHandle, 
-		                           decodeOptions->options->certUsage);
+		bad = NSS_CMSSignedData_VerifySignerInfo(sigd, j,
+					   decodeOptions->options->certHandle,
+					   decodeOptions->options->certUsage);
 		vs  = NSS_CMSSignerInfo_GetVerificationStatus(si);
 		svs = NSS_CMSUtil_VerificationStatusToString(vs);
 		if (decodeOptions->headerLevel >= 0) {
@@ -345,7 +345,7 @@ int ceph_decode_cms(CephContext *cct, bufferlist& cms_bl, bufferlist& decoded_bl
 
     cmsg = decode(cct, &input, &decodeOptions, decoded_bl);
     if (!cmsg) {
-        ldout(cct, 0) << "ERROR: problem decoding" << dendl;
+	ldout(cct, 0) << "ERROR: problem decoding" << dendl;
 	ret = -EINVAL;
     }
 

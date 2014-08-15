@@ -52,7 +52,7 @@ class FooTest : public testing::Test {
 };
 
 // Next, associate a list of types with the test case, which will be
-// repeated for each type in the list.  The typedef is necessary for
+// repeated for each type in the list.	The typedef is necessary for
 // the macro to parse correctly.
 typedef testing::Types<char, int, unsigned int> MyTypes;
 TYPED_TEST_CASE(FooTest, MyTypes);
@@ -82,7 +82,7 @@ TYPED_TEST(FooTest, DoesBlah) {
 
 TYPED_TEST(FooTest, HasPropertyA) { ... }
 
-#endif  // 0
+#endif	// 0
 
 // Type-parameterized tests are abstract test patterns parameterized
 // by a type.  Compared with typed tests, type-parameterized tests
@@ -127,7 +127,7 @@ TYPED_TEST_P(FooTest, HasPropertyA) { ... }
 // test case name; the rest are the names of the tests in this test
 // case.
 REGISTER_TYPED_TEST_CASE_P(FooTest,
-                           DoesBlah, HasPropertyA);
+			   DoesBlah, HasPropertyA);
 
 // Finally, you are free to instantiate the pattern with the types you
 // want.  If you put the above code in a header file, you can #include
@@ -144,7 +144,7 @@ INSTANTIATE_TYPED_TEST_CASE_P(My, FooTest, MyTypes);
 // directly without Types<...>:
 //   INSTANTIATE_TYPED_TEST_CASE_P(My, FooTest, int);
 
-#endif  // 0
+#endif	// 0
 
 #include "gtest/internal/gtest-port.h"
 #include "gtest/internal/gtest-type-util.h"
@@ -177,15 +177,15 @@ INSTANTIATE_TYPED_TEST_CASE_P(My, FooTest, MyTypes);
   }; \
   bool gtest_##CaseName##_##TestName##_registered_ GTEST_ATTRIBUTE_UNUSED_ = \
       ::testing::internal::TypeParameterizedTest< \
-          CaseName, \
-          ::testing::internal::TemplateSel< \
-              GTEST_TEST_CLASS_NAME_(CaseName, TestName)>, \
-          GTEST_TYPE_PARAMS_(CaseName)>::Register(\
-              "", #CaseName, #TestName, 0); \
+	  CaseName, \
+	  ::testing::internal::TemplateSel< \
+	      GTEST_TEST_CLASS_NAME_(CaseName, TestName)>, \
+	  GTEST_TYPE_PARAMS_(CaseName)>::Register(\
+	      "", #CaseName, #TestName, 0); \
   template <typename gtest_TypeParam_> \
   void GTEST_TEST_CLASS_NAME_(CaseName, TestName)<gtest_TypeParam_>::TestBody()
 
-#endif  // GTEST_HAS_TYPED_TEST
+#endif	// GTEST_HAS_TYPED_TEST
 
 // Implements type-parameterized tests.
 
@@ -231,7 +231,7 @@ INSTANTIATE_TYPED_TEST_CASE_P(My, FooTest, MyTypes);
   }; \
   static bool gtest_##TestName##_defined_ GTEST_ATTRIBUTE_UNUSED_ = \
       GTEST_TYPED_TEST_CASE_P_STATE_(CaseName).AddTestName(\
-          __FILE__, __LINE__, #CaseName, #TestName); \
+	  __FILE__, __LINE__, #CaseName, #TestName); \
   } \
   template <typename gtest_TypeParam_> \
   void GTEST_CASE_NAMESPACE_(CaseName)::TestName<gtest_TypeParam_>::TestBody()
@@ -242,7 +242,7 @@ INSTANTIATE_TYPED_TEST_CASE_P(My, FooTest, MyTypes);
   } \
   static const char* const GTEST_REGISTERED_TEST_NAMES_(CaseName) = \
       GTEST_TYPED_TEST_CASE_P_STATE_(CaseName).VerifyRegisteredTestNames(\
-          __FILE__, __LINE__, #__VA_ARGS__)
+	  __FILE__, __LINE__, #__VA_ARGS__)
 
 // The 'Types' template argument below must have spaces around it
 // since some compilers may choke on '>>' when passing a template
@@ -250,10 +250,10 @@ INSTANTIATE_TYPED_TEST_CASE_P(My, FooTest, MyTypes);
 # define INSTANTIATE_TYPED_TEST_CASE_P(Prefix, CaseName, Types) \
   bool gtest_##Prefix##_##CaseName GTEST_ATTRIBUTE_UNUSED_ = \
       ::testing::internal::TypeParameterizedTestCase<CaseName, \
-          GTEST_CASE_NAMESPACE_(CaseName)::gtest_AllTests_, \
-          ::testing::internal::TypeList< Types >::type>::Register(\
-              #Prefix, #CaseName, GTEST_REGISTERED_TEST_NAMES_(CaseName))
+	  GTEST_CASE_NAMESPACE_(CaseName)::gtest_AllTests_, \
+	  ::testing::internal::TypeList< Types >::type>::Register(\
+	      #Prefix, #CaseName, GTEST_REGISTERED_TEST_NAMES_(CaseName))
 
-#endif  // GTEST_HAS_TYPED_TEST_P
+#endif	// GTEST_HAS_TYPED_TEST_P
 
-#endif  // GTEST_INCLUDE_GTEST_GTEST_TYPED_TEST_H_
+#endif	// GTEST_INCLUDE_GTEST_GTEST_TYPED_TEST_H_

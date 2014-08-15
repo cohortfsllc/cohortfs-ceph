@@ -23,10 +23,10 @@ setup() {
 
 read_write_1_impl() {
         write_objects 1 2 100 8192 data
-        read_objects 2 100 8192 
+        read_objects 2 100 8192
 
         write_objects 3 3 10 81920 data
-        read_objects 3 10 81920 
+        read_objects 3 10 81920
 
         write_objects 4 4 100 4 data
         read_objects 4 100 4

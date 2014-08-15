@@ -88,7 +88,7 @@ class CephContext;
        * @param bl buffer
        * @param bl_map map of which logical source extents this covers
        * @param bl_off logical buffer offset (e.g., first bl_map key if the
-       *                                      buffer is not sparse)
+       *				      buffer is not sparse)
        * @param buffer_extents output buffer extents the data maps to
        */
       void add_partial_sparse_result(

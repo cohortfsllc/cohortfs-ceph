@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -33,10 +33,10 @@
 #undef dout_prefix
 #define dout_prefix _prefix(_dout, mon, this)
 static ostream& _prefix(std::ostream *_dout, const Monitor *mon,
-                        const HealthMonitor *hmon) {
+			const HealthMonitor *hmon) {
   return *_dout << "mon." << mon->name << "@" << mon->rank
 		<< "(" << mon->get_state_name() << ")." << hmon->get_name()
-                << "(" << hmon->get_epoch() << ") ";
+		<< "(" << hmon->get_epoch() << ") ";
 }
 
 void HealthMonitor::init()
@@ -59,7 +59,7 @@ bool HealthMonitor::service_dispatch(Message *m)
   int service_type = hm->get_service_type();
   if (services.count(service_type) == 0) {
     dout(1) << __func__ << " service type " << service_type
-            << " not registered -- drop message!" << dendl;
+	    << " not registered -- drop message!" << dendl;
     m->put();
     return false;
   }
@@ -69,7 +69,7 @@ bool HealthMonitor::service_dispatch(Message *m)
 void HealthMonitor::service_shutdown()
 {
   dout(0) << "HealthMonitor::service_shutdown "
-          << services.size() << " services" << dendl;
+	  << services.size() << " services" << dendl;
   for (map<int,HealthService*>::iterator it = services.begin();
       it != services.end();
        ++it) {

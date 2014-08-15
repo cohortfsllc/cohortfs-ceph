@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -56,7 +56,7 @@ ostream& operator<<(ostream& out, LogMonitor& pm)
   return out << "v" << pm.pg_map.version << ": "
 	     << pm.pg_map.pg_stat.size() << " pgs: "
 	     << states << "; "
-	     << kb_t(pm.pg_map.total_pg_kb()) << " data, " 
+	     << kb_t(pm.pg_map.total_pg_kb()) << " data, "
 	     << kb_t(pm.pg_map.total_used_kb()) << " used, "
 	     << kb_t(pm.pg_map.total_avail_kb()) << " / "
 	     << kb_t(pm.pg_map.total_kb()) << " free";
@@ -68,13 +68,13 @@ ostream& operator<<(ostream& out, LogMonitor& pm)
  Tick function to update the map based on performance every N seconds
 */
 
-void LogMonitor::tick() 
+void LogMonitor::tick()
 {
   if (!is_active()) return;
 
   dout(10) << *this << dendl;
 
-  if (!mon->is_leader()) return; 
+  if (!mon->is_leader()) return;
 
 }
 
@@ -97,7 +97,7 @@ void LogMonitor::update_from_paxos(bool *need_bootstrap)
   dout(10) << __func__ << dendl;
   version_t version = get_last_committed();
   dout(10) << __func__ << " version " << version
-           << " summary v " << summary.version << dendl;
+	   << " summary v " << summary.version << dendl;
   if (version == summary.version)
     return;
   assert(version >= summary.version);
@@ -129,7 +129,7 @@ void LogMonitor::update_from_paxos(bool *need_bootstrap)
     while (!p.end()) {
       LogEntry le;
       le.decode(p);
-      dout(7) << "update_from_paxos applying incremental log " << summary.version+1 <<  " " << le << dendl;
+      dout(7) << "update_from_paxos applying incremental log " << summary.version+1 <<	" " << le << dendl;
 
       if (g_conf->mon_cluster_log_to_syslog) {
 	le.log_to_syslog(g_conf->mon_cluster_log_to_syslog_level,
@@ -269,7 +269,7 @@ bool LogMonitor::preprocess_log(MLog *m)
 	    << session->caps << dendl;
     goto done;
   }
-  
+
   for (deque<LogEntry>::iterator p = m->entries.begin();
        p != m->entries.end();
        ++p) {
@@ -288,12 +288,12 @@ bool LogMonitor::preprocess_log(MLog *m)
   return true;
 }
 
-bool LogMonitor::prepare_log(MLog *m) 
+bool LogMonitor::prepare_log(MLog *m)
 {
   dout(10) << "prepare_log " << *m << " from " << m->get_orig_source() << dendl;
 
   if (m->fsid != mon->monmap->fsid) {
-    dout(0) << "handle_log on fsid " << m->fsid << " != " << mon->monmap->fsid 
+    dout(0) << "handle_log on fsid " << m->fsid << " != " << mon->monmap->fsid
 	    << dendl;
     m->put();
     return false;
@@ -430,16 +430,16 @@ void LogMonitor::check_sub(Subscription *s)
 
   version_t summary_version = summary.version;
   if (s->next > summary_version) {
-    dout(10) << __func__ << " client " << s->session->inst 
-	    << " requested version (" << s->next << ") is greater than ours (" 
-	    << summary_version << "), which means we already sent him" 
+    dout(10) << __func__ << " client " << s->session->inst
+	    << " requested version (" << s->next << ") is greater than ours ("
+	    << summary_version << "), which means we already sent him"
 	    << " everything we have." << dendl;
     return;
-  } 
- 
+  }
+
   MLog *mlog = new MLog(mon->monmap->fsid);
 
-  if (s->next == 0) { 
+  if (s->next == 0) {
     /* First timer, heh? */
     bool ret = _create_sub_summary(mlog, sub_level);
     if (!ret) {
@@ -452,10 +452,10 @@ void LogMonitor::check_sub(Subscription *s)
     _create_sub_incremental(mlog, sub_level, s->next);
   }
 
-  dout(1) << __func__ << " sending message to " << s->session->inst 
+  dout(1) << __func__ << " sending message to " << s->session->inst
 	  << " with " << mlog->entries.size() << " entries"
 	  << " (version " << mlog->version << ")" << dendl;
-  
+
   mon->messenger->send_message(mlog, s->session->con);
   if (s->onetime)
     mon->session_map.remove_sub(s);
@@ -504,8 +504,8 @@ bool LogMonitor::_create_sub_summary(MLog *mlog, int level)
  */
 void LogMonitor::_create_sub_incremental(MLog *mlog, int level, version_t sv)
 {
-  dout(10) << __func__ << " level " << level << " ver " << sv 
-	  << " cur summary ver " << summary.version << dendl; 
+  dout(10) << __func__ << " level " << level << " ver " << sv
+	  << " cur summary ver " << summary.version << dendl;
 
   if (sv < get_first_committed()) {
     dout(10) << __func__ << " skipped from " << sv
@@ -534,7 +534,7 @@ void LogMonitor::_create_sub_incremental(MLog *mlog, int level, version_t sv)
       le.decode(p);
 
       if (le.type < level) {
-	dout(20) << __func__ << " requested " << level 
+	dout(20) << __func__ << " requested " << level
 		 << " entry " << le.type << dendl;
 	continue;
       }
@@ -544,7 +544,7 @@ void LogMonitor::_create_sub_incremental(MLog *mlog, int level, version_t sv)
     mlog->version = sv++;
   }
 
-  dout(10) << __func__ << " incremental message ready (" 
+  dout(10) << __func__ << " incremental message ready ("
 	   << mlog->entries.size() << " entries)" << dendl;
 }
 

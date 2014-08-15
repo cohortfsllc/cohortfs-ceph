@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *	http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -29,26 +29,26 @@ public:
     }
 
     ~ScopedLocalRef() {
-        reset();
+	reset();
     }
 
     void reset(T ptr = NULL) {
-        if (ptr != mLocalRef) {
-            if (mLocalRef != NULL) {
-                mEnv->DeleteLocalRef(mLocalRef);
-            }
-            mLocalRef = ptr;
-        }
+	if (ptr != mLocalRef) {
+	    if (mLocalRef != NULL) {
+		mEnv->DeleteLocalRef(mLocalRef);
+	    }
+	    mLocalRef = ptr;
+	}
     }
 
     T release() __attribute__((warn_unused_result)) {
-        T localRef = mLocalRef;
-        mLocalRef = NULL;
-        return localRef;
+	T localRef = mLocalRef;
+	mLocalRef = NULL;
+	return localRef;
     }
 
     T get() const {
-        return mLocalRef;
+	return mLocalRef;
     }
 
 private:
@@ -60,4 +60,4 @@ private:
     void operator=(const ScopedLocalRef&);
 };
 
-#endif  // SCOPED_LOCAL_REF_H_included
+#endif	// SCOPED_LOCAL_REF_H_included

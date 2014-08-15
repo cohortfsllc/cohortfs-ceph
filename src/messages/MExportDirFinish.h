@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -38,7 +38,7 @@ public:
   void print(ostream& o) const {
     o << "export_finish(" << dirfrag << (last ? " last" : "") << ")";
   }
-  
+
   void encode_payload(uint64_t features) {
     ::encode(dirfrag, payload);
     ::encode(last, payload);

@@ -10,7 +10,7 @@
  *
  * Hypertable is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
@@ -71,19 +71,19 @@ namespace Hypertable {
     virtual ~CephBroker();
 
     virtual void open(ResponseCallbackOpen *cb, const char *fname,
-                      uint32_t flags, uint32_t bufsz);
+		      uint32_t flags, uint32_t bufsz);
     virtual void
     create(ResponseCallbackOpen *cb, const char *fname, uint32_t flags,
-           int32_t bufsz, int16_t replication, int64_t blksz);
+	   int32_t bufsz, int16_t replication, int64_t blksz);
     virtual void close(ResponseCallback *cb, uint32_t fd);
     virtual void read(ResponseCallbackRead *cb, uint32_t fd, uint32_t amount);
     virtual void append(ResponseCallbackAppend *cb, uint32_t fd,
-                        uint32_t amount, const void *data, bool sync);
+			uint32_t amount, const void *data, bool sync);
     virtual void seek(ResponseCallback *cb, uint32_t fd, uint64_t offset);
     virtual void remove(ResponseCallback *cb, const char *fname);
     virtual void length(ResponseCallbackLength *cb, const char *fname, bool);
     virtual void pread(ResponseCallbackRead *cb, uint32_t fd, uint64_t offset,
-                       uint32_t amount, bool);
+		       uint32_t amount, bool);
     virtual void mkdirs(ResponseCallback *cb, const char *dname);
     virtual void rmdir(ResponseCallback *cb, const char *dname);
     virtual void flush(ResponseCallback *cb, uint32_t fd);
@@ -93,7 +93,7 @@ namespace Hypertable {
     virtual void exists(ResponseCallbackExists *cb, const char *fname);
     virtual void rename(ResponseCallback *cb, const char *src, const char *dst);
     virtual void debug(ResponseCallback *, int32_t command,
-                       StaticBuffer &serialized_parameters);
+		       StaticBuffer &serialized_parameters);
 
   private:
     struct ceph_mount_info *cmount;

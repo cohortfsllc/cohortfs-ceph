@@ -3,7 +3,7 @@ Index: plugins/Makefile.nmake
 --- plugins/Makefile.nmake	(revision 43768)
 +++ plugins/Makefile.nmake	(working copy)
 @@ -8,6 +8,7 @@
- 
+
  PLUGIN_LIST = \
  	asn1        \
 +	ceph        \
@@ -51,7 +51,7 @@ Index: packaging/nsis/Makefile.nmake
 --- packaging/nsis/Makefile.nmake	(revision 43768)
 +++ packaging/nsis/Makefile.nmake	(working copy)
 @@ -46,6 +46,7 @@
- 
+
  PLUGINS= \
  	../../plugins/asn1/asn1.dll \
 +	../../plugins/ceph/ceph.dll \

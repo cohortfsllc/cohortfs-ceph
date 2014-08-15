@@ -36,13 +36,13 @@ struct cls_user_bucket {
     if (struct_v >= 2) {
       ::decode(marker, bl);
       if (struct_v <= 3) {
-        uint64_t id;
-        ::decode(id, bl);
-        char buf[16];
-        snprintf(buf, sizeof(buf), "%llu", (long long)id);
-        bucket_id = buf;
+	uint64_t id;
+	::decode(id, bl);
+	char buf[16];
+	snprintf(buf, sizeof(buf), "%llu", (long long)id);
+	bucket_id = buf;
       } else {
-        ::decode(bucket_id, bl);
+	::decode(bucket_id, bl);
       }
     }
     if (struct_v >= 5) {
@@ -183,5 +183,3 @@ void cls_user_gen_test_stats(cls_user_stats *stats);
 void cls_user_gen_test_header(cls_user_header *h);
 
 #endif
-
-

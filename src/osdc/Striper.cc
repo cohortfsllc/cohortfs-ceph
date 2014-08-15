@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -45,17 +45,17 @@ void Striper::file_to_extents(CephContext *cct, const char *object_format,
 			      map<object_t,vector<ObjectExtent> >& object_extents,
 			      uint64_t buffer_offset)
 {
-  ldout(cct, 10) << "file_to_extents " << offset << "~" << len 
+  ldout(cct, 10) << "file_to_extents " << offset << "~" << len
 		 << " format " << object_format
 		 << dendl;
   assert(len > 0);
 
   /*
    * we want only one extent per object!
-   * this means that each extent we read may map into different bits of the 
+   * this means that each extent we read may map into different bits of the
    * final read buffer.. hence OSDExtent.buffer_extents
    */
-  
+
   uint32_t object_size = layout->fl_object_size;
   uint32_t su = layout->fl_stripe_unit;
   uint32_t stripe_count = layout->fl_stripe_count;
@@ -68,11 +68,11 @@ void Striper::file_to_extents(CephContext *cct, const char *object_format,
   uint64_t left = len;
   while (left > 0) {
     // layout into objects
-    uint64_t blockno = cur / su;          // which block
-    uint64_t stripeno = blockno / stripe_count;    // which horizontal stripe        (Y)
+    uint64_t blockno = cur / su;	  // which block
+    uint64_t stripeno = blockno / stripe_count;	   // which horizontal stripe	     (Y)
     uint64_t stripepos = blockno % stripe_count;   // which object in the object set (X)
-    uint64_t objectsetno = stripeno / stripes_per_object;       // which object set
-    uint64_t objectno = objectsetno * stripe_count + stripepos;  // object id
+    uint64_t objectsetno = stripeno / stripes_per_object;	// which object set
+    uint64_t objectno = objectsetno * stripe_count + stripepos;	 // object id
 
     // find oid, extent
     char buf[strlen(object_format) + 32];
@@ -120,7 +120,7 @@ void Striper::file_to_extents(CephContext *cct, const char *object_format,
     }
     ex->buffer_extents.push_back(make_pair(cur - offset + buffer_offset, x_len));
 
-    ldout(cct, 15) << "file_to_extents  " << *ex << " in "
+    ldout(cct, 15) << "file_to_extents	" << *ex << " in "
 		   << dendl;
     left -= x_len;
     cur += x_len;

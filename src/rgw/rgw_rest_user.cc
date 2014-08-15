@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #include "common/ceph_json.h"
 
 #include "rgw_op.h"
@@ -726,14 +728,14 @@ public:
  * E.g., if quota type not specified:
  * {
  *    "user_quota" : {
- *      "max_size_kb" : 4096,
- *      "max_objects" : -1,
- *      "enabled" : false
+ *	"max_size_kb" : 4096,
+ *	"max_objects" : -1,
+ *	"enabled" : false
  *    },
  *    "bucket_quota" : {
- *      "max_size_kb" : 1024,
- *      "max_objects" : -1,
- *      "enabled" : true
+ *	"max_size_kb" : 1024,
+ *	"max_objects" : -1,
+ *	"enabled" : true
  *    }
  * }
  *
@@ -824,12 +826,12 @@ void RGWOp_Quota_Set::execute()
       bool empty;
       http_ret = rgw_rest_get_json_input(store->ctx(), s, quota, QUOTA_INPUT_MAX_LEN, &empty);
       if (http_ret < 0) {
-        ldout(store->ctx(), 20) << "failed to retrieve input" << dendl;
-        if (!empty)
-          return;
+	ldout(store->ctx(), 20) << "failed to retrieve input" << dendl;
+	if (!empty)
+	  return;
 
-        /* was probably chunked input, but no content provided, configure via http params */
-        use_http_params = true;
+	/* was probably chunked input, but no content provided, configure via http params */
+	use_http_params = true;
       }
     }
 
@@ -838,14 +840,14 @@ void RGWOp_Quota_Set::execute()
       string err_msg;
       http_ret = user.info(info, &err_msg);
       if (http_ret < 0) {
-        ldout(store->ctx(), 20) << "failed to get user info: " << http_ret << dendl;
-        return;
+	ldout(store->ctx(), 20) << "failed to get user info: " << http_ret << dendl;
+	return;
       }
       RGWQuotaInfo *old_quota;
       if (set_user) {
-        old_quota = &info.user_quota;
+	old_quota = &info.user_quota;
       } else {
-        old_quota = &info.bucket_quota;
+	old_quota = &info.bucket_quota;
       }
 
       RESTArgs::get_int64(s, "max-objects", old_quota->max_objects, &quota.max_objects);

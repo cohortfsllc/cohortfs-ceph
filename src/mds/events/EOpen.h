@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_MDS_EOPEN_H
@@ -24,7 +24,7 @@ public:
   vector<inodeno_t> inos;
 
   EOpen() : LogEvent(EVENT_OPEN) { }
-  EOpen(MDLog *mdlog) : 
+  EOpen(MDLog *mdlog) :
     LogEvent(EVENT_OPEN), metablob(mdlog) { }
 
   void print(ostream& out) const {

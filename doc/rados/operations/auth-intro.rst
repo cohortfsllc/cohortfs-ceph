@@ -20,7 +20,7 @@ technology stack.
             |      OSDs     | |      MDSs     | |    Monitors   |
             +---------------+ +---------------+ +---------------+
 
-Users are either individuals or system actors such as applications, which 
+Users are either individuals or system actors such as applications, which
 use Ceph clients to interact with Ceph server daemons.
 
 .. ditaa::  +-----+
@@ -34,7 +34,7 @@ use Ceph clients to interact with Ceph server daemons.
             /--+--\
             |     |
             |     |
-             actor                                    
+             actor
 
 For additional information, see our `Cephx Guide`_ and `ceph-authtool manpage`_.
 
@@ -48,17 +48,17 @@ Cryptographic authentication has some computational costs, though they should
 generally be quite low.  If the network environment connecting your client and
 server hosts is very safe and you cannot afford authentication, you can use a
 Ceph option to turn it off.  **This is not generally recommended**, but should you
-need to do so, details can be found in the `Disable Cephx`_ section.  
+need to do so, details can be found in the `Disable Cephx`_ section.
 
-.. important:: Remember, if you disable authentication, you are at risk of a 
-   man-in-the-middle attack altering your client/server messages, which could 
+.. important:: Remember, if you disable authentication, you are at risk of a
+   man-in-the-middle attack altering your client/server messages, which could
    lead to disastrous security effects.
 
 A key scalability feature of Ceph is to avoid a centralized interface to the
 Ceph object store, which means that Ceph clients must be able to interact with
 OSDs directly. To protect data, Ceph provides its ``cephx`` authentication
 system, which authenticates users operating Ceph clients. The ``cephx`` protocol
-operates in a manner with behavior similar to `Kerberos`_. 
+operates in a manner with behavior similar to `Kerberos`_.
 
 .. _Disable Cephx: ../authentication#disable-cephx
 .. _Kerberos: http://en.wikipedia.org/wiki/Kerberos_(protocol)
@@ -85,11 +85,11 @@ To use ``cephx``, an administrator must set up users first. In the following
 diagram, the ``client.admin`` user invokes  ``ceph auth get-or-create-key`` from
 the command line to generate a username and secret key. Ceph's ``auth``
 subsystem generates the username and key, stores a copy with the monitor(s) and
-transmits the user's secret back to the ``client.admin`` user. This means that 
+transmits the user's secret back to the ``client.admin`` user. This means that
 the client and the monitor share a secret key.
 
-.. note:: The ``client.admin`` user must provide the user ID and 
-   secret key to the user in a secure manner. 
+.. note:: The ``client.admin`` user must provide the user ID and
+   secret key to the user in a secure manner.
 
 .. ditaa:: +---------+     +---------+
            | Client  |     | Monitor |
@@ -97,7 +97,7 @@ the client and the monitor share a secret key.
                 |  request to   |
                 | create a user |
                 |-------------->|----------+ create user
-                |               |          | and                 
+                |               |          | and
                 |<--------------|<---------+ store key
                 | transmit key  |
                 |               |
@@ -119,25 +119,25 @@ cluster.
            +---------+     +---------+
                 |  authenticate |
                 |-------------->|----------+ generate and
-                |               |          | encrypt                
+                |               |          | encrypt
                 |<--------------|<---------+ session key
                 | transmit      |
                 | encrypted     |
                 | session key   |
-                |               |             
+                |               |
                 |-----+ decrypt |
-                |     | session | 
-                |<----+ key     |              
+                |     | session |
+                |<----+ key     |
                 |               |
                 |  req. ticket  |
                 |-------------->|----------+ generate and
-                |               |          | encrypt                
+                |               |          | encrypt
                 |<--------------|<---------+ ticket
                 | recv. ticket  |
-                |               |             
+                |               |
                 |-----+ decrypt |
-                |     | ticket  | 
-                |<----+         |              
+                |     | ticket  |
+                |<----+         |
 
 
 The ``cephx`` protocol authenticates ongoing communications between the client
@@ -149,7 +149,7 @@ monitors, OSDs and metadata servers can verify with their shared secret.
            |  Client |     | Monitor |     |  MDS  |     |  OSD  |
            +---------+     +---------+     +-------+     +-------+
                 |  request to   |              |             |
-                | create a user |              |             |               
+                | create a user |              |             |
                 |-------------->| mon and      |             |
                 |<--------------| client share |             |
                 |    receive    | a secret.    |             |
@@ -157,7 +157,7 @@ monitors, OSDs and metadata servers can verify with their shared secret.
                 |               |<------------>|             |
                 |               |<-------------+------------>|
                 |               | mon, mds,    |             |
-                | authenticate  | and osd      |             |  
+                | authenticate  | and osd      |             |
                 |-------------->| share        |             |
                 |<--------------| a secret     |             |
                 |  session key  |              |             |
@@ -173,7 +173,7 @@ monitors, OSDs and metadata servers can verify with their shared secret.
                 | receive response (CephFS only)             |
                 |                                            |
                 |                make request                |
-                |------------------------------------------->|  
+                |------------------------------------------->|
                 |<-------------------------------------------|
                                receive response
 
@@ -191,10 +191,10 @@ authenticated  user to exercise the functionality of the monitors, OSDs and
 metadata servers. Capabilities can also restrict access to data within one or
 more pools.
 
-.. note:: Ceph uses the capabilities discussed here for setting up and 
-   controlling access between various Ceph client and server instances, and 
-   are relevant regardless of what type of client accesses the Ceph object 
-   store. CephFS uses a different type of capability for files and directories 
+.. note:: Ceph uses the capabilities discussed here for setting up and
+   controlling access between various Ceph client and server instances, and
+   are relevant regardless of what type of client accesses the Ceph object
+   store. CephFS uses a different type of capability for files and directories
    internal to the CephFS filesystem. CephFS filesystem access controls are
    relevant to CephFS, but not block devices or the RESTful gateway.
 
@@ -204,7 +204,7 @@ the user.
 
 ``allow``
 
-:Description: Precedes access settings for a daemon. Implies ``rw`` for MDS only. 
+:Description: Precedes access settings for a daemon. Implies ``rw`` for MDS only.
 :Example: ``ceph-authtool -n client.foo --cap mds 'allow'``
 
 
@@ -217,7 +217,7 @@ the user.
 ``w``
 
 :Description: Gives the user write access to objects.
-:Example: ``ceph-authtool -n client.foo --cap osd 'allow w'`` 
+:Example: ``ceph-authtool -n client.foo --cap osd 'allow w'``
 
 
 ``x``
@@ -228,13 +228,13 @@ the user.
 
 ``class-read``
 
-:Descriptions: Gives the user the capability to call class read methods. Subset of ``x``. 
+:Descriptions: Gives the user the capability to call class read methods. Subset of ``x``.
 :Example: ``ceph-authtool -n client.foo --cap osd 'allow class-read'``
 
 
 ``class-write``
 
-:Description: Gives the user the capability to call class write methods. Subset of ``x``. 
+:Description: Gives the user the capability to call class write methods. Subset of ``x``.
 :Example: ``ceph-authtool -n client.foo --cap osd 'allow class-write'``
 
 
@@ -247,7 +247,7 @@ the user.
 When setting capabilities for a user, Ceph also supports restricting the
 capabilities to a particular pool. This means you can have full access to some
 pools, and restricted (or no) access to other pools for the same user.
-For example:: 
+For example::
 
 	ceph-authtool -n client.foo --cap osd 'allow rwx pool=customer-pool'
 
@@ -262,15 +262,15 @@ run on their behalf.  If that effect is required to handle your access control
 needs, you must have another mechanism, which is likely to be specific to the
 front end used to access the Ceph object store.  This other mechanism has the
 role of ensuring that only acceptable users and programs are able to run on the
-machine that Ceph will permit to access its object store. 
+machine that Ceph will permit to access its object store.
 
 The keys used to authenticate Ceph clients and servers are typically stored in
 a plain text file with appropriate permissions in a trusted host.
 
-.. important:: Storing keys in plaintext files has security shortcomings, but 
-   they are difficult to avoid, given the basic authentication methods Ceph 
-   uses in the background. Those setting up Ceph systems should be aware of 
-   these shortcomings.  
+.. important:: Storing keys in plaintext files has security shortcomings, but
+   they are difficult to avoid, given the basic authentication methods Ceph
+   uses in the background. Those setting up Ceph systems should be aware of
+   these shortcomings.
 
 In particular, arbitrary user machines, especially portable machines, should not
 be configured to interact directly with Ceph, since that mode of use would

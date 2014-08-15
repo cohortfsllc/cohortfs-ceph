@@ -1,7 +1,7 @@
 #
-# this is a kludge installed by ceph to fix the /dev/disk/by-partuuid 
-# symlinks on systems with old udev (< 180).  it's a stripped down 
-# version of a newer 60-persistent-storage.rules file that hopefully 
+# this is a kludge installed by ceph to fix the /dev/disk/by-partuuid
+# symlinks on systems with old udev (< 180).  it's a stripped down
+# version of a newer 60-persistent-storage.rules file that hopefully
 # captures the same set of conditions for setting up those symlinks.
 #
 

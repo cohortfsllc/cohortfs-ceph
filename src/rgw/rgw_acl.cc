@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #include <string.h>
 
 #include <iostream>
@@ -28,7 +30,7 @@ void RGWAccessControlList::_add_grant(ACLGrant *grant)
     {
       string id;
       if (!grant->get_id(id)) {
-        ldout(cct, 0) << "ERROR: grant->get_id() failed" << dendl;
+	ldout(cct, 0) << "ERROR: grant->get_id() failed" << dendl;
       }
       acl_user_map[id] |= perm.get_permissions();
     }
@@ -106,7 +108,7 @@ bool RGWAccessControlPolicy::verify_permission(string& uid, int user_perm_mask, 
   if (policy_perm & RGW_PERM_READ_OBJS) {
     policy_perm |= (RGW_PERM_READ | RGW_PERM_READ_ACP);
   }
-   
+
   int acl_perm = policy_perm & perm & user_perm_mask;
 
   ldout(cct, 10) << " uid=" << uid << " requested perm (type)=" << perm << ", policy perm=" << policy_perm << ", user_perm_mask=" << user_perm_mask << ", acl perm=" << acl_perm << dendl;

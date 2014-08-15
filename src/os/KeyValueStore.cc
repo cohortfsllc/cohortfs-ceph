@@ -1167,7 +1167,7 @@ unsigned KeyValueStore::_do_transaction(Transaction& transaction,
 
     case Transaction::OP_WRITE:
       r = _write(i->cid, i->oid, i->off, i->len, i->data,
-	         t, transaction.get_replica());
+		 t, transaction.get_replica());
       break;
 
     case Transaction::OP_ZERO:
@@ -1188,12 +1188,12 @@ unsigned KeyValueStore::_do_transaction(Transaction& transaction,
 
     case Transaction::OP_SETATTR:
       {
-        map<string, bufferptr> to_set;
-        to_set[i->name] = bufferptr(i->data.c_str(), i->data.length());
-        r = _setattrs(i->cid, i->oid, to_set, t);
-        if (r == -ENOSPC)
-          dout(0) << " ENOSPC on setxattr on " << i->cid << "/" << i->oid
-                  << " name " << i->name << " size " << i->data.length() << dendl;
+	map<string, bufferptr> to_set;
+	to_set[i->name] = bufferptr(i->data.c_str(), i->data.length());
+	r = _setattrs(i->cid, i->oid, to_set, t);
+	if (r == -ENOSPC)
+	  dout(0) << " ENOSPC on setxattr on " << i->cid << "/" << i->oid
+		  << " name " << i->name << " size " << i->data.length() << dendl;
       }
       break;
 
@@ -1460,8 +1460,8 @@ int KeyValueStore::_generic_read(StripObjectMap::StripObjectHeader &header,
 
 
 int KeyValueStore::read(const coll_t &cid, const hobject_t& oid,
-                        uint64_t offset, size_t len, bufferlist& bl,
-                        bool allow_eio)
+			uint64_t offset, size_t len, bufferlist& bl,
+			bool allow_eio)
 {
   dout(15) << __func__ << " " << cid << "/" << oid << " " << offset << "~"
 	   << len << dendl;
@@ -1529,7 +1529,7 @@ int KeyValueStore::_remove(const coll_t &cid, const hobject_t& oid,
 }
 
 int KeyValueStore::_truncate(const coll_t &cid, const hobject_t& oid,
-                             uint64_t size, BufferTransaction &t)
+			     uint64_t size, BufferTransaction &t)
 {
   dout(15) << __func__ << " " << cid << "/" << oid << " size " << size
 	   << dendl;
@@ -1731,7 +1731,7 @@ int KeyValueStore::_write(const coll_t &cid, const hobject_t& oid,
 }
 
 int KeyValueStore::_zero(const coll_t &cid, const hobject_t& oid,
-                         uint64_t offset, size_t len, BufferTransaction &t)
+			 uint64_t offset, size_t len, BufferTransaction &t)
 {
   dout(15) << __func__ << " " << cid << "/" << oid << " " << offset << "~" << len << dendl;
 
@@ -1818,7 +1818,7 @@ int KeyValueStore::_clone_range(const coll_t &cid, const hobject_t& oldoid,
 // attrs
 
 int KeyValueStore::getattr(const coll_t &cid, const hobject_t& oid,
-                           const char *name, bufferptr &bp)
+			   const char *name, bufferptr &bp)
 {
   dout(15) << __func__ << " " << cid << "/" << oid << " '" << name << "'"
 	   << dendl;
@@ -1913,7 +1913,7 @@ out:
 
 
 int KeyValueStore::_rmattr(const coll_t &cid, const hobject_t& oid,
-                           const char *name, BufferTransaction &t)
+			   const char *name, BufferTransaction &t)
 {
   dout(15) << __func__ << " " << cid << "/" << oid << " '" << name << "'"
 	   << dendl;
@@ -2543,7 +2543,7 @@ int KeyValueStore::omap_get_header(const coll_t &c, const hobject_t &hoid,
 }
 
 int KeyValueStore::omap_get_keys(const coll_t &c, const hobject_t &hoid,
-                                 set<string> *keys)
+				 set<string> *keys)
 {
   dout(15) << __func__ << " " << c << "/" << hoid << dendl;
 

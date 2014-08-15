@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -22,7 +22,7 @@ extern "C" {
 /** Create a pipe and set both ends to have F_CLOEXEC
  *
  * @param pipefd	pipe array, just as in pipe(2)
- * @return		0 on success, errno otherwise 
+ * @return		0 on success, errno otherwise
  */
 int pipe_cloexec(int pipefd[2]);
 

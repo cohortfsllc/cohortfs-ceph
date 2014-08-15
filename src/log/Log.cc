@@ -16,7 +16,7 @@
 #include "include/compat.h"
 #include "include/on_exit.h"
 
-#define DEFAULT_MAX_NEW    100
+#define DEFAULT_MAX_NEW	   100
 #define DEFAULT_MAX_RECENT 10000
 
 #define PREALLOC 1000000
@@ -246,7 +246,7 @@ void Log::_log_message(const char *s, bool crash)
   if ((crash ? m_syslog_crash : m_syslog_log) >= 0) {
     syslog(LOG_USER, "%s", s);
   }
-  
+
   if ((crash ? m_stderr_crash : m_stderr_log) >= 0) {
     cerr << s << std::endl;
   }
@@ -264,7 +264,7 @@ void Log::dump_recent()
 
   EntryQueue old;
   _log_message("--- begin dump of recent events ---", true);
-  _flush(&m_recent, &old, true);  
+  _flush(&m_recent, &old, true);
 
   char buf[4096];
   _log_message("--- logging levels ---", true);

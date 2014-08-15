@@ -566,7 +566,7 @@ public:
   /**
    * Make sure that the iterator picks on new keys added if it hasn't yet
    * iterated away from that position.
-   * 
+   *
    * This should only happen for the whole-space iterator when not using
    * the snapshot version.
    *
@@ -580,7 +580,7 @@ public:
     iter->seek_to_first();
     ASSERT_TRUE(iter->valid());
     ASSERT_TRUE(validate_iterator(iter, prefix1, "aaa",
-	  	_gen_val_str("aaa")));
+		_gen_val_str("aaa")));
     iter->next();
     ASSERT_TRUE(iter->valid());
     ASSERT_TRUE(validate_iterator(iter, prefix1, "ccc",
@@ -623,7 +623,7 @@ public:
     iter->seek_to_first();
     ASSERT_TRUE(iter->valid());
     ASSERT_TRUE(validate_iterator(iter, prefix1, "aaa",
-	  	_gen_val_str("aaa")));
+		_gen_val_str("aaa")));
     iter->next();
     ASSERT_TRUE(iter->valid());
     ASSERT_TRUE(validate_iterator(iter, prefix1, "ccc",
@@ -882,7 +882,7 @@ public:
     ASSERT_FALSE(iter->valid());
     // we reached the end of the key_space, so the iterator should no longer
     // be valid
-    
+
     // see what happens when we look for an inexistent prefix, that will
     // compare higher than the existing prefixes, with an empty key
     // expected: reach the store's end; iterator becomes invalid

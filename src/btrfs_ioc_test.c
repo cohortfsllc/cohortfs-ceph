@@ -166,6 +166,6 @@ int main(int argc, char *argv[])
 		do_snap_destroy(fd, snap_name);
 		close(fd);
 	}
-	
+
 	return 0;
 }

@@ -133,7 +133,7 @@ public:
   void execute();
   int read_user_manifest_part(rgw_bucket& bucket, RGWObjEnt& ent, RGWAccessControlPolicy *bucket_policy, off_t start_ofs, off_t end_ofs);
   int iterate_user_manifest_parts(rgw_bucket& bucket, string& obj_prefix, RGWAccessControlPolicy *bucket_policy,
-                                  uint64_t *ptotal_len, bool read_data);
+				  uint64_t *ptotal_len, bool read_data);
   int handle_user_manifest(const char *prefix);
 
   int get_data_cb(bufferlist& bl, off_t ofs, off_t len);
@@ -203,7 +203,7 @@ public:
 class RGWListBucket : public RGWOp {
 protected:
   string prefix;
-  string marker; 
+  string marker;
   string max_keys;
   string delimiter;
   int max;
@@ -632,7 +632,7 @@ protected:
 
 public:
   RGWOptionsCORS() : ret(0), rule(NULL), origin(NULL),
-                     req_hdrs(NULL), req_meth(NULL) {
+		     req_hdrs(NULL), req_meth(NULL) {
   }
 
   int verify_permission() {return 0;}
@@ -818,8 +818,8 @@ struct RGWMultipartUploadEntry {
 class RGWListBucketMultiparts : public RGWOp {
 protected:
   string prefix;
-  RGWMPObj marker; 
-  RGWMultipartUploadEntry next_marker; 
+  RGWMPObj marker;
+  RGWMultipartUploadEntry next_marker;
   int max_uploads;
   string delimiter;
   int ret;

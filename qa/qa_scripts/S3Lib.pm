@@ -143,11 +143,11 @@ sub get_user_info
     return ($acc_key, $sec_key);
 }
 
-# Function that deletes the user $rgw_user and write to logfile. 
+# Function that deletes the user $rgw_user and write to logfile.
 sub delete_user
 {
     my $cmd = "sudo radosgw-admin user rm --uid=$rgw_user";
-    my $cmd_op = get_command_output($cmd); 	
+    my $cmd_op = get_command_output($cmd);
     if ($cmd_op !~ /aborting/){
         _write_log_entry( "user $rgw_user deleted" );
     } else {

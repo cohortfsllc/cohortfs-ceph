@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -51,7 +51,7 @@ public:
   client_t get_last_wrlock_client() const {
     return last_wrlock_client;
   }
-  
+
   virtual void print(ostream& out) const {
     out << "(";
     _print(out);

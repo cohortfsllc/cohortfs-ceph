@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -42,15 +42,15 @@ class AsyncReserver {
   void do_queues() {
     typename map<unsigned, list<pair<T, Context*> > >::reverse_iterator it;
     for (it = queues.rbegin();
-         it != queues.rend() && in_progress.size() < max_allowed;
-         ++it) {
+	 it != queues.rend() && in_progress.size() < max_allowed;
+	 ++it) {
       while (in_progress.size() < max_allowed &&
-             !it->second.empty()) {
-        pair<T, Context*> p = it->second.front();
-        queue_pointers.erase(p.first);
-        it->second.pop_front();
-        f->queue(p.second);
-        in_progress.insert(p.first);
+	     !it->second.empty()) {
+	pair<T, Context*> p = it->second.front();
+	queue_pointers.erase(p.first);
+	it->second.pop_front();
+	f->queue(p.second);
+	in_progress.insert(p.first);
       }
     }
   }
@@ -75,7 +75,7 @@ public:
    * reservation slot.
    */
   void request_reservation(
-    T item,                   ///< [in] reservation key
+    T item,		      ///< [in] reservation key
     Context *on_reserved,     ///< [in] callback to be called on reservation
     unsigned prio
     ) {
@@ -92,10 +92,10 @@ public:
    *
    * Frees the reservation under key for use.
    * Note, after cancel_reservation, the reservation_callback may or
-   * may not still be called. 
+   * may not still be called.
    */
   void cancel_reservation(
-    T item                   ///< [in] key for reservation to cancel
+    T item		     ///< [in] key for reservation to cancel
     ) {
     Mutex::Locker l(lock);
     if (queue_pointers.count(item)) {

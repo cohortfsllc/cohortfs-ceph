@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 #include "acconfig.h"
 
@@ -64,7 +64,7 @@ int FileJournal::_open(bool forwrite, bool create)
   }
   if (create)
     flags |= O_CREAT;
-  
+
   if (fd >= 0) {
     if (TEMP_FAILURE_RETRY(::close(fd))) {
       int err = errno;
@@ -92,7 +92,7 @@ int FileJournal::_open(bool forwrite, bool create)
     ret = _open_block_device();
   } else {
     if (aio && !force_aio) {
-      derr << "FileJournal::_open: disabling aio for non-block journal.  Use "
+      derr << "FileJournal::_open: disabling aio for non-block journal.	 Use "
 	   << "journal_force_aio to force use of aio anyway" << dendl;
       aio = false;
     }
@@ -116,7 +116,7 @@ int FileJournal::_open(bool forwrite, bool create)
   max_size -= max_size % block_size;
 
   dout(1) << "_open " << fn << " fd " << fd
-	  << ": " << max_size 
+	  << ": " << max_size
 	  << " bytes, block size " << block_size
 	  << " bytes, directio = " << directio
 	  << ", aio = " << aio
@@ -196,7 +196,7 @@ void FileJournal::_check_disk_write_cache() const
     }
 
     int on;
-    if (sscanf(line, " write-caching =  %d", &on) != 1)
+    if (sscanf(line, " write-caching =	%d", &on) != 1)
       continue;
     if (!on) {
       dout(10) << "_check_disk_write_cache: disk write cache is off (good) on "
@@ -216,9 +216,9 @@ void FileJournal::_check_disk_write_cache() const
     }
     derr << TEXT_RED
 	 << " ** WARNING: disk write cache is ON on " << fn << ".\n"
-	 << "    Journaling will not be reliable on kernels prior to 2.6.33\n"
-	 << "    (recent kernels are safe).  You can disable the write cache with\n"
-	 << "    'hdparm -W 0 " << fn << "'"
+	 << "	 Journaling will not be reliable on kernels prior to 2.6.33\n"
+	 << "	 (recent kernels are safe).  You can disable the write cache with\n"
+	 << "	 'hdparm -W 0 " << fn << "'"
 	 << TEXT_NORMAL
 	 << dendl;
     break;
@@ -313,10 +313,10 @@ int FileJournal::_open_file(int64_t oldsize, blksize_t blksize,
     }
     delete [] buf;
   }
-      
+
 
   dout(10) << "_open journal is not a block device, NOT checking disk "
-           << "write cache on '" << fn << "'" << dendl;
+	   << "write cache on '" << fn << "'" << dendl;
 
   return 0;
 }
@@ -387,7 +387,7 @@ int FileJournal::create()
   if (TEMP_FAILURE_RETRY(::pwrite(fd, bp.c_str(), bp.length(), 0)) < 0) {
     ret = errno;
     derr << "FileJournal::create : create write header error "
-         << cpp_strerror(ret) << dendl;
+	 << cpp_strerror(ret) << dendl;
     goto close_fd;
   }
 
@@ -453,7 +453,7 @@ int FileJournal::open(uint64_t fs_op_seq)
   uint64_t next_seq = fs_op_seq + 1;
 
   int err = _open(false);
-  if (err < 0) 
+  if (err < 0)
     return err;
 
   // assume writeable, unless...
@@ -470,12 +470,12 @@ int FileJournal::open(uint64_t fs_op_seq)
   zero_buf = new char[header.alignment];
   memset(zero_buf, 0, header.alignment);
 
-  dout(10) << "open header.fsid = " << header.fsid 
-    //<< " vs expected fsid = " << fsid 
+  dout(10) << "open header.fsid = " << header.fsid
+    //<< " vs expected fsid = " << fsid
 	   << dendl;
   if (header.fsid != fsid) {
     derr << "FileJournal::open: ondisk fsid " << header.fsid << " doesn't match expected " << fsid
-         << ", invalid (someone else's?) journal" << dendl;
+	 << ", invalid (someone else's?) journal" << dendl;
     return -EINVAL;
   }
   if (header.max_size > max_size) {
@@ -492,7 +492,7 @@ int FileJournal::open(uint64_t fs_op_seq)
     return -EINVAL;
   }
   if (header.alignment != block_size && directio) {
-    dout(0) << "open journal alignment " << header.alignment << " does not match block size " 
+    dout(0) << "open journal alignment " << header.alignment << " does not match block size "
 	    << block_size << " (required for direct_io journal mode)" << dendl;
     return -EINVAL;
   }
@@ -622,7 +622,7 @@ void FileJournal::stop_writer()
     aio_cond.Signal();
     write_finish_cond.Signal();
 #endif
-  } 
+  }
   write_thread.join();
 #ifdef HAVE_LIBAIO
   write_finish_thread.join();
@@ -665,10 +665,10 @@ int FileJournal::read_header()
     dout(0) << "read_header got " << cpp_strerror(err) << dendl;
     return -err;
   }
-  
+
   /*
    * Unfortunately we weren't initializing the flags field for new
-   * journals!  Aie.  This is safe(ish) now that we have only one
+   * journals!	Aie.  This is safe(ish) now that we have only one
    * flag.  Probably around when we add the next flag we need to
    * remove this or else this (eventually old) code will clobber newer
    * code's flags.
@@ -752,12 +752,12 @@ int FileJournal::prepare_multi_write(bufferlist& bl, uint64_t& orig_ops, uint64_
 
   if (full_state != FULL_NOTFULL)
     return -ENOSPC;
-  
+
   while (!writeq_empty()) {
     int r = prepare_single_write(bl, queue_pos, orig_ops, orig_bytes);
     if (r == -ENOSPC) {
       if (orig_ops)
-	break;         // commit what we have
+	break;	       // commit what we have
 
       if (logger)
 	logger->inc(l_os_j_full);
@@ -772,7 +772,7 @@ int FileJournal::prepare_multi_write(bufferlist& bl, uint64_t& orig_ops, uint64_
 	while (!writeq_empty()) {
 	  put_throttle(1, peek_write().bl.length());
 	  pop_write();
-	}  
+	}
 	print_header();
       }
 
@@ -861,7 +861,7 @@ int FileJournal::prepare_single_write(bufferlist& bl, off64_t& queue_pos, uint64
 
   int r = check_for_full(seq, queue_pos, size);
   if (r < 0)
-    return r;   // ENOSPC or EAGAIN
+    return r;	// ENOSPC or EAGAIN
 
   orig_bytes += ebl.length();
   orig_ops++;
@@ -873,7 +873,7 @@ int FileJournal::prepare_single_write(bufferlist& bl, off64_t& queue_pos, uint64
 	   << " ebl " << ebl.length() << " post_pad " << post_pad << " tail " << head_size << ")"
 	   << " (ebl alignment " << alignment << ")"
 	   << dendl;
-    
+
   // add it this entry
   entry_header_t h;
   memset(&h, 0, sizeof(h));
@@ -950,7 +950,7 @@ int FileJournal::write_bl(off64_t& pos, bufferlist& bl)
 void FileJournal::do_write(bufferlist& bl)
 {
   // nothing to do?
-  if (bl.length() == 0 && !must_write_header) 
+  if (bl.length() == 0 && !must_write_header)
     return;
 
   buffer::ptr hbp;
@@ -965,10 +965,10 @@ void FileJournal::do_write(bufferlist& bl)
     hbp = prepare_header();
   }
 
-  dout(15) << "do_write writing " << write_pos << "~" << bl.length() 
+  dout(15) << "do_write writing " << write_pos << "~" << bl.length()
 	   << (hbp.length() ? " + header":"")
 	   << dendl;
-  
+
   utime_t from = ceph_clock_now(g_ceph_context);
 
   // entry
@@ -1002,7 +1002,7 @@ void FileJournal::do_write(bufferlist& bl)
     if (hbp.length()) {
       // be sneaky: include the header in the second fragment
       second.push_front(hbp);
-      pos = 0;          // we included the header
+      pos = 0;		// we included the header
     }
     if (write_bl(pos, second)) {
       derr << "FileJournal::do_write: write_bl(pos=" << pos
@@ -1034,11 +1034,11 @@ void FileJournal::do_write(bufferlist& bl)
     /*
      * We'd really love to have a fsync_range or fdatasync_range and do a:
      *
-     *  if (split) {
-     *    ::fsync_range(fd, header.max_size - split, split)l
-     *    ::fsync_range(fd, get_top(), bl.length() - split);
-     *  else
-     *    ::fsync_range(fd, write_pos, bl.length())
+     *	if (split) {
+     *	  ::fsync_range(fd, header.max_size - split, split)l
+     *	  ::fsync_range(fd, get_top(), bl.length() - split);
+     *	else
+     *	  ::fsync_range(fd, write_pos, bl.length())
      *
      * NetBSD and AIX apparently have it, and adding it to Linux wouldn't be
      * too hard given all the underlying infrastructure already exist.
@@ -1053,10 +1053,10 @@ void FileJournal::do_write(bufferlist& bl)
 #endif
   }
 
-  utime_t lat = ceph_clock_now(g_ceph_context) - from;    
+  utime_t lat = ceph_clock_now(g_ceph_context) - from;
   dout(20) << "do_write latency " << lat << dendl;
 
-  write_lock.Lock();    
+  write_lock.Lock();
 
   assert(write_pos == pos);
   assert(write_pos % header.alignment == 0);
@@ -1066,7 +1066,7 @@ void FileJournal::do_write(bufferlist& bl)
     journaled_seq = writing_seq;
 
     // kick finisher?
-    //  only if we haven't filled up recently!
+    //	only if we haven't filled up recently!
     if (full_state != FULL_NOTFULL) {
       dout(10) << "do_write NOT queueing finisher seq " << journaled_seq
 	       << ", full_commit_seq|full_restart_seq" << dendl;
@@ -1111,7 +1111,7 @@ void FileJournal::write_thread_entry()
 	continue;
       }
     }
-    
+
 #ifdef HAVE_LIBAIO
     if (aio) {
       Mutex::Locker locker(aio_lock);
@@ -1122,7 +1122,7 @@ void FileJournal::write_thread_entry()
       // NOTE: our condition here is based on aio_num (protected by
       // aio_lock) and throttle_bytes (part of the write queue).  when
       // we sleep, we *only* wait for aio_num to change, and do not
-      // wake when more data is queued.  this is not strictly correct,
+      // wake when more data is queued.	 this is not strictly correct,
       // but should be fine given that we will have plenty of aios in
       // flight if we hit this limit to ensure we keep the device
       // saturated.
@@ -1188,7 +1188,7 @@ void FileJournal::do_aio_write(bufferlist& bl)
   }
 
   // nothing to do?
-  if (bl.length() == 0 && !must_write_header) 
+  if (bl.length() == 0 && !must_write_header)
     return;
 
   buffer::ptr hbp;
@@ -1200,10 +1200,10 @@ void FileJournal::do_aio_write(bufferlist& bl)
   // entry
   off64_t pos = write_pos;
 
-  dout(15) << "do_aio_write writing " << pos << "~" << bl.length() 
+  dout(15) << "do_aio_write writing " << pos << "~" << bl.length()
 	   << (hbp.length() ? " + header":"")
 	   << dendl;
-  
+
   // split?
   off64_t split = 0;
   if (pos + bl.length() > header.max_size) {
@@ -1223,9 +1223,9 @@ void FileJournal::do_aio_write(bufferlist& bl)
     if (hbp.length()) {
       // be sneaky: include the header in the second fragment
       second.push_front(hbp);
-      pos = 0;          // we included the header
+      pos = 0;		// we included the header
     } else
-      pos = get_top();  // no header, start after that
+      pos = get_top();	// no header, start after that
     if (write_aio_bl(pos, second, writing_seq)) {
       derr << "FileJournal::do_aio_write: write_aio_bl(pos=" << pos
 	   << ") failed" << dendl;
@@ -1268,7 +1268,7 @@ int FileJournal::write_aio_bl(off64_t& pos, bufferlist& bl, uint64_t seq)
   align_bl(pos, bl);
 
   dout(20) << "write_aio_bl " << pos << "~" << bl.length() << " seq " << seq << dendl;
-  
+
   while (bl.length() > 0) {
     int max = MIN(bl.buffers().size(), IOV_MAX-1);
     iovec *iov = new iovec[max];
@@ -1334,7 +1334,7 @@ void FileJournal::write_finish_thread_entry()
 	continue;
       }
     }
-    
+
     dout(20) << "write_finish_thread_entry waiting for aio(s)" << dendl;
     io_event event[16];
     int r = io_getevents(aio_ctx, 1, 16, event, NULL);
@@ -1346,7 +1346,7 @@ void FileJournal::write_finish_thread_entry()
       derr << "io_getevents got " << cpp_strerror(r) << dendl;
       assert(0 == "got unexpected error from io_getevents");
     }
-    
+
     {
       Mutex::Locker locker(aio_lock);
       for (int i=0; i<r; i++) {
@@ -1393,8 +1393,8 @@ void FileJournal::check_aio_completion()
   }
 
   if (completed_something) {
-    // kick finisher?  
-    //  only if we haven't filled up recently!
+    // kick finisher?
+    //	only if we haven't filled up recently!
     Mutex::Locker locker(finisher_lock);
     journaled_seq = new_journaled_seq;
     if (full_state != FULL_NOTFULL) {
@@ -1439,7 +1439,7 @@ void FileJournal::submit_entry(uint64_t seq, bufferlist& e, int alignment,
 
   {
     Mutex::Locker l1(writeq_lock);  // ** lock **
-    Mutex::Locker l2(completions_lock);  // ** lock **
+    Mutex::Locker l2(completions_lock);	 // ** lock **
     completions.push_back(
       completion_item(
 	seq, oncommit, ceph_clock_now(g_ceph_context), osd_op));
@@ -1544,13 +1544,13 @@ void FileJournal::committed_thru(uint64_t seq)
 
   // committed but unjournaled items
   while (!writeq_empty() && peek_write().seq <= seq) {
-    dout(15) << " dropping committed but unwritten seq " << peek_write().seq 
+    dout(15) << " dropping committed but unwritten seq " << peek_write().seq
 	     << " len " << peek_write().bl.length()
 	     << dendl;
     put_throttle(1, peek_write().bl.length());
     pop_write();
   }
-  
+
   commit_cond.Signal();
 
   dout(10) << "committed_thru done" << dendl;
@@ -1561,7 +1561,7 @@ void FileJournal::put_throttle(uint64_t ops, uint64_t bytes)
 {
   uint64_t new_ops = throttle_ops.put(ops);
   uint64_t new_bytes = throttle_bytes.put(bytes);
-  dout(5) << "put_throttle finished " << ops << " ops and " 
+  dout(5) << "put_throttle finished " << ops << " ops and "
 	   << bytes << " bytes, now "
 	   << new_ops << " ops and " << new_bytes << " bytes"
 	   << dendl;
@@ -1607,13 +1607,13 @@ void FileJournal::wrap_read_bl(
 
     int64_t len;
     if (pos + olen > header.max_size)
-      len = header.max_size - pos;        // partial
+      len = header.max_size - pos;	  // partial
     else
-      len = olen;                         // rest
-    
+      len = olen;			  // rest
+
     int64_t actual = ::lseek64(fd, pos, SEEK_SET);
     assert(actual == pos);
-    
+
     bufferptr bp = buffer::create(len);
     int r = safe_read_exact(fd, bp.c_str(), len);
     if (r) {
@@ -1738,7 +1738,7 @@ FileJournal::read_entry_result FileJournal::do_read_entry(
   }
 
   if ((header.flags & header_t::FLAG_CRC) ||   // if explicitly enabled (new journal)
-      h->crc32c != 0) {                        // newer entry in old journal
+      h->crc32c != 0) {			       // newer entry in old journal
     uint32_t actual_crc = bl->crc32c(0);
     if (actual_crc != h->crc32c) {
       if (ss)

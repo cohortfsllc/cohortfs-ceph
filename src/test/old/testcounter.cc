@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 
 #include "common/DecayCounter.h"
 
@@ -7,11 +9,11 @@ using namespace std;
 struct RealCounter {
 public:
   list<int> hits;
-  
+
   void hit(int ms) {
 	hits.push_back(ms);
   }
-  
+
   int get(double hl, int now) {
 	trim(now-hl);
 	return hits.size();
@@ -19,10 +21,10 @@ public:
 
   void trim(int to) {
 	while (!hits.empty() &&
-		   hits.front() < to) 
+		   hits.front() < to)
 	  hits.pop_front();
   }
- 
+
 
 };
 
@@ -56,7 +58,7 @@ int main(int argc, char **argv)
 	  cout << ms << "\t"
 		   << target*hl << "\t"
 		   << rc.get(hl*1000, ms) << "\t"
-		   << o.get(now) << "\t" 
+		   << o.get(now) << "\t"
 		   << dc.val << "\t"
 		//		   << dc.delta << "\t"
 		   << o.get_last_vel() << "\t"

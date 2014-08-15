@@ -48,21 +48,21 @@ class ClsUserListCtx : public ObjectOperationCompletion {
   int *pret;
 public:
   ClsUserListCtx(list<cls_user_bucket_entry> *_entries, string *_marker, bool *_truncated, int *_pret) :
-                                      entries(_entries), marker(_marker), truncated(_truncated), pret(_pret) {}
+				      entries(_entries), marker(_marker), truncated(_truncated), pret(_pret) {}
   void handle_completion(int r, bufferlist& outbl) {
     if (r >= 0) {
       cls_user_list_buckets_ret ret;
       try {
-        bufferlist::iterator iter = outbl.begin();
-        ::decode(ret, iter);
-        if (entries)
+	bufferlist::iterator iter = outbl.begin();
+	::decode(ret, iter);
+	if (entries)
 	  *entries = ret.entries;
-        if (truncated)
-          *truncated = ret.truncated;
-        if (marker)
-          *marker = ret.marker;
+	if (truncated)
+	  *truncated = ret.truncated;
+	if (marker)
+	  *marker = ret.marker;
       } catch (buffer::error& err) {
-        r = -EIO;
+	r = -EIO;
       }
     }
     if (pret) {
@@ -72,8 +72,8 @@ public:
 };
 
 void cls_user_bucket_list(librados::ObjectReadOperation& op,
-                       const string& in_marker, int max_entries, list<cls_user_bucket_entry>& entries,
-                       string *out_marker, bool *truncated, int *pret)
+		       const string& in_marker, int max_entries, list<cls_user_bucket_entry>& entries,
+		       string *out_marker, bool *truncated, int *pret)
 {
   bufferlist inbl;
   cls_user_list_buckets_op call;
@@ -100,15 +100,15 @@ public:
     if (r >= 0) {
       cls_user_get_header_ret ret;
       try {
-        bufferlist::iterator iter = outbl.begin();
-        ::decode(ret, iter);
-        if (header)
+	bufferlist::iterator iter = outbl.begin();
+	::decode(ret, iter);
+	if (header)
 	  *header = ret.header;
       } catch (buffer::error& err) {
-        r = -EIO;
+	r = -EIO;
       }
       if (ret_ctx) {
-        ret_ctx->handle_response(r, ret.header);
+	ret_ctx->handle_response(r, ret.header);
       }
     }
     if (pret) {
@@ -118,7 +118,7 @@ public:
 };
 
 void cls_user_get_header(librados::ObjectReadOperation& op,
-                       cls_user_header *header, int *pret)
+		       cls_user_header *header, int *pret)
 {
   bufferlist inbl;
   cls_user_get_header_op call;

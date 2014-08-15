@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
 my %pin;
-my %hist;     
+my %hist;
 my $l = 1;
 my @pins;
 while (<>) {

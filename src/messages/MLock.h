@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 
@@ -25,20 +25,20 @@ class MLock : public Message {
   int32_t     asker;  // who is initiating this request
   metareqid_t reqid;  // for remote lock requests
 
-  uint16_t      lock_type;  // lock object type
+  uint16_t	lock_type;  // lock object type
   MDSCacheObjectInfo object_info;
 
-  bufferlist lockdata;  // and possibly some data
+  bufferlist lockdata;	// and possibly some data
 
 public:
   bufferlist& get_data() { return lockdata; }
   int get_asker() { return asker; }
   int get_action() { return action; }
   metareqid_t get_reqid() { return reqid; }
-  
+
   int get_lock_type() { return lock_type; }
   MDSCacheObjectInfo &get_object_info() { return object_info; }
-  
+
   MLock() : Message(MSG_MDS_LOCK) {}
   MLock(int ac, int as) :
     Message(MSG_MDS_LOCK),
@@ -58,7 +58,7 @@ public:
   }
 private:
   ~MLock() {}
-  
+
 public:
   const char *get_type_name() const { return "ILock"; }
   void print(ostream& out) const {
@@ -67,12 +67,12 @@ public:
 	<< " " << object_info
 	<< ")";
   }
-  
+
   void set_reqid(metareqid_t ri) { reqid = ri; }
   void set_data(const bufferlist& lockdata) {
     this->lockdata = lockdata;
   }
-  
+
   void decode_payload() {
     bufferlist::iterator p = payload.begin();
     ::decode(asker, p);

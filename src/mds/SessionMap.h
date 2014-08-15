@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_MDS_SESSIONMAP_H
@@ -32,7 +32,7 @@ struct MDRequestImpl;
 #include "msg/Message.h"
 
 
-/* 
+/*
  * session
  */
 
@@ -40,23 +40,23 @@ class Session : public RefCountedObject {
   // -- state etc --
 public:
   /*
-                    
-        <deleted> <-- closed <------------+
-             ^         |                  |
-             |         v                  |
-          killing <-- opening <----+      |
-             ^         |           |      |
-             |         v           |      |
-           stale <--> open --> closing ---+
+
+	<deleted> <-- closed <------------+
+	     ^	       |		  |
+	     |	       v		  |
+	  killing <-- opening <----+	  |
+	     ^	       |	   |	  |
+	     |	       v	   |	  |
+	   stale <--> open --> closing ---+
 
     + additional dimension of 'importing' (with counter)
 
   */
   enum {
     STATE_CLOSED = 0,
-    STATE_OPENING = 1,   // journaling open
+    STATE_OPENING = 1,	 // journaling open
     STATE_OPEN = 2,
-    STATE_CLOSING = 3,   // journaling close
+    STATE_CLOSING = 3,	 // journaling close
     STATE_STALE = 4,
     STATE_KILLING = 5
   };
@@ -79,7 +79,7 @@ private:
   int importing_count;
   friend class SessionMap;
 public:
-  session_info_t info;                         ///< durable bits
+  session_info_t info;			       ///< durable bits
 
   ConnectionRef connection;
   xlist<Session*>::item item_session_list;
@@ -140,7 +140,7 @@ public:
 
   // -- caps --
 private:
-  version_t cap_push_seq;        // cap push seq #
+  version_t cap_push_seq;	 // cap push seq #
   map<version_t, list<Context*> > waitfor_flush; // flush session messages
 public:
   xlist<Capability*> caps;     // inodes with caps; front=most recently used
@@ -184,7 +184,7 @@ public:
   }
   void trim_completed_requests(ceph_tid_t mintid) {
     // trim
-    while (!info.completed_requests.empty() && 
+    while (!info.completed_requests.empty() &&
 	   (mintid == 0 || info.completed_requests.begin()->first < mintid))
       info.completed_requests.erase(info.completed_requests.begin());
   }
@@ -198,7 +198,7 @@ public:
   }
 
 
-  Session() : 
+  Session() :
     state(STATE_CLOSED), state_seq(0), importing_count(0),
     connection(NULL), item_session_list(this),
     requests(0),  // member_offset passed to front() manually
@@ -235,20 +235,20 @@ private:
   std::unordered_map<entity_name_t, Session*> session_map;
 public:
   map<int,xlist<Session*>* > by_state;
-  
-public:  // i am lazy
+
+public:	 // i am lazy
   version_t version, projected, committing, committed;
   map<version_t, list<Context*> > commit_waiters;
 
 public:
-  SessionMap(MDS *m) : mds(m), 
-		       version(0), projected(0), committing(0), committed(0) 
+  SessionMap(MDS *m) : mds(m),
+		       version(0), projected(0), committing(0), committed(0)
   { }
-  
+
   //for the dencoder
   SessionMap() : mds(NULL), version(0), projected(0),
 		 committing(0), committed(0) {}
-    
+
   // sessions
   bool empty() { return session_map.empty(); }
 
@@ -344,8 +344,8 @@ public:
   }
 
   void open_sessions(map<client_t,entity_inst_t>& client_map) {
-    for (map<client_t,entity_inst_t>::iterator p = client_map.begin(); 
-	 p != client_map.end(); 
+    for (map<client_t,entity_inst_t>::iterator p = client_map.begin();
+	 p != client_map.end();
 	 ++p) {
       Session *s = get_or_add_session(p->second);
       set_state(s, Session::STATE_OPEN);
@@ -392,8 +392,7 @@ public:
   void _load_finish(int r, bufferlist &bl);
   void save(Context *onsave, version_t needv=0);
   void _save_finish(version_t v);
- 
-};
 
+};
 
 #endif

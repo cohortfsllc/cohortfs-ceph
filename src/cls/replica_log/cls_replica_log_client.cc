@@ -4,7 +4,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  */
 
 #include <errno.h>
@@ -15,9 +15,9 @@
 using namespace librados;
 
 void cls_replica_log_prepare_marker(cls_replica_log_progress_marker& progress,
-                                    const string& entity, const string& marker,
-                                    const utime_t& time,
-                                    const list<pair<string, utime_t> > *entries)
+				    const string& entity, const string& marker,
+				    const utime_t& time,
+				    const list<pair<string, utime_t> > *entries)
 {
   progress.entity_id = entity;
   progress.position_marker = marker;
@@ -32,9 +32,9 @@ void cls_replica_log_prepare_marker(cls_replica_log_progress_marker& progress,
 }
 
 void cls_replica_log_extract_marker(const cls_replica_log_progress_marker& progress,
-                                    string& entity, string& marker,
-                                    utime_t& time,
-                                    list<pair<string, utime_t> >& entries)
+				    string& entity, string& marker,
+				    utime_t& time,
+				    list<pair<string, utime_t> >& entries)
 {
   entity = progress.entity_id;
   marker = progress.position_marker;
@@ -46,7 +46,7 @@ void cls_replica_log_extract_marker(const cls_replica_log_progress_marker& progr
 }
 
 void cls_replica_log_update_bound(librados::ObjectWriteOperation& o,
-                                  const cls_replica_log_progress_marker& progress)
+				  const cls_replica_log_progress_marker& progress)
 {
   cls_replica_log_set_marker_op op(progress);
   bufferlist in;
@@ -55,7 +55,7 @@ void cls_replica_log_update_bound(librados::ObjectWriteOperation& o,
 }
 
 void cls_replica_log_delete_bound(librados::ObjectWriteOperation& o,
-                                  const string& entity)
+				  const string& entity)
 {
   cls_replica_log_delete_marker_op op(entity);
   bufferlist in;
@@ -64,9 +64,9 @@ void cls_replica_log_delete_bound(librados::ObjectWriteOperation& o,
 }
 
 int cls_replica_log_get_bounds(librados::IoCtx& io_ctx, const string& oid,
-                                string& position_marker,
-                                utime_t& oldest_time,
-                                list<cls_replica_log_progress_marker>& markers)
+				string& position_marker,
+				utime_t& oldest_time,
+				list<cls_replica_log_progress_marker>& markers)
 {
   bufferlist in;
   bufferlist out;

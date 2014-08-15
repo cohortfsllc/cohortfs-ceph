@@ -2,7 +2,7 @@
 
 =head1 NAME
 
-s3_bucket_quota.pl - Script to test the rgw bucket quota functionality using s3 interface. 
+s3_bucket_quota.pl - Script to test the rgw bucket quota functionality using s3 interface.
 
 =head1 SYNOPSIS
 
@@ -10,13 +10,13 @@ Use:
         perl s3_bucket_quota.pl [--help]
 
 Examples:
-        perl s3_bucket_quota.pl 
+        perl s3_bucket_quota.pl
         or
         perl s3_bucket_quota.pl  --help
 
 =head1 DESCRIPTION
 
-This script intends to test the rgw bucket quota funcionality using s3 interface 
+This script intends to test the rgw bucket quota funcionality using s3 interface
 and reports the test results
 
 =head1 ARGUMENTS
@@ -57,7 +57,7 @@ our $hostname = "$host.$domain:7280"; # as rgw is running on port 7280
 our $testfileloc;
 my $rgw_user = "qa_user";
 
-# Function that deletes the user $rgw_user and write to logfile. 
+# Function that deletes the user $rgw_user and write to logfile.
 sub delete_user
 {
     my $cmd = "sudo radosgw-admin user rm --uid=$rgw_user";
@@ -72,7 +72,7 @@ sub delete_user
 }
 
 sub quota_set_max_size {
-    my $set_quota = `sudo radosgw-admin quota set --bucket=$bucketname --max-size=1048576000`; 
+    my $set_quota = `sudo radosgw-admin quota set --bucket=$bucketname --max-size=1048576000`;
     if ($set_quota !~ /./){
       print "quota set for the bucket: $bucketname \n";
     } else {
@@ -84,7 +84,7 @@ sub quota_set_max_size {
 
 sub quota_set_max_size_zero {
     run_s3($rgw_user);
-    my $set_quota = `sudo radosgw-admin quota set --bucket=$bucketname --max-size=0`; 
+    my $set_quota = `sudo radosgw-admin quota set --bucket=$bucketname --max-size=0`;
     if ($set_quota !~ /./){
       pass ("quota set for the bucket: $bucketname with max size as zero\n");
     } else {
@@ -95,7 +95,7 @@ sub quota_set_max_size_zero {
 
 sub quota_set_max_objs_zero {
     run_s3($rgw_user);
-    my $set_quota = `sudo radosgw-admin quota set --bucket=$bucketname --max-objects=0`; 
+    my $set_quota = `sudo radosgw-admin quota set --bucket=$bucketname --max-objects=0`;
     if ($set_quota !~ /./){
       pass ("quota set for the bucket: $bucketname with max objects as zero\n");
     } else {
@@ -106,7 +106,7 @@ sub quota_set_max_objs_zero {
 
 sub quota_set_neg_size {
     run_s3($rgw_user);
-    my $set_quota = `sudo radosgw-admin quota set --bucket=$bucketname --max-size=-1`; 
+    my $set_quota = `sudo radosgw-admin quota set --bucket=$bucketname --max-size=-1`;
     if ($set_quota !~ /./){
       pass ("quota set for the bucket: $bucketname with max size -1\n");
     } else {
@@ -117,7 +117,7 @@ sub quota_set_neg_size {
 
 sub quota_set_neg_objs {
     run_s3($rgw_user);
-    my $set_quota = `sudo radosgw-admin quota set --bucket=$bucketname --max-objects=-1`; 
+    my $set_quota = `sudo radosgw-admin quota set --bucket=$bucketname --max-objects=-1`;
     if ($set_quota !~ /./){
       pass ("quota set for the bucket: $bucketname max objects -1 \n");
     } else {
@@ -127,8 +127,8 @@ sub quota_set_neg_objs {
 }
 
 sub quota_set_user_objs {
-    my $set_quota = `sudo radosgw-admin quota set --uid=$rgw_user --quota-scope=bucket`; 
-    my $set_quota1 = `sudo radosgw-admin quota set --bucket=$bucketname --max-objects=1`; 
+    my $set_quota = `sudo radosgw-admin quota set --uid=$rgw_user --quota-scope=bucket`;
+    my $set_quota1 = `sudo radosgw-admin quota set --bucket=$bucketname --max-objects=1`;
     if ($set_quota1 !~ /./){
       print "bucket quota max_objs set for the given user: $bucketname \n";
     } else {
@@ -139,8 +139,8 @@ sub quota_set_user_objs {
 }
 
 sub quota_set_user_size {
-    my $set_quota = `sudo radosgw-admin quota set --uid=$rgw_user --quota-scope=bucket`; 
-    my $set_quota1 = `sudo radosgw-admin quota set --bucket=$bucketname --max-size=1048576000`; 
+    my $set_quota = `sudo radosgw-admin quota set --uid=$rgw_user --quota-scope=bucket`;
+    my $set_quota1 = `sudo radosgw-admin quota set --bucket=$bucketname --max-size=1048576000`;
     if ($set_quota1 !~ /./){
       print "bucket quota max size set for the given user: $bucketname \n";
     } else {
@@ -151,34 +151,34 @@ sub quota_set_user_size {
 }
 
 sub quota_set_max_obj {
-    # set max objects 
-    my $set_quota = `sudo radosgw-admin quota set --bucket=$bucketname --max-objects=1`; 
-    if ($set_quota !~ /./){ 
-      print "quota set for the bucket: $bucketname \n"; 
+    # set max objects
+    my $set_quota = `sudo radosgw-admin quota set --bucket=$bucketname --max-objects=1`;
+    if ($set_quota !~ /./){
+      print "quota set for the bucket: $bucketname \n";
     } else {
-      print "quota set failed for the bucket: $bucketname \n"; 
+      print "quota set failed for the bucket: $bucketname \n";
      exit 1;
     }
     return 0;
 }
 
 sub quota_enable {
-    my $en_quota = `sudo radosgw-admin quota enable --bucket=$bucketname`; 
-    if ($en_quota !~ /./){ 
-      print "quota enabled for the bucket: $bucketname \n"; 
+    my $en_quota = `sudo radosgw-admin quota enable --bucket=$bucketname`;
+    if ($en_quota !~ /./){
+      print "quota enabled for the bucket: $bucketname \n";
     } else {
-      print "quota enable failed for the bucket: $bucketname \n"; 
+      print "quota enable failed for the bucket: $bucketname \n";
       exit 1;
     }
     return 0;
 }
 
 sub quota_disable {
-    my $dis_quota = `sudo radosgw-admin quota disable --bucket=$bucketname`; 
-    if ($dis_quota !~ /./){ 
-      print "quota disabled for the bucket: $bucketname \n"; 
+    my $dis_quota = `sudo radosgw-admin quota disable --bucket=$bucketname`;
+    if ($dis_quota !~ /./){
+      print "quota disabled for the bucket: $bucketname \n";
     } else {
-      print "quota disable failed for the bucket: $bucketname \n"; 
+      print "quota disable failed for the bucket: $bucketname \n";
       exit 1;
     }
     return 0;
@@ -198,7 +198,7 @@ sub delete_bucket {
    ($bucket->delete_bucket) and (print "bucket delete succeeded \n") or die $s3->err . "delete bucket failed\n" . $s3->errstr;
 }
 
-# set bucket quota with max_objects and verify 
+# set bucket quota with max_objects and verify
 sub test_max_objects {
     my $size = '10Mb';
     create_file($size);
@@ -234,7 +234,7 @@ sub test_max_objects_per_user{
     delete_bucket();
 }
 
-# set bucket quota with max_objects and try to exceed the max_objects and verify 
+# set bucket quota with max_objects and try to exceed the max_objects and verify
 sub test_beyond_max_objs {
     my $size = "10Mb";
     create_file($size);
@@ -253,7 +253,7 @@ sub test_beyond_max_objs {
     delete_bucket();
 }
 
-# set bucket quota for a user with max_objects and try to exceed the max_objects and verify 
+# set bucket quota for a user with max_objects and try to exceed the max_objects and verify
 sub test_beyond_max_objs_user {
     my $size = "10Mb";
     create_file($size);
@@ -278,7 +278,7 @@ sub test_quota_size {
     my $size = "2Gb";
     create_file($size);
     run_s3($rgw_user);
-    quota_set_max_size();    
+    quota_set_max_size();
     quota_enable();
     my $ret_value = upload_file();
     if ($ret_value == 1) {
@@ -288,7 +288,7 @@ sub test_quota_size {
             print "delete objects successful \n";
             my $size1 = "1Gb";
             create_file($size1);
-            my $ret_val1 = upload_file(); 
+            my $ret_val1 = upload_file();
             if ($ret_val1 == 0) {
                 pass ( "set max size and ensure that the max size is in effect" );
             } else {
@@ -384,7 +384,7 @@ quota_set_max_size_zero();
 quota_set_max_objs_zero();
 quota_set_neg_objs();
 quota_set_neg_size();
-test_quota_size(); 
+test_quota_size();
 test_quota_size_user();
 test_quota_size_disabled();
 test_quota_size_disabled_user();

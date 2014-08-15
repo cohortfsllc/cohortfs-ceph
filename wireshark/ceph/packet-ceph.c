@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 /* packet-ceph.c
 * This program is free software; you can redistribute it and/or
 * modify it under the terms of the GNU General Public License
@@ -6,7 +8,7 @@
 *
 * This program is distributed in the hope that it will be useful,
 * but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	See the
 * GNU General Public License for more details.
 *
 * You should have received a copy of the GNU General Public License
@@ -126,7 +128,7 @@ static const value_string packettypenames[] = {
 	{ 48, "Poolop Reply" },
 	{ 49, "Poolop" },
 	{ 0, NULL }
-};	
+};
 
 #define ACK_MSG_SIZE			9
 #define TVB_MSG_HEADER_POS(x) (1 + offsetof(struct ceph_msg_header, x))
@@ -209,68 +211,68 @@ static gint ett_ceph_footer = -1;
 
 const char *ceph_cap_op_name(int op)
 {
-        char* plop;
+	char* plop;
 
-        switch (op) {
-        case CEPH_CAP_OP_GRANT: return "grant";
-        case CEPH_CAP_OP_REVOKE: return "revoke";
-        case CEPH_CAP_OP_TRUNC: return "trunc";
-        case CEPH_CAP_OP_EXPORT: return "export";
-        case CEPH_CAP_OP_IMPORT: return "import";
-        case CEPH_CAP_OP_UPDATE: return "update";
-        case CEPH_CAP_OP_DROP: return "drop";
-        case CEPH_CAP_OP_FLUSH: return "flush";
-        case CEPH_CAP_OP_FLUSH_ACK: return "flush_ack";
-        case CEPH_CAP_OP_FLUSHSNAP: return "flushsnap";
-        case CEPH_CAP_OP_FLUSHSNAP_ACK: return "flushsnap_ack";
-        case CEPH_CAP_OP_RELEASE: return "release";
-        case CEPH_CAP_OP_RENEW: return "renew";
-        }
+	switch (op) {
+	case CEPH_CAP_OP_GRANT: return "grant";
+	case CEPH_CAP_OP_REVOKE: return "revoke";
+	case CEPH_CAP_OP_TRUNC: return "trunc";
+	case CEPH_CAP_OP_EXPORT: return "export";
+	case CEPH_CAP_OP_IMPORT: return "import";
+	case CEPH_CAP_OP_UPDATE: return "update";
+	case CEPH_CAP_OP_DROP: return "drop";
+	case CEPH_CAP_OP_FLUSH: return "flush";
+	case CEPH_CAP_OP_FLUSH_ACK: return "flush_ack";
+	case CEPH_CAP_OP_FLUSHSNAP: return "flushsnap";
+	case CEPH_CAP_OP_FLUSHSNAP_ACK: return "flushsnap_ack";
+	case CEPH_CAP_OP_RELEASE: return "release";
+	case CEPH_CAP_OP_RENEW: return "renew";
+	}
 
-        plop = malloc(16*sizeof(char));
-        sprintf(plop,"%i",op);
+	plop = malloc(16*sizeof(char));
+	sprintf(plop,"%i",op);
 
-        return plop;
+	return plop;
 }
 
 const char *ceph_mds_op_name(int op)
 {
 	char* plop;
 
-        switch (op) {
-        case CEPH_MDS_OP_LOOKUP:  return "lookup";
-        case CEPH_MDS_OP_LOOKUPHASH:  return "lookuphash";
-        case CEPH_MDS_OP_LOOKUPPARENT:  return "lookupparent";
-        case CEPH_MDS_OP_LOOKUPINO:  return "lookupino";
-        case CEPH_MDS_OP_LOOKUPNAME:  return "lookupname";
-        case CEPH_MDS_OP_GETATTR:  return "getattr";
-        case CEPH_MDS_OP_SETXATTR: return "setxattr";
-        case CEPH_MDS_OP_SETATTR: return "setattr";
-        case CEPH_MDS_OP_RMXATTR: return "rmxattr";
-        case CEPH_MDS_OP_SETLAYOUT: return "setlayou";
-        case CEPH_MDS_OP_SETDIRLAYOUT: return "setdirlayout";
-        case CEPH_MDS_OP_READDIR: return "readdir";
-        case CEPH_MDS_OP_MKNOD: return "mknod";
-        case CEPH_MDS_OP_LINK: return "link";
-        case CEPH_MDS_OP_UNLINK: return "unlink";
-        case CEPH_MDS_OP_RENAME: return "rename";
-        case CEPH_MDS_OP_MKDIR: return "mkdir";
-        case CEPH_MDS_OP_RMDIR: return "rmdir";
-        case CEPH_MDS_OP_SYMLINK: return "symlink";
-        case CEPH_MDS_OP_CREATE: return "create";
-        case CEPH_MDS_OP_OPEN: return "open";
-        case CEPH_MDS_OP_LOOKUPSNAP: return "lookupsnap";
-        case CEPH_MDS_OP_LSSNAP: return "lssnap";
-        case CEPH_MDS_OP_MKSNAP: return "mksnap";
-        case CEPH_MDS_OP_RMSNAP: return "rmsnap";
-        case CEPH_MDS_OP_SETFILELOCK: return "setfilelock";
-        case CEPH_MDS_OP_GETFILELOCK: return "getfilelock";
-        }
+	switch (op) {
+	case CEPH_MDS_OP_LOOKUP:  return "lookup";
+	case CEPH_MDS_OP_LOOKUPHASH:  return "lookuphash";
+	case CEPH_MDS_OP_LOOKUPPARENT:	return "lookupparent";
+	case CEPH_MDS_OP_LOOKUPINO:  return "lookupino";
+	case CEPH_MDS_OP_LOOKUPNAME:  return "lookupname";
+	case CEPH_MDS_OP_GETATTR:  return "getattr";
+	case CEPH_MDS_OP_SETXATTR: return "setxattr";
+	case CEPH_MDS_OP_SETATTR: return "setattr";
+	case CEPH_MDS_OP_RMXATTR: return "rmxattr";
+	case CEPH_MDS_OP_SETLAYOUT: return "setlayou";
+	case CEPH_MDS_OP_SETDIRLAYOUT: return "setdirlayout";
+	case CEPH_MDS_OP_READDIR: return "readdir";
+	case CEPH_MDS_OP_MKNOD: return "mknod";
+	case CEPH_MDS_OP_LINK: return "link";
+	case CEPH_MDS_OP_UNLINK: return "unlink";
+	case CEPH_MDS_OP_RENAME: return "rename";
+	case CEPH_MDS_OP_MKDIR: return "mkdir";
+	case CEPH_MDS_OP_RMDIR: return "rmdir";
+	case CEPH_MDS_OP_SYMLINK: return "symlink";
+	case CEPH_MDS_OP_CREATE: return "create";
+	case CEPH_MDS_OP_OPEN: return "open";
+	case CEPH_MDS_OP_LOOKUPSNAP: return "lookupsnap";
+	case CEPH_MDS_OP_LSSNAP: return "lssnap";
+	case CEPH_MDS_OP_MKSNAP: return "mksnap";
+	case CEPH_MDS_OP_RMSNAP: return "rmsnap";
+	case CEPH_MDS_OP_SETFILELOCK: return "setfilelock";
+	case CEPH_MDS_OP_GETFILELOCK: return "getfilelock";
+	}
 
 	plop = malloc(16*sizeof(char));
-        printf(plop,"%i",op);
+	printf(plop,"%i",op);
 
-        return plop;
+	return plop;
 }
 
 
@@ -292,7 +294,7 @@ void proto_reg_handoff_ceph(void)
 void proto_register_ceph (void)
 {
 	/* A header field is something you can search/filter on.
-	* 
+	*
 	* We create a structure to register our fields. It consists of an
 	* array of hf_register_info structures, each of which are of the format
 	* {&(field id), {name, abbrev, type, display, strings, bitmask, blurb, HFILL}}.
@@ -318,7 +320,7 @@ void proto_register_ceph (void)
 			"CEPH Authentication reply", HFILL }},
 		{ &hf_ceph_header,
 			{ "Header", "ceph.header", FT_NONE, BASE_NONE, NULL, 0x0,
-		 	"CEPH Header", HFILL }},
+			"CEPH Header", HFILL }},
 		{ &hf_ceph_banner,
 			{ "Ceph Banner", "ceph.connect.banner", FT_STRING, BASE_NONE, NULL, 0x0,
 			"Ceph Banner", HFILL }},
@@ -348,121 +350,121 @@ void proto_register_ceph (void)
 			"connect: nonce", HFILL }},
 		{ &hf_ceph_sockaddr_in,
 			{ "sockaddr_in", "ceph.sockaddr_in", FT_NONE, BASE_NONE, NULL, 0x0,
-		 	"sockaddr_in", HFILL }},
+			"sockaddr_in", HFILL }},
 		{ &hf_sin_family,
 			{ "sin_family", "ceph.sin_family", FT_UINT16, BASE_HEX, NULL, 0x0,
-		 	"sockaddr_in: sin_family", HFILL }},
+			"sockaddr_in: sin_family", HFILL }},
 		{ &hf_sin_port,
 			{ "sin_port", "ceph.sin_port", FT_UINT16, BASE_DEC, NULL, 0x0,
-		 	"sockaddr_in: sin_port", HFILL }},
+			"sockaddr_in: sin_port", HFILL }},
 		{ &hf_sin_addr,
 			{ "ip addr", "ceph.addr", FT_IPv4, BASE_NONE, NULL, 0x0,
-		 	"sockaddr_in: ip addr", HFILL }},
+			"sockaddr_in: ip addr", HFILL }},
 		{ &hf_ceph_connect_host_type,
 			{ "host_type", "ceph.connect.host_type", FT_UINT32, BASE_DEC, NULL, 0x0,
-		 	"connect: host_type", HFILL }},
+			"connect: host_type", HFILL }},
 		{ &hf_ceph_connect_tag,
 			{ "tag", "ceph.connect.tag", FT_UINT8, BASE_DEC, NULL, 0x0,
-		 	"connect: tag", HFILL }},
+			"connect: tag", HFILL }},
 		{ &hf_ceph_mds_op,
 			{ "mds op", "ceph.mds.op", FT_UINT32, BASE_HEX, NULL, 0x0,
-		 	"ceph: mds op", HFILL }},
+			"ceph: mds op", HFILL }},
 		{ &hf_ceph_connect_global_seq,
 			{ "global_seq", "ceph.connect.global_seq", FT_UINT32, BASE_DEC, NULL, 0x0,
-		 	"connect: global_seq", HFILL }},
+			"connect: global_seq", HFILL }},
 		{ &hf_ceph_connect_connect_seq,
 			{ "connect_seq", "ceph.connect.connect_seq", FT_UINT32, BASE_DEC, NULL, 0x0,
-		 	"connect: connect_seq", HFILL }},
+			"connect: connect_seq", HFILL }},
 		{ &hf_ceph_connect_flags,
 			{ "flags", "ceph.connect.flags", FT_UINT8, BASE_HEX, NULL, 0x0,
-		 	"connect: flags", HFILL }},
+			"connect: flags", HFILL }},
 		{ &hf_ceph_length,
 			{ "Package Length", "ceph.len", FT_UINT32, BASE_DEC, NULL, 0x0,
 			"Package Length", HFILL }},
 		{ &hf_ceph_type,
 			{ "Type", "ceph.type", FT_UINT8, BASE_DEC, VALS(packettypenames), 0x0,
-		 	"Package Type", HFILL }},
+			"Package Type", HFILL }},
 		{ &hf_ceph_text,
 			{ "Text", "ceph.text", FT_STRING, BASE_NONE, NULL, 0x0,
-		 	"Text", HFILL }},
+			"Text", HFILL }},
 		{ &hf_ceph_path,
 			{ "path", "ceph.path", FT_STRING, BASE_NONE, NULL, 0x0,
-		 	"path", HFILL }},
+			"path", HFILL }},
 		{ &hf_ceph_hdr_tag,
 			{ "tag", "ceph.tag", FT_UINT8, BASE_DEC, NULL, 0x0,
-		 	"hdr: tag", HFILL }},
+			"hdr: tag", HFILL }},
 		{ &hf_ceph_hdr_seq_ack,
 			{ "ack seq", "ceph.ack.seq", FT_UINT64, BASE_DEC, NULL, 0x0,
-		 	"ack: seq", HFILL }},
+			"ack: seq", HFILL }},
 		{ &hf_ceph_hdr_seq,
 			{ "seq", "ceph.seq", FT_UINT64, BASE_DEC, NULL, 0x0,
-		 	"hdr: seq", HFILL }},
+			"hdr: seq", HFILL }},
 		{ &hf_ceph_hdr_type,
 			{ "type", "ceph.type", FT_UINT16, BASE_HEX, NULL, 0x0,
-		 	"hdr: type", HFILL }},
+			"hdr: type", HFILL }},
 		{ &hf_ceph_hdr_priority,
 			{ "priority", "ceph.priority", FT_UINT16, BASE_DEC, NULL, 0x0,
-		 	"hdr: priority", HFILL }},
+			"hdr: priority", HFILL }},
 		{ &hf_ceph_hdr_version,
 			{ "version", "ceph.version", FT_UINT16, BASE_DEC, NULL, 0x0,
-		 	"hdr: version", HFILL }},
+			"hdr: version", HFILL }},
 		{ &hf_ceph_hdr_mon_protocol,
 			{ "mon_protocol", "ceph.mon_protocol", FT_UINT16, BASE_DEC, NULL, 0x0,
-		 	"hdr: mon_protocol", HFILL }},
+			"hdr: mon_protocol", HFILL }},
 		{ &hf_ceph_hdr_osd_protocol,
 			{ "osd_protocol", "ceph.osd_protocol", FT_UINT16, BASE_DEC, NULL, 0x0,
-		 	"hdr: osd_protocol", HFILL }},
+			"hdr: osd_protocol", HFILL }},
 		{ &hf_ceph_hdr_mds_protocol,
 			{ "mds_protocol", "ceph.mds_protocol", FT_UINT16, BASE_DEC, NULL, 0x0,
-		 	"hdr: mds_protocol", HFILL }},
+			"hdr: mds_protocol", HFILL }},
 		{ &hf_ceph_hdr_client_protocol,
 			{ "client_protocol", "ceph.client_protocol", FT_UINT16, BASE_DEC, NULL, 0x0,
-		 	"hdr: client_protocol", HFILL }},
+			"hdr: client_protocol", HFILL }},
 		{ &hf_ceph_hdr_front_len,
 			{ "front_len", "ceph.front_len", FT_UINT32, BASE_DEC, NULL, 0x0,
-		 	"hdr: front_len", HFILL }},
+			"hdr: front_len", HFILL }},
 		{ &hf_ceph_hdr_middle_len,
 			{ "middle_len", "ceph.middle_len", FT_UINT32, BASE_DEC, NULL, 0x0,
-		 	"hdr: middle_len", HFILL }},
+			"hdr: middle_len", HFILL }},
 		{ &hf_ceph_hdr_data_off,
 			{ "data_off", "ceph.data_off", FT_UINT32, BASE_DEC, NULL, 0x0,
-		 	"hdr: data_off", HFILL }},
+			"hdr: data_off", HFILL }},
 		{ &hf_ceph_hdr_data_len,
 			{ "data_len", "ceph.data_len", FT_UINT32, BASE_DEC, NULL, 0x0,
-		 	"hdr: data_len", HFILL }},
+			"hdr: data_len", HFILL }},
 		{ &hf_ceph_hdr_src,
 			{ "src", "ceph.src", FT_NONE, BASE_NONE, NULL, 0x0,
-		 	"hdr: src", HFILL }},
+			"hdr: src", HFILL }},
 		{ &hf_ceph_hdr_orig_src,
 			{ "orig_src", "ceph.orig_src", FT_NONE, BASE_NONE, NULL, 0x0,
-		 	"hdr: orig_src", HFILL }},
+			"hdr: orig_src", HFILL }},
 		{ &hf_ceph_hdr_dst,
 			{ "dst", "ceph.dst", FT_NONE, BASE_NONE, NULL, 0x0,
-		 	"hdr: dst", HFILL }},
+			"hdr: dst", HFILL }},
 		{ &hf_ceph_hdr_crc,
 			{ "crc", "ceph.crc", FT_UINT32, BASE_HEX, NULL, 0x0,
-		 	"hdr: crc", HFILL }},
+			"hdr: crc", HFILL }},
 		{ &hf_ceph_front,
 			{ "Front", "ceph.front", FT_NONE, BASE_NONE, NULL, 0x0,
-		 	"Ceph Front", HFILL }},
+			"Ceph Front", HFILL }},
 		{ &hf_ceph_data,
 			{ "Data", "ceph.data", FT_NONE, BASE_NONE, NULL, 0x0,
-		 	"Ceph Data", HFILL }},
+			"Ceph Data", HFILL }},
 		{ &hf_ceph_footer,
 			{ "Footer", "ceph.footer", FT_NONE, BASE_NONE, NULL, 0x0,
-		 	"Ceph Footer", HFILL }},
+			"Ceph Footer", HFILL }},
 		{ &hf_ceph_footer_flags,
 			{ "flags", "ceph.footer.flags", FT_UINT32, BASE_HEX, NULL, 0x0,
-		 	"footer: flags", HFILL }},
+			"footer: flags", HFILL }},
 		{ &hf_ceph_footer_front_crc,
 			{ "front_crc", "ceph.footer.front_crc", FT_UINT32, BASE_HEX, NULL, 0x0,
-		 	"footer: front_crc", HFILL }},
+			"footer: front_crc", HFILL }},
 		{ &hf_ceph_footer_middle_crc,
 			{ "middle_crc", "ceph.footer.middle_crc", FT_UINT32, BASE_HEX, NULL, 0x0,
-		 	"footer: middle_crc", HFILL }},
+			"footer: middle_crc", HFILL }},
 		{ &hf_ceph_footer_data_crc,
 			{ "data_crc", "ceph.footer.data_crc", FT_UINT32, BASE_HEX, NULL, 0x0,
-		 	"footer: data_crc", HFILL }},
+			"footer: data_crc", HFILL }},
 	};
 	static gint *ett[] = {
 		&ett_ceph,
@@ -484,7 +486,7 @@ void proto_register_ceph (void)
 	register_dissector("ceph", dissect_ceph, proto_ceph);
 	//}
 }
-	
+
 static guint32 dissect_sockaddr_in(tvbuff_t *tvb, proto_tree *tree, guint32 offset)
 {
 	proto_tree *ceph_sockaddr_tree;
@@ -656,7 +658,7 @@ static guint32 dissect_ceph_file_layout(tvbuff_t *tvb, proto_tree *tree, guint32
 	struct ceph_file_layout *lo;
 
 	lo = (struct ceph_file_layout *)tvb_get_ptr(tvb, offset, sizeof(struct ceph_file_layout));
-	
+
 	PROTO_ADD_TEXT(struct ceph_file_layout, lo, fl_stripe_unit, "%d");
 	PROTO_ADD_TEXT(struct ceph_file_layout, lo, fl_stripe_count, "%d");
 	PROTO_ADD_TEXT(struct ceph_file_layout, lo, fl_object_size, "%d");
@@ -700,7 +702,7 @@ static guint32 dissect_ceph_mon_statfs(tvbuff_t *tvb, proto_tree *tree, guint32 
 	struct ceph_mon_statfs *req;
 
 	req = (struct ceph_mon_statfs *)tvb_get_ptr(tvb, offset, sizeof(struct ceph_mon_statfs));
-	
+
 	dissect_ceph_fsid(tvb, tree, offset + offsetof(struct ceph_mon_statfs, fsid));
 	PROTO_ADD_TEXT(struct ceph_mon_statfs, req, monhdr.session_mon_tid, "%lld");
 
@@ -712,7 +714,7 @@ static guint32 dissect_ceph_mon_statfs_reply(tvbuff_t *tvb, proto_tree *tree, gu
 	struct ceph_mon_statfs_reply *req;
 
 	req = (struct ceph_mon_statfs_reply *)tvb_get_ptr(tvb, offset, sizeof(struct ceph_mon_statfs_reply));
-	
+
 	dissect_ceph_fsid(tvb, tree, offset + offsetof(struct ceph_mon_statfs_reply, fsid));
 	PROTO_ADD_TEXT(struct ceph_mon_statfs_reply, req, version, "%lld");
 
@@ -729,7 +731,7 @@ static guint32 dissect_ceph_client_osd_getmap(tvbuff_t *tvb, proto_tree *tree, g
 	struct ceph_osd_getmap *req;
 
 	req = (struct ceph_osd_getmap *)tvb_get_ptr(tvb, offset, sizeof(struct ceph_osd_getmap));
-	
+
 	dissect_ceph_fsid(tvb, tree, offset + offsetof(struct ceph_osd_getmap, fsid));
 	PROTO_ADD_TEXT(struct ceph_osd_getmap, req, start, "%d");
 
@@ -741,7 +743,7 @@ static guint32 dissect_ceph_client_mds_getmap(tvbuff_t *tvb, proto_tree *tree, g
 	struct ceph_mds_getmap *req;
 
 	req = (struct ceph_mds_getmap *)tvb_get_ptr(tvb, offset, sizeof(struct ceph_mds_getmap));
-	
+
 	PROTO_ADD_TEXT(struct ceph_mds_getmap, req, monhdr.have_version, "%lld");
 	dissect_ceph_fsid(tvb, tree, offset + offsetof(struct ceph_mds_getmap, fsid));
 
@@ -754,7 +756,7 @@ static guint32 dissect_ceph_client_mds_request(tvbuff_t *tvb, packet_info *pinfo
 	proto_item *item;
 
 	head = (struct ceph_mds_request_head *)tvb_get_ptr(tvb, offset, sizeof(struct ceph_mds_request_head));
-	
+
 	//PROTO_ADD_TEXT(struct ceph_mds_request_head, head, tid, "%lld");
 	PROTO_ADD_TEXT(struct ceph_mds_request_head, head, oldest_client_tid, "%lld");
 	PROTO_ADD_TEXT(struct ceph_mds_request_head, head, mdsmap_epoch, "%d");
@@ -771,7 +773,7 @@ static guint32 dissect_ceph_client_mds_request(tvbuff_t *tvb, packet_info *pinfo
 	if (check_col(pinfo->cinfo, COL_INFO)) {
 		col_append_fstr(pinfo->cinfo, COL_INFO, " (%s)", ceph_mds_op_name(head->op));
 	}
-	
+
 	/* FIXME */
 	switch (head->op) {
 	case CEPH_MDS_OP_LOOKUP:
@@ -811,7 +813,7 @@ static guint32 dissect_ceph_client_mds_request(tvbuff_t *tvb, packet_info *pinfo
 	offset += sizeof(struct ceph_mds_request_head);
 #if 0
 	if (head->op == CEPH_MDS_OP_FINDINODE) {
-	
+
 	} else {
 		guint64 ino1, ino2;
 		char *s1 = NULL, *s2 = NULL;
@@ -827,7 +829,7 @@ static guint32 dissect_ceph_client_mds_request(tvbuff_t *tvb, packet_info *pinfo
 		}
 
 
-		
+
 	}
 #endif
 	return offset;
@@ -839,10 +841,10 @@ static guint32 dissect_ceph_client_mds_reply(tvbuff_t *tvb, packet_info *pinfo, 
 	struct ceph_mds_reply_head *head;
 
 	head = (struct ceph_mds_reply_head *)tvb_get_ptr(tvb, offset, sizeof(struct ceph_mds_reply_head));
-	
+
 	//PROTO_ADD_TEXT(struct ceph_mds_reply_head, head, tid, "%lld");
 
-	proto_tree_add_text(tree, tvb, offsetof(struct ceph_mds_reply_head, op), 
+	proto_tree_add_text(tree, tvb, offsetof(struct ceph_mds_reply_head, op),
 				sizeof(head->op), "op: %d (%s)", head->op, ceph_mds_op_name(head->op));
 
 	PROTO_ADD_TEXT(struct ceph_mds_reply_head, head, result, "%d");
@@ -863,7 +865,7 @@ static guint32 dissect_ceph_client_mds_lease_request(tvbuff_t *tvb, packet_info 
 	static char *lease_action[] = { "", "revoke", "release", "renew" };
 
 	head = (struct ceph_mds_lease *)tvb_get_ptr(tvb, offset, sizeof(struct ceph_mds_lease));
-	
+
 	PROTO_ADD_TEXT(struct ceph_mds_lease, head, action, "%d");
 	PROTO_ADD_TEXT(struct ceph_mds_lease, head, mask, "%.4x");
 	PROTO_ADD_TEXT(struct ceph_mds_lease, head, ino, FMT_INO);
@@ -885,7 +887,7 @@ static guint32 dissect_ceph_client_mds_caps_request(tvbuff_t *tvb, packet_info *
 	struct ceph_mds_caps *head;
 
 	head = (struct ceph_mds_caps *)tvb_get_ptr(tvb, offset, sizeof(struct ceph_mds_caps));
-	
+
 	PROTO_ADD_TEXT(struct ceph_mds_caps, head, op, "%d");
 	PROTO_ADD_TEXT(struct ceph_mds_caps, head, ino, FMT_INO);
 	PROTO_ADD_TEXT(struct ceph_mds_caps, head, seq, "%d");
@@ -1223,7 +1225,7 @@ dissect_ceph_client(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
 	const guchar *ptr;
 	guint32 pos = 0;
 	int have_banner = 0;
-	
+
 	if (check_col(pinfo->cinfo, COL_PROTOCOL))
 		col_set_str(pinfo->cinfo, COL_PROTOCOL, PROTO_TAG_CEPH);
 	/* Clear out stuff in the info column */
@@ -1244,7 +1246,7 @@ dissect_ceph_client(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
 
 	if (check_col(pinfo->cinfo, COL_INFO)) {
 		const char *entity_str = NULL;
-			
+
 		if (have_banner) {
 			if (IS_MON(pinfo))
 				entity_str = MON_STR;
@@ -1343,7 +1345,7 @@ dissect_ceph_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
 		dissect_ceph_client(tvb, pinfo, tree);
 	else
 		dissect_ceph_server(tvb, pinfo, tree);
-}		
+}
 
 static guint dissect_ceph_acks(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
 {
@@ -1392,10 +1394,10 @@ static guint get_ceph_message_len(packet_info *pinfo, tvbuff_t *tvb, int offset)
 		pos = ACK_MSG_SIZE;
 
 	len = pos + (guint)1 + sizeof(struct ceph_msg_header) +
-		TVB_MSG_FIELD(tvb_get_letohl, tvb, offset, front_len) + 
-		TVB_MSG_FIELD(tvb_get_letohl, tvb, offset, data_len) + 
+		TVB_MSG_FIELD(tvb_get_letohl, tvb, offset, front_len) +
+		TVB_MSG_FIELD(tvb_get_letohl, tvb, offset, data_len) +
 		sizeof(struct ceph_msg_footer);
-	
+
 	if (!*ptr)
 		return 0;
 	return len;

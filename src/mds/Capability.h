@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -63,7 +63,7 @@ class Capability {
 private:
   static boost::pool<> pool;
 public:
-  static void *operator new(size_t num_bytes) { 
+  static void *operator new(size_t num_bytes) {
     void *n = pool.malloc();
     if (!n)
       throw std::bad_alloc();
@@ -107,7 +107,7 @@ private:
 
   uint64_t cap_id;
 
-  uint32_t _wanted;     // what the client wants (ideally)
+  uint32_t _wanted;	// what the client wants (ideally)
 
   utime_t last_issue_stamp;
 
@@ -153,7 +153,7 @@ public:
       // no change.
       assert(_pending == c);
     }
-    //last_issue = 
+    //last_issue =
     ++last_sent;
     return last_sent;
   }
@@ -240,9 +240,9 @@ public:
     g_num_caps++;
   }
 
-  Capability(const Capability& other);  // no copying
-  const Capability& operator=(const Capability& other);  // no copying
-  
+  Capability(const Capability& other);	// no copying
+  const Capability& operator=(const Capability& other);	 // no copying
+
   ceph_seq_t get_mseq() { return mseq; }
   void inc_mseq() { mseq++; }
 
@@ -337,7 +337,7 @@ public:
   void decode(bufferlist::iterator &bl);
   void dump(Formatter *f) const;
   static void generate_test_instances(list<Capability*>& ls);
-  
+
 };
 
 WRITE_CLASS_ENCODER(Capability::Export)

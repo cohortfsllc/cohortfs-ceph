@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #include <errno.h>
 #include <limits.h>
 
@@ -294,8 +296,8 @@ void dump_uri_from_state(struct req_state *s)
       location += s->bucket_name_str;
       location += "/";
       if (!s->object_str.empty()) {
-        location += s->object_str;
-        s->cio->print("Location: %s\n", location.c_str());
+	location += s->object_str;
+	s->cio->print("Location: %s\n", location.c_str());
       }
     }
   }
@@ -371,7 +373,7 @@ void dump_owner(struct req_state *s, string& id, string& name, const char *secti
 }
 
 void dump_access_control(struct req_state *s, const char *origin, const char *meth,
-                         const char *hdr, const char *exp_hdr, uint32_t max_age) {
+			 const char *hdr, const char *exp_hdr, uint32_t max_age) {
   if (origin && (origin[0] != '\0')) {
     s->cio->print("Access-Control-Allow-Origin: %s\n", origin);
     if (meth && (meth[0] != '\0'))
@@ -804,15 +806,15 @@ static int read_all_chunked_input(req_state *s, char **pdata, int *plen, int max
 	need_to_read *= 2;
 
       if (total > max_read) {
-        free(data);
-        return -ERANGE;
+	free(data);
+	return -ERANGE;
       }
       total += need_to_read;
 
       void *p = realloc(data, total + 1);
       if (!p) {
-        free(data);
-        return -ENOMEM;
+	free(data);
+	return -ENOMEM;
       }
       data = (char *)p;
     } else {
@@ -902,7 +904,7 @@ int RGWListMultipart_ObjStore::get_params()
       return ret;
     }
   }
-  
+
   string str = s->info.args.get("max-parts");
   if (!str.empty())
     max_parts = atoi(str.c_str());
@@ -1204,9 +1206,9 @@ int RGWREST::preprocess(struct req_state *s, RGWClientIO *cio)
 	dout(0) << "WARNING: rgw_resolver->resolve_cname() returned r=" << r << dendl;
       }
       if (found) {
-        dout(0) << "resolved host cname " << h << " -> " << cname << dendl;
+	dout(0) << "resolved host cname " << h << " -> " << cname << dendl;
 	h = cname;
-        pos = h.find(g_conf->rgw_dns_name);
+	pos = h.find(g_conf->rgw_dns_name);
       }
     }
 

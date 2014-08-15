@@ -273,7 +273,7 @@ void CryptoAES::encrypt(const bufferptr& secret, const bufferlist& in, bufferlis
 #endif
 }
 
-void CryptoAES::decrypt(const bufferptr& secret, const bufferlist& in, 
+void CryptoAES::decrypt(const bufferptr& secret, const bufferlist& in,
 			bufferlist& out, std::string &error) const
 {
 #ifdef USE_CRYPTOPP
@@ -285,7 +285,7 @@ void CryptoAES::decrypt(const bufferptr& secret, const bufferlist& in,
   string decryptedtext;
   CryptoPP::StringSink *sink = new CryptoPP::StringSink(decryptedtext);
   CryptoPP::StreamTransformationFilter stfDecryptor(cbcDecryption, sink);
-  for (std::list<bufferptr>::const_iterator it = in.buffers().begin(); 
+  for (std::list<bufferptr>::const_iterator it = in.buffers().begin();
        it != in.buffers().end(); ++it) {
       const unsigned char *in_buf = (const unsigned char *)it->c_str();
       stfDecryptor.Put(in_buf, it->length());

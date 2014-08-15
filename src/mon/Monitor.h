@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,16 +7,16 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
-/* 
- * This is the top level monitor. It runs on each machine in the Monitor   
- * Cluster. The election of a leader for the paxos algorithm only happens 
- * once per machine via the elector. There is a separate paxos instance (state) 
- * kept for each of the system components: Object Store Device (OSD) Monitor, 
+/*
+ * This is the top level monitor. It runs on each machine in the Monitor
+ * Cluster. The election of a leader for the paxos algorithm only happens
+ * once per machine via the elector. There is a separate paxos instance (state)
+ * kept for each of the system components: Object Store Device (OSD) Monitor,
  * Placement Group (PG) Monitor, Metadata Server (MDS) Monitor, and Client Monitor.
  */
 
@@ -114,7 +114,7 @@ public:
   ConnectionRef con_self;
   Mutex lock;
   SafeTimer timer;
-  
+
   /// true if we have ever joined a quorum.  if false, we are either a
   /// new cluster, a newly joining monitor, or a just-upgraded
   /// monitor.
@@ -197,10 +197,10 @@ private:
 
   /// features we require of peers (based on on-disk compatset)
   uint64_t required_features;
-  
-  int leader;            // current leader (to best of knowledge)
-  set<int> quorum;       // current active set of monitors (if !starting)
-  utime_t leader_since;  // when this monitor became the leader, if it is the leader
+
+  int leader;		 // current leader (to best of knowledge)
+  set<int> quorum;	 // current active set of monitors (if !starting)
+  utime_t leader_since;	 // when this monitor became the leader, if it is the leader
   utime_t exited_quorum; // time detected as not in quorum; 0 if in
   uint64_t quorum_features;  ///< intersection of quorum member feature bits
   bufferlist supported_commands_bl; // encoded MonCommands we support
@@ -211,7 +211,7 @@ private:
    * @defgroup scrub
    * @{
    */
-  version_t scrub_version;            ///< paxos version we are scrubbing
+  version_t scrub_version;	      ///< paxos version we are scrubbing
   map<int,ScrubResult> scrub_result;  ///< results so far
 
   /**
@@ -234,12 +234,12 @@ private:
    */
   struct SyncProvider {
     entity_inst_t entity;  ///< who
-    uint64_t cookie;       ///< unique cookie for this sync attempt
-    utime_t timeout;       ///< when we give up and expire this attempt
+    uint64_t cookie;	   ///< unique cookie for this sync attempt
+    utime_t timeout;	   ///< when we give up and expire this attempt
     version_t last_committed; ///< last paxos version on peer
     pair<string,string> last_key; ///< last key sent to (or on) peer
-    bool full;             ///< full scan?
-    MonitorDBStore::Synchronizer synchronizer;   ///< iterator
+    bool full;		   ///< full scan?
+    MonitorDBStore::Synchronizer synchronizer;	 ///< iterator
 
     SyncProvider() : cookie(0), last_committed(0), full(false) {}
 
@@ -250,22 +250,22 @@ private:
   };
 
   map<uint64_t, SyncProvider> sync_providers;  ///< cookie -> SyncProvider for those syncing from us
-  uint64_t sync_provider_count;   ///< counter for issued cookies to keep them unique
+  uint64_t sync_provider_count;	  ///< counter for issued cookies to keep them unique
 
   /**
    * @} // requester state
    */
-  entity_inst_t sync_provider;   ///< who we are syncing from
-  uint64_t sync_cookie;          ///< 0 if we are starting, non-zero otherwise
-  bool sync_full;                ///< true if we are a full sync, false for recent catch-up
-  version_t sync_start_version;  ///< last_committed at sync start
-  Context *sync_timeout_event;   ///< timeout event
+  entity_inst_t sync_provider;	 ///< who we are syncing from
+  uint64_t sync_cookie;		 ///< 0 if we are starting, non-zero otherwise
+  bool sync_full;		 ///< true if we are a full sync, false for recent catch-up
+  version_t sync_start_version;	 ///< last_committed at sync start
+  Context *sync_timeout_event;	 ///< timeout event
 
   /**
    * floor for sync source
    *
    * When we sync we forget about our old last_committed value which
-   * can be dangerous.  For example, if we have a cluster of:
+   * can be dangerous.	For example, if we have a cluster of:
    *
    *   mon.a: lc 100
    *   mon.b: lc 80
@@ -420,16 +420,16 @@ private:
    * This mechanism works as follows:
    *
    *  - Leader sends out a 'PING' message to each other monitor in the quorum.
-   *    The message is timestamped with the leader's current time. The leader's
-   *    current time is recorded in a map, associated with each peon's
-   *    instance.
+   *	The message is timestamped with the leader's current time. The leader's
+   *	current time is recorded in a map, associated with each peon's
+   *	instance.
    *  - The peon replies to the leader with a timestamped 'PONG' message.
    *  - The leader calculates a delta between the peon's timestamp and its
-   *    current time and stashes it.
+   *	current time and stashes it.
    *  - The leader also calculates the time it took to receive the 'PONG'
-   *    since the 'PING' was sent, and stashes an approximate latency estimate.
+   *	since the 'PING' was sent, and stashes an approximate latency estimate.
    *  - Once all the quorum members have pong'ed, the leader will share the
-   *    clock skew and latency maps with all the monitors in the quorum.
+   *	clock skew and latency maps with all the monitors in the quorum.
    */
   map<entity_inst_t, utime_t> timecheck_waiting;
   map<entity_inst_t, double> timecheck_skews;
@@ -461,8 +461,8 @@ private:
   void timecheck_report();
   void timecheck();
   health_status_t timecheck_status(ostringstream &ss,
-                                   const double skew_bound,
-                                   const double latency);
+				   const double skew_bound,
+				   const double latency);
   void handle_timecheck_leader(MTimeCheck *m);
   void handle_timecheck_peon(MTimeCheck *m);
   void handle_timecheck(MTimeCheck *m);
@@ -498,7 +498,7 @@ private:
    */
   void handle_ping(MPing *m);
 
-  Context *probe_timeout_event;  // for probing
+  Context *probe_timeout_event;	 // for probing
 
   struct C_ProbeTimeout : public Context {
     Monitor *mon;
@@ -603,13 +603,13 @@ public:
   void handle_subscribe(MMonSubscribe *m);
   void handle_mon_get_map(MMonGetMap *m);
   static void _generate_command_map(map<string,cmd_vartype>& cmdmap,
-                                    map<string,string> &param_str_map);
+				    map<string,string> &param_str_map);
   static const MonCommand *_get_moncommand(const string &cmd_prefix,
-                                           MonCommand *cmds, int cmds_size);
+					   MonCommand *cmds, int cmds_size);
   bool _allowed_command(MonSession *s, string &module, string &prefix,
-                        const map<string,cmd_vartype>& cmdmap,
-                        const map<string,string>& param_str_map,
-                        const MonCommand *this_cmd);
+			const map<string,cmd_vartype>& cmdmap,
+			const map<string,string>& param_str_map,
+			const MonCommand *this_cmd);
   void get_mon_status(Formatter *f, ostream& ss);
   void _quorum_status(Formatter *f, ostream& ss);
   void _osdmonitor_prepare_command(cmdmap_t& cmdmap, ostream& ss);
@@ -665,7 +665,7 @@ public:
   };
   uint64_t routed_request_tid;
   map<uint64_t, RoutedRequest*> routed_requests;
-  
+
   void forward_request_leader(PaxosServiceMessage *req);
   void handle_forward(MForward *m);
   void try_send_message(Message *m, const entity_inst_t& to);
@@ -932,7 +932,7 @@ struct MonCommand {
     ENCODE_FINISH(bl);
   }
   static void decode_array(MonCommand **cmds, int *size,
-                           bufferlist::iterator &bl) {
+			   bufferlist::iterator &bl) {
     DECODE_START(1, bl);
     uint16_t s = 0;
     ::decode(s, bl);

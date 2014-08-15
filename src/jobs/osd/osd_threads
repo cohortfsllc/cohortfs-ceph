@@ -6,16 +6,16 @@
 	'nummds' => 1,
 	'numosd' => 8,
 	'numclient' => 50,
-	
+
 	# parameters
-	'fs' => [ 
+	'fs' => [
 #			  'obfs',
 			  'fakestore',
-			  'ebofs' 
+			  'ebofs'
 			  ],
 	'until' => 100,     # --syn until $n    ... when to stop clients
 	'writefile' => 1,
-	'writefile_size' => [ 
+	'writefile_size' => [
 						  1024000,
 						  131072,
 						  65536,
@@ -24,9 +24,9 @@
 	'writefile_mb' => 1000,
 
 	'osd_maxthreads' => [0, 1, 2, 4, 8],
-	
+
 	'custom' => '--tcp_skip_rank0',
-	
+
 	# for final summation (script/sum.pl)
 	'start' => 30,
 	'end' => 90

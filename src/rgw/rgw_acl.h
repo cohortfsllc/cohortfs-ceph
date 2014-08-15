@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #ifndef CEPH_RGW_ACL_H
 #define CEPH_RGW_ACL_H
 
@@ -11,15 +13,15 @@
 using namespace std;
 
 
-#define RGW_PERM_READ            0x01
-#define RGW_PERM_WRITE           0x02
-#define RGW_PERM_READ_ACP        0x04
-#define RGW_PERM_WRITE_ACP       0x08
-#define RGW_PERM_READ_OBJS       0x10
-#define RGW_PERM_WRITE_OBJS      0x20
-#define RGW_PERM_FULL_CONTROL    ( RGW_PERM_READ | RGW_PERM_WRITE | \
-                                  RGW_PERM_READ_ACP | RGW_PERM_WRITE_ACP )
-#define RGW_PERM_ALL_S3          RGW_PERM_FULL_CONTROL
+#define RGW_PERM_READ		 0x01
+#define RGW_PERM_WRITE		 0x02
+#define RGW_PERM_READ_ACP	 0x04
+#define RGW_PERM_WRITE_ACP	 0x08
+#define RGW_PERM_READ_OBJS	 0x10
+#define RGW_PERM_WRITE_OBJS	 0x20
+#define RGW_PERM_FULL_CONTROL	 ( RGW_PERM_READ | RGW_PERM_WRITE | \
+				  RGW_PERM_READ_ACP | RGW_PERM_WRITE_ACP )
+#define RGW_PERM_ALL_S3		 RGW_PERM_FULL_CONTROL
 
 enum ACLGranteeTypeEnum {
 /* numbers are encoded, should not change */
@@ -31,8 +33,8 @@ enum ACLGranteeTypeEnum {
 
 enum ACLGroupTypeEnum {
 /* numbers are encoded should not change */
-  ACL_GROUP_NONE                = 0,
-  ACL_GROUP_ALL_USERS           = 1,
+  ACL_GROUP_NONE		= 0,
+  ACL_GROUP_ALL_USERS		= 1,
   ACL_GROUP_AUTHENTICATED_USERS = 2,
 };
 
@@ -162,7 +164,7 @@ public:
   static void generate_test_instances(list<ACLGrant*>& o);
 
   ACLGroupTypeEnum uri_to_group(string& uri);
-  
+
   void set_canon(string& _id, string& _name, int perm) {
     type.set(ACL_TYPE_CANON_USER);
     id = _id;
@@ -217,8 +219,8 @@ public:
     } else if (!maps_initialized) {
       multimap<string, ACLGrant>::iterator iter;
       for (iter = grant_map.begin(); iter != grant_map.end(); ++iter) {
-        ACLGrant& grant = iter->second;
-        _add_grant(&grant);
+	ACLGrant& grant = iter->second;
+	_add_grant(&grant);
       }
     }
     DECODE_FINISH(bl);

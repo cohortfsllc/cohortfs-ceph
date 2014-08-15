@@ -2,7 +2,7 @@
 
 =head1 NAME
 
-rbd_functional_tests.pl - Script to test the RBD functionality.  
+rbd_functional_tests.pl - Script to test the RBD functionality.
 
 =head1 SYNOPSIS
 
@@ -10,7 +10,7 @@ Use:
         perl rbd_functional_tests.pl [--help]
 
 Examples:
-        perl rbd_functional_tests.pl  
+        perl rbd_functional_tests.pl
 	or
 	perl rbd_functional_tests.pl  --help
 
@@ -80,10 +80,10 @@ our $CLI_FLAG = "FALSE";
 my $TC3_LOG = "verify import of file to rbd image and export the same image to file";
 my $TC5_LOG = "Export rbd image to already existing non-empty file";
 my $TC6_LOG = "Import file to an existing rbd image";
-my $TC7_LOG = "verify import of an empty local file to rbd image";  
+my $TC7_LOG = "verify import of an empty local file to rbd image";
 my $TC8_LOG = "verify import of nonexisting file to rbd image";
 my $TC9_LOG = "verify import of a directory to rbd image";
-my $TC11_LOG = "verify export from an non-existing rbd image"; 
+my $TC11_LOG = "verify export from an non-existing rbd image";
 
 sub _create_pool {
     $exec_cmd = get_command_output("$RADOS_RMPOOL $pool_name");
@@ -221,12 +221,12 @@ sub import_resize_checkobjs {
                 if ($rc3) {
                     tpass("TC2 passed: Import file to an image, resize image and verify");
 
-=head - this one hangs 	
+=head - this one hangs
 					my $rc2 = perform_action( $RBD_EXPORT,"$pool_name\/$img $exp_to_file",0);
 					if ($rc2) {
-						tpass( "TC12 Passed - Export image of size 0" );	
+						tpass( "TC12 Passed - Export image of size 0" );
 					} else {
-						tfail( "TC12 Failed - Export image of size 0" );	
+						tfail( "TC12 Failed - Export image of size 0" );
 					}
 =cut
 

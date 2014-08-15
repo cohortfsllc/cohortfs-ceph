@@ -1,10 +1,12 @@
+// -*- mode:C; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
  * Copyright 2013 Inktank
  */
 
@@ -55,7 +57,7 @@ TEST_F(cls_replica_log_Test, test_set_get_marker)
   utime_t reply_time;
   list<cls_replica_log_progress_marker> return_progress_list;
   ASSERT_EQ(0, cls_replica_log_get_bounds(ioctx, oid, reply_position_marker,
-                                          reply_time, return_progress_list));
+					  reply_time, return_progress_list));
 
   ASSERT_EQ(reply_position_marker, marker);
   ASSERT_EQ((double)10, (double)reply_time);
@@ -65,8 +67,8 @@ TEST_F(cls_replica_log_Test, test_set_get_marker)
   list<pair<string, utime_t> > response_item_list;
 
   cls_replica_log_extract_marker(return_progress_list.front(),
-                                 response_entity, response_marker,
-                                 response_time, response_item_list);
+				 response_entity, response_marker,
+				 response_time, response_item_list);
   ASSERT_EQ(response_entity, entity);
   ASSERT_EQ(response_marker, marker);
   ASSERT_EQ(response_time, time);
@@ -111,7 +113,7 @@ TEST_F(cls_replica_log_Test, test_good_delete)
   utime_t reply_time;
   list<cls_replica_log_progress_marker> return_progress_list;
   ASSERT_EQ(0, cls_replica_log_get_bounds(ioctx, oid, reply_position_marker,
-                                          reply_time, return_progress_list));
+					  reply_time, return_progress_list));
   ASSERT_EQ((unsigned)0, return_progress_list.size());
 }
 
@@ -121,8 +123,8 @@ TEST_F(cls_replica_log_Test, test_bad_get)
   utime_t reply_time;
   list<cls_replica_log_progress_marker> return_progress_list;
   ASSERT_EQ(-ENOENT,
-            cls_replica_log_get_bounds(ioctx, oid, reply_position_marker,
-                                       reply_time, return_progress_list));
+	    cls_replica_log_get_bounds(ioctx, oid, reply_position_marker,
+				       reply_time, return_progress_list));
 }
 
 TEST_F(cls_replica_log_Test, test_double_delete)
@@ -145,7 +147,7 @@ TEST_F(cls_replica_log_Test, test_double_delete)
   utime_t reply_time;
   list<cls_replica_log_progress_marker> return_progress_list;
   ASSERT_EQ(0, cls_replica_log_get_bounds(ioctx, oid, reply_position_marker,
-                                          reply_time, return_progress_list));
+					  reply_time, return_progress_list));
   ASSERT_EQ((unsigned)0, return_progress_list.size());
 
 }

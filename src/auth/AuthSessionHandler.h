@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 
@@ -35,7 +35,7 @@ protected:
   CryptoKey key;
 
 public:
-  // Keep stats on how many messages were signed, how many messages were encrypted, how many 
+  // Keep stats on how many messages were signed, how many messages were encrypted, how many
   // signatures were properly checked, and how many messages were decrypted. PLR
   int messages_signed;
   int signatures_checked;
@@ -44,11 +44,11 @@ public:
   int messages_encrypted;
   int messages_decrypted;
 
-  AuthSessionHandler(CephContext *cct_) : cct(cct_), messages_signed(0), signatures_checked(0), 
+  AuthSessionHandler(CephContext *cct_) : cct(cct_), messages_signed(0), signatures_checked(0),
     signatures_matched(0), signatures_failed(0), messages_encrypted(0), messages_decrypted(0) {}
 
-  AuthSessionHandler(CephContext *cct_, int protocol_, CryptoKey key_) : cct(cct_), 
-    protocol(protocol_), key(key_), messages_signed(0), signatures_checked(0), signatures_matched(0), 
+  AuthSessionHandler(CephContext *cct_, int protocol_, CryptoKey key_) : cct(cct_),
+    protocol(protocol_), key(key_), messages_signed(0), signatures_checked(0), signatures_matched(0),
     signatures_failed(0), messages_encrypted(0), messages_decrypted(0) {}
   virtual ~AuthSessionHandler() { }
 

@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -65,7 +65,7 @@ public:
     static const int STATE_DIRTYPOOL   = (1<<2);
     string  dn; // dentry
     version_t dnv;
-    inode_t inode;      // if it's not
+    inode_t inode;	// if it's not
     fragtree_t dirfragtree;
     map<string,bufferptr> xattrs;
     string symlink;
@@ -77,7 +77,7 @@ public:
     const fullbit& operator=(const fullbit& o);
 
     fullbit(const string& d,
-	    version_t v, const inode_t& i, const fragtree_t &dft, 
+	    version_t v, const inode_t& i, const fragtree_t &dft,
 	    const map<string,bufferptr> &xa, const string& sym,
 	    uint8_t st) :
       _enc(1024)
@@ -201,13 +201,13 @@ public:
    */
 public:
   struct dirlump {
-    static const int STATE_COMPLETE =    (1<<1);
-    static const int STATE_DIRTY =       (1<<2);  // dirty due to THIS journal item, that is!
-    static const int STATE_NEW =         (1<<3);  // new directory
+    static const int STATE_COMPLETE =	 (1<<1);
+    static const int STATE_DIRTY =	 (1<<2);  // dirty due to THIS journal item, that is!
+    static const int STATE_NEW =	 (1<<3);  // new directory
     static const int STATE_IMPORTING =	 (1<<4);  // importing directory
     static const int STATE_DIRTYDFT =	 (1<<5);  // dirty dirfragtree
 
-    //version_t  dirv;
+    //version_t	 dirv;
     fnode_t fnode;
     uint32_t state;
     uint32_t nfull, nremote, nnull;
@@ -221,7 +221,7 @@ public:
 
   public:
     dirlump() : state(0), nfull(0), nremote(0), nnull(0), dn_decoded(true) { }
-    
+
     bool is_complete() const { return state & STATE_COMPLETE; }
     void mark_complete() { state |= STATE_COMPLETE; }
     bool is_dirty() const { return state & STATE_DIRTY; }
@@ -275,7 +275,7 @@ public:
       ::encode(dremote, dnbl);
       ::encode(dnull, dnbl);
     }
-    void _decode_bits() { 
+    void _decode_bits() {
       if (dn_decoded) return;
       bufferlist::iterator p = dnbl.begin();
       ::decode(dfull, p);
@@ -292,8 +292,8 @@ public:
   WRITE_CLASS_ENCODER(dirlump)
 
 private:
-  // my lumps.  preserve the order we added them in a list.
-  list<dirfrag_t>         lump_order;
+  // my lumps.	preserve the order we added them in a list.
+  list<dirfrag_t>	  lump_order;
   map<dirfrag_t, dirlump> lump_map;
   list<std::shared_ptr<fullbit> > roots;
 
@@ -304,16 +304,16 @@ public:
   inodeno_t renamed_dirino;
   list<frag_t> renamed_dir_frags;
 private:
-  
+
   // ino (pre)allocation.  may involve both inotable AND session state.
   version_t inotablev, sessionmapv;
-  inodeno_t allocated_ino;            // inotable
+  inodeno_t allocated_ino;	      // inotable
   interval_set<inodeno_t> preallocated_inos; // inotable + session
-  inodeno_t used_preallocated_ino;    //            session
-  entity_name_t client_name;          //            session
+  inodeno_t used_preallocated_ino;    //	    session
+  entity_name_t client_name;	      //	    session
 
   // inodes i've truncated
-  list<inodeno_t> truncate_start;        // start truncate 
+  list<inodeno_t> truncate_start;	 // start truncate
   map<inodeno_t,uint64_t> truncate_finish;  // finished truncate (started in segment blah)
 
   vector<inodeno_t> destroyed_inodes;
@@ -380,7 +380,7 @@ private:
   void add_destroyed_inode(inodeno_t ino) {
     destroyed_inodes.push_back(ino);
   }
-  
+
   void add_null_dentry(CDentry *dn, bool dirty) {
     add_null_dentry(add_dir(dn->get_dir(), false), dn, dirty);
   }
@@ -398,7 +398,7 @@ private:
   void add_remote_dentry(CDentry *dn, bool dirty, inodeno_t rino, int rdt) {
     add_remote_dentry(add_dir(dn->get_dir(), false), dn, dirty, rino, rdt);
   }
-  void add_remote_dentry(dirlump& lump, CDentry *dn, bool dirty, 
+  void add_remote_dentry(dirlump& lump, CDentry *dn, bool dirty,
 			 inodeno_t rino=0, unsigned char rdt=0) {
     if (!rino) {
       rino = dn->get_projected_linkage()->get_remote_ino();
@@ -421,7 +421,7 @@ private:
     add_primary_dentry(add_dir(dn->get_dir(), false), dn, in, state);
   }
   void add_primary_dentry(dirlump& lump, CDentry *dn, CInode *in, uint8_t state) {
-    if (!in) 
+    if (!in)
       in = dn->get_projected_linkage()->get_inode();
 
     // make note of where this inode was last journaled
@@ -540,7 +540,7 @@ private:
 
   void print(ostream& out) const {
     out << "[metablob";
-    if (!lump_order.empty()) 
+    if (!lump_order.empty())
       out << " " << lump_order.front() << ", " << lump_map.size() << " dirs";
     if (!table_tids.empty())
       out << " table_tids=" << table_tids;

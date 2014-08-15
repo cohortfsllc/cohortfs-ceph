@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #ifndef CEPH_RGW_REST_H
 #define CEPH_RGW_REST_H
 #define TIME_BUF_SIZE 128
@@ -16,7 +18,7 @@ extern void rgw_flush_formatter_and_reset(struct req_state *s,
 					 ceph::Formatter *formatter);
 
 extern void rgw_flush_formatter(struct req_state *s,
-                                         ceph::Formatter *formatter);
+					 ceph::Formatter *formatter);
 
 extern int rgw_rest_read_all_input(struct req_state *s, char **data, int *plen, int max_len);
 
@@ -375,7 +377,7 @@ extern void dump_redirect(struct req_state *s, const string& redirect);
 extern void dump_pair(struct req_state *s, const char *key, const char *value);
 extern bool is_valid_url(const char *url);
 extern void dump_access_control(struct req_state *s, const char *origin, const char *meth,
-                         const char *hdr, const char *exp_hdr, uint32_t max_age);
+			 const char *hdr, const char *exp_hdr, uint32_t max_age);
 extern void dump_access_control(req_state *s, RGWOp *op);
 
 

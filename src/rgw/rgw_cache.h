@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #ifndef CEPH_RGWCACHE_H
 #define CEPH_RGWCACHE_H
 
@@ -14,11 +16,11 @@ enum {
   REMOVE_OBJ,
 };
 
-#define CACHE_FLAG_DATA           0x01
-#define CACHE_FLAG_XATTRS         0x02
-#define CACHE_FLAG_META           0x04
+#define CACHE_FLAG_DATA		  0x01
+#define CACHE_FLAG_XATTRS	  0x02
+#define CACHE_FLAG_META		  0x04
 #define CACHE_FLAG_MODIFY_XATTRS  0x08
-#define CACHE_FLAG_OBJV           0x10
+#define CACHE_FLAG_OBJV		  0x10
 
 #define mydout(v) lsubdout(T::cct, rgw, v)
 
@@ -155,7 +157,7 @@ public:
 };
 
 template <class T>
-class RGWCache  : public T
+class RGWCache	: public T
 {
   ObjectCache cache;
 
@@ -200,23 +202,23 @@ public:
   RGWCache() {}
 
   int set_attr(void *ctx, rgw_obj& obj, const char *name, bufferlist& bl, RGWObjVersionTracker *objv_tracker);
-  int set_attrs(void *ctx, rgw_obj& obj, 
-                map<string, bufferlist>& attrs,
-                map<string, bufferlist>* rmattrs,
-                RGWObjVersionTracker *objv_tracker);
+  int set_attrs(void *ctx, rgw_obj& obj,
+		map<string, bufferlist>& attrs,
+		map<string, bufferlist>* rmattrs,
+		RGWObjVersionTracker *objv_tracker);
   int put_obj_meta_impl(void *ctx, rgw_obj& obj, uint64_t size, time_t *mtime,
-                   map<std::string, bufferlist>& attrs, RGWObjCategory category, int flags,
-                   map<std::string, bufferlist>* rmattrs, const bufferlist *data,
-                   RGWObjManifest *manifest, const string *ptag, list<string> *remove_objs,
-                   bool modify_version, RGWObjVersionTracker *objv_tracker, time_t set_mtime,
-                   const string& owner);
+		   map<std::string, bufferlist>& attrs, RGWObjCategory category, int flags,
+		   map<std::string, bufferlist>* rmattrs, const bufferlist *data,
+		   RGWObjManifest *manifest, const string *ptag, list<string> *remove_objs,
+		   bool modify_version, RGWObjVersionTracker *objv_tracker, time_t set_mtime,
+		   const string& owner);
   int put_obj_data(void *ctx, rgw_obj& obj, const char *data,
-              off_t ofs, size_t len, bool exclusive);
+	      off_t ofs, size_t len, bool exclusive);
 
   int get_obj(void *ctx, RGWObjVersionTracker *objv_tracker, void **handle, rgw_obj& obj, bufferlist& bl, off_t ofs, off_t end);
 
   int obj_stat(void *ctx, rgw_obj& obj, uint64_t *psize, time_t *pmtime, uint64_t *epoch, map<string, bufferlist> *attrs,
-               bufferlist *first_chunk, RGWObjVersionTracker *objv_tracker);
+	       bufferlist *first_chunk, RGWObjVersionTracker *objv_tracker);
 
   int delete_obj_impl(void *ctx, const string& bucket_owner, rgw_obj& obj, RGWObjVersionTracker *objv_tracker);
 };
@@ -267,7 +269,7 @@ int RGWCache<T>::get_obj(void *ctx, RGWObjVersionTracker *objv_tracker, void **h
   uint32_t flags = CACHE_FLAG_DATA;
   if (objv_tracker)
     flags |= CACHE_FLAG_OBJV;
-  
+
   if (cache.get(name, info, flags) == 0) {
     if (info.status < 0)
       return info.status;
@@ -336,7 +338,7 @@ int RGWCache<T>::set_attr(void *ctx, rgw_obj& obj, const char *attr_name, buffer
       cache.put(name, info);
       int r = distribute_cache(name, obj, info, UPDATE_OBJ);
       if (r < 0)
-        mydout(0) << "ERROR: failed to distribute cache for " << obj << dendl;
+	mydout(0) << "ERROR: failed to distribute cache for " << obj << dendl;
     } else {
      cache.remove(name);
     }
@@ -346,10 +348,10 @@ int RGWCache<T>::set_attr(void *ctx, rgw_obj& obj, const char *attr_name, buffer
 }
 
 template <class T>
-int RGWCache<T>::set_attrs(void *ctx, rgw_obj& obj, 
-                           map<string, bufferlist>& attrs,
-                           map<string, bufferlist>* rmattrs,
-                           RGWObjVersionTracker *objv_tracker) 
+int RGWCache<T>::set_attrs(void *ctx, rgw_obj& obj,
+			   map<string, bufferlist>& attrs,
+			   map<string, bufferlist>* rmattrs,
+			   RGWObjVersionTracker *objv_tracker)
 {
   rgw_bucket bucket;
   string oid;
@@ -375,7 +377,7 @@ int RGWCache<T>::set_attrs(void *ctx, rgw_obj& obj,
       cache.put(name, info);
       int r = distribute_cache(name, obj, info, UPDATE_OBJ);
       if (r < 0)
-        mydout(0) << "ERROR: failed to distribute cache for " << obj << dendl;
+	mydout(0) << "ERROR: failed to distribute cache for " << obj << dendl;
     } else {
      cache.remove(name);
     }
@@ -386,11 +388,11 @@ int RGWCache<T>::set_attrs(void *ctx, rgw_obj& obj,
 
 template <class T>
 int RGWCache<T>::put_obj_meta_impl(void *ctx, rgw_obj& obj, uint64_t size, time_t *mtime,
-                              map<std::string, bufferlist>& attrs, RGWObjCategory category, int flags,
-                              map<std::string, bufferlist>* rmattrs, const bufferlist *data,
-                              RGWObjManifest *manifest, const string *ptag, list<string> *remove_objs,
-                              bool modify_version, RGWObjVersionTracker *objv_tracker, time_t set_mtime,
-                              const string& owner)
+			      map<std::string, bufferlist>& attrs, RGWObjCategory category, int flags,
+			      map<std::string, bufferlist>* rmattrs, const bufferlist *data,
+			      RGWObjManifest *manifest, const string *ptag, list<string> *remove_objs,
+			      bool modify_version, RGWObjVersionTracker *objv_tracker, time_t set_mtime,
+			      const string& owner)
 {
   rgw_bucket bucket;
   string oid;
@@ -412,14 +414,14 @@ int RGWCache<T>::put_obj_meta_impl(void *ctx, rgw_obj& obj, uint64_t size, time_
     }
   }
   int ret = T::put_obj_meta_impl(ctx, obj, size, mtime, attrs, category, flags, rmattrs, data, manifest, ptag, remove_objs,
-                                 modify_version, objv_tracker, set_mtime, owner);
+				 modify_version, objv_tracker, set_mtime, owner);
   if (cacheable) {
     string name = normal_name(bucket, oid);
     if (ret >= 0) {
       cache.put(name, info);
       int r = distribute_cache(name, obj, info, UPDATE_OBJ);
       if (r < 0)
-        mydout(0) << "ERROR: failed to distribute cache for " << obj << dendl;
+	mydout(0) << "ERROR: failed to distribute cache for " << obj << dendl;
     } else {
      cache.remove(name);
     }
@@ -430,7 +432,7 @@ int RGWCache<T>::put_obj_meta_impl(void *ctx, rgw_obj& obj, uint64_t size, time_
 
 template <class T>
 int RGWCache<T>::put_obj_data(void *ctx, rgw_obj& obj, const char *data,
-              off_t ofs, size_t len, bool exclusive)
+	      off_t ofs, size_t len, bool exclusive)
 {
   rgw_bucket bucket;
   string oid;
@@ -454,7 +456,7 @@ int RGWCache<T>::put_obj_data(void *ctx, rgw_obj& obj, const char *data,
       cache.put(name, info);
       int r = distribute_cache(name, obj, info, UPDATE_OBJ);
       if (r < 0)
-        mydout(0) << "ERROR: failed to distribute cache for " << obj << dendl;
+	mydout(0) << "ERROR: failed to distribute cache for " << obj << dendl;
     } else {
      cache.remove(name);
     }
@@ -465,8 +467,8 @@ int RGWCache<T>::put_obj_data(void *ctx, rgw_obj& obj, const char *data,
 
 template <class T>
 int RGWCache<T>::obj_stat(void *ctx, rgw_obj& obj, uint64_t *psize, time_t *pmtime,
-                          uint64_t *pepoch, map<string, bufferlist> *attrs,
-                          bufferlist *first_chunk, RGWObjVersionTracker *objv_tracker)
+			  uint64_t *pepoch, map<string, bufferlist> *attrs,
+			  bufferlist *first_chunk, RGWObjVersionTracker *objv_tracker)
 {
   rgw_bucket bucket;
   string oid;
@@ -561,7 +563,7 @@ int RGWCache<T>::watch_cb(int opcode, uint64_t ver, bufferlist& bl)
   string oid;
   normalize_bucket_and_obj(info.obj.bucket, info.obj.object, bucket, oid);
   string name = normal_name(bucket, oid);
-  
+
   switch (info.op) {
   case UPDATE_OBJ:
     cache.put(name, info.obj_info);

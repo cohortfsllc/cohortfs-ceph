@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 /*
  * rbd-fuse
  */
@@ -143,7 +145,7 @@ open_rbd_image(const char *image_name)
 	struct rbd_openimage *rbd;
 	int fd;
 
-	if (image_name == (char *)NULL) 
+	if (image_name == (char *)NULL)
 		return -1;
 
 	// relies on caller to keep rbd_images up to date
@@ -541,7 +543,7 @@ rbdfs_truncate(const char *path, off_t size)
 
 /**
  * set an xattr on path, with name/value, length size.
- * Presumably flags are from Linux, as in XATTR_CREATE or 
+ * Presumably flags are from Linux, as in XATTR_CREATE or
  * XATTR_REPLACE (both "set", but fail if exist vs fail if not exist.
  *
  * We accept xattrs only on the root node.
@@ -667,10 +669,10 @@ static void usage(const char *progname)
 "Usage: %s mountpoint [options]\n"
 "\n"
 "General options:\n"
-"    -h   --help            print help\n"
-"    -V   --version         print version\n"
-"    -c   --configfile      ceph configuration file [/etc/ceph/ceph.conf]\n"
-"    -p   --poolname        rados pool name [rbd]\n"
+"    -h	  --help	    print help\n"
+"    -V	  --version	    print version\n"
+"    -c	  --configfile	    ceph configuration file [/etc/ceph/ceph.conf]\n"
+"    -p	  --poolname	    rados pool name [rbd]\n"
 "\n", progname);
 }
 

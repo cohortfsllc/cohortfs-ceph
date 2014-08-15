@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #ifndef CEPH_RADOS_TYPES_H
 #define CEPH_RADOS_TYPES_H
 
@@ -12,6 +14,6 @@ struct obj_watch_t {
   int64_t watcher_id;
   uint64_t cookie;
   uint32_t timeout_seconds;
-}; 
+};
 
 #endif

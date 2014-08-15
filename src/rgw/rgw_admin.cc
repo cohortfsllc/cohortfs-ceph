@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #include <errno.h>
 
 #include <iostream>
@@ -36,91 +38,91 @@ using namespace std;
 
 static RGWRados *store = NULL;
 
-void _usage() 
+void _usage()
 {
   cerr << "usage: radosgw-admin <cmd> [options...]" << std::endl;
   cerr << "commands:\n";
-  cerr << "  user create                create a new user\n" ;
-  cerr << "  user modify                modify user\n";
-  cerr << "  user info                  get user info\n";
-  cerr << "  user rm                    remove user\n";
-  cerr << "  user suspend               suspend a user\n";
-  cerr << "  user enable                re-enable user after suspension\n";
-  cerr << "  user check                 check user info\n";
-  cerr << "  user stats                 show user stats as accounted by quota subsystem\n";
-  cerr << "  caps add                   add user capabilities\n";
-  cerr << "  caps rm                    remove user capabilities\n";
-  cerr << "  subuser create             create a new subuser\n" ;
-  cerr << "  subuser modify             modify subuser\n";
-  cerr << "  subuser rm                 remove subuser\n";
-  cerr << "  key create                 create access key\n";
-  cerr << "  key rm                     remove access key\n";
-  cerr << "  bucket list                list buckets\n";
-  cerr << "  bucket link                link bucket to specified user\n";
-  cerr << "  bucket unlink              unlink bucket from specified user\n";
-  cerr << "  bucket stats               returns bucket statistics\n";
-  cerr << "  bucket rm                  remove bucket\n";
-  cerr << "  bucket check               check bucket index\n";
-  cerr << "  object rm                  remove object\n";
-  cerr << "  object unlink              unlink object from bucket index\n";
-  cerr << "  quota set                  set quota params\n";
-  cerr << "  quota enable               enable quota\n";
-  cerr << "  quota disable              disable quota\n";
-  cerr << "  region get                 show region info\n";
-  cerr << "  regions list               list all regions set on this cluster\n";
-  cerr << "  region set                 set region info (requires infile)\n";
-  cerr << "  region default             set default region\n";
-  cerr << "  region-map get             show region-map\n";
-  cerr << "  region-map set             set region-map (requires infile)\n";
-  cerr << "  zone get                   show zone cluster params\n";
-  cerr << "  zone set                   set zone cluster params (requires infile)\n";
-  cerr << "  zone list                  list all zones set on this cluster\n";
-  cerr << "  pool add                   add an existing pool for data placement\n";
-  cerr << "  pool rm                    remove an existing pool from data placement set\n";
-  cerr << "  pools list                 list placement active set\n";
-  cerr << "  policy                     read bucket/object policy\n";
-  cerr << "  log list                   list log objects\n";
-  cerr << "  log show                   dump a log from specific object or (bucket + date\n";
-  cerr << "                             + bucket-id)\n";
-  cerr << "  log rm                     remove log object\n";
-  cerr << "  usage show                 show usage (by user, date range)\n";
-  cerr << "  usage trim                 trim usage (by user, date range)\n";
-  cerr << "  temp remove                remove temporary objects that were created up to\n";
-  cerr << "                             specified date (and optional time)\n";
-  cerr << "  gc list                    dump expired garbage collection objects (specify\n";
-  cerr << "                             --include-all to list all entries, including unexpired)\n";
-  cerr << "  gc process                 manually process garbage\n";
-  cerr << "  metadata get               get metadata info\n";
-  cerr << "  metadata put               put metadata info\n";
-  cerr << "  metadata rm                remove metadata info\n";
-  cerr << "  metadata list              list metadata info\n";
-  cerr << "  mdlog list                 list metadata log\n";
-  cerr << "  mdlog trim                 trim metadata log\n";
-  cerr << "  bilog list                 list bucket index log\n";
-  cerr << "  bilog trim                 trim bucket index log (use start-marker, end-marker)\n";
-  cerr << "  datalog list               list data log\n";
-  cerr << "  datalog trim               trim data log\n";
-  cerr << "  opstate list               list stateful operations entries (use client_id,\n";
-  cerr << "                             op_id, object)\n";
-  cerr << "  opstate set                set state on an entry (use client_id, op_id, object, state)\n";
-  cerr << "  opstate renew              renew state on an entry (use client_id, op_id, object)\n";
-  cerr << "  opstate rm                 remove entry (use client_id, op_id, object)\n";
-  cerr << "  replicalog get             get replica metadata log entry\n";
-  cerr << "  replicalog delete          delete replica metadata log entry\n";
+  cerr << "  user create		create a new user\n" ;
+  cerr << "  user modify		modify user\n";
+  cerr << "  user info			get user info\n";
+  cerr << "  user rm			remove user\n";
+  cerr << "  user suspend		suspend a user\n";
+  cerr << "  user enable		re-enable user after suspension\n";
+  cerr << "  user check			check user info\n";
+  cerr << "  user stats			show user stats as accounted by quota subsystem\n";
+  cerr << "  caps add			add user capabilities\n";
+  cerr << "  caps rm			remove user capabilities\n";
+  cerr << "  subuser create		create a new subuser\n" ;
+  cerr << "  subuser modify		modify subuser\n";
+  cerr << "  subuser rm			remove subuser\n";
+  cerr << "  key create			create access key\n";
+  cerr << "  key rm			remove access key\n";
+  cerr << "  bucket list		list buckets\n";
+  cerr << "  bucket link		link bucket to specified user\n";
+  cerr << "  bucket unlink		unlink bucket from specified user\n";
+  cerr << "  bucket stats		returns bucket statistics\n";
+  cerr << "  bucket rm			remove bucket\n";
+  cerr << "  bucket check		check bucket index\n";
+  cerr << "  object rm			remove object\n";
+  cerr << "  object unlink		unlink object from bucket index\n";
+  cerr << "  quota set			set quota params\n";
+  cerr << "  quota enable		enable quota\n";
+  cerr << "  quota disable		disable quota\n";
+  cerr << "  region get			show region info\n";
+  cerr << "  regions list		list all regions set on this cluster\n";
+  cerr << "  region set			set region info (requires infile)\n";
+  cerr << "  region default		set default region\n";
+  cerr << "  region-map get		show region-map\n";
+  cerr << "  region-map set		set region-map (requires infile)\n";
+  cerr << "  zone get			show zone cluster params\n";
+  cerr << "  zone set			set zone cluster params (requires infile)\n";
+  cerr << "  zone list			list all zones set on this cluster\n";
+  cerr << "  pool add			add an existing pool for data placement\n";
+  cerr << "  pool rm			remove an existing pool from data placement set\n";
+  cerr << "  pools list			list placement active set\n";
+  cerr << "  policy			read bucket/object policy\n";
+  cerr << "  log list			list log objects\n";
+  cerr << "  log show			dump a log from specific object or (bucket + date\n";
+  cerr << "				+ bucket-id)\n";
+  cerr << "  log rm			remove log object\n";
+  cerr << "  usage show			show usage (by user, date range)\n";
+  cerr << "  usage trim			trim usage (by user, date range)\n";
+  cerr << "  temp remove		remove temporary objects that were created up to\n";
+  cerr << "				specified date (and optional time)\n";
+  cerr << "  gc list			dump expired garbage collection objects (specify\n";
+  cerr << "				--include-all to list all entries, including unexpired)\n";
+  cerr << "  gc process			manually process garbage\n";
+  cerr << "  metadata get		get metadata info\n";
+  cerr << "  metadata put		put metadata info\n";
+  cerr << "  metadata rm		remove metadata info\n";
+  cerr << "  metadata list		list metadata info\n";
+  cerr << "  mdlog list			list metadata log\n";
+  cerr << "  mdlog trim			trim metadata log\n";
+  cerr << "  bilog list			list bucket index log\n";
+  cerr << "  bilog trim			trim bucket index log (use start-marker, end-marker)\n";
+  cerr << "  datalog list		list data log\n";
+  cerr << "  datalog trim		trim data log\n";
+  cerr << "  opstate list		list stateful operations entries (use client_id,\n";
+  cerr << "				op_id, object)\n";
+  cerr << "  opstate set		set state on an entry (use client_id, op_id, object, state)\n";
+  cerr << "  opstate renew		renew state on an entry (use client_id, op_id, object)\n";
+  cerr << "  opstate rm			remove entry (use client_id, op_id, object)\n";
+  cerr << "  replicalog get		get replica metadata log entry\n";
+  cerr << "  replicalog delete		delete replica metadata log entry\n";
   cerr << "options:\n";
-  cerr << "   --uid=<id>                user id\n";
-  cerr << "   --subuser=<name>          subuser name\n";
-  cerr << "   --access-key=<key>        S3 access key\n";
+  cerr << "   --uid=<id>		user id\n";
+  cerr << "   --subuser=<name>		subuser name\n";
+  cerr << "   --access-key=<key>	S3 access key\n";
   cerr << "   --email=<email>\n";
-  cerr << "   --secret=<key>            specify secret key\n";
-  cerr << "   --gen-access-key          generate random access key (for S3)\n";
-  cerr << "   --gen-secret              generate random secret key\n";
-  cerr << "   --key-type=<type>         key type, options are: swift, s3\n";
-  cerr << "   --temp-url-key[-2]=<key>  temp url key\n";
-  cerr << "   --access=<access>         Set access permissions for sub-user, should be one\n";
-  cerr << "                             of read, write, readwrite, full\n";
+  cerr << "   --secret=<key>		specify secret key\n";
+  cerr << "   --gen-access-key		generate random access key (for S3)\n";
+  cerr << "   --gen-secret		generate random secret key\n";
+  cerr << "   --key-type=<type>		key type, options are: swift, s3\n";
+  cerr << "   --temp-url-key[-2]=<key>	temp url key\n";
+  cerr << "   --access=<access>		Set access permissions for sub-user, should be one\n";
+  cerr << "				of read, write, readwrite, full\n";
   cerr << "   --display-name=<name>\n";
-  cerr << "   --system                  set the system flag on the user\n";
+  cerr << "   --system			set the system flag on the user\n";
   cerr << "   --bucket=<bucket>\n";
   cerr << "   --pool=<pool>\n";
   cerr << "   --object=<object>\n";
@@ -128,45 +130,45 @@ void _usage()
   cerr << "   --start-date=<date>\n";
   cerr << "   --end-date=<date>\n";
   cerr << "   --bucket-id=<bucket-id>\n";
-  cerr << "   --shard-id=<shard-id>     optional for mdlog list\n";
-  cerr << "                             required for: \n";
-  cerr << "                               mdlog trim\n";
-  cerr << "                               replica mdlog get/delete\n";
-  cerr << "                               replica datalog get/delete\n";
-  cerr << "   --metadata-key=<key>      key to retrieve metadata from with metadata get\n";
-  cerr << "   --rgw-region=<region>     region in which radosgw is running\n";
-  cerr << "   --rgw-zone=<zone>         zone in which radosgw is running\n";
-  cerr << "   --fix                     besides checking bucket index, will also fix it\n";
-  cerr << "   --check-objects           bucket check: rebuilds bucket index according to\n";
-  cerr << "                             actual objects state\n";
-  cerr << "   --format=<format>         specify output format for certain operations: xml,\n";
-  cerr << "                             json\n";
-  cerr << "   --purge-data              when specified, user removal will also purge all the\n";
-  cerr << "                             user data\n";
-  cerr << "   --purge-keys              when specified, subuser removal will also purge all the\n";
-  cerr << "                             subuser keys\n";
-  cerr << "   --purge-objects           remove a bucket's objects before deleting it\n";
-  cerr << "                             (NOTE: required to delete a non-empty bucket)\n";
-  cerr << "   --sync-stats              option to 'user stats', update user stats with current\n";
-  cerr << "                             stats reported by user's buckets indexes\n";
+  cerr << "   --shard-id=<shard-id>	optional for mdlog list\n";
+  cerr << "				required for: \n";
+  cerr << "				  mdlog trim\n";
+  cerr << "				  replica mdlog get/delete\n";
+  cerr << "				  replica datalog get/delete\n";
+  cerr << "   --metadata-key=<key>	key to retrieve metadata from with metadata get\n";
+  cerr << "   --rgw-region=<region>	region in which radosgw is running\n";
+  cerr << "   --rgw-zone=<zone>		zone in which radosgw is running\n";
+  cerr << "   --fix			besides checking bucket index, will also fix it\n";
+  cerr << "   --check-objects		bucket check: rebuilds bucket index according to\n";
+  cerr << "				actual objects state\n";
+  cerr << "   --format=<format>		specify output format for certain operations: xml,\n";
+  cerr << "				json\n";
+  cerr << "   --purge-data		when specified, user removal will also purge all the\n";
+  cerr << "				user data\n";
+  cerr << "   --purge-keys		when specified, subuser removal will also purge all the\n";
+  cerr << "				subuser keys\n";
+  cerr << "   --purge-objects		remove a bucket's objects before deleting it\n";
+  cerr << "				(NOTE: required to delete a non-empty bucket)\n";
+  cerr << "   --sync-stats		option to 'user stats', update user stats with current\n";
+  cerr << "				stats reported by user's buckets indexes\n";
   cerr << "   --show-log-entries=<flag> enable/disable dump of log entries on log show\n";
-  cerr << "   --show-log-sum=<flag>     enable/disable dump of log summation on log show\n";
-  cerr << "   --skip-zero-entries       log show only dumps entries that don't have zero value\n";
-  cerr << "                             in one of the numeric field\n";
-  cerr << "   --infile                  specify a file to read in when setting data\n";
-  cerr << "   --state=<state string>    specify a state for the opstate set command\n";
-  cerr << "   --replica-log-type        replica log type (metadata, data, bucket), required for\n";
-  cerr << "                             replica log operations\n";
-  cerr << "   --categories=<list>       comma separated list of categories, used in usage show\n";
-  cerr << "   --caps=<caps>             list of caps (e.g., \"usage=read, write; user=read\"\n";
-  cerr << "   --yes-i-really-mean-it    required for certain operations\n";
+  cerr << "   --show-log-sum=<flag>	enable/disable dump of log summation on log show\n";
+  cerr << "   --skip-zero-entries	log show only dumps entries that don't have zero value\n";
+  cerr << "				in one of the numeric field\n";
+  cerr << "   --infile			specify a file to read in when setting data\n";
+  cerr << "   --state=<state string>	specify a state for the opstate set command\n";
+  cerr << "   --replica-log-type	replica log type (metadata, data, bucket), required for\n";
+  cerr << "				replica log operations\n";
+  cerr << "   --categories=<list>	comma separated list of categories, used in usage show\n";
+  cerr << "   --caps=<caps>		list of caps (e.g., \"usage=read, write; user=read\"\n";
+  cerr << "   --yes-i-really-mean-it	required for certain operations\n";
   cerr << "\n";
   cerr << "<date> := \"YYYY-MM-DD[ hh:mm:ss]\"\n";
   cerr << "\nQuota options:\n";
-  cerr << "   --bucket                  specified bucket for quota command\n";
-  cerr << "   --max-objects             specify max objects (negative value to disable)\n";
-  cerr << "   --max-size                specify max size (in bytes, negative value to disable)\n";
-  cerr << "   --quota-scope             scope of quota (bucket, user)\n";
+  cerr << "   --bucket			specified bucket for quota command\n";
+  cerr << "   --max-objects		specify max objects (negative value to disable)\n";
+  cerr << "   --max-size		specify max size (in bytes, negative value to disable)\n";
+  cerr << "   --quota-scope		scope of quota (bucket, user)\n";
   cerr << "\n";
   generic_client_usage();
 }
@@ -261,7 +263,7 @@ static int get_cmd(const char *cmd, const char *prev_cmd, bool *need_more)
       strcmp(cmd, "buckets") == 0 ||
       strcmp(cmd, "caps") == 0 ||
       strcmp(cmd, "datalog") == 0 ||
-      strcmp(cmd, "gc") == 0 || 
+      strcmp(cmd, "gc") == 0 ||
       strcmp(cmd, "key") == 0 ||
       strcmp(cmd, "log") == 0 ||
       strcmp(cmd, "mdlog") == 0 ||
@@ -393,7 +395,7 @@ static int get_cmd(const char *cmd, const char *prev_cmd, bool *need_more)
     if (strcmp(cmd, "list") == 0)
       return OPT_REGION_LIST;
   } else if (strcmp(prev_cmd, "region-map") == 0 ||
-             strcmp(prev_cmd, "regionmap") == 0) {
+	     strcmp(prev_cmd, "regionmap") == 0) {
     if (strcmp(cmd, "get") == 0)
       return OPT_REGIONMAP_GET;
     if (strcmp(cmd, "set") == 0)
@@ -521,7 +523,7 @@ int bucket_stats(rgw_bucket& bucket, Formatter *formatter)
   formatter->dump_string("bucket", bucket.name);
   formatter->dump_string("pool", bucket.data_pool);
   formatter->dump_string("index_pool", bucket.index_pool);
-  
+
   formatter->dump_string("id", bucket.bucket_id);
   formatter->dump_string("marker", bucket.marker);
   formatter->dump_string("owner", bucket_info.owner);
@@ -617,7 +619,7 @@ static int read_decode_json(const string& infile, T& t)
   }
   return 0;
 }
-    
+
 static int parse_date_str(const string& date_str, utime_t& ut)
 {
   uint64_t epoch = 0;
@@ -666,7 +668,7 @@ static bool dump_string(const char *field_name, bufferlist& bl, Formatter *f)
 }
 
 void set_quota_info(RGWQuotaInfo& quota, int opt_cmd, int64_t max_size, int64_t max_objects,
-                    bool have_max_size, bool have_max_objects)
+		    bool have_max_size, bool have_max_objects)
 {
   switch (opt_cmd) {
     case OPT_QUOTA_ENABLE:
@@ -676,10 +678,10 @@ void set_quota_info(RGWQuotaInfo& quota, int opt_cmd, int64_t max_size, int64_t 
 
     case OPT_QUOTA_SET:
       if (have_max_objects) {
-        quota.max_objects = max_objects;
+	quota.max_objects = max_objects;
       }
       if (have_max_size) {
-        quota.max_size_kb = rgw_rounded_kb(max_size);
+	quota.max_size_kb = rgw_rounded_kb(max_size);
       }
       break;
     case OPT_QUOTA_DISABLE:
@@ -689,7 +691,7 @@ void set_quota_info(RGWQuotaInfo& quota, int opt_cmd, int64_t max_size, int64_t 
 }
 
 int set_bucket_quota(RGWRados *store, int opt_cmd, string& bucket_name, int64_t max_size, int64_t max_objects,
-                     bool have_max_size, bool have_max_objects)
+		     bool have_max_size, bool have_max_objects)
 {
   RGWBucketInfo bucket_info;
   map<string, bufferlist> attrs;
@@ -710,7 +712,7 @@ int set_bucket_quota(RGWRados *store, int opt_cmd, string& bucket_name, int64_t 
 }
 
 int set_user_bucket_quota(int opt_cmd, RGWUser& user, RGWUserAdminOpState& op_state, int64_t max_size, int64_t max_objects,
-                          bool have_max_size, bool have_max_objects)
+			  bool have_max_size, bool have_max_objects)
 {
   RGWUserInfo& user_info = op_state.get_user_info();
 
@@ -728,7 +730,7 @@ int set_user_bucket_quota(int opt_cmd, RGWUser& user, RGWUserAdminOpState& op_st
 }
 
 int set_user_quota(int opt_cmd, RGWUser& user, RGWUserAdminOpState& op_state, int64_t max_size, int64_t max_objects,
-                   bool have_max_size, bool have_max_objects)
+		   bool have_max_size, bool have_max_objects)
 {
   RGWUserInfo& user_info = op_state.get_user_info();
 
@@ -745,7 +747,7 @@ int set_user_quota(int opt_cmd, RGWUser& user, RGWUserAdminOpState& op_state, in
   return 0;
 }
 
-int main(int argc, char **argv) 
+int main(int argc, char **argv)
 {
   vector<const char*> args;
   argv_to_vec(argc, (const char **)argv, args);
@@ -856,12 +858,12 @@ int main(int argc, char **argv)
     } else if (ceph_argparse_witharg(args, i, &val, "--key-type", (char*)NULL)) {
       key_type_str = val;
       if (key_type_str.compare("swift") == 0) {
-        key_type = KEY_TYPE_SWIFT;
+	key_type = KEY_TYPE_SWIFT;
       } else if (key_type_str.compare("s3") == 0) {
-        key_type = KEY_TYPE_S3;
+	key_type = KEY_TYPE_S3;
       } else {
-        cerr << "bad key type: " << key_type_str << std::endl;
-        return usage();
+	cerr << "bad key type: " << key_type_str << std::endl;
+	return usage();
       }
     } else if (ceph_argparse_binary_flag(args, i, &gen_access_key, NULL, "--gen-access-key", (char*)NULL)) {
       // do nothing
@@ -887,21 +889,21 @@ int main(int argc, char **argv)
     } else if (ceph_argparse_witharg(args, i, &val, "--max-size", (char*)NULL)) {
       max_size = (int64_t)strict_strtoll(val.c_str(), 10, &err);
       if (!err.empty()) {
-        cerr << "ERROR: failed to parse max size: " << err << std::endl;
-        return EINVAL;
+	cerr << "ERROR: failed to parse max size: " << err << std::endl;
+	return EINVAL;
       }
       have_max_size = true;
     } else if (ceph_argparse_witharg(args, i, &val, "--max-objects", (char*)NULL)) {
       max_objects = (int64_t)strict_strtoll(val.c_str(), 10, &err);
       if (!err.empty()) {
-        cerr << "ERROR: failed to parse max objects: " << err << std::endl;
-        return EINVAL;
+	cerr << "ERROR: failed to parse max objects: " << err << std::endl;
+	return EINVAL;
       }
       have_max_objects = true;
     } else if (ceph_argparse_witharg(args, i, &val, "--date", "--time", (char*)NULL)) {
       date = val;
       if (end_date.empty())
-        end_date = date;
+	end_date = date;
     } else if (ceph_argparse_witharg(args, i, &val, "--start-date", "--start-time", (char*)NULL)) {
       start_date = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--end-date", "--end-time", (char*)NULL)) {
@@ -925,8 +927,8 @@ int main(int argc, char **argv)
     } else if (ceph_argparse_witharg(args, i, &val, "--bucket-id", (char*)NULL)) {
       bucket_id = val;
       if (bucket_id.empty()) {
-        cerr << "bad bucket-id" << std::endl;
-        return usage();
+	cerr << "bad bucket-id" << std::endl;
+	return usage();
       }
     } else if (ceph_argparse_witharg(args, i, &val, "--format", (char*)NULL)) {
       format = val;
@@ -974,8 +976,8 @@ int main(int argc, char **argv)
       replica_log_type_str = val;
       replica_log_type = get_replicalog_type(replica_log_type_str);
       if (replica_log_type == ReplicaLog_Invalid) {
-        cerr << "ERROR: invalid replica log type" << std::endl;
-        return EINVAL;
+	cerr << "ERROR: invalid replica log type" << std::endl;
+	return EINVAL;
       }
     } else if (strncmp(*i, "-", 1) == 0) {
       cerr << "ERROR: invalid flag " << *i << std::endl;
@@ -1010,14 +1012,14 @@ int main(int argc, char **argv)
     /* some commands may have an optional extra param */
     if (i != args.end()) {
       switch (opt_cmd) {
-        case OPT_METADATA_GET:
-        case OPT_METADATA_PUT:
-        case OPT_METADATA_RM:
-        case OPT_METADATA_LIST:
-          metadata_key = *i;
-          break;
-        default:
-          break;
+	case OPT_METADATA_GET:
+	case OPT_METADATA_PUT:
+	case OPT_METADATA_RM:
+	case OPT_METADATA_LIST:
+	  metadata_key = *i;
+	  break;
+	default:
+	  break;
       }
     }
   }
@@ -1028,7 +1030,7 @@ int main(int argc, char **argv)
     pretty_format = true;
   }
 
-  if (format ==  "xml")
+  if (format ==	 "xml")
     formatter = new XMLFormatter(pretty_format);
   else if (format == "json")
     formatter = new JSONFormatter(pretty_format);
@@ -1040,11 +1042,11 @@ int main(int argc, char **argv)
   RGWStreamFlusher f(formatter, cout);
 
   bool raw_storage_op = (opt_cmd == OPT_REGION_GET || opt_cmd == OPT_REGION_LIST ||
-                         opt_cmd == OPT_REGION_SET || opt_cmd == OPT_REGION_DEFAULT ||
-                         opt_cmd == OPT_REGIONMAP_GET || opt_cmd == OPT_REGIONMAP_SET ||
-                         opt_cmd == OPT_REGIONMAP_UPDATE ||
-                         opt_cmd == OPT_ZONE_GET || opt_cmd == OPT_ZONE_SET ||
-                         opt_cmd == OPT_ZONE_LIST);
+			 opt_cmd == OPT_REGION_SET || opt_cmd == OPT_REGION_DEFAULT ||
+			 opt_cmd == OPT_REGIONMAP_GET || opt_cmd == OPT_REGIONMAP_SET ||
+			 opt_cmd == OPT_REGIONMAP_UPDATE ||
+			 opt_cmd == OPT_ZONE_GET || opt_cmd == OPT_ZONE_SET ||
+			 opt_cmd == OPT_ZONE_LIST);
 
 
   if (raw_storage_op) {
@@ -1067,7 +1069,7 @@ int main(int argc, char **argv)
       RGWRegion region;
       int ret = region.init(g_ceph_context, store);
       if (ret < 0) {
-        cerr << "failed to init region: " << cpp_strerror(-ret) << std::endl;
+	cerr << "failed to init region: " << cpp_strerror(-ret) << std::endl;
 	return -ret;
       }
 
@@ -1086,7 +1088,7 @@ int main(int argc, char **argv)
       list<string> regions;
       ret = store->list_regions(regions);
       if (ret < 0) {
-        cerr << "failed to list regions: " << cpp_strerror(-ret) << std::endl;
+	cerr << "failed to list regions: " << cpp_strerror(-ret) << std::endl;
 	return -ret;
       }
       RGWDefaultRegionInfo default_region;
@@ -1110,13 +1112,13 @@ int main(int argc, char **argv)
       }
       ret = read_decode_json(infile, region);
       if (ret < 0) {
-        return 1;
+	return 1;
       }
 
       ret = region.store_info(false);
       if (ret < 0) {
-        cerr << "ERROR: couldn't store zone info: " << cpp_strerror(-ret) << std::endl;
-        return 1;
+	cerr << "ERROR: couldn't store zone info: " << cpp_strerror(-ret) << std::endl;
+	return 1;
       }
 
       encode_json("region", region, formatter);
@@ -1152,13 +1154,13 @@ int main(int argc, char **argv)
       RGWRegionMap regionmap;
       int ret = read_decode_json(infile, regionmap);
       if (ret < 0) {
-        return 1;
+	return 1;
       }
 
       ret = regionmap.store(g_ceph_context, store);
       if (ret < 0) {
-        cerr << "ERROR: couldn't store region map info: " << cpp_strerror(-ret) << std::endl;
-        return 1;
+	cerr << "ERROR: couldn't store region map info: " << cpp_strerror(-ret) << std::endl;
+	return 1;
       }
 
       encode_json("region-map", regionmap, formatter);
@@ -1183,23 +1185,23 @@ int main(int argc, char **argv)
       list<string> regions;
       ret = store->list_regions(regions);
       if (ret < 0) {
-        cerr << "failed to list regions: " << cpp_strerror(-ret) << std::endl;
+	cerr << "failed to list regions: " << cpp_strerror(-ret) << std::endl;
 	return -ret;
       }
 
       for (list<string>::iterator iter = regions.begin(); iter != regions.end(); ++iter) {
-        ret = region.read_info(*iter);
-        if (ret < 0) {
-        cerr << "failed to read region info (name=" << *iter << "): " << cpp_strerror(-ret) << std::endl;
+	ret = region.read_info(*iter);
+	if (ret < 0) {
+	cerr << "failed to read region info (name=" << *iter << "): " << cpp_strerror(-ret) << std::endl;
 	return -ret;
-        }
-        regionmap.update(region);
+	}
+	regionmap.update(region);
       }
 
       ret = regionmap.store(g_ceph_context, store);
       if (ret < 0) {
-        cerr << "ERROR: couldn't store region map info: " << cpp_strerror(-ret) << std::endl;
-        return 1;
+	cerr << "ERROR: couldn't store region map info: " << cpp_strerror(-ret) << std::endl;
+	return 1;
       }
 
       encode_json("region-map", regionmap, formatter);
@@ -1210,7 +1212,7 @@ int main(int argc, char **argv)
       RGWRegion region;
       int ret = region.init(g_ceph_context, store);
       if (ret < 0) {
-        cerr << "WARNING: failed to initialize region" << std::endl;
+	cerr << "WARNING: failed to initialize region" << std::endl;
       }
       RGWZoneParams zone;
       ret = zone.init(g_ceph_context, store, region);
@@ -1226,19 +1228,19 @@ int main(int argc, char **argv)
       RGWRegion region;
       int ret = region.init(g_ceph_context, store);
       if (ret < 0) {
-        cerr << "WARNING: failed to initialize region" << std::endl;
+	cerr << "WARNING: failed to initialize region" << std::endl;
       }
       RGWZoneParams zone;
       zone.init_default(store);
       ret = read_decode_json(infile, zone);
       if (ret < 0) {
-        return 1;
+	return 1;
       }
 
       ret = zone.store_info(g_ceph_context, store, region);
       if (ret < 0) {
-        cerr << "ERROR: couldn't store zone info: " << cpp_strerror(-ret) << std::endl;
-        return 1;
+	cerr << "ERROR: couldn't store zone info: " << cpp_strerror(-ret) << std::endl;
+	return 1;
       }
 
       encode_json("zone", zone, formatter);
@@ -1248,7 +1250,7 @@ int main(int argc, char **argv)
       list<string> zones;
       int ret = store->list_zones(zones);
       if (ret < 0) {
-        cerr << "failed to list zones: " << cpp_strerror(-ret) << std::endl;
+	cerr << "failed to list zones: " << cpp_strerror(-ret) << std::endl;
 	return -ret;
       }
       formatter->open_object_section("zones_list");
@@ -1477,40 +1479,40 @@ int main(int argc, char **argv)
       RGWBucketInfo bucket_info;
       int ret = init_bucket(bucket_name, bucket_info, bucket);
       if (ret < 0) {
-        cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
-        return -ret;
+	cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
+	return -ret;
       }
       formatter->open_array_section("entries");
       bool truncated;
       int count = 0;
       if (max_entries < 0)
-        max_entries = 1000;
+	max_entries = 1000;
 
       string prefix;
       string delim;
       vector<RGWObjEnt> result;
       map<string, bool> common_prefixes;
       string ns;
-      
+
       do {
-        list<rgw_bi_log_entry> entries;
-        ret = store->list_objects(bucket, max_entries - count, prefix, delim,
-                                  marker, result, common_prefixes, true,
-                                  ns, false, &truncated, NULL);
-        if (ret < 0) {
-          cerr << "ERROR: store->list_objects(): " << cpp_strerror(-ret) << std::endl;
-          return -ret;
-        }
+	list<rgw_bi_log_entry> entries;
+	ret = store->list_objects(bucket, max_entries - count, prefix, delim,
+				  marker, result, common_prefixes, true,
+				  ns, false, &truncated, NULL);
+	if (ret < 0) {
+	  cerr << "ERROR: store->list_objects(): " << cpp_strerror(-ret) << std::endl;
+	  return -ret;
+	}
 
-        count += result.size();
+	count += result.size();
 
-        for (vector<RGWObjEnt>::iterator iter = result.begin(); iter != result.end(); ++iter) {
-          RGWObjEnt& entry = *iter;
-          encode_json("entry", entry, formatter);
+	for (vector<RGWObjEnt>::iterator iter = result.begin(); iter != result.end(); ++iter) {
+	  RGWObjEnt& entry = *iter;
+	  encode_json("entry", entry, formatter);
 
-          marker = entry.name;
-        }
-        formatter->flush(cout);
+	  marker = entry.name;
+	}
+	formatter->flush(cout);
       } while (truncated && count < max_entries);
 
       formatter->close_section();
@@ -1623,7 +1625,7 @@ int main(int argc, char **argv)
       formatter->open_object_section("log");
 
       struct rgw_log_entry entry;
-      
+
       // peek at first entry to get bucket metadata
       r = store->log_show_next(h, &entry);
       if (r < 0) {
@@ -1640,43 +1642,43 @@ int main(int argc, char **argv)
       uint64_t total_entries = 0;
 
       if (show_log_entries)
-        formatter->open_array_section("log_entries");
+	formatter->open_array_section("log_entries");
 
       do {
 	uint64_t total_time =  entry.total_time.sec() * 1000000LL * entry.total_time.usec();
 
-        agg_time += total_time;
-        agg_bytes_sent += entry.bytes_sent;
-        agg_bytes_received += entry.bytes_received;
-        total_entries++;
+	agg_time += total_time;
+	agg_bytes_sent += entry.bytes_sent;
+	agg_bytes_received += entry.bytes_received;
+	total_entries++;
 
-        if (skip_zero_entries && entry.bytes_sent == 0 &&
-            entry.bytes_received == 0)
-          goto next;
+	if (skip_zero_entries && entry.bytes_sent == 0 &&
+	    entry.bytes_received == 0)
+	  goto next;
 
-        if (show_log_entries) {
+	if (show_log_entries) {
 
 	  rgw_format_ops_log_entry(entry, formatter);
 	  formatter->flush(cout);
-        }
+	}
 next:
 	r = store->log_show_next(h, &entry);
       } while (r > 0);
 
       if (r < 0) {
-      	cerr << "error reading log " << oid << ": " << cpp_strerror(-r) << std::endl;
+	cerr << "error reading log " << oid << ": " << cpp_strerror(-r) << std::endl;
 	return -r;
       }
       if (show_log_entries)
-        formatter->close_section();
+	formatter->close_section();
 
       if (show_log_sum) {
-        formatter->open_object_section("log_sum");
+	formatter->open_object_section("log_sum");
 	formatter->dump_int("bytes_sent", agg_bytes_sent);
 	formatter->dump_int("bytes_received", agg_bytes_received);
 	formatter->dump_int("total_time", agg_time);
 	formatter->dump_int("total_entries", total_entries);
-        formatter->close_section();
+	formatter->close_section();
       }
       formatter->close_section();
       formatter->flush(cout);
@@ -1690,7 +1692,7 @@ next:
       }
     }
   }
-  
+
   if (opt_cmd == OPT_POOL_ADD) {
     if (pool_name.empty()) {
       cerr << "need to specify pool to add!" << std::endl;
@@ -1738,19 +1740,19 @@ next:
     uint64_t end_epoch = (uint64_t)-1;
 
     int ret;
-    
+
     if (!start_date.empty()) {
       ret = utime_t::parse_date(start_date, &start_epoch, NULL);
       if (ret < 0) {
-        cerr << "ERROR: failed to parse start date" << std::endl;
-        return 1;
+	cerr << "ERROR: failed to parse start date" << std::endl;
+	return 1;
       }
     }
     if (!end_date.empty()) {
       ret = utime_t::parse_date(end_date, &end_epoch, NULL);
       if (ret < 0) {
-        cerr << "ERROR: failed to parse end date" << std::endl;
-        return 1;
+	cerr << "ERROR: failed to parse end date" << std::endl;
+	return 1;
       }
     }
 
@@ -1778,16 +1780,16 @@ next:
     if (!start_date.empty()) {
       ret = utime_t::parse_date(start_date, &start_epoch, NULL);
       if (ret < 0) {
-        cerr << "ERROR: failed to parse start date" << std::endl;
-        return 1;
+	cerr << "ERROR: failed to parse start date" << std::endl;
+	return 1;
       }
     }
 
     if (!end_date.empty()) {
       ret = utime_t::parse_date(end_date, &end_epoch, NULL);
       if (ret < 0) {
-        cerr << "ERROR: failed to parse end date" << std::endl;
-        return 1;
+	cerr << "ERROR: failed to parse end date" << std::endl;
+	return 1;
       }
     }
 
@@ -1795,7 +1797,7 @@ next:
     if (ret < 0) {
       cerr << "ERROR: read_usage() returned ret=" << ret << std::endl;
       return 1;
-    }   
+    }
   }
 
   if (opt_cmd == OPT_OBJECT_RM) {
@@ -1843,7 +1845,7 @@ next:
     map<string, bufferlist> attrs;
     void *obj_ctx = store->create_context(NULL);
     ret = store->prepare_get_obj(obj_ctx, obj, NULL, NULL, &attrs, NULL,
-                                 NULL, NULL, NULL, NULL, NULL, &obj_size, NULL, &handle, NULL);
+				 NULL, NULL, NULL, NULL, NULL, &obj_size, NULL, &handle, NULL);
     store->finish_get_obj(&handle);
     store->destroy_context(obj_ctx);
     if (ret < 0) {
@@ -1860,17 +1862,17 @@ next:
       bufferlist& bl = iter->second;
       bool handled = false;
       if (iter->first == RGW_ATTR_MANIFEST) {
-        handled = decode_dump<RGWObjManifest>("manifest", bl, formatter);
+	handled = decode_dump<RGWObjManifest>("manifest", bl, formatter);
       } else if (iter->first == RGW_ATTR_ACL) {
-        handled = decode_dump<RGWAccessControlPolicy>("policy", bl, formatter);
+	handled = decode_dump<RGWAccessControlPolicy>("policy", bl, formatter);
       } else if (iter->first == RGW_ATTR_ID_TAG) {
-        handled = dump_string("tag", bl, formatter);
+	handled = dump_string("tag", bl, formatter);
       } else if (iter->first == RGW_ATTR_ETAG) {
-        handled = dump_string("etag", bl, formatter);
+	handled = dump_string("etag", bl, formatter);
       }
 
       if (!handled)
-        other_attrs[iter->first] = bl;
+	other_attrs[iter->first] = bl;
     }
 
     formatter->open_object_section("attrs");
@@ -1911,11 +1913,11 @@ next:
 	formatter->dump_string("tag", info.tag);
 	formatter->dump_stream("time") << info.time;
 	formatter->open_array_section("objs");
-        list<cls_rgw_obj>::iterator liter;
+	list<cls_rgw_obj>::iterator liter;
 	cls_rgw_obj_chain& chain = info.chain;
 	for (liter = chain.objs.begin(); liter != chain.objs.end(); ++liter) {
 	  cls_rgw_obj& obj = *liter;
-          encode_json("obj", obj, formatter);
+	  encode_json("obj", obj, formatter);
 	}
 	formatter->close_section(); // objs
 	formatter->close_section(); // obj_chain
@@ -1941,17 +1943,17 @@ next:
   if (opt_cmd == OPT_USER_STATS) {
     if (sync_stats) {
       if (!bucket_name.empty()) {
-        int ret = rgw_bucket_sync_user_stats(store, bucket_name);
-        if (ret < 0) {
-          cerr << "ERROR: could not sync bucket stats: " << cpp_strerror(-ret) << std::endl;
-          return -ret;
-        }
+	int ret = rgw_bucket_sync_user_stats(store, bucket_name);
+	if (ret < 0) {
+	  cerr << "ERROR: could not sync bucket stats: " << cpp_strerror(-ret) << std::endl;
+	  return -ret;
+	}
       } else {
-        int ret = rgw_user_sync_all_stats(store, user_id);
-        if (ret < 0) {
-          cerr << "ERROR: failed to sync user stats: " << cpp_strerror(-ret) << std::endl;
-          return -ret;
-        }
+	int ret = rgw_user_sync_all_stats(store, user_id);
+	if (ret < 0) {
+	  cerr << "ERROR: failed to sync user stats: " << cpp_strerror(-ret) << std::endl;
+	  return -ret;
+	}
       }
     }
 
@@ -2019,8 +2021,8 @@ next:
       list<string> keys;
       ret = store->meta_mgr->list_keys_next(handle, max, keys, &truncated);
       if (ret < 0) {
-        cerr << "ERROR: lists_keys_next(): " << cpp_strerror(-ret) << std::endl;
-        return -ret;
+	cerr << "ERROR: lists_keys_next(): " << cpp_strerror(-ret) << std::endl;
+	return -ret;
       }
 
       for (list<string>::iterator iter = keys.begin(); iter != keys.end(); ++iter) {
@@ -2061,24 +2063,24 @@ next:
       bool truncated;
       do {
 	  int ret = meta_log->list_entries(handle, 1000, entries, NULL, &truncated);
-        if (ret < 0) {
-          cerr << "ERROR: meta_log->list_entries(): " << cpp_strerror(-ret) << std::endl;
-          return -ret;
-        }
+	if (ret < 0) {
+	  cerr << "ERROR: meta_log->list_entries(): " << cpp_strerror(-ret) << std::endl;
+	  return -ret;
+	}
 
-        for (list<cls_log_entry>::iterator iter = entries.begin(); iter != entries.end(); ++iter) {
-          cls_log_entry& entry = *iter;
-          store->meta_mgr->dump_log_entry(entry, formatter);
-        }
-        formatter->flush(cout);
+	for (list<cls_log_entry>::iterator iter = entries.begin(); iter != entries.end(); ++iter) {
+	  cls_log_entry& entry = *iter;
+	  store->meta_mgr->dump_log_entry(entry, formatter);
+	}
+	formatter->flush(cout);
       } while (truncated);
 
       meta_log->complete_list_entries(handle);
 
       if (specified_shard_id)
-        break;
+	break;
     }
-  
+
 
     formatter->close_section();
     formatter->flush(cout);
@@ -2108,7 +2110,7 @@ next:
       return -ret;
     }
   }
-  
+
   if (opt_cmd == OPT_BILOG_LIST) {
     if (bucket_name.empty()) {
       cerr << "ERROR: bucket not specified" << std::endl;
@@ -2130,17 +2132,17 @@ next:
       list<rgw_bi_log_entry> entries;
       ret = store->list_bi_log_entries(bucket, marker, max_entries - count, entries, &truncated);
       if (ret < 0) {
-        cerr << "ERROR: list_bi_log_entries(): " << cpp_strerror(-ret) << std::endl;
-        return -ret;
+	cerr << "ERROR: list_bi_log_entries(): " << cpp_strerror(-ret) << std::endl;
+	return -ret;
       }
 
       count += entries.size();
 
       for (list<rgw_bi_log_entry>::iterator iter = entries.begin(); iter != entries.end(); ++iter) {
-        rgw_bi_log_entry& entry = *iter;
-        encode_json("entry", entry, formatter);
+	rgw_bi_log_entry& entry = *iter;
+	encode_json("entry", entry, formatter);
 
-        marker = entry.id;
+	marker = entry.id;
       }
       formatter->flush(cout);
     } while (truncated && count < max_entries);
@@ -2191,15 +2193,15 @@ next:
       list<rgw_data_change> entries;
       ret = log->list_entries(start_time, end_time, max_entries - count, entries, marker, &truncated);
       if (ret < 0) {
-        cerr << "ERROR: list_bi_log_entries(): " << cpp_strerror(-ret) << std::endl;
-        return -ret;
+	cerr << "ERROR: list_bi_log_entries(): " << cpp_strerror(-ret) << std::endl;
+	return -ret;
       }
 
       count += entries.size();
 
       for (list<rgw_data_change>::iterator iter = entries.begin(); iter != entries.end(); ++iter) {
-        rgw_data_change& entry = *iter;
-        encode_json("entry", entry, formatter);
+	rgw_data_change& entry = *iter;
+	encode_json("entry", entry, formatter);
       }
       formatter->flush(cout);
     } while (truncated && count < max_entries);
@@ -2207,7 +2209,7 @@ next:
     formatter->close_section();
     formatter->flush(cout);
   }
-  
+
   if (opt_cmd == OPT_DATALOG_TRIM) {
     utime_t start_time, end_time;
 
@@ -2240,13 +2242,13 @@ next:
     do {
       int ret = oc.list_entries(handle, max, entries, &done);
       if (ret < 0) {
-        cerr << "oc.list_entries returned " << cpp_strerror(-ret) << std::endl;
-        oc.finish_list_entries(handle);
-        return -ret;
+	cerr << "oc.list_entries returned " << cpp_strerror(-ret) << std::endl;
+	oc.finish_list_entries(handle);
+	return -ret;
       }
 
       for (list<cls_statelog_entry>::iterator iter = entries.begin(); iter != entries.end(); ++iter) {
-        oc.dump_entry(*iter, formatter);
+	oc.dump_entry(*iter, formatter);
       }
 
       formatter->flush(cout);
@@ -2277,14 +2279,14 @@ next:
     if (opt_cmd == OPT_OPSTATE_SET) {
       ret = oc.set_state(client_id, op_id, object, state);
       if (ret < 0) {
-        cerr << "ERROR: failed to set state: " << cpp_strerror(-ret) << std::endl;
-        return -ret;
+	cerr << "ERROR: failed to set state: " << cpp_strerror(-ret) << std::endl;
+	return -ret;
       }
     } else {
       ret = oc.renew_state(client_id, op_id, object, state);
       if (ret < 0) {
-        cerr << "ERROR: failed to renew state: " << cpp_strerror(-ret) << std::endl;
-        return -ret;
+	cerr << "ERROR: failed to renew state: " << cpp_strerror(-ret) << std::endl;
+	return -ret;
       }
     }
   }
@@ -2313,39 +2315,39 @@ next:
     RGWReplicaBounds bounds;
     if (replica_log_type == ReplicaLog_Metadata) {
       if (!specified_shard_id) {
-        cerr << "ERROR: shard-id must be specified for get operation" << std::endl;
-        return EINVAL;
+	cerr << "ERROR: shard-id must be specified for get operation" << std::endl;
+	return EINVAL;
       }
 
       RGWReplicaObjectLogger logger(store, pool_name, META_REPLICA_LOG_OBJ_PREFIX);
       int ret = logger.get_bounds(shard_id, bounds);
       if (ret < 0)
-        return -ret;
+	return -ret;
     } else if (replica_log_type == ReplicaLog_Data) {
       if (!specified_shard_id) {
-        cerr << "ERROR: shard-id must be specified for get operation" << std::endl;
-        return EINVAL;
+	cerr << "ERROR: shard-id must be specified for get operation" << std::endl;
+	return EINVAL;
       }
       RGWReplicaObjectLogger logger(store, pool_name, DATA_REPLICA_LOG_OBJ_PREFIX);
       int ret = logger.get_bounds(shard_id, bounds);
       if (ret < 0)
-        return -ret;
+	return -ret;
     } else if (replica_log_type == ReplicaLog_Bucket) {
       if (bucket_name.empty()) {
-        cerr << "ERROR: bucket not specified" << std::endl;
-        return -EINVAL;
+	cerr << "ERROR: bucket not specified" << std::endl;
+	return -EINVAL;
       }
       RGWBucketInfo bucket_info;
       int ret = init_bucket(bucket_name, bucket_info, bucket);
       if (ret < 0) {
-        cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
-        return -ret;
+	cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
+	return -ret;
       }
 
       RGWReplicaBucketLogger logger(store);
       ret = logger.get_bounds(bucket, bounds);
       if (ret < 0)
-        return -ret;
+	return -ret;
     } else { // shouldn't get here
       assert(0);
     }
@@ -2357,46 +2359,46 @@ next:
   if (opt_cmd == OPT_REPLICALOG_DELETE) {
     if (replica_log_type == ReplicaLog_Metadata) {
       if (!specified_shard_id) {
-        cerr << "ERROR: shard-id must be specified for delete operation" << std::endl;
-        return EINVAL;
+	cerr << "ERROR: shard-id must be specified for delete operation" << std::endl;
+	return EINVAL;
       }
       if (!specified_daemon_id) {
-        cerr << "ERROR: daemon-id must be specified for delete operation" << std::endl;
-        return EINVAL;
+	cerr << "ERROR: daemon-id must be specified for delete operation" << std::endl;
+	return EINVAL;
       }
       RGWReplicaObjectLogger logger(store, pool_name, META_REPLICA_LOG_OBJ_PREFIX);
       int ret = logger.delete_bound(shard_id, daemon_id);
       if (ret < 0)
-        return -ret;
+	return -ret;
     } else if (replica_log_type == ReplicaLog_Data) {
       if (!specified_shard_id) {
-        cerr << "ERROR: shard-id must be specified for delete operation" << std::endl;
-        return EINVAL;
+	cerr << "ERROR: shard-id must be specified for delete operation" << std::endl;
+	return EINVAL;
       }
       if (!specified_daemon_id) {
-        cerr << "ERROR: daemon-id must be specified for delete operation" << std::endl;
-        return EINVAL;
+	cerr << "ERROR: daemon-id must be specified for delete operation" << std::endl;
+	return EINVAL;
       }
       RGWReplicaObjectLogger logger(store, pool_name, DATA_REPLICA_LOG_OBJ_PREFIX);
       int ret = logger.delete_bound(shard_id, daemon_id);
       if (ret < 0)
-        return -ret;
+	return -ret;
     } else if (replica_log_type == ReplicaLog_Bucket) {
       if (bucket_name.empty()) {
-        cerr << "ERROR: bucket not specified" << std::endl;
-        return -EINVAL;
+	cerr << "ERROR: bucket not specified" << std::endl;
+	return -EINVAL;
       }
       RGWBucketInfo bucket_info;
       int ret = init_bucket(bucket_name, bucket_info, bucket);
       if (ret < 0) {
-        cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
-        return -ret;
+	cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
+	return -ret;
       }
 
       RGWReplicaBucketLogger logger(store);
       ret = logger.delete_bound(bucket, daemon_id);
       if (ret < 0)
-        return -ret;
+	return -ret;
     }
   }
 
@@ -2410,18 +2412,18 @@ next:
 
     if (!bucket_name.empty()) {
       if (!quota_scope.empty() && quota_scope != "bucket") {
-        cerr << "ERROR: invalid quota scope specification." << std::endl;
-        return EINVAL;
+	cerr << "ERROR: invalid quota scope specification." << std::endl;
+	return EINVAL;
       }
       set_bucket_quota(store, opt_cmd, bucket_name, max_size, max_objects, have_max_size, have_max_objects);
     } else if (!user_id.empty()) {
       if (quota_scope == "bucket") {
-        set_user_bucket_quota(opt_cmd, user, user_op, max_size, max_objects, have_max_size, have_max_objects);
+	set_user_bucket_quota(opt_cmd, user, user_op, max_size, max_objects, have_max_size, have_max_objects);
       } else if (quota_scope == "user") {
-        set_user_quota(opt_cmd, user, user_op, max_size, max_objects, have_max_size, have_max_objects);
+	set_user_quota(opt_cmd, user, user_op, max_size, max_objects, have_max_size, have_max_objects);
       } else {
-        cerr << "ERROR: invalid quota scope specification. Please specify either --quota-scope=bucket, or --quota-scope=user" << std::endl;
-        return EINVAL;
+	cerr << "ERROR: invalid quota scope specification. Please specify either --quota-scope=bucket, or --quota-scope=user" << std::endl;
+	return EINVAL;
       }
     }
   }

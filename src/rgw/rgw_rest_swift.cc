@@ -1,4 +1,5 @@
-
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #include "common/Formatter.h"
 #include "common/utf8.h"
 #include "rgw_swift.h"
@@ -155,7 +156,7 @@ void RGWListBucket_ObjStore_SWIFT::send_response()
 
     if (do_objs && (marker.empty() || iter->name.compare(marker) > 0)) {
       if (iter->name.compare(path) == 0)
-        goto next;
+	goto next;
 
       s->formatter->open_object_section("object");
       s->formatter->dump_string("name", iter->name);
@@ -163,15 +164,15 @@ void RGWListBucket_ObjStore_SWIFT::send_response()
       s->formatter->dump_int("bytes", iter->size);
       string single_content_type = iter->content_type;
       if (iter->content_type.size()) {
-        // content type might hold multiple values, just dump the last one
-        ssize_t pos = iter->content_type.rfind(',');
-        if (pos > 0) {
-          ++pos;
-          while (single_content_type[pos] == ' ')
-            ++pos;
-          single_content_type = single_content_type.substr(pos);
-        }
-        s->formatter->dump_string("content_type", single_content_type);
+	// content type might hold multiple values, just dump the last one
+	ssize_t pos = iter->content_type.rfind(',');
+	if (pos > 0) {
+	  ++pos;
+	  while (single_content_type[pos] == ' ')
+	    ++pos;
+	  single_content_type = single_content_type.substr(pos);
+	}
+	s->formatter->dump_string("content_type", single_content_type);
       }
       time_t mtime = iter->mtime.sec();
       dump_time(s, "last_modified", &mtime);
@@ -181,19 +182,19 @@ void RGWListBucket_ObjStore_SWIFT::send_response()
     if (do_pref &&  (marker.empty() || pref_iter->first.compare(marker) > 0)) {
       const string& name = pref_iter->first;
       if (name.compare(delimiter) == 0)
-        goto next;
+	goto next;
 
-        s->formatter->open_object_section_with_attrs("subdir", FormatterAttrs("name", name.c_str(), NULL));
+	s->formatter->open_object_section_with_attrs("subdir", FormatterAttrs("name", name.c_str(), NULL));
 
-        /* swift is a bit inconsistent here */
-        switch (s->format) {
-          case RGW_FORMAT_XML:
-            s->formatter->dump_string("name", name);
-            break;
-          default:
-            s->formatter->dump_string("subdir", name);
-        }
-        s->formatter->close_section();
+	/* swift is a bit inconsistent here */
+	switch (s->format) {
+	  case RGW_FORMAT_XML:
+	    s->formatter->dump_string("name", name);
+	    break;
+	  default:
+	    s->formatter->dump_string("subdir", name);
+	}
+	s->formatter->close_section();
     }
 next:
     if (do_objs)
@@ -243,7 +244,7 @@ static void dump_container_metadata(struct req_state *s, RGWBucketEnt& bucket)
 }
 
 static void dump_account_metadata(struct req_state *s, uint32_t buckets_count,
-                                  uint64_t buckets_object_count, uint64_t buckets_size, uint64_t buckets_size_rounded)
+				  uint64_t buckets_object_count, uint64_t buckets_size, uint64_t buckets_size_rounded)
 {
   char buf[32];
   snprintf(buf, sizeof(buf), "%lld", (long long)buckets_count);
@@ -285,7 +286,7 @@ void RGWStatBucket_ObjStore_SWIFT::send_response()
 }
 
 static int get_swift_container_settings(req_state *s, RGWRados *store, RGWAccessControlPolicy *policy, bool *has_policy,
-                                        RGWCORSConfiguration *cors_config, bool *has_cors)
+					RGWCORSConfiguration *cors_config, bool *has_cors)
 {
   string read_list, write_list;
 
@@ -397,10 +398,10 @@ int RGWPutObj_ObjStore_SWIFT::get_params()
     if (suffix) {
       suffix++;
       if (*suffix) {
-        string suffix_str(suffix);
+	string suffix_str(suffix);
 	const char *mime = rgw_find_mime_by_ext(suffix_str);
 	if (mime) {
-          s->generic_attrs[RGW_ATTR_CONTENT_TYPE] = mime;
+	  s->generic_attrs[RGW_ATTR_CONTENT_TYPE] = mime;
 	}
       }
     }
@@ -570,8 +571,8 @@ int RGWGetObj_ObjStore_SWIFT::send_response_data(bufferlist& bl, off_t bl_ofs, o
     if (iter != attrs.end()) {
       bufferlist& bl = iter->second;
       if (bl.length()) {
-        char *etag = bl.c_str();
-        dump_etag(s, etag);
+	char *etag = bl.c_str();
+	dump_etag(s, etag);
       }
     }
 
@@ -582,13 +583,13 @@ int RGWGetObj_ObjStore_SWIFT::send_response_data(bufferlist& bl, off_t bl_ofs, o
 	if (aiter->first.compare(RGW_ATTR_CONTENT_TYPE) == 0) { // special handling for content_type
 	  content_type = iter->second.c_str();
 	  continue;
-        }
-        response_attrs[aiter->second] = iter->second.c_str();
+	}
+	response_attrs[aiter->second] = iter->second.c_str();
       } else {
-        if (strncmp(name, RGW_ATTR_META_PREFIX, sizeof(RGW_ATTR_META_PREFIX)-1) == 0) {
-          name += sizeof(RGW_ATTR_META_PREFIX) - 1;
-          s->cio->print("X-%s-Meta-%s: %s\r\n", (s->object ? "Object" : "Container"), name, iter->second.c_str());
-        }
+	if (strncmp(name, RGW_ATTR_META_PREFIX, sizeof(RGW_ATTR_META_PREFIX)-1) == 0) {
+	  name += sizeof(RGW_ATTR_META_PREFIX) - 1;
+	  s->cio->print("X-%s-Meta-%s: %s\r\n", (s->object ? "Object" : "Container"), name, iter->second.c_str());
+	}
       }
     }
   }
@@ -640,7 +641,7 @@ void RGWOptionsCORS_ObjStore_SWIFT::send_response()
     return;
   }
   dump_errno(s);
-  dump_access_control(s, origin, req_meth, hdrs.c_str(), exp_hdrs.c_str(), max_age); 
+  dump_access_control(s, origin, req_meth, hdrs.c_str(), exp_hdrs.c_str(), max_age);
   end_header(s, NULL);
 }
 
@@ -872,7 +873,7 @@ int RGWHandler_ObjStore_SWIFT::init_from_header(struct req_state *s)
     first = req.substr(0, pos);
     if (first.compare(g_conf->rgw_swift_url_prefix) == 0) {
       if (cut_url) {
-        next_tok(req, first, '/');
+	next_tok(req, first, '/');
       }
     }
   } else {
@@ -918,7 +919,7 @@ int RGWHandler_ObjStore_SWIFT::init_from_header(struct req_state *s)
     return 0;
 
   s->bucket_name_str = first;
-   
+
   s->info.effective_uri = "/" + s->bucket_name_str;
 
   if (req.size()) {
@@ -964,7 +965,7 @@ int RGWHandler_ObjStore_SWIFT::init(RGWRados *store, struct req_state *s, RGWCli
     if (dest_bucket_name != s->bucket_name_str) {
       ret = validate_bucket_name(dest_bucket_name.c_str());
       if (ret < 0)
-        return ret;
+	return ret;
     }
 
     /* convert COPY operation into PUT */

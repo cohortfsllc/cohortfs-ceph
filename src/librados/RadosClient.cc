@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -164,7 +164,7 @@ int librados::RadosClient::connect()
   state = CONNECTING;
 
   /* dout and friends use g_ceph_context to print stuff.  If we want
-   * to use dout to debug library calls, these have to be set.  There's
+   * to use dout to debug library calls, these have to be set.	There's
    * no way for python code (ie, the ceph command) to set them (or know
    * that it should).  Eventually, should use ldout(cct,x)
    * everywhere (and make sure cct is passed more places).  For now, ...
@@ -534,8 +534,8 @@ class C_WatchNotify : public Context {
 
 public:
   C_WatchNotify(librados::WatchContext *_ctx, Mutex *_client_lock,
-                uint8_t _o, uint64_t _v, uint64_t _n, bufferlist& _bl) : 
-                ctx(_ctx), client_lock(_client_lock), opcode(_o), ver(_v), notify_id(_n), bl(_bl) {}
+		uint8_t _o, uint64_t _v, uint64_t _n, bufferlist& _bl) :
+		ctx(_ctx), client_lock(_client_lock), opcode(_o), ver(_v), notify_id(_n), bl(_bl) {}
 
   void finish(int r) {
     ctx->notify(client_lock, opcode, ver, notify_id, bl);

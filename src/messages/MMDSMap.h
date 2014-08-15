@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -32,22 +32,22 @@ class MMDSMap : public Message {
     epoch_t e = 0;
     map<epoch_t, bufferlist>::iterator i = maps.begin();
     if (i != maps.end())  e = i->first;
-    i = incremental_maps.begin();    
+    i = incremental_maps.begin();
     if (i != incremental_maps.end() &&
-        (e == 0 || i->first < e)) e = i->first;
+	(e == 0 || i->first < e)) e = i->first;
     return e;
   }
   epoch_t get_last() {
     epoch_t e = 0;
     map<epoch_t, bufferlist>::reverse_iterator i = maps.rbegin();
     if (i != maps.rend())  e = i->first;
-    i = incremental_maps.rbegin();    
+    i = incremental_maps.rbegin();
     if (i != incremental_maps.rend() &&
-        (e == 0 || i->first > e)) e = i->first;
+	(e == 0 || i->first > e)) e = i->first;
     return e;
   }
   */
-  
+
   uuid_d fsid;
   epoch_t epoch;
   bufferlist encoded;
@@ -55,7 +55,7 @@ class MMDSMap : public Message {
   version_t get_epoch() const { return epoch; }
   bufferlist& get_encoded() { return encoded; }
 
-  MMDSMap() : 
+  MMDSMap() :
     Message(CEPH_MSG_MDS_MAP) {}
   MMDSMap(const uuid_d &f, MDSMap *mm) :
     Message(CEPH_MSG_MDS_MAP),

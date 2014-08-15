@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #include "msg/SimpleMessenger.h"
@@ -95,7 +95,7 @@ int MonClient::get_monmap()
 {
   ldout(cct, 10) << "get_monmap" << dendl;
   Mutex::Locker l(monc_lock);
-  
+
   _sub_want("monmap", 0, 0);
   if (cur_mon.empty())
     _reopen_session();
@@ -116,8 +116,8 @@ int MonClient::get_monmap_privately()
   SimpleMessenger* smessenger = NULL;
   if (!messenger) {
     messenger = smessenger = new SimpleMessenger(cct,
-                                                 entity_name_t::CLIENT(-1),
-                                                 "temp_mon_client", getpid());
+						 entity_name_t::CLIENT(-1),
+						 "temp_mon_client", getpid());
     messenger->add_dispatcher_head(this);
     smessenger->start();
     temp_msgr = true;
@@ -187,11 +187,11 @@ int MonClient::get_monmap_privately()
  *     or blocked waiting for auth to complete with mon.BAR.
  *
  * - Ping a monitor prior to establishing a connection (using connect())
- *   and properly establish the MonClient's messenger.  This frees us
+ *   and properly establish the MonClient's messenger.	This frees us
  *   from dealing with the complex foo that happens in connect().
  *
  * We also don't rely on MonClient as a dispatcher for this messenger,
- * unlike what happens with the MonClient's default messenger.  This allows
+ * unlike what happens with the MonClient's default messenger.	This allows
  * us to sandbox the whole ping, having it much as a separate entity in
  * the MonClient class, considerably simplifying the handling and dispatching
  * of messages without needing to consider monc_lock.
@@ -209,21 +209,21 @@ int MonClient::ping_monitor(const string &mon_id, string *result_reply)
     return -EINVAL;
   } else if (!monmap.contains(mon_id)) {
     ldout(cct, 10) << __func__ << " no such monitor 'mon." << mon_id << "'"
-                   << dendl;
+		   << dendl;
     return -ENOENT;
   }
 
   MonClientPinger *pinger = new MonClientPinger(cct, result_reply);
 
   Messenger *smsgr = new SimpleMessenger(cct,
-                                         entity_name_t::CLIENT(-1),
-                                         "temp_ping_client", getpid());
+					 entity_name_t::CLIENT(-1),
+					 "temp_ping_client", getpid());
   smsgr->add_dispatcher_head(pinger);
   smsgr->start();
 
   ConnectionRef con = smsgr->get_connection(monmap.get_inst(mon_id));
   ldout(cct, 10) << __func__ << " ping mon." << mon_id
-                 << " " << con->get_peer_addr() << dendl;
+		 << " " << con->get_peer_addr() << dendl;
   smsgr->send_message(new MPing, con);
 
   pinger->lock.Lock();
@@ -340,7 +340,7 @@ void MonClient::handle_monmap(MMonMap *m)
 
   if (false /* !monmap.get_addr_name(cur_con->get_peer_addr(), cur_mon) */) {
     ldout(cct, 10) << "mon." << cur_mon << " went away" << dendl;
-    _reopen_session();  // can't find the mon we were talking to (above)
+    _reopen_session();	// can't find the mon we were talking to (above)
   } else {
     _finish_hunting();
   }
@@ -367,8 +367,8 @@ int MonClient::init()
     if (cct->_conf->auth_supported.length() != 0)
       method = cct->_conf->auth_supported;
     else if (entity_name.get_type() == CEPH_ENTITY_TYPE_OSD ||
-             entity_name.get_type() == CEPH_ENTITY_TYPE_MDS ||
-             entity_name.get_type() == CEPH_ENTITY_TYPE_MON)
+	     entity_name.get_type() == CEPH_ENTITY_TYPE_MDS ||
+	     entity_name.get_type() == CEPH_ENTITY_TYPE_MON)
       method = cct->_conf->auth_cluster_required;
     else
       method = cct->_conf->auth_client_required;
@@ -543,11 +543,11 @@ void MonClient::handle_auth(MAuthReply *m)
 	send_log();
       }
       if (session_established_context) {
-        cb = session_established_context;
-        session_established_context = NULL;
+	cb = session_established_context;
+	session_established_context = NULL;
       }
     }
-  
+
     _check_auth_tickets();
   }
   auth_cond.SignalAll();
@@ -613,7 +613,7 @@ void MonClient::_reopen_session(int rank, string name)
     cur_con->get_messenger()->mark_down(cur_con);
   }
   cur_con = messenger->get_connection(monmap.get_inst(cur_mon));
-	
+
   ldout(cct, 10) << "picked mon." << cur_mon << " con " << cur_con
 		 << " addr " << cur_con->get_peer_addr()
 		 << dendl;
@@ -635,9 +635,9 @@ void MonClient::_reopen_session(int rank, string name)
   if (had_a_connection) {
     reopen_interval_multiplier *= cct->_conf->mon_client_hunt_interval_backoff;
     if (reopen_interval_multiplier >
-          cct->_conf->mon_client_hunt_interval_max_multiple)
+	  cct->_conf->mon_client_hunt_interval_max_multiple)
       reopen_interval_multiplier =
-          cct->_conf->mon_client_hunt_interval_max_multiple;
+	  cct->_conf->mon_client_hunt_interval_max_multiple;
   }
 
   // restart authentication handshake
@@ -676,7 +676,7 @@ bool MonClient::ms_handle_reset(Connection *con)
       ldout(cct, 10) << "ms_handle_reset current mon " << con->get_peer_addr() << dendl;
       if (hunting)
 	return true;
-      
+
       ldout(cct, 0) << "hunting for new mon" << dendl;
       _reopen_session();
     }
@@ -688,7 +688,7 @@ void MonClient::_finish_hunting()
 {
   assert(monc_lock.is_locked());
   if (hunting) {
-    ldout(cct, 1) << "found mon." << cur_mon << dendl; 
+    ldout(cct, 1) << "found mon." << cur_mon << dendl;
     hunting = false;
     had_a_connection = true;
     reopen_interval_multiplier /= 2.0;
@@ -702,16 +702,16 @@ void MonClient::tick()
   ldout(cct, 10) << "tick" << dendl;
 
   _check_auth_tickets();
-  
+
   if (hunting) {
     ldout(cct, 1) << "continuing hunt" << dendl;
     _reopen_session();
   } else if (!cur_mon.empty()) {
     // just renew as needed
     utime_t now = ceph_clock_now(cct);
-    ldout(cct, 10) << "renew subs? (now: " << now 
-		   << "; renew after: " << sub_renew_after << ") -- " 
-		   << (now > sub_renew_after ? "yes" : "no") 
+    ldout(cct, 10) << "renew subs? (now: " << now
+		   << "; renew after: " << sub_renew_after << ") -- "
+		   << (now > sub_renew_after ? "yes" : "no")
 		   << dendl;
     if (now > sub_renew_after)
       _renew_subs();
@@ -741,7 +741,7 @@ void MonClient::schedule_tick()
 {
   if (hunting)
     timer.add_event_after(cct->_conf->mon_client_hunt_interval
-                          * reopen_interval_multiplier, new C_Tick(this));
+			  * reopen_interval_multiplier, new C_Tick(this));
   else
     timer.add_event_after(cct->_conf->mon_client_ping_interval, new C_Tick(this));
 }
@@ -844,7 +844,7 @@ int MonClient::wait_auth_rotating(double timeout)
 
   if (auth->get_protocol() == CEPH_AUTH_NONE)
     return 0;
-  
+
   if (!rotating_secrets)
     return 0;
 

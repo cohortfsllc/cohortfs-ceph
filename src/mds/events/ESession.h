@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_MDS_ESESSION_H
@@ -23,7 +23,7 @@
 class ESession : public LogEvent {
  protected:
   entity_inst_t client_inst;
-  bool open;    // open or close
+  bool open;	// open or close
   version_t cmapv;  // client map version
 
   interval_set<inodeno_t> inos;
@@ -59,9 +59,9 @@ class ESession : public LogEvent {
     if (inos.size())
       out << " (" << inos.size() << " inos, v" << inotablev << ")";
   }
-  
+
   void update_segment();
-  void replay(MDS *mds);  
+  void replay(MDS *mds);
 };
 
 #endif

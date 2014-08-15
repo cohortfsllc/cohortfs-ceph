@@ -13,13 +13,13 @@
 
 	'start' => 10,
 	'end' => 40,
-	'until' => 40,  
+	'until' => 40,
 	'kill_after' => 90,
-	
+
 	'writefile' => 1,
-	'writefile_size' => [4096, 
+	'writefile_size' => [4096,
 						 8*1024,
-						 16*1024, 
+						 16*1024,
 						 32*1024,
 						 64*1024,
 						 128*1024,
@@ -34,7 +34,7 @@
 	'file_layout_num_rep' => [1,2,3],#, 2, 3, 4],
 
 	'client_oc' => [0,1],
-		
+
 	'custom' => '--tcp_skip_rank0',
 
 	'comb' => {

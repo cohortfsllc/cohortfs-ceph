@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 #ifndef CEPH_CLASSHANDLER_H
 #define CEPH_CLASSHANDLER_H
@@ -38,12 +38,12 @@ public:
   };
 
   struct ClassData {
-    enum Status { 
+    enum Status {
       CLASS_UNKNOWN,
-      CLASS_MISSING,         // missing
+      CLASS_MISSING,	     // missing
       CLASS_MISSING_DEPS,    // missing dependencies
       CLASS_INITIALIZING,    // calling init() right now
-      CLASS_OPEN,            // initialized, usable
+      CLASS_OPEN,	     // initialized, usable
     } status;
 
     string name;
@@ -52,12 +52,12 @@ public:
 
     map<string, ClassMethod> methods_map;
 
-    set<ClassData *> dependencies;         /* our dependencies */
+    set<ClassData *> dependencies;	   /* our dependencies */
     set<ClassData *> missing_dependencies; /* only missing dependencies */
 
     ClassMethod *_get_method(const char *mname);
 
-    ClassData() : status(CLASS_UNKNOWN), 
+    ClassData() : status(CLASS_UNKNOWN),
 		  handler(NULL),
 		  handle(NULL) {}
     ~ClassData() { }

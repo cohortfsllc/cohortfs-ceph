@@ -1,7 +1,7 @@
 /* gprof-helper.c -- preload library to profile pthread-enabled programs
  *
  * Authors: Sam Hocevar <sam at zoy dot org>
- *          Daniel Jönsson <danieljo at fagotten dot org>
+ *	    Daniel Jönsson <danieljo at fagotten dot org>
  *
  *  This program is free software; you can redistribute it and/or
  *  modify it under the terms of the Do What The Fuck You Want To
@@ -25,9 +25,9 @@ static void * wrapper_routine(void *);
 
 /* Original pthread function */
 static int (*pthread_create_orig)(pthread_t *__restrict,
-                                  __const pthread_attr_t *__restrict,
-                                  void *(*)(void *),
-                                  void *__restrict) = NULL;
+				  __const pthread_attr_t *__restrict,
+				  void *(*)(void *),
+				  void *__restrict) = NULL;
 
 /* Library initialization function */
 void wooinit(void) __attribute__((constructor));
@@ -38,13 +38,13 @@ void wooinit(void)
     fprintf(stderr, "pthreads: using profiling hooks for gprof\n");
     if(pthread_create_orig == NULL)
     {
-        char *error = dlerror();
-        if(error == NULL)
-        {
-            error = "pthread_create is NULL";
-        }
-        fprintf(stderr, "%s\n", error);
-        exit(EXIT_FAILURE);
+	char *error = dlerror();
+	if(error == NULL)
+	{
+	    error = "pthread_create is NULL";
+	}
+	fprintf(stderr, "%s\n", error);
+	exit(EXIT_FAILURE);
     }
 }
 
@@ -82,9 +82,9 @@ static void * wrapper_routine(void * data)
 
 /* Our wrapper function for the real pthread_create() */
 int pthread_create(pthread_t *__restrict thread,
-                   __const pthread_attr_t *__restrict attr,
-                   void * (*start_routine)(void *),
-                   void *__restrict arg)
+		   __const pthread_attr_t *__restrict attr,
+		   void * (*start_routine)(void *),
+		   void *__restrict arg)
 {
     wrapper_t wrapper_data;
     int i_return;
@@ -99,15 +99,15 @@ int pthread_create(pthread_t *__restrict thread,
 
     /* The real pthread_create call */
     i_return = pthread_create_orig(thread,
-                                   attr,
-                                   &wrapper_routine,
-                                   &wrapper_data);
+				   attr,
+				   &wrapper_routine,
+				   &wrapper_data);
 
     /* If the thread was successfully spawned, wait for the data
      * to be released */
     if(i_return == 0)
     {
-        pthread_cond_wait(&wrapper_data.wait, &wrapper_data.lock);
+	pthread_cond_wait(&wrapper_data.wait, &wrapper_data.lock);
     }
 
     pthread_mutex_unlock(&wrapper_data.lock);

@@ -22,7 +22,7 @@ public:
   public:
     /// Set Keys
     void set(
-      const string &prefix,                 ///< [in] Prefix for keys
+      const string &prefix,		    ///< [in] Prefix for keys
       const std::map<string, bufferlist> &to_set ///< [in] keys/values to set
     ) {
       std::map<string, bufferlist>::const_iterator it;
@@ -75,7 +75,7 @@ public:
 
   /// Retrieve Keys
   virtual int get(
-    const string &prefix,        ///< [in] Prefix for key
+    const string &prefix,	 ///< [in] Prefix for key
     const std::set<string> &key,      ///< [in] Key to retrieve
     std::map<string, bufferlist> *out ///< [out] Key value retrieved
     ) = 0;

@@ -37,7 +37,7 @@
 
 #if GTEST_OS_MAC
 # include <time.h>
-#endif  // GTEST_OS_MAC
+#endif	// GTEST_OS_MAC
 
 #include <list>
 #include <utility>  // For std::pair and std::make_pair.
@@ -48,7 +48,7 @@
 
 // Indicates that this translation unit is part of Google Test's
 // implementation.  It must come before gtest-internal-inl.h is
-// included, or there will be a compiler error.  This trick is to
+// included, or there will be a compiler error.	 This trick is to
 // prevent a user from accidentally including gtest-internal-inl.h in
 // his code.
 #define GTEST_IMPLEMENTATION_ 1
@@ -240,7 +240,7 @@ TEST(ScopedPtrTest, DefinesElementType) {
 TEST(GtestCheckSyntaxTest, BehavesLikeASingleStatement) {
   if (AlwaysFalse())
     GTEST_CHECK_(false) << "This should never be executed; "
-                           "It's a compilation test only.";
+			   "It's a compilation test only.";
 
   if (AlwaysTrue())
     GTEST_CHECK_(true);
@@ -293,7 +293,7 @@ TEST(FormatCompilerIndependentFileLocationTest, FormatsFileLocation) {
 
 TEST(FormatCompilerIndependentFileLocationTest, FormatsUknownFile) {
   EXPECT_EQ("unknown file:42",
-            FormatCompilerIndependentFileLocation(NULL, 42));
+	    FormatCompilerIndependentFileLocation(NULL, 42));
 }
 
 TEST(FormatCompilerIndependentFileLocationTest, FormatsUknownLine) {
@@ -316,7 +316,7 @@ TEST(GetThreadCountTest, ReturnsCorrectValue) {
   EXPECT_EQ(1U, GetThreadCount());
   pthread_mutex_t mutex;
   pthread_attr_t  attr;
-  pthread_t       thread_id;
+  pthread_t	  thread_id;
 
   // TODO(vladl@google.com): turn mutex into internal::Mutex for automatic
   // destruction.
@@ -346,7 +346,7 @@ TEST(GetThreadCountTest, ReturnsCorrectValue) {
     SleepMilliseconds(100);
   }
 
-# endif  // GTEST_OS_MAC
+# endif	 // GTEST_OS_MAC
 
   EXPECT_EQ(1U, GetThreadCount());
   pthread_mutex_destroy(&mutex);
@@ -355,7 +355,7 @@ TEST(GetThreadCountTest, ReturnsCorrectValue) {
 TEST(GetThreadCountTest, ReturnsZeroWhenUnableToCountThreads) {
   EXPECT_EQ(0U, GetThreadCount());
 }
-#endif  // GTEST_OS_MAC || GTEST_OS_QNX
+#endif	// GTEST_OS_MAC || GTEST_OS_QNX
 
 TEST(GtestCheckDeathTest, DiesWithCorrectOutputOnFailure) {
   const bool a_false_condition = false;
@@ -366,11 +366,11 @@ TEST(GtestCheckDeathTest, DiesWithCorrectOutputOnFailure) {
      "gtest-port_test\\.cc:[0-9]+"
 #else
      "gtest-port_test\\.cc:\\d+"
-#endif  // _MSC_VER
+#endif	// _MSC_VER
      ".*a_false_condition.*Extra info.*";
 
   EXPECT_DEATH_IF_SUPPORTED(GTEST_CHECK_(a_false_condition) << "Extra info",
-                            regex);
+			    regex);
 }
 
 #if GTEST_HAS_DEATH_TEST
@@ -383,7 +383,7 @@ TEST(GtestCheckDeathTest, LivesSilentlyOnSuccess) {
       ::testing::ExitedWithCode(0), "Success");
 }
 
-#endif  // GTEST_HAS_DEATH_TEST
+#endif	// GTEST_HAS_DEATH_TEST
 
 // Verifies that Google Test choose regular expression engine appropriate to
 // the platform. The test will produce compiler errors in case of failure.
@@ -464,7 +464,7 @@ TYPED_TEST(RETest, PartialMatchWorks) {
   EXPECT_FALSE(RE::PartialMatch(TypeParam("zza"), re));
 }
 
-# endif  // GTEST_HAS_TYPED_TEST
+# endif	 // GTEST_HAS_TYPED_TEST
 
 #elif GTEST_USES_SIMPLE_RE
 
@@ -722,38 +722,38 @@ TEST(AtomMatchesCharTest, UnescapedChar) {
 
 TEST(ValidateRegexTest, GeneratesFailureAndReturnsFalseForInvalid) {
   EXPECT_NONFATAL_FAILURE(ASSERT_FALSE(ValidateRegex(NULL)),
-                          "NULL is not a valid simple regular expression");
+			  "NULL is not a valid simple regular expression");
   EXPECT_NONFATAL_FAILURE(
       ASSERT_FALSE(ValidateRegex("a\\")),
       "Syntax error at index 1 in simple regular expression \"a\\\": ");
   EXPECT_NONFATAL_FAILURE(ASSERT_FALSE(ValidateRegex("a\\")),
-                          "'\\' cannot appear at the end");
+			  "'\\' cannot appear at the end");
   EXPECT_NONFATAL_FAILURE(ASSERT_FALSE(ValidateRegex("\\n\\")),
-                          "'\\' cannot appear at the end");
+			  "'\\' cannot appear at the end");
   EXPECT_NONFATAL_FAILURE(ASSERT_FALSE(ValidateRegex("\\s\\hb")),
-                          "invalid escape sequence \"\\h\"");
+			  "invalid escape sequence \"\\h\"");
   EXPECT_NONFATAL_FAILURE(ASSERT_FALSE(ValidateRegex("^^")),
-                          "'^' can only appear at the beginning");
+			  "'^' can only appear at the beginning");
   EXPECT_NONFATAL_FAILURE(ASSERT_FALSE(ValidateRegex(".*^b")),
-                          "'^' can only appear at the beginning");
+			  "'^' can only appear at the beginning");
   EXPECT_NONFATAL_FAILURE(ASSERT_FALSE(ValidateRegex("$$")),
-                          "'$' can only appear at the end");
+			  "'$' can only appear at the end");
   EXPECT_NONFATAL_FAILURE(ASSERT_FALSE(ValidateRegex("^$a")),
-                          "'$' can only appear at the end");
+			  "'$' can only appear at the end");
   EXPECT_NONFATAL_FAILURE(ASSERT_FALSE(ValidateRegex("a(b")),
-                          "'(' is unsupported");
+			  "'(' is unsupported");
   EXPECT_NONFATAL_FAILURE(ASSERT_FALSE(ValidateRegex("ab)")),
-                          "')' is unsupported");
+			  "')' is unsupported");
   EXPECT_NONFATAL_FAILURE(ASSERT_FALSE(ValidateRegex("[ab")),
-                          "'[' is unsupported");
+			  "'[' is unsupported");
   EXPECT_NONFATAL_FAILURE(ASSERT_FALSE(ValidateRegex("a{2")),
-                          "'{' is unsupported");
+			  "'{' is unsupported");
   EXPECT_NONFATAL_FAILURE(ASSERT_FALSE(ValidateRegex("?")),
-                          "'?' can only follow a repeatable token");
+			  "'?' can only follow a repeatable token");
   EXPECT_NONFATAL_FAILURE(ASSERT_FALSE(ValidateRegex("^*")),
-                          "'*' can only follow a repeatable token");
+			  "'*' can only follow a repeatable token");
   EXPECT_NONFATAL_FAILURE(ASSERT_FALSE(ValidateRegex("5*+")),
-                          "'+' can only follow a repeatable token");
+			  "'+' can only follow a repeatable token");
 }
 
 TEST(ValidateRegexTest, ReturnsTrueForValid) {
@@ -930,7 +930,7 @@ TEST(RETest, PartialMatchWorks) {
   EXPECT_FALSE(RE::PartialMatch("zza", re));
 }
 
-#endif  // GTEST_USES_POSIX_RE
+#endif	// GTEST_USES_POSIX_RE
 
 #if !GTEST_OS_WINDOWS_MOBILE
 
@@ -967,14 +967,14 @@ TEST(CaptureTest, CapturesStdoutAndStderr) {
 TEST(CaptureDeathTest, CannotReenterStdoutCapture) {
   CaptureStdout();
   EXPECT_DEATH_IF_SUPPORTED(CaptureStdout(),
-                            "Only one stdout capturer can exist at a time");
+			    "Only one stdout capturer can exist at a time");
   GetCapturedStdout();
 
   // We cannot test stderr capturing using death tests as they use it
   // themselves.
 }
 
-#endif  // !GTEST_OS_WINDOWS_MOBILE
+#endif	// !GTEST_OS_WINDOWS_MOBILE
 
 TEST(ThreadLocalTest, DefaultConstructorInitializesToDefaultValues) {
   ThreadLocal<int> t1;
@@ -1069,7 +1069,7 @@ class AtomicCounterWithMutex {
       // barrier functionality as we are testing them here.
       pthread_mutex_t memory_barrier_mutex;
       GTEST_CHECK_POSIX_SUCCESS_(
-          pthread_mutex_init(&memory_barrier_mutex, NULL));
+	  pthread_mutex_init(&memory_barrier_mutex, NULL));
       GTEST_CHECK_POSIX_SUCCESS_(pthread_mutex_lock(&memory_barrier_mutex));
 
       SleepMilliseconds(random_.Generate(30));
@@ -1083,7 +1083,7 @@ class AtomicCounterWithMutex {
 
  private:
   volatile int value_;
-  Mutex* const mutex_;  // Protects value_.
+  Mutex* const mutex_;	// Protects value_.
   Random       random_;
 };
 
@@ -1106,9 +1106,9 @@ TEST(MutexTest, OnlyOneThreadCanLockAtATime) {
   // kCycleCount times each.
   for (int i = 0; i < kThreadCount; ++i) {
     counting_threads[i].reset(new ThreadType(&CountingThreadFunc,
-                                             make_pair(&locked_counter,
-                                                       kCycleCount),
-                                             &threads_can_start));
+					     make_pair(&locked_counter,
+						       kCycleCount),
+					     &threads_can_start));
   }
   threads_can_start.Notify();
   for (int i = 0; i < kThreadCount; ++i)
@@ -1141,7 +1141,7 @@ TEST(ThreadLocalTest, ParameterizedConstructorSetsDefault) {
 
   std::string result;
   RunFromThread(&RetrieveThreadLocalValue,
-                make_pair(&thread_local_string, &result));
+		make_pair(&thread_local_string, &result));
   EXPECT_STREQ("foo", result.c_str());
 }
 
@@ -1193,7 +1193,7 @@ TEST(ThreadLocalTest, DestroysManagedObjectForOwnThreadWhenDying) {
     ASSERT_FALSE(g_destroyed[1]);
   }
 
-  // Now thread_local_tracker has died.  It should have destroyed both the
+  // Now thread_local_tracker has died.	 It should have destroyed both the
   // default value shared by all threads and the value for the main
   // thread.
   ASSERT_EQ(2U, g_destroyed.size());
@@ -1217,7 +1217,7 @@ TEST(ThreadLocalTest, DestroysManagedObjectAtThreadExit) {
 
     // This creates another DestructorTracker object in the new thread.
     ThreadWithParam<ThreadParam> thread(
-        &CallThreadLocalGet, &thread_local_tracker, NULL);
+	&CallThreadLocalGet, &thread_local_tracker, NULL);
     thread.Join();
 
     // Now the new thread has exited.  The per-thread object for it
@@ -1227,7 +1227,7 @@ TEST(ThreadLocalTest, DestroysManagedObjectAtThreadExit) {
     ASSERT_TRUE(g_destroyed[1]);
   }
 
-  // Now thread_local_tracker has died.  The default value should have been
+  // Now thread_local_tracker has died.	 The default value should have been
   // destroyed too.
   ASSERT_EQ(2U, g_destroyed.size());
   EXPECT_TRUE(g_destroyed[0]);
@@ -1243,11 +1243,11 @@ TEST(ThreadLocalTest, ThreadLocalMutationsAffectOnlyCurrentThread) {
 
   std::string result;
   RunFromThread(&RetrieveThreadLocalValue,
-                make_pair(&thread_local_string, &result));
+		make_pair(&thread_local_string, &result));
   EXPECT_TRUE(result.empty());
 }
 
-#endif  // GTEST_IS_THREADSAFE
+#endif	// GTEST_IS_THREADSAFE
 
 }  // namespace internal
 }  // namespace testing

@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -21,11 +21,11 @@
 #else
 #define TEST(x, y) void y()
 #define ASSERT_EQ(v, s) if(v != s)cout << "Error at " << __LINE__ << "(" << #v << "!= " << #s << "\n"; \
-                                else cout << "(" << #v << "==" << #s << ") PASSED\n";
+				else cout << "(" << #v << "==" << #s << ") PASSED\n";
 #define EXPECT_EQ(v, s) ASSERT_EQ(v, s)
 #define ASSERT_TRUE(c) if(c)cout << "Error at " << __LINE__ << "(" << #c << ")" << "\n"; \
-                          else cout << "(" << #c << ") PASSED\n";
-#define EXPECT_TRUE(c) ASSERT_TRUE(c) 
+			  else cout << "(" << #c << ") PASSED\n";
+#define EXPECT_TRUE(c) ASSERT_TRUE(c)
 #endif
 using namespace std;
 
@@ -57,8 +57,8 @@ void append_stripes(list<rgw_obj> *objs, RGWObjManifest& manifest, uint64_t obj_
 }
 
 static void gen_obj(uint64_t obj_size, uint64_t head_max_size, uint64_t stripe_size,
-                    RGWObjManifest *manifest, rgw_bucket *bucket, rgw_obj *head, RGWObjManifest::generator *gen,
-                    list<rgw_obj> *test_objs)
+		    RGWObjManifest *manifest, rgw_bucket *bucket, rgw_obj *head, RGWObjManifest::generator *gen,
+		    list<rgw_obj> *test_objs)
 {
   manifest->set_trivial_rule(head_max_size, stripe_size);
 
@@ -199,9 +199,9 @@ TEST(TestRGWManifest, multipart) {
     rgw_obj head;
     for (ofs = 0; ofs < part_size; ofs += stripe_size) {
       if (ofs == 0) {
-        int r = gen.create_begin(g_ceph_context, &manifest, bucket, head);
-        ASSERT_EQ(r, 0);
-        continue;
+	int r = gen.create_begin(g_ceph_context, &manifest, bucket, head);
+	ASSERT_EQ(r, 0);
+	continue;
       }
       gen.create_next(ofs);
     }

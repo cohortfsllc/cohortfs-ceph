@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -34,8 +34,8 @@ using namespace librados;
 
 static void usage(void)
 {
-  cerr << "--oid           set object id to 'operate' on" << std::endl;
-  cerr << "--pool          set pool to 'operate' on" << std::endl;
+  cerr << "--oid	   set object id to 'operate' on" << std::endl;
+  cerr << "--pool	   set pool to 'operate' on" << std::endl;
 }
 
 int main(int argc, const char **argv)

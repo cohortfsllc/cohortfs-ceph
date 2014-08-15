@@ -31,7 +31,7 @@ public:
 
   /* Reinitialize the semaphore to the desired value.
    * NOT thread-safe if it is in use at the time!
-   */ 
+   */
   int reinit(int dval);
 
 private:

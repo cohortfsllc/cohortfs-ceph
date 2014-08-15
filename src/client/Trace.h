@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 
@@ -27,7 +27,7 @@ using std::ifstream;
 
 /*
 
- this class is more like an iterator over a constant tokenlist (which 
+ this class is more like an iterator over a constant tokenlist (which
  is protected by a mutex, see Trace.cc)
 
  */
@@ -40,8 +40,8 @@ class Trace {
 
  public:
   Trace(const char* f) : _line(0), filename(f), fs(0) {}
-  ~Trace() { 
-    delete fs; 
+  ~Trace() {
+    delete fs;
   }
 
   Trace(const Trace& other);

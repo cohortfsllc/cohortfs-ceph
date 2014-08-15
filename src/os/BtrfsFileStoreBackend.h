@@ -24,7 +24,7 @@ private:
   bool has_snap_create;       ///< snap create ioctl is supported
   bool has_snap_destroy;      ///< snap destroy ioctl is supported
   bool has_snap_create_v2;    ///< snap create v2 ioctl (async!) is supported
-  bool has_wait_sync;         ///< wait sync ioctl is supported
+  bool has_wait_sync;	      ///< wait sync ioctl is supported
   bool stable_commits;
   bool m_filestore_btrfs_clone_range;
   bool m_filestore_btrfs_snap;

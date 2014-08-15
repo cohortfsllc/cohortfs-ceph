@@ -37,14 +37,14 @@
 #if GTEST_HAS_DEATH_TEST
 
 # if GTEST_HAS_SEH
-#  include <windows.h>          // For RaiseException().
+#  include <windows.h>		// For RaiseException().
 # endif
 
 # include "gtest/gtest-spi.h"
 
 # if GTEST_HAS_EXCEPTIONS
 
-#  include <exception>  // For std::exception.
+#  include <exception>	// For std::exception.
 
 // Tests that death tests report thrown exceptions as failures and that the
 // exceptions do not escape death test macros.
@@ -53,8 +53,8 @@ TEST(CxxExceptionDeathTest, ExceptionIsFailure) {
     EXPECT_NONFATAL_FAILURE(EXPECT_DEATH(throw 1, ""), "threw an exception");
   } catch (...) {  // NOLINT
     FAIL() << "An exception escaped a death test macro invocation "
-           << "with catch_exceptions "
-           << (testing::GTEST_FLAG(catch_exceptions) ? "enabled" : "disabled");
+	   << "with catch_exceptions "
+	   << (testing::GTEST_FLAG(catch_exceptions) ? "enabled" : "disabled");
   }
 }
 
@@ -66,12 +66,12 @@ class TestException : public std::exception {
 TEST(CxxExceptionDeathTest, PrintsMessageForStdExceptions) {
   // Verifies that the exception message is quoted in the failure text.
   EXPECT_NONFATAL_FAILURE(EXPECT_DEATH(throw TestException(), ""),
-                          "exceptional message");
+			  "exceptional message");
   // Verifies that the location is mentioned in the failure text.
   EXPECT_NONFATAL_FAILURE(EXPECT_DEATH(throw TestException(), ""),
-                          "gtest-death-test_ex_test.cc");
+			  "gtest-death-test_ex_test.cc");
 }
-# endif  // GTEST_HAS_EXCEPTIONS
+# endif	 // GTEST_HAS_EXCEPTIONS
 
 # if GTEST_HAS_SEH
 // Tests that enabling interception of SEH exceptions with the
@@ -84,7 +84,7 @@ TEST(SehExceptionDeasTest, CatchExceptionsDoesNotInterfere) {
 }
 # endif
 
-#endif  // GTEST_HAS_DEATH_TEST
+#endif	// GTEST_HAS_DEATH_TEST
 
 int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);

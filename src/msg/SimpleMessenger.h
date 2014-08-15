@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_SIMPLEMESSENGER_H
@@ -63,9 +63,9 @@
  * Lock ordering:
  *
  *   SimpleMessenger::lock
- *       Pipe::pipe_lock
- *           DispatchQueue::lock
- *               IncomingQueue::lock
+ *	 Pipe::pipe_lock
+ *	     DispatchQueue::lock
+ *		 IncomingQueue::lock
  */
 
 class SimpleMessenger : public Messenger {
@@ -288,7 +288,7 @@ private:
    * just drop silently under failure.
    */
   void submit_message(Message *m, Connection *con,
-                      const entity_addr_t& addr, int dest_type, bool lazy);
+		      const entity_addr_t& addr, int dest_type, bool lazy);
   /**
    * Look through the pipes in the pipe_reap_queue and tear them down.
    */
@@ -335,9 +335,9 @@ private:
    */
   set<Pipe*> accepting_pipes;
   /// a set of all the Pipes we have which are somehow active
-  set<Pipe*>      pipes;
+  set<Pipe*>	  pipes;
   /// a list of Pipes we want to tear down
-  list<Pipe*>     pipe_reap_queue;
+  list<Pipe*>	  pipe_reap_queue;
 
   /// internal cluster protocol version, if any, for talking to entities of the same type.
   int cluster_protocol;
@@ -356,7 +356,7 @@ private:
   Cond reaper_cond;
 
   /// This Cond is slept on by wait() and signaled by dispatch_entry()
-  Cond  wait_cond;
+  Cond	wait_cond;
 
   friend class Pipe;
 
@@ -390,7 +390,7 @@ public:
    * This wraps ms_deliver_verify_authorizer; we use it for Pipe.
    */
   bool verify_authorizer(Connection *con, int peer_type, int protocol, bufferlist& auth, bufferlist& auth_reply,
-                         bool& isvalid,CryptoKey& session_key);
+			 bool& isvalid,CryptoKey& session_key);
   /**
    * Increment the global sequence for this SimpleMessenger and return it.
    * This is for the connect protocol, although it doesn't hurt if somebody
@@ -478,6 +478,6 @@ public:
   /**
    * @} // SimpleMessenger Internals
    */
-} ;
+};
 
 #endif /* CEPH_SIMPLEMESSENGER_H */

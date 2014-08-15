@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 
@@ -68,7 +68,7 @@ public:
 	f->open_object_section("xattr");
 	f->dump_string("name", p->first);
 	f->dump_int("length", p->second.length());
-	f->close_section();	
+	f->close_section();
       }
       f->close_section();
 
@@ -79,7 +79,7 @@ public:
 	f->open_object_section("pair");
 	f->dump_string("key", p->first);
 	f->dump_int("length", p->second.length());
-	f->close_section();	
+	f->close_section();
       }
       f->close_section();
     }
@@ -88,12 +88,12 @@ public:
 
   struct Collection {
     std::unordered_map<hobject_t, ObjectRef> object_hash;  ///< for lookup
-    map<hobject_t, ObjectRef> object_map;        ///< for iteration
+    map<hobject_t, ObjectRef> object_map;	 ///< for iteration
     map<string,bufferptr> xattr;
     RWLock lock;   ///< for object_{map,hash}
 
     // NOTE: The lock only needs to protect the object_map/hash, not the
-    // contents of individual objects.  The osd is already sequencing
+    // contents of individual objects.	The osd is already sequencing
     // reads and writes, so we will never see them concurrently at this
     // level.
 
@@ -101,7 +101,7 @@ public:
       RWLock::RLocker l(lock);
       std::unordered_map<hobject_t, ObjectRef>::iterator o = object_hash.find(oid);
       if (o == object_hash.end())
-        return ObjectRef();
+	return ObjectRef();
       return o->second;
     }
 
@@ -109,7 +109,7 @@ public:
       RWLock::WLocker l(lock);
       std::unordered_map<hobject_t, ObjectRef>::iterator i = object_hash.find(oid);
       if (i != object_hash.end())
-        return i->second;
+	return i->second;
       ObjectRef o(new Object);
       object_map[oid] = o;
       object_hash[oid] = o;
@@ -175,7 +175,7 @@ private:
     }
     bool valid() {
       RWLock::RLocker l(o->omap_lock);
-      return it != o->omap.end();      
+      return it != o->omap.end();
     }
     int next() {
       RWLock::RLocker l(o->omap_lock);
@@ -206,7 +206,7 @@ private:
 		  time_t suicide_timeout, ThreadPool *tp)
       : ThreadPool::WorkQueue<Transaction>("MemStore::TransactionWQ",
 					   timeout, suicide_timeout, tp),
-        store(store) {}
+	store(store) {}
 
     bool _enqueue(Transaction *t) {
       store->transactions.push_back(*t);
@@ -252,17 +252,17 @@ private:
 
   int _touch(const coll_t &cid, const hobject_t& oid);
   int _write(const coll_t &cid, const hobject_t& oid, uint64_t offset,
-             size_t len, const bufferlist& bl, bool replica = false);
+	     size_t len, const bufferlist& bl, bool replica = false);
   int _zero(const coll_t &cid, const hobject_t& oid,
-            uint64_t offset, size_t len);
+	    uint64_t offset, size_t len);
   int _truncate(const coll_t &cid, const hobject_t& oid, uint64_t size);
   int _remove(const coll_t &cid, const hobject_t& oid);
   int _setattrs(const coll_t &cid, const hobject_t& oid,
-                map<string,bufferptr>& aset);
+		map<string,bufferptr>& aset);
   int _rmattr(const coll_t &cid, const hobject_t& oid, const char *name);
   int _rmattrs(const coll_t &cid, const hobject_t& oid);
   int _clone(const coll_t &cid, const hobject_t& oldoid,
-             const hobject_t& newoid);
+	     const hobject_t& newoid);
   int _clone_range(const coll_t &cid, const hobject_t& oldoid,
 		   const hobject_t& newoid,
 		   uint64_t srcoff, uint64_t len, uint64_t dstoff);
@@ -270,20 +270,20 @@ private:
   int _omap_setkeys(const coll_t &cid, const hobject_t &oid,
 		    const map<string, bufferlist> &aset);
   int _omap_rmkeys(const coll_t &cid, const hobject_t &oid,
-                   const set<string> &keys);
+		   const set<string> &keys);
   int _omap_rmkeyrange(const coll_t &cid, const hobject_t &oid,
 		       const string& first, const string& last);
   int _omap_setheader(const coll_t &cid, const hobject_t &oid,
-                      const bufferlist &bl);
+		      const bufferlist &bl);
 
   int _create_collection(const coll_t &c);
   int _destroy_collection(const coll_t &c);
   int _collection_add(const coll_t &cid, const coll_t &ocid,
-                      const hobject_t& oid);
+		      const hobject_t& oid);
   int _collection_move_rename(const coll_t &oldcid, const hobject_t& oldoid,
 			      const coll_t &cid, const hobject_t& o);
   int _collection_setattr(const coll_t &cid, const char *name,
-                          const void *value, size_t size);
+			  const void *value, size_t size);
   int _collection_setattrs(const coll_t &cid, map<string,bufferptr> &aset);
   int _collection_rmattr(const coll_t &cid, const char *name);
   int _collection_rename(const coll_t &cid, const coll_t &ncid);
@@ -345,11 +345,11 @@ public:
     bufferlist& bl,
     bool allow_eio = false);
   int fiemap(const coll_t &cid, const hobject_t& oid,
-             uint64_t offset, size_t len, bufferlist& bl);
+	     uint64_t offset, size_t len, bufferlist& bl);
   int getattr(const coll_t &cid, const hobject_t& oid,
-              const char *name, bufferptr& value);
+	      const char *name, bufferptr& value);
   int getattrs(const coll_t &cid, const hobject_t& oid,
-               map<string,bufferptr>& aset, bool user_only = false);
+	       map<string,bufferptr>& aset, bool user_only = false);
 
   int list_collections(vector<coll_t>& ls);
   bool collection_exists(const coll_t &c);
@@ -365,30 +365,30 @@ public:
 			    vector<hobject_t> *ls);
 
   int omap_get(
-    const coll_t &cid,      ///< [in] Collection containing oid
+    const coll_t &cid,	    ///< [in] Collection containing oid
     const hobject_t &oid,   ///< [in] Object containing omap
-    bufferlist *header,     ///< [out] omap header
+    bufferlist *header,	    ///< [out] omap header
     map<string, bufferlist> *out /// < [out] Key to value map
     );
 
   /// Get omap header
   int omap_get_header(
-    const coll_t &cid,      ///< [in] Collection containing oid
+    const coll_t &cid,	    ///< [in] Collection containing oid
     const hobject_t &oid,   ///< [in] Object containing omap
-    bufferlist *header,     ///< [out] omap header
+    bufferlist *header,	    ///< [out] omap header
     bool allow_eio = false  ///< [in] don't assert on eio
     );
 
   /// Get keys defined on oid
   int omap_get_keys(
-    const coll_t &cid,      ///< [in] Collection containing oid
+    const coll_t &cid,	    ///< [in] Collection containing oid
     const hobject_t &oid,   ///< [in] Object containing omap
-    set<string> *keys       ///< [out] Keys defined on oid
+    set<string> *keys	    ///< [out] Keys defined on oid
     );
 
   /// Get key values
   int omap_get_values(
-    const coll_t &cid,      ///< [in] Collection containing oid
+    const coll_t &cid,	    ///< [in] Collection containing oid
     const hobject_t &oid,   ///< [in] Object containing omap
     const set<string> &keys, ///< [in] Keys to get
     map<string, bufferlist> *out ///< [out] Returned keys and values
@@ -396,14 +396,14 @@ public:
 
   /// Filters keys into out which are defined on oid
   int omap_check_keys(
-    const coll_t &cid,      ///< [in] Collection containing oid
+    const coll_t &cid,	    ///< [in] Collection containing oid
     const hobject_t &oid,   ///< [in] Object containing omap
     const set<string> &keys, ///< [in] Keys to check
-    set<string> *out        ///< [out] Subset of keys defined on oid
+    set<string> *out	    ///< [out] Subset of keys defined on oid
     );
 
   ObjectMap::ObjectMapIterator get_omap_iterator(
-    const coll_t &cid,      ///< [in] collection
+    const coll_t &cid,	    ///< [in] collection
     const hobject_t &oid    ///< [in] object
     );
 
@@ -417,8 +417,5 @@ public:
     TrackedOpRef op = TrackedOpRef(),
     ThreadPool::TPHandle *handle = NULL);
 };
-
-
-
 
 #endif

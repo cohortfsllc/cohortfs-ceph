@@ -27,7 +27,7 @@ ceph_meta_data() {
 	    shortdesc="Manages a Ceph MON instance."
 	    ;;
     esac
-    
+
 cat <<EOF
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">

@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,11 +7,11 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
- 
+
 /* Metadata Server Monitor
  */
 
@@ -39,8 +39,8 @@ class MMDSLoadTargets;
 class MDSMonitor : public PaxosService {
  public:
   // mds maps
-  MDSMap mdsmap;          // current
-  bufferlist mdsmap_bl;   // encoded
+  MDSMap mdsmap;	  // current
+  bufferlist mdsmap_bl;	  // encoded
 
   MDSMap pending_mdsmap;  // current + pending updates
 
@@ -59,7 +59,7 @@ class MDSMonitor : public PaxosService {
       else if (r == -ECANCELED)
 	m->put();
       else
-	mm->dispatch((PaxosServiceMessage*)m);        // try again
+	mm->dispatch((PaxosServiceMessage*)m);	      // try again
     }
   };
 
@@ -70,7 +70,7 @@ class MDSMonitor : public PaxosService {
   // service methods
   void create_initial();
   void update_from_paxos(bool *need_bootstrap);
-  void create_pending(); 
+  void create_pending();
   void encode_pending(MonitorDBStore::Transaction *t);
   // we don't require full versions; don't encode any.
   virtual void encode_full(MonitorDBStore::Transaction *t) { }
@@ -78,7 +78,7 @@ class MDSMonitor : public PaxosService {
   void update_logger();
 
   void _updated(MMDSBeacon *m);
- 
+
   bool preprocess_query(PaxosServiceMessage *m);  // true if processed.
   bool prepare_update(PaxosServiceMessage *m);
   bool should_propose(double& delay);
@@ -115,7 +115,7 @@ public:
   {
   }
 
-  void tick();     // check state, take actions
+  void tick();	   // check state, take actions
 
   void dump_info(Formatter *f);
 

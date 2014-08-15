@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 
@@ -28,19 +28,19 @@
 
 #include "CollectionIndex.h"
 
-/** 
+/**
  * LFNIndex also encapsulates logic for manipulating
  * subdirectories of of a collection as well as the long filename
  * logic.
  *
  * The protected methods provide machinery for derived classes to
  * manipulate subdirectories and objects.
- *  
+ *
  * The virtual methods are to be overridden to provide the actual
  * hashed layout.
- *  
+ *
  * User must call created when an object is created.
- *  
+ *
  * Syncronization: Calling code must ensure that there are no object
  * creations or deletions during the lifetime of a Path object (except
  * of an object at that path).
@@ -71,7 +71,7 @@
   return -1;					\
   }						\
 
-  
+
 
 class LFNIndex : public CollectionIndex {
   /// Hash digest output size.
@@ -195,11 +195,11 @@ public:
     );
 
   virtual int _split(
-    uint32_t match,                             //< [in] value to match
-    uint32_t bits,                              //< [in] bits to check
+    uint32_t match,				//< [in] value to match
+    uint32_t bits,				//< [in] bits to check
     std::shared_ptr<CollectionIndex> dest  //< [in] destination index
     ) = 0;
-  
+
   /// @see CollectionIndex
   int split(
     uint32_t match,
@@ -220,13 +220,13 @@ protected:
   virtual int _created(
     const vector<string> &path, ///< [in] Path to subdir.
     const hobject_t &oid,      ///< [in] Object created.
-    const string &mangled_name  ///< [in] Mangled filename.
+    const string &mangled_name	///< [in] Mangled filename.
     ) = 0;
 
   /// Will be called to remove an object
   virtual int _remove(
-    const vector<string> &path,     ///< [in] Path to subdir.
-    const hobject_t &oid,          ///< [in] Object to remove.
+    const vector<string> &path,	    ///< [in] Path to subdir.
+    const hobject_t &oid,	   ///< [in] Object to remove.
     const string &mangled_name	    ///< [in] Mangled filename.
     ) = 0;
 
@@ -244,7 +244,7 @@ protected:
    * @param [out] seq Snapid to list.
    * @param [in] max_count Max number to list (0 for no limit).
    * @param [out] ls Container for listed objects.
-   * @param [in,out] last List handle.  0 for beginning.  Passing the same
+   * @param [in,out] last List handle.	0 for beginning.  Passing the same
    * cookie location will cause the next max_count to be listed.
    * @return Error code.  0 on success.
    */
@@ -273,9 +273,9 @@ protected:
 
   /// Link an object from from into to
   int link_object(
-    const vector<string> &from,   ///< [in] Source subdirectory.
-    const vector<string> &to,     ///< [in] Dest subdirectory.
-    const hobject_t &oid,        ///< [in] Object to move.
+    const vector<string> &from,	  ///< [in] Source subdirectory.
+    const vector<string> &to,	  ///< [in] Dest subdirectory.
+    const hobject_t &oid,	 ///< [in] Object to move.
     const string &from_short_name ///< [in] Mangled filename of oid.
     ); ///< @return Error Code, 0 on success
 
@@ -296,35 +296,35 @@ protected:
     const map<string, hobject_t> &to_remove,
     map<string, hobject_t> *remaining
     );
-	
 
-  /** 
+
+  /**
    * Moves contents of from into to.
    *
    * Invalidates mangled names in to.  If interupted, all objects will be
-   * present in to before objects are removed from from.  Ignores EEXIST 
+   * present in to before objects are removed from from.  Ignores EEXIST
    * while linking into to.
    * @return Error Code, 0 on success
    */
   int move_objects(
     const vector<string> &from, ///< [in] Source subdirectory.
-    const vector<string> &to    ///< [in] Dest subdirectory.
+    const vector<string> &to	///< [in] Dest subdirectory.
     );
 
-  /** 
+  /**
    * Remove an object from from.
    *
    * Invalidates mangled names in from.
    * @return Error Code, 0 on success
    */
   int remove_object(
-    const vector<string> &from,  ///< [in] Directory from which to remove.
-    const hobject_t &to_remove   ///< [in] Object to remove.
+    const vector<string> &from,	 ///< [in] Directory from which to remove.
+    const hobject_t &to_remove	 ///< [in] Object to remove.
     );
 
   /**
    * Gets the filename corresponding to oid in from.
-   * 
+   *
    * The filename may differ between subdirectories.  Furthermore,
    * file creations ore removals in from may invalidate the name.
    * @return Error code on failure, 0 on success
@@ -338,10 +338,10 @@ protected:
 
   /// do move subdir from from to dest
   static int move_subdir(
-    LFNIndex &from,             ///< [in] from index
-    LFNIndex &dest,             ///< [in] to index
+    LFNIndex &from,		///< [in] from index
+    LFNIndex &dest,		///< [in] to index
     const vector<string> &path, ///< [in] path containing dir
-    string dir                  ///< [in] dir to move
+    string dir			///< [in] dir to move
     );
 
   /// do move object from from to dest
@@ -372,7 +372,7 @@ protected:
   /// Lists subdirectories.
   int list_subdirs(
     const vector<string> &to_list, ///< [in] Directory to list.
-    set<string> *out		   ///< [out] Subdirectories listed. 
+    set<string> *out		   ///< [out] Subdirectories listed.
     );
 
   /// Create subdirectory.
@@ -394,14 +394,14 @@ protected:
   /// Save attr_value to attr_name attribute on path.
   int add_attr_path(
     const vector<string> &path, ///< [in] Path to modify.
-    const string &attr_name, 	///< [in] Name of attribute.
+    const string &attr_name,	///< [in] Name of attribute.
     bufferlist &attr_value	///< [in] Value to save.
     );
 
   /// Read into attr_value atribute attr_name on path.
   int get_attr_path(
     const vector<string> &path, ///< [in] Path to read.
-    const string &attr_name, 	///< [in] Attribute to read. 
+    const string &attr_name,	///< [in] Attribute to read.
     bufferlist &attr_value	///< [out] Attribute value read.
     );
 
@@ -428,7 +428,7 @@ private:
    * @param [in] oid Object for which to get filename.
    * @param [out] mangled_name Filename for oid, pass NULL if not needed.
    * @param [out] full_path Fullpath for oid, pass NULL if not needed.
-   * @param [out] exists 1 if the file exists, 0 otherwise, pass NULL if 
+   * @param [out] exists 1 if the file exists, 0 otherwise, pass NULL if
    * not needed
    * @return Error Code, 0 on success.
    */
@@ -444,7 +444,7 @@ private:
   int lfn_created(
     const vector<string> &path, ///< [in] Path to adjust.
     const hobject_t &oid,	///< [in] Object created.
-    const string &mangled_name  ///< [in] Filename of created object.
+    const string &mangled_name	///< [in] Filename of created object.
     );
 
   /// Removes oid from path while adjusting path contents
@@ -457,7 +457,7 @@ private:
   ///Transate a file into and hobject_t.
   int lfn_translate(
     const vector<string> &path, ///< [in] Path containing the file.
-    const string &short_name,	///< [in] Filename to translate. 
+    const string &short_name,	///< [in] Filename to translate.
     hobject_t *out		///< [out] Object found.
     ); ///< @return Negative error code on error, 0 if not an object, 1 else
 
@@ -527,7 +527,7 @@ private:
 
   /// Decompose full path into object name and filename.
   int decompose_full_path(
-    const char *in,      ///< [in] Full path to object.
+    const char *in,	 ///< [in] Full path to object.
     vector<string> *out, ///< [out] Path to object at in.
     hobject_t *oid,	 ///< [out] Object at in.
     string *shortname	 ///< [out] Filename of object at in.

@@ -44,7 +44,7 @@ target_link_libraries(test_crypt
 
 if(0)
 # test_rados
-add_executable(test_rados 
+add_executable(test_rados
   osd/TestRados.cc
   osd/TestOpStat.cc
   osd/Object.cc osd/RadosModel.cc
@@ -344,7 +344,7 @@ set(UNITTEST_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I${CMAKE_SOURCE_DIR}/src/gtest/inclu
 if (WITH_CLIENT)
   list(APPEND UNITTEST_LIBS cephfs)
 endif (WITH_CLIENT)
-  
+
 # unittest_encoding
 set(unittest_encoding_srcs
   encoding.cc
@@ -473,7 +473,7 @@ add_executable(unittest_striper
   ${unittest_striper_srcs}
   $<TARGET_OBJECTS:heap_profiler_objs>
   )
-target_link_libraries(unittest_striper global ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS} 
+target_link_libraries(unittest_striper global ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS}
   ${UNITTEST_LIBS})
 set_target_properties(unittest_striper PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
@@ -581,7 +581,7 @@ add_executable(unittest_run_cmd
   ${unittest_run_cmd_srcs}
   $<TARGET_OBJECTS:heap_profiler_objs>
   )
-target_link_libraries(unittest_run_cmd global ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS} 
+target_link_libraries(unittest_run_cmd global ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS}
   ${UNITTEST_LIBS})
 set_target_properties(unittest_run_cmd PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
@@ -592,7 +592,7 @@ add_executable(unittest_signals
   ${unittest_signals_srcs}
   $<TARGET_OBJECTS:heap_profiler_objs>
   )
-target_link_libraries(unittest_signals global ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS} 
+target_link_libraries(unittest_signals global ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS}
   ${UNITTEST_LIBS})
 set_target_properties(unittest_signals PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
@@ -919,7 +919,7 @@ set_target_properties(unittest_mon_moncap PROPERTIES COMPILE_FLAGS
 
 # unittest_ipaddr
 add_executable(unittest_ipaddr test_ipaddr.cc)
-target_link_libraries(unittest_ipaddr mon global ${CMAKE_DL_LIBS} 
+target_link_libraries(unittest_ipaddr mon global ${CMAKE_DL_LIBS}
   ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
 set_target_properties(unittest_ipaddr PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
@@ -1086,7 +1086,7 @@ if(${WITH_RADOSGW})
 endif(${WITH_RADOSGW})
 
 if(0)
-# radostest 
+# radostest
 set(libradostest_srcs librados/test.cc librados/TestCase.cc)
 add_library(radostest STATIC ${libradostest_srcs})
 set_target_properties(radostest PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
@@ -1359,7 +1359,7 @@ add_executable(test_rados_api_c_read_operations
   librados/c_read_operations.cc
   $<TARGET_OBJECTS:heap_profiler_objs>
   )
-set_target_properties(test_rados_api_c_read_operations PROPERTIES COMPILE_FLAGS 
+set_target_properties(test_rados_api_c_read_operations PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 target_link_libraries(test_rados_api_c_read_operations
   librados
@@ -1517,7 +1517,7 @@ if(${WITH_CLIENT})
     ${TCMALLOC_LIBS}
     ${CMAKE_DL_LIBS}
     )
-endif(${WITH_CLIENT})  
+endif(${WITH_CLIENT})
 
 add_executable(test_objectstore
   objectstore/store_test.cc

@@ -234,7 +234,7 @@ TEST(Crc32c, RangeZero) {
   const char *b = (const char *)malloc(len);
   memset((void *)b, 0, len);
   uint32_t crc = 1; /* when checking zero buffer we want to start with a non zero crc, otherwise
-                       all the results are going to be zero */
+		       all the results are going to be zero */
   uint32_t *check = crc_zero_check_table;
   for (int i = 0 ; i < len; i++, check++) {
     crc = ceph_crc32c(crc, (unsigned char *)b+i, len-i);
@@ -245,7 +245,7 @@ TEST(Crc32c, RangeZero) {
 TEST(Crc32c, RangeNull) {
   int len = sizeof(crc_zero_check_table) / sizeof(crc_zero_check_table[0]);
   uint32_t crc = 1; /* when checking zero buffer we want to start with a non zero crc, otherwise
-                       all the results are going to be zero */
+		       all the results are going to be zero */
   uint32_t *check = crc_zero_check_table;
 
   for (int i = 0 ; i < len; i++, check++) {

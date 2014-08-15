@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 
 #include "common/Mutex.h"
 #include "common/Cond.h"
@@ -121,7 +121,7 @@ public:
    * This should be overridden by asynchronous operations.
    *
    * @param info information stored by a callback, or NULL -
-   *             useful for multi-operation TestOps
+   *		 useful for multi-operation TestOps
    */
   virtual void _finish(CallbackInfo *info)
   {
@@ -176,7 +176,7 @@ public:
   bool pool_snaps;
   int snapname_num;
 
-  RadosTestContext(const string &pool_name, 
+  RadosTestContext(const string &pool_name,
 		   int max_in_flight,
 		   uint64_t max_size,
 		   uint64_t min_stride_size,
@@ -192,7 +192,7 @@ public:
     max_in_flight(max_in_flight),
     seq_num(0), seq(0),
     rados_id(id), initialized(false),
-    max_size(max_size), 
+    max_size(max_size),
     min_stride_size(min_stride_size), max_stride_size(max_stride_size),
     attr_gen(2000),
     no_omap(no_omap),
@@ -270,7 +270,7 @@ public:
 	    ++i;
 	  }
 	}
-	
+
 	if (inflight.size() >= (unsigned) max_in_flight || (!next && !inflight.empty())) {
 	  cout << " waiting on " << inflight.size() << std::endl;
 	  wait();
@@ -405,7 +405,7 @@ public:
   void update_object_version(const string &oid, uint64_t version,
 			     int snap = -1)
   {
-    for (map<int, map<string,ObjectDesc> >::reverse_iterator i = 
+    for (map<int, map<string,ObjectDesc> >::reverse_iterator i =
 	   pool_obj_cont.rbegin();
 	 i != pool_obj_cont.rend();
 	 ++i) {
@@ -435,7 +435,7 @@ public:
 
   bool find_object(const string &oid, ObjectDesc *contents, int snap = -1) const
   {
-    for (map<int, map<string,ObjectDesc> >::const_reverse_iterator i = 
+    for (map<int, map<string,ObjectDesc> >::const_reverse_iterator i =
 	   pool_obj_cont.rbegin();
 	 i != pool_obj_cont.rend();
 	 ++i) {
@@ -702,7 +702,7 @@ public:
     : TestOp(n, context, stat),
       oid(oid), waiting_on(0), last_acked_tid(0), do_append(do_append)
   {}
-		
+
   void _begin()
   {
     context->state_lock.Lock();
@@ -746,7 +746,7 @@ public:
     //cout << " waiting_on = " << waiting_on << std::endl;
     ContentsGenerator::iterator gen_pos = cont_gen->get_iterator(cont);
     uint64_t tid = 1;
-    for (map<uint64_t, uint64_t>::iterator i = ranges.begin(); 
+    for (map<uint64_t, uint64_t>::iterator i = ranges.begin();
 	 i != ranges.end();
 	 ++i, ++tid) {
       bufferlist to_write;
@@ -799,7 +799,7 @@ public:
 	this,
 	new TestOp::CallbackInfo(++tid));
     rcompletion = context->rados.aio_create_completion(
-         (void*) cb_arg, NULL, &write_callback);
+	 (void*) cb_arg, NULL, &write_callback);
     waiting_on++;
     read_op.read(0, 1, &rbuffer, 0);
     context->io_ctx.aio_operate(
@@ -842,7 +842,7 @@ public:
 	(*i)->release();
 	waiting.erase(i++);
       }
-      
+
       context->update_object_version(oid, version);
       if (rcompletion->get_version64() != version) {
 	cerr << "Error: racing read on " << oid << " returned version "
@@ -956,7 +956,7 @@ public:
       retval(0),
       attrretval(0)
   {}
-		
+
   void _begin()
   {
     context->state_lock.Lock();
@@ -1054,7 +1054,7 @@ public:
 	headerbl = iter->second;
 	xattrs.erase(iter);
       }
-      cout << num << ":  expect " << old_value.most_recent() << std::endl;
+      cout << num << ":	 expect " << old_value.most_recent() << std::endl;
       assert(!old_value.deleted());
       if (old_value.has_contents()) {
 	ContDesc to_check;
@@ -1349,7 +1349,7 @@ public:
 	     const string &_oid,
 	     TestOpStat *stat = 0)
     : TestOp(n, context, stat),
-      oid(_oid), roll_back_to(-1), 
+      oid(_oid), roll_back_to(-1),
       done(false), comp(NULL)
   {}
 
@@ -1446,7 +1446,7 @@ public:
 	     TestOpStat *stat)
     : TestOp(n, context, stat),
       oid(oid), oid_src(oid_src),
-      comp(NULL), snap(-1), done(0), 
+      comp(NULL), snap(-1), done(0),
       version(0), r(0)
   {}
 
@@ -1491,7 +1491,7 @@ public:
     comp_racing_read = context->rados.aio_create_completion((void*) read_cb_arg, NULL, &write_callback);
     rd_op.stat(NULL, NULL, NULL);
     context->io_ctx.aio_operate(context->prefix+oid, comp_racing_read, &rd_op,
-				librados::OPERATION_ORDER_READS_WRITES,  // order wrt previous write/update
+				librados::OPERATION_ORDER_READS_WRITES,	 // order wrt previous write/update
 				NULL);
 
   }
@@ -1507,7 +1507,7 @@ public:
     if (info->id == 0) {
       // copy_from
       assert(comp->is_complete());
-      cout << num << ":  finishing copy_from to " << context->prefix + oid << std::endl;
+      cout << num << ":	 finishing copy_from to " << context->prefix + oid << std::endl;
       if ((r = comp->get_return_value())) {
 	if (r == -ENOENT && src_value.deleted()) {
 	  cout << num << ":  got expected ENOENT (src dne)" << std::endl;
@@ -1524,7 +1524,7 @@ public:
     } else if (info->id == 1) {
       // racing read
       assert(comp_racing_read->is_complete());
-      cout << num << ":  finishing copy_from racing read to " << context->prefix + oid << std::endl;
+      cout << num << ":	 finishing copy_from racing read to " << context->prefix + oid << std::endl;
       if ((r = comp_racing_read->get_return_value())) {
 	if (!(r == -ENOENT && src_value.deleted())) {
 	  cerr << "Error: oid " << oid << " copy_from " << oid_src << " returned error code "
@@ -1760,11 +1760,11 @@ public:
 
     int r = completion->get_return_value();
     if (r == 0) {
-      cout << num << ":  " << (dirty ? "dirty" : "clean") << std::endl;
+      cout << num << ":	 " << (dirty ? "dirty" : "clean") << std::endl;
       assert(!old_value.deleted());
       assert(dirty == old_value.dirty);
     } else {
-      cout << num << ":  got " << r << std::endl;
+      cout << num << ":	 got " << r << std::endl;
       assert(r == -ENOENT);
       assert(old_value.deleted());
     }

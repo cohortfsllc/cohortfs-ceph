@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_MDSTABLETYPES_H
@@ -29,13 +29,13 @@ inline const char *get_mdstable_name(int t) {
 }
 
 enum {
-  TABLESERVER_OP_QUERY        =  1,
+  TABLESERVER_OP_QUERY	      =	 1,
   TABLESERVER_OP_QUERY_REPLY  = -2,
-  TABLESERVER_OP_PREPARE      =  3,
-  TABLESERVER_OP_AGREE        = -4,
-  TABLESERVER_OP_COMMIT       =  5,
-  TABLESERVER_OP_ACK          = -6,
-  TABLESERVER_OP_ROLLBACK     =  7,
+  TABLESERVER_OP_PREPARE      =	 3,
+  TABLESERVER_OP_AGREE	      = -4,
+  TABLESERVER_OP_COMMIT	      =	 5,
+  TABLESERVER_OP_ACK	      = -6,
+  TABLESERVER_OP_ROLLBACK     =	 7,
   TABLESERVER_OP_SERVER_UPDATE = 8,
   TABLESERVER_OP_SERVER_READY = -9,
 };

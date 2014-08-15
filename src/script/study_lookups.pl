@@ -34,7 +34,7 @@ sub unlink {
     } elsif ($new == 0) {
 	delete $nlink{$i};
     }
-    delete $ns{$p}->{$n};	
+    delete $ns{$p}->{$n};
 }
 
 
@@ -64,7 +64,7 @@ while (1) {
     elsif ($cmd eq 'll_create') {
 	chomp(my $p = <>);
 	chomp(my $n = <>);
-	<>; <>; <>; 
+	<>; <>; <>;
 	chomp(my $r = <>);
 	$ns{$p}->{$n} = $r;
 	$nlink{$r} = 1;
@@ -72,7 +72,7 @@ while (1) {
     elsif ($cmd eq 'll_mknod') {
 	chomp(my $p = <>);
 	chomp(my $n = <>);
-	<>; <>; 
+	<>; <>;
 	chomp(my $r = <>);
 	$ns{$p}->{$n} = $r;
 	$nlink{$r} = 1;
@@ -117,9 +117,9 @@ while (1) {
 	    &unlink($np, $nn);
 	}
 	$ns{$np}->{$nn} = $ns{$p}->{$n};
-	delete $ns{$p}->{$n};	
+	delete $ns{$p}->{$n};
     }
-    
+
     # skip to @
     while (<>) {
 	last if $_ eq "@\n";

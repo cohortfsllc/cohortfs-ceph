@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 
@@ -38,7 +38,7 @@ class GenContext {
 
  public:
   GenContext() {}
-  virtual ~GenContext() {}       // we want a virtual destructor!!!
+  virtual ~GenContext() {}	 // we want a virtual destructor!!!
   virtual void complete(T t) {
     finish(t);
     delete this;
@@ -57,7 +57,7 @@ class Context {
 
  public:
   Context() {}
-  virtual ~Context() {}       // we want a virtual destructor!!!
+  virtual ~Context() {}	      // we want a virtual destructor!!!
   virtual void complete(int r) {
     finish(r);
     delete this;
@@ -98,8 +98,8 @@ typedef std::shared_ptr<RunOnDelete> RunOnDeleteRef;
 /*
  * finish and destroy a list of Contexts
  */
-inline void finish_contexts(CephContext *cct, std::list<Context*>& finished, 
-                            int result = 0)
+inline void finish_contexts(CephContext *cct, std::list<Context*>& finished,
+			    int result = 0)
 {
   if (finished.empty())
     return;
@@ -109,8 +109,8 @@ inline void finish_contexts(CephContext *cct, std::list<Context*>& finished,
 
   if (cct)
     mydout(cct, 10) << ls.size() << " contexts to finish with " << result << dendl;
-  for (std::list<Context*>::iterator it = ls.begin(); 
-       it != ls.end(); 
+  for (std::list<Context*>::iterator it = ls.begin();
+       it != ls.end();
        it++) {
     Context *c = *it;
     if (cct)
@@ -119,8 +119,8 @@ inline void finish_contexts(CephContext *cct, std::list<Context*>& finished,
   }
 }
 
-inline void finish_contexts(CephContext *cct, std::vector<Context*>& finished, 
-                            int result = 0)
+inline void finish_contexts(CephContext *cct, std::vector<Context*>& finished,
+			    int result = 0)
 {
   if (finished.empty())
     return;
@@ -130,8 +130,8 @@ inline void finish_contexts(CephContext *cct, std::vector<Context*>& finished,
 
   if (cct)
     mydout(cct,10) << ls.size() << " contexts to finish with " << result << dendl;
-  for (std::vector<Context*>::iterator it = ls.begin(); 
-       it != ls.end(); 
+  for (std::vector<Context*>::iterator it = ls.begin();
+       it != ls.end();
        it++) {
     Context *c = *it;
     if (cct)
@@ -288,7 +288,7 @@ public:
     return s;
   }
   void finish(int r) {
-    assert(0);    // nobody should ever call me.
+    assert(0);	  // nobody should ever call me.
   }
   friend class C_GatherBuilder;
 };
@@ -356,7 +356,7 @@ public:
     assert(!activated);
     if (c_gather == NULL)
       return 0;
-    Mutex::Locker l(c_gather->lock); 
+    Mutex::Locker l(c_gather->lock);
     return c_gather->sub_created_count;
   }
   int num_subs_remaining() {

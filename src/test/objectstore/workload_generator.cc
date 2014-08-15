@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  */
 #include <cassert>
 #include <stdio.h>
@@ -60,16 +60,16 @@ WorkloadGenerator::WorkloadGenerator(vector<const char*> args)
   m_nr_runs.set(0);
 
   init_args(args);
-  dout(0) << "data            = " << g_conf->osd_data << dendl;
-  dout(0) << "journal         = " << g_conf->osd_journal << dendl;
+  dout(0) << "data	      = " << g_conf->osd_data << dendl;
+  dout(0) << "journal	      = " << g_conf->osd_journal << dendl;
   dout(0) << "journal size    = " << g_conf->osd_journal_size << dendl;
 
   err = ::mkdir(g_conf->osd_data.c_str(), 0755);
   assert(err == 0 || (err < 0 && errno == EEXIST));
   ObjectStore *store_ptr = ObjectStore::create(g_ceph_context,
-                                               g_conf->osd_objectstore,
-                                               g_conf->osd_data,
-                                               g_conf->osd_journal);
+					       g_conf->osd_objectstore,
+					       g_conf->osd_data,
+					       g_conf->osd_journal);
   m_store.reset(store_ptr);
   err = m_store->mkfs();
   assert(err == 0);
@@ -81,7 +81,7 @@ WorkloadGenerator::WorkloadGenerator(vector<const char*> args)
 
   init(m_num_colls, 0);
 
-  dout(0) << "#colls          = " << m_num_colls << dendl;
+  dout(0) << "#colls	      = " << m_num_colls << dendl;
   dout(0) << "#objs per coll  = " << m_num_objs_per_coll << dendl;
   dout(0) << "#txs per destr  = " << m_destroy_coll_every_nr_runs << dendl;
 
@@ -100,19 +100,19 @@ size_t WorkloadGenerator::_parse_size_or_die(std::string& val)
   for (i = 0; i < val.length(); i++) {
     if (!isdigit(val[i])) {
       if (isalpha(val[i])) {
-        val[i] = tolower(val[i]);
-        switch (val[i]) {
-        case 'b': break;
-        case 'k': multiplier = 10; break;
-        case 'm': multiplier = 20; break;
-        case 'g': multiplier = 30; break;
-        default:
-          goto die;
-        }
-        val[i] = '\0';
-        break;
+	val[i] = tolower(val[i]);
+	switch (val[i]) {
+	case 'b': break;
+	case 'k': multiplier = 10; break;
+	case 'm': multiplier = 20; break;
+	case 'g': multiplier = 30; break;
+	default:
+	  goto die;
+	}
+	val[i] = '\0';
+	break;
       } else {
-        goto die;
+	goto die;
       }
     }
   }
@@ -148,37 +148,37 @@ void WorkloadGenerator::init_args(vector<const char*> args)
     if (ceph_argparse_double_dash(args, i)) {
       break;
     } else if (ceph_argparse_witharg(args, i, &val,
-        "--test-num-colls", (char*) NULL)) {
+	"--test-num-colls", (char*) NULL)) {
       m_num_colls = strtoll(val.c_str(), NULL, 10);
     } else if (ceph_argparse_witharg(args, i, &val,
-        "--test-objs-per-coll", (char*) NULL)) {
+	"--test-objs-per-coll", (char*) NULL)) {
       m_num_objs_per_coll = strtoll(val.c_str(), NULL, 10);
     } else if (ceph_argparse_witharg(args, i, &val,
-        "--test-destroy-coll-per-N-trans", (char*) NULL)) {
+	"--test-destroy-coll-per-N-trans", (char*) NULL)) {
       m_destroy_coll_every_nr_runs = strtoll(val.c_str(), NULL, 10);
     } else if (ceph_argparse_witharg(args, i, &val,
-        "--test-num-ops", (char*) NULL)) {
+	"--test-num-ops", (char*) NULL)) {
       m_num_ops = strtoll(val.c_str(), NULL, 10);
     } else if (ceph_argparse_witharg(args, i, &val,
-        "--test-max-in-flight", (char*) NULL)) {
+	"--test-max-in-flight", (char*) NULL)) {
       m_max_in_flight = strtoll(val.c_str(), NULL, 10);
     } else if (ceph_argparse_witharg(args, i, &val,
-        "--test-write-data-size", (char*) NULL)) {
+	"--test-write-data-size", (char*) NULL)) {
       m_write_data_bytes = _parse_size_or_die(val);
     } else if (ceph_argparse_witharg(args, i, &val,
-        "--test-write-xattr-obj-size", (char*) NULL)) {
+	"--test-write-xattr-obj-size", (char*) NULL)) {
       m_write_xattr_obj_bytes = _parse_size_or_die(val);
     } else if (ceph_argparse_witharg(args, i, &val,
-        "--test-write-xattr-coll-size", (char*) NULL)) {
+	"--test-write-xattr-coll-size", (char*) NULL)) {
       m_write_xattr_coll_bytes = _parse_size_or_die(val);
     } else if (ceph_argparse_witharg(args, i, &val,
-        "--test-write-pglog-size", (char*) NULL)) {
+	"--test-write-pglog-size", (char*) NULL)) {
       m_write_pglog_bytes = _parse_size_or_die(val);
     } else if (ceph_argparse_witharg(args, i, &val,
-        "--test-suppress-ops", (char*) NULL)) {
+	"--test-suppress-ops", (char*) NULL)) {
       _suppress_ops_or_die(val);
     } else if (ceph_argparse_witharg(args, i, &val,
-        "--test-show-stats-period", (char*) NULL)) {
+	"--test-show-stats-period", (char*) NULL)) {
       m_stats_show_secs = strtoll(val.c_str(), NULL, 10);
     } else if (ceph_argparse_flag(args, &i, "--test-show-stats", (char*) NULL)) {
       m_do_stats = true;
@@ -317,7 +317,7 @@ void WorkloadGenerator::do_setattr_collection(ObjectStore::Transaction *t,
 }
 
 void WorkloadGenerator::do_append_log(ObjectStore::Transaction *t,
-                                      coll_entry_t *entry, C_StatState *stat)
+				      coll_entry_t *entry, C_StatState *stat)
 {
   if (m_suppress_write_log) {
     dout(5) << __func__ << " suppressed" << dendl;
@@ -362,12 +362,12 @@ void WorkloadGenerator::do_destroy_collection(ObjectStore::Transaction *t,
 
 TestObjectStoreState::coll_entry_t
 *WorkloadGenerator::do_create_collection(ObjectStore::Transaction *t,
-                                         C_StatState *stat)
+					 C_StatState *stat)
 {
   coll_entry_t *entry = coll_create(m_next_coll_nr++);
   if (!entry) {
     dout(0) << __func__ << " failed to create coll id "
-        << m_next_coll_nr << dendl;
+	<< m_next_coll_nr << dendl;
     return NULL;
   }
   m_collections.insert(make_pair(entry->m_id, entry));
@@ -422,9 +422,9 @@ void WorkloadGenerator::run()
     }
 
     dout(5) << __func__
-        << " m_finished_lock is-locked: " << m_finished_lock.is_locked()
-        << " in-flight: " << m_in_flight.read()
-        << dendl;
+	<< " m_finished_lock is-locked: " << m_finished_lock.is_locked()
+	<< " in-flight: " << m_in_flight.read()
+	<< dendl;
 
     wait_for_ready();
 
@@ -449,8 +449,8 @@ void WorkloadGenerator::run()
 
       entry = do_create_collection(t, stat_state);
       if (!entry) {
-        dout(0) << __func__ << " something went terribly wrong creating coll" << dendl;
-        break;
+	dout(0) << __func__ << " something went terribly wrong creating coll" << dendl;
+	break;
       }
 
       c = new C_OnReadable(this, t);
@@ -465,7 +465,7 @@ void WorkloadGenerator::run()
       do_destroy_collection(t, entry, stat_state);
       c = new C_OnDestroyed(this, t, entry);
       if (!m_num_ops)
-        create_coll = true;
+	create_coll = true;
     } else {
       hobject_t *obj = get_rnd_obj(entry);
 
@@ -509,28 +509,28 @@ void usage()
   cout << "\
 \n\
 Global Options:\n\
-  -c FILE                             Read configuration from FILE\n\
-  --osd-objectstore TYPE              Set OSD ObjectStore type\n\
-  --osd-data PATH                     Set OSD Data path\n\
-  --osd-journal PATH                  Set OSD Journal path\n\
-  --osd-journal-size VAL              Set Journal size\n\
-  --help                              This message\n\
+  -c FILE			      Read configuration from FILE\n\
+  --osd-objectstore TYPE	      Set OSD ObjectStore type\n\
+  --osd-data PATH		      Set OSD Data path\n\
+  --osd-journal PATH		      Set OSD Journal path\n\
+  --osd-journal-size VAL	      Set Journal size\n\
+  --help			      This message\n\
 \n\
 Test-specific Options:\n\
-  --test-num-colls VAL                Set the number of collections\n\
-  --test-num-objs-per-coll VAL        Set the number of objects per collection\n\
+  --test-num-colls VAL		      Set the number of collections\n\
+  --test-num-objs-per-coll VAL	      Set the number of objects per collection\n\
   --test-destroy-coll-per-N-trans VAL Set how many transactions to run before\n\
-                                      destroying a collection.\n\
-  --test-num-ops VAL                  Run a certain number of operations\n\
-                                      (a VAL of 0 runs the test forever)\n\
-   --test-max-in-flight VAL           Maximum number of in-flight transactions\n\
-                                      (default: 50)\n\
-   --test-suppress-ops OPS            Suppress ops specified in OPS\n\
-   --test-write-data-size SIZE        Specify SIZE for all data writes\n\
+				      destroying a collection.\n\
+  --test-num-ops VAL		      Run a certain number of operations\n\
+				      (a VAL of 0 runs the test forever)\n\
+   --test-max-in-flight VAL	      Maximum number of in-flight transactions\n\
+				      (default: 50)\n\
+   --test-suppress-ops OPS	      Suppress ops specified in OPS\n\
+   --test-write-data-size SIZE	      Specify SIZE for all data writes\n\
    --test-write-xattr-obj-size SIZE   Specify SIZE for all xattrs on objects\n\
    --test-write-xattr-coll-size SIZE  Specify SIZE for all xattrs on colls\n\
-   --test-write-pglog-size SIZE       Specify SIZE for all pglog writes\n\
-   --test-show-stats                  Show stats as we go\n\
+   --test-write-pglog-size SIZE	      Specify SIZE for all pglog writes\n\
+   --test-show-stats		      Show stats as we go\n\
    --test-show-stats-period SECS      Show stats every SECS (default: 5)\n\
 \n\
    SIZE is a numeric value that can be assumed as being bytes, or may be any\n\
@@ -538,10 +538,10 @@ Test-specific Options:\n\
       e.g., 1G = 1024M = 1048576k = 1073741824\n\
 \n\
    OPS can be one or more of the following options:\n\
-      c    writes on collection's xattrs\n\
-      o    writes on object's xattr\n\
-      l    writes on pglog\n\
-      d    data writes on objects\n\
+      c	   writes on collection's xattrs\n\
+      o	   writes on object's xattr\n\
+      l	   writes on pglog\n\
+      d	   data writes on objects\n\
 \n\
 " << std::endl;
 }

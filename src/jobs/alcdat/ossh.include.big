@@ -24,13 +24,13 @@
 				'numclient' => '$nummds * $cper',
 				'numosd' => '$nummds * .6',
 				'n' => '415'],#1 + $cnode + $nummds + $numosd' ],
-	
+
 	'custom' => '--tcp_skip_rank0 --tcp_overlay_clients --mds_shutdown_check 60 --syn only 0 --syn trace traces/openssh/untar.include 1 --syn sleep 30 --syn trace traces/openssh/make.include 1000',
 
 	# parameters
 	'fs' => 'ebofs',
 
-	#'until' => 500,   
+	#'until' => 500,
 	#'kill_after' => 600,
 	#'start' => 200,
 	#'end' => 500,

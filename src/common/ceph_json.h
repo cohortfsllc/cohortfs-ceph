@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
 #ifndef CEPH_JSON_H
@@ -306,15 +306,15 @@ void encode_json_map(const char *name, const map<K, V>& m, ceph::Formatter *f)
   for (iter = m.begin(); iter != m.end(); ++iter) {
     encode_json("obj", iter->second, f);
   }
-  f->close_section(); 
+  f->close_section();
 }
 
 
 template<class K, class V>
 void encode_json_map(const char *name, const char *index_name,
-                     const char *object_name, const char *value_name,
-                     void (*cb)(const char *, const V&, ceph::Formatter *, void *), void *parent,
-                     const map<K, V>& m, ceph::Formatter *f)
+		     const char *object_name, const char *value_name,
+		     void (*cb)(const char *, const V&, ceph::Formatter *, void *), void *parent,
+		     const map<K, V>& m, ceph::Formatter *f)
 {
   f->open_array_section(name);
   typename map<K,V>::const_iterator iter;
@@ -341,20 +341,20 @@ void encode_json_map(const char *name, const char *index_name,
       f->close_section();
     }
   }
-  f->close_section(); 
+  f->close_section();
 }
 
 template<class K, class V>
 void encode_json_map(const char *name, const char *index_name,
-                     const char *object_name, const char *value_name,
-                     const map<K, V>& m, ceph::Formatter *f)
+		     const char *object_name, const char *value_name,
+		     const map<K, V>& m, ceph::Formatter *f)
 {
   encode_json_map<K, V>(name, index_name, object_name, value_name, NULL, NULL, m, f);
 }
 
 template<class K, class V>
 void encode_json_map(const char *name, const char *index_name, const char *value_name,
-                     const map<K, V>& m, ceph::Formatter *f)
+		     const map<K, V>& m, ceph::Formatter *f)
 {
   encode_json_map<K, V>(name, index_name, NULL, value_name, NULL, NULL, m, f);
 }

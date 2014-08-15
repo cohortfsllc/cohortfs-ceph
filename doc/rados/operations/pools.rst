@@ -6,36 +6,36 @@ When you first deploy a cluster without creating a pool, Ceph uses the default
 pools for storing data. A pool provides you with:
 
 - **Resilience**: You can set how many OSD are allowed to fail without loosing data.
-  For replicated pools, it is the desired number of copies/replicas of an object. 
+  For replicated pools, it is the desired number of copies/replicas of an object.
   A typical configuration stores an object and one additional copy
   (i.e., ``size = 2``), but you can determine the number of copies/replicas.
   For erasure coded pools, it is the number of coding chunks
   (i.e. ``erasure-code-m=2``)
-  
+
 - **Placement Groups**: You can set the number of placement groups for the pool.
-  A typical configuration uses approximately 100 placement groups per OSD to 
-  provide optimal balancing without using up too many computing resources. When 
+  A typical configuration uses approximately 100 placement groups per OSD to
+  provide optimal balancing without using up too many computing resources. When
   setting up multiple pools, be careful to ensure you set a reasonable number of
-  placement groups for both the pool and the cluster as a whole. 
+  placement groups for both the pool and the cluster as a whole.
 
-- **CRUSH Rules**: When you store data in a pool, a CRUSH ruleset mapped to the 
-  pool enables CRUSH to identify a rule for the placement of the object 
-  and its replicas (or chunks for erasure coded pools) in your cluster. 
+- **CRUSH Rules**: When you store data in a pool, a CRUSH ruleset mapped to the
+  pool enables CRUSH to identify a rule for the placement of the object
+  and its replicas (or chunks for erasure coded pools) in your cluster.
   You can create a custom CRUSH rule for your pool.
-  
-- **Snapshots**: When you create snapshots with ``ceph osd pool mksnap``, 
-  you effectively take a snapshot of a particular pool.
-  
-- **Set Ownership**: You can set a user ID as the owner of a pool. 
 
-To organize data into pools, you can list, create, and remove pools. 
+- **Snapshots**: When you create snapshots with ``ceph osd pool mksnap``,
+  you effectively take a snapshot of a particular pool.
+
+- **Set Ownership**: You can set a user ID as the owner of a pool.
+
+To organize data into pools, you can list, create, and remove pools.
 You can also view the utilization statistics for each pool.
 
 
 List Pools
 ==========
 
-To list your cluster's pools, execute:: 
+To list your cluster's pools, execute::
 
 	ceph osd lspools
 
@@ -53,13 +53,13 @@ Create a Pool
 
 Before creating pools, refer to the `Pool, PG and CRUSH Config Reference`_.
 Ideally, you should override the default value for the number of placement
-groups in you Ceph configuration file, as the default is NOT ideal. 
-For example:: 
+groups in you Ceph configuration file, as the default is NOT ideal.
+For example::
 
 	osd pool default pg num = 100
 	osd pool default pgp num = 100
 
-To create a pool, execute:: 
+To create a pool, execute::
 
 	ceph osd pool create {pool-name} {pg-num} [{pgp-num}] [replicated]
 	ceph osd pool create {pool-name} {pg-num}  {pgp-num}   erasure \
@@ -70,7 +70,7 @@ To create a pool, execute::
              [{erasure-code-m=coding-chunks}] \
              [{key=value} ...]
 
-Where: 
+Where:
 
 ``{pool-name}``
 
@@ -81,7 +81,7 @@ Where:
 ``{pg-num}``
 
 :Description: The total number of placement groups for the pool. See `Placement
-              Groups`_  for details on calculating a suitable number. The 
+              Groups`_  for details on calculating a suitable number. The
               default value ``8`` is NOT suitable for most systems.
 
 :Type: Integer
@@ -91,7 +91,7 @@ Where:
 ``{pgp-num}``
 
 :Description: The total number of placement groups for placement purposes. This
-              **should be equal to the total number of placement groups**, except 
+              **should be equal to the total number of placement groups**, except
               for placement group splitting scenarios.
 
 :Type: Integer
@@ -109,17 +109,17 @@ Where:
               implement a subset of the available operations.
 
 :Type: String
-:Required: No. 
+:Required: No.
 :Default: replicated
 
 ``{crush_ruleset=ruleset}``
 
 :Description: For **erasure** pools only. Set the name of the CRUSH
               **ruleset**. It must be an existing ruleset matching
-              the requirements of the underlying erasure code plugin. 
+              the requirements of the underlying erasure code plugin.
 
 :Type: String
-:Required: No. 
+:Required: No.
 
 ``{erasure-code-directory=directory}``
 
@@ -136,7 +136,7 @@ Where:
               to compute coding chunks and recover missing chunks.
 
 :Type: String
-:Required: No. 
+:Required: No.
 :Default: jerasure
 
 ``{erasure-code-k=data-chunks}``
@@ -146,7 +146,7 @@ Where:
               each stored on a different OSD.
 
 :Type: Integer
-:Required: No. 
+:Required: No.
 :Default: 4
 
 ``{erasure-code-m=coding-chunks}``
@@ -158,7 +158,7 @@ Where:
               without losing data.
 
 :Type: Integer
-:Required: No. 
+:Required: No.
 :Default: 2
 
 ``{key=value}``
@@ -169,7 +169,7 @@ Where:
               ignored.
 
 :Type: String
-:Required: No. 
+:Required: No.
 
 When you create a pool, set the number of placement groups to a reasonable value
 (e.g., ``100``). Consider the total number of placement groups per OSD too.
@@ -178,11 +178,11 @@ you have many pools with many placement groups (e.g., 50 pools with 100
 placement groups each). The point of diminishing returns depends upon the power
 of the OSD host.
 
-See `Placement Groups`_ for details on calculating an appropriate number of 
+See `Placement Groups`_ for details on calculating an appropriate number of
 placement groups for your pool.
 
 .. _Placement Groups: ../placement-groups
- 
+
 
 Delete a Pool
 =============
@@ -191,7 +191,7 @@ To delete a pool, execute::
 
 	ceph osd pool delete {pool-name} [{pool-name} --yes-i-really-really-mean-it]
 
-	
+
 If you created your own rulesets and rules for a pool you created,  you should
 consider removing them when you no longer need your pool.  If you created users
 with permissions strictly for a pool that no longer exists, you should consider
@@ -201,53 +201,53 @@ deleting those users too.
 Rename a Pool
 =============
 
-To rename a pool, execute:: 
+To rename a pool, execute::
 
 	ceph osd pool rename {current-pool-name} {new-pool-name}
 
-If you rename a pool and you have per-pool capabilities for an authenticated 
+If you rename a pool and you have per-pool capabilities for an authenticated
 user, you must update the user's capabilities (i.e., caps) with the new pool
-name. 
+name.
 
 .. note:: Version ``0.48`` Argonaut and above.
 
 Show Pool Statistics
 ====================
 
-To show a pool's utilization statistics, execute:: 
+To show a pool's utilization statistics, execute::
 
 	rados df
-	
+
 
 Make a Snapshot of a Pool
 =========================
 
-To make a snapshot of a pool, execute:: 
+To make a snapshot of a pool, execute::
 
-	ceph osd pool mksnap {pool-name} {snap-name}	
-	
+	ceph osd pool mksnap {pool-name} {snap-name}
+
 .. note:: Version ``0.48`` Argonaut and above.
 
 
 Remove a Snapshot of a Pool
 ===========================
 
-To remove a snapshot of a pool, execute:: 
+To remove a snapshot of a pool, execute::
 
 	ceph osd pool rmsnap {pool-name} {snap-name}
 
-.. note:: Version ``0.48`` Argonaut and above.	
+.. note:: Version ``0.48`` Argonaut and above.
 
 .. _setpoolvalues:
 
 Set Pool Values
 ===============
 
-To set a value to a pool, execute the following:: 
+To set a value to a pool, execute the following::
 
 	ceph osd pool set {pool-name} {key} {value}
-	
-You may set values for the following keys: 
+
+You may set values for the following keys:
 
 ``size``
 
@@ -263,13 +263,13 @@ You may set values for the following keys:
 
 ``crash_replay_interval``
 
-:Description: The number of seconds to allow clients to replay acknowledged, but uncommitted requests. 
+:Description: The number of seconds to allow clients to replay acknowledged, but uncommitted requests.
 :Type: Integer
 
 
 ``pgp_num``
 
-:Description: The effective number of placement groups to use when calculating data placement. 
+:Description: The effective number of placement groups to use when calculating data placement.
 :Type: Integer
 :Valid Range: Equal to or less than ``pg_num``.
 
@@ -286,16 +286,16 @@ You may set values for the following keys:
 :Valid Range: 1 sets flag, 0 unsets flag
 
 
-.. note:: Version ``0.48`` Argonaut and above.	
+.. note:: Version ``0.48`` Argonaut and above.
 
 
 Get Pool Values
 ===============
 
-To set a value to a pool, execute the following:: 
+To set a value to a pool, execute the following::
 
 	ceph osd pool get {pool-name} {key}
-	
+
 
 ``pg_num``
 
@@ -305,7 +305,7 @@ To set a value to a pool, execute the following::
 
 ``pgp_num``
 
-:Description: The effective number of placement groups to use when calculating data placement. 
+:Description: The effective number of placement groups to use when calculating data placement.
 :Type: Integer
 :Valid Range: Equal to or less than ``pg_num``.
 
@@ -313,19 +313,19 @@ To set a value to a pool, execute the following::
 Set the Number of Object Replicas
 =================================
 
-To set the number of object replicas on a replicated pool, execute the following:: 
+To set the number of object replicas on a replicated pool, execute the following::
 
 	ceph osd pool set {poolname} size {num-replicas}
 
 .. important:: The ``{num-replicas}`` includes the object itself.
-   If you want the object and two copies of the object for a total of 
+   If you want the object and two copies of the object for a total of
    three instances of the object, specify ``3``.
-   
-For example:: 
+
+For example::
 
 	ceph osd pool set data size 3
 
-You may execute this command for each pool. **Note:** An object might accept 
+You may execute this command for each pool. **Note:** An object might accept
 I/Os in degraded mode with fewer than ``pool size`` replicas.  To set a minimum
 number of required replicas for I/O, you should use the ``min_size`` setting.
 For example::
@@ -339,12 +339,12 @@ This ensures that no object in the data pool will receive I/O with fewer than
 Get the Number of Object Replicas
 =================================
 
-To get the number of object replicas, execute the following:: 
+To get the number of object replicas, execute the following::
 
 	ceph osd dump | grep 'rep size'
-	
+
 Ceph will list the pools, with the ``rep size`` attribute highlighted.
-By default, ceph Creates one replica of an object (a total of two copies, or 
+By default, ceph Creates one replica of an object (a total of two copies, or
 a size of 2).
 
 

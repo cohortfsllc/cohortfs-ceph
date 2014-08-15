@@ -1,6 +1,6 @@
 // -*- mode:C; tab-width:8; c-basic-offset:8; indent-tabs-mode:t -*-
 /*
- *	Copyright (C) 1991, NeXT Computer, Inc.  All Rights Reserverd.
+ *	Copyright (C) 1991, NeXT Computer, Inc.	 All Rights Reserverd.
  *
  *	File:	fsx.c
  *	Author:	Avadis Tevanian, Jr.
@@ -264,7 +264,7 @@ logdump(void)
 		lp = &oplog[i];
 		if ((closeopen = lp->operation < 0))
 			lp->operation = ~ lp->operation;
-			
+
 		switch (lp->operation) {
 		case OP_MAPREAD:
 			prt("MAPREAD  0x%x thru 0x%x\t(0x%x bytes)",
@@ -366,7 +366,7 @@ save_buffer(char *buffer, off_t bufferlength, int fd)
 	ret = lseek(fd, (off_t)0, SEEK_SET);
 	if (ret == (off_t)-1)
 		prterr("save_buffer: lseek 0");
-	
+
 	byteswritten = write(fd, buffer, (size_t)bufferlength);
 	if (byteswritten != bufferlength) {
 		if (byteswritten == -1)
@@ -398,7 +398,7 @@ report_failure(int status)
 }
 
 #define short_at(cp) ((unsigned short)((*((unsigned char *)(cp)) << 8) | \
-				        *(((unsigned char *)(cp)) + 1)))
+					*(((unsigned char *)(cp)) + 1)))
 
 void
 check_buffers(char *good_buf, char *temp_buf, unsigned offset, unsigned size)
@@ -417,12 +417,12 @@ check_buffers(char *good_buf, char *temp_buf, unsigned offset, unsigned size)
 			c = good_buf[offset];
 			t = temp_buf[i];
 			if (c != t) {
-			        if (n < 16) {
+				if (n < 16) {
 					bad = short_at(&temp_buf[i]);
-				        prt("0x%5x\t0x%04x\t0x%04x", offset,
-				            short_at(&good_buf[offset]), bad);
+					prt("0x%5x\t0x%04x\t0x%04x", offset,
+					    short_at(&good_buf[offset]), bad);
 					op = temp_buf[offset & 1 ? i+1 : i];
-				        prt("\t0x%5x\n", n);
+					prt("\t0x%5x\n", n);
 					if (op)
 						prt("operation# (mod 256) for "
 						  "the bad data may be %u\n",
@@ -471,9 +471,9 @@ check_trunc_hack(void)
 	rbd_resize(image, (off_t)100000);
 	rbd_stat(image, &statbuf, sizeof(statbuf));
 	if (statbuf.size != (off_t)100000) {
- 		prt("no extend on truncate! not posix!\n");
- 		exit(130);
- 	}
+		prt("no extend on truncate! not posix!\n");
+		exit(130);
+	}
 	rbd_resize(image, (off_t)0);
 }
 
@@ -588,7 +588,7 @@ check_eofpage(char *s, unsigned offset, char *p, int size)
 		return;
 	/*
 	 * we landed in the last page of the file
-	 * test to make sure the VM system provided 0's 
+	 * test to make sure the VM system provided 0's
 	 * beyond the true end of the file mapping
 	 * (as required by mmap def in 1996 posix 1003.1)
 	 */
@@ -610,7 +610,7 @@ void
 gendata(char *original_buf, char *good_buf, unsigned offset, unsigned size)
 {
 	while (size--) {
-		good_buf[offset] = testcalls % 256; 
+		good_buf[offset] = testcalls % 256;
 		if (offset % 2)
 			good_buf[offset] += original_buf[offset];
 		offset++;
@@ -703,7 +703,7 @@ dotruncate(unsigned size)
 
 	if (testcalls <= simulatedopcount)
 		return;
-	
+
 	if ((progressinterval && testcalls % progressinterval == 0) ||
 	    (debug && (monitorstart == -1 || monitorend == -1 ||
 		      size <= monitorend)))
@@ -956,15 +956,15 @@ usage(void)
 #ifdef FALLOCATE
 "	-F: Do not use fallocate (preallocation) calls\n"
 #endif
-"        -H: Do not use punch hole calls\n"
+"	 -H: Do not use punch hole calls\n"
 "	-L: fsxLite - no file creations & no file size changes\n\
 	-N numops: total # operations to do (default infinity)\n\
 	-O: use oplen (see -o flag) for every op (default random)\n\
 	-P: save .fsxlog and .fsxgood files in dirpath (default ./)\n\
 	-S seed: for random # generator (default 1) 0 gets timestamp\n\
 	-W: mapped write operations DISabled\n\
-        -R: read() system calls only (mapped reads disabled)\n\
-        -Z: O_DIRECT (use -R, -W, -r and -w too)\n\
+	-R: read() system calls only (mapped reads disabled)\n\
+	-Z: O_DIRECT (use -R, -W, -r and -w too)\n\
 	poolname: this is REQUIRED (no default)\n\
 	imagename: this is REQUIRED (no default)\n");
 	exit(89);
@@ -1006,9 +1006,9 @@ getnum(char *s, char **e)
 
 #ifdef AIO
 
-#define QSZ     1024
+#define QSZ	1024
 io_context_t	io_ctx;
-struct iocb 	iocb;
+struct iocb	iocb;
 
 int aio_setup()
 {
@@ -1016,10 +1016,10 @@ int aio_setup()
 	ret = io_queue_init(QSZ, &io_ctx);
 	if (ret != 0) {
 		fprintf(stderr, "aio_setup: io_queue_init failed: %s\n",
-                        strerror(ret));
-                return(-1);
-        }
-        return(0);
+			strerror(ret));
+		return(-1);
+	}
+	return(0);
 }
 
 int
@@ -1054,7 +1054,7 @@ __aio_rw(int rw, int fd, char *buf, unsigned len, unsigned offset)
 		else {
 			fprintf(stderr, "errcode=%d\n", -ret);
 			fprintf(stderr, "aio_rw: io_getevents failed: %s\n",
-				 	strerror(-ret));
+					strerror(-ret));
 		}
 		goto out_error;
 	}
@@ -1262,11 +1262,11 @@ main(int argc, char **argv)
 			strncpy(logfile, dirpath, sizeof(logfile));
 			strcat(logfile, "/");
 			break;
-                case 'R':
-                        mapped_reads = 0;
-                        break;
+		case 'R':
+			mapped_reads = 0;
+			break;
 		case 'S':
-                        seed = getnum(optarg, &endp);
+			seed = getnum(optarg, &endp);
 			if (seed == 0)
 				seed = time(0) % 10000;
 			if (!quiet)
@@ -1275,7 +1275,7 @@ main(int argc, char **argv)
 				usage();
 			break;
 		case 'W':
-		        mapped_writes = 0;
+			mapped_writes = 0;
 			if (!quiet)
 				fprintf(stdout, "mapped writes DISABLED\n");
 			break;
@@ -1335,7 +1335,7 @@ main(int argc, char **argv)
 	}
 
 #ifdef AIO
-	if (aio) 
+	if (aio)
 		aio_setup();
 #endif
 

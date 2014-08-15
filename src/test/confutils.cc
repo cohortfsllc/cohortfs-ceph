@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 #include "common/ConfUtils.h"
@@ -89,7 +89,7 @@ static int create_tempfile(const std::string &fname, const char *text)
   size_t res = fwrite(text, 1, strlen_text, fp);
   if (res != strlen_text) {
     int err = errno;
-    cerr << "fwrite error while writing to " << fname 
+    cerr << "fwrite error while writing to " << fname
 	 << ": " << cpp_strerror(err) << std::endl;
     return err;
   }
@@ -120,26 +120,26 @@ const char * const trivial_conf_4 = "log dir = \"barbaz\"\n";
 const char * const simple_conf_1 = "\
 ; here's a comment\n\
 [global]\n\
-        keyring = .my_ceph_keyring\n\
+	keyring = .my_ceph_keyring\n\
 \n\
 [mds]\n\
 	log dir = out\n\
 	log per instance = true\n\
 	log sym history = 100\n\
-        profiling logger = true\n\
+	profiling logger = true\n\
 	profiling logger dir = wowsers\n\
 	chdir = ""\n\
 	pid file = out/$name.pid\n\
 \n\
-        mds debug frag = true\n\
+	mds debug frag = true\n\
 [osd]\n\
 	pid file = out/$name.pid\n\
-        osd scrub load threshold = 5.0\n\
+	osd scrub load threshold = 5.0\n\
 \n\
-        lockdep = 1\n\
+	lockdep = 1\n\
 [osd0]\n\
-        osd data = dev/osd0\n\
-        osd journal size = 100\n\
+	osd data = dev/osd0\n\
+	osd journal size = 100\n\
 [mds.a]\n\
 [mds.b]\n\
 [mds.c]\n\
@@ -153,22 +153,22 @@ const char * const simple_conf_2 = "\
 	log sym history = 100\n\
 	log dir = out # after a comment, anything # can ### happen ;;; right?\n\
 	log per instance = true\n\
-        profiling logger = true\n\
-	profiling                 logger dir = log\n\
+	profiling logger = true\n\
+	profiling		  logger dir = log\n\
 	chdir = ""\n\
-        pid file\t=\tfoo2\n\
+	pid file\t=\tfoo2\n\
 [osd0]\n\
-        keyring   =       osd_keyring          ; osd's keyring\n\
+	keyring	  =	  osd_keyring	       ; osd's keyring\n\
 \n\
-           \n\
+	   \n\
 [global]\n\
 	# I like pound signs as comment markers.\n\
 	; Do you like pound signs as comment markers?\n\
-        keyring = shenanigans          ; The keyring of a leprechaun\n\
+	keyring = shenanigans	       ; The keyring of a leprechaun\n\
 \n\
 	# Let's just have a line with a lot of whitespace and nothing else.\n\
-                         \n\
-        lockdep = 1\n\
+			 \n\
+	lockdep = 1\n\
 ";
 
 // test line-combining
@@ -177,7 +177,7 @@ const char * const conf3 = "\
 	log file = /quite/a/long/path\\\n\
 /for/a/log/file\n\
 	pid file = \\\n\
-                           spork\\\n\
+			   spork\\\n\
 \n\
 [mon] #nothing here \n\
 ";
@@ -204,7 +204,7 @@ const char illegal_conf1[] = "\
 	log file = foo\n\
 	pid file = invalid-utf-\xe2\x28\xa1\n\
 [osd0]\n\
-        keyring = osd_keyring          ; osd's keyring\n\
+	keyring = osd_keyring	       ; osd's keyring\n\
 ";
 
 // illegal because it contains a malformed section header.
@@ -212,54 +212,54 @@ const char illegal_conf2[] = "\
 [global\n\
 	log file = foo\n\
 [osd0]\n\
-        keyring = osd_keyring          ; osd's keyring\n\
+	keyring = osd_keyring	       ; osd's keyring\n\
 ";
 
 // illegal because it contains a line that doesn't parse
 const char illegal_conf3[] = "\
 [global]\n\
-        who_what_where\n\
+	who_what_where\n\
 [osd0]\n\
-        keyring = osd_keyring          ; osd's keyring\n\
+	keyring = osd_keyring	       ; osd's keyring\n\
 ";
 
 // illegal because it has unterminated quotes
 const char illegal_conf4[] = "\
 [global]\n\
-        keyring = \"unterminated quoted string\n\
+	keyring = \"unterminated quoted string\n\
 [osd0]\n\
-        keyring = osd_keyring          ; osd's keyring\n\
+	keyring = osd_keyring	       ; osd's keyring\n\
 ";
 
 // illegal because it has a backslash at the very end
 const char illegal_conf5[] = "\
 [global]\n\
-        keyring = something awful\\\\\n\
+	keyring = something awful\\\\\n\
 ";
 
 // unicode config file
 const char unicode_config_1[] = "\
 [global]\n\
-        log file =           \x66\xd1\x86\xd1\x9d\xd3\xad\xd3\xae     \n\
-        pid file =           foo-bar\n\
+	log file =	     \x66\xd1\x86\xd1\x9d\xd3\xad\xd3\xae     \n\
+	pid file =	     foo-bar\n\
 [osd0]\n\
 ";
 
 const char override_config_1[] = "\
 [global]\n\
-        log file =           global_log\n\
+	log file =	     global_log\n\
 [mds]\n\
-        log file =           mds_log\n\
+	log file =	     mds_log\n\
 [osd]\n\
-        log file =           osd_log\n\
+	log file =	     osd_log\n\
 [osd.0]\n\
-        log file =           osd0_log\n\
+	log file =	     osd0_log\n\
 ";
 
 const char dup_key_config_1[] = "\
 [mds.a]\n\
-        log_file = 1\n\
-        log_file = 3\n\
+	log_file = 1\n\
+	log_file = 3\n\
 ";
 
 TEST(ConfUtils, Whitespace) {
@@ -271,25 +271,25 @@ TEST(ConfUtils, Whitespace) {
   ConfFile::trim_whitespace(test0a, true);
   ASSERT_EQ(test0a, "");
 
-  std::string test0b("          ");
+  std::string test0b("		");
   ConfFile::trim_whitespace(test0b, false);
   ASSERT_EQ(test0b, "");
 
-  std::string test0c("          ");
+  std::string test0c("		");
   ConfFile::trim_whitespace(test0c, true);
   ASSERT_EQ(test0c, "");
 
-  std::string test1(" abc             ");
+  std::string test1(" abc	      ");
   ConfFile::trim_whitespace(test1, false);
   ASSERT_EQ(test1, "abc");
 
-  std::string test2(" abc        d     ");
+  std::string test2(" abc	 d     ");
   ConfFile::trim_whitespace(test2, true);
   ASSERT_EQ(test2, "abc d");
 
-  std::string test3(" abc        d     ");
+  std::string test3(" abc	 d     ");
   ConfFile::trim_whitespace(test3, false);
-  ASSERT_EQ(test3, "abc        d");
+  ASSERT_EQ(test3, "abc	       d");
 
   std::string test4("abcd");
   ConfFile::trim_whitespace(test4, false);

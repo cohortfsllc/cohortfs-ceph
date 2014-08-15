@@ -1,11 +1,11 @@
 #!/bin/bash
 # vim: ts=8 sw=2 smarttab
 #
-# run_seed_to.sh - Run ceph_test_filestore_idempotent_sequence up until an 
+# run_seed_to.sh - Run ceph_test_filestore_idempotent_sequence up until an
 # injection point, generating a sequence of operations based on a
 # provided seed.
 #
-# We also perform three additional tests, focused on assessing if 
+# We also perform three additional tests, focused on assessing if
 # replaying a larger chunck of the journal affects the expected store
 # behavior. These tests will be performed by increasing the store's
 # journal sync interval to a very large value, allowing the store to
@@ -13,7 +13,7 @@
 # over 10 hours, case on which the interval variables must be changed
 # to an appropriate value). Unless the '--no-journal-test' option is
 # specified, we will run the 3 following scenarios:
-#  
+#
 #  1) journal sync'ing for both stores is good as disabled
 #     (we call it '00', for store naming purposes)
 #  2) journal sync'ing for store A is as good as disabled
@@ -36,7 +36,7 @@ test_opts=""
 
 usage() {
   echo "usage: $1 [options..] <seed> <kill-at>"
-  echo 
+  echo
   echo "options:"
   echo "  -c, --colls <VAL>    # of collections"
   echo "  -o, --objs <VAL>     # of objects"
@@ -170,14 +170,14 @@ echo kill at $killat
 to=1000000000
 
 #
-# store names 
+# store names
 #
 # We need these for two reasons:
 #  1) if we are running the tests on a btrfs volume, then we need to use
 #     a seq number for each run. Being on btrfs means we will fail when
 #     removing the store's directories and it's far more simple to just
 #     specify differente store names such as 'a.$seq' or 'b.$seq'.
-#  
+#
 #  2) unless the '--no-journal-test' option is specified, we will run
 #     three additional tests for each store, and we will reuse the same
 #     command for each one of the runs, but varying the store's name and

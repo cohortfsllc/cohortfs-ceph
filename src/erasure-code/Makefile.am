@@ -1,6 +1,6 @@
 ## erasure code plugins
 erasure_codelibdir = $(pkglibdir)/erasure-code
-erasure_codelib_LTLIBRARIES =  
+erasure_codelib_LTLIBRARIES =
 
 include erasure-code/jerasure/Makefile.am
 

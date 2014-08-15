@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -156,7 +156,7 @@ void Filer::_probed(Probe *probe, const object_t& oid,
        p != probe->probing.end();
        ++p) {
     uint64_t shouldbe = p->length + p->offset;
-    ldout(cct, 10) << "_probed  " << probe->ino << " object " << hex << p->oid << dec
+    ldout(cct, 10) << "_probed	" << probe->ino << " object " << hex << p->oid << dec
 	     << " should be " << shouldbe
 	     << ", actual is " << probe->known_size[p->oid]
 	     << dendl;
@@ -176,8 +176,8 @@ void Filer::_probed(Probe *probe, const object_t& oid,
 	   ++i) {
 	if (oleft <= (uint64_t)i->second) {
 	  end = probe->probing_off + i->first + oleft;
-	  ldout(cct, 10) << "_probed  end is in buffer_extent " << i->first << "~" << i->second << " off " << oleft 
-		   << ", from was " << probe->probing_off << ", end is " << end 
+	  ldout(cct, 10) << "_probed  end is in buffer_extent " << i->first << "~" << i->second << " off " << oleft
+		   << ", from was " << probe->probing_off << ", end is " << end
 		   << dendl;
 
 	  probe->found_size = true;
@@ -303,5 +303,3 @@ void Filer::_do_purge_range(PurgeRange *pr, int fin)
     max--;
   }
 }
-
-

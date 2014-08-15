@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 
 #include <iostream>
 
@@ -9,7 +11,7 @@
 int main(int argc, char **argv)
 {
   /*
-   * you need to create a suitable osdmap first.  e.g., for 40 osds, 
+   * you need to create a suitable osdmap first.  e.g., for 40 osds,
    * $ ./osdmaptool --createsimple 40 --clobber .ceph_osdmap
    */
   bufferlist bl;
@@ -109,6 +111,6 @@ int main(int argc, char **argv)
   for (int i=0; i<4; i++) {
     cout << "size" << i << "\t" << size[i] << std::endl;
   }
-  
+
   return 0;
 }

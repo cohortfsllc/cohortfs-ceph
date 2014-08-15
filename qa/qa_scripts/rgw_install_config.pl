@@ -61,11 +61,11 @@ sub exec_cmd
     if ( $excmd == 0 ) {
         _write_log_entry("$cmd successful");
 	return 0;
-    } else{ 
+    } else{
         _write_log_entry("$cmd NOT successful");
         return 1;
-    }	
-} 
+    }
+}
 
 # function to execute the command and return output
 sub get_cmd_op
@@ -81,13 +81,13 @@ sub enmod
 {
 	if (!system("sudo a2enmod rewrite")){
 		if (!system("sudo a2enmod fastcgi")){
-		        _write_log_entry("a2enmod rewrite && a2enmod fastcgi successful"); 
+		        _write_log_entry("a2enmod rewrite && a2enmod fastcgi successful");
 			return 0;
-		}	
-		write_log_entry("a2enmod fastcgi NOT successful"); 
+		}
+		write_log_entry("a2enmod fastcgi NOT successful");
                 return 1;
-	}	
-	write_log_entry("a2enmod rewrite NOT successful"); 
+	}
+	write_log_entry("a2enmod rewrite NOT successful");
         return 1;
 }
 
@@ -97,11 +97,11 @@ sub set_httpconf
        my $hostname = shift;
        my $http_conf = "/etc/apache2/httpd.conf";
        my $file = "test_file";
-       open (FH, ">$file"); 
+       open (FH, ">$file");
        print FH "ServerName $hostname";
        close FH;
-       my $get_op = "sudo sh -c \"cat $file >> $http_conf\"";        
-       my $exit_status = exec_cmd($get_op);	
+       my $get_op = "sudo sh -c \"cat $file >> $http_conf\"";
+       my $exit_status = exec_cmd($get_op);
        exec_cmd("rm -f $file");
        return $exit_status;
 }
@@ -119,13 +119,13 @@ sub append_ceph_conf
 		  rgw socket path = /tmp/radosgw.sock
 		  log file = /var/log/ceph/radosgw.log \n";
 	close FH;
-	my $get_op = "sudo sh -c \"cat $file1 >> $file\""; 
-        my $exit_status = exec_cmd($get_op);	
+	my $get_op = "sudo sh -c \"cat $file1 >> $file\"";
+        my $exit_status = exec_cmd($get_op);
         exec_cmd("rm -f $file1");
         return $exit_status;
 }
 
-# create s3gw.fcgi file and set execute permission for the file  
+# create s3gw.fcgi file and set execute permission for the file
 sub create_fcgi
 {
         my $file = "/var/www/s3gw.fcgi";
@@ -133,12 +133,12 @@ sub create_fcgi
         my $exe_cmd = "exec /usr/bin/radosgw -c /etc/ceph/ceph.conf -n client.radosgw.gateway";
         my $file1 = "test_file3";
         open (FH, ">$file1");
-        print FH "#!/bin/sh \n $exe_cmd \n"; 
+        print FH "#!/bin/sh \n $exe_cmd \n";
         close FH;
         my $get_op = "sudo sh -c \"cat $file1 >> $file\"" ;
         my $exit_status = exec_cmd($get_op);
         exec_cmd("rm -f $file1");
-        my $exit_status1 = exec_cmd($chmod_file) if (!$exit_status); 
+        my $exit_status1 = exec_cmd($chmod_file) if (!$exit_status);
         return $exit_status1;
 }
 
@@ -174,8 +174,8 @@ sub create_rgw_conf {
 	open (FH, ">$file1");
 	print FH "$content";
 	close FH;
-	my $get_op = "sudo sh -c \"cat $file1 >> $file\""; 
-	my $exit_status = exec_cmd($get_op);	
+	my $get_op = "sudo sh -c \"cat $file1 >> $file\"";
+	my $exit_status = exec_cmd($get_op);
         exec_cmd("rm -f $file1");
 	return $exit_status;
 }
@@ -198,7 +198,7 @@ sub generate_keyring_and_key
 sub create_user
 {
 	my $usr = shift;
-	my $cmd = "sudo radosgw-admin user create --uid=$usr --display-name=$usr";	
+	my $cmd = "sudo radosgw-admin user create --uid=$usr --display-name=$usr";
 	my $status = exec_cmd($cmd);
 	return($status);
 }
@@ -207,10 +207,10 @@ sub create_user
 sub start_rgw
 {
  	my $cmd = "sudo /etc/init.d/radosgw start";
-	my $check_ps = "ps -ef | grep radosgw | grep -v grep"; 
+	my $check_ps = "ps -ef | grep radosgw | grep -v grep";
 	my $status = get_cmd_op($cmd);
-	if (!$status) {  
-		my $ps = get_cmd_op($check_ps); 
+	if (!$status) {
+		my $ps = get_cmd_op($check_ps);
 		if ($ps =~ /radosgw/) {
 			return 0;
 		}
@@ -244,8 +244,8 @@ sub ensite_dissite
 {
 	my $a2ensite = "sudo a2ensite rgw.conf";
 	my $a2dissite = "sudo a2dissite default";
-	my $check_en = get_cmd_op($a2ensite); 
-	my $check_dis = get_cmd_op($a2dissite); 
+	my $check_en = get_cmd_op($a2ensite);
+	my $check_dis = get_cmd_op($a2dissite);
 	if (($check_en =~ /nabl/) && ($check_dis =~ /isabl/)){
 		return 0;
 	}
@@ -257,7 +257,7 @@ sub ensite_dissite
 my $domain = "front.sepia.ceph.com";
 my $host = get_hostname();
 my $hostname = "$host.$domain";
-my $run_update = "sudo apt-get update";  
+my $run_update = "sudo apt-get update";
 my $install_radosgw = "sudo apt-get install radosgw";
 my $mkdir_rgw = "sudo mkdir -p /var/lib/ceph/radosgw/ceph-radosgw.gateway";
 my $add_entry_ceph_keyring = "sudo ceph -k /etc/ceph/ceph.keyring auth add client.radosgw.gateway -i /etc/ceph/keyring.radosgw.gateway";
@@ -265,11 +265,11 @@ my $start_rgw = "sudo /etc/init.d/radosgw start";
 my $user = "qa";
 my $install_ap_fcgi = "yes | sudo apt-get install apache2 libapache2-mod-fastcgi" if(!exec_cmd($run_update));
 my $check_en = enmod() if(!$install_ap_fcgi);
-my $check_http = set_httpconf($hostname) if (!$check_en); 
+my $check_http = set_httpconf($hostname) if (!$check_en);
 my $check_apache = start_service("apache2") if (!$check_http) ;
-my $check_install = exec_cmd($install_radosgw) if(!$check_apache);		
+my $check_install = exec_cmd($install_radosgw) if(!$check_apache);
 my $get_exit = append_ceph_conf($host) if(!$check_install);
-my $get_exec = exec_cmd($mkdir_rgw) if(!$get_exit);	
+my $get_exec = exec_cmd($mkdir_rgw) if(!$get_exit);
 my $get_status = create_rgw_conf() if (!$get_exec);
 my $get_enstatus = ensite_dissite() if (!$get_status);
 my $get_status1 = create_fcgi() if(!$get_enstatus);
@@ -278,8 +278,8 @@ my $status_add = exec_cmd($add_entry_ceph_keyring) if(!$status);
 my $status_ceph = start_service("ceph") if (!$status_add);
 my $status_apache = start_service("apache2") if (!$status_ceph);
 my $status_rgw = start_rgw() if (!$status_apache);
-my $status_user = create_user($user) if (!$status_rgw);	
-_write_log_entry("RGW installation and configuration successful!") if (!$status_user);	
+my $status_user = create_user($user) if (!$status_rgw);
+_write_log_entry("RGW installation and configuration successful!") if (!$status_user);
 
 
 

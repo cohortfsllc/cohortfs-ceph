@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -11,7 +11,7 @@
  *  modify it under the terms of the GNU Lesser General Public
  *  License as published by the Free Software Foundation; either
  *  version 2.1 of the License, or (at your option) any later version.
- * 
+ *
  */
 
 #include <errno.h>
@@ -66,8 +66,8 @@ TYPED_TEST(ErasureCodeTest, encode_decode)
   int want_to_encode[] = { 0, 1, 2, 3 };
   map<int, bufferlist> encoded;
   EXPECT_EQ(0, jerasure.encode(set<int>(want_to_encode, want_to_encode+4),
-                              in,
-                              &encoded));
+			      in,
+			      &encoded));
   EXPECT_EQ(4u, encoded.size());
   unsigned length =  encoded[0].length();
   EXPECT_EQ(0, strncmp(encoded[0].c_str(), in.c_str(), length));
@@ -80,16 +80,16 @@ TYPED_TEST(ErasureCodeTest, encode_decode)
     int want_to_decode[] = { 0, 1 };
     map<int, bufferlist> decoded;
     EXPECT_EQ(0, jerasure.decode(set<int>(want_to_decode, want_to_decode+2),
-                                encoded,
-                                &decoded));
-    EXPECT_EQ(2u, decoded.size()); 
+				encoded,
+				&decoded));
+    EXPECT_EQ(2u, decoded.size());
     EXPECT_EQ(length, decoded[0].length());
     EXPECT_EQ(0, strncmp(decoded[0].c_str(), in.c_str(), length));
     EXPECT_EQ(0, strncmp(decoded[1].c_str(), in.c_str() + length,
 			 in.length() - length));
   }
 
-  // two chunks are missing 
+  // two chunks are missing
   {
     map<int, bufferlist> degraded = encoded;
     degraded.erase(0);
@@ -98,10 +98,10 @@ TYPED_TEST(ErasureCodeTest, encode_decode)
     int want_to_decode[] = { 0, 1 };
     map<int, bufferlist> decoded;
     EXPECT_EQ(0, jerasure.decode(set<int>(want_to_decode, want_to_decode+2),
-                                degraded,
-                                &decoded));
+				degraded,
+				&decoded));
     // always decode all, regardless of want_to_decode
-    EXPECT_EQ(4u, decoded.size()); 
+    EXPECT_EQ(4u, decoded.size());
     EXPECT_EQ(length, decoded[0].length());
     EXPECT_EQ(0, strncmp(decoded[0].c_str(), in.c_str(), length));
     EXPECT_EQ(0, strncmp(decoded[1].c_str(), in.c_str() + length,
@@ -350,12 +350,12 @@ int main(int argc, char **argv)
   return RUN_ALL_TESTS();
 }
 
-/* 
+/*
  * Local Variables:
- * compile-command: "cd ../.. ; make -j4 && 
- *   make unittest_erasure_code_jerasure && 
+ * compile-command: "cd ../.. ; make -j4 &&
+ *   make unittest_erasure_code_jerasure &&
  *   valgrind --tool=memcheck --leak-check=full \
- *      ./unittest_erasure_code_jerasure \
- *      --gtest_filter=*.* --log-to-stderr=true --debug-osd=20"
+ *	./unittest_erasure_code_jerasure \
+ *	--gtest_filter=*.* --log-to-stderr=true --debug-osd=20"
  * End:
  */

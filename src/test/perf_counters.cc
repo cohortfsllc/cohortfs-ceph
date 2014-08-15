@@ -8,11 +8,11 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
-#include "include/types.h" // FIXME: ordering shouldn't be important, but right 
-                           // now, this include has to come before the others.
+#include "include/types.h" // FIXME: ordering shouldn't be important, but right
+			   // now, this include has to come before the others.
 
 
 #include "common/perf_counters.h"

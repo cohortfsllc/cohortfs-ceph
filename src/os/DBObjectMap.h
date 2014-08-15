@@ -26,19 +26,19 @@
  * @see sys_prefix
  *
  * - HOBJECT_TO_SEQ: Contains leaf mapping from hobject_t->hobj.seq and
- *                   corresponding omap header
+ *		     corresponding omap header
  * - SYS_PREFIX: GLOBAL_STATE_KEY - contains next seq number
- *                                  @see State
- *                                  @see write_state
- *                                  @see init
- *                                  @see generate_new_header
+ *				    @see State
+ *				    @see write_state
+ *				    @see init
+ *				    @see generate_new_header
  * - USER_PREFIX + header_key(header->seq) + USER_PREFIX
- *              : key->value for header->seq
+ *		: key->value for header->seq
  * - USER_PREFIX + header_key(header->seq) + COMPLETE_PREFIX: see below
  * - USER_PREFIX + header_key(header->seq) + XATTR_PREFIX: xattrs
  * - USER_PREFIX + header_key(header->seq) + SYS_PREFIX
- *              : USER_HEADER_KEY - omap header for header->seq
- *              : HEADER_KEY - encoding of header for header->seq
+ *		: USER_HEADER_KEY - omap header for header->seq
+ *		: HEADER_KEY - encoding of header for header->seq
  *
  * For each node (represented by a header), we
  * store three mappings: the key mapping, the complete mapping, and the parent.
@@ -347,8 +347,8 @@ private:
 
     /// Tests whether to_test is in complete region
     int in_complete_region(const string &to_test, ///< [in] key to test
-			   string *begin,         ///< [out] beginning of region
-			   string *end            ///< [out] end of region
+			   string *begin,	  ///< [out] beginning of region
+			   string *end		  ///< [out] end of region
       ); ///< @returns true if to_test is in the complete region, else false
 
   private:
@@ -443,7 +443,7 @@ private:
   void _set_header(Header header, const bufferlist &bl,
 		   KeyValueDB::Transaction t);
 
-  /** 
+  /**
    * Removes map header lock once Header is out of scope
    * @see lookup_map_header
    */
@@ -461,7 +461,7 @@ private:
     }
   };
 
-  /** 
+  /**
    * Removes header seq lock once Header is out of scope
    * @see lookup_parent
    * @see generate_new_header

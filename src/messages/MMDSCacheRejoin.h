@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -30,7 +30,7 @@ class MMDSCacheRejoin : public Message {
   static const int COMPAT_VERSION = 1;
 
  public:
-  static const int OP_WEAK = 1;  // replica -> auth, + maybe open files.
+  static const int OP_WEAK = 1;	 // replica -> auth, + maybe open files.
   static const int OP_STRONG = 2; // replica -> auth, open files/lock state.
   static const int OP_ACK = 3; // auth -> replica, here is your lock state.
   static const int OP_MISSING = 5; // auth -> replica, i am missing these items
@@ -47,7 +47,7 @@ class MMDSCacheRejoin : public Message {
   }
 
   // -- types --
-  struct inode_strong { 
+  struct inode_strong {
     uint32_t nonce;
     int32_t caps_wanted;
     int32_t filelock, nestlock, dftlock;
@@ -94,9 +94,9 @@ class MMDSCacheRejoin : public Message {
     unsigned char remote_d_type;
     uint32_t nonce;
     int32_t lock;
-    dn_strong() : 
+    dn_strong() :
       ino(0), remote_ino(0), remote_d_type(0), nonce(0), lock(0) {}
-    dn_strong(inodeno_t pi, inodeno_t ri, unsigned char rdt, int n, int l) : 
+    dn_strong(inodeno_t pi, inodeno_t ri, unsigned char rdt, int n, int l) :
       ino(pi), remote_ino(ri), remote_d_type(rdt), nonce(n), lock(l) {}
     bool is_primary() { return ino > 0; }
     bool is_remote() { return remote_ino > 0; }
@@ -192,7 +192,7 @@ class MMDSCacheRejoin : public Message {
   map<vinodeno_t, map<int32_t, list<slave_reqid> > > wrlocked_inodes;
   map<dirfrag_t, map<string, list<slave_reqid> > > authpinned_dentries;
   map<dirfrag_t, map<string, slave_reqid> > xlocked_dentries;
-  
+
   MMDSCacheRejoin() :
     Message(MSG_MDS_CACHEREJOIN, HEAD_VERSION, COMPAT_VERSION)
   {}

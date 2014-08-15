@@ -1924,9 +1924,9 @@ For more detailed information, see :download:`the complete changelog <changelog/
 v0.67.5 "Dumpling"
 ==================
 
-This release includes a few critical bug fixes for the radosgw, 
+This release includes a few critical bug fixes for the radosgw,
 including a fix for hanging operations on large objects.  There are also
-several bug fixes for radosgw multi-site replications, and a few 
+several bug fixes for radosgw multi-site replications, and a few
 backported features.  Also, notably, the 'osd perf' command (which dumps
 recent performance information about active OSDs) has been backported.
 
@@ -2980,7 +2980,7 @@ Notable Changes from v0.60
 * osd: improve client request throttling
 * osd, librados: fixes to the LIST_SNAPS operation
 * osd: improvements to scrub error repair
-* osd: better prevention of wedging OSDs with ENOSPC 
+* osd: better prevention of wedging OSDs with ENOSPC
 * osd: many small fixes
 * mds: fix xattr handling on root inode
 * mds: fixed bugs in journal replay
@@ -3182,7 +3182,7 @@ Notable Changes
  * mon: rearchitected to utilize single instance of paxos and a key/value store (Joao Luis)
  * mon: new 'ceph df [detail]' command
  * osd: support for improved hashing of PGs across OSDs via HASHPSPOOL pool flag and feature
- * osd: refactored watch/notify infrastructure (fixes protocol, removes many bugs) (Sam Just) 
+ * osd: refactored watch/notify infrastructure (fixes protocol, removes many bugs) (Sam Just)
  * osd, librados: ability to list watchers (David Zafman)
  * osd, librados: new listsnaps command (David Zafman)
  * osd: trim log more aggressively, avoid appearance of leak memory
@@ -3957,7 +3957,7 @@ v0.48 "argonaut"
 Upgrading
 ---------
 
-* This release includes a disk format upgrade.  Each ceph-osd daemon, upon startup, will migrate its locally stored data to the new format.  This process can take a while (for large object counts, even hours), especially on non-btrfs file systems.  
+* This release includes a disk format upgrade.  Each ceph-osd daemon, upon startup, will migrate its locally stored data to the new format.  This process can take a while (for large object counts, even hours), especially on non-btrfs file systems.
 
 * To keep the cluster available while the upgrade is in progress, we recommend you upgrade a storage node or rack at a time, and wait for the cluster to recover each time.  To prevent the cluster from moving data around in response to the OSD daemons being down for minutes or hours, you may want to::
 

@@ -50,25 +50,25 @@ extern void *cls_alloc(size_t size);
 extern void cls_free(void *p);
 
 extern int cls_read(cls_method_context_t hctx, int ofs, int len,
-                                 char **outdata, int *outdatalen);
+				 char **outdata, int *outdatalen);
 extern int cls_call(cls_method_context_t hctx, const char *cls, const char *method,
-                                 char *indata, int datalen,
-                                 char **outdata, int *outdatalen);
+				 char *indata, int datalen,
+				 char **outdata, int *outdatalen);
 extern int cls_getxattr(cls_method_context_t hctx, const char *name,
-                                 char **outdata, int *outdatalen);
+				 char **outdata, int *outdatalen);
 extern int cls_setxattr(cls_method_context_t hctx, const char *name,
-                                 const char *value, int val_len);
+				 const char *value, int val_len);
 /** This will fill in the passed origin pointer with the origin of the
  * request which activated your class call. */
 extern int cls_get_request_origin(cls_method_context_t hctx,
-                                  entity_inst_t *origin);
+				  entity_inst_t *origin);
 
 /* class registration api */
 extern int cls_register(const char *name, cls_handle_t *handle);
 extern int cls_unregister(cls_handle_t);
 
 extern int cls_register_method(cls_handle_t hclass, const char *method, int flags,
-                        cls_method_call_t class_call, cls_method_handle_t *handle);
+			cls_method_call_t class_call, cls_method_handle_t *handle);
 extern int cls_unregister_method(cls_method_handle_t handle);
 
 
@@ -104,30 +104,30 @@ extern int cls_cxx_read(cls_method_context_t hctx, int ofs, int len, bufferlist 
 extern int cls_cxx_write(cls_method_context_t hctx, int ofs, int len, bufferlist *bl);
 extern int cls_cxx_write_full(cls_method_context_t hctx, bufferlist *bl);
 extern int cls_cxx_getxattr(cls_method_context_t hctx, const char *name,
-                            bufferlist *outbl);
+			    bufferlist *outbl);
 extern int cls_cxx_getxattrs(cls_method_context_t hctx, map<string, bufferlist> *attrset);
 extern int cls_cxx_setxattr(cls_method_context_t hctx, const char *name,
-                            bufferlist *inbl);
+			    bufferlist *inbl);
 extern int cls_cxx_replace(cls_method_context_t hctx, int ofs, int len, bufferlist *bl);
 extern int cls_cxx_map_clear(cls_method_context_t hctx);
 extern int cls_cxx_map_get_all_vals(cls_method_context_t hctx,
-                                    std::map<string, bufferlist> *vals);
+				    std::map<string, bufferlist> *vals);
 extern int cls_cxx_map_get_keys(cls_method_context_t hctx,
-                                const string &start_after,
-                                uint64_t max_to_get,
-                                std::set<string> *keys);
+				const string &start_after,
+				uint64_t max_to_get,
+				std::set<string> *keys);
 extern int cls_cxx_map_get_vals(cls_method_context_t hctx,
-                                const string &start_after,
-                                const string &filter_prefix,
-                                uint64_t max_to_get,
-                                std::map<string, bufferlist> *vals);
+				const string &start_after,
+				const string &filter_prefix,
+				uint64_t max_to_get,
+				std::map<string, bufferlist> *vals);
 extern int cls_cxx_map_read_header(cls_method_context_t hctx, bufferlist *outbl);
 extern int cls_cxx_map_get_val(cls_method_context_t hctx,
-                               const string &key, bufferlist *outbl);
+			       const string &key, bufferlist *outbl);
 extern int cls_cxx_map_set_val(cls_method_context_t hctx,
-                               const string &key, bufferlist *inbl);
+			       const string &key, bufferlist *inbl);
 extern int cls_cxx_map_set_vals(cls_method_context_t hctx,
-                                const std::map<string, bufferlist> *map);
+				const std::map<string, bufferlist> *map);
 extern int cls_cxx_map_write_header(cls_method_context_t hctx, bufferlist *inbl);
 extern int cls_cxx_map_remove_key(cls_method_context_t hctx, const string &key);
 extern int cls_cxx_map_update(cls_method_context_t hctx, bufferlist *inbl);

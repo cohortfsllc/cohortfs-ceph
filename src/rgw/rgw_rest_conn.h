@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #ifndef CEPH_RGW_REST_CONN_H
 #define CEPH_RGW_REST_CONN_H
 
@@ -24,7 +26,7 @@ public:
 
   /* async request */
   int put_obj_init(const string& uid, rgw_obj& obj, uint64_t obj_size,
-                   map<string, bufferlist>& attrs, RGWRESTStreamWriteRequest **req);
+		   map<string, bufferlist>& attrs, RGWRESTStreamWriteRequest **req);
   int complete_request(RGWRESTStreamWriteRequest *req, string& etag, time_t *mtime);
 
   int get_obj(const string& uid, req_info *info /* optional */, rgw_obj& obj, bool prepend_metadata, RGWGetDataCB *cb, RGWRESTStreamReadRequest **req);

@@ -16,7 +16,7 @@ static const uint8_t MON_CAP_R     = (1 << 1);      // read
 static const uint8_t MON_CAP_W     = (1 << 2);      // write
 static const uint8_t MON_CAP_X     = (1 << 3);      // execute
 static const uint8_t MON_CAP_ALL   = MON_CAP_R | MON_CAP_W | MON_CAP_X;
-static const uint8_t MON_CAP_ANY   = 0xff;          // *
+static const uint8_t MON_CAP_ANY   = 0xff;	    // *
 
 struct mon_rwxa_t {
   uint8_t val;

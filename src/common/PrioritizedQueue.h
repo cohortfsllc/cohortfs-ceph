@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -255,7 +255,7 @@ public:
 	 i != queue.end();
 	 ) {
       unsigned priority = i->first;
-      
+
       i->second.remove_by_filter(f, removed);
       if (i->second.empty()) {
 	++i;

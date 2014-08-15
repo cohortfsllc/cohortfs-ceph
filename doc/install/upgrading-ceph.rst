@@ -3,9 +3,9 @@
 ================
 
 You can upgrade daemons in your Ceph cluster while the cluster is
-online and in service! The upgrade process is relatively simple: 
+online and in service! The upgrade process is relatively simple:
 
-#. Use ``ceph-deploy`` to upgrade the packages for multiple hosts, 
+#. Use ``ceph-deploy`` to upgrade the packages for multiple hosts,
    or login to each host and upgrade the Ceph package manually.
 #. Restart each daemon.
 #. Ensure your cluster is healthy.
@@ -28,7 +28,7 @@ daemons in your cluster before you try to exercise new functionality in a
 release.
 
 Each release of Ceph may have some additional steps. Refer to the following
-sections to identify release-specific procedures for your cluster before 
+sections to identify release-specific procedures for your cluster before
 using the upgrade procedures.
 
 
@@ -41,7 +41,7 @@ When upgrading from Argonaut to Bobtail, you need to be aware of several things:
 #. Monitors use a new internal on-wire protocol.
 #. RBD ``format2`` images require upgrading all OSDs before using it.
 
-Ensure that you update package repository paths. For example:: 
+Ensure that you update package repository paths. For example::
 
 	sudo rm /etc/apt/sources.list.d/ceph.list
 	echo deb http://ceph.com/debian-bobtail/ $(lsb_release -sc) main | sudo tee /etc/apt/sources.list.d/ceph.list
@@ -53,7 +53,7 @@ Authentication
 
 The Ceph Bobtail release enables authentication by default. Bobtail also has
 finer-grained authentication configuration settings. In previous versions of
-Ceph (i.e., actually v 0.55 and earlier), you could simply specify:: 
+Ceph (i.e., actually v 0.55 and earlier), you could simply specify::
 
 	auth supported = [cephx | none]
 
@@ -123,7 +123,7 @@ Argonaut to Cuttlefish without the intermediate upgrade to Bobtail.
 .. important:: Ensure that the repository specified points to Bobtail, not
    Cuttlefish.
 
-For example:: 
+For example::
 
 	sudo rm /etc/apt/sources.list.d/ceph.list
 	echo deb http://ceph.com/debian-bobtail/ $(lsb_release -sc) main | sudo tee /etc/apt/sources.list.d/ceph.list
@@ -135,10 +135,10 @@ requires all monitors to be Bobtail or greater. Upgrading only a majority of the
 nodes (e.g., two out of three) may expose the cluster to a situation where a
 single additional failure may compromise availability (because the non-upgraded
 daemon cannot participate in the new protocol).  We recommend not waiting for an
-extended period of time between ``ceph-mon`` upgrades. See `Upgrading 
+extended period of time between ``ceph-mon`` upgrades. See `Upgrading
 Monitors`_ for details.
 
-.. note:: See the `Authentication`_ section and the 
+.. note:: See the `Authentication`_ section and the
    `Ceph Authentication - Backward Compatibility`_ for additional information
    on authentication backward compatibility settings for Bobtail.
 
@@ -171,7 +171,7 @@ metadata servers in a cluster, ensure the metadata servers have unique names.
 See the following sections for details.
 
 Replace any ``apt`` reference to older repositories with a reference to the
-Cuttlefish repository. For example:: 
+Cuttlefish repository. For example::
 
 	sudo rm /etc/apt/sources.list.d/ceph.list
 	echo deb http://ceph.com/debian-cuttlefish/ $(lsb_release -sc) main | sudo tee /etc/apt/sources.list.d/ceph.list
@@ -181,13 +181,13 @@ Monitor
 -------
 
 The architecture of the monitors changed significantly from Bobtail to
-Cuttlefish. See `Monitor Config Reference`_ and `Joao's blog post`_ for 
+Cuttlefish. See `Monitor Config Reference`_ and `Joao's blog post`_ for
 details. This means that v0.59 and pre-v0.59 monitors do not talk to each other
-(Cuttlefish is v.0.61). When you upgrade each monitor, it will convert its 
-local data store to the new format. Once you upgrade a majority of monitors, 
+(Cuttlefish is v.0.61). When you upgrade each monitor, it will convert its
+local data store to the new format. Once you upgrade a majority of monitors,
 the monitors form a quorum using the new protocol and the old monitors will be
 blocked until they get upgraded. For this reason, we recommend upgrading the
-monitors in immediate succession. 
+monitors in immediate succession.
 
 .. important:: Do not run a mixed-version cluster for an extended period.
 
@@ -220,16 +220,16 @@ Second, you must upgrade the full set of monitors to use Dumpling, because of a
 protocol change.
 
 Replace any reference to older repositories with a reference to the
-Dumpling repository. For example, with ``apt`` perform the following:: 
+Dumpling repository. For example, with ``apt`` perform the following::
 
 	sudo rm /etc/apt/sources.list.d/ceph.list
 	echo deb http://ceph.com/debian-dumpling/ $(lsb_release -sc) main | sudo tee /etc/apt/sources.list.d/ceph.list
 
-With CentOS/Red Hat distributions, remove the old repository. :: 
+With CentOS/Red Hat distributions, remove the old repository. ::
 
 	sudo rm /etc/yum.repos.d/ceph.repo
 
-Then add a new ``ceph.repo`` repository entry with the following contents. 
+Then add a new ``ceph.repo`` repository entry with the following contents.
 
 .. code-block:: ini
 
@@ -239,14 +239,14 @@ Then add a new ``ceph.repo`` repository entry with the following contents.
 	enabled=1
 	gpgcheck=1
 	type=rpm-md
-	gpgkey=https://ceph.com/git/?p=ceph.git;a=blob_plain;f=keys/release.asc	
+	gpgkey=https://ceph.com/git/?p=ceph.git;a=blob_plain;f=keys/release.asc
 
 
 .. note:: Ensure you use the correct URL for your distribution. Check the
-   http://ceph.com/rpm directory for your distribution. 
+   http://ceph.com/rpm directory for your distribution.
 
 .. note:: Since you can upgrade using ``ceph-deploy`` you will only need to add
-   the repository on Ceph Client nodes where you use the ``ceph`` command line 
+   the repository on Ceph Client nodes where you use the ``ceph`` command line
    interface or the ``ceph-deploy`` tool.
 
 
@@ -257,17 +257,17 @@ When upgrading from Dumpling (v0.64) you may perform a rolling
 upgrade.
 
 Replace any reference to older repositories with a reference to the
-Emperor repository. For example, with ``apt`` perform the following:: 
+Emperor repository. For example, with ``apt`` perform the following::
 
 	sudo rm /etc/apt/sources.list.d/ceph.list
 	echo deb http://ceph.com/debian-emperor/ $(lsb_release -sc) main | sudo tee /etc/apt/sources.list.d/ceph.list
 
-With CentOS/Red Hat distributions, remove the old repository. :: 
+With CentOS/Red Hat distributions, remove the old repository. ::
 
 	sudo rm /etc/yum.repos.d/ceph.repo
 
 Then add a new ``ceph.repo`` repository entry with the following contents and
-replace ``{distro}`` with your distribution (e.g., ``el6``, ``rhel6``, etc). 
+replace ``{distro}`` with your distribution (e.g., ``el6``, ``rhel6``, etc).
 
 .. code-block:: ini
 
@@ -277,14 +277,14 @@ replace ``{distro}`` with your distribution (e.g., ``el6``, ``rhel6``, etc).
 	enabled=1
 	gpgcheck=1
 	type=rpm-md
-	gpgkey=https://ceph.com/git/?p=ceph.git;a=blob_plain;f=keys/release.asc	
+	gpgkey=https://ceph.com/git/?p=ceph.git;a=blob_plain;f=keys/release.asc
 
 
 .. note:: Ensure you use the correct URL for your distribution. Check the
-   http://ceph.com/rpm directory for your distribution. 
+   http://ceph.com/rpm directory for your distribution.
 
 .. note:: Since you can upgrade using ``ceph-deploy`` you will only need to add
-   the repository on Ceph Client nodes where you use the ``ceph`` command line 
+   the repository on Ceph Client nodes where you use the ``ceph`` command line
    interface or the ``ceph-deploy`` tool.
 
 
@@ -297,8 +297,8 @@ that you must upgrade the  ``ceph-common`` library on all nodes that access the
 Ceph Storage Cluster with the ``ceph`` CLI before upgrading Ceph daemons. ::
 
 	sudo apt-get update && sudo apt-get install ceph-common
-	
-Ensure that you have the latest version (v0.67 or later). If you do not, 
+
+Ensure that you have the latest version (v0.67 or later). If you do not,
 you may need to uninstall, auto remove dependencies and reinstall.
 
 See `v0.65`_ for details on the new command line interface.
@@ -316,7 +316,7 @@ Before upgrading Ceph daemons, upgrade the ``ceph-deploy`` tool. ::
 Or::
 
 	sudo apt-get install ceph-deploy
-	
+
 Or::
 
 	sudo yum install ceph-deploy python-pushy
@@ -338,7 +338,7 @@ succession) to minimize the possibility of downtime.
 Upgrade Procedures
 ==================
 
-The following sections describe the upgrade process. 
+The following sections describe the upgrade process.
 
 .. important:: Each release of Ceph may have some additional steps. Refer to
    release-specific sections for details **BEFORE** you begin upgrading daemons.
@@ -349,17 +349,17 @@ Upgrading Monitors
 
 To upgrade monitors, perform the following steps:
 
-#. Upgrade the Ceph package for each daemon instance. 
+#. Upgrade the Ceph package for each daemon instance.
 
-   You may use ``ceph-deploy`` to address all monitor nodes at once. 
+   You may use ``ceph-deploy`` to address all monitor nodes at once.
    For example::
 
 	ceph-deploy install --stable {stable release} ceph-node1[ ceph-node2]
 	ceph-deploy install --stable dumpling mon1 mon2 mon3
 
-   You may also use the package manager for your Linux distribution on 
-   each individual node. To upgrade packages manually on each Debian/Ubuntu 
-   host, perform the following steps . :: 
+   You may also use the package manager for your Linux distribution on
+   each individual node. To upgrade packages manually on each Debian/Ubuntu
+   host, perform the following steps . ::
 
 	ssh {mon-host}
 	sudo apt-get update && sudo apt-get install ceph
@@ -368,9 +368,9 @@ To upgrade monitors, perform the following steps:
 
 	ssh {mon-host}
 	sudo yum update && sudo yum install ceph
-	
- 
-#. Restart each monitor. For Debian/Ubuntu distributions, use:: 
+
+
+#. Restart each monitor. For Debian/Ubuntu distributions, use::
 
 	sudo restart ceph-mon id={hostname}
 
@@ -378,9 +378,9 @@ To upgrade monitors, perform the following steps:
 
 	sudo /etc/init.d/ceph restart {mon-id}
 
-   For CentOS/Red Hat distributions deployed with ``ceph-deploy``, 
+   For CentOS/Red Hat distributions deployed with ``ceph-deploy``,
    the monitor ID is usually ``mon.{hostname}``.
-   
+
 #. Ensure each monitor has rejoined the quorum. ::
 
 	ceph mon stat
@@ -393,17 +393,17 @@ Upgrading an OSD
 
 To upgrade a Ceph OSD Daemon, perform the following steps:
 
-#. Upgrade the Ceph OSD Daemon package. 
+#. Upgrade the Ceph OSD Daemon package.
 
-   You may use ``ceph-deploy`` to address all Ceph OSD Daemon nodes at 
+   You may use ``ceph-deploy`` to address all Ceph OSD Daemon nodes at
    once. For example::
 
 	ceph-deploy install --stable {stable release} ceph-node1[ ceph-node2]
 	ceph-deploy install --stable dumpling mon1 mon2 mon3
 
-   You may also use the package manager on each node to upgrade packages 
+   You may also use the package manager on each node to upgrade packages
    manually. For Debian/Ubuntu hosts, perform the following steps on each
-   host. :: 
+   host. ::
 
 	ssh {osd-host}
 	sudo apt-get update && sudo apt-get install ceph
@@ -414,24 +414,24 @@ To upgrade a Ceph OSD Daemon, perform the following steps:
 	sudo yum update && sudo yum install ceph
 
 
-#. Restart the OSD, where ``N`` is the OSD number. For Debian/Ubuntu, use:: 
+#. Restart the OSD, where ``N`` is the OSD number. For Debian/Ubuntu, use::
 
 	sudo restart ceph-osd id=N
 
    For multiple OSDs on a host, you may restart all of them with Upstart. ::
 
 	sudo restart ceph-osd-all
-	
+
    For CentOS/Red Hat distributions, use::
 
-	sudo /etc/init.d/ceph restart N	
+	sudo /etc/init.d/ceph restart N
 
 
 #. Ensure each upgraded Ceph OSD Daemon has rejoined the cluster::
 
 	ceph osd stat
 
-Ensure that you have completed the upgrade cycle for all of your 
+Ensure that you have completed the upgrade cycle for all of your
 Ceph OSD Daemons.
 
 
@@ -440,15 +440,15 @@ Upgrading a Metadata Server
 
 To upgrade a Ceph Metadata Server, perform the following steps:
 
-#. Upgrade the Ceph Metadata Server package. You may use ``ceph-deploy`` to 
-   address all Ceph Metadata Server nodes at once, or use the package manager 
+#. Upgrade the Ceph Metadata Server package. You may use ``ceph-deploy`` to
+   address all Ceph Metadata Server nodes at once, or use the package manager
    on each node. For example::
 
 	ceph-deploy install --stable {stable release} ceph-node1[ ceph-node2]
 	ceph-deploy install --stable dumpling mon1 mon2 mon3
 
    To upgrade packages manually, perform the following steps on each
-   Debian/Ubuntu host. :: 
+   Debian/Ubuntu host. ::
 
 	ssh {mon-host}
 	sudo apt-get update && sudo apt-get install ceph-mds
@@ -458,11 +458,11 @@ To upgrade a Ceph Metadata Server, perform the following steps:
 	ssh {mon-host}
 	sudo yum update && sudo yum install ceph-mds
 
- 
-#. Restart the metadata server. For Debian/Ubuntu, use:: 
+
+#. Restart the metadata server. For Debian/Ubuntu, use::
 
 	sudo restart ceph-mds id={hostname}
-	
+
    For CentOS/Red Hat distributions, use::
 
 	sudo /etc/init.d/ceph restart mds.{hostname}
@@ -482,7 +482,7 @@ Once you have upgraded the packages and restarted daemons on your Ceph
 cluster, we recommend upgrading ``ceph-common`` and client libraries
 (``librbd1`` and ``librados2``) on your client nodes too.
 
-#. Upgrade the package:: 
+#. Upgrade the package::
 
 	ssh {client-host}
 	apt-get update && sudo apt-get install ceph-common librados2 librbd1 python-ceph
@@ -513,8 +513,8 @@ setting, your monitor keyring should look something like this::
 
 	[mon.]
 		key = AQBJIHhRuHCwDRAAZjBTSJcIBIoGpdOR9ToiyQ==
-		caps mon = "allow *" 
-		
+		caps mon = "allow *"
+
 Adding ``caps mon = "allow *"`` will ease the transition from ``mkcephfs`` to
 ``ceph-deploy`` by allowing ``ceph-create-keys`` to use the ``mon.`` keyring
 file in ``$mon_data`` and get the caps it needs.
@@ -532,6 +532,6 @@ to use the default paths.
 Under those directories, the keyring should be in a file named ``keyring``.
 
 .. _Monitor Config Reference: ../../rados/configuration/mon-config-ref
-.. _Joao's blog post: http://ceph.com/dev-notes/cephs-new-monitor-changes 
+.. _Joao's blog post: http://ceph.com/dev-notes/cephs-new-monitor-changes
 .. _Ceph Authentication: ../../rados/operations/authentication/
 .. _Ceph Authentication - Backward Compatibility: ../../rados/operations/authentication/#backward-compatibility

@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 /*
  * Copyright (c) 1998-2001 Apple Computer, Inc. All rights reserved.
  *
@@ -5,7 +7,7 @@
  *
  * The contents of this file constitute Original Code as defined in and
  * are subject to the Apple Public Source License Version 2.0 (the
- * "License").  You may not use this file except in compliance with the
+ * "License").	You may not use this file except in compliance with the
  * License.  Please obtain a copy of the License at
  * http://www.opensource.apple.com/apsl/ and read it before using this file.
  *
@@ -22,7 +24,7 @@
  *	File:	fsx.c
  *	Author:	Avadis Tevanian, Jr.
  *
- *	File system exerciser. 
+ *	File system exerciser.
  *
  *	Rewrite and enhancements 1998-2001 Conrad Minshall -- conrad@mac.com
  *
@@ -124,8 +126,8 @@ int	lite = 0;			/* -L flag */
 long	numops = -1;			/* -N flag */
 int	randomoplen = 1;		/* -O flag disables it */
 int	seed = 1;			/* -S flag */
-int     mapped_writes = 1;	      /* -W flag disables */
-int 	mapped_reads = 1;		/* -R flag disables it */
+int	mapped_writes = 1;	      /* -W flag disables */
+int	mapped_reads = 1;		/* -R flag disables it */
 int	fsxgoodfd = 0;
 FILE *	fsxlogf = NULL;
 int badoff = -1;
@@ -221,7 +223,7 @@ logdump(void)
 		lp = &oplog[i];
 		if ((closeopen = lp->operation < 0))
 			lp->operation = ~ lp->operation;
-			
+
 		switch (lp->operation) {
 		case OP_MAPREAD:
 			prt("MAPREAD\t0x%x thru 0x%x\t(0x%x bytes)",
@@ -311,7 +313,7 @@ save_buffer(char *buffer, off_t bufferlength, int fd)
 	ret = lseek(fd, (off_t)0, SEEK_SET);
 	if (ret == (off_t)-1)
 		prterr("save_buffer: lseek 0");
-	
+
 	byteswritten = write(fd, buffer, (size_t)bufferlength);
 	if (byteswritten != bufferlength) {
 		if (byteswritten == -1)
@@ -328,7 +330,7 @@ void
 report_failure(int status)
 {
 	logdump();
-	
+
 	if (fsxgoodfd) {
 		if (good_buf) {
 			save_buffer(good_buf, file_size, fsxgoodfd);
@@ -486,7 +488,7 @@ check_eofpage(char *s, unsigned offset, char *p, int size)
 		return;
 	/*
 	 * we landed in the last page of the file
-	 * test to make sure the VM system provided 0's 
+	 * test to make sure the VM system provided 0's
 	 * beyond the true end of the file mapping
 	 * (as required by mmap def in 1996 posix 1003.1)
 	 */
@@ -509,7 +511,7 @@ domapread(unsigned offset, unsigned size)
 {
 	unsigned pg_offset;
 	unsigned map_size;
-	char    *p;
+	char	*p;
 
 	offset -= offset % readbdy;
 	if (size == 0) {
@@ -564,7 +566,7 @@ void
 gendata(char *original_buf, char *good_buf, unsigned offset, unsigned size)
 {
 	while (size--) {
-		good_buf[offset] = testcalls % 256; 
+		good_buf[offset] = testcalls % 256;
 		if (offset % 2)
 			good_buf[offset] += original_buf[offset];
 		offset++;
@@ -632,8 +634,8 @@ domapwrite(unsigned offset, unsigned size)
 {
 	unsigned pg_offset;
 	unsigned map_size;
-	off_t    cur_filesize;
-	char    *p;
+	off_t	 cur_filesize;
+	char	*p;
 
 	offset -= offset % writebdy;
 	if (size == 0) {
@@ -719,7 +721,7 @@ dotruncate(unsigned size)
 
 	if (testcalls <= simulatedopcount)
 		return;
-	
+
 	if ((progressinterval && testcalls % progressinterval == 0) ||
 	    (debug && (monitorstart == -1 || monitorend == -1 ||
 		       size <= monitorend)))
@@ -760,7 +762,7 @@ writefileimage()
 
 void
 docloseopen(void)
-{ 
+{
 	if (testcalls <= simulatedopcount)
 		return;
 
@@ -808,9 +810,9 @@ test(void)
 	/*
 	 * READ:	op = 0
 	 * WRITE:	op = 1
-	 * MAPREAD:     op = 2
+	 * MAPREAD:	op = 2
 	 * TRUNCATE:	op = 3
-	 * MAPWRITE:    op = 3 or 4
+	 * MAPWRITE:	op = 3 or 4
 	 */
 	if (lite ? 0 : op == 3 && style == 0) /* vanilla truncate? */
 		dotruncate(random() % maxfilelen);
@@ -1136,7 +1138,7 @@ main(int argc, char **argv)
 				     (unsigned)written, maxfilelen);
 			exit(98);
 		}
-	} else 
+	} else
 		check_trunc_hack();
 
 	while (numops == -1 || numops--)

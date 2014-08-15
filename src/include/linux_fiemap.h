@@ -4,8 +4,8 @@
  * Some portions copyright (C) 2007 Cluster File Systems, Inc
  *
  * Authors: Mark Fasheh <mfasheh@suse.com>
- *          Kalpak Shah <kalpak.shah@sun.com>
- *          Andreas Dilger <adilger@sun.com>
+ *	    Kalpak Shah <kalpak.shah@sun.com>
+ *	    Andreas Dilger <adilger@sun.com>
  */
 #ifndef _LINUX_FIEMAP_H
 #define _LINUX_FIEMAP_H

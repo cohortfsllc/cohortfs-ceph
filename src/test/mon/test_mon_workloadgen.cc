@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 #include "acconfig.h"
@@ -528,11 +528,11 @@ class OSDStub : public TestStub
     dout(1) << __func__ << dendl;
     if (m->fsid != monc.get_fsid()) {
       dout(0) << __func__
-              << " message fsid " << m->fsid << " != " << monc.get_fsid()
-              << dendl;
+	      << " message fsid " << m->fsid << " != " << monc.get_fsid()
+	      << dendl;
       dout(0) << __func__ << " " << m
-              << " from " << m->get_source_inst()
-              << dendl;
+	      << " from " << m->get_source_inst()
+	      << dendl;
       dout(0) << monc.get_monmap() << dendl;
     }
     assert(m->fsid == monc.get_fsid());
@@ -702,14 +702,14 @@ void usage() {
 	    << std::endl;
   std::cout << "\n\
 Global Options:\n\
-  -c FILE                   Read configuration from FILE\n\
-  --keyring FILE            Read keyring from FILE\n\
-  --help                    This message\n\
+  -c FILE		    Read configuration from FILE\n\
+  --keyring FILE	    Read keyring from FILE\n\
+  --help		    This message\n\
 \n\
 Test-specific Options:\n\
-  --stub-id ID1..ID2        Interval of OSD ids for multiple stubs to mimic.\n\
-  --stub-id ID              OSD id a stub will mimic to be\n\
-                            (same as --stub-id ID..ID)\n\
+  --stub-id ID1..ID2	    Interval of OSD ids for multiple stubs to mimic.\n\
+  --stub-id ID		    OSD id a stub will mimic to be\n\
+			    (same as --stub-id ID..ID)\n\
 " << std::endl;
 }
 
@@ -762,7 +762,7 @@ int main(int argc, const char *argv[])
     if (ceph_argparse_double_dash(args, i)) {
       break;
     } else if (ceph_argparse_witharg(args, i, &val,
-        "--stub-id", (char*) NULL)) {
+	"--stub-id", (char*) NULL)) {
       int first = -1, last = -1;
       if (get_id_interval(first, last, val) < 0) {
 	std::cerr << "** error parsing stub id '" << val << "'" << std::endl;
@@ -791,7 +791,7 @@ int main(int argc, const char *argv[])
 
   if (stub_ids.empty()) {
     std::cerr << "** error: must specify at least one '--stub-id <ID>'"
-         << std::endl;
+	 << std::endl;
     usage();
     return 1;
   }

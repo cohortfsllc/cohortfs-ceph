@@ -165,7 +165,7 @@ TYPED_TEST(NumericTest, DefaultIsZero) {
 
 }  // namespace library1
 
-#endif  // GTEST_HAS_TYPED_TEST
+#endif	// GTEST_HAS_TYPED_TEST
 
 // This #ifdef block tests type-parameterized tests.
 #if GTEST_HAS_TYPED_TEST_P
@@ -189,7 +189,7 @@ class TypedTestCasePStateTest : public Test {
 TEST_F(TypedTestCasePStateTest, SucceedsForMatchingList) {
   const char* tests = "A, B, C";
   EXPECT_EQ(tests,
-            state_.VerifyRegisteredTestNames("foo.cc", 1, tests));
+	    state_.VerifyRegisteredTestNames("foo.cc", 1, tests));
 }
 
 // Makes sure that the order of the tests and spaces around the names
@@ -197,7 +197,7 @@ TEST_F(TypedTestCasePStateTest, SucceedsForMatchingList) {
 TEST_F(TypedTestCasePStateTest, IgnoresOrderAndSpaces) {
   const char* tests = "A,C,   B";
   EXPECT_EQ(tests,
-            state_.VerifyRegisteredTestNames("foo.cc", 1, tests));
+	    state_.VerifyRegisteredTestNames("foo.cc", 1, tests));
 }
 
 typedef TypedTestCasePStateTest TypedTestCasePStateDeathTest;
@@ -260,7 +260,7 @@ TYPED_TEST_P(DerivedTest, ValuesAreStillCorrect) {
 }
 
 REGISTER_TYPED_TEST_CASE_P(DerivedTest,
-                           ValuesAreCorrect, ValuesAreStillCorrect);
+			   ValuesAreCorrect, ValuesAreStillCorrect);
 
 typedef Types<short, long> MyTwoTypes;
 INSTANTIATE_TYPED_TEST_CASE_P(My, DerivedTest, MyTwoTypes);
@@ -339,13 +339,13 @@ TYPED_TEST_P(NumericTest, ZeroIsLessThanOne) {
 }
 
 REGISTER_TYPED_TEST_CASE_P(NumericTest,
-                           DefaultIsZero, ZeroIsLessThanOne);
+			   DefaultIsZero, ZeroIsLessThanOne);
 typedef Types<int, double> NumericTypes;
 INSTANTIATE_TYPED_TEST_CASE_P(My, NumericTest, NumericTypes);
 
 }  // namespace library2
 
-#endif  // GTEST_HAS_TYPED_TEST_P
+#endif	// GTEST_HAS_TYPED_TEST_P
 
 #if !defined(GTEST_HAS_TYPED_TEST) && !defined(GTEST_HAS_TYPED_TEST_P)
 
@@ -357,4 +357,4 @@ INSTANTIATE_TYPED_TEST_CASE_P(My, NumericTest, NumericTypes);
 // must be defined). This dummy test keeps gtest_main linked in.
 TEST(DummyTest, TypedTestsAreNotSupportedOnThisPlatform) {}
 
-#endif  // #if !defined(GTEST_HAS_TYPED_TEST) && !defined(GTEST_HAS_TYPED_TEST_P)
+#endif	// #if !defined(GTEST_HAS_TYPED_TEST) && !defined(GTEST_HAS_TYPED_TEST_P)

@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -94,7 +94,7 @@ protected:
 
   list<Context*> waitfor_replay;
 
-  void _replay();         // old way
+  void _replay();	  // old way
   void _replay_thread();  // new way
 
 
@@ -136,10 +136,10 @@ private:
     }
   };
   void handle_journaler_write_error(int r);
- 
+
 public:
   void create_logger();
-  
+
   // replay state
   map<inodeno_t, set<inodeno_t> >   pending_exports;
 
@@ -147,7 +147,7 @@ public:
 
 public:
   MDLog(MDS *m) : mds(m),
-		  num_events(0), 
+		  num_events(0),
 		  unflushed(0),
 		  capped(false),
 		  journaler(0),
@@ -155,7 +155,7 @@ public:
 		  replay_thread(this),
 		  already_replayed(false),
 		  expiring_events(0), expired_events(0),
-		  cur_event(NULL) { }		  
+		  cur_event(NULL) { }
   ~MDLog();
 
 
@@ -168,7 +168,7 @@ public:
     return segments.empty() ? NULL : segments.rbegin()->second;
   }
 
-  LogSegment *get_current_segment() { 
+  LogSegment *get_current_segment() {
     assert(!segments.empty());
     return segments.rbegin()->second;
   }
@@ -186,7 +186,7 @@ public:
   void flush_logger();
 
   size_t get_num_events() { return num_events; }
-  size_t get_num_segments() { return segments.size(); }  
+  size_t get_num_segments() { return segments.size(); }
 
   uint64_t get_read_pos();
   uint64_t get_write_pos();
@@ -239,8 +239,8 @@ private:
   void write_head(Context *onfinish);
 
 public:
-  void create(Context *onfinish);  // fresh, empty log! 
-  void open(Context *onopen);      // append() or replay() to follow!
+  void create(Context *onfinish);  // fresh, empty log!
+  void open(Context *onopen);	   // append() or replay() to follow!
   void append();
   void replay(Context *onfinish);
 

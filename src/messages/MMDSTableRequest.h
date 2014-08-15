@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 
@@ -27,7 +27,7 @@ class MMDSTableRequest : public Message {
   bufferlist bl;
 
   MMDSTableRequest() : Message(MSG_MDS_TABLE_REQUEST) {}
-  MMDSTableRequest(int tab, int o, uint64_t r, version_t v=0) : 
+  MMDSTableRequest(int tab, int o, uint64_t r, version_t v=0) :
     Message(MSG_MDS_TABLE_REQUEST),
     table(tab), op(o), reqid(r) {
     set_tid(v);
@@ -35,7 +35,7 @@ class MMDSTableRequest : public Message {
 private:
   ~MMDSTableRequest() {}
 
-public:  
+public:
   virtual const char *get_type_name() const { return "mds_table_request"; }
   void print(ostream& o) const {
     o << "mds_table_request(" << get_mdstable_name(table)

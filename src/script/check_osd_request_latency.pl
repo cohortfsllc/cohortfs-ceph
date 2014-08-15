@@ -31,18 +31,18 @@ while (<>) {
 	my $req = "$tid";
 	if (exists $r{$req}) {
 	    my $len = tosec($stamp) - tosec($r{$req});
-	    
+
 	    #print "$req $len ($r{$req} - $stamp)\n";
 	    $lat_req{$len} = $req;
-	    
+
 	    delete $r{$req};
 	}
 	next;
     }
-    
+
 }
 
 
 for my $len (sort {$b <=> $a} keys %lat_req) {
-    print "$len\t$lat_req{$len}\t$desc{$lat_req{$len}}\n";    
+    print "$len\t$lat_req{$len}\t$desc{$lat_req{$len}}\n";
 }

@@ -7,13 +7,13 @@
 	#'nummds' => [1, 2, 4, 8, 16, 32, 48, 64, 80, 96, 128],
 	#'nummds' => [2, 4, 8, 16, 32, 48, 64, 80, 96, 128],
 	'nummds' => [160,200],
-	
+
 	#'nummds' => [1, 2, 4, 6, 7], # googoo
 	#'trace' => ['make.lib', 'make.include'],
-	
+
 	'mds_bal_interval' => 90, #[30, 60, 90], #$[60,90], #[60,90],#[30, 60, 90],
 	#'mds_bal_max' => [4, 10],#6,#[2,4,6,8],
-	
+
 	'mds_decay_halflife' => 30,
 	'mds_bal_rep' => 1500,
 	'cper' => [25, 50, 100], #50,#[25, 50, 75, 100],#50,# [ 50, 100 ],
@@ -25,12 +25,12 @@
 
 
 	'custom' => '--tcp_skip_rank0 --debug_mds_balancer 1 --mds_shutdown_check 60 --syn only 0 --syn trace traces/openssh/untar.lib 1 --syn sleep 10 --syn trace traces/openssh/make.lib 1000',
-	
+
 	# parameters
 	#'fs' => ['fakestore'],
 	'fs' => 'ebofs',
 
-	#'until' => 500,   
+	#'until' => 500,
 	#'kill_after' => 600,
 	#'start' => 200,
 	#'end' => 500,

@@ -35,7 +35,7 @@
 #include <stdio.h>
 #include "gtest/gtest.h"
 
-#define GTEST_IMPLEMENTATION_ 1  // Required for the next #include.
+#define GTEST_IMPLEMENTATION_ 1	 // Required for the next #include.
 #include "src/gtest-internal-inl.h"
 #undef GTEST_IMPLEMENTATION_
 
@@ -62,13 +62,13 @@ class MyEnvironment : public testing::Environment {
 
     switch (failure_in_set_up_) {
       case NON_FATAL_FAILURE:
-        ADD_FAILURE() << "Expected non-fatal failure in global set-up.";
-        break;
+	ADD_FAILURE() << "Expected non-fatal failure in global set-up.";
+	break;
       case FATAL_FAILURE:
-        FAIL() << "Expected fatal failure in global set-up.";
-        break;
+	FAIL() << "Expected fatal failure in global set-up.";
+	break;
       default:
-        break;
+	break;
     }
   }
 
@@ -141,51 +141,51 @@ int main(int argc, char **argv) {
   // registration function returns its argument.
   MyEnvironment* const env = new MyEnvironment;
   Check(testing::AddGlobalTestEnvironment(env) == env,
-        "AddGlobalTestEnvironment() should return its argument.");
+	"AddGlobalTestEnvironment() should return its argument.");
 
   // Verifies that RUN_ALL_TESTS() runs the tests when the global
   // set-up is successful.
   Check(RunAllTests(env, NO_FAILURE) != 0,
-        "RUN_ALL_TESTS() should return non-zero, as the global tear-down "
-        "should generate a failure.");
+	"RUN_ALL_TESTS() should return non-zero, as the global tear-down "
+	"should generate a failure.");
   Check(test_was_run,
-        "The tests should run, as the global set-up should generate no "
-        "failure");
+	"The tests should run, as the global set-up should generate no "
+	"failure");
   Check(env->tear_down_was_run(),
-        "The global tear-down should run, as the global set-up was run.");
+	"The global tear-down should run, as the global set-up was run.");
 
   // Verifies that RUN_ALL_TESTS() runs the tests when the global
   // set-up generates no fatal failure.
   Check(RunAllTests(env, NON_FATAL_FAILURE) != 0,
-        "RUN_ALL_TESTS() should return non-zero, as both the global set-up "
-        "and the global tear-down should generate a non-fatal failure.");
+	"RUN_ALL_TESTS() should return non-zero, as both the global set-up "
+	"and the global tear-down should generate a non-fatal failure.");
   Check(test_was_run,
-        "The tests should run, as the global set-up should generate no "
-        "fatal failure.");
+	"The tests should run, as the global set-up should generate no "
+	"fatal failure.");
   Check(env->tear_down_was_run(),
-        "The global tear-down should run, as the global set-up was run.");
+	"The global tear-down should run, as the global set-up was run.");
 
   // Verifies that RUN_ALL_TESTS() runs no test when the global set-up
   // generates a fatal failure.
   Check(RunAllTests(env, FATAL_FAILURE) != 0,
-        "RUN_ALL_TESTS() should return non-zero, as the global set-up "
-        "should generate a fatal failure.");
+	"RUN_ALL_TESTS() should return non-zero, as the global set-up "
+	"should generate a fatal failure.");
   Check(!test_was_run,
-        "The tests should not run, as the global set-up should generate "
-        "a fatal failure.");
+	"The tests should not run, as the global set-up should generate "
+	"a fatal failure.");
   Check(env->tear_down_was_run(),
-        "The global tear-down should run, as the global set-up was run.");
+	"The global tear-down should run, as the global set-up was run.");
 
   // Verifies that RUN_ALL_TESTS() doesn't do global set-up or
   // tear-down when there is no test to run.
   testing::GTEST_FLAG(filter) = "-*";
   Check(RunAllTests(env, NO_FAILURE) == 0,
-        "RUN_ALL_TESTS() should return zero, as there is no test to run.");
+	"RUN_ALL_TESTS() should return zero, as there is no test to run.");
   Check(!env->set_up_was_run(),
-        "The global set-up should not run, as there is no test to run.");
+	"The global set-up should not run, as there is no test to run.");
   Check(!env->tear_down_was_run(),
-        "The global tear-down should not run, "
-        "as the global set-up was not run.");
+	"The global tear-down should not run, "
+	"as the global set-up was not run.");
 
   printf("PASS\n");
   return 0;

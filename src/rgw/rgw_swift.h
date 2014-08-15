@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 
 #ifndef CEPH_RGW_SWIFT_H
 #define CEPH_RGW_SWIFT_H
@@ -27,7 +29,7 @@ class RGWSwift {
 			      RGWUserInfo& rgw_user);
 
   int parse_keystone_token_response(const string& token, bufferlist& bl, struct rgw_swift_auth_info *info,
-		                    KeystoneToken& t);
+				    KeystoneToken& t);
   int update_user_info(RGWRados *store, struct rgw_swift_auth_info *info, RGWUserInfo& user_info);
   int get_keystone_url(std::string& url);
   int get_keystone_admin_token(std::string& token);

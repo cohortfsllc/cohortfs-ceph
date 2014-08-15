@@ -13,7 +13,7 @@
   $ osdmaptool --import-crush "$CRUSH_MAP" "$OSD_MAP" > /dev/null
   osdmaptool: osdmap file 'osdmap'
   $ OUT="$TESTDIR/out"
-# 
+#
 # --test-map-pgs
 #
   $ osdmaptool --mark-up-in --test-map-pgs "$OSD_MAP" > "$OUT"
@@ -28,7 +28,7 @@
   $ grep "$PATTERN" $OUT || cat "$OUT"
   size 3\t24000 (esc)
   $ STATS_CRUSH=$(grep '^ avg ' "$OUT")
-# 
+#
 # --test-map-pgs --test-random is expected to change nothing regarding the totals
 #
   $ osdmaptool --mark-up-in --test-random --test-map-pgs "$OSD_MAP" > "$OUT"

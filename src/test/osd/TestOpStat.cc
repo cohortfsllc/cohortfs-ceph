@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 #include "include/interval_set.h"
 #include "include/buffer.h"
 #include <list>
@@ -33,7 +33,7 @@ void TestOpStat::TypeStatus::export_latencies(map<double,uint64_t> &in) const
     ++j;
   }
 }
-  
+
 std::ostream & operator<<(std::ostream &out, TestOpStat &rhs)
 {
   rhs.stat_lock.Lock();
@@ -46,13 +46,13 @@ std::ostream & operator<<(std::ostream &out, TestOpStat &rhs)
     latency[90] = 0;
     latency[99] = 0;
     i->second.export_latencies(latency);
-    
+
     out << i->first << " latency: " << std::endl;
     for (map<double,uint64_t>::iterator j = latency.begin();
 	 j != latency.end();
 	 ++j) {
       if (j->second == 0) break;
-      out << "\t" << j->first << "th percentile: " 
+      out << "\t" << j->first << "th percentile: "
 	  << j->second / 1000 << "ms" << std::endl;
     }
   }

@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_RGW_COMMON_H
@@ -44,7 +44,7 @@ namespace ceph {
 using ceph::crypto::MD5;
 
 
-#define RGW_ATTR_PREFIX  "user.rgw."
+#define RGW_ATTR_PREFIX	 "user.rgw."
 
 #define RGW_HTTP_RGWX_ATTR_PREFIX "RGWX_ATTR_"
 #define RGW_HTTP_RGWX_ATTR_PREFIX_OUT "Rgwx-Attr-"
@@ -55,7 +55,7 @@ using ceph::crypto::MD5;
 
 #define RGW_ATTR_ACL		RGW_ATTR_PREFIX "acl"
 #define RGW_ATTR_CORS		RGW_ATTR_PREFIX "cors"
-#define RGW_ATTR_ETAG    	RGW_ATTR_PREFIX "etag"
+#define RGW_ATTR_ETAG		RGW_ATTR_PREFIX "etag"
 #define RGW_ATTR_BUCKETS	RGW_ATTR_PREFIX "buckets"
 #define RGW_ATTR_META_PREFIX	RGW_ATTR_PREFIX RGW_AMZ_META_PREFIX
 #define RGW_ATTR_CONTENT_TYPE	RGW_ATTR_PREFIX "content_type"
@@ -64,79 +64,79 @@ using ceph::crypto::MD5;
 #define RGW_ATTR_CONTENT_ENC	RGW_ATTR_PREFIX "content_encoding"
 #define RGW_ATTR_CONTENT_LANG	RGW_ATTR_PREFIX "content_language"
 #define RGW_ATTR_EXPIRES	RGW_ATTR_PREFIX "expires"
-#define RGW_ATTR_ID_TAG    	RGW_ATTR_PREFIX "idtag"
-#define RGW_ATTR_SHADOW_OBJ    	RGW_ATTR_PREFIX "shadow_name"
-#define RGW_ATTR_MANIFEST    	RGW_ATTR_PREFIX "manifest"
-#define RGW_ATTR_USER_MANIFEST  RGW_ATTR_PREFIX "user_manifest"
+#define RGW_ATTR_ID_TAG		RGW_ATTR_PREFIX "idtag"
+#define RGW_ATTR_SHADOW_OBJ	RGW_ATTR_PREFIX "shadow_name"
+#define RGW_ATTR_MANIFEST	RGW_ATTR_PREFIX "manifest"
+#define RGW_ATTR_USER_MANIFEST	RGW_ATTR_PREFIX "user_manifest"
 
 #define RGW_BUCKETS_OBJ_SUFFIX ".buckets"
 
-#define RGW_MAX_PENDING_CHUNKS  16
-#define RGW_MAX_PUT_SIZE        (5ULL*1024*1024*1024)
+#define RGW_MAX_PENDING_CHUNKS	16
+#define RGW_MAX_PUT_SIZE	(5ULL*1024*1024*1024)
 #define RGW_MIN_MULTIPART_SIZE (5ULL*1024*1024)
 
-#define RGW_FORMAT_PLAIN        0
-#define RGW_FORMAT_XML          1
-#define RGW_FORMAT_JSON         2
+#define RGW_FORMAT_PLAIN	0
+#define RGW_FORMAT_XML		1
+#define RGW_FORMAT_JSON		2
 
-#define RGW_CAP_READ            0x1
-#define RGW_CAP_WRITE           0x2
-#define RGW_CAP_ALL             (RGW_CAP_READ | RGW_CAP_WRITE)
+#define RGW_CAP_READ		0x1
+#define RGW_CAP_WRITE		0x2
+#define RGW_CAP_ALL		(RGW_CAP_READ | RGW_CAP_WRITE)
 
-#define RGW_REST_SWIFT          0x1
-#define RGW_REST_SWIFT_AUTH     0x2
+#define RGW_REST_SWIFT		0x1
+#define RGW_REST_SWIFT_AUTH	0x2
 
 #define RGW_SUSPENDED_USER_AUID (uint64_t)-2
 
-#define RGW_OP_TYPE_READ         0x01
-#define RGW_OP_TYPE_WRITE        0x02
-#define RGW_OP_TYPE_DELETE       0x04
+#define RGW_OP_TYPE_READ	 0x01
+#define RGW_OP_TYPE_WRITE	 0x02
+#define RGW_OP_TYPE_DELETE	 0x04
 
-#define RGW_OP_TYPE_MODIFY       (RGW_OP_TYPE_WRITE | RGW_OP_TYPE_DELETE)
-#define RGW_OP_TYPE_ALL          (RGW_OP_TYPE_READ | RGW_OP_TYPE_WRITE | RGW_OP_TYPE_DELETE)
+#define RGW_OP_TYPE_MODIFY	 (RGW_OP_TYPE_WRITE | RGW_OP_TYPE_DELETE)
+#define RGW_OP_TYPE_ALL		 (RGW_OP_TYPE_READ | RGW_OP_TYPE_WRITE | RGW_OP_TYPE_DELETE)
 
 #define RGW_DEFAULT_MAX_BUCKETS 1000
 
 #define RGW_DEFER_TO_BUCKET_ACLS_RECURSE 1
 #define RGW_DEFER_TO_BUCKET_ACLS_FULL_CONTROL 2
 
-#define STATUS_CREATED           1900
-#define STATUS_ACCEPTED          1901
-#define STATUS_NO_CONTENT        1902
-#define STATUS_PARTIAL_CONTENT   1903
-#define STATUS_REDIRECT          1904
-#define STATUS_NO_APPLY          1905
-#define STATUS_APPLIED           1906
+#define STATUS_CREATED		 1900
+#define STATUS_ACCEPTED		 1901
+#define STATUS_NO_CONTENT	 1902
+#define STATUS_PARTIAL_CONTENT	 1903
+#define STATUS_REDIRECT		 1904
+#define STATUS_NO_APPLY		 1905
+#define STATUS_APPLIED		 1906
 
-#define ERR_INVALID_BUCKET_NAME  2000
-#define ERR_INVALID_OBJECT_NAME  2001
-#define ERR_NO_SUCH_BUCKET       2002
-#define ERR_METHOD_NOT_ALLOWED   2003
-#define ERR_INVALID_DIGEST       2004
-#define ERR_BAD_DIGEST           2005
-#define ERR_UNRESOLVABLE_EMAIL   2006
-#define ERR_INVALID_PART         2007
-#define ERR_INVALID_PART_ORDER   2008
-#define ERR_NO_SUCH_UPLOAD       2009
-#define ERR_REQUEST_TIMEOUT      2010
-#define ERR_LENGTH_REQUIRED      2011
-#define ERR_REQUEST_TIME_SKEWED  2012
-#define ERR_BUCKET_EXISTS        2013
-#define ERR_BAD_URL              2014
-#define ERR_PRECONDITION_FAILED  2015
-#define ERR_NOT_MODIFIED         2016
-#define ERR_INVALID_UTF8         2017
+#define ERR_INVALID_BUCKET_NAME	 2000
+#define ERR_INVALID_OBJECT_NAME	 2001
+#define ERR_NO_SUCH_BUCKET	 2002
+#define ERR_METHOD_NOT_ALLOWED	 2003
+#define ERR_INVALID_DIGEST	 2004
+#define ERR_BAD_DIGEST		 2005
+#define ERR_UNRESOLVABLE_EMAIL	 2006
+#define ERR_INVALID_PART	 2007
+#define ERR_INVALID_PART_ORDER	 2008
+#define ERR_NO_SUCH_UPLOAD	 2009
+#define ERR_REQUEST_TIMEOUT	 2010
+#define ERR_LENGTH_REQUIRED	 2011
+#define ERR_REQUEST_TIME_SKEWED	 2012
+#define ERR_BUCKET_EXISTS	 2013
+#define ERR_BAD_URL		 2014
+#define ERR_PRECONDITION_FAILED	 2015
+#define ERR_NOT_MODIFIED	 2016
+#define ERR_INVALID_UTF8	 2017
 #define ERR_UNPROCESSABLE_ENTITY 2018
-#define ERR_TOO_LARGE            2019
-#define ERR_TOO_MANY_BUCKETS     2020
-#define ERR_INVALID_REQUEST      2021
-#define ERR_TOO_SMALL            2022
-#define ERR_NOT_FOUND            2023
-#define ERR_PERMANENT_REDIRECT   2024
-#define ERR_LOCKED               2025
-#define ERR_QUOTA_EXCEEDED       2026
-#define ERR_USER_SUSPENDED       2100
-#define ERR_INTERNAL_ERROR       2200
+#define ERR_TOO_LARGE		 2019
+#define ERR_TOO_MANY_BUCKETS	 2020
+#define ERR_INVALID_REQUEST	 2021
+#define ERR_TOO_SMALL		 2022
+#define ERR_NOT_FOUND		 2023
+#define ERR_PERMANENT_REDIRECT	 2024
+#define ERR_LOCKED		 2025
+#define ERR_QUOTA_EXCEEDED	 2026
+#define ERR_USER_SUSPENDED	 2100
+#define ERR_INTERNAL_ERROR	 2200
 
 typedef void *RGWAccessHandle;
 
@@ -185,8 +185,8 @@ enum RGWIntentEvent {
 };
 
 enum RGWObjCategory {
-  RGW_OBJ_CATEGORY_NONE      = 0,
-  RGW_OBJ_CATEGORY_MAIN      = 1,
+  RGW_OBJ_CATEGORY_NONE	     = 0,
+  RGW_OBJ_CATEGORY_MAIN	     = 1,
   RGW_OBJ_CATEGORY_SHADOW    = 2,
   RGW_OBJ_CATEGORY_MULTIMETA = 3,
 };
@@ -279,7 +279,7 @@ class RGWConf;
 class RGWEnv {
   std::map<string, string, ltstr_nocase> env_map;
 public:
-  RGWConf *conf; 
+  RGWConf *conf;
 
   RGWEnv();
   ~RGWEnv();
@@ -570,8 +570,8 @@ struct rgw_bucket {
   std::string bucket_id;
 
   std::string oid; /*
-                    * runtime in-memory only info. If not empty, points to the bucket instance object
-                    */
+		    * runtime in-memory only info. If not empty, points to the bucket instance object
+		    */
 
   rgw_bucket() { }
   rgw_bucket(const cls_user_bucket& b) {
@@ -616,13 +616,13 @@ struct rgw_bucket {
     if (struct_v >= 2) {
       ::decode(marker, bl);
       if (struct_v <= 3) {
-        uint64_t id;
-        ::decode(id, bl);
-        char buf[16];
-        snprintf(buf, sizeof(buf), "%llu", (long long)id);
-        bucket_id = buf;
+	uint64_t id;
+	::decode(id, bl);
+	char buf[16];
+	snprintf(buf, sizeof(buf), "%llu", (long long)id);
+	bucket_id = buf;
       } else {
-        ::decode(bucket_id, bl);
+	::decode(bucket_id, bl);
       }
     }
     if (struct_v >= 5) {
@@ -662,7 +662,7 @@ inline ostream& operator<<(ostream& out, const rgw_bucket &b) {
       s = "i=" + b.index_pool;
     if (!b.data_extra_pool.empty() && b.data_pool.compare(b.data_extra_pool)) {
       if (!s.empty()) {
-        s += ",";
+	s += ",";
       }
       s += "e=" + b.data_extra_pool;
     }
@@ -893,7 +893,7 @@ struct req_state {
 
    bool has_bad_meta;
 
-   RGWUserInfo user; 
+   RGWUserInfo user;
    RGWAccessControlPolicy *bucket_acl;
    RGWAccessControlPolicy *object_acl;
 
@@ -1086,10 +1086,10 @@ public:
     orig_obj = o;
     if (ns.empty()) {
       if (o.empty())
-        return;
+	return;
       if (o.size() < 1 || o[0] != '_') {
-        object = o;
-        return;
+	object = o;
+	return;
       }
       object = "_";
       object.append(o);
@@ -1123,11 +1123,11 @@ public:
   static bool translate_raw_obj_to_obj_in_ns(string& obj, string& ns) {
     if (ns.empty()) {
       if (obj[0] != '_')
-        return true;
+	return true;
 
       if (obj.size() >= 2 && obj[1] == '_') {
-        obj = obj.substr(1);
-        return true;
+	obj = obj.substr(1);
+	return true;
       }
 
       return false;
@@ -1142,7 +1142,7 @@ public:
 
     string obj_ns = obj.substr(1, pos - 1);
     if (obj_ns.compare(ns) != 0)
-        return false;
+	return false;
 
     obj = obj.substr(pos + 1);
     return true;
@@ -1209,8 +1209,8 @@ public:
 
   bool operator==(const rgw_obj& o) const {
     return (object.compare(o.object) == 0) &&
-           (bucket.name.compare(o.bucket.name) == 0) &&
-           (ns.compare(o.ns) == 0);
+	   (bucket.name.compare(o.bucket.name) == 0) &&
+	   (ns.compare(o.ns) == 0);
   }
   bool operator<(const rgw_obj& o) const {
     int r = bucket.name.compare(o.bucket.name);
@@ -1285,8 +1285,8 @@ static inline int rgw_str_to_bool(const char *s, int def_val)
     return def_val;
 
   return (strcasecmp(s, "on") == 0 ||
-          strcasecmp(s, "yes") == 0 ||
-          strcasecmp(s, "1") == 0);
+	  strcasecmp(s, "yes") == 0 ||
+	  strcasecmp(s, "1") == 0);
 }
 
 static inline void append_rand_alpha(CephContext *cct, string& src, string& dest, int len)
@@ -1347,7 +1347,7 @@ extern bool url_decode(string& src_str, string& dest_str);
 extern void url_encode(const string& src, string& dst);
 
 extern void calc_hmac_sha1(const char *key, int key_len,
-                          const char *msg, int msg_len, char *dest);
+			  const char *msg, int msg_len, char *dest);
 /* destination should be CEPH_CRYPTO_HMACSHA1_DIGESTSIZE bytes long */
 
 extern int rgw_parse_op_type_list(const string& str, uint32_t *perm);

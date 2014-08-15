@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
 #ifdef ENCODE_DUMP
@@ -121,7 +121,7 @@ using namespace std;
 
 #include "common/config.h"
 
-#define DEBUGLVL  10    // debug level of output
+#define DEBUGLVL  10	// debug level of output
 
 #define dout_subsys ceph_subsys_ms
 
@@ -353,7 +353,7 @@ Message *decode_message(CephContext *cct, int crcflags,
 
   case MSG_MON_GLOBAL_ID:
     m = new MMonGlobalID;
-    break; 
+    break;
 
     // clients
   case CEPH_MSG_MON_SUBSCRIBE:
@@ -549,7 +549,7 @@ Message *decode_message(CephContext *cct, int crcflags,
   }
 
   // m->header.version, if non-zero, should be populated with the
-  // newest version of the encoding the code supports.  If set, check
+  // newest version of the encoding the code supports.	If set, check
   // it against compat_version.
   if (m->get_header().version &&
       m->get_header().version < header.compat_version) {
@@ -595,8 +595,8 @@ Message *decode_message(CephContext *cct, int crcflags,
 
 
 // This routine is not used for ordinary messages, but only when encapsulating a message
-// for forwarding and routing.  It's also used in a backward compatibility test, which only
-// effectively tests backward compability for those functions.  To avoid backward compatibility
+// for forwarding and routing.	It's also used in a backward compatibility test, which only
+// effectively tests backward compability for those functions.	To avoid backward compatibility
 // problems, we currently always encode and decode using the old footer format that doesn't
 // allow for message authentication.  Eventually we should fix that.  PLR
 
@@ -622,7 +622,7 @@ void encode_message(Message *msg, uint64_t features, bufferlist& payload)
   ::encode(msg->get_data(), payload);
 }
 
-// See above for somewhat bogus use of the old message footer.  We switch to the current footer
+// See above for somewhat bogus use of the old message footer.	We switch to the current footer
 // after decoding the old one so the other form of decode_message() doesn't have to change.
 // We've slipped in a 0 signature at this point, so any signature checking after this will
 // fail.  PLR

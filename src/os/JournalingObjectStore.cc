@@ -16,8 +16,8 @@ void JournalingObjectStore::journal_start()
   dout(10) << "journal_start" << dendl;
   finisher.start();
 }
- 
-void JournalingObjectStore::journal_stop() 
+
+void JournalingObjectStore::journal_stop()
 {
   dout(10) << "journal_stop" << dendl;
   finisher.stop();
@@ -48,7 +48,7 @@ int JournalingObjectStore::journal_replay(uint64_t fs_op_seq)
 
   int err = journal->open(op_seq);
   if (err < 0) {
-    dout(3) << "journal_replay open failed with " 
+    dout(3) << "journal_replay open failed with "
 	    << cpp_strerror(err) << dendl;
     delete journal;
     journal = 0;
@@ -71,7 +71,7 @@ int JournalingObjectStore::journal_replay(uint64_t fs_op_seq)
       continue;
     }
     assert(op_seq == seq-1);
-    
+
     dout(3) << "journal_replay: applying op seq " << seq << dendl;
     bufferlist::iterator p = bl.begin();
     list<Transaction*> tls;
@@ -87,7 +87,7 @@ int JournalingObjectStore::journal_replay(uint64_t fs_op_seq)
     op_seq = seq;
 
     while (!tls.empty()) {
-      delete tls.front(); 
+      delete tls.front();
       tls.pop_front();
     }
 
@@ -229,12 +229,12 @@ void JournalingObjectStore::ApplyManager::commit_finish()
 {
   Mutex::Locker l(com_lock);
   dout(10) << "commit_finish thru " << committing_seq << dendl;
-  
+
   if (journal)
     journal->committed_thru(committing_seq);
 
   committed_seq = committing_seq;
-  
+
   map<version_t, vector<Context*> >::iterator p = commit_waiters.begin();
   while (p != commit_waiters.end() &&
     p->first <= committing_seq) {

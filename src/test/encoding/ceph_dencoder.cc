@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #include <cassert>
 #include <errno.h>
 #include "include/types.h"
@@ -25,25 +27,25 @@ void usage(ostream &out)
 {
   out << "usage: ceph-dencoder [commands ...]" << std::endl;
   out << "\n";
-  out << "  version            print version string (to stdout)\n";
+  out << "  version	       print version string (to stdout)\n";
   out << "\n";
   out << "  import <encfile>   read encoded data from encfile\n";
-  out << "  export <outfile>    write encoded data to outfile\n";
+  out << "  export <outfile>	write encoded data to outfile\n";
   out << "\n";
-  out << "  set_features <num>  set feature bits used for encoding\n";
-  out << "  get_features        print feature bits (int) to stdout\n";
+  out << "  set_features <num>	set feature bits used for encoding\n";
+  out << "  get_features	print feature bits (int) to stdout\n";
   out << "\n";
-  out << "  list_types          list supported types\n";
-  out << "  type <classname>    select in-memory type\n";
-  out << "  decode              decode into in-memory object\n";
-  out << "  encode              encode in-memory object\n";
-  out << "  dump_json           dump in-memory object as json (to stdout)\n";
+  out << "  list_types		list supported types\n";
+  out << "  type <classname>	select in-memory type\n";
+  out << "  decode		decode into in-memory object\n";
+  out << "  encode		encode in-memory object\n";
+  out << "  dump_json		dump in-memory object as json (to stdout)\n";
   out << "\n";
-  out << "  copy                copy object (via operator=)\n";
-  out << "  copy_ctor           copy object (via copy ctor)\n";
+  out << "  copy		copy object (via operator=)\n";
+  out << "  copy_ctor		copy object (via copy ctor)\n";
   out << "\n";
-  out << "  count_tests         print number of generated test objects (to stdout)\n";
-  out << "  select_test <n>     select generated test object as in-memory object\n";
+  out << "  count_tests		print number of generated test objects (to stdout)\n";
+  out << "  select_test <n>	select generated test object as in-memory object\n";
 }
 struct Dencoder {
   virtual ~Dencoder() {}
@@ -228,7 +230,7 @@ public:
   //}
 };
 
-  
+
 
 int main(int argc, const char **argv)
 {
@@ -356,8 +358,8 @@ int main(int argc, const char **argv)
       }
       int r = encbl.read_file(*i, &err);
       if (r < 0) {
-        cerr << "error reading " << *i << ": " << err << std::endl;
-        exit(1);
+	cerr << "error reading " << *i << ": " << err << std::endl;
+	exit(1);
       }
 
     } else if (*i == string("export")) {
@@ -397,12 +399,12 @@ int main(int argc, const char **argv)
 	exit(1);
       }
       int n = atoi(*i);
-      err = den->select_generated(n);      
+      err = den->select_generated(n);
     } else {
       cerr << "unknown option '" << *i << "'" << std::endl;
       usage(cerr);
       exit(1);
-    }      
+    }
     if (err.length()) {
       cerr << "error: " << err << std::endl;
       exit(1);

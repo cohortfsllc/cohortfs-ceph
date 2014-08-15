@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -80,11 +80,11 @@ extern "C" {
  */
 /** @cond TODO_enums_not_yet_in_asphyxiate */
 enum {
-	LIBRADOS_CMPXATTR_OP_EQ  = 1,
-	LIBRADOS_CMPXATTR_OP_NE  = 2,
-	LIBRADOS_CMPXATTR_OP_GT  = 3,
+	LIBRADOS_CMPXATTR_OP_EQ	 = 1,
+	LIBRADOS_CMPXATTR_OP_NE	 = 2,
+	LIBRADOS_CMPXATTR_OP_GT	 = 3,
 	LIBRADOS_CMPXATTR_OP_GTE = 4,
-	LIBRADOS_CMPXATTR_OP_LT  = 5,
+	LIBRADOS_CMPXATTR_OP_LT	 = 5,
 	LIBRADOS_CMPXATTR_OP_LTE = 6
 };
 /** @endcond */
@@ -253,13 +253,13 @@ int rados_create(rados_t *cluster, const char * const id);
 /**
  * Extended version of rados_create.
  *
- * Like rados_create, but 
+ * Like rados_create, but
  * 1) don't assume 'client\.'+id; allow full specification of name
  * 2) allow specification of cluster name
  * 3) flags for future expansion
  */
 int rados_create2(rados_t *pcluster, const char *const clustername,
-	          const char * const name, uint64_t flags);
+		  const char * const name, uint64_t flags);
 
 /**
  * Initialize a cluster handle from an existing configuration.
@@ -281,13 +281,13 @@ int rados_create_with_context(rados_t *cluster, rados_config_t cct);
  * buffer and length pointers can be NULL, in which case they are
  * not filled in.
  *
- * @param      cluster    cluster handle
- * @param[in]  mon_id     ID of the monitor to ping
- * @param[out] outstr     double pointer with the resulting reply
+ * @param      cluster	  cluster handle
+ * @param[in]  mon_id	  ID of the monitor to ping
+ * @param[out] outstr	  double pointer with the resulting reply
  * @param[out] outstrlen  pointer with the size of the reply in @p outstr
  */
 int rados_ping_monitor(rados_t cluster, const char *mon_id,
-                       char **outstr, size_t *outstrlen);
+		       char **outstr, size_t *outstrlen);
 
 /**
  * Connect to the cluster.
@@ -469,7 +469,7 @@ int rados_cluster_fsid(rados_t cluster, char *buf, size_t len);
 
 /**
  * Get/wait for the most recent osdmap
- * 
+ *
  * @param cluster the cluster to shutdown
  * @returns 0 on sucess, negative error code on failure
  */
@@ -796,30 +796,30 @@ int rados_stat(rados_ioctx_t io, const char *o, uint64_t *psize, time_t *pmtime)
  *
  * Do compound update to a tmap object, inserting or deleting some
  * number of records.  cmdbuf is a series of operation byte
- * codes, following by command payload.  Each command is a single-byte
+ * codes, following by command payload.	 Each command is a single-byte
  * command code, whose value is one of CEPH_OSD_TMAP_*.
  *
  *  - update tmap 'header'
- *    - 1 byte  = CEPH_OSD_TMAP_HDR
+ *    - 1 byte	= CEPH_OSD_TMAP_HDR
  *    - 4 bytes = data length (little endian)
  *    - N bytes = data
  *
  *  - insert/update one key/value pair
- *    - 1 byte  = CEPH_OSD_TMAP_SET
+ *    - 1 byte	= CEPH_OSD_TMAP_SET
  *    - 4 bytes = key name length (little endian)
  *    - N bytes = key name
  *    - 4 bytes = data length (little endian)
  *    - M bytes = data
  *
  *  - insert one key/value pair; return -EEXIST if it already exists.
- *    - 1 byte  = CEPH_OSD_TMAP_CREATE
+ *    - 1 byte	= CEPH_OSD_TMAP_CREATE
  *    - 4 bytes = key name length (little endian)
  *    - N bytes = key name
  *    - 4 bytes = data length (little endian)
  *    - M bytes = data
  *
  *  - remove one key/value pair
- *    - 1 byte  = CEPH_OSD_TMAP_RM
+ *    - 1 byte	= CEPH_OSD_TMAP_RM
  *    - 4 bytes = key name length (little endian)
  *    - N bytes = key name
  *
@@ -828,7 +828,7 @@ int rados_stat(rados_ioctx_t io, const char *o, uint64_t *psize, time_t *pmtime)
  *  - All key/value updates must be in lexicographically sorted order
  *    in cmdbuf.
  *  - You can read/write to a tmap object via the regular APIs, but
- *    you should be careful not to corrupt it.  Also be aware that the
+ *    you should be careful not to corrupt it.	Also be aware that the
  *    object format may change without notice.
  *
  * @param io ioctx
@@ -1247,7 +1247,7 @@ typedef void (*rados_watchcb_t)(uint8_t opcode, uint64_t ver, void *arg);
  * @note BUG: watch timeout should be configurable
  * @note BUG: librados should provide a way for watchers to notice connection resets
  * @note BUG: the ver parameter does not work, and -ERANGE will never be returned
- *            (http://www.tracker.newdream.net/issues/2592)
+ *	      (http://www.tracker.newdream.net/issues/2592)
  *
  * @param io the context the object is in
  * @param o the object to watch
@@ -1371,10 +1371,10 @@ void rados_write_op_assert_exists(rados_write_op_t write_op);
  * @param value_len length of buffer to compare actual xattr value to
  */
 void rados_write_op_cmpxattr(rados_write_op_t write_op,
-                             const char *name,
-                             uint8_t comparison_operator,
-                             const char *value,
-                             size_t value_len);
+			     const char *name,
+			     uint8_t comparison_operator,
+			     const char *value,
+			     size_t value_len);
 
 /**
  * Ensure that the an omap value satisfies a comparison,
@@ -1404,9 +1404,9 @@ void rados_write_op_omap_cmp(rados_write_op_t write_op,
  * @param value_len length of buffer to set xattr to
  */
 void rados_write_op_setxattr(rados_write_op_t write_op,
-                             const char *name,
-                             const char *value,
-                             size_t value_len);
+			     const char *name,
+			     const char *value,
+			     size_t value_len);
 
 /**
  * Remove an xattr
@@ -1423,9 +1423,9 @@ void rados_write_op_rmxattr(rados_write_op_t write_op, const char *name);
  * @param len length of buffer
  */
 void rados_write_op_write(rados_write_op_t write_op,
-                          const char *buffer,
-                          size_t len,
-                          uint64_t offset);
+			  const char *buffer,
+			  size_t len,
+			  uint64_t offset);
 
 /**
  * Write whole object, atomically replacing it.
@@ -1434,8 +1434,8 @@ void rados_write_op_write(rados_write_op_t write_op,
  * @param len length of buffer
  */
 void rados_write_op_write_full(rados_write_op_t write_op,
-                               const char *buffer,
-                               size_t len);
+			       const char *buffer,
+			       size_t len);
 
 /**
  * Append to end of object.
@@ -1444,8 +1444,8 @@ void rados_write_op_write_full(rados_write_op_t write_op,
  * @param len length of buffer
  */
 void rados_write_op_append(rados_write_op_t write_op,
-                           const char *buffer,
-                           size_t len);
+			   const char *buffer,
+			   size_t len);
 /**
  * Remove object
  * @param write_op operation to add this action to
@@ -1528,8 +1528,8 @@ void rados_write_op_omap_clear(rados_write_op_t write_op);
  * @param expected_write_size expected size of writes to the object, in bytes
  */
 void rados_write_op_set_alloc_hint(rados_write_op_t write_op,
-                                   uint64_t expected_object_size,
-                                   uint64_t expected_write_size);
+				   uint64_t expected_object_size,
+				   uint64_t expected_write_size);
 
 /**
  * Perform a write operation synchronously
@@ -1554,10 +1554,10 @@ int rados_write_op_operate(rados_write_op_t write_op,
  * @flags flags to apply to the entire operation (LIBRADOS_OPERATION_*)
  */
 int rados_aio_write_op_operate(rados_write_op_t write_op,
-                               rados_ioctx_t io,
-                               rados_completion_t completion,
-                               const char *oid,
-                               time_t *mtime,
+			       rados_ioctx_t io,
+			       rados_completion_t completion,
+			       const char *oid,
+			       time_t *mtime,
 			       int flags);
 
 /**
@@ -1930,7 +1930,7 @@ int rados_break_lock(rados_ioctx_t io, const char *o, const char *name,
  */
 int rados_mon_command(rados_t cluster, const char **cmd, size_t cmdlen,
 		      const char *inbuf, size_t inbuflen,
-	       	      char **outbuf, size_t *outbuflen,
+		      char **outbuf, size_t *outbuflen,
 		      char **outs, size_t *outslen);
 
 /**
@@ -1993,7 +1993,7 @@ void rados_buffer_free(char *buf);
  */
 typedef void (*rados_log_callback_t)(void *arg,
 				     const char *line,
-				     const char *who, 
+				     const char *who,
 				     uint64_t sec, uint64_t nsec,
 				     uint64_t seq, const char *level,
 				     const char *msg);

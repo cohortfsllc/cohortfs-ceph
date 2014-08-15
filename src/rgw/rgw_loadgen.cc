@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 
 #include <string.h>
 
@@ -23,13 +25,13 @@ int RGWLoadGenRequestEnv::sign(RGWAccessKey& access_key)
   string digest;
 
   rgw_create_s3_canonical_header(request_method.c_str(),
-                                 NULL, /* const char *content_md5 */
-                                 content_type.c_str(),
-                                 date_str.c_str(),
-                                 meta_map,
-                                 uri.c_str(),
-                                 sub_resources,
-                                 canonical_header);
+				 NULL, /* const char *content_md5 */
+				 content_type.c_str(),
+				 date_str.c_str(),
+				 meta_map,
+				 uri.c_str(),
+				 sub_resources,
+				 canonical_header);
 
   int ret = rgw_get_s3_header_digest(canonical_header, access_key.key, digest);
   if (ret < 0) {

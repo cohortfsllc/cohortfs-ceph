@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #ifndef CEPH_RGW_USER_H
 #define CEPH_RGW_USER_H
 
@@ -53,31 +55,31 @@ extern bool rgw_user_is_authenticated(RGWUserInfo& info);
  * Returns: 0 on success, -ERR# on failure.
  */
 extern int rgw_store_user_info(RGWRados *store, RGWUserInfo& info, RGWUserInfo *old_info,
-                               RGWObjVersionTracker *objv_tracker, time_t mtime, bool exclusive);
+			       RGWObjVersionTracker *objv_tracker, time_t mtime, bool exclusive);
 /**
  * Given an email, finds the user info associated with it.
  * returns: 0 on success, -ERR# on failure (including nonexistence)
  */
 extern int rgw_get_user_info_by_uid(RGWRados *store, string& user_id, RGWUserInfo& info,
-                                    RGWObjVersionTracker *objv_tracker = NULL, time_t *pmtime = NULL);
+				    RGWObjVersionTracker *objv_tracker = NULL, time_t *pmtime = NULL);
 /**
  * Given an swift username, finds the user info associated with it.
  * returns: 0 on success, -ERR# on failure (including nonexistence)
  */
 extern int rgw_get_user_info_by_email(RGWRados *store, string& email, RGWUserInfo& info,
-                                      RGWObjVersionTracker *objv_tracker = NULL, time_t *pmtime = NULL);
+				      RGWObjVersionTracker *objv_tracker = NULL, time_t *pmtime = NULL);
 /**
  * Given an swift username, finds the user info associated with it.
  * returns: 0 on success, -ERR# on failure (including nonexistence)
  */
 extern int rgw_get_user_info_by_swift(RGWRados *store, string& swift_name, RGWUserInfo& info,
-                                      RGWObjVersionTracker *objv_tracker = NULL, time_t *pmtime = NULL);
+				      RGWObjVersionTracker *objv_tracker = NULL, time_t *pmtime = NULL);
 /**
  * Given an access key, finds the user info associated with it.
  * returns: 0 on success, -ERR# on failure (including nonexistence)
  */
 extern int rgw_get_user_info_by_access_key(RGWRados *store, string& access_key, RGWUserInfo& info,
-                                           RGWObjVersionTracker *objv_tracker = NULL, time_t *pmtime = NULL);
+					   RGWObjVersionTracker *objv_tracker = NULL, time_t *pmtime = NULL);
 /**
  * Given an RGWUserInfo, deletes the user and its bucket ACLs.
  */
@@ -353,7 +355,7 @@ struct RGWUserAdminOpState {
   std::string get_display_name() { return display_name; };
   map<int, std::string>& get_temp_url_keys() { return temp_url_keys; };
 
-  RGWUserInfo&  get_user_info() { return info; };
+  RGWUserInfo&	get_user_info() { return info; };
 
   map<std::string, RGWAccessKey> *get_swift_keys() { return &info.swift_keys; };
   map<std::string, RGWAccessKey> *get_access_keys() { return &info.access_keys; };
@@ -609,39 +611,39 @@ class RGWUserAdminOp_User
 {
 public:
   static int info(RGWRados *store,
-                  RGWUserAdminOpState& op_state, RGWFormatterFlusher& flusher);
+		  RGWUserAdminOpState& op_state, RGWFormatterFlusher& flusher);
 
   static int create(RGWRados *store,
-                  RGWUserAdminOpState& op_state, RGWFormatterFlusher& flusher);
+		  RGWUserAdminOpState& op_state, RGWFormatterFlusher& flusher);
 
   static int modify(RGWRados *store,
-                  RGWUserAdminOpState& op_state, RGWFormatterFlusher& flusher);
+		  RGWUserAdminOpState& op_state, RGWFormatterFlusher& flusher);
 
   static int remove(RGWRados *store,
-                  RGWUserAdminOpState& op_state, RGWFormatterFlusher& flusher);
+		  RGWUserAdminOpState& op_state, RGWFormatterFlusher& flusher);
 };
 
 class RGWUserAdminOp_Subuser
 {
 public:
   static int create(RGWRados *store,
-                  RGWUserAdminOpState& op_state, RGWFormatterFlusher& flusher);
+		  RGWUserAdminOpState& op_state, RGWFormatterFlusher& flusher);
 
   static int modify(RGWRados *store,
-                  RGWUserAdminOpState& op_state, RGWFormatterFlusher& flusher);
+		  RGWUserAdminOpState& op_state, RGWFormatterFlusher& flusher);
 
   static int remove(RGWRados *store,
-                  RGWUserAdminOpState& op_state, RGWFormatterFlusher& flusher);
+		  RGWUserAdminOpState& op_state, RGWFormatterFlusher& flusher);
 };
 
 class RGWUserAdminOp_Key
 {
 public:
   static int create(RGWRados *store,
-                  RGWUserAdminOpState& op_state, RGWFormatterFlusher& flusher);
+		  RGWUserAdminOpState& op_state, RGWFormatterFlusher& flusher);
 
   static int remove(RGWRados *store,
-                  RGWUserAdminOpState& op_state, RGWFormatterFlusher& flusher);
+		  RGWUserAdminOpState& op_state, RGWFormatterFlusher& flusher);
 };
 
 class RGWUserAdminOp_Caps

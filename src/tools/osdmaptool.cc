@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #include <sys/types.h>
@@ -34,7 +34,7 @@ void usage()
   cout << " usage: [--print] [--createsimple <numosd> [--clobber] ] <mapfilename>" << std::endl;
   cout << "   --export-crush <file>   write osdmap's crush map to <file>" << std::endl;
   cout << "   --import-crush <file>   replace osdmap's crush map with <file>" << std::endl;
-  cout << "   --mark-up-in            mark osds up and in (but do not persist)" << std::endl;
+  cout << "   --mark-up-in	      mark osds up and in (but do not persist)" << std::endl;
   exit(1);
 }
 
@@ -173,7 +173,7 @@ int main(int argc, const char **argv)
   if (modified)
     osdmap.inc_epoch();
 
-  if (print) 
+  if (print)
     osdmap.print(cout);
   if (print_json)
     osdmap.dump_json(cout);
@@ -193,7 +193,7 @@ int main(int argc, const char **argv)
       return 1;
     }
   }
-  
+
 
   return 0;
 }

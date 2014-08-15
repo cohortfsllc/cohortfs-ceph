@@ -1,4 +1,5 @@
-
+// -*- mode:C; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #include <errno.h>
 
 #include "common/ceph_json.h"
@@ -172,7 +173,7 @@ int RGWPolicy::add_condition(const string& op, const string& first, const string
   }
 
   cond->set_vals(first, second);
-  
+
   conditions.push_back(cond);
 
   return 0;
@@ -274,16 +275,16 @@ int RGWPolicy::from_json(bufferlist& bl, string& err_msg)
       int i;
       for (i = 0; !citer.end() && i < 3; ++citer, ++i) {
 	JSONObj *o = *citer;
-        v.push_back(o->get_data());
+	v.push_back(o->get_data());
       }
       if (i != 3 || !citer.end()) { /* we expect exactly 3 arguments here */
-        err_msg = "Bad condition array, expecting 3 arguments";
-        return -EINVAL;
+	err_msg = "Bad condition array, expecting 3 arguments";
+	return -EINVAL;
       }
 
       int r = add_condition(v[0], v[1], v[2], err_msg);
       if (r < 0)
-        return r;
+	return r;
     } else {
       JSONObj *c = *citer;
       dout(0) << "adding simple_check: " << c->get_name() << " : " << c->get_data() << dendl;

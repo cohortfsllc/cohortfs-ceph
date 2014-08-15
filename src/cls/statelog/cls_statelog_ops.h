@@ -32,7 +32,7 @@ struct cls_statelog_list_op {
   string op_id;
   string marker; /* if not empty, overrides from_time */
   int max_entries; /* upperbound to returned num of entries
-                      might return less than that and still be truncated */
+		      might return less than that and still be truncated */
 
   cls_statelog_list_op() {}
 

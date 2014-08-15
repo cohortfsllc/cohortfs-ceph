@@ -102,7 +102,7 @@ public:
     m_in_flight.set(0);
     m_store.reset(store);
   }
-  ~TestObjectStoreState() { 
+  ~TestObjectStoreState() {
     map<int, coll_entry_t*>::iterator it = m_collections.begin();
     while (it != m_collections.end()) {
       if (it->second)
@@ -133,7 +133,7 @@ public:
 
    public:
     C_OnFinished(TestObjectStoreState *state,
-        ObjectStore::Transaction *t) : m_state(state), m_tx(t) { }
+	ObjectStore::Transaction *t) : m_state(state), m_tx(t) { }
 
     void finish(int r) {
       Mutex::Locker locker(m_state->m_finished_lock);

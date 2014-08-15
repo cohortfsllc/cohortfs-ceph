@@ -10,7 +10,7 @@
   tunable choose_local_fallback_tries 0
   tunable choose_total_tries 50
   tunable chooseleaf_descend_once 1
-  
+
   # devices
   device 0 device0
   device 1 osd.1
@@ -251,7 +251,7 @@
   device 236 osd.236
   device 237 osd.237
   device 238 osd.238
-  
+
   # types
   type 0 osd
   type 1 host
@@ -264,7 +264,7 @@
   type 8 datacenter
   type 9 region
   type 10 root
-  
+
   # buckets
   host cephstore5522 {
   \tid -2\t\t# do not change unnecessarily (esc)
@@ -762,7 +762,7 @@
   \titem irv-n2 weight 119.000 (esc)
   \titem irv-n1 weight 119.000 (esc)
   }
-  
+
   # rules
   rule replicated_ruleset {
   \truleset 0 (esc)
@@ -773,7 +773,7 @@
   \tstep chooseleaf firstn 0 type host (esc)
   \tstep emit (esc)
   }
-  
+
   # end crush map
   $ rm oc
   $ osdmaptool --test-map-pg 0.0 om
@@ -786,16 +786,16 @@
   fsid [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12} (re)
   created \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+ (re)
   modified \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+ (re)
-  flags 
-  
+  flags
+
   pool 0 'data' replicated size 3 min_size 2 crush_ruleset 0 object_hash rjenkins pg_num 15296 pgp_num 15296 last_change 0 owner 0 flags hashpspool crash_replay_interval 45 stripe_width 0
   pool 1 'metadata' replicated size 3 min_size 2 crush_ruleset 0 object_hash rjenkins pg_num 15296 pgp_num 15296 last_change 0 owner 0 flags hashpspool stripe_width 0
   pool 2 'rbd' replicated size 3 min_size 2 crush_ruleset 0 object_hash rjenkins pg_num 15296 pgp_num 15296 last_change 0 owner 0 flags hashpspool stripe_width 0
-  
-  max_osd 239
-  
 
-  $ osdmaptool --clobber --create-from-conf --osd_pool_default_crush_replicated_ruleset 55 om -c $TESTDIR/ceph.conf.withracks  
+  max_osd 239
+
+
+  $ osdmaptool --clobber --create-from-conf --osd_pool_default_crush_replicated_ruleset 55 om -c $TESTDIR/ceph.conf.withracks
   osdmaptool: osdmap file 'om'
   osdmaptool: writing epoch 1 to om
   $ osdmaptool --print om | grep 'pool 0'

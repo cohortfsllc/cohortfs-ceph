@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -11,7 +11,7 @@
  *  modify it under the terms of the GNU Lesser General Public
  *  License as published by the Free Software Foundation; either
  *  version 2.1 of the License, or (at your option) any later version.
- * 
+ *
  */
 
 #include <unistd.h>
@@ -22,7 +22,7 @@
 class ErasureCodePluginExample : public ErasureCodePlugin {
 public:
   virtual int factory(const map<std::string,std::string> &parameters,
-                      ErasureCodeInterfaceRef *erasure_code)
+		      ErasureCodeInterfaceRef *erasure_code)
   {
     *erasure_code = ErasureCodeInterfaceRef(new ErasureCodeExample());
     return 0;

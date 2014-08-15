@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -16,29 +16,29 @@
 #define CEPH_LOGEVENT_H
 
 #define EVENT_NEW_ENCODING 0 // indicates that the encoding is versioned
-#define EVENT_UNUSED       1 // was previously EVENT_STRING
+#define EVENT_UNUSED	   1 // was previously EVENT_STRING
 
 #define EVENT_SUBTREEMAP   2
-#define EVENT_EXPORT       3
+#define EVENT_EXPORT	   3
 #define EVENT_IMPORTSTART  4
 #define EVENT_IMPORTFINISH 5
-#define EVENT_FRAGMENT     6
+#define EVENT_FRAGMENT	   6
 
 #define EVENT_RESETJOURNAL 9
 
-#define EVENT_SESSION      10
+#define EVENT_SESSION	   10
 #define EVENT_SESSIONS_OLD 11
-#define EVENT_SESSIONS     12
+#define EVENT_SESSIONS	   12
 
-#define EVENT_UPDATE       20
+#define EVENT_UPDATE	   20
 #define EVENT_SLAVEUPDATE  21
-#define EVENT_OPEN         22
-#define EVENT_COMMITTED    23
+#define EVENT_OPEN	   22
+#define EVENT_COMMITTED	   23
 
 #define EVENT_TABLECLIENT  42
 #define EVENT_TABLESERVER  43
 
-#define EVENT_SUBTREEMAP_TEST   50
+#define EVENT_SUBTREEMAP_TEST	50
 
 
 #include <string>
@@ -93,12 +93,12 @@ protected:
     ENCODE_FINISH(bl);
   }
 
-  virtual void print(ostream& out) const { 
+  virtual void print(ostream& out) const {
     out << "event(" << _type << ")";
   }
 
   /*** live journal ***/
-  /* update_segment() - adjust any state we need to in the LogSegment 
+  /* update_segment() - adjust any state we need to in the LogSegment
    */
   virtual void update_segment() { }
 

@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -40,8 +40,8 @@ class MMDSBeacon : public PaxosServiceMessage {
 
  public:
   MMDSBeacon() : PaxosServiceMessage(MSG_MDS_BEACON, 0, HEAD_VERSION) { }
-  MMDSBeacon(const uuid_d &f, uint64_t g, string& n, epoch_t les, int st, version_t se) : 
-    PaxosServiceMessage(MSG_MDS_BEACON, les, HEAD_VERSION), 
+  MMDSBeacon(const uuid_d &f, uint64_t g, string& n, epoch_t les, int st, version_t se) :
+    PaxosServiceMessage(MSG_MDS_BEACON, les, HEAD_VERSION),
     fsid(f), global_id(g), name(n), state(st), seq(se),
     standby_for_rank(-1) {
   }
@@ -67,7 +67,7 @@ public:
   void set_standby_for_name(const char* c) { standby_for_name.assign(c); }
 
   void print(ostream& out) const {
-    out << "mdsbeacon(" << global_id << "/" << name << " " << ceph_mds_state_name(state) 
+    out << "mdsbeacon(" << global_id << "/" << name << " " << ceph_mds_state_name(state)
 	<< " seq " << seq << " v" << version << ")";
   }
 

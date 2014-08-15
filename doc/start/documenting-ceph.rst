@@ -42,11 +42,11 @@ Ceph documentation lives in the Ceph repository right along side the Ceph source
 code under the ``ceph/doc`` directory. The most common way to make contributions
 is to use the `Fork and Pull`_ approach. To use this approach, you must:
 
-- Install git locally. :: 
+- Install git locally. ::
 
 	sudo apt-get install git
 
-- Ensure your ``.gitconfig`` file has your name and email address. :: 
+- Ensure your ``.gitconfig`` file has your name and email address. ::
 
 	[user]
 	   email = {your-email-address}
@@ -64,28 +64,28 @@ information architecture primarily by its main components.
 
 - **Ceph Storage Cluster:** The Ceph Storage Cluster documentation resides
   under the ``doc/rados`` directory.
-  
+
 - **Ceph Block Device:** The Ceph Block Device documentation resides under
   the ``doc/rbd`` directory.
-  
+
 - **Ceph Object Storage:** The Ceph Object Storage documentation resides under
   the ``doc/radosgw`` directory.
 
-- **Ceph Filesystem:** The Ceph Filesystem documentation resides under the 
+- **Ceph Filesystem:** The Ceph Filesystem documentation resides under the
   ``doc/cephfs`` directory.
-  
+
 - **Installation (Quick):** Quick start documentation resides under the
   ``doc/start`` directory.
-  
+
 - **Installation (Manual):** Manual installation documentation resides under
   the ``doc/install`` directory.
-  
+
 - **Manpage:** Manpage source resides under the ``doc/man`` directory.
 
-- **Developer:** Developer documentation resides under the ``doc/dev`` 
+- **Developer:** Developer documentation resides under the ``doc/dev``
   directory.
 
-- **Images:** If you include images such as JPEG or PNG files, you should 
+- **Images:** If you include images such as JPEG or PNG files, you should
   store them under the ``doc/images`` directory.
 
 
@@ -99,7 +99,7 @@ are in the current release. ``master`` is the most commonly used branch. ::
 
 	git checkout master
 
-When you make changes to documentation that affect an upcoming release, use 
+When you make changes to documentation that affect an upcoming release, use
 the ``next`` branch. ``next`` is the second most commonly used branch. ::
 
 	git checkout next
@@ -118,8 +118,8 @@ http://tracker.ceph.com/issues/4000.
 
 .. note:: Please don't commingle documentation contributions and source code
    contributions in a single pull request. Editors review the documentation
-   and engineers review source code changes. When you keep documentation 
-   pull requests separate from source code pull requests, it simplifies the 
+   and engineers review source code changes. When you keep documentation
+   pull requests separate from source code pull requests, it simplifies the
    process and we won't have to ask you to resubmit the requests separately.
 
 Before you create your branch name, ensure that it doesn't already exist in the
@@ -146,8 +146,8 @@ or a table of contents entry. The ``index.rst`` file of a top-level directory
 usually contains a TOC, where you can add the new file name. All documents must
 have a title. See `Headings`_ for details.
 
-Your new document doesn't get tracked by ``git`` automatically. When you want 
-to add the document to the repository,  you must use ``git add 
+Your new document doesn't get tracked by ``git`` automatically. When you want
+to add the document to the repository,  you must use ``git add
 {path-to-filename}``. For example, from the top level  directory of the
 repository, adding an ``example.rst`` file to the ``rados`` subdirectory would
 look like this::
@@ -155,7 +155,7 @@ look like this::
 	git add doc/rados/example.rst
 
 Deleting a document involves removing it from the repository with ``git rm
-{path-to-filename}``. For example:: 
+{path-to-filename}``. For example::
 
 	git rm doc/rados/example.rst
 
@@ -166,7 +166,7 @@ Build the Source
 ----------------
 
 To build the documentation, navigate to the ``ceph`` repository directory;
-then execute the build script:: 
+then execute the build script::
 
 	cd ceph
 	admin/build-doc
@@ -178,7 +178,7 @@ fix errors before committing a change, and you SHOULD fix warnings.
    it automatically breaks the build!
 
 The first time you build the documentation, the script will notify you if
-you do not have the dependencies installed. To run Sphinx, at least 
+you do not have the dependencies installed. To run Sphinx, at least
 the following are required:
 
 - python-dev
@@ -190,12 +190,12 @@ the following are required:
 - ditaa
 - graphviz
 
-Install each dependency that isn't installed on your host. For Debian/Ubuntu 
+Install each dependency that isn't installed on your host. For Debian/Ubuntu
 distributions, execute the following::
 
 	sudo apt-get install python-dev python-pip python-virtualenv libxml2-dev libxslt-dev doxygen ditaa graphviz ant
 
-.. For CentOS/RHEL distributions, execute the following:: 
+.. For CentOS/RHEL distributions, execute the following::
 
 .. 	sudo yum install python-dev python-pip python-virtualenv libxml2-dev libxslt-dev doxygen ditaa graphviz ant
 
@@ -226,52 +226,52 @@ Ceph documentation commits are simple, but follow a strict convention:
 - A commit MUST have a comment.
 - A commit comment MUST be prepended with ``doc:``. (strict)
 - The comment summary MUST be one line only. (strict)
-- Additional comments MAY follow a blank line after the summary, 
+- Additional comments MAY follow a blank line after the summary,
   but should be terse.
 - A commit MAY include ``Fixes: #{bug number}``.
 - Commits MUST include ``Signed-off-by: Firstname Lastname <email>``. (strict)
 
-.. tip:: Follow the foregoing convention particularly where it says 
-   ``(strict)`` or you will be asked to modify your commit to comply with 
+.. tip:: Follow the foregoing convention particularly where it says
+   ``(strict)`` or you will be asked to modify your commit to comply with
    this convention.
 
-The following is a common commit comment (preferred):: 
+The following is a common commit comment (preferred)::
 
 	doc: Fixes a spelling error and a broken hyperlink.
-	
+
 	Signed-off-by: John Doe <john.doe@gmail.com>
 
 
-The following comment includes a reference to a bug. :: 
+The following comment includes a reference to a bug. ::
 
 	doc: Fixes a spelling error and a broken hyperlink.
 
 	Fixes: #1234
-	
+
 	Signed-off-by: John Doe <john.doe@gmail.com>
 
 
 The following comment includes a terse sentence following the comment summary.
-There is a carriage return between the summary line and the description:: 
+There is a carriage return between the summary line and the description::
 
 	doc: Added mon setting to monitor config reference
-	
+
 	Describes 'mon setting', which is a new setting added
 	to config_opts.h.
-	
+
 	Signed-off-by: John Doe <john.doe@gmail.com>
 
 
-To commit changes, execute the following:: 
+To commit changes, execute the following::
 
 	git commit -a
-	
-You can also a graphical editor like ``gitk`` and ``git-gui``. :: 
+
+You can also a graphical editor like ``gitk`` and ``git-gui``. ::
 
 	sudo apt-get install gitk git-gui
 	cd {git-ceph-repo-path}
 	gitk
-	
+
 Then select **File->Start git gui** to activate the graphical user interface.
 
 
@@ -320,17 +320,17 @@ Review the following style guides to maintain this consistency.
 Headings
 --------
 
-#. **Document Titles:** Document titles use the ``=`` character overline and 
-   underline with a leading and trailing space on the title text line. 
+#. **Document Titles:** Document titles use the ``=`` character overline and
+   underline with a leading and trailing space on the title text line.
    See `Document Title`_ for details.
 
 #. **Section Titles:** Section tiles use the ``=`` character underline with no
-   leading or trailing spaces for text. Two carriage returns should precede a 
+   leading or trailing spaces for text. Two carriage returns should precede a
    section title (unless an inline reference precedes it). See `Sections`_ for
    details.
 
-#. **Subsection Titles:** Subsection titles use the ``_`` character underline 
-   with no leading or trailing spaces for text.  Two carriage returns should 
+#. **Subsection Titles:** Subsection titles use the ``_`` character underline
+   with no leading or trailing spaces for text.  Two carriage returns should
    precede a subsection title (unless an inline reference precedes it).
 
 
@@ -342,18 +342,18 @@ a command line interface without leading or trailing white space. Where
 possible, we prefer to maintain this convention with text, lists, literal text
 (exceptions allowed), tables, and ``ditaa`` graphics.
 
-#. **Paragraphs**: Paragraphs have a leading and a trailing carriage return, 
-   and should be 80 characters wide or less so that the documentation can be 
+#. **Paragraphs**: Paragraphs have a leading and a trailing carriage return,
+   and should be 80 characters wide or less so that the documentation can be
    read in native format in a command line terminal.
 
 #. **Literal Text:** To create an example of literal text (e.g., command line
    usage), terminate the preceding paragraph with ``::`` or enter a carriage
    return to create an empty line after the preceding paragraph; then, enter
    ``::`` on a separate line followed by another empty line. Then, begin the
-   literal text with tab indentation (preferred) or space indentation of 3 
+   literal text with tab indentation (preferred) or space indentation of 3
    characters.
 
-#. **Indented Text:** Indented text such as bullet points 
+#. **Indented Text:** Indented text such as bullet points
    (e.g., ``- some text``) may span multiple lines. The text of subsequent
    lines should begin at the same character position as the text of the
    indented text (less numbers, bullets, etc.).
@@ -366,13 +366,13 @@ possible, we prefer to maintain this convention with text, lists, literal text
 
 #. **Numbered Lists:** Numbered lists should use autonumbering by starting
    a numbered indent with ``#.`` instead of the actual number so that
-   numbered paragraphs can be repositioned without requiring manual 
+   numbered paragraphs can be repositioned without requiring manual
    renumbering.
 
-#. **Code Examples:** Ceph supports the use of the 
-   ``.. code-block::<language>`` role, so that you can add highlighting to 
-   source examples. This is preferred for source code. However, use of this 
-   tag will cause autonumbering to restart at 1 if it is used as an example 
+#. **Code Examples:** Ceph supports the use of the
+   ``.. code-block::<language>`` role, so that you can add highlighting to
+   source examples. This is preferred for source code. However, use of this
+   tag will cause autonumbering to restart at 1 if it is used as an example
    within a numbered list. See `Showing code examples`_ for details.
 
 
@@ -393,12 +393,12 @@ The Ceph project uses `paragraph level markup`_ to highlight points.
 #. **Version Added:** Use the ``.. versionadded::`` directive for new features
    or configuration settings so that users know the minimum release for using
    a feature.
-   
+
 #. **Version Changed:** Use the ``.. versionchanged::`` directive for changes
    in usage or configuration settings.
 
-#. **Deprecated:** Use the ``.. deprecated::`` directive when CLI usage, 
-   a feature or a configuration setting is no longer preferred or will be 
+#. **Deprecated:** Use the ``.. deprecated::`` directive when CLI usage,
+   a feature or a configuration setting is no longer preferred or will be
    discontinued.
 
 #. **Topic:** Use the ``.. topic::`` directive to encapsulate text that is
@@ -413,7 +413,7 @@ All documents must be linked from another document or a table of contents,
 otherwise you will receive a warning when building the documentation.
 
 The Ceph project uses the ``.. toctree::`` directive. See `The TOC tree`_
-for details. When rendering a TOC, consider specifying the ``:maxdepth:`` 
+for details. When rendering a TOC, consider specifying the ``:maxdepth:``
 parameter so the rendered TOC is reasonably terse.
 
 Document authors should prefer to use the ``:ref:`` syntax where a link target

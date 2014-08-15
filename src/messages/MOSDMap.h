@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 
@@ -34,18 +34,18 @@ class MOSDMap : public Message {
     epoch_t e = 0;
     map<epoch_t, bufferlist>::const_iterator i = maps.begin();
     if (i != maps.end())  e = i->first;
-    i = incremental_maps.begin();    
+    i = incremental_maps.begin();
     if (i != incremental_maps.end() &&
-        (e == 0 || i->first < e)) e = i->first;
+	(e == 0 || i->first < e)) e = i->first;
     return e;
   }
   epoch_t get_last() const {
     epoch_t e = 0;
     map<epoch_t, bufferlist>::const_reverse_iterator i = maps.rbegin();
     if (i != maps.rend())  e = i->first;
-    i = incremental_maps.rbegin();    
+    i = incremental_maps.rbegin();
     if (i != incremental_maps.rend() &&
-        (e == 0 || i->first > e)) e = i->first;
+	(e == 0 || i->first > e)) e = i->first;
     return e;
   }
   epoch_t get_oldest() {

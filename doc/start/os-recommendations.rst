@@ -5,7 +5,7 @@
 Ceph Dependencies
 =================
 
-As a general rule, we recommend deploying Ceph on newer releases of Linux. 
+As a general rule, we recommend deploying Ceph on newer releases of Linux.
 
 Linux Kernel
 ------------
@@ -15,7 +15,7 @@ Linux Kernel
   - v3.6.6 or later in the v3.6 stable series
   - v3.4.20 or later in the v3.4 stable series
 
-- **btrfs**: If you use the ``btrfs`` file system with Ceph, we recommend using 
+- **btrfs**: If you use the ``btrfs`` file system with Ceph, we recommend using
   a recent Linux kernel (v3.5 or later).
 
 glibc
@@ -41,7 +41,7 @@ Emperor (0.72)
 --------------
 
 +----------+----------+--------------------+--------------+---------+------------+
-| Distro   | Release  | Code Name          | Kernel       | Notes   | Testing    | 
+| Distro   | Release  | Code Name          | Kernel       | Notes   | Testing    |
 +==========+==========+====================+==============+=========+============+
 | Ubuntu   | 12.04    | Precise Pangolin   | linux-3.2.0  | 1, 2    | B, I, C    |
 +----------+----------+--------------------+--------------+---------+------------+
@@ -70,7 +70,7 @@ Dumpling (0.67)
 ---------------
 
 +----------+----------+--------------------+--------------+---------+------------+
-| Distro   | Release  | Code Name          | Kernel       | Notes   | Testing    | 
+| Distro   | Release  | Code Name          | Kernel       | Notes   | Testing    |
 +==========+==========+====================+==============+=========+============+
 | Ubuntu   | 12.04    | Precise Pangolin   | linux-3.2.0  | 1, 2    | B, I, C    |
 +----------+----------+--------------------+--------------+---------+------------+
@@ -99,7 +99,7 @@ Cuttlefish (0.61)
 -----------------
 
 +----------+----------+--------------------+--------------+---------+------------+
-| Distro   | Release  | Code Name          | Kernel       | Notes   | Testing    | 
+| Distro   | Release  | Code Name          | Kernel       | Notes   | Testing    |
 +==========+==========+====================+==============+=========+============+
 | Ubuntu   | 12.04    | Precise Pangolin   | linux-3.2.0  | 1, 2    | B, I, C    |
 +----------+----------+--------------------+--------------+---------+------------+
@@ -127,7 +127,7 @@ Bobtail (0.56)
 --------------
 
 +----------+----------+--------------------+--------------+---------+------------+
-| Distro   | Release  | Code Name          | Kernel       | Notes   | Testing    | 
+| Distro   | Release  | Code Name          | Kernel       | Notes   | Testing    |
 +==========+==========+====================+==============+=========+============+
 | Ubuntu   | 11.04    | Natty Narwhal      | linux-2.6.38 | 1, 2, 3 | B          |
 +----------+----------+--------------------+--------------+---------+------------+
@@ -155,7 +155,7 @@ Argonaut (0.48)
 ---------------
 
 +----------+----------+--------------------+--------------+---------+------------+
-| Distro   | Release  | Code Name          | Kernel       | Notes   | Testing    | 
+| Distro   | Release  | Code Name          | Kernel       | Notes   | Testing    |
 +==========+==========+====================+==============+=========+============+
 | Ubuntu   | 11.04    | Natty Narwhal      | linux-2.6.38 | 1, 2, 3 | B          |
 +----------+----------+--------------------+--------------+---------+------------+

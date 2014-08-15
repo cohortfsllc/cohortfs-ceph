@@ -59,7 +59,7 @@ static string get_obj_name(int num)
 }
 
 static void get_entries_by_object(librados::IoCtx& ioctx, string& oid,
-                                  list<cls_statelog_entry>& entries, string& object, string& op_id, int expected)
+				  list<cls_statelog_entry>& entries, string& object, string& op_id, int expected)
 {
   /* search everything */
   string empty_str, marker;
@@ -74,7 +74,7 @@ static void get_entries_by_object(librados::IoCtx& ioctx, string& oid,
 }
 
 static void get_entries_by_client_id(librados::IoCtx& ioctx, string& oid,
-                                     list<cls_statelog_entry>& entries, string& client_id, string& op_id, int expected)
+				     list<cls_statelog_entry>& entries, string& client_id, string& op_id, int expected)
 {
   /* search everything */
   string empty_str, marker;
@@ -122,7 +122,7 @@ TEST(cls_rgw, test_statelog_basic)
     next_op_id(op_ids[i], &id);
     string obj = get_obj_name(i / 2);
     string cid = client_id[i / (num_ops / 2)];
-    add_log(op, cid, op_ids[i], obj, i /* just for testing */); 
+    add_log(op, cid, op_ids[i], obj, i /* just for testing */);
   }
   ASSERT_EQ(0, ioctx.operate(oid, op));
 
@@ -208,4 +208,3 @@ TEST(cls_rgw, test_statelog_basic)
   delete op;
   delete rop;
 }
-

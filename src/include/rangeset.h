@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 
@@ -31,7 +31,7 @@ using namespace std;
 template <class T>
 struct _rangeset_base {
   map<T,T> ranges;  // pair(first,last) (inclusive, e.g. [first,last])
-                    
+
   typedef typename map<T,T>::iterator mapit;
 
   // get iterator for range including val.  or ranges.end().
@@ -42,13 +42,13 @@ struct _rangeset_base {
       typename map<T,T>::reverse_iterator it = ranges.rbegin();
       if (it == ranges.rend()) return ranges.end();
       if (it->first <= val && it->second >= val)
-        return ranges.find(it->first);
+	return ranges.find(it->first);
       return ranges.end();
     } else {
-      if (it->first == val) return 
+      if (it->first == val) return
       it--;
       if (it->first <= val && it->second >= val)
-        return it;
+	return it;
       return ranges.end();
     }
   }
@@ -83,7 +83,7 @@ public:
   bool operator!=(rangeset_iterator<T> rit) {
     return (it != rit.it) || (rit.current != current);
   }
-  
+
   T& operator*() {
     return current;
   }
@@ -94,9 +94,9 @@ public:
     else {
       it++;
       if (it != ranges.end())
-        current = it->first;
+	current = it->first;
     }
-    
+
     return *this;
   }
 };
@@ -146,7 +146,7 @@ public:
     assert(!empty());
     return true;
   }
-  
+
   void insert(T val) {
     assert(!contains(val));
 
@@ -154,7 +154,7 @@ public:
     map_iterator right = theset.get_range_for(val+1);
 
     if (left != theset.ranges.end() &&
-        right != theset.ranges.end()) {
+	right != theset.ranges.end()) {
       // join!
       left->second = right->second;
       theset.ranges.erase(right);
@@ -196,18 +196,18 @@ public:
     return false;
   }
 
-  
+
   T first() {
     assert(!empty());
     map_iterator it = theset.ranges.begin();
     return it->first;
   }
-  
+
   void erase(T val) {
     assert(contains(val));
     map_iterator it = theset.get_range_for(val);
     assert(it != theset.ranges.end());
-    
+
     // entire range
     if (val == it->first && val == it->second) {
       theset.ranges.erase(it);
@@ -220,7 +220,7 @@ public:
       theset.ranges.insert(pair<T,T>(val+1, it->second));
       theset.ranges.erase(it);
       _size--;
-      return;      
+      return;
     }
 
     // end
@@ -240,8 +240,8 @@ public:
 
   void dump() {
     for (typename map<T,T>::iterator it = theset.ranges.begin();
-         it != theset.ranges.end();
-         it++) {
+	 it != theset.ranges.end();
+	 it++) {
       cout << " " << it->first << "-" << it->second << endl;
     }
   }

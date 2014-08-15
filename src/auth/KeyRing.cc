@@ -190,7 +190,7 @@ void KeyRing::decode_plaintext(bufferlist::iterator& bli)
     for (ConfSection::const_line_iter_t l = s->second.lines.begin();
 	 l != s->second.lines.end(); ++l) {
       if (l->key.empty())
-        continue;
+	continue;
       string k(l->key);
       std::replace(k.begin(), k.end(), '_', ' ');
       ret = set_modifier(k.c_str(), l->val.c_str(), ename, caps);

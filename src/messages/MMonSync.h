@@ -27,11 +27,11 @@ public:
   enum {
     OP_GET_COOKIE_FULL = 1,   // -> start a session (full scan)
     OP_GET_COOKIE_RECENT = 2, // -> start a session (only recent paxos events)
-    OP_COOKIE = 3,            // <- pass the iterator cookie, or
-    OP_GET_CHUNK = 4,         // -> get some keys
-    OP_CHUNK = 5,             // <- return some keys
-    OP_LAST_CHUNK = 6,        // <- return the last set of keys
-    OP_NO_COOKIE = 8,         // <- sorry, no cookie
+    OP_COOKIE = 3,	      // <- pass the iterator cookie, or
+    OP_GET_CHUNK = 4,	      // -> get some keys
+    OP_CHUNK = 5,	      // <- return some keys
+    OP_LAST_CHUNK = 6,	      // <- return the last set of keys
+    OP_NO_COOKIE = 8,	      // <- sorry, no cookie
   };
 
   /**

@@ -209,7 +209,7 @@ function test_find_cluster_by_uuid() {
 
     setup
     rm $DIR/ceph.conf
-    test_activate_dir > $DIR/test_find 2>&1 
+    test_activate_dir > $DIR/test_find 2>&1
     grep --quiet "No cluster conf found in $DIR" $DIR/test_find || return 1
     teardown
 }

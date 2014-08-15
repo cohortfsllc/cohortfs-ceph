@@ -78,7 +78,7 @@ private:
   void load_from_buffer(const char *buf, size_t sz,
 			std::deque<std::string> *errors, std::ostream *warnings);
   static ConfLine* process_line(int line_no, const char *line,
-			        std::deque<std::string> *errors);
+				std::deque<std::string> *errors);
 
   std::map <std::string, ConfSection> sections;
 };

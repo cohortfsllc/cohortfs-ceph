@@ -37,9 +37,9 @@
 
 #include "gtest/gtest.h"
 
-#include <stdio.h>                      // for fflush, fprintf, NULL, etc.
-#include <stdlib.h>                     // for exit
-#include <exception>                    // for set_terminate
+#include <stdio.h>			// for fflush, fprintf, NULL, etc.
+#include <stdlib.h>			// for exit
+#include <exception>			// for set_terminate
 
 // This terminate handler aborts the program using exit() rather than abort().
 // This avoids showing pop-ups on Windows systems and core dumps on Unix-like

@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 #ifndef CEPH_MON_QUORUM_SERVICE_H
@@ -33,16 +33,16 @@ class QuorumService
     C_Tick(QuorumService *qs) : s(qs) { }
     void finish(int r) {
       if (r < 0)
-        return;
+	return;
       s->tick();
     }
   };
 
 public:
   enum {
-    SERVICE_HEALTH                   = 0x01,
-    SERVICE_TIMECHECK                = 0x02,
-    SERVICE_CONFIG_KEY               = 0x03,
+    SERVICE_HEALTH		     = 0x01,
+    SERVICE_TIMECHECK		     = 0x02,
+    SERVICE_CONFIG_KEY		     = 0x03,
   };
 
 protected:
@@ -125,7 +125,7 @@ public:
   virtual void init() { }
 
   virtual health_status_t get_health(Formatter *f,
-                          list<pair<health_status_t,string> > *detail) = 0;
+			  list<pair<health_status_t,string> > *detail) = 0;
   virtual int get_type() = 0;
   virtual string get_name() const = 0;
 

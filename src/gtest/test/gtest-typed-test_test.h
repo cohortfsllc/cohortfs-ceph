@@ -59,7 +59,7 @@ TYPED_TEST_P(ContainerTest, InitialSizeIsZero) {
 }
 
 REGISTER_TYPED_TEST_CASE_P(ContainerTest,
-                           CanBeDefaultConstructed, InitialSizeIsZero);
+			   CanBeDefaultConstructed, InitialSizeIsZero);
 
 #endif  // GTEST_HAS_TYPED_TEST_P
 

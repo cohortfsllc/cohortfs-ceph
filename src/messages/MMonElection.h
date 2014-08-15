@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 
@@ -38,7 +38,7 @@ public:
     default: assert(0); return 0;
     }
   }
-  
+
   uuid_d fsid;
   int32_t op;
   epoch_t epoch;
@@ -50,7 +50,7 @@ public:
    * on user cluster, so we've left them in for compatibility. */
   version_t defunct_one;
   version_t defunct_two;
-  
+
   MMonElection() : Message(MSG_MON_ELECTION, HEAD_VERSION, COMPAT_VERSION),
     op(0), epoch(0), quorum_features(0), defunct_one(0),
     defunct_two(0)
@@ -68,12 +68,12 @@ public:
 private:
   ~MMonElection() {}
 
-public:  
+public:
   const char *get_type_name() const { return "election"; }
   void print(ostream& out) const {
     out << "election(" << fsid << " " << get_opname(op) << " " << epoch << ")";
   }
-  
+
   void encode_payload(uint64_t features) {
     if (monmap_bl.length() && (features != CEPH_FEATURES_ALL)) {
       // reencode old-format monmap
@@ -114,7 +114,7 @@ public:
     if (header.version >= 5)
       ::decode(sharing_bl, p);
   }
-  
+
 };
 
 #endif

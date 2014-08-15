@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 #include <algorithm>
@@ -64,7 +64,7 @@ void AuthMethodList::remove_supported_auth(int auth_type)
   for (list<uint32_t>::iterator p = auth_supported.begin(); p != auth_supported.end(); ) {
     if (*p == (uint32_t)auth_type)
       auth_supported.erase(p++);
-    else 
+    else
       ++p;
   }
 }

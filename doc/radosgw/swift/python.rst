@@ -30,7 +30,7 @@ This creates a new container called ``my-new-container``:
 .. code-block:: python
 
 	container = conn.create_container('my-new-container')
-	
+
 
 Create an Object
 ================
@@ -42,7 +42,7 @@ This creates a file ``hello.txt`` from the file named ``my_hello.txt``:
 	obj = container.create_object('hello.txt')
 	obj.content_type = 'text/plain'
 	obj.load_from_filename('./my_hello.txt')
-	
+
 
 List Owned Containers
 =====================
@@ -63,7 +63,7 @@ The output will look something like this::
 List a Container's Content
 ==========================
 
-This gets a list of objects in the container, and prints out each 
+This gets a list of objects in the container, and prints out each
 object's name, the file size, and last modified date:
 
 .. code-block:: python
@@ -97,7 +97,7 @@ This deletes the object ``goodbye.txt``:
 .. code-block:: python
 
 	container.delete_object('goodbye.txt')
-	
+
 Delete a Container
 ==================
 

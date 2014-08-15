@@ -4,7 +4,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  * Copyright 2013 Inktank
  */
@@ -56,15 +56,15 @@ struct cls_replica_log_progress_marker {
 
   cls_replica_log_progress_marker() {}
   cls_replica_log_progress_marker(const string& entity, const string& marker,
-                                  const utime_t& time ) :
-                                    entity_id(entity), position_marker(marker),
-                                    position_time(time) {}
+				  const utime_t& time ) :
+				    entity_id(entity), position_marker(marker),
+				    position_time(time) {}
   cls_replica_log_progress_marker(const string& entity, const string& marker,
-                                  const utime_t& time,
-                                  const std::list<cls_replica_log_item_marker>& b) :
-                                    entity_id(entity), position_marker(marker),
-                                    position_time(time),
-                                    items(b) {}
+				  const utime_t& time,
+				  const std::list<cls_replica_log_item_marker>& b) :
+				    entity_id(entity), position_marker(marker),
+				    position_time(time),
+				    items(b) {}
 
   void encode(bufferlist& bl) const {
     ENCODE_START(1, 1, bl);

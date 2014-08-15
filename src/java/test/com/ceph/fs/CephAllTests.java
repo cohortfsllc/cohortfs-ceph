@@ -29,7 +29,7 @@ import static org.junit.Assert.*;
 
 
 @RunWith( Suite.class )
-@Suite.SuiteClasses( { 
+@Suite.SuiteClasses( {
   CephDoubleMountTest.class,
   CephMountCreateTest.class,
   CephMountTest.class,

@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #include <sys/stat.h>
@@ -36,7 +36,7 @@ using namespace std;
 #include "common/ceph_argparse.h"
 #include "global/global_init.h"
 #include "common/safe_io.h"
-       
+
 #ifndef DARWIN
 #include <envz.h>
 #endif // DARWIN
@@ -71,7 +71,7 @@ int main(int argc, const char **argv, const char *envp[]) {
   if (sizeof(long) == 4) {
     cerr << std::endl;
     cerr << "WARNING: Ceph inode numbers are 64 bits wide, and FUSE on 32-bit kernels does" << std::endl;
-    cerr << "         not cope well with that situation.  Expect to crash shortly." << std::endl;
+    cerr << "	      not cope well with that situation.  Expect to crash shortly." << std::endl;
     cerr << std::endl;
   }
 
@@ -122,7 +122,7 @@ int main(int argc, const char **argv, const char *envp[]) {
 			   new QueueStrategy(2) /* dispatch strategy */);
       xmsgr->set_port_shift(111);
       messenger = xmsgr;
-      
+
     }
     else {
       messenger = Messenger::create(g_ceph_context,
@@ -155,7 +155,7 @@ int main(int argc, const char **argv, const char *envp[]) {
       cerr << "ceph-fuse[" << getpid() << "]: ceph mount failed with " << cpp_strerror(-r) << std::endl;
       goto out_init_failed;
     }
-    
+
     // start up fuse
     // use my argc, argv (make sure you pass a mount point!)
     r = client->mount(g_conf->client_mountpoint.c_str());

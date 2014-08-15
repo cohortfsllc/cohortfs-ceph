@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 
@@ -102,7 +102,7 @@ class Elector {
    * to be elected if we think we might have a chance (i.e., the other guy's
    * rank is lower than ours).
    */
-  bool     electing_me;
+  bool	   electing_me;
   /**
    * Holds the time at which we started the election.
    */
@@ -132,7 +132,7 @@ class Elector {
   /**
    * @}
    */
- 
+
   /**
    * Update our epoch.
    *
@@ -180,7 +180,7 @@ class Elector {
    * Start new elections by proposing ourselves as the new Leader.
    *
    * Basically, send propose messages to all the monitors in the MonMap and
-   * then reset the expire_event timer so we can limit the amount of time we 
+   * then reset the expire_event timer so we can limit the amount of time we
    * will be going at it.
    *
    * @pre   participating is true
@@ -204,7 +204,7 @@ class Elector {
    * @post  we sent an ack message to @p who
    * @post  we reset the expire_event timer
    *
-   * @param who Some other monitor's numeric identifier. 
+   * @param who Some other monitor's numeric identifier.
    */
   void defer(int who);
   /**
@@ -222,7 +222,7 @@ class Elector {
   void expire();
   /**
    * Declare Victory.
-   * 
+   *
    * We won. Or at least we believe we won, but for all intentions and purposes
    * that does not matter. What matters is that we Won.
    *
@@ -277,7 +277,7 @@ class Elector {
    *  @li We received a message with a newer epoch, which means we must have
    *	  somehow lost track of what was going on (maybe we rebooted), thus we
    *	  will start a new election
-   *  @li We consider ourselves in the run for the Leader (i.e., @p electing_me 
+   *  @li We consider ourselves in the run for the Leader (i.e., @p electing_me
    *	  is true), and we are actually being Acked by someone; thus simply add
    *	  the one acking us to the @p acked_me set. If we do now have acks from
    *	  all the participants, then we can declare victory
@@ -339,7 +339,7 @@ class Elector {
    * @param m A message with an operation type of OP_NAK
    */
   void handle_nak(class MMonElection *m);
-  
+
  public:
   /**
    * Create an Elector class
@@ -367,7 +367,7 @@ class Elector {
    *
    * We will simply cancel the @p expire_event if any exists.
    *
-   * @post @p expire_event is cancelled 
+   * @post @p expire_event is cancelled
    */
   void shutdown();
 

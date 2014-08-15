@@ -11,15 +11,15 @@ locks are always tied to active_requests.
 read locks can be placed on any node.
 xlocks must be applied at the authority.
 
-for multi-lock operations (link, unlink, rename), we must acquire xlocks on a remote node.  lock requests are associated with a reqid.  the authoritative node keeps track of which remote xlocks it holds.  when forwarded/restarted, it can drop remote locks.  
+for multi-lock operations (link, unlink, rename), we must acquire xlocks on a remote node.  lock requests are associated with a reqid.  the authoritative node keeps track of which remote xlocks it holds.  when forwarded/restarted, it can drop remote locks.
 
 when restarting, drop all locks.
-on remote, drop locks and state, and notify main req node.  
+on remote, drop locks and state, and notify main req node.
 recover dist request state on rejoin:
  - surviving op initiator will assert read or xlock
  - recovering op initiator will restart requests.  (from initiator's perspective, ops have either happened or they haven't, depending on whether the event is journaled.)
  - recovering or surviving op cohort will determine lock state during rejoin, or get a commit or rollback...
- - 
+ -
 
 
 --- path_pin = read lock on /some/random/path
@@ -60,7 +60,7 @@ ORDERING
   - auth pin on xlocks only.  no need on read locks.
   - pre-grab all auth pins on a node the first time it is visiting during lock acquisition.
     - what if things move?  if we find we are missing a needed auth pin when we revisit a host at any point, and the item is not still authpinnable, we back off and restart.  (we cannot block.)
-  - 
+  -
   - if we find we are not authpinnable, drop all locks and wait.
 
 

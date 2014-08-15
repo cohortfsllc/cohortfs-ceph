@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -63,7 +63,7 @@ public:
     catch (const std::exception& e) {
       // we shouldn't get here, but if we do, we want to know about it.
       lderr(cct) << "ceph_mount_info::~ceph_mount_info: caught exception: "
-	         << e.what() << dendl;
+		 << e.what() << dendl;
     }
     catch (...) {
       // ignore
@@ -73,7 +73,7 @@ public:
   int mount(const std::string &mount_root)
   {
     int ret;
-    
+
     if (mounted)
       return -EISCONN;
 
@@ -95,7 +95,7 @@ public:
 			   new QueueStrategy(2) /* dispatch strategy */);
       xmsgr->set_port_shift(111);
       messenger = xmsgr;
-      
+
     }
     else {
 	messenger = Messenger::create(cct, entity_name_t::CLIENT(), "client",
@@ -726,7 +726,7 @@ extern "C" int ceph_fsync(struct ceph_mount_info *cmount, int fd, int syncdataon
 }
 
 extern "C" int ceph_fallocate(struct ceph_mount_info *cmount, int fd, int mode,
-	                      int64_t offset, int64_t length)
+			      int64_t offset, int64_t length)
 {
   if (!cmount->is_mounted())
     return -ENOTCONN;
@@ -1153,7 +1153,7 @@ extern "C" int ceph_get_pool_replication(struct ceph_mount_info *cmount,
 /* Low-level exports */
 
 extern "C" int ceph_ll_lookup_root(struct ceph_mount_info *cmount,
-                  Inode **parent)
+		  Inode **parent)
 {
   *parent = cmount->get_client()->get_root();
   if (*parent)
@@ -1446,8 +1446,8 @@ extern "C" int ceph_ll_getxattr(class ceph_mount_info *cmount,
   return (cmount->get_client()->ll_getxattr(in, name, value, size, uid, gid));
 }
 extern "C" int ceph_ll_listxattr(struct ceph_mount_info *cmount,
-                              Inode *in, char *list,
-                              size_t buf_size, size_t *list_size, int uid, int gid)
+			      Inode *in, char *list,
+			      size_t buf_size, size_t *list_size, int uid, int gid)
 {
   int res = cmount->get_client()->ll_listxattr(in, list, buf_size, uid, gid);
   if (res >= 0) {

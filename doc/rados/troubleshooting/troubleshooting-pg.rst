@@ -6,24 +6,24 @@
 Placement Groups Never Get Clean
 ================================
 
-There are a few cases where Ceph placement groups never get clean: 
+There are a few cases where Ceph placement groups never get clean:
 
 #. **One OSD:** If you deviate from the quick start and use only one OSD, you
-   will likely run into problems. OSDs report other OSDs to the monitor, and 
-   also interact with other OSDs when replicating data. If you have only one 
-   OSD, a second OSD cannot check its heartbeat. Also, if you remove an OSD 
-   and have only one OSD remaining, you may encounter problems. An secondary 
-   or tertiary OSD expects another OSD to tell it which placement groups it 
-   should have. The lack of another OSD prevents this from occurring. So a 
+   will likely run into problems. OSDs report other OSDs to the monitor, and
+   also interact with other OSDs when replicating data. If you have only one
+   OSD, a second OSD cannot check its heartbeat. Also, if you remove an OSD
+   and have only one OSD remaining, you may encounter problems. An secondary
+   or tertiary OSD expects another OSD to tell it which placement groups it
+   should have. The lack of another OSD prevents this from occurring. So a
    placement group can remain stuck “stale” forever.
 
 #. **Pool Size = 1**: If you have only one copy of an object, no other OSD will
-   tell the OSD which objects it should have. For each placement group mapped 
-   to the remaining OSD (see ``ceph pg dump``), you can force the OSD to notice 
+   tell the OSD which objects it should have. For each placement group mapped
+   to the remaining OSD (see ``ceph pg dump``), you can force the OSD to notice
    the placement groups it needs by running::
-   
+
    	ceph pg force_create_pg <pgid>
-   	
+
 #. **CRUSH Rules:** Another candidate for placement groups remaining
    unclean involves errors in your CRUSH map.
 
@@ -41,10 +41,10 @@ of these states for a long time this may be an indication of a larger problem.
 For this reason, the monitor will warn when placement groups get "stuck" in a
 non-optimal state.  Specifically, we check for:
 
-* ``inactive`` - The placement group has not been ``active`` for too long 
+* ``inactive`` - The placement group has not been ``active`` for too long
   (i.e., it hasn't been able to service read/write requests).
-  
-* ``unclean`` - The placement group has not been ``clean`` for too long 
+
+* ``unclean`` - The placement group has not been ``clean`` for too long
   (i.e., it hasn't been able to completely recover from a previous failure).
 
 * ``stale`` - The placement group status has not been updated by a ``ceph-osd``,
@@ -117,11 +117,11 @@ and things will recover.
 
 Alternatively, if there is a catastrophic failure of ``osd.1`` (e.g., disk
 failure), we can tell the cluster that it is ``lost`` and to cope as
-best it can. 
+best it can.
 
 .. important:: This is dangerous in that the cluster cannot
-   guarantee that the other copies of the data are consistent 
-   and up to date.  
+   guarantee that the other copies of the data are consistent
+   and up to date.
 
 To instruct Ceph to continue anyway::
 
@@ -207,7 +207,7 @@ data, but it is ``down``.  The full range of possible states include::
  * not queried (yet)
 
 Sometimes it simply takes some time for the cluster to query possible
-locations.  
+locations.
 
 It is possible that there are other locations where the object can
 exist that are not listed.  For example, if a ceph-osd is stopped and
@@ -275,9 +275,9 @@ placement group count for pools isn't useful, but you can change it `here`_.
 Can't Write Data
 ================
 
-If your cluster is up, but some OSDs are down and you cannot write data, 
+If your cluster is up, but some OSDs are down and you cannot write data,
 check to ensure that you have the minimum number of OSDs running for the
-placement group. If you don't have the minimum number of OSDs running, 
+placement group. If you don't have the minimum number of OSDs running,
 Ceph will not allow you to write data because there is no guarantee
 that Ceph can replicate your data. See ``osd pool default min size``
 in the `Pool, PG and CRUSH Config Reference`_ for details.

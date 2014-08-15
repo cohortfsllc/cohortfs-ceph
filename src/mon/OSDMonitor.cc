@@ -263,7 +263,7 @@ void OSDMonitor::on_active()
   update_logger();
 
   if (mon->is_leader())
-    mon->clog.info() << "osdmap " << osdmap << "\n"; 
+    mon->clog.info() << "osdmap " << osdmap << "\n";
 
   if (!mon->is_leader()) {
     list<MOSDFailure*> ls;
@@ -291,7 +291,7 @@ void OSDMonitor::on_shutdown()
 void OSDMonitor::update_logger()
 {
   dout(10) << "update_logger" << dendl;
-  
+
   mon->cluster_logger->set(l_cluster_num_osd, osdmap.get_num_osds());
   mon->cluster_logger->set(l_cluster_num_osd_up, osdmap.get_num_up_osds());
   mon->cluster_logger->set(l_cluster_num_osd_in, osdmap.get_num_in_osds());
@@ -469,7 +469,7 @@ bool OSDMonitor::preprocess_query(PaxosServiceMessage *m)
 bool OSDMonitor::prepare_update(PaxosServiceMessage *m)
 {
   dout(7) << "prepare_update " << *m << " from " << m->get_orig_source_inst() << dendl;
-  
+
   switch (m->get_type()) {
     // damp updates
   case MSG_OSD_MARK_ME_DOWN:
@@ -563,7 +563,7 @@ bool OSDMonitor::preprocess_failure(MOSDFailure *m)
       goto didit;
     }
   }
-  
+
 
   // weird?
   if (!osdmap.have_inst(badboy)) {
@@ -822,7 +822,7 @@ bool OSDMonitor::prepare_failure(MOSDFailure *m)
   // calculate failure time
   utime_t now = ceph_clock_now(g_ceph_context);
   utime_t failed_since = m->get_recv_stamp() - utime_t(m->failed_for ? m->failed_for : g_conf->osd_heartbeat_grace, 0);
-  
+
   if (m->if_osd_failed()) {
     // add a report
     mon->clog.debug() << m->get_target() << " reported failed by "
@@ -863,7 +863,7 @@ bool OSDMonitor::prepare_failure(MOSDFailure *m)
     mon->no_reply(m);
     m->put();
   }
-  
+
   return false;
 }
 

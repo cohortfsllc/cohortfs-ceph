@@ -105,7 +105,7 @@ void parse_syn_options(vector<const char*>& args)
 	syn_iargs.push_back( b );
       } else if (strcmp(args[i],"dumpplacement") == 0) {
 	syn_modes.push_back( SYNCLIENT_MODE_DUMP );
-	syn_sargs.push_back( args[++i] );   
+	syn_sargs.push_back( args[++i] );
       } else if (strcmp(args[i],"dropcache") == 0) {
 	syn_modes.push_back( SYNCLIENT_MODE_DROPCACHE );
       } else if (strcmp(args[i],"makedirs") == 0) {
@@ -166,7 +166,7 @@ void parse_syn_options(vector<const char*>& args)
 	//syn_sargs.push_back( atoi(args[++i]) );
       } else if (strcmp(args[i],"randomwalk") == 0) {
 	syn_modes.push_back( SYNCLIENT_MODE_RANDOMWALK );
-	syn_iargs.push_back( atoi(args[++i]) );	      
+	syn_iargs.push_back( atoi(args[++i]) );
 
       } else if (strcmp(args[i],"trace") == 0) {
 	syn_modes.push_back( SYNCLIENT_MODE_TRACE );
@@ -201,22 +201,22 @@ void parse_syn_options(vector<const char*>& args)
 	syn_modes.push_back( SYNCLIENT_MODE_ONLYRANGE );
 	syn_iargs.push_back( atoi(args[++i]) );
 	syn_iargs.push_back( atoi(args[++i]) );
-	
-      } else if (strcmp(args[i],"sleep") == 0) { 
+
+      } else if (strcmp(args[i],"sleep") == 0) {
 	syn_modes.push_back( SYNCLIENT_MODE_SLEEP );
 	syn_iargs.push_back( atoi(args[++i]) );
-      } else if (strcmp(args[i],"randomsleep") == 0) { 
+      } else if (strcmp(args[i],"randomsleep") == 0) {
 	syn_modes.push_back( SYNCLIENT_MODE_RANDOMSLEEP );
 	syn_iargs.push_back( atoi(args[++i]) );
 
-      } else if (strcmp(args[i],"opentest") == 0) { 
+      } else if (strcmp(args[i],"opentest") == 0) {
 	syn_modes.push_back( SYNCLIENT_MODE_OPENTEST );
 	syn_iargs.push_back( atoi(args[++i]) );
       } else if (strcmp(args[i],"optest") == 0) {
 	syn_modes.push_back( SYNCLIENT_MODE_OPTEST );
 	syn_iargs.push_back( atoi(args[++i]) );
 
-      } else if (strcmp(args[i],"truncate") == 0) { 
+      } else if (strcmp(args[i],"truncate") == 0) {
 	syn_modes.push_back( SYNCLIENT_MODE_TRUNCATE );
 	syn_sargs.push_back(args[++i]);
 	syn_iargs.push_back(atoi(args[++i]));
@@ -257,7 +257,7 @@ SyntheticClient::SyntheticClient(Client *client, int w)
   this->client = client;
   whoami = w;
   thread_id = 0;
-  
+
   did_readdir = false;
 
   run_only = -1;
@@ -278,28 +278,28 @@ SyntheticClient::SyntheticClient(Client *client, int w)
 void *synthetic_client_thread_entry(void *ptr)
 {
   SyntheticClient *sc = static_cast<SyntheticClient*>(ptr);
-  //int r = 
+  //int r =
   sc->run();
   return 0;//(void*)r;
 }
 
-string SyntheticClient::get_sarg(int seq) 
+string SyntheticClient::get_sarg(int seq)
 {
   string a;
   if (!sargs.empty()) {
-    a = sargs.front(); 
+    a = sargs.front();
     sargs.pop_front();
   }
   if (a.length() == 0 || a == "~") {
     char s[30];
     snprintf(s, sizeof(s), "syn.%lld.%d", (long long)client->whoami.v, seq);
     a = s;
-  } 
+  }
   return a;
 }
 
 int SyntheticClient::run()
-{ 
+{
   dout(15) << "initing" << dendl;
   int err = client->init();
   if (err < 0) {
@@ -426,7 +426,7 @@ int SyntheticClient::run()
 	if (iarg1 && run_me()) {
 	  dout(2) << "sleepuntil " << iarg1 << dendl;
 	  utime_t at = ceph_clock_now(client->cct) - run_start;
-	  if (at.sec() < iarg1) 
+	  if (at.sec() < iarg1)
 	    sleep(iarg1 - at.sec());
 	}
 	did_run_me();
@@ -612,7 +612,7 @@ int SyntheticClient::run()
 	int rskew = iargs.front();  iargs.pop_front();
 	int wskew = iargs.front();  iargs.pop_front();
 	if (run_me()) {
-	  dout(2) << "objectrw " << cout << " " << size << " " << wrpc 
+	  dout(2) << "objectrw " << cout << " " << size << " " << wrpc
 		  << " " << overlap << " " << rskew << " " << wskew << dendl;
 	  object_rw(count, size, wrpc, overlap, rskew, wskew);
 	}
@@ -774,22 +774,22 @@ int SyntheticClient::run()
 
 	if (run_me()) {
 	  dout(0) << "trace " << tfile << " prefix=" << prefix << " count=" << iarg1 << " data=" << playdata << dendl;
-	  
+
 	  Trace t(realtfile);
-	  
+
 	  if (iarg1 == 0) iarg1 = 1; // play trace at least once!
 
 	  for (int i=0; i<iarg1; i++) {
 	    utime_t start = ceph_clock_now(client->cct);
-	    
+
 	    if (time_to_stop()) break;
 	    play_trace(t, prefix, !playdata);
 	    if (time_to_stop()) break;
 	    if (iarg1 > 1) clean_dir(prefix);  // clean only if repeat
-	    
+
 	    utime_t lat = ceph_clock_now(client->cct);
 	    lat -= start;
-	    
+
 	    dout(0) << " trace " << tfile << " loop " << (i+1) << "/" << iarg1 << " done in " << (double)lat << " seconds" << dendl;
 	    if (client->logger
 		&& i > 0
@@ -914,12 +914,12 @@ int SyntheticClient::join_thread()
 }
 
 
-bool roll_die(float p) 
+bool roll_die(float p)
 {
   float r = (float)(rand() % 100000) / 100000.0;
-  if (r < p) 
+  if (r < p)
     return true;
-  else 
+  else
     return false;
 }
 
@@ -1020,13 +1020,13 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
 	dout(1) << "play_trace at line " << t.get_line() << dendl;
       }
     }
-    
+
     if (time_to_stop()) break;
-    
+
     // op
     const char *op = t.get_string(buf, 0);
     dout(4) << (t.get_line()-1) << ": trace op " << op << dendl;
-    
+
     if (op[0] == '@') {
       // timestamp... ignore it!
       t.get_int(); // sec
@@ -1038,14 +1038,14 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
     if (strcmp(op, "link") == 0) {
       const char *a = t.get_string(buf, p);
       const char *b = t.get_string(buf2, p);
-      client->link(a,b);      
+      client->link(a,b);
     } else if (strcmp(op, "unlink") == 0) {
       const char *a = t.get_string(buf, p);
       client->unlink(a);
     } else if (strcmp(op, "rename") == 0) {
       const char *a = t.get_string(buf, p);
       const char *b = t.get_string(buf2, p);
-      client->rename(a,b);	
+      client->rename(a,b);
     } else if (strcmp(op, "mkdir") == 0) {
       const char *a = t.get_string(buf, p);
       int64_t b = t.get_int();
@@ -1056,7 +1056,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
     } else if (strcmp(op, "symlink") == 0) {
       const char *a = t.get_string(buf, p);
       const char *b = t.get_string(buf2, p);
-      client->symlink(a,b);	 
+      client->symlink(a,b);
     } else if (strcmp(op, "readlink") == 0) {
       const char *a = t.get_string(buf, p);
       char buf[100];
@@ -1115,14 +1115,14 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       open_dirs.erase(a);
     } else if (strcmp(op, "open") == 0) {
       const char *a = t.get_string(buf, p);
-      int64_t b = t.get_int(); 
-      int64_t c = t.get_int(); 
+      int64_t b = t.get_int();
+      int64_t c = t.get_int();
       int64_t d = t.get_int();
       int64_t fd = client->open(a, b, c);
       if (fd > 0) open_files[d] = fd;
     } else if (strcmp(op, "oldopen") == 0) {
       const char *a = t.get_string(buf, p);
-      int64_t b = t.get_int(); 
+      int64_t b = t.get_int();
       int64_t d = t.get_int();
       int64_t fd = client->open(a, b, 0755);
       if (fd > 0) open_files[d] = fd;
@@ -1383,12 +1383,12 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
     } else if (strcmp(op, "ll_flush") == 0) {
       int64_t f = t.get_int();
       if (!metadata_only &&
-	  ll_files.count(f)) 
+	  ll_files.count(f))
 	client->ll_flush(ll_files[f]);
     } else if (strcmp(op, "ll_fsync") == 0) {
       int64_t f = t.get_int();
       if (!metadata_only &&
-	  ll_files.count(f)) 
+	  ll_files.count(f))
 	client->ll_fsync(ll_files[f], false); // FIXME dataonly param
     } else if (strcmp(op, "ll_release") == 0) {
       int64_t f = t.get_int();
@@ -1507,7 +1507,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
     dout(1) << "leftover ll_releasedir " << fi->second << dendl;
     if (fi->second) client->ll_releasedir(fi->second);
   }
-  
+
   return 0;
 }
 
@@ -1552,7 +1552,7 @@ int SyntheticClient::clean_dir(string& basedir)
 }
 
 
-int SyntheticClient::full_walk(string& basedir) 
+int SyntheticClient::full_walk(string& basedir)
 {
   if (time_to_stop()) return -1;
 
@@ -1581,15 +1581,15 @@ int SyntheticClient::full_walk(string& basedir)
       dout(1) << "readdir on " << dir << " returns " << r << dendl;
       continue;
     }
-    
+
     for (list<string>::iterator it = contents.begin();
 	 it != contents.end();
 	 ++it) {
       if (*it == "." ||
-	  *it == "..") 
+	  *it == "..")
 	continue;
       string file = dir + "/" + *it;
-      
+
       struct stat st;
       frag_info_t dirstat;
       int r = client->lstat(file.c_str(), &st, &dirstat);
@@ -1605,7 +1605,7 @@ int SyntheticClient::full_walk(string& basedir)
 	actual.nsubdirs++;
       else
 	actual.nfiles++;
-      
+
       // print
       char *tm = ctime(&st.st_mtime);
       tm[strlen(tm)-1] = 0;
@@ -1627,7 +1627,7 @@ int SyntheticClient::full_walk(string& basedir)
 	     tm,
 	     file.c_str());
 
-      
+
       if ((st.st_mode & S_IFMT) == S_IFDIR) {
 	dirq.push_back(file);
 	statq.push_back(dirstat);
@@ -1667,9 +1667,9 @@ int SyntheticClient::dump_placement(string& fn) {
     dout(0) << "lstat error for file " << fn << dendl;
     return lstat_result;
   }
-    
+
   off_t filesize = stbuf.st_size;
- 
+
   // grab the placement info
   vector<ObjectExtent> extents;
   off_t offset = 0;
@@ -1680,7 +1680,7 @@ int SyntheticClient::dump_placement(string& fn) {
   // run through all the object extents
   dout(0) << "file size is " << filesize << dendl;
   dout(0) << "(osd, start, length) tuples for file " << fn << dendl;
-  for (vector<ObjectExtent>::iterator i = extents.begin(); 
+  for (vector<ObjectExtent>::iterator i = extents.begin();
        i != extents.end(); ++i) {
 
     int osd;
@@ -1692,7 +1692,7 @@ int SyntheticClient::dump_placement(string& fn) {
     for (vector<pair<uint64_t, uint64_t> >::iterator j = i->buffer_extents.begin();
 	 j != i->buffer_extents.end(); ++j) {
       dout(0) << "OSD " << osd << ", offset " << (*j).first
-	      << ", length " << (*j).second << dendl;	 
+	      << ", length " << (*j).second << dendl;
     }
   }
   return 0;
@@ -1725,7 +1725,7 @@ int SyntheticClient::make_dirs(const char *basedir, int dirs, int files, int dep
     snprintf(d, sizeof(d), "%s/dir.%d", basedir, i);
     make_dirs(d, dirs, files, depth-1);
   }
-  
+
   return 0;
 }
 
@@ -1755,7 +1755,7 @@ int SyntheticClient::stat_dirs(const char *basedir, int dirs, int files, int dep
     snprintf(d, sizeof(d), "%s/dir.%d", basedir, i);
     stat_dirs(d, dirs, files, depth-1);
   }
-  
+
   return 0;
 }
 int SyntheticClient::read_dirs(const char *basedir, int dirs, int files, int depth)
@@ -1789,7 +1789,7 @@ int SyntheticClient::read_dirs(const char *basedir, int dirs, int files, int dep
     e -= s;
   }
 
-  if (depth > 0) 
+  if (depth > 0)
     for (int i=0; i<dirs; i++) {
       snprintf(d, sizeof(d), "%s/dir.%d", basedir, i);
       if (read_dirs(d, dirs, files, depth-1) < 0) return -1;
@@ -1820,7 +1820,7 @@ int SyntheticClient::make_files(int num, int count, int priv, bool more)
       sleep(2);
     }
   }
-  
+
   // files
   struct stat st;
   utime_t start = ceph_clock_now(client->cct);
@@ -1843,7 +1843,7 @@ int SyntheticClient::make_files(int num, int count, int priv, bool more)
   utime_t end = ceph_clock_now(client->cct);
   end -= start;
   dout(0) << "makefiles time is " << end << " or " << ((double)end / (double)num) <<" per file" << dendl;
-  
+
   return 0;
 }
 
@@ -1892,7 +1892,7 @@ int SyntheticClient::create_shared(int num)
     snprintf(d, sizeof(d), "test/file.%d", n);
     client->mknod(d, 0644);
   }
-  
+
   return 0;
 }
 
@@ -1921,7 +1921,7 @@ int SyntheticClient::open_shared(int num, int count)
       client->close(fd);
     }
   }
-  
+
   return 0;
 }
 
@@ -1992,7 +1992,7 @@ int SyntheticClient::write_file(string& fn, int size, loff_t wrsize)   // size i
     delete[] buf;
     return fd;
   }
-  
+
   utime_t from = ceph_clock_now(client->cct);
   utime_t start = from;
   uint64_t bytes = 0, total = 0;
@@ -2004,14 +2004,14 @@ int SyntheticClient::write_file(string& fn, int size, loff_t wrsize)   // size i
       break;
     }
     dout(2) << "writing block " << i << "/" << chunks << dendl;
-    
+
     // fill buf with a 16 byte fingerprint
     // 64 bits : file offset
     // 64 bits : client id
     // = 128 bits (16 bytes)
     uint64_t *p = (uint64_t*)buf;
     while ((char*)p < buf + wrsize) {
-      *p = (uint64_t)i*(uint64_t)wrsize + (uint64_t)((char*)p - buf);	   
+      *p = (uint64_t)i*(uint64_t)wrsize + (uint64_t)((char*)p - buf);
       p++;
       *p = client->get_nodeid().v;
       p++;
@@ -2031,7 +2031,7 @@ int SyntheticClient::write_file(string& fn, int size, loff_t wrsize)   // size i
   }
 
   client->fsync(fd, true);
-  
+
   utime_t stop = ceph_clock_now(client->cct);
   double el = stop - start;
   dout(0) << "write total " << (total / el / 1048576.0) << " MB/sec ("
@@ -2062,14 +2062,14 @@ int SyntheticClient::write_fd(int fd, int size, int wrsize)   // size is in MB, 
       break;
     }
     dout(2) << "writing block " << i << "/" << chunks << dendl;
-    
+
     // fill buf with a 16 byte fingerprint
     // 64 bits : file offset
     // 64 bits : client id
     // = 128 bits (16 bytes)
     uint64_t *p = (uint64_t*)buf;
     while ((char*)p < buf + wrsize) {
-      *p = (uint64_t)i*(uint64_t)wrsize + (uint64_t)((char*)p - buf);	   
+      *p = (uint64_t)i*(uint64_t)wrsize + (uint64_t)((char*)p - buf);
       p++;
       *p = client->get_nodeid().v;
       p++;
@@ -2098,7 +2098,7 @@ int SyntheticClient::write_batch(int nfile, int size, int wrsize)
 int SyntheticClient::read_file(const std::string& fn, int size,
 			       int rdsize, bool ignoreprint)
 {
-  char *buf = new char[rdsize]; 
+  char *buf = new char[rdsize];
   memset(buf, 1, rdsize);
   uint64_t chunks = (uint64_t)size * (uint64_t)(1024*1024) / (uint64_t)rdsize;
 
@@ -2121,7 +2121,7 @@ int SyntheticClient::read_file(const std::string& fn, int size,
       dout(1) << "read_file got r = " << r << ", probably end of file" << dendl;
       break;
     }
- 
+
     bytes += rdsize;
     total += rdsize;
 
@@ -2153,7 +2153,7 @@ int SyntheticClient::read_file(const std::string& fn, int size,
 	bad++;
       }
     }
-    if (bad && !ignoreprint) 
+    if (bad && !ignoreprint)
       dout(0) << " + " << (bad-1) << " other bad 16-byte bits in this block" << dendl;
   }
 
@@ -2208,10 +2208,10 @@ int SyntheticClient::create_objects(int nobj, int osize, int inflight)
     end = nobj * (client->get_nodeid().v+1) / numc;
   }
 
-  dout(5) << "create_objects " << nobj << " size=" << osize 
+  dout(5) << "create_objects " << nobj << " size=" << osize
 	  << " .. doing [" << start << "," << end << ") inc " << inc
 	  << dendl;
-  
+
   bufferptr bp(osize);
   bp.zero();
   bufferlist bl;
@@ -2271,12 +2271,12 @@ int SyntheticClient::create_objects(int nobj, int osize, int inflight)
   return 0;
 }
 
-int SyntheticClient::object_rw(int nobj, int osize, int wrpc, 
+int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
 			       int overlappc,
 			       double rskew, double wskew)
 {
   dout(5) << "object_rw " << nobj << " size=" << osize << " with "
-	  << wrpc << "% writes" 
+	  << wrpc << "% writes"
 	  << ", " << overlappc << "% overlap"
 	  << ", rskew = " << rskew
 	  << ", wskew = " << wskew
@@ -2314,7 +2314,7 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
 
   while (1) {
     if (time_to_stop()) break;
-    
+
     // read or write?
     bool write = (rand() % 100) < wrpc;
 
@@ -2324,7 +2324,7 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
     if (write) {
       o = (long)trunc(pow(r, wskew) * (double)nobj);  // exponentially skew towards 0
       int pnoremap = (long)(r * 100.0);
-      if (pnoremap >= overlappc) 
+      if (pnoremap >= overlappc)
 	o = (o*prime) % nobj;	 // remap
     } else {
       o = (long)trunc(pow(r, rskew) * (double)nobj);  // exponentially skew towards 0
@@ -2369,9 +2369,9 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
     utime_t lat = ceph_clock_now(client->cct);
     lat -= start;
     if (client->logger) {
-      if (write) 
+      if (write)
 	client->logger->tset(l_c_owrlat, lat);
-      else 
+      else
 	client->logger->tset(l_c_ordlat, lat);
     }
   }
@@ -2396,7 +2396,7 @@ int SyntheticClient::read_random(string& fn, int size, int rdsize)   // size is 
 
   int fd = client->open(fn.c_str(), O_RDWR);
   dout(5) << "reading from " << fn << " fd " << fd << dendl;
-   
+
  // dout(0) << "READING FROM  " << fn << " fd " << fd << dendl;
 
  // dout(0) << "filename " << fn << " size:" << size  << " read size|" << rdsize << "|" <<  "\ chunks: |" << chunks <<"|" <<  dendl;
@@ -2424,10 +2424,10 @@ int SyntheticClient::read_random(string& fn, int size, int rdsize)   // size is 
 	delete[] buf;
 	buf = NULL;
     }
-    if ( x < 0.5) 
+    if ( x < 0.5)
     {
 	//dout(0) << "DECIDED TO READ " << x << dendl;
-	buf = new char[rdsize]; 
+	buf = new char[rdsize];
 	memset(buf, 1, rdsize);
 	read=true;
     }
@@ -2441,7 +2441,7 @@ int SyntheticClient::read_random(string& fn, int size, int rdsize)   // size is 
     //double  y	 = drand48() ;
 
     //dout(0) << "OFFSET is |" << offset << "| chunks |" << chunks<<  dendl;
-    
+
     if ( read)
     {
 	offset=(rand())%(chunks+1);
@@ -2472,7 +2472,7 @@ int SyntheticClient::read_random(string& fn, int size, int rdsize)   // size is 
       offset=(rand())%(chunks+1);
     __uint64_t *p = (__uint64_t*)buf;
     while ((char*)p < buf + rdsize) {
-      *p = offset*rdsize + (char*)p - buf;	
+      *p = offset*rdsize + (char*)p - buf;
       p++;
       *p = client->get_nodeid().v;
       p++;
@@ -2505,11 +2505,11 @@ int SyntheticClient::read_random(string& fn, int size, int rdsize)   // size is 
 	bad++;
       }
     }
-    if (bad) 
+    if (bad)
       dout(0) << " + " << (bad-1) << " other bad 16-byte bits in this block" << dendl;
   }
   }
-  
+
   client->close(fd);
   delete[] buf;
 
@@ -2525,33 +2525,33 @@ int normdist(int min, int max, int stdev) /* specifies input values */;
 //{
  // for ( int i=0; i < 10; i++ )
  //  normdist ( 0 , 10, 1 );
-   
+
 //}
 
 
 int normdist(int min, int max, int stdev) /* specifies input values */
 {
   /* min: Minimum value; max: Maximum value; stdev: degree of deviation */
-  
+
   //int min, max, stdev; {
   time_t seconds;
   time( &seconds);
   srand(seconds);
-  
+
   int range, iterate, result;
   /* declare range, iterate and result as integers, to avoid the need for
      floating point math*/
-  
+
   result = 0;
   /* ensure result is initialized to 0 */
-  
+
   range = max -min;
   /* calculate range of possible values between the max and min values */
-  
+
   iterate = range / stdev;
   /* this number of iterations ensures the proper shape of the resulting
      curve */
-  
+
   stdev += 1; /* compensation for integer vs. floating point math */
   for (int c = iterate; c != 0; c--) /* loop through iterations */
     {
@@ -2566,41 +2566,41 @@ int normdist(int min, int max, int stdev) /* specifies input values */
 int SyntheticClient::read_random_ex(string& fn, int size, int rdsize)	// size is in MB, wrsize in bytes
 {
   __uint64_t chunks = (__uint64_t)size * (__uint64_t)(1024*1024) / (__uint64_t)rdsize;
-  
+
   int fd = client->open(fn.c_str(), O_RDWR);
   dout(5) << "reading from " << fn << " fd " << fd << dendl;
-  
+
   // dout(0) << "READING FROM  " << fn << " fd " << fd << dendl;
-  
+
   // dout(0) << "filename " << fn << " size:" << size  << " read size|" << rdsize << "|" <<  "\ chunks: |" << chunks <<"|" <<  dendl;
-  
+
   if (fd < 0) return fd;
   int offset = 0;
   char * buf = NULL;
-  
+
   for (unsigned i=0; i<2000; i++) {
     if (time_to_stop()) break;
-    
+
     bool read=false;
-    
+
     time_t seconds;
     time( &seconds);
     srand(seconds);
-    
+
     // use rand instead ??
     double x = drand48();
-    
+
     //dout(0) << "RANDOM NUMBER RETURN |" << x << "|" << dendl;
-    
+
     // cleanup before call 'new'
     if (buf != NULL) {
 	delete[] buf;
 	buf = NULL;
     }
-    if ( x < 0.5) 
+    if ( x < 0.5)
       {
 	//dout(0) << "DECIDED TO READ " << x << dendl;
-	buf = new char[rdsize]; 
+	buf = new char[rdsize];
 	memset(buf, 1, rdsize);
 	read=true;
       }
@@ -2610,25 +2610,25 @@ int SyntheticClient::read_random_ex(string& fn, int size, int rdsize)	// size is
 	buf = new char[rdsize+100];   // 1 MB
 	memset(buf, 7, rdsize);
       }
-    
+
     //double  y	 = drand48() ;
-    
+
     //dout(0) << "OFFSET is |" << offset << "| chunks |" << chunks<<  dendl;
-    
+
     if ( read)
       {
 	//offset=(rand())%(chunks+1);
-	
-	/*    if ( chunks > 10000 ) 
+
+	/*    if ( chunks > 10000 )
 	      offset= normdist( 0 , chunks/1000 , 5  )*1000;
 	      else if ( chunks > 1000 )
 	      offset= normdist( 0 , chunks/100 , 5  )*100;
 	      else if ( chunks > 100 )
 	      offset= normdist( 0 , chunks/20 , 5  )*20;*/
-	
-	
+
+
 	dout(2) << "reading block " << offset << "/" << chunks << dendl;
-	
+
 	int r = client->read(fd, buf, rdsize,
 			     offset*rdsize);
 	if (r < rdsize) {
@@ -2638,34 +2638,34 @@ int SyntheticClient::read_random_ex(string& fn, int size, int rdsize)	// size is
     else
       {
 	dout(2) << "writing block " << offset << "/" << chunks << dendl;
-	
+
 	// fill buf with a 16 byte fingerprint
 	// 64 bits : file offset
 	// 64 bits : client id
 	// = 128 bits (16 bytes)
-	
+
 	//if (true )
 	//{
 	int count = rand()%10;
-	
+
 	for ( int j=0;j<count; j++ )
 	  {
-	    
+
 	    offset=(rand())%(chunks+1);
 	    __uint64_t *p = (__uint64_t*)buf;
 	    while ((char*)p < buf + rdsize) {
-	      *p = offset*rdsize + (char*)p - buf;	
+	      *p = offset*rdsize + (char*)p - buf;
 	      p++;
 	      *p = client->get_nodeid().v;
 	      p++;
 	    }
-	    
+
 	    client->write(fd, buf, rdsize,
 			  offset*rdsize);
 	  }
 	//}
       }
-    
+
     // verify fingerprint
     if ( read )
       {
@@ -2687,11 +2687,11 @@ int SyntheticClient::read_random_ex(string& fn, int size, int rdsize)	// size is
 	    bad++;
 	  }
 	}
-	if (bad) 
+	if (bad)
 	  dout(0) << " + " << (bad-1) << " other bad 16-byte bits in this block" << dendl;
       }
   }
-  
+
   client->close(fd);
   delete[] buf;
 
@@ -2706,7 +2706,7 @@ int SyntheticClient::random_walk(int num_req)
   //dout(1) << "random_walk() will do " << left << " ops" << dendl;
 
   init_op_dist();  // set up metadata op distribution
- 
+
   while (left > 0) {
     left--;
 
@@ -2748,10 +2748,10 @@ int SyntheticClient::random_walk(int num_req)
     if (op == CEPH_MDS_OP_UNLINK) {
       if (contents.empty())
 	op = CEPH_MDS_OP_READDIR;
-      else 
+      else
 	r = client->unlink( get_random_sub() );	  // will fail on dirs
     }
-     
+
     if (op == CEPH_MDS_OP_RENAME) {
       if (contents.empty())
 	op = CEPH_MDS_OP_READDIR;
@@ -2759,18 +2759,18 @@ int SyntheticClient::random_walk(int num_req)
 	r = client->rename( get_random_sub(), make_sub("ren") );
       }
     }
-    
+
     if (op == CEPH_MDS_OP_MKDIR) {
       r = client->mkdir( make_sub("mkdir"), 0755);
     }
-    
+
     if (op == CEPH_MDS_OP_RMDIR) {
       if (!subdirs.empty())
 	r = client->rmdir( get_random_subdir() );
       else
 	r = client->rmdir( cwd.c_str() );     // will pbly fail
     }
-    
+
     if (op == CEPH_MDS_OP_SYMLINK) {
     }
     /*
@@ -2780,17 +2780,17 @@ int SyntheticClient::random_walk(int num_req)
       else
 	r = client->chmod( get_random_sub(), rand() & 0755 );
     }
-    
+
     if (op == CEPH_MDS_OP_CHOWN) {
       if (contents.empty())	    r = client->chown( cwd.c_str(), rand(), rand() );
       else
 	r = client->chown( get_random_sub(), rand(), rand() );
     }
-     
+
     if (op == CEPH_MDS_OP_UTIME) {
       struct utimbuf b;
       memset(&b, 1, sizeof(b));
-      if (contents.empty()) 
+      if (contents.empty())
 	r = client->utime( cwd.c_str(), &b );
       else
 	r = client->utime( get_random_sub(), &b );
@@ -2798,11 +2798,11 @@ int SyntheticClient::random_walk(int num_req)
     */
     if (op == CEPH_MDS_OP_LINK) {
     }
-    
+
     if (op == CEPH_MDS_OP_MKNOD) {
       r = client->mknod( make_sub("mknod"), 0644);
     }
-     
+
     if (op == CEPH_MDS_OP_OPEN) {
       if (contents.empty())
 	op = CEPH_MDS_OP_READDIR;
@@ -2825,7 +2825,7 @@ int SyntheticClient::random_walk(int num_req)
       }
     }
     */
-    
+
     if (op == CEPH_MDS_OP_GETATTR) {
       struct stat st;
       if (contents.empty()) {
@@ -2844,10 +2844,10 @@ int SyntheticClient::random_walk(int num_req)
 
     if (op == CEPH_MDS_OP_READDIR) {
       clear_dir();
-      
+
       list<string> c;
       r = client->getdir( cwd.c_str(), c );
-      
+
       for (list<string>::iterator it = c.begin();
 	   it != c.end();
 	   ++it) {
@@ -2855,24 +2855,24 @@ int SyntheticClient::random_walk(int num_req)
 	abort();
 	/*contents[*it] = it->second;
 	if (it->second &&
-	    S_ISDIR(it->second->st_mode)) 
+	    S_ISDIR(it->second->st_mode))
 	  subdirs.insert(*it);
 	*/
       }
-      
+
       did_readdir = true;
     }
-      
+
     // errors?
     if (r < 0) {
       // reevaluate cwd.
       //while (cwd.depth()) {
       //if (client->lookup(cwd)) break;	  // it's in the cache
-	
+
       //dout(DBL) << "r = " << r << ", client doesn't have " << cwd << ", cd .." << dendl;
       dout(DBL) << "r = " << r << ", client may not have " << cwd << ", cd .." << dendl;
       up();
-      //}      
+      //}
     }
   }
 
@@ -2894,10 +2894,10 @@ int SyntheticClient::random_walk(int num_req)
 void SyntheticClient::make_dir_mess(const char *basedir, int n)
 {
   vector<string> dirs;
-  
+
   dirs.push_back(basedir);
   dirs.push_back(basedir);
-  
+
   client->mkdir(basedir, 0755);
 
   // motivation:
@@ -2909,7 +2909,7 @@ void SyntheticClient::make_dir_mess(const char *basedir, int n)
     // pick a dir
     int k = rand() % dirs.size();
     string parent = dirs[k];
-    
+
     // pick a name
     std::stringstream ss;
     ss << parent << "/" << i;
@@ -2923,8 +2923,8 @@ void SyntheticClient::make_dir_mess(const char *basedir, int n)
     // do it
     client->mkdir(dir.c_str(), 0755);
   }
-    
-  
+
+
 }
 
 
@@ -2985,7 +2985,7 @@ void SyntheticClient::foo()
     fd = client->open("tester", O_WRONLY|O_CREAT);
     client->write(fd, "hi there", 0, 8);
     client->close(fd);
-    return;    
+    return;
   }
   if (1) {
     // open some files
@@ -2997,7 +2997,7 @@ void SyntheticClient::foo()
       int c = rand() % s;
       char src[80];
       snprintf(src, sizeof(src), "syn.0.0/dir.%d/dir.%d/file.%d", a, b, c);
-      //int fd = 
+      //int fd =
       client->open(src, O_RDONLY);
     }
 
@@ -3056,7 +3056,7 @@ void SyntheticClient::foo()
       client->unlink(dst);
     }
 
-    
+
     return;
   }
 
@@ -3067,7 +3067,7 @@ void SyntheticClient::foo()
   client->mkdir("dir", 0755);
   client->link("two", "/dir/twolink");
   client->link("dir/twolink", "four");
-  
+
   // unlink fun
   client->mknod("a", 0644);
   client->unlink("a");
@@ -3091,7 +3091,7 @@ void SyntheticClient::foo()
   client->rename("p2","dir1/p2");
   client->rename("dir1/p2","dir2/p2");
   client->rename("dir2/p2","/p2");
-  
+
   // check primary+remote link merging
   client->link("p2","p2.l");
   client->link("p4","p4.l");
@@ -3130,7 +3130,7 @@ int SyntheticClient::thrash_links(const char *basedir, int dirs, int files, int 
   if (1) {
     bool renames = true; // thrash renames too?
     for (int k=0; k<n; k++) {
-      
+
       if (renames && rand() % 10 == 0) {
 	// rename some directories.  whee!
 	int dep = (rand() % depth) + 1;
@@ -3152,14 +3152,14 @@ int SyntheticClient::thrash_links(const char *basedir, int dirs, int files, int 
 	    dst += t;
 	  }
 	}
-	
+
 	if (client->rename(dst.c_str(), "/tmp") == 0) {
 	  client->rename(src.c_str(), dst.c_str());
 	  client->rename("/tmp", src.c_str());
 	}
 	continue;
-      } 
-      
+      }
+
       // pick a dest dir
       string src = basedir;
       {
@@ -3185,17 +3185,17 @@ int SyntheticClient::thrash_links(const char *basedir, int dirs, int files, int 
 	snprintf(t, sizeof(t), "/file.%d", a);
 	dst += t;
       }
-      
+
       int o = rand() % 4;
       switch (o) {
-      case 0: 
-	client->mknod(src.c_str(), 0755); 
-	if (renames) client->rename(src.c_str(), dst.c_str()); 
+      case 0:
+	client->mknod(src.c_str(), 0755);
+	if (renames) client->rename(src.c_str(), dst.c_str());
 	break;
-      case 1: 
-	client->mknod(src.c_str(), 0755); 
+      case 1:
+	client->mknod(src.c_str(), 0755);
 	client->unlink(dst.c_str());
-	client->link(src.c_str(), dst.c_str()); 
+	client->link(src.c_str(), dst.c_str());
 	break;
       case 2: client->unlink(src.c_str()); break;
       case 3: client->unlink(dst.c_str()); break;
@@ -3210,12 +3210,12 @@ int SyntheticClient::thrash_links(const char *basedir, int dirs, int files, int 
     // now link shit up
     for (int i=0; i<n; i++) {
       if (time_to_stop()) return 0;
-      
+
       char f[20];
-      
+
       // pick a file
       string file = basedir;
-      
+
       if (depth) {
 	int d = rand() % (depth+1);
 	for (int k=0; k<d; k++) {
@@ -3225,7 +3225,7 @@ int SyntheticClient::thrash_links(const char *basedir, int dirs, int files, int 
       }
       snprintf(f, sizeof(f), "/file.%d", rand() % files);
       file += f;
-      
+
       // pick a dir for our link
       string ln = basedir;
       if (depth) {
@@ -3237,8 +3237,8 @@ int SyntheticClient::thrash_links(const char *basedir, int dirs, int files, int 
       }
       snprintf(f, sizeof(f), "/ln.%d", i);
       ln += f;
-      
-      client->link(file.c_str(), ln.c_str());  
+
+      client->link(file.c_str(), ln.c_str());
     }
   }
   return 0;
@@ -3329,7 +3329,7 @@ void SyntheticClient::import_find(const char *base, const char *find, bool data)
       link += filename.substr(0, pos);
       string target;
       if (filename[pos+4] == '/') {
-	if (base[0] != '-') 
+	if (base[0] != '-')
 	  target = base;
 	target += filename.substr(pos + 4);
       } else {
@@ -3348,7 +3348,7 @@ void SyntheticClient::import_find(const char *base, const char *find, bool data)
 	client->mkdir(f.c_str(), mode);
       } else {
 	int fd = client->open(f.c_str(), O_WRONLY|O_CREAT, mode & 0777);
-	assert(fd > 0);	
+	assert(fd > 0);
 	if (data) {
 	  client->write(fd, "", 0, size);
 	} else {
@@ -3366,7 +3366,7 @@ void SyntheticClient::import_find(const char *base, const char *find, bool data)
       }
     }
   }
-  
+
 
 }
 

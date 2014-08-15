@@ -9,7 +9,7 @@ introduces a layer of indirection to ensure that data doesn't bind directly to
 particular OSD addresses. This means that tracking down system faults requires
 finding the `placement group`_ and the underlying OSDs at root of the problem.
 
-.. tip:: A fault in one part of the cluster may prevent you from accessing a 
+.. tip:: A fault in one part of the cluster may prevent you from accessing a
    particular object, but that doesn't mean that you can't access other objects.
    When you run into a fault, don't panic. Just follow the steps for monitoring
    your OSDs and placement groups. Then, begin troubleshooting.
@@ -29,7 +29,7 @@ placement groups to other OSDs. If an OSD is ``out`` of the cluster, CRUSH will
 not assign placement groups to the OSD. If an OSD is ``down``, it should also be
 ``out``.
 
-.. note:: If an OSD is ``down`` and ``in``, there is a problem and the cluster 
+.. note:: If an OSD is ``down`` and ``in``, there is a problem and the cluster
    will not be in a healthy state.
 
 .. ditaa:: +----------------+        +----------------+
@@ -61,7 +61,7 @@ echo   ``HEALTH OK`` in a few expected circumstances:
 
 An important aspect of monitoring OSDs is to ensure that when the cluster
 is up and running that all OSDs that are ``in`` the cluster are ``up`` and
-running, too. To see if all OSDs are running, execute:: 
+running, too. To see if all OSDs are running, execute::
 
 	ceph osd stat
 
@@ -72,32 +72,32 @@ how many are ``up`` (y) and how many are ``in`` (z). ::
 
 If the number of OSDs that are ``in`` the cluster is more than the number of
 OSDs that are ``up``, execute the following command to identify the ``ceph-osd``
-daemons that aren't running:: 
+daemons that aren't running::
 
 	ceph osd tree
 
-:: 
+::
 
 	dumped osdmap tree epoch 1
 	# id	weight	type name	up/down	reweight
 	-1	2	pool openstack
 	-3	2		rack dell-2950-rack-A
 	-2	2			host dell-2950-A1
-	0	1				osd.0	up	1	
+	0	1				osd.0	up	1
 	1	1				osd.1	down	1
 
 
 .. tip:: The ability to search through a well-designed CRUSH hierarchy may help
    you troubleshoot your cluster by identifying the physcial locations faster.
 
-If an OSD is ``down``, start it:: 
+If an OSD is ``down``, start it::
 
 	sudo /etc/init.d/ceph -a start osd.1
 
 See `OSD Not Running`_ for problems associated with OSDs that stopped, or won't
 restart.
 
-	
+
 
 PG Sets
 =======
@@ -115,11 +115,11 @@ some cases, an OSD in the Acting Set is ``down`` or otherwise not able to
 service requests for objects in the placement group. When these situations
 arise, don't panic. Common examples include:
 
-- You added or removed an OSD. Then, CRUSH reassigned the placement group to 
+- You added or removed an OSD. Then, CRUSH reassigned the placement group to
   other OSDs--thereby changing the composition of the Acting Set and spawning
   the migration of data with a "backfill" process.
 - An OSD was ``down``, was restared, and is now ``recovering``.
-- An OSD in the Acting Set is ``down`` or unable to service requests, 
+- An OSD in the Acting Set is ``down`` or unable to service requests,
   and another OSD has temporarily assumed its duties.
 
 Ceph processes a client request using the **Up Set**, which is the set of OSDs
@@ -129,12 +129,12 @@ migrating data, an OSD is recovering, or that there is a problem (i.e., Ceph
 usually echoes a "HEALTH WARN" state with a "stuck stale" message in such
 scenarios).
 
-To retrieve a list of placement groups, execute:: 
+To retrieve a list of placement groups, execute::
 
 	ceph pg dump
-	
+
 To view which OSDs are within the Acting Set or the Up Set for a given placement
-group, execute:: 
+group, execute::
 
 	ceph pg map {pg-num}
 
@@ -145,9 +145,9 @@ The result should tell you the osdmap epoch (eNNN), the placement group number
 	osdmap eNNN pg {pg-num} -> up [0,1,2] acting [0,1,2]
 
 .. note:: If the Up Set and Acting Set do not match, this may be an indicator
-   that the cluster rebalancing itself or of a potential problem with 
+   that the cluster rebalancing itself or of a potential problem with
    the cluster.
- 
+
 
 Peering
 =======
@@ -165,14 +165,14 @@ OSDs to establish agreement on the current state of the placement group
            +---------+     +---------+     +-------+
                 |               |              |
                 |  Request To   |              |
-                |     Peer      |              |             
+                |     Peer      |              |
                 |-------------->|              |
                 |<--------------|              |
                 |    Peering                   |
                 |                              |
                 |         Request To           |
-                |            Peer              | 
-                |----------------------------->|  
+                |            Peer              |
+                |----------------------------->|
                 |<-----------------------------|
                 |          Peering             |
 
@@ -202,7 +202,7 @@ panic. In many cases, the cluster will recover on its own. In some cases, you
 may need to take action. An important aspect of monitoring placement groups is
 to ensure that when the cluster is up and running that all placement groups are
 ``active``, and preferably in the ``clean`` state. To see the status of all
-placement groups, execute:: 
+placement groups, execute::
 
 	ceph pg stat
 
@@ -217,45 +217,45 @@ particular state such as ``active+clean`` (y). ::
 In addition to the placement group states, Ceph will also echo back the amount
 of data used (aa), the amount of storage capacity remaining (bb), and the total
 storage capacity for the placement group. These numbers can be important in a
-few cases: 
+few cases:
 
-- You are reaching your ``near full ratio`` or ``full ratio``. 
-- Your data isn't getting distributed across the cluster due to an 
+- You are reaching your ``near full ratio`` or ``full ratio``.
+- Your data isn't getting distributed across the cluster due to an
   error in your CRUSH configuration.
 
 
 .. topic:: Placement Group IDs
 
-   Placement group IDs consist of the pool number (not pool name) followed 
+   Placement group IDs consist of the pool number (not pool name) followed
    by a period (.) and the placement group ID--a hexadecimal number. You
-   can view pool numbers and their names from the output of ``ceph osd 
-   lspools``. The default pool names ``data``, ``metadata`` and ``rbd`` 
-   correspond to pool numbers ``0``, ``1`` and ``2`` respectively. A fully 
+   can view pool numbers and their names from the output of ``ceph osd
+   lspools``. The default pool names ``data``, ``metadata`` and ``rbd``
+   correspond to pool numbers ``0``, ``1`` and ``2`` respectively. A fully
    qualified placement group ID has the following form::
-   
-   	{pool-num}.{pg-id}
-   
-   And it typically looks like this:: 
-   
-   	0.1f
-   
 
-To retrieve a list of placement groups, execute the following:: 
+   	{pool-num}.{pg-id}
+
+   And it typically looks like this::
+
+   	0.1f
+
+
+To retrieve a list of placement groups, execute the following::
 
 	ceph pg dump
-	
-You can also format the output in JSON format and save it to a file:: 
+
+You can also format the output in JSON format and save it to a file::
 
 	ceph pg dump -o {filename} --format=json
 
-To query a particular placement group, execute the following:: 
+To query a particular placement group, execute the following::
 
 	ceph pg {poolnum}.{pg-id} query
-	
+
 Ceph will output the query in JSON format.
 
 .. code-block:: javascript
-	
+
 	{
 	  "state": "active+clean",
 	  "up": [
@@ -318,7 +318,7 @@ Ceph will output the query in JSON format.
 	        "num_write_kb": 1
 	      },
 	      "stat_cat_sum": {
-	        
+
 	      },
 	      "up": [
 	        1,
@@ -338,7 +338,7 @@ Ceph will output the query in JSON format.
 	      "name": "Started\/Primary\/Active",
 	      "enter_time": "2013-01-23 09:35:37.594691",
 	      "might_have_unfound": [
-	        
+
 	      ],
 	      "scrub": {
 	        "scrub_epoch_start": "536",
@@ -347,7 +347,7 @@ Ceph will output the query in JSON format.
 	        "finalizing_scrub": 0,
 	        "scrub_waiting_on": 0,
 	        "scrub_waiting_on_whom": [
-	          
+
 	        ]
 	      }
 	    },
@@ -372,8 +372,8 @@ group's Acting Set will peer. Once peering is complete, the placement group
 status should be ``active+clean``, which means a Ceph client can begin writing
 to the placement group.
 
-.. ditaa:: 
-         
+.. ditaa::
+
        /-----------\       /-----------\       /-----------\
        | Creating  |------>|  Peering  |------>|  Active   |
        \-----------/       \-----------/       \-----------/
@@ -390,15 +390,15 @@ state of the placement group. However, completion of the peering process does
 
 .. topic:: Authoratative History
 
-   Ceph will **NOT** acknowledge a write operation to a client, until 
-   all OSDs of the acting set persist the write operation. This practice 
-   ensures that at least one member of the acting set will have a record 
-   of every acknowledged write operation since the last successful 
+   Ceph will **NOT** acknowledge a write operation to a client, until
+   all OSDs of the acting set persist the write operation. This practice
+   ensures that at least one member of the acting set will have a record
+   of every acknowledged write operation since the last successful
    peering operation.
-   
-   With an accurate record of each acknowledged write operation, Ceph can 
-   construct and disseminate a new authoritative history of the placement 
-   group--a complete, and fully ordered set of operations that, if performed, 
+
+   With an accurate record of each acknowledged write operation, Ceph can
+   construct and disseminate a new authoritative history of the placement
+   group--a complete, and fully ordered set of operations that, if performed,
    would bring an OSD’s copy of a placement group up to date.
 
 
@@ -408,15 +408,15 @@ Active
 Once Ceph completes the peering process, a placement group may become
 ``active``. The ``active`` state means that the data in the placement group is
 generally  available in the primary placement group and the replicas for read
-and write operations. 
+and write operations.
 
 
-Clean 
+Clean
 -----
 
 When a placement group is in the ``clean`` state, the primary OSD and the
 replica OSDs have successfully peered and there are no stray replicas for the
-placement group. Ceph replicated all objects in the placement group the correct 
+placement group. Ceph replicated all objects in the placement group the correct
 number of times.
 
 
@@ -427,7 +427,7 @@ When a client writes an object to the primary OSD, the primary OSD is
 responsible for writing the replicas to the replica OSDs. After the primary OSD
 writes the object to storage, the placement group will remain in a ``degraded``
 state until the primary OSD has received an acknowledgement from the replica
-OSDs that Ceph created the replica objects successfully. 
+OSDs that Ceph created the replica objects successfully.
 
 The reason a placement group can be ``active+degraded`` is that an OSD may be
 ``active`` even though it doesn't hold all of the objects yet. If an OSD goes
@@ -490,7 +490,7 @@ During the backfill operations, you may see one of several states:
 ``backfill_wait`` indicates that a backfill operation is pending, but isn't
 underway yet; ``backfill`` indicates that a backfill operation is underway;
 and, ``backfill_too_full`` indicates that a backfill operation was requested,
-but couldn't be completed due to insufficient storage capacity. 
+but couldn't be completed due to insufficient storage capacity.
 
 Ceph provides a number of settings to manage the load spike associated with
 reassigning placement groups to an OSD (especially a new OSD). By default,
@@ -526,7 +526,7 @@ fails to report to the monitor or if other OSDs have reported the primary OSD
 ``down``, the monitors will mark the placement group ``stale``.
 
 When you start your cluster, it is common to see the ``stale`` state until
-the peering process completes. After your cluster has been running for awhile, 
+the peering process completes. After your cluster has been running for awhile,
 seeing placement groups in the ``stale`` state indicates that the primary OSD
 for those placement groups is ``down`` or not reporting placement group statistics
 to the monitor.
@@ -535,20 +535,20 @@ to the monitor.
 Identifying Troubled PGs
 ========================
 
-As previously noted, a placement group isn't necessarily problematic just 
+As previously noted, a placement group isn't necessarily problematic just
 because its state isn't ``active+clean``. Generally, Ceph's ability to self
 repair may not be working when placement groups get stuck. The stuck states
 include:
 
-- **Unclean**: Placement groups contain objects that are not replicated the 
+- **Unclean**: Placement groups contain objects that are not replicated the
   desired number of times. They should be recovering.
-- **Inactive**: Placement groups cannot process reads or writes because they 
+- **Inactive**: Placement groups cannot process reads or writes because they
   are waiting for an OSD with the most up-to-date data to come back ``up``.
-- **Stale**: Placement groups are in an unknown state, because the OSDs that 
-  host them have not reported to the monitor cluster in a while (configured 
+- **Stale**: Placement groups are in an unknown state, because the OSDs that
+  host them have not reported to the monitor cluster in a while (configured
   by ``mon osd report timeout``).
 
-To identify stuck placement groups, execute the following:: 
+To identify stuck placement groups, execute the following::
 
 	ceph pg dump_stuck [unclean|inactive|stale]
 
@@ -559,7 +559,7 @@ stuck placement groups, see `Troubleshooting PG Errors`_.
 Finding an Object Location
 ==========================
 
-To store object data in the Ceph Object Store, a Ceph client must: 
+To store object data in the Ceph Object Store, a Ceph client must:
 
 #. Set an object name
 #. Specify a `pool`_
@@ -567,37 +567,37 @@ To store object data in the Ceph Object Store, a Ceph client must:
 The Ceph client retrieves the latest cluster map and the CRUSH algorithm
 calculates how to map the object to a `placement group`_, and then calculates
 how to assign the placement group to an OSD dynamically. To find the object
-location, all you need is the object name and the pool name. For example:: 
+location, all you need is the object name and the pool name. For example::
 
 	ceph osd map {poolname} {object-name}
 
 .. topic:: Excercise: Locate an Object
 
 	As an exercise, lets create an object. Specify an object name, a path to a
-	test file containing some object data and a pool name using the 
+	test file containing some object data and a pool name using the
 	``rados put`` command on the command line. For example::
-   
-		rados put {object-name} {file-path} --pool=data   	
+
+		rados put {object-name} {file-path} --pool=data
 		rados put test-object-1 testfile.txt --pool=data
-   
+
 	To verify that the Ceph Object Store stored the object, execute the following::
-   
+
 		rados -p data ls
-   
-	Now, identify the object location::	
+
+	Now, identify the object location::
 
 		ceph osd map {pool-name} {object-name}
 		ceph osd map data test-object-1
-   
-	Ceph should output the object's location. For example:: 
-   
+
+	Ceph should output the object's location. For example::
+
 		osdmap e537 pool 'data' (0) object 'test-object-1' -> pg 0.d1743484 (0.4) -> up [1,0] acting [1,0]
-   
+
 	To remove the test object, simply delete it using the ``rados rm`` command.
-	For example:: 
-   
+	For example::
+
 		rados rm test-object-1 --pool=data
-   
+
 
 As the cluster evolves, the object location may change dynamically. One benefit
 of Ceph's dynamic rebalancing is that Ceph relieves you from having to perform

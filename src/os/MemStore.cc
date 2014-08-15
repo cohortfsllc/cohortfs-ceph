@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 #include "acconfig.h"
@@ -171,7 +171,7 @@ int MemStore::_load()
 
   dump_all();
 
-  return 0;  
+  return 0;
 }
 
 void MemStore::set_fsid(uuid_d u)
@@ -222,10 +222,10 @@ int MemStore::mkfs()
 int MemStore::statfs(struct statfs *st)
 {
   dout(10) << __func__ << dendl;
-  // make some shit up.  these are the only fields that matter.
+  // make some shit up.	 these are the only fields that matter.
   st->f_bsize = 1024;
   st->f_blocks = 1000000;
-  st->f_bfree =  1000000;
+  st->f_bfree =	 1000000;
   st->f_bavail = 1000000;
   return 0;
 }
@@ -367,7 +367,7 @@ int MemStore::fiemap(const coll_t &cid, const hobject_t& oid,
   map<uint64_t, uint64_t> m;
   m[offset] = l;
   ::encode(m, bl);
-  return 0;  
+  return 0;
 }
 
 int MemStore::getattr(const coll_t &cid, const hobject_t& oid,
@@ -547,9 +547,9 @@ int MemStore::collection_list_range(const coll_t &cid,
 }
 
 int MemStore::omap_get(
-    const coll_t &cid,      ///< [in] Collection containing oid
+    const coll_t &cid,	    ///< [in] Collection containing oid
     const hobject_t &oid,   ///< [in] Object containing omap
-    bufferlist *header,     ///< [out] omap header
+    bufferlist *header,	    ///< [out] omap header
     map<string, bufferlist> *out /// < [out] Key to value map
     )
 {
@@ -567,10 +567,10 @@ int MemStore::omap_get(
 }
 
 int MemStore::omap_get_header(
-    const coll_t &cid,      ///< [in] Collection containing oid
+    const coll_t &cid,	    ///< [in] Collection containing oid
     const hobject_t &oid,   ///< [in] Object containing omap
-    bufferlist *header,     ///< [out] omap header
-    bool allow_eio          ///< [in] don't assert on eio
+    bufferlist *header,	    ///< [out] omap header
+    bool allow_eio	    ///< [in] don't assert on eio
     )
 {
   dout(10) << __func__ << " " << cid << " " << oid << dendl;
@@ -586,9 +586,9 @@ int MemStore::omap_get_header(
 }
 
 int MemStore::omap_get_keys(
-    const coll_t &cid,      ///< [in] Collection containing oid
+    const coll_t &cid,	    ///< [in] Collection containing oid
     const hobject_t &oid,   ///< [in] Object containing omap
-    set<string> *keys       ///< [out] Keys defined on oid
+    set<string> *keys	    ///< [out] Keys defined on oid
     )
 {
   dout(10) << __func__ << " " << cid << " " << oid << dendl;
@@ -607,7 +607,7 @@ int MemStore::omap_get_keys(
 }
 
 int MemStore::omap_get_values(
-    const coll_t &cid,      ///< [in] Collection containing oid
+    const coll_t &cid,	    ///< [in] Collection containing oid
     const hobject_t &oid,   ///< [in] Object containing omap
     const set<string> &keys, ///< [in] Keys to get
     map<string, bufferlist> *out ///< [out] Returned keys and values
@@ -632,10 +632,10 @@ int MemStore::omap_get_values(
 }
 
 int MemStore::omap_check_keys(
-    const coll_t &cid,      ///< [in] Collection containing oid
+    const coll_t &cid,	    ///< [in] Collection containing oid
     const hobject_t &oid,   ///< [in] Object containing omap
     const set<string> &keys, ///< [in] Keys to check
-    set<string> *out        ///< [out] Subset of keys defined on oid
+    set<string> *out	    ///< [out] Subset of keys defined on oid
     )
 {
   dout(10) << __func__ << " " << cid << " " << oid << dendl;
@@ -911,7 +911,7 @@ int MemStore::_write(const coll_t &cid, const hobject_t& oid,
 }
 
 void MemStore::_write_pages(const bufferlist& src, unsigned offset,
-                            ObjectRef o)
+			    ObjectRef o)
 {
   unsigned len = src.length();
 
@@ -1206,7 +1206,7 @@ int MemStore::_destroy_collection(const coll_t &cid)
 }
 
 int MemStore::_collection_add(const coll_t &cid, const coll_t &ocid,
-                              const hobject_t& oid)
+			      const hobject_t& oid)
 {
   dout(10) << __func__ << " " << cid << " " << ocid << " " << oid << dendl;
   CollectionRef c = get_collection(cid);
@@ -1229,8 +1229,8 @@ int MemStore::_collection_add(const coll_t &cid, const coll_t &ocid,
 }
 
 int MemStore::_collection_move_rename(const coll_t &oldcid,
-                                      const hobject_t& oldoid,
-                                      const coll_t &cid, const hobject_t& oid)
+				      const hobject_t& oldoid,
+				      const coll_t &cid, const hobject_t& oid)
 {
   dout(10) << __func__ << " " << oldcid << " " << oldoid << " -> "
 	   << cid << " " << oid << dendl;

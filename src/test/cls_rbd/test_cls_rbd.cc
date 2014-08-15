@@ -323,7 +323,7 @@ TEST(cls_rbd, stripingv2)
   uint64_t su = 65536, sc = 12;
   ASSERT_EQ(-ENOEXEC, get_stripe_unit_count(&ioctx, "foo", &su, &sc));
   ASSERT_EQ(-ENOEXEC, set_stripe_unit_count(&ioctx, "foo", su, sc));
-  
+
   ASSERT_EQ(0, create_image(&ioctx, "bar", 10, 22, RBD_FEATURE_STRIPINGV2, "bar"));
   ASSERT_EQ(0, get_stripe_unit_count(&ioctx, "bar", &su, &sc));
   ASSERT_EQ(1ull << 22, su);

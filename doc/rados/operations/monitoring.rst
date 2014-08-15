@@ -3,27 +3,27 @@
 ======================
 
 Once you have a running cluster, you may use the ``ceph`` tool to monitor your
-cluster. Monitoring a cluster typically involves checking OSD status, monitor 
+cluster. Monitoring a cluster typically involves checking OSD status, monitor
 status, placement group status and metadata server status.
 
 Interactive Mode
 ================
 
 To run the ``ceph`` tool in interactive mode, type ``ceph`` at the command line
-with no arguments.  For example:: 
+with no arguments.  For example::
 
 	ceph
 	ceph> health
 	ceph> status
 	ceph> quorum_status
 	ceph> mon_status
-	
+
 
 Checking Cluster Health
 =======================
 
 After you start your cluster, and before you start reading and/or
-writing data, check your cluster's health first. You can check on the 
+writing data, check your cluster's health first. You can check on the
 health of your Ceph cluster with the following::
 
 	ceph health
@@ -41,13 +41,13 @@ such as ``HEALTH_OK``. At that point, it is okay to begin using the cluster.
 Watching a Cluster
 ==================
 
-To watch the cluster's ongoing events, open a new terminal. Then, enter:: 
+To watch the cluster's ongoing events, open a new terminal. Then, enter::
 
 	ceph -w
 
 Ceph will print each version of the placement group map and their status.  For
 example, a tiny Ceph cluster consisting of one monitor, one metadata server and
-two OSDs may print the following:: 
+two OSDs may print the following::
 
    health HEALTH_OK
    monmap e1: 1 mons at {a=192.168.0.1:6789/0}, election epoch 0, quorum 0 a
@@ -64,11 +64,11 @@ two OSDs may print the following::
 Checking a Cluster's Status
 ===========================
 
-To check a cluster's status, execute the following:: 
+To check a cluster's status, execute the following::
 
 	ceph status
-	
-Or:: 
+
+Or::
 
 	ceph -s
 
@@ -89,27 +89,27 @@ of one monitor, one metadata server and  two OSDs may print the following::
 Checking OSD Status
 ===================
 
-You can check OSDs to ensure they are ``up`` and ``in`` by executing:: 
+You can check OSDs to ensure they are ``up`` and ``in`` by executing::
 
 	ceph osd stat
-	
-Or:: 
+
+Or::
 
 	ceph osd dump
-	
-You can also check view OSDs according to their position in the CRUSH map. :: 
+
+You can also check view OSDs according to their position in the CRUSH map. ::
 
 	ceph osd tree
 
 Ceph will print out a CRUSH tree with a host, its OSDs, whether they are up
-and their weight. ::  
+and their weight. ::
 
 	# id	weight	type name	up/down	reweight
 	-1	3	pool default
 	-3	3		rack mainrack
 	-2	3			host osd-host
-	0	1				osd.0	up	1	
-	1	1				osd.1	up	1	
+	0	1				osd.0	up	1
+	1	1				osd.1	up	1
 	2	1				osd.2	up	1
 
 For a detailed discussion, refer to `Monitoring OSDs and Placement Groups`_.
@@ -125,13 +125,13 @@ monitor status periodically to ensure that they are running.
 To see display the monitor map, execute the following::
 
 	ceph mon stat
-	
-Or:: 
+
+Or::
 
 	ceph mon dump
-	
-To check the quorum status for the monitor cluster, execute the following:: 
-	
+
+To check the quorum status for the monitor cluster, execute the following::
+
 	ceph quorum_status
 
 Ceph will return the quorum status. For example, a Ceph  cluster consisting of
@@ -167,11 +167,11 @@ Checking MDS Status
 
 Metadata servers provide metadata services for  Ceph FS. Metadata servers have
 two sets of states: ``up | down`` and ``active | inactive``. To ensure your
-metadata servers are ``up`` and ``active``,  execute the following:: 
+metadata servers are ``up`` and ``active``,  execute the following::
 
 	ceph mds stat
-	
-To display details of the metadata cluster, execute the following:: 
+
+To display details of the metadata cluster, execute the following::
 
 	ceph mds dump
 
@@ -180,7 +180,7 @@ Checking Placement Group States
 ===============================
 
 Placement groups map objects to OSDs. When you monitor your
-placement groups,  you will want them to be ``active`` and ``clean``. 
+placement groups,  you will want them to be ``active`` and ``clean``.
 For a detailed discussion, refer to `Monitoring OSDs and Placement Groups`_.
 
 .. _Monitoring OSDs and Placement Groups: ../monitoring-osd-pg
@@ -189,14 +189,14 @@ For a detailed discussion, refer to `Monitoring OSDs and Placement Groups`_.
 Using the Admin Socket
 ======================
 
-The Ceph admin socket allows you to query a daemon via a socket interface. 
+The Ceph admin socket allows you to query a daemon via a socket interface.
 By default, Ceph sockets reside under ``/var/run/ceph``. To access a daemon
-via the admin socket, login to the host running the daemon and use the 
-following command:: 
+via the admin socket, login to the host running the daemon and use the
+following command::
 
 	ceph --admin-daemon /var/run/ceph/{socket-name}
 
-To view the available admin socket commands, execute the following command:: 
+To view the available admin socket commands, execute the following command::
 
 	ceph --admin-daemon /var/run/ceph/{socket-name} help
 

@@ -5,7 +5,7 @@ Erasure Coded Placement Groups
 Glossary
 --------
 
-*chunk* 
+*chunk*
    when the encoding function is called, it returns chunks of the same
    size. Data chunks which can be concated to reconstruct the original
    object and coding chunks which can be used to rebuild a lost chunk.
@@ -15,7 +15,7 @@ Glossary
    rank of the first chunk is 0, the rank of the second chunk is 1
    etc.
 
-*stripe* 
+*stripe*
    when an object is too large to be encoded with a single call,
    each set of chunks created by a call to the encoding function is
    called a stripe.
@@ -29,14 +29,14 @@ Glossary
 
 The definitions are illustrated as follows:
 ::
- 
+
                  OSD 40                       OSD 33
        +-------------------------+ +-------------------------+
        |      shard 0 - PG 10    | |      shard 1 - PG 10    |
        |+------ object O -------+| |+------ object O -------+|
        ||+---------------------+|| ||+---------------------+||
  stripe|||    chunk  0         ||| |||    chunk  1         ||| ...
-   0   |||    [0,+N)           ||| |||    [0,+N)           ||| 
+   0   |||    [0,+N)           ||| |||    [0,+N)           |||
        ||+---------------------+|| ||+---------------------+||
        ||+---------------------+|| ||+---------------------+||
  stripe|||    chunk  0         ||| |||    chunk  1         ||| ...

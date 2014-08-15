@@ -4,7 +4,7 @@
 #
 
 glop="""
-sys.path.insert(0, "pypath") 
+sys.path.insert(0, "pypath")
 os.environ["PATH"] = "binpath:" + os.environ["PATH"]
 """
 import sys

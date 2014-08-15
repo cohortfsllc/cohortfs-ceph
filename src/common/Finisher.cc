@@ -73,7 +73,7 @@ void *Finisher::finisher_thread_entry()
     finisher_empty_cond.Signal();
     if (finisher_stop)
       break;
-    
+
     ldout(cct, 10) << "finisher_thread sleeping" << dendl;
     finisher_cond.Wait(finisher_lock);
   }

@@ -24,7 +24,7 @@ trap cleanup EXIT
 
 # start from a clone
 rbd create $parent --size $size --image-format 2 --stripe-count 8 --stripe-unit 65536
-rbd bench-write $parent --io-size $iosize --io-threads $iothreads --io-total $iototal --io-pattern rand 
+rbd bench-write $parent --io-size $iosize --io-threads $iothreads --io-total $iototal --io-pattern rand
 rbd snap create $parent --snap parent
 rbd snap protect $parent --snap parent
 rbd clone $parent@parent $src --stripe-count 4 --stripe-unit 262144

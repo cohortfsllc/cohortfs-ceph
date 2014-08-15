@@ -67,8 +67,8 @@ static void get_index_by_object(cls_statelog_entry& entry, string& index)
 }
 
 static int get_existing_entry(cls_method_context_t hctx, const string& client_id,
-                               const string& op_id, const string& object,
-                               cls_statelog_entry& entry)
+			       const string& op_id, const string& object,
+			       cls_statelog_entry& entry)
 {
   if ((object.empty() && client_id.empty()) || op_id.empty()) {
     return -EINVAL;
@@ -99,7 +99,7 @@ static int get_existing_entry(cls_method_context_t hctx, const string& client_id
       (!client_id.empty() && entry.client_id != client_id)){
     /* ouch, we were passed inconsistent client_id / object */
     CLS_LOG(0, "data mismatch: object=%s client_id=%s entry: object=%s client_id=%s",
-            object.c_str(), client_id.c_str(), entry.object.c_str(), entry.client_id.c_str());
+	    object.c_str(), client_id.c_str(), entry.object.c_str(), entry.client_id.c_str());
     return -EINVAL;
   }
 
@@ -142,7 +142,7 @@ static int cls_statelog_add(cls_method_context_t hctx, bufferlist *in, bufferlis
       return ret;
 
   }
-  
+
   return 0;
 }
 

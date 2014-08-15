@@ -92,7 +92,7 @@ TEST_F(PrematureExitDeathTest, FileExistsDuringExecutionOfDeathTest) {
       // otherwise don't crash, which will cause the main test process
       // to report that the death test has failed.
       if (PrematureExitFileExists()) {
-        exit(1);
+	exit(1);
       }
     }, "");
 }
@@ -131,8 +131,8 @@ int main(int argc, char **argv) {
   if (filepath != NULL && *filepath != '\0') {
     if (PrematureExitTest::FileExists(filepath)) {
       printf(
-          "File %s shouldn't exist after the test program finishes, but does.",
-          filepath);
+	  "File %s shouldn't exist after the test program finishes, but does.",
+	  filepath);
       return 1;
     }
   }

@@ -105,7 +105,7 @@ output you would get with ``quorum_status``.
 
 Take the following example of ``mon_status``::
 
-  
+
   { "name": "c",
     "rank": 2,
     "state": "peon",
@@ -265,7 +265,7 @@ monitors::
       0: 127.0.0.1:6789/0 mon.a
       1: 127.0.0.1:6790/0 mon.b
       2: 127.0.0.1:6795/0 mon.c
-      
+
 This may not be what you have however. For instance, in some versions of
 early Cuttlefish there was this one bug that could cause your ``monmap``
 to be nullified.  Completely filled with zeros. This means that not even

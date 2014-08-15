@@ -4,7 +4,7 @@ echo "starting libcephfs-java tests"
 # configure CEPH_CONF and LD_LIBRARY_PATH if they're not already set
 conf="$CEPH_CONF"
 if [ -z "$conf" ] ; then
-	echo "Setting conf to /etc/ceph/ceph.conf" 
+	echo "Setting conf to /etc/ceph/ceph.conf"
 	conf="/etc/ceph/ceph.conf"
 else
 	echo "conf is set to $conf"

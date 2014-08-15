@@ -9,13 +9,13 @@ start on the Admin Host.
 Prerequisites
 =============
 
-#. Verify that you have an appropriate version of the Linux kernel. 
+#. Verify that you have an appropriate version of the Linux kernel.
    See `OS Recommendations`_ for details. ::
-   
+
 	lsb_release -a
 	uname -r
 
-#. On the admin node, use ``ceph-deploy`` to install Ceph on your 
+#. On the admin node, use ``ceph-deploy`` to install Ceph on your
    ``ceph-client`` node. ::
 
 	ceph-deploy install ceph-client
@@ -23,7 +23,7 @@ Prerequisites
 
 #. Ensure that the :term:`Ceph Storage Cluster` is running and in an ``active +
    clean``  state. Also, ensure that you have at least one :term:`Ceph Metadata
-   Server` running. :: 
+   Server` running. ::
 
 	ceph -s [-m {monitor-ip-address}] [-k {path/to/ceph.client.admin.keyring}]
 
@@ -31,38 +31,38 @@ Prerequisites
 Create a Secret File
 ====================
 
-The Ceph Storage Cluster runs with authentication turned on by default. 
-You should have a file containing the secret key (i.e., not the keyring 
-itself). To obtain the secret key for a particular user, perform the 
-following procedure: 
+The Ceph Storage Cluster runs with authentication turned on by default.
+You should have a file containing the secret key (i.e., not the keyring
+itself). To obtain the secret key for a particular user, perform the
+following procedure:
 
-#. Identify a key for a user within a keyring file. For example:: 
+#. Identify a key for a user within a keyring file. For example::
 
 	cat ceph.client.admin.keyring
 
 #. Copy the key of the user who will be using the mounted Ceph FS filesystem.
-   It should look something like this:: 
-	
+   It should look something like this::
+
 	[client.admin]
 	   key = AQCj2YpRiAe6CxAA7/ETt7Hcl9IyxyYciVs47w==
 
-#. Open a text editor. 
+#. Open a text editor.
 
 #. Paste the key into an empty file. It should look something like this::
 
 	AQCj2YpRiAe6CxAA7/ETt7Hcl9IyxyYciVs47w==
 
-#. Save the file with the user ``name`` as an attribute 
+#. Save the file with the user ``name`` as an attribute
    (e.g., ``admin.secret``).
 
 #. Ensure the file permissions are appropriate for the user, but not
-   visible to other users. 
+   visible to other users.
 
 
 Kernel Driver
 =============
 
-Mount Ceph FS as a kernel driver. :: 
+Mount Ceph FS as a kernel driver. ::
 
 	sudo mkdir /mnt/mycephfs
 	sudo mount -t ceph {ip-address-of-monitor}:6789:/ /mnt/mycephfs
@@ -97,7 +97,7 @@ Additional Information
 
 See `Ceph FS`_ for additional information. Ceph FS is not quite as stable
 as the Ceph Block Device and Ceph Object Storage. See `Troubleshooting`_
-if you encounter trouble. 
+if you encounter trouble.
 
 .. _Storage Cluster Quick Start: ../quick-ceph-deploy
 .. _Ceph FS: ../../cephfs/

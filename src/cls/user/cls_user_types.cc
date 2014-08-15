@@ -91,7 +91,7 @@ void cls_user_gen_test_header(cls_user_header *h)
   h->last_stats_sync = utime_t(1, 0);
   h->last_stats_update = utime_t(2, 0);
 }
-  
+
 void cls_user_header::dump(Formatter *f) const
 {
   encode_json("stats", stats, f);

@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_MMONJOIN_H
@@ -31,16 +31,16 @@ class MMonJoin : public PaxosServiceMessage {
     : PaxosServiceMessage(MSG_MON_JOIN, 0),
       fsid(f), name(n), addr(a)
   { }
-  
+
 private:
   ~MMonJoin() {}
 
-public:  
+public:
   const char *get_type_name() const { return "mon_join"; }
   void print(ostream& o) const {
     o << "mon_join(" << name << " " << addr << ")";
   }
-  
+
   void encode_payload(uint64_t features) {
     paxos_encode();
     ::encode(fsid, payload);

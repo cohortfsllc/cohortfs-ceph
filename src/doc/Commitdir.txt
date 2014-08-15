@@ -3,12 +3,12 @@ OLD
 
 How Directory Committing Works:
 
-Each CDir has: 
+Each CDir has:
 	 version - current version of directory
 	 committing_version - which version was sent to stable storage
 	 last_committed_version - last version to be safely stored
 
-Each Inode has: 
+Each Inode has:
 	 parent_dir_version - what dir version i was in when i was dirtied.  (*)
 
 	 (*) note that if you change an inode, mark_dirty() again, even if it's already dirty!

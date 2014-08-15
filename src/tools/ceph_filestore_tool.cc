@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -52,7 +52,7 @@ int main(int argc, char **argv)
   bool fix_lost_objects = false;
   unsigned LIST_AT_A_TIME = 100;
   unsigned scanned = 0;
-  
+
   po::options_description desc("Allowed options");
   desc.add_options()
     ("help", "produce help message")
@@ -82,7 +82,7 @@ int main(int argc, char **argv)
     cout << desc << std::endl;
     exit(1);
   }
-     
+
   if (vm.count("help")) {
     cout << desc << std::endl;
     return 1;
@@ -92,12 +92,12 @@ int main(int argc, char **argv)
     cerr << "Must provide filestore-path" << std::endl
 	 << desc << std::endl;
     return 1;
-  } 
+  }
   if (!vm.count("journal-path")) {
     cerr << "Must provide journal-path" << std::endl
 	 << desc << std::endl;
     return 1;
-  } 
+  }
 
   if ((fspath.length() == 0 || jpath.length() == 0)) {
     cerr << "Invalid params" << desc << std::endl;

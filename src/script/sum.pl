@@ -35,7 +35,7 @@ if (scalar(@files) == 1 && $files[0] =~ /\*/) {
 		push(@files, "$dir/$f");
 	}
 	closedir(D);
-	
+
 #	print "files = @files\n";
 }
 
@@ -57,7 +57,7 @@ for (@data) {
 	chomp;
 	my @r = split(/\s+/,$_);
 	my $r = shift @r;
-	
+
 	# column headings?
 	if ($r =~ /^\#/) {
 		my $num = 0;
@@ -82,7 +82,7 @@ for (@data) {
 
 		$min{$col{$i}} = $v
 			if ($min{$col{$i}} > $v || !(defined $min{$col{$i}}));
-		$max{$col{$i}} = $v 
+		$max{$col{$i}} = $v
 			if ($max{$col{$i}} < $v);
 
 		$avg{$col{$i}} += $v;
@@ -97,7 +97,7 @@ print join("\t",'#', map { $col{$_} } @c) . "\n";
 my $n = 0;
 for my $k (sort {$a <=> $b} keys %sum) {
 	if ($avgrows) {
-		print join("\t",$k, #map int, 
+		print join("\t",$k, #map int,
 				   map { $sum{$k}->{$col{$_}}/$tcount{$k} } @c ) . "\n";
 	} else {
 		print join("\t",$k, map { $sum{$k}->{$col{$_}} } @c ) . "\n";
@@ -120,7 +120,7 @@ for my $k (keys %avg) {
 		my $a = $sum{$t}->{$k} / $files;
 		$var += ($a - $av) * ($a - $av);
 	}
-	
+
 	$avgvalvart{$k} = $var / $rows;
 }
 
@@ -133,9 +133,9 @@ print join("\t", '#minval', map { $min{$col{$_}} } @c ) . "\n";
 print join("\t", '#maxval', map { $max{$col{$_}} } @c ) . "\n";
 print join("\t", '#rows', map { $rows } @c) . "\n";
 print join("\t", '#files', map { $files } @c) . "\n";
-print join("\t", '#sum', 
+print join("\t", '#sum',
 		   map { $avg{$col{$_}} } @c ) . "\n";
-print join("\t", '#avgval', #map int, 
+print join("\t", '#avgval', #map int,
 		   map { $avgval{$col{$_}} } @c ) . "\n";
 #		   map { ($rows*$files) ? ($_ / ($rows*$files)):0 } map { $avg{$col{$_}} } @c ) . "\n";
 
@@ -144,5 +144,5 @@ print join("\t", '#avgvalvart',
 print join("\t", '#avgvaldevt',
 		   map { sqrt($_) } map { $avgvalvart{$col{$_}} } @c ) . "\n";
 
-print join("\t", '#avgsum', #map int, 
+print join("\t", '#avgsum', #map int,
 		   map { $_ / $rows } map { $avg{$col{$_}} } @c ) . "\n";

@@ -1,10 +1,12 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  * Copyright 2013 Inktank
  */
 
@@ -50,9 +52,9 @@ int RGWReplicaLogger::open_ioctx(librados::IoCtx& ctx, const string& pool)
 }
 
 int RGWReplicaLogger::update_bound(const string& oid, const string& pool,
-                                   const string& daemon_id,
-                                   const string& marker, const utime_t& time,
-                                   const list<RGWReplicaItemMarker> *entries)
+				   const string& daemon_id,
+				   const string& marker, const utime_t& time,
+				   const list<RGWReplicaItemMarker> *entries)
 {
   cls_replica_log_progress_marker progress;
   progress.entity_id = daemon_id;
@@ -72,7 +74,7 @@ int RGWReplicaLogger::update_bound(const string& oid, const string& pool,
 }
 
 int RGWReplicaLogger::delete_bound(const string& oid, const string& pool,
-                                   const string& daemon_id)
+				   const string& daemon_id)
 {
   librados::IoCtx ioctx;
   int r = open_ioctx(ioctx, pool);
@@ -86,7 +88,7 @@ int RGWReplicaLogger::delete_bound(const string& oid, const string& pool,
 }
 
 int RGWReplicaLogger::get_bounds(const string& oid, const string& pool,
-                                 RGWReplicaBounds& bounds)
+				 RGWReplicaBounds& bounds)
 {
   librados::IoCtx ioctx;
   int r = open_ioctx(ioctx, pool);
@@ -99,9 +101,9 @@ int RGWReplicaLogger::get_bounds(const string& oid, const string& pool,
 
 RGWReplicaObjectLogger::
 RGWReplicaObjectLogger(RGWRados *_store,
-                       const string& _pool,
-                       const string& _prefix) : RGWReplicaLogger(_store),
-                       pool(_pool), prefix(_prefix) {
+		       const string& _pool,
+		       const string& _prefix) : RGWReplicaLogger(_store),
+		       pool(_pool), prefix(_prefix) {
   if (pool.empty())
     store->get_log_pool_name(pool);
 }

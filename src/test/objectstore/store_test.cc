@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -51,9 +51,9 @@ public:
     }
 
     ObjectStore *store_ = ObjectStore::create(g_ceph_context,
-                                              string(GetParam()),
-                                              string("store_test_temp_dir"),
-                                              string("store_test_temp_journal"));
+					      string(GetParam()),
+					      string("store_test_temp_dir"),
+					      string("store_test_temp_journal"));
     store.reset(store_);
     EXPECT_EQ(store->mkfs(), 0);
     EXPECT_EQ(store->mount(), 0);
@@ -319,7 +319,7 @@ public:
     ObjectStore::Transaction *t;
     hobject_t hoid;
     C_SyntheticOnReadable(SyntheticWorkloadState *state,
-                          ObjectStore::Transaction *t, hobject_t hoid)
+			  ObjectStore::Transaction *t, hobject_t hoid)
       : state(state), t(t), hoid(hoid) {}
 
     void finish(int r) {
@@ -328,7 +328,7 @@ public:
       ASSERT_EQ(r, 0);
       state->in_flight_objects.erase(hoid);
       if (state->contents.count(hoid))
-        state->available_objects.insert(hoid);
+	state->available_objects.insert(hoid);
       --(state->in_flight);
       state->cond.Signal();
     }
@@ -437,7 +437,7 @@ public:
       contents[new_obj].copy(0, offset, value);
       value.append(bl);
       if (value.length() < contents[new_obj].length())
-        contents[new_obj].copy(value.length(), contents[new_obj].length()-value.length(), value);
+	contents[new_obj].copy(value.length(), contents[new_obj].length()-value.length(), value);
       value.swap(contents[new_obj]);
     }
 
@@ -460,7 +460,7 @@ public:
     {
       Mutex::Locker locker(lock);
       if (!can_unlink())
-        return ;
+	return ;
       wait_for_ready();
 
       obj = get_uniform_random_object();
@@ -472,7 +472,7 @@ public:
     } else {
       size_t max_len = contents[obj].length() - offset;
       if (len > max_len)
-        len = max_len;
+	len = max_len;
       ASSERT_EQ(len, result.length());
       contents[obj].copy(offset, len, bl);
       ASSERT_EQ(r, (int)len);
@@ -548,7 +548,7 @@ public:
     {
       Mutex::Locker locker(lock);
       if (!can_unlink())
-        return ;
+	return ;
       hoid = get_uniform_random_object();
       in_flight_objects.insert(hoid);
       available_objects.erase(hoid);

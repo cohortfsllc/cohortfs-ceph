@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_EIMPORTSTART_H
@@ -35,20 +35,20 @@ protected:
 
   EImportStart(MDLog *log,
 	       dirfrag_t di,
-	       vector<dirfrag_t>& b) : LogEvent(EVENT_IMPORTSTART), 
+	       vector<dirfrag_t>& b) : LogEvent(EVENT_IMPORTSTART),
 				       base(di), bounds(b),
 				       metablob(log) { }
   EImportStart() : LogEvent(EVENT_IMPORTSTART) { }
-  
+
   void print(ostream& out) const {
     out << "EImportStart " << base << " " << metablob;
   }
-  
+
   void encode(bufferlist &bl) const;
   void decode(bufferlist::iterator &bl);
   void dump(Formatter *f) const;
   static void generate_test_instances(list<EImportStart*>& ls);
-  
+
   void update_segment();
   void replay(MDS *mds);
 

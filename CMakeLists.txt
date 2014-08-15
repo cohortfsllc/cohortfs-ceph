@@ -5,7 +5,7 @@ set(VERSION "0.80")
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/modules/")
 
-include_directories(  
+include_directories(
   ${PROJECT_BINARY_DIR}/src/include
   ${OFED_PREFIX}/include
   ${LEVELDB_PREFIX}/include
@@ -24,7 +24,7 @@ include(CheckFunctionExists)
 CHECK_FUNCTION_EXISTS(fallocate CEPH_HAVE_FALLOCATE)
 CHECK_FUNCTION_EXISTS(posix_fadvise HAVE_POSIX_FADVISE)
 CHECK_FUNCTION_EXISTS(posix_fallocate HAVE_POSIX_FALLOCATE)
-CHECK_FUNCTION_EXISTS(syncfs HAVE_SYS_SYNCFS) 
+CHECK_FUNCTION_EXISTS(syncfs HAVE_SYS_SYNCFS)
 CHECK_FUNCTION_EXISTS(sync_file_range HAVE_SYNC_FILE_RANGE)
 CHECK_INCLUDE_FILES("arpa/inet.h" HAVE_ARPA_INET_H)
 CHECK_INCLUDE_FILES("boost/random/discrete_distribution.hpp" HAVE_BOOST_RANDOM_DISCRETE_DISTRIBUTION)
@@ -202,18 +202,18 @@ endif(WITH_XIO)
 option(WITH_RADOSGW "Rados Gateway is enabled" ON)
 
 
-option(WITH_TESTS "Build tests" ON) 	 			 	
-	
-option(WITH_FIO "Support for fio engines" OFF) 	 	
-if(WITH_FIO) 	 	
-	find_package(fio REQUIRED) 	 	
+option(WITH_TESTS "Build tests" ON)
+
+option(WITH_FIO "Support for fio engines" OFF)
+if(WITH_FIO)
+	find_package(fio REQUIRED)
 endif(WITH_FIO)
 
-option(WITH_CDS "Support for CDS MemStore and fio engines" ON) 	 	
-if(WITH_CDS) 	 	
-	find_package(cds REQUIRED) 	 	
-	set(HAVE_CDS 1) 	 	
-	include_directories(${CDS_INC_DIR}) 	 	
+option(WITH_CDS "Support for CDS MemStore and fio engines" ON)
+if(WITH_CDS)
+	find_package(cds REQUIRED)
+	set(HAVE_CDS 1)
+	include_directories(${CDS_INC_DIR})
 endif(WITH_CDS)
 
 option(USE_CEPH_ASSERT "Use Ceph's assert override" ON)
@@ -248,7 +248,7 @@ endif(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 
 # find out which platform we are building on
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-set(OperatingSystem "Mac OS X")  
+set(OperatingSystem "Mac OS X")
 endif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 
 add_subdirectory(src)

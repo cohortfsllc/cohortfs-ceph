@@ -45,8 +45,8 @@ using std::vector;
  *
  * This tests watch/notify with pool and object deletion.
  *
- * EXPECT:            * notifies to a deleted object or pool are not received
- *                    * notifies to existing objects are received
+ * EXPECT:	      * notifies to a deleted object or pool are not received
+ *		      * notifies to existing objects are received
  *
  * DO NOT EXPECT      * hangs, crashes
  */

@@ -51,9 +51,9 @@ class HybridPrimeTable : public PrimeTable {
  public:
   HybridPrimeTable(bool force_on_the_fly, int max_precalculated)
       : on_the_fly_impl_(new OnTheFlyPrimeTable),
-        precalc_impl_(force_on_the_fly ? NULL :
-                          new PreCalculatedPrimeTable(max_precalculated)),
-        max_precalculated_(max_precalculated) {}
+	precalc_impl_(force_on_the_fly ? NULL :
+			  new PreCalculatedPrimeTable(max_precalculated)),
+	max_precalculated_(max_precalculated) {}
   virtual ~HybridPrimeTable() {
     delete on_the_fly_impl_;
     delete precalc_impl_;
@@ -157,8 +157,8 @@ TEST_P(PrimeTableTest, CanGetNextPrime) {
 // PrecalcPrimeTable instance and some inside it (10). Combine will produce all
 // possible combinations.
 INSTANTIATE_TEST_CASE_P(MeaningfulTestParameters,
-                        PrimeTableTest,
-                        Combine(Bool(), Values(1, 10)));
+			PrimeTableTest,
+			Combine(Bool(), Values(1, 10)));
 
 #else
 
@@ -170,4 +170,4 @@ INSTANTIATE_TEST_CASE_P(MeaningfulTestParameters,
 // defined). This dummy test keeps gtest_main linked in.
 TEST(DummyTest, CombineIsNotSupportedOnThisPlatform) {}
 
-#endif  // GTEST_HAS_COMBINE
+#endif	// GTEST_HAS_COMBINE

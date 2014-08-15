@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #include <cassert>
@@ -31,7 +31,7 @@ void SessionMap::dump()
   dout(10) << "dump" << dendl;
   for (std::unordered_map<entity_name_t,Session*>::iterator p = session_map.begin();
        p != session_map.end();
-       ++p) 
+       ++p)
     dout(10) << p->first << " " << p->second
 	     << " state " << p->second->get_state_name()
 	     << " completed " << p->second->info.completed_requests
@@ -68,7 +68,7 @@ void SessionMap::load(Context *onload)
 
   if (onload)
     waiting_for_load.push_back(onload);
-  
+
   C_SM_Load *c = new C_SM_Load(this);
   object_t oid = get_object_name();
   VolumeRef volume(mds->get_metadata_volume());
@@ -76,15 +76,15 @@ void SessionMap::load(Context *onload)
 }
 
 void SessionMap::_load_finish(int r, bufferlist &bl)
-{ 
+{
   bufferlist::iterator blp = bl.begin();
   if (r < 0) {
     derr << "_load_finish got " << cpp_strerror(r) << dendl;
     assert(0 == "failed to load sessionmap");
   }
   dump();
-  decode(blp);  // note: this sets last_cap_renew = now()
-  dout(10) << "_load_finish v " << version 
+  decode(blp);	// note: this sets last_cap_renew = now()
+  dout(10) << "_load_finish v " << version
 	   << ", " << session_map.size() << " sessions, "
 	   << bl.length() << " bytes"
 	   << dendl;
@@ -111,7 +111,7 @@ public:
 void SessionMap::save(Context *onsave, version_t needv)
 {
   dout(10) << "save needv " << needv << ", v " << version << dendl;
- 
+
   if (needv && committing >= needv) {
     assert(committing > committed);
     commit_waiters[committing].push_back(onsave);
@@ -146,14 +146,14 @@ void SessionMap::_save_finish(version_t v)
 
 void SessionMap::encode(bufferlist& bl) const
 {
-  uint64_t pre = -1;     // for 0.19 compatibility; we forgot an encoding prefix.
+  uint64_t pre = -1;	 // for 0.19 compatibility; we forgot an encoding prefix.
   ::encode(pre, bl);
 
   ENCODE_START(3, 3, bl);
   ::encode(version, bl);
 
-  for (std::unordered_map<entity_name_t,Session*>::const_iterator p = session_map.begin(); 
-       p != session_map.end(); 
+  for (std::unordered_map<entity_name_t,Session*>::const_iterator p = session_map.begin();
+       p != session_map.end();
        ++p) {
     if (p->second->is_open() ||
 	p->second->is_closing() ||
@@ -174,9 +174,9 @@ void SessionMap::decode(bufferlist::iterator& p)
   if (pre == (uint64_t)-1) {
     DECODE_START_LEGACY_COMPAT_LEN(3, 3, 3, p);
     assert(struct_v >= 2);
-    
+
     ::decode(version, p);
-    
+
     while (!p.end()) {
       entity_inst_t inst;
       ::decode(inst.name, p);
@@ -194,7 +194,7 @@ void SessionMap::decode(bufferlist::iterator& p)
     // this is a meaningless upper bound.  can be ignored.
     uint32_t n;
     ::decode(n, p);
-    
+
     while (n-- && !p.end()) {
       bufferlist::iterator p2 = p;
       Session *s = new Session;
@@ -256,8 +256,8 @@ void SessionMap::wipe()
 
 void SessionMap::wipe_ino_prealloc()
 {
-  for (std::unordered_map<entity_name_t,Session*>::iterator p = session_map.begin(); 
-       p != session_map.end(); 
+  for (std::unordered_map<entity_name_t,Session*>::iterator p = session_map.begin();
+       p != session_map.end();
        ++p) {
     p->second->pending_prealloc_inos.clear();
     p->second->info.prealloc_inos.clear();

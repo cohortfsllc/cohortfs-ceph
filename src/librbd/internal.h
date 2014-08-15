@@ -15,9 +15,9 @@
 enum {
   l_librbd_first = 26000,
 
-  l_librbd_rd,               // read ops
-  l_librbd_rd_bytes,         // bytes read
-  l_librbd_rd_latency,       // average latency
+  l_librbd_rd,		     // read ops
+  l_librbd_rd_bytes,	     // bytes read
+  l_librbd_rd_latency,	     // average latency
   l_librbd_wr,
   l_librbd_wr_bytes,
   l_librbd_wr_latency,
@@ -26,8 +26,8 @@ enum {
   l_librbd_discard_latency,
   l_librbd_flush,
 
-  l_librbd_aio_rd,               // read ops
-  l_librbd_aio_rd_bytes,         // bytes read
+  l_librbd_aio_rd,		 // read ops
+  l_librbd_aio_rd_bytes,	 // bytes read
   l_librbd_aio_rd_latency,
   l_librbd_aio_wr,
   l_librbd_aio_wr_bytes,

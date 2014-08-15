@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #ifndef CEPH_RGW_LOG_H
 #define CEPH_RGW_LOG_H
 
@@ -76,13 +78,13 @@ struct rgw_log_entry {
 
     if (struct_v >= 3) {
       if (struct_v <= 5) {
-        uint64_t id;
-        ::decode(id, p);
-        char buf[32];
-        snprintf(buf, sizeof(buf), "%llu", (long long)id);
-        bucket_id = buf;
+	uint64_t id;
+	::decode(id, p);
+	char buf[32];
+	snprintf(buf, sizeof(buf), "%llu", (long long)id);
+	bucket_id = buf;
       } else {
-        ::decode(bucket_id, p);
+	::decode(bucket_id, p);
       }
     } else
       bucket_id = "";

@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 
@@ -17,8 +17,8 @@
 #define CEPH_FILEPATH_H
 
 /*
- * BUG:  /a/b/c is equivalent to a/b/c in dentry-breakdown, but not string.
- *   -> should it be different?  how?  should this[0] be "", with depth 4?
+ * BUG:	 /a/b/c is equivalent to a/b/c in dentry-breakdown, but not string.
+ *   -> should it be different?	 how?  should this[0] be "", with depth 4?
  *
  */
 
@@ -36,7 +36,7 @@ using namespace std;
 
 class filepath {
   inodeno_t ino;   // base inode.  ino=0 implies pure relative path.
-  string path;     // relative path.
+  string path;	   // relative path.
 
   /** bits - path segments
    * this is ['a', 'b', 'c'] for both the aboslute and relative case.
@@ -58,12 +58,12 @@ class filepath {
     int off = 0;
     while (off < (int)path.length()) {
       int nextslash = path.find('/', off);
-      if (nextslash < 0) 
-        nextslash = path.length();  // no more slashes
+      if (nextslash < 0)
+	nextslash = path.length();  // no more slashes
       if (((nextslash - off) > 0) || encoded) {
-        // skip empty components unless they were introduced deliberately
-        // see commit message for more detail
-        bits.push_back( path.substr(off,nextslash-off) );
+	// skip empty components unless they were introduced deliberately
+	// see commit message for more detail
+	bits.push_back( path.substr(off,nextslash-off) );
       }
       off = nextslash+1;
     }
@@ -95,14 +95,14 @@ class filepath {
 
   /*
    * if we are fed a relative path as a string, either set ino=0 (strictly
-   * relative) or 1 (absolute).  throw out any leading '/'.
+   * relative) or 1 (absolute).	 throw out any leading '/'.
    */
   filepath(const char *s) : encoded(false) {
     set_path(s);
   }
   void set_path(const char *s) {
     if (s[0] == '/') {
-      path = s + 1;    
+      path = s + 1;
       ino = 1;
     } else {
       ino = 0;
@@ -127,7 +127,7 @@ class filepath {
   bool absolute() const { return ino == 1; }
   bool pure_relative() const { return ino == 0; }
   bool ino_relative() const { return ino > 0; }
-  
+
   const string& operator[](int i) const {
     if (bits.empty() && path.length() > 0) parse_bits();
     return bits[i];
@@ -162,13 +162,13 @@ class filepath {
   }
 
   void pop_dentry() {
-    if (bits.empty() && path.length() > 0) 
+    if (bits.empty() && path.length() > 0)
       parse_bits();
     bits.pop_back();
     rebuild_path();
-  }    
+  }
   void push_dentry(const string& s) {
-    if (bits.empty() && path.length() > 0) 
+    if (bits.empty() && path.length() > 0)
       parse_bits();
     if (!bits.empty())
       path += "/";
@@ -185,7 +185,7 @@ class filepath {
   }
   void append(const filepath& a) {
     assert(a.pure_relative());
-    for (unsigned i=0; i<a.depth(); i++) 
+    for (unsigned i=0; i<a.depth(); i++)
       push_dentry(a[i]);
   }
 

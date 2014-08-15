@@ -1,7 +1,7 @@
 # some valgrind suppressions
 # to load these automagically,
 # cat > ~/.valgrindrc
-# --suppressions=valgrind.supp 
+# --suppressions=valgrind.supp
 # <control-d>
 
 

@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_COMPATSET_H
@@ -130,7 +130,7 @@ struct CompatSet {
    * 0: The CompatSets have the same feature set.
    * 1: This CompatSet's features are a strict superset of the other's.
    * -1: This CompatSet is missing at least one feature
-   *     described in the other. It may still have more features, though.
+   *	 described in the other. It may still have more features, though.
    */
   int compare(CompatSet& other) {
     if ((other.compat.mask == compat.mask) &&
@@ -170,7 +170,7 @@ struct CompatSet {
     }
     return diff;
   }
-  
+
   /* Merge features supported by other CompatSet into this one.
    * Return: true if some features were merged
    */
@@ -203,7 +203,7 @@ struct CompatSet {
     ro_compat.encode(bl);
     incompat.encode(bl);
   }
-  
+
   void decode(bufferlist::iterator& bl) {
     compat.decode(bl);
     ro_compat.decode(bl);

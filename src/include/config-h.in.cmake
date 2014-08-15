@@ -4,19 +4,19 @@
 #define CONFIG_H
 
 /* fallocate(2) is supported */
-#cmakedefine CEPH_HAVE_FALLOCATE 
+#cmakedefine CEPH_HAVE_FALLOCATE
 
 /* posix_fadvise is supported */
 #cmakedefine HAVE_POSIX_FADVISE
 
 /* posix_fallocate is supported */
-#cmakedefine HAVE_POSIX_FALLOCATE 
+#cmakedefine HAVE_POSIX_FALLOCATE
 
 /* Define if darwin/osx */
-#cmakedefine DARWIN 
+#cmakedefine DARWIN
 
 /* Define if you want C_Gather debugging */
-#cmakedefine DEBUG_GATHER 
+#cmakedefine DEBUG_GATHER
 
 /* Define if enabling coverage. */
 #cmakedefine ENABLE_COVERAGE

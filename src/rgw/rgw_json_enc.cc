@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 
 #include "rgw_common.h"
 #include "rgw_rados.h"
@@ -292,13 +294,13 @@ static void mask_to_str(rgw_flags_desc *mask_list, uint32_t mask, char *buf, int
     for (int i = 0; mask_list[i].mask; i++) {
       struct rgw_flags_desc *desc = &mask_list[i];
       if ((mask & desc->mask) == desc->mask) {
-        pos += snprintf(buf + pos, len - pos, "%s%s", sep, desc->str);
-        if (pos == len)
-          return;
-        sep = ", ";
-        mask &= ~desc->mask;
-        if (!mask)
-          return;
+	pos += snprintf(buf + pos, len - pos, "%s%s", sep, desc->str);
+	if (pos == len)
+	  return;
+	sep = ", ";
+	mask &= ~desc->mask;
+	if (!mask)
+	  return;
       }
     }
     if (mask == orig_mask) // no change

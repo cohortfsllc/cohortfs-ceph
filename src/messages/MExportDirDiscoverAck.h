@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -40,7 +40,7 @@ public:
   const char *get_type_name() const { return "ExDisA"; }
   void print(ostream& o) const {
     o << "export_discover_ack(" << dirfrag;
-    if (success) 
+    if (success)
       o << " success)";
     else
       o << " failure)";

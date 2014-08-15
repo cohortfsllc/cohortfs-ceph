@@ -2,17 +2,17 @@
  Cephx Guide
 =============
 
-Ceph provides two authentication modes: 
+Ceph provides two authentication modes:
 
 - **None:** Any user can access data without authentication.
 - **Cephx**: Ceph requires user authentication in a manner similar to Kerberos.
 
 If you disable ``cephx``, you do not need to generate keys using the procedures
-described here. If you re-enable ``cephx`` and have already generated keys, you 
+described here. If you re-enable ``cephx`` and have already generated keys, you
 do not need to generate the keys again.
-   
-.. important:: The ``cephx`` protocol does not address data encryption in transport 
-   (e.g., SSL/TLS) or encryption at rest.   
+
+.. important:: The ``cephx`` protocol does not address data encryption in transport
+   (e.g., SSL/TLS) or encryption at rest.
 
 For additional information, see our `Cephx Intro`_, our `Cephx Configuration
 Reference`_ and `ceph-authtool manpage`_.
@@ -25,23 +25,23 @@ Configuring Cephx
 =================
 
 There are several important procedures you must follow to enable the ``cephx``
-protocol for your Ceph cluster and its daemons: 
+protocol for your Ceph cluster and its daemons:
 
-#. You must generate a secret key for the default ``client.admin`` user so the 
-   administrator can execute Ceph commands. 
-   
-#. You must generate a monitor secret key and distribute it to all monitors in 
-   the cluster. 
+#. You must generate a secret key for the default ``client.admin`` user so the
+   administrator can execute Ceph commands.
 
-#. You must follow the remaining steps in `Enabling Cephx`_ to enable 
+#. You must generate a monitor secret key and distribute it to all monitors in
+   the cluster.
+
+#. You must follow the remaining steps in `Enabling Cephx`_ to enable
    authentication.
 
-See the `Cephx Configuration Reference`_ for additional details. 
+See the `Cephx Configuration Reference`_ for additional details.
 
-.. tip:: This guide is for manual configuration. If you use a deployment tool 
-   such as ``ceph-deploy``, it is very likely that the tool will perform at 
+.. tip:: This guide is for manual configuration. If you use a deployment tool
+   such as ``ceph-deploy``, it is very likely that the tool will perform at
    least the first two steps for you. Verify that your deployment tool
-   addresses these steps so that you don't overwrite your keys inadvertantly. 
+   addresses these steps so that you don't overwrite your keys inadvertantly.
 
 
 .. _client-admin-key:
@@ -55,8 +55,8 @@ assumes that you are the ``client.admin`` default user. When running Ceph with
 ``ceph`` commands as the administrator.
 
 .. important:: To run Ceph commands on the command line with
-   ``cephx`` enabled, you need to create a key for the ``client.admin`` 
-   user, and create a secret file under ``/etc/ceph``. 
+   ``cephx`` enabled, you need to create a key for the ``client.admin``
+   user, and create a secret file under ``/etc/ceph``.
 
 The following command will generate and register a ``client.admin``
 key on the monitor with admin capabilities and write it to a keyring
@@ -66,7 +66,7 @@ value will be returned.	::
 	sudo ceph auth get-or-create client.admin mds 'allow' osd 'allow *' mon 'allow *' > /etc/ceph/ceph.client.admin.keyring
 
 Ensure that the keyring has appropriate permissions so that the current user
-can use the keyring. 
+can use the keyring.
 
 See `Enabling Cephx`_ step 1 for stepwise details to enable ``cephx``.
 
@@ -79,7 +79,7 @@ generate a secret monitor key and keyring. ::
 
       sudo ceph-authtool {keyring} --create-keyring --gen-key -n mon.
 
-A cluster with multiple monitors must have identical keyrings for all 
+A cluster with multiple monitors must have identical keyrings for all
 monitors. So you must copy the keyring to each monitor host under the
 following directory::
 
@@ -108,16 +108,16 @@ you may skip the steps related to generating keys.
 
 	ceph auth get-or-create client.admin mon 'allow *' mds 'allow *' osd 'allow *' -o /etc/ceph/ceph.client.admin.keyring
 
-   **Warning:** This will clobber any existing 
-   ``/etc/ceph/client.admin.keyring`` file. Do not perform this step if a 
+   **Warning:** This will clobber any existing
+   ``/etc/ceph/client.admin.keyring`` file. Do not perform this step if a
    deployment tool has already done it for you. Be careful!
 
 #. Create a keyring for your cluster and generate a monitor secret key. ::
 
 	ceph-authtool --create-keyring /tmp/ceph.mon.keyring --gen-key -n mon. --cap mon 'allow *'
 
-#. Copy the monitor keyring into a ``ceph.mon.keyring`` file in every monitor's 
-   ``mon data`` directory. For example, to copy it to ``mon.a`` in cluster ``ceph``, 
+#. Copy the monitor keyring into a ``ceph.mon.keyring`` file in every monitor's
+   ``mon data`` directory. For example, to copy it to ``mon.a`` in cluster ``ceph``,
    use the following::
 
     cp /tmp/ceph.mon.keyring /var/lib/ceph/mon/ceph-a/keyring
@@ -139,13 +139,13 @@ you may skip the steps related to generating keys.
     auth client required = cephx
 
 #. Or, enable ``cephx`` authentication for Ceph versions ``0.50`` and below by
-   setting the following option in the ``[global]`` section of your `Ceph 
+   setting the following option in the ``[global]`` section of your `Ceph
    configuration`_ file. **NOTE:** Deprecated as of version ``0.50``. ::
 
     auth supported = cephx
 
 
-#. Start or restart the Ceph cluster. See `Operating a Cluster`_ for details. 
+#. Start or restart the Ceph cluster. See `Operating a Cluster`_ for details.
 
 For details on bootstrapping a monitor manually, see `Manual Deployment`_.
 
@@ -168,13 +168,13 @@ during setup and/or troubleshooting to temporarily disable authentication.
     auth client required = none
     auth supported = none
 
-#. Or, disable ``cephx`` authentication for versions ``0.50`` and below 
-   (deprecated as of version 0.51) by setting the following option in the 
+#. Or, disable ``cephx`` authentication for versions ``0.50`` and below
+   (deprecated as of version 0.51) by setting the following option in the
    ``[global]`` section of your `Ceph configuration`_ file::
 
     auth supported = none
 
-#. Start or restart the Ceph cluster. See `Operating a Cluster`_ for details. 
+#. Start or restart the Ceph cluster. See `Operating a Cluster`_ for details.
 
 
 
@@ -231,8 +231,8 @@ copy of the key without actually revealing it.  This provides mutual
 authentication, which means the cluster is sure the user possesses the secret
 key, and the user is sure that the cluster has a copy of the secret key.
 
-Default users and pools are suitable for initial testing purposes. For test bed 
-and production environments, you should create users and assign pool access to 
+Default users and pools are suitable for initial testing purposes. For test bed
+and production environments, you should create users and assign pool access to
 the users.
 
 
@@ -263,7 +263,7 @@ copy the keyring from the cluster host to the client(s). ::
 
 	sudo scp {user}@{ceph-cluster-host}:/etc/ceph/ceph.keyring /etc/ceph/ceph.keyring
 
-.. tip:: Ensure the ``ceph.keyring`` file has appropriate permissions set 
+.. tip:: Ensure the ``ceph.keyring`` file has appropriate permissions set
    (e.g., ``chmod 644``) on your client machine.
 
 
@@ -272,11 +272,11 @@ copy the keyring from the cluster host to the client(s). ::
 Delete a Key
 ------------
 
-To delete a key for a user or a daemon, use ``ceph auth del``:: 
+To delete a key for a user or a daemon, use ``ceph auth del``::
 
 	ceph auth del {daemon-type}.{ID|username}
-	
-Where ``{daemon-type}`` is one of ``client``, ``osd``, ``mon``, or ``mds``, 
+
+Where ``{daemon-type}`` is one of ``client``, ``osd``, ``mon``, or ``mds``,
 and ``{ID|username}`` is the ID of the daemon or the username.
 
 After you delete a key from the cluster keyring, go to the relevant client(s) and
@@ -284,7 +284,7 @@ copy the keyring from the cluster host to the client(s). ::
 
 	sudo scp {user}@{ceph-cluster-host}:/etc/ceph/ceph.keyring /etc/ceph/ceph.keyring
 
-.. tip:: Ensure the ``ceph.keyring`` file has appropriate permissions set 
+.. tip:: Ensure the ``ceph.keyring`` file has appropriate permissions set
    (e.g., ``chmod 644``) on your client machine.
 
 
@@ -316,12 +316,12 @@ Ceph supports the following usage for user name and secret:
 ``--id`` | ``--user``
 
 :Description: Ceph identifies users with a type and an ID (e.g., ``TYPE.ID`` or
-              ``client.admin``, ``client.user1``). The ``id``, ``name`` and 
-              ``-n`` options enable you to specify the ID portion of the user 
-              name (e.g., ``admin``, ``user1``, ``foo``, etc.). You can specify 
-              the user with the ``--id`` and omit the type. For example, 
-              to specify user ``client.foo`` enter the following:: 
-              
+              ``client.admin``, ``client.user1``). The ``id``, ``name`` and
+              ``-n`` options enable you to specify the ID portion of the user
+              name (e.g., ``admin``, ``user1``, ``foo``, etc.). You can specify
+              the user with the ``--id`` and omit the type. For example,
+              to specify user ``client.foo`` enter the following::
+
                ceph --id foo --keyring /path/to/keyring health
                ceph --user foo --keyring /path/to/keyring health
 
@@ -329,10 +329,10 @@ Ceph supports the following usage for user name and secret:
 ``--name``
 
 :Description: Ceph identifies users with a type and an ID (e.g., ``TYPE.ID`` or
-              ``client.admin``, ``client.user1``). The ``--name`` and ``-n`` 
-              options enables you to specify the fully qualified user name. 
-              You must specify the user type (typically ``client``) with the 
-              user ID. For example:: 
+              ``client.admin``, ``client.user1``). The ``--name`` and ``-n``
+              options enables you to specify the fully qualified user name.
+              You must specify the user type (typically ``client``) with the
+              user ID. For example::
 
                ceph --name client.foo --keyring /path/to/keyring health
                ceph -n client.foo --keyring /path/to/keyring health
@@ -340,30 +340,30 @@ Ceph supports the following usage for user name and secret:
 
 ``--keyring``
 
-:Description: The path to the keyring containing one or more user name and 
-              secret. The ``--secret`` option provides the same functionality, 
-              but it does not work with Ceph RADOS Gateway, which uses 
-              ``--secret`` for another purpose. You may retrieve a keyring with 
-              ``ceph auth get-or-create`` and store it locally. This is a 
-              preferred approach, because you can switch user names without 
-              switching the keyring path. For example:: 
+:Description: The path to the keyring containing one or more user name and
+              secret. The ``--secret`` option provides the same functionality,
+              but it does not work with Ceph RADOS Gateway, which uses
+              ``--secret`` for another purpose. You may retrieve a keyring with
+              ``ceph auth get-or-create`` and store it locally. This is a
+              preferred approach, because you can switch user names without
+              switching the keyring path. For example::
 
                sudo rbd map foo --pool rbd myimage --id client.foo --keyring /path/to/keyring
 
 
 ``--keyfile``
 
-:Description: The path to the key file containing the secret key for the user 
-              specified by ``--id``, ``--name``, ``-n``, or ``--user``. You may 
-              retrieve the key for a specific user with ``ceph auth get`` and 
-              store it locally. Then, specify the path to the keyfile. 
+:Description: The path to the key file containing the secret key for the user
+              specified by ``--id``, ``--name``, ``-n``, or ``--user``. You may
+              retrieve the key for a specific user with ``ceph auth get`` and
+              store it locally. Then, specify the path to the keyfile.
               For example::
 
                sudo rbd map foo --pool rbd myimage --id client.foo --keyfile /path/to/file
 
 
-.. note:: Add the user and secret to the ``CEPH_ARGS`` environment variable so that 
-   you don’t need to enter them each time. You can override the environment 
+.. note:: Add the user and secret to the ``CEPH_ARGS`` environment variable so that
+   you don’t need to enter them each time. You can override the environment
    variable settings on the command line.
 
 
@@ -397,10 +397,10 @@ advantage of allowing two different releases to interact. **We do not recommend
 this as a long term solution**. Allowing newer daemons to forgo ongoing
 authentication has the unfortunate security effect that an attacker with control
 of some of your machines or some access to your network can disable session
-security simply by claiming to be unable to sign messages.  
+security simply by claiming to be unable to sign messages.
 
-.. note:: Even if you don't actually run any old versions of Ceph, 
-   the attacker may be able to force some messages to be accepted unsigned in the 
+.. note:: Even if you don't actually run any old versions of Ceph,
+   the attacker may be able to force some messages to be accepted unsigned in the
    default scenario. While running Cephx with the default scenario, Ceph still
    authenticates the initial communication, but you lose desirable session security.
 
@@ -424,8 +424,8 @@ communications only, separate from client-facing service::
 An option to make a client require signatures from the cluster is not
 yet implemented.
 
-**We recommend migrating all daemons to the newer versions and enabling the 
-foregoing flag** at the nearest practical time so that you may avail yourself 
+**We recommend migrating all daemons to the newer versions and enabling the
+foregoing flag** at the nearest practical time so that you may avail yourself
 of the enhanced authentication.
 
 .. _Ceph configuration: ../../configuration/ceph-conf

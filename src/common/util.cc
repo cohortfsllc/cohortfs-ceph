@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #include <errno.h>
@@ -51,7 +51,7 @@ int64_t unit_to_bytesize(string val, std::ostream *pss)
   if (!::isdigit(c)) {
     if (val.length() < 2) {
       if (pss)
-        *pss << "invalid value: " << val;
+	*pss << "invalid value: " << val;
       return -EINVAL;
     }
     val = val.substr(0,val.length()-1);
@@ -79,7 +79,7 @@ int64_t unit_to_bytesize(string val, std::ostream *pss)
       break;
     default:
       if (pss)
-        *pss << "unrecognized modifier '" << c << "'" << std::endl;
+	*pss << "unrecognized modifier '" << c << "'" << std::endl;
       return -EINVAL;
     }
   }

@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -52,7 +52,7 @@ class CDir : public MDSCacheObject {
 private:
   static boost::pool<> pool;
 public:
-  static void *operator new(size_t num_bytes) { 
+  static void *operator new(size_t num_bytes) {
     void *n = pool.malloc();
     if (!n)
       throw std::bad_alloc();
@@ -66,13 +66,13 @@ public:
   // -- pins --
   static const int PIN_DNWAITER =     1;
   static const int PIN_INOWAITER =    2;
-  static const int PIN_CHILD =        3;
-  static const int PIN_FROZEN =       4;
+  static const int PIN_CHILD =	      3;
+  static const int PIN_FROZEN =	      4;
   static const int PIN_SUBTREE =      5;
   static const int PIN_IMPORTING =    7;
   static const int PIN_IMPORTBOUND =  9;
   static const int PIN_EXPORTBOUND = 10;
-  static const int PIN_STICKY =      11;
+  static const int PIN_STICKY =	     11;
   static const int PIN_SUBTREETEMP = 12;  // used by MDCache::trim_non_auth()
   const char *pin_name(int p) {
     switch (p) {
@@ -91,22 +91,22 @@ public:
   }
 
   // -- state --
-  static const unsigned STATE_COMPLETE =      (1<< 1);   // the complete contents are in cache
-  static const unsigned STATE_FROZENTREE =    (1<< 2);   // root of tree (bounded by exports)
-  static const unsigned STATE_FREEZINGTREE =  (1<< 3);   // in process of freezing 
+  static const unsigned STATE_COMPLETE =      (1<< 1);	 // the complete contents are in cache
+  static const unsigned STATE_FROZENTREE =    (1<< 2);	 // root of tree (bounded by exports)
+  static const unsigned STATE_FREEZINGTREE =  (1<< 3);	 // in process of freezing
   static const unsigned STATE_FROZENDIR =     (1<< 4);
   static const unsigned STATE_FREEZINGDIR =   (1<< 5);
-  static const unsigned STATE_COMMITTING =    (1<< 6);   // mid-commit
-  static const unsigned STATE_FETCHING =      (1<< 7);   // currenting fetching
+  static const unsigned STATE_COMMITTING =    (1<< 6);	 // mid-commit
+  static const unsigned STATE_FETCHING =      (1<< 7);	 // currenting fetching
   static const unsigned STATE_IMPORTBOUND =   (1<<10);
   static const unsigned STATE_EXPORTBOUND =   (1<<11);
   static const unsigned STATE_EXPORTING =     (1<<12);
   static const unsigned STATE_IMPORTING =     (1<<13);
   static const unsigned STATE_FRAGMENTING =   (1<<14);
-  static const unsigned STATE_STICKY =        (1<<15);  // sticky pin due to inode stickydirs
-  static const unsigned STATE_DNPINNEDFRAG =  (1<<16);  // dir is refragmenting
-  static const unsigned STATE_ASSIMRSTAT =    (1<<17);  // assimilating inode->frag rstats
-  static const unsigned STATE_DIRTYDFT =      (1<<18);  // dirty dirfragtree
+  static const unsigned STATE_STICKY =	      (1<<15);	// sticky pin due to inode stickydirs
+  static const unsigned STATE_DNPINNEDFRAG =  (1<<16);	// dir is refragmenting
+  static const unsigned STATE_ASSIMRSTAT =    (1<<17);	// assimilating inode->frag rstats
+  static const unsigned STATE_DIRTYDFT =      (1<<18);	// dirty dirfragtree
 
   // common states
   static const unsigned STATE_CLEAN =  0;
@@ -114,39 +114,39 @@ public:
 
   // these state bits are preserved by an import/export
   // ...except if the directory is hashed, in which case none of them are!
-  static const unsigned MASK_STATE_EXPORTED = 
+  static const unsigned MASK_STATE_EXPORTED =
   (STATE_COMPLETE|STATE_DIRTY|STATE_DIRTYDFT);
-  static const unsigned MASK_STATE_IMPORT_KEPT = 
-  (						  
+  static const unsigned MASK_STATE_IMPORT_KEPT =
+  (
    STATE_IMPORTING
    |STATE_IMPORTBOUND|STATE_EXPORTBOUND
    |STATE_FROZENTREE
    |STATE_STICKY);
-  static const unsigned MASK_STATE_EXPORT_KEPT = 
+  static const unsigned MASK_STATE_EXPORT_KEPT =
   (STATE_EXPORTING
    |STATE_IMPORTBOUND|STATE_EXPORTBOUND
    |STATE_FROZENTREE
    |STATE_FROZENDIR
    |STATE_STICKY);
-  static const unsigned MASK_STATE_FRAGMENT_KEPT = 
+  static const unsigned MASK_STATE_FRAGMENT_KEPT =
   (STATE_DIRTY|
    STATE_EXPORTBOUND |
    STATE_IMPORTBOUND |
    STATE_REJOINUNDEF);
 
   // -- rep spec --
-  static const int REP_NONE =     0;
-  static const int REP_ALL =      1;
-  static const int REP_LIST =     2;
+  static const int REP_NONE =	  0;
+  static const int REP_ALL =	  1;
+  static const int REP_LIST =	  2;
 
 
   static const unsigned EXPORT_NONCE  = 1;
 
 
   // -- wait masks --
-  static const uint64_t WAIT_DENTRY       = (1<<0);  // wait for item to be in cache
-  static const uint64_t WAIT_COMPLETE     = (1<<1);  // wait for complete dir contents
-  static const uint64_t WAIT_FROZEN       = (1<<2);  // auth pins removed
+  static const uint64_t WAIT_DENTRY	  = (1<<0);  // wait for item to be in cache
+  static const uint64_t WAIT_COMPLETE	  = (1<<1);  // wait for complete dir contents
+  static const uint64_t WAIT_FROZEN	  = (1<<2);  // auth pins removed
 
   static const int WAIT_DNLOCK_OFFSET = 4;
 
@@ -161,8 +161,8 @@ public:
   // context
   MDCache  *cache;
 
-  CInode          *inode;  // my inode
-  frag_t           frag;   // my frag
+  CInode	  *inode;  // my inode
+  frag_t	   frag;   // my frag
 
   bool is_lt(const MDSCacheObject *r) const {
     return dirfrag() < (static_cast<const CDir*>(r))->dirfrag();
@@ -188,9 +188,9 @@ public:
 
 public:
   version_t get_version() { return fnode.version; }
-  void set_version(version_t v) { 
+  void set_version(version_t v) {
     assert(projected_fnode.empty());
-    projected_version = fnode.version = v; 
+    projected_version = fnode.version = v;
   }
   version_t get_projected_version() { return projected_version; }
 
@@ -224,7 +224,7 @@ public:
 protected:
 
   // contents of this directory
-  map_t items;       // non-null AND null
+  map_t items;	     // non-null AND null
   unsigned num_head_items;
   unsigned num_head_null;
 
@@ -247,14 +247,14 @@ protected:
 
   // cache control  (defined for authority; hints for replicas)
   int32_t      dir_rep;
-  set<int32_t> dir_rep_by;      // if dir_rep == REP_LIST
+  set<int32_t> dir_rep_by;	// if dir_rep == REP_LIST
 
   // popularity
   dirfrag_load_vec_t pop_me;
   dirfrag_load_vec_t pop_nested;
   dirfrag_load_vec_t pop_auth_subtree;
   dirfrag_load_vec_t pop_auth_subtree_nested;
- 
+
   utime_t last_popularity_sample;
 
   load_spread_t pop_spread;
@@ -289,10 +289,10 @@ protected:
 
   // -- accessors --
   inodeno_t ino() const { return inode->ino(); } // deprecate me?
-  frag_t    get_frag()    const { return frag; }
+  frag_t    get_frag()	  const { return frag; }
   dirfrag_t dirfrag() const { return dirfrag_t(inode->ino(), frag); }
 
-  CInode *get_inode()    { return inode; }
+  CInode *get_inode()	 { return inode; }
   CDir *get_parent_dir() { return inode->get_parent_dir(); }
 
   map_t::iterator begin() { return items.begin(); }
@@ -305,9 +305,9 @@ protected:
   bool check_rstats();
 
   void inc_num_dirty() { num_dirty++; }
-  void dec_num_dirty() { 
+  void dec_num_dirty() {
     assert(num_dirty > 0);
-    num_dirty--; 
+    num_dirty--;
   }
   int get_num_dirty() {
     return num_dirty;
@@ -351,17 +351,17 @@ public:
 private:
   void prepare_new_fragment(bool replay);
   void prepare_old_fragment(bool replay);
-  void steal_dentry(CDentry *dn);  // from another dir.  used by merge/split.
+  void steal_dentry(CDentry *dn);  // from another dir.	 used by merge/split.
   void finish_old_fragment(list<Context*>& waiters, bool replay);
   void init_fragment_pins();
 
 
   // -- authority --
   /*
-   *     normal: <parent,unknown>   !subtree_root
-   * delegation: <mds,unknown>       subtree_root
-   *  ambiguous: <mds1,mds2>         subtree_root
-   *             <parent,mds2>       subtree_root     
+   *	 normal: <parent,unknown>   !subtree_root
+   * delegation: <mds,unknown>	     subtree_root
+   *  ambiguous: <mds1,mds2>	     subtree_root
+   *		 <parent,mds2>	     subtree_root
    */
   pair<int,int> dir_auth;
 
@@ -379,22 +379,22 @@ private:
   bool is_full_dir_nonauth() {
     return !is_auth() && !is_ambiguous_dir_auth();
   }
-  
+
   bool is_subtree_root() {
     return dir_auth != CDIR_AUTH_DEFAULT;
   }
 
-  bool contains(CDir *x);  // true if we are x or an ancestor of x 
+  bool contains(CDir *x);  // true if we are x or an ancestor of x
 
 
   // for giving to clients
   void get_dist_spec(set<int>& ls, int auth) {
     if (is_rep()) {
       for (map<int,unsigned>::iterator p = replicas_begin();
-	   p != replicas_end(); 
+	   p != replicas_end();
 	   ++p)
 	ls.insert(p->first);
-      if (!ls.empty()) 
+      if (!ls.empty())
 	ls.insert(auth);
     }
   }
@@ -405,9 +405,9 @@ private:
     frag_t frag = get_frag();
     int32_t auth;
     set<int32_t> dist;
-    
+
     auth = dir_auth.first;
-    if (is_auth()) 
+    if (is_auth())
       get_dist_spec(dist, whoami);
 
     ::encode(frag, bl);
@@ -446,13 +446,13 @@ private:
   bool is_dirty_dft() { return state & STATE_DIRTYDFT; }
 
   int get_dir_rep() { return dir_rep; }
-  bool is_rep() { 
+  bool is_rep() {
     if (dir_rep == REP_NONE) return false;
     return true;
   }
- 
+
   // -- fetch --
-  object_t get_ondisk_object() { 
+  object_t get_ondisk_object() {
     return file_object_t(ino(), frag);
   }
   void fetch(Context *c, bool ignore_authpinnability=false);
@@ -497,7 +497,7 @@ public:
     if (request_pins == 0) put(PIN_REQUEST);
   }
 
-    
+
   // -- waiters --
 protected:
   map< string, list<Context*> > waiting_on_dentry;
@@ -568,10 +568,10 @@ public:
   bool is_frozen_tree();
   bool is_frozen_tree_root() { return state & STATE_FROZENTREE; }
   bool is_frozen_dir() { return state & STATE_FROZENDIR; }
-  
+
   bool is_freezeable(bool freezing=false) {
     // no nested auth pins.
-    if ((auth_pins-freezing) > 0 || nested_auth_pins > 0) 
+    if ((auth_pins-freezing) > 0 || nested_auth_pins > 0)
       return false;
 
     // inode must not be frozen.
@@ -581,7 +581,7 @@ public:
     return true;
   }
   bool is_freezeable_dir(bool freezing=false) {
-    if ((auth_pins-freezing) > 0 || dir_auth_pins > 0) 
+    if ((auth_pins-freezing) > 0 || dir_auth_pins > 0)
       return false;
 
     // if not subtree root, inode must not be frozen (tree--frozen_dir is okay).

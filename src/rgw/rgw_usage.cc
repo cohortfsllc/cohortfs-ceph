@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 
 #include <string>
 #include <map>
@@ -53,7 +55,7 @@ int RGWUsage::show(RGWRados *store, string& uid, uint64_t start_epoch,
   map<string, rgw_usage_log_entry> summary_map;
   while (is_truncated) {
     int ret = store->read_usage(uid, start_epoch, end_epoch, max_entries,
-                                &is_truncated, usage_iter, usage);
+				&is_truncated, usage_iter, usage);
 
     if (ret == -ENOENT) {
       ret = 0;
@@ -70,25 +72,25 @@ int RGWUsage::show(RGWRados *store, string& uid, uint64_t start_epoch,
       const rgw_usage_log_entry& entry = iter->second;
 
       if (show_log_entries) {
-        if (ub.user.compare(last_owner) != 0) {
-          if (user_section_open) {
-            formatter->close_section();
-            formatter->close_section();
-          }
-          formatter->open_object_section("user");
-          formatter->dump_string("owner", ub.user);
-          formatter->open_array_section("buckets");
-          user_section_open = true;
-          last_owner = ub.user;
-        }
-        formatter->open_object_section("bucket");
-        formatter->dump_string("bucket", ub.bucket);
-        utime_t ut(entry.epoch, 0);
-        ut.gmtime(formatter->dump_stream("time"));
-        formatter->dump_int("epoch", entry.epoch);
-        dump_usage_categories_info(formatter, entry, categories);
-        formatter->close_section(); // bucket
-        flusher.flush();
+	if (ub.user.compare(last_owner) != 0) {
+	  if (user_section_open) {
+	    formatter->close_section();
+	    formatter->close_section();
+	  }
+	  formatter->open_object_section("user");
+	  formatter->dump_string("owner", ub.user);
+	  formatter->open_array_section("buckets");
+	  user_section_open = true;
+	  last_owner = ub.user;
+	}
+	formatter->open_object_section("bucket");
+	formatter->dump_string("bucket", ub.bucket);
+	utime_t ut(entry.epoch, 0);
+	ut.gmtime(formatter->dump_stream("time"));
+	formatter->dump_int("epoch", entry.epoch);
+	dump_usage_categories_info(formatter, entry, categories);
+	formatter->close_section(); // bucket
+	flusher.flush();
       }
 
       summary_map[ub.user].aggregate(entry, categories);

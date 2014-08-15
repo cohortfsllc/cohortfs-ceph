@@ -30,14 +30,14 @@ struct ceph_ioctl_layout {
  * file offset.
  */
 struct ceph_ioctl_dataloc {
-	uint64_t file_offset;           /* in+out: file offset */
-	uint64_t object_offset;         /* out: offset in object */
-	uint64_t object_no;             /* out: object # */
-	uint64_t object_size;           /* out: object size */
-	char object_name[64];        /* out: object name */
-	uint64_t block_offset;          /* out: offset in block */
-	uint64_t block_size;            /* out: block length */
-	int64_t osd;                   /* out: osd # */
+	uint64_t file_offset;		/* in+out: file offset */
+	uint64_t object_offset;		/* out: offset in object */
+	uint64_t object_no;		/* out: object # */
+	uint64_t object_size;		/* out: object size */
+	char object_name[64];	     /* out: object name */
+	uint64_t block_offset;		/* out: offset in block */
+	uint64_t block_size;		/* out: block length */
+	int64_t osd;		       /* out: osd # */
 	struct sockaddr_storage osd_addr; /* out: osd address */
 };
 

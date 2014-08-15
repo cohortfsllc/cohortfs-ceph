@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #include <string>
@@ -44,8 +44,8 @@ const string LFNIndex::LFN_ATTR = "user.cephos.lfn";
 const string LFNIndex::PHASH_ATTR_PREFIX = "user.cephos.phash.";
 const string LFNIndex::SUBDIR_PREFIX = "DIR_";
 const string LFNIndex::FILENAME_COOKIE = "long";
-const int LFNIndex::FILENAME_PREFIX_LEN =  FILENAME_SHORT_LEN - FILENAME_HASH_LEN - 
-								FILENAME_COOKIE.size() - 
+const int LFNIndex::FILENAME_PREFIX_LEN =  FILENAME_SHORT_LEN - FILENAME_HASH_LEN -
+								FILENAME_COOKIE.size() -
 								FILENAME_EXTRA;
 void LFNIndex::maybe_inject_failure()
 {
@@ -226,8 +226,8 @@ int LFNIndex::remove_objects(const vector<string> &dir,
 	 i != holes.end();
 	 ++i) {
       if (candidate == chain.rend() || *i > candidate->first) {
-	string remove_path_name = 
-	  get_full_path(dir, lfn_get_short_name(to_clean->second, *i)); 
+	string remove_path_name =
+	  get_full_path(dir, lfn_get_short_name(to_clean->second, *i));
 	maybe_inject_failure();
 	int r = ::unlink(remove_path_name.c_str());
 	maybe_inject_failure();
@@ -364,7 +364,7 @@ int LFNIndex::move_object(
 }
 
 
-static int get_hobject_from_oinfo(const char *dir, const char *file, 
+static int get_hobject_from_oinfo(const char *dir, const char *file,
 				  hobject_t *o)
 {
   char path[PATH_MAX];
@@ -510,7 +510,7 @@ int LFNIndex::path_exists(const vector<string> &to_check, int *exists)
 }
 
 int LFNIndex::add_attr_path(const vector<string> &path,
-			    const string &attr_name, 
+			    const string &attr_name,
 			    bufferlist &attr_value)
 {
   string full_path = get_full_path_subdir(path);
@@ -521,7 +521,7 @@ int LFNIndex::add_attr_path(const vector<string> &path,
 }
 
 int LFNIndex::get_attr_path(const vector<string> &path,
-			    const string &attr_name, 
+			    const string &attr_name,
 			    bufferlist &attr_value)
 {
   string full_path = get_full_path_subdir(path);
@@ -664,7 +664,7 @@ int LFNIndex::lfn_created(const vector<string> &path,
   string full_path = get_full_path(path, mangled_name);
   string full_name = lfn_generate_object_name(oid);
   maybe_inject_failure();
-  return chain_setxattr(full_path.c_str(), get_lfn_attr().c_str(), 
+  return chain_setxattr(full_path.c_str(), get_lfn_attr().c_str(),
 		     full_name.c_str(), full_name.size());
 }
 
@@ -682,8 +682,8 @@ int LFNIndex::lfn_unlink(const vector<string> &path,
     return 0;
   }
   string subdir_path = get_full_path_subdir(path);
-  
-  
+
+
   int i = 0;
   for ( ; ; ++i) {
     string candidate = lfn_get_short_name(oid, i);

@@ -57,7 +57,7 @@ protected:
       string path,				///< [in] Path to return.
       coll_t coll)				///< [in] collection
       : full_path(path), parent_coll(coll) {}
-      
+
     /// Getter for the stored path.
     const char *path() const { return full_path.c_str(); }
 
@@ -100,7 +100,7 @@ protected:
    */
   virtual void set_ref(std::shared_ptr<CollectionIndex> ref) = 0;
 
-  /** 
+  /**
    * Initializes the index.
    *
    * @return Error Code, 0 for success

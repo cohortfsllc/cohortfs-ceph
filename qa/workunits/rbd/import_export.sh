@@ -138,7 +138,7 @@ dd if=/dev/zero bs=4M count=1 | rados -p rbd put ${prefix}.000000000000 -
 # 1 object full of zeros; export should still create 0-disk-usage file
 rm /tmp/sparse || true
 rbd export sparse /tmp/sparse
-[ $(stat /tmp/sparse --format=%b) = '0' ] 
+[ $(stat /tmp/sparse --format=%b) = '0' ]
 rbd rm sparse
 
 rm /tmp/sparse /tmp/sparse1 /tmp/sparse2 /tmp/sparse3 || true

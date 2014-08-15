@@ -69,11 +69,11 @@ const char* TypedTestCasePState::VerifyRegisteredTestNames(
 
     bool found = false;
     for (DefinedTestIter it = defined_test_names_.begin();
-         it != defined_test_names_.end();
-         ++it) {
+	 it != defined_test_names_.end();
+	 ++it) {
       if (name == *it) {
-        found = true;
-        break;
+	found = true;
+	break;
       }
     }
 
@@ -81,7 +81,7 @@ const char* TypedTestCasePState::VerifyRegisteredTestNames(
       tests.insert(name);
     } else {
       errors << "No test named " << name
-             << " can be found in this test case.\n";
+	     << " can be found in this test case.\n";
     }
   }
 
@@ -96,7 +96,7 @@ const char* TypedTestCasePState::VerifyRegisteredTestNames(
   const std::string& errors_str = errors.GetString();
   if (errors_str != "") {
     fprintf(stderr, "%s %s", FormatFileLocation(file, line).c_str(),
-            errors_str.c_str());
+	    errors_str.c_str());
     fflush(stderr);
     posix::Abort();
   }
@@ -104,7 +104,7 @@ const char* TypedTestCasePState::VerifyRegisteredTestNames(
   return registered_tests;
 }
 
-#endif  // GTEST_HAS_TYPED_TEST_P
+#endif	// GTEST_HAS_TYPED_TEST_P
 
 }  // namespace internal
 }  // namespace testing

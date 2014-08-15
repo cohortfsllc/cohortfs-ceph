@@ -29,7 +29,7 @@ Ceph Block Devices can integrate with the QEMU virtual machine. For details on
 QEMU, see  `QEMU Open Source Processor Emulator`_. For QEMU documentation, see
 `QEMU Manual`_. For installation details, see `Installation`_.
 
-.. important:: To use Ceph Block Devices with QEMU, you must have access to a 
+.. important:: To use Ceph Block Devices with QEMU, you must have access to a
    running Ceph cluster.
 
 
@@ -57,7 +57,7 @@ For example::
 Resizing Images with QEMU
 =========================
 
-You can resize a block device image from QEMU. You must specify ``rbd``, 
+You can resize a block device image from QEMU. You must specify ``rbd``,
 the pool name, and the name of the image you wish to resize. You must also
 specify the size of the image. ::
 
@@ -71,7 +71,7 @@ For example::
 Retrieving Image Info with QEMU
 ===============================
 
-You can retrieve block device image information from QEMU. You must 
+You can retrieve block device image information from QEMU. You must
 specify ``rbd``, the pool name, and the name of the image. ::
 
 	qemu-img info rbd:{pool-name}/{image-name}
@@ -171,7 +171,7 @@ Writethrough::
    rbd_cache = true
    rbd_cache_max_dirty = 0
 
-None:: 
+None::
 
    rbd_cache = false
 

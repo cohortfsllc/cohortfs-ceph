@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -39,11 +39,11 @@ extern "C"{
 #else
 #define TEST(x, y) void y()
 #define ASSERT_EQ(v, s) if(v != s)cout << "Error at " << __LINE__ << "(" << #v << "!= " << #s << "\n"; \
-                                else cout << "(" << #v << "==" << #s << ") PASSED\n";
+				else cout << "(" << #v << "==" << #s << ") PASSED\n";
 #define EXPECT_EQ(v, s) ASSERT_EQ(v, s)
 #define ASSERT_TRUE(c) if(c)cout << "Error at " << __LINE__ << "(" << #c << ")" << "\n"; \
-                          else cout << "(" << #c << ") PASSED\n";
-#define EXPECT_TRUE(c) ASSERT_TRUE(c) 
+			  else cout << "(" << #c << ") PASSED\n";
+#define EXPECT_TRUE(c) ASSERT_TRUE(c)
 #endif
 using namespace std;
 
@@ -57,15 +57,15 @@ static string uid = CEPH_UID;
 static string display_name = "CEPH";
 static string meta_caps = "metadata";
 
-extern "C" int ceph_armor(char *dst, const char *dst_end, 
-                          const char *src, const char *end);
+extern "C" int ceph_armor(char *dst, const char *dst_end,
+			  const char *src, const char *end);
 static void print_usage(char *exec){
   cout << "Usage: " << exec << " <Options>\n";
   cout << "Options:\n"
-          "-g <gw-ip> - The ip address of the gateway\n"
-          "-p <gw-port> - The port number of the gateway\n"
-          "-c <ceph.conf> - Absolute path of ceph config file\n"
-          "-rgw-admin <path/to/radosgw-admin> - radosgw-admin absolute path\n";
+	  "-g <gw-ip> - The ip address of the gateway\n"
+	  "-p <gw-port> - The port number of the gateway\n"
+	  "-c <ceph.conf> - Absolute path of ceph config file\n"
+	  "-rgw-admin <path/to/radosgw-admin> - radosgw-admin absolute path\n";
 }
 
 namespace admin_meta {
@@ -88,9 +88,9 @@ class test_helper {
     ~test_helper(){
       curl_global_cleanup();
     }
-    int send_request(string method, string uri, 
-                     size_t (*function)(void *,size_t,size_t,void *) = 0,
-                     void *ud = 0, size_t length = 0);
+    int send_request(string method, string uri,
+		     size_t (*function)(void *,size_t,size_t,void *) = 0,
+		     void *ud = 0, size_t length = 0);
     int extract_input(int argc, char *argv[]);
     string& get_response(string hdr){
       return response[hdr];
@@ -178,13 +178,13 @@ static inline void buf_to_hex(const unsigned char *buf, int len, char *str)
 }
 
 static void calc_hmac_sha1(const char *key, int key_len,
-                    const char *msg, int msg_len, char *dest)
+		    const char *msg, int msg_len, char *dest)
 /* destination should be CEPH_CRYPTO_HMACSHA1_DIGESTSIZE bytes long */
 {
   ceph::crypto::HMACSHA1 hmac((const unsigned char *)key, key_len);
   hmac.Update((const unsigned char *)msg, msg_len);
   hmac.Final((unsigned char *)dest);
-  
+
   char hex_str[(CEPH_CRYPTO_HMACSHA1_DIGESTSIZE * 2) + 1];
   admin_meta::buf_to_hex((unsigned char *)dest, CEPH_CRYPTO_HMACSHA1_DIGESTSIZE, hex_str);
 }
@@ -207,10 +207,10 @@ static int get_s3_auth(string method, string creds, string date, string res, str
     else
       tmp_res.assign(res, 0, off);
     auth_hdr.append(method + string("\n\n\n") + date + string("\n") + tmp_res);
-    admin_meta::calc_hmac_sha1(secret.c_str(), secret.length(), 
-                               auth_hdr.c_str(), auth_hdr.length(), hmac_sha1);
+    admin_meta::calc_hmac_sha1(secret.c_str(), secret.length(),
+			       auth_hdr.c_str(), auth_hdr.length(), hmac_sha1);
     int ret = ceph_armor(b64, b64 + 64, hmac_sha1,
-                         hmac_sha1 + CEPH_CRYPTO_HMACSHA1_DIGESTSIZE);
+			 hmac_sha1 + CEPH_CRYPTO_HMACSHA1_DIGESTSIZE);
     if (ret < 0) {
       cout << "ceph_armor failed\n";
       return -1;
@@ -226,26 +226,26 @@ void get_date(string& d){
   char date[64];
   struct tm tm;
   char *days[] = {(char *)"Sun", (char *)"Mon", (char *)"Tue",
-                  (char *)"Wed", (char *)"Thu", (char *)"Fri", 
-                  (char *)"Sat"};
-  char *months[] = {(char *)"Jan", (char *)"Feb", (char *)"Mar", 
-                    (char *)"Apr", (char *)"May", (char *)"Jun",
-                    (char *)"Jul",(char *) "Aug", (char *)"Sep", 
-                    (char *)"Oct", (char *)"Nov", (char *)"Dec"};
+		  (char *)"Wed", (char *)"Thu", (char *)"Fri",
+		  (char *)"Sat"};
+  char *months[] = {(char *)"Jan", (char *)"Feb", (char *)"Mar",
+		    (char *)"Apr", (char *)"May", (char *)"Jun",
+		    (char *)"Jul",(char *) "Aug", (char *)"Sep",
+		    (char *)"Oct", (char *)"Nov", (char *)"Dec"};
   gettimeofday(&tv, NULL);
   gmtime_r(&tv.tv_sec, &tm);
-  sprintf(date, "%s, %d %s %d %d:%d:%d GMT", 
-          days[tm.tm_wday], 
-          tm.tm_mday, months[tm.tm_mon], 
-          tm.tm_year + 1900,
-          tm.tm_hour, tm.tm_min, 0 /*tm.tm_sec*/);
+  sprintf(date, "%s, %d %s %d %d:%d:%d GMT",
+	  days[tm.tm_wday],
+	  tm.tm_mday, months[tm.tm_mon],
+	  tm.tm_year + 1900,
+	  tm.tm_hour, tm.tm_min, 0 /*tm.tm_sec*/);
   d = date;
 }
 
-int test_helper::send_request(string method, string res, 
-                                   size_t (*read_function)( void *,size_t,size_t,void *),
-                                   void *ud,
-                                   size_t length){
+int test_helper::send_request(string method, string res,
+				   size_t (*read_function)( void *,size_t,size_t,void *),
+				   void *ud,
+				   size_t length){
   string url;
   string auth, date;
   url.append(string("http://") + host);
@@ -280,19 +280,19 @@ int test_helper::send_request(string method, string res,
     slist = curl_slist_append(slist, auth.c_str());
     slist = curl_slist_append(slist, http_date.c_str());
     for(list<string>::iterator it = extra_hdrs.begin();
-        it != extra_hdrs.end(); ++it){
+	it != extra_hdrs.end(); ++it){
       slist = curl_slist_append(slist, (*it).c_str());
     }
     if(read_function)
       curl_slist_append(slist, "Expect:");
-    curl_easy_setopt(curl_inst, CURLOPT_HTTPHEADER, slist); 
+    curl_easy_setopt(curl_inst, CURLOPT_HTTPHEADER, slist);
 
     response.erase(response.begin(), response.end());
     extra_hdrs.erase(extra_hdrs.begin(), extra_hdrs.end());
     CURLcode res = curl_easy_perform(curl_inst);
     if(res != CURLE_OK){
-      cout << "Curl perform failed for " << url << ", res: " << 
-        curl_easy_strerror(res) << "\n";
+      cout << "Curl perform failed for " << url << ", res: " <<
+	curl_easy_strerror(res) << "\n";
       return -1;
     }
     curl_slist_free_all(slist);
@@ -316,8 +316,8 @@ int run_rgw_admin(string& cmd, string& resp) {
     unsigned loop = 1;
 
     argv[0] = (char *)"radosgw-admin";
-    for (list<string>::iterator it = l.begin(); 
-         it != l.end(); ++it) {
+    for (list<string>::iterator it = l.begin();
+	 it != l.end(); ++it) {
       argv[loop++] = (char *)(*it).c_str();
     }
     argv[loop] = NULL;
@@ -326,14 +326,14 @@ int run_rgw_admin(string& cmd, string& resp) {
     if (!stdout) {
       cout << "Unable to open stdout file" << std::endl;
     }
-    execv((g_test->get_rgw_admin_path()).c_str(), argv); 
+    execv((g_test->get_rgw_admin_path()).c_str(), argv);
   } else if (pid > 0) {
     int status;
     waitpid(pid, &status, 0);
     if (WIFEXITED(status)) {
       if(WEXITSTATUS(status) != 0) {
-        cout << "Child exited with status " << WEXITSTATUS(status) << std::endl;
-        return -1;
+	cout << "Child exited with status " << WEXITSTATUS(status) << std::endl;
+	return -1;
       }
     }
     ifstream in;
@@ -353,7 +353,7 @@ int run_rgw_admin(string& cmd, string& resp) {
       unlink(RGW_ADMIN_RESP_PATH);
       /* cout << "radosgw-admin " << cmd << ": " << resp << std::endl;*/
     }
-  } else 
+  } else
     return -1;
   return 0;
 }
@@ -371,7 +371,7 @@ int get_creds(string& json, string& creds) {
   for(map<string, RGWAccessKey>::iterator it = info.access_keys.begin();
       it != info.access_keys.end(); ++it) {
     RGWAccessKey _k = it->second;
-    /*cout << "accesskeys [ " << it->first << " ] = " << 
+    /*cout << "accesskeys [ " << it->first << " ] = " <<
       "{ " << _k.id << ", " << _k.key << ", " << _k.subuser << "}" << std::endl;*/
     creds.append(it->first + string(":") + _k.key);
     break;
@@ -462,9 +462,9 @@ int meta_caps_rm(const char *perm) {
 int compare_access_keys(RGWAccessKey& k1, RGWAccessKey& k2) {
   if (k1.id.compare(k2.id) != 0)
     return -1;
-  if (k1.key.compare(k2.key) != 0) 
+  if (k1.key.compare(k2.key) != 0)
     return -1;
-  if (k1.subuser.compare(k2.subuser) != 0) 
+  if (k1.subuser.compare(k2.subuser) != 0)
     return -1;
 
   return 0;
@@ -503,7 +503,7 @@ int compare_user_info(RGWUserInfo& i1, RGWUserInfo& i2) {
     if (compare_access_keys(k1, k2) != 0)
       return -1;
   }
-  if (i1.subusers.size() != i2.subusers.size()) 
+  if (i1.subusers.size() != i2.subusers.size())
     return -1;
   for (map<string, RGWSubUser>::iterator it = i1.subusers.begin();
        it != i1.subusers.end(); ++it) {
@@ -512,7 +512,7 @@ int compare_user_info(RGWUserInfo& i1, RGWUserInfo& i2) {
     if (!i2.subusers.count(it->first))
       return -1;
     k2 = i2.subusers[it->first];
-    if (k1.name.compare(k2.name) != 0) 
+    if (k1.name.compare(k2.name) != 0)
       return -1;
     if (k1.perm_mask != k2.perm_mask)
       return -1;
@@ -574,7 +574,7 @@ TEST(TestRGWAdmin, meta_list){
 
   ASSERT_TRUE(parse_json_resp(parser) == 0);
   EXPECT_TRUE(parser.is_array());
-  
+
   vector<string> l;
   l = parser.get_array_elements();
   for(vector<string>::iterator it = l.begin();
@@ -596,7 +596,7 @@ TEST(TestRGWAdmin, meta_list){
 
   ASSERT_TRUE(parse_json_resp(parser) == 0);
   EXPECT_TRUE(parser.is_array());
-  
+
   l = parser.get_array_elements();
   EXPECT_EQ(1U, l.size());
   for(vector<string>::iterator it = l.begin();
@@ -617,7 +617,7 @@ TEST(TestRGWAdmin, meta_list){
 
   ASSERT_TRUE(parse_json_resp(parser) == 0);
   EXPECT_TRUE(parser.is_array());
-  
+
   l = parser.get_array_elements();
   EXPECT_EQ(2U, l.size());
   bool found2 = false;
@@ -636,7 +636,7 @@ TEST(TestRGWAdmin, meta_list){
   /*Remove the metadata caps*/
   int rv = meta_caps_rm(perm);
   EXPECT_EQ(0, rv);
-  
+
   if(rv == 0) {
     g_test->send_request(string("GET"), string("/admin/metadata/"));
     EXPECT_EQ(403U, g_test->get_resp_code());
@@ -656,7 +656,7 @@ TEST(TestRGWAdmin, meta_get){
   ASSERT_EQ(0, meta_caps_add(perm));
 
   ASSERT_EQ(0, user_info(uid, display_name, info));
- 
+
   g_test->send_request(string("GET"), string("/admin/metadata/user?key=test"));
   EXPECT_EQ(404U, g_test->get_resp_code());
 
@@ -668,7 +668,7 @@ TEST(TestRGWAdmin, meta_get){
   string metadata_key;
 
   obj_version *objv = &objv_tracker.read_version;
-     
+
   JSONDecoder::decode_json("key", metadata_key, &parser);
   JSONDecoder::decode_json("ver", *objv, &parser);
   JSONObj *jo = parser.find_obj("data");
@@ -686,13 +686,13 @@ TEST(TestRGWAdmin, meta_get){
   ASSERT_EQ(0, meta_caps_rm(perm));
   perm = "read";
   ASSERT_EQ(0, meta_caps_add(perm));
-  
+
   JSONParser parser1;
   g_test->send_request(string("GET"), (string("/admin/metadata/user?key=") + uid));
   EXPECT_EQ(200U, g_test->get_resp_code());
 
   ASSERT_TRUE(parse_json_resp(parser1) == 0);
- 
+
   RGWObjVersionTracker objv_tracker1;
   obj_version *objv1 = &objv_tracker1.read_version;
 
@@ -713,10 +713,10 @@ TEST(TestRGWAdmin, meta_get){
   /*Version and tag infromation*/
   EXPECT_TRUE(objv1->ver > objv->ver);
   EXPECT_EQ(objv1->tag, objv->tag);
-  
+
   int rv = meta_caps_rm(perm);
   EXPECT_EQ(0, rv);
-  
+
   if(rv == 0) {
     g_test->send_request(string("GET"), (string("/admin/metadata/user?key=") + uid));
     EXPECT_EQ(403U, g_test->get_resp_code());
@@ -731,7 +731,7 @@ TEST(TestRGWAdmin, meta_put){
 
   ASSERT_EQ(0, user_create(uid, display_name));
   ASSERT_EQ(0, meta_caps_add(perm));
-  
+
   g_test->send_request(string("GET"), (string("/admin/metadata/user?key=") + uid));
   EXPECT_EQ(200U, g_test->get_resp_code());
 
@@ -740,7 +740,7 @@ TEST(TestRGWAdmin, meta_put){
   string metadata_key;
 
   obj_version *objv = &objv_tracker.read_version;
-     
+
   JSONDecoder::decode_json("key", metadata_key, &parser);
   JSONDecoder::decode_json("ver", *objv, &parser);
   JSONObj *jo = parser.find_obj("data");
@@ -768,9 +768,9 @@ TEST(TestRGWAdmin, meta_put){
   std::stringstream ss;
   f->flush(ss);
 
-  g_test->send_request(string("PUT"), (string("/admin/metadata/user?key=") + uid), 
-                       meta_read_json,
-                       (void *)&ss, ss.str().length());
+  g_test->send_request(string("PUT"), (string("/admin/metadata/user?key=") + uid),
+		       meta_read_json,
+		       (void *)&ss, ss.str().length());
   EXPECT_EQ(200U, g_test->get_resp_code());
 
   ASSERT_EQ(0, user_info(uid, display_name, obt_info));
@@ -779,7 +779,7 @@ TEST(TestRGWAdmin, meta_put){
   EXPECT_TRUE (obt_info.caps.check_cap(meta_caps, cp) == 0);
   cp = RGW_CAP_READ;
   EXPECT_TRUE (obt_info.caps.check_cap(meta_caps, cp) != 0);
-  
+
   int rv = meta_caps_rm("write");
   EXPECT_EQ(0, rv);
   if(rv == 0) {
@@ -799,7 +799,7 @@ TEST(TestRGWAdmin, meta_lock_unlock) {
   rest_req = "/admin/metadata/user?key="CEPH_UID"&lock&length=3";
   g_test->send_request(string("POST"), rest_req, read_dummy_post, NULL, sizeof(int));
   EXPECT_EQ(400U, g_test->get_resp_code()); /*Bad request*/
-  
+
   rest_req = "/admin/metadata/user?lock&length=3&lock_id=ceph";
   g_test->send_request(string("POST"), rest_req, read_dummy_post, NULL, sizeof(int));
   EXPECT_EQ(400U, g_test->get_resp_code()); /*Bad request*/
@@ -811,76 +811,76 @@ TEST(TestRGWAdmin, meta_lock_unlock) {
   rest_req = "/admin/metadata/user?unlock&lock_id=ceph";
   g_test->send_request(string("POST"), rest_req, read_dummy_post, NULL, sizeof(int));
   EXPECT_EQ(400U, g_test->get_resp_code()); /*Bad request*/
-  
+
   rest_req = "/admin/metadata/user?key="CEPH_UID"&lock&length=3&lock_id=ceph";
   g_test->send_request(string("POST"), rest_req, read_dummy_post, NULL, sizeof(int));
-  EXPECT_EQ(200U, g_test->get_resp_code()); 
-  
+  EXPECT_EQ(200U, g_test->get_resp_code());
+
   rest_req = "/admin/metadata/user?key="CEPH_UID"&unlock&lock_id=ceph";
   g_test->send_request(string("POST"), rest_req, read_dummy_post, NULL, sizeof(int));
-  EXPECT_EQ(200U, g_test->get_resp_code()); 
-  
+  EXPECT_EQ(200U, g_test->get_resp_code());
+
   rest_req = "/admin/metadata/user?key="CEPH_UID"&lock&length=3&lock_id=ceph1";
   g_test->send_request(string("POST"), rest_req, read_dummy_post, NULL, sizeof(int));
-  EXPECT_EQ(200U, g_test->get_resp_code()); 
-  
+  EXPECT_EQ(200U, g_test->get_resp_code());
+
   rest_req = "/admin/metadata/user?key="CEPH_UID"&unlock&lock_id=ceph1";
   g_test->send_request(string("POST"), rest_req, read_dummy_post, NULL, sizeof(int));
-  EXPECT_EQ(200U, g_test->get_resp_code()); 
-  
+  EXPECT_EQ(200U, g_test->get_resp_code());
+
   rest_req = "/admin/metadata/user?key="CEPH_UID"&lock&length=3&lock_id=ceph";
   g_test->send_request(string("POST"), rest_req, read_dummy_post, NULL, sizeof(int));
-  EXPECT_EQ(200U, g_test->get_resp_code()); 
+  EXPECT_EQ(200U, g_test->get_resp_code());
   utime_t sleep_time(3, 0);
 
   rest_req = "/admin/metadata/user?key="CEPH_UID"&lock&length=3&lock_id=ceph1";
   g_test->send_request(string("POST"), rest_req, read_dummy_post, NULL, sizeof(int));
-  EXPECT_EQ(500U, g_test->get_resp_code()); 
+  EXPECT_EQ(500U, g_test->get_resp_code());
 
   rest_req = "/admin/metadata/user?key="CEPH_UID"&lock&length=3&lock_id=ceph";
   g_test->send_request(string("POST"), rest_req, read_dummy_post, NULL, sizeof(int));
-  EXPECT_EQ(409U, g_test->get_resp_code()); 
+  EXPECT_EQ(409U, g_test->get_resp_code());
   sleep_time.sleep();
 
   rest_req = "/admin/metadata/user?key="CEPH_UID"&lock&length=3&lock_id=ceph1";
   g_test->send_request(string("POST"), rest_req, read_dummy_post, NULL, sizeof(int));
-  EXPECT_EQ(200U, g_test->get_resp_code()); 
-  
+  EXPECT_EQ(200U, g_test->get_resp_code());
+
   rest_req = "/admin/metadata/user?key="CEPH_UID"&unlock&lock_id=ceph1";
   g_test->send_request(string("POST"), rest_req, read_dummy_post, NULL, sizeof(int));
-  EXPECT_EQ(200U, g_test->get_resp_code()); 
+  EXPECT_EQ(200U, g_test->get_resp_code());
 
   ASSERT_EQ(0, meta_caps_rm(perm));
   perm = "read";
   ASSERT_EQ(0, meta_caps_add(perm));
   rest_req = "/admin/metadata/user?key="CEPH_UID"&lock&length=3&lock_id=ceph";
   g_test->send_request(string("POST"), rest_req, read_dummy_post, NULL, sizeof(int));
-  EXPECT_EQ(403U, g_test->get_resp_code()); 
-  
+  EXPECT_EQ(403U, g_test->get_resp_code());
+
   rest_req = "/admin/metadata/user?key="CEPH_UID"&unlock&lock_id=ceph";
   g_test->send_request(string("POST"), rest_req, read_dummy_post, NULL, sizeof(int));
-  EXPECT_EQ(403U, g_test->get_resp_code()); 
-  
+  EXPECT_EQ(403U, g_test->get_resp_code());
+
   ASSERT_EQ(0, meta_caps_rm(perm));
   perm = "write";
   ASSERT_EQ(0, meta_caps_add(perm));
   rest_req = "/admin/metadata/user?key="CEPH_UID"&lock&length=3&lock_id=ceph";
   g_test->send_request(string("POST"), rest_req, read_dummy_post, NULL, sizeof(int));
-  EXPECT_EQ(200U, g_test->get_resp_code()); 
-  
+  EXPECT_EQ(200U, g_test->get_resp_code());
+
   rest_req = "/admin/metadata/user?key="CEPH_UID"&unlock&lock_id=ceph";
   g_test->send_request(string("POST"), rest_req, read_dummy_post, NULL, sizeof(int));
-  EXPECT_EQ(200U, g_test->get_resp_code()); 
-  
+  EXPECT_EQ(200U, g_test->get_resp_code());
+
   ASSERT_EQ(0, meta_caps_rm(perm));
   rest_req = "/admin/metadata/user?key="CEPH_UID"&lock&length=3&lock_id=ceph";
   g_test->send_request(string("POST"), rest_req, read_dummy_post, NULL, sizeof(int));
-  EXPECT_EQ(403U, g_test->get_resp_code()); 
-  
+  EXPECT_EQ(403U, g_test->get_resp_code());
+
   rest_req = "/admin/metadata/user?key="CEPH_UID"&unlock&lock_id=ceph";
   g_test->send_request(string("POST"), rest_req, read_dummy_post, NULL, sizeof(int));
-  EXPECT_EQ(403U, g_test->get_resp_code()); 
-  
+  EXPECT_EQ(403U, g_test->get_resp_code());
+
   ASSERT_EQ(0, user_rm(uid, display_name));
 }
 
@@ -900,7 +900,7 @@ TEST(TestRGWAdmin, meta_delete){
   ASSERT_EQ(0, user_create(uid, display_name));
   perm = "read";
   ASSERT_EQ(0, meta_caps_add(perm));
-  
+
   g_test->send_request(string("DELETE"), (string("/admin/metadata/user?key=") + uid));
   EXPECT_EQ(403U, g_test->get_resp_code());
   ASSERT_EQ(0, user_rm(uid, display_name));

@@ -314,7 +314,7 @@ AM_CONDITIONAL(WITH_RADOSGW, test "$RADOSGW" = "1")
 
 AS_IF([test "$RADOSGW" = "1"], [AC_DEFINE([WITH_RADOSGW], [1], [define if radosgw enabled])])
 
-AS_IF([test "$RADOSGW" = "1"], 
+AS_IF([test "$RADOSGW" = "1"],
               [AC_CHECK_LIB([curl], [curl_multi_wait],
                             AC_DEFINE([HAVE_CURL_MULTI_WAIT], [1], [Define if have curl_multi_wait()]))
               ])
@@ -405,7 +405,7 @@ if test "x$enable_cephfs_java" = "xyes"; then
        ])
 
         # cephfs_java_test only makes sense if java is already turned on
-	# setup CLASSPATH for Debian default junit4.jar package 
+	# setup CLASSPATH for Debian default junit4.jar package
         #
         # Configuring --with-debug and --enable-cephfs-java will throw an error if
         # JUnit4 cannot be found. While currently this works for users who have
@@ -550,7 +550,7 @@ AC_ARG_WITH([libaio],
 AS_IF([test "x$with_libaio" != xno],
 	    [AC_CHECK_LIB([aio], [io_submit], [true], AC_MSG_FAILURE([libaio not found]))])
 AS_IF([test "x$with_libaio" != xno],
-	    [AC_CHECK_HEADER([libaio.h])])	
+	    [AC_CHECK_HEADER([libaio.h])])
 AS_IF([test "$with_libaio" = "yes"],
 	    [AC_DEFINE([HAVE_LIBAIO], [1], [Defined if you don't have atomic_ops])])
 AM_CONDITIONAL(WITH_LIBAIO, [ test "$with_libaio" = "yes" ])

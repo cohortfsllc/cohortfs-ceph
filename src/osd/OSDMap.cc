@@ -690,7 +690,7 @@ int OSDMap::apply_incremental(const Incremental &inc)
     osd_xinfo[p->first] = p->second;
 
   // uuid
-  for (map<int32_t,uuid_d>::const_iterator p = inc.new_uuid.begin(); p != inc.new_uuid.end(); ++p) 
+  for (map<int32_t,uuid_d>::const_iterator p = inc.new_uuid.begin(); p != inc.new_uuid.end(); ++p)
     (*osd_uuid)[p->first] = p->second;
 
   // blacklist

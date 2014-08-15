@@ -11,7 +11,7 @@ installed::
 The profiler dumps output to your ``log file`` directory (i.e.,
 ``/var/log/ceph``). See `Logging and Debugging`_ for details.
 To view the profiler logs with Google's performance tools, execute the
-following:: 
+following::
 
 	google-pprof -gv {log-path/filename}
 
@@ -27,11 +27,11 @@ OSD number or metadata server letter.
 Starting the Profiler
 ---------------------
 
-To start the heap profiler, execute the following:: 
+To start the heap profiler, execute the following::
 
 	ceph {daemon-type} tell {daemon-id} heap start_profiler
 
-For example:: 
+For example::
 
 	ceph osd tell 1 heap start_profiler
 
@@ -39,11 +39,11 @@ For example::
 Printing Stats
 --------------
 
-To print out statistics, execute the following:: 
+To print out statistics, execute the following::
 
 	ceph {daemon-type} tell {daemon-id} heap stats
 
-For example:: 
+For example::
 
 	ceph osd tell 0 heap stats
 
@@ -54,11 +54,11 @@ For example::
 Dumping Heap Information
 ------------------------
 
-To dump heap information, execute the following:: 
+To dump heap information, execute the following::
 
 	ceph {daemon-type} tell {daemon-id} heap dump
 
-For example:: 
+For example::
 
 	ceph mds tell a heap dump
 
@@ -69,11 +69,11 @@ Releasing Memory
 ----------------
 
 To release memory that ``tcmalloc`` has allocated but which is not being used by
-the Ceph daemon itself, execute the following:: 
+the Ceph daemon itself, execute the following::
 
 	ceph {daemon-type} tell {daemon-id} heap release
 
-For example:: 
+For example::
 
 	ceph osd tell 2 heap release
 
@@ -81,11 +81,11 @@ For example::
 Stopping the Profiler
 ---------------------
 
-To stop the heap profiler, execute the following:: 
+To stop the heap profiler, execute the following::
 
 	ceph {daemon-type} tell {daemon-id} heap stop_profiler
 
-For example:: 
+For example::
 
 	ceph {daemon-type} tell {daemon-id} heap stop_profiler
 

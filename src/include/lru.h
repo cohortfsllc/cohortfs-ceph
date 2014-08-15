@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 
@@ -39,7 +39,7 @@ class LRUObject {
   }
 
   // pin/unpin item in cache
-  void lru_pin(); 
+  void lru_pin();
   void lru_unpin();
   bool lru_is_expireable() { return !lru_pinned; }
 
@@ -58,7 +58,7 @@ class LRUList {
     head = tail = 0;
     len = 0;
   }
-  
+
   uint32_t  get_length() { return len; }
 
   LRUObject *get_head() {
@@ -114,7 +114,7 @@ class LRUList {
     assert(len>0);
     len--;
   }
-  
+
 };
 
 
@@ -127,7 +127,7 @@ class LRU {
 
   friend class LRUObject;
   //friend class MDCache; // hack
-  
+
  public:
   LRU(int max = 0) {
     lru_num = 0;
@@ -145,7 +145,7 @@ class LRU {
 
   void lru_set_max(uint32_t m) { lru_max = m; }
   void lru_set_midpoint(float f) { lru_midpoint = f; }
-  
+
   void lru_clear() {
     lru_top.clear();
     lru_bot.clear();
@@ -189,7 +189,7 @@ class LRU {
   void lru_insert_pintail(LRUObject *o) {
     assert(!o->lru);
     o->lru = this;
-    
+
     assert(o->lru_pinned);
 
     lru_pintail.insert_head(o);
@@ -198,7 +198,7 @@ class LRU {
   }
   */
 
-  
+
 
 
   // adjust top/bot balance, as necessary
@@ -207,8 +207,8 @@ class LRU {
 
     unsigned toplen = lru_top.get_length();
     unsigned topwant = (unsigned)(lru_midpoint * ((double)lru_max - lru_num_pinned));
-    while (toplen > 0 && 
-           toplen > topwant) {
+    while (toplen > 0 &&
+	   toplen > topwant) {
       // remove from tail of top, stick at head of bot
       // FIXME: this could be way more efficient by moving a whole chain of items.
 
@@ -228,8 +228,8 @@ class LRU {
     if (!o->lru) return o;
 
     assert((o->lru_list == &lru_pintail) ||
-           (o->lru_list == &lru_top) ||
-           (o->lru_list == &lru_bot));
+	   (o->lru_list == &lru_top) ||
+	   (o->lru_list == &lru_bot));
     o->lru_list->remove(o);
 
     lru_num--;
@@ -248,7 +248,7 @@ class LRU {
   // touch item -- move to midpoint (unless already higher)
   bool lru_midtouch(LRUObject *o) {
     if (o->lru_list == &lru_top) return false;
-    
+
     lru_remove(o);
     lru_insert_mid(o);
     return true;
@@ -274,7 +274,7 @@ class LRU {
   // expire -- expire a single item
   LRUObject *lru_get_next_expire() {
     LRUObject *p;
-    
+
     // look through tail of bot
     while (lru_bot.get_length()) {
       p = lru_bot.get_tail();
@@ -294,14 +294,14 @@ class LRU {
       lru_top.remove(p);
       lru_pintail.insert_head(p);
     }
-    
+
     // no luck!
     return NULL;
   }
-  
+
   LRUObject *lru_expire() {
     LRUObject *p = lru_get_next_expire();
-    if (p) 
+    if (p)
       return lru_remove(p);
     return NULL;
   }
@@ -314,7 +314,7 @@ class LRU {
 };
 
 
-inline void LRUObject::lru_pin() 
+inline void LRUObject::lru_pin()
 {
   lru_pinned = true;
   if (lru) lru->lru_num_pinned++;

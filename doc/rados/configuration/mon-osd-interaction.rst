@@ -65,7 +65,7 @@ of your Ceph configuration file, or by setting the value at runtime.
                 |----+ Mark          |
                 |    | OSD 2         |
                 |<---+ Down          |
-                
+
 
 .. index:: OSD down report
 
@@ -88,18 +88,18 @@ Ceph configuration file, or by setting the value at runtime.
 .. ditaa:: +---------+     +---------+
            |  OSD 1  |     | Monitor |
            +---------+     +---------+
-                |               |             
+                |               |
                 | OSD 2 Is Down |
                 |-------------->|
-                |               |             
+                |               |
                 | OSD 2 Is Down |
                 |-------------->|
-                |               |             
+                |               |
                 | OSD 2 Is Down |
                 |-------------->|
-                |               |             
+                |               |
                 |               |----------+ Mark
-                |               |          | OSD 2                
+                |               |          | OSD 2
                 |               |<---------+ Down
 
 
@@ -120,13 +120,13 @@ setting the value at runtime.
            +---------+     +---------+     +-------+     +---------+
                 |               |              |              |
                 |  Request To   |              |              |
-                |     Peer      |              |              |               
+                |     Peer      |              |              |
                 |-------------->|              |              |
                 |<--------------|              |              |
                 |    Peering                   |              |
                 |                              |              |
                 |  Request To                  |              |
-                |     Peer                     |              |               
+                |     Peer                     |              |
                 |----------------------------->|              |
                 |                                             |
                 |----+ OSD Monitor                            |
@@ -137,7 +137,7 @@ setting the value at runtime.
                 |-------------------------------------------->|
                 |<--------------------------------------------|
                 |          Receive New Cluster Map            |
- 
+
 
 .. index:: OSD status
 
@@ -151,10 +151,10 @@ event such as a failure, a change in placement group stats, a change in
 ``up_thru`` or when it boots within 5 seconds. You can change the Ceph OSD
 Daemon minimum report interval by adding an ``osd mon report interval min``
 setting under the ``[osd]`` section of your Ceph configuration file, or by
-setting the value at runtime. A Ceph OSD Daemon sends a report to a Ceph 
-Monitor every 120 seconds irrespective of whether any notable changes occur. 
-You can change the Ceph Monitor report interval by adding an ``osd mon report 
-interval max`` setting under the ``[osd]`` section of your Ceph configuration 
+setting the value at runtime. A Ceph OSD Daemon sends a report to a Ceph
+Monitor every 120 seconds irrespective of whether any notable changes occur.
+You can change the Ceph Monitor report interval by adding an ``osd mon report
+interval max`` setting under the ``[osd]`` section of your Ceph configuration
 file, or by setting the value at runtime.
 
 
@@ -209,18 +209,18 @@ Monitor Settings
 
 ``mon osd min up ratio``
 
-:Description: The minimum ratio of ``up`` Ceph OSD Daemons before Ceph will 
+:Description: The minimum ratio of ``up`` Ceph OSD Daemons before Ceph will
               mark Ceph OSD Daemons ``down``.
-              
+
 :Type: Double
 :Default: ``.3``
 
 
 ``mon osd min in ratio``
 
-:Description: The minimum ratio of ``in`` Ceph OSD Daemons before Ceph will 
+:Description: The minimum ratio of ``in`` Ceph OSD Daemons before Ceph will
               mark Ceph OSD Daemons ``out``.
-              
+
 :Type: Double
 :Default: ``.3``
 
@@ -253,75 +253,75 @@ Monitor Settings
 :Default: ``true``
 
 
-``mon osd auto mark in`` 
+``mon osd auto mark in``
 
-:Description: Ceph will mark any booting Ceph OSD Daemons as ``in`` 
+:Description: Ceph will mark any booting Ceph OSD Daemons as ``in``
               the Ceph Storage Cluster.
 
 :Type: Boolean
 :Default: ``false``
 
 
-``mon osd auto mark auto out in`` 
+``mon osd auto mark auto out in``
 
-:Description: Ceph will mark booting Ceph OSD Daemons auto marked ``out`` 
+:Description: Ceph will mark booting Ceph OSD Daemons auto marked ``out``
               of the Ceph Storage Cluster as ``in`` the cluster.
-              
+
 :Type: Boolean
-:Default: ``true`` 
+:Default: ``true``
 
 
-``mon osd auto mark new in`` 
+``mon osd auto mark new in``
 
-:Description: Ceph will mark booting new Ceph OSD Daemons as ``in`` the 
+:Description: Ceph will mark booting new Ceph OSD Daemons as ``in`` the
               Ceph Storage Cluster.
-              
+
 :Type: Boolean
-:Default: ``true`` 
+:Default: ``true``
 
 
-``mon osd down out interval`` 
+``mon osd down out interval``
 
 :Description: The number of seconds Ceph waits before marking a Ceph OSD Daemon
               ``down`` and ``out`` if it doesn't respond.
-              
+
 :Type: 32-bit Integer
 :Default: ``300``
 
 
 ``mon osd downout subtree limit``
 
-:Description: The largest :term:`CRUSH` unit type that Ceph will 
-              automatically mark ``out``. 
+:Description: The largest :term:`CRUSH` unit type that Ceph will
+              automatically mark ``out``.
 
 :Type: String
 :Default: ``rack``
 
 
-``mon osd report timeout`` 
+``mon osd report timeout``
 
-:Description: The grace period in seconds before declaring 
+:Description: The grace period in seconds before declaring
               unresponsive Ceph OSD Daemons ``down``.
 
 :Type: 32-bit Integer
 :Default: ``900``
 
-``mon osd min down reporters`` 
+``mon osd min down reporters``
 
-:Description: The minimum number of Ceph OSD Daemons required to report a 
+:Description: The minimum number of Ceph OSD Daemons required to report a
               ``down`` Ceph OSD Daemon.
 
 :Type: 32-bit Integer
 :Default: ``1``
 
 
-``mon osd min down reports`` 
+``mon osd min down reports``
 
-:Description: The minimum number of times a Ceph OSD Daemon must report 
+:Description: The minimum number of times a Ceph OSD Daemon must report
               that another Ceph OSD Daemon is ``down``.
 
 :Type: 32-bit Integer
-:Default: ``3`` 
+:Default: ``3``
 
 .. index:: OSD hearbeat
 
@@ -330,61 +330,61 @@ OSD Settings
 
 ``osd heartbeat address``
 
-:Description: An Ceph OSD Daemon's network address for heartbeats. 
+:Description: An Ceph OSD Daemon's network address for heartbeats.
 :Type: Address
 :Default: The host address.
 
 
-``osd heartbeat interval`` 
+``osd heartbeat interval``
 
 :Description: How often an Ceph OSD Daemon pings its peers (in seconds).
 :Type: 32-bit Integer
 :Default: ``6``
 
 
-``osd heartbeat grace`` 
+``osd heartbeat grace``
 
 :Description: The elapsed time when a Ceph OSD Daemon hasn't shown a heartbeat
               that the Ceph Storage Cluster considers it ``down``.
- 
+
 :Type: 32-bit Integer
 :Default: ``20``
 
 
-``osd mon heartbeat interval`` 
+``osd mon heartbeat interval``
 
-:Description: How often the Ceph OSD Daemon pings a Ceph Monitor if it has no 
+:Description: How often the Ceph OSD Daemon pings a Ceph Monitor if it has no
               Ceph OSD Daemon peers.
 
 :Type: 32-bit Integer
-:Default: ``30`` 
+:Default: ``30``
 
 
-``osd mon report interval max`` 
+``osd mon report interval max``
 
 :Description: The maximum time in seconds that a Ceph OSD Daemon can wait before
               it must report to a Ceph Monitor.
 
 :Type: 32-bit Integer
-:Default: ``120`` 
+:Default: ``120``
 
 
-``osd mon report interval min`` 
+``osd mon report interval min``
 
 :Description: The minimum number of seconds a Ceph OSD Daemon may wait
-              from startup or another reportable event before reporting 
+              from startup or another reportable event before reporting
               to a Ceph Monitor.
 
 :Type: 32-bit Integer
 :Default: ``5``
-:Valid Range: Should be less than ``osd mon report interval max`` 
+:Valid Range: Should be less than ``osd mon report interval max``
 
 
-``osd mon ack timeout`` 
+``osd mon ack timeout``
 
-:Description: The number of seconds to wait for a Ceph Monitor to acknowledge a 
+:Description: The number of seconds to wait for a Ceph Monitor to acknowledge a
               request for statistics.
 
 :Type: 32-bit Integer
-:Default: ``30`` 
+:Default: ``30``
 

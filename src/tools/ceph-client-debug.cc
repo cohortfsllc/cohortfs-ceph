@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -41,7 +41,7 @@ void traverse_dentries(Inode *ino, std::vector<Dentry*> &parts)
   if (ino->dn_set.empty()) {
     return;
   }
-  
+
   Dentry* dn = *(ino->dn_set.begin());
   parts.push_back(dn);
   traverse_dentries(dn->dir->parent_inode, parts);
@@ -66,7 +66,7 @@ int lookup_trace(ceph_mount_info *client, inodeno_t const ino)
       assert(dn->dir->parent_inode);
       r = lookup_trace(client, dn->dir->parent_inode->ino);
       if (r) {
-        return r;
+	return r;
       }
     } else {
       // We reached the root of the tree
@@ -87,7 +87,7 @@ int main(int argc, const char **argv)
 
   global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY,
 	      CINIT_FLAG_UNPRIVILEGED_DAEMON_DEFAULTS);
-  
+
   common_init_finish(g_ceph_context);
 
   // Expect exactly one positional argument (inode number)
@@ -133,7 +133,7 @@ int main(int argc, const char **argv)
   // Retrieve dentry trace
   std::vector<Dentry*> path;
   traverse_dentries(ino, path);
-  
+
   // Print inode and path as a JSON object
   JSONFormatter jf(true);
   jf.open_object_section("client_debug");
@@ -146,11 +146,11 @@ int main(int argc, const char **argv)
     jf.open_array_section("path");
     {
       for (std::vector<Dentry*>::reverse_iterator p = path.rbegin(); p != path.rend(); ++p) {
-        jf.open_object_section("dentry");
-        {
-          (*p)->dump(&jf);
-        }
-        jf.close_section(); // dentry
+	jf.open_object_section("dentry");
+	{
+	  (*p)->dump(&jf);
+	}
+	jf.close_section(); // dentry
       }
     }
     jf.close_section(); // path
@@ -165,7 +165,7 @@ int main(int argc, const char **argv)
     ceph_ll_forget(client, (*p)->inode, 1);
   }
   ino = NULL;
-  path.clear();  
+  path.clear();
 
   // Shut down
   r = ceph_unmount(client);
@@ -173,6 +173,6 @@ int main(int argc, const char **argv)
     derr << "Error mounting: " << cpp_strerror(r) << dendl;
   }
   ceph_shutdown(client);
-  
+
   return r;
 }

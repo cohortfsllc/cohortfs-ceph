@@ -248,7 +248,7 @@ public:
 
 string Watch::gen_dbg_prefix() {
   stringstream ss;
-  ss << vol->gen_prefix() << " -- Watch(" 
+  ss << vol->gen_prefix() << " -- Watch("
      << make_pair(cookie, entity) << ") ";
   return ss.str();
 }

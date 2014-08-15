@@ -15,8 +15,8 @@ sbin_SCRIPTS =
 su_sbin_PROGRAMS =
 su_sbin_SCRIPTS =
 dist_bin_SCRIPTS =
-lib_LTLIBRARIES = 
-noinst_LTLIBRARIES = 
+lib_LTLIBRARIES =
+noinst_LTLIBRARIES =
 noinst_LIBRARIES =
 radoslib_LTLIBRARIES =
 

@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 
@@ -30,7 +30,7 @@ class MDirUpdate : public Message {
   int get_source_mds() const { return from_mds; }
   dirfrag_t get_dirfrag() const { return dirfrag; }
   int get_dir_rep() const { return dir_rep; }
-  const set<int>& get_dir_rep_by() const { return dir_rep_by; } 
+  const set<int>& get_dir_rep_by() const { return dir_rep_by; }
   bool should_discover() const { return discover > 0; }
   const filepath& get_path() const { return path; }
 
@@ -39,12 +39,12 @@ class MDirUpdate : public Message {
   }
 
   MDirUpdate() : Message(MSG_MDS_DIRUPDATE) {}
-  MDirUpdate(int f, 
+  MDirUpdate(int f,
 	     dirfrag_t dirfrag,
-             int dir_rep,
-             set<int>& dir_rep_by,
-             filepath& path,
-             bool discover = false) :
+	     int dir_rep,
+	     set<int>& dir_rep_by,
+	     filepath& path,
+	     bool discover = false) :
     Message(MSG_MDS_DIRUPDATE) {
     this->from_mds = f;
     this->dirfrag = dirfrag;

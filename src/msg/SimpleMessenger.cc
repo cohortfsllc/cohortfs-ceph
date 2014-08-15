@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -89,22 +89,22 @@ int SimpleMessenger::shutdown()
 }
 
 int SimpleMessenger::_send_message(Message *m, const entity_inst_t& dest,
-                                   bool lazy)
+				   bool lazy)
 {
   // set envelope
   m->get_header().src = get_myname();
 
   if (!m->get_priority()) m->set_priority(get_default_send_priority());
- 
+
   ldout(cct,1) << (lazy ? "lazy " : "") <<"--> " << dest.name << " "
-          << dest.addr << " -- " << *m
-    	  << " -- ?+" << m->get_data().length()
-	  << " " << m 
+	  << dest.addr << " -- " << *m
+	  << " -- ?+" << m->get_data().length()
+	  << " " << m
 	  << dendl;
 
   if (dest.addr == entity_addr_t()) {
     ldout(cct,0) << (lazy ? "lazy_" : "") << "send_message message " << *m
-                 << " with empty dest " << dest.addr << dendl;
+		 << " with empty dest " << dest.addr << dendl;
     m->put();
     return -EINVAL;
   }
@@ -112,7 +112,7 @@ int SimpleMessenger::_send_message(Message *m, const entity_inst_t& dest,
   lock.Lock();
   Pipe *pipe = _lookup_pipe(dest.addr);
   submit_message(m, (pipe ? pipe->connection_state.get() : NULL),
-                 dest.addr, dest.name.type(), lazy);
+		 dest.addr, dest.name.type(), lazy);
   lock.Unlock();
   return 0;
 }
@@ -333,9 +333,9 @@ Pipe *SimpleMessenger::connect_rank(const entity_addr_t& addr,
 {
   assert(lock.is_locked());
   assert(addr != my_inst.addr);
-  
+
   ldout(cct,10) << "connect_rank to " << addr << ", creating pipe and registering" << dendl;
-  
+
   // create pipe
   Pipe *pipe = new Pipe(this, Pipe::STATE_CONNECTING,
 			static_cast<PipeConnection*>(con));
@@ -479,13 +479,13 @@ int SimpleMessenger::send_keepalive(const entity_inst_t& dest)
       // remote.
       Pipe *pipe = _lookup_pipe(dest_proc_addr);
       if (pipe) {
-        // connected?
+	// connected?
 	pipe->pipe_lock.Lock();
 	ldout(cct,20) << "send_keepalive remote, " << dest_addr << ", have pipe." << dendl;
 	pipe->_send_keepalive();
 	pipe->pipe_lock.Unlock();
       } else {
-        ret = -EINVAL;
+	ret = -EINVAL;
       }
       if (!pipe) {
 	ldout(cct,20) << "send_keepalive no pipe for " << dest_addr << ", doing nothing." << dendl;

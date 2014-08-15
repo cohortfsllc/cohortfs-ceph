@@ -296,8 +296,8 @@ int main(int argc, char **argv)
     } else if (strcmp(argv[i], "--op") == 0) {
       i++;
       if (i == argc) {
-        cerr << "Missing op after --op" << std::endl;
-        return 1;
+	cerr << "Missing op after --op" << std::endl;
+	return 1;
       }
       int j;
       for (j = 0; op_types[j].name; ++j) {

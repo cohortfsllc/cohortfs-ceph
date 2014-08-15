@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -64,7 +64,7 @@ TEST(MonCap, ParseGood) {
     MonCap cap;
     std::cout << "Testing good input: '" << str << "'" << std::endl;
     ASSERT_TRUE(cap.parse(str, &std::cout));
-    std::cout << "                                         -> " << cap << std::endl;
+    std::cout << "					   -> " << cap << std::endl;
   }
 }
 

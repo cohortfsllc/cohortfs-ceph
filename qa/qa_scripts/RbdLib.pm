@@ -52,13 +52,13 @@ our $RBD_SHOWMAPPED = "rbd showmapped";
 our $RADOS_LS       = "rados ls";
 our $SNAP_PROTECT   = "rbd snap protect";
 our $SNAP_UNPROTECT = "rbd snap unprotect";
-our $RBD_CHILDREN   = "rbd children"; 
-our $RBD_FLATTEN    = "rbd flatten"; 
+our $RBD_CHILDREN   = "rbd children";
+our $RBD_FLATTEN    = "rbd flatten";
 
 #====Error messages========================
 
-our $RBD_CREATE_ERR    = "size must be >= 0"; 
-our $RBD_EXTRA_ERR     = "extraneous parameter"; 
+our $RBD_CREATE_ERR    = "size must be >= 0";
+our $RBD_EXTRA_ERR     = "extraneous parameter";
 our $RBD_REQ_ERR       = "expected integer";
 our $RBD_RM_ERROR      = "image name was not specified";
 our $SNAP_LS_ERROR     = "snap name was not specified";
@@ -88,8 +88,8 @@ our $CLONE_ARG_ERR     = "destination image name was not specified";
 our $CLONE_PARENT_ERR  = "error opening parent image";
 our $CLONE_PF_ERR      = "parent image must be in new format";
 our $FLATTEN_ERR       = "librbd: parent snapshot must be protected";
-our $FLATTEN_IMG_ERR   = "librbd: image has no parent"; 
- 
+our $FLATTEN_IMG_ERR   = "librbd: image has no parent";
+
 #=======Success messages=======================
 
 our $POOL_MK_SUCCESS       = "successfully created pool";
@@ -132,13 +132,13 @@ sub _pre_clean_up {
 "rm -rf logfile.txt log.txt test_completed.txt"
     );
 }
- 
+
 sub perform_action {
     my ( $action, $cmd_args, $option ) = @_;
     my $command = frame_command( $action, $cmd_args, $option );
     my $cmd_op = get_command_output($command);
     my $rc = validate_cmd_output( $cmd_op, $action, $cmd_args, $option );
-    return $rc;	
+    return $rc;
 }
 
 sub verify_action {
@@ -466,7 +466,7 @@ sub validate_cmd_output {
     }
 }
 
-# Test Script execution results for Functional tests 
+# Test Script execution results for Functional tests
 sub log_results
 {
 	if ( $TPASS_FLAG eq "TRUE" ) {

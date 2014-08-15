@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_MON_TYPES_H
@@ -18,12 +18,12 @@
 #include "include/utime.h"
 #include "common/Formatter.h"
 
-#define PAXOS_MDSMAP     0
-#define PAXOS_OSDMAP     1
-#define PAXOS_LOG        2
-#define PAXOS_MONMAP     3
-#define PAXOS_AUTH       4
-#define PAXOS_NUM        5
+#define PAXOS_MDSMAP	 0
+#define PAXOS_OSDMAP	 1
+#define PAXOS_LOG	 2
+#define PAXOS_MONMAP	 3
+#define PAXOS_AUTH	 4
+#define PAXOS_NUM	 5
 
 inline const char *get_paxos_name(int p) {
   switch (p) {
@@ -43,7 +43,7 @@ inline const char *get_paxos_name(int p) {
  *
  * If we ever decide to support multiple backends for the monitor store,
  * we should then create an abstract class 'MonitorStoreStats' of sorts
- * and inherit it on LevelDBStoreStats.  I'm sure you'll figure something
+ * and inherit it on LevelDBStoreStats.	 I'm sure you'll figure something
  * out.
  */
 struct LevelDBStoreStats {

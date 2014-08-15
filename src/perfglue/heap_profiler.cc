@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #include <google/heap-profiler.h>
@@ -69,7 +69,7 @@ static void get_profile_name(char *profile_name, int profile_name_len)
 void ceph_heap_profiler_start()
 {
   char profile_name[PATH_MAX];
-  get_profile_name(profile_name, sizeof(profile_name)); 
+  get_profile_name(profile_name, sizeof(profile_name));
   generic_dout(0) << "turning on heap profiler with prefix "
 		  << profile_name << dendl;
   HeapProfilerStart(profile_name);
@@ -86,7 +86,7 @@ void ceph_heap_profiler_dump(const char *reason)
 }
 
 void ceph_heap_profiler_handle_command(const std::vector<std::string>& cmd,
-                                       ostream& out)
+				       ostream& out)
 {
   if (cmd.size() == 1 && cmd[0] == "dump") {
     if (!ceph_heap_profiler_running()) {

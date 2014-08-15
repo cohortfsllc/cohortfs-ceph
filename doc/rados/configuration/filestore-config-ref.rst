@@ -16,8 +16,8 @@
 Extended Attributes
 ===================
 
-Extended Attributes (XATTRs) are an important aspect in your configuration. 
-Some file systems have limits on the number of bytes stored in XATTRS. 
+Extended Attributes (XATTRs) are an important aspect in your configuration.
+Some file systems have limits on the number of bytes stored in XATTRS.
 Additionally, in some cases, the filesystem may not be as fast as an alternative
 method of storing XATTRs. The following settings may help improve performance
 by using a method of storing XATTRs that is extrinsic to the underlying filesystem.
@@ -31,7 +31,7 @@ xattrs`` threshold are reached.
 
 ``filestore xattr use omap``
 
-:Description: Use object map for XATTRS. Set to ``true`` for ``ext4`` file systems. 
+:Description: Use object map for XATTRS. Set to ``true`` for ``ext4`` file systems.
 :Type: Boolean
 :Required: No
 :Default: ``false``
@@ -113,7 +113,7 @@ performance in some cases.
 
 ``filestore sync flush``
 
-:Description: Enables the synchronization flusher. 
+:Description: Enables the synchronization flusher.
 :Type: Boolean
 :Required: No
 :Default: ``false``
@@ -137,7 +137,7 @@ The following settings provide limits on the size of filestore queue.
 
 ``filestore queue max ops``
 
-:Description: Defines the maximum number of in progress operations the file store accepts before blocking on queuing new operations. 
+:Description: Defines the maximum number of in progress operations the file store accepts before blocking on queuing new operations.
 :Type: Integer
 :Required: No. Minimal impact on performance.
 :Default: ``500``
@@ -145,7 +145,7 @@ The following settings provide limits on the size of filestore queue.
 
 ``filestore queue max bytes``
 
-:Description: The maximum number of bytes for an operation. 
+:Description: The maximum number of bytes for an operation.
 :Type: Integer
 :Required: No
 :Default: ``100 << 20``
@@ -153,7 +153,7 @@ The following settings provide limits on the size of filestore queue.
 
 ``filestore queue committing max ops``
 
-:Description: The maximum number of operations the filestore can commit. 
+:Description: The maximum number of operations the filestore can commit.
 :Type: Integer
 :Required: No
 :Default: ``500``
@@ -175,7 +175,7 @@ Timeouts
 
 ``filestore op threads``
 
-:Description: The number of filesystem operation threads that execute in parallel. 
+:Description: The number of filesystem operation threads that execute in parallel.
 :Type: Integer
 :Required: No
 :Default: ``2``
@@ -191,7 +191,7 @@ Timeouts
 
 ``filestore op thread suicide timeout``
 
-:Description: The timeout for a commit operation before cancelling the commit (in seconds). 
+:Description: The timeout for a commit operation before cancelling the commit (in seconds).
 :Type: Integer
 :Required: No
 :Default: ``180``
@@ -263,8 +263,8 @@ Misc
 
 ``filestore split multiple``
 
-:Description:  ``filestore_split_multiple * filestore_merge_threshold * 16`` 
-               is the maximum number of files in a subdirectory before 
+:Description:  ``filestore_split_multiple * filestore_merge_threshold * 16``
+               is the maximum number of files in a subdirectory before
                splitting into child directories.
 
 :Type: Integer

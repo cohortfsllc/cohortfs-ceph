@@ -512,12 +512,12 @@ EOF
 			mon 'allow *' osd 'allow *' mds 'allow'
 	    fi
 	fi
-	
+
 	run 'mds' $CEPH_BIN/ceph-mds -i $name $ARGS $CMDS_ARGS
 	if [ "$standby" -eq 1 ]; then
 	    run 'mds' $CEPH_BIN/ceph-mds -i ${name}s $ARGS $CMDS_ARGS
 	fi
-	
+
 	mds=$(($mds + 1))
 	[ $mds -eq $CEPH_NUM_MDS ] && break
 
@@ -556,7 +556,7 @@ EOF
 			    if [ -f "${APACHE2_MODULE_PATH}/mod_${module}.so" ]; then
 				    APACHE2_EXTRA_MODULES="${APACHE2_EXTRA_MODULES}LoadModule ${module}_module ${APACHE2_MODULE_PATH}/mod_${module}.so
 "
-			    fi 
+			    fi
 		    done
 		    echo $APACHE2_EXTRA_MODULES
 		    cat <<EOF > $CEPH_OUT_DIR/apache.conf

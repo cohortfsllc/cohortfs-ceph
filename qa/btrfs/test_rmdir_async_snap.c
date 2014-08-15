@@ -24,7 +24,7 @@ int main(int argc, char **argv)
 	if (argc > 1)
 		num = atoi(argv[1]);
 	printf("will do %d iterations\n", num);
-	
+
 	fd = open(".", O_RDONLY);
 	vold.fd = 0;
 	strcpy(vold.name, "current");

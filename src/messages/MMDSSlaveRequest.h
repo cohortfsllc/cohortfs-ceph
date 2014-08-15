@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 
@@ -21,10 +21,10 @@
 
 class MMDSSlaveRequest : public Message {
  public:
-  static const int OP_XLOCK =       1;
+  static const int OP_XLOCK =	    1;
   static const int OP_XLOCKACK =   -1;
-  static const int OP_UNXLOCK =     2;
-  static const int OP_AUTHPIN =     3;
+  static const int OP_UNXLOCK =	    2;
+  static const int OP_AUTHPIN =	    3;
   static const int OP_AUTHPINACK = -3;
 
   static const int OP_LINKPREP =     4;
@@ -46,15 +46,15 @@ class MMDSSlaveRequest : public Message {
   static const int OP_RENAMENOTIFY = 12;
   static const int OP_RENAMENOTIFYACK = -12;
 
-  static const int OP_FINISH = 17;  
-  static const int OP_COMMITTED = -18;  
+  static const int OP_FINISH = 17;
+  static const int OP_COMMITTED = -18;
 
   static const int OP_ABORT =  20;  // used for recovery only
   //static const int OP_COMMIT = 21;  // used for recovery only
 
 
   const static char *get_opname(int o) {
-    switch (o) { 
+    switch (o) {
     case OP_XLOCK: return "xlock";
     case OP_XLOCKACK: return "xlock_ack";
     case OP_UNXLOCK: return "unxlock";
@@ -102,7 +102,7 @@ class MMDSSlaveRequest : public Message {
   // for locking
   uint16_t lock_type;  // lock object type
   MDSCacheObjectInfo object_info;
-  
+
   // for authpins
   vector<MDSCacheObjectInfo> authpins;
 
@@ -139,7 +139,7 @@ public:
 
   // ----
   MMDSSlaveRequest() : Message(MSG_MDS_SLAVE_REQUEST) { }
-  MMDSSlaveRequest(metareqid_t ri, uint32_t att, int o) : 
+  MMDSSlaveRequest(metareqid_t ri, uint32_t att, int o) :
     Message(MSG_MDS_SLAVE_REQUEST),
     reqid(ri), attempt(att), op(o), flags(0), lock_type(0),
     inode_export_v(0) { }
@@ -187,10 +187,10 @@ public:
   void print(ostream& out) const {
     out << "slave_request(" << reqid
 	<< "." << attempt
-	<< " " << get_opname(op) 
+	<< " " << get_opname(op)
 	<< ")";
-  }  
-	
+  }
+
 };
 
 #endif

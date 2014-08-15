@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -35,7 +35,7 @@ public:
   void print(ostream& out) const {
     out << "client_cap_release(" << caps.size() << ")";
   }
-  
+
   void decode_payload() {
     bufferlist::iterator p = payload.begin();
     ::decode(head, p);

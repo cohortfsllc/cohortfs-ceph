@@ -32,9 +32,9 @@ int main(int argc, char **argv)
 		num = atoi(argv[1]);
 	printf("will do %d iterations\n", num);
 
-        int cwd = open(".", O_RDONLY);
-        printf("cwd = %d\n", cwd);
-        while (num-- > 0) {
+	int cwd = open(".", O_RDONLY);
+	printf("cwd = %d\n", cwd);
+	while (num-- > 0) {
 		if (rand() % 10 == 0) {
 			uint64_t transid;
 			int r;
@@ -44,16 +44,16 @@ int main(int argc, char **argv)
 			printf("sync started, transid %lld, waiting\n", transid);
 			r = ioctl(cwd, BTRFS_IOC_WAIT_SYNC, &transid);
 			check_return(r);
-			printf("sync finished\n");	
+			printf("sync finished\n");
 		}
 
-                int i = rand() % max;
-                struct stat st;
-                va.fd = cwd;
-                sprintf(va.name, "test.%d", i);
-                va.transid = 0;
-                int r = stat(va.name, &st);
-                if (r < 0) {
+		int i = rand() % max;
+		struct stat st;
+		va.fd = cwd;
+		sprintf(va.name, "test.%d", i);
+		va.transid = 0;
+		int r = stat(va.name, &st);
+		if (r < 0) {
 			if (rand() % 3 == 0) {
 				printf("snap create (sync) %s\n", va.name);
 				va.flags = 0;
@@ -70,14 +70,14 @@ int main(int argc, char **argv)
 					r = ioctl(cwd, BTRFS_IOC_WAIT_SYNC, &va.transid);
 					check_return(r);
 				}
-                        }
-                } else {
-                        printf("snap remove %s\n", va.name);
+			}
+		} else {
+			printf("snap remove %s\n", va.name);
 			vold.fd = va.fd;
 			strcpy(vold.name, va.name);
-                        r = ioctl(cwd, BTRFS_IOC_SNAP_DESTROY, &vold);
+			r = ioctl(cwd, BTRFS_IOC_SNAP_DESTROY, &vold);
 			check_return(r);
-                }
-        }
+		}
+	}
 	return 0;
 }

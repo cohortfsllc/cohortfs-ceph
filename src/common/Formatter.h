@@ -94,7 +94,7 @@ class JSONFormatter : public Formatter {
     bool is_array;
     json_formatter_stack_entry_d() : size(0), is_array(false) {}
   };
-  
+
   bool m_pretty;
   void open_section(const char *name, bool is_array);
   void print_quoted_string(const char *s);

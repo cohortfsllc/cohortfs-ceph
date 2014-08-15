@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef _BACKWARD_BACKWARD_WARNING_H
@@ -39,7 +39,7 @@ int Dumper::init(int rank_)
 
   inodeno_t ino = MDS_INO_LOG_OFFSET + rank;
   journaler = new Journaler(ino, mdsmap->get_metadata_volume(objecter->osdmap), CEPH_FS_ONDISK_MAGIC,
-                                       objecter, 0, 0, &timer);
+				       objecter, 0, 0, &timer);
   return 0;
 }
 
@@ -108,7 +108,7 @@ void Dumper::dump(const char *dump_file)
     char buf[200];
     memset(buf, 0, sizeof(buf));
     sprintf(buf, "Ceph mds%d journal dump\n start offset %" PRIu64
-	    " (0x%" PRIx64 ")\n       length %" PRIu32 " (0x%" PRIx32 ")\n%c",
+	    " (0x%" PRIx64 ")\n	      length %" PRIu32 " (0x%" PRIx32 ")\n%c",
 	    rank, start, start, bl.length(), bl.length(),
 	    4);
     int r = safe_write(fd, buf, sizeof(buf));
@@ -123,7 +123,7 @@ void Dumper::dump(const char *dump_file)
     cout << "wrote " << bl.length() << " bytes at offset " << start << " to " << dump_file << "\n"
 	 << "NOTE: this is a _sparse_ file; you can\n"
 	 << "\t$ tar cSzf " << dump_file << ".tgz " << dump_file << "\n"
-	 << "      to efficiently compress it while preserving sparseness." << std::endl;
+	 << "	   to efficiently compress it while preserving sparseness." << std::endl;
   } else {
     int err = errno;
     derr << "unable to open " << dump_file << ": " << cpp_strerror(err) << dendl;
@@ -133,7 +133,7 @@ void Dumper::dump(const char *dump_file)
 void Dumper::undump(const char *dump_file)
 {
   cout << "undump " << dump_file << std::endl;
-  
+
   int fd = ::open(dump_file, O_RDONLY);
   if (fd < 0) {
     derr << "couldn't open " << dump_file << ": " << cpp_strerror(errno) << dendl;
@@ -142,7 +142,7 @@ void Dumper::undump(const char *dump_file)
 
   // Ceph mds0 journal dump
   //  start offset 232401996 (0xdda2c4c)
-  //        length 1097504 (0x10bf20)
+  //	    length 1097504 (0x10bf20)
 
   char buf[200];
   int r = safe_read(fd, buf, sizeof(buf));
@@ -156,7 +156,7 @@ void Dumper::undump(const char *dump_file)
   sscanf(strstr(buf, "length"), "length %llu", &len);
 
   cout << "start " << start << " len " << len << std::endl;
-  
+
   inodeno_t ino = MDS_INO_LOG_OFFSET + rank;
 
   Journaler::Header h;
@@ -168,7 +168,7 @@ void Dumper::undump(const char *dump_file)
   VolumeRef volume(mdsmap->get_metadata_volume(objecter->osdmap));
   h.layout = g_default_file_layout;
   h.layout.fl_uuid = volume->uuid;
-  
+
   bufferlist hbl;
   ::encode(h, hbl);
 
@@ -263,7 +263,7 @@ void Dumper::dump_entries()
       lock.Unlock();
       localLock.Lock();
       while (!done)
-        cond.Wait(localLock);
+	cond.Wait(localLock);
       localLock.Unlock();
       lock.Lock();
     }

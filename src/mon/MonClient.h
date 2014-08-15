@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_MONCLIENT_H
@@ -75,7 +75,7 @@ struct MonClientPinger : public Dispatcher {
     while (!done) {
       ret = ping_recvd_cond.WaitUntil(lock, until);
       if (ret == -ETIMEDOUT)
-        break;
+	break;
     }
     return ret;
   }
@@ -199,7 +199,7 @@ public:
 
   // mon subscriptions
 private:
-  map<string,ceph_mon_subscribe_item> sub_have;  // my subs, and current versions
+  map<string,ceph_mon_subscribe_item> sub_have;	 // my subs, and current versions
   utime_t sub_renew_sent, sub_renew_after;
 
   void _renew_subs();
@@ -253,7 +253,7 @@ public:
   bool sub_want_increment(string what, version_t start, unsigned flags) {
     Mutex::Locker l(monc_lock);
     map<string,ceph_mon_subscribe_item>::iterator i =
-            sub_have.find(what);
+	    sub_have.find(what);
     if (i == sub_have.end() || i->second.start < start) {
       ceph_mon_subscribe_item& item = sub_have[what];
       item.start = start;
@@ -262,7 +262,7 @@ public:
     }
     return false;
   }
-  
+
   KeyRing *keyring;
   RotatingKeyRing *rotating_secrets;
 
@@ -284,11 +284,11 @@ public:
    * Ping monitor with ID @p mon_id and record the resulting
    * reply in @p result_reply.
    *
-   * @param[in]  mon_id Target monitor's ID
+   * @param[in]	 mon_id Target monitor's ID
    * @param[out] Resulting reply from mon.ID, if param != NULL
-   * @returns    0 in case of success; < 0 in case of error,
-   *             -ETIMEDOUT if monitor didn't reply before timeout
-   *             expired (default: conf->client_mount_timeout).
+   * @returns	 0 in case of success; < 0 in case of error,
+   *		 -ETIMEDOUT if monitor didn't reply before timeout
+   *		 expired (default: conf->client_mount_timeout).
    */
   int ping_monitor(const string &mon_id, string *result_reply);
 
@@ -406,7 +406,7 @@ public:
 			const vector<string>& cmd, const bufferlist& inbl,
 			bufferlist *outbl, string *outs,
 			Context *onfinish);
-  int start_mon_command(const string &mon_name,  ///< mon name, with mon. prefix
+  int start_mon_command(const string &mon_name,	 ///< mon name, with mon. prefix
 			const vector<string>& cmd, const bufferlist& inbl,
 			bufferlist *outbl, string *outs,
 			Context *onfinish);

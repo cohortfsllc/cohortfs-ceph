@@ -147,7 +147,7 @@ Commands
 
 :command:`import` [*path*] [*dest-image*]
   Creates a new image and imports its data from path (use - for
-  stdin).  The import operation will try to create sparse rbd images 
+  stdin).  The import operation will try to create sparse rbd images
   if possible.  For import from stdin, the sparsification unit is
   the data block size of the destination image (1 << order).
 
@@ -185,7 +185,7 @@ Commands
 
 :command:`bench-write` [*image-name*] --io-size [*io-size-in-bytes*] --io-threads [*num-ios-in-flight*] --io-total [*total-bytes-to-write*]
   Generate a series of sequential writes to the image and measure the
-  write throughput and latency.  Defaults are: --io-size 4096, --io-threads 16, 
+  write throughput and latency.  Defaults are: --io-size 4096, --io-threads 16,
   --io-total 1GB
 
 Image name

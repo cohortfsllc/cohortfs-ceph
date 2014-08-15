@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -20,27 +20,27 @@
 #include <iostream>
 #include <include/types.h>
 
-#define RGW_CORS_GET    0x1
-#define RGW_CORS_PUT    0x2
-#define RGW_CORS_HEAD   0x4
-#define RGW_CORS_POST   0x8
+#define RGW_CORS_GET	0x1
+#define RGW_CORS_PUT	0x2
+#define RGW_CORS_HEAD	0x4
+#define RGW_CORS_POST	0x8
 #define RGW_CORS_DELETE 0x10
-#define RGW_CORS_COPY   0x20
-#define RGW_CORS_ALL    (RGW_CORS_GET    |  \
-                         RGW_CORS_PUT    |  \
-                         RGW_CORS_HEAD   |  \
-                         RGW_CORS_POST   |  \
-                         RGW_CORS_DELETE |  \
-                         RGW_CORS_COPY)
+#define RGW_CORS_COPY	0x20
+#define RGW_CORS_ALL	(RGW_CORS_GET	 |  \
+			 RGW_CORS_PUT	 |  \
+			 RGW_CORS_HEAD	 |  \
+			 RGW_CORS_POST	 |  \
+			 RGW_CORS_DELETE |  \
+			 RGW_CORS_COPY)
 
 #define CORS_MAX_AGE_INVALID ((uint32_t)-1)
 
 class RGWCORSRule
 {
 protected:
-  uint32_t       max_age;
-  uint8_t        allowed_methods;
-  std::string         id;
+  uint32_t	 max_age;
+  uint8_t	 allowed_methods;
+  std::string	      id;
   std::set<string> allowed_hdrs; /* If you change this, you need to discard lowercase_allowed_hdrs */
   std::set<string> lowercase_allowed_hdrs; /* Not built until needed in RGWCORSRule::is_header_allowed */
   std::set<string> allowed_origins;
@@ -48,8 +48,8 @@ protected:
 
 public:
   RGWCORSRule() : max_age(CORS_MAX_AGE_INVALID),allowed_methods(0) {}
-  RGWCORSRule(std::set<string>& o, std::set<string>& h, 
-              std::list<string>& e, uint8_t f, uint32_t a)
+  RGWCORSRule(std::set<string>& o, std::set<string>& h,
+	      std::list<string>& e, uint8_t f, uint32_t a)
       :max_age(a),
        allowed_methods(f),
        allowed_hdrs(h),
@@ -84,7 +84,7 @@ public:
   bool is_origin_present(const char *o);
   void format_exp_headers(std::string& s);
   void erase_origin_if_present(std::string& origin, bool *rule_empty);
-  void dump_origins(); 
+  void dump_origins();
   void dump(Formatter *f) const;
   bool is_header_allowed(const char *hdr, size_t len);
 };
@@ -120,7 +120,7 @@ class RGWCORSConfiguration
   void erase_host_name_rule(std::string& origin);
   void dump();
   void stack_rule(RGWCORSRule& r) {
-    rules.push_front(r);    
+    rules.push_front(r);
   }
 };
 WRITE_CLASS_ENCODER(RGWCORSConfiguration)

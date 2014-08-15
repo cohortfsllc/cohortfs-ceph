@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #include "common/config.h"
@@ -28,7 +28,7 @@ bool KeyServerData::get_service_secret(CephContext *cct, uint32_t service_id,
 {
   map<uint32_t, RotatingSecrets>::const_iterator iter =
 	rotating_secrets.find(service_id);
-  if (iter == rotating_secrets.end()) { 
+  if (iter == rotating_secrets.end()) {
     ldout(cct, 10) << "get_service_secret service " << ceph_entity_type_name(service_id) << " not found " << dendl;
     return false;
   }
@@ -36,7 +36,7 @@ bool KeyServerData::get_service_secret(CephContext *cct, uint32_t service_id,
   const RotatingSecrets& secrets = iter->second;
 
   // second to oldest, unless it's expired
-  map<uint64_t, ExpiringCryptoKey>::const_iterator riter = 
+  map<uint64_t, ExpiringCryptoKey>::const_iterator riter =
 	secrets.secrets.begin();
   if (secrets.secrets.size() > 1)
     ++riter;
@@ -72,7 +72,7 @@ bool KeyServerData::get_service_secret(CephContext *cct, uint32_t service_id,
     return false;
 
   const RotatingSecrets& secrets = iter->second;
-  map<uint64_t, ExpiringCryptoKey>::const_iterator riter = 
+  map<uint64_t, ExpiringCryptoKey>::const_iterator riter =
       secrets.secrets.find(secret_id);
 
   if (riter == secrets.secrets.end()) {
@@ -81,8 +81,8 @@ bool KeyServerData::get_service_secret(CephContext *cct, uint32_t service_id,
     ldout(cct, 30) << " I have:" << dendl;
     for (map<uint64_t, ExpiringCryptoKey>::const_iterator iter =
 	     secrets.secrets.begin();
-        iter != secrets.secrets.end();
-        ++iter)
+	iter != secrets.secrets.end();
+	++iter)
       ldout(cct, 30) << " id " << iter->first << " " << iter->second << dendl;
     return false;
   }
@@ -180,8 +180,8 @@ void KeyServer::_dump_rotating_secrets()
 	 mapiter != key.secrets.end();
 	 ++mapiter)
       ldout(cct, 30) << "service " << ceph_entity_type_name(iter->first)
-	             << " id " << mapiter->first
-	             << " key " << mapiter->second << dendl;
+		     << " id " << mapiter->first
+		     << " key " << mapiter->second << dendl;
   }
 }
 
@@ -206,8 +206,8 @@ int KeyServer::_rotate_secret(uint32_t service_id)
     uint64_t secret_id = r.add(ek);
     ldout(cct, 10) << "_rotate_secret adding " << ceph_entity_type_name(service_id) << dendl;
     ldout(cct, 30) << "_rotate_secret adding " << ceph_entity_type_name(service_id)
-	           << " id " << secret_id << " " << ek
-	           << dendl;
+		   << " id " << secret_id << " " << ek
+		   << dendl;
     added++;
   }
   return added;
@@ -320,7 +320,7 @@ int KeyServer::encode_secrets(Formatter *f, stringstream *ds) const
     }
 
     map<string, bufferlist>::const_iterator capsiter =
-        mapiter->second.caps.begin();
+	mapiter->second.caps.begin();
     for (; capsiter != mapiter->second.caps.end(); ++capsiter) {
       // FIXME: need a const_iterator for bufferlist, but it doesn't exist yet.
       bufferlist *bl = const_cast<bufferlist*>(&capsiter->second);
@@ -328,9 +328,9 @@ int KeyServer::encode_secrets(Formatter *f, stringstream *ds) const
       string caps;
       ::decode(caps, dataiter);
       if (ds)
-        *ds << "\tcaps: [" << capsiter->first << "] " << caps << std::endl;
+	*ds << "\tcaps: [" << capsiter->first << "] " << caps << std::endl;
       if (f)
-        f->dump_string(capsiter->first.c_str(), caps);
+	f->dump_string(capsiter->first.c_str(), caps);
     }
     if (f) {
       f->close_section(); // caps
@@ -365,11 +365,11 @@ bool KeyServer::updated_rotating(bufferlist& rotating_bl, version_t& rotating_ve
 {
   Mutex::Locker l(lock);
 
-  _check_rotating_secrets(); 
+  _check_rotating_secrets();
 
   if (data.rotating_ver <= rotating_ver)
     return false;
- 
+
   data.encode_rotating(rotating_bl);
 
   rotating_ver = data.rotating_ver;
@@ -450,7 +450,7 @@ int KeyServer::build_session_auth_info(uint32_t service_id, CephXServiceTicketIn
 }
 
 int KeyServer::build_session_auth_info(uint32_t service_id, CephXServiceTicketInfo& auth_ticket_info, CephXSessionAuthInfo& info,
-                                        CryptoKey& service_secret, uint64_t secret_id)
+					CryptoKey& service_secret, uint64_t secret_id)
 {
   info.service_secret = service_secret;
   info.secret_id = secret_id;

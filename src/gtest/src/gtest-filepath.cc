@@ -46,7 +46,7 @@
 #else
 # include <limits.h>
 # include <climits>  // Some Linux distributions define PATH_MAX here.
-#endif  // GTEST_OS_WINDOWS_MOBILE
+#endif	// GTEST_OS_WINDOWS_MOBILE
 
 #if GTEST_OS_WINDOWS
 # define GTEST_PATH_MAX_ _MAX_PATH
@@ -56,7 +56,7 @@
 # define GTEST_PATH_MAX_ _XOPEN_PATH_MAX
 #else
 # define GTEST_PATH_MAX_ _POSIX_PATH_MAX
-#endif  // GTEST_OS_WINDOWS
+#endif	// GTEST_OS_WINDOWS
 
 #include "gtest/internal/gtest-string.h"
 
@@ -81,12 +81,12 @@ const char kCurrentDirectoryString[] = "\\";
 const DWORD kInvalidFileAttributes = 0xffffffff;
 # else
 const char kCurrentDirectoryString[] = ".\\";
-# endif  // GTEST_OS_WINDOWS_MOBILE
+# endif	 // GTEST_OS_WINDOWS_MOBILE
 #else
 const char kPathSeparator = '/';
 const char kPathSeparatorString[] = "/";
 const char kCurrentDirectoryString[] = "./";
-#endif  // GTEST_OS_WINDOWS
+#endif	// GTEST_OS_WINDOWS
 
 // Returns whether the given character is a valid path separator.
 static bool IsPathSeparator(char c) {
@@ -109,7 +109,7 @@ FilePath FilePath::GetCurrentDir() {
 #else
   char cwd[GTEST_PATH_MAX_ + 1] = { '\0' };
   return FilePath(getcwd(cwd, sizeof(cwd)) == NULL ? "" : cwd);
-#endif  // GTEST_OS_WINDOWS_MOBILE
+#endif	// GTEST_OS_WINDOWS_MOBILE
 }
 
 // Returns a copy of the FilePath with the case-insensitive extension removed.
@@ -120,7 +120,7 @@ FilePath FilePath::RemoveExtension(const char* extension) const {
   const std::string dot_extension = std::string(".") + extension;
   if (String::EndsWithCaseInsensitive(pathname_, dot_extension)) {
     return FilePath(pathname_.substr(
-        0, pathname_.length() - dot_extension.length()));
+	0, pathname_.length() - dot_extension.length()));
   }
   return *this;
 }
@@ -176,15 +176,15 @@ FilePath FilePath::RemoveFileName() const {
 // than zero (e.g., 12), returns "dir/test_12.xml".
 // On Windows platform, uses \ as the separator rather than /.
 FilePath FilePath::MakeFileName(const FilePath& directory,
-                                const FilePath& base_name,
-                                int number,
-                                const char* extension) {
+				const FilePath& base_name,
+				int number,
+				const char* extension) {
   std::string file;
   if (number == 0) {
     file = base_name.string() + "." + extension;
   } else {
     file = base_name.string() + "_" + StreamableToString(number)
-        + "." + extension;
+	+ "." + extension;
   }
   return ConcatPaths(directory, FilePath(file));
 }
@@ -192,7 +192,7 @@ FilePath FilePath::MakeFileName(const FilePath& directory,
 // Given directory = "dir", relative_path = "test.xml", returns "dir/test.xml".
 // On Windows, uses \ as the separator rather than /.
 FilePath FilePath::ConcatPaths(const FilePath& directory,
-                               const FilePath& relative_path) {
+			       const FilePath& relative_path) {
   if (directory.IsEmpty())
     return relative_path;
   const FilePath dir(directory.RemoveTrailingPathSeparator());
@@ -210,7 +210,7 @@ bool FilePath::FileOrDirectoryExists() const {
 #else
   posix::StatStruct file_stat;
   return posix::Stat(pathname_.c_str(), &file_stat) == 0;
-#endif  // GTEST_OS_WINDOWS_MOBILE
+#endif	// GTEST_OS_WINDOWS_MOBILE
 }
 
 // Returns true if pathname describes a directory in the file-system
@@ -221,7 +221,7 @@ bool FilePath::DirectoryExists() const {
   // Don't strip off trailing separator if path is a root directory on
   // Windows (like "C:\\").
   const FilePath& path(IsRootDirectory() ? *this :
-                                           RemoveTrailingPathSeparator());
+					   RemoveTrailingPathSeparator());
 #else
   const FilePath& path(*this);
 #endif
@@ -238,7 +238,7 @@ bool FilePath::DirectoryExists() const {
   posix::StatStruct file_stat;
   result = posix::Stat(path.c_str(), &file_stat) == 0 &&
       posix::IsDir(file_stat);
-#endif  // GTEST_OS_WINDOWS_MOBILE
+#endif	// GTEST_OS_WINDOWS_MOBILE
 
   return result;
 }
@@ -249,7 +249,7 @@ bool FilePath::IsRootDirectory() const {
 #if GTEST_OS_WINDOWS
   // TODO(wan@google.com): on Windows a network share like
   // \\server\share can be a root directory, although it cannot be the
-  // current directory.  Handle this properly.
+  // current directory.	 Handle this properly.
   return pathname_.length() == 3 && IsAbsolutePath();
 #else
   return pathname_.length() == 1 && IsPathSeparator(pathname_.c_str()[0]);
@@ -279,8 +279,8 @@ bool FilePath::IsAbsolutePath() const {
 // There could be a race condition if two or more processes are calling this
 // function at the same time -- they could both pick the same filename.
 FilePath FilePath::GenerateUniqueFileName(const FilePath& directory,
-                                          const FilePath& base_name,
-                                          const char* extension) {
+					  const FilePath& base_name,
+					  const char* extension) {
   FilePath full_pathname;
   int number = 0;
   do {
@@ -294,7 +294,7 @@ FilePath FilePath::GenerateUniqueFileName(const FilePath& directory,
 // This does NOT check that a directory (or file) actually exists.
 bool FilePath::IsDirectory() const {
   return !pathname_.empty() &&
-         IsPathSeparator(pathname_.c_str()[pathname_.length() - 1]);
+	 IsPathSeparator(pathname_.c_str()[pathname_.length() - 1]);
 }
 
 // Create directories so that path exists. Returns true if successful or if
@@ -327,12 +327,12 @@ bool FilePath::CreateFolder() const {
   int result = _mkdir(pathname_.c_str());
 #else
   int result = mkdir(pathname_.c_str(), 0777);
-#endif  // GTEST_OS_WINDOWS_MOBILE
+#endif	// GTEST_OS_WINDOWS_MOBILE
 
   if (result == -1) {
     return this->DirectoryExists();  // An error is OK if the directory exists.
   }
-  return true;  // No error.
+  return true;	// No error.
 }
 
 // If input name has a trailing separator character, remove it and return the
@@ -365,11 +365,11 @@ void FilePath::Normalize() {
     } else {
 #if GTEST_HAS_ALT_PATH_SEP_
       if (*dest_ptr == kAlternatePathSeparator) {
-        *dest_ptr = kPathSeparator;
+	*dest_ptr = kPathSeparator;
       }
 #endif
       while (IsPathSeparator(*src))
-        src++;
+	src++;
     }
     dest_ptr++;
   }

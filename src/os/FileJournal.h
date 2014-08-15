@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 
@@ -106,8 +106,8 @@ public:
     uuid_d fsid;
     uint32_t block_size;
     uint32_t alignment;
-    int64_t max_size;   // max size of journal ring buffer
-    int64_t start;      // offset of first entry
+    int64_t max_size;	// max size of journal ring buffer
+    int64_t start;	// offset of first entry
     uint64_t committed_up_to; // committed up to
 
     /**
@@ -116,7 +116,7 @@ public:
      * entry at header.start has sequence >= start_seq
      *
      * Generally, the entry at header.start will have sequence
-     * start_seq if it exists.  The only exception is immediately
+     * start_seq if it exists.	The only exception is immediately
      * after journal creation since the first sequence number is
      * not known.
      *
@@ -197,12 +197,12 @@ public:
 
   struct entry_header_t {
     uint64_t seq;     // fs op seq #
-    uint32_t crc32c;  // payload only.  not header, pre_pad, post_pad, or footer.
+    uint32_t crc32c;  // payload only.	not header, pre_pad, post_pad, or footer.
     uint32_t len;
     uint32_t pre_pad, post_pad;
     uint64_t magic1;
     uint64_t magic2;
-    
+
     void make_magic(off64_t pos, uint64_t fsid) {
       magic1 = pos;
       magic2 = fsid ^ seq ^ len;
@@ -224,7 +224,7 @@ private:
   bool is_bdev;
   bool directio, aio, force_aio;
   bool must_write_header;
-  off64_t write_pos;      // byte where the next entry to be written will go
+  off64_t write_pos;	  // byte where the next entry to be written will go
   off64_t read_pos;
 
 #ifdef HAVE_LIBAIO
@@ -235,7 +235,7 @@ private:
     bufferlist bl;
     struct iovec *iov;
     bool done;
-    uint64_t off, len;    ///< these are for debug only
+    uint64_t off, len;	  ///< these are for debug only
     uint64_t seq; ///< seq number to complete on aio completion, if non-zero
 
     aio_info(bufferlist& b, uint64_t o, uint64_t s)
@@ -264,7 +264,7 @@ private:
    * is called.
    *   FULL - we just filled up during this epoch.
    *   WAIT - we filled up last epoch; now we have to wait until everything during
-   *          that epoch commits to the fs before we can start writing over it.
+   *	      that epoch commits to the fs before we can start writing over it.
    *   NOTFULL - all good, journal away.
    */
   enum {
@@ -279,7 +279,7 @@ private:
   deque<pair<uint64_t, off64_t> > journalq;  // track seq offsets, so we can trim later.
   uint64_t writing_seq;
 
-  
+
   // throttle
   Throttle throttle_ops, throttle_bytes;
 
@@ -417,7 +417,7 @@ private:
   /**
    * read_entry
    *
-   * Reads next entry starting at pos.  If the entry appears
+   * Reads next entry starting at pos.	If the entry appears
    * clean, *bl will contain the payload, *seq will contain
    * the sequence number, and *out_pos will reflect the next
    * read position.  If the entry is invalid *ss will contain
@@ -429,11 +429,11 @@ private:
    * is most likely corrupt.
    */
   read_entry_result do_read_entry(
-    off64_t pos,          ///< [in] position to read
-    off64_t *next_pos,    ///< [out] next position to read
-    bufferlist* bl,       ///< [out] payload for successful read
-    uint64_t *seq,        ///< [out] seq of successful read
-    ostream *ss,          ///< [out] error output
+    off64_t pos,	  ///< [in] position to read
+    off64_t *next_pos,	  ///< [out] next position to read
+    bufferlist* bl,	  ///< [out] payload for successful read
+    uint64_t *seq,	  ///< [out] seq of successful read
+    ostream *ss,	  ///< [out] error output
     entry_header_t *h = 0 ///< [out] header
     ); ///< @return result code
 

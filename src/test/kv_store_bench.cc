@@ -2,7 +2,7 @@
  * KvStoreBench.cc
  *
  *  Created on: Aug 23, 2012
- *      Author: eleanor
+ *	Author: eleanor
  */
 
 #include "test/kv_store_bench.h"
@@ -71,28 +71,28 @@ int KvStoreBench::setup(int argc, const char** argv) {
       << "contention.\n"
       << "\n"
       << "WORKLOAD OPTIONS\n"
-      << "   --name <client name>                          client name (default admin)\n"
-      << "   --entries <number>                            number of key/value pairs to store initially\n"
-      << "                                                 (default " << entries << ")\n"
-      << "   --ops <number>                                number of operations to run\n"
-      << "   --keysize <number>                            number of characters per key (default " << key_size << ")\n"
-      << "   --valsize <number>                            number of characters per value (default " << val_size << ")\n"
-      << "   -t <number>                                   number of operations in flight concurrently\n"
-      << "                                                 (default " << max_ops_in_flight << ")\n"
-      << "   --clients <number>                            tells this instance how many total clients are. Note that\n"
-      << "                                                 changing this does not change the number of clients."
-      << "   -d <insert> <update> <delete> <read>          percent (1-100) of operations that should be of each type\n"
-      << "                                                 (default 25 25 25 25)\n"
-      << "   -r <number>                                   random seed to use (default time(0))\n"
+      << "   --name <client name>			   client name (default admin)\n"
+      << "   --entries <number>				   number of key/value pairs to store initially\n"
+      << "						   (default " << entries << ")\n"
+      << "   --ops <number>				   number of operations to run\n"
+      << "   --keysize <number>				   number of characters per key (default " << key_size << ")\n"
+      << "   --valsize <number>				   number of characters per value (default " << val_size << ")\n"
+      << "   -t <number>				   number of operations in flight concurrently\n"
+      << "						   (default " << max_ops_in_flight << ")\n"
+      << "   --clients <number>				   tells this instance how many total clients are. Note that\n"
+      << "						   changing this does not change the number of clients."
+      << "   -d <insert> <update> <delete> <read>	   percent (1-100) of operations that should be of each type\n"
+      << "						   (default 25 25 25 25)\n"
+      << "   -r <number>				   random seed to use (default time(0))\n"
       << "ALGORITHM OPTIONS\n"
-      << "   --kval                                        k, where each object has a number of entries\n"
-      << "                                                 >= k and <= 2k.\n"
-      << "   --cache-size                                  number of index entries to keep in cache\n"
-      << "                                                 (default " << cache_size << ")\n"
-      << "   --cache-refresh                               percent (1-100) of cache-size to read each \n"
-      << "                                                 time the index is read\n"
+      << "   --kval					   k, where each object has a number of entries\n"
+      << "						   >= k and <= 2k.\n"
+      << "   --cache-size				   number of index entries to keep in cache\n"
+      << "						   (default " << cache_size << ")\n"
+      << "   --cache-refresh				   percent (1-100) of cache-size to read each \n"
+      << "						   time the index is read\n"
       << "OTHER OPTIONS\n"
-      << "   --verbosity-on                                display debug output\n";
+      << "   --verbosity-on				   display debug output\n";
   for (unsigned i = 0; i < args.size(); i++) {
     if(i < args.size() - 1) {
       if (strcmp(args[i], "--ops") == 0) {
@@ -502,7 +502,7 @@ int KvStoreBench::test_teuthology_sync(next_gen_t distr,
     //latency
     data.latency_jf.open_object_section("latency");
     data.latency_jf.dump_float(string(1, d.first).c_str(),
-        time);
+	time);
     data.latency_jf.close_section();
   }
 

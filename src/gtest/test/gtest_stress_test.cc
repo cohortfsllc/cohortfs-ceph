@@ -130,8 +130,8 @@ TEST(StressTest, CanUseScopedTraceAndAssertionsInManyThreads) {
     Notification threads_can_start;
     for (int i = 0; i != kThreadCount; i++)
       threads[i].reset(new ThreadWithParam<int>(&ManyAsserts,
-                                                i,
-                                                &threads_can_start));
+						i,
+						&threads_can_start));
 
     threads_can_start.Notify();
 
@@ -163,10 +163,10 @@ TEST(StressTest, CanUseScopedTraceAndAssertionsInManyThreads) {
 void FailingThread(bool is_fatal) {
   if (is_fatal)
     FAIL() << "Fatal failure in some other thread. "
-           << "(This failure is expected.)";
+	   << "(This failure is expected.)";
   else
     ADD_FAILURE() << "Non-fatal failure in some other thread. "
-                  << "(This failure is expected.)";
+		  << "(This failure is expected.)";
 }
 
 void GenerateFatalFailureInAnotherThread(bool is_fatal) {
@@ -216,7 +216,7 @@ TEST(NonFatalFailureTest, ExpectNonFatalFailureIgnoresFailuresInOtherThreads) {
   // This statement should fail, since the current thread doesn't generate a
   // fatal failure, only another one does.
   EXPECT_NONFATAL_FAILURE(GenerateFatalFailureInAnotherThread(false),
-                          "expected");
+			  "expected");
   CheckTestFailureCount(2);
 }
 
@@ -253,4 +253,4 @@ int main(int argc, char **argv) {
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
-#endif  // GTEST_IS_THREADSAFE
+#endif	// GTEST_IS_THREADSAFE

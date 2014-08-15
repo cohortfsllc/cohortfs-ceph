@@ -21,7 +21,7 @@ before building out a large cluster. See `Data Storage`_ for additional details.
 List Disks
 ==========
 
-To list the disks on a node, execute the following command:: 
+To list the disks on a node, execute the following command::
 
 	ceph-deploy disk list {node-name [node-name]...}
 
@@ -42,25 +42,25 @@ Prepare OSDs
 ============
 
 Once you create a cluster, install Ceph packages, and gather keys, you
-may prepare the OSDs and deploy them to the OSD node(s). If you need to 
-identify a disk or zap it prior to preparing it for use as an OSD, 
+may prepare the OSDs and deploy them to the OSD node(s). If you need to
+identify a disk or zap it prior to preparing it for use as an OSD,
 see `List Disks`_ and `Zap Disks`_. ::
 
 	ceph-deploy osd prepare {node-name}:{disk}[:{path/to/journal}]
 	ceph-deploy osd prepare osdserver1:sdb:/dev/ssd1
 
 The ``prepare`` command only prepares the OSD. It does not activate it. To
-activate a prepared OSD, use the ``activate`` command. See `Activate OSDs`_ 
+activate a prepared OSD, use the ``activate`` command. See `Activate OSDs`_
 for details.
 
-The foregoing example assumes a disk dedicated to one Ceph OSD Daemon, and 
-a path to an SSD journal partition. We recommend storing the journal on 
+The foregoing example assumes a disk dedicated to one Ceph OSD Daemon, and
+a path to an SSD journal partition. We recommend storing the journal on
 a separate drive to maximize throughput. You may dedicate a single drive
-for the journal too (which may be expensive) or place the journal on the 
+for the journal too (which may be expensive) or place the journal on the
 same disk as the OSD (not recommended as it impairs performance). In the
 foregoing example we store the journal on a partioned solid state drive.
 
-.. note:: When running multiple Ceph OSD daemons on a single node, and 
+.. note:: When running multiple Ceph OSD daemons on a single node, and
    sharing a partioned journal with each OSD daemon, you should consider
    the entire node the minimum failure domain for CRUSH purposes, because
    if the SSD drive fails, all of the Ceph OSD daemons that journal to it
@@ -93,7 +93,7 @@ for executing the ``prepare`` and ``activate`` command sequentially.  ::
 .. List OSDs
 .. =========
 
-.. To list the OSDs deployed on a node(s), execute the following command:: 
+.. To list the OSDs deployed on a node(s), execute the following command::
 
 ..	ceph-deploy osd list {node-name}
 
@@ -103,7 +103,7 @@ Destroy OSDs
 
 .. note:: Coming soon. See `Remove OSDs`_ for manual procedures.
 
-.. To destroy an OSD, execute the following command:: 
+.. To destroy an OSD, execute the following command::
 
 ..	ceph-deploy osd destroy {node-name}:{path-to-disk}[:{path/to/journal}]
 

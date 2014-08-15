@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 #ifndef CEPH_OBJECTSTORE_H
@@ -31,7 +31,7 @@
 #if defined(DARWIN) || defined(__FreeBSD__)
 #include <sys/statvfs.h>
 #else
-#include <sys/vfs.h>    /* or <sys/statfs.h> */
+#include <sys/vfs.h>	/* or <sys/statfs.h> */
 #endif /* DARWIN */
 
 class CephContext;
@@ -117,7 +117,7 @@ public:
    * a sequencer orders transactions
    *
    * Any transactions queued under a given sequencer will be applied in
-   * sequence.  Transactions queued under different sequencers may run
+   * sequence.	Transactions queued under different sequencers may run
    * in parallel.
    *
    * Clients of ObjectStore create and maintain their own Sequencer objects.
@@ -182,7 +182,7 @@ public:
    * Xattrs are equivalent to the extended attributes of file
    * systems. Xattrs are a set of key/value pairs.  Sub-value access
    * is not required. It is possible to enumerate the set of xattrs in
-   * key order.  At the implementation level, xattrs are used
+   * key order.	 At the implementation level, xattrs are used
    * exclusively internal to Ceph and the implementer can expect the
    * total size of all of the xattrs on an object to be relatively
    * small, i.e., less than 64KB. Much of Ceph assumes that accessing
@@ -198,7 +198,7 @@ public:
    * values. Enumeration of xattrs doesn't include omap entries and
    * vice versa. The size and access characteristics of omap entries
    * are very different from xattrs. In particular, the value portion
-   * of an omap entry can be quite large (MBs).  More importantly, the
+   * of an omap entry can be quite large (MBs).	 More importantly, the
    * interface must support efficient range queries on omap entries even
    * when there are a large numbers of entries.
    *
@@ -227,7 +227,7 @@ public:
    * objects (Context) for any combination of the three classes of
    * callbacks:
    *
-   *    on_applied_sync, on_applied, and on_commit.
+   *	on_applied_sync, on_applied, and on_commit.
    *
    * The "on_applied" and "on_applied_sync" callbacks are invoked when
    * the modifications requested by the Transaction are visible to
@@ -252,7 +252,7 @@ public:
    * serialization, however, does not copy any data, but (using the
    * bufferlist library) will reference the original buffers.  This
    * implies that the buffer that contains the data being submitted
-   * must remain stable until the on_commit callback completes.  In
+   * must remain stable until the on_commit callback completes.	 In
    * practice, bufferlist handles all of this for you and this
    * subtlety is only relevant if you are referencing an existing
    * buffer via buffer::raw_static.
@@ -462,8 +462,8 @@ public:
       other.ops.clear();
 
       if (other.largest_data_len > largest_data_len) {
-        largest_data_len = other.largest_data_len;
-        largest_data_off = other.largest_data_off;
+	largest_data_len = other.largest_data_len;
+	largest_data_off = other.largest_data_off;
       }
       on_applied.splice(on_applied.end(), other.on_applied);
       on_commit.splice(on_commit.end(), other.on_commit);
@@ -539,7 +539,7 @@ public:
      * "hole" in the file.
      */
     void write(const coll_t &cid, const hobject_t& oid,
-               uint64_t off, uint64_t len, const bufferlist& data) {
+	       uint64_t off, uint64_t len, const bufferlist& data) {
       ops.push_back(Op(OP_WRITE));
       Op &op = ops.back();
       op.cid = cid;
@@ -583,13 +583,13 @@ public:
     }
     /// Set an xattr of an object
     void setattr(const coll_t &cid, const hobject_t& oid,
-                 const char* name, bufferlist& val) {
+		 const char* name, bufferlist& val) {
       string n(name);
       setattr(cid, oid, n, val);
     }
     /// Set an xattr of an object
     void setattr(const coll_t &cid, const hobject_t& oid,
-                 const string& s, bufferlist& val) {
+		 const string& s, bufferlist& val) {
       ops.push_back(Op(OP_SETATTR));
       Op &op = ops.back();
       op.cid = cid;
@@ -599,7 +599,7 @@ public:
     }
     /// Set multiple xattrs of an object
     void setattrs(const coll_t &cid, const hobject_t& oid,
-                  map<string, bufferlist>& attrset) {
+		  map<string, bufferlist>& attrset) {
       ops.push_back(Op(OP_SETATTRS));
       Op &op = ops.back();
       op.cid = cid;
@@ -611,7 +611,7 @@ public:
       ::decode(op.xattrs, p);
     }
     void setattrs(const coll_t &cid, const hobject_t& oid,
-                  map<string, bufferptr>& attrset) {
+		  map<string, bufferptr>& attrset) {
       ops.push_back(Op(OP_SETATTRS));
       Op &op = ops.back();
       op.cid = cid;
@@ -959,11 +959,11 @@ public:
     C_GatherBuilder g_onreadable_sync(g_ceph_context, onreadable_sync);
     for (list<Transaction*>::iterator i = tls.begin(); i != tls.end(); ++i) {
       if (onreadable)
-        (*i)->register_on_applied(g_onreadable.new_sub());
+	(*i)->register_on_applied(g_onreadable.new_sub());
       if (ondisk)
-        (*i)->register_on_commit(g_ondisk.new_sub());
+	(*i)->register_on_commit(g_ondisk.new_sub());
       if (onreadable_sync)
-        (*i)->register_on_applied_sync(g_onreadable_sync.new_sub());
+	(*i)->register_on_applied_sync(g_onreadable_sync.new_sub());
     }
     if (onreadable)
       g_onreadable.activate();
@@ -1147,7 +1147,7 @@ public:
    * @returns 0 on success, negative error code on failure.
    */
   virtual int fiemap(const coll_t &cid, const hobject_t& oid,
-                     uint64_t offset, size_t len, bufferlist& bl) = 0;
+		     uint64_t offset, size_t len, bufferlist& bl) = 0;
 
   /**
    * getattr -- get an xattr of an object
@@ -1159,7 +1159,7 @@ public:
    * @returns 0 on success, negative error code on failure.
    */
   virtual int getattr(const coll_t &cid, const hobject_t& oid,
-                      const char *name, bufferptr& value) = 0;
+		      const char *name, bufferptr& value) = 0;
 
   /**
    * getattr -- get an xattr of an object
@@ -1179,7 +1179,7 @@ public:
     return r;
   }
   int getattr(const coll_t &cid, const hobject_t& oid,
-              const string name, bufferlist& value) {
+	      const string name, bufferlist& value) {
     bufferptr bp;
     int r = getattr(cid, oid, name.c_str(), bp);
     value.push_back(bp);
@@ -1312,12 +1312,12 @@ public:
    * @return zero on success, or negative error
    */
   virtual int collection_list_range(const coll_t &c, hobject_t start,
-                                    hobject_t end, vector<hobject_t> *ls) = 0;
+				    hobject_t end, vector<hobject_t> *ls) = 0;
 
   /// OMAP
   /// Get omap contents
   virtual int omap_get(
-    const coll_t &c,         ///< [in] Collection containing oid
+    const coll_t &c,	     ///< [in] Collection containing oid
     const hobject_t &oid,    ///< [in] Object containing omap
     bufferlist *header,	     ///< [out] omap header
     map<string, bufferlist> *out /// < [out] Key to value map

@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -43,7 +43,7 @@ void global_pre_init(std::vector < const char * > *alt_def_args,
 
 /*
  * perform all of the steps that global_init_daemonize performs just prior
- * to actually forking (via daemon(3)).  return 0 if we are going to proceed
+ * to actually forking (via daemon(3)).	 return 0 if we are going to proceed
  * with the fork, or -1 otherwise.
  */
 int global_init_prefork(CephContext *cct, int flags);
@@ -61,7 +61,7 @@ void global_init_postfork_finish(CephContext *cct, int flags);
 
 
 /*
- * global_init_daemonize handles daemonizing a process. 
+ * global_init_daemonize handles daemonizing a process.
  *
  * If this is called, it *must* be called before common_init_finish.
  * Note that this is equivalent to calling _prefork(), daemon(), and

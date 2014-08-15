@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -37,9 +37,9 @@ void RGWOp_RegionMap_Get::send_response() {
 
   if (http_ret < 0)
     return;
-  
+
   encode_json("region-map", regionmap, s->formatter);
-  flusher.flush(); 
+  flusher.flush();
 }
 
 RGWOp* RGWHandler_Config::op_get() {

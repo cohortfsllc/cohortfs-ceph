@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #include <sys/stat.h>
@@ -46,7 +46,7 @@ uint64_t received = 0;
 
 class Admin : public Dispatcher {
 public:
-  Admin() 
+  Admin()
     : Dispatcher(g_ceph_context)
   {
   }
@@ -85,7 +85,7 @@ int main(int argc, const char **argv, const char *envp[]) {
   MonClient mc(g_ceph_context);
   if (mc.build_initial_monmap() < 0)
     return -1;
-  
+
   // start up network
   int whoami = mc.monmap.get_rank(args[0]);
   assert(whoami >= 0);
@@ -107,7 +107,7 @@ int main(int argc, const char **argv, const char *envp[]) {
   messenger->add_dispatcher_head(&dispatcher);
 
   rank->start();
-  
+
   int isend = 0;
   if (whoami == 0)
     isend = 100;
@@ -124,12 +124,12 @@ int main(int argc, const char **argv, const char *envp[]) {
     int t = rand() % mc.get_num_mon();
     if (t == whoami)
       continue;
-    
+
     if (rand() % 10 == 0) {
       //cerr << "mark_down " << t << std::endl;
       dout(0) << "mark_down " << t << dendl;
       messenger->mark_down(mc.get_mon_addr(t));
-    } 
+    }
     //cerr << "pinging " << t << std::endl;
     dout(0) << "pinging " << t << dendl;
     messenger->send_message(new MPing, mc.get_mon_inst(t));
@@ -139,7 +139,7 @@ int main(int argc, const char **argv, const char *envp[]) {
 
   // wait for messenger to finish
   rank->wait();
-  
+
   return 0;
 }
 

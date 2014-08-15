@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -182,9 +182,9 @@ void RGWFormatter_Plain::write_data(const char *fmt, ...)
     if (n > -1 && n < size)
       goto done;
     /* Else try again with more space. */
-    if (n > -1)    /* glibc 2.1 */
+    if (n > -1)	   /* glibc 2.1 */
       size = n+1; /* precisely what is needed */
-    else           /* glibc 2.0 */
+    else	   /* glibc 2.0 */
       size *= 2;  /* twice the old size */
     if (p_on_stack)
       np = (char *)malloc(size + 8);

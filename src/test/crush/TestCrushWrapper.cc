@@ -14,7 +14,7 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
  * GNU Library Public License for more details.
  *
  */
@@ -33,7 +33,7 @@
 
 TEST(CrushWrapper, get_immediate_parent) {
   CrushWrapper *c = new CrushWrapper;
-  
+
   const int ROOT_TYPE = 1;
   c->set_type_name(ROOT_TYPE, "root");
   const int OSD_TYPE = 0;
@@ -327,7 +327,7 @@ TEST(CrushWrapper, insert_item) {
     EXPECT_EQ(-EEXIST, c->insert_item(g_ceph_context, another_item, 1.0,
 				      "osd." + stringify(item), loc));
   }
-  // implicit creation of a bucket 
+  // implicit creation of a bucket
   {
     string name = "NAME";
     map<string,string> loc;
@@ -351,7 +351,7 @@ TEST(CrushWrapper, insert_item) {
     EXPECT_EQ(-EINVAL, c->insert_item(g_ceph_context, item, 1.0,
 				      "osd." + stringify(item), loc));
   }
-  // 
+  //
   //   When there is:
   //
   //   default --> host0 --> item
@@ -360,8 +360,8 @@ TEST(CrushWrapper, insert_item) {
   //   because it would create a loop.
   //
   //   default --> host0 --> item
-  //           |
-  //           +-> item 
+  //	       |
+  //	       +-> item
   //
   {
     item++;
@@ -381,7 +381,7 @@ TEST(CrushWrapper, insert_item) {
 					"osd." + stringify(item), loc));
     }
   }
-  // 
+  //
   //   When there is:
   //
   //   default --> host0
@@ -415,7 +415,7 @@ TEST(CrushWrapper, insert_item) {
     EXPECT_EQ(-EINVAL, c->insert_item(g_ceph_context, item, 1.0,
 				      "osd." + stringify(item), loc));
   }
-  // fail when no location 
+  // fail when no location
   {
     map<string,string> loc;
     item++;
@@ -624,10 +624,10 @@ int main(int argc, char **argv) {
 
 /*
  * Local Variables:
- * compile-command: "cd ../.. ; make -j4 unittest_crush_wrapper && 
+ * compile-command: "cd ../.. ; make -j4 unittest_crush_wrapper &&
  *    valgrind \
  *    --max-stackframe=20000000 --tool=memcheck \
  *    ./unittest_crush_wrapper --log-to-stderr=true --debug-crush=20 \
- *        # --gtest_filter=CrushWrapper.insert_item"
+ *	  # --gtest_filter=CrushWrapper.insert_item"
  * End:
  */

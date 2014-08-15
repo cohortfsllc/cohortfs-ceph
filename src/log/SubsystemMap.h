@@ -15,8 +15,8 @@ namespace log {
 struct Subsystem {
   int log_level, gather_level;
   std::string name;
-  
-  Subsystem() : log_level(0), gather_level(0) {}     
+
+  Subsystem() : log_level(0), gather_level(0) {}
 };
 
 class SubsystemMap {
@@ -36,7 +36,7 @@ public:
     return m_max_name_len;
   }
 
-  void add(unsigned subsys, std::string name, int log, int gather);  
+  void add(unsigned subsys, std::string name, int log, int gather);
   void set_log_level(unsigned subsys, int log);
   void set_gather_level(unsigned subsys, int gather);
 

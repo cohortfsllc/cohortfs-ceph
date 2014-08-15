@@ -42,8 +42,8 @@ class StoreTool
   }
 
   uint32_t traverse(const string &prefix,
-                    const bool do_crc,
-                    ostream *out) {
+		    const bool do_crc,
+		    ostream *out) {
     KeyValueDB::WholeSpaceIterator iter = db->get_iterator();
 
     if (prefix.empty())
@@ -56,23 +56,23 @@ class StoreTool
     while (iter->valid()) {
       pair<string,string> rk = iter->raw_key();
       if (!prefix.empty() && (rk.first != prefix))
-        break;
+	break;
 
       if (out)
-        *out << rk.first << ":" << rk.second;
+	*out << rk.first << ":" << rk.second;
       if (do_crc) {
-        bufferlist bl;
-        bl.append(rk.first);
-        bl.append(rk.second);
-        bl.append(iter->value());
+	bufferlist bl;
+	bl.append(rk.first);
+	bl.append(rk.second);
+	bl.append(iter->value());
 
-        crc = bl.crc32c(crc);
-        if (out) {
-          *out << " (" << bl.crc32c(0) << ")";
-        }
+	crc = bl.crc32c(crc);
+	if (out) {
+	  *out << " (" << bl.crc32c(0) << ")";
+	}
       }
       if (out)
-        *out << std::endl;
+	*out << std::endl;
       iter->next();
     }
 
@@ -122,7 +122,7 @@ class StoreTool
     map<string,uint64_t> extras;
     uint64_t s = db->get_estimated_size(extras);
     for (map<string,uint64_t>::iterator p = extras.begin();
-         p != extras.end(); ++p) {
+	 p != extras.end(); ++p) {
       std::cout << p->first << " - " << p->second << std::endl;
     }
     std::cout << "total: " << s << std::endl;
@@ -169,26 +169,26 @@ class StoreTool
 
 
       while (it->valid() && num_keys < num_keys_per_tx) {
-        pair<string,string> k = it->raw_key();
-        bufferlist v = it->value();
-        tx->set(k.first, k.second, v);
+	pair<string,string> k = it->raw_key();
+	bufferlist v = it->value();
+	tx->set(k.first, k.second, v);
 
-        num_keys ++;
-        total_size += v.length();
+	num_keys ++;
+	total_size += v.length();
 
-        it->next();
+	it->next();
       }
 
       total_txs ++;
       total_keys += num_keys;
 
       if (num_keys > 0)
-        other.submit_transaction_sync(tx);
+	other.submit_transaction_sync(tx);
 
       utime_t cur_duration = ceph_clock_now(g_ceph_context) - started_at;
       std::cout << "ts = " << cur_duration << "s, copied " << total_keys
-                << " keys so far (" << stringify(si_t(total_size)) << ")"
-                << std::endl;
+		<< " keys so far (" << stringify(si_t(total_size)) << ")"
+		<< std::endl;
 
     } while (it->valid());
 
@@ -199,7 +199,7 @@ class StoreTool
     std::cout << "  used " << total_txs << " transactions" << std::endl;
     std::cout << "  total size " << stringify(si_t(total_size)) << std::endl;
     std::cout << "  from '" << store_path << "' to '" << other_path << "'"
-              << std::endl;
+	      << std::endl;
     std::cout << "  duration " << time_taken << " seconds" << std::endl;
 
     return 0;
@@ -292,21 +292,21 @@ int main(int argc, const char *argv[])
       string out(argv[6]);
 
       if (subcmd != "out") {
-        std::cerr << "unrecognized subcmd '" << subcmd << "'"
-                  << std::endl;
-        return 1;
+	std::cerr << "unrecognized subcmd '" << subcmd << "'"
+		  << std::endl;
+	return 1;
       }
 
       if (out.empty()) {
-        std::cerr << "unspecified out file" << std::endl;
-        return 1;
+	std::cerr << "unspecified out file" << std::endl;
+	return 1;
       }
 
       int err = bl.write_file(argv[6], 0644);
       if (err < 0) {
-        std::cerr << "error writing value to '" << out << "': "
-                  << cpp_strerror(err) << std::endl;
-        return 1;
+	std::cerr << "error writing value to '" << out << "': "
+		  << cpp_strerror(err) << std::endl;
+	return 1;
       }
     } else {
       ostringstream os;
@@ -348,11 +348,11 @@ int main(int argc, const char *argv[])
     bufferlist bl = st.get(prefix, key, exists);
     if (!exists) {
       std::cerr << "(" << prefix << "," << key
-                << ") does not exist" << std::endl;
+		<< ") does not exist" << std::endl;
       return 1;
     }
     std::cout << "(" << prefix << "," << key
-              << ") size " << si_t(bl.length()) << std::endl;
+	      << ") size " << si_t(bl.length()) << std::endl;
 
   } else if (cmd == "set") {
     if (argc < 7) {
@@ -368,15 +368,15 @@ int main(int argc, const char *argv[])
     if (subcmd == "ver") {
       version_t v = (version_t) strict_strtoll(argv[6], 10, &errstr);
       if (!errstr.empty()) {
-        std::cerr << "error reading version: " << errstr << std::endl;
-        return 1;
+	std::cerr << "error reading version: " << errstr << std::endl;
+	return 1;
       }
       ::encode(v, val);
     } else if (subcmd == "in") {
       int ret = val.read_file(argv[6], &errstr);
       if (ret < 0 || !errstr.empty()) {
-        std::cerr << "error reading file: " << errstr << std::endl;
-        return 1;
+	std::cerr << "error reading file: " << errstr << std::endl;
+	return 1;
       }
     } else {
       std::cerr << "unrecognized subcommand '" << subcmd << "'" << std::endl;
@@ -387,7 +387,7 @@ int main(int argc, const char *argv[])
     bool ret = st.set(prefix, key, val);
     if (!ret) {
       std::cerr << "error setting ("
-                << prefix << "," << key << ")" << std::endl;
+		<< prefix << "," << key << ")" << std::endl;
       return 1;
     }
   } else if (cmd == "store-copy") {
@@ -399,15 +399,15 @@ int main(int argc, const char *argv[])
       string err;
       num_keys_per_tx = strict_strtol(argv[4], 10, &err);
       if (!err.empty()) {
-        std::cerr << "invalid num_keys_per_tx: " << err << std::endl;
-        return 1;
+	std::cerr << "invalid num_keys_per_tx: " << err << std::endl;
+	return 1;
       }
     }
 
     int ret = st.copy_store_to(argv[3], num_keys_per_tx);
     if (ret < 0) {
       std::cerr << "error copying store to path '" << argv[3]
-                << "': " << cpp_strerror(ret) << std::endl;
+		<< "': " << cpp_strerror(ret) << std::endl;
       return 1;
     }
 

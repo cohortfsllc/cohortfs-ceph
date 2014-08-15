@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -250,7 +250,7 @@ trim_whitespace(std::string &str, bool strip_internal)
 /* Normalize a key name.
  *
  * Normalized key names have no leading or trailing whitespace, and all
- * whitespace is stored as underscores.  The main reason for selecting this
+ * whitespace is stored as underscores.	 The main reason for selecting this
  * normal form is so that in common/config.cc, we can use a macro to stringify
  * the field names of md_config_t and get a key in normal form.
  */
@@ -447,7 +447,7 @@ process_line(int line_no, const char *line, std::deque<std::string> *errors)
 	  if (newsection.empty()) {
 	    ostringstream oss;
 	    oss << "error parsing new section name: no section name found? "
-	        << "at char " << (l - line) << ", line " << line_no;
+		<< "at char " << (l - line) << ", line " << line_no;
 	    errors->push_back(oss.str());
 	    return NULL;
 	  }
@@ -473,7 +473,7 @@ process_line(int line_no, const char *line, std::deque<std::string> *errors)
 	  ostringstream oss;
 	  if (c == '\0') {
 	    oss << "end of key=val line " << line_no
-	        << " reached, no \"=val\" found...missing =?";
+		<< " reached, no \"=val\" found...missing =?";
 	  } else {
 	    oss << "unexpected character while parsing putative key value, "
 		<< "at char " << (l - line) << ", line " << line_no;
@@ -486,7 +486,7 @@ process_line(int line_no, const char *line, std::deque<std::string> *errors)
 	  if (key.empty()) {
 	    ostringstream oss;
 	    oss << "error parsing key name: no key name found? "
-	        << "at char " << (l - line) << ", line " << line_no;
+		<< "at char " << (l - line) << ", line " << line_no;
 	    errors->push_back(oss.str());
 	    return NULL;
 	  }
@@ -521,7 +521,7 @@ process_line(int line_no, const char *line, std::deque<std::string> *errors)
 	  if (escaping) {
 	    ostringstream oss;
 	    oss << "error parsing value name: unterminated escape sequence "
-	        << "at char " << (l - line) << ", line " << line_no;
+		<< "at char " << (l - line) << ", line " << line_no;
 	    errors->push_back(oss.str());
 	    return NULL;
 	  }

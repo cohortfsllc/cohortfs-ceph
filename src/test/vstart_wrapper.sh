@@ -39,12 +39,12 @@ function vstart_setup()
 
     crit=$(expr 100 - $(ceph-conf --show-config-value mon_data_avail_crit))
     if [ $(df . | perl -ne 'print if(s/.*\s(\d+)%.*/\1/)') -ge $crit ] ; then
-        df . 
+        df .
         cat <<EOF
 error: not enough free disk space for mon to run
-The mon will shutdown with a message such as 
+The mon will shutdown with a message such as
  "reached critical levels of available space on local monitor storage -- shutdown!"
-as soon as it finds the disk has is more than ${crit}% full. 
+as soon as it finds the disk has is more than ${crit}% full.
 This is a limit determined by
  ceph-conf --show-config-value mon_data_avail_crit
 EOF
@@ -59,7 +59,7 @@ function main()
     else
         trap "rm -f $TMPFILE" EXIT
     fi
-    
+
     "$@" || return 1
 }
 

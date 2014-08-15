@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -32,7 +32,7 @@ class AnchorClient : public MDSTableClient {
 
 public:
   AnchorClient(MDS *m) : MDSTableClient(m, TABLE_ANCHOR) {}
-  
+
   void handle_query_result(MMDSTableRequest *m);
   void lookup(inodeno_t ino, vector<Anchor>& trace, Context *onfinish);
   void _lookup(inodeno_t ino);

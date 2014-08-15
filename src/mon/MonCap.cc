@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -46,7 +46,7 @@ using std::vector;
 #define dout_subsys ceph_subsys_mon
 
 ostream& operator<<(ostream& out, mon_rwxa_t p)
-{ 
+{
   if (p == MON_CAP_ANY)
     return out << "*";
 
@@ -344,7 +344,7 @@ struct MonCapParser : qi::grammar<Iterator, MonCap()>
     using qi::lit;
 
     quoted_string %=
-      lexeme['"' >> +(char_ - '"') >> '"'] | 
+      lexeme['"' >> +(char_ - '"') >> '"'] |
       lexeme['\'' >> +(char_ - '\'') >> '\''];
     unquoted_word %= +char_("a-zA-Z0-9_.-");
     str %= quoted_string | unquoted_word;
@@ -366,7 +366,7 @@ struct MonCapParser : qi::grammar<Iterator, MonCap()>
     service_match %= -spaces >> lit("allow") >> spaces >> lit("service") >> (lit('=') | spaces)
 			     >> str >> qi::attr(string()) >> qi::attr(string())
 			     >> qi::attr(map<string,StringConstraint>())
-                             >> spaces >> rwxa;
+			     >> spaces >> rwxa;
 
     // profile foo
     profile_match %= -spaces >> lit("allow") >> spaces >> lit("profile") >> (lit('=') | spaces)
@@ -397,7 +397,7 @@ struct MonCapParser : qi::grammar<Iterator, MonCap()>
 
     // moncap := grant [grant ...]
     grants %= (grant % (*lit(' ') >> (lit(';') | lit(',')) >> *lit(' ')));
-    moncap = grants  [_val = phoenix::construct<MonCap>(_1)]; 
+    moncap = grants  [_val = phoenix::construct<MonCap>(_1)];
 
   }
   qi::rule<Iterator> spaces;
@@ -445,6 +445,6 @@ bool MonCap::parse(const string& str, ostream *err)
       *err << "moncap parse failed, stopped at end of '" << str << "'\n";
   }
 
-  return false; 
+  return false;
 }
 

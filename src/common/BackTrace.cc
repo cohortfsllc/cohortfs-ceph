@@ -25,7 +25,7 @@ void BackTrace::print(std::ostream& out)
     if (!function)
       return;
     char *begin = 0, *end = 0;
-    
+
     // find the parentheses and address offset surrounding the mangled name
     for (char *j = strings[i]; *j; ++j) {
       if (*j == '(')

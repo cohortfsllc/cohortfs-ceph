@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -156,8 +156,8 @@ struct librados::IoCtxImpl {
     uint64_t cookie);
 
   int set_alloc_hint(const object_t& oid,
-                     uint64_t expected_object_size,
-                     uint64_t expected_write_size);
+		     uint64_t expected_object_size,
+		     uint64_t expected_write_size);
 
   version_t last_version();
   void set_notify_timeout(uint32_t timeout);

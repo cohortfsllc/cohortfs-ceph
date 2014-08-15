@@ -4,7 +4,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  * Copyright 2013 Inktank
  */
@@ -25,9 +25,9 @@
  * param entries A list of in-progress entries prior to the marker
  */
 void cls_replica_log_prepare_marker(cls_replica_log_progress_marker& progress,
-                                    const string& entity, const string& marker,
-                                    const utime_t& time,
-                                    const list<pair<string, utime_t> > *entries);
+				    const string& entity, const string& marker,
+				    const utime_t& time,
+				    const list<pair<string, utime_t> > *entries);
 
 /**
  * Extract a progress marker object into its components.
@@ -39,9 +39,9 @@ void cls_replica_log_prepare_marker(cls_replica_log_progress_marker& progress,
  * @param entries [out] List of in-progress entries prior to the marker
  */
 void cls_replica_log_extract_marker(const cls_replica_log_progress_marker& progress,
-                                    string& entity, string& marker,
-                                    utime_t& time,
-                                    list<pair<string, utime_t> >& entries);
+				    string& entity, string& marker,
+				    utime_t& time,
+				    list<pair<string, utime_t> >& entries);
 
 /**
  * Add a progress marker update to a write op. The op will return 0 on
@@ -53,7 +53,7 @@ void cls_replica_log_extract_marker(const cls_replica_log_progress_marker& progr
  * @param progress The progress marker to send
  */
 void cls_replica_log_update_bound(librados::ObjectWriteOperation& op,
-                                  const cls_replica_log_progress_marker& progress);
+				  const cls_replica_log_progress_marker& progress);
 
 /**
  * Remove an entity's progress marker from the replica log. The op will return
@@ -64,7 +64,7 @@ void cls_replica_log_update_bound(librados::ObjectWriteOperation& op,
  * @param entity The entity whose progress should be removed
  */
 void cls_replica_log_delete_bound(librados::ObjectWriteOperation& op,
-                                  const string& entity);
+				  const string& entity);
 
 /**
  * Read the bounds on a replica log.
@@ -77,8 +77,8 @@ void cls_replica_log_delete_bound(librados::ObjectWriteOperation& op,
  * @param markers [out] List of progress markers for individual daemons
  */
 int cls_replica_log_get_bounds(librados::IoCtx& io_ctx, const string& oid,
-                                string& position_marker,
-                                utime_t& oldest_time,
-                                list<cls_replica_log_progress_marker>& markers);
+				string& position_marker,
+				utime_t& oldest_time,
+				list<cls_replica_log_progress_marker>& markers);
 
 #endif /* CLS_REPLICA_LOG_CLIENT_H_ */

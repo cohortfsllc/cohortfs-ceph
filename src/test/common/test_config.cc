@@ -14,7 +14,7 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
  * GNU Library Public License for more details.
  *
  *
@@ -77,8 +77,8 @@ public:
       std::string val = "$mon_host";
       EXPECT_TRUE(expand_meta(val, &oss));
       EXPECT_EQ(public_network + " " +
-                public_network + " " +
-                "localhost", val);
+		public_network + " " +
+		"localhost", val);
       EXPECT_EQ("", oss.str());
     }
     // variable expansion loops are non fatal
@@ -97,11 +97,11 @@ public:
       EXPECT_TRUE(expand_meta(val, &oss));
       EXPECT_EQ("$cluster_network", val);
       const char *expected_oss =
-        "variable expansion loop at mon_host=$cluster_network\n"
-        "expansion stack: \n"
-        "public_network=$mon_host\n"
-        "cluster_network=$public_network\n"
-        "mon_host=$cluster_network\n";
+	"variable expansion loop at mon_host=$cluster_network\n"
+	"expansion stack: \n"
+	"public_network=$mon_host\n"
+	"cluster_network=$public_network\n"
+	"mon_host=$cluster_network\n";
       EXPECT_EQ(expected_oss, oss.str());
     }
   }
@@ -112,9 +112,9 @@ public:
     for (int i = 0; i < NUM_CONFIG_OPTIONS; i++) {
       config_option *opt = config_optionsp + i;
       if (opt->type == OPT_STR) {
-        std::string *str = (std::string *)opt->conf_ptr(this);
-        if (str->find("$") != string::npos)
-          before_count++;
+	std::string *str = (std::string *)opt->conf_ptr(this);
+	if (str->find("$") != string::npos)
+	  before_count++;
       }
     }
     // if there are no meta variables in the default configuration,
@@ -126,9 +126,9 @@ public:
     for (int i = 0; i < NUM_CONFIG_OPTIONS; i++) {
       config_option *opt = config_optionsp + i;
       if (opt->type == OPT_STR) {
-        std::string *str = (std::string *)opt->conf_ptr(this);
-        if (str->find("$") != string::npos)
-          after_count++;
+	std::string *str = (std::string *)opt->conf_ptr(this);
+	if (str->find("$") != string::npos)
+	  after_count++;
       }
     }
     ASSERT_EQ(0, after_count);

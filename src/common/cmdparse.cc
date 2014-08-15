@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public
  * License version 2, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -60,8 +60,8 @@ dump_cmd_to_json(Formatter *f, const string& cmd)
 	key = keyval.substr(0, pos);
 	val = keyval.substr(pos+1);
       } else {
-        key = keyval;
-        val = true;
+	key = keyval;
+	val = true;
       }
       desckv.insert(std::pair<std::string, std::string> (key, val));
     }
@@ -143,14 +143,14 @@ cmdmap_from_json(vector<string> cmd, map<string, cmd_vartype> *mapp, stringstrea
       // ok, marshal it into our string->cmd_vartype map, or throw an
       // exception if it's not a simple datatype.  This is kind of
       // annoying, since json_spirit has a boost::variant inside it
-      // already, but it's not public.  Oh well.
+      // already, but it's not public.	Oh well.
 
       switch (it->second.type()) {
 
       case json_spirit::obj_type:
       default:
 	throw(runtime_error("JSON array/object not allowed " + fullcmd));
-        break;
+	break;
 
       case json_spirit::array_type:
 	{
@@ -203,7 +203,7 @@ class stringify_visitor : public boost::static_visitor<string>
       }
 };
 
-string 
+string
 cmd_vartype_stringify(const cmd_vartype &v)
 {
   return boost::apply_visitor(stringify_visitor(), v);
@@ -216,7 +216,7 @@ handle_bad_get(CephContext *cct, string k, const char *tname)
   ostringstream errstr;
   int status;
   const char *typestr = abi::__cxa_demangle(tname, 0, 0, &status);
-  if (status != 0) 
+  if (status != 0)
     typestr = tname;
   errstr << "bad boost::get: key " << k << " is not type " << typestr;
   lderr(cct) << errstr.str() << dendl;

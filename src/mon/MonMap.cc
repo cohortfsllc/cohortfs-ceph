@@ -87,16 +87,16 @@ void MonMap::generate_test_instances(list<MonMap*>& o)
 }
 
 // read from/write to a file
-int MonMap::write(const char *fn) 
+int MonMap::write(const char *fn)
 {
   // encode
   bufferlist bl;
   encode(bl, CEPH_FEATURES_ALL);
-  
+
   return bl.write_file(fn);
 }
 
-int MonMap::read(const char *fn) 
+int MonMap::read(const char *fn)
 {
   // read
   bufferlist bl;
@@ -114,7 +114,7 @@ void MonMap::print_summary(ostream& out) const
       << mon_addr.size() << " mons at "
       << mon_addr;
 }
- 
+
 void MonMap::print(ostream& out) const
 {
   out << "epoch " << epoch << "\n";
@@ -271,7 +271,7 @@ int MonMap::build_initial(CephContext *cct, ostream& errout)
     int r = build_from_host_list(conf->mon_host, "noname-");
     if (r < 0) {
       errout << "unable to parse addrs in '" << conf->mon_host << "'"
-             << std::endl;
+	     << std::endl;
       return r;
     }
     return 0;
@@ -282,7 +282,7 @@ int MonMap::build_initial(CephContext *cct, ostream& errout)
   int ret = conf->get_all_sections(sections);
   if (ret) {
     errout << "Unable to find any monitors in the configuration "
-         << "file, because there was an error listing the sections. error "
+	 << "file, because there was an error listing the sections. error "
 	 << ret << std::endl;
     return -ENOENT;
   }

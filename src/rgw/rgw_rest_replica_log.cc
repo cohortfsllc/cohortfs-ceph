@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -40,9 +40,9 @@ static int parse_to_utime(string& in, utime_t& out) {
 
 void RGWOp_OBJLog_SetBounds::execute() {
   string id_str = s->info.args.get("id"),
-         marker = s->info.args.get("marker"),
-         time = s->info.args.get("time"),
-         daemon_id = s->info.args.get("daemon_id");
+	 marker = s->info.args.get("marker"),
+	 time = s->info.args.get("time"),
+	 daemon_id = s->info.args.get("daemon_id");
 
   if (id_str.empty() ||
       marker.empty() ||
@@ -52,7 +52,7 @@ void RGWOp_OBJLog_SetBounds::execute() {
     http_ret = -EINVAL;
     return;
   }
-  
+
   int shard;
   string err;
   utime_t ut;
@@ -63,7 +63,7 @@ void RGWOp_OBJLog_SetBounds::execute() {
     http_ret = -EINVAL;
     return;
   }
-  
+
   if (parse_to_utime(time, ut) < 0) {
     http_ret = -EINVAL;
     return;
@@ -100,7 +100,7 @@ void RGWOp_OBJLog_GetBounds::execute() {
     http_ret = -EINVAL;
     return;
   }
- 
+
   string pool;
   RGWReplicaObjectLogger rl(store, pool, prefix);
   http_ret = rl.get_bounds(shard, bounds);
@@ -120,7 +120,7 @@ void RGWOp_OBJLog_GetBounds::send_response() {
 
 void RGWOp_OBJLog_DeleteBounds::execute() {
   string id = s->info.args.get("id"),
-         daemon_id = s->info.args.get("daemon_id");
+	 daemon_id = s->info.args.get("daemon_id");
 
   if (id.empty() ||
       daemon_id.empty()) {
@@ -128,7 +128,7 @@ void RGWOp_OBJLog_DeleteBounds::execute() {
     http_ret = -EINVAL;
     return;
   }
-  
+
   int shard;
   string err;
 
@@ -137,7 +137,7 @@ void RGWOp_OBJLog_DeleteBounds::execute() {
     dout(5) << "Error parsing id parameter - " << id << ", err " << err << dendl;
     http_ret = -EINVAL;
   }
-  
+
   string pool;
   RGWReplicaObjectLogger rl(store, pool, prefix);
   http_ret = rl.delete_bound(shard, daemon_id);
@@ -146,7 +146,7 @@ void RGWOp_OBJLog_DeleteBounds::execute() {
 static int bucket_instance_to_bucket(RGWRados *store, string& bucket_instance, rgw_bucket& bucket) {
   RGWBucketInfo bucket_info;
   time_t mtime;
-  
+
   int r = store->get_bucket_instance_info(NULL, bucket_instance, bucket_info, &mtime, NULL);
   if (r < 0) {
     dout(5) << "could not get bucket instance info for bucket=" << bucket_instance << ": " << cpp_strerror(r) << dendl;
@@ -161,9 +161,9 @@ static int bucket_instance_to_bucket(RGWRados *store, string& bucket_instance, r
 
 void RGWOp_BILog_SetBounds::execute() {
   string bucket_instance = s->info.args.get("bucket-instance"),
-         marker = s->info.args.get("marker"),
-         time = s->info.args.get("time"),
-         daemon_id = s->info.args.get("daemon_id");
+	 marker = s->info.args.get("marker"),
+	 time = s->info.args.get("time"),
+	 daemon_id = s->info.args.get("daemon_id");
 
   if (bucket_instance.empty() ||
       marker.empty() ||
@@ -173,16 +173,16 @@ void RGWOp_BILog_SetBounds::execute() {
     http_ret = -EINVAL;
     return;
   }
-  
+
   utime_t ut;
-  
+
   if (parse_to_utime(time, ut) < 0) {
     http_ret = -EINVAL;
     return;
   }
 
   rgw_bucket bucket;
-  if ((http_ret = bucket_instance_to_bucket(store, bucket_instance, bucket)) < 0) 
+  if ((http_ret = bucket_instance_to_bucket(store, bucket_instance, bucket)) < 0)
     return;
 
   RGWReplicaBucketLogger rl(store);
@@ -207,7 +207,7 @@ void RGWOp_BILog_GetBounds::execute() {
   }
 
   rgw_bucket bucket;
-  if ((http_ret = bucket_instance_to_bucket(store, bucket_instance, bucket)) < 0) 
+  if ((http_ret = bucket_instance_to_bucket(store, bucket_instance, bucket)) < 0)
     return;
 
   RGWReplicaBucketLogger rl(store);
@@ -228,7 +228,7 @@ void RGWOp_BILog_GetBounds::send_response() {
 
 void RGWOp_BILog_DeleteBounds::execute() {
   string bucket_instance = s->info.args.get("bucket-instance"),
-         daemon_id = s->info.args.get("daemon_id");
+	 daemon_id = s->info.args.get("daemon_id");
 
   if (bucket_instance.empty() ||
       daemon_id.empty()) {
@@ -236,11 +236,11 @@ void RGWOp_BILog_DeleteBounds::execute() {
     http_ret = -EINVAL;
     return;
   }
-  
+
   rgw_bucket bucket;
-  if ((http_ret = bucket_instance_to_bucket(store, bucket_instance, bucket)) < 0) 
+  if ((http_ret = bucket_instance_to_bucket(store, bucket_instance, bucket)) < 0)
     return;
-  
+
   RGWReplicaBucketLogger rl(store);
   http_ret = rl.delete_bound(bucket, daemon_id);
 }
@@ -273,11 +273,11 @@ RGWOp *RGWHandler_ReplicaLog::op_delete() {
 
   if (type.compare("metadata") == 0)
     return new RGWOp_OBJLog_DeleteBounds(META_REPLICA_LOG_OBJ_PREFIX, "mdlog");
-  else if (type.compare("bucket-index") == 0) 
+  else if (type.compare("bucket-index") == 0)
     return new RGWOp_BILog_DeleteBounds;
   else if (type.compare("data") == 0)
     return new RGWOp_OBJLog_DeleteBounds(DATA_REPLICA_LOG_OBJ_PREFIX, "datalog");
-  
+
   return NULL;
 }
 

@@ -42,9 +42,9 @@ static int g_num_objects = 50;
  *
  * This tests creation and deletion races.
  *
- * EXPECT:            * can delete a pool while another user is using it
- *                    * operations on pools return error codes after the pools
- *                      are deleted
+ * EXPECT:	      * can delete a pool while another user is using it
+ *		      * operations on pools return error codes after the pools
+ *			are deleted
  *
  * DO NOT EXPECT      * hangs, crashes
  */
@@ -59,7 +59,7 @@ int main(int argc, const char **argv)
   const char *num_objects = getenv("NUM_OBJECTS");
   std::string pool = "foo";
   if (num_objects) {
-    g_num_objects = atoi(num_objects); 
+    g_num_objects = atoi(num_objects);
     if (g_num_objects == 0)
       return 100;
   }
@@ -105,6 +105,6 @@ int main(int argc, const char **argv)
     }
   }
 
-  printf("******* SUCCESS **********\n"); 
+  printf("******* SUCCESS **********\n");
   return EXIT_SUCCESS;
 }

@@ -13,7 +13,7 @@ conf="$1"
 # cp /path/to/ceph.conf $conf
 
 ## from a URL:
-# wget -q -O $conf http://somewhere.com/some/ceph.conf 
+# wget -q -O $conf http://somewhere.com/some/ceph.conf
 
 ## via scp
 # scp -i /path/to/id_dsa user@host:/path/to/ceph.conf $conf

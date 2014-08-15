@@ -81,7 +81,7 @@ Core Changes:
   APPEND, DELETE, (SET|RM)ATTR log entries.
 - The filestore needs to be able to deal with multiply versioned
   hobjects.  This means adapting the filestore internally to
-  use a `ghobject <https://github.com/ceph/ceph/blob/firefly/src/common/hobject.h#L238>`_ 
+  use a `ghobject <https://github.com/ceph/ceph/blob/firefly/src/common/hobject.h#L238>`_
   which is basically a tuple<hobject_t, gen_t,
   shard_t>.  The gen_t + shard_t need to be included in the on-disk
   filename.  gen_t is a unique object identifier to make sure there
@@ -136,7 +136,7 @@ Core Changes:
 
 PGBackend interfaces:
 
-- have_enough_infos() 
+- have_enough_infos()
 - choose_acting()
 
 PGTemp

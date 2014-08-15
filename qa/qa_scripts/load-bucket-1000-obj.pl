@@ -136,7 +136,7 @@ for($counter = 1; $counter <= $maxcount; $counter++){
      $exit_status=3;
   }
 
- 
+
   # delete files in the bucket
   print "Deleting $maxcount files...\n";
   $response = $bucket->list_all

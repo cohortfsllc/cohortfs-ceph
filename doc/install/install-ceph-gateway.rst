@@ -2,7 +2,7 @@
  Install Ceph Object Gateway
 =============================
 
-The :term:`Ceph Object Gateway` daemon runs on Apache and FastCGI. 
+The :term:`Ceph Object Gateway` daemon runs on Apache and FastCGI.
 
 To run a :term:`Ceph Object Storage` service, you must install Apache and
 FastCGI. Then, you must install the Ceph Object Gateway daemon. The Ceph Object
@@ -13,7 +13,7 @@ daemon. If you plan to run a Ceph Object Storage service with a federated
 architecture (multiple regions and zones), you must also install the
 synchronization agent.
 
-See `Get Packages`_ for information on adding Ceph packages to each Ceph Node. 
+See `Get Packages`_ for information on adding Ceph packages to each Ceph Node.
 Ensure that you have executed those steps on each Ceph Node first.
 
 
@@ -26,7 +26,7 @@ Gateways. However, they will not provide 100-continue support.
 Debian Packages
 ---------------
 
-To install Apache and FastCGI Debian packages, execute the following:: 
+To install Apache and FastCGI Debian packages, execute the following::
 
 	sudo apt-get install apache2 libapache2-mod-fastcgi
 
@@ -36,7 +36,7 @@ RPM Packages
 
 To install Apache and FastCGI RPMs, execute the following::
 
-	sudo rpm -ivh fcgi-2.4.0-10.el6.x86_64.rpm 
+	sudo rpm -ivh fcgi-2.4.0-10.el6.x86_64.rpm
 	sudo rpm -ivh mod_fastcgi-2.4.6-2.el6.rf.x86_64.rpm
 
 Or::
@@ -62,15 +62,15 @@ Debian Packages
 
 	wget -q -O- https://raw.github.com/ceph/ceph/master/keys/autobuild.asc | sudo apt-key add -
 
-#. Add a ``ceph-apache.list`` file to your APT sources. :: 
+#. Add a ``ceph-apache.list`` file to your APT sources. ::
 
 	echo deb http://gitbuilder.ceph.com/apache2-deb-$(lsb_release -sc)-x86_64-basic/ref/master $(lsb_release -sc) main | sudo tee /etc/apt/sources.list.d/ceph-apache.list
 
-#. Add a ``ceph-fastcgi.list`` file to your APT sources. :: 
+#. Add a ``ceph-fastcgi.list`` file to your APT sources. ::
 
 	echo deb http://gitbuilder.ceph.com/libapache-mod-fastcgi-deb-$(lsb_release -sc)-x86_64-basic/ref/master $(lsb_release -sc) main | sudo tee /etc/apt/sources.list.d/ceph-fastcgi.list
 
-#. Update your repository and install Apache and FastCGI:: 
+#. Update your repository and install Apache and FastCGI::
 
 	sudo apt-get update && sudo apt-get install apache2 libapache2-mod-fastcgi
 
@@ -86,13 +86,13 @@ To install Apache with 100-continue, execute the following steps:
 
 #. Ensure ``/etc/yum/pluginconf.d/priorities.conf`` exists.
 
-#. Ensure ``priorities.conf`` enables the plugin. :: 
+#. Ensure ``priorities.conf`` enables the plugin. ::
 
 	[main]
 	enabled = 1
 
-#. Add a ``ceph-apache.repo`` file to ``/etc/yum.repos.d``. Replace 
-   ``{distro}`` with the name of your distribution (e.g., ``centos6``, 
+#. Add a ``ceph-apache.repo`` file to ``/etc/yum.repos.d``. Replace
+   ``{distro}`` with the name of your distribution (e.g., ``centos6``,
    ``rhel6``, etc.) ::
 
 	[apache2-ceph-noarch]
@@ -114,8 +114,8 @@ To install Apache with 100-continue, execute the following steps:
 	gpgkey=https://ceph.com/git/?p=ceph.git;a=blob_plain;f=keys/autobuild.asc
 
 
-#. Add a ``ceph-fastcgi.repo`` file to ``/etc/yum.repos.d``. Replace 
-   ``{distro}`` with the name of your distribution (e.g., ``centos6``, 
+#. Add a ``ceph-fastcgi.repo`` file to ``/etc/yum.repos.d``. Replace
+   ``{distro}`` with the name of your distribution (e.g., ``centos6``,
    ``rhel6``, etc.) ::
 
 	[fastcgi-ceph-basearch]
@@ -126,7 +126,7 @@ To install Apache with 100-continue, execute the following steps:
 	gpgcheck=1
 	type=rpm-md
 	gpgkey=https://ceph.com/git/?p=ceph.git;a=blob_plain;f=keys/autobuild.asc
-	
+
 	[fastcgi-ceph-noarch]
 	name=FastCGI noarch packages for Ceph
 	baseurl=http://gitbuilder.ceph.com/mod_fastcgi-rpm-{distro}-x86_64-basic/ref/master
@@ -149,7 +149,7 @@ To install Apache with 100-continue, execute the following steps:
    ``noarch`` entry above.
 
 
-#. Update your repo and install Apache and FastCGI. :: 
+#. Update your repo and install Apache and FastCGI. ::
 
 	sudo yum update && sudo yum install httpd mod_fastcgi
 
@@ -158,19 +158,19 @@ Configure Apache/FastCGI
 ========================
 
 To complete the installation, ensure that you have the rewrite module
-enabled and FastCGI enabled. The steps differ slightly based upon the 
-type of package installation. 
+enabled and FastCGI enabled. The steps differ slightly based upon the
+type of package installation.
 
 Debian-based Packages
 ---------------------
 
-#. Open the ``apache2.conf`` file. :: 
+#. Open the ``apache2.conf`` file. ::
 
 	sudo vim /etc/apache2/apache2.conf
 
 
-#. Add a line for the ``ServerName`` in the Apache configuration file. 
-   Provide the fully qualified domain name of the server machine 
+#. Add a line for the ``ServerName`` in the Apache configuration file.
+   Provide the fully qualified domain name of the server machine
    (e.g., ``hostname -f``). ::
 
 	ServerName {fqdn}
@@ -190,31 +190,31 @@ RPM-based Packages
 ------------------
 
 
-#. Open the ``httpd.conf`` file. :: 
+#. Open the ``httpd.conf`` file. ::
 
 	sudo vim /etc/httpd/conf/httpd.conf
 
-#. Uncomment ``#ServerName`` and add the name of your server. 
-   Provide the fully qualified domain name of the server machine 
-   (e.g., ``hostname -f``).:: 
+#. Uncomment ``#ServerName`` and add the name of your server.
+   Provide the fully qualified domain name of the server machine
+   (e.g., ``hostname -f``).::
 
 	ServerName {fgdn}
 
-#. Ensure that the Rewrite module is enabled. :: 
+#. Ensure that the Rewrite module is enabled. ::
 
 	#if not present, add:
-	LoadModule rewrite_module modules/mod_rewrite.so	
+	LoadModule rewrite_module modules/mod_rewrite.so
 
 #. Save the ``httpd.conf`` file.
 
 #. Ensure that the FastCGI module is enabled. The installer should
    include an ``/etc/httpd/conf.d/fastcgi.conf`` file that loads the
-   FastCGI module. :: 
+   FastCGI module. ::
 
 	#if not present, add:
 	LoadModule fastcgi_module modules/mod_fastcgi.so
 
-#. Restart Apache so that the foregoing changes take effect.. :: 
+#. Restart Apache so that the foregoing changes take effect.. ::
 
 	sudo /etc/init.d/httpd restart
 
@@ -239,7 +239,7 @@ Debian Packages
 
 To enable SSL for Debian/Ubuntu systems, execute the following steps:
 
-#. Ensure that you have installed the dependencies. :: 
+#. Ensure that you have installed the dependencies. ::
 
 	sudo apt-get install openssl ssl-cert
 
@@ -293,11 +293,11 @@ To use Ceph with S3-style subdomains (e.g., ``bucket-name.domain-name.com``),
 you need to add a wildcard to the DNS record of the DNS server you use with the
 ``radosgw`` daemon.
 
-.. tip:: The address of the DNS must also be specified in the Ceph 
+.. tip:: The address of the DNS must also be specified in the Ceph
    configuration file with the ``rgw dns name = {hostname}`` setting.
 
 For ``dnsmasq``, consider addding the following ``address`` setting with a dot
-(.) prepended to the host name:: 
+(.) prepended to the host name::
 
 	address=/.{hostname-or-fqdn}/{host-ip-address}
 	address=/.ceph-node/192.168.0.1
@@ -316,21 +316,21 @@ For ``bind``, consider adding the a wildcard to the DNS record::
 	@	IN	A	192.168.122.113
 	*	IN	CNAME	@
 
-Restart your DNS server and ping your server with a subdomain to 
+Restart your DNS server and ping your server with a subdomain to
 ensure that your Ceph Object Store ``radosgw`` daemon can process
-the subdomain requests. :: 
+the subdomain requests. ::
 
 	ping mybucket.{fqdn}
 	ping mybucket.ceph-node
-	
+
 
 Install Ceph Object Gateway
 ===========================
 
 Ceph Object Storage services use the Ceph Object Gateway daemon (``radosgw``)
-to enable the gateway. For federated architectures, the synchronization 
+to enable the gateway. For federated architectures, the synchronization
 agent (``radosgw-agent``) provides data and metadata synchronization between
-zones and regions. 
+zones and regions.
 
 
 Debian Packages
@@ -339,11 +339,11 @@ Debian Packages
 To install the Ceph Object Gateway daemon, execute the following::
 
 	sudo apt-get install radosgw
-	
+
 
 To install the Ceph Object Gateway synchronization agent, execute the
 following::
-	
+
 	sudo apt-get install radosgw-agent
 
 
@@ -351,7 +351,7 @@ RPM Packages
 ------------
 
 To install the Ceph Object Gateway daemon, execute the
-following:: 
+following::
 
 	sudo yum install ceph-radosgw ceph
 
@@ -360,7 +360,7 @@ To install the Ceph Object Gateway synchronization agent, execute the
 following::
 
 	sudo yum install radosgw-agent
-	
+
 
 .. _Get Packages: ../get-packages
 .. _Ubuntu Server Guide: https://help.ubuntu.com/12.04/serverguide/httpd.html

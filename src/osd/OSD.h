@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -88,7 +88,7 @@ private:
 public:
   MonClient   *&monc;
   ThreadPool::WorkQueueVal<pair<OSDVolRef, OpRequestRef>, OSDVolRef> &op_wq;
-  ClassHandler  *&class_handler;
+  ClassHandler	*&class_handler;
 
   void dequeue_vol(OSDVol *v, list<OpRequestRef> *dequeued);
 
@@ -303,7 +303,7 @@ public:
 
 protected:
   Mutex osd_lock;			// global lock
-  SafeTimer tick_timer;    // safe timer (osd_lock)
+  SafeTimer tick_timer;	   // safe timer (osd_lock)
 
   AuthAuthorizeHandlerRegistry *authorize_handler_cluster_registry;
   AuthAuthorizeHandlerRegistry *authorize_handler_service_registry;
@@ -345,9 +345,9 @@ protected:
   bool asok_command(string command, cmdmap_t& cmdmap, string format, ostream& ss);
 
 public:
-  ClassHandler  *class_handler;
+  ClassHandler	*class_handler;
   int get_nodeid() { return whoami; }
-  
+
   static hobject_t get_osdmap_pobject_name(epoch_t epoch) {
     char foo[20];
     snprintf(foo, sizeof(foo), "osdmap.%d", epoch);
@@ -375,7 +375,7 @@ public:
   /**
    * get_osd_initial_compat_set()
    *
-   * Get the initial feature set for this OSD.  Features
+   * Get the initial feature set for this OSD.	Features
    * here are automatically upgraded.
    *
    * Return value: Initial osd CompatSet
@@ -390,7 +390,7 @@ public:
    * Return value: CompatSet of all supported features
    */
   static CompatSet get_osd_compat_set();
-  
+
 
 private:
   // -- superblock --
@@ -473,14 +473,14 @@ private:
   // -- heartbeat --
   /// information about a heartbeat peer
   struct HeartbeatInfo {
-    int peer;           ///< peer
+    int peer;		///< peer
     ConnectionRef con_front;   ///< peer connection (front)
     ConnectionRef con_back;    ///< peer connection (back)
-    utime_t first_tx;   ///< time we sent our first ping request
-    utime_t last_tx;    ///< last time we sent a ping request
+    utime_t first_tx;	///< time we sent our first ping request
+    utime_t last_tx;	///< last time we sent a ping request
     utime_t last_rx_front;  ///< last time we got a ping reply on the front side
     utime_t last_rx_back;   ///< last time we got a ping reply on the back side
-    epoch_t epoch;      ///< most recent epoch we wanted this peer
+    epoch_t epoch;	///< most recent epoch we wanted this peer
 
     bool is_unhealthy(utime_t cutoff) {
       return
@@ -505,8 +505,8 @@ private:
   map<int, int> debug_heartbeat_drops_remaining;
   Cond heartbeat_cond;
   bool heartbeat_stop;
-  bool heartbeat_need_update;   ///< true if we need to refresh our heartbeat peers
-  epoch_t heartbeat_epoch;      ///< last epoch we updated our heartbeat peers
+  bool heartbeat_need_update;	///< true if we need to refresh our heartbeat peers
+  epoch_t heartbeat_epoch;	///< last epoch we updated our heartbeat peers
   map<int,HeartbeatInfo> heartbeat_peers;  ///< map of osd id to HeartbeatInfo
   utime_t last_mon_heartbeat;
   Messenger *hbclient_messenger;
@@ -809,7 +809,7 @@ private:
 public:
   static int peek_meta(ObjectStore *store, string& magic,
 		       uuid_d& cluster_fsid, uuid_d& osd_fsid, int& whoami);
-  
+
 
   // startup/shutdown
   int pre_init();

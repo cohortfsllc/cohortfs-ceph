@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #ifndef CEPH_CLS_RGW_TYPES_H
 #define CEPH_CLS_RGW_TYPES_H
 
@@ -139,30 +141,30 @@ void decode_packed_val(T& val, bufferlist::iterator& bl)
   switch (c) {
     case 1:
       {
-        uint8_t v;
-        ::decode(v, bl);
-        val = v;
+	uint8_t v;
+	::decode(v, bl);
+	val = v;
       }
       break;
     case 2:
       {
-        uint16_t v;
-        ::decode(v, bl);
-        val = v;
+	uint16_t v;
+	::decode(v, bl);
+	val = v;
       }
       break;
     case 4:
       {
-        uint32_t v;
-        ::decode(v, bl);
-        val = v;
+	uint32_t v;
+	::decode(v, bl);
+	val = v;
       }
       break;
     case 8:
       {
-        uint64_t v;
-        ::decode(v, bl);
-        val = v;
+	uint64_t v;
+	::decode(v, bl);
+	val = v;
       }
       break;
     default:
@@ -468,7 +470,7 @@ struct rgw_usage_log_entry {
     map<string, rgw_usage_data>::const_iterator iter;
     for (iter = e.usage_map.begin(); iter != e.usage_map.end(); ++iter) {
       if (!categories || !categories->size() || categories->count(iter->first)) {
-        add(iter->first, iter->second);
+	add(iter->first, iter->second);
       }
     }
   }
@@ -477,7 +479,7 @@ struct rgw_usage_log_entry {
     usage = rgw_usage_data();
     for (map<string, rgw_usage_data>::const_iterator iter = usage_map.begin(); iter != usage_map.end(); ++iter) {
       if (!categories.size() || categories.count(iter->first)) {
-        usage.aggregate(iter->second);
+	usage.aggregate(iter->second);
       }
     }
   }
@@ -535,7 +537,7 @@ struct rgw_user_bucket {
       return true;
     else if (!comp)
       return bucket.compare(ub2.bucket) < 0;
-  
+
     return false;
   }
 };

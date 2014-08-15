@@ -12,7 +12,7 @@
 				'numclient' => '$nummds * $cper',
 				'numosd' => '$nummds',
 				'n' => '1 + $cnode + $nummds + $numosd' ],
-	
+
 	# parameters
 	'fs' => 'ebofs',
 
@@ -22,9 +22,9 @@
 	'kill_after' => 250,
 	'start' => 30,
 	'end' => 180,
-	
+
 	'custom' => '--tcp_skip_rank0 --meta_log_layout_num_rep 1 --meta_dir_layout_num_rep 1 --mds_shutdown_check 60 --syn makefiles 100000 1000 0',
-	
+
 	'comb' => {
 		'x' => 'nummds',
 		'vars' => [ 'mds.req', 'cl.lat' ]

@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -29,10 +29,10 @@
 #undef dout_prefix
 #define dout_prefix _prefix(_dout, mon, this)
 static ostream& _prefix(std::ostream *_dout, const Monitor *mon,
-                        const ConfigKeyService *service) {
+			const ConfigKeyService *service) {
   return *_dout << "mon." << mon->name << "@" << mon->rank
 		<< "(" << mon->get_state_name() << ")." << service->get_name()
-                << "(" << service->get_epoch() << ") ";
+		<< "(" << service->get_epoch() << ") ";
 }
 
 const string ConfigKeyService::STORE_PREFIX = "mon_config_key";
@@ -147,13 +147,13 @@ bool ConfigKeyService::service_dispatch(Message *m)
     if (data.length() > (size_t) g_conf->mon_config_key_max_entry_size) {
       ret = -EFBIG; // File too large
       ss << "error: entry size limited to "
-         << g_conf->mon_config_key_max_entry_size << " bytes. "
-         << "Use 'mon config key max entry size' to manually adjust";
+	 << g_conf->mon_config_key_max_entry_size << " bytes. "
+	 << "Use 'mon config key max entry size' to manually adjust";
       goto out;
     }
     // we'll reply to the message once the proposal has been handled
     store_put(key, data,
-        new Monitor::C_Command(mon, cmd, 0, "value stored", 0));
+	new Monitor::C_Command(mon, cmd, 0, "value stored", 0));
     // return for now; we'll put the message once it's done.
     return true;
 

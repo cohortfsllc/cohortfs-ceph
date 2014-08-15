@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -24,7 +24,7 @@
  *
  *  trimmed_pos <= expire_pos <= unused_field <= write_pos.
  *
- * Often, unused_field <= write_pos (as with MDS log).  During
+ * Often, unused_field <= write_pos (as with MDS log).	During
  * recovery, write_pos is undefined until the end of the log is
  * discovered.
  *
@@ -32,19 +32,19 @@
  * regular intervals.  The basic invariants include:
  *
  *   head.unused_field <= unused_field -- the head may "lag", since
- *                                        it's updated lazily.
+ *					  it's updated lazily.
  *   head.write_pos  <= write_pos
  *   head.expire_pos <= expire_pos
- *   head.trimmed_pos   <= trimmed_pos
+ *   head.trimmed_pos	<= trimmed_pos
  *
  * More significantly,
  *
  *   head.expire_pos >= trimmed_pos -- this ensures we can find the
- *                                  "beginning" of the log as last
- *                                  recorded, before it is trimmed.
- *                                  trimming will block until a
- *                                  sufficiently current expire_pos is
- *                                  committed.
+ *				    "beginning" of the log as last
+ *				    recorded, before it is trimmed.
+ *				    trimming will block until a
+ *				    sufficiently current expire_pos is
+ *				    committed.
  *
  * To recover log state, we simply start at the last write_pos in the
  * head, and probe the object sequence sizes until we read the end.
@@ -207,14 +207,14 @@ private:
 
   // writer
   uint64_t prezeroing_pos;
-  uint64_t prezero_pos;     // we zero journal space ahead of write_pos to avoid problems with tail probing
-  uint64_t write_pos;       // logical write position, where next entry will go
-  uint64_t flush_pos;       // where we will flush. if write_pos>flush_pos, we're buffering writes.
+  uint64_t prezero_pos;	    // we zero journal space ahead of write_pos to avoid problems with tail probing
+  uint64_t write_pos;	    // logical write position, where next entry will go
+  uint64_t flush_pos;	    // where we will flush. if write_pos>flush_pos, we're buffering writes.
   uint64_t safe_pos; // what has been committed safely to disk.
-  bufferlist write_buf;  // write buffer.  flush_pos + write_buf.length() == write_pos.
+  bufferlist write_buf;	 // write buffer.  flush_pos + write_buf.length() == write_pos.
 
   bool waiting_for_zero;
-  interval_set<uint64_t> pending_zero;  // non-contig bits we've zeroed
+  interval_set<uint64_t> pending_zero;	// non-contig bits we've zeroed
   std::set<uint64_t> pending_safe;
   std::map<uint64_t, std::list<Context*> > waitfor_safe; // when safe through given offset
 
@@ -224,14 +224,14 @@ private:
   friend class C_Flush;
 
   // reader
-  uint64_t read_pos;      // logical read position, where next entry starts.
+  uint64_t read_pos;	  // logical read position, where next entry starts.
   uint64_t requested_pos; // what we've requested from OSD.
   uint64_t received_pos;  // what we've received from OSD.
-  bufferlist read_buf; // read buffer.  unused_field + read_buf.length() == prefetch_pos.
+  bufferlist read_buf; // read buffer.	unused_field + read_buf.length() == prefetch_pos.
 
   map<uint64_t,bufferlist> prefetch_buf;
 
-  uint64_t fetch_len;     // how much to read at a time
+  uint64_t fetch_len;	  // how much to read at a time
   uint64_t temp_fetch_len;
 
   // for wait_for_readable()
@@ -242,16 +242,16 @@ private:
   void _finish_read(int r, uint64_t offset, bufferlist &bl); // read completion callback
   void _assimilate_prefetch();
   void _issue_read(uint64_t len);  // read some more
-  void _prefetch();             // maybe read ahead
+  void _prefetch();		// maybe read ahead
   class C_Read;
   friend class C_Read;
   class C_RetryRead;
   friend class C_RetryRead;
 
   // trimmer
-  uint64_t expire_pos;    // what we're allowed to trim to
+  uint64_t expire_pos;	  // what we're allowed to trim to
   uint64_t trimming_pos;      // what we've requested to trim through
-  uint64_t trimmed_pos;   // what has been trimmed
+  uint64_t trimmed_pos;	  // what has been trimmed
   map<uint64_t, list<Context*> > waitfor_trim;
 
   void _trim_finish(int r, uint64_t to);
@@ -265,8 +265,8 @@ private:
   // only init_headers when following or first reading off-disk
   void init_headers(Header& h) {
     assert(readonly ||
-           state == STATE_READHEAD ||
-           state == STATE_REREADHEAD);
+	   state == STATE_READHEAD ||
+	   state == STATE_REREADHEAD);
     last_written = last_committed = h;
   }
 
@@ -280,7 +280,7 @@ private:
   void handle_write_error(int r);
 
 public:
-  Journaler(inodeno_t ino_, VolumeRef vol_, const char *mag, Objecter *obj, PerfCounters *l, int lkey, SafeTimer *tim) : 
+  Journaler(inodeno_t ino_, VolumeRef vol_, const char *mag, Objecter *obj, PerfCounters *l, int lkey, SafeTimer *tim) :
     cct(obj->cct), last_written(mag), last_committed(mag),
     ino(ino_), volume(vol_), readonly(true), magic(mag),
     objecter(obj), filer(objecter), logger(l), logger_key_lat(lkey),
@@ -291,7 +291,7 @@ public:
     read_pos(0), requested_pos(0), received_pos(0),
     fetch_len(0), temp_fetch_len(0),
     on_readable(0), on_write_error(NULL),
-    expire_pos(0), trimming_pos(0), trimmed_pos(0) 
+    expire_pos(0), trimming_pos(0), trimmed_pos(0)
   {
     memset(&layout, 0, sizeof(layout));
   }
@@ -322,9 +322,9 @@ public:
   //void open(Context *onopen);
   //void claim(Context *onclaim, msg_addr_t from);
 
-  /* reset 
-   *  NOTE: we assume the caller knows/has ensured that any objects 
-   * in our sequence do not exist.. e.g. after a MKFS.  this is _not_
+  /* reset
+   *  NOTE: we assume the caller knows/has ensured that any objects
+   * in our sequence do not exist.. e.g. after a MKFS.	this is _not_
    * an "erase" method.
    */
   void create(ceph_file_layout *layout);
@@ -358,7 +358,7 @@ public:
   void flush(Context *onsafe = 0);
 
   // read
-  void set_read_pos(int64_t p) { 
+  void set_read_pos(int64_t p) {
     assert(requested_pos == received_pos);  // we can't cope w/ in-progress read right now.
     read_pos = requested_pos = received_pos = p;
     read_buf.clear();
@@ -368,8 +368,8 @@ public:
   bool is_readable();
   bool try_read_entry(bufferlist& bl);
   void wait_for_readable(Context *onfinish);
-  
-  void set_write_pos(int64_t p) { 
+
+  void set_write_pos(int64_t p) {
     prezeroing_pos = prezero_pos = write_pos = flush_pos = safe_pos = p;
   }
 

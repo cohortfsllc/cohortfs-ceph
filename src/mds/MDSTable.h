@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_MDSTABLE_H
@@ -30,17 +30,17 @@ class MDSTable {
   bool per_mds;
 
   object_t get_object_name();
-  
-  static const int STATE_UNDEF   = 0;
+
+  static const int STATE_UNDEF	 = 0;
   static const int STATE_OPENING = 1;
-  static const int STATE_ACTIVE  = 2;
+  static const int STATE_ACTIVE	 = 2;
   //static const int STATE_COMMITTING = 3;
   int state;
-  
+
   version_t version, committing_version, committed_version, projected_version;
-  
+
   map<version_t, list<Context*> > waitfor_save;
-  
+
 public:
   MDSTable(MDS *m, const char *n, bool is_per_mds) :
     mds(m), table_name(n), per_mds(is_per_mds),
@@ -52,7 +52,7 @@ public:
   version_t get_committed_version() { return committed_version; }
   version_t get_committing_version() { return committing_version; }
   version_t get_projected_version() { return projected_version; }
-  
+
   void force_replay_version(version_t v) {
     version = projected_version = v;
   }

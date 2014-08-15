@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -58,21 +60,21 @@ int RGWValidateSwiftToken::receive_header(void *ptr, size_t len)
       char *l = line;
       char *tok = strsep(&l, " \t:");
       if (tok) {
-        while (l && *l == ' ')
-          l++;
- 
-        if (strcmp(tok, "HTTP") == 0) {
-          info->status = atoi(l);
-        } else if (strcasecmp(tok, "X-Auth-Groups") == 0) {
-          info->auth_groups = l;
-          char *s = strchr(l, ',');
-          if (s) {
-            *s = '\0';
-            info->user = l;
-          }
-        } else if (strcasecmp(tok, "X-Auth-Ttl") == 0) {
-          info->ttl = atoll(l);
-        }
+	while (l && *l == ' ')
+	  l++;
+
+	if (strcmp(tok, "HTTP") == 0) {
+	  info->status = atoi(l);
+	} else if (strcasecmp(tok, "X-Auth-Groups") == 0) {
+	  info->auth_groups = l;
+	  char *s = strchr(l, ',');
+	  if (s) {
+	    *s = '\0';
+	    info->user = l;
+	  }
+	} else if (strcasecmp(tok, "X-Auth-Ttl") == 0) {
+	  info->ttl = atoll(l);
+	}
       }
     }
     if (s != end)
@@ -275,7 +277,7 @@ int	RGWSwift::get_keystone_admin_token(std::string& token)
   } else {
     token = cct->_conf->rgw_keystone_admin_token;
   }
-  return 0; 
+  return 0;
 }
 
 
@@ -312,7 +314,7 @@ int RGWSwift::check_revoked()
   if (iter.end()) {
     ldout(cct, 0) << "revoked tokens response is missing signed section" << dendl;
     return -EINVAL;
-  }  
+  }
 
   JSONObj *signed_obj = *iter;
 
@@ -326,7 +328,7 @@ int RGWSwift::check_revoked()
     return ret;
 
   ldout(cct, 10) << "content=" << signed_b64 << dendl;
-  
+
   bufferlist json;
   ret = decode_b64_cms(cct, signed_b64, json);
   if (ret < 0) {
@@ -362,7 +364,7 @@ int RGWSwift::check_revoked()
     string token_id = token->get_data();
     keystone_token_cache->invalidate(token_id);
   }
-  
+
   return 0;
 }
 
@@ -591,7 +593,7 @@ int authenticate_temp_url(RGWRados *store, req_state *s)
 
     char dest[CEPH_CRYPTO_HMACSHA1_DIGESTSIZE];
     calc_hmac_sha1(temp_url_key.c_str(), temp_url_key.size(),
-                   str.c_str(), str.size(), dest);
+		   str.c_str(), str.size(), dest);
 
     char dest_str[CEPH_CRYPTO_HMACSHA1_DIGESTSIZE * 2 + 1];
     buf_to_hex((const unsigned char *)dest, sizeof(dest), dest_str);

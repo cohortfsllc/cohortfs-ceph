@@ -19,7 +19,7 @@ while (<>) {
     my ($stamp) = /^\S+ (\S+)/;
 
     my ($req,$desc) = /\<\=\= client\d+ \S+ \d+ \=\=\=\= client_request\((\S+) ([^\)]+)/;
-    
+
     if (defined $req) {
 	#print "$req\n"; # ($r{$req} - $stamp)\n";
 	$r{$req} = $stamp;
@@ -35,7 +35,7 @@ while (<>) {
 	    my $len = tosec($stamp) - tosec($r{$req});
 	    #print "$req $len ($r{$req} - $stamp)\n";
 	    $lat_req{$len} = $req;
-	    
+
 	    delete $r{$req};
 	}
     }
@@ -44,5 +44,5 @@ while (<>) {
 
 for my $len (sort {$b <=> $a} keys %lat_req) {
     my $req = $lat_req{$len};
-    print "$len\t$req\t$what{$req}\n";    
+    print "$len\t$req\t$what{$req}\n";
 }

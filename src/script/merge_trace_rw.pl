@@ -5,7 +5,7 @@ use strict;
 my @file = <>;
 sub get_op {
 	my @op = shift @file;
-	while (@file && 
+	while (@file &&
 		   $file[0] !~ /^[a-z]+$/) {
 		push( @op, shift @file );
 	}
@@ -20,7 +20,7 @@ while (@file) {
 		   $op eq "write\n") {
 		die unless scalar(@args) == 3;
 		my ($nop, @nargs) = &get_op;
-		if ($nop eq $op 
+		if ($nop eq $op
 			&& ($args[0] == $nargs[0] )
 			&& ($args[2] + $args[1] == $nargs[2])
 			) {

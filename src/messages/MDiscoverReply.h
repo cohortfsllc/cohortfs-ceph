@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -38,13 +38,13 @@ using namespace std;
  *
  * we also return errors:
  *   error_flag_dn(string) - the specified dentry dne
- *   error_flag_dir        - the last item wasn't a dir; we couldn't continue.
+ *   error_flag_dir	   - the last item wasn't a dir; we couldn't continue.
  *
  * and sometimes,
- *   dir_auth_hint         - where we think the dir auth is
+ *   dir_auth_hint	   - where we think the dir auth is
  *
  * depth() gives us the number of depth units/indices for which we have
- * information.  this INCLUDES those for which we have errors but no data.
+ * information.	 this INCLUDES those for which we have errors but no data.
  *
  * see MDCache::handle_discover, handle_discover_reply.
  *
@@ -52,14 +52,14 @@ using namespace std;
  * so basically, we get
  *
  *   dir den ino   i
- *            x    0
- *    x   x   x    1
+ *	      x	   0
+ *    x	  x   x	   1
  * or
- *        x   x    0
- *    x   x   x    1
+ *	  x   x	   0
+ *    x	  x   x	   1
  * or
- *    x   x   x    0
- *    x   x   x    1
+ *    x	  x   x	   0
+ *    x	  x   x	   1
  * ...and trail off however we want.
  */
 
@@ -78,7 +78,7 @@ class MDiscoverReply : public Message {
   bool flag_error_dn;
   bool flag_error_ino;
   bool flag_error_dir;
-  string error_dentry;   // dentry that was not found (to trigger waiters on asker)
+  string error_dentry;	 // dentry that was not found (to trigger waiters on asker)
   bool unsolicited;
 
   int32_t dir_auth_hint;
@@ -152,7 +152,7 @@ public:
   void print(ostream& out) const {
     out << "discover_reply(" << header.tid << " " << base_ino << ")";
   }
-  
+
   // builders
   bool is_empty() {
     return trace.length() == 0 &&
@@ -163,15 +163,15 @@ public:
   }
 
   //  void set_flag_forward() { flag_forward = true; }
-  void set_flag_error_dn(const string& dn) { 
-    flag_error_dn = true; 
-    error_dentry = dn; 
+  void set_flag_error_dn(const string& dn) {
+    flag_error_dn = true;
+    error_dentry = dn;
   }
   void set_flag_error_ino() {
     flag_error_ino = true;
   }
-  void set_flag_error_dir() { 
-    flag_error_dir = true; 
+  void set_flag_error_dir() {
+    flag_error_dir = true;
   }
   void set_dir_auth_hint(int a) {
     dir_auth_hint = a;

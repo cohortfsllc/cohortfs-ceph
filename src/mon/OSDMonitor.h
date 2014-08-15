@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -10,9 +10,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 /* Object Store Device (OSD) Monitor
@@ -43,9 +43,9 @@ class Monitor;
 
 /// information about a particular peer's failure reports for one osd
 struct failure_reporter_t {
-  int num_reports;          ///< reports from this reporter
-  utime_t failed_since;     ///< when they think it failed
-  MOSDFailure *msg;         ///< most recent failure message
+  int num_reports;	    ///< reports from this reporter
+  utime_t failed_since;	    ///< when they think it failed
+  MOSDFailure *msg;	    ///< most recent failure message
 
   failure_reporter_t() : num_reports(0), msg(NULL) {}
   failure_reporter_t(utime_t s) : num_reports(1), failed_since(s), msg(NULL) {}
@@ -54,7 +54,7 @@ struct failure_reporter_t {
 /// information about all failure reports for one osd
 struct failure_info_t {
   map<int, failure_reporter_t> reporters;  ///< reporter -> # reports
-  utime_t max_failed_since;                ///< most recent failed_since
+  utime_t max_failed_since;		   ///< most recent failed_since
   int num_reports;
 
   failure_info_t() : num_reports(0) {}
@@ -121,9 +121,9 @@ private:
   // [leader]
   OSDMap::Incremental pending_inc;
   map<int, bufferlist> pending_metadata;
-  set<int>             pending_metadata_rm;
+  set<int>	       pending_metadata_rm;
   map<int, failure_info_t> failure_info;
-  map<int,utime_t>    down_pending_out;  // osd down -> out
+  map<int,utime_t>    down_pending_out;	 // osd down -> out
 
   map<int,double> osd_weight;
 
@@ -153,7 +153,7 @@ private:
   virtual void encode_full(MonitorDBStore::Transaction *t) { }
   /**
    * do not let paxosservice periodically stash full osdmaps, or we will break our
-   * locally-managed full maps.  (update_from_paxos loads the latest and writes them
+   * locally-managed full maps.	 (update_from_paxos loads the latest and writes them
    * out going forward from there, but if we just synced that may mean we skip some.)
    */
   virtual bool should_stash_full() {
@@ -221,7 +221,7 @@ private:
     OSDMonitor *cmon;
     MOSDBoot *m;
     bool logit;
-    C_Booted(OSDMonitor *cm, MOSDBoot *m_, bool l=true) : 
+    C_Booted(OSDMonitor *cm, MOSDBoot *m_, bool l=true) :
       cmon(cm), m(m_), logit(l) {}
     void finish(int r) {
       if (r >= 0)
@@ -256,7 +256,7 @@ private:
   OSDMonitor(Monitor *mn, Paxos *p, string service_name)
   : PaxosService(mn, p, service_name) { }
 
-  void tick();  // check state, take actions
+  void tick();	// check state, take actions
 
   int parse_osd_id(const char *s, stringstream *pss);
 

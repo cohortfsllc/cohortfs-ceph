@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 #include "MDSTableServer.h"
@@ -86,16 +86,16 @@ void MDSTableServer::handle_commit(MMDSTableRequest *req)
       return;
 
     _note_commit(tid);
-    mds->mdlog->start_submit_entry(new ETableServer(table, TABLESERVER_OP_COMMIT, 0, -1, 
+    mds->mdlog->start_submit_entry(new ETableServer(table, TABLESERVER_OP_COMMIT, 0, -1,
 						    tid, version));
     mds->mdlog->wait_for_safe(new C_Commit(this, req));
   }
   else if (tid <= version) {
-    dout(0) << "got commit for tid " << tid << " <= " << version 
-	    << ", already committed, sending ack." 
+    dout(0) << "got commit for tid " << tid << " <= " << version
+	    << ", already committed, sending ack."
 	    << dendl;
     _commit_logged(req);
-  } 
+  }
   else {
     // wtf.
     dout(0) << "got commit for tid " << tid << " > " << version << dendl;
@@ -125,7 +125,7 @@ void MDSTableServer::handle_rollback(MMDSTableRequest *req)
   assert(pending_for_mds.count(tid));
   _rollback(tid);
   _note_rollback(tid);
-  mds->mdlog->start_submit_entry(new ETableServer(table, TABLESERVER_OP_ROLLBACK, 0, -1, 
+  mds->mdlog->start_submit_entry(new ETableServer(table, TABLESERVER_OP_ROLLBACK, 0, -1,
 						  tid, version));
   req->put();
 }

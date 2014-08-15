@@ -30,7 +30,7 @@ void cls_version_inc(librados::ObjectWriteOperation& op, obj_version& objv, Vers
   bufferlist in;
   cls_version_inc_op call;
   call.objv = objv;
-  
+
   obj_version_cond c;
   c.cond = cond;
   c.ver = objv;
@@ -65,11 +65,11 @@ public:
     if (r >= 0) {
       cls_version_read_ret ret;
       try {
-        bufferlist::iterator iter = outbl.begin();
-        ::decode(ret, iter);
+	bufferlist::iterator iter = outbl.begin();
+	::decode(ret, iter);
 	*objv = ret.objv;
       } catch (buffer::error& err) {
-        // nothing we can do about it atm
+	// nothing we can do about it atm
       }
     }
   }

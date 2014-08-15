@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -183,7 +183,7 @@ TEST(DaemonConfig, InjectArgsReject) {
   // We should complain about the garbage in the input
   std::string injection("--random-garbage-in-injectargs 26 --num-client 28");
   ret = g_ceph_context->_conf->injectargs(injection, &cout);
-  ASSERT_EQ(ret, -EINVAL); 
+  ASSERT_EQ(ret, -EINVAL);
 
   // But, debug should still be set...
   memset(buf, 0, sizeof(buf));
@@ -200,7 +200,7 @@ TEST(DaemonConfig, InjectArgsReject) {
   // variable and there isn't an observer for it.
   std::string injection2("--osd_data /tmp/some-other-directory --num-client 4");
   ret = g_ceph_context->_conf->injectargs(injection2, &cout);
-  ASSERT_EQ(ret, -ENOSYS); 
+  ASSERT_EQ(ret, -ENOSYS);
 
   // It should be unchanged.
   memset(buf2, 0, sizeof(buf2));

@@ -61,7 +61,7 @@ std::string create_one_ec_pool(const std::string &pool_name, rados_t *cluster)
     oss << "rados_mon_command erasure-code-profile set name:testprofile failed with error " << ret;
     return oss.str();
   }
-    
+
   std::string cmdstr = "{\"prefix\": \"osd pool create\", \"pool\": \"" +
      pool_name + "\", \"pool_type\":\"erasure\", \"pg_num\":8, \"pgp_num\":8, \"erasure_code_profile\":\"testprofile\"}";
   cmd[0] = (char *)cmdstr.c_str();
@@ -114,7 +114,7 @@ std::string create_one_ec_pool_pp(const std::string &pool_name, Rados &cluster)
     oss << "mon_command erasure-code-profile set name:testprofile failed with error " << ret;
     return oss.str();
   }
-    
+
   ret = cluster.mon_command(
     "{\"prefix\": \"osd pool create\", \"pool\": \"" + pool_name + "\", \"pool_type\":\"erasure\", \"pg_num\":8, \"pgp_num\":8, \"erasure_code_profile\":\"testprofile\"}",
     inbl, NULL, NULL);

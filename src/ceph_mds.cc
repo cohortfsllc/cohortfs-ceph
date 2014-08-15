@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #include <sys/types.h>
@@ -56,20 +56,20 @@ void usage()
 {
   derr << "usage: ceph-mds -i name [flags] [[--journal_check rank]|[--hot-standby][rank]]\n"
        << "  -m monitorip:port\n"
-       << "        connect to monitor at given address\n"
+       << "	   connect to monitor at given address\n"
        << "  --debug_mds n\n"
-       << "        debug MDS level (e.g. 10)\n"
+       << "	   debug MDS level (e.g. 10)\n"
        << "  --dump-journal rank filename\n"
-       << "        dump the MDS journal (binary) for rank.\n"
+       << "	   dump the MDS journal (binary) for rank.\n"
        << "  --dump-journal-entries rank filename\n"
-       << "        dump the MDS journal (JSON) for rank.\n"
+       << "	   dump the MDS journal (JSON) for rank.\n"
        << "  --journal-check rank\n"
-       << "        replay the journal for rank, then exit\n"
+       << "	   replay the journal for rank, then exit\n"
        << "  --hot-standby rank\n"
-       << "        start up as a hot standby for rank\n"
+       << "	   start up as a hot standby for rank\n"
        << "  --reset-journal rank\n"
-       << "        discard the MDS journal for rank, and replace it with a single\n"
-       << "        event that updates/resets inotable and sessionmap on replay.\n"
+       << "	   discard the MDS journal for rank, and replace it with a single\n"
+       << "	   event that updates/resets inotable and sessionmap on replay.\n"
        << dendl;
   generic_server_usage();
 }
@@ -142,7 +142,7 @@ static void handle_mds_signal(int signum)
     mds->handle_signal(signum);
 }
 
-int main(int argc, const char **argv) 
+int main(int argc, const char **argv)
 {
   vector<const char*> args;
   argv_to_vec(argc, argv, args);
@@ -193,8 +193,8 @@ int main(int argc, const char **argv)
     else if (ceph_argparse_witharg(args, i, &val, "--journal-check", (char*)NULL)) {
       int r = parse_rank("journal-check", val);
       if (shadow) {
-        dout(0) << "Error: can only select one standby state" << dendl;
-        return -1;
+	dout(0) << "Error: can only select one standby state" << dendl;
+	return -1;
       }
       dout(0) << "requesting oneshot_replay for mds." << r << dendl;
       shadow = MDSMap::STATE_ONESHOT_REPLAY;
@@ -206,8 +206,8 @@ int main(int argc, const char **argv)
     else if (ceph_argparse_witharg(args, i, &val, "--hot-standby", (char*)NULL)) {
       int r = parse_rank("hot-standby", val);
       if (shadow) {
-        dout(0) << "Error: can only select one standby state" << dendl;
-        return -1;
+	dout(0) << "Error: can only select one standby state" << dendl;
+	return -1;
       }
       dout(0) << "requesting standby_replay for mds." << r << dendl;
       shadow = MDSMap::STATE_STANDBY_REPLAY;
@@ -358,7 +358,7 @@ int main(int argc, const char **argv)
   pidfile_remove();
 
   // only delete if it was a clean shutdown (to aid memory leak
-  // detection, etc.).  don't bother if it was a suicide.
+  // detection, etc.).	don't bother if it was a suicide.
   if (mds->is_stopped())
     delete mds;
 

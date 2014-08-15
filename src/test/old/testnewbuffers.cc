@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 
 #include <list>
 #include <iostream>
@@ -14,7 +16,7 @@ using namespace std;
   public:
 	bufferlist bl;
 	Th(bufferlist& o) : bl(o) { }
-	
+
 	void *entry() {
 	  //cout << "start" << endl;
 	  // thrash it a bit.
@@ -46,7 +48,7 @@ int main()
 
   bufferptr p3 = buffer::copy("abcdef",7);
   //bufferptr p3 = new buffer("abcdef",7);
-  
+
   cout << "p3 is " << p3.c_str() << " " << p3 << endl;
 
   bufferlist bl;

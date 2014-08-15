@@ -27,7 +27,7 @@
 #     ...distribute /tmp/foo to each monitor node...
 #
 #  mon$ mkcephfs -d /tmp/foo --init-local-daemons mon
-#  
+#
 #  master$ cp /tmp/foo/keyring.admin /etc/ceph/keyring  # don't forget!
 #
 # In the degenerate case (one node), this is just
@@ -222,7 +222,7 @@ if [ $preparemonmap -eq 1 ]; then
     monmap="$dir/monmap"
     echo $BINDIR/monmaptool --create --clobber $args --print $monmap || exit 1
     $BINDIR/monmaptool --create --clobber $args --print $monmap || exit 1
-        
+
     # copy conf
     cp $conf $dir/conf
 
@@ -237,7 +237,7 @@ if [ -n "$initdaemon" ]; then
     type=`echo $name | cut -c 1-3`   # e.g. 'mon', if $name is 'mon1'
     id=`echo $name | cut -c 4- | sed 's/^\\.//'`
     name="$type.$id"
-    
+
     # create /var/run/ceph (or wherever pid file and/or admin socket live)
     get_conf pid_file "/var/run/ceph/$name.pid" "pid file"
     rundir=`dirname $pid_file`
@@ -257,7 +257,7 @@ if [ -n "$initdaemon" ]; then
 	get_conf osd_keyring "$osd_data/keyring" "keyring"
 	$BINDIR/ceph-authtool -p -n $name $osd_keyring > $dir/key.$name
     fi
-    
+
     if [ $type = "mds" ]; then
 	get_conf mds_data "/var/lib/ceph/mds/ceph-$id" "mds data"
 	get_conf mds_keyring "$mds_data/keyring" "keyring"
@@ -277,7 +277,7 @@ if [ -n "$initdaemon" ]; then
 	fi
 	$BINDIR/ceph-mon -c $conf --mkfs -i $id --monmap $dir/monmap --osdmap $dir/osdmap -k $dir/keyring.mon
     fi
-    
+
     exit 0
 fi
 
@@ -294,7 +294,7 @@ if [ -n "$initlocaldaemons" ]; then
 
 	check_host || continue
 
-	$0 -d $dir --init-daemon $name	
+	$0 -d $dir --init-daemon $name
     done
     exit 0
 fi
@@ -353,12 +353,12 @@ if [ -n "$prepareosdfs" ]; then
     fi
     [ -n "$fs_opt" ] && fs_opt="-o $fs_opt"
     get_conf osd_user "root" "user"
-    
+
     if [ -n "$osd_journal" ] && echo "fs_devs" | grep -q -w "$osd_journal" ; then
         echo "ERROR: osd journal device ($osd_journal) also used by devs ($fs_devs)"
 	exit 1
     fi
-    
+
     test -d $osd_data || mkdir -p $osd_data
 
     if [ -n "$osd_journal" ]; then
@@ -496,7 +496,7 @@ if [ $allhosts -eq 1 ]; then
 		cp $dir/conf /etc/ceph/ceph.conf
 	    fi
 	fi
-	
+
 	if [ $mkfs -eq 1 ] && [ "$type" = "osd" ]; then
 	    do_root_cmd "$0 -d $rdir --prepare-osdfs $name"
 	fi
@@ -514,7 +514,7 @@ if [ $allhosts -eq 1 ]; then
 
     # prepare monitors
     $0 -d $dir --prepare-mon $moreargs
-    
+
     # mons
     get_name_list "mon"
     for name in $what; do
@@ -524,7 +524,7 @@ if [ $allhosts -eq 1 ]; then
 	name="$type.$id"
 
 	check_host || continue
-	
+
 	if [ -n "$ssh" ]; then
 	    rdir=`mktemp -u /tmp/mkfs.ceph.XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX` || exit 1
 	    echo pushing everything to $host
@@ -543,7 +543,7 @@ if [ $allhosts -eq 1 ]; then
 		cp $dir/conf /etc/ceph/ceph.conf
 	    fi
 	fi
-	
+
 	do_root_cmd "$0 -d $rdir --init-daemon $name"
 
 	if [ -n "$ssh" ]; then

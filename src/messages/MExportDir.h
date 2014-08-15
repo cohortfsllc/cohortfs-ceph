@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -20,7 +20,7 @@
 
 
 class MExportDir : public Message {
- public: 
+ public:
   dirfrag_t dirfrag;
   bufferlist export_data;
   vector<dirfrag_t> bounds;
@@ -40,7 +40,7 @@ public:
     o << "export(" << dirfrag << ")";
   }
 
-  void add_export(dirfrag_t df) { 
+  void add_export(dirfrag_t df) {
     bounds.push_back(df);
   }
 

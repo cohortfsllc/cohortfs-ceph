@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 #include "TextTable.h"
@@ -67,7 +67,7 @@ std::ostream &operator<<(std::ostream& out, TextTable &t)
   for (unsigned int i = 0; i < t.col.size(); i++) {
     TextTable::TextTableColumn col = t.col[i];
     out << string(t.indent, ' ')
-        << pad(col.heading, col.width, col.hd_align)
+	<< pad(col.heading, col.width, col.hd_align)
 	<< ' ';
   }
   out << endl;

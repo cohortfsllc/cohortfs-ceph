@@ -151,12 +151,12 @@ crc32_iscsi_00:
 %define block_0         rcx
 %define block_1         r8
 %define block_2         r11
-%define len             rsi 
-%define len_dw          esi 
-%define len_w           si 
-%define len_b           sil 
-%define crc_init        rdx 
-%define crc_init_dw     edx 
+%define len             rsi
+%define len_dw          esi
+%define len_w           si
+%define len_b           sil
+%define crc_init        rdx
+%define crc_init_dw     edx
 %else
 %define bufp            rcx
 %define bufp_dw         ecx
@@ -166,12 +166,12 @@ crc32_iscsi_00:
 %define block_0         rdi
 %define block_1         rsi
 %define block_2         r11
-%define len             rdx 
-%define len_dw          edx 
-%define len_w           dx 
-%define len_b           dl 
-%define crc_init        r8 
-%define crc_init_dw     r8d 
+%define len             rdx
+%define len_dw          edx
+%define len_w           dx
+%define len_b           dl
+%define crc_init        r8
+%define crc_init_dw     r8d
 %endif
 
 

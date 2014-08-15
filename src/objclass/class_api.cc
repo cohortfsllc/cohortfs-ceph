@@ -52,8 +52,8 @@ int cls_unregister(cls_handle_t handle)
 }
 
 int cls_register_method(cls_handle_t hclass, const char *method,
-                        int flags,
-                        cls_method_call_t class_call, cls_method_handle_t *handle)
+			int flags,
+			cls_method_call_t class_call, cls_method_handle_t *handle)
 {
   if (!(flags & (CLS_METHOD_RD | CLS_METHOD_WR)))
     return -EINVAL;
@@ -65,7 +65,7 @@ int cls_register_method(cls_handle_t hclass, const char *method,
 }
 
 int cls_register_cxx_method(cls_handle_t hclass, const char *method,
-                            int flags,
+			    int flags,
 			    cls_method_cxx_call_t class_call, cls_method_handle_t *handle)
 {
   ClassHandler::ClassData *cls = (ClassHandler::ClassData *)hclass;
@@ -111,7 +111,7 @@ int cls_call(cls_method_context_t hctx, const char *cls, const char *method,
 }
 
 int cls_getxattr(cls_method_context_t hctx, const char *name,
-                                 char **outdata, int *outdatalen)
+				 char **outdata, int *outdatalen)
 {
   OSDVol::OpContext **pctx = (OSDVol::OpContext **)hctx;
   bufferlist name_data;
@@ -134,7 +134,7 @@ int cls_getxattr(cls_method_context_t hctx, const char *name,
 }
 
 int cls_setxattr(cls_method_context_t hctx, const char *name,
-                                 const char *value, int val_len)
+				 const char *value, int val_len)
 {
   OSDVol::OpContext **pctx = (OSDVol::OpContext **)hctx;
   bufferlist name_data;
@@ -316,7 +316,7 @@ int cls_cxx_getxattrs(cls_method_context_t hctx, map<string, bufferlist> *attrse
 }
 
 int cls_cxx_setxattr(cls_method_context_t hctx, const char *name,
-                     bufferlist *inbl)
+		     bufferlist *inbl)
 {
   OSDVol::OpContext **pctx = (OSDVol::OpContext **)hctx;
   bufferlist name_data;

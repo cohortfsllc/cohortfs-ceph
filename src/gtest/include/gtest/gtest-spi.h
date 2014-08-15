@@ -54,7 +54,7 @@ class GTEST_API_ ScopedFakeTestPartResultReporter
   // The two possible mocking modes of this object.
   enum InterceptMode {
     INTERCEPT_ONLY_CURRENT_THREAD,  // Intercepts only thread local failures.
-    INTERCEPT_ALL_THREADS           // Intercepts all failures.
+    INTERCEPT_ALL_THREADS	    // Intercepts all failures.
   };
 
   // The c'tor sets this object as the test part result reporter used
@@ -65,7 +65,7 @@ class GTEST_API_ ScopedFakeTestPartResultReporter
 
   // Same as above, but you can choose the interception scope of this object.
   ScopedFakeTestPartResultReporter(InterceptMode intercept_mode,
-                                   TestPartResultArray* result);
+				   TestPartResultArray* result);
 
   // The d'tor restores the previous test part result reporter.
   virtual ~ScopedFakeTestPartResultReporter();
@@ -97,8 +97,8 @@ class GTEST_API_ SingleFailureChecker {
  public:
   // The constructor remembers the arguments.
   SingleFailureChecker(const TestPartResultArray* results,
-                       TestPartResult::Type type,
-                       const string& substr);
+		       TestPartResult::Type type,
+		       const string& substr);
   ~SingleFailureChecker();
  private:
   const TestPartResultArray* const results_;
@@ -143,11 +143,11 @@ class GTEST_API_ SingleFailureChecker {
     };\
     ::testing::TestPartResultArray gtest_failures;\
     ::testing::internal::SingleFailureChecker gtest_checker(\
-        &gtest_failures, ::testing::TestPartResult::kFatalFailure, (substr));\
+	&gtest_failures, ::testing::TestPartResult::kFatalFailure, (substr));\
     {\
       ::testing::ScopedFakeTestPartResultReporter gtest_reporter(\
-          ::testing::ScopedFakeTestPartResultReporter:: \
-          INTERCEPT_ONLY_CURRENT_THREAD, &gtest_failures);\
+	  ::testing::ScopedFakeTestPartResultReporter:: \
+	  INTERCEPT_ONLY_CURRENT_THREAD, &gtest_failures);\
       GTestExpectFatalFailureHelper::Execute();\
     }\
   } while (::testing::internal::AlwaysFalse())
@@ -160,11 +160,11 @@ class GTEST_API_ SingleFailureChecker {
     };\
     ::testing::TestPartResultArray gtest_failures;\
     ::testing::internal::SingleFailureChecker gtest_checker(\
-        &gtest_failures, ::testing::TestPartResult::kFatalFailure, (substr));\
+	&gtest_failures, ::testing::TestPartResult::kFatalFailure, (substr));\
     {\
       ::testing::ScopedFakeTestPartResultReporter gtest_reporter(\
-          ::testing::ScopedFakeTestPartResultReporter:: \
-          INTERCEPT_ALL_THREADS, &gtest_failures);\
+	  ::testing::ScopedFakeTestPartResultReporter:: \
+	  INTERCEPT_ALL_THREADS, &gtest_failures);\
       GTestExpectFatalFailureHelper::Execute();\
     }\
   } while (::testing::internal::AlwaysFalse())
@@ -205,12 +205,12 @@ class GTEST_API_ SingleFailureChecker {
   do {\
     ::testing::TestPartResultArray gtest_failures;\
     ::testing::internal::SingleFailureChecker gtest_checker(\
-        &gtest_failures, ::testing::TestPartResult::kNonFatalFailure, \
-        (substr));\
+	&gtest_failures, ::testing::TestPartResult::kNonFatalFailure, \
+	(substr));\
     {\
       ::testing::ScopedFakeTestPartResultReporter gtest_reporter(\
-          ::testing::ScopedFakeTestPartResultReporter:: \
-          INTERCEPT_ONLY_CURRENT_THREAD, &gtest_failures);\
+	  ::testing::ScopedFakeTestPartResultReporter:: \
+	  INTERCEPT_ONLY_CURRENT_THREAD, &gtest_failures);\
       if (::testing::internal::AlwaysTrue()) { statement; }\
     }\
   } while (::testing::internal::AlwaysFalse())
@@ -219,14 +219,14 @@ class GTEST_API_ SingleFailureChecker {
   do {\
     ::testing::TestPartResultArray gtest_failures;\
     ::testing::internal::SingleFailureChecker gtest_checker(\
-        &gtest_failures, ::testing::TestPartResult::kNonFatalFailure, \
-        (substr));\
+	&gtest_failures, ::testing::TestPartResult::kNonFatalFailure, \
+	(substr));\
     {\
       ::testing::ScopedFakeTestPartResultReporter gtest_reporter(\
-          ::testing::ScopedFakeTestPartResultReporter::INTERCEPT_ALL_THREADS, \
-          &gtest_failures);\
+	  ::testing::ScopedFakeTestPartResultReporter::INTERCEPT_ALL_THREADS, \
+	  &gtest_failures);\
       if (::testing::internal::AlwaysTrue()) { statement; }\
     }\
   } while (::testing::internal::AlwaysFalse())
 
-#endif  // GTEST_INCLUDE_GTEST_GTEST_SPI_H_
+#endif	// GTEST_INCLUDE_GTEST_GTEST_SPI_H_

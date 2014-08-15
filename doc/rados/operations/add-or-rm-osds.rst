@@ -3,7 +3,7 @@
 ======================
 
 When you have a cluster up and running, you may add OSDs or remove OSDs
-from the cluster at runtime. 
+from the cluster at runtime.
 
 Adding OSDs
 ===========
@@ -18,7 +18,7 @@ are reaching the upper end of its capacity. As your cluster reaches its ``near
 full`` ratio, you should add one or more OSDs to expand your cluster's capacity.
 
 .. warning:: Do not let your cluster reach its ``full ratio`` before
-   adding an OSD. OSD failures that occur after the cluster reaches 
+   adding an OSD. OSD failures that occur after the cluster reaches
    its ``near full`` ratio may cause the cluster to exceed its
    ``full ratio``.
 
@@ -28,7 +28,7 @@ Deploy your Hardware
 If you are adding a new host when adding a new OSD,  see `Hardware
 Recommendations`_ for details on minimum recommendations for OSD hardware. To
 add an OSD host to your cluster, first make sure you have an up-to-date version
-of Linux installed, and you have made some initial preparations for your 
+of Linux installed, and you have made some initial preparations for your
 storage drives.  See `Filesystem Recommendations`_ for details.
 
 Add your OSD host to a rack in your cluster, connect it to the network
@@ -57,48 +57,48 @@ This procedure sets up an ``ceph-osd`` daemon, configures it to use one drive,
 and configures the cluster to distribute data to the OSD. If your host has
 multiple drives, you may add an OSD for each drive by repeating this procedure.
 
-To add an OSD, create a data directory for it, mount a drive to that directory, 
+To add an OSD, create a data directory for it, mount a drive to that directory,
 add the OSD to the cluster, and then add it to the CRUSH map.
 
 When you add the OSD to the CRUSH map, consider the weight you give to the new
 OSD. Hard drive capacity grows 40% per year, so newer OSD hosts may have larger
-hard drives than older hosts in the cluster (i.e., they may have greater 
+hard drives than older hosts in the cluster (i.e., they may have greater
 weight).
 
 .. tip:: Ceph prefers uniform hardware across pools. If you are adding drives
-   of dissimilar size, you can adjust their weights. However, for best 
+   of dissimilar size, you can adjust their weights. However, for best
    performance, consider a CRUSH hierarchy with drives of the same type/size.
 
-#. Create the OSD. If no UUID is given, it will be set automatically when the 
-   OSD starts up. The following command will output the OSD number, which you 
+#. Create the OSD. If no UUID is given, it will be set automatically when the
+   OSD starts up. The following command will output the OSD number, which you
    will need for subsequent steps. ::
-	
+
 	ceph osd create [{uuid}]
 
 
-#. Create the default directory on your new OSD. :: 
+#. Create the default directory on your new OSD. ::
 
 	ssh {new-osd-host}
 	sudo mkdir /var/lib/ceph/osd/ceph-{osd-number}
-	
 
-#. If the OSD is for a drive other than the OS drive, prepare it 
-   for use with Ceph, and mount it to the directory you just created:: 
+
+#. If the OSD is for a drive other than the OS drive, prepare it
+   for use with Ceph, and mount it to the directory you just created::
 
 	ssh {new-osd-host}
 	sudo mkfs -t {fstype} /dev/{drive}
 	sudo mount -o user_xattr /dev/{hdd} /var/lib/ceph/osd/ceph-{osd-number}
 
-	
-#. Initialize the OSD data directory. :: 
+
+#. Initialize the OSD data directory. ::
 
 	ssh {new-osd-host}
 	ceph-osd -i {osd-num} --mkfs --mkkey
-	
+
    The directory must be empty before you can run ``ceph-osd``.
 
-#. Register the OSD authentication key. The value of ``ceph`` for 
-   ``ceph-{osd-num}`` in the path is the ``$cluster-$id``.  If your 
+#. Register the OSD authentication key. The value of ``ceph`` for
+   ``ceph-{osd-num}`` in the path is the ``$cluster-$id``.  If your
    cluster name differs from ``ceph``, use your cluster name instead.::
 
 	ceph auth add osd.{osd-num} osd 'allow *' mon 'allow rwx' -i /var/lib/ceph/osd/ceph-{osd-num}/keyring
@@ -109,12 +109,12 @@ weight).
    bucket (if it's not already in the CRUSH map), add the device as an item in the
    host, assign it a weight, recompile it and set it. See `Add/Move an OSD`_ for
    details.
-   
+
    For Argonaut (v 0.48), execute the following::
 
 	ceph osd crush add {id} {name} {weight}  [{bucket-type}={bucket-name} ...]
 
-   For Bobtail (v 0.56) and later releases, execute the following:: 
+   For Bobtail (v 0.56) and later releases, execute the following::
 
 	ceph osd crush add {id-or-name} {weight}  [{bucket-type}={bucket-name} ...]
 
@@ -153,8 +153,8 @@ weight).
 Starting the OSD
 ----------------
 
-After you add an OSD to Ceph, the OSD is in your configuration. However, 
-it is not yet running. The OSD is ``down`` and ``in``. You must start 
+After you add an OSD to Ceph, the OSD is in your configuration. However,
+it is not yet running. The OSD is ``down`` and ``in``. You must start
 your new OSD before it can begin receiving data. You may use
 ``service ceph`` from your admin host or start the OSD from its host
 machine.
@@ -176,7 +176,7 @@ Observe the Data Migration
 
 Once you have added your new OSD to the CRUSH map, Ceph  will begin rebalancing
 the server by migrating placement groups to your new OSD. You can observe this
-process with  the `ceph`_ tool. :: 
+process with  the `ceph`_ tool. ::
 
 	ceph -w
 
@@ -202,16 +202,16 @@ are reaching the upper end of its capacity. Ensure that when you remove an OSD
 that your cluster is not at its ``near full`` ratio.
 
 .. warning:: Do not let your cluster reach its ``full ratio`` when
-   removing an OSD. Removing OSDs could cause the cluster to reach 
+   removing an OSD. Removing OSDs could cause the cluster to reach
    or exceed its ``full ratio``.
-   
+
 
 Take the OSD ``out`` of the Cluster
 -----------------------------------
 
 Before you remove an OSD, it is usually ``up`` and ``in``.  You need to take it
 out of the cluster so that Ceph can begin rebalancing and copying its data to
-other OSDs. :: 
+other OSDs. ::
 
 	ceph osd out {osd-num}
 
@@ -221,7 +221,7 @@ Observe the Data Migration
 
 Once you have taken your OSD ``out`` of the cluster, Ceph  will begin
 rebalancing the cluster by migrating placement groups out of the OSD you
-removed. You can observe  this process with  the `ceph`_ tool. :: 
+removed. You can observe  this process with  the `ceph`_ tool. ::
 
 	ceph -w
 
@@ -233,14 +233,14 @@ completes. (Control-c to exit.)
 Stopping the OSD
 ----------------
 
-After you take an OSD out of the cluster, it may still be running. 
-That is, the OSD may be ``up`` and ``out``. You must stop 
-your OSD before you remove it from the configuration. :: 
+After you take an OSD out of the cluster, it may still be running.
+That is, the OSD may be ``up`` and ``out``. You must stop
+your OSD before you remove it from the configuration. ::
 
 	ssh {osd-host}
 	sudo /etc/init.d/ceph stop osd.{osd-num}
 
-Once you stop your OSD, it is ``down``. 
+Once you stop your OSD, it is ``down``.
 
 
 Removing the OSD
@@ -255,25 +255,25 @@ OSD for each drive by repeating this procedure.
 #. Remove the OSD from the CRUSH map so that it no longer receives data. You may
    also decompile the CRUSH map, remove the OSD from the device list, remove the
    device as an item in the host bucket or remove the host  bucket (if it's in the
-   CRUSH map and you intend to remove the host), recompile the map and set it. 
-   See `Remove an OSD`_ for details. :: 
+   CRUSH map and you intend to remove the host), recompile the map and set it.
+   See `Remove an OSD`_ for details. ::
 
 	ceph osd crush remove {name}
-	
+
 #. Remove the OSD authentication key. ::
 
 	ceph auth del osd.{osd-num}
-	
-   The value of ``ceph`` for ``ceph-{osd-num}`` in the path is the ``$cluster-$id``. 
-   If your cluster name differs from ``ceph``, use your cluster name instead.	
-	
+
+   The value of ``ceph`` for ``ceph-{osd-num}`` in the path is the ``$cluster-$id``.
+   If your cluster name differs from ``ceph``, use your cluster name instead.
+
 #. Remove the OSD. ::
 
 	ceph osd rm {osd-num}
 	#for example
 	ceph osd rm 1
-	
-#. Navigate to the host where you keep the master copy of the cluster's 
+
+#. Navigate to the host where you keep the master copy of the cluster's
    ``ceph.conf`` file. ::
 
 	ssh {admin-host}
@@ -284,11 +284,11 @@ OSD for each drive by repeating this procedure.
 
 	[osd.1]
 		host = {hostname}
- 
-#. From the host where you keep the master copy of the cluster's ``ceph.conf`` file, 
-   copy the updated ``ceph.conf`` file to the ``/etc/ceph`` directory of other 
+
+#. From the host where you keep the master copy of the cluster's ``ceph.conf`` file,
+   copy the updated ``ceph.conf`` file to the ``/etc/ceph`` directory of other
    hosts in your cluster.
-   
-		
-	
+
+
+
 .. _Remove an OSD: ../crush-map#removeosd

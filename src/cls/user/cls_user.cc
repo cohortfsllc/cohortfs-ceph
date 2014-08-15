@@ -51,7 +51,7 @@ static void get_key_by_bucket_name(const string& bucket_name, string *key)
 }
 
 static int get_existing_bucket_entry(cls_method_context_t hctx, const string& bucket_name,
-                                     cls_user_bucket_entry& entry)
+				     cls_user_bucket_entry& entry)
 {
   if (bucket_name.empty()) {
     return -EINVAL;
@@ -168,7 +168,7 @@ static int cls_user_set_buckets_info(cls_method_context_t hctx, bufferlist *in, 
     }
 
     CLS_LOG(20, "storing entry for key=%s size=%lld count=%lld",
-            key.c_str(), (long long)update_entry.size, (long long)update_entry.count);
+	    key.c_str(), (long long)update_entry.size, (long long)update_entry.count);
 
     apply_entry_stats(update_entry, &entry);
     entry.user_stats_sync = true;
@@ -188,7 +188,7 @@ static int cls_user_set_buckets_info(cls_method_context_t hctx, bufferlist *in, 
     header.last_stats_update = op.time;
 
   ::encode(header, bl);
-  
+
   ret = cls_cxx_map_write_header(hctx, &bl);
   if (ret < 0)
     return ret;
@@ -271,7 +271,7 @@ static int cls_user_remove_bucket(cls_method_context_t hctx, bufferlist *in, buf
   ret = remove_entry(hctx, key);
   if (ret < 0)
     return ret;
-  
+
   return 0;
 }
 
@@ -370,9 +370,9 @@ void __cls_init()
 
   /* log */
   cls_register_cxx_method(h_class, "set_buckets_info", CLS_METHOD_RD | CLS_METHOD_WR,
-                          cls_user_set_buckets_info, &h_user_set_buckets_info);
+			  cls_user_set_buckets_info, &h_user_set_buckets_info);
   cls_register_cxx_method(h_class, "complete_stats_sync", CLS_METHOD_RD | CLS_METHOD_WR,
-                          cls_user_complete_stats_sync, &h_user_set_buckets_info);
+			  cls_user_complete_stats_sync, &h_user_set_buckets_info);
   cls_register_cxx_method(h_class, "remove_bucket", CLS_METHOD_RD | CLS_METHOD_WR, cls_user_remove_bucket, &h_user_remove_bucket);
   cls_register_cxx_method(h_class, "list_buckets", CLS_METHOD_RD, cls_user_list_buckets, &h_user_list_buckets);
   cls_register_cxx_method(h_class, "get_header", CLS_METHOD_RD, cls_user_get_header, &h_user_get_header);

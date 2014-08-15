@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #ifndef CEPH_RGW_METADATA_H
 #define CEPH_RGW_METADATA_H
 
@@ -29,7 +31,7 @@ class RGWMetadataObject {
 protected:
   obj_version objv;
   time_t mtime;
-  
+
 public:
   RGWMetadataObject() : mtime(0) {}
   virtual ~RGWMetadataObject() {}
@@ -51,7 +53,7 @@ public:
     APPLY_NEWER
   };
   static bool string_to_sync_type(const string& sync_string,
-                                  sync_type_t& type) {
+				  sync_type_t& type) {
     if (sync_string.compare("update-by-version") == 0)
       type = APPLY_UPDATES;
     else if (sync_string.compare("update-by-timestamp") == 0)
@@ -67,7 +69,7 @@ public:
 
   virtual int get(RGWRados *store, string& entry, RGWMetadataObject **obj) = 0;
   virtual int put(RGWRados *store, string& entry, RGWObjVersionTracker& objv_tracker,
-                  time_t mtime, JSONObj *obj, sync_type_t type) = 0;
+		  time_t mtime, JSONObj *obj, sync_type_t type) = 0;
   virtual int remove(RGWRados *store, string& entry, RGWObjVersionTracker& objv_tracker) = 0;
 
   virtual int list_keys_init(RGWRados *store, void **phandle) = 0;
@@ -88,8 +90,8 @@ protected:
    * @return true if the update should proceed, false otherwise.
    */
   bool check_versions(const obj_version& ondisk, const time_t& ondisk_time,
-                      const obj_version& incoming, const time_t& incoming_time,
-                      sync_type_t sync_mode) {
+		      const obj_version& incoming, const time_t& incoming_time,
+		      sync_type_t sync_mode) {
     switch (sync_mode) {
     case APPLY_UPDATES:
       if ((ondisk.tag != incoming.tag) ||
@@ -149,8 +151,8 @@ public:
   void init_list_entries(int shard_id, utime_t& from_time, utime_t& end_time, string& marker, void **handle);
   void complete_list_entries(void *handle);
   int list_entries(void *handle,
-                   int max_entries,
-                   list<cls_log_entry>& entries,
+		   int max_entries,
+		   list<cls_log_entry>& entries,
 		   string *out_marker,
 		   bool *truncated);
 
@@ -172,10 +174,10 @@ class RGWMetadataManager {
 
   int find_handler(const string& metadata_key, RGWMetadataHandler **handler, string& entry);
   int pre_modify(RGWMetadataHandler *handler, string& section, const string& key,
-                 RGWMetadataLogData& log_data, RGWObjVersionTracker *objv_tracker,
-                 RGWMDLogStatus op_type);
+		 RGWMetadataLogData& log_data, RGWObjVersionTracker *objv_tracker,
+		 RGWMDLogStatus op_type);
   int post_modify(RGWMetadataHandler *handler, const string& section, const string& key, RGWMetadataLogData& log_data,
-                 RGWObjVersionTracker *objv_tracker, int ret);
+		 RGWObjVersionTracker *objv_tracker, int ret);
 
 public:
   RGWMetadataManager(CephContext *_cct, RGWRados *_store);
@@ -186,18 +188,18 @@ public:
   RGWMetadataHandler *get_handler(const char *type);
 
   int put_entry(RGWMetadataHandler *handler, const string& key, bufferlist& bl, bool exclusive,
-                RGWObjVersionTracker *objv_tracker, time_t mtime, map<string, bufferlist> *pattrs = NULL);
+		RGWObjVersionTracker *objv_tracker, time_t mtime, map<string, bufferlist> *pattrs = NULL);
   int remove_entry(RGWMetadataHandler *handler, string& key, RGWObjVersionTracker *objv_tracker);
   int set_attr(RGWMetadataHandler *handler, string& key, rgw_obj& obj, string& attr, bufferlist& bl,
-               RGWObjVersionTracker *objv_tracker);
+	       RGWObjVersionTracker *objv_tracker);
   int set_attrs(RGWMetadataHandler *handler, string& key,
-                rgw_obj& obj, map<string, bufferlist>& attrs,
-                map<string, bufferlist>* rmattrs,
-                RGWObjVersionTracker *objv_tracker);
+		rgw_obj& obj, map<string, bufferlist>& attrs,
+		map<string, bufferlist>* rmattrs,
+		RGWObjVersionTracker *objv_tracker);
   int get(string& metadata_key, Formatter *f);
   int put(string& metadata_key, bufferlist& bl,
-          RGWMetadataHandler::sync_type_t sync_mode,
-          obj_version *existing_version = NULL);
+	  RGWMetadataHandler::sync_type_t sync_mode,
+	  obj_version *existing_version = NULL);
   int remove(string& metadata_key);
 
   int list_keys_init(string& section, void **phandle);

@@ -3,7 +3,7 @@
 cwd=`pwd`
 cat > conf <<EOF
 [mon]
-admin socket = 
+admin socket =
 log file = $cwd/\$name.log
 debug mon = 20
 debug ms = 1

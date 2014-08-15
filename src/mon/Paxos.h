@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 /*
@@ -18,15 +18,15 @@ time---->
 cccccccccccccccccca????????????????????????????????????????
 cccccccccccccccccca????????????????????????????????????????
 cccccccccccccccccca???????????????????????????????????????? leader
-cccccccccccccccccc????????????????????????????????????????? 
-ccccc?????????????????????????????????????????????????????? 
+cccccccccccccccccc?????????????????????????????????????????
+ccccc??????????????????????????????????????????????????????
 
 last_committed
 
 pn_from
 pn
 
-a 12v 
+a 12v
 b 12v
 c 14v
 d
@@ -131,7 +131,7 @@ class Paxos;
  * This libary is based on the Paxos algorithm, but varies in a few key ways:
  *  1- Only a single new value is generated at a time, simplifying the recovery logic.
  *  2- Nodes track "committed" values, and share them generously (and trustingly)
- *  3- A 'leasing' mechanism is built-in, allowing nodes to determine when it is 
+ *  3- A 'leasing' mechanism is built-in, allowing nodes to determine when it is
  *     safe to "read" their copy of the last committed value.
  *
  * This provides a simple replication substrate that services can be built on top of.
@@ -260,8 +260,8 @@ private:
   /**
    * Last committed value's version.
    *
-   * On both the Leader and the Peons, this is the last value's version that 
-   * was accepted by a given quorum and thus committed, that this instance 
+   * On both the Leader and the Peons, this is the last value's version that
+   * was accepted by a given quorum and thus committed, that this instance
    * knows about.
    *
    * @note It may not be the last committed value's version throughout the
@@ -283,7 +283,7 @@ private:
   /**
    * The last Proposal Number we have accepted.
    *
-   * On the Leader, it will be the Proposal Number picked by the Leader 
+   * On the Leader, it will be the Proposal Number picked by the Leader
    * itself. On the Peon, however, it will be the proposal sent by the Leader
    * and it will only be updated iif its value is higher than the one
    * already known by the Peon.
@@ -325,7 +325,7 @@ private:
    *
    * Instead of performing a full commit each time a read is requested, we
    * keep leases. Each lease will have an expiration date, which may or may
-   * not be extended. 
+   * not be extended.
    */
   utime_t lease_expire;
   /**
@@ -375,7 +375,7 @@ private:
    *
    * @note If this version equals @p last_committed+1 when we reach the final
    *	   steps of recovery, then the algorithm will assume this is a value
-   *	   the Leader does not know about, and trustingly the Leader will 
+   *	   the Leader does not know about, and trustingly the Leader will
    *	   propose this version's value.
    */
   version_t  uncommitted_v;
@@ -628,7 +628,7 @@ public:
     C_Proposal(Context *c, bufferlist& proposal_bl) :
 	proposer_context(c),
 	bl(proposal_bl),
-        proposed(false),
+	proposed(false),
 	proposal_time(ceph_clock_now(NULL))
       { }
 
@@ -667,7 +667,7 @@ private:
    * @post Recovery Phase initiated by sending messages to the quorum.
    *
    * @param oldpn A proposal number taken as the highest known so far, that
-   *		  should be taken into consideration when generating a new 
+   *		  should be taken into consideration when generating a new
    *		  Proposal Number for the Recovery Phase.
    */
   void collect(version_t oldpn);
@@ -692,7 +692,7 @@ private:
   /**
    * Handle a response from a Peon to the Leader's collect phase.
    *
-   * The received message will state the Peon's last committed version, as 
+   * The received message will state the Peon's last committed version, as
    * well as its last proposal number. This will lead to one of the following
    * scenarios: if the replied Proposal Number is equal to the one we proposed,
    * then the Peon has accepted our proposal, and if all the Peons do accept
@@ -713,7 +713,7 @@ private:
    *
    * @invariant The message is an operation of type OP_LAST.
    * @pre We are the Leader.
-   * @post We initiate a commit, or we retry with a higher Proposal Number, 
+   * @post We initiate a commit, or we retry with a higher Proposal Number,
    *	   or we drop the message.
    * @post We move from STATE_RECOVERING to STATE_ACTIVE.
    *
@@ -735,9 +735,9 @@ private:
 
   /**
    * @defgroup Paxos_h_updating_funcs Functions used during the Updating State
-   * 
-   * These functions may easily be mapped to the original Paxos Algorithm's 
-   * phases. 
+   *
+   * These functions may easily be mapped to the original Paxos Algorithm's
+   * phases.
    *
    * Taking into account the algorithm can be divided in 4 phases (Prepare,
    * Promise, Accept Request and Accepted), we can easily map Paxos::begin to
@@ -754,9 +754,9 @@ private:
    *
    * @pre We are the Leader
    * @pre We are on STATE_ACTIVE
-   * @post We commit, iif we are alone, or we send a message to each quorum 
+   * @post We commit, iif we are alone, or we send a message to each quorum
    *	   member
-   * @post We are on STATE_ACTIVE, iif we are alone, or on 
+   * @post We are on STATE_ACTIVE, iif we are alone, or on
    *	   STATE_UPDATING otherwise
    *
    * @param value The value being proposed to the quorum
@@ -943,13 +943,13 @@ private:
    * @pre We are a Peon
    * @post Trigger fresh elections
    */
-  void lease_timeout();        // on peon, if lease isn't extended
+  void lease_timeout();	       // on peon, if lease isn't extended
 
   /// restart the lease timeout timer
   void reset_lease_timeout();
 
   /**
-   * Cancel all of Paxos' timeout/renew events. 
+   * Cancel all of Paxos' timeout/renew events.
    */
   void cancel_events();
   /**
@@ -965,7 +965,7 @@ private:
    * @return A globally unique, monotonically increasing Proposal Number
    */
   version_t get_new_proposal_number(version_t gt=0);
- 
+
   /**
    * @todo document sync function
    */
@@ -1002,7 +1002,7 @@ public:
    * @param m A monitor
    * @param mid A machine id
    */
-  Paxos(Monitor *m, const string &name) 
+  Paxos(Monitor *m, const string &name)
 		 : mon(m),
 		   paxos_name(name),
 		   state(STATE_RECOVERING),
@@ -1051,7 +1051,7 @@ public:
    * Once an election is won, the Leader will be initiated and there are two
    * possible outcomes of this method: the Leader directly jumps to the active
    * state (STATE_ACTIVE) if it believes to be the only one in the quorum, or
-   * will start recovering (STATE_RECOVERING) by initiating the collect phase. 
+   * will start recovering (STATE_RECOVERING) by initiating the collect phase.
    *
    * @pre Our monitor is the Leader.
    * @post We are either on STATE_ACTIVE if we're the only one in the quorum,
@@ -1066,7 +1066,7 @@ public:
    * we will soon be enrolled into the Leader's collect phase.
    *
    * @pre There is a Leader, and he's about to start the collect phase.
-   * @post We are on STATE_RECOVERING and will soon receive collect phase's 
+   * @post We are on STATE_RECOVERING and will soon receive collect phase's
    *	   messages.
    */
   void peon_init();
@@ -1164,7 +1164,7 @@ public:
 
     return true;
   }
- 
+
   // read
   /**
    * @defgroup Paxos_h_read_funcs Read-related functions

@@ -70,8 +70,9 @@ public:
     start_tick();
   }
 
-  virtual health_status_t get_health(Formatter *f,
-                          list<pair<health_status_t,string> > *detail);
+  virtual health_status_t get_health(
+    Formatter *f,
+    list<pair<health_status_t,string> > *detail);
 
   virtual int get_type() {
     return HealthService::SERVICE_HEALTH_DATA;

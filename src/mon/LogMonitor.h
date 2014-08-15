@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_LOGMONITOR_H
@@ -65,7 +65,7 @@ private:
 	return;
       }
       logmon->_updated_log(ack);
-    }    
+    }
   };
 
   bool preprocess_command(MMonCommand *m);
@@ -78,10 +78,10 @@ private:
 		       const string& key, bufferlist& bl);
 
  public:
-  LogMonitor(Monitor *mn, Paxos *p, const string& service_name) 
+  LogMonitor(Monitor *mn, Paxos *p, const string& service_name)
     : PaxosService(mn, p, service_name) { }
-  
-  void tick();  // check state, take actions
+
+  void tick();	// check state, take actions
 
   void check_subs();
   void check_sub(Subscription *s);

@@ -43,18 +43,18 @@
 # include <sys/stat.h>
 #else
 # include <unistd.h>
-#endif  // GTEST_OS_WINDOWS_MOBILE
+#endif	// GTEST_OS_WINDOWS_MOBILE
 
 #if GTEST_OS_MAC
 # include <mach/mach_init.h>
 # include <mach/task.h>
 # include <mach/vm_map.h>
-#endif  // GTEST_OS_MAC
+#endif	// GTEST_OS_MAC
 
 #if GTEST_OS_QNX
 # include <devctl.h>
 # include <sys/procfs.h>
-#endif  // GTEST_OS_QNX
+#endif	// GTEST_OS_QNX
 
 #include "gtest/gtest-spi.h"
 #include "gtest/gtest-message.h"
@@ -63,7 +63,7 @@
 
 // Indicates that this translation unit is part of Google Test's
 // implementation.  It must come before gtest-internal-inl.h is
-// included, or there will be a compiler error.  This trick is to
+// included, or there will be a compiler error.	 This trick is to
 // prevent a user from accidentally including gtest-internal-inl.h in
 // his code.
 #define GTEST_IMPLEMENTATION_ 1
@@ -80,7 +80,7 @@ const int kStdErrFileno = 2;
 #else
 const int kStdOutFileno = STDOUT_FILENO;
 const int kStdErrFileno = STDERR_FILENO;
-#endif  // _MSC_VER
+#endif	// _MSC_VER
 
 #if GTEST_OS_MAC
 
@@ -95,8 +95,8 @@ size_t GetThreadCount() {
     // task_threads allocates resources in thread_list and we need to free them
     // to avoid leaks.
     vm_deallocate(task,
-                  reinterpret_cast<vm_address_t>(thread_list),
-                  sizeof(thread_t) * thread_count);
+		  reinterpret_cast<vm_address_t>(thread_list),
+		  sizeof(thread_t) * thread_count);
     return static_cast<size_t>(thread_count);
   } else {
     return 0;
@@ -131,7 +131,7 @@ size_t GetThreadCount() {
   return 0;
 }
 
-#endif  // GTEST_OS_MAC
+#endif	// GTEST_OS_MAC
 
 #if GTEST_USES_POSIX_RE
 
@@ -178,7 +178,7 @@ void RE::Init(const char* regex) {
   snprintf(full_pattern, full_regex_len, "^(%s)$", regex);
   is_valid_ = regcomp(&full_regex_, full_pattern, REG_EXTENDED) == 0;
   // We want to call regcomp(&partial_regex_, ...) even if the
-  // previous expression returns false.  Otherwise partial_regex_ may
+  // previous expression returns false.	 Otherwise partial_regex_ may
   // not be properly initialized can may cause trouble when it's
   // freed.
   //
@@ -224,7 +224,7 @@ bool IsValidEscape(char c) {
 }
 
 // Returns true iff the given atom (specified by escaped and pattern)
-// matches ch.  The result is undefined if the atom is invalid.
+// matches ch.	The result is undefined if the atom is invalid.
 bool AtomMatchesChar(bool escaped, char pattern_char, char ch) {
   if (escaped) {  // "\\p" where p is pattern_char.
     switch (pattern_char) {
@@ -249,7 +249,7 @@ bool AtomMatchesChar(bool escaped, char pattern_char, char ch) {
 // Helper function used by ValidateRegex() to format error messages.
 std::string FormatRegexSyntaxError(const char* regex, int index) {
   return (Message() << "Syntax error at index " << index
-          << " in simple regular expression \"" << regex << "\": ").GetString();
+	  << " in simple regular expression \"" << regex << "\": ").GetString();
 }
 
 // Generates non-fatal failures and returns false if regex is invalid;
@@ -271,36 +271,36 @@ bool ValidateRegex(const char* regex) {
     if (regex[i] == '\\') {  // An escape sequence
       i++;
       if (regex[i] == '\0') {
-        ADD_FAILURE() << FormatRegexSyntaxError(regex, i - 1)
-                      << "'\\' cannot appear at the end.";
-        return false;
+	ADD_FAILURE() << FormatRegexSyntaxError(regex, i - 1)
+		      << "'\\' cannot appear at the end.";
+	return false;
       }
 
       if (!IsValidEscape(regex[i])) {
-        ADD_FAILURE() << FormatRegexSyntaxError(regex, i - 1)
-                      << "invalid escape sequence \"\\" << regex[i] << "\".";
-        is_valid = false;
+	ADD_FAILURE() << FormatRegexSyntaxError(regex, i - 1)
+		      << "invalid escape sequence \"\\" << regex[i] << "\".";
+	is_valid = false;
       }
       prev_repeatable = true;
     } else {  // Not an escape sequence.
       const char ch = regex[i];
 
       if (ch == '^' && i > 0) {
-        ADD_FAILURE() << FormatRegexSyntaxError(regex, i)
-                      << "'^' can only appear at the beginning.";
-        is_valid = false;
+	ADD_FAILURE() << FormatRegexSyntaxError(regex, i)
+		      << "'^' can only appear at the beginning.";
+	is_valid = false;
       } else if (ch == '$' && regex[i + 1] != '\0') {
-        ADD_FAILURE() << FormatRegexSyntaxError(regex, i)
-                      << "'$' can only appear at the end.";
-        is_valid = false;
+	ADD_FAILURE() << FormatRegexSyntaxError(regex, i)
+		      << "'$' can only appear at the end.";
+	is_valid = false;
       } else if (IsInSet(ch, "()[]{}|")) {
-        ADD_FAILURE() << FormatRegexSyntaxError(regex, i)
-                      << "'" << ch << "' is unsupported.";
-        is_valid = false;
+	ADD_FAILURE() << FormatRegexSyntaxError(regex, i)
+		      << "'" << ch << "' is unsupported.";
+	is_valid = false;
       } else if (IsRepeat(ch) && !prev_repeatable) {
-        ADD_FAILURE() << FormatRegexSyntaxError(regex, i)
-                      << "'" << ch << "' can only follow a repeatable token.";
-        is_valid = false;
+	ADD_FAILURE() << FormatRegexSyntaxError(regex, i)
+		      << "'" << ch << "' can only follow a repeatable token.";
+	is_valid = false;
       }
 
       prev_repeatable = !IsInSet(ch, "^$?*+");
@@ -311,7 +311,7 @@ bool ValidateRegex(const char* regex) {
 }
 
 // Matches a repeated regex atom followed by a valid simple regular
-// expression.  The regex atom is defined as c if escaped is false,
+// expression.	The regex atom is defined as c if escaped is false,
 // or \c otherwise.  repeat is the repetition meta character (?, *,
 // or +).  The behavior is undefined if str contains too many
 // characters to be indexable by size_t, in which case the test will
@@ -362,17 +362,17 @@ bool MatchRegexAtHead(const char* regex, const char* str) {
     // here's an indirect recursion.  It terminates as the regex gets
     // shorter in each recursion.
     return MatchRepetitionAndRegexAtHead(
-        escaped, regex[0], regex[1], regex + 2, str);
+	escaped, regex[0], regex[1], regex + 2, str);
   } else {
     // regex isn't empty, isn't "$", and doesn't start with a
     // repetition.  We match the first atom of regex with the first
     // character of str and recurse.
     return (*str != '\0') && AtomMatchesChar(escaped, *regex, *str) &&
-        MatchRegexAtHead(regex + 1, str + 1);
+	MatchRegexAtHead(regex + 1, str + 1);
   }
 }
 
-// Returns true iff regex matches any substring of str.  regex must be
+// Returns true iff regex matches any substring of str.	 regex must be
 // a valid simple regular expression, or the result is undefined.
 //
 // The algorithm is recursive, but the recursion depth doesn't exceed
@@ -447,7 +447,7 @@ void RE::Init(const char* regex) {
   *buffer = '\0';
 }
 
-#endif  // GTEST_USES_POSIX_RE
+#endif	// GTEST_USES_POSIX_RE
 
 const char kUnknownFile[] = "unknown file";
 
@@ -463,7 +463,7 @@ GTEST_API_ ::std::string FormatFileLocation(const char* file, int line) {
   return file_name + "(" + StreamableToString(line) + "):";
 #else
   return file_name + ":" + StreamableToString(line) + ":";
-#endif  // _MSC_VER
+#endif	// _MSC_VER
 }
 
 // Formats a file location for compiler-independent XML output.
@@ -485,11 +485,11 @@ GTEST_API_ ::std::string FormatCompilerIndependentFileLocation(
 GTestLog::GTestLog(GTestLogSeverity severity, const char* file, int line)
     : severity_(severity) {
   const char* const marker =
-      severity == GTEST_INFO ?    "[  INFO ]" :
+      severity == GTEST_INFO ?	  "[  INFO ]" :
       severity == GTEST_WARNING ? "[WARNING]" :
-      severity == GTEST_ERROR ?   "[ ERROR ]" : "[ FATAL ]";
+      severity == GTEST_ERROR ?	  "[ ERROR ]" : "[ FATAL ]";
   GetStream() << ::std::endl << marker << " "
-              << FormatFileLocation(file, line).c_str() << ": ";
+	      << FormatFileLocation(file, line).c_str() << ": ";
 }
 
 // Flushes the buffers and, if severity is GTEST_FATAL, aborts the program.
@@ -505,7 +505,7 @@ GTestLog::~GTestLog() {
 #ifdef _MSC_VER
 # pragma warning(push)
 # pragma warning(disable: 4996)
-#endif  // _MSC_VER
+#endif	// _MSC_VER
 
 #if GTEST_HAS_STREAM_REDIRECTION
 
@@ -520,14 +520,14 @@ class CapturedStream {
 
     ::GetTempPathA(sizeof(temp_dir_path), temp_dir_path);
     const UINT success = ::GetTempFileNameA(temp_dir_path,
-                                            "gtest_redir",
-                                            0,  // Generate unique file name.
-                                            temp_file_path);
+					    "gtest_redir",
+					    0,	// Generate unique file name.
+					    temp_file_path);
     GTEST_CHECK_(success != 0)
-        << "Unable to create a temporary file in " << temp_dir_path;
+	<< "Unable to create a temporary file in " << temp_dir_path;
     const int captured_fd = creat(temp_file_path, _S_IREAD | _S_IWRITE);
     GTEST_CHECK_(captured_fd != -1) << "Unable to open temporary file "
-                                    << temp_file_path;
+				    << temp_file_path;
     filename_ = temp_file_path;
 # else
     // There's no guarantee that a test has write access to the current
@@ -555,7 +555,7 @@ class CapturedStream {
 #  endif  // GTEST_OS_LINUX_ANDROID
     const int captured_fd = mkstemp(name_template);
     filename_ = name_template;
-# endif  // GTEST_OS_WINDOWS
+# endif	 // GTEST_OS_WINDOWS
     fflush(NULL);
     dup2(captured_fd, fd_);
     close(captured_fd);
@@ -626,7 +626,7 @@ std::string CapturedStream::ReadEntireFile(FILE* file) {
 
 # ifdef _MSC_VER
 #  pragma warning(pop)
-# endif  // _MSC_VER
+# endif	 // _MSC_VER
 
 static CapturedStream* g_captured_stderr = NULL;
 static CapturedStream* g_captured_stdout = NULL;
@@ -635,7 +635,7 @@ static CapturedStream* g_captured_stdout = NULL;
 void CaptureStream(int fd, const char* stream_name, CapturedStream** stream) {
   if (*stream != NULL) {
     GTEST_LOG_(FATAL) << "Only one " << stream_name
-                      << " capturer can exist at a time.";
+		      << " capturer can exist at a time.";
   }
   *stream = new CapturedStream(fd);
 }
@@ -670,7 +670,7 @@ std::string GetCapturedStderr() {
   return GetCapturedStream(&g_captured_stderr);
 }
 
-#endif  // GTEST_HAS_STREAM_REDIRECTION
+#endif	// GTEST_HAS_STREAM_REDIRECTION
 
 #if GTEST_HAS_DEATH_TEST
 
@@ -678,7 +678,7 @@ std::string GetCapturedStderr() {
 ::std::vector<testing::internal::string> g_argvs;
 
 static const ::std::vector<testing::internal::string>* g_injected_test_argvs =
-                                        NULL;  // Owned.
+					NULL;  // Owned.
 
 void SetInjectableArgvs(const ::std::vector<testing::internal::string>* argvs) {
   if (g_injected_test_argvs != argvs)
@@ -692,7 +692,7 @@ const ::std::vector<testing::internal::string>& GetInjectableArgvs() {
   }
   return g_argvs;
 }
-#endif  // GTEST_HAS_DEATH_TEST
+#endif	// GTEST_HAS_DEATH_TEST
 
 #if GTEST_OS_WINDOWS_MOBILE
 namespace posix {
@@ -701,10 +701,10 @@ void Abort() {
   TerminateProcess(GetCurrentProcess(), 1);
 }
 }  // namespace posix
-#endif  // GTEST_OS_WINDOWS_MOBILE
+#endif	// GTEST_OS_WINDOWS_MOBILE
 
 // Returns the name of the environment variable corresponding to the
-// given flag.  For example, FlagToEnvVar("foo") will return
+// given flag.	For example, FlagToEnvVar("foo") will return
 // "GTEST_FOO" in the open-source version.
 static std::string FlagToEnvVar(const char* flag) {
   const std::string full_flag =
@@ -731,8 +731,8 @@ bool ParseInt32(const Message& src_text, const char* str, Int32* value) {
     // No - an invalid character was encountered.
     Message msg;
     msg << "WARNING: " << src_text
-        << " is expected to be a 32-bit integer, but actually"
-        << " has value \"" << str << "\".\n";
+	<< " is expected to be a 32-bit integer, but actually"
+	<< " has value \"" << str << "\".\n";
     printf("%s", msg.GetString().c_str());
     fflush(stdout);
     return false;
@@ -741,15 +741,15 @@ bool ParseInt32(const Message& src_text, const char* str, Int32* value) {
   // Is the parsed value in the range of an Int32?
   const Int32 result = static_cast<Int32>(long_value);
   if (long_value == LONG_MAX || long_value == LONG_MIN ||
-      // The parsed value overflows as a long.  (strtol() returns
+      // The parsed value overflows as a long.	(strtol() returns
       // LONG_MAX or LONG_MIN when the input overflows.)
       result != long_value
       // The parsed value overflows as an Int32.
       ) {
     Message msg;
     msg << "WARNING: " << src_text
-        << " is expected to be a 32-bit integer, but actually"
-        << " has value " << str << ", which overflows.\n";
+	<< " is expected to be a 32-bit integer, but actually"
+	<< " has value " << str << ", which overflows.\n";
     printf("%s", msg.GetString().c_str());
     fflush(stdout);
     return false;
@@ -783,9 +783,9 @@ Int32 Int32FromGTestEnv(const char* flag, Int32 default_value) {
 
   Int32 result = default_value;
   if (!ParseInt32(Message() << "Environment variable " << env_var,
-                  string_value, &result)) {
+		  string_value, &result)) {
     printf("The default value %s is used.\n",
-           (Message() << default_value).GetString().c_str());
+	   (Message() << default_value).GetString().c_str());
     fflush(stdout);
     return default_value;
   }

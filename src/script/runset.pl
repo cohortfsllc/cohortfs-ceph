@@ -180,7 +180,7 @@ sub run {
 
 	push( @fulldirs, "" . $fn );
 
-	
+
 	# filters
 	$filters{ join(',', @filt) } = 1;
 
@@ -242,7 +242,7 @@ touch $fn/.post
 	close O;
 
 	my $killmin = 1 + int ($h->{'kill_after'} / 60);
-	
+
 	$c = "bash -c \"ulimit -c 0 ; $c\"";
 	#$c = "bash -c \"$c\"";
 
@@ -254,7 +254,7 @@ touch $fn/.post
 	} else {
 		$launch = $mpiexec;
 	}
-	
+
 	if ($sim->{'_psub'}) {
 		# template!
 		my $tp = `cat $sim->{'_psub'}`;

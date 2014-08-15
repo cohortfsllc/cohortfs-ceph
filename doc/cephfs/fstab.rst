@@ -2,8 +2,8 @@
  Mount Ceph FS in your File Systems Table
 ==========================================
 
-If you mount Ceph FS in your file systems table, the Ceph file system will mount 
-automatically on startup. 
+If you mount Ceph FS in your file systems table, the Ceph file system will mount
+automatically on startup.
 
 Kernel Driver
 =============
@@ -13,16 +13,16 @@ following to ``/etc/fstab``::
 
 	{ipaddress}:{port}:/ {mount}/{mountpoint} {filesystem-name}	[name=username,secret=secretkey|secretfile=/path/to/secretfile],[{mount.options}]
 
-For example:: 
+For example::
 
 	10.10.10.10:6789:/     /mnt/ceph    ceph    name=admin,secretfile=/etc/ceph/secret.key,noatime    0       2
-	
-.. important:: The ``name`` and ``secret`` or ``secretfile`` options are 
-   mandatory when you have Ceph authentication running. 
- 
-See `Authentication`_ for details. 
-   
-   
+
+.. important:: The ``name`` and ``secret`` or ``secretfile`` options are
+   mandatory when you have Ceph authentication running.
+
+See `Authentication`_ for details.
+
+
 FUSE
 ====
 
@@ -34,14 +34,14 @@ following to ``/etc/fstab``::
 
 For example::
 
-	id=admin  /mnt/ceph  fuse.ceph defaults 0 0 
-	id=myuser,conf=/etc/ceph/cluster.conf  /mnt/ceph2  fuse.ceph defaults 0 0 
+	id=admin  /mnt/ceph  fuse.ceph defaults 0 0
+	id=myuser,conf=/etc/ceph/cluster.conf  /mnt/ceph2  fuse.ceph defaults 0 0
 
 The ``DEVICE`` field is a comma-delimited list of options to pass to the command line.
-Ensure you use the ID (e.g., ``admin``, not ``client.admin``). You can pass any valid 
+Ensure you use the ID (e.g., ``admin``, not ``client.admin``). You can pass any valid
 ``ceph-fuse`` option to the command line this way.
 
-See `Authentication`_ for details. 
+See `Authentication`_ for details.
 
 
 .. _Authentication: ../../rados/operations/authentication/

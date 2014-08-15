@@ -14,7 +14,7 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
  * GNU Library Public License for more details.
  *
  */
@@ -40,8 +40,8 @@ public:
   int cleanup() { return 0; }
 
   virtual int _split(
-		     uint32_t match,                           
-		     uint32_t bits,                            
+		     uint32_t match,
+		     uint32_t bits,
 		     std::shared_ptr<CollectionIndex> dest
 		     ) { return 0; }
 
@@ -59,7 +59,7 @@ protected:
   virtual int _created(
 		       const vector<string> &path,
 		       const ghobject_t &hoid,
-		       const string &mangled_name 
+		       const string &mangled_name
 		       ) { return 0; }
 
   virtual int _remove(
@@ -72,7 +72,7 @@ protected:
 		      const ghobject_t &hoid,
 		      vector<string> *path,
 		      string *mangled_name,
-		      int *exists		 
+		      int *exists
 		      ) { return 0; }
 
   virtual int _collection_list(
@@ -236,7 +236,7 @@ TEST_F(TestLFNIndex, remove_object) {
   }
 
   //
-  // long object name removal of the last file 
+  // long object name removal of the last file
   //
   {
     std::string mangled_name;
@@ -245,7 +245,7 @@ TEST_F(TestLFNIndex, remove_object) {
     ghobject_t hoid(hobject_t(object_t(object_name)));
 
     //
-    //   PATH/AAA..._0_long => does not match long object name
+    //	 PATH/AAA..._0_long => does not match long object name
     //
     EXPECT_EQ(0, get_mangled_name(path, hoid, &mangled_name, &exists));
     EXPECT_EQ(0, exists);
@@ -263,7 +263,7 @@ TEST_F(TestLFNIndex, remove_object) {
     EXPECT_EQ(object_name_1.size(), (unsigned)chain_setxattr(pathname.c_str(), LFN_ATTR.c_str(), object_name_1.c_str(), object_name_1.size()));
 
     //
-    //   PATH/AAA..._1_long => matches long object name
+    //	 PATH/AAA..._1_long => matches long object name
     //
     std::string mangled_name_1;
     exists = 666;
@@ -294,7 +294,7 @@ TEST_F(TestLFNIndex, remove_object) {
     ghobject_t hoid(hobject_t(object_t(object_name)));
 
     //
-    //   PATH/AAA..._0_long => matches long object name
+    //	 PATH/AAA..._0_long => matches long object name
     //
     EXPECT_EQ(0, get_mangled_name(path, hoid, &mangled_name, &exists));
     EXPECT_EQ(0, exists);
@@ -303,7 +303,7 @@ TEST_F(TestLFNIndex, remove_object) {
     EXPECT_EQ(0, ::close(::creat(pathname.c_str(), 0600)));
     EXPECT_EQ(0, created(hoid, pathname.c_str()));
     //
-    //   PATH/AAA..._1_long => matches long object name
+    //	 PATH/AAA..._1_long => matches long object name
     //
     std::string mangled_name_1 = mangled_name;
     mangled_name_1.replace(mangled_name_1.find("0_long"), 6, "1_long");
@@ -316,9 +316,9 @@ TEST_F(TestLFNIndex, remove_object) {
     //
     // remove_object replaces the file to be removed with the last from the
     // collision list. In this case it replaces
-    //    PATH/AAA..._0_long 
+    //	  PATH/AAA..._0_long
     // with
-    //    PATH/AAA..._1_long 
+    //	  PATH/AAA..._1_long
     //
     EXPECT_EQ(0, remove_object(path, hoid));
     EXPECT_EQ(0, ::access(pathname.c_str(), 0));
@@ -375,7 +375,7 @@ TEST_F(TestLFNIndex, get_mangled_name) {
 
     //
     // if a file by the same name exists but does not have the
-    // expected extended attribute, it is silently removed 
+    // expected extended attribute, it is silently removed
     //
     mangled_name.clear();
     exists = 666;
@@ -388,7 +388,7 @@ TEST_F(TestLFNIndex, get_mangled_name) {
 
     //
     // if a file by the same name exists but does not have the
-    // expected extended attribute, and cannot be removed, 
+    // expected extended attribute, and cannot be removed,
     // return on error
     //
     mangled_name.clear();
@@ -433,7 +433,7 @@ TEST_F(TestLFNIndex, get_mangled_name) {
     EXPECT_EQ(0, get_mangled_name(path, hoid, &mangled_name_same_prefix, &exists));
     EXPECT_NE(std::string::npos, mangled_name_same_prefix.find("1_long"));
     EXPECT_EQ(0, exists);
-    
+
     EXPECT_EQ(0, ::unlink(pathname.c_str()));
   }
 }
@@ -457,10 +457,10 @@ int main(int argc, char **argv) {
   }
 }
 
-/* 
+/*
  * Local Variables:
- * compile-command: "cd ../.. ; 
- *   make unittest_lfnindex && 
+ * compile-command: "cd ../.. ;
+ *   make unittest_lfnindex &&
  *   valgrind --tool=memcheck ./unittest_lfnindex \
  *   # --gtest_filter=TestLFNIndex.* --log-to-stderr=true --debug-filestore=20"
  * End:

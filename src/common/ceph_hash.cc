@@ -8,28 +8,28 @@
  */
 #define mix(a, b, c)						\
 	do {							\
-		a = a - b;  a = a - c;  a = a ^ (c >> 13);	\
-		b = b - c;  b = b - a;  b = b ^ (a << 8);	\
-		c = c - a;  c = c - b;  c = c ^ (b >> 13);	\
-		a = a - b;  a = a - c;  a = a ^ (c >> 12);	\
-		b = b - c;  b = b - a;  b = b ^ (a << 16);	\
-		c = c - a;  c = c - b;  c = c ^ (b >> 5);	\
-		a = a - b;  a = a - c;  a = a ^ (c >> 3);	\
-		b = b - c;  b = b - a;  b = b ^ (a << 10);	\
-		c = c - a;  c = c - b;  c = c ^ (b >> 15);	\
+		a = a - b;  a = a - c;	a = a ^ (c >> 13);	\
+		b = b - c;  b = b - a;	b = b ^ (a << 8);	\
+		c = c - a;  c = c - b;	c = c ^ (b >> 13);	\
+		a = a - b;  a = a - c;	a = a ^ (c >> 12);	\
+		b = b - c;  b = b - a;	b = b ^ (a << 16);	\
+		c = c - a;  c = c - b;	c = c ^ (b >> 5);	\
+		a = a - b;  a = a - c;	a = a ^ (c >> 3);	\
+		b = b - c;  b = b - a;	b = b ^ (a << 10);	\
+		c = c - a;  c = c - b;	c = c ^ (b >> 15);	\
 	} while (0)
 
 unsigned ceph_str_hash_rjenkins(const char *str, unsigned length)
 {
 	const unsigned char *k = (const unsigned char *)str;
 	uint32_t a, b, c;  /* the internal state */
-	uint32_t len;      /* how many key bytes still need mixing */
+	uint32_t len;	   /* how many key bytes still need mixing */
 
 	/* Set up the internal state */
 	len = length;
-	a = 0x9e3779b9;      /* the golden ratio; an arbitrary value */
+	a = 0x9e3779b9;	     /* the golden ratio; an arbitrary value */
 	b = a;
-	c = 0;               /* variable initialization of internal state */
+	c = 0;		     /* variable initialization of internal state */
 
 	/* handle most of the key */
 	while (len >= 12) {
@@ -46,7 +46,7 @@ unsigned ceph_str_hash_rjenkins(const char *str, unsigned length)
 
 	/* handle the last 11 bytes */
 	c = c + length;
-	switch (len) {            /* all the case statements fall through */
+	switch (len) {		  /* all the case statements fall through */
 	case 11:
 		c = c + ((uint32_t)k[10] << 24);
 	case 10:

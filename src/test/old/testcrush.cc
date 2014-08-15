@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 
 
 #include "../crush/crush.h"
@@ -22,7 +24,7 @@ ostream& operator<<(ostream& out, vector<int>& v)
 }
 */
 
-void make_disks(int n, int& no, vector<int>& d) 
+void make_disks(int n, int& no, vector<int>& d)
 {
   d.clear();
   while (n) {
@@ -42,7 +44,7 @@ Bucket *make_bucket(Crush& c, vector<int>& wid, int h, int& ndisks, int& nbucket
     for (int i=0; i<wid[h]; i++)
       disks.push_back(ndisks++);
     UniformBucket *b = new UniformBucket(nbuckets--, 1, 0, 10, disks);
-    b->make_primes(hash);  
+    b->make_primes(hash);
     c.add_bucket(b);
     //cout << h << " uniformbucket with " << wid[h] << " disks" << endl;
     return b;
@@ -67,7 +69,7 @@ int make_hierarchy(Crush& c, vector<int>& wid, int& ndisks, int& nbuckets)
 
 
 
-int main() 
+int main()
 {
   Hash h(73232313);
 
@@ -80,32 +82,32 @@ int main()
   int root = -1;
   int nbuckets = -1;
   int ndisks = 0;
-  
+
   if (0) {
     make_disks(12, ndisks, disks);
     UniformBucket ub1(-1, 1, 0, 30, disks);
     ub1.make_primes(h);
     cout << "ub1 primes are " << ub1.primes << endl;
     c.add_bucket(&ub1);
-    
+
     make_disks(17, ndisks, disks);
     UniformBucket ub2(-2, 1, 0, 30, disks);
-    ub2.make_primes(h);  
+    ub2.make_primes(h);
     cout << "ub2 primes are " << ub2.primes << endl;
     c.add_bucket(&ub2);
-    
+
     make_disks(4, ndisks, disks);
     UniformBucket ub3(-3, 1, 0, 30, disks);
-    ub3.make_primes(h);  
+    ub3.make_primes(h);
     cout << "ub3 primes are " << ub3.primes << endl;
     c.add_bucket(&ub3);
-    
+
     make_disks(20, ndisks, disks);
     MixedBucket umb1(-4, 1);
     for (int i=0; i<20; i++)
       umb1.add_item(disks[i], 30);
     c.add_bucket(&umb1);
-    
+
     MixedBucket b(-100, 1);
     //b.add_item(-2, ub1.get_weight());
     b.add_item(-4, umb1.get_weight());
@@ -123,30 +125,30 @@ int main()
       int n = 5;
 
       if (1) {
-        // add n buckets of n disks
-        for (int j=0; j<n; j++) {
-          
-          MixedBucket *d = new MixedBucket(bucket--, 1);
-          
-          make_disks(n, ndisks, disks);
-          for (int k=0; k<n; k++)
-            d->add_item(disks[k], 10);
-          
-          //b->add_item(disks[j], 10);
-          c.add_bucket(d);
-          b->add_item(d->get_id(), d->get_weight());
-        }
-        
-        c.add_bucket(b);
-        root->add_item(b->get_id(), b->get_weight());
-      } else {
-        // add n*n disks
-        make_disks(n*n, ndisks, disks);
-        for (int k=0; k<n*n; k++)
-          b->add_item(disks[k], 10);
+	// add n buckets of n disks
+	for (int j=0; j<n; j++) {
 
-        c.add_bucket(b);
-        root->add_item(b->get_id(), b->get_weight());
+	  MixedBucket *d = new MixedBucket(bucket--, 1);
+
+	  make_disks(n, ndisks, disks);
+	  for (int k=0; k<n; k++)
+	    d->add_item(disks[k], 10);
+
+	  //b->add_item(disks[j], 10);
+	  c.add_bucket(d);
+	  b->add_item(d->get_id(), d->get_weight());
+	}
+
+	c.add_bucket(b);
+	root->add_item(b->get_id(), b->get_weight());
+      } else {
+	// add n*n disks
+	make_disks(n*n, ndisks, disks);
+	for (int k=0; k<n*n; k++)
+	  b->add_item(disks[k], 10);
+
+	c.add_bucket(b);
+	root->add_item(b->get_id(), b->get_weight());
       }
     }
 
@@ -160,7 +162,7 @@ int main()
       wid.push_back(10);
     root = make_hierarchy(c, wid, ndisks, nbuckets);
   }
-  
+
 
 
   // rule
@@ -187,7 +189,7 @@ int main()
 
   int pg_per = 100;
   int numpg = pg_per*ndisks/numrep;
-  
+
   vector<int> ocount(ndisks);
   cout << ndisks << " disks, " << 1-nbuckets << " buckets" << endl;
   cout << pg_per << " pgs per disk" << endl;
@@ -200,14 +202,14 @@ int main()
   if (!times) times = 1;
 
   cout << "looping " << times << " times" << endl;
-  
+
   float tvar = 0;
   int tvarnum = 0;
 
   int x = 0;
   for (int t=0; t<times; t++) {
     vector<int> v(numrep);
-    
+
     for (int z=0; z<ndisks; z++) ocount[z] = 0;
 
     for (int xx=1; xx<numpg; xx++) {
@@ -215,34 +217,34 @@ int main()
 
       //cout << H(x) << "\t" << h(x) << endl;
       c.do_rule(rule, x, v);
-      //cout << "v = " << v << endl;// " " << v[0] << " " << v[1] << "  " << v[2] << endl;
-      
+      //cout << "v = " << v << endl;// " " << v[0] << " " << v[1] << "	" << v[2] << endl;
+
       bool bad = false;
       for (int i=0; i<numrep; i++) {
-        //int d = b.choose_r(x, i, h);
-        //v[i] = d;
-        ocount[v[i]]++;
-        for (int j=i+1; j<numrep; j++) {
-          if (v[i] == v[j]) 
-            bad = true;
-        }
+	//int d = b.choose_r(x, i, h);
+	//v[i] = d;
+	ocount[v[i]]++;
+	for (int j=i+1; j<numrep; j++) {
+	  if (v[i] == v[j])
+	    bad = true;
+	}
       }
       if (bad)
-        cout << "bad set " << x << ": " << v << endl;
-      
+	cout << "bad set " << x << ": " << v << endl;
+
       //cout << v << "\t" << ocount << endl;
     }
-    
+
     /*
       for (int i=0; i<ocount.size(); i++) {
       cout << "disk " << i << " has " << ocount[i] << endl;
       }
     */
-    
+
     cout << "collisions: " << c.collisions << endl;
     cout << "r bumps: " << c.bumps << endl;
-    
-    
+
+
     float avg = 0.0;
     for (int i=0; i<ocount.size(); i++)
       avg += ocount[i];
@@ -251,9 +253,9 @@ int main()
     for (int i=0; i<ocount.size(); i++)
       var += (ocount[i] - avg) * (ocount[i] - avg);
     var /= ocount.size();
-    
-    cout << "avg " << avg << "  var " << var << "   sd " << sqrt(var) << endl;
-    
+
+    cout << "avg " << avg << "	var " << var << "   sd " << sqrt(var) << endl;
+
     tvar += var;
     tvarnum++;
   }

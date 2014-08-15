@@ -32,15 +32,15 @@ following diagram depicts the CloudStack/Ceph technology stack.
             |          OSDs          | |        Monitors        |
             +------------------------+ +------------------------+
 
-.. important:: To use Ceph Block Devices with CloudStack, you must have  
+.. important:: To use Ceph Block Devices with CloudStack, you must have
    access to a running Ceph Storage Cluster.
 
 CloudStack integrates with Ceph's block devices to provide CloudStack with a
 back end for CloudStack's Primary Storage. The instructions below detail the
 setup for CloudStack Primary Storage.
 
-.. note:: We recommend installing with Ubuntu 13.04 or later so that 
-   you can use package installation instead of having to compile 
+.. note:: We recommend installing with Ubuntu 13.04 or later so that
+   you can use package installation instead of having to compile
    libvirt from source.
 
 .. note:: Make sure the /tmp partition on your hypervisors is at least 25GB.
@@ -51,7 +51,7 @@ setup for CloudStack Primary Storage.
 .. note:: To use RBD with CloudStack 4.4.0 you require at least librbd version
    0.67.7 (Ceph Dumpling). Otherwise template deployments and template backups
    will fail. In case you use Ubuntu we recommend at least LTS version 14.04
-   
+
 Installing and configuring QEMU for use with CloudStack doesn't require any
 special handling. Ensure that you have a running Ceph Storage Cluster. Install
 QEMU and configure it for use with Ceph; then, install ``libvirt`` version
@@ -76,7 +76,7 @@ CloudStack NFS Primary Storage. Ensure your Ceph cluster is running, then create
 the pool. ::
 
    ceph osd pool create cloudstack
-   
+
 See `Create a Pool`_ for details on specifying the number of placement groups
 for your pools, and `Placement Groups`_ for details on the number of placement
 groups you should set for your pools.
@@ -98,10 +98,10 @@ Add Primary Storage
 ===================
 
 To add primary storage, refer to `Add Primary Storage (4.2.0)`_ to add a Ceph block device, the steps
-include: 
+include:
 
 #. Log in to the CloudStack UI.
-#. Click **Infrastructure** on the left side navigation bar. 
+#. Click **Infrastructure** on the left side navigation bar.
 #. Select the Zone you want to use for Primary Storage.
 #. Click the **Compute** tab.
 #. Select **View All** on the `Primary Storage` node in the diagram.

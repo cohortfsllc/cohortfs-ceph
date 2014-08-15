@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -115,14 +115,14 @@ void env_to_vec(std::vector<const char*>& args, const char *name)
 }
 
 void argv_to_vec(int argc, const char **argv,
-                 std::vector<const char*>& args)
+		 std::vector<const char*>& args)
 {
   for (int i=1; i<argc; i++)
     args.push_back(argv[i]);
 }
 
 void vec_to_argv(const char *argv0, std::vector<const char*>& args,
-                 int *argc, const char ***argv)
+		 int *argc, const char ***argv)
 {
   *argv = (const char**)malloc(sizeof(char*) * (args.size() + 1));
   if (!*argv)
@@ -254,7 +254,7 @@ static bool va_ceph_argparse_binary_flag(std::vector<const char*> &args,
 	}
 	if (oss) {
 	  (*oss) << "Parse error parsing binary flag  " << a
-	         << ". Expected true or false, but got '" << val << "'\n";
+		 << ". Expected true or false, but got '" << val << "'\n";
 	}
 	*ret = -EINVAL;
 	return true;
@@ -441,9 +441,9 @@ CephInitParameters ceph_argparse_early_args
     else if (ceph_argparse_flag(args, &i, "--show_args", (char*)NULL)) {
       cout << "args: ";
       for (std::vector<const char *>::iterator ci = orig_args.begin(); ci != orig_args.end(); ++ci) {
-        if (ci != orig_args.begin())
-          cout << " ";
-        cout << *ci;
+	if (ci != orig_args.begin())
+	  cout << " ";
+	cout << *ci;
       }
       cout << std::endl;
     }
@@ -459,18 +459,18 @@ static void generic_usage(bool is_server)
 {
   cout << "\
   --conf/-c FILE    read configuration from the given configuration file\n\
-  --id/-i ID        set ID portion of my name\n\
+  --id/-i ID	    set ID portion of my name\n\
   --name/-n TYPE.ID set name\n\
   --cluster NAME    set cluster name (default: ceph)\n\
-  --version         show version and quit\n\
+  --version	    show version and quit\n\
 " << std::endl;
 
   if (is_server) {
     cout << "\
-  -d                run in foreground, log to stderr.\n\
-  -f                run in foreground, log to usual location.\n";
+  -d		    run in foreground, log to stderr.\n\
+  -f		    run in foreground, log to usual location.\n";
     cout << "\
-  --debug_ms N      set message debug level (e.g. 1)\n";
+  --debug_ms N	    set message debug level (e.g. 1)\n";
   }
 }
 

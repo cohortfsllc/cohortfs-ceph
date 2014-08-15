@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -59,13 +59,13 @@ public:
   /// Returns requested key values
   virtual int get_keys(
     const std::set<K> &keys,   ///< [in] keys requested
-    std::map<K, V> *got  ///< [out] values for keys obtained
+    std::map<K, V> *got	 ///< [out] values for keys obtained
     ) = 0; ///< @return error value
 
   /// Returns next key
   virtual int get_next(
-    const K &key,       ///< [in] key after which to get next
-    pair<K, V> *next    ///< [out] first key after key
+    const K &key,	///< [in] key after which to get next
+    pair<K, V> *next	///< [out] first key after key
     ) = 0; ///< @return 0 on success, -ENOENT if there is no next
 
   virtual ~StoreDriver() {}
@@ -90,8 +90,8 @@ public:
 
   /// Fetch first key/value pair after specified key
   int get_next(
-    K key,               ///< [in] key after which to get next
-    pair<K, V> *next     ///< [out] next key
+    K key,		 ///< [in] key after which to get next
+    pair<K, V> *next	 ///< [out] next key
     ) {
     while (true) {
       pair<K, boost::optional<V> > cached;
@@ -148,7 +148,7 @@ public:
 
   /// Adds operation removing keys to Transaction
   void remove_keys(
-    const set<K> &keys,  ///< [in]
+    const set<K> &keys,	 ///< [in]
     Transaction<K, V> *t ///< [out] transaction to use
     ) {
     std::set<VPtr> vptrs;
@@ -167,7 +167,7 @@ public:
   /// Gets keys, uses cached values for unstable keys
   int get_keys(
     const set<K> &keys_to_get, ///< [in] set of keys to fetch
-    map<K, V> *got             ///< [out] keys gotten
+    map<K, V> *got	       ///< [out] keys gotten
     ) {
     set<K> to_get;
     map<K, V> _got;

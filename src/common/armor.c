@@ -30,7 +30,7 @@ static int decode_bits(char c)
 		return 63;
 	if (c == '=')
 		return 0; /* just non-negative, please */
-	return -EINVAL;	
+	return -EINVAL;
 }
 
 static int set_str_val(char **pdst, const char *end, char c)

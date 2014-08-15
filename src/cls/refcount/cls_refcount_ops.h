@@ -34,8 +34,8 @@ WRITE_CLASS_ENCODER(cls_refcount_get_op)
 
 struct cls_refcount_put_op {
   string tag;
-  bool implicit_ref; // assume wildcard reference for
-                          // objects without a set ref
+  bool implicit_ref; // assume wildcard reference for objects without
+		     // a set ref
 
   cls_refcount_put_op() : implicit_ref(false) {}
 
@@ -81,8 +81,8 @@ struct cls_refcount_set_op {
 WRITE_CLASS_ENCODER(cls_refcount_set_op)
 
 struct cls_refcount_read_op {
-  bool implicit_ref; // assume wildcard reference for
-                          // objects without a set ref
+  bool implicit_ref; // assume wildcard reference for objects without
+		     // a set ref
 
   cls_refcount_read_op() : implicit_ref(false) {}
 

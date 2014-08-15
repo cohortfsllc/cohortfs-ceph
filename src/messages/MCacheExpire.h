@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -62,7 +62,7 @@ public:
   int get_from() { return from; }
 
   MCacheExpire() : Message(MSG_MDS_CACHEEXPIRE), from(-1) {}
-  MCacheExpire(int f) : 
+  MCacheExpire(int f) :
     Message(MSG_MDS_CACHEEXPIRE),
     from(f) { }
 private:
@@ -70,7 +70,7 @@ private:
 
 public:
   virtual const char *get_type_name() const { return "cache_expire";}
-  
+
   void add_inode(dirfrag_t r, vinodeno_t vino, unsigned nonce) {
     realms[r].inodes[vino] = nonce;
   }

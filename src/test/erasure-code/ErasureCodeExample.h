@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -11,7 +11,7 @@
  *  modify it under the terms of the GNU Lesser General Public
  *  License as published by the Free Software Foundation; either
  *  version 2.1 of the License, or (at your option) any later version.
- * 
+ *
  */
 
 #ifndef CEPH_ERASURE_CODE_EXAMPLE_H
@@ -45,10 +45,10 @@ public:
     return crush.add_simple_ruleset(name, "default", "host",
 				    "indep", pg_pool_t::TYPE_ERASURE, ss);
   }
-  
+
   virtual int minimum_to_decode(const set<int> &want_to_read,
-                                const set<int> &available_chunks,
-                                set<int> *minimum) {
+				const set<int> &available_chunks,
+				set<int> *minimum) {
     if (includes(available_chunks.begin(), available_chunks.end(),
 		 want_to_read.begin(), want_to_read.end())) {
       *minimum = want_to_read;
@@ -62,8 +62,8 @@ public:
   }
 
   virtual int minimum_to_decode_with_cost(const set<int> &want_to_read,
-                                          const map<int, int> &available,
-                                          set<int> *minimum) {
+					  const map<int, int> &available,
+					  set<int> *minimum) {
     //
     // If one chunk is more expensive to fetch than the others,
     // recover it instead. For instance, if the cost reflects the
@@ -104,8 +104,8 @@ public:
   }
 
   virtual int encode(const set<int> &want_to_encode,
-                     const bufferlist &in,
-                     map<int, bufferlist> *encoded) {
+		     const bufferlist &in,
+		     map<int, bufferlist> *encoded) {
     //
     // make sure all data chunks have the same length, allocating
     // padding if necessary.
@@ -122,7 +122,7 @@ public:
     char *p = out.c_str();
     for (unsigned i = 0; i < chunk_length; i++)
       p[i + CODING_CHUNK * chunk_length] =
-        p[i + FIRST_DATA_CHUNK * chunk_length] ^
+	p[i + FIRST_DATA_CHUNK * chunk_length] ^
 	p[i + SECOND_DATA_CHUNK * chunk_length];
     //
     // populate the bufferlist with bufferptr pointing
@@ -130,8 +130,8 @@ public:
     //
     const bufferptr ptr = out.buffers().front();
     for (set<int>::iterator j = want_to_encode.begin();
-         j != want_to_encode.end();
-         ++j) {
+	 j != want_to_encode.end();
+	 ++j) {
       bufferptr chunk(ptr, (*j) * chunk_length, chunk_length);
       (*encoded)[*j].push_front(chunk);
     }
@@ -139,21 +139,21 @@ public:
   }
 
   virtual int decode(const set<int> &want_to_read,
-                     const map<int, bufferlist> &chunks,
-                     map<int, bufferlist> *decoded) {
+		     const map<int, bufferlist> &chunks,
+		     map<int, bufferlist> *decoded) {
     //
     // All chunks have the same size
     //
     unsigned chunk_length = (*chunks.begin()).second.length();
     for (set<int>::iterator i = want_to_read.begin();
-         i != want_to_read.end();
-         ++i) {
+	 i != want_to_read.end();
+	 ++i) {
       if (chunks.find(*i) != chunks.end()) {
 	//
 	// If the chunk is available, just copy the bufferptr pointer
 	// to the decoded argument.
 	//
-        (*decoded)[*i] = chunks.find(*i)->second;
+	(*decoded)[*i] = chunks.find(*i)->second;
       } else if(chunks.size() != 2) {
 	//
 	// If a chunk is missing and there are not enough chunks
@@ -165,16 +165,16 @@ public:
 	// No matter what the missing chunk is, XOR of the other
 	// two recovers it.
 	//
-        map<int, bufferlist>::const_iterator k = chunks.begin();
-        const char *a = k->second.buffers().front().c_str();
-        ++k;
-        const char *b = k->second.buffers().front().c_str();
-        bufferptr chunk(chunk_length);
+	map<int, bufferlist>::const_iterator k = chunks.begin();
+	const char *a = k->second.buffers().front().c_str();
+	++k;
+	const char *b = k->second.buffers().front().c_str();
+	bufferptr chunk(chunk_length);
 	char *c = chunk.c_str();
-        for (unsigned j = 0; j < chunk_length; j++) {
-          c[j] = a[j] ^ b[j];
-        }
-        (*decoded)[*i].push_front(chunk);
+	for (unsigned j = 0; j < chunk_length; j++) {
+	  c[j] = a[j] ^ b[j];
+	}
+	(*decoded)[*i].push_front(chunk);
       }
     }
     return 0;

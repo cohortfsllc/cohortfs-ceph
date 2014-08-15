@@ -1,4 +1,4 @@
-// -*- mode:C; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -11,7 +11,7 @@
  *  modify it under the terms of the GNU Lesser General Public
  *  License as published by the Free Software Foundation; either
  *  version 2.1 of the License, or (at your option) any later version.
- * 
+ *
  */
 
 #include "include/stringify.h"
@@ -37,16 +37,16 @@ TEST(ErasureCodeExample, minimum_to_decode)
   {
     set<int> minimum;
     EXPECT_EQ(-EIO, example.minimum_to_decode(want_to_read,
-                                              available_chunks,
-                                              &minimum));
+					      available_chunks,
+					      &minimum));
   }
   available_chunks.insert(0);
   available_chunks.insert(2);
   {
     set<int> minimum;
     EXPECT_EQ(0, example.minimum_to_decode(want_to_read,
-                                           available_chunks,
-                                           &minimum));
+					   available_chunks,
+					   &minimum));
     EXPECT_EQ(available_chunks, minimum);
     EXPECT_EQ(2u, minimum.size());
     EXPECT_EQ(1u, minimum.count(0));
@@ -56,8 +56,8 @@ TEST(ErasureCodeExample, minimum_to_decode)
     set<int> minimum;
     available_chunks.insert(1);
     EXPECT_EQ(0, example.minimum_to_decode(want_to_read,
-                                           available_chunks,
-                                           &minimum));
+					   available_chunks,
+					   &minimum));
     EXPECT_EQ(1u, minimum.size());
     EXPECT_EQ(1u, minimum.count(1));
   }
@@ -134,8 +134,8 @@ TEST(ErasureCodeExample, encode_decode)
     int want_to_decode[] = { 0, 1 };
     map<int, bufferlist> decoded;
     EXPECT_EQ(0, example.decode(set<int>(want_to_decode, want_to_decode+2),
-                                encoded,
-                                &decoded));
+				encoded,
+				&decoded));
     EXPECT_EQ(2u, decoded.size());
     EXPECT_EQ(3u, decoded[0].length());
     EXPECT_EQ('A', decoded[0][0]);
@@ -145,7 +145,7 @@ TEST(ErasureCodeExample, encode_decode)
     EXPECT_EQ('E', decoded[1][1]);
   }
 
-  // one chunk is missing 
+  // one chunk is missing
   {
     map<int, bufferlist> degraded = encoded;
     degraded.erase(0);
@@ -153,8 +153,8 @@ TEST(ErasureCodeExample, encode_decode)
     int want_to_decode[] = { 0, 1 };
     map<int, bufferlist> decoded;
     EXPECT_EQ(0, example.decode(set<int>(want_to_decode, want_to_decode+2),
-                                degraded,
-                                &decoded));
+				degraded,
+				&decoded));
     EXPECT_EQ(2u, decoded.size());
     EXPECT_EQ(3u, decoded[0].length());
     EXPECT_EQ('A', decoded[0][0]);
@@ -185,8 +185,8 @@ TEST(ErasureCodeExample, decode)
   int want_to_encode[] = { 0, 1, 2 };
   map<int, bufferlist> encoded;
   EXPECT_EQ(0, example.encode(set<int>(want_to_encode, want_to_encode+3),
-                              in,
-                              &encoded));
+			      in,
+			      &encoded));
   EXPECT_EQ(3u, encoded.size());
 
   // successfull decode
@@ -197,7 +197,7 @@ TEST(ErasureCodeExample, decode)
   EXPECT_TRUE(usable == in);
 
   // cannot recover
-  map<int, bufferlist> degraded;  
+  map<int, bufferlist> degraded;
   degraded[0] = encoded[0];
   EXPECT_EQ(-ERANGE, example.decode_concat(degraded, &out));
 }
@@ -246,13 +246,12 @@ int main(int argc, char **argv) {
 
 /*
  * Local Variables:
- * compile-command: "cd ../.. ; 
- *   make -j4 && 
- *   make unittest_erasure_code_example && 
+ * compile-command: "cd ../.. ;
+ *   make -j4 &&
+ *   make unittest_erasure_code_example &&
  *   valgrind  --leak-check=full --tool=memcheck \
- *      ./unittest_erasure_code_example --gtest_filter=*.* \
- *      --log-to-stderr=true --debug-osd=20
+ *	./unittest_erasure_code_example --gtest_filter=*.* \
+ *	--log-to-stderr=true --debug-osd=20
  * "
  * End:
  */
-

@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  * Handles the import and export of  mds authorities and actual cache data.
  * See src/doc/exports.txt for a description.
  */
@@ -94,25 +94,25 @@ protected:
     utime_t last_cum_auth_pins_change;
     int last_cum_auth_pins;
     int num_remote_waiters; // number of remote authpin waiters
-    export_state_t() : state(0), peer(0), tid(0), mut(), 
+    export_state_t() : state(0), peer(0), tid(0), mut(),
 		       last_cum_auth_pins(0), num_remote_waiters(0) {}
   };
 
   map<CDir*, export_state_t>  export_state;
-  
+
   list<pair<dirfrag_t,int> >  export_queue;
 
 
   // -- imports --
 public:
-  const static int IMPORT_DISCOVERING   = 1; // waiting for prep
-  const static int IMPORT_DISCOVERED    = 2; // waiting for prep
-  const static int IMPORT_PREPPING      = 3; // opening dirs on bounds
-  const static int IMPORT_PREPPED       = 4; // opened bounds, waiting for import
-  const static int IMPORT_LOGGINGSTART  = 5; // got import, logging EImportStart
-  const static int IMPORT_ACKING        = 6; // logged EImportStart, sent ack, waiting for finish
-  const static int IMPORT_FINISHING     = 7; // sent cap imports, waiting for finish
-  const static int IMPORT_ABORTING      = 8; // notifying bystanders of an abort before unfreezing
+  const static int IMPORT_DISCOVERING	= 1; // waiting for prep
+  const static int IMPORT_DISCOVERED	= 2; // waiting for prep
+  const static int IMPORT_PREPPING	= 3; // opening dirs on bounds
+  const static int IMPORT_PREPPED	= 4; // opened bounds, waiting for import
+  const static int IMPORT_LOGGINGSTART	= 5; // got import, logging EImportStart
+  const static int IMPORT_ACKING	= 6; // logged EImportStart, sent ack, waiting for finish
+  const static int IMPORT_FINISHING	= 7; // sent cap imports, waiting for finish
+  const static int IMPORT_ABORTING	= 8; // notifying bystanders of an abort before unfreezing
 
   static const char *get_import_statename(int s) {
     switch (s) {
@@ -152,7 +152,7 @@ public:
 
   void show_importing();
   void show_exporting();
-  
+
   // -- status --
   int is_exporting(CDir *dir) {
     map<CDir*, export_state_t>::iterator it = export_state.find(dir);
@@ -235,12 +235,12 @@ public:
   void clear_export_queue() {
     export_queue.clear();
   }
-  
+
   void get_export_lock_set(CDir *dir, set<SimpleLock*>& locks);
   void get_export_client_set(CDir *dir, set<client_t> &client_set);
   void get_export_client_set(CInode *in, set<client_t> &client_set);
 
-  void encode_export_inode(CInode *in, bufferlist& bl, 
+  void encode_export_inode(CInode *in, bufferlist& bl,
 			   map<client_t,entity_inst_t>& exported_client_map);
   void encode_export_inode_caps(CInode *in, bool auth_cap, bufferlist& bl,
 				map<client_t,entity_inst_t>& exported_client_map);
@@ -248,7 +248,7 @@ public:
 			   map<client_t,Capability::Import>& peer_imported,
 			   list<Context*>& finished);
   void finish_export_inode_caps(CInode *in, int target,
-			        map<client_t,Capability::Import>& peer_imported);
+				map<client_t,Capability::Import>& peer_imported);
 
 
   int encode_export_dir(bufferlist& exportbl,
@@ -295,7 +295,7 @@ public:
   void handle_export_dir(MExportDir *m);
 
 public:
-  void decode_import_inode(CDentry *dn, bufferlist::iterator& blp, int oldauth, 
+  void decode_import_inode(CDentry *dn, bufferlist::iterator& blp, int oldauth,
 			   LogSegment *ls, uint64_t log_offset,
 			   map<CInode*, map<client_t,Capability::Export> >& cap_imports,
 			   list<ScatterLock*>& updated_scatterlocks);
@@ -307,7 +307,7 @@ public:
   int decode_import_dir(bufferlist::iterator& blp,
 			int oldauth,
 			CDir *import_root,
-			EImportStart *le, 
+			EImportStart *le,
 			LogSegment *ls,
 			map<CInode*, map<client_t,Capability::Export> >& cap_imports,
 			list<ScatterLock*>& updated_scatterlocks, utime_t now);
@@ -332,7 +332,7 @@ public:
 protected:
 
   void handle_export_caps(MExportCaps *m);
-  void logged_import_caps(CInode *in, 
+  void logged_import_caps(CInode *in,
 			  int from,
 			  map<CInode*, map<client_t,Capability::Export> >& cap_imports,
 			  map<client_t,entity_inst_t>& client_map,

@@ -9,7 +9,7 @@
 Load the Ceph RBD Module
 ========================
 
-To map a block device image to a kernel module, first load the Ceph RBD module:: 
+To map a block device image to a kernel module, first load the Ceph RBD module::
 
 	modprobe rbd
 
@@ -23,15 +23,15 @@ To mount a block device image, first return a list of the images. ::
 Map a Block Device
 ==================
 
-Use ``rbd`` to map an image name to a kernel module. You must specify the 
+Use ``rbd`` to map an image name to a kernel module. You must specify the
 image name, the pool name, and the user name. ::
 
   sudo rbd map {image-name} --pool {pool-name} --id {user-name}
 
-For example:: 
+For example::
 
   sudo rbd map foo --pool rbd myimage --id admin
- 
+
 If you use `cephx`_ authentication, you must also specify a secret.  It may come
 from a keyring or a file containing the secret. ::
 
@@ -49,14 +49,14 @@ specify the ``showmapped`` option. ::
 
 
 Unmapping a Block Device
-========================	
+========================
 
 To unmap a block device image with the ``rbd`` command, specify the ``rm``
 option  and the device name (i.e., by convention the same as the block device
-image name). :: 
+image name). ::
 
 	sudo rbd unmap /dev/rbd/{poolname}/{imagename}
-	
+
 For example::
 
 	sudo rbd unmap /dev/rbd/rbd/foo

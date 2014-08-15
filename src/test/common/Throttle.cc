@@ -14,7 +14,7 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
  * GNU Library Public License for more details.
  *
  */
@@ -39,13 +39,13 @@ protected:
     int64_t count;
     bool waited;
 
-    Thread_get(Throttle& _throttle, int64_t _count) : 
+    Thread_get(Throttle& _throttle, int64_t _count) :
       throttle(_throttle),
       count(_count),
       waited(false)
     {
     }
-    
+
     virtual void *entry() {
       waited = throttle.get(count);
       throttle.put(count);
@@ -91,24 +91,24 @@ TEST_F(ThrottleTest, get) {
   do {
     cout << "Trying (1) with delay " << delay << "us\n";
 
-    ASSERT_FALSE(throttle.get(throttle_max)); 
-    ASSERT_FALSE(throttle.get_or_fail(throttle_max));  
+    ASSERT_FALSE(throttle.get(throttle_max));
+    ASSERT_FALSE(throttle.get_or_fail(throttle_max));
 
     Thread_get t(throttle, 7);
     t.create();
     usleep(delay);
-    ASSERT_EQ(throttle.put(throttle_max), 0); 
+    ASSERT_EQ(throttle.put(throttle_max), 0);
     t.join();
 
     if (!(waited = t.waited))
       delay *= 2;
   } while(!waited);
-	  
+
   do {
     cout << "Trying (2) with delay " << delay << "us\n";
 
     ASSERT_FALSE(throttle.get(throttle_max / 2));
-    ASSERT_FALSE(throttle.get_or_fail(throttle_max));  
+    ASSERT_FALSE(throttle.get_or_fail(throttle_max));
 
     Thread_get t(throttle, throttle_max);
     t.create();
@@ -126,13 +126,13 @@ TEST_F(ThrottleTest, get) {
     if (!(waited = t.waited && u.waited))
       delay *= 2;
   } while(!waited);
-	  
+
 }
 
 TEST_F(ThrottleTest, get_or_fail) {
   {
     Throttle throttle(g_ceph_context, "throttle");
-    
+
     ASSERT_TRUE(throttle.get_or_fail(5));
     ASSERT_TRUE(throttle.get_or_fail(5));
   }
@@ -149,8 +149,8 @@ TEST_F(ThrottleTest, get_or_fail) {
     ASSERT_FALSE(throttle.get_or_fail(throttle_max * 2));
     ASSERT_EQ(throttle.put(throttle_max * 2), 0);
 
-    ASSERT_TRUE(throttle.get_or_fail(throttle_max));  
-    ASSERT_FALSE(throttle.get_or_fail(1));  
+    ASSERT_TRUE(throttle.get_or_fail(throttle_max));
+    ASSERT_FALSE(throttle.get_or_fail(1));
     ASSERT_EQ(throttle.put(throttle_max), 0);
   }
 }
@@ -167,7 +167,7 @@ TEST_F(ThrottleTest, wait) {
     cout << "Trying (3) with delay " << delay << "us\n";
 
     ASSERT_FALSE(throttle.get(throttle_max / 2));
-    ASSERT_FALSE(throttle.get_or_fail(throttle_max));  
+    ASSERT_FALSE(throttle.get_or_fail(throttle_max));
 
     Thread_get t(throttle, throttle_max);
     t.create();
@@ -175,8 +175,8 @@ TEST_F(ThrottleTest, wait) {
 
     //
     // Throttle::_reset_max(int64_t m) used to contain a test
-    // that blocked the following statement, only if 
-    // the argument was greater than throttle_max. 
+    // that blocked the following statement, only if
+    // the argument was greater than throttle_max.
     // Although a value lower than throttle_max would cover
     // the same code in _reset_max, the throttle_max * 100
     // value is left here to demonstrate that the problem
@@ -202,7 +202,7 @@ TEST_F(ThrottleTest, destructor) {
     int64_t throttle_max = 10;
     Throttle *throttle = new Throttle(g_ceph_context, "throttle", throttle_max);
 
-    ASSERT_FALSE(throttle->get(5)); 
+    ASSERT_FALSE(throttle->get(5));
 
     t = new Thread_get(*throttle, 7);
     t->create();
@@ -220,8 +220,8 @@ TEST_F(ThrottleTest, destructor) {
     } while(!blocked);
     delete throttle;
   }
-  
-  { // 
+
+  { //
     // The thread is left hanging, otherwise it will abort().
     // Deleting the Throttle on which it is waiting creates a
     // inconsistency that will be detected: the Throttle object that
@@ -247,10 +247,10 @@ int main(int argc, char **argv) {
 
 /*
  * Local Variables:
- * compile-command: "cd ../.. ; 
- *   make unittest_throttle ; 
+ * compile-command: "cd ../.. ;
+ *   make unittest_throttle ;
  *   ./unittest_throttle # --gtest_filter=ThrottleTest.destructor \
- *       --log-to-stderr=true --debug-filestore=20
+ *	 --log-to-stderr=true --debug-filestore=20
  * "
  * End:
  */

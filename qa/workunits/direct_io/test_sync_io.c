@@ -73,7 +73,7 @@ int read_file(int buf_align, uint64_t offset, int len, int direct) {
 	       (unsigned long long)offset, len);
 	void *rawbuf;
 	int r;
-        int flags;
+	int flags;
 	int err = 0;
 
 	if(direct)
@@ -133,11 +133,11 @@ int write_file(int buf_align, uint64_t offset, int len, int direct)
 	       (unsigned long long)offset, len);
 	void *rawbuf;
 	int r;
-        int err = 0;
+	int err = 0;
 	int flags;
 	if (direct)
 	   flags = O_WRONLY|O_DIRECT|O_CREAT;
-        else
+	else
 	   flags = O_WRONLY|O_CREAT;
 
 	int fd = open("foo", flags, 0644);
@@ -226,14 +226,14 @@ int main(int argc, char **argv)
 
 	if (read) {
 		write_pattern();
-		
+
 		for (i = 0; i < 4096; i += 512)
 			for (j = 4*1024*1024 - 4096; j < 4*1024*1024 + 4096; j += 512)
 				for (k = 1024; k <= 16384; k *= 2) {
 					read_direct(i, j, k);
 					read_sync(i, j, k);
 				}
-		
+
 	}
 	unlink("foo");
 	if (write) {
@@ -244,7 +244,7 @@ int main(int argc, char **argv)
 					write_sync(i, j, k);
 				}
 	}
-	
+
 
 	return 0;
 }

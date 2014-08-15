@@ -3,7 +3,7 @@
 cwd=`pwd`
 cat > conf <<EOF
 [mon]
-admin socket = 
+admin socket =
 EOF
 
 rm -f mm

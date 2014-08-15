@@ -14,7 +14,7 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
  * GNU Library Public License for more details.
  *
  */
@@ -140,7 +140,7 @@ TEST(Buffer, constructors) {
     //EXPECT_THROW(buffer::create_page_aligned((unsigned)ULLONG_MAX), buffer::bad_alloc);
 #ifndef DARWIN
     ASSERT_TRUE(ptr.is_page_aligned());
-#endif // DARWIN 
+#endif // DARWIN
     bufferptr clone = ptr.clone();
     EXPECT_EQ(0, ::memcmp(clone.c_str(), ptr.c_str(), len));
   }
@@ -315,17 +315,17 @@ TEST_F(TestRawPipe, buffer_list_write_fd_zero_copy) {
 }
 #endif // CEPH_HAVE_SPLICE
 
-//                                     
-// +-----------+                +-----+
-// |           |                |     |
+//
+// +-----------+		+-----+
+// |	       |		|     |
 // |  offset   +----------------+     |
-// |           |                |     |
-// |  length   +----            |     |
-// |           |    \-------    |     |
-// +-----------+            \---+     |
-// |   ptr     |                +-----+
-// +-----------+                | raw |
-//                              +-----+
+// |	       |		|     |
+// |  length   +----		|     |
+// |	       |    \-------	|     |
+// +-----------+	    \---+     |
+// |   ptr     |		+-----+
+// +-----------+		| raw |
+//				+-----+
 //
 TEST(BufferPtr, constructors) {
   unsigned len = 17;
@@ -426,7 +426,7 @@ TEST(BufferPtr, assignment) {
     ASSERT_EQ((unsigned)0, original.offset());
     ASSERT_EQ(len, original.length());
   }
-  
+
   //
   // a copy points to the same raw
   //
@@ -653,32 +653,32 @@ TEST(BufferPtr, ostream) {
     std::ostringstream stream;
     stream << ptr;
     EXPECT_GT(stream.str().size(), stream.str().find("len 4 nref 1)"));
-  }  
+  }
 }
 
 //
-//                                             +---------+
-//                                             | +-----+ |
-//    list              ptr                    | |     | |
-// +----------+       +-----+                  | |     | |
-// | append_  >------->     >-------------------->     | |
-// |  buffer  |       +-----+                  | |     | |
-// +----------+                        ptr     | |     | |
-// |   _len   |      list            +-----+   | |     | |
-// +----------+    +------+     ,--->+     >----->     | |
-// | _buffers >---->      >-----     +-----+   | +-----+ |
-// +----------+    +----^-+     \      ptr     |   raw   |
-// |  last_p  |        /         `-->+-----+   | +-----+ |
-// +--------+-+       /              +     >----->     | |
-//          |       ,-          ,--->+-----+   | |     | |
-//          |      /        ,---               | |     | |
-//          |     /     ,---                   | |     | |
-//        +-v--+-^--+--^+-------+              | |     | |
-//        | bl | ls | p | p_off >--------------->|     | |
-//        +----+----+-----+-----+              | +-----+ |
-//        |               | off >------------->|   raw   |
-//        +---------------+-----+              |         |
-//              iterator                       +---------+
+//					       +---------+
+//					       | +-----+ |
+//    list		ptr		       | |     | |
+// +----------+	      +-----+		       | |     | |
+// | append_  >------->	    >-------------------->     | |
+// |  buffer  |	      +-----+		       | |     | |
+// +----------+			       ptr     | |     | |
+// |   _len   |	     list	     +-----+   | |     | |
+// +----------+	   +------+	,--->+	   >----->     | |
+// | _buffers >---->	  >-----     +-----+   | +-----+ |
+// +----------+	   +----^-+	\      ptr     |   raw	 |
+// |  last_p  |	       /	 `-->+-----+   | +-----+ |
+// +--------+-+	      /		     +	   >----->     | |
+//	    |	    ,-		,--->+-----+   | |     | |
+//	    |	   /	    ,---	       | |     | |
+//	    |	  /	,---		       | |     | |
+//	  +-v--+-^--+--^+-------+	       | |     | |
+//	  | bl | ls | p | p_off >--------------->|     | |
+//	  +----+----+-----+-----+	       | +-----+ |
+//	  |		  | off >------------->|   raw	 |
+//	  +---------------+-----+	       |	 |
+//		iterator		       +---------+
 //
 TEST(BufferListIterator, constructors) {
   //
@@ -834,7 +834,7 @@ TEST(BufferListIterator, operator_plus_plus) {
     bufferlist::iterator i(&bl);
     ++i;
     EXPECT_EQ('B', *i);
-  }  
+  }
 }
 
 TEST(BufferListIterator, get_current_ptr) {
@@ -850,7 +850,7 @@ TEST(BufferListIterator, get_current_ptr) {
     EXPECT_EQ('B', ptr[0]);
     EXPECT_EQ((unsigned)1, ptr.offset());
     EXPECT_EQ((unsigned)2, ptr.length());
-  }  
+  }
 }
 
 TEST(BufferListIterator, copy) {
@@ -867,7 +867,7 @@ TEST(BufferListIterator, copy) {
     //
     // demonstrates that it seeks back to offset if p == ls->end()
     //
-    EXPECT_THROW(i.advance(200), buffer::end_of_buffer); 
+    EXPECT_THROW(i.advance(200), buffer::end_of_buffer);
     i.copy(2, copy);
     EXPECT_EQ(0, ::memcmp(copy, expected, 2));
     EXPECT_EQ('X', copy[2]);
@@ -895,7 +895,7 @@ TEST(BufferListIterator, copy) {
     //
     // demonstrates that it seeks back to offset if p == ls->end()
     //
-    EXPECT_THROW(i.advance(200), buffer::end_of_buffer); 
+    EXPECT_THROW(i.advance(200), buffer::end_of_buffer);
     i.copy(2, copy);
     EXPECT_EQ(0, ::memcmp(copy.c_str(), expected, 2));
     i.seek(0);
@@ -916,7 +916,7 @@ TEST(BufferListIterator, copy) {
     //
     // demonstrates that it seeks back to offset if p == ls->end()
     //
-    EXPECT_THROW(i.advance(200), buffer::end_of_buffer); 
+    EXPECT_THROW(i.advance(200), buffer::end_of_buffer);
     i.copy_all(copy);
     EXPECT_EQ('A', copy[0]);
     EXPECT_EQ('B', copy[1]);
@@ -932,7 +932,7 @@ TEST(BufferListIterator, copy) {
     //
     // demonstrates that it seeks back to offset if p == ls->end()
     //
-    EXPECT_THROW(i.advance(200), buffer::end_of_buffer); 
+    EXPECT_THROW(i.advance(200), buffer::end_of_buffer);
     i.copy(2, copy);
     EXPECT_EQ(0, ::memcmp(copy.c_str(), expected, 2));
     i.seek(0);
@@ -958,7 +958,7 @@ TEST(BufferListIterator, copy_in) {
     //
     // demonstrates that it seeks back to offset if p == ls->end()
     //
-    EXPECT_THROW(i.advance(200), buffer::end_of_buffer); 
+    EXPECT_THROW(i.advance(200), buffer::end_of_buffer);
     const char *expected = "ABC";
     i.copy_in(3, expected);
     EXPECT_EQ(0, ::memcmp(bl.c_str(), expected, 3));
@@ -975,7 +975,7 @@ TEST(BufferListIterator, copy_in) {
     //
     // demonstrates that it seeks back to offset if p == ls->end()
     //
-    EXPECT_THROW(i.advance(200), buffer::end_of_buffer); 
+    EXPECT_THROW(i.advance(200), buffer::end_of_buffer);
     bufferlist expected;
     expected.append("ABC", 3);
     i.copy_in(3, expected);
@@ -1238,7 +1238,7 @@ TEST(BufferList, is_contiguous) {
   bufferlist bl;
   EXPECT_TRUE(bl.is_contiguous());
   EXPECT_EQ((unsigned)0, bl.buffers().size());
-  bl.append('A');  
+  bl.append('A');
   EXPECT_TRUE(bl.is_contiguous());
   EXPECT_EQ((unsigned)1, bl.buffers().size());
   bufferptr ptr(1);
@@ -1477,7 +1477,7 @@ TEST(BufferList, copy_in) {
     src.append("ABC");
     EXPECT_THROW(bl.copy_in((unsigned)100, (unsigned)100, src), buffer::end_of_buffer);
     bl.copy_in(1, 2, src);
-    EXPECT_EQ(0, ::memcmp("XAB", bl.c_str(), 3));    
+    EXPECT_EQ(0, ::memcmp("XAB", bl.c_str(), 3));
   }
 }
 
@@ -2076,8 +2076,8 @@ TEST(BufferList, TestPtrAppend) {
     } else {
       char *current = correct + curpos;
       for (int i = 0; i < length; ++i) {
-        char next = random() % 255;
-        correct[curpos++] = next;
+	char next = random() % 255;
+	correct[curpos++] = next;
       }
       bufferptr ptr(current, length);
       bl.append(ptr);
@@ -2140,7 +2140,7 @@ TEST(BufferHash, all) {
     bl.append("A");
     bufferhash hash;
     EXPECT_EQ((unsigned)0, hash.digest());
-    bufferhash& returned_hash =  hash << bl;
+    bufferhash& returned_hash =	 hash << bl;
     EXPECT_EQ(&returned_hash, &hash);
     EXPECT_EQ((unsigned)0xB3109EBF, hash.digest());
   }
@@ -2148,7 +2148,7 @@ TEST(BufferHash, all) {
 
 /*
  * Local Variables:
- * compile-command: "cd .. ; make unittest_bufferlist && 
+ * compile-command: "cd .. ; make unittest_bufferlist &&
  *    ulimit -s unlimited ; CEPH_BUFFER_TRACK=true valgrind \
  *    --max-stackframe=20000000 --tool=memcheck \
  *    ./unittest_bufferlist # --gtest_filter=BufferList.constructors"

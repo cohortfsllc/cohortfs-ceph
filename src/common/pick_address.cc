@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -142,11 +142,11 @@ bool have_local_addr(CephContext *cct, const list<entity_addr_t>& ls, entity_add
       entity_addr_t a;
       a.set_sockaddr(addrs->ifa_addr);
       for (list<entity_addr_t>::const_iterator p = ls.begin(); p != ls.end(); ++p) {
-        if (a.is_same_host(*p)) {
-          *match = *p;
-          found = true;
-          goto out;
-        }
+	if (a.is_same_host(*p)) {
+	  *match = *p;
+	  found = true;
+	  goto out;
+	}
       }
     }
   }

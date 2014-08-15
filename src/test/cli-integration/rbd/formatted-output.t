@@ -35,11 +35,11 @@ For now, use a more inclusive regex.
   $ rbd info foo --format json | python -mjson.tool
   {
       "block_name_prefix": "rb.0.*",  (glob)
-      "format": 1, 
-      "name": "foo", 
-      "object_size": 4194304, 
-      "objects": 256, 
-      "order": 22, 
+      "format": 1,
+      "name": "foo",
+      "object_size": 4194304,
+      "objects": 256,
+      "order": 22,
       "size": 1073741824
   }
 The version of xml_pp included in ubuntu precise always prints a 'warning'
@@ -65,14 +65,14 @@ whenever it is run. grep -v to ignore it, but still work on other distros.
   {
       "block_name_prefix": "rbd_data.*",  (glob)
       "features": [
-          "layering", 
+          "layering",
           "striping"
-      ], 
-      "format": 2, 
-      "name": "bar", 
-      "object_size": 4194304, 
-      "objects": 256, 
-      "order": 22, 
+      ],
+      "format": 2,
+      "name": "bar",
+      "object_size": 4194304,
+      "objects": 256,
+      "order": 22,
       "size": 1073741824
   }
   $ rbd info bar --format xml | xml_pp 2>&1 | grep -v '^new version at /usr/bin/xml_pp'
@@ -100,14 +100,14 @@ whenever it is run. grep -v to ignore it, but still work on other distros.
   {
       "block_name_prefix": "rbd_data.*",  (glob)
       "features": [
-          "layering", 
+          "layering",
           "striping"
-      ], 
-      "format": 2, 
-      "name": "baz", 
-      "object_size": 4194304, 
-      "objects": 512, 
-      "order": 22, 
+      ],
+      "format": 2,
+      "name": "baz",
+      "object_size": 4194304,
+      "objects": 512,
+      "order": 22,
       "size": 2147483648
   }
   $ rbd info baz --format xml | xml_pp 2>&1 | grep -v '^new version at /usr/bin/xml_pp'
@@ -133,11 +133,11 @@ whenever it is run. grep -v to ignore it, but still work on other distros.
   $ rbd info quux --format json | python -mjson.tool
   {
       "block_name_prefix": "rb.0.*",  (glob)
-      "format": 1, 
-      "name": "quux", 
-      "object_size": 4194304, 
-      "objects": 1, 
-      "order": 22, 
+      "format": 1,
+      "name": "quux",
+      "object_size": 4194304,
+      "objects": 1,
+      "order": 22,
       "size": 1048576
   }
   $ rbd info quux --format xml | xml_pp 2>&1 | grep -v '^new version at /usr/bin/xml_pp'
@@ -157,9 +157,9 @@ whenever it is run. grep -v to ignore it, but still work on other distros.
   baz
   $ rbd list --format json | python -mjson.tool
   [
-      "foo", 
-      "quux", 
-      "bar", 
+      "foo",
+      "quux",
+      "bar",
       "baz"
   ]
   $ rbd list --format xml | xml_pp 2>&1 | grep -v '^new version at /usr/bin/xml_pp'
@@ -204,11 +204,11 @@ whenever it is run. grep -v to ignore it, but still work on other distros.
       "id1": {
           "address": "*",  (glob)
           "locker": "client.*" (glob)
-      }, 
+      },
       "id2": {
           "address": "*",  (glob)
           "locker": "client.*" (glob)
-      }, 
+      },
       "id3": {
           "address": "*",  (glob)
           "locker": "client.*" (glob)

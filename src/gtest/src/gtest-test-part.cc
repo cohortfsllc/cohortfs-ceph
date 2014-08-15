@@ -35,7 +35,7 @@
 
 // Indicates that this translation unit is part of Google Test's
 // implementation.  It must come before gtest-internal-inl.h is
-// included, or there will be a compiler error.  This trick is to
+// included, or there will be a compiler error.	 This trick is to
 // prevent a user from accidentally including gtest-internal-inl.h in
 // his code.
 #define GTEST_IMPLEMENTATION_ 1
@@ -59,8 +59,8 @@ std::ostream& operator<<(std::ostream& os, const TestPartResult& result) {
   return os
       << result.file_name() << ":" << result.line_number() << ": "
       << (result.type() == TestPartResult::kSuccess ? "Success" :
-          result.type() == TestPartResult::kFatalFailure ? "Fatal failure" :
-          "Non-fatal failure") << ":\n"
+	  result.type() == TestPartResult::kFatalFailure ? "Fatal failure" :
+	  "Non-fatal failure") << ":\n"
       << result.message() << std::endl;
 }
 
@@ -89,7 +89,7 @@ namespace internal {
 HasNewFatalFailureHelper::HasNewFatalFailureHelper()
     : has_new_fatal_failure_(false),
       original_reporter_(GetUnitTestImpl()->
-                         GetTestPartResultReporterForCurrentThread()) {
+			 GetTestPartResultReporterForCurrentThread()) {
   GetUnitTestImpl()->SetTestPartResultReporterForCurrentThread(this);
 }
 

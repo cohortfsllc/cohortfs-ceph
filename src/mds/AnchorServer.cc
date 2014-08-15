@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -73,14 +73,14 @@ void AnchorServer::generate_test_instances(list<AnchorServer*>& ls)
  */
 
 bool AnchorServer::add(inodeno_t ino, inodeno_t dirino, uint32_t dn_hash,
-                       bool replace)
+		       bool replace)
 {
   //dout(17) << "add " << ino << " dirfrag " << dirfrag << dendl;
-  
+
   // parent should be there
-  assert(MDS_INO_IS_BASE(dirino) ||     // base case,
-         anchor_map.count(dirino));   // or have it
-  
+  assert(MDS_INO_IS_BASE(dirino) ||	// base case,
+	 anchor_map.count(dirino));   // or have it
+
   if (anchor_map.count(ino) == 0) {
     // new item
     anchor_map[ino] = Anchor(ino, dirino, dn_hash, 0, version);
@@ -89,7 +89,7 @@ bool AnchorServer::add(inodeno_t ino, inodeno_t dirino, uint32_t dn_hash,
     anchor_map[ino].dirino = dirino;
     anchor_map[ino].dn_hash = dn_hash;
     dout(7) << "add had old Anchor, updated it to "
-            << anchor_map[ino] << dendl;
+	    << anchor_map[ino] << dendl;
   } else {
     dout(7) << "add had " << anchor_map[ino] << dendl;
     return false;
@@ -107,10 +107,10 @@ void AnchorServer::inc(inodeno_t ino, int ref)
     Anchor &anchor = anchor_map[ino];
     anchor.nref += ref;
     anchor.updated = version;
-      
+
     dout(10) << "inc now " << anchor << dendl;
     ino = anchor.dirino;
-    
+
     if (ino == 0 || MDS_INO_IS_BASE(ino)) break;
     if (anchor_map.count(ino) == 0) break;
   }
@@ -135,7 +135,7 @@ void AnchorServer::dec(inodeno_t ino, int ref)
       dout(10) << "dec now " << anchor << dendl;
       ino = anchor.dirino;
     }
-    
+
     if (ino == 0) break;
     if (anchor_map.count(ino) == 0) break;
   }
@@ -174,7 +174,7 @@ void AnchorServer::_prepare(bufferlist &bl, uint64_t reqid, int bymds)
     pending_destroy[version] = ino;
     pending_ops[ino].push_back(pair<version_t, Context*>(version, NULL));
     break;
-    
+
   case TABLE_OP_UPDATE:
     ::decode(trace, p);
     version++;
@@ -242,36 +242,36 @@ bool AnchorServer::_commit(version_t tid, MMDSTableRequest *req)
   if (pending_create.count(tid)) {
     dout(7) << "commit " << tid << " create " << pending_create[tid] << dendl;
     pending_create.erase(tid);
-  } 
+  }
 
   else if (pending_destroy.count(tid)) {
     inodeno_t ino = pending_destroy[tid];
     dout(7) << "commit " << tid << " destroy " << ino << dendl;
-    
+
     dec(ino);  // destroy
-    
+
     pending_destroy.erase(tid);
   }
 
   else if (pending_update.count(tid)) {
     inodeno_t ino = pending_update[tid].first;
     vector<Anchor> &trace = pending_update[tid].second;
-    
+
     if (anchor_map.count(ino)) {
       dout(7) << "commit " << tid << " update " << ino << dendl;
 
       int ref = anchor_map[ino].nref;
       // remove old
       dec(ino, ref);
-      
+
       // add new
-      for (unsigned i=0; i<trace.size(); i++) 
+      for (unsigned i=0; i<trace.size(); i++)
 	add(trace[i].ino, trace[i].dirino, trace[i].dn_hash, true);
       inc(ino, ref);
     } else {
       dout(7) << "commit " << tid << " update " << ino << " -- DNE" << dendl;
     }
-    
+
     pending_update.erase(tid);
   }
   else
@@ -285,7 +285,7 @@ bool AnchorServer::_commit(version_t tid, MMDSTableRequest *req)
   return true;
 }
 
-void AnchorServer::_rollback(version_t tid) 
+void AnchorServer::_rollback(version_t tid)
 {
   list<Context *> finished;
   check_pending(tid, NULL, finished);
@@ -295,7 +295,7 @@ void AnchorServer::_rollback(version_t tid)
     dout(7) << "rollback " << tid << " create " << ino << dendl;
     dec(ino);
     pending_create.erase(tid);
-  } 
+  }
 
   else if (pending_destroy.count(tid)) {
     inodeno_t ino = pending_destroy[tid];
@@ -330,10 +330,10 @@ void AnchorServer::handle_query(MMDSTableRequest *req)
   while (true) {
     assert(anchor_map.count(curino) == 1);
     Anchor &anchor = anchor_map[curino];
-    
-    dout(10) << "handle_lookup  adding " << anchor << dendl;
+
+    dout(10) << "handle_lookup	adding " << anchor << dendl;
     trace.insert(trace.begin(), anchor);  // lame FIXME
-    
+
     if (MDS_INO_IS_BASE(anchor.dirino))
       break;
     curino = anchor.dirino;
@@ -347,5 +347,3 @@ void AnchorServer::handle_query(MMDSTableRequest *req)
 
   req->put();
 }
-
-

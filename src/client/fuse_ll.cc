@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -116,7 +116,7 @@ static void fuse_ll_getattr(fuse_req_t req, fuse_ino_t ino,
   const struct fuse_ctx *ctx = fuse_req_ctx(req);
   Inode *in = cfuse->iget(ino);
   struct stat stbuf;
-  
+
   (void) fi; // XXX
 
   if (cfuse->client->ll_getattr(in, &stbuf, ctx->uid, ctx->gid)
@@ -180,7 +180,7 @@ static void fuse_ll_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
   int r = cfuse->client->ll_listxattr(in, buf, size, ctx->uid, ctx->gid);
   if (size == 0 && r >= 0)
     fuse_reply_xattr(req, r);
-  else if (r >= 0) 
+  else if (r >= 0)
     fuse_reply_buf(req, buf, r);
   else
     fuse_reply_err(req, -r);
@@ -383,7 +383,7 @@ static void fuse_ll_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent,
   struct fuse_entry_param fe;
 
   memset(&fe, 0, sizeof(fe));
-  
+
   int r = cfuse->client->ll_link(in, nin, newname, &fe.attr, ctx->uid,
 				 ctx->gid);
   if (r == 0) {
@@ -455,7 +455,7 @@ static void fuse_ll_flush(fuse_req_t req, fuse_ino_t ino,
 
 #ifdef FUSE_IOCTL_COMPAT
 static void fuse_ll_ioctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg, struct fuse_file_info *fi,
-                          unsigned flags, const void *in_buf, size_t in_bufsz, size_t out_bufsz)
+			  unsigned flags, const void *in_buf, size_t in_bufsz, size_t out_bufsz)
 {
   CephFuse::Handle *cfuse = (CephFuse::Handle *)fuse_req_userdata(req);
 
@@ -485,8 +485,8 @@ static void fuse_ll_ioctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg, st
 #if FUSE_VERSION > FUSE_MAKE_VERSION(2, 9)
 
 static void fuse_ll_fallocate(fuse_req_t req, fuse_ino_t ino, int mode,
-                              off_t offset, off_t length,
-                              struct fuse_file_info *fi)
+			      off_t offset, off_t length,
+			      struct fuse_file_info *fi)
 {
   CephFuse::Handle *cfuse = (CephFuse::Handle *)fuse_req_userdata(req);
   Fh *fh = (Fh*)fi->fh;

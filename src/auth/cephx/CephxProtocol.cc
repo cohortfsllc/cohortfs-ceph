@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -24,7 +24,7 @@
 
 
 
-void cephx_calc_client_server_challenge(CephContext *cct, CryptoKey& secret, uint64_t server_challenge, 
+void cephx_calc_client_server_challenge(CephContext *cct, CryptoKey& secret, uint64_t server_challenge,
 		  uint64_t client_challenge, uint64_t *key, std::string &ret)
 {
   CephXChallengeBlob b;
@@ -79,11 +79,11 @@ bool cephx_build_service_ticket_blob(CephContext *cct, CephXSessionAuthInfo& inf
  * {principal_ticket, session key}^service_secret  ... "enc_ticket"
  */
 bool cephx_build_service_ticket_reply(CephContext *cct,
-                     CryptoKey& principal_secret,
-                     vector<CephXSessionAuthInfo> ticket_info_vec,
-                     bool should_encrypt_ticket,
-                     CryptoKey& ticket_enc_key,
-                     bufferlist& reply)
+		     CryptoKey& principal_secret,
+		     vector<CephXSessionAuthInfo> ticket_info_vec,
+		     bool should_encrypt_ticket,
+		     CryptoKey& ticket_enc_key,
+		     bufferlist& reply)
 {
   uint8_t service_ticket_reply_v = 1;
   ::encode(service_ticket_reply_v, reply);
@@ -93,7 +93,7 @@ bool cephx_build_service_ticket_reply(CephContext *cct,
   ldout(cct, 10) << "build_service_ticket_reply encoding " << num
 	   << " tickets with secret " << principal_secret << dendl;
 
-  for (vector<CephXSessionAuthInfo>::iterator ticket_iter = ticket_info_vec.begin(); 
+  for (vector<CephXSessionAuthInfo>::iterator ticket_iter = ticket_info_vec.begin();
        ticket_iter != ticket_info_vec.end();
        ++ticket_iter) {
     CephXSessionAuthInfo& info = *ticket_iter;
@@ -126,7 +126,7 @@ bool cephx_build_service_ticket_reply(CephContext *cct,
     if (should_encrypt_ticket) {
       if (encode_encrypt(cct, service_ticket_bl, ticket_enc_key, reply, error)) {
 	ldout(cct, -1) << "error encoding encrypted ticket: " << error << dendl;
-        return false;
+	return false;
       }
     } else {
       ::encode(service_ticket_bl, reply);
@@ -151,7 +151,7 @@ bool CephXTicketHandler::verify_service_ticket_reply(CryptoKey& secret,
     ldout(cct, 0) << "verify_service_ticket_reply: failed decode_decrypt, error is: " << error << dendl;
     return false;
   }
-  
+
   uint8_t ticket_enc;
   ::decode(ticket_enc, indata);
 
@@ -174,7 +174,7 @@ bool CephXTicketHandler::verify_service_ticket_reply(CryptoKey& secret,
   ldout(cct, 10) << "verify_service_ticket_reply service " << ceph_entity_type_name(service_id)
 	   << " secret_id " << ticket.secret_id
 	   << " session_key " << msg_a.session_key
-           << " validity=" << msg_a.validity << dendl;
+	   << " validity=" << msg_a.validity << dendl;
   session_key = msg_a.session_key;
   if (!msg_a.validity.is_zero()) {
     expires = ceph_clock_now(cct);
@@ -183,7 +183,7 @@ bool CephXTicketHandler::verify_service_ticket_reply(CryptoKey& secret,
     renew_after -= ((double)msg_a.validity.sec() / 4);
     ldout(cct, 10) << "ticket expires=" << expires << " renew_after=" << renew_after << dendl;
   }
-  
+
   have_key_flag = true;
   return true;
 }
@@ -364,7 +364,7 @@ bool cephx_decode_ticket(CephContext *cct, KeyStore *keys, uint32_t service_id,
     }
   } else {
     if (!keys->get_service_secret(service_id, secret_id, service_secret)) {
-      ldout(cct, 0) << "ceph_decode_ticket could not get service secret for service_id=" 
+      ldout(cct, 0) << "ceph_decode_ticket could not get service secret for service_id="
 	      << ceph_entity_type_name(service_id) << " secret_id=" << secret_id << dendl;
       return false;
     }
@@ -373,7 +373,7 @@ bool cephx_decode_ticket(CephContext *cct, KeyStore *keys, uint32_t service_id,
   std::string error;
   decode_decrypt_enc_bl(cct, ticket_info, service_secret, ticket_blob.blob, error);
   if (!error.empty()) {
-    ldout(cct, 0) << "ceph_decode_ticket could not decrypt ticket info. error:" 
+    ldout(cct, 0) << "ceph_decode_ticket could not decrypt ticket info. error:"
 	<< error << dendl;
     return false;
   }

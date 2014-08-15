@@ -782,7 +782,7 @@ KvFlatBtreeAsync(int k_val, string name, int cache, double cache_r,
   int setup(int argc, const char** argv);
 
   int set(const string &key, const bufferlist &val,
-        bool update_on_existing);
+	  bool update_on_existing);
 
   int remove(const string &key);
 

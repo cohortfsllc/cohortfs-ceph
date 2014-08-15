@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -40,8 +40,8 @@ using namespace std;
  *  metadata lives on what MDS.
  *
  * for readdir replies:
- *  dir_contents is a vector of InodeStat*'s.  
- * 
+ *  dir_contents is a vector of InodeStat*'s.
+ *
  * that's mostly it, i think!
  *
  */
@@ -50,7 +50,7 @@ using namespace std;
 struct LeaseStat {
   // this matches ceph_mds_reply_lease
   uint16_t mask;
-  uint32_t duration_ms;  
+  uint32_t duration_ms;
   uint32_t seq;
 
   LeaseStat() : mask(0), duration_ms(0), seq(0) {}
@@ -77,7 +77,7 @@ struct DirStat {
   frag_t frag;
   int32_t auth;
   set<int32_t> dist;
-  
+
   DirStat() : auth(CDIR_AUTH_PARENT) {}
   DirStat(bufferlist::iterator& p) {
     decode(p);
@@ -114,7 +114,7 @@ struct InodeStat {
 
   frag_info_t dirstat;
   nest_info_t rstat;
-  
+
   string  symlink;   // symlink content (if symlink)
   fragtree_t dirfragtree;
 
@@ -168,7 +168,7 @@ struct InodeStat {
       n--;
     }
     ::decode(symlink, p);
-    
+
     if (features & CEPH_FEATURE_DIRLAYOUTHASH)
       ::decode(dir_layout, p);
     else
@@ -184,7 +184,7 @@ struct InodeStat {
       inline_version = CEPH_INLINE_NONE;
     }
   }
-  
+
   // see CInode::encode_inodestat for encoder.
 };
 

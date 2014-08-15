@@ -1,4 +1,5 @@
-
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 
 #include "../crush/BinaryTree.h"
 using namespace crush;
@@ -7,7 +8,7 @@ using namespace crush;
 #include <vector>
 using namespace std;
 
-int main() 
+int main()
 {
   BinaryTree t;
 
@@ -27,20 +28,18 @@ int main()
       nodes.push_back( t.add_node(1) );
     } else {
       if (!nodes.empty()) {
-        //for (int i=0; i<nodes.size(); i++) {
-        int p = rand() % nodes.size();
-        int n = nodes[p];
-        assert (t.exists(n));
-        cout << "removing " << n << endl;
-        t.remove_node(n);
-        
-        for (int j=p; j<nodes.size(); j++)
-          nodes[j] = nodes[j+1];
-        nodes.pop_back();
+	//for (int i=0; i<nodes.size(); i++) {
+	int p = rand() % nodes.size();
+	int n = nodes[p];
+	assert (t.exists(n));
+	cout << "removing " << n << endl;
+	t.remove_node(n);
+
+	for (int j=p; j<nodes.size(); j++)
+	  nodes[j] = nodes[j+1];
+	nodes.pop_back();
       }
     }
     cout << t << endl;
   }
-
-
 }

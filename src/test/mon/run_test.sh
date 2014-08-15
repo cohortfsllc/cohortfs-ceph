@@ -10,7 +10,7 @@ fi
 
 usage() {
   echo "usage: $1 [options..] <num-osds>"
-  echo 
+  echo
   echo "options:"
   echo "  -v, --verbose        Be more verbose"
   echo "  -c, --conf FILE      ceph.conf location"

@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #include <sys/socket.h>
@@ -42,7 +42,7 @@ int Accepter::bind(const entity_addr_t &bind_addr, const set<int>& avoid_ports)
   const md_config_t *conf = msgr->cct->_conf;
   // bind to a socket
   ldout(msgr->cct,10) << "accepter.bind" << dendl;
-  
+
   int family;
   switch (bind_addr.get_family()) {
   case AF_INET:
@@ -116,7 +116,7 @@ int Accepter::bind(const entity_addr_t &bind_addr, const set<int>& avoid_ports)
     lderr(msgr->cct) << "accepter.bind failed getsockname: " << cpp_strerror(rc) << dendl;
     return rc;
   }
-  
+
   ldout(msgr->cct,10) << "accepter.bind bound to " << listen_addr << dendl;
 
   // listen!
@@ -127,7 +127,7 @@ int Accepter::bind(const entity_addr_t &bind_addr, const set<int>& avoid_ports)
 		     << ": " << cpp_strerror(rc) << dendl;
     return rc;
   }
-  
+
   msgr->set_myaddr(bind_addr);
   if (bind_addr != entity_addr_t())
     msgr->learned_addr(bind_addr);
@@ -151,7 +151,7 @@ int Accepter::bind(const entity_addr_t &bind_addr, const set<int>& avoid_ports)
 int Accepter::rebind(const set<int>& avoid_ports)
 {
   ldout(msgr->cct,1) << "accepter.rebind avoid " << avoid_ports << dendl;
-  
+
   // invalidate our previously learned address.
   msgr->unlearn_addr();
 
@@ -185,7 +185,7 @@ int Accepter::start()
 void *Accepter::entry()
 {
   ldout(msgr->cct,10) << "accepter starting" << dendl;
-  
+
   int errors = 0;
 
   struct pollfd pfd;
@@ -211,7 +211,7 @@ void *Accepter::entry()
     if (sd >= 0) {
       errors = 0;
       ldout(msgr->cct,10) << "accepted incoming on sd " << sd << dendl;
-      
+
       msgr->add_accept_pipe(sd);
     } else {
       ldout(msgr->cct,0) << "accepter no incoming connection?  sd = " << sd
@@ -252,7 +252,3 @@ void Accepter::stop()
   }
   done = false;
 }
-
-
-
-

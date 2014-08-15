@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 /*
  *  Ceph FileStore engine
  *
@@ -35,27 +37,27 @@ struct ceph_filestore_options {
 static struct fio_option* init_options() {
 	static struct fio_option options[] = {{},{},{},{}};
 
-	options[0].name     = "objectstore";
+	options[0].name	    = "objectstore";
 	options[0].lname    = "ceph objectstore type";
-	options[0].type     = FIO_OPT_STR_STORE;
-	options[0].help     = "Type of ObjectStore to create";
-	options[0].off1     = offsetof(struct ceph_filestore_options, objectstore);
+	options[0].type	    = FIO_OPT_STR_STORE;
+	options[0].help	    = "Type of ObjectStore to create";
+	options[0].off1	    = offsetof(struct ceph_filestore_options, objectstore);
 	options[0].category = FIO_OPT_C_ENGINE;
 	options[0].group    = FIO_OPT_G_RBD;
 
-	options[1].name     = "filestore_debug";
+	options[1].name	    = "filestore_debug";
 	options[1].lname    = "ceph filestore debug level";
-	options[1].type     = FIO_OPT_STR_STORE;
-	options[1].help     = "Debug level for ceph filestore log output";
-	options[1].off1     = offsetof(struct ceph_filestore_options, filestore_debug);
+	options[1].type	    = FIO_OPT_STR_STORE;
+	options[1].help	    = "Debug level for ceph filestore log output";
+	options[1].off1	    = offsetof(struct ceph_filestore_options, filestore_debug);
 	options[1].category = FIO_OPT_C_ENGINE;
 	options[1].group    = FIO_OPT_G_RBD;
 
-	options[2].name     = "filestore_journal";
+	options[2].name	    = "filestore_journal";
 	options[2].lname    = "ceph filestore journal path";
-	options[2].type     = FIO_OPT_STR_STORE;
-	options[2].help     = "Path for a temporary journal file";
-	options[2].off1     = offsetof(struct ceph_filestore_options, filestore_journal);
+	options[2].type	    = FIO_OPT_STR_STORE;
+	options[2].help	    = "Path for a temporary journal file";
+	options[2].off1	    = offsetof(struct ceph_filestore_options, filestore_journal);
 	options[2].category = FIO_OPT_C_ENGINE;
 	options[2].group    = FIO_OPT_G_RBD;
 
@@ -174,7 +176,7 @@ static int fio_ceph_filestore_queue(struct thread_data *td, struct io_u *io_u)
 	bufferlist data;
 	data.push_back(buffer::create_static(len, (char *)io_u->xfer_buf));
 
-        if (io_u->ddir == DDIR_WRITE) {
+	if (io_u->ddir == DDIR_WRITE) {
 		ObjectStore::Transaction *t = new ObjectStore::Transaction;
 		if (!t) {
 			cout << "ObjectStore Transcation allocation failed." << std::endl;
@@ -219,7 +221,7 @@ static int fio_ceph_filestore_init(struct thread_data *td)
 
 	//mktemp(o->filestore_journal); // NOSPC issue
 
-  	ObjectStore *fs = ObjectStore::create(g_ceph_context,
+	ObjectStore *fs = ObjectStore::create(g_ceph_context,
 			o->objectstore, td->o.directory,
 			o->filestore_journal ? o->filestore_journal : "");
 	if (fs == NULL) {
@@ -281,7 +283,7 @@ static int fio_ceph_filestore_setup(struct thread_data *td)
 		td->o.nr_files = td->o.nr_files ? : 1;
 	}
 	f = td->files[0];
-	f->real_file_size = 1024 * 1024; 
+	f->real_file_size = 1024 * 1024;
 
 	return 0;
 
@@ -323,20 +325,20 @@ void get_ioengine(struct ioengine_ops **ioengine_ptr) {
 	ioengine = *ioengine_ptr;
 
 	strcpy(ioengine->name, "cephobjectstore");
-	ioengine->version        = FIO_IOOPS_VERSION;
-	ioengine->setup          = fio_ceph_filestore_setup;
-	ioengine->init           = fio_ceph_filestore_init;
-	//ioengine->prep           = fio_ceph_filestore_prep;
-	ioengine->queue          = fio_ceph_filestore_queue;
-	//ioengine->cancel         = fio_ceph_filestore_cancel;
-	ioengine->getevents      = fio_ceph_filestore_getevents;
-	ioengine->event          = fio_ceph_filestore_event;
-	ioengine->cleanup        = fio_ceph_filestore_cleanup;
-	ioengine->open_file      = fio_ceph_filestore_open;
-	//ioengine->close_file     = fio_ceph_filestore_close;
-	ioengine->io_u_init      = fio_ceph_filestore_io_u_init;
-	ioengine->io_u_free      = fio_ceph_filestore_io_u_free;
-	ioengine->options        = init_options();
+	ioengine->version	 = FIO_IOOPS_VERSION;
+	ioengine->setup		 = fio_ceph_filestore_setup;
+	ioengine->init		 = fio_ceph_filestore_init;
+	//ioengine->prep	   = fio_ceph_filestore_prep;
+	ioengine->queue		 = fio_ceph_filestore_queue;
+	//ioengine->cancel	   = fio_ceph_filestore_cancel;
+	ioengine->getevents	 = fio_ceph_filestore_getevents;
+	ioengine->event		 = fio_ceph_filestore_event;
+	ioengine->cleanup	 = fio_ceph_filestore_cleanup;
+	ioengine->open_file	 = fio_ceph_filestore_open;
+	//ioengine->close_file	   = fio_ceph_filestore_close;
+	ioengine->io_u_init	 = fio_ceph_filestore_io_u_init;
+	ioengine->io_u_free	 = fio_ceph_filestore_io_u_free;
+	ioengine->options	 = init_options();
 	ioengine->option_struct_size = sizeof(struct ceph_filestore_options);
 }
 }

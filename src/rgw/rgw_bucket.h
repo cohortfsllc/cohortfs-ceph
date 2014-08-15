@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #ifndef CEPH_RGW_BUCKET_H
 #define CEPH_RGW_BUCKET_H
 
@@ -23,11 +25,11 @@ using namespace std;
 extern void rgw_get_buckets_obj(const string& user_id, string& buckets_obj_id);
 
 extern int rgw_bucket_store_info(RGWRados *store, const string& bucket_name, bufferlist& bl, bool exclusive,
-                                 map<string, bufferlist> *pattrs, RGWObjVersionTracker *objv_tracker,
-                                 time_t mtime);
+				 map<string, bufferlist> *pattrs, RGWObjVersionTracker *objv_tracker,
+				 time_t mtime);
 extern int rgw_bucket_instance_store_info(RGWRados *store, string& oid, bufferlist& bl, bool exclusive,
-                                 map<string, bufferlist> *pattrs, RGWObjVersionTracker *objv_tracker,
-                                 time_t mtime);
+				 map<string, bufferlist> *pattrs, RGWObjVersionTracker *objv_tracker,
+				 time_t mtime);
 
 extern int rgw_bucket_instance_remove_entry(RGWRados *store, string& entry, RGWObjVersionTracker *objv_tracker);
 
@@ -100,7 +102,7 @@ extern void rgw_bucket_init(RGWMetadataManager *mm);
  * Returns: 0 on success, -ERR# on failure.
  */
 extern int rgw_read_user_buckets(RGWRados *store, string user_id, RGWUserBuckets& buckets,
-                                 const string& marker, uint64_t max, bool need_stats);
+				 const string& marker, uint64_t max, bool need_stats);
 
 extern int rgw_link_bucket(RGWRados *store, string user_id, rgw_bucket& bucket, time_t creation_time, bool update_entrypoint = true);
 extern int rgw_unlink_bucket(RGWRados *store, string user_id, const string& bucket_name, bool update_entrypoint = true);
@@ -109,9 +111,9 @@ extern int rgw_remove_object(RGWRados *store, const string& bucket_owner, rgw_bu
 extern int rgw_remove_bucket(RGWRados *store, const string& bucket_owner, rgw_bucket& bucket, bool delete_children);
 
 extern int rgw_bucket_set_attrs(RGWRados *store, RGWBucketInfo& bucket_info,
-                                map<string, bufferlist>& attrs,
-                                map<string, bufferlist>* rmattrs,
-                                RGWObjVersionTracker *objv_tracker);
+				map<string, bufferlist>& attrs,
+				map<string, bufferlist>* rmattrs,
+				RGWObjVersionTracker *objv_tracker);
 
 extern void check_bad_user_bucket_mapping(RGWRados *store, const string& user_id, bool fix);
 
@@ -141,7 +143,7 @@ struct RGWBucketAdminOpState {
       uid = user_id;
   }
   void set_bucket_name(std::string& bucket_str) {
-    bucket_name = bucket_str; 
+    bucket_name = bucket_str;
   }
   void set_object(std::string& object_str) {
     object_name = object_str;
@@ -154,7 +156,7 @@ struct RGWBucketAdminOpState {
 
   rgw_bucket& get_bucket() { return bucket; };
   void set_bucket(rgw_bucket& _bucket) {
-    bucket = _bucket; 
+    bucket = _bucket;
     bucket_stored = true;
   }
 
@@ -163,12 +165,12 @@ struct RGWBucketAdminOpState {
   bool will_delete_children() { return delete_child_objects; };
   bool will_check_objects() { return check_objects; };
   bool is_user_op() { return !uid.empty(); };
-  bool is_system_op() { return uid.empty(); }; 
+  bool is_system_op() { return uid.empty(); };
   bool has_bucket_stored() { return bucket_stored; };
 
-  RGWBucketAdminOpState() : list_buckets(false), stat_buckets(false), check_objects(false), 
-                            fix_index(false), delete_child_objects(false),
-                            bucket_stored(false)  {}
+  RGWBucketAdminOpState() : list_buckets(false), stat_buckets(false), check_objects(false),
+			    fix_index(false), delete_child_objects(false),
+			    bucket_stored(false)  {}
 };
 
 /*
@@ -195,15 +197,15 @@ public:
   int init(RGWRados *storage, RGWBucketAdminOpState& op_state);
 
   int check_bad_index_multipart(RGWBucketAdminOpState& op_state,
-          list<std::string>& objs_to_unlink, std::string *err_msg = NULL);
+	  list<std::string>& objs_to_unlink, std::string *err_msg = NULL);
 
   int check_object_index(RGWBucketAdminOpState& op_state,
-          map<string, RGWObjEnt> result, std::string *err_msg = NULL);
+	  map<string, RGWObjEnt> result, std::string *err_msg = NULL);
 
   int check_index(RGWBucketAdminOpState& op_state,
-          map<RGWObjCategory, RGWStorageStats>& existing_stats,
-          map<RGWObjCategory, RGWStorageStats>& calculated_stats,
-          std::string *err_msg = NULL);
+	  map<RGWObjCategory, RGWStorageStats>& existing_stats,
+	  map<RGWObjCategory, RGWStorageStats>& calculated_stats,
+	  std::string *err_msg = NULL);
 
   int remove(RGWBucketAdminOpState& op_state, std::string *err_msg = NULL);
   int link(RGWBucketAdminOpState& op_state, std::string *err_msg = NULL);
@@ -220,16 +222,16 @@ class RGWBucketAdminOp
 {
 public:
   static int get_policy(RGWRados *store, RGWBucketAdminOpState& op_state,
-                  RGWFormatterFlusher& flusher);
+		  RGWFormatterFlusher& flusher);
   static int get_policy(RGWRados *store, RGWBucketAdminOpState& op_state,
-                  ostream& os);
+		  ostream& os);
 
 
   static int unlink(RGWRados *store, RGWBucketAdminOpState& op_state);
   static int link(RGWRados *store, RGWBucketAdminOpState& op_state);
 
   static int check_index(RGWRados *store, RGWBucketAdminOpState& op_state,
-                  RGWFormatterFlusher& flusher);
+		  RGWFormatterFlusher& flusher);
 
   static int remove_bucket(RGWRados *store, RGWBucketAdminOpState& op_state);
   static int remove_object(RGWRados *store, RGWBucketAdminOpState& op_state);
@@ -332,7 +334,7 @@ class RGWDataChangesLog {
 public:
 
   RGWDataChangesLog(CephContext *_cct, RGWRados *_store) : cct(_cct), store(_store),
-                                                           changes(cct->_conf->rgw_data_log_changes_size) {
+							   changes(cct->_conf->rgw_data_log_changes_size) {
     num_shards = cct->_conf->rgw_data_log_num_shards;
 
     oids = new string[num_shards];
@@ -364,9 +366,9 @@ public:
 		   string *out_marker,
 		   bool *truncated);
   int trim_entries(int shard_id, const utime_t& start_time, const utime_t& end_time,
-                   const string& start_marker, const string& end_marker);
+		   const string& start_marker, const string& end_marker);
   int trim_entries(const utime_t& start_time, const utime_t& end_time,
-                   const string& start_marker, const string& end_marker);
+		   const string& start_marker, const string& end_marker);
   int get_info(int shard_id, RGWDataChangesLogInfo *info);
   int lock_exclusive(int shard_id, utime_t& duration, string& zone_id, string& owner_id) {
     return store->lock_exclusive(store->zone.log_pool, oids[shard_id], duration, zone_id, owner_id);
@@ -381,7 +383,7 @@ public:
     LogMarker() : shard(0) {}
   };
   int list_entries(utime_t& start_time, utime_t& end_time, int max_entries,
-               list<rgw_data_change>& entries, LogMarker& marker, bool *ptruncated);
+	       list<rgw_data_change>& entries, LogMarker& marker, bool *ptruncated);
 
   bool going_down();
 };

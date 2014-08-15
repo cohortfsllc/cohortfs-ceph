@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -11,7 +11,7 @@
  *  modify it under the terms of the GNU Lesser General Public
  *  License as published by the Free Software Foundation; either
  *  version 2.1 of the License, or (at your option) any later version.
- * 
+ *
  */
 
 #ifndef CEPH_ERASURE_CODE_JERASURE_H
@@ -35,7 +35,7 @@ public:
   {}
 
   virtual ~ErasureCodeJerasure() {}
-  
+
   virtual int create_ruleset(const string &name,
 			     CrushWrapper &crush,
 			     ostream *ss) const;
@@ -51,35 +51,35 @@ public:
   virtual unsigned int get_chunk_size(unsigned int object_size) const;
 
   virtual int minimum_to_decode(const set<int> &want_to_read,
-                                const set<int> &available_chunks,
-                                set<int> *minimum);
+				const set<int> &available_chunks,
+				set<int> *minimum);
 
   virtual int minimum_to_decode_with_cost(const set<int> &want_to_read,
-                                          const map<int, int> &available,
-                                          set<int> *minimum);
+					  const map<int, int> &available,
+					  set<int> *minimum);
 
   virtual int encode(const set<int> &want_to_encode,
-                     const bufferlist &in,
-                     map<int, bufferlist> *encoded);
+		     const bufferlist &in,
+		     map<int, bufferlist> *encoded);
 
   virtual int decode(const set<int> &want_to_read,
-                     const map<int, bufferlist> &chunks,
-                     map<int, bufferlist> *decoded);
+		     const map<int, bufferlist> &chunks,
+		     map<int, bufferlist> *decoded);
 
   void init(const map<std::string,std::string> &parameters);
   virtual void jerasure_encode(char **data,
-                               char **coding,
-                               int blocksize) = 0;
+			       char **coding,
+			       int blocksize) = 0;
   virtual int jerasure_decode(int *erasures,
-                               char **data,
-                               char **coding,
-                               int blocksize) = 0;
+			       char **data,
+			       char **coding,
+			       int blocksize) = 0;
   virtual unsigned get_alignment() const = 0;
   virtual void parse(const map<std::string,std::string> &parameters) = 0;
   virtual void prepare() = 0;
   static int to_int(const std::string &name,
-                    const map<std::string,std::string> &parameters,
-                    int default_value);
+		    const map<std::string,std::string> &parameters,
+		    int default_value);
   static bool is_prime(int value);
 };
 
@@ -100,12 +100,12 @@ public:
   }
 
   virtual void jerasure_encode(char **data,
-                               char **coding,
-                               int blocksize);
+			       char **coding,
+			       int blocksize);
   virtual int jerasure_decode(int *erasures,
-                               char **data,
-                               char **coding,
-                               int blocksize);
+			       char **data,
+			       char **coding,
+			       int blocksize);
   virtual unsigned get_alignment() const;
   virtual void parse(const map<std::string,std::string> &parameters);
   virtual void prepare();
@@ -127,12 +127,12 @@ public:
   }
 
   virtual void jerasure_encode(char **data,
-                               char **coding,
-                               int blocksize);
+			       char **coding,
+			       int blocksize);
   virtual int jerasure_decode(int *erasures,
-                               char **data,
-                               char **coding,
-                               int blocksize);
+			       char **data,
+			       char **coding,
+			       int blocksize);
   virtual unsigned get_alignment() const;
   virtual void parse(const map<std::string,std::string> &parameters);
   virtual void prepare();
@@ -161,12 +161,12 @@ public:
   }
 
   virtual void jerasure_encode(char **data,
-                               char **coding,
-                               int blocksize);
+			       char **coding,
+			       int blocksize);
   virtual int jerasure_decode(int *erasures,
-                               char **data,
-                               char **coding,
-                               int blocksize);
+			       char **data,
+			       char **coding,
+			       int blocksize);
   virtual unsigned get_alignment() const;
   virtual void parse(const map<std::string,std::string> &parameters);
   void prepare_schedule(int *matrix);
@@ -208,12 +208,12 @@ public:
   virtual ~ErasureCodeJerasureLiberation();
 
   virtual void jerasure_encode(char **data,
-                               char **coding,
-                               int blocksize);
+			       char **coding,
+			       int blocksize);
   virtual int jerasure_decode(int *erasures,
-                               char **data,
-                               char **coding,
-                               int blocksize);
+			       char **data,
+			       char **coding,
+			       int blocksize);
   virtual unsigned get_alignment() const;
   virtual void parse(const map<std::string,std::string> &parameters);
   virtual void prepare();

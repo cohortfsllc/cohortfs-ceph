@@ -12,7 +12,7 @@ and Swift APIs, or native bindings (librados).
 .. ditaa::
             +-----------------------+  +------------------------+
             | CephFS Kernel Object  |  |      CephFS FUSE       |
-            +-----------------------+  +------------------------+            
+            +-----------------------+  +------------------------+
 
             +---------------------------------------------------+
             |            Ceph FS Library (libcephfs)            |
@@ -41,7 +41,7 @@ To run the Ceph Filesystem, you must have a running Ceph Storage Cluster with at
 least one :term:`Ceph Metadata Server` running.
 
 
-.. toctree:: 
+.. toctree::
 	:maxdepth: 1
 
 	Add/Remove MDS <../../rados/deployment/ceph-deploy-mds>
@@ -49,7 +49,7 @@ least one :term:`Ceph Metadata Server` running.
 	Journaler Configuration <journaler>
 	Manpage ceph-mds <../../man/8/ceph-mds>
 
-.. raw:: html 
+.. raw:: html
 
 	</td><td><h3>Step 2: Mount Ceph FS</h3>
 
@@ -58,7 +58,7 @@ one Ceph Metadata Server, you may mount your Ceph Filesystem.
 Ensure that you client has network connectivity and the proper
 authentication keyring.
 
-.. toctree:: 
+.. toctree::
 	:maxdepth: 1
 
 	Mount Ceph FS <kernel>
@@ -69,11 +69,11 @@ authentication keyring.
 	Manpage mount.ceph <../../man/8/mount.ceph>
 
 
-.. raw:: html 
+.. raw:: html
 
 	</td><td><h3>Additional Details</h3>
 
-.. toctree:: 
+.. toctree::
 	:maxdepth: 1
 
 	Using Ceph with Hadoop <hadoop>

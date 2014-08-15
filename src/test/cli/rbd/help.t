@@ -30,10 +30,10 @@
                    --io-threads <num>             ios in flight
                    --io-total <bytes>             total bytes to write
                    --io-pattern <seq|rand>        write pattern
-  
+
   <image-name> are [pool/]name, or you may specify
   individual pieces of names with -p/--pool and/or --image.
-  
+
   Other input options:
     -p, --pool <pool>                  source pool name
     --image <image-name>               image name

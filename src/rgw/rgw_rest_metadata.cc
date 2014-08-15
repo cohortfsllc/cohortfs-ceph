@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -126,7 +126,7 @@ int RGWOp_Metadata_Put::get_data(bufferlist& bl) {
     }
     bl.append(data, read_len);
   } else {
-    int chunk_size = CEPH_PAGE_SIZE; 
+    int chunk_size = CEPH_PAGE_SIZE;
     const char *enc = s->info.env->get("HTTP_TRANSFER_ENCODING");
     if (!enc || strcmp(enc, "chunked")) {
       return -ERR_LENGTH_REQUIRED;
@@ -138,8 +138,8 @@ int RGWOp_Metadata_Put::get_data(bufferlist& bl) {
     do {
       int r = s->cio->read(data, chunk_size, &read_len);
       if (r < 0) {
-        free(data);
-        return r;
+	free(data);
+	return r;
       }
       bl.append(data, read_len);
     } while ((read_len == chunk_size));
@@ -157,16 +157,16 @@ void RGWOp_Metadata_Put::execute() {
   if (http_ret < 0) {
     return;
   }
-  
+
   frame_metadata_key(s, metadata_key);
-  
+
   RGWMetadataHandler::sync_type_t sync_type = RGWMetadataHandler::APPLY_ALWAYS;
 
   bool mode_exists = false;
   string mode_string = s->info.args.get("update-type", &mode_exists);
   if (mode_exists) {
     bool parsed = RGWMetadataHandler::string_to_sync_type(mode_string,
-                                                          sync_type);
+							  sync_type);
     if (!parsed) {
       http_ret = -EINVAL;
       return;
@@ -222,7 +222,7 @@ void RGWOp_Metadata_Lock::execute() {
   duration_str = s->info.args.get("length");
   lock_id      = s->info.args.get("lock_id");
 
-  if ((!s->info.args.exists("key")) || 
+  if ((!s->info.args.exists("key")) ||
       (duration_str.empty()) ||
       lock_id.empty()) {
     dout(5) << "Error invalid parameter list" << dendl;
@@ -255,7 +255,7 @@ void RGWOp_Metadata_Unlock::execute() {
 
   lock_id = s->info.args.get("lock_id");
 
-  if ((!s->info.args.exists("key")) || 
+  if ((!s->info.args.exists("key")) ||
       lock_id.empty()) {
     dout(5) << "Error invalid parameter list" << dendl;
     http_ret = -EINVAL;
@@ -288,4 +288,3 @@ RGWOp *RGWHandler_Metadata::op_post() {
 
   return NULL;
 }
-

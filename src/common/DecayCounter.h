@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_DECAYCOUNTER_H
@@ -21,15 +21,15 @@
 
 /**
  *
- * TODO: normalize value based on some fucntion of half_life, 
+ * TODO: normalize value based on some fucntion of half_life,
  *  so that it can be interpreted as an approximation of a
  *  moving average of N seconds.  currently, changing half-life
- *  skews the scale of the value, even at steady state.  
+ *  skews the scale of the value, even at steady state.
  *
  */
 
 class DecayRate {
-  double k;             // k = ln(.5)/half_life
+  double k;		// k = ln(.5)/half_life
 
   friend class DecayCounter;
 
@@ -38,16 +38,16 @@ public:
   DecayRate(double hl) { set_halflife(hl); }
   void set_halflife(double hl) {
     k = ::log(.5) / hl;
-  }    
+  }
 };
 
 class DecayCounter {
  protected:
 public:
-  double val;           // value
-  double delta;         // delta since last decay
-  double vel;           // recent velocity
-  utime_t last_decay;   // time of last decay
+  double val;		// value
+  double delta;		// delta since last decay
+  double vel;		// recent velocity
+  utime_t last_decay;	// time of last decay
 
  public:
 
@@ -81,13 +81,13 @@ public:
   double get_last() {
     return val;
   }
-  
+
   double get_last_vel() {
     return vel;
   }
 
-  utime_t get_last_decay() { 
-    return last_decay; 
+  utime_t get_last_decay() {
+    return last_decay;
   }
 
   /**
@@ -109,7 +109,7 @@ public:
   }
   void scale(double f) {
     val *= f;
-    delta *= f;    
+    delta *= f;
     vel *= f;
   }
 
@@ -129,6 +129,5 @@ inline void encode(const DecayCounter &c, bufferlist &bl) { c.encode(bl); }
 inline void decode(DecayCounter &c, const utime_t &t, bufferlist::iterator &p) {
   c.decode(t, p);
 }
-
 
 #endif

@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -72,7 +72,7 @@ struct cinode_lock_info_t cinode_lock_info[] = {
   { CEPH_LOCK_IAUTH, CEPH_CAP_AUTH_EXCL },
   { CEPH_LOCK_ILINK, CEPH_CAP_LINK_EXCL },
   { CEPH_LOCK_IXATTR, CEPH_CAP_XATTR_EXCL },
-  { CEPH_LOCK_IFLOCK, CEPH_CAP_FLOCK_EXCL }  
+  { CEPH_LOCK_IFLOCK, CEPH_CAP_FLOCK_EXCL }
 };
 int num_cinode_locks = 5;
 
@@ -178,7 +178,7 @@ ostream& operator<<(ostream& out, CInode& in)
     out << " " << in.filelock;
   if (!in.xattrlock.is_sync_and_unlocked())
     out << " " << in.xattrlock;
-  if (!in.versionlock.is_sync_and_unlocked())  
+  if (!in.versionlock.is_sync_and_unlocked())
     out << " " << in.versionlock;
 
   // hack: spit out crap on which clients have caps
@@ -188,8 +188,8 @@ ostream& operator<<(ostream& out, CInode& in)
   if (!in.get_client_caps().empty()) {
     out << " caps={";
     for (map<client_t,Capability*>::iterator it = in.get_client_caps().begin();
-         it != in.get_client_caps().end();
-         ++it) {
+	 it != in.get_client_caps().end();
+	 ++it) {
       if (it != in.get_client_caps().begin()) out << ",";
       out << it->first << "="
 	  << ccap_string(it->second->pending());
@@ -257,7 +257,7 @@ void CInode::clear_dirty_rstat()
   }
 }
 
-inode_t *CInode::project_inode(map<string,bufferptr> *px) 
+inode_t *CInode::project_inode(map<string,bufferptr> *px)
 {
   if (projected_nodes.empty()) {
     projected_nodes.push_back(new projected_inode_t(new inode_t(inode)));
@@ -274,7 +274,7 @@ inode_t *CInode::project_inode(map<string,bufferptr> *px)
   return projected_nodes.back()->inode;
 }
 
-void CInode::pop_and_dirty_projected_inode(LogSegment *ls) 
+void CInode::pop_and_dirty_projected_inode(LogSegment *ls)
 {
   assert(!projected_nodes.empty());
   dout(15) << "pop_and_dirty_projected_inode " << projected_nodes.front()->inode
@@ -314,7 +314,7 @@ uint32_t CInode::hash_dentry_name(const string &dn)
 frag_t CInode::pick_dirfrag(const string& dn)
 {
   if (dirfragtree.empty())
-    return frag_t();          // avoid the string hash if we can.
+    return frag_t();	      // avoid the string hash if we can.
 
   uint32_t h = hash_dentry_name(dn);
   return dirfragtree[h];
@@ -328,7 +328,7 @@ bool CInode::get_dirfrags_under(frag_t fg, list<CDir*>& ls)
   for (list<frag_t>::iterator p = fglist.begin(); p != fglist.end(); ++p)
     if (dirfrags.count(*p))
       ls.push_back(dirfrags[*p]);
-    else 
+    else
       all = false;
 
   if (all)
@@ -395,7 +395,7 @@ CDir *CInode::get_approx_dirfrag(frag_t fg)
   // find a child?
   list<CDir*> ls;
   get_dirfrags_under(fg, ls);
-  if (!ls.empty()) 
+  if (!ls.empty())
     return ls.front();
 
   // try parents?
@@ -405,9 +405,9 @@ CDir *CInode::get_approx_dirfrag(frag_t fg)
     if (dir) return dir;
   }
   return NULL;
-}	
+}
 
-void CInode::get_dirfrags(list<CDir*>& ls) 
+void CInode::get_dirfrags(list<CDir*>& ls)
 {
   // all dirfrags
   for (map<frag_t,CDir*>::iterator p = dirfrags.begin();
@@ -415,8 +415,8 @@ void CInode::get_dirfrags(list<CDir*>& ls)
        ++p)
     ls.push_back(p->second);
 }
-void CInode::get_nested_dirfrags(list<CDir*>& ls) 
-{  
+void CInode::get_nested_dirfrags(list<CDir*>& ls)
+{
   // dirfrags in same subtree
   for (map<frag_t,CDir*>::iterator p = dirfrags.begin();
        p != dirfrags.end();
@@ -424,8 +424,8 @@ void CInode::get_nested_dirfrags(list<CDir*>& ls)
     if (!p->second->is_subtree_root())
       ls.push_back(p->second);
 }
-void CInode::get_subtree_dirfrags(list<CDir*>& ls) 
-{ 
+void CInode::get_subtree_dirfrags(list<CDir*>& ls)
+{
   // dirfrags that are roots of new subtrees
   for (map<frag_t,CDir*>::iterator p = dirfrags.begin();
        p != dirfrags.end();
@@ -467,23 +467,23 @@ void CInode::close_dirfrag(frag_t fg)
 {
   dout(14) << "close_dirfrag " << fg << dendl;
   assert(dirfrags.count(fg));
-  
+
   CDir *dir = dirfrags[fg];
   dir->remove_null_dentries();
-  
+
   // clear dirty flag
   if (dir->is_dirty())
     dir->mark_clean();
-  
+
   if (stickydir_ref > 0) {
     dir->state_clear(CDir::STATE_STICKY);
     dir->put(CDir::PIN_STICKY);
   }
-  
+
   // dump any remaining dentries, for debugging purposes
   for (CDir::map_t::iterator p = dir->items.begin();
        p != dir->items.end();
-       ++p) 
+       ++p)
     dout(14) << "close_dirfrag LEFTOVER dn " << *p->second << dendl;
 
   assert(dir->get_num_ref() == 0);
@@ -493,7 +493,7 @@ void CInode::close_dirfrag(frag_t fg)
 
 void CInode::close_dirfrags()
 {
-  while (!dirfrags.empty()) 
+  while (!dirfrags.empty())
     close_dirfrag(dirfrags.begin()->first);
 }
 
@@ -557,14 +557,14 @@ void CInode::put_stickydirs()
 void CInode::first_get()
 {
   // pin my dentry?
-  if (parent) 
+  if (parent)
     parent->get(CDentry::PIN_INODEPIN);
 }
 
-void CInode::last_put() 
+void CInode::last_put()
 {
   // unpin my dentry?
-  if (parent) 
+  if (parent)
     parent->put(CDentry::PIN_INODEPIN);
 }
 
@@ -574,13 +574,13 @@ void CInode::_put()
     mdcache->maybe_eval_stray(this, true);
 }
 
-void CInode::add_remote_parent(CDentry *p) 
+void CInode::add_remote_parent(CDentry *p)
 {
   if (remote_parents.empty())
     get(PIN_REMOTEPARENT);
   remote_parents.insert(p);
 }
-void CInode::remove_remote_parent(CDentry *p) 
+void CInode::remove_remote_parent(CDentry *p)
 {
   remote_parents.erase(p);
   if (remote_parents.empty())
@@ -603,9 +603,9 @@ CDir *CInode::get_projected_parent_dir()
     return p->dir;
   return NULL;
 }
-CInode *CInode::get_parent_inode() 
+CInode *CInode::get_parent_inode()
 {
-  if (parent) 
+  if (parent)
     return parent->dir->inode;
   return NULL;
 }
@@ -629,10 +629,10 @@ void CInode::make_path_string(string& s, bool force, CDentry *use_parent)
 
   if (use_parent) {
     use_parent->make_path_string(s);
-  } 
+  }
   else if (is_root()) {
     s = "";  // root
-  } 
+  }
   else if (is_mdsdir()) {
     char t[40];
     uint64_t eino(ino());
@@ -650,7 +650,7 @@ void CInode::make_path_string(string& s, bool force, CDentry *use_parent)
 void CInode::make_path_string_projected(string& s)
 {
   make_path_string(s);
-  
+
   if (!projected_parent.empty()) {
     string q;
     q.swap(s);
@@ -669,7 +669,7 @@ void CInode::make_path_string_projected(string& s)
 
 void CInode::make_path(filepath& fp)
 {
-  if (parent) 
+  if (parent)
     parent->make_path(fp);
   else
     fp = filepath(ino());
@@ -679,7 +679,7 @@ void CInode::make_anchor_trace(vector<Anchor>& trace)
 {
   if (get_projected_parent_dn())
     get_projected_parent_dn()->make_anchor_trace(trace, this);
-  else 
+  else
     assert(is_base());
 }
 
@@ -695,7 +695,7 @@ void CInode::name_stray_dentry(string& dname)
 
 version_t CInode::pre_dirty()
 {
-  version_t pv; 
+  version_t pv;
   if (parent || !projected_parent.empty()) {
     pv = get_projected_parent_dn()->pre_dirty(get_projected_version());
     dout(10) << "pre_dirty " << pv << " (current v " << inode.version << ")" << dendl;
@@ -719,26 +719,26 @@ void CInode::_mark_dirty(LogSegment *ls)
     get(PIN_DIRTY);
     assert(ls);
   }
-  
+
   // move myself to this segment's dirty list
-  if (ls) 
+  if (ls)
     ls->dirty_inodes.push_back(&item_dirty);
 }
 
 void CInode::mark_dirty(version_t pv, LogSegment *ls) {
-  
+
   dout(10) << "mark_dirty " << *this << dendl;
 
   /*
     NOTE: I may already be dirty, but this fn _still_ needs to be called so that
-    the directory is (perhaps newly) dirtied, and so that parent_dir_version is 
+    the directory is (perhaps newly) dirtied, and so that parent_dir_version is
     updated below.
   */
-  
+
   // only auth can get dirty.  "dirty" async data in replicas is relative to
   // filelock state, not the dirty flag.
   assert(is_auth());
-  
+
   // touch my private version
   assert(inode.version < pv);
   inode.version = pv;
@@ -756,11 +756,11 @@ void CInode::mark_clean()
   if (state_test(STATE_DIRTY)) {
     state_clear(STATE_DIRTY);
     put(PIN_DIRTY);
-    
+
     // remove myself from ls dirty list
     item_dirty.remove_myself();
   }
-}    
+}
 
 
 // --------------
@@ -1067,7 +1067,7 @@ void CInode::encode_lock_state(int type, bufferlist& bl)
     ::encode(inode.nlink, bl);
     ::encode(inode.anchored, bl);
     break;
-    
+
   case CEPH_LOCK_IDFT:
     if (is_auth()) {
       ::encode(inode.version, bl);
@@ -1084,7 +1084,7 @@ void CInode::encode_lock_state(int type, bufferlist& bl)
       set<frag_t> myfrags;
       list<CDir*> dfls;
       get_dirfrags(dfls);
-      for (list<CDir*>::iterator p = dfls.begin(); p != dfls.end(); ++p) 
+      for (list<CDir*>::iterator p = dfls.begin(); p != dfls.end(); ++p)
 	if ((*p)->is_auth()) {
 	  frag_t fg = (*p)->get_frag();
 	  myfrags.insert(fg);
@@ -1092,7 +1092,7 @@ void CInode::encode_lock_state(int type, bufferlist& bl)
       ::encode(myfrags, bl);
     }
     break;
-    
+
   case CEPH_LOCK_IFILE:
     if (is_auth()) {
       ::encode(inode.version, bl);
@@ -1127,7 +1127,7 @@ void CInode::encode_lock_state(int type, bufferlist& bl)
 	if (is_auth() || dir->is_auth()) {
 	  fnode_t *pf = dir->get_projected_fnode();
 	  dout(15) << fg << " " << *dir << dendl;
-	  dout(20) << fg << "           fragstat " << pf->fragstat << dendl;
+	  dout(20) << fg << "		fragstat " << pf->fragstat << dendl;
 	  dout(20) << fg << " accounted_fragstat " << pf->accounted_fragstat << dendl;
 	  ::encode(fg, tmp);
 	  ::encode(pf->fragstat, tmp);
@@ -1191,7 +1191,7 @@ void CInode::encode_lock_state(int type, bufferlist& bl)
       ::encode(inode.layout, bl);
     }
     break;
-  
+
   default:
     assert(0);
   }
@@ -1294,7 +1294,7 @@ void CInode::decode_lock_state(int type, bufferlist& bl)
       ::decode(replica_dirty, p);
       if (replica_dirty) {
 	dout(10) << "decode_lock_state setting filelock dirty flag" << dendl;
-	filelock.mark_dirty();  // ok bc we're auth and caller will handle
+	filelock.mark_dirty();	// ok bc we're auth and caller will handle
       }
     }
     {
@@ -1314,12 +1314,12 @@ void CInode::decode_lock_state(int type, bufferlist& bl)
 	::decode(fg, p);
 	::decode(fragstat, p);
 	::decode(accounted_fragstat, p);
-	dout(10) << fg << "           fragstat " << fragstat << dendl;
+	dout(10) << fg << "	      fragstat " << fragstat << dendl;
 	dout(20) << fg << " accounted_fragstat " << accounted_fragstat << dendl;
 
 	CDir *dir = get_dirfrag(fg);
 	if (is_auth()) {
-	  assert(dir);                // i am auth; i had better have this dir open
+	  assert(dir);		      // i am auth; i had better have this dir open
 	  dout(10) << fg << " on " << *dir << dendl;
 	  dir->fnode.fragstat = fragstat;
 	  dir->fnode.accounted_fragstat = accounted_fragstat;
@@ -1345,7 +1345,7 @@ void CInode::decode_lock_state(int type, bufferlist& bl)
       ::decode(replica_dirty, p);
       if (replica_dirty) {
 	dout(10) << "decode_lock_state setting nestlock dirty flag" << dendl;
-	nestlock.mark_dirty();  // ok bc we're auth and caller will handle
+	nestlock.mark_dirty();	// ok bc we're auth and caller will handle
       }
     } else {
       ::decode(inode.version, p);
@@ -1355,7 +1355,7 @@ void CInode::decode_lock_state(int type, bufferlist& bl)
       ::decode(rstat, p);
       if (!is_auth()) {
 	dout(10) << " taking inode rstat " << rstat << " for " << *this << dendl;
-	inode.rstat = rstat;    // take inode summation if replica
+	inode.rstat = rstat;	// take inode summation if replica
       }
       uint32_t n;
       ::decode(n, p);
@@ -1366,8 +1366,8 @@ void CInode::decode_lock_state(int type, bufferlist& bl)
 	::decode(fg, p);
 	::decode(rstat, p);
 	::decode(accounted_rstat, p);
-	dout(10) << fg << "               rstat " << rstat << dendl;
-	dout(10) << fg << "     accounted_rstat " << accounted_rstat << dendl;
+	dout(10) << fg << "		  rstat " << rstat << dendl;
+	dout(10) << fg << "	accounted_rstat " << accounted_rstat << dendl;
 
 	CDir *dir = get_dirfrag(fg);
 	if (is_auth()) {
@@ -1498,7 +1498,7 @@ struct C_Inode_FragUpdate : public Context {
   C_Inode_FragUpdate(CInode *i, CDir *d, MutationRef& m) : in(i), dir(d), mut(m) {}
   void finish(int r) {
     in->_finish_frag_update(dir, mut);
-  }    
+  }
 };
 
 void CInode::finish_scatter_update(ScatterLock *lock, CDir *dir,
@@ -1538,17 +1538,17 @@ void CInode::finish_scatter_update(ScatterLock *lock, CDir *dir,
       default:
 	assert(0);
       }
-	
+
       mut->add_projected_fnode(dir);
 
       EUpdate *le = new EUpdate(mdlog, ename);
       mdlog->start_entry(le);
       le->metablob.add_dir_context(dir);
       le->metablob.add_dir(dir, true);
-      
+
       assert(!dir->is_frozen());
       mut->auth_pin(dir);
-      
+
       mdlog->submit_entry(le, new C_Inode_FragUpdate(this, dir, mut));
     } else {
       dout(10) << "finish_scatter_update " << fg << " accounted " << *lock
@@ -1614,7 +1614,7 @@ void CInode::finish_scatter_gather_update(int type)
 	  pf = dir->project_fnode();
 
 	if (pf->accounted_fragstat.version == pi->dirstat.version - 1) {
-	  dout(20) << fg << "           fragstat " << pf->fragstat << dendl;
+	  dout(20) << fg << "		fragstat " << pf->fragstat << dendl;
 	  dout(20) << fg << " accounted_fragstat " << pf->accounted_fragstat << dendl;
 	  pi->dirstat.add_delta(pf->fragstat, pf->accounted_fragstat, touched_mtime);
 	} else {
@@ -1625,7 +1625,7 @@ void CInode::finish_scatter_gather_update(int type)
 	    pf->fragstat.nsubdirs < 0) {
 	  clog.error() << "bad/negative dir size on "
 	      << dir->dirfrag() << " " << pf->fragstat << "\n";
-	  
+
 	  if (pf->fragstat.nfiles < 0)
 	    pf->fragstat.nfiles = 0;
 	  if (pf->fragstat.nsubdirs < 0)
@@ -1643,9 +1643,9 @@ void CInode::finish_scatter_gather_update(int type)
 	if (fg == frag_t()) { // i.e., we are the only frag
 	  if (pi->dirstat.size() != pf->fragstat.size()) {
 	    clog.error() << "unmatched fragstat size on single "
-	       << "dirfrag " << dir->dirfrag() << ", inode has " 
+	       << "dirfrag " << dir->dirfrag() << ", inode has "
 	       << pi->dirstat << ", dirfrag has " << pf->fragstat << "\n";
-	    
+
 	    // trust the dirfrag for now
 	    version_t v = pi->dirstat.version;
 	    pi->dirstat = pf->fragstat;
@@ -1701,7 +1701,7 @@ void CInode::finish_scatter_gather_update(int type)
 	  if (update)
 	    dir->assimilate_dirty_rstat_inodes();
 
-	  dout(20) << fg << "           rstat "
+	  dout(20) << fg << "		rstat "
 		   << pf->rstat << dendl;
 	  dout(20) << fg << " accounted_rstat "
 		   << pf->accounted_rstat << dendl;
@@ -1772,9 +1772,9 @@ void CInode::finish_scatter_gather_update_accounted(int type, MutationRef& mut, 
     CDir *dir = p->second;
     if (!dir->is_auth() || dir->get_version() == 0 || dir->is_frozen())
       continue;
-    
+
     if (type == CEPH_LOCK_IDFT)
-      continue;  // nothing to do.
+      continue;	 // nothing to do.
 
     dout(10) << " journaling updated frag accounted_ on " << *dir << dendl;
     assert(dir->is_projected());
@@ -1835,7 +1835,7 @@ void CInode::take_dir_waiting(frag_t fg, list<Context*>& ls)
   }
 }
 
-void CInode::add_waiter(uint64_t tag, Context *c) 
+void CInode::add_waiter(uint64_t tag, Context *c)
 {
   dout(10) << "add_waiter tag " << std::hex << tag << std::dec << " " << c
 	   << " !ambig " << !state_test(STATE_AMBIGUOUSAUTH)
@@ -1893,7 +1893,7 @@ bool CInode::freeze_inode(int auth_pin_allowance)
   return true;
 }
 
-void CInode::unfreeze_inode(list<Context*>& finished) 
+void CInode::unfreeze_inode(list<Context*>& finished)
 {
   dout(10) << "unfreeze_inode" << dendl;
   if (state_test(STATE_FREEZING)) {
@@ -1902,7 +1902,7 @@ void CInode::unfreeze_inode(list<Context*>& finished)
   } else if (state_test(STATE_FROZEN)) {
     state_clear(STATE_FROZEN);
     put(PIN_FROZEN);
-  } else 
+  } else
     assert(0);
   take_waiting(WAIT_UNFREEZE, finished);
 }
@@ -1954,7 +1954,7 @@ bool CInode::can_auth_pin() {
   return true;
 }
 
-void CInode::auth_pin(void *by) 
+void CInode::auth_pin(void *by)
 {
   if (auth_pins == 0)
     get(PIN_AUTHPIN);
@@ -1967,12 +1967,12 @@ void CInode::auth_pin(void *by)
   dout(10) << "auth_pin by " << by << " on " << *this
 	   << " now " << auth_pins << "+" << nested_auth_pins
 	   << dendl;
-  
+
   if (parent)
     parent->adjust_nested_auth_pins(1, 1, this);
 }
 
-void CInode::auth_unpin(void *by) 
+void CInode::auth_unpin(void *by)
 {
   auth_pins--;
 
@@ -1983,11 +1983,11 @@ void CInode::auth_unpin(void *by)
 
   if (auth_pins == 0)
     put(PIN_AUTHPIN);
-  
+
   dout(10) << "auth_unpin by " << by << " on " << *this
 	   << " now " << auth_pins << "+" << nested_auth_pins
 	   << dendl;
-  
+
   assert(auth_pins >= 0);
 
   if (parent)
@@ -2001,7 +2001,7 @@ void CInode::auth_unpin(void *by)
     state_clear(STATE_FREEZING);
     state_set(STATE_FROZEN);
     finish_waiting(WAIT_FROZEN);
-  }  
+  }
 }
 
 void CInode::adjust_nested_auth_pins(int a, void *by)
@@ -2022,9 +2022,9 @@ void CInode::adjust_nested_auth_pins(int a, void *by)
       CDir *dir = p->second;
       if (!dir->is_subtree_root() && dir->get_cum_auth_pins())
 	s++;
-    } 
+    }
     assert(s == nested_auth_pins);
-  } 
+  }
 
   if (parent)
     parent->adjust_nested_auth_pins(a, 0, by);
@@ -2042,9 +2042,9 @@ void CInode::adjust_nested_anchors(int by)
 
 // authority
 
-pair<int,int> CInode::authority() 
+pair<int,int> CInode::authority()
 {
-  if (inode_auth.first >= 0) 
+  if (inode_auth.first >= 0)
     return inode_auth;
 
   if (parent)
@@ -2149,7 +2149,7 @@ void CInode::choose_lock_state(SimpleLock *lock, int allissued)
       assert(lock->get_state() == LOCK_LOCK);
   }
 }
- 
+
 void CInode::choose_lock_states()
 {
   int issued = get_caps_issued();
@@ -2265,7 +2265,7 @@ int CInode::get_caps_allowed_ever()
     allowed = CEPH_CAP_PIN | CEPH_CAP_ANY_EXCL | CEPH_CAP_ANY_SHARED;
   else
     allowed = CEPH_CAP_ANY;
-  return allowed & 
+  return allowed &
     (CEPH_CAP_PIN |
      (filelock.gcaps_allowed_ever() << filelock.get_cap_shift()) |
      (authlock.gcaps_allowed_ever() << authlock.get_cap_shift()) |
@@ -2275,7 +2275,7 @@ int CInode::get_caps_allowed_ever()
 
 int CInode::get_caps_allowed_by_type(int type)
 {
-  return 
+  return
     CEPH_CAP_PIN |
     (filelock.gcaps_allowed(type) << filelock.get_cap_shift()) |
     (authlock.gcaps_allowed(type) << authlock.get_cap_shift()) |
@@ -2285,7 +2285,7 @@ int CInode::get_caps_allowed_by_type(int type)
 
 int CInode::get_caps_careful()
 {
-  return 
+  return
     (filelock.gcaps_careful() << filelock.get_cap_shift()) |
     (authlock.gcaps_careful() << authlock.get_cap_shift()) |
     (xattrlock.gcaps_careful() << xattrlock.get_cap_shift()) |
@@ -2294,7 +2294,7 @@ int CInode::get_caps_careful()
 
 int CInode::get_xlocker_mask(client_t client)
 {
-  return 
+  return
     (filelock.gcaps_xlocker_mask(client) << filelock.get_cap_shift()) |
     (authlock.gcaps_xlocker_mask(client) << authlock.get_cap_shift()) |
     (xattrlock.gcaps_xlocker_mask(client) << xattrlock.get_cap_shift()) |
@@ -2366,7 +2366,7 @@ int CInode::get_caps_wanted(int *ploner, int *pother, int shift, int mask)
       if (it->first == loner_cap)
 	loner |= t;
       else
-	other |= t;	
+	other |= t;
     }
     //cout << " get_caps_wanted client " << it->first << " " << cap_string(it->second.wanted()) << endl;
   }
@@ -2400,7 +2400,7 @@ void CInode::replicate_relax_locks()
   //dout(10) << " relaxing locks on " << *this << dendl;
   assert(is_auth());
   assert(!is_replicated());
-  
+
   authlock.replicate_relax();
   linklock.replicate_relax();
   dirfragtreelock.replicate_relax();
@@ -2459,10 +2459,10 @@ int CInode::encode_inodestat(bufferlist& bl, Session *session,
 
   bool plocal = versionlock.get_last_wrlock_client() == client;
   bool ppolicy = policylock.is_xlocked_by_client(client) || get_loner()==client;
-  
+
   inode_t *i = (pfile|pauth|plink|pxattr|plocal) ? pi : oi;
   i->ctime.encode_timeval(&e.ctime);
-  
+
   dout(20) << " pfile " << pfile << " pauth " << pauth << " plink " << plink << " pxattr " << pxattr
 	   << " plocal " << plocal
 	   << " ctime " << i->ctime
@@ -2530,7 +2530,7 @@ int CInode::encode_inodestat(bufferlist& bl, Session *session,
       pxattrs = pxattr ? get_projected_xattrs() : &xattrs;
     ::encode(*pxattrs, xbl);
   }
-  
+
   // do we have room?
   if (max_bytes) {
     unsigned bytes = sizeof(e);
@@ -2640,12 +2640,12 @@ void CInode::encode_cap_message(MClientCaps *m, Capability *cap)
   bool pauth = authlock.is_xlocked_by_client(client);
   bool plink = linklock.is_xlocked_by_client(client);
   bool pxattr = xattrlock.is_xlocked_by_client(client);
- 
+
   inode_t *oi = &inode;
   inode_t *pi = get_projected_inode();
   inode_t *i = (pfile|pauth|plink|pxattr) ? pi : oi;
   i->ctime.encode_timeval(&m->head.ctime);
-  
+
   dout(20) << "encode_cap_message pfile " << pfile
 	   << " pauth " << pauth << " plink " << plink << " pxattr " << pxattr
 	   << " ctime " << i->ctime << dendl;
@@ -2894,7 +2894,7 @@ void CInode::decode_import(bufferlist::iterator& p,
     // it is frozen (and in a SYNC or LOCK state).  FIXME.
 
     if (dir->is_auth() ||
-        filelock.get_state() == LOCK_MIX) {
+	filelock.get_state() == LOCK_MIX) {
       dout(10) << " skipped fragstat info for " << *dir << dendl;
       frag_info_t f;
       ::decode(f, q);
@@ -2905,7 +2905,7 @@ void CInode::decode_import(bufferlist::iterator& p,
       dout(10) << " took fragstat info for " << *dir << dendl;
     }
     if (dir->is_auth() ||
-        nestlock.get_state() == LOCK_MIX) {
+	nestlock.get_state() == LOCK_MIX) {
       dout(10) << " skipped rstat info for " << *dir << dendl;
       nest_info_t n;
       ::decode(n, q);

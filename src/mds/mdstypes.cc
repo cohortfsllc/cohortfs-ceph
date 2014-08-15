@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
 #include "mdstypes.h"
@@ -269,7 +269,7 @@ void inode_t::decode(bufferlist::iterator &p)
 	q = m.begin(); q != m.end(); ++q)
       client_ranges[q->first].range = q->second;
   }
-    
+
   ::decode(dirstat, p);
   ::decode(rstat, p);
   ::decode(accounted_rstat, p);

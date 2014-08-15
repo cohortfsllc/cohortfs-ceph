@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  */
 
 #ifndef MDS_UTILITY_H_
@@ -50,7 +50,7 @@ public:
   bool ms_handle_reset(Connection *con) { return false; }
   void ms_handle_remote_reset(Connection *con) {}
   bool ms_get_authorizer(int dest_type, AuthAuthorizer **authorizer,
-                         bool force_new);
+			 bool force_new);
   int init();
   void shutdown();
 };

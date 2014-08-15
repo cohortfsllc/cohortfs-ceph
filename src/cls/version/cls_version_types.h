@@ -37,7 +37,7 @@ struct obj_version {
 
   bool compare(struct obj_version *v) {
     return (ver == v->ver &&
-            tag.compare(v->tag) == 0);
+	    tag.compare(v->tag) == 0);
   }
 
   void dump(Formatter *f) const;
@@ -47,11 +47,11 @@ WRITE_CLASS_ENCODER(obj_version)
 
 enum VersionCond {
   VER_COND_NONE =      0,
-  VER_COND_EQ,  /* equal */
-  VER_COND_GT,  /* greater than */
-  VER_COND_GE,  /* greater or equal */
-  VER_COND_LT,  /* less than */
-  VER_COND_LE,  /* less or equal */
+  VER_COND_EQ,	/* equal */
+  VER_COND_GT,	/* greater than */
+  VER_COND_GE,	/* greater or equal */
+  VER_COND_LT,	/* less than */
+  VER_COND_LE,	/* less or equal */
   VER_COND_TAG_EQ,
   VER_COND_TAG_NE,
 };
@@ -80,7 +80,4 @@ struct obj_version_cond {
 };
 WRITE_CLASS_ENCODER(obj_version_cond)
 
-
 #endif
-
-

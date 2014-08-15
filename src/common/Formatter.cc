@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -115,10 +115,10 @@ void JSONFormatter::print_comma(json_formatter_stack_entry_d& entry)
   } else if (entry.is_array && m_pretty) {
     m_ss << "\n";
     for (unsigned i=1; i < m_stack.size(); i++)
-      m_ss << "    ";
+      m_ss << "	   ";
   }
   if (m_pretty && entry.is_array)
-    m_ss << "    ";
+    m_ss << "	 ";
 }
 
 void JSONFormatter::print_quoted_string(const char *s)
@@ -275,7 +275,7 @@ void JSONFormatter::write_raw_data(const char *data)
   m_ss << data;
 }
 
-const char *XMLFormatter::XML_1_DTD = 
+const char *XMLFormatter::XML_1_DTD =
   "<?xml version=\"1.0\" encoding=\"UTF-8\"?>";
 
 XMLFormatter::XMLFormatter(bool pretty)
@@ -477,7 +477,7 @@ void XMLFormatter::finish_pending_string()
 {
   if (!m_pending_string_name.empty()) {
     m_ss << escape_xml_str(m_pending_string.str().c_str())
-         << "</" << m_pending_string_name << ">";
+	 << "</" << m_pending_string_name << ">";
     m_pending_string_name.clear();
     m_pending_string.str(std::string());
     if (m_pretty) {

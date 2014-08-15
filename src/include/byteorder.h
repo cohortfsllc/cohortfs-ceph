@@ -34,18 +34,18 @@
 # endif
 #endif
 
-static __inline__ uint16_t swab16(uint16_t val) 
+static __inline__ uint16_t swab16(uint16_t val)
 {
   return (val >> 8) | (val << 8);
 }
-static __inline__ uint32_t swab32(uint32_t val) 
+static __inline__ uint32_t swab32(uint32_t val)
 {
   return (( val >> 24) |
 	  ((val >> 8)  & 0xff00) |
-	  ((val << 8)  & 0xff0000) | 
+	  ((val << 8)  & 0xff0000) |
 	  ((val << 24)));
 }
-static __inline__ uint64_t swab64(uint64_t val) 
+static __inline__ uint64_t swab64(uint64_t val)
 {
   return (( val >> 56) |
 	  ((val >> 40) & 0xff00ull) |
@@ -84,7 +84,7 @@ static __inline__ uint64_t swab64(uint64_t val)
   static inline bool operator==(ceph_le##bits a, ceph_le##bits b) {		\
     return a.v == b.v;							\
   }
-  
+
 MAKE_LE_CLASS(64)
 MAKE_LE_CLASS(32)
 MAKE_LE_CLASS(16)

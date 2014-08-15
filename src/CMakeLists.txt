@@ -265,7 +265,7 @@ target_link_libraries(common PRIVATE ${CRYPTO_LIBS} rt uuid ${Boost_LIBRARIES} $
 
 set(libglobal_srcs
   global/global_init.cc
-  global/pidfile.cc 
+  global/pidfile.cc
   global/signal_handler.cc
   )
 set(global_common_files
@@ -340,18 +340,18 @@ set(lib_mon_srcs
   auth/AuthServiceHandler.cc
   ${osd_mon_files}
   ${mon_common_files}
-  mon/Paxos.cc 
+  mon/Paxos.cc
   mon/PaxosService.cc
   mon/OSDMonitor.cc
   mon/MDSMonitor.cc
-  mon/MonmapMonitor.cc 
+  mon/MonmapMonitor.cc
   mon/LogMonitor.cc
   mon/AuthMonitor.cc
   mon/Elector.cc
-  mon/MonitorStore.cc  
+  mon/MonitorStore.cc
   mon/HealthMonitor.cc
   ${os_mon_files}
-  mon/DataHealthService.cc 
+  mon/DataHealthService.cc
   mon/ConfigKeyService.cc
   )
 set(monitorstore_src
@@ -379,7 +379,7 @@ set(libos_srcs
   os/IndexManager.cc
   os/FlatIndex.cc
   os/LevelDBStore.cc
-  os/DBObjectMap.cc 
+  os/DBObjectMap.cc
   os/WBThrottle.cc
   os/GenericFileStoreBackend.cc
   os/BtrfsFileStoreBackend.cc
@@ -417,7 +417,7 @@ install(TARGETS cls_refcount DESTINATION lib/rados-classes)
 
 set(cls_lock_files
   cls/lock/cls_lock_client.cc
-  cls/lock/cls_lock_types.cc 
+  cls/lock/cls_lock_types.cc
   cls/lock/cls_lock_ops.cc
   cls/lock/cls_lock.cc
   )
@@ -469,7 +469,7 @@ endif(${ENABLE_SHARED})
 install(TARGETS cls_replica_log DESTINATION lib/rados-classes)
 
 set(cls_statelog_files
-  cls/statelog/cls_statelog.cc 
+  cls/statelog/cls_statelog.cc
   cls/statelog/cls_statelog_client.cc
   )
 add_library(cls_statelog_objs OBJECT ${cls_statelog_files})
@@ -628,15 +628,15 @@ add_custom_target(shell_scripts ALL
   ${CMAKE_BINARY_DIR}/ceph-debugpack ${CMAKE_BINARY_DIR}/ceph-coverage
   ${CMAKE_BINARY_DIR}/ceph COMMENT "Shell Scripts have permission")
 
-install(PROGRAMS 
-  ${CMAKE_SOURCE_DIR}/src/ceph-run 
+install(PROGRAMS
+  ${CMAKE_SOURCE_DIR}/src/ceph-run
   ${CMAKE_SOURCE_DIR}/src/vstart.sh
   ${CMAKE_SOURCE_DIR}/src/ceph-clsinfo
   # This is rather bostumous, it would be better if configured scripts were
   # treated as targets in their own right. Will require some poking at
   # CMake to work properly. Same goes for the other configured scripts.
   ${CMAKE_BINARY_DIR}/ceph-debugpack
-  ${CMAKE_BINARY_DIR}/ceph-coverage 
+  ${CMAKE_BINARY_DIR}/ceph-coverage
   ${CMAKE_BINARY_DIR}/ceph
   DESTINATION bin)
 install(TARGETS

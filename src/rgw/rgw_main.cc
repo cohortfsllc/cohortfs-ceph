@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -204,12 +206,12 @@ protected:
     void _dump_queue() {
       deque<RGWRequest *>::iterator iter;
       if (process->m_req_queue.empty()) {
-        dout(20) << "RGWWQ: empty" << dendl;
-        return;
+	dout(20) << "RGWWQ: empty" << dendl;
+	return;
       }
       dout(20) << "RGWWQ:" << dendl;
       for (iter = process->m_req_queue.begin(); iter != process->m_req_queue.end(); ++iter) {
-        dout(20) << "req: " << hex << *iter << dec << dendl;
+	dout(20) << "req: " << hex << *iter << dec << dendl;
       }
     }
     void _clear() {
@@ -270,8 +272,8 @@ void RGWFCGXProcess::run()
       int err = errno;
       /* ENXIO is actually expected, we'll get that if we try to open a unix domain socket */
       if (err != ENXIO) {
-        dout(0) << "ERROR: cannot create socket: path=" << path_str << " error=" << cpp_strerror(err) << dendl;
-        return;
+	dout(0) << "ERROR: cannot create socket: path=" << path_str << " error=" << cpp_strerror(err) << dendl;
+	return;
       }
     } else {
       close(fd);
@@ -326,7 +328,7 @@ struct RGWLoadGenRequest : public RGWRequest {
 
 
   RGWLoadGenRequest(const string& _m, const  string& _r, int _cl,
-                    atomic_t *ff) : method(_m), resource(_r), content_length(_cl), fail_flag(ff) {}
+		    atomic_t *ff) : method(_m), resource(_r), content_length(_cl), fail_flag(ff) {}
 };
 
 class RGWLoadGenProcess : public RGWProcess {
@@ -627,7 +629,7 @@ void RGWFCGXProcess::handle_request(RGWRequest *r)
   FCGX_Request *fcgx = &req->fcgx;
   RGWFCGX client_io(fcgx);
 
- 
+
   int ret = process_request(store, rest, req, &client_io, olog);
   if (ret < 0) {
     /* we don't really care about return code */
@@ -721,8 +723,8 @@ int usage()
 {
   cerr << "usage: radosgw [options...]" << std::endl;
   cerr << "options:\n";
-  cerr << "   --rgw-region=<region>     region in which radosgw runs\n";
-  cerr << "   --rgw-zone=<zone>         zone in which radosgw runs\n";
+  cerr << "   --rgw-region=<region>	region in which radosgw runs\n";
+  cerr << "   --rgw-zone=<zone>		zone in which radosgw runs\n";
   generic_server_usage();
   return 0;
 }
@@ -998,9 +1000,9 @@ int main(int argc, const char **argv)
 
   rgw_init_resolver();
   rgw_rest_init(g_ceph_context);
-  
+
   curl_global_init(CURL_GLOBAL_ALL);
-  
+
   FCGX_Init();
 
   int r = 0;
@@ -1017,7 +1019,7 @@ int main(int argc, const char **argv)
   init_timer.shutdown();
   mutex.Unlock();
 
-  if (r) 
+  if (r)
     return 1;
 
   rgw_user_init(store->meta_mgr);
@@ -1053,7 +1055,7 @@ int main(int argc, const char **argv)
     admin_resource->register_resource("usage", new RGWRESTMgr_Usage);
     admin_resource->register_resource("user", new RGWRESTMgr_User);
     admin_resource->register_resource("bucket", new RGWRESTMgr_Bucket);
-  
+
     /*Registering resource for /admin/metadata */
     admin_resource->register_resource("metadata", new RGWRESTMgr_Metadata);
     admin_resource->register_resource("log", new RGWRESTMgr_Log);

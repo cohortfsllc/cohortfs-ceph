@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -36,7 +36,7 @@ class MOSDMarkMeDown : public PaxosServiceMessage {
  private:
   ~MOSDMarkMeDown() {}
 
-public: 
+public:
   entity_inst_t get_target() { return target_osd; }
   epoch_t get_epoch() { return epoch; }
 

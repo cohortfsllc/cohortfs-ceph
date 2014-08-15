@@ -1,4 +1,3 @@
-
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
@@ -40,8 +39,8 @@ using std::vector;
  * This tests creating a pool in one Runnable, and then opening an io context
  * based on that pool in another.
  *
- * EXPECT:            * can't create the same pool twice
- *                    * one Runnable can use the pool after the other one creates it
+ * EXPECT:	      * can't create the same pool twice
+ *		      * one Runnable can use the pool after the other one creates it
  *
  * DO NOT EXPECT      * hangs, crashes
  */
@@ -97,7 +96,7 @@ const char *get_id_str()
 
 int main(int argc, const char **argv)
 {
-  // first test: create a pool, shut down the client, access that 
+  // first test: create a pool, shut down the client, access that
   // pool in a different process.
   CrossProcessSem *pool_setup_sem = NULL;
   RETURN1_IF_NONZERO(CrossProcessSem::create(0, &pool_setup_sem));
@@ -113,7 +112,7 @@ int main(int argc, const char **argv)
     return EXIT_FAILURE;
   }
 
-  // second test: create a pool, access that 
+  // second test: create a pool, access that
   // pool in a different process, THEN shut down the first client.
   CrossProcessSem *pool_setup_sem2 = NULL;
   RETURN1_IF_NONZERO(CrossProcessSem::create(0, &pool_setup_sem2));
@@ -131,6 +130,6 @@ int main(int argc, const char **argv)
     return EXIT_FAILURE;
   }
 
-  printf("******* SUCCESS **********\n"); 
+  printf("******* SUCCESS **********\n");
   return EXIT_SUCCESS;
 }

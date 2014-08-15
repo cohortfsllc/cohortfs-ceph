@@ -11,7 +11,7 @@ independently, even if they can't.)
 The anchortable journals the proposed update, and responds with an
 AGREE and a version number.  This uniquely identifies the request.
 
-The MDS can then update the filesystem metadata however it sees fit.  
+The MDS can then update the filesystem metadata however it sees fit.
 When it is finished (and the results journaled), it sends a COMMIT to
 the anchortable.  The table journals the commit, frees any state from
 the transaction, and sends an ACK.  The initiating MDS should then
@@ -44,7 +44,7 @@ journaling the ACK, it resends COMMIT to the anchor table.  If it
 receives an AGREE after resending the COMMIT, it simply ignores the
 AGREE.  The anchortable will respond with an ACK, allowing the
 initiating MDS to journal the final ACK and close out the transaction
-locally.  
+locally.
 
 On journal replay, each metadata update (EMetaBlob) encountered that
 includes an anchor transaction is noted in the AnchorClient by adding

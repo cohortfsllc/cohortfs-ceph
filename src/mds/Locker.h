@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -57,12 +57,12 @@ class Locker {
 private:
   MDS *mds;
   MDCache *mdcache;
- 
+
  public:
-  Locker(MDS *m, MDCache *c) : mds(m), mdcache(c) {}  
+  Locker(MDS *m, MDCache *c) : mds(m), mdcache(c) {}
 
   SimpleLock *get_lock(int lock_type, MDSCacheObjectInfo &info);
-  
+
   void dispatch(Message *m);
   void handle_lock(MLock *m);
 
@@ -106,7 +106,7 @@ public:
     CInode *in;
   public:
     C_EvalScatterGathers(Locker *l, CInode *i) : locker(l), in(i) {
-      in->get(CInode::PIN_PTRWAITER);    
+      in->get(CInode::PIN_PTRWAITER);
     }
     void finish(int r) {
       in->put(CInode::PIN_PTRWAITER);
@@ -162,7 +162,7 @@ protected:
 
   // scatter
 public:
-  void scatter_eval(ScatterLock *lock, bool *need_issue);        // public for MDCache::adjust_subtree_auth()
+  void scatter_eval(ScatterLock *lock, bool *need_issue);	 // public for MDCache::adjust_subtree_auth()
 
   void scatter_tick();
   void scatter_nudge(ScatterLock *lock, Context *c, bool forcelockchange=false);
@@ -182,8 +182,8 @@ protected:
   public:
     C_Locker_ScatterWB(Locker *l, ScatterLock *sl, MutationRef& m) :
       locker(l), lock(sl), mut(m) {}
-    void finish(int r) { 
-      locker->scatter_writebehind_finish(lock, mut); 
+    void finish(int r) {
+      locker->scatter_writebehind_finish(lock, mut);
     }
   };
   void scatter_writebehind_finish(ScatterLock *lock, MutationRef& mut);
@@ -271,8 +271,8 @@ protected:
 public:
   void calc_new_client_ranges(CInode *in, uint64_t size, map<client_t, client_writeable_range_t>& new_ranges);
   bool check_inode_max_size(CInode *in, bool force_wrlock=false,
-                            bool update_size=false, uint64_t newsize=0,
-                            bool update_max=false, uint64_t newmax=0,
+			    bool update_size=false, uint64_t newsize=0,
+			    bool update_max=false, uint64_t newmax=0,
 			    utime_t mtime=utime_t());
   void share_inode_max_size(CInode *in, Capability *only_cap=0);
 
@@ -282,7 +282,7 @@ private:
   friend struct C_Locker_FileUpdate_finish;
   friend class C_Locker_RetryCapRelease;
 
-  
+
   // -- client leases --
 public:
   void handle_client_lease(struct MClientLease *m);

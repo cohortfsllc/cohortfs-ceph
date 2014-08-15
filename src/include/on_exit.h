@@ -23,7 +23,7 @@ class OnExitManager {
       pthread_mutex_lock(&lock_);
       std::vector<struct cb>::iterator it;
       for (it = funcs_.begin(); it != funcs_.end(); it++) {
-        it->func(it->arg);
+	it->func(it->arg);
       }
       funcs_.clear();
       pthread_mutex_unlock(&lock_);

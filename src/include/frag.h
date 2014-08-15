@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_FRAG_H
@@ -27,19 +27,19 @@
 
 /*
  *
- * the goal here is to use a binary split strategy to partition a namespace.  
+ * the goal here is to use a binary split strategy to partition a namespace.
  * frag_t represents a particular fragment.  bits() tells you the size of the
  * fragment, and value() it's name.  this is roughly analogous to an ip address
  * and netmask.
  *
- * fragtree_t represents an entire namespace and it's partition.  it essentially 
- * tells you where fragments are split into other fragments, and by how much 
+ * fragtree_t represents an entire namespace and it's partition.  it essentially
+ * tells you where fragments are split into other fragments, and by how much
  * (i.e. by how many bits, resulting in a power of 2 number of child fragments).
  *
  * this vaguely resembles a btree, in that when a fragment becomes large or small
  * we can split or merge, except that there is no guarantee of being balanced.
  *
- * presumably we are partitioning the output of a (perhaps specialized) hash 
+ * presumably we are partitioning the output of a (perhaps specialized) hash
  * function.
  */
 
@@ -55,18 +55,18 @@
  *
  * we write it as v/b, where v is a value and b is the number of bits.
  * 0/0 (bits==0) corresponds to the entire namespace.  if we bisect that,
- * we get 0/1 and 1/1.  quartering gives us 0/2, 1/2, 2/2, 3/2.  and so on.
+ * we get 0/1 and 1/1.	quartering gives us 0/2, 1/2, 2/2, 3/2.	 and so on.
  *
- * this makes the right most bit of v the "most significant", which is the 
+ * this makes the right most bit of v the "most significant", which is the
  * opposite of what we usually see.
  */
 
 /*
  * TODO:
- *  - get_first_child(), next_sibling(int parent_bits) to make (possibly partial) 
+ *  - get_first_child(), next_sibling(int parent_bits) to make (possibly partial)
  *    iteration efficient (see, e.g., try_assimilate_children()
  *  - rework frag_t so that we mask the left-most (most significant) bits instead of
- *    the right-most (least significant) bits.  just because it's more intutive, and
+ *    the right-most (least significant) bits.	just because it's more intutive, and
  *    matches the network/netmask concept.
  */
 
@@ -78,15 +78,15 @@ class frag_t {
    * helpers _exclusively_.
    */
  public:
-  _frag_t _enc;  
-  
+  _frag_t _enc;
+
   frag_t() : _enc(0) { }
   frag_t(unsigned v, unsigned b) : _enc(ceph_frag_make(b, v)) { }
   frag_t(_frag_t e) : _enc(e) { }
 
   // constructors
   void from_unsigned(unsigned e) { _enc = e; }
-  
+
   // accessors
   unsigned value() const { return ceph_frag_value(_enc); }
   unsigned bits() const { return ceph_frag_bits(_enc); }
@@ -112,7 +112,7 @@ class frag_t {
   void split(int nb, std::list<frag_t>& fragments) const {
     assert(nb > 0);
     unsigned nway = 1 << nb;
-    for (unsigned i=0; i<nway; i++) 
+    for (unsigned i=0; i<nway; i++)
       fragments.push_back(make_child(i, nb));
   }
 
@@ -153,30 +153,30 @@ inline std::ostream& operator<<(std::ostream& out, frag_t hb)
   unsigned num = hb.bits();
   if (num) {
     unsigned val = hb.value();
-    for (unsigned bit = 23; num; num--, bit--) 
+    for (unsigned bit = 23; num; num--, bit--)
       out << ((val & (1<<bit)) ? '1':'0');
   }
   return out << '*';
 }
 
 inline void encode(frag_t f, bufferlist& bl) { encode_raw(f._enc, bl); }
-inline void decode(frag_t &f, bufferlist::iterator& p) { 
+inline void decode(frag_t &f, bufferlist::iterator& p) {
   uint32_t v;
-  decode_raw(v, p); 
+  decode_raw(v, p);
   f._enc = v;
 }
 
 
 
 /**
- * fragtree_t -- partition an entire namespace into one or more frag_t's. 
+ * fragtree_t -- partition an entire namespace into one or more frag_t's.
  */
 class fragtree_t {
   // pairs <f, b>:
   //  frag_t f is split by b bits.
   //  if child frag_t does not appear, it is not split.
 public:
-  std::map<frag_t,int32_t> _splits;  
+  std::map<frag_t,int32_t> _splits;
 
 public:
   // -------------
@@ -190,7 +190,7 @@ public:
 
   // -------------
   // accessors
-  bool empty() { 
+  bool empty() {
     return _splits.empty();
   }
   int get_split(const frag_t hb) const {
@@ -201,7 +201,7 @@ public:
       return p->second;
   }
 
-  
+
   bool is_leaf(frag_t x) const {
     std::list<frag_t> ls;
     get_leaves_under(x, ls);
@@ -230,8 +230,8 @@ public:
       frag_t t = q.back();
       q.pop_back();
       int nb = get_split(t);
-      if (nb) 
-	t.split(nb, q);   // queue up children
+      if (nb)
+	t.split(nb, q);	  // queue up children
       else
 	ls.push_front(t);  // not spit, it's a leaf.
     }
@@ -272,8 +272,8 @@ public:
   frag_t get_branch_or_leaf(frag_t x) const {
     frag_t branch = get_branch(x);
     int nb = get_split(branch);
-    if (nb > 0 &&                                  // if branch is a split, and
-	branch.bits() + nb <= x.bits())            // one of the children is or contains x 
+    if (nb > 0 &&				   // if branch is a split, and
+	branch.bits() + nb <= x.bits())		   // one of the children is or contains x
       return frag_t(x.value(), branch.bits()+nb);  // then return that child (it's a leaf)
     else
       return branch;
@@ -289,11 +289,11 @@ public:
       frag_t t = q.front();
       q.pop_front();
       if (t.bits() >= x.bits() &&    // if t is more specific than x, and
-	  !x.contains(t))            // x does not contain t,
-	continue;         // then skip
+	  !x.contains(t))	     // x does not contain t,
+	continue;	  // then skip
       int nb = get_split(t);
-      if (nb) 
-	t.split(nb, q);   // queue up children
+      if (nb)
+	t.split(nb, q);	  // queue up children
       else if (x.contains(t))
 	ls.push_back(t);  // not spit, it's a leaf.
     }
@@ -309,12 +309,12 @@ public:
       frag_t t = q.front();
       q.pop_front();
       if (t.bits() >= x.bits() &&  // if t is more specific than x, and
-	  !x.contains(t))          // x does not contain t,
-	continue;         // then skip 
+	  !x.contains(t))	   // x does not contain t,
+	continue;	  // then skip
       int nb = get_split(t);
       if (nb) {
 	if (t == x) return false;  // it's split.
-	t.split(nb, q);   // queue up children
+	t.split(nb, q);	  // queue up children
       } else {
 	if (t == x) return true;   // it's there.
       }
@@ -322,7 +322,7 @@ public:
     return false;
   }
 
-  /** 
+  /**
    * operator[] -- map a (hash?) value to a frag
    */
   frag_t operator[](unsigned v) const {
@@ -333,7 +333,7 @@ public:
 
       // is this a leaf?
       if (nb == 0) return t;  // done.
-      
+
       // pick appropriate child fragment.
       unsigned nway = 1 << nb;
       unsigned i;
@@ -354,7 +354,7 @@ public:
   void split(frag_t x, int b, bool simplify=true) {
     assert(is_leaf(x));
     _splits[x] = b;
-    
+
     if (simplify)
       try_assimilate_children(get_branch_above(x));
   }
@@ -381,8 +381,8 @@ public:
 	 p != children.end();
 	 ++p) {
       int cb = get_split(*p);
-      if (!cb) return;  // nope.
-      if (childbits && cb != childbits) return;  // not the same
+      if (!cb) return;	// nope.
+      if (childbits && cb != childbits) return;	 // not the same
       childbits = cb;
     }
     // all children are split with childbits!
@@ -416,7 +416,7 @@ public:
 	return true;
       }
       assert(nb > spread);
-      
+
       // add an intermediary split
       merge(parent, nb, false);
       split(parent, spread, false);
@@ -431,7 +431,7 @@ public:
       }
     }
 
-    // x is now a leaf or split.  
+    // x is now a leaf or split.
     // hoover up any children.
     std::list<frag_t> q;
     q.push_back(x);
@@ -441,8 +441,8 @@ public:
       int nb = get_split(t);
       if (nb) {
 	lgeneric_dout(cct, 10) << "merging child " << t << " by " << nb << dendl;
-	merge(t, nb, false);    // merge this point, and
-	t.split(nb, q);         // queue up children
+	merge(t, nb, false);	// merge this point, and
+	t.split(nb, q);		// queue up children
       }
     }
 
@@ -456,7 +456,7 @@ public:
     std::map<frag_t,int32_t> copy;
     std::list<frag_t> q;
     q.push_back(frag_t());
-    
+
     while (1) {
       frag_t cur = q.front();
       q.pop_front();
@@ -465,10 +465,10 @@ public:
       copy[cur] = b;
       cur.split(b, q);
     }
-    
-    assert(copy == _splits);	
+
+    assert(copy == _splits);
   }
-  
+
   // encoding
   void encode(bufferlist& bl) const {
     ::encode(_splits, bl);
@@ -492,7 +492,7 @@ public:
       int nb = get_split(t);
       if (nb) {
 	out << t << " %" << nb;
-	t.split(nb, q);   // queue up children
+	t.split(nb, q);	  // queue up children
       } else {
 	out << t;
       }
@@ -512,7 +512,7 @@ inline bool operator!=(const fragtree_t& l, const fragtree_t& r) {
 inline std::ostream& operator<<(std::ostream& out, const fragtree_t& ft)
 {
   out << "fragtree_t(";
-  
+
   if (0) {
     std::list<frag_t> q;
     q.push_back(frag_t());
@@ -523,7 +523,7 @@ inline std::ostream& operator<<(std::ostream& out, const fragtree_t& ft)
       if (nb) {
 	if (t.bits()) out << ' ';
 	out << t << '%' << nb;
-	t.split(nb, q);   // queue up children
+	t.split(nb, q);	  // queue up children
       }
     }
   }
@@ -565,7 +565,7 @@ public:
       f = f.parent();
     }
   }
-  
+
   void insert(frag_t f) {
     _set.insert(f);
     simplify();
@@ -592,7 +592,7 @@ public:
   }
 };
 
-inline std::ostream& operator<<(std::ostream& out, const fragset_t& fs) 
+inline std::ostream& operator<<(std::ostream& out, const fragset_t& fs)
 {
   return out << "fragset_t(" << fs.get() << ")";
 }

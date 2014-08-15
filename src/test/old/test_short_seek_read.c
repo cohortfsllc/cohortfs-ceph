@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #include "include/types.h"
 #include "common/Clock.h"
 
@@ -23,17 +25,17 @@ int main(int argc, char **argv)
 
   //uint64_t numblocks = atoll(argv[2]) * 4;// / 4096;
   int count = 1000;
-  
+
   cout << "fn " << fn << endl;
   cout << "numblocks " << numblocks << endl;
-  
+
   int blocks = 1;
   while (blocks <= 1024) {
     //cout << "fd is " << fd << endl;
 
     void *buf;
     ::posix_memalign(&buf, 4096, 4096*blocks);
-    
+
     int s = blocks*4096;
 
     double timeper = 0.0;
@@ -56,7 +58,7 @@ int main(int argc, char **argv)
       utime_t end = ceph_clock_now(g_ceph_context);
       timeper += (end-start);
     }
-    
+
     timeper /= count;
     cout << blocks << "\t" << s << "\t" << (double)timeper << endl;
 
@@ -64,7 +66,7 @@ int main(int argc, char **argv)
     free(buf);
   }
 
-  close(fd);  
+  close(fd);
 
 }
 

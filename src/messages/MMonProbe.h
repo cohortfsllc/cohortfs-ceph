@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 
@@ -45,7 +45,7 @@ public:
     default: assert(0); return 0;
     }
   }
-  
+
   uuid_d fsid;
   int32_t op;
   string name;
@@ -70,7 +70,7 @@ public:
 private:
   ~MMonProbe() {}
 
-public:  
+public:
   const char *get_type_name() const { return "mon_probe"; }
   void print(ostream& out) const {
     out << "mon_probe(" << get_opname(op) << " " << fsid << " name " << name;
@@ -88,7 +88,7 @@ public:
       out << " required_features " << required_features;
     out << ")";
   }
-  
+
   void encode_payload(uint64_t features) {
     if (monmap_bl.length() && (features & CEPH_FEATURE_MONENC) == 0) {
       // reencode old-format monmap

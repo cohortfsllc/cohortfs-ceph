@@ -26,7 +26,7 @@ void MemoryModel::_sample(snap *psnap)
   while (!f.eof()) {
     string line;
     getline(f, line);
-    
+
     if (strncmp(line.c_str(), "VmSize:", 7) == 0)
       psnap->size = atoi(line.c_str() + 7);
     else if (strncmp(line.c_str(), "VmRSS:", 6) == 0)
@@ -94,7 +94,7 @@ void MemoryModel::_sample(snap *psnap)
   // ...
 #if defined(__linux__)
   struct mallinfo mi = mallinfo();
-  
+
   psnap->malloc = mi.uordblks >> 10;
   psnap->mmap = mi.hblks >> 10;
 #else

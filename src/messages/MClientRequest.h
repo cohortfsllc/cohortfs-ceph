@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -22,10 +22,10 @@
  * by clients. can be forwarded around between MDS's.
  *
  *   int client - the originating client
- *   long tid   - transaction id, unique among requests for that client.
- *                probably just a counter!
- *                -> the MDS passes the Request to the Reply constructor,
- *                   so this always matches.
+ *   long tid	- transaction id, unique among requests for that client.
+ *		  probably just a counter!
+ *		  -> the MDS passes the Request to the Reply constructor,
+ *		     so this always matches.
  *
  *   int op - the metadata op code.  MDS_OP_RENAME, etc.
  *   int caller_uid, _gid - guess
@@ -160,8 +160,8 @@ public:
 
   const char *get_type_name() const { return "creq"; }
   void print(ostream& out) const {
-    out << "client_request(" << get_orig_source() 
-	<< ":" << get_tid() 
+    out << "client_request(" << get_orig_source()
+	<< ":" << get_tid()
 	<< " " << ceph_mds_op_name(get_op());
     if (head.op == CEPH_MDS_OP_GETATTR)
       out << " " << ccap_string(head.args.getattr.mask);
@@ -189,7 +189,7 @@ public:
 	  << ", length " << head.args.filelock_change.length
 	  << ", wait " << (int)head.args.filelock_change.wait;
     }
-    //if (!get_filepath().empty()) 
+    //if (!get_filepath().empty())
     out << " " << get_filepath();
     if (!get_filepath2().empty())
       out << " " << get_filepath2();

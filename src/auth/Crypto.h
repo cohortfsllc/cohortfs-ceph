@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 #ifndef CEPH_AUTH_CRYPTO_H
@@ -155,7 +155,7 @@ public:
   int validate_secret(bufferptr& secret);
   void encrypt(const bufferptr& secret, const bufferlist& in,
 	       bufferlist& out, std::string &error) const;
-  void decrypt(const bufferptr& secret, const bufferlist& in, 
+  void decrypt(const bufferptr& secret, const bufferlist& in,
 	      bufferlist& out, std::string &error) const;
 };
 

@@ -84,7 +84,7 @@ function auth_none() {
     [ ! -f $MON_DIR/keyring ] || return 1
 
     mon_run --auth-supported=none
-    
+
     timeout $TIMEOUT ./ceph --mon-host $MONA mon stat || return 1
 }
 

@@ -46,23 +46,23 @@ setlkw_timeout (int sig) {
 #define _PATH_MOUNTED_LOCK "/etc/mtab~"
 
 /* exit status - bits below are ORed */
-#define EX_USAGE        1       /* incorrect invocation or permission */
-#define EX_SYSERR       2       /* out of memory, cannot fork, ... */
-#define EX_SOFTWARE     4       /* internal mount bug or wrong version */
-#define EX_USER         8       /* user interrupt */
-#define EX_FILEIO      16       /* problems writing, locking, ... mtab/fstab */
-#define EX_FAIL        32       /* mount failure */
-#define EX_SOMEOK      64       /* some mount succeeded */
+#define EX_USAGE	1	/* incorrect invocation or permission */
+#define EX_SYSERR	2	/* out of memory, cannot fork, ... */
+#define EX_SOFTWARE	4	/* internal mount bug or wrong version */
+#define EX_USER		8	/* user interrupt */
+#define EX_FILEIO      16	/* problems writing, locking, ... mtab/fstab */
+#define EX_FAIL	       32	/* mount failure */
+#define EX_SOMEOK      64	/* some mount succeeded */
 
 int die(int err, const char *fmt, ...) {
-        va_list args;
+	va_list args;
 
-        va_start(args, fmt);
-        vfprintf(stderr, fmt, args);
-        fprintf(stderr, "\n");
-        va_end(args);
+	va_start(args, fmt);
+	vfprintf(stderr, fmt, args);
+	fprintf(stderr, "\n");
+	va_end(args);
 
-        exit(err);
+	exit(err);
 }
 
 static void
@@ -258,7 +258,7 @@ update_mtab_entry(const char *spec, const char *node, const char *type,
 	mnt.mnt_passno = pass;
 
 	FILE *fp;
-	
+
 	lock_mtab();
 	fp = setmntent(_PATH_MOUNTED, "a+");
 	if (fp == NULL) {

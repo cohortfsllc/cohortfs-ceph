@@ -1,3 +1,6 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
+
 #include <errno.h>
 #include <fnmatch.h>
 
@@ -15,7 +18,7 @@ bool KeystoneToken::User::has_role(const string& r) {
   list<Role>::iterator iter;
   for (iter = roles.begin(); iter != roles.end(); ++iter) {
       if (fnmatch(r.c_str(), ((*iter).name.c_str()), 0) == 0) {
-        return true;
+	return true;
       }
   }
   return false;

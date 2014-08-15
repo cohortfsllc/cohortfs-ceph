@@ -90,7 +90,7 @@
      --end-date=<date>
      --bucket-id=<bucket-id>
      --shard-id=<shard-id>     optional for mdlog list
-                               required for: 
+                               required for:
                                  mdlog trim
                                  replica mdlog get/delete
                                  replica datalog get/delete
@@ -121,19 +121,19 @@
      --categories=<list>       comma separated list of categories, used in usage show
      --caps=<caps>             list of caps (e.g., "usage=read, write; user=read"
      --yes-i-really-mean-it    required for certain operations
-  
+
   <date> := "YYYY-MM-DD[ hh:mm:ss]"
-  
+
   Quota options:
      --bucket                  specified bucket for quota command
      --max-objects             specify max objects (negative value to disable)
      --max-size                specify max size (in bytes, negative value to disable)
      --quota-scope             scope of quota (bucket, user)
-  
+
     --conf/-c FILE    read configuration from the given configuration file
     --id/-i ID        set ID portion of my name
     --name/-n TYPE.ID set name
     --cluster NAME    set cluster name (default: ceph)
     --version         show version and quit
-  
+
   [1]

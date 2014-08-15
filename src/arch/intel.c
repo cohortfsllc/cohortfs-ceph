@@ -10,7 +10,7 @@
  *  modify it under the terms of the GNU Lesser General Public
  *  License as published by the Free Software Foundation; either
  *  version 2.1 of the License, or (at your option) any later version.
- * 
+ *
  */
 #include <stdio.h>
 #include "arch/probe.h"
@@ -28,19 +28,19 @@ int ceph_arch_intel_sse2 = 0;
 /* Note: valgrind redefines cpuid : it is different from the native processor. */
 /* intel cpu? */
 static void do_cpuid(unsigned int *eax, unsigned int *ebx, unsigned int *ecx,
-                     unsigned int *edx)
+		     unsigned int *edx)
 {
-        int id = *eax;
+	int id = *eax;
 
-        asm("movl %4, %%eax;"
-            "cpuid;"
-            "movl %%eax, %0;"
-            "movl %%ebx, %1;"
-            "movl %%ecx, %2;"
-            "movl %%edx, %3;"
-                : "=r" (*eax), "=r" (*ebx), "=r" (*ecx), "=r" (*edx)
-                : "r" (id)
-                : "eax", "ebx", "ecx", "edx");
+	asm("movl %4, %%eax;"
+	    "cpuid;"
+	    "movl %%eax, %0;"
+	    "movl %%ebx, %1;"
+	    "movl %%ecx, %2;"
+	    "movl %%edx, %3;"
+		: "=r" (*eax), "=r" (*ebx), "=r" (*ecx), "=r" (*edx)
+		: "r" (id)
+		: "eax", "ebx", "ecx", "edx");
 }
 
 /* http://en.wikipedia.org/wiki/CPUID#EAX.3D1:_Processor_Info_and_Feature_Bits */
@@ -67,13 +67,13 @@ int ceph_arch_intel_probe(void)
 		ceph_arch_intel_sse41 = 1;
 	}
 	if ((ecx & CPUID_SSSE3) != 0) {
-	        ceph_arch_intel_ssse3 = 1;
+		ceph_arch_intel_ssse3 = 1;
 	}
 	if ((ecx & CPUID_SSE3) != 0) {
-	        ceph_arch_intel_sse3 = 1;
+		ceph_arch_intel_sse3 = 1;
 	}
 	if ((edx & CPUID_SSE2) != 0) {
-	        ceph_arch_intel_sse2 = 1;
+		ceph_arch_intel_sse2 = 1;
 	}
 
 	return 0;

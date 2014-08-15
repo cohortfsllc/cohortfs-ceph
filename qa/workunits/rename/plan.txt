@@ -108,4 +108,4 @@ r   n   diff
 p   p   same
 r   p   same
 
-p   r   
+p   r

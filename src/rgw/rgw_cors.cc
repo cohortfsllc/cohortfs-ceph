@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -16,7 +16,7 @@
 #include <iostream>
 #include <map>
 
-#include <boost/algorithm/string.hpp> 
+#include <boost/algorithm/string.hpp>
 
 #include "include/types.h"
 #include "common/debug.h"
@@ -32,7 +32,7 @@ void RGWCORSRule::dump_origins() {
   unsigned num_origins = allowed_origins.size();
   dout(10) << "Allowed origins : " << num_origins << dendl;
   for(set<string>::iterator it = allowed_origins.begin();
-      it != allowed_origins.end(); 
+      it != allowed_origins.end();
       ++it) {
     dout(10) << *it << "," << dendl;
   }
@@ -44,8 +44,8 @@ void RGWCORSRule::erase_origin_if_present(string& origin, bool *rule_empty) {
     return;
   *rule_empty = false;
   if (it != allowed_origins.end()) {
-    dout(10) << "Found origin " << origin << ", set size:" << 
-        allowed_origins.size() << dendl;
+    dout(10) << "Found origin " << origin << ", set size:" <<
+	allowed_origins.size() << dendl;
     allowed_origins.erase(it);
     *rule_empty = (allowed_origins.empty());
   }
@@ -79,8 +79,8 @@ string lowercase_http_attr(const string& orig)
 
 
 static bool is_string_in_set(set<string>& s, string h) {
-  if ((s.find("*") != s.end()) || 
-          (s.find(h) != s.end())) {
+  if ((s.find("*") != s.end()) ||
+	  (s.find(h) != s.end())) {
     return true;
   }
   /* The header can be Content-*-type, or Content-* */
@@ -90,26 +90,26 @@ static bool is_string_in_set(set<string>& s, string h) {
     if ((off = (*it).find("*"))!=string::npos) {
       list<string> ssplit;
       unsigned flen = 0;
-      
+
       get_str_list((*it), "* \t", ssplit);
       if (off != 0) {
-        string sl = ssplit.front();
-        flen = sl.length();
-        dout(10) << "Finding " << sl << ", in " << h << ", at offset 0" << dendl;
-        if (!boost::algorithm::starts_with(h,sl))
-          continue;
-        ssplit.pop_front();
+	string sl = ssplit.front();
+	flen = sl.length();
+	dout(10) << "Finding " << sl << ", in " << h << ", at offset 0" << dendl;
+	if (!boost::algorithm::starts_with(h,sl))
+	  continue;
+	ssplit.pop_front();
       }
       if (off != ((*it).length() - 1)) {
-        string sl = ssplit.front();
-        dout(10) << "Finding " << sl << ", in " << h 
-          << ", at offset not less than " << flen << dendl;
-        if (h.compare((h.size() - sl.size()), sl.size(), sl) != 0)
-          continue;
-        ssplit.pop_front();
+	string sl = ssplit.front();
+	dout(10) << "Finding " << sl << ", in " << h
+	  << ", at offset not less than " << flen << dendl;
+	if (h.compare((h.size() - sl.size()), sl.size(), sl) != 0)
+	  continue;
+	ssplit.pop_front();
       }
       if (!ssplit.empty())
-        continue;
+	continue;
       return true;
     }
   }
@@ -137,13 +137,13 @@ void RGWCORSRule::format_exp_headers(string& s) {
   for(list<string>::iterator it = exposable_hdrs.begin();
       it != exposable_hdrs.end(); ++it) {
       if (s.length() > 0)
-        s.append(",");
+	s.append(",");
       s.append((*it));
   }
 }
 
 RGWCORSRule * RGWCORSConfiguration::host_name_rule(const char *origin) {
-  for(list<RGWCORSRule>::iterator it_r = rules.begin(); 
+  for(list<RGWCORSRule>::iterator it_r = rules.begin();
       it_r != rules.end(); ++it_r) {
     RGWCORSRule& r = (*it_r);
     if (r.is_origin_present(origin))
@@ -157,11 +157,11 @@ void RGWCORSConfiguration::erase_host_name_rule(string& origin) {
   unsigned loop = 0;
   /*Erase the host name from that rule*/
   dout(10) << "Num of rules : " << rules.size() << dendl;
-  for(list<RGWCORSRule>::iterator it_r = rules.begin(); 
+  for(list<RGWCORSRule>::iterator it_r = rules.begin();
       it_r != rules.end(); ++it_r, loop++) {
     RGWCORSRule& r = (*it_r);
     r.erase_origin_if_present(origin, &rule_empty);
-    dout(10) << "Origin:" << origin << ", rule num:" 
+    dout(10) << "Origin:" << origin << ", rule num:"
       << loop << ", emptying now:" << rule_empty << dendl;
     if (rule_empty) {
       rules.erase(it_r);

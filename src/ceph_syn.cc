@@ -43,7 +43,7 @@ using namespace std;
 #include <sys/types.h>
 #include <fcntl.h>
 
-int main(int argc, const char **argv, char *envp[]) 
+int main(int argc, const char **argv, char *envp[])
 {
   //cerr << "ceph-syn starting" << std::endl;
   vector<const char*> args;
@@ -78,7 +78,7 @@ int main(int argc, const char **argv, char *envp[])
 			   new QueueStrategy(2) /* dispatch strategy */);
       xmsgr->set_port_shift(111);
       messengers[i] = xmsgr;
-      
+
     }
     else {
       messengers[i] = Messenger::create(g_ceph_context,
@@ -104,7 +104,7 @@ int main(int argc, const char **argv, char *envp[])
     messengers[i]->start();
   }
 
-  for (list<SyntheticClient*>::iterator p = synclients.begin(); 
+  for (list<SyntheticClient*>::iterator p = synclients.begin();
        p != synclients.end();
        ++p)
     (*p)->start_thread();

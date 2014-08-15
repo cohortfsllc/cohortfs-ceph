@@ -31,7 +31,7 @@ struct cls_log_list_op {
   string marker; /* if not empty, overrides from_time */
   utime_t to_time; /* not inclusive */
   int max_entries; /* upperbound to returned num of entries
-                      might return less than that and still be truncated */
+		      might return less than that and still be truncated */
 
   cls_log_list_op() {}
 

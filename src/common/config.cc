@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -248,7 +248,7 @@ int md_config_t::parse_config_files_impl(const std::list<std::string> &conf_file
       set_val_impl(val.c_str(), opt);
     }
   }
-  
+
   // subsystems?
   for (int o = 0; o < subsys.get_num(); o++) {
     std::string as_option("debug_");
@@ -265,7 +265,7 @@ int md_config_t::parse_config_files_impl(const std::list<std::string> &conf_file
 	subsys.set_log_level(o, log);
 	subsys.set_gather_level(o, gather);
       }
-    }	
+    }
   }
 
   // Warn about section names that look like old-style section names
@@ -476,7 +476,7 @@ int md_config_t::parse_option(std::vector<const char*>& args,
 	  *oss << "debug_" << subsys.get_name(o) << "=" << log << "/" << gather << " ";
       }
       break;
-    }	
+    }
   }
   if (o < subsys.get_num()) {
     return ret;
@@ -689,7 +689,7 @@ int md_config_t::set_val(const char *key, const char *val, bool meta)
 	}
 	return -EINVAL;
       }
-    }	
+    }
   }
 
   for (int i = 0; i < NUM_CONFIG_OPTIONS; ++i) {
@@ -740,44 +740,44 @@ int md_config_t::_get_val(const char *key, char **buf, int len) const
     ostringstream oss;
     switch (opt->type) {
       case OPT_INT:
-        oss << *(int*)opt->conf_ptr(this);
-        break;
+	oss << *(int*)opt->conf_ptr(this);
+	break;
       case OPT_LONGLONG:
-        oss << *(long long*)opt->conf_ptr(this);
-        break;
+	oss << *(long long*)opt->conf_ptr(this);
+	break;
       case OPT_STR:
 	oss << *((std::string*)opt->conf_ptr(this));
 	break;
       case OPT_FLOAT:
-        oss << *(float*)opt->conf_ptr(this);
-        break;
+	oss << *(float*)opt->conf_ptr(this);
+	break;
       case OPT_DOUBLE:
-        oss << *(double*)opt->conf_ptr(this);
-        break;
+	oss << *(double*)opt->conf_ptr(this);
+	break;
       case OPT_BOOL: {
 	  bool b = *(bool*)opt->conf_ptr(this);
 	  oss << (b ? "true" : "false");
 	}
-        break;
+	break;
       case OPT_U32:
-        oss << *(uint32_t*)opt->conf_ptr(this);
-        break;
+	oss << *(uint32_t*)opt->conf_ptr(this);
+	break;
       case OPT_U64:
-        oss << *(uint64_t*)opt->conf_ptr(this);
-        break;
+	oss << *(uint64_t*)opt->conf_ptr(this);
+	break;
       case OPT_ADDR:
-        oss << *(entity_addr_t*)opt->conf_ptr(this);
-        break;
+	oss << *(entity_addr_t*)opt->conf_ptr(this);
+	break;
       case OPT_UUID:
 	oss << *(uuid_d*)opt->conf_ptr(this);
-        break;
+	break;
     }
     string str(oss.str());
     int l = strlen(str.c_str()) + 1;
     if (len == -1) {
       *buf = (char*)malloc(l);
       if (!*buf)
-        return -ENOMEM;
+	return -ENOMEM;
       strcpy(*buf, str.c_str());
       return 0;
     }
@@ -802,10 +802,10 @@ int md_config_t::_get_val(const char *key, char **buf, int len) const
   return -ENOENT;
 }
 
-/* The order of the sections here is important.  The first section in the
+/* The order of the sections here is important.	 The first section in the
  * vector is the "highest priority" section; if we find it there, we'll stop
  * looking. The lowest priority section is the one we look in only if all
- * others had nothing.  This should always be the global section.
+ * others had nothing.	This should always be the global section.
  */
 void md_config_t::get_my_sections(std::vector <std::string> &sections) const
 {

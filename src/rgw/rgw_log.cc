@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #include "common/Clock.h"
 #include "common/Timer.h"
 #include "common/utf8.h"
@@ -202,7 +204,7 @@ void rgw_format_ops_log_entry(struct rgw_log_entry& entry, Formatter *formatter)
 {
   formatter->open_object_section("log_entry");
   formatter->dump_string("bucket", entry.bucket);
-  entry.time.gmtime(formatter->dump_stream("time"));      // UTC
+  entry.time.gmtime(formatter->dump_stream("time"));	  // UTC
   entry.time.localtime(formatter->dump_stream("time_local"));
   formatter->dump_string("remote_addr", entry.remote_addr);
   if (entry.object_owner.length())
@@ -215,10 +217,10 @@ void rgw_format_ops_log_entry(struct rgw_log_entry& entry, Formatter *formatter)
   formatter->dump_int("bytes_sent", entry.bytes_sent);
   formatter->dump_int("bytes_received", entry.bytes_received);
   formatter->dump_int("object_size", entry.obj_size);
-  uint64_t total_time =  entry.total_time.sec() * 1000000LL * entry.total_time.usec();
+  uint64_t total_time =	 entry.total_time.sec() * 1000000LL * entry.total_time.usec();
 
   formatter->dump_int("total_time", total_time);
-  formatter->dump_string("user_agent",  entry.user_agent);
+  formatter->dump_string("user_agent",	entry.user_agent);
   formatter->dump_string("referrer",  entry.referrer);
   formatter->close_section();
 }
@@ -301,7 +303,7 @@ int rgw_log_op(RGWRados *store, struct req_state *s, const string& op_name, OpsL
   if (s->cct->_conf->rgw_remote_addr_param.length())
     set_param_str(s, s->cct->_conf->rgw_remote_addr_param.c_str(), entry.remote_addr);
   else
-    set_param_str(s, "REMOTE_ADDR", entry.remote_addr);    
+    set_param_str(s, "REMOTE_ADDR", entry.remote_addr);
   set_param_str(s, "HTTP_USER_AGENT", entry.user_agent);
   set_param_str(s, "HTTP_REFERRER", entry.referrer);
   set_param_str(s, "REQUEST_URI", entry.uri);
@@ -344,7 +346,7 @@ int rgw_log_op(RGWRados *store, struct req_state *s, const string& op_name, OpsL
 
   if (s->cct->_conf->rgw_ops_log_rados) {
     string oid = render_log_object_name(s->cct->_conf->rgw_log_object_name, &bdt,
-				        s->bucket.bucket_id, entry.bucket);
+					s->bucket.bucket_id, entry.bucket);
 
     rgw_obj obj(store->zone.log_pool, oid);
 
@@ -352,7 +354,7 @@ int rgw_log_op(RGWRados *store, struct req_state *s, const string& op_name, OpsL
     if (ret == -ENOENT) {
       ret = store->create_pool(store->zone.log_pool);
       if (ret < 0)
-        goto done;
+	goto done;
       // retry
       ret = store->append_async(obj, bl.length(), bl);
     }
@@ -388,7 +390,7 @@ int rgw_log_intent(RGWRados *store, rgw_obj& obj, RGWIntentEvent intent, const u
 
   char buf[bucket.name.size() + bucket.bucket_id.size() + 16];
   sprintf(buf, "%.4d-%.2d-%.2d-%s-%s", (bdt.tm_year+1900), (bdt.tm_mon+1), bdt.tm_mday,
-          bucket.bucket_id.c_str(), obj.bucket.name.c_str());
+	  bucket.bucket_id.c_str(), obj.bucket.name.c_str());
   string oid(buf);
   rgw_obj log_obj(intent_log_bucket, oid);
 

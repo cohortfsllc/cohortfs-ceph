@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -92,7 +92,7 @@ void AnchorClient::_lookup(inodeno_t ino)
 
 // FRIENDLY PREPARE
 
-void AnchorClient::prepare_create(inodeno_t ino, vector<Anchor>& trace, 
+void AnchorClient::prepare_create(inodeno_t ino, vector<Anchor>& trace,
 				  version_t *patid, Context *onfinish)
 {
   dout(10) << "prepare_create " << ino << " " << trace << dendl;
@@ -104,7 +104,7 @@ void AnchorClient::prepare_create(inodeno_t ino, vector<Anchor>& trace,
   _prepare(bl, patid, 0, onfinish);
 }
 
-void AnchorClient::prepare_destroy(inodeno_t ino, 
+void AnchorClient::prepare_destroy(inodeno_t ino,
 				   version_t *patid, Context *onfinish)
 {
   dout(10) << "prepare_destroy " << ino << dendl;
@@ -116,7 +116,7 @@ void AnchorClient::prepare_destroy(inodeno_t ino,
 }
 
 
-void AnchorClient::prepare_update(inodeno_t ino, vector<Anchor>& trace, 
+void AnchorClient::prepare_update(inodeno_t ino, vector<Anchor>& trace,
 				  version_t *patid, Context *onfinish)
 {
   dout(10) << "prepare_update " << ino << " " << trace << dendl;

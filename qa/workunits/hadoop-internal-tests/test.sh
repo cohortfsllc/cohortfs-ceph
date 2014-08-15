@@ -6,7 +6,7 @@
 # configure CEPH_CONF and LD_LIBRARY_PATH if they're not already set
 conf="$CEPH_CONF"
 if [ -z "$conf" ] ; then
-	echo "Setting conf to /etc/ceph/ceph.conf" 
+	echo "Setting conf to /etc/ceph/ceph.conf"
 	conf="/etc/ceph/ceph.conf"
 else
 	echo "conf is set to $conf"
@@ -65,10 +65,10 @@ echo generating custom replication hadoop config $cust_repl_conf
 gen_hadoop_conf $cust_repl_conf $POOL_NAMES $conf
 
 echo running default replication hadoop tests
-java -Dhadoop.conf.file=$def_repl_conf -Djava.library.path=$ld_lib_path -cp /usr/share/java/junit4.jar:$TESTDIR/apache_hadoop/build/hadoop-core-1.0.4-SNAPSHOT.jar:$TESTDIR/inktank_hadoop/build/hadoop-cephfs.jar:$TESTDIR/inktank_hadoop/build/hadoop-cephfs-test.jar:$TESTDIR/apache_hadoop/build/hadoop-test-1.0.4-SNAPSHOT.jar:$TESTDIR/apache_hadoop/build/ivy/lib/Hadoop/common/commons-logging-1.1.1.jar:/usr/share/java/libcephfs.jar org.junit.runner.JUnitCore org.apache.hadoop.fs.ceph.TestCephDefaultReplication 
+java -Dhadoop.conf.file=$def_repl_conf -Djava.library.path=$ld_lib_path -cp /usr/share/java/junit4.jar:$TESTDIR/apache_hadoop/build/hadoop-core-1.0.4-SNAPSHOT.jar:$TESTDIR/inktank_hadoop/build/hadoop-cephfs.jar:$TESTDIR/inktank_hadoop/build/hadoop-cephfs-test.jar:$TESTDIR/apache_hadoop/build/hadoop-test-1.0.4-SNAPSHOT.jar:$TESTDIR/apache_hadoop/build/ivy/lib/Hadoop/common/commons-logging-1.1.1.jar:/usr/share/java/libcephfs.jar org.junit.runner.JUnitCore org.apache.hadoop.fs.ceph.TestCephDefaultReplication
 
 echo running custom replication hadoop tests
-java -Dhadoop.conf.file=$cust_repl_conf -Djava.library.path=$ld_lib_path -cp /usr/share/java/junit4.jar:$TESTDIR/apache_hadoop/build/hadoop-core-1.0.4-SNAPSHOT.jar:$TESTDIR/inktank_hadoop/build/hadoop-cephfs.jar:$TESTDIR/inktank_hadoop/build/hadoop-cephfs-test.jar:$TESTDIR/apache_hadoop/build/hadoop-test-1.0.4-SNAPSHOT.jar:$TESTDIR/apache_hadoop/build/ivy/lib/Hadoop/common/commons-logging-1.1.1.jar:/usr/share/java/libcephfs.jar org.junit.runner.JUnitCore org.apache.hadoop.fs.ceph.TestCephCustomReplication 
+java -Dhadoop.conf.file=$cust_repl_conf -Djava.library.path=$ld_lib_path -cp /usr/share/java/junit4.jar:$TESTDIR/apache_hadoop/build/hadoop-core-1.0.4-SNAPSHOT.jar:$TESTDIR/inktank_hadoop/build/hadoop-cephfs.jar:$TESTDIR/inktank_hadoop/build/hadoop-cephfs-test.jar:$TESTDIR/apache_hadoop/build/hadoop-test-1.0.4-SNAPSHOT.jar:$TESTDIR/apache_hadoop/build/ivy/lib/Hadoop/common/commons-logging-1.1.1.jar:/usr/share/java/libcephfs.jar org.junit.runner.JUnitCore org.apache.hadoop.fs.ceph.TestCephCustomReplication
 
 echo "completed hadoop-internal-tests tests"
 exit 0

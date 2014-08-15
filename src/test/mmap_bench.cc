@@ -17,15 +17,15 @@ static void usage()
 {
 	derr << "usage: objectstore-bench [flags]\n"
 		"  --huge-pages\n"
-		"        use huge pages for the memory map\n"
+		"	 use huge pages for the memory map\n"
 		"  --size\n"
-		"        total size in bytes\n"
+		"	 total size in bytes\n"
 		"  --block-size\n"
-		"        block size in bytes for each write\n"
+		"	 block size in bytes for each write\n"
 		"  --repeats\n"
-		"        number of times to repeat the write cycle\n"
+		"	 number of times to repeat the write cycle\n"
 		"  --threads\n"
-		"        number of threads to carry out this workload\n" << dendl;
+		"	 number of threads to carry out this workload\n" << dendl;
 	generic_server_usage();
 }
 

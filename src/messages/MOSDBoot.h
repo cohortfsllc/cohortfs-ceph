@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_MOSDBOOT_H
@@ -39,7 +39,7 @@ class MOSDBoot : public PaxosServiceMessage {
   MOSDBoot(OSDSuperblock& s, epoch_t be,
 	   const entity_addr_t& hb_back_addr_ref,
 	   const entity_addr_t& hb_front_addr_ref,
-           const entity_addr_t& cluster_addr_ref)
+	   const entity_addr_t& cluster_addr_ref)
     : PaxosServiceMessage(MSG_OSD_BOOT, s.current_epoch, HEAD_VERSION, COMPAT_VERSION),
       sb(s),
       hb_back_addr(hb_back_addr_ref),
@@ -47,7 +47,7 @@ class MOSDBoot : public PaxosServiceMessage {
       cluster_addr(cluster_addr_ref),
       boot_epoch(be)
   { }
-  
+
 private:
   ~MOSDBoot() { }
 
@@ -56,7 +56,7 @@ public:
   void print(ostream& out) const {
     out << "osd_boot(osd." << sb.whoami << " booted " << boot_epoch << " v" << version << ")";
   }
-  
+
   void encode_payload(uint64_t features) {
     paxos_encode();
     ::encode(sb, payload);

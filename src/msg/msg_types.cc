@@ -56,7 +56,7 @@ bool entity_addr_t::parse(const char *s, const char **end)
     start++;
     brackets = true;
   }
-  
+
   // inet_pton() requires a null terminated input, so let's fill two
   // buffers, one with ipv4 allowed characters, and one with ipv6, and
   // then see which parses.
@@ -103,7 +103,7 @@ bool entity_addr_t::parse(const char *s, const char **end)
       return false;
     p++;
   }
-  
+
   //cout << "p is " << *p << std::endl;
   if (*p == ':') {
     // parse a port, too!

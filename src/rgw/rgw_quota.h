@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -31,7 +31,7 @@ struct RGWQuotaInfo {
   int64_t max_objs_soft_threshold;
 
   RGWQuotaInfo() : max_size_kb(-1), max_objects(-1), enabled(false),
-                   max_size_soft_threshold(-1), max_objs_soft_threshold(-1) {}
+		   max_size_soft_threshold(-1), max_objs_soft_threshold(-1) {}
 
   void encode(bufferlist& bl) const {
     ENCODE_START(1, 1, bl);
@@ -63,7 +63,7 @@ public:
   virtual ~RGWQuotaHandler() {
   }
   virtual int check_quota(const string& bucket_owner, rgw_bucket& bucket,
-                          RGWQuotaInfo& user_quota, RGWQuotaInfo& bucket_quota,
+			  RGWQuotaInfo& user_quota, RGWQuotaInfo& bucket_quota,
 			  uint64_t num_objs, uint64_t size) = 0;
 
   virtual void update_stats(const string& bucket_owner, rgw_bucket& bucket, int obj_delta, uint64_t added_bytes, uint64_t removed_bytes) = 0;

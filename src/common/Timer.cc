@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -87,7 +87,7 @@ void SafeTimer::timer_thread()
   ldout(cct,10) << "timer_thread starting" << dendl;
   while (!stopping) {
     utime_t now = ceph_clock_now(cct);
-    
+
     while (!schedule.empty()) {
       scheduled_map_t::iterator p = schedule.begin();
 
@@ -99,7 +99,7 @@ void SafeTimer::timer_thread()
       events.erase(callback);
       schedule.erase(p);
       ldout(cct,10) << "timer_thread executing " << callback << dendl;
-      
+
       if (!safe_callbacks)
 	lock.Unlock();
       callback->complete(0);
@@ -151,7 +151,7 @@ void SafeTimer::add_event_at(utime_t when, Context *callback)
 bool SafeTimer::cancel_event(Context *callback)
 {
   assert(lock.is_locked());
-  
+
   std::map<Context*, std::multimap<utime_t, Context*>::iterator>::iterator p = events.find(callback);
   if (p == events.end()) {
     ldout(cct,10) << "cancel_event " << callback << " not found" << dendl;
@@ -170,7 +170,7 @@ void SafeTimer::cancel_all_events()
 {
   ldout(cct,10) << "cancel_all_events" << dendl;
   assert(lock.is_locked());
-  
+
   while (!events.empty()) {
     std::map<Context*, std::multimap<utime_t, Context*>::iterator>::iterator p = events.begin();
     ldout(cct,10) << " cancelled " << p->second->first << " -> " << p->first << dendl;

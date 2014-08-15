@@ -1,4 +1,4 @@
-// -*- mode:C; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public
  * License version 2, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -112,7 +112,7 @@ TEST(LibRBD, CreateAndStat)
   int order = 0;
   const char *name = "testimg";
   uint64_t size = 2 << 20;
-  
+
   ASSERT_EQ(0, create_image(ioctx, name, size, &order));
   ASSERT_EQ(0, rbd_open(ioctx, name, &image));
   ASSERT_EQ(0, rbd_stat(image, &info, sizeof(info)));
@@ -142,7 +142,7 @@ TEST(LibRBD, CreateAndStatPP)
     int order = 0;
     const char *name = "testimg";
     uint64_t size = 2 << 20;
-    
+
     ASSERT_EQ(0, create_image_pp(rbd, ioctx, name, size, &order));
     ASSERT_EQ(0, rbd.open(ioctx, image, name));
     ASSERT_EQ(0, image.stat(info, sizeof(info)));
@@ -167,7 +167,7 @@ TEST(LibRBD, ResizeAndStat)
   int order = 0;
   const char *name = "testimg";
   uint64_t size = 2 << 20;
-  
+
   ASSERT_EQ(0, create_image(ioctx, name, size, &order));
   ASSERT_EQ(0, rbd_open(ioctx, name, &image));
 
@@ -178,7 +178,7 @@ TEST(LibRBD, ResizeAndStat)
   ASSERT_EQ(0, rbd_resize(image, size / 2));
   ASSERT_EQ(0, rbd_stat(image, &info, sizeof(info)));
   ASSERT_EQ(info.size, size / 2);
-  
+
   ASSERT_EQ(0, rbd_close(image));
 
   rados_ioctx_destroy(ioctx);
@@ -201,14 +201,14 @@ TEST(LibRBD, ResizeAndStatPP)
     int order = 0;
     const char *name = "testimg";
     uint64_t size = 2 << 20;
-    
+
     ASSERT_EQ(0, create_image_pp(rbd, ioctx, name, size, &order));
     ASSERT_EQ(0, rbd.open(ioctx, image, name));
-    
+
     ASSERT_EQ(0, image.resize(size * 4));
     ASSERT_EQ(0, image.stat(info, sizeof(info)));
     ASSERT_EQ(info.size, size * 4);
-    
+
     ASSERT_EQ(0, image.resize(size / 2));
     ASSERT_EQ(0, image.stat(info, sizeof(info)));
     ASSERT_EQ(info.size, size / 2);
@@ -276,7 +276,7 @@ TEST(LibRBD, TestCreateLsDelete)
   const char *name = "testimg";
   const char *name2 = "testimg2";
   uint64_t size = 2 << 20;
-  
+
   ASSERT_EQ(0, create_image(ioctx, name, size, &order));
   ASSERT_EQ(1, test_ls(ioctx, 1, name));
   ASSERT_EQ(0, create_image(ioctx, name2, size, &order));
@@ -336,8 +336,8 @@ TEST(LibRBD, TestCreateLsDeletePP)
     int order = 0;
     const char *name = "testimg";
     const char *name2 = "testimg2";
-    uint64_t size = 2 << 20;  
-    
+    uint64_t size = 2 << 20;
+
     ASSERT_EQ(0, create_image_pp(rbd, ioctx, name, size, &order));
     ASSERT_EQ(1, test_ls_pp(rbd, ioctx, 1, name));
     ASSERT_EQ(0, rbd.create(ioctx, name2, size, &order));
@@ -356,7 +356,7 @@ static int print_progress_percent(uint64_t offset, uint64_t src_size,
 {
   float percent = ((float)offset * 100) / src_size;
   printf("%3.2f%% done\n", percent);
-  return 0; 
+  return 0;
 }
 
 TEST(LibRBD, TestCopy)
@@ -374,7 +374,7 @@ TEST(LibRBD, TestCopy)
   const char *name3 = "testimg3";
 
   uint64_t size = 2 << 20;
-  
+
   ASSERT_EQ(0, create_image(ioctx, name, size, &order));
   ASSERT_EQ(0, rbd_open(ioctx, name, &image));
   ASSERT_EQ(1, test_ls(ioctx, 1, name));
@@ -405,7 +405,7 @@ TEST(LibRBD, TestCopyPP)
   librados::Rados rados;
   librados::IoCtx ioctx;
   string pool_name = get_temp_pool_name();
-  
+
   ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
   ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
 
@@ -538,7 +538,7 @@ TEST(LibRBD, TestIO)
   int order = 0;
   const char *name = "testimg";
   uint64_t size = 2 << 20;
-  
+
   ASSERT_EQ(0, create_image(ioctx, name, size, &order));
   ASSERT_EQ(0, rbd_open(ioctx, name, &image));
 
@@ -569,11 +569,11 @@ TEST(LibRBD, TestIO)
   aio_discard_test_data(image, TEST_IO_SIZE*3, TEST_IO_SIZE);
 
   read_test_data(image, test_data,  0, TEST_IO_SIZE);
-  read_test_data(image,  zero_data, TEST_IO_SIZE, TEST_IO_SIZE);
+  read_test_data(image,	 zero_data, TEST_IO_SIZE, TEST_IO_SIZE);
   read_test_data(image, test_data,  TEST_IO_SIZE*2, TEST_IO_SIZE);
-  read_test_data(image,  zero_data, TEST_IO_SIZE*3, TEST_IO_SIZE);
+  read_test_data(image,	 zero_data, TEST_IO_SIZE*3, TEST_IO_SIZE);
   read_test_data(image, test_data,  TEST_IO_SIZE*4, TEST_IO_SIZE);
-  
+
   rbd_image_info_t info;
   rbd_completion_t comp;
   ASSERT_EQ(0, rbd_stat(image, &info, sizeof(info)));
@@ -607,7 +607,7 @@ TEST(LibRBD, TestEmptyDiscard)
   int order = 0;
   const char *name = "testimg";
   uint64_t size = 20 << 20;
-  
+
   ASSERT_EQ(0, create_image(ioctx, name, size, &order));
   ASSERT_EQ(0, rbd_open(ioctx, name, &image));
 
@@ -704,7 +704,7 @@ void read_test_data(librbd::Image& image, const char *expected, off_t off, size_
   assert(strncmp(bl.c_str(), expected, expected_len) == 0);
 }
 
-TEST(LibRBD, TestIOPP) 
+TEST(LibRBD, TestIOPP)
 {
   librados::Rados rados;
   librados::IoCtx ioctx;
@@ -719,14 +719,14 @@ TEST(LibRBD, TestIOPP)
     int order = 0;
     const char *name = "testimg";
     uint64_t size = 2 << 20;
-    
+
     ASSERT_EQ(0, create_image_pp(rbd, ioctx, name, size, &order));
     ASSERT_EQ(0, rbd.open(ioctx, image, name));
 
     char test_data[TEST_IO_SIZE + 1];
     char zero_data[TEST_IO_SIZE + 1];
     int i;
-    
+
     srand(time(0));
     for (i = 0; i < TEST_IO_SIZE; ++i) {
       test_data[i] = (char) (rand() % (126 - 33) + 33);
@@ -736,20 +736,20 @@ TEST(LibRBD, TestIOPP)
 
     for (i = 0; i < 5; ++i)
       write_test_data(image, test_data, strlen(test_data) * i);
-    
+
     for (i = 5; i < 10; ++i)
       aio_write_test_data(image, test_data, strlen(test_data) * i);
-    
+
     for (i = 0; i < 5; ++i)
       read_test_data(image, test_data, strlen(test_data) * i, TEST_IO_SIZE);
-    
+
     for (i = 5; i < 10; ++i)
       aio_read_test_data(image, test_data, strlen(test_data) * i, TEST_IO_SIZE);
 
     // discard 2nd, 4th sections.
     discard_test_data(image, TEST_IO_SIZE, TEST_IO_SIZE);
     aio_discard_test_data(image, TEST_IO_SIZE*3, TEST_IO_SIZE);
-    
+
     read_test_data(image, test_data,  0, TEST_IO_SIZE);
     read_test_data(image,  zero_data, TEST_IO_SIZE, TEST_IO_SIZE);
     read_test_data(image, test_data,  TEST_IO_SIZE*2, TEST_IO_SIZE);
@@ -955,11 +955,11 @@ void scribble(librbd::Image& image, int n, int max, interval_set<uint64_t> *exis
     uint64_t len = 1 + rand() % max;
     if (rand() % 4 == 0) {
       ASSERT_EQ((int)len, image.discard(off, len));
-      interval_set<uint64_t> w;      
+      interval_set<uint64_t> w;
       w.insert(off, len);
 
       // the zeroed bit no longer exists...
-      w.intersection_of(*exists); 
+      w.intersection_of(*exists);
       exists->subtract(w);
 
       // the bits we discarded are no long written...

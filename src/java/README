@@ -17,7 +17,7 @@ Testing
 
 These tests assume a live cluster, and depend on JUnit4 and Ant.
 
-To run the tests make sure that the JUnit4 JAR is installed. 
+To run the tests make sure that the JUnit4 JAR is installed.
 Install it via a package manager or like this:
 
   $ mkdir lib
@@ -25,9 +25,9 @@ Install it via a package manager or like this:
   $ wget https://github.com/downloads/KentBeck/junit/junit-4.8.2.jar
 
 And then add the jar to the CLASSPATH.
-*NOTE* for now, configure is only looking for this jar in the 
+*NOTE* for now, configure is only looking for this jar in the
 /usr/share/java directory as junit4.jar. So create a softlink
-to that location from wherever the junit jar is installed. 
+to that location from wherever the junit jar is installed.
 
 Ant is used to run the unit test (apt-get install ant). For example:
 

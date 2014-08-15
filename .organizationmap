@@ -1,7 +1,7 @@
 #
 # See .mailmap for author normalization.
 #
-# To display the 10 organization who contributed 
+# To display the 10 organization who contributed
 # most commits to ceph ( requires git >= 1.8.4 ):
 #
 # git log --pretty='%aN <%aE>' | \
@@ -135,7 +135,7 @@ Pacific Northwest National Laboratory <contact@pnl.gov> Erwin, Brock A <Brock.Er
 Pacific Northwest National Laboratory <contact@pnl.gov> Brown, David M JR <david.brown@pnl.gov>
 Pacific Northwest National Laboratory <contact@pnl.gov> Evan Felix <evan.felix@pnnl.gov>
 Pacific Northwest National Laboratory <contact@pnl.gov> Scott Devoid <devoid@anl.gov>
-Unilogic Networks B.V <contact@unilogicnetworks.net> Pascal de Bruijn <pascal@unilogicnetworks.net> 
+Unilogic Networks B.V <contact@unilogicnetworks.net> Pascal de Bruijn <pascal@unilogicnetworks.net>
 Los Alamos National Laboratory <contact@lanl.gov> Esteban Molina-Estolano <eestolan@lanl.gov>
 Choopa, LLC <contact@choopa.com> Adam Twardowski <adam.twardowski@gmail.com>
 CISCO <contact@cisco.com> Kai Zhang <zakir.exe@gmail.com>

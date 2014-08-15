@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_MONMAP_H
@@ -81,7 +81,7 @@ class MonMap {
     mon_addr[name] = addr;
     calc_ranks();
   }
-  
+
   void remove(const string &name) {
     assert(mon_addr.count(name));
     mon_addr.erase(name);
@@ -188,10 +188,10 @@ class MonMap {
   /**
    * build an initial bootstrap monmap from conf
    *
-   * Build an initial bootstrap monmap from the config.  This will
+   * Build an initial bootstrap monmap from the config.	 This will
    * try, in this order:
    *
-   *   1 monmap   -- an explicitly provided monmap
+   *   1 monmap	  -- an explicitly provided monmap
    *   2 mon_host -- list of monitors
    *   3 config [mon.*] sections, and 'mon addr' fields in those sections
    *

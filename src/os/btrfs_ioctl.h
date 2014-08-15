@@ -7,7 +7,7 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the GNU
  * General Public License for more details.
  *
  * You should have received a copy of the GNU General Public
@@ -54,7 +54,7 @@ struct btrfs_ioctl_ino_lookup_args {
 };
 
 struct btrfs_ioctl_search_key {
-	/* which root are we searching.  0 is the tree of tree roots */
+	/* which root are we searching.	 0 is the tree of tree roots */
 	uint64_t tree_id;
 
 	/* keys returned will be >= min and <= max */
@@ -168,9 +168,9 @@ struct btrfs_ioctl_space_args {
  */
 #define BTRFS_IOC_TRANS_START  _IO(BTRFS_IOCTL_MAGIC, 6)
 #define BTRFS_IOC_TRANS_END    _IO(BTRFS_IOCTL_MAGIC, 7)
-#define BTRFS_IOC_SYNC         _IO(BTRFS_IOCTL_MAGIC, 8)
+#define BTRFS_IOC_SYNC	       _IO(BTRFS_IOCTL_MAGIC, 8)
 
-#define BTRFS_IOC_CLONE        _IOW(BTRFS_IOCTL_MAGIC, 9, int)
+#define BTRFS_IOC_CLONE	       _IOW(BTRFS_IOCTL_MAGIC, 9, int)
 #define BTRFS_IOC_ADD_DEV _IOW(BTRFS_IOCTL_MAGIC, 10, \
 				   struct btrfs_ioctl_vol_args)
 #define BTRFS_IOC_RM_DEV _IOW(BTRFS_IOCTL_MAGIC, 11, \

@@ -47,10 +47,10 @@ cls_method_handle_t h_list_locks;
 
 typedef struct lock_info_s {
   map<locker_id_t, locker_info_t> lockers; // map of lockers
-  ClsLockType lock_type;                              // lock type (exclusive / shared)
-  string tag;                                         // tag: operations on lock can only succeed with this tag
-                                                      //      as long as set of non expired lockers
-                                                      //      is bigger than 0.
+  ClsLockType lock_type;			      // lock type (exclusive / shared)
+  string tag;					      // tag: operations on lock can only succeed with this tag
+						      //      as long as set of non expired lockers
+						      //      is bigger than 0.
 
   void encode(bufferlist &bl) const {
     ENCODE_START(1, 1, bl);
@@ -65,7 +65,7 @@ typedef struct lock_info_s {
     ::decode(lockers, bl);
     uint8_t t;
     ::decode(t, bl);
-    lock_type = (ClsLockType)t; 
+    lock_type = (ClsLockType)t;
     ::decode(tag, bl);
     DECODE_FINISH(bl);
   }
@@ -79,7 +79,7 @@ static int read_lock(cls_method_context_t hctx, const string& name, lock_info_t 
   bufferlist bl;
   string key = LOCK_PREFIX;
   key.append(name);
- 
+
   int r = cls_cxx_getxattr(hctx, key.c_str(), &bl);
   if (r < 0) {
     if (r ==  -ENODATA) {
@@ -153,13 +153,13 @@ static int write_lock(cls_method_context_t hctx, const string& name, const lock_
  * @return 0 on success, or -errno on failure
  */
 static int lock_obj(cls_method_context_t hctx,
-                    const string& name,
-                    ClsLockType lock_type,
-                    utime_t duration,
-                    const string& description,
-                    uint8_t flags,
-                    const string& cookie,
-                    const string& tag)
+		    const string& name,
+		    ClsLockType lock_type,
+		    utime_t duration,
+		    const string& description,
+		    uint8_t flags,
+		    const string& cookie,
+		    const string& tag)
 {
   bool exclusive = lock_type == LOCK_EXCLUSIVE;
   lock_info_t linfo;
@@ -248,7 +248,7 @@ static int lock_obj(cls_method_context_t hctx,
  * -EBUSY if the object is already locked, or -errno on (unexpected) failure.
  */
 static int lock_op(cls_method_context_t hctx,
-                   bufferlist *in, bufferlist *out)
+		   bufferlist *in, bufferlist *out)
 {
   CLS_LOG(20, "lock_op");
   cls_lock_lock_op op;
@@ -260,8 +260,8 @@ static int lock_op(cls_method_context_t hctx,
   }
 
   return lock_obj(hctx,
-                  op.name, op.type, op.duration, op.description,
-                  op.flags, op.cookie, op.tag);
+		  op.name, op.type, op.duration, op.description,
+		  op.flags, op.cookie, op.tag);
 }
 
 /**
@@ -275,9 +275,9 @@ static int lock_op(cls_method_context_t hctx,
  *  entity or cookie is wrong), or -errno on other error.
  */
 static int remove_lock(cls_method_context_t hctx,
-                const string& name,
-                entity_name_t& locker,
-                const string& cookie)
+		const string& name,
+		entity_name_t& locker,
+		const string& cookie)
 {
   // get current lockers
   lock_info_t linfo;
@@ -313,7 +313,7 @@ static int remove_lock(cls_method_context_t hctx,
  * -errno on other (unexpected) error.
  */
 static int unlock_op(cls_method_context_t hctx,
-                     bufferlist *in, bufferlist *out)
+		     bufferlist *in, bufferlist *out)
 {
   CLS_LOG(20, "unlock_op");
   cls_lock_unlock_op op;
@@ -341,7 +341,7 @@ static int unlock_op(cls_method_context_t hctx,
  * is wrong), or -errno on other (unexpected) error.
  */
 static int break_lock(cls_method_context_t hctx,
-               bufferlist *in, bufferlist *out)
+	       bufferlist *in, bufferlist *out)
 {
   CLS_LOG(20, "break_lock");
   cls_lock_break_op op;
@@ -444,20 +444,20 @@ void __cls_init()
 
   cls_register("lock", &h_class);
   cls_register_cxx_method(h_class, "lock",
-                          CLS_METHOD_RD | CLS_METHOD_WR,
-                          lock_op, &h_lock_op);
+			  CLS_METHOD_RD | CLS_METHOD_WR,
+			  lock_op, &h_lock_op);
   cls_register_cxx_method(h_class, "unlock",
-                          CLS_METHOD_RD | CLS_METHOD_WR,
-                          unlock_op, &h_unlock_op);
+			  CLS_METHOD_RD | CLS_METHOD_WR,
+			  unlock_op, &h_unlock_op);
   cls_register_cxx_method(h_class, "break_lock",
-                          CLS_METHOD_RD | CLS_METHOD_WR,
-                          break_lock, &h_break_lock);
+			  CLS_METHOD_RD | CLS_METHOD_WR,
+			  break_lock, &h_break_lock);
   cls_register_cxx_method(h_class, "get_info",
-                          CLS_METHOD_RD,
-                          get_info, &h_get_info);
+			  CLS_METHOD_RD,
+			  get_info, &h_get_info);
   cls_register_cxx_method(h_class, "list_locks",
-                          CLS_METHOD_RD,
-                          list_locks, &h_list_locks);
+			  CLS_METHOD_RD,
+			  list_locks, &h_list_locks);
 
   return;
 }

@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -162,7 +162,7 @@ class MDS : public Dispatcher {
   MDSMap *mdsmap;
   OSDMap *osdmap;
   Objecter *objecter;
-  Filer *filer;       // for reading/writing to/from osds
+  Filer *filer;	      // for reading/writing to/from osds
   LogClient clog;
 
   // sub systems
@@ -200,7 +200,7 @@ class MDS : public Dispatcher {
 
   map<int,version_t> peer_mdsmap_epoch;
 
-  ceph_tid_t last_tid;    // for mds-initiated requests (e.g. stray rename)
+  ceph_tid_t last_tid;	  // for mds-initiated requests (e.g. stray rename)
 
  public:
   void wait_for_active(Context *c) {
@@ -300,7 +300,7 @@ class MDS : public Dispatcher {
       mds->tick();
     }
   } *tick_event;
-  void     reset_tick();
+  void	   reset_tick();
 
   // -- client map --
   SessionMap   sessionmap;
@@ -363,10 +363,10 @@ class MDS : public Dispatcher {
 
   void create_logger();
 
-  void bcast_mds_map();  // to mounted clients
+  void bcast_mds_map();	 // to mounted clients
 
-  void boot_create();             // i am new mds.
-  void boot_start(int step=0, int r=0);    // starting|replay
+  void boot_create();		  // i am new mds.
+  void boot_start(int step=0, int r=0);	   // starting|replay
 
   void calc_recovery_set();
 
@@ -402,7 +402,7 @@ class MDS : public Dispatcher {
   void respawn();
 
   void tick();
-  
+
   void beacon_start();
   void beacon_send();
   void handle_mds_beacon(MMDSBeacon *m);
@@ -419,7 +419,7 @@ class MDS : public Dispatcher {
 
   bool handle_core_message(Message *m);
   bool handle_deferrable_message(Message *m);
-  
+
   // special message types
   void handle_command(class MMonCommand *m);
   void handle_mds_map(class MMDSMap *m);

@@ -44,7 +44,7 @@ ceph_test_crypto_LDADD = $(CEPH_GLOBAL)
 bin_DEBUGPROGRAMS += ceph_test_crypto
 
 ceph_test_keys_SOURCES = test/testkeys.cc
-ceph_test_keys_LDADD = $(LIBMON) $(CEPH_GLOBAL) 
+ceph_test_keys_LDADD = $(LIBMON) $(CEPH_GLOBAL)
 bin_DEBUGPROGRAMS += ceph_test_keys
 
 if WITH_FIO_DIR
@@ -322,12 +322,12 @@ unittest_workqueue_CXXFLAGS = $(UNITTEST_CXXFLAGS)
 unittest_workqueue_LDADD = $(UNITTEST_LDADD) $(CEPH_GLOBAL)
 check_PROGRAMS += unittest_workqueue
 
-unittest_striper_SOURCES = test/test_striper.cc 
+unittest_striper_SOURCES = test/test_striper.cc
 unittest_striper_CXXFLAGS = $(UNITTEST_CXXFLAGS)
 unittest_striper_LDADD = $(LIBOSDC) $(UNITTEST_LDADD) $(CEPH_GLOBAL)
 check_PROGRAMS += unittest_striper
 
-unittest_prebufferedstreambuf_SOURCES = test/test_prebufferedstreambuf.cc 
+unittest_prebufferedstreambuf_SOURCES = test/test_prebufferedstreambuf.cc
 unittest_prebufferedstreambuf_CXXFLAGS = $(UNITTEST_CXXFLAGS)
 unittest_prebufferedstreambuf_LDADD = $(LIBCOMMON) $(UNITTEST_LDADD) $(EXTRALIBS)
 check_PROGRAMS += unittest_prebufferedstreambuf
@@ -369,7 +369,7 @@ check_PROGRAMS += unittest_ceph_compatset
 
 unittest_osd_types_SOURCES = test/osd/types.cc
 unittest_osd_types_CXXFLAGS = $(UNITTEST_CXXFLAGS)
-unittest_osd_types_LDADD = $(UNITTEST_LDADD) $(CEPH_GLOBAL) 
+unittest_osd_types_LDADD = $(UNITTEST_LDADD) $(CEPH_GLOBAL)
 check_PROGRAMS += unittest_osd_types
 
 unittest_pglog_SOURCES = test/osd/TestPGLog.cc
@@ -417,7 +417,7 @@ unittest_librados_CXXFLAGS = $(UNITTEST_CXXFLAGS)
 check_PROGRAMS += unittest_librados
 
 unittest_bufferlist_SOURCES = test/bufferlist.cc
-unittest_bufferlist_LDADD = $(UNITTEST_LDADD) $(CEPH_GLOBAL) 
+unittest_bufferlist_LDADD = $(UNITTEST_LDADD) $(CEPH_GLOBAL)
 unittest_bufferlist_CXXFLAGS = $(UNITTEST_CXXFLAGS)
 check_PROGRAMS += unittest_bufferlist
 
@@ -540,7 +540,7 @@ unittest_daemon_config_LDADD = $(UNITTEST_LDADD) $(CEPH_GLOBAL)
 unittest_daemon_config_CXXFLAGS = $(UNITTEST_CXXFLAGS)
 check_PROGRAMS += unittest_daemon_config
 
-unittest_osd_osdcap_SOURCES = test/osd/osdcap.cc 
+unittest_osd_osdcap_SOURCES = test/osd/osdcap.cc
 unittest_osd_osdcap_LDADD = $(LIBOSD) $(UNITTEST_LDADD) $(CEPH_GLOBAL)
 unittest_osd_osdcap_CXXFLAGS = $(UNITTEST_CXXFLAGS)
 check_PROGRAMS += unittest_osd_osdcap

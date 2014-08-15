@@ -103,8 +103,8 @@ TEST_P(ValueParamTest, TestB) {
 INSTANTIATE_TEST_CASE_P(
     MyInstantiation, ValueParamTest,
     testing::Values(MyType("one line"),
-                    MyType("two\nlines"),
-                    MyType("a very\nloooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong line")));  // NOLINT
+		    MyType("two\nlines"),
+		    MyType("a very\nloooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong line")));  // NOLINT
 
 // A group of typed tests.
 
@@ -122,7 +122,7 @@ class MyArray {
 };
 
 typedef testing::Types<VeryLoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooogName,  // NOLINT
-                       int*, MyArray<bool, 42> > MyTypes;
+		       int*, MyArray<bool, 42> > MyTypes;
 
 TYPED_TEST_CASE(TypedTest, MyTypes);
 

@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #include "rgw_swift_auth.h"
 #include "rgw_rest.h"
 
@@ -206,7 +208,7 @@ void RGW_SWIFT_Auth_Get::execute()
   }
 
   s->cio->print("X-Storage-Url: %s/%s/v1%s\n", swift_url.c_str(),
-	        swift_prefix.c_str(), tenant_path.c_str());
+		swift_prefix.c_str(), tenant_path.c_str());
 
   if ((ret = encode_token(s->cct, swift_key->id, swift_key->key, bl)) < 0)
     goto done;

@@ -70,7 +70,7 @@ namespace librados
    * ops added to an ObjectOperation.
    */
   enum ObjectOperationFlags {
-    OP_EXCL =   LIBRADOS_OP_FLAG_EXCL,
+    OP_EXCL =	LIBRADOS_OP_FLAG_EXCL,
     OP_FAILOK = LIBRADOS_OP_FLAG_FAILOK,
   };
 
@@ -292,9 +292,9 @@ namespace librados
      * @param prval [out] place error code in prval upon completion
      */
     void omap_get_keys(const std::string &start_after,
-                       uint64_t max_return,
-                       std::set<std::string> *out_keys,
-                       int *prval);
+		       uint64_t max_return,
+		       std::set<std::string> *out_keys,
+		       int *prval);
 
     /**
      * omap_get_header: get header from object omap

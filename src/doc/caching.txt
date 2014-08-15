@@ -33,7 +33,7 @@ expiration of the replicas is required to allow previously replicated
 objects from eventually being trimmed from the cache as well.
 
 Each metdata object has a authority bit that indicates whether it is
-authoritative or a replica.  
+authoritative or a replica.
 
 
 REPLICA NONCE
@@ -83,7 +83,7 @@ point of authority delegation and becomes a {\it subtree root}.  A
 CDir is a subtree root iff its dir_auth specifies an MDS id (and is not
 AUTH_PARENT).
 
- - A dir is a subtree root iff dir_auth != AUTH_PARENT.  
+ - A dir is a subtree root iff dir_auth != AUTH_PARENT.
 
  - If dir_auth = AUTH_PARENT then the inode auth == dir auth, but the
    converse may not be true.
@@ -127,7 +127,7 @@ AMBIGUOUS DIR_AUTH
 While metadata for a subtree is being migrated between two MDS nodes,
 the dir_auth for the subtree root is allowed to be ambiguous.  That
 is, it will specify both the old and new MDS ids, indicating that a
-migration is in progress.  
+migration is in progress.
 
 If a replicated metadata object is expired from the cache from a
 subtree whose authority is ambiguous, the cache expiration is sent to
@@ -183,7 +183,7 @@ intervening updates.
 
 If the directory at the base of a freezing or frozen subtree is not
 also a subtree root (that is, it has dir_auth == AUTH_PARENT), the
-directory's parent inode is auth pinned.  
+directory's parent inode is auth pinned.
 
  - a frozen tree root dir will auth_pin its inode IFF it is auth AND
    not a subtree root.

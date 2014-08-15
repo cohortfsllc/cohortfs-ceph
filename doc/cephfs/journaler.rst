@@ -35,7 +35,7 @@
 
 ``journaler batch interval``
 
-:Description: Maximum additional latency in seconds we incur artificially. 
+:Description: Maximum additional latency in seconds we incur artificially.
 :Type: Double
 :Required: No
 :Default: ``.001``
@@ -43,7 +43,7 @@
 
 ``journaler batch max``
 
-:Description: Maximum bytes we'll delay flushing. 
-:Type: 64-bit Unsigned Integer 
+:Description: Maximum bytes we'll delay flushing.
+:Type: 64-bit Unsigned Integer
 :Required: No
 :Default: ``0``

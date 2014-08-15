@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public
  * License version 2, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -26,8 +26,8 @@ void usage()
 {
   cout << "usage: librados-config [option]\n"
        << "where options are:\n"
-       << "  --version                    library version\n"
-       << "  --vernum                     library version code\n";
+       << "  --version			  library version\n"
+       << "  --vernum			  library version code\n";
 }
 
 void usage_exit()
@@ -36,7 +36,7 @@ void usage_exit()
   exit(1);
 }
 
-int main(int argc, const char **argv) 
+int main(int argc, const char **argv)
 {
   vector<const char*> args;
   argv_to_vec(argc, argv, args);

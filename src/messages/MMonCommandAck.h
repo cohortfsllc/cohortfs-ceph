@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_MMONCOMMANDACK_H
@@ -22,9 +22,9 @@ class MMonCommandAck : public PaxosServiceMessage {
   vector<string> cmd;
   int32_t r;
   string rs;
-  
+
   MMonCommandAck() : PaxosServiceMessage(MSG_MON_COMMAND_ACK, 0) {}
-  MMonCommandAck(vector<string>& c, int _r, string s, version_t v) : 
+  MMonCommandAck(vector<string>& c, int _r, string s, version_t v) :
     PaxosServiceMessage(MSG_MON_COMMAND_ACK, v),
     cmd(c), r(_r), rs(s) { }
 private:
@@ -35,7 +35,7 @@ public:
   void print(ostream& o) const {
     o << "mon_command_ack(" << cmd << "=" << r << " " << rs << " v" << version << ")";
   }
-  
+
   void encode_payload(uint64_t features) {
     paxos_encode();
     ::encode(r, payload);

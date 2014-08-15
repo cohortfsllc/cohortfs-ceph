@@ -2,7 +2,7 @@
 
 =head1 NAME
 
-rbd_cli_tests.pl - Script to test the RBD CLI commands and report the  
+rbd_cli_tests.pl - Script to test the RBD CLI commands and report the
 test results
 
 =head1 SYNOPSIS
@@ -11,7 +11,7 @@ Use:
         perl rbd_cli_tests.pl [--pool pool_name][--help]
 
 Examples:
-        perl rbd_cli_tests.pl --pool test_pool 
+        perl rbd_cli_tests.pl --pool test_pool
 	or
 	perl rbd_cli_tests.pl  --help
 
@@ -20,21 +20,21 @@ Examples:
 This script intends to test the RBD CLI commands for the scenarios mentioned below
 and reports the test results
 
-Positive cases 
+Positive cases
 Negative cases
 -- Boundary value testing
 -- Incorrect Parameter values/ Incorrect field values
--- Insufficient parameters / Extra parameters    
+-- Insufficient parameters / Extra parameters
 
 =head1 ARGUMENTS
 
 rbd_cli_tests.pl takes the following arguments:
    --pool
-   (optional) If not specified, rbd pool is used. 
+   (optional) If not specified, rbd pool is used.
    --help
    (optional) Displays the usage message.
 
-If cephx is enabled, set 'export CEPH_ARGS="--keyring /etc/ceph/ceph.keyring --id <user>"' 
+If cephx is enabled, set 'export CEPH_ARGS="--keyring /etc/ceph/ceph.keyring --id <user>"'
 and execute the script as root.
 
 For Example,for "nova" user, 'export CEPH_ARGS="--keyring /etc/ceph/ceph.keyring --id nova"'
@@ -333,7 +333,7 @@ sub create_test_file {
     return 0;
 }
 
-# deletes and creates a given rados pool  
+# deletes and creates a given rados pool
 sub _create_rados_pool {
     $exec_cmd = get_command_output("$RADOS_RMPOOL $pool_name");
     if (   ( $exec_cmd =~ /$POOL_RM_SUCCESS/ )

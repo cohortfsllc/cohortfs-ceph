@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #ifndef CEPH_RGW_REST_S3_H
 #define CEPH_RGW_REST_S3_H
 #define TIME_BUF_SIZE 128
@@ -104,22 +106,22 @@ class RGWPostObj_ObjStore_S3 : public RGWPostObj_ObjStore {
   string boundary;
   string filename;
   bufferlist in_data;
-  map<string, post_form_part, const ltstr_nocase> parts;  
+  map<string, post_form_part, const ltstr_nocase> parts;
   RGWPolicyEnv env;
   RGWPolicy post_policy;
   string err_msg;
 
   int read_with_boundary(bufferlist& bl, uint64_t max, bool check_eol,
-                         bool *reached_boundary,
+			 bool *reached_boundary,
 			 bool *done);
 
   int read_line(bufferlist& bl, uint64_t max,
-                bool *reached_boundary, bool *done);
+		bool *reached_boundary, bool *done);
 
   int read_data(bufferlist& bl, uint64_t max, bool *reached_boundary, bool *done);
 
   int read_form_part_header(struct post_form_part *part,
-                            bool *done);
+			    bool *done);
   bool part_str(const string& name, string *val);
   bool part_bl(const string& name, bufferlist *pbl);
 
@@ -416,6 +418,5 @@ public:
   }
   virtual RGWHandler *get_handler(struct req_state *s);
 };
-
 
 #endif

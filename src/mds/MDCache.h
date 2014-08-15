@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -85,10 +85,10 @@ class MDCache {
   LRU lru;   // dentry lru for expiring items from cache
  protected:
   std::unordered_map<vinodeno_t,CInode*> inode_map;  // map of inodes by ino
-  CInode *root;                            // root inode
-  CInode *myin;                            // .ceph/mds%d dir
+  CInode *root;				   // root inode
+  CInode *myin;				   // .ceph/mds%d dir
 
-  CInode *strays[NUM_STRAY];         // my stray dir
+  CInode *strays[NUM_STRAY];	     // my stray dir
   int stray_index;
 
   CInode *get_stray() {
@@ -125,8 +125,8 @@ public:
   }
 
   // -- client caps --
-  uint64_t              last_cap_id;
-  
+  uint64_t		last_cap_id;
+
 
 
   // -- discover --
@@ -169,7 +169,7 @@ public:
   void discover_ino(CDir *base, inodeno_t want_ino, Context *onfinish,
 		    bool want_xlocked=false);
 
-  void kick_discovers(int who);  // after a failure.
+  void kick_discovers(int who);	 // after a failure.
 
 
 public:
@@ -181,7 +181,7 @@ public:
 protected:
   map<CDir*,set<CDir*> > subtrees;   // nested bounds on subtrees.
   map<CInode*,list<pair<CDir*,CDir*> > > projected_subtree_renames;  // renamed ino -> target dir
-  
+
   // adjust subtree auth specification
   //  dir->dir_auth
   //  imports/exports/nested_exports
@@ -191,7 +191,7 @@ public:
   void list_subtrees(list<CDir*>& ls);
   void adjust_subtree_auth(CDir *root, pair<int,int> auth, bool do_eval=true);
   void adjust_subtree_auth(CDir *root, int a, int b=CDIR_AUTH_UNKNOWN, bool do_eval=true) {
-    adjust_subtree_auth(root, pair<int,int>(a,b), do_eval); 
+    adjust_subtree_auth(root, pair<int,int>(a,b), do_eval);
   }
   void adjust_bounded_subtree_auth(CDir *dir, set<CDir*>& bounds, pair<int,int> auth);
   void adjust_bounded_subtree_auth(CDir *dir, set<CDir*>& bounds, int a) {
@@ -223,7 +223,7 @@ public:
 
   void project_subtree_rename(CInode *diri, CDir *olddir, CDir *newdir);
   void adjust_subtree_after_rename(CInode *diri, CDir *olddir,
-                                   bool pop, bool imported = false);
+				   bool pop, bool imported = false);
 
   void get_auth_subtrees(set<CDir*>& s);
   void get_fullauth_subtrees(set<CDir*>& s);
@@ -232,7 +232,7 @@ public:
   int num_subtrees_fullauth();
   int num_subtrees_fullnonauth();
 
-  
+
 protected:
   // delayed cache expire
   map<CDir*, map<int, MCacheExpire*> > delayed_expire; // subtree root -> expire msg
@@ -260,7 +260,7 @@ public:
   void request_drop_non_rdlocks(MDRequestRef& r);
   void request_drop_locks(MDRequestRef& r);
   void request_cleanup(MDRequestRef& r);
-  
+
   void request_kill(MDRequestRef& r);  // called when session closes
 
   void journal_dirty_inode(MutationImpl *mut, EMetaBlob *metablob, CInode *in);
@@ -300,9 +300,9 @@ public:
 protected:
   // [resolve]
   // from EImportStart w/o EImportFinish during journal replay
-  map<dirfrag_t, vector<dirfrag_t> >            my_ambiguous_imports;  
+  map<dirfrag_t, vector<dirfrag_t> >		my_ambiguous_imports;
   // from MMDSResolves
-  map<int, map<dirfrag_t, vector<dirfrag_t> > > other_ambiguous_imports;  
+  map<int, map<dirfrag_t, vector<dirfrag_t> > > other_ambiguous_imports;
 
   map<int, map<metareqid_t, MDSlaveUpdate*> > uncommitted_slave_updates;  // slave: for replay.
   map<CInode*, int> uncommitted_slave_rename_olddir;  // slave: preserve the non-auth dir until seeing commit.
@@ -318,7 +318,7 @@ protected:
     bool recovering;
     umaster() : committing(false), recovering(false) {}
   };
-  map<metareqid_t, umaster>                 uncommitted_masters;         // master: req -> slave set
+  map<metareqid_t, umaster>		    uncommitted_masters;	 // master: req -> slave set
 
   set<metareqid_t>		pending_masters;
   map<int, set<metareqid_t> >	ambiguous_slave_updates;
@@ -329,9 +329,9 @@ protected:
   bool resolves_pending;
   set<int> resolve_gather;	// nodes i need resolves from
   set<int> resolve_ack_gather;	// nodes i need a resolve_ack from
-  map<metareqid_t, int> need_resolve_rollback;  // rollbacks i'm writing to the journal
+  map<metareqid_t, int> need_resolve_rollback;	// rollbacks i'm writing to the journal
   map<int, MMDSResolve*> delayed_resolve;
-  
+
   void handle_resolve(MMDSResolve *m);
   void handle_resolve_ack(MMDSResolveAck *m);
   void process_delayed_resolve();
@@ -385,7 +385,7 @@ public:
     if (resolves_pending)
       send_subtree_resolves();
   }
-  
+
   void _move_subtree_map_bound(dirfrag_t df, dirfrag_t oldparent, dirfrag_t newparent,
 			       map<dirfrag_t,vector<dirfrag_t> >& subtrees);
   ESubtreeMap *create_subtree_map();
@@ -397,7 +397,7 @@ protected:
   // [rejoin]
   bool rejoins_pending;
   set<int> rejoin_gather;      // nodes from whom i need a rejoin
-  set<int> rejoin_sent;        // nodes i sent a rejoin to
+  set<int> rejoin_sent;	       // nodes i sent a rejoin to
   set<int> rejoin_ack_gather;  // nodes from whom i need a rejoin ack
   map<int,map<inodeno_t,map<client_t,Capability::Import> > > rejoin_imported_caps;
   map<inodeno_t,pair<int,map<client_t,Capability::Export> > > rejoin_slave_exports;
@@ -410,7 +410,7 @@ protected:
   map<inodeno_t,filepath> cap_import_paths;
   set<inodeno_t> cap_imports_missing;
   int cap_imports_num_opening;
-  
+
   set<CInode*> rejoin_undef_inodes;
   set<CInode*> rejoin_potential_updated_scatterlocks;
   set<CDir*>   rejoin_undef_dirfrags;
@@ -448,7 +448,7 @@ public:
     cap_exports[ino][client] = capinfo;
     cap_export_targets[ino] = target;
   }
-  void rejoin_recovered_caps(inodeno_t ino, client_t client, cap_reconnect_t& icr, 
+  void rejoin_recovered_caps(inodeno_t ino, client_t client, cap_reconnect_t& icr,
 			     int frommds=-1) {
     cap_imports[ino][client][frommds] = icr.capinfo;
     cap_import_paths[ino] = filepath(icr.path, (uint64_t)icr.capinfo.pathbase);
@@ -527,7 +527,7 @@ public:
  public:
   MDCache(MDS *m);
   ~MDCache();
-  
+
   // debug
   void log_stat();
 
@@ -547,7 +547,7 @@ public:
   bool trim_inode(CDentry *dn, CInode *in, CDir *con,
 		  map<int,class MCacheExpire*>& expiremap);
   void send_expire_messages(map<int, MCacheExpire*>& expiremap);
-  void trim_non_auth();      // trim out trimmable non-auth items
+  void trim_non_auth();	     // trim out trimmable non-auth items
   bool trim_non_auth_subtree(CDir *directory);
   void try_trim_non_auth_subtree(CDir *dir);
   bool can_trim_non_auth_dirfrag(CDir *dir) {
@@ -564,7 +564,7 @@ public:
   bool shutdown_pass();
   bool shutdown_export_strays();
   bool shutdown_export_caps();
-  bool shutdown();                    // clear cache (ie at shutodwn)
+  bool shutdown();		      // clear cache (ie at shutodwn)
 
   bool did_shutdown_log_cap;
 
@@ -609,7 +609,7 @@ public:
 
   MDSCacheObject *get_object(MDSCacheObjectInfo &info);
 
-  
+
 
  public:
   void add_inode(CInode *in);
@@ -625,7 +625,7 @@ public:
     // touch ancestors
     if (dn->get_dir()->get_inode()->get_projected_parent_dn())
       touch_dentry(dn->get_dir()->get_inode()->get_projected_parent_dn());
-    
+
     // touch me
     if (dn->is_auth())
       lru.lru_touch(dn);
@@ -695,7 +695,7 @@ public:
 
   void _create_system_file(CDir *dir, const char *name, CInode *in, Context *fin);
   void _create_system_file_finish(MutationRef& mut, CDentry *dn,
-                                  version_t dpv, Context *fin);
+				  version_t dpv, Context *fin);
 
   void open_foreign_mdsdir(inodeno_t ino, Context *c);
   CDentry *get_or_create_stray_dentry(CInode *in);
@@ -755,7 +755,7 @@ public:
 			 inodeno_t hadino, version_t hadv, Context *onfinish);
 
   bool parallel_fetch(map<inodeno_t,filepath>& pathmap, set<inodeno_t>& missing);
-  bool parallel_fetch_traverse_dir(inodeno_t ino, filepath& path, 
+  bool parallel_fetch_traverse_dir(inodeno_t ino, filepath& path,
 				   set<CDir*>& fetch_queue, set<inodeno_t>& missing,
 				   C_GatherBuilder &gather_bld);
 
@@ -807,7 +807,7 @@ public:
   void kick_open_ino_peers(int who);
   void open_ino(inodeno_t ino, VolumeRef volume, Context *fin,
 		bool want_replica=true, bool want_xlocked=false);
-  
+
   // -- find_ino_peer --
   struct find_ino_peer_info_t {
     inodeno_t ino;
@@ -896,7 +896,7 @@ public:
     ::encode(in->inode.ino, bl);  // bleh, minor assymetry here
     in->encode_replica(to, bl);
   }
-  
+
   CDir* add_replica_dir(bufferlist::iterator& p, CInode *diri, int from, list<Context*>& finished);
   CDir* forge_replica_dir(CInode *diri, frag_t fg, int from);
   CDentry *add_replica_dentry(bufferlist::iterator& p, CDir *dir, list<Context*>& finished);
@@ -946,7 +946,7 @@ private:
   void adjust_dir_fragments(CInode *diri,
 			    list<CDir*>& srcfrags,
 			    frag_t basefrag, int bits,
-			    list<CDir*>& resultfrags, 
+			    list<CDir*>& resultfrags,
 			    list<Context*>& waiters,
 			    bool replay);
   CDir *force_dir_fragment(CInode *diri, frag_t fg, bool replay=true);

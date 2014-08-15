@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -237,7 +237,7 @@ public:
 
  protected:
   MonClient *monclient;
-  Messenger *messenger;  
+  Messenger *messenger;
   client_t whoami;
 
   // mds sessions

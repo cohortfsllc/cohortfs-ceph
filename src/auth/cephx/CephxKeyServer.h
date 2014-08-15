@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 #ifndef CEPH_KEYSSERVER_H
@@ -103,7 +103,7 @@ struct KeyServerData {
 
   map<EntityName, EntityAuth>::iterator secrets_begin()
   { return secrets.begin(); }
-  map<EntityName, EntityAuth>::const_iterator secrets_begin() const 
+  map<EntityName, EntityAuth>::const_iterator secrets_begin() const
   { return secrets.begin(); }
   map<EntityName, EntityAuth>::iterator secrets_end()
   { return secrets.end(); }
@@ -128,7 +128,7 @@ struct KeyServerData {
     bufferlist rotating_bl;  // if SET_ROTATING.  otherwise,
     EntityName name;
     EntityAuth auth;
-    
+
     void encode(bufferlist& bl) const {
       uint8_t struct_v = 1;
       ::encode(struct_v, bl);
@@ -162,7 +162,7 @@ struct KeyServerData {
     case AUTH_INC_ADD:
       add_auth(inc.name, inc.auth);
       break;
-      
+
     case AUTH_INC_DEL:
       remove_secret(inc.name);
       break;
@@ -194,7 +194,7 @@ class KeyServer : public KeyStore {
   int _rotate_secret(uint32_t service_id);
   bool _check_rotating_secrets();
   void _dump_rotating_secrets();
-  int _build_session_auth_info(uint32_t service_id, 
+  int _build_session_auth_info(uint32_t service_id,
 	CephXServiceTicketInfo& auth_ticket_info, CephXSessionAuthInfo& info);
   bool _get_service_caps(const EntityName& name, uint32_t service_id,
 	AuthCapsInfo& caps) const;
@@ -211,12 +211,12 @@ public:
 
   int build_session_auth_info(uint32_t service_id, CephXServiceTicketInfo& auth_ticket_info, CephXSessionAuthInfo& info);
   int build_session_auth_info(uint32_t service_id, CephXServiceTicketInfo& auth_ticket_info, CephXSessionAuthInfo& info,
-                                        CryptoKey& service_secret, uint64_t secret_id);
+			      CryptoKey& service_secret, uint64_t secret_id);
 
   /* get current secret for specific service type */
   bool get_service_secret(uint32_t service_id, ExpiringCryptoKey& service_key,
 			  uint64_t& secret_id) const;
-  bool get_service_secret(uint32_t service_id, CryptoKey& service_key, 
+  bool get_service_secret(uint32_t service_id, CryptoKey& service_key,
 			  uint64_t& secret_id) const;
   bool get_service_secret(uint32_t service_id, uint64_t secret_id,
 			  CryptoKey& secret) const;
@@ -239,7 +239,7 @@ public:
   }
   version_t get_ver() const {
     Mutex::Locker l(lock);
-    return data.version;    
+    return data.version;
   }
 
   void clear_secrets() {

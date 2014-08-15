@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 
@@ -124,7 +124,7 @@ public:
     iterator cur = pages.end();
 
     // loop in reverse so we can provide hints to avl_set::insert_check()
-    //  and get O(1) insertions after the first
+    //	and get O(1) insertions after the first
     uint64_t position = offset + length;
     if ((position & ~(PageSize-1)) == position)
       position--;
@@ -138,7 +138,7 @@ public:
 	page_type *page = new page_type(page_offset);
 	cur = pages.insert_commit(*page, commit);
 
-	/* XXX  Dont zero-fill pages AOT, rather find holes and expand
+	/* XXX	Dont zero-fill pages AOT, rather find holes and expand
 	 * them when read.  Just avoiding the fills isn't enough, but it
 	 * increased throughput by 100MB/s.   And it's enough for simple
 	 * benchmarks that only read after write.  */

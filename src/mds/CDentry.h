@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -131,12 +131,12 @@ public:
   };
 
 protected:
-  CDir *dir;     // containing dirfrag
+  CDir *dir;	 // containing dirfrag
   linkage_t linkage;
   list<linkage_t> projected;
 
   version_t version;  // dir version when last touched.
-  version_t projected_version;  // what it will be when i unlock/commit.
+  version_t projected_version;	// what it will be when i unlock/commit.
 
 public:
   elist<CDentry*>::item item_dirty;
@@ -216,7 +216,7 @@ public:
     p->remote_ino = ino;
     p->remote_d_type = d_type;
   }
-  void push_projected_linkage(CInode *inode); 
+  void push_projected_linkage(CInode *inode);
   linkage_t *pop_projected_linkage();
 
   bool is_projected() { return projected.size(); }
@@ -231,7 +231,7 @@ public:
   }
 
   bool use_projected(client_t client, const MutationRef& mut) const {
-    return lock.can_read_projected(client) || 
+    return lock.can_read_projected(client) ||
       lock.get_xlock_by() == mut;
   }
   linkage_t *get_linkage(client_t client, const MutationRef& mut) {
@@ -258,13 +258,13 @@ public:
   int get_num_auth_pins() { return auth_pins; }
   int get_num_dir_auth_pins();
   int get_num_nested_auth_pins() { return nested_auth_pins; }
-  
+
   void adjust_nested_anchors(int by);
 
   // remote links
   void link_remote(linkage_t *dnl, CInode *in);
   void unlink_remote(linkage_t *dnl);
-  
+
   // copy cons
   CDentry(const CDentry& m);
   const CDentry& operator= (const CDentry& right);
@@ -279,7 +279,7 @@ public:
   void set_version(version_t v) { projected_version = version = v; }
   version_t get_projected_version() { return projected_version; }
   void set_projected_version(version_t v) { projected_version = v; }
-  
+
   pair<int,int> authority();
 
   version_t pre_dirty(version_t min=0);
@@ -290,7 +290,7 @@ public:
   void mark_new();
   bool is_new() { return state_test(STATE_NEW); }
   void clear_new() { state_clear(STATE_NEW); }
-  
+
   // -- replication
   void encode_replica(int mds, bufferlist& bl) {
     if (!is_replicated())
@@ -306,7 +306,7 @@ public:
   void decode_replica(bufferlist::iterator& p, bool is_new);
 
   // -- exporting
-  // note: this assumes the dentry already exists.  
+  // note: this assumes the dentry already exists.
   // i.e., the name is already extracted... so we just need the other state.
   void encode_export(bufferlist& bl) {
     ::encode(state, bl);
@@ -370,7 +370,7 @@ public:
   }
   bool have_client_lease(client_t c) {
     ClientLease *l = get_client_lease(c);
-    if (l) 
+    if (l)
       return true;
     else
       return false;
@@ -378,9 +378,9 @@ public:
 
   ClientLease *add_client_lease(client_t c, Session *session);
   void remove_client_lease(ClientLease *r, class Locker *locker);  // returns remaining mask (if any), and kicks locker eval_gathers
-  
 
-  
+
+
   ostream& print_db_line_prefix(ostream& out);
   void print(ostream& out);
 

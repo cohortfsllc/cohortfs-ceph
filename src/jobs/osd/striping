@@ -9,15 +9,15 @@
 
 	'numosd' => [2,3,4,5,6,7,8,10,12], #[6, 8, 10, 12, 16],
 	'numosd' => [14],
-	#'cper' => [4, 5, 6, 7, 8, 9, 10, 11, 12], #[1, 4, 6, 8, 16, 32, 64], 
-	#'cper' => [4, 6, 8, 10, 12, 16, 24, 32 ], #[1, 4, 6, 8, 16, 32, 64], 
+	#'cper' => [4, 5, 6, 7, 8, 9, 10, 11, 12], #[1, 4, 6, 8, 16, 32, 64],
+	#'cper' => [4, 6, 8, 10, 12, 16, 24, 32 ], #[1, 4, 6, 8, 16, 32, 64],
 	'cper' => [30],
-	
+
 	'_dep' => [ 'cnode' => '$numosd',
 				'numclient' => '$cnode * $cper',
 				'n' => 38],#'$nummds + $numosd + $cnode'],
 	#'numclient' => [5, 10, 20, 50, 75, 100, 150 ],
-	
+
 	'start' => 30,
 	'end' => 90,
 	'until' => 100,     # --syn until $n    ... when to stop clients
@@ -41,17 +41,17 @@
 #						 16384
 #						 ],
 	'writefile_mb' => 1000,
-	
+
 	'file_layout_num_rep'=> [1,2,3],
 
 	'osd_pg_bits' => 12,#[6, 8, 10, 12, 14],
-	
+
 	'osd_object_layout' => [ 'hashino' ],#'hash', 'hashino', 'linear' ],
-	'osd_pg_layout' => [ 'crush', 'linear' ],#, 'linear'],#, 'hash' ],#, 'linear' ],#, 'hash' ], 
+	'osd_pg_layout' => [ 'crush', 'linear' ],#, 'linear'],#, 'hash' ],#, 'linear' ],#, 'hash' ],
 
 	#'custom' => '--tcp_skip_rank0', # --osd_maxthreads 0',
 	#'custom' => '--debug_after 110 --debug_osd 15 --debug_filer 15 --debug 5',
-	
+
 	# for final summation (script/sum.pl)
 
 	'comb' => {
@@ -65,7 +65,7 @@
 
 =item some googoo notes
 
-for 1mb 1x writes, 
+for 1mb 1x writes,
 
  with numosd=6, min cper=6 to saturate (cper_saturate)
  googoo saturates at numosd=8.  (osd_saturate)

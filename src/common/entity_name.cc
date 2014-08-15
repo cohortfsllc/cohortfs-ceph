@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -61,7 +61,7 @@ from_str(const string& s)
 
   if (pos < 0)
     return false;
- 
+
   string type_ = s.substr(0, pos);
   string id_ = s.substr(pos + 1);
   if (set(type_, id_))

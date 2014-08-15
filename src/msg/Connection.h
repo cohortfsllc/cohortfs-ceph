@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_CONNECTION_H
@@ -64,7 +64,7 @@ public:
       failed(false),
       rx_buffers_version(0) {
     // we are managed exlusively by ConnectionRef; make it so you can
-    //   ConnectionRef foo = new Connection;
+    //	 ConnectionRef foo = new Connection;
     nref.set(0);
   }
 
@@ -98,7 +98,7 @@ public:
 
   int get_peer_type() { return peer_type; }
   void set_peer_type(int t) { peer_type = t; }
-  
+
   bool peer_is_mon() { return peer_type == CEPH_ENTITY_TYPE_MON; }
   bool peer_is_mds() { return peer_type == CEPH_ENTITY_TYPE_MDS; }
   bool peer_is_osd() { return peer_type == CEPH_ENTITY_TYPE_OSD; }

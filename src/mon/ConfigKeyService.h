@@ -53,8 +53,8 @@ public:
    */
   virtual void init() { }
   virtual health_status_t get_health(
-                          Formatter *f,
-                          list<pair<health_status_t,string> > *detail) {
+    Formatter *f,
+    list<pair<health_status_t,string> > *detail) {
     return HEALTH_OK;
   }
   virtual bool service_dispatch(Message *m);

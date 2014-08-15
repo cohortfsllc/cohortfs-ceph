@@ -52,7 +52,7 @@ cp $srcdir/kcon_most.sh $root/root/most.sh
 cp $srcdir/kcon_all.sh $root/root/all.sh
 
 # fix up consoles
-cat <<EOF >> $root/etc/securetty 
+cat <<EOF >> $root/etc/securetty
 
 # uml
 tty0

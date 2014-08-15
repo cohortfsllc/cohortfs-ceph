@@ -1,4 +1,5 @@
-
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #include "common/armor.h"
 #include "rgw_common.h"
 
@@ -65,11 +66,11 @@ static void get_canon_resource(const char *request_uri, map<string, string>& sub
     map<string, string>::iterator iter = sub_resources.find(*p);
     if (iter == sub_resources.end())
       continue;
-    
+
     if (append_str.empty())
       append_str.append("?");
     else
-      append_str.append("&");     
+      append_str.append("&");
     append_str.append(iter->first);
     if (!iter->second.empty()) {
       append_str.append("=");
@@ -89,15 +90,15 @@ static void get_canon_resource(const char *request_uri, map<string, string>& sub
  * compute a request's signature
  */
 void rgw_create_s3_canonical_header(const char *method, const char *content_md5, const char *content_type, const char *date,
-                            map<string, string>& meta_map, const char *request_uri, map<string, string>& sub_resources,
-                            string& dest_str)
+			    map<string, string>& meta_map, const char *request_uri, map<string, string>& sub_resources,
+			    string& dest_str)
 {
   string dest;
 
   if (method)
     dest = method;
   dest.append("\n");
-  
+
   if (content_md5) {
     dest.append(content_md5);
   }
@@ -156,8 +157,8 @@ bool rgw_create_s3_canonical_header(req_info& info, utime_t *header_time, string
   if (content_md5) {
     for (const char *p = content_md5; *p; p++) {
       if (!is_base64_for_content_md5(*p)) {
-        dout(0) << "NOTICE: bad content-md5 provided (not base64), aborting request p=" << *p << " " << (int)*p << dendl;
-        return false;
+	dout(0) << "NOTICE: bad content-md5 provided (not base64), aborting request p=" << *p << " " << (int)*p << dendl;
+	return false;
       }
     }
   }
@@ -175,20 +176,20 @@ bool rgw_create_s3_canonical_header(req_info& info, utime_t *header_time, string
     } else {
       req_date = info.env->get("HTTP_X_AMZ_DATE");
       if (!req_date) {
-        dout(0) << "NOTICE: missing date for auth header" << dendl;
-        return false;
+	dout(0) << "NOTICE: missing date for auth header" << dendl;
+	return false;
       }
     }
 
     if (header_time) {
       struct tm t;
       if (!parse_rfc2616(req_date, &t)) {
-        dout(0) << "NOTICE: failed to parse date for auth header" << dendl;
-        return false;
+	dout(0) << "NOTICE: failed to parse date for auth header" << dendl;
+	return false;
       }
       if (t.tm_year < 70) {
-        dout(0) << "NOTICE: bad date (predates epoch): " << req_date << dendl;
-        return false;
+	dout(0) << "NOTICE: bad date (predates epoch): " << req_date << dendl;
+	return false;
       }
       *header_time = utime_t(timegm(&t), 0);
     }
@@ -204,8 +205,8 @@ bool rgw_create_s3_canonical_header(req_info& info, utime_t *header_time, string
     request_uri = info.effective_uri;
 
   rgw_create_s3_canonical_header(info.method, content_md5, content_type, date.c_str(),
-                            meta_map, request_uri.c_str(), sub_resources,
-                            dest);
+			    meta_map, request_uri.c_str(), sub_resources,
+			    dest);
 
   return true;
 }

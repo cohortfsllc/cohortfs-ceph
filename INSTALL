@@ -11,7 +11,7 @@ $ ./configure
 $ make
 
 Note that if the FUSE library is not found, the user-space fuse client
-will not be built.  
+will not be built.
 
 If you are doing development, you may want to do
 

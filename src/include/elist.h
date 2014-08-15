@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_ELIST_H
@@ -33,9 +33,9 @@ class elist {
 public:
   struct item {
     item *_prev, *_next;
-    
+
     item(T i=0) : _prev(this), _next(this) {}
-    ~item() { 
+    ~item() {
       assert(!is_on_list());
     }
 
@@ -43,7 +43,7 @@ public:
     item(const item& other);
     const item& operator= (const item& right);
 
-    
+
     bool empty() const { return _prev == this; }
     bool is_on_list() const { return !empty(); }
 
@@ -75,7 +75,7 @@ public:
 
     T get_item(size_t offset) {
       assert(offset);
-      return (T)(((char *)this) - offset); 
+      return (T)(((char *)this) - offset);
     }
   };
 
@@ -88,7 +88,7 @@ public:
   const elist& operator=(const elist& other);
 
   elist(size_t o) : _head(NULL), item_offset(o) {}
-  ~elist() { 
+  ~elist() {
     assert(_head.empty());
   }
 
@@ -102,12 +102,12 @@ public:
   }
 
   void push_front(item *i) {
-    if (!i->empty()) 
+    if (!i->empty())
       i->remove_myself();
     _head.insert_after(i);
   }
   void push_back(item *i) {
-    if (!i->empty()) 
+    if (!i->empty())
       i->remove_myself();
     _head.insert_before(i);
   }

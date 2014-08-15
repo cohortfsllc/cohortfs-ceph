@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -41,12 +41,12 @@ void RGWOp_MDLog_List::execute() {
   string   shard = s->info.args.get("id");
   string   max_entries_str = s->info.args.get("max-entries");
   string   st = s->info.args.get("start-time"),
-           et = s->info.args.get("end-time"),
-           marker = s->info.args.get("marker"),
-           err;
-  utime_t  ut_st, 
-           ut_et;
-  void    *handle;
+	   et = s->info.args.get("end-time"),
+	   marker = s->info.args.get("marker"),
+	   err;
+  utime_t  ut_st,
+	   ut_et;
+  void	  *handle;
   unsigned shard_id, max_entries = LOG_CLASS_LIST_MAX_ENTRIES;
 
   shard_id = (unsigned)strict_strtol(shard.c_str(), 10, &err);
@@ -73,8 +73,8 @@ void RGWOp_MDLog_List::execute() {
       http_ret = -EINVAL;
       return;
     }
-  } 
-  
+  }
+
   RGWMetadataLog *meta_log = store->meta_mgr->get_log();
 
   meta_log->init_list_entries(shard_id, ut_st, ut_et, marker, &handle);
@@ -82,10 +82,10 @@ void RGWOp_MDLog_List::execute() {
   do {
     http_ret = meta_log->list_entries(handle, max_entries, entries,
 				      &last_marker, &truncated);
-    if (http_ret < 0) 
+    if (http_ret < 0)
       break;
 
-    if (!max_entries_str.empty()) 
+    if (!max_entries_str.empty())
       max_entries -= entries.size();
   } while (truncated && (max_entries > 0));
 
@@ -160,13 +160,13 @@ void RGWOp_MDLog_ShardInfo::send_response() {
 
 void RGWOp_MDLog_Delete::execute() {
   string   st = s->info.args.get("start-time"),
-           et = s->info.args.get("end-time"),
-           start_marker = s->info.args.get("start-marker"),
-           end_marker = s->info.args.get("end-marker"),
-           shard = s->info.args.get("id"),
-           err;
-  utime_t  ut_st, 
-           ut_et;
+	   et = s->info.args.get("end-time"),
+	   start_marker = s->info.args.get("start-marker"),
+	   end_marker = s->info.args.get("end-marker"),
+	   shard = s->info.args.get("id"),
+	   err;
+  utime_t  ut_st,
+	   ut_et;
   unsigned shard_id;
 
   http_ret = 0;
@@ -270,9 +270,9 @@ void RGWOp_MDLog_Unlock::execute() {
 
 void RGWOp_BILog_List::execute() {
   string bucket_name = s->info.args.get("bucket"),
-         marker = s->info.args.get("marker"),
-         max_entries_str = s->info.args.get("max-entries"),
-         bucket_instance = s->info.args.get("bucket-instance");
+	 marker = s->info.args.get("marker"),
+	 max_entries_str = s->info.args.get("max-entries"),
+	 bucket_instance = s->info.args.get("bucket-instance");
   RGWBucketInfo bucket_info;
   unsigned max_entries;
 
@@ -308,8 +308,8 @@ void RGWOp_BILog_List::execute() {
   do {
     list<rgw_bi_log_entry> entries;
     int ret = store->list_bi_log_entries(bucket_info.bucket,
-                                          marker, max_entries - count, 
-                                          entries, &truncated);
+					  marker, max_entries - count,
+					  entries, &truncated);
     if (ret < 0) {
       dout(5) << "ERROR: list_bi_log_entries()" << dendl;
       return;
@@ -354,10 +354,10 @@ void RGWOp_BILog_List::send_response_end() {
   s->formatter->close_section();
   flusher.flush();
 }
-      
+
 void RGWOp_BILog_Info::execute() {
   string bucket_name = s->info.args.get("bucket"),
-         bucket_instance = s->info.args.get("bucket-instance");
+	 bucket_instance = s->info.args.get("bucket-instance");
   RGWBucketInfo bucket_info;
 
   if (bucket_name.empty() && bucket_instance.empty()) {
@@ -406,9 +406,9 @@ void RGWOp_BILog_Info::send_response() {
 
 void RGWOp_BILog_Delete::execute() {
   string bucket_name = s->info.args.get("bucket"),
-         start_marker = s->info.args.get("start-marker"),
-         end_marker = s->info.args.get("end-marker"),
-         bucket_instance = s->info.args.get("bucket-instance");
+	 start_marker = s->info.args.get("start-marker"),
+	 end_marker = s->info.args.get("end-marker"),
+	 bucket_instance = s->info.args.get("bucket-instance");
 
   RGWBucketInfo bucket_info;
 
@@ -443,12 +443,12 @@ void RGWOp_DATALog_List::execute() {
   string   shard = s->info.args.get("id");
 
   string   st = s->info.args.get("start-time"),
-           et = s->info.args.get("end-time"),
-           max_entries_str = s->info.args.get("max-entries"),
-           marker = s->info.args.get("marker"),
-           err;
-  utime_t  ut_st, 
-           ut_et;
+	   et = s->info.args.get("end-time"),
+	   max_entries_str = s->info.args.get("max-entries"),
+	   marker = s->info.args.get("marker"),
+	   err;
+  utime_t  ut_st,
+	   ut_et;
   unsigned shard_id, max_entries = LOG_CLASS_LIST_MAX_ENTRIES;
 
   shard_id = (unsigned)strict_strtol(shard.c_str(), 10, &err);
@@ -475,18 +475,18 @@ void RGWOp_DATALog_List::execute() {
       http_ret = -EINVAL;
       return;
     }
-  } 
-  
+  }
+
   do {
     // Note that last_marker is updated to be the marker of the last
     // entry listed
-    http_ret = store->data_log->list_entries(shard_id, ut_st, ut_et, 
+    http_ret = store->data_log->list_entries(shard_id, ut_st, ut_et,
 					     max_entries, entries, marker,
 					     &last_marker, &truncated);
-    if (http_ret < 0) 
+    if (http_ret < 0)
       break;
 
-    if (!max_entries_str.empty()) 
+    if (!max_entries_str.empty())
       max_entries -= entries.size();
   } while (truncated && (max_entries > 0));
 }
@@ -628,13 +628,13 @@ void RGWOp_DATALog_Unlock::execute() {
 
 void RGWOp_DATALog_Delete::execute() {
   string   st = s->info.args.get("start-time"),
-           et = s->info.args.get("end-time"),
-           start_marker = s->info.args.get("start-marker"),
-           end_marker = s->info.args.get("end-marker"),
-           shard = s->info.args.get("id"),
-           err;
-  utime_t  ut_st, 
-           ut_et;
+	   et = s->info.args.get("end-time"),
+	   start_marker = s->info.args.get("start-marker"),
+	   end_marker = s->info.args.get("end-marker"),
+	   shard = s->info.args.get("id"),
+	   err;
+  utime_t  ut_st,
+	   ut_et;
   unsigned shard_id;
 
   http_ret = 0;
@@ -674,9 +674,9 @@ RGWOp *RGWHandler_Log::op_get() {
   if (type.compare("metadata") == 0) {
     if (s->info.args.exists("id")) {
       if (s->info.args.exists("info")) {
-        return new RGWOp_MDLog_ShardInfo;
+	return new RGWOp_MDLog_ShardInfo;
       } else {
-        return new RGWOp_MDLog_List;
+	return new RGWOp_MDLog_List;
       }
     } else {
       return new RGWOp_MDLog_Info;
@@ -690,9 +690,9 @@ RGWOp *RGWHandler_Log::op_get() {
   } else if (type.compare("data") == 0) {
     if (s->info.args.exists("id")) {
       if (s->info.args.exists("info")) {
-        return new RGWOp_DATALog_ShardInfo;
+	return new RGWOp_DATALog_ShardInfo;
       } else {
-        return new RGWOp_DATALog_List;
+	return new RGWOp_DATALog_List;
       }
     } else {
       return new RGWOp_DATALog_Info;
@@ -711,7 +711,7 @@ RGWOp *RGWHandler_Log::op_delete() {
 
   if (type.compare("metadata") == 0)
     return new RGWOp_MDLog_Delete;
-  else if (type.compare("bucket-index") == 0) 
+  else if (type.compare("bucket-index") == 0)
     return new RGWOp_BILog_Delete;
   else if (type.compare("data") == 0)
     return new RGWOp_DATALog_Delete;
@@ -739,4 +739,3 @@ RGWOp *RGWHandler_Log::op_post() {
   }
   return NULL;
 }
-

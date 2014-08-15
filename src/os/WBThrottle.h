@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -144,11 +144,11 @@ public:
 
   /// Queue wb on oid, fd taking throttle (does not block)
   void queue_wb(
-    FDRef fd,              ///< [in] FDRef to oid
+    FDRef fd,		   ///< [in] FDRef to oid
     const hobject_t &oid, ///< [in] object
-    uint64_t offset,       ///< [in] offset written
-    uint64_t len,          ///< [in] length written
-    bool nocache           ///< [in] try to clear out of cache after write
+    uint64_t offset,	   ///< [in] offset written
+    uint64_t len,	   ///< [in] length written
+    bool nocache	   ///< [in] try to clear out of cache after write
     );
 
   /// Clear all wb (probably due to sync)

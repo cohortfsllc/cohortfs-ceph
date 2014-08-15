@@ -7,7 +7,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  * Series of functions to test your rados installation. Notice
  * that this code is not terribly robust -- for instance, if you
@@ -113,9 +113,9 @@ void *ObjBencher::status_printer(void *_bencher) {
 
     if (!std::isnan(bandwidth)) {
       if (bandwidth > data.idata.max_bandwidth)
-        data.idata.max_bandwidth = bandwidth;
+	data.idata.max_bandwidth = bandwidth;
       if (bandwidth < data.idata.min_bandwidth)
-        data.idata.min_bandwidth = bandwidth;
+	data.idata.min_bandwidth = bandwidth;
 
       data.history.bandwidth.push_back(bandwidth);
     }
@@ -217,7 +217,7 @@ int ObjBencher::aio_bench(
 	cerr << "Should never happen: bench metadata missing for current run!" << std::endl;
       goto out;
     }
- 
+
     r = clean_up(num_objects, prevPid, concurrentios);
     if (r != 0) goto out;
 
@@ -361,16 +361,16 @@ int ObjBencher::write_bench(int secondsToRun, int maxObjectsToCreate,
       int old_slot = slot;
       do {
 	if (completion_is_done(slot)) {
-          found = true;
+	  found = true;
 	  break;
 	}
-        slot++;
-        if (slot == concurrentios) {
-          slot = 0;
-        }
+	slot++;
+	if (slot == concurrentios) {
+	  slot = 0;
+	}
       } while (slot != old_slot);
       if (found)
-        break;
+	break;
       lc.cond.Wait(lock);
     }
     lock.Unlock();
@@ -453,17 +453,17 @@ int ObjBencher::write_bench(int secondsToRun, int maxObjectsToCreate,
   char bw[20];
   snprintf(bw, sizeof(bw), "%.3lf \n", bandwidth);
 
-  out(cout) << "Total time run:         " << timePassed << std::endl
-       << "Total writes made:      " << data.finished << std::endl
-       << "Write size:             " << data.object_size << std::endl
-       << "Bandwidth (MB/sec):     " << bw << std::endl
-       << "Stddev Bandwidth:       " << vec_stddev(data.history.bandwidth) << std::endl
+  out(cout) << "Total time run:		" << timePassed << std::endl
+       << "Total writes made:	   " << data.finished << std::endl
+       << "Write size:		   " << data.object_size << std::endl
+       << "Bandwidth (MB/sec):	   " << bw << std::endl
+       << "Stddev Bandwidth:	   " << vec_stddev(data.history.bandwidth) << std::endl
        << "Max bandwidth (MB/sec): " << data.idata.max_bandwidth << std::endl
        << "Min bandwidth (MB/sec): " << data.idata.min_bandwidth << std::endl
-       << "Average Latency:        " << data.avg_latency << std::endl
-       << "Stddev Latency:         " << vec_stddev(data.history.latency) << std::endl
-       << "Max latency:            " << data.max_latency << std::endl
-       << "Min latency:            " << data.min_latency << std::endl;
+       << "Average Latency:	   " << data.avg_latency << std::endl
+       << "Stddev Latency:	   " << vec_stddev(data.history.latency) << std::endl
+       << "Max latency:		   " << data.max_latency << std::endl
+       << "Min latency:		   " << data.min_latency << std::endl;
 
   //write object size/number data for read benchmarks
   ::encode(data.object_size, b_write);
@@ -551,13 +551,13 @@ int ObjBencher::seq_read_bench(int seconds_to_run, int num_objects, int concurre
     while (1) {
       do {
 	if (completion_is_done(slot)) {
-          found = true;
+	  found = true;
 	  break;
 	}
-        slot++;
-        if (slot == concurrentios) {
-          slot = 0;
-        }
+	slot++;
+	if (slot == concurrentios) {
+	  slot = 0;
+	}
       } while (slot != old_slot);
       if (found) {
 	break;
@@ -649,13 +649,13 @@ int ObjBencher::seq_read_bench(int seconds_to_run, int num_objects, int concurre
   char bw[20];
   snprintf(bw, sizeof(bw), "%.3lf \n", bandwidth);
 
-  out(cout) << "Total time run:        " << runtime << std::endl
-       << "Total reads made:     " << data.finished << std::endl
-       << "Read size:            " << data.object_size << std::endl
-       << "Bandwidth (MB/sec):    " << bw << std::endl
-       << "Average Latency:       " << data.avg_latency << std::endl
-       << "Max latency:           " << data.max_latency << std::endl
-       << "Min latency:           " << data.min_latency << std::endl;
+  out(cout) << "Total time run:	       " << runtime << std::endl
+       << "Total reads made:	 " << data.finished << std::endl
+       << "Read size:		 " << data.object_size << std::endl
+       << "Bandwidth (MB/sec):	  " << bw << std::endl
+       << "Average Latency:	  " << data.avg_latency << std::endl
+       << "Max latency:		  " << data.max_latency << std::endl
+       << "Min latency:		  " << data.min_latency << std::endl;
 
   completions_done();
 
@@ -736,17 +736,17 @@ int ObjBencher::rand_read_bench(int seconds_to_run, int num_objects, int concurr
     bool found = false;
     while (1) {
       do {
-        if (completion_is_done(slot)) {
-          found = true;
-          break;
-        }
-        slot++;
-        if (slot == concurrentios) {
-          slot = 0;
-        }
+	if (completion_is_done(slot)) {
+	  found = true;
+	  break;
+	}
+	slot++;
+	if (slot == concurrentios) {
+	  slot = 0;
+	}
       } while (slot != old_slot);
       if (found) {
-        break;
+	break;
       }
       lc.cond.Wait(lock);
     }
@@ -836,13 +836,13 @@ int ObjBencher::rand_read_bench(int seconds_to_run, int num_objects, int concurr
   char bw[20];
   snprintf(bw, sizeof(bw), "%.3lf \n", bandwidth);
 
-  out(cout) << "Total time run:        " << runtime << std::endl
-       << "Total reads made:     " << data.finished << std::endl
-       << "Read size:            " << data.object_size << std::endl
-       << "Bandwidth (MB/sec):    " << bw << std::endl
-       << "Average Latency:       " << data.avg_latency << std::endl
-       << "Max latency:           " << data.max_latency << std::endl
-       << "Min latency:           " << data.min_latency << std::endl;
+  out(cout) << "Total time run:	       " << runtime << std::endl
+       << "Total reads made:	 " << data.finished << std::endl
+       << "Read size:		 " << data.object_size << std::endl
+       << "Bandwidth (MB/sec):	  " << bw << std::endl
+       << "Average Latency:	  " << data.avg_latency << std::endl
+       << "Max latency:		  " << data.max_latency << std::endl
+       << "Min latency:		  " << data.min_latency << std::endl;
 
   completions_done();
 
@@ -931,13 +931,13 @@ int ObjBencher::clean_up(int num_objects, int prevPid, int concurrentios) {
     while (1) {
       do {
 	if (completion_is_done(slot)) {
-          found = true;
+	  found = true;
 	  break;
 	}
-        slot++;
-        if (slot == concurrentios) {
-          slot = 0;
-        }
+	slot++;
+	if (slot == concurrentios) {
+	  slot = 0;
+	}
       } while (slot != old_slot);
       if (found) {
 	break;

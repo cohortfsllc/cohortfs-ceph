@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 
@@ -90,7 +90,7 @@ int CephxClientHandler::handle_response(int ret, bufferlist::iterator& indata)
 {
   ldout(cct, 10) << "handle_response ret = " << ret << dendl;
   RWLock::WLocker l(lock);
-  
+
   if (ret < 0)
     return ret; // hrm!
 
@@ -114,7 +114,7 @@ int CephxClientHandler::handle_response(int ret, bufferlist::iterator& indata)
       ldout(cct, 10) << " get_auth_session_key" << dendl;
       CryptoKey secret;
       keyring->get_secret(cct->_conf->name, secret);
-	
+
       if (!tickets.verify_service_ticket_reply(secret, indata)) {
 	ldout(cct, 0) << "could not verify service_ticket reply" << dendl;
 	return -EPERM;
@@ -132,10 +132,10 @@ int CephxClientHandler::handle_response(int ret, bufferlist::iterator& indata)
     {
       CephXTicketHandler& ticket_handler = tickets.get_handler(CEPH_ENTITY_TYPE_AUTH);
       ldout(cct, 10) << " get_principal_session_key session_key " << ticket_handler.session_key << dendl;
-  
+
       if (!tickets.verify_service_ticket_reply(ticket_handler.session_key, indata)) {
-        ldout(cct, 0) << "could not verify service_ticket reply" << dendl;
-        return -EPERM;
+	ldout(cct, 0) << "could not verify service_ticket reply" << dendl;
+	return -EPERM;
       }
       validate_tickets();
       if (!need) {

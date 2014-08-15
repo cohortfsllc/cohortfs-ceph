@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_MON_SESSION_H
@@ -32,7 +32,7 @@ struct Subscription {
   version_t next;
   bool onetime;
   bool incremental_onetime;  // has CEPH_FEATURE_INCSUBOSDMAP
-  
+
   Subscription(MonSession *s, const string& t) : session(s), type(t), type_item(this),
 						 next(0), onetime(false), incremental_onetime(false) {};
 };
@@ -147,24 +147,24 @@ struct MonSessionMap {
     bool backward = true, forward = true;
     while (backward || forward) {
       if (backward) {
-        if (osdmap->is_up(b->first) &&
+	if (osdmap->is_up(b->first) &&
 	    osdmap->get_addr(b->first) == b->second->con->get_peer_addr()) {
-          s = b->second;
-          break;
-        }
-        if (b != by_osd.begin())
-          --b;
-        else
-          backward = false;
+	  s = b->second;
+	  break;
+	}
+	if (b != by_osd.begin())
+	  --b;
+	else
+	  backward = false;
       }
 
       forward = (f != by_osd.end());
       if (forward) {
-        if (osdmap->is_up(f->first)) {
-          s = f->second;
-          break;
-        }
-        ++f;
+	if (osdmap->is_up(f->first)) {
+	  s = f->second;
+	  break;
+	}
+	++f;
       }
     }
 
@@ -178,7 +178,7 @@ struct MonSessionMap {
     } else {
       sub = new Subscription(s, what);
       s->sub_map[what] = sub;
-      
+
       if (!subs.count(what))
 	subs[what] = new xlist<Subscription*>;
       subs[what]->push_back(&sub->type_item);

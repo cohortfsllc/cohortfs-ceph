@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -11,7 +11,7 @@
  *  modify it under the terms of the GNU Lesser General Public
  *  License as published by the Free Software Foundation; either
  *  version 2.1 of the License, or (at your option) any later version.
- * 
+ *
  */
 
 #include <errno.h>
@@ -24,8 +24,8 @@
 using namespace std;
 
 int get_str_map(const string &str,
-                stringstream &ss,
-                map<string,string> *str_map)
+		stringstream &ss,
+		map<string,string> *str_map)
 {
   json_spirit::mValue json;
   try {
@@ -46,7 +46,7 @@ int get_str_map(const string &str,
 	 ++i) {
       (*str_map)[i->first] = i->second.get_str();
     }
-    
+
   } catch (json_spirit::Error_position &e) {
     // fallback to key=value format
 

@@ -11,7 +11,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -27,11 +27,11 @@
  * where:
  * signature:  describes the command and its parameters (more below)
  * helpstring: displays in CLI help, API help (nice if it refers to
- *             parameter names from signature, 40-a few hundred chars)
+ *	       parameter names from signature, 40-a few hundred chars)
  * modulename: the monitor module or daemon this applies to:
- *             mds, osd, mon, auth, log, config-key
+ *	       mds, osd, mon, auth, log, config-key
  * req perms:  required permission in that modulename space to execute command
- *             this also controls what type of REST command is accepted
+ *	       this also controls what type of REST command is accepted
  * availability: cli, rest, or both
  *
  * The commands describe themselves completely enough for the separate
@@ -44,15 +44,15 @@
  * contain no spaces or '=' signs or a list of key=val[,key=val...]
  * which also includes no spaces.
  *
- * The key=val form describes a non-literal parameter.  Each will have at
+ * The key=val form describes a non-literal parameter.	Each will have at
  * least a name= and type=, and each type can have its own type-specific
- * parameters.  The parser is the arbiter of these types and their 
+ * parameters.	The parser is the arbiter of these types and their
  * interpretation.  A few more non-type-specific key=val pairs exist:
  *
  *    req=false marks an optional parameter (default for req is 'true')
  *    n=<n> is a repeat count for how many of this argument must be supplied.
- *          n=1 is the default.
- *          n=N is a special case that means "1 or more".
+ *	    n=1 is the default.
+ *	    n=N is a special case that means "1 or more".
  *
  * A perhaps-incomplete list of types:
  *
@@ -186,7 +186,7 @@ COMMAND("tell " \
  */
 
 COMMAND("mds stat", "show MDS status", "mds", "r", "cli,rest")
-COMMAND("mds dump " 
+COMMAND("mds dump "
 	"name=epoch,type=CephInt,req=false,range=0", \
 	"dump info, optionally from epoch", "mds", "r", "cli,rest")
 COMMAND("mds getmap " \

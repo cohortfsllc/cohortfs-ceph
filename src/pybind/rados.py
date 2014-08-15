@@ -167,7 +167,7 @@ def run_in_thread(target, args, timeout=0):
 class Rados(object):
     """librados python wrapper"""
     def require_state(self, *args):
-        """ 
+        """
         Checks if the Rados object is in a special state
 
         :raises: RadosStateError
@@ -252,7 +252,7 @@ Rados object in state %s." % (self.state))
     def version(self):
         """
         Get the version number of the ``librados`` C library.
-    
+
         :returns: a tuple of ``(major, minor, extra)`` components of the
                   librados version
         """
@@ -417,14 +417,14 @@ Rados object in state %s." % (self.state))
     def get_cluster_stats(self):
         """
         Read usage info about the cluster
-        
+
         This tells you total space, space used, space available, and number
         of objects. These are not updated immediately when data is written,
         they are eventually consistent.
 
         :returns: dict - contains the following keys:
 
-            - ``kb`` (int) - total space 
+            - ``kb`` (int) - total space
 
             - ``kb_used`` (int) - space used
 
@@ -465,13 +465,13 @@ Rados object in state %s." % (self.state))
         Create an io context
 
         The io context allows you to perform operations within a particular
-        volume. 
+        volume.
 
         :param ioctx_name: name of the volume
         :type ioctx_name: str
 
         :raises: :class:`TypeError`, :class:`Error`
-        :returns: Ioctx - Rados Ioctx object 
+        :returns: Ioctx - Rados Ioctx object
         """
         self.require_state("connected")
         if not isinstance(ioctx_name, str):
@@ -598,8 +598,8 @@ class Completion(object):
                              (self.rados_comp,))
 
     def __del__(self):
-        """ 
-        Release a completion 
+        """
+        Release a completion
 
         Call this when you no longer need the completion. It may not be
         freed immediately if the operation is not acked and committed.
@@ -632,8 +632,8 @@ class Ioctx(object):
         self.close()
 
     def __aio_safe_cb(self, completion, _):
-        """ 
-        Callback to onsafe() for asynchronous operations 
+        """
+        Callback to onsafe() for asynchronous operations
         """
         cb = None
         with self.lock:
@@ -643,8 +643,8 @@ class Ioctx(object):
         return 0
 
     def __aio_complete_cb(self, completion, _):
-        """ 
-        Callback to oncomplete() for asynchronous operations 
+        """
+        Callback to oncomplete() for asynchronous operations
         """
         cb = None
         with self.lock:
@@ -665,7 +665,7 @@ class Ioctx(object):
         :type onsafe: completion
 
         :raises: :class:`Error`
-        :returns: completion object 
+        :returns: completion object
         """
         completion = c_void_p(0)
         complete_cb = None
@@ -708,7 +708,7 @@ class Ioctx(object):
         :type onsafe: completion
 
         :raises: :class:`Error`
-        :returns: completion object 
+        :returns: completion object
         """
         completion = self.__get_completion(oncomplete, onsafe)
         ret = run_in_thread(self.librados.rados_aio_write,
@@ -740,7 +740,7 @@ class Ioctx(object):
         :type onsafe: completion
 
         :raises: :class:`Error`
-        :returns: completion object 
+        :returns: completion object
         """
         completion = self.__get_completion(oncomplete, onsafe)
         ret = run_in_thread(self.librados.rados_aio_write_full,
@@ -771,7 +771,7 @@ class Ioctx(object):
         :type onsafe: completion
 
         :raises: :class:`Error`
-        :returns: completion object 
+        :returns: completion object
         """
         completion = self.__get_completion(oncomplete, onsafe)
         ret = run_in_thread(self.librados.rados_aio_append,
@@ -885,7 +885,7 @@ class Ioctx(object):
 
         :raises: :class:`TypeError`
         :raises: :class:`LogicError`
-        :returns: int - number of bytes written 
+        :returns: int - number of bytes written
         """
         self.require_ioctx_open()
         if not isinstance(key, str):
@@ -977,7 +977,7 @@ returned %d, but should return zero on success." % (self.name, ret))
         :param key: name of the object
         :type key: str
         :param length: the number of bytes to read (default=8192)
-        :type length: int 
+        :type length: int
         :param offset: byte offset in the object to begin reading at
         :type offset: int
 
@@ -1032,7 +1032,7 @@ returned %d, but should return zero on success." % (self.name, ret))
         :raises: :class:`Error`
         :returns: int - 0 on success, otherwise raises error
         """
-        
+
         self.require_ioctx_open()
         if not isinstance(key, str):
             raise TypeError('key must be a string')
@@ -1045,7 +1045,7 @@ returned %d, but should return zero on success." % (self.name, ret))
     def stat(self, key):
         """
         Get object stats (size/mtime)
-        
+
         :param key: the name of the object to get stats from
         :type key: str
 
@@ -1069,7 +1069,7 @@ returned %d, but should return zero on success." % (self.name, ret))
     def get_xattr(self, key, xattr_name):
         """
         Get the value of an extended attribute on an object.
-        
+
         :param key: the name of the object to get xattr from
         :type key: str
         :param xattr_name: which extended attribute to read
@@ -1099,7 +1099,7 @@ returned %d, but should return zero on success." % (self.name, ret))
     def get_xattrs(self, oid):
         """
         Start iterating over xattrs on an object.
-        
+
         :param oid: the name of the object to get xattrs from
         :type key: str
 
@@ -1120,7 +1120,7 @@ returned %d, but should return zero on success." % (self.name, ret))
     def set_xattr(self, key, xattr_name, xattr_value):
         """
         Set an extended attribute on an object.
-        
+
         :param key: the name of the object to set xattr to
         :type key: str
         :param xattr_name: which extended attribute to set
@@ -1149,7 +1149,7 @@ returned %d, but should return zero on success." % (self.name, ret))
     def rm_xattr(self, key, xattr_name):
         """
         Removes an extended attribute on from an object.
-        
+
         :param key: the name of the object to remove xattr from
         :type key: str
         :param xattr_name: which extended attribute to remove
@@ -1243,7 +1243,7 @@ MONITOR_LEVELS = [
    "debug",
    "info",
    "warn", "warning",
-   "err", "error", 
+   "err", "error",
    "sec",
    ]
 

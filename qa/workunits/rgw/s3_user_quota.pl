@@ -116,7 +116,7 @@ sub quota_set_max_obj_per_user {
     delete_keys($mytestfilename);
     purge_data($rgw_user);
 }
- 
+
 sub quota_enable_user {
     my ($rgw_user) = @_;
     my $en_quota = `sudo radosgw-admin quota enable --uid=$rgw_user --quota-scope=user`;

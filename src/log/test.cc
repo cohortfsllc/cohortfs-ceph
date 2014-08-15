@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #include <gtest/gtest.h>
 
 #include "log/Log.h"
@@ -16,7 +18,7 @@ TEST(Log, Simple)
 
   Log log(&subs);
   log.start();
- 
+
   log.set_log_file("/tmp/foo");
   log.reopen_log_file();
 
@@ -35,7 +37,7 @@ TEST(Log, Simple)
       log.submit_entry(e);
     }
   }
-  
+
   log.flush();
 
   log.dump_recent();

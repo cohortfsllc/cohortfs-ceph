@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 #ifndef OS_INDEXMANAGER_H
 #define OS_INDEXMANAGER_H
@@ -32,12 +32,12 @@ typedef std::shared_ptr<CollectionIndex> Index;
  *
  * Allowing a modification (removal or addition of an object) to occur
  * while a read is occuring (lookup of an object's path and use of
- * that path) may result in the path becoming invalid.  Thus, during
+ * that path) may result in the path becoming invalid.	Thus, during
  * the lifetime of a CollectionIndex object and any paths returned
  * by it, no other concurrent accesses may be allowed.
  *
  * This is enforced using shared_ptr.  A shared_ptr<CollectionIndex>
- * is returned from get_index.  Any paths generated using that object
+ * is returned from get_index.	Any paths generated using that object
  * carry a reference to the parrent index.  Once all
  * shared_ptr<CollectionIndex> references have expired, the destructor
  * removes the weak_ptr from col_indices and wakes waiters.
@@ -59,7 +59,7 @@ class IndexManager {
   public:
     coll_t c;
     IndexManager *manager;
-    RemoveOnDelete(coll_t c, IndexManager *manager) : 
+    RemoveOnDelete(coll_t c, IndexManager *manager) :
       c(c), manager(manager) {}
 
     void operator()(CollectionIndex *index) {

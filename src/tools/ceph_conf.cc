@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -38,22 +38,22 @@ USAGE\n\
 ceph-conf <flags> <action>\n\
 \n\
 ACTIONS\n\
-  -L|--list-all-sections          List all sections\n\
-  -l|--list-sections <prefix>     List sections with the given prefix\n\
-  --filter-key <key>              Filter section list to only include sections\n\
-                                  with given key defined.\n\
+  -L|--list-all-sections	  List all sections\n\
+  -l|--list-sections <prefix>	  List sections with the given prefix\n\
+  --filter-key <key>		  Filter section list to only include sections\n\
+				  with given key defined.\n\
   --filter-key-value <key>=<val>  Filter section list to only include sections\n\
-                                  with given key/value pair.\n\
-  --lookup <key>                  Print a configuration setting to stdout.\n\
-                                  Returns 0 (success) if the configuration setting is\n\
-                                  found; 1 otherwise.\n\
-  -r|--resolve-search             search for the first file that exists and\n\
-                                  can be opened in the resulted comma\n\
-                                  delimited search list.\n\
+				  with given key/value pair.\n\
+  --lookup <key>		  Print a configuration setting to stdout.\n\
+				  Returns 0 (success) if the configuration setting is\n\
+				  found; 1 otherwise.\n\
+  -r|--resolve-search		  search for the first file that exists and\n\
+				  can be opened in the resulted comma\n\
+				  delimited search list.\n\
 \n\
 FLAGS\n\
-  --name name                     Set type.id\n\
-  [-s <section>]                  Add to list of sections to search\n\
+  --name name			  Set type.id\n\
+  [-s <section>]		  Add to list of sections to search\n\
 \n\
 If there is no action given, the action will default to --lookup.\n\
 \n\
@@ -108,7 +108,7 @@ static int list_sections(const std::string &prefix,
     }
     if (r < 0)
       continue;
-    
+
     cout << *p << std::endl;
   }
   return 0;
@@ -193,7 +193,7 @@ int main(int argc, const char **argv)
 	cerr << "expecting argument like 'key=value' for --filter-key-value (not '" << val << "')" << std::endl;
 	usage();
 	exit(1);
-      } 
+      }
       string key(val, 0, pos);
       string value(val, pos+1);
       filter_key_value[key] = value;

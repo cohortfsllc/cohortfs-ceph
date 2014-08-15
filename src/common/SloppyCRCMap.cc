@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
 #include "common/SloppyCRCMap.h"
@@ -62,7 +62,7 @@ int SloppyCRCMap::read(uint64_t offset, uint64_t len, const bufferlist& bl,
     pos += block_size;
     left -= block_size;
   }
-  return errors;  
+  return errors;
 }
 
 void SloppyCRCMap::truncate(uint64_t offset)

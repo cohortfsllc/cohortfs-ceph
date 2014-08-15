@@ -14,32 +14,32 @@ creating users and setting user capabilities.
 Enable/Disable Authentication
 =============================
 
-Depending on the version, Ceph either enables or disables authentication by 
-default. Use the following settings to expressly enable or disable Ceph. 
+Depending on the version, Ceph either enables or disables authentication by
+default. Use the following settings to expressly enable or disable Ceph.
 See `Ceph Authentication`_ for additional details.
 
 
 .. topic:: Authentication Enablement Defaults
 
-   Ceph version 0.54 and earlier versions disable authentication by default. 
-   If you want to use Ceph authentication, you must specifically enable it 
-   for version 0.54 and earlier versions. 
-   
+   Ceph version 0.54 and earlier versions disable authentication by default.
+   If you want to use Ceph authentication, you must specifically enable it
+   for version 0.54 and earlier versions.
+
    Ceph version 0.55 and later version enable authentication by default. If you
    do not want to use Ceph authentication, you must specifically disable it
    for versions 0.55 and later versions.
-   
+
 
 .. topic:: Authentication Granularity
 
    Ceph version 0.50 and earlier versions use ``auth supported`` to enable or
-   disable authentication between the :term:`Ceph Client` and the :term:`Ceph 
+   disable authentication between the :term:`Ceph Client` and the :term:`Ceph
    Storage Cluster`. Ceph authentication in earlier versions only authenticates
-   users sending message traffic between the client and the cluster, so it does 
+   users sending message traffic between the client and the cluster, so it does
    not have fine-grained control.
-   
+
    Ceph version 0.51 and later versions use fine-grained control, which allows
-   you to require authentication of the client by the cluster 
+   you to require authentication of the client by the cluster
    (``auth service required``), authentication of the cluster by the client
    (``auth client required``), and authentication of a daemon within the
    cluster by another daemon within the cluster (``auth cluster required``).
@@ -50,33 +50,33 @@ See `Ceph Authentication`_ for additional details.
 
 .. deprecated:: 0.51
 
-:Description: Indicates whether to use authentication. If not specified, 
+:Description: Indicates whether to use authentication. If not specified,
               it defaults to ``none``, which means it is disabled.
 
 :Type: String
 :Required: No
 :Default: ``none``
 
-    
+
 ``auth cluster required``
 
 .. versionadded:: 0.51
 
 :Description: If enabled, the Ceph Storage Cluster daemons (i.e., ``ceph-mon``,
-              ``ceph-osd``, and ``ceph-mds``) must authenticate with 
+              ``ceph-osd``, and ``ceph-mds``) must authenticate with
               each other. Valid settings are ``cephx`` or ``none``.
 
 :Type: String
 :Required: No
 :Default: Version 0.54 and earlier ``none``. Version 0.55 and later ``cephx``.
 
-    
+
 ``auth service required``
 
 .. versionadded:: 0.51
 
 :Description: If enabled, the Ceph Storage Cluster daemons require Ceph Clients
-              to authenticate with the Ceph Storage Cluster in order to access 
+              to authenticate with the Ceph Storage Cluster in order to access
               Ceph services. Valid settings are ``cephx`` or ``none``.
 
 :Type: String
@@ -89,8 +89,8 @@ See `Ceph Authentication`_ for additional details.
 
 .. versionadded:: 0.51
 
-:Description: If enabled, the Ceph Client requires the Ceph Storage Cluster to 
-              authenticate with the Ceph Client. Valid settings are ``cephx`` 
+:Description: If enabled, the Ceph Client requires the Ceph Storage Cluster to
+              authenticate with the Ceph Client. Valid settings are ``cephx``
               or ``none``.
 
 :Type: String
@@ -121,7 +121,7 @@ Host`_ for details. To perform this step manually, execute the following::
 
 	sudo scp {user}@{ceph-cluster-host}:/etc/ceph/ceph.client.admin.keyring /etc/ceph/ceph.client.admin.keyring
 
-.. tip:: Ensure the ``ceph.keyring`` file has appropriate permissions set 
+.. tip:: Ensure the ``ceph.keyring`` file has appropriate permissions set
    (e.g., ``chmod 644``) on your client machine.
 
 You may specify the key itself in the Ceph configuration file using the ``key``
@@ -130,7 +130,7 @@ setting (not recommended), or a path to a keyfile using the ``keyfile`` setting.
 
 ``keyring``
 
-:Description: The path to the keyring file. 
+:Description: The path to the keyring file.
 :Type: String
 :Required: No
 :Default: ``/etc/ceph/$cluster.$name.keyring,/etc/ceph/$cluster.keyring,/etc/ceph/keyring,/etc/ceph/keyring.bin``
@@ -172,9 +172,9 @@ Ceph, and you can enable/disable signatures for messages between Ceph daemons.
 
 ``cephx require signatures``
 
-:Description: If set to ``true``, Ceph requires signatures on all message 
-              traffic between the Ceph Client and the Ceph Storage Cluster, and 
-              between daemons comprising the Ceph Storage Cluster. 
+:Description: If set to ``true``, Ceph requires signatures on all message
+              traffic between the Ceph Client and the Ceph Storage Cluster, and
+              between daemons comprising the Ceph Storage Cluster.
 
 :Type: Boolean
 :Required: No
@@ -184,7 +184,7 @@ Ceph, and you can enable/disable signatures for messages between Ceph daemons.
 ``cephx cluster require signatures``
 
 :Description: If set to ``true``, Ceph requires signatures on all message
-              traffic between Ceph daemons comprising the Ceph Storage Cluster. 
+              traffic between Ceph daemons comprising the Ceph Storage Cluster.
 
 :Type: Boolean
 :Required: No
@@ -215,8 +215,8 @@ Time to Live
 
 ``auth service ticket ttl``
 
-:Description: When the Ceph Storage Cluster sends a Ceph Client a ticket for 
-              authentication, the Ceph Storage Cluster assigns the ticket a 
+:Description: When the Ceph Storage Cluster sends a Ceph Client a ticket for
+              authentication, the Ceph Storage Cluster assigns the ticket a
               time to live.
 
 :Type: Double

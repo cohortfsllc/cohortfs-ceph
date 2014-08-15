@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #include "MonitorStore.h"
@@ -125,7 +125,7 @@ version_t MonitorStore::get_int(const char *a, const char *b)
     snprintf(fn, sizeof(fn), "%s/%s/%s", dir.c_str(), a, b);
   else
     snprintf(fn, sizeof(fn), "%s/%s", dir.c_str(), a);
-  
+
   int fd = ::open(fn, O_RDONLY);
   if (fd < 0) {
     int err = errno;
@@ -138,7 +138,7 @@ version_t MonitorStore::get_int(const char *a, const char *b)
     assert(0 == "failed to open");
     return 0;
   }
-  
+
   char buf[20];
   memset(buf, 0, sizeof(buf));
   int r = safe_read(fd, buf, sizeof(buf) - 1);
@@ -152,9 +152,9 @@ version_t MonitorStore::get_int(const char *a, const char *b)
   }
   int close_err = TEMP_FAILURE_RETRY(::close(fd));
   assert (0 == close_err);
-  
+
   version_t val = atoi(buf);
-  
+
   if (b) {
     dout(15) << "get_int " << a << "/" << b << " = " << val << dendl;
   } else {
@@ -181,7 +181,7 @@ void MonitorStore::put_int(version_t val, const char *a, const char *b)
   } else {
     dout(15) << "set_int " << a << " = " << val << dendl;
   }
-  
+
   char vs[30];
   snprintf(vs, sizeof(vs), "%lld\n", (unsigned long long)val);
 
@@ -242,7 +242,7 @@ bool MonitorStore::exists_bl_ss(const char *a, const char *b)
     dout(15) << "exists_bl " << a << dendl;
     snprintf(fn, sizeof(fn), "%s/%s", dir.c_str(), a);
   }
-  
+
   struct stat st;
   int r = ::stat(fn, &st);
   //char buf[80];
@@ -268,7 +268,7 @@ void MonitorStore::erase_ss(const char *a, const char *b)
   int r = ::unlink(fn);
   assert(0 == r || ENOENT == errno); // callers don't check for existence first
 
-  ::rmdir(dr);  // sloppy attempt to clean up empty dirs
+  ::rmdir(dr);	// sloppy attempt to clean up empty dirs
 }
 
 int MonitorStore::get_bl_ss(bufferlist& bl, const char *a, const char *b)
@@ -279,7 +279,7 @@ int MonitorStore::get_bl_ss(bufferlist& bl, const char *a, const char *b)
   } else {
     snprintf(fn, sizeof(fn), "%s/%s", dir.c_str(), a);
   }
-  
+
   int fd = ::open(fn, O_RDONLY);
   if (fd < 0) {
     if (b) {
@@ -295,7 +295,7 @@ int MonitorStore::get_bl_ss(bufferlist& bl, const char *a, const char *b)
   int rc = ::fstat(fd, &st);
   assert(rc == 0);
   __int32_t len = st.st_size;
- 
+
   // read buffer
   bl.clear();
   bufferptr bp(len);
@@ -339,7 +339,7 @@ void MonitorStore::write_bl_ss(bufferlist& bl, const char *a, const char *b, boo
   } else {
     dout(15) << "put_bl " << a << " = " << bl.length() << " bytes" << dendl;
   }
-  
+
   char tfn[1024];
   int fd;
   if (append) {
@@ -359,7 +359,7 @@ void MonitorStore::write_bl_ss(bufferlist& bl, const char *a, const char *b, boo
       assert(0 == "failed to open");
     }
   }
-  
+
   err = bl.write_fd(fd);
   assert(!err);
   err = ::fsync(fd);
@@ -440,19 +440,19 @@ void MonitorStore::put_bl_sn_map(const char *a,
   sync_filesystem(dirfd);
   close_err = TEMP_FAILURE_RETRY(::close(dirfd));
   assert (0 == close_err);
-    
+
   // rename them all into place
   for (map<version_t,bufferlist>::iterator p = start; p != end; ++p) {
     char tfn[1024], fn[1024];
-    
+
     snprintf(fn, sizeof(fn), "%s/%llu", dfn, (long long unsigned)p->first);
     snprintf(tfn, sizeof(tfn), "%s.new", fn);
-    
+
     err = ::rename(tfn, fn);
     if (err < 0)
       assert(0 == "failed to rename");
   }
-    
+
   // fsync the dir (to commit the renames)
   dirfd = ::open(dir.c_str(), O_RDONLY);
   if (dirfd < 0) {

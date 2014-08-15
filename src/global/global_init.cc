@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -90,10 +90,10 @@ void global_pre_init(std::vector < const char * > *alt_def_args,
 	ostringstream oss;
 	oss << "global_init: unable to open config file from search list "
 	    << conf_file_list << "\n";
-        dout_emergency(oss.str());
-        _exit(1);
+	dout_emergency(oss.str());
+	_exit(1);
       } else {
-        derr <<"did not load config file, using default settings." << dendl;
+	derr <<"did not load config file, using default settings." << dendl;
       }
     }
   }

@@ -9,8 +9,8 @@ or `Monitor Bootstrap`_.
 Adding Monitors
 ===============
 
-Ceph monitors are light-weight processes that maintain a master copy of the 
-cluster map. You can run a cluster with 1 monitor. We recommend at least 3 
+Ceph monitors are light-weight processes that maintain a master copy of the
+cluster map. You can run a cluster with 1 monitor. We recommend at least 3
 monitors for a production cluster. Ceph monitors use a variation of the
 `Paxos_` protocol to establish consensus about maps and other critical
 information across the cluster. Due to the nature of Paxos, Ceph requires
@@ -32,11 +32,11 @@ For an initial deployment of a multi-node Ceph cluster, it is advisable to
 deploy three monitors, increasing the number two at a time if a valid need
 for more than three exists.
 
-Since monitors are light-weight, it is possible to run them on the same 
+Since monitors are light-weight, it is possible to run them on the same
 host as an OSD; however, we recommend running them on separate hosts,
-because fsync issues with the kernel may impair performance. 
+because fsync issues with the kernel may impair performance.
 
-.. note:: A *majority* of monitors in your cluster must be able to 
+.. note:: A *majority* of monitors in your cluster must be able to
    reach each other in order to establish a quorum.
 
 Deploy your Hardware
@@ -45,7 +45,7 @@ Deploy your Hardware
 If you are adding a new host when adding a new monitor,  see `Hardware
 Recommendations`_ for details on minimum recommendations for monitor hardware.
 To add a monitor host to your cluster, first make sure you have an up-to-date
-version of Linux installed (typically Ubuntu 12.04 precise). 
+version of Linux installed (typically Ubuntu 12.04 precise).
 
 Add your monitor host to a rack in your cluster, connect it to the network
 and ensure that it has network connectivity.
@@ -72,49 +72,49 @@ Adding a Monitor (Manual)
 This procedure creates a ``ceph-mon`` data directory, retrieves the monitor map
 and monitor keyring, and adds a ``ceph-mon`` daemon to your cluster.  If
 this results in only two monitor daemons, you may add more monitors by
-repeating this procedure until you have a sufficient number of ``ceph-mon`` 
+repeating this procedure until you have a sufficient number of ``ceph-mon``
 daemons to achieve a quorum.
 
-At this point you should define your monitor's id.  Traditionally, monitors 
-have been named with single letters (``a``, ``b``, ``c``, ...), but you are 
-free to define the id as you see fit.  For the purpose of this document, 
-please take into account that ``{mon-id}`` should be the id you chose, 
-without the ``mon.`` prefix (i.e., ``{mon-id}`` should be the ``a`` 
+At this point you should define your monitor's id.  Traditionally, monitors
+have been named with single letters (``a``, ``b``, ``c``, ...), but you are
+free to define the id as you see fit.  For the purpose of this document,
+please take into account that ``{mon-id}`` should be the id you chose,
+without the ``mon.`` prefix (i.e., ``{mon-id}`` should be the ``a``
 on ``mon.a``).
 
-#. Create the default directory on your new monitor. :: 
+#. Create the default directory on your new monitor. ::
 
 	ssh {new-mon-host}
 	sudo mkdir /var/lib/ceph/mon/ceph-{mon-id}
 
-#. Create a temporary directory ``{tmp}`` to keep the files needed during 
-   this process. This directory should be different from monitor's default 
-   directory created in the previous step, and can be removed after all the 
-   steps are taken. :: 
+#. Create a temporary directory ``{tmp}`` to keep the files needed during
+   this process. This directory should be different from monitor's default
+   directory created in the previous step, and can be removed after all the
+   steps are taken. ::
 
 	mkdir {tmp}
 
-#. Retrieve the keyring for your monitors, where ``{tmp}`` is the path to 
+#. Retrieve the keyring for your monitors, where ``{tmp}`` is the path to
    the retrieved keyring, and ``{filename}`` is the name of the file containing
-   the retrieved monitor key. :: 
+   the retrieved monitor key. ::
 
 	ceph auth get mon. -o {tmp}/{filename}
 
-#. Retrieve the monitor map, where ``{tmp}`` is the path to 
-   the retrieved monitor map, and ``{filename}`` is the name of the file 
-   containing the retrieved monitor monitor map. :: 
+#. Retrieve the monitor map, where ``{tmp}`` is the path to
+   the retrieved monitor map, and ``{filename}`` is the name of the file
+   containing the retrieved monitor monitor map. ::
 
 	ceph mon getmap -o {tmp}/{filename}
 
-#. Prepare the monitor's data directory created in the first step. You must 
-   specify the path to the monitor map so that you can retrieve the 
-   information about a quorum of monitors and their ``fsid``. You must also 
-   specify a path to the monitor keyring:: 
+#. Prepare the monitor's data directory created in the first step. You must
+   specify the path to the monitor map so that you can retrieve the
+   information about a quorum of monitors and their ``fsid``. You must also
+   specify a path to the monitor keyring::
 
 	sudo ceph-mon -i {mon-id} --mkfs --monmap {tmp}/{filename} --keyring {tmp}/{filename}
-	
 
-#. Add the new monitor to the list of monitors for you cluster (runtime). This enables 
+
+#. Add the new monitor to the list of monitors for you cluster (runtime). This enables
    other nodes to use this monitor during their initial startup. ::
 
 	ceph mon add <mon-id> <ip>[:<port>]
@@ -130,9 +130,9 @@ on ``mon.a``).
 Removing Monitors
 =================
 
-When you remove monitors from a cluster, consider that Ceph monitors use 
-PAXOS to establish consensus about the master cluster map. You must have 
-a sufficient number of monitors to establish a quorum for consensus about 
+When you remove monitors from a cluster, consider that Ceph monitors use
+PAXOS to establish consensus about the master cluster map. You must have
+a sufficient number of monitors to establish a quorum for consensus about
 the cluster map.
 
 .. _Removing a Monitor (Manual):
@@ -142,28 +142,28 @@ Removing a Monitor (Manual)
 
 This procedure removes a ``ceph-mon`` daemon from your cluster.   If this
 procedure results in only two monitor daemons, you may add or remove another
-monitor until you have a number of ``ceph-mon`` daemons that can achieve a 
+monitor until you have a number of ``ceph-mon`` daemons that can achieve a
 quorum.
 
 #. Stop the monitor. ::
 
 	service ceph -a stop mon.{mon-id}
-	
+
 #. Remove the monitor from the cluster. ::
 
 	ceph mon remove {mon-id}
-	
-#. Remove the monitor entry from ``ceph.conf``. 
+
+#. Remove the monitor entry from ``ceph.conf``.
 
 
 Removing Monitors from an Unhealthy Cluster
 -------------------------------------------
 
-This procedure removes a ``ceph-mon`` daemon from an unhealhty cluster--i.e., 
+This procedure removes a ``ceph-mon`` daemon from an unhealhty cluster--i.e.,
 a cluster that has placement groups that are persistently not ``active + clean``.
 
 
-#. Identify a surviving monitor and log in to that host. :: 
+#. Identify a surviving monitor and log in to that host. ::
 
 	ceph mon dump
 	ssh {mon-host}
@@ -175,17 +175,17 @@ a cluster that has placement groups that are persistently not ``active + clean``
 	# for example,
         ceph-mon -i a --extract-monmap /tmp/monmap
 
-#. Remove the non-surviving monitors. 	For example, if you have three monitors, 
-   ``mon.a``, ``mon.b``, and ``mon.c``, where only ``mon.a`` will survive, follow 
-   the example below:: 
+#. Remove the non-surviving monitors. 	For example, if you have three monitors,
+   ``mon.a``, ``mon.b``, and ``mon.c``, where only ``mon.a`` will survive, follow
+   the example below::
 
 	monmaptool {map-path} --rm {mon-id}
 	# for example,
 	monmaptool /tmp/monmap --rm b
 	monmaptool /tmp/monmap --rm c
-	
-#. Inject the surviving map with the removed monitors into the surviving monitors. 
-   For example, to inject a map into monitor ``mon.a``, follow the example below:: 
+
+#. Inject the surviving map with the removed monitors into the surviving monitors.
+   For example, to inject a map into monitor ``mon.a``, follow the example below::
 
 	ceph-mon -i {mon-id} --inject-monmap {map-path}
 	# for example,
@@ -254,7 +254,7 @@ monitor successfully joins the  quorum; then, remove the monitor that uses the
 old IP address. Then, update the ``ceph.conf`` file to ensure that clients and
 other daemons know the IP address of the new monitor.
 
-For example, lets assume there are three monitors in place, such as :: 
+For example, lets assume there are three monitors in place, such as ::
 
 	[mon.a]
 		host = host01
@@ -292,16 +292,16 @@ Using the previous monitor configuration as an example, assume you want to move
 all the  monitors from the ``10.0.0.x`` range to ``10.1.0.x``, and these
 networks  are unable to communicate.  Use the following procedure:
 
-#. Retrieve the monitor map, where ``{tmp}`` is the path to 
-   the retrieved monitor map, and ``{filename}`` is the name of the file 
-   containing the retrieved monitor monitor map. :: 
+#. Retrieve the monitor map, where ``{tmp}`` is the path to
+   the retrieved monitor map, and ``{filename}`` is the name of the file
+   containing the retrieved monitor monitor map. ::
 
 	ceph mon getmap -o {tmp}/{filename}
 
 #. The following example demonstrates the contents of the monmap. ::
 
 	$ monmaptool --print {tmp}/{filename}
-	
+
 	monmaptool: monmap file {tmp}/{filename}
 	epoch 1
 	fsid 224e376d-c5fe-4504-96bb-ea6332a19e61
@@ -314,7 +314,7 @@ networks  are unable to communicate.  Use the following procedure:
 #. Remove the existing monitors. ::
 
 	$ monmaptool --rm a --rm b --rm c {tmp}/{filename}
-	
+
 	monmaptool: monmap file {tmp}/{filename}
 	monmaptool: removing a
 	monmaptool: removing b
@@ -324,14 +324,14 @@ networks  are unable to communicate.  Use the following procedure:
 #. Add the new monitor locations. ::
 
 	$ monmaptool --add a 10.1.0.1:6789 --add b 10.1.0.2:6789 --add c 10.1.0.3:6789 {tmp}/{filename}
-	
+
 	monmaptool: monmap file {tmp}/{filename}
 	monmaptool: writing epoch 1 to {tmp}/{filename} (3 monitors)
 
 #. Check new contents. ::
 
 	$ monmaptool --print {tmp}/{filename}
-	
+
 	monmaptool: monmap file {tmp}/{filename}
 	epoch 1
 	fsid 224e376d-c5fe-4504-96bb-ea6332a19e61
@@ -342,10 +342,10 @@ networks  are unable to communicate.  Use the following procedure:
 	2: 10.1.0.3:6789/0 mon.c
 
 At this point, we assume the monitors (and stores) are installed at the new
-location. The next step is to propagate the modified monmap to the new 
+location. The next step is to propagate the modified monmap to the new
 monitors, and inject the modified monmap into each new monitor.
 
-#. First, make sure to stop all your monitors.  Injection must be done while 
+#. First, make sure to stop all your monitors.  Injection must be done while
    the daemon is not running.
 
 #. Inject the monmap. ::
@@ -354,7 +354,7 @@ monitors, and inject the modified monmap into each new monitor.
 
 #. Restart the monitors.
 
-After this step, migration to the new location is complete and 
+After this step, migration to the new location is complete and
 the monitors should operate successfully.
 
 

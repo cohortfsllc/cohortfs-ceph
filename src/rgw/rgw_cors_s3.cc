@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -47,14 +47,14 @@ void RGWCORSRule_S3::to_xml(XMLFormatter& f) {
   if (allowed_methods & RGW_CORS_COPY)
     f.dump_string("AllowedMethod", "COPY");
   /*AllowedOrigins*/
-  for(set<string>::iterator it = allowed_origins.begin(); 
-      it != allowed_origins.end(); 
+  for(set<string>::iterator it = allowed_origins.begin();
+      it != allowed_origins.end();
       ++it) {
     string host = *it;
     f.dump_string("AllowedOrigin", host);
   }
   /*AllowedHeader*/
-  for(set<string>::iterator it = allowed_hdrs.begin(); 
+  for(set<string>::iterator it = allowed_hdrs.begin();
       it != allowed_hdrs.end(); ++it) {
     f.dump_string("AllowedHeader", *it);
   }
@@ -63,7 +63,7 @@ void RGWCORSRule_S3::to_xml(XMLFormatter& f) {
     f.dump_unsigned("MaxAgeSeconds", max_age);
   }
   /*ExposeHeader*/
-  for(list<string>::iterator it = exposable_hdrs.begin(); 
+  for(list<string>::iterator it = exposable_hdrs.begin();
       it != exposable_hdrs.end(); ++it) {
     f.dump_string("ExposeHeader", *it);
   }
@@ -80,22 +80,22 @@ bool RGWCORSRule_S3::xml_end(const char *el) {
       const char *s = obj->get_data().c_str();
       dout(10) << "RGWCORSRule::xml_end, el : " << el << ", data : " << s << dendl;
       if (strcasecmp(s, "GET") == 0) {
-        allowed_methods |= RGW_CORS_GET;
+	allowed_methods |= RGW_CORS_GET;
       } else if (strcasecmp(s, "POST") == 0) {
-        allowed_methods |= RGW_CORS_POST;
+	allowed_methods |= RGW_CORS_POST;
       } else if (strcasecmp(s, "DELETE") == 0) {
-        allowed_methods |= RGW_CORS_DELETE;
+	allowed_methods |= RGW_CORS_DELETE;
       } else if (strcasecmp(s, "HEAD") == 0) {
-        allowed_methods |= RGW_CORS_HEAD;
+	allowed_methods |= RGW_CORS_HEAD;
       } else if (strcasecmp(s, "PUT") == 0) {
-        allowed_methods |= RGW_CORS_PUT;
+	allowed_methods |= RGW_CORS_PUT;
       } else if (strcasecmp(s, "COPY") == 0) {
-        allowed_methods |= RGW_CORS_COPY;
+	allowed_methods |= RGW_CORS_COPY;
       } else {
-        return false;
+	return false;
       }
     }
-  } 
+  }
   /*Check the id's len, it should be less than 255*/
   XMLObj *xml_id = find_first("ID");
   if (xml_id != NULL) {
@@ -104,7 +104,7 @@ bool RGWCORSRule_S3::xml_end(const char *el) {
       dout(0) << "RGWCORSRule has id of length greater than 255" << dendl;
       return false;
     }
-    dout(10) << "RGWCORRule id : " << data << dendl;  
+    dout(10) << "RGWCORRule id : " << data << dendl;
     id = data;
   }
   /*Check if there is atleast one AllowedOrigin*/
@@ -149,7 +149,7 @@ bool RGWCORSRule_S3::xml_end(const char *el) {
       dout(10) << "RGWCORSRule - allowed_hdr : " << obj->get_data() << dendl;
       string s = obj->get_data();
       if (validate_name_string(s) != 0)
-         return false;
+	 return false;
       allowed_hdrs.insert(allowed_hdrs.end(), s);
     }
   }
@@ -231,9 +231,8 @@ XMLObj *RGWCORSXMLParser_S3::alloc_obj(const char *el) {
     return new CORSRuleAllowedHeader_S3;
   } else if (strcmp(el, "MaxAgeSeconds") == 0) {
     return new CORSRuleMaxAgeSeconds_S3;
-  } else if (strcmp(el, "ExposeHeader")  == 0) {
+  } else if (strcmp(el, "ExposeHeader")	 == 0) {
     return new CORSRuleExposeHeader_S3;
   }
   return NULL;
 }
-

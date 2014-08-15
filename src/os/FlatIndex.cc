@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -39,11 +39,11 @@ using ceph::crypto::SHA1;
 
 #define FILENAME_LFN_DIGEST_SIZE CEPH_CRYPTO_SHA1_DIGESTSIZE
 
-#define FILENAME_MAX_LEN        4096    // the long file name size
-#define FILENAME_SHORT_LEN      255     // the short file name size
-#define FILENAME_COOKIE         "long"  // ceph long file name
-#define FILENAME_HASH_LEN       FILENAME_LFN_DIGEST_SIZE
-#define FILENAME_EXTRA	        4       // underscores and digit
+#define FILENAME_MAX_LEN	4096	// the long file name size
+#define FILENAME_SHORT_LEN	255	// the short file name size
+#define FILENAME_COOKIE		"long"	// ceph long file name
+#define FILENAME_HASH_LEN	FILENAME_LFN_DIGEST_SIZE
+#define FILENAME_EXTRA		4	// underscores and digit
 
 #define LFN_ATTR "user.cephos.lfn"
 
@@ -144,7 +144,7 @@ static char *append_oname(char *dest, const char* src, size_t len)
     if (*i == '\\') {
       *t++ = '\\';
       *t++ = '\\';
-    } else if (*i == '.' && i == src) {  // only escape leading .
+    } else if (*i == '.' && i == src) {	 // only escape leading .
       *t++ = '\\';
       *t++ = '.';
     } else if (*i == '/') {
@@ -242,8 +242,8 @@ static int lfn_get(const char *coll_path, const hobject_t& oid, char *pathname, 
     if (r > 0) {
       buf[MIN((int)sizeof(buf)-1, r)] = '\0';
       if (strcmp(buf, lfn) == 0) { // a match?
-        *exist = 1;
-        return i;
+	*exist = 1;
+	return i;
       }
     }
     switch (r) {
@@ -293,7 +293,7 @@ int FlatIndex::unlink(const hobject_t &o) {
   int path_len;
   int is_lfn;
 
-  r = lfn_get(base_path.c_str(), o, short_fn, sizeof(short_fn), 
+  r = lfn_get(base_path.c_str(), o, short_fn, sizeof(short_fn),
 	      long_fn, sizeof(long_fn), &exist, &is_lfn);
   if (r < 0)
     return r;
@@ -321,10 +321,10 @@ int FlatIndex::unlink(const hobject_t &o) {
     ret = ::stat(short_fn2, &buf);
     if (ret < 0) {
       if (i == r + 1) {
-        err = ::unlink(short_fn);
-        if (err < 0)
-          return err;
-        return 0;
+	err = ::unlink(short_fn);
+	if (err < 0)
+	  return err;
+	return 0;
       }
       break;
     }
@@ -344,8 +344,8 @@ int FlatIndex::lookup(const hobject_t &hoid, IndexedPath *path, int *exist) {
   char short_fn[PATH_MAX];
   int r;
   int is_lfn;
-  r = lfn_get(base_path.c_str(), hoid, 
-	      short_fn, sizeof(short_fn), long_fn, 
+  r = lfn_get(base_path.c_str(), hoid,
+	      short_fn, sizeof(short_fn), long_fn,
 	      sizeof(long_fn), exist, &is_lfn);
   if (r < 0)
     return r;
@@ -353,7 +353,7 @@ int FlatIndex::lookup(const hobject_t &hoid, IndexedPath *path, int *exist) {
   return 0;
 }
 
-static int get_hobject_from_oinfo(const char *dir, const char *file, 
+static int get_hobject_from_oinfo(const char *dir, const char *file,
 				  hobject_t *o) {
   char path[PATH_MAX];
   bufferptr bp(PATH_MAX);
@@ -387,7 +387,7 @@ int FlatIndex::collection_list(vector<hobject_t> *ls) {
   DIR *dir = ::opendir(dir_name);
   if (!dir)
     return -errno;
-  
+
   // first, build (ino, object) list
   vector< pair<ino_t,hobject_t> > inolist;
 
@@ -398,7 +398,7 @@ int FlatIndex::collection_list(vector<hobject_t> *ls) {
     // parse
     if (de->d_name[0] == '.')
       continue;
-    //cout << "  got object " << de->d_name << std::endl;
+    //cout << "	 got object " << de->d_name << std::endl;
     hobject_t o;
     lfn_translate(dir_name, de->d_name, new_name, sizeof(new_name));
     if (parse_object(new_name, o)) {

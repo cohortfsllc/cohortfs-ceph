@@ -61,7 +61,7 @@ struct EntryQueue {
       t = m_head->m_next;
       delete m_head;
       m_head = t;
-    }      
+    }
   }
 };
 

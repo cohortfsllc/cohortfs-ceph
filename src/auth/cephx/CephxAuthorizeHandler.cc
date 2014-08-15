@@ -10,7 +10,7 @@
 
 bool CephxAuthorizeHandler::verify_authorizer(CephContext *cct, KeyStore *keys,
 					      bufferlist& authorizer_data, bufferlist& authorizer_reply,
-                                              EntityName& entity_name, uint64_t& global_id, AuthCapsInfo& caps_info, CryptoKey& session_key,  uint64_t *auid)
+					      EntityName& entity_name, uint64_t& global_id, AuthCapsInfo& caps_info, CryptoKey& session_key,  uint64_t *auid)
 {
   bufferlist::iterator iter = authorizer_data.begin();
 
@@ -36,7 +36,7 @@ bool CephxAuthorizeHandler::verify_authorizer(CephContext *cct, KeyStore *keys,
 
 // Return type of crypto used for this session's data;  for cephx, symmetric authentication
 
-int CephxAuthorizeHandler::authorizer_session_crypto() 
+int CephxAuthorizeHandler::authorizer_session_crypto()
 {
   return SESSION_SYMMETRIC_AUTHENTICATE;
 }

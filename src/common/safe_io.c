@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -47,14 +47,14 @@ ssize_t safe_read(int fd, void *buf, size_t count)
 
 ssize_t safe_read_exact(int fd, void *buf, size_t count)
 {
-        ssize_t ret = safe_read(fd, buf, count);
+	ssize_t ret = safe_read(fd, buf, count);
 	if (ret < 0)
 		return ret;
 	if ((size_t)ret != count)
 		return -EDOM;
 	return 0;
 }
- 
+
 ssize_t safe_write(int fd, const void *buf, size_t count)
 {
 	while (count > 0) {

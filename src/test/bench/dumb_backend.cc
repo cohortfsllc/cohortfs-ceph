@@ -47,7 +47,7 @@ void DumbBackend::_write(
   if (do_fadvise) {
     int fa_r = ::posix_fadvise(fd, offset, bl.length(), POSIX_FADV_DONTNEED);
     if (fa_r) {
-        std::cout << "posix_fadvise failed, errno is: " << fa_r << std::endl;
+	std::cout << "posix_fadvise failed, errno is: " << fa_r << std::endl;
     }
   }
 #else

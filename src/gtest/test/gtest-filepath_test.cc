@@ -32,7 +32,7 @@
 // Google Test filepath utilities
 //
 // This file tests classes and functions used internally by
-// Google Test.  They are subject to change without notice.
+// Google Test.	 They are subject to change without notice.
 //
 // This file is #included from gtest_unittest.cc, to avoid changing
 // build or make-files for some existing Google Test clients. Do not
@@ -43,7 +43,7 @@
 
 // Indicates that this translation unit is part of Google Test's
 // implementation.  It must come before gtest-internal-inl.h is
-// included, or there will be a compiler error.  This trick is to
+// included, or there will be a compiler error.	 This trick is to
 // prevent a user from accidentally including gtest-internal-inl.h in
 // his code.
 #define GTEST_IMPLEMENTATION_ 1
@@ -54,7 +54,7 @@
 # include <windows.h>  // NOLINT
 #elif GTEST_OS_WINDOWS
 # include <direct.h>  // NOLINT
-#endif  // GTEST_OS_WINDOWS_MOBILE
+#endif	// GTEST_OS_WINDOWS_MOBILE
 
 namespace testing {
 namespace internal {
@@ -105,7 +105,7 @@ TEST(GetCurrentDirTest, ReturnsCurrentDir) {
 # endif
 }
 
-#endif  // GTEST_OS_WINDOWS_MOBILE
+#endif	// GTEST_OS_WINDOWS_MOBILE
 
 TEST(IsEmptyTest, ReturnsTrueForEmptyPath) {
   EXPECT_TRUE(FilePath("").IsEmpty());
@@ -177,7 +177,7 @@ TEST(RemoveDirectoryNameTest, ShouldGiveFileNameForAlternateSeparator) {
 // RemoveDirectoryName("adir/subdir/afile") -> "afile"
 TEST(RemoveDirectoryNameTest, ShouldAlsoGiveFileNameForAlternateSeparator) {
   EXPECT_EQ("afile",
-            FilePath("adir/subdir/afile").RemoveDirectoryName().string());
+	    FilePath("adir/subdir/afile").RemoveDirectoryName().string());
 }
 
 #endif
@@ -201,7 +201,7 @@ TEST(RemoveFileNameTest, ButNoFile) {
 // RemoveFileName "adir/afile" -> "adir/"
 TEST(RemoveFileNameTest, GivesDirName) {
   EXPECT_EQ("adir" GTEST_PATH_SEP_,
-            FilePath("adir" GTEST_PATH_SEP_ "afile").RemoveFileName().string());
+	    FilePath("adir" GTEST_PATH_SEP_ "afile").RemoveFileName().string());
 }
 
 // RemoveFileName "adir/subdir/afile" -> "adir/subdir/"
@@ -225,19 +225,19 @@ TEST(RemoveFileNameTest, GivesRootDir) {
 // RemoveFileName("adir/") -> "adir/"
 TEST(RemoveFileNameTest, ButNoFileForAlternateSeparator) {
   EXPECT_EQ("adir" GTEST_PATH_SEP_,
-            FilePath("adir/").RemoveFileName().string());
+	    FilePath("adir/").RemoveFileName().string());
 }
 
 // RemoveFileName("adir/afile") -> "adir/"
 TEST(RemoveFileNameTest, GivesDirNameForAlternateSeparator) {
   EXPECT_EQ("adir" GTEST_PATH_SEP_,
-            FilePath("adir/afile").RemoveFileName().string());
+	    FilePath("adir/afile").RemoveFileName().string());
 }
 
 // RemoveFileName("adir/subdir/afile") -> "adir/subdir/"
 TEST(RemoveFileNameTest, GivesDirAndSubDirNameForAlternateSeparator) {
   EXPECT_EQ("adir" GTEST_PATH_SEP_ "subdir" GTEST_PATH_SEP_,
-            FilePath("adir/subdir/afile").RemoveFileName().string());
+	    FilePath("adir/subdir/afile").RemoveFileName().string());
 }
 
 // RemoveFileName("/afile") -> "\"
@@ -285,19 +285,19 @@ TEST(MakeFileNameTest, GenerateWhenNumberIsNotZeroAndDirIsEmpty) {
 
 TEST(ConcatPathsTest, WorksWhenDirDoesNotEndWithPathSep) {
   FilePath actual = FilePath::ConcatPaths(FilePath("foo"),
-                                          FilePath("bar.xml"));
+					  FilePath("bar.xml"));
   EXPECT_EQ("foo" GTEST_PATH_SEP_ "bar.xml", actual.string());
 }
 
 TEST(ConcatPathsTest, WorksWhenPath1EndsWithPathSep) {
   FilePath actual = FilePath::ConcatPaths(FilePath("foo" GTEST_PATH_SEP_),
-                                          FilePath("bar.xml"));
+					  FilePath("bar.xml"));
   EXPECT_EQ("foo" GTEST_PATH_SEP_ "bar.xml", actual.string());
 }
 
 TEST(ConcatPathsTest, Path1BeingEmpty) {
   FilePath actual = FilePath::ConcatPaths(FilePath(""),
-                                          FilePath("bar.xml"));
+					  FilePath("bar.xml"));
   EXPECT_EQ("bar.xml", actual.string());
 }
 
@@ -308,15 +308,15 @@ TEST(ConcatPathsTest, Path2BeingEmpty) {
 
 TEST(ConcatPathsTest, BothPathBeingEmpty) {
   FilePath actual = FilePath::ConcatPaths(FilePath(""),
-                                          FilePath(""));
+					  FilePath(""));
   EXPECT_EQ("", actual.string());
 }
 
 TEST(ConcatPathsTest, Path1ContainsPathSep) {
   FilePath actual = FilePath::ConcatPaths(FilePath("foo" GTEST_PATH_SEP_ "bar"),
-                                          FilePath("foobar.xml"));
+					  FilePath("foobar.xml"));
   EXPECT_EQ("foo" GTEST_PATH_SEP_ "bar" GTEST_PATH_SEP_ "foobar.xml",
-            actual.string());
+	    actual.string());
 }
 
 TEST(ConcatPathsTest, Path2ContainsPathSep) {
@@ -324,12 +324,12 @@ TEST(ConcatPathsTest, Path2ContainsPathSep) {
       FilePath("foo" GTEST_PATH_SEP_),
       FilePath("bar" GTEST_PATH_SEP_ "bar.xml"));
   EXPECT_EQ("foo" GTEST_PATH_SEP_ "bar" GTEST_PATH_SEP_ "bar.xml",
-            actual.string());
+	    actual.string());
 }
 
 TEST(ConcatPathsTest, Path2EndsWithPathSep) {
   FilePath actual = FilePath::ConcatPaths(FilePath("foo"),
-                                          FilePath("bar" GTEST_PATH_SEP_));
+					  FilePath("bar" GTEST_PATH_SEP_));
   EXPECT_EQ("foo" GTEST_PATH_SEP_ "bar" GTEST_PATH_SEP_, actual.string());
 }
 
@@ -355,15 +355,15 @@ TEST(RemoveTrailingPathSeparatorTest, ShouldRemoveTrailingSeparator) {
 // RemoveTrailingPathSeparator "foo/bar/" -> "foo/bar/"
 TEST(RemoveTrailingPathSeparatorTest, ShouldRemoveLastSeparator) {
   EXPECT_EQ("foo" GTEST_PATH_SEP_ "bar",
-            FilePath("foo" GTEST_PATH_SEP_ "bar" GTEST_PATH_SEP_)
-                .RemoveTrailingPathSeparator().string());
+	    FilePath("foo" GTEST_PATH_SEP_ "bar" GTEST_PATH_SEP_)
+		.RemoveTrailingPathSeparator().string());
 }
 
 // RemoveTrailingPathSeparator "foo/bar" -> "foo/bar"
 TEST(RemoveTrailingPathSeparatorTest, ShouldReturnUnmodified) {
   EXPECT_EQ("foo" GTEST_PATH_SEP_ "bar",
-            FilePath("foo" GTEST_PATH_SEP_ "bar")
-                .RemoveTrailingPathSeparator().string());
+	    FilePath("foo" GTEST_PATH_SEP_ "bar")
+		.RemoveTrailingPathSeparator().string());
 }
 
 TEST(DirectoryTest, RootDirectoryExists) {
@@ -376,7 +376,7 @@ TEST(DirectoryTest, RootDirectoryExists) {
   EXPECT_TRUE(FilePath(current_drive).DirectoryExists());
 #else
   EXPECT_TRUE(FilePath("/").DirectoryExists());
-#endif  // GTEST_OS_WINDOWS
+#endif	// GTEST_OS_WINDOWS
 }
 
 #if GTEST_OS_WINDOWS
@@ -395,14 +395,14 @@ TEST(DirectoryTest, RootOfWrongDriveDoesNotExists) {
     }
   _chdrive(saved_drive_);
 }
-#endif  // GTEST_OS_WINDOWS
+#endif	// GTEST_OS_WINDOWS
 
 #if !GTEST_OS_WINDOWS_MOBILE
 // Windows CE _does_ consider an empty directory to exist.
 TEST(DirectoryTest, EmptyPathDirectoryDoesNotExist) {
   EXPECT_FALSE(FilePath("").DirectoryExists());
 }
-#endif  // !GTEST_OS_WINDOWS_MOBILE
+#endif	// !GTEST_OS_WINDOWS_MOBILE
 
 TEST(DirectoryTest, CurrentDirectoryExists) {
 #if GTEST_OS_WINDOWS  // We are on Windows.
@@ -411,22 +411,22 @@ TEST(DirectoryTest, CurrentDirectoryExists) {
   EXPECT_TRUE(FilePath(".").DirectoryExists());
   EXPECT_TRUE(FilePath(".\\").DirectoryExists());
 
-# endif  // _WIN32_CE
+# endif	 // _WIN32_CE
 #else
   EXPECT_TRUE(FilePath(".").DirectoryExists());
   EXPECT_TRUE(FilePath("./").DirectoryExists());
-#endif  // GTEST_OS_WINDOWS
+#endif	// GTEST_OS_WINDOWS
 }
 
 // "foo/bar" == foo//bar" == "foo///bar"
 TEST(NormalizeTest, MultipleConsecutiveSepaparatorsInMidstring) {
   EXPECT_EQ("foo" GTEST_PATH_SEP_ "bar",
-            FilePath("foo" GTEST_PATH_SEP_ "bar").string());
+	    FilePath("foo" GTEST_PATH_SEP_ "bar").string());
   EXPECT_EQ("foo" GTEST_PATH_SEP_ "bar",
-            FilePath("foo" GTEST_PATH_SEP_ GTEST_PATH_SEP_ "bar").string());
+	    FilePath("foo" GTEST_PATH_SEP_ GTEST_PATH_SEP_ "bar").string());
   EXPECT_EQ("foo" GTEST_PATH_SEP_ "bar",
-            FilePath("foo" GTEST_PATH_SEP_ GTEST_PATH_SEP_
-                     GTEST_PATH_SEP_ "bar").string());
+	    FilePath("foo" GTEST_PATH_SEP_ GTEST_PATH_SEP_
+		     GTEST_PATH_SEP_ "bar").string());
 }
 
 // "/bar" == //bar" == "///bar"
@@ -456,11 +456,11 @@ TEST(NormalizeTest, MultipleConsecutiveSepaparatorsAtStringEnd) {
 // "foo\\/").
 TEST(NormalizeTest, MixAlternateSeparatorAtStringEnd) {
   EXPECT_EQ("foo" GTEST_PATH_SEP_,
-            FilePath("foo/").string());
+	    FilePath("foo/").string());
   EXPECT_EQ("foo" GTEST_PATH_SEP_,
-            FilePath("foo" GTEST_PATH_SEP_ "/").string());
+	    FilePath("foo" GTEST_PATH_SEP_ "/").string());
   EXPECT_EQ("foo" GTEST_PATH_SEP_,
-            FilePath("foo//" GTEST_PATH_SEP_).string());
+	    FilePath("foo//" GTEST_PATH_SEP_).string());
 }
 
 #endif
@@ -470,7 +470,7 @@ TEST(AssignmentOperatorTest, DefaultAssignedToNonDefault) {
   FilePath non_default_path("path");
   non_default_path = default_path;
   EXPECT_EQ("", non_default_path.string());
-  EXPECT_EQ("", default_path.string());  // RHS var is unchanged.
+  EXPECT_EQ("", default_path.string());	 // RHS var is unchanged.
 }
 
 TEST(AssignmentOperatorTest, NonDefaultAssignedToDefault) {
@@ -478,7 +478,7 @@ TEST(AssignmentOperatorTest, NonDefaultAssignedToDefault) {
   FilePath default_path;
   default_path = non_default_path;
   EXPECT_EQ("path", default_path.string());
-  EXPECT_EQ("path", non_default_path.string());  // RHS var is unchanged.
+  EXPECT_EQ("path", non_default_path.string());	 // RHS var is unchanged.
 }
 
 TEST(AssignmentOperatorTest, ConstAssignedToNonConst) {
@@ -492,14 +492,14 @@ class DirectoryCreationTest : public Test {
  protected:
   virtual void SetUp() {
     testdata_path_.Set(FilePath(
-        TempDir() + GetCurrentExecutableName().string() +
-        "_directory_creation" GTEST_PATH_SEP_ "test" GTEST_PATH_SEP_));
+	TempDir() + GetCurrentExecutableName().string() +
+	"_directory_creation" GTEST_PATH_SEP_ "test" GTEST_PATH_SEP_));
     testdata_file_.Set(testdata_path_.RemoveTrailingPathSeparator());
 
     unique_file0_.Set(FilePath::MakeFileName(testdata_path_, FilePath("unique"),
-        0, "txt"));
+	0, "txt"));
     unique_file1_.Set(FilePath::MakeFileName(testdata_path_, FilePath("unique"),
-        1, "txt"));
+	1, "txt"));
 
     remove(testdata_file_.c_str());
     remove(unique_file0_.c_str());
@@ -529,7 +529,7 @@ class DirectoryCreationTest : public Test {
     return "/sdcard/";
 #else
     return "/tmp/";
-#endif  // GTEST_OS_WINDOWS_MOBILE
+#endif	// GTEST_OS_WINDOWS_MOBILE
   }
 
   void CreateTextFile(const char* filename) {
@@ -646,14 +646,14 @@ TEST(FilePathTest, IsAbsolutePath) {
   EXPECT_FALSE(FilePath("").IsAbsolutePath());
 #if GTEST_OS_WINDOWS
   EXPECT_TRUE(FilePath("c:\\" GTEST_PATH_SEP_ "is_not"
-                       GTEST_PATH_SEP_ "relative").IsAbsolutePath());
+		       GTEST_PATH_SEP_ "relative").IsAbsolutePath());
   EXPECT_FALSE(FilePath("c:foo" GTEST_PATH_SEP_ "bar").IsAbsolutePath());
   EXPECT_TRUE(FilePath("c:/" GTEST_PATH_SEP_ "is_not"
-                       GTEST_PATH_SEP_ "relative").IsAbsolutePath());
+		       GTEST_PATH_SEP_ "relative").IsAbsolutePath());
 #else
   EXPECT_TRUE(FilePath(GTEST_PATH_SEP_ "is_not" GTEST_PATH_SEP_ "relative")
-              .IsAbsolutePath());
-#endif  // GTEST_OS_WINDOWS
+	      .IsAbsolutePath());
+#endif	// GTEST_OS_WINDOWS
 }
 
 TEST(FilePathTest, IsRootDirectory) {

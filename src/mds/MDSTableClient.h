@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_MDSTABLECLIENT_H
@@ -36,7 +36,7 @@ protected:
   struct _pending_prepare {
     Context *onfinish;
     version_t *ptid;
-    bufferlist *pbl; 
+    bufferlist *pbl;
     bufferlist mutation;
 
     _pending_prepare() : onfinish(0), ptid(0), pbl(0) {}
@@ -52,7 +52,7 @@ protected:
   map<version_t, LogSegment*> pending_commit;
   map<version_t, list<Context*> > ack_waiters;
 
-  void handle_reply(class MMDSTableQuery *m);  
+  void handle_reply(class MMDSTableQuery *m);
 
   class C_LoggedAck : public Context {
     MDSTableClient *tc;

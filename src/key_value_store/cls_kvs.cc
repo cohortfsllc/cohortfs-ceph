@@ -2,7 +2,7 @@
  * OSD classes for the key value store
  *
  *  Created on: Aug 10, 2012
- *      Author: Eleanor Cawthon
+ *	Author: Eleanor Cawthon
  */
 
 #include "objclass/objclass.h"
@@ -78,7 +78,7 @@ static int get_idata_from_key(cls_method_context_t hctx, const string &key,
 
 
 static int get_idata_from_key_op(cls_method_context_t hctx,
-                   bufferlist *in, bufferlist *out) {
+		   bufferlist *in, bufferlist *out) {
   CLS_LOG(20, "get_idata_from_key_op");
   idata_from_key_args op;
   bufferlist::iterator it = in->begin();
@@ -130,7 +130,7 @@ static int get_next_idata(cls_method_context_t hctx, const index_data &idata,
 }
 
 static int get_next_idata_op(cls_method_context_t hctx,
-                   bufferlist *in, bufferlist *out) {
+		   bufferlist *in, bufferlist *out) {
   CLS_LOG(20, "get_next_idata_op");
   idata_from_idata_args op;
   bufferlist::iterator it = in->begin();
@@ -191,7 +191,7 @@ static int get_prev_idata(cls_method_context_t hctx, const index_data &idata,
 }
 
 static int get_prev_idata_op(cls_method_context_t hctx,
-                   bufferlist *in, bufferlist *out) {
+		   bufferlist *in, bufferlist *out) {
   CLS_LOG(20, "get_next_idata_op");
   idata_from_idata_args op;
   bufferlist::iterator it = in->begin();
@@ -271,7 +271,7 @@ static int check_writable(cls_method_context_t hctx) {
 }
 
 static int check_writable_op(cls_method_context_t hctx,
-                   bufferlist *in, bufferlist *out) {
+		   bufferlist *in, bufferlist *out) {
   CLS_LOG(20, "check_writable_op");
   return check_writable(hctx);
 }
@@ -321,7 +321,7 @@ static int assert_size_in_bound(cls_method_context_t hctx, int bound,
 }
 
 static int assert_size_in_bound_op(cls_method_context_t hctx,
-                   bufferlist *in, bufferlist *out) {
+		   bufferlist *in, bufferlist *out) {
   CLS_LOG(20, "assert_size_in_bound_op");
   assert_size_args op;
   bufferlist::iterator it = in->begin();
@@ -419,7 +419,7 @@ static int omap_insert(cls_method_context_t hctx,
 }
 
 static int omap_insert_op(cls_method_context_t hctx,
-                   bufferlist *in, bufferlist *out) {
+		   bufferlist *in, bufferlist *out) {
   CLS_LOG(20, "omap_insert");
   omap_set_args op;
   bufferlist::iterator it = in->begin();
@@ -473,7 +473,7 @@ static int create_with_omap(cls_method_context_t hctx,
 }
 
 static int create_with_omap_op(cls_method_context_t hctx,
-                   bufferlist *in, bufferlist *out) {
+		   bufferlist *in, bufferlist *out) {
   CLS_LOG(20, "omap_insert");
   map<string, bufferlist> omap;
   bufferlist::iterator it = in->begin();
@@ -564,7 +564,7 @@ static int omap_remove(cls_method_context_t hctx,
 }
 
 static int omap_remove_op(cls_method_context_t hctx,
-                   bufferlist *in, bufferlist *out) {
+		   bufferlist *in, bufferlist *out) {
   CLS_LOG(20, "omap_remove");
   omap_rm_args op;
   bufferlist::iterator it = in->begin();
@@ -627,7 +627,7 @@ static int maybe_read_for_balance(cls_method_context_t hctx,
 }
 
 static int maybe_read_for_balance_op(cls_method_context_t hctx,
-                   bufferlist *in, bufferlist *out) {
+		   bufferlist *in, bufferlist *out) {
   CLS_LOG(20, "maybe_read_for_balance");
   rebalance_args op;
   bufferlist::iterator it = in->begin();
@@ -652,35 +652,35 @@ void __cls_init()
 
   cls_register("kvs", &h_class);
   cls_register_cxx_method(h_class, "get_idata_from_key",
-                          CLS_METHOD_RD,
-                          get_idata_from_key_op, &h_get_idata_from_key);
+			  CLS_METHOD_RD,
+			  get_idata_from_key_op, &h_get_idata_from_key);
   cls_register_cxx_method(h_class, "get_next_idata",
-                          CLS_METHOD_RD,
-                          get_next_idata_op, &h_get_next_idata);
+			  CLS_METHOD_RD,
+			  get_next_idata_op, &h_get_next_idata);
   cls_register_cxx_method(h_class, "get_prev_idata",
-                          CLS_METHOD_RD,
-                          get_prev_idata_op, &h_get_prev_idata);
+			  CLS_METHOD_RD,
+			  get_prev_idata_op, &h_get_prev_idata);
   cls_register_cxx_method(h_class, "read_many",
-                          CLS_METHOD_RD,
-                          read_many_op, &h_read_many);
+			  CLS_METHOD_RD,
+			  read_many_op, &h_read_many);
   cls_register_cxx_method(h_class, "check_writable",
-                          CLS_METHOD_RD | CLS_METHOD_WR,
-                          check_writable_op, &h_check_writable);
+			  CLS_METHOD_RD | CLS_METHOD_WR,
+			  check_writable_op, &h_check_writable);
   cls_register_cxx_method(h_class, "assert_size_in_bound",
-                          CLS_METHOD_WR,
-                          assert_size_in_bound_op, &h_assert_size_in_bound);
+			  CLS_METHOD_WR,
+			  assert_size_in_bound_op, &h_assert_size_in_bound);
   cls_register_cxx_method(h_class, "omap_insert",
-                          CLS_METHOD_WR,
-                          omap_insert_op, &h_omap_insert);
+			  CLS_METHOD_WR,
+			  omap_insert_op, &h_omap_insert);
   cls_register_cxx_method(h_class, "create_with_omap",
 			  CLS_METHOD_WR,
 			  create_with_omap_op, &h_create_with_omap);
   cls_register_cxx_method(h_class, "omap_remove",
-                          CLS_METHOD_WR,
-                          omap_remove_op, &h_omap_remove);
+			  CLS_METHOD_WR,
+			  omap_remove_op, &h_omap_remove);
   cls_register_cxx_method(h_class, "maybe_read_for_balance",
-                          CLS_METHOD_RD,
-                          maybe_read_for_balance_op, &h_maybe_read_for_balance);
+			  CLS_METHOD_RD,
+			  maybe_read_for_balance_op, &h_maybe_read_for_balance);
 
   return;
 }

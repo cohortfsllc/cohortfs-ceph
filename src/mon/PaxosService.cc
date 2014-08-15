@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -70,7 +70,7 @@ bool PaxosService::dispatch(PaxosServiceMessage *m)
   }
 
   // preprocess
-  if (preprocess_query(m)) 
+  if (preprocess_query(m))
     return true;  // easy!
 
   // leader?
@@ -78,7 +78,7 @@ bool PaxosService::dispatch(PaxosServiceMessage *m)
     mon->forward_request_leader(m);
     return true;
   }
-  
+
   // writeable?
   if (!is_writeable()) {
     dout(10) << " waiting for paxos -> writeable" << dendl;
@@ -98,14 +98,14 @@ bool PaxosService::dispatch(PaxosServiceMessage *m)
 	  proposal_timer = new C_Propose(this);
 	  dout(10) << " setting proposal_timer " << proposal_timer << " with delay of " << delay << dendl;
 	  mon->timer.add_event_after(delay, proposal_timer);
-	} else { 
+	} else {
 	  dout(10) << " proposal_timer already set" << dendl;
 	}
       }
     } else {
       dout(10) << " not proposing" << dendl;
     }
-  }     
+  }
   return true;
 }
 
@@ -180,8 +180,8 @@ void PaxosService::propose_pending()
   }
 
   /**
-   * @note The value we propose is encoded in a bufferlist, passed to 
-   *	   Paxos::propose_new_value and it is obtained by calling a 
+   * @note The value we propose is encoded in a bufferlist, passed to
+   *	   Paxos::propose_new_value and it is obtained by calling a
    *	   function that must be implemented by the class implementing us.
    *	   I.e., the function encode_pending will be the one responsible
    *	   to encode whatever is pending on the implementation class into a

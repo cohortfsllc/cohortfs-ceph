@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #include <curl/curl.h>
 #include <curl/easy.h>
 #include <curl/multi.h>
@@ -82,9 +84,9 @@ int RGWHTTPClient::process(const char *method, const char *url)
   }
   curl_easy_setopt(curl_handle, CURLOPT_READFUNCTION, send_http_data);
   curl_easy_setopt(curl_handle, CURLOPT_READDATA, (void *)this);
-  curl_easy_setopt(curl_handle, CURLOPT_UPLOAD, 1L); 
+  curl_easy_setopt(curl_handle, CURLOPT_UPLOAD, 1L);
   if (has_send_len) {
-    curl_easy_setopt(curl_handle, CURLOPT_INFILESIZE, (void *)send_len); 
+    curl_easy_setopt(curl_handle, CURLOPT_INFILESIZE, (void *)send_len);
   }
   CURLcode status = curl_easy_perform(curl_handle);
   if (status) {
@@ -170,9 +172,9 @@ int RGWHTTPClient::init_async(const char *method, const char *url, void **handle
   }
   curl_easy_setopt(easy_handle, CURLOPT_READFUNCTION, send_http_data);
   curl_easy_setopt(easy_handle, CURLOPT_READDATA, (void *)this);
-  curl_easy_setopt(easy_handle, CURLOPT_UPLOAD, 1L); 
+  curl_easy_setopt(easy_handle, CURLOPT_UPLOAD, 1L);
   if (has_send_len) {
-    curl_easy_setopt(easy_handle, CURLOPT_INFILESIZE, (void *)send_len); 
+    curl_easy_setopt(easy_handle, CURLOPT_INFILESIZE, (void *)send_len);
   }
 
   return 0;
@@ -199,12 +201,12 @@ static int do_curl_wait(CephContext *cct, CURLM *handle)
   fd_set fdwrite;
   fd_set fdexcep;
   int maxfd = -1;
- 
+
   FD_ZERO(&fdread);
   FD_ZERO(&fdwrite);
   FD_ZERO(&fdexcep);
 
-  /* get file descriptors from the transfers */ 
+  /* get file descriptors from the transfers */
   int ret = curl_multi_fdset(handle, &fdread, &fdwrite, &fdexcep, &maxfd);
   if (ret) {
     dout(0) << "ERROR: curl_multi_fdset returned " << ret << dendl;
@@ -242,7 +244,7 @@ int RGWHTTPClient::process_request(void *handle, bool wait_for_data, bool *done)
     if (wait_for_data) {
       int ret = do_curl_wait(cct, req_data->multi_handle);
       if (ret < 0) {
-        return ret;
+	return ret;
       }
     }
 
@@ -251,21 +253,21 @@ int RGWHTTPClient::process_request(void *handle, bool wait_for_data, bool *done)
     switch (mstatus) {
       case CURLM_OK:
       case CURLM_CALL_MULTI_PERFORM:
-        break;
+	break;
       default:
-        return -EINVAL;
+	return -EINVAL;
     }
     int msgs_left;
     CURLMsg *msg;
     while ((msg = curl_multi_info_read(req_data->multi_handle, &msgs_left))) {
       if (msg->msg == CURLMSG_DONE) {
-        switch (msg->data.result) {
-          case CURLE_OK:
-            break;
-          default:
-            dout(20) << "ERROR: msg->data.result=" << msg->data.result << dendl;
-            return -EIO;
-        }
+	switch (msg->data.result) {
+	  case CURLE_OK:
+	    break;
+	  default:
+	    dout(20) << "ERROR: msg->data.result=" << msg->data.result << dendl;
+	    return -EIO;
+	}
       }
     }
   } while (mstatus == CURLM_CALL_MULTI_PERFORM);

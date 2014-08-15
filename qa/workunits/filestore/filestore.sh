@@ -1,4 +1,4 @@
-#!/bin/bash 
+#!/bin/bash
 #
 # Copyright (C) 2013 Cloudwatt <libre.licensing@cloudwatt.com>
 #

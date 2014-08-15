@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  */
 #ifndef WORKLOAD_GENERATOR_H_
 #define WORKLOAD_GENERATOR_H_
@@ -110,7 +110,7 @@ class WorkloadGenerator : public TestObjectStoreState {
 
   bool should_destroy_collection() {
     return ((m_destroy_coll_every_nr_runs > 0) &&
-        ((int)m_nr_runs.read() >= m_destroy_coll_every_nr_runs));
+	((int)m_nr_runs.read() >= m_destroy_coll_every_nr_runs));
   }
   void do_destroy_collection(ObjectStore::Transaction *t, coll_entry_t *entry,
       C_StatState *stat);
@@ -130,7 +130,7 @@ public:
 
   public:
     C_OnReadable(WorkloadGenerator *state,
-                                  ObjectStore::Transaction *t)
+				  ObjectStore::Transaction *t)
      :TestObjectStoreState::C_OnFinished(state, t), wrkldgen_state(state) { }
 
     void finish(int r)
@@ -145,8 +145,8 @@ public:
 
   public:
     C_OnDestroyed(WorkloadGenerator *state,
-        ObjectStore::Transaction *t, coll_entry_t *entry) :
-          C_OnReadable(state, t), m_entry(entry) {}
+	ObjectStore::Transaction *t, coll_entry_t *entry) :
+	  C_OnReadable(state, t), m_entry(entry) {}
 
     void finish(int r) {
       C_OnReadable::finish(r);

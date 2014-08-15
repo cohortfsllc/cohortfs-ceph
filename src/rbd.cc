@@ -79,57 +79,57 @@ void usage()
   cout <<
 "usage: rbd [-n <auth user>] [OPTIONS] <cmd> ...\n"
 "where 'vol' is a rados vol name (default is 'rbd') and 'cmd' is one of:\n"
-"  (ls | list) [vol-name]                     list rbd images\n"
-"  info <image-name>                           show information about image size,\n"
-"                                              striping, etc.\n"
-"  create --size <MB> <name>                   create an empty image\n"
-"  resize --size <MB> <image-name>             resize (expand or contract) image\n"
-"  rm <image-name>                             delete an image\n"
-"  export <image-name> <path>                  export image to file\n"
-"                                              \"-\" for stdout\n"
-"  import <path> <image-name>                  import image from file\n"
-"                                              (dest defaults\n"
-"                                               as the filename part of file)\n"
-"                                              \"-\" for stdin\n"
-"  (cp | copy) <src> <dest>                    copy src image to dest\n"
-"  (mv | rename) <src> <dest>                  rename src image to dest\n"
-"  watch <image-name>                          watch events on image\n"
-"  map <image-name>                            map image to a block device\n"
-"                                              using the kernel\n"
-"  unmap <device>                              unmap a rbd device that was\n"
-"                                              mapped by the kernel\n"
-"  showmapped                                  show the rbd images mapped\n"
-"                                              by the kernel\n"
-"  lock list <image-name>                      show locks held on an image\n"
+"  (ls | list) [vol-name]		      list rbd images\n"
+"  info <image-name>			       show information about image size,\n"
+"					       striping, etc.\n"
+"  create --size <MB> <name>		       create an empty image\n"
+"  resize --size <MB> <image-name>	       resize (expand or contract) image\n"
+"  rm <image-name>			       delete an image\n"
+"  export <image-name> <path>		       export image to file\n"
+"					       \"-\" for stdout\n"
+"  import <path> <image-name>		       import image from file\n"
+"					       (dest defaults\n"
+"						as the filename part of file)\n"
+"					       \"-\" for stdin\n"
+"  (cp | copy) <src> <dest>		       copy src image to dest\n"
+"  (mv | rename) <src> <dest>		       rename src image to dest\n"
+"  watch <image-name>			       watch events on image\n"
+"  map <image-name>			       map image to a block device\n"
+"					       using the kernel\n"
+"  unmap <device>			       unmap a rbd device that was\n"
+"					       mapped by the kernel\n"
+"  showmapped				       show the rbd images mapped\n"
+"					       by the kernel\n"
+"  lock list <image-name>		       show locks held on an image\n"
 "  lock add <image-name> <id> [--shared <tag>] take a lock called id on an image\n"
 "  lock remove <image-name> <id> <locker>      release a lock on an image\n"
-"  bench-write <image-name>                    simple write benchmark\n"
-"                 --io-size <bytes>              write size\n"
-"                 --io-threads <num>             ios in flight\n"
-"                 --io-total <bytes>             total bytes to write\n"
-"                 --io-pattern <seq|rand>        write pattern\n"
+"  bench-write <image-name>		       simple write benchmark\n"
+"		  --io-size <bytes>		 write size\n"
+"		  --io-threads <num>		 ios in flight\n"
+"		  --io-total <bytes>		 total bytes to write\n"
+"		  --io-pattern <seq|rand>	 write pattern\n"
 "\n"
 "<image-name> is [vol/]name, or you may specify\n"
 "individual pieces of names with -p/--vol and/or --image.\n"
 "\n"
 "Other input options:\n"
-"  --vol <volume>                     source volume name\n"
-"  --image <image-name>               image name\n"
-"  --dest <image-name>                destination [volume and] image name\n"
-"  --dest-vol <name>                  destination volume name\n"
-"  --path <path-name>                 path name for import/export\n"
-"  --size <size in MB>                size of image for create and resize\n"
-"  --id <username>                    rados user (without 'client.'prefix) to\n"
-"                                     authenticate as\n"
-"  --keyfile <path>                   file containing secret key for use with cephx\n"
-"  --shared <tag>                     take a shared (rather than exclusive) lock\n"
-"  --format <output-format>           output format (default: plain, json, xml)\n"
-"  --pretty-format                    make json or xml output more readable\n"
-"  --no-settle                        do not wait for udevadm to settle on map/unmap\n"
-"  --no-progress                      do not show progress for long-running commands\n"
-"  -o, --options <map-options>        options to use when mapping an image\n"
-"  --read-only                        set device readonly when mapping image\n"
-"  --allow-shrink                     allow shrinking of an image when resizing\n";
+"  --vol <volume>		      source volume name\n"
+"  --image <image-name>		      image name\n"
+"  --dest <image-name>		      destination [volume and] image name\n"
+"  --dest-vol <name>		      destination volume name\n"
+"  --path <path-name>		      path name for import/export\n"
+"  --size <size in MB>		      size of image for create and resize\n"
+"  --id <username>		      rados user (without 'client.'prefix) to\n"
+"				      authenticate as\n"
+"  --keyfile <path>		      file containing secret key for use with cephx\n"
+"  --shared <tag>		      take a shared (rather than exclusive) lock\n"
+"  --format <output-format>	      output format (default: plain, json, xml)\n"
+"  --pretty-format		      make json or xml output more readable\n"
+"  --no-settle			      do not wait for udevadm to settle on map/unmap\n"
+"  --no-progress		      do not show progress for long-running commands\n"
+"  -o, --options <map-options>	      options to use when mapping an image\n"
+"  --read-only			      set device readonly when mapping image\n"
+"  --allow-shrink		      allow shrinking of an image when resizing\n";
 }
 
 struct MyProgressContext : public librbd::ProgressContext {
@@ -520,7 +520,7 @@ static int do_bench_write(librbd::Image& image, uint64_t io_size,
     thread_offset.push_back(start_pos);
   }
 
-  printf("  SEC       OPS   OPS/SEC   BYTES/SEC\n");
+  printf("  SEC	      OPS   OPS/SEC   BYTES/SEC\n");
   uint64_t off;
   for (off = 0; off < io_bytes; off += io_size) {
     b.wait_for(io_threads - 1);
@@ -532,18 +532,18 @@ static int do_bench_write(librbd::Image& image, uint64_t io_size,
       off += io_size;
 
       if (pattern == "rand") {
-        thread_offset[i] = (rand() % (size / io_size)) * io_size;
+	thread_offset[i] = (rand() % (size / io_size)) * io_size;
       } else {
-        thread_offset[i] += io_size;
-        if (thread_offset[i] + io_size > size)
-          thread_offset[i] = 0;
+	thread_offset[i] += io_size;
+	if (thread_offset[i] + io_size > size)
+	  thread_offset[i] = 0;
       }
     }
 
     utime_t now = ceph_clock_now(NULL);
     utime_t elapsed = now - start;
     if (elapsed.sec() != last.sec()) {
-      printf("%5d  %8d  %8.2lf  %8.2lf\n",
+      printf("%5d  %8d	%8.2lf	%8.2lf\n",
 	     (int)elapsed,
 	     (int)(ios - io_threads),
 	     (double)(ios - io_threads) / elapsed,
@@ -560,7 +560,7 @@ static int do_bench_write(librbd::Image& image, uint64_t io_size,
   utime_t now = ceph_clock_now(NULL);
   double elapsed = now - start;
 
-  printf("elapsed: %5d  ops: %8d  ops/sec: %8.2lf  bytes/sec: %8.2lf\n",
+  printf("elapsed: %5d	ops: %8d  ops/sec: %8.2lf  bytes/sec: %8.2lf\n",
 	 (int)elapsed, ios, (double)ios / elapsed, (double)off / elapsed);
 
   return 0;
@@ -603,7 +603,7 @@ static int export_read_cb(uint64_t ofs, size_t len, const char *buf, void *arg)
 
 	maplen = len;
 	localbuf = (char *)mmap(NULL, maplen, PROT_READ,
-			        MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+				MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
 	if (localbuf == MAP_FAILED) {
 	  cerr << "rbd: MAP_FAILED mmap'ing buffer for zero writes"
 	       << std::endl;
@@ -962,9 +962,9 @@ static int do_kernel_add(const char *volname, const char *imgname)
     r = system(cmd);
     if (r) {
       if (r < 0)
-        cerr << "rbd: error executing modprobe as shell command!" << std::endl;
+	cerr << "rbd: error executing modprobe as shell command!" << std::endl;
       else
-        cerr << "rbd: modprobe rbd failed! (" << r << ")" <<std::endl;
+	cerr << "rbd: modprobe rbd failed! (" << r << ")" <<std::endl;
       return r;
     }
   }
@@ -981,13 +981,13 @@ static int do_kernel_add(const char *volname, const char *imgname)
     if (errno == ENOENT) {
       fd = open("/sys/bus/rbd/add", O_WRONLY);
       if (fd < 0) {
-        r = -errno;
-        if (r == -ENOENT) {
-          cerr << "rbd: /sys/bus/rbd/add does not exist!" << std::endl
-               << "Did you run 'modprobe rbd' or is your rbd module too old?"
-               << std::endl;
-        }
-        return r;
+	r = -errno;
+	if (r == -ENOENT) {
+	  cerr << "rbd: /sys/bus/rbd/add does not exist!" << std::endl
+	       << "Did you run 'modprobe rbd' or is your rbd module too old?"
+	       << std::endl;
+	}
+	return r;
       }
     } else {
       return -errno;
@@ -1180,7 +1180,7 @@ static int get_rbd_seq(dev_t devno, string &seq)
     if (!err.empty()) {
       cerr << err << std::endl;
       cerr << "rbd: could not parse major number read from " << fn << ": "
-           << cpp_strerror(-r) << std::endl;
+	   << cpp_strerror(-r) << std::endl;
       continue;
     }
     if (cur_major != (int)major(wholediskno))
@@ -1248,9 +1248,9 @@ static int do_kernel_rm(const char *dev)
     int r = system("/sbin/udevadm settle");
     if (r) {
       if (r < 0)
-        cerr << "rbd: error executing udevadm as shell command!" << std::endl;
+	cerr << "rbd: error executing udevadm as shell command!" << std::endl;
       else
-        cerr << "rbd: '/sbin/udevadm settle' failed! (" << r << ")" <<std::endl;
+	cerr << "rbd: '/sbin/udevadm settle' failed! (" << r << ")" <<std::endl;
       // ignore the error, though.
     }
   }
@@ -1262,7 +1262,7 @@ static int do_kernel_rm(const char *dev)
     if (errno == ENOENT) {
       fd = open("/sys/bus/rbd/remove", O_WRONLY);
       if (fd < 0)
-        return -errno;
+	return -errno;
     } else {
       return -errno;
     }
@@ -1283,9 +1283,9 @@ static int do_kernel_rm(const char *dev)
     int r = system("/sbin/udevadm settle");
     if (r) {
       if (r < 0)
-        cerr << "rbd: error executing udevadm as shell command!" << std::endl;
+	cerr << "rbd: error executing udevadm as shell command!" << std::endl;
       else
-        cerr << "rbd: '/sbin/udevadm settle' failed! (" << r << ")" <<std::endl;
+	cerr << "rbd: '/sbin/udevadm settle' failed! (" << r << ")" <<std::endl;
       return r;
     }
   }
@@ -1337,13 +1337,13 @@ static void put_map_option(const string key, string val)
   map<string, string>::const_iterator it = map_options.find(key);
   if (it != map_options.end()) {
     cerr << "rbd: warning: redefining map option " << key << ": '"
-         << it->second << "' -> '" << val << "'" << std::endl;
+	 << it->second << "' -> '" << val << "'" << std::endl;
   }
   map_options[key] = val;
 }
 
 static int put_map_option_value(const string opt, const char *value_char,
-                                string (*parse_cb)(const char *))
+				string (*parse_cb)(const char *))
 {
   if (!value_char || *value_char == '\0') {
     cerr << "rbd: " << opt << " option requires a value" << std::endl;
@@ -1353,7 +1353,7 @@ static int put_map_option_value(const string opt, const char *value_char,
   string value = parse_cb(value_char);
   if (value.empty()) {
     cerr << "rbd: invalid " << opt << " value '" << value_char << "'"
-         << std::endl;
+	 << std::endl;
     return 1;
   }
 
@@ -1373,23 +1373,23 @@ static int parse_map_options(char *options)
 
     if (!strcmp(this_char, "fsid")) {
       if (put_map_option_value("fsid", value_char, map_option_uuid_cb))
-        return 1;
+	return 1;
     } else if (!strcmp(this_char, "ip")) {
       if (put_map_option_value("ip", value_char, map_option_ip_cb))
-        return 1;
+	return 1;
     } else if (!strcmp(this_char, "share") || !strcmp(this_char, "noshare")) {
       put_map_option("share", this_char);
     } else if (!strcmp(this_char, "crc") || !strcmp(this_char, "nocrc")) {
       put_map_option("crc", this_char);
     } else if (!strcmp(this_char, "mount_timeout")) {
       if (put_map_option_value("mount_timeout", value_char, map_option_int_cb))
-        return 1;
+	return 1;
     } else if (!strcmp(this_char, "osdkeepalive")) {
       if (put_map_option_value("osdkeepalive", value_char, map_option_int_cb))
-        return 1;
+	return 1;
     } else if (!strcmp(this_char, "osd_idle_ttl")) {
       if (put_map_option_value("osd_idle_ttl", value_char, map_option_int_cb))
-        return 1;
+	return 1;
     } else if (!strcmp(this_char, "rw") || !strcmp(this_char, "ro")) {
       put_map_option("rw", this_char);
     } else {
@@ -1476,7 +1476,7 @@ static int get_cmd(const char *cmd, bool lockcmd)
 /*
  * Called 1-N times depending on how many args the command needs.  If
  * the positional varN is already set, set the next one; this handles
- * both --args above and unadorned args below.  Calling with all args
+ * both --args above and unadorned args below.	Calling with all args
  * filled is an error.
  */
 static bool set_conf_param(const char *param, const char **var1,
@@ -1578,8 +1578,8 @@ int main(int argc, const char **argv)
     } else if (ceph_argparse_witharg(args, i, &val, "-o", "--options", (char*)NULL)) {
       char *map_options = strdup(val.c_str());
       if (parse_map_options(map_options)) {
-        cerr << "rbd: couldn't parse map options" << std::endl;
-        return EXIT_FAILURE;
+	cerr << "rbd: couldn't parse map options" << std::endl;
+	return EXIT_FAILURE;
       }
     } else if (ceph_argparse_flag(args, &i, "--read-only", (char *)NULL)) {
       // --read-only is equivalent to -o ro

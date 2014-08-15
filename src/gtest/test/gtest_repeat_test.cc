@@ -37,7 +37,7 @@
 
 // Indicates that this translation unit is part of Google Test's
 // implementation.  It must come before gtest-internal-inl.h is
-// included, or there will be a compiler error.  This trick is to
+// included, or there will be a compiler error.	 This trick is to
 // prevent a user from accidentally including gtest-internal-inl.h in
 // his code.
 #define GTEST_IMPLEMENTATION_ 1
@@ -66,9 +66,9 @@ namespace {
     const int actual_val = (actual);\
     if (::testing::internal::IsTrue(expected_val != actual_val)) {\
       ::std::cout << "Value of: " #actual "\n"\
-                  << "  Actual: " << actual_val << "\n"\
-                  << "Expected: " #expected "\n"\
-                  << "Which is: " << expected_val << "\n";\
+		  << "	Actual: " << actual_val << "\n"\
+		  << "Expected: " #expected "\n"\
+		  << "Which is: " << expected_val << "\n";\
       ::testing::internal::posix::Abort();\
     }\
   } while (::testing::internal::AlwaysFalse())
@@ -128,14 +128,14 @@ class MyParamTest : public testing::TestWithParam<int> {};
 
 TEST_P(MyParamTest, ShouldPass) {
   // TODO(vladl@google.com): Make parameter value checking robust
-  //                         WRT order of tests.
+  //			     WRT order of tests.
   GTEST_CHECK_INT_EQ_(g_param_test_count % kNumberOfParamTests, GetParam());
   g_param_test_count++;
 }
 INSTANTIATE_TEST_CASE_P(MyParamSequence,
-                        MyParamTest,
-                        testing::Range(0, kNumberOfParamTests));
-#endif  // GTEST_HAS_PARAM_TEST
+			MyParamTest,
+			testing::Range(0, kNumberOfParamTests));
+#endif	// GTEST_HAS_PARAM_TEST
 
 // Resets the count for each test.
 void ResetCounts() {
@@ -146,7 +146,7 @@ void ResetCounts() {
   g_death_test_count = 0;
 #if GTEST_HAS_PARAM_TEST
   g_param_test_count = 0;
-#endif  // GTEST_HAS_PARAM_TEST
+#endif	// GTEST_HAS_PARAM_TEST
 }
 
 // Checks that the count for each test is expected.
@@ -158,7 +158,7 @@ void CheckCounts(int expected) {
   GTEST_CHECK_INT_EQ_(expected, g_death_test_count);
 #if GTEST_HAS_PARAM_TEST
   GTEST_CHECK_INT_EQ_(expected * kNumberOfParamTests, g_param_test_count);
-#endif  // GTEST_HAS_PARAM_TEST
+#endif	// GTEST_HAS_PARAM_TEST
 }
 
 // Tests the behavior of Google Test when --gtest_repeat is not specified.
@@ -203,7 +203,7 @@ void TestRepeatWithFilterForSuccessfulTests(int repeat) {
   GTEST_CHECK_INT_EQ_(repeat, g_death_test_count);
 #if GTEST_HAS_PARAM_TEST
   GTEST_CHECK_INT_EQ_(repeat * kNumberOfParamTests, g_param_test_count);
-#endif  // GTEST_HAS_PARAM_TEST
+#endif	// GTEST_HAS_PARAM_TEST
 }
 
 // Tests using --gtest_repeat when --gtest_filter specifies a set of
@@ -221,7 +221,7 @@ void TestRepeatWithFilterForFailedTests(int repeat) {
   GTEST_CHECK_INT_EQ_(0, g_death_test_count);
 #if GTEST_HAS_PARAM_TEST
   GTEST_CHECK_INT_EQ_(0, g_param_test_count);
-#endif  // GTEST_HAS_PARAM_TEST
+#endif	// GTEST_HAS_PARAM_TEST
 }
 
 }  // namespace

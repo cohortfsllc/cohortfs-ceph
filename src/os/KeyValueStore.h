@@ -425,18 +425,18 @@ class KeyValueStore : public ObjectStore,
   int read(const coll_t &cid, const hobject_t& oid, uint64_t offset, size_t len,
 	   bufferlist& bl, bool allow_eio = false);
   int fiemap(const coll_t &cid, const hobject_t& oid, uint64_t offset,
-             size_t len, bufferlist& bl);
+	     size_t len, bufferlist& bl);
 
   int _touch(const coll_t &cid, const hobject_t& oid, BufferTransaction &t);
   int _write(const coll_t &cid, const hobject_t& oid, uint64_t offset,
-             size_t len, const bufferlist& bl, BufferTransaction &t,
-             bool replica = false);
+	     size_t len, const bufferlist& bl, BufferTransaction &t,
+	     bool replica = false);
   int _zero(const coll_t &cid, const hobject_t& oid, uint64_t offset,
-            size_t len, BufferTransaction &t);
+	    size_t len, BufferTransaction &t);
   int _truncate(const coll_t &cid, const hobject_t& oid, uint64_t size,
 		BufferTransaction &t);
   int _clone(const coll_t &cid, const hobject_t& oldoid,
-             const hobject_t& newoid, BufferTransaction &t);
+	     const hobject_t& newoid, BufferTransaction &t);
   int _clone_range(const coll_t &cid, const hobject_t& oldoid,
 		   const hobject_t& newoid, uint64_t srcoff,
 		   uint64_t len, uint64_t dstoff, BufferTransaction &t);
@@ -455,7 +455,7 @@ class KeyValueStore : public ObjectStore,
   int getattr(const coll_t &cid, const hobject_t& oid, const char *name,
 	      bufferptr &bp);
   int getattrs(const coll_t &cid, const hobject_t& oid,
-               map<string,bufferptr>& aset, bool user_only = false);
+	       map<string,bufferptr>& aset, bool user_only = false);
 
   int _setattrs(const coll_t &cid, const hobject_t& oid,
 		map<string, bufferptr>& aset, BufferTransaction &t);
@@ -470,7 +470,7 @@ class KeyValueStore : public ObjectStore,
   int _collection_setattr(const coll_t &c, const char *name, const void *value,
 			  size_t size, BufferTransaction &t);
   int _collection_rmattr(const coll_t &c, const char *name,
-                         BufferTransaction &t);
+			 BufferTransaction &t);
   int _collection_setattrs(const coll_t &cid, map<string,bufferptr> &aset,
 			   BufferTransaction &t);
 
@@ -507,9 +507,9 @@ class KeyValueStore : public ObjectStore,
     bool allow_eio = false);
   int omap_get_keys(const coll_t &c, const hobject_t &oid, set<string> *keys);
   int omap_get_values(const coll_t &c, const hobject_t &oid,
-                      const set<string> &keys, map<string, bufferlist> *out);
+		      const set<string> &keys, map<string, bufferlist> *out);
   int omap_check_keys(const coll_t &c, const hobject_t &oid,
-                      const set<string> &keys, set<string> *out);
+		      const set<string> &keys, set<string> *out);
   ObjectMap::ObjectMapIterator get_omap_iterator(const coll_t &c,
 						 const hobject_t &oid);
 
@@ -526,12 +526,12 @@ class KeyValueStore : public ObjectStore,
 		    map<string, bufferlist> &aset,
 		    BufferTransaction &t);
   int _omap_rmkeys(const coll_t &cid, const hobject_t &oid,
-                   const set<string> &keys, BufferTransaction &t);
+		   const set<string> &keys, BufferTransaction &t);
   int _omap_rmkeyrange(const coll_t &cid, const hobject_t &oid,
 		       const string& first, const string& last,
 		       BufferTransaction &t);
   int _omap_setheader(const coll_t &cid, const hobject_t &oid,
-                      const bufferlist &bl, BufferTransaction &t);
+		      const bufferlist &bl, BufferTransaction &t);
 
   virtual const char** get_tracked_conf_keys() const;
   virtual void handle_conf_change(const struct md_config_t *conf,

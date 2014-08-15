@@ -54,7 +54,7 @@ sub load_sum {
 			$s->{$k}->{'statlat'} = $s->{$k}->{'lstatsum'} / $s->{$k}->{'lstatnum'} if $s->{$k}->{'lstatnum'} > 0;
 			$s->{$k}->{'dirlat'} = $s->{$k}->{'ldirsum'} / $s->{$k}->{'ldirnum'} if $s->{$k}->{'ldirnum'} > 0;
 		}
-	}		
+	}
 	return $s;
 }
 
@@ -72,20 +72,20 @@ for my $f (@filt) {
 			#print "db @db\n";
 			my $ok = 1;
 			for my $r (@reg) {
-				
+
 				$ok = 0 unless grep {$_ eq $r} @db;
 			}
 			next unless $ok;
 		}
-		#next if ($f ne '.' && $d !~ /$reg/);			
+		#next if ($f ne '.' && $d !~ /$reg/);
 		#print "$d\n";
 		my ($x) = $d =~ /$xaxis=([\d\.]+)/;
-		
+
 		for my $v (@vars) {
 			my ($what, $field) = $v =~ /^(.+)\.([^\.]+)$/;
 			#print "$what $field .. $v  .. $f.$field\n";
 			my $s = &load_sum("$d/sum.$what");
-			
+
 			#print "\t$v";
 			if ($field =~ /^sum=/) {
 				#warn "SUM field $field\n";

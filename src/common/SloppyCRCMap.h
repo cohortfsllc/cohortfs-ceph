@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
 #ifndef CEPH_COMMON_SLOPPYCRCMAP_H
@@ -20,7 +20,7 @@
 class SloppyCRCMap {
   static const int crc_iv = 0xffffffff;
 
-  std::map<uint64_t, uint32_t> crc_map;  // offset -> crc(-1)
+  std::map<uint64_t, uint32_t> crc_map;	 // offset -> crc(-1)
   uint32_t block_size;
   uint32_t zero_crc;
 

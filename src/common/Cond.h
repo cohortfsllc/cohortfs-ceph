@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 
@@ -40,11 +40,11 @@ class Cond {
     int r = pthread_cond_init(&_c,NULL);
     assert(r == 0);
   }
-  virtual ~Cond() { 
-    pthread_cond_destroy(&_c); 
+  virtual ~Cond() {
+    pthread_cond_destroy(&_c);
   }
 
-  int Wait(Mutex &mutex)  { 
+  int Wait(Mutex &mutex)  {
     // make sure this cond is used with one mutex only
     assert(waiter_mutex == NULL || waiter_mutex == &mutex);
     waiter_mutex = &mutex;
@@ -79,11 +79,11 @@ class Cond {
     return WaitUntil(mutex, when);
   }
 
-  int SloppySignal() { 
+  int SloppySignal() {
     int r = pthread_cond_broadcast(&_c);
     return r;
   }
-  int Signal() { 
+  int Signal() {
     // make sure signaler is holding the waiter's lock.
     assert(waiter_mutex == NULL ||
 	   waiter_mutex->is_locked());
@@ -91,7 +91,7 @@ class Cond {
     int r = pthread_cond_broadcast(&_c);
     return r;
   }
-  int SignalOne() { 
+  int SignalOne() {
     // make sure signaler is holding the waiter's lock.
     assert(waiter_mutex == NULL ||
 	   waiter_mutex->is_locked());
@@ -99,7 +99,7 @@ class Cond {
     int r = pthread_cond_signal(&_c);
     return r;
   }
-  int SignalAll() { 
+  int SignalAll() {
     // make sure signaler is holding the waiter's lock.
     assert(waiter_mutex == NULL ||
 	   waiter_mutex->is_locked());

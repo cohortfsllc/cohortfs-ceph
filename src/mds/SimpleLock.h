@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 
@@ -45,7 +45,7 @@ extern "C" {
 }
 
 
-#define CAP_ANY     0
+#define CAP_ANY	    0
 #define CAP_LONER   1
 #define CAP_XLOCKER 2
 
@@ -85,7 +85,7 @@ struct LockType {
 class SimpleLock {
 public:
   LockType *type;
-  
+
   const char *get_state_name(int n) const {
     switch (n) {
     case LOCK_UNDEF: return "UNDEF";
@@ -104,7 +104,7 @@ public:
     case LOCK_EXCL_SYNC: return "excl->sync";
     case LOCK_EXCL_LOCK: return "excl->lock";
     case LOCK_SYNC_EXCL: return "sync->excl";
-    case LOCK_LOCK_EXCL: return "lock->excl";      
+    case LOCK_LOCK_EXCL: return "lock->excl";
 
     case LOCK_XSYN: return "xsyn";
     case LOCK_XSYN_EXCL: return "xsyn->excl";
@@ -114,12 +114,12 @@ public:
     case LOCK_SYNC_MIX: return "sync->mix";
     case LOCK_SYNC_MIX2: return "sync->mix(2)";
     case LOCK_LOCK_TSYN: return "lock->tsyn";
-      
+
     case LOCK_MIX_LOCK: return "mix->lock";
     case LOCK_MIX_LOCK2: return "mix->lock(2)";
     case LOCK_MIX: return "mix";
     case LOCK_MIX_TSYN: return "mix->tsyn";
-      
+
     case LOCK_TSYN_MIX: return "tsyn->mix";
     case LOCK_TSYN_LOCK: return "tsyn->lock";
     case LOCK_TSYN: return "tsyn";
@@ -137,13 +137,13 @@ public:
 
 
   // waiting
-  static const uint64_t WAIT_RD          = (1<<0);  // to read
-  static const uint64_t WAIT_WR          = (1<<1);  // to write
-  static const uint64_t WAIT_XLOCK       = (1<<2);  // to xlock   (** dup)
-  static const uint64_t WAIT_STABLE      = (1<<2);  // for a stable state
+  static const uint64_t WAIT_RD		 = (1<<0);  // to read
+  static const uint64_t WAIT_WR		 = (1<<1);  // to write
+  static const uint64_t WAIT_XLOCK	 = (1<<2);  // to xlock	  (** dup)
+  static const uint64_t WAIT_STABLE	 = (1<<2);  // for a stable state
   static const uint64_t WAIT_REMOTEXLOCK = (1<<3);  // for a remote xlock
-  static const int WAIT_BITS        = 4;
-  static const uint64_t WAIT_ALL         = ((1<<WAIT_BITS)-1);
+  static const int WAIT_BITS	    = 4;
+  static const uint64_t WAIT_ALL	 = ((1<<WAIT_BITS)-1);
 
 
 protected:
@@ -218,7 +218,7 @@ public:
 
   SimpleLock(MDSCacheObject *o, LockType *lt) :
     type(lt),
-    parent(o), 
+    parent(o),
     state(LOCK_SYNC),
     num_rdlock(0),
     num_client_lease(0),
@@ -242,7 +242,7 @@ public:
 
   int get_wait_shift() const {
     switch (get_type()) {
-    case CEPH_LOCK_DN:       return 8;
+    case CEPH_LOCK_DN:	     return 8;
     case CEPH_LOCK_DVERSION: return 8 + 1*SimpleLock::WAIT_BITS;
     case CEPH_LOCK_IAUTH:    return 8 + 2*SimpleLock::WAIT_BITS;
     case CEPH_LOCK_ILINK:    return 8 + 3*SimpleLock::WAIT_BITS;
@@ -308,13 +308,13 @@ public:
   bool is_waiter_for(uint64_t mask) const {
     return parent->is_waiter_for(mask << get_wait_shift());
   }
-  
-  
+
+
 
   // state
   int get_state() const { return state; }
-  int set_state(int s) { 
-    state = s; 
+  int set_state(int s) {
+    state = s;
     //assert(!is_stable() || gather_set.size() == 0);  // gather should be empty in stable states.
     return s;
   }
@@ -365,7 +365,7 @@ public:
 
   void init_gather() {
     for (map<int,unsigned>::const_iterator p = parent->replicas_begin();
-	 p != parent->replicas_end(); 
+	 p != parent->replicas_end();
 	 ++p)
       more()->gather_set.insert(p->first);
   }
@@ -433,10 +433,10 @@ public:
 
   // rdlock
   bool is_rdlocked() const { return num_rdlock > 0; }
-  int get_rdlock() { 
+  int get_rdlock() {
     if (!num_rdlock)
       parent->get(MDSCacheObject::PIN_LOCK);
-    return ++num_rdlock; 
+    return ++num_rdlock;
   }
   int put_rdlock() {
     assert(num_rdlock>0);
@@ -471,13 +471,13 @@ public:
   }
 
   // xlock
-  void get_xlock(MutationRef who, client_t client) { 
+  void get_xlock(MutationRef who, client_t client) {
     assert(get_xlock_by() == 0);
     assert(state == LOCK_XLOCK || is_locallock() ||
 	   state == LOCK_LOCK /* if we are a slave */);
     parent->get(MDSCacheObject::PIN_LOCK);
     more()->num_xlock++;
-    more()->xlock_by = who; 
+    more()->xlock_by = who;
     more()->xlock_by_client = client;
   }
   void set_xlock_done() {
@@ -514,7 +514,7 @@ public:
   MutationRef get_xlock_by() const {
     return have_more() ? more()->xlock_by : MutationRef();
   }
-  
+
   // lease
   void get_client_lease() {
     num_client_lease++;
@@ -587,9 +587,9 @@ public:
 	return get_sm()->states[s].xlocker_caps | get_sm()->states[s].caps; // xlocker always gets more
       else if (is_loner_mode() && who == CAP_ANY)
 	return get_sm()->states[s].caps;
-      else 
+      else
 	return get_sm()->states[s].loner_caps | get_sm()->states[s].caps;  // loner always gets more
-    } else 
+    } else
       return get_sm()->states[s].replica_caps;
   }
   int gcaps_careful() {
@@ -650,9 +650,9 @@ public:
       out << " g=" << get_gather_set();
     if (num_client_lease)
       out << " l=" << num_client_lease;
-    if (is_rdlocked()) 
+    if (is_rdlocked())
       out << " r=" << get_num_rdlocks();
-    if (is_wrlocked()) 
+    if (is_wrlocked())
       out << " w=" << get_num_wrlocks();
     if (is_xlocked()) {
       out << " x=" << get_num_xlocks();
@@ -674,7 +674,7 @@ public:
 };
 WRITE_CLASS_ENCODER(SimpleLock)
 
-inline ostream& operator<<(ostream& out, const SimpleLock& l) 
+inline ostream& operator<<(ostream& out, const SimpleLock& l)
 {
   l.print(out);
   return out;

@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #include "rgw_common.h"
 #include "rgw_log.h"
 
@@ -65,7 +67,7 @@ int RGWEnv::get_int(const char *name, int def_val)
     return def_val;
 
   const char *s = iter->second.c_str();
-  return atoi(s);  
+  return atoi(s);
 }
 
 bool RGWEnv::get_bool(const char *name, bool def_val)
@@ -85,7 +87,7 @@ size_t RGWEnv::get_size(const char *name, size_t def_val)
     return def_val;
 
   const char *s = iter->second.c_str();
-  return atoll(s);  
+  return atoll(s);
 }
 
 bool RGWEnv::exists(const char *name)

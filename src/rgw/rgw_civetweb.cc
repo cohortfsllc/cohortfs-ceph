@@ -1,4 +1,5 @@
-
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #include <string.h>
 
 #include "civetweb/civetweb.h"
@@ -21,7 +22,7 @@ int RGWMongoose::write_data(const char *buf, int len)
 }
 
 RGWMongoose::RGWMongoose(mg_connection *_conn, int _port) : conn(_conn), port(_port), header_done(false), sent_header(false), has_content_length(false),
-                                                 explicit_keepalive(false)
+						 explicit_keepalive(false)
 {
 }
 
@@ -41,12 +42,12 @@ int RGWMongoose::complete_request()
       header_done = false; /* let's go back to writing the header */
 
       if (0 && data.length() == 0) {
-        has_content_length = true;
-        print("Transfer-Enconding: %s\n", "chunked");
-        data.append("0\r\n\r\n", sizeof("0\r\n\r\n")-1);
+	has_content_length = true;
+	print("Transfer-Enconding: %s\n", "chunked");
+	data.append("0\r\n\r\n", sizeof("0\r\n\r\n")-1);
       } else {
-        int r = send_content_length(data.length());
-        if (r < 0)
+	int r = send_content_length(data.length());
+	if (r < 0)
 	  return r;
       }
     }
@@ -97,16 +98,16 @@ void RGWMongoose::init_env(CephContext *cct)
       char c = *src;
       switch (c) {
        case '-':
-         c = '_';
-         break;
+	 c = '_';
+	 break;
        default:
-         c = toupper(c);
-         break;
+	 c = toupper(c);
+	 break;
       }
       *dest = c;
     }
     *dest = '\0';
-    
+
     env.set(buf, header->value);
   }
 

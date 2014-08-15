@@ -100,7 +100,7 @@ static char *parse_options(const char *data, int *filesys_flags)
 		if(*data == 0)
 			break;
 		next_keyword = strchr(data,',');
-	
+
 		/* temporarily null terminate end of keyword=value pair */
 		if(next_keyword)
 			*next_keyword++ = 0;
@@ -129,13 +129,13 @@ static char *parse_options(const char *data, int *filesys_flags)
 			*filesys_flags |= MS_NOEXEC;
 		} else if (strncmp(data, "exec", 4) == 0) {
 			*filesys_flags &= ~MS_NOEXEC;
-                } else if (strncmp(data, "sync", 4) == 0) {
-                        *filesys_flags |= MS_SYNCHRONOUS;
-                } else if (strncmp(data, "remount", 7) == 0) {
-                        *filesys_flags |= MS_REMOUNT;
-                } else if (strncmp(data, "mandlock", 8) == 0) {
-                        *filesys_flags |= MS_MANDLOCK;
-		} else if ((strncmp(data, "nobrl", 5) == 0) || 
+		} else if (strncmp(data, "sync", 4) == 0) {
+			*filesys_flags |= MS_SYNCHRONOUS;
+		} else if (strncmp(data, "remount", 7) == 0) {
+			*filesys_flags |= MS_REMOUNT;
+		} else if (strncmp(data, "mandlock", 8) == 0) {
+			*filesys_flags |= MS_MANDLOCK;
+		} else if ((strncmp(data, "nobrl", 5) == 0) ||
 			   (strncmp(data, "nolock", 6) == 0)) {
 			*filesys_flags &= ~MS_MANDLOCK;
 		} else if (strncmp(data, "noatime", 7) == 0) {
@@ -212,7 +212,7 @@ static char *parse_options(const char *data, int *filesys_flags)
 			} else {
 				pos = safe_cat(&out, &out_len, pos, data);
 			}
-			
+
 		}
 		data = next_keyword;
 	} while (data);

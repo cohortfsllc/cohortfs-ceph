@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -20,7 +20,7 @@
  * sections. It is signal-safe. Unlike pthread_spin_lock and friends, it has a
  * static initializer so you can write:
  *
- * simple_spinlock_t my_spinlock = SIMPLE_SPINLOCK_INITIALIZER 
+ * simple_spinlock_t my_spinlock = SIMPLE_SPINLOCK_INITIALIZER
  *
  * This allows you to use the lock anywhere you want-- even in global
  * constructors. Since simple_spinlock_t is a primitive type, it will start out

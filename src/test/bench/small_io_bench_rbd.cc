@@ -171,7 +171,7 @@ int main(int argc, char **argv)
 	  ),
 	new Uniform(vm["io-size"].as<unsigned>()),
 	new WeightedDist<Bencher::OpType>(rng, ops)
-        );
+	);
     }
 
     Bencher bencher(

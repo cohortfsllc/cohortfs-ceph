@@ -24,7 +24,7 @@ case "$1" in
     ;;
 
     purge)
-	rm -rf /var/log/ceph 
+	rm -rf /var/log/ceph
 	rm -rf /etc/ceph
     ;;
 

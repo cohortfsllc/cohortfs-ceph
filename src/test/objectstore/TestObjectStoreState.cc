@@ -50,7 +50,7 @@ void TestObjectStoreState::init(int colls, int objs)
     int coll_id = i;
     coll_entry_t *entry = coll_create(coll_id);
     dout(5) << "init create collection " << entry->m_coll.to_str()
-        << " meta " << entry->m_meta_obj.oid.name << dendl;
+	<< " meta " << entry->m_meta_obj.oid.name << dendl;
 
     t = new ObjectStore::Transaction;
     t->create_collection(entry->m_coll);
@@ -65,7 +65,7 @@ void TestObjectStoreState::init(int colls, int objs)
     baseid += objs;
 
     m_store->queue_transaction(&(entry->m_osr), t,
-        new C_OnFinished(this, t));
+	new C_OnFinished(this, t));
     inc_in_flight();
 
     m_collections.insert(make_pair(coll_id, entry));
@@ -154,7 +154,7 @@ TestObjectStoreState::coll_entry_t::~coll_entry_t()
     for (; it != m_objects.end(); ++it) {
       hobject_t *obj = it->second;
       if (obj) {
-        delete obj;
+	delete obj;
       }
     }
     m_objects.clear();
@@ -173,7 +173,7 @@ hobject_t *TestObjectStoreState::coll_entry_t::touch_obj(int id)
   map<int, hobject_t*>::iterator it = m_objects.find(id);
   if (it != m_objects.end()) {
     dout(5) << "touch_obj coll id " << m_id
-        << " name " << it->second->oid.name << dendl;
+	<< " name " << it->second->oid.name << dendl;
     return it->second;
   }
 
@@ -208,7 +208,7 @@ hobject_t *TestObjectStoreState::coll_entry_t::get_obj(int id, bool remove)
   map<int, hobject_t*>::iterator it = m_objects.find(id);
   if (it == m_objects.end()) {
     dout(5) << "get_obj coll " << m_coll.to_str()
-        << " obj #" << id << " non-existent" << dendl;
+	<< " obj #" << id << " non-existent" << dendl;
     return NULL;
   }
 
@@ -242,7 +242,7 @@ hobject_t *TestObjectStoreState::coll_entry_t::get_obj_at(int pos,
 {
   if (m_objects.empty()) {
     dout(5) << "get_obj_at coll " << m_coll.to_str() << " pos " << pos
-        << " in an empty collection" << dendl;
+	<< " in an empty collection" << dendl;
     return NULL;
   }
 
@@ -257,7 +257,7 @@ hobject_t *TestObjectStoreState::coll_entry_t::get_obj_at(int pos,
 
   if (ret == NULL) {
     dout(5) << "get_obj_at coll " << m_coll.to_str() << " pos " << pos
-        << " non-existent" << dendl;
+	<< " non-existent" << dendl;
     return NULL;
   }
 

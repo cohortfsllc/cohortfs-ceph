@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 #include "common/utf8.h"
@@ -26,7 +26,7 @@ TEST(IsValidUtf8, SimpleAscii) {
 
 TEST(IsValidUtf8, ControlChars) {
   // Sadly, control characters are valid utf8...
-  uint8_t control_chars[] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 
+  uint8_t control_chars[] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
 			      0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d };
   ASSERT_EQ(0, check_utf8((char*)control_chars, sizeof(control_chars)));
 }

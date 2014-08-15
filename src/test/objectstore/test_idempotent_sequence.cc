@@ -56,17 +56,17 @@ Commands:\n\
   " << run_seq_to << "\n\
 \n\
 Global Options:\n\
-  -c FILE                             Read configuration from FILE\n\
-  --osd-data PATH                     Set OSD Data path\n\
-  --osd-journal PATH                  Set OSD Journal path\n\
-  --osd-journal-size VAL              Set Journal size\n\
-  --help                              This message\n\
+  -c FILE			      Read configuration from FILE\n\
+  --osd-data PATH		      Set OSD Data path\n\
+  --osd-journal PATH		      Set OSD Journal path\n\
+  --osd-journal-size VAL	      Set Journal size\n\
+  --help			      This message\n\
 \n\
 Test-specific Options:\n\
-  --test-seed VAL                     Seed to run the test\n\
-  --test-status-file PATH             Path to keep the status file\n\
-  --test-num-colls VAL                Number of collections to create on init\n\
-  --test-num-objs VAL                 Number of objects to create on init\n\
+  --test-seed VAL		      Seed to run the test\n\
+  --test-status-file PATH	      Path to keep the status file\n\
+  --test-num-colls VAL		      Number of collections to create on init\n\
+  --test-num-objs VAL		      Number of objects to create on init\n\
 " << std::endl;
 }
 
@@ -146,7 +146,7 @@ int run_sequence_to(int val, std::string& filestore_path,
     delete store;
     return err;
   }
-  
+
   err = store->mkfs();
   assert(err == 0);
 
@@ -218,26 +218,26 @@ int main(int argc, const char *argv[])
     if (ceph_argparse_double_dash(args, i)) {
       break;
     } else if (ceph_argparse_witharg(args, i, &val,
-        "--test-seed", (char*) NULL)) {
+	"--test-seed", (char*) NULL)) {
       seed = strtoll(val.c_str(), NULL, 10);
       is_seed_set = true;
     } else if (ceph_argparse_witharg(args, i, &val,
-        "--test-num-colls", (char*) NULL)) {
+	"--test-num-colls", (char*) NULL)) {
       num_colls = strtoll(val.c_str(), NULL, 10);
     } else if (ceph_argparse_witharg(args, i, &val,
-        "--test-num-objs", (char*) NULL)) {
+	"--test-num-objs", (char*) NULL)) {
       num_objs = strtoll(val.c_str(), NULL, 10);
     } else if (ceph_argparse_witharg(args, i, &val,
-        "--test-status-file", (char*) NULL)) {
+	"--test-status-file", (char*) NULL)) {
       status_file = val;
     } else if (ceph_argparse_flag(args, &i, "--help", (char*) NULL)) {
       usage(our_name);
       exit(0);
     } else {
       if (command.empty())
-        command = *i++;
+	command = *i++;
       else
-        command_args.push_back(string(*i++));
+	command_args.push_back(string(*i++));
     }
   }
 

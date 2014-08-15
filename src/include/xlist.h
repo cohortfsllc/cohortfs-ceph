@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -24,9 +24,9 @@ public:
     T _item;
     item *_prev, *_next;
     xlist *_list;
-    
+
     item(T i) : _item(i), _prev(0), _next(0), _list(0) {}
-    ~item() { 
+    ~item() {
       assert(!is_on_list());
       //remove_myself();
     }
@@ -35,7 +35,7 @@ public:
     item(const item& other);
     const item& operator= (const item& right);
 
-    
+
     xlist* get_list() { return _list; }
     bool is_on_list() const { return _list ? true:false; }
     bool remove_myself() {
@@ -65,7 +65,7 @@ public:
   const xlist& operator=(const xlist& other);
 
   xlist() : _front(0), _back(0), _size(0) {}
-  ~xlist() { 
+  ~xlist() {
     assert(_size == 0);
     assert(_front == 0);
     assert(_back == 0);
@@ -75,9 +75,9 @@ public:
     assert((bool)_front == (bool)_size);
     return _size;
   }
-  bool empty() const { 
+  bool empty() const {
     assert((bool)_front == (bool)_size);
-    return _front == 0; 
+    return _front == 0;
   }
 
   void clear() {
@@ -87,13 +87,13 @@ public:
   }
 
   void push_front(item *i) {
-    if (i->_list) 
+    if (i->_list)
       i->_list->remove(i);
 
     i->_list = this;
     i->_next = _front;
     i->_prev = 0;
-    if (_front) 
+    if (_front)
       _front->_prev = i;
     else
       _back = i;
@@ -101,13 +101,13 @@ public:
     _size++;
   }
   void push_back(item *i) {
-    if (i->_list) 
+    if (i->_list)
       i->_list->remove(i);
 
     i->_list = this;
     i->_next = 0;
     i->_prev = _back;
-    if (_back) 
+    if (_back)
       _back->_next = i;
     else
       _front = i;
@@ -116,7 +116,7 @@ public:
   }
   void remove(item *i) {
     assert(i->_list == this);
-    
+
     if (i->_prev)
       i->_prev->_next = i->_next;
     else

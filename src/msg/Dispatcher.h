@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 
@@ -50,7 +50,7 @@ public:
   virtual void ms_handle_accept(Connection *con) { };
 
   /*
-   * this indicates that the ordered+reliable delivery semantics have 
+   * this indicates that the ordered+reliable delivery semantics have
    * been violated.  Messages may have been lost due to a fault
    * in the network connection.
    * Only called on lossy Connections or those you've
@@ -71,7 +71,7 @@ public:
    * a reference to it.
    */
   virtual void ms_handle_remote_reset(Connection *con) = 0;
-  
+
   /**
    * @defgroup Authentication
    * @{

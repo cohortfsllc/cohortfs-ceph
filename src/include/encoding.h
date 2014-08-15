@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 #ifndef CEPH_ENCODING_H
 #define CEPH_ENCODING_H
@@ -37,7 +37,7 @@ using namespace ceph;
  * - A feature encode() method will fail to compile if a value is not
  *   passed in.
  * - The feature varianet of the STL templates will be used when the feature arg is
- *   provided.  It will be passed through to any template arg types, but it will be
+ *   provided.	It will be passed through to any template arg types, but it will be
  *   ignored when not needed.
  */
 
@@ -86,8 +86,8 @@ inline void decode(bool &v, bufferlist::iterator& p) {
 
 #define WRITE_INTTYPE_ENCODER(type, etype)				\
   inline void encode(type v, bufferlist& bl, uint64_t features=0) {	\
-    ceph_##etype e;					                \
-    e = v;                                                              \
+    ceph_##etype e;							\
+    e = v;								\
     encode_raw(e, bl);							\
   }									\
   inline void decode(type &v, bufferlist::iterator& p) {		\
@@ -183,7 +183,7 @@ inline void decode_nohead(int len, std::string& s, bufferlist::iterator& p)
 }
 
 // const char* (encode only, string compatible)
-inline void encode(const char *s, bufferlist& bl) 
+inline void encode(const char *s, bufferlist& bl)
 {
   uint32_t len = strlen(s);
   encode(len, bl);
@@ -211,7 +211,7 @@ inline void decode_array_nohead(A a[], int n, bufferlist::iterator &p)
 // buffers
 
 // bufferptr (encapsulated)
-inline void encode(const buffer::ptr& bp, bufferlist& bl) 
+inline void encode(const buffer::ptr& bp, bufferlist& bl)
 {
   uint32_t len = bp.length();
   encode(len, bl);
@@ -235,13 +235,13 @@ inline void decode(buffer::ptr& bp, bufferlist::iterator& p)
 }
 
 // bufferlist (encapsulated)
-inline void encode(const bufferlist& s, bufferlist& bl) 
+inline void encode(const bufferlist& s, bufferlist& bl)
 {
   uint32_t len = s.length();
   encode(len, bl);
   bl.append(s);
 }
-inline void encode_destructively(bufferlist& s, bufferlist& bl) 
+inline void encode_destructively(bufferlist& s, bufferlist& bl)
 {
   uint32_t len = s.length();
   encode(len, bl);
@@ -255,7 +255,7 @@ inline void decode(bufferlist& s, bufferlist::iterator& p)
   p.copy(len, s);
 }
 
-inline void encode_nohead(const bufferlist& s, bufferlist& bl) 
+inline void encode_nohead(const bufferlist& s, bufferlist& bl)
 {
   bl.append(s);
 }
@@ -461,7 +461,7 @@ inline void decode(std::vector<T*>& v, bufferlist::iterator& p)
   uint32_t n;
   decode(n, p);
   v.resize(n);
-  for (uint32_t i=0; i<n; i++) 
+  for (uint32_t i=0; i<n; i++)
     v[i] = new T(p);
 }
 */
@@ -488,7 +488,7 @@ inline void decode(std::vector<T>& v, bufferlist::iterator& p)
   uint32_t n;
   decode(n, p);
   v.resize(n);
-  for (uint32_t i=0; i<n; i++) 
+  for (uint32_t i=0; i<n; i++)
     decode(v[i], p);
 }
 
@@ -502,7 +502,7 @@ template<class T>
 inline void decode_nohead(int len, std::vector<T>& v, bufferlist::iterator& p)
 {
   v.resize(len);
-  for (uint32_t i=0; i<v.size(); i++) 
+  for (uint32_t i=0; i<v.size(); i++)
     decode(v[i], p);
 }
 
@@ -737,8 +737,8 @@ inline void decode(std::deque<T>& ls, bufferlist::iterator& p)
   ::encode(struct_compat, bl);				     \
   buffer::list::iterator struct_compat_it = bl.end();	     \
   struct_compat_it.advance(-1);				     \
-  ceph_le32 struct_len;				             \
-  struct_len = 0;                                            \
+  ceph_le32 struct_len;					     \
+  struct_len = 0;					     \
   ::encode(struct_len, bl);				     \
   buffer::list::iterator struct_len_it = bl.end();	     \
   struct_len_it.advance(-4);				     \
@@ -779,7 +779,7 @@ inline void decode(std::deque<T>& ls, bufferlist::iterator& p)
  */
 #define DECODE_OLDEST(oldestv)						\
   if (struct_v < oldestv)						\
-    throw buffer::malformed_input(DECODE_ERR_OLDVERSION(__PRETTY_FUNCTION__, v)); 
+    throw buffer::malformed_input(DECODE_ERR_OLDVERSION(__PRETTY_FUNCTION__, v));
 
 /**
  * start a decoding block

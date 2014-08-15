@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #include "MonmapMonitor.h"
@@ -55,7 +55,7 @@ void MonmapMonitor::update_from_paxos(bool *need_bootstrap)
 
   dout(10) << __func__ << " version " << version
 	   << ", my v " << mon->monmap->epoch << dendl;
-  
+
   if (need_bootstrap && version != mon->monmap->get_epoch()) {
     dout(10) << " signaling that we need a bootstrap" << dendl;
     *need_bootstrap = true;
@@ -179,7 +179,7 @@ bool MonmapMonitor::preprocess_command(MMonCommand *m)
     r = 0;
 
   } else if (prefix == "mon getmap" ||
-             prefix == "mon dump") {
+	     prefix == "mon dump") {
 
     epoch_t epoch;
     int64_t epochnum;
@@ -191,8 +191,8 @@ bool MonmapMonitor::preprocess_command(MMonCommand *m)
       bufferlist bl;
       r = get_version(epoch, bl);
       if (r == -ENOENT) {
-        ss << "there is no map for epoch " << epoch;
-        goto reply;
+	ss << "there is no map for epoch " << epoch;
+	goto reply;
       }
       assert(r == 0);
       assert(bl.length() > 0);
@@ -212,20 +212,20 @@ bool MonmapMonitor::preprocess_command(MMonCommand *m)
       stringstream ds;
       boost::scoped_ptr<Formatter> f(new_formatter(format));
       if (f) {
-        f->open_object_section("monmap");
-        p->dump(f.get());
-        f->open_array_section("quorum");
-        for (set<int>::iterator q = mon->get_quorum().begin();
-            q != mon->get_quorum().end(); ++q) {
-          f->dump_int("mon", *q);
-        }
-        f->close_section();
-        f->close_section();
-        f->flush(ds);
-        r = 0;
+	f->open_object_section("monmap");
+	p->dump(f.get());
+	f->open_array_section("quorum");
+	for (set<int>::iterator q = mon->get_quorum().begin();
+	    q != mon->get_quorum().end(); ++q) {
+	  f->dump_int("mon", *q);
+	}
+	f->close_section();
+	f->close_section();
+	f->flush(ds);
+	r = 0;
       } else {
-        p->print(ds);
-        r = 0;
+	p->print(ds);
+	r = 0;
       }
       rdata.append(ds);
       ss << "dumped monmap epoch " << p->get_epoch();
@@ -253,7 +253,7 @@ reply:
 bool MonmapMonitor::prepare_update(PaxosServiceMessage *m)
 {
   dout(7) << "prepare_update " << *m << " from " << m->get_orig_source_inst() << dendl;
-  
+
   switch (m->get_type()) {
   case MSG_MON_COMMAND:
     return prepare_command(static_cast<MMonCommand*>(m));
@@ -322,15 +322,15 @@ bool MonmapMonitor::prepare_command(MMonCommand *m)
 
     do {
       if (pending_map.contains(addr)) {
-        string n = pending_map.get_name(addr);
-        if (n == name)
-          break;
+	string n = pending_map.get_name(addr);
+	if (n == name)
+	  break;
       } else if (pending_map.contains(name)) {
-        entity_addr_t tmp_addr = pending_map.get_addr(name);
-        if (tmp_addr == addr)
-          break;
+	entity_addr_t tmp_addr = pending_map.get_addr(name);
+	if (tmp_addr == addr)
+	  break;
       } else {
-        break;
+	break;
       }
       err = -EEXIST;
       ss << "mon." << name << " at " << addr << " already exists";
@@ -346,7 +346,7 @@ bool MonmapMonitor::prepare_command(MMonCommand *m)
     pending_map.last_changed = ceph_clock_now(g_ceph_context);
     getline(ss, rs);
     wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs,
-                                                     get_last_committed() + 1));
+						     get_last_committed() + 1));
     return true;
 
   } else if (prefix == "mon remove") {
@@ -463,7 +463,7 @@ int MonmapMonitor::get_monmap(bufferlist &bl)
   int err = get_version(latest_ver, bl);
   if (err < 0) {
     dout(1) << __func__ << " error obtaining monmap: "
-            << cpp_strerror(err) << dendl;
+	    << cpp_strerror(err) << dendl;
     return err;
   }
   return 0;

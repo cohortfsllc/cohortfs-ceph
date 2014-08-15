@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 #ifndef CEPH_BUFFER_H
 #define CEPH_BUFFER_H
@@ -119,7 +119,7 @@ public:
   static void track_c_str(bool b);
 
 private:
- 
+
   /* hack for memory utilization debugging. */
   static void inc_total_alloc(unsigned len);
   static void dec_total_alloc(unsigned len);
@@ -146,7 +146,7 @@ public:
 public:
 
   /*
-   * named constructors 
+   * named constructors
    */
   static raw* copy(const char *c, unsigned len);
   static raw* create(unsigned len);
@@ -162,7 +162,7 @@ public:
 #endif
 
   /*
-   * a buffer pointer.  references (a subsequence of) a raw buffer.
+   * a buffer pointer.	references (a subsequence of) a raw buffer.
    */
   class ptr {
     raw *_raw;
@@ -181,7 +181,7 @@ public:
     ~ptr() {
       release();
     }
-    
+
     bool have_raw() const { return _raw ? true:false; }
 
     raw *clone();
@@ -248,7 +248,7 @@ public:
     std::list<ptr> _buffers;
     unsigned _len;
 
-    ptr append_buffer;  // where i put small appends.
+    ptr append_buffer;	// where i put small appends.
 
   public:
     class iterator {
@@ -261,11 +261,11 @@ public:
       // constructor.  position.
       iterator() :
 	bl(0), ls(0), off(0), p_off(0) {}
-      iterator(list *l, unsigned o=0) : 
+      iterator(list *l, unsigned o=0) :
 	bl(l), ls(&bl->_buffers), off(0), p(ls->begin()), p_off(0) {
 	advance(o);
       }
-      iterator(list *l, unsigned o, std::list<ptr>::iterator ip, unsigned po) : 
+      iterator(list *l, unsigned o, std::list<ptr>::iterator ip, unsigned po) :
 	bl(l), ls(&bl->_buffers), off(o), p(ip), p_off(po) { }
 
       iterator(const iterator& other) : bl(other.bl),
@@ -363,8 +363,8 @@ public:
 	}
 
       inline char* get_bytes(unsigned *nbytes) {
-        *nbytes = p->length() - p_off;
-        return p->c_str()+p_off;
+	*nbytes = p->length() - p_off;
+	return p->c_str()+p_off;
       }
 
       // copy data out.
@@ -496,8 +496,8 @@ public:
     list(const list& other) : _buffers(other._buffers), _len(other._len), last_p(this) { }
     list& operator= (const list& other) {
       if (this != &other) {
-        _buffers = other._buffers;
-        _len = other._len;
+	_buffers = other._buffers;
+	_len = other._len;
       }
       return *this;
     }

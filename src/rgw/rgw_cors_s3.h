@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -32,7 +32,7 @@ class RGWCORSRule_S3 : public RGWCORSRule, public XMLObj
   public:
     RGWCORSRule_S3() {}
     ~RGWCORSRule_S3() {}
-    
+
     bool xml_end(const char *el);
     void to_xml(XMLFormatter& f);
 };

@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_MON_MONITORSTORE_H
@@ -99,7 +99,7 @@ public:
   /*
   version_t get_incarnation() { return get_int("incarnation"); }
   void set_incarnation(version_t i) { set_int(i, "incarnation"); }
-  
+
   version_t get_last_proposal() { return get_int("last_proposal"); }
   void set_last_proposal(version_t i) { set_int(i, "last_proposal"); }
   */

@@ -1,4 +1,4 @@
-#!/bin/bash 
+#!/bin/bash
 #
 # Copyright (C) 2013 Cloudwatt <libre.licensing@cloudwatt.com>
 #
@@ -65,9 +65,9 @@ function example_test() {
 }
 
 #
-# The results are expected to be consistent with 
+# The results are expected to be consistent with
 # https://www.usenix.org/legacy/events/fast09/tech/full_papers/plank/plank_html/
-# 
+#
 function jerasure_test() {
     local plugin=jerasure
 

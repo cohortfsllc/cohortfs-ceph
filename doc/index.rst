@@ -3,7 +3,7 @@
 =================
 
 Ceph uniquely delivers **object, block, and file storage in one unified
-system**. 
+system**.
 
 .. raw:: html
 
@@ -21,7 +21,7 @@ system**.
 - Multi-site deployment
 - Disaster recovery
 
-.. raw:: html 
+.. raw:: html
 
 	</td><td><h3>Ceph Block Device</h3>
 
@@ -37,15 +37,15 @@ system**.
 - Back-end for cloud solutions
 - Incremental backup
 
-.. raw:: html 
+.. raw:: html
 
 	</td><td><h3>Ceph Filesystem</h3>
-	
+
 - POSIX-compliant semantics
 - Separates metadata from data
 - Dynamic rebalancing
 - Subdirectory snapshots
-- Configurable striping 
+- Configurable striping
 - Kernel driver support
 - FUSE support
 - NFS/CIFS deployable
@@ -54,22 +54,22 @@ system**.
 .. raw:: html
 
 	</td></tr><tr><td>
-	
+
 See `Ceph Object Store`_ for additional details.
 
 .. raw:: html
 
 	</td><td>
-	
+
 See `Ceph Block Device`_ for additional details.
-	
+
 .. raw:: html
 
 	</td><td>
-	
-See `Ceph Filesystem`_ for additional details.	
-	
-.. raw::	html 
+
+See `Ceph Filesystem`_ for additional details.
+
+.. raw::	html
 
 	</td></tr></tbody></table>
 

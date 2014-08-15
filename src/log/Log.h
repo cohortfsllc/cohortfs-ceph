@@ -20,7 +20,7 @@ class Log : private Thread
   Log **m_indirect_this;
 
   SubsystemMap *m_subs;
-  
+
   pthread_mutex_t m_queue_mutex;
   pthread_mutex_t m_flush_mutex;
   pthread_cond_t m_cond_loggers;
@@ -56,7 +56,7 @@ public:
   void set_log_file(std::string fn);
   void reopen_log_file();
 
-  void flush(); 
+  void flush();
 
   void dump_recent();
 

@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -536,7 +536,7 @@ static uint32_t simple_spinlock_t buffer_debug_lock = SIMPLE_SPINLOCK_INITIALIZE
     static void operator delete(void *p)
     {
       xio_msg_buffer *buf = static_cast<xio_msg_buffer*>(p);
-      // return hook ref (counts against pool);  it appears illegal
+      // return hook ref (counts against pool);	 it appears illegal
       // to do this in our dtor, because this fires after that
       buf->m_hook->put();
     }
@@ -648,7 +648,7 @@ static uint32_t simple_spinlock_t buffer_debug_lock = SIMPLE_SPINLOCK_INITIALIZE
       p._raw->nref.inc();
       bdout << "ptr " << this << " get " << _raw << bendl;
     }
-    buffer::raw *raw = p._raw; 
+    buffer::raw *raw = p._raw;
     release();
     if (raw) {
       _raw = raw;
@@ -768,7 +768,7 @@ static uint32_t simple_spinlock_t buffer_debug_lock = SIMPLE_SPINLOCK_INITIALIZE
     (c_str())[_len] = c;
     _len++;
   }
-  
+
   void buffer::ptr::append(const char *p, unsigned l)
   {
     assert(_raw);
@@ -776,7 +776,7 @@ static uint32_t simple_spinlock_t buffer_debug_lock = SIMPLE_SPINLOCK_INITIALIZE
     memcpy(c_str() + _len, p, l);
     _len += l;
   }
-    
+
   void buffer::ptr::copy_in(unsigned o, unsigned l, const char *src)
   {
     assert(_raw);
@@ -894,7 +894,7 @@ static uint32_t simple_spinlock_t buffer_debug_lock = SIMPLE_SPINLOCK_INITIALIZE
   {
     for (std::list<ptr>::const_iterator it = _buffers.begin();
 	 it != _buffers.end();
-	 ++it) 
+	 ++it)
       if (!it->is_page_aligned())
 	return false;
     return true;
@@ -904,7 +904,7 @@ static uint32_t simple_spinlock_t buffer_debug_lock = SIMPLE_SPINLOCK_INITIALIZE
   {
     for (std::list<ptr>::const_iterator it = _buffers.begin();
 	 it != _buffers.end();
-	 ++it) 
+	 ++it)
       if (!it->is_n_page_sized())
 	return false;
     return true;
@@ -938,18 +938,18 @@ static uint32_t simple_spinlock_t buffer_debug_lock = SIMPLE_SPINLOCK_INITIALIZE
 	 ++it) {
       if (p + it->length() > o) {
 	if (p >= o && p+it->length() <= o+l)
-	  it->zero();                         // all
-	else if (p >= o) 
-	  it->zero(0, o+l-p);                 // head
+	  it->zero();			      // all
+	else if (p >= o)
+	  it->zero(0, o+l-p);		      // head
 	else
 	  it->zero(o-p, it->length()-(o-p));  // tail
       }
       p += it->length();
       if (o+l <= p)
-	break;  // done
+	break;	// done
     }
   }
-  
+
   bool buffer::list::is_contiguous()
   {
     return &(*_buffers.begin()) == &(*_buffers.rbegin());
@@ -992,7 +992,7 @@ void buffer::list::rebuild_page_aligned()
       ++p;
       continue;
     }
-    
+
     // consolidate unaligned items, until we get something that is sized+aligned
     list unaligned;
     unsigned offset = 0;
@@ -1046,7 +1046,7 @@ void buffer::list::rebuild_page_aligned()
   {
     if (off + len > length())
       throw end_of_buffer();
-    if (last_p.get_off() != off) 
+    if (last_p.get_off() != off)
       last_p.seek(off);
     last_p.copy(len, dest);
   }
@@ -1055,31 +1055,31 @@ void buffer::list::rebuild_page_aligned()
   {
     if (off + len > length())
       throw end_of_buffer();
-    if (last_p.get_off() != off) 
+    if (last_p.get_off() != off)
       last_p.seek(off);
     last_p.copy(len, dest);
   }
 
   void buffer::list::copy(unsigned off, unsigned len, std::string& dest) const
   {
-    if (last_p.get_off() != off) 
+    if (last_p.get_off() != off)
       last_p.seek(off);
     return last_p.copy(len, dest);
   }
-    
+
   void buffer::list::copy_in(unsigned off, unsigned len, const char *src)
   {
     if (off + len > length())
       throw end_of_buffer();
-    
-    if (last_p.get_off() != off) 
+
+    if (last_p.get_off() != off)
       last_p.seek(off);
     last_p.copy_in(len, src);
   }
 
   void buffer::list::copy_in(unsigned off, unsigned len, const list& src)
   {
-    if (last_p.get_off() != off) 
+    if (last_p.get_off() != off)
       last_p.seek(off);
     last_p.copy_in(len, src);
   }
@@ -1097,7 +1097,7 @@ void buffer::list::rebuild_page_aligned()
     append_buffer.append(c);
     append(append_buffer, append_buffer.end() - 1, 1);	// add segment to the list
   }
-  
+
   void buffer::list::append(const char *data, unsigned len)
   {
     while (len > 0) {
@@ -1112,8 +1112,8 @@ void buffer::list::rebuild_page_aligned()
 	data += gap;
       }
       if (len == 0)
-	break;  // done!
-      
+	break;	// done!
+
       // make a new append_buffer!
       unsigned alen = CEPH_PAGE_SIZE * (((len-1) / CEPH_PAGE_SIZE) + 1);
       append_buffer = create_page_aligned(alen);
@@ -1150,7 +1150,7 @@ void buffer::list::rebuild_page_aligned()
     _len += bl._len;
     for (std::list<ptr>::const_iterator p = bl._buffers.begin();
 	 p != bl._buffers.end();
-	 ++p) 
+	 ++p)
       _buffers.push_back(*p);
   }
 
@@ -1164,7 +1164,7 @@ void buffer::list::rebuild_page_aligned()
 	append("\n", 1);
     }
   }
-  
+
   void buffer::list::append_zero(unsigned len)
   {
     ptr bp(len);
@@ -1172,7 +1172,7 @@ void buffer::list::rebuild_page_aligned()
     append(bp);
   }
 
-  
+
   /*
    * get a char
    */
@@ -1180,7 +1180,7 @@ void buffer::list::rebuild_page_aligned()
   {
     if (n >= _len)
       throw end_of_buffer();
-    
+
     for (std::list<ptr>::const_iterator p = _buffers.begin();
 	 p != _buffers.end();
 	 ++p) {
@@ -1199,7 +1199,7 @@ void buffer::list::rebuild_page_aligned()
   char *buffer::list::c_str()
   {
     if (_buffers.empty())
-      return 0;                         // no buffers
+      return 0;				// no buffers
 
     std::list<ptr>::const_iterator iter = _buffers.begin();
     ++iter;
@@ -1215,7 +1215,7 @@ void buffer::list::rebuild_page_aligned()
       throw end_of_buffer();
 
     clear();
-      
+
     // skip off
     std::list<ptr>::const_iterator curbuf = other._buffers.begin();
     while (off > 0 &&
@@ -1226,7 +1226,7 @@ void buffer::list::rebuild_page_aligned()
       ++curbuf;
     }
     assert(len == 0 || curbuf != other._buffers.end());
-    
+
     while (len > 0) {
       // partial?
       if (off + len < curbuf->length()) {
@@ -1235,7 +1235,7 @@ void buffer::list::rebuild_page_aligned()
 	_len += len;
 	break;
       }
-      
+
       // through end
       //cout << "copying end (all?) of " << *curbuf << std::endl;
       unsigned howmuch = curbuf->length() - off;
@@ -1258,7 +1258,7 @@ void buffer::list::rebuild_page_aligned()
 
     assert(len > 0);
     //cout << "splice off " << off << " len " << len << " ... mylen = " << length() << std::endl;
-      
+
     // skip off
     std::list<ptr>::iterator curbuf = _buffers.begin();
     while (off > 0) {
@@ -1274,7 +1274,7 @@ void buffer::list::rebuild_page_aligned()
 	break;
       }
     }
-    
+
     if (off) {
       // add a reference to the front bit
       //  insert it before curbuf (which we'll hose)
@@ -1282,33 +1282,33 @@ void buffer::list::rebuild_page_aligned()
       _buffers.insert( curbuf, ptr( *curbuf, 0, off ) );
       _len += off;
     }
-    
+
     while (len > 0) {
       // partial?
       if (off + len < (*curbuf).length()) {
 	//cout << "keeping end of " << *curbuf << ", losing first " << off+len << std::endl;
-	if (claim_by) 
+	if (claim_by)
 	  claim_by->append( *curbuf, off, len );
-	(*curbuf).set_offset( off+len + (*curbuf).offset() );    // ignore beginning big
+	(*curbuf).set_offset( off+len + (*curbuf).offset() );	 // ignore beginning big
 	(*curbuf).set_length( (*curbuf).length() - (len+off) );
 	_len -= off+len;
 	//cout << " now " << *curbuf << std::endl;
 	break;
       }
-      
+
       // hose though the end
       unsigned howmuch = (*curbuf).length() - off;
       //cout << "discarding " << howmuch << " of " << *curbuf << std::endl;
-      if (claim_by) 
+      if (claim_by)
 	claim_by->append( *curbuf, off, howmuch );
       _len -= (*curbuf).length();
       _buffers.erase( curbuf++ );
       len -= howmuch;
       off = 0;
     }
-      
+
     // splice in *replace (implement me later?)
-    
+
     last_p = begin();  // just in case we were in the removed region.
   };
 
@@ -1316,8 +1316,8 @@ void buffer::list::rebuild_page_aligned()
   {
     list s;
     s.substr_of(*this, off, len);
-    for (std::list<ptr>::const_iterator it = s._buffers.begin(); 
-	 it != s._buffers.end(); 
+    for (std::list<ptr>::const_iterator it = s._buffers.begin();
+	 it != s._buffers.end();
 	 ++it)
       if (it->length())
 	out.write(it->c_str(), it->length());
@@ -1330,7 +1330,7 @@ void buffer::list::rebuild_page_aligned()
       len -= l;
       }*/
   }
-  
+
 void buffer::list::encode_base64(buffer::list& o)
 {
   bufferptr bp(length() * 4 / 3 + 3);
@@ -1354,7 +1354,7 @@ void buffer::list::decode_base64(buffer::list& e)
   push_back(bp);
 }
 
-  
+
 
 int buffer::list::read_file(const char *fn, std::string *error)
 {
@@ -1586,8 +1586,8 @@ void buffer::list::hexdump(std::ostream &out) const
       out << " " << std::setw(2) << ((unsigned)(*this)[o+i] & 0xff);
     }
     for (; i<per; i++)
-      out << "   ";
-    
+      out << "	 ";
+
     out << " : ";
     for (i=0; i<per && o+i<length(); i++) {
       char c = (*this)[o+i];

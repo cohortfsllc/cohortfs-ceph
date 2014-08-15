@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  * Client requests often need to get forwarded from some monitor
  * to the leader. This class encapsulates the original message
@@ -34,7 +34,7 @@ struct MForward : public Message {
   static const int COMPAT_VERSION = 0;
 
   MForward() : Message(MSG_FORWARD, HEAD_VERSION, COMPAT_VERSION),
-               tid(0), msg(NULL), con_features(0) {}
+	       tid(0), msg(NULL), con_features(0) {}
   //the message needs to have caps filled in!
   MForward(uint64_t t, PaxosServiceMessage *m, uint64_t feat) :
     Message(MSG_FORWARD, HEAD_VERSION, COMPAT_VERSION),
@@ -83,9 +83,9 @@ public:
     if (msg)
       o << "forward(" << *msg << " caps " << client_caps
 	<< " tid " << tid
-        << " con_features " << con_features << ") to leader";
+	<< " con_features " << con_features << ") to leader";
     else o << "forward(??? ) to leader";
   }
 };
-  
+
 #endif

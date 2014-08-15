@@ -4,7 +4,7 @@
 
 This guide describes installing Ceph packages manually. This procedure
 is only for users who are not installing with a deployment tool such as
-``ceph-deploy``, ``chef``, ``juju``, etc. 
+``ceph-deploy``, ``chef``, ``juju``, etc.
 
 .. tip:: You can also use ``ceph-deploy`` to install Ceph packages, which may
    be more convenient since you can install ``ceph`` on multiple hosts with
@@ -23,12 +23,12 @@ update APT's database and install Ceph::
 Installing with RPM
 ===================
 
-To install pre-requisite packages, execute the following::  
+To install pre-requisite packages, execute the following::
 
 	sudo yum install snappy leveldb gdisk python-argparse gperftools-libs
 
 Once you have added either release or development packages, or added a
-``ceph.repo`` file to ``/etc/yum.repos.d``, you can install Ceph packages. :: 
+``ceph.repo`` file to ``/etc/yum.repos.d``, you can install Ceph packages. ::
 
 	sudo yum install ceph
 
@@ -36,7 +36,7 @@ Installing a Build
 ==================
 
 If you build Ceph from source code, you may install Ceph in user space
-by executing the following:: 
+by executing the following::
 
 	sudo make install
 

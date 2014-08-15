@@ -57,7 +57,7 @@ int main(int argc, const char **argv)
     T *t = ls.front();
     ls.pop_front();
     t->join();
-    delete t;    
+    delete t;
   }
 
   utime_t t = ceph_clock_now(NULL);

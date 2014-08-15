@@ -14,7 +14,7 @@ def main():
     info_types = ['num_ops', 'ops']
     assert sorted(records.keys()) == sorted(info_types)
     assert(records['num_ops'] == len(records['ops']))
-    
+
     for op in records['ops']:
         assert op['description'] is not None
         assert op['received_at'] is not None

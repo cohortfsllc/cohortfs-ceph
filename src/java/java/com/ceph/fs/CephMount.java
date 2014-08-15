@@ -482,7 +482,7 @@ public class CephMount {
 
   /**
    * Change file mode.
-   * 
+   *
    * @param path Path to file.
    * @param mode New mode bits.
    */

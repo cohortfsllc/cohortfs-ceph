@@ -18,7 +18,7 @@ main() {
 
 	l.fl_stripe_unit = 65536;
 	l.fl_object_size = 65536;
-	
+
 	r = ioctl(fd, CEPH_IOC_SET_LAYOUT, &l, sizeof(l));
 	printf("set = %d\n", r);
 }

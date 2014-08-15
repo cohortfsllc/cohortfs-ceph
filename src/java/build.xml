@@ -31,15 +31,15 @@
 
   <target name="compile-tests-jar">
     <javac srcdir="${test.dir}" destdir="${test.dir}"
-      includeantruntime="false" source="1.5" target="1.5"> 
+      includeantruntime="false" source="1.5" target="1.5">
       <classpath>
         <pathelement location="${env.CEPHFS_JAR}"/>
         <pathelement location="libcephfs.jar"/>
         <pathelement location="${env.CLASSPATH}" />
       </classpath>
     </javac>
-    <jar destfile="./libcephfs-test.jar"> 
-      <fileset dir="${test.dir}" includes="**/*.class"/>  
+    <jar destfile="./libcephfs-test.jar">
+      <fileset dir="${test.dir}" includes="**/*.class"/>
     </jar>
   </target>
 

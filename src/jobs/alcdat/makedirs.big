@@ -12,7 +12,7 @@
 				'numclient' => '$nummds * $cper',
 				'numosd' => '$nummds * .8',
 				'n' => '415'],#1 + $cnode + $nummds + $numosd' ],
-	
+
 	# parameters
 	'fs' => 'ebofs',
 	#'fs' => 'fakestore',
@@ -27,17 +27,17 @@
 	'kill_after' => 400,
 	'start' => 100,
 	'end' => 300,
-	
+
 	'makedirs' => 1,
 	'makedirs_dirs' => 10,
 	'makedirs_files' => 10,
 	'makedirs_depth' => 4,
-		
-	# --meta_log_layout_scount 32 --meta_log_layout_ssize 256  
-	# --osd_pg_layout linear 
+
+	# --meta_log_layout_scount 32 --meta_log_layout_ssize 256
+	# --osd_pg_layout linear
 	'custom' => '--tcp_skip_rank0 --meta_log_layout_num_rep 1 --meta_dir_layout_num_rep 1 --mds_shutdown_check 60',
 	#'custom' => '--debug_after 110 --debug_osd 15 --debug_filer 15 --debug 5',
-	
+
 	'comb' => {
 		'x' => 'nummds',
 		'vars' => [ 'mds.req' ]

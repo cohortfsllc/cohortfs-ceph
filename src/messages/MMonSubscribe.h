@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef CEPH_MMONSUBSCRIBE_H
@@ -34,12 +34,12 @@ struct MMonSubscribe : public Message {
   static const int HEAD_VERSION = 2;
 
   map<string, ceph_mon_subscribe_item> what;
-  
+
   MMonSubscribe() : Message(CEPH_MSG_MON_SUBSCRIBE, HEAD_VERSION) { }
 private:
   ~MMonSubscribe() {}
 
-public:  
+public:
   void sub_want(const char *w, version_t start, unsigned flags) {
     what[w].start = start;
     what[w].flags = flags;

@@ -107,7 +107,7 @@ bool Throttle::_wait(int64_t c)
       ldout(cct, 3) << "_wait finished waiting" << dendl;
       if (logger) {
 	utime_t dur = ceph_clock_now(cct) - start;
-        logger->tinc(l_throttle_wait, dur);
+	logger->tinc(l_throttle_wait, dur);
       }
     }
 

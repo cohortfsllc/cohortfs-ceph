@@ -6,18 +6,18 @@
 	'nummds' => 1,
 	'numosd' => 8,
 	'numclient' => 100,#[10, 50, 100, 200, 400],
-	
+
 'kill_after' => 200,
 
 	# parameters
-	'fs' => 'ebofs',#[ 
+	'fs' => 'ebofs',#[
 #			  'obfs',
 #			  'fakestore',
-#			  'ebofs' 
+#			  'ebofs'
 #			  ],
 	'until' => 100,     # --syn until $n    ... when to stop clients
 	'writefile' => 1,
-	'writefile_size' => [ 
+	'writefile_size' => [
 #						  2560000,
 						  1024000,
 						  262144,
@@ -31,7 +31,7 @@
 #						  1
 						  ],
 	'writefile_mb' => 1000,
-	
+
 #	'custom' => '--tcp_skip_rank0',# --osd_maxthreads 0',
 			'custom' => '--debug_after 110 --debug_osd 15 --debug_filer 15 --debug 5',
 

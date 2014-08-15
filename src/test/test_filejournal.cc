@@ -73,7 +73,7 @@ int main(int argc, char **argv) {
   g_ceph_context->_conf->apply_changes(NULL);
 
   finisher = new Finisher(g_ceph_context);
-  
+
   if (!args.empty()) {
     size_t copy_len = std::min(sizeof(path)-1, strlen(args[0]));
     strncpy(path, args[0], copy_len);
@@ -88,7 +88,7 @@ int main(int argc, char **argv) {
 
   finisher->start();
 
-  cout << "DIRECTIO OFF  AIO OFF" << std::endl;
+  cout << "DIRECTIO OFF	 AIO OFF" << std::endl;
   directio = false;
   aio = false;
   int r = RUN_ALL_TESTS();
@@ -103,11 +103,11 @@ int main(int argc, char **argv) {
       r = RUN_ALL_TESTS();
     }
   }
-  
+
   finisher->stop();
 
   unlink(path);
-  
+
   return r;
 }
 
@@ -156,7 +156,7 @@ TEST(TestFileJournal, WriteMany) {
   j.make_writeable();
 
   C_GatherBuilder gb(g_ceph_context, new C_SafeCond(&wait_lock, &cond, &done));
-  
+
   bufferlist bl;
   bl.append("small");
   uint64_t seq = 1;
@@ -214,9 +214,9 @@ TEST(TestFileJournal, ReplaySmall) {
   FileJournal j(fsid, finisher, &sync_cond, path, directio, aio);
   ASSERT_EQ(0, j.create());
   j.make_writeable();
-  
+
   C_GatherBuilder gb(g_ceph_context, new C_SafeCond(&wait_lock, &cond, &done));
-  
+
   bufferlist bl;
   bl.append("small");
   j.submit_entry(1, bl, 0, gb.new_sub());
@@ -259,10 +259,10 @@ TEST(TestFileJournal, ReplayCorrupt) {
   FileJournal j(fsid, finisher, &sync_cond, path, directio, aio);
   ASSERT_EQ(0, j.create());
   j.make_writeable();
-  
+
   C_GatherBuilder gb(g_ceph_context, new C_SafeCond(&wait_lock, &cond, &done));
-  
-  const char *needle =    "i am a needle";
+
+  const char *needle =	  "i am a needle";
   const char *newneedle = "in a haystack";
   bufferlist bl;
   bl.append(needle);
@@ -328,7 +328,7 @@ TEST(TestFileJournal, WriteTrim) {
   j.make_writeable();
 
   list<C_Sync*> ls;
-  
+
   bufferlist bl;
   char foo[1024*1024];
   memset(foo, 1, sizeof(foo));
@@ -366,7 +366,7 @@ TEST(TestFileJournal, WriteTrimSmall) {
   j.make_writeable();
 
   list<C_Sync*> ls;
-  
+
   bufferlist bl;
   char foo[1024*1024];
   memset(foo, 1, sizeof(foo));
@@ -410,7 +410,7 @@ TEST(TestFileJournal, ReplayDetectCorruptFooterMagic) {
 
   C_GatherBuilder gb(g_ceph_context, new C_SafeCond(&wait_lock, &cond, &done));
 
-  const char *needle =    "i am a needle";
+  const char *needle =	  "i am a needle";
   for (unsigned i = 1; i <= 4; ++i) {
     bufferlist bl;
     bl.append(needle);
@@ -460,7 +460,7 @@ TEST(TestFileJournal, ReplayDetectCorruptPayload) {
 
   C_GatherBuilder gb(g_ceph_context, new C_SafeCond(&wait_lock, &cond, &done));
 
-  const char *needle =    "i am a needle";
+  const char *needle =	  "i am a needle";
   for (unsigned i = 1; i <= 4; ++i) {
     bufferlist bl;
     bl.append(needle);
@@ -510,7 +510,7 @@ TEST(TestFileJournal, ReplayDetectCorruptHeader) {
 
   C_GatherBuilder gb(g_ceph_context, new C_SafeCond(&wait_lock, &cond, &done));
 
-  const char *needle =    "i am a needle";
+  const char *needle =	  "i am a needle";
   for (unsigned i = 1; i <= 4; ++i) {
     bufferlist bl;
     bl.append(needle);

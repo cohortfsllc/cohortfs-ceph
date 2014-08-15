@@ -83,7 +83,7 @@ sub iterate {
     my $fix = shift @_ || {};
     my $vary;
     my @r;
-    
+
     my $this;
     for my $k (sort keys %$sim) {
 	#next if $k =~ /^_/;
@@ -103,7 +103,7 @@ sub iterate {
 	    }
 	}
     }
-    
+
     if ($vary) {
 	#print "vary $vary\n";
 	for my $v (@{$sim->{$vary}}) {
@@ -111,19 +111,19 @@ sub iterate {
 	    push(@r, &iterate($sim, $this));
 	}
     } else {
-	
+
 	if ($sim->{'_dep'}) {
 	    my @s = @{$sim->{'_dep'}};
 	    while (@s) {
 		my $dv = shift @s;
 		my $eq = shift @s;
-		
+
 		$eq =~ s/\$(\w+)/"\$this->{'$1'}"/eg;
 		$this->{$dv} = eval $eq;
 		#print "$dv : $eq -> $this->{$dv}\n";
 	    }
 	}
-	
+
 	push(@r, $this);
     }
     return @r;
@@ -152,7 +152,7 @@ sub run {
 
 	push( @fulldirs, "" . $fn );
 
-	
+
 	# filters
 	$filters{ join(',', @filt) } = 1;
 
@@ -207,7 +207,7 @@ touch $fn/.post
 	    $killmin = 1 + int ($h->{'_kill_after'} / 60);
 	    $killmin = "-t $killmin";
 	}
-	
+
 	$c = "bash -c \"ulimit -c 0 ; $c\"";
 	#$c = "bash -c \"$c\"";
 
@@ -221,7 +221,7 @@ touch $fn/.post
 	} else {
 		$launch = $mpiexec;
 	}
-	
+
 	if ($sim->{'_psub'}) {
 		# template!
 		my $tp = `cat $sim->{'_psub'}`;

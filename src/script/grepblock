@@ -10,6 +10,6 @@ while (<>) {
 	for my $x (/(\d+\~\d+)/) {
 		my ($s,$l) = split(/\~/,$x);
 		$yes = 1 if ($block >= $s && $block < $s+$l);
-	}	
+	}
 	print if $yes;
 }

@@ -11,7 +11,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -68,9 +68,9 @@ ostream& operator<<(ostream& out, const osd_info_t& info);
 struct osd_xinfo_t {
   utime_t down_stamp; ///< timestamp when we were last marked down
   float laggy_probability; ///< encoded as uint32_t: 0 = definitely
-			   ///  not laggy, 0xffffffff definitely laggy
+			   ///	not laggy, 0xffffffff definitely laggy
   uint32_t laggy_interval; ///< average interval between being marked
-			   ///  laggy and recovering
+			   ///	laggy and recovering
   uint64_t features; ///< features supported by this osd we should know about
 
   osd_xinfo_t() : laggy_probability(0), laggy_interval(0),
@@ -102,7 +102,7 @@ public:
     int32_t new_flags;
 
     // full (rare)
-    bufferlist fullmap;  // in leiu of below.
+    bufferlist fullmap;	 // in leiu of below.
 
     // incremental
     int32_t new_max_osd;
@@ -187,7 +187,7 @@ private:
 
   uint32_t flags;
 
-  int num_osd;         // not saved
+  int num_osd;	       // not saved
   int32_t max_osd;
   vector<uint8_t> osd_state;
 
@@ -345,7 +345,7 @@ int identify_osd(const entity_addr_t& addr) const;
   }
   bool find_osd_on_ip(const entity_addr_t& ip) const;
   bool have_inst(int osd) const {
-    return exists(osd) && is_up(osd); 
+    return exists(osd) && is_up(osd);
   }
   const entity_addr_t &get_addr(int osd) const {
     assert(exists(osd));
@@ -408,7 +408,7 @@ int identify_osd(const entity_addr_t& addr) const;
     assert(osd < max_osd);
     return osd_xinfo[osd];
   }
-  
+
   int get_any_up_osd() const {
     for (int i=0; i<max_osd; i++)
       if (is_up(i))
@@ -546,6 +546,5 @@ inline ostream& operator<<(ostream& out, const OSDMap& m) {
   m.print_oneline_summary(out);
   return out;
 }
-
 
 #endif

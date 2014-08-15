@@ -10,7 +10,7 @@
  *
  * Hypertable is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
@@ -55,7 +55,7 @@ static std::string cpp_strerror(int err)
 }
 
 OpenFileDataCeph::OpenFileDataCeph(struct ceph_mount_info *cmount_, const String& fname,
-				   int _fd, int _flags) 
+				   int _fd, int _flags)
   : cmount(cmount_), fd(_fd), flags(_flags), filename(fname)
 {
 }
@@ -139,7 +139,7 @@ void CephBroker::create(ResponseCallbackOpen *cb, const char *fname, uint32_t fl
 
   make_abs_path(fname, abspath);
   HT_DEBUGF("create file='%s' flags=%u bufsz=%d replication=%d blksz=%lld",
-            fname, flags, bufsz, (int)replication, (Lld)blksz);
+	    fname, flags, bufsz, (int)replication, (Lld)blksz);
 
   fd = atomic_inc_return(&ms_next_fd);
 
@@ -244,7 +244,7 @@ void CephBroker::append(ResponseCallbackAppend *cb, uint32_t fd,
   if ((offset = (uint64_t)ceph_lseek(cmount, fdata->fd, 0, SEEK_CUR)) < 0) {
     std::string errs(cpp_strerror((int)-offset));
     HT_ERRORF("lseek failed: fd=%d ceph_fd=%d offset=0 SEEK_CUR - %s", fd, fdata->fd,
-              errs.c_str());
+	      errs.c_str());
     report_error(cb, offset);
     return;
   }
@@ -293,11 +293,11 @@ void CephBroker::seek(ResponseCallback *cb, uint32_t fd, uint64_t offset) {
 
 void CephBroker::remove(ResponseCallback *cb, const char *fname) {
   String abspath;
-  
+
   HT_DEBUGF("remove file='%s'", fname);
-  
+
   make_abs_path(fname, abspath);
-  
+
   int r;
   if ((r = ceph_unlink(cmount, abspath.c_str())) < 0) {
     std::string errs(cpp_strerror(r));
@@ -343,7 +343,7 @@ void CephBroker::pread(ResponseCallbackRead *cb, uint32_t fd, uint64_t offset,
   if ((nread = ceph_read(cmount, fdata->fd, (char *)buf.base, amount, offset)) < 0) {
     std::string errs(cpp_strerror(nread));
     HT_ERRORF("pread failed: fd=%d ceph_fd=%d amount=%d offset=%llu - %s", fd, fdata->fd,
-              amount, (Llu)offset, errs.c_str());
+	      amount, (Llu)offset, errs.c_str());
     report_error(cb, nread);
     return;
   }
@@ -488,7 +488,7 @@ void CephBroker::readdir(ResponseCallbackReaddir *cb, const char *dname) {
 void CephBroker::exists(ResponseCallbackExists *cb, const char *fname) {
   String abspath;
   struct stat statbuf;
-  
+
   HT_DEBUGF("exists file='%s'", fname);
   make_abs_path(fname, abspath);
   cb->response(ceph_lstat(cmount, abspath.c_str(), &statbuf) == 0);
@@ -522,5 +522,3 @@ void CephBroker::report_error(ResponseCallback *cb, int error) {
 
   cb->error(Error::DFSBROKER_IO_ERROR, errbuf);
 }
-
-

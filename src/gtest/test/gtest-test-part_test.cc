@@ -48,8 +48,8 @@ class TestPartResultTest : public Test {
  protected:
   TestPartResultTest()
       : r1_(TestPartResult::kSuccess, "foo/bar.cc", 10, "Success!"),
-        r2_(TestPartResult::kNonFatalFailure, "foo/bar.cc", -1, "Failure!"),
-        r3_(TestPartResult::kFatalFailure, NULL, -1, "Failure!") {}
+	r2_(TestPartResult::kNonFatalFailure, "foo/bar.cc", -1, "Failure!"),
+	r3_(TestPartResult::kFatalFailure, NULL, -1, "Failure!") {}
 
   TestPartResult r1_, r2_, r3_;
 };
@@ -62,9 +62,9 @@ TEST_F(TestPartResultTest, ConstructorWorks) {
   message << "some unimportant stack trace";
 
   const TestPartResult result(TestPartResult::kNonFatalFailure,
-                              "some_file.cc",
-                              42,
-                              message.GetString().c_str());
+			      "some_file.cc",
+			      42,
+			      message.GetString().c_str());
 
   EXPECT_EQ(TestPartResult::kNonFatalFailure, result.type());
   EXPECT_STREQ("some_file.cc", result.file_name());
@@ -75,27 +75,27 @@ TEST_F(TestPartResultTest, ConstructorWorks) {
 
 TEST_F(TestPartResultTest, ResultAccessorsWork) {
   const TestPartResult success(TestPartResult::kSuccess,
-                               "file.cc",
-                               42,
-                               "message");
+			       "file.cc",
+			       42,
+			       "message");
   EXPECT_TRUE(success.passed());
   EXPECT_FALSE(success.failed());
   EXPECT_FALSE(success.nonfatally_failed());
   EXPECT_FALSE(success.fatally_failed());
 
   const TestPartResult nonfatal_failure(TestPartResult::kNonFatalFailure,
-                                        "file.cc",
-                                        42,
-                                        "message");
+					"file.cc",
+					42,
+					"message");
   EXPECT_FALSE(nonfatal_failure.passed());
   EXPECT_TRUE(nonfatal_failure.failed());
   EXPECT_TRUE(nonfatal_failure.nonfatally_failed());
   EXPECT_FALSE(nonfatal_failure.fatally_failed());
 
   const TestPartResult fatal_failure(TestPartResult::kFatalFailure,
-                                     "file.cc",
-                                     42,
-                                     "message");
+				     "file.cc",
+				     42,
+				     "message");
   EXPECT_FALSE(fatal_failure.passed());
   EXPECT_TRUE(fatal_failure.failed());
   EXPECT_FALSE(fatal_failure.nonfatally_failed());
@@ -160,7 +160,7 @@ class TestPartResultArrayTest : public Test {
  protected:
   TestPartResultArrayTest()
       : r1_(TestPartResult::kNonFatalFailure, "foo/bar.cc", -1, "Failure 1"),
-        r2_(TestPartResult::kFatalFailure, "foo/bar.cc", -1, "Failure 2") {}
+	r2_(TestPartResult::kFatalFailure, "foo/bar.cc", -1, "Failure 2") {}
 
   const TestPartResult r1_, r2_;
 };

@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -44,11 +44,11 @@ extern "C"{
 #else
 #define TEST(x, y) void y()
 #define ASSERT_EQ(v, s) if(v != s)cout << "Error at " << __LINE__ << "(" << #v << "!= " << #s << "\n"; \
-                                else cout << "(" << #v << "==" << #s << ") PASSED\n";
+				else cout << "(" << #v << "==" << #s << ") PASSED\n";
 #define EXPECT_EQ(v, s) ASSERT_EQ(v, s)
 #define ASSERT_TRUE(c) if(c)cout << "Error at " << __LINE__ << "(" << #c << ")" << "\n"; \
-                          else cout << "(" << #c << ") PASSED\n";
-#define EXPECT_TRUE(c) ASSERT_TRUE(c) 
+			  else cout << "(" << #c << ") PASSED\n";
+#define EXPECT_TRUE(c) ASSERT_TRUE(c)
 #endif
 using namespace std;
 
@@ -60,15 +60,15 @@ using namespace std;
 static string uid = "ceph";
 static string display_name = "CEPH";
 
-extern "C" int ceph_armor(char *dst, const char *dst_end, 
-                          const char *src, const char *end);
+extern "C" int ceph_armor(char *dst, const char *dst_end,
+			  const char *src, const char *end);
 static void print_usage(char *exec){
   cout << "Usage: " << exec << " <Options>\n";
   cout << "Options:\n"
-          "-g <gw-ip> - The ip address of the gateway\n"
-          "-p <gw-port> - The port number of the gateway\n"
-          "-c <ceph.conf> - Absolute path of ceph config file\n"
-          "-rgw-admin <path/to/radosgw-admin> - radosgw-admin absolute path\n";
+	  "-g <gw-ip> - The ip address of the gateway\n"
+	  "-p <gw-port> - The port number of the gateway\n"
+	  "-c <ceph.conf> - Absolute path of ceph config file\n"
+	  "-rgw-admin <path/to/radosgw-admin> - radosgw-admin absolute path\n";
 }
 
 namespace admin_log {
@@ -91,9 +91,9 @@ class test_helper {
     ~test_helper(){
       curl_global_cleanup();
     }
-    int send_request(string method, string uri, 
-                     size_t (*function)(void *,size_t,size_t,void *) = 0,
-                     void *ud = 0, size_t length = 0);
+    int send_request(string method, string uri,
+		     size_t (*function)(void *,size_t,size_t,void *) = 0,
+		     void *ud = 0, size_t length = 0);
     int extract_input(int argc, char *argv[]);
     string& get_response(string hdr){
       return response[hdr];
@@ -181,13 +181,13 @@ static inline void buf_to_hex(const unsigned char *buf, int len, char *str)
 }
 
 static void calc_hmac_sha1(const char *key, int key_len,
-                    const char *msg, int msg_len, char *dest)
+		    const char *msg, int msg_len, char *dest)
 /* destination should be CEPH_CRYPTO_HMACSHA1_DIGESTSIZE bytes long */
 {
   ceph::crypto::HMACSHA1 hmac((const unsigned char *)key, key_len);
   hmac.Update((const unsigned char *)msg, msg_len);
   hmac.Final((unsigned char *)dest);
-  
+
   char hex_str[(CEPH_CRYPTO_HMACSHA1_DIGESTSIZE * 2) + 1];
   admin_log::buf_to_hex((unsigned char *)dest, CEPH_CRYPTO_HMACSHA1_DIGESTSIZE, hex_str);
 }
@@ -210,10 +210,10 @@ static int get_s3_auth(string method, string creds, string date, string res, str
     else
       tmp_res.assign(res, 0, off);
     auth_hdr.append(method + string("\n\n\n") + date + string("\n") + tmp_res);
-    admin_log::calc_hmac_sha1(secret.c_str(), secret.length(), 
-                               auth_hdr.c_str(), auth_hdr.length(), hmac_sha1);
+    admin_log::calc_hmac_sha1(secret.c_str(), secret.length(),
+			       auth_hdr.c_str(), auth_hdr.length(), hmac_sha1);
     int ret = ceph_armor(b64, b64 + 64, hmac_sha1,
-                         hmac_sha1 + CEPH_CRYPTO_HMACSHA1_DIGESTSIZE);
+			 hmac_sha1 + CEPH_CRYPTO_HMACSHA1_DIGESTSIZE);
     if (ret < 0) {
       cout << "ceph_armor failed\n";
       return -1;
@@ -229,26 +229,26 @@ void get_date(string& d){
   char date[64];
   struct tm tm;
   char *days[] = {(char *)"Sun", (char *)"Mon", (char *)"Tue",
-                  (char *)"Wed", (char *)"Thu", (char *)"Fri", 
-                  (char *)"Sat"};
-  char *months[] = {(char *)"Jan", (char *)"Feb", (char *)"Mar", 
-                    (char *)"Apr", (char *)"May", (char *)"Jun",
-                    (char *)"Jul",(char *) "Aug", (char *)"Sep", 
-                    (char *)"Oct", (char *)"Nov", (char *)"Dec"};
+		  (char *)"Wed", (char *)"Thu", (char *)"Fri",
+		  (char *)"Sat"};
+  char *months[] = {(char *)"Jan", (char *)"Feb", (char *)"Mar",
+		    (char *)"Apr", (char *)"May", (char *)"Jun",
+		    (char *)"Jul",(char *) "Aug", (char *)"Sep",
+		    (char *)"Oct", (char *)"Nov", (char *)"Dec"};
   gettimeofday(&tv, NULL);
   gmtime_r(&tv.tv_sec, &tm);
-  sprintf(date, "%s, %d %s %d %d:%d:%d GMT", 
-          days[tm.tm_wday], 
-          tm.tm_mday, months[tm.tm_mon], 
-          tm.tm_year + 1900,
-          tm.tm_hour, tm.tm_min, tm.tm_sec);
+  sprintf(date, "%s, %d %s %d %d:%d:%d GMT",
+	  days[tm.tm_wday],
+	  tm.tm_mday, months[tm.tm_mon],
+	  tm.tm_year + 1900,
+	  tm.tm_hour, tm.tm_min, tm.tm_sec);
   d = date;
 }
 
-int test_helper::send_request(string method, string res, 
-                                   size_t (*read_function)( void *,size_t,size_t,void *),
-                                   void *ud,
-                                   size_t length){
+int test_helper::send_request(string method, string res,
+				   size_t (*read_function)( void *,size_t,size_t,void *),
+				   void *ud,
+				   size_t length){
   string url;
   string auth, date;
   url.append(string("http://") + host);
@@ -283,19 +283,19 @@ int test_helper::send_request(string method, string res,
     slist = curl_slist_append(slist, auth.c_str());
     slist = curl_slist_append(slist, http_date.c_str());
     for(list<string>::iterator it = extra_hdrs.begin();
-        it != extra_hdrs.end(); ++it){
+	it != extra_hdrs.end(); ++it){
       slist = curl_slist_append(slist, (*it).c_str());
     }
     if(read_function)
       curl_slist_append(slist, "Expect:");
-    curl_easy_setopt(curl_inst, CURLOPT_HTTPHEADER, slist); 
+    curl_easy_setopt(curl_inst, CURLOPT_HTTPHEADER, slist);
 
     response.erase(response.begin(), response.end());
     extra_hdrs.erase(extra_hdrs.begin(), extra_hdrs.end());
     CURLcode res = curl_easy_perform(curl_inst);
     if(res != CURLE_OK){
-      cout << "Curl perform failed for " << url << ", res: " << 
-        curl_easy_strerror(res) << "\n";
+      cout << "Curl perform failed for " << url << ", res: " <<
+	curl_easy_strerror(res) << "\n";
       return -1;
     }
     curl_slist_free_all(slist);
@@ -320,8 +320,8 @@ int run_rgw_admin(string& cmd, string& resp) {
     unsigned loop = 1;
 
     argv[0] = (char *)"radosgw-admin";
-    for (list<string>::iterator it = l.begin(); 
-         it != l.end(); ++it) {
+    for (list<string>::iterator it = l.begin();
+	 it != l.end(); ++it) {
       argv[loop++] = (char *)(*it).c_str();
     }
     argv[loop] = NULL;
@@ -330,14 +330,14 @@ int run_rgw_admin(string& cmd, string& resp) {
     if (!stdout) {
       cout << "Unable to open stdout file" << std::endl;
     }
-    execv((g_test->get_rgw_admin_path()).c_str(), argv); 
+    execv((g_test->get_rgw_admin_path()).c_str(), argv);
   } else if (pid > 0) {
     int status;
     waitpid(pid, &status, 0);
     if (WIFEXITED(status)) {
       if(WEXITSTATUS(status) != 0) {
-        cout << "Child exited with status " << WEXITSTATUS(status) << std::endl;
-        return -1;
+	cout << "Child exited with status " << WEXITSTATUS(status) << std::endl;
+	return -1;
       }
     }
     ifstream in;
@@ -357,7 +357,7 @@ int run_rgw_admin(string& cmd, string& resp) {
       unlink(RGW_ADMIN_RESP_PATH);
       /* cout << "radosgw-admin " << cmd << ": " << resp << std::endl; */
     }
-  } else 
+  } else
     return -1;
   return 0;
 }
@@ -375,7 +375,7 @@ int get_creds(string& json, string& creds) {
   for(map<string, RGWAccessKey>::iterator it = info.access_keys.begin();
       it != info.access_keys.end(); ++it) {
     RGWAccessKey _k = it->second;
-    /*cout << "accesskeys [ " << it->first << " ] = " << 
+    /*cout << "accesskeys [ " << it->first << " ] = " <<
       "{ " << _k.id << ", " << _k.key << ", " << _k.subuser << "}" << std::endl;*/
     creds.append(it->first + string(":") + _k.key);
     break;
@@ -423,7 +423,7 @@ int user_info(string& uid, string& display_name, RGWUserInfo& uinfo) {
 
 int user_rm(string& uid, string& display_name) {
   stringstream ss;
-  ss << "-c " << g_test->get_ceph_conf_path() << 
+  ss << "-c " << g_test->get_ceph_conf_path() <<
     " metadata rm --metadata-key=user:" << uid;
 
   string out;
@@ -495,7 +495,7 @@ static int get_opstate_list(list<cls_statelog_entry> &entries) {
   JSONParser parser;
   if (parse_json_resp(parser) != 0)
     return -1;
-  if (!parser.is_array()) 
+  if (!parser.is_array())
     return -1;
 
   vector<string> l;
@@ -519,7 +519,7 @@ static int get_opstate_list(list<cls_statelog_entry> &entries) {
 
 TEST(TestRGWAdmin, opstate_set_list_delete) {
   const char *cname = "opstate",
-             *perm = "*";
+	     *perm = "*";
   string rest_req;
   stringstream ss;
   list<cls_statelog_entry> entries;
@@ -553,7 +553,7 @@ TEST(TestRGWAdmin, opstate_set_list_delete) {
 
   state = "in-progress";
   entries.clear();
-  ss << "/admin/opstate?client-id=" << cid_1 << "&op-id=" << oid_1 
+  ss << "/admin/opstate?client-id=" << cid_1 << "&op-id=" << oid_1
     << "&object=" << obj_1 << "&state=" << state;
   rest_req = ss.str();
   g_test->send_request(string("POST"), rest_req, read_dummy_post, NULL, sizeof(int));
@@ -579,7 +579,7 @@ TEST(TestRGWAdmin, opstate_set_list_delete) {
   state = "complete";
   ss.str("");
   entries.clear();
-  ss << "/admin/opstate?client-id=" << cid_1 << "&op-id=" << oid_1 
+  ss << "/admin/opstate?client-id=" << cid_1 << "&op-id=" << oid_1
     << "&object=" << obj_1 << "&state=" << state;
   rest_req = ss.str();
   g_test->send_request(string("POST"), rest_req, read_dummy_post, NULL, sizeof(int));
@@ -603,7 +603,7 @@ TEST(TestRGWAdmin, opstate_set_list_delete) {
 
   ss.str("");
   entries.clear();
-  ss << "/admin/opstate?client-id=" << cid_2 << "&op-id=" << oid_2 
+  ss << "/admin/opstate?client-id=" << cid_2 << "&op-id=" << oid_2
     << "&object=" << obj_2 << "&state=" << state;
   rest_req = ss.str();
   g_test->send_request(string("POST"), rest_req, read_dummy_post, NULL, sizeof(int));
@@ -637,7 +637,7 @@ TEST(TestRGWAdmin, opstate_set_list_delete) {
   EXPECT_EQ(200U, g_test->get_resp_code());
   EXPECT_EQ(get_opstate_list(entries), 0);
   EXPECT_EQ(entries.size(), 1U);
-  
+
   ss.str("");
   entries.clear();
   ss << "/admin/opstate?client-id=" << cid_2 << "&op-id=" << oid_2 << "&object=" << obj_2;
@@ -646,7 +646,7 @@ TEST(TestRGWAdmin, opstate_set_list_delete) {
   EXPECT_EQ(200U, g_test->get_resp_code());
   EXPECT_EQ(get_opstate_list(entries), 0);
   EXPECT_EQ(entries.size(), 1U);
-  
+
   ss.str("");
   entries.clear();
   ss << "/admin/opstate?client-id=" << cid_2;
@@ -685,13 +685,13 @@ TEST(TestRGWAdmin, opstate_set_list_delete) {
   rest_req = "/admin/opstate?object=1&op-id=1";
   g_test->send_request(string("DELETE"), rest_req);
   EXPECT_EQ(400U, g_test->get_resp_code()); /*Missing client-id*/
-  
+
   rest_req = "/admin/opstate?object=1&op-id=1&client-id=1";
   g_test->send_request(string("DELETE"), rest_req);
   EXPECT_EQ(404U, g_test->get_resp_code());
 
   ss.str("");
-  ss << "/admin/opstate?client-id=" << cid_1 << "&op-id=" << oid_1 
+  ss << "/admin/opstate?client-id=" << cid_1 << "&op-id=" << oid_1
     << "&object=" << obj_1;
   rest_req = ss.str();
   g_test->send_request(string("DELETE"), rest_req);
@@ -707,7 +707,7 @@ TEST(TestRGWAdmin, opstate_set_list_delete) {
   EXPECT_EQ(entries.size(), 1U);
 
   ss.str("");
-  ss << "/admin/opstate?client-id=" << cid_2 << "&op-id=" << oid_2 
+  ss << "/admin/opstate?client-id=" << cid_2 << "&op-id=" << oid_2
     << "&object=" << obj_2;
   rest_req = ss.str();
   g_test->send_request(string("DELETE"), rest_req);
@@ -728,7 +728,7 @@ TEST(TestRGWAdmin, opstate_set_list_delete) {
 
 TEST(TestRGWAdmin, opstate_renew) {
   const char *cname = "opstate",
-             *perm = "*";
+	     *perm = "*";
   string rest_req;
   stringstream ss;
   string cid_1 = "cid_1";
@@ -761,7 +761,7 @@ TEST(TestRGWAdmin, opstate_renew) {
 
   state = "complete";
   ss.str("");
-  ss << "/admin/opstate?client-id=" << cid_1 << "&op-id=" << oid_1 
+  ss << "/admin/opstate?client-id=" << cid_1 << "&op-id=" << oid_1
     << "&object=" << obj_1 << "&state=" << state;
   rest_req = ss.str();
   g_test->send_request(string("POST"), rest_req, read_dummy_post, NULL, sizeof(int));
@@ -772,29 +772,29 @@ TEST(TestRGWAdmin, opstate_renew) {
   EXPECT_EQ(200U, g_test->get_resp_code());
 
   ss.str("");
-  ss << "/admin/opstate?renew&client-id=" << cid_1 << "&op-id=1" 
+  ss << "/admin/opstate?renew&client-id=" << cid_1 << "&op-id=1"
     << "&object=" << obj_1 << "&state=" << state;
   rest_req = ss.str();
   g_test->send_request(string("POST"), rest_req, read_dummy_post, NULL, sizeof(int));
   EXPECT_EQ(404U, g_test->get_resp_code());
-  
+
   ss.str("");
-  ss << "/admin/opstate?renew&client-id=" << cid_1 << "&op-id=" << oid_1 
+  ss << "/admin/opstate?renew&client-id=" << cid_1 << "&op-id=" << oid_1
     << "&object=" << obj_1 << "&state=" << state;
   rest_req = ss.str();
   g_test->send_request(string("POST"), rest_req, read_dummy_post, NULL, sizeof(int));
   EXPECT_EQ(200U, g_test->get_resp_code());
 
   ss.str("");
-  ss << "/admin/opstate?renew&client-id=" << cid_1 << "&op-id=" << oid_1 
+  ss << "/admin/opstate?renew&client-id=" << cid_1 << "&op-id=" << oid_1
     << "&object=" << obj_1 << "&state=in-progress";
   rest_req = ss.str();
   g_test->send_request(string("POST"), rest_req, read_dummy_post, NULL, sizeof(int));
   EXPECT_EQ(500U, g_test->get_resp_code());
 
   ss.str("");
-  ss << "/admin/opstate?client-id=" << cid_1 << "&op-id=" << oid_1 
-    << "&object=" << obj_1;
+  ss << "/admin/opstate?client-id=" << cid_1 << "&op-id=" << oid_1
+     << "&object=" << obj_1;
   rest_req = ss.str();
   g_test->send_request(string("DELETE"), rest_req);
   EXPECT_EQ(200U, g_test->get_resp_code());

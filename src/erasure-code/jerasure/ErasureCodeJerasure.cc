@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -11,7 +11,7 @@
  *  modify it under the terms of the GNU Lesser General Public
  *  License as published by the Free Software Foundation; either
  *  version 2.1 of the License, or (at your option) any later version.
- * 
+ *
  */
 
 #include <errno.h>
@@ -28,7 +28,7 @@ extern "C" {
 #include "liberation.h"
 }
 
-// FIXME(loic) this may be too conservative, check back with feedback from Andreas 
+// FIXME(loic) this may be too conservative, check back with feedback from Andreas
 #define LARGEST_VECTOR_WORDSIZE 16
 
 #define dout_subsys ceph_subsys_osd
@@ -72,8 +72,8 @@ unsigned int ErasureCodeJerasure::get_chunk_size(unsigned int object_size) const
 }
 
 int ErasureCodeJerasure::minimum_to_decode(const set<int> &want_to_read,
-                                           const set<int> &available_chunks,
-                                           set<int> *minimum) 
+					   const set<int> &available_chunks,
+					   set<int> *minimum)
 {
   if (includes(available_chunks.begin(), available_chunks.end(),
 	       want_to_read.begin(), want_to_read.end())) {
@@ -90,8 +90,8 @@ int ErasureCodeJerasure::minimum_to_decode(const set<int> &want_to_read,
 }
 
 int ErasureCodeJerasure::minimum_to_decode_with_cost(const set<int> &want_to_read,
-                                                     const map<int, int> &available,
-                                                     set<int> *minimum)
+						     const map<int, int> &available,
+						     set<int> *minimum)
 {
   set <int> available_chunks;
   for (map<int, int>::const_iterator i = available.begin();
@@ -102,8 +102,8 @@ int ErasureCodeJerasure::minimum_to_decode_with_cost(const set<int> &want_to_rea
 }
 
 int ErasureCodeJerasure::encode(const set<int> &want_to_encode,
-                                const bufferlist &in,
-                                map<int, bufferlist> *encoded)
+				const bufferlist &in,
+				map<int, bufferlist> *encoded)
 {
   unsigned blocksize = get_chunk_size(in.length());
   unsigned padded_length = blocksize * k;
@@ -135,8 +135,8 @@ int ErasureCodeJerasure::encode(const set<int> &want_to_encode,
 }
 
 int ErasureCodeJerasure::decode(const set<int> &want_to_read,
-                                const map<int, bufferlist> &chunks,
-                                map<int, bufferlist> *decoded)
+				const map<int, bufferlist> &chunks,
+				map<int, bufferlist> *decoded)
 {
   vector<int> have;
   have.reserve(chunks.size());
@@ -159,7 +159,7 @@ int ErasureCodeJerasure::decode(const set<int> &want_to_read,
   int erasures_count = 0;
   char *data[k];
   char *coding[m];
-  for (int i =  0; i < k + m; i++) {
+  for (int i =	0; i < k + m; i++) {
     if (chunks.find(i) == chunks.end()) {
       erasures[erasures_count] = i;
       erasures_count++;
@@ -183,8 +183,8 @@ int ErasureCodeJerasure::decode(const set<int> &want_to_read,
 }
 
 int ErasureCodeJerasure::to_int(const std::string &name,
-                                const map<std::string,std::string> &parameters,
-                                int default_value)
+				const map<std::string,std::string> &parameters,
+				int default_value)
 {
   if (parameters.find(name) == parameters.end() ||
       parameters.find(name)->second.size() == 0) {
@@ -197,8 +197,8 @@ int ErasureCodeJerasure::to_int(const std::string &name,
   int r = strict_strtol(p.c_str(), 10, &err);
   if (!err.empty()) {
     derr << "could not convert " << name << "=" << value
-         << " to int because " << err
-         << ", set to default " << default_value << dendl;
+	 << " to int because " << err
+	 << ", set to default " << default_value << dendl;
     return default_value;
   }
   dout(10) << name << " set to " << r << dendl;
@@ -220,20 +220,20 @@ bool ErasureCodeJerasure::is_prime(int value)
   return false;
 }
 
-// 
+//
 // ErasureCodeJerasureReedSolomonVandermonde
 //
 void ErasureCodeJerasureReedSolomonVandermonde::jerasure_encode(char **data,
-                                                                char **coding,
-                                                                int blocksize)
+								char **coding,
+								int blocksize)
 {
   jerasure_matrix_encode(k, m, w, matrix, data, coding, blocksize);
 }
 
 int ErasureCodeJerasureReedSolomonVandermonde::jerasure_decode(int *erasures,
-                                                                char **data,
-                                                                char **coding,
-                                                                int blocksize)
+								char **data,
+								char **coding,
+								int blocksize)
 {
   return jerasure_matrix_decode(k, m, w, matrix, 1,
 				erasures, data, coding, blocksize);
@@ -265,12 +265,12 @@ void ErasureCodeJerasureReedSolomonVandermonde::prepare()
   matrix = reed_sol_vandermonde_coding_matrix(k, m, w);
 }
 
-// 
+//
 // ErasureCodeJerasureReedSolomonRAID6
 //
 void ErasureCodeJerasureReedSolomonRAID6::jerasure_encode(char **data,
-                                                                char **coding,
-                                                                int blocksize)
+								char **coding,
+								int blocksize)
 {
   reed_sol_r6_encode(k, w, data, coding, blocksize);
 }
@@ -308,7 +308,7 @@ void ErasureCodeJerasureReedSolomonRAID6::prepare()
   matrix = reed_sol_r6_coding_matrix(k, w);
 }
 
-// 
+//
 // ErasureCodeJerasureCauchy
 //
 void ErasureCodeJerasureCauchy::jerasure_encode(char **data,
@@ -350,7 +350,7 @@ void ErasureCodeJerasureCauchy::prepare_schedule(int *matrix)
   schedule = jerasure_smart_bitmatrix_to_schedule(k, m, w, bitmatrix);
 }
 
-// 
+//
 // ErasureCodeJerasureCauchyOrig
 //
 void ErasureCodeJerasureCauchyOrig::prepare()
@@ -360,7 +360,7 @@ void ErasureCodeJerasureCauchyOrig::prepare()
   free(matrix);
 }
 
-// 
+//
 // ErasureCodeJerasureCauchyGood
 //
 void ErasureCodeJerasureCauchyGood::prepare()
@@ -370,7 +370,7 @@ void ErasureCodeJerasureCauchyGood::prepare()
   free(matrix);
 }
 
-// 
+//
 // ErasureCodeJerasureLiberation
 //
 ErasureCodeJerasureLiberation::~ErasureCodeJerasureLiberation()
@@ -382,17 +382,17 @@ ErasureCodeJerasureLiberation::~ErasureCodeJerasureLiberation()
 }
 
 void ErasureCodeJerasureLiberation::jerasure_encode(char **data,
-                                                    char **coding,
-                                                    int blocksize)
+						    char **coding,
+						    int blocksize)
 {
   jerasure_schedule_encode(k, m, w, schedule, data,
 			   coding, blocksize, packetsize);
 }
 
 int ErasureCodeJerasureLiberation::jerasure_decode(int *erasures,
-                                                    char **data,
-                                                    char **coding,
-                                                    int blocksize)
+						    char **data,
+						    char **coding,
+						    int blocksize)
 {
   return jerasure_schedule_decode_lazy(k, m, w, bitmatrix, erasures, data,
 				       coding, blocksize, packetsize, 1);
@@ -446,7 +446,7 @@ void ErasureCodeJerasureLiberation::prepare()
   schedule = jerasure_smart_bitmatrix_to_schedule(k, m, w, bitmatrix);
 }
 
-// 
+//
 // ErasureCodeJerasureBlaumRoth
 //
 void ErasureCodeJerasureBlaumRoth::prepare()
@@ -455,7 +455,7 @@ void ErasureCodeJerasureBlaumRoth::prepare()
   schedule = jerasure_smart_bitmatrix_to_schedule(k, m, w, bitmatrix);
 }
 
-// 
+//
 // ErasureCodeJerasureLiber8tion
 //
 void ErasureCodeJerasureLiber8tion::parse(const map<std::string,std::string> &parameters)

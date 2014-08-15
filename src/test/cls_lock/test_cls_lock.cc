@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #include <iostream>
@@ -51,8 +51,8 @@ void lock_info(IoCtx *ioctx, string& oid, string& name, map<locker_id_t, locker_
   map<locker_id_t, locker_info_t>::iterator liter;
   for (liter = lockers.begin(); liter != lockers.end(); ++liter) {
     const locker_id_t& locker = liter->first;
-    cout << "    " << locker.locker << " expiration=" << liter->second.expiration
-         << " addr=" << liter->second.addr << " cookie=" << locker.cookie << std::endl;
+    cout << "	 " << locker.locker << " expiration=" << liter->second.expiration
+	 << " addr=" << liter->second.addr << " cookie=" << locker.cookie << std::endl;
   }
 }
 

@@ -3,7 +3,7 @@
 #define CEPH_MDS_LOCKS_H
 
 struct sm_state_t {
-  int next;         // 0 if stable
+  int next;	    // 0 if stable
   char loner;
   int replica_state;
   char can_read;
@@ -45,23 +45,23 @@ extern const struct sm_t sm_locallock;
 enum {
   LOCK_UNDEF = 0,
 
-  //                                    auth               rep
-  LOCK_SYNC,    // AR   R . RD L . / C .   R RD L . / C . 
-  LOCK_LOCK,    // AR   R . .. . X / . .   . .. . . / . .
+  //					auth		   rep
+  LOCK_SYNC,	// AR	R . RD L . / C .   R RD L . / C .
+  LOCK_LOCK,	// AR	R . .. . X / . .   . .. . . / . .
 
   LOCK_PREXLOCK,    // A    . . .. . . / . .   (lock)
-  LOCK_XLOCK,       // A    . . .. . . / . .   (lock)
+  LOCK_XLOCK,	    // A    . . .. . . / . .   (lock)
   LOCK_XLOCKDONE,   // A    r p rd l x / . .   (lock)  <-- by same client only!!
   LOCK_LOCK_XLOCK,
 
-  LOCK_SYNC_LOCK,    // AR   R . .. . . / . .   R .. . . / . .
-  LOCK_LOCK_SYNC,    // A    R p rd l . / . .   (lock)  <-- lc by same client only
+  LOCK_SYNC_LOCK,    // AR   R . .. . . / . .	R .. . . / . .
+  LOCK_LOCK_SYNC,    // A    R p rd l . / . .	(lock)	<-- lc by same client only
 
-  LOCK_EXCL,         // A    . . .. . . / c x * (lock)
+  LOCK_EXCL,	     // A    . . .. . . / c x * (lock)
   LOCK_EXCL_SYNC,    // A    . . .. . . / c . * (lock)
-  LOCK_EXCL_LOCK,    // A    . . .. . . / . .   (lock)
+  LOCK_EXCL_LOCK,    // A    . . .. . . / . .	(lock)
   LOCK_SYNC_EXCL,    // Ar   R . .. . . / c . * (sync->lock)
-  LOCK_LOCK_EXCL,    // A    R . .. . . / . .   (lock)
+  LOCK_LOCK_EXCL,    // A    R . .. . . / . .	(lock)
 
   LOCK_REMOTEXLOCK,  // on NON-auth
 
@@ -99,23 +99,23 @@ enum {
 // lock actions
 
 // for replicas
-#define LOCK_AC_SYNC        -1
-#define LOCK_AC_MIX         -2
-#define LOCK_AC_LOCK        -3
+#define LOCK_AC_SYNC	    -1
+#define LOCK_AC_MIX	    -2
+#define LOCK_AC_LOCK	    -3
 #define LOCK_AC_LOCKFLUSHED -4
 
 // for auth
-#define LOCK_AC_SYNCACK      1
-#define LOCK_AC_MIXACK     2
-#define LOCK_AC_LOCKACK      3
+#define LOCK_AC_SYNCACK	     1
+#define LOCK_AC_MIXACK	   2
+#define LOCK_AC_LOCKACK	     3
 
 #define LOCK_AC_REQSCATTER   7
 #define LOCK_AC_REQUNSCATTER 8
-#define LOCK_AC_NUDGE        9
+#define LOCK_AC_NUDGE	     9
 #define LOCK_AC_REQRDLOCK   10
 
-#define LOCK_AC_FOR_REPLICA(a)  ((a) < 0)
-#define LOCK_AC_FOR_AUTH(a)     ((a) > 0)
+#define LOCK_AC_FOR_REPLICA(a)	((a) < 0)
+#define LOCK_AC_FOR_AUTH(a)	((a) > 0)
 
 
 static inline const char *get_lock_action_name(int a) {
@@ -136,7 +136,5 @@ static inline const char *get_lock_action_name(int a) {
   default: return "???";
   }
 }
-
-
 
 #endif

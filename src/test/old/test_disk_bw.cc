@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 
 #include <sys/time.h>
 #include <sys/types.h>
@@ -18,27 +20,27 @@ using namespace std;
 
 int main(int argc, char **argv)
 {
-  void   *buf;
-  int     fd, count, loop = 0, ret;
-  
+  void	 *buf;
+  int	  fd, count, loop = 0, ret;
+
   if (argc != 4) {
     fprintf(stderr, "Usage: %s device bsize count\n", argv[0]);
     exit (0);
   }
-  
+
   int bsize = atoi(argv[2]);
   count = atoi(argv[3]);
-  
+
   posix_memalign(&buf, sysconf(_SC_PAGESIZE), bsize);
-  
-  //if ((fd = open(argv[1], O_SYNC|O_RDWR)) < 0) {  
+
+  //if ((fd = open(argv[1], O_SYNC|O_RDWR)) < 0) {
   if ((fd = open(argv[1], O_DIRECT|O_RDWR)) < 0) {
 
     fprintf(stderr, "Can't open device %s\n", argv[1]);
     exit (4);
   }
-  
- 
+
+
   utime_t start = ceph_clock_now(g_ceph_context);
   while (loop++ < count) {
     ret = safe_write(fd, buf, bsize);
@@ -55,7 +57,7 @@ int main(int argc, char **argv)
 
   char hostname[80];
   gethostname(hostname, 80);
-  
+
   double mb = bsize*count/1024/1024;
 
   cout << hostname << "\t" << mb << " MB\t" << end << " seconds\t" << (mb / (double)end) << " MB/sec" << std::endl;
