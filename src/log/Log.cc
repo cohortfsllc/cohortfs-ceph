@@ -17,6 +17,9 @@
 #include "include/on_exit.h"
 
 #ifdef HAVE_LTTNG
+#define TRACEPOINT_PROBE_DYNAMIC_LINKAGE
+#define TRACEPOINT_CREATE_PROBES
+#define TRACEPOINT_DEFINE
 #include "LttngLog.h"
 #endif // HAVE_LTTNG
 
