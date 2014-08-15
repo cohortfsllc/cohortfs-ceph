@@ -49,6 +49,7 @@ int main(int argc, const char **argv)
 	std::string addr = "localhost";
 	std::string port = "1234";
 	bool dfast = false;
+	bool osdprot = false;
 
 	cout << "Xio Server starting..." << endl;
 
@@ -68,6 +69,10 @@ int main(int argc, const char **argv)
 	  }  else if (ceph_argparse_flag(args, arg_iter, "--dfast",
 					   (char*) NULL)) {
 	    dfast = true;
+	  }  else if (ceph_argparse_flag(args, arg_iter, "--osdprot",
+					   (char*) NULL)) {
+	    osdprot = true;
+
 	  } else {
 	    ++arg_iter;
 	  }
@@ -91,7 +96,13 @@ int main(int argc, const char **argv)
 				     0 /* nonce */,
 				     2 /* portals */,
 				     dstrategy);
-	static_cast<XioMessenger*>(messenger)->set_special_handling(MSG_SPECIAL_HANDLING_REDUPE);
+	static_cast<XioMessenger*>(messenger)->set_special_handling(
+	  MSG_SPECIAL_HANDLING_REDUPE);
+
+	if (osdprot) {
+	  messenger->set_cluster_protocol(10 /* CEPH_OSD_PROTOCOL */);
+	  // alter policy?
+	}
 
 	// enable timing prints
 	static_cast<XioMessenger*>(messenger)->set_magic(MSG_MAGIC_TRACE_CTR);
