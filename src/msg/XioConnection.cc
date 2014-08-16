@@ -634,6 +634,9 @@ int XioConnection::CState::state_fail(Message* m, uint32_t flags)
   xcon->discard_input_queue(flags|OP_FLAG_LOCKED);
   xcon->adjust_clru(flags|OP_FLAG_LOCKED|OP_FLAG_LRU);
 
+  // Accelio disconnect
+  xio_disconnect(xcon->conn);
+
   if (! (flags & OP_FLAG_LOCKED))
     pthread_spin_unlock(&xcon->sp);
 
@@ -908,11 +911,13 @@ int XioConnection::CState::msg_connect_auth_reply(MConnectAuthReply *m)
 	     << features << " < peer " << m->features
 	     << " missing " << (m->features & ~policy.features_supported)
 	     << std::dec << dendl;
+    state_fail(m, OP_FLAG_NONE); // XXX correct?
   }
 
   if (m->tag == CEPH_MSGR_TAG_BADPROTOVER) {
     dout(4) << "connect protocol version mismatch, my " << protocol_version
 	    << " != " << m->protocol_version << dendl;
+    state_fail(m, OP_FLAG_NONE); // XXX correct?
     goto dispose_m;
   }
 
@@ -920,7 +925,8 @@ int XioConnection::CState::msg_connect_auth_reply(MConnectAuthReply *m)
     dout(4) << "connect got BADAUTHORIZER" << dendl;
     if (flags & FLAG_BAD_AUTH) {
       // prevent oscillation
-      flags &= ~FLAG_BAD_AUTH;
+      flags &= ~FLAG_BAD_AUTH; // XXX terminal state could reset flags?
+      state_fail(m, OP_FLAG_NONE); // XXX correct?
       goto dispose_m;
     } else {
       flags |= FLAG_BAD_AUTH;
@@ -942,6 +948,7 @@ int XioConnection::CState::msg_connect_auth_reply(MConnectAuthReply *m)
     connect_seq = 0;
     // notify ULP
     msgr->ms_deliver_handle_reset(xcon);
+    // restart negotiation
     init_state();
     goto dispose_m;
   }
