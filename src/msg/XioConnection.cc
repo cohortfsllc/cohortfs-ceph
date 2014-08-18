@@ -355,7 +355,10 @@ int XioConnection::on_msg_req(struct xio_session *session,
     if (unlikely(cstate.get_session_state() == XioConnection::START))
       return cstate.next_state(m);
 
+#if 0 /* XXX have observed DISCONNECTED--we should ignore this case,
+       * and deliver anyway */
     assert(cstate.get_session_state() == XioConnection::UP);
+#endif
 
     /* MP-SAFE */
     cstate.set_in_seq(header.seq);
