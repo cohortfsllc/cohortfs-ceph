@@ -285,6 +285,11 @@ XioMessenger::XioMessenger(CephContext *cct, entity_name_t name,
       xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_OUT_IOVLEN,
 		  &xopt, sizeof(unsigned));
 
+#define XMSG_QUEUE_DEPTH 512
+      xopt = XMSG_QUEUE_DEPTH;
+      xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_QUEUE_DEPTH,
+		  &xopt, sizeof(unsigned));
+
       /* and unregisterd one */
 #define XMSG_MEMPOOL_MIN 4096
 #define XMSG_MEMPOOL_MAX 4096
@@ -904,15 +909,17 @@ retry:
 	  XioHelo xhelo(bound ? XIO_HELO_FLAG_BOUND_ADDR : XIO_HELO_FLAG_NONE,
 			self_inst, dest);
 	  ::encode(xhelo, xhelo_bl);
-	  /* XXX client session attributes */
-	  struct xio_session_attr attr;
-	  attr.ses_ops = &xio_msgr_ops;
-	  attr.user_context_len = xhelo_bl.length();
-	  attr.user_context = malloc(attr.user_context_len);
-	  memcpy(attr.user_context, xhelo_bl.c_str(), attr.user_context_len);
-	  attr.uri = NULL; /* XXX */
-	  xcon->session = xio_session_create(
-	    XIO_SESSION_REQ, &attr, xio_uri.c_str(), 0, 0, xcon.get() /*ptr*/);
+	  /* XXX client session creation parameters */
+	  struct xio_session_params params = {
+	    .type		= XIO_SESSION_CLIENT,
+	    .initial_sn	= 0,
+	    .ses_ops		= &xio_msgr_ops,
+	    .user_context	= xcon.get(),
+	    .private_data	= xhelo_bl.c_str(),
+	    .private_data_len =  xhelo_bl.length(),
+	    .uri		= (char *)xio_uri.c_str()
+	  };
+	  xcon->session = xio_session_create(&params);
 	  /* this should cause callbacks with user context of conn, but
 	   * we can always set it explicitly */
 	  xcon->conn = xio_connect(
@@ -941,17 +948,19 @@ retry:
     self_inst, dest);
     ::encode(xhelo, xhelo_bl);
 
-    /* XXX client session attributes */
-    struct xio_session_attr attr;
-    attr.ses_ops = &xio_msgr_ops;
-    attr.user_context_len = xhelo_bl.length();
-    attr.user_context = malloc(attr.user_context_len);
-    memcpy(attr.user_context, xhelo_bl.c_str(), attr.user_context_len);
-    attr.uri = NULL; /* XXX */
+    XioConnection *xcon = new XioConnection(this, XioConnection::ACTIVE, _dest);
 
-    XioConnection *xcon = new XioConnection(this, XioConnection::ACTIVE,
-					    _dest);
-    xcon->get(); /* sentinel ref */
+	  /* XXX client session creation parameters */
+    struct xio_session_params params = {
+      .type		= XIO_SESSION_CLIENT,
+      .initial_sn	= 0,
+      .ses_ops		= &xio_msgr_ops,
+      .user_context	= xcon->get(), /* sentinel ref */
+      .private_data	= xhelo_bl.c_str(),
+      .private_data_len =  xhelo_bl.length(),
+      .uri		= (char *)xio_uri.c_str()
+    };
+    xcon->session = xio_session_create(&params);
 
     /* lock xcon until state established */
     pthread_spin_lock(&xcon->sp);
@@ -961,8 +970,7 @@ retry:
     xcon->cstate.flags |= XioConnection::CState::FLAG_MAPPED;
     conns_sp.unlock();
 
-    xcon->session = xio_session_create(XIO_SESSION_REQ, &attr, xio_uri.c_str(),
-				       0, 0, xcon);
+    xcon->session = xio_session_create(&params);
     if (!! xcon->session) {
       /* this should cause callbacks with user context of conn, but
        * we can always set it explicitly */
