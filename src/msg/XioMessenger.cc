@@ -892,8 +892,7 @@ retry:
   XioConnection::EntitySet::iterator conn_iter =
     conns_entity_map.find(_dest, XioConnection::EntityComp());
   if (conn_iter != conns_entity_map.end()) {
-    XioConnectionRef cref  = &(*conn_iter); /* ref+1 */
-    XioConnection *xcon = cref->get(); /* ref'd above, so safe this scope */
+    XioConnectionRef xcon  = &(*conn_iter); /* ref+1 */
     conns_sp.unlock();
     /* lock xcon until state established */
     pthread_spin_lock(&xcon->sp);
@@ -913,11 +912,12 @@ retry:
 	  memcpy(attr.user_context, xhelo_bl.c_str(), attr.user_context_len);
 	  attr.uri = NULL; /* XXX */
 	  xcon->session = xio_session_create(
-	    XIO_SESSION_REQ, &attr, xio_uri.c_str(), 0, 0, xcon);
+	    XIO_SESSION_REQ, &attr, xio_uri.c_str(), 0, 0, xcon.get() /*ptr*/);
 	  /* this should cause callbacks with user context of conn, but
 	   * we can always set it explicitly */
 	  xcon->conn = xio_connect(
-	    xcon->session, this->portals.get_portal0()->ctx, 0, NULL, xcon);
+	    xcon->session, this->portals.get_portal0()->ctx, 0, NULL,
+	    xcon.get() /* ptr */);
 	  xcon->connected.set(true);
 	  /* kickoff session negotiation */
 	  xcon->cstate.init_state(); /* LOCKED */
@@ -928,7 +928,7 @@ retry:
       goto retry;
     }
     pthread_spin_unlock(&xcon->sp);
-    return cref;
+    return xcon;
   }
   else {
     string xio_uri = xio_uri_from_entity(_dest.addr, true /* want_port */);
@@ -951,8 +951,7 @@ retry:
 
     XioConnection *xcon = new XioConnection(this, XioConnection::ACTIVE,
 					    _dest);
-    /* sentinel ref */
-    xcon->get();
+    xcon->get(); /* sentinel ref */
 
     /* lock xcon until state established */
     pthread_spin_lock(&xcon->sp);
@@ -964,21 +963,22 @@ retry:
 
     xcon->session = xio_session_create(XIO_SESSION_REQ, &attr, xio_uri.c_str(),
 				       0, 0, xcon);
-    if (! xcon->session)
-      abort();
+    if (!! xcon->session) {
+      /* this should cause callbacks with user context of conn, but
+       * we can always set it explicitly */
+      xcon->conn = xio_connect(xcon->session, this->portals.get_portal0()->ctx,
+			       0, NULL, xcon);
+      xcon->connected.set(true);
 
-    /* this should cause callbacks with user context of conn, but
-     * we can always set it explicitly */
-    xcon->conn = xio_connect(xcon->session, this->portals.get_portal0()->ctx,
-			     0, NULL, xcon);
-    xcon->connected.set(true);
+      /* kickoff session negotition */
+      xcon->cstate.init_state(); /* LOCKED */
+    }
 
-    /* kickoff session negotition */
-    xcon->cstate.init_state(); /* LOCKED */
+    // if !xcon->session, xcon stgate is {INIT, IDLE}
 
     pthread_spin_unlock(&xcon->sp);
 
-    return xcon->get(); /* nref +1 */
+    return xcon; /* caller receives +1 */
   }
 } /* get_connection */
 
