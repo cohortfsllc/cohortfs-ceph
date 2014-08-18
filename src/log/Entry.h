@@ -47,7 +47,7 @@ struct Entry {
   }
 
   const std::string& get_str() {
-    return m_streambuf.get_str();
+    return m_streambuf.str();
   }
 };
 

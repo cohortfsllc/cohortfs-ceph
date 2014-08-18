@@ -63,7 +63,7 @@ TEST(PrebufferedStreambuf, SimpleOverflow)
   const char *s = "hello, this is longer than buf[10]";
   os << s;
 
-  ASSERT_EQ(s, sb.get_str());
+  ASSERT_EQ(s, sb.str());
 
   std::istream is(&sb);
   std::string out;
@@ -79,7 +79,7 @@ TEST(PrebufferedStreambuf, ManyOverflow)
   const char *s = "hello, this way way way way way way way way way way way way way way way way way way way way way way way way way _way_ longer than buf[10]";
   os << s;
 
-  ASSERT_EQ(s, sb.get_str());
+  ASSERT_EQ(s, sb.str());
 
   std::istream is(&sb);
   std::string out;

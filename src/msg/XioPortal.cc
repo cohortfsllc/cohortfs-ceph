@@ -25,10 +25,10 @@ int XioPortal::bind(struct xio_session_ops *ops, const string &base_uri,
   ostream(&buf) << base_uri << ':' << port;
 
   uint16_t assigned;
-  server = xio_bind(ctx, ops, buf.get_str().c_str(), &assigned, 0, msgr);
+  server = xio_bind(ctx, ops, buf.str().c_str(), &assigned, 0, msgr);
   if (server == NULL) {
     int err = xio_errno();
-    derr << "xp::bind: portal " << buf.get_str()
+    derr << "xp::bind: portal " << buf.str()
       << " failed to bind: " << xio_strerror(err) << dendl;
     return err;
   }
@@ -39,7 +39,7 @@ int XioPortal::bind(struct xio_session_ops *ops, const string &base_uri,
     ostream(&buf) << base_uri << ':' << assigned;
   }
 
-  xio_uri = buf.get_str();
+  xio_uri = buf.str();
   portal_id = const_cast<char*>(xio_uri.c_str());
   if (assigned_port)
     *assigned_port = assigned;

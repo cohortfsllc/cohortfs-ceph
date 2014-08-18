@@ -44,7 +44,7 @@ public:
   int_type underflow();
 
   /// return a const reference to the string
-  const std::string& get_str();
+  const std::string& str();
 };
 
 #endif

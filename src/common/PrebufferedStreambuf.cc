@@ -86,7 +86,7 @@ streampos PrebufferedStreambuf::seekoff(streamoff off, ios_base::seekdir way,
   return streampos(-1);
 }
 
-const string& PrebufferedStreambuf::get_str()
+const string& PrebufferedStreambuf::str()
 {
   // resize the buffer to end at pptr()
   m_buf.resize(pptr()-eback());
