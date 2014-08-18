@@ -20,12 +20,13 @@
 class PrebufferedStreambuf
   : public std::basic_streambuf<char, std::basic_string<char>::traits_type>
 {
-  std::string m_buf;
-
   typedef std::char_traits<char> traits_ty;
   typedef traits_ty::int_type int_type;
   typedef traits_ty::pos_type pos_type;
   typedef traits_ty::off_type off_type;
+
+  std::string m_buf;
+  pos_type m_len;
 
 protected:
   // support pubseekpos() and pubseekoff()

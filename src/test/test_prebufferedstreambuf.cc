@@ -87,3 +87,43 @@ TEST(PrebufferedStreambuf, ManyOverflow)
   ASSERT_EQ(s, out);
 }
 
+
+TEST(PrebufferedStreambuf, Seek)
+{
+  PrebufferedStreambuf sb(20);
+  std::iostream stream(&sb);
+
+  stream << "hello world";
+  ASSERT_EQ(sb.str(), "hello world");
+
+  // get current write position
+  std::streampos pos = sb.pubseekoff(0, std::ios_base::cur, std::ios_base::out);
+  ASSERT_EQ(pos, 11);
+  // move read position to the second character, 'e'
+  char c;
+  pos = sb.pubseekpos(1, std::ios_base::in);
+  ASSERT_EQ(pos, 1);
+  stream >> c;
+  ASSERT_EQ(c, 'e');
+
+  // move write position to 'world', and overwrite with 'ceph!'
+  pos = sb.pubseekoff(-5, std::ios_base::cur, std::ios_base::out);
+  ASSERT_EQ(pos, 6);
+  stream << "ceph!";
+  ASSERT_EQ(sb.str(), "hello ceph!");
+
+  // move read and write positions to the 'e' in hello
+  pos = sb.pubseekoff(-10, std::ios_base::end,
+    std::ios_base::in | std::ios_base::out);
+  ASSERT_EQ(pos, 1);
+  // replace 'e' with 'a' and read it back
+  stream << 'a';
+  stream >> c;
+  ASSERT_EQ(c, 'a');
+  ASSERT_EQ(sb.str(), "hallo ceph!");
+
+  // invalid to do relative seek with both read and write position
+  pos = sb.pubseekoff(0, std::ios_base::cur,
+    std::ios_base::in | std::ios_base::out);
+  ASSERT_EQ(pos, -1);
+}

@@ -5,7 +5,7 @@
 
 using namespace std;
 
-PrebufferedStreambuf::PrebufferedStreambuf(size_t len)
+PrebufferedStreambuf::PrebufferedStreambuf(size_t len) : m_len(0)
 {
   // reserve memory for the buffer
   m_buf.resize(len);
@@ -54,8 +54,11 @@ streampos PrebufferedStreambuf::seekpos(streampos sp, ios_base::openmode which)
     return streampos(-1);
   if (which & ios_base::in)
     setg(eback(), eback() + sp, egptr());
-  if (which & ios_base::out)
+  if (which & ios_base::out) {
+    if (m_len < pptr() - eback())
+      m_len = pptr() - eback();
     setp(eback() + sp, epptr());
+  }
   return sp;
 }
 
@@ -77,9 +80,11 @@ streampos PrebufferedStreambuf::seekoff(streamoff off, ios_base::seekdir way,
       return gptr() - eback();
     }
     if (which == ios_base::out) {
-      if (pptr() + off > epptr() || pptr() + off < pbase())
+      if (m_len < pptr() - eback())
+	m_len = pptr() - eback();
+      if (pptr() + off > eback() + m_len || pptr() + off < eback())
 	return streampos(-1);
-      setp(pptr() + off, epptr());
+      setp(pptr() + off, eback() + m_len);
       return pptr() - eback();
     }
   }
@@ -88,14 +93,17 @@ streampos PrebufferedStreambuf::seekoff(streamoff off, ios_base::seekdir way,
 
 const string& PrebufferedStreambuf::str()
 {
-  // resize the buffer to end at pptr()
-  m_buf.resize(pptr()-eback());
+  if (m_len < pptr() - eback())
+    m_len = pptr() - eback();
 
-  // update end of output sequence (next write overflows)
-  setp(pptr(), pptr());
+  // resize the buffer to end at m_len
+  m_buf.resize(m_len);
+
+  // update end of output sequence
+  setp(pptr(), eback() + m_len);
 
   // update end of input sequence
-  setg(eback(), gptr(), pptr());
+  setg(eback(), gptr(), epptr());
 
   return m_buf;
 }
