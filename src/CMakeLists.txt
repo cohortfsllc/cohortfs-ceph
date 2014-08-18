@@ -441,6 +441,7 @@ add_library(cls_references_objs OBJECT ${cls_references_files})
 set(osdc_osd_srcs osdc/Objecter.cc osdc/Striper.cc)
 
 set(osd_srcs
+  libosd.cc
   osd/OSD.cc
   osd/Watch.cc
   osd/ClassHandler.cc
