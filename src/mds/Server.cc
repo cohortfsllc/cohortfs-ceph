@@ -5506,7 +5506,7 @@ void Server::handle_client_rename(MDRequestRef& mdr)
 
   // -- prepare anchor updates --
   if (!linkmerge || srcdnl->is_primary()) {
-    C_GatherBuilder anchorgather(g_ceph_context);
+    C_GatherBuilder anchorgather;
 
     if (srcdnl->is_primary() &&
       (srcdnl->get_inode()->is_anchored() ||
@@ -6287,7 +6287,7 @@ void Server::handle_slave_rename_prep(MDRequestRef& mdr)
       set<client_t> export_client_set;
       mdcache->migrator->get_export_client_set(srcdnl->get_inode(), export_client_set);
 
-      C_GatherBuilder gather(g_ceph_context);
+      C_GatherBuilder gather;
       flush_client_sessions(export_client_set, gather);
       if (gather.has_subs()) {
 	mdr->more()->waiting_on_slave.insert(-1);

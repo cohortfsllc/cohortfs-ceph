@@ -26,6 +26,7 @@
 #include <time.h>
 #include <sstream>
 #include <vector>
+#include "global/global_context.h"
 
 using std::cout;
 using std::cerr;

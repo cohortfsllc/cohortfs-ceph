@@ -492,9 +492,9 @@ void Paxos::handle_last(MMonPaxos *last)
 	if (do_refresh()) {
 	  finish_round();
 
-	  finish_contexts(g_ceph_context, waiting_for_active);
-	  finish_contexts(g_ceph_context, waiting_for_readable);
-	  finish_contexts(g_ceph_context, waiting_for_writeable);
+	  finish_contexts(waiting_for_active);
+	  finish_contexts(waiting_for_readable);
+	  finish_contexts(waiting_for_writeable);
 	}
       }
     }
@@ -584,10 +584,10 @@ void Paxos::begin(bufferlist& v)
       assert(is_updating());  // we can't be updating-previous with quorum of 1
       commit_proposal();
       finish_round();
-      finish_contexts(g_ceph_context, waiting_for_active);
-      finish_contexts(g_ceph_context, waiting_for_commit);
-      finish_contexts(g_ceph_context, waiting_for_readable);
-      finish_contexts(g_ceph_context, waiting_for_writeable);
+      finish_contexts(waiting_for_active);
+      finish_contexts(waiting_for_commit);
+      finish_contexts(waiting_for_readable);
+      finish_contexts(waiting_for_writeable);
     }
     return;
   }
@@ -704,7 +704,7 @@ void Paxos::handle_accept(MMonPaxos *accept)
       goto out;
     if (is_updating())
       commit_proposal();
-    finish_contexts(g_ceph_context, waiting_for_commit);
+    finish_contexts(waiting_for_commit);
 
     // cancel timeout event
     mon->timer.cancel_event(accept_timeout_event);
@@ -718,9 +718,9 @@ void Paxos::handle_accept(MMonPaxos *accept)
     finish_round();
 
     // wake people up
-    finish_contexts(g_ceph_context, waiting_for_active);
-    finish_contexts(g_ceph_context, waiting_for_readable);
-    finish_contexts(g_ceph_context, waiting_for_writeable);
+    finish_contexts(waiting_for_active);
+    finish_contexts(waiting_for_readable);
+    finish_contexts(waiting_for_writeable);
   }
 
  out:
@@ -812,7 +812,7 @@ void Paxos::handle_commit(MMonPaxos *commit)
   store_state(commit);
 
   if (do_refresh()) {
-    finish_contexts(g_ceph_context, waiting_for_commit);
+    finish_contexts(waiting_for_commit);
   }
 
   commit->put();
@@ -972,9 +972,9 @@ void Paxos::handle_lease(MMonPaxos *lease)
   reset_lease_timeout();
 
   // kick waiters
-  finish_contexts(g_ceph_context, waiting_for_active);
+  finish_contexts(waiting_for_active);
   if (is_readable())
-    finish_contexts(g_ceph_context, waiting_for_readable);
+    finish_contexts(waiting_for_readable);
 
   lease->put();
 }
@@ -1145,11 +1145,11 @@ void Paxos::cancel_events()
 
 void Paxos::shutdown() {
   dout(10) << __func__ << " cancel all contexts" << dendl;
-  finish_contexts(g_ceph_context, waiting_for_writeable, -ECANCELED);
-  finish_contexts(g_ceph_context, waiting_for_commit, -ECANCELED);
-  finish_contexts(g_ceph_context, waiting_for_readable, -ECANCELED);
-  finish_contexts(g_ceph_context, waiting_for_active, -ECANCELED);
-  finish_contexts(g_ceph_context, proposals, -ECANCELED);
+  finish_contexts(waiting_for_writeable, -ECANCELED);
+  finish_contexts(waiting_for_commit, -ECANCELED);
+  finish_contexts(waiting_for_readable, -ECANCELED);
+  finish_contexts(waiting_for_active, -ECANCELED);
+  finish_contexts(proposals, -ECANCELED);
 }
 
 void Paxos::leader_init()
@@ -1157,7 +1157,7 @@ void Paxos::leader_init()
   cancel_events();
   new_value.clear();
 
-  finish_contexts(g_ceph_context, proposals, -EAGAIN);
+  finish_contexts(proposals, -EAGAIN);
 
   if (mon->get_quorum().size() == 1) {
     state = STATE_ACTIVE;
@@ -1183,9 +1183,9 @@ void Paxos::peon_init()
   reset_lease_timeout();
 
   // no chance to write now!
-  finish_contexts(g_ceph_context, waiting_for_writeable, -EAGAIN);
-  finish_contexts(g_ceph_context, waiting_for_commit, -EAGAIN);
-  finish_contexts(g_ceph_context, proposals, -EAGAIN);
+  finish_contexts(waiting_for_writeable, -EAGAIN);
+  finish_contexts(waiting_for_commit, -EAGAIN);
+  finish_contexts(proposals, -EAGAIN);
 }
 
 void Paxos::restart()
@@ -1196,9 +1196,9 @@ void Paxos::restart()
 
   state = STATE_RECOVERING;
 
-  finish_contexts(g_ceph_context, proposals, -EAGAIN);
-  finish_contexts(g_ceph_context, waiting_for_commit, -EAGAIN);
-  finish_contexts(g_ceph_context, waiting_for_active, -EAGAIN);
+  finish_contexts(proposals, -EAGAIN);
+  finish_contexts(waiting_for_commit, -EAGAIN);
+  finish_contexts(waiting_for_active, -EAGAIN);
 }
 
 

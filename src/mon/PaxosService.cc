@@ -235,7 +235,7 @@ void PaxosService::restart()
     proposal_timer = 0;
   }
 
-  finish_contexts(g_ceph_context, waiting_for_finished_proposal, -EAGAIN);
+  finish_contexts(waiting_for_finished_proposal, -EAGAIN);
 
   if (have_pending) {
     discard_pending();
@@ -250,7 +250,7 @@ void PaxosService::election_finished()
 {
   dout(10) << "election_finished" << dendl;
 
-  finish_contexts(g_ceph_context, waiting_for_finished_proposal, -EAGAIN);
+  finish_contexts(waiting_for_finished_proposal, -EAGAIN);
 
   // make sure we update our state
   _active();
@@ -296,7 +296,7 @@ void PaxosService::_active()
   // wake up anyone who came in while we were proposing.  note that
   // anyone waiting for the previous proposal to commit is no longer
   // on this list; it is on Paxos's.
-  finish_contexts(g_ceph_context, waiting_for_finished_proposal, 0);
+  finish_contexts(waiting_for_finished_proposal, 0);
 
   if (is_active() && mon->is_leader())
     upgrade_format();
@@ -318,7 +318,7 @@ void PaxosService::shutdown()
     proposal_timer = 0;
   }
 
-  finish_contexts(g_ceph_context, waiting_for_finished_proposal, -EAGAIN);
+  finish_contexts(waiting_for_finished_proposal, -EAGAIN);
 
   on_shutdown();
 }

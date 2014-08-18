@@ -192,7 +192,7 @@ void Journaler::_finish_read_head(int r, bufferlist& bl)
 		  << dendl;
     list<Context*> ls;
     ls.swap(waitfor_recover);
-    finish_contexts(cct, ls, r);
+    finish_contexts(ls, r);
     return;
   }
 
@@ -201,7 +201,7 @@ void Journaler::_finish_read_head(int r, bufferlist& bl)
     state = STATE_ACTIVE;
     list<Context*> ls;
     ls.swap(waitfor_recover);
-    finish_contexts(cct, ls, 0);
+    finish_contexts(ls, 0);
     return;
   }
 
@@ -215,7 +215,7 @@ void Journaler::_finish_read_head(int r, bufferlist& bl)
 	    << magic << "'" << dendl;
     list<Context*> ls;
     ls.swap(waitfor_recover);
-    finish_contexts(cct, ls, -EINVAL);
+    finish_contexts(ls, -EINVAL);
     return;
   }
 
@@ -288,7 +288,7 @@ out:
   // done.
   list<Context*> ls;
   ls.swap(waitfor_recover);
-  finish_contexts(cct, ls, r);
+  finish_contexts(ls, r);
 }
 
 class Journaler::C_RereadHeadProbe : public Context
@@ -418,7 +418,7 @@ void Journaler::_finish_flush(int r, uint64_t start, utime_t stamp)
   while (!waitfor_safe.empty()) {
     if (waitfor_safe.begin()->first > safe_pos)
       break;
-    finish_contexts(cct, waitfor_safe.begin()->second);
+    finish_contexts(waitfor_safe.begin()->second);
     waitfor_safe.erase(waitfor_safe.begin());
   }
 }
@@ -1034,7 +1034,7 @@ void Journaler::_trim_finish(int r, uint64_t to)
   // finishers?
   while (!waitfor_trim.empty() &&
 	 waitfor_trim.begin()->first <= trimmed_pos) {
-    finish_contexts(cct, waitfor_trim.begin()->second, 0);
+    finish_contexts(waitfor_trim.begin()->second, 0);
     waitfor_trim.erase(waitfor_trim.begin());
   }
 }

@@ -190,8 +190,8 @@ class Filer {
       objecter->_modify(extents[0].oid, volume, ops, mtime,
 			flags, onack, oncommit);
     } else {
-      C_GatherBuilder gack(cct, onack);
-      C_GatherBuilder gcom(cct, oncommit);
+      C_GatherBuilder gack(onack);
+      C_GatherBuilder gcom(oncommit);
       for (vector<ObjectExtent>::iterator p = extents.begin();
 	   p != extents.end();
 	   ++p) {
@@ -232,8 +232,8 @@ class Filer {
 		       extents[0].length, mtime, flags,
 		       onack, oncommit);
     } else {
-      C_GatherBuilder gack(cct, onack);
-      C_GatherBuilder gcom(cct, oncommit);
+      C_GatherBuilder gack(onack);
+      C_GatherBuilder gcom(oncommit);
       for (vector<ObjectExtent>::iterator p = extents.begin();
 	   p != extents.end();
 	   ++p) {

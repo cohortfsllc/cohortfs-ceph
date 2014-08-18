@@ -2,6 +2,7 @@
 #include "common/Mutex.h"
 #include "common/Timer.h"
 #include "global/global_init.h"
+#include "global/global_context.h"
 
 #include <iostream>
 

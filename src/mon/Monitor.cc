@@ -688,8 +688,8 @@ void Monitor::shutdown()
     (*p)->shutdown();
   health_monitor->shutdown();
 
-  finish_contexts(g_ceph_context, waitfor_quorum, -ECANCELED);
-  finish_contexts(g_ceph_context, maybe_wait_for_quorum, -ECANCELED);
+  finish_contexts(waitfor_quorum, -ECANCELED);
+  finish_contexts(maybe_wait_for_quorum, -ECANCELED);
 
   timer.shutdown();
 
@@ -1687,8 +1687,8 @@ void Monitor::finish_election()
   apply_quorum_to_compatset_features();
   timecheck_finish();
   exited_quorum = utime_t();
-  finish_contexts(g_ceph_context, waitfor_quorum);
-  finish_contexts(g_ceph_context, maybe_wait_for_quorum);
+  finish_contexts(waitfor_quorum);
+  finish_contexts(maybe_wait_for_quorum);
   resend_routed_requests();
   update_logger();
   register_cluster_logger();
@@ -2719,7 +2719,7 @@ void Monitor::resend_routed_requests()
   }
   if (mon == rank) {
     routed_requests.clear();
-    finish_contexts(g_ceph_context, retry);
+    finish_contexts(retry);
   }
 }
 
@@ -3792,7 +3792,7 @@ void Monitor::tick()
   sync_trim_providers();
 
   if (!maybe_wait_for_quorum.empty()) {
-    finish_contexts(g_ceph_context, maybe_wait_for_quorum);
+    finish_contexts(maybe_wait_for_quorum);
   }
 
   new_tick();

@@ -19,6 +19,7 @@
 
 #include "common/config.h"
 #include "include/Context.h"
+#include "common/dout.h"
 
 #define dout_subsys ceph_subsys_timer
 #undef dout_prefix

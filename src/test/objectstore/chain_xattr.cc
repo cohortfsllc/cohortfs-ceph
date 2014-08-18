@@ -25,7 +25,9 @@
 #include "include/Context.h"
 #include "common/errno.h"
 #include "common/ceph_argparse.h"
+#include "common/config.h"
 #include "global/global_init.h"
+#include "global/global_context.h"
 #include <gtest/gtest.h>
 
 #define LARGE_BLOCK_LEN CHAIN_XATTR_MAX_BLOCK_LEN + 1024
@@ -198,7 +200,7 @@ int main(int argc, char **argv) {
   ::close(tmpfd);
   ::unlink(file);
   if ((ret < 0) || (x != y)) {
-    cerr << "SKIP all tests because extended attributes don't appear to work in the file system in which the tests are run: " << cpp_strerror(ret) << std::endl;
+    std::cerr << "SKIP all tests because extended attributes don't appear to work in the file system in which the tests are run: " << cpp_strerror(ret) << std::endl;
   } else {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

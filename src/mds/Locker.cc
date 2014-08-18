@@ -883,7 +883,7 @@ bool Locker::eval(CInode *in, int mask, bool caps_imported)
     }
   }
 
-  finish_contexts(g_ceph_context, finishers);
+  finish_contexts(finishers);
 
   if (need_issue)
     issue_caps(in);
@@ -1014,7 +1014,7 @@ void Locker::eval_cap_gather(CInode *in, set<CInode*> *issue_set)
       issue_caps(in);
   }
 
-  finish_contexts(g_ceph_context, finishers);
+  finish_contexts(finishers);
 }
 
 void Locker::eval_scatter_gathers(CInode *in)
@@ -1035,7 +1035,7 @@ void Locker::eval_scatter_gathers(CInode *in)
   if (need_issue)
     issue_caps(in);
 
-  finish_contexts(g_ceph_context, finishers);
+  finish_contexts(finishers);
 }
 
 void Locker::eval(SimpleLock *lock, bool *need_issue)

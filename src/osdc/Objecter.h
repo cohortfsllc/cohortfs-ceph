@@ -1570,7 +1570,7 @@ public:
 		 extents[0].length, bl, flags, extents[0].truncate_size,
 		 trunc_seq, onfinish);
     } else {
-      C_GatherBuilder gather(cct);
+      C_GatherBuilder gather;
       vector<bufferlist> resultbl(extents.size());
       int i=0;
       for (vector<ObjectExtent>::iterator p = extents.begin();
@@ -1598,8 +1598,8 @@ public:
 		  extents[0].length, bl, mtime, flags,
 		  extents[0].truncate_size, trunc_seq, onack, oncommit);
     } else {
-      C_GatherBuilder gack(cct, onack);
-      C_GatherBuilder gcom(cct, oncommit);
+      C_GatherBuilder gack(onack);
+      C_GatherBuilder gcom(oncommit);
       for (vector<ObjectExtent>::iterator p = extents.begin();
 	   p != extents.end(); ++p) {
 	bufferlist cur;

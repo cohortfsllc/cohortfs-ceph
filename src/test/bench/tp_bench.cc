@@ -20,9 +20,11 @@
 #include "detailed_stat_collector.h"
 #include "distribution.h"
 #include "global/global_init.h"
+#include "global/global_context.h"
 #include "common/WorkQueue.h"
 #include "common/Semaphore.h"
 #include "common/Finisher.h"
+#include "common/config.h"
 
 namespace po = boost::program_options;
 using namespace std;

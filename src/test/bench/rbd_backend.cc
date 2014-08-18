@@ -19,7 +19,7 @@ void on_complete(void *completion, void *_arg) {
 }
 
 void RBDBackend::write(
-  const string &oid,
+  const std::string &oid,
   uint64_t offset,
   const bufferlist &bl,
   Context *on_write_applied,
@@ -36,7 +36,7 @@ void RBDBackend::write(
 }
 
 void RBDBackend::read(
-  const string &oid,
+  const std::string &oid,
   uint64_t offset,
   uint64_t length,
   bufferlist *bl,

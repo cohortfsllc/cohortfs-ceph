@@ -20,6 +20,7 @@
 #include "common/Cond.h"
 #include "common/Thread.h"
 #include "common/perf_counters.h"
+#include "common/ceph_context.h"
 
 class CephContext;
 

@@ -20,6 +20,8 @@
 
 #include "common/config.h"
 #include "common/HeartbeatMap.h"
+#include "common/dout.h"
+#include "common/ceph_context.h"
 
 #define dout_subsys ceph_subsys_tp
 #undef dout_prefix

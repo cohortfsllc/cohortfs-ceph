@@ -89,7 +89,7 @@ void MDSTable::save_2(int r, version_t v)
     ls.splice(ls.end(), waitfor_save.begin()->second);
     waitfor_save.erase(waitfor_save.begin());
   }
-  finish_contexts(g_ceph_context, ls,0);
+  finish_contexts(ls,0);
 }
 
 

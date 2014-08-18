@@ -26,6 +26,7 @@
 #include "common/Throttle.h"
 #include "common/ceph_argparse.h"
 #include "global/global_init.h"
+#include "global/global_context.h"
 #include <gtest/gtest.h>
 
 using std::cout;

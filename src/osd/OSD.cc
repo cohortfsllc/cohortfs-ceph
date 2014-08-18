@@ -2480,7 +2480,7 @@ void OSD::handle_osd_map(MOSDMap *m)
 
   map_lock.get_write();
 
-  C_Contexts *fin = new C_Contexts(cct);
+  C_Contexts *fin = new C_Contexts;
 
   // advance through the new maps
   for (epoch_t cur = start; cur <= superblock.newest_map; cur++) {

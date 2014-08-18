@@ -18,12 +18,10 @@
 
 #include <cassert>
 #include <list>
+#include <vector>
 #include <set>
-#include <iostream>
-
-#include "common/dout.h"
-
-#define mydout(cct, v) lgeneric_subdout(cct, context, v)
+#include <memory>
+#include "common/Mutex.h"
 
 /*
  * GenContext - abstract callback class
@@ -98,8 +96,7 @@ typedef std::shared_ptr<RunOnDelete> RunOnDeleteRef;
 /*
  * finish and destroy a list of Contexts
  */
-inline void finish_contexts(CephContext *cct, std::list<Context*>& finished,
-			    int result = 0)
+inline void finish_contexts(std::list<Context*>& finished, int result = 0)
 {
   if (finished.empty())
     return;
@@ -107,20 +104,15 @@ inline void finish_contexts(CephContext *cct, std::list<Context*>& finished,
   std::list<Context*> ls;
   ls.swap(finished); // swap out of place to avoid weird loops
 
-  if (cct)
-    mydout(cct, 10) << ls.size() << " contexts to finish with " << result << dendl;
   for (std::list<Context*>::iterator it = ls.begin();
        it != ls.end();
        it++) {
     Context *c = *it;
-    if (cct)
-      mydout(cct,10) << "---- " << c << dendl;
     c->complete(result);
   }
 }
 
-inline void finish_contexts(CephContext *cct, std::vector<Context*>& finished,
-			    int result = 0)
+inline void finish_contexts(std::vector<Context*>& finished, int result = 0)
 {
   if (finished.empty())
     return;
@@ -128,14 +120,10 @@ inline void finish_contexts(CephContext *cct, std::vector<Context*>& finished,
   std::vector<Context*> ls;
   ls.swap(finished); // swap out of place to avoid weird loops
 
-  if (cct)
-    mydout(cct,10) << ls.size() << " contexts to finish with " << result << dendl;
   for (std::vector<Context*>::iterator it = ls.begin();
        it != ls.end();
        it++) {
     Context *c = *it;
-    if (cct)
-      mydout(cct,10) << "---- " << c << dendl;
     c->complete(result);
   }
 }
@@ -151,13 +139,7 @@ public:
  */
 class C_Contexts : public Context {
 public:
-  CephContext *cct;
   std::list<Context*> contexts;
-
-  C_Contexts(CephContext *cct_)
-    : cct(cct_)
-  {
-  }
 
   void add(Context* c) {
     contexts.push_back(c);
@@ -166,7 +148,7 @@ public:
     contexts.splice(contexts.end(), ls);
   }
   void finish(int r) {
-    finish_contexts(cct, contexts, r);
+    finish_contexts(contexts, r);
   }
   bool empty() { return contexts.empty(); }
 
@@ -178,7 +160,7 @@ public:
       cs.clear();
       return c;
     } else {
-      C_Contexts *c(new C_Contexts(0));
+      C_Contexts *c(new C_Contexts());
       c->take(cs);
       return c;
     }
@@ -193,12 +175,8 @@ public:
  */
 class C_Gather : public Context {
 private:
-  CephContext *cct;
   int result;
   Context *onfinish;
-#ifdef DEBUG_GATHER
-  std::set<Context*> waitfor;
-#endif
   int sub_created_count;
   int sub_existing_count;
   Mutex lock;
@@ -206,16 +184,7 @@ private:
 
   void sub_finish(Context* sub, int r) {
     lock.Lock();
-#ifdef DEBUG_GATHER
-    assert(waitfor.count(sub));
-    waitfor.erase(sub);
-#endif
     --sub_existing_count;
-    mydout(cct,10) << "C_Gather " << this << ".sub_finish(r=" << r << ") " << sub
-#ifdef DEBUG_GATHER
-		    << " (remaining " << waitfor << ")"
-#endif
-		    << dendl;
     if (r < 0 && result == 0)
       result = r;
     if ((activated == false) || (sub_existing_count != 0)) {
@@ -248,17 +217,12 @@ private:
     }
   };
 
-  C_Gather(CephContext *cct_, Context *onfinish_)
-    : cct(cct_), result(0), onfinish(onfinish_),
+  C_Gather(Context *onfinish_)
+    : result(0), onfinish(onfinish_),
       sub_created_count(0), sub_existing_count(0),
-      lock(true), activated(false)
-  {
-    mydout(cct,10) << "C_Gather " << this << ".new" << dendl;
-  }
+      lock(true), activated(false) {}
 public:
-  ~C_Gather() {
-    mydout(cct,10) << "C_Gather " << this << ".delete" << dendl;
-  }
+  ~C_Gather() {}
   void set_finisher(Context *onfinish_) {
     Mutex::Locker l(lock);
     assert(!onfinish);
@@ -281,10 +245,6 @@ public:
     sub_created_count++;
     sub_existing_count++;
     Context *s = new C_GatherSub(this);
-#ifdef DEBUG_GATHER
-    waitfor.insert(s);
-#endif
-    mydout(cct,10) << "C_Gather " << this << ".new_sub is " << sub_created_count << " " << s << dendl;
     return s;
   }
   void finish(int r) {
@@ -312,12 +272,12 @@ public:
 class C_GatherBuilder
 {
 public:
-  C_GatherBuilder(CephContext *cct_)
-    : cct(cct_), c_gather(NULL), finisher(NULL), activated(false)
+  C_GatherBuilder()
+    : c_gather(NULL), finisher(NULL), activated(false)
   {
   }
-  C_GatherBuilder(CephContext *cct_, Context *finisher_)
-    : cct(cct_), c_gather(NULL), finisher(finisher_), activated(false)
+  C_GatherBuilder(Context *finisher_)
+    : c_gather(NULL), finisher(finisher_), activated(false)
   {
   }
   ~C_GatherBuilder() {
@@ -330,7 +290,7 @@ public:
   }
   Context *new_sub() {
     if (!c_gather) {
-      c_gather = new C_Gather(cct, finisher);
+      c_gather = new C_Gather(finisher);
     }
     return c_gather->new_sub();
   }
@@ -368,12 +328,9 @@ public:
   }
 
 private:
-  CephContext *cct;
   C_Gather *c_gather;
   Context *finisher;
   bool activated;
 };
-
-#undef mydout
 
 #endif

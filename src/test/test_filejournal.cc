@@ -155,7 +155,7 @@ TEST(TestFileJournal, WriteMany) {
   ASSERT_EQ(0, j.create());
   j.make_writeable();
 
-  C_GatherBuilder gb(g_ceph_context, new C_SafeCond(&wait_lock, &cond, &done));
+  C_GatherBuilder gb(new C_SafeCond(&wait_lock, &cond, &done));
 
   bufferlist bl;
   bl.append("small");
@@ -178,7 +178,7 @@ TEST(TestFileJournal, WriteManyVecs) {
   ASSERT_EQ(0, j.create());
   j.make_writeable();
 
-  C_GatherBuilder gb(g_ceph_context, new C_SafeCond(&wait_lock, &cond, &done));
+  C_GatherBuilder gb(new C_SafeCond(&wait_lock, &cond, &done));
 
   bufferlist first;
   first.append("small");
@@ -215,7 +215,7 @@ TEST(TestFileJournal, ReplaySmall) {
   ASSERT_EQ(0, j.create());
   j.make_writeable();
 
-  C_GatherBuilder gb(g_ceph_context, new C_SafeCond(&wait_lock, &cond, &done));
+  C_GatherBuilder gb(new C_SafeCond(&wait_lock, &cond, &done));
 
   bufferlist bl;
   bl.append("small");
@@ -260,7 +260,7 @@ TEST(TestFileJournal, ReplayCorrupt) {
   ASSERT_EQ(0, j.create());
   j.make_writeable();
 
-  C_GatherBuilder gb(g_ceph_context, new C_SafeCond(&wait_lock, &cond, &done));
+  C_GatherBuilder gb(new C_SafeCond(&wait_lock, &cond, &done));
 
   const char *needle =	  "i am a needle";
   const char *newneedle = "in a haystack";
@@ -408,7 +408,7 @@ TEST(TestFileJournal, ReplayDetectCorruptFooterMagic) {
   ASSERT_EQ(0, j.create());
   j.make_writeable();
 
-  C_GatherBuilder gb(g_ceph_context, new C_SafeCond(&wait_lock, &cond, &done));
+  C_GatherBuilder gb(new C_SafeCond(&wait_lock, &cond, &done));
 
   const char *needle =	  "i am a needle";
   for (unsigned i = 1; i <= 4; ++i) {
@@ -458,7 +458,7 @@ TEST(TestFileJournal, ReplayDetectCorruptPayload) {
   ASSERT_EQ(0, j.create());
   j.make_writeable();
 
-  C_GatherBuilder gb(g_ceph_context, new C_SafeCond(&wait_lock, &cond, &done));
+  C_GatherBuilder gb(new C_SafeCond(&wait_lock, &cond, &done));
 
   const char *needle =	  "i am a needle";
   for (unsigned i = 1; i <= 4; ++i) {
@@ -508,7 +508,7 @@ TEST(TestFileJournal, ReplayDetectCorruptHeader) {
   ASSERT_EQ(0, j.create());
   j.make_writeable();
 
-  C_GatherBuilder gb(g_ceph_context, new C_SafeCond(&wait_lock, &cond, &done));
+  C_GatherBuilder gb(new C_SafeCond(&wait_lock, &cond, &done));
 
   const char *needle =	  "i am a needle";
   for (unsigned i = 1; i <= 4; ++i) {

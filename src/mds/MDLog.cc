@@ -368,7 +368,7 @@ void MDLog::trim(int m)
 
 void MDLog::try_expire(LogSegment *ls, int op_prio)
 {
-  C_GatherBuilder gather_bld(g_ceph_context);
+  C_GatherBuilder gather_bld;
   ls->try_to_expire(mds, gather_bld, op_prio);
   if (gather_bld.has_subs()) {
     assert(expiring_segments.count(ls) == 0);
@@ -620,7 +620,7 @@ void MDLog::_replay_thread()
   }
 
   dout(10) << "_replay_thread kicking waiters" << dendl;
-  finish_contexts(g_ceph_context, waitfor_replay, r);
+  finish_contexts(waitfor_replay, r);
 
   dout(10) << "_replay_thread finish" << dendl;
   mds->mds_lock.Unlock();

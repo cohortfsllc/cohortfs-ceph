@@ -1036,7 +1036,7 @@ void Migrator::export_frozen(CDir *dir)
   set<client_t> export_client_set;
   get_export_client_set(dir, export_client_set);
 
-  C_GatherBuilder gather(g_ceph_context);
+  C_GatherBuilder gather;
   mds->server->flush_client_sessions(export_client_set, gather);
   if (gather.has_subs()) {
     it->second.warning_ack_waiting.insert(-1);
@@ -1757,7 +1757,7 @@ void Migrator::export_finish(CDir *dir)
   assert(g_conf->mds_kill_export_at != 13);
 
   // finish export (adjust local cache state)
-  C_Contexts *fin = new C_Contexts(g_ceph_context);
+  C_Contexts *fin = new C_Contexts;
   finish_export_dir(dir, ceph_clock_now(g_ceph_context),
 		    it->second.peer, it->second.peer_imported, fin->contexts);
   dir->add_waiter(CDir::WAIT_UNFREEZE, fin);

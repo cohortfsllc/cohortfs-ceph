@@ -90,7 +90,7 @@ void SessionMap::_load_finish(int r, bufferlist &bl)
 	   << dendl;
   projected = committing = committed = version;
   dump();
-  finish_contexts(g_ceph_context, waiting_for_load);
+  finish_contexts(waiting_for_load);
 }
 
 
@@ -137,7 +137,7 @@ void SessionMap::_save_finish(version_t v)
   dout(10) << "_save_finish v" << v << dendl;
   committed = v;
 
-  finish_contexts(g_ceph_context, commit_waiters[v]);
+  finish_contexts(commit_waiters[v]);
   commit_waiters.erase(v);
 }
 

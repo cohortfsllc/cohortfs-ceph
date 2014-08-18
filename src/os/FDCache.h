@@ -23,6 +23,8 @@
 #include "common/Cond.h"
 #include "common/shared_cache.hpp"
 #include "include/compat.h"
+#include "common/ceph_context.h"
+#include "common/config.h"
 
 /**
  * FD Cache

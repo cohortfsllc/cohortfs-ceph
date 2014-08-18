@@ -1086,7 +1086,7 @@ void CDir::finish_waiting(uint64_t mask, int result)
   list<Context*> finished;
   take_waiting(mask, finished);
   if (result < 0)
-    finish_contexts(g_ceph_context, finished, result);
+    finish_contexts(finished, result);
   else
     cache->mds->queue_waiters(finished);
 }
@@ -1475,8 +1475,7 @@ void CDir::_omap_commit(int op_prio)
   set<string> to_remove;
   map<string, bufferlist> to_set;
 
-  C_GatherBuilder gather(g_ceph_context,
-			 new C_Dir_Committed(this, get_version()));
+  C_GatherBuilder gather(new C_Dir_Committed(this, get_version()));
 
   object_t oid = get_ondisk_object();
   VolumeRef volume(cache->mds->get_metadata_volume());

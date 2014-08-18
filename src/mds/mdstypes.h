@@ -1243,7 +1243,7 @@ protected:
   void finish_waiting(uint64_t mask, int result = 0) {
     list<Context*> finished;
     take_waiting(mask, finished);
-    finish_contexts(g_ceph_context, finished, result);
+    finish_contexts(finished, result);
   }
 
 

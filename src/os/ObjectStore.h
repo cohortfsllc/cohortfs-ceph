@@ -954,9 +954,9 @@ public:
 			 TrackedOpRef op = TrackedOpRef(),
 			 ThreadPool::TPHandle *handle = NULL) {
     assert(!tls.empty());
-    C_GatherBuilder g_onreadable(g_ceph_context, onreadable);
-    C_GatherBuilder g_ondisk(g_ceph_context, ondisk);
-    C_GatherBuilder g_onreadable_sync(g_ceph_context, onreadable_sync);
+    C_GatherBuilder g_onreadable(onreadable);
+    C_GatherBuilder g_ondisk(ondisk);
+    C_GatherBuilder g_onreadable_sync(onreadable_sync);
     for (list<Transaction*>::iterator i = tls.begin(); i != tls.end(); ++i) {
       if (onreadable)
 	(*i)->register_on_applied(g_onreadable.new_sub());

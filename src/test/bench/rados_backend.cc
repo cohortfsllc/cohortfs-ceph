@@ -18,7 +18,7 @@ void on_complete(void *completion, void *_arg) {
 }
 
 void RadosBackend::write(
-  const string &oid,
+  const std::string &oid,
   uint64_t offset,
   const bufferlist &bl,
   Context *on_write_applied,
@@ -42,7 +42,7 @@ void RadosBackend::write(
 }
 
 void RadosBackend::read(
-  const string &oid,
+  const std::string &oid,
   uint64_t offset,
   uint64_t length,
   bufferlist *bl,

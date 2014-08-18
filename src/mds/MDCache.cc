@@ -3733,7 +3733,7 @@ bool MDCache::parallel_fetch(map<inodeno_t,filepath>& pathmap, set<inodeno_t>& m
 {
   dout(10) << "parallel_fetch on " << pathmap.size() << " paths" << dendl;
 
-  C_GatherBuilder gather_bld(g_ceph_context, new C_MDC_RejoinGatherFinish(this));
+  C_GatherBuilder gather_bld(new C_MDC_RejoinGatherFinish(this));
 
   // scan list
   set<CDir*> fetch_queue;
@@ -4920,7 +4920,7 @@ bool MDCache::open_undef_inodes_dirfrags()
   if (fetch_queue.empty())
     return false;
 
-  C_GatherBuilder gather(g_ceph_context, new C_MDC_RejoinGatherFinish(this));
+  C_GatherBuilder gather(new C_MDC_RejoinGatherFinish(this));
   for (set<CDir*>::iterator p = fetch_queue.begin();
        p != fetch_queue.end();
        ++p) {
@@ -7596,7 +7596,7 @@ void MDCache::open_ino_finish(inodeno_t ino, open_ino_info_t& info, int ret)
   list<Context*> waiters;
   waiters.swap(info.waiters);
   opening_inodes.erase(ino);
-  finish_contexts(g_ceph_context, waiters, ret);
+  finish_contexts(waiters, ret);
 }
 
 void MDCache::do_open_ino(inodeno_t ino, open_ino_info_t& info, int err)
@@ -8569,7 +8569,7 @@ void MDCache::purge_stray(CDentry *dn)
   // that is implicit in the dentry's presence and non-use in the stray
   // dir.  on recovery, we'll need to re-eval all strays anyway.
 
-  C_GatherBuilder gather(g_ceph_context, new C_MDC_PurgeStrayPurged(this, dn));
+  C_GatherBuilder gather(new C_MDC_PurgeStrayPurged(this, dn));
 
   if (in->is_dir()) {
     VolumeRef volume(mds->get_metadata_volume());
@@ -9484,7 +9484,7 @@ void MDCache::handle_discover_reply(MDiscoverReply *m)
   }
 
   // waiters
-  finish_contexts(g_ceph_context, error, -ENOENT);  // finish errors directly
+  finish_contexts(error, -ENOENT);  // finish errors directly
   mds->queue_waiters(finished);
 
   // done
@@ -10146,7 +10146,7 @@ void MDCache::split_dir(CDir *dir, int bits)
   info.bits = bits;
   info.last_cum_auth_pins_change = ceph_clock_now(g_ceph_context);
 
-  C_GatherBuilder gather(g_ceph_context, new C_MDC_FragmentFrozen(this, dir->dirfrag()));
+  C_GatherBuilder gather(new C_MDC_FragmentFrozen(this, dir->dirfrag()));
   fragment_freeze_dirs(dirs, gather);
   gather.activate();
 
@@ -10183,8 +10183,8 @@ void MDCache::merge_dir(CInode *diri, frag_t frag)
   info.bits = -bits;
   info.last_cum_auth_pins_change = ceph_clock_now(g_ceph_context);
 
-  C_GatherBuilder gather(g_ceph_context,
-			 new C_MDC_FragmentFrozen(this, dirfrag_t(diri->ino(), frag)));
+  C_GatherBuilder gather(new C_MDC_FragmentFrozen(this, dirfrag_t(diri->ino(),
+								  frag)));
   fragment_freeze_dirs(dirs, gather);
   gather.activate();
 
@@ -10219,7 +10219,7 @@ void MDCache::fragment_mark_and_complete(list<CDir*>& dirs)
   CInode *diri = dirs.front()->get_inode();
   dout(10) << "fragment_mark_and_complete " << dirs << " on " << *diri << dendl;
 
-  C_GatherBuilder gather(g_ceph_context);
+  C_GatherBuilder gather;
 
   for (list<CDir*>::iterator p = dirs.begin();
        p != dirs.end();
@@ -10555,7 +10555,7 @@ void MDCache::_fragment_logged(MDRequestRef& mdr)
   mdr->apply();	 // mark scatterlock
 
   // store resulting frags
-  C_GatherBuilder gather(g_ceph_context, new C_MDC_FragmentStore(this, mdr));
+  C_GatherBuilder gather(new C_MDC_FragmentStore(this, mdr));
 
   for (list<CDir*>::iterator p = info.resultfrags.begin();
        p != info.resultfrags.end();
@@ -10643,7 +10643,7 @@ void MDCache::_fragment_committed(dirfrag_t basedirfrag, list<CDir*>& resultfrag
   ufragment &uf = it->second;
 
   // remove old frags
-  C_GatherBuilder gather(g_ceph_context, new C_MDC_FragmentFinish(this, basedirfrag, resultfrags));
+  C_GatherBuilder gather(new C_MDC_FragmentFinish(this, basedirfrag, resultfrags));
 
   VolumeRef volume(mds->get_metadata_volume());
   for (list<frag_t>::iterator p = uf.old_frags.begin();

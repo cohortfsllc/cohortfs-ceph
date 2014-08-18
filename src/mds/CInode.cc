@@ -833,7 +833,7 @@ void CInode::fetch(Context *fin)
   dout(10) << "fetch" << dendl;
 
   C_Inode_Fetched *c = new C_Inode_Fetched(this, fin);
-  C_GatherBuilder gather(g_ceph_context, c);
+  C_GatherBuilder gather(c);
 
   object_t oid = CInode::get_object_name(ino(), frag_t(), "");
   VolumeRef volume(mdcache->mds->get_metadata_volume());
@@ -948,7 +948,7 @@ void CInode::store_backtrace(Context *fin)
     return;
   }
 
-  C_GatherBuilder gather(g_ceph_context, fin2);
+  C_GatherBuilder gather(fin2);
   mdcache->mds->objecter->mutate(oid, volume, op,
 				 ceph_clock_now(g_ceph_context),
 				 0, NULL, gather.new_sub());

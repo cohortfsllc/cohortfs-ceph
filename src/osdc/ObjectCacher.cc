@@ -790,7 +790,7 @@ void ObjectCacher::bh_read_finish(uuid_d volume, object_t oid, ceph_tid_t tid,
   // called with lock held.
   ldout(cct, 20) << "finishing waiters " << ls << dendl;
 
-  finish_contexts(cct, ls, err);
+  finish_contexts(ls, err);
   --reads_outstanding;
   read_cond.Signal();
 }
@@ -918,7 +918,7 @@ void ObjectCacher::bh_write_commit(uuid_d volume, object_t oid, loff_t start,
     }
 
     if (!ls.empty())
-      finish_contexts(cct, ls, r);
+      finish_contexts(ls, r);
   }
 }
 
@@ -1613,7 +1613,7 @@ bool ObjectCacher::flush_set(ObjectSet *oset, Context *onfinish)
   ldout(cct, 10) << "flush_set " << oset << dendl;
 
   // we'll need to wait for all objects to flush!
-  C_GatherBuilder gather(cct);
+  C_GatherBuilder gather;
 
   for (xlist<Object*>::iterator i = oset->objects.begin();
        !i.end(); ++i) {
@@ -1648,7 +1648,7 @@ bool ObjectCacher::flush_set(ObjectSet *oset, vector<ObjectExtent>& exv, Context
 		 << " ObjectExtents" << dendl;
 
   // we'll need to wait for all objects to flush!
-  C_GatherBuilder gather(cct);
+  C_GatherBuilder gather;
 
   for (vector<ObjectExtent>::iterator p = exv.begin();
        p != exv.end();

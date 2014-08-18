@@ -24,13 +24,13 @@ public:
 };
 
 TEST(ContextGather, Constructor) {
-  C_GatherBuilder gather(g_ceph_context);
+  C_GatherBuilder gather;
   EXPECT_FALSE(gather.has_subs());
   EXPECT_TRUE(gather.get() == NULL);
 }
 
 TEST(ContextGather, OneSub) {
-  C_GatherBuilder gather(g_ceph_context);
+  C_GatherBuilder gather;
   Context *sub = gather.new_sub();
   EXPECT_EQ(1, gather.num_subs_created());
   EXPECT_EQ(1, gather.num_subs_remaining());
@@ -48,7 +48,7 @@ TEST(ContextGather, OneSub) {
 TEST(ContextGather, ManySubs) {
   bool finish_called = false;
   int result = 0;
-  C_GatherBuilder gather(g_ceph_context, new C_Checker(&finish_called, &result));
+  C_GatherBuilder gather(new C_Checker(&finish_called, &result));
   int sub_count = 8;
   Context* subs[sub_count];
   //create subs and test
@@ -72,7 +72,7 @@ TEST(ContextGather, ManySubs) {
 }
 
 TEST(ContextGather, AlternatingSubCreateFinish) {
-  C_GatherBuilder gather(g_ceph_context);
+  C_GatherBuilder gather;
   int sub_count = 8;
   bool finish_called = false;
   int result = 0;
