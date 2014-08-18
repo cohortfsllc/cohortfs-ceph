@@ -1786,3 +1786,7 @@ target_link_libraries(pagesetbench os global boost_filesystem boost_system)
 # test_direct_messenger
 add_executable(test_direct_messenger messenger/test_direct_messenger.cc)
 target_link_libraries(test_direct_messenger global)
+
+# test_libosd
+add_executable(test_libosd test_libosd.cc)
+target_link_libraries(test_libosd PRIVATE osd os global)
