@@ -664,6 +664,7 @@ if(${WITH_RBD})
     set_target_properties(librbd PROPERTIES VERSION "1.0.0" SOVERSION "1" OUTPUT_NAME rbd
       LINK_FLAGS "-Wl,-export-dynamic")
   endif(${ENABLE_SHARED})
+  install(DIRECTORY "${CMAKE_SOURCE_DIR}/src/include/rbd" DESTINATION include)
   install(TARGETS librados librbd DESTINATION lib)
   install(FILES include/rbd/librbd.h include/rbd/librbd.hpp
     DESTINATION include/rbd)
