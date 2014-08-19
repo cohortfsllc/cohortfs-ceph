@@ -1523,6 +1523,7 @@ int main(int argc, const char **argv)
   int pretty_format = 0;
   long long bench_io_size = 4096, bench_io_threads = 16, bench_bytes = 1 << 30;
   string bench_pattern = "seq";
+  bool xio = false;
 
   std::string val;
   std::ostringstream err;
@@ -1588,7 +1589,23 @@ int main(int argc, const char **argv)
       progress = false;
     } else if (ceph_argparse_flag(args, &i , "--allow-shrink", (char *)NULL)) {
       resize_allow_shrink = true;
-    }  else {
+    } else if (ceph_argparse_witharg(args, i, &val, "--format", (char *)NULL)) {
+      std::string err;
+      long long ret = strict_strtoll(val.c_str(), 10, &err);
+      if (err.empty()) {
+	format = ret;
+	format_specified = true;
+	cerr << "rbd: using --format for specifying the rbd image format is"
+	     << " deprecated, use --image-format instead"
+	     << std::endl;
+      } else {
+	output_format = strdup(val.c_str());
+	output_format_specified = true;
+      }
+    } else if (ceph_argparse_binary_flag(args, i, &pretty_format, NULL, "--pretty-format", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, i, "-x", "--xio", (char*)NULL)) {
+      xio = true;
+    } else {
       ++i;
     }
   }
@@ -1782,9 +1799,12 @@ if (!set_conf_param(v, p1, p2, p3)) { \
     return EXIT_FAILURE;
   }
 
-  if (talk_to_cluster && rados.connect() < 0) {
-    cerr << "rbd: couldn't connect to the cluster!" << std::endl;
-    return EXIT_FAILURE;
+  if (talk_to_cluster) {
+    int r = xio ? rados.xio_connect() : rados.connect();
+    if (r < 0) {
+      cerr << "rbd: couldn't connect to the cluster!" << std::endl;
+      return EXIT_FAILURE;
+    }
   }
 
   int r;
