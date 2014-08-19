@@ -27,21 +27,32 @@
 
 #define dout_subsys ceph_subsys_osd
 
+namespace global
+{
 // global init
-std::once_flag global_init_flag;
+std::once_flag init_flag;
 
-static void libosd_global_init()
+static void init()
 {
   std::vector<const char*> args;
   global_init(NULL, args, CEPH_ENTITY_TYPE_OSD, CODE_ENVIRONMENT_DAEMON, 0);
   common_init_finish(g_ceph_context);
 }
 
+// osd map
+Mutex osd_lock;
+
+typedef std::map<int, libosd*> osdmap;
+osdmap osds;
+}
+
 struct LibOSD : public libosd {
 private:
-  const int whoami;
+  //CephContext *context;
+  //md_config_t *config;
   MonClient *monc;
   ObjectStore *store;
+  OSD *osd;
   Messenger *ms_cluster;
   Messenger *ms_public;
   Messenger *ms_public_xio;
@@ -61,12 +72,16 @@ public:
 
   int init();
   void cleanup();
+
+  // libosd interface
+  void signal(int signum);
 };
 
 LibOSD::LibOSD(int whoami)
-  : whoami(whoami),
+  : libosd(whoami),
     monc(NULL),
     store(NULL),
+    osd(NULL),
     ms_cluster(NULL),
     ms_public(NULL),
     ms_public_xio(NULL),
@@ -228,47 +243,164 @@ int LibOSD::create_messengers()
       << TEXT_NORMAL << dendl;
   }
 
-  entity_addr_t public_addr(g_conf->public_addr);
-  if (ms_public != ms_public_xio) {
-    dout(-1) << "binding ms_public on " << public_addr << dendl;
-    r = ms_public->bind(public_addr);
-    if (r < 0)
-      return r;
-    public_addr = ms_public->get_myaddr();
-  }
-  if (ms_public_xio) {
-    dout(-1) << "binding ms_public_xio on " << public_addr << dendl;
-    r = ms_public_xio->bind(public_addr);
-    if (r < 0)
-      return r;
-  }
-
   r = ms_cluster->bind(g_conf->cluster_addr);
   if (r < 0)
     return r;
+  dout(-1) << "bound ms_cluster: " << ms_cluster->get_myaddr() << dendl;
 
-  return r;
+  entity_addr_t public_addr(g_conf->public_addr);
+  if (ms_public != ms_public_xio) {
+    r = ms_public->bind(public_addr);
+    if (r < 0)
+      return r;
+    dout(-1) << "bound ms_public: " << ms_public->get_myaddr() << dendl;
+    public_addr = ms_public->get_myaddr();
+  }
+  if (ms_public_xio) {
+    r = ms_public_xio->bind(public_addr);
+    if (r < 0)
+      return r;
+    dout(-1) << "bound ms_public_xio: " << ms_public_xio->get_myaddr() << dendl;
+  }
+
+  entity_addr_t objecter_addr(g_conf->public_addr);
+  if (ms_objecter != ms_objecter_xio) {
+    r = ms_objecter->bind(objecter_addr);
+    if (r < 0)
+      return r;
+    dout(-1) << "bound ms_objecter: " << ms_objecter->get_myaddr() << dendl;
+    objecter_addr = ms_objecter->get_myaddr();
+  }
+  if (ms_objecter_xio) {
+    r = ms_objecter_xio->bind(objecter_addr);
+    if (r < 0)
+      return r;
+    dout(-1) << "bound ms_objecter_xio: " << ms_objecter_xio->get_myaddr() << dendl;
+  }
+
+  // hb front should bind to same ip as public_addr
+  entity_addr_t hb_front_addr(g_conf->public_addr);
+  if (hb_front_addr.is_ip())
+    hb_front_addr.set_port(0);
+  r = ms_front_hb->bind(hb_front_addr);
+  if (r < 0)
+    return r;
+  dout(-1) << "bound ms_front_hb: " << ms_front_hb->get_myaddr() << dendl;
+
+  // hb back should bind to same ip as cluster_addr (if specified)
+  entity_addr_t hb_back_addr(g_conf->osd_heartbeat_addr);
+  if (hb_back_addr.is_blank_ip()) {
+    hb_back_addr = g_conf->cluster_addr;
+    if (hb_back_addr.is_ip())
+      hb_back_addr.set_port(0);
+  }
+  r = ms_back_hb->bind(hb_back_addr);
+  if (r < 0)
+    return r;
+  dout(-1) << "bound ms_back_hb: " << ms_back_hb->get_myaddr() << dendl;
+
+  return 0;
 }
 
 int LibOSD::init()
 {
   // call global_init() on first entry
-  std::call_once(global_init_flag, libosd_global_init);
+  std::call_once(global::init_flag, global::init);
 
   int r = create_messengers();
-  return r;
+  if (r != 0) {
+    dout(-1) << "create_messengers failed with " << r << dendl;
+    return r;
+  }
+
+  // Set up crypto, daemonize, etc.
+  global_init_daemonize(g_ceph_context, 0);
+  common_init_finish(g_ceph_context);
+
+  monc = new MonClient(g_ceph_context);
+  r = monc->build_initial_monmap();
+  if (r < 0)
+    return r;
+
+  // create osd
+  osd = new OSD(g_ceph_context, store, whoami,
+      ms_cluster, ms_public, ms_public_xio,
+      ms_client_hb, ms_front_hb, ms_back_hb,
+      ms_objecter, ms_objecter_xio,
+      monc, g_conf->osd_data, g_conf->osd_journal);
+
+  r = osd->pre_init();
+  if (r < 0) {
+    derr << TEXT_RED << " ** ERROR: osd pre_init failed: " << cpp_strerror(-r)
+         << TEXT_NORMAL << dendl;
+    return r;
+  }
+
+  // start messengers
+  ms_cluster->start();
+  if (ms_public != ms_public_xio)
+    ms_public->start();
+  if (ms_public_xio)
+    ms_public_xio->start();
+  if (ms_objecter != ms_objecter_xio)
+    ms_objecter->start();
+  if (ms_objecter_xio)
+    ms_objecter_xio->start();
+  ms_client_hb->start();
+  ms_front_hb->start();
+  ms_back_hb->start();
+
+  // start osd
+  r = osd->init();
+  if (r < 0) {
+    derr << TEXT_RED << " ** ERROR: osd init failed: " << cpp_strerror(-r)
+         << TEXT_NORMAL << dendl;
+    return r;
+  }
+  return 0;
 }
 
 void LibOSD::cleanup()
 {
   // close/wait on messengers
+  ms_cluster->wait();
+  if (ms_public != ms_public_xio)
+    ms_public->wait();
+  if (ms_public_xio)
+    ms_public_xio->wait();
+  if (ms_objecter != ms_objecter_xio)
+    ms_objecter->wait();
+  if (ms_objecter_xio)
+    ms_objecter_xio->wait();
+  ms_client_hb->wait();
+  ms_front_hb->wait();
+  ms_back_hb->wait();
+}
+
+void LibOSD::signal(int signum)
+{
+  osd->handle_signal(signum);
 }
 
 
 // C interface
 struct libosd* libosd_init(int name)
 {
-  LibOSD *osd = new LibOSD(name);
+  LibOSD *osd;
+
+  {
+    using namespace global;
+    Mutex::Locker lock(osd_lock);
+
+    // existing osd with this name?
+    std::pair<osdmap::iterator, bool> result =
+      osds.insert(osdmap::value_type(name, NULL));
+    if (!result.second)
+      return NULL;
+
+    result.first->second = osd = new LibOSD(name);
+  }
+
   if (osd->init() == 0)
     return osd;
 
@@ -279,6 +411,19 @@ struct libosd* libosd_init(int name)
 void libosd_cleanup(struct libosd *osd)
 {
   static_cast<LibOSD*>(osd)->cleanup();
+
+  global::osd_lock.Lock();
+  global::osds.erase(osd->whoami);
+  global::osd_lock.Unlock();
+
   delete osd;
 }
 
+void libosd_signal(int signum)
+{
+  // signal all osds under list lock
+  Mutex::Locker lock(global::osd_lock);
+
+  for (auto osd : global::osds)
+    osd.second->signal(signum);
+}
