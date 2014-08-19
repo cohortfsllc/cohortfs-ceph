@@ -8,7 +8,11 @@
 
 // C++ interface
 struct libosd {
+  const int whoami;
+  libosd(int name) : whoami(name) {}
   virtual ~libosd() {}
+
+  virtual void signal(int signum) = 0;
 };
 
 #endif
@@ -16,5 +20,7 @@ struct libosd {
 // C interface
 struct libosd* libosd_init(int name);
 void libosd_cleanup(struct libosd *osd);
+
+void libosd_signal(int signum);
 
 #endif
