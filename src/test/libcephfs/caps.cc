@@ -12,8 +12,9 @@
  *
  */
 #include "gtest/gtest.h"
+#include "include/types.h"	// necessary for also includes ceph_fs.h
 #include "include/cephfs/libcephfs.h"
-#include "include/ceph_fs.h"
+// #include "include/ceph_fs.h"
 #include <errno.h>
 #include <sys/fcntl.h>
 #include <unistd.h>

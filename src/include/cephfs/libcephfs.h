@@ -50,7 +50,7 @@ extern "C" {
 
 #define CEPH_INO_ROOT  1
 
-DO I INCLUDE THIS FILE?
+#if 0
 struct ceph_file_layout {
 	/* file -> object mapping */
 	uint32_t fl_stripe_unit;     /* stripe unit, in bytes.	must be multiple
@@ -67,6 +67,9 @@ struct ceph_file_layout {
 	uint32_t fl_pg_preferred; /* preferred primary for pg (-1 for none) */
 	uint32_t fl_pg_pool;	  /* namespace, crush ruleset, rep level */
 } __attribute__ ((packed));
+#else
+struct ceph_file_layout;
+#endif
 
 
 typedef struct _inodeno_t {
@@ -89,7 +92,11 @@ struct vinodeno_t;
 typedef struct vinodeno_t vinodeno;
 struct ceph_mount_info;
 struct ceph_dir_result;
+#ifdef __cplusplus
 class CephContext;
+#else
+struct CephContext;
+#endif
 
 /* setattr mask bits */
 #ifndef CEPH_SETATTR_MODE

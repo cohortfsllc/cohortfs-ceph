@@ -113,23 +113,24 @@ if(${WITH_RADOSGW})
     ${CMAKE_SOURCE_DIR}/src/rgw/rgw_json_enc.cc
   )
 endif(${WITH_RADOSGW})
-add_executable(dencoder ${dencoder_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
-target_link_libraries(dencoder
+set(dencoder_dependencies
   cls_lock
   cls_refcount
   cls_replica_log
   librados
-  osd
+  osd)
+if(WITH_MDS)
+  list(APPEND dencoder_dependencies mds)
+endif(WITH_MDS)
+list(APPEND dencoder_dependencies
   osdc
   mon
   global
   ${EXTRALIBS}
   ${TCMALLOC_LIBS}
-  ${CMAKE_DL_LIBS}
-  )
-if(WITH_MDS)
-  target_link_libraries(dencoder mds)
-endif(WITH_MDS)
+  ${CMAKE_DL_LIBS})
+add_executable(dencoder ${dencoder_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
+target_link_libraries(dencoder ${dencoder_dependencies})
 if(${WITH_RADOSGW})
   target_link_libraries(dencoder
     ${EXTRALIBS}

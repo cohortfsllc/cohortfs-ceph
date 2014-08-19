@@ -3227,7 +3227,7 @@ void Client::handle_cap_grant(MetaSession *session, Inode *in, Cap *cap, MClient
 		<< " was " << ccap_string(old_caps) << dendl;
   cap->seq = m->get_seq();
 
-  in->layout = m->get_layout();
+  in->layout = m->head.layout;
 
   // update inode
   int implemented = 0;
@@ -5325,7 +5325,9 @@ int Client::_open(Inode *in, int flags, mode_t mode, Fh **fhp, int uid, int gid)
     req->set_filepath(path);
     req->head.args.open.flags = flags & ~O_CREAT;
     req->head.args.open.mode = mode;
+#if 0
     req->head.args.open.pool = -1;
+#endif
     req->head.args.open.old_size = in->size;   // for O_TRUNC
     req->set_inode(in);
     result = make_request(req, uid, gid);
@@ -5445,9 +5447,11 @@ int Client::uninline_data(Inode *in, Context *onfinish)
 
   ObjectOperation create_ops;
   create_ops.create(false);
+  VolumeRef mvol;
+  objecter->osdmap->find_by_uuid(in->layout.fl_uuid, mvol);
 
   objecter->mutate(oid,
-		   OSDMap::file_to_object_locator(in->layout),
+		   mvol,
 		   create_ops,
 		   ceph_clock_now(cct),
 		   0,
@@ -5467,7 +5471,7 @@ int Client::uninline_data(Inode *in, Context *onfinish)
   uninline_ops.setxattr("inline_version", inline_version_bl);
 
   objecter->mutate(oid,
-		   OSDMap::file_to_object_locator(in->layout),
+		   mvol,
 		   uninline_ops,
 		   ceph_clock_now(cct),
 		   0,
@@ -5757,7 +5761,9 @@ int Client::_read_sync(Fh *f, uint64_t off, uint64_t len, bufferlist *bl,
     bufferlist tbl;
 
     int wanted = left;
-    filer->read_trunc(in->ino, &in->layout, pos, left, &tbl, 0,
+    VolumeRef mvol;
+    objecter->osdmap->find_by_uuid(in->layout.fl_uuid, mvol);
+    filer->read_trunc(in->ino, mvol, &in->layout, pos, left, &tbl, 0,
 		      in->truncate_size, in->truncate_seq,
 		      onfinish);
     client_lock.Unlock();
@@ -5978,11 +5984,13 @@ int Client::_write(Fh *f, int64_t offset, uint64_t size, const char *buf)
     bool done = false;
     Context *onfinish = new C_SafeCond(&flock, &cond, &done);
     Context *onsafe = new C_Client_SyncCommit(this, in);
+    VolumeRef mvol;
+    objecter->osdmap->find_by_uuid(in->layout.fl_uuid, mvol);
 
     unsafe_sync_write++;
     get_cap_ref(in, CEPH_CAP_FILE_BUFFER);  // released by onsafe callback
 
-    r = filer->write_trunc(in->ino, &in->layout, offset, size, bl,
+    r = filer->write_trunc(in->ino, mvol, &in->layout, offset, size, bl,
 			   ceph_clock_now(cct), 0, in->truncate_size,
 			   in->truncate_seq, onfinish, onsafe);
     if (r < 0)
@@ -6693,6 +6701,7 @@ int Client::_getxattr(Inode *in, const char *name, void *value, size_t size,
     char buf[256];
 
     r = -ENODATA;
+#if 0
     if ((in->is_file() && n.find("ceph.file.layout") == 0) ||
 	(in->is_dir() && in->has_dir_layout() && n.find("ceph.dir.layout") == 0)) {
       string rest = n.substr(n.find("layout"));
@@ -6723,6 +6732,7 @@ int Client::_getxattr(Inode *in, const char *name, void *value, size_t size,
 		       (long unsigned)in->layout.fl_pg_pool);
       }
     }
+#endif
     if (size != 0) {
       if (r > (int)size) {
 	r = -ERANGE;
@@ -7000,6 +7010,7 @@ int Client::_create(Inode *dir, const char *name, int flags, mode_t mode,
   if (cmode < 0)
     return -EINVAL;
 
+#if 0
   int64_t pool_id = -1;
   if (data_pool && *data_pool) {
     pool_id = osdmap->lookup_pg_pool_name(data_pool);
@@ -7008,6 +7019,7 @@ int Client::_create(Inode *dir, const char *name, int flags, mode_t mode,
     if (pool_id > 0xffffffffll)
       return -ERANGE;  // bummer!
   }
+#endif
 
   MetaRequest *req = new MetaRequest(CEPH_MDS_OP_CREATE);
 
@@ -7022,7 +7034,9 @@ int Client::_create(Inode *dir, const char *name, int flags, mode_t mode,
   req->head.args.open.stripe_unit = stripe_unit;
   req->head.args.open.stripe_count = stripe_count;
   req->head.args.open.object_size = object_size;
+#if 0
   req->head.args.open.pool = pool_id;
+#endif
   req->dentry_drop = CEPH_CAP_FILE_SHARED;
   req->dentry_unless = CEPH_CAP_FILE_EXCL;
 
@@ -7496,6 +7510,7 @@ int Client::ll_file_layout(Inode *in, ceph_file_layout *layout)
   return 0;
 }
 
+#if 0
 /* Currently we cannot take advantage of redundancy in reads, since we
    would have to go through all possible placement groups (a
    potentially quite large number determined by a hash), and use CRUSH
@@ -7528,6 +7543,7 @@ int Client::ll_get_stripe_osd(Inode *in, uint64_t blockno,
   osdmap->pg_to_osds(pg, &osds, &primary);
   return osds[0];
 }
+#endif
 
 /* Return the offset of the block, internal to the object */
 
@@ -7717,9 +7733,11 @@ int Client::ll_read_block(Inode *in, uint64_t blockid,
   bool done = false;
   Context *onfinish = new C_SafeCond(&flock, &cond, &done, &r);
   bufferlist bl;
+  VolumeRef mvol;
+  objecter->osdmap->find_by_uuid(in->layout.fl_uuid, mvol);
 
   objecter->read(oid,
-		 object_locator_t(layout->fl_pg_pool),
+		 mvol,
 		 offset,
 		 length,
 		 &bl,
@@ -7782,9 +7800,11 @@ int Client::ll_write_block(Inode *in, uint64_t blockid,
 
   /* lock just in time */
   client_lock.Lock();
+  VolumeRef mvol;
+  objecter->osdmap->find_by_uuid(layout->fl_uuid, mvol);
 
   objecter->write(oid,
-		  object_locator_t(layout->fl_pg_pool),
+		  mvol,
 		  offset,
 		  length,
 		  bl,
@@ -7936,12 +7956,14 @@ int Client::_fallocate(Fh *fh, int mode, int64_t offset, int64_t length)
       bool done = false;
       Context *onfinish = new C_SafeCond(&flock, &cond, &done);
       Context *onsafe = new C_Client_SyncCommit(this, in);
+      VolumeRef mvol;
+      objecter->osdmap->find_by_uuid(in->layout.fl_uuid, mvol);
 
       unsafe_sync_write++;
       get_cap_ref(in, CEPH_CAP_FILE_BUFFER);
 
       _invalidate_inode_cache(in, offset, length);
-      r = filer->zero(in->ino, &in->layout,
+      r = filer->zero(in->ino, mvol, &in->layout,
 		      offset, length,
 		      ceph_clock_now(cct),
 		      0, true, onfinish, onsafe);
@@ -8074,6 +8096,7 @@ int Client::fdescribe_layout(int fd, ceph_file_layout *lp)
 }
 
 
+#if 0
 // expose osdmap
 
 int64_t Client::get_pool_id(const char *pool_name)
@@ -8172,6 +8195,7 @@ int Client::get_file_stripe_address(int fd, loff_t offset,
 
   return 0;
 }
+#endif
 
 int Client::get_osd_addr(int osd, entity_addr_t& addr)
 {

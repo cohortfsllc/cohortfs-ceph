@@ -1007,7 +1007,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
   Cond cond;
   bool ack;
   bool safe;
-  C_GatherBuilder safeg(client->cct, new C_SafeCond(&lock, &cond, &safe));
+  C_GatherBuilder safeg(new C_SafeCond(&lock, &cond, &safe));
   Context *safegref = safeg.new_sub();	// take a ref
 
   while (!t.end()) {
@@ -1404,11 +1404,15 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       int64_t oh = t.get_int();
       int64_t ol = t.get_int();
       object_t oid = file_object_t(oh, ol);
+      const char *a = t.get_string(buf, p);
+      uuid_d uuid;
+      uuid.parse(a);
       lock.Lock();
-      object_locator_t oloc(SYNCLIENT_FIRST_POOL);
+      VolumeRef mvol;
+      client->osdmap->find_by_uuid(uuid, mvol);
       uint64_t size;
       utime_t mtime;
-      client->objecter->stat(oid, oloc, &size, &mtime, 0,
+      client->objecter->stat(oid, mvol, &size, &mtime, 0,
 			     new C_SafeCond(&lock, &cond, &ack));
       while (!ack) cond.Wait(lock);
       lock.Unlock();
@@ -1418,11 +1422,15 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       int64_t ol = t.get_int();
       int64_t off = t.get_int();
       int64_t len = t.get_int();
+      const char *a = t.get_string(buf, p);
       object_t oid = file_object_t(oh, ol);
-      object_locator_t oloc(SYNCLIENT_FIRST_POOL);
+      uuid_d uuid;
+      uuid.parse(a);
+      VolumeRef mvol;
+      client->osdmap->find_by_uuid(uuid, mvol);
       lock.Lock();
       bufferlist bl;
-      client->objecter->read(oid, oloc, off, len, &bl, 0,
+      client->objecter->read(oid, mvol, off, len, &bl, 0,
 			     new C_SafeCond(&lock, &cond, &ack));
       while (!ack) cond.Wait(lock);
       lock.Unlock();
@@ -1432,13 +1440,17 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       int64_t ol = t.get_int();
       int64_t off = t.get_int();
       int64_t len = t.get_int();
+      const char *a = t.get_string(buf, p);
       object_t oid = file_object_t(oh, ol);
-      object_locator_t oloc(SYNCLIENT_FIRST_POOL);
+      uuid_d uuid;
+      uuid.parse(a);
+      VolumeRef mvol;
+      client->osdmap->find_by_uuid(uuid, mvol);
       lock.Lock();
       bufferptr bp(len);
       bufferlist bl;
       bl.push_back(bp);
-      client->objecter->write(oid, oloc, off, len, bl,
+      client->objecter->write(oid, mvol, off, len, bl,
 			      ceph_clock_now(client->cct), 0,
 			      new C_SafeCond(&lock, &cond, &ack),
 			      safeg.new_sub());
@@ -1451,10 +1463,14 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       int64_t ol = t.get_int();
       int64_t off = t.get_int();
       int64_t len = t.get_int();
+      const char *a = t.get_string(buf, p);
       object_t oid = file_object_t(oh, ol);
-      object_locator_t oloc(SYNCLIENT_FIRST_POOL);
+      uuid_d uuid;
+      uuid.parse(a);
+      VolumeRef mvol;
+      client->osdmap->find_by_uuid(uuid, mvol);
       lock.Lock();
-      client->objecter->zero(oid, oloc, off, len,
+      client->objecter->zero(oid, mvol, off, len,
 			     ceph_clock_now(client->cct), 0,
 			     new C_SafeCond(&lock, &cond, &ack),
 			     safeg.new_sub());
@@ -1653,6 +1669,7 @@ int SyntheticClient::full_walk(string& basedir)
 
 
 int SyntheticClient::dump_placement(string& fn) {
+#if 0
 
   // open file
   int fd = client->open(fn.c_str(), O_RDONLY);
@@ -1696,6 +1713,10 @@ int SyntheticClient::dump_placement(string& fn) {
     }
   }
   return 0;
+#else
+  cerr << "dump_placement not implemented" << std::endl;
+  return -1;
+#endif
 }
 
 
@@ -1929,6 +1950,7 @@ int SyntheticClient::open_shared(int num, int count)
 // Hits OSD 0 with writes to various files with OSD 0 as the primary.
 int SyntheticClient::overload_osd_0(int n, int size, int wrsize) {
 
+#if 0
   // collect a bunch of files starting on OSD 0
   int left = n;
   int tried = 0;
@@ -1958,10 +1980,14 @@ int SyntheticClient::overload_osd_0(int n, int size, int wrsize) {
     // do whatever operation we want to do on the file. How about a write?
     write_fd(fd, size, wrsize);
   }
+#else
+  cerr << "overload_osd_0 not implemented" << std::endl;
+#endif
   return 0;
 }
 
 
+#if 0
 // See what the primary is for the first object in this file.
 int SyntheticClient::check_first_primary(int fh) {
   vector<ObjectExtent> extents;
@@ -1973,6 +1999,7 @@ int SyntheticClient::check_first_primary(int fh) {
     osd);
   return osd;
 }
+#endif
 
 int SyntheticClient::rm_file(string& fn)
 {
@@ -2222,6 +2249,10 @@ int SyntheticClient::create_objects(int nobj, int osize, int inflight)
 
   int unack = 0;
   int unsafe = 0;
+  uuid_d uuid;
+  uuid.parse("deac041b-4100-4c75-93a3-b9329b9cf9cf");
+  VolumeRef mvol;
+  client->osdmap->find_by_uuid(uuid, mvol);
 
   list<utime_t> starts;
 
@@ -2229,7 +2260,6 @@ int SyntheticClient::create_objects(int nobj, int osize, int inflight)
     if (time_to_stop()) break;
 
     object_t oid = file_object_t(999, i);
-    object_locator_t oloc(SYNCLIENT_FIRST_POOL);
 
     if (i % inflight == 0) {
       dout(6) << "create_objects " << i << "/" << (nobj+1) << dendl;
@@ -2238,7 +2268,7 @@ int SyntheticClient::create_objects(int nobj, int osize, int inflight)
 
     starts.push_back(ceph_clock_now(client->cct));
     client->client_lock.Lock();
-    client->objecter->write(oid, oloc, 0, osize, bl,
+    client->objecter->write(oid, mvol, 0, osize, bl,
 			    ceph_clock_now(client->cct), 0,
 			    new C_Ref(lock, cond, &unack),
 			    new C_Ref(lock, cond, &unsafe));
@@ -2311,6 +2341,10 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
 
   int unack = 0;
   int unsafe = 0;
+  uuid_d uuid;
+  uuid.parse("deac041b-4100-4c75-93a3-b9329b9cf9cf");
+  VolumeRef mvol;
+  client->osdmap->find_by_uuid(uuid, mvol);
 
   while (1) {
     if (time_to_stop()) break;
@@ -2330,7 +2364,6 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
       o = (long)trunc(pow(r, rskew) * (double)nobj);  // exponentially skew towards 0
     }
     object_t oid = file_object_t(999, o);
-    object_locator_t oloc(SYNCLIENT_FIRST_POOL);
 
     client->client_lock.Lock();
     utime_t start = ceph_clock_now(client->cct);
@@ -2349,12 +2382,12 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
 	op.op.op = CEPH_OSD_OP_STARTSYNC;
 	m.ops.push_back(op);
       }
-      client->objecter->mutate(oid, oloc, m, ceph_clock_now(client->cct), 0,
+      client->objecter->mutate(oid, mvol, m, ceph_clock_now(client->cct), 0,
 			       NULL, new C_Ref(lock, cond, &unack));
     } else {
       dout(10) << "read from " << oid << dendl;
       bufferlist inbl;
-      client->objecter->read(oid, oloc, 0, osize, &inbl, 0,
+      client->objecter->read(oid, mvol, 0, osize, &inbl, 0,
 			     new C_Ref(lock, cond, &unack));
     }
     client->client_lock.Unlock();
@@ -3404,6 +3437,9 @@ int SyntheticClient::chunk_file(string &filename)
   if (ret < 0)
     return ret;
 
+  VolumeRef mvol;
+  client->osdmap->find_by_uuid(inode.layout.fl_uuid, mvol);
+
   uint64_t pos = 0;
   bufferlist from_before;
   while (pos < size) {
@@ -3416,7 +3452,7 @@ int SyntheticClient::chunk_file(string &filename)
 
     flock.Lock();
     Context *onfinish = new C_SafeCond(&flock, &cond, &done);
-    filer->read(inode.ino, &inode.layout, pos, get, &bl, 0, onfinish);
+    filer->read(inode.ino, mvol, &inode.layout, pos, get, &bl, 0, onfinish);
     while (!done)
       cond.Wait(flock);
     flock.Unlock();

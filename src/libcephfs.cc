@@ -826,6 +826,7 @@ extern "C" int ceph_get_path_object_size(struct ceph_mount_info *cmount, const c
   return l.fl_object_size;
 }
 
+#if 0
 extern "C" int ceph_get_file_pool(struct ceph_mount_info *cmount, int fh)
 {
   struct ceph_file_layout l;
@@ -902,6 +903,7 @@ extern "C" int ceph_get_path_pool_name(struct ceph_mount_info *cmount, const cha
   strncpy(buf, name.c_str(), len);
   return name.length();
 }
+#endif
 
 extern "C" int ceph_get_file_layout(struct ceph_mount_info *cmount, int fh, int *stripe_unit, int *stripe_count, int *object_size, int *pg_pool)
 {
@@ -919,8 +921,10 @@ extern "C" int ceph_get_file_layout(struct ceph_mount_info *cmount, int fh, int 
     *stripe_count = l.fl_stripe_count;
   if (object_size)
     *object_size = l.fl_object_size;
+#if 0
   if (pg_pool)
     *pg_pool = l.fl_pg_pool;
+#endif
   return 0;
 }
 
@@ -940,11 +944,14 @@ extern "C" int ceph_get_path_layout(struct ceph_mount_info *cmount, const char *
     *stripe_count = l.fl_stripe_count;
   if (object_size)
     *object_size = l.fl_object_size;
+#if 0
   if (pg_pool)
-    *pg_pool = l.fl_pg_pool;
+    *pg_pool = 0; l.fl_pg_pool;
+#endif
   return 0;
 }
 
+#if 0
 extern "C" int ceph_get_file_replication(struct ceph_mount_info *cmount, int fh)
 {
   struct ceph_file_layout l;
@@ -972,6 +979,7 @@ extern "C" int ceph_get_path_replication(struct ceph_mount_info *cmount, const c
   int rep = cmount->get_client()->get_pool_replication(l.fl_pg_pool);
   return rep;
 }
+#endif
 
 extern "C" int ceph_set_default_file_stripe_unit(struct ceph_mount_info *cmount,
 						 int stripe)
@@ -1006,6 +1014,7 @@ extern "C" int ceph_set_default_preferred_pg(struct ceph_mount_info *cmount, int
   return -EOPNOTSUPP;
 }
 
+#if 0
 extern "C" int ceph_get_file_extent_osd(struct ceph_mount_info *cmount, int fh,
 					int64_t offset, int64_t *length,
 					int *osd)
@@ -1061,6 +1070,7 @@ extern "C" int ceph_get_osd_crush_location(struct ceph_mount_info *cmount,
 
   return needed;
 }
+#endif
 
 extern "C" int ceph_get_osd_addr(struct ceph_mount_info *cmount, int osd,
     struct sockaddr_storage *addr)
@@ -1081,6 +1091,7 @@ extern "C" int ceph_get_osd_addr(struct ceph_mount_info *cmount, int osd,
   return 0;
 }
 
+#if 0
 extern "C" int ceph_get_file_stripe_address(struct ceph_mount_info *cmount,
 					    int fh, int64_t offset,
 					    struct sockaddr_storage *addr)
@@ -1099,6 +1110,7 @@ extern "C" int ceph_get_file_stripe_address(struct ceph_mount_info *cmount,
 
   return 1;
 }
+#endif
 
 extern "C" CephContext *ceph_get_mount_context(struct ceph_mount_info *cmount)
 {
@@ -1126,6 +1138,7 @@ extern "C" int ceph_get_stripe_unit_granularity(struct ceph_mount_info *cmount)
   return CEPH_MIN_STRIPE_UNIT;
 }
 
+#if 0
 extern "C" int ceph_get_pool_id(struct ceph_mount_info *cmount, const char *pool_name)
 {
   if (!cmount->is_mounted())
@@ -1151,6 +1164,7 @@ extern "C" int ceph_get_pool_replication(struct ceph_mount_info *cmount,
   return cmount->get_client()->get_pool_replication(pool_id);
 }
 /* Low-level exports */
+#endif
 
 extern "C" int ceph_ll_lookup_root(struct ceph_mount_info *cmount,
 		  Inode **parent)
@@ -1486,12 +1500,14 @@ extern "C" uint32_t ceph_ll_file_layout(class ceph_mount_info *cmount,
   return (cmount->get_client()->ll_file_layout(in, layout));
 }
 
+#if 0
 extern "C" int ceph_ll_get_stripe_osd(class ceph_mount_info *cmount,
 				      Inode *in, uint64_t blockno,
 				      struct ceph_file_layout* layout)
 {
   return (cmount->get_client()->ll_get_stripe_osd(in, blockno, layout));
 }
+#endif
 
 extern "C" int ceph_ll_num_osds(class ceph_mount_info *cmount)
 {

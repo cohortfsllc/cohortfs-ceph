@@ -748,9 +748,11 @@ public:
 
   // expose osdmap
   int get_local_osd();
+#if 0
   int get_pool_replication(int64_t pool);
   int64_t get_pool_id(const char *pool_name);
   string get_pool_name(int64_t pool);
+#endif
   int get_osd_crush_location(int id, vector<pair<string, string> >& path);
 
   int enumerate_layout(int fd, vector<ObjectExtent>& result,

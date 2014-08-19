@@ -11,11 +11,13 @@ public:
   ObjecterWriteback(Objecter *o) : m_objecter(o) {}
   virtual ~ObjecterWriteback() {}
 
-  virtual void read(const object_t& oid, const object_locator_t& oloc,
+  virtual void read(const object_t& oid, const uuid_d& volume,
 		    uint64_t off, uint64_t len,
 		    bufferlist *pbl, uint64_t trunc_size,  uint32_t trunc_seq,
 		    Context *onfinish) {
-    m_objecter->read_trunc(oid, oloc, off, len, pbl, 0,
+    VolumeRef volref;
+    m_objecter->osdmap->find_by_uuid(volume, volref);
+    m_objecter->read_trunc(oid, volref, off, len, pbl, 0,
 			   trunc_size, trunc_seq, onfinish);
   }
 
@@ -24,19 +26,23 @@ public:
     return false;
   }
 
-  virtual ceph_tid_t write(const object_t& oid, const object_locator_t& oloc,
+  virtual ceph_tid_t write(const object_t& oid, const uuid_d& volume,
 		      uint64_t off, uint64_t len,
 		      const bufferlist &bl, utime_t mtime, uint64_t trunc_size,
 		      uint32_t trunc_seq, Context *oncommit) {
-    return m_objecter->write_trunc(oid, oloc, off, len, bl,
+    VolumeRef volref;
+    m_objecter->osdmap->find_by_uuid(volume, volref);
+    return m_objecter->write_trunc(oid, volref, off, len, bl,
 				   mtime, 0, trunc_size, trunc_seq, NULL,
 				   oncommit);
   }
 
-  virtual ceph_tid_t lock(const object_t& oid, const object_locator_t& oloc,
+  virtual ceph_tid_t lock(const object_t& oid, const uuid_d& volume,
 			  int op, int flags, Context *onack,
 			  Context *oncommit) {
-    return m_objecter->lock(oid, oloc, op, flags, onack, oncommit);
+    VolumeRef volref;
+    m_objecter->osdmap->find_by_uuid(volume, volref);
+    return m_objecter->lock(oid, volref, op, flags, onack, oncommit);
   }
 
 private:
