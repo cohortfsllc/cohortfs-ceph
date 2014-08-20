@@ -8,7 +8,7 @@ set(CLIKE_COMMON_FLAGS "-Wall -Wtype-limits -Wignored-qualifiers -Winit-self -Wp
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${CLIKE_COMMON_FLAGS}")
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CLIKE_COMMON_FLAGS} -std=c++11 -Wnon-virtual-dtor -Wno-invalid-offsetof -Wno-unused-private-field")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CLIKE_COMMON_FLAGS} -std=c++11 -Wnon-virtual-dtor -Wno-invalid-offsetof -Wno-unused-private-field -Wno-mismatched-tags")
 
 
 set(EXTRALIBS uuid rt dl)
