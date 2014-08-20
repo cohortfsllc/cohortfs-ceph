@@ -114,41 +114,37 @@ if(${WITH_RADOSGW})
   )
 endif(${WITH_RADOSGW})
 set(dencoder_dependencies
-  cls_lock
-  cls_refcount
-  cls_replica_log
+  cls_lock_client
+  cls_refcount_client
+  cls_replica_log_client
   librados
-  osd)
-if(WITH_MDS)
-  list(APPEND dencoder_dependencies mds)
-endif(WITH_MDS)
-list(APPEND dencoder_dependencies
+  osd
   osdc
   mon
   global
   ${EXTRALIBS}
   ${TCMALLOC_LIBS}
   ${CMAKE_DL_LIBS})
-add_executable(dencoder ${dencoder_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
-target_link_libraries(dencoder ${dencoder_dependencies})
-if(${WITH_RADOSGW})
-  target_link_libraries(dencoder
-    ${EXTRALIBS}
-    ${TCMALLOC_LIBS}
-    ${CMAKE_DL_LIBS}
-    rgw_a
-    cls_rgw
-    cls_log
-    cls_statelog
-    cls_version
+if(WITH_RADOSGW)
+  list(APPEND dencoder_dependencies
+    cls_rgw_client
+    cls_log_client
+    cls_statelog_client
+    cls_version_client
     cls_kvs
-    cls_user
+    cls_user_client
     curl
     expat
     fcgi
-    resolv
-  )
-endif(${WITH_RADOSGW})
+    resolv)
+endif (WITH_RADOSGW)
+
+if(WITH_MDS)
+  list(APPEND dencoder_dependencies mds)
+endif(WITH_MDS)
+
+add_executable(dencoder ${dencoder_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
+target_link_libraries(dencoder ${dencoder_dependencies})
 
 # get_command_descriptions
 add_executable(get_command_descriptions
@@ -979,15 +975,15 @@ if(${WITH_RADOSGW})
     )
   target_link_libraries(test_rgw_manifest
     rgw_a
-    cls_rgw
-    cls_lock
-    cls_refcount
-    cls_log
-    cls_statelog
-    cls_version
-    cls_replica_log
+    cls_rgw_client
+    cls_lock_client
+    cls_refcount_client
+    cls_log_client
+    cls_statelog_client
+    cls_version_client
+    cls_replica_log_client
     cls_kvs
-    cls_user
+    cls_user_client
     librados
     global
     curl
@@ -1014,13 +1010,14 @@ if(${WITH_RADOSGW})
     curl
     uuid
     expat
-    cls_version
-    cls_log
-    cls_statelog
-    cls_refcount
-    cls_rgw
-    cls_user
-    cls_lock
+    cls_version_client
+    cls_log_client
+    cls_statelog_client
+    cls_refcount_client
+    cls_rgw_client
+    cls_user_client
+    cls_lock_client
+    boost_regex
     ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS} ${UNITTEST_LIBS} ${CRYPTO_LIBS})
   set_target_properties(test_cls_rgw_meta PROPERTIES COMPILE_FLAGS
     ${UNITTEST_CXX_FLAGS})
@@ -1040,13 +1037,14 @@ if(${WITH_RADOSGW})
     curl
     uuid
     expat
-    cls_version
-    cls_log
-    cls_statelog
-    cls_refcount
-    cls_rgw
-    cls_user
-    cls_lock
+    cls_version_client
+    cls_log_client
+    cls_statelog_client
+    cls_refcount_client
+    cls_rgw_client
+    cls_user_client
+    cls_lock_client
+    boost_regex
     ${CMAKE_DL_LIBS}
     ${TCMALLOC_LIBS}
     ${UNITTEST_LIBS}
@@ -1065,13 +1063,13 @@ if(${WITH_RADOSGW})
   target_link_libraries(test_cls_rgw_opstate
     rgw_a
     librados
-    cls_version
-    cls_log
-    cls_statelog
-    cls_refcount
-    cls_rgw
-    cls_user
-    cls_lock
+    cls_version_client
+    cls_log_client
+    cls_statelog_client
+    cls_refcount_client
+    cls_rgw_client
+    cls_user_client
+    cls_lock_client
     global
     curl
     uuid
@@ -1161,7 +1159,7 @@ set_target_properties(test_cls_refcount PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 target_link_libraries(test_cls_refcount
   librados
-  cls_refcount
+  cls_refcount_client
   global
   ${UNITTEST_LIBS}
   ${CMAKE_DL_LIBS}
@@ -1179,7 +1177,7 @@ set_target_properties(test_cls_version PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 target_link_libraries(test_cls_version
   librados
-  cls_version
+  cls_version_client
   global
   ${UNITTEST_LIBS}
   ${CMAKE_DL_LIBS}
@@ -1197,7 +1195,7 @@ set_target_properties(test_cls_log PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 target_link_libraries(test_cls_log
   librados
-  cls_log
+  cls_log_client
   global
   radostest
   ${UNITTEST_LIBS}
@@ -1215,7 +1213,7 @@ set_target_properties(test_cls_statelog PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 target_link_libraries(test_cls_statelog
   librados
-  cls_statelog
+  cls_statelog_client
   global
   ${UNITTEST_LIBS}
   ${CMAKE_DL_LIBS}
@@ -1233,7 +1231,7 @@ set_target_properties(test_cls_replica_log PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 target_link_libraries(test_cls_replica_log
   librados
-  cls_replica_log
+  cls_replica_log_client
   global
   ${UNITTEST_LIBS}
   ${CMAKE_DL_LIBS}
@@ -1285,7 +1283,7 @@ if(${WITH_RADOSGW})
   set_target_properties(test_cls_rgw PROPERTIES COMPILE_FLAGS
     ${UNITTEST_CXX_FLAGS})
   target_link_libraries(test_cls_rgw
-    cls_rgw
+    cls_rgw_client
     librados
     global
     ${UNITTEST_LIBS}
