@@ -78,7 +78,6 @@ librados::RadosClient::RadosClient(CephContext *cct_)
     timer(cct, lock),
     refcnt(1),
     log_last_version(0), log_cb(NULL), log_cb_arg(NULL),
-    use_xio(false),
     finisher(cct),
     max_watch_cookie(0)
 {
@@ -143,12 +142,6 @@ int librados::RadosClient::ping_monitor(const string mon_id, string *result)
   return err;
 }
 
-int librados::RadosClient::xio_connect()
-{
-  use_xio = true;
-  return connect();
-}
-
 int librados::RadosClient::connect()
 {
   common_init_finish(cct);
@@ -179,10 +172,8 @@ int librados::RadosClient::connect()
   err = -ENOMEM;
   nonce = getpid() + (1000000 * (uint64_t)rados_instance.inc());
 
-  switch (use_xio) {
 #ifdef HAVE_XIO
-  case true:
-  {
+  if (cct->_conf->client_rdma) {
     XioMessenger *xmsgr
       = new XioMessenger(cct, entity_name_t::CLIENT(-1), "radosclient",
 			 nonce, 0 /* portals */,
@@ -190,15 +181,12 @@ int librados::RadosClient::connect()
     xmsgr->set_port_shift(111) /* XXX */;
     messenger = xmsgr;
   }
-  break;
+  else
 #endif
-  default:
+  {
     messenger = new SimpleMessenger(cct, entity_name_t::CLIENT(-1),
 				    "radosclient", nonce);
-    break;
-  };
-  if (!messenger)
-    goto out;
+  }
 
   // require OSDREPLYMUX feature.  this means we will fail to talk to
   // old servers.  this is necessary because otherwise we won't know
