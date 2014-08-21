@@ -20,6 +20,9 @@ struct Entry {
   utime_t m_stamp;
   pthread_t m_thread;
   short m_prio, m_subsys;
+  int message_id;
+  int pid;
+  
   Entry *m_next;
 
   PrebufferedStreambuf m_streambuf;
