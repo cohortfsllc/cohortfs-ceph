@@ -10,7 +10,9 @@
 
 #include "Entry.h"
 #include "EntryQueue.h"
+#include "common/entity_name.h"
 #include "SubsystemMap.h"
+#include <atomic.h>
 
 namespace ceph {
 namespace log {
@@ -20,7 +22,7 @@ class Log : private Thread
   Log **m_indirect_this;
 
   SubsystemMap *m_subs;
-
+  EntityName *m_name; 
   pthread_mutex_t m_queue_mutex;
   pthread_mutex_t m_flush_mutex;
   pthread_cond_t m_cond_loggers;
@@ -35,7 +37,8 @@ class Log : private Thread
   int m_syslog_log, m_syslog_crash;
   int m_stderr_log, m_stderr_crash;
   bool m_lttng_enabled;
-
+  atomic_t m_message_id;
+  const int m_pid;
   bool m_stop;
 
   int m_max_new, m_max_recent;
@@ -47,7 +50,7 @@ class Log : private Thread
   void _log_message(const char *s, bool crash);
 
 public:
-  Log(SubsystemMap *s);
+  Log(SubsystemMap *s, EntityName *name);
   virtual ~Log();
 
   void set_flush_on_exit();

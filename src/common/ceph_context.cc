@@ -258,7 +258,7 @@ CephContext::CephContext(uint32_t module_type_)
 {
   ceph_spin_init(&_service_thread_lock);
 
-  _log = new ceph::log::Log(&_conf->subsys);
+  _log = new ceph::log::Log(&_conf->subsys, &_conf->name);
 
   _log_obs = new LogObs(_log);
   _conf->add_observer(_log_obs);

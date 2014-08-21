@@ -14,19 +14,39 @@
 
 TRACEPOINT_EVENT(
        ceph,
-       log,
-       TP_ARGS(short, prio, short, subsys, const char *, message),
+       log_header,
+       TP_ARGS(int, entity_type, const char *,  entity_name, int, pid, int, message_id, short, prio, short, subsys),
        TP_FIELDS(
-             ctf_integer(short, prio, prio)
+	     ctf_integer(int, entity_type, entity_type)
+	     ctf_string(entity_name,  entity_name)
+	     ctf_integer(int, pid, pid)
+             ctf_integer(int, message_id, message_id)
              ctf_integer(short, subsys, subsys)
-             ctf_string(msg, message)
+             ctf_integer(short, prio, prio)
        )
 )
 
 TRACEPOINT_LOGLEVEL(
        ceph,
-       log,
+       log_header,
        TRACE_INFO)
+
+TRACEPOINT_EVENT(
+       ceph,
+       log_message,
+       TP_ARGS(int, pid, int, message_id, const char *, message),
+       TP_FIELDS(
+             ctf_integer(int, pid, pid)
+             ctf_integer(int, message_id, message_id)
+             ctf_string(msg, message)
+       )
+)
+
+TRACEPOINT_LOGLEVEL(
+       nothing,
+       log_message,
+       TRACE_INFO)
+
 
 #endif
 
