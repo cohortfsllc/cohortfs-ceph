@@ -142,6 +142,7 @@ void MDSMap::dump(Formatter *f) const
     f->dump_stream("uuid") << *p;
   f->close_section();
   f->dump_stream("metadata_uuid") << metadata_uuid;
+  f->dump_bool("inline_data", inline_data_enabled);
 }
 
 void MDSMap::generate_test_instances(list<MDSMap*>& ls)
@@ -188,9 +189,7 @@ void MDSMap::print(ostream& out)
       << "failed\t" << failed << "\n"
       << "stopped\t" << stopped << "\n";
   out << "data_volumes\t" << data_volumes << "\n";
-#if 0
-  out << "metadata_pool\t" << metadata_pool << "\n";
-#endif
+  out << "metadata_volume\t" << metadata_uuid << "\n";
   out << "inline_data\t" << (inline_data_enabled ? "enabled" : "disabled") << "\n";
 
   multimap< pair<unsigned,unsigned>, uint64_t > foo;
@@ -470,6 +469,7 @@ void MDSMap::decode(bufferlist::iterator& p)
   // kclient ignores everything from here
   uint16_t ev = 87;
   ::decode(ev, p);
+  ::decode(compat, p);
   ::decode(metadata_uuid, p);
   ::decode(created, p);
   ::decode(modified, p);
