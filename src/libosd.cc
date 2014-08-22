@@ -48,8 +48,9 @@ osdmap osds;
 
 struct LibOSD : public libosd {
 private:
-  //CephContext *context;
-  //md_config_t *config;
+  CephContext *cct;
+  md_config_t *conf;
+
   MonClient *monc;
   ObjectStore *store;
   OSD *osd;
@@ -64,6 +65,13 @@ private:
   std::unique_ptr<Throttle> client_byte_throttler;
   std::unique_ptr<Throttle> client_msg_throttler;
 
+  // messengers
+  Messenger* create_messenger(const entity_name_t &me,
+			      const char *name, pid_t pid);
+#ifdef HAVE_XIO
+  Messenger* create_messenger_xio(const entity_name_t &me,
+				  const char *name, pid_t pid);
+#endif
   int create_messengers();
 
 public:
@@ -79,6 +87,8 @@ public:
 
 LibOSD::LibOSD(int whoami)
   : libosd(whoami),
+    cct(g_ceph_context),
+    conf(c_conf),
     monc(NULL),
     store(NULL),
     osd(NULL),
@@ -107,21 +117,20 @@ LibOSD::~LibOSD()
   delete ms_back_hb;
 }
 
-Messenger* create_messenger(const entity_name_t &me,
-			    const char *name, pid_t pid)
+Messenger* LibOSD::create_messenger(const entity_name_t &me,
+				    const char *name, pid_t pid)
 {
-  Messenger *ms = Messenger::create(g_ceph_context, me, name, pid);
+  Messenger *ms = Messenger::create(cct, me, name, pid);
   ms->set_cluster_protocol(CEPH_OSD_PROTOCOL);
   return ms;
 }
 
 #ifdef HAVE_XIO
-Messenger* create_messenger_xio(const entity_name_t &me,
-				const char *name, pid_t pid)
+Messenger* LibOSD::create_messenger_xio(const entity_name_t &me,
+					const char *name, pid_t pid)
 {
   const int nportals = 2;
-  XioMessenger *ms = new XioMessenger(g_ceph_context,
-				      me, name, pid, nportals,
+  XioMessenger *ms = new XioMessenger(cct, me, name, pid, nportals,
 				      new QueueStrategy(nportals));
   ms->set_cluster_protocol(CEPH_OSD_PROTOCOL);
   ms->set_port_shift(111);
@@ -137,7 +146,7 @@ int LibOSD::create_messengers()
 
   // create messengers
 #ifdef HAVE_XIO
-  if (g_conf->cluster_rdma) {
+  if (conf->cluster_rdma) {
     ms_cluster = create_messenger_xio(me, "cluster", pid);
     ms_public_xio = create_messenger_xio(me, "xio client", pid);
     ms_objecter_xio = create_messenger_xio(me, "xio objecter", pid);
@@ -165,11 +174,9 @@ int LibOSD::create_messengers()
 
   // set up policies
   client_byte_throttler.reset(
-      new Throttle(g_ceph_context, "osd_client_bytes",
-		   g_conf->osd_client_message_size_cap));
+      new Throttle(cct, "osd_client_bytes", conf->osd_client_message_size_cap));
   client_msg_throttler.reset(
-      new Throttle(g_ceph_context, "osd_client_messages",
-		   g_conf->osd_client_message_cap));
+      new Throttle(cct, "osd_client_messages", conf->osd_client_message_cap));
 
   uint64_t supported =
     CEPH_FEATURE_UID |
@@ -230,25 +237,24 @@ int LibOSD::create_messengers()
 			 Messenger::Policy::stateless_server(0, 0));
 
   // bind messengers
-  pick_addresses(g_ceph_context, CEPH_PICK_ADDRESS_PUBLIC
-				|CEPH_PICK_ADDRESS_CLUSTER);
-  dout(-1) << __FUNCTION__ << ": public " << g_conf->public_addr
-    << ", cluster " << g_conf->cluster_addr << dendl;
+  pick_addresses(cct, CEPH_PICK_ADDRESS_PUBLIC|CEPH_PICK_ADDRESS_CLUSTER);
+  dout(-1) << __FUNCTION__ << ": public " << conf->public_addr
+    << ", cluster " << conf->cluster_addr << dendl;
 
-  if (g_conf->public_addr.is_blank_ip() &&
-      !g_conf->cluster_addr.is_blank_ip()) {
+  if (conf->public_addr.is_blank_ip() &&
+      !conf->cluster_addr.is_blank_ip()) {
     derr << TEXT_YELLOW
       << " ** WARNING: specified cluster addr but not public addr; we **\n"
       << " **          recommend you specify neither or both.         **"
       << TEXT_NORMAL << dendl;
   }
 
-  r = ms_cluster->bind(g_conf->cluster_addr);
+  r = ms_cluster->bind(conf->cluster_addr);
   if (r < 0)
     return r;
   dout(-1) << "bound ms_cluster: " << ms_cluster->get_myaddr() << dendl;
 
-  entity_addr_t public_addr(g_conf->public_addr);
+  entity_addr_t public_addr(conf->public_addr);
   if (ms_public != ms_public_xio) {
     r = ms_public->bind(public_addr);
     if (r < 0)
@@ -263,7 +269,7 @@ int LibOSD::create_messengers()
     dout(-1) << "bound ms_public_xio: " << ms_public_xio->get_myaddr() << dendl;
   }
 
-  entity_addr_t objecter_addr(g_conf->public_addr);
+  entity_addr_t objecter_addr(conf->public_addr);
   if (ms_objecter != ms_objecter_xio) {
     r = ms_objecter->bind(objecter_addr);
     if (r < 0)
@@ -279,7 +285,7 @@ int LibOSD::create_messengers()
   }
 
   // hb front should bind to same ip as public_addr
-  entity_addr_t hb_front_addr(g_conf->public_addr);
+  entity_addr_t hb_front_addr(conf->public_addr);
   if (hb_front_addr.is_ip())
     hb_front_addr.set_port(0);
   r = ms_front_hb->bind(hb_front_addr);
@@ -288,9 +294,9 @@ int LibOSD::create_messengers()
   dout(-1) << "bound ms_front_hb: " << ms_front_hb->get_myaddr() << dendl;
 
   // hb back should bind to same ip as cluster_addr (if specified)
-  entity_addr_t hb_back_addr(g_conf->osd_heartbeat_addr);
+  entity_addr_t hb_back_addr(conf->osd_heartbeat_addr);
   if (hb_back_addr.is_blank_ip()) {
-    hb_back_addr = g_conf->cluster_addr;
+    hb_back_addr = conf->cluster_addr;
     if (hb_back_addr.is_ip())
       hb_back_addr.set_port(0);
   }
@@ -314,20 +320,20 @@ int LibOSD::init()
   }
 
   // Set up crypto, daemonize, etc.
-  global_init_daemonize(g_ceph_context, 0);
-  common_init_finish(g_ceph_context);
+  global_init_daemonize(cct, 0);
+  common_init_finish(cct);
 
-  monc = new MonClient(g_ceph_context);
+  monc = new MonClient(cct);
   r = monc->build_initial_monmap();
   if (r < 0)
     return r;
 
   // create osd
-  osd = new OSD(g_ceph_context, store, whoami,
+  osd = new OSD(cct, store, whoami,
       ms_cluster, ms_public, ms_public_xio,
       ms_client_hb, ms_front_hb, ms_back_hb,
       ms_objecter, ms_objecter_xio,
-      monc, g_conf->osd_data, g_conf->osd_journal);
+      monc, conf->osd_data, conf->osd_journal);
 
   r = osd->pre_init();
   if (r < 0) {
