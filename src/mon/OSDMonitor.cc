@@ -18,6 +18,8 @@
 #include <sstream>
 #include <cassert>
 
+#include "boost/regex.hpp"
+
 #include "OSDMonitor.h"
 #include "Monitor.h"
 #include "MDSMonitor.h"
@@ -2301,6 +2303,43 @@ done:
 				 mon, m, 0, rs,
 				 get_last_committed() + 1));
     return true;
+  } else if (prefix == "osd volume list") {
+    string pattern;
+    stringstream ds;
+    bool first = true;
+
+    cmd_getval(g_ceph_context, cmdmap, "pattern", pattern, string("."));
+    try {
+      const boost::regex e(pattern);
+      if (f)
+	f->open_array_section("volumes");
+      for (map<uuid_d,VolumeRef>::const_iterator v
+	     = osdmap.vols.by_uuid.begin();
+	   v != osdmap.vols.by_uuid.end();
+	   ++v) {
+	if (!regex_search(v->second->name, e,
+		boost::regex_constants::match_any))
+	  continue;
+	if (f) {
+	  f->open_object_section("volume_info");
+	  v->second->dump(f.get());
+	  f->close_section();
+	} else {
+	  if (!first) ds << "\n";
+	  ds << *v->second;
+	  first = false;
+	}
+      }
+      if (f) {
+	f->close_section();
+	f->flush(ds);
+      }
+      rdata.append(ds);
+    } catch (boost::regex_error& e) {
+      ss << e.what();
+      err = -EINVAL;
+      goto reply;
+    }
   } else {
     err = -EINVAL;
   }
