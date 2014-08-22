@@ -338,8 +338,9 @@ COMMAND("osd volume remove "		   \
 	"name=volumeName,type=CephString", \
 	"Remove a volume",		   \
 	"osd", "rw", "cli,rest")
-COMMAND("osd volume list",			\
-	"list volumes",				\
+COMMAND("osd volume list "				\
+	"name=pattern,type=CephString,req=false",	\
+	"list volumes",					\
 	"osd", "r", "cli,rest")
 
 /*
