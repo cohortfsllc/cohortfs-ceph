@@ -2,7 +2,7 @@
 // vim: ts=8 sw=2 smarttab
 
 #include "stdio.h"
-#include "libosd.h"
+#include "libosd/ceph_osd.h"
 
 int main(int argc, const char *argv[])
 {
