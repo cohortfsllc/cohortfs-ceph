@@ -250,6 +250,11 @@ endif(${ENABLE_SHARED})
 
 add_library(common SHARED ${libcommon_files} $<TARGET_OBJECTS:mon_common_objs>
   $<TARGET_OBJECTS:common_mountcephfs_objs>)
+if(${ENABLE_SHARED})
+  set_target_properties(common PROPERTIES OUTPUT_NAME ceph-common
+    VERSION "1.0.0" SOVERSION "1" LINK_FLAGS "-Wl,-export-dynamic")
+endif(${ENABLE_SHARED})
+install(TARGETS common DESTINATION lib)
 
 set_source_files_properties(${CMAKE_SOURCE_DIR}/src/common/version.cc
   ${CMAKE_SOURCE_DIR}/src/test/encoding/ceph_dencoder.cc
@@ -396,6 +401,11 @@ if(${HAVE_LIBAIO})
   target_link_libraries(os PRIVATE aio)
 endif(${HAVE_LIBAIO})
 target_link_libraries(os PRIVATE leveldb snappy)
+if(${ENABLE_SHARED})
+  set_target_properties(os PROPERTIES OUTPUT_NAME ceph-os
+    VERSION "1.0.0" SOVERSION "1" LINK_FLAGS "-Wl,-export-dynamic")
+endif(${ENABLE_SHARED})
+install(TARGETS os DESTINATION lib)
 
 set(cls_references_files objclass/class_api.cc)
 add_library(cls_references_objs OBJECT ${cls_references_files})
