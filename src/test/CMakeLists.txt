@@ -121,7 +121,9 @@ set(dencoder_dependencies
   osd
   osdc
   mon
+  os
   global
+  boost_system
   ${EXTRALIBS}
   ${TCMALLOC_LIBS}
   ${CMAKE_DL_LIBS})
@@ -157,6 +159,8 @@ target_link_libraries(get_command_descriptions
   mon
   global
   leveldb
+  boost_regex
+  boost_system
   ${EXTRALIBS}
   ${TCMALLOC_LIBS}
   ${CMAKE_DL_LIBS}
@@ -1770,4 +1774,4 @@ target_link_libraries(mmapbench os global)
 
 # pagesetbench
 add_executable(pagesetbench pageset_bench.cc)
-target_link_libraries(pagesetbench os global)
+target_link_libraries(pagesetbench os global boost_system)
