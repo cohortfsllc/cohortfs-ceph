@@ -443,6 +443,10 @@ OPTION(osd_op_history_duration, OPT_U32, 600) // Oldest completed op to track
 OPTION(osd_target_transaction_size, OPT_INT, 30)     // to adjust various transactions that batch smaller items
 OPTION(osd_failsafe_full_ratio, OPT_FLOAT, .97) // what % full makes an OSD "full" (failsafe)
 OPTION(osd_failsafe_nearfull_ratio, OPT_FLOAT, .90) // what % full makes an OSD near full (failsafe)
+
+OPTION(osd_module_dir, OPT_STR, CEPH_LIBDIR "/os-modules") // ObjectStore libraries
+OPTION(osd_modules, OPT_STR, "") // comma-separated list of ObjectStore modules
+
 OPTION(osd_leveldb_write_buffer_size, OPT_U64, 0) // OSD's leveldb write buffer size
 OPTION(osd_leveldb_cache_size, OPT_U64, 0) // OSD's leveldb cache size
 OPTION(osd_leveldb_block_size, OPT_U64, 0) // OSD's leveldb block size
