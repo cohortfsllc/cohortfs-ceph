@@ -3,7 +3,7 @@
 
 #include <mutex> // once_flag, call_once
 
-#include "libosd.h"
+#include "ceph_osd.h"
 #include "acconfig.h"
 
 #include "msg/Messenger.h"

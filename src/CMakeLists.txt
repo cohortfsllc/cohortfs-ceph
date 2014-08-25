@@ -440,8 +440,10 @@ add_library(cls_references_objs OBJECT ${cls_references_files})
 
 set(osdc_osd_srcs osdc/Objecter.cc osdc/Striper.cc)
 
+set(libosd_srcs
+  libosd/libosd.cc
+  )
 set(osd_srcs
-  libosd.cc
   osd/OSD.cc
   osd/Watch.cc
   osd/ClassHandler.cc
@@ -449,6 +451,7 @@ set(osd_srcs
   osd/OSDriver.cc
   osd/OSDVol.cc
   ${osdc_osd_srcs}
+  ${libosd_srcs}
   )
 set(osd_mon_files mon/Monitor.cc)
 add_library(osd_mon_objs OBJECT ${osd_mon_files})
