@@ -229,8 +229,6 @@ set(libcommon_files
   ${xiomsg_files}
   ${mds_files})
 set(mon_common_files
-  auth/AuthSessionHandler.cc
-  auth/cephx/CephxSessionHandler.cc
   )
 add_library(mon_common_objs OBJECT ${mon_common_files})
 set(common_mountcephfs_files
@@ -250,7 +248,7 @@ if(${ENABLE_SHARED})
   list(APPEND libcommon_files $<TARGET_OBJECTS:global_common_objs>)
 endif(${ENABLE_SHARED})
 
-add_library(common STATIC ${libcommon_files} $<TARGET_OBJECTS:mon_common_objs>
+add_library(common SHARED ${libcommon_files} $<TARGET_OBJECTS:mon_common_objs>
   $<TARGET_OBJECTS:common_mountcephfs_objs>)
 
 set_source_files_properties(${CMAKE_SOURCE_DIR}/src/common/version.cc
@@ -363,8 +361,8 @@ add_library(mon STATIC ${lib_mon_srcs} $<TARGET_OBJECTS:mon_common_objs>
   $<TARGET_OBJECTS:monitorstore_obj>)
 set(ceph_mon_srcs ceph_mon.cc common/TextTable.cc)
 add_executable(ceph-mon ${ceph_mon_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
-target_link_libraries(ceph-mon mon boost_thread common os global ${EXTRALIBS}
-  ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
+target_link_libraries(ceph-mon mon boost_regex boost_system boost_thread
+  common os global leveldb ${EXTRALIBS} ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
 install(TARGETS ceph-mon DESTINATION bin)
 
 # OSD
@@ -393,7 +391,7 @@ set(os_mon_files
   os/LevelDBStore.cc
   )
 add_library(os_mon_objs OBJECT ${os_mon_files})
-add_library(os STATIC ${libos_srcs} $<TARGET_OBJECTS:os_mon_objs>)
+add_library(os SHARED ${libos_srcs})
 if(${HAVE_LIBAIO})
   target_link_libraries(os PRIVATE aio)
 endif(${HAVE_LIBAIO})
@@ -553,7 +551,7 @@ if(${WITH_MDS})
   set(ceph_mds_srcs ceph_mds.cc)
   add_executable(ceph-mds ${ceph_mds_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
   target_link_libraries(ceph-mds mds osdc ${CMAKE_DL_LIBS} global
-    ${TCMALLOC_LIBS} boost_thread)
+    ${TCMALLOC_LIBS} boost_system boost_thread)
   install(TARGETS ceph-mds DESTINATION bin)
 endif(${WITH_MDS})
 
