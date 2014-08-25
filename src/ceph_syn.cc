@@ -17,12 +17,12 @@
 #include <string>
 using namespace std;
 
+#include "common/config.h"
+
 #if defined(HAVE_XIO)
 #include "msg/XioMessenger.h"
 #include "msg/QueueStrategy.h"
 #endif
-
-#include "common/config.h"
 
 #include "client/SyntheticClient.h"
 #include "client/Client.h"

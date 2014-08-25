@@ -18,6 +18,8 @@
 #include <string.h>
 #include <string>
 
+#include "common/config.h"
+
 #if defined(HAVE_XIO)
 #include "msg/XioMessenger.h"
 #include "msg/QueueStrategy.h"
@@ -29,7 +31,6 @@
 #include "common/Mutex.h"
 #include "common/ceph_argparse.h"
 #include "common/common_init.h"
-#include "common/config.h"
 #include "common/version.h"
 #include "mon/MonClient.h"
 #include "include/str_list.h"
