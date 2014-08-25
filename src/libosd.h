@@ -15,12 +15,18 @@ struct libosd {
   virtual void signal(int signum) = 0;
 };
 
-#endif
+extern "C" {
+#endif // __cplusplus
 
 // C interface
+
 struct libosd* libosd_init(int name);
 void libosd_cleanup(struct libosd *osd);
 
 void libosd_signal(int signum);
+
+#ifdef __cplusplus
+} // extern "C"
+#endif // __cplusplus
 
 #endif

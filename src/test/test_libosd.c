@@ -1,16 +1,14 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
-#include <iostream>
-
+#include "stdio.h"
 #include "libosd.h"
 
 int main(int argc, const char *argv[])
 {
-
-  libosd *osd = libosd_init(0);
+  struct libosd *osd = libosd_init(0);
   if (osd == NULL) {
-    std::cerr << "osd init failed" << std::endl;
+    fputs("osd init failed\n", stderr);
     return 1;
   }
   libosd_cleanup(osd);
