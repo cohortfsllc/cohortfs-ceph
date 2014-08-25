@@ -65,13 +65,6 @@ private:
   std::unique_ptr<Throttle> client_byte_throttler;
   std::unique_ptr<Throttle> client_msg_throttler;
 
-  // messengers
-  Messenger* create_messenger(const entity_name_t &me,
-			      const char *name, pid_t pid);
-#ifdef HAVE_XIO
-  Messenger* create_messenger_xio(const entity_name_t &me,
-				  const char *name, pid_t pid);
-#endif
   int create_messengers();
 
 public:
@@ -88,7 +81,7 @@ public:
 LibOSD::LibOSD(int whoami)
   : libosd(whoami),
     cct(g_ceph_context),
-    conf(c_conf),
+    conf(g_conf),
     monc(NULL),
     store(NULL),
     osd(NULL),
@@ -105,6 +98,8 @@ LibOSD::LibOSD(int whoami)
 
 LibOSD::~LibOSD()
 {
+  delete osd;
+  delete monc;
   delete ms_cluster;
   if (ms_public != ms_public_xio)
     delete ms_public;
@@ -115,10 +110,11 @@ LibOSD::~LibOSD()
   delete ms_client_hb;
   delete ms_front_hb;
   delete ms_back_hb;
+  cct->put();
 }
 
-Messenger* LibOSD::create_messenger(const entity_name_t &me,
-				    const char *name, pid_t pid)
+Messenger* create_messenger(CephContext *cct, const entity_name_t &me,
+			    const char *name, pid_t pid)
 {
   Messenger *ms = Messenger::create(cct, me, name, pid);
   ms->set_cluster_protocol(CEPH_OSD_PROTOCOL);
@@ -126,8 +122,8 @@ Messenger* LibOSD::create_messenger(const entity_name_t &me,
 }
 
 #ifdef HAVE_XIO
-Messenger* LibOSD::create_messenger_xio(const entity_name_t &me,
-					const char *name, pid_t pid)
+Messenger* create_messenger_xio(CephContext *cct, const entity_name_t &me,
+				const char *name, pid_t pid)
 {
   const int nportals = 2;
   XioMessenger *ms = new XioMessenger(cct, me, name, pid, nportals,
@@ -147,29 +143,29 @@ int LibOSD::create_messengers()
   // create messengers
 #ifdef HAVE_XIO
   if (conf->cluster_rdma) {
-    ms_cluster = create_messenger_xio(me, "cluster", pid);
-    ms_public_xio = create_messenger_xio(me, "xio client", pid);
-    ms_objecter_xio = create_messenger_xio(me, "xio objecter", pid);
-    ms_client_hb = create_messenger_xio(me, "hbclient", pid);
-    ms_front_hb = create_messenger_xio(me, "hb_front_server", pid);
-    ms_back_hb = create_messenger_xio(me, "hb_back_server", pid);
+    ms_cluster = create_messenger_xio(cct, me, "cluster", pid);
+    ms_public_xio = create_messenger_xio(cct, me, "xio client", pid);
+    ms_objecter_xio = create_messenger_xio(cct, me, "xio objecter", pid);
+    ms_client_hb = create_messenger_xio(cct, me, "hbclient", pid);
+    ms_front_hb = create_messenger_xio(cct, me, "hb_front_server", pid);
+    ms_back_hb = create_messenger_xio(cct, me, "hb_back_server", pid);
   } else {
-    ms_cluster = create_messenger(me, "cluster", pid);
-    ms_public = create_messenger(me, "client", pid);
-    ms_objecter = create_messenger(me, "ms_objecter", pid);
-    ms_public_xio = create_messenger_xio(me, "xio client", pid);
-    ms_objecter_xio = create_messenger_xio(me, "xio objecter", pid);
-    ms_client_hb = create_messenger(me, "hbclient", pid);
-    ms_front_hb = create_messenger(me, "hb_front_server", pid);
-    ms_back_hb = create_messenger(me, "hb_back_server", pid);
+    ms_cluster = create_messenger(cct, me, "cluster", pid);
+    ms_public = create_messenger(cct, me, "client", pid);
+    ms_objecter = create_messenger(cct, me, "ms_objecter", pid);
+    ms_public_xio = create_messenger_xio(cct, me, "xio client", pid);
+    ms_objecter_xio = create_messenger_xio(cct, me, "xio objecter", pid);
+    ms_client_hb = create_messenger(cct, me, "hbclient", pid);
+    ms_front_hb = create_messenger(cct, me, "hb_front_server", pid);
+    ms_back_hb = create_messenger(cct, me, "hb_back_server", pid);
   }
 #else // !HAVE_XIO
-  ms_cluster = create_messenger(me, "cluster", pid);
-  ms_public = create_messenger(me, "client", pid);
-  ms_objecter = create_messenger(me, "ms_objecter", pid);
-  ms_client_hb = create_messenger(me, "hbclient", pid);
-  ms_front_hb = create_messenger(me, "hb_front_server", pid);
-  ms_back_hb = create_messenger(me, "hb_back_server", pid);
+  ms_cluster = create_messenger(cct, me, "cluster", pid);
+  ms_public = create_messenger(cct, me, "client", pid);
+  ms_objecter = create_messenger(cct, me, "ms_objecter", pid);
+  ms_client_hb = create_messenger(cct, me, "hbclient", pid);
+  ms_front_hb = create_messenger(cct, me, "hb_front_server", pid);
+  ms_back_hb = create_messenger(cct, me, "hb_back_server", pid);
 #endif // !HAVE_XIO
 
   // set up policies
@@ -305,14 +301,13 @@ int LibOSD::create_messengers()
     return r;
   dout(-1) << "bound ms_back_hb: " << ms_back_hb->get_myaddr() << dendl;
 
+  // TODO: create DirectMessenger pair, and hook up the dispatcher
+
   return 0;
 }
 
 int LibOSD::init()
 {
-  // call global_init() on first entry
-  std::call_once(global::init_flag, global::init);
-
   int r = create_messengers();
   if (r != 0) {
     dout(-1) << "create_messengers failed with " << r << dendl;
@@ -321,7 +316,16 @@ int LibOSD::init()
 
   // Set up crypto, daemonize, etc.
   global_init_daemonize(cct, 0);
-  common_init_finish(cct);
+
+  // the store
+  ObjectStore *store = ObjectStore::create(cct,
+      conf->osd_objectstore,
+      conf->osd_data,
+      conf->osd_journal);
+  if (!store) {
+    derr << "unable to create object store" << dendl;
+    return -ENODEV;
+  }
 
   monc = new MonClient(cct);
   r = monc->build_initial_monmap();
@@ -390,10 +394,13 @@ void LibOSD::signal(int signum)
 
 
 // C interface
+
 struct libosd* libosd_init(int name)
 {
-  LibOSD *osd;
+  // call global_init() on first entry
+  std::call_once(global::init_flag, global::init);
 
+  LibOSD *osd;
   {
     using namespace global;
     Mutex::Locker lock(osd_lock);
