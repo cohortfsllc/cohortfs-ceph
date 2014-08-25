@@ -4,6 +4,7 @@
  * Ceph - scalable distributed file system
  *
  * Copyright (C) 2004-2006 Sage Weil <sage@newdream.net>
+ * Portions Copyright (C) 2014 CohortFS, LLC
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public

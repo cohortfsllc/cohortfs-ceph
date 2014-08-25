@@ -376,6 +376,7 @@ set(libos_srcs
   os/FileStore.cc
   os/chain_xattr.cc
   os/ObjectStore.cc
+  os/Factory.cc
   os/JournalingObjectStore.cc
   os/LFNIndex.cc
   os/IndexManager.cc
