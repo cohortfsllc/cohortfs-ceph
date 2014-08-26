@@ -260,6 +260,7 @@ void OSDMessengers::start()
 
 void OSDMessengers::cleanup()
 {
+  // XXX: assert(started);
   // close/wait on messengers
   cluster->wait();
   if (client != client_xio)
