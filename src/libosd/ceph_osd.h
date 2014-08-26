@@ -12,6 +12,8 @@ struct libosd {
   libosd(int name) : whoami(name) {}
   virtual ~libosd() {}
 
+  virtual int run() = 0;
+  virtual void shutdown() = 0;
   virtual void signal(int signum) = 0;
 };
 
@@ -20,15 +22,26 @@ struct libosd {
 extern "C" {
 #endif /* __cplusplus */
 
+/* initialization arguments for libosd_init() */
 struct libosd_init_args {
-  int id; /* osd instance id */
-  const char *config; /* path to ceph configuration file */
-  const char *cluster; /* ceph cluster name (default "ceph") */
+  int id;		/* osd instance id */
+  const char *config;	/* path to ceph configuration file */
+  const char *cluster;	/* ceph cluster name (default "ceph") */
 };
 
+/* bind messengers, create an objectstore, and create an OSD */
 struct libosd* libosd_init(const struct libosd_init_args *args);
+
+/* starts the osd and blocks until shutdown */
+int libosd_run(struct libosd *osd);
+
+/* starts shutting down a running osd */
+void libosd_shutdown(struct libosd *osd);
+
+/* release resources associated with an osd that is not running */
 void libosd_cleanup(struct libosd *osd);
 
+/* send the given signal to all osds */
 void libosd_signal(int signum);
 
 #ifdef __cplusplus
