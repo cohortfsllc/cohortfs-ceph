@@ -6,7 +6,11 @@
 
 int main(int argc, const char *argv[])
 {
-  struct libosd *osd = libosd_init(0);
+  struct libosd_init_args args = {
+    .id = 0,
+    .config = "/etc/ceph/ceph.conf",
+  };
+  struct libosd *osd = libosd_init(&args);
   if (osd == NULL) {
     fputs("osd init failed\n", stderr);
     return 1;

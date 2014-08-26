@@ -10,9 +10,9 @@
 #include "osd/OSD.h"
 #include "mon/MonClient.h"
 
-#include "global/global_init.h"
-#include "global/global_context.h"
 #include "common/common_init.h"
+#include "common/ceph_argparse.h"
+//#include "global/global_context.h"
 #include "include/msgr.h"
 #include "common/debug.h"
 #include "include/color.h"
@@ -23,21 +23,39 @@
 
 namespace global
 {
-// global init
-std::once_flag init_flag;
-
-static void init()
-{
-  std::vector<const char*> args;
-  global_init(NULL, args, CEPH_ENTITY_TYPE_OSD, CODE_ENVIRONMENT_DAEMON, 0);
-  common_init_finish(g_ceph_context);
-}
-
-// osd map
+// Maintain a map to prevent multiple OSDs with the same name
+// TODO: allow same name with different cluster name?
 Mutex osd_lock;
 
 typedef std::map<int, libosd*> osdmap;
 osdmap osds;
+
+// Maintain a set of ceph contexts so we can make sure that
+// g_ceph_context and g_conf are always valid, if available
+class ContextSet {
+  Mutex mtx;
+  std::set<CephContext*> contexts;
+public:
+  void insert(CephContext *cct) {
+    Mutex::Locker lock(mtx);
+    contexts.insert(cct);
+    // initialize g_ceph_context
+    if (g_ceph_context == NULL) {
+      g_ceph_context = cct;
+      g_conf = cct->_conf;
+    }
+  }
+  void erase(CephContext *cct) {
+    Mutex::Locker lock(mtx);
+    contexts.erase(cct);
+    // replace g_ceph_context
+    if (g_ceph_context == cct) {
+      g_ceph_context = contexts.empty() ? NULL : *contexts.begin();
+      g_conf = g_ceph_context ? g_ceph_context->_conf : NULL;
+    }
+  }
+};
+ContextSet contexts;
 }
 
 struct LibOSD : public libosd {
@@ -50,11 +68,13 @@ private:
   OSD *osd;
   OSDMessengers ms;
 
+  int create_context(const libosd_init_args *args);
+
 public:
   LibOSD(int whoami);
   ~LibOSD();
 
-  int init();
+  int init(const libosd_init_args *args);
   void cleanup();
 
   // libosd interface
@@ -63,8 +83,8 @@ public:
 
 LibOSD::LibOSD(int whoami)
   : libosd(whoami),
-    cct(g_ceph_context),
-    conf(g_conf),
+    cct(NULL),
+    conf(NULL),
     monc(NULL),
     store(NULL),
     osd(NULL)
@@ -75,16 +95,57 @@ LibOSD::~LibOSD()
 {
   delete osd;
   delete monc;
-  cct->put();
+  if (cct) {
+    global::contexts.erase(cct);
+    cct->put();
+  }
 }
 
-int LibOSD::init()
+int LibOSD::create_context(const struct libosd_init_args *args)
 {
+  CephInitParameters params(CEPH_ENTITY_TYPE_OSD);
+  char id[12];
+  sprintf(id, "%d", args->id);
+  params.name.set_id(id);
+
+  cct = common_preinit(params, CODE_ENVIRONMENT_DAEMON, 0);
+  global::contexts.insert(cct);
+
+  conf = cct->_conf;
+
+  if (args->cluster && args->cluster[0])
+    conf->cluster.assign(args->cluster);
+
+  // parse configuration
+  if (args->config && args->config[0]) {
+    std::deque<std::string> parse_errors;
+    int r = conf->parse_config_files(args->config, &parse_errors, &cerr, 0);
+    if (r != 0) {
+      derr << "libosd_init failed to parse configuration "
+	<< args->config << dendl;
+      return r;
+    }
+    conf->apply_changes(NULL);
+    complain_about_parse_errors(cct, &parse_errors);
+  }
+
+  cct->init();
+
+  return 0;
+}
+
+int LibOSD::init(const struct libosd_init_args *args)
+{
+  // create the CephContext and parse the configuration
+  int r = create_context(args);
+  if (r != 0)
+    return r;
+
   const entity_name_t me(entity_name_t::OSD(whoami));
   const pid_t pid = getpid();
 
   // create and bind messengers
-  int r = ms.create(cct, conf, me, pid);
+  r = ms.create(cct, conf, me, pid);
   if (r != 0) {
     derr << TEXT_RED << " ** ERROR: messenger creation failed: "
          << cpp_strerror(-r) << TEXT_NORMAL << dendl;
@@ -98,9 +159,6 @@ int LibOSD::init()
     return r;
   }
 
-  // Set up crypto, daemonize, etc.
-  global_init_daemonize(cct, 0);
-
   // the store
   ObjectStore *store = ObjectStore::create(cct,
       conf->osd_objectstore,
@@ -111,6 +169,7 @@ int LibOSD::init()
     return -ENODEV;
   }
 
+  // monitor client
   monc = new MonClient(cct);
   r = monc->build_initial_monmap();
   if (r < 0)
@@ -138,6 +197,7 @@ int LibOSD::init()
   if (r < 0) {
     derr << TEXT_RED << " ** ERROR: osd init failed: " << cpp_strerror(-r)
          << TEXT_NORMAL << dendl;
+    ms.cleanup();
     return r;
   }
   return 0;
@@ -157,27 +217,36 @@ void LibOSD::signal(int signum)
 
 // C interface
 
-struct libosd* libosd_init(int name)
+struct libosd* libosd_init(const struct libosd_init_args *args)
 {
-  // call global_init() on first entry
-  std::call_once(global::init_flag, global::init);
-
   LibOSD *osd;
   {
     using namespace global;
+    // protect access to the map of osds
     Mutex::Locker lock(osd_lock);
 
     // existing osd with this name?
     std::pair<osdmap::iterator, bool> result =
-      osds.insert(osdmap::value_type(name, NULL));
-    if (!result.second)
+      osds.insert(osdmap::value_type(args->id, NULL));
+    if (!result.second) {
+      derr << "libosd_init found existing osd." << args->id << dendl;
       return NULL;
+    }
 
-    result.first->second = osd = new LibOSD(name);
+    result.first->second = osd = new LibOSD(args->id);
   }
 
-  if (osd->init() == 0)
-    return osd;
+  try {
+    if (osd->init(args) == 0)
+      return osd;
+  } catch (std::exception &e) {
+    derr << "libosd_init caught exception " << e.what() << dendl;
+  }
+
+  // remove from the map of osds
+  global::osd_lock.Lock();
+  global::osds.erase(osd->whoami);
+  global::osd_lock.Unlock();
 
   delete osd;
   return NULL;
@@ -185,8 +254,13 @@ struct libosd* libosd_init(int name)
 
 void libosd_cleanup(struct libosd *osd)
 {
-  static_cast<LibOSD*>(osd)->cleanup();
+  try {
+    static_cast<LibOSD*>(osd)->cleanup();
+  } catch (std::exception &e) {
+    derr << "libosd_cleanup caught exception " << e.what() << dendl;
+  }
 
+  // remove from the map of osds
   global::osd_lock.Lock();
   global::osds.erase(osd->whoami);
   global::osd_lock.Unlock();
@@ -199,6 +273,11 @@ void libosd_signal(int signum)
   // signal all osds under list lock
   Mutex::Locker lock(global::osd_lock);
 
-  for (auto osd : global::osds)
-    osd.second->signal(signum);
+  for (auto osd : global::osds) {
+    try {
+      osd.second->signal(signum);
+    } catch (std::exception &e) {
+      derr << "libosd_signal caught exception " << e.what() << dendl;
+    }
+  }
 }
