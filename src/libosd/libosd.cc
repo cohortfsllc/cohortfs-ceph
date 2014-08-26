@@ -98,8 +98,8 @@ LibOSD::~LibOSD()
   delete osd;
   delete monc;
   if (cct) {
-    global::contexts.erase(cct);
     cct->put();
+    global::contexts.erase(cct);
   }
 }
 
