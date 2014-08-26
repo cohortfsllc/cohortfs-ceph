@@ -89,6 +89,9 @@ protected:
   string path;
 
 public:
+  Logger *logger;
+
+
   /**
    * create - create an ObjectStore instance.
    *
@@ -102,8 +105,6 @@ public:
 			     const string& type,
 			     const string& data,
 			     const string& journal);
-
-  Logger *logger;
 
   /**
    * Fetch Object Store statistics.

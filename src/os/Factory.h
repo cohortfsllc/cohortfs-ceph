@@ -18,36 +18,13 @@
 
 #include "ObjectStore.h"
 
-namespace ceph {
+extern "C" {
+  typedef void* (*objectstore_dllinit_func)(void);
+}
+typedef ObjectStore* (*objectstore_factory_method)(CephContext* cct,
+						   const std::string& data,
+						   const std::string& journal);
 
-  typedef void* (*objectstore_dllinit)(void);
-  typedef ObjectStore* (*objectstore_factory_method)(CephContext* cct,
-						     const string& type,
-						     const string& data,
-						     const string& journal);
-
-  const char* OBJECTSTORE_INIT_FUNC = "objectstore_dllinit";
-
-  class ObjectStoreFactory
-  {
-  public:
-
-    /**
-     * create - create an ObjectStore instance.
-     *
-     * This is invoked once at initialization time.
-     *
-     * @param type type of store. This is a string from the configuration file.
-     * @param data path (or other descriptor) for data
-     * @param journal path (or other descriptor) for journal (optional)
-     */
-    ObjectStore* factory(CephContext* cct,
-			 const string& type,
-			 const string& data,
-			 const string& journal);
-
-  };
-
-} /* namespace ceph */
+#define OBJECTSTORE_INIT_FUNC "objectstore_dllinit"
 
 #endif /* OS_FACTORY_H */

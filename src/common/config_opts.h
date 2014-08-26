@@ -428,7 +428,7 @@ OPTION(osd_default_data_pool_replay_window, OPT_INT, 45)
 OPTION(osd_preserve_trimmed_log, OPT_BOOL, false)
 OPTION(osd_scan_list_ping_tp_interval, OPT_U64, 100)
 OPTION(osd_auto_weight, OPT_BOOL, false)
-OPTION(osd_class_dir, OPT_STR, CEPH_LIBDIR "/rados-classes") // where rados plugins are stored
+OPTION(osd_class_dir, OPT_STR, CEPH_PKGLIBDIR "/rados-classes") // where rados plugins are stored
 OPTION(osd_open_classes_on_start, OPT_BOOL, true)
 OPTION(osd_check_for_log_corruption, OPT_BOOL, false)
 OPTION(osd_default_notify_timeout, OPT_U32, 30) // default notify timeout in seconds
@@ -444,7 +444,7 @@ OPTION(osd_target_transaction_size, OPT_INT, 30)     // to adjust various transa
 OPTION(osd_failsafe_full_ratio, OPT_FLOAT, .97) // what % full makes an OSD "full" (failsafe)
 OPTION(osd_failsafe_nearfull_ratio, OPT_FLOAT, .90) // what % full makes an OSD near full (failsafe)
 
-OPTION(osd_module_dir, OPT_STR, CEPH_LIBDIR "/os-modules") // ObjectStore libraries
+OPTION(osd_module_dir, OPT_STR, CEPH_PKGLIBDIR "/os-modules") // ObjectStore libraries
 OPTION(osd_modules, OPT_STR, "") // comma-separated list of ObjectStore modules
 
 OPTION(osd_leveldb_write_buffer_size, OPT_U64, 0) // OSD's leveldb write buffer size

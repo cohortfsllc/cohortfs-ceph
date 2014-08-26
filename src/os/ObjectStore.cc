@@ -16,27 +16,7 @@
 #include <sstream>
 #include "ObjectStore.h"
 #include "common/Formatter.h"
-#include "FileStore.h"
-#include "MemStore.h"
-#include "KeyValueStore.h"
 #include "common/safe_io.h"
-
-ObjectStore *ObjectStore::create(CephContext *cct,
-				 const string& type,
-				 const string& data,
-				 const string& journal)
-{
-  if (type == "filestore") {
-    return new FileStore(data, journal);
-  }
-  if (type == "memstore") {
-    return new MemStore(cct, data);
-  }
-  if (type == "keyvaluestore-dev") {
-    return new KeyValueStore(data);
-  }
-  return NULL;
-}
 
 int ObjectStore::write_meta(const std::string& key,
 			    const std::string& value)

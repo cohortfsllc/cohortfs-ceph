@@ -31,6 +31,22 @@
 #undef dout_prefix
 #define dout_prefix *_dout << "memstore(" << path << ") "
 
+/* Factory method */
+ObjectStore* MemStore_factory(CephContext* cct,
+			      const std::string& data,
+			      const std::string& journal)
+{
+  return new MemStore(cct, data);
+}
+
+/* DLL machinery */
+extern "C" {
+  void* objectstore_dllinit()
+  {
+    return reinterpret_cast<void*>(MemStore_factory);
+  }
+} /* extern "C" */
+
 // for comparing collections for lock ordering
 bool operator>(const MemStore::CollectionRef& l,
 	       const MemStore::CollectionRef& r)

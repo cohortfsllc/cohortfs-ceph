@@ -21,56 +21,74 @@
 
 #include "common/Mutex.h"
 #include "Factory.h"
+#include "common/debug.h"
+#include <boost/filesystem.hpp>
+
+#define dout_subsys ceph_subsys_filestore
 
 using namespace std;
+namespace bf = boost::filesystem;
 
-namespace ceph {
+static Mutex mtx;
+static map<string, objectstore_factory_method> modules;
 
-  static Mutex mtx;
-  static map<string, ObjectStoreFactory*> modules;
-
-  ObjectStore* ObjectStoreFactory::factory(CephContext* cct,
-					   const string& name,
-					   const string& data,
-					   const string& journal)
+ObjectStore* ObjectStore::create(CephContext* cct,
+				 const string& name,
+				 const string& data,
+				 const string& journal)
   {
     Mutex::Locker lock(mtx);
 
     ObjectStore* os = NULL;
-    ObjectStoreFactory* factory = NULL;
+    objectstore_factory_method factory = NULL;
+    void* module = NULL;
 
     // cached?
     auto iter = modules.find(name);
     if (iter != modules.end())
-      return iter->second->factory(cct, name, data, journal);
+      return iter->second(cct, data, journal);
 
     // ok, try the file system
-
-    // try as a full path
-    string path = name;
-    void* module = ::dlopen(path.c_str(), RTLD_NOW);
+    bf::path p(name);
+    if (bf::exists(p) && bf::is_regular_file(p)) {
+      module = ::dlopen(p.c_str(), RTLD_NOW);
+    }
     if (! module) {
       // try relative
-      path = cct->_conf->osd_module_dir + name + ".so";
-      module = ::dlopen(path.c_str(), RTLD_NOW);
-      if (! module)
-	return NULL;
+      string bname = "libos_" + name + ".so";
+      p = cct->_conf->osd_module_dir;
+      p /= bname;
+      if (bf::exists(p)) {
+	module = ::dlopen(p.c_str(), RTLD_NOW);
+	if (! module) {
+	  dout(0) << __func__  << " failed to load ObjectStore module "
+		  << bname << " (" << p << ")" << dendl;
+	  return NULL;
+	}
+	dout(11) << "load ObjectStore module " << bname << " (" << p << ")"
+		 << dendl;
+      }
     }
 
-    objectstore_dllinit dllinit = (objectstore_dllinit)
-      dlsym(module, OBJECTSTORE_INIT_FUNC);
+    objectstore_dllinit_func dllinit =
+      reinterpret_cast<objectstore_dllinit_func>(
+	dlsym(module, OBJECTSTORE_INIT_FUNC));
 
-    if (! dllinit)
+    if (! dllinit) {
+      dout(0) << __func__ << " " << OBJECTSTORE_INIT_FUNC << " failed "
+	      << name << " (" << p << ")" << dendl;
       goto out;
+    }
 
-    factory = reinterpret_cast<ObjectStoreFactory*>(dllinit());
+    factory = reinterpret_cast<objectstore_factory_method>(dllinit());
     if (!! factory) {
       modules[name] = factory;
-      os = factory->factory(cct, name, data, journal);
+      os = factory(cct, data, journal);
+    } else {
+      dout(0) << __func__  << " ObjectStore factory failed "
+	      << " (" << p << ")" << dendl;
     }
 
   out:
     return os;
-  }
-
-} /* namespace ceph */
+  } /* ObjectStore::create */

@@ -46,6 +46,7 @@
 #include <sstream>
 
 #include "FileStore.h"
+#include "Factory.h"
 #include "GenericFileStoreBackend.h"
 #include "BtrfsFileStoreBackend.h"
 #include "XfsFileStoreBackend.h"
@@ -78,6 +79,22 @@ using ceph::crypto::SHA1;
 #define dout_subsys ceph_subsys_filestore
 #undef dout_prefix
 #define dout_prefix *_dout << "filestore(" << basedir << ") "
+
+/* Factory method */
+ObjectStore* FileStore_factory(CephContext* cct,
+			       const std::string& data,
+			       const std::string& journal)
+{
+  return new FileStore(data, journal);
+}
+
+/* DLL machinery */
+extern "C" {
+  void* objectstore_dllinit()
+  {
+    return reinterpret_cast<void*>(FileStore_factory);
+  }
+} /* extern "C" */
 
 #define COMMIT_SNAP_ITEM "snap_%lld"
 #define CLUSTER_SNAP_ITEM "clustersnap_%s"
