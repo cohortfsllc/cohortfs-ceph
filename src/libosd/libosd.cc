@@ -24,7 +24,7 @@
 namespace global
 {
 // Maintain a map to prevent multiple OSDs with the same name
-// TODO: allow same name with different cluster name?
+// TODO: allow same name with different cluster name
 Mutex osd_lock;
 
 typedef std::map<int, libosd*> osdmap;
@@ -75,11 +75,13 @@ public:
   ~LibOSD();
 
   int init(const libosd_init_args *args);
-  void cleanup();
 
   // libosd interface
+  int run();
+  void shutdown();
   void signal(int signum);
 };
+
 
 LibOSD::LibOSD(int whoami)
   : libosd(whoami),
@@ -188,25 +190,30 @@ int LibOSD::init(const struct libosd_init_args *args)
          << TEXT_NORMAL << dendl;
     return r;
   }
+  return 0;
+}
 
+int LibOSD::run()
+{
   // start messengers
   ms.start();
 
   // start osd
-  r = osd->init();
+  int r = osd->init();
   if (r < 0) {
     derr << TEXT_RED << " ** ERROR: osd init failed: " << cpp_strerror(-r)
          << TEXT_NORMAL << dendl;
-    ms.cleanup();
     return r;
   }
+
+  // wait on messengers
+  ms.wait();
   return 0;
 }
 
-void LibOSD::cleanup()
+void LibOSD::shutdown()
 {
-  // close/wait on messengers
-  ms.cleanup();
+  osd->shutdown();
 }
 
 void LibOSD::signal(int signum)
@@ -245,27 +252,42 @@ struct libosd* libosd_init(const struct libosd_init_args *args)
 
   // remove from the map of osds
   global::osd_lock.Lock();
-  global::osds.erase(osd->whoami);
+  global::osds.erase(args->id);
   global::osd_lock.Unlock();
 
   delete osd;
   return NULL;
 }
 
-void libosd_cleanup(struct libosd *osd)
+int libosd_run(struct libosd *osd)
 {
   try {
-    static_cast<LibOSD*>(osd)->cleanup();
+    return osd->run();
   } catch (std::exception &e) {
-    derr << "libosd_cleanup caught exception " << e.what() << dendl;
+    derr << "libosd_run caught exception " << e.what() << dendl;
+    return -EFAULT;
   }
+}
+
+void libosd_shutdown(struct libosd *osd)
+{
+  try {
+    osd->shutdown();
+  } catch (std::exception &e) {
+    derr << "libosd_shutdown caught exception " << e.what() << dendl;
+  }
+}
+
+void libosd_cleanup(struct libosd *osd)
+{
+  // assert(!running)
+  const int id = osd->whoami;
+  delete osd;
 
   // remove from the map of osds
   global::osd_lock.Lock();
-  global::osds.erase(osd->whoami);
+  global::osds.erase(id);
   global::osd_lock.Unlock();
-
-  delete osd;
 }
 
 void libosd_signal(int signum)

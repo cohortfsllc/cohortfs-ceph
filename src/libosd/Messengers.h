@@ -35,7 +35,7 @@ struct OSDMessengers {
 
   void start();
 
-  void cleanup();
+  void wait();
 };
 
 #endif // CEPH_OSD_MESSENGERS_H

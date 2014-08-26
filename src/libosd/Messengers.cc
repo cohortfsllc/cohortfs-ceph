@@ -258,7 +258,7 @@ void OSDMessengers::start()
   back_hb->start();
 }
 
-void OSDMessengers::cleanup()
+void OSDMessengers::wait()
 {
   // XXX: assert(started);
   // close/wait on messengers
