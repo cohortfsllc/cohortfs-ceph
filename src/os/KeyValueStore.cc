@@ -57,6 +57,23 @@ using ceph::crypto::SHA1;
 
 #define dout_subsys ceph_subsys_keyvaluestore
 
+/* Factory method */
+ObjectStore* KVStore_factory(CephContext* cct,
+			     const std::string& type,
+			     const std::string& data,
+			     const std::string& journal)
+{
+  return new KeyValueStore(data);
+}
+
+/* DLL machinery */
+extern "C" {
+  void* objectstore_dllinit()
+  {
+    return reinterpret_cast<void*>(KVStore_factory);
+  }
+} /* extern "C" */
+
 const string KeyValueStore::OBJECT_STRIP_PREFIX = "_STRIP_";
 const string KeyValueStore::OBJECT_XATTR = "__OBJATTR__";
 const string KeyValueStore::OBJECT_OMAP = "__OBJOMAP__";

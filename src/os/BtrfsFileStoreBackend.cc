@@ -36,6 +36,7 @@
 #include <sstream>
 
 #include "BtrfsFileStoreBackend.h"
+#include "Factory.h"
 
 #include "common/errno.h"
 #include "common/config.h"
