@@ -122,7 +122,11 @@ set(dencoder_dependencies
   cls_refcount_client
   cls_replica_log_client
   librados
-  osd
+  osd)
+if(WITH_MDS)
+  list(APPEND dencoder_dependencies mds)
+endif(WITH_MDS)
+list(APPEND dencoder_dependencies
   osdc
   mon
   os
@@ -145,10 +149,6 @@ if(WITH_RADOSGW)
     fcgi
     resolv)
 endif (WITH_RADOSGW)
-
-if(WITH_MDS)
-  list(APPEND dencoder_dependencies mds)
-endif(WITH_MDS)
 
 add_executable(dencoder ${dencoder_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
 target_link_libraries(dencoder ${dencoder_dependencies})
@@ -846,6 +846,7 @@ add_executable(unittest_libcephfs_config
   $<TARGET_OBJECTS:heap_profiler_objs>
   )
 target_link_libraries(unittest_libcephfs_config
+  common
   global
   ${CMAKE_DL_LIBS}
   ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
@@ -1510,6 +1511,7 @@ if(${WITH_CLIENT})
   set_target_properties(test_libcephfs PROPERTIES COMPILE_FLAGS
     ${UNITTEST_CXX_FLAGS})
   target_link_libraries(test_libcephfs
+    common
     cephfs
     ${UNITTEST_LIBS}
     ${EXTRALIBS}
@@ -1664,6 +1666,7 @@ target_link_libraries(test_keyvaluedb_atomicity
   os
   ${UNITTEST_LIBS}
   global boost_filesystem
+  leveldb
   ${EXTRALIBS}
   ${TCMALLOC_LIBS}
   ${CMAKE_DL_LIBS}
@@ -1705,6 +1708,7 @@ if(${WITH_CLIENT})
     $<TARGET_OBJECTS:heap_profiler_objs>
   )
   target_link_libraries(test_c_headers
+    common
     librados
     cephfs
     ${EXTRALIBS}
