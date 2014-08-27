@@ -553,7 +553,8 @@ set(ceph_mon_store_converter_srcs
   )
 add_executable(ceph_mon_store_converter ${ceph_mon_store_converter_srcs}
   $<TARGET_OBJECTS:monitorstore_obj>)
-target_link_libraries(ceph_mon_store_converter os global boost_filesystem)
+target_link_libraries(ceph_mon_store_converter os global leveldb
+  boost_filesystem boost_system)
 install(TARGETS ceph_mon_store_converter DESTINATION bin)
 
 configure_file(${CMAKE_SOURCE_DIR}/src/mkcephfs.in
@@ -627,7 +628,7 @@ if(${WITH_CLIENT})
   install(DIRECTORY "${CMAKE_SOURCE_DIR}/src/include/cephfs" DESTINATION include)
   set(ceph_syn_srcs ceph_syn.cc client/SyntheticClient.cc)
   add_executable(ceph-syn ${ceph_syn_srcs})
-  target_link_libraries(ceph-syn client global)
+  target_link_libraries(ceph-syn client global boost_system)
 
   set(mount_ceph_srcs mount/mount.ceph.c)
   add_executable(mount.ceph ${mount_ceph_srcs}
@@ -641,7 +642,7 @@ if(${WITH_CLIENT})
   if(WITH_FUSE)
     set(ceph_fuse_srcs ceph_fuse.cc client/fuse_ll.cc)
     add_executable(ceph-fuse ${ceph_fuse_srcs})
-    target_link_libraries(ceph-fuse fuse client global)
+    target_link_libraries(ceph-fuse fuse client global boost_system)
     install(TARGETS ceph-fuse DESTINATION bin)
   endif(WITH_FUSE)
 endif(${WITH_CLIENT})
