@@ -1,10 +1,8 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
-#include <mutex> // once_flag, call_once
-
 #include "ceph_osd.h"
-#include "acconfig.h"
+#include "Messengers.h"
 
 #include "os/ObjectStore.h"
 #include "osd/OSD.h"
@@ -12,12 +10,8 @@
 
 #include "common/common_init.h"
 #include "common/ceph_argparse.h"
-//#include "global/global_context.h"
 #include "include/msgr.h"
-#include "common/debug.h"
 #include "include/color.h"
-
-#include "Messengers.h"
 
 #define dout_subsys ceph_subsys_osd
 
@@ -173,6 +167,8 @@ int LibOSD::init(const struct libosd_init_args *args)
     derr << "unable to create object store" << dendl;
     return -ENODEV;
   }
+
+  common_init_finish(cct, 0);
 
   // monitor client
   monc = new MonClient(cct);
