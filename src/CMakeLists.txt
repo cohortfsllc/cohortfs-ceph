@@ -397,7 +397,7 @@ add_library(os SHARED ${libos_srcs})
 if(${HAVE_LIBAIO})
   target_link_libraries(os PRIVATE aio)
 endif(${HAVE_LIBAIO})
-target_link_libraries(os PRIVATE leveldb snappy)
+target_link_libraries(os PRIVATE leveldb snappy boost_filesystem)
 if(${ENABLE_SHARED})
   set_target_properties(os PROPERTIES OUTPUT_NAME ceph-os
     VERSION "1.0.0" SOVERSION "1" LINK_FLAGS "-Wl,-export-dynamic")
