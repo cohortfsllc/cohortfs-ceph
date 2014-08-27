@@ -66,7 +66,7 @@ private:
   MonClient *monc;
   ObjectStore *store;
   OSD *osd;
-  OSDMessengers ms;
+  OSDMessengers *ms;
 
   int create_context(const libosd_init_args *args);
 
@@ -89,7 +89,8 @@ LibOSD::LibOSD(int whoami)
     conf(NULL),
     monc(NULL),
     store(NULL),
-    osd(NULL)
+    osd(NULL),
+    ms(NULL)
 {
 }
 
@@ -97,6 +98,7 @@ LibOSD::~LibOSD()
 {
   delete osd;
   delete monc;
+  delete ms;
   if (cct) {
     cct->put();
     global::contexts.erase(cct);
@@ -147,14 +149,15 @@ int LibOSD::init(const struct libosd_init_args *args)
   const pid_t pid = getpid();
 
   // create and bind messengers
-  r = ms.create(cct, conf, me, pid);
+  ms = new OSDMessengers();
+  r = ms->create(cct, conf, me, pid);
   if (r != 0) {
     derr << TEXT_RED << " ** ERROR: messenger creation failed: "
          << cpp_strerror(-r) << TEXT_NORMAL << dendl;
     return r;
   }
 
-  r = ms.bind(cct, conf);
+  r = ms->bind(cct, conf);
   if (r != 0) {
     derr << TEXT_RED << " ** ERROR: bind failed: " << cpp_strerror(-r)
          << TEXT_NORMAL << dendl;
@@ -179,9 +182,9 @@ int LibOSD::init(const struct libosd_init_args *args)
 
   // create osd
   osd = new OSD(cct, store, whoami,
-      ms.cluster, ms.client, ms.client_xio,
-      ms.client_hb, ms.front_hb, ms.back_hb,
-      ms.objecter, ms.objecter_xio,
+      ms->cluster, ms->client, ms->client_xio,
+      ms->client_hb, ms->front_hb, ms->back_hb,
+      ms->objecter, ms->objecter_xio,
       monc, conf->osd_data, conf->osd_journal);
 
   r = osd->pre_init();
@@ -196,7 +199,7 @@ int LibOSD::init(const struct libosd_init_args *args)
 int LibOSD::run()
 {
   // start messengers
-  ms.start();
+  ms->start();
 
   // start osd
   int r = osd->init();
@@ -207,7 +210,7 @@ int LibOSD::run()
   }
 
   // wait on messengers
-  ms.wait();
+  ms->wait();
   return 0;
 }
 
