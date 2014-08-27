@@ -227,9 +227,6 @@ set(libcommon_files
   ${auth_files}
   ${xiomsg_files}
   ${mds_files})
-set(mon_common_files
-  )
-add_library(mon_common_objs OBJECT ${mon_common_files})
 set(common_mountcephfs_files
   common/armor.c
   common/safe_io.c
@@ -247,7 +244,7 @@ if(${ENABLE_SHARED})
   list(APPEND libcommon_files $<TARGET_OBJECTS:global_common_objs>)
 endif(${ENABLE_SHARED})
 
-add_library(common ${CEPH_SHARED} ${libcommon_files} $<TARGET_OBJECTS:mon_common_objs>
+add_library(common ${CEPH_SHARED} ${libcommon_files}
   $<TARGET_OBJECTS:common_mountcephfs_objs>)
 if(${ENABLE_SHARED})
   set_target_properties(common PROPERTIES OUTPUT_NAME ceph-common
@@ -345,7 +342,6 @@ set(lib_mon_srcs
   auth/cephx/CephxServiceHandler.cc
   auth/AuthServiceHandler.cc
   ${osd_mon_files}
-  ${mon_common_files}
   mon/Paxos.cc
   mon/PaxosService.cc
   mon/OSDMonitor.cc
@@ -364,9 +360,8 @@ set(monitorstore_src
   mon/MonitorStore.cc
   )
 add_library(monitorstore_obj OBJECT ${monitorstore_src})
-add_library(mon STATIC ${lib_mon_srcs} $<TARGET_OBJECTS:mon_common_objs>
-  $<TARGET_OBJECTS:os_mon_objs> $<TARGET_OBJECTS:osd_mon_objs>
-  $<TARGET_OBJECTS:monitorstore_obj>)
+add_library(mon STATIC ${lib_mon_srcs} $<TARGET_OBJECTS:os_mon_objs>
+  $<TARGET_OBJECTS:osd_mon_objs> $<TARGET_OBJECTS:monitorstore_obj>)
 set(ceph_mon_srcs ceph_mon.cc common/TextTable.cc)
 add_executable(ceph-mon ${ceph_mon_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
 target_link_libraries(ceph-mon mon boost_regex boost_system boost_thread
