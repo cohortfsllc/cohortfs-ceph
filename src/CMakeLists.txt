@@ -465,7 +465,8 @@ target_link_libraries(osd PRIVATE common dl leveldb)
 
 set(ceph_osd_srcs ceph_osd.cc objclass/class_api.cc)
 add_executable(ceph-osd ${ceph_osd_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
-target_link_libraries(ceph-osd osd os global boost_filesystem ${TCMALLOC_LIBS})
+target_link_libraries(ceph-osd osd os global
+  boost_system boost_filesystem ${TCMALLOC_LIBS})
 install(TARGETS ceph-osd DESTINATION bin)
 
 # MDS
