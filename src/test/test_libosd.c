@@ -25,5 +25,6 @@ int main(int argc, const char *argv[])
   fprintf(stderr, "libosd_run returned %d\n", r);
 
   libosd_cleanup(osd);
+  fputs("libosd_cleanup finished\n", stderr);
   return r;
 }
