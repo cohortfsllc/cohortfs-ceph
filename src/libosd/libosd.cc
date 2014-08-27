@@ -71,7 +71,7 @@ public:
   int init(const libosd_init_args *args);
 
   // libosd interface
-  int run();
+  void join();
   void shutdown();
   void signal(int signum);
 };
@@ -189,25 +189,24 @@ int LibOSD::init(const struct libosd_init_args *args)
          << TEXT_NORMAL << dendl;
     return r;
   }
-  return 0;
-}
 
-int LibOSD::run()
-{
   // start messengers
   ms->start();
 
   // start osd
-  int r = osd->init();
+  r = osd->init();
   if (r < 0) {
     derr << TEXT_RED << " ** ERROR: osd init failed: " << cpp_strerror(-r)
          << TEXT_NORMAL << dendl;
     return r;
   }
+  return 0;
+}
 
+void LibOSD::join()
+{
   // wait on messengers
   ms->wait();
-  return 0;
 }
 
 void LibOSD::shutdown()
@@ -258,13 +257,12 @@ struct libosd* libosd_init(const struct libosd_init_args *args)
   return NULL;
 }
 
-int libosd_run(struct libosd *osd)
+void libosd_join(struct libosd *osd)
 {
   try {
-    return osd->run();
+    osd->join();
   } catch (std::exception &e) {
-    derr << "libosd_run caught exception " << e.what() << dendl;
-    return -EFAULT;
+    derr << "libosd_join caught exception " << e.what() << dendl;
   }
 }
 
