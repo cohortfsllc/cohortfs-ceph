@@ -247,7 +247,7 @@ if(${ENABLE_SHARED})
   list(APPEND libcommon_files $<TARGET_OBJECTS:global_common_objs>)
 endif(${ENABLE_SHARED})
 
-add_library(common SHARED ${libcommon_files} $<TARGET_OBJECTS:mon_common_objs>
+add_library(common ${CEPH_SHARED} ${libcommon_files} $<TARGET_OBJECTS:mon_common_objs>
   $<TARGET_OBJECTS:common_mountcephfs_objs>)
 if(${ENABLE_SHARED})
   set_target_properties(common PROPERTIES OUTPUT_NAME ceph-common
@@ -393,7 +393,7 @@ set(os_mon_files
   os/LevelDBStore.cc
   )
 add_library(os_mon_objs OBJECT ${os_mon_files})
-add_library(os SHARED ${libos_srcs})
+add_library(os ${CEPH_SHARED} ${libos_srcs})
 if(${HAVE_LIBAIO})
   target_link_libraries(os PRIVATE aio)
 endif(${HAVE_LIBAIO})
