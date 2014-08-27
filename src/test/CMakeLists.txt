@@ -1790,4 +1790,5 @@ target_link_libraries(test_direct_messenger global)
 # test_libosd
 add_executable(test_libosd test_libosd.c $<TARGET_OBJECTS:heap_profiler_objs>)
 set_target_properties(test_libosd PROPERTIES LINKER_LANGUAGE C)
-target_link_libraries(test_libosd PRIVATE osd os global ${TCMALLOC_LIBS})
+target_link_libraries(test_libosd PRIVATE osd os global
+  boost_filesystem boost_system ${TCMALLOC_LIBS})
