@@ -957,6 +957,10 @@ int OSD::shutdown()
   objecter_messenger->shutdown();
   hb_front_server_messenger->shutdown();
   hb_back_server_messenger->shutdown();
+  if (client_xio_messenger && client_xio_messenger != client_messenger)
+    client_xio_messenger->shutdown();
+  if (objecter_xio_messenger && objecter_xio_messenger != objecter_messenger)
+    objecter_xio_messenger->shutdown();
   return r;
 }
 
