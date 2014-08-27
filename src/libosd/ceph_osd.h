@@ -12,7 +12,7 @@ struct libosd {
   libosd(int name) : whoami(name) {}
   virtual ~libosd() {}
 
-  virtual int run() = 0;
+  virtual void join() = 0;
   virtual void shutdown() = 0;
   virtual void signal(int signum) = 0;
 };
@@ -32,8 +32,8 @@ struct libosd_init_args {
 /* bind messengers, create an objectstore, and create an OSD */
 struct libosd* libosd_init(const struct libosd_init_args *args);
 
-/* starts the osd and blocks until shutdown */
-int libosd_run(struct libosd *osd);
+/* blocks until the osd shuts down */
+void libosd_join(struct libosd *osd);
 
 /* starts shutting down a running osd */
 void libosd_shutdown(struct libosd *osd);
