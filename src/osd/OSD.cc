@@ -753,12 +753,12 @@ int OSD::init()
   if (is_stopping())
     return 0;
 
-  dout(10) << "ensuring vols have consumed prior maps" << dendl;
-  consume_map();
-
   dout(0) << "done with init, starting boot process" << dendl;
   state = STATE_BOOTING;
   start_boot();
+
+  dout(10) << "ensuring vols have consumed prior maps" << dendl;
+  consume_map();
 
   return 0;
 monout:
@@ -831,6 +831,7 @@ int OSD::shutdown()
 {
   if (!service.prepare_to_stop())
     return 0; // already shutting down
+
   osd_lock.Lock();
   if (is_stopping()) {
     osd_lock.Unlock();
@@ -841,6 +842,8 @@ int OSD::shutdown()
   heartbeat_lock.Lock();
   state = STATE_STOPPING;
   heartbeat_lock.Unlock();
+
+  notify_state_observers(state, osdmap->get_epoch());
 
   // Debugging
   cct->_conf->set_val("debug_osd", "100");
@@ -1455,6 +1458,7 @@ void OSD::tick()
       dout(1) << "healthy again, booting" << dendl;
       state = STATE_BOOTING;
       start_boot();
+      notify_state_observers(state, osdmap->get_epoch());
     }
   }
 
@@ -1574,6 +1578,7 @@ void OSD::start_waiting_for_healthy()
 {
   dout(1) << "start_waiting_for_healthy" << dendl;
   state = STATE_WAITING_FOR_HEALTHY;
+  notify_state_observers(state, osdmap->get_epoch());
   last_heartbeat_resample = utime_t();
 }
 
@@ -2746,6 +2751,8 @@ void OSD::consume_map()
 
   service.pre_publish_map(osdmap);
   service.publish_map(osdmap);
+
+  notify_state_observers(state, osdmap->get_epoch());
 }
 
 void OSD::activate_map()

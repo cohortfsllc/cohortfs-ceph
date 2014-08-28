@@ -50,6 +50,8 @@
 #include "common/PrioritizedQueue.h"
 #include "include/lru.h"
 
+#include "StateObserver.h"
+
 #define CEPH_OSD_PROTOCOL    10 /* cluster internal */
 
 
@@ -293,7 +295,8 @@ struct C_OSD_SendMessageOnConn: public Context {
 };
 
 class OSD : public Dispatcher,
-	    public md_config_obs_t {
+	    public md_config_obs_t,
+	    public OSDStateNotifier {
   /** OSD **/
 public:
   // config observer bits
