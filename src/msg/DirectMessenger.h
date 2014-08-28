@@ -16,8 +16,7 @@
 #define CEPH_MSG_DIRECTMESSENGER_H
 
 #include "SimplePolicyMessenger.h"
-#include "common/Mutex.h"
-#include "common/Cond.h"
+#include "common/Semaphore.h"
 
 
 class DispatchStrategy;
@@ -30,9 +29,8 @@ class DispatchStrategy;
  */
 class DirectMessenger : public SimplePolicyMessenger {
 private:
-  // mutex and condition variable for signalling wait() from shutdown()
-  Mutex mtx;
-  Cond cond;
+  // semaphore for signalling wait() from shutdown()
+  Semaphore sem;
 
   DispatchStrategy *my_dispatchers;
 

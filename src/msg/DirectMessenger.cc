@@ -20,7 +20,6 @@ DirectMessenger::DirectMessenger(CephContext *cct, entity_name_t name,
 				 string mname, uint64_t nonce,
 				 DispatchStrategy *my_dispatchers)
   : SimplePolicyMessenger(cct, name, mname, nonce),
-    mtx("DirectMessenger::mtx"),
     my_dispatchers(my_dispatchers),
     peer_dispatchers(NULL)
 {
@@ -60,9 +59,7 @@ int DirectMessenger::start()
 int DirectMessenger::shutdown()
 {
   // signal wait()
-  mtx.Lock();
-  cond.Signal();
-  mtx.Unlock();
+  sem.Put();
 
   my_dispatchers->shutdown();
 
@@ -72,9 +69,7 @@ int DirectMessenger::shutdown()
 void DirectMessenger::wait()
 {
   // wait on signal from shutdown()
-  mtx.Lock();
-  cond.Wait(mtx);
-  mtx.Unlock();
+  sem.Get();
 
   my_dispatchers->wait();
 }
@@ -89,7 +84,6 @@ ConnectionRef DirectMessenger::get_connection(const entity_inst_t& dst)
 ConnectionRef DirectMessenger::get_loopback_connection()
 {
   // allow direct loopback, despite its questionable utility
-  Mutex::Locker lock(mtx);
   if (!loopback_connection)
     loopback_connection.reset(new DirectConnection(this));
   return loopback_connection;
