@@ -176,6 +176,9 @@
 /* Define to 1 if you have the <utime.h> header file. */
 #cmakedefine HAVE_UTIME_H
 
+/* Define to 1 if you have the <semaphore.h> header file. */
+#cmakedefine HAVE_SEMAPHORE_H
+
 /* Define to the sub-directory in which libtool stores uninstalled libraries.
    */
 #cmakedefine LT_OBJDIR

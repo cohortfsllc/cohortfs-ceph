@@ -12,21 +12,46 @@
  *
  */
 
-
 #ifndef CEPH_Sem_Posix__H
 #define CEPH_Sem_Posix__H
+
+#include "acconfig.h"
+
+#ifdef HAVE_SEMAPHORE_H
+
+#include <semaphore.h>
+
+class Semaphore
+{
+  sem_t sem;
+public:
+  Semaphore(unsigned int initial = 0) {
+    sem_init(&sem, 0, initial);
+  }
+  ~Semaphore() {
+    sem_destroy(&sem);
+  }
+  void Put() {
+    sem_post(&sem);
+  }
+  void Get() {
+    sem_wait(&sem);
+  }
+};
+
+#else // !HAVE_SEMAPHORE_H
 
 class Semaphore
 {
   Mutex m;
   Cond c;
-  int count;
+  unsigned int count;
 
   public:
 
-  Semaphore()
+  Semaphore(unsigned int initial = 0)
+    : count(initial)
   {
-    count = 0;
   }
 
   void Put()
@@ -40,7 +65,7 @@ class Semaphore
   void Get()
   {
     m.Lock();
-    while(count <= 0) {
+    while(count == 0) {
       c.Wait(m);
     }
     count--;
@@ -48,4 +73,6 @@ class Semaphore
   }
 };
 
-#endif // !_Mutex_Posix_
+#endif // !HAVE_SEMAPHORE_H
+
+#endif // !CEPH_Sem_Posix__H
