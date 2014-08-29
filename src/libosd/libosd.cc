@@ -8,6 +8,8 @@
 #include "osd/OSD.h"
 #include "mon/MonClient.h"
 
+#include "Dispatcher.h"
+
 #include "common/common_init.h"
 #include "common/ceph_argparse.h"
 #include "include/msgr.h"
@@ -61,6 +63,7 @@ private:
   ObjectStore *store;
   OSD *osd;
   OSDMessengers *ms;
+  LibOSDDispatcher *dispatcher;
 
   int create_context(const libosd_init_args *args);
 
@@ -84,7 +87,8 @@ LibOSD::LibOSD(int whoami)
     monc(NULL),
     store(NULL),
     osd(NULL),
-    ms(NULL)
+    ms(NULL),
+    dispatcher(NULL)
 {
 }
 
@@ -93,6 +97,7 @@ LibOSD::~LibOSD()
   delete osd;
   delete monc;
   delete ms;
+  delete dispatcher;
   if (cct) {
     cct->put();
     global::contexts.erase(cct);
@@ -183,6 +188,10 @@ int LibOSD::init(const struct libosd_init_args *args)
       ms->objecter, ms->objecter_xio,
       monc, conf->osd_data, conf->osd_journal);
 
+  // set up direct messengers
+  dispatcher = new LibOSDDispatcher(cct, osd);
+
+  // initialize osd
   r = osd->pre_init();
   if (r < 0) {
     derr << TEXT_RED << " ** ERROR: osd pre_init failed: " << cpp_strerror(-r)
@@ -207,6 +216,7 @@ void LibOSD::join()
 {
   // wait on messengers
   ms->wait();
+  dispatcher->wait();
 }
 
 void LibOSD::shutdown()

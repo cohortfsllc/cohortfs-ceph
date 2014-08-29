@@ -1,8 +1,8 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
-#ifndef CEPH_OSD_MESSENGERS_H
-#define CEPH_OSD_MESSENGERS_H
+#ifndef CEPH_LIBOSD_MESSENGERS_H
+#define CEPH_LIBOSD_MESSENGERS_H
 
 #include "include/types.h"
 
@@ -38,4 +38,4 @@ struct OSDMessengers {
   void wait();
 };
 
-#endif // CEPH_OSD_MESSENGERS_H
+#endif // CEPH_LIBOSD_MESSENGERS_H
