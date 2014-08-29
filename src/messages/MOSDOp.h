@@ -98,12 +98,12 @@ public:
   }
   void write(uint64_t off, uint64_t len, bufferlist& bl) {
     add_simple_op(CEPH_OSD_OP_WRITE, off, len);
-    data.claim(bl);
+    ops.back().indata.claim(bl);
     header.data_off = off;
   }
   void writefull(bufferlist& bl) {
     add_simple_op(CEPH_OSD_OP_WRITEFULL, 0, bl.length());
-    data.claim(bl);
+    ops.back().indata.claim(bl);
     header.data_off = 0;
   }
   void zero(uint64_t off, uint64_t len) {
