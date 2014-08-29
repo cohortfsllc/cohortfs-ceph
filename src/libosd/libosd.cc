@@ -54,8 +54,7 @@ public:
 ContextSet contexts;
 }
 
-struct LibOSD : public libosd {
-private:
+class LibOSD : public libosd, private OSDStateObserver {
   CephContext *cct;
   md_config_t *conf;
 
@@ -64,6 +63,19 @@ private:
   OSD *osd;
   OSDMessengers *ms;
   LibOSDDispatcher *dispatcher;
+
+  struct {
+    Mutex mtx;
+    Cond cond;
+    int state;
+    epoch_t epoch;
+  } osdmap;
+
+  // OSDStateObserver
+  void on_osd_state(int state, epoch_t epoch);
+
+  bool wait_for_epoch(epoch_t min);
+  bool wait_for_active(epoch_t *epoch);
 
   int create_context(const libosd_init_args *args);
 
@@ -199,6 +211,9 @@ int LibOSD::init(const struct libosd_init_args *args)
     return r;
   }
 
+  // register for state change notifications
+  osd->add_state_observer(this);
+
   // start messengers
   ms->start();
 
@@ -210,6 +225,42 @@ int LibOSD::init(const struct libosd_init_args *args)
     return r;
   }
   return 0;
+}
+
+void LibOSD::on_osd_state(int state, epoch_t epoch)
+{
+  dout(1) << "on_osd_state " << state << " epoch " << epoch << dendl;
+
+  Mutex::Locker lock(osdmap.mtx);
+  if (osdmap.state != state) {
+    osdmap.state = state;
+    osdmap.cond.Signal();
+
+    if (state == OSD::STATE_STOPPING)
+      dispatcher->shutdown();
+  }
+  osdmap.epoch = epoch;
+}
+
+bool LibOSD::wait_for_epoch(epoch_t min)
+{
+  Mutex::Locker lock(osdmap.mtx);
+  while (osdmap.epoch < min
+      && osdmap.state != OSD::STATE_STOPPING)
+    osdmap.cond.Wait(osdmap.mtx);
+
+  return osdmap.state != OSD::STATE_STOPPING;
+}
+
+bool LibOSD::wait_for_active(epoch_t *epoch)
+{
+  Mutex::Locker lock(osdmap.mtx);
+  while (osdmap.state != OSD::STATE_ACTIVE
+      && osdmap.state != OSD::STATE_STOPPING)
+    osdmap.cond.Wait(osdmap.mtx);
+
+  *epoch = osdmap.epoch;
+  return osdmap.state != OSD::STATE_STOPPING;
 }
 
 void LibOSD::join()
