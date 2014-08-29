@@ -23,6 +23,9 @@ struct uuid_d {
   uuid_d() {
     memset(&uuid, 0, sizeof(uuid));
   }
+  uuid_d(const uuid_t u) {
+    memcpy(&uuid, &u, sizeof(uuid));
+  }
 
   bool is_zero() const {
     return uuid_is_null(uuid);

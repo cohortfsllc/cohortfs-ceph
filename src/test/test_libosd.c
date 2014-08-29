@@ -25,6 +25,10 @@ int test_single()
   int r = libosd_get_volume(osd, "rbd", volume);
   if (r != 0) {
     fprintf(stderr, "libosd_get_volume() failed with %d\n", r);
+  } else {
+    char buf[64] = {};
+    r = libosd_write(osd, "obj", volume, 0, sizeof(buf), buf);
+    fprintf(stderr, "libosd_write() returned %d\n", r);
   }
 
   libosd_join(osd);
@@ -86,11 +90,12 @@ int main(int argc, const char *argv[])
     fprintf(stderr, "test_single() failed with %d\n", r);
     return r;
   }
-
+#if 0
   r = test_double();
   if (r != 0) {
     fprintf(stderr, "test_double() failed with %d\n", r);
     return r;
   }
+#endif
   return 0;
 }

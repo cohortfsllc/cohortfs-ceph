@@ -9,11 +9,15 @@
 #include "mon/MonClient.h"
 
 #include "Dispatcher.h"
+#include "messages/MOSDOp.h"
+#include "messages/MOSDOpReply.h"
 
 #include "common/common_init.h"
 #include "common/ceph_argparse.h"
 #include "include/msgr.h"
 #include "include/color.h"
+
+#include "include/uuid.h"
 
 #define dout_subsys ceph_subsys_osd
 
@@ -91,6 +95,10 @@ public:
   void signal(int signum);
 
   int get_volume(const char *name, uuid_t uuid);
+  int read(const char *object, const uuid_t volume,
+	   uint64_t offset, uint64_t length, char *data);
+  int write(const char *object, const uuid_t volume,
+	    uint64_t offset, uint64_t length, char *data);
 };
 
 
@@ -298,6 +306,92 @@ int LibOSD::get_volume(const char *name, uuid_t uuid)
   return 0;
 }
 
+int LibOSD::read(const char *object, const uuid_t volume,
+		 uint64_t offset, uint64_t length, char *data)
+{
+  const int client = 0; // XXX: get client id from monitor?
+  const long tid = 0; // XXX: track tids
+  hobject_t oid = object_t(object);
+  uuid_d vol(volume);
+  epoch_t epoch = 0;
+  const int flags = 0;
+
+  if (!wait_for_active(&epoch))
+    return -ENODEV;
+
+  MOSDOp *m = new MOSDOp(client, tid, oid, vol, epoch, flags);
+  m->read(offset, length);
+
+  // send message over direct messenger
+  Message *reply = dispatcher->send_and_wait_for_reply(m);
+  if (reply == NULL)
+    return -ENODEV;
+
+  assert(reply->get_type() == CEPH_MSG_OSD_OPREPLY);
+  MOSDOpReply *opreply = static_cast<MOSDOpReply*>(reply);
+
+  vector<OSDOp> ops;
+  opreply->claim_ops(ops);
+  opreply->put();
+
+  assert(ops.size() == 1);
+  OSDOp &op = *ops.begin();
+  assert(op.op.op == CEPH_OSD_OP_READ);
+  if (op.rval != 0) {
+    derr << "LibOSD::read failed with " << cpp_strerror(op.rval) << dendl;
+    return op.rval;
+  }
+
+  assert(op.indata.length() == op.op.payload_len);
+  assert(length >= op.op.payload_len);
+
+  length = op.op.payload_len;
+  op.indata.copy(offset, length, data);
+  return static_cast<int>(length);
+}
+
+int LibOSD::write(const char *object, const uuid_t volume,
+		  uint64_t offset, uint64_t length, char *data)
+{
+  const int client = 0; // XXX: get client id from monitor?
+  const long tid = 0; // XXX: track tids
+  hobject_t oid = object_t(object);
+  uuid_d vol(volume);
+  epoch_t epoch = 0;
+  const int flags = CEPH_OSD_FLAG_ONDISK; // ONACK
+
+  if (!wait_for_active(&epoch))
+    return -ENODEV;
+
+  bufferlist bl;
+  bl.append(buffer::create_static(length, data));
+
+  MOSDOp *m = new MOSDOp(client, tid, oid, vol, epoch, flags);
+  m->write(offset, length, bl);
+
+  // send message over direct messenger
+  Message *reply = dispatcher->send_and_wait_for_reply(m);
+  if (reply == NULL)
+    return -ENODEV;
+
+  assert(reply->get_type() == CEPH_MSG_OSD_OPREPLY);
+  MOSDOpReply *opreply = static_cast<MOSDOpReply*>(reply);
+
+  vector<OSDOp> ops;
+  opreply->claim_ops(ops);
+  opreply->put();
+
+  assert(ops.size() == 1);
+  OSDOp &op = *ops.begin();
+  assert(op.op.op == CEPH_OSD_OP_WRITE);
+
+  if (op.rval != 0) {
+    derr << "LibOSD::write failed with " << cpp_strerror(op.rval) << dendl;
+    return op.rval;
+  }
+  return 0;
+}
+
 
 // C interface
 
@@ -386,6 +480,28 @@ int libosd_get_volume(struct libosd *osd, const char *name, uuid_t uuid)
     return osd->get_volume(name, uuid);
   } catch (std::exception &e) {
     derr << "libosd_get_volume caught exception " << e.what() << dendl;
+    return -EFAULT;
+  }
+}
+
+int libosd_read(struct libosd *osd, const char *object, const uuid_t volume,
+		uint64_t offset, uint64_t length, char *data)
+{
+  try {
+    return osd->read(object, volume, offset, length, data);
+  } catch (std::exception &e) {
+    derr << "libosd_read caught exception " << e.what() << dendl;
+    return -EFAULT;
+  }
+}
+
+int libosd_write(struct libosd *osd, const char *object, const uuid_t volume,
+		 uint64_t offset, uint64_t length, char *data)
+{
+  try {
+    return osd->write(object, volume, offset, length, data);
+  } catch (std::exception &e) {
+    derr << "libosd_write caught exception " << e.what() << dendl;
     return -EFAULT;
   }
 }
