@@ -21,6 +21,12 @@ int test_single()
   signal(SIGINT, libosd_signal);
   signal(SIGTERM, libosd_signal);
 
+  uuid_t volume;
+  int r = libosd_get_volume(osd, "rbd", volume);
+  if (r != 0) {
+    fprintf(stderr, "libosd_get_volume() failed with %d\n", r);
+  }
+
   libosd_join(osd);
   fputs("libosd_join returned\n", stderr);
 
