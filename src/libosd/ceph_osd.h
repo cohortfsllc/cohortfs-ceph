@@ -1,8 +1,10 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
-// vim: ts=8 sw=2 smarttab
+/* -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- */
+/* vim: ts=8 sw=2 smarttab */
 
 #ifndef LIBCEPH_OSD_H
 #define LIBCEPH_OSD_H
+
+#include <uuid/uuid.h>
 
 #ifdef __cplusplus
 
@@ -15,6 +17,8 @@ struct libosd {
   virtual void join() = 0;
   virtual void shutdown() = 0;
   virtual void signal(int signum) = 0;
+
+  virtual int get_volume(const char *name, uuid_t uuid) = 0;
 };
 
 
@@ -43,6 +47,10 @@ void libosd_cleanup(struct libosd *osd);
 
 /* send the given signal to all osds */
 void libosd_signal(int signum);
+
+
+/* look up a volume by name, and set its uuid.  returns 0 on success */
+int libosd_get_volume(struct libosd *osd, const char *name, uuid_t uuid);
 
 #ifdef __cplusplus
 } /* extern "C" */

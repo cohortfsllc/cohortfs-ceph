@@ -89,6 +89,8 @@ public:
   void join();
   void shutdown();
   void signal(int signum);
+
+  int get_volume(const char *name, uuid_t uuid);
 };
 
 
@@ -280,6 +282,22 @@ void LibOSD::signal(int signum)
   osd->handle_signal(signum);
 }
 
+int LibOSD::get_volume(const char *name, uuid_t uuid)
+{
+  // wait for osdmap
+  epoch_t epoch;
+  if (!wait_for_active(&epoch))
+    return -ENODEV;
+
+  OSDMapRef osdmap = osd->service.get_osdmap();
+  VolumeRef volume;
+  if (!osdmap->find_by_name(name, volume))
+    return -ENOENT;
+
+  memcpy(uuid, volume->uuid.uuid, sizeof(uuid_t));
+  return 0;
+}
+
 
 // C interface
 
@@ -359,5 +377,15 @@ void libosd_signal(int signum)
     } catch (std::exception &e) {
       derr << "libosd_signal caught exception " << e.what() << dendl;
     }
+  }
+}
+
+int libosd_get_volume(struct libosd *osd, const char *name, uuid_t uuid)
+{
+  try {
+    return osd->get_volume(name, uuid);
+  } catch (std::exception &e) {
+    derr << "libosd_get_volume caught exception " << e.what() << dendl;
+    return -EFAULT;
   }
 }
