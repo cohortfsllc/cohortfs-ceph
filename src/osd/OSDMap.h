@@ -503,8 +503,8 @@ public:
   int add_volume(VolumeRef volume);
   int remove_volume(uuid_d uuid);
 
-  bool vol_exists(const uuid_d& uuid) {
-    map<uuid_d,VolumeRef>::iterator v = vols.by_uuid.find(uuid);
+  bool vol_exists(const uuid_d& uuid) const {
+    map<uuid_d,VolumeRef>::const_iterator v = vols.by_uuid.find(uuid);
     if (v == vols.by_uuid.end()) {
       return false;
     } else {
@@ -512,8 +512,8 @@ public:
     }
   }
 
-  bool find_by_uuid(const uuid_d& uuid, VolumeRef& vol) {
-    map<uuid_d,VolumeRef>::iterator v = vols.by_uuid.find(uuid);
+  bool find_by_uuid(const uuid_d& uuid, VolumeRef& vol) const {
+    map<uuid_d,VolumeRef>::const_iterator v = vols.by_uuid.find(uuid);
     if (v == vols.by_uuid.end()) {
       return false;
     } else {
@@ -521,8 +521,8 @@ public:
       return true;
     }
   }
-  bool find_by_name(const string& name, VolumeRef& vol) {
-    map<string,VolumeRef>::iterator v = vols.by_name.find(name);
+  bool find_by_name(const string& name, VolumeRef& vol) const {
+    map<string,VolumeRef>::const_iterator v = vols.by_name.find(name);
     if (v == vols.by_name.end()) {
       return false;
     } else {
@@ -531,7 +531,7 @@ public:
     }
   }
 
-  bool volmap_empty(void) {
+  bool volmap_empty(void) const {
     return vols.by_uuid.empty();
   }
 };
