@@ -4,6 +4,7 @@
 #ifndef LIBCEPH_OSD_H
 #define LIBCEPH_OSD_H
 
+#include <stdint.h>
 #include <uuid/uuid.h>
 
 #ifdef __cplusplus
@@ -19,6 +20,11 @@ struct libosd {
   virtual void signal(int signum) = 0;
 
   virtual int get_volume(const char *name, uuid_t uuid) = 0;
+
+  virtual int read(const char *object, const uuid_t volume,
+		   uint64_t offset, uint64_t length, char *data) = 0;
+  virtual int write(const char *object, const uuid_t volume,
+		    uint64_t offset, uint64_t length, char *data) = 0;
 };
 
 
@@ -51,6 +57,12 @@ void libosd_signal(int signum);
 
 /* look up a volume by name, and set its uuid.  returns 0 on success */
 int libosd_get_volume(struct libosd *osd, const char *name, uuid_t uuid);
+
+int libosd_read(struct libosd *osd, const char *object, const uuid_t volume,
+		uint64_t offset, uint64_t length, char *data);
+
+int libosd_write(struct libosd *osd, const char *object, const uuid_t volume,
+		 uint64_t offset, uint64_t length, char *data);
 
 #ifdef __cplusplus
 } /* extern "C" */
