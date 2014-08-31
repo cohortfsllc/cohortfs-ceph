@@ -66,7 +66,7 @@ OSDVol::OSDVol(OSDService *o, OSDMapRef curmap, uuid_d v) :
   osdriver(osd->store, coll_t()),
   osdmap_ref(curmap), last_persisted_osdmap_ref(curmap),
   ref(0), deleting(false), dirty_info(false),
-  id(v), info(v), info_oid(hobject_t("info")),
+  id(v), info(v),
   osr(osd->osr_registry.lookup_or_create(v, (stringify(v)))),
   finish_sync_event(NULL), coll(v),
   last_became_active(ceph_clock_now(cct))
@@ -266,7 +266,7 @@ void OSDVol::read_info()
   set<string> keys;
   keys.insert(k);
   map<string,bufferlist> values;
-  int r = osd->store->omap_get_values(coll_t::META_COLL, info_oid, keys,
+  int r = osd->store->omap_get_values(coll_t::META_COLL, osd->infos_oid, keys,
 				      &values);
   if (r < 0) {
     throw std::system_error(-r, std::system_category(),
