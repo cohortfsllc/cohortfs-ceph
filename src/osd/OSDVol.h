@@ -419,7 +419,6 @@ public:
   static string get_epoch_key(uuid_d vol) {
     return stringify(vol) + "_epoch";
   }
-//  hobject_t info_oid;
 
   void handle_watch_timeout(WatchRef watch);
 
