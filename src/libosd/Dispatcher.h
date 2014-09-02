@@ -10,22 +10,29 @@
 class CephContext;
 class DirectMessenger;
 class OSD;
-struct C_ReplyCond;
 
 class LibOSDDispatcher : public Dispatcher {
+public:
+  struct OnReply {
+    virtual ~OnReply();
+    virtual void on_reply(ceph_tid_t id, Message *m) = 0;
+    virtual void on_failure(ceph_tid_t id, int r) = 0;
+  };
+
+private:
   // direct messenger pair
   DirectMessenger *ms_client, *ms_server;
 
   Spinlock tid_lock; // protects next_tid and callback map
   ceph_tid_t next_tid;
-  typedef map<ceph_tid_t, C_ReplyCond*> cb_map;
+  typedef map<ceph_tid_t, OnReply*> cb_map;
   cb_map callbacks;
 
 public:
   LibOSDDispatcher(CephContext *cct, OSD *osd);
   ~LibOSDDispatcher();
 
-  Message* send_and_wait_for_reply(Message *m);
+  ceph_tid_t send_request(Message *m, OnReply *c);
 
   void shutdown();
   void wait();
