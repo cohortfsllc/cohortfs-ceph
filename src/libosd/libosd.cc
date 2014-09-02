@@ -59,6 +59,8 @@ ContextSet contexts;
 }
 
 class LibOSD : public libosd, private OSDStateObserver {
+  libosd_callbacks *callbacks;
+
   CephContext *cct;
   md_config_t *conf;
 
@@ -96,14 +98,17 @@ public:
 
   int get_volume(const char *name, uuid_t uuid);
   int read(const char *object, const uuid_t volume,
-	   uint64_t offset, uint64_t length, char *data);
+	   uint64_t offset, uint64_t length, char *data,
+	   void *user, uint64_t *id);
   int write(const char *object, const uuid_t volume,
-	    uint64_t offset, uint64_t length, char *data);
+	    uint64_t offset, uint64_t length, char *data,
+	    void *user, uint64_t *id);
 };
 
 
 LibOSD::LibOSD(int whoami)
   : libosd(whoami),
+    callbacks(NULL),
     cct(NULL),
     conf(NULL),
     monc(NULL),
@@ -161,6 +166,8 @@ int LibOSD::create_context(const struct libosd_init_args *args)
 
 int LibOSD::init(const struct libosd_init_args *args)
 {
+  callbacks = args->callbacks;
+
   // create the CephContext and parse the configuration
   int r = create_context(args);
   if (r != 0)
@@ -306,59 +313,119 @@ int LibOSD::get_volume(const char *name, uuid_t uuid)
   return 0;
 }
 
+// Dispatcher callback to fire the read completion
+class OnReadReply : public LibOSDDispatcher::OnReply {
+  char *data;
+  uint64_t length;
+  io_completion_fn completion;
+  void *user;
+public:
+  OnReadReply(char *data, uint64_t length, io_completion_fn completion,
+	      void *user)
+    : data(data), length(length), completion(completion), user(user) {}
+
+  void on_reply(ceph_tid_t tid, Message *reply) {
+    assert(reply->get_type() == CEPH_MSG_OSD_OPREPLY);
+    MOSDOpReply *m = static_cast<MOSDOpReply*>(reply);
+
+    vector<OSDOp> ops;
+    m->claim_ops(ops);
+    m->put();
+
+    assert(ops.size() == 1);
+    OSDOp &op = *ops.begin();
+    assert(op.op.op == CEPH_OSD_OP_READ);
+
+    if (op.rval != 0) {
+      length = 0;
+    } else {
+      assert(length >= op.op.payload_len);
+      length = op.op.payload_len;
+
+      assert(length == op.outdata.length());
+      op.outdata.copy(0, length, data);
+    }
+
+    completion(tid, op.rval, length, user);
+  }
+
+  void on_failure(ceph_tid_t tid, int r) {
+    completion(tid, r, 0, user);
+  }
+};
+
 int LibOSD::read(const char *object, const uuid_t volume,
-		 uint64_t offset, uint64_t length, char *data)
+		 uint64_t offset, uint64_t length, char *data,
+		 void *user, uint64_t *id)
 {
-  const int client = 0; // XXX: get client id from monitor?
-  const long tid = 0; // XXX: track tids
+  const int client = 0;
+  const long tid = 0;
   hobject_t oid = object_t(object);
   uuid_d vol(volume);
   epoch_t epoch = 0;
   const int flags = 0;
 
+  if (!callbacks || !callbacks->read_completion)
+    return -EINVAL;
+
   if (!wait_for_active(&epoch))
     return -ENODEV;
 
+  // set up osd read op
   MOSDOp *m = new MOSDOp(client, tid, oid, vol, epoch, flags);
   m->read(offset, length);
 
-  // send message over direct messenger
-  Message *reply = dispatcher->send_and_wait_for_reply(m);
-  if (reply == NULL)
-    return -ENODEV;
+  // create reply callback
+  OnReadReply *onreply = new OnReadReply(data, length,
+					 callbacks->read_completion, user);
 
-  assert(reply->get_type() == CEPH_MSG_OSD_OPREPLY);
-  MOSDOpReply *opreply = static_cast<MOSDOpReply*>(reply);
-
-  vector<OSDOp> ops;
-  opreply->claim_ops(ops);
-  opreply->put();
-
-  assert(ops.size() == 1);
-  OSDOp &op = *ops.begin();
-  assert(op.op.op == CEPH_OSD_OP_READ);
-  if (op.rval != 0) {
-    derr << "LibOSD::read failed with " << cpp_strerror(op.rval) << dendl;
-    return op.rval;
-  }
-
-  assert(op.indata.length() == op.op.payload_len);
-  assert(length >= op.op.payload_len);
-
-  length = op.op.payload_len;
-  op.indata.copy(offset, length, data);
-  return static_cast<int>(length);
+  // send request over direct messenger
+  *id = dispatcher->send_request(m, onreply);
+  return 0;
 }
 
+// Dispatcher callback to fire the write completion
+class OnWriteReply : public LibOSDDispatcher::OnReply {
+  io_completion_fn completion;
+  void *user;
+public:
+  OnWriteReply(io_completion_fn completion, void *user)
+    : completion(completion), user(user) {}
+
+  void on_reply(ceph_tid_t tid, Message *reply) {
+    assert(reply->get_type() == CEPH_MSG_OSD_OPREPLY);
+    MOSDOpReply *m = static_cast<MOSDOpReply*>(reply);
+
+    vector<OSDOp> ops;
+    m->claim_ops(ops);
+    m->put();
+
+    assert(ops.size() == 1);
+    OSDOp &op = *ops.begin();
+    assert(op.op.op == CEPH_OSD_OP_WRITE);
+
+    uint64_t length = op.rval ? 0 : op.op.extent.length;
+    completion(tid, op.rval, length, user);
+  }
+
+  virtual void on_failure(ceph_tid_t tid, int r) {
+    completion(tid, r, 0, user);
+  }
+};
+
 int LibOSD::write(const char *object, const uuid_t volume,
-		  uint64_t offset, uint64_t length, char *data)
+		  uint64_t offset, uint64_t length, char *data,
+		  void *user, uint64_t *id)
 {
-  const int client = 0; // XXX: get client id from monitor?
-  const long tid = 0; // XXX: track tids
+  const int client = 0;
+  const long tid = 0;
   hobject_t oid = object_t(object);
   uuid_d vol(volume);
   epoch_t epoch = 0;
   const int flags = CEPH_OSD_FLAG_ONDISK; // ONACK
+
+  if (!callbacks || !callbacks->write_completion)
+    return -EINVAL;
 
   if (!wait_for_active(&epoch))
     return -ENODEV;
@@ -366,29 +433,15 @@ int LibOSD::write(const char *object, const uuid_t volume,
   bufferlist bl;
   bl.append(buffer::create_static(length, data));
 
+  // set up osd write op
   MOSDOp *m = new MOSDOp(client, tid, oid, vol, epoch, flags);
   m->write(offset, length, bl);
 
-  // send message over direct messenger
-  Message *reply = dispatcher->send_and_wait_for_reply(m);
-  if (reply == NULL)
-    return -ENODEV;
+  // create reply callback
+  OnWriteReply *onreply = new OnWriteReply(callbacks->write_completion, user);
 
-  assert(reply->get_type() == CEPH_MSG_OSD_OPREPLY);
-  MOSDOpReply *opreply = static_cast<MOSDOpReply*>(reply);
-
-  vector<OSDOp> ops;
-  opreply->claim_ops(ops);
-  opreply->put();
-
-  assert(ops.size() == 1);
-  OSDOp &op = *ops.begin();
-  assert(op.op.op == CEPH_OSD_OP_WRITE);
-
-  if (op.rval != 0) {
-    derr << "LibOSD::write failed with " << cpp_strerror(op.rval) << dendl;
-    return op.rval;
-  }
+  // send request over direct messenger
+  *id = dispatcher->send_request(m, onreply);
   return 0;
 }
 
@@ -452,7 +505,8 @@ void libosd_cleanup(struct libosd *osd)
 {
   // assert(!running)
   const int id = osd->whoami;
-  delete osd;
+  // delete LibOSD because base destructor is protected
+  delete static_cast<LibOSD*>(osd);
 
   // remove from the map of osds
   global::osd_lock.Lock();
@@ -485,10 +539,11 @@ int libosd_get_volume(struct libosd *osd, const char *name, uuid_t uuid)
 }
 
 int libosd_read(struct libosd *osd, const char *object, const uuid_t volume,
-		uint64_t offset, uint64_t length, char *data)
+		uint64_t offset, uint64_t length, char *data,
+		void *user, uint64_t *id)
 {
   try {
-    return osd->read(object, volume, offset, length, data);
+    return osd->read(object, volume, offset, length, data, id);
   } catch (std::exception &e) {
     derr << "libosd_read caught exception " << e.what() << dendl;
     return -EFAULT;
@@ -496,10 +551,11 @@ int libosd_read(struct libosd *osd, const char *object, const uuid_t volume,
 }
 
 int libosd_write(struct libosd *osd, const char *object, const uuid_t volume,
-		 uint64_t offset, uint64_t length, char *data)
+		 uint64_t offset, uint64_t length, char *data,
+		 void *user, uint64_t *id)
 {
   try {
-    return osd->write(object, volume, offset, length, data);
+    return osd->write(object, volume, offset, length, data, id);
   } catch (std::exception &e) {
     derr << "libosd_write caught exception " << e.what() << dendl;
     return -EFAULT;

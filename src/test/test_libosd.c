@@ -6,11 +6,32 @@
 
 #include "libosd/ceph_osd.h"
 
+
+struct io_completion {
+  pthread_mutex_t mutex;
+  pthread_cond_t cond;
+  int result;
+};
+
+void write_completion(uint64_t id, int result, uint64_t length, void *user)
+{
+  struct io_completion *io = (struct io_completion*)user;
+
+  pthread_mutex_lock(&io->mutex);
+  io->result = result;
+  pthread_cond_signal(&io->cond);
+  pthread_mutex_unlock(&io->mutex);
+}
+
 int test_single()
 {
+  struct libosd_callbacks callbacks = {
+    .write_completion = write_completion
+  };
   struct libosd_init_args args = {
     .id = 0,
     .config = "/etc/ceph/ceph.conf",
+    .callbacks = &callbacks
   };
   struct libosd *osd = libosd_init(&args);
   if (osd == NULL) {
@@ -26,8 +47,12 @@ int test_single()
   if (r != 0) {
     fprintf(stderr, "libosd_get_volume() failed with %d\n", r);
   } else {
+    struct io_completion io = {
+      .mutex = PTHREAD_MUTEX_INITIALIZER,
+      .cond = PTHREAD_COND_INITIALIZER
+    };
     char buf[64] = {};
-    r = libosd_write(osd, "obj", volume, 0, sizeof(buf), buf);
+    r = libosd_write(osd, "obj", volume, 0, sizeof(buf), buf, &io);
     fprintf(stderr, "libosd_write() returned %d\n", r);
   }
 

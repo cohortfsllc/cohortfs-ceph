@@ -35,18 +35,6 @@ LibOSDDispatcher::~LibOSDDispatcher()
   delete ms_server;
 }
 
-struct C_ReplyCond : public C_SafeCond {
-  Message **reply;
-
-  C_ReplyCond(Mutex *l, Cond *c, bool *d, Message **reply)
-    : C_SafeCond(l, c, d), reply(reply) {}
-
-  void on_reply(Message *m) {
-    *reply = m;
-    complete(0);
-  }
-};
-
 void LibOSDDispatcher::shutdown()
 {
   ms_client->shutdown();
@@ -54,8 +42,11 @@ void LibOSDDispatcher::shutdown()
 
   // drop any outstanding requests
   tid_lock.lock();
-  for (cb_map::iterator i = callbacks.begin(); i != callbacks.end(); ++i)
-    i->second->complete(-1);
+  for (cb_map::iterator i = callbacks.begin(); i != callbacks.end(); ++i) {
+    i->second->on_failure(i->first, -ENODEV);
+    delete i->second;
+  }
+  callbacks.clear();
   tid_lock.unlock();
 }
 
@@ -65,25 +56,19 @@ void LibOSDDispatcher::wait()
   ms_server->wait();
 }
 
-Message* LibOSDDispatcher::send_and_wait_for_reply(Message *m)
+ceph_tid_t LibOSDDispatcher::send_request(Message *m, OnReply *c)
 {
-  // initialize wait context
-  Mutex mtx("LibOSDDispatcher::send_and_wait");
-  Cond cond;
-  bool done;
-  Message *reply = NULL;
-  C_ReplyCond *c = new C_ReplyCond(&mtx, &cond, &done, &reply);
-
   // register tid/callback
   tid_lock.lock();
-  m->set_tid(next_tid++);
-  callbacks.insert(make_pair(m->get_tid(), c));
+  const ceph_tid_t tid = next_tid++;
+  m->set_tid(tid);
+  callbacks.insert(cb_map::value_type(tid, c));
   tid_lock.unlock();
 
   // get connection
   ConnectionRef conn = ms_client->get_connection(ms_server->get_myinst());
   if (conn->get_priv() == NULL) {
-    // create a session
+    // create an osd session
     OSD::Session *s = new OSD::Session;
     conn->set_priv(s->get());
     s->con = conn;
@@ -95,29 +80,25 @@ Message* LibOSDDispatcher::send_and_wait_for_reply(Message *m)
   // send to server messenger
   ms_client->send_message(m, conn.get());
 
-  // wait for response
-  mtx.Lock();
-  while (!done)
-    cond.Wait(mtx);
-  mtx.Unlock();
-
-  return reply;
+  return tid;
 }
 
 bool LibOSDDispatcher::ms_dispatch(Message *m)
 {
+  const ceph_tid_t tid = m->get_tid();
   tid_lock.lock();
-  cb_map::iterator i = callbacks.find(m->get_tid());
+  cb_map::iterator i = callbacks.find(tid);
   if (i == callbacks.end()) {
     tid_lock.unlock();
     // drop messages that aren't replies
     return false;
   }
 
-  C_ReplyCond *c = i->second;
+  OnReply *c = i->second;
   callbacks.erase(i);
   tid_lock.unlock();
 
-  c->on_reply(m);
+  c->on_reply(tid, m);
+  delete c;
   return true;
 }
