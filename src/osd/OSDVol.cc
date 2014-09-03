@@ -50,12 +50,12 @@ static ostream& _prefix(std::ostream *_dout, T *vol) {
 
 void OSDVol::get()
 {
-  ref.inc();
+  ++ref;
 }
 
 void OSDVol::put()
 {
-  if (ref.dec() == 0)
+  if (--ref == 0)
     delete this;
 }
 

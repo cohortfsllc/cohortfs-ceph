@@ -3,7 +3,7 @@
 #ifndef CEPH_TEST_OSDC_FAKEWRITEBACK_H
 #define CEPH_TEST_OSDC_FAKEWRITEBACK_H
 
-#include "include/atomic.h"
+#include <atomic>
 #include "include/Context.h"
 #include "include/types.h"
 #include "osd/osd_types.h"
@@ -33,7 +33,7 @@ private:
   CephContext *m_cct;
   Mutex *m_lock;
   uint64_t m_delay_ns;
-  atomic_t m_tid;
+  std::atomic<ceph_tid_t> m_tid;
   Finisher *m_finisher;
 };
 

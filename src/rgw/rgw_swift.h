@@ -4,6 +4,7 @@
 #ifndef CEPH_RGW_SWIFT_H
 #define CEPH_RGW_SWIFT_H
 
+#include <atomic>
 #include "rgw_common.h"
 #include "common/Cond.h"
 
@@ -22,7 +23,7 @@ struct rgw_swift_auth_info {
 
 class RGWSwift {
   CephContext *cct;
-  atomic_t down_flag;
+  std::atomic<bool> down_flag;
 
   int validate_token(const char *token, struct rgw_swift_auth_info *info);
   int validate_keystone_token(RGWRados *store, const string& token, struct rgw_swift_auth_info *info,

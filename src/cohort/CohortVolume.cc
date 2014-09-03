@@ -7,6 +7,7 @@
  * DO NOT DISTRIBUTE THIS FILE.  EVER.
  */
 
+#include <atomic>
 #include <cstring>
 #include <stdlib.h>
 #include <sys/types.h>
@@ -270,7 +271,7 @@ error:
 class C_MultiCond : public Context {
   Mutex lock; ///< Mutex to take
   int rval; ///< return value (optional)
-  atomic_t refcnt; ///< call dependent context when this gets to zero
+  std::atomic<uint64_t> refcnt; ///< call dependent context when this at zero
   Context *dependent; ///< dependent context
 
 public:
@@ -290,7 +291,7 @@ public:
   }
   void complete(int r) {
     finish(r);
-    if (refcnt.dec() == 0) {
+    if (--refcnt == 0) {
       dependent->complete(rval);
       delete this;
     }
@@ -513,7 +514,7 @@ static bool stupid_end_test(vector<bufferlist::iterator>& cursors)
 class C_MultiRead : public Context {
   Mutex lock; ///< Mutex to take
   int rval; ///< return value
-  atomic_t refcnt; ///< Gather when this gets to 0
+  std::atomic<uint64_t> refcnt; ///< Gather when this gets to 0
   Context *dependent; ///< Dependent context
   bufferlist *bl; //< Bufferlist to gather into
   const erasure_params *erasure; //< Erasure parameters
@@ -548,7 +549,7 @@ public:
 
   void complete(int r) {
     finish(r);
-    if (refcnt.dec() == 0) {
+    if (--refcnt == 0) {
       if ((rval >= 0) && (len > 0)) {
 	try {
 	  uint32_t real_len = 0;
@@ -672,7 +673,7 @@ struct C_MultiStat : public Context {
   vector<bufferlist> reads; //< Bufferlists to gather from
   uint64_t *psize;
   utime_t *pmtime;
-  atomic_t refcnt; ///< Gather when this gets to 0
+  std::atomic<uint64_t> refcnt; ///< Gather when this gets to 0
   Context *fin;
 
   C_MultiStat(uint64_t *ps, utime_t *pm, size_t ref, Context *c) :
@@ -689,7 +690,7 @@ struct C_MultiStat : public Context {
 
   void complete(int r) {
     bool foundone = false;;
-    if (refcnt.dec() == 0) {
+    if (--refcnt == 0) {
       for (vector<bufferlist>::iterator i = reads.begin();
 	   i != reads.end();
 	   ++i) {

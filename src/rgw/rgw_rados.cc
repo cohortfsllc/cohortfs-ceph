@@ -1,5 +1,11 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
+#include <string>
+#include <iostream>
+#include <vector>
+#include <list>
+#include <map>
+#include <atomic>
 #include <errno.h>
 #include <stdlib.h>
 #include <sys/types.h>
@@ -33,11 +39,6 @@
 #include "include/rados/librados.hpp"
 using namespace librados;
 
-#include <string>
-#include <iostream>
-#include <vector>
-#include <list>
-#include <map>
 #include "auth/Crypto.h" // get_random_bytes()
 
 #include "rgw_log.h"
@@ -4492,8 +4493,8 @@ struct get_obj_data : public RefCountedObject {
   Mutex data_lock;
   list<get_obj_aio_data> aio_data;
   RGWGetDataCB *client_cb;
-  atomic_t cancelled;
-  atomic_t err_code;
+  std::atomic<bool> cancelled;
+  std::atomic<int> err_code;
   Throttle throttle;
   list<bufferlist> read_list;
 
@@ -4504,16 +4505,16 @@ struct get_obj_data : public RefCountedObject {
       throttle(cct, "get_obj_data", cct->_conf->rgw_get_obj_window_size, false) {}
   virtual ~get_obj_data() { }
   void set_cancelled(int r) {
-    cancelled.set(1);
-    err_code.set(r);
+    cancelled = true;
+    err_code = r;
   }
 
   bool is_cancelled() {
-    return cancelled.read() == 1;
+    return cancelled;
   }
 
   int get_err_code() {
-    return err_code.read();
+    return err_code;
   }
 
   int wait_next_io(bool *done) {

@@ -23,7 +23,7 @@ int RGWRESTConn::get_url(string& endpoint)
     return -EIO;
   }
 
-  int i = counter.inc();
+  int i = ++counter;
   endpoint = endpoints[i % endpoints.size()];
 
   return 0;

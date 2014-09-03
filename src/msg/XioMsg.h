@@ -16,6 +16,7 @@
 #ifndef XIO_MSG_H
 #define XIO_MSG_H
 
+#include <atomic>
 #include <boost/intrusive/list.hpp>
 #include "SimplePolicyMessenger.h"
 extern "C" {
@@ -205,7 +206,7 @@ public:
   xio_msg_ex req_0;
   xio_msg_ex* req_arr;
   struct xio_mempool_obj mp_this;
-  atomic_t nrefs;
+  std::atomic<uint64_t> nrefs;
 
 public:
   XioMsg(Message *_m, XioConnection *_xcon, struct xio_mempool_obj& _mp,
@@ -229,10 +230,10 @@ public:
       xcon->get();
     }
 
-  XioMsg* get() { nrefs.inc(); return this; };
+  XioMsg* get() { ++nrefs; return this; };
 
   void put(int n) {
-    int refs = nrefs.sub(n);
+    int refs = (nrefs -= n);
     if (refs == 0) {
       struct xio_mempool_obj *mp = &this->mp_this;
       this->~XioMsg();
@@ -292,7 +293,7 @@ private:
   XioConnection *xcon;
   XioInSeq msg_seq;
   XioPool rsp_pool;
-  atomic_t nrefs;
+  std::atomic<uint64_t> nrefs;
   bool cl_flag;
   friend class XioConnection;
   friend class XioMessenger;
@@ -317,14 +318,14 @@ public:
   int release_msgs();
 
   XioCompletionHook* get() {
-    nrefs.inc(); return this;
+    ++nrefs; return this;
   }
   virtual void set_message(Message *_m) {
     m = _m;
   }
 
   void put(int n) {
-    int refs = nrefs.sub(n);
+    int refs = (nrefs -= n);
     if (refs == 0) {
       /* in Marcus' new system, refs reaches 0 twice:  once in
        * Message lifecycle, and again after xio_release_msg.

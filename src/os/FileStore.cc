@@ -469,7 +469,7 @@ FileStore::FileStore(const std::string &base, const std::string &jdev, const cha
   m_filestore_max_inline_xattr_size(0),
   m_filestore_max_inline_xattrs(0)
 {
-  m_filestore_kill_at.set(g_conf->filestore_kill_at);
+  m_filestore_kill_at = g_conf->filestore_kill_at;
 
   ostringstream oss;
   oss << basedir << "/current";
@@ -4330,8 +4330,8 @@ int FileStore::_collection_move_rename(const coll_t &oldcid, const hobject_t& ol
 
 void FileStore::_inject_failure()
 {
-  if (m_filestore_kill_at.read()) {
-    int final = m_filestore_kill_at.dec();
+  if (m_filestore_kill_at) {
+    int final = --m_filestore_kill_at;
     dout(5) << "_inject_failure " << (final+1) << " -> " << final << dendl;
     if (final == 0) {
       derr << "_inject_failure KILLING" << dendl;
@@ -4493,7 +4493,7 @@ void FileStore::handle_conf_change(const struct md_config_t *conf,
     m_filestore_queue_max_bytes = conf->filestore_queue_max_bytes;
     m_filestore_queue_committing_max_ops = conf->filestore_queue_committing_max_ops;
     m_filestore_queue_committing_max_bytes = conf->filestore_queue_committing_max_bytes;
-    m_filestore_kill_at.set(conf->filestore_kill_at);
+    m_filestore_kill_at = conf->filestore_kill_at;
     m_filestore_fail_eio = conf->filestore_fail_eio;
     m_filestore_replica_fadvise = conf->filestore_replica_fadvise;
     m_filestore_sloppy_crc = conf->filestore_sloppy_crc;

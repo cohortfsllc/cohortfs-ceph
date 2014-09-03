@@ -235,7 +235,7 @@ public:
 
 public:
   ~Message() {
-    assert(nref.read() == 0);
+    assert(nref == 0);
     if (byte_throttler)
       byte_throttler->put(payload.length() + middle.length() + data.length());
     if (msg_throttler)

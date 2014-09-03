@@ -15,26 +15,26 @@
 #ifndef CEPH_REFCOUNTEDOBJ_H
 #define CEPH_REFCOUNTEDOBJ_H
 
+#include <atomic>
 #include "common/Mutex.h"
 #include "common/Cond.h"
-#include "include/atomic.h"
 
 
 struct RefCountedObject {
-  atomic_t nref;
+  std::atomic<uint64_t> nref;
   RefCountedObject() : nref(1) {}
   virtual ~RefCountedObject() {}
 
   RefCountedObject *get() {
-    nref.inc();
+    ++nref;
     return this;
   }
   RefCountedObject *add(int n) {
-    nref.add(n);
+    nref += n;
     return this;
   }
   void put() {
-    if (nref.dec() == 0)
+    if (--nref == 0)
       delete this;
   }
 };
@@ -85,7 +85,7 @@ struct RefCountedCond : public RefCountedObject {
  *
  */
 struct RefCountedWaitObject {
-  atomic_t nref;
+  std::atomic<uint64_t> nref;
   RefCountedCond *c;
 
   RefCountedWaitObject() : nref(1) {
@@ -96,7 +96,7 @@ struct RefCountedWaitObject {
   }
 
   RefCountedWaitObject *get() {
-    nref.inc();
+    ++nref;
     return this;
   }
 
@@ -104,7 +104,7 @@ struct RefCountedWaitObject {
     bool ret = false;
     RefCountedCond *cond = c;
     cond->get();
-    if (nref.dec() == 0) {
+    if (--nref == 0) {
       cond->done();
       delete this;
       ret = true;
@@ -117,7 +117,7 @@ struct RefCountedWaitObject {
     RefCountedCond *cond = c;
 
     cond->get();
-    if (nref.dec() == 0) {
+    if (--nref == 0) {
       cond->done();
       delete this;
     } else {

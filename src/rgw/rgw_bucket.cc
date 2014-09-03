@@ -1361,11 +1361,11 @@ int RGWDataChangesLog::trim_entries(const utime_t& start_time, const utime_t& en
 
 bool RGWDataChangesLog::going_down()
 {
-  return (down_flag.read() != 0);
+  return down_flag;
 }
 
 RGWDataChangesLog::~RGWDataChangesLog() {
-  down_flag.set(1);
+  down_flag = true;
   renew_thread->stop();
   renew_thread->join();
   delete renew_thread;

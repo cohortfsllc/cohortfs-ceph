@@ -183,7 +183,7 @@ int main(int argc, const char **argv)
 
 	messenger->shutdown();
 
-	cout << "conn has refs " << conn->nref.read() << std::endl;
+cout << "conn has refs " << conn->nref << std::endl;
 
 out:
 	return r;

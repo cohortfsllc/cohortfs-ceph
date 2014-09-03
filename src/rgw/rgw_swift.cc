@@ -689,7 +689,7 @@ void RGWSwift::finalize_keystone()
   delete keystone_token_cache;
   keystone_token_cache = NULL;
 
-  down_flag.set(1);
+  down_flag = true;
   if (keystone_revoke_thread) {
     keystone_revoke_thread->stop();
     keystone_revoke_thread->join();
@@ -712,7 +712,7 @@ void swift_finalize()
 
 bool RGWSwift::going_down()
 {
-  return (down_flag.read() != 0);
+  return down_flag;
 }
 
 void *RGWSwift::KeystoneRevokeThread::entry() {

@@ -15,9 +15,9 @@
 #ifndef CEPH_LIBRADOS_IOCTXIMPL_H
 #define CEPH_LIBRADOS_IOCTXIMPL_H
 
+#include <atomic>
 #include "common/Cond.h"
 #include "common/Mutex.h"
-#include "include/atomic.h"
 #include "include/types.h"
 #include "include/rados/librados.h"
 #include "include/rados/librados.hpp"
@@ -28,7 +28,7 @@
 class RadosClient;
 
 struct librados::IoCtxImpl {
-  atomic_t ref_cnt;
+  std::atomic<uint64_t> ref_cnt;
   RadosClient *client;
   uuid_d volume;
   uint64_t assert_ver;
@@ -62,11 +62,11 @@ struct librados::IoCtxImpl {
   }
 
   void get() {
-    ref_cnt.inc();
+    ++ref_cnt;
   }
 
   void put() {
-    if (ref_cnt.dec() == 0)
+    if (--ref_cnt == 0)
       delete this;
   }
 

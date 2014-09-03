@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 /** -*- C++ -*-
  * Copyright (C) 2009-2011 New Dream Network
  *
@@ -28,13 +30,12 @@ extern "C" {
 #include <unistd.h>
 }
 
+#include <atomic>
+#include <cephfs/libcephfs.h>
 #include "Common/String.h"
-#include "Common/atomic.h"
 #include "Common/Properties.h"
-
 #include "DfsBroker/Lib/Broker.h"
 
-#include <cephfs/libcephfs.h>
 
 namespace Hypertable {
   using namespace DfsBroker;
@@ -97,7 +98,7 @@ namespace Hypertable {
 
   private:
     struct ceph_mount_info *cmount;
-    static atomic_t ms_next_fd;
+    static std::atomic<uint64_t> ms_next_fd;
 
     virtual void report_error(ResponseCallback *cb, int error);
 

@@ -226,7 +226,7 @@ public:
 	      if (unlikely(code)) {
 		xs->xcon->msg_send_fail(xmsg, code);
 	      } else
-		xs->xcon->send.set(msg->timestamp); /* XXX atomic? */
+		xs->xcon->send = msg->timestamp; /* XXX atomic? */
 	      break;
 	    default:
 	      /* INCOMING_MSG_RELEASE */

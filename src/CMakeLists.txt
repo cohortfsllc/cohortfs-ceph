@@ -29,10 +29,6 @@ endif(WITH_CDS)
 
 set(CRYPTO_LIBS cryptopp)
 
-if(${HAVE_ATOMIC_OPS})
-  list(APPEND EXTRALIBS atomic_ops)
-endif(${HAVE_ATOMIC_OPS})
-
 set(bindir ${CMAKE_INSTALL_PREFIX}/bin)
 set(sbindir ${CMAKE_INSTALL_PREFIX}/sbin)
 set(libdir ${CMAKE_INSTALL_PREFIX}/lib)

@@ -3,6 +3,7 @@
 #ifndef CEPH_RGW_REST_CONN_H
 #define CEPH_RGW_REST_CONN_H
 
+#include <atomic>
 #include "rgw_rest_client.h"
 
 class CephContext;
@@ -15,7 +16,7 @@ class RGWRESTConn
   map<int, string> endpoints;
   RGWAccessKey key;
   string region;
-  atomic_t counter;
+  std::atomic<int> counter;
 public:
 
   RGWRESTConn(CephContext *_cct, RGWRados *store, list<string>& endpoints);

@@ -3,6 +3,7 @@
 #ifndef CEPH_RGW_BUCKET_H
 #define CEPH_RGW_BUCKET_H
 
+#include <atomic>
 #include <string>
 #include <memory>
 
@@ -288,7 +289,7 @@ class RGWDataChangesLog {
 
   Mutex lock;
 
-  atomic_t down_flag;
+  std::atomic<bool> down_flag;
 
   struct ChangeStatus {
     utime_t cur_expiration;

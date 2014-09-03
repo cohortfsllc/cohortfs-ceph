@@ -12,13 +12,15 @@
  *
  */
 
+#include <atomic>
 #include <cassert>
+#include <iostream>
+#include <string>
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 
-#include <iostream>
-#include <string>
 #include <pthread.h>
 #include <errno.h>
 
@@ -52,7 +54,7 @@
 #undef dout_prefix
 #define dout_prefix *_dout << "librados: "
 
-static atomic_t rados_instance;
+std::atomic<uint64_t> rados_instance;
 
 bool librados::RadosClient::ms_get_authorizer(int dest_type,
 					      AuthAuthorizer **authorizer,
@@ -170,7 +172,7 @@ int librados::RadosClient::connect()
     goto out;
 
   err = -ENOMEM;
-  nonce = getpid() + (1000000 * (uint64_t)rados_instance.inc());
+  nonce = getpid() + (1000000 * ++rados_instance);
 
 #ifdef HAVE_XIO
   if (cct->_conf->client_rdma) {

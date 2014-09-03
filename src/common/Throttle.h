@@ -4,10 +4,10 @@
 #ifndef CEPH_THROTTLE_H
 #define CEPH_THROTTLE_H
 
+#include <atomic>
+#include <list>
 #include "Mutex.h"
 #include "Cond.h"
-#include <list>
-#include "include/atomic.h"
 
 class CephContext;
 class PerfCounters;
@@ -16,7 +16,8 @@ class Throttle {
   CephContext *cct;
   std::string name;
   PerfCounters *logger;
-	ceph::atomic_t count, max;
+  std::atomic<int64_t> count;
+  std::atomic<int64_t> max;
   Mutex lock;
   std::list<Cond*> cond;
   bool use_perf;
@@ -28,8 +29,8 @@ public:
 private:
   void _reset_max(int64_t m);
   bool _should_wait(int64_t c) {
-    int64_t m = max.read();
-    int64_t cur = count.read();
+    int64_t m = max;
+    int64_t cur = count;
     return
       m &&
       ((c <= m && cur + c > m) || // normally stay under max
@@ -40,10 +41,10 @@ private:
 
 public:
   int64_t get_current() {
-    return count.read();
+    return count;
   }
 
-  int64_t get_max() { return max.read(); }
+  int64_t get_max() { return max; }
 
   bool wait(int64_t m = 0);
 

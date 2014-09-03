@@ -724,7 +724,7 @@ int Pipe::accept()
       state = STATE_STANDBY;
     } else {
       state = STATE_CLOSED;
-      state_closed.set(1);
+      state_closed = true;
     }
     fault();
     if (queued || replaced)
@@ -745,7 +745,7 @@ int Pipe::accept()
   }
 
   state = STATE_CLOSED;
-  state_closed.set(1);
+  state_closed = true;
   fault();
   return -1;
 }
@@ -1364,7 +1364,7 @@ void Pipe::stop()
   ldout(msgr->cct,10) << "stop" << dendl;
   assert(pipe_lock.is_locked());
   state = STATE_CLOSED;
-  state_closed.set(1);
+  state_closed = true;
   cond.Signal();
   shutdown_socket();
 }
@@ -1526,7 +1526,7 @@ void Pipe::reader()
       pipe_lock.Lock();
       if (state == STATE_CLOSING) {
 	state = STATE_CLOSED;
-	state_closed.set(1);
+	state_closed = true;
       } else {
 	state = STATE_CLOSING;
       }
@@ -1576,7 +1576,7 @@ void Pipe::writer()
       ldout(msgr->cct,20) << "writer writing CLOSE tag" << dendl;
       char tag = CEPH_MSGR_TAG_CLOSE;
       state = STATE_CLOSED;
-      state_closed.set(1);
+      state_closed = true;
       pipe_lock.Unlock();
       if (sd) {
 	int r = ::write(sd, &tag, 1);

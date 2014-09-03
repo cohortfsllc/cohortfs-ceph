@@ -55,7 +55,7 @@ Throttle::Throttle(CephContext *cct, std::string n, int64_t m, bool _use_perf)
 
     logger = b.create_perf_counters();
     cct->get_perfcounters_collection()->add(logger);
-    logger->set(l_throttle_max, max.read());
+    logger->set(l_throttle_max, max);
   }
 }
 
@@ -83,7 +83,7 @@ void Throttle::_reset_max(int64_t m)
     cond.front()->SignalOne();
   if (logger)
     logger->set(l_throttle_max, m);
-  max.set((size_t)m);
+  max = m;
 }
 
 bool Throttle::_wait(int64_t c)
@@ -123,7 +123,7 @@ bool Throttle::_wait(int64_t c)
 
 bool Throttle::wait(int64_t m)
 {
-  if (0 == max.read()) {
+  if (0 == max) {
     return false;
   }
 
@@ -138,31 +138,32 @@ bool Throttle::wait(int64_t m)
 
 int64_t Throttle::take(int64_t c)
 {
-  if (0 == max.read()) {
+  if (0 == max) {
     return 0;
   }
   assert(c >= 0);
   ldout(cct, 10) << "take " << c << dendl;
   {
     Mutex::Locker l(lock);
-    count.add(c);
+    count += c;
   }
   if (logger) {
     logger->inc(l_throttle_take);
     logger->inc(l_throttle_take_sum, c);
-    logger->set(l_throttle_val, count.read());
+    logger->set(l_throttle_val, count);
   }
-  return count.read();
+  return count;
 }
 
 bool Throttle::get(int64_t c, int64_t m)
 {
-  if (0 == max.read()) {
+  if (0 == max) {
     return false;
   }
 
   assert(c >= 0);
-  ldout(cct, 10) << "get " << c << " (" << count.read() << " -> " << (count.read() + c) << ")" << dendl;
+  ldout(cct, 10) << "get " << c << " (" << count << " -> " << (count + c)
+		 << ")" << dendl;
   bool waited = false;
   {
     Mutex::Locker l(lock);
@@ -171,12 +172,12 @@ bool Throttle::get(int64_t c, int64_t m)
       _reset_max(m);
     }
     waited = _wait(c);
-    count.add(c);
+    count += c;
   }
   if (logger) {
     logger->inc(l_throttle_get);
     logger->inc(l_throttle_get_sum, c);
-    logger->set(l_throttle_val, count.read());
+    logger->set(l_throttle_val, count);
   }
   return waited;
 }
@@ -186,7 +187,7 @@ bool Throttle::get(int64_t c, int64_t m)
  */
 bool Throttle::get_or_fail(int64_t c)
 {
-  if (0 == max.read()) {
+  if (0 == max) {
     return true;
   }
 
@@ -199,13 +200,14 @@ bool Throttle::get_or_fail(int64_t c)
     }
     return false;
   } else {
-    ldout(cct, 10) << "get_or_fail " << c << " success (" << count.read() << " -> " << (count.read() + c) << ")" << dendl;
-    count.add(c);
+    ldout(cct, 10) << "get_or_fail " << c << " success (" << count << " -> "
+		   << (count + c) << ")" << dendl;
+    count += c;
     if (logger) {
       logger->inc(l_throttle_get_or_fail_success);
       logger->inc(l_throttle_get);
       logger->inc(l_throttle_get_sum, c);
-      logger->set(l_throttle_val, count.read());
+      logger->set(l_throttle_val, count);
     }
     return true;
   }
@@ -213,25 +215,26 @@ bool Throttle::get_or_fail(int64_t c)
 
 int64_t Throttle::put(int64_t c)
 {
-  if (0 == max.read()) {
+  if (0 == max) {
     return 0;
   }
 
   assert(c >= 0);
-  ldout(cct, 10) << "put " << c << " (" << count.read() << " -> " << (count.read()-c) << ")" << dendl;
+  ldout(cct, 10) << "put " << c << " (" << count << " -> "
+		 << (count - c) << ")" << dendl;
   Mutex::Locker l(lock);
   if (c) {
     if (!cond.empty())
       cond.front()->SignalOne();
-    assert(((int64_t)count.read()) >= c); //if count goes negative, we failed somewhere!
-    count.sub(c);
+    assert(count >= c); //if count goes negative, we failed somewhere!
+    count -= c;
     if (logger) {
       logger->inc(l_throttle_put);
       logger->inc(l_throttle_put_sum, c);
-      logger->set(l_throttle_val, count.read());
+      logger->set(l_throttle_val, count);
     }
   }
-  return count.read();
+  return count;
 }
 
 SimpleThrottle::SimpleThrottle(uint64_t max, bool ignore_enoent)

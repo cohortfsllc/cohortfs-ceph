@@ -933,9 +933,9 @@ int OSD::shutdown()
        ++p) {
     dout(20) << " kicking vol " << p->first << dendl;
     p->second->lock();
-    if (p->second->ref.read() != 1) {
+    if (p->second->ref != 1) {
       derr << "volume " << p->first << " has ref count of "
-	   << p->second->ref.read() << dendl;
+	   << p->second->ref << dendl;
       assert(0);
     }
     p->second->unlock();

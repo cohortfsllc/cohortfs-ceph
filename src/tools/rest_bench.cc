@@ -13,7 +13,6 @@
  */
 
 #include "include/types.h"
-#include "include/atomic.h"
 
 #include "common/obj_bencher.h"
 #include "common/config.h"

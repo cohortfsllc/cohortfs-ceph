@@ -15,6 +15,7 @@
 #ifndef CEPH_OSDVOL_H
 #define CEPH_OSDVOL_H
 
+#include <atomic>
 #include <cassert>
 #include <boost/scoped_ptr.hpp>
 #include <boost/optional.hpp>
@@ -25,7 +26,6 @@
 #include "osd_types.h"
 #include "include/buffer.h"
 #include "include/xlist.h"
-#include "include/atomic.h"
 
 #include "OpRequest.h"
 #include "OSDMap.h"
@@ -221,7 +221,7 @@ public:
   class Mutation {
   public:
     xlist<Mutation*>::item queue_item;
-    int nref;
+    std::atomic<uint64_t> nref;
 
     eversion_t v;
 
@@ -250,7 +250,7 @@ public:
       on_applied(NULL) { }
 
     Mutation *get() {
-      nref++;
+      ++nref;
       return this;
     }
     void put() {
@@ -303,7 +303,7 @@ protected:
    * put_unlock() when done with the current pointer (_most common_).
    */
   Mutex _lock;
-  atomic_t ref;
+  std::atomic<uint64_t> ref;
 
   /**
    * Grabs locks for OpContext, should be cleaned up in close_op_ctx

@@ -12,8 +12,8 @@
  *
  */
 
+#include <atomic>
 #include "common/errno.h"
-#include "include/atomic.h"
 #include "systest_runnable.h"
 #include "systest_settings.h"
 
@@ -47,7 +47,7 @@ static pid_t do_gettid(void)
 #endif
 }
 
-ceph::atomic_t m_highest_id(0);
+std::atomic<uint64_t> m_highest_id(0);
 
 SysTestRunnable::
 SysTestRunnable(int argc, const char **argv)
@@ -56,7 +56,7 @@ SysTestRunnable(int argc, const char **argv)
     m_argv_orig(NULL)
 {
   m_started = false;
-  m_id = m_highest_id.inc();
+  m_id = ++m_highest_id;
   memset(&m_pthread, 0, sizeof(m_pthread));
   m_pid = 0;
   update_id_str(false);

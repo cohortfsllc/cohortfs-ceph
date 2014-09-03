@@ -25,7 +25,6 @@
 #include <unordered_set>
 
 #include "common/Mutex.h"
-#include "include/atomic.h"
 #include "common/Cond.h"
 #include "common/Thread.h"
 #include "common/Throttle.h"
@@ -365,7 +364,7 @@ private:
     if (p == rank_pipe.end())
       return NULL;
     // see lock cribbing in Pipe::fault()
-    if (p->second->state_closed.read())
+    if (p->second->state_closed)
       return NULL;
     return p->second;
   }

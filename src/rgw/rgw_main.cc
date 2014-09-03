@@ -1,5 +1,6 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
+#include <atomic>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -77,7 +78,7 @@ static sig_t sighandler_alrm;
 class RGWProcess;
 
 static int signal_fd[2] = {0, 0};
-static atomic_t disable_signal_fd;
+static std::atomic<bool> disable_signal_fd;
 
 static void signal_shutdown();
 
@@ -324,11 +325,12 @@ struct RGWLoadGenRequest : public RGWRequest {
   string method;
   string resource;
   int content_length;
-  atomic_t *fail_flag;
+  std::atomic<bool> *fail_flag;
 
 
   RGWLoadGenRequest(const string& _m, const  string& _r, int _cl,
-		    atomic_t *ff) : method(_m), resource(_r), content_length(_cl), fail_flag(ff) {}
+		    std::atomic<bool> *ff)
+    : method(_m), resource(_r), content_length(_cl), fail_flag(ff) {}
 };
 
 class RGWLoadGenProcess : public RGWProcess {
@@ -339,7 +341,8 @@ public:
   void run();
   void checkpoint();
   void handle_request(RGWRequest *req);
-  void gen_request(const string& method, const string& resource, int content_length, atomic_t *fail_flag);
+  void gen_request(const string& method, const string& resource,
+		   int content_length, std::atomic<bool> *fail_flag);
 
   void set_access_key(RGWAccessKey& key) { access_key = key; }
 };
@@ -364,7 +367,7 @@ void RGWLoadGenProcess::run()
 
   string buckets[num_buckets];
 
-  atomic_t failed;
+  std::atomic<bool> failed;
 
   for (i = 0; i < num_buckets; i++) {
     buckets[i] = "/loadgen";
@@ -378,7 +381,7 @@ void RGWLoadGenProcess::run()
 
   string *objs = new string[num_objs];
 
-  if (failed.read()) {
+  if (failed) {
     derr << "ERROR: bucket creation failed" << dendl;
     goto done;
   }
@@ -396,7 +399,7 @@ void RGWLoadGenProcess::run()
 
   checkpoint();
 
-  if (failed.read()) {
+  if (failed) {
     derr << "ERROR: bucket creation failed" << dendl;
     goto done;
   }
@@ -427,9 +430,12 @@ done:
   signal_shutdown();
 }
 
-void RGWLoadGenProcess::gen_request(const string& method, const string& resource, int content_length, atomic_t *fail_flag)
+void RGWLoadGenProcess::gen_request(const string& method,
+				    const string& resource, int content_length,
+				    std::atomic<uint64_t> *fail_flag)
 {
-  RGWLoadGenRequest *req = new RGWLoadGenRequest(method, resource, content_length, fail_flag);
+  RGWLoadGenRequest *req = new RGWLoadGenRequest(method, resource,
+						 content_length, fail_flag);
   req->id = ++max_req_id;
   dout(10) << "allocated request req=" << hex << req << dec << dendl;
   req_throttle.get(1);
@@ -438,7 +444,7 @@ void RGWLoadGenProcess::gen_request(const string& method, const string& resource
 
 static void signal_shutdown()
 {
-  if (!disable_signal_fd.read()) {
+  if (!disable_signal_fd) {
     int val = 0;
     int ret = write(signal_fd[0], (char *)&val, sizeof(val));
     if (ret < 0) {
@@ -665,7 +671,7 @@ void RGWLoadGenProcess::handle_request(RGWRequest *r)
     dout(20) << "process_request() returned " << ret << dendl;
 
     if (req->fail_flag) {
-      req->fail_flag->inc();
+      *(req->fail_flag) = true;
     }
   }
 

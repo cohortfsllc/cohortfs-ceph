@@ -15,6 +15,7 @@
 #ifndef CEPH_MSGR_PIPE_H
 #define CEPH_MSGR_PIPE_H
 
+#include <atomic>
 #include "msg_types.h"
 #include "Messenger.h"
 #include "auth/AuthSessionHandler.h"
@@ -145,7 +146,7 @@ class DispatchQueue;
 
     Mutex pipe_lock;
     int state;
-    atomic_t state_closed; // non-zero iff state = STATE_CLOSED
+    std::atomic<bool> state_closed; // non-zero iff state = STATE_CLOSED
 
     // session_security handles any signatures or encryptions required for this pipe's msgs. PLR
 

@@ -26,9 +26,9 @@
 #define dout_subsys ceph_subsys_xio
 
 Mutex mtx;
-atomic_t initialized;
+std::atomic<bool> initialized;
 
-atomic_t XioMessenger::nInstances;
+std::atomic<uint64_t> XioMessenger::nInstances;
 
 struct xio_mempool *xio_msgr_noreg_mpool;
 
@@ -253,10 +253,10 @@ XioMessenger::XioMessenger(CephContext *cct, entity_name_t name,
     magic |= MSG_MAGIC_TRACE_XCON;
 
   /* package init */
-  if (! initialized.read()) {
+  if (!initialized) {
 
     mtx.Lock();
-    if (! initialized.read()) {
+    if (!initialized) {
 
       xio_init();
 
@@ -311,7 +311,7 @@ XioMessenger::XioMessenger(CephContext *cct, entity_name_t name,
       xio_msgr_ops.on_cancel_request = on_cancel_request;
 
       /* mark initialized */
-      initialized.set(1);
+      initialized = true;
     }
     mtx.Unlock();
   }
@@ -319,7 +319,7 @@ XioMessenger::XioMessenger(CephContext *cct, entity_name_t name,
   dispatch_strategy->set_messenger(this);
 
   /* update class instance count */
-  nInstances.inc();
+  ++nInstances;
 
 } /* ctor */
 
@@ -385,7 +385,7 @@ int XioMessenger::session_event(struct xio_session *session,
     xcona.user_context = xcon;
     (void) xio_modify_connection(conn, &xcona, XIO_CONNECTION_ATTR_USER_CTX);
 
-    xcon->connected.set(true);
+    xcon->connected = true;
 
     /* sentinel ref */
     xcon->get(); /* xcon->nref == 1 */
@@ -843,7 +843,7 @@ ConnectionRef XioMessenger::get_connection(const entity_inst_t& dest)
      * we can always set it explicitly */
     xcon->conn = xio_connect(xcon->session, this->portals.get_portal0()->ctx,
 			     0, NULL, xcon);
-    xcon->connected.set(true);
+    xcon->connected = true;
 
     /* sentinel ref */
     xcon->get(); /* xcon->nref == 1 */
@@ -871,5 +871,5 @@ void XioMessenger::try_insert(XioConnection *xcon)
 XioMessenger::~XioMessenger()
 {
   delete dispatch_strategy;
-  nInstances.dec();
+  --nInstances;
 } /* dtor */

@@ -16,6 +16,7 @@
 #ifndef XIO_CONNECTION_H
 #define XIO_CONNECTION_H
 
+#include <atomic>
 #include <boost/intrusive/avl_set.hpp>
 #include <boost/intrusive/list.hpp>
 extern "C" {
@@ -24,7 +25,6 @@ extern "C" {
 #include "XioInSeq.h"
 #include "Connection.h"
 #include "Messenger.h"
-#include "include/atomic.h"
 
 #define XIO_ALL_FEATURES (CEPH_FEATURES_ALL & \
 			  ~CEPH_FEATURE_MSGR_KEEPALIVE2)
@@ -42,13 +42,13 @@ public:
 private:
   XioConnection::type xio_conn_type;
   XioPortal *portal;
-  atomic_t connected;
+  std::atomic<bool> connected;
   entity_inst_t peer;
   struct xio_session *session;
   struct xio_connection	*conn;
   pthread_spinlock_t sp;
-  atomic_t send;
-  atomic_t recv;
+  std::atomic<uint64_t> send;
+  std::atomic<uint64_t> recv;
   uint32_t magic;
   uint32_t special_handling;
 
@@ -89,7 +89,7 @@ private:
   friend class XioMsg;
 
   int on_disconnect_event() {
-    connected.set(false);
+    connected = false;
     pthread_spin_lock(&sp);
     if (!conn)
       this->put();
@@ -116,7 +116,7 @@ public:
       xio_connection_destroy(conn);
   }
 
-  bool is_connected() { return connected.read(); }
+  bool is_connected() { return connected; }
 
   const entity_inst_t& get_peer() const { return peer; }
 

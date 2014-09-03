@@ -17,7 +17,6 @@
 
 
 #include "include/utime.h"
-#include "include/atomic.h"
 #include "common/lru_map.h"
 
 class RGWRados;

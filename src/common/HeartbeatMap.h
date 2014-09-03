@@ -15,13 +15,12 @@
 #ifndef CEPH_HEARTBEATMAP_H
 #define CEPH_HEARTBEATMAP_H
 
-#include <pthread.h>
-
+#include <atomic>
 #include <string>
 #include <list>
 #include <time.h>
+#include <pthread.h>
 
-#include "include/atomic.h"
 
 #include "RWLock.h"
 
@@ -42,7 +41,8 @@ namespace ceph {
 
 struct heartbeat_handle_d {
   std::string name;
-  atomic_t timeout, suicide_timeout;
+  std::atomic<uint64_t> timeout;
+  std::atomic<uint64_t> suicide_timeout;
   time_t grace, suicide_grace;
   std::list<heartbeat_handle_d*>::iterator list_item;
 

@@ -251,7 +251,7 @@ int RGWGC::process()
 
 bool RGWGC::going_down()
 {
-  return (down_flag.read() != 0);
+  return down_flag;
 }
 
 void RGWGC::start_processor()
@@ -262,7 +262,7 @@ void RGWGC::start_processor()
 
 void RGWGC::stop_processor()
 {
-  down_flag.set(1);
+  down_flag = true;
   if (worker) {
     worker->stop();
     worker->join();

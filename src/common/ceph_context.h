@@ -15,11 +15,11 @@
 #ifndef CEPH_CEPHCONTEXT_H
 #define CEPH_CEPHCONTEXT_H
 
+#include <atomic>
 #include <iostream>
 #include <stdint.h>
 
 #include "include/buffer.h"
-#include "include/atomic.h"
 #include "common/cmdparse.h"
 #include "include/Spinlock.h"
 
@@ -56,14 +56,14 @@ public:
   // ref count!
 private:
   ~CephContext();
-  ceph::atomic_t nref;
+  std::atomic<uint64_t> nref;
 public:
   CephContext *get() {
-    nref.inc();
+    ++nref;
     return this;
   }
   void put() {
-    if (nref.dec() == 0)
+    if (--nref == 0)
       delete this;
   }
 

@@ -4,8 +4,8 @@
 #define CEPH_RGW_GC_H
 
 
+#include <atomic>
 #include "include/types.h"
-#include "include/atomic.h"
 #include "include/rados/librados.hpp"
 #include "common/Mutex.h"
 #include "common/Cond.h"
@@ -19,7 +19,7 @@ class RGWGC {
   RGWRados *store;
   int max_objs;
   string *obj_names;
-  atomic_t down_flag;
+  std::atomic<bool> down_flag;
 
   int tag_index(const string& tag);
 

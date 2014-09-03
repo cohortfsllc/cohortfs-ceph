@@ -65,7 +65,7 @@ public:
       rx_buffers_version(0) {
     // we are managed exlusively by ConnectionRef; make it so you can
     //	 ConnectionRef foo = new Connection;
-    nref.set(0);
+    nref = 0;
   }
 
   ~Connection() {

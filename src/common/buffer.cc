@@ -12,6 +12,13 @@
  *
  */
 
+#include <atomic>
+#include <fstream>
+#include <sstream>
+#include <sys/uio.h>
+#include <limits.h>
+#include <errno.h>
+
 
 #include "armor.h"
 #include "common/environment.h"
@@ -19,19 +26,12 @@
 #include "common/safe_io.h"
 #include "common/simple_spin.h"
 #include "common/strtol.h"
-#include "include/atomic.h"
 #include "common/Mutex.h"
 #include "include/types.h"
 #include "include/compat.h"
 #if defined(HAVE_XIO)
 #include "msg/XioMsg.h"
 #endif
-
-#include <errno.h>
-#include <fstream>
-#include <sstream>
-#include <sys/uio.h>
-#include <limits.h>
 
 using std::cerr;
 
@@ -46,46 +46,46 @@ static uint32_t simple_spinlock_t buffer_debug_lock = SIMPLE_SPINLOCK_INITIALIZE
 # define bendl std::endl; }
 #endif
 
-  atomic_t buffer_total_alloc;
+  std::atomic<size_t> buffer_total_alloc;
   bool buffer_track_alloc = get_env_bool("CEPH_BUFFER_TRACK");
 
   void buffer::inc_total_alloc(unsigned len) {
     if (buffer_track_alloc)
-      buffer_total_alloc.add(len);
+      buffer_total_alloc += len;
   }
   void buffer::dec_total_alloc(unsigned len) {
     if (buffer_track_alloc)
-      buffer_total_alloc.sub(len);
+      buffer_total_alloc -= len;
   }
   int buffer::get_total_alloc() {
-    return buffer_total_alloc.read();
+    return buffer_total_alloc;
   }
 
-  atomic_t buffer_cached_crc;
-  atomic_t buffer_cached_crc_adjusted;
+  std::atomic<uint64_t> buffer_cached_crc;
+  std::atomic<uint64_t> buffer_cached_crc_adjusted;
   bool buffer_track_crc = get_env_bool("CEPH_BUFFER_TRACK");
 
   void buffer::track_cached_crc(bool b) {
     buffer_track_crc = b;
   }
   int buffer::get_cached_crc() {
-    return buffer_cached_crc.read();
+    return buffer_cached_crc;
   }
   int buffer::get_cached_crc_adjusted() {
-    return buffer_cached_crc_adjusted.read();
+    return buffer_cached_crc_adjusted;
   }
 
-  atomic_t buffer_c_str_accesses;
+  std::atomic<uint64_t> buffer_c_str_accesses;
   bool buffer_track_c_str = get_env_bool("CEPH_BUFFER_TRACK");
 
   void buffer::track_c_str(bool b) {
     buffer_track_c_str = b;
   }
   int buffer::get_c_str_accesses() {
-    return buffer_c_str_accesses.read();
+    return buffer_c_str_accesses;
   }
 
-  atomic_t buffer_max_pipe_size;
+  std::atomic<size_t> buffer_max_pipe_size;
   int update_max_pipe_size() {
 #ifdef CEPH_HAVE_SETPIPE_SZ
     char buf[32];
@@ -102,18 +102,18 @@ static uint32_t simple_spinlock_t buffer_debug_lock = SIMPLE_SPINLOCK_INITIALIZE
     size_t size = strict_strtol(buf, 10, &err);
     if (!err.empty())
       return -EIO;
-    buffer_max_pipe_size.set(size);
+    buffer_max_pipe_size = size;
 #endif
     return 0;
   }
 
   size_t get_max_pipe_size() {
 #ifdef CEPH_HAVE_SETPIPE_SZ
-    size_t size = buffer_max_pipe_size.read();
+    size_t size = buffer_max_pipe_size;
     if (size)
       return size;
     if (update_max_pipe_size() == 0)
-      return buffer_max_pipe_size.read();
+      return buffer_max_pipe_size;
 #endif
     // this is the max size hardcoded in linux before 2.6.35
     return 65536;
@@ -126,7 +126,7 @@ static uint32_t simple_spinlock_t buffer_debug_lock = SIMPLE_SPINLOCK_INITIALIZE
   public:
     char *data;
     unsigned len;
-    atomic_t nref;
+    std::atomic<uint64_t> nref;
 
     raw(unsigned l) : data(NULL), len(l), nref(0)
     { }
@@ -612,25 +612,25 @@ static uint32_t simple_spinlock_t buffer_debug_lock = SIMPLE_SPINLOCK_INITIALIZE
 
   buffer::ptr::ptr(raw *r) : _raw(r), _off(0), _len(r->len)   // no lock needed; this is an unref raw.
   {
-    r->nref.inc();
+    ++(r->nref);
     bdout << "ptr " << this << " get " << _raw << bendl;
   }
   buffer::ptr::ptr(unsigned l) : _off(0), _len(l)
   {
     _raw = create(l);
-    _raw->nref.inc();
+    ++(_raw->nref);
     bdout << "ptr " << this << " get " << _raw << bendl;
   }
   buffer::ptr::ptr(const char *d, unsigned l) : _off(0), _len(l)    // ditto.
   {
     _raw = copy(d, l);
-    _raw->nref.inc();
+    ++(_raw->nref);
     bdout << "ptr " << this << " get " << _raw << bendl;
   }
   buffer::ptr::ptr(const ptr& p) : _raw(p._raw), _off(p._off), _len(p._len)
   {
     if (_raw) {
-      _raw->nref.inc();
+      ++(_raw->nref);
       bdout << "ptr " << this << " get " << _raw << bendl;
     }
   }
@@ -639,13 +639,13 @@ static uint32_t simple_spinlock_t buffer_debug_lock = SIMPLE_SPINLOCK_INITIALIZE
   {
     assert(o+l <= p._len);
     assert(_raw);
-    _raw->nref.inc();
+    ++(_raw->nref);
     bdout << "ptr " << this << " get " << _raw << bendl;
   }
   buffer::ptr& buffer::ptr::operator= (const ptr& p)
   {
     if (p._raw) {
-      p._raw->nref.inc();
+      ++(p._raw->nref);
       bdout << "ptr " << this << " get " << _raw << bendl;
     }
     buffer::raw *raw = p._raw;
@@ -682,7 +682,7 @@ static uint32_t simple_spinlock_t buffer_debug_lock = SIMPLE_SPINLOCK_INITIALIZE
   {
     if (_raw) {
       bdout << "ptr " << this << " release " << _raw << bendl;
-      if (_raw->nref.dec() == 0) {
+      if (--(_raw->nref) == 0) {
 	//cout << "hosing raw " << (void*)_raw << " len " << _raw->len << std::endl;
 	delete _raw;  // dealloc old (if any)
       }
@@ -695,13 +695,13 @@ static uint32_t simple_spinlock_t buffer_debug_lock = SIMPLE_SPINLOCK_INITIALIZE
   const char *buffer::ptr::c_str() const {
     assert(_raw);
     if (buffer_track_c_str)
-      buffer_c_str_accesses.inc();
+      ++buffer_c_str_accesses;
     return _raw->get_data() + _off;
   }
   char *buffer::ptr::c_str() {
     assert(_raw);
     if (buffer_track_c_str)
-      buffer_c_str_accesses.inc();
+      ++buffer_c_str_accesses;
     return _raw->get_data() + _off;
   }
 
@@ -727,7 +727,7 @@ static uint32_t simple_spinlock_t buffer_debug_lock = SIMPLE_SPINLOCK_INITIALIZE
 
   const char *buffer::ptr::raw_c_str() const { assert(_raw); return _raw->data; }
   unsigned buffer::ptr::raw_length() const { assert(_raw); return _raw->len; }
-  int buffer::ptr::raw_nref() const { assert(_raw); return _raw->nref.read(); }
+  int buffer::ptr::raw_nref() const { assert(_raw); return _raw->nref; }
 
   unsigned buffer::ptr::wasted()
   {
@@ -1545,7 +1545,7 @@ uint32_t buffer::list::crc32c(uint32_t crc) const
 	  // got it already
 	  crc = ccrc.second;
 	  if (buffer_track_crc)
-	    buffer_cached_crc.inc();
+	    ++buffer_cached_crc;
 	} else {
 	  /* If we have cached crc32c(buf, v) for initial value v,
 	   * we can convert this to a different initial value v' by:
@@ -1557,7 +1557,7 @@ uint32_t buffer::list::crc32c(uint32_t crc) const
 	   */
 	  crc = ccrc.second ^ ceph_crc32c(ccrc.first ^ crc, NULL, it->length());
 	  if (buffer_track_crc)
-	    buffer_cached_crc_adjusted.inc();
+	    ++buffer_cached_crc_adjusted;
 	}
       } else {
 	uint32_t base = crc;
@@ -1603,7 +1603,8 @@ void buffer::list::hexdump(std::ostream &out) const
 }
 
 std::ostream& operator<<(std::ostream& out, const buffer::raw &r) {
-  return out << "buffer::raw(" << (void*)r.data << " len " << r.len << " nref " << r.nref.read() << ")";
+  return out << "buffer::raw(" << (void*)r.data << " len " << r.len
+	     << " nref " << r.nref << ")";
 }
 
 #if defined(HAVE_XIO)

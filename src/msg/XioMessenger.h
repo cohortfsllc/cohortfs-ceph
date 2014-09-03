@@ -16,6 +16,7 @@
 #ifndef XIO_MESSENGER_H
 #define XIO_MESSENGER_H
 
+#include <atomic>
 #include "SimplePolicyMessenger.h"
 extern "C" {
 #include "libxio.h"
@@ -23,7 +24,6 @@ extern "C" {
 #include "XioConnection.h"
 #include "XioPortal.h"
 #include "DispatchStrategy.h"
-#include "include/atomic.h"
 #include "common/Thread.h"
 #include "common/Mutex.h"
 #include "include/Spinlock.h"
@@ -31,7 +31,7 @@ extern "C" {
 class XioMessenger : public SimplePolicyMessenger
 {
 private:
-  static atomic_t nInstances;
+  static atomic<uint64_t> nInstances;
   Spinlock conns_sp;
   XioConnection::ConnList conns_list;
   XioConnection::EntitySet conns_entity_map;

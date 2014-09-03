@@ -16,16 +16,15 @@
 #ifndef CEPH_FILESTORE_H
 #define CEPH_FILESTORE_H
 
-#include "include/types.h"
-#include "CollectionIndex.h"
-
+#include <atomic>
 #include <cassert>
 #include <map>
 #include <deque>
 #include <boost/scoped_ptr.hpp>
 #include <fstream>
 #include <unordered_map>
-
+#include "include/types.h"
+#include "CollectionIndex.h"
 
 #include "ObjectStore.h"
 #include "JournalingObjectStore.h"
@@ -595,7 +594,7 @@ private:
   bool m_filestore_do_dump;
   std::ofstream m_filestore_dump;
   JSONFormatter m_filestore_dump_fmt;
-  atomic_t m_filestore_kill_at;
+  std::atomic<int> m_filestore_kill_at;
   bool m_filestore_sloppy_crc;
   int m_filestore_sloppy_crc_block_size;
   uint64_t m_filestore_max_alloc_hint_size;
