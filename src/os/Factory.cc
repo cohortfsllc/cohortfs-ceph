@@ -62,7 +62,7 @@ ObjectStore* ObjectStore::create(CephContext* cct,
 	module = ::dlopen(p.c_str(), RTLD_NOW);
 	if (! module) {
 	  dout(0) << __func__  << " failed to load ObjectStore module "
-		  << bname << " (" << p << ")" << dendl;
+		  << bname << ":\n" << dlerror() << dendl;
 	  return NULL;
 	}
 	dout(11) << "load ObjectStore module " << bname << " (" << p << ")"
