@@ -1,5 +1,6 @@
 /* -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- */
-/* vim: ts=8 sw=2 smarttab */
+/* vim: ts=8 sw=2 smarttab
+*/
 
 #ifndef LIBCEPH_OSD_H
 #define LIBCEPH_OSD_H
@@ -22,10 +23,10 @@ struct libosd {
 
   virtual int read(const char *object, const uuid_t volume,
 		   uint64_t offset, uint64_t length, char *data,
-		   uint64_t *id) = 0;
+		   void *user, uint64_t *id) = 0;
   virtual int write(const char *object, const uuid_t volume,
 		    uint64_t offset, uint64_t length, char *data,
-		    uint64_t *id) = 0;
+		    void *user, uint64_t *id) = 0;
 
 protected: /* must be deleted by libosd_cleanup() */
   virtual ~libosd() {}
@@ -95,7 +96,7 @@ int libosd_get_volume(struct libosd *osd, const char *name, uuid_t uuid);
  */
 int libosd_read(struct libosd *osd, const char *object, const uuid_t volume,
 		uint64_t offset, uint64_t length, char *data,
-		uint64_t *id, void *user);
+		void *user, uint64_t *id);
 
 /**
  * Write to an object asynchronously. 
@@ -115,7 +116,7 @@ int libosd_read(struct libosd *osd, const char *object, const uuid_t volume,
  */
 int libosd_write(struct libosd *osd, const char *object, const uuid_t volume,
 		 uint64_t offset, uint64_t length, char *data,
-		 uint64_t *id, void *user);
+		 void *user, uint64_t *id);
 
 #ifdef __cplusplus
 } /* extern "C" */

@@ -3,6 +3,7 @@
 
 #include <signal.h>
 #include <stdio.h>
+#include <pthread.h>
 
 #include "libosd/ceph_osd.h"
 
@@ -11,6 +12,7 @@ struct io_completion {
   pthread_mutex_t mutex;
   pthread_cond_t cond;
   int result;
+  int done;
 };
 
 void write_completion(uint64_t id, int result, uint64_t length, void *user)
@@ -19,6 +21,7 @@ void write_completion(uint64_t id, int result, uint64_t length, void *user)
 
   pthread_mutex_lock(&io->mutex);
   io->result = result;
+  io->done = 1;
   pthread_cond_signal(&io->cond);
   pthread_mutex_unlock(&io->mutex);
 }
@@ -49,11 +52,19 @@ int test_single()
   } else {
     struct io_completion io = {
       .mutex = PTHREAD_MUTEX_INITIALIZER,
-      .cond = PTHREAD_COND_INITIALIZER
+      .cond = PTHREAD_COND_INITIALIZER,
+      .done = 0
     };
+    uint64_t id;
     char buf[64] = {};
-    r = libosd_write(osd, "obj", volume, 0, sizeof(buf), buf, &io);
+    r = libosd_write(osd, "obj", volume, 0, sizeof(buf), buf, &io, &id);
     fprintf(stderr, "libosd_write() returned %d\n", r);
+
+    pthread_mutex_lock(&io.mutex);
+    while (!io.done)
+      pthread_cond_wait(&io.cond, &io.mutex);
+    pthread_mutex_unlock(&io.mutex);
+    fprintf(stderr, "write_callback() got result %d\n", io.result);
   }
 
   libosd_join(osd);

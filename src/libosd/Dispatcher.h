@@ -14,7 +14,7 @@ class OSD;
 class LibOSDDispatcher : public Dispatcher {
 public:
   struct OnReply {
-    virtual ~OnReply();
+    virtual ~OnReply() {}
     virtual void on_reply(ceph_tid_t id, Message *m) = 0;
     virtual void on_failure(ceph_tid_t id, int r) = 0;
   };
