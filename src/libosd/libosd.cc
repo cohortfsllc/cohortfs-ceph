@@ -450,6 +450,9 @@ int LibOSD::write(const char *object, const uuid_t volume,
 
 struct libosd* libosd_init(const struct libosd_init_args *args)
 {
+  if (args == NULL)
+    return NULL;
+
   LibOSD *osd;
   {
     using namespace global;
@@ -543,7 +546,7 @@ int libosd_read(struct libosd *osd, const char *object, const uuid_t volume,
 		void *user, uint64_t *id)
 {
   try {
-    return osd->read(object, volume, offset, length, data, id);
+    return osd->read(object, volume, offset, length, data, user, id);
   } catch (std::exception &e) {
     derr << "libosd_read caught exception " << e.what() << dendl;
     return -EFAULT;
@@ -555,7 +558,7 @@ int libosd_write(struct libosd *osd, const char *object, const uuid_t volume,
 		 void *user, uint64_t *id)
 {
   try {
-    return osd->write(object, volume, offset, length, data, id);
+    return osd->write(object, volume, offset, length, data, user, id);
   } catch (std::exception &e) {
     derr << "libosd_write caught exception " << e.what() << dendl;
     return -EFAULT;
