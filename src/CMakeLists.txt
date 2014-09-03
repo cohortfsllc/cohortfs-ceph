@@ -389,9 +389,6 @@ set(os_mon_files
   )
 add_library(os_mon_objs OBJECT ${os_mon_files})
 add_library(os ${CEPH_SHARED} ${libos_srcs})
-if(${HAVE_LIBAIO})
-  target_link_libraries(os PRIVATE aio)
-endif(${HAVE_LIBAIO})
 target_link_libraries(os PRIVATE leveldb snappy boost_filesystem)
 if(${ENABLE_SHARED})
   set_target_properties(os PROPERTIES OUTPUT_NAME ceph-os
@@ -411,6 +408,9 @@ set(os_filestore_files
 
 add_library(os_filestore_objs OBJECT ${os_filestore_files})
 add_library(os_filestore SHARED $<TARGET_OBJECTS:os_filestore_objs>)
+if(${HAVE_LIBAIO})
+  target_link_libraries(os_filestore aio)
+endif(${HAVE_LIBAIO})
 target_link_libraries(os_filestore os)
 set_target_properties(os_filestore PROPERTIES VERSION "1.0.0" SOVERSION "1")
 install(TARGETS os_filestore DESTINATION lib/os-modules)
