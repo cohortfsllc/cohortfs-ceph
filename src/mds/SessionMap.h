@@ -242,7 +242,8 @@ public:	 // i am lazy
 
 public:
   SessionMap(MDS *m) : mds(m),
-		       version(0), projected(0), committing(0), committed(0)
+		       version(0), projected(0), committing(0), committed(0),
+		       commit_waiters()
   { }
 
   //for the dencoder
