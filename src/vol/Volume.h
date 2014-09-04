@@ -144,6 +144,8 @@ public:
   virtual int read(const object_t& oid, uint64_t off, uint64_t len,
 		   bufferlist *pbl, int flags, Context *onfinish,
 		   Objecter *objecter) = 0;
+  virtual int read_full(const object_t& oid, bufferlist *pbl, int flags,
+			Context *onfinish, Objecter *objecter) = 0;
   virtual int remove(const object_t& oid, utime_t mtime, int flags,
 		     Context *onack, Context *oncommit,
 		     Objecter *objecter) = 0;

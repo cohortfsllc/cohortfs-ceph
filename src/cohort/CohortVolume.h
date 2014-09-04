@@ -164,6 +164,12 @@ protected:
   virtual int read(const object_t& oid, uint64_t off, uint64_t len,
 		   bufferlist *pbl, int flags, Context *onfinish,
 		   Objecter *objecter);
+  virtual int read_full(const object_t& oid, bufferlist *pbl, int flags,
+			Context *onfinish, Objecter *objecter) {
+    /* NB. SIZE_MAX == ObjectStore::read_entire */
+    return read(oid, 0, SIZE_MAX, pbl, flags, onfinish,
+		objecter);
+  }
   virtual int remove(const object_t& oid, utime_t mtime, int flags,
 		     Context *onack, Context *oncommit, Objecter *objecter);
   virtual int stat(const object_t& oid, uint64_t *psize,
