@@ -145,7 +145,7 @@ void Journaler::read_head(Context *on_finish, bufferlist *bl)
   assert(state == STATE_READHEAD || state == STATE_REREADHEAD);
 
   object_t oid = file_object_t(ino, 0);
-  objecter->read_full(oid, volume, bl, 0, on_finish);
+  volume->read_full(oid, bl, 0, on_finish, objecter);
 }
 
 /**
@@ -236,8 +236,14 @@ void Journaler::probe(Context *finish, uint64_t *end)
 {
   ldout(cct, 1) << "probing for end of the log" << dendl;
   assert(state == STATE_PROBING || state == STATE_REPROBING);
+#if 0
   // probe the log
   filer.probe(ino, &layout, write_pos, end, 0, true, 0, finish);
+#else
+  object_t oid = file_object_t(ino, 0);
+  volume->stat(oid, end, NULL, CEPH_OSD_FLAG_RWORDERED, 
+	       finish, objecter);
+#endif
 }
 
 void Journaler::reprobe(Context *finish)
@@ -345,8 +351,8 @@ void Journaler::write_head(Context *oncommit)
   ::encode(last_written, bl);
 
   object_t oid = file_object_t(ino, 0);
-  objecter->write_full(oid, volume, bl, ceph_clock_now(cct), 0,
-		       NULL, new C_WriteHead(this, last_written, oncommit));
+  volume->write_full(oid, bl, ceph_clock_now(cct), 0,
+		       NULL, new C_WriteHead(this, last_written, oncommit), objecter);
 }
 
 void Journaler::_finish_write_head(int r, Header &wrote, Context *oncommit)
@@ -528,8 +534,14 @@ void Journaler::_do_flush(unsigned amount)
     write_buf.splice(0, len, &write_bl);
   }
 
+#if 0
   filer.write(ino, volume, &layout, flush_pos, len, write_bl, ceph_clock_now(cct),
 	      0, NULL, onsafe);
+#else
+  object_t oid = file_object_t(ino, 0);
+  volume->write(oid, flush_pos, len, write_bl, ceph_clock_now(cct), 0,
+		NULL, onsafe, objecter);
+#endif
 
   flush_pos += len;
   assert(write_buf.length() == write_pos - flush_pos);
@@ -644,7 +656,13 @@ void Journaler::_issue_prezero()
       ldout(cct, 10) << "_issue_prezero zeroing " << prezeroing_pos << "~" << len << " (partial period)" << dendl;
     }
     Context *c = new C_Journaler_Prezero(this, prezeroing_pos, len);
+#if 0
     filer.zero(ino, volume, &layout, prezeroing_pos, len, ceph_clock_now(cct), 0, NULL, c);
+#else
+    object_t oid = file_object_t(ino, 0);
+    volume->zero(oid, prezeroing_pos, len, ceph_clock_now(cct), 0,
+		 NULL, c, objecter);
+#endif
     prezeroing_pos += len;
   }
 }
@@ -810,7 +828,12 @@ void Journaler::_issue_read(uint64_t len)
     if (l > len)
       l = len;
     C_Read *c = new C_Read(this, requested_pos);
+#if 0
     filer.read(ino, volume, &layout, requested_pos, l, &c->bl, 0, c);
+#else
+    object_t oid = file_object_t(ino, 0);
+    volume->read(oid, requested_pos, l, &c->bl, 0, c, objecter);
+#endif
     requested_pos += l;
     len -= l;
   }
@@ -1005,10 +1028,17 @@ void Journaler::trim()
 	   << dendl;
 
   // delete range of objects
+#if 0
   uint64_t first = trimming_pos / period;
   uint64_t num = (trim_to - trimming_pos) / period;
   filer.purge_range(ino, &layout, first, num, ceph_clock_now(cct), 0,
 		    new C_Trim(this, trim_to));
+#else
+  object_t oid = file_object_t(ino, 0);
+  // XXX: does this release storage?  Maybe need volume->purge_range ?
+  volume->zero(oid, trimming_pos, trim_to - trimming_pos, ceph_clock_now(cct),
+	       0, NULL, new C_Trim(this, trim_to), objecter);
+#endif
   trimming_pos = trim_to;
 }
 

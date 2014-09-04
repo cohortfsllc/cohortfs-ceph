@@ -58,7 +58,7 @@
 #define CEPH_JOURNALER_H
 
 #include "Objecter.h"
-#include "Filer.h"
+// #include "Filer.h"
 
 #include <list>
 #include <map>
@@ -149,7 +149,7 @@ private:
 
   const char *magic;
   Objecter *objecter;
-  Filer filer;
+//  Filer filer;
 
   PerfCounters *logger;
   int logger_key_lat;
@@ -283,7 +283,9 @@ public:
   Journaler(inodeno_t ino_, VolumeRef vol_, const char *mag, Objecter *obj, PerfCounters *l, int lkey, SafeTimer *tim) :
     cct(obj->cct), last_written(mag), last_committed(mag),
     ino(ino_), volume(vol_), readonly(true), magic(mag),
-    objecter(obj), filer(objecter), logger(l), logger_key_lat(lkey),
+    objecter(obj),
+//filer(objecter),
+logger(l), logger_key_lat(lkey),
     timer(tim), delay_flush_event(0),
     state(STATE_UNDEF), error(0),
     prezeroing_pos(0), prezero_pos(0), write_pos(0), flush_pos(0), safe_pos(0),
