@@ -88,12 +88,12 @@ void Dumper::dump(const char *dump_file)
 
   cout << "journal is " << start << "~" << len << std::endl;
 
-  Filer filer(objecter);
   bufferlist bl;
 
   lock.Lock();
-  filer.read(ino, volume, &journaler->get_layout(),
-	     start, len, &bl, 0, new C_SafeCond(&localLock, &cond, &done));
+  object_t oid = file_object_t(ino, 0);
+  volume->read(oid, start, len, &bl, 0,
+	       new C_SafeCond(&localLock, &cond, &done), objecter);
   lock.Unlock();
   localLock.Lock();
   while (!done)
@@ -188,7 +188,6 @@ void Dumper::undump(const char *dump_file)
   lock.Unlock();
 
   // read
-  Filer filer(objecter);
   uint64_t pos = start;
   uint64_t left = len;
   while (left > 0) {
@@ -197,9 +196,9 @@ void Dumper::undump(const char *dump_file)
     uint64_t l = MIN(left, 1024*1024);
     j.read_fd(fd, l);
     cout << " writing " << pos << "~" << l << std::endl;
-    filer.write(ino, volume, &h.layout, pos, l, j,
+    volume->write(oid, pos, l, j,
 		ceph_clock_now(g_ceph_context), 0, NULL,
-		new C_SafeCond(&lock, &cond, &done));
+		new C_SafeCond(&lock, &cond, &done), objecter);
 
     lock.Lock();
     while (!done)
