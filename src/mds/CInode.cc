@@ -805,8 +805,9 @@ void CInode::store(Context *fin)
   object_t oid = CInode::get_object_name(ino(), frag_t(), ".inode");
   VolumeRef mvol(mdcache->mds->get_metadata_volume());
 
-  mdcache->mds->objecter->mutate(oid, mvol, m, ceph_clock_now(g_ceph_context), 0,
-				 NULL, new C_Inode_Stored(this, get_version(), fin) );
+  mvol->mutate_md(oid, m, ceph_clock_now(g_ceph_context), 0, NULL,
+		  new C_Inode_Stored(this, get_version(), fin),
+		  mdcache->mds->objecter);
 }
 
 void CInode::_stored(version_t v, Context *fin)
@@ -837,17 +838,18 @@ void CInode::fetch(Context *fin)
 
   object_t oid = CInode::get_object_name(ino(), frag_t(), "");
   VolumeRef volume(mdcache->mds->get_metadata_volume());
+  assert(!!volume);
 
   ObjectOperation rd;
   rd.getxattr("inode", &c->bl, NULL);
 
-  mdcache->mds->objecter->read(oid, volume, rd,
-			       (bufferlist*)NULL, 0, gather.new_sub());
+  volume->md_read(oid, rd, (bufferlist*)NULL, 0, gather.new_sub(),
+		  mdcache->mds->objecter);
 
   // read from separate object too
   object_t oid2 = CInode::get_object_name(ino(), frag_t(), ".inode");
-  mdcache->mds->objecter->read(oid2, volume, 0, 0, &c->bl2,
-			       0, gather.new_sub());
+  volume->read(oid2, 0, 0, &c->bl2, 0, gather.new_sub(),
+               mdcache->mds->objecter);
 
   gather.activate();
 }
@@ -928,6 +930,8 @@ void CInode::store_backtrace(Context *fin)
   else
     mvol = volume;
 
+  assert(!!mvol);
+
   inode_backtrace_t bt;
   build_backtrace(volume->uuid, bt);
   bufferlist bl;
@@ -942,16 +946,14 @@ void CInode::store_backtrace(Context *fin)
 					      fin);
 
   if (!state_test(STATE_DIRTYPOOL) || inode.old_volumes.empty()) {
-    mdcache->mds->objecter->mutate(oid, volume, op,
-				   ceph_clock_now(g_ceph_context), 0,
-				   NULL, fin2);
+    volume->mutate_md(oid, op, ceph_clock_now(g_ceph_context), 0, NULL,
+                      fin2, mdcache->mds->objecter);
     return;
   }
 
   C_GatherBuilder gather(fin2);
-  mdcache->mds->objecter->mutate(oid, volume, op,
-				 ceph_clock_now(g_ceph_context),
-				 0, NULL, gather.new_sub());
+  volume->mutate_md(oid, op, ceph_clock_now(g_ceph_context), 0, NULL,
+		    gather.new_sub(), mdcache->mds->objecter);
 
   set<uuid_d> old_volumes;
   for (vector<uuid_d>::iterator p = inode.old_volumes.begin();
@@ -966,9 +968,8 @@ void CInode::store_backtrace(Context *fin)
 
     VolumeRef ovol;
     mdcache->mds->osdmap->find_by_uuid(*p, ovol);
-    mdcache->mds->objecter->mutate(oid, ovol, op,
-				   ceph_clock_now(g_ceph_context),
-				   0, NULL, gather.new_sub());
+    ovol->mutate_md(oid, op, ceph_clock_now(g_ceph_context), 0, NULL,
+		 gather.new_sub(), mdcache->mds->objecter);
     old_volumes.insert(*p);
   }
   gather.activate();
