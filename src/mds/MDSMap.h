@@ -259,6 +259,7 @@ public:
     if (!metadata_volume) {
 	osdmap->find_by_uuid(metadata_uuid, metadata_volume);
     }
+    assert(!!metadata_volume);
     return metadata_volume;
   }
   uuid_d get_metadata_uuid() const {
