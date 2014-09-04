@@ -31,7 +31,7 @@ enum {
 
 Throttle::Throttle(CephContext *cct, std::string n, int64_t m, bool _use_perf)
   : cct(cct), name(n), logger(NULL),
-		max(m),
+		count(0), max(m),
     use_perf(_use_perf)
 {
   assert(m >= 0);
