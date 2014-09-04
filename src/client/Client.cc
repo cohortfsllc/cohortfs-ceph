@@ -5449,6 +5449,10 @@ int Client::uninline_data(Inode *in, Context *onfinish)
   create_ops.create(false);
   VolumeRef mvol;
   objecter->osdmap->find_by_uuid(in->layout.fl_uuid, mvol);
+  if (!mvol) {
+    onfinish->complete(-ENXIO);
+    return 0;
+  }
 
   objecter->mutate(oid,
 		   mvol,
@@ -5752,6 +5756,12 @@ int Client::_read_sync(Fh *f, uint64_t off, uint64_t len, bufferlist *bl,
 
   ldout(cct, 10) << "_read_sync " << *in << " " << off << "~" << len << dendl;
 
+  VolumeRef mvol;
+  objecter->osdmap->find_by_uuid(in->layout.fl_uuid, mvol);
+  if (!mvol) {
+    return -ENXIO;
+  }
+	
   Mutex flock;
   Cond cond;
   while (left > 0) {
@@ -5761,8 +5771,6 @@ int Client::_read_sync(Fh *f, uint64_t off, uint64_t len, bufferlist *bl,
     bufferlist tbl;
 
     int wanted = left;
-    VolumeRef mvol;
-    objecter->osdmap->find_by_uuid(in->layout.fl_uuid, mvol);
     filer->read_trunc(in->ino, mvol, &in->layout, pos, left, &tbl, 0,
 		      in->truncate_size, in->truncate_seq,
 		      onfinish);
@@ -5986,6 +5994,10 @@ int Client::_write(Fh *f, int64_t offset, uint64_t size, const char *buf)
     Context *onsafe = new C_Client_SyncCommit(this, in);
     VolumeRef mvol;
     objecter->osdmap->find_by_uuid(in->layout.fl_uuid, mvol);
+    if (!mvol) {
+      r = -ENXIO;
+      goto done;
+    }
 
     unsafe_sync_write++;
     get_cap_ref(in, CEPH_CAP_FILE_BUFFER);  // released by onsafe callback
@@ -7735,6 +7747,8 @@ int Client::ll_read_block(Inode *in, uint64_t blockid,
   bufferlist bl;
   VolumeRef mvol;
   objecter->osdmap->find_by_uuid(in->layout.fl_uuid, mvol);
+  if (!mvol)
+    return -ENXIO;
 
   objecter->read(oid,
 		 mvol,
@@ -7802,6 +7816,8 @@ int Client::ll_write_block(Inode *in, uint64_t blockid,
   client_lock.Lock();
   VolumeRef mvol;
   objecter->osdmap->find_by_uuid(layout->fl_uuid, mvol);
+  if (!mvol)
+    return -ENXIO;
 
   objecter->write(oid,
 		  mvol,
@@ -7958,6 +7974,10 @@ int Client::_fallocate(Fh *fh, int mode, int64_t offset, int64_t length)
       Context *onsafe = new C_Client_SyncCommit(this, in);
       VolumeRef mvol;
       objecter->osdmap->find_by_uuid(in->layout.fl_uuid, mvol);
+      if (!mvol) {
+	r = -ENXIO;
+	goto done;
+      }
 
       unsafe_sync_write++;
       get_cap_ref(in, CEPH_CAP_FILE_BUFFER);
