@@ -7628,7 +7628,8 @@ void MDCache::do_open_ino(inodeno_t ino, open_ino_info_t& info, int err)
   } else {
     assert(!info.ancestors.empty());
     info.checking = mds->get_nodeid();
-    open_ino(info.ancestors[0].dirino, mds->get_metadata_volume(),
+    VolumeRef mvol(mds->get_metadata_volume());
+    open_ino(info.ancestors[0].dirino, mvol,
 	     new C_MDC_OpenInoParentOpened(this, ino), info.want_replica);
   }
 }
