@@ -965,7 +965,7 @@ int CohortVolume::zero(const object_t& oid, uint64_t off, uint64_t len,
   assert(erasure.m == 0);
 
   for (size_t stripe = 0; stripe < erasure.k; ++stripe) {
-    vector<OSDOp> ops;
+    vector<OSDOp> ops(1);
     ops[0].op.op = CEPH_OSD_OP_ZERO;
     ops[0].op.extent.offset = off;
     ops[0].op.extent.length = len;
