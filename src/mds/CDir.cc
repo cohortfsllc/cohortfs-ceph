@@ -1269,7 +1269,7 @@ void CDir::_tmap_fetch(const string& want_dn)
   VolumeRef volume(cache->mds->get_metadata_volume());
   ObjectOperation rd;
   rd.tmap_get(&fin->bl, NULL);
-  cache->mds->objecter->read(oid, volume, rd, NULL, 0, fin);
+  volume->md_read(oid, rd, NULL, 0, fin, cache->mds->objecter);
 }
 
 void CDir::_tmap_fetched(bufferlist& bl, const string& want_dn, int r)
@@ -1327,7 +1327,7 @@ void CDir::_omap_fetch(const string& want_dn)
   ObjectOperation rd;
   rd.omap_get_header(&fin->hdrbl, &fin->ret1);
   rd.omap_get_vals("", "", (uint64_t)-1, &fin->omap, &fin->ret2);
-  cache->mds->objecter->read(oid, volume, rd, NULL, 0, fin);
+  volume->md_read(oid, rd, NULL, 0, fin, cache->mds->objecter);
 }
 
 void CDir::_omap_fetched(bufferlist& hdrbl, map<string, bufferlist>& omap,
@@ -1511,9 +1511,8 @@ void CDir::_omap_commit(int op_prio)
       if (!to_remove.empty())
 	op.omap_rm_keys(to_remove);
 
-      cache->mds->objecter->mutate(oid, volume, op,
-				   ceph_clock_now(g_ceph_context),
-				   0, NULL, gather.new_sub());
+      volume->mutate_md(oid, op, ceph_clock_now(g_ceph_context), 0, NULL,
+			gather.new_sub(), cache->mds->objecter);
 
       write_size = 0;
       to_set.clear();
@@ -1543,9 +1542,8 @@ void CDir::_omap_commit(int op_prio)
   if (!to_remove.empty())
     op.omap_rm_keys(to_remove);
 
-  cache->mds->objecter->mutate(oid, volume, op,
-			       ceph_clock_now(g_ceph_context),
-			       0, NULL, gather.new_sub());
+  volume->mutate_md(oid, op, ceph_clock_now(g_ceph_context), 0, NULL,
+		    gather.new_sub(), cache->mds->objecter);
 
   gather.activate();
 }
