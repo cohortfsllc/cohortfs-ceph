@@ -118,6 +118,7 @@ if (HAVE_XIO)
     msg/XioConnection.cc
     msg/XioMessenger.cc
     msg/XioMsg.cc
+    msg/XioPool.cc
     msg/XioPortal.cc
     )
 endif (HAVE_XIO)
