@@ -260,7 +260,7 @@ if(${WITH_PROFILER})
   target_link_libraries(common PRIVATE profiler)
 endif(${WITH_PROFILER})
 
-target_link_libraries(common PRIVATE json_spirit ${CRYPTO_LIBS} rt ${Boost_LIBRARIES} ${EXTRALIBS})
+target_link_libraries(common PRIVATE erasure_code json_spirit ${CRYPTO_LIBS} rt ${Boost_LIBRARIES} ${EXTRALIBS})
 
 set(libglobal_srcs
   global/global_init.cc
@@ -520,6 +520,7 @@ if(${WITH_MDS})
   install(TARGETS ceph-mds DESTINATION bin)
 endif(${WITH_MDS})
 
+add_subdirectory(erasure-code)
 
 if (WITH_TESTS)
   add_subdirectory(gtest)

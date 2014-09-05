@@ -1,7 +1,7 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
- * Ceph - scalable distributed file system
+ * Ceph distributed storage system
  *
  * Copyright (C) 2013 Cloudwatt <libre.licensing@cloudwatt.com>
  *
@@ -142,9 +142,9 @@
 
 #include <map>
 #include <set>
+#include <vector>
+#include <memory>
 #include "include/buffer.h"
-
-class CrushWrapper;
 
 using namespace std;
 
@@ -153,24 +153,6 @@ namespace ceph {
   class ErasureCodeInterface {
   public:
     virtual ~ErasureCodeInterface() {}
-
-    /**
-     * Create a new ruleset in **crush** under the name **name**,
-     * unless it already exists.
-     *
-     * Return the ruleset number that was created on success. If a
-     * ruleset **name** already exists, return -EEXISTS, otherwise
-     * return a negative value indicating an error with a semantic
-     * defined by the implementation.
-     *
-     * @param [in] name of the ruleset to create
-     * @param [in] crush crushmap in which the ruleset is created
-     * @param [out] ss contains informative messages when an error occurs
-     * @return **0** on success or a negative errno on error.
-     */
-    virtual int create_ruleset(const string &name,
-			       CrushWrapper &crush,
-			       ostream *ss) const = 0;
 
     /**
      * Return the number of chunks created by a call to the **encode**
@@ -196,6 +178,18 @@ namespace ceph {
     virtual unsigned int get_data_chunk_count() const = 0;
 
     /**
+     * Return the number of coding chunks created by a call to the
+     * **encode** method. The coding chunks are used to recover from
+     * the loss of one or more chunks. If there is one coding chunk,
+     * it is possible to recover from the loss of exactly one
+     * chunk. If there are two coding chunks, it is possible to
+     * recover from the loss of at most two chunks, etc.
+     *
+     * @return the number of coding chunks created by encode()
+     */
+    virtual unsigned int get_coding_chunk_count() const = 0;
+
+    /**
      * Return the size (in bytes) of a single chunk created by a call
      * to the **decode** method. The returned size multiplied by
      * **get_chunk_count()** is greater or equal to **object_size**.
@@ -209,7 +203,7 @@ namespace ceph {
      * The byte found at offset **B** of the original object is mapped
      * to chunk **B / get_chunk_size()** at offset **B % get_chunk_size()**.
      *
-     * @param [in] object_size the number of bytes of the object to **encode()**
+     * @param [in] object_size number of bytes of the object to **encode()**
      * @return the size (in bytes) of a single chunk created by **encode()**
      */
     virtual unsigned int get_chunk_size(unsigned int object_size) const = 0;
@@ -284,7 +278,7 @@ namespace ceph {
      * The **encoded** map may contain pointers to data stored in
      * the **in** parameter. If the caller modifies the content of
      * **in** after calling the encode method, it may have a side
-     * effect on the content of **encoded**.
+     * effect on the content of **encoded**. 
      *
      * The **encoded** map may contain pointers to buffers allocated
      * by the encode method. They will be freed when **encoded** is
@@ -300,6 +294,10 @@ namespace ceph {
     virtual int encode(const set<int> &want_to_encode,
 		       const bufferlist &in,
 		       map<int, bufferlist> *encoded) = 0;
+
+
+    virtual int encode_chunks(const set<int> &want_to_encode,
+			      map<int, bufferlist> *encoded) = 0;
 
     /**
      * Decode the **chunks** and store at least **want_to_read**
@@ -338,6 +336,45 @@ namespace ceph {
 		       const map<int, bufferlist> &chunks,
 		       map<int, bufferlist> *decoded) = 0;
 
+    virtual int decode_chunks(const set<int> &want_to_read,
+			      const map<int, bufferlist> &chunks,
+			      map<int, bufferlist> *decoded) = 0;
+
+    /**
+     * Return the ordered list of chunks or an empty vector
+     * if no remapping is necessary.
+     *
+     * By default encoding an object with K=2,M=1 will create three
+     * chunks, the first two are data and the last one coding. For
+     * a 10MB object, it would be:
+     *
+     *	 chunk 0 for the first 5MB
+     *	 chunk 1 for the last 5MB
+     *	 chunk 2 for the 5MB coding chunk
+     *
+     * The plugin may, however, decide to remap them in a different
+     * order, such as:
+     *
+     *	 chunk 0 for the last 5MB
+     *	 chunk 1 for the 5MB coding chunk
+     *	 chunk 2 for the first 5MB
+     *
+     * The vector<int> remaps the chunks so that the first chunks are
+     * data, in sequential order, and the last chunks contain parity
+     * in the same order as they were output by the encoding function.
+     *
+     * In the example above the mapping would be:
+     *
+     *	 [ 1, 2, 0 ]
+     *
+     * The returned vector<int> only contains information for chunks
+     * that need remapping. If no remapping is necessary, the
+     * vector<int> is empty.
+     *
+     * @return vector<int> list of indices of chunks to be remapped
+     */
+    virtual const vector<int> &get_chunk_mapping() const = 0;
+
     /**
      * Decode the first **get_data_chunk_count()** **chunks** and
      * concatenate them them into **decoded**.
@@ -348,18 +385,8 @@ namespace ceph {
      * @param [out] decoded concatenante of the data chunks
      * @return **0** on success or a negative errno on error.
      */
-    int decode_concat(const map<int, bufferlist> &chunks,
-		      bufferlist *decoded) {
-      set<int> want_to_read;
-      for (unsigned int i = 0; i < get_data_chunk_count(); i++)
-	want_to_read.insert(i);
-      map<int, bufferlist> decoded_map;
-      int r = decode(want_to_read, chunks, &decoded_map);
-      if (r == 0)
-	for (unsigned int i = 0; i < get_data_chunk_count(); i++)
-	  decoded->claim_append(decoded_map[i]);
-      return r;
-    }
+    virtual int decode_concat(const map<int, bufferlist> &chunks,
+			      bufferlist *decoded) = 0;
   };
 
   typedef std::shared_ptr<ErasureCodeInterface> ErasureCodeInterfaceRef;
