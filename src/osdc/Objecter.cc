@@ -706,6 +706,7 @@ Objecter::OSDSession *Objecter::get_session(int osd)
   OSDSession *s = new OSDSession(osd);
   osd_sessions[osd] = s;
   s->con = messenger->get_connection(osdmap->get_inst(osd));
+  s->con->get();
   logger->inc(l_osdc_osd_session_open);
   logger->inc(l_osdc_osd_sessions, osd_sessions.size());
   return s;
@@ -718,8 +719,10 @@ void Objecter::reopen_session(OSDSession *s)
   if (s->con) {
     messenger->mark_down(s->con);
     logger->inc(l_osdc_osd_session_close);
+    s->con->put();
   }
   s->con = messenger->get_connection(inst);
+  s->con->get();
   s->incarnation++;
   logger->inc(l_osdc_osd_session_open);
 }
@@ -730,6 +733,13 @@ void Objecter::close_session(OSDSession *s)
   if (s->con) {
     messenger->mark_down(s->con);
     logger->inc(l_osdc_osd_session_close);
+  }
+  for (xlist<Op*>::iterator p = s->ops.begin(); !p.end();) {
+    Op *op = *p;
+    ++p;
+    assert(!op->session || op->session == s);
+    op->session_item.remove_myself();	// yes?
+    op->session = 0;
   }
   s->ops.clear();
   s->linger_ops.clear();
@@ -1209,6 +1219,11 @@ int Objecter::recalc_op_target(Op *op)
     }
   }
   return r;
+#else
+    ldout(cct, 0) << "!!! recalc_op_target tid " << op->tid
+		   << " volume " << op->target.volume
+		   << " oid " << op->target.oid
+		   << " osd " << op->target.osd << dendl;
 #endif
   return 0;
 }
@@ -1232,6 +1247,11 @@ bool Objecter::recalc_linger_op_target(LingerOp *linger_op)
     }
   }
   return r;
+#else
+    ldout(cct, 0) << "!!! recalc_linger_op_target tid " << linger_op->linger_id
+		   << " volume " << linger_op->target.volume
+		   << " oid " << linger_op->target.oid
+		   << " osd " << linger_op->target.osd << dendl;
 #endif
   return 0;
 }
