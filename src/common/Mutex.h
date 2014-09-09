@@ -60,7 +60,8 @@ public:
   ~Mutex()
     {
       assert(nlock == 0);
-      pthread_mutex_destroy(&_m);
+      int r = pthread_mutex_destroy(&_m);
+      assert(r == 0);
     }
   bool is_locked() const {
     return (nlock > 0);
