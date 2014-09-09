@@ -848,7 +848,7 @@ void CInode::fetch(Context *fin)
 
   // read from separate object too
   object_t oid2 = CInode::get_object_name(ino(), frag_t(), ".inode");
-  volume->read(oid2, 0, 0, &c->bl2, 0, gather.new_sub(),
+  volume->read_full(oid2, &c->bl2, 0, gather.new_sub(),
                mdcache->mds->objecter);
 
   gather.activate();
