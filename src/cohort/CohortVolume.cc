@@ -526,7 +526,7 @@ public:
 
   C_MultiRead(size_t ref, Context *dep, bufferlist *b,
 	      const erasure_params *e, uint64_t o, uint64_t l)
-    : rval(-ENOENT), refcnt(ref), dependent(dep),
+    : rval(0), refcnt(ref), dependent(dep),
       bl(b), erasure(e), off(o), len(l), reads(ref) { }
 
   size_t ostripe(const uint64_t o) {
@@ -535,13 +535,7 @@ public:
 
   void finish(int r) {
     lock.Lock();
-    if (rval >= 0) {
-      if (r >= 0) {
-	rval += r;
-      } else if (r != -ENOENT) {
-	rval = r;
-      }
-    } else if (rval == -ENOENT && r >= 0) {
+    if ((rval == 0) && (r != -ENOENT)) {
       rval = r;
     }
     lock.Unlock();
