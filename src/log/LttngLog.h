@@ -12,13 +12,12 @@
 
 #include <lttng/tracepoint.h>
 
-TRACEPOINT_EVENT(
-       ceph,
+TRACEPOINT_EVENT( ceph,
        log_header,
-       TP_ARGS(int, entity_type, const char *,  entity_name, int, pid, int, message_id, short, prio, short, subsys),
+       TP_ARGS(int, entity_type, long, thread, int, pid, int, message_id, short, prio, short, subsys),
        TP_FIELDS(
 	     ctf_integer(int, entity_type, entity_type)
-	     ctf_string(entity_name,  entity_name)
+	     ctf_integer(long, thread, thread)
 	     ctf_integer(int, pid, pid)
              ctf_integer(int, message_id, message_id)
              ctf_integer(short, subsys, subsys)
@@ -31,22 +30,49 @@ TRACEPOINT_LOGLEVEL(
        log_header,
        TRACE_INFO)
 
+TRACEPOINT_EVENT( ceph,
+       log_integer,
+       TP_ARGS(int, identifier, char, origin_type, int, pid, int, message_id),
+       TP_FIELDS(
+	     ctf_integer(int, value, value)
+	     ctf_integer(char, type, type)
+	     ctf_integer(int, pid, pid)
+             ctf_integer(int, message_id, message_id)
+)
+
+TRACEPOINT_LOGLEVEL(
+       ceph,
+       log_integer,
+       TRACE_INFO)
+
+TRACEPOINT_EVENT( ceph,
+       log_string,
+       TP_ARGS( char, string, int, pid, int, message_id),
+       TP_FIELDS(
+	     ctf_string(char, string, string)
+	     ctf_integer(int, pid, pid)
+             ctf_integer(int, message_id, message_id)
+)
+
+TRACEPOINT_LOGLEVEL(
+       ceph,
+       log_string,
+       TRACE_INFO)
+
 TRACEPOINT_EVENT(
        ceph,
-       log_message,
-       TP_ARGS(int, pid, int, message_id, const char *, message),
+       log_footer,
+       TP_ARGS(int, pid, int, message_id),
        TP_FIELDS(
              ctf_integer(int, pid, pid)
              ctf_integer(int, message_id, message_id)
-             ctf_string(msg, message)
        )
 )
 
 TRACEPOINT_LOGLEVEL(
-       nothing,
-       log_message,
+       ceph,
+       log_footer,
        TRACE_INFO)
-
 
 #endif
 
