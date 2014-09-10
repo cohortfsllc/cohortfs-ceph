@@ -1818,7 +1818,7 @@ int KeyValueStore::_clone_range(const coll_t &cid, const hobject_t& oldoid,
     return r;
   }
 
-  r = _generic_read(*old_header, srcoff, len, bl, &t);
+  r = _generic_read(*old_header, srcoff, len, bl, false, &t);
   if (r < 0)
     goto out;
 
@@ -2252,7 +2252,7 @@ int KeyValueStore::_collection_add(const coll_t &c, const coll_t &oldcid,
     goto out;
   }
 
-  r = _generic_read(*old_header, 0, old_header->max_size, bl, &t);
+  r = _generic_read(*old_header, 0, old_header->max_size, bl, false, &t);
   if (r < 0) {
     r = -EINVAL;
     goto out;
