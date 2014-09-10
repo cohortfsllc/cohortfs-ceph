@@ -1097,22 +1097,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
 
   assert(!nargs.empty());
 
-  if (strcmp(nargs[0], "mapext") == 0) {
-    if (vol_name.empty() || nargs.size() < 2)
-      usage_exit();
-    string oid(nargs[1]);
-    std::map<uint64_t,uint64_t> m;
-    ret = io_ctx.mapext(oid, 0, -1, m);
-    if (ret < 0) {
-      cerr << "mapext error on " << vol_name << "/" << oid << ": " << cpp_strerror(ret) << std::endl;
-      goto out;
-    }
-    std::map<uint64_t,uint64_t>::iterator iter;
-    for (iter = m.begin(); iter != m.end(); ++iter) {
-      cout << hex << iter->first << "\t" << iter->second << dec << std::endl;
-    }
-  }
-  else if (strcmp(nargs[0], "stat") == 0) {
+  if (strcmp(nargs[0], "stat") == 0) {
     if (vol_name.empty() || nargs.size() < 2)
       usage_exit();
     string oid(nargs[1]);

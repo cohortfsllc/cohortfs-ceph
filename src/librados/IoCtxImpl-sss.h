@@ -88,8 +88,6 @@ struct librados::IoCtxImpl {
   int append(const object_t& oid, bufferlist& bl, size_t len);
   int write_full(const object_t& oid, bufferlist& bl);
   int read(const object_t& oid, bufferlist& bl, size_t len, uint64_t off);
-  int mapext(const object_t& oid, uint64_t off, size_t len,
-	     std::map<uint64_t,uint64_t>& m);
   int sparse_read(const object_t& oid, std::map<uint64_t,uint64_t>& m,
 		  bufferlist& bl, size_t len, uint64_t off);
   int remove(const object_t& oid);

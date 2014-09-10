@@ -71,7 +71,6 @@ enum {
   l_osdc_osdop_zero,
   l_osdc_osdop_truncate,
   l_osdc_osdop_delete,
-  l_osdc_osdop_mapext,
   l_osdc_osdop_sparse_read,
   l_osdc_osdop_clonerange,
   l_osdc_osdop_getxattr,
@@ -158,7 +157,6 @@ void Objecter::init_unlocked()
     pcb.add_u64_counter(l_osdc_osdop_zero, "osdop_zero");
     pcb.add_u64_counter(l_osdc_osdop_truncate, "osdop_truncate");
     pcb.add_u64_counter(l_osdc_osdop_delete, "osdop_delete");
-    pcb.add_u64_counter(l_osdc_osdop_mapext, "osdop_mapext");
     pcb.add_u64_counter(l_osdc_osdop_sparse_read, "osdop_sparse_read");
     pcb.add_u64_counter(l_osdc_osdop_clonerange, "osdop_clonerange");
     pcb.add_u64_counter(l_osdc_osdop_getxattr, "osdop_getxattr");
@@ -1030,7 +1028,6 @@ ceph_tid_t Objecter::_op_submit(Op *op)
     case CEPH_OSD_OP_ZERO: code = l_osdc_osdop_zero; break;
     case CEPH_OSD_OP_TRUNCATE: code = l_osdc_osdop_truncate; break;
     case CEPH_OSD_OP_DELETE: code = l_osdc_osdop_delete; break;
-    case CEPH_OSD_OP_MAPEXT: code = l_osdc_osdop_mapext; break;
     case CEPH_OSD_OP_SPARSE_READ: code = l_osdc_osdop_sparse_read; break;
     case CEPH_OSD_OP_GETXATTR: code = l_osdc_osdop_getxattr; break;
     case CEPH_OSD_OP_SETXATTR: code = l_osdc_osdop_setxattr; break;

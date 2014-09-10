@@ -326,10 +326,6 @@ struct ObjectOperation {
     bufferlist bl;
     add_data(CEPH_OSD_OP_DELETE, 0, 0, bl);
   }
-  void mapext(uint64_t off, uint64_t len) {
-    bufferlist bl;
-    add_data(CEPH_OSD_OP_MAPEXT, off, len, bl);
-  }
   void sparse_read(uint64_t off, uint64_t len) {
     bufferlist bl;
     add_data(CEPH_OSD_OP_SPARSE_READ, off, len, bl);
@@ -1262,23 +1258,6 @@ public:
     ops[i].op.extent.length = len;
     ops[i].op.extent.truncate_size = trunc_size;
     ops[i].op.extent.truncate_seq = trunc_seq;
-    Op *o = new Op(oid, volume->uuid, ops,
-		   flags | global_op_flags | CEPH_OSD_FLAG_READ,
-		   onfinish, 0, objver);
-    o->outbl = pbl;
-    return op_submit(o);
-  }
-  ceph_tid_t mapext(const object_t& oid, VolumeRef volume,
-		    uint64_t off, uint64_t len, bufferlist *pbl, int flags,
-		    Context *onfinish, version_t *objver = NULL,
-		    ObjectOperation *extra_ops = NULL) {
-    vector<OSDOp> ops;
-    int i = init_ops(ops, 1, extra_ops);
-    ops[i].op.op = CEPH_OSD_OP_MAPEXT;
-    ops[i].op.extent.offset = off;
-    ops[i].op.extent.length = len;
-    ops[i].op.extent.truncate_size = 0;
-    ops[i].op.extent.truncate_seq = 0;
     Op *o = new Op(oid, volume->uuid, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_READ,
 		   onfinish, 0, objver);

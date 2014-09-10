@@ -557,38 +557,6 @@ int librados::IoCtxImpl::read(const object_t& oid,
   return bl.length();
 }
 
-int librados::IoCtxImpl::mapext(const object_t& oid,
-				uint64_t off, size_t len,
-				std::map<uint64_t,uint64_t>& m)
-{
-  bufferlist bl;
-
-  Mutex mylock;
-  Cond cond;
-  bool done;
-  int r;
-  Context *onack = new C_SafeCond(&mylock, &cond, &done, &r);
-
-  lock->Lock();
-  objecter->mapext(oid, volume,
-		   off, len, &bl, 0, onack);
-  lock->Unlock();
-
-  mylock.Lock();
-  while (!done)
-    cond.Wait(mylock);
-  mylock.Unlock();
-  ldout(client->cct, 10) << "Objecter returned from read r=" << r << dendl;
-
-  if (r < 0)
-    return r;
-
-  bufferlist::iterator iter = bl.begin();
-  ::decode(m, iter);
-
-  return m.size();
-}
-
 int librados::IoCtxImpl::sparse_read(const object_t& oid,
 				     std::map<uint64_t,uint64_t>& m,
 				     bufferlist& data_bl, size_t len,

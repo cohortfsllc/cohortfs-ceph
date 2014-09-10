@@ -587,13 +587,6 @@ int librados::IoCtx::trunc(const std::string& oid, uint64_t size)
   return io_ctx_impl->trunc(obj, size);
 }
 
-int librados::IoCtx::mapext(const std::string& oid, uint64_t off, size_t len,
-			    std::map<uint64_t,uint64_t>& m)
-{
-  object_t obj(oid);
-  return io_ctx_impl->mapext(oid, off, len, m);
-}
-
 int librados::IoCtx::sparse_read(const std::string& oid,
 				 std::map<uint64_t,uint64_t>& m,
 				 bufferlist& bl, size_t len, uint64_t off)

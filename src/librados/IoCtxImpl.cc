@@ -659,15 +659,6 @@ int librados::IoCtxImpl::read(const object_t& oid, bufferlist& bl, size_t len,
   return bl.length();
 }
 
-int librados::IoCtxImpl::mapext(const object_t& oid,
-				uint64_t off, size_t len,
-				std::map<uint64_t,uint64_t>& m)
-{
-  puts("NEVER.");
-  abort();
-  return -1;
-}
-
 int librados::IoCtxImpl::sparse_read(const object_t& oid,
 				     std::map<uint64_t,uint64_t>& m,
 				     bufferlist& data_bl, size_t len,

@@ -1281,22 +1281,6 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
       break;
 
     /* map extents */
-    case CEPH_OSD_OP_MAPEXT:
-      ++ctx->num_read;
-      {
-	// read into a buffer
-	bufferlist bl;
-	int r = osd->store->fiemap(coll, soid, op.extent.offset, op.extent.length, bl);
-	osd_op.outdata.claim(bl);
-	if (r < 0)
-	  result = r;
-	ctx->delta_stats.num_rd_kb += SHIFT_ROUND_UP(op.extent.length, 10);
-	ctx->delta_stats.num_rd++;
-	dout(10) << " map_extents done on object " << soid << dendl;
-      }
-      break;
-
-    /* map extents */
     case CEPH_OSD_OP_SPARSE_READ:
       ++ctx->num_read;
       {
