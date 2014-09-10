@@ -166,7 +166,7 @@ void Log::submit_entry(Entry *e)
   // regardless of log levels; lttng user will filter the events
   if (m_lttng_enabled) {
     int message_id = m_message_id.inc();
-    tracepoint(ceph, log_header, m_name->get_type(), m_name->get_id().c_str(), m_pid, message_id, e->m_prio, e->m_subsys);
+    tracepoint(ceph, log_header, m_name->get_type(), m_name->get_id().c_str(), e->m_thread, m_pid, message_id, e->m_prio, e->m_subsys);
   
     tracepoint(ceph, log_message, m_pid, message_id, e->get_str().c_str());
   }
