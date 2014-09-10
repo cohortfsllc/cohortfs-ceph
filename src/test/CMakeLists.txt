@@ -1782,3 +1782,7 @@ target_link_libraries(mmapbench os global boost_filesystem)
 # pagesetbench
 add_executable(pagesetbench pageset_bench.cc)
 target_link_libraries(pagesetbench os global boost_filesystem boost_system)
+set_target_properties(pagesetbench PROPERTIES COMPILE_FLAGS "-std=gnu++11")
+
+add_executable(test_lttng_log_stream test_lttng_log_stream.cc)
+target_link_libraries(test_lttng_log_stream common)
