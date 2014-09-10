@@ -28,19 +28,18 @@ extern struct xio_mempool *xio_msgr_noreg_mpool;
 
 #define dout_subsys ceph_subsys_xio
 
-void print_xio_msg_hdr(const char *tag, const XioMsgHdr &hdr,
-		       const struct xio_msg *msg)
+void print_xio_msg_hdr(CephContext *cct, const char *tag,
+		       const XioMsgHdr &hdr, const struct xio_msg *msg)
 {
-
   if (msg) {
-    dout(4) << tag <<
+    ldout(cct,4) << tag <<
       " xio msg:" <<
       " sn: " << msg->sn <<
       " timestamp: " << msg->timestamp <<
       dendl;
   }
 
-  dout(4) << tag <<
+  ldout(cct,4) << tag <<
     " ceph header: " <<
     " front_len: " << hdr.hdr->front_len <<
     " seq: " << hdr.hdr->seq <<
@@ -58,7 +57,7 @@ void print_xio_msg_hdr(const char *tag, const XioMsgHdr &hdr,
     " msg_cnt: " << hdr.msg_cnt <<
     dendl;
 
-  dout(4) << tag <<
+  ldout(cct,4) << tag <<
     " ceph footer: " <<
     " front_crc: " << hdr.ftr->front_crc <<
     " middle_crc: " << hdr.ftr->middle_crc <<
@@ -68,11 +67,11 @@ void print_xio_msg_hdr(const char *tag, const XioMsgHdr &hdr,
     dendl;
 }
 
-void print_ceph_msg(const char *tag, Message *m)
+void print_ceph_msg(CephContext *cct, const char *tag, Message *m)
 {
   if (m->get_magic() & (MSG_MAGIC_XIO & MSG_MAGIC_TRACE_DTOR)) {
     ceph_msg_header& header = m->get_header();
-    dout(4) << tag << " header version " << header.version <<
+    ldout(cct,4) << tag << " header version " << header.version <<
       " compat version " << header.compat_version <<
       dendl;
   }
@@ -153,7 +152,7 @@ int XioConnection::on_msg_req(struct xio_session *session,
     in_seq.cnt = msg_cnt.msg_cnt;
     in_seq.p = true;
     if (unlikely(magic & (MSG_MAGIC_TRACE_XCON))) {
-      dout(11) << __func__ << " !in_seq.p" <<
+      ldout(msgr->cct,11) << __func__ << " !in_seq.p" <<
 	" req " << req <<
 	" in.header.iov_base " << req->in.header.iov_base <<
 	" in.header.iov_len " << (int) req->in.header.iov_len <<
@@ -163,7 +162,7 @@ int XioConnection::on_msg_req(struct xio_session *session,
   in_seq.append(req);
   if (in_seq.cnt > 0) {
     if (unlikely(magic & (MSG_MAGIC_TRACE_XCON))) {
-      dout(11) << __func__ << " in_seq.cnt > 0 (" << in_seq.cnt << ")" << dendl;
+      ldout(msgr->cct,11) << __func__ << " in_seq.cnt > 0 (" << in_seq.cnt << ")" << dendl;
     }
     return 0;
   }
@@ -171,7 +170,7 @@ int XioConnection::on_msg_req(struct xio_session *session,
     in_seq.p = false;
 
   if (unlikely(magic & (MSG_MAGIC_TRACE_XCON))) {
-    dout(11) << __func__ << " start decode" << dendl;
+    ldout(msgr->cct,11) << __func__ << " start decode" << dendl;
   }
 
   XioMessenger *msgr = static_cast<XioMessenger*>(get_messenger());
@@ -184,7 +183,7 @@ int XioConnection::on_msg_req(struct xio_session *session,
   list<struct xio_msg *>& msg_seq = in_seq.seq;
   list<struct xio_msg *>::iterator msg_iter = msg_seq.begin();
 
-  dout(11) << __func__ << " " << "msg_seq.size()="  << msg_seq.size()
+  ldout(msgr->cct,11) << __func__ << " " << "msg_seq.size()="  << msg_seq.size()
 	  << dendl;
 
   treq = *msg_iter;
@@ -195,7 +194,7 @@ int XioConnection::on_msg_req(struct xio_session *session,
   uint_to_timeval(t1, treq->timestamp);
 
   if (magic & (MSG_MAGIC_TRACE_XCON)) {
-      print_xio_msg_hdr("on_msg_req", hdr, NULL);
+      print_xio_msg_hdr(msgr->cct, "on_msg_req", hdr, NULL);
   }
 
   struct xio_iovec_ex *msg_iov, *iovs;
@@ -324,7 +323,7 @@ int XioConnection::on_msg_req(struct xio_session *session,
   }
 
   if (magic & (MSG_MAGIC_TRACE_XCON)) {
-    dout(11) << "XioConnection.cc:on_msg_req msg detail"
+    ldout(msgr->cct,11) << "XioConnection.cc:on_msg_req msg detail"
 	     << " payload: " << payload.length()
 	     << " (" << payload.buffers().size() << ")"
 	     << " middle: " << middle.length()
@@ -332,7 +331,7 @@ int XioConnection::on_msg_req(struct xio_session *session,
 	     << " data: " << data.length()
 	     << " (" << data.buffers().size() << ")"
 	     << dendl;
-    dout(11) << "XioConnection.cc:on_msg_req payload dump: ";
+    ldout(msgr->cct,11) << "XioConnection.cc:on_msg_req payload dump: ";
     payload.hexdump( *_dout );
     *_dout << dendl;
   }
@@ -379,14 +378,14 @@ int XioConnection::on_msg_req(struct xio_session *session,
     }
 
     if (magic & (MSG_MAGIC_TRACE_XCON)) {
-      dout(4) << "decode m is " << m->get_type() << dendl;
+      ldout(msgr->cct,4) << "decode m is " << m->get_type() << dendl;
     }
 
     /* dispatch it */
     msgr->ds_dispatch(m);
   } else {
     /* responds for undecoded messages and frees hook */
-    dout(4) << "decode m failed" << dendl;
+    ldout(msgr->cct,4) << "decode m failed" << dendl;
   }
 
   return 0;
@@ -408,7 +407,7 @@ int XioConnection::on_ow_msg_send_complete(struct xio_session *session,
     }
   } /* trace ctr */
 
-  dout(11) << "on_msg_delivered xcon: " << xmsg->xcon <<
+  ldout(msgr->cct,11) << "on_msg_delivered xcon: " << xmsg->xcon <<
     " session: " << session << " msg: " << req << " sn: " << req->sn <<
     " type: " << xmsg->m->get_type() << " tid: " << xmsg->m->get_tid() <<
     " seq: " << xmsg->m->get_seq() << dendl;
@@ -421,7 +420,7 @@ int XioConnection::on_ow_msg_send_complete(struct xio_session *session,
 
 void XioConnection::msg_send_fail(XioMsg *xmsg, int code)
 {
-  dout(4) << "xio_send_msg FAILED " << &xmsg->req_0.msg << " code=" << code <<
+  ldout(msgr->cct,4) << "xio_send_msg FAILED " << &xmsg->req_0.msg << " code=" << code <<
     " (" << xio_strerror(code) << ")" << dendl;
   /* return refs taken for each xio_msg */
   xmsg->put_msg_refs();
@@ -429,7 +428,7 @@ void XioConnection::msg_send_fail(XioMsg *xmsg, int code)
 
 void XioConnection::msg_release_fail(struct xio_msg *msg, int code)
 {
-  dout(4) << "xio_release_msg FAILED " << msg <<  "code=" << code <<
+  ldout(msgr->cct,4) << "xio_release_msg FAILED " << msg <<  "code=" << code <<
     " (" << xio_strerror(code) << ")" << dendl;
 } /* msg_release_fail */
 
