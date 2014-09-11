@@ -16,7 +16,9 @@ TEST(Log, Simple)
   subs.add(2, "bar", 20, 2);
   subs.add(3, "baz", 10, 3);
 
-  Log log(&subs);
+  EntityName name;
+
+  Log log(&subs, &name);
   log.start();
 
   log.set_log_file("/tmp/foo");
@@ -51,7 +53,9 @@ TEST(Log, ManyNoGather)
 {
   SubsystemMap subs;
   subs.add(1, "foo", 1, 1);
-  Log log(&subs);
+
+  EntityName name;
+  Log log(&subs, &name);
   log.start();
   log.set_log_file("/tmp/big");
   log.reopen_log_file();
@@ -69,7 +73,8 @@ TEST(Log, ManyGatherLog)
 {
   SubsystemMap subs;
   subs.add(1, "foo", 20, 10);
-  Log log(&subs);
+  EntityName name;
+  Log log(&subs, &name);
   log.start();
   log.set_log_file("/tmp/big");
   log.reopen_log_file();
@@ -87,7 +92,8 @@ TEST(Log, ManyGatherLogStringAssign)
 {
   SubsystemMap subs;
   subs.add(1, "foo", 20, 10);
-  Log log(&subs);
+  EntityName name;
+  Log log(&subs, &name);
   log.start();
   log.set_log_file("/tmp/big");
   log.reopen_log_file();
@@ -108,7 +114,8 @@ TEST(Log, ManyGatherLogStringAssignWithReserve)
 {
   SubsystemMap subs;
   subs.add(1, "foo", 20, 10);
-  Log log(&subs);
+  EntityName name;
+  Log log(&subs, &name);
   log.start();
   log.set_log_file("/tmp/big");
   log.reopen_log_file();
@@ -131,7 +138,8 @@ TEST(Log, ManyGatherLogPrebuf)
 {
   SubsystemMap subs;
   subs.add(1, "foo", 20, 10);
-  Log log(&subs);
+  EntityName name;
+  Log log(&subs, &name);
   log.start();
   log.set_log_file("/tmp/big");
   log.reopen_log_file();
@@ -153,7 +161,9 @@ TEST(Log, ManyGatherLogPrebufOverflow)
 {
   SubsystemMap subs;
   subs.add(1, "foo", 20, 10);
-  Log log(&subs);
+
+  EntityName name;
+  Log log(&subs, &name);
   log.start();
   log.set_log_file("/tmp/big");
   log.reopen_log_file();
@@ -176,7 +186,9 @@ TEST(Log, ManyGather)
 {
   SubsystemMap subs;
   subs.add(1, "foo", 20, 1);
-  Log log(&subs);
+ 
+  EntityName name;
+  Log log(&subs, &name);
   log.start();
   log.set_log_file("/tmp/big");
   log.reopen_log_file();

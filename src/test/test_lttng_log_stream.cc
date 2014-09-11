@@ -56,7 +56,8 @@ int main(int argc, char *argv[])
     max<float>(), max<double>(), max<long double>(),
     "foo", ucstr, (void*)max<uintptr_t>() };
 
-  lttng_stream out;
+  lttng_stream out(1, "a", 
+	 1000, 2, 3, 4, 5);
   out << test << std::endl;
   std::cout << test << std::endl;
   return 0;

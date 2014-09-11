@@ -31,15 +31,20 @@ private:
   };
 
   // tracepoint emission functions
-  void emit_header(); // TODO: add arguments for log_header
+  void emit_header(int entity_type, const char *entity_name, long thread, int pid
+	, int message_id, short subsys, short prio);
+	 // TODO: add arguments for log_header
   void emit_integer(uint64_t val, enum int_type type);
   void emit_string(const char *val);
   void emit_footer();
 
 public:
-  lttng_stream() // TODO: add arguments for emit_header()
+  lttng_stream(int entity_type, const char *entity_name, long thread, int pid,
+	 int message_id, short subsys, short prio)
+	 // TODO: add arguments for emit_header()
   {
-    emit_header();
+	emit_header(entity_type, entity_name, thread, pid, message_id, subsys,
+	 prio);
   }
   ~lttng_stream()
   {
