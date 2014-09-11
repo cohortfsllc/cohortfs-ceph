@@ -15,7 +15,7 @@ struct io_completion {
   int done;
 };
 
-void write_completion(uint64_t id, int result, uint64_t length, void *user)
+void write_completion(int result, uint64_t length, void *user)
 {
   struct io_completion *io = (struct io_completion*)user;
 
@@ -55,9 +55,8 @@ int test_single()
       .cond = PTHREAD_COND_INITIALIZER,
       .done = 0
     };
-    uint64_t id;
     char buf[64] = {};
-    r = libosd_write(osd, "obj", volume, 0, sizeof(buf), buf, &io, &id);
+    r = libosd_write(osd, "obj", volume, 0, sizeof(buf), buf, &io);
     fprintf(stderr, "libosd_write() returned %d\n", r);
 
     pthread_mutex_lock(&io.mutex);

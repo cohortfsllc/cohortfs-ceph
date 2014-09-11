@@ -43,7 +43,7 @@ void LibOSDDispatcher::shutdown()
   // drop any outstanding requests
   tid_lock.lock();
   for (cb_map::iterator i = callbacks.begin(); i != callbacks.end(); ++i) {
-    i->second->on_failure(i->first, -ENODEV);
+    i->second->on_failure(-ENODEV);
     delete i->second;
   }
   callbacks.clear();
@@ -56,7 +56,7 @@ void LibOSDDispatcher::wait()
   ms_server->wait();
 }
 
-ceph_tid_t LibOSDDispatcher::send_request(Message *m, OnReply *c)
+void LibOSDDispatcher::send_request(Message *m, OnReply *c)
 {
   // register tid/callback
   tid_lock.lock();
@@ -79,8 +79,6 @@ ceph_tid_t LibOSDDispatcher::send_request(Message *m, OnReply *c)
 
   // send to server messenger
   ms_client->send_message(m, conn.get());
-
-  return tid;
 }
 
 bool LibOSDDispatcher::ms_dispatch(Message *m)
@@ -98,7 +96,7 @@ bool LibOSDDispatcher::ms_dispatch(Message *m)
   callbacks.erase(i);
   tid_lock.unlock();
 
-  c->on_reply(tid, m);
+  c->on_reply(m);
   delete c;
   return true;
 }

@@ -99,10 +99,10 @@ public:
   int get_volume(const char *name, uuid_t uuid);
   int read(const char *object, const uuid_t volume,
 	   uint64_t offset, uint64_t length, char *data,
-	   void *user, uint64_t *id);
+	   void *user);
   int write(const char *object, const uuid_t volume,
 	    uint64_t offset, uint64_t length, char *data,
-	    void *user, uint64_t *id);
+	    void *user);
 };
 
 
@@ -324,7 +324,7 @@ public:
 	      void *user)
     : data(data), length(length), completion(completion), user(user) {}
 
-  void on_reply(ceph_tid_t tid, Message *reply) {
+  void on_reply(Message *reply) {
     assert(reply->get_type() == CEPH_MSG_OSD_OPREPLY);
     MOSDOpReply *m = static_cast<MOSDOpReply*>(reply);
 
@@ -346,17 +346,17 @@ public:
       op.outdata.copy(0, length, data);
     }
 
-    completion(tid, op.rval, length, user);
+    completion(op.rval, length, user);
   }
 
-  void on_failure(ceph_tid_t tid, int r) {
-    completion(tid, r, 0, user);
+  void on_failure(int r) {
+    completion(r, 0, user);
   }
 };
 
 int LibOSD::read(const char *object, const uuid_t volume,
 		 uint64_t offset, uint64_t length, char *data,
-		 void *user, uint64_t *id)
+		 void *user)
 {
   const int client = 0;
   const long tid = 0;
@@ -380,7 +380,7 @@ int LibOSD::read(const char *object, const uuid_t volume,
 					 callbacks->read_completion, user);
 
   // send request over direct messenger
-  *id = dispatcher->send_request(m, onreply);
+  dispatcher->send_request(m, onreply);
   return 0;
 }
 
@@ -392,7 +392,7 @@ public:
   OnWriteReply(io_completion_fn completion, void *user)
     : completion(completion), user(user) {}
 
-  void on_reply(ceph_tid_t tid, Message *reply) {
+  void on_reply(Message *reply) {
     assert(reply->get_type() == CEPH_MSG_OSD_OPREPLY);
     MOSDOpReply *m = static_cast<MOSDOpReply*>(reply);
 
@@ -405,17 +405,17 @@ public:
     assert(op.op.op == CEPH_OSD_OP_WRITE);
 
     uint64_t length = op.rval ? 0 : op.op.extent.length;
-    completion(tid, op.rval, length, user);
+    completion(op.rval, length, user);
   }
 
-  virtual void on_failure(ceph_tid_t tid, int r) {
-    completion(tid, r, 0, user);
+  virtual void on_failure(int r) {
+    completion(r, 0, user);
   }
 };
 
 int LibOSD::write(const char *object, const uuid_t volume,
 		  uint64_t offset, uint64_t length, char *data,
-		  void *user, uint64_t *id)
+		  void *user)
 {
   const int client = 0;
   const long tid = 0;
@@ -441,7 +441,7 @@ int LibOSD::write(const char *object, const uuid_t volume,
   OnWriteReply *onreply = new OnWriteReply(callbacks->write_completion, user);
 
   // send request over direct messenger
-  *id = dispatcher->send_request(m, onreply);
+  dispatcher->send_request(m, onreply);
   return 0;
 }
 
@@ -542,11 +542,10 @@ int libosd_get_volume(struct libosd *osd, const char *name, uuid_t uuid)
 }
 
 int libosd_read(struct libosd *osd, const char *object, const uuid_t volume,
-		uint64_t offset, uint64_t length, char *data,
-		void *user, uint64_t *id)
+		uint64_t offset, uint64_t length, char *data, void *user)
 {
   try {
-    return osd->read(object, volume, offset, length, data, user, id);
+    return osd->read(object, volume, offset, length, data, user);
   } catch (std::exception &e) {
     derr << "libosd_read caught exception " << e.what() << dendl;
     return -EFAULT;
@@ -554,11 +553,10 @@ int libosd_read(struct libosd *osd, const char *object, const uuid_t volume,
 }
 
 int libosd_write(struct libosd *osd, const char *object, const uuid_t volume,
-		 uint64_t offset, uint64_t length, char *data,
-		 void *user, uint64_t *id)
+		 uint64_t offset, uint64_t length, char *data, void *user)
 {
   try {
-    return osd->write(object, volume, offset, length, data, user, id);
+    return osd->write(object, volume, offset, length, data, user);
   } catch (std::exception &e) {
     derr << "libosd_write caught exception " << e.what() << dendl;
     return -EFAULT;
