@@ -23,10 +23,10 @@ struct libosd {
 
   virtual int read(const char *object, const uuid_t volume,
 		   uint64_t offset, uint64_t length, char *data,
-		   void *user, uint64_t *id) = 0;
+		   void *user) = 0;
   virtual int write(const char *object, const uuid_t volume,
 		    uint64_t offset, uint64_t length, char *data,
-		    void *user, uint64_t *id) = 0;
+		    void *user) = 0;
 
 protected: /* must be deleted by libosd_cleanup() */
   virtual ~libosd() {}
@@ -38,8 +38,7 @@ extern "C" {
 #endif /* __cplusplus */
 
 /* i/o completion function for async read and write callbacks */
-typedef void (*io_completion_fn)(uint64_t id, int result, uint64_t length,
-				 void *user);
+typedef void (*io_completion_fn)(int result, uint64_t length, void *user);
 
 /* osd callback function table */
 struct libosd_callbacks {
@@ -87,16 +86,13 @@ int libosd_get_volume(struct libosd *osd, const char *name, uuid_t uuid);
  * @param offset  Offset into the object
  * @param length  Number of bytes to read
  * @param data	  Buffer to receive the object data
- * @param id	  Operation identifier assigned by libosd. Will match the
- *		  id argument passed to the read_completion callback
  * @param user	  User data passed to the read_completion callback
  *
  * @return Nonzero on immediate errors. Otherwise returns 0 and promises
  * to call the read_completion callback on success or failure.
  */
 int libosd_read(struct libosd *osd, const char *object, const uuid_t volume,
-		uint64_t offset, uint64_t length, char *data,
-		void *user, uint64_t *id);
+		uint64_t offset, uint64_t length, char *data, void *user);
 
 /**
  * Write to an object asynchronously. 
@@ -107,16 +103,13 @@ int libosd_read(struct libosd *osd, const char *object, const uuid_t volume,
  * @param offset  Offset into the object
  * @param length  Number of bytes to write
  * @param data	  Buffer to receive the object data
- * @param id	  Operation identifier assigned by libosd. Will match the
- *		  id argument passed to the read_completion callback
  * @param user	  User data passed to the read_completion callback
  *
  * @return Nonzero on immediate errors. Otherwise returns 0 and promises
  * to call the read_completion callback on success or failure.
  */
 int libosd_write(struct libosd *osd, const char *object, const uuid_t volume,
-		 uint64_t offset, uint64_t length, char *data,
-		 void *user, uint64_t *id);
+		 uint64_t offset, uint64_t length, char *data, void *user);
 
 #ifdef __cplusplus
 } /* extern "C" */
