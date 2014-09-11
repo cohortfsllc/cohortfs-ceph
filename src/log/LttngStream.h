@@ -5,8 +5,7 @@
 #define CEPH_LOG_LTTNGSTREAM
 
 #include <inttypes.h>
-
-#include "LttngLog.h"
+#include <ostream>
 
 
 // lttng log stream
@@ -32,22 +31,13 @@ private:
   };
 
   // tracepoint emission functions
-  void emit_header()
-  {
-    // TODO: emit header tracepoint with values from lttng_stream() constructor
-  }
-  void emit_integer(uint64_t val, enum int_type type)
-  {
-  }
-  void emit_string(const char *val)
-  {
-  }
-  void emit_footer()
-  {
-  }
+  void emit_header(); // TODO: add arguments for log_header
+  void emit_integer(uint64_t val, enum int_type type);
+  void emit_string(const char *val);
+  void emit_footer();
 
 public:
-  lttng_stream() // TODO: add any arguments for the header message
+  lttng_stream() // TODO: add arguments for emit_header()
   {
     emit_header();
   }
@@ -56,7 +46,7 @@ public:
     emit_footer();
   }
 
-  // output operators
+  // output operators for built-in types
   lttng_stream& operator<<(bool val) {
     emit_integer(static_cast<uint64_t>(val), TYPE_BOOL);
     return *this;
