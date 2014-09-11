@@ -35,15 +35,17 @@ protected: /* must be deleted by libosd_cleanup() */
 
 /* C interface */
 extern "C" {
+#else
+struct libosd;
 #endif /* __cplusplus */
 
-/* i/o completion function for async read and write callbacks */
+/* io completion callback */
 typedef void (*io_completion_fn)(int result, uint64_t length, void *user);
 
 /* osd callback function table */
 struct libosd_callbacks {
-  void (*osd_active)();
-  void (*osd_shutdown)();
+  void (*osd_active)(struct libosd *osd, void *user);
+  void (*osd_shutdown)(struct libosd *osd, void *user);
   io_completion_fn read_completion;
   io_completion_fn write_completion;
 };
@@ -54,6 +56,7 @@ struct libosd_init_args {
   const char *config;	/* path to ceph configuration file */
   const char *cluster;	/* ceph cluster name (default "ceph") */
   struct libosd_callbacks *callbacks; /* optional callbacks */
+  void *user;		/* user data for osd_active and osd_shutdown */
 };
 
 /* bind messengers, create an objectstore, and start an OSD.

@@ -60,6 +60,7 @@ ContextSet contexts;
 
 class LibOSD : public libosd, private OSDStateObserver {
   libosd_callbacks *callbacks;
+  void *user;
 
   CephContext *cct;
   md_config_t *conf;
@@ -167,6 +168,7 @@ int LibOSD::create_context(const struct libosd_init_args *args)
 int LibOSD::init(const struct libosd_init_args *args)
 {
   callbacks = args->callbacks;
+  user = args->user;
 
   // create the CephContext and parse the configuration
   int r = create_context(args);
@@ -253,8 +255,13 @@ void LibOSD::on_osd_state(int state, epoch_t epoch)
     osdmap.state = state;
     osdmap.cond.Signal();
 
-    if (state == OSD::STATE_STOPPING)
+    if (state == OSD::STATE_ACTIVE) {
+      if (callbacks && callbacks->osd_active)
+	callbacks->osd_active(this, user);
+    } else if (state == OSD::STATE_STOPPING) {
       dispatcher->shutdown();
+    }
+    // TODO: signal callbacks->osd_shutdown() when shutdown is complete
   }
   osdmap.epoch = epoch;
 }
