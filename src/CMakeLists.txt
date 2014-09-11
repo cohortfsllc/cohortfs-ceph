@@ -457,14 +457,14 @@ set(osd_srcs
   )
 set(osd_mon_files mon/Monitor.cc)
 add_library(osd_mon_objs OBJECT ${osd_mon_files})
-add_library(osd ${osd_srcs} $<TARGET_OBJECTS:cls_references_objs>)
-#add_library(osd ${CEPH_SHARED} ${osd_srcs} $<TARGET_OBJECTS:cls_references_objs>)
-#if(${ENABLE_SHARED})
-#  set_target_properties(osd PROPERTIES OUTPUT_NAME ceph-osd VERSION "1.0.0"
-#    SOVERSION "1" LINK_FLAGS "-Wl,-export-dynamic")
-#  install(TARGETS osd DESTINATION lib)
-#endif(${ENABLE_SHARED})
-target_link_libraries(osd PRIVATE common dl leveldb ${EXTRALIBS})
+add_library(osd ${CEPH_SHARED} ${osd_srcs} $<TARGET_OBJECTS:cls_references_objs>)
+if(${ENABLE_SHARED})
+  set_target_properties(osd PROPERTIES OUTPUT_NAME ceph-osd VERSION "1.0.0"
+    SOVERSION "1" LINK_FLAGS "-Wl,-export-dynamic")
+  install(TARGETS osd DESTINATION lib)
+  install(FILES ${CMAKE_SOURCE_DIR}/src/libosd/ceph_osd.h DESTINATION include)
+endif(${ENABLE_SHARED})
+target_link_libraries(osd PRIVATE common os dl leveldb ${EXTRALIBS})
 
 set(ceph_osd_srcs ceph_osd.cc objclass/class_api.cc)
 add_executable(ceph-osd ${ceph_osd_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
