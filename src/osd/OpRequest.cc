@@ -13,10 +13,9 @@
 
 
 
-OpRequest::OpRequest(Message *req, OpTracker *tracker) :
-  TrackedOp(req, tracker),
-  rmw_flags(0),
-  hit_flag_points(0), latest_flag_point(0) {
+OpRequest::OpRequest(Message *req)
+  : rmw_flags(0), request(req), hit_flag_points(0), latest_flag_point(0)
+{
 }
 
 void OpRequest::_dump(utime_t now, Formatter *f) const
@@ -31,25 +30,16 @@ void OpRequest::_dump(utime_t now, Formatter *f) const
     f->dump_int("tid", m->get_tid());
     f->close_section(); // client_info
   }
-  {
-    f->open_array_section("events");
-    for (list<pair<utime_t, string> >::const_iterator i = events.begin();
-	 i != events.end();
-	 ++i) {
-      f->open_object_section("event");
-      f->dump_stream("time") << i->first;
-      f->dump_string("event", i->second);
-      f->close_section();
-    }
-    f->close_section();
-  }
 }
 
-void OpRequest::init_from_message()
+OpRequestRef OpRequest::create_request(Message *ref)
 {
-  if (request->get_type() == CEPH_MSG_OSD_OP) {
-    reqid = static_cast<MOSDOp*>(request)->get_reqid();
+  OpRequestRef retval(new OpRequest(ref));
+
+  if (ref->get_type() == CEPH_MSG_OSD_OP) {
+    retval->reqid = static_cast<MOSDOp*>(ref)->get_reqid();
   }
+  return retval;
 }
 
 bool OpRequest::check_rmw(int flag) {

@@ -414,7 +414,7 @@ public:
 
   int queue_transactions(
     Sequencer *osr, list<Transaction*>& tls,
-    TrackedOpRef op = TrackedOpRef(),
+    OpRequestRef op = OpRequestRef(),
     ThreadPool::TPHandle *handle = NULL);
 };
 

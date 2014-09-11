@@ -1571,7 +1571,7 @@ int FileStore::get_max_object_name_length()
 FileStore::Op *FileStore::build_op(list<Transaction*>& tls,
 				   Context *onreadable,
 				   Context *onreadable_sync,
-				   TrackedOpRef osd_op)
+				   OpRequestRef osd_op)
 {
   uint64_t bytes = 0, ops = 0;
   for (list<Transaction*>::iterator p = tls.begin();
@@ -1726,7 +1726,7 @@ struct C_JournaledAhead : public Context {
 };
 
 int FileStore::queue_transactions(Sequencer *posr, list<Transaction*> &tls,
-				  TrackedOpRef osd_op,
+				  OpRequestRef osd_op,
 				  ThreadPool::TPHandle *handle)
 {
   Context *onreadable;

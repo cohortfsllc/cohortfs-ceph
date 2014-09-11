@@ -579,10 +579,6 @@ private:
   }
   void do_waiters();
 
-  // -- op tracking --
-  OpTracker op_tracker;
-  void check_ops_in_flight();
-
   // -- op queue --
 
   struct OpWQ: public ThreadPool::WorkQueueVal<pair<OSDVolRef, OpRequestRef>,

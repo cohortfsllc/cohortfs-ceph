@@ -148,7 +148,6 @@ OSDService::OSDService(OSD *osd) :
   map_bl_cache(cct->_conf->osd_map_cache_size),
   map_bl_inc_cache(cct->_conf->osd_map_cache_size),
   cur_state(NONE),
-  last_msg(0),
   cur_ratio(0),
   state(NOT_STOPPING)
 {}
@@ -429,15 +428,10 @@ OSD::OSD(CephContext *cct_, ObjectStore *store_,
   hb_back_server_messenger(hb_back_serverm),
   heartbeat_thread(this),
   heartbeat_dispatcher(this),
-  op_tracker(cct, cct->_conf->osd_enable_op_tracker),
   op_wq(this, cct->_conf->osd_op_thread_timeout, &op_tp),
   up_thru_wanted(0), up_thru_pending(0), service(this)
 {
   monc->set_messenger(client_messenger);
-  op_tracker.set_complaint_and_threshold(cct->_conf->osd_op_complaint_time,
-					 cct->_conf->osd_op_log_threshold);
-  op_tracker.set_history_size_and_duration(cct->_conf->osd_op_history_size,
-					   cct->_conf->osd_op_history_duration);
 }
 
 OSD::~OSD()
@@ -509,10 +503,6 @@ bool OSD::asok_command(string command, cmdmap_t& cmdmap, string format,
     f->close_section();
   } else if (command == "flush_journal") {
     store->sync_and_flush();
-  } else if (command == "dump_ops_in_flight") {
-    op_tracker.dump_ops_in_flight(f);
-  } else if (command == "dump_historic_ops") {
-    op_tracker.dump_historic_ops(f);
   } else if (command == "dump_op_pq_state") {
     f->open_object_section("pq");
     op_wq.dump(f);
@@ -948,7 +938,6 @@ int OSD::shutdown()
 
   osdmap = OSDMapRef();
   service.shutdown();
-  op_tracker.on_shutdown();
 
   class_handler->shutdown();
   client_messenger->shutdown();
@@ -1111,8 +1100,6 @@ void OSDService::check_nearfull_warning(const osd_stat_t &osd_stat)
   Mutex::Locker l(full_status_lock);
   enum s_names new_state;
 
-  time_t now = ceph_clock_gettime(NULL);
-
   // We base ratio on kb_avail rather than kb_used because they can
   // differ significantly e.g. on btrfs volumes with a large number of
   // chunks reserved for metadata, and for our purposes (avoiding
@@ -1134,10 +1121,8 @@ void OSDService::check_nearfull_warning(const osd_stat_t &osd_stat)
 
   if (cur_state != new_state) {
     cur_state = new_state;
-  } else if (now - last_msg < cct->_conf->osd_op_complaint_time) {
-    return;
   }
-  last_msg = now;
+
   if (cur_state == FULL)
     clog.error() << "OSD full dropping all updates " << (int)(ratio * 100) << "% full";
   else
@@ -1468,22 +1453,7 @@ void OSD::tick()
     dispatch_cond.Signal();
   }
 
-  check_ops_in_flight();
-
   tick_timer.add_event_after(1.0, new C_Tick(this));
-}
-
-void OSD::check_ops_in_flight()
-{
-  vector<string> warnings;
-  if (op_tracker.check_ops_in_flight(warnings)) {
-    for (vector<string>::iterator i = warnings.begin();
-	i != warnings.end();
-	++i) {
-      clog.warn() << *i;
-    }
-  }
-  return;
 }
 
 // =========================================
@@ -2199,8 +2169,7 @@ void OSD::_dispatch(Message *m)
 
   default:
     {
-      OpRequestRef op = op_tracker.create_request<OpRequest>(m);
-      op->mark_event("waiting_for_osdmap");
+      OpRequestRef op = OpRequest::create_request(m);
       // no map?  starting up?
       if (!osdmap) {
 	dout(7) << "no OSDMap, not booted" << dendl;
@@ -3222,16 +3191,7 @@ const char** OSD::get_tracked_conf_keys() const
 void OSD::handle_conf_change(const struct md_config_t *conf,
 			     const std::set <std::string> &changed)
 {
-  if (changed.count("osd_op_complaint_time") ||
-      changed.count("osd_op_log_threshold")) {
-    op_tracker.set_complaint_and_threshold(cct->_conf->osd_op_complaint_time,
-					   cct->_conf->osd_op_log_threshold);
-  }
-  if (changed.count("osd_op_history_size") ||
-      changed.count("osd_op_history_duration")) {
-    op_tracker.set_history_size_and_duration(cct->_conf->osd_op_history_size,
-					     cct->_conf->osd_op_history_duration);
-  }
+  // Nothing for now.
 }
 
 // --------------------------------

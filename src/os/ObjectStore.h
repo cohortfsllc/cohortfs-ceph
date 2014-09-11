@@ -21,7 +21,6 @@
 #include "include/buffer.h"
 #include "include/types.h"
 #include "osd/osd_types.h"
-#include "common/TrackedOp.h"
 #include "common/WorkQueue.h"
 #include "ObjectMap.h"
 
@@ -937,12 +936,12 @@ public:
     list<Transaction *> tls;
     tls.push_back(t);
     return queue_transactions(osr, tls, new C_DeleteTransaction(t),
-			      NULL, NULL, TrackedOpRef(), handle);
+			      NULL, NULL, OpRequestRef(), handle);
   }
 
   int queue_transaction(Sequencer *osr, Transaction *t, Context *onreadable, Context *ondisk=0,
 			Context *onreadable_sync=0,
-			TrackedOpRef op = TrackedOpRef(),
+			OpRequestRef op = OpRequestRef(),
 			ThreadPool::TPHandle *handle = NULL) {
     list<Transaction*> tls;
     tls.push_back(t);
@@ -953,7 +952,7 @@ public:
   int queue_transactions(Sequencer *osr, list<Transaction*>& tls,
 			 Context *onreadable, Context *ondisk=0,
 			 Context *onreadable_sync=0,
-			 TrackedOpRef op = TrackedOpRef(),
+			 OpRequestRef op = OpRequestRef(),
 			 ThreadPool::TPHandle *handle = NULL) {
     assert(!tls.empty());
     C_GatherBuilder g_onreadable(onreadable);
@@ -978,7 +977,7 @@ public:
 
   virtual int queue_transactions(
     Sequencer *osr, list<Transaction*>& tls,
-    TrackedOpRef op = TrackedOpRef(),
+    OpRequestRef op = OpRequestRef(),
     ThreadPool::TPHandle *handle = NULL) = 0;
 
 
@@ -989,7 +988,7 @@ public:
     Context *oncommit,
     Context *onreadable_sync,
     Context *oncomplete,
-    TrackedOpRef op);
+    OpRequestRef op);
 
   int queue_transaction(
     Sequencer *osr,
@@ -998,7 +997,7 @@ public:
     Context *oncommit,
     Context *onreadable_sync,
     Context *oncomplete,
-    TrackedOpRef op) {
+    OpRequestRef op) {
     list<Transaction*> tls;
     tls.push_back(t);
     return queue_transactions(

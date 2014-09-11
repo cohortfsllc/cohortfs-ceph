@@ -83,7 +83,7 @@ int ObjectStore::queue_transactions(
   Context *oncommit,
   Context *onreadable_sync,
   Context *oncomplete,
-  TrackedOpRef op = TrackedOpRef())
+  OpRequestRef op = OpRequestRef())
 {
   RunOnDeleteRef _complete(new RunOnDelete(oncomplete));
   Context *_onreadable = new Wrapper<RunOnDeleteRef>(

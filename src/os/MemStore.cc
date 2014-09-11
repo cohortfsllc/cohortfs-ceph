@@ -692,7 +692,7 @@ ObjectMap::ObjectMapIterator MemStore::get_omap_iterator(const coll_t &cid,
 
 int MemStore::queue_transactions(Sequencer *osr,
 				 list<Transaction*>& tls,
-				 TrackedOpRef op,
+				 OpRequestRef op,
 				 ThreadPool::TPHandle *handle)
 {
   // fixme: ignore the Sequencer and serialize everything.

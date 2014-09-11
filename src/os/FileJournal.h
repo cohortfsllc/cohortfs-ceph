@@ -41,19 +41,19 @@ public:
     uint64_t seq;
     Context *finish;
     utime_t start;
-    TrackedOpRef tracked_op;
+    OpRequestRef op;
     completion_item(uint64_t o, Context *c, utime_t s,
-		    TrackedOpRef opref)
-      : seq(o), finish(c), start(s), tracked_op(opref) {}
+		    OpRequestRef opref)
+      : seq(o), finish(c), start(s), op(opref) {}
     completion_item() : seq(0), finish(0), start(0) {}
   };
   struct write_item {
     uint64_t seq;
     bufferlist bl;
     int alignment;
-    TrackedOpRef tracked_op;
-    write_item(uint64_t s, bufferlist& b, int al, TrackedOpRef opref) :
-      seq(s), alignment(al), tracked_op(opref) {
+    OpRequestRef op;
+    write_item(uint64_t s, bufferlist& b, int al, OpRequestRef opref) :
+      seq(s), alignment(al), op(opref) {
       bl.claim(b);
     }
     write_item() : seq(0), alignment(0) {}
@@ -90,7 +90,7 @@ public:
 
   void submit_entry(uint64_t seq, bufferlist& bl, int alignment,
 		    Context *oncommit,
-		    TrackedOpRef osd_op = TrackedOpRef());
+		    OpRequestRef osd_op = OpRequestRef());
   /// End protected by finisher_lock
 
   /*

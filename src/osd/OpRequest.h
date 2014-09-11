@@ -21,7 +21,6 @@
 #include "common/Mutex.h"
 #include "include/xlist.h"
 #include "msg/Message.h"
-#include "common/TrackedOp.h"
 
 /**
  * osd request identifier
@@ -49,11 +48,14 @@ WRITE_CLASS_ENCODER(osd_reqid_t)
  * The OpRequest takes in a Message* and takes over a single reference
  * to it, which it puts() when destroyed.
  */
-struct OpRequest : public TrackedOp {
-  friend class OpTracker;
+class OpRequest {
+public:
+  typedef std::shared_ptr<OpRequest> Ref;
 
   // rmw flags
   int rmw_flags;
+
+  static Ref create_request(Message *ref);
 
   bool check_rmw(int flag);
   bool may_read();
@@ -70,8 +72,10 @@ struct OpRequest : public TrackedOp {
   void set_class_write();
 
   void _dump(utime_t now, Formatter *f) const;
+  Message *get_req() const { return request; }
 
 private:
+  Message *request;
   osd_reqid_t reqid;
   uint8_t hit_flag_points;
   uint8_t latest_flag_point;
@@ -83,7 +87,7 @@ private:
   static const uint8_t flag_sub_op_sent = 1 << 4;
   static const uint8_t flag_commit_sent = 1 << 5;
 
-  OpRequest(Message *req, OpTracker *tracker);
+  OpRequest(Message *req);
 
 public:
   bool been_queued_for_vol() { return hit_flag_points & flag_queued_for_vol; }
@@ -114,38 +118,26 @@ public:
   }
 
   void mark_queued_for_vol() {
-    mark_event("queued_for_vol");
-    current = "queued for volume";
     hit_flag_points |= flag_queued_for_vol;
     latest_flag_point = flag_queued_for_vol;
   }
   void mark_reached_vol() {
-    mark_event("reached_volume");
-    current = "reached volume";
     hit_flag_points |= flag_reached_vol;
     latest_flag_point = flag_reached_vol;
   }
   void mark_delayed(string s) {
-    mark_event(s);
-    current = s;
     hit_flag_points |= flag_delayed;
     latest_flag_point = flag_delayed;
   }
   void mark_started() {
-    mark_event("started");
-    current = "started";
     hit_flag_points |= flag_started;
     latest_flag_point = flag_started;
   }
   void mark_sub_op_sent(string s) {
-    mark_event(s);
-    current = s;
     hit_flag_points |= flag_sub_op_sent;
     latest_flag_point = flag_sub_op_sent;
   }
   void mark_commit_sent() {
-    mark_event("commit_sent");
-    current = "commit sent";
     hit_flag_points |= flag_commit_sent;
     latest_flag_point = flag_commit_sent;
   }
@@ -160,10 +152,6 @@ public:
   osd_reqid_t get_reqid() const {
     return reqid;
   }
-
-  void init_from_message();
-
-  typedef std::shared_ptr<OpRequest> Ref;
 };
 
 typedef OpRequest::Ref OpRequestRef;

@@ -837,8 +837,6 @@ void FileJournal::queue_completions_thru(uint64_t seq)
     }
     if (next.finish)
       finisher->queue(next.finish);
-    if (next.tracked_op)
-      next.tracked_op->mark_event("journaled_completion_queued");
   }
   finisher_cond.Signal();
 }
@@ -896,9 +894,6 @@ int FileJournal::prepare_single_write(bufferlist& bl, off64_t& queue_pos, uint64
     bl.push_back(bp);
   }
   bl.append((const char*)&h, sizeof(h));
-
-  if (next_write.tracked_op)
-    next_write.tracked_op->mark_event("write_thread_in_journal_buffer");
 
   // pop from writeq
   pop_write();
@@ -1417,7 +1412,7 @@ void FileJournal::check_aio_completion()
 #endif
 
 void FileJournal::submit_entry(uint64_t seq, bufferlist& e, int alignment,
-			       Context *oncommit, TrackedOpRef osd_op)
+			       Context *oncommit, OpRequestRef osd_op)
 {
   // dump on queue
   dout(5) << "submit_entry seq " << seq
@@ -1428,8 +1423,6 @@ void FileJournal::submit_entry(uint64_t seq, bufferlist& e, int alignment,
   dout(30) << "XXX throttle take " << e.length() << dendl;
   throttle_ops.take(1);
   throttle_bytes.take(e.length());
-  if (osd_op)
-    osd_op->mark_event("commit_queued_for_journal_write");
   if (logger) {
     logger->set(l_os_jq_max_ops, throttle_ops.get_max());
     logger->set(l_os_jq_max_bytes, throttle_bytes.get_max());

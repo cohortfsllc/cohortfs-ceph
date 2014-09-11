@@ -161,7 +161,6 @@ set(libcommon_files
   common/str_list.cc
   common/str_map.cc
   common/errno.cc
-  common/TrackedOp.cc
   common/util.cc
   common/SloppyCRCMap.cc
   log/Log.cc
