@@ -164,6 +164,7 @@ set(libcommon_files
   common/SloppyCRCMap.cc
   log/Log.cc
   log/SubsystemMap.cc
+  log/LttngStream.cc
   mon/MonCap.cc
   mon/MonClient.cc
   mon/MonMap.cc
@@ -255,7 +256,7 @@ if(${WITH_PROFILER})
   target_link_libraries(common PRIVATE profiler)
 endif(${WITH_PROFILER})
 
-target_link_libraries(common PRIVATE json_spirit ${CRYPTO_LIBS} rt uuid lttng-ust ${Boost_LIBRARIES} ${CDS_LIBS} ${EXTRALIBS})
+target_link_libraries(common PRIVATE ${CRYPTO_LIBS} rt uuid dl lttng-ust ${Boost_LIBRARIES} ${CDS_LIBS})
 
 set(libglobal_srcs
   global/global_init.cc
