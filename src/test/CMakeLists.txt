@@ -1665,7 +1665,9 @@ set_target_properties(test_keyvaluedb_atomicity PROPERTIES COMPILE_FLAGS
 target_link_libraries(test_keyvaluedb_atomicity
   os
   ${UNITTEST_LIBS}
-  global boost_filesystem
+  global
+  boost_filesystem
+  boost_system
   leveldb
   ${EXTRALIBS}
   ${TCMALLOC_LIBS}
