@@ -32,12 +32,12 @@ static void do_cpuid(unsigned int *eax, unsigned int *ebx, unsigned int *ecx,
 {
 	int id = *eax;
 
-	asm("movl %4, %%eax;"
-	    "cpuid;"
-	    "movl %%eax, %0;"
-	    "movl %%ebx, %1;"
-	    "movl %%ecx, %2;"
-	    "movl %%edx, %3;"
+	__asm__("movl %4, %%eax;"
+		"cpuid;"
+		"movl %%eax, %0;"
+		"movl %%ebx, %1;"
+		"movl %%ecx, %2;"
+		"movl %%edx, %3;"
 		: "=r" (*eax), "=r" (*ebx), "=r" (*ecx), "=r" (*edx)
 		: "r" (id)
 		: "eax", "ebx", "ecx", "edx");
