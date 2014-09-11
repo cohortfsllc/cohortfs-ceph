@@ -350,7 +350,7 @@ set(UNITTEST_LIBS gtest_main ${PTHREAD_LIBS})
 set(UNITTEST_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I${CMAKE_SOURCE_DIR}/src/gtest/include -I${CMAKE_BINARY_DIR}/src/gtest/include -fno-strict-aliasing")
 
 if (WITH_CLIENT)
-  list(APPEND UNITTEST_LIBS cephfs)
+  list(APPEND UNITTEST_LIBS cephfs boost_system)
 endif (WITH_CLIENT)
 
 # unittest_encoding
