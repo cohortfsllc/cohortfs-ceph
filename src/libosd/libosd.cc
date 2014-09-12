@@ -14,6 +14,7 @@
 
 #include "common/common_init.h"
 #include "common/ceph_argparse.h"
+#include "common/Finisher.h"
 #include "include/msgr.h"
 #include "include/color.h"
 
@@ -61,6 +62,7 @@ ContextSet contexts;
 class LibOSD : public libosd, private OSDStateObserver {
   libosd_callbacks *callbacks;
   void *user;
+  Finisher *finisher; // thread to send callbacks to user
 
   CephContext *cct;
   md_config_t *conf;
@@ -110,6 +112,8 @@ public:
 LibOSD::LibOSD(int whoami)
   : libosd(whoami),
     callbacks(NULL),
+    user(NULL),
+    finisher(NULL),
     cct(NULL),
     conf(NULL),
     monc(NULL),
@@ -126,6 +130,10 @@ LibOSD::~LibOSD()
   delete monc;
   delete ms;
   delete dispatcher;
+  if (finisher) {
+    finisher->stop();
+    delete finisher;
+  }
   if (cct) {
     cct->put();
     global::contexts.erase(cct);
@@ -230,6 +238,10 @@ int LibOSD::init(const struct libosd_init_args *args)
     return r;
   }
 
+  // start callback finisher thread
+  finisher = new Finisher(cct);
+  finisher->start();
+
   // register for state change notifications
   osd->add_state_observer(this);
 
@@ -246,6 +258,18 @@ int LibOSD::init(const struct libosd_init_args *args)
   return 0;
 }
 
+struct C_Active : public Context {
+  typedef void (*callback_fn)(struct libosd *osd, void *user);
+  callback_fn cb;
+  libosd *osd;
+  void *user;
+  C_Active(callback_fn cb, libosd *osd, void *user)
+    : cb(cb), osd(osd), user(user) {}
+  void finish(int r) {
+    cb(osd, user);
+  }
+};
+
 void LibOSD::on_osd_state(int state, epoch_t epoch)
 {
   dout(1) << "on_osd_state " << state << " epoch " << epoch << dendl;
@@ -257,11 +281,10 @@ void LibOSD::on_osd_state(int state, epoch_t epoch)
 
     if (state == OSD::STATE_ACTIVE) {
       if (callbacks && callbacks->osd_active)
-	callbacks->osd_active(this, user);
+	finisher->queue(new C_Active(callbacks->osd_active, this, user));
     } else if (state == OSD::STATE_STOPPING) {
       dispatcher->shutdown();
     }
-    // TODO: signal callbacks->osd_shutdown() when shutdown is complete
   }
   osdmap.epoch = epoch;
 }
@@ -320,16 +343,31 @@ int LibOSD::get_volume(const char *name, uuid_t uuid)
   return 0;
 }
 
+struct C_Completion : public Context {
+  libosd_io_completion_fn cb;
+  int result;
+  uint64_t length;
+  int flags;
+  void *user;
+  C_Completion(libosd_io_completion_fn cb, int result, uint64_t length,
+      int flags, void *user)
+    : cb(cb), result(result), length(length), flags(flags), user(user) {}
+  void finish(int r) {
+    cb(result, length, flags, user);
+  }
+};
+
 // Dispatcher callback to fire the read completion
 class OnReadReply : public LibOSDDispatcher::OnReply {
+  Finisher *finisher;
   char *data;
   uint64_t length;
   libosd_io_completion_fn cb;
   void *user;
 public:
-  OnReadReply(char *data, uint64_t length, libosd_io_completion_fn cb,
-	      void *user)
-    : data(data), length(length), cb(cb), user(user) {}
+  OnReadReply(Finisher *finisher, char *data, uint64_t length,
+	      libosd_io_completion_fn cb, void *user)
+    : finisher(finisher), data(data), length(length), cb(cb), user(user) {}
 
   void on_reply(Message *reply) {
     assert(reply->get_type() == CEPH_MSG_OSD_OPREPLY);
@@ -353,11 +391,11 @@ public:
       op.outdata.copy(0, length, data);
     }
 
-    cb(op.rval, length, 0, user);
+    finisher->queue(new C_Completion(cb, op.rval, length, 0, user));
   }
 
   void on_failure(int r) {
-    cb(r, 0, 0, user);
+    finisher->queue(new C_Completion(cb, r, 0, 0, user));
   }
 };
 
@@ -382,7 +420,7 @@ int LibOSD::read(const char *object, const uuid_t volume,
   m->read(offset, length);
 
   // create reply callback
-  OnReadReply *onreply = new OnReadReply(data, length,
+  OnReadReply *onreply = new OnReadReply(finisher, data, length,
 					 callbacks->read_completion, user);
 
   // send request over direct messenger
@@ -392,12 +430,14 @@ int LibOSD::read(const char *object, const uuid_t volume,
 
 // Dispatcher callback to fire the write completion
 class OnWriteReply : public LibOSDDispatcher::OnReply {
+  Finisher *finisher;
   libosd_io_completion_fn cb;
   int flags;
   void *user;
 public:
-  OnWriteReply(libosd_io_completion_fn cb, int flags, void *user)
-    : cb(cb), flags(flags), user(user) {}
+  OnWriteReply(Finisher *finisher, libosd_io_completion_fn cb,
+	       int flags, void *user)
+    : finisher(finisher), cb(cb), flags(flags), user(user) {}
 
   bool is_last_reply(Message *reply) {
     assert(reply->get_type() == CEPH_MSG_OSD_OPREPLY);
@@ -421,11 +461,11 @@ public:
     assert(op.op.op == CEPH_OSD_OP_WRITE);
 
     uint64_t length = op.rval ? 0 : op.op.extent.length;
-    cb(op.rval, length, 0, user);
+    finisher->queue(new C_Completion(cb, op.rval, length, flag, user));
   }
 
   virtual void on_failure(int r) {
-    cb(r, 0, 0, user);
+    finisher->queue(new C_Completion(cb, r, 0, 0, user));
   }
 };
 
@@ -462,7 +502,8 @@ int LibOSD::write(const char *object, const uuid_t volume,
   // create reply callback
   OnWriteReply *onreply = NULL;
   if (m->wants_ack() || m->wants_ondisk())
-    onreply = new OnWriteReply(callbacks->write_completion, flags, user);
+    onreply = new OnWriteReply(finisher, callbacks->write_completion,
+			       flags, user);
 
   // send request over direct messenger
   dispatcher->send_request(m, onreply);
