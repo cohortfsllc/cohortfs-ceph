@@ -56,7 +56,7 @@ int test_single()
       .done = 0
     };
     char buf[64] = {};
-    r = libosd_write(osd, "obj", volume, 0, sizeof(buf), buf, &io);
+    r = libosd_write(osd, "obj", volume, 0, sizeof(buf), buf, 0, &io);
     fprintf(stderr, "libosd_write() returned %d\n", r);
 
     pthread_mutex_lock(&io.mutex);

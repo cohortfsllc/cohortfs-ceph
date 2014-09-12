@@ -100,10 +100,10 @@ public:
   int get_volume(const char *name, uuid_t uuid);
   int read(const char *object, const uuid_t volume,
 	   uint64_t offset, uint64_t length, char *data,
-	   void *user);
+	   int flags, void *user);
   int write(const char *object, const uuid_t volume,
 	    uint64_t offset, uint64_t length, char *data,
-	    void *user);
+	    int flags, void *user);
 };
 
 
@@ -363,14 +363,13 @@ public:
 
 int LibOSD::read(const char *object, const uuid_t volume,
 		 uint64_t offset, uint64_t length, char *data,
-		 void *user)
+		 int flags, void *user)
 {
   const int client = 0;
   const long tid = 0;
   hobject_t oid = object_t(object);
   uuid_d vol(volume);
   epoch_t epoch = 0;
-  const int flags = 0;
 
   if (!callbacks || !callbacks->read_completion)
     return -EINVAL;
@@ -379,7 +378,7 @@ int LibOSD::read(const char *object, const uuid_t volume,
     return -ENODEV;
 
   // set up osd read op
-  MOSDOp *m = new MOSDOp(client, tid, oid, vol, epoch, flags);
+  MOSDOp *m = new MOSDOp(client, tid, oid, vol, epoch, 0);
   m->read(offset, length);
 
   // create reply callback
@@ -422,14 +421,13 @@ public:
 
 int LibOSD::write(const char *object, const uuid_t volume,
 		  uint64_t offset, uint64_t length, char *data,
-		  void *user)
+		  int flags, void *user)
 {
   const int client = 0;
   const long tid = 0;
   hobject_t oid = object_t(object);
   uuid_d vol(volume);
   epoch_t epoch = 0;
-  const int flags = CEPH_OSD_FLAG_ONDISK; // ONACK
 
   if (!callbacks || !callbacks->write_completion)
     return -EINVAL;
@@ -441,8 +439,10 @@ int LibOSD::write(const char *object, const uuid_t volume,
   bl.append(buffer::create_static(length, data));
 
   // set up osd write op
-  MOSDOp *m = new MOSDOp(client, tid, oid, vol, epoch, flags);
+  MOSDOp *m = new MOSDOp(client, tid, oid, vol, epoch, 0);
   m->write(offset, length, bl);
+
+  m->set_want_ondisk(true);
 
   // create reply callback
   OnWriteReply *onreply = new OnWriteReply(callbacks->write_completion, user);
@@ -549,10 +549,11 @@ int libosd_get_volume(struct libosd *osd, const char *name, uuid_t uuid)
 }
 
 int libosd_read(struct libosd *osd, const char *object, const uuid_t volume,
-		uint64_t offset, uint64_t length, char *data, void *user)
+		uint64_t offset, uint64_t length, char *data,
+		int flags, void *user)
 {
   try {
-    return osd->read(object, volume, offset, length, data, user);
+    return osd->read(object, volume, offset, length, data, flags, user);
   } catch (std::exception &e) {
     derr << "libosd_read caught exception " << e.what() << dendl;
     return -EFAULT;
@@ -560,10 +561,11 @@ int libosd_read(struct libosd *osd, const char *object, const uuid_t volume,
 }
 
 int libosd_write(struct libosd *osd, const char *object, const uuid_t volume,
-		 uint64_t offset, uint64_t length, char *data, void *user)
+		 uint64_t offset, uint64_t length, char *data,
+		 int flags, void *user)
 {
   try {
-    return osd->write(object, volume, offset, length, data, user);
+    return osd->write(object, volume, offset, length, data, flags, user);
   } catch (std::exception &e) {
     derr << "libosd_write caught exception " << e.what() << dendl;
     return -EFAULT;
