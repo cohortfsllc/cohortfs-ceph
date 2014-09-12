@@ -18,6 +18,11 @@ struct io_completion {
 void write_completion(int result, uint64_t length, int flags, void *user)
 {
   struct io_completion *io = (struct io_completion*)user;
+  printf("write_completion result %d flags %d\n", result, flags);
+
+  // wait for STABLE
+  if (result == 0 && (flags & LIBOSD_WRITE_CB_STABLE) == 0)
+    return;
 
   pthread_mutex_lock(&io->mutex);
   io->result = result;
@@ -56,7 +61,8 @@ int test_single()
       .done = 0
     };
     char buf[64] = {};
-    r = libosd_write(osd, "obj", volume, 0, sizeof(buf), buf, 0, &io);
+    r = libosd_write(osd, "obj", volume, 0, sizeof(buf), buf,
+		     LIBOSD_WRITE_CB_UNSTABLE | LIBOSD_WRITE_CB_STABLE, &io);
     fprintf(stderr, "libosd_write() returned %d\n", r);
 
     pthread_mutex_lock(&io.mutex);

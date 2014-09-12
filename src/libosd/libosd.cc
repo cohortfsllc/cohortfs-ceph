@@ -393,14 +393,24 @@ int LibOSD::read(const char *object, const uuid_t volume,
 // Dispatcher callback to fire the write completion
 class OnWriteReply : public LibOSDDispatcher::OnReply {
   libosd_io_completion_fn cb;
+  int flags;
   void *user;
 public:
-  OnWriteReply(libosd_io_completion_fn cb, void *user)
-    : cb(cb), user(user) {}
+  OnWriteReply(libosd_io_completion_fn cb, int flags, void *user)
+    : cb(cb), flags(flags), user(user) {}
+
+  bool is_last_reply(Message *reply) {
+    assert(reply->get_type() == CEPH_MSG_OSD_OPREPLY);
+    MOSDOpReply *m = static_cast<MOSDOpReply*>(reply);
+    return (flags & LIBOSD_WRITE_CB_STABLE) == 0 || m->is_ondisk();
+  }
 
   void on_reply(Message *reply) {
     assert(reply->get_type() == CEPH_MSG_OSD_OPREPLY);
     MOSDOpReply *m = static_cast<MOSDOpReply*>(reply);
+
+    const int flag = m->is_ondisk() ? LIBOSD_WRITE_CB_STABLE :
+      LIBOSD_WRITE_CB_UNSTABLE;
 
     vector<OSDOp> ops;
     m->claim_ops(ops);
@@ -429,7 +439,9 @@ int LibOSD::write(const char *object, const uuid_t volume,
   uuid_d vol(volume);
   epoch_t epoch = 0;
 
-  if (!callbacks || !callbacks->write_completion)
+  // invalid to request callbacks without supplying write_completion
+  if (flags & (LIBOSD_WRITE_CB_UNSTABLE | LIBOSD_WRITE_CB_STABLE) &&
+      (!callbacks || !callbacks->write_completion))
     return -EINVAL;
 
   if (!wait_for_active(&epoch))
@@ -442,10 +454,15 @@ int LibOSD::write(const char *object, const uuid_t volume,
   MOSDOp *m = new MOSDOp(client, tid, oid, vol, epoch, 0);
   m->write(offset, length, bl);
 
-  m->set_want_ondisk(true);
+  if (flags & LIBOSD_WRITE_CB_UNSTABLE)
+    m->set_want_ack(true);
+  if (flags & LIBOSD_WRITE_CB_STABLE)
+    m->set_want_ondisk(true);
 
   // create reply callback
-  OnWriteReply *onreply = new OnWriteReply(callbacks->write_completion, user);
+  OnWriteReply *onreply = NULL;
+  if (m->wants_ack() || m->wants_ondisk())
+    onreply = new OnWriteReply(callbacks->write_completion, flags, user);
 
   // send request over direct messenger
   dispatcher->send_request(m, onreply);

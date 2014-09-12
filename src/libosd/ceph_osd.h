@@ -100,6 +100,12 @@ int libosd_read(struct libosd *osd, const char *object, const uuid_t volume,
 		uint64_t offset, uint64_t length, char *data,
 		int flags, void *user);
 
+/* libosd_write() flags */
+/* request a write_completion when the data is in cache */
+#define LIBOSD_WRITE_CB_UNSTABLE  0x01
+/* request a write_completion when the data is on stable storage */
+#define LIBOSD_WRITE_CB_STABLE	  0x02
+
 /**
  * Write to an object asynchronously. 
  *
