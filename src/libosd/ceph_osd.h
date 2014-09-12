@@ -40,14 +40,15 @@ struct libosd;
 #endif /* __cplusplus */
 
 /* io completion callback */
-typedef void (*io_completion_fn)(int result, uint64_t length, void *user);
+typedef void (*libosd_io_completion_fn)(int result, uint64_t length,
+					int flags, void *user);
 
 /* osd callback function table */
 struct libosd_callbacks {
   void (*osd_active)(struct libosd *osd, void *user);
   void (*osd_shutdown)(struct libosd *osd, void *user);
-  io_completion_fn read_completion;
-  io_completion_fn write_completion;
+  libosd_io_completion_fn read_completion;
+  libosd_io_completion_fn write_completion;
 };
 
 /* initialization arguments for libosd_init() */

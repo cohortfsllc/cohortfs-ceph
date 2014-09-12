@@ -15,7 +15,7 @@ struct io_completion {
   int done;
 };
 
-void write_completion(int result, uint64_t length, void *user)
+void write_completion(int result, uint64_t length, int flags, void *user)
 {
   struct io_completion *io = (struct io_completion*)user;
 
