@@ -324,12 +324,12 @@ int LibOSD::get_volume(const char *name, uuid_t uuid)
 class OnReadReply : public LibOSDDispatcher::OnReply {
   char *data;
   uint64_t length;
-  io_completion_fn completion;
+  libosd_io_completion_fn cb;
   void *user;
 public:
-  OnReadReply(char *data, uint64_t length, io_completion_fn completion,
+  OnReadReply(char *data, uint64_t length, libosd_io_completion_fn cb,
 	      void *user)
-    : data(data), length(length), completion(completion), user(user) {}
+    : data(data), length(length), cb(cb), user(user) {}
 
   void on_reply(Message *reply) {
     assert(reply->get_type() == CEPH_MSG_OSD_OPREPLY);
@@ -353,11 +353,11 @@ public:
       op.outdata.copy(0, length, data);
     }
 
-    completion(op.rval, length, user);
+    cb(op.rval, length, 0, user);
   }
 
   void on_failure(int r) {
-    completion(r, 0, user);
+    cb(r, 0, 0, user);
   }
 };
 
@@ -393,11 +393,11 @@ int LibOSD::read(const char *object, const uuid_t volume,
 
 // Dispatcher callback to fire the write completion
 class OnWriteReply : public LibOSDDispatcher::OnReply {
-  io_completion_fn completion;
+  libosd_io_completion_fn cb;
   void *user;
 public:
-  OnWriteReply(io_completion_fn completion, void *user)
-    : completion(completion), user(user) {}
+  OnWriteReply(libosd_io_completion_fn cb, void *user)
+    : cb(cb), user(user) {}
 
   void on_reply(Message *reply) {
     assert(reply->get_type() == CEPH_MSG_OSD_OPREPLY);
@@ -412,11 +412,11 @@ public:
     assert(op.op.op == CEPH_OSD_OP_WRITE);
 
     uint64_t length = op.rval ? 0 : op.op.extent.length;
-    completion(op.rval, length, user);
+    cb(op.rval, length, 0, user);
   }
 
   virtual void on_failure(int r) {
-    completion(r, 0, user);
+    cb(r, 0, 0, user);
   }
 };
 
