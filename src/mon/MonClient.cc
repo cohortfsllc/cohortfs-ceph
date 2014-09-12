@@ -78,6 +78,19 @@ MonClient::MonClient(CephContext *cct_) :
 
 MonClient::~MonClient()
 {
+#if 0
+  /* this was an attempt to fix the "lock in use" bug I described
+   * in src/common/Mutex.h .  This fix just results in a failure
+   * inside of librados::RadosClient::connect() which winds up
+   * looking at a data structure that just got freed by rados_shutdown().
+   * Ie, this doesn't fix the inherent use after free bug.  - mdw 20140912.
+   */
+  if (state != MC_STATE_HAVE_SESSION) {
+    Mutex::Locker l(monc_lock);
+    authenticate_err = 1;
+    auth_cond.SignalAll();
+  }
+#endif
   delete auth_supported;
   delete session_established_context;
   delete auth;
