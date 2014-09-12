@@ -15,6 +15,7 @@
 #ifndef CEPH_MUTEX_H
 #define CEPH_MUTEX_H
 
+#include <iostream>
 #include <cassert>
 #include <pthread.h>
 
@@ -61,7 +62,20 @@ public:
     {
       assert(nlock == 0);
       int r = pthread_mutex_destroy(&_m);
+#if 0
+      /* the original ceph code ignored failures from pthread_mutex_destroy()
+       * There's an inherent problem destroying a mutex that's in use by
+       * by another thread, and the ceph code can do this.  My test case:
+       * interrupting "ceph" python script trying to connect to a dead ceph-mon.
+       * This results in thread #2 calling rados_shutdown() while thread #1
+       * is stuck waiting inside of rados_connect().  -mdw 20140912
+       */
       assert(r == 0);
+#else
+      if (r != 0) {
+	std::cerr << "Mutex::~Mutex: pthread_mutex_destroy returned " << r << std::endl;
+      }
+#endif
     }
   bool is_locked() const {
     return (nlock > 0);
