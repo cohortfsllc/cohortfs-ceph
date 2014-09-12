@@ -70,11 +70,10 @@ void LibOSDDispatcher::send_request(Message *m, OnReply *c)
   if (conn->get_priv() == NULL) {
     // create an osd session
     OSD::Session *s = new OSD::Session;
-    conn->set_priv(s->get());
     s->con = conn;
     s->entity_name.set_name(ms_client->get_myname());
     s->auid = CEPH_AUTH_UID_DEFAULT;
-    s->put();
+    conn->set_priv(s);
   }
 
   // send to server messenger
@@ -93,10 +92,16 @@ bool LibOSDDispatcher::ms_dispatch(Message *m)
   }
 
   OnReply *c = i->second;
-  callbacks.erase(i);
+
+  bool last_reply = c == NULL || c->is_last_reply(m);
+  if (last_reply)
+    callbacks.erase(i);
   tid_lock.unlock();
 
-  c->on_reply(m);
-  delete c;
+  if (c) {
+    c->on_reply(m);
+    if (last_reply)
+      delete c;
+  }
   return true;
 }
