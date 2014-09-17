@@ -25,6 +25,10 @@ void lttng_stream::emit_string(const char *val)
 	tracepoint(ceph, log_string, val, pid, message_id);
 }
 
+void lttng_stream::emit_manip(enum manip_type type, int val)
+{
+}
+
 void lttng_stream::emit_footer()
 {
 	tracepoint(ceph, log_footer, pid, message_id);

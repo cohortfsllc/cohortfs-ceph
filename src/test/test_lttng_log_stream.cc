@@ -60,7 +60,7 @@ int main(int argc, char *argv[])
 
   lttng_stream out(1, "a", 
 	 1000, 2, 3, 4, 5);
-  out << test << std::endl;
+  out << std::hex << test << std::dec << std::endl;
   std::cout << test << std::endl;
   return 0;
 }
