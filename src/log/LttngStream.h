@@ -6,6 +6,7 @@
 
 #include <inttypes.h>
 #include <ostream>
+#include <iomanip>
 
 
 // lttng log stream
@@ -32,12 +33,40 @@ private:
     TYPE_PTR,
   };
 
+  // stream manipulators
+  enum manip_type {
+    MANIP_ENDL,
+    MANIP_ENDS,
+    MANIP_FLUSH,
+    MANIP_BOOLALPHA,
+    MANIP_SHOWBASE,
+    MANIP_SHOWPOINT,
+    MANIP_SHOWPOS,
+    MANIP_UNITBUF,
+    MANIP_UPPERCASE,
+    MANIP_DEC,
+    MANIP_HEX,
+    MANIP_OCT,
+    MANIP_FIXED,
+    MANIP_SCIENTIFIC,
+    MANIP_INTERNAL,
+    MANIP_LEFT,
+    MANIP_RIGHT,
+    MANIP_SETBASE,
+    MANIP_SETFILL,
+    MANIP_SETPRECISION,
+    MANIP_SETW,
+    MANIP_SETIOSFLAGS,
+    MANIP_RESETIOSFLAGS,
+  };
+
   // tracepoint emission functions
   void emit_header(int entity_type, const char *entity_name, long thread, 
 	short subsys, short prio);
 	 // TODO: add arguments for log_header
   void emit_integer(uint64_t val, enum int_type type);
   void emit_string(const char *val);
+  void emit_manip(enum manip_type type, int val);
   void emit_footer();
 
 public:
@@ -127,10 +156,88 @@ public:
     return *this;
   }
 
-  // for std::flush, endl, hex, dec, etc
-  typedef std::ostream& (*ostream_manip)(std::ostream&);
-  lttng_stream& operator<<(ostream_manip manip) {
-    // XXX: figure out how to support endl, hex, dec, etc
+  // ostream manip: for endl, ends, flush
+  lttng_stream& operator<<(std::ostream& (*manip)(std::ostream&)) {
+    typedef std::ostream::char_type C;
+    typedef std::ostream::traits_type T;
+
+    if (manip == &std::endl<C, T>) {
+      emit_manip(MANIP_ENDL, 0);
+    } else if (manip == &std::ends<C, T>) {
+      emit_manip(MANIP_ENDS, 0);
+    } else if (manip == &std::flush<C, T>) {
+      emit_manip(MANIP_FLUSH, 0);
+    }
+    return *this;
+  }
+
+  // ios_base manip: for dec, hex, oct, etc
+  lttng_stream& operator<<(std::ios_base& (*manip)(std::ios_base&)) {
+    // Format flag manipulators at http://www.cplusplus.com/reference/ios/
+    if (manip == std::dec) {
+      emit_manip(MANIP_DEC, 0);
+    } else if (manip == std::hex) {
+      emit_manip(MANIP_HEX, 0);
+    } else if (manip == std::oct) {
+      emit_manip(MANIP_OCT, 0);
+    } else if (manip == std::boolalpha) {
+      emit_manip(MANIP_BOOLALPHA, 1);
+    } else if (manip == std::noboolalpha) {
+      emit_manip(MANIP_BOOLALPHA, 0);
+    } else if (manip == std::showbase) {
+      emit_manip(MANIP_SHOWBASE, 1);
+    } else if (manip == std::noshowbase) {
+      emit_manip(MANIP_SHOWBASE, 0);
+    } else if (manip == std::showpoint) {
+      emit_manip(MANIP_SHOWPOINT, 1);
+    } else if (manip == std::noshowpoint) {
+      emit_manip(MANIP_SHOWPOINT, 0);
+    } else if (manip == std::showpos) {
+      emit_manip(MANIP_SHOWPOS, 1);
+    } else if (manip == std::noshowpos) {
+      emit_manip(MANIP_SHOWPOS, 0);
+    } else if (manip == std::uppercase) {
+      emit_manip(MANIP_UPPERCASE, 1);
+    } else if (manip == std::nouppercase) {
+      emit_manip(MANIP_UPPERCASE, 0);
+    } else if (manip == std::fixed) {
+      emit_manip(MANIP_FIXED, 0);
+    } else if (manip == std::scientific) {
+      emit_manip(MANIP_SCIENTIFIC, 0);
+    } else if (manip == std::internal) {
+      emit_manip(MANIP_INTERNAL, 0);
+    } else if (manip == std::left) {
+      emit_manip(MANIP_LEFT, 0);
+    } else if (manip == std::right) {
+      emit_manip(MANIP_RIGHT, 0);
+    }
+    return *this;
+  }
+
+  // iomanip: setbase, setfill, setprecision, setw, setiosflags, resetiosflags
+  // XXX: glibc type names are not portable
+  lttng_stream& operator<<(std::_Setbase b) {
+    emit_manip(MANIP_SETBASE, b._M_base);
+    return *this;
+  }
+  lttng_stream& operator<<(std::_Setfill<char> f) {
+    emit_manip(MANIP_SETFILL, f._M_c);
+    return *this;
+  }
+  lttng_stream& operator<<(std::_Setprecision p) {
+    emit_manip(MANIP_SETPRECISION, p._M_n);
+    return *this;
+  }
+  lttng_stream& operator<<(std::_Setw w) {
+    emit_manip(MANIP_SETW, w._M_n);
+    return *this;
+  }
+  lttng_stream& operator<<(std::_Setiosflags f) {
+    emit_manip(MANIP_SETIOSFLAGS, f._M_mask);
+    return *this;
+  }
+  lttng_stream& operator<<(std::_Resetiosflags f) {
+    emit_manip(MANIP_RESETIOSFLAGS, f._M_mask);
     return *this;
   }
 };
