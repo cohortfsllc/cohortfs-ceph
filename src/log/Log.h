@@ -4,6 +4,7 @@
 #ifndef __CEPH_LOG_LOG_H
 #define __CEPH_LOG_LOG_H
 
+#include <atomic>
 #include "common/Thread.h"
 
 #include <pthread.h>
@@ -12,7 +13,6 @@
 #include "EntryQueue.h"
 #include "common/entity_name.h"
 #include "SubsystemMap.h"
-#include <atomic.h>
 
 namespace ceph {
 namespace log {
@@ -37,7 +37,7 @@ class Log : private Thread
   int m_syslog_log, m_syslog_crash;
   int m_stderr_log, m_stderr_crash;
   bool m_lttng_enabled;
-  atomic_t m_message_id;
+  std::atomic<int> m_message_id;
   const int m_pid;
   bool m_stop;
 
