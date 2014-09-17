@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+/// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
 #include <cassert>
@@ -17,9 +17,9 @@
 #include "include/on_exit.h"
 
 #ifdef HAVE_LTTNG
-#define TRACEPOINT_PROBE_DYNAMIC_LINKAGE
-#define TRACEPOINT_CREATE_PROBES
-#define TRACEPOINT_DEFINE
+//#define TRACEPOINT_PROBE_DYNAMIC_LINKAGE
+//#define TRACEPOINT_CREATE_PROBES
+//#define TRACEPOINT_DEFINE
 #include "LttngLog.h"
 #endif // HAVE_LTTNG
 
@@ -53,6 +53,7 @@ Log::Log(SubsystemMap *s, EntityName *name)
     m_fd(-1),
     m_syslog_log(-2), m_syslog_crash(-2),
     m_stderr_log(1), m_stderr_crash(-1),
+    m_message_id(0),
     m_lttng_enabled(false),
     m_pid(getpid()),
     m_stop(false),
@@ -164,10 +165,10 @@ void Log::submit_entry(Entry *e)
 #ifdef HAVE_LTTNG
   // signal lttng tracepoints directly from the submitting thread,
   // regardless of log levels; lttng user will filter the events
-  if (m_lttng_enabled) {
-    int message_id = m_message_id.inc();
-    tracepoint(ceph, log_header, m_name->get_type(), m_name->get_id().c_str(),
-    e->m_thread, m_pid, message_id, e->m_prio, e->m_subsys);
+ if (m_lttng_enabled) {
+//    int message_id = ++m_message_id;
+//    tracepoint(ceph, log_header, m_name->get_type(), m_name->get_id().c_str(),
+//    e->m_thread, m_pid, message_id, e->m_prio, e->m_subsys);
   
 //    tracepoint(ceph, log_message, m_pid, message_id, e->get_str().c_str());
   }

@@ -12,6 +12,8 @@
 class lttng_stream {
 private:
   // TODO: add variables for pid, message_id for use in emit_*() functions
+    int pid;
+    int message_id;
 
   // integer types for log_integer tracepoint
   enum int_type {
@@ -31,8 +33,8 @@ private:
   };
 
   // tracepoint emission functions
-  void emit_header(int entity_type, const char *entity_name, long thread, int pid
-	, int message_id, short subsys, short prio);
+  void emit_header(int entity_type, const char *entity_name, long thread, 
+	short subsys, short prio);
 	 // TODO: add arguments for log_header
   void emit_integer(uint64_t val, enum int_type type);
   void emit_string(const char *val);
@@ -42,9 +44,11 @@ public:
   lttng_stream(int entity_type, const char *entity_name, long thread, int pid,
 	 int message_id, short subsys, short prio)
 	 // TODO: add arguments for emit_header()
+	: pid(pid),
+	message_id(message_id)
+
   {
-	emit_header(entity_type, entity_name, thread, pid, message_id, subsys,
-	 prio);
+	emit_header(entity_type, entity_name, thread, subsys, prio);
   }
   ~lttng_stream()
   {

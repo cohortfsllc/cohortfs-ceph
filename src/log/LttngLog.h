@@ -12,8 +12,8 @@
 
 #include <lttng/tracepoint.h>
 
-TRACEPOINT_EVENT( ceph,
-       log_header,
+TRACEPOINT_EVENT(ceph,
+      log_header,
        TP_ARGS(int, entity_type, const char *, entity_name, long, thread, int, pid, int, message_id, short, prio, short, subsys),
        TP_FIELDS(
 	     ctf_integer(int, entity_type, entity_type)
@@ -33,10 +33,10 @@ TRACEPOINT_LOGLEVEL(
 
 TRACEPOINT_EVENT(ceph,
        log_integer,
-       TP_ARGS(int, value, const char *, type, int, pid, int, message_id),
+       TP_ARGS(int, value, char, type, int, pid, int, message_id),
        TP_FIELDS(
 	     ctf_integer(int, value, value)
-	     ctf_string(type, type)
+	     ctf_integer(char, type, type)
 	     ctf_integer(int, pid, pid)
              ctf_integer(int, message_id, message_id)
 	)	

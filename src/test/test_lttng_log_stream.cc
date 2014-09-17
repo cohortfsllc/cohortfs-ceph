@@ -4,6 +4,8 @@
 #include <iostream>
 #include <limits>
 
+#define TRACEPOINT_PROBE_DYNAMIC_LINKAGE
+#define TRACEPOINT_DEFINE
 #include "log/LttngStream.h"
 
 

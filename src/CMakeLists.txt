@@ -256,7 +256,7 @@ if(${WITH_PROFILER})
   target_link_libraries(common PRIVATE profiler)
 endif(${WITH_PROFILER})
 
-target_link_libraries(common PRIVATE ${CRYPTO_LIBS} rt uuid dl lttng-ust ${Boost_LIBRARIES} ${CDS_LIBS})
+target_link_libraries(common PRIVATE ${CRYPTO_LIBS} rt uuid dl lttng-ust json_spirit ${Boost_LIBRARIES} ${CDS_LIBS})
 
 set(libglobal_srcs
   global/global_init.cc
