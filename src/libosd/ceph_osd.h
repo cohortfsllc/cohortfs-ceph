@@ -27,6 +27,8 @@ struct libosd {
   virtual int write(const char *object, const uuid_t volume,
 		    uint64_t offset, uint64_t length, char *data,
 		    int flags, void *user) = 0;
+  virtual int truncate(const char *object, const uuid_t volume,
+		       uint64_t offset, int flags, void *user) = 0;
 
 protected: /* must be deleted by libosd_cleanup() */
   virtual ~libosd() {}
@@ -116,15 +118,31 @@ int libosd_read(struct libosd *osd, const char *object, const uuid_t volume,
  * @param length  Number of bytes to write
  * @param data	  Buffer to receive the object data
  * @param flags	  LIBOSD_WRITE_ flags
- * @param user	  User data passed to the read_completion callback
+ * @param user	  User data passed to the write_completion callback
  *
  * @return Nonzero on immediate errors. Otherwise returns 0 and promises
- * to call the read_completion callback on success or failure.
+ * to call the write_completion callback on success or failure.
  */
 int libosd_write(struct libosd *osd, const char *object, const uuid_t volume,
 		 uint64_t offset, uint64_t length, char *data,
 		 int flags, void *user);
 
+/**
+ * Truncate an object asynchronously. 
+ *
+ * @param osd	  The libosd object returned by libosd_init()
+ * @param object  The object name string
+ * @param volume  The volume uuid returned by libosd_get_volume()
+ * @param offset  Offset into the object
+ * @param flags	  LIBOSD_WRITE_ flags
+ * @param user	  User data passed to the write_completion callback
+ *
+ * @return Nonzero on immediate errors. Otherwise returns 0 and promises
+ * to call the write_completion callback on success or failure.
+ */
+int libosd_truncate(struct libosd *osd, const char *object,
+		    const uuid_t volume, uint64_t offset,
+		    int flags, void *user);
 #ifdef __cplusplus
 } /* extern "C" */
 #endif /* __cplusplus */

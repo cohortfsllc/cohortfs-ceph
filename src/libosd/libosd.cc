@@ -106,6 +106,8 @@ public:
   int write(const char *object, const uuid_t volume,
 	    uint64_t offset, uint64_t length, char *data,
 	    int flags, void *user);
+  int truncate(const char *object, const uuid_t volume,
+	       uint64_t offset, int flags, void *user);
 };
 
 
@@ -510,6 +512,43 @@ int LibOSD::write(const char *object, const uuid_t volume,
   return 0;
 }
 
+int LibOSD::truncate(const char *object, const uuid_t volume,
+		     uint64_t offset, int flags, void *user)
+{
+  const int client = 0;
+  const long tid = 0;
+  hobject_t oid = object_t(object);
+  uuid_d vol(volume);
+  epoch_t epoch = 0;
+
+  // invalid to request callbacks without supplying write_completion
+  if (flags & (LIBOSD_WRITE_CB_UNSTABLE | LIBOSD_WRITE_CB_STABLE) &&
+      (!callbacks || !callbacks->write_completion))
+    return -EINVAL;
+
+  if (!wait_for_active(&epoch))
+    return -ENODEV;
+
+  // set up osd truncate op
+  MOSDOp *m = new MOSDOp(client, tid, oid, vol, epoch, 0);
+  m->truncate(offset);
+
+  if (flags & LIBOSD_WRITE_CB_UNSTABLE)
+    m->set_want_ack(true);
+  if (flags & LIBOSD_WRITE_CB_STABLE)
+    m->set_want_ondisk(true);
+
+  // create reply callback
+  OnWriteReply *onreply = NULL;
+  if (m->wants_ack() || m->wants_ondisk())
+    onreply = new OnWriteReply(finisher, callbacks->write_completion,
+			       flags, user);
+
+  // send request over direct messenger
+  dispatcher->send_request(m, onreply);
+  return 0;
+}
+
 
 // C interface
 
@@ -626,6 +665,18 @@ int libosd_write(struct libosd *osd, const char *object, const uuid_t volume,
     return osd->write(object, volume, offset, length, data, flags, user);
   } catch (std::exception &e) {
     derr << "libosd_write caught exception " << e.what() << dendl;
+    return -EFAULT;
+  }
+}
+
+int libosd_truncate(struct libosd *osd, const char *object,
+		    const uuid_t volume, uint64_t offset,
+		    int flags, void *user)
+{
+  try {
+    return osd->truncate(object, volume, offset, flags, user);
+  } catch (std::exception &e) {
+    derr << "libosd_truncate caught exception " << e.what() << dendl;
     return -EFAULT;
   }
 }
