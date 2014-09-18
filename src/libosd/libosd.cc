@@ -78,6 +78,7 @@ class LibOSD : public libosd, private OSDStateObserver {
     Cond cond;
     int state;
     epoch_t epoch;
+    bool shutdown;
   } osdmap;
 
   // OSDStateObserver
@@ -124,6 +125,9 @@ LibOSD::LibOSD(int whoami)
     ms(NULL),
     dispatcher(NULL)
 {
+    osdmap.state = 0;
+    osdmap.epoch = 0;
+    osdmap.shutdown = false;
 }
 
 LibOSD::~LibOSD()
@@ -260,12 +264,12 @@ int LibOSD::init(const struct libosd_init_args *args)
   return 0;
 }
 
-struct C_Active : public Context {
+struct C_StateCb : public Context {
   typedef void (*callback_fn)(struct libosd *osd, void *user);
   callback_fn cb;
   libosd *osd;
   void *user;
-  C_Active(callback_fn cb, libosd *osd, void *user)
+  C_StateCb(callback_fn cb, libosd *osd, void *user)
     : cb(cb), osd(osd), user(user) {}
   void finish(int r) {
     cb(osd, user);
@@ -283,8 +287,11 @@ void LibOSD::on_osd_state(int state, epoch_t epoch)
 
     if (state == OSD::STATE_ACTIVE) {
       if (callbacks && callbacks->osd_active)
-	finisher->queue(new C_Active(callbacks->osd_active, this, user));
+	finisher->queue(new C_StateCb(callbacks->osd_active, this, user));
     } else if (state == OSD::STATE_STOPPING) {
+      // make osd_shutdown calback only if we haven't called libosd_shutdown()
+      if (!osdmap.shutdown && callbacks && callbacks->osd_shutdown)
+	finisher->queue(new C_StateCb(callbacks->osd_shutdown, this, user));
       dispatcher->shutdown();
     }
   }
@@ -321,6 +328,10 @@ void LibOSD::join()
 
 void LibOSD::shutdown()
 {
+  osdmap.mtx.Lock();
+  osdmap.shutdown = true;
+  osdmap.mtx.Unlock();
+
   osd->shutdown();
 }
 
