@@ -106,15 +106,6 @@ public:
 			     const string& journal);
 
   /**
-   * Fetch Object Store statistics.
-   *
-   * Currently only latency of write and apply times are measured.
-   *
-   * This appears to be called with nothing locked.
-   */
-  virtual objectstore_perf_stat_t get_cur_stats() = 0;
-
-  /**
    * a sequencer orders transactions
    *
    * Any transactions queued under a given sequencer will be applied in

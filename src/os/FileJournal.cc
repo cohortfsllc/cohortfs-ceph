@@ -18,7 +18,6 @@
 #include "common/safe_io.h"
 #include "FileJournal.h"
 #include "include/color.h"
-#include "common/perf_counters.h"
 #include "os/FileStore.h"
 
 #include "include/compat.h"
@@ -759,9 +758,6 @@ int FileJournal::prepare_multi_write(bufferlist& bl, uint64_t& orig_ops, uint64_
       if (orig_ops)
 	break;	       // commit what we have
 
-      if (logger)
-	logger->inc(l_os_j_full);
-
       if (wait_on_full) {
 	dout(20) << "prepare_multi_write full on first entry, need to wait" << dendl;
       } else {
@@ -832,9 +828,6 @@ void FileJournal::queue_completions_thru(uint64_t seq)
 	     << " queueing seq " << next.seq
 	     << " " << next.finish
 	     << " lat " << lat << dendl;
-    if (logger) {
-      logger->tinc(l_os_j_lat, lat);
-    }
     if (next.finish)
       finisher->queue(next.finish);
   }
@@ -1153,11 +1146,6 @@ void FileJournal::write_thread_entry()
     }
     assert(r == 0);
 
-    if (logger) {
-      logger->inc(l_os_j_wr);
-      logger->inc(l_os_j_wr_bytes, bl.length());
-    }
-
 #ifdef HAVE_LIBAIO
     if (aio)
       do_aio_write(bl);
@@ -1423,12 +1411,6 @@ void FileJournal::submit_entry(uint64_t seq, bufferlist& e, int alignment,
   dout(30) << "XXX throttle take " << e.length() << dendl;
   throttle_ops.take(1);
   throttle_bytes.take(e.length());
-  if (logger) {
-    logger->set(l_os_jq_max_ops, throttle_ops.get_max());
-    logger->set(l_os_jq_max_bytes, throttle_bytes.get_max());
-    logger->set(l_os_jq_ops, throttle_ops.get_current());
-    logger->set(l_os_jq_bytes, throttle_bytes.get_current());
-  }
 
   {
     Mutex::Locker l1(writeq_lock);  // ** lock **
@@ -1558,15 +1540,6 @@ void FileJournal::put_throttle(uint64_t ops, uint64_t bytes)
 	   << bytes << " bytes, now "
 	   << new_ops << " ops and " << new_bytes << " bytes"
 	   << dendl;
-
-  if (logger) {
-    logger->inc(l_os_j_ops, ops);
-    logger->inc(l_os_j_bytes, bytes);
-    logger->set(l_os_jq_ops, new_ops);
-    logger->set(l_os_jq_bytes, new_bytes);
-    logger->set(l_os_jq_max_ops, throttle_ops.get_max());
-    logger->set(l_os_jq_max_bytes, throttle_bytes.get_max());
-  }
 }
 
 int FileJournal::make_writeable()

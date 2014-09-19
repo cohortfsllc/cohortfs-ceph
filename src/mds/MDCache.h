@@ -31,8 +31,6 @@
 #include "messages/MClientRequest.h"
 #include "messages/MMDSSlaveRequest.h"
 
-class PerfCounters;
-
 class MDS;
 class Session;
 class Migrator;
@@ -527,9 +525,6 @@ public:
  public:
   MDCache(MDS *m);
   ~MDCache();
-
-  // debug
-  void log_stat();
 
   // root inode
   CInode *get_root() { return root; }

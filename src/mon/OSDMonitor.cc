@@ -35,7 +35,6 @@
 
 #include "common/Timer.h"
 #include "common/ceph_argparse.h"
-#include "common/perf_counters.h"
 #include "common/strtol.h"
 
 #include "common/config.h"
@@ -233,7 +232,6 @@ void OSDMonitor::update_from_paxos(bool *need_bootstrap)
   check_subs();
 
   share_map_with_random_osd();
-  update_logger();
 
   process_failures();
 
@@ -262,8 +260,6 @@ void OSDMonitor::update_msgr_features()
 
 void OSDMonitor::on_active()
 {
-  update_logger();
-
   if (mon->is_leader())
     mon->clog.info() << "osdmap " << osdmap << "\n";
 
@@ -288,16 +284,6 @@ void OSDMonitor::on_shutdown()
     ls.front()->put();
     ls.pop_front();
   }
-}
-
-void OSDMonitor::update_logger()
-{
-  dout(10) << "update_logger" << dendl;
-
-  mon->cluster_logger->set(l_cluster_num_osd, osdmap.get_num_osds());
-  mon->cluster_logger->set(l_cluster_num_osd_up, osdmap.get_num_up_osds());
-  mon->cluster_logger->set(l_cluster_num_osd_in, osdmap.get_num_in_osds());
-  mon->cluster_logger->set(l_cluster_osd_epoch, osdmap.get_epoch());
 }
 
 void OSDMonitor::create_pending()

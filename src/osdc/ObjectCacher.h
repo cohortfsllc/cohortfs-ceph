@@ -17,31 +17,8 @@
 
 class CephContext;
 class WritebackHandler;
-class PerfCounters;
-
-enum {
-  l_objectcacher_first = 25000,
-
-  l_objectcacher_cache_ops_hit, // ops we satisfy completely from cache
-  l_objectcacher_cache_ops_miss, // ops we don't satisfy completely from cache
-
-  l_objectcacher_cache_bytes_hit, // bytes read directly from cache
-  l_objectcacher_cache_bytes_miss, // bytes we couldn't read right from cache
-
-  l_objectcacher_data_read, // total bytes read out
-  l_objectcacher_data_written, // bytes written to cache
-  l_objectcacher_data_flushed, // bytes flushed to WritebackHandler
-  l_objectcacher_overwritten_in_flush, // bytes overwritten while flushing
-
-  l_objectcacher_write_ops_blocked, // write ops delayed from dirty limits
-  l_objectcacher_write_bytes_blocked, // write bytes delayed for dirty limits
-  l_objectcacher_write_time_blocked, // time write blocked for dirty limits
-
-  l_objectcacher_last,
-};
 
 class ObjectCacher {
-  PerfCounters *perfcounter;
  public:
   CephContext *cct;
   class Object;
@@ -325,7 +302,6 @@ class ObjectCacher {
  private:
   WritebackHandler& writeback_handler;
 
-  string name;
   Mutex& lock;
 
   uint64_t max_dirty, target_dirty, max_size, max_objects;
@@ -520,12 +496,7 @@ class ObjectCacher {
     Context *m_onfinish;
   };
 
-  void perf_start();
-  void perf_stop();
-
-
-
-  ObjectCacher(CephContext *cct_, string name, WritebackHandler& wb, Mutex& l,
+  ObjectCacher(CephContext *cct_, WritebackHandler& wb, Mutex& l,
 	       flush_set_callback_t flush_callback,
 	       void *flush_callback_arg,
 	       uint64_t max_bytes, uint64_t max_objects,

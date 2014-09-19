@@ -25,7 +25,6 @@
 
 class AdminSocket;
 class CephContextServiceThread;
-class PerfCountersCollection;
 class md_config_obs_t;
 struct md_config_t;
 class CephContextHook;
@@ -82,9 +81,6 @@ public:
   /* Get the module type (client, mon, osd, mds, etc.) */
   uint32_t get_module_type() const;
 
-  /* Get the PerfCountersCollection of this CephContext */
-  PerfCountersCollection *get_perfcounters_collection();
-
   ceph::HeartbeatMap *get_heartbeat_map() {
     return _heartbeat_map;
   }
@@ -131,11 +127,6 @@ private:
 
   /* lock which protects service thread creation, destruction, etc. */
   ceph_spinlock_t _service_thread_lock;
-
-  /* The collection of profiling loggers associated with this context */
-  PerfCountersCollection *_perf_counters_collection;
-
-  md_config_obs_t *_perf_counters_conf_obs;
 
   CephContextHook *_admin_hook;
 

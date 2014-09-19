@@ -15,7 +15,6 @@
 #include <system_error>
 #include "boost/tuple/tuple.hpp"
 #include "OSDVol.h"
-#include "common/perf_counters.h"
 #include "common/errno.h"
 #include "common/config.h"
 #include "common/cmdparse.h"

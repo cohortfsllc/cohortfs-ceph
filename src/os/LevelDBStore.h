@@ -27,25 +27,11 @@
 
 #include "common/ceph_context.h"
 
-class PerfCounters;
-
-enum {
-  l_leveldb_first = 34300,
-  l_leveldb_gets,
-  l_leveldb_txns,
-  l_leveldb_compact,
-  l_leveldb_compact_range,
-  l_leveldb_compact_queue_merge,
-  l_leveldb_compact_queue_len,
-  l_leveldb_last,
-};
-
 /**
  * Uses LevelDB to implement the KeyValueDB interface
  */
 class LevelDBStore : public KeyValueDB {
   CephContext *cct;
-  PerfCounters *logger;
   string path;
   boost::scoped_ptr<leveldb::Cache> db_cache;
 #ifdef HAVE_LEVELDB_FILTER_POLICY
@@ -139,7 +125,6 @@ public:
 
   LevelDBStore(CephContext *c, const string &path) :
     cct(c),
-    logger(NULL),
     path(path),
     db_cache(NULL),
 #ifdef HAVE_LEVELDB_FILTER_POLICY

@@ -1204,10 +1204,9 @@ void Migrator::export_go_synced(CDir *dir, uint64_t tid)
   // fill export message with cache data
   MExportDir *req = new MExportDir(dir->dirfrag(), it->second.tid);
   map<client_t,entity_inst_t> exported_client_map;
-  int num_exported_inodes = encode_export_dir(req->export_data,
-					      dir,   // recur start point
-					      exported_client_map,
-					      now);
+  encode_export_dir(req->export_data, dir, // recur start point
+		    exported_client_map,
+		    now);
   ::encode(exported_client_map, req->client_map);
 
   // add bounds to message
@@ -1221,10 +1220,6 @@ void Migrator::export_go_synced(CDir *dir, uint64_t tid)
   // send
   mds->send_message_mds(req, it->second.peer);
   assert(g_conf->mds_kill_export_at != 8);
-
-  // stats
-  if (mds->logger) mds->logger->inc(l_mds_ex);
-  if (mds->logger) mds->logger->inc(l_mds_iexp, num_exported_inodes);
 
   cache->show_subtrees();
 }
@@ -2240,12 +2235,6 @@ void Migrator::handle_export_dir(MExportDir *m)
   mds->mdlog->submit_entry(le);
   mds->mdlog->wait_for_safe(onlogged);
   mds->mdlog->flush();
-
-  // some stats
-  if (mds->logger) {
-    mds->logger->inc(l_mds_im);
-    mds->logger->inc(l_mds_iim, num_imported_inodes);
-  }
 
   m->put();
 }

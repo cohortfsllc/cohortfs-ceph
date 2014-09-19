@@ -18,7 +18,6 @@
 #include "common/Mutex.h"
 #include "common/Cond.h"
 #include "common/Thread.h"
-#include "common/perf_counters.h"
 #include "common/ceph_context.h"
 
 class CephContext;
@@ -36,7 +35,6 @@ class Finisher {
   bool		 finisher_stop, finisher_running;
   vector<Context*> finisher_queue;
   list<pair<Context*,int> > finisher_queue_rval;
-  PerfCounters *logger;
 
   void *finisher_thread_entry();
 
@@ -56,8 +54,6 @@ class Finisher {
       finisher_queue.push_back(c);
     finisher_cond.Signal();
     finisher_lock.Unlock();
-    if (logger)
-      logger->inc(l_finisher_queue_len);
   }
   void queue(vector<Context*>& ls) {
     finisher_lock.Lock();
@@ -65,8 +61,6 @@ class Finisher {
     finisher_cond.Signal();
     finisher_lock.Unlock();
     ls.clear();
-    if (logger)
-      logger->inc(l_finisher_queue_len);
   }
   void queue(deque<Context*>& ls) {
     finisher_lock.Lock();
@@ -74,8 +68,6 @@ class Finisher {
     finisher_cond.Signal();
     finisher_lock.Unlock();
     ls.clear();
-    if (logger)
-      logger->inc(l_finisher_queue_len);
   }
 
   void start();
@@ -85,27 +77,14 @@ class Finisher {
 
   Finisher(CephContext *cct_) :
     cct(cct_), finisher_stop(false), finisher_running(false),
-    logger(0),
     finisher_thread(this) {}
   Finisher(CephContext *cct_, string name) :
     cct(cct_), finisher_lock("Finisher::finisher_lock"),
     finisher_stop(false), finisher_running(false),
-    logger(0),
     finisher_thread(this) {
-    PerfCountersBuilder b(cct, string("finisher-") + name,
-			  l_finisher_first, l_finisher_last);
-    b.add_time_avg(l_finisher_queue_len, "queue_len");
-    logger = b.create_perf_counters();
-    cct->get_perfcounters_collection()->add(logger);
-    logger->set(l_finisher_queue_len, 0);
   }
 
-  ~Finisher() {
-    if (logger && cct) {
-      cct->get_perfcounters_collection()->remove(logger);
-      delete logger;
-    }
-  }
+  ~Finisher() { }
 };
 
 class C_OnFinisher : public Context {

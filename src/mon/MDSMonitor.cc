@@ -30,7 +30,6 @@
 
 #include "messages/MGenericMessage.h"
 
-#include "common/perf_counters.h"
 #include "common/Timer.h"
 
 #include "common/config.h"
@@ -114,7 +113,6 @@ void MDSMonitor::update_from_paxos(bool *need_bootstrap)
   print_map(mdsmap, 0);
 
   check_subs();
-  update_logger();
 }
 
 void MDSMonitor::create_pending()
@@ -159,16 +157,6 @@ version_t MDSMonitor::get_trim_to()
   if (last - get_first_committed() > max && floor < last - max)
     return last - max;
   return floor;
-}
-
-void MDSMonitor::update_logger()
-{
-  dout(10) << "update_logger" << dendl;
-
-  mon->cluster_logger->set(l_cluster_num_mds_up, mdsmap.get_num_up_mds());
-  mon->cluster_logger->set(l_cluster_num_mds_in, mdsmap.get_num_in_mds());
-  mon->cluster_logger->set(l_cluster_num_mds_failed, mdsmap.get_num_failed_mds());
-  mon->cluster_logger->set(l_cluster_mds_epoch, mdsmap.get_epoch());
 }
 
 bool MDSMonitor::preprocess_query(PaxosServiceMessage *m)
@@ -537,7 +525,6 @@ void MDSMonitor::_updated(MMDSBeacon *m)
 void MDSMonitor::on_active()
 {
   tick();
-  update_logger();
 
   if (mon->is_leader())
     mon->clog.info() << "mdsmap " << mdsmap << "\n";

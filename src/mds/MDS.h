@@ -24,7 +24,6 @@
 #include "include/types.h"
 #include "include/Context.h"
 #include "common/DecayCounter.h"
-#include "common/perf_counters.h"
 #include "common/Mutex.h"
 #include "common/Cond.h"
 #include "common/Timer.h"
@@ -36,73 +35,6 @@
 
 
 #define CEPH_MDS_PROTOCOL    23 /* cluster internal */
-
-
-enum {
-  l_mds_first = 2000,
-  l_mds_req,
-  l_mds_reply,
-  l_mds_replyl,
-  l_mds_fw,
-  l_mds_dir_f,
-  l_mds_dir_c,
-  l_mds_dir_sp,
-  l_mds_dir_ffc,
-  l_mds_imax,
-  l_mds_i,
-  l_mds_itop,
-  l_mds_ibot,
-  l_mds_iptail,
-  l_mds_ipin,
-  l_mds_iex,
-  l_mds_icap,
-  l_mds_cap,
-  l_mds_dis,
-  l_mds_t,
-  l_mds_thit,
-  l_mds_tfw,
-  l_mds_tdis,
-  l_mds_tdirf,
-  l_mds_trino,
-  l_mds_tlock,
-  l_mds_l,
-  l_mds_q,
-  l_mds_popanyd,
-  l_mds_popnest,
-  l_mds_sm,
-  l_mds_ex,
-  l_mds_iexp,
-  l_mds_im,
-  l_mds_iim,
-  l_mds_last,
-};
-
-enum {
-  l_mdc_first = 3000,
-  l_mdc_last,
-};
-
-enum {
-  l_mdm_first = 2500,
-  l_mdm_ino,
-  l_mdm_inoa,
-  l_mdm_inos,
-  l_mdm_dir,
-  l_mdm_dira,
-  l_mdm_dirs,
-  l_mdm_dn,
-  l_mdm_dna,
-  l_mdm_dns,
-  l_mdm_cap,
-  l_mdm_capa,
-  l_mdm_caps,
-  l_mdm_rss,
-  l_mdm_heap,
-  l_mdm_malloc,
-  l_mdm_buf,
-  l_mdm_last,
-};
-
 
 
 class filepath;
@@ -179,8 +111,6 @@ class MDS : public Dispatcher {
 
   MDSTableClient *get_table_client(int t);
   MDSTableServer *get_table_server(int t);
-
-  PerfCounters *logger, *mlogger;
 
   int orig_argc;
   const char **orig_argv;
@@ -360,8 +290,6 @@ class MDS : public Dispatcher {
 
   // start up, shutdown
   int init(int wanted_state=MDSMap::STATE_BOOT);
-
-  void create_logger();
 
   void bcast_mds_map();	 // to mounted clients
 

@@ -30,7 +30,6 @@
 #include "global/global_init.h"
 #include "os/ObjectStore.h"
 #include "os/FileStore.h"
-#include "common/perf_counters.h"
 #include "common/errno.h"
 #include "osd/PGLog.h"
 #include "osd/OSD.h"

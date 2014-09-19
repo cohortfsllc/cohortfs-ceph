@@ -45,7 +45,6 @@
 #include "common/errno.h"
 #include "common/run_cmd.h"
 #include "common/safe_io.h"
-#include "common/perf_counters.h"
 #include "common/sync_filesystem.h"
 #include "LevelDBStore.h"
 
@@ -507,7 +506,6 @@ int KeyValueStore::_create_current()
 KeyValueStore::KeyValueStore(const std::string &base,
 			     const char *name, bool do_update) :
   ObjectStore(base),
-  internal_name(name),
   basedir(base),
   fsid_fd(-1), op_fd(-1), current_fd(-1),
   kv_type(KV_TYPE_NONE),
@@ -520,7 +518,6 @@ KeyValueStore::KeyValueStore(const std::string &base,
 	g_conf->keyvaluestore_op_threads, "keyvaluestore_op_threads"),
   op_wq(this, g_conf->keyvaluestore_op_thread_timeout,
 	g_conf->keyvaluestore_op_thread_suicide_timeout, &op_tp),
-  logger(NULL),
   m_keyvaluestore_queue_max_ops(g_conf->keyvaluestore_queue_max_ops),
   m_keyvaluestore_queue_max_bytes(g_conf->keyvaluestore_queue_max_bytes),
   do_update(do_update)
@@ -533,30 +530,12 @@ KeyValueStore::KeyValueStore(const std::string &base,
   sss << basedir << "/current/commit_op_seq";
   current_op_seq_fn = sss.str();
 
-  // initialize logger
-  PerfCountersBuilder plb(g_ceph_context, internal_name, l_os_commit_lat, l_os_last);
-
-  plb.add_u64(l_os_oq_max_ops, "op_queue_max_ops");
-  plb.add_u64(l_os_oq_ops, "op_queue_ops");
-  plb.add_u64_counter(l_os_ops, "ops");
-  plb.add_u64(l_os_oq_max_bytes, "op_queue_max_bytes");
-  plb.add_u64(l_os_oq_bytes, "op_queue_bytes");
-  plb.add_u64_counter(l_os_bytes, "bytes");
-  plb.add_time_avg(l_os_apply_lat, "apply_latency");
-  plb.add_time_avg(l_os_queue_lat, "queue_transaction_latency_avg");
-
-  logger = plb.create_perf_counters();
-
-  g_ceph_context->get_perfcounters_collection()->add(logger);
   g_ceph_context->_conf->add_observer(this);
 }
 
 KeyValueStore::~KeyValueStore()
 {
   g_ceph_context->_conf->remove_observer(this);
-  g_ceph_context->get_perfcounters_collection()->remove(logger);
-
-  delete logger;
 }
 
 int KeyValueStore::statfs(struct statfs *buf)
@@ -1021,9 +1000,6 @@ void KeyValueStore::queue_op(OpSequencer *osr, Op *o)
 
   osr->queue(o);
 
-  logger->inc(l_os_ops);
-  logger->inc(l_os_bytes, o->bytes);
-
   dout(5) << "queue_op " << o << " seq " << o->op << " " << *osr << " "
 	  << o->bytes << " bytes" << "	 (queue has " << op_queue_len
 	  << " ops and " << op_queue_bytes << " bytes)" << dendl;
@@ -1035,10 +1011,6 @@ void KeyValueStore::op_queue_reserve_throttle(Op *o, ThreadPool::TPHandle *handl
   uint64_t max_ops = m_keyvaluestore_queue_max_ops;
   uint64_t max_bytes = m_keyvaluestore_queue_max_bytes;
 
-  logger->set(l_os_oq_max_ops, max_ops);
-  logger->set(l_os_oq_max_bytes, max_bytes);
-
-  utime_t start = ceph_clock_now(g_ceph_context);
   {
     Mutex::Locker l(op_throttle_lock);
     while ((max_ops && (op_queue_len + 1) > max_ops) ||
@@ -1057,11 +1029,6 @@ void KeyValueStore::op_queue_reserve_throttle(Op *o, ThreadPool::TPHandle *handl
     op_queue_len++;
     op_queue_bytes += o->bytes;
   }
-  utime_t end = ceph_clock_now(g_ceph_context);
-  logger->tinc(l_os_queue_lat, end - start);
-
-  logger->set(l_os_oq_ops, op_queue_len);
-  logger->set(l_os_oq_bytes, op_queue_bytes);
 }
 
 void KeyValueStore::op_queue_release_throttle(Op *o)
@@ -1072,9 +1039,6 @@ void KeyValueStore::op_queue_release_throttle(Op *o)
     op_queue_bytes -= o->bytes;
     op_throttle_cond.Signal();
   }
-
-  logger->set(l_os_oq_ops, op_queue_len);
-  logger->set(l_os_oq_bytes, op_queue_bytes);
 }
 
 void KeyValueStore::_do_op(OpSequencer *osr, ThreadPool::TPHandle &handle)
@@ -1108,7 +1072,6 @@ void KeyValueStore::_finish_op(OpSequencer *osr)
 
   utime_t lat = ceph_clock_now(g_ceph_context);
   lat -= o->start;
-  logger->tinc(l_os_apply_lat, lat);
 
   if (o->onreadable_sync) {
     o->onreadable_sync->complete(0);

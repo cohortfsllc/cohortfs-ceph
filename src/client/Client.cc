@@ -62,7 +62,6 @@ using namespace std;
 
 #include "common/Cond.h"
 #include "common/Mutex.h"
-#include "common/perf_counters.h"
 #include "common/admin_socket.h"
 #include "common/errno.h"
 
@@ -142,7 +141,6 @@ dir_result_t::dir_result_t(Inode *in)
 Client::Client(Messenger *m, MonClient *mc)
   : Dispatcher(m->cct),
     cct(m->cct),
-    logger(NULL),
     m_command_hook(this),
     timer(m->cct, client_lock),
     ino_invalidate_cb(NULL),
@@ -187,8 +185,8 @@ Client::Client(Messenger *m, MonClient *mc)
 			  0, 0);
   objecter->set_client_incarnation(0);	// client always 0, for now.
   writeback_handler = new ObjecterWriteback(objecter);
-  objectcacher = new ObjectCacher(cct, "libcephfs", *writeback_handler, client_lock,
-				  client_flush_set_callback,	// all commit callback
+  objectcacher = new ObjectCacher(cct, *writeback_handler, client_lock,
+				  client_flush_set_callback, // all commit callback
 				  (void*)this,
 				  cct->_conf->client_oc_size,
 				  cct->_conf->client_oc_max_objects,
@@ -213,8 +211,6 @@ Client::~Client()
   delete objecter;
   delete osdmap;
   delete mdsmap;
-
-  delete logger;
 }
 
 
@@ -364,16 +360,6 @@ int Client::init()
   monclient->sub_want("osdmap", 0, CEPH_SUBSCRIBE_ONETIME);
   monclient->renew_subs();
 
-  // logger
-  PerfCountersBuilder plb(cct, "client", l_c_first, l_c_last);
-  plb.add_time_avg(l_c_reply, "reply");
-  plb.add_time_avg(l_c_lat, "lat");
-  plb.add_time_avg(l_c_wrlat, "wrlat");
-  plb.add_time_avg(l_c_owrlat, "owrlat");
-  plb.add_time_avg(l_c_ordlat, "ordlat");
-  logger = plb.create_perf_counters();
-  cct->get_perfcounters_collection()->add(logger);
-
   client_lock.Unlock();
 
   AdminSocket* admin_socket = cct->get_admin_socket();
@@ -439,12 +425,6 @@ void Client::shutdown()
   client_lock.Unlock();
   objecter->shutdown_unlocked();
   monclient->shutdown();
-
-  if (logger) {
-    cct->get_perfcounters_collection()->remove(logger);
-    delete logger;
-    logger = NULL;
-  }
 }
 
 
@@ -1354,8 +1334,6 @@ int Client::make_request(MetaRequest *request,
   utime_t lat = ceph_clock_now(cct);
   lat -= request->sent_stamp;
   ldout(cct, 20) << "lat " << lat << dendl;
-  logger->tinc(l_c_lat, lat);
-  logger->tinc(l_c_reply, lat);
 
   put_request(request);
 
@@ -6022,7 +6000,6 @@ success:
   // time
   lat = ceph_clock_now(cct);
   lat -= start;
-  logger->tinc(l_c_wrlat, lat);
 
   totalwritten = size;
   r = (int)totalwritten;

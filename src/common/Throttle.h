@@ -10,20 +10,17 @@
 #include "Cond.h"
 
 class CephContext;
-class PerfCounters;
 
 class Throttle {
   CephContext *cct;
   std::string name;
-  PerfCounters *logger;
   std::atomic<int64_t> count;
   std::atomic<int64_t> max;
   Mutex lock;
   std::list<Cond*> cond;
-  bool use_perf;
 
 public:
-  Throttle(CephContext *cct, std::string n, int64_t m = 0, bool _use_perf = true);
+  Throttle(CephContext *cct, std::string n, int64_t m = 0);
   ~Throttle();
 
 private:

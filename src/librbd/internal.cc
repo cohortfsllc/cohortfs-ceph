@@ -476,7 +476,6 @@ namespace librbd {
 
     ldout(cct, 2) << "done." << dendl;
 
-    ictx->perfcounter->inc(l_librbd_resize);
     return 0;
   }
 
@@ -911,9 +910,6 @@ namespace librbd {
     }
 
     elapsed = ceph_clock_now(ictx->cct) - start_time;
-    ictx->perfcounter->tinc(l_librbd_rd_latency, elapsed);
-    ictx->perfcounter->inc(l_librbd_rd);
-    ictx->perfcounter->inc(l_librbd_rd_bytes, mylen);
     return total_read;
   }
 
@@ -987,9 +983,6 @@ namespace librbd {
       return ret;
 
     elapsed = ceph_clock_now(ictx->cct) - start_time;
-    ictx->perfcounter->tinc(l_librbd_wr_latency, elapsed);
-    ictx->perfcounter->inc(l_librbd_wr);
-    ictx->perfcounter->inc(l_librbd_wr_bytes, mylen);
     return mylen;
   }
 
@@ -1023,9 +1016,6 @@ namespace librbd {
       return ret;
 
     elapsed = ceph_clock_now(ictx->cct) - start_time;
-    ictx->perfcounter->inc(l_librbd_discard_latency, elapsed);
-    ictx->perfcounter->inc(l_librbd_discard);
-    ictx->perfcounter->inc(l_librbd_discard_bytes, len);
     return len;
   }
 
@@ -1149,7 +1139,6 @@ namespace librbd {
     }
     c->finish_adding_requests(cct);
     c->put();
-    ictx->perfcounter->inc(l_librbd_aio_flush);
 
     return 0;
   }
@@ -1165,7 +1154,6 @@ namespace librbd {
 
     ictx->user_flushed();
     r = _flush(ictx);
-    ictx->perfcounter->inc(l_librbd_flush);
     return r;
   }
 
@@ -1228,9 +1216,6 @@ namespace librbd {
     c->finish_adding_requests(ictx->cct);
     c->put();
 
-    ictx->perfcounter->inc(l_librbd_aio_wr);
-    ictx->perfcounter->inc(l_librbd_aio_wr_bytes, mylen);
-
     return r;
   }
 
@@ -1278,9 +1263,6 @@ namespace librbd {
 
     c->finish_adding_requests(ictx->cct);
     c->put();
-
-    ictx->perfcounter->inc(l_librbd_aio_discard);
-    ictx->perfcounter->inc(l_librbd_aio_discard_bytes, len);
 
     /* FIXME: cleanup all the allocated stuff */
     return r;
@@ -1340,9 +1322,6 @@ namespace librbd {
   done:
     c->finish_adding_requests(ictx->cct);
     c->put();
-
-    ictx->perfcounter->inc(l_librbd_aio_rd);
-    ictx->perfcounter->inc(l_librbd_aio_rd_bytes, len);
 
     return ret;
   }

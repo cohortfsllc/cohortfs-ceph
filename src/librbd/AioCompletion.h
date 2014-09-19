@@ -6,7 +6,6 @@
 #include "common/Cond.h"
 #include "common/Mutex.h"
 #include "common/ceph_context.h"
-#include "common/perf_counters.h"
 #include "include/Context.h"
 #include "include/utime.h"
 #include "include/rbd/librbd.hpp"
@@ -100,19 +99,6 @@ namespace librbd {
       utime_t elapsed;
       assert(lock.is_locked());
       elapsed = ceph_clock_now(ictx->cct) - start_time;
-      switch (aio_type) {
-      case AIO_TYPE_READ:
-	ictx->perfcounter->tinc(l_librbd_aio_rd_latency, elapsed); break;
-      case AIO_TYPE_WRITE:
-	ictx->perfcounter->tinc(l_librbd_aio_wr_latency, elapsed); break;
-      case AIO_TYPE_DISCARD:
-	ictx->perfcounter->tinc(l_librbd_aio_discard_latency, elapsed); break;
-      case AIO_TYPE_FLUSH:
-	ictx->perfcounter->tinc(l_librbd_aio_flush_latency, elapsed); break;
-      default:
-	lderr(ictx->cct) << "completed invalid aio_type: " << aio_type << dendl;
-	break;
-      }
       if (complete_cb) {
 	complete_cb(rbd_comp, complete_arg);
       }

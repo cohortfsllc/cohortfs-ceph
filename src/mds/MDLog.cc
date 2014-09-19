@@ -21,7 +21,6 @@
 #include "osdc/Journaler.h"
 
 #include "common/entity_name.h"
-#include "common/perf_counters.h"
 
 #include "events/ESubtreeMap.h"
 
@@ -39,41 +38,8 @@
 MDLog::~MDLog()
 {
   if (journaler) { delete journaler; journaler = 0; }
-  if (logger) {
-    g_ceph_context->get_perfcounters_collection()->remove(logger);
-    delete logger;
-    logger = 0;
-  }
 }
 
-
-void MDLog::create_logger()
-{
-  PerfCountersBuilder plb(g_ceph_context, "mds_log", l_mdl_first, l_mdl_last);
-
-  plb.add_u64_counter(l_mdl_evadd, "evadd");
-  plb.add_u64_counter(l_mdl_evex, "evex");
-  plb.add_u64_counter(l_mdl_evtrm, "evtrm");
-  plb.add_u64(l_mdl_ev, "ev");
-  plb.add_u64(l_mdl_evexg, "evexg");
-  plb.add_u64(l_mdl_evexd, "evexd");
-
-  plb.add_u64_counter(l_mdl_segadd, "segadd");
-  plb.add_u64_counter(l_mdl_segex, "segex");
-  plb.add_u64_counter(l_mdl_segtrm, "segtrm");
-  plb.add_u64(l_mdl_seg, "seg");
-  plb.add_u64(l_mdl_segexg, "segexg");
-  plb.add_u64(l_mdl_segexd, "segexd");
-
-  plb.add_u64(l_mdl_expos, "expos");
-  plb.add_u64(l_mdl_wrpos, "wrpos");
-  plb.add_u64(l_mdl_rdpos, "rdpos");
-  plb.add_u64(l_mdl_jlat, "jlat");
-
-  // logger
-  logger = plb.create_perf_counters();
-  g_ceph_context->get_perfcounters_collection()->add(logger);
-}
 
 void MDLog::init_journaler()
 {
@@ -83,7 +49,6 @@ void MDLog::init_journaler()
   // log streamer
   if (journaler) delete journaler;
   journaler = new Journaler(ino, mds->get_metadata_volume(), CEPH_FS_ONDISK_MAGIC, mds->objecter,
-			    logger, l_mdl_jlat,
 			    &mds->timer);
   assert(journaler->is_readonly());
   journaler->set_write_error_handler(new C_MDL_WriteError(this));
@@ -129,9 +94,6 @@ void MDLog::create(Context *c)
   journaler->set_writeable();
   journaler->create(&mds->mdcache->default_log_layout);
   journaler->write_head(c);
-
-  logger->set(l_mdl_expos, journaler->get_expire_pos());
-  logger->set(l_mdl_wrpos, journaler->get_write_pos());
 }
 
 void MDLog::open(Context *c)
@@ -150,8 +112,6 @@ void MDLog::append()
   journaler->set_expire_pos(journaler->get_write_pos());
 
   journaler->set_writeable();
-
-  logger->set(l_mdl_expos, journaler->get_write_pos());
 }
 
 
@@ -203,12 +163,6 @@ void MDLog::submit_entry(LogEvent *le, Context *c)
   }
 
   le->_segment->end = journaler->get_write_pos();
-
-  if (logger) {
-    logger->inc(l_mdl_evadd);
-    logger->set(l_mdl_ev, num_events);
-    logger->set(l_mdl_wrpos, journaler->get_write_pos());
-  }
 
   unflushed++;
 
@@ -286,9 +240,6 @@ void MDLog::prepare_new_segment()
   dout(7) << __func__ << " at " << journaler->get_write_pos() << dendl;
 
   segments[journaler->get_write_pos()] = new LogSegment(journaler->get_write_pos());
-
-  logger->inc(l_mdl_segadd);
-  logger->set(l_mdl_seg, segments.size());
 
   // Adjust to next stray dir
   dout(10) << "Advancing to next stray directory on mds " << mds->get_nodeid()
@@ -381,9 +332,6 @@ void MDLog::try_expire(LogSegment *ls, int op_prio)
     dout(10) << "try_expire expired segment " << ls->offset << dendl;
     _expired(ls);
   }
-
-  logger->set(l_mdl_segexg, expiring_segments.size());
-  logger->set(l_mdl_evexg, expiring_events);
 }
 
 void MDLog::_maybe_expired(LogSegment *ls, int op_prio)
@@ -415,10 +363,6 @@ void MDLog::_trim_expired_segments()
     if (journaler->get_expire_pos() < ls->offset)
       journaler->set_expire_pos(ls->offset);
 
-    logger->set(l_mdl_expos, ls->offset);
-    logger->inc(l_mdl_segtrm);
-    logger->inc(l_mdl_evtrm, ls->num_events);
-
     segments.erase(ls->offset);
     delete ls;
     trimmed = true;
@@ -438,15 +382,7 @@ void MDLog::_expired(LogSegment *ls)
     // expired.
     expired_segments.insert(ls);
     expired_events += ls->num_events;
-
-    logger->inc(l_mdl_evex, ls->num_events);
-    logger->inc(l_mdl_segex);
   }
-
-  logger->set(l_mdl_ev, num_events);
-  logger->set(l_mdl_evexd, expired_events);
-  logger->set(l_mdl_seg, segments.size());
-  logger->set(l_mdl_segexd, expired_segments.size());
 }
 
 
@@ -584,7 +520,6 @@ void MDLog::_replay_thread()
     if (le->get_type() == EVENT_SUBTREEMAP ||
 	le->get_type() == EVENT_RESETJOURNAL) {
       segments[pos] = new LogSegment(pos);
-      logger->set(l_mdl_seg, segments.size());
     }
 
     // have we seen an import map yet?
@@ -603,8 +538,6 @@ void MDLog::_replay_thread()
     }
     delete le;
 
-    logger->set(l_mdl_rdpos, pos);
-
     // drop lock for a second, so other events/messages (e.g. beacon timer!) can go off
     mds->mds_lock.Unlock();
     mds->mds_lock.Lock();
@@ -615,8 +548,6 @@ void MDLog::_replay_thread()
     assert(journaler->get_read_pos() == journaler->get_write_pos());
     dout(10) << "_replay - complete, " << num_events
 	     << " events" << dendl;
-
-    logger->set(l_mdl_expos, journaler->get_expire_pos());
   }
 
   dout(10) << "_replay_thread kicking waiters" << dendl;

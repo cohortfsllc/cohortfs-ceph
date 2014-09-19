@@ -47,8 +47,6 @@
 
 #include "InoTable.h"
 
-#include "common/perf_counters.h"
-
 #include "common/Timer.h"
 
 #include "events/ESession.h"
@@ -147,9 +145,6 @@ MDS::MDS(const std::string &n, Messenger *m, MonClient *mc) :
   req_rate = 0;
 
   last_state = want_state = state = MDSMap::STATE_BOOT;
-
-  logger = 0;
-  mlogger = 0;
 }
 
 MDS::~MDS() {
@@ -173,113 +168,9 @@ MDS::~MDS() {
   if (filer) { delete filer; filer = 0; }
   if (objecter) { delete objecter; objecter = 0; }
 
-  if (logger) {
-    g_ceph_context->get_perfcounters_collection()->remove(logger);
-    delete logger;
-    logger = 0;
-  }
-  if (mlogger) {
-    g_ceph_context->get_perfcounters_collection()->remove(mlogger);
-    delete mlogger;
-    mlogger = 0;
-  }
-
   if (messenger)
     delete messenger;
 }
-
-void MDS::create_logger()
-{
-  dout(10) << "create_logger" << dendl;
-  {
-    PerfCountersBuilder mds_plb(g_ceph_context, "mds", l_mds_first, l_mds_last);
-
-    mds_plb.add_u64_counter(l_mds_req, "req"); // FIXME: nobody is actually setting this
-    mds_plb.add_u64_counter(l_mds_reply, "reply");
-    mds_plb.add_time_avg(l_mds_replyl, "replyl");
-    mds_plb.add_u64_counter(l_mds_fw, "fw");
-
-    mds_plb.add_u64_counter(l_mds_dir_f, "dir_f");
-    mds_plb.add_u64_counter(l_mds_dir_c, "dir_c");
-    mds_plb.add_u64_counter(l_mds_dir_sp, "dir_sp");
-    mds_plb.add_u64_counter(l_mds_dir_ffc, "dir_ffc");
-    //mds_plb.add_u64_counter("mkdir");
-
-    /*
-    mds_plb.add_u64_counter("newin"); // new inodes (pre)loaded
-    mds_plb.add_u64_counter("newt");  // inodes first touched/used
-    mds_plb.add_u64_counter("outt");  // trimmed touched
-    mds_plb.add_u64_counter("outut"); // trimmed untouched (wasted effort)
-    mds_plb.add_fl_avg("oututl"); // avg trim latency for untouched
-
-    mds_plb.add_u64_counter("dirt1");
-    mds_plb.add_u64_counter("dirt2");
-    mds_plb.add_u64_counter("dirt3");
-    mds_plb.add_u64_counter("dirt4");
-    mds_plb.add_u64_counter("dirt5");
-    */
-
-    mds_plb.add_u64(l_mds_imax, "imax");
-    mds_plb.add_u64(l_mds_i, "i");
-    mds_plb.add_u64(l_mds_itop, "itop");
-    mds_plb.add_u64(l_mds_ibot, "ibot");
-    mds_plb.add_u64(l_mds_iptail, "iptail");
-    mds_plb.add_u64(l_mds_ipin, "ipin");
-    mds_plb.add_u64_counter(l_mds_iex, "iex");
-    mds_plb.add_u64_counter(l_mds_icap, "icap");
-    mds_plb.add_u64_counter(l_mds_cap, "cap");
-
-    mds_plb.add_u64_counter(l_mds_dis, "dis"); // FIXME: unused
-
-    mds_plb.add_u64_counter(l_mds_t, "t");
-    mds_plb.add_u64_counter(l_mds_thit, "thit");
-    mds_plb.add_u64_counter(l_mds_tfw, "tfw");
-    mds_plb.add_u64_counter(l_mds_tdis, "tdis");
-    mds_plb.add_u64_counter(l_mds_tdirf, "tdirf");
-    mds_plb.add_u64_counter(l_mds_trino, "trino");
-    mds_plb.add_u64_counter(l_mds_tlock, "tlock");
-
-    mds_plb.add_u64(l_mds_l, "l");
-    mds_plb.add_u64(l_mds_q, "q");
-    mds_plb.add_u64(l_mds_popanyd, "popanyd"); // FIXME: unused
-    mds_plb.add_u64(l_mds_popnest, "popnest");
-
-    mds_plb.add_u64(l_mds_sm, "sm");
-    mds_plb.add_u64_counter(l_mds_ex, "ex");
-    mds_plb.add_u64_counter(l_mds_iexp, "iexp");
-    mds_plb.add_u64_counter(l_mds_im, "im");
-    mds_plb.add_u64_counter(l_mds_iim, "iim");
-    logger = mds_plb.create_perf_counters();
-    g_ceph_context->get_perfcounters_collection()->add(logger);
-  }
-
-  {
-    PerfCountersBuilder mdm_plb(g_ceph_context, "mds_mem", l_mdm_first, l_mdm_last);
-    mdm_plb.add_u64(l_mdm_ino, "ino");
-    mdm_plb.add_u64_counter(l_mdm_inoa, "ino+");
-    mdm_plb.add_u64_counter(l_mdm_inos, "ino-");
-    mdm_plb.add_u64(l_mdm_dir, "dir");
-    mdm_plb.add_u64_counter(l_mdm_dira, "dir+");
-    mdm_plb.add_u64_counter(l_mdm_dirs, "dir-");
-    mdm_plb.add_u64(l_mdm_dn, "dn");
-    mdm_plb.add_u64_counter(l_mdm_dna, "dn+");
-    mdm_plb.add_u64_counter(l_mdm_dns, "dn-");
-    mdm_plb.add_u64(l_mdm_cap, "cap");
-    mdm_plb.add_u64_counter(l_mdm_capa, "cap+");
-    mdm_plb.add_u64_counter(l_mdm_caps, "cap-");
-    mdm_plb.add_u64(l_mdm_rss, "rss");
-    mdm_plb.add_u64(l_mdm_heap, "heap");
-    mdm_plb.add_u64(l_mdm_malloc, "malloc");
-    mdm_plb.add_u64(l_mdm_buf, "buf");
-    mlogger = mdm_plb.create_perf_counters();
-    g_ceph_context->get_perfcounters_collection()->add(mlogger);
-  }
-
-  mdlog->create_logger();
-  server->create_logger();
-}
-
-
 
 MDSTableClient *MDS::get_table_client(int t)
 {
@@ -537,8 +428,6 @@ int MDS::init(int wanted_state)
   // schedule tick
   reset_tick();
 
-  create_logger();
-
   mds_lock.Unlock();
 
   return 0;
@@ -580,15 +469,6 @@ void MDS::tick()
   utime_t now = ceph_clock_now(g_ceph_context);
   mds_load_t load = balancer->get_load(now);
 
-  if (logger) {
-    req_rate = logger->get(l_mds_req);
-
-    logger->set(l_mds_l, 100 * load.mds_load());
-    logger->set(l_mds_q, messenger->get_dispatch_queue_len());
-    logger->set(l_mds_sm, mdcache->num_subtrees());
-
-    mdcache->log_stat();
-  }
 
   // ...
   if (is_clientreplay() || is_active() || is_stopping()) {
@@ -2044,25 +1924,6 @@ bool MDS::_dispatch(Message *m)
     mdcache->migrator->hash_dir(mdcache->get_root()->dir);
   }
   */
-
-  if (mlogger) {
-    mlogger->set(l_mdm_ino, g_num_ino);
-    mlogger->set(l_mdm_dir, g_num_dir);
-    mlogger->set(l_mdm_dn, g_num_dn);
-    mlogger->set(l_mdm_cap, g_num_cap);
-
-    mlogger->inc(l_mdm_inoa, g_num_inoa);  g_num_inoa = 0;
-    mlogger->inc(l_mdm_inos, g_num_inos);  g_num_inos = 0;
-    mlogger->inc(l_mdm_dira, g_num_dira);  g_num_dira = 0;
-    mlogger->inc(l_mdm_dirs, g_num_dirs);  g_num_dirs = 0;
-    mlogger->inc(l_mdm_dna, g_num_dna);	 g_num_dna = 0;
-    mlogger->inc(l_mdm_dns, g_num_dns);	 g_num_dns = 0;
-    mlogger->inc(l_mdm_capa, g_num_capa);  g_num_capa = 0;
-    mlogger->inc(l_mdm_caps, g_num_caps);  g_num_caps = 0;
-
-    mlogger->set(l_mdm_buf, buffer::get_total_alloc());
-
-  }
 
   // shut down?
   if (is_stopping()) {

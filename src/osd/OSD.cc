@@ -70,7 +70,6 @@
 
 #include "messages/MWatchNotify.h"
 
-#include "common/perf_counters.h"
 #include "common/Timer.h"
 #include "common/LogClient.h"
 #include "common/HeartbeatMap.h"

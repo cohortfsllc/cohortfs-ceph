@@ -44,7 +44,6 @@
 
 #include "common/errno.h"
 #include "common/safe_io.h"
-#include "common/perf_counters.h"
 #include "common/MemoryModel.h"
 #include "osdc/Journaler.h"
 #include "osdc/Filer.h"
@@ -177,18 +176,6 @@ MDCache::~MDCache()
 }
 
 
-
-void MDCache::log_stat()
-{
-  mds->logger->set(l_mds_imax, g_conf->mds_cache_size);
-  mds->logger->set(l_mds_i, lru.lru_get_size());
-  mds->logger->set(l_mds_ipin, lru.lru_get_num_pinned());
-  mds->logger->set(l_mds_itop, lru.lru_get_top());
-  mds->logger->set(l_mds_ibot, lru.lru_get_bot());
-  mds->logger->set(l_mds_iptail, lru.lru_get_pintail());
-  mds->logger->set(l_mds_icap, num_inodes_with_caps);
-  mds->logger->set(l_mds_cap, num_caps);
-}
 
 
 //
@@ -5640,7 +5627,6 @@ bool MDCache::trim_dentry(CDentry *dn, map<int, MCacheExpire*>& expiremap)
   if (dir->get_num_head_items() == 0 && dir->is_subtree_root())
     migrator->export_empty_import(dir);
 
-  if (mds->logger) mds->logger->inc(l_mds_iex);
   return false;
 }
 
@@ -5748,17 +5734,6 @@ bool MDCache::trim_inode(CDentry *dn, CInode *in, CDir *con, map<int, MCacheExpi
       expiremap[a]->add_inode(df, in->vino(), in->get_replica_nonce());
     }
   }
-
-  /*
-  if (in->is_auth()) {
-    if (in->hack_accessed)
-      mds->logger->inc("outt");
-    else {
-      mds->logger->inc("outut");
-      mds->logger->fset("oututl", ceph_clock_now(g_ceph_context) - in->hack_load_stamp);
-    }
-  }
-  */
 
   // unlink
   if (dn)
@@ -6334,10 +6309,6 @@ void MDCache::check_memory_usage()
 	   << ", " << num_caps << " caps, " << caps_per_inode << " caps per inode"
 	   << dendl;
 
-  mds->mlogger->set(l_mdm_rss, last.get_rss());
-  mds->mlogger->set(l_mdm_heap, last.get_heap());
-  mds->mlogger->set(l_mdm_malloc, last.malloc);
-
   /*int size = last.get_total();
   if (size > g_conf->mds_mem_max * .9) {
     float ratio = (float)g_conf->mds_mem_max * .9 / (float)size;
@@ -6748,8 +6719,6 @@ int MDCache::path_traverse(MDRequestRef& mdr, Message *req, Context *fin,     //
 
   client_t client = (mdr && mdr->reqid.name.is_client()) ? mdr->reqid.name.num() : -1;
 
-  if (mds->logger) mds->logger->inc(l_mds_t);
-
   dout(7) << "traverse: opening base ino " << path.get_ino() << dendl;
   CInode *cur = get_inode(path.get_ino());
   if (cur == NULL) {
@@ -6796,7 +6765,6 @@ int MDCache::path_traverse(MDRequestRef& mdr, Message *req, Context *fin,     //
 	dout(10) << "traverse: need dirfrag " << fg << ", doing discover from " << *cur << dendl;
 	discover_path(cur, path.postfixpath(depth), _get_waiter(mdr, req, fin),
 		      null_okay);
-	if (mds->logger) mds->logger->inc(l_mds_tdis);
 	return 1;
       }
     }
@@ -6851,7 +6819,6 @@ int MDCache::path_traverse(MDRequestRef& mdr, Message *req, Context *fin,     //
 	(dnl->is_null() || forward)) {
       dout(10) << "traverse: xlocked dentry at " << *dn << dendl;
       dn->lock.add_waiter(SimpleLock::WAIT_RD, _get_waiter(mdr, req, fin));
-      if (mds->logger) mds->logger->inc(l_mds_tlock);
       mds->mdlog->flush();
       return 1;
     }
@@ -6885,7 +6852,6 @@ int MDCache::path_traverse(MDRequestRef& mdr, Message *req, Context *fin,     //
 	  assert(mdr);	// we shouldn't hit non-primary dentries doing a non-mdr traversal!
 	  open_remote_dentry(dn, true, _get_waiter(mdr, req, fin),
 			     (null_okay && depth == path.depth() - 1));
-	  if (mds->logger) mds->logger->inc(l_mds_trino);
 	  return 1;
 	}
       }
@@ -6970,7 +6936,6 @@ int MDCache::path_traverse(MDRequestRef& mdr, Message *req, Context *fin,     //
 	dout(7) << "traverse: incomplete dir contents for " << *cur << ", fetching" << dendl;
 	touch_inode(cur);
 	curdir->fetch(_get_waiter(mdr, req, fin), path[depth]);
-	if (mds->logger) mds->logger->inc(l_mds_tdirf);
 	return 1;
       }
     } else {
@@ -7005,7 +6970,6 @@ int MDCache::path_traverse(MDRequestRef& mdr, Message *req, Context *fin,     //
 	else
 	  mds->forward_message_mds(req, dauth.first);
 
-	if (mds->logger) mds->logger->inc(l_mds_tfw);
 	assert(fin == NULL);
 	return 2;
       }
@@ -7015,7 +6979,6 @@ int MDCache::path_traverse(MDRequestRef& mdr, Message *req, Context *fin,     //
   }
 
   // success.
-  if (mds->logger) mds->logger->inc(l_mds_thit);
   return 0;
 }
 
@@ -8038,7 +8001,6 @@ void MDCache::request_forward(MDRequestRef& mdr, int who, int port)
 	    << *mdr->client_request << dendl;
     mds->forward_message_mds(mdr->client_request, who);
     mdr->client_request = 0;
-    if (mds->logger) mds->logger->inc(l_mds_fw);
   } else {
     dout(7) << "request_forward drop " << *mdr << " req " << *mdr->client_request
 	    << " was from mds" << dendl;
@@ -8176,9 +8138,6 @@ void MDCache::request_cleanup(MDRequestRef& mdr)
     dout(10) << " fail-safe queueing next replay op" << dendl;
     mds->queue_one_replay();
   }
-
-  if (mds->logger)
-    log_stat();
 }
 
 void MDCache::request_kill(MDRequestRef& mdr)

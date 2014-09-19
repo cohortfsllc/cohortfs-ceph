@@ -470,7 +470,6 @@ void abort_early(struct req_state *s, RGWOp *op, int err_no)
   dump_bucket_from_state(s);
   end_header(s, op);
   rgw_flush_formatter_and_reset(s, s->formatter);
-  perfcounter->inc(l_rgw_failed_req);
 }
 
 void dump_continue(struct req_state *s)

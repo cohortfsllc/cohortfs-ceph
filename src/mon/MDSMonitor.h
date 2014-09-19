@@ -75,8 +75,6 @@ class MDSMonitor : public PaxosService {
   // we don't require full versions; don't encode any.
   virtual void encode_full(MonitorDBStore::Transaction *t) { }
 
-  void update_logger();
-
   void _updated(MMDSBeacon *m);
 
   bool preprocess_query(PaxosServiceMessage *m);  // true if processed.

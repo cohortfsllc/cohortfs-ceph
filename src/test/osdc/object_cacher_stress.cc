@@ -55,7 +55,7 @@ int stress_test(uint64_t num_ops, uint64_t num_objs,
   Mutex lock;
   FakeWriteback writeback(g_ceph_context, &lock, delay_ns);
 
-  ObjectCacher obc(g_ceph_context, "test", writeback, lock, NULL, NULL,
+  ObjectCacher obc(g_ceph_context, writeback, lock, NULL, NULL,
 		   g_conf->client_oc_size,
 		   g_conf->client_oc_max_objects,
 		   g_conf->client_oc_max_dirty,

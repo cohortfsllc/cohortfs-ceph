@@ -655,7 +655,6 @@ int RGWGetObj::read_user_manifest_part(rgw_bucket& bucket, RGWObjEnt& ent, RGWAc
     goto done_err;
   }
 
-  perfcounter->inc(l_rgw_get_b, cur_end - cur_ofs);
   while (cur_ofs <= cur_end) {
     bufferlist bl;
     ret = store->get_obj(obj_ctx, NULL, &handle, part, bl, cur_ofs, cur_end);
@@ -666,7 +665,6 @@ int RGWGetObj::read_user_manifest_part(rgw_bucket& bucket, RGWObjEnt& ent, RGWAc
     cur_ofs += len;
     ofs += len;
     ret = 0;
-    perfcounter->tinc(l_rgw_get_lat,
 		      (ceph_clock_now(s->cct) - start_time));
     send_response_data(bl, 0, len);
 
@@ -726,9 +724,6 @@ int RGWGetObj::iterate_user_manifest_parts(rgw_bucket& bucket, string& obj_prefi
 	end_ofs = end - cur_total_len + 1;
 	found_end = true;
       }
-
-      perfcounter->tinc(l_rgw_get_lat,
-		       (ceph_clock_now(s->cct) - start_time));
 
       if (found_start) {
 	len_count += end_ofs - start_ofs;
@@ -847,7 +842,6 @@ void RGWGetObj::execute()
 
   map<string, bufferlist>::iterator attr_iter;
 
-  perfcounter->inc(l_rgw_get);
   off_t new_ofs, new_end;
 
   ret = get_params();
@@ -883,12 +877,8 @@ void RGWGetObj::execute()
   if (!get_data || ofs > end)
     goto done_err;
 
-  perfcounter->inc(l_rgw_get_b, end - ofs);
-
   ret = store->get_obj_iterate(s->obj_ctx, &handle, obj, ofs, end, &cb);
 
-  perfcounter->tinc(l_rgw_get_lat,
-		   (ceph_clock_now(s->cct) - start_time));
   if (ret < 0) {
     goto done_err;
   }
@@ -1510,7 +1500,6 @@ void RGWPutObj::execute()
   map<string, string>::iterator iter;
 
 
-  perfcounter->inc(l_rgw_put);
   ret = -EINVAL;
   if (!s->object) {
     goto done;
@@ -1585,7 +1574,6 @@ void RGWPutObj::execute()
     goto done;
   }
   s->obj_size = ofs;
-  perfcounter->inc(l_rgw_put_b, s->obj_size);
 
   ret = store->check_quota(s->bucket_owner.get_id(), s->bucket,
 			   user_quota, bucket_quota, s->obj_size);
@@ -1629,8 +1617,6 @@ void RGWPutObj::execute()
   ret = processor->complete(etag, &mtime, 0, attrs);
 done:
   dispose_processor(processor);
-  perfcounter->tinc(l_rgw_put_lat,
-		   (ceph_clock_now(s->cct) - s->time));
 }
 
 int RGWPostObj::verify_permission()

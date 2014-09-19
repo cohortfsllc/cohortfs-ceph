@@ -56,7 +56,6 @@
 class Messenger;
 class Message;
 class MonClient;
-class PerfCounters;
 class ObjectStore;
 class OSDMap;
 class MLog;

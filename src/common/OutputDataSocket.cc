@@ -18,7 +18,6 @@
 #include "common/config.h"
 #include "common/dout.h"
 #include "common/errno.h"
-#include "common/perf_counters.h"
 #include "common/pipe.h"
 #include "common/safe_io.h"
 #include "common/version.h"

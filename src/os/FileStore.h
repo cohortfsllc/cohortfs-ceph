@@ -102,26 +102,7 @@ public:
 
   int peek_journal_fsid(uuid_d *fsid);
 
-  struct FSPerfTracker {
-    PerfCounters::avg_tracker<uint64_t> os_commit_latency;
-    PerfCounters::avg_tracker<uint64_t> os_apply_latency;
-
-    objectstore_perf_stat_t get_cur_stats() const {
-      objectstore_perf_stat_t ret;
-      ret.filestore_commit_latency = os_commit_latency.avg();
-      ret.filestore_apply_latency = os_apply_latency.avg();
-      return ret;
-    }
-
-    void update_from_perfcounters(PerfCounters &logger);
-  } perf_tracker;
-  objectstore_perf_stat_t get_cur_stats() {
-    perf_tracker.update_from_perfcounters(*logger);
-    return perf_tracker.get_cur_stats();
-  }
-
 private:
-  string internal_name;		///< internal name, used to name the perfcounter instance
   string basedir, journalpath;
   std::string current_fn;
   std::string current_op_seq_fn;
@@ -312,8 +293,6 @@ private:
   int write_version_stamp();
 
   int open_journal();
-
-  PerfCounters *logger;
 
 public:
   int lfn_find(const coll_t &cid, const hobject_t& oid, IndexedPath *path);

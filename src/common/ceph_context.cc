@@ -15,7 +15,6 @@
 #include <time.h>
 
 #include "common/admin_socket.h"
-#include "common/perf_counters.h"
 #include "common/Thread.h"
 #include "common/ceph_context.h"
 #include "common/config.h"
@@ -151,7 +150,7 @@ public:
 };
 
 
-// perfcounter hooks
+// hooks
 
 class CephContextHook : public AdminSocketHook {
   CephContext *m_cct;
@@ -180,67 +179,58 @@ void CephContext::do_command(std::string command, cmdmap_t& cmdmap,
   }
   lgeneric_dout(this, 1) << "do_command '" << command << "' '"
 			 << ss.str() << dendl;
-  if (command == "perfcounters_dump" || command == "1" ||
-      command == "perf dump") {
-    _perf_counters_collection->dump_formatted(f, false);
+  f->open_object_section(command.c_str());
+  if (command == "config show") {
+    _conf->show_config(f);
   }
-  else if (command == "perfcounters_schema" || command == "2" ||
-    command == "perf schema") {
-    _perf_counters_collection->dump_formatted(f, true);
+  else if (command == "config set") {
+    std::string var;
+    std::vector<std::string> val;
+
+    if (!(cmd_getval(this, cmdmap, "var", var)) ||
+	!(cmd_getval(this, cmdmap, "val", val))) {
+      f->dump_string("error", "syntax error: 'config set <var> <value>'");
+    } else {
+      // val may be multiple words
+      string valstr = str_join(val, " ");
+      int r = _conf->set_val(var.c_str(), valstr.c_str());
+      if (r < 0) {
+	f->dump_stream("error") << "error setting '" << var << "' to '" << valstr << "': " << cpp_strerror(r);
+      } else {
+	ostringstream ss;
+	_conf->apply_changes(&ss);
+	f->dump_string("success", ss.str());
+      }
+    }
+  } else if (command == "config get") {
+    std::string var;
+    if (!cmd_getval(this, cmdmap, "var", var)) {
+      f->dump_string("error", "syntax error: 'config get <var>'");
+    } else {
+      char buf[4096];
+      memset(buf, 0, sizeof(buf));
+      char *tmp = buf;
+      int r = _conf->get_val(var.c_str(), &tmp, sizeof(buf));
+      if (r < 0) {
+	f->dump_stream("error") << "error getting '" << var << "': " << cpp_strerror(r);
+      } else {
+	f->dump_string(var.c_str(), buf);
+      }
+    }
+  } else if (command == "log flush") {
+    _log->flush();
+  }
+  else if (command == "log dump") {
+    _log->dump_recent();
+  }
+  else if (command == "log reopen") {
+    _log->reopen_log_file();
   }
   else {
-    f->open_object_section(command.c_str());
-    if (command == "config show") {
-      _conf->show_config(f);
-    }
-    else if (command == "config set") {
-      std::string var;
-      std::vector<std::string> val;
-
-      if (!(cmd_getval(this, cmdmap, "var", var)) ||
-	  !(cmd_getval(this, cmdmap, "val", val))) {
-	f->dump_string("error", "syntax error: 'config set <var> <value>'");
-      } else {
-	// val may be multiple words
-	string valstr = str_join(val, " ");
-	int r = _conf->set_val(var.c_str(), valstr.c_str());
-	if (r < 0) {
-	  f->dump_stream("error") << "error setting '" << var << "' to '" << valstr << "': " << cpp_strerror(r);
-	} else {
-	  ostringstream ss;
-	  _conf->apply_changes(&ss);
-	  f->dump_string("success", ss.str());
-	}
-      }
-    } else if (command == "config get") {
-      std::string var;
-      if (!cmd_getval(this, cmdmap, "var", var)) {
-	f->dump_string("error", "syntax error: 'config get <var>'");
-      } else {
-	char buf[4096];
-	memset(buf, 0, sizeof(buf));
-	char *tmp = buf;
-	int r = _conf->get_val(var.c_str(), &tmp, sizeof(buf));
-	if (r < 0) {
-	    f->dump_stream("error") << "error getting '" << var << "': " << cpp_strerror(r);
-	} else {
-	    f->dump_string(var.c_str(), buf);
-	}
-      }
-    } else if (command == "log flush") {
-      _log->flush();
-    }
-    else if (command == "log dump") {
-      _log->dump_recent();
-    }
-    else if (command == "log reopen") {
-      _log->reopen_log_file();
-    }
-    else {
-      assert(0 == "registered under wrong command?");
-    }
-    f->close_section();
+    assert(0 == "registered under wrong command?");
   }
+  f->close_section();
+
   f->flush(*out);
   delete f;
   lgeneric_dout(this, 1) << "do_command '" << command << "' '" << ss.str()
@@ -256,8 +246,6 @@ CephContext::CephContext(uint32_t module_type_)
     _service_thread(NULL),
     _log_obs(NULL),
     _admin_socket(NULL),
-    _perf_counters_collection(NULL),
-    _perf_counters_conf_obs(NULL),
     _heartbeat_map(NULL),
     _crypto_none(NULL),
     _crypto_aes(NULL)
@@ -269,17 +257,10 @@ CephContext::CephContext(uint32_t module_type_)
   _log_obs = new LogObs(_log);
   _conf->add_observer(_log_obs);
 
-  _perf_counters_collection = new PerfCountersCollection(this);
   _admin_socket = new AdminSocket(this);
   _heartbeat_map = new HeartbeatMap(this);
 
   _admin_hook = new CephContextHook(this);
-  _admin_socket->register_command("perfcounters_dump", "perfcounters_dump", _admin_hook, "");
-  _admin_socket->register_command("1", "1", _admin_hook, "");
-  _admin_socket->register_command("perf dump", "perf dump", _admin_hook, "dump perfcounters value");
-  _admin_socket->register_command("perfcounters_schema", "perfcounters_schema", _admin_hook, "");
-  _admin_socket->register_command("2", "2", _admin_hook, "");
-  _admin_socket->register_command("perf schema", "perf schema", _admin_hook, "dump perfcounters schema");
   _admin_socket->register_command("config show", "config show", _admin_hook, "dump current config settings");
   _admin_socket->register_command("config set", "config set name=var,type=CephString name=val,type=CephString,n=N",  _admin_hook, "config set <field> <val> [<val> ...]: set a config variable");
   _admin_socket->register_command("config get", "config get name=var,type=CephString", _admin_hook, "config get <field>: get the config value");
@@ -295,12 +276,6 @@ CephContext::~CephContext()
 {
   join_service_thread();
 
-  _admin_socket->unregister_command("perfcounters_dump");
-  _admin_socket->unregister_command("perf dump");
-  _admin_socket->unregister_command("1");
-  _admin_socket->unregister_command("perfcounters_schema");
-  _admin_socket->unregister_command("perf schema");
-  _admin_socket->unregister_command("2");
   _admin_socket->unregister_command("config show");
   _admin_socket->unregister_command("config set");
   _admin_socket->unregister_command("config get");
@@ -311,12 +286,6 @@ CephContext::~CephContext()
   delete _admin_socket;
 
   delete _heartbeat_map;
-
-  delete _perf_counters_collection;
-  _perf_counters_collection = NULL;
-
-  delete _perf_counters_conf_obs;
-  _perf_counters_conf_obs = NULL;
 
   _conf->remove_observer(_log_obs);
   delete _log_obs;
@@ -391,11 +360,6 @@ void CephContext::join_service_thread()
 uint32_t CephContext::get_module_type() const
 {
   return _module_type;
-}
-
-PerfCountersCollection *CephContext::get_perfcounters_collection()
-{
-  return _perf_counters_collection;
 }
 
 AdminSocket *CephContext::get_admin_socket()

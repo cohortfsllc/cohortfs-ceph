@@ -177,7 +177,6 @@ protected:
 
     bool _enqueue(RGWRequest *req) {
       process->m_req_queue.push_back(req);
-      perfcounter->inc(l_rgw_qlen);
       dout(20) << "enqueued request req=" << hex << req << dec << dendl;
       _dump_queue();
       return true;
@@ -195,14 +194,11 @@ protected:
       process->m_req_queue.pop_front();
       dout(20) << "dequeued request req=" << hex << req << dec << dendl;
       _dump_queue();
-      perfcounter->inc(l_rgw_qlen, -1);
       return req;
     }
     void _process(RGWRequest *req) {
-      perfcounter->inc(l_rgw_qactive);
       process->handle_request(req);
       process->req_throttle.put(1);
-      perfcounter->inc(l_rgw_qactive, -1);
     }
     void _dump_queue() {
       deque<RGWRequest *>::iterator iter;
@@ -515,7 +511,6 @@ static int process_request(RGWRados *store, RGWREST *rest, RGWRequest *req, RGWC
   req->log_init();
 
   dout(1) << "====== starting new request req=" << hex << req << dec << " =====" << dendl;
-  perfcounter->inc(l_rgw_req);
 
   RGWEnv& rgw_env = client_io->get_env();
 
@@ -1017,8 +1012,6 @@ int main(int argc, const char **argv)
     derr << "Couldn't init storage provider (RADOS)" << dendl;
     r = EIO;
   }
-  if (!r)
-    r = rgw_perf_start(g_ceph_context);
 
   mutex.Lock();
   init_timer.cancel_all_events();
@@ -1192,8 +1185,6 @@ int main(int argc, const char **argv)
   rgw_log_usage_finalize();
 
   delete olog;
-
-  rgw_perf_stop(g_ceph_context);
 
   RGWStoreManager::close_storage(store);
 

@@ -26,7 +26,6 @@ using namespace std;
 
 
 #include "include/filepath.h"
-#include "common/perf_counters.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -791,13 +790,6 @@ int SyntheticClient::run()
 	    lat -= start;
 
 	    dout(0) << " trace " << tfile << " loop " << (i+1) << "/" << iarg1 << " done in " << (double)lat << " seconds" << dendl;
-	    if (client->logger
-		&& i > 0
-		&& i < iarg1-1
-		) {
-	      //client->logger->finc("trsum", (double)lat);
-	      //client->logger->inc("trnum");
-	    }
 	  }
 	  dout(1) << "done " << dendl;
 	}
@@ -2401,12 +2393,6 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
 
     utime_t lat = ceph_clock_now(client->cct);
     lat -= start;
-    if (client->logger) {
-      if (write)
-	client->logger->tset(l_c_owrlat, lat);
-      else
-	client->logger->tset(l_c_ordlat, lat);
-    }
   }
 
 

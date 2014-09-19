@@ -669,17 +669,6 @@ target_link_libraries(unittest_crypto_init global ${CMAKE_DL_LIBS}
 set_target_properties(unittest_crypto_init PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 
-# unittest_perf_counters
-set(unittest_perf_counters_srcs perf_counters.cc)
-add_executable(unittest_perf_counters
-  ${unittest_perf_counters_srcs}
-  $<TARGET_OBJECTS:heap_profiler_objs>
-  )
-target_link_libraries(unittest_perf_counters global ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
-set_target_properties(unittest_perf_counters PROPERTIES COMPILE_FLAGS
-  ${UNITTEST_CXX_FLAGS})
-
 # unittest_admin_socket
 set(unittest_admin_socket_srcs admin_socket.cc)
 add_executable(unittest_admin_socket

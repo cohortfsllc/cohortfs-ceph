@@ -136,7 +136,6 @@ set(libcommon_files
   common/LogEntry.cc
   common/PrebufferedStreambuf.cc
   common/BackTrace.cc
-  common/perf_counters.cc
   common/OutputDataSocket.cc
   common/admin_socket.cc
   common/admin_socket_client.cc

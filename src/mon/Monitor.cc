@@ -60,7 +60,6 @@
 #include "common/Timer.h"
 #include "common/Clock.h"
 #include "common/errno.h"
-#include "common/perf_counters.h"
 #include "common/admin_socket.h"
 
 #include "include/color.h"
@@ -135,7 +134,6 @@ Monitor::Monitor(CephContext* cct_, string nm, MonitorDBStore *s,
   con_self(m ? m->get_loopback_connection() : NULL),
   timer(cct_, lock),
   has_ever_joined(false),
-  logger(NULL), cluster_logger(NULL), cluster_logger_registered(false),
   monmap(map),
   clog(cct_, messenger, monmap, LogClient::FLAG_MON),
   key_server(cct, &keyring),
@@ -384,42 +382,6 @@ int Monitor::preinit()
 
   dout(1) << "preinit fsid " << monmap->fsid << dendl;
 
-  assert(!logger);
-  {
-    PerfCountersBuilder pcb(g_ceph_context, "mon", l_mon_first, l_mon_last);
-    // ...
-    logger = pcb.create_perf_counters();
-    cct->get_perfcounters_collection()->add(logger);
-  }
-
-  assert(!cluster_logger);
-  {
-    PerfCountersBuilder pcb(g_ceph_context, "cluster", l_cluster_first, l_cluster_last);
-    pcb.add_u64(l_cluster_num_mon, "num_mon");
-    pcb.add_u64(l_cluster_num_mon_quorum, "num_mon_quorum");
-    pcb.add_u64(l_cluster_num_osd, "num_osd");
-    pcb.add_u64(l_cluster_num_osd_up, "num_osd_up");
-    pcb.add_u64(l_cluster_num_osd_in, "num_osd_in");
-    pcb.add_u64(l_cluster_osd_epoch, "osd_epoch");
-    pcb.add_u64(l_cluster_osd_kb, "osd_kb");
-    pcb.add_u64(l_cluster_osd_kb_used, "osd_kb_used");
-    pcb.add_u64(l_cluster_osd_kb_avail, "osd_kb_avail");
-    pcb.add_u64(l_cluster_num_pool, "num_pool");
-    pcb.add_u64(l_cluster_num_pg, "num_pg");
-    pcb.add_u64(l_cluster_num_pg_active_clean, "num_pg_active_clean");
-    pcb.add_u64(l_cluster_num_pg_active, "num_pg_active");
-    pcb.add_u64(l_cluster_num_pg_peering, "num_pg_peering");
-    pcb.add_u64(l_cluster_num_object, "num_object");
-    pcb.add_u64(l_cluster_num_object_degraded, "num_object_degraded");
-    pcb.add_u64(l_cluster_num_object_unfound, "num_object_unfound");
-    pcb.add_u64(l_cluster_num_bytes, "num_bytes");
-    pcb.add_u64(l_cluster_num_mds_up, "num_mds_up");
-    pcb.add_u64(l_cluster_num_mds_in, "num_mds_in");
-    pcb.add_u64(l_cluster_num_mds_failed, "num_mds_failed");
-    pcb.add_u64(l_cluster_mds_epoch, "mds_epoch");
-    cluster_logger = pcb.create_perf_counters();
-  }
-
   // verify cluster_uuid
   {
     int r = check_fsid();
@@ -623,34 +585,6 @@ void Monitor::refresh_from_paxos(bool *need_bootstrap)
   }
 }
 
-void Monitor::register_cluster_logger()
-{
-  if (!cluster_logger_registered) {
-    dout(10) << "register_cluster_logger" << dendl;
-    cluster_logger_registered = true;
-    cct->get_perfcounters_collection()->add(cluster_logger);
-  } else {
-    dout(10) << "register_cluster_logger - already registered" << dendl;
-  }
-}
-
-void Monitor::unregister_cluster_logger()
-{
-  if (cluster_logger_registered) {
-    dout(10) << "unregister_cluster_logger" << dendl;
-    cluster_logger_registered = false;
-    cct->get_perfcounters_collection()->remove(cluster_logger);
-  } else {
-    dout(10) << "unregister_cluster_logger - not registered" << dendl;
-  }
-}
-
-void Monitor::update_logger()
-{
-  cluster_logger->set(l_cluster_num_mon, monmap->size());
-  cluster_logger->set(l_cluster_num_mon_quorum, quorum.size());
-}
-
 void Monitor::shutdown()
 {
   dout(1) << "shutdown" << dendl;
@@ -669,18 +603,6 @@ void Monitor::shutdown()
   }
 
   elector.shutdown();
-
-  if (logger) {
-    cct->get_perfcounters_collection()->remove(logger);
-    delete logger;
-    logger = NULL;
-  }
-  if (cluster_logger) {
-    if (cluster_logger_registered)
-      cct->get_perfcounters_collection()->remove(cluster_logger);
-    delete cluster_logger;
-    cluster_logger = NULL;
-  }
 
   // clean up
   paxos->shutdown();
@@ -708,7 +630,6 @@ void Monitor::bootstrap()
   dout(10) << "bootstrap" << dendl;
 
   sync_reset_requester();
-  unregister_cluster_logger();
   cancel_probe_timeout();
 
   // note my rank
@@ -1690,8 +1611,6 @@ void Monitor::finish_election()
   finish_contexts(waitfor_quorum);
   finish_contexts(maybe_wait_for_quorum);
   resend_routed_requests();
-  update_logger();
-  register_cluster_logger();
 
   // am i named properly?
   string cur_name = monmap->get_name(messenger->get_myaddr());

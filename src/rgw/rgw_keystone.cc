@@ -48,7 +48,6 @@ bool RGWKeystoneTokenCache::find(const string& token_id, KeystoneToken& token)
   map<string, token_entry>::iterator iter = tokens.find(token_id);
   if (iter == tokens.end()) {
     lock.Unlock();
-    if (perfcounter) perfcounter->inc(l_rgw_keystone_token_cache_miss);
     return false;
   }
 
@@ -58,7 +57,6 @@ bool RGWKeystoneTokenCache::find(const string& token_id, KeystoneToken& token)
   if (entry.token.expired()) {
     tokens.erase(iter);
     lock.Unlock();
-    if (perfcounter) perfcounter->inc(l_rgw_keystone_token_cache_hit);
     return false;
   }
   token = entry.token;
@@ -67,7 +65,6 @@ bool RGWKeystoneTokenCache::find(const string& token_id, KeystoneToken& token)
   entry.lru_iter = tokens_lru.begin();
 
   lock.Unlock();
-  if (perfcounter) perfcounter->inc(l_rgw_keystone_token_cache_hit);
 
   return true;
 }

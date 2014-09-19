@@ -173,8 +173,6 @@ private:
 
   void share_map_with_random_osd();
 
-  void update_logger();
-
   void handle_query(PaxosServiceMessage *m);
   bool preprocess_query(PaxosServiceMessage *m);  // true if processed.
   bool prepare_update(PaxosServiceMessage *m);

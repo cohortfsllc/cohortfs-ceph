@@ -13,7 +13,6 @@
  */
 
 #include <cassert>
-#include "common/perf_counters.h"
 #include "common/dout.h"
 #include "include/Context.h"
 #include "msg/Messenger.h"
@@ -397,13 +396,6 @@ void Journaler::_finish_flush(int r, uint64_t start, utime_t stamp)
 
   assert(start >= safe_pos);
   assert(start < flush_pos);
-
-  // calc latency?
-  if (logger) {
-    utime_t lat = ceph_clock_now(cct);
-    lat -= stamp;
-    logger->tinc(logger_key_lat, lat);
-  }
 
   // adjust safe_pos
   assert(pending_safe.count(start));

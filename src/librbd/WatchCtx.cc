@@ -3,7 +3,6 @@
 
 #include "common/ceph_context.h"
 #include "common/dout.h"
-#include "common/perf_counters.h"
 
 #include "librbd/ImageCtx.h"
 #include "librbd/internal.h"
@@ -30,7 +29,6 @@ namespace librbd {
     if (valid) {
       Mutex::Locker lictx(ictx->refresh_lock);
       ++ictx->refresh_seq;
-      ictx->perfcounter->inc(l_librbd_notify);
     }
   }
 }

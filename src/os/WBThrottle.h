@@ -25,18 +25,6 @@
 #include "common/Thread.h"
 #include "common/ceph_context.h"
 
-class PerfCounters;
-enum {
-  l_wbthrottle_first = 999090,
-  l_wbthrottle_bytes_dirtied,
-  l_wbthrottle_bytes_wb,
-  l_wbthrottle_ios_dirtied,
-  l_wbthrottle_ios_wb,
-  l_wbthrottle_inodes_dirtied,
-  l_wbthrottle_inodes_wb,
-  l_wbthrottle_last
-};
-
 /**
  * WBThrottle
  *
@@ -79,7 +67,6 @@ class WBThrottle : Thread, public md_config_obs_t {
   };
 
   CephContext *cct;
-  PerfCounters *logger;
   bool stopping;
   Mutex lock;
   Cond cond;

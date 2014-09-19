@@ -5,7 +5,6 @@
 #include "common/ceph_context.h"
 #include "common/dout.h"
 #include "common/errno.h"
-#include "common/perf_counters.h"
 
 #include "librbd/internal.h"
 #if 0
@@ -30,7 +29,6 @@ using librados::IoCtx;
 namespace librbd {
   ImageCtx::ImageCtx(const string &image_name, IoCtx& p, bool ro)
     : cct((CephContext*)p.cct()),
-      perfcounter(NULL),
       read_only(ro),
       flush_encountered(false),
       exclusive_locked(false),
@@ -48,10 +46,6 @@ namespace librbd {
 
     memset(&header, 0, sizeof(header));
 
-    string pname = string("librbd-") + string("-") +
-      data_ctx.get_volume_name() + string("/") + name;
-    perf_start(pname);
-
     if (cct->_conf->rbd_cache) {
       Mutex::Locker l(cache_lock);
       ldout(cct, 20) << "enabling caching..." << dendl;
@@ -68,7 +62,7 @@ namespace librbd {
 		     << " max_dirty_age="
 		     << cct->_conf->rbd_cache_max_dirty_age << dendl;
 
-      object_cacher = new ObjectCacher(cct, pname, *writeback_handler, cache_lock,
+      object_cacher = new ObjectCacher(cct, *writeback_handler, cache_lock,
 				       NULL, NULL,
 				       cct->_conf->rbd_cache_size,
 				       10,  /* reset this in init */
@@ -83,7 +77,6 @@ namespace librbd {
   }
 
   ImageCtx::~ImageCtx() {
-    perf_stop();
     if (object_cacher) {
       delete object_cacher;
       object_cacher = NULL;
@@ -109,43 +102,6 @@ namespace librbd {
     header_oid = header_name(name);
     image_oid = image_name(name);
     return 0;
-  }
-
-  void ImageCtx::perf_start(string name) {
-    PerfCountersBuilder plb(cct, name, l_librbd_first, l_librbd_last);
-
-    plb.add_u64_counter(l_librbd_rd, "rd");
-    plb.add_u64_counter(l_librbd_rd_bytes, "rd_bytes");
-    plb.add_time_avg(l_librbd_rd_latency, "rd_latency");
-    plb.add_u64_counter(l_librbd_wr, "wr");
-    plb.add_u64_counter(l_librbd_wr_bytes, "wr_bytes");
-    plb.add_time_avg(l_librbd_wr_latency, "wr_latency");
-    plb.add_u64_counter(l_librbd_discard, "discard");
-    plb.add_u64_counter(l_librbd_discard_bytes, "discard_bytes");
-    plb.add_time_avg(l_librbd_discard_latency, "discard_latency");
-    plb.add_u64_counter(l_librbd_flush, "flush");
-    plb.add_u64_counter(l_librbd_aio_rd, "aio_rd");
-    plb.add_u64_counter(l_librbd_aio_rd_bytes, "aio_rd_bytes");
-    plb.add_time_avg(l_librbd_aio_rd_latency, "aio_rd_latency");
-    plb.add_u64_counter(l_librbd_aio_wr, "aio_wr");
-    plb.add_u64_counter(l_librbd_aio_wr_bytes, "aio_wr_bytes");
-    plb.add_time_avg(l_librbd_aio_wr_latency, "aio_wr_latency");
-    plb.add_u64_counter(l_librbd_aio_discard, "aio_discard");
-    plb.add_u64_counter(l_librbd_aio_discard_bytes, "aio_discard_bytes");
-    plb.add_time_avg(l_librbd_aio_discard_latency, "aio_discard_latency");
-    plb.add_u64_counter(l_librbd_aio_flush, "aio_flush");
-    plb.add_time_avg(l_librbd_aio_flush_latency, "aio_flush_latency");
-    plb.add_u64_counter(l_librbd_notify, "notify");
-    plb.add_u64_counter(l_librbd_resize, "resize");
-
-    perfcounter = plb.create_perf_counters();
-    cct->get_perfcounters_collection()->add(perfcounter);
-  }
-
-  void ImageCtx::perf_stop() {
-    assert(perfcounter);
-    cct->get_perfcounters_collection()->remove(perfcounter);
-    delete perfcounter;
   }
 
   uint64_t ImageCtx::get_current_size() const

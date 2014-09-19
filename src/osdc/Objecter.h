@@ -41,8 +41,6 @@ class Message;
 
 class MStatfsReply;
 
-class PerfCounters;
-
 // -----------------------------------------
 
 struct ObjectOperation {
@@ -697,8 +695,6 @@ private:
   Mutex &client_lock;
   SafeTimer &timer;
 
-  PerfCounters *logger;
-
   class C_Tick : public Context {
     Objecter *ob;
   public:
@@ -1051,7 +1047,7 @@ public:
     last_seen_osdmap_version(0),
     last_seen_pgmap_version(0),
     client_lock(l), timer(t),
-    logger(NULL), tick_event(NULL),
+    tick_event(NULL),
     m_request_state_hook(NULL),
     num_homeless_ops(0),
     mon_timeout(mon_timeout),
@@ -1062,7 +1058,6 @@ public:
   ~Objecter() {
     assert(!tick_event);
     assert(!m_request_state_hook);
-    assert(!logger);
   }
 
   void init_unlocked();

@@ -147,15 +147,9 @@ class StripObjectMap: public GenericObjectMap {
 class KeyValueStore : public ObjectStore,
 		      public md_config_obs_t {
  public:
-  objectstore_perf_stat_t get_cur_stats() {
-    objectstore_perf_stat_t ret;
-    return ret;
-  }
-
   static const uint32_t target_version = 1;
 
  private:
-  string internal_name; // internal name, used to name the perfcounter instance
   string basedir;
   std::string current_fn;
   std::string current_op_seq_fn;
@@ -362,8 +356,6 @@ class KeyValueStore : public ObjectStore,
   void _do_op(OpSequencer *osr, ThreadPool::TPHandle &handle);
   void op_queue_release_throttle(Op *o);
   void _finish_op(OpSequencer *osr);
-
-  PerfCounters *logger;
 
  public:
 

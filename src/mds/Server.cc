@@ -53,7 +53,6 @@
 #include "include/filepath.h"
 #include "common/errno.h"
 #include "common/Timer.h"
-#include "common/perf_counters.h"
 #include "include/compat.h"
 #include "osd/OSDMap.h"
 
@@ -69,19 +68,6 @@ using namespace std;
 #define dout_subsys ceph_subsys_mds
 #undef dout_prefix
 #define dout_prefix *_dout << "mds." << mds->get_nodeid() << ".server "
-
-void Server::create_logger()
-{
-  PerfCountersBuilder plb(g_ceph_context, "mds_server", l_mdss_first, l_mdss_last);
-  plb.add_u64_counter(l_mdss_hcreq,"hcreq"); // handle client req
-  plb.add_u64_counter(l_mdss_hsreq, "hsreq"); // slave
-  plb.add_u64_counter(l_mdss_hcsess, "hcsess");	   // client session
-  plb.add_u64_counter(l_mdss_dcreq, "dcreq"); // dispatch client req
-  plb.add_u64_counter(l_mdss_dsreq, "dsreq"); // slave
-  logger = plb.create_perf_counters();
-  g_ceph_context->get_perfcounters_collection()->add(logger);
-}
-
 
 /* This function DOES put the passed message before returning*/
 void Server::dispatch(Message *m)
@@ -851,9 +837,7 @@ void Server::early_reply(MDRequestRef& mdr, CInode *tracei, CDentry *tracedn)
 
   mdr->did_early_reply = true;
 
-  mds->logger->inc(l_mds_reply);
   utime_t lat = ceph_clock_now(g_ceph_context) - mdr->client_request->get_recv_stamp();
-  mds->logger->tinc(l_mds_replyl, lat);
   dout(20) << "lat " << lat << dendl;
 }
 
@@ -892,9 +876,7 @@ void Server::reply_request(MDRequestRef& mdr, MClientReply *reply, CInode *trace
 
   if (!did_early_reply && !is_replay) {
 
-    mds->logger->inc(l_mds_reply);
     utime_t lat = ceph_clock_now(g_ceph_context) - mdr->client_request->get_recv_stamp();
-    mds->logger->tinc(l_mds_replyl, lat);
     dout(20) << "lat " << lat << dendl;
 
     if (tracei)
@@ -1038,8 +1020,6 @@ void Server::handle_client_request(MClientRequest *req)
 {
   dout(4) << "handle_client_request " << *req << dendl;
 
-  if (logger) logger->inc(l_mdss_hcreq);
-
   if (!mdcache->is_open()) {
     dout(5) << "waiting for root" << dendl;
     mdcache->wait_for_open(new C_MDS_RetryMessage(mds, req));
@@ -1130,8 +1110,6 @@ void Server::handle_client_request(MClientRequest *req)
 void Server::dispatch_client_request(MDRequestRef& mdr)
 {
   MClientRequest *req = mdr->client_request;
-
-  if (logger) logger->inc(l_mdss_dcreq);
 
   dout(7) << "dispatch_client_request " << *req << dendl;
 
@@ -1238,8 +1216,6 @@ void Server::handle_slave_request(MMDSSlaveRequest *m)
 {
   dout(4) << "handle_slave_request " << m->get_reqid() << " from " << m->get_source() << dendl;
   int from = m->get_source().num();
-
-  if (logger) logger->inc(l_mdss_hsreq);
 
   // reply?
   if (m->is_reply())
@@ -1429,8 +1405,6 @@ void Server::dispatch_slave_request(MDRequestRef& mdr)
     mdcache->request_finish(mdr);
     return;
   }
-
-  if (logger) logger->inc(l_mdss_dsreq);
 
   int op = mdr->slave_request->get_op();
   switch (op) {

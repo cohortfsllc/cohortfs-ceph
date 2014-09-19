@@ -23,22 +23,16 @@
 #include "common/Finisher.h"
 #include "osd/OpRequest.h"
 
-class PerfCounters;
-
 class Journal {
 protected:
   uuid_d fsid;
   Finisher *finisher;
-public:
-  PerfCounters *logger;
-protected:
   Cond *do_sync_cond;
   bool wait_on_full;
 
 public:
   Journal(uuid_d f, Finisher *fin, Cond *c=0) :
-    fsid(f), finisher(fin), logger(NULL),
-    do_sync_cond(c),
+    fsid(f), finisher(fin), do_sync_cond(c),
     wait_on_full(false) { }
   virtual ~Journal() { }
 

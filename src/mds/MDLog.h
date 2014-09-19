@@ -16,27 +16,6 @@
 #ifndef CEPH_MDLOG_H
 #define CEPH_MDLOG_H
 
-enum {
-  l_mdl_first = 5000,
-  l_mdl_evadd,
-  l_mdl_evex,
-  l_mdl_evtrm,
-  l_mdl_ev,
-  l_mdl_evexg,
-  l_mdl_evexd,
-  l_mdl_segadd,
-  l_mdl_segex,
-  l_mdl_segtrm,
-  l_mdl_seg,
-  l_mdl_segexg,
-  l_mdl_segexd,
-  l_mdl_expos,
-  l_mdl_wrpos,
-  l_mdl_rdpos,
-  l_mdl_jlat,
-  l_mdl_last,
-};
-
 #include "include/types.h"
 #include "include/Context.h"
 
@@ -52,8 +31,6 @@ class LogEvent;
 class MDS;
 class LogSegment;
 class ESubtreeMap;
-
-class PerfCounters;
 
 #include <map>
 using std::map;
@@ -71,9 +48,6 @@ protected:
 
   inodeno_t ino;
   Journaler *journaler;
-
-  PerfCounters *logger;
-
 
   // -- replay --
   Cond replay_cond;
@@ -138,8 +112,6 @@ private:
   void handle_journaler_write_error(int r);
 
 public:
-  void create_logger();
-
   // replay state
   map<inodeno_t, set<inodeno_t> >   pending_exports;
 
@@ -151,7 +123,6 @@ public:
 		  unflushed(0),
 		  capped(false),
 		  journaler(0),
-		  logger(0),
 		  replay_thread(this),
 		  already_replayed(false),
 		  expiring_events(0), expired_events(0),
@@ -182,8 +153,6 @@ public:
   bool have_any_segments() {
     return !segments.empty();
   }
-
-  void flush_logger();
 
   size_t get_num_events() { return num_events; }
   size_t get_num_segments() { return segments.size(); }

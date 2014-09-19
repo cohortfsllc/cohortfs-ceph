@@ -91,7 +91,6 @@ SUBSYS(auth, 1, 5)
 SUBSYS(crypto, 1, 5)
 SUBSYS(finisher, 1, 1)
 SUBSYS(heartbeatmap, 1, 5)
-SUBSYS(perfcounter, 1, 5)
 SUBSYS(rgw, 1, 5)		  // log level for the Rados gateway
 SUBSYS(javaclient, 1, 5)
 SUBSYS(asok, 1, 5)
@@ -104,7 +103,6 @@ OPTION(keyring, OPT_STR, "/etc/ceph/$cluster.$name.keyring,/etc/ceph/$cluster.ke
 OPTION(heartbeat_interval, OPT_INT, 5)
 OPTION(heartbeat_file, OPT_STR, "")
 OPTION(heartbeat_inject_failure, OPT_INT, 0)	// force an unhealthy heartbeat for N seconds
-OPTION(perf, OPT_BOOL, true)	   // enable internal perf counters
 
 OPTION(ms_tcp_nodelay, OPT_BOOL, true)
 OPTION(ms_tcp_rcvbuf, OPT_INT, 0)
@@ -715,9 +713,6 @@ OPTION(rgw_user_quota_sync_idle_users, OPT_BOOL, false) // whether stats for idl
 OPTION(rgw_user_quota_sync_wait_time, OPT_INT, 3600 * 24) // min time between two full stats syc for non-idle users
 
 OPTION(rgw_multipart_min_part_size, OPT_INT, 5 * 1024 * 1024) // min size for each part (except for last one) in multipart upload
-
-OPTION(mutex_perf_counter, OPT_BOOL, false) // enable/disable mutex perf counter
-OPTION(throttler_perf_counter, OPT_BOOL, true) // enable/disable throttler perf counter
 
 // This will be set to true when it is safe to start threads.
 // Once it is true, it will never change.

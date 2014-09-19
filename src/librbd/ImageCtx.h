@@ -20,7 +20,6 @@
 #include "librbd/LibrbdWriteback.h"
 
 class CephContext;
-class PerfCounters;
 
 namespace librbd {
 
@@ -30,7 +29,6 @@ namespace librbd {
 
   struct ImageCtx {
     CephContext *cct;
-    PerfCounters *perfcounter;
     struct rbd_obj_header_ondisk header;
     // whether the image was opened read-only. cannot be changed after opening
     bool read_only;
@@ -70,8 +68,6 @@ namespace librbd {
     ImageCtx(const std::string &image_name, IoCtx& p, bool read_only);
     ~ImageCtx();
     int init();
-    void perf_start(std::string name);
-    void perf_stop();
 
     uint64_t get_current_size() const;
     uint64_t get_image_size() const;

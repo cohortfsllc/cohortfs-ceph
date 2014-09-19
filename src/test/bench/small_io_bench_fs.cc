@@ -22,7 +22,6 @@
 #include "global/global_init.h"
 #include "os/FileStore.h"
 #include "testfilestore_backend.h"
-#include "common/perf_counters.h"
 
 namespace po = boost::program_options;
 using namespace std;
@@ -33,7 +32,6 @@ struct MorePrinting : public DetailedStatCollector::AdditionalPrinting {
   void operator()(std::ostream *out) {
     bufferlist bl;
     Formatter *f = new_formatter("json-pretty");
-    cct->get_perfcounters_collection()->dump_formatted(f, 0);
     f->flush(bl);
     delete f;
     bl.append('\0');

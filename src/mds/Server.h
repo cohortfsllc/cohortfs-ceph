@@ -17,7 +17,6 @@
 
 #include "MDS.h"
 
-class PerfCounters;
 class LogEvent;
 class EMetaBlob;
 class EUpdate;
@@ -28,22 +27,11 @@ struct MDRequestImpl;
 typedef std::shared_ptr<MutationImpl> MutationRef;
 typedef std::shared_ptr<MDRequestImpl> MDRequestRef;
 
-enum {
-  l_mdss_first = 1000,
-  l_mdss_hcreq,
-  l_mdss_hsreq,
-  l_mdss_hcsess,
-  l_mdss_dcreq,
-  l_mdss_dsreq,
-  l_mdss_last,
-};
-
 class Server {
   MDS *mds;
   MDCache *mdcache;
   MDLog *mdlog;
   Messenger *messenger;
-  PerfCounters *logger;
 
 public:
   int failed_reconnects;
@@ -54,16 +42,11 @@ public:
     mds(m),
     mdcache(mds->mdcache), mdlog(mds->mdlog),
     messenger(mds->messenger),
-    logger(0),
     failed_reconnects(0),
     terminating_sessions(false) {
   }
   ~Server() {
-    g_ceph_context->get_perfcounters_collection()->remove(logger);
-    delete logger;
   }
-
-  void create_logger();
 
   // message handler
   void dispatch(Message *m);

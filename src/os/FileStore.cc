@@ -64,7 +64,6 @@
 #include "common/errno.h"
 #include "common/run_cmd.h"
 #include "common/safe_io.h"
-#include "common/perf_counters.h"
 #include "common/sync_filesystem.h"
 #include "common/fd.h"
 #include "DBObjectMap.h"
@@ -133,18 +132,6 @@ int FileStore::peek_journal_fsid(uuid_d *fsid)
   FileJournal j(*fsid, 0, 0, journalpath.c_str(), false, false);
   return j.peek_fsid(*fsid);
 }
-
-void FileStore::FSPerfTracker::update_from_perfcounters(
-  PerfCounters &logger)
-{
-  os_commit_latency.consume_next(
-    logger.get_tavg_ms(
-      l_os_commit_lat));
-  os_apply_latency.consume_next(
-    logger.get_tavg_ms(
-      l_os_apply_lat));
-}
-
 
 ostream& operator<<(ostream& out, const FileStore::OpSequencer& s)
 {
@@ -423,7 +410,6 @@ int FileStore::lfn_unlink(const coll_t &cid, const hobject_t& o,
 
 FileStore::FileStore(const std::string &base, const std::string &jdev, const char *name, bool do_update) :
   JournalingObjectStore(base),
-  internal_name(name),
   basedir(base), journalpath(jdev),
   blk_size(0),
   fsid_fd(-1), op_fd(-1),
@@ -442,7 +428,6 @@ FileStore::FileStore(const std::string &base, const std::string &jdev, const cha
   op_tp(g_ceph_context, "FileStore::op_tp", g_conf->filestore_op_threads, "filestore_op_threads"),
   op_wq(this, g_conf->filestore_op_thread_timeout,
 	g_conf->filestore_op_thread_suicide_timeout, &op_tp),
-  logger(NULL),
   m_filestore_commit_timeout(g_conf->filestore_commit_timeout),
   m_filestore_journal_parallel(g_conf->filestore_journal_parallel ),
   m_filestore_journal_trailing(g_conf->filestore_journal_trailing),
@@ -483,36 +468,6 @@ FileStore::FileStore(const std::string &base, const std::string &jdev, const cha
   omss << basedir << "/current/omap";
   omap_dir = omss.str();
 
-  // initialize logger
-  PerfCountersBuilder plb(g_ceph_context, internal_name, l_os_first, l_os_last);
-
-  plb.add_u64(l_os_jq_max_ops, "journal_queue_max_ops");
-  plb.add_u64(l_os_jq_ops, "journal_queue_ops");
-  plb.add_u64_counter(l_os_j_ops, "journal_ops");
-  plb.add_u64(l_os_jq_max_bytes, "journal_queue_max_bytes");
-  plb.add_u64(l_os_jq_bytes, "journal_queue_bytes");
-  plb.add_u64_counter(l_os_j_bytes, "journal_bytes");
-  plb.add_time_avg(l_os_j_lat, "journal_latency");
-  plb.add_u64_counter(l_os_j_wr, "journal_wr");
-  plb.add_u64_avg(l_os_j_wr_bytes, "journal_wr_bytes");
-  plb.add_u64(l_os_oq_max_ops, "op_queue_max_ops");
-  plb.add_u64(l_os_oq_ops, "op_queue_ops");
-  plb.add_u64_counter(l_os_ops, "ops");
-  plb.add_u64(l_os_oq_max_bytes, "op_queue_max_bytes");
-  plb.add_u64(l_os_oq_bytes, "op_queue_bytes");
-  plb.add_u64_counter(l_os_bytes, "bytes");
-  plb.add_time_avg(l_os_apply_lat, "apply_latency");
-  plb.add_u64(l_os_committing, "committing");
-
-  plb.add_u64_counter(l_os_commit, "commitcycle");
-  plb.add_time_avg(l_os_commit_len, "commitcycle_interval");
-  plb.add_time_avg(l_os_commit_lat, "commitcycle_latency");
-  plb.add_u64_counter(l_os_j_full, "journal_full");
-  plb.add_time_avg(l_os_queue_lat, "queue_transaction_latency_avg");
-
-  logger = plb.create_perf_counters();
-
-  g_ceph_context->get_perfcounters_collection()->add(logger);
   g_ceph_context->_conf->add_observer(this);
 
   generic_backend = new GenericFileStoreBackend(this);
@@ -524,17 +479,8 @@ FileStore::FileStore(const std::string &base, const std::string &jdev, const cha
 FileStore::~FileStore()
 {
   g_ceph_context->_conf->remove_observer(this);
-  g_ceph_context->get_perfcounters_collection()->remove(logger);
 
   delete generic_backend;
-
-  if (journal)
-    journal->logger = NULL;
-  delete logger;
-
-  if (m_filestore_do_dump) {
-    dump_stop();
-  }
 }
 
 static void get_attrname(const char *name, char *buf, int len)
@@ -568,8 +514,6 @@ int FileStore::open_journal()
     dout(10) << "open_journal at " << journalpath << dendl;
     journal = new FileJournal(fsid, &finisher, &sync_cond, journalpath.c_str(),
 			      m_journal_dio, m_journal_aio, m_journal_force_aio);
-    if (journal)
-      journal->logger = logger;
   }
   return 0;
 }
@@ -1602,9 +1546,6 @@ void FileStore::queue_op(OpSequencer *osr, Op *o)
 
   osr->queue(o);
 
-  logger->inc(l_os_ops);
-  logger->inc(l_os_bytes, o->bytes);
-
   dout(5) << "queue_op " << o << " seq " << o->op
 	  << " " << *osr
 	  << " " << o->bytes << " bytes"
@@ -1624,10 +1565,6 @@ void FileStore::op_queue_reserve_throttle(Op *o, ThreadPool::TPHandle *handle)
     max_bytes += m_filestore_queue_committing_max_bytes;
   }
 
-  logger->set(l_os_oq_max_ops, max_ops);
-  logger->set(l_os_oq_max_bytes, max_bytes);
-
-  utime_t start = ceph_clock_now(g_ceph_context);
   {
     Mutex::Locker l(op_throttle_lock);
     while ((max_ops && (op_queue_len + 1) > max_ops) ||
@@ -1645,11 +1582,6 @@ void FileStore::op_queue_reserve_throttle(Op *o, ThreadPool::TPHandle *handle)
     op_queue_len++;
     op_queue_bytes += o->bytes;
   }
-  utime_t end = ceph_clock_now(g_ceph_context);
-  logger->tinc(l_os_queue_lat, end - start);
-
-  logger->set(l_os_oq_ops, op_queue_len);
-  logger->set(l_os_oq_bytes, op_queue_bytes);
 }
 
 void FileStore::op_queue_release_throttle(Op *o)
@@ -1660,9 +1592,6 @@ void FileStore::op_queue_release_throttle(Op *o)
     op_queue_bytes -= o->bytes;
     op_throttle_cond.Signal();
   }
-
-  logger->set(l_os_oq_ops, op_queue_len);
-  logger->set(l_os_oq_bytes, op_queue_bytes);
 }
 
 void FileStore::_do_op(OpSequencer *osr, ThreadPool::TPHandle &handle)
@@ -1700,7 +1629,6 @@ void FileStore::_finish_op(OpSequencer *osr)
 
   utime_t lat = ceph_clock_now(g_ceph_context);
   lat -= o->start;
-  logger->tinc(l_os_apply_lat, lat);
 
   if (o->onreadable_sync) {
     o->onreadable_sync->complete(0);
@@ -2928,8 +2856,6 @@ void FileStore::sync_entry()
       timer.add_event_after(m_filestore_commit_timeout, sync_entry_timeo);
       sync_entry_timeo_lock.Unlock();
 
-      logger->set(l_os_committing, 1);
-
       // make flusher stop flushing previously queued stuff
       sync_epoch++;
 
@@ -2998,14 +2924,8 @@ void FileStore::sync_entry()
       utime_t dur = done - startwait;
       dout(10) << "sync_entry commit took " << lat << ", interval was " << dur << dendl;
 
-      logger->inc(l_os_commit);
-      logger->tinc(l_os_commit_lat, lat);
-      logger->tinc(l_os_commit_len, dur);
-
       apply_manager.commit_finish();
       wbthrottle.clear();
-
-      logger->set(l_os_committing, 0);
 
       // remove old snaps?
       if (backend->can_checkpoint()) {

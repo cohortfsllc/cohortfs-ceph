@@ -717,8 +717,6 @@ void CDir::split(int bits, list<CDir*>& subs, list<Context*>& waiters, bool repl
 {
   dout(10) << "split by " << bits << " bits on " << *this << dendl;
 
-  if (cache->mds->logger) cache->mds->logger->inc(l_mds_dir_sp);
-
   assert(replay || is_complete() || !is_auth());
 
   list<frag_t> frags;
@@ -1243,8 +1241,6 @@ void CDir::fetch(Context *c, const string& want_dn, bool ignore_authpinnability)
   auth_pin(this);
   state_set(CDir::STATE_FETCHING);
 
-  if (cache->mds->logger) cache->mds->logger->inc(l_mds_dir_f);
-
   _omap_fetch(want_dn);
 }
 
@@ -1624,9 +1620,7 @@ void CDir::_commit(version_t want, int op_prio)
     state_set(STATE_COMMITTING);
   }
 
-  if (cache->mds->logger) cache->mds->logger->inc(l_mds_dir_c);
-
-   _omap_commit(op_prio);
+  _omap_commit(op_prio);
 }
 
 

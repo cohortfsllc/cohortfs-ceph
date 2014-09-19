@@ -74,8 +74,6 @@ class Filer;
 class Objecter;
 class WritebackHandler;
 
-class PerfCounters;
-
 enum {
   l_c_first = 20000,
   l_c_reply,
@@ -197,8 +195,6 @@ struct dir_result_t {
 class Client : public Dispatcher {
  public:
   CephContext *cct;
-
-  PerfCounters *logger;
 
   class CommandHook : public AdminSocketHook {
     Client *m_client;
