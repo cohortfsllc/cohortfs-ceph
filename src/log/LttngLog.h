@@ -33,9 +33,9 @@ TRACEPOINT_LOGLEVEL(
 
 TRACEPOINT_EVENT(ceph,
        log_integer,
-       TP_ARGS(int, value, char, type, int, pid, int, message_id),
+       TP_ARGS(uint64_t, value, char, type, int, pid, int, message_id),
        TP_FIELDS(
-	     ctf_integer(int, value, value)
+	     ctf_integer(uint64_t, value, value)
 	     ctf_integer(char, type, type)
 	     ctf_integer(int, pid, pid)
              ctf_integer(int, message_id, message_id)
@@ -60,6 +60,22 @@ TRACEPOINT_EVENT(ceph,
 TRACEPOINT_LOGLEVEL(
        ceph,
        log_string,
+       TRACE_INFO)
+
+TRACEPOINT_EVENT(ceph,
+       log_manip,
+       TP_ARGS(int, value, char, type, int, pid, int, message_id),
+       TP_FIELDS(
+	     ctf_integer(int, value, value)
+	     ctf_integer(char, type, type)
+	     ctf_integer(int, pid, pid)
+             ctf_integer(int, message_id, message_id)
+	)	
+)
+
+TRACEPOINT_LOGLEVEL(
+       ceph,
+       log_manip,
        TRACE_INFO)
 
 TRACEPOINT_EVENT(
