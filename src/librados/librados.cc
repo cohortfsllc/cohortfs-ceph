@@ -198,12 +198,6 @@ void librados::ObjectReadOperation::sparse_read(uint64_t off, uint64_t len,
   o->sparse_read(off, len, m, data_bl, prval);
 }
 
-void librados::ObjectReadOperation::tmap_get(bufferlist *pbl, int *prval)
-{
-  ::ObjectOperation *o = (::ObjectOperation *)impl;
-  o->tmap_get(pbl, prval);
-}
-
 void librados::ObjectReadOperation::getxattr(const char *name, bufferlist *pbl,
 					     int *prval)
 {
@@ -380,20 +374,6 @@ void librados::ObjectWriteOperation::omap_rm_keys(
 {
   ::ObjectOperation *o = (::ObjectOperation *)impl;
   o->omap_rm_keys(to_rm);
-}
-
-void librados::ObjectWriteOperation::tmap_put(const bufferlist &bl)
-{
-  ::ObjectOperation *o = (::ObjectOperation *)impl;
-  bufferlist c = bl;
-  o->tmap_put(c);
-}
-
-void librados::ObjectWriteOperation::tmap_update(const bufferlist& cmdbl)
-{
-  ::ObjectOperation *o = (::ObjectOperation *)impl;
-  bufferlist c = cmdbl;
-  o->tmap_update(c);
 }
 
 void librados::ObjectWriteOperation::set_alloc_hint(
@@ -640,30 +620,6 @@ int librados::IoCtx::exec(const std::string& oid, const char *cls,
 {
   object_t obj(oid);
   return io_ctx_impl->exec(obj, cls, method, inbl, outbl);
-}
-
-int librados::IoCtx::tmap_update(const std::string& oid, bufferlist& cmdbl)
-{
-  object_t obj(oid);
-  return io_ctx_impl->tmap_update(obj, cmdbl);
-}
-
-int librados::IoCtx::tmap_put(const std::string& oid, bufferlist& bl)
-{
-  object_t obj(oid);
-  return io_ctx_impl->tmap_put(obj, bl);
-}
-
-int librados::IoCtx::tmap_get(const std::string& oid, bufferlist& bl)
-{
-  object_t obj(oid);
-  return io_ctx_impl->tmap_get(obj, bl);
-}
-
-int librados::IoCtx::tmap_to_omap(const std::string& oid, bool nullok)
-{
-  object_t obj(oid);
-  return io_ctx_impl->tmap_to_omap(obj, nullok);
 }
 
 int librados::IoCtx::omap_get_vals(const std::string& oid,
@@ -1789,48 +1745,6 @@ extern "C" int rados_stat(rados_ioctx_t io, const char *o, uint64_t *psize,
   librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
   object_t oid(o);
   return ctx->stat(oid, psize, pmtime);
-}
-
-extern "C" int rados_tmap_update(rados_ioctx_t io, const char *o,
-				 const char *cmdbuf, size_t cmdbuflen)
-{
-  librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
-  object_t oid(o);
-  bufferlist cmdbl;
-  cmdbl.append(cmdbuf, cmdbuflen);
-  return ctx->tmap_update(oid, cmdbl);
-}
-
-extern "C" int rados_tmap_put(rados_ioctx_t io, const char *o, const char *buf,
-			      size_t buflen)
-{
-  librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
-  object_t oid(o);
-  bufferlist bl;
-  bl.append(buf, buflen);
-  return ctx->tmap_put(oid, bl);
-}
-
-extern "C" int rados_tmap_get(rados_ioctx_t io, const char *o, char *buf,
-			      size_t buflen)
-{
-  librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
-  object_t oid(o);
-  bufferlist bl;
-  int r = ctx->tmap_get(oid, bl);
-  if (r < 0)
-    return r;
-  if (bl.length() > buflen)
-    return -ERANGE;
-  bl.copy(0, bl.length(), buf);
-  return bl.length();
-}
-
-extern "C" int rados_tmap_to_omap(rados_ioctx_t io, const char *o, bool nullok)
-{
-  librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
-  object_t oid(o);
-  return ctx->tmap_to_omap(oid, nullok);
 }
 
 extern "C" int rados_exec(rados_ioctx_t io, const char *o, const char *cls,

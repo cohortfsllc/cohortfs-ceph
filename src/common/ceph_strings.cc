@@ -41,9 +41,6 @@ const char *ceph_osd_op_name(int op)
 	case CEPH_OSD_OP_SETTRUNC: return "settrunc";
 	case CEPH_OSD_OP_TRIMTRUNC: return "trimtrunc";
 
-	case CEPH_OSD_OP_TMAPUP: return "tmapup";
-	case CEPH_OSD_OP_TMAPGET: return "tmapget";
-	case CEPH_OSD_OP_TMAPPUT: return "tmapput";
 	case CEPH_OSD_OP_WATCH: return "watch";
 
 	case CEPH_OSD_OP_ASSERT_SRC_VERSION: return "assert-src-version";

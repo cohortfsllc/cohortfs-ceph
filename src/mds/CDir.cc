@@ -1244,60 +1244,6 @@ void CDir::fetch(Context *c, const string& want_dn, bool ignore_authpinnability)
   _omap_fetch(want_dn);
 }
 
-class C_Dir_TMAP_Fetched : public Context {
- protected:
-  CDir *dir;
-  string want_dn;
- public:
-  bufferlist bl;
-
-  C_Dir_TMAP_Fetched(CDir *d, const string& w) : dir(d), want_dn(w) { }
-  void finish(int r) {
-    dir->_tmap_fetched(bl, want_dn, r);
-  }
-};
-
-void CDir::_tmap_fetch(const string& want_dn)
-{
-  // start by reading the first hunk of it
-  C_Dir_TMAP_Fetched *fin = new C_Dir_TMAP_Fetched(this, want_dn);
-  object_t oid = get_ondisk_object();
-  VolumeRef volume(cache->mds->get_metadata_volume());
-  ObjectOperation rd;
-  rd.tmap_get(&fin->bl, NULL);
-  volume->md_read(oid, rd, NULL, 0, fin, cache->mds->objecter);
-}
-
-void CDir::_tmap_fetched(bufferlist& bl, const string& want_dn, int r)
-{
-  LogClient &clog = cache->mds->clog;
-  dout(10) << "_tmap_fetched " << bl.length()  << " bytes for " << *this
-	   << " want_dn=" << want_dn << dendl;
-
-  assert(r == 0 || r == -ENOENT);
-  assert(is_auth());
-  assert(!is_frozen());
-
-  bufferlist header;
-  map<string, bufferlist> omap;
-
-  if (bl.length() == 0) {
-    r = -ENODATA;
-  } else {
-    bufferlist::iterator p = bl.begin();
-    ::decode(header, p);
-    ::decode(omap, p);
-
-    if (!p.end()) {
-      clog.warn() << "tmap buffer of dir " << dirfrag() << " has "
-		  << bl.length() - p.get_off() << " extra bytes\n";
-    }
-    bl.clear();
-  }
-
-  _omap_fetched(header, omap, want_dn, r);
-}
-
 class C_Dir_OMAP_Fetched : public Context {
  protected:
   CDir *dir;
@@ -1339,11 +1285,6 @@ void CDir::_omap_fetched(bufferlist& hdrbl, map<string, bufferlist>& omap,
   assert(!is_frozen());
 
   if (hdrbl.length() == 0) {
-    if (r != -ENODATA) { // called by _tmap_fetched() ?
-      dout(10) << "_fetched 0 byte from omap, retry tmap" << dendl;
-      _tmap_fetch(want_dn);
-      return;
-    }
 
     dout(0) << "_fetched missing object for " << *this << dendl;
     clog.error() << "dir " << dirfrag() << " object missing on disk; some files may be lost\n";
@@ -1500,7 +1441,6 @@ void CDir::_omap_commit(int op_prio)
     if (write_size >= max_write_size) {
       ObjectOperation op;
       op.priority = op_prio;
-      op.tmap_to_omap(true); // convert tmap to omap
 
       if (!to_set.empty())
 	op.omap_set(to_set);
@@ -1518,7 +1458,6 @@ void CDir::_omap_commit(int op_prio)
 
   ObjectOperation op;
   op.priority = op_prio;
-  op.tmap_to_omap(true); // convert tmap to omap
 
   /*
    * save the header at the last moment.. If we were to send it off

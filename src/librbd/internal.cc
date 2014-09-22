@@ -158,64 +158,9 @@ namespace librbd {
     return r;
   }
 
-#if 0
-  int tmap_set(IoCtx& io_ctx, const string& imgname)
-  {
-    bufferlist cmdbl, emptybl;
-    uint8_t c = CEPH_OSD_TMAP_SET;
-    ::encode(c, cmdbl);
-    ::encode(imgname, cmdbl);
-    ::encode(emptybl, cmdbl);
-    return io_ctx.tmap_update(RBD_DIRECTORY, cmdbl);
-  }
-
-  int tmap_rm(IoCtx& io_ctx, const string& imgname)
-  {
-    bufferlist cmdbl;
-    uint8_t c = CEPH_OSD_TMAP_RM;
-    ::encode(c, cmdbl);
-    ::encode(imgname, cmdbl);
-    return io_ctx.tmap_update(RBD_DIRECTORY, cmdbl);
-  }
-
-  int list(IoCtx& io_ctx, vector<string>& names)
-  {
-    CephContext *cct = (CephContext *)io_ctx.cct();
-    ldout(cct, 20) << "list " << &io_ctx << dendl;
-
-    bufferlist bl;
-    int r = io_ctx.read(RBD_DIRECTORY, bl, 0, 0);
-    if (r < 0)
-      return r;
-
-    // old format images are in a tmap
-    if (bl.length()) {
-      bufferlist::iterator p = bl.begin();
-      bufferlist header;
-      map<string,bufferlist> m;
-      ::decode(header, p);
-      ::decode(m, p);
-      for (map<string,bufferlist>::iterator q = m.begin(); q != m.end(); ++q) {
-	names.push_back(q->first);
-      }
-    }
-
-    return 0;
-  }
-#endif
-
   int create(IoCtx& io_ctx, const char *imgname, uint64_t size)
   {
     CephContext *cct = (CephContext *)io_ctx.cct();
-#if 0
-    ldout(cct, 2) << "adding rbd image to directory..." << dendl;
-    int r = tmap_set(io_ctx, imgname);
-    if (r < 0) {
-      lderr(cct) << "error adding image to directory: " << cpp_strerror(r)
-		 << dendl;
-      return r;
-    }
-#endif
 
     ldout(cct, 2) << "creating rbd image..." << dendl;
     struct rbd_obj_header_ondisk header;
@@ -229,14 +174,6 @@ namespace librbd {
     if (r < 0) {
       lderr(cct) << "Error writing image header: " << cpp_strerror(r)
 		 << dendl;
-#if 0
-      int remove_r = tmap_rm(io_ctx, imgname);
-      if (remove_r < 0) {
-	lderr(cct) << "Could not remove image from directory after "
-		   << "header creation failed: "
-		   << cpp_strerror(r) << dendl;
-      }
-#endif
       return r;
     }
 
@@ -307,21 +244,6 @@ namespace librbd {
 		 << cpp_strerror(r) << dendl;
       return r;
     }
-
-#if 0
-    r = tmap_set(io_ctx, dstname);
-    if (r < 0) {
-      io_ctx.remove(dst_oid);
-      lderr(cct) << "couldn't add " << dstname << " to directory: "
-		 << cpp_strerror(r) << dendl;
-      return r;
-    }
-    r = tmap_rm(io_ctx, srcname);
-    if (r < 0) {
-      lderr(cct) << "warning: couldn't remove old entry from directory ("
-		 << srcname << ")" << dendl;
-    }
-#endif
 
     r = io_ctx.remove(src_oid);
     if (r < 0 && r != -ENOENT) {
@@ -396,16 +318,6 @@ namespace librbd {
 	return r;
       }
     }
-
-#if 0
-    ldout(cct, 2) << "removing rbd image from directory..." << dendl;
-    r = tmap_rm(io_ctx, imgname);
-    if (r < 0) {
-      lderr(cct) << "error removing img from old-style directory: "
-		 << cpp_strerror(-r) << dendl;
-      return r;
-    }
-#endif
 
     ldout(cct, 2) << "done." << dendl;
     return 0;

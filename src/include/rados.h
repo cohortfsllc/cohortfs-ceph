@@ -193,10 +193,6 @@ enum {
 	CEPH_OSD_OP_SETTRUNC  = CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_DATA | 8,
 	CEPH_OSD_OP_TRIMTRUNC = CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_DATA | 9,
 
-	CEPH_OSD_OP_TMAPUP  = CEPH_OSD_OP_MODE_RMW | CEPH_OSD_OP_TYPE_DATA | 10,
-	CEPH_OSD_OP_TMAPPUT = CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_DATA | 11,
-	CEPH_OSD_OP_TMAPGET = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_DATA | 12,
-
 	CEPH_OSD_OP_CREATE  = CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_DATA | 13,
 
 	CEPH_OSD_OP_WATCH   = CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_DATA | 15,
@@ -212,9 +208,6 @@ enum {
 	CEPH_OSD_OP_OMAPCLEAR	  = CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_DATA | 23,
 	CEPH_OSD_OP_OMAPRMKEYS	  = CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_DATA | 24,
 	CEPH_OSD_OP_OMAP_CMP	  = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_DATA | 25,
-
-	/* convert tmap to omap */
-	CEPH_OSD_OP_TMAP2OMAP = CEPH_OSD_OP_MODE_RMW | CEPH_OSD_OP_TYPE_DATA | 34,
 
 	/* hints */
 	CEPH_OSD_OP_SETALLOCHINT = CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_DATA | 35,
@@ -294,16 +287,6 @@ static inline int ceph_osd_op_mode_modify(int op)
 	return op & CEPH_OSD_OP_MODE_WR;
 }
 
-/*
- * note that the following tmap stuff is also defined in the ceph librados.h
- * and objclass.h. Any modification here needs to be updated there
- */
-#define CEPH_OSD_TMAP_HDR 'h'
-#define CEPH_OSD_TMAP_SET 's'
-#define CEPH_OSD_TMAP_CREATE 'c' /* create key */
-#define CEPH_OSD_TMAP_RM  'r'
-#define CEPH_OSD_TMAP_RMSLOPPY 'R'
-
 extern const char *ceph_osd_op_name(int op);
 
 /*
@@ -346,10 +329,6 @@ enum {
 enum {
 	CEPH_OSD_CMPXATTR_MODE_STRING = 1,
 	CEPH_OSD_CMPXATTR_MODE_U64    = 2
-};
-
-enum {
-	CEPH_OSD_TMAP2OMAP_NULLOK = 1,
 };
 
 /*

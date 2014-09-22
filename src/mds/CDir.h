@@ -461,8 +461,6 @@ protected:
   void _omap_fetch(const string& want_dn);
   void _omap_fetched(bufferlist& hdrbl, map<string, bufferlist>& omap,
 		     const string& want_dn, int r);
-  void _tmap_fetch(const string& want_dn);
-  void _tmap_fetched(bufferlist &bl, const string& want_dn, int r);
 
   // -- commit --
   map<version_t, list<Context*> > waiting_for_commit;

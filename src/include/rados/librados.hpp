@@ -183,8 +183,6 @@ namespace librados
     void zero(uint64_t off, uint64_t len);
     void rmxattr(const char *name);
     void setxattr(const char *name, const bufferlist& bl);
-    void tmap_update(const bufferlist& cmdbl);
-    void tmap_put(const bufferlist& bl);
 
     /**
      * set keys and values according to map
@@ -244,7 +242,6 @@ namespace librados
      */
     void sparse_read(uint64_t off, uint64_t len, std::map<uint64_t,uint64_t> *m,
 		     bufferlist *data_bl, int *prval);
-    void tmap_get(bufferlist *pbl, int *prval);
 
     /**
      * omap_get_vals: keys and values from the object omap
@@ -383,21 +380,6 @@ namespace librados
     int stat(const std::string& oid, uint64_t *psize, time_t *pmtime);
     int exec(const std::string& oid, const char *cls, const char *method,
 	     bufferlist& inbl, bufferlist& outbl);
-    /**
-     * modify object tmap based on encoded update sequence
-     *
-     * NOTE: this call steals the contents of @param bl
-     */
-    int tmap_update(const std::string& oid, bufferlist& cmdbl);
-    /**
-     * replace object contents with provided encoded tmap data
-     *
-     * NOTE: this call steals the contents of @param bl
-     */
-    int tmap_put(const std::string& oid, bufferlist& bl);
-    int tmap_get(const std::string& oid, bufferlist& bl);
-    int tmap_to_omap(const std::string& oid, bool nullok=false);
-
     int omap_get_vals(const std::string& oid,
 		      const std::string& start_after,
 		      uint64_t max_return,
