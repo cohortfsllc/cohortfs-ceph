@@ -32,16 +32,18 @@ public:
   MLog(const uuid_d& f) : PaxosServiceMessage(MSG_LOG, 0), fsid(f) { }
 private:
   ~MLog() {}
-
-public:
-  const char *get_type_name() const { return "log"; }
-  void print(ostream& out) const {
+  template <typename T>
+  void _print(T& out) const {
     out << "log(";
     if (entries.size())
       out << entries.size() << " entries";
     out << ")";
   }
 
+public:
+  const char *get_type_name() const { return "log"; }
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
   void encode_payload(uint64_t features) {
     paxos_encode();
     ::encode(fsid, payload);

@@ -395,7 +395,8 @@ public:
   virtual void decode_payload() = 0;
   virtual void encode_payload(uint64_t features) = 0;
   virtual const char *get_type_name() const = 0;
-  virtual void print(std::ostream& out) const {
+  template <typename T>
+  virtual void print(T& out) const {
     out << get_type_name() << " magic: " << magic;
   }
 
@@ -409,7 +410,8 @@ extern Message *decode_message(CephContext *cct, int crcflags,
 			       ceph_msg_header &header,
 			       ceph_msg_footer& footer, bufferlist& front,
 			       bufferlist& middle, bufferlist& data);
-inline std::ostream& operator<<(std::ostream& out, Message& m) {
+template <typename T>
+inline T& operator<<(T& out, Message& m) {
   m.print(out);
   if (m.get_header().version)
     out << " v" << m.get_header().version;
