@@ -32,43 +32,6 @@ struct ceph_timespec {
 
 
 /*
- * object layout - how objects are mapped into PGs
- */
-#define CEPH_OBJECT_LAYOUT_HASH	    1
-#define CEPH_OBJECT_LAYOUT_LINEAR   2
-#define CEPH_OBJECT_LAYOUT_HASHINO  3
-
-/*
- * pg layout -- how PGs are mapped onto (sets of) OSDs
- */
-#define CEPH_PG_LAYOUT_CRUSH  0
-#define CEPH_PG_LAYOUT_HASH   1
-#define CEPH_PG_LAYOUT_LINEAR 2
-#define CEPH_PG_LAYOUT_HYBRID 3
-
-#define CEPH_PG_MAX_SIZE      16  /* max # osds in a single pg */
-
-/*
- * placement group.
- * we encode this into one __le64.
- */
-struct ceph_pg {
-	__le16 preferred; /* preferred primary osd */
-	__le16 ps;	  /* placement seed */
-	__le32 pool;	  /* object pool */
-} __attribute__ ((packed));
-
-/*
- * pg pool types
- *
- * NOTE: These map 1:1 on to the pg_pool_t::TYPE_* values.  They are
- * duplicated here only for CrushCompiler's benefit.
- */
-#define CEPH_PG_TYPE_REPLICATED 1
-/* #define CEPH_PG_TYPE_RAID4	2   never implemented */
-#define CEPH_PG_TYPE_ERASURE 3
-
-/*
  * stable_mod func is used to control number of placement groups.
  * similar to straight-up modulo, but produces a stable mapping as b
  * increases over time.	 b is the number of bins, and bmask is the
@@ -356,10 +319,6 @@ struct ceph_osd_op {
 			uint8_t argc;
 			__le32 indata_len;
 		} __attribute__ ((packed)) cls;
-		struct {
-			__le64 count;
-			__le32 start_epoch; /* for the pgls sequence */
-		} __attribute__ ((packed)) pgls;
 		struct {
 			__le64 cookie;
 			__le64 ver;

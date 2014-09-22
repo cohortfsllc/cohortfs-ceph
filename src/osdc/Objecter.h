@@ -164,25 +164,6 @@ struct ObjectOperation {
     osd_op.op.watch.flag = flag;
     osd_op.indata.append(inbl);
   }
-  void add_pgls(int op, uint64_t count, collection_list_handle_t cookie, epoch_t start_epoch) {
-    OSDOp& osd_op = add_op(op);
-    osd_op.op.op = op;
-    osd_op.op.pgls.count = count;
-    osd_op.op.pgls.start_epoch = start_epoch;
-    ::encode(cookie, osd_op.indata);
-  }
-  void add_pgls_filter(int op, uint64_t count, bufferlist& filter, collection_list_handle_t cookie, epoch_t start_epoch) {
-    OSDOp& osd_op = add_op(op);
-    osd_op.op.op = op;
-    osd_op.op.pgls.count = count;
-    osd_op.op.pgls.start_epoch = start_epoch;
-    string cname = "pg";
-    string mname = "filter";
-    ::encode(cname, osd_op.indata);
-    ::encode(mname, osd_op.indata);
-    ::encode(cookie, osd_op.indata);
-    osd_op.indata.append(filter);
-  }
   void add_alloc_hint(int op, uint64_t expected_object_size,
 		      uint64_t expected_write_size) {
     OSDOp& osd_op = add_op(op);
