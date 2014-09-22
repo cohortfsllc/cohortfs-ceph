@@ -8,10 +8,34 @@
 #include "LttngStream.h"
 //#include "Log.h"
 
+namespace {
+pid_t lttng_getpid() {
+        static const pid_t pid = getpid();
+        return pid;
+}
+uint64_t lttng_next_message_id() {
+        static std::atomic<uint64_t> id(0);
+        return id++;
+}
+}
+
+lttng_stream::lttng_stream(int entity_type, const char *entity_name,
+	 short subsys, short prio)
+	: pid(lttng_getpid()),
+	message_id(lttng_next_message_id()),
+	thread(pthread_self())
+
+  {
+	emit_header(entity_type, entity_name, thread, subsys, prio);
+  }
+  ~lttng_stream()
+  {
+    emit_footer();
+  }
+
 void lttng_stream::emit_header(int entity_type, const char *entity_name,
 	 long thread, short subsys, short prio)
 {
-	// TODO: emit header tracepoint with values from lttng_stream() constructor
 	tracepoint(ceph, log_header, entity_type, entity_name, thread, pid, message_id, prio, subsys);
 }
 
