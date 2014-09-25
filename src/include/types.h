@@ -95,15 +95,58 @@ typedef off_t loff_t;
 typedef off_t off64_t;
 #endif
 
+/*
+ * Templated stream output operators should support std::ostream and types
+ * derived from std::ostream, as well as other types not derived from
+ * std::ostream that still support operator<<.
+ *
+ * Types derived from std::ostream present a problem for templated operator<<,
+ * because all default operator<< return std::ostream&. If the operator takes
+ * stream type T and returns type T, it won't work for derived types like
+ * std::stringstream; if the operator calls other stream operators that
+ * return std::ostream, it can't return the result as a std::stringstream.
+ *
+ * We add a StrmRet template to solve this, for example:
+ *
+ * template<typename T>
+ * inline typename StrmRet<T>::type operator<<(T &out, const foo &f) {
+ *   return out << f.bar;
+ * }
+ *
+ * Which will generate the following functions, with T=std::stringstream:
+ *   std::ostream& operator<<(std::stringstream&, const foo &f)
+ * and with T=lttng_stream:
+ *   lttng_stream& operator<<(lttng_stream&, const foo &f)
+ */
+#include <boost/type_traits.hpp>
+
+// default template keeps input type
+template<typename T, typename Base, bool IsDerived>
+struct BaseIfDerivedImpl { typedef T type; };
+
+// specialization replaces type with base
+template<typename T, typename Base>
+struct BaseIfDerivedImpl<T, Base, true> { typedef Base type; };
+
+// chooses type T, unless it inherits from Base
+template<typename T, typename Base>
+struct BaseIfDerived : public BaseIfDerivedImpl<T, Base,
+  boost::is_base_and_derived<Base, T>::value> {};
+
+// StrmRet<T>::type is set to T, or ostream if derived from ostream
+template<typename T>
+struct StrmRet : public BaseIfDerived<T, std::ostream> {};
+
+
 // -- io helpers --
 
 template<typename T, class A, class B>
-inline T& operator<<(T& out, const std::pair<A,B>& v) {
+inline typename StrmRet<T>::type& operator<<(T& out, const std::pair<A,B>& v) {
   return out << v.first << "," << v.second;
 }
 
 template<typename T, class A>
-inline T& operator<<(T& out, const std::vector<A>& v) {
+inline typename StrmRet<T>::type& operator<<(T& out, const std::vector<A>& v) {
   out << "[";
   for (typename std::vector<A>::const_iterator p = v.begin(); p != v.end(); ++p) {
     if (p != v.begin()) out << ",";
@@ -113,7 +156,7 @@ inline T& operator<<(T& out, const std::vector<A>& v) {
   return out;
 }
 template<typename T, class A>
-inline T& operator<<(T& out, const std::deque<A>& v) {
+inline typename StrmRet<T>::type& operator<<(T& out, const std::deque<A>& v) {
   out << "<";
   for (typename std::deque<A>::const_iterator p = v.begin(); p != v.end();
        ++p) {
@@ -125,7 +168,7 @@ inline T& operator<<(T& out, const std::deque<A>& v) {
 }
 
 template<typename T,class A>
-inline T& operator<<(T& out, const std::list<A>& ilist) {
+inline typename StrmRet<T>::type& operator<<(T& out, const std::list<A>& ilist) {
   for (typename std::list<A>::const_iterator it = ilist.begin();
        it != ilist.end();
        ++it) {
@@ -136,7 +179,7 @@ inline T& operator<<(T& out, const std::list<A>& ilist) {
 }
 
 template<typename T, class A>
-inline T& operator<<(T& out, const std::set<A>& iset) {
+inline typename StrmRet<T>::type& operator<<(T& out, const std::set<A>& iset) {
   for (typename std::set<A>::const_iterator it = iset.begin();
        it != iset.end();
        ++it) {
@@ -147,7 +190,7 @@ inline T& operator<<(T& out, const std::set<A>& iset) {
 }
 
 template<typename T, class A>
-inline T& operator<<(T& out, const std::multiset<A>& iset) {
+inline typename StrmRet<T>::type& operator<<(T& out, const std::multiset<A>& iset) {
   for (typename std::multiset<A>::const_iterator it = iset.begin();
        it != iset.end();
        ++it) {
@@ -158,7 +201,7 @@ inline T& operator<<(T& out, const std::multiset<A>& iset) {
 }
 
 template<typename T, class A,class B>
-inline T& operator<<(T& out, const std::map<A,B>& m)
+inline typename StrmRet<T>::type& operator<<(T& out, const std::map<A,B>& m)
 {
   out << "{";
   for (typename std::map<A,B>::const_iterator it = m.begin();
@@ -172,7 +215,7 @@ inline T& operator<<(T& out, const std::map<A,B>& m)
 }
 
 template<typename T, class A,class B>
-inline T& operator<<(T& out, const std::multimap<A,B>& m)
+inline typename StrmRet<T>::type& operator<<(T& out, const std::multimap<A,B>& m)
 {
   out << "{{";
   for (typename std::multimap<A,B>::const_iterator it = m.begin();
@@ -276,7 +319,7 @@ static inline bool operator>=(const client_t& l, int64_t o) { return l.v >= o; }
 static inline bool operator<(const client_t& l, int64_t o) { return l.v < o; }
 
 template <typename T>
-inline T& operator<<(T& out, const client_t& c) {
+inline typename StrmRet<T>::type& operator<<(T& out, const client_t& c) {
   return out << c.v;
 }
 
@@ -304,7 +347,7 @@ struct inodeno_t {
 WRITE_CLASS_ENCODER(inodeno_t)
 
 template <typename T>
-inline T& operator<<(T& out, inodeno_t ino) {
+inline typename StrmRet<T>::type& operator<<(T& out, inodeno_t ino) {
   return out << std::hex << ino.val << std::dec;
 }
 
@@ -346,7 +389,7 @@ struct prettybyte_t {
 };
 
 template <typename T>
-inline T& operator<<(T& out, const prettybyte_t& b)
+inline typename StrmRet<T>::type& operator<<(T& out, const prettybyte_t& b)
 {
   uint64_t bump_after = 100;
   if (b.v > bump_after << 60)
@@ -370,7 +413,7 @@ struct si_t {
 };
 
 template <typename T>
-inline T& operator<<(T& out, const si_t& b)
+inline typename StrmRet<T>::type& operator<<(T& out, const si_t& b)
 {
   uint64_t bump_after = 100;
   if (b.v > bump_after << 60)
@@ -394,7 +437,7 @@ struct pretty_si_t {
 };
 
 template <typename T>
-inline T& operator<<(T& out, const pretty_si_t& b)
+inline typename StrmRet<T>::type& operator<<(T& out, const pretty_si_t& b)
 {
   uint64_t bump_after = 100;
   if (b.v > bump_after << 60)
@@ -418,7 +461,7 @@ struct kb_t {
 };
 
 template <typename T>
-inline T& operator<<(T& out, const kb_t& kb)
+inline typename StrmRet<T>::type& operator<<(T& out, const kb_t& kb)
 {
   uint64_t bump_after = 100;
   if (kb.v > bump_after << 40)
@@ -433,7 +476,7 @@ inline T& operator<<(T& out, const kb_t& kb)
 }
 
 template <typename T>
-inline T& operator<<(T& out, const ceph_mon_subscribe_item& i)
+inline typename StrmRet<T>::type& operator<<(T& out, const ceph_mon_subscribe_item& i)
 {
   return out << i.start
 	     << ((i.flags & CEPH_SUBSCRIBE_ONETIME) ? "" : "+");
@@ -447,7 +490,7 @@ enum health_status_t {
 
 #ifdef __cplusplus
 template <typename T>
-inline T& operator<<(T &oss, health_status_t status) {
+inline typename StrmRet<T>::type& operator<<(T &oss, health_status_t status) {
   switch (status) {
     case HEALTH_ERR:
       oss << "HEALTH_ERR";
