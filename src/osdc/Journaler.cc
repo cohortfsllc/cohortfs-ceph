@@ -441,7 +441,7 @@ uint64_t Journaler::append_entry(bufferlist& bl)
       bufferptr bp(write_pos - owp);
       bp.zero();
       assert(bp.length() >= 4);
-      write_buf.push_back(bp);
+      write_buf.append(bp.raw_c_str(), bp.raw_length());
 
       // now flush.
       flush();
@@ -451,10 +451,17 @@ uint64_t Journaler::append_entry(bufferlist& bl)
   }
 
   ldout(cct, 10) << "append_entry len " << bl.length() << " to " << write_pos << "~" << (bl.length() + sizeof(uint32_t)) << dendl;
+<<<<<<< HEAD
 
   // append
+=======
+  
+  // append, but consolidate into page-sized buffers
+>>>>>>> 79e1c4b... journaler: consolidate journal entry buffers
   ::encode(s, write_buf);
-  write_buf.claim_append(bl);
+  std::list<buffer::ptr>::const_iterator p;
+  for (p = bl.buffers().begin(); p != bl.buffers().end(); ++p)
+    write_buf.append(p->c_str(), p->length());
   write_pos += sizeof(s) + s;
 
   // flush previous object?
