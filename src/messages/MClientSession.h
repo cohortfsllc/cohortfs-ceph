@@ -44,9 +44,8 @@ public:
 private:
   ~MClientSession() {}
 
-public:
-  const char *get_type_name() const { return "client_session"; }
-  void print(ostream& out) const {
+  template <typename T>
+  void _print(T& out) const {
     out << "client_session(" << ceph_session_op_name(get_op());
     if (get_seq())
       out << " seq " << get_seq();
@@ -55,6 +54,11 @@ public:
 	  << head.max_leases;
     out << ")";
   }
+
+public:
+  const char *get_type_name() const { return "client_session"; }
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
   void decode_payload() {
     bufferlist::iterator p = payload.begin();

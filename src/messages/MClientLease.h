@@ -48,9 +48,8 @@ struct MClientLease : public Message {
 private:
   ~MClientLease() {}
 
-public:
-  const char *get_type_name() const { return "client_lease"; }
-  void print(ostream& out) const {
+  template <typename T>
+  void _print(T& out) const {
     out << "client_lease(a=" << ceph_lease_op_name(get_action())
 	<< " seq " << get_seq()
 	<< " mask " << get_mask();
@@ -59,6 +58,12 @@ public:
       out << "/" << dname;
     out << ")";
   }
+
+public:
+  const char *get_type_name() const { return "client_lease"; }
+
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
   void decode_payload() {
     bufferlist::iterator p = payload.begin();

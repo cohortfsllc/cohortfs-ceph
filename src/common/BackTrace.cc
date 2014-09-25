@@ -1,5 +1,6 @@
 
 #include <ostream>
+#include <sstream>
 #include <cxxabi.h>
 #include <stdlib.h>
 #include <string.h>
@@ -66,4 +67,13 @@ void BackTrace::print(std::ostream& out)
   }
 };
 
+void BackTrace::print(lttng_stream& out) {
+  std::stringstream ss; 
+  print(ss);
+  out << ss.str();
+  }
 }
+
+
+
+

@@ -86,6 +86,49 @@ public:
 private:
   ~MClientRequest() {}
 
+  template <typename T>
+  void _print(T& out) const {
+    out << "client_request(" << get_orig_source()
+	<< ":" << get_tid()
+	<< " " << ceph_mds_op_name(get_op());
+    if (head.op == CEPH_MDS_OP_GETATTR)
+      out << " " << ccap_string(head.args.getattr.mask);
+    if (head.op == CEPH_MDS_OP_SETATTR) {
+      if (head.args.setattr.mask & CEPH_SETATTR_MODE)
+	out << " mode=0" << std::oct << head.args.setattr.mode << std::dec;
+      if (head.args.setattr.mask & CEPH_SETATTR_UID)
+	out << " uid=" << head.args.setattr.uid;
+      if (head.args.setattr.mask & CEPH_SETATTR_GID)
+	out << " gid=" << head.args.setattr.gid;
+      if (head.args.setattr.mask & CEPH_SETATTR_SIZE)
+	out << " size=" << head.args.setattr.size;
+      if (head.args.setattr.mask & CEPH_SETATTR_MTIME)
+	out << " mtime=" << utime_t(head.args.setattr.mtime);
+      if (head.args.setattr.mask & CEPH_SETATTR_ATIME)
+	out << " atime=" << utime_t(head.args.setattr.atime);
+    }
+    if (head.op == CEPH_MDS_OP_SETFILELOCK ||
+	head.op == CEPH_MDS_OP_GETFILELOCK) {
+      out << "rule " << (int)head.args.filelock_change.rule
+	  << ", type " << (int)head.args.filelock_change.type
+	  << ", owner " << head.args.filelock_change.owner
+	  << ", pid " << head.args.filelock_change.pid
+	  << ", start " << head.args.filelock_change.start
+	  << ", length " << head.args.filelock_change.length
+	  << ", wait " << (int)head.args.filelock_change.wait;
+    }
+
+    //if (!get_filepath().empty())
+    out << " " << get_filepath();
+    if (!get_filepath2().empty())
+      out << " " << get_filepath2();
+    if (head.num_retry)
+      out << " RETRY=" << (int)head.num_retry;
+    if (get_flags() & CEPH_MDS_FLAG_REPLAY)
+      out << " REPLAY";
+    out << ")";
+  }
+
 public:
   void set_mdsmap_epoch(epoch_t e) { head.mdsmap_epoch = e; }
   epoch_t get_mdsmap_epoch() { return head.mdsmap_epoch; }
@@ -159,46 +202,9 @@ public:
   }
 
   const char *get_type_name() const { return "creq"; }
-  void print(ostream& out) const {
-    out << "client_request(" << get_orig_source()
-	<< ":" << get_tid()
-	<< " " << ceph_mds_op_name(get_op());
-    if (head.op == CEPH_MDS_OP_GETATTR)
-      out << " " << ccap_string(head.args.getattr.mask);
-    if (head.op == CEPH_MDS_OP_SETATTR) {
-      if (head.args.setattr.mask & CEPH_SETATTR_MODE)
-	out << " mode=0" << std::oct << head.args.setattr.mode << std::dec;
-      if (head.args.setattr.mask & CEPH_SETATTR_UID)
-	out << " uid=" << head.args.setattr.uid;
-      if (head.args.setattr.mask & CEPH_SETATTR_GID)
-	out << " gid=" << head.args.setattr.gid;
-      if (head.args.setattr.mask & CEPH_SETATTR_SIZE)
-	out << " size=" << head.args.setattr.size;
-      if (head.args.setattr.mask & CEPH_SETATTR_MTIME)
-	out << " mtime=" << utime_t(head.args.setattr.mtime);
-      if (head.args.setattr.mask & CEPH_SETATTR_ATIME)
-	out << " atime=" << utime_t(head.args.setattr.atime);
-    }
-    if (head.op == CEPH_MDS_OP_SETFILELOCK ||
-	head.op == CEPH_MDS_OP_GETFILELOCK) {
-      out << "rule " << (int)head.args.filelock_change.rule
-	  << ", type " << (int)head.args.filelock_change.type
-	  << ", owner " << head.args.filelock_change.owner
-	  << ", pid " << head.args.filelock_change.pid
-	  << ", start " << head.args.filelock_change.start
-	  << ", length " << head.args.filelock_change.length
-	  << ", wait " << (int)head.args.filelock_change.wait;
-    }
-    //if (!get_filepath().empty())
-    out << " " << get_filepath();
-    if (!get_filepath2().empty())
-      out << " " << get_filepath2();
-    if (head.num_retry)
-      out << " RETRY=" << (int)head.num_retry;
-    if (get_flags() & CEPH_MDS_FLAG_REPLAY)
-      out << " REPLAY";
-    out << ")";
-  }
+
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
 };
 

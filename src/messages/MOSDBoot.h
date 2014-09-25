@@ -51,11 +51,16 @@ class MOSDBoot : public PaxosServiceMessage {
 private:
   ~MOSDBoot() { }
 
-public:
-  const char *get_type_name() const { return "osd_boot"; }
-  void print(ostream& out) const {
+  template <typename T>
+  void _print(T& out) const {
     out << "osd_boot(osd." << sb.whoami << " booted " << boot_epoch << " v" << version << ")";
   }
+
+public:
+  const char *get_type_name() const { return "osd_boot"; }
+
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
   void encode_payload(uint64_t features) {
     paxos_encode();

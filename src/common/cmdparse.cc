@@ -198,7 +198,7 @@ class stringify_visitor : public boost::static_visitor<string>
     string operator()(T &operand) const
       {
 	ostringstream oss;
-	oss << operand;
+        (std::ostream&)oss << operand;
 	return oss.str();
       }
 };

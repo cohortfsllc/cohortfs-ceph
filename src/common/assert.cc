@@ -18,6 +18,7 @@
 #include "common/debug.h"
 #include "common/Clock.h"
 #include "include/ceph_assert.h"
+#include "log/Log.h"
 
 #include <errno.h>
 #include <iostream>

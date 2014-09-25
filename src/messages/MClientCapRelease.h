@@ -30,11 +30,16 @@ class MClientCapRelease : public Message {
 private:
   ~MClientCapRelease() {}
 
-public:
-  const char *get_type_name() const { return "client_cap_release";}
-  void print(ostream& out) const {
+  template <typename T>
+  void _print(T& out) const {
     out << "client_cap_release(" << caps.size() << ")";
   }
+
+public:
+  const char *get_type_name() const { return "client_cap_release";}
+
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
   void decode_payload() {
     bufferlist::iterator p = payload.begin();

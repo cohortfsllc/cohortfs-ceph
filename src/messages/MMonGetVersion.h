@@ -26,6 +26,11 @@
  * if it may have been created but the map was not received yet.
  */
 class MMonGetVersion : public Message {
+private:
+  template <typename T>
+  void _print(T& o) const {
+    o << "mon_get_version(what=" << what << " handle=" << handle << ")";
+  }
 public:
   MMonGetVersion() : Message(CEPH_MSG_MON_GET_VERSION) {}
 
@@ -33,10 +38,9 @@ public:
     return "mon_get_version";
   }
 
-  void print(ostream& o) const {
-    o << "mon_get_version(what=" << what << " handle=" << handle << ")";
-  }
 
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
   void encode_payload(uint64_t features) {
     ::encode(handle, payload);
     ::encode(what, payload);

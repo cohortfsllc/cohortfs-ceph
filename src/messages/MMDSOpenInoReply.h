@@ -30,10 +30,15 @@ struct MMDSOpenInoReply : public Message {
   }
 
   const char *get_type_name() const { return "openinoreply"; }
-  void print(ostream &out) const {
+private:
+  template <typename T>
+  void _print(T &out) const {
     out << "openinoreply(" << header.tid << " "
 	<< ino << " " << hint << " " << ancestors << ")";
   }
+public:
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
   void encode_payload(uint64_t features) {
     ::encode(ino, payload);

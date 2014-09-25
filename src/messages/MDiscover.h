@@ -64,15 +64,20 @@ class MDiscover : public Message {
 private:
   ~MDiscover() {}
 
-public:
-  const char *get_type_name() const { return "Dis"; }
-  void print(ostream &out) const {
+  template <typename T>
+  void _print(T &out) const {
     out << "discover(" << header.tid << " " << base_ino << "." << base_dir_frag
 	<< " " << want;
     if (want_ino)
       out << want_ino;
     out << ")";
   }
+
+public:
+  const char *get_type_name() const { return "Dis"; }
+
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
   void decode_payload() {
     bufferlist::iterator p = payload.begin();

@@ -34,19 +34,24 @@ class MClientRequestForward : public Message {
 private:
   ~MClientRequestForward() {}
 
-public:
-  int get_dest_mds() { return dest_mds; }
-  int get_num_fwd() { return num_fwd; }
-  bool must_resend() { return client_must_resend; }
-
-  const char *get_type_name() const { return "client_request_forward"; }
-  void print(ostream& o) const {
+  template <typename T>
+  void _print(T& o) const {
     o << "client_request_forward(" << get_tid()
       << " to mds." << dest_mds
       << " num_fwd=" << num_fwd
       << (client_must_resend ? " client_must_resend":"")
       << ")";
   }
+
+public:
+  int get_dest_mds() { return dest_mds; }
+  int get_num_fwd() { return num_fwd; }
+  bool must_resend() { return client_must_resend; }
+
+  const char *get_type_name() const { return "client_request_forward"; }
+
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
   void encode_payload(uint64_t features) {
     ::encode(dest_mds, payload);

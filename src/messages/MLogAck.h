@@ -27,11 +27,16 @@ public:
 private:
   ~MLogAck() {}
 
-public:
-  const char *get_type_name() const { return "log_ack"; }
-  void print(ostream& out) const {
+  template <typename T>
+  void _print(T& out) const {
     out << "log(last " << last << ")";
   }
+
+public:
+  const char *get_type_name() const { return "log_ack"; }
+
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
   void encode_payload(uint64_t features) {
     ::encode(fsid, payload);

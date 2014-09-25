@@ -32,7 +32,8 @@ inline bool operator!=(const sockaddr_in& a, const sockaddr_in& b) {
   return strncmp((const char*)&a, (const char*)&b, sizeof(a)) != 0;
 }
 
-extern std::ostream& operator<<(std::ostream& out, const sockaddr_storage &ss);
+template <typename T>
+extern T& operator<<(T& out, const sockaddr_storage &ss);
 
 class entity_name_t {
 public:
@@ -129,15 +130,16 @@ inline bool operator!= (const entity_name_t& l, const entity_name_t& r) {
   return (l.type() != r.type()) || (l.num() != r.num()); }
 inline bool operator< (const entity_name_t& l, const entity_name_t& r) {
   return (l.type() < r.type()) || (l.type() == r.type() && l.num() < r.num()); }
-
-inline std::ostream& operator<<(std::ostream& out, const entity_name_t& addr) {
+template <typename T>
+inline T& operator<<(T& out, const entity_name_t& addr) {
   //if (addr.is_namer()) return out << "namer";
   if (addr.is_new() || addr.num() < 0)
     return out << addr.type_str() << ".?";
   else
     return out << addr.type_str() << '.' << addr.num();
 }
-inline std::ostream& operator<<(std::ostream& out, const ceph_entity_name& addr) {
+template <typename T>
+inline T& operator<<(T& out, const ceph_entity_name& addr) {
   return out << *(const entity_name_t*)&addr;
 }
 
@@ -349,7 +351,8 @@ struct entity_addr_t {
 };
 WRITE_CLASS_ENCODER(entity_addr_t)
 
-inline std::ostream& operator<<(std::ostream& out, const entity_addr_t &addr)
+template <typename T>
+inline T& operator<<(T& out, const entity_addr_t &addr)
 {
   return out << addr.addr << '/' << addr.nonce;
 }
@@ -427,12 +430,13 @@ namespace std {
   };
 }
 
-
-inline std::ostream& operator<<(std::ostream& out, const entity_inst_t &i)
+template <typename T>
+inline T& operator<<(T& out, const entity_inst_t &i)
 {
   return out << i.name << " " << i.addr;
 }
-inline std::ostream& operator<<(std::ostream& out, const ceph_entity_inst &i)
+template <typename T>
+inline T& operator<<(T& out, const ceph_entity_inst &i)
 {
   entity_inst_t n = i;
   return out << n;

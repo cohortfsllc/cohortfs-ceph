@@ -28,6 +28,12 @@ class MMonGetVersionReply : public Message {
 
   static const int HEAD_VERSION = 2;
 
+private:
+  template <typename T>
+  void _print(T& o) const {
+    o << "mon_check_map_ack(handle=" << handle << " version=" << version << ")";
+  }
+
 public:
   MMonGetVersionReply() : Message(CEPH_MSG_MON_GET_VERSION_REPLY, HEAD_VERSION) { }
 
@@ -35,10 +41,8 @@ public:
     return "mon_check_map_ack";
   }
 
-  void print(ostream& o) const {
-    o << "mon_check_map_ack(handle=" << handle << " version=" << version << ")";
-  }
-
+  void print(lttng_stream& out) const { _print(out); }  
+  void print(ostream& out) const { _print(out); }
   void encode_payload(uint64_t features) {
     ::encode(handle, payload);
     ::encode(version, payload);

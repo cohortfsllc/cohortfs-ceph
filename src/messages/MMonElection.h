@@ -68,11 +68,16 @@ public:
 private:
   ~MMonElection() {}
 
-public:
-  const char *get_type_name() const { return "election"; }
-  void print(ostream& out) const {
+  template <typename T>
+  void _print(T& out) const {
     out << "election(" << fsid << " " << get_opname(op) << " " << epoch << ")";
   }
+
+public:
+  const char *get_type_name() const { return "election"; }
+
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
   void encode_payload(uint64_t features) {
     if (monmap_bl.length() && (features != CEPH_FEATURES_ALL)) {

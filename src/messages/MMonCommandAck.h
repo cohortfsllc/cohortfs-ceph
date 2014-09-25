@@ -30,11 +30,16 @@ class MMonCommandAck : public PaxosServiceMessage {
 private:
   ~MMonCommandAck() {}
 
-public:
-  const char *get_type_name() const { return "mon_command"; }
-  void print(ostream& o) const {
+  template <typename T>
+  void _print(T& o) const {
     o << "mon_command_ack(" << cmd << "=" << r << " " << rs << " v" << version << ")";
   }
+
+public:
+  const char *get_type_name() const { return "mon_command"; }
+
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
   void encode_payload(uint64_t features) {
     paxos_encode();

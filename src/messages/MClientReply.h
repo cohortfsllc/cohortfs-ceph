@@ -221,10 +221,8 @@ public:
   }
 private:
   ~MClientReply() {}
-
-public:
-  const char *get_type_name() const { return "creply"; }
-  void print(ostream& o) const {
+  template <typename T>
+  void _print(T& o) const {
     o << "client_reply(???:" << get_tid();
     o << " = " << get_result();
     if (get_result() <= 0) {
@@ -239,6 +237,10 @@ public:
     o << ")";
   }
 
+public:
+  const char *get_type_name() const { return "creply"; }
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
   // serialization
   virtual void decode_payload() {
     bufferlist::iterator p = payload.begin();

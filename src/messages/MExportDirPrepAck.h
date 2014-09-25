@@ -32,13 +32,16 @@ class MExportDirPrepAck : public Message {
   }
 private:
   ~MExportDirPrepAck() {}
+  template <typename T>
+  void _print(T& o) const {
+    o << "export_prep_ack(" << dirfrag << (success ? " success)" : " fail)");
+  }
 
 public:
   bool is_success() { return success; }
   const char *get_type_name() const { return "ExPAck"; }
-  void print(ostream& o) const {
-    o << "export_prep_ack(" << dirfrag << (success ? " success)" : " fail)");
-  }
+  void print(lttng_stream& out) const { _print(out); }  
+  void print(ostream& out) const { _print(out); }
 
   void decode_payload() {
     bufferlist::iterator p = payload.begin();

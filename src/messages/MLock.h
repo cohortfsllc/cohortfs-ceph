@@ -59,14 +59,19 @@ public:
 private:
   ~MLock() {}
 
-public:
-  const char *get_type_name() const { return "ILock"; }
-  void print(ostream& out) const {
+  template <typename T>
+  void _print(T& out) const {
     out << "lock(a=" << get_lock_action_name(action)
 	<< " " << get_lock_type_name(lock_type)
 	<< " " << object_info
 	<< ")";
   }
+
+public:
+  const char *get_type_name() const { return "ILock"; }
+
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
   void set_reqid(metareqid_t ri) { reqid = ri; }
   void set_data(const bufferlist& lockdata) {

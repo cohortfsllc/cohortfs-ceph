@@ -37,6 +37,14 @@ class MOSDFailure : public PaxosServiceMessage {
 private:
   ~MOSDFailure() {}
 
+  template <typename T>
+  void _print(T& out) const {
+    out << "osd_failure("
+	<< (is_failed ? "failed " : "recovered ")
+	<< target_osd << " for " << failed_for << "sec e" << epoch
+	<< " v" << version << ")";
+  }
+
 public:
   entity_inst_t get_target() { return target_osd; }
   bool if_osd_failed() { return is_failed; }
@@ -67,12 +75,9 @@ public:
   }
 
   const char *get_type_name() const { return "osd_failure"; }
-  void print(ostream& out) const {
-    out << "osd_failure("
-	<< (is_failed ? "failed " : "recovered ")
-	<< target_osd << " for " << failed_for << "sec e" << epoch
-	<< " v" << version << ")";
-  }
+
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 };
 
 #endif

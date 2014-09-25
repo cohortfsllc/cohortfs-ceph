@@ -65,12 +65,16 @@ class MMDSMap : public Message {
   }
 private:
   ~MMDSMap() {}
+  template <typename T>
+  void _print(T& out) const {
+    out << "mdsmap(e " << epoch << ")";
+  }
+
 
 public:
   const char *get_type_name() const { return "mdsmap"; }
-  void print(ostream& out) const {
-    out << "mdsmap(e " << epoch << ")";
-  }
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
   // marshalling
   void decode_payload() {

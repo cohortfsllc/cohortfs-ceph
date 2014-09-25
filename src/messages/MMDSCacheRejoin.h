@@ -201,13 +201,15 @@ class MMDSCacheRejoin : public Message {
     op(o) {}
 private:
   ~MMDSCacheRejoin() {}
-
-public:
-  const char *get_type_name() const { return "cache_rejoin"; }
-  void print(ostream& out) const {
+  template <typename T>
+  void _print(T& out) const {
     out << "cache_rejoin " << get_opname(op);
   }
+public:
+  const char *get_type_name() const { return "cache_rejoin"; }
 
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
   // -- builders --
   // inodes
   void add_weak_inode(vinodeno_t i) {

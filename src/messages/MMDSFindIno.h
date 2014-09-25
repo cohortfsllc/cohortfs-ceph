@@ -24,11 +24,17 @@ struct MMDSFindIno : public Message {
   MMDSFindIno() : Message(MSG_MDS_FINDINO) {}
   MMDSFindIno(ceph_tid_t t, inodeno_t i) : Message(MSG_MDS_FINDINO), tid(t),
 					   ino(i) {}
-
-  const char *get_type_name() const { return "findino"; }
-  void print(ostream &out) const {
+private:
+  template <typename T>
+  void _print(T &out) const {
     out << "findino(" << tid << " " << ino << ")";
   }
+
+public:
+  const char *get_type_name() const { return "findino"; }
+
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
   void encode_payload(uint64_t features) {
     ::encode(tid, payload);

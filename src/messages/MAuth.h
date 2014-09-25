@@ -28,12 +28,17 @@ struct MAuth : public PaxosServiceMessage {
 private:
   ~MAuth() {}
 
-public:
-  const char *get_type_name() const { return "auth"; }
-  void print(ostream& out) const {
+  template <typename T>
+  void _print(T& out) const {
     out << "auth(proto " << protocol << " " << auth_payload.length() << " bytes"
 	<< " epoch " << monmap_epoch << ")";
   }
+
+public:
+  const char *get_type_name() const { return "auth"; }
+
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
   void decode_payload() {
     bufferlist::iterator p = payload.begin();
@@ -47,6 +52,7 @@ public:
   }
   void encode_payload(uint64_t features) {
     paxos_encode();
+
     ::encode(protocol, payload);
     ::encode(auth_payload, payload);
     ::encode(monmap_epoch, payload);

@@ -35,6 +35,14 @@ class MOSDMarkMeDown : public PaxosServiceMessage {
       fsid(fs), target_osd(f), epoch(e), ack(ack) {}
  private:
   ~MOSDMarkMeDown() {}
+  template <typename T>
+  void _print(T& out) const {
+    out << "osd_mark_me_down("
+	<< "ack=" << ack
+	<< ", target_osd=" << target_osd
+	<< ", fsid=" << fsid
+	<< ")";
+  }
 
 public:
   entity_inst_t get_target() { return target_osd; }
@@ -57,13 +65,8 @@ public:
   }
 
   const char *get_type_name() const { return "osd_mark_me_down"; }
-  void print(ostream& out) const {
-    out << "osd_mark_me_down("
-	<< "ack=" << ack
-	<< ", target_osd=" << target_osd
-	<< ", fsid=" << fsid
-	<< ")";
-  }
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 };
 
 #endif

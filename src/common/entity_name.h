@@ -85,4 +85,9 @@ WRITE_CLASS_ENCODER(EntityName);
 
 WRITE_EQ_OPERATORS_2(EntityName, type, id)
 
+template <typename T>
+T& operator<<(T& out, const EntityName& n)
+{
+  return out << n.to_str();
+}
 #endif

@@ -55,6 +55,15 @@ private:
     if (msg) msg->put();
   }
 
+  template <typename T>
+  void _print(T& o) const {
+    if (msg)
+      o << "forward(" << *msg << " caps " << client_caps
+	<< " tid " << tid
+	<< " con_features " << con_features << ") to leader";
+    else o << "forward(??? ) to leader";
+  }
+
 public:
   void encode_payload(uint64_t features) {
     ::encode(tid, payload);
@@ -79,13 +88,10 @@ public:
   }
 
   const char *get_type_name() const { return "forward"; }
-  void print(ostream& o) const {
-    if (msg)
-      o << "forward(" << *msg << " caps " << client_caps
-	<< " tid " << tid
-	<< " con_features " << con_features << ") to leader";
-    else o << "forward(??? ) to leader";
-  }
+
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
+
 };
 
 #endif

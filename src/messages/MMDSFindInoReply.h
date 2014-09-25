@@ -25,10 +25,17 @@ struct MMDSFindInoReply : public Message {
   MMDSFindInoReply() : Message(MSG_MDS_FINDINOREPLY) {}
   MMDSFindInoReply(ceph_tid_t t) : Message(MSG_MDS_FINDINOREPLY), tid(t) {}
 
-  const char *get_type_name() const { return "findinoreply"; }
-  void print(ostream &out) const {
+private:
+  template <typename T>
+  void _print(T &out) const {
     out << "findinoreply(" << tid << " " << path << ")";
   }
+
+public:
+  const char *get_type_name() const { return "findinoreply"; }
+
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
   void encode_payload(uint64_t features) {
     ::encode(tid, payload);

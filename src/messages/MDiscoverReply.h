@@ -146,12 +146,15 @@ class MDiscoverReply : public Message {
   }
 private:
   ~MDiscoverReply() {}
+  template <typename T>
+  void _print(T& out) const {
+    out << "discover_reply(" << header.tid << " " << base_ino << ")";
+  }
 
 public:
   const char *get_type_name() const { return "discover_reply"; }
-  void print(ostream& out) const {
-    out << "discover_reply(" << header.tid << " " << base_ino << ")";
-  }
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
   // builders
   bool is_empty() {

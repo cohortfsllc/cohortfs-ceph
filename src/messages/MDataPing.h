@@ -69,6 +69,11 @@ private:
       }
     }
 
+  template <typename T>
+  void _print(T& out) const {
+    out << get_type_name() << " " << tag << " " << counter;
+  }
+
 public:
   void decode_payload() {
     bufferlist::iterator p = payload.begin();
@@ -82,9 +87,9 @@ public:
 
   const char *get_type_name() const { return "data_ping"; }
 
-  void print(ostream& out) const {
-    out << get_type_name() << " " << tag << " " << counter;
-  }
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
+
 };
 
 #endif /* CEPH_MDATAPING_H */

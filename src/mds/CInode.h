@@ -52,7 +52,8 @@ class MClientCaps;
 struct ObjectOperation;
 class EMetaBlob;
 
-ostream& operator<<(ostream& out, CInode& in);
+template <typename T>
+T& operator<<(T& out, CInode& in);
 
 struct cinode_lock_info_t {
   int lock;

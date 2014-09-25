@@ -27,6 +27,10 @@ class MOSDAlive : public PaxosServiceMessage {
   MOSDAlive() : PaxosServiceMessage(MSG_OSD_ALIVE, 0) {}
 private:
   ~MOSDAlive() {}
+  template <typename T>
+  void _print(T &out) const {
+    out << "osd_alive(want up_thru " << want << " have " << version << ")";
+  }
 
 public:
   void encode_payload(uint64_t features) {
@@ -40,9 +44,8 @@ public:
   }
 
   const char *get_type_name() const { return "osd_alive"; }
-  void print(ostream &out) const {
-    out << "osd_alive(want up_thru " << want << " have " << version << ")";
-  }
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
 };
 

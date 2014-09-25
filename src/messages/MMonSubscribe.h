@@ -39,6 +39,11 @@ struct MMonSubscribe : public Message {
 private:
   ~MMonSubscribe() {}
 
+  template <typename T>
+  void _print(T& o) const {
+    o << "mon_subscribe(" << what << ")";
+  }
+
 public:
   void sub_want(const char *w, version_t start, unsigned flags) {
     what[w].start = start;
@@ -46,9 +51,9 @@ public:
   }
 
   const char *get_type_name() const { return "mon_subscribe"; }
-  void print(ostream& o) const {
-    o << "mon_subscribe(" << what << ")";
-  }
+
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
   void decode_payload() {
     bufferlist::iterator p = payload.begin();

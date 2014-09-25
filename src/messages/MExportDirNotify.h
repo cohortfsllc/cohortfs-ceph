@@ -43,9 +43,8 @@ class MExportDirNotify : public Message {
 private:
   ~MExportDirNotify() {}
 
-public:
-  const char *get_type_name() const { return "ExNot"; }
-  void print(ostream& o) const {
+  template <typename T>
+  void _print(T& o) const {
     o << "export_notify(" << base;
     o << " " << old_auth << " -> " << new_auth;
     if (ack)
@@ -53,6 +52,12 @@ public:
     else
       o << " no ack)";
   }
+
+public:
+  const char *get_type_name() const { return "ExNot"; }
+
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
   void copy_bounds(list<dirfrag_t>& ex) {
     this->bounds = ex;

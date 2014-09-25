@@ -63,7 +63,8 @@ struct uuid_d {
 };
 WRITE_CLASS_ENCODER(uuid_d)
 
-inline std::ostream& operator<<(std::ostream& out, const uuid_d& u) {
+template <typename T>
+inline T& operator<<(T& out, const uuid_d& u) {
   char b[uuid_d::char_rep_buf_size];
   uuid_unparse(u.uuid, b);
   return out << b;

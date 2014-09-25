@@ -28,6 +28,7 @@ using namespace std;
 #include "include/types.h"
 #include "include/ceph_features.h"
 #include "auth/Crypto.h"
+#include "common/dout.h"
 
 #include <errno.h>
 #include <sstream>
