@@ -7,6 +7,8 @@
 #include <inttypes.h>
 #include <ostream>
 #include <iomanip>
+#include <boost/intrusive_ptr.hpp>
+
 
 
 // lttng log stream
@@ -71,6 +73,7 @@ private:
 public:
   lttng_stream(int entity_type, const char *entity_name,
 	 short subsys, short prio);
+
 
   ~lttng_stream()
   {
@@ -233,6 +236,26 @@ public:
     emit_manip(MANIP_RESETIOSFLAGS, f._M_mask);
     return *this;
   }
+  struct lttng_endl {};
+  static lttng_endl endl;
 };
 
+inline lttng_stream& operator<<(lttng_stream &out, const std::string &s) {
+    return out << s.c_str();
+}
+
+//operator
+template<class Y>
+inline lttng_stream& operator<<(lttng_stream &out, boost::intrusive_ptr<Y> const & p) {
+    return out << p.get();  
+}
+
+// replaces flush with a no_op in dendl
+inline lttng_stream& operator<<(lttng_stream &out, lttng_stream::lttng_endl&) 
+{
+ return out;
+}
+
 #endif // CEPH_LOG_LTTNGSTREAM
+
+

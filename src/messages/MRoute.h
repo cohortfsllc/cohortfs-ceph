@@ -41,6 +41,17 @@ private:
   ~MRoute() {
     if (msg) msg->put();
   }
+  template <typename T>
+  void _print(T& o) const {
+    if (msg)
+      o << "route(" << *msg;
+    else
+      o << "route(no-reply";
+    if (session_mon_tid)
+      o << " tid " << session_mon_tid << ")";
+    else
+      o << " to " << dest << ")";
+  }
 
 public:
   void decode_payload() {
@@ -73,16 +84,8 @@ public:
   }
 
   const char *get_type_name() const { return "route"; }
-  void print(ostream& o) const {
-    if (msg)
-      o << "route(" << *msg;
-    else
-      o << "route(no-reply";
-    if (session_mon_tid)
-      o << " tid " << session_mon_tid << ")";
-    else
-      o << " to " << dest << ")";
-  }
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 };
 
 #endif

@@ -35,9 +35,8 @@ class MMDSTableRequest : public Message {
 private:
   ~MMDSTableRequest() {}
 
-public:
-  virtual const char *get_type_name() const { return "mds_table_request"; }
-  void print(ostream& o) const {
+  template <typename T>
+  void _print(T& o) const {
     o << "mds_table_request(" << get_mdstable_name(table)
       << " " << get_mdstableserver_opname(op);
     if (reqid) o << " " << reqid;
@@ -45,6 +44,12 @@ public:
     if (bl.length()) o << " " << bl.length() << " bytes";
     o << ")";
   }
+
+public:
+  virtual const char *get_type_name() const { return "mds_table_request"; }
+
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
   virtual void decode_payload() {
     bufferlist::iterator p = payload.begin();

@@ -146,6 +146,14 @@ public:
 private:
   ~MMDSSlaveRequest() {}
 
+  template <typename T>
+  void _print(T& out) const {
+    out << "slave_request(" << reqid
+	<< "." << attempt
+	<< " " << get_opname(op)
+	<< ")";
+  }
+
 public:
   void encode_payload(uint64_t features) {
     ::encode(reqid, payload);
@@ -184,12 +192,9 @@ public:
   }
 
   const char *get_type_name() const { return "slave_request"; }
-  void print(ostream& out) const {
-    out << "slave_request(" << reqid
-	<< "." << attempt
-	<< " " << get_opname(op)
-	<< ")";
-  }
+
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
 };
 

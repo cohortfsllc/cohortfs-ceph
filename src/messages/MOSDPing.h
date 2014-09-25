@@ -62,6 +62,14 @@ class MOSDPing : public Message {
   {}
 private:
   ~MOSDPing() {}
+  template <typename T>
+  void _print(T& out) const {
+    out << "osd_ping(" << get_op_name(op)
+	<< " e" << map_epoch
+      //<< " as_of " << peer_as_of_epoch
+	<< " stamp " << stamp
+	<< ")";
+  }
 
 public:
   void decode_payload() {
@@ -84,13 +92,8 @@ public:
   }
 
   const char *get_type_name() const { return "osd_ping"; }
-  void print(ostream& out) const {
-    out << "osd_ping(" << get_op_name(op)
-	<< " e" << map_epoch
-      //<< " as_of " << peer_as_of_epoch
-	<< " stamp " << stamp
-	<< ")";
-  }
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 };
 
 #endif

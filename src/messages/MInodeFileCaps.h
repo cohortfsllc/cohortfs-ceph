@@ -33,11 +33,16 @@ class MInodeFileCaps : public Message {
 private:
   ~MInodeFileCaps() {}
 
-public:
-  const char *get_type_name() const { return "inode_file_caps";}
-  void print(ostream& out) const {
+  template <typename T>
+  void _print(T& out) const {
     out << "inode_file_caps(" << ino << " " << ccap_string(caps) << ")";
   }
+
+public:
+  const char *get_type_name() const { return "inode_file_caps";}
+
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
   void encode_payload(uint64_t features) {
     ::encode(ino, payload);

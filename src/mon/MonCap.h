@@ -157,4 +157,80 @@ WRITE_CLASS_ENCODER(MonCap)
 
 ostream& operator<<(ostream& out, const MonCap& cap);
 
+static inline bool is_not_alnum_space(char c)
+{
+  return !(isalpha(c) || isdigit(c) || (c == '-') || (c == '_'));
+}
+
+static string maybe_quote_string(const std::string& str)
+{
+  if (find_if(str.begin(), str.end(), is_not_alnum_space) == str.end())
+    return str;
+  return string("\"") + str + string("\"");
+}
+
+template <typename T>
+T& operator<<(T& out, mon_rwxa_t p)
+{
+  if (p == MON_CAP_ANY)
+    return out << "*";
+
+  if (p & MON_CAP_R)
+    out << "r";
+  if (p & MON_CAP_W)
+    out << "w";
+  if (p & MON_CAP_X)
+    out << "x";
+  return out;
+}
+
+template <typename T>
+T& operator<<(T& out, const StringConstraint& c)
+{
+  if (c.prefix.length())
+    return out << "prefix " << c.prefix;
+  else
+    return out << "value " << c.value;
+}
+
+template <typename T>
+T& operator<<(T& out, const MonCapGrant& m)
+{
+  out << "allow";
+  if (m.service.length()) {
+    out << " service " << maybe_quote_string(m.service);
+  }
+  if (m.command.length()) {
+    out << " command " << maybe_quote_string(m.command);
+    if (!m.command_args.empty()) {
+      out << " with";
+      for (map<string,StringConstraint>::const_iterator p = m.command_args.begin();
+	   p != m.command_args.end();
+	   ++p) {
+	if (p->second.value.length())
+	  out << " " << maybe_quote_string(p->first) << "=" << maybe_quote_string(p->second.value);
+	else
+	  out << " " << maybe_quote_string(p->first) << " prefix " << maybe_quote_string(p->second.prefix);
+      }
+    }
+  }
+  if (m.profile.length()) {
+    out << " profile " << maybe_quote_string(m.profile);
+  }
+  if (m.allow != 0)
+    out << " " << m.allow;
+  return out;
+}
+
+template <typename T>
+T& operator<<(T&out, const MonCap& m)
+{
+  for (vector<MonCapGrant>::const_iterator p = m.grants.begin(); p != m.grants.end(); ++p) {
+    if (p != m.grants.begin())
+      out << ", ";
+    out << *p;
+  }
+  return out;
+}
+
 #endif

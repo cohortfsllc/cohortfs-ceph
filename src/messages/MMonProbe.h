@@ -69,10 +69,8 @@ public:
       required_features(0) {}
 private:
   ~MMonProbe() {}
-
-public:
-  const char *get_type_name() const { return "mon_probe"; }
-  void print(ostream& out) const {
+  template <typename T>
+  void _print(T& out) const {
     out << "mon_probe(" << get_opname(op) << " " << fsid << " name " << name;
     if (quorum.size())
       out << " quorum " << quorum;
@@ -88,6 +86,13 @@ public:
       out << " required_features " << required_features;
     out << ")";
   }
+
+
+public:
+  const char *get_type_name() const { return "mon_probe"; }
+
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
   void encode_payload(uint64_t features) {
     if (monmap_bl.length() && (features & CEPH_FEATURE_MONENC) == 0) {

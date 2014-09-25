@@ -97,13 +97,13 @@ typedef off_t off64_t;
 
 // -- io helpers --
 
-template<class A, class B>
-inline std::ostream& operator<<(std::ostream& out, const std::pair<A,B>& v) {
+template<typename T, class A, class B>
+inline T& operator<<(T& out, const std::pair<A,B>& v) {
   return out << v.first << "," << v.second;
 }
 
-template<class A>
-inline std::ostream& operator<<(std::ostream& out, const std::vector<A>& v) {
+template<typename T, class A>
+inline T& operator<<(T& out, const std::vector<A>& v) {
   out << "[";
   for (typename std::vector<A>::const_iterator p = v.begin(); p != v.end(); ++p) {
     if (p != v.begin()) out << ",";
@@ -112,8 +112,8 @@ inline std::ostream& operator<<(std::ostream& out, const std::vector<A>& v) {
   out << "]";
   return out;
 }
-template<class A>
-inline std::ostream& operator<<(std::ostream& out, const std::deque<A>& v) {
+template<typename T, class A>
+inline T& operator<<(T& out, const std::deque<A>& v) {
   out << "<";
   for (typename std::deque<A>::const_iterator p = v.begin(); p != v.end();
        ++p) {
@@ -124,8 +124,8 @@ inline std::ostream& operator<<(std::ostream& out, const std::deque<A>& v) {
   return out;
 }
 
-template<class A>
-inline std::ostream& operator<<(std::ostream& out, const std::list<A>& ilist) {
+template<typename T,class A>
+inline T& operator<<(T& out, const std::list<A>& ilist) {
   for (typename std::list<A>::const_iterator it = ilist.begin();
        it != ilist.end();
        ++it) {
@@ -135,8 +135,8 @@ inline std::ostream& operator<<(std::ostream& out, const std::list<A>& ilist) {
   return out;
 }
 
-template<class A>
-inline std::ostream& operator<<(std::ostream& out, const std::set<A>& iset) {
+template<typename T, class A>
+inline T& operator<<(T& out, const std::set<A>& iset) {
   for (typename std::set<A>::const_iterator it = iset.begin();
        it != iset.end();
        ++it) {
@@ -146,8 +146,8 @@ inline std::ostream& operator<<(std::ostream& out, const std::set<A>& iset) {
   return out;
 }
 
-template<class A>
-inline std::ostream& operator<<(std::ostream& out, const std::multiset<A>& iset) {
+template<typename T, class A>
+inline T& operator<<(T& out, const std::multiset<A>& iset) {
   for (typename std::multiset<A>::const_iterator it = iset.begin();
        it != iset.end();
        ++it) {
@@ -157,8 +157,8 @@ inline std::ostream& operator<<(std::ostream& out, const std::multiset<A>& iset)
   return out;
 }
 
-template<class A,class B>
-inline std::ostream& operator<<(std::ostream& out, const std::map<A,B>& m)
+template<typename T, class A,class B>
+inline T& operator<<(T& out, const std::map<A,B>& m)
 {
   out << "{";
   for (typename std::map<A,B>::const_iterator it = m.begin();
@@ -171,8 +171,8 @@ inline std::ostream& operator<<(std::ostream& out, const std::map<A,B>& m)
   return out;
 }
 
-template<class A,class B>
-inline std::ostream& operator<<(std::ostream& out, const std::multimap<A,B>& m)
+template<typename T, class A,class B>
+inline T& operator<<(T& out, const std::multimap<A,B>& m)
 {
   out << "{{";
   for (typename std::multimap<A,B>::const_iterator it = m.begin();
@@ -275,7 +275,8 @@ static inline bool operator>=(const client_t& l, const client_t& r) { return l.v
 static inline bool operator>=(const client_t& l, int64_t o) { return l.v >= o; }
 static inline bool operator<(const client_t& l, int64_t o) { return l.v < o; }
 
-inline std::ostream& operator<<(std::ostream& out, const client_t& c) {
+template <typename T>
+inline T& operator<<(T& out, const client_t& c) {
   return out << c.v;
 }
 
@@ -302,7 +303,8 @@ struct inodeno_t {
 } __attribute__ ((__may_alias__));
 WRITE_CLASS_ENCODER(inodeno_t)
 
-inline std::ostream& operator<<(std::ostream& out, inodeno_t ino) {
+template <typename T>
+inline T& operator<<(T& out, inodeno_t ino) {
   return out << std::hex << ino.val << std::dec;
 }
 
@@ -343,7 +345,8 @@ struct prettybyte_t {
   prettybyte_t(uint64_t _v) : v(_v) {}
 };
 
-inline std::ostream& operator<<(std::ostream& out, const prettybyte_t& b)
+template <typename T>
+inline T& operator<<(T& out, const prettybyte_t& b)
 {
   uint64_t bump_after = 100;
   if (b.v > bump_after << 60)
@@ -366,7 +369,8 @@ struct si_t {
   si_t(uint64_t _v) : v(_v) {}
 };
 
-inline std::ostream& operator<<(std::ostream& out, const si_t& b)
+template <typename T>
+inline T& operator<<(T& out, const si_t& b)
 {
   uint64_t bump_after = 100;
   if (b.v > bump_after << 60)
@@ -389,7 +393,8 @@ struct pretty_si_t {
   pretty_si_t(uint64_t _v) : v(_v) {}
 };
 
-inline std::ostream& operator<<(std::ostream& out, const pretty_si_t& b)
+template <typename T>
+inline T& operator<<(T& out, const pretty_si_t& b)
 {
   uint64_t bump_after = 100;
   if (b.v > bump_after << 60)
@@ -412,7 +417,8 @@ struct kb_t {
   kb_t(uint64_t _v) : v(_v) {}
 };
 
-inline std::ostream& operator<<(std::ostream& out, const kb_t& kb)
+template <typename T>
+inline T& operator<<(T& out, const kb_t& kb)
 {
   uint64_t bump_after = 100;
   if (kb.v > bump_after << 40)
@@ -426,7 +432,8 @@ inline std::ostream& operator<<(std::ostream& out, const kb_t& kb)
   return out << kb.v << " kB";
 }
 
-inline std::ostream& operator<<(std::ostream& out, const ceph_mon_subscribe_item& i)
+template <typename T>
+inline T& operator<<(T& out, const ceph_mon_subscribe_item& i)
 {
   return out << i.start
 	     << ((i.flags & CEPH_SUBSCRIBE_ONETIME) ? "" : "+");
@@ -439,7 +446,8 @@ enum health_status_t {
 };
 
 #ifdef __cplusplus
-inline std::ostream& operator<<(std::ostream &oss, health_status_t status) {
+template <typename T>
+inline T& operator<<(T &oss, health_status_t status) {
   switch (status) {
     case HEALTH_ERR:
       oss << "HEALTH_ERR";

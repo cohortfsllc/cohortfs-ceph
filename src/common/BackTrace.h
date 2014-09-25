@@ -5,6 +5,7 @@
 #include <execinfo.h>
 #include <stdlib.h>
 
+#include "log/LttngStream.h"
 namespace ceph {
 
 struct BackTrace {
@@ -27,6 +28,7 @@ struct BackTrace {
   const BackTrace& operator=(const BackTrace& other);
 
   void print(std::ostream& out);
+  void print(lttng_stream& out);
 };
 
 }

@@ -83,6 +83,22 @@ public:
   }
 private:
   ~MOSDOp() {}
+  template <typename T>
+  void _print(T& out) const {
+    out << "osd_op(" << get_reqid();
+    out << " ";
+    out << volume << ":";
+    out << oid;
+
+    out << " " << ops;
+    if (is_retry_attempt())
+      out << " RETRY=" << get_retry_attempt();
+    if (reassert_version != eversion_t())
+      out << " reassert_version=" << reassert_version;
+    out << " " << ceph_osd_flag_string(get_flags());
+    out << " e" << osdmap_epoch;
+    out << ")";
+  }
 
 public:
   void set_version(eversion_t v) { reassert_version = v; }
@@ -203,21 +219,8 @@ public:
   }
 
   const char *get_type_name() const { return "osd_op"; }
-  void print(ostream& out) const {
-    out << "osd_op(" << get_reqid();
-    out << " ";
-    out << volume << ":";
-    out << oid;
-
-    out << " " << ops;
-    if (is_retry_attempt())
-      out << " RETRY=" << get_retry_attempt();
-    if (reassert_version != eversion_t())
-      out << " reassert_version=" << reassert_version;
-    out << " " << ceph_osd_flag_string(get_flags());
-    out << " e" << osdmap_epoch;
-    out << ")";
-  }
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 };
 
 

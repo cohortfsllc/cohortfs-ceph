@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+//T -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
 * Ceph - scalable distributed file system
@@ -19,6 +19,20 @@ class MMonSync : public Message
 {
   static const int HEAD_VERSION = 2;
   static const int COMPAT_VERSION = 2;
+private:
+  template <typename T>
+  void _print(T& out) const {
+    out << "mon_sync(" << get_opname(op);
+    if (cookie)
+      out << " cookie " << cookie;
+    if (last_committed > 0)
+      out << " lc " << last_committed;
+    if (chunk_bl.length())
+      out << " bl " << chunk_bl.length() << " bytes";
+    if (!last_key.first.empty() || !last_key.second.empty())
+      out << " last_key " << last_key.first << "," << last_key.second;
+    out << ")";
+  }
 
 public:
   /**
@@ -73,18 +87,8 @@ public:
 
   const char *get_type_name() const { return "mon_sync"; }
 
-  void print(ostream& out) const {
-    out << "mon_sync(" << get_opname(op);
-    if (cookie)
-      out << " cookie " << cookie;
-    if (last_committed > 0)
-      out << " lc " << last_committed;
-    if (chunk_bl.length())
-      out << " bl " << chunk_bl.length() << " bytes";
-    if (!last_key.first.empty() || !last_key.second.empty())
-      out << " last_key " << last_key.first << "," << last_key.second;
-    out << ")";
-  }
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
   void encode_payload(uint64_t features) {
     ::encode(op, payload);

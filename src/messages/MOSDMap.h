@@ -67,6 +67,14 @@ class MOSDMap : public Message {
 private:
   ~MOSDMap() {}
 
+  template <typename T>
+  void _print(T& out) const {
+    out << "osd_map(" << get_first() << ".." << get_last();
+    if (oldest_map || newest_map)
+      out << " src has " << oldest_map << ".." << newest_map;
+    out << ")";
+  }
+
 public:
   // marshalling
   void decode_payload() {
@@ -86,12 +94,9 @@ public:
   }
 
   const char *get_type_name() const { return "omap"; }
-  void print(ostream& out) const {
-    out << "osd_map(" << get_first() << ".." << get_last();
-    if (oldest_map || newest_map)
-      out << " src has " << oldest_map << ".." << newest_map;
-    out << ")";
-  }
+
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 };
 
 #endif

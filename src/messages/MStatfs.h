@@ -31,12 +31,15 @@ public:
 
 private:
   ~MStatfs() {}
+  template <typename T>
+  void _print(T& out) const {
+    out << "statfs(" << get_tid() << " v" << version << ")";
+  }
 
 public:
   const char *get_type_name() const { return "statfs"; }
-  void print(ostream& out) const {
-    out << "statfs(" << get_tid() << " v" << version << ")";
-  }
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
   void encode_payload(uint64_t features) {
     paxos_encode();

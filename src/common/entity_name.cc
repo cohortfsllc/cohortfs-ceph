@@ -158,11 +158,6 @@ bool operator<(const EntityName& a, const EntityName& b)
   return (a.type < b.type) || (a.type == b.type && a.id < b.id);
 }
 
-std::ostream& operator<<(std::ostream& out, const EntityName& n)
-{
-  return out << n.to_str();
-}
-
 uint32_t str_to_ceph_entity_type(const char * str)
 {
   size_t i;

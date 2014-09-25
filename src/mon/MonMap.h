@@ -229,17 +229,42 @@ class MonMap {
 			   string my_name, const entity_addr_t& my_addr,
 			   set<entity_addr_t> *removed);
 
-  void print(ostream& out) const;
-  void print_summary(ostream& out) const;
+template <typename T>
+  void print(T& out) const;
+template <typename T>
+  void print_summary(T& out) const;
   void dump(ceph::Formatter *f) const;
 
   static void generate_test_instances(list<MonMap*>& o);
 };
 WRITE_CLASS_ENCODER_FEATURES(MonMap)
 
-inline ostream& operator<<(ostream& out, MonMap& m) {
+template <typename T>
+inline T& operator<<(T& out, MonMap& m) {
   m.print_summary(out);
   return out;
+}
+
+template <typename T>
+void MonMap::print_summary(T& out) const
+{
+  out << "e" << epoch << ": "
+      << mon_addr.size() << " mons at "
+      << mon_addr;
+}
+
+template <typename T>
+void MonMap::print(T& out) const
+{
+  out << "epoch " << epoch << "\n";
+  out << "fsid " << fsid << "\n";
+  out << "last_changed " << last_changed << "\n";
+  out << "created " << created << "\n";
+  unsigned i = 0;
+  for (map<entity_addr_t,string>::const_iterator p = addr_name.begin();
+       p != addr_name.end();
+       ++p)
+    out << i++ << ": " << p->first << " mon." << p->second << "\n";
 }
 
 #endif

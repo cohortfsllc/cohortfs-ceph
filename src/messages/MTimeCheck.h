@@ -40,6 +40,18 @@ struct MTimeCheck : public Message
 
 private:
   ~MTimeCheck() { }
+  template <typename T>
+  void _print(T &o) const {
+    o << "time_check( " << get_op_name()
+      << " e " << epoch << " r " << round;
+    if (op == OP_PONG) {
+      o << " ts " << timestamp;
+    } else if (op == OP_REPORT) {
+      o << " #skews " << skews.size()
+	<< " #latencies " << latencies.size();
+    }
+    o << " )";
+  }
 
 public:
   const char *get_type_name() const { return "time_check"; }
@@ -51,17 +63,9 @@ public:
     }
     return "???";
   }
-  void print(ostream &o) const {
-    o << "time_check( " << get_op_name()
-      << " e " << epoch << " r " << round;
-    if (op == OP_PONG) {
-      o << " ts " << timestamp;
-    } else if (op == OP_REPORT) {
-      o << " #skews " << skews.size()
-	<< " #latencies " << latencies.size();
-    }
-    o << " )";
-  }
+
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
   void decode_payload() {
     bufferlist::iterator p = payload.begin();

@@ -124,7 +124,24 @@ public:
   }
 private:
   ~MOSDOpReply() {}
-
+  template <typename T>
+  void _print(T& out) const {
+    out << "osd_op_reply(" << get_tid()
+	<< " " << oid << " " << ops
+	<< " v" << get_replay_version()
+	<< " uv" << get_user_version();
+    if (is_ondisk())
+      out << " ondisk";
+    else if (is_onnvram())
+      out << " onnvram";
+    else
+      out << " ack";
+    out << " = " << get_result();
+    if (get_result() < 0) {
+      out << " (" << cpp_strerror(get_result()) << ")";
+    }
+    out << ")";
+  }
 public:
   virtual void encode_payload(uint64_t features) {
 
@@ -177,23 +194,8 @@ public:
 
   const char *get_type_name() const { return "osd_op_reply"; }
 
-  void print(ostream& out) const {
-    out << "osd_op_reply(" << get_tid()
-	<< " " << oid << " " << ops
-	<< " v" << get_replay_version()
-	<< " uv" << get_user_version();
-    if (is_ondisk())
-      out << " ondisk";
-    else if (is_onnvram())
-      out << " onnvram";
-    else
-      out << " ack";
-    out << " = " << get_result();
-    if (get_result() < 0) {
-      out << " (" << cpp_strerror(get_result()) << ")";
-    }
-    out << ")";
-  }
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
 };
 

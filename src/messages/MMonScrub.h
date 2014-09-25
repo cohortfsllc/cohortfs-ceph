@@ -21,6 +21,17 @@ class MMonScrub : public Message
   static const int HEAD_VERSION = 1;
   static const int COMPAT_VERSION = 1;
 
+private:
+
+  template <typename T>
+  void _print(T& out) const {
+    out << "mon_scrub(" << get_opname((op_type_t)op);
+    out << " v " << version;
+    if (op == OP_RESULT)
+      out << " " << result;
+    out << ")";
+  }
+
 public:
   typedef enum {
     OP_SCRUB = 1,	  // leader->peon: scrub (a range of) keys
@@ -50,13 +61,8 @@ public:
 
   const char *get_type_name() const { return "mon_scrub"; }
 
-  void print(ostream& out) const {
-    out << "mon_scrub(" << get_opname((op_type_t)op);
-    out << " v " << version;
-    if (op == OP_RESULT)
-      out << " " << result;
-    out << ")";
-  }
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
   void encode_payload(uint64_t features) {
     uint8_t o = op;

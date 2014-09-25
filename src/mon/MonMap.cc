@@ -107,27 +107,6 @@ int MonMap::read(const char *fn)
   decode(bl);
   return 0;
 }
-
-void MonMap::print_summary(ostream& out) const
-{
-  out << "e" << epoch << ": "
-      << mon_addr.size() << " mons at "
-      << mon_addr;
-}
-
-void MonMap::print(ostream& out) const
-{
-  out << "epoch " << epoch << "\n";
-  out << "fsid " << fsid << "\n";
-  out << "last_changed " << last_changed << "\n";
-  out << "created " << created << "\n";
-  unsigned i = 0;
-  for (map<entity_addr_t,string>::const_iterator p = addr_name.begin();
-       p != addr_name.end();
-       ++p)
-    out << i++ << ": " << p->first << " mon." << p->second << "\n";
-}
-
 void MonMap::dump(Formatter *f) const
 {
   f->dump_int("epoch", epoch);

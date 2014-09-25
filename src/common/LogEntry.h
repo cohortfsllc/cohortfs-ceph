@@ -105,7 +105,8 @@ struct LogSummary {
 };
 WRITE_CLASS_ENCODER(LogSummary)
 
-inline std::ostream& operator<<(std::ostream& out, clog_type t)
+template <typename T>
+inline T& operator<<(T& out, clog_type t)
 {
   switch (t) {
   case CLOG_DEBUG:
@@ -122,8 +123,8 @@ inline std::ostream& operator<<(std::ostream& out, clog_type t)
     return out << "[???]";
   }
 }
-
-inline std::ostream& operator<<(std::ostream& out, const LogEntry& e)
+template <typename T>
+inline T& operator<<(T& out, const LogEntry& e)
 {
   return out << e.stamp << " " << e.who << " " << e.seq << " : " << e.type << " " << e.msg;
 }

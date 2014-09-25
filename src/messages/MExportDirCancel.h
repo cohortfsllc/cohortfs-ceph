@@ -31,12 +31,15 @@ class MExportDirCancel : public Message {
   }
 private:
   ~MExportDirCancel() {}
+  template <typename T>
+  void _print(T& o) const {
+    o << "export_cancel(" << dirfrag << ")";
+  }
 
 public:
   const char *get_type_name() const { return "ExCancel"; }
-  void print(ostream& o) const {
-    o << "export_cancel(" << dirfrag << ")";
-  }
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
   void encode_payload(uint64_t features) {
     ::encode(dirfrag, payload);

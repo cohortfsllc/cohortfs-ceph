@@ -29,14 +29,18 @@ class MMDSResolve : public Message {
 private:
   ~MMDSResolve() {}
 
-public:
-  const char *get_type_name() const { return "mds_resolve"; }
-
-  void print(ostream& out) const {
+  template <typename T>
+  void _print(T& out) const {
     out << "mds_resolve(" << subtrees.size()
 	<< "+" << ambiguous_imports.size()
 	<< " subtrees +" << slave_requests.size() << " slave requests)";
   }
+
+public:
+  const char *get_type_name() const { return "mds_resolve"; }
+
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
   void add_subtree(dirfrag_t im) {
     subtrees[im].clear();

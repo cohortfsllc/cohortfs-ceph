@@ -17,6 +17,11 @@
 #define CEPH_MSTATFSREPLY_H
 
 class MStatfsReply : public Message {
+private:
+  template <typename T>
+  void _print(T& out) const {
+    out << "statfs_reply(" << header.tid << ")";
+  }
 public:
   struct ceph_mon_statfs_reply h;
 
@@ -28,9 +33,8 @@ public:
   }
 
   const char *get_type_name() const { return "statfs_reply"; }
-  void print(ostream& out) const {
-    out << "statfs_reply(" << header.tid << ")";
-  }
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
   void encode_payload(uint64_t features) {
     ::encode(h, payload);

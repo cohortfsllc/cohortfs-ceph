@@ -36,15 +36,20 @@ class MExportDirDiscoverAck : public Message {
 private:
   ~MExportDirDiscoverAck() {}
 
-public:
-  const char *get_type_name() const { return "ExDisA"; }
-  void print(ostream& o) const {
+  template <typename T>
+  void _print(T& o) const {
     o << "export_discover_ack(" << dirfrag;
     if (success)
       o << " success)";
     else
       o << " failure)";
   }
+
+public:
+  const char *get_type_name() const { return "ExDisA"; }
+
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
   void decode_payload() {
     bufferlist::iterator p = payload.begin();

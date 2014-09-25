@@ -19,6 +19,7 @@
 #include "msg_types.h"
 #include "Messenger.h"
 #include "auth/AuthSessionHandler.h"
+#include "common/Thread.h"
 
 
 class SimpleMessenger;

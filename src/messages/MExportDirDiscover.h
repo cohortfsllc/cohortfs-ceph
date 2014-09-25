@@ -42,11 +42,16 @@ class MExportDirDiscover : public Message {
 private:
   ~MExportDirDiscover() {}
 
-public:
-  const char *get_type_name() const { return "ExDis"; }
-  void print(ostream& o) const {
+  template <typename T>
+  void _print(T& o) const {
     o << "export_discover(" << dirfrag << " " << path << ")";
   }
+
+public:
+  const char *get_type_name() const { return "ExDis"; }
+
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
   virtual void decode_payload() {
     bufferlist::iterator p = payload.begin();

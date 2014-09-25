@@ -32,7 +32,10 @@ class MWatchNotify : public Message {
 					cookie(c), ver(v), notify_id(i), opcode(o), bl(b) { }
 private:
   ~MWatchNotify() {}
-
+  template <typename T>
+  void _print(T& out) const {
+    out << "watch-notify(c=" << cookie << " v=" << ver << " i=" << notify_id << " opcode=" << (int)opcode << ")";
+  }
 public:
   void decode_payload() {
     uint8_t msg_ver;
@@ -56,9 +59,8 @@ public:
   }
 
   const char *get_type_name() const { return "watch-notify"; }
-  void print(ostream& out) const {
-    out << "watch-notify(c=" << cookie << " v=" << ver << " i=" << notify_id << " opcode=" << (int)opcode << ")";
-  }
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 };
 
 #endif

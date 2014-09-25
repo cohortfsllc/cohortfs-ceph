@@ -395,8 +395,12 @@ public:
   virtual void decode_payload() = 0;
   virtual void encode_payload(uint64_t features) = 0;
   virtual const char *get_type_name() const = 0;
-  template <typename T>
-  virtual void print(T& out) const {
+
+  virtual void print(ostream& out) const {
+    out << get_type_name() << " magic: " << magic;
+  }
+
+  virtual void print(lttng_stream& out) const {
     out << get_type_name() << " magic: " << magic;
   }
 

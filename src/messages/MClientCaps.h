@@ -120,10 +120,8 @@ class MClientCaps : public Message {
   }
 private:
   ~MClientCaps() {}
-
-public:
-  const char *get_type_name() const { return "Cfcap";}
-  void print(ostream& out) const {
+  template <typename T>
+  void _print(T& out) const {
     out << "client_caps(" << ceph_cap_op_name(head.op)
 	<< " ino " << inodeno_t(head.ino)
 	<< " " << head.cap_id
@@ -148,7 +146,11 @@ public:
 
     out << ")";
   }
+public:
+  const char *get_type_name() const { return "Cfcap";}
 
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
   void decode_payload() {
     bufferlist::iterator p = payload.begin();
     ::decode(head, p);

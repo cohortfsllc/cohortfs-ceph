@@ -42,6 +42,13 @@ struct MMonHealth : public MMonQuorumService
 private:
   ~MMonHealth() { }
 
+  template <typename T>
+  void _print(T &o) const {
+    o << "mon_health( service " << get_service_type()
+      << " op " << get_service_op_name()
+      << " e " << get_epoch() << " r " << get_round()
+      << " )";
+  }
 public:
   const char *get_type_name() const { return "mon_health"; }
   const char *get_service_op_name() const {
@@ -50,12 +57,8 @@ public:
     }
     return "???";
   }
-  void print(ostream &o) const {
-    o << "mon_health( service " << get_service_type()
-      << " op " << get_service_op_name()
-      << " e " << get_epoch() << " r " << get_round()
-      << " )";
-  }
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
   int get_service_type() const {
     return service_type;

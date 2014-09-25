@@ -76,10 +76,8 @@ class MMonPaxos : public Message {
 private:
   ~MMonPaxos() {}
 
-public:
-  const char *get_type_name() const { return "paxos"; }
-
-  void print(ostream& out) const {
+  template <typename T>
+  void _print(T& out) const {
     out << "paxos(" << get_opname(op)
 	<< " lc " << last_committed
 	<< " fc " << first_committed
@@ -88,6 +86,12 @@ public:
       out << " latest " << latest_version << " (" << latest_value.length() << " bytes)";
     out <<  ")";
   }
+
+public:
+  const char *get_type_name() const { return "paxos"; }
+
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
   void encode_payload(uint64_t features) {
     if ((features & CEPH_FEATURE_MONCLOCKCHECK) == 0)

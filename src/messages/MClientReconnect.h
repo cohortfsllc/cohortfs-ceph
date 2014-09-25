@@ -31,12 +31,17 @@ public:
 private:
   ~MClientReconnect() {}
 
-public:
-  const char *get_type_name() const { return "client_reconnect"; }
-  void print(ostream& out) const {
+  template <typename T>
+  void _print(T& out) const {
     out << "client_reconnect("
 	<< caps.size() << " caps)";
   }
+
+public:
+  const char *get_type_name() const { return "client_reconnect"; }
+
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
   void add_cap(inodeno_t ino, uint64_t cap_id, inodeno_t pathbase, const string& path,
 	       int wanted, int issued) {

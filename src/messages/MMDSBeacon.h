@@ -47,7 +47,11 @@ class MMDSBeacon : public PaxosServiceMessage {
   }
 private:
   ~MMDSBeacon() {}
-
+  template <typename T>
+  void _print(T& out) const {
+    out << "mdsbeacon(" << global_id << "/" << name << " " << ceph_mds_state_name(state)
+	<< " seq " << seq << " v" << version << ")";
+  }
 public:
   uuid_d& get_fsid() { return fsid; }
   uint64_t get_global_id() { return global_id; }
@@ -66,10 +70,8 @@ public:
   void set_standby_for_name(string& n) { standby_for_name = n; }
   void set_standby_for_name(const char* c) { standby_for_name.assign(c); }
 
-  void print(ostream& out) const {
-    out << "mdsbeacon(" << global_id << "/" << name << " " << ceph_mds_state_name(state)
-	<< " seq " << seq << " v" << version << ")";
-  }
+  void print(ostream& out) const { _print(out); }
+  void print(lttng_stream& out) const { _print(out); }  
 
   void encode_payload(uint64_t features) {
     paxos_encode();

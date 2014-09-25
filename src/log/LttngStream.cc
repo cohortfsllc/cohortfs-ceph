@@ -6,6 +6,7 @@
 
 #include "LttngLog.h"
 #include "LttngStream.h"
+#include <atomic>
 //#include "Log.h"
 
 namespace {
@@ -27,10 +28,6 @@ lttng_stream::lttng_stream(int entity_type, const char *entity_name,
 
   {
 	emit_header(entity_type, entity_name, thread, subsys, prio);
-  }
-  ~lttng_stream()
-  {
-    emit_footer();
   }
 
 void lttng_stream::emit_header(int entity_type, const char *entity_name,
