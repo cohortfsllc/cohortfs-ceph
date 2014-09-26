@@ -73,7 +73,3 @@ void BackTrace::print(lttng_stream& out) {
   out << ss.str();
   }
 }
-
-
-
-
