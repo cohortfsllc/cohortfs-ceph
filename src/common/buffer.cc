@@ -1602,7 +1602,16 @@ void buffer::list::hexdump(std::ostream &out) const
   out.flags(original_flags);
 }
 
-std::ostream& operator<<(std::ostream& out, const buffer::raw &r) {
+void buffer::list::hexdump(lttng_stream &out) {
+  std::stringstream ss; 
+  hexdump(ss);
+  out << ss.str();
+}
+
+} // namespace ceph
+
+template <typename T>
+T& operator<<(T& out, const buffer::raw &r) {
   return out << "buffer::raw(" << (void*)r.data << " len " << r.len
 	     << " nref " << r.nref << ")";
 }
