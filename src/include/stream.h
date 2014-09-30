@@ -4,48 +4,58 @@
 #ifndef CEPH_STREAM_H
 #define CEPH_STREAM_H
 
-#include <boost/type_traits.hpp> // is_base_and_derived
+#include <ostream>
 
 /*
  * Stream output operators are templated to support std::ostream and types
  * derived from std::ostream, as well as other types not derived from
- * std::ostream that still support operator<<.
+ * std::ostream that still support operator<< (see lttng_stream).
  *
  * Types derived from std::ostream present a problem for templated operator<<,
- * because all default operator<< return std::ostream&. If the operator takes
- * stream type T and returns type T, it won't work for derived types like
- * std::stringstream; if the operator calls other stream operators that
- * return std::ostream, it can't return the result as a std::stringstream.
+ * because it creates ambiguities between our operator and std::ostream's
+ * default operators.
  *
- * We add a StrmRet template to solve this, for example:
+ * Taking 'std::stringstream << int' as an example, the compiler doesn't know
+ * whether to prefer a conversion from stringstream to ostream, which matches
+ * the default ostream::operator<<(int), over a conversion from int to a
+ * ceph-defined type like client_t, which would match our generated
+ * operator<<(T=stringstream&, client_t).
+ *
+ * To resolve this ambiguity, we disable instantiations for any type which
+ * derives from std::ostream, making sure that we only generate
+ * operator<<(T=ostream&, client_t). The compiler will clearly prefer the
+ * default ostream::operator<<(int) in this case.
+ *
+ * We add a StrmRet template to accomplish this, for example:
  *
  * template<typename T>
- * inline typename StrmRet<T>::type operator<<(T &out, const foo &f) {
- *   return out << f.bar;
+ * inline typename StrmRet<T>::type operator<<(T &out, const client_t &c) {
+ *   return out << c.v;
  * }
  *
- * Which will generate the following functions, with T=std::stringstream:
- *   std::ostream& operator<<(std::stringstream&, const foo &f)
- * and with T=lttng_stream:
- *   lttng_stream& operator<<(lttng_stream&, const foo &f)
  */
 
-// default template keeps input type
-template<typename T, typename Base, bool IsDerived>
-struct BaseIfDerivedImpl { typedef T type; };
+#if __cplusplus <= 199711L // not C++11, use boost type_traits
 
-// specialization replaces type with base
-template<typename T, typename Base>
-struct BaseIfDerivedImpl<T, Base, true> { typedef Base type; };
+#include <boost/type_traits.hpp>
 
-// chooses type T, unless it inherits from Base
-template<typename T, typename Base>
-struct BaseIfDerived : public BaseIfDerivedImpl<T, Base,
-  boost::is_base_and_derived<Base, T>::value> {};
+template<typename Base, typename T>
+struct disable_if_derived : public boost::disable_if<
+  boost::is_base_and_derived<Base, T> > {};
 
-// StrmRet<T>::type is set to T, or ostream if derived from ostream
+#else // use C++11 type_traits
+
+#include <type_traits>
+
+// std::is_base_of<T, T> is true, so check std::is_same as well
+template<typename Base, typename T>
+struct disable_if_derived : public std::enable_if<
+  !std::is_base_of<Base, T>::value || std::is_same<Base, T>::value, T> {};
+
+#endif // C++11
+
+// StrmRet<T>::type is set to T, unless T is derived from ostream
 template<typename T>
-struct StrmRet : public BaseIfDerived<T, std::ostream> {};
+struct StrmRet : public disable_if_derived<std::ostream, T> {};
 
-
-#endif
+#endif // CEPH_STREAM_H
