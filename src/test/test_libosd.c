@@ -7,6 +7,8 @@
 
 #include "libosd/ceph_osd.h"
 
+#define TEST_MULTI
+#ifndef TEST_MULTI
 
 struct io_completion {
   pthread_mutex_t mutex;
@@ -20,7 +22,7 @@ void write_completion(int result, uint64_t length, int flags, void *user)
   struct io_completion *io = (struct io_completion*)user;
   printf("write_completion result %d flags %d\n", result, flags);
 
-  // wait for STABLE
+  /* wait for STABLE */
   if (result == 0 && (flags & LIBOSD_WRITE_CB_STABLE) == 0)
     return;
 
@@ -80,6 +82,8 @@ int test_single()
   return 0;
 }
 
+#else /* TEST_MULTI */
+
 int test_double()
 {
   struct libosd *osd1, *osd2;
@@ -92,7 +96,7 @@ int test_double()
     .config = "/etc/ceph/ceph.conf",
   };
 
-  // start osds
+  /* start osds */
   osd1 = libosd_init(&args1);
   if (osd1 == NULL) {
     fputs("osd1 init failed\n", stderr);
@@ -107,31 +111,36 @@ int test_double()
   }
   printf("osd2 created %p\n", osd2);
 
-  // join osds
+  /* join osds */
   printf("waiting on osd1 %p\n", osd1);
   libosd_join(osd1);
   printf("waiting on osd2 %p\n", osd2);
   libosd_join(osd2);
 
-  // clean up
+  /* clean up */
   libosd_cleanup(osd1);
   libosd_cleanup(osd2);
   puts("finished");
   return 0;
 }
 
+#endif
+
 
 int main(int argc, const char *argv[])
 {
+  int r = 0;
+
   signal(SIGINT, libosd_signal);
   signal(SIGTERM, libosd_signal);
 
-  int r = test_single();
+#ifndef TEST_MULTI
+  r = test_single();
   if (r != 0) {
     fprintf(stderr, "test_single() failed with %d\n", r);
     return r;
   }
-#if 0
+#else
   r = test_double();
   if (r != 0) {
     fprintf(stderr, "test_double() failed with %d\n", r);
