@@ -471,7 +471,8 @@ public:
 
     assert(ops.size() == 1);
     OSDOp &op = *ops.begin();
-    assert(op.op.op == CEPH_OSD_OP_WRITE);
+    assert(op.op.op == CEPH_OSD_OP_WRITE ||
+           op.op.op == CEPH_OSD_OP_TRUNCATE);
 
     uint64_t length = op.rval ? 0 : op.op.extent.length;
     finisher->queue(new C_Completion(cb, op.rval, length, flag, user));
