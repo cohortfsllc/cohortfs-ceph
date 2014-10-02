@@ -2353,11 +2353,6 @@ void OSDVol::eval_mutation(Mutation *mutation)
     dout(10) << " removing " << mutation->tid << dendl;
     assert(!mutation_queue.empty());
     dout(20) << "   q front is " << mutation_queue.front()->tid << dendl;
-    if (mutation_queue.front() != mutation) {
-      dout(0) << " removing " << mutation->tid << dendl;
-      dout(0) << "   q front is " << mutation_queue.front()->tid << dendl;
-      assert(mutation_queue.front() == mutation);
-    }
     remove_mutation(mutation);
   }
 }
