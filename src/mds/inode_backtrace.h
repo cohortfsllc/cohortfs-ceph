@@ -39,7 +39,8 @@ inline bool operator==(const inode_backpointer_t& l, const inode_backpointer_t& 
 	return l.dirino == r.dirino && l.version == r.version && l.dname == r.dname;
 }
 
-inline ostream& operator<<(ostream& out, const inode_backpointer_t& ib) {
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const inode_backpointer_t& ib) {
   return out << "<" << ib.dirino << "/" << ib.dname << " v" << ib.version << ">";
 }
 

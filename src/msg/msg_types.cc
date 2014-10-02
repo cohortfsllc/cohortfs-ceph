@@ -131,8 +131,8 @@ bool entity_addr_t::parse(const char *s, const char **end)
 }
 
 
-
-std::ostream& operator<<(std::ostream& out, const sockaddr_storage &ss)
+template <typename T>
+typename StrmRet<T>::type& operator<<(T& out, const sockaddr_storage &ss)
 {
   char buf[NI_MAXHOST] = { 0 };
   char serv[NI_MAXSERV] = { 0 };

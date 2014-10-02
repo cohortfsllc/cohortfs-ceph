@@ -31,8 +31,6 @@ struct mon_rwxa_t {
   }
 };
 
-ostream& operator<<(ostream& out, mon_rwxa_t p);
-
 struct StringConstraint {
   string value;
   string prefix;
@@ -40,8 +38,8 @@ struct StringConstraint {
   StringConstraint() {}
   StringConstraint(string a, string b) : value(a), prefix(b) {}
 };
-
-ostream& operator<<(ostream& out, const StringConstraint& c);
+template <typename T>
+typename StrmRet<T>::type operator<<(T& out, const StringConstraint& c);
 
 struct MonCapGrant {
   /*
@@ -110,8 +108,8 @@ struct MonCapGrant {
       command.length() == 0;
   }
 };
-
-ostream& operator<<(ostream& out, const MonCapGrant& g);
+template <typename T>
+typename StrmRet<T>::type& operator<<(T& out, const MonCapGrant& g);
 
 struct MonCap {
   string text;
@@ -155,7 +153,8 @@ struct MonCap {
 };
 WRITE_CLASS_ENCODER(MonCap)
 
-ostream& operator<<(ostream& out, const MonCap& cap);
+template <typename T>
+typename StrmRet<T>::type& operator<<(T& out, const MonCap& cap);
 
 static inline bool is_not_alnum_space(char c)
 {
@@ -170,7 +169,7 @@ static string maybe_quote_string(const std::string& str)
 }
 
 template <typename T>
-T& operator<<(T& out, mon_rwxa_t p)
+typename StrmRet<T>::type& operator<<(T& out, mon_rwxa_t p)
 {
   if (p == MON_CAP_ANY)
     return out << "*";
@@ -185,7 +184,7 @@ T& operator<<(T& out, mon_rwxa_t p)
 }
 
 template <typename T>
-T& operator<<(T& out, const StringConstraint& c)
+typename StrmRet<T>::type& operator<<(T& out, const StringConstraint& c)
 {
   if (c.prefix.length())
     return out << "prefix " << c.prefix;
@@ -194,7 +193,7 @@ T& operator<<(T& out, const StringConstraint& c)
 }
 
 template <typename T>
-T& operator<<(T& out, const MonCapGrant& m)
+typename StrmRet<T>::type& operator<<(T& out, const MonCapGrant& m)
 {
   out << "allow";
   if (m.service.length()) {
@@ -223,7 +222,7 @@ T& operator<<(T& out, const MonCapGrant& m)
 }
 
 template <typename T>
-T& operator<<(T&out, const MonCap& m)
+typename StrmRet<T>::type& operator<<(T& out, const MonCap& m)
 {
   for (vector<MonCapGrant>::const_iterator p = m.grants.begin(); p != m.grants.end(); ++p) {
     if (p != m.grants.begin())

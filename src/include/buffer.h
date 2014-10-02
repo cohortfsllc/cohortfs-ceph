@@ -59,6 +59,7 @@ extern "C" {
 
 # include <assert.h>
 #include "log/LttngStream.h"
+#include "include/stream.h"
 
 class XioCompletionHook;
 
@@ -141,8 +142,8 @@ private:
 public:
   class xio_mempool;
   class xio_msg_buffer;
-
-  friend std::ostream& operator<<(std::ostream& out, const raw &r);
+  template <typename T>
+  friend typename StrmRet<T>::type& operator<<(T& out, const raw &r);
 
 public:
 
@@ -608,7 +609,7 @@ public:
     void decode_base64(list& o);
 
     void hexdump(std::ostream &out) const;
-    void hexdump(lttng_stream& out) const;
+    void hexdump(lttng_stream &out) const;
     int read_file(const char *fn, std::string *error);
     ssize_t read_fd(int fd, size_t len);
     int read_fd_zero_copy(int fd, size_t len);

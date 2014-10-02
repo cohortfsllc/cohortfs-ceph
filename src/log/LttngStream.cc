@@ -20,6 +20,8 @@ uint64_t lttng_next_message_id() {
 }
 }
 
+lttng_stream::lttng_endl lttng_stream::endl;
+
 lttng_stream::lttng_stream(int entity_type, const char *entity_name,
 	 short subsys, short prio)
 	: pid(lttng_getpid()),

@@ -194,8 +194,8 @@ struct MonSessionMap {
     delete sub;
   }
 };
-
-inline ostream& operator<<(ostream& out, const MonSession *s)
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const MonSession *s)
 {
   out << "MonSession: " << s->inst << " is "
       << (s->closed ? "closed" : "open");

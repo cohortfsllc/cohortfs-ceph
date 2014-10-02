@@ -143,7 +143,7 @@ void KeyRing::encode_formatted(string label, Formatter *f, bufferlist& bl)
     f->open_object_section("auth_entities");
     f->dump_string("entity", p->first.to_str().c_str());
     std::ostringstream keyss;
-    keyss << p->second.key;
+    (ostream&)keyss << p->second.key;
     f->dump_string("key", keyss.str());
     f->open_object_section("caps");
     for (map<string, bufferlist>::iterator q = p->second.caps.begin();

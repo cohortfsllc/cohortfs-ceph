@@ -49,7 +49,8 @@ struct EntityAuth {
 };
 WRITE_CLASS_ENCODER(EntityAuth)
 
-static inline std::ostream& operator<<(std::ostream& out,
+template <typename T>
+static inline typename StrmRet<T>::type& operator<<(T& out,
 				       const EntityAuth& a) {
   return out << "auth(auid = " << a.auid << " key=" << a.key << " with " << a.caps.size() << " caps)";
 }
@@ -166,8 +167,8 @@ struct ExpiringCryptoKey {
   }
 };
 WRITE_CLASS_ENCODER(ExpiringCryptoKey);
-
-static inline std::ostream& operator<<(std::ostream& out,
+template <typename T>
+static inline typename StrmRet<T>::type& operator<<(T& out,
 				       const ExpiringCryptoKey& c)
 {
   return out << c.key << " expires " << c.expiration;

@@ -53,7 +53,8 @@ const char *ceph_osd_flag_name(unsigned flag);
 /// convert CEPH_OSD_FLAG_* op flags to a string
 string ceph_osd_flag_string(unsigned flags);
 
-inline ostream& operator<<(ostream& out, const osd_reqid_t& r) {
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const osd_reqid_t& r) {
   return out << r.name << "." << r.inc << ":" << r.tid;
 }
 
@@ -153,12 +154,14 @@ private:
 
 WRITE_CLASS_ENCODER(coll_t)
 
-inline ostream& operator<<(ostream& out, const coll_t& c) {
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const coll_t& c) {
   out << c.to_str();
   return out;
 }
 
-inline ostream& operator<<(ostream& out, const ceph_object_layout &ol)
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const ceph_object_layout &ol)
 {
   int su = ol.ol_stripe_unit;
   if (su)
@@ -231,7 +234,8 @@ inline bool operator>(const eversion_t& l, const eversion_t& r) {
 inline bool operator>=(const eversion_t& l, const eversion_t& r) {
   return (l.epoch == r.epoch) ? (l.version >= r.version):(l.epoch >= r.epoch);
 }
-inline ostream& operator<<(ostream& out, const eversion_t e) {
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const eversion_t e) {
   return out << e.epoch << "'" << e.version;
 }
 
@@ -311,7 +315,8 @@ inline bool operator!=(const osd_stat_t& l, const osd_stat_t& r) {
 
 
 
-inline ostream& operator<<(ostream& out, const osd_stat_t& s) {
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const osd_stat_t& s) {
   return out << "osd_stat(" << kb_t(s.kb_used) << " used, "
 	     << kb_t(s.kb_avail) << " avail, "
 	     << kb_t(s.kb) << " total, "
@@ -436,7 +441,8 @@ struct vol_info_t {
 };
 WRITE_CLASS_ENCODER(vol_info_t)
 
-inline ostream& operator<<(ostream& out, const vol_info_t& vi)
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const vol_info_t& vi)
 {
   out << vi.volume << "(";
   if (vi.is_empty())
@@ -564,7 +570,8 @@ struct osd_peer_stat_t {
 };
 WRITE_CLASS_ENCODER(osd_peer_stat_t)
 
-ostream& operator<<(ostream& out, const osd_peer_stat_t &stat);
+template <typename T>
+typename StrmRet<T>::type& operator<<(T&, const osd_peer_stat_t &stat);
 
 
 // -----------------------------------------
@@ -587,7 +594,8 @@ class ObjectExtent {
     oid(o), offset(off), length(l), truncate_size(ts) { }
 };
 
-inline ostream& operator<<(ostream& out, const ObjectExtent &ex)
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const ObjectExtent &ex)
 {
   return out << "extent( in "
 	     << " " << ex.offset << "~" << ex.length
@@ -624,7 +632,8 @@ public:
 };
 WRITE_CLASS_ENCODER(OSDSuperblock)
 
-inline ostream& operator<<(ostream& out, const OSDSuperblock& sb)
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const OSDSuperblock& sb)
 {
   return out << "sb(" << sb.cluster_fsid
 	     << " osd." << sb.whoami
@@ -663,7 +672,8 @@ static inline bool operator==(const watch_info_t& l, const watch_info_t& r) {
 	    && l.addr == r.addr;
 }
 
-static inline ostream& operator<<(ostream& out, const watch_info_t& w) {
+template <typename T>
+static inline typename StrmRet<T>::type& operator<<(T& out, const watch_info_t& w) {
   return out << "watch(cookie " << w.cookie << " " << w.timeout_seconds << "s"
     << " " << w.addr << ")";
 }
@@ -674,7 +684,8 @@ struct notify_info_t {
   bufferlist bl;
 };
 
-static inline ostream& operator<<(ostream& out, const notify_info_t& n) {
+template <typename T>
+static inline typename StrmRet<T>::type& operator<<(T& out, const notify_info_t& n) {
   return out << "notify(cookie " << n.cookie << " " << n.timeout << "s)";
 }
 
@@ -980,7 +991,8 @@ public:
   }
 };
 
-inline ostream& operator<<(ostream& out, const ObjectState& obs)
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const ObjectState& obs)
 {
   out << obs.oi.soid;
   if (!obs.exists)
@@ -988,7 +1000,8 @@ inline ostream& operator<<(ostream& out, const ObjectState& obs)
   return out;
 }
 
-inline ostream& operator<<(ostream& out, const ObjectContext::RWState& rw)
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const ObjectContext::RWState& rw)
 {
   return out << "rwstate(" << rw.get_state_name()
 	     << " n=" << rw.count
@@ -996,12 +1009,14 @@ inline ostream& operator<<(ostream& out, const ObjectContext::RWState& rw)
 	     << ")";
 }
 
-inline ostream& operator<<(ostream& out, const ObjectContext& obc)
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const ObjectContext& obc)
 {
   return out << "obc(" << obc.obs << " " << obc.rwstate << ")";
 }
 
-ostream& operator<<(ostream& out, const object_info_t& oi);
+template <typename T>
+typename StrmRet<T>::type operator<<(T&, const object_info_t& oi);
 
 struct OSDOp {
   ceph_osd_op op;
@@ -1050,7 +1065,8 @@ struct OSDOp {
   static void merge_osd_op_vector_out_data(vector<OSDOp>& ops, bufferlist& out);
 };
 
-ostream& operator<<(ostream& out, const OSDOp& op);
+template <typename T>
+typename StrmRet<T>::type& operator<<(T&, const OSDOp& op);
 
 struct watch_item_t {
   entity_name_t name;
@@ -1142,4 +1158,96 @@ struct obj_list_watch_response_t {
 
 WRITE_CLASS_ENCODER(obj_list_watch_response_t)
 
+template <typename T>
+typename StrmRet<T>::type& operator<<(T& out, const osd_peer_stat_t &stat)
+{
+  return out << "stat(" << stat.stamp << ")";
+}
+
+template <typename T>
+typename StrmRet<T>::type& operator<<(T& out, const object_info_t& oi)
+{
+  out << oi.soid << "(" << oi.version
+      << " " << oi.last_reqid;
+  out << " wrlock_by=" << oi.wrlock_by;
+  if (oi.flags)
+    out << " " << oi.get_flag_string();
+  out << " s " << oi.size;
+  out << " uv" << oi.user_version;
+  out << ")";
+  return out;
+}
+
+template <typename T>
+typename StrmRet<T>::type& operator<<(T& out, const OSDOp& op)
+{
+  out << ceph_osd_op_name(op.op.op);
+  if (ceph_osd_op_type_data(op.op.op)) {
+    // data extent
+    switch (op.op.op) {
+    case CEPH_OSD_OP_STAT:
+    case CEPH_OSD_OP_DELETE:
+    case CEPH_OSD_OP_LIST_WATCHERS:
+    case CEPH_OSD_OP_ASSERT_VER:
+      out << " v" << op.op.assert_ver.ver;
+      break;
+    case CEPH_OSD_OP_TRUNCATE:
+      out << " " << op.op.extent.offset;
+      break;
+    case CEPH_OSD_OP_MASKTRUNC:
+    case CEPH_OSD_OP_TRIMTRUNC:
+      out << " " << op.op.extent.truncate_seq << "@" << (int64_t)op.op.extent.truncate_size;
+      break;
+    case CEPH_OSD_OP_WATCH:
+      out << (op.op.watch.flag ? " add":" remove")
+	  << " cookie " << op.op.watch.cookie << " ver " << op.op.watch.ver;
+      break;
+    case CEPH_OSD_OP_SETALLOCHINT:
+      out << " object_size " << op.op.alloc_hint.expected_object_size
+	  << " write_size " << op.op.alloc_hint.expected_write_size;
+      break;
+    default:
+      out << " " << op.op.extent.offset << "~" << op.op.extent.length;
+      if (op.op.extent.truncate_seq)
+	out << " [" << op.op.extent.truncate_seq << "@" << (int64_t)op.op.extent.truncate_size << "]";
+    }
+  } else if (ceph_osd_op_type_attr(op.op.op)) {
+    // xattr name
+    if (op.op.xattr.name_len && op.indata.length()) {
+      out << " ";
+      op.indata.write(0, op.op.xattr.name_len, out);
+    }
+    if (op.op.xattr.value_len)
+      out << " (" << op.op.xattr.value_len << ")";
+    if (op.op.op == CEPH_OSD_OP_CMPXATTR)
+      out << " op " << (int)op.op.xattr.cmp_op << " mode " << (int)op.op.xattr.cmp_mode;
+  } else if (ceph_osd_op_type_exec(op.op.op)) {
+    // class.method
+    if (op.op.cls.class_len && op.indata.length()) {
+      out << " ";
+      op.indata.write(0, op.op.cls.class_len, out);
+      out << ".";
+      op.indata.write(op.op.cls.class_len, op.op.cls.method_len, out);
+    }
+  } else if (ceph_osd_op_type_multi(op.op.op)) {
+    switch (op.op.op) {
+    case CEPH_OSD_OP_ASSERT_SRC_VERSION:
+      out << " v" << op.op.watch.ver
+	  << " of " << op.oid;
+      break;
+    case CEPH_OSD_OP_SRC_CMPXATTR:
+      out << " " << op.oid;
+      if (op.op.xattr.name_len && op.indata.length()) {
+	out << " ";
+	op.indata.write(0, op.op.xattr.name_len, out);
+      }
+      if (op.op.xattr.value_len)
+	out << " (" << op.op.xattr.value_len << ")";
+      if (op.op.op == CEPH_OSD_OP_CMPXATTR)
+	out << " op " << (int)op.op.xattr.cmp_op << " mode " << (int)op.op.xattr.cmp_mode;
+      break;
+    }
+  }
+  return out;
+}
 #endif

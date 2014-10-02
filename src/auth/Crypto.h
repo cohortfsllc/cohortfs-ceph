@@ -61,7 +61,12 @@ public:
 
   int get_type() const { return type; }
   utime_t get_created() const { return created; }
-  void print(std::ostream& out) const;
+
+  template <typename T>
+  void print(T &out) const
+  {
+    out << encode_base64();
+  }
 
   int set_secret(CephContext *cct, int type, bufferptr& s);
   bufferptr& get_secret() { return secret; }
@@ -101,7 +106,8 @@ public:
 };
 WRITE_CLASS_ENCODER(CryptoKey);
 
-static inline std::ostream& operator<<(std::ostream& out, const CryptoKey& k)
+template <typename T>
+static inline typename StrmRet<T>::type& operator<<(T& out, const CryptoKey& k)
 {
   k.print(out);
   return out;

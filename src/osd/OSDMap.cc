@@ -325,7 +325,7 @@ void OSDMap::Incremental::dump(Formatter *f) const
        p != new_blacklist.end();
        ++p) {
     stringstream ss;
-    ss << p->first;
+    (ostream&)ss << p->first;
     f->dump_stream(ss.str().c_str()) << p->second;
   }
   f->close_section();
@@ -900,7 +900,7 @@ void OSDMap::dump(Formatter *f) const
        p != blacklist.end();
        ++p) {
     stringstream ss;
-    ss << p->first;
+    (ostream&)ss <<  p->first;
     f->dump_stream(ss.str().c_str()) << p->second;
   }
   f->close_section();

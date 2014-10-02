@@ -53,7 +53,7 @@ struct ObjectOperation;
 class EMetaBlob;
 
 template <typename T>
-T& operator<<(T& out, CInode& in);
+typename StrmRet<T>::type& operator<<(T& out, CInode& in);
 
 struct cinode_lock_info_t {
   int lock;

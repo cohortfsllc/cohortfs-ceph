@@ -334,8 +334,9 @@ void md_config_t::_show_config(std::ostream *out, Formatter *f)
       ostringstream ss;
       std::string debug_name = "debug_";
       debug_name += subsys.get_name(o);
-      ss << subsys.get_log_level(o)
-	 << "/" << subsys.get_gather_level(o);
+      //int level = subsys.get_log_level(o);
+      ss
+	  << subsys.get_gather_level(o);
       f->dump_string(debug_name.c_str(), ss.str());
     }
   }
@@ -772,7 +773,7 @@ int md_config_t::_get_val(const char *key, char **buf, int len) const
 	oss << *(entity_addr_t*)opt->conf_ptr(this);
 	break;
       case OPT_UUID:
-	oss << *(uuid_d*)opt->conf_ptr(this);
+	(std::ostream&)oss << *(uuid_d*)opt->conf_ptr(this);
 	break;
     }
     string str(oss.str());

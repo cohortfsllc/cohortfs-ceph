@@ -9,6 +9,7 @@
  */
 
 #include "encoding.h"
+#include "stream.h"
 #include <ostream>
 #include <string>
 
@@ -61,7 +62,7 @@ struct uuid_d {
 WRITE_CLASS_ENCODER(uuid_d)
 
 template <typename T>
-inline T& operator<<(T& out, const uuid_d& u) {
+inline typename StrmRet<T>::type& operator<<(T& out, const uuid_d& u) {
   char b[uuid_d::char_rep_buf_size];
   uuid_unparse(u.uuid, b);
   return out << b;

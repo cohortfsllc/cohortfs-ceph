@@ -219,7 +219,8 @@ class filepath {
 
 WRITE_CLASS_ENCODER(filepath)
 
-inline ostream& operator<<(ostream& out, const filepath& path)
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const filepath& path)
 {
   if (path.get_ino()) {
     out << '#' << path.get_ino();

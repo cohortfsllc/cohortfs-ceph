@@ -33,7 +33,7 @@ inline bool operator!=(const sockaddr_in& a, const sockaddr_in& b) {
 }
 
 template <typename T>
-extern T& operator<<(T& out, const sockaddr_storage &ss);
+extern typename StrmRet<T>::type& operator<<(T& out, const sockaddr_storage &ss);
 
 class entity_name_t {
 public:
@@ -130,8 +130,24 @@ inline bool operator!= (const entity_name_t& l, const entity_name_t& r) {
   return (l.type() != r.type()) || (l.num() != r.num()); }
 inline bool operator< (const entity_name_t& l, const entity_name_t& r) {
   return (l.type() < r.type()) || (l.type() == r.type() && l.num() < r.num()); }
-template <typename T>
-inline T& operator<<(T& out, const entity_name_t& addr) {
+/*template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const entity_name_t& addr) {
+  //if (addr.is_namer()) return out << "namer";
+  if (addr.is_new() || addr.num() < 0)
+    return out << addr.type_str() << ".?";
+  else
+    return out << addr.type_str() << '.' << addr.num();
+}
+*/
+inline std::ostream& operator<<(std::ostream& out, const entity_name_t& addr) {
+  //if (addr.is_namer()) return out << "namer";
+  if (addr.is_new() || addr.num() < 0)
+    return out << addr.type_str() << ".?";
+  else
+    return out << addr.type_str() << '.' << addr.num();
+}
+
+inline lttng_stream& operator<<(lttng_stream& out, const entity_name_t& addr) {
   //if (addr.is_namer()) return out << "namer";
   if (addr.is_new() || addr.num() < 0)
     return out << addr.type_str() << ".?";
@@ -139,7 +155,7 @@ inline T& operator<<(T& out, const entity_name_t& addr) {
     return out << addr.type_str() << '.' << addr.num();
 }
 template <typename T>
-inline T& operator<<(T& out, const ceph_entity_name& addr) {
+inline typename StrmRet<T>::type& operator<<(T& out, const ceph_entity_name& addr) {
   return out << *(const entity_name_t*)&addr;
 }
 
@@ -351,8 +367,12 @@ struct entity_addr_t {
 };
 WRITE_CLASS_ENCODER(entity_addr_t)
 
-template <typename T>
-inline T& operator<<(T& out, const entity_addr_t &addr)
+inline std::ostream& operator<<(std::ostream& out, const entity_addr_t &addr)
+{
+  return out << addr.addr << '/' << addr.nonce;
+}
+
+inline lttng_stream& operator<<(lttng_stream& out, const entity_addr_t &addr)
 {
   return out << addr.addr << '/' << addr.nonce;
 }
@@ -431,12 +451,12 @@ namespace std {
 }
 
 template <typename T>
-inline T& operator<<(T& out, const entity_inst_t &i)
+inline typename StrmRet<T>::type& operator<<(T& out, const entity_inst_t &i)
 {
   return out << i.name << " " << i.addr;
 }
 template <typename T>
-inline T& operator<<(T& out, const ceph_entity_inst &i)
+inline typename StrmRet<T>::type& operator<<(T& out, const ceph_entity_inst &i)
 {
   entity_inst_t n = i;
   return out << n;
