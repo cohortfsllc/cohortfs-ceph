@@ -173,7 +173,8 @@ struct ScrubResult {
 };
 WRITE_CLASS_ENCODER(ScrubResult);
 
-static inline ostream& operator<<(ostream& out, const ScrubResult& r) {
+template <typename T>
+static inline typename StrmRet<T>::type& operator<<(T& out, const ScrubResult& r) {
   return out << "ScrubResult(keys " << r.prefix_keys << " crc " << r.prefix_crc << ")";
 }
 

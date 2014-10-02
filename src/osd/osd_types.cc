@@ -557,12 +557,6 @@ void osd_peer_stat_t::generate_test_instances(list<osd_peer_stat_t*>& o)
   o.back()->stamp = utime_t(1, 2);
 }
 
-ostream& operator<<(ostream& out, const osd_peer_stat_t &stat)
-{
-  return out << "stat(" << stat.stamp << ")";
-}
-
-
 // -- OSDSuperblock --
 
 void OSDSuperblock::encode(bufferlist &bl) const
@@ -779,95 +773,7 @@ void object_info_t::generate_test_instances(list<object_info_t*>& o)
   // fixme
 }
 
-
-ostream& operator<<(ostream& out, const object_info_t& oi)
-{
-  out << oi.soid << "(" << oi.version
-      << " " << oi.last_reqid;
-  out << " wrlock_by=" << oi.wrlock_by;
-  if (oi.flags)
-    out << " " << oi.get_flag_string();
-  out << " s " << oi.size;
-  out << " uv" << oi.user_version;
-  out << ")";
-  return out;
-}
-
 // -- OSDOp --
-
-ostream& operator<<(ostream& out, const OSDOp& op)
-{
-  out << ceph_osd_op_name(op.op.op);
-  if (ceph_osd_op_type_data(op.op.op)) {
-    // data extent
-    switch (op.op.op) {
-    case CEPH_OSD_OP_STAT:
-    case CEPH_OSD_OP_DELETE:
-    case CEPH_OSD_OP_LIST_WATCHERS:
-    case CEPH_OSD_OP_ASSERT_VER:
-      out << " v" << op.op.assert_ver.ver;
-      break;
-    case CEPH_OSD_OP_TRUNCATE:
-      out << " " << op.op.extent.offset;
-      break;
-    case CEPH_OSD_OP_MASKTRUNC:
-    case CEPH_OSD_OP_TRIMTRUNC:
-      out << " " << op.op.extent.truncate_seq << "@" << (int64_t)op.op.extent.truncate_size;
-      break;
-    case CEPH_OSD_OP_WATCH:
-      out << (op.op.watch.flag ? " add":" remove")
-	  << " cookie " << op.op.watch.cookie << " ver " << op.op.watch.ver;
-      break;
-    case CEPH_OSD_OP_SETALLOCHINT:
-      out << " object_size " << op.op.alloc_hint.expected_object_size
-	  << " write_size " << op.op.alloc_hint.expected_write_size;
-      break;
-    default:
-      out << " " << op.op.extent.offset << "~" << op.op.extent.length;
-      if (op.op.extent.truncate_seq)
-	out << " [" << op.op.extent.truncate_seq << "@" << (int64_t)op.op.extent.truncate_size << "]";
-    }
-  } else if (ceph_osd_op_type_attr(op.op.op)) {
-    // xattr name
-    if (op.op.xattr.name_len && op.indata.length()) {
-      out << " ";
-      op.indata.write(0, op.op.xattr.name_len, out);
-    }
-    if (op.op.xattr.value_len)
-      out << " (" << op.op.xattr.value_len << ")";
-    if (op.op.op == CEPH_OSD_OP_CMPXATTR)
-      out << " op " << (int)op.op.xattr.cmp_op << " mode " << (int)op.op.xattr.cmp_mode;
-  } else if (ceph_osd_op_type_exec(op.op.op)) {
-    // class.method
-    if (op.op.cls.class_len && op.indata.length()) {
-      out << " ";
-      op.indata.write(0, op.op.cls.class_len, out);
-      out << ".";
-      op.indata.write(op.op.cls.class_len, op.op.cls.method_len, out);
-    }
-  } else if (ceph_osd_op_type_multi(op.op.op)) {
-    switch (op.op.op) {
-    case CEPH_OSD_OP_ASSERT_SRC_VERSION:
-      out << " v" << op.op.watch.ver
-	  << " of " << op.oid;
-      break;
-    case CEPH_OSD_OP_SRC_CMPXATTR:
-      out << " " << op.oid;
-      if (op.op.xattr.name_len && op.indata.length()) {
-	out << " ";
-	op.indata.write(0, op.op.xattr.name_len, out);
-      }
-      if (op.op.xattr.value_len)
-	out << " (" << op.op.xattr.value_len << ")";
-      if (op.op.op == CEPH_OSD_OP_CMPXATTR)
-	out << " op " << (int)op.op.xattr.cmp_op << " mode " << (int)op.op.xattr.cmp_mode;
-      break;
-    }
-  }
-  return out;
-}
-
-
 void OSDOp::split_osd_op_vector_in_data(vector<OSDOp>& ops, bufferlist& in)
 {
   bufferlist::iterator datap = in.begin();

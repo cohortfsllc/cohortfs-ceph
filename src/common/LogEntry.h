@@ -106,7 +106,7 @@ struct LogSummary {
 WRITE_CLASS_ENCODER(LogSummary)
 
 template <typename T>
-inline T& operator<<(T& out, clog_type t)
+inline typename StrmRet<T>::type& operator<<(T& out, clog_type t)
 {
   switch (t) {
   case CLOG_DEBUG:
@@ -124,7 +124,7 @@ inline T& operator<<(T& out, clog_type t)
   }
 }
 template <typename T>
-inline T& operator<<(T& out, const LogEntry& e)
+inline typename StrmRet<T>::type& operator<<(T& out, const LogEntry& e)
 {
   return out << e.stamp << " " << e.who << " " << e.seq << " : " << e.type << " " << e.msg;
 }

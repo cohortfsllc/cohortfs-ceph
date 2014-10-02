@@ -415,7 +415,7 @@ extern Message *decode_message(CephContext *cct, int crcflags,
 			       ceph_msg_footer& footer, bufferlist& front,
 			       bufferlist& middle, bufferlist& data);
 template <typename T>
-inline T& operator<<(T& out, Message& m) {
+inline typename StrmRet<T>::type& operator<<(T& out, Message& m) {
   m.print(out);
   if (m.get_header().version)
     out << " v" << m.get_header().version;

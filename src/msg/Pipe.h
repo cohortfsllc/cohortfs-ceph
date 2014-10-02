@@ -107,7 +107,21 @@ class DispatchQueue;
 
     SimpleMessenger *msgr;
     uint64_t conn_id;
-    ostream& _pipe_prefix(std::ostream *_dout);
+
+    struct Prefix {
+        entity_addr_t my_addr;
+        entity_addr_t peer_addr;
+        Pipe *pipe;
+        int sd;
+        int port;
+        int state;
+        uint32_t peer_global_seq;
+        uint32_t connect_seq;
+        bool lossy;
+        PipeConnectionRef connection_state;
+    };
+
+    Prefix get_pipe_prefix();
 
     Pipe* get() {
       return static_cast<Pipe*>(RefCountedObject::get());

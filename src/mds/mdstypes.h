@@ -155,8 +155,8 @@ WRITE_CLASS_ENCODER(frag_info_t)
 inline bool operator==(const frag_info_t &l, const frag_info_t &r) {
   return memcmp(&l, &r, sizeof(l)) == 0;
 }
-
-ostream& operator<<(ostream &out, const frag_info_t &f);
+template <typename T>
+typename StrmRet<T>::type& operator<<(T &out, const frag_info_t &f);
 
 
 struct nest_info_t : public scatter_info_t {
@@ -208,8 +208,8 @@ WRITE_CLASS_ENCODER(nest_info_t)
 inline bool operator==(const nest_info_t &l, const nest_info_t &r) {
   return memcmp(&l, &r, sizeof(l)) == 0;
 }
-
-ostream& operator<<(ostream &out, const nest_info_t &n);
+template <typename T>
+typename StrmRet<T>::type& operator<<(T &out, const nest_info_t &n);
 
 
 struct vinodeno_t {
@@ -248,7 +248,8 @@ namespace std {
 
 
 
-inline ostream& operator<<(ostream &out, const vinodeno_t &vino) {
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T &out, const vinodeno_t &vino) {
   out << vino.ino;
   return out;
 }
@@ -279,8 +280,8 @@ inline void decode(client_writeable_range_t::byte_range_t& range, bufferlist::it
 }
 
 WRITE_CLASS_ENCODER(client_writeable_range_t)
-
-ostream& operator<<(ostream& out, const client_writeable_range_t& r);
+template <typename T>
+typename StrmRet<T>::type& operator<<(T& out, const client_writeable_range_t& r);
 
 inline bool operator==(const client_writeable_range_t& l,
 		       const client_writeable_range_t& r) {
@@ -507,7 +508,8 @@ struct metareqid_t {
 };
 WRITE_CLASS_ENCODER(metareqid_t)
 
-inline ostream& operator<<(ostream& out, const metareqid_t& r) {
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const metareqid_t& r) {
   return out << r.name << ":" << r.tid;
 }
 
@@ -634,7 +636,8 @@ struct dirfrag_t {
 WRITE_CLASS_ENCODER(dirfrag_t)
 
 
-inline ostream& operator<<(ostream& out, const dirfrag_t df) {
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const dirfrag_t df) {
   out << df.ino;
   if (!df.frag.is_root()) out << "." << df.frag;
   return out;
@@ -779,7 +782,8 @@ inline void decode(dirfrag_load_vec_t& c, const utime_t &t, bufferlist::iterator
   c.decode(t, p);
 }
 
-inline ostream& operator<<(ostream& out, dirfrag_load_vec_t& dl)
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, dirfrag_load_vec_t& dl)
 {
   // ugliness!
   utime_t now = ceph_clock_now(g_ceph_context);
@@ -831,7 +835,8 @@ inline void decode(mds_load_t &c, const utime_t &t, bufferlist::iterator &p) {
   c.decode(t, p);
 }
 
-inline ostream& operator<<( ostream& out, mds_load_t& load )
+template <typename T>
+inline typename StrmRet<T>::type& operator<<( T& out, mds_load_t& load )
 {
   return out << "mdsload<" << load.auth << "/" << load.all
 	     << ", req " << load.req_rate
@@ -920,10 +925,12 @@ struct mdsco_db_line_prefix {
   MDSCacheObject *object;
   mdsco_db_line_prefix(MDSCacheObject *o) : object(o) {}
 };
-ostream& operator<<(ostream& out, mdsco_db_line_prefix o);
+template <typename T>
+typename StrmRet<T>::type& operator<<(T& out, mdsco_db_line_prefix o);
 
 // printer
-ostream& operator<<(ostream& out, MDSCacheObject &o);
+template <typename T>
+typename StrmRet<T>::type& operator<<(T& out, MDSCacheObject &o);
 
 class MDSCacheObjectInfo {
 public:
@@ -1271,18 +1278,21 @@ protected:
 
 };
 
-inline ostream& operator<<(ostream& out, MDSCacheObject &o) {
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, MDSCacheObject &o) {
   o.print(out);
   return out;
 }
 
-inline ostream& operator<<(ostream& out, const MDSCacheObjectInfo &info) {
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const MDSCacheObjectInfo &info) {
   if (info.ino) return out << info.ino;
   if (info.dname.length()) return out << info.dirfrag << "/" << info.dname;
   return out << info.dirfrag;
 }
 
-inline ostream& operator<<(ostream& out, mdsco_db_line_prefix o) {
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, mdsco_db_line_prefix o) {
   o.object->print_db_line_prefix(out);
   return out;
 }

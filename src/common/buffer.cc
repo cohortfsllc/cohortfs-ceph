@@ -1602,7 +1602,7 @@ void buffer::list::hexdump(std::ostream &out) const
   out.flags(original_flags);
 }
 
-void buffer::list::hexdump(lttng_stream &out) {
+void buffer::list::hexdump(lttng_stream &out) const {
   std::stringstream ss; 
   hexdump(ss);
   out << ss.str();
@@ -1611,7 +1611,7 @@ void buffer::list::hexdump(lttng_stream &out) {
 } // namespace ceph
 
 template <typename T>
-T& operator<<(T& out, const buffer::raw &r) {
+typename StrmRet<T>::type& operator<<(T& out, const buffer::raw &r) {
   return out << "buffer::raw(" << (void*)r.data << " len " << r.len
 	     << " nref " << r.nref << ")";
 }
@@ -1627,4 +1627,3 @@ struct xio_mempool_obj* get_xio_mp(const buffer::ptr& bp)
 }
 #endif // HAVE_XIO
 
-} // namespace ceph

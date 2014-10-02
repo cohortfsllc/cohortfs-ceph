@@ -31,6 +31,7 @@
 #include "include/compat.h"
 #include "include/color.h"
 #include "include/ceph_assert.h"
+#include "log/Log.h"
 
 #include <errno.h>
 #include <deque>

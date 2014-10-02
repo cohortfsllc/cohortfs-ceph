@@ -69,7 +69,6 @@ struct EntityName
   static std::string get_valid_types_as_str();
 
   friend bool operator<(const EntityName& a, const EntityName& b);
-  friend std::ostream& operator<<(std::ostream& out, const EntityName& n);
   friend bool operator==(const EntityName& a, const EntityName& b);
   friend bool operator!=(const EntityName& a, const EntityName& b);
 
@@ -86,7 +85,7 @@ WRITE_CLASS_ENCODER(EntityName);
 WRITE_EQ_OPERATORS_2(EntityName, type, id)
 
 template <typename T>
-T& operator<<(T& out, const EntityName& n)
+typename StrmRet<T>::type& operator<<(T& out, const EntityName& n)
 {
   return out << n.to_str();
 }

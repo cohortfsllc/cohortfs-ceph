@@ -28,7 +28,9 @@
 #define dout_subsys ceph_subsys_ms
 #undef dout_prefix
 #define dout_prefix _prefix(_dout, this)
-static ostream& _prefix(std::ostream *_dout, SimpleMessenger *msgr) {
+
+template <typename T>
+static typename StrmRet<T>::type& _prefix(T *_dout, SimpleMessenger *msgr) {
   return *_dout << "-- " << msgr->get_myaddr() << " ";
 }
 

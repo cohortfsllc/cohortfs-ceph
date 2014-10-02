@@ -113,7 +113,12 @@ namespace std {
   };
 }
 
-std::ostream& operator<<(std::ostream& out, const hobject_t& o);
+template <typename T>
+typename StrmRet<T>::type& operator<<(T& out, const hobject_t& o)
+{
+  out << o.to_str();
+  return out;
+}
 
 WRITE_EQ_OPERATORS_3(hobject_t, oid, stripetype, stripeno)
 WRITE_CMP_OPERATORS_3(hobject_t, oid, stripetype, stripeno)

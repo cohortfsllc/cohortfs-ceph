@@ -196,8 +196,3 @@ void hobject_t::generate_test_instances(list<hobject_t*>& o)
   o.push_back(new hobject_t(object_t("oname3"), ECC, 31));
 }
 
-std::ostream& operator<<(std::ostream& out, const hobject_t& o)
-{
-  out << o.to_str();
-  return out;
-}

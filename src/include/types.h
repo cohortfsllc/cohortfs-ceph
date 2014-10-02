@@ -282,7 +282,6 @@ inline typename StrmRet<T>::type& operator<<(T& out, const client_t& c) {
 }
 
 
-
 // --------------------------------------
 // ino
 
