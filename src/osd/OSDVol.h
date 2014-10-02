@@ -368,8 +368,8 @@ protected:
 
   // replica ops
   // [primary|tail]
+  Mutex mutation_lock;
   xlist<Mutation*> mutation_queue;
-  map<ceph_tid_t, Mutation*> mutation_map;
 
   friend class C_OSD_MutationApplied;
   friend class C_OSD_MutationCommit;

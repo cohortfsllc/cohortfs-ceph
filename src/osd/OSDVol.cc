@@ -2345,6 +2345,7 @@ void OSDVol::eval_mutation(Mutation *mutation)
 
   // done.
   if (mutation->applied && mutation->committed) {
+    Mutex::Locker l(mutation_lock);
     mutation->done = true;
 
     release_op_ctx_locks(mutation->ctx);
@@ -2357,7 +2358,6 @@ void OSDVol::eval_mutation(Mutation *mutation)
       dout(0) << "   q front is " << mutation_queue.front()->tid << dendl;
       assert(mutation_queue.front() == mutation);
     }
-    mutation_queue.pop_front();
     remove_mutation(mutation);
   }
 }
@@ -2372,8 +2372,8 @@ OSDVol::Mutation *OSDVol::new_mutation(OpContext *ctx, ObjectContextRef obc,
 
   Mutation *mutation = new Mutation(ctx, obc, tid);
 
+  Mutex::Locker l(mutation_lock);
   mutation_queue.push_back(&mutation->queue_item);
-  mutation_map[mutation->tid] = mutation;
   mutation->get();
 
   return mutation;
@@ -2381,10 +2381,11 @@ OSDVol::Mutation *OSDVol::new_mutation(OpContext *ctx, ObjectContextRef obc,
 
 void OSDVol::remove_mutation(Mutation *mutation)
 {
+  assert(mutation_lock.is_locked());
   dout(20) << __func__ << " " << mutation->tid << dendl;
   release_op_ctx_locks(mutation->ctx);
   mutation->ctx->finish(0);  // FIXME: return value here is sloppy
-  mutation_map.erase(mutation->tid);
+  mutation_queue.remove(&mutation->queue_item);
   mutation->put();
 }
 
@@ -2572,6 +2573,7 @@ void OSDVol::apply_mutations(bool requeue)
   list<OpRequestRef> rq;
 
   // apply all mutations
+  mutation_lock.Lock(); // Not exception safe, fix.
   while (!mutation_queue.empty()) {
     Mutation *mutation = mutation_queue.front();
     mutation_queue.pop_front();
@@ -2600,6 +2602,7 @@ void OSDVol::apply_mutations(bool requeue)
 
     remove_mutation(mutation);
   }
+  mutation_lock.Unlock();
 
   if (requeue) {
     requeue_ops(rq);
