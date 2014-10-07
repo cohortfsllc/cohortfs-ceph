@@ -51,7 +51,8 @@ set(jerasure_srcs
 
 add_library(ec_jerasure_generic SHARED ${jerasure_srcs})
 target_link_libraries(ec_jerasure_generic ${EXTRALIBS})
-set_target_properties(ec_jerasure_generic PROPERTIES VERSION 2.0.0 SOVERSION 2)
+set_target_properties(ec_jerasure_generic PROPERTIES VERSION 2.0.0 SOVERSION 2
+  COMPILE_FLAGS "-Wno-unused-function")
 install(TARGETS ec_jerasure_generic DESTINATION lib/erasure-code)
 
 # ec_jerasure_sse3
