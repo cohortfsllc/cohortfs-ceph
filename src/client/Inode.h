@@ -13,6 +13,12 @@
 
 #include "osdc/ObjectCacher.h"
 
+#include "MetaSession.h"
+#include "Inode.h"
+#include "Dentry.h"
+#include "Dir.h"
+
+
 struct MetaSession;
 class Dentry;
 class Dir;
@@ -223,6 +229,47 @@ class Inode {
   void dump(Formatter *f) const;
 };
 
-ostream& operator<<(ostream &out, Inode &in);
+template <typename T>
+typename StrmRet<T>::type& operator<<(T &out, Inode &in)
+{
+  out << in.vino() << "("
+      << "ref=" << in._ref
+      << " cap_refs=" << in.cap_refs
+      << " open=" << in.open_by_mode
+      << " mode=" << oct << in.mode << dec
+      << " size=" << in.size << "/" << in.max_size
+      << " mtime=" << in.mtime
+      << " caps=" << ccap_string(in.caps_issued());
+  if (!in.caps.empty()) {
+    out << "(";
+    for (map<int,Cap*>::iterator p = in.caps.begin();
+	 p != in.caps.end();
+	 ++p) {
+      if (p != in.caps.begin())
+	out << ',';
+      out << p->first << '=' << ccap_string(p->second->issued);
+    }
+    out << ")";
+  }
+  if (in.dirty_caps)
+    out << " dirty_caps=" << ccap_string(in.dirty_caps);
+  if (in.flushing_caps)
+    out << " flushing_caps=" << ccap_string(in.flushing_caps);
+
+  if (in.flags & I_COMPLETE)
+    out << " COMPLETE";
+
+  if (in.is_file())
+    out << " " << in.oset;
+
+  if (!in.dn_set.empty())
+    out << " parents=" << in.dn_set;
+
+  if (in.is_dir() && in.has_dir_layout())
+    out << " has_dir_layout";
+
+  out << ' ' << &in << ")";
+  return out;
+}
 
 #endif

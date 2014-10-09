@@ -142,8 +142,8 @@ private:
 public:
   class xio_mempool;
   class xio_msg_buffer;
-  template <typename T>
-  friend typename StrmRet<T>::type& operator<<(T& out, const raw &r);
+  friend std::ostream& operator<<(std::ostream& out, const raw &r); 
+  friend lttng_stream& operator<<(lttng_stream& out, const raw &r); 
 
 public:
 
@@ -238,8 +238,8 @@ public:
     void zero(unsigned o, unsigned l);
 
   };
-
-  friend std::ostream& operator<<(std::ostream& out, const buffer::ptr& bp);
+  template <typename T>
+  friend typename StrmRet<T>::type& operator<<(T& out, const buffer::ptr& bp);
 
   /*
    * list - the useful bit!
@@ -603,7 +603,27 @@ public:
 
     // funky modifer
     void splice(unsigned off, unsigned len, list *claim_by=0 /*, bufferlist& replace_with */);
-    void write(int off, int len, std::ostream& out) const;
+
+    template <typename T>
+    void write(int off, int len, T& out) const
+    {
+    list s;
+    s.substr_of(*this, off, len);
+    for (std::list<ptr>::const_iterator it = s._buffers.begin();
+	 it != s._buffers.end();
+	 ++it)
+      if (it->length())
+	out.write(it->c_str(), it->length());
+    /*iterator p(this, off);
+      while (len > 0 && !p.end()) {
+      int l = p.left_in_this_buf();
+      if (l > len)
+      l = len;
+      out.write(p.c_str(), l);
+      len -= l;
+      }*/
+    }
+
 
     void encode_base64(list& o);
     void decode_base64(list& o);
@@ -678,8 +698,8 @@ inline bool operator<=(bufferlist& l, bufferlist& r) {
   return r >= l;
 }
 
-
-inline std::ostream& operator<<(std::ostream& out, const buffer::ptr& bp) {
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const buffer::ptr& bp) {
   if (bp.have_raw())
     out << "buffer::ptr(" << bp.offset() << "~" << bp.length()
 	<< " " << (void*)bp.c_str()
@@ -690,8 +710,8 @@ inline std::ostream& operator<<(std::ostream& out, const buffer::ptr& bp) {
     out << "buffer:ptr(" << bp.offset() << "~" << bp.length() << " no raw)";
   return out;
 }
-
-inline std::ostream& operator<<(std::ostream& out, const buffer::list& bl) {
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const buffer::list& bl) {
   out << "buffer::list(len=" << bl.length() << "," << std::endl;
 
   std::list<buffer::ptr>::const_iterator it = bl.buffers().begin();
@@ -703,21 +723,23 @@ inline std::ostream& operator<<(std::ostream& out, const buffer::list& bl) {
   out << std::endl << ")";
   return out;
 }
-
-inline std::ostream& operator<<(std::ostream& out, buffer::error& e)
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, buffer::error& e)
 {
   return out << e.what();
 }
-
-inline bufferhash& operator<<(bufferhash& l, bufferlist &r) {
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& l, bufferlist &r) {
   l.update(r);
   return l;
 }
+
 
 #if defined(HAVE_XIO)
 struct xio_mempool_obj* get_xio_mp(const buffer::ptr& bp);
 #endif
 
 } // namespace ceph
+
 
 #endif

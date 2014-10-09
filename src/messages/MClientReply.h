@@ -68,7 +68,8 @@ struct LeaseStat {
 };
 WRITE_CLASS_ENCODER(LeaseStat)
 
-inline ostream& operator<<(ostream& out, const LeaseStat& l) {
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const LeaseStat& l) {
   return out << "lease(mask " << l.mask << " dur " << l.duration_ms << ")";
 }
 

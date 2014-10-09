@@ -644,8 +644,8 @@ public:
   }
 };
 
-
-inline ostream& operator<<(ostream& out, ObjectCacher::BufferHead &bh)
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, ObjectCacher::BufferHead &bh)
 {
   out << "bh[ " << &bh << " "
       << bh.start() << "~" << bh.length()
@@ -675,7 +675,8 @@ inline ostream& operator<<(ostream& out, ObjectCacher::BufferHead &bh)
   return out;
 }
 
-inline ostream& operator<<(ostream& out, ObjectCacher::ObjectSet &os)
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, ObjectCacher::ObjectSet &os)
 {
   return out << "objectset[" << os.ino
 	     << " ts " << os.truncate_seq << "/" << os.truncate_size
@@ -684,7 +685,8 @@ inline ostream& operator<<(ostream& out, ObjectCacher::ObjectSet &os)
 	     << "]";
 }
 
-inline ostream& operator<<(ostream& out, ObjectCacher::Object &ob)
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, ObjectCacher::Object &ob)
 {
   out << "object["
       << ob.get_oid() << " oset " << ob.oset << dec

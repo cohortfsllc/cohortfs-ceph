@@ -8,6 +8,7 @@
 #include <ostream>
 #include <iomanip>
 #include <boost/intrusive_ptr.hpp>
+#include <memory>
 
 
 
@@ -69,6 +70,7 @@ private:
   void emit_string(const char *val);
   void emit_manip(enum manip_type type, int val);
   void emit_footer();
+  void emit_blob(const char *, size_t len);
 
 public:
   lttng_stream(int entity_type, const char *entity_name,
@@ -238,6 +240,12 @@ public:
   }
   struct lttng_endl {};
   static lttng_endl endl;
+
+   lttng_stream& write(const char* s, size_t len)
+  {
+    emit_blob(s, len);
+    return *this;
+  }
 };
 
 inline lttng_stream& operator<<(lttng_stream &out, const std::string &s) {
@@ -247,6 +255,11 @@ inline lttng_stream& operator<<(lttng_stream &out, const std::string &s) {
 //operator
 template<class Y>
 inline lttng_stream& operator<<(lttng_stream &out, boost::intrusive_ptr<Y> const & p) {
+    return out << p.get();  
+}
+
+template<class Y>
+inline lttng_stream& operator<<(lttng_stream &out, std::shared_ptr<Y> const & p) {
     return out << p.get();  
 }
 

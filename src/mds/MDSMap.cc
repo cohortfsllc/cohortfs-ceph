@@ -169,65 +169,6 @@ void MDSMap::generate_test_instances(list<MDSMap*>& ls)
   ls.push_back(m);
 }
 
-void MDSMap::print(ostream& out)
-{
-  out << "epoch\t" << epoch << "\n";
-  out << "flags\t" << hex << flags << dec << "\n";
-  out << "created\t" << created << "\n";
-  out << "modified\t" << modified << "\n";
-  out << "tableserver\t" << tableserver << "\n";
-  out << "root\t" << root << "\n";
-  out << "session_timeout\t" << session_timeout << "\n"
-      << "session_autoclose\t" << session_autoclose << "\n";
-  out << "max_file_size\t" << max_file_size << "\n";
-  out << "last_failure\t" << last_failure << "\n"
-      << "last_failure_osd_epoch\t" << last_failure_osd_epoch << "\n";
-  out << "compat\t" << compat << "\n";
-  out << "max_mds\t" << max_mds << "\n";
-  out << "in\t" << in << "\n"
-      << "up\t" << up << "\n"
-      << "failed\t" << failed << "\n"
-      << "stopped\t" << stopped << "\n";
-  out << "data_volumes\t" << data_volumes << "\n";
-  out << "metadata_volume\t" << metadata_uuid << "\n";
-  out << "inline_data\t" << (inline_data_enabled ? "enabled" : "disabled") << "\n";
-
-  multimap< pair<unsigned,unsigned>, uint64_t > foo;
-  for (map<uint64_t,mds_info_t>::iterator p = mds_info.begin();
-       p != mds_info.end();
-       ++p)
-    foo.insert(pair<pair<unsigned,unsigned>,uint64_t>(pair<unsigned,unsigned>(p->second.rank, p->second.inc-1), p->first));
-
-  for (multimap< pair<unsigned,unsigned>, uint64_t >::iterator p = foo.begin();
-       p != foo.end();
-       ++p) {
-    mds_info_t& info = mds_info[p->second];
-
-    out << p->second << ":\t"
-	<< info.addr
-	<< " '" << info.name << "'"
-	<< " mds." << info.rank
-	<< "." << info.inc
-	<< " " << ceph_mds_state_name(info.state)
-	<< " seq " << info.state_seq;
-    if (info.laggy())
-      out << " laggy since " << info.laggy_since;
-    if (info.standby_for_rank != -1 ||
-	!info.standby_for_name.empty()) {
-      out << " (standby for";
-      //if (info.standby_for_rank >= 0)
-	out << " rank " << info.standby_for_rank;
-      if (!info.standby_for_name.empty())
-	out << " '" << info.standby_for_name << "'";
-      out << ")";
-    }
-    if (!info.export_targets.empty())
-      out << " export_targets=" << info.export_targets;
-    out << "\n";
-  }
-}
-
-
 
 void MDSMap::print_summary(Formatter *f, ostream *out)
 {

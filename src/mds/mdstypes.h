@@ -1011,7 +1011,12 @@ class MDSCacheObject {
 
   // printing
   virtual void print(ostream& out) = 0;
+  virtual void print(lttng_stream& out) = 0;
+
   virtual ostream& print_db_line_prefix(ostream& out) {
+    return out << "mdscacheobject(" << this << ") ";
+  }
+  virtual lttng_stream& print_db_line_prefix(lttng_stream& out) {
     return out << "mdscacheobject(" << this << ") ";
   }
 
