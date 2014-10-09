@@ -123,6 +123,7 @@ static uint32_t simple_spinlock_t buffer_debug_lock = SIMPLE_SPINLOCK_INITIALIZE
     buffer::malformed_input(cpp_strerror(error).c_str()), code(error) {}
 
   class buffer::raw {
+
   public:
     char *data;
     unsigned len;
@@ -1312,24 +1313,6 @@ void buffer::list::rebuild_page_aligned()
     last_p = begin();  // just in case we were in the removed region.
   };
 
-  void buffer::list::write(int off, int len, std::ostream& out) const
-  {
-    list s;
-    s.substr_of(*this, off, len);
-    for (std::list<ptr>::const_iterator it = s._buffers.begin();
-	 it != s._buffers.end();
-	 ++it)
-      if (it->length())
-	out.write(it->c_str(), it->length());
-    /*iterator p(this, off);
-      while (len > 0 && !p.end()) {
-      int l = p.left_in_this_buf();
-      if (l > len)
-      l = len;
-      out.write(p.c_str(), l);
-      len -= l;
-      }*/
-  }
 
 void buffer::list::encode_base64(buffer::list& o)
 {
@@ -1608,13 +1591,16 @@ void buffer::list::hexdump(lttng_stream &out) const {
   out << ss.str();
 }
 
-} // namespace ceph
-
-template <typename T>
-typename StrmRet<T>::type& operator<<(T& out, const buffer::raw &r) {
+lttng_stream& operator<<(lttng_stream& out, const buffer::raw &r) {
   return out << "buffer::raw(" << (void*)r.data << " len " << r.len
 	     << " nref " << r.nref << ")";
 }
+
+std::ostream& operator<<(std::ostream& out, const buffer::raw &r) {
+  return out << "buffer::raw(" << (void*)r.data << " len " << r.len
+	     << " nref " << r.nref << ")";
+}
+} // namespace ceph
 
 #if defined(HAVE_XIO)
 struct xio_mempool_obj* get_xio_mp(const buffer::ptr& bp)

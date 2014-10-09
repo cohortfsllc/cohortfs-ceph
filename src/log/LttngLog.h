@@ -93,6 +93,20 @@ TRACEPOINT_LOGLEVEL(
        log_footer,
        TRACE_INFO)
 
+TRACEPOINT_EVENT(
+       ceph,
+       log_blob,
+       TP_ARGS(const char *, blob, size_t, len),
+       TP_FIELDS(
+             ctf_sequence(char, blob_name, blob, size_t, len)
+       )
+)
+
+TRACEPOINT_LOGLEVEL(
+       ceph,
+       log_blob,
+       TRACE_INFO)
+
 #endif
 
 #include <lttng/tracepoint-event.h>

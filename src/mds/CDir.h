@@ -41,7 +41,9 @@ class Context;
 
 struct ObjectOperation;
 
-ostream& operator<<(ostream& out, class CDir& dir);
+template <typename T>
+typename StrmRet<T>::type& operator<<(T& out, CDir& dir);
+
 class CDir : public MDSCacheObject {
   /*
    * This class uses a boost::pool to handle allocation. This is *not*
@@ -594,8 +596,8 @@ public:
   CDir *get_frozen_tree_root();
 
 
-  ostream& print_db_line_prefix(ostream& out);
   void print(ostream& out);
+  void print(lttng_stream& out);
 };
 
 #endif

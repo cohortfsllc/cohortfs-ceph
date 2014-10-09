@@ -15,6 +15,11 @@
 #ifndef CEPH_MSG_TYPES_H
 #define CEPH_MSG_TYPES_H
 
+#include <arpa/inet.h>
+#include <stdlib.h>
+#include <string.h>
+#include <netdb.h>
+
 #include <netinet/in.h>
 
 #include "include/types.h"
@@ -33,7 +38,27 @@ inline bool operator!=(const sockaddr_in& a, const sockaddr_in& b) {
 }
 
 template <typename T>
-extern typename StrmRet<T>::type& operator<<(T& out, const sockaddr_storage &ss);
+typename StrmRet<T>::type& operator<<(T& out, const sockaddr_storage &ss)
+{
+  char buf[NI_MAXHOST] = { 0 };
+  char serv[NI_MAXSERV] = { 0 };
+  size_t hostlen;
+
+  if (ss.ss_family == AF_INET)
+    hostlen = sizeof(struct sockaddr_in);
+  else if (ss.ss_family == AF_INET6)
+    hostlen = sizeof(struct sockaddr_in6);
+  else
+    hostlen = sizeof(struct sockaddr_storage);
+  getnameinfo((struct sockaddr *)&ss, hostlen, buf, sizeof(buf),
+	      serv, sizeof(serv),
+	      NI_NUMERICHOST | NI_NUMERICSERV);
+  if (ss.ss_family == AF_INET6)
+    return out << '[' << buf << "]:" << serv;
+  return out //<< ss.ss_family << ":"
+	     << buf << ':' << serv;
+}
+
 
 class entity_name_t {
 public:

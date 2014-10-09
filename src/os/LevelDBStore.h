@@ -21,6 +21,7 @@
 #endif
 
 #include <errno.h>
+#include "log/Log.h"
 #include "common/errno.h"
 #include "common/dout.h"
 #include "common/Formatter.h"

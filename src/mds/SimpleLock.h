@@ -643,7 +643,8 @@ public:
     return false;
   }
 
-  void _print(ostream& out) const {
+  template <typename T>
+  void _print(T& out) const {
     out << get_lock_type_name(get_type()) << " ";
     out << get_state_name(get_state());
     if (!get_gather_set().empty())
@@ -666,6 +667,12 @@ public:
     */
   }
 
+  virtual void print(lttng_stream& out) const {
+    out << "(";
+    _print(out);
+    out << ")";
+  }
+
   virtual void print(ostream& out) const {
     out << "(";
     _print(out);
@@ -674,7 +681,8 @@ public:
 };
 WRITE_CLASS_ENCODER(SimpleLock)
 
-inline ostream& operator<<(ostream& out, const SimpleLock& l)
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const SimpleLock& l)
 {
   l.print(out);
   return out;

@@ -339,7 +339,8 @@ WRITE_CLASS_ENCODER(MMDSCacheRejoin::dn_weak)
 WRITE_CLASS_ENCODER(MMDSCacheRejoin::lock_bls)
 WRITE_CLASS_ENCODER(MMDSCacheRejoin::slave_reqid)
 
-inline ostream& operator<<(ostream& out, const MMDSCacheRejoin::slave_reqid& r) {
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const MMDSCacheRejoin::slave_reqid& r) {
   return out << r.reqid << '.' << r.attempt;
 }
 

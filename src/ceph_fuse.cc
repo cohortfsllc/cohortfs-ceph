@@ -37,6 +37,8 @@ using namespace std;
 #include "global/global_init.h"
 #include "common/safe_io.h"
 
+#include "log/Log.h"
+
 #ifndef DARWIN
 #include <envz.h>
 #endif // DARWIN

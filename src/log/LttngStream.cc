@@ -57,3 +57,8 @@ void lttng_stream::emit_footer()
 {
 	tracepoint(ceph, log_footer, pid, message_id);
 }
+
+void lttng_stream::emit_blob(const char *blob, size_t len)
+{
+	tracepoint(ceph, log_blob, blob, len);
+}

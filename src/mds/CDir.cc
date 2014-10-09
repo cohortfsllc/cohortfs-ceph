@@ -46,8 +46,8 @@
 
 boost::pool<> CDir::pool(sizeof(CDir));
 
-
-ostream& operator<<(ostream& out, CDir& dir)
+template <typename T>
+typename StrmRet<T>::type& operator<<(T& out, CDir& dir)
 {
   string path;
   dir.get_inode()->make_path_string_projected(path);
@@ -131,18 +131,20 @@ ostream& operator<<(ostream& out, CDir& dir)
   return out << "]";
 }
 
+  template <typename T>
+  typename StrmRet<T>::type& print_db_line_prefix(T& out)
+  {
+  return out << ceph_clock_now(g_ceph_context) << " mds." << cache->mds->get_nodeid() << ".cache.dir(" << this->dirfrag() << ") ";
+  }
 
 void CDir::print(ostream& out)
 {
   out << *this;
 }
 
-
-
-
-ostream& CDir::print_db_line_prefix(ostream& out)
+void CDir::print(lttng_stream& out)
 {
-  return out << ceph_clock_now(g_ceph_context) << " mds." << cache->mds->get_nodeid() << ".cache.dir(" << this->dirfrag() << ") ";
+  out << *this;
 }
 
 

@@ -58,7 +58,3 @@ void Anchor::generate_test_instances(list<Anchor*>& ls)
   ls.back()->updated = 5;
 }
 
-ostream& operator<<(ostream& out, const Anchor &a)
-{
-  return out << "a(" << a.ino << " " << a.dirino << "/" << a.dn_hash << " " << a.nref << " v" << a.updated << ")";
-}

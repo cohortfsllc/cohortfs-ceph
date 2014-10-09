@@ -86,7 +86,7 @@ using namespace std;
 #undef dout_prefix
 #define dout_prefix *_dout << "client." << whoami << " "
 
-#define	 tout(cct)	 if (!cct->_conf->client_trace.empty()) traceout
+#define	 tout(cct)	 if (!cct->_conf->client_trace.empty()) (ostream&)traceout
 
 
 
