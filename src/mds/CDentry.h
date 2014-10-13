@@ -382,12 +382,18 @@ public:
 
 
   ostream& print_db_line_prefix(ostream& out);
+  lttng_stream& print_db_line_prefix(lttng_stream& out);
+
   void print(ostream& out);
+  void print(lttng_stream& out);
 
   friend class CDir;
 };
 
-ostream& operator<<(ostream& out, CDentry& dn);
+template <typename T>
+typename StrmRet<T>::type& db_line_prefix(T& out);
 
+template <typename T>
+typename StrmRet<T>::type& operator<<(T& out, CDentry& dn);
 
 #endif

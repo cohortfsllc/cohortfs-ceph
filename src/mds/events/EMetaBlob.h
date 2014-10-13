@@ -565,7 +565,8 @@ WRITE_CLASS_ENCODER(EMetaBlob::remotebit)
 WRITE_CLASS_ENCODER(EMetaBlob::nullbit)
 WRITE_CLASS_ENCODER(EMetaBlob::dirlump)
 
-inline ostream& operator<<(ostream& out, const EMetaBlob& t) {
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const EMetaBlob& t) {
   t.print(out);
   return out;
 }

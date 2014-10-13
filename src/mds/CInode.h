@@ -172,7 +172,9 @@ public:
   // nonce given to replicas created by export
   static const unsigned EXPORT_NONCE = 1;
 
+
   ostream& print_db_line_prefix(ostream& out);
+  lttng_stream& print_db_line_prefix(lttng_stream& out);
 
  public:
   MDCache *mdcache;
@@ -784,7 +786,10 @@ public:
   }
 
   void print(ostream& out);
+  void print(lttng_stream& out);
 
 };
 
+  template <typename T>
+  typename StrmRet<T>::type& print_db_line_prefix(T& out);
 #endif

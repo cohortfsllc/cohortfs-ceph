@@ -59,11 +59,21 @@ LockType CInode::flocklock_type(CEPH_LOCK_IFLOCK);
 LockType CInode::policylock_type(CEPH_LOCK_IPOLICY);
 
 //int cinode_pins[CINODE_NUM_PINS];  // counts
-ostream& CInode::print_db_line_prefix(ostream& out)
+template <typename T>
+typename StrmRet<T>::type& db_line_prefix(T& out, CInode* in)
 {
-  return out << ceph_clock_now(g_ceph_context) << " mds." << mdcache->mds->get_nodeid() << ".cache.ino(" << inode.ino << ") ";
+  return out << ceph_clock_now(g_ceph_context) << " mds." << in->mdcache->mds->get_nodeid() << ".cache.ino(" << in->inode.ino << ") ";
 }
 
+ostream& CInode::print_db_line_prefix(ostream& out)
+{
+  return db_line_prefix(out, this);
+}
+
+lttng_stream& CInode::print_db_line_prefix(lttng_stream& out)
+{
+  return db_line_prefix(out, this);
+}
 /*
  * write caps and lock ids
  */
@@ -77,8 +87,8 @@ struct cinode_lock_info_t cinode_lock_info[] = {
 int num_cinode_locks = 5;
 
 
-
-ostream& operator<<(ostream& out, CInode& in)
+template <typename T>
+typename StrmRet<T>::type& operator<<(T& out, CInode& in)
 {
   string path;
   in.make_path_string_projected(path);
@@ -226,6 +236,11 @@ ostream& operator<<(ostream& out, CInode& in)
   return out;
 }
 
+
+void CInode::print(lttng_stream& out)
+{
+  out << *this;
+}
 
 void CInode::print(ostream& out)
 {

@@ -521,8 +521,8 @@ private:
 };
 
 
-template<class T>
-inline ostream& operator<<(ostream& out, const interval_set<T> &s) {
+template <class T, typename S>
+inline typename StrmRet<S>::type& operator<<(S& out, const interval_set<T> &s) {
   out << "[";
   const char *prequel = "";
   for (typename interval_set<T>::const_iterator i = s.begin();

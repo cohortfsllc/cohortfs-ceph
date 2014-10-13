@@ -594,8 +594,14 @@ public:
   CDir *get_frozen_tree_root();
 
 
+  ostream& print_db_line_prefix(ostream& out);
+  lttng_stream& print_db_line_prefix(lttng_stream& out);
+
   void print(ostream& out);
   void print(lttng_stream& out);
 };
+
+  template <typename T>
+  typename StrmRet<T>::type& db_line_prefix(T& out, CDir* dir);
 
 #endif

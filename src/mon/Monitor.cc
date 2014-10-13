@@ -84,7 +84,8 @@
 #define dout_subsys ceph_subsys_mon
 #undef dout_prefix
 #define dout_prefix _prefix(_dout, this)
-static ostream& _prefix(std::ostream *_dout, const Monitor *mon) {
+template <typename T>
+static typename StrmRet<T>::type& _prefix(T *_dout, const Monitor *mon) {
   return *_dout << "mon." << mon->name << "@" << mon->rank
 		<< "(" << mon->get_state_name() << ") e" << mon->monmap->get_epoch() << " ";
 }

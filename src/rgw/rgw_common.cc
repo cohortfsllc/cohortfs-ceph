@@ -200,11 +200,6 @@ void req_info::init_meta_info(bool *found_bad_meta)
   }
 }
 
-std::ostream& operator<<(std::ostream& oss, const rgw_err &err)
-{
-  oss << "rgw_err(http_ret=" << err.http_ret << ", s3='" << err.s3_code << "') ";
-  return oss;
-}
 
 string rgw_string_unquote(const string& s)
 {

@@ -72,7 +72,8 @@ inline bool operator>=(const object_t& l, const object_t& r) {
 inline bool operator<=(const object_t& l, const object_t& r) {
   return l.name <= r.name;
 }
-inline std::ostream& operator<<(std::ostream& out, const object_t& o) {
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const object_t& o) {
   return out << o.name;
 }
 

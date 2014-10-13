@@ -48,7 +48,8 @@ struct SequencerPosition {
 };
 WRITE_CLASS_ENCODER(SequencerPosition)
 
-inline ostream& operator<<(ostream& out, const SequencerPosition& t) {
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const SequencerPosition& t) {
   return out << t.seq << "." << t.trans << "." << t.op;
 }
 

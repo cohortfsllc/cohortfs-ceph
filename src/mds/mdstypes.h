@@ -155,8 +155,20 @@ WRITE_CLASS_ENCODER(frag_info_t)
 inline bool operator==(const frag_info_t &l, const frag_info_t &r) {
   return memcmp(&l, &r, sizeof(l)) == 0;
 }
+
 template <typename T>
-typename StrmRet<T>::type& operator<<(T &out, const frag_info_t &f);
+typename StrmRet<T>::type& operator<<(T &out, const frag_info_t &f)
+{
+  if (f == frag_info_t())
+    return out << "f()";
+  out << "f(v" << f.version;
+  if (f.mtime != utime_t())
+    out << " m" << f.mtime;
+  if (f.nfiles || f.nsubdirs)
+    out << " " << f.size() << "=" << f.nfiles << "+" << f.nsubdirs;
+  out << ")";
+  return out;
+}
 
 
 struct nest_info_t : public scatter_info_t {
@@ -208,8 +220,25 @@ WRITE_CLASS_ENCODER(nest_info_t)
 inline bool operator==(const nest_info_t &l, const nest_info_t &r) {
   return memcmp(&l, &r, sizeof(l)) == 0;
 }
+
 template <typename T>
-typename StrmRet<T>::type& operator<<(T &out, const nest_info_t &n);
+typename StrmRet<T>::type& operator<<(T &out, const nest_info_t &n)
+{
+  if (n == nest_info_t())
+    return out << "n()";
+  out << "n(v" << n.version;
+  if (n.rctime != utime_t())
+    out << " rc" << n.rctime;
+  if (n.rbytes)
+    out << " b" << n.rbytes;
+  if (n.ranchors)
+    out << " a" << n.ranchors;
+  if (n.rfiles || n.rsubdirs)
+    out << " " << n.rsize() << "=" << n.rfiles << "+" << n.rsubdirs;
+  out << ")";
+  return out;
+}
+
 
 
 struct vinodeno_t {
@@ -273,6 +302,12 @@ struct client_writeable_range_t {
   void dump(Formatter *f) const;
   static void generate_test_instances(list<client_writeable_range_t*>& ls);
 };
+
+template <typename T>
+typename StrmRet<T>::type& operator<<(T& out, const client_writeable_range_t& r)
+{
+  return out << r.range.first << '-' << r.range.last;
+}
 
 inline void decode(client_writeable_range_t::byte_range_t& range, bufferlist::iterator& bl) {
   ::decode(range.first, bl);
@@ -1123,7 +1158,8 @@ protected:
 #endif
   }
 
-  void print_pin_set(ostream& out) {
+  template <typename T>
+  void print_pin_set(T& out) {
 #ifdef MDS_REF_SET
     map<int, int>::iterator it = ref_map.begin();
     while (it != ref_map.end()) {

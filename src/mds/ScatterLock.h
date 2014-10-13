@@ -212,6 +212,20 @@ public:
     return SimpleLock::remove_replica(from);
   }
 
+  virtual void print(lttng_stream& out) const {
+    out << "(";
+    _print(out);
+    if (is_dirty())
+      out << " dirty";
+    if (is_flushing())
+      out << " flushing";
+    if (is_flushed())
+      out << " flushed";
+    if (get_scatter_wanted())
+      out << " scatter_wanted";
+    out << ")";
+  }
+
   virtual void print(ostream& out) const {
     out << "(";
     _print(out);

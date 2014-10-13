@@ -59,19 +59,6 @@ void frag_info_t::generate_test_instances(list<frag_info_t*>& ls)
   ls.back()->nsubdirs = 5;
 }
 
-ostream& operator<<(ostream &out, const frag_info_t &f)
-{
-  if (f == frag_info_t())
-    return out << "f()";
-  out << "f(v" << f.version;
-  if (f.mtime != utime_t())
-    out << " m" << f.mtime;
-  if (f.nfiles || f.nsubdirs)
-    out << " " << f.size() << "=" << f.nfiles << "+" << f.nsubdirs;
-  out << ")";
-  return out;
-}
-
 
 /*
  * nest_info_t
@@ -123,23 +110,6 @@ void nest_info_t::generate_test_instances(list<nest_info_t*>& ls)
   ls.back()->rctime = utime_t(7, 8);
 }
 
-ostream& operator<<(ostream &out, const nest_info_t &n)
-{
-  if (n == nest_info_t())
-    return out << "n()";
-  out << "n(v" << n.version;
-  if (n.rctime != utime_t())
-    out << " rc" << n.rctime;
-  if (n.rbytes)
-    out << " b" << n.rbytes;
-  if (n.ranchors)
-    out << " a" << n.ranchors;
-  if (n.rfiles || n.rsubdirs)
-    out << " " << n.rsize() << "=" << n.rfiles << "+" << n.rsubdirs;
-  out << ")";
-  return out;
-}
-
 
 /*
  * client_writeable_range_t
@@ -176,12 +146,6 @@ void client_writeable_range_t::generate_test_instances(list<client_writeable_ran
   ls.back()->range.first = 123;
   ls.back()->range.last = 456;
 }
-
-ostream& operator<<(ostream& out, const client_writeable_range_t& r)
-{
-  return out << r.range.first << '-' << r.range.last;
-}
-
 
 /*
  * inode_t

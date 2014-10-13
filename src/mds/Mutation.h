@@ -135,12 +135,17 @@ struct MutationImpl {
   void apply();
   void cleanup();
 
+  virtual void print(lttng_stream &out) {
+    out << "mutation(" << this << ")";
+  }
+
   virtual void print(ostream &out) {
     out << "mutation(" << this << ")";
   }
 };
 
-inline ostream& operator<<(ostream& out, MutationImpl &mut)
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, MutationImpl &mut)
 {
   mut.print(out);
   return out;

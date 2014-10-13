@@ -233,12 +233,14 @@ struct CompatSet {
 };
 WRITE_CLASS_ENCODER(CompatSet)
 
-inline std::ostream& operator<<(std::ostream& out, const CompatSet::FeatureSet& fs)
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const CompatSet::FeatureSet& fs)
 {
   return out << fs.names;
 }
 
-inline ostream& operator<<(ostream& out, const CompatSet& compat)
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const CompatSet& compat)
 {
   return out << "compat=" << compat.compat
 	     << ",rocompat=" << compat.ro_compat

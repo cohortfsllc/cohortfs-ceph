@@ -65,7 +65,8 @@ struct inode_backtrace_t {
 };
 WRITE_CLASS_ENCODER(inode_backtrace_t)
 
-inline ostream& operator<<(ostream& out, const inode_backtrace_t& it) {
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const inode_backtrace_t& it) {
   return out << "(" << it.volume << ")" << it.ino << ":" << it.ancestors << "//" << it.old_volumes;
 }
 
