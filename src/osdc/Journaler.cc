@@ -69,7 +69,8 @@ void Journaler::set_layout(ceph_file_layout *l)
 
 /***************** HEADER *******************/
 
-ostream& operator<<(ostream& out, Journaler::Header &h)
+template <typename T>
+typename StrmRet<T>::type& operator<<(T& out, Journaler::Header &h)
 {
   return out << "loghead(trim " << h.trimmed_pos
 	     << ", expire " << h.expire_pos

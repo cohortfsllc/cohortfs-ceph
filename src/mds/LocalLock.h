@@ -52,6 +52,14 @@ public:
     return last_wrlock_client;
   }
 
+  virtual void print(lttng_stream& out) const {
+    out << "(";
+    _print(out);
+    if (last_wrlock_client >= 0)
+      out << " last_client=" << last_wrlock_client;
+    out << ")";
+  }
+
   virtual void print(ostream& out) const {
     out << "(";
     _print(out);

@@ -9,7 +9,8 @@
 #include "mdstypes.h"
 
 
-inline ostream& operator<<(ostream& out, ceph_filelock& l) {
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, ceph_filelock& l) {
   out << "start: " << l.start << ", length: " << l.length
       << ", client: " << l.client << ", owner: " << l.owner
       << ", pid: " << l.pid << ", type: " << (int)l.type
@@ -216,8 +217,8 @@ public:
 };
 WRITE_CLASS_ENCODER(ceph_lock_state_t)
 
-
-inline ostream& operator<<(ostream& out, ceph_lock_state_t& l) {
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, ceph_lock_state_t& l) {
   out << "ceph_lock_state_t. held_locks.size()=" << l.held_locks.size()
       << ", waiting_locks.size()=" << l.waiting_locks.size()
       << ", client_held_lock_counts -- " << l.client_held_lock_counts

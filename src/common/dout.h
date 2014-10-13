@@ -41,7 +41,7 @@ class _bad_endl_use_dendl_t { public: _bad_endl_use_dendl_t(int) {} };
 static const _bad_endl_use_dendl_t endl = 0;
 
 template <typename T>
-inline typename StrmRet<T>::types& operator<<(T& out, _bad_endl_use_dendl_t) {
+inline typename StrmRet<T>::type& operator<<(T& out, _bad_endl_use_dendl_t) {
   assert(0 && "you are using the wrong endl.. use std::endl or dendl");
   return out;
 }

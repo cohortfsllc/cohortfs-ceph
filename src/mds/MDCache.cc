@@ -103,7 +103,8 @@ extern struct ceph_file_layout g_default_file_layout;
 #define dout_subsys ceph_subsys_mds
 #undef dout_prefix
 #define dout_prefix _prefix(_dout, mds)
-static ostream& _prefix(std::ostream *_dout, MDS *mds) {
+template <typename T>
+static typename StrmRet<T>::type& _prefix(T *_dout, MDS *mds) {
   return *_dout << "mds." << mds->get_nodeid() << ".cache ";
 }
 
@@ -11079,7 +11080,7 @@ void MDCache::dump_cache(const char *fn)
        ++it) {
     CInode *in = it->second;
     ostringstream ss;
-    ss << *in << std::endl;
+    (ostream&)ss << *in << std::endl;
     std::string s = ss.str();
     r = safe_write(fd, s.c_str(), s.length());
     if (r < 0)

@@ -198,13 +198,21 @@ struct rgw_err {
   void clear();
   bool is_clear() const;
   bool is_err() const;
-  friend std::ostream& operator<<(std::ostream& oss, const rgw_err &err);
+
+  template <typename T>
+  friend typename StrmRet<T>::type& operator<<(T& oss, const rgw_err &err);
 
   int http_ret;
   int ret;
   std::string s3_code;
   std::string message;
 };
+
+  typename StrmRet<T>::type& operator<<(T& oss, const rgw_err &err);
+{
+  oss << "rgw_err(http_ret=" << err.http_ret << ", s3='" << err.s3_code << "') ";
+  return oss;
+}
 
 /* Helper class used for XMLArgs parsing */
 class NameVal
@@ -653,7 +661,8 @@ struct rgw_bucket {
 };
 WRITE_CLASS_ENCODER(rgw_bucket)
 
-inline ostream& operator<<(ostream& out, const rgw_bucket &b) {
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const rgw_bucket &b) {
   out << b.name;
   if (b.name.compare(b.data_pool)) {
     out << "(@";
@@ -1226,7 +1235,8 @@ public:
 };
 WRITE_CLASS_ENCODER(rgw_obj)
 
-inline ostream& operator<<(ostream& out, const rgw_obj &o) {
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const rgw_obj &o) {
   return out << o.bucket.name << ":" << o.object;
 }
 

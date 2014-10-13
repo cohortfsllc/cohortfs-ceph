@@ -132,10 +132,21 @@ typename StrmRet<T>::type& operator<<(T& out, CDir& dir)
 }
 
   template <typename T>
-  typename StrmRet<T>::type& print_db_line_prefix(T& out)
-  {
-  return out << ceph_clock_now(g_ceph_context) << " mds." << cache->mds->get_nodeid() << ".cache.dir(" << this->dirfrag() << ") ";
-  }
+  typename StrmRet<T>::type& db_line_prefix(T& out, CDir* dir)
+{
+  return out << ceph_clock_now(g_ceph_context) << " mds." 
+<< dir->cache->mds->get_nodeid() << ".cache.dir(" << dir->dirfrag() << ") ";
+}
+
+ostream& CDir::print_db_line_prefix(ostream& out)
+{
+  return db_line_prefix(out, this);
+}
+
+lttng_stream& CDir::print_db_line_prefix(lttng_stream& out)
+{
+  return db_line_prefix(out, this);
+}
 
 void CDir::print(ostream& out)
 {

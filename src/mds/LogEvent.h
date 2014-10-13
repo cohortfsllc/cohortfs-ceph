@@ -93,6 +93,9 @@ protected:
     ENCODE_FINISH(bl);
   }
 
+  virtual void print(lttng_stream& out) const {
+    out << "event(" << _type << ")";
+  }
   virtual void print(ostream& out) const {
     out << "event(" << _type << ")";
   }
@@ -110,7 +113,8 @@ protected:
 
 };
 
-inline ostream& operator<<(ostream& out, LogEvent& le) {
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, LogEvent& le) {
   le.print(out);
   return out;
 }

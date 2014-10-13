@@ -32,9 +32,21 @@
   << ".cache.den(" << dir->dirfrag() << " " << name << ") "
 
 
+template <typename T>
+typename StrmRet<T>::type& db_line_prefix(T& out, CDentry* dentry)
+{
+  CDir *dir = dentry->get_dir();
+  return out << ceph_clock_now(g_ceph_context) << " mds." << dir->cache->mds->get_nodeid() << ".cache.den(" << dir->ino() << " " << dentry->name << ") ";
+}
+
+lttng_stream& CDentry::print_db_line_prefix(lttng_stream& out)
+{
+  return db_line_prefix(out, this); 
+}
+
 ostream& CDentry::print_db_line_prefix(ostream& out)
 {
-  return out << ceph_clock_now(g_ceph_context) << " mds." << dir->cache->mds->get_nodeid() << ".cache.den(" << dir->ino() << " " << name << ") ";
+  return db_line_prefix(out, this); 
 }
 
 boost::pool<> CDentry::pool(sizeof(CDentry));
@@ -44,8 +56,8 @@ LockType CDentry::versionlock_type(CEPH_LOCK_DVERSION);
 
 
 // CDentry
-
-ostream& operator<<(ostream& out, CDentry& dn)
+template <typename T>
+typename StrmRet<T>::type& operator<<(T& out, CDentry& dn)
 {
   filepath path;
   dn.make_path(path);
@@ -114,6 +126,11 @@ bool operator<(const CDentry& l, const CDentry& r)
   return false;
 }
 
+
+void CDentry::print(lttng_stream& out)
+{
+  out << *this;
+}
 
 void CDentry::print(ostream& out)
 {

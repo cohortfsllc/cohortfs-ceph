@@ -148,7 +148,8 @@ class frag_t {
   }
 };
 
-inline std::ostream& operator<<(std::ostream& out, frag_t hb)
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, frag_t hb)
 {
   //out << std::hex << hb.value() << std::dec << "/" << hb.bits() << '=';
   unsigned num = hb.bits();
@@ -510,7 +511,8 @@ inline bool operator!=(const fragtree_t& l, const fragtree_t& r) {
   return l._splits != r._splits;
 }
 
-inline std::ostream& operator<<(std::ostream& out, const fragtree_t& ft)
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const fragtree_t& ft)
 {
   out << "fragtree_t(";
 
@@ -593,7 +595,8 @@ public:
   }
 };
 
-inline std::ostream& operator<<(std::ostream& out, const fragset_t& fs)
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const fragset_t& fs)
 {
   return out << "fragset_t(" << fs.get() << ")";
 }

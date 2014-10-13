@@ -376,6 +376,8 @@ inline bool operator!=(const utime_t& a, const utime_t& b)
 // output
 
 // ostream
+//template <typename T>
+//inline typename StrmRet<T>::type& operator<<(T& out, const utime_t& t)
 inline std::ostream& operator<<(std::ostream& out, const utime_t& t)
 {
   return t.localtime(out);

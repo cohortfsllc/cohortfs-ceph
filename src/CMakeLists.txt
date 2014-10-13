@@ -520,7 +520,7 @@ set(ceph_conf_srcs
   tools/ceph_conf.cc
   )
 add_executable(ceph-conf ${ceph_conf_srcs})
-target_link_libraries(ceph-conf global)
+target_link_libraries(ceph-conf global boost_system)
 install(TARGETS ceph-conf DESTINATION bin)
 
 set(monmaptool_srcs
@@ -541,7 +541,7 @@ set(ceph_authtool_srcs
   tools/ceph_authtool.cc
   )
 add_executable(ceph-authtool ${ceph_authtool_srcs})
-target_link_libraries(ceph-authtool global ${EXTRALIBS})
+target_link_libraries(ceph-authtool global boost_system ${EXTRALIBS})
 install(TARGETS ceph-authtool DESTINATION bin)
 
 set(ceph_mon_store_converter_srcs
