@@ -68,6 +68,8 @@ namespace ceph {
       };
       static const int type_mask = 0x7; // low 3 bits
 
+      static const int flag_alignment_hack = 0x8;
+
       char *data;
       unsigned len;
       std::atomic<uint32_t> nref;
@@ -90,6 +92,33 @@ namespace ceph {
 	::free(data);
       }
 
+      // type_aligned
+#ifndef __CYGWIN__
+      void init_aligned() {
+#ifdef DARWIN
+	data = (char *)::valloc(len);
+#else
+	int r = ::posix_memalign((void**)(void*)&data, CEPH_PAGE_SIZE, len);
+	if (r)
+	  throw bad_alloc();
+#endif /* DARWIN */
+	if (!data)
+	  throw bad_alloc();
+      }
+      void cleanup_aligned() {
+	::free((void*)data);
+      }
+#else // __CYGWIN__
+      void init_aligned() {
+	flags |= flag_alignment_hack;
+	data = new char[len+CEPH_PAGE_SIZE-1];
+      }
+      void cleanup_aligned() {
+	delete[] data;
+	dec_total_alloc(len+CEPH_PAGE_SIZE-1);
+      }
+#endif // __CYGWIN__
+
 
       virtual raw* clone_empty() {
 	return new raw(get_type(), len);
@@ -109,6 +138,9 @@ namespace ceph {
 	case type_malloc:
 	  init_malloc();
 	  break;
+	case type_aligned:
+	  init_aligned();
+	  break;
 	}
       }
 
@@ -119,12 +151,22 @@ namespace ceph {
 	case type_malloc:
 	  cleanup_malloc();
 	  break;
+	case type_aligned:
+	  cleanup_aligned();
+	  break;
 	}
       }
 
     public:
       virtual char *get_data() {
-	return data;
+	switch (get_type()) {
+	case type_aligned:
+	  if (flags & flag_alignment_hack)
+	    return data + CEPH_PAGE_SIZE - ((ptrdiff_t)data & ~CEPH_PAGE_MASK);
+	  return data;
+	default:
+	  return data;
+	}
       }
 
       raw *clone() {
@@ -142,7 +184,12 @@ namespace ceph {
       }
 
       virtual bool is_page_aligned() {
-	return ((long)data & ~CEPH_PAGE_MASK) == 0;
+	switch (get_type()) {
+	case type_aligned:
+	  return true;
+	default:
+	  return ((long)data & ~CEPH_PAGE_MASK) == 0;
+	}
       }
 
       bool is_n_page_sized() {
@@ -186,7 +233,9 @@ namespace ceph {
 	return new raw(type_malloc, len, buf);
       }
       static raw* create_static(unsigned len, char *buf);
-      static raw* create_page_aligned(unsigned len);
+      static raw* create_page_aligned(unsigned len) {
+	return new raw(type_aligned, len);
+      }
       static raw* create_zero_copy(unsigned len, int fd, int64_t *offset);
 #ifdef HAVE_XIO
       static raw* create_xio_msg(unsigned len, char *buf,
@@ -196,75 +245,6 @@ namespace ceph {
       friend class ptr;
       friend std::ostream& operator<<(std::ostream& out, const raw &r);
     };
-
-#ifndef __CYGWIN__
-    class raw_mmap_pages : public raw {
-    public:
-      raw_mmap_pages(unsigned l) : raw(type_aligned, l) {
-	data = (char*)::mmap(NULL, len, PROT_READ|PROT_WRITE,
-			     MAP_PRIVATE|MAP_ANON, -1, 0);
-	if (!data)
-	  throw bad_alloc();
-      }
-
-      ~raw_mmap_pages() {
-	::munmap(data, len);
-      }
-
-      raw* clone_empty() {
-	return new raw_mmap_pages(len);
-      }
-    };
-
-    class raw_posix_aligned : public raw {
-    public:
-      raw_posix_aligned(unsigned l) : raw(type_aligned, l) {
-#ifdef DARWIN
-	data = (char *) valloc (len);
-#else
-	data = 0;
-	int r = ::posix_memalign((void**)(void*)&data, CEPH_PAGE_SIZE, len);
-	if (r)
-	  throw bad_alloc();
-#endif /* DARWIN */
-	if (!data)
-	  throw bad_alloc();
-      }
-
-      ~raw_posix_aligned() {
-	::free((void*)data);
-      }
-
-      raw* clone_empty() {
-	return new raw_posix_aligned(len);
-      }
-    };
-#endif
-
-#ifdef __CYGWIN__
-    class raw_hack_aligned : public raw {
-      char *realdata;
-    public:
-      raw_hack_aligned(unsigned l) : raw(type_aligned, l) {
-	realdata = new char[len+CEPH_PAGE_SIZE-1];
-	unsigned off = ((unsigned)realdata) & ~CEPH_PAGE_MASK;
-	if (off)
-	  data = realdata + CEPH_PAGE_SIZE - off;
-	else
-	  data = realdata;
-	//cout << "hack aligned " << (unsigned)data
-	//<< " in raw " << (unsigned)realdata
-	//<< " off " << off << std::endl;
-	assert(((unsigned)data & (CEPH_PAGE_SIZE-1)) == 0);
-      }
-      ~raw_hack_aligned() {
-	delete[] realdata;
-      }
-      raw* clone_empty() {
-	return new raw_hack_aligned(len);
-      }
-    };
-#endif
 
 #ifdef CEPH_HAVE_SPLICE
     class raw_pipe : public raw {
@@ -469,15 +449,6 @@ namespace ceph {
 
     inline raw* raw::create_static(unsigned len, char *buf) {
       return new raw_static(buf, len);
-    }
-
-    inline raw* raw::create_page_aligned(unsigned len) {
-#ifndef __CYGWIN__
-      //return new raw_mmap_pages(len);
-      return new raw_posix_aligned(len);
-#else
-      return new raw_hack_aligned(len);
-#endif
     }
 
     inline raw* raw::create_zero_copy(unsigned len, int fd, int64_t *offset) {
