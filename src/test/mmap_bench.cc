@@ -117,7 +117,7 @@ public:
 
     void *entry() {
 	bufferlist data;
-	data.append(ceph::buffer::create(block_size));
+	data.append(ceph::buffer::raw::create(block_size));
 
 	dout(0) << "Writing " << size << " in blocks of " << block_size
 		<< dendl;

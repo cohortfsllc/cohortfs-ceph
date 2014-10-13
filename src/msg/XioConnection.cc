@@ -151,8 +151,8 @@ int XioConnection::on_msg_req(struct xio_session *session,
    * xio_session */
   if (! in_seq.p) {
     XioMsgCnt msg_cnt(
-      ceph::buffer::create_static(treq->in.header.iov_len,
-			    (char*) treq->in.header.iov_base));
+      ceph::buffer::raw::create_static(treq->in.header.iov_len,
+				       (char*) treq->in.header.iov_base));
     in_seq.cnt = msg_cnt.msg_cnt;
     in_seq.p = true;
     if (unlikely(magic & (MSG_MAGIC_TRACE_XCON))) {
@@ -192,9 +192,8 @@ int XioConnection::on_msg_req(struct xio_session *session,
 
   treq = *msg_iter;
   XioMsgHdr hdr(header, footer,
-		ceph::buffer::create_static(treq->in.header.iov_len,
-				    (char*) treq->in.header.iov_base));
-
+		ceph::buffer::raw::create_static(treq->in.header.iov_len,
+						 (char*) treq->in.header.iov_base));
   uint_to_timeval(t1, treq->timestamp);
 
   if (magic & (MSG_MAGIC_TRACE_XCON)) {
