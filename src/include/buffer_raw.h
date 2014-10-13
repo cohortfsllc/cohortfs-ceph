@@ -55,7 +55,7 @@ namespace ceph {
   namespace buffer {
 
     class raw {
-    public:
+    protected:
       char *data;
       unsigned len;
       std::atomic<uint32_t> nref;
@@ -77,6 +77,7 @@ namespace ceph {
       raw(const raw &other);
       const raw& operator=(const raw &other);
 
+    public:
       virtual char *get_data() {
 	return data;
       }
@@ -85,7 +86,7 @@ namespace ceph {
 
       raw *clone() {
 	raw *c = clone_empty();
-	memcpy(c->data, data, len);
+	memcpy(c->get_data(), data, len);
 	return c;
       }
 
@@ -144,6 +145,9 @@ namespace ceph {
       static raw* create_xio_msg(unsigned len, char *buf,
 				 XioCompletionHook *hook);
 #endif
+
+      friend class ptr;
+      friend std::ostream& operator<<(std::ostream& out, const raw &r);
     };
 
     class raw_malloc : public raw {
@@ -429,7 +433,7 @@ namespace ceph {
 
     inline raw* copy(const char *c, unsigned len) {
       raw* r = new raw_char(len);
-      memcpy(r->data, c, len);
+      memcpy(r->get_data(), c, len);
       return r;
     }
 
