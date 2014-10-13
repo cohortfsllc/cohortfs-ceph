@@ -35,8 +35,8 @@ namespace ceph {
     public:
       struct xio_mempool_obj mp_this;
       xio_mempool(struct xio_mempool_obj& _mp, unsigned l) :
-	raw((char*)_mp.addr, l), mp_this(_mp)
-	{ }
+	raw(type_xio_reg, l, (char*)_mp.addr), mp_this(_mp)
+	{}
 
       bool is_volatile() {
 	/* data points to registered memory, which, though safe to hold, is a
@@ -59,7 +59,8 @@ namespace ceph {
     }
 
     static inline struct xio_mempool_obj* get_xio_mp(const buffer::ptr& bp) {
-      buffer::xio_mempool *mb = dynamic_cast<buffer::xio_mempool*>(bp.get_raw());
+      buffer::xio_mempool *mb =
+	dynamic_cast<buffer::xio_mempool*>(bp.get_raw());
       if (mb) {
 	return &(mb->mp_this);
       }
