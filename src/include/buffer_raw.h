@@ -69,6 +69,7 @@ namespace ceph {
       static const int type_mask = 0x7; // low 3 bits
 
       static const int flag_alignment_hack = 0x8;
+      static const int flag_pipe_consumed  = 0x10;
 
       char *data;
       unsigned len;
@@ -115,141 +116,19 @@ namespace ceph {
       }
       void cleanup_aligned() {
 	delete[] data;
-	dec_total_alloc(len+CEPH_PAGE_SIZE-1);
       }
 #endif // __CYGWIN__
 
+      // type_pipe
+#ifndef CEPH_HAVE_SPLICE
+      void init_pipe() { throw error_code(-ENOTSUP); }
+      void cleanup_pipe() {}
+      char *copy_pipe() { throw error_code(-ENOTSUP); }
+#else // CEPH_HAVE_SPLICE
+      int pipefds[2];
 
-      virtual raw* clone_empty() {
-	return new raw(get_type(), len);
-      }
-
-      // no copying.
-      raw(const raw &other);
-      const raw& operator=(const raw &other);
-
-      // private constructor, use factory functions to enforce
-      // type-specific invariants
-      raw(uint8_t flags, unsigned len, char *data = NULL)
-	: data(data), len(len), nref(0), flags(flags),
-	  crc_lock("buffer::raw::crc_lock")
-      {
-	switch (get_type()) {
-	case type_malloc:
-	  init_malloc();
-	  break;
-	case type_aligned:
-	  init_aligned();
-	  break;
-	}
-      }
-
-      // private destructor, only deleted by ptr (a friend)
-      virtual ~raw()
-      {
-	switch (get_type()) {
-	case type_malloc:
-	  cleanup_malloc();
-	  break;
-	case type_aligned:
-	  cleanup_aligned();
-	  break;
-	}
-      }
-
-    public:
-      virtual char *get_data() {
-	switch (get_type()) {
-	case type_aligned:
-	  if (flags & flag_alignment_hack)
-	    return data + CEPH_PAGE_SIZE - ((ptrdiff_t)data & ~CEPH_PAGE_MASK);
-	  return data;
-	default:
-	  return data;
-	}
-      }
-
-      raw *clone() {
-	raw *c = clone_empty();
-	memcpy(c->get_data(), data, len);
-	return c;
-      }
-
-      virtual bool can_zero_copy() const {
-	return false;
-      }
-
-      virtual int zero_copy_to_fd(int fd, loff_t *offset) {
-	return -ENOTSUP;
-      }
-
-      virtual bool is_page_aligned() {
-	switch (get_type()) {
-	case type_aligned:
-	  return true;
-	default:
-	  return ((long)data & ~CEPH_PAGE_MASK) == 0;
-	}
-      }
-
-      bool is_n_page_sized() {
-	return (len & ~CEPH_PAGE_MASK) == 0;
-      }
-
-      virtual bool is_volatile() {
-      /* true if the raw memory may be unsafe (or preferable not to) hold
-       * for long periods due to, e.g., special registration */
-      return false;
-     }
-
-      virtual bool get_crc(const pair<size_t, size_t> &fromto,
-			   pair<uint32_t, uint32_t> *crc) const {
-	Mutex::Locker l(crc_lock);
-	map<pair<size_t, size_t>, pair<uint32_t, uint32_t> >::const_iterator i
-	  = crc_map.find(fromto);
-	if (i == crc_map.end())
-	  return false;
-	*crc = i->second;
-	return true;
-      }
-
-      virtual void set_crc(const pair<size_t, size_t> &fromto,
-			   const pair<uint32_t, uint32_t> &crc) {
-	Mutex::Locker l(crc_lock);
-	crc_map[fromto] = crc;
-      }
-
-      virtual void invalidate_crc() {
-	Mutex::Locker l(crc_lock);
-	crc_map.clear();
-      }
-
-      static raw* create(unsigned len);
-      static raw* claim_char(unsigned len, char *buf);
-      static raw* create_malloc(unsigned len) {
-	return new raw(type_malloc, len);
-      }
-      static raw* claim_malloc(unsigned len, char *buf) {
-	return new raw(type_malloc, len, buf);
-      }
-      static raw* create_static(unsigned len, char *buf);
-      static raw* create_page_aligned(unsigned len) {
-	return new raw(type_aligned, len);
-      }
-      static raw* create_zero_copy(unsigned len, int fd, int64_t *offset);
-#ifdef HAVE_XIO
-      static raw* create_xio_msg(unsigned len, char *buf,
-				 XioCompletionHook *hook);
-#endif
-
-      friend class ptr;
-      friend std::ostream& operator<<(std::ostream& out, const raw &r);
-    };
-
-#ifdef CEPH_HAVE_SPLICE
-    class raw_pipe : public raw {
-    public:
-      raw_pipe(unsigned len) : raw(type_pipe, len), source_consumed(false) {
+      void init_pipe() {
+	assert(!data);
 	size_t max = get_max_pipe_size();
 	if (len > max) {
 	  throw malformed_input("length larger than max pipe size");
@@ -273,56 +152,12 @@ namespace ceph {
 	  // continue, since the pipe should become large enough as needed
 	}
       }
-
-      ~raw_pipe() {
+      void cleanup_pipe() {
 	if (data)
 	  delete data;
 	close_pipe(pipefds);
       }
 
-      bool can_zero_copy() const {
-	return true;
-      }
-
-      bool is_page_aligned() {
-	return false;
-      }
-
-      int set_source(int fd, loff_t *off) {
-	int flags = SPLICE_F_NONBLOCK;
-	ssize_t r = safe_splice(fd, off, pipefds[1], NULL, len, flags);
-	if (r < 0) {
-	  return r;
-	}
-	// update length with actual amount read
-	len = r;
-	return 0;
-      }
-
-      int zero_copy_to_fd(int fd, loff_t *offset) {
-	assert(!source_consumed);
-	int flags = SPLICE_F_NONBLOCK;
-	ssize_t r = safe_splice_exact(pipefds[0], NULL, fd, offset, len, flags);
-	if (r < 0) {
-	  return r;
-	}
-	source_consumed = true;
-	return 0;
-      }
-
-      raw* clone_empty() {
-	// cloning doesn't make sense for pipe-based buffers,
-	// and is only used by unit tests for other types of buffers
-	return NULL;
-      }
-
-      char *get_data() {
-	if (data)
-	  return data;
-	return copy_pipe(pipefds);
-      }
-
-    private:
       int set_pipe_size(int *fds, long length) {
 #ifdef CEPH_HAVE_SETPIPE_SZ
 	if (::fcntl(fds[1], F_SETPIPE_SZ, length) == -1) {
@@ -335,7 +170,7 @@ namespace ceph {
 	  }
 	  return r;
 	}
-#endif
+#endif // CEPH_HAVE_SETPIPE_SZ
 	return 0;
       }
 
@@ -354,15 +189,15 @@ namespace ceph {
 	  VOID_TEMP_FAILURE_RETRY(::close(fds[1]));
       }
 
-      char *copy_pipe(int *fds) {
+      char *copy_pipe() {
 	/* preserve original pipe contents by copying into a temporary
 	 * pipe before reading.
 	 */
 	int tmpfd[2];
 	int r;
 
-	assert(!source_consumed);
-	assert(fds[0] >= 0);
+	assert((flags & flag_pipe_consumed) == 0);
+	assert(pipefds[0] >= 0);
 
 	if (::pipe(tmpfd) == -1) {
 	  r = -errno;
@@ -376,7 +211,7 @@ namespace ceph {
 	if (r < 0) {
 	}
 	int flags = SPLICE_F_NONBLOCK;
-	if (::tee(fds[0], tmpfd[1], len, flags) == -1) {
+	if (::tee(pipefds[0], tmpfd[1], len, flags) == -1) {
 	  r = errno;
 	  close_pipe(tmpfd);
 	  throw error_code(r);
@@ -396,10 +231,189 @@ namespace ceph {
 	close_pipe(tmpfd);
 	return data;
       }
-      bool source_consumed;
-      int pipefds[2];
-    };
 #endif // CEPH_HAVE_SPLICE
+
+
+      virtual raw* clone_empty() {
+	switch (get_type()) {
+	case type_pipe:
+	  // cloning doesn't make sense for pipe-based buffers,
+	  // and is only used by unit tests for other types of buffers
+	  return NULL;
+	default:
+	  return new raw(get_type(), len);
+	}
+      }
+
+      // no copying.
+      raw(const raw &other);
+      const raw& operator=(const raw &other);
+
+      // private constructor, use factory functions to enforce
+      // type-specific invariants
+      raw(uint8_t flags, unsigned len, char *data = NULL)
+	: data(data), len(len), nref(0), flags(flags),
+	  crc_lock("buffer::raw::crc_lock")
+      {
+	switch (get_type()) {
+	case type_malloc:
+	  init_malloc();
+	  break;
+	case type_aligned:
+	  init_aligned();
+	  break;
+	case type_pipe:
+	  init_pipe();
+	  break;
+	}
+      }
+
+      // private destructor, only deleted by ptr (a friend)
+      virtual ~raw()
+      {
+	switch (get_type()) {
+	case type_malloc:
+	  cleanup_malloc();
+	  break;
+	case type_aligned:
+	  cleanup_aligned();
+	  break;
+	case type_pipe:
+	  cleanup_pipe();
+	  break;
+	}
+      }
+
+    public:
+      char *get_data() {
+	switch (get_type()) {
+	case type_aligned:
+	  if (flags & flag_alignment_hack)
+	    return data + CEPH_PAGE_SIZE - ((ptrdiff_t)data & ~CEPH_PAGE_MASK);
+	  return data;
+	case type_pipe:
+	  return copy_pipe();
+	default:
+	  return data;
+	}
+      }
+
+      raw *clone() {
+	raw *c = clone_empty();
+	memcpy(c->data, data, len);
+	return c;
+      }
+
+#ifndef CEPH_HAVE_SPLICE
+      bool can_zero_copy() const { return false; }
+      int set_source(int fd, loff_t *off) { return -ENOTSUP; }
+      int zero_copy_to_fd(int fd, loff_t *offset) { return -ENOTSUP; }
+#else // CEPH_HAVE_SPLICE
+      bool can_zero_copy() const { return get_type() == type_pipe; }
+
+      int set_source(int fd, loff_t *off) {
+	ssize_t r = safe_splice(fd, off, pipefds[1], NULL, len,
+				SPLICE_F_NONBLOCK);
+	if (r < 0) {
+	  return r;
+	}
+	// update length with actual amount read
+	len = r;
+	return 0;
+      }
+
+      int zero_copy_to_fd(int fd, loff_t *offset) {
+	assert((flags & flag_pipe_consumed) == 0);
+	int flags = SPLICE_F_NONBLOCK;
+	ssize_t r = safe_splice_exact(pipefds[0], NULL, fd, offset, len, flags);
+	if (r < 0) {
+	  return r;
+	}
+	flags |= flag_pipe_consumed;
+	return 0;
+      }
+#endif // CEPH_HAVE_SPLICE
+
+      bool is_page_aligned() {
+	switch (get_type()) {
+	case type_aligned:
+	  return true;
+	case type_pipe:
+	  return false;
+	default:
+	  return ((long)data & ~CEPH_PAGE_MASK) == 0;
+	}
+      }
+
+      bool is_n_page_sized() {
+	return (len & ~CEPH_PAGE_MASK) == 0;
+      }
+
+      bool is_volatile() {
+	/* true if the raw memory may be unsafe (or preferable not to) hold
+	 * for long periods due to, e.g., special registration */
+	switch (get_type()) {
+	case type_xio_reg:
+	  return true;
+	default:
+	  return false;
+	}
+	return false;
+      }
+
+      bool get_crc(const pair<size_t, size_t> &fromto,
+		   pair<uint32_t, uint32_t> *crc) const {
+	Mutex::Locker l(crc_lock);
+	map<pair<size_t, size_t>, pair<uint32_t, uint32_t> >::const_iterator i
+	  = crc_map.find(fromto);
+	if (i == crc_map.end())
+	  return false;
+	*crc = i->second;
+	return true;
+      }
+
+      void set_crc(const pair<size_t, size_t> &fromto,
+		   const pair<uint32_t, uint32_t> &crc) {
+	Mutex::Locker l(crc_lock);
+	crc_map[fromto] = crc;
+      }
+
+      void invalidate_crc() {
+	Mutex::Locker l(crc_lock);
+	crc_map.clear();
+      }
+
+
+      static raw* create(unsigned len);
+      static raw* claim_char(unsigned len, char *buf);
+      static raw* create_malloc(unsigned len) {
+	return new raw(type_malloc, len);
+      }
+      static raw* claim_malloc(unsigned len, char *buf) {
+	return new raw(type_malloc, len, buf);
+      }
+      static raw* create_static(unsigned len, char *buf);
+      static raw* create_page_aligned(unsigned len) {
+	return new raw(type_aligned, len);
+      }
+      static raw* create_zero_copy(unsigned len, int fd, int64_t *offset) {
+	raw* buf = new raw(type_pipe, len);
+	int r = buf->set_source(fd, (loff_t*)offset);
+	if (r < 0) {
+	  delete buf;
+	  throw error_code(r);
+	}
+	return buf;
+      }
+#ifdef HAVE_XIO
+      static raw* create_xio_msg(unsigned len, char *buf,
+				 XioCompletionHook *hook);
+#endif
+
+      friend class ptr;
+      friend std::ostream& operator<<(std::ostream& out, const raw &r);
+    };
+
 
     /*
      * primitive buffer types
@@ -449,20 +463,6 @@ namespace ceph {
 
     inline raw* raw::create_static(unsigned len, char *buf) {
       return new raw_static(buf, len);
-    }
-
-    inline raw* raw::create_zero_copy(unsigned len, int fd, int64_t *offset) {
-#ifdef CEPH_HAVE_SPLICE
-      raw_pipe* buf = new raw_pipe(len);
-      int r = buf->set_source(fd, (loff_t*)offset);
-      if (r < 0) {
-	delete buf;
-	throw error_code(r);
-      }
-      return buf;
-#else
-      throw error_code(-ENOTSUP);
-#endif
     }
 
     inline std::ostream& operator<<(std::ostream& out, const raw &r) {
