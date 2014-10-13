@@ -19,6 +19,10 @@
 #include "buffer_int.h"
 #include "buffer_raw.h"
 
+#include <boost/intrusive/list.hpp>
+
+namespace bi = boost::intrusive;
+
 namespace ceph {
 
   /* re-open buffer namespace */
@@ -46,6 +50,8 @@ namespace ceph {
 
 
     public:
+      bi::list_member_hook<> bi_hook1; // primary list hook
+
       ptr() : _raw(0), _off(0), _len(0) {}
 
       ptr(raw *r) : _raw(r), _off(0), _len(r->len) {

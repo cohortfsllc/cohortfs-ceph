@@ -477,9 +477,8 @@ enum bl_type
 static inline int
 xio_count_buffers(buffer::list& bl, int& req_size, int& msg_off, int& req_off)
 {
-
-  const std::list<buffer::ptr>& buffers = bl.buffers();
-  list<bufferptr>::const_iterator pb;
+  const ceph::buffer::PtrList& buffers = bl.buffers();
+  ceph::buffer::PtrList::const_iterator pb;
   size_t size, off, count;
   int result;
   int first = 1;
@@ -525,8 +524,8 @@ xio_place_buffers(buffer::list& bl, XioMsg *xmsg, struct xio_msg*& req,
 		  int ex_cnt, int& msg_off, int& req_off, bl_type type)
 {
 
-  const std::list<buffer::ptr>& buffers = bl.buffers();
-  list<bufferptr>::const_iterator pb;
+  const ceph::buffer::PtrList& buffers = bl.buffers();
+  ceph::buffer::PtrList::const_iterator pb;
   struct xio_iovec_ex* iov;
   size_t size, off, count;
   const char *data = NULL;
@@ -795,9 +794,9 @@ int XioMessenger::send_message(Message *m, Connection *con)
   /* fixup first msg */
   req = &xmsg->req_0.msg;
 
-  const std::list<buffer::ptr>& header = xmsg->hdr.get_bl().buffers();
+  const ceph::buffer::PtrList& header = xmsg->hdr.get_bl().buffers();
   assert(header.size() == 1); /* XXX */
-  list<bufferptr>::const_iterator pb = header.begin();
+  ceph::buffer::PtrList::const_iterator pb = header.begin();
   req->out.header.iov_base = (char*) pb->c_str();
   req->out.header.iov_len = pb->length();
 

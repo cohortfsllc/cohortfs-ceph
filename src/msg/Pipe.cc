@@ -2172,7 +2172,7 @@ int Pipe::write_message(ceph_msg_header& header, ceph_msg_footer& footer, buffer
   }
 
   // payload (front+data)
-  list<bufferptr>::const_iterator pb = blist.buffers().begin();
+  ceph::buffer::PtrList::const_iterator pb = blist.buffers().begin();
   int b_off = 0;  // carry-over buffer offset, if any
   int bl_pos = 0; // blist pos
   int left = blist.length();
