@@ -42,9 +42,6 @@ extern "C" {
 
 #include "buffer_int.h"
 
-#ifdef HAVE_XIO
-class XioCompletionHook;
-#endif
 
 namespace ceph {
 
@@ -233,6 +230,15 @@ namespace ceph {
       }
 #endif // CEPH_HAVE_SPLICE
 
+      // type_char
+      void init_char() {
+	if (!data && len)
+	  data = new char[len];
+      }
+
+      void cleanup_char() {
+	delete[] data;
+      }
 
       virtual raw* clone_empty() {
 	switch (get_type()) {
@@ -265,6 +271,9 @@ namespace ceph {
 	case type_pipe:
 	  init_pipe();
 	  break;
+	case type_char:
+	  init_char();
+	  break;
 	}
       }
 
@@ -280,6 +289,9 @@ namespace ceph {
 	  break;
 	case type_pipe:
 	  cleanup_pipe();
+	  break;
+	case type_char:
+	  cleanup_char();
 	  break;
 	}
       }
@@ -383,19 +395,28 @@ namespace ceph {
 	crc_map.clear();
       }
 
+      static raw* create(unsigned len) {
+	return new raw(type_char, len);
+      }
 
-      static raw* create(unsigned len);
-      static raw* claim_char(unsigned len, char *buf);
+      static raw* claim_char(unsigned len, char *buf) {
+	return new raw(type_char, len, buf);
+      }
+
       static raw* create_malloc(unsigned len) {
 	return new raw(type_malloc, len);
       }
+
       static raw* claim_malloc(unsigned len, char *buf) {
 	return new raw(type_malloc, len, buf);
       }
+
       static raw* create_static(unsigned len, char *buf);
+
       static raw* create_page_aligned(unsigned len) {
 	return new raw(type_aligned, len);
       }
+
       static raw* create_zero_copy(unsigned len, int fd, int64_t *offset) {
 	raw* buf = new raw(type_pipe, len);
 	int r = buf->set_source(fd, (loff_t*)offset);
@@ -405,37 +426,9 @@ namespace ceph {
 	}
 	return buf;
       }
-#ifdef HAVE_XIO
-      static raw* create_xio_msg(unsigned len, char *buf,
-				 XioCompletionHook *hook);
-#endif
 
       friend class ptr;
       friend std::ostream& operator<<(std::ostream& out, const raw &r);
-    };
-
-
-    /*
-     * primitive buffer types
-     */
-    class raw_char : public raw {
-    public:
-      raw_char(unsigned l) : raw(type_char, l) {
-	if (len)
-	  data = new char[len];
-	else
-	  data = 0;
-      }
-      raw_char(unsigned l, char *b) : raw(type_char, l, b)
-	{}
-      
-      ~raw_char() {
-	delete[] data;
-      }
-      
-      raw* clone_empty() {
-	return new raw_char(len);
-      }
     };
 
     class raw_static : public raw {
@@ -443,22 +436,14 @@ namespace ceph {
       raw_static(const char *d, unsigned l) : raw(type_static, l, (char*)d) { }
       ~raw_static() {}
       raw* clone_empty() {
-	return new raw_char(len);
+	return raw::create(len);
       }
     };
 
     inline raw* copy(const char *c, unsigned len) {
-      raw* r = new raw_char(len);
+      raw* r = raw::create(len);
       memcpy(r->get_data(), c, len);
       return r;
-    }
-
-    inline raw* raw::create(unsigned len) {
-      return new raw_char(len);
-    }
-
-    inline raw* raw::claim_char(unsigned len, char *buf) {
-      return new raw_char(len, buf);
     }
 
     inline raw* raw::create_static(unsigned len, char *buf) {

@@ -28,7 +28,7 @@ extern struct xio_mempool *xio_msgr_reg_mpool;
 
 namespace ceph {
 
-  /* re-open buffer namespace  */
+  /* re-open buffer namespace */
   namespace buffer {
 
     class xio_mempool : public raw {
@@ -38,19 +38,13 @@ namespace ceph {
 	raw(type_xio_reg, l, (char*)_mp.addr), mp_this(_mp)
 	{}
 
-      bool is_volatile() {
-	/* data points to registered memory, which, though safe to hold, is a
-	 * finite pool resource */
-	return true;
-      }
-
       static void operator delete(void *p) {
 	xio_mempool *xm = static_cast<xio_mempool*>(p);
 	xpool_free(xm->len + sizeof(xio_mempool), &xm->mp_this);
       }
 
       raw* clone_empty() {
-	return new buffer::raw_char(len);
+	return raw::create(len);
       }
     };
 
