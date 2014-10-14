@@ -213,7 +213,8 @@ int XioConnection::on_msg_req(struct xio_session *session,
     iovs = vmsg_sglist(&treq->in);
     for (; blen && (ix < iov_len); ++ix) {
       msg_iov = &iovs[ix];
-      bp = ceph::buffer::ptr(ceph::buffer::ptr_to_raw(msg_iov->user_context));
+      bp = ceph::buffer::ptr(
+	ceph::buffer::raw::ptr_to_raw(msg_iov->user_context));
       /* XXX need to detect any buffer which needs to be
        * split due to coalescing of a segment (front, middle,
        * data) boundary */
@@ -255,7 +256,8 @@ int XioConnection::on_msg_req(struct xio_session *session,
     iovs = vmsg_sglist(&treq->in);
     for (; blen && (ix < iov_len); ++ix) {
       msg_iov = &iovs[ix];
-      bp = ceph::buffer::ptr(ceph::buffer::ptr_to_raw(msg_iov->user_context));
+      bp = ceph::buffer::ptr(
+	ceph::buffer::raw::ptr_to_raw(msg_iov->user_context));
       /* XXX need to detect any buffer which needs to be
        * split due to coalescing of a segment (front, middle,
        * data) boundary */
@@ -297,7 +299,8 @@ int XioConnection::on_msg_req(struct xio_session *session,
     iovs = vmsg_sglist(&treq->in);
     for (; blen && (ix < iov_len); ++ix) {
       msg_iov = &iovs[ix];
-      bp = ceph::buffer::ptr(ceph::buffer::ptr_to_raw(msg_iov->user_context));
+      bp = ceph::buffer::ptr(
+	ceph::buffer::raw::ptr_to_raw(msg_iov->user_context));
       /* XXX need to detect any buffer which needs to be
        * split due to coalescing of a segment (front, middle,
        * data) boundary */

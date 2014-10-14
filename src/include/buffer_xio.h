@@ -17,68 +17,56 @@
 #define CEPH_BUFFER_XIO_H
 
 #if defined(HAVE_XIO)
-
-#include "buffer_raw.h"
-#include "buffer_ptr.h" // includes buffer_raw.h
-
 #include <atomic>
 #include "msg/XioPool.h"
 
 extern struct xio_mempool *xio_msgr_reg_mpool;
 
+#include "buffer_ptr.h" // includes buffer_raw.h
+
 namespace ceph {
 
   /* re-open buffer namespace */
   namespace buffer {
-
-    class xio_mempool : public raw {
-    public:
-      struct xio_mempool_obj mp_this;
-      xio_mempool(struct xio_mempool_obj& _mp, unsigned l) :
-	raw(type_xio_reg, l, (char*)_mp.addr), mp_this(_mp)
-	{}
-
-      static void operator delete(void *p) {
-	xio_mempool *xm = static_cast<xio_mempool*>(p);
-	xpool_free(xm->len + sizeof(xio_mempool), &xm->mp_this);
+    // pool-allocated raw objects must release their memory in operator delete
+    inline void raw::operator delete(void *p) {
+      raw *r = static_cast<raw*>(p);
+      switch (r->get_type()) {
+      case type_xio:
+      case type_xio_reg:
+	xio_mempool_free(&r->xio.mp);
+	break;
+      default:
+	break;
       }
-
-      raw* clone_empty() {
-	return raw::create(len);
-      }
-    };
-
-    static inline raw* ptr_to_raw(void *addr) {
-      return reinterpret_cast<raw*>(addr);
     }
 
-    static inline struct xio_mempool_obj* get_xio_mp(const buffer::ptr& bp) {
-      buffer::xio_mempool *mb =
-	dynamic_cast<buffer::xio_mempool*>(bp.get_raw());
-      if (mb) {
-	return &(mb->mp_this);
+    inline struct xio_mempool_obj* raw::get_xio_mp() const {
+      switch(get_type()) {
+      case raw::type_xio:
+      case raw::type_xio_reg:
+	return const_cast<xio_mempool_obj*>(&(xio.mp));
+	break;
+      default:
+	break;
       }
       return NULL;
     }
 
-    static inline unsigned int sizeof_reg() {
-      return sizeof(xio_mempool);
-    }
-
-    static inline buffer::raw* create_reg(struct xio_iovec_ex *iov) {
+    inline raw* raw::create_reg(struct xio_iovec_ex *iov) {
       struct xio_mempool_obj mp;
-      xpool_alloc(xio_msgr_reg_mpool, iov->iov_len+sizeof(xio_mempool), &mp);
+      xpool_alloc(xio_msgr_reg_mpool, iov->iov_len+sizeof(raw), &mp);
       if (! mp.addr)
 	abort();
       iov->iov_base = mp.addr;
       iov->mr = mp.mr;
       // placement construct it
-      buffer::raw* bp =
+      buffer::raw* r =
 	reinterpret_cast<buffer::raw*>((char*) mp.addr + iov->iov_len);
-      new (bp) xio_mempool(mp, iov->iov_len);
-      return bp;
+      new (r) raw(type_xio_reg, iov->iov_len, static_cast<char*>(mp.addr));
+      r->xio.mp = mp;
+      return r;
     }
-
   } /* namespace buffer */
 } /* namespace ceph */
 

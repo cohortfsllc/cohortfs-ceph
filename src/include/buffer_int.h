@@ -122,25 +122,11 @@ namespace ceph {
     void dec_total_alloc(unsigned len);
 
     /*
-     * an abstract raw buffer.  with a reference count.
+     * an abstract raw buffer with a reference count.
      */
     class raw;
-    class raw_crc;
-    class raw_malloc;
-    class raw_static;
-    class raw_mmap_pages;
-    class raw_posix_aligned;
-    class raw_hack_aligned;
-    class raw_char;
-    class raw_pipe;
-    class xio_mempool;
-    class xio_msg_buffer;
 
     raw* copy(const char *c, unsigned len);
-
-#if defined(HAVE_XIO)
-    raw* create_msg(unsigned len, char *buf, XioCompletionHook *m_hook);
-#endif
 
     /*
      * nested utility classes

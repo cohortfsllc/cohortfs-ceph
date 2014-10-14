@@ -236,7 +236,7 @@ public:
       struct xio_iovec_ex *iov = &iovs[ix];
       /* we can recover the address of the buffer flyweight from
        * iov->base, but, heck */
-      iov->user_context = (void*) ceph::buffer::create_reg(iov);
+      iov->user_context = (void*) ceph::buffer::raw::create_reg(iov);
     }
     return 0;
   } /* assign_data */

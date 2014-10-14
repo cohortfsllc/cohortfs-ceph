@@ -332,54 +332,54 @@ XioMessenger::XioMessenger(CephContext *cct, entity_name_t name,
 			   XIO_MEMPOOL_FLAG_REG_MR);
 
       (void) xio_mempool_add_allocator(xio_msgr_reg_mpool,
-				       64 + buffer::sizeof_reg(),
+				       64 + buffer::raw::sizeof_reg(),
 				       cct->_conf->xio_mp_min,
 				       cct->_conf->xio_mp_max_64,
 				       XMSG_MEMPOOL_QUANTUM_SMALL);
 
       (void) xio_mempool_add_allocator(xio_msgr_reg_mpool,
-				       256 + buffer::sizeof_reg(),
+				       256 + buffer::raw::sizeof_reg(),
 				       cct->_conf->xio_mp_min,
 				       cct->_conf->xio_mp_max_256,
 				       XMSG_MEMPOOL_QUANTUM_SMALL);
 
       (void) xio_mempool_add_allocator(xio_msgr_reg_mpool,
-				       1024 + buffer::sizeof_reg(),
+				       1024 + buffer::raw::sizeof_reg(),
 				       cct->_conf->xio_mp_min,
 				       cct->_conf->xio_mp_max_1k,
 				       XMSG_MEMPOOL_QUANTUM_SMALL);
 
-      int pool_size = getpagesize() + buffer::sizeof_reg();
+      int pool_size = getpagesize() + buffer::raw::sizeof_reg();
       (void) xio_mempool_add_allocator(xio_msgr_reg_mpool, pool_size,
 				       cct->_conf->xio_mp_min,
 				       cct->_conf->xio_mp_max_page,
 				       XMSG_MEMPOOL_QUANTUM_SMALL);
 
-      pool_size = 2 * getpagesize() + buffer::sizeof_reg();
+      pool_size = 2 * getpagesize() + buffer::raw::sizeof_reg();
       (void) xio_mempool_add_allocator(xio_msgr_reg_mpool, pool_size,
 				       cct->_conf->xio_mp_min,
 				       cct->_conf->xio_mp_max_page,
 				       XMSG_MEMPOOL_QUANTUM_SMALL);
 
-      pool_size = 4 * getpagesize() + buffer::sizeof_reg();
+      pool_size = 4 * getpagesize() + buffer::raw::sizeof_reg();
       (void) xio_mempool_add_allocator(xio_msgr_reg_mpool, pool_size,
 				       cct->_conf->xio_mp_min,
 				       cct->_conf->xio_mp_max_page,
 				       XMSG_MEMPOOL_QUANTUM_SMALL);
 
-      pool_size = 1024*1024 + buffer::sizeof_reg();
+      pool_size = 1024*1024 + buffer::raw::sizeof_reg();
       (void) xio_mempool_add_allocator(xio_msgr_reg_mpool, pool_size,
 				       cct->_conf->xio_mp_min,
 				       cct->_conf->xio_mp_max_page,
 				       XMSG_MEMPOOL_QUANTUM_LARGE);
 
-      pool_size = 4*1024*1024 + buffer::sizeof_reg();
+      pool_size = 4*1024*1024 + buffer::raw::sizeof_reg();
       (void) xio_mempool_add_allocator(xio_msgr_reg_mpool, pool_size,
 				       cct->_conf->xio_mp_min,
 				       cct->_conf->xio_mp_max_page,
 				       XMSG_MEMPOOL_QUANTUM_LARGE);
 
-      pool_size = 8*1024*1024 + buffer::sizeof_reg();
+      pool_size = 8*1024*1024 + buffer::raw::sizeof_reg();
       (void) xio_mempool_add_allocator(xio_msgr_reg_mpool, pool_size,
 				       0,
 				       cct->_conf->xio_mp_max_page,
@@ -642,7 +642,7 @@ xio_place_buffers(buffer::list& bl, XioMsg *xmsg, struct xio_msg*& req,
       //break;
     default:
     {
-      struct xio_mempool_obj *mp = ceph::buffer::get_xio_mp(*pb);
+      struct xio_mempool_obj *mp = pb->get_raw()->get_xio_mp();
       iov->mr = (mp) ? mp->mr : NULL;
     }
       break;
