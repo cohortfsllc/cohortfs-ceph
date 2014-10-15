@@ -42,7 +42,8 @@ static typename StrmRet<T>::type& _prefix(T *_dout, Monitor *mon, version_t v) {
 		<< ").log v" << v << " ";
 }
 
-ostream& operator<<(ostream& out, LogMonitor& pm)
+template <typename T>
+typename StrmRet<T>::type& operator<<(T& out, LogMonitor& pm)
 {
   /*
   std::stringstream ss;
@@ -141,7 +142,7 @@ void LogMonitor::update_from_paxos(bool *need_bootstrap)
 	int l = clog_type_to_syslog_level(le.type);
 	if (l <= min) {
 	  stringstream ss;
-	  ss << le << "\n";
+	  (ostream&)ss << le << "\n";
 	  blog.append(ss.str());
 	}
       }

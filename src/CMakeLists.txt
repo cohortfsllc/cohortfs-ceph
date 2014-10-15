@@ -324,7 +324,7 @@ target_link_libraries(rados librados global boost_filesystem ${CMAKE_DL_LIBS})
 set(librados_config_srcs
   librados-config.cc)
 add_executable(librados-config ${librados_config_srcs})
-target_link_libraries(librados-config librados global boost_filesystem
+target_link_libraries(librados-config librados global boost_filesystem boost_system 
   ${CMAKE_DL_LIBS})
 
 install(TARGETS rados librados-config DESTINATION bin)
@@ -538,7 +538,7 @@ set(monmaptool_srcs
   tools/monmaptool.cc
   )
 add_executable(monmaptool ${monmaptool_srcs})
-target_link_libraries(monmaptool global)
+target_link_libraries(monmaptool global boost_system)
 install(TARGETS monmaptool DESTINATION bin)
 
 set(osdomaptool_srcs

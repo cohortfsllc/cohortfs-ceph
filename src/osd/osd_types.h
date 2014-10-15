@@ -1015,9 +1015,6 @@ inline typename StrmRet<T>::type& operator<<(T& out, const ObjectContext& obc)
   return out << "obc(" << obc.obs << " " << obc.rwstate << ")";
 }
 
-template <typename T>
-typename StrmRet<T>::type operator<<(T&, const object_info_t& oi);
-
 struct OSDOp {
   ceph_osd_op op;
   object_t oid;

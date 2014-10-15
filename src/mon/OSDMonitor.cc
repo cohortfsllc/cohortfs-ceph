@@ -2313,7 +2313,7 @@ done:
 	  f->close_section();
 	} else {
 	  if (!first) ds << "\n";
-	  ds << *v->second;
+	  (std::ostream&)ds << *v->second;
 	  first = false;
 	}
       }

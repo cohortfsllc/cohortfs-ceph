@@ -28,6 +28,7 @@ class Formatter {
   virtual ~Formatter();
 
   virtual void flush(std::ostream& os) = 0;
+  virtual void flush(lttng_stream& os) = 0;
   void flush(bufferlist &bl) {
     std::stringstream os;
     flush(os);
@@ -114,6 +115,7 @@ class XMLFormatter : public Formatter {
   XMLFormatter(bool pretty = false);
 
   void flush(std::ostream& os);
+  void flush(lttng_stream& os);
   void reset();
   void open_array_section(const char *name);
   void open_array_section_in_ns(const char *name, const char *ns);

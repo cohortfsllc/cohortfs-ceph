@@ -119,7 +119,7 @@ int librados::RadosClient::get_fsid(std::string *s)
     return -EINVAL;
   Mutex::Locker l(lock);
   ostringstream oss;
-  oss << monclient.get_fsid();
+  (std::ostream&)oss << monclient.get_fsid();
   *s = oss.str();
   return 0;
 }

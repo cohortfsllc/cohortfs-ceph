@@ -46,7 +46,8 @@ static typename StrmRet<T>::type& _prefix(T *_dout, Monitor *mon, version_t v) {
 		<< ").auth v" << v << " ";
 }
 
-ostream& operator<<(ostream& out, AuthMonitor& pm)
+template <typename T>
+typename StrmRet<T>::type& operator<<(T& out, AuthMonitor& pm)
 {
   return out << "auth";
 }
@@ -882,7 +883,7 @@ bool AuthMonitor::prepare_command(MMonCommand *m)
 	if (f) {
 	  entity_auth.key.encode_formatted("auth", f.get(), rdata);
 	} else {
-	  ds << entity_auth.key;
+	  (ostream&)ds << entity_auth.key;
 	}
       } else {
 	KeyRing kr;
@@ -929,7 +930,7 @@ bool AuthMonitor::prepare_command(MMonCommand *m)
       if (f) {
 	auth_inc.auth.key.encode_formatted("auth", f.get(), rdata);
       } else {
-	ds << auth_inc.auth.key;
+	(ostream&)ds << auth_inc.auth.key;
       }
     } else {
       KeyRing kr;

@@ -1051,19 +1051,6 @@ void OSDMap::print_summary(Formatter *f, ostream& out) const
   }
 }
 
-template <typename T>
-void OSDMap::print_oneline_summary(T& out) const
-{
-  out << "e" << get_epoch() << ": "
-      << get_num_osds() << " osds: "
-      << get_num_up_osds() << " up, "
-      << get_num_in_osds() << " in";
-  if (test_flag(CEPH_OSDMAP_FULL))
-    out << " full";
-  else if (test_flag(CEPH_OSDMAP_NEARFULL))
-    out << " nearfull";
-}
-
 int OSDMap::build_simple(CephContext *cct, epoch_t e, uuid_d &fsid,
 			  int nosd)
 {
