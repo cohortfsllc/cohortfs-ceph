@@ -292,7 +292,9 @@ namespace ceph {
 	append_buffer = buffer::create(prealloc);
 	append_buffer.set_length(0);   // unused, so far.
       }
-      ~list() {}
+      ~list() {
+	clear();
+      }
 
       // XXX Casey review
       list(const list& other) : _len(other._len),
