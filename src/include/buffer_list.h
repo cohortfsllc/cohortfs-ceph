@@ -39,7 +39,7 @@ namespace ceph {
 
     class list {
     private:
-      PtrList _bi_buffers;
+      PtrList _buffers;
       unsigned _len;
       ptr append_buffer; // where i put small appends.
 
@@ -48,7 +48,7 @@ namespace ceph {
     public:
       class iterator {
 	list *bl;
-	PtrList* bi_ls;  // meh.. just here to avoid an extra pointer deref
+	PtrList* ls;  // meh.. just here to avoid an extra pointer deref
 	unsigned off;  // in bl
 	PtrList::iterator bi_p;
 	unsigned p_off; // in *p
@@ -56,11 +56,11 @@ namespace ceph {
       public:
 	// constructor.  position.
 	iterator() :
-	  bl(0), bi_ls(0), off(0), p_off(0) {}
+	  bl(0), ls(0), off(0), p_off(0) {}
 
 	iterator(list *l, unsigned o=0) :
-	  bl(l), bi_ls(&bl->_bi_buffers), off(0),
-	  bi_p(bi_ls->begin()), p_off(0) {
+	  bl(l), ls(&bl->_buffers), off(0),
+	  bi_p(ls->begin()), p_off(0) {
 	  advance(o);
 	}
 
@@ -70,11 +70,11 @@ namespace ceph {
 
 	iterator(list *l, unsigned o, PtrList::iterator ip,
 		 unsigned po) :
-	  bl(l), bi_ls(&bl->_bi_buffers), off(o),
+	  bl(l), ls(&bl->_buffers), off(o),
 	  bi_p(ip), p_off(po) { }
 
 	iterator(const iterator& other) : bl(other.bl),
-					  bi_ls(other.bi_ls),
+					  ls(other.ls),
 					  off(other.off),
 					  bi_p(other.bi_p),
 					  p_off(other.p_off) {}
@@ -82,7 +82,7 @@ namespace ceph {
 	iterator& operator=(const iterator& other) {
 	  if (this != &other) {
 	    bl = other.bl;
-	    bi_ls = other.bi_ls;
+	    ls = other.ls;
 	    off = other.off;
 	    bi_p = other.bi_p;
 	    p_off = other.p_off;
@@ -99,7 +99,7 @@ namespace ceph {
 
 	/*  true if iterator is at the end of the buffer::list */
 	bool end() {
-	  return bi_p == bi_ls->end();
+	  return bi_p == ls->end();
 	  //return off == bl->length();
 	}
 
@@ -111,7 +111,7 @@ namespace ceph {
 	  if (o > 0) {
 	    p_off += o;
 	    while (p_off > 0) {
-	      if (bi_p == bi_ls->end())
+	      if (bi_p == ls->end())
 		throw end_of_buffer();
 	      if (p_off >= bi_p->length()) {
 		// skip this buffer
@@ -134,7 +134,7 @@ namespace ceph {
 	      off -= d;
 	      o += d;
 	    } else if (off > 0) {
-	      assert(bi_p != bi_ls->begin());
+	      assert(bi_p != ls->begin());
 	      --bi_p;
 	      p_off = bi_p->length();
 	    } else {
@@ -145,26 +145,26 @@ namespace ceph {
 
 	void seek(unsigned o) {
 	  //cout << this << " seek " << o << std::endl;
-	  bi_p = bi_ls->begin();
+	  bi_p = ls->begin();
 	  off = p_off = 0;
 	  advance(o);
 	}
 
 	char operator*() {
-	  if (bi_p == bi_ls->end())
+	  if (bi_p == ls->end())
 	    throw end_of_buffer();
 	  return (*bi_p)[p_off];
 	}
 
 	buffer::list::iterator& operator++() {
-	  if (bi_p == bi_ls->end())
+	  if (bi_p == ls->end())
 	    throw end_of_buffer();
 	  advance(1);
 	  return *this;
 	}
 
 	buffer::ptr get_current_ptr() {
-	  if (bi_p == bi_ls->end())
+	  if (bi_p == ls->end())
 	    throw end_of_buffer();
 	  return ptr(*bi_p, p_off, bi_p->length() - p_off);
 	}
@@ -172,9 +172,9 @@ namespace ceph {
 	// copy data out.
 	// note that these all _append_ to dest!
 	void copy(unsigned len, char *dest) {
-	  if (bi_p == bi_ls->end()) seek(off);
+	  if (bi_p == ls->end()) seek(off);
 	  while (len > 0) {
-	    if (bi_p == bi_ls->end())
+	    if (bi_p == ls->end())
 	      throw end_of_buffer();
 	    assert(bi_p->length() > 0);
 
@@ -194,10 +194,10 @@ namespace ceph {
 	}
 
 	void copy(unsigned len, list &dest) {
-	  if (bi_p == bi_ls->end())
+	  if (bi_p == ls->end())
 	    seek(off);
 	  while (len > 0) {
-	    if (bi_p == bi_ls->end())
+	    if (bi_p == ls->end())
 	      throw end_of_buffer();
 
 	    unsigned howmuch = bi_p->length() - p_off;
@@ -211,10 +211,10 @@ namespace ceph {
 	}
 
 	void copy(unsigned len, std::string &dest) {
-	  if (bi_p == bi_ls->end())
+	  if (bi_p == ls->end())
 	    seek(off);
 	  while (len > 0) {
-	    if (bi_p == bi_ls->end())
+	    if (bi_p == ls->end())
 	      throw end_of_buffer();
 
 	    unsigned howmuch = bi_p->length() - p_off;
@@ -229,10 +229,10 @@ namespace ceph {
 	}
 
 	void copy_all(list &dest) {
-	  if (bi_p == bi_ls->end())
+	  if (bi_p == ls->end())
 	    seek(off);
 	  while (1) {
-	    if (bi_p == bi_ls->end())
+	    if (bi_p == ls->end())
 	      return;
 	    assert(bi_p->length() > 0);
 
@@ -247,10 +247,10 @@ namespace ceph {
 	// copy data in
 	void copy_in(unsigned len, const char *src) {
 	  // copy
-	  if (bi_p == bi_ls->end())
+	  if (bi_p == ls->end())
 	    seek(off);
 	  while (len > 0) {
-	    if (bi_p == bi_ls->end())
+	    if (bi_p == ls->end())
 	      throw end_of_buffer();
 
 	    unsigned howmuch = bi_p->length() - p_off;
@@ -264,14 +264,14 @@ namespace ceph {
 	  }
 	}
 
-	void copy_in(unsigned len, const list& otherl) {
-	  if (bi_p == bi_ls->end())
+	void copy_in(unsigned len, const list& other) {
+	  if (bi_p == ls->end())
 	    seek(off);
 	  unsigned left = len;
-	  for (PtrList::const_iterator i = otherl._bi_buffers.begin();
-	       i != otherl._bi_buffers.end();
+	  for (PtrList::const_iterator i = other._buffers.begin();
+	       i != other._buffers.end();
 	       ++i) {
-	    unsigned l = (*i).length();
+	    unsigned l = i->length();
 	    if (left < l)
 	      l = left;
 	    copy_in(l, i->c_str());
@@ -299,39 +299,39 @@ namespace ceph {
       // XXX Casey review
       list(const list& other) : _len(other._len),
 				last_p(this) {
-	//PtrList blah(other._bi_buffers); // cant do this
+	//PtrList blah(other._buffers); // cant do this
 	PtrList::const_iterator it;
-	for (it = other._bi_buffers.begin(); it != _bi_buffers.end();
+	for (it = other._buffers.begin(); it != _buffers.end();
 	     ++it) {
 	  buffer::ptr* bp = def_ptr_alloc.allocate(1);
 	  def_ptr_alloc.construct(bp, *it);
-	  _bi_buffers.push_back(*bp);
+	  _buffers.push_back(*bp);
 	}
       }
 
       list& operator= (const list& other) {
 	if (this != &other) {
-	  _bi_buffers.clear();
+	  _buffers.clear();
 	  // _buffers = other._buffers;
 	  PtrList::const_iterator it;
-	  for (it = other._bi_buffers.begin(); it != _bi_buffers.end();
+	  for (it = other._buffers.begin(); it != _buffers.end();
 	       ++it) {
 	    buffer::ptr* bp = def_ptr_alloc.allocate(1);
 	    def_ptr_alloc.construct(bp, *it);
-	    _bi_buffers.push_back(*bp);
+	    _buffers.push_back(*bp);
 	  }
 	  _len = other._len;
 	}
 	return *this;
       }
 
-      const PtrList& buffers() const { return _bi_buffers; }
-      const PtrList& bi_buffers() const { return _bi_buffers; }
+      const PtrList& buffers() const { return _buffers; }
+      const PtrList& bi_buffers() const { return _buffers; }
 
       void swap(list& other)
 	{
 	  std::swap(_len, other._len);
-	  _bi_buffers.swap(other._bi_buffers);
+	  _buffers.swap(other._buffers);
 	  append_buffer.swap(other.append_buffer);
 	  //last_p.swap(other.last_p);
 	  last_p = begin();
@@ -342,8 +342,8 @@ namespace ceph {
 #if 0
 	// DEBUG: verify _len
 	unsigned len = 0;
-	for (PtrList::const_iterator it = _bi_buffers.begin();
-	     it != _bi_buffers.end();
+	for (PtrList::const_iterator it = _buffers.begin();
+	     it != _buffers.end();
 	     ++it) {
 	  len += (*it).length();
 	}
@@ -359,10 +359,10 @@ namespace ceph {
 
 	  // buffer-wise comparison
 	  if (true) {
-	    PtrList::const_iterator a = _bi_buffers.begin();
-	    PtrList::const_iterator b = other._bi_buffers.begin();
+	    PtrList::const_iterator a = _buffers.begin();
+	    PtrList::const_iterator b = other._buffers.begin();
 	    unsigned aoff = 0, boff = 0;
-	    while (a != _bi_buffers.end()) {
+	    while (a != _buffers.end()) {
 	      unsigned len = a->length() - aoff;
 	      if (len > b->length() - boff)
 		len = b->length() - boff;
@@ -379,7 +379,7 @@ namespace ceph {
 		++b;
 	      }
 	    }
-	    assert(b == other._bi_buffers.end());
+	    assert(b == other._buffers.end());
 	    return true;
 	  }
 
@@ -398,8 +398,8 @@ namespace ceph {
 	}
 
       bool can_zero_copy() const {
-	for (PtrList::const_iterator it = _bi_buffers.begin();
-	     it != _bi_buffers.end();
+	for (PtrList::const_iterator it = _buffers.begin();
+	     it != _buffers.end();
 	     ++it)
 	  if (!it->can_zero_copy())
 	    return false;
@@ -408,8 +408,8 @@ namespace ceph {
 
       // std++11 lambdas ftw (next 3)
       bool is_page_aligned() const {
-	for (PtrList::const_iterator it = _bi_buffers.begin();
-	     it != _bi_buffers.end();
+	for (PtrList::const_iterator it = _buffers.begin();
+	     it != _buffers.end();
 	     ++it)
 	  if (!it->is_page_aligned())
 	    return false;
@@ -417,8 +417,8 @@ namespace ceph {
       }
 
       bool is_n_page_sized() const {
-	for (PtrList::const_iterator it = _bi_buffers.begin();
-	     it != _bi_buffers.end();
+	for (PtrList::const_iterator it = _buffers.begin();
+	     it != _buffers.end();
 	     ++it)
 	  if (!it->is_n_page_sized())
 	    return false;
@@ -426,8 +426,8 @@ namespace ceph {
       }
 
       bool is_zero() const {
-	for (PtrList::const_iterator it = _bi_buffers.begin();
-	     it != _bi_buffers.end();
+	for (PtrList::const_iterator it = _buffers.begin();
+	     it != _buffers.end();
 	     ++it) {
 	  if (!it->is_zero()) {
 	    return false;
@@ -438,14 +438,15 @@ namespace ceph {
 
       // modifiers
       void clear() {
-	PtrList tmp;
-	tmp.splice(tmp.end(), _bi_buffers);
-	for (PtrList::iterator it = tmp.begin();
-	     it != tmp.end(); ++it) {
+	// in default mode, bi::list::clear() will not visit
+	// elements interned on _buffers
+	for (PtrList::iterator it = _buffers.begin();
+	     it != _buffers.end(); ++it) {
 	  buffer::ptr* bp = &(*it);
 	  def_ptr_alloc.destroy(bp);
 	  def_ptr_alloc.deallocate(bp, 1);
 	}
+	_buffers.clear();
        	_len = 0;
        	last_p = begin();
       }
@@ -455,14 +456,14 @@ namespace ceph {
 	  return;
 	buffer::ptr* tp = def_ptr_alloc.allocate(1);
 	def_ptr_alloc.construct(tp, bp);
-	_bi_buffers.push_back(*tp);
+	_buffers.push_back(*tp);
 	_len += bp.length();
       }
 
       void push_front(raw *r) {
 	buffer::ptr* bp = def_ptr_alloc.allocate(1);
 	def_ptr_alloc.construct(bp, r);
-	_bi_buffers.push_front(*bp);
+	_buffers.push_front(*bp);
 	_len += bp->length();
       }
 
@@ -471,22 +472,22 @@ namespace ceph {
 	  return;
 	buffer::ptr* tp = def_ptr_alloc.allocate(1);
 	def_ptr_alloc.construct(tp, bp);
-	_bi_buffers.push_back(*tp);
+	_buffers.push_back(*tp);
 	_len += bp.length();
       }
 
       void push_back(raw *r) {
 	buffer::ptr* bp = def_ptr_alloc.allocate(1);
 	def_ptr_alloc.construct(bp, r);
-	_bi_buffers.push_back(*bp);
+	_buffers.push_back(*bp);
 	_len += bp->length();
       }
 
       // std++11 lambdas ftw
       void zero()
 	{
-	  for (PtrList::iterator it = _bi_buffers.begin();
-	       it != _bi_buffers.end();
+	  for (PtrList::iterator it = _buffers.begin();
+	       it != _buffers.end();
 	       ++it)
 	    it->zero();
 	}
@@ -495,8 +496,8 @@ namespace ceph {
 	{
 	  assert(o+l <= _len);
 	  unsigned p = 0;
-	  for (PtrList::iterator it = _bi_buffers.begin();
-	       it != _bi_buffers.end();
+	  for (PtrList::iterator it = _buffers.begin();
+	       it != _buffers.end();
 	       ++it) {
 	    if (p + it->length() > o) {
 	      if (p >= o && p+it->length() <= o+l)
@@ -514,7 +515,7 @@ namespace ceph {
 
       bool is_contiguous()
 	{
-	  return &(*_bi_buffers.begin()) == &(*_bi_buffers.rbegin());
+	  return &(*_buffers.begin()) == &(*_buffers.rbegin());
 	}
 
       void rebuild()
@@ -530,8 +531,8 @@ namespace ceph {
       void rebuild(ptr& nb)
 	{
 	  unsigned pos = 0;
-	  for (PtrList::iterator it = _bi_buffers.begin();
-	       it != _bi_buffers.end();
+	  for (PtrList::iterator it = _buffers.begin();
+	       it != _buffers.end();
 	       ++it) {
 	    nb.copy_in(pos, it->length(), it->c_str());
 	    pos += it->length();
@@ -542,8 +543,8 @@ namespace ceph {
 
       void rebuild_page_aligned()
 	{
-	  PtrList::iterator p = _bi_buffers.begin();
-	  while (p != _bi_buffers.end()) {
+	  PtrList::iterator p = _buffers.begin();
+	  while (p != _buffers.end()) {
 	    // keep anything that's already page sized+aligned
 	    if (p->is_page_aligned() && p->is_n_page_sized()) {
 	      /*cout << " segment " << (void*)p->c_str()
@@ -571,15 +572,15 @@ namespace ceph {
 	      */
 	      offset += p->length();
 	      unaligned.push_back(*p);
-	      _bi_buffers.erase(p++);
-	    } while (p != _bi_buffers.end() &&
+	      _buffers.erase(p++);
+	    } while (p != _buffers.end() &&
 		     (!p->is_page_aligned() ||
 		      !p->is_n_page_sized() ||
 		      (offset & ~CEPH_PAGE_MASK)));
 	    buffer::ptr* bp = def_ptr_alloc.allocate(1);
 	    def_ptr_alloc.construct(bp, create_page_aligned(unaligned._len));
 	    unaligned.rebuild(*bp);
-	    _bi_buffers.insert(p, unaligned._bi_buffers.front());
+	    _buffers.insert(p, unaligned._buffers.front());
 	  }
 	}
 
@@ -595,7 +596,7 @@ namespace ceph {
 	{
 	  // steal the other guy's buffers
 	  _len += bl._len;
-	  _bi_buffers.splice(_bi_buffers.end(), bl._bi_buffers );
+	  _buffers.splice(_buffers.end(), bl._buffers );
 	  bl._len = 0;
 	  bl.last_p = bl.begin();
 	}
@@ -604,7 +605,7 @@ namespace ceph {
 	{
 	  // steal the other guy's buffers
 	  _len += bl._len;
-	  _bi_buffers.splice(_bi_buffers.begin(), bl._bi_buffers);
+	  _buffers.splice(_buffers.begin(), bl._buffers);
 	  bl._len = 0;
 	  bl.last_p = bl.begin();
 	}
@@ -614,7 +615,7 @@ namespace ceph {
       }
 
       iterator end() {
-	return iterator(this, _len, _bi_buffers.end(), 0);
+	return iterator(this, _len, _buffers.end(), 0);
       }
 
       // crope lookalikes.
@@ -704,8 +705,8 @@ namespace ceph {
 
       void append(const ptr& bp, unsigned off, unsigned len) {
 	assert(len+off <= bp.length());
-	if (!_bi_buffers.empty()) {
-	  ptr &l = _bi_buffers.back();
+	if (!_buffers.empty()) {
+	  ptr &l = _buffers.back();
 	  if (l.get_raw() == bp.get_raw() &&
 	      l.end() == bp.start() + off) {
 	    // yay contiguous with tail bp!
@@ -722,12 +723,12 @@ namespace ceph {
       // intrusive sharing exemplar
       void append(const list& bl) {
 	_len += bl._len;
-	for (PtrList::const_iterator p = bl._bi_buffers.begin();
-	     p != bl._bi_buffers.end();
+	for (PtrList::const_iterator p = bl._buffers.begin();
+	     p != bl._buffers.end();
 	     ++p) {
 	  buffer::ptr* bp = def_ptr_alloc.allocate(1);
 	  def_ptr_alloc.construct(bp, *p);
-	  _bi_buffers.push_back(*bp);
+	  _buffers.push_back(*bp);
 	}
       }
 
@@ -755,8 +756,8 @@ namespace ceph {
 	if (n >= _len)
 	  throw end_of_buffer();
 
-	for (PtrList::const_iterator p = _bi_buffers.begin();
-	     p != _bi_buffers.end();
+	for (PtrList::const_iterator p = _buffers.begin();
+	     p != _buffers.end();
 	     ++p) {
 	  if (n >= p->length()) {
 	    n -= p->length();
@@ -771,15 +772,15 @@ namespace ceph {
        * return a contiguous ptr to whole bufferlist contents.
        */
       char *c_str() {
-	if (_bi_buffers.empty())
+	if (_buffers.empty())
 	  return 0; // no buffers
 
-	PtrList::const_iterator iter = _bi_buffers.begin();
+	PtrList::const_iterator iter = _buffers.begin();
 	++iter;
 
-	if (iter != _bi_buffers.end())
+	if (iter != _buffers.end())
 	  rebuild();
-	return _bi_buffers.front().c_str();  // good, we're already contiguous.
+	return _buffers.front().c_str();  // good, we're already contiguous.
       }
 
       void substr_of(const list& other, unsigned off, unsigned len) {
@@ -789,7 +790,7 @@ namespace ceph {
 	clear();
 
 	// skip off
-	PtrList::const_iterator curbuf = other._bi_buffers.begin();
+	PtrList::const_iterator curbuf = other._buffers.begin();
 	while (off > 0 &&
 	       off >= curbuf->length()) {
 	  // skip this buffer
@@ -797,7 +798,7 @@ namespace ceph {
 	  off -= curbuf->length();
 	  ++curbuf;
 	}
-	assert(len == 0 || curbuf != other._bi_buffers.end());
+	assert(len == 0 || curbuf != other._buffers.end());
 
 	while (len > 0) {
 	  // partial?
@@ -805,7 +806,7 @@ namespace ceph {
 	    //cout << "copying partial of " << *curbuf << std::endl;
 	    buffer::ptr* bp = def_ptr_alloc.allocate(1);
 	    def_ptr_alloc.construct(bp, ptr(*curbuf, off, len)); // refleak?
-	    _bi_buffers.push_back(*bp);
+	    _buffers.push_back(*bp);
 	    _len += len;
 	    break;
 	  }
@@ -816,7 +817,7 @@ namespace ceph {
 
 	  buffer::ptr* bp = def_ptr_alloc.allocate(1);
 	  def_ptr_alloc.construct(bp, ptr(*curbuf, off, howmuch)); // refleak?
-	  _bi_buffers.push_back(*bp);
+	  _buffers.push_back(*bp);
 	  _len += howmuch;
 	  len -= howmuch;
 	  off = 0;
@@ -839,9 +840,9 @@ namespace ceph {
 	*/
 
 	// skip off
-	PtrList::iterator curbuf = _bi_buffers.begin();
+	PtrList::iterator curbuf = _buffers.begin();
 	while (off > 0) {
-	  assert(curbuf != _bi_buffers.end());
+	  assert(curbuf != _buffers.end());
 	  if (off >= curbuf->length()) {
 	    // skip this buffer
 	    /* cout << "off = " << off << " skipping over " << *curbuf
@@ -864,7 +865,7 @@ namespace ceph {
 
 	  buffer::ptr* bp = def_ptr_alloc.allocate(1);
 	  def_ptr_alloc.construct(bp, ptr(*curbuf, 0, off)); // XXX refleak?
-	  _bi_buffers.insert(curbuf, *bp);
+	  _buffers.insert(curbuf, *bp);
 	  _len += off;
 	}
 
@@ -890,7 +891,7 @@ namespace ceph {
 	  if (claim_by)
 	    claim_by->append(*curbuf, off, howmuch);
 	  _len -= curbuf->length();
-	  _bi_buffers.erase(curbuf++);
+	  _buffers.erase(curbuf++);
 	  len -= howmuch;
 	  off = 0;
 	}
@@ -902,8 +903,8 @@ namespace ceph {
       void write(int off, int len, std::ostream& out) const {
 	list s;
 	s.substr_of(*this, off, len);
-	for (PtrList::const_iterator it = s._bi_buffers.begin();
-	     it != s._bi_buffers.end();
+	for (PtrList::const_iterator it = s._buffers.begin();
+	     it != s._buffers.end();
 	     ++it)
 	  if (it->length())
 	    out.write(it->c_str(), it->length());
@@ -1079,8 +1080,8 @@ namespace ceph {
 	int iovlen = 0;
 	ssize_t bytes = 0;
 
-	PtrList::const_iterator p = _bi_buffers.begin();
-	while (p != _bi_buffers.end()) {
+	PtrList::const_iterator p = _buffers.begin();
+	while (p != _buffers.end()) {
 	  if (p->length() > 0) {
 	    iov[iovlen].iov_base = (void *)p->c_str();
 	    iov[iovlen].iov_len = p->length();
@@ -1090,7 +1091,7 @@ namespace ceph {
 	  ++p;
 
 	  if (iovlen == IOV_MAX-1 ||
-	      p == _bi_buffers.end()) {
+	      p == _buffers.end()) {
 	    iovec *start = iov;
 	    int num = iovlen;
 	    ssize_t wrote;
@@ -1136,8 +1137,8 @@ namespace ceph {
 	  return (int) offset;
 	if (offset == ESPIPE)
 	  off_p = NULL;
-	for (PtrList::const_iterator it = _bi_buffers.begin();
-	     it != _bi_buffers.end(); ++it) {
+	for (PtrList::const_iterator it = _buffers.begin();
+	     it != _buffers.end(); ++it) {
 	  int r = it->zero_copy_to_fd(fd, off_p);
 	  if (r < 0)
 	    return r;
@@ -1148,8 +1149,8 @@ namespace ceph {
       }
 
       __u32 crc32c(__u32 crc) const {
-	for (PtrList::const_iterator it = _bi_buffers.begin();
-	     it != _bi_buffers.end(); ++it) {
+	for (PtrList::const_iterator it = _buffers.begin();
+	     it != _buffers.end(); ++it) {
 	  if (it->length()) {
 	    raw *r = it->get_raw();
 	    pair<size_t, size_t> ofs(it->offset(), it->offset() +
