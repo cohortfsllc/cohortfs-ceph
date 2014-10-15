@@ -64,10 +64,6 @@ namespace ceph {
 	  advance(o);
 	}
 
-	iterator(list *l, unsigned o, std::list<ptr>::iterator ip,
-		 unsigned po) :
-	  bl(l), off(o), p_off(po) { }
-
 	iterator(list *l, unsigned o, PtrList::iterator ip,
 		 unsigned po) :
 	  bl(l), ls(&bl->_buffers), off(o),
