@@ -42,7 +42,7 @@
 #undef dout_prefix
 #define dout_prefix _prefix(_dout, this)
 template <typename T, typename Y>
-static StrmRet<Y>::type& _prefix(Y *_dout, T *vol) {
+static typename StrmRet<Y>::type& _prefix(Y *_dout, T *vol) {
   return *_dout << vol->gen_prefix();
 }
 
@@ -303,17 +303,6 @@ void OSDVol::requeue_ops(list<OpRequestRef> &ls)
   ls.clear();
 }
 
-ostream& operator<<(ostream& out, const OSDVol& vol)
-{
-  out << "vol[" << vol.info;
-
-  if (vol.last_update_ondisk != vol.info.last_update)
-    out << " luod=" << vol.last_update_ondisk;
-  out << "]";
-
-
-  return out;
-}
 
 bool OSDVol::can_discard_op(OpRequestRef op)
 {

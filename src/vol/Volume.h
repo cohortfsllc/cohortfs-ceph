@@ -178,7 +178,8 @@ public:
 
 WRITE_CLASS_ENCODER(Volume)
 
-inline ostream& operator<<(ostream& out, const Volume& vol) {
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const Volume& vol) {
   return out << Volume::type_string(vol.type) << " : "
 	     << vol.uuid << " : " << vol.name;
 }

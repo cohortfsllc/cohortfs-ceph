@@ -664,7 +664,18 @@ protected:
 			  Context *on_complete);
 };
 
-ostream& operator<<(ostream& out, const OSDVol& vol);
+template <typename T>
+typename StrmRet<T>::type& operator<<(T& out, const OSDVol& vol)
+{
+  out << "vol[" << vol.info;
+
+  if (vol.last_update_ondisk != vol.info.last_update)
+    out << " luod=" << vol.last_update_ondisk;
+  out << "]";
+
+
+  return out;
+}
 void intrusive_ptr_add_ref(OSDVol::Mutation *mutation);
 void intrusive_ptr_release(OSDVol::Mutation *mutation);
 

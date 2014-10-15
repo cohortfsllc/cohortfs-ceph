@@ -1391,6 +1391,10 @@ public:
 WRITE_CLASS_ENCODER(ObjectStore::Transaction::Op)
 WRITE_CLASS_ENCODER(ObjectStore::Transaction)
 
-ostream& operator<<(ostream& out, const ObjectStore::Sequencer& s);
+template <typename T>
+typename StrmRet<T>::type& operator<<(T& out, const ObjectStore::Sequencer& s)
+{
+  return out << "osr(" << s.get_name() << " " << &s << ")";
+}
 
 #endif

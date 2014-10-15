@@ -504,7 +504,18 @@ public:
   void print(ostream& out) const;
   void print_summary(Formatter *f, ostream& out) const;
   template <typename T>
-  void print_oneline_summary(T& out) const;
+  void print_oneline_summary(T& out) const
+  {
+    out << "e" << get_epoch() << ": "
+        << get_num_osds() << " osds: "
+        << get_num_up_osds() << " up, "
+        << get_num_in_osds() << " in";
+    if (test_flag(CEPH_OSDMAP_FULL))
+      out << " full";
+    else if (test_flag(CEPH_OSDMAP_NEARFULL))
+      out << " nearfull";
+  }
+
 
   string get_flag_string() const;
   static string get_flag_string(unsigned flags);
