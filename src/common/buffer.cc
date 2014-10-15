@@ -120,6 +120,8 @@ namespace ceph {
       return 65536;
     }
 
+    FSBAllocator<buffer::ptr, 512> buffer::list::def_ptr_alloc;
+
   } /* namespace buffer */
 
 } /* namespace ceph */

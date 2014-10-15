@@ -22,6 +22,7 @@
 #include "buffer_ptr.h"
 
 #include <include/intarith.h>
+#include <include/FSBAllocator.h>
 
 namespace ceph {
 
@@ -41,6 +42,8 @@ namespace ceph {
       PtrList _bi_buffers;
       unsigned _len;
       ptr append_buffer; // where i put small appends.
+
+      static FSBAllocator<ptr, 512> def_ptr_alloc;
 
     public:
       class iterator {
@@ -298,11 +301,9 @@ namespace ceph {
 	PtrList::const_iterator it;
 	for (it = other._bi_buffers.begin(); it != _bi_buffers.end();
 	     ++it) {
-	  // XXX is this correct, or do we need to push_back
-	  // ptr bp(it->get_raw()?  hoping it's the same thing...
-	  // I make use of that form later, need to get
-	  // correct or consistent
-	  _bi_buffers.push_back(const_cast<ptr&>(*it));
+	  buffer::ptr* bp = def_ptr_alloc.allocate(1);
+	  def_ptr_alloc.construct(bp, *it);
+	  _bi_buffers.push_back(*bp);
 	}
       }
 
@@ -313,16 +314,15 @@ namespace ceph {
 	  PtrList::const_iterator it;
 	  for (it = other._bi_buffers.begin(); it != _bi_buffers.end();
 	       ++it) {
-	    // XXX viz^^
-	    _bi_buffers.push_back(const_cast<ptr&>(*it));
+	    buffer::ptr* bp = def_ptr_alloc.allocate(1);
+	    def_ptr_alloc.construct(bp, *it);
+	    _bi_buffers.push_back(*bp);
 	  }
 	  _len = other._len;
 	}
 	return *this;
       }
 
-      // XXXX
-      //const std::list<ptr>& buffers() const { return _buffers; }
       const PtrList& buffers() const { return _bi_buffers; }
       const PtrList& bi_buffers() const { return _bi_buffers; }
 
@@ -436,33 +436,48 @@ namespace ceph {
 
       // modifiers
       void clear() {
-	_bi_buffers.clear();
-	_len = 0;
-	last_p = begin();
+	PtrList tmp;
+	tmp.splice(tmp.end(), _bi_buffers);
+	for (PtrList::iterator it = tmp.begin();
+	     it != tmp.end(); ++it) {
+	  buffer::ptr* bp = &(*it);
+	  def_ptr_alloc.destroy(bp);
+	  def_ptr_alloc.deallocate(bp, 1);
+	}
+       	_len = 0;
+       	last_p = begin();
       }
 
       void push_front(ptr& bp) {
 	if (bp.length() == 0)
 	  return;
-	_bi_buffers.push_front(bp);
+	buffer::ptr* tp = def_ptr_alloc.allocate(1);
+	def_ptr_alloc.construct(tp, bp);
+	_bi_buffers.push_back(*tp);
 	_len += bp.length();
       }
 
       void push_front(raw *r) {
-	ptr bp(r);
-	push_front(bp);
+	buffer::ptr* bp = def_ptr_alloc.allocate(1);
+	def_ptr_alloc.construct(bp, r);
+	_bi_buffers.push_front(*bp);
+	_len += bp->length();
       }
 
       void push_back(const ptr& bp) {
 	if (bp.length() == 0)
 	  return;
-	_bi_buffers.push_back(const_cast<ptr&>(bp));
+	buffer::ptr* tp = def_ptr_alloc.allocate(1);
+	def_ptr_alloc.construct(tp, bp);
+	_bi_buffers.push_back(*tp);
 	_len += bp.length();
       }
 
       void push_back(raw *r) {
-	ptr bp(r);
-	push_back(bp);
+	buffer::ptr* bp = def_ptr_alloc.allocate(1);
+	def_ptr_alloc.construct(bp, r);
+	_bi_buffers.push_back(*bp);
+	_len += bp->length();
       }
 
       // std++11 lambdas ftw
@@ -519,8 +534,8 @@ namespace ceph {
 	    nb.copy_in(pos, it->length(), it->c_str());
 	    pos += it->length();
 	  }
-	  _bi_buffers.clear();
-	  _bi_buffers.push_back(nb);
+	  clear(); // _len == 0
+	  push_back(nb); // _len == nb.length()
 	}
 
       void rebuild_page_aligned()
@@ -559,8 +574,9 @@ namespace ceph {
 		     (!p->is_page_aligned() ||
 		      !p->is_n_page_sized() ||
 		      (offset & ~CEPH_PAGE_MASK)));
-	    ptr nb(buffer::create_page_aligned(unaligned._len));
-	    unaligned.rebuild(nb);
+	    buffer::ptr* bp = def_ptr_alloc.allocate(1);
+	    def_ptr_alloc.construct(bp, create_page_aligned(unaligned._len));
+	    unaligned.rebuild(*bp);
 	    _bi_buffers.insert(p, unaligned._bi_buffers.front());
 	  }
 	}
@@ -701,14 +717,15 @@ namespace ceph {
 	push_back(tempbp);
       }
 
-      // XXX intrusive sharing exemplar
+      // intrusive sharing exemplar
       void append(const list& bl) {
 	_len += bl._len;
 	for (PtrList::const_iterator p = bl._bi_buffers.begin();
 	     p != bl._bi_buffers.end();
 	     ++p) {
-	  ptr bp(p->get_raw());
-	  _bi_buffers.push_back(const_cast<ptr&>(bp));
+	  buffer::ptr* bp = def_ptr_alloc.allocate(1);
+	  def_ptr_alloc.construct(bp, *p);
+	  _bi_buffers.push_back(*bp);
 	}
       }
 
@@ -723,9 +740,10 @@ namespace ceph {
       }
 
       void append_zero(unsigned len) {
-	ptr bp(len);
-	bp.zero();
-	append(bp);
+	buffer::ptr* bp = def_ptr_alloc.allocate(1);
+	def_ptr_alloc.construct(bp, len);
+	bp->zero();
+	append(*bp);
       }
 
       /*
@@ -783,8 +801,9 @@ namespace ceph {
 	  // partial?
 	  if (off + len < curbuf->length()) {
 	    //cout << "copying partial of " << *curbuf << std::endl;
-	    ptr bp(curbuf->get_raw(), off, len);
-	    _bi_buffers.push_back(bp);
+	    buffer::ptr* bp = def_ptr_alloc.allocate(1);
+	    def_ptr_alloc.construct(bp, ptr(*curbuf, off, len)); // refleak?
+	    _bi_buffers.push_back(*bp);
 	    _len += len;
 	    break;
 	  }
@@ -792,16 +811,16 @@ namespace ceph {
 	  // through end
 	  //cout << "copying end (all?) of " << *curbuf << std::endl;
 	  unsigned howmuch = curbuf->length() - off;
-	  ptr bp(curbuf->get_raw(), off, howmuch);
-	  _bi_buffers.push_back(bp);
+
+	  buffer::ptr* bp = def_ptr_alloc.allocate(1);
+	  def_ptr_alloc.construct(bp, ptr(*curbuf, off, howmuch)); // refleak?
+	  _bi_buffers.push_back(*bp);
 	  _len += howmuch;
 	  len -= howmuch;
 	  off = 0;
 	  ++curbuf;
 	}
       }
-
-      // XXXX:  TODO:  finish; dont understand splice semantics!
 
       // funky modifer
       void splice(unsigned off, unsigned len, list *claim_by=0
@@ -840,8 +859,10 @@ namespace ceph {
 	  //  insert it before curbuf (which we'll hose)
 	  /* cout << "keeping front " << off << " of " << *curbuf
 	     << std::endl; */
-	  ptr bp(curbuf->get_raw(), 0, off);
-	  _bi_buffers.insert(curbuf, bp);
+
+	  buffer::ptr* bp = def_ptr_alloc.allocate(1);
+	  def_ptr_alloc.construct(bp, ptr(*curbuf, 0, off)); // XXX refleak?
+	  _bi_buffers.insert(curbuf, *bp);
 	  _len += off;
 	}
 

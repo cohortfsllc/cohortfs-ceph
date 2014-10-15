@@ -200,6 +200,8 @@ endif(WITH_XIO)
 
 option(WITH_TEST "Build tests" ON)
 
+option(WITH_FSB_ALLOC "Enable FSBAllocator" ON)
+
 #option for RGW
 option(WITH_RADOSGW "Rados Gateway is enabled" ON)
 

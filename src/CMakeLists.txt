@@ -74,6 +74,12 @@ else()
   set(TCMALLOC_srcs perfglue/disabled_heap_profiler.cc)
 endif(${WITH_TCMALLOC})
 
+if(ENABLE_FSB_ALLOC)
+  # XXX compiler
+  set(CMAKE_CXX_FLAGS
+    "${CMAKE_CXX_FLAGS} -DFSBALLOCATOR_USE_THREAD_SAFE_LOCKING_GCC_WITH_SCHED")
+endif(ENABLE_FSB_ALLOC)
+
 if(HAVE_XIO)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I${Xio_INCLUDE_DIR}")
   add_definitions("-DHAVE_XIO")
