@@ -93,6 +93,14 @@ void JSONFormatter::flush(std::ostream& os)
   m_ss.str("");
 }
 
+void JSONFormatter::flush(lttng_stream& os)
+{
+  finish_pending_string();
+  os << m_ss.str();
+  m_ss.clear();
+  m_ss.str("");
+}
+
 void JSONFormatter::reset()
 {
   m_stack.clear();

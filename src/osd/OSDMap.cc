@@ -63,13 +63,6 @@ void osd_info_t::generate_test_instances(list<osd_info_t*>& o)
   o.back()->down_at = 5;
 }
 
-ostream& operator<<(ostream& out, const osd_info_t& info)
-{
-  out << "up_from " << info.up_from
-      << " up_thru " << info.up_thru
-      << " down_at " << info.down_at;
-    return out;
-}
 
 // ----------------------------------
 // osd_xinfo_t
@@ -117,12 +110,6 @@ void osd_xinfo_t::generate_test_instances(list<osd_xinfo_t*>& o)
   o.back()->laggy_interval = 123456;
 }
 
-ostream& operator<<(ostream& out, const osd_xinfo_t& xi)
-{
-  return out << "down_stamp " << xi.down_stamp
-	     << " laggy_probability " << xi.laggy_probability
-	     << " laggy_interval " << xi.laggy_interval;
-}
 
 // ----------------------------------
 // OSDMap::Incremental
@@ -1064,7 +1051,8 @@ void OSDMap::print_summary(Formatter *f, ostream& out) const
   }
 }
 
-void OSDMap::print_oneline_summary(ostream& out) const
+template <typename T>
+void OSDMap::print_oneline_summary(T& out) const
 {
   out << "e" << get_epoch() << ": "
       << get_num_osds() << " osds: "

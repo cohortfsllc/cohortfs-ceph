@@ -40,7 +40,7 @@ public:
   template<typename T>
   std::ostream& operator<<(const T& rhs)
   {
-    return ss << rhs;
+    return (std::ostream&)ss << rhs;
   }
 
 private:

@@ -85,6 +85,7 @@
 #define dout_subsys ceph_subsys_mon
 #undef dout_prefix
 #define dout_prefix _prefix(_dout, this)
+
 template <typename T>
 static typename StrmRet<T>::type& _prefix(T *_dout, const Monitor *mon) {
   return *_dout << "mon." << mon->name << "@" << mon->rank
@@ -2021,7 +2022,7 @@ void Monitor::get_cluster_status(stringstream &ss, Formatter *f)
     osdmon()->osdmap.print_summary(f, cout);
     f->close_section();
     f->open_object_section("mdsmap");
-    mdsmon()->mdsmap.print_summary(f, NULL);
+    mdsmon()->mdsmap.print_summary(f);
     f->close_section();
     f->close_section();
   } else {
@@ -2269,7 +2270,7 @@ void Monitor::handle_command(MMonCommand *m)
       f->close_section();
       f->flush(rdata);
     } else {
-      ds << monmap->fsid;
+      (ostream&)ds << monmap->fsid;
       rdata.append(ds);
     }
     reply_command(m, 0, "", rdata, 0);
@@ -3842,7 +3843,7 @@ int Monitor::write_fsid()
 int Monitor::write_fsid(MonitorDBStore::Transaction &t)
 {
   ostringstream ss;
-  ss << monmap->get_fsid() << "\n";
+  (ostream&)ss << monmap->get_fsid() << "\n";
   string us = ss.str();
 
   bufferlist b;

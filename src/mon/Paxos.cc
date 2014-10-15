@@ -27,7 +27,9 @@
 #define dout_subsys ceph_subsys_paxos
 #undef dout_prefix
 #define dout_prefix _prefix(_dout, mon, mon->name, mon->rank, paxos_name, state, first_committed, last_committed)
-static ostream& _prefix(std::ostream *_dout, Monitor *mon, const string& name,
+
+template <typename T>
+static typename StrmRet<T>::type& _prefix(T *_dout, Monitor *mon, const string& name,
 			int rank, const string& paxos_name, int state,
 			version_t first_committed, version_t last_committed)
 {
@@ -1307,7 +1309,8 @@ bool Paxos::is_writeable()
     is_lease_valid();
 }
 
-void Paxos::list_proposals(ostream& out)
+template <typename T>
+void Paxos::list_proposals(T& out)
 {
   out << __func__ << " " << proposals.size() << " in queue:\n";
   list<Context*>::iterator p_it = proposals.begin();

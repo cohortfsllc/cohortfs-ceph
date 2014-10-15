@@ -44,7 +44,8 @@
 #define dout_subsys ceph_subsys_mon
 #undef dout_prefix
 #define dout_prefix _prefix(_dout, mon, mdsmap)
-static ostream& _prefix(std::ostream *_dout, Monitor *mon, MDSMap& mdsmap) {
+template <typename T>
+static typename StrmRet<T>::type& _prefix(T *_dout, Monitor *mon, MDSMap& mdsmap) {
   return *_dout << "mon." << mon->name << "@" << mon->rank
 		<< "(" << mon->get_state_name()
 		<< ").mds e" << mdsmap.get_epoch() << " ";
@@ -592,7 +593,7 @@ bool MDSMonitor::preprocess_command(MMonCommand *m)
       f->close_section();
       f->flush(ds);
     } else {
-      ds << mdsmap;
+      (std::ostream&)ds << mdsmap;
     }
     r = 0;
   } else if (prefix == "mds dump") {
@@ -698,7 +699,7 @@ bool MDSMonitor::preprocess_command(MMonCommand *m)
 	f->close_section();
 	f->flush(ds);
       } else {
-	ds << mdsmap.compat;
+	(std::ostream&)ds << mdsmap.compat;
       }
       r = 0;
   }

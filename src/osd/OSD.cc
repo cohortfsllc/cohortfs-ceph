@@ -101,7 +101,8 @@
 #undef dout_prefix
 #define dout_prefix _prefix(_dout, whoami, get_osdmap())
 
-static ostream& _prefix(std::ostream* _dout, int whoami, OSDMapRef osdmap) {
+template <typename T>
+static typename StrmRet<T>::type& _prefix(T* _dout, int whoami, OSDMapRef osdmap) {
   return *_dout << "osd." << whoami << " "
 		<< (osdmap ? osdmap->get_epoch():0)
 		<< " ";

@@ -637,13 +637,17 @@ public:
 }
 
 
-  void print_summary(Formatter *f, ostream *out);
+  void print_summary(Formatter *f, ostream *out=NULL);
+  void print_summary(Formatter *f, lttng_stream *out);
 
   void dump(Formatter *f) const;
   static void generate_test_instances(list<MDSMap*>& ls);
 };
 WRITE_CLASS_ENCODER_FEATURES(MDSMap::mds_info_t)
 WRITE_CLASS_ENCODER_FEATURES(MDSMap)
+
+template <typename T>
+typename StrmRet<T>::type& summary(Formatter *f,T *out, MDSMap *mdsmap);
 
 template <typename T>
 inline typename StrmRet<T>::type& operator<<(T& out, MDSMap& m) {
