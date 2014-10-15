@@ -50,7 +50,8 @@ namespace ceph {
 
 
     public:
-      bi::list_member_hook<> bi_hook1; // primary list hook
+      bi::list_member_hook< bi::link_mode<bi::normal_link> >
+      bi_hook1; // primary list hook
 
       ptr() : _raw(0), _off(0), _len(0) {}
 

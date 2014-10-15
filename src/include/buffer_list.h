@@ -34,7 +34,9 @@ namespace ceph {
      */
     typedef bi::list< ptr,
 		      bi::member_hook<
-			ptr, bi::list_member_hook<>, &ptr::bi_hook1 >
+			ptr, 
+			bi::list_member_hook< bi::link_mode< bi::normal_link> >,
+			&ptr::bi_hook1 >
 		      > PtrList;
 
     class list {
