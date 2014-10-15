@@ -268,13 +268,13 @@ namespace ceph {
 	  if (bi_p == ls->end())
 	    seek(off);
 	  unsigned left = len;
-	  for (PtrList::const_iterator i = other._buffers.begin();
-	       i != other._buffers.end();
-	       ++i) {
-	    unsigned l = i->length();
+	  for (PtrList::const_iterator it = other._buffers.begin();
+	       it != other._buffers.end();
+	       ++it) {
+	    unsigned l = it->length();
 	    if (left < l)
 	      l = left;
-	    copy_in(l, i->c_str());
+	    copy_in(l, it->c_str());
 	    left -= l;
 	    if (left == 0)
 	      break;
@@ -543,17 +543,17 @@ namespace ceph {
 
       void rebuild_page_aligned()
 	{
-	  PtrList::iterator p = _buffers.begin();
-	  while (p != _buffers.end()) {
+	  PtrList::iterator it = _buffers.begin();
+	  while (it != _buffers.end()) {
 	    // keep anything that's already page sized+aligned
-	    if (p->is_page_aligned() && p->is_n_page_sized()) {
+	    if (it->is_page_aligned() && it->is_n_page_sized()) {
 	      /*cout << " segment " << (void*)p->c_str()
 		<< " offset " << ((unsigned long)p->c_str() & ~CEPH_PAGE_MASK)
 		<< " length " << p->length()
 		<< " " << (p->length() & ~CEPH_PAGE_MASK) << " ok"
 		<< std::endl;
 	      */
-	      ++p;
+	      ++it;
 	      continue;
 	    }
 
@@ -570,17 +570,17 @@ namespace ceph {
 		<< (offset & ~CEPH_PAGE_MASK)
 		<< " not ok" << std::endl;
 	      */
-	      offset += p->length();
-	      unaligned.push_back(*p);
-	      _buffers.erase(p++);
-	    } while (p != _buffers.end() &&
-		     (!p->is_page_aligned() ||
-		      !p->is_n_page_sized() ||
+	      offset += it->length();
+	      unaligned.push_back(*it);
+	      _buffers.erase(it++);
+	    } while (it != _buffers.end() &&
+		     (!it->is_page_aligned() ||
+		      !it->is_n_page_sized() ||
 		      (offset & ~CEPH_PAGE_MASK)));
 	    buffer::ptr* bp = def_ptr_alloc.allocate(1);
 	    def_ptr_alloc.construct(bp, create_page_aligned(unaligned._len));
 	    unaligned.rebuild(*bp);
-	    _buffers.insert(p, unaligned._buffers.front());
+	    _buffers.insert(it, unaligned._buffers.front());
 	  }
 	}
 
@@ -723,11 +723,11 @@ namespace ceph {
       // intrusive sharing exemplar
       void append(const list& bl) {
 	_len += bl._len;
-	for (PtrList::const_iterator p = bl._buffers.begin();
-	     p != bl._buffers.end();
-	     ++p) {
+	for (PtrList::const_iterator it = bl._buffers.begin();
+	     it != bl._buffers.end();
+	     ++it) {
 	  buffer::ptr* bp = def_ptr_alloc.allocate(1);
-	  def_ptr_alloc.construct(bp, *p);
+	  def_ptr_alloc.construct(bp, *it);
 	  _buffers.push_back(*bp);
 	}
       }
@@ -756,14 +756,14 @@ namespace ceph {
 	if (n >= _len)
 	  throw end_of_buffer();
 
-	for (PtrList::const_iterator p = _buffers.begin();
-	     p != _buffers.end();
-	     ++p) {
-	  if (n >= p->length()) {
-	    n -= p->length();
+	for (PtrList::const_iterator it = _buffers.begin();
+	     it != _buffers.end();
+	     ++it) {
+	  if (n >= it->length()) {
+	    n -= it->length();
 	    continue;
 	  }
-	  return (*p)[n];
+	  return (*it)[n];
 	}
 	assert(0);
       }
@@ -774,11 +774,9 @@ namespace ceph {
       char *c_str() {
 	if (_buffers.empty())
 	  return 0; // no buffers
-
-	PtrList::const_iterator iter = _buffers.begin();
-	++iter;
-
-	if (iter != _buffers.end())
+	PtrList::const_iterator it = _buffers.begin();
+	++it;
+	if (it != _buffers.end())
 	  rebuild();
 	return _buffers.front().c_str();  // good, we're already contiguous.
       }
@@ -1080,18 +1078,18 @@ namespace ceph {
 	int iovlen = 0;
 	ssize_t bytes = 0;
 
-	PtrList::const_iterator p = _buffers.begin();
-	while (p != _buffers.end()) {
-	  if (p->length() > 0) {
-	    iov[iovlen].iov_base = (void *)p->c_str();
-	    iov[iovlen].iov_len = p->length();
-	    bytes += p->length();
+	PtrList::const_iterator it = _buffers.begin();
+	while (it != _buffers.end()) {
+	  if (it->length() > 0) {
+	    iov[iovlen].iov_base = (void *)it->c_str();
+	    iov[iovlen].iov_len = it->length();
+	    bytes += it->length();
 	    iovlen++;
 	  }
-	  ++p;
+	  ++it;
 
 	  if (iovlen == IOV_MAX-1 ||
-	      p == _buffers.end()) {
+	      it == _buffers.end()) {
 	    iovec *start = iov;
 	    int num = iovlen;
 	    ssize_t wrote;
@@ -1203,21 +1201,21 @@ namespace ceph {
     }; /* class buffer::list */
 
     inline bool operator>(bufferlist& l, bufferlist& r) {
-      for (unsigned p = 0; ; p++) {
-	if (l.length() > p && r.length() == p) return true;
-	if (l.length() == p) return false;
-	if (l[p] > r[p]) return true;
-	if (l[p] < r[p]) return false;
+      for (unsigned pos = 0; ; ++pos) {
+	if (l.length() > pos && r.length() == pos) return true;
+	if (l.length() == pos) return false;
+	if (l[pos] > r[pos]) return true;
+	if (l[pos] < r[pos]) return false;
       }
     }
 
     inline bool operator>=(bufferlist& l, bufferlist& r) {
-      for (unsigned p = 0; ; p++) {
-	if (l.length() > p && r.length() == p) return true;
-	if (r.length() == p && l.length() == p) return true;
-	if (l.length() == p && r.length() > p) return false;
-	if (l[p] > r[p]) return true;
-	if (l[p] < r[p]) return false;
+      for (unsigned pos = 0; ; ++pos) {
+	if (l.length() > pos && r.length() == pos) return true;
+	if (r.length() == pos && l.length() == pos) return true;
+	if (l.length() == pos && r.length() > pos) return false;
+	if (l[pos] > r[pos]) return true;
+	if (l[pos] < r[pos]) return false;
       }
     }
 
@@ -1238,8 +1236,8 @@ namespace ceph {
     inline bool operator==(bufferlist &l, bufferlist &r) {
       if (l.length() != r.length())
 	return false;
-      for (unsigned p = 0; p < l.length(); p++) {
-	if (l[p] != r[p])
+      for (unsigned pos = 0; pos < l.length(); ++pos) {
+	if (l[pos] != r[pos])
 	  return false;
       }
       return true;
