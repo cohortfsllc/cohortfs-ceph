@@ -1263,7 +1263,8 @@ public:
    * @param out[out] Output Stream onto which we will output the list
    *		     of queued proposals.
    */
-  void list_proposals(ostream& out);
+  template <typename T>
+  void list_proposals(T& out);
   /**
    * Propose a new value to the Leader.
    *
@@ -1303,7 +1304,8 @@ public:
   MonitorDBStore *get_store();
 };
 
-inline ostream& operator<<(ostream& out, Paxos::C_Proposal& p)
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, Paxos::C_Proposal& p)
 {
   string proposed = (p.proposed ? "proposed" : "unproposed");
   out << " " << proposed

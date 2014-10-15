@@ -40,8 +40,8 @@
 #define DOUT_PREFIX_ARGS this, osd->whoami, get_osdmap()
 #undef dout_prefix
 #define dout_prefix _prefix(_dout, this)
-template <typename T>
-static ostream& _prefix(std::ostream *_dout, T *vol) {
+template <typename T, typename Y>
+static StrmRet<Y>::type& _prefix(Y *_dout, T *vol) {
   return *_dout << vol->gen_prefix();
 }
 

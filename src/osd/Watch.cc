@@ -18,9 +18,9 @@ struct CancelableContext : public Context {
 #define dout_subsys ceph_subsys_osd
 #undef dout_prefix
 #define dout_prefix _prefix(_dout, this)
-
-static ostream& _prefix(
-  std::ostream* _dout,
+template <typename T>
+static typename StrmRet<T>::type& _prefix(
+  T* _dout,
   Notify *notify) {
   return *_dout << notify->gen_dbg_prefix();
 }
@@ -194,9 +194,9 @@ void Notify::init()
 #define dout_subsys ceph_subsys_osd
 #undef dout_prefix
 #define dout_prefix _prefix(_dout, watch.get())
-
-static ostream& _prefix(
-  std::ostream* _dout,
+template <typename T>
+static typename StrmRet<T>::type& _prefix(
+  T* _dout,
   Watch *watch) {
   return *_dout << watch->gen_dbg_prefix();
 }

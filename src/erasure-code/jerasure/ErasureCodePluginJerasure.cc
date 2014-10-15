@@ -22,7 +22,8 @@
 #undef dout_prefix
 #define dout_prefix _prefix(_dout)
 
-static ostream& _prefix(std::ostream* _dout)
+template <typename T>
+static typename StrmRet<T>::type& _prefix(T* _dout)
 {
   return *_dout << "ErasureCodePluginJerasure: ";
 }

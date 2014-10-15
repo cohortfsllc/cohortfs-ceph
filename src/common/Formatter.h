@@ -72,6 +72,7 @@ class JSONFormatter : public Formatter {
   JSONFormatter(bool p=false);
 
   void flush(std::ostream& os);
+  void flush(lttng_stream& os);
   void reset();
   virtual void open_array_section(const char *name);
   void open_array_section_in_ns(const char *name, const char *ns);

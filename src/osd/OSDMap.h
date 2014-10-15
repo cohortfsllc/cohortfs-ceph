@@ -63,7 +63,14 @@ struct osd_info_t {
 };
 WRITE_CLASS_ENCODER(osd_info_t)
 
-ostream& operator<<(ostream& out, const osd_info_t& info);
+template <typename T>
+typename StrmRet<T>::type& operator<<(T& out, const osd_info_t& info)
+{
+  out << "up_from " << info.up_from
+      << " up_thru " << info.up_thru
+      << " down_at " << info.down_at;
+    return out;
+}
 
 struct osd_xinfo_t {
   utime_t down_stamp; ///< timestamp when we were last marked down
@@ -83,7 +90,13 @@ struct osd_xinfo_t {
 };
 WRITE_CLASS_ENCODER(osd_xinfo_t)
 
-ostream& operator<<(ostream& out, const osd_xinfo_t& xi);
+template <typename T>
+typename StrmRet<T>::type& operator<<(T& out, const osd_xinfo_t& xi)
+{
+  return out << "down_stamp " << xi.down_stamp
+	     << " laggy_probability " << xi.laggy_probability
+	     << " laggy_interval " << xi.laggy_interval;
+}
 
 
 /** OSDMap
@@ -490,7 +503,8 @@ private:
 public:
   void print(ostream& out) const;
   void print_summary(Formatter *f, ostream& out) const;
-  void print_oneline_summary(ostream& out) const;
+  template <typename T>
+  void print_oneline_summary(T& out) const;
 
   string get_flag_string() const;
   static string get_flag_string(unsigned flags);
@@ -542,7 +556,8 @@ WRITE_CLASS_ENCODER(OSDMap::Incremental::vol_inc_remove)
 
 typedef std::shared_ptr<const OSDMap> OSDMapRef;
 
-inline ostream& operator<<(ostream& out, const OSDMap& m) {
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const OSDMap& m) {
   m.print_oneline_summary(out);
   return out;
 }

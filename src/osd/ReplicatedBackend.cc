@@ -19,7 +19,8 @@
 #define DOUT_PREFIX_ARGS this
 #undef dout_prefix
 #define dout_prefix _prefix(_dout, this)
-static ostream& _prefix(std::ostream *_dout, ReplicatedBackend *pgb) {
+template <typename T>
+static typename StrmRet<T>::type& _prefix(T *_dout, ReplicatedBackend *pgb) {
   return *_dout << pgb->get_parent()->gen_dbg_prefix();
 }
 

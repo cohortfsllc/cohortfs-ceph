@@ -169,25 +169,25 @@ void MDSMap::generate_test_instances(list<MDSMap*>& ls)
   ls.push_back(m);
 }
 
-
-void MDSMap::print_summary(Formatter *f, ostream *out)
+template <typename T>
+typename StrmRet<T>::type& summary(Formatter *f, T *out, MDSMap *mdsmap)
 {
   map<int,string> by_rank;
   map<string,int> by_state;
 
   if (f) {
-    f->dump_unsigned("epoch", get_epoch());
-    f->dump_unsigned("up", up.size());
-    f->dump_unsigned("in", in.size());
-    f->dump_unsigned("max", max_mds);
+    f->dump_unsigned("epoch", mdsmap->get_epoch());
+    f->dump_unsigned("up", mdsmap->get_num_up_mds());
+    f->dump_unsigned("in", mdsmap->get_num_in_mds());
+    f->dump_unsigned("max", mdsmap->get_max_mds());
   } else {
-    *out << "e" << get_epoch() << ": " << up.size() << "/" << in.size() << "/" << max_mds << " up";
+    *out << "e" << mdsmap->get_epoch() << ": " << mdsmap->get_num_up_mds() << "/" << mdsmap->get_num_in_mds() << "/" << mdsmap->get_max_mds() << " up";
   }
 
   if (f)
     f->open_array_section("by_rank");
-  for (map<uint64_t,mds_info_t>::iterator p = mds_info.begin();
-       p != mds_info.end();
+  for (map<uint64_t, MDSMap::mds_info_t>::const_iterator p = mdsmap->get_mds_info().begin();
+       p != mdsmap->get_mds_info().end();
        ++p) {
     string s = ceph_mds_state_name(p->second.state);
     if (p->second.laggy())
@@ -222,15 +222,25 @@ void MDSMap::print_summary(Formatter *f, ostream *out)
     }
   }
 
-  if (!failed.empty()) {
+  if (mdsmap->is_any_failed()) {
     if (f) {
-      f->dump_unsigned("failed", failed.size());
+      f->dump_unsigned("failed", mdsmap->get_num_failed_mds());
     } else {
-      *out << ", " << failed.size() << " failed";
+      *out << ", " << mdsmap->get_num_failed_mds() << " failed";
     }
   }
   //if (stopped.size())
   //out << ", " << stopped.size() << " stopped";
+}
+
+void MDSMap::print_summary(Formatter *f,ostream *out)
+{
+ summary(f, out, this);
+}
+
+void MDSMap::print_summary(Formatter *f,lttng_stream *out)
+{
+ summary(f, out, this);
 }
 
 void MDSMap::get_health(list<pair<health_status_t,string> >& summary,

@@ -35,7 +35,8 @@
 #define dout_subsys ceph_subsys_mon
 #undef dout_prefix
 #define dout_prefix _prefix(_dout, mon, get_last_committed())
-static ostream& _prefix(std::ostream *_dout, Monitor *mon, version_t v) {
+template <typename T>
+static typename StrmRet<T>::type& _prefix(T *_dout, Monitor *mon, version_t v) {
   return *_dout << "mon." << mon->name << "@" << mon->rank
 		<< "(" << mon->get_state_name()
 		<< ").log v" << v << " ";
