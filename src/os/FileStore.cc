@@ -145,13 +145,6 @@ void FileStore::FSPerfTracker::update_from_perfcounters(
       l_os_apply_lat));
 }
 
-
-ostream& operator<<(ostream& out, const FileStore::OpSequencer& s)
-{
-  assert(&out);
-  return out << *s.parent;
-}
-
 int FileStore::get_cdir(const coll_t &cid, char *s, int len)
 {
   const string &cid_str(cid.to_str());

@@ -308,8 +308,9 @@ class KeyValueStore : public ObjectStore,
       return parent->get_name();
     }
   };
-
-  friend ostream& operator<<(ostream& out, const OpSequencer& s);
+  
+  template <typename T>
+  friend typename StrmRet<T>::type& operator<<(T& out, const OpSequencer& s);
 
   Sequencer default_osr;
   deque<OpSequencer*> op_queue;

@@ -432,7 +432,7 @@ done:
 
 void RGWLoadGenProcess::gen_request(const string& method,
 				    const string& resource, int content_length,
-				    std::atomic<uint64_t> *fail_flag)
+				    std::atomic<bool> *fail_flag)
 {
   RGWLoadGenRequest *req = new RGWLoadGenRequest(method, resource,
 						 content_length, fail_flag);

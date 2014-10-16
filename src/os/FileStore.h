@@ -86,7 +86,8 @@ public:
 };
 WRITE_CLASS_ENCODER(FSSuperblock)
 
-inline ostream& operator<<(ostream& out, const FSSuperblock& sb)
+template <typename T>
+inline typename StrmRet<T>::type& operator<<(T& out, const FSSuperblock& sb)
 {
   return out << "sb(" << sb.compat_features << ")";
 }
@@ -251,8 +252,8 @@ private:
       return parent->get_name();
     }
   };
-
-  friend ostream& operator<<(ostream& out, const OpSequencer& s);
+  template <typename T>
+  friend typename StrmRet<T>::type& operator<<(T& out, const OpSequencer& s);
 
   Mutex fdcache_lock;
   FDCache fdcache;
@@ -628,7 +629,12 @@ private:
   friend class FileStoreBackend;
 };
 
-ostream& operator<<(ostream& out, const FileStore::OpSequencer& s);
+template <typename T>
+typename StrmRet<T>::type& operator<<(T& out, const FileStore::OpSequencer& s)
+{
+  assert(&out);
+  return out << *s.parent;
+}
 
 struct fiemap;
 

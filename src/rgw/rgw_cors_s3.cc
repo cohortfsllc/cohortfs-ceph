@@ -167,6 +167,17 @@ void RGWCORSConfiguration_S3::to_xml(ostream& out) {
   f.flush(out);
 }
 
+void RGWCORSConfiguration_S3::to_xml(lttng_stream& out) {
+  XMLFormatter f;
+  f.open_object_section("CORSConfiguration");
+  for(list<RGWCORSRule>::iterator it = rules.begin();
+      it != rules.end(); ++it) {
+    (static_cast<RGWCORSRule_S3 &>(*it)).to_xml(f);
+  }
+  f.close_section();
+  f.flush(out);
+}
+
 bool RGWCORSConfiguration_S3::xml_end(const char *el) {
   XMLObjIter iter = find("CORSRule");
   RGWCORSRule_S3 *obj;

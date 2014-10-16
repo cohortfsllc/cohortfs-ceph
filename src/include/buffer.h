@@ -728,8 +728,8 @@ inline typename StrmRet<T>::type& operator<<(T& out, buffer::error& e)
 {
   return out << e.what();
 }
-template <typename T>
-inline typename StrmRet<T>::type& operator<<(T& l, bufferlist &r) {
+
+inline bufferhash& operator<<(bufferhash& l, bufferlist &r) {
   l.update(r);
   return l;
 }

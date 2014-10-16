@@ -7,6 +7,7 @@
 #include <atomic>
 #include "rgw_common.h"
 #include "common/Cond.h"
+#include "log/Log.h"
 
 class RGWRados;
 class KeystoneToken;

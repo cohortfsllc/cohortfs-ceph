@@ -120,7 +120,7 @@ static int record_hello(cls_method_context_t hctx, bufferlist *in, bufferlist *o
   entity_inst_t origin;
   cls_get_request_origin(hctx, &origin);
   ostringstream ss;
-  ss << origin;
+  (std::ostream&)ss << origin;
   bufferlist attrbl;
   attrbl.append(ss.str());
   r = cls_cxx_setxattr(hctx, "said_by", &attrbl);
@@ -226,7 +226,7 @@ static int turn_it_to_11(cls_method_context_t hctx, bufferlist *in, bufferlist *
   entity_inst_t origin;
   cls_get_request_origin(hctx, &origin);
   ostringstream ss;
-  ss << origin;
+  (std::ostream&)ss << origin;
   bufferlist attrbl;
   attrbl.append(ss.str());
   r = cls_cxx_setxattr(hctx, "amplified_by", &attrbl);

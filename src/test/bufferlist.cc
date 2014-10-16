@@ -644,14 +644,14 @@ TEST(BufferPtr, ostream) {
   {
     bufferptr ptr;
     std::ostringstream stream;
-    stream << ptr;
+    (std::ostream&)stream << ptr;
     EXPECT_GT(stream.str().size(), stream.str().find("buffer:ptr(0~0 no raw"));
   }
   {
     char str[] = "XXXX";
     bufferptr ptr(buffer::create_static(strlen(str), str));
     std::ostringstream stream;
-    stream << ptr;
+    (std::ostream&)stream << ptr;
     EXPECT_GT(stream.str().size(), stream.str().find("len 4 nref 1)"));
   }
 }
@@ -2003,7 +2003,7 @@ TEST(BufferList, ostream) {
     bufferptr ptr(s[i], strlen(s[i]));
     bl.push_back(ptr);
   }
-  stream << bl;
+  (std::ostream&)stream << bl;
   std::cerr << stream.str() << std::endl;
   EXPECT_GT(stream.str().size(), stream.str().find("list(len=6,"));
   EXPECT_GT(stream.str().size(), stream.str().find("len 3 nref 1),\n"));

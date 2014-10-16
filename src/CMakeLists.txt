@@ -319,7 +319,7 @@ set(rados_srcs
   tools/rados/rados.cc
   common/obj_bencher.cc)
 add_executable(rados ${rados_srcs})
-target_link_libraries(rados librados global boost_filesystem ${CMAKE_DL_LIBS})
+target_link_libraries(rados librados global boost_filesystem boost_system ${CMAKE_DL_LIBS})
 
 set(librados_config_srcs
   librados-config.cc)
@@ -534,7 +534,7 @@ set(osdomaptool_srcs
   tools/osdmaptool.cc
   )
 add_executable(osdmaptool  ${osdomaptool_srcs})
-target_link_libraries(osdmaptool global ${CMAKE_DL_LIBS})
+target_link_libraries(osdmaptool global boost_system ${CMAKE_DL_LIBS})
 install(TARGETS osdmaptool DESTINATION bin)
 
 set(ceph_authtool_srcs
@@ -665,7 +665,7 @@ if(${WITH_RBD})
     $<TARGET_OBJECTS:heap_profiler_objs>)
   set_target_properties(rbd PROPERTIES OUTPUT_NAME rbd)
   target_link_libraries(rbd global librbd librados common keyutils udev
-    boost_filesystem ${BLKID_LIBRARIES} ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
+    boost_filesystem  boost_system ${BLKID_LIBRARIES} ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
   install(TARGETS rbd DESTINATION bin)
   install(PROGRAMS ${CMAKE_SOURCE_DIR}/src/ceph-rbdnamer
     DESTINATION bin)
@@ -686,12 +686,12 @@ if(${WITH_RADOSGW})
     rgw/rgw_swift_auth.cc rgw/rgw_main.cc rgw/rgw_keystone.cc
     rgw/rgw_rest_client.cc rgw/rgw_metadata.cc rgw/rgw_rest_config.cc
     rgw/rgw_rest_conn.cc rgw/rgw_rest_log.cc rgw/rgw_rest_metadata.cc
-    rgw/rgw_rest_opstate.cc rgw/rgw_rest_replica_log.cc ${kvs_srcs})
+    rgw/rgw_rest_opstate.cc rgw/rgw_rest_replica_log.cc rgw/rgw_client_io.cc ${kvs_srcs})
   add_executable(radosgw ${radosgw_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
-  target_link_libraries(radosgw rgw_a librados
+  target_link_libraries(radosgw librados
     cls_rgw_client cls_lock_client cls_refcount_client
     cls_log_client cls_statelog_client cls_version_client
     cls_replica_log_client cls_user_client
-    curl expat global fcgi resolv ${TCMALLOC_LIBS})
+    curl expat global fcgi resolv boost_system ${TCMALLOC_LIBS})
   install(TARGETS radosgw DESTINATION bin)
 endif(${WITH_RADOSGW})

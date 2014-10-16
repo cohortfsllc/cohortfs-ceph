@@ -23,6 +23,7 @@ public:
   virtual ~RGWFormatter_Plain();
 
   virtual void flush(ostream& os);
+  virtual void flush(lttng_stream& os);
   virtual void reset();
 
   virtual void open_array_section(const char *name);

@@ -8,6 +8,7 @@
 #include "common/config.h"
 #include "common/ceph_argparse.h"
 #include "global/global_init.h"
+#include "log/Log.h"
 
 using std::cout;
 using std::cerr;

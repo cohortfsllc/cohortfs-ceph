@@ -45,6 +45,7 @@ class RGWCORSConfiguration_S3 : public RGWCORSConfiguration, public XMLObj
 
     bool xml_end(const char *el);
     void to_xml(ostream& out);
+    void to_xml(lttng_stream& out);
 };
 
 class RGWCORSXMLParser_S3 : public RGWXMLParser
