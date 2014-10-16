@@ -2102,8 +2102,11 @@ bool Locker::check_inode_max_size(CInode *in, bool force_wrlock,
     metablob = &eo->metablob;
     le = eo;
     mut->ls->open_files.push_back(&in->item_open_file);
+  } else {
+    EUpdate *eu = new EUpdate(mds->mdlog, "check_inode_max_size");
+    metablob = &eu->metablob;
+    le = eu;
   }
-
   mds->mdlog->start_entry(le);
   if (update_size) {  // FIXME if/when we do max_size nested accounting
     mdcache->predirty_journal_parents(mut, metablob, in, 0, PREDIRTY_PRIMARY);
