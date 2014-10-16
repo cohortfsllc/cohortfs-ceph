@@ -472,7 +472,8 @@ out:
 
 // =========== KeyValueStore Intern Helper Implementation ==============
 
-ostream& operator<<(ostream& out, const KeyValueStore::OpSequencer& s)
+template <typename T>
+typename StrmRet<T>::type& operator<<(T& out, const KeyValueStore::OpSequencer& s)
 {
   assert(&out);
   return out << *s.parent;

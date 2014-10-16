@@ -173,8 +173,8 @@ struct rgw_err {
   std::string s3_code;
   std::string message;
 };
-
-  typename StrmRet<T>::type& operator<<(T& oss, const rgw_err &err);
+  template <typename T>
+  typename StrmRet<T>::type& operator<<(T& oss, const rgw_err &err)
 {
   oss << "rgw_err(http_ret=" << err.http_ret << ", s3='" << err.s3_code << "') ";
   return oss;

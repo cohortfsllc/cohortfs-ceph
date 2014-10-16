@@ -1,0 +1,29 @@
+README for Enabling LTTNG logging
+=================================
+
+Prerequisites
+=============
+lttng-tools
+lttng-modules-dkms
+liblttng-ust-dev
+
+CMake Congfiguration
+====================
+
+$ cmake ..[path] -DWITH_RADOSGW=OFF -DWITH_TESTS=OFF
+
+Catching the logs
+=================
+before the ceph daemons are started create and start a new lttng event:
+$ sudo lttng create [session name]
+$ sudo lttng enable -u -a 
+$ sudo lttng start
+
+You can also run $ lttng list -u to view all the user space tracepoint events to make sure 
+
+Every new tracing sessions traces are written to a directory under  ~/lttng-traces/[session name...]. Once your session is over, run lttng stop and lttng destroy to stop the tracing and be able to start a new secession respectively. 
+
+to view log output clone babeltrace-ceph and
+$ make ceph_log_plugin
+$ sudo ./ceph_log_plugin ~/lttng-traces/[session name...]
+

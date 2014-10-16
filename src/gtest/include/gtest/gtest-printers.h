@@ -242,7 +242,7 @@ void DefaultPrintNonContainerTo(const T& value, ::std::ostream* os) {
   // impossible to define #1 (e.g. when foo is ::std, defining
   // anything in it is undefined behavior unless you are a compiler
   // vendor.).
-  *os << value;
+  (std::ostream&)*os << value;
 }
 
 }  // namespace testing_internal

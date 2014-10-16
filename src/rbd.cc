@@ -890,7 +890,7 @@ static int do_kernel_add(const char *volname, const char *imgname)
   map<string, entity_addr_t>::const_iterator it = monmap.mon_addr.begin();
   ostringstream oss;
   for (size_t i = 0; i < monmap.mon_addr.size(); ++i, ++it) {
-    oss << it->second.addr;
+    (std::ostream&)oss << it->second.addr;
     if (i + 1 < monmap.mon_addr.size())
       oss << ",";
   }
@@ -1302,7 +1302,7 @@ static string map_option_uuid_cb(const char *value_char)
     return "";
 
   ostringstream oss;
-  oss << u;
+  (std::ostream&)oss << u;
   return oss.str();
 }
 
@@ -1316,7 +1316,7 @@ static string map_option_ip_cb(const char *value_char)
   }
 
   ostringstream oss;
-  oss << a.addr;
+  (std::ostream&)oss << a.addr;
   return oss.str();
 }
 

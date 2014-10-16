@@ -14,6 +14,7 @@
 #include "common/errno.h"
 #include "common/strtol.h"
 #include "common/ceph_argparse.h"
+#include "log/Log.h"
 
 #define dout_subsys ceph_subsys_filestore
 
