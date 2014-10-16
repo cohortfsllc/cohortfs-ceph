@@ -2555,31 +2555,31 @@ int CInode::encode_inodestat(bufferlist& bl, Session *session,
       else if (get_wanted_loner() < 0)
 	try_drop_loner();
     }
+  }
 
-    if (!no_caps && valid && cap) {
-      int likes = get_caps_liked();
-      int allowed = get_caps_allowed_for_client(client);
-      int issue = (cap->wanted() | likes) & allowed;
-      cap->issue_norevoke(issue);
-      issue = cap->pending();
-      cap->set_last_issue();
-      cap->set_last_issue_stamp(ceph_clock_now(g_ceph_context));
-      cap->clear_new();
-      e.cap.caps = issue;
-      e.cap.wanted = cap->wanted();
-      e.cap.cap_id = cap->get_cap_id();
-      e.cap.seq = cap->get_last_seq();
-      dout(10) << "encode_inodestat issueing "
-	       << ccap_string(issue) << " seq " << cap->get_last_seq()
-	       << dendl;
-      e.cap.mseq = cap->get_mseq();
-    } else {
-      e.cap.cap_id = 0;
-      e.cap.caps = 0;
-      e.cap.seq = 0;
-      e.cap.mseq = 0;
-      e.cap.wanted = 0;
-    }
+  if (!no_caps && valid && cap) {
+    int likes = get_caps_liked();
+    int allowed = get_caps_allowed_for_client(client);
+    int issue = (cap->wanted() | likes) & allowed;
+    cap->issue_norevoke(issue);
+    issue = cap->pending();
+    cap->set_last_issue();
+    cap->set_last_issue_stamp(ceph_clock_now(g_ceph_context));
+    cap->clear_new();
+    e.cap.caps = issue;
+    e.cap.wanted = cap->wanted();
+    e.cap.cap_id = cap->get_cap_id();
+    e.cap.seq = cap->get_last_seq();
+    dout(10) << "encode_inodestat issueing "
+	     << ccap_string(issue) << " seq " << cap->get_last_seq()
+	     << dendl;
+    e.cap.mseq = cap->get_mseq();
+  } else {
+    e.cap.cap_id = 0;
+    e.cap.caps = 0;
+    e.cap.seq = 0;
+    e.cap.mseq = 0;
+    e.cap.wanted = 0;
   }
   e.cap.flags = is_auth() ? CEPH_CAP_FLAG_AUTH:0;
   dout(10) << "encode_inodestat caps " << ccap_string(e.cap.caps)
