@@ -108,8 +108,7 @@ bool operator<(const CDentry& l, const CDentry& r)
 {
   if ((l.get_dir()->ino() < r.get_dir()->ino()) ||
       (l.get_dir()->ino() == r.get_dir()->ino() &&
-       (l.get_name() < r.get_name() ||
-	(l.get_name() == r.get_name()))))
+       (l.get_name() < r.get_name())))
     return true;
   return false;
 }
