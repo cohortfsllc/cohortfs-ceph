@@ -835,7 +835,7 @@ if(${WITH_RADOSGW})
     ${unittest_formatter_srcs}
     $<TARGET_OBJECTS:heap_profiler_objs>
   )
-  target_link_libraries(unittest_formatter global ${CMAKE_DL_LIBS}
+  target_link_libraries(unittest_formatter global boost_system ${CMAKE_DL_LIBS}
     ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
   set_target_properties(unittest_formatter PROPERTIES COMPILE_FLAGS
     ${UNITTEST_CXX_FLAGS})
