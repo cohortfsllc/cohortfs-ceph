@@ -96,9 +96,11 @@ TRACEPOINT_LOGLEVEL(
 TRACEPOINT_EVENT(
        ceph,
        log_blob,
-       TP_ARGS(const char *, blob, size_t, len),
+       TP_ARGS(const char *, blob, size_t, len, int, pid, int, message_id),
        TP_FIELDS(
              ctf_sequence(char, blob_name, blob, size_t, len)
+	     ctf_integer(int, pid, pid)
+             ctf_integer(int, message_id, message_id)
        )
 )
 
