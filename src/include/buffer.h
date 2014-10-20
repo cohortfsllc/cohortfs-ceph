@@ -57,7 +57,7 @@ extern "C" {
 }
 #endif /* HAVE_XIO */
 
-# include <assert.h>
+#include <assert.h>
 #include "log/LttngStream.h"
 #include "include/stream.h"
 
