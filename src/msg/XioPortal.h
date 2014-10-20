@@ -26,6 +26,7 @@ extern "C" {
 #include "XioConnection.h"
 #include "XioMsg.h"
 
+#include "common/Thread.h"
 #include "common/dout.h"
 
 #ifndef CACHE_LINE_SIZE
