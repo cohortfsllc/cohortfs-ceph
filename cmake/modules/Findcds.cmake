@@ -13,7 +13,9 @@ find_path(CDS_INC_DIR cds/init.h NO_DEFAULT_PATH PATHS
 if (CDS_INC_DIR)
   set(CDS_FOUND TRUE)
 else ()
-  set(CDS_FOUND FALSE)
+  set (CDS_INC_DIR "")
+  set (CDS_LIBS "")
+  set (CDS_FOUND FALSE)
 endif ()
 
 if (CDS_FOUND)
