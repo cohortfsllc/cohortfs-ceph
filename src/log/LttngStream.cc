@@ -60,5 +60,5 @@ void lttng_stream::emit_footer()
 
 void lttng_stream::emit_blob(const char *blob, size_t len)
 {
-	tracepoint(ceph, log_blob, blob, len);
+	tracepoint(ceph, log_blob, blob, len, pid, message_id);
 }
