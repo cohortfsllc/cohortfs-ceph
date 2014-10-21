@@ -13,6 +13,7 @@ struct Fh {
   Inode    *inode;
   loff_t    pos;
   int       mds; // have to talk to mds we opened with (for now)
+  VolumeRef vol;
   int       mode; // the mode i opened the file with
 
   int flags;

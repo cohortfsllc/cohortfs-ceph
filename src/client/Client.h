@@ -297,7 +297,6 @@ public:
   void sync_write_commit(Inode *in);
 
 protected:
-  Filer *filer;
   ObjectCacher *objectcacher;
   Objecter *objecter;     // (non-blocking) osd interface
   WritebackHandler      *writeback_handler;
