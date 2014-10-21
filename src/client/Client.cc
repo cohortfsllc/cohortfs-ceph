@@ -194,7 +194,6 @@ Client::Client(Messenger *m, MonClient *mc)
 				  cct->_conf->client_oc_target_dirty,
 				  cct->_conf->client_oc_max_dirty_age,
 				  true);
-  filer = new Filer(objecter);
 }
 
 
@@ -207,7 +206,6 @@ Client::~Client()
   delete objectcacher;
   delete writeback_handler;
 
-  delete filer;
   delete objecter;
   delete osdmap;
   delete mdsmap;
@@ -5252,6 +5250,7 @@ Fh *Client::_create_fh(Inode *in, int flags, int cmode)
   assert(in);
   f->inode = in;
   f->inode->get();
+  objecter->osdmap->find_by_uuid(in->layout.fl_uuid, f->vol);
 
   ldout(cct, 10) << "_create_fh " << in->ino << " mode " << cmode << dendl;
 
@@ -5734,9 +5733,7 @@ int Client::_read_sync(Fh *f, uint64_t off, uint64_t len, bufferlist *bl,
 
   ldout(cct, 10) << "_read_sync " << *in << " " << off << "~" << len << dendl;
 
-  VolumeRef mvol;
-  objecter->osdmap->find_by_uuid(in->layout.fl_uuid, mvol);
-  if (!mvol) {
+  if (!f->vol) {
     return -ENXIO;
   }
 	
@@ -5749,9 +5746,8 @@ int Client::_read_sync(Fh *f, uint64_t off, uint64_t len, bufferlist *bl,
     bufferlist tbl;
 
     int wanted = left;
-    filer->read_trunc(in->ino, mvol, &in->layout, pos, left, &tbl, 0,
-		      in->truncate_size, in->truncate_seq,
-		      onfinish);
+    object_t oid = file_object_t(in->ino, 0);
+    f->vol->read(oid, pos, left, &tbl, 0, onfinish, objecter);
     client_lock.Unlock();
     flock.Lock();
     while (!done)
@@ -5970,9 +5966,7 @@ int Client::_write(Fh *f, int64_t offset, uint64_t size, const char *buf)
     bool done = false;
     Context *onfinish = new C_SafeCond(&flock, &cond, &done);
     Context *onsafe = new C_Client_SyncCommit(this, in);
-    VolumeRef mvol;
-    objecter->osdmap->find_by_uuid(in->layout.fl_uuid, mvol);
-    if (!mvol) {
+    if (!f->vol) {
       r = -ENXIO;
       goto done;
     }
@@ -5980,9 +5974,9 @@ int Client::_write(Fh *f, int64_t offset, uint64_t size, const char *buf)
     unsafe_sync_write++;
     get_cap_ref(in, CEPH_CAP_FILE_BUFFER);  // released by onsafe callback
 
-    r = filer->write_trunc(in->ino, mvol, &in->layout, offset, size, bl,
-			   ceph_clock_now(cct), 0, in->truncate_size,
-			   in->truncate_seq, onfinish, onsafe);
+    object_t oid = file_object_t(in->ino, 0);
+    r = f->vol->write(oid, offset, size, bl, ceph_clock_now(cct), 0,
+		  onfinish, onsafe, objecter);
     if (r < 0)
       goto done;
 
@@ -7960,10 +7954,10 @@ int Client::_fallocate(Fh *fh, int mode, int64_t offset, int64_t length)
       get_cap_ref(in, CEPH_CAP_FILE_BUFFER);
 
       _invalidate_inode_cache(in, offset, length);
-      r = filer->zero(in->ino, mvol, &in->layout,
-		      offset, length,
+      object_t oid = file_object_t(in->ino, 0);
+      r = mvol->zero(oid, offset, length,
 		      ceph_clock_now(cct),
-		      0, true, onfinish, onsafe);
+		      0, onfinish, onsafe, objecter);
       if (r < 0)
 	goto done;
 

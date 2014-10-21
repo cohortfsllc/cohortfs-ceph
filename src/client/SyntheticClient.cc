@@ -3414,7 +3414,7 @@ int SyntheticClient::chunk_file(string &filename)
   uint64_t size = st.st_size;
   dout(0) << "file " << filename << " size is " << size << dendl;
 
-  Filer *filer = client->filer;
+  Filer *filer = new Filer(client->objecter);
 
   inode_t inode;
   memset(&inode, 0, sizeof(inode));
@@ -3462,5 +3462,6 @@ int SyntheticClient::chunk_file(string &filename)
   }
 
   client->close(fd);
+  delete filer;
   return 0;
 }
