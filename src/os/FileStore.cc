@@ -133,17 +133,6 @@ int FileStore::peek_journal_fsid(uuid_d *fsid)
   return j.peek_fsid(*fsid);
 }
 
-void FileStore::FSPerfTracker::update_from_perfcounters(
-  PerfCounters &logger)
-{
-  os_commit_latency.consume_next(
-    logger.get_tavg_ms(
-      l_os_commit_lat));
-  os_apply_latency.consume_next(
-    logger.get_tavg_ms(
-      l_os_apply_lat));
-}
-
 int FileStore::get_cdir(const coll_t &cid, char *s, int len)
 {
   const string &cid_str(cid.to_str());

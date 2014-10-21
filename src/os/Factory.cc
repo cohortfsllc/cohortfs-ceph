@@ -22,7 +22,7 @@
 #include "common/Mutex.h"
 #include "Factory.h"
 #include "common/debug.h"
-#include <boost/filesystem.hpp>
+#include "include/boost_filesystem.h"
 
 #define dout_subsys ceph_subsys_filestore
 
