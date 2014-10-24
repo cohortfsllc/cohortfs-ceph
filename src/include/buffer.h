@@ -159,6 +159,9 @@ public:
   static raw* create_reg(struct xio_iovec_ex *iov);
   static unsigned int sizeof_reg(void);
   static raw* container_of_reg(void* addr);
+  static raw* ptr_to_raw(void *addr) {
+    return reinterpret_cast<raw*>(addr);
+  }
 #endif
 
   /*
