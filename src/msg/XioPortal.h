@@ -165,7 +165,7 @@ public:
 
   void *entry()
     {
-      int ix, size, code = 0;
+      int size, code = 0;
       uint32_t xio_qdepth;
       XioSubmit::Queue send_q;
       XioSubmit::Queue::iterator q_iter;
@@ -186,18 +186,20 @@ public:
 	}
 
 	if (size > 0) {
-	  for (ix = 0; ix < size; ++ix) {
-	    q_iter = send_q.begin();
+	  q_iter = send_q.begin();
+	  while (q_iter != send_q.end()) {
 	    xs = &(*q_iter);
 	    xcon = xs->xcon;
 	    xmsg = static_cast<XioMsg*>(xs);
 
 	    /* guard Accelio send queue */
 	    xio_qdepth = xcon->xio_queue_depth();
-	    if (unlikely((xcon->send_ctr + xmsg->hdr.msg_cnt) > xio_qdepth))
+	    if (unlikely((xcon->send_ctr + xmsg->hdr.msg_cnt) > xio_qdepth)) {
+	      ++q_iter;
 	      continue;
+	    }
 
-	    send_q.erase(q_iter);
+	    q_iter = send_q.erase(q_iter);
 
 	    /* XXX we know we are not racing with a disconnect
 	     * thread */
