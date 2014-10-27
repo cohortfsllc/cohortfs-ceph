@@ -1641,15 +1641,4 @@ std::ostream& operator<<(std::ostream& out, const buffer::raw &r) {
 	     << " nref " << r.nref << ")";
 }
 
-#if defined(HAVE_XIO)
-struct xio_mempool_obj* get_xio_mp(const buffer::ptr& bp)
-{
-  buffer::xio_mempool *mb = dynamic_cast<buffer::xio_mempool*>(bp.get_raw());
-  if (mb) {
-    return &(mb->mp_this);
-  }
-  return NULL;
-}
-#endif // HAVE_XIO
-
 } // namespace ceph
