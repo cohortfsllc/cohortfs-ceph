@@ -217,7 +217,7 @@ public:
 	    if (unlikely(code)) {
 	      xcon->msg_send_fail(xmsg, code);
 	    } else {
-	      xcon->send.set(msg->timestamp); // need atomic?
+	      xcon->send.store(msg->timestamp); // need atomic?
 	      xcon->send_ctr += xmsg->hdr.msg_cnt; // only inc if cb promised
 	    }
 	  }
