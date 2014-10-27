@@ -59,8 +59,6 @@ extern "C" {
 
 # include <assert.h>
 
-class XioCompletionHook;
-
 namespace ceph {
 
 class buffer {
@@ -158,7 +156,7 @@ public:
   static raw* create_zero_copy(unsigned len, int fd, int64_t *offset);
 
 #if defined(HAVE_XIO)
- static raw* create_msg(unsigned len, char *buf, XioCompletionHook *m_hook);
+ static raw* create_reg(struct xio_iovec_ex *iov);
 #endif
 
   /*
@@ -551,6 +549,28 @@ public:
     void push_back(raw *r) {
       ptr bp(r);
       push_back(bp);
+    }
+
+    /* Like the corresponding std::list method
+     * 1. calling invalidates iterators
+     * 2. calling on an empty list results in undefined behavior
+     */
+    ptr& pop_front() {
+      ptr& bp = _buffers.front();
+      _buffers.pop_front();
+      _len -= bp.length();
+      return bp;
+    }
+
+    /* Like the corresponding std::list method
+     * 1. calling invalidates iterators
+     * 2. calling on an empty list results in undefined behavior
+     */
+    ptr& pop_back() {
+      ptr& bp = _buffers.back();
+      _buffers.pop_back();
+      _len -= bp.length();
+      return bp;
     }
 
     void zero();
