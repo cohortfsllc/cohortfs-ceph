@@ -439,8 +439,11 @@ int XioMessenger::session_event(struct xio_session *session,
   case XIO_SESSION_TEARDOWN_EVENT:
     dout(2) << "xio_session_teardown " << session << dendl;
     xio_session_destroy(session);
-    if (nsessions.dec() == 0)
-      sh_cond.Signal();
+    if (nsessions.dec() == 0) {
+      Mutex::Locker lck(sh_mtx);
+      if (nsessions.read() == 0)
+	sh_cond.Signal();
+    }
     break;
   default:
     break;
