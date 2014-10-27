@@ -451,13 +451,8 @@ uint64_t Journaler::append_entry(bufferlist& bl)
   }
 
   ldout(cct, 10) << "append_entry len " << bl.length() << " to " << write_pos << "~" << (bl.length() + sizeof(uint32_t)) << dendl;
-<<<<<<< HEAD
 
-  // append
-=======
-  
   // append, but consolidate into page-sized buffers
->>>>>>> 79e1c4b... journaler: consolidate journal entry buffers
   ::encode(s, write_buf);
   std::list<buffer::ptr>::const_iterator p;
   for (p = bl.buffers().begin(); p != bl.buffers().end(); ++p)
