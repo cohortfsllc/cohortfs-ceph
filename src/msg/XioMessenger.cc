@@ -419,13 +419,13 @@ int XioMessenger::new_session(struct xio_session *session,
 			      struct xio_new_session_req *req,
 			      void *cb_user_context)
 {
-  if (shutdown_called.read()) {
+  if (shutdown_called.load()) {
     return xio_reject(
       session, XIO_E_SESSION_REFUSED, NULL /* udata */, 0 /* udata len */);
   }
   int code = portals.accept(session, req, cb_user_context);
   if (! code)
-    nsessions.inc();
+    ++nsessions;
   return code;
 } /* new_session */
 
@@ -527,9 +527,9 @@ int XioMessenger::session_event(struct xio_session *session,
   case XIO_SESSION_TEARDOWN_EVENT:
     dout(2) << "xio_session_teardown " << session << dendl;
     xio_session_destroy(session);
-    if (nsessions.dec() == 0) {
+    if (--nsessions == 0) {
       Mutex::Locker lck(sh_mtx);
-      if (nsessions.read() == 0)
+      if (nsessions.load() == 0)
 	sh_cond.Signal();
     }
     break;
@@ -908,7 +908,7 @@ assert(req->out.pdata_iov.nents || !nbuffers);
 
 int XioMessenger::shutdown()
 {
-  shutdown_called.set(true);
+  shutdown_called.store(true);
   conns_sp.lock();
   XioConnection::ConnList::iterator iter;
   iter = conns_list.begin();
@@ -916,10 +916,10 @@ int XioMessenger::shutdown()
     (void) iter->disconnect(); // XXX mark down?
   }
   conns_sp.unlock();
-  while(nsessions.read() > 0) {
+  while(nsessions.load() > 0) {
     Mutex::Locker lck(sh_mtx);
-    if (nsessions.read() > 0)
-      sh_cond.Wait();
+    if (nsessions.load() > 0)
+      sh_cond.Wait(sh_mtx);
   }
   portals.shutdown();
   dispatch_strategy->shutdown();
@@ -929,7 +929,7 @@ int XioMessenger::shutdown()
 
 ConnectionRef XioMessenger::get_connection(const entity_inst_t& dest)
 {
-  if (shutdown_called.read())
+  if (shutdown_called.load())
     return NULL;
 
   const entity_inst_t& self_inst = get_myinst();
@@ -978,7 +978,7 @@ ConnectionRef XioMessenger::get_connection(const entity_inst_t& dest)
       delete xcon;
       return NULL;
     }
-    nsessions.inc();
+    ++nsessions;
 
     /* this should cause callbacks with user context of conn, but
      * we can always set it explicitly */

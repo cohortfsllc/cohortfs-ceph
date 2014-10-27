@@ -32,8 +32,8 @@ class XioMessenger : public SimplePolicyMessenger
 {
 private:
   static atomic<uint64_t> nInstances;
-  atomic_t<uint32_t> nsessions;
-  atomic_t<uint32_t> shutdown_called;
+  std::atomic<uint32_t> nsessions;
+  std::atomic<uint32_t> shutdown_called;
   Spinlock conns_sp;
   XioConnection::ConnList conns_list;
   XioConnection::EntitySet conns_entity_map;
