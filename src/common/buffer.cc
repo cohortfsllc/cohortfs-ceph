@@ -671,6 +671,18 @@ static uint32_t simple_spinlock_t buffer_debug_lock = SIMPLE_SPINLOCK_INITIALIZE
     return _raw->clone();
   }
 
+  buffer::ptr& buffer::ptr::strong_claim() {
+    if (_raw && _raw->is_volatile()) {
+      buffer::raw *tr = _raw;
+      _raw = tr->clone();
+      _raw->nref.store(1);
+      if (unlikely(--tr->nref == 0)) {
+	delete tr;
+      }
+    }
+    return *this;
+  }
+
   void buffer::ptr::swap(ptr& other)
   {
     raw *r = _raw;

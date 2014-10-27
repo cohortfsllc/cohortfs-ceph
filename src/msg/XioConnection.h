@@ -84,7 +84,7 @@ private:
     uint32_t reconnects;
     uint32_t connect_seq, peer_global_seq;
     uint32_t in_seq, out_seq_acked; // atomic<uint64_t>, got receipt
-    atomic_t out_seq; // atomic<uint32_t>
+    std::atomic<uint64_t> out_seq;
 
     lifecycle() : state(lifecycle::INIT), in_seq(0), out_seq(0) {}
 
@@ -93,7 +93,7 @@ private:
     }
 
     uint32_t next_out_seq() {
-      return out_seq.inc();
+      return ++out_seq;
     };
 
   } state;
@@ -159,7 +159,7 @@ private:
   friend class XioMsg;
 
   int on_disconnect_event() {
-    connected = false;
+    connected.store(false);
     pthread_spin_lock(&sp);
     if (!conn)
       this->put();
@@ -213,7 +213,7 @@ public:
 
   void disconnect() {
     if (is_connected()) {
-      connected.set(false);
+      connected.store(false);
       xio_disconnect(conn); // normal teardown will clean up conn
     }
   }
@@ -257,7 +257,7 @@ public:
 class XioLoopbackConnection : public Connection
 {
 private:
-  atomic_t seq;
+  std::atomic<uint64_t> seq;
 public:
   XioLoopbackConnection(Messenger *m) : Connection(m), seq(0)
     {
@@ -274,11 +274,11 @@ public:
   virtual bool is_connected() { return true; }
 
   uint32_t get_seq() {
-    return seq.read();
+    return seq.load();
   }
 
   uint32_t next_seq() {
-    return seq.inc();
+    return ++seq;
   }
 };
 
