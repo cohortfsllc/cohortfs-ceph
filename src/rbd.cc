@@ -1588,19 +1588,6 @@ int main(int argc, const char **argv)
       progress = false;
     } else if (ceph_argparse_flag(args, &i , "--allow-shrink", (char *)NULL)) {
       resize_allow_shrink = true;
-    } else if (ceph_argparse_witharg(args, i, &val, "--format", (char *)NULL)) {
-      std::string err;
-      long long ret = strict_strtoll(val.c_str(), 10, &err);
-      if (err.empty()) {
-	format = ret;
-	format_specified = true;
-	cerr << "rbd: using --format for specifying the rbd image format is"
-	     << " deprecated, use --image-format instead"
-	     << std::endl;
-      } else {
-	output_format = strdup(val.c_str());
-	output_format_specified = true;
-      }
     } else if (ceph_argparse_binary_flag(args, i, &pretty_format, NULL, "--pretty-format", (char*)NULL)) {
     } else {
       ++i;
