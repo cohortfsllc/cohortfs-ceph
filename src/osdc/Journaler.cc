@@ -442,7 +442,6 @@ uint64_t Journaler::append_entry(bufferlist& bl)
       bp.zero();
       assert(bp.length() >= 4);
       write_buf.append(bp.c_str(), bp.length());
-      
       // now flush.
       flush();
 
