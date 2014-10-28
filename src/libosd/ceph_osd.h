@@ -186,6 +186,9 @@ void libosd_signal(int signum);
  */
 int libosd_get_volume(struct libosd *osd, const char *name, uuid_t uuid);
 
+/* Completion flags for libosd_read() */
+#define LIBOSD_READ_FLAGS_NONE	  0x0
+
 /**
  * Read from an object asynchronously.
  *
@@ -207,6 +210,7 @@ int libosd_read(struct libosd *osd, const char *object, const uuid_t volume,
 		int flags, void *user);
 
 /* Completion flags for libosd_write() and libosd_truncate() */
+#define LIBOSD_WRITE_FLAGS_NONE	  0x0
 /** Request a completion once the data is written to cache */
 #define LIBOSD_WRITE_CB_UNSTABLE  0x01
 /** Request a completion once the data is written to stable storage */
