@@ -356,31 +356,47 @@ int LibOSD::get_volume(const char *name, uuid_t uuid)
   return 0;
 }
 
-struct C_Completion : public Context {
-  libosd_io_completion_fn cb;
+class CSyncCompletion {
+private:
+  Mutex mutex;
+  Cond cond;
+  bool done;
   int result;
-  uint64_t length;
-  int flags;
-  void *user;
-  C_Completion(libosd_io_completion_fn cb, int result, uint64_t length,
-      int flags, void *user)
-    : cb(cb), result(result), length(length), flags(flags), user(user) {}
-  void finish(int r) {
-    cb(result, length, flags, user);
+
+  void signal(int r) {
+    Mutex::Locker lock(mutex);
+    done = true;
+    result = r;
+    cond.Signal();
+  }
+
+public:
+  CSyncCompletion() : done(false) {}
+
+  int wait() {
+    Mutex::Locker lock(mutex);
+    while (!done)
+      cond.Wait(mutex);
+    return result;
+  }
+
+  // libosd_io_completion_fn to signal the condition variable
+  static void callback(int result, uint64_t length, int flags, void *user) {
+    CSyncCompletion *sync = static_cast<CSyncCompletion*>(user);
+    sync->signal(result);
   }
 };
 
 // Dispatcher callback to fire the read completion
 class OnReadReply : public LibOSDDispatcher::OnReply {
-  Finisher *finisher;
   char *data;
   uint64_t length;
   libosd_io_completion_fn cb;
   void *user;
 public:
-  OnReadReply(Finisher *finisher, char *data, uint64_t length,
+  OnReadReply(char *data, uint64_t length,
 	      libosd_io_completion_fn cb, void *user)
-    : finisher(finisher), data(data), length(length), cb(cb), user(user) {}
+    : data(data), length(length), cb(cb), user(user) {}
 
   void on_reply(Message *reply) {
     assert(reply->get_type() == CEPH_MSG_OSD_OPREPLY);
@@ -404,11 +420,11 @@ public:
       op.outdata.copy(0, length, data);
     }
 
-    finisher->queue(new C_Completion(cb, op.rval, length, 0, user));
+    cb(op.rval, length, 0, user);
   }
 
   void on_failure(int r) {
-    finisher->queue(new C_Completion(cb, r, 0, 0, user));
+    cb(r, 0, 0, user);
   }
 };
 
@@ -421,9 +437,13 @@ int LibOSD::read(const char *object, const uuid_t volume,
   hobject_t oid = object_t(object);
   uuid_d vol(volume);
   epoch_t epoch = 0;
+  std::unique_ptr<CSyncCompletion> sync;
 
-  if (!cb)
-    return -EINVAL;
+  if (!cb) {
+    cb = CSyncCompletion::callback;
+    sync.reset(new CSyncCompletion());
+    user = sync.get();
+  }
 
   if (!wait_for_active(&epoch))
     return -ENODEV;
@@ -433,23 +453,22 @@ int LibOSD::read(const char *object, const uuid_t volume,
   m->read(offset, length);
 
   // create reply callback
-  OnReadReply *onreply = new OnReadReply(finisher, data, length, cb, user);
+  OnReadReply *onreply = new OnReadReply(data, length, cb, user);
 
   // send request over direct messenger
   dispatcher->send_request(m, onreply);
-  return 0;
+
+  return sync ? sync->wait() : 0;
 }
 
 // Dispatcher callback to fire the write completion
 class OnWriteReply : public LibOSDDispatcher::OnReply {
-  Finisher *finisher;
   libosd_io_completion_fn cb;
   int flags;
   void *user;
 public:
-  OnWriteReply(Finisher *finisher, libosd_io_completion_fn cb,
-	       int flags, void *user)
-    : finisher(finisher), cb(cb), flags(flags), user(user) {}
+  OnWriteReply(libosd_io_completion_fn cb, int flags, void *user)
+    : cb(cb), flags(flags), user(user) {}
 
   bool is_last_reply(Message *reply) {
     assert(reply->get_type() == CEPH_MSG_OSD_OPREPLY);
@@ -474,11 +493,11 @@ public:
            op.op.op == CEPH_OSD_OP_TRUNCATE);
 
     uint64_t length = op.rval ? 0 : op.op.extent.length;
-    finisher->queue(new C_Completion(cb, op.rval, length, flag, user));
+    cb(op.rval, length, flag, user);
   }
 
-  virtual void on_failure(int r) {
-    finisher->queue(new C_Completion(cb, r, 0, 0, user));
+  void on_failure(int r) {
+    cb(r, 0, 0, user);
   }
 };
 
@@ -491,10 +510,13 @@ int LibOSD::write(const char *object, const uuid_t volume,
   hobject_t oid = object_t(object);
   uuid_d vol(volume);
   epoch_t epoch = 0;
+  std::unique_ptr<CSyncCompletion> sync;
 
-  // invalid to request callbacks without supplying write_completion
-  if (flags & (LIBOSD_WRITE_CB_UNSTABLE | LIBOSD_WRITE_CB_STABLE) && !cb)
-    return -EINVAL;
+  if (flags & (LIBOSD_WRITE_CB_UNSTABLE | LIBOSD_WRITE_CB_STABLE) && !cb) {
+    cb = CSyncCompletion::callback;
+    sync.reset(new CSyncCompletion());
+    user = sync.get();
+  }
 
   if (!wait_for_active(&epoch))
     return -ENODEV;
@@ -514,11 +536,12 @@ int LibOSD::write(const char *object, const uuid_t volume,
   // create reply callback
   OnWriteReply *onreply = NULL;
   if (m->wants_ack() || m->wants_ondisk())
-    onreply = new OnWriteReply(finisher, cb, flags, user);
+    onreply = new OnWriteReply(cb, flags, user);
 
   // send request over direct messenger
   dispatcher->send_request(m, onreply);
-  return 0;
+
+  return sync ? sync->wait() : 0;
 }
 
 int LibOSD::truncate(const char *object, const uuid_t volume,
@@ -530,10 +553,13 @@ int LibOSD::truncate(const char *object, const uuid_t volume,
   hobject_t oid = object_t(object);
   uuid_d vol(volume);
   epoch_t epoch = 0;
+  std::unique_ptr<CSyncCompletion> sync;
 
-  // invalid to request callbacks without supplying write_completion
-  if (flags & (LIBOSD_WRITE_CB_UNSTABLE | LIBOSD_WRITE_CB_STABLE) && !cb)
-    return -EINVAL;
+  if (flags & (LIBOSD_WRITE_CB_UNSTABLE | LIBOSD_WRITE_CB_STABLE) && !cb) {
+    cb = CSyncCompletion::callback;
+    sync.reset(new CSyncCompletion());
+    user = sync.get();
+  }
 
   if (!wait_for_active(&epoch))
     return -ENODEV;
@@ -550,11 +576,12 @@ int LibOSD::truncate(const char *object, const uuid_t volume,
   // create reply callback
   OnWriteReply *onreply = NULL;
   if (m->wants_ack() || m->wants_ondisk())
-    onreply = new OnWriteReply(finisher, cb, flags, user);
+    onreply = new OnWriteReply(cb, flags, user);
 
   // send request over direct messenger
   dispatcher->send_request(m, onreply);
-  return 0;
+
+  return sync ? sync->wait() : 0;
 }
 
 
