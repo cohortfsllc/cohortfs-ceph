@@ -103,12 +103,12 @@ public:
   int get_volume(const char *name, uuid_t uuid);
   int read(const char *object, const uuid_t volume,
 	   uint64_t offset, uint64_t length, char *data,
-	   int flags, void *user);
+	   int flags, libosd_io_completion_fn cb, void *user);
   int write(const char *object, const uuid_t volume,
 	    uint64_t offset, uint64_t length, char *data,
-	    int flags, void *user);
-  int truncate(const char *object, const uuid_t volume,
-	       uint64_t offset, int flags, void *user);
+	    int flags, libosd_io_completion_fn cb, void *user);
+  int truncate(const char *object, const uuid_t volume, uint64_t offset,
+	       int flags, libosd_io_completion_fn cb, void *user);
 };
 
 
@@ -414,7 +414,7 @@ public:
 
 int LibOSD::read(const char *object, const uuid_t volume,
 		 uint64_t offset, uint64_t length, char *data,
-		 int flags, void *user)
+		 int flags, libosd_io_completion_fn cb, void *user)
 {
   const int client = 0;
   const long tid = 0;
@@ -422,7 +422,7 @@ int LibOSD::read(const char *object, const uuid_t volume,
   uuid_d vol(volume);
   epoch_t epoch = 0;
 
-  if (!callbacks || !callbacks->read_completion)
+  if (!cb)
     return -EINVAL;
 
   if (!wait_for_active(&epoch))
@@ -433,8 +433,7 @@ int LibOSD::read(const char *object, const uuid_t volume,
   m->read(offset, length);
 
   // create reply callback
-  OnReadReply *onreply = new OnReadReply(finisher, data, length,
-					 callbacks->read_completion, user);
+  OnReadReply *onreply = new OnReadReply(finisher, data, length, cb, user);
 
   // send request over direct messenger
   dispatcher->send_request(m, onreply);
@@ -485,7 +484,7 @@ public:
 
 int LibOSD::write(const char *object, const uuid_t volume,
 		  uint64_t offset, uint64_t length, char *data,
-		  int flags, void *user)
+		  int flags, libosd_io_completion_fn cb, void *user)
 {
   const int client = 0;
   const long tid = 0;
@@ -494,8 +493,7 @@ int LibOSD::write(const char *object, const uuid_t volume,
   epoch_t epoch = 0;
 
   // invalid to request callbacks without supplying write_completion
-  if (flags & (LIBOSD_WRITE_CB_UNSTABLE | LIBOSD_WRITE_CB_STABLE) &&
-      (!callbacks || !callbacks->write_completion))
+  if (flags & (LIBOSD_WRITE_CB_UNSTABLE | LIBOSD_WRITE_CB_STABLE) && !cb)
     return -EINVAL;
 
   if (!wait_for_active(&epoch))
@@ -516,8 +514,7 @@ int LibOSD::write(const char *object, const uuid_t volume,
   // create reply callback
   OnWriteReply *onreply = NULL;
   if (m->wants_ack() || m->wants_ondisk())
-    onreply = new OnWriteReply(finisher, callbacks->write_completion,
-			       flags, user);
+    onreply = new OnWriteReply(finisher, cb, flags, user);
 
   // send request over direct messenger
   dispatcher->send_request(m, onreply);
@@ -525,7 +522,8 @@ int LibOSD::write(const char *object, const uuid_t volume,
 }
 
 int LibOSD::truncate(const char *object, const uuid_t volume,
-		     uint64_t offset, int flags, void *user)
+		     uint64_t offset, int flags,
+		     libosd_io_completion_fn cb, void *user)
 {
   const int client = 0;
   const long tid = 0;
@@ -534,8 +532,7 @@ int LibOSD::truncate(const char *object, const uuid_t volume,
   epoch_t epoch = 0;
 
   // invalid to request callbacks without supplying write_completion
-  if (flags & (LIBOSD_WRITE_CB_UNSTABLE | LIBOSD_WRITE_CB_STABLE) &&
-      (!callbacks || !callbacks->write_completion))
+  if (flags & (LIBOSD_WRITE_CB_UNSTABLE | LIBOSD_WRITE_CB_STABLE) && !cb)
     return -EINVAL;
 
   if (!wait_for_active(&epoch))
@@ -553,8 +550,7 @@ int LibOSD::truncate(const char *object, const uuid_t volume,
   // create reply callback
   OnWriteReply *onreply = NULL;
   if (m->wants_ack() || m->wants_ondisk())
-    onreply = new OnWriteReply(finisher, callbacks->write_completion,
-			       flags, user);
+    onreply = new OnWriteReply(finisher, cb, flags, user);
 
   // send request over direct messenger
   dispatcher->send_request(m, onreply);
@@ -659,10 +655,10 @@ int libosd_get_volume(struct libosd *osd, const char *name, uuid_t uuid)
 
 int libosd_read(struct libosd *osd, const char *object, const uuid_t volume,
 		uint64_t offset, uint64_t length, char *data,
-		int flags, void *user)
+		int flags, libosd_io_completion_fn cb, void *user)
 {
   try {
-    return osd->read(object, volume, offset, length, data, flags, user);
+    return osd->read(object, volume, offset, length, data, flags, cb, user);
   } catch (std::exception &e) {
     derr << "libosd_read caught exception " << e.what() << dendl;
     return -EFAULT;
@@ -671,10 +667,10 @@ int libosd_read(struct libosd *osd, const char *object, const uuid_t volume,
 
 int libosd_write(struct libosd *osd, const char *object, const uuid_t volume,
 		 uint64_t offset, uint64_t length, char *data,
-		 int flags, void *user)
+		 int flags, libosd_io_completion_fn cb, void *user)
 {
   try {
-    return osd->write(object, volume, offset, length, data, flags, user);
+    return osd->write(object, volume, offset, length, data, flags, cb, user);
   } catch (std::exception &e) {
     derr << "libosd_write caught exception " << e.what() << dendl;
     return -EFAULT;
@@ -683,10 +679,10 @@ int libosd_write(struct libosd *osd, const char *object, const uuid_t volume,
 
 int libosd_truncate(struct libosd *osd, const char *object,
 		    const uuid_t volume, uint64_t offset,
-		    int flags, void *user)
+		    int flags, libosd_io_completion_fn cb, void *user)
 {
   try {
-    return osd->truncate(object, volume, offset, flags, user);
+    return osd->truncate(object, volume, offset, flags, cb, user);
   } catch (std::exception &e) {
     derr << "libosd_truncate caught exception " << e.what() << dendl;
     return -EFAULT;
