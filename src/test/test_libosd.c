@@ -7,8 +7,41 @@
 
 #include "libosd/ceph_osd.h"
 
-#define TEST_MULTI
-#ifndef TEST_MULTI
+
+static int test_sync()
+{
+  struct libosd_init_args args = {
+    .id = 0,
+    .config = "/etc/ceph/ceph.conf",
+  };
+  struct libosd *osd = libosd_init(&args);
+  if (osd == NULL) {
+    fputs("osd init failed\n", stderr);
+    return 1;
+  }
+
+  uuid_t volume;
+  int r = libosd_get_volume(osd, "rbd", volume);
+  if (r != 0) {
+    fprintf(stderr, "libosd_get_volume() failed with %d\n", r);
+  } else {
+    char buf[64] = {};
+    r = libosd_write(osd, "obj", volume, 0, sizeof(buf), buf,
+		     LIBOSD_WRITE_CB_UNSTABLE | LIBOSD_WRITE_CB_STABLE,
+		     NULL, NULL);
+    fprintf(stderr, "libosd_write() returned %d\n", r);
+  }
+
+  libosd_shutdown(osd);
+  fputs("libosd shutting down\n", stderr);
+
+  libosd_join(osd);
+  fputs("libosd_join returned\n", stderr);
+
+  libosd_cleanup(osd);
+  fputs("libosd_cleanup finished\n", stderr);
+  return 0;
+}
 
 struct io_completion {
   pthread_mutex_t mutex;
@@ -17,7 +50,7 @@ struct io_completion {
   int done;
 };
 
-void write_completion(int result, uint64_t length, int flags, void *user)
+static void write_completion(int result, uint64_t length, int flags, void *user)
 {
   struct io_completion *io = (struct io_completion*)user;
   printf("write_completion result %d flags %d\n", result, flags);
@@ -33,24 +66,17 @@ void write_completion(int result, uint64_t length, int flags, void *user)
   pthread_mutex_unlock(&io->mutex);
 }
 
-int test_single()
+static int test_async()
 {
-  struct libosd_callbacks callbacks = {
-    .write_completion = write_completion
-  };
   struct libosd_init_args args = {
     .id = 0,
     .config = "/etc/ceph/ceph.conf",
-    .callbacks = &callbacks
   };
   struct libosd *osd = libosd_init(&args);
   if (osd == NULL) {
     fputs("osd init failed\n", stderr);
     return 1;
   }
-
-  signal(SIGINT, libosd_signal);
-  signal(SIGTERM, libosd_signal);
 
   uuid_t volume;
   int r = libosd_get_volume(osd, "rbd", volume);
@@ -64,7 +90,8 @@ int test_single()
     };
     char buf[64] = {};
     r = libosd_write(osd, "obj", volume, 0, sizeof(buf), buf,
-		     LIBOSD_WRITE_CB_UNSTABLE | LIBOSD_WRITE_CB_STABLE, &io);
+		     LIBOSD_WRITE_CB_UNSTABLE | LIBOSD_WRITE_CB_STABLE,
+		     write_completion, &io);
     fprintf(stderr, "libosd_write() returned %d\n", r);
 
     pthread_mutex_lock(&io.mutex);
@@ -74,6 +101,9 @@ int test_single()
     fprintf(stderr, "write_callback() got result %d\n", io.result);
   }
 
+  fputs("libosd shutting down\n", stderr);
+  libosd_shutdown(osd);
+
   libosd_join(osd);
   fputs("libosd_join returned\n", stderr);
 
@@ -82,9 +112,7 @@ int test_single()
   return 0;
 }
 
-#else /* TEST_MULTI */
-
-int test_double()
+static int test_double()
 {
   struct libosd *osd1, *osd2;
   struct libosd_init_args args1 = {
@@ -111,6 +139,10 @@ int test_double()
   }
   printf("osd2 created %p\n", osd2);
 
+  fputs("libosds shutting down\n", stderr);
+  libosd_shutdown(osd1);
+  libosd_shutdown(osd2);
+
   /* join osds */
   printf("waiting on osd1 %p\n", osd1);
   libosd_join(osd1);
@@ -124,28 +156,29 @@ int test_double()
   return 0;
 }
 
-#endif
-
 
 int main(int argc, const char *argv[])
 {
   int r = 0;
 
   signal(SIGINT, libosd_signal);
-  signal(SIGTERM, libosd_signal);
 
-#ifndef TEST_MULTI
-  r = test_single();
+  r = test_sync();
   if (r != 0) {
-    fprintf(stderr, "test_single() failed with %d\n", r);
+    fprintf(stderr, "test_sync() failed with %d\n", r);
     return r;
   }
-#else
+
+  r = test_async();
+  if (r != 0) {
+    fprintf(stderr, "test_async() failed with %d\n", r);
+    return r;
+  }
+
   r = test_double();
   if (r != 0) {
     fprintf(stderr, "test_double() failed with %d\n", r);
     return r;
   }
-#endif
   return 0;
 }
