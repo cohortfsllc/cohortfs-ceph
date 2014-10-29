@@ -116,8 +116,6 @@ MDS::MDS(const std::string &n, Messenger *m, MonClient *mc) :
 			  0, 0);
   objecter->unset_honor_osdmap_full();
 
-  filer = new Filer(objecter);
-
   mdcache = new MDCache(this);
   mdlog = new MDLog(this);
   balancer = new MDBalancer(this);
@@ -165,7 +163,6 @@ MDS::~MDS() {
   if (server) { delete server; server = 0; }
   if (locker) { delete locker; locker = 0; }
 
-  if (filer) { delete filer; filer = 0; }
   if (objecter) { delete objecter; objecter = 0; }
 
   if (messenger)
