@@ -777,14 +777,6 @@ void OSD::final_init()
 				     asok_hook,
 				     "flush the journal to permanent store");
   assert(r == 0);
-  r = admin_socket->register_command("dump_ops_in_flight",
-				     "dump_ops_in_flight", asok_hook,
-				     "show the ops currently in flight");
-  assert(r == 0);
-  r = admin_socket->register_command("dump_historic_ops", "dump_historic_ops",
-				     asok_hook,
-				     "show slowest recent ops");
-  assert(r == 0);
   r = admin_socket->register_command("dump_op_pq_state", "dump_op_pq_state",
 				     asok_hook,
 				     "dump op priority queue state");
@@ -865,21 +857,11 @@ int OSD::shutdown()
   // unregister commands
   cct->get_admin_socket()->unregister_command("status");
   cct->get_admin_socket()->unregister_command("flush_journal");
-  cct->get_admin_socket()->unregister_command("dump_ops_in_flight");
-  cct->get_admin_socket()->unregister_command("dump_historic_ops");
   cct->get_admin_socket()->unregister_command("dump_op_pq_state");
   cct->get_admin_socket()->unregister_command("dump_blacklist");
   cct->get_admin_socket()->unregister_command("dump_watchers");
   delete asok_hook;
   asok_hook = NULL;
-
-  cct->get_admin_socket()->unregister_command("setomapval");
-  cct->get_admin_socket()->unregister_command("rmomapkey");
-  cct->get_admin_socket()->unregister_command("setomapheader");
-  cct->get_admin_socket()->unregister_command("getomap");
-  cct->get_admin_socket()->unregister_command("truncobj");
-  cct->get_admin_socket()->unregister_command("injectdataerr");
-  cct->get_admin_socket()->unregister_command("injectmdataerr");
 
   osd_lock.Unlock();
 
