@@ -688,7 +688,7 @@ static uint32_t simple_spinlock_t buffer_debug_lock = SIMPLE_SPINLOCK_INITIALIZE
       buffer::raw *tr = _raw;
       _raw = tr->clone();
       _raw->nref.store(1);
-      if (unlikely(--tr->nref == 0)) {
+      if (--tr->nref == 0) {
 	delete tr;
       }
     }
