@@ -5243,9 +5243,9 @@ void MDCache::do_file_recover()
       file_recovering.insert(in);
 
       C_MDC_Recover *fin = new C_MDC_Recover(this, in);
-      mds->filer->probe(in->inode.ino, &in->inode.layout,
-			pi->get_max_size(), &fin->size, &fin->mtime, false,
-			0, fin);
+      object_t oid = CInode::get_object_name(in->inode.ino, frag_t(), "");
+      // 0 or CEPH_OSD_FLAG_RWORDERED?
+      in->volume->stat(oid, &fin->size, &fin->mtime, 0, fin, mds->objecter);
     } else {
       dout(10) << "do_file_recover skipping " << in->inode.size
 	       << " " << *in << dendl;
@@ -5335,6 +5335,7 @@ struct C_MDC_TruncateFinish : public Context {
 void MDCache::_truncate_inode(CInode *in, LogSegment *ls)
 {
   inode_t *pi = &in->inode;
+  object_t oid = CInode::get_object_name(pi->ino, frag_t(), "");
   dout(10) << "_truncate_inode "
 	   << pi->truncate_from << " -> " << pi->truncate_size
 	   << " on " << *in << dendl;
@@ -5346,9 +5347,9 @@ void MDCache::_truncate_inode(CInode *in, LogSegment *ls)
 
   in->auth_pin(this);
 
-  mds->filer->truncate(in->inode.ino, in->volume, &in->inode.layout,
-		       pi->truncate_size, pi->truncate_from-pi->truncate_size, pi->truncate_seq, utime_t(), 0,
-		       0, new C_MDC_TruncateFinish(this, in, ls));
+  in->volume->trunc(oid, ceph_clock_now(NULL), 0,
+		    pi->truncate_size, pi->truncate_seq,
+		    0, new C_MDC_TruncateFinish(this, in, ls), mds->objecter);
 }
 
 struct C_MDC_TruncateLogged : public Context {
@@ -8506,6 +8507,7 @@ void MDCache::purge_stray(CDentry *dn)
 {
   CDentry::linkage_t *dnl = dn->get_projected_linkage();
   CInode *in = dnl->get_inode();
+  object_t oid = CInode::get_object_name(in->inode.ino, frag_t(), "");
   dout(10) << "purge_stray " << *dn << " " << *in << dendl;
   assert(!dn->is_replicated());
 
@@ -8540,7 +8542,6 @@ void MDCache::purge_stray(CDentry *dn)
     for (list<frag_t>::iterator p = ls.begin();
 	 p != ls.end();
 	 ++p) {
-      object_t oid = CInode::get_object_name(in->inode.ino, *p, "");
       dout(10) << "purge_stray remove dirfrag " << oid << dendl;
       mds->objecter->remove(oid, volume, ceph_clock_now(g_ceph_context),
 			    0, NULL, gather.new_sub());
@@ -8558,26 +8559,26 @@ void MDCache::purge_stray(CDentry *dn)
     // when truncating a file, the filer does not delete stripe objects that are
     // truncated to zero. so we need to purge stripe objects up to the max size
     // the file has ever been.
+    // XXX is this still true with stripulator? mdw 20141027
     to = MAX(in->inode.max_size_ever, to);
     if (to && period) {
       uint64_t num = (to + period - 1) / period;
       dout(10) << "purge_stray 0~" << to << " objects 0~" << num
 	       << " on " << *in << dendl;
-      mds->filer->purge_range(in->inode.ino, &in->inode.layout,
-			      0, num, ceph_clock_now(g_ceph_context), 0,
-			      gather.new_sub());
+      in->volume->zero(oid, 0, 0, ceph_clock_now(mds->objecter->cct), 0,
+			      0, gather.new_sub(), mds->objecter);
     }
   }
 
   inode_t *pi = in->get_projected_inode();
-  object_t oid = CInode::get_object_name(pi->ino, frag_t(), "");
+  object_t poid = CInode::get_object_name(pi->ino, frag_t(), "");
   // remove the backtrace object if it was not purged
   if (!gather.has_subs()) {
     VolumeRef volume;
     mds->osdmap->find_by_uuid(pi->layout.fl_uuid, volume);
-    dout(10) << "purge_stray remove backtrace object " << oid
+    dout(10) << "purge_stray remove backtrace object " << poid
 	     << " volume " << volume << dendl;
-    mds->objecter->remove(oid, volume,
+    mds->objecter->remove(poid, volume,
 			  ceph_clock_now(g_ceph_context), 0, NULL,
 			  gather.new_sub());
   }
@@ -8587,7 +8588,7 @@ void MDCache::purge_stray(CDentry *dn)
        ++p) {
     VolumeRef volume;
     mds->osdmap->find_by_uuid(*p, volume);
-    mds->objecter->remove(oid, volume, ceph_clock_now(g_ceph_context), 0,
+    mds->objecter->remove(poid, volume, ceph_clock_now(g_ceph_context), 0,
 			  NULL, gather.new_sub());
   }
   assert(gather.has_subs());
