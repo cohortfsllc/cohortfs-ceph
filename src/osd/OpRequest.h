@@ -152,6 +152,9 @@ public:
   osd_reqid_t get_reqid() const {
     return reqid;
   }
+  
+  ~OpRequest() { request->put(); }
+  
 };
 
 typedef OpRequest::Ref OpRequestRef;
