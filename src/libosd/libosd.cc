@@ -440,6 +440,7 @@ int LibOSD::read(const char *object, const uuid_t volume,
   std::unique_ptr<CSyncCompletion> sync;
 
   if (!cb) {
+    // set up a synchronous completion
     cb = CSyncCompletion::callback;
     sync.reset(new CSyncCompletion());
     user = sync.get();
@@ -501,6 +502,8 @@ public:
   }
 };
 
+#define WRITE_CB_FLAGS (LIBOSD_WRITE_CB_UNSTABLE | LIBOSD_WRITE_CB_STABLE)
+
 int LibOSD::write(const char *object, const uuid_t volume,
 		  uint64_t offset, uint64_t length, char *data,
 		  int flags, libosd_io_completion_fn cb, void *user)
@@ -512,10 +515,20 @@ int LibOSD::write(const char *object, const uuid_t volume,
   epoch_t epoch = 0;
   std::unique_ptr<CSyncCompletion> sync;
 
-  if (flags & (LIBOSD_WRITE_CB_UNSTABLE | LIBOSD_WRITE_CB_STABLE) && !cb) {
+  if (!cb) {
+    // when synchronous, flags must specify exactly one of UNSTABLE or STABLE
+    if ((flags & WRITE_CB_FLAGS) == 0 ||
+	(flags & WRITE_CB_FLAGS) == WRITE_CB_FLAGS)
+      return -EINVAL;
+
+    // set up a synchronous completion
     cb = CSyncCompletion::callback;
     sync.reset(new CSyncCompletion());
     user = sync.get();
+  } else {
+    // when asynchronous, flags must specify one or more of UNSTABLE or STABLE
+    if ((flags & WRITE_CB_FLAGS) == 0)
+      return -EINVAL;
   }
 
   if (!wait_for_active(&epoch))
@@ -555,10 +568,19 @@ int LibOSD::truncate(const char *object, const uuid_t volume,
   epoch_t epoch = 0;
   std::unique_ptr<CSyncCompletion> sync;
 
-  if (flags & (LIBOSD_WRITE_CB_UNSTABLE | LIBOSD_WRITE_CB_STABLE) && !cb) {
+  if (!cb) {
+    // when synchronous, flags must specify exactly one of UNSTABLE or STABLE
+    if ((flags & WRITE_CB_FLAGS) == 0 ||
+	(flags & WRITE_CB_FLAGS) == WRITE_CB_FLAGS)
+      return -EINVAL;
+
+    // set up a synchronous completion
     cb = CSyncCompletion::callback;
     sync.reset(new CSyncCompletion());
     user = sync.get();
+  } else if ((flags & WRITE_CB_FLAGS) == 0) {
+    // when asynchronous, flags must specify one or more of UNSTABLE or STABLE
+    return -EINVAL;
   }
 
   if (!wait_for_active(&epoch))
