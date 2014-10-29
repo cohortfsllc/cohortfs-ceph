@@ -29,6 +29,7 @@
 #include "common/Mutex.h"
 #include "include/types.h"
 #include "include/compat.h"
+#include "common/likely.h"
 #if defined(HAVE_XIO)
 #include "msg/XioMsg.h"
 #endif
