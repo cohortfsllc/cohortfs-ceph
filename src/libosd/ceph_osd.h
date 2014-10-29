@@ -175,7 +175,9 @@ void libosd_signal(int signum);
  * @param name    The volume name in the osd map
  * @param uuid    The uuid to be assigned
  *
- * @return 0 on success, ENOENT if not found.
+ * @retval 0 on success.
+ * @retval -ENOENT if not found.
+ * @retval -ENODEV if the OSD is shutting down.
  */
 int libosd_get_volume(struct libosd *osd, const char *name, uuid_t uuid);
 
@@ -183,7 +185,8 @@ int libosd_get_volume(struct libosd *osd, const char *name, uuid_t uuid);
 #define LIBOSD_READ_FLAGS_NONE	  0x0
 
 /**
- * Read from an object asynchronously.
+ * Read from an object. The function is asynchronous is a callback function
+ * is given.
  *
  * @param osd	  The libosd object returned by libosd_init()
  * @param object  The object name string
@@ -195,9 +198,9 @@ int libosd_get_volume(struct libosd *osd, const char *name, uuid_t uuid);
  * @param cb	  Read completion callback (optional)
  * @param user	  User data passed to the callback (optional)
  *
- * @return Nonzero on immediate errors. Otherwise returns 0 and promises
- * to call the read_completion callback on success or failure. EINVAL
- * if no read_completion callback is given.
+ * @return Returns the number of bytes read synchronously, 0 if the read
+ * request was submitted asynchronously, or a negative error code on failure.
+ * @retval -ENODEV if the OSD is shutting down.
  */
 int libosd_read(struct libosd *osd, const char *object, const uuid_t volume,
 		uint64_t offset, uint64_t length, char *data,
@@ -211,7 +214,8 @@ int libosd_read(struct libosd *osd, const char *object, const uuid_t volume,
 #define LIBOSD_WRITE_CB_STABLE	  0x02
 
 /**
- * Write to an object asynchronously.
+ * Write to an object. The function is asynchronous if a callback function
+ * is given.
  *
  * @param osd	  The libosd object returned by libosd_init()
  * @param object  The object name string
@@ -223,16 +227,21 @@ int libosd_read(struct libosd *osd, const char *object, const uuid_t volume,
  * @param cb	  Write completion callback (optional)
  * @param user	  User data passed to the callback (optional)
  *
- * @return Nonzero on immediate errors. Otherwise returns 0 and promises
- * to call the write_completion callback on success or failure. EINVAL
- * if no write_completion callback is given.
+ * @return Returns the number of bytes written synchronously, 0 if the write
+ * request was submitted asynchronously, or a negative error code on failure.
+ * @retval -EINVAL if a write completion is given and flags contains neither
+ * LIBOSD_WRITE_CB_UNSTABLE nor LIBOSD_WRITE_CB_STABLE.
+ * @retval -EINVAL if no write completion is given and flags does not contain
+ * exactly one of LIBOSD_WRITE_CB_UNSTABLE or LIBOSD_WRITE_CB_STABLE.
+ * @retval -ENODEV if the OSD is shutting down.
  */
 int libosd_write(struct libosd *osd, const char *object, const uuid_t volume,
 		 uint64_t offset, uint64_t length, char *data,
 		 int flags, libosd_io_completion_fn cb, void *user);
 
 /**
- * Truncate an object asynchronously.
+ * Truncate an object. The function is asynchronous if a callback function
+ * is given.
  *
  * @param osd	  The libosd object returned by libosd_init()
  * @param object  The object name string
@@ -242,9 +251,13 @@ int libosd_write(struct libosd *osd, const char *object, const uuid_t volume,
  * @param cb	  Truncate completion callback (optional)
  * @param user	  User data passed to the callback (optional)
  *
- * @return Nonzero on immediate errors. Otherwise returns 0 and promises
- * to call the write_completion callback on success or failure. EINVAL
- * if no write_completion callback is given.
+ * @return Returns 0 if the write request was completed synchronously or
+ * was submitted asynchronously, or a negative error code on failure.
+ * @retval -EINVAL if a write completion is given and flags contains neither
+ * LIBOSD_WRITE_CB_UNSTABLE nor LIBOSD_WRITE_CB_STABLE.
+ * @retval -EINVAL if no write completion is given and flags does not contain
+ * exactly one of LIBOSD_WRITE_CB_UNSTABLE or LIBOSD_WRITE_CB_STABLE.
+ * @retval -ENODEV if the OSD is shutting down.
  */
 int libosd_truncate(struct libosd *osd, const char *object,
 		    const uuid_t volume, uint64_t offset,
