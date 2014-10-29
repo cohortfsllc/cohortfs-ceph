@@ -302,7 +302,8 @@ void Log::start()
 
 void Log::stop()
 {
-  assert(is_started());
+  if (!is_started())
+    return;
   pthread_mutex_lock(&m_queue_mutex);
   m_stop = true;
   pthread_cond_signal(&m_cond_flusher);
