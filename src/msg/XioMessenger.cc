@@ -410,7 +410,7 @@ int XioMessenger::pool_hint(uint32_t dsize) {
   if (dsize > 1024*1024)
     return 0;
 
-  unsigned int quantum = (dsize > 4*getpagesize()) ?
+  uint32_t quantum = (dsize > 4*uint32_t(getpagesize())) ?
     XMSG_MEMPOOL_QUANTUM_SMALL : XMSG_MEMPOOL_QUANTUM_LARGE;
 
   /* if dsize is already present, returns -EEXIST */
