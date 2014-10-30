@@ -9,16 +9,17 @@
 #include "libosd/ceph_osd.h"
 
 
-static int test_sync_write(struct libosd *osd, uuid_t volume)
+static int test_sync_write(struct libosd *osd, const uuid_t volume)
 {
   char buf[64] = {};
   int r;
 
-  // flags=0 -> EINVAL
+  // flags=NONE -> EINVAL
   r = libosd_write(osd, "sync-inval0", volume, 0, sizeof(buf), buf,
-		   0, NULL, NULL);
+		   LIBOSD_WRITE_FLAGS_NONE, NULL, NULL);
   if (r != -EINVAL) {
-    fprintf(stderr, "libosd_write(flags=0) returned %d, expected -EINVAL\n", r);
+    fprintf(stderr, "libosd_write(flags=NONE) returned %d, "
+	"expected -EINVAL\n", r);
     return -1;
   }
 
@@ -57,7 +58,27 @@ static int test_sync_write(struct libosd *osd, uuid_t volume)
        " expected %ld\n", r, sizeof(buf));
     return -1;
   }
-  return r;
+  return 0;
+}
+
+static int test_sync_read(struct libosd *osd, const uuid_t volume)
+{
+  char buf[64] = {};
+  int r;
+
+  // read object created by test_sync_write()
+  r = libosd_read(osd, "sync-stable", volume, 0, sizeof(buf), buf,
+		  LIBOSD_READ_FLAGS_NONE, NULL, NULL);
+  if (r < 0) {
+    fprintf(stderr, "libosd_read() failed with %d\n", r);
+    return r;
+  }
+  if (r != sizeof(buf)) {
+    fprintf(stderr, "libosd_read() read %d bytes, expected %ld\n",
+	r, sizeof(buf));
+    return -1;
+  }
+  return 0;
 }
 
 struct io_completion {
@@ -68,10 +89,10 @@ struct io_completion {
   int done;
 };
 
-static void write_completion(int result, uint64_t length, int flags, void *user)
+static void completion_cb(int result, uint64_t length, int flags, void *user)
 {
   struct io_completion *io = (struct io_completion*)user;
-  printf("write_completion result %d flags %d\n", result, flags);
+  printf("completion cb result %d length %ld\n", result, length);
 
   pthread_mutex_lock(&io->mutex);
   io->result = result;
@@ -90,7 +111,7 @@ static int wait_for_completion(struct io_completion *io, int count)
   return io->result;
 }
 
-static int test_async_write(struct libosd *osd, uuid_t volume)
+static int test_async_write(struct libosd *osd, const uuid_t volume)
 {
   char buf[64] = {};
   struct io_completion io1 = {
@@ -110,76 +131,113 @@ static int test_async_write(struct libosd *osd, uuid_t volume)
   };
   int r;
 
-  // flags=0 -> EINVAL
+  // flags=NONE -> EINVAL
   r = libosd_write(osd, "async-inval0", volume, 0, sizeof(buf), buf,
-		   0, write_completion, NULL);
+		   LIBOSD_WRITE_FLAGS_NONE, completion_cb, NULL);
   if (r != -EINVAL) {
-    fprintf(stderr, "libosd_write(flags=0) returned %d, expected -EINVAL\n", r);
+    fprintf(stderr, "libosd_write(flags=NONE) returned %d, "
+	"expected -EINVAL\n", r);
     return -1;
   }
 
   // flags=UNSTABLE
   r = libosd_write(osd, "async-unstable", volume, 0, sizeof(buf), buf,
-		   LIBOSD_WRITE_CB_UNSTABLE, write_completion, &io1);
+		   LIBOSD_WRITE_CB_UNSTABLE, completion_cb, &io1);
   if (r != 0) {
     fprintf(stderr, "libosd_write(flags=UNSTABLE) failed with %d\n", r);
     return r;
   }
   r = wait_for_completion(&io1, 1);
   if (r != 0) {
-    fprintf(stderr, "write_completion(flags=UNSTABLE) got result %d\n", r);
+    fprintf(stderr, "completion_cb(flags=UNSTABLE) got result %d\n", r);
     return r;
   }
   if (io1.length != sizeof(buf)) {
-    fprintf(stderr, "write_completion(flags=UNSTABLE) got length %ld, "
+    fprintf(stderr, "completion_cb(flags=UNSTABLE) got length %ld, "
 	"expected %ld\n", io1.length, sizeof(buf));
-    return r;
+    return -1;
   }
 
   // flags=STABLE
   r = libosd_write(osd, "async-stable", volume, 0, sizeof(buf), buf,
-		   LIBOSD_WRITE_CB_STABLE, write_completion, &io2);
+		   LIBOSD_WRITE_CB_STABLE, completion_cb, &io2);
   if (r != 0) {
     fprintf(stderr, "libosd_write(flags=STABLE) failed with %d\n", r);
     return r;
   }
   r = wait_for_completion(&io2, 1);
   if (r != 0) {
-    fprintf(stderr, "write_completion(flags=STABLE) got result %d\n", r);
+    fprintf(stderr, "completion_cb(flags=STABLE) got result %d\n", r);
     return r;
   }
   if (io2.length != sizeof(buf)) {
-    fprintf(stderr, "write_completion(flags=STABLE) got length %ld, "
+    fprintf(stderr, "completion_cb(flags=STABLE) got length %ld, "
 	"expected %ld\n", io2.length, sizeof(buf));
-    return r;
+    return -1;
   }
 
   // flags=UNSTABLE|STABLE
   r = libosd_write(osd, "async-unstable-stable", volume, 0, sizeof(buf), buf,
 		   LIBOSD_WRITE_CB_UNSTABLE | LIBOSD_WRITE_CB_STABLE,
-		   write_completion, &io3);
+		   completion_cb, &io3);
   if (r != 0) {
     fprintf(stderr, "libosd_write(flags=UNSTABLE|STABLE) failed with %d\n", r);
     return r;
   }
   r = wait_for_completion(&io3, 2); // wait for both callbacks
   if (r != 0) {
-    fprintf(stderr, "write_completion(flags=UNSTABLE|STABLE) got result %d\n", r);
+    fprintf(stderr, "completion_cb(flags=UNSTABLE|STABLE) got result %d\n", r);
     return r;
   }
   if (io3.length != sizeof(buf)) {
-    fprintf(stderr, "write_completion(flags=UNSTABLE) got length %ld, "
+    fprintf(stderr, "completion_cb(flags=UNSTABLE) got length %ld, "
 	"expected %ld\n", io3.length, sizeof(buf));
-    return r;
+    return -1;
   }
   return 0;
 }
 
-static int run_tests(struct libosd *osd, uuid_t volume)
+static int test_async_read(struct libosd *osd, const uuid_t volume)
+{
+  char buf[64] = {};
+  struct io_completion io = {
+    .mutex = PTHREAD_MUTEX_INITIALIZER,
+    .cond = PTHREAD_COND_INITIALIZER,
+    .done = 0
+  };
+  int r;
+
+  r = libosd_read(osd, "async-stable", volume, 0, sizeof(buf), buf,
+		  LIBOSD_READ_FLAGS_NONE, completion_cb, &io);
+  if (r != 0) {
+    fprintf(stderr, "libosd_read() failed with %d\n", r);
+    return r;
+  }
+  r = wait_for_completion(&io, 1);
+  if (r != 0) {
+    fprintf(stderr, "completion_cb() got result %d\n", r);
+    return r;
+  }
+  if (io.length != sizeof(buf)) {
+    fprintf(stderr, "completion_cb() got length %ld, "
+	"expected %ld\n", io.length, sizeof(buf));
+    return -1;
+  }
+  return 0;
+}
+
+
+static int run_tests(struct libosd *osd, const uuid_t volume)
 {
   int r = test_sync_write(osd, volume);
   if (r != 0) {
     fprintf(stderr, "test_sync_write() failed with %d\n", r);
+    return r;
+  }
+
+  r = test_sync_read(osd, volume);
+  if (r != 0) {
+    fprintf(stderr, "test_sync_read() failed with %d\n", r);
     return r;
   }
 
@@ -188,6 +246,13 @@ static int run_tests(struct libosd *osd, uuid_t volume)
     fprintf(stderr, "test_async_write() failed with %d\n", r);
     return r;
   }
+
+  r = test_async_read(osd, volume);
+  if (r != 0) {
+    fprintf(stderr, "test_async_read() failed with %d\n", r);
+    return r;
+  }
+  puts("libosd tests passed");
   return 0;
 }
 
@@ -214,12 +279,7 @@ int main(int argc, const char *argv[])
   }
 
   libosd_shutdown(osd);
-  fputs("libosd shutting down\n", stderr);
-
   libosd_join(osd);
-  fputs("libosd_join returned\n", stderr);
-
   libosd_cleanup(osd);
-  fputs("libosd_cleanup finished\n", stderr);
   return r;
 }
