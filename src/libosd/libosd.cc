@@ -354,34 +354,36 @@ int LibOSD::get_volume(const char *name, uuid_t uuid)
   return 0;
 }
 
-class CSyncCompletion {
+class SyncCompletion {
 private:
   Mutex mutex;
   Cond cond;
   bool done;
   int result;
+  int length;
 
-  void signal(int r) {
+  void signal(int r, int len) {
     Mutex::Locker lock(mutex);
     done = true;
     result = r;
+    length = len;
     cond.Signal();
   }
 
 public:
-  CSyncCompletion() : done(false) {}
+  SyncCompletion() : done(false) {}
 
   int wait() {
     Mutex::Locker lock(mutex);
     while (!done)
       cond.Wait(mutex);
-    return result;
+    return result != 0 ? result : length;
   }
 
   // libosd_io_completion_fn to signal the condition variable
   static void callback(int result, uint64_t length, int flags, void *user) {
-    CSyncCompletion *sync = static_cast<CSyncCompletion*>(user);
-    sync->signal(result);
+    SyncCompletion *sync = static_cast<SyncCompletion*>(user);
+    sync->signal(result, length);
   }
 };
 
@@ -411,10 +413,8 @@ public:
     if (op.rval != 0) {
       length = 0;
     } else {
-      assert(length >= op.op.payload_len);
-      length = op.op.payload_len;
-
-      assert(length == op.outdata.length());
+      assert(length >= op.outdata.length());
+      length = op.outdata.length();
       op.outdata.copy(0, length, data);
     }
 
@@ -435,12 +435,12 @@ int LibOSD::read(const char *object, const uuid_t volume,
   hobject_t oid = object_t(object);
   uuid_d vol(volume);
   epoch_t epoch = 0;
-  std::unique_ptr<CSyncCompletion> sync;
+  std::unique_ptr<SyncCompletion> sync;
 
   if (!cb) {
     // set up a synchronous completion
-    cb = CSyncCompletion::callback;
-    sync.reset(new CSyncCompletion());
+    cb = SyncCompletion::callback;
+    sync.reset(new SyncCompletion());
     user = sync.get();
   }
 
@@ -511,7 +511,7 @@ int LibOSD::write(const char *object, const uuid_t volume,
   hobject_t oid = object_t(object);
   uuid_d vol(volume);
   epoch_t epoch = 0;
-  std::unique_ptr<CSyncCompletion> sync;
+  std::unique_ptr<SyncCompletion> sync;
 
   if (!cb) {
     // when synchronous, flags must specify exactly one of UNSTABLE or STABLE
@@ -520,8 +520,8 @@ int LibOSD::write(const char *object, const uuid_t volume,
       return -EINVAL;
 
     // set up a synchronous completion
-    cb = CSyncCompletion::callback;
-    sync.reset(new CSyncCompletion());
+    cb = SyncCompletion::callback;
+    sync.reset(new SyncCompletion());
     user = sync.get();
   } else {
     // when asynchronous, flags must specify one or more of UNSTABLE or STABLE
@@ -564,7 +564,7 @@ int LibOSD::truncate(const char *object, const uuid_t volume,
   hobject_t oid = object_t(object);
   uuid_d vol(volume);
   epoch_t epoch = 0;
-  std::unique_ptr<CSyncCompletion> sync;
+  std::unique_ptr<SyncCompletion> sync;
 
   if (!cb) {
     // when synchronous, flags must specify exactly one of UNSTABLE or STABLE
@@ -573,8 +573,8 @@ int LibOSD::truncate(const char *object, const uuid_t volume,
       return -EINVAL;
 
     // set up a synchronous completion
-    cb = CSyncCompletion::callback;
-    sync.reset(new CSyncCompletion());
+    cb = SyncCompletion::callback;
+    sync.reset(new SyncCompletion());
     user = sync.get();
   } else if ((flags & WRITE_CB_FLAGS) == 0) {
     // when asynchronous, flags must specify one or more of UNSTABLE or STABLE
