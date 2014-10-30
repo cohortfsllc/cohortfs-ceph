@@ -13,7 +13,9 @@
 #ifndef CEPH_RBD_TYPES_H
 #define CEPH_RBD_TYPES_H
 
-#if defined(__linux__)
+#if defined(DONT_INCLUDE_THOSE_TYPES)
+/* don't try to re-dcl types dcl'd in *our* src/include/types.h */
+#elif defined(__linux__)
 #include <linux/types.h>
 #elif defined(__FreeBSD__)
 #include <sys/types.h>

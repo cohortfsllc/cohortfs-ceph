@@ -43,6 +43,7 @@ using std::istringstream;
 #define __le16 ceph_le16
 #define __le32 ceph_le32
 #define __le64 ceph_le64
+#define DONT_INCLUDE_THOSE_TYPES 1
 #include "ceph_fs.h"
 #include "ceph_frag.h"
 #include "rbd_types.h"
