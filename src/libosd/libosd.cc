@@ -162,17 +162,15 @@ int LibOSD::create_context(const struct libosd_init_args *args)
     conf->cluster.assign(args->cluster);
 
   // parse configuration
-  if (args->config && args->config[0]) {
-    std::deque<std::string> parse_errors;
-    int r = conf->parse_config_files(args->config, &parse_errors, &cerr, 0);
-    if (r != 0) {
-      derr << "libosd_init failed to parse configuration "
-	<< args->config << dendl;
-      return r;
-    }
-    conf->apply_changes(NULL);
-    complain_about_parse_errors(cct, &parse_errors);
+  std::deque<std::string> parse_errors;
+  int r = conf->parse_config_files(args->config, &parse_errors, &cerr, 0);
+  if (r != 0) {
+    derr << "libosd_init failed to parse configuration "
+      << args->config << dendl;
+    return r;
   }
+  conf->apply_changes(NULL);
+  complain_about_parse_errors(cct, &parse_errors);
 
   cct->init();
 
