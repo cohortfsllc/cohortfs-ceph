@@ -38,7 +38,6 @@
 #include "common/ceph_context.h"
 #include "common/LogClient.h"
 #include "include/str_list.h"
-#include "OSDriver.h"
 
 #include <list>
 #include <memory>
@@ -58,8 +57,8 @@ class MOSDOp;
 
 class OSDVol;
 
-void intrusive_ptr_add_ref(OSDVol *vol);
-void intrusive_ptr_release(OSDVol *vol);
+void intrusive_ptr_add_ref(OSDVol* vol);
+void intrusive_ptr_release(OSDVol* vol);
 
 typedef boost::intrusive_ptr<OSDVol> OSDVolRef;
 
@@ -85,13 +84,13 @@ public:
 
   std::string gen_dbg_prefix() const { return gen_prefix(); }
 
-  const vol_info_t &get_info() const {
+  const vol_info_t& get_info() const {
     return info;
   }
   ObjectContextRef get_obc(
-    const oid_t &hoid,
-    map<string, bufferlist> &attrs) {
-    return get_object_context(hoid, true, &attrs);
+    const oid_t& oid,
+    map<string, bufferlist>& attrs) {
+    return get_object_context(oid, true,& attrs);
   }
 
   entity_name_t get_cluster_msgr_name();
@@ -106,9 +105,9 @@ public:
   struct OpContext {
     OpRequestRef op;
     osd_reqid_t reqid;
-    vector<OSDOp> &ops;
+    vector<OSDOp>& ops;
 
-    const ObjectState *obs; // Old objectstate
+    const ObjectState* obs; // Old objectstate
 
     ObjectState new_obs;  // resulting ObjectState
     object_stat_sum_t delta_stats;
@@ -137,7 +136,7 @@ public:
 
     int current_osd_subop_num;
 
-    ObjectStore::Transaction *op_t;
+    ObjectStore::Transaction* op_t;
 
     interval_set<uint64_t> modified_ranges;
     ObjectContextRef obc;
@@ -145,10 +144,10 @@ public:
 
     int data_off; // FIXME: may want to kill this msgr hint off at some point!
 
-    MOSDOpReply *reply;
+    MOSDOpReply* reply;
 
     ceph::mono_time readable_stamp;  // when applied on all replicas
-    OSDVol *vol;
+    OSDVol* vol;
 
     int num_read;    ///< count read ops
     int num_write;   ///< count update ops
@@ -159,8 +158,8 @@ public:
     int async_read_result;
     unsigned inflightreads;
     friend struct OnReadComplete;
-    void start_async_reads(OSDVol *vol);
-    void finish_read(OSDVol *vol);
+    void start_async_reads(OSDVol* vol);
+    void finish_read(OSDVol* vol);
     bool async_reads_complete() {
       return inflightreads == 0;
     }
@@ -169,13 +168,13 @@ public:
 
     enum { W_LOCK, R_LOCK, NONE } lock_to_release;
 
-    Context *on_finish;
+    Context* on_finish;
 
     OpContext(const OpContext& other);
     const OpContext& operator=(const OpContext& other);
 
     OpContext(OpRequestRef _op, osd_reqid_t _reqid, vector<OSDOp>& _ops,
-	      ObjectState *_obs, OSDVol *_vol) :
+	      ObjectState* _obs, OSDVol* _vol) :
       op(_op), reqid(_reqid), ops(_ops), obs(_obs),
       new_obs(_obs->oi, _obs->exists),
       modify(false), user_modify(false),
@@ -226,7 +225,7 @@ public:
 
     eversion_t v;
 
-    OpContext *ctx;
+    OpContext* ctx;
     ObjectContextRef obc;
     map<oid_t,ObjectContextRef> src_obc;
 
@@ -239,9 +238,9 @@ public:
 
     bool sent_disk;
 
-    Context *on_applied;
+    Context* on_applied;
 
-    Mutation(OpContext *c, ObjectContextRef pi, ceph_tid_t tid) :
+    Mutation(OpContext* c, ObjectContextRef pi, ceph_tid_t tid) :
       queue_item(this),
       nref(1),
       ctx(c), obc(pi),
@@ -250,7 +249,7 @@ public:
       applied(false), committed(false), sent_disk(false),
       on_applied(NULL) { }
 
-    Mutation *get() {
+    Mutation* get() {
       ++nref;
       return this;
     }
@@ -265,9 +264,9 @@ public:
   };
 
 protected:
-  OSDService *osd;
+  OSDService* osd;
 public:
-  CephContext *cct;
+  CephContext* cct;
 protected:
   OSDriver osdriver;
 
@@ -313,7 +312,7 @@ protected:
    * @param ctx [in,out] ctx to get locks for
    * @return true on success, false if we are queued
    */
-  bool get_rw_locks(OpContext *ctx) {
+  bool get_rw_locks(OpContext* ctx) {
     if (ctx->op->may_write() || ctx->op->may_cache()) {
       if (ctx->obc->get_write(ctx->op)) {
 	ctx->lock_to_release = OpContext::W_LOCK;
@@ -334,7 +333,7 @@ protected:
    *
    * @param ctx [in] ctx to clean up
    */
-  void close_op_ctx(OpContext *ctx, int r) {
+  void close_op_ctx(OpContext* ctx, int r) {
     release_op_ctx_locks(ctx);
     delete ctx->op_t;
     ctx->op_t = NULL;
@@ -347,7 +346,7 @@ protected:
    *
    * @param ctx [in] ctx to clean up
    */
-  void release_op_ctx_locks(OpContext *ctx) {
+  void release_op_ctx_locks(OpContext* ctx) {
     list<OpRequestRef> to_req;
     bool requeue_recovery = false;
     switch (ctx->lock_to_release) {
@@ -375,16 +374,16 @@ protected:
 
   friend class C_OSD_MutationApplied;
   friend class C_OSD_MutationCommit;
-  void mutations_all_applied(Mutation *mutation);
-  void mutations_all_committed(Mutation *mutation);
-  void eval_mutation(Mutation *mutation);
-  void issue_mutation(Mutation *mutation);
-  Mutation *new_mutation(OpContext *ctx, ObjectContextRef obc,
+  void mutations_all_applied(Mutation* mutation);
+  void mutations_all_committed(Mutation* mutation);
+  void eval_mutation(Mutation* mutation);
+  void issue_mutation(Mutation* mutation);
+  Mutation* new_mutation(OpContext* ctx, ObjectContextRef obc,
 			 ceph_tid_t rep_tid);
-  void remove_mutation(Mutation *mutation);
+  void remove_mutation(Mutation* mutation);
 
-  Mutation *simple_mutation_create(ObjectContextRef obc);
-  void simple_mutation_submit(Mutation *mutation);
+  Mutation* simple_mutation_create(ObjectContextRef obc);
+  void simple_mutation_submit(Mutation* mutation);
 
   // projected object info
   SharedPtrRegistry<oid_t, ObjectContext> object_contexts;
@@ -394,7 +393,7 @@ public:
 
 
   int whoami();
-  unique_lock lock_suspend_timeout(ThreadPool::TPHandle &handle);
+  unique_lock lock_suspend_timeout(ThreadPool::TPHandle& handle);
 
   void get();
   void put();
@@ -418,15 +417,15 @@ protected:
   ObjectContextRef get_object_context(
     const oid_t& soid,
     bool can_create,
-    map<string, bufferlist> *attrs = 0
+    map<string, bufferlist>* attrs = 0
     );
 
   void context_registry_on_change();
-  void object_context_destructor_callback(ObjectContext *obc);
+  void object_context_destructor_callback(ObjectContext* obc);
   struct C_Vol_ObjectContext : public Context {
     OSDVolRef osdvol;
-    ObjectContext *obc;
-    C_Vol_ObjectContext(OSDVol *v, ObjectContext *o) :
+    ObjectContext* obc;
+    C_Vol_ObjectContext(OSDVol* v, ObjectContext* o) :
       osdvol(v), obc(o) {}
     void finish(int r) {
       osdvol->object_context_destructor_callback(obc);
@@ -434,16 +433,16 @@ protected:
   };
 
   int find_object_context(const oid_t& oid,
-			  ObjectContextRef *pobc,
+			  ObjectContextRef* pobc,
 			  bool can_create);
 
   // low level ops
 
-  void execute_ctx(OpContext *ctx);
-  void finish_ctx(OpContext *ctx);
-  void reply_ctx(OpContext *ctx, int err);
-  void reply_ctx(OpContext *ctx, int err, eversion_t v, version_t uv);
-  void make_writeable(OpContext *ctx);
+  void execute_ctx(OpContext* ctx);
+  void finish_ctx(OpContext* ctx);
+  void reply_ctx(OpContext* ctx, int err);
+  void reply_ctx(OpContext* ctx, int err, eversion_t v, version_t uv);
+  void make_writeable(OpContext* ctx);
 
   void write_update_size_and_usage(object_stat_sum_t& stats, object_info_t& oi,
 				   interval_set<uint64_t>& modified,
@@ -452,9 +451,9 @@ protected:
   void add_interval_usage(interval_set<uint64_t>& s,
 			  object_stat_sum_t& st);
 
-  int prepare_transaction(OpContext *ctx);
+  int prepare_transaction(OpContext* ctx);
   list<pair<OpRequestRef, OpContext*> > in_progress_async_reads;
-  void complete_read_ctx(int result, OpContext *ctx);
+  void complete_read_ctx(int result, OpContext* ctx);
 
   struct C_OSD_OndiskWriteUnlock : public Context {
     ObjectContextRef obc, obc2, obc3;
@@ -471,8 +470,8 @@ protected:
     }
   };
   struct C_OSD_OndiskWriteUnlockList : public Context {
-    list<ObjectContextRef> *pls;
-    C_OSD_OndiskWriteUnlockList(list<ObjectContextRef> *l) : pls(l) {}
+    list<ObjectContextRef>* pls;
+    C_OSD_OndiskWriteUnlockList(list<ObjectContextRef>* l) : pls(l) {}
     void finish(int r) {
       for (list<ObjectContextRef>::iterator p = pls->begin(); p != pls->end(); ++p)
 	(*p)->ondisk_write_unlock();
@@ -490,32 +489,29 @@ public:
   int do_xattr_cmp_uint64_t(int op, uint64_t v1, bufferlist& xattr);
   int do_xattr_cmp_str(int op, string& v1s, bufferlist& xattr);
 
-  int do_osd_ops(OpContext *ctx, vector<OSDOp>& ops);
+  int do_osd_ops(OpContext* ctx, vector<OSDOp>& ops);
 
-  int _get_tmap(OpContext *ctx, bufferlist *header, bufferlist *vals);
-  int do_tmap2omap(OpContext *ctx, unsigned flags);
-  int do_tmapup(OpContext *ctx, bufferlist::iterator& bp, OSDOp& osd_op);
-  int do_tmapup_slow(OpContext *ctx, bufferlist::iterator& bp, OSDOp& osd_op, bufferlist& bl);
+  int _get_tmap(OpContext* ctx, bufferlist* header, bufferlist* vals);
+  int do_tmap2omap(OpContext* ctx, unsigned flags);
+  int do_tmapup(OpContext* ctx, bufferlist::iterator& bp, OSDOp& osd_op);
+  int do_tmapup_slow(OpContext* ctx, bufferlist::iterator& bp, OSDOp& osd_op,
+		     bufferlist& bl);
 
-  void do_osd_op_effects(OpContext *ctx);
+  void do_osd_op_effects(OpContext* ctx);
 
 protected:
-
   list<OpRequestRef> waiting_for_active;
   map<eversion_t,list<OpRequestRef> > waiting_for_ack, waiting_for_ondisk;
 
   void requeue_object_waiters(map<oid_t, list<OpRequestRef> >& m);
   void requeue_op(OpRequestRef op);
-  void requeue_ops(list<OpRequestRef> &l);
+  void requeue_ops(list<OpRequestRef>& l);
 
   // for ordering writes
   std::shared_ptr<ObjectStore::Sequencer> osr;
 
 private:
-  int _delete_obj(OpContext *ctx, bool no_whiteout);
-  static int _write_info(ObjectStore::Transaction& t, epoch_t epoch,
-			 vol_info_t &info, coll_t coll,
-			 oid_t &infos_obj);
+  int _delete_oid(OpContext* ctx, bool no_whiteout);
 
 public:
   void clear_primary_state();
@@ -527,7 +523,7 @@ public:
   void activate(ObjectStore::Transaction& t, epoch_t query_epoch);
   void _activate_committed(epoch_t e);
 
-  Context *finish_sync_event;
+  Context* finish_sync_event;
 
   loff_t get_log_write_pos() {
     return 0;
@@ -535,7 +531,7 @@ public:
 
   friend class C_OSD_RepModify_Commit;
 
-  OSDVol(OSDService *o, OSDMapRef curmap,
+  OSDVol(OSDService* o, OSDMapRef curmap,
 	 const boost::uuids::uuid& vol);
 
   ~OSDVol();
@@ -557,7 +553,7 @@ private:
   void write_info(ObjectStore::Transaction& t);
   void populate_obc_watchers(ObjectContextRef obc);
   void get_obc_watchers(ObjectContextRef obc,
-			list<obj_watch_item_t> &vol_watchers);
+			list<obj_watch_item_t>& vol_watchers);
   void check_blacklisted_obc_watchers(ObjectContextRef obc);
 
 public:
@@ -574,7 +570,11 @@ public:
     return at_version;
   }
 
-  coll_t get_coll(void) {
+  const coll_t& get_cid(void) {
+    return cid;
+  }
+  
+  CollectionHandle get_coll(void) {
     return coll;
   }
 
@@ -597,22 +597,23 @@ public:
   void handle_advance_map(OSDMapRef osdmap);
   void handle_activate_map();
 
-  void on_removal(ObjectStore::Transaction *t);
+  void on_removal(ObjectStore::Transaction* t);
 
 
-  void do_request(OpRequestRef op, ThreadPool::TPHandle &handle);
+  void do_request(OpRequestRef op, ThreadPool::TPHandle& handle);
 
   void do_op(OpRequestRef op);
   int do_command(cmdmap_t cmdmap, ostream& ss, bufferlist& idata,
 		 bufferlist& odata);
 
-  void on_change(ObjectStore::Transaction *t);
+  void on_change(ObjectStore::Transaction* t);
   void check_blacklisted_watchers();
   void get_watchers(std::list<obj_watch_item_t>&);
 
   // From the Backend
 protected:
-  const coll_t coll;
+  const coll_t cid;
+  CollectionHandle coll;
   ceph::mono_time last_became_active;
 
   void on_shutdown();
@@ -634,30 +635,30 @@ protected:
 
   /// List objects in collection
   int objects_list_partial(
-    const oid_t &begin,
+    const oid_t& begin,
     int min,
     int max,
-    vector<oid_t> *ls,
-    oid_t *next);
+    vector<oid_t>* ls,
+    oid_t* next);
 
   int objects_list_range(
-    const oid_t &start,
-    const oid_t &end,
-    vector<oid_t> *ls);
+    const oid_t& start,
+    const oid_t& end,
+    vector<oid_t>* ls);
 
   int objects_get_attr(
-    const oid_t &hoid,
-    const string &attr,
-    bufferlist *out);
+    const oid_t& oid,
+    const string& attr,
+    bufferlist* out);
 
-  void objects_read_async(const oid_t &hoid,
+  void objects_read_async(const oid_t& oid,
 			  const list<pair<pair<uint64_t, uint64_t>,
-			  pair<bufferlist*, Context*> > > &to_read,
-			  Context *on_complete);
+			  pair<bufferlist*, Context*> > >& to_read,
+			  Context* on_complete);
 };
 
 ostream& operator<<(ostream& out, const OSDVol& vol);
-void intrusive_ptr_add_ref(OSDVol::Mutation *mutation);
-void intrusive_ptr_release(OSDVol::Mutation *mutation);
+void intrusive_ptr_add_ref(OSDVol::Mutation* mutation);
+void intrusive_ptr_release(OSDVol::Mutation* mutation);
 
 #endif

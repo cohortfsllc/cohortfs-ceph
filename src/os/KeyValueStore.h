@@ -14,10 +14,8 @@
  *
  */
 
-
 #ifndef CEPH_KEYVALUESTORE_H
 #define CEPH_KEYVALUESTORE_H
-
 
 #include <cassert>
 #include <condition_variable>
@@ -73,7 +71,8 @@ class StripObjectMap: public GenericObjectMap {
     bool deleted;
     map<pair<string, string>, bufferlist> buffers;  // pair(prefix, key)
 
-    StripObjectHeader(): strip_size(default_strip_size), max_size(0), deleted(false) {}
+    StripObjectHeader(): strip_size(default_strip_size), max_size(0),
+			 deleted(false) {}
 
     void encode(bufferlist &bl) const {
       ENCODE_START(1, 1, bl);
@@ -101,20 +100,20 @@ class StripObjectMap: public GenericObjectMap {
 
   static int file_to_extents(uint64_t offset, size_t len, uint64_t strip_size,
 			     vector<StripExtent> &extents);
-  int lookup_strip_header(const coll_t & cid, const hoid_t &oid,
+  int lookup_strip_header(const coll_t&  cid, const hoid_t& oid,
 			  StripObjectHeader &header);
   int save_strip_header(StripObjectHeader &header,
 			const SequencerPosition &spos,
 			KeyValueDB::Transaction t);
-  int create_strip_header(const coll_t &cid, const hoid_t &oid,
+  int create_strip_header(const coll_t& cid, const hoid_t& oid,
 			  StripObjectHeader &strip_header,
 			  KeyValueDB::Transaction t);
   void clone_wrap(StripObjectHeader &old_header,
-		  const coll_t &cid, const hoid_t &oid,
+		  const coll_t& cid, const hoid_t& oid,
 		  KeyValueDB::Transaction t,
 		  StripObjectHeader *origin_header,
 		  StripObjectHeader *target_header);
-  void rename_wrap(const coll_t &cid, const hoid_t &oid,
+  void rename_wrap(const coll_t& cid, const hoid_t& oid,
 		   KeyValueDB::Transaction t,
 		   StripObjectHeader *header);
   // Already hold header to avoid lock header seq again
@@ -146,6 +145,40 @@ class KeyValueStore : public ObjectStore,
 		      public md_config_obs_t {
  public:
   static const uint32_t target_version = 1;
+
+  using ObjectStore::CollectionHandle;
+  using ObjectStore::ObjectHandle;
+
+  inline CollectionHandle get_slot_collection(Transaction& t, uint16_t c_ix) {
+    col_slot_t& c_slot = t.c_slot(c_ix);
+    CollectionHandle ch = get<0>(c_slot);
+    if (ch)
+      return ch;
+    ch = open_collection(get<1>(c_slot));
+    if (ch) {
+      // update slot for queued Ops to find
+      get<0>(c_slot) = ch;
+      // then mark it for release when t is cleaned up
+      get<2>(c_slot) |= ObjectStore::Transaction::FLAG_REF;
+    }
+    return ch;
+  } /* get_slot_collection */
+
+  inline ObjectHandle get_slot_object(Transaction& t, CollectionHandle ch,
+				      uint16_t o_ix, bool create) {
+    obj_slot_t& o_slot = t.o_slot(o_ix);
+    ObjectHandle oh = static_cast<ObjectHandle>(get<0>(o_slot));
+    if (oh)
+      return oh;
+    else {
+      oh = KeyValueStore::get_object(ch, get<1>(o_slot));
+      // update slot for queued Ops to find
+      get<0>(o_slot) = oh;
+      // then mark it for release when t is cleaned up
+      get<2>(o_slot) |= ObjectStore::Transaction::FLAG_REF;
+    }
+    return oh;
+  }
 
  private:
   string basedir;
@@ -184,13 +217,13 @@ class KeyValueStore : public ObjectStore,
 
   // A special coll used by store collection info, each oid in this coll
   // represent a coll_t
-  static bool is_coll_obj(const coll_t &c) {
+  static bool is_coll_obj(const coll_t& c) {
     return c.to_str().compare("COLLECTIONS") == 0;
   }
   static coll_t get_coll_for_coll() {
     return coll_t("COLLECTIONS");
   }
-  static hoid_t make_ghobject_for_coll(const coll_t &col) {
+  static hoid_t make_ghobject_for_coll(const coll_t& col) {
     return hoid_t(col.to_str());
   }
 
@@ -214,7 +247,7 @@ class KeyValueStore : public ObjectStore,
     SequencerPosition spos;
     KeyValueDB::Transaction t;
 
-    int lookup_cached_header(const coll_t &cid, const hoid_t &oid,
+    int lookup_cached_header(const coll_t& cid, const hoid_t& oid,
 			     StripObjectMap::StripObjectHeader **strip_header,
 			     bool create_if_missing);
     int get_buffer_keys(StripObjectMap::StripObjectHeader &strip_header,
@@ -228,9 +261,9 @@ class KeyValueStore : public ObjectStore,
 			   const string &prefix);
     int clear_buffer(StripObjectMap::StripObjectHeader &strip_header);
     void clone_buffer(StripObjectMap::StripObjectHeader &old_header,
-		      const coll_t &cid, const hoid_t &oid);
+		      const coll_t& cid, const hoid_t& oid);
     void rename_buffer(StripObjectMap::StripObjectHeader &old_header,
-		       const coll_t &cid, const hoid_t &oid);
+		       const coll_t& cid, const hoid_t& oid);
     int submit_transaction();
 
     BufferTransaction(KeyValueStore *store,
@@ -356,33 +389,35 @@ class KeyValueStore : public ObjectStore,
     }
   } op_wq;
 
-  Op *build_op(list<Transaction*>& tls, Context *ondisk, Context *onreadable,
-	       Context *onreadable_sync, OpRequestRef osd_op);
-  void queue_op(OpSequencer *osr, Op *o);
-  void op_queue_reserve_throttle(Op *o, ThreadPool::TPHandle *handle = NULL);
+  Op *build_op(list<Transaction*>& tls, Context* ondisk,
+	       Context *onreadable, Context* onreadable_sync,
+	       OpRequestRef osd_op);
+  void queue_op(OpSequencer* osr, Op* o);
+  void op_queue_reserve_throttle(Op* o,
+				 ThreadPool::TPHandle* handle = NULL);
   // Must be given an UNLOCKED unique_lock. Doesn't matter what it's
   // associated with.
-  void _do_op(OpSequencer *osr, ThreadPool::TPHandle &handle,
+  void _do_op(OpSequencer* osr, ThreadPool::TPHandle &handle,
 	      unique_lock& osral);
-  void op_queue_release_throttle(Op *o);
+  void op_queue_release_throttle(Op* o);
   // Must be given the LOCKED unique_lock from _do_op.
-  void _finish_op(OpSequencer *osr, unique_lock& osral);
+  void _finish_op(OpSequencer* osr, unique_lock& osral);
 
  public:
 
-  KeyValueStore(CephContext *_cct, const std::string &base,
-		const char *internal_name = "keyvaluestore-dev",
+  KeyValueStore(CephContext* _cct, const std::string& base,
+		const char* internal_name = "keyvaluestore-dev",
 		bool update_to=false);
   ~KeyValueStore();
 
   int _detect_backend() { kv_type = KV_TYPE_LEVELDB; return 0; }
   bool test_mount_in_use();
-  int version_stamp_is_valid(uint32_t *version);
+  int version_stamp_is_valid(uint32_t* version);
   int update_version_stamp();
   uint32_t get_target_version() {
     return target_version;
   }
-  int peek_journal_fsid(boost::uuids::uuid *id) {
+  int peek_journal_fsid(boost::uuids::uuid* id) {
     *id = fsid;
     return 0;
   }
@@ -397,19 +432,19 @@ class KeyValueStore : public ObjectStore,
   int statfs(struct statfs *buf);
 
   int _do_transactions(
-    list<Transaction*> &tls, uint64_t op_seq,
-    ThreadPool::TPHandle *handle);
-  int do_transactions(list<Transaction*> &tls, uint64_t op_seq) {
+    list<Transaction*>& tls, uint64_t op_seq,
+    ThreadPool::TPHandle* handle);
+  int do_transactions(list<Transaction*>& tls, uint64_t op_seq) {
     return _do_transactions(tls, op_seq, 0);
   }
   unsigned _do_transaction(Transaction& transaction,
-			   BufferTransaction &bt,
+			   BufferTransaction& bt,
 			   SequencerPosition& spos,
-			   ThreadPool::TPHandle *handle);
+			   ThreadPool::TPHandle* handle);
 
   int queue_transactions(Sequencer *osr, list<Transaction*>& tls,
 			 OpRequestRef op = OpRequestRef(),
-			 ThreadPool::TPHandle *handle = NULL);
+			 ThreadPool::TPHandle* handle = NULL);
 
 
   // ------------------
@@ -417,33 +452,38 @@ class KeyValueStore : public ObjectStore,
 
   int _generic_read(StripObjectMap::StripObjectHeader &header,
 		    uint64_t offset, size_t len, bufferlist& bl,
-		    bool allow_eio = false, BufferTransaction *bt = 0);
-  int _generic_write(StripObjectMap::StripObjectHeader &header,
+		    bool allow_eio = false, BufferTransaction* bt = 0);
+  int _generic_write(StripObjectMap::StripObjectHeader& header,
 		     uint64_t offset, size_t len, const bufferlist& bl,
-		     BufferTransaction &t, bool replica = false);
+		     BufferTransaction& t, bool replica = false);
 
-  bool exists(const coll_t &cid, const hoid_t& oid);
-  int stat(const coll_t &cid, const hoid_t& oid, struct stat *st,
+  bool exists(CollectionHandle ch, const hobject_t& oid);
+
+  ObjectHandle get_object(CollectionHandle ch, const hobject_t& oid);
+  void put_object(ObjectHandle oh);
+
+  int stat(CollectionHandle ch, ObjectHandle oh, struct stat *st,
 	   bool allow_eio = false);
-  int read(const coll_t &cid, const hoid_t& oid, uint64_t offset, size_t len,
-	   bufferlist& bl, bool allow_eio = false);
-  int fiemap(const coll_t &cid, const hoid_t& oid, uint64_t offset,
+  int read(CollectionHandle ch, ObjectHandle oh, uint64_t offset,
+	   size_t len, bufferlist& bl, bool allow_eio = false);
+  int fiemap(CollectionHandle ch, ObjectHandle oh, uint64_t offset,
 	     size_t len, bufferlist& bl);
 
-  int _touch(const coll_t &cid, const hoid_t& oid, BufferTransaction &t);
-  int _write(const coll_t &cid, const hoid_t& oid, uint64_t offset,
-	     size_t len, const bufferlist& bl, BufferTransaction &t,
+  int _touch(const coll_t& cid, const hoid_t& oid, BufferTransaction& t);
+  int _write(const coll_t& cid, const hoid_t& oid, uint64_t offset,
+	     size_t len, const bufferlist& bl, BufferTransaction& t,
 	     bool replica = false);
-  int _zero(const coll_t &cid, const hoid_t& oid, uint64_t offset,
-	    size_t len, BufferTransaction &t);
-  int _truncate(const coll_t &cid, const hoid_t& oid, uint64_t size,
-		BufferTransaction &t);
-  int _clone(const coll_t &cid, const hoid_t& oldoid,
-	     const hoid_t& newoid, BufferTransaction &t);
-  int _clone_range(const coll_t &cid, const hoid_t& oldoid,
+  int _zero(const coll_t& cid, const hoid_t& oid, uint64_t offset,
+	    size_t len, BufferTransaction& t);
+  int _truncate(const coll_t& cid, const hoid_t& oid, uint64_t size,
+		BufferTransaction& t);
+  int _clone(const coll_t& cid, const hoid_t& oldoid,
+	     const hoid_t& newoid, BufferTransaction& t);
+  int _clone_range(const coll_t& cid, const hoid_t& oldoid,
 		   const hoid_t& newoid, uint64_t srcoff,
-		   uint64_t len, uint64_t dstoff, BufferTransaction &t);
-  int _remove(const coll_t &cid, const hoid_t& oid, BufferTransaction &t);
+		   uint64_t len, uint64_t dstoff, BufferTransaction& t);
+  int _remove(const coll_t& cid, const hoid_t& oid,
+	      BufferTransaction& t);
 
 
   void start_sync() {}
@@ -455,66 +495,80 @@ class KeyValueStore : public ObjectStore,
   boost::uuids::uuid get_fsid() { return fsid; }
 
   // attrs
-  int getattr(const coll_t &cid, const hoid_t& oid, const char *name,
-	      bufferptr &bp);
-  int getattrs(const coll_t &cid, const hoid_t& oid,
+  int getattr(CollectionHandle ch, ObjectHandle oh,
+	      const char* name, bufferptr& bp);
+  int getattrs(CollectionHandle ch, ObjectHandle oh,
 	       map<string,bufferptr>& aset, bool user_only = false);
 
-  int _setattrs(const coll_t &cid, const hoid_t& oid,
-		map<string, bufferptr>& aset, BufferTransaction &t);
-  int _rmattr(const coll_t &cid, const hoid_t& oid, const char *name,
-	      BufferTransaction &t);
-  int _rmattrs(const coll_t &cid, const hoid_t& oid, BufferTransaction &t);
+  int _setattrs(const coll_t& cid, const hoid_t& oid,
+		map<string, bufferptr>& aset, BufferTransaction& t);
+  int _rmattr(const coll_t& cid, const hoid_t& oid, const char* name,
+	      BufferTransaction& t);
+  int _rmattrs(const coll_t& cid, const hoid_t& oid,
+	       BufferTransaction& t);
 
-  int collection_getattr(const coll_t &c, const char *name, void *value, size_t size);
-  int collection_getattr(const coll_t &c, const char *name, bufferlist& bl);
-  int collection_getattrs(const coll_t &cid, map<string,bufferptr> &aset);
+  int collection_getattr(CollectionHandle ch, const char* name,
+			 void *value, size_t size);
+  int collection_getattr(CollectionHandle ch, const char* name,
+			 bufferlist& bl);
+  int collection_getattrs(CollectionHandle ch,
+			  map<string,bufferptr>& aset);
 
-  int _collection_setattr(const coll_t &c, const char *name, const void *value,
-			  size_t size, BufferTransaction &t);
-  int _collection_rmattr(const coll_t &c, const char *name,
-			 BufferTransaction &t);
-  int _collection_setattrs(const coll_t &cid, map<string,bufferptr> &aset,
-			   BufferTransaction &t);
+  int _collection_setattr(const coll_t& c, const char* name,
+			  const void* value,
+			  size_t size, BufferTransaction& t);
+  int _collection_rmattr(const coll_t& c, const char* name,
+			 BufferTransaction& t);
+  int _collection_setattrs(const coll_t& cid,
+			   map<string,bufferptr>& aset,
+			   BufferTransaction& t);
 
   // collections
-  int _create_collection(const coll_t &c, BufferTransaction &t);
-  int _destroy_collection(const coll_t &c, BufferTransaction &t);
-  int _collection_add(const coll_t &c, const coll_t &ocid, const hoid_t& oid,
-		      BufferTransaction &t);
-  int _collection_move_rename(const coll_t &oldcid, const hoid_t& oldoid,
-			      const coll_t &c, const hoid_t& o,
-			      BufferTransaction &t);
-  int _collection_remove_recursive(const coll_t &cid,
-				   BufferTransaction &t);
-  int _collection_rename(const coll_t &cid, const coll_t &ncid,
-			 BufferTransaction &t);
+
+  int _create_collection(const coll_t& c, BufferTransaction& t);
+  int _destroy_collection(const coll_t& c, BufferTransaction& t);
+  int _collection_add(const coll_t& c, const coll_t& ocid,
+		      const hoid_t& oid,
+		      BufferTransaction& t);
+  int _collection_move_rename(const coll_t& oldcid,
+			      const hoid_t& oldoid,
+			      const coll_t& c, const hoid_t& o,
+			      BufferTransaction& t);
+  int _collection_remove_recursive(const coll_t& cid,
+				   BufferTransaction& t);
+  int _collection_rename(const coll_t& cid, const coll_t& ncid,
+			 BufferTransaction& t);
   int list_collections(vector<coll_t>& ls);
-  bool collection_exists(const coll_t &c);
-  bool collection_empty(const coll_t &c);
-  int collection_list(const coll_t &c, vector<hoid_t>& oid);
-  int collection_list_partial(const coll_t &c, hoid_t start,
+  CollectionHandle open_collection(const coll_t& c);
+  int close_collection(CollectionHandle chandle);
+  bool collection_exists(const coll_t& c);
+  bool collection_empty(CollectionHandle ch);
+  int collection_list(CollectionHandle ch, vector<hobject_t>& oid);
+  int collection_list_partial(CollectionHandle ch, hobject_t start,
 			      int min, int max,
-			      vector<hoid_t> *ls, hoid_t *next);
-  int collection_list_range(const coll_t &c, hoid_t start, hoid_t end,
-			    vector<hoid_t> *ls);
-  int collection_version_current(const coll_t &c, uint32_t *version);
+			      vector<hobject_t>* ls, hobject_t* next);
+  int collection_list_range(CollectionHandle ch, hobject_t start,
+			    hobject_t end, vector<hobject_t>* ls);
+  int collection_version_current(CollectionHandle ch,
+				 uint32_t* version);
 
   // omap (see ObjectStore.h for documentation)
-  int omap_get(const coll_t &c, const hoid_t &oid, bufferlist *header,
-	       map<string, bufferlist> *out);
+  int omap_get(CollectionHandle ch, ObjectHandle oh,
+	       bufferlist* header, map<string, bufferlist>* out);
   int omap_get_header(
-    const coll_t &c,
-    const hoid_t &oid,
-    bufferlist *out,
+    CollectionHandle ch,
+    ObjectHandle oh,
+    bufferlist* out,
     bool allow_eio = false);
-  int omap_get_keys(const coll_t &c, const hoid_t &oid, set<string> *keys);
-  int omap_get_values(const coll_t &c, const hoid_t &oid,
-		      const set<string> &keys, map<string, bufferlist> *out);
-  int omap_check_keys(const coll_t &c, const hoid_t &oid,
-		      const set<string> &keys, set<string> *out);
-  ObjectMap::ObjectMapIterator get_omap_iterator(const coll_t &c,
-						 const hoid_t &oid);
+  int omap_get_keys(CollectionHandle ch, ObjectHandle oh,
+		    set<string>* keys);
+  int omap_get_values(CollectionHandle ch, ObjectHandle oh,
+		      const set<string>& keys,
+		      map<string, bufferlist>* out);
+  int omap_check_keys(CollectionHandle ch, ObjectHandle oh,
+		      const set<string>& keys, set<string>* out);
+  ObjectMap::ObjectMapIterator get_omap_iterator(CollectionHandle ch,
+						 ObjectHandle oh);
 
   void dump_transactions(list<ObjectStore::Transaction*>& ls, uint64_t seq,
 			 OpSequencer *osr);
@@ -523,29 +577,28 @@ class KeyValueStore : public ObjectStore,
   void _inject_failure() {}
 
   // omap
-  int _omap_clear(const coll_t &cid, const hoid_t &oid,
-		  BufferTransaction &t);
-  int _omap_setkeys(const coll_t &cid, const hoid_t &oid,
-		    map<string, bufferlist> &aset,
-		    BufferTransaction &t);
-  int _omap_rmkeys(const coll_t &cid, const hoid_t &oid,
-		   const set<string> &keys, BufferTransaction &t);
-  int _omap_rmkeyrange(const coll_t &cid, const hoid_t &oid,
+  int _omap_clear(const coll_t& cid, const hoid_t& oid,
+		  BufferTransaction& t);
+  int _omap_setkeys(const coll_t& cid, const hoid_t& oid,
+		    map<string, bufferlist>& aset,
+		    BufferTransaction& t);
+  int _omap_rmkeys(const coll_t& cid, const hoid_t& oid,
+		   const set<string>& keys, BufferTransaction& t);
+  int _omap_rmkeyrange(const coll_t& cid, const hoid_t& oid,
 		       const string& first, const string& last,
-		       BufferTransaction &t);
-  int _omap_setheader(const coll_t &cid, const hoid_t &oid,
-		      const bufferlist &bl, BufferTransaction &t);
+		       BufferTransaction& t);
+  int _omap_setheader(const coll_t& cid, const hoid_t& oid,
+		      const bufferlist& bl, BufferTransaction& t);
 
   virtual const char** get_tracked_conf_keys() const;
-  virtual void handle_conf_change(const struct md_config_t *conf,
-				  const std::set <std::string> &changed);
+  virtual void handle_conf_change(const struct md_config_t* conf,
+				  const std::set <std::string>& changed);
 
   std::string m_osd_rollback_to_cluster_snap;
   int m_keyvaluestore_queue_max_ops;
   int m_keyvaluestore_queue_max_bytes;
 
   int do_update;
-
 
   static const string OBJECT_STRIP_PREFIX;
   static const string OBJECT_XATTR;
