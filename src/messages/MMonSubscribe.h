@@ -22,10 +22,10 @@
  * compatibility with old crap
  */
 struct ceph_mon_subscribe_item_old {
-	__le64 unused;
-	__le64 have;
+	uint64_t unused;
+	uint64_t have;
 	uint8_t onetime;
-} __attribute__ ((packed));
+};
 WRITE_RAW_ENCODER(ceph_mon_subscribe_item_old)
 
 

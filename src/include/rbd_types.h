@@ -47,8 +47,8 @@ struct rbd_obj_header_ondisk {
 	char text[40];
 	char signature[4];
 	char version[8];
-	__le64 image_size;
-} __attribute__((packed));
+	uint64_t image_size;
+};
 
 
 #endif

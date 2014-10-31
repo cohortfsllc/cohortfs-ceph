@@ -11,27 +11,17 @@
  */
 #include "include/types.h"
 
-packed_ceph_file_layout & packed_ceph_file_layout::operator=(const ceph_file_layout &x) {
-	memcpy(this->fl_uuid, &x.fl_uuid, sizeof this->fl_uuid);
-	return *this;
-}
-
-ceph_file_layout & ceph_file_layout::operator=(const packed_ceph_file_layout &x) {
-	memset(this, 0, sizeof *this);
-	memcpy(&this->fl_uuid, x.fl_uuid, sizeof this->fl_uuid);
-	return *this;
-}
 void ceph_file_layout::encode(bufferlist &bl) const {
-	::encode(fl_stripe_unit, bl);
-	::encode(fl_stripe_count, bl);
-	::encode(fl_object_size, bl);
-	::encode(fl_uuid, bl);
+    ::encode(fl_stripe_unit, bl);
+    ::encode(fl_stripe_count, bl);
+    ::encode(fl_object_size, bl);
+    ::encode_raw(fl_uuid, bl);
 }
 void ceph_file_layout::decode(bufferlist::iterator &bl) {
-	::decode(fl_stripe_unit, bl);
-	::decode(fl_stripe_count, bl);
-	::decode(fl_object_size, bl);
-	::decode(fl_uuid, bl);
+    ::decode(fl_stripe_unit, bl);
+    ::decode(fl_stripe_count, bl);
+    ::decode(fl_object_size, bl);
+    ::decode_raw(fl_uuid, bl);
 }
 void ceph_dir_layout::encode(bufferlist &bl) const {
 	::encode(dl_dir_hash, bl);
@@ -45,9 +35,9 @@ void ceph_dir_layout::decode(bufferlist::iterator &bl) {
  */
 int ceph_file_layout_is_valid(const struct ceph_file_layout *layout)
 {
-	uint32_t su = le32_to_cpu(layout->fl_stripe_unit);
-	uint32_t sc = le32_to_cpu(layout->fl_stripe_count);
-	uint32_t os = le32_to_cpu(layout->fl_object_size);
+	uint32_t su = layout->fl_stripe_unit;
+	uint32_t sc = layout->fl_stripe_count;
+	uint32_t os = layout->fl_object_size;
 
 	/* stripe unit, object size must be non-zero, 64k increment */
 	if (!su || (su & (CEPH_MIN_STRIPE_UNIT-1)))

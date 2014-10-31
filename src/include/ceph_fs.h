@@ -12,6 +12,12 @@
 #ifndef CEPH_FS_H
 #define CEPH_FS_H
 
+#include <uuid/uuid.h>
+#ifdef __cplusplus
+#include "include/buffer.h"
+#include "include/encoding.h"
+#include "buffer.h"
+#endif
 #include "msgr.h"
 #include "rados.h"
 
@@ -37,31 +43,20 @@
  * ceph_file_layout - describe data layout for a file/inode
  */
 
-struct ceph_file_layout;
-
-struct packed_ceph_file_layout {
-	uint8_t fl_uuid[16];
-#ifdef __cplusplus
-	packed_ceph_file_layout & operator=(const ceph_file_layout &x);
-#endif
-} __attribute__ ((packed));
-#ifdef __cplusplus
-WRITE_RAW_ENCODER(packed_ceph_file_layout);
-#endif
-
-#ifdef __cplusplus
 struct ceph_file_layout {
 	/* file -> object mapping */
-	__le32 fl_stripe_unit;	   /* stripe unit, in bytes.  must be multiple
+	uint32_t fl_stripe_unit;	   /* stripe unit, in bytes.  must be multiple
 				      of page size. */
-	__le32 fl_stripe_count;	   /* over this many objects */
-	__le32 fl_object_size;	   /* until objects are this big, then move to
+	uint32_t fl_stripe_count;	   /* over this many objects */
+	uint32_t fl_object_size;	   /* until objects are this big, then move to
 				      new objects */
-	uuid_d fl_uuid;		   /* where this lives (can this not be on disk?) */
-	void encode(bufferlist &bl) const;
-	void decode(bufferlist::iterator &p);
-	ceph_file_layout & operator=(const packed_ceph_file_layout &x);
+	uuid_t fl_uuid;		   /* where this lives (can this not be on disk?) */
+#ifdef __cplusplus
+	void encode(ceph::bufferlist &bl) const;
+	void decode(ceph::bufferlist::iterator &p);
+#endif
 };
+#ifdef __cplusplus
 WRITE_CLASS_ENCODER(ceph_file_layout)
 #endif
 
@@ -149,73 +144,73 @@ enum {
 
 
 struct ceph_mon_request_header {
-	__le64 have_version;
-	__le16 session_mon;
-	__le64 session_mon_tid;
-} __attribute__ ((packed));
+	uint64_t have_version;
+	uint16_t session_mon;
+	uint64_t session_mon_tid;
+};
 
 struct ceph_mon_statfs {
 	struct ceph_mon_request_header monhdr;
 	struct ceph_fsid fsid;
-} __attribute__ ((packed));
+};
 
 struct ceph_statfs {
-	__le64 kb, kb_used, kb_avail;
-	__le64 num_objects;
-} __attribute__ ((packed));
+	uint64_t kb, kb_used, kb_avail;
+	uint64_t num_objects;
+};
 
 struct ceph_mon_statfs_reply {
 	struct ceph_fsid fsid;
-	__le64 version;
+	uint64_t version;
 	struct ceph_statfs st;
-} __attribute__ ((packed));
+};
 
 const char *ceph_pool_op_name(int op);
 
 struct ceph_mon_poolop {
 	struct ceph_mon_request_header monhdr;
 	struct ceph_fsid fsid;
-	__le32 pool;
-	__le32 op;
-	__le64 auid;
-	__le32 name_len;
-} __attribute__ ((packed));
+	uint32_t pool;
+	uint32_t op;
+	uint64_t auid;
+	uint32_t name_len;
+};
 
 struct ceph_mon_poolop_reply {
 	struct ceph_mon_request_header monhdr;
 	struct ceph_fsid fsid;
-	__le32 reply_code;
-	__le32 epoch;
+	uint32_t reply_code;
+	uint32_t epoch;
 	char has_data;
 	char data[0];
-} __attribute__ ((packed));
+};
 
 struct ceph_osd_getmap {
 	struct ceph_mon_request_header monhdr;
 	struct ceph_fsid fsid;
-	__le32 start;
-} __attribute__ ((packed));
+	uint32_t start;
+};
 
 struct ceph_mds_getmap {
 	struct ceph_mon_request_header monhdr;
 	struct ceph_fsid fsid;
-} __attribute__ ((packed));
+};
 
 struct ceph_client_mount {
 	struct ceph_mon_request_header monhdr;
-} __attribute__ ((packed));
+};
 
 #define CEPH_SUBSCRIBE_ONETIME	  1  /* i want only 1 update after have */
 
 struct ceph_mon_subscribe_item {
-	__le64 start;
+	uint64_t start;
 	uint8_t flags;
-} __attribute__ ((packed));
+};
 
 struct ceph_mon_subscribe_ack {
-	__le32 duration;	 /* seconds */
+	uint32_t duration;	 /* seconds */
 	struct ceph_fsid fsid;
-} __attribute__ ((packed));
+};
 
 /*
  * mdsmap flags
@@ -285,11 +280,11 @@ enum {
 extern const char *ceph_session_op_name(int op);
 
 struct ceph_mds_session_head {
-	__le32 op;
-	__le64 seq;
+	uint32_t op;
+	uint64_t seq;
 	struct ceph_timespec stamp;
-	__le32 max_caps, max_leases;
-} __attribute__ ((packed));
+	uint32_t max_caps, max_leases;
+};
 
 /* client_request */
 /*
@@ -352,145 +347,145 @@ extern const char *ceph_mds_op_name(int op);
 
 union ceph_mds_request_args {
 	struct {
-		__le32 mask;		     /* CEPH_CAP_* */
-	} __attribute__ ((packed)) getattr;
+		uint32_t mask;		     /* CEPH_CAP_* */
+	} getattr;
 	struct {
-		__le32 mode;
-		__le32 uid;
-		__le32 gid;
+		uint32_t mode;
+		uint32_t uid;
+		uint32_t gid;
 		struct ceph_timespec mtime;
 		struct ceph_timespec atime;
-		__le64 size, old_size;	     /* old_size needed by truncate */
-		__le32 mask;		     /* CEPH_SETATTR_* */
-	} __attribute__ ((packed)) setattr;
+		uint64_t size, old_size;	     /* old_size needed by truncate */
+		uint32_t mask;		     /* CEPH_SETATTR_* */
+	} setattr;
 	struct {
-		__le32 frag;		     /* which dir fragment */
-		__le32 max_entries;	     /* how many dentries to grab */
-		__le32 max_bytes;
-	} __attribute__ ((packed)) readdir;
+		uint32_t frag;		     /* which dir fragment */
+		uint32_t max_entries;	     /* how many dentries to grab */
+		uint32_t max_bytes;
+	} readdir;
 	struct {
-		__le32 mode;
-		__le32 rdev;
-	} __attribute__ ((packed)) mknod;
+		uint32_t mode;
+		uint32_t rdev;
+	} mknod;
 	struct {
-		__le32 mode;
-	} __attribute__ ((packed)) mkdir;
+		uint32_t mode;
+	} mkdir;
 	struct {
-		__le32 flags;
-		__le32 mode;
-		__le32 stripe_unit;	     /* layout for newly created file */
-		__le32 stripe_count;	     /* ... */
-		__le32 object_size;
-		__le32 unused;		     /* used to be preferred */
-		__le64 old_size;	     /* if O_TRUNC */
-	} __attribute__ ((packed)) open;
+		uint32_t flags;
+		uint32_t mode;
+		uint32_t stripe_unit;	     /* layout for newly created file */
+		uint32_t stripe_count;	     /* ... */
+		uint32_t object_size;
+		uint32_t unused;		     /* used to be preferred */
+		uint64_t old_size;	     /* if O_TRUNC */
+	} open;
 	struct {
-		__le32 flags;
-	} __attribute__ ((packed)) setxattr;
+		uint32_t flags;
+	} setxattr;
 	struct {
-		struct packed_ceph_file_layout layout;
-	} __attribute__ ((packed)) setlayout;
+		struct ceph_file_layout layout;
+	} setlayout;
 	struct {
 		uint8_t rule; /* currently fcntl or flock */
 		uint8_t type; /* shared, exclusive, remove*/
-		__le64 owner; /* who requests/holds the lock */
-		__le64 pid; /* process id requesting the lock */
-		__le64 start; /* initial location to lock */
-		__le64 length; /* num bytes to lock from start */
+		uint64_t owner; /* who requests/holds the lock */
+		uint64_t pid; /* process id requesting the lock */
+		uint64_t start; /* initial location to lock */
+		uint64_t length; /* num bytes to lock from start */
 		uint8_t wait; /* will caller wait for lock to become available? */
-	} __attribute__ ((packed)) filelock_change;
-} __attribute__ ((packed));
+	} filelock_change;
+};
 
 #define CEPH_MDS_FLAG_REPLAY	    1  /* this is a replayed op */
 #define CEPH_MDS_FLAG_WANT_DENTRY   2  /* want dentry in reply */
 
 struct ceph_mds_request_head {
-	__le64 oldest_client_tid;
-	__le32 mdsmap_epoch;	       /* on client */
-	__le32 flags;		       /* CEPH_MDS_FLAG_* */
+	uint64_t oldest_client_tid;
+	uint32_t mdsmap_epoch;	       /* on client */
+	uint32_t flags;		       /* CEPH_MDS_FLAG_* */
 	uint8_t num_retry, num_fwd;	  /* count retry, fwd attempts */
-	__le16 num_releases;	       /* # include cap/lease release records */
-	__le32 op;		       /* mds op code */
-	__le32 caller_uid, caller_gid;
-	__le64 ino;		       /* use this ino for openc, mkdir, mknod,
+	uint16_t num_releases;	       /* # include cap/lease release records */
+	uint32_t op;		       /* mds op code */
+	uint32_t caller_uid, caller_gid;
+	uint64_t ino;		       /* use this ino for openc, mkdir, mknod,
 					  etc. (if replaying) */
 	union ceph_mds_request_args args;
-} __attribute__ ((packed));
+};
 
 /* cap/lease release record */
 struct ceph_mds_request_release {
-	__le64 ino, cap_id;	       /* ino and unique cap id */
-	__le32 caps, wanted;	       /* new issued, wanted */
-	__le32 seq, issue_seq, mseq;
-	__le32 dname_seq;	       /* if releasing a dentry lease, a */
-	__le32 dname_len;	       /* string follows. */
-} __attribute__ ((packed));
+	uint64_t ino, cap_id;	       /* ino and unique cap id */
+	uint32_t caps, wanted;	       /* new issued, wanted */
+	uint32_t seq, issue_seq, mseq;
+	uint32_t dname_seq;	       /* if releasing a dentry lease, a */
+	uint32_t dname_len;	       /* string follows. */
+};
 
 /* client reply */
 struct ceph_mds_reply_head {
-	__le32 op;
-	__le32 result;
-	__le32 mdsmap_epoch;
+	uint32_t op;
+	uint32_t result;
+	uint32_t mdsmap_epoch;
 	uint8_t safe;			  /* true if committed to disk */
 	uint8_t is_dentry, is_target;	  /* true if dentry, target inode records
 					  are included with reply */
-} __attribute__ ((packed));
+};
 
 /* one for each node split */
 struct ceph_frag_tree_split {
-	__le32 frag;		       /* this frag splits... */
-	__le32 by;		       /* ...by this many bits */
-} __attribute__ ((packed));
+	uint32_t frag;		       /* this frag splits... */
+	uint32_t by;		       /* ...by this many bits */
+};
 
 struct ceph_frag_tree_head {
-	__le32 nsplits;		       /* num ceph_frag_tree_split records */
+	uint32_t nsplits;		       /* num ceph_frag_tree_split records */
 	struct ceph_frag_tree_split splits[];
-} __attribute__ ((packed));
+};
 
 /* capability issue, for bundling with mds reply */
 struct ceph_mds_reply_cap {
-	__le32 caps, wanted;	       /* caps issued, wanted */
-	__le64 cap_id;
-	__le32 seq, mseq;
+	uint32_t caps, wanted;	       /* caps issued, wanted */
+	uint64_t cap_id;
+	uint32_t seq, mseq;
 	uint8_t flags;			  /* CEPH_CAP_FLAG_* */
-} __attribute__ ((packed));
+};
 
 #define CEPH_CAP_FLAG_AUTH	(1 << 0)	/* cap is issued by auth mds */
 #define CEPH_CAP_FLAG_RELEASE	(1 << 1)	/* ask client to release the cap */
 
 /* inode record, for bundling with mds reply */
 struct ceph_mds_reply_inode {
-	__le64 ino;
-	__le32 rdev;
-	__le64 version;		       /* inode version */
-	__le64 xattr_version;	       /* version for xattr blob */
+	uint64_t ino;
+	uint32_t rdev;
+	uint64_t version;		       /* inode version */
+	uint64_t xattr_version;	       /* version for xattr blob */
 	struct ceph_mds_reply_cap cap; /* caps issued for this inode */
-	struct packed_ceph_file_layout layout;
+	struct ceph_file_layout layout;
 	struct ceph_timespec ctime, mtime, atime;
-	__le32 time_warp_seq;
-	__le64 size, max_size, truncate_size;
-	__le32 truncate_seq;
-	__le32 mode, uid, gid;
-	__le32 nlink;
-	__le64 files, subdirs, rbytes, rfiles, rsubdirs;  /* dir stats */
+	uint32_t time_warp_seq;
+	uint64_t size, max_size, truncate_size;
+	uint32_t truncate_seq;
+	uint32_t mode, uid, gid;
+	uint32_t nlink;
+	uint64_t files, subdirs, rbytes, rfiles, rsubdirs;  /* dir stats */
 	struct ceph_timespec rctime;
 	struct ceph_frag_tree_head fragtree;  /* (must be at end of struct) */
-} __attribute__ ((packed));
+};
 /* followed by frag array, symlink string, dir layout, xattr blob */
 
 /* reply_lease follows dname, and reply_inode */
 struct ceph_mds_reply_lease {
-	__le16 mask;		/* lease type(s) */
-	__le32 duration_ms;	/* lease duration */
-	__le32 seq;
-} __attribute__ ((packed));
+	uint16_t mask;		/* lease type(s) */
+	uint32_t duration_ms;	/* lease duration */
+	uint32_t seq;
+};
 
 struct ceph_mds_reply_dirfrag {
-	__le32 frag;		/* fragment */
-	__le32 auth;		/* auth mds, if this is a delegation point */
-	__le32 ndist;		/* number of mds' this is replicated on */
-	__le32 dist[];
-} __attribute__ ((packed));
+	uint32_t frag;		/* fragment */
+	uint32_t auth;		/* auth mds, if this is a delegation point */
+	uint32_t ndist;		/* number of mds' this is replicated on */
+	uint32_t dist[];
+};
 
 #define CEPH_LOCK_FCNTL	   1
 #define CEPH_LOCK_FLOCK	   2
@@ -500,13 +495,13 @@ struct ceph_mds_reply_dirfrag {
 #define CEPH_LOCK_UNLOCK   4
 
 struct ceph_filelock {
-	__le64 start;/* file offset to start lock at */
-	__le64 length; /* num bytes to lock; 0 for all following start */
-	__le64 client; /* which client holds the lock */
-	__le64 owner; /* who requests/holds the lock */
-	__le64 pid; /* process id holding the lock on the client */
+	uint64_t start;/* file offset to start lock at */
+	uint64_t length; /* num bytes to lock; 0 for all following start */
+	uint64_t client; /* which client holds the lock */
+	uint64_t owner; /* who requests/holds the lock */
+	uint64_t pid; /* process id holding the lock on the client */
 	uint8_t type; /* shared lock, exclusive lock, or unlock */
-} __attribute__ ((packed));
+};
 
 
 /* file access modes */
@@ -630,59 +625,59 @@ extern const char *ceph_cap_op_name(int op);
 
 /* extra info for cap import/export */
 struct ceph_mds_cap_peer {
-	__le64 cap_id;
-	__le32 seq;
-	__le32 mseq;
-	__le32 mds;
+	uint64_t cap_id;
+	uint32_t seq;
+	uint32_t mseq;
+	uint32_t mds;
 	uint8_t	  flags;
-} __attribute__ ((packed));
+};
 
 /*
  * caps message, used for capability callbacks, acks, requests, etc.
  */
 struct ceph_mds_caps {
-	__le32 op;		    /* CEPH_CAP_OP_* */
-	__le64 ino, realm;
-	__le64 cap_id;
-	__le32 seq, issue_seq;
-	__le32 caps, wanted, dirty; /* latest issued/wanted/dirty */
-	__le32 migrate_seq;
+	uint32_t op;		    /* CEPH_CAP_OP_* */
+	uint64_t ino, realm;
+	uint64_t cap_id;
+	uint32_t seq, issue_seq;
+	uint32_t caps, wanted, dirty; /* latest issued/wanted/dirty */
+	uint32_t migrate_seq;
 
 	/* authlock */
-	__le32 uid, gid, mode;
+	uint32_t uid, gid, mode;
 
 	/* linklock */
-	__le32 nlink;
+	uint32_t nlink;
 
 	/* xattrlock */
-	__le32 xattr_len;
-	__le64 xattr_version;
+	uint32_t xattr_len;
+	uint64_t xattr_version;
 
 	union {
 		/* all except export */
 		struct {
 			/* filelock */
-			__le64 size, max_size, truncate_size;
-			__le32 truncate_seq;
+			uint64_t size, max_size, truncate_size;
+			uint32_t truncate_seq;
 			struct ceph_timespec mtime, atime, ctime;
-			struct packed_ceph_file_layout layout;
-			__le32 time_warp_seq;
+			struct ceph_file_layout layout;
+			uint32_t time_warp_seq;
 		};
 		/* export message */
 		struct ceph_mds_cap_peer peer;
 	};
-} __attribute__ ((packed));
+};
 
 /* cap release msg head */
 struct ceph_mds_cap_release {
-	__le32 num;		   /* number of cap_items that follow */
-} __attribute__ ((packed));
+	uint32_t num;		   /* number of cap_items that follow */
+};
 
 struct ceph_mds_cap_item {
-	__le64 ino;
-	__le64 cap_id;
-	__le32 migrate_seq, seq;
-} __attribute__ ((packed));
+	uint64_t ino;
+	uint64_t cap_id;
+	uint32_t migrate_seq, seq;
+};
 
 #define CEPH_MDS_LEASE_REVOKE 1	 /*    mds  -> client */
 #define CEPH_MDS_LEASE_RELEASE 2  /* client  -> mds    */
@@ -694,30 +689,30 @@ extern const char *ceph_lease_op_name(int o);
 /* lease msg header */
 struct ceph_mds_lease {
 	uint8_t action; /* CEPH_MDS_LEASE_* */
-	__le16 mask; /* which lease */
-	__le64 ino;
-	__le32 seq;
-	__le32 duration_ms; /* duration of renewal */
-} __attribute__ ((packed));
-/* followed by a __le32+string for dname */
+	uint16_t mask; /* which lease */
+	uint64_t ino;
+	uint32_t seq;
+	uint32_t duration_ms; /* duration of renewal */
+};
+/* followed by a uint32_t+string for dname */
 
 /* client reconnect */
 struct ceph_mds_cap_reconnect {
-	__le64 cap_id;
-	__le32 wanted;
-	__le32 issued;
-	__le64 pathbase; /* base ino for our path to this ino */
-	__le32 flock_len; /* size of flock state blob, if any */
-} __attribute__ ((packed));
+	uint64_t cap_id;
+	uint32_t wanted;
+	uint32_t issued;
+	uint64_t pathbase; /* base ino for our path to this ino */
+	uint32_t flock_len; /* size of flock state blob, if any */
+};
 /* followed by flock blob */
 
 struct ceph_mds_cap_reconnect_v1 {
-	__le64 cap_id;
-	__le32 wanted;
-	__le32 issued;
-	__le64 size;
+	uint64_t cap_id;
+	uint32_t wanted;
+	uint32_t issued;
+	uint64_t size;
 	struct ceph_timespec mtime, atime;
-	__le64 pathbase; /* base ino for our path to this ino */
-} __attribute__ ((packed));
+	uint64_t pathbase; /* base ino for our path to this ino */
+};
 
 #endif

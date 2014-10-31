@@ -1448,7 +1448,7 @@ void Pipe::reader()
     // open ...
     if (tag == CEPH_MSGR_TAG_ACK) {
       ldout(msgr->cct,20) << "reader got ACK" << dendl;
-      ceph_le64 seq;
+      uint64_t seq;
       int rc = tcp_read((char*)&seq, sizeof(seq));
       pipe_lock.Lock();
       if (rc < 0) {
@@ -1857,8 +1857,8 @@ int Pipe::read_message(Message **pm, AuthSessionHandler* auth_handler)
 
 
   // read data
-  data_len = le32_to_cpu(header.data_len);
-  data_off = le32_to_cpu(header.data_off);
+  data_len = header.data_len;
+  data_off = header.data_off;
   if (data_len) {
     unsigned offset = 0;
     unsigned left = data_len;
@@ -2053,7 +2053,7 @@ int Pipe::write_ack(uint64_t seq)
   ldout(msgr->cct,10) << "write_ack " << seq << dendl;
 
   char c = CEPH_MSGR_TAG_ACK;
-  ceph_le64 s;
+  uint64_t s;
   s = seq;
 
   struct msghdr msg;

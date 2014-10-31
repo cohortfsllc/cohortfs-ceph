@@ -27,6 +27,10 @@ struct uuid_d {
     uuid_copy(uuid, u);
   }
 
+  void copyout(uuid_t u) const {
+    uuid_copy(u, uuid);
+  }
+
   bool is_zero() const {
     return uuid_is_null(uuid);
   }

@@ -38,7 +38,7 @@ class XioMsg;
 class XioMsgCnt
 {
 public:
-  __le32 msg_cnt;
+  uint32_t msg_cnt;
   buffer::list bl;
 public:
   XioMsgCnt(buffer::ptr p)

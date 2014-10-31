@@ -333,12 +333,11 @@ int CohortVolume::create(const object_t& oid, utime_t mtime,
 }
 
 struct writestripe {
-  ceph_le64 off;
-  ceph_le64 len;
+  uint64_t off;
+  uint64_t len;
   bufferlist bl;
 
   writestripe() {
-    /* ceph_le64 is an even worse idea than I had imagined */
     off = 0;
     len = 0;
   }
@@ -921,8 +920,8 @@ int CohortVolume::trunc(const object_t& oid,
   assert(erasure.m == 0);
 
   for (size_t stripe = 0; stripe < erasure.k; ++stripe) {
-    ceph_le64 zero;
-    ceph_le64 stripetrunclen;
+    uint64_t zero;
+    uint64_t stripetrunclen;
     stripe_extent(0, trunc_size, stripe, zero, stripetrunclen);
     vector<OSDOp> ops;
     ops[0].op.op = CEPH_OSD_OP_TRUNCATE;

@@ -75,7 +75,7 @@ public:
   bool is_mon() const { return type() == TYPE_MON; }
 
   operator ceph_entity_name() const {
-    ceph_entity_name n = { _type, init_le64(_num) };
+    ceph_entity_name n = { _type, _num };
     return n;
   }
 

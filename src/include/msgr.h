@@ -45,8 +45,8 @@ static inline int32_t ceph_seq_cmp(uint32_t a, uint32_t b)
  */
 struct ceph_entity_name {
 	uint8_t type;	   /* CEPH_ENTITY_TYPE_* */
-	__le64 num;
-} __attribute__ ((packed));
+	int64_t num;
+};
 
 #define CEPH_ENTITY_TYPE_MON	0x01
 #define CEPH_ENTITY_TYPE_MDS	0x02
@@ -64,15 +64,15 @@ extern const char *ceph_entity_type_name(int type);
  * entity_addr -- network address
  */
 struct ceph_entity_addr {
-	__le32 type;
-	__le32 nonce;  /* unique id for process (e.g. pid) */
+	uint32_t type;
+	uint32_t nonce;  /* unique id for process (e.g. pid) */
 	struct sockaddr_storage in_addr;
-} __attribute__ ((packed));
+};
 
 struct ceph_entity_inst {
 	struct ceph_entity_name name;
 	struct ceph_entity_addr addr;
-} __attribute__ ((packed));
+};
 
 
 /* used by message exchange protocol */
@@ -100,25 +100,25 @@ struct ceph_entity_inst {
  * connection negotiation
  */
 struct ceph_msg_connect {
-	__le64 features;     /* supported feature bits */
-	__le32 host_type;    /* CEPH_ENTITY_TYPE_* */
-	__le32 global_seq;   /* count connections initiated by this host */
-	__le32 connect_seq;  /* count connections initiated in this session */
-	__le32 protocol_version;
-	__le32 authorizer_protocol;
-	__le32 authorizer_len;
+	uint64_t features;     /* supported feature bits */
+	uint32_t host_type;    /* CEPH_ENTITY_TYPE_* */
+	uint32_t global_seq;   /* count connections initiated by this host */
+	uint32_t connect_seq;  /* count connections initiated in this session */
+	uint32_t protocol_version;
+	uint32_t authorizer_protocol;
+	uint32_t authorizer_len;
 	uint8_t	 flags;		/* CEPH_MSG_CONNECT_* */
-} __attribute__ ((packed));
+};
 
 struct ceph_msg_connect_reply {
 	uint8_t tag;
-	__le64 features;     /* feature bits for this session */
-	__le32 global_seq;
-	__le32 connect_seq;
-	__le32 protocol_version;
-	__le32 authorizer_len;
+	uint64_t features;     /* feature bits for this session */
+	uint32_t global_seq;
+	uint32_t connect_seq;
+	uint32_t protocol_version;
+	uint32_t authorizer_len;
 	uint8_t flags;
-} __attribute__ ((packed));
+};
 
 #define CEPH_MSG_CONNECT_LOSSY	1  /* messages i send may be safely dropped */
 
@@ -127,43 +127,43 @@ struct ceph_msg_connect_reply {
  * message header
  */
 struct ceph_msg_header_old {
-	__le64 seq;	  /* message seq# for this session */
-	__le64 tid;	  /* transaction id */
-	__le16 type;	  /* message type */
-	__le16 priority;  /* priority.	higher value == higher priority */
-	__le16 version;	  /* version of message encoding */
+	uint64_t seq;	  /* message seq# for this session */
+	uint64_t tid;	  /* transaction id */
+	uint16_t type;	  /* message type */
+	uint16_t priority;  /* priority.	higher value == higher priority */
+	uint16_t version;	  /* version of message encoding */
 
-	__le32 front_len; /* bytes in main payload */
-	__le32 middle_len;/* bytes in middle payload */
-	__le32 data_len;  /* bytes of data payload */
-	__le16 data_off;  /* sender: include full offset;
+	uint32_t front_len; /* bytes in main payload */
+	uint32_t middle_len;/* bytes in middle payload */
+	uint32_t data_len;  /* bytes of data payload */
+	uint16_t data_off;  /* sender: include full offset;
 			     receiver: mask against ~PAGE_MASK */
 
 	struct ceph_entity_inst src, orig_src;
-	__le32 reserved;
-	__le32 crc;	  /* header crc32c */
-} __attribute__ ((packed));
+	uint32_t reserved;
+	uint32_t crc;	  /* header crc32c */
+};
 
 struct ceph_msg_header {
-	__le64 seq;	  /* message seq# for this session */
-	__le64 tid;	  /* transaction id */
-	__le16 type;	  /* message type */
-	__le16 priority;  /* priority.	higher value == higher priority */
-	__le16 version;	  /* version of message encoding */
+	uint64_t seq;	  /* message seq# for this session */
+	uint64_t tid;	  /* transaction id */
+	uint16_t type;	  /* message type */
+	uint16_t priority;  /* priority.	higher value == higher priority */
+	uint16_t version;	  /* version of message encoding */
 
-	__le32 front_len; /* bytes in main payload */
-	__le32 middle_len;/* bytes in middle payload */
-	__le32 data_len;  /* bytes of data payload */
-	__le16 data_off;  /* sender: include full offset;
+	uint32_t front_len; /* bytes in main payload */
+	uint32_t middle_len;/* bytes in middle payload */
+	uint32_t data_len;  /* bytes of data payload */
+	uint16_t data_off;  /* sender: include full offset;
 			     receiver: mask against ~PAGE_MASK */
 
 	struct ceph_entity_name src;
 
 	/* oldest code we think can decode this.  unknown if zero. */
-	__le16 compat_version;
-	__le16 reserved;
-	__le32 crc;	  /* header crc32c */
-} __attribute__ ((packed));
+	uint16_t compat_version;
+	uint16_t reserved;
+	uint32_t crc;	  /* header crc32c */
+};
 
 #define CEPH_MSG_PRIO_LOW     64
 #define CEPH_MSG_PRIO_DEFAULT 127
@@ -176,16 +176,16 @@ struct ceph_msg_header {
  */
 
 struct ceph_msg_footer_old {
-	__le32 front_crc, middle_crc, data_crc;
+	uint32_t front_crc, middle_crc, data_crc;
 	uint8_t flags;
-} __attribute__ ((packed));
+};
 
 struct ceph_msg_footer {
-	__le32 front_crc, middle_crc, data_crc;
+	uint32_t front_crc, middle_crc, data_crc;
 	// sig holds the 64 bits of the digital signature for the message PLR
-	__le64	sig;
+	uint64_t	sig;
 	uint8_t flags;
-} __attribute__ ((packed));
+};
 
 #define CEPH_MSG_FOOTER_COMPLETE  (1<<0)   /* msg wasn't aborted */
 #define CEPH_MSG_FOOTER_NOCRC	  (1<<1)   /* no data crc */

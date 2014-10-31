@@ -569,13 +569,13 @@ WRITE_CLASS_ENCODER(cap_reconnect_t)
 
 // compat for pre-FLOCK feature
 struct old_ceph_mds_cap_reconnect {
-	__le64 cap_id;
-	__le32 wanted;
-	__le32 issued;
-  __le64 old_size;
+	uint64_t cap_id;
+	uint32_t wanted;
+	uint32_t issued;
+  uint64_t old_size;
   struct ceph_timespec old_mtime, old_atime;
-	__le64 pathbase; /* base ino for our path to this ino */
-} __attribute__ ((packed));
+	uint64_t pathbase; /* base ino for our path to this ino */
+};
 WRITE_RAW_ENCODER(old_ceph_mds_cap_reconnect)
 
 struct old_cap_reconnect_t {

@@ -1,8 +1,5 @@
 // there must be a better way?
-typedef char bool;
-#define false 0
-#define true  1
-
+#include <stdbool.h>
 #include <netinet/in.h>
 #if defined(__linux__)
 #include <linux/types.h>

@@ -62,9 +62,12 @@ inline void decode_raw(T& t, bufferlist::iterator &p)
 WRITE_RAW_ENCODER(uint8_t)
 WRITE_RAW_ENCODER(int8_t)
 WRITE_RAW_ENCODER(char)
-WRITE_RAW_ENCODER(ceph_le64)
-WRITE_RAW_ENCODER(ceph_le32)
-WRITE_RAW_ENCODER(ceph_le16)
+WRITE_RAW_ENCODER(uint64_t)
+WRITE_RAW_ENCODER(uint32_t)
+WRITE_RAW_ENCODER(uint16_t)
+WRITE_RAW_ENCODER(int64_t)
+WRITE_RAW_ENCODER(int32_t)
+WRITE_RAW_ENCODER(int16_t)
 
 // FIXME: we need to choose some portable floating point encoding here
 WRITE_RAW_ENCODER(float)
@@ -80,28 +83,6 @@ inline void decode(bool &v, bufferlist::iterator& p) {
   v = vv;
 }
 
-
-// -----------------------------------
-// int types
-
-#define WRITE_INTTYPE_ENCODER(type, etype)				\
-  inline void encode(type v, bufferlist& bl, uint64_t features=0) {	\
-    ceph_##etype e;							\
-    e = v;								\
-    encode_raw(e, bl);							\
-  }									\
-  inline void decode(type &v, bufferlist::iterator& p) {		\
-    ceph_##etype e;							\
-    decode_raw(e, p);							\
-    v = e;								\
-  }
-
-WRITE_INTTYPE_ENCODER(uint64_t, le64)
-WRITE_INTTYPE_ENCODER(int64_t, le64)
-WRITE_INTTYPE_ENCODER(uint32_t, le32)
-WRITE_INTTYPE_ENCODER(int32_t, le32)
-WRITE_INTTYPE_ENCODER(uint16_t, le16)
-WRITE_INTTYPE_ENCODER(int16_t, le16)
 
 #ifdef ENCODE_DUMP
 # include <stdio.h>
@@ -366,7 +347,7 @@ inline void encode(const std::list<T>& ls, bufferlist& bl)
       n++;
       encode(*p, bl);
     }
-    ceph_le32 en;
+    uint32_t en;
     en = n;
     bl.copy_in(pos, sizeof(en), (char*)&en);
   } else {
@@ -401,7 +382,7 @@ inline void encode(const std::list<std::shared_ptr<T> >& ls, bufferlist& bl)
       n++;
       encode(**p, bl);
     }
-    ceph_le32 en;
+    uint32_t en;
     en = n;
     bl.copy_in(pos, sizeof(en), (char*)&en);
   } else {
@@ -737,7 +718,7 @@ inline void decode(std::deque<T>& ls, bufferlist::iterator& p)
   ::encode(struct_compat, bl);				     \
   buffer::list::iterator struct_compat_it = bl.end();	     \
   struct_compat_it.advance(-1);				     \
-  ceph_le32 struct_len;					     \
+  uint32_t struct_len;					     \
   struct_len = 0;					     \
   ::encode(struct_len, bl);				     \
   buffer::list::iterator struct_len_it = bl.end();	     \

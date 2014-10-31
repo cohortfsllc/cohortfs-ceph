@@ -44,7 +44,7 @@ struct chunk {
 	uint64_t pad4;
 	uint64_t pad5;
 	uint64_t not_offset;
-} __attribute__((packed));
+};
 
 static int page_size;
 

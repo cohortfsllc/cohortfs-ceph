@@ -167,7 +167,7 @@ void Dumper::undump(const char *dump_file)
 
   VolumeRef volume(mdsmap->get_metadata_volume(objecter->osdmap));
   h.layout = g_default_file_layout;
-  h.layout.fl_uuid = volume->uuid;
+  volume->uuid.copyout(h.layout.fl_uuid);
 
   bufferlist hbl;
   ::encode(h, hbl);

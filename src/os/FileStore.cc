@@ -72,8 +72,9 @@
 #include "common/ceph_crypto.h"
 using ceph::crypto::SHA1;
 
-
 #include "common/config.h"
+
+const uint32_t FileStore::target_version = 3;
 
 #define dout_subsys ceph_subsys_filestore
 #undef dout_prefix

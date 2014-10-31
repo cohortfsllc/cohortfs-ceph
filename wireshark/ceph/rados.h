@@ -32,15 +32,15 @@ static inline int ceph_fsid_compare(const struct ceph_fsid *a,
 /*
  * ino, object, etc.
  */
-typedef __le64 ceph_snapid_t;
+typedef uint64_t ceph_snapid_t;
 #define CEPH_SNAPDIR ((uint64_t)(-1))  /* reserved for hidden .snap dir */
 #define CEPH_NOSNAP  ((uint64_t)(-2))  /* "head", "live" revision */
 #define CEPH_MAXSNAP ((uint64_t)(-3))  /* largest valid snapid */
 
 struct ceph_timespec {
-	__le32 tv_sec;
-	__le32 tv_nsec;
-} __attribute__ ((packed));
+	uint32_t tv_sec;
+	uint32_t tv_nsec;
+};
 
 
 /*
@@ -62,81 +62,28 @@ struct ceph_timespec {
 
 /*
  * placement group.
- * we encode this into one __le64.
+ * we encode this into one uint64_t.
  */
 struct ceph_pg {
-	__le16 preferred; /* preferred primary osd */
-	__le16 ps;	  /* placement seed */
-	__le32 pool;	  /* object pool */
-} __attribute__ ((packed));
-
-/*
- * pg_pool is a set of pgs storing a pool of objects
- *
- *  pg_num -- base number of pseudorandomly placed pgs
- *
- *  pgp_num -- effective number when calculating pg placement.	this
- * is used for pg_num increases.  new pgs result in data being "split"
- * into new pgs.  for this to proceed smoothly, new pgs are intiially
- * colocated with their parents; that is, pgp_num doesn't increase
- * until the new pgs have successfully split.  only _then_ are the new
- * pgs placed independently.
- *
- *  lpg_num -- localized pg count (per device).	 replicas are randomly
- * selected.
- *
- *  lpgp_num -- as above.
- */
-#define CEPH_PG_TYPE_REP     1
-#define CEPH_PG_TYPE_RAID4   2
-#define CEPH_PG_POOL_VERSION 2
-struct ceph_pg_pool {
-	uint8_t type;		     /* CEPH_PG_TYPE_* */
-	uint8_t size;		     /* number of osds in each pg */
-	uint8_t crush_ruleset;	     /* crush placement rule */
-	uint8_t object_hash;	     /* hash mapping object name to ps */
-	__le32 pg_num, pgp_num;	  /* number of pg's */
-	__le32 lpg_num, lpgp_num; /* number of localized pg's */
-	__le32 last_change;	  /* most recent epoch changed */
-	__le64 snap_seq;	  /* seq for per-pool snapshot */
-	__le32 snap_epoch;	  /* epoch of last snap */
-	__le32 num_snaps;
-	__le32 num_removed_snap_intervals; /* if non-empty, NO per-pool snaps */
-	__le64 auid;		   /* who owns the pg */
-} __attribute__ ((packed));
-
-/*
- * stable_mod func is used to control number of placement groups.
- * similar to straight-up modulo, but produces a stable mapping as b
- * increases over time.	 b is the number of bins, and bmask is the
- * containing power of 2 minus 1.
- *
- * b <= bmask and bmask=(2**n)-1
- * e.g., b=12 -> bmask=15, b=123 -> bmask=127
- */
-static inline int ceph_stable_mod(int x, int b, int bmask)
-{
-	if ((x & bmask) < b)
-		return x & bmask;
-	else
-		return x & (bmask >> 1);
-}
+	uint16_t preferred; /* preferred primary osd */
+	uint16_t ps;	  /* placement seed */
+	uint32_t pool;	  /* object pool */
+};
 
 /*
  * object layout - how a given object should be stored.
  */
 struct ceph_object_layout {
-	struct ceph_pg ol_pgid;	  /* raw pg, with _full_ ps precision. */
-	__le32 ol_stripe_unit;	  /* for per-object parity, if any */
-} __attribute__ ((packed));
+	uint32_t ol_stripe_unit;	  /* for per-object parity, if any */
+};
 
 /*
  * compound epoch+version, used by storage layer to serialize mutations
  */
 struct ceph_eversion {
-	__le32 epoch;
-	__le64 version;
-} __attribute__ ((packed));
+	uint32_t epoch;
+	uint64_t version;
+};
 
 /*
  * osd map bits
@@ -334,78 +281,72 @@ enum {
  * payload
  */
 struct ceph_osd_op {
-	__le16 op;	     /* CEPH_OSD_OP_* */
-	__le32 flags;	     /* CEPH_OSD_FLAG_* */
+	uint16_t op;	     /* CEPH_OSD_OP_* */
+	uint32_t flags;	     /* CEPH_OSD_FLAG_* */
 	union {
 		struct {
-			__le64 offset, length;
-			__le64 truncate_size;
-			__le32 truncate_seq;
-		} __attribute__ ((packed)) extent;
+			uint64_t offset, length;
+			uint64_t truncate_size;
+			uint32_t truncate_seq;
+		} extent;
 		struct {
-			__le32 name_len;
-			__le32 value_len;
+			uint32_t name_len;
+			uint32_t value_len;
 			uint8_t cmp_op;	      /* CEPH_OSD_CMPXATTR_OP_* */
 			uint8_t cmp_mode;     /* CEPH_OSD_CMPXATTR_MODE_* */
-		} __attribute__ ((packed)) xattr;
+		} xattr;
 		struct {
 			uint8_t class_len;
 			uint8_t method_len;
 			uint8_t argc;
-			__le32 indata_len;
-		} __attribute__ ((packed)) cls;
+			uint32_t indata_len;
+		} cls;
 		struct {
-			__le64 cookie, count;
-		} __attribute__ ((packed)) pgls;
-		struct {
-			__le64 snapid;
-		} __attribute__ ((packed)) snap;
-		struct {
-			__le64 cookie;
-			__le64 ver;
+			uint64_t cookie;
+			uint64_t ver;
 			uint8_t flag;	/* 0 = unwatch, 1 = watch */
-		} __attribute__ ((packed)) watch;
+		} watch;
 };
-	__le32 payload_len;
-} __attribute__ ((packed));
+	uint32_t payload_len;
+};
 
 /*
  * osd request message header.	each request may include multiple
  * ceph_osd_op object operations.
  */
 struct ceph_osd_request_head {
-	__le32 client_inc;		   /* client incarnation */
+	uint32_t client_inc;		   /* client incarnation */
 	struct ceph_object_layout layout;  /* pgid */
-	__le32 osdmap_epoch;		   /* client's osdmap epoch */
+	uint32_t osdmap_epoch;		   /* client's osdmap epoch */
 
-	__le32 flags;
+	uint32_t flags;
 
 	struct ceph_timespec mtime;	   /* for mutations only */
 	struct ceph_eversion reassert_version; /* if we are replaying op */
 
-	__le32 object_len;     /* length of object name */
+	uint32_t object_len;     /* length of object name */
 
-	__le64 snapid;	       /* snapid to read */
-	__le64 snap_seq;       /* writer's snap context */
-	__le32 num_snaps;
+	uint64_t snapid;	       /* snapid to read */
+	uint64_t snap_seq;       /* writer's snap context */
+	uint32_t num_snaps;
 
-	__le16 num_ops;
+	uint16_t num_ops;
 	struct ceph_osd_op ops[];  /* followed by ops[], obj, ticket, snaps */
-} __attribute__ ((packed));
+};
 
 struct ceph_osd_reply_head {
-	__le32 client_inc;		  /* client incarnation */
-	__le32 flags;
+	uint32_t client_inc;		  /* client incarnation */
+	uint32_t flags;
 	struct ceph_object_layout layout;
-	__le32 osdmap_epoch;
+	uint32_t osdmap_epoch;
 	struct ceph_eversion reassert_version; /* for replaying uncommitted */
 
-	__le32 result;			  /* result code */
+	uint32_t result;			  /* result code */
 
-	__le32 object_len;		  /* length of object name */
-	__le32 num_ops;
+	uint32_t object_len;		  /* length of object name */
+	uint32_t num_ops;
 	struct ceph_osd_op ops[0];  /* ops[], object */
-} __attribute__ ((packed));
+};
 
 
 

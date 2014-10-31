@@ -18,11 +18,6 @@
 #endif
 typedef int bool;
 
-#define le16_to_cpu(x) (x)
-#define le32_to_cpu(x) (x)
-#define le64_to_cpu(x) (x)
-
-
 typedef guint32 uint32_t;
 
 #include <fcntl.h>

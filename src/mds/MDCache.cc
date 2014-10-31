@@ -263,10 +263,10 @@ void MDCache::remove_inode(CInode *o)
 void MDCache::init_layouts()
 {
   default_file_layout = g_default_file_layout;
-  default_file_layout.fl_uuid = mds->mdsmap->get_metadata_uuid();
+  mds->mdsmap->get_metadata_uuid().copyout(default_file_layout.fl_uuid);
 
   default_log_layout = g_default_file_layout;
-  default_log_layout.fl_uuid = mds->mdsmap->get_metadata_uuid();
+  mds->mdsmap->get_metadata_uuid().copyout(default_log_layout.fl_uuid);
   if (g_conf->mds_log_segment_size > 0) {
     default_log_layout.fl_object_size = g_conf->mds_log_segment_size;
     default_log_layout.fl_stripe_unit = g_conf->mds_log_segment_size;
@@ -312,7 +312,7 @@ CInode *MDCache::create_root_inode()
 {
   CInode *i = create_system_inode(MDS_INO_ROOT, S_IFDIR|0755);
   i->inode.layout = default_file_layout;
-  i->inode.layout.fl_uuid = mds->mdsmap->get_first_data_volume();
+  mds->mdsmap->get_first_data_volume().copyout(i->inode.layout.fl_uuid);
   return i;
 }
 

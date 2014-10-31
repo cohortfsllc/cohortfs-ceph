@@ -50,27 +50,7 @@ extern "C" {
 
 #define CEPH_INO_ROOT  1
 
-#if 0
-struct ceph_file_layout {
-	/* file -> object mapping */
-	uint32_t fl_stripe_unit;     /* stripe unit, in bytes.	must be multiple
-				      of page size. */
-	uint32_t fl_stripe_count;    /* over this many objects */
-	uint32_t fl_object_size;     /* until objects are this big, then move to
-				      new objects */
-	uint32_t fl_cas_hash;	     /* 0 = none; 1 = sha256 */
-
-	/* pg -> disk layout */
-	uint32_t fl_object_stripe_unit;	 /* for per-object parity, if any */
-
-	/* object -> pg layout */
-	uint32_t fl_pg_preferred; /* preferred primary for pg (-1 for none) */
-	uint32_t fl_pg_pool;	  /* namespace, crush ruleset, rep level */
-} __attribute__ ((packed));
-#else
 struct ceph_file_layout;
-#endif
-
 
 typedef struct _inodeno_t {
   uint64_t val;

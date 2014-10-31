@@ -94,7 +94,7 @@ inline ostream& operator<<(ostream& out, const FSSuperblock& sb)
 class FileStore : public JournalingObjectStore,
 		  public md_config_obs_t
 {
-  static const uint32_t target_version = 3;
+  static const uint32_t target_version;
 public:
   uint32_t get_target_version() {
     return target_version;

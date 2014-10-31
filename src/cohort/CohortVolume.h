@@ -60,8 +60,8 @@ protected:
      versions of Ceph. */
 
   void stripe_extent(const uint64_t off, const uint64_t len,
-		     const size_t stripe, ceph_le64 &stripeoff,
-		     ceph_le64 &stripelen) {
+		     const size_t stripe, uint64_t &stripeoff,
+		     uint64_t &stripelen) {
     size_t first = ostripe(off);
     size_t span = osd_span(off, len);
     if ((span == 0 && !first) ||

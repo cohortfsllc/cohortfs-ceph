@@ -26,9 +26,9 @@ static inline int ceph_fsid_compare(const struct ceph_fsid *a,
  */
 
 struct ceph_timespec {
-	__le32 tv_sec;
-	__le32 tv_nsec;
-} __attribute__ ((packed));
+	uint32_t tv_sec;
+	uint32_t tv_nsec;
+};
 
 
 /*
@@ -52,16 +52,16 @@ static inline int ceph_stable_mod(int x, int b, int bmask)
  * object layout - how a given object should be stored.
  */
 struct ceph_object_layout {
-	__le32 ol_stripe_unit;	  /* for per-object parity, if any */
-} __attribute__ ((packed));
+	uint32_t ol_stripe_unit;	  /* for per-object parity, if any */
+};
 
 /*
  * compound epoch+version, used by storage layer to serialize mutations
  */
 struct ceph_eversion {
-	__le32 epoch;
-	__le64 version;
-} __attribute__ ((packed));
+	uint32_t epoch;
+	uint64_t version;
+};
 
 /*
  * osd map bits
@@ -299,69 +299,69 @@ enum {
  * payload
  */
 struct ceph_osd_op {
-	__le16 op;	     /* CEPH_OSD_OP_* */
-	__le32 flags;	     /* CEPH_OSD_FLAG_* */
+	uint16_t op;	     /* CEPH_OSD_OP_* */
+	uint32_t flags;	     /* CEPH_OSD_FLAG_* */
 	union {
 		struct {
-			__le64 offset, length;
-			__le64 truncate_size;
-			__le32 truncate_seq;
-		} __attribute__ ((packed)) extent;
+			uint64_t offset, length;
+			uint64_t truncate_size;
+			uint32_t truncate_seq;
+		} extent;
 		struct {
-			__le32 name_len;
-			__le32 value_len;
+			uint32_t name_len;
+			uint32_t value_len;
 			uint8_t cmp_op;	      /* CEPH_OSD_CMPXATTR_OP_* */
 			uint8_t cmp_mode;     /* CEPH_OSD_CMPXATTR_MODE_* */
-		} __attribute__ ((packed)) xattr;
+		} xattr;
 		struct {
 			uint8_t class_len;
 			uint8_t method_len;
 			uint8_t argc;
-			__le32 indata_len;
-		} __attribute__ ((packed)) cls;
+			uint32_t indata_len;
+		} cls;
 		struct {
-			__le64 cookie;
-			__le64 ver;
+			uint64_t cookie;
+			uint64_t ver;
 			uint8_t flag;	/* 0 = unwatch, 1 = watch */
-		} __attribute__ ((packed)) watch;
+		} watch;
 		struct {
-			__le64 unused;
-			__le64 ver;
-		} __attribute__ ((packed)) assert_ver;
+			uint64_t unused;
+			uint64_t ver;
+		} assert_ver;
 		struct {
-			__le64 max;	/* max data in reply */
-		} __attribute__ ((packed)) copy_get;
+			uint64_t max;	/* max data in reply */
+		} copy_get;
 		struct {
-			__le64 src_version;
+			uint64_t src_version;
 			uint8_t flags;
-		} __attribute__ ((packed)) copy_from;
+		} copy_from;
 		struct {
 			struct ceph_timespec stamp;
-		} __attribute__ ((packed)) hit_set_get;
+		} hit_set_get;
 		struct {
 			uint8_t flags;
-		} __attribute__ ((packed)) tmap2omap;
+		} tmap2omap;
 		struct {
-			__le64 expected_object_size;
-			__le64 expected_write_size;
-		} __attribute__ ((packed)) alloc_hint;
+			uint64_t expected_object_size;
+			uint64_t expected_write_size;
+		} alloc_hint;
 	};
-	__le32 payload_len;
-} __attribute__ ((packed));
+	uint32_t payload_len;
+};
 
 struct ceph_osd_reply_head {
-	__le32 client_inc;		  /* client incarnation */
-	__le32 flags;
+	uint32_t client_inc;		  /* client incarnation */
+	uint32_t flags;
 	struct ceph_object_layout layout;
-	__le32 osdmap_epoch;
+	uint32_t osdmap_epoch;
 	struct ceph_eversion reassert_version; /* for replaying uncommitted */
 
-	__le32 result;			  /* result code */
+	uint32_t result;			  /* result code */
 
-	__le32 object_len;		  /* length of object name */
-	__le32 num_ops;
+	uint32_t object_len;		  /* length of object name */
+	uint32_t num_ops;
 	struct ceph_osd_op ops[0];  /* ops[], object */
-} __attribute__ ((packed));
+};
 
 
 #endif

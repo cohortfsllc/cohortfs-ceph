@@ -31,8 +31,8 @@ namespace bi = boost::intrusive;
 class XioMsgHdr
 {
 public:
-  __le32 msg_cnt;
-  __le32 peer_type;
+  uint32_t msg_cnt;
+  uint32_t peer_type;
   entity_addr_t addr; /* XXX hack! */
   ceph_msg_header* hdr;
   ceph_msg_footer* ftr;

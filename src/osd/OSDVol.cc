@@ -866,8 +866,8 @@ static int check_offset_and_length(uint64_t offset, uint64_t length, uint64_t ma
 }
 
 struct FillInExtent : public Context {
-  ceph_le64 *r;
-  FillInExtent(ceph_le64 *r) : r(r) {}
+  uint64_t *r;
+  FillInExtent(uint64_t *r) : r(r) {}
   void finish(int _r) {
     if (_r >= 0) {
       *r = _r;
@@ -1484,7 +1484,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
     case CEPH_OSD_OP_CREATE:
       ++ctx->num_write;
       {
-	int flags = le32_to_cpu(op.flags);
+	int flags = op.flags;
 	if (obs.exists && (flags & CEPH_OSD_OP_FLAG_EXCL)) {
 	  result = -EEXIST; /* this is an exclusive create */
 	} else {
