@@ -80,6 +80,7 @@ public:
   SharedPtrRegistry<uuid_d, ObjectStore::Sequencer> osr_registry;
   const int whoami;
   ObjectStore *&store;
+  CollectionHandle meta_col;
   LogClient &clog;
   hobject_t infos_oid;
 private:
@@ -398,9 +399,9 @@ private:
   // -- superblock --
   OSDSuperblock superblock;
 
-  void write_superblock();
-  void write_superblock(ObjectStore::Transaction& t);
-  int read_superblock();
+  void write_superblock(CollectionHandle meta);
+  void write_superblock(CollectionHandle meta, ObjectStore::Transaction& t);
+  int read_superblock(CollectionHandle meta);
 
   CompatSet osd_compat;
 

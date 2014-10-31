@@ -106,14 +106,14 @@ void ObjectStore::Transaction::dump(ceph::Formatter *f)
       break;
     case Transaction::OP_TOUCH:
       f->dump_string("op_name", "touch");
-      f->dump_stream("collection") << i->cid;
-      f->dump_stream("oid") << i->oid;
+      f->dump_stream("collection") << get<1>(col_slots[i->c1_ix]);
+      f->dump_stream("oid") << get<1>(obj_slots[i->o1_ix]);
       break;
 
     case Transaction::OP_WRITE:
       f->dump_string("op_name", "write");
-      f->dump_stream("collection") << i->cid;
-      f->dump_stream("oid") << i->oid;
+      f->dump_stream("collection") << get<1>(col_slots[i->c1_ix]);
+      f->dump_stream("oid") << get<1>(obj_slots[i->o1_ix]);
       f->dump_unsigned("length", i->len);
       f->dump_unsigned("offset", i->off);
       f->dump_unsigned("bufferlist length", i->data.length());
@@ -121,45 +121,45 @@ void ObjectStore::Transaction::dump(ceph::Formatter *f)
 
     case Transaction::OP_ZERO:
       f->dump_string("op_name", "zero");
-      f->dump_stream("collection") << i->cid;
-      f->dump_stream("oid") << i->oid;
+      f->dump_stream("collection") << get<1>(col_slots[i->c1_ix]);
+      f->dump_stream("oid") << get<1>(obj_slots[i->o1_ix]);
       f->dump_unsigned("offset", i->off);
       f->dump_unsigned("length", i->len);
       break;
 
     case Transaction::OP_TRIMCACHE:
       f->dump_string("op_name", "trim_cache");
-      f->dump_stream("collection") << i->cid;
-      f->dump_stream("oid") << i->oid;
+      f->dump_stream("collection") << get<1>(col_slots[i->c1_ix]);
+      f->dump_stream("oid") << get<1>(obj_slots[i->o1_ix]);
       f->dump_unsigned("offset", i->off);
       f->dump_unsigned("length", i->len);
       break;
 
     case Transaction::OP_TRUNCATE:
       f->dump_string("op_name", "truncate");
-      f->dump_stream("collection") << i->cid;
-      f->dump_stream("oid") << i->oid;
+      f->dump_stream("collection") << get<1>(col_slots[i->c1_ix]);
+      f->dump_stream("oid") << get<1>(obj_slots[i->o1_ix]);
       f->dump_unsigned("offset", i->off);
       break;
 
     case Transaction::OP_REMOVE:
       f->dump_string("op_name", "remove");
-      f->dump_stream("collection") << i->cid;
-      f->dump_stream("oid") << i->oid;
+      f->dump_stream("collection") << get<1>(col_slots[i->c1_ix]);
+      f->dump_stream("oid") << get<1>(obj_slots[i->o1_ix]);
       break;
 
     case Transaction::OP_SETATTR:
       f->dump_string("op_name", "setattr");
-      f->dump_stream("collection") << i->cid;
-      f->dump_stream("oid") << i->oid;
+      f->dump_stream("collection") << get<1>(col_slots[i->c1_ix]);
+      f->dump_stream("oid") << get<1>(obj_slots[i->o1_ix]);
       f->dump_string("name", i->name);
       f->dump_unsigned("length", i->data.length());
       break;
 
     case Transaction::OP_SETATTRS:
       f->dump_string("op_name", "setattrs");
-      f->dump_stream("collection") << i->cid;
-      f->dump_stream("oid") << i->oid;
+      f->dump_stream("collection") << get<1>(col_slots[i->c1_ix]);
+      f->dump_stream("oid") << get<1>(obj_slots[i->o1_ix]);
       f->open_object_section("attr_lens");
       for (map<string,bufferptr>::iterator p = i->xattrs.begin();
 	  p != i->xattrs.end(); ++p) {
@@ -169,38 +169,38 @@ void ObjectStore::Transaction::dump(ceph::Formatter *f)
 
     case Transaction::OP_RMATTR:
       f->dump_string("op_name", "rmattr");
-      f->dump_stream("collection") << i->cid;
-      f->dump_stream("oid") << i->oid;
+      f->dump_stream("collection") << get<1>(col_slots[i->c1_ix]);
+      f->dump_stream("oid") << get<1>(obj_slots[i->o1_ix]);
       f->dump_string("name", i->name);
       break;
 
     case Transaction::OP_RMATTRS:
       f->dump_string("op_name", "rmattrs");
-      f->dump_stream("collection") << i->cid;
-      f->dump_stream("oid") << i->oid;
+      f->dump_stream("collection") << get<1>(col_slots[i->c1_ix]);
+      f->dump_stream("oid") << get<1>(obj_slots[i->o1_ix]);
       break;
 
     case Transaction::OP_CLONE:
       f->dump_string("op_name", "clone");
-      f->dump_stream("collection") << i->cid;
-      f->dump_stream("src_oid") << i->oid;
-      f->dump_stream("dst_oid") << i->oid2;
+      f->dump_stream("collection") << get<1>(col_slots[i->c1_ix]);
+      f->dump_stream("src_oid") << get<1>(obj_slots[i->o1_ix]);
+      f->dump_stream("dst_oid") << get<1>(obj_slots[i->o2_ix]);
       break;
 
     case Transaction::OP_CLONERANGE:
       f->dump_string("op_name", "clonerange");
-      f->dump_stream("collection") << i->cid;
-      f->dump_stream("src_oid") << i->oid;
-      f->dump_stream("dst_oid") << i->oid2;
+      f->dump_stream("collection") << get<1>(col_slots[i->c1_ix]);
+      f->dump_stream("src_oid") << get<1>(obj_slots[i->o1_ix]);
+      f->dump_stream("dst_oid") << get<1>(obj_slots[i->o2_ix]);
       f->dump_unsigned("offset", i->off);
       f->dump_unsigned("len", i->len);
       break;
 
     case Transaction::OP_CLONERANGE2:
       f->dump_string("op_name", "clonerange2");
-      f->dump_stream("collection") << i->cid;
-      f->dump_stream("src_oid") << i->oid;
-      f->dump_stream("dst_oid") << i->oid2;
+      f->dump_stream("collection") << get<1>(col_slots[i->c1_ix]);
+      f->dump_stream("src_oid") << get<1>(obj_slots[i->o1_ix]);
+      f->dump_stream("dst_oid") << get<1>(obj_slots[i->o2_ix]);
       f->dump_unsigned("src_offset", i->off);
       f->dump_unsigned("len", i->len);
       f->dump_unsigned("dst_offset", i->off2);
@@ -208,45 +208,45 @@ void ObjectStore::Transaction::dump(ceph::Formatter *f)
 
     case Transaction::OP_MKCOLL:
       f->dump_string("op_name", "mkcoll");
-      f->dump_stream("collection") << i->cid;
+      f->dump_stream("collection") << get<1>(col_slots[i->c1_ix]);
       break;
 
     case Transaction::OP_RMCOLL:
       f->dump_string("op_name", "rmcoll");
-      f->dump_stream("collection") << i->cid;
+      f->dump_stream("collection") << get<1>(col_slots[i->c1_ix]);
       break;
 
     case Transaction::OP_COLL_ADD:
       f->dump_string("op_name", "collection_add");
-      f->dump_stream("src_collection") << i->cid;
-      f->dump_stream("dst_collection") << i->cid2;
-      f->dump_stream("oid") << i->oid;
+      f->dump_stream("src_collection") << get<1>(col_slots[i->c1_ix]);
+      f->dump_stream("dst_collection") << get<1>(col_slots[i->c2_ix]);
+      f->dump_stream("oid") << get<1>(obj_slots[i->o1_ix]);
       break;
 
     case Transaction::OP_COLL_REMOVE:
       f->dump_string("op_name", "collection_remove");
-      f->dump_stream("collection") << i->cid;
-      f->dump_stream("oid") << i->oid;
+      f->dump_stream("collection") << get<1>(col_slots[i->c1_ix]);
+      f->dump_stream("oid") << get<1>(obj_slots[i->o1_ix]);
       break;
 
     case Transaction::OP_COLL_MOVE:
       f->open_object_section("collection_move");
-      f->dump_stream("src_collection") << i->cid;
-      f->dump_stream("dst_collection") << i->cid2;
-      f->dump_stream("oid") << i->oid;
+      f->dump_stream("src_collection") << get<1>(col_slots[i->c1_ix]);
+      f->dump_stream("dst_collection") << get<1>(col_slots[i->c2_ix]);
+      f->dump_stream("oid") << get<1>(obj_slots[i->o1_ix]);
       f->close_section();
       break;
 
     case Transaction::OP_COLL_SETATTR:
       f->dump_string("op_name", "collection_setattr");
-      f->dump_stream("collection") << i->cid;
+      f->dump_stream("collection") << get<1>(col_slots[i->c1_ix]);
       f->dump_string("name", i->name);
       f->dump_unsigned("length", i->data.length());
       break;
 
     case Transaction::OP_COLL_RMATTR:
       f->dump_string("op_name", "collection_rmattr");
-      f->dump_stream("collection") << i->cid;
+      f->dump_stream("collection") << get<1>(col_slots[i->c1_ix]);
       f->dump_string("name", i->name);
       break;
 
@@ -256,20 +256,20 @@ void ObjectStore::Transaction::dump(ceph::Formatter *f)
 
     case Transaction::OP_COLL_RENAME:
       f->dump_string("op_name", "collection_rename");
-      f->dump_stream("src_collection") << i->cid;
-      f->dump_stream("dst_collection") << i->cid2;
+      f->dump_stream("src_collection") << get<1>(col_slots[i->c1_ix]);
+      f->dump_stream("dst_collection") << get<1>(col_slots[i->c2_ix]);
       break;
 
     case Transaction::OP_OMAP_CLEAR:
       f->dump_string("op_name", "omap_clear");
-      f->dump_stream("collection") << i->cid;
-      f->dump_stream("oid") << i->oid;
+      f->dump_stream("collection") << get<1>(col_slots[i->c1_ix]);
+      f->dump_stream("oid") << get<1>(obj_slots[i->o1_ix]);
       break;
 
     case Transaction::OP_OMAP_SETKEYS:
       f->dump_string("op_name", "omap_setkeys");
-      f->dump_stream("collection") << i->cid;
-      f->dump_stream("oid") << i->oid;
+      f->dump_stream("collection") << get<1>(col_slots[i->c1_ix]);
+      f->dump_stream("oid") << get<1>(obj_slots[i->o1_ix]);
       f->open_object_section("attr_lens");
       for (map<string, bufferlist>::iterator p = i->attrs.begin();
 	  p != i->attrs.end(); ++p) {
@@ -280,37 +280,37 @@ void ObjectStore::Transaction::dump(ceph::Formatter *f)
 
     case Transaction::OP_OMAP_RMKEYS:
       f->dump_string("op_name", "omap_rmkeys");
-      f->dump_stream("collection") << i->cid;
-      f->dump_stream("oid") << i->oid;
+      f->dump_stream("collection") << get<1>(col_slots[i->c1_ix]);
+      f->dump_stream("oid") << get<1>(obj_slots[i->o1_ix]);
       break;
 
     case Transaction::OP_OMAP_SETHEADER:
       f->dump_string("op_name", "omap_setheader");
-      f->dump_stream("collection") << i->cid;
-      f->dump_stream("oid") << i->oid;
+      f->dump_stream("collection") << get<1>(col_slots[i->c1_ix]);
+      f->dump_stream("oid") << get<1>(obj_slots[i->o1_ix]);
       f->dump_stream("header_length") << i->data.length();
       break;
 
     case Transaction::OP_OMAP_RMKEYRANGE:
       f->dump_string("op_name", "op_omap_rmkeyrange");
-      f->dump_stream("collection") << i->cid;
-      f->dump_stream("oid") << i->oid;
+      f->dump_stream("collection") << get<1>(col_slots[i->c1_ix]);
+      f->dump_stream("oid") << get<1>(obj_slots[i->o1_ix]);
       f->dump_string("first", i->name);
       f->dump_string("last", i->name2);
       break;
 
     case Transaction::OP_COLL_MOVE_RENAME:
       f->dump_string("op_name", "op_coll_move_rename");
-      f->dump_stream("old_collection") << i->cid;
-      f->dump_stream("old_oid") << i->oid;
-      f->dump_stream("new_collection") << i->cid2;
-      f->dump_stream("new_oid") << i->oid2;
+      f->dump_stream("old_collection") << get<1>(col_slots[i->c1_ix]);
+      f->dump_stream("old_oid") << get<1>(obj_slots[i->o1_ix]);
+      f->dump_stream("new_collection") << get<1>(col_slots[i->c2_ix]);
+      f->dump_stream("new_oid") << get<1>(obj_slots[i->o2_ix]);
       break;
 
     case Transaction::OP_SETALLOCHINT:
       f->dump_string("op_name", "op_setallochint");
-      f->dump_stream("collection") << i->cid;
-      f->dump_stream("oid") << i->oid;
+      f->dump_stream("collection") << get<1>(col_slots[i->c1_ix]);
+      f->dump_stream("oid") << get<1>(obj_slots[i->o1_ix]);
       f->dump_stream("expected_object_size") << i->value1;
       f->dump_stream("expected_write_size") << i->value2;
       break;
@@ -333,136 +333,136 @@ void ObjectStore::Transaction::Op::encode(bufferlist &bl) const
   // encode only the fields relevant to this op
   switch (op) {
   case OP_TOUCH:
-    ::encode(cid, bl);
-    ::encode(oid, bl);
+    ::encode(c1_ix, bl);
+    ::encode(o1_ix, bl);
     break;
   case OP_WRITE:
-    ::encode(cid, bl);
-    ::encode(oid, bl);
+    ::encode(c1_ix, bl);
+    ::encode(o1_ix, bl);
     ::encode(off, bl);
     ::encode(len, bl);
     ::encode(data, bl);
     break;
   case OP_ZERO:
-    ::encode(cid, bl);
-    ::encode(oid, bl);
+    ::encode(c1_ix, bl);
+    ::encode(o1_ix, bl);
     ::encode(off, bl);
     ::encode(len, bl);
     break;
   case OP_TRIMCACHE:
-    ::encode(cid, bl);
-    ::encode(oid, bl);
+    ::encode(c1_ix, bl);
+    ::encode(o1_ix, bl);
     ::encode(off, bl);
     ::encode(len, bl);
     break;
   case OP_TRUNCATE:
-    ::encode(cid, bl);
-    ::encode(oid, bl);
+    ::encode(c1_ix, bl);
+    ::encode(o1_ix, bl);
     ::encode(off, bl);
     break;
   case OP_REMOVE:
-    ::encode(cid, bl);
-    ::encode(oid, bl);
+    ::encode(c1_ix, bl);
+    ::encode(o1_ix, bl);
     break;
   case OP_SETATTR:
-    ::encode(cid, bl);
-    ::encode(oid, bl);
+    ::encode(c1_ix, bl);
+    ::encode(o1_ix, bl);
     ::encode(name, bl);
     ::encode(data, bl);
     break;
   case OP_SETATTRS:
-    ::encode(cid, bl);
-    ::encode(oid, bl);
+    ::encode(c1_ix, bl);
+    ::encode(o1_ix, bl);
     ::encode(xattrs, bl);
     break;
   case OP_RMATTR:
-    ::encode(cid, bl);
-    ::encode(oid, bl);
+    ::encode(c1_ix, bl);
+    ::encode(o1_ix, bl);
     ::encode(name, bl);
     break;
   case OP_RMATTRS:
-    ::encode(cid, bl);
-    ::encode(oid, bl);
+    ::encode(c1_ix, bl);
+    ::encode(o1_ix, bl);
     break;
   case OP_CLONE:
-    ::encode(cid, bl);
-    ::encode(oid, bl);
-    ::encode(oid2, bl);
+    ::encode(c1_ix, bl);
+    ::encode(o1_ix, bl);
+    ::encode(o2_ix, bl);
     break;
   case OP_CLONERANGE:
-    ::encode(cid, bl);
-    ::encode(oid, bl);
-    ::encode(oid2, bl);
+    ::encode(c1_ix, bl);
+    ::encode(o1_ix, bl);
+    ::encode(o2_ix, bl);
     ::encode(off, bl);
     ::encode(len, bl);
     break;
   case OP_CLONERANGE2:
-    ::encode(cid, bl);
-    ::encode(oid, bl);
-    ::encode(oid2, bl);
+    ::encode(c1_ix, bl);
+    ::encode(o1_ix, bl);
+    ::encode(o2_ix, bl);
     ::encode(off, bl);
     ::encode(len, bl);
     ::encode(off2, bl);
     break;
   case OP_RMCOLL:
-    ::encode(cid, bl);
+    ::encode(c1_ix, bl);
     break;
   case OP_COLL_ADD:
-    ::encode(cid, bl);
-    ::encode(cid2, bl);
-    ::encode(oid, bl);
+    ::encode(c1_ix, bl);
+    ::encode(c2_ix, bl);
+    ::encode(o1_ix, bl);
     break;
   case OP_COLL_REMOVE:
-    ::encode(cid, bl);
-    ::encode(oid, bl);
+    ::encode(c1_ix, bl);
+    ::encode(o1_ix, bl);
     break;
   case OP_COLL_MOVE:
-    ::encode(cid, bl);
-    ::encode(cid2, bl);
-    ::encode(oid, bl);
+    ::encode(c1_ix, bl);
+    ::encode(c2_ix, bl);
+    ::encode(o1_ix, bl);
     break;
   case OP_COLL_MOVE_RENAME:
-    ::encode(cid, bl);
-    ::encode(oid, bl);
-    ::encode(cid2, bl);
-    ::encode(oid2, bl);
+    ::encode(c1_ix, bl);
+    ::encode(o1_ix, bl);
+    ::encode(c2_ix, bl);
+    ::encode(o2_ix, bl);
     break;
   case OP_COLL_SETATTRS:
-    ::encode(cid, bl);
+    ::encode(c1_ix, bl);
     ::encode(xattrs, bl);
     break;
   case OP_COLL_RENAME:
-    ::encode(cid, bl);
-    ::encode(cid2, bl);
+    ::encode(c1_ix, bl);
+    ::encode(c2_ix, bl);
     break;
   case OP_OMAP_CLEAR:
-    ::encode(cid, bl);
-    ::encode(oid, bl);
+    ::encode(c1_ix, bl);
+    ::encode(o1_ix, bl);
     break;
   case OP_OMAP_SETKEYS:
-    ::encode(cid, bl);
-    ::encode(oid, bl);
+    ::encode(c1_ix, bl);
+    ::encode(o1_ix, bl);
     ::encode(attrs, bl);
     break;
   case OP_OMAP_RMKEYS:
-    ::encode(cid, bl);
-    ::encode(oid, bl);
+    ::encode(c1_ix, bl);
+    ::encode(o1_ix, bl);
     ::encode(keys, bl);
     break;
   case OP_OMAP_RMKEYRANGE:
-    ::encode(cid, bl);
-    ::encode(oid, bl);
+    ::encode(c1_ix, bl);
+    ::encode(o1_ix, bl);
     ::encode(name, bl);
     ::encode(name2, bl);
     break;
   case OP_OMAP_SETHEADER:
-    ::encode(cid, bl);
-    ::encode(oid, bl);
+    ::encode(c1_ix, bl);
+    ::encode(o1_ix, bl);
     ::encode(data, bl);
     break;
   case OP_SETALLOCHINT:
-    ::encode(cid, bl);
-    ::encode(oid, bl);
+    ::encode(c1_ix, bl);
+    ::encode(o1_ix, bl);
     ::encode(value1, bl);
     ::encode(value2, bl);
     break;
@@ -471,76 +471,77 @@ void ObjectStore::Transaction::Op::encode(bufferlist &bl) const
 
 void ObjectStore::Transaction::Op::decode(bufferlist::iterator &p)
 {
+  coll_t cid;
   ::decode(op, p);
   switch (op) {
   case OP_TOUCH:
     ::decode(cid, p);
-    ::decode(oid, p);
+    ::decode(o1_ix, p);
     break;
   case OP_WRITE:
     ::decode(cid, p);
-    ::decode(oid, p);
+    ::decode(o1_ix, p);
     ::decode(off, p);
     ::decode(len, p);
     ::decode(data, p);
     break;
   case OP_ZERO:
     ::decode(cid, p);
-    ::decode(oid, p);
+    ::decode(o1_ix, p);
     ::decode(off, p);
     ::decode(len, p);
     break;
   case OP_TRIMCACHE:
     ::decode(cid, p);
-    ::decode(oid, p);
+    ::decode(o1_ix, p);
     ::decode(off, p);
     ::decode(len, p);
     break;
   case OP_TRUNCATE:
     ::decode(cid, p);
-    ::decode(oid, p);
+    ::decode(o1_ix, p);
     ::decode(off, p);
     break;
   case OP_REMOVE:
     ::decode(cid, p);
-    ::decode(oid, p);
+    ::decode(o1_ix, p);
     break;
   case OP_SETATTR:
     ::decode(cid, p);
-    ::decode(oid, p);
+    ::decode(o1_ix, p);
     ::decode(name, p);
     ::decode(data, p);
     break;
   case OP_SETATTRS:
     ::decode(cid, p);
-    ::decode(oid, p);
+    ::decode(o1_ix, p);
     ::decode(xattrs, p);
     break;
   case OP_RMATTR:
     ::decode(cid, p);
-    ::decode(oid, p);
+    ::decode(o1_ix, p);
     ::decode(name, p);
     break;
   case OP_RMATTRS:
     ::decode(cid, p);
-    ::decode(oid, p);
+    ::decode(o1_ix, p);
     break;
   case OP_CLONE:
     ::decode(cid, p);
-    ::decode(oid, p);
-    ::decode(oid2, p);
+    ::decode(o1_ix, p);
+    ::decode(o2_ix, p);
     break;
   case OP_CLONERANGE:
     ::decode(cid, p);
-    ::decode(oid, p);
-    ::decode(oid2, p);
+    ::decode(o1_ix, p);
+    ::decode(o2_ix, p);
     ::decode(off, p);
     ::decode(len, p);
     break;
   case OP_CLONERANGE2:
     ::decode(cid, p);
-    ::decode(oid, p);
-    ::decode(oid2, p);
+    ::decode(o1_ix, p);
+    ::decode(o2_ix, p);
     ::decode(off, p);
     ::decode(len, p);
     ::decode(off2, p);
@@ -549,68 +550,69 @@ void ObjectStore::Transaction::Op::decode(bufferlist::iterator &p)
     ::decode(cid, p);
     break;
   case OP_COLL_ADD:
-    ::decode(cid, p);
-    ::decode(cid2, p);
-    ::decode(oid, p);
+    ::decode(c1_ix, p);
+    ::decode(c2_ix, p);
+    ::decode(o1_ix, p);
     break;
   case OP_COLL_REMOVE:
-    ::decode(cid, p);
-    ::decode(oid, p);
+    ::decode(c1_ix, p);
+    ::decode(o1_ix, p);
     break;
   case OP_COLL_MOVE:
-    ::decode(cid, p);
-    ::decode(cid2, p);
-    ::decode(oid, p);
+    ::decode(c1_ix, p);
+    ::decode(c2_ix, p);
+    ::decode(o1_ix, p);
     break;
   case OP_COLL_MOVE_RENAME:
-    ::decode(cid, p);
-    ::decode(oid, p);
-    ::decode(cid2, p);
-    ::decode(oid2, p);
+    ::decode(c1_ix, p);
+    ::decode(o1_ix, p);
+    ::decode(c2_ix, p);
+    ::decode(o2_ix, p);
     break;
   case OP_COLL_SETATTRS:
-    ::decode(cid, p);
+    ::decode(c1_ix, p);
     ::decode(xattrs, p);
     break;
   case OP_COLL_RENAME:
-    ::decode(cid, p);
-    ::decode(cid2, p);
+    ::decode(c1_ix, p);
+    ::decode(c2_ix, p);
     break;
   case OP_OMAP_CLEAR:
-    ::decode(cid, p);
-    ::decode(oid, p);
+    ::decode(c1_ix, p);
+    ::decode(o1_ix, p);
     break;
   case OP_OMAP_SETKEYS:
-    ::decode(cid, p);
-    ::decode(oid, p);
+    ::decode(c1_ix, p);
+    ::decode(o1_ix, p);
     ::decode(attrs, p);
     break;
   case OP_OMAP_RMKEYS:
-    ::decode(cid, p);
-    ::decode(oid, p);
+    ::decode(c1_ix, p);
+    ::decode(o1_ix, p);
     ::decode(keys, p);
     break;
   case OP_OMAP_RMKEYRANGE:
-    ::decode(cid, p);
-    ::decode(oid, p);
+    ::decode(c1_ix, p);
+    ::decode(o1_ix, p);
     ::decode(name, p);
     ::decode(name2, p);
     break;
   case OP_OMAP_SETHEADER:
-    ::decode(cid, p);
-    ::decode(oid, p);
+    ::decode(c1_ix, p);
+    ::decode(o1_ix, p);
     ::decode(data, p);
     break;
   case OP_SETALLOCHINT:
-    ::decode(cid, p);
-    ::decode(oid, p);
+    ::decode(c1_ix, p);
+    ::decode(o1_ix, p);
     ::decode(value1, p);
     ::decode(value2, p);
     break;
   }
 }
 
-void ObjectStore::Transaction::generate_test_instances(list<ObjectStore::Transaction*>& o)
+void ObjectStore::Transaction::generate_test_instances(
+  list<ObjectStore::Transaction*>& o)
 {
   o.push_back(new Transaction);
 
@@ -618,50 +620,65 @@ void ObjectStore::Transaction::generate_test_instances(list<ObjectStore::Transac
   t->nop();
   o.push_back(t);
 
-  t = new Transaction;
   coll_t c("foocoll");
   coll_t c2("foocoll2");
   hobject_t o1(hobject_t("obj", DATA, 91));
   hobject_t o2(hobject_t("obj2", ECC, 456));
   hobject_t o3(hobject_t("obj3", DATA, 456));
-  t->touch(c, o1);
+
+  t = new Transaction;
+  t->push_cid(c);
+  t->push_cid(c2);
+  t->push_oid(o1);
+  t->push_oid(o2);
+  t->push_oid(o3);
+
+  t->touch(0, 0);
   bufferlist bl;
   bl.append("some data");
-  t->write(c, o1, 1, bl.length(), bl);
-  t->zero(c, o1, 22, 33);
-  t->truncate(c, o1, 99);
-  t->remove(c, o1);
+  t->write(0, 0, 1, bl.length(), bl);
+  t->zero(0, 0, 22, 33);
+  t->truncate(0, 0, 99);
+  t->remove(0, 0);
   o.push_back(t);
 
   t = new Transaction;
-  t->setattr(c, o1, "key", bl);
+  t->push_cid(c);
+  t->push_cid(c2);
+  t->push_oid(o1);
+  t->push_oid(o2);
+  t->push_oid(o3);
+  
+  t->setattr(0, 0, "key", bl);
   map<string,bufferptr> m;
   m["a"] = ceph::buffer::copy("this", 4);
   m["b"] = ceph::buffer::copy("that", 4);
-  t->setattrs(c, o1, m);
-  t->rmattr(c, o1, "b");
-  t->rmattrs(c, o1);
+  t->setattrs(0, 0, m);
+  t->rmattr(0, 0, "b");
+  t->rmattrs(0, 0);
 
-  t->clone(c, o1, o2);
-  t->clone(c, o1, o3);
-  t->clone_range(c, o1, o2, 1, 12, 99);
+  t->clone(0, 0, 1);
+  t->clone(0, 0, 2);
+  t->clone_range(0, 0, 1, 1, 12, 99);
 
-  t->create_collection(c);
-  t->collection_add(c, c2, o1);
-  t->collection_add(c, c2, o2);
-  t->collection_move(c, c2, o3);
-  t->remove_collection(c);
-  t->collection_setattr(c, "this", bl);
-  t->collection_rmattr(c, "foo");
-  t->collection_setattrs(c, m);
-  t->collection_rename(c, c2);
+  // XXX: so, should the previous operations on c have failed?
+  int ix = t->create_collection(c);
+  t->collection_add(ix, 1, 0);
+  t->collection_add(ix, 1, 1);
+  t->collection_move(ix, 1, 2);
+  t->remove_collection(ix);
+  t->collection_setattr(ix, "this", bl);
+  t->collection_rmattr(ix, "foo");
+  t->collection_setattrs(ix, m);
+  t->collection_rename(ix, 1);
   o.push_back(t);
 }
 
-int ObjectStore::collection_list(const coll_t &c, vector<hobject_t>& o)
+int ObjectStore::collection_list(CollectionHandle ch,
+				 vector<hobject_t>& o)
 {
   vector<hobject_t> go;
-  int ret = collection_list(c, go);
+  int ret = collection_list(ch, go);
   if (ret == 0) {
     o.reserve(go.size());
     for (vector<hobject_t>::iterator i = go.begin(); i != go.end() ; ++i)
@@ -670,13 +687,15 @@ int ObjectStore::collection_list(const coll_t &c, vector<hobject_t>& o)
   return ret;
 }
 
-int ObjectStore::collection_list_partial(const coll_t &c, hobject_t start,
+int ObjectStore::collection_list_partial(CollectionHandle ch,
+					 hobject_t start,
 					 int min, int max,
-					 vector<hobject_t> *ls, hobject_t *next)
+					 vector<hobject_t> *ls,
+					 hobject_t *next)
 {
   vector<hobject_t> go;
   hobject_t gnext, gstart(start);
-  int ret = collection_list_partial(c, gstart, min, max, &go, &gnext);
+  int ret = collection_list_partial(ch, gstart, min, max, &go, &gnext);
   if (ret == 0) {
     *next = gnext;
     ls->reserve(go.size());
@@ -686,12 +705,14 @@ int ObjectStore::collection_list_partial(const coll_t &c, hobject_t start,
   return ret;
 }
 
-int ObjectStore::collection_list_range(const coll_t &c, hobject_t start,
-				       hobject_t end, vector<hobject_t> *ls)
+int ObjectStore::collection_list_range(CollectionHandle ch,
+				       hobject_t start,
+				       hobject_t end,
+				       vector<hobject_t> *ls)
 {
   vector<hobject_t> go;
   hobject_t gstart(start), gend(end);
-  int ret = collection_list_range(c, gstart, gend, &go);
+  int ret = collection_list_range(ch, gstart, gend, &go);
   if (ret == 0) {
     ls->reserve(go.size());
     for (vector<hobject_t>::iterator i = go.begin(); i != go.end() ; ++i)

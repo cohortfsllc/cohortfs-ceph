@@ -29,6 +29,8 @@ using std::deque;
 # include <libaio.h>
 #endif
 
+class ObjectStore;
+
 /**
  * Implements journaling on top of block device or file.
  *
@@ -61,6 +63,8 @@ public:
 
   Mutex finisher_lock;
   Cond finisher_cond;
+
+  ObjectStore* os;
   uint64_t journaled_seq;
   bool plug_journal_completions;
 
@@ -351,8 +355,9 @@ private:
   }
 
  public:
-  FileJournal(uuid_d fsid, Finisher *fin, Cond *sync_cond, const char *f, bool dio=false, bool ai=true, bool faio=false) :
+  FileJournal(ObjectStore* os, uuid_d fsid, Finisher *fin, Cond *sync_cond, const char *f, bool dio=false, bool ai=true, bool faio=false) :
     Journal(fsid, fin, sync_cond),
+    os(os),
     journaled_seq(0),
     plug_journal_completions(false),
     fn(f),

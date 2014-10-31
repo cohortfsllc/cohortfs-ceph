@@ -75,7 +75,8 @@ class StripObjectMap: public GenericObjectMap {
     bool deleted;
     map<pair<string, string>, bufferlist> buffers;  // pair(prefix, key)
 
-    StripObjectHeader(): strip_size(default_strip_size), max_size(0), deleted(false) {}
+    StripObjectHeader(): strip_size(default_strip_size), max_size(0),
+			 deleted(false) {}
 
     void encode(bufferlist &bl) const {
       ENCODE_START(1, 1, bl);
@@ -143,11 +144,47 @@ class StripObjectMap: public GenericObjectMap {
   static const uint64_t default_strip_size = 1024;
 };
 
+#define KVSTORE_TFLAG_NONE         0x0000
+#define KVSTORE_TFLAG_REF          0x0001
 
 class KeyValueStore : public ObjectStore,
 		      public md_config_obs_t {
  public:
   static const uint32_t target_version = 1;
+
+  using ObjectStore::CollectionHandle;
+  using ObjectStore::ObjectHandle;
+
+  inline CollectionHandle get_slot_collection(Transaction& t, uint16_t c_ix) {
+    col_slot_t& c_slot = t.c_slot(c_ix);
+    CollectionHandle ch = get<0>(c_slot);
+    if (ch)
+      return ch;
+    ch = open_collection(get<1>(c_slot));
+    if (ch) {
+      // update slot for queued Ops to find
+      get<0>(c_slot) = ch;
+      // then mark it for release when t is cleaned up
+      get<2>(c_slot) |= KVSTORE_TFLAG_REF;
+    }
+    return ch;
+  } /* get_slot_collection */
+
+  inline ObjectHandle get_slot_object(Transaction& t, CollectionHandle ch,
+				      uint16_t o_ix, bool create) {
+    obj_slot_t& o_slot = t.o_slot(o_ix);
+    ObjectHandle oh = static_cast<ObjectHandle>(get<0>(o_slot));
+    if (oh)
+      return oh;
+    else {
+      oh = KeyValueStore::get_object(ch, get<1>(o_slot));
+      // update slot for queued Ops to find
+      get<0>(o_slot) = oh;
+      // then mark it for release when t is cleaned up
+      get<2>(o_slot) |= KVSTORE_TFLAG_REF;
+    }
+    return oh;
+  }
 
  private:
   string basedir;
@@ -411,12 +448,16 @@ class KeyValueStore : public ObjectStore,
 		     uint64_t offset, size_t len, const bufferlist& bl,
 		     BufferTransaction &t, bool replica = false);
 
-  bool exists(const coll_t &cid, const hobject_t& oid);
-  int stat(const coll_t &cid, const hobject_t& oid, struct stat *st,
+  bool exists(CollectionHandle ch, const hobject_t& oid);
+
+  ObjectHandle get_object(CollectionHandle ch, const hobject_t& oid);
+  void put_object(ObjectHandle oh);
+
+  int stat(CollectionHandle ch, ObjectHandle oh, struct stat *st,
 	   bool allow_eio = false);
-  int read(const coll_t &cid, const hobject_t& oid, uint64_t offset, size_t len,
-	   bufferlist& bl, bool allow_eio = false);
-  int fiemap(const coll_t &cid, const hobject_t& oid, uint64_t offset,
+  int read(CollectionHandle ch, ObjectHandle oh, uint64_t offset,
+	   size_t len, bufferlist& bl, bool allow_eio = false);
+  int fiemap(CollectionHandle ch, ObjectHandle oh, uint64_t offset,
 	     size_t len, bufferlist& bl);
 
   int _touch(const coll_t &cid, const hobject_t& oid, BufferTransaction &t);
@@ -444,9 +485,9 @@ class KeyValueStore : public ObjectStore,
   uuid_d get_fsid() { return fsid; }
 
   // attrs
-  int getattr(const coll_t &cid, const hobject_t& oid, const char *name,
-	      bufferptr &bp);
-  int getattrs(const coll_t &cid, const hobject_t& oid,
+  int getattr(CollectionHandle ch, ObjectHandle oh,
+	      const char *name, bufferptr &bp);
+  int getattrs(CollectionHandle ch, ObjectHandle oh,
 	       map<string,bufferptr>& aset, bool user_only = false);
 
   int _setattrs(const coll_t &cid, const hobject_t& oid,
@@ -455,9 +496,12 @@ class KeyValueStore : public ObjectStore,
 	      BufferTransaction &t);
   int _rmattrs(const coll_t &cid, const hobject_t& oid, BufferTransaction &t);
 
-  int collection_getattr(const coll_t &c, const char *name, void *value, size_t size);
-  int collection_getattr(const coll_t &c, const char *name, bufferlist& bl);
-  int collection_getattrs(const coll_t &cid, map<string,bufferptr> &aset);
+  int collection_getattr(CollectionHandle ch, const char *name,
+			 void *value, size_t size);
+  int collection_getattr(CollectionHandle ch, const char *name,
+			 bufferlist& bl);
+  int collection_getattrs(CollectionHandle ch,
+			  map<string,bufferptr> &aset);
 
   int _collection_setattr(const coll_t &c, const char *name, const void *value,
 			  size_t size, BufferTransaction &t);
@@ -467,6 +511,7 @@ class KeyValueStore : public ObjectStore,
 			   BufferTransaction &t);
 
   // collections
+
   int _create_collection(const coll_t &c, BufferTransaction &t);
   int _destroy_collection(const coll_t &c, BufferTransaction &t);
   int _collection_add(const coll_t &c, const coll_t &ocid, const hobject_t& oid,
@@ -479,31 +524,34 @@ class KeyValueStore : public ObjectStore,
   int _collection_rename(const coll_t &cid, const coll_t &ncid,
 			 BufferTransaction &t);
   int list_collections(vector<coll_t>& ls);
+  CollectionHandle open_collection(const coll_t& c);
+  int close_collection(CollectionHandle chandle);
   bool collection_exists(const coll_t &c);
-  bool collection_empty(const coll_t &c);
-  int collection_list(const coll_t &c, vector<hobject_t>& oid);
-  int collection_list_partial(const coll_t &c, hobject_t start,
+  bool collection_empty(CollectionHandle ch);
+  int collection_list(CollectionHandle ch, vector<hobject_t>& oid);
+  int collection_list_partial(CollectionHandle ch, hobject_t start,
 			      int min, int max,
 			      vector<hobject_t> *ls, hobject_t *next);
-  int collection_list_range(const coll_t &c, hobject_t start, hobject_t end,
-			    vector<hobject_t> *ls);
-  int collection_version_current(const coll_t &c, uint32_t *version);
+  int collection_list_range(CollectionHandle ch, hobject_t start,\
+			    hobject_t end, vector<hobject_t> *ls);
+  int collection_version_current(CollectionHandle ch, uint32_t *version);
 
   // omap (see ObjectStore.h for documentation)
-  int omap_get(const coll_t &c, const hobject_t &oid, bufferlist *header,
-	       map<string, bufferlist> *out);
+  int omap_get(CollectionHandle ch, ObjectHandle oh,
+	       bufferlist *header, map<string, bufferlist> *out);
   int omap_get_header(
-    const coll_t &c,
-    const hobject_t &oid,
+    CollectionHandle ch,
+    ObjectHandle oh,
     bufferlist *out,
     bool allow_eio = false);
-  int omap_get_keys(const coll_t &c, const hobject_t &oid, set<string> *keys);
-  int omap_get_values(const coll_t &c, const hobject_t &oid,
+  int omap_get_keys(CollectionHandle ch, ObjectHandle oh,
+		    set<string> *keys);
+  int omap_get_values(CollectionHandle ch, ObjectHandle oh,
 		      const set<string> &keys, map<string, bufferlist> *out);
-  int omap_check_keys(const coll_t &c, const hobject_t &oid,
+  int omap_check_keys(CollectionHandle ch, ObjectHandle oh,
 		      const set<string> &keys, set<string> *out);
-  ObjectMap::ObjectMapIterator get_omap_iterator(const coll_t &c,
-						 const hobject_t &oid);
+  ObjectMap::ObjectMapIterator get_omap_iterator(CollectionHandle ch,
+						 ObjectHandle oh);
 
   void dump_transactions(list<ObjectStore::Transaction*>& ls, uint64_t seq,
 			 OpSequencer *osr);
@@ -534,7 +582,6 @@ class KeyValueStore : public ObjectStore,
   int m_keyvaluestore_queue_max_bytes;
 
   int do_update;
-
 
   static const string OBJECT_STRIP_PREFIX;
   static const string OBJECT_XATTR;

@@ -23,22 +23,19 @@
 #include "CollectionIndex.h"
 
 /**
- * FlatIndex implements the collection layout prior to CollectionIndex
- *
- * This class should only be used for converting old filestores.
+ * FlatIndex is now FileStore's primitive/flat mapping from
+ * FS
  */
 class FlatIndex : public CollectionIndex {
   std::weak_ptr<CollectionIndex> self_ref;
   string base_path;
-  coll_t collection;
 public:
-  FlatIndex(coll_t collection, string base_path) : base_path(base_path),
-						   collection(collection) {}
+  FlatIndex(string base_path) : base_path(base_path) {}
 
   /// @see CollectionIndex
   uint32_t collection_version() { return FLAT_INDEX_TAG; }
 
-  coll_t coll() const { return collection; }
+  coll_t coll() const { return coll_t(); }
 
   /// @see CollectionIndex
   void set_ref(std::shared_ptr<CollectionIndex> ref);
@@ -50,21 +47,8 @@ public:
   int init();
 
   /// @see CollectionIndex
-  int created(
-    const hobject_t &oid,
-    const char *path
-    );
-
-  /// @see CollectionIndex
   int unlink(
     const hobject_t &oid
-    );
-
-  /// @see CollectionIndex
-  int lookup(
-    const hobject_t &oid,
-    IndexedPath *path,
-    int *exist
     );
 
   /// @see CollectionIndex

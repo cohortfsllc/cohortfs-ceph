@@ -372,9 +372,9 @@ set(libos_srcs
   os/ObjectStore.cc
   os/Factory.cc
   os/JournalingObjectStore.cc
-  os/LFNIndex.cc
-  os/IndexManager.cc
-  os/FlatIndex.cc
+#  os/LFNIndex.cc
+#  os/IndexManager.cc
+#  os/FlatIndex.cc
   os/LevelDBStore.cc
   os/DBObjectMap.cc
   os/WBThrottle.cc
@@ -449,7 +449,6 @@ set(osd_srcs
   osd/Watch.cc
   osd/ClassHandler.cc
   osd/OpRequest.cc
-  osd/OSDriver.cc
   osd/OSDVol.cc
   ${osdc_osd_srcs}
   ${libosd_srcs}

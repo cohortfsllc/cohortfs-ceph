@@ -36,15 +36,16 @@
 #include <errno.h>
 #include "common/BackTrace.h"
 
+
 #define dout_subsys ceph_subsys_osd
 #define DOUT_PREFIX_ARGS this, osd->whoami, get_osdmap()
 #undef dout_prefix
 #define dout_prefix _prefix(_dout, this)
+
 template <typename T>
 static ostream& _prefix(std::ostream *_dout, T *vol) {
   return *_dout << vol->gen_prefix();
 }
-
 
 
 void OSDVol::get()
@@ -58,23 +59,21 @@ void OSDVol::put()
     delete this;
 }
 
-
 OSDVol::OSDVol(OSDService *o, OSDMapRef curmap, uuid_d v) :
   osd(o),
   cct(o->cct),
-  osdriver(osd->store, coll_t()),
   osdmap_ref(curmap), last_persisted_osdmap_ref(curmap),
   ref(0), deleting(false), dirty_info(false),
   id(v), info(v),
   osr(osd->osr_registry.lookup_or_create(v, (stringify(v)))),
-  finish_sync_event(NULL), coll(v),
+  finish_sync_event(NULL), cid(v), coll(NULL),
   last_became_active(ceph_clock_now(cct))
 {
   // RAII, Baby
 
   Mutex::Locker l(_lock);
 
-  if (osd->store->collection_exists(coll)) {
+  if (osd->store->collection_exists(cid)) {
     read_info();
   } else {
     init();
@@ -121,7 +120,9 @@ std::string OSDVol::gen_prefix() const
 void OSDVol::remove_object(
   ObjectStore::Transaction &t, const hobject_t &soid)
 {
-  t.remove(coll, soid);
+  uint16_t c_ix = t.push_col(coll);
+  uint16_t o_ix = t.push_oid(soid); // XXXX oid?  open it?
+  t.remove(c_ix, o_ix);
 }
 
 void OSDVol::clear_primary_state()
@@ -215,7 +216,7 @@ void OSDVol::_activate_committed(epoch_t e)
 void OSDVol::init(void)
 {
   ObjectStore::Transaction *t = new ObjectStore::Transaction;
-  t->create_collection(coll);
+  t->create_collection(cid);
   dirty_info = true;
   write_info(*t);
   int r = osd->store->apply_transaction(*t);
@@ -223,29 +224,19 @@ void OSDVol::init(void)
     throw std::system_error(-r, std::system_category(),
 			    "initializing volume");
   }
-}
-
-int OSDVol::_write_info(ObjectStore::Transaction& t, epoch_t epoch,
-			vol_info_t &info, coll_t coll,
-			hobject_t &infos_oid)
-{
-  // info.
-  map<string,bufferlist> v;
-  ::encode(epoch, v[get_epoch_key(info.volume)]);
-  ::encode(info, v[get_info_key(info.volume)]);
-
-  t.omap_setkeys(coll_t::META_COLL, infos_oid, v);
-
-  return 0;
+  coll = osd->store->open_collection(cid);
 }
 
 void OSDVol::write_info(ObjectStore::Transaction& t)
 {
-  int ret = _write_info(t, get_osdmap()->get_epoch(), info, coll,
-			osd->infos_oid);
-  assert(ret == 0);
-  last_persisted_osdmap_ref = osdmap_ref;
+  map<string,bufferlist> v;
 
+  ::encode(get_osdmap()->get_epoch(), v[get_epoch_key(info.volume)]);
+  ::encode(info, v[get_info_key(info.volume)]);
+  uint16_t c_ix = t.push_col(osd->meta_col);
+  uint16_t o_ix = t.push_oid(osd->infos_oid); // XXX oid?  open it?
+  t.omap_setkeys(c_ix, o_ix, v);
+  last_persisted_osdmap_ref = osdmap_ref;
   dirty_info = false;
 }
 
@@ -257,24 +248,26 @@ void OSDVol::write_if_dirty(ObjectStore::Transaction& t)
 
 void OSDVol::read_info()
 {
-  // We shouldn't even be called if this isn't the case
-  assert(osd->store->collection_exists(coll));
-
   // get info out of leveldb
   string k = get_info_key(info.volume);
   set<string> keys;
   keys.insert(k);
   map<string,bufferlist> values;
-  int r = osd->store->omap_get_values(coll_t::META_COLL, osd->infos_oid, keys,
-				      &values);
-  if (r < 0) {
-    throw std::system_error(-r, std::system_category(),
-			    "reading volume info");
+  ObjectHandle oh =
+    osd->store->get_object(osd->meta_col, osd->infos_oid);
+  if (oh) {
+    int r = osd->store->omap_get_values(osd->meta_col, oh, keys, &values);
+    if (r < 0) {
+      osd->store->put_object(oh);
+      throw std::system_error(-r, std::system_category(),
+			      "reading volume info");
+    }
+    assert(values.size() == 1);
+    bufferlist bl = values[k];
+    bufferlist::iterator p = bl.begin();
+    ::decode(info, p);
+    osd->store->put_object(oh);
   }
-  assert(values.size() == 1);
-  bufferlist bl = values[k];
-  bufferlist::iterator p = bl.begin();
-  ::decode(info, p);
 }
 
 void OSDVol::requeue_object_waiters(map<hobject_t, list<OpRequestRef> >& m)
@@ -880,15 +873,24 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
   int result = 0;
   ObjectState& obs = ctx->new_obs;
   object_info_t& oi = obs.oi;
-  const hobject_t& soid = oi.soid;
+  const hobject_t& soid = oi.soid; // ctx->new_objs->obs.oi.soid
+  const hobject_t& obc_soid = ctx->obc->obs.oi.soid;
 
+  ObjectHandle oh = osd->store->get_object(coll, soid);
+  ObjectHandle oh2 = osd->store->get_object(coll, obc_soid);
+
+  ObjectStore::Transaction* t = ctx->op_t;  
   bool first_read = true;
 
-  ObjectStore::Transaction* t = ctx->op_t;
+  assert(oh);
+
+  uint16_t c_ix = t->push_col(coll);
+  uint16_t o_ix = t->push_obj(oh);
 
   dout(10) << "do_osd_op " << soid << " " << ops << dendl;
 
-  for (vector<OSDOp>::iterator p = ops.begin(); p != ops.end(); ++p, ctx->current_osd_subop_num++) {
+  for (vector<OSDOp>::iterator p = ops.begin(); p != ops.end(); ++p,
+	 ctx->current_osd_subop_num++) {
     OSDOp& osd_op = *p;
     ceph_osd_op& op = osd_op.op;
 
@@ -932,8 +934,10 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	// no-op
 	goto fail;
       }
-      dout(10) << " munging ZERO " << op.extent.offset << "~" << op.extent.length
-	       << " -> TRUNCATE " << op.extent.offset << " (old size is " << oi.size << ")" << dendl;
+      dout(10) << " munging ZERO " << op.extent.offset << "~"
+	       << op.extent.length
+	       << " -> TRUNCATE " << op.extent.offset << " (old size is "
+	       << oi.size << ")" << dendl;
       op.op = CEPH_OSD_OP_TRUNCATE;
     }
 
@@ -967,7 +971,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  // a read operation of 0 bytes does *not* do nothing, this is why
 	  // the trimmed_read boolean is needed
 	} else {
-	  int r = osd->store->read(coll, soid, op.extent.offset,
+	  int r = osd->store->read(coll, oh, op.extent.offset,
 				   op.extent.length, osd_op.outdata);
 	  if (r >= 0)
 	    op.extent.length = r;
@@ -993,14 +997,16 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
       ++ctx->num_read;
       {
 	if (op.extent.truncate_seq) {
-	  dout(0) << "sparse_read does not support truncation sequence " << dendl;
+	  dout(0) << "sparse_read does not support truncation sequence "
+		  << dendl;
 	  result = -EINVAL;
 	  break;
 	}
 	// read into a buffer
 	bufferlist bl;
 	int total_read = 0;
-	int r = osd->store->fiemap(coll, soid, op.extent.offset, op.extent.length, bl);
+	int r = osd->store->fiemap(coll, oh, op.extent.offset,
+				   op.extent.length, bl);
 	if (r < 0)  {
 	  result = r;
 	  break;
@@ -1017,7 +1023,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	      last < miter->first) {
 	    bufferlist t;
 	    uint64_t len = miter->first - last;
-	    r = osd->store->read(coll, soid, last, len, t);
+	    r = osd->store->read(coll, oh, last, len, t);
 	    if (!t.is_zero()) {
 	      osd->clog.error() << coll << " " << soid
 				<< " sparse-read found data in hole "
@@ -1026,7 +1032,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  }
 
 	  bufferlist tmpbl;
-	  r = osd->store->read(coll, soid, miter->first, miter->second,
+	  r = osd->store->read(coll, oh, miter->first, miter->second,
 			       tmpbl);
 	  if (r < 0)
 	    break;
@@ -1036,7 +1042,8 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  if (r < (int)miter->second)
 	    miter->second = r;
 	  total_read += r;
-	  dout(10) << "sparse-read " << miter->first << "@" << miter->second << dendl;
+	  dout(10) << "sparse-read " << miter->first << "@" << miter->second
+		   << dendl;
 	  data_bl.claim_append(tmpbl);
 	  last = miter->first + r;
 	}
@@ -1047,7 +1054,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  if (last < end) {
 	    bufferlist t;
 	    uint64_t len = end - last;
-	    r = osd->store->read(coll, soid, last, len, t);
+	    r = osd->store->read(coll, oh, last, len, t);
 	    if (!t.is_zero()) {
 	      osd->clog.error() << coll << " " << soid
 				<< " sparse-read found data in hole "
@@ -1069,7 +1076,8 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	ctx->delta_stats.num_rd_kb += SHIFT_ROUND_UP(op.extent.length, 10);
 	ctx->delta_stats.num_rd++;
 
-	dout(10) << " sparse_read got " << total_read << " bytes from object " << soid << dendl;
+	dout(10) << " sparse_read got " << total_read << " bytes from object "
+		 << soid << dendl;
       }
       break;
 
@@ -1096,7 +1104,8 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 
 	ClassHandler::ClassMethod *method = cls->get_method(mname.c_str());
 	if (!method) {
-	  dout(10) << "call method " << cname << "." << mname << " does not exist" << dendl;
+	  dout(10) << "call method " << cname << "." << mname <<
+	    " does not exist" << dendl;
 	  result = -EOPNOTSUPP;
 	  break;
 	}
@@ -1112,17 +1121,20 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	result = method->exec((cls_method_context_t)&ctx, indata, outdata);
 
 	if (ctx->num_read > prev_rd && !(flags & CLS_METHOD_RD)) {
-	  derr << "method " << cname << "." << mname << " tried to read object but is not marked RD" << dendl;
+	  derr << "method " << cname << "." << mname <<
+	    " tried to read object but is not marked RD" << dendl;
 	  result = -EIO;
 	  break;
 	}
 	if (ctx->num_write > prev_wr && !(flags & CLS_METHOD_WR)) {
-	  derr << "method " << cname << "." << mname << " tried to update object but is not marked WR" << dendl;
+	  derr << "method " << cname << "." << mname <<
+	    " tried to update object but is not marked WR" << dendl;
 	  result = -EIO;
 	  break;
 	}
 
-	dout(10) << "method called response length=" << outdata.length() << dendl;
+	dout(10) << "method called response length=" << outdata.length()
+		 << dendl;
 	op.extent.length = outdata.length();
 	osd_op.outdata.claim_append(outdata);
 	dout(30) << "out dump: ";
@@ -1149,6 +1161,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	string aname;
 	bp.copy(op.xattr.name_len, aname);
 	string name = "_" + aname;
+	// XXXX
 	int r = objects_get_attr(ctx->obc->obs.oi.soid,
 				 name,
 				 &(osd_op.outdata));
@@ -1166,7 +1179,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
       ++ctx->num_read;
       {
 	map<string, bufferlist> out;
-	result = osd->store->getattrs(coll, ctx->obc->obs.oi.soid, out, true);
+	result = osd->store->getattrs(coll, oh2, out, true);
 
 	bufferlist bl;
 	::encode(out, bl);
@@ -1352,11 +1365,11 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
       {
 	if (!obs.exists) {
 	  ctx->mod_desc.create();
-	  t->touch(coll, soid);
+	  t->touch(c_ix, o_ix);
 	  ctx->delta_stats.num_objects++;
 	  obs.exists = true;
 	}
-	t->set_alloc_hint(coll, soid, op.alloc_hint.expected_object_size,
+	t->set_alloc_hint(c_ix, o_ix, op.alloc_hint.expected_object_size,
 			  op.alloc_hint.expected_write_size);
 	ctx->delta_stats.num_wr++;
 	result = 0;
@@ -1399,7 +1412,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  if (obs.exists) {
 	    dout(10) << " truncate_seq " << op.extent.truncate_seq << " > current " << seq
 		     << ", truncating to " << op.extent.truncate_size << dendl;
-	    t->truncate(coll, soid, op.extent.truncate_size);
+	    t->truncate(c_ix, o_ix, op.extent.truncate_size);
 	    oi.truncate_seq = op.extent.truncate_seq;
 	    oi.truncate_size = op.extent.truncate_size;
 	    if (op.extent.truncate_size != oi.size) {
@@ -1418,7 +1431,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 					 cct->_conf->osd_max_object_size);
 	if (result < 0)
 	  break;
-	t->write(coll, soid, op.extent.offset, op.extent.length,
+	t->write(c_ix, o_ix, op.extent.offset, op.extent.length,
 		 osd_op.indata);
 	write_update_size_and_usage(ctx->delta_stats, oi, ctx->modified_ranges,
 				    op.extent.offset, op.extent.length, true);
@@ -1441,9 +1454,9 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  break;
 
 	if (obs.exists) {
-	  t->truncate(coll, soid, 0);
+	  t->truncate(c_ix, o_ix, 0);
 	}
-	t->write(coll, soid, op.extent.offset, op.extent.length,
+	t->write(c_ix, o_ix, op.extent.offset, op.extent.length,
 		 osd_op.indata);
 	if (!obs.exists) {
 	  ctx->delta_stats.num_objects++;
@@ -1471,7 +1484,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  break;
 	assert(op.extent.length);
 	if (obs.exists) {
-	  t->zero(coll, soid, op.extent.offset, op.extent.length);
+	  t->zero(c_ix, o_ix, op.extent.offset, op.extent.length);
 	  interval_set<uint64_t> ch;
 	  ch.insert(op.extent.offset, op.extent.length);
 	  ctx->modified_ranges.union_of(ch);
@@ -1491,7 +1504,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  if (result >= 0) {
 	    if (!obs.exists)
 	      ctx->mod_desc.create();
-	    t->touch(coll, soid);
+	    t->touch(c_ix, o_ix);
 	    if (!obs.exists) {
 	      ctx->delta_stats.num_objects++;
 	      obs.exists = true;
@@ -1522,17 +1535,19 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	if (op.extent.truncate_seq) {
 	  assert(op.extent.offset == op.extent.truncate_size);
 	  if (op.extent.truncate_seq <= oi.truncate_seq) {
-	    dout(10) << " truncate seq " << op.extent.truncate_seq << " <= current " << oi.truncate_seq
+	    dout(10) << " truncate seq " << op.extent.truncate_seq
+		     << " <= current " << oi.truncate_seq
 		     << ", no-op" << dendl;
 	    break; // old
 	  }
-	  dout(10) << " truncate seq " << op.extent.truncate_seq << " > current " << oi.truncate_seq
+	  dout(10) << " truncate seq " << op.extent.truncate_seq
+		   << " > current " << oi.truncate_seq
 		   << ", truncating" << dendl;
 	  oi.truncate_seq = op.extent.truncate_seq;
 	  oi.truncate_size = op.extent.truncate_size;
 	}
 
-	t->truncate(coll, soid, op.extent.offset);
+	t->truncate(c_ix, o_ix, op.extent.offset);
 	if (oi.size > op.extent.offset) {
 	  interval_set<uint64_t> trim;
 	  trim.insert(op.extent.offset, oi.size-op.extent.offset);
@@ -1570,8 +1585,9 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	entity_name_t entity = ctx->reqid.name;
 	ObjectContextRef obc = ctx->obc;
 
-	dout(10) << "watch: ctx->obc=" << (void *)obc.get() << " cookie=" << cookie
-		 << " oi.version=" << oi.version.version << " ctx->at_version=" << ctx->at_version << dendl;
+	dout(10) << "watch: ctx->obc=" << (void *)obc.get() << " cookie="
+		 << cookie << " oi.version=" << oi.version.version
+		 << " ctx->at_version=" << ctx->at_version << dendl;
 	dout(10) << "watch: oi.user_version=" << oi.user_version<< dendl;
 	dout(10) << "watch: peer_addr="
 	  << ctx->op->get_req()->get_connection()->get_peer_addr() << dendl;
@@ -1580,9 +1596,11 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  ctx->op->get_req()->get_connection()->get_peer_addr());
 	if (do_watch) {
 	  if (oi.watchers.count(make_pair(cookie, entity))) {
-	    dout(10) << " found existing watch " << w << " by " << entity << dendl;
+	    dout(10) << " found existing watch " << w << " by "
+		     << entity << dendl;
 	  } else {
-	    dout(10) << " registered new watch " << w << " by " << entity << dendl;
+	    dout(10) << " registered new watch " << w << " by "
+		     << entity << dendl;
 	    oi.watchers[make_pair(cookie, entity)] = w;
 	    t->nop();  // make sure update the object_info on disk!
 	  }
@@ -1616,7 +1634,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	}
 	if (!obs.exists) {
 	  ctx->mod_desc.create();
-	  t->touch(coll, soid);
+	  t->touch(c_ix, o_ix);
 	  ctx->delta_stats.num_objects++;
 	  obs.exists = true;
 	}
@@ -1626,7 +1644,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 
 	bufferlist bl;
 	bp.copy(op.xattr.value_len, bl);
-	t->setattr(coll, soid, name, bl);
+	t->setattr(c_ix, o_ix, name, bl);
 	ctx->delta_stats.num_wr++;
       }
       break;
@@ -1637,7 +1655,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	string aname;
 	bp.copy(op.xattr.name_len, aname);
 	string name = "_" + aname;
-	t->rmattr(coll, soid, name);
+	t->rmattr(c_ix, o_ix, name);
 	ctx->delta_stats.num_wr++;
       }
       break;
@@ -1680,9 +1698,8 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	}
 	set<string> out_set;
 
-	ObjectMap::ObjectMapIterator iter = osd->store->get_omap_iterator(
-	  coll, soid
-	  );
+	ObjectMap::ObjectMapIterator iter =
+	  osd->store->get_omap_iterator(coll, oh);
 	assert(iter);
 	iter->upper_bound(start_after);
 	for (uint64_t i = 0;
@@ -1691,7 +1708,8 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  out_set.insert(iter->key());
 	}
 	::encode(out_set, osd_op.outdata);
-	ctx->delta_stats.num_rd_kb += SHIFT_ROUND_UP(osd_op.outdata.length(), 10);
+	ctx->delta_stats.num_rd_kb +=
+	  SHIFT_ROUND_UP(osd_op.outdata.length(), 10);
 	ctx->delta_stats.num_rd++;
       }
       break;
@@ -1713,9 +1731,8 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	}
 	map<string, bufferlist> out_set;
 
-	ObjectMap::ObjectMapIterator iter = osd->store->get_omap_iterator(
-	  coll, soid
-	  );
+	ObjectMap::ObjectMapIterator iter =
+	  osd->store->get_omap_iterator(coll, oh);
 	if (!iter) {
 	  result = -ENOENT;
 	  goto fail;
@@ -1730,7 +1747,8 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  out_set.insert(make_pair(iter->key(), iter->value()));
 	}
 	::encode(out_set, osd_op.outdata);
-	ctx->delta_stats.num_rd_kb += SHIFT_ROUND_UP(osd_op.outdata.length(), 10);
+	ctx->delta_stats.num_rd_kb +=
+	  SHIFT_ROUND_UP(osd_op.outdata.length(), 10);
 	ctx->delta_stats.num_rd++;
       }
       break;
@@ -1738,8 +1756,9 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
     case CEPH_OSD_OP_OMAPGETHEADER:
       ++ctx->num_read;
       {
-	osd->store->omap_get_header(coll, soid, &osd_op.outdata);
-	ctx->delta_stats.num_rd_kb += SHIFT_ROUND_UP(osd_op.outdata.length(), 10);
+	osd->store->omap_get_header(coll, oh, &osd_op.outdata);
+	ctx->delta_stats.num_rd_kb +=
+	  SHIFT_ROUND_UP(osd_op.outdata.length(), 10);
 	ctx->delta_stats.num_rd++;
       }
       break;
@@ -1756,9 +1775,10 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  goto fail;
 	}
 	map<string, bufferlist> out;
-	osd->store->omap_get_values(coll, soid, keys_to_get, &out);
+	osd->store->omap_get_values(coll, oh, keys_to_get, &out);
 	::encode(out, osd_op.outdata);
-	ctx->delta_stats.num_rd_kb += SHIFT_ROUND_UP(osd_op.outdata.length(), 10);
+	ctx->delta_stats.num_rd_kb +=
+	  SHIFT_ROUND_UP(osd_op.outdata.length(), 10);
 	ctx->delta_stats.num_rd++;
       }
       break;
@@ -1782,11 +1802,10 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	map<string, bufferlist> out;
 
 	set<string> to_get;
-	for (map<string, pair<bufferlist, int> >::iterator i = assertions.begin();
-	     i != assertions.end();
-	     ++i)
+	map<string, pair<bufferlist, int> >::iterator i;
+	for (i = assertions.begin(); i != assertions.end(); ++i)
 	  to_get.insert(i->first);
-	int r = osd->store->omap_get_values(coll, soid, to_get, &out);
+	int r = osd->store->omap_get_values(coll, oh, to_get, &out);
 	if (r < 0) {
 	  result = r;
 	  break;
@@ -1795,9 +1814,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	ctx->delta_stats.num_rd++;
 
 	bufferlist empty;
-	for (map<string, pair<bufferlist, int> >::iterator i = assertions.begin();
-	     i != assertions.end();
-	     ++i) {
+	for (i = assertions.begin(); i != assertions.end(); ++i) {
 	  bufferlist &bl = out.count(i->first) ?
 	    out[i->first] : empty;
 	  switch (i->second.second) {
@@ -1837,7 +1854,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  ctx->delta_stats.num_objects++;
 	  obs.exists = true;
 	}
-	t->touch(coll, soid);
+	t->touch(c_ix, o_ix);
 	map<string, bufferlist> to_set;
 	try {
 	  ::decode(to_set, bp);
@@ -1852,7 +1869,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	     ++i) {
 	  dout(20) << "\t" << i->first << dendl;
 	}
-	t->omap_setkeys(coll, soid, to_set);
+	t->omap_setkeys(c_ix, o_ix, to_set);
 	ctx->delta_stats.num_wr++;
       }
       obs.oi.set_flag(object_info_t::FLAG_OMAP);
@@ -1865,8 +1882,8 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  ctx->delta_stats.num_objects++;
 	  obs.exists = true;
 	}
-	t->touch(coll, soid);
-	t->omap_setheader(coll, soid, osd_op.indata);
+	t->touch(c_ix, o_ix);
+	t->omap_setheader(c_ix, o_ix, osd_op.indata);
 	ctx->delta_stats.num_wr++;
       }
       obs.oi.set_flag(object_info_t::FLAG_OMAP);
@@ -1879,8 +1896,8 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  result = -ENOENT;
 	  break;
 	}
-	t->touch(coll, soid);
-	t->omap_clear(coll, soid);
+	t->touch(c_ix, o_ix);
+	t->omap_clear(c_ix, o_ix);
 	ctx->delta_stats.num_wr++;
       }
       obs.oi.set_flag(object_info_t::FLAG_OMAP);
@@ -1893,7 +1910,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  result = -ENOENT;
 	  break;
 	}
-	t->touch(coll, soid);
+	t->touch(c_ix, o_ix);
 	set<string> to_rm;
 	try {
 	  ::decode(to_rm, bp);
@@ -1902,7 +1919,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  result = -EINVAL;
 	  goto fail;
 	}
-	t->omap_rmkeys(coll, soid, to_rm);
+	t->omap_rmkeys(c_ix, o_ix, to_rm);
 	ctx->delta_stats.num_wr++;
       }
       obs.oi.set_flag(object_info_t::FLAG_OMAP);
@@ -1925,6 +1942,10 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
     if (result < 0)
       break;
   }
+
+  osd->store->put_object(oh);
+  osd->store->put_object(oh2);
+  
   return result;
 }
 
@@ -1935,10 +1956,13 @@ inline int OSDVol::_delete_oid(OpContext *ctx, bool no_whiteout)
   const hobject_t& soid = oi.soid;
   ObjectStore::Transaction* t = ctx->op_t;
 
+  uint16_t c_ix = t->push_col(coll);
+  uint16_t o_ix = t->push_oid(soid); // XXXX oid?  open it?
+
   if (!obs.exists)
     return -ENOENT;
 
-  t->remove(coll, soid);
+  t->remove(c_ix, o_ix);
 
   if (oi.size > 0) {
     interval_set<uint64_t> ch;
@@ -2122,9 +2146,13 @@ int OSDVol::prepare_transaction(OpContext *ctx)
 
 void OSDVol::finish_ctx(OpContext *ctx)
 {
+  ObjectStore::Transaction *t = ctx->op_t;
   const hobject_t& soid = ctx->obs->oi.soid;
+
   dout(20) << __func__ << " " << soid << " " << ctx
 	   << dendl;
+
+  uint16_t c_ix = t->push_col(coll);
 
   // finish and log the op.
   if (ctx->user_modify) {
@@ -2154,7 +2182,8 @@ void OSDVol::finish_ctx(OpContext *ctx)
 
     bufferlist bv(sizeof(ctx->new_obs.oi));
     ::encode(ctx->new_obs.oi, bv);
-    ctx->op_t->setattr(coll, ctx->obc->obs.oi.soid, OI_ATTR, bv);
+    uint16_t o_ix = t->push_oid(ctx->obc->obs.oi.soid); // XXXX oid?
+    t->setattr(c_ix, o_ix, OI_ATTR, bv);
   } else {
     ctx->new_obs.oi = object_info_t(ctx->obc->obs.oi.soid);
   }
@@ -2432,12 +2461,14 @@ void OSDVol::handle_watch_timeout(WatchRef watch)
   Mutation *mutation = new_mutation(ctx, obc, tid);
 
   ObjectStore::Transaction *t = ctx->op_t;
+  uint16_t c_ix = t->push_col(coll);
+  uint16_t o_ix = t->push_oid(obc->obs.oi.soid); // XXXX oid? open it?
 
   obc->obs.oi.prior_version = mutation->obc->obs.oi.version;
   obc->obs.oi.version = ctx->at_version;
   bufferlist bl;
   ::encode(obc->obs.oi, bl);
-  t->setattr(coll, obc->obs.oi.soid, OI_ATTR, bl);
+  t->setattr(c_ix, o_ix, OI_ATTR, bl);
 
   // obc ref swallowed by mutation!
   issue_mutation(mutation, mutation->ctx->mtime);
@@ -2692,10 +2723,16 @@ int OSDVol::objects_get_attr(const hobject_t &hoid, const string &attr,
 			 bufferlist *out)
 {
   bufferptr bp;
-  int r = osd->store->getattr(coll, hoid, attr.c_str(), bp);
-  if (r >= 0 && out) {
-    out->clear();
-    out->push_back(bp);
+  ObjectHandle oh = osd->store->get_object(coll, hoid);
+  int r = -EINVAL;
+
+  if (oh) {
+    r = osd->store->getattr(coll, oh, attr.c_str(), bp);
+    if (r >= 0 && out) {
+      out->clear();
+      out->push_back(bp);
+    }
+    osd->store->put_object(oh);
   }
   return r;
 }
@@ -2706,19 +2743,22 @@ void OSDVol::objects_read_async(const hobject_t &hoid,
 			    Context *on_complete)
 {
   int r = 0;
+  ObjectHandle oh = osd->store->get_object(coll, hoid);
+  assert(oh);
   for (list<pair<pair<uint64_t, uint64_t>,
 	 pair<bufferlist*, Context*> > >::const_iterator i =
 	 to_read.begin();
        i != to_read.end() && r >= 0;
        ++i) {
-    int _r = osd->store->read(coll, hoid, i->first.first,
-			 i->first.second, *(i->second.first));
+    int _r = osd->store->read(coll, oh, i->first.first, i->first.second,
+			      *(i->second.first));
     if (i->second.second) {
       i->second.second->complete(_r);
     }
     if (_r < 0)
       r = _r;
   }
+  osd->store->put_object(oh);
   on_complete->complete(r);
 }
 
