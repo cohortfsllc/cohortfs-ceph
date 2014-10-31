@@ -463,7 +463,7 @@ if(${ENABLE_SHARED})
   install(TARGETS osd DESTINATION lib)
   install(FILES ${CMAKE_SOURCE_DIR}/src/libosd/ceph_osd.h DESTINATION include)
 endif(${ENABLE_SHARED})
-target_link_libraries(osd PRIVATE common os dl leveldb ${EXTRALIBS})
+target_link_libraries(osd PRIVATE common os global dl leveldb ${EXTRALIBS})
 
 set(ceph_osd_srcs ceph_osd.cc objclass/class_api.cc)
 add_executable(ceph-osd ${ceph_osd_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
