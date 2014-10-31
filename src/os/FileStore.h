@@ -60,9 +60,6 @@ static const __SWORD_TYPE XFS_SUPER_MAGIC(0x58465342);
 static const __SWORD_TYPE ZFS_SUPER_MAGIC(0x2fc12fc1);
 #endif
 
-typedef CollectionIndex::IndexedPath IndexedPath;
-
-
 enum fs_types {
   FS_TYPE_NONE = 0,
   FS_TYPE_XFS,
@@ -102,6 +99,67 @@ public:
 
   int peek_journal_fsid(boost::uuids::uuid *fsid);
 
+  class FSCollection : public ObjectStore::Collection
+  {
+  public:
+    int fd; // collection's dirfd
+    // and object fdcache
+    std::mutex fdcache_lock;
+    FDCache fdcache;
+
+    FSCollection(CephContext *cct, const coll_t& cid, int fd)
+      : ObjectStore::Collection(cid), fd(fd), fdcache(cct) {
+      // TODO:  do something
+    }
+    friend class FileStore;
+  };
+
+  class FSObject : public ObjectStore::Object
+  {
+  public:
+    FSObject(const hoid_t& oid, const FDRef& _fd)
+      : ObjectStore::Object(oid) {
+      fd = _fd;
+    }
+    FDRef fd;
+  };
+
+  inline FSCollection* get_slot_collection(Transaction& t, uint16_t c_ix) {
+    using std::get;
+    col_slot_t& c_slot = t.c_slot(c_ix);
+    FSCollection* fc = static_cast<FSCollection*>(get<0>(c_slot));
+    if (fc)
+      return fc;
+    fc = static_cast<FSCollection*>(open_collection(get<1>(c_slot)));
+    if (fc) {
+      // update slot for queued Ops to find
+      get<0>(c_slot) = fc;
+      // then mark it for release when t is cleaned up
+      get<2>(c_slot) |= ObjectStore::Transaction::FLAG_REF;
+    }
+    return fc;
+  } /* get_slot_collection */
+
+  inline FSObject* get_slot_object(Transaction& t, FSCollection* fc,
+				   uint16_t o_ix, const SequencerPosition& spos,
+				   bool create) {
+    using std::get;
+    obj_slot_t& o_slot = t.o_slot(o_ix);
+    FSObject* fo = static_cast<FSObject*>(get<0>(o_slot));
+    if (fo)
+      return fo;
+    if (create) {
+      fo = static_cast<FSObject*>(get_object(fc, get<1>(o_slot), spos, create));
+      if (fo) {
+	// update slot for queued Ops to find
+	get<0>(o_slot) = fo;
+	// then mark it for release when t is cleaned up
+	get<2>(o_slot) |= ObjectStore::Transaction::FLAG_REF;
+      }
+    }
+    return fo;
+  } /* get_slot_object */
+
 private:
   typedef std::lock_guard<std::mutex> lock_guard;
   typedef std::unique_lock<std::mutex> unique_lock;
@@ -122,8 +180,8 @@ private:
 
   // Indexed Collections
   IndexManager index_manager;
-  int get_index(const coll_t &c, Index *index);
-  int init_index(const coll_t &c);
+  int get_index(const coll_t& c, Index *index);
+  int init_index(const coll_t& c);
 
   // ObjectMap
   boost::scoped_ptr<ObjectMap> object_map;
@@ -131,7 +189,7 @@ private:
   Finisher ondisk_finisher;
 
   // helper fns
-  int get_cdir(const coll_t &cid, char *s, int len);
+  int get_cdir(const coll_t& cid, char *s, int len);
 
   /// read a uuid from fd
   int read_fsid(int fd, boost::uuids::uuid *uuid);
@@ -243,10 +301,7 @@ private:
 
   friend ostream& operator<<(ostream& out, const OpSequencer& s);
 
-  std::mutex fdcache_lock;
-  FDCache fdcache;
   WBThrottle wbthrottle;
-
   Sequencer default_osr;
   deque<OpSequencer*> op_queue;
   uint64_t op_queue_len, op_queue_bytes;
@@ -319,21 +374,18 @@ private:
   int open_journal();
 
 public:
-  int lfn_find(const coll_t &cid, const hoid_t& oid, IndexedPath *path);
-  int lfn_truncate(const coll_t &cid, const hoid_t& oid, off_t length);
-  int lfn_stat(const coll_t &cid, const hoid_t& oid, struct stat *buf);
-  int lfn_open(
-    const coll_t &cid,
-    const hoid_t& oid,
-    bool create,
-    FDRef *outfd,
-    IndexedPath *path = 0,
-    Index *index = 0);
+  /* XXX lfn_ methods likely to move, and be renamed (since the LFN
+   * concept is gone) */  
+  int lfn_find(FSCollection* fc, const hoid_t& oid);
+  int lfn_stat(FSCollection* fc, const hoid_t& oid,
+	       struct stat *st);
+  int lfn_open(FSCollection* fc, const hoid_t& oid, bool create,
+	       FDRef *outfd);
   void lfn_close(FDRef fd);
-  int lfn_link(const coll_t &c, const coll_t &newcid,
+  int lfn_link(FSCollection* fc, FSCollection* newfc,
 	       const hoid_t& o, const hoid_t& newoid);
-  int lfn_unlink(const coll_t &cid, const hoid_t& o, const SequencerPosition &spos,
-		 bool force_clear_omap=false);
+  int lfn_unlink(FSCollection* fc, const hoid_t& o,
+		 const SequencerPosition &spos, bool force_clear_omap=false);
 
 public:
   FileStore(CephContext *_cct, const std::string &base,
@@ -371,6 +423,7 @@ public:
 			 OpRequestRef op = OpRequestRef(),
 			 ThreadPool::TPHandle *handle = NULL);
 
+private:
   /**
    * set replay guard xattr on given file
    *
@@ -384,15 +437,16 @@ public:
 			 const SequencerPosition& spos,
 			 const hoid_t *oid=0,
 			 bool in_progress=false);
-  void _set_replay_guard(const coll_t &cid,
+  void _set_replay_guard(FSCollection* fc,
 			 const SequencerPosition& spos,
 			 bool in_progress);
-  void _set_global_replay_guard(const coll_t &cid,
+  void _set_global_replay_guard(FSCollection* fc,
 				const SequencerPosition &spos);
 
   /// close a replay guard opened with in_progress=true
   void _close_replay_guard(int fd, const SequencerPosition& spos);
-  void _close_replay_guard(const coll_t &cid, const SequencerPosition& spos);
+  void _close_replay_guard(FSCollection* fc,
+			   const SequencerPosition& spos);
 
   /**
    * check replay guard xattr on given file
@@ -412,49 +466,66 @@ public:
    *        already been applied, 0 if it was in progress
    */
   int _check_replay_guard(int fd, const SequencerPosition& spos);
-  int _check_replay_guard(const coll_t &cid, const SequencerPosition& spos);
-  int _check_replay_guard(const coll_t &cid, hoid_t oid,
+  int _check_replay_guard(FSCollection* fc,
+			  const SequencerPosition& spos);
+  int _check_replay_guard(FSCollection* fc,
+			  FSObject* fo,
 			  const SequencerPosition& pos);
-  int _check_global_replay_guard(const coll_t &cid,
+  int _check_global_replay_guard(FSCollection* fc,
 				 const SequencerPosition& spos);
+
+public:
 
   // ------------------
   // objects
   int pick_object_revision_lt(hoid_t& oid) {
     return 0;
   }
-  bool exists(const coll_t &cid, const hoid_t& oid);
+
+  bool exists(CollectionHandle ch, const hoid_t& oid);
+
+  ObjectHandle get_object(CollectionHandle ch, const hoid_t& oid);
+  void put_object(ObjectHandle oh);
+
+  FSObject* get_object(FSCollection* fc, const hoid_t& oid,
+		       const SequencerPosition& spos, bool create);
+  void put_object(FSObject* fo);
+
   int stat(
-    const coll_t &cid,
-    const hoid_t& oid,
+    CollectionHandle ch,
+    ObjectHandle oh,
     struct stat *st,
     bool allow_eio = false);
+
   int read(
-    const coll_t &cid,
-    const hoid_t& oid,
+    CollectionHandle ch,
+    ObjectHandle oh,
     uint64_t offset,
     size_t len,
     bufferlist& bl,
     bool allow_eio = false);
-  int fiemap(const coll_t &cid, const hoid_t& oid,
+  int fiemap(CollectionHandle ch, ObjectHandle oh,
 	     uint64_t offset, size_t len, bufferlist& bl);
 
-  int _touch(const coll_t &cid, const hoid_t& oid);
-  int _write(const coll_t &cid, const hoid_t& oid,
+  int _touch(FSCollection* fc, FSObject* fo);
+  int _write(FSCollection* fc, FSObject* fo,
 	     uint64_t offset, size_t len,
 	     const bufferlist& bl, bool replica = false);
-  int _zero(const coll_t &cid, const hoid_t& oid,
+  int _zero(FSCollection* fc, FSObject* fo,
 	    uint64_t offset, size_t len);
-  int _truncate(const coll_t &cid, const hoid_t& oid, uint64_t size);
-  int _clone(const coll_t &cid, const hoid_t& oldoid,
-	     const hoid_t& newoid, const SequencerPosition& spos);
-  int _clone_range(const coll_t &cid, const hoid_t& oldoid,
-		   const hoid_t& newoid, uint64_t srcoff,
+  int _truncate(FSCollection* fc, FSObject* fo,
+		uint64_t size);
+  int _clone(FSCollection* fc, FSObject* fo,
+	     FSObject* fo2, const SequencerPosition& spos);
+  int _clone_range(FSCollection* fc, FSObject* fo,
+		   FSObject* fo2, uint64_t srcoff,
 		   uint64_t len, uint64_t dstoff,
 		   const SequencerPosition& spos);
-  int _do_clone_range(int from, int to, uint64_t srcoff, uint64_t len, uint64_t dstoff);
-  int _do_copy_range(int from, int to, uint64_t srcoff, uint64_t len, uint64_t dstoff);
-  int _remove(const coll_t &cid, const hoid_t& oid,
+  int _do_clone_range(int from, int to, uint64_t srcoff, uint64_t len,
+		      uint64_t dstoff);
+  int _do_copy_range(int from, int to, uint64_t srcoff, uint64_t len,
+		     uint64_t dstoff);
+  int _remove(FSCollection* fc, const hoid_t& oid,
 	      const SequencerPosition &spos);
 
   int _fgetattr(int fd, const char *name, bufferptr& bp);
@@ -481,101 +552,108 @@ public:
   std::mutex read_error_lock;
   set<hoid_t> data_error_set; // read() will return -EIO
   set<hoid_t> mdata_error_set; // getattr(),stat() will return -EIO
-  void inject_data_error(const hoid_t &oid);
-  void inject_mdata_error(const hoid_t &oid);
-  void debug_obj_on_delete(const hoid_t &oid);
-  bool debug_data_eio(const hoid_t &oid);
-  bool debug_mdata_eio(const hoid_t &oid);
+  void inject_data_error(const hoid_t& oid);
+  void inject_mdata_error(const hoid_t& oid);
+  void debug_obj_on_delete(const hoid_t& oid);
+  bool debug_data_eio(const hoid_t& oid);
+  bool debug_mdata_eio(const hoid_t& oid);
 
   int snapshot(const string& name);
 
   // attrs
-  int getattr(const coll_t &cid, const hoid_t& oid,
-	      const char *name, bufferptr &bp);
-  int getattrs(const coll_t &cid, const hoid_t& oid,
+  int getattr(CollectionHandle ch, ObjectHandle oh,
+	      const char* name, bufferptr& bp);
+  int getattrs(CollectionHandle ch, ObjectHandle oh,
 	       map<string,bufferptr>& aset, bool user_only = false);
 
-  int _setattrs(const coll_t &cid, const hoid_t& oid,
-		map<string,bufferptr>& aset, const SequencerPosition &spos);
-  int _rmattr(const coll_t &cid, const hoid_t& oid, const char *name,
-	      const SequencerPosition &spos);
-  int _rmattrs(const coll_t &cid, const hoid_t& oid,
+  int _setattrs(FSCollection* fc, FSObject* fo,
+		map<string,bufferptr>& aset,
+		const SequencerPosition &spos);
+  int _rmattr(FSCollection* fc, FSObject* fo,
+	      const char* name, const SequencerPosition& spos);
+  int _rmattrs(FSCollection* fc, FSObject* fo,
 	       const SequencerPosition &spos);
 
-  int collection_getattr(const coll_t &c, const char *name, void *value, size_t size);
-  int collection_getattr(const coll_t &c, const char *name, bufferlist& bl);
-  int collection_getattrs(const coll_t &cid, map<string,bufferptr> &aset);
-
-  int _collection_setattr(const coll_t &c, const char *name, const void *value, size_t size);
-  int _collection_rmattr(const coll_t &c, const char *name);
-  int _collection_setattrs(const coll_t &cid, map<string,bufferptr> &aset);
-  int _collection_remove_recursive(const coll_t &cid,
-				   const SequencerPosition &spos);
-  int _collection_rename(const coll_t &cid, const coll_t &ncid,
-			 const SequencerPosition& spos);
+  int collection_getattr(CollectionHandle ch, const char* name,
+			 void* value, size_t size);
+  int collection_getattr(CollectionHandle ch, const char* name,
+			 bufferlist& bl);
+  int collection_getattrs(CollectionHandle ch,
+			  map<string,bufferptr>& aset);
+  int _collection_setattr(FSCollection* fc, const char* name,
+			  const void* value, size_t size);
+  int _collection_rmattr(FSCollection* fc, const char* name);
+  int _collection_setattrs(FSCollection* fc,
+			   map<string,bufferptr>& aset);
 
   // collections
+  using ObjectStore::CollectionHandle;
+
   int list_collections(vector<coll_t>& ls);
-  int collection_version_current(const coll_t &c, uint32_t *version);
-  int collection_stat(const coll_t &c, struct stat *st);
-  bool collection_exists(const coll_t &c);
-  bool collection_empty(const coll_t &c);
-  int collection_list(const coll_t &c, vector<hoid_t>& oid);
-  int collection_list_partial(const coll_t &c, hoid_t start,
-			      int min, int max, vector<hoid_t> *ls,
-			      hoid_t *next);
-  int collection_list_range(const coll_t &c, hoid_t start, hoid_t end,
-			    vector<hoid_t> *ls);
+  CollectionHandle open_collection(const coll_t& c);
+  int close_collection(CollectionHandle chandle);
+  int collection_version_current(CollectionHandle ch,
+				 uint32_t* version);
+  int collection_stat(const coll_t& c, struct stat *st);
+  bool collection_exists(const coll_t& c);
+  bool collection_empty(CollectionHandle ch);
+  int collection_list(CollectionHandle ch, vector<hoid_t>& oid);
+  int collection_list_partial(CollectionHandle ch, hoid_t start,
+			      int min, int max, vector<hoid_t>* ls,
+			      hoid_t* next);
+  int collection_list_range(CollectionHandle ch, hoid_t start,
+			    hoid_t end, vector<hoid_t>* ls);
 
   // omap (see ObjectStore.h for documentation)
-  int omap_get(const coll_t &c, const hoid_t &oid, bufferlist *header,
-	       map<string, bufferlist> *out);
+  int omap_get(CollectionHandle ch, ObjectHandle oh,
+	       bufferlist* header, map<string, bufferlist>* out);
   int omap_get_header(
-    const coll_t &c,
-    const hoid_t &oid,
+    CollectionHandle ch,
+    ObjectHandle oh,
     bufferlist *out,
     bool allow_eio = false);
-  int omap_get_keys(const coll_t &c, const hoid_t &oid, set<string> *keys);
-  int omap_get_values(const coll_t &c, const hoid_t &oid,
-		      const set<string> &keys, map<string, bufferlist> *out);
-  int omap_check_keys(const coll_t &c, const hoid_t &oid,
-		      const set<string> &keys, set<string> *out);
-  ObjectMap::ObjectMapIterator get_omap_iterator(const coll_t &c,
-						 const hoid_t &oid);
+  int omap_get_keys(CollectionHandle ch, ObjectHandle oh,
+		    set<string>* keys);
+  int omap_get_values(CollectionHandle ch, ObjectHandle oh,
+		      const set<string>& keys,
+		      map<string, bufferlist>* out);
+  int omap_check_keys(CollectionHandle ch, ObjectHandle oh,
+		      const set<string>& keys, set<string>* out);
+  ObjectMap::ObjectMapIterator get_omap_iterator(CollectionHandle ch,
+						 ObjectHandle oh);
 
-  int _create_collection(const coll_t &c);
-  int _create_collection(const coll_t &c, const SequencerPosition &spos);
-  int _destroy_collection(const coll_t &c);
-  int _collection_add(const coll_t &c, const coll_t &ocid, const hoid_t& oid,
-		      const SequencerPosition& spos);
-  int _collection_move_rename(const coll_t &oldcid, const hoid_t& oldoid,
-			      const coll_t &c, const hoid_t& o,
-			      const SequencerPosition& spos);
-
-  int _set_alloc_hint(const coll_t &cid, const hoid_t& oid,
+  int _create_collection(const coll_t& c);
+  int _create_collection(const coll_t& c,
+			 const SequencerPosition& spos);
+  int _destroy_collection(FSCollection* fc);
+  int _set_alloc_hint(FSCollection* fc, FSObject* fo,
 		      uint64_t expected_object_size,
 		      uint64_t expected_write_size);
 
   void dump_start(const std::string& file);
   void dump_stop();
-  void dump_transactions(list<ObjectStore::Transaction*>& ls, uint64_t seq, OpSequencer *osr);
+  void dump_transactions(list<ObjectStore::Transaction*>& ls,
+			 uint64_t seq,
+			 OpSequencer* osr);
 
 private:
   void _inject_failure();
 
   // omap
-  int _omap_clear(const coll_t &cid, const hoid_t &oid,
+  int _omap_clear(FSCollection* fc, FSObject* fo,
 		  const SequencerPosition &spos);
-  int _omap_setkeys(const coll_t &cid, const hoid_t &oid,
-		    const map<string, bufferlist> &aset,
-		    const SequencerPosition &spos);
-  int _omap_rmkeys(const coll_t &cid, const hoid_t &oid,
-		   const set<string> &keys, const SequencerPosition &spos);
-  int _omap_rmkeyrange(const coll_t &cid, const hoid_t &oid,
+  int _omap_setkeys(FSCollection* fc, FSObject* fo,
+		    const map<string, bufferlist>& aset,
+		    const SequencerPosition& spos);
+  int _omap_rmkeys(FSCollection* fc, FSObject* fo,
+		   const set<string>& keys,
+		   const SequencerPosition& spos);
+  int _omap_rmkeyrange(FSCollection* fc, FSObject* fo,
 		       const string& first, const string& last,
-		       const SequencerPosition &spos);
-  int _omap_setheader(const coll_t &cid, const hoid_t &oid,
-		      const bufferlist &bl, const SequencerPosition &spos);
+		       const SequencerPosition& spos);
+  int _omap_setheader(FSCollection* fc, FSObject* fo,
+		      const bufferlist &bl,
+		      const SequencerPosition &spos);
 
   virtual const char** get_tracked_conf_keys() const;
   virtual void handle_conf_change(const struct md_config_t *conf,

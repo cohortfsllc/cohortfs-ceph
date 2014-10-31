@@ -12,7 +12,6 @@
  *
  */
 
-
 #ifndef CEPH_MEMSTORE_H
 #define CEPH_MEMSTORE_H
 
@@ -24,13 +23,18 @@
 #include "ObjectStore.h"
 #include "PageSet.h"
 
+#include <atomic>
+#include <boost/intrusive_ptr.hpp>
+
 
 class MemStore : public ObjectStore {
 private:
   static const size_t PageSize = 64 << 10;
   typedef PageSet<PageSize> page_set;
+
 public:
-  struct Object {
+  struct Object : public ObjectStore::Object {
+    mutable std::atomic<uint32_t> refcnt;
     Spinlock alloc_lock;
     std::shared_timed_mutex omap_lock;
     typedef std::unique_lock<std::shared_timed_mutex> unique_lock;
@@ -41,7 +45,20 @@ public:
     bufferlist omap_header;
     map<string,bufferlist> omap;
 
-    Object() : data_len(0) {}
+    Object(const hoid_t& oid) :
+      ObjectStore::Object(oid), refcnt(0), data_len(0)
+      {}
+
+    friend void intrusive_ptr_add_ref(const Object* o) {
+      o->refcnt.fetch_add(1, std::memory_order_relaxed);
+    }
+    
+    friend void intrusive_ptr_release(const Object* o) {
+      if (o->refcnt.fetch_sub(1, std::memory_order_release) == 1) {
+	std::atomic_thread_fence(std::memory_order_acquire);
+	delete o; // XXX Casey?
+      }
+    }
 
     void encode(bufferlist& bl) const {
       ENCODE_START(2, 2, bl);
@@ -88,13 +105,14 @@ public:
       f->close_section();
     }
   };
-  typedef std::shared_ptr<Object> ObjectRef;
+  typedef boost::intrusive_ptr<Object> ObjectRef;
 
-  struct Collection {
+  struct MemCollection : public ObjectStore::Collection {
     std::unordered_map<hoid_t, ObjectRef> object_hash;  ///< for lookup
     map<hoid_t, ObjectRef> object_map;	 ///< for iteration
     map<string,bufferptr> xattr;
     std::shared_timed_mutex lock;
+
     typedef std::unique_lock<std::shared_timed_mutex> unique_lock;
     typedef std::shared_lock<std::shared_timed_mutex> shared_lock;
 
@@ -116,7 +134,7 @@ public:
       auto i = object_hash.find(oid);
       if (i != object_hash.end())
 	return i->second;
-      ObjectRef o(new Object);
+      ObjectRef o(new Object(oid));
       object_map[oid] = o;
       object_hash[oid] = o;
       return o;
@@ -143,7 +161,7 @@ public:
       while (s--) {
 	hoid_t k;
 	::decode(k, p);
-	ObjectRef o(new Object);
+	ObjectRef o(new Object(k));
 	o->decode(p);
 	object_map.insert(make_pair(k, o));
 	object_hash.insert(make_pair(k, o));
@@ -151,30 +169,63 @@ public:
       DECODE_FINISH(p);
     }
 
-    Collection() {}
+    MemCollection(const coll_t& cid) :
+      ObjectStore::Collection(cid)
+      {}
   };
-  typedef std::shared_ptr<Collection> CollectionRef;
+
+  inline MemCollection* get_slot_collection(Transaction& t, uint16_t c_ix) {
+    using std::get;
+    col_slot_t& c_slot = t.c_slot(c_ix);
+    MemCollection* c = static_cast<MemCollection*>(get<0>(c_slot));
+    if (c)
+      return c;
+    c = static_cast<MemCollection*>(open_collection(get<1>(c_slot)));
+    if (c) {
+      // update slot for queued Ops to find
+      get<0>(c_slot) = c;
+      // then mark it for release when t is cleaned up
+      get<2>(c_slot) |= ObjectStore::Transaction::FLAG_REF;
+    }
+    return c;
+  } /* get_slot_collection */
+
+  inline ObjectHandle get_slot_object(Transaction& t, MemCollection* c,
+				      uint16_t o_ix, bool create) {
+    using std::get;
+    obj_slot_t& o_slot = t.o_slot(o_ix);
+    ObjectHandle oh = static_cast<ObjectHandle>(get<0>(o_slot));
+    if (oh)
+      return oh;
+    else {
+      oh = MemStore::get_object(c, get<1>(o_slot));
+      // update slot for queued Ops to find
+      get<0>(o_slot) = oh;
+      // then mark it for release when t is cleaned up
+      get<2>(o_slot) |= ObjectStore::Transaction::FLAG_REF;
+    }
+    return oh;
+  } /* get_slot_object */
 
 private:
   class OmapIteratorImpl : public ObjectMap::ObjectMapIteratorImpl {
-    CollectionRef c;
     ObjectRef o;
     map<string,bufferlist>::iterator it;
   public:
-    OmapIteratorImpl(CollectionRef c, ObjectRef o)
-      : c(c), o(o), it(o->omap.begin()) {}
+    OmapIteratorImpl(ObjectRef o)
+      : o(o), it(o->omap.begin()) {}
 
     int seek_to_first() {
       shared_lock l(o->omap_lock);
       it = o->omap.begin();
       return 0;
     }
-    int upper_bound(const string &after) {
+    int upper_bound(const string& after) {
       shared_lock l(o->omap_lock);
       it = o->omap.upper_bound(after);
       return 0;
     }
-    int lower_bound(const string &to) {
+    int lower_bound(const string& to) {
       shared_lock l(o->omap_lock);
       it = o->omap.lower_bound(to);
       return 0;
@@ -206,19 +257,19 @@ private:
   ObjectStore::Transaction::Queue transactions;
 
   class TransactionWQ : public ThreadPool::WorkQueue<Transaction> {
-    MemStore *store;
+    MemStore* store;
   public:
-    TransactionWQ(MemStore *store, ceph::timespan timeout,
-		  ceph::timespan suicide_timeout, ThreadPool *tp)
+    TransactionWQ(MemStore* store, ceph::timespan timeout,
+		  ceph::timespan suicide_timeout, ThreadPool* tp)
       : ThreadPool::WorkQueue<Transaction>("MemStore::TransactionWQ",
 					   timeout, suicide_timeout, tp),
 	store(store) {}
 
-    bool _enqueue(Transaction *t) {
+    bool _enqueue(Transaction* t) {
       store->transactions.push_back(*t);
       return true;
     }
-    void _dequeue(Transaction *t) {
+    void _dequeue(Transaction* t) {
       assert(0);
     }
     bool _empty() {
@@ -227,14 +278,14 @@ private:
     Transaction* _dequeue() {
       if (store->transactions.empty())
 	return NULL;
-      Transaction *t = &store->transactions.front();
+      Transaction* t = &store->transactions.front();
       store->transactions.pop_front();
       return t;
     }
-    void _process(Transaction *t, ThreadPool::TPHandle &handle) {
+    void _process(Transaction* t, ThreadPool::TPHandle& handle) {
       store->_do_transaction(*t, handle);
     }
-    void _process_finish(Transaction *t) {
+    void _process_finish(Transaction* t) {
       store->_finish_transaction(*t);
     }
     void _clear() {
@@ -242,7 +293,7 @@ private:
     }
   } tx_wq;
 
-  map<coll_t, CollectionRef> coll_map;
+  map<coll_t, MemCollection*> coll_map;
   std::shared_timed_mutex coll_lock;
   typedef std::unique_lock<std::shared_timed_mutex> unique_lock;
   typedef std::shared_lock<std::shared_timed_mutex> shared_lock;
@@ -250,62 +301,61 @@ private:
   typedef std::unique_lock<std::mutex> unique_apply_lock;
   typedef std::unique_lock<std::mutex> apply_lock_guard;
 
-  CollectionRef get_collection(const coll_t &cid);
-
   Finisher finisher;
 
-  void _do_transaction(Transaction &t, ThreadPool::TPHandle &handle);
-  void _finish_transaction(Transaction &t);
+  void _do_transaction(Transaction& t, ThreadPool::TPHandle& handle);
+  void _finish_transaction(Transaction& t);
 
-  int _read_pages(page_set &pages, unsigned offset, size_t len, bufferlist &dst);
-  void _write_pages(const bufferlist& src, unsigned offset, ObjectRef o);
+  int _read_pages(page_set& pages, unsigned offset, size_t len,
+		  bufferlist& dst);
 
-  int _touch(const coll_t &cid, const hoid_t& oid);
-  int _write(const coll_t &cid, const hoid_t& oid, uint64_t offset,
-	     size_t len, const bufferlist& bl, bool replica = false);
-  int _zero(const coll_t &cid, const hoid_t& oid,
+  void _write_pages(const bufferlist& src, unsigned offset,
+		    Object* o); // XXX woo!
+
+  int _touch(MemCollection* c, ObjectHandle oh);
+  int _write(MemCollection* c, ObjectHandle oh,
+	     uint64_t offset, size_t len, const bufferlist& bl,
+	     bool replica = false);
+  int _zero(MemCollection* c, ObjectHandle oh,
 	    uint64_t offset, size_t len);
-  int _truncate(const coll_t &cid, const hoid_t& oid, uint64_t size);
-  int _remove(const coll_t &cid, const hoid_t& oid);
-  int _setattrs(const coll_t &cid, const hoid_t& oid,
+  int _truncate(MemCollection* c, ObjectHandle oh,
+		uint64_t size);
+  int _remove(MemCollection* c, ObjectHandle oh);
+  int _setattrs(MemCollection* c, ObjectHandle oh,
 		map<string,bufferptr>& aset);
-  int _rmattr(const coll_t &cid, const hoid_t& oid, const char *name);
-  int _rmattrs(const coll_t &cid, const hoid_t& oid);
-  int _clone(const coll_t &cid, const hoid_t& oldoid,
-	     const hoid_t& newoid);
-  int _clone_range(const coll_t &cid, const hoid_t& oldoid,
-		   const hoid_t& newoid,
-		   uint64_t srcoff, uint64_t len, uint64_t dstoff);
-  int _omap_clear(const coll_t &cid, const hoid_t &oid);
-  int _omap_setkeys(const coll_t &cid, const hoid_t &oid,
-		    const map<string, bufferlist> &aset);
-  int _omap_rmkeys(const coll_t &cid, const hoid_t &oid,
-		   const set<string> &keys);
-  int _omap_rmkeyrange(const coll_t &cid, const hoid_t &oid,
+  int _rmattr(MemCollection* c, ObjectHandle oh,
+	      const char* name);
+  int _rmattrs(MemCollection* c, ObjectHandle oh);
+  int _clone(MemCollection* c, ObjectHandle oh,
+	     ObjectHandle noh);
+  int _clone_range(MemCollection* c, ObjectHandle oh,
+		   ObjectHandle noh, uint64_t srcoff, uint64_t len,
+		   uint64_t dstoff);
+  int _omap_clear(MemCollection* c, ObjectHandle oh);
+  int _omap_setkeys(MemCollection* c, ObjectHandle oh,
+		    const map<string, bufferlist>& aset);
+  int _omap_rmkeys(MemCollection* c, ObjectHandle oh,
+		   const set<string>& keys);
+  int _omap_rmkeyrange(MemCollection* c, ObjectHandle oh,
 		       const string& first, const string& last);
-  int _omap_setheader(const coll_t &cid, const hoid_t &oid,
-		      const bufferlist &bl);
+  int _omap_setheader(MemCollection* c, ObjectHandle oh,
+		      const bufferlist& bl);
 
-  int _create_collection(const coll_t &c);
-  int _destroy_collection(const coll_t &c);
-  int _collection_add(const coll_t &cid, const coll_t &ocid,
-		      const hoid_t& oid);
-  int _collection_move_rename(const coll_t &oldcid, const hoid_t& oldoid,
-			      const coll_t &cid, const hoid_t& o);
-  int _collection_setattr(const coll_t &cid, const char *name,
-			  const void *value, size_t size);
-  int _collection_setattrs(const coll_t &cid, map<string,bufferptr> &aset);
-  int _collection_rmattr(const coll_t &cid, const char *name);
-  int _collection_rename(const coll_t &cid, const coll_t &ncid);
+  int _create_collection(const coll_t& c);
+  int _destroy_collection(MemCollection* c);
+  int _collection_setattr(MemCollection* c, const char* name,
+			  const void* value, size_t size);
+  int _collection_setattrs(MemCollection* c, map<string,bufferptr>& aset);
+  int _collection_rmattr(MemCollection* c, const char* name);
 
   int _save();
   int _load();
 
-  void dump(Formatter *f);
+  void dump(Formatter* f);
   void dump_all();
 
 public:
-  MemStore(CephContext *_cct, const string& path)
+  MemStore(CephContext* _cct, const string& path)
     : ObjectStore(_cct, path),
       tx_tp(cct, "MemStore::tx_tp",
 	    cct->_conf->filestore_op_threads, "memstore_tx_threads"),
@@ -321,7 +371,7 @@ public:
     return 1;
   }
 
-  int peek_journal_fsid(boost::uuids::uuid *fsid);
+  int peek_journal_fsid(boost::uuids::uuid* fsid);
 
   bool test_mount_in_use() {
     return false;
@@ -339,82 +389,104 @@ public:
     return 0;
   }
 
-  int statfs(struct statfs *buf);
+  int statfs(struct statfs* buf);
+  
+  bool exists(CollectionHandle ch, const hoid_t& oid);
 
-  bool exists(const coll_t &cid, const hoid_t& oid);
+  ObjectHandle get_object(CollectionHandle ch,
+			  const hoid_t& oid) {
+    // find Object as intrusive_ptr<T>, explicit ref, return
+    ObjectRef o = static_cast<MemStore::Object*>(get_object(ch, oid));
+    if (!o)
+      return NULL;
+    intrusive_ptr_add_ref(o.get());
+    return o.get();
+  }
+
+  void put_object(ObjectHandle oh) {
+    ObjectRef o = static_cast<MemStore::Object*>(oh);
+    intrusive_ptr_release(o.get());
+  }
+
   int stat(
-    const coll_t &cid,
-    const hoid_t& oid,
-    struct stat *st,
+    CollectionHandle ch,
+    ObjectHandle oh,
+    struct stat* st,
     bool allow_eio = false); // struct stat?
   int read(
-    const coll_t &cid,
-    const hoid_t& oid,
+    CollectionHandle ch,
+    ObjectHandle oh,
     uint64_t offset,
     size_t len,
     bufferlist& bl,
     bool allow_eio = false);
-  int fiemap(const coll_t &cid, const hoid_t& oid,
+  int fiemap(CollectionHandle ch, ObjectHandle oh,
 	     uint64_t offset, size_t len, bufferlist& bl);
-  int getattr(const coll_t &cid, const hoid_t& oid,
-	      const char *name, bufferptr& value);
-  int getattrs(const coll_t &cid, const hoid_t& oid,
+  int getattr(CollectionHandle ch, ObjectHandle oh,
+	      const char* name, bufferptr& value);
+  int getattrs(CollectionHandle ch, ObjectHandle oh,
 	       map<string,bufferptr>& aset, bool user_only = false);
 
   int list_collections(vector<coll_t>& ls);
-  bool collection_exists(const coll_t &c);
-  int collection_getattr(const coll_t &cid, const char *name,
-			 void *value, size_t size);
-  int collection_getattr(const coll_t &cid, const char *name, bufferlist& bl);
-  int collection_getattrs(const coll_t &cid, map<string,bufferptr> &aset);
-  bool collection_empty(const coll_t &c);
-  int collection_list(const coll_t &cid, vector<hoid_t>& o);
-  int collection_list_partial(const coll_t &cid, hoid_t start,
-			      int min, int max, vector<hoid_t> *ls, hoid_t *next);
-  int collection_list_range(const coll_t &cid, hoid_t start, hoid_t end,
-			    vector<hoid_t> *ls);
+
+  CollectionHandle open_collection(const coll_t& c);
+  int close_collection(CollectionHandle ch);
+  bool collection_exists(const coll_t& c);
+  int collection_getattr(CollectionHandle ch, const char* name,
+			 void* value, size_t size);
+  int collection_getattr(CollectionHandle ch, const char* name,
+			 bufferlist& bl);
+  int collection_getattrs(CollectionHandle ch,
+			  map<string,bufferptr>& aset);
+  bool collection_empty(CollectionHandle ch);
+  int collection_list(CollectionHandle ch, vector<hoid_t>& o);
+  int collection_list_partial(CollectionHandle ch, hoid_t start,
+			      int min, int max, vector<hoid_t>* ls,
+			      hoid_t* next);
+  int collection_list_range(CollectionHandle ch, hoid_t start,
+			    hoid_t end, vector<hoid_t>* ls);
 
   int omap_get(
-    const coll_t &cid,	    ///< [in] Collection containing obj
-    const hoid_t &oid,   ///< [in] Object containing omap
-    bufferlist *header,	    ///< [out] omap header
-    map<string, bufferlist> *out /// < [out] Key to value map
+    CollectionHandle ch, ///< [in] Collection containing oid
+    ObjectHandle oh,   ///< [in] Object containing omap
+    bufferlist* header,	    ///< [out] omap header
+    map<string, bufferlist>* out /// < [out] Key to value map
     );
 
   /// Get omap header
   int omap_get_header(
-    const coll_t &cid,	    ///< [in] Collection containing obj
-    const hoid_t &oid,   ///< [in] Object containing omap
-    bufferlist *header,	    ///< [out] omap header
+    CollectionHandle ch, ///< [in] Collection containing oid
+    ObjectHandle oh,   ///< [in] Object containing omap
+    bufferlist* header,	    ///< [out] omap header
     bool allow_eio = false  ///< [in] don't assert on eio
     );
 
   /// Get keys defined on obj
   int omap_get_keys(
-    const coll_t &cid,	    ///< [in] Collection containing obj
-    const hoid_t &oid,   ///< [in] Object containing omap
-    set<string> *keys	    ///< [out] Keys defined on obj
+    CollectionHandle ch, ///< [in] Collection containing oid
+    ObjectHandle oh,   ///< [in] Object containing omap
+    set<string>* keys	    ///< [out] Keys defined on oid
     );
 
   /// Get key values
   int omap_get_values(
-    const coll_t &cid,	    ///< [in] Collection containing obj
-    const hoid_t &oid,   ///< [in] Object containing omap
-    const set<string> &keys, ///< [in] Keys to get
-    map<string, bufferlist> *out ///< [out] Returned keys and values
+    CollectionHandle ch, ///< [in] Collection containing oid
+    ObjectHandle oh,   ///< [in] Object containing omap
+    const set<string>& keys, ///< [in] Keys to get
+    map<string, bufferlist>* out ///< [out] Returned keys and values
     );
 
   /// Filters keys into out which are defined on obj
   int omap_check_keys(
-    const coll_t &cid,	    ///< [in] Collection containing obj
-    const hoid_t &oid,   ///< [in] Object containing omap
-    const set<string> &keys, ///< [in] Keys to check
-    set<string> *out	    ///< [out] Subset of keys defined on obj
+    CollectionHandle ch, ///< [in] Collection containing oid
+    ObjectHandle oh,   ///< [in] Object containing omap
+    const set<string>& keys, ///< [in] Keys to check
+    set<string>* out	    ///< [out] Subset of keys defined on obj
     );
 
   ObjectMap::ObjectMapIterator get_omap_iterator(
-    const coll_t &cid,	    ///< [in] collection
-    const hoid_t &oid    ///< [in] object
+    CollectionHandle ch, ///< [in] collection
+    ObjectHandle oh    ///< [in] object
     );
 
   void set_fsid(const boost::uuids::uuid& u);
@@ -423,9 +495,9 @@ public:
   objectstore_perf_stat_t get_cur_stats();
 
   int queue_transactions(
-    Sequencer *osr, list<Transaction*>& tls,
+    Sequencer* osr, list<Transaction*>& tls,
     OpRequestRef op = OpRequestRef(),
-    ThreadPool::TPHandle *handle = NULL);
+    ThreadPool::TPHandle* handle = NULL);
 };
 
 #endif
