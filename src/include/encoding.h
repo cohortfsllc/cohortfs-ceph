@@ -140,7 +140,6 @@ inline void decode(bool &v, bufferlist::iterator& p) {
     ENCODE_DUMP_PRE(); c.encode(bl, features); ENCODE_DUMP_POST(cl); }	\
   inline void decode(cl &c, bufferlist::iterator &p) { c.decode(p); }
 
-
 // string
 inline void encode(const std::string& s, bufferlist& bl, uint64_t features=0)
 {
@@ -267,6 +266,7 @@ inline void decode(T &o, bufferlist& bl)
 #include <map>
 #include <deque>
 #include <vector>
+#include <tuple>
 #include <string>
 #include <boost/optional.hpp>
 

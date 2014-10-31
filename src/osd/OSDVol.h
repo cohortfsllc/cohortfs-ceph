@@ -39,7 +39,6 @@
 #include "common/ceph_context.h"
 #include "common/LogClient.h"
 #include "include/str_list.h"
-#include "OSDriver.h"
 
 #include <list>
 #include <memory>
@@ -266,7 +265,6 @@ public:
 protected:
   OSDService *osd;
   CephContext *cct;
-  OSDriver osdriver;
 
   // Ops waiting for map, should be queued at back
   Mutex map_lock;
@@ -506,12 +504,12 @@ public:
   int _get_tmap(OpContext *ctx, bufferlist *header, bufferlist *vals);
   int do_tmap2omap(OpContext *ctx, unsigned flags);
   int do_tmapup(OpContext *ctx, bufferlist::iterator& bp, OSDOp& osd_op);
-  int do_tmapup_slow(OpContext *ctx, bufferlist::iterator& bp, OSDOp& osd_op, bufferlist& bl);
+  int do_tmapup_slow(OpContext *ctx, bufferlist::iterator& bp, OSDOp& osd_op,
+		     bufferlist& bl);
 
   void do_osd_op_effects(OpContext *ctx);
 
 protected:
-
   list<OpRequestRef> waiting_for_active;
   map<eversion_t,list<OpRequestRef> > waiting_for_ack, waiting_for_ondisk;
 
@@ -524,9 +522,6 @@ protected:
 
 private:
   int _delete_oid(OpContext *ctx, bool no_whiteout);
-  static int _write_info(ObjectStore::Transaction& t, epoch_t epoch,
-			 vol_info_t &info, coll_t coll,
-			 hobject_t &infos_oid);
 
 public:
   void clear_primary_state();
@@ -585,7 +580,11 @@ public:
     return at_version;
   }
 
-  coll_t get_coll(void) {
+  const coll_t& get_cid(void) {
+    return cid;
+  }
+  
+  CollectionHandle get_coll(void) {
     return coll;
   }
 
@@ -623,7 +622,8 @@ public:
 
   // From the Backend
 protected:
-  const coll_t coll;
+  const coll_t cid;
+  CollectionHandle coll;
   utime_t last_became_active;
 
   void on_shutdown();

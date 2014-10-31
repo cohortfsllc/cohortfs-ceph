@@ -151,7 +151,9 @@ OSDService::OSDService(OSD *osd) :
   cur_state(NONE),
   cur_ratio(0),
   state(NOT_STOPPING)
-{}
+{
+  meta_col = store->open_collection(coll_t::META_COLL);
+}
 
 OSDService::~OSDService()
 {
@@ -200,7 +202,7 @@ int OSD::mkfs(CephContext *cct, ObjectStore *store, const string &dev,
 	      const boost::uuids::uuid& fsid, int whoami)
 {
   int ret;
-
+  CollectionHandle meta_col(NULL);
   try {
     // if we are fed a uuid for this osd, use it.
     store->set_fsid(cct->_conf->osd_uuid);
@@ -219,77 +221,107 @@ int OSD::mkfs(CephContext *cct, ObjectStore *store, const string &dev,
 
     OSDSuperblock sb;
     bufferlist sbbl;
-    ret = store->read(coll_t::META_COLL, OSD_SUPERBLOCK_POBJECT, 0,
-		      store->read_entire, sbbl);
-    if (ret >= 0) {
-      dout(0) << " have superblock" << dendl;
-      if (whoami != sb.whoami) {
-	derr << "provided osd id " << whoami << " != superblock's " << sb.whoami << dendl;
-	ret = -EINVAL;
-	goto umount_store;
-      }
-      if (fsid != sb.cluster_fsid) {
-	derr << "provided cluster fsid " << fsid << " != superblock's " << sb.cluster_fsid << dendl;
-	ret = -EINVAL;
-	goto umount_store;
-      }
-    } else {
-      // create superblock
-      if (fsid.is_nil()) {
-	derr << "must specify cluster fsid" << dendl;
-	ret = -EINVAL;
-	goto umount_store;
-      }
 
-      sb.cluster_fsid = fsid;
-      sb.osd_fsid = store->get_fsid();
-      sb.whoami = whoami;
-      sb.compat_features = get_osd_initial_compat_set();
+    meta_col = store->open_collection(coll_t::META_COLL);
+    assert(meta_col);
 
-      // benchmark?
-      if (cct->_conf->osd_auto_weight) {
-	bufferlist bl;
-	bufferptr bp(1048576);
-	bp.zero();
-	bl.push_back(bp);
-	dout(0) << "testing disk bandwidth..." << dendl;
-	utime_t start = ceph_clock_now(cct);
-	object_t oid("disk_bw_test");
-	for (int i=0; i<1000; i++) {
-	  ObjectStore::Transaction *t = new ObjectStore::Transaction(1);
-	  t->write(coll_t::META_COLL, hobject_t(oid), i*bl.length(), bl.length(), bl);
-	  store->queue_transaction_and_cleanup(NULL, t);
+    ObjectHandle oh = store->get_object(meta_col, OSD_SUPERBLOCK_POBJECT);
+    if (oh) {
+      ret = store->read(meta_col, oh, 0, store->read_entire, sbbl);
+      store->put_object(oh);
+      if (ret >= 0) {
+	dout(0) << " have superblock" << dendl;
+	if (whoami != sb.whoami) {
+	  derr << "provided osd id " << whoami << " != superblock's "
+	       << sb.whoami << dendl;
+	  ret = -EINVAL;
+	  goto umount_store;
 	}
-	store->sync();
-	utime_t end = ceph_clock_now(cct);
-	end -= start;
-	dout(0) << "measured " << (1000.0 / (double)end) << " mb/sec" << dendl;
-	ObjectStore::Transaction tr;
-	tr.remove(coll_t::META_COLL, hobject_t(oid));
-	ret = store->apply_transaction(tr);
-	if (ret) {
-	  derr << "OSD::mkfs: error while benchmarking: apply_transaction returned "
-	       << ret << dendl;
+	if (fsid != sb.cluster_fsid) {
+	  derr << "provided cluster fsid " << fsid << " != superblock's "
+	       << sb.cluster_fsid << dendl;
+	  ret = -EINVAL;
+	  goto umount_store;
+	}
+	store->put_object(oh);
+      } else {
+	// create superblock
+	if (fsid.is_nil()) {
+	  derr << "must specify cluster fsid" << dendl;
+	  ret = -EINVAL;
 	  goto umount_store;
 	}
 
-	// set osd weight
-	sb.weight = (1000.0 / (double)end);
-      }
+	sb.cluster_fsid = fsid;
+	sb.osd_fsid = store->get_fsid();
+	sb.whoami = whoami;
+	sb.compat_features = get_osd_initial_compat_set();
 
-      bufferlist bl;
-      ::encode(sb, bl);
+	uint16_t c_ix;
+	uint16_t o_ix;
 
-      ObjectStore::Transaction t;
-      t.create_collection(coll_t::META_COLL);
-      t.write(coll_t::META_COLL, OSD_SUPERBLOCK_POBJECT, 0, bl.length(), bl);
-      ret = store->apply_transaction(t);
-      if (ret) {
-	derr << "OSD::mkfs: error while writing OSD_SUPERBLOCK_POBJECT: "
-	     << "apply_transaction returned " << ret << dendl;
-	goto umount_store;
-      }
-    }
+	// benchmark?
+	if (cct->_conf->osd_auto_weight) {
+	  bufferlist bl;
+	  bufferptr bp(1048576);
+	  bp.zero();
+	  bl.push_back(bp);
+	  dout(0) << "testing disk bandwidth..." << dendl;
+	  utime_t start = ceph_clock_now(cct);
+	  object_t oid("disk_bw_test");
+	  for (int i=0; i<1000; i++) {
+	    ObjectStore::Transaction *t = new ObjectStore::Transaction(1);
+	    c_ix = t->push_col(meta_col);
+	    o_ix = t->push_oid(hobject_t(oid)); // XXXX
+	    t->write(c_ix, o_ix, i*bl.length(), bl.length(), bl);
+	    store->queue_transaction_and_cleanup(NULL, t);
+	  }
+	  store->sync();
+	  utime_t end = ceph_clock_now(cct);
+	  end -= start;
+	  dout(0) << "measured " << (1000.0 / (double)end) << " mb/sec"
+		  << dendl;
+	  ObjectStore::Transaction tr;
+	  c_ix = tr.push_col(meta_col);
+	  o_ix = tr.push_oid(hobject_t(oid)); // XXXX
+	  tr.remove(c_ix, o_ix);
+	  ret = store->apply_transaction(tr);
+	  if (ret) {
+	    derr << "OSD::mkfs: error while benchmarking: apply_transaction "
+	      "returned " << ret << dendl;
+	    goto umount_store;
+	  }
+
+	  // set osd weight
+	  sb.weight = (1000.0 / (double)end);
+	}
+
+	bufferlist bl;
+	::encode(sb, bl);
+
+	ObjectStore::Transaction t;
+	t.create_collection(coll_t::META_COLL);
+	ret = store->apply_transaction(t);
+	if (ret) {
+	  derr << "OSD::mkfs: error while creating meta collection: "
+	       << "apply_transaction returned " << ret << dendl;
+	  goto umount_store;
+	}
+
+	meta_col = store->open_collection(coll_t::META_COLL);
+	assert(meta_col);
+	t = ObjectStore::Transaction(); // XXX
+	c_ix = t.push_col(meta_col);
+	o_ix = t.push_oid(OSD_SUPERBLOCK_POBJECT);
+	t.write(c_ix, o_ix, 0, bl.length(), bl);
+	ret = store->apply_transaction(t);
+	if (ret) {
+	  derr << "OSD::mkfs: error while writing OSD_SUPERBLOCK_POBJECT: "
+	       << "apply_transaction returned " << ret << dendl;
+	  goto umount_store;
+	}
+      } /* create super */
+    } /* oh */
 
     store->sync_and_flush();
 
@@ -310,6 +342,8 @@ int OSD::mkfs(CephContext *cct, ObjectStore *store, const string &dev,
   }
 
 umount_store:
+  if (meta_col)
+    store->close_collection(meta_col);
   store->umount();
 free_store:
   delete store;
@@ -612,13 +646,22 @@ int OSD::init()
 
   dout(2) << "boot" << dendl;
 
+  CollectionHandle meta_col = store->open_collection(coll_t::META_COLL);
+  if (! meta_col) {
+    derr << "OSD::init() : unable to open osd meta collection" << dendl;
+    r = -EINVAL;
+    goto out;
+  }
+
   // read superblock
-  r = read_superblock();
+  r = read_superblock(meta_col);
   if (r < 0) {
     derr << "OSD::init() : unable to read osd superblock" << dendl;
     r = -EINVAL;
     goto out;
   }
+  
+  assert(meta_col);
 
   if (osd_compat.compare(superblock.compat_features) < 0) {
     derr << "The disk uses features unsupported by the executable." << dendl;
@@ -653,17 +696,22 @@ int OSD::init()
     // do anything else
     dout(5) << "Upgrading superblock adding: " << diff << dendl;
     ObjectStore::Transaction t;
-    write_superblock(t);
+    write_superblock(meta_col, t);
     r = store->apply_transaction(t);
     if (r < 0)
       goto out;
   }
 
   // make sure info object exists
-  if (!store->exists(coll_t::META_COLL, service.infos_oid)) {
+  uint16_t c_ix;
+  uint16_t o_ix;
+  
+  if (!store->exists(meta_col, service.infos_oid)) {
     dout(10) << "init creating/touching snapmapper object" << dendl;
     ObjectStore::Transaction t;
-    t.touch(coll_t::META_COLL, service.infos_oid);
+    c_ix = t.push_col(meta_col);
+    o_ix = t.push_oid(service.infos_oid);
+    t.touch(c_ix, o_ix);
     r = store->apply_transaction(t);
     if (r < 0)
       goto out;
@@ -675,7 +723,8 @@ int OSD::init()
   if (cct->_conf->osd_open_classes_on_start) {
     int r = class_handler->open_all_classes();
     if (r)
-      dout(1) << "warning: got an error loading one or more classes: " << cpp_strerror(r) << dendl;
+      dout(1) << "warning: got an error loading one or more classes: "
+	      << cpp_strerror(r) << dendl;
   }
 
   // load up "current" osdmap
@@ -889,7 +938,7 @@ int OSD::shutdown()
   dout(10) << "noting clean unmount in epoch " << osdmap->get_epoch() << dendl;
   superblock.mounted = boot_epoch;
   ObjectStore::Transaction t;
-  write_superblock(t);
+  write_superblock(service.meta_col, t);
   int r = store->apply_transaction(t);
   if (r) {
     derr << "OSD::shutdown: error writing superblock: "
@@ -937,7 +986,7 @@ int OSD::shutdown()
   return r;
 }
 
-void OSD::write_superblock(ObjectStore::Transaction& t)
+void OSD::write_superblock(CollectionHandle meta, ObjectStore::Transaction& t)
 {
   dout(10) << "write_superblock " << superblock << dendl;
 
@@ -948,59 +997,68 @@ void OSD::write_superblock(ObjectStore::Transaction& t)
 
   bufferlist bl;
   ::encode(superblock, bl);
-  t.write(coll_t::META_COLL, OSD_SUPERBLOCK_POBJECT, 0, bl.length(), bl);
+
+  uint16_t c_ix = t.push_col(meta);
+  uint16_t o_ix = t.push_oid(OSD_SUPERBLOCK_POBJECT); // XXX oid? open it?
+  t.write(c_ix, o_ix, 0, bl.length(), bl);
 }
 
-int OSD::read_superblock()
+int OSD::read_superblock(CollectionHandle meta)
 {
   bufferlist bl;
-  int r = store->read(coll_t::META_COLL, OSD_SUPERBLOCK_POBJECT, 0,
-		      store->read_entire, bl);
-  if (r < 0)
-    return r;
+  bufferlist::iterator p;
+  ObjectHandle oh = nullptr;
+  int r = 0;
 
-  bufferlist::iterator p = bl.begin();
-  ::decode(superblock, p);
-
-  dout(10) << "read_superblock " << superblock << dendl;
-
-  return 0;
+  oh = store->get_object(meta, OSD_SUPERBLOCK_POBJECT);
+  if (likely(!!oh)) {
+    int r = store->read(meta, oh, 0, store->read_entire, bl);
+    if (r == 0) {
+      p = bl.begin();
+      ::decode(superblock, p);
+      store->put_object(oh);
+      dout(10) << "read_superblock " << superblock << dendl;
+    }
+  }
+  return r;
 }
 
-
-
-void OSD::recursive_remove_collection(ObjectStore *store, coll_t tmp)
+void OSD::recursive_remove_collection(ObjectStore *store, coll_t cid)
 {
-  OSDriver driver(
-    store,
-    coll_t());
-
   boost::uuids::uuid vol;
-  tmp.is_vol(vol);
+  cid.is_vol(vol);
 
-  ObjectStore::Transaction t;
+  CollectionHandle ch = store->open_collection(cid);
+  if (! ch)
+    return;
 
   vector<hobject_t> objects;
-  store->collection_list(tmp, objects);
+  store->collection_list(ch, objects);
+
+  ObjectStore::Transaction t;
+  uint16_t c_ix = t.push_col(ch);
+  uint16_t o_ix;
 
   // delete them.
   unsigned removed = 0;
   for (vector<hobject_t>::iterator p = objects.begin();
        p != objects.end();
        ++p, removed++) {
-    OSDriver::OSTransaction _t(driver.get_transaction(&t));
-    t.collection_remove(tmp, *p);
+    o_ix = t.push_oid(*p); // XXX oid? open it?
+    t.collection_remove(c_ix, o_ix);
     if (removed > 300) {
       int r = store->apply_transaction(t);
       assert(r == 0);
       t = ObjectStore::Transaction();
+      c_ix = t.push_col(ch);
       removed = 0;
     }
   }
-  t.remove_collection(tmp);
+  t.remove_collection(c_ix);
   int r = store->apply_transaction(t);
   assert(r == 0);
   store->sync_and_flush();
+  store->close_collection(ch);
 }
 
 
@@ -2352,6 +2410,8 @@ void OSD::handle_osd_map(MOSDMap *m)
   ObjectStore::Transaction *_t = new ObjectStore::Transaction(
       cct->_conf->osd_target_transaction_size);
   ObjectStore::Transaction &t = *_t;
+  uint16_t c_ix = t.push_col(service.meta_col);
+  uint16_t o_ix;
 
   // store new maps: queue for disk and put in the osdmap cache
   epoch_t last_marked_full = 0;
@@ -2370,7 +2430,9 @@ void OSD::handle_osd_map(MOSDMap *m)
       pinned_maps.push_back(add_map(o));
 
       hobject_t fulloid = get_osdmap_pobject_name(e);
-      t.write(coll_t::META_COLL, fulloid, 0, bl.length(), bl);
+      /* XXX surely service has started */
+      o_ix = t.push_oid(fulloid); // XXXX oid?  open it?
+      t.write(c_ix, o_ix, 0, bl.length(), bl);
       pin_map_bl(e, bl);
       continue;
     }
@@ -2380,7 +2442,8 @@ void OSD::handle_osd_map(MOSDMap *m)
       dout(10) << "handle_osd_map  got inc map for epoch " << e << dendl;
       bufferlist& bl = p->second;
       hobject_t oid = get_inc_osdmap_pobject_name(e);
-      t.write(coll_t::META_COLL, oid, 0, bl.length(), bl);
+      o_ix = t.push_oid(oid); // XXXX oid?  open it?
+      t.write(c_ix, o_ix, 0, bl.length(), bl);
       pin_map_inc_bl(e, bl);
 
       OSDMap *o = new OSDMap;
@@ -2395,7 +2458,8 @@ void OSD::handle_osd_map(MOSDMap *m)
       bufferlist::iterator p = bl.begin();
       inc.decode(p);
       if (o->apply_incremental(inc) < 0) {
-	derr << "ERROR: bad fsid?  i have " << osdmap->get_fsid() << " and inc has " << inc.fsid << dendl;
+	derr << "ERROR: bad fsid?  i have " << osdmap->get_fsid()
+	     << " and inc has " << inc.fsid << dendl;
 	assert(0 == "bad fsid");
       }
 
@@ -2407,7 +2471,8 @@ void OSD::handle_osd_map(MOSDMap *m)
       o->encode(fbl);
 
       hobject_t fulloid = get_osdmap_pobject_name(e);
-      t.write(coll_t::META_COLL, fulloid, 0, fbl.length(), fbl);
+      o_ix = t.push_oid(fulloid); // XXXX oid?  open it?
+      t.write(c_ix, o_ix, 0, fbl.length(), fbl);
       pin_map_bl(e, fbl);
       continue;
     }
@@ -2422,8 +2487,10 @@ void OSD::handle_osd_map(MOSDMap *m)
 	  service.map_cache.cached_key_lower_bound()));
     for (epoch_t e = superblock.oldest_map; e < min; ++e) {
       dout(20) << " removing old osdmap epoch " << e << dendl;
-      t.remove(coll_t::META_COLL, get_osdmap_pobject_name(e));
-      t.remove(coll_t::META_COLL, get_inc_osdmap_pobject_name(e));
+      o_ix = t.push_oid(get_osdmap_pobject_name(e));
+      t.remove(c_ix, o_ix);
+      o_ix = t.push_oid(get_inc_osdmap_pobject_name(e));
+      t.remove(c_ix, o_ix);
       superblock.oldest_map = e+1;
       num++;
       if (num >= cct->_conf->osd_target_transaction_size &&
@@ -2569,7 +2636,7 @@ void OSD::handle_osd_map(MOSDMap *m)
   }
 
   // superblock and commit
-  write_superblock(t);
+  write_superblock(service.meta_col, t);
   store->queue_transaction(
     0,
     _t,
@@ -2812,9 +2879,13 @@ bool OSDService::_get_map_bl(epoch_t e, bufferlist& bl)
   bool found = map_bl_cache.lookup(e, &bl);
   if (found)
     return true;
-  found = store->read(
-    coll_t::META_COLL, OSD::get_osdmap_pobject_name(e), 0,
-    store->read_entire, bl) >= 0;
+  ObjectHandle oh =
+    store->get_object(meta_col, OSD::get_osdmap_pobject_name(e));
+  if (oh) {
+    found = store->read(
+      meta_col, oh, 0, store->read_entire, bl) >= 0;
+    store->put_object(oh);
+  }
   if (found)
     _add_map_bl(e, bl);
   return found;
@@ -2826,11 +2897,15 @@ bool OSDService::get_inc_map_bl(epoch_t e, bufferlist& bl)
   bool found = map_bl_inc_cache.lookup(e, &bl);
   if (found)
     return true;
-  found = store->read(
-    coll_t::META_COLL, OSD::get_inc_osdmap_pobject_name(e), 0,
-    store->read_entire, bl) >= 0;
-  if (found)
-    _add_map_inc_bl(e, bl);
+  ObjectHandle oh =
+    store->get_object(meta_col, OSD::get_inc_osdmap_pobject_name(e));
+  if (oh) {
+    found = store->read(meta_col, oh, 0,
+			store->read_entire, bl) >= 0;
+    store->put_object(oh);
+    if (found)
+      _add_map_inc_bl(e, bl);
+  }
   return found;
 }
 

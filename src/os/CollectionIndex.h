@@ -25,62 +25,12 @@
  * CollectionIndex provides an interface for manipulating indexed collections
  */
 class CollectionIndex {
-protected:
-  /**
-   * Object encapsulating a returned path.
-   *
-   * A path to an object (existent or non-existent) becomes invalid
-   * when a different object is created in the index.  Path stores
-   * a shared_ptr to the CollectionIndex to keep the index alive
-   * during its lifetime.
-   * @see IndexManager
-   * @see self_ref
-   * @see set_ref
-   */
-  class Path {
-  public:
-    /// Returned path
-    string full_path;
-    /// Ref to parent Index
-    std::shared_ptr<CollectionIndex> parent_ref;
-    /// coll_t for parent Index
-    coll_t parent_coll;
-
-    /// Normal Constructor
-    Path(
-      string path,				///< [in] Path to return.
-      std::weak_ptr<CollectionIndex> ref)  ///< [in] weak_ptr to parent.
-      : full_path(path), parent_ref(ref), parent_coll(parent_ref->coll()) {}
-
-    /// Debugging Constructor
-    Path(
-      string path,				///< [in] Path to return.
-      coll_t coll)				///< [in] collection
-      : full_path(path), parent_coll(coll) {}
-
-    /// Getter for the stored path.
-    const char *path() const { return full_path.c_str(); }
-
-    /// Getter for collection
-    coll_t coll() const { return parent_coll; }
-
-    /// Getter for parent
-    std::shared_ptr<CollectionIndex> get_index() const {
-      return parent_ref;
-    }
-  };
- public:
-  /// Type of returned paths
-  typedef std::shared_ptr<Path> IndexedPath;
-
-  static IndexedPath get_testing_path(string path, coll_t collection) {
-    return IndexedPath(new Path(path, collection));
-  }
-
+public:
   static const uint32_t FLAT_INDEX_TAG = 0;
   static const uint32_t HASH_INDEX_TAG = 1;
   static const uint32_t HASH_INDEX_TAG_2 = 2;
   static const uint32_t HOBJECT_WITH_POOL = 3;
+
   /**
    * For tracking Filestore collection versions.
    *
@@ -121,33 +71,12 @@ protected:
   virtual int cleanup() = 0;
 
   /**
-   * Call when a file is created using a path returned from lookup.
-   *
-   * @return Error Code, 0 for success
-   */
-  virtual int created(
-    const hobject_t &oid, ///< [in] Created object.
-    const char *path	   ///< [in] Path to created object.
-    ) = 0;
-
-  /**
    * Removes oid from the collection
    *
    * @return Error Code, 0 for success
    */
   virtual int unlink(
     const hobject_t &oid ///< [in] Object to remove
-    ) = 0;
-
-  /**
-   * Gets the IndexedPath for oid.
-   *
-   * @return Error Code, 0 for success
-   */
-  virtual int lookup(
-    const hobject_t &oid, ///< [in] Object to lookup
-    IndexedPath *path,	   ///< [out] Path to object
-    int *exist ///< [out] True if the object exists, else false
     ) = 0;
 
   /**

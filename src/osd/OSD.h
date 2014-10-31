@@ -85,6 +85,7 @@ public:
   SharedPtrRegistry<boost::uuids::uuid, ObjectStore::Sequencer> osr_registry;
   const int whoami;
   ObjectStore *&store;
+  CollectionHandle meta_col;
   LogClient &clog;
   hobject_t infos_oid;
 private:
@@ -373,11 +374,13 @@ public:
     getline(ss, s);
     return hobject_t(object_t(s.c_str()));
   }
+
   static hobject_t make_infos_oid() {
     hobject_t oid(object_t("infos"));
     return oid;
   }
-  static void recursive_remove_collection(ObjectStore *store, coll_t tmp);
+
+  static void recursive_remove_collection(ObjectStore *store, coll_t col);
 
   /**
    * get_osd_initial_compat_set()
@@ -403,9 +406,9 @@ private:
   // -- superblock --
   OSDSuperblock superblock;
 
-  void write_superblock();
-  void write_superblock(ObjectStore::Transaction& t);
-  int read_superblock();
+  void write_superblock(CollectionHandle meta);
+  void write_superblock(CollectionHandle meta, ObjectStore::Transaction& t);
+  int read_superblock(CollectionHandle meta);
 
   CompatSet osd_compat;
 

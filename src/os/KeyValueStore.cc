@@ -1126,35 +1126,60 @@ int KeyValueStore::_do_transactions(list<Transaction*> &tls, uint64_t op_seq,
   return r;
 }
 
-unsigned KeyValueStore::_do_transaction(Transaction& transaction,
+unsigned KeyValueStore::_do_transaction(Transaction& tr,
 					BufferTransaction &t,
 					SequencerPosition& spos,
 					ThreadPool::TPHandle *handle)
 {
-  dout(10) << "_do_transaction on " << &transaction << dendl;
+  dout(10) << "_do_transaction on " << &tr << dendl;
 
   typedef Transaction::op_iterator op_iterator;
-  for (op_iterator i = transaction.begin(); i != transaction.end(); ++i) {
-    if (handle)
-      handle->reset_tp_timeout();
+  for (op_iterator i = tr.begin(); i != tr.end(); ++i) {
 
     int r = 0;
 
+    CollectionHandle ch = nullptr;
+    ObjectHandle oh, oh2;
+
+    if (handle)
+      handle->reset_tp_timeout();
+
     switch (i->op) {
-    case Transaction::OP_NOP:
-      break;
+  case Transaction::OP_NOP:
+    break;
 
     case Transaction::OP_TOUCH:
-      r = _touch(i->cid, i->oid, t);
+      r = -ENOENT;
+      ch = get_slot_collection(tr, i->c1_ix);
+      if (ch) {
+	oh = get_slot_object(tr, ch, i->o1_ix, true /* create */);
+	if (oh) {
+	  r = _touch(ch->get_cid(), oh->get_oid(), t);
+	}
+      }
       break;
 
     case Transaction::OP_WRITE:
-      r = _write(i->cid, i->oid, i->off, i->len, i->data,
-		 t, transaction.get_replica());
+      r = -ENOENT;
+      ch = get_slot_collection(tr, i->c1_ix);
+      if (ch) {
+	oh = get_slot_object(tr, ch, i->o1_ix, true /* create */);
+	if (oh) {
+	  r = _write(ch->get_cid(), oh->get_oid(), i->off, i->len, i->data,
+		     t, tr.get_replica());
+	}
+      }
       break;
 
     case Transaction::OP_ZERO:
-      r = _zero(i->cid, i->oid, i->off, i->len, t);
+      r = -ENOENT;
+      ch = get_slot_collection(tr, i->c1_ix);
+      if (ch) {
+	oh = get_slot_object(tr, ch, i->o1_ix, true /* create */);
+	if (oh) {
+	  r = _zero(ch->get_cid(), oh->get_oid(), i->off, i->len, t);
+	}
+      }
       break;
 
     case Transaction::OP_TRIMCACHE:
@@ -1162,82 +1187,156 @@ unsigned KeyValueStore::_do_transaction(Transaction& transaction,
       break;
 
     case Transaction::OP_TRUNCATE:
-      r = _truncate(i->cid, i->oid, i->off, t);
+      r = -ENOENT;
+      ch = get_slot_collection(tr, i->c1_ix);
+      if (ch) {
+	oh = get_slot_object(tr, ch, i->o1_ix, true /* create */);
+	if (oh) {
+	  r = _truncate(ch->get_cid(), oh->get_oid(), i->off, t);
+	}
+      }
       break;
 
     case Transaction::OP_REMOVE:
-      r = _remove(i->cid, i->oid, t);
+      r = -ENOENT;
+      ch = get_slot_collection(tr, i->c1_ix);
+      if (ch) {
+	oh = get_slot_object(tr, ch, i->o1_ix, false /* create */);
+	if (oh) {
+	  r = _remove(ch->get_cid(), oh->get_oid(), t);
+	}
+      }
       break;
 
     case Transaction::OP_SETATTR:
       {
-	map<string, bufferptr> to_set;
-	to_set[i->name] = bufferptr(i->data.c_str(), i->data.length());
-	r = _setattrs(i->cid, i->oid, to_set, t);
-	if (r == -ENOSPC)
-	  dout(0) << " ENOSPC on setxattr on " << i->cid << "/" << i->oid
-		  << " name " << i->name << " size " << i->data.length() << dendl;
+	r = -ENOENT;
+	ch = get_slot_collection(tr, i->c1_ix);
+	if (ch) {
+	  oh = get_slot_object(tr, ch, i->o1_ix, true /* create */);
+	  if (oh) {
+	    map<string, bufferptr> to_set;
+	    to_set[i->name] = bufferptr(i->data.c_str(), i->data.length());
+	    r = _setattrs(ch->get_cid(), oh->get_oid(), to_set, t);
+	    if (r == -ENOSPC)
+	      dout(0) << " ENOSPC on setxattr on " << ch << "/" << oh->get_oid()
+		      << " name " << i->name << " size " << i->data.length()
+		      << dendl;
+	  }
+	}
       }
       break;
 
     case Transaction::OP_SETATTRS:
-      r = _setattrs(i->cid, i->oid, i->xattrs, t);
-      if (r == -ENOSPC)
-	dout(0) << " ENOSPC on setxattrs on " << i->cid << "/" << i->oid << dendl;
+      r = -ENOENT;
+      ch = get_slot_collection(tr, i->c1_ix);
+      if (ch) {
+	oh = get_slot_object(tr, ch, i->o1_ix, true /* create */);
+	if (oh) {
+	  r = _setattrs(ch->get_cid(), oh->get_oid(), i->xattrs, t);
+	  if (r == -ENOSPC)
+	    dout(0) << " ENOSPC on setxattrs on " << ch << "/" << oh->get_oid()
+		    << dendl;
+	}
+      }
       break;
 
     case Transaction::OP_RMATTR:
-      r = _rmattr(i->cid, i->oid, i->name.c_str(), t);
+      r = -ENOENT;
+      ch = get_slot_collection(tr, i->c1_ix);
+      if (ch) {
+	oh = get_slot_object(tr, ch, i->o1_ix, false /* create */);
+	if (oh) {
+	  r = _rmattr(ch->get_cid(), oh->get_oid(), i->name.c_str(), t);
+	}
+      }
       break;
 
     case Transaction::OP_RMATTRS:
-      r = _rmattrs(i->cid, i->oid, t);
+      r = -ENOENT;
+      ch = get_slot_collection(tr, i->c1_ix);
+      if (ch) {
+	oh = get_slot_object(tr, ch, i->o1_ix, false /* create */);
+	if (oh) {
+	  r = _rmattrs(ch->get_cid(), oh->get_oid(), t);
+	}
+      }
       break;
 
     case Transaction::OP_CLONE:
-      r = _clone(i->cid, i->oid, i->oid2, t);
+      r = -ENOENT;
+      ch = get_slot_collection(tr, i->c1_ix);
+      if (ch) {
+	oh = get_slot_object(tr, ch, i->o1_ix, true /* create */);
+	if (oh) {
+	  oh2 = get_slot_object(tr, ch, i->o2_ix, true /* create */);
+	  if (oh2) {
+	    r = _clone(ch->get_cid(), oh->get_oid(), oh2->get_oid(), t);
+	  }
+	}
+      }
       break;
 
     case Transaction::OP_CLONERANGE:
-      r = _clone_range(i->cid, i->oid, i->oid2, i->off, i->len, i->off, t);
+      r = -ENOENT;
+      ch = get_slot_collection(tr, i->c1_ix);
+      if (ch) {
+	oh = get_slot_object(tr, ch, i->o1_ix, true /* create */);
+	if (oh) {
+	  oh2 = get_slot_object(tr, ch, i->o2_ix, true /* create */);
+	  if (oh2) {
+	    r = _clone_range(ch->get_cid(), oh->get_oid(), oh2->get_oid(),
+			     i->off, i->len, i->off, t);
+	  }
+	}
+      }    
       break;
 
     case Transaction::OP_CLONERANGE2:
-      r = _clone_range(i->cid, i->oid, i->oid2, i->off, i->len, i->off2, t);
+      r = -ENOENT;
+      ch = get_slot_collection(tr, i->c1_ix);
+      if (ch) {
+	oh = get_slot_object(tr, ch, i->o1_ix, true /* create */);
+	if (oh) {
+	  oh2 = get_slot_object(tr, ch, i->o2_ix, true /* create */);
+	  if (oh2) {
+	    r = _clone_range(ch->get_cid(), oh->get_oid(), oh2->get_oid(),
+			     i->off, i->len, i->off2, t);
+	  }
+	}
+      }
       break;
 
     case Transaction::OP_MKCOLL:
-      r = _create_collection(i->cid, t);
+      r = _create_collection(ch->get_cid(), t);
+      if (!r) {
+	(void) get_slot_collection(tr, i->c1_ix);
+      }
       break;
 
     case Transaction::OP_RMCOLL:
-      r = _destroy_collection(i->cid, t);
-      break;
-
-    case Transaction::OP_COLL_ADD:
-      r = _collection_add(i->cid, i->cid2, i->oid, t);
-      break;
-
-    case Transaction::OP_COLL_REMOVE:
-      r = _remove(i->cid, i->oid, t);
-      break;
-
-    case Transaction::OP_COLL_MOVE:
-      // WARNING: this is deprecated and buggy; only here to replay old journals.
-      r = _collection_move_rename(i->cid, i->oid, i->cid2, i->oid, t);
-      break;
-
-    case Transaction::OP_COLL_MOVE_RENAME:
-      r = _collection_move_rename(i->cid, i->oid, i->cid2, i->oid2, t);
+      r = -ENOENT;
+      ch = get_slot_collection(tr, i->c1_ix);
+      if (ch) {
+	r = _destroy_collection(ch->get_cid(), t);
+      }
       break;
 
     case Transaction::OP_COLL_SETATTR:
-      r = _collection_setattr(i->cid, i->name.c_str(),
-			      i->data.c_str(), i->data.length(), t);
+      r = -ENOENT;
+      ch = get_slot_collection(tr, i->c1_ix);
+      if (ch) {
+	r = _collection_setattr(ch->get_cid(), i->name.c_str(),
+				i->data.c_str(), i->data.length(), t);
+      }
       break;
 
     case Transaction::OP_COLL_RMATTR:
-      r = _collection_rmattr(i->cid, i->name.c_str(), t);
+      r = -ENOENT;
+      ch = get_slot_collection(tr, i->c1_ix);
+      if (ch) {
+	r = _collection_rmattr(ch->get_cid(), i->name.c_str(), t);
+      }
       break;
 
     case Transaction::OP_STARTSYNC:
@@ -1246,30 +1345,86 @@ unsigned KeyValueStore::_do_transaction(Transaction& transaction,
 	break;
       }
 
-    case Transaction::OP_COLL_RENAME:
-      r = _collection_rename(i->cid, i->cid2, t);
+    case Transaction::OP_OMAP_CLEAR:
+      r = -ENOENT;
+      ch = get_slot_collection(tr, i->c1_ix);
+      if (ch) {
+	oh = get_slot_object(tr, ch, i->o1_ix, false /* !create */);
+	if (oh) {
+	  r = _omap_clear(ch->get_cid(), oh->get_oid(), t);
+	}
+      }
       break;
 
-    case Transaction::OP_OMAP_CLEAR:
-      r = _omap_clear(i->cid, i->oid, t);
-      break;
     case Transaction::OP_OMAP_SETKEYS:
-      r = _omap_setkeys(i->cid, i->oid, i->attrs, t);
+      r = -ENOENT;
+      ch = get_slot_collection(tr, i->c1_ix);
+      if (ch) {
+	oh = get_slot_object(tr, ch, i->o1_ix, true /* create */);
+	if (oh) {
+	  r = _omap_setkeys(ch->get_cid(), oh->get_oid(), i->attrs, t);
+	}
+      }
       break;
+
     case Transaction::OP_OMAP_RMKEYS:
-      r = _omap_rmkeys(i->cid, i->oid, i->keys, t);
+      r = -ENOENT;
+      ch = get_slot_collection(tr, i->c1_ix);
+      if (ch) {
+	oh = get_slot_object(tr, ch, i->o1_ix, false /* !create */);
+	if (oh) {
+	  r = _omap_rmkeys(ch->get_cid(), oh->get_oid(), i->keys, t);
+	}
+      }
       break;
+
     case Transaction::OP_OMAP_RMKEYRANGE:
-      r = _omap_rmkeyrange(i->cid, i->oid, i->name, i->name2, t);
+      r = -ENOENT;
+      ch = get_slot_collection(tr, i->c1_ix);
+      if (ch) {
+	oh = get_slot_object(tr, ch, i->o1_ix, false /* !create */);
+	if (oh) {
+	  r = _omap_rmkeyrange(ch->get_cid(), oh->get_oid(), i->name,
+			       i->name2, t);
+	}
+      }
       break;
+
     case Transaction::OP_OMAP_SETHEADER:
-      r = _omap_setheader(i->cid, i->oid, i->data, t);
+      r = -ENOENT;
+      ch = get_slot_collection(tr, i->c1_ix);
+      if (ch) {
+	oh = get_slot_object(tr, ch, i->o1_ix, true /* !create */);
+	if (oh) {
+	  r = _omap_setheader(ch->get_cid(), oh->get_oid(), i->data, t);
+	}
+      }
       break;
 
     case Transaction::OP_SETALLOCHINT:
       // TODO: can kvstore make use of the hint?
       break;
+#if 0
+    case Transaction::OP_COLL_ADD:
+      r = -EINVAL; // removed
+      break;
 
+    case Transaction::OP_COLL_REMOVE:
+      r = -EINVAL; // removed
+      break;
+
+    case Transaction::OP_COLL_MOVE:
+      r = -EINVAL; // removed
+      break;
+
+    case Transaction::OP_COLL_MOVE_RENAME:
+      r = -EINVAL; // removed
+      break;
+
+    case Transaction::OP_COLL_RENAME:
+      r = -EINVAL; // removed
+      break;
+#endif
     default:
       derr << "bad op " << i->op << dendl;
       assert(0);
@@ -1311,7 +1466,7 @@ unsigned KeyValueStore::_do_transaction(Transaction& transaction,
 	dout(0) << " transaction dump:\n";
 	JSONFormatter f(true);
 	f.open_object_section("transaction");
-	transaction.dump(&f);
+	tr.dump(&f);
 	f.close_section();
 	f.flush(*_dout);
 	*_dout << dendl;
@@ -1333,8 +1488,10 @@ unsigned KeyValueStore::_do_transaction(Transaction& transaction,
 // =========== KeyValueStore Op Implementation ==============
 // objects
 
-bool KeyValueStore::exists(const coll_t &cid, const hobject_t& oid)
+bool KeyValueStore::exists(CollectionHandle ch, const hobject_t& oid)
 {
+  const coll_t& cid = ch->get_cid();
+  
   dout(10) << __func__ << "collection: " << cid << " object: " << oid
 	   << dendl;
   int r;
@@ -1348,9 +1505,21 @@ bool KeyValueStore::exists(const coll_t &cid, const hobject_t& oid)
   return true;
 }
 
-int KeyValueStore::stat(const coll_t &cid, const hobject_t& oid,
+ObjectHandle KeyValueStore::get_object(
+  CollectionHandle ch, const hobject_t& oid) {
+  return new Object(oid);
+}
+
+void put_object(ObjectHandle oh) {
+  delete oh;
+}
+
+int KeyValueStore::stat(CollectionHandle ch, ObjectHandle oh,
 			struct stat *st, bool allow_eio)
 {
+  const coll_t& cid = ch->get_cid();
+  const hobject_t& oid = oh->get_oid();
+
   dout(10) << "stat " << cid << "/" << oid << dendl;
 
   StripObjectMap::StripObjectHeader header;
@@ -1442,10 +1611,13 @@ int KeyValueStore::_generic_read(StripObjectMap::StripObjectHeader &header,
 }
 
 
-int KeyValueStore::read(const coll_t &cid, const hobject_t& oid,
+int KeyValueStore::read(CollectionHandle ch, ObjectHandle oh,
 			uint64_t offset, size_t len, bufferlist& bl,
 			bool allow_eio)
 {
+  const coll_t& cid = ch->get_cid();
+  const hobject_t& oid = oh->get_oid();
+
   dout(15) << __func__ << " " << cid << "/" << oid << " " << offset << "~"
 	   << len << dendl;
 
@@ -1462,9 +1634,12 @@ int KeyValueStore::read(const coll_t &cid, const hobject_t& oid,
   return _generic_read(header, offset, len, bl, allow_eio);
 }
 
-int KeyValueStore::fiemap(const coll_t &cid, const hobject_t& oid,
+int KeyValueStore::fiemap(CollectionHandle ch, ObjectHandle oh,
 			  uint64_t offset, size_t len, bufferlist& bl)
 {
+  const coll_t& cid = ch->get_cid();
+  const hobject_t& oid = oh->get_oid();
+
   dout(10) << __func__ << " " << cid << " " << oid << " " << offset << "~"
 	   << len << dendl;
   int r;
@@ -1800,9 +1975,12 @@ int KeyValueStore::_clone_range(const coll_t &cid, const hobject_t& oldoid,
 
 // attrs
 
-int KeyValueStore::getattr(const coll_t &cid, const hobject_t& oid,
+int KeyValueStore::getattr(CollectionHandle ch, ObjectHandle oh,
 			   const char *name, bufferptr &bp)
 {
+  const coll_t& cid = ch->get_cid();
+  const hobject_t& oid = oh->get_oid();
+
   dout(15) << __func__ << " " << cid << "/" << oid << " '" << name << "'"
 	   << dendl;
 
@@ -1830,11 +2008,14 @@ int KeyValueStore::getattr(const coll_t &cid, const hobject_t& oid,
   return r;
 }
 
-int KeyValueStore::getattrs(const coll_t &cid, const hobject_t& oid,
-			   map<string,bufferptr>& aset, bool user_only)
+int KeyValueStore::getattrs(CollectionHandle ch, ObjectHandle oh,
+			    map<string,bufferptr>& aset, bool user_only)
 {
   int r;
   map<string, bufferlist> attr_aset;
+
+  const coll_t& cid = ch->get_cid();
+  const hobject_t& oid = oh->get_oid();
 
   r = backend->get(cid, oid, OBJECT_XATTR, &attr_aset);
   if (r < 0 && r != -ENOENT) {
@@ -1952,16 +2133,19 @@ int KeyValueStore::_rmattrs(const coll_t &cid, const hobject_t& oid,
 
 // collection attrs
 
-int KeyValueStore::collection_getattr(const coll_t &c, const char *name,
-				      void *value, size_t size)
+int KeyValueStore::collection_getattr(CollectionHandle ch,
+				      const char *name, void *value,
+				      size_t size)
 {
+  const coll_t& c = ch->get_cid();
+
   dout(15) << __func__ << " " << c.to_str() << " '" << name << "' len "
 	   << size << dendl;
 
   bufferlist bl;
   int r;
 
-  r = collection_getattr(c, name, bl);
+  r = collection_getattr(ch, name, bl);
   if (r < 0)
       goto out;
 
@@ -1979,9 +2163,11 @@ out:
   return r;
 }
 
-int KeyValueStore::collection_getattr(const coll_t &c, const char *name,
-				      bufferlist& bl)
+int KeyValueStore::collection_getattr(CollectionHandle ch,
+				      const char *name, bufferlist& bl)
 {
+  const coll_t& c = ch->get_cid();
+
   dout(15) << __func__ << " " << c.to_str() << " '" << name
 	   << "'" << dendl;
 
@@ -2004,9 +2190,11 @@ int KeyValueStore::collection_getattr(const coll_t &c, const char *name,
   return bl.length();
 }
 
-int KeyValueStore::collection_getattrs(const coll_t &cid,
+int KeyValueStore::collection_getattrs(CollectionHandle ch,
 				       map<string, bufferptr> &aset)
 {
+  const coll_t& cid = ch->get_cid();
+
   dout(10) << __func__ << " " << cid.to_str() << dendl;
 
   map<string, bufferlist> out;
@@ -2284,7 +2472,7 @@ int KeyValueStore::_collection_remove_recursive(const coll_t &cid,
   vector<hobject_t> objects;
   hobject_t place;
   do {
-    r = collection_list_partial(cid, place, 200, 300, &objects, &place);
+    r = backend->list_objects(cid, place, 300, &objects, &place);
     if (r < 0)
       return r;
 
@@ -2333,8 +2521,8 @@ int KeyValueStore::_collection_rename(const coll_t &cid, const coll_t &ncid,
   hobject_t next, current;
   int move_size = 0;
   while (1) {
-    collection_list_partial(cid, current, get_ideal_list_min(),
-			    get_ideal_list_max(), &objects, &next);
+    r = backend->list_objects(cid, current, get_ideal_list_max(),
+			      &objects, &next);
 
     dout(20) << __func__ << cid << "objects size: " << objects.size()
 	     << dendl;
@@ -2377,6 +2565,17 @@ int KeyValueStore::list_collections(vector<coll_t>& ls)
   return 0;
 }
 
+ObjectStore::CollectionHandle KeyValueStore::open_collection(const coll_t& c)
+{
+  return new Collection(c);
+}
+
+int KeyValueStore::close_collection(ObjectStore::CollectionHandle ch)
+{
+  delete ch;
+  return 0;
+}
+
 bool KeyValueStore::collection_exists(const coll_t &c)
 {
   dout(10) << __func__ << " " << dendl;
@@ -2390,28 +2589,30 @@ bool KeyValueStore::collection_exists(const coll_t &c)
   return true;
 }
 
-bool KeyValueStore::collection_empty(const coll_t &c)
+bool KeyValueStore::collection_empty(CollectionHandle ch)
 {
+  const coll_t& cid = ch->get_cid();
+
   dout(10) << __func__ << " " << dendl;
 
   vector<hobject_t> oids;
-  backend->list_objects(c, hobject_t(), 1, &oids, 0);
+  backend->list_objects(cid, hobject_t(), 1, &oids, 0);
 
   return oids.empty();
 }
 
-int KeyValueStore::collection_list_range(const coll_t &c, hobject_t start,
-					 hobject_t end,
+int KeyValueStore::collection_list_range(CollectionHandle ch,
+					 hobject_t start, hobject_t end,
 					 vector<hobject_t> *ls)
 {
   bool done = false;
   hobject_t next = start;
+  const coll_t& cid = ch->get_cid();
 
   while (!done) {
     vector<hobject_t> next_objects;
-    int r = collection_list_partial(c, next, get_ideal_list_min(),
-				    get_ideal_list_max(),
-				    &next_objects, &next);
+    int r = backend->list_objects(cid, next, get_ideal_list_max(),
+				  &next_objects, &next);
     if (r < 0)
       return r;
 
@@ -2435,25 +2636,30 @@ int KeyValueStore::collection_list_range(const coll_t &c, hobject_t start,
   return 0;
 }
 
-int KeyValueStore::collection_list_partial(const coll_t &c, hobject_t start,
+int KeyValueStore::collection_list_partial(CollectionHandle ch,
+					   hobject_t start,
 					   int min, int max,
 					   vector<hobject_t> *ls,
 					   hobject_t *next)
 {
-  dout(10) << __func__ << " " << c << " start:" << start << dendl;
+  const coll_t& cid = ch->get_cid();
+
+  dout(10) << __func__ << " " << cid << " start:" << start << dendl;
 
   if (min < 0 || max < 0)
       return -EINVAL;
 
-  return backend->list_objects(c, start, max, ls, next);
+  return backend->list_objects(cid, start, max, ls, next);
 }
 
-int KeyValueStore::collection_list(const coll_t &c, vector<hobject_t>& ls)
+int KeyValueStore::collection_list(CollectionHandle ch,
+				   vector<hobject_t>& ls)
 {
-  return collection_list_partial(c, hobject_t(), 0, 0, &ls, 0);
+  return collection_list_partial(ch, hobject_t(), 0, 0, &ls, 0);
 }
 
-int KeyValueStore::collection_version_current(const coll_t &c, uint32_t *version)
+int KeyValueStore::collection_version_current(CollectionHandle ch,
+					      uint32_t *version)
 {
   *version = COLLECTION_VERSION;
   if (*version == target_version)
@@ -2464,19 +2670,21 @@ int KeyValueStore::collection_version_current(const coll_t &c, uint32_t *version
 
 // omap
 
-int KeyValueStore::omap_get(const coll_t &c, const hobject_t &hoid,
+int KeyValueStore::omap_get(CollectionHandle ch, ObjectHandle oh,
 			    bufferlist *bl, map<string, bufferlist> *out)
 {
-  dout(15) << __func__ << " " << c << "/" << hoid << dendl;
+  const coll_t& cid = ch->get_cid();
+  const hobject_t& hoid = oh->get_oid();
+
+  dout(15) << __func__ << " " << cid << "/" << hoid << dendl;
 
   StripObjectMap::StripObjectHeader header;
 
-  int r = backend->lookup_strip_header(c, hoid, header);
+  int r = backend->lookup_strip_header(cid, hoid, header);
   if (r < 0) {
     dout(10) << __func__ << " lookup_strip_header failed: r =" << r << dendl;
     return r;
   }
-
 
   r = backend->get_with_header(header, OBJECT_OMAP, out);
   if (r < 0 && r != -ENOENT) {
@@ -2502,16 +2710,20 @@ int KeyValueStore::omap_get(const coll_t &c, const hobject_t &hoid,
   return 0;
 }
 
-int KeyValueStore::omap_get_header(const coll_t &c, const hobject_t &hoid,
+int KeyValueStore::omap_get_header(CollectionHandle ch,
+      ObjectHandle oh,
 				   bufferlist *bl, bool allow_eio)
 {
-  dout(15) << __func__ << " " << c << "/" << hoid << dendl;
+  const coll_t& cid = ch->get_cid();
+  const hobject_t& hoid = oh->get_oid();
+
+  dout(15) << __func__ << " " << cid << "/" << hoid << dendl;
 
   set<string> keys;
   map<string, bufferlist> got;
 
   keys.insert(OBJECT_OMAP_HEADER_KEY);
-  int r = backend->get_values(c, hoid, OBJECT_OMAP_HEADER, keys, &got);
+  int r = backend->get_values(cid, hoid, OBJECT_OMAP_HEADER, keys, &got);
   if (r < 0 && r != -ENOENT) {
     dout(10) << __func__ << " err r =" << r << dendl;
     return r;
@@ -2525,37 +2737,48 @@ int KeyValueStore::omap_get_header(const coll_t &c, const hobject_t &hoid,
   return 0;
 }
 
-int KeyValueStore::omap_get_keys(const coll_t &c, const hobject_t &hoid,
-				 set<string> *keys)
+int KeyValueStore::omap_get_keys(CollectionHandle ch,
+				 ObjectHandle oh, set<string> *keys)
 {
-  dout(15) << __func__ << " " << c << "/" << hoid << dendl;
+  const coll_t& cid = ch->get_cid();
+  const hobject_t& hoid = oh->get_oid();
 
-  int r = backend->get_keys(c, hoid, OBJECT_OMAP, keys);
+  dout(15) << __func__ << " " << cid << "/" << hoid << dendl;
+
+  int r = backend->get_keys(cid, hoid, OBJECT_OMAP, keys);
   if (r < 0 && r != -ENOENT) {
     return r;
   }
   return 0;
 }
 
-int KeyValueStore::omap_get_values(const coll_t &c, const hobject_t &hoid,
+int KeyValueStore::omap_get_values(CollectionHandle ch,
+				   ObjectHandle oh,
 				   const set<string> &keys,
 				   map<string, bufferlist> *out)
 {
-  dout(15) << __func__ << " " << c << "/" << hoid << dendl;
+  const coll_t& cid = ch->get_cid();
+  const hobject_t& hoid = oh->get_oid();
 
-  int r = backend->get_values(c, hoid, OBJECT_OMAP, keys, out);
+  dout(15) << __func__ << " " << cid << "/" << hoid << dendl;
+
+  int r = backend->get_values(cid, hoid, OBJECT_OMAP, keys, out);
   if (r < 0 && r != -ENOENT) {
     return r;
   }
   return 0;
 }
 
-int KeyValueStore::omap_check_keys(const coll_t &c, const hobject_t &hoid,
+int KeyValueStore::omap_check_keys(CollectionHandle ch,
+				   ObjectHandle oh,
 				   const set<string> &keys, set<string> *out)
 {
-  dout(15) << __func__ << " " << c << "/" << hoid << dendl;
+  const coll_t& cid = ch->get_cid();
+  const hobject_t& hoid = oh->get_oid();
 
-  int r = backend->check_keys(c, hoid, OBJECT_OMAP, keys, out);
+  dout(15) << __func__ << " " << cid << "/" << hoid << dendl;
+
+  int r = backend->check_keys(cid, hoid, OBJECT_OMAP, keys, out);
   if (r < 0 && r != -ENOENT) {
     return r;
   }
@@ -2563,10 +2786,10 @@ int KeyValueStore::omap_check_keys(const coll_t &c, const hobject_t &hoid,
 }
 
 ObjectMap::ObjectMapIterator KeyValueStore::get_omap_iterator(
-    const coll_t &c, const hobject_t &hoid)
+  CollectionHandle ch, ObjectHandle oh)
 {
-  dout(15) << __func__ << " " << c << "/" << hoid << dendl;
-  return backend->get_iterator(c, hoid, OBJECT_OMAP);
+  dout(15) << __func__ << " " << ch->get_cid() << "/" << oh->get_oid() << dendl;
+  return backend->get_iterator(ch->get_cid(), oh->get_oid(), OBJECT_OMAP);
 }
 
 int KeyValueStore::_omap_clear(const coll_t &cid, const hobject_t &hoid,
@@ -2660,7 +2883,8 @@ int KeyValueStore::_omap_rmkeyrange(const coll_t &cid, const hobject_t &hoid,
 
   set<string> keys;
   {
-    ObjectMap::ObjectMapIterator iter = get_omap_iterator(cid, hoid);
+    ObjectMap::ObjectMapIterator iter =
+      backend->get_iterator(cid, hoid, OBJECT_OMAP);
     if (!iter)
       return -ENOENT;
 
@@ -2713,6 +2937,7 @@ void KeyValueStore::handle_conf_change(const struct md_config_t *conf,
   }
 }
 
-void KeyValueStore::dump_transactions(list<ObjectStore::Transaction*>& ls, uint64_t seq, OpSequencer *osr)
+void KeyValueStore::dump_transactions(list<ObjectStore::Transaction*>& ls,
+				      uint64_t seq, OpSequencer *osr)
 {
 }

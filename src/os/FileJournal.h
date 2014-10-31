@@ -30,6 +30,8 @@ using std::deque;
 # include <libaio.h>
 #endif
 
+class ObjectStore;
+
 /**
  * Implements journaling on top of block device or file.
  *
@@ -63,6 +65,7 @@ public:
     write_item() : seq(0), alignment(0) {}
   };
 
+  ObjectStore* os;
   ZTracer::Endpoint trace_endpoint;
   Mutex finisher_lock;
   Cond finisher_cond;
@@ -343,9 +346,14 @@ private:
   }
 
  public:
-  FileJournal(const boost::uuids::uuid& fsid, Finisher *fin, Cond *sync_cond, const char *f,
-	      bool dio = false, bool ai = true, bool faio = false) :
+  FileJournal(ObjectStore* os, const boost::uuids::uuid& fsid,
+	      Finisher *fin, Cond *sync_cond,
+	      const char *f,
+	      bool dio = false,
+	      bool ai = true,
+	      bool faio = false) :
     Journal(fsid, fin, sync_cond),
+    os(os),
     trace_endpoint("0.0.0.0", 0, NULL),
     journaled_seq(0),
     plug_journal_completions(false),

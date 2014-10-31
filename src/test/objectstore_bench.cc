@@ -136,6 +136,12 @@ class OBS_Worker : public Thread
     // use a sequencer for each thread so they don't serialize each other
     ObjectStore::Sequencer seq("osbench worker");
 
+    // when we know a stable collection and/or object by handle, we
+    // can establish them ahead-of-time and save work processing the
+    // transactions in ObjectStore, here we'll do just the collection
+    // to exercise object lookups
+    ObjectStore::CollectionHandle ch = fs->open_collection(coll_t());
+
     for (int ix = 0; ix < repeats; ++ix) {
       uint64_t offset = 0;
       size_t len = size;
@@ -147,8 +153,11 @@ class OBS_Worker : public Thread
 	size_t count = len < block_size ? len : (size_t)block_size;
 
 	ObjectStore::Transaction *t = new ObjectStore::Transaction;
-	t->write(coll_t(), hobject_t(poid), offset, count, data);
+	t->push_col(ch);
+	t->push_oid(poid);
 
+	// use the internal offsets for col/cid, obj/oid for brevity
+	t->write(offset, count, data);
 	tls.push_back(t);
 
 	offset += count;
@@ -175,6 +184,9 @@ class OBS_Worker : public Thread
       }
     }
 
+    // return ObjectStore handles
+    fs->close_collection(ch);
+    
     return 0;
   }
 };
