@@ -172,7 +172,7 @@ int OSDMessengers::bind(CephContext *cct, md_config_t *conf)
 {
   // bind messengers
   pick_addresses(cct, CEPH_PICK_ADDRESS_PUBLIC|CEPH_PICK_ADDRESS_CLUSTER);
-  dout(-1) << __FUNCTION__ << ": client " << conf->public_addr
+  dout(10) << __FUNCTION__ << ": client " << conf->public_addr
     << ", cluster " << conf->cluster_addr << dendl;
 
   if (conf->public_addr.is_blank_ip() &&
@@ -186,21 +186,21 @@ int OSDMessengers::bind(CephContext *cct, md_config_t *conf)
   int r = cluster->bind(conf->cluster_addr);
   if (r < 0)
     return r;
-  dout(-1) << "bound cluster: " << cluster->get_myaddr() << dendl;
+  dout(10) << "bound cluster: " << cluster->get_myaddr() << dendl;
 
   entity_addr_t public_addr(conf->public_addr);
   if (client != client_xio) {
     r = client->bind(public_addr);
     if (r < 0)
       return r;
-    dout(-1) << "bound client: " << client->get_myaddr() << dendl;
+    dout(10) << "bound client: " << client->get_myaddr() << dendl;
     public_addr = client->get_myaddr();
   }
   if (client_xio) {
     r = client_xio->bind(public_addr);
     if (r < 0)
       return r;
-    dout(-1) << "bound client_xio: " << client_xio->get_myaddr() << dendl;
+    dout(10) << "bound client_xio: " << client_xio->get_myaddr() << dendl;
   }
 
   entity_addr_t objecter_addr(conf->public_addr);
@@ -208,14 +208,14 @@ int OSDMessengers::bind(CephContext *cct, md_config_t *conf)
     r = objecter->bind(objecter_addr);
     if (r < 0)
       return r;
-    dout(-1) << "bound objecter: " << objecter->get_myaddr() << dendl;
+    dout(10) << "bound objecter: " << objecter->get_myaddr() << dendl;
     objecter_addr = objecter->get_myaddr();
   }
   if (objecter_xio) {
     r = objecter_xio->bind(objecter_addr);
     if (r < 0)
       return r;
-    dout(-1) << "bound objecter_xio: " << objecter_xio->get_myaddr() << dendl;
+    dout(10) << "bound objecter_xio: " << objecter_xio->get_myaddr() << dendl;
   }
 
   // hb front should bind to same ip as public_addr
@@ -225,7 +225,7 @@ int OSDMessengers::bind(CephContext *cct, md_config_t *conf)
   r = front_hb->bind(hb_front_addr);
   if (r < 0)
     return r;
-  dout(-1) << "bound front_hb: " << front_hb->get_myaddr() << dendl;
+  dout(10) << "bound front_hb: " << front_hb->get_myaddr() << dendl;
 
   // hb back should bind to same ip as cluster_addr (if specified)
   entity_addr_t hb_back_addr(conf->osd_heartbeat_addr);
@@ -237,7 +237,7 @@ int OSDMessengers::bind(CephContext *cct, md_config_t *conf)
   r = back_hb->bind(hb_back_addr);
   if (r < 0)
     return r;
-  dout(-1) << "bound back_hb: " << back_hb->get_myaddr() << dendl;
+  dout(10) << "bound back_hb: " << back_hb->get_myaddr() << dendl;
 
   return 0;
 }
