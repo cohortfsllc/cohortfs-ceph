@@ -60,10 +60,16 @@ namespace ceph {
       unsigned len;
       std::atomic<uint32_t> nref;
 
-      raw(unsigned l) : data(NULL), len(l), nref(0)
+      mutable Mutex crc_lock;
+      map<pair<size_t, size_t>, pair<uint32_t, uint32_t> > crc_map;
+
+      raw(unsigned l)
+	: data(NULL), len(l), nref(0),
+	  crc_lock("buffer::raw::crc_lock")
 	{ }
       raw(char *c, unsigned l)
-	: data(c), len(l), nref(0)
+	: data(c), len(l), nref(0),
+	  crc_lock("buffer::raw::crc_lock")
 	{ }
       virtual ~raw() {};
 
@@ -107,44 +113,6 @@ namespace ceph {
 
       virtual bool get_crc(const pair<size_t, size_t> &fromto,
 			   pair<uint32_t, uint32_t> *crc) const {
-	return false;
-      }
-
-      virtual void set_crc(const pair<size_t, size_t> &fromto,
-			   const pair<uint32_t, uint32_t> &crc) {}
-
-      virtual void invalidate_crc() {}
-
-      static raw* create(unsigned len);
-      static raw* claim_char(unsigned len, char *buf);
-      static raw* create_malloc(unsigned len);
-      static raw* claim_malloc(unsigned len, char *buf);
-      static raw* create_static(unsigned len, char *buf);
-      static raw* create_page_aligned(unsigned len);
-      static raw* create_zero_copy(unsigned len, int fd, int64_t *offset);
-#ifdef HAVE_XIO
-      static raw* create_xio_msg(unsigned len, char *buf,
-				 XioCompletionHook *hook);
-#endif
-    };
-
-    class raw_crc : public raw {
-    public:
-      mutable Mutex crc_lock;
-      map<pair<size_t, size_t>, pair<uint32_t, uint32_t> > crc_map;
-
-      raw_crc(unsigned l) :
-	raw(l)
-	{}
-
-      raw_crc(char *c, unsigned l) :
-	raw(c, l)
-	{}
-
-      virtual ~raw_crc() {};
-
-      virtual bool get_crc(const pair<size_t, size_t> &fromto,
-			   pair<uint32_t, uint32_t> *crc) const {
 	Mutex::Locker l(crc_lock);
 	map<pair<size_t, size_t>, pair<uint32_t, uint32_t> >::const_iterator i
 	  = crc_map.find(fromto);
@@ -164,11 +132,23 @@ namespace ceph {
 	Mutex::Locker l(crc_lock);
 	crc_map.clear();
       }
+
+      static raw* create(unsigned len);
+      static raw* claim_char(unsigned len, char *buf);
+      static raw* create_malloc(unsigned len);
+      static raw* claim_malloc(unsigned len, char *buf);
+      static raw* create_static(unsigned len, char *buf);
+      static raw* create_page_aligned(unsigned len);
+      static raw* create_zero_copy(unsigned len, int fd, int64_t *offset);
+#ifdef HAVE_XIO
+      static raw* create_xio_msg(unsigned len, char *buf,
+				 XioCompletionHook *hook);
+#endif
     };
 
-    class raw_malloc : public raw_crc {
+    class raw_malloc : public raw {
     public:
-      raw_malloc(unsigned l) : raw_crc(l) {
+      raw_malloc(unsigned l) : raw(l) {
 	if (len) {
 	  data = (char *)malloc(len);
 	  if (!data)
@@ -178,7 +158,7 @@ namespace ceph {
 	}
       }
 
-      raw_malloc(unsigned l, char *b) : raw_crc(b, l)
+      raw_malloc(unsigned l, char *b) : raw(b, l)
 	{}
 
       ~raw_malloc() {
@@ -191,9 +171,9 @@ namespace ceph {
     };
 
 #ifndef __CYGWIN__
-    class raw_mmap_pages : public raw_crc {
+    class raw_mmap_pages : public raw {
     public:
-      raw_mmap_pages(unsigned l) : raw_crc(l) {
+      raw_mmap_pages(unsigned l) : raw(l) {
 	data = (char*)::mmap(NULL, len, PROT_READ|PROT_WRITE,
 			     MAP_PRIVATE|MAP_ANON, -1, 0);
 	if (!data)
@@ -209,9 +189,9 @@ namespace ceph {
       }
     };
 
-    class raw_posix_aligned : public raw_crc {
+    class raw_posix_aligned : public raw {
     public:
-      raw_posix_aligned(unsigned l) : raw_crc(l) {
+      raw_posix_aligned(unsigned l) : raw(l) {
 #ifdef DARWIN
 	data = (char *) valloc (len);
 #else
@@ -235,10 +215,10 @@ namespace ceph {
 #endif
 
 #ifdef __CYGWIN__
-    class raw_hack_aligned : public raw_crc {
+    class raw_hack_aligned : public raw {
       char *realdata;
     public:
-      raw_hack_aligned(unsigned l) : raw_crc(l) {
+      raw_hack_aligned(unsigned l) : raw(l) {
 	realdata = new char[len+CEPH_PAGE_SIZE-1];
 	unsigned off = ((unsigned)realdata) & ~CEPH_PAGE_MASK;
 	if (off)
@@ -417,16 +397,16 @@ namespace ceph {
     /*
      * primitive buffer types
      */
-    class raw_char : public raw_crc {
+    class raw_char : public raw {
     public:
-      raw_char(unsigned l) : raw_crc(l) {
+      raw_char(unsigned l) : raw(l) {
 	if (len)
 	  data = new char[len];
 	else
 	  data = 0;
       }
       
-      raw_char(unsigned l, char *b) : raw_crc(b, l)
+      raw_char(unsigned l, char *b) : raw(b, l)
 	{}
       
       ~raw_char() {
@@ -438,9 +418,9 @@ namespace ceph {
       }
     };
 
-    class raw_static : public raw_crc {
+    class raw_static : public raw {
     public:
-      raw_static(const char *d, unsigned l) : raw_crc((char*)d, l) { }
+      raw_static(const char *d, unsigned l) : raw((char*)d, l) { }
       ~raw_static() {}
       raw* clone_empty() {
 	return new raw_char(len);
