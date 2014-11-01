@@ -150,8 +150,9 @@ if(WITH_RADOSGW)
     resolv)
 endif (WITH_RADOSGW)
 
-add_executable(dencoder ${dencoder_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
-target_link_libraries(dencoder ${dencoder_dependencies})
+add_executable(ceph-dencoder
+  ${dencoder_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
+target_link_libraries(ceph-dencoder ${dencoder_dependencies})
 
 # get_command_descriptions
 add_executable(get_command_descriptions
