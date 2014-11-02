@@ -564,11 +564,7 @@ private:
   list<OpRequestRef> finished;
   Mutex finished_lock;
 
-  void take_waiters(list<OpRequestRef>& ls) {
-    finished_lock.Lock();
-    finished.splice(finished.end(), ls);
-    finished_lock.Unlock();
-  }
+  void take_waiters(list<OpRequestRef>& ls);
   void take_waiters_front(list<OpRequestRef>& ls) {
     finished_lock.Lock();
     finished.splice(finished.begin(), ls);
@@ -679,9 +675,7 @@ protected:
   void note_down_osd(int osd);
   void note_up_osd(int osd);
 
-  void advance_vol(
-    epoch_t advance_to, OSDVol *vol,
-    ThreadPool::TPHandle &handle);
+  void advance_vol(epoch_t advance_to, OSDVolRef& vol);
   void advance_map(ObjectStore::Transaction& t, C_Contexts *tfin);
   void consume_map();
   void activate_map();

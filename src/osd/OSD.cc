@@ -2158,12 +2158,14 @@ void OSD::_dispatch(Message *m)
   default:
     {
       OpRequestRef op = OpRequest::create_request(m);
+#if 0
       // no map?  starting up?
       if (!osdmap) {
 	dout(7) << "no OSDMap, not booted" << dendl;
 	waiting_for_osdmap.push_back(op);
 	break;
       }
+#endif
 
       // need OSDMap
       dispatch_op(op);
@@ -2638,9 +2640,7 @@ void OSD::check_osdmap_features(ObjectStore *fs)
   }
 }
 
-void OSD::advance_vol(
-  epoch_t osd_epoch, OSDVol *vol,
-  ThreadPool::TPHandle &handle)
+void OSD::advance_vol(epoch_t osd_epoch, OSDVolRef& vol)
 {
   assert(vol->is_locked());
   epoch_t next_epoch = vol->get_osdmap()->get_epoch() + 1;
@@ -2689,7 +2689,8 @@ void OSD::advance_map(ObjectStore::Transaction& t, C_Contexts *tfin)
 void OSD::consume_map()
 {
   assert(osd_lock.is_locked());
-  dout(7) << "consume_map version " << osdmap->get_epoch() << dendl;
+  epoch_t to = osdmap->get_epoch();
+  dout(7) << "consume_map version " << to << dendl;
 
 #if 0 // For future use, Volume Deletion
   int num_vols;
@@ -2707,10 +2708,20 @@ void OSD::consume_map()
   }
 #endif
 
+  notify_state_observers(state, to);
+
+  for (std::map<uuid_d,OSDVolRef>::iterator it = vol_map.begin();
+       it != vol_map.end();
+       ++it) {
+
+    OSDVolRef vol = it->second;
+    vol->lock();
+    advance_vol(to, vol);
+    vol->unlock();
+  }
+
   service.pre_publish_map(osdmap);
   service.publish_map(osdmap);
-
-  notify_state_observers(state, osdmap->get_epoch());
 }
 
 void OSD::activate_map()
@@ -2726,6 +2737,19 @@ void OSD::activate_map()
 
   // process waiters
   take_waiters(waiting_for_osdmap);
+}
+
+void OSD::take_waiters(list<OpRequestRef>& ls) {
+  finished_lock.Lock();
+  finished.splice(finished.end(), ls);
+  finished_lock.Unlock();
+  for (std::map<uuid_d,OSDVolRef>::iterator it = vol_map.begin();
+       it != vol_map.end();
+       ++it) {
+
+    OSDVolRef vol = it->second;
+    vol->take_waiters();
+  }
 }
 
 
@@ -2975,9 +2999,11 @@ void OSD::handle_op(OpRequestRef op)
   // we don't need encoded payload anymore
   m->clear_payload();
 
+#if 0
   // require same or newer map
   if (!require_same_or_newer_map(op, m->get_map_epoch()))
     return;
+#endif
 
   // object name too long?
   if (m->get_oid().oid.name.size() > MAX_CEPH_OBJECT_NAME_LEN) {
