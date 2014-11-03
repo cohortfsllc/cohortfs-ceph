@@ -2,11 +2,13 @@
 
 # cls_hello
 add_library(cls_hello SHARED hello/cls_hello.cc)
+target_link_libraries(cls_hello common)
 set_target_properties(cls_hello PROPERTIES VERSION "1.0.0" SOVERSION "1")
 install(TARGETS cls_hello DESTINATION lib/rados-classes)
 
 # cls_lock
 add_library(cls_lock SHARED lock/cls_lock.cc)
+target_link_libraries(cls_lock common)
 set_target_properties(cls_lock PROPERTIES VERSION "1.0.0" SOVERSION "1")
 install(TARGETS cls_lock DESTINATION lib/rados-classes)
 
@@ -20,7 +22,7 @@ add_library(cls_refcount SHARED
   refcount/cls_refcount.cc
   refcount/cls_refcount_ops.cc
   ${CMAKE_SOURCE_DIR}/src/common/ceph_json.cc)
-target_link_libraries(cls_refcount json_spirit)
+target_link_libraries(cls_refcount json_spirit common)
 set_target_properties(cls_refcount PROPERTIES VERSION "1.0.0" SOVERSION "1")
 install(TARGETS cls_refcount DESTINATION lib/rados-classes)
 
@@ -30,6 +32,7 @@ add_library(cls_refcount_client
 
 # cls_version
 add_library(cls_version SHARED version/cls_version.cc)
+target_link_libraries(cls_version common)
 set_target_properties(cls_version PROPERTIES VERSION "1.0.0" SOVERSION "1")
 install(TARGETS cls_version DESTINATION lib/rados-classes)
 
@@ -39,6 +42,7 @@ add_library(cls_version_client
 
 # cls_log
 add_library(cls_log SHARED log/cls_log.cc)
+target_link_libraries(cls_log common)
 set_target_properties(cls_log PROPERTIES VERSION "1.0.0" SOVERSION "1")
 install(TARGETS cls_log DESTINATION lib/rados-classes)
 
@@ -46,6 +50,7 @@ add_library(cls_log_client log/cls_log_client.cc)
 
 # cls_statelog
 add_library(cls_statelog SHARED statelog/cls_statelog.cc)
+target_link_libraries(cls_statelog common)
 set_target_properties(cls_statelog PROPERTIES VERSION "1.0.0" SOVERSION "1")
 install(TARGETS cls_statelog DESTINATION lib/rados-classes)
 
@@ -53,6 +58,7 @@ add_library(cls_statelog_client statelog/cls_statelog_client.cc)
 
 # cls_replica_log
 add_library(cls_replica_log SHARED replica_log/cls_replica_log.cc)
+target_link_libraries(cls_replica_log common)
 set_target_properties(cls_replica_log PROPERTIES VERSION "1.0.0" SOVERSION "1")
 install(TARGETS cls_replica_log DESTINATION lib/rados-classes)
 
@@ -63,6 +69,7 @@ add_library(cls_replica_log_client
 
 # cls_user
 add_library(cls_user SHARED user/cls_user.cc)
+target_link_libraries(cls_user common)
 set_target_properties(cls_user PROPERTIES VERSION "1.0.0" SOVERSION "1")
 install(TARGETS cls_user DESTINATION lib/rados-classes)
 
@@ -78,7 +85,7 @@ if (WITH_RADOSGW)
     rgw/cls_rgw_ops.cc
     rgw/cls_rgw_types.cc
     ${CMAKE_SOURCE_DIR}/src/common/ceph_json.cc)
-  target_link_libraries(cls_rgw json_spirit)
+  target_link_libraries(cls_rgw json_spirit common)
   set_target_properties(cls_rgw PROPERTIES VERSION "1.0.0" SOVERSION "1")
   install(TARGETS cls_rgw DESTINATION lib/rados-classes)
 
