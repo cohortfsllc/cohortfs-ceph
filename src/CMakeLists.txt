@@ -411,7 +411,7 @@ add_library(os_filestore SHARED $<TARGET_OBJECTS:os_filestore_objs>)
 if(${HAVE_LIBAIO})
   target_link_libraries(os_filestore aio)
 endif(${HAVE_LIBAIO})
-target_link_libraries(os_filestore os)
+target_link_libraries(os_filestore common os)
 set_target_properties(os_filestore PROPERTIES VERSION "1.0.0" SOVERSION "1")
 install(TARGETS os_filestore DESTINATION lib/os-modules)
 
@@ -422,7 +422,7 @@ set(os_kvstore_files
 
 add_library(os_kvstore_objs OBJECT ${os_kvstore_files})
 add_library(os_kvstore SHARED $<TARGET_OBJECTS:os_kvstore_objs>)
-target_link_libraries(os_kvstore os)
+target_link_libraries(os_kvstore common os)
 set_target_properties(os_kvstore PROPERTIES VERSION "1.0.0" SOVERSION "1")
 install(TARGETS os_kvstore DESTINATION lib/os-modules)
 
@@ -433,7 +433,7 @@ set(os_memstore_files
 
 add_library(os_memstore_objs OBJECT ${os_memstore_files})
 add_library(os_memstore SHARED $<TARGET_OBJECTS:os_memstore_objs>)
-target_link_libraries(os_memstore os)
+target_link_libraries(os_memstore common os)
 set_target_properties(os_memstore PROPERTIES VERSION "1.0.0" SOVERSION "1")
 install(TARGETS os_memstore DESTINATION lib/os-modules)
 
