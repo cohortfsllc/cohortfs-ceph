@@ -2299,9 +2299,9 @@ void Locker::handle_client_caps(MClientCaps *m)
       dout(7) << " flush client." << client << " dirty "
 	      << ccap_string(m->get_dirty()) << " seq " << m->get_seq()
 	      << " on " << *in << dendl;
-      ack = new MClientCaps(CEPH_CAP_OP_FLUSH_ACK, in->ino(), 0,
+      ack = new MClientCaps(CEPH_CAP_OP_FLUSH_ACK, in->ino(),
 			    cap->get_cap_id(), m->get_seq(),
-			    m->get_caps(), 0, m->get_dirty());
+			    m->get_caps(), 0, m->get_dirty(), 0);
       ack->set_client_tid(m->get_client_tid());
     }
 
