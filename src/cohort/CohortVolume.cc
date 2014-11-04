@@ -15,13 +15,14 @@
 #include <dlfcn.h>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/classification.hpp>
+#include <boost/uuid/uuid_generators.hpp>
 #include "osd/OSDMap.h"
 #include "CohortVolume.h"
 #include "osdc/Objecter.h"
 
 const uint64_t CohortVolume::one_op = 4194304;
 
-typedef int (*place_func)(void*, const uuid_t, size_t, const char*,
+typedef int (*place_func)(void*, const uint8_t[16], size_t, const char*,
 			  struct erasure_params *,
 			  bool(*)(void*, int),
 			  bool(*)(void*, int));
@@ -37,14 +38,15 @@ VolumeRef CohortVolFactory(bufferlist::iterator& bl, uint8_t v, vol_type t)
 
 void CohortVolume::compile(epoch_t epoch)
 {
-  char uuidstring[uuid_d::char_rep_buf_size];
-  char cfilename[uuid_d::char_rep_buf_size + 10];
-  char objfilename[uuid_d::char_rep_buf_size + 10];
-  char sofilename[uuid_d::char_rep_buf_size + 10];
+  const size_t uuid_strlen = 37;
+  char uuidstring[uuid_strlen];
+  char cfilename[uuid_strlen + 10];
+  char objfilename[uuid_strlen + 10];
+  char sofilename[uuid_strlen + 10];
 
   pid_t child;
 
-  uuid.print(uuidstring);
+  strcpy(uuidstring, to_string(id).c_str());
   strcpy(cfilename, "/tmp/");
   strcat(cfilename, uuidstring);
   strcpy(objfilename, cfilename);
@@ -194,7 +196,7 @@ int CohortVolume::place(const object_t& object,
 
   place_func entry_point = (place_func) entry_points[rule_index];
 
-  int rc = entry_point(&context, uuid.uuid,
+  int rc = entry_point(&context, id.data,
 		       object.name.length(), object.name.data(),
 		       &erasure, test_osd, return_osd);
   compile_lock.unlock();
@@ -246,7 +248,7 @@ VolumeRef CohortVolume::create(const string& name,
   if (!valid_name(name, error_message))
     goto error;
 
-  v->uuid.generate_random();
+  v->id = boost::uuids::random_generator()();
   v->name = name;
   v->last_update = last_update;
   v->place_text.append(place_text);
@@ -320,7 +322,7 @@ int CohortVolume::create(const object_t& oid, utime_t mtime,
     ops[0].op.op = CEPH_OSD_OP_CREATE;
     ops[0].op.flags = 0;
     Objecter::Op *o
-      = new Objecter::Op(hobject_t(oid, DATA, stripe), uuid,
+      = new Objecter::Op(hobject_t(oid, DATA, stripe), id,
 			 ops, global_flags | CEPH_OSD_FLAG_WRITE,
 			 multiack, multicommit, NULL);
     o->mtime = mtime;
@@ -409,7 +411,7 @@ int CohortVolume::write(const object_t& oid, uint64_t off, uint64_t len,
     ops[0].op.extent.truncate_seq = 0;
     ops[0].indata = stripes[stripe].bl;
     Objecter::Op *o
-      = new Objecter::Op(hobject_t(oid, DATA, stripe), uuid,
+      = new Objecter::Op(hobject_t(oid, DATA, stripe), id,
 			 ops, flags | CEPH_OSD_FLAG_WRITE,
 			 multiack, multicommit, NULL);
     o->mtime = mtime;
@@ -482,7 +484,7 @@ int CohortVolume::write_full(const object_t& oid,
     assert(ops[0].op.extent.length <= one_op);
     ops[0].indata = stripes[stripe].bl;
     Objecter::Op *o
-      = new Objecter::Op(hobject_t(oid, DATA, stripe), uuid,
+      = new Objecter::Op(hobject_t(oid, DATA, stripe), id,
 			 ops, flags | CEPH_OSD_FLAG_WRITE,
 			 multiack, multicommit, NULL);
     o->mtime = mtime;
@@ -612,7 +614,7 @@ int CohortVolume::md_read(const object_t& oid, ObjectOperation& op,
   assert(erasure.m == 0);
 
   Objecter::Op *o
-    = new Objecter::Op(hobject_t(oid, DATA, 0), uuid, op.ops,
+    = new Objecter::Op(hobject_t(oid, DATA, 0), id, op.ops,
 		       flags | CEPH_OSD_FLAG_READ, onack, NULL, NULL);
   o->priority = op.priority;
   o->outbl = pbl;
@@ -651,7 +653,7 @@ int CohortVolume::read(const object_t& oid, uint64_t off, uint64_t len,
     ops[0].op.extent.truncate_size = 0;
     ops[0].op.extent.truncate_seq = 0;
     Objecter::Op *o
-      = new Objecter::Op(hobject_t(oid, DATA, stripe), uuid, ops,
+      = new Objecter::Op(hobject_t(oid, DATA, stripe), id, ops,
 			 flags | CEPH_OSD_FLAG_READ, mr, 0, NULL);
     o->outbl = &mr->reads[stripe];
     o->osd = osds[stripe];
@@ -726,7 +728,7 @@ int CohortVolume::stat(const object_t& oid,
     vector<OSDOp> ops(1);
     ops[0].op.op = CEPH_OSD_OP_STAT;
     Objecter::Op *o
-      = new Objecter::Op(hobject_t(oid, DATA, stripe), uuid,
+      = new Objecter::Op(hobject_t(oid, DATA, stripe), id,
 			 ops, flags | CEPH_OSD_FLAG_READ, ms, 0, NULL);
     o->outbl = &ms->reads[stripe];
     o->osd = osds[stripe];
@@ -757,7 +759,7 @@ int CohortVolume::remove(const object_t& oid,
     vector<OSDOp> ops(1);
     ops[0].op.op = CEPH_OSD_OP_DELETE;
     Objecter::Op *o
-      = new Objecter::Op(hobject_t(oid, DATA, stripe), uuid,
+      = new Objecter::Op(hobject_t(oid, DATA, stripe), id,
 			 ops, flags | CEPH_OSD_FLAG_WRITE,
 			 multiack, multicommit, NULL);
     o->mtime = mtime;
@@ -800,7 +802,7 @@ int CohortVolume::getxattr(const object_t& oid, const char *name,
   if (name)
     ops[0].indata.append(name);
   Objecter::Op *o
-    = new Objecter::Op(hobject_t(oid, DATA, 0), uuid,
+    = new Objecter::Op(hobject_t(oid, DATA, 0), id,
 		       ops, flags | CEPH_OSD_FLAG_READ, onfinish, 0,
 		       NULL);
   o->outbl = pbl;
@@ -832,7 +834,7 @@ int CohortVolume::removexattr(const object_t& oid, const char *name,
     if (name)
       ops[0].indata.append(name);
     Objecter::Op *o
-      = new Objecter::Op(hobject_t(oid, DATA, stripe), uuid,
+      = new Objecter::Op(hobject_t(oid, DATA, stripe), id,
 			 ops, flags | CEPH_OSD_FLAG_WRITE,
 			 multiack, multicommit, NULL);
     o->mtime = mtime;
@@ -869,7 +871,7 @@ int CohortVolume::setxattr(const object_t& oid, const char *name,
       ops[0].indata.append(name);
     ops[0].indata.append(bl);
     Objecter::Op *o
-      = new Objecter::Op(hobject_t(oid, DATA, stripe), uuid,
+      = new Objecter::Op(hobject_t(oid, DATA, stripe), id,
 			 ops, flags | CEPH_OSD_FLAG_WRITE,
 			 multiack, multicommit, NULL);
     o->mtime = mtime;
@@ -893,7 +895,7 @@ int CohortVolume::getxattrs(const object_t& oid,
   vector<OSDOp> ops;
   ops[0].op.op = CEPH_OSD_OP_GETXATTRS;
   Objecter::Op *o
-    = new Objecter::Op(hobject_t(oid, DATA, 0), uuid,
+    = new Objecter::Op(hobject_t(oid, DATA, 0), id,
 		       ops, flags | CEPH_OSD_FLAG_READ, fin, 0,
 		       NULL);
   o->outbl = &fin->bl;
@@ -929,7 +931,7 @@ int CohortVolume::trunc(const object_t& oid,
     ops[0].op.extent.truncate_size = stripetrunclen;
     ops[0].op.extent.truncate_seq = trunc_seq;
     Objecter::Op *o
-      = new Objecter::Op(hobject_t(oid, DATA, stripe), uuid,
+      = new Objecter::Op(hobject_t(oid, DATA, stripe), id,
 			 ops, flags | CEPH_OSD_FLAG_WRITE,
 			 multiack, multicommit, NULL);
     o->mtime = mtime;
@@ -965,7 +967,7 @@ int CohortVolume::zero(const object_t& oid, uint64_t off, uint64_t len,
     stripe_extent(off, len, stripe, ops[0].op.extent.offset,
 		  ops[0].op.extent.length);
     Objecter::Op *o
-      = new Objecter::Op(hobject_t(oid, DATA, stripe), uuid,
+      = new Objecter::Op(hobject_t(oid, DATA, stripe), id,
 			 ops, flags | CEPH_OSD_FLAG_WRITE,
 			 multiack, multicommit, NULL);
     o->mtime = mtime;
@@ -999,7 +1001,7 @@ int CohortVolume::mutate_md(const object_t& oid, ObjectOperation& op,
 
   for (size_t stripe = 0; stripe < erasure.k; ++stripe) {
     Objecter::Op *o
-      = new Objecter::Op(hobject_t(oid, DATA, stripe), uuid, op.ops, flags |
+      = new Objecter::Op(hobject_t(oid, DATA, stripe), id, op.ops, flags |
 			 CEPH_OSD_FLAG_WRITE, multiack, multicommit);
     o->mtime = mtime;
     o->osd = osds[stripe];

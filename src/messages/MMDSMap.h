@@ -20,8 +20,6 @@
 #include "mds/MDSMap.h"
 #include "include/ceph_features.h"
 
-#include <uuid/uuid.h>
-
 class MMDSMap : public Message {
  public:
   /*
@@ -48,7 +46,7 @@ class MMDSMap : public Message {
   }
   */
 
-  uuid_d fsid;
+  boost::uuids::uuid fsid;
   epoch_t epoch;
   bufferlist encoded;
 
@@ -57,7 +55,7 @@ class MMDSMap : public Message {
 
   MMDSMap() :
     Message(CEPH_MSG_MDS_MAP) {}
-  MMDSMap(const uuid_d &f, MDSMap *mm) :
+  MMDSMap(const boost::uuids::uuid& f, MDSMap *mm) :
     Message(CEPH_MSG_MDS_MAP),
     fsid(f) {
     epoch = mm->get_epoch();

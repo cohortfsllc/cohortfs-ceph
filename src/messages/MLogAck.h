@@ -15,15 +15,13 @@
 #ifndef CEPH_MLOGACK_H
 #define CEPH_MLOGACK_H
 
-#include <uuid/uuid.h>
-
 class MLogAck : public Message {
 public:
-  uuid_d fsid;
+  boost::uuids::uuid fsid;
   version_t last;
 
   MLogAck() : Message(MSG_LOGACK) {}
-  MLogAck(uuid_d& f, version_t l) : Message(MSG_LOGACK), fsid(f), last(l) {}
+  MLogAck(const boost::uuids::uuid& f, version_t l) : Message(MSG_LOGACK), fsid(f), last(l) {}
 private:
   ~MLogAck() {}
 

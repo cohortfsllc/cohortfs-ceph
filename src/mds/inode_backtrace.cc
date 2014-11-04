@@ -1,6 +1,8 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
+#include <boost/uuid/uuid_io.hpp>
+#include <boost/uuid/string_generator.hpp>
 #include "inode_backtrace.h"
 
 #include "common/Formatter.h"
@@ -84,18 +86,20 @@ void inode_backtrace_t::dump(Formatter *f) const
   f->close_section();
   f->dump_stream("volume") << volume;
   f->open_array_section("old_volumes");
-  for (set<uuid_d>::iterator p = old_volumes.begin(); p != old_volumes.end(); ++p) {
-    f->dump_stream("uuid") << *p;
+  for (const auto& v : old_volumes) {
+    f->dump_stream("uuid") << v;
   }
   f->close_section();
 }
 
 void inode_backtrace_t::generate_test_instances(list<inode_backtrace_t*>& ls)
 {
-  uuid_d uuid1, uuid2, uuid3;
-  uuid1.parse("5a9e54a4-7740-4d03-b0fb-e1f3b899b185");
-  uuid2.parse("5edbdba8-af1a-4b48-8f2f-1ec5cf84efbe");
-  uuid3.parse("e9013f90-e7a3-4f69-bb85-bcf74559e68d");
+  boost::uuids::string_generator parse;
+  boost::uuids::uuid uuid1, uuid2, uuid3;
+
+  uuid1 = parse("5a9e54a4-7740-4d03-b0fb-e1f3b899b185");
+  uuid2 = parse("5edbdba8-af1a-4b48-8f2f-1ec5cf84efbe");
+  uuid3 = parse("e9013f90-e7a3-4f69-bb85-bcf74559e68d");
   ls.push_back(new inode_backtrace_t);
   ls.push_back(new inode_backtrace_t);
   ls.back()->ino = 1;

@@ -315,8 +315,8 @@ void inode_t::dump(Formatter *f) const
   f->close_section();
 
   f->open_array_section("old_volumes");
-  vector<uuid_d>::const_iterator i = old_volumes.begin();
-  while(i != old_volumes.end()) {
+  auto i = old_volumes.cbegin();
+  while(i != old_volumes.cend()) {
     f->dump_stream("uuid") << *i;
   }
   f->close_section();

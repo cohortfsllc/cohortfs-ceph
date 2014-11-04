@@ -21,8 +21,8 @@ public:
   struct ceph_mon_statfs_reply h;
 
   MStatfsReply() : Message(CEPH_MSG_STATFS_REPLY) {}
-  MStatfsReply(uuid_d &f, ceph_tid_t t, epoch_t epoch) : Message(CEPH_MSG_STATFS_REPLY) {
-    memcpy(&h.fsid, f.uuid, sizeof(h.fsid));
+  MStatfsReply(const boost::uuids::uuid &f, ceph_tid_t t, epoch_t epoch) : Message(CEPH_MSG_STATFS_REPLY) {
+    memcpy(&h.fsid, &f, sizeof(h.fsid));
     header.tid = t;
     h.version = epoch;
   }

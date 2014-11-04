@@ -15,6 +15,9 @@
 #include <cassert>
 #include <unistd.h>
 #include <stdlib.h>
+#include <boost/uuid/string_generator.hpp>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -125,7 +128,7 @@ static CompatSet get_fs_supported_compat_set() {
 }
 
 
-int FileStore::peek_journal_fsid(uuid_d *fsid)
+int FileStore::peek_journal_fsid(boost::uuids::uuid *fsid)
 {
   // make sure we don't try to use aio or direct_io (and get annoying
   // error messages from failing to do so); performance implications
@@ -536,7 +539,7 @@ int FileStore::mkfs()
 {
   int ret = 0;
   char fsid_fn[PATH_MAX];
-  uuid_d old_fsid;
+  boost::uuids::uuid old_fsid;
 
   dout(1) << "mkfs in " << basedir << dendl;
   basedir_fd = ::open(basedir.c_str(), O_RDONLY);
@@ -560,16 +563,16 @@ int FileStore::mkfs()
     goto close_fsid_fd;
   }
 
-  if (read_fsid(fsid_fd, &old_fsid) < 0 || old_fsid.is_zero()) {
-    if (fsid.is_zero()) {
-      fsid.generate_random();
+  if (read_fsid(fsid_fd, &old_fsid) < 0 || old_fsid.is_nil()) {
+    if (fsid.is_nil()) {
+      fsid = boost::uuids::random_generator()();
       dout(1) << "mkfs generated fsid " << fsid << dendl;
     } else {
       dout(1) << "mkfs using provided fsid " << fsid << dendl;
     }
 
     char fsid_str[40];
-    fsid.print(fsid_str);
+    strcpy(fsid_str, to_string(fsid).c_str());
     strcat(fsid_str, "\n");
     ret = ::ftruncate(fsid_fd, 0);
     if (ret < 0) {
@@ -592,7 +595,7 @@ int FileStore::mkfs()
     }
     dout(10) << "mkfs fsid is " << fsid << dendl;
   } else {
-    if (!fsid.is_zero() && fsid != old_fsid) {
+    if (!fsid.is_nil() && fsid != old_fsid) {
       derr << "mkfs on-disk fsid " << old_fsid << " != provided " << fsid << dendl;
       ret = -EINVAL;
       goto close_fsid_fd;
@@ -755,23 +758,22 @@ int FileStore::mkjournal()
   return ret;
 }
 
-int FileStore::read_fsid(int fd, uuid_d *uuid)
+int FileStore::read_fsid(int fd, boost::uuids::uuid *id)
 {
+  boost::uuids::string_generator parse;
   char fsid_str[40];
   int ret = safe_read(fd, fsid_str, sizeof(fsid_str));
   if (ret < 0)
     return ret;
-  if (ret == 8) {
-    // old 64-bit fsid... mirror it.
-    *(uint64_t*)&uuid->uuid[0] = *(uint64_t*)fsid_str;
-    *(uint64_t*)&uuid->uuid[8] = *(uint64_t*)fsid_str;
-    return 0;
-  }
 
   if (ret > 36)
     fsid_str[36] = 0;
-  if (!uuid->parse(fsid_str))
+  try {
+    *id = parse(fsid_str);
+  } catch (std::runtime_error& e) {
     return -EINVAL;
+  }
+
   return 0;
 }
 

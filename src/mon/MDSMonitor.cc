@@ -60,9 +60,10 @@ void MDSMonitor::print_map(MDSMap &m, int dbl)
   *_dout << dendl;
 }
 
-void MDSMonitor::create_new_fs(MDSMap &m, uuid_d &metadata_vol, uuid_d &data_vol)
+void MDSMonitor::create_new_fs(MDSMap &m, const boost::uuids::uuid& metadata_vol,
+			       const boost::uuids::uuid& data_vol)
 {
-  uuid_d zero_uuid;
+  boost::uuids::uuid zero_uuid;
   m.max_mds = g_conf->max_mds;
   m.created = ceph_clock_now(g_ceph_context);
   m.data_volumes.insert(data_vol);
@@ -1063,7 +1064,7 @@ bool MDSMonitor::prepare_command(MMonCommand *m)
       r = -EPERM;
       goto out;
     }
-    create_new_fs(pending_mdsmap, metadata_vol->uuid, data_vol->uuid);
+    create_new_fs(pending_mdsmap, metadata_vol->id, data_vol->id);
     ss << "new fs with metadata volume " << metadata << " and data volume " << data;
     string rs;
     getline(ss, rs);

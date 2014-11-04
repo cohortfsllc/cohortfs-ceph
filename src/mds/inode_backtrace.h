@@ -3,6 +3,8 @@
 #ifndef CEPH_INODE_BACKTRACE_H
 #define CEPH_INODE_BACKTRACE_H
 
+#include <boost/uuid/nil_generator.hpp>
+#include <boost/uuid/uuid_io.hpp>
 #include "mdstypes.h"
 
 namespace ceph {
@@ -51,11 +53,11 @@ inline ostream& operator<<(ostream& out, const inode_backpointer_t& ib) {
 struct inode_backtrace_t {
   inodeno_t ino;       // my ino
   vector<inode_backpointer_t> ancestors;
-  uuid_d volume;
+  boost::uuids::uuid volume;
   // we use a set for old_volumes to avoid duplicate entries, e.g. setlayout 0, 1, 0
-  set<uuid_d> old_volumes;
+  set<boost::uuids::uuid> old_volumes;
 
-  inode_backtrace_t() : volume() {}
+  inode_backtrace_t() : volume(boost::uuids::nil_uuid()) {}
 
   void encode(bufferlist& bl) const;
   void decode(bufferlist::iterator &bl);
@@ -65,7 +67,8 @@ struct inode_backtrace_t {
 WRITE_CLASS_ENCODER(inode_backtrace_t)
 
 inline ostream& operator<<(ostream& out, const inode_backtrace_t& it) {
-  return out << "(" << it.volume << ")" << it.ino << ":" << it.ancestors << "//" << it.old_volumes;
+  return out << "(" << it.volume << ")" << it.ino << ":"
+	     << it.ancestors << "//" << it.old_volumes;
 }
 
 

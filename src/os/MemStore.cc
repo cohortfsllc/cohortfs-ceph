@@ -21,6 +21,10 @@
 #include <sys/param.h>
 #endif
 
+#include <boost/uuid/nil_generator.hpp>
+#include <boost/uuid/random_generator.hpp>
+#include <boost/uuid/string_generator.hpp>
+#include <boost/uuid/uuid_io.hpp>
 #include "include/types.h"
 #include "include/stringify.h"
 #include "common/errno.h"
@@ -55,9 +59,9 @@ bool operator>(const MemStore::CollectionRef& l,
 }
 
 
-int MemStore::peek_journal_fsid(uuid_d *fsid)
+int MemStore::peek_journal_fsid(boost::uuids::uuid *fsid)
 {
-  *fsid = uuid_d();
+  *fsid = boost::uuids::nil_uuid();
   return 0;
 }
 
@@ -190,21 +194,19 @@ int MemStore::_load()
   return 0;
 }
 
-void MemStore::set_fsid(uuid_d u)
+void MemStore::set_fsid(const boost::uuids::uuid& u)
 {
   int r = write_meta("fs_fsid", stringify(u));
   assert(r >= 0);
 }
 
-uuid_d MemStore::get_fsid()
+boost::uuids::uuid MemStore::get_fsid()
 {
   string fsid_str;
   int r = read_meta("fs_fsid", &fsid_str);
   assert(r >= 0);
-  uuid_d uuid;
-  bool b = uuid.parse(fsid_str.c_str());
-  assert(b);
-  return uuid;
+  boost::uuids::string_generator parse;
+  return parse(fsid_str);
 }
 
 int MemStore::mkfs()
@@ -212,8 +214,7 @@ int MemStore::mkfs()
   string fsid_str;
   int r = read_meta("fs_fsid", &fsid_str);
   if (r == -ENOENT) {
-    uuid_d fsid;
-    fsid.generate_random();
+    boost::uuids::uuid fsid = boost::uuids::random_generator()();
     fsid_str = stringify(fsid);
     r = write_meta("fs_fsid", fsid_str);
     if (r < 0)

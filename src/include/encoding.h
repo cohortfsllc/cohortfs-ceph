@@ -14,8 +14,10 @@
 #ifndef CEPH_ENCODING_H
 #define CEPH_ENCODING_H
 
+#include <cassert>
 #include <memory>
 #include <unordered_map>
+#include <boost/uuid/uuid.hpp>
 #include "byteorder.h"
 #include "buffer.h"
 #include "assert.h"
@@ -68,6 +70,9 @@ WRITE_RAW_ENCODER(uint16_t)
 WRITE_RAW_ENCODER(int64_t)
 WRITE_RAW_ENCODER(int32_t)
 WRITE_RAW_ENCODER(int16_t)
+static_assert(sizeof(boost::uuids::uuid) == 16,
+	      "boost:uuids::uuid is not sixteen bytes wide.");
+WRITE_RAW_ENCODER(boost::uuids::uuid);
 
 // FIXME: we need to choose some portable floating point encoding here
 WRITE_RAW_ENCODER(float)

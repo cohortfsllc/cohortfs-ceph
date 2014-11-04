@@ -432,7 +432,7 @@ done:
   return ret;
 }
 
-int FileJournal::peek_fsid(uuid_d& fsid)
+int FileJournal::peek_fsid(boost::uuids::uuid& fsid)
 {
   int r = _open(false, false);
   if (r < 0)

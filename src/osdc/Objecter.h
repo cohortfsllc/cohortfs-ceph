@@ -15,6 +15,7 @@
 #ifndef CEPH_OBJECTER_H
 #define CEPH_OBJECTER_H
 
+#include <boost/uuid/nil_generator.hpp>
 #include "include/types.h"
 #include "include/buffer.h"
 #include "include/xlist.h"
@@ -683,13 +684,13 @@ public:
   struct op_target_t {
     int flags;
     hobject_t oid;
-    uuid_d volume;
+    boost::uuids::uuid volume;
 
     bool paused;
 
     int osd;	  ///< the final target osd, or -1
 
-    op_target_t(hobject_t oid, uuid_d volume, int flags)
+    op_target_t(hobject_t oid, const boost::uuids::uuid& volume, int flags)
       : flags(flags),
 	oid(oid),
 	volume(volume),
@@ -739,7 +740,7 @@ public:
     /// true if we should resend this message on failure
     bool should_resend;
 
-    Op(const hobject_t& o, uuid_d volume, vector<OSDOp>& op,
+    Op(const hobject_t& o, const boost::uuids::uuid& volume, vector<OSDOp>& op,
        int f, Context *ac, Context *co, version_t *ov = NULL) :
       session(NULL), session_item(this), incarnation(0),
       target(o, volume, f),
@@ -854,7 +855,7 @@ public:
     epoch_t map_dne_bound;
 
     LingerOp() : linger_id(0),
-		 target(object_t(), uuid_d(), 0),
+		 target(object_t(), boost::uuids::nil_uuid(), 0),
 		 poutbl(NULL), pobjver(NULL),
 		 registered(false),
 		 on_reg_ack(NULL), on_reg_commit(NULL),
@@ -1092,7 +1093,7 @@ public:
   Op *prepare_mutate_op(const object_t& oid, VolumeRef volume,
 			ObjectOperation& op, utime_t mtime, int flags,
 			Context *onack, Context *oncommit, version_t *objver = NULL) {
-    Op *o = new Op(oid, volume->uuid, op.ops,
+    Op *o = new Op(oid, volume->id, op.ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		   onack, oncommit, objver);
     o->priority = op.priority;
@@ -1111,7 +1112,7 @@ public:
   Op *prepare_read_op(const object_t& oid, VolumeRef volume,
 		      ObjectOperation& op, bufferlist *pbl, int flags,
 		      Context *onack, version_t *objver = NULL) {
-    Op *o = new Op(oid, volume->uuid, op.ops,
+    Op *o = new Op(oid, volume->id, op.ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_READ, onack,
 		   NULL, objver);
     o->priority = op.priority;
@@ -1173,7 +1174,7 @@ public:
     int i = init_ops(ops, 1, extra_ops);
     ops[i].op.op = CEPH_OSD_OP_STAT;
     C_Stat *fin = new C_Stat(psize, pmtime, onfinish);
-    Op *o = new Op(oid, volume->uuid, ops,
+    Op *o = new Op(oid, volume->id, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_READ,
 		   fin, 0, objver);
     o->outbl = &fin->bl;
@@ -1192,7 +1193,7 @@ public:
     ops[i].op.extent.length = len;
     ops[i].op.extent.truncate_size = 0;
     ops[i].op.extent.truncate_seq = 0;
-    Op *o = new Op(oid, volume->uuid, ops,
+    Op *o = new Op(oid, volume->id, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_READ,
 		   onfinish, 0, objver);
     o->outbl = pbl;
@@ -1211,7 +1212,7 @@ public:
     ops[i].op.extent.length = len;
     ops[i].op.extent.truncate_size = trunc_size;
     ops[i].op.extent.truncate_seq = trunc_seq;
-    Op *o = new Op(oid, volume->uuid, ops,
+    Op *o = new Op(oid, volume->id, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_READ,
 		   onfinish, 0, objver);
     o->outbl = pbl;
@@ -1228,7 +1229,7 @@ public:
     ops[i].op.xattr.value_len = 0;
     if (name)
       ops[i].indata.append(name);
-    Op *o = new Op(oid, volume->uuid, ops,
+    Op *o = new Op(oid, volume->id, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_READ,
 		   onfinish, 0, objver);
     o->outbl = pbl;
@@ -1243,7 +1244,7 @@ public:
     int i = init_ops(ops, 1, extra_ops);
     ops[i].op.op = CEPH_OSD_OP_GETXATTRS;
     C_GetAttrs *fin = new C_GetAttrs(attrset, onfinish);
-    Op *o = new Op(oid, volume->uuid, ops,
+    Op *o = new Op(oid, volume->id, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_READ,
 		   fin, 0, objver);
     o->outbl = &fin->bl;
@@ -1264,7 +1265,7 @@ public:
 		     vector<OSDOp>& ops, utime_t mtime, int flags,
 		     Context *onack, Context *oncommit,
 		     version_t *objver = NULL) {
-    Op *o = new Op(oid, volume->uuid, ops, flags | global_op_flags |
+    Op *o = new Op(oid, volume->id, ops, flags | global_op_flags |
 		   CEPH_OSD_FLAG_WRITE, onack, oncommit, objver);
     o->mtime = mtime;
     return op_submit(o);
@@ -1282,7 +1283,7 @@ public:
     ops[i].op.extent.truncate_size = 0;
     ops[i].op.extent.truncate_seq = 0;
     ops[i].indata = bl;
-    Op *o = new Op(oid, volume->uuid, ops,
+    Op *o = new Op(oid, volume->id, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		   onack, oncommit, objver);
     o->mtime = mtime;
@@ -1301,7 +1302,7 @@ public:
     ops[i].op.extent.truncate_size = 0;
     ops[i].op.extent.truncate_seq = 0;
     ops[i].indata = bl;
-    Op *o = new Op(oid, volume->uuid, ops,
+    Op *o = new Op(oid, volume->id, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		   onack, oncommit, objver);
     o->mtime = mtime;
@@ -1321,7 +1322,7 @@ public:
     ops[i].op.extent.truncate_size = trunc_size;
     ops[i].op.extent.truncate_seq = trunc_seq;
     ops[i].indata = bl;
-    Op *o = new Op(oid, volume->uuid, ops,
+    Op *o = new Op(oid, volume->id, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		   onack, oncommit, objver);
     o->mtime = mtime;
@@ -1338,7 +1339,7 @@ public:
     ops[i].op.extent.offset = 0;
     ops[i].op.extent.length = bl.length();
     ops[i].indata = bl;
-    Op *o = new Op(oid, volume->uuid, ops,
+    Op *o = new Op(oid, volume->id, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		   onack, oncommit, objver);
     o->mtime = mtime;
@@ -1356,7 +1357,7 @@ public:
     ops[i].op.extent.offset = trunc_size;
     ops[i].op.extent.truncate_size = trunc_size;
     ops[i].op.extent.truncate_seq = trunc_seq;
-    Op *o = new Op(oid, volume->uuid, ops,
+    Op *o = new Op(oid, volume->id, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		   onack, oncommit, objver);
     o->mtime = mtime;
@@ -1373,7 +1374,7 @@ public:
     ops[i].op.op = CEPH_OSD_OP_ZERO;
     ops[i].op.extent.offset = off;
     ops[i].op.extent.length = len;
-    Op *o = new Op(oid, volume->uuid, ops,
+    Op *o = new Op(oid, volume->id, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		   onack, oncommit, objver);
     o->mtime = mtime;
@@ -1389,7 +1390,7 @@ public:
     int i = init_ops(ops, 1, extra_ops);
     ops[i].op.op = CEPH_OSD_OP_CREATE;
     ops[i].op.flags = create_flags;
-    Op *o = new Op(oid, volume->uuid, ops,
+    Op *o = new Op(oid, volume->id, ops,
 		   global_flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		   onack, oncommit, objver);
     o->mtime = mtime;
@@ -1403,7 +1404,7 @@ public:
     vector<OSDOp> ops;
     int i = init_ops(ops, 1, extra_ops);
     ops[i].op.op = CEPH_OSD_OP_DELETE;
-    Op *o = new Op(oid, volume->uuid, ops,
+    Op *o = new Op(oid, volume->id, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		   onack, oncommit, objver);
     o->mtime = mtime;
@@ -1417,7 +1418,7 @@ public:
     vector<OSDOp> ops;
     int i = init_ops(ops, 1, extra_ops);
     ops[i].op.op = op;
-    Op *o = new Op(oid, volume->uuid, ops,
+    Op *o = new Op(oid, volume->id, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		   onack, oncommit, objver);
     return op_submit(o);
@@ -1435,7 +1436,7 @@ public:
     if (name)
       ops[i].indata.append(name);
     ops[i].indata.append(bl);
-    Op *o = new Op(oid, volume->uuid, ops,
+    Op *o = new Op(oid, volume->id, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		   onack, oncommit, objver);
     o->mtime = mtime;
@@ -1453,7 +1454,7 @@ public:
     ops[i].op.xattr.value_len = 0;
     if (name)
       ops[i].indata.append(name);
-    Op *o = new Op(oid, volume->uuid, ops,
+    Op *o = new Op(oid, volume->id, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		   onack, oncommit, objver);
     o->mtime = mtime;

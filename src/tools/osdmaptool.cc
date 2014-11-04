@@ -12,6 +12,7 @@
  *
  */
 
+#include <boost/uuid/nil_generator.hpp>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -149,8 +150,7 @@ int main(int argc, const char **argv)
     } else {
       num_osd = -1;
     }
-    uuid_d fsid;
-    memset(&fsid, 0, sizeof(uuid_d));
+    boost::uuids::uuid fsid = boost::uuids::nil_uuid();
     osdmap.build_simple(g_ceph_context, 0, fsid, num_osd);
     modified = true;
   }

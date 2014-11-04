@@ -17,11 +17,13 @@
 
 extern struct ceph_file_layout g_default_file_layout;
 
+#include <boost/uuid/nil_generator.hpp>
 #include <iosfwd>
 #include <vector>
 #include <map>
 #include <set>
 
+#include <boost/uuid/uuid.hpp>
 #include "common/ConfUtils.h"
 #include "common/entity_name.h"
 #include "common/Mutex.h"
@@ -209,7 +211,7 @@ public:
 #define OPTION_OPT_ADDR(name) const entity_addr_t name;
 #define OPTION_OPT_U32(name) const uint32_t name;
 #define OPTION_OPT_U64(name) const uint64_t name;
-#define OPTION_OPT_UUID(name) const uuid_d name;
+#define OPTION_OPT_UUID(name) const boost::uuids::uuid name;
 #define OPTION(name, ty, init) OPTION_##ty(name)
 #define SUBSYS(name, log, gather)
 #define DEFAULT_SUBSYS(log, gather)

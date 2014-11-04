@@ -19,9 +19,12 @@
 #include <string>
 #include <map>
 #include <vector>
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_io.hpp>
+#include <boost/uuid/nil_generator.hpp>
 #include "include/types.h"
 #include "common/Formatter.h"
-#include "include/uuid.h"
+#include <boost/uuid/uuid.hpp>
 #include "include/stringify.h"
 #include "include/encoding.h"
 #include "include/utime.h"
@@ -79,10 +82,10 @@ protected:
   virtual void decode_payload(bufferlist::iterator& bl, uint8_t v);
 
   Volume(const vol_type t) :
-    type(t), uuid(), name() { }
+    type(t), id(boost::uuids::nil_uuid()), name() { }
 
   Volume(const vol_type t, const string n) :
-    type(t), uuid(), name(n) { }
+    type(t), id(boost::uuids::nil_uuid()), name(n) { }
 
 
 public:
@@ -90,7 +93,7 @@ public:
   /* It seems a bit icky to have a type field like this when we
      already have type information encoded in the class. */
   vol_type type;
-  uuid_d uuid;
+  boost::uuids::uuid id;
   string name;
   epoch_t last_update;
 
@@ -109,13 +112,13 @@ public:
   /* Dummy decode for WRITE_CLASS_ENCODER */
   void decode(bufferlist& bl) { assert(false); };
   void decode(bufferlist::iterator& bl) { assert(false); };
-  static string get_epoch_key(uuid_d vol) {
+  static string get_epoch_key(const boost::uuids::uuid& vol) {
     return stringify(vol) + "_epoch";
   }
-  static string get_info_key(uuid_d vol) {
+  static string get_info_key(const boost::uuids::uuid& vol) {
     return stringify(vol) + "_info";
   }
-  static string get_biginfo_key(uuid_d vol) {
+  static string get_biginfo_key(const boost::uuids::uuid& vol) {
     return stringify(vol) + "_biginfo";
   }
 
@@ -180,7 +183,7 @@ WRITE_CLASS_ENCODER(Volume)
 
 inline ostream& operator<<(ostream& out, const Volume& vol) {
   return out << Volume::type_string(vol.type) << " : "
-	     << vol.uuid << " : " << vol.name;
+	     << vol.id << " : " << vol.name;
 }
 
 #endif // VOL_VOLUME_H

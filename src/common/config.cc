@@ -19,6 +19,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <boost/uuid/string_generator.hpp>
 
 
 #include "auth/Auth.h"
@@ -772,7 +773,7 @@ int md_config_t::_get_val(const char *key, char **buf, int len) const
 	oss << *(entity_addr_t*)opt->conf_ptr(this);
 	break;
       case OPT_UUID:
-	oss << *(uuid_d*)opt->conf_ptr(this);
+	oss << *(boost::uuids::uuid*)opt->conf_ptr(this);
 	break;
     }
     string str(oss.str());
@@ -939,9 +940,15 @@ int md_config_t::set_val_raw(const char *val, const config_option *opt)
       return 0;
     }
     case OPT_UUID: {
-      uuid_d *u = (uuid_d*)opt->conf_ptr(this);
-      if (!u->parse(val))
+      boost::uuids::uuid *u = (boost::uuids::uuid*) opt->conf_ptr(this);
+      boost::uuids::string_generator parse;
+
+      try {
+	*u = parse(val);
+      } catch (std::runtime_error& e) {
 	return -EINVAL;
+      }
+      
       return 0;
     }
   }

@@ -5,7 +5,10 @@
 
 #include "backend.h"
 #include "include/Context.h"
+#include "include/buffer.h"
 #include "include/rados/librados.hpp"
+
+using namespace ceph;
 
 class RadosBackend : public Backend {
   librados::IoCtx *ioctx;

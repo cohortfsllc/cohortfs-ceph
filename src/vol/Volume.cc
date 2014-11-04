@@ -12,6 +12,7 @@
  *
  */
 
+#include <boost/uuid/string_generator.hpp>
 #include "Volume.h"
 #include <sstream>
 
@@ -45,14 +46,14 @@ const Volume::factory Volume::factories[] = {
 void Volume::dump(Formatter *f) const
 {
   f->dump_int("type", type);
-  f->dump_stream("uuid") << uuid;
+  f->dump_stream("uuid") << id;
   f->dump_stream("name") << name;
   f->dump_stream("last_update") << last_update;
 }
 
 void Volume::decode_payload(bufferlist::iterator& bl, uint8_t v)
 {
-  ::decode(uuid, bl);
+  ::decode(id, bl);
   ::decode(name, bl);
   ::decode(last_update, bl);
 }
@@ -62,7 +63,7 @@ void Volume::encode(bufferlist& bl) const
   int version = 0;
   ::encode(version, bl);
   ::encode(type, bl);
-  ::encode(uuid, bl);
+  ::encode(id, bl);
   ::encode(name, bl);
   ::encode(last_update, bl);
 }
@@ -91,10 +92,14 @@ bool Volume::valid_name(const string &name, string &error)
     }
   }
 
-  uuid_d uuid;
-  if (uuid.parse(name)) {
+
+  try {
+    boost::uuids::string_generator parse;
+    parse(name);
     error = "volume name cannot match the form of UUIDs";
     return false;
+  } catch (std::runtime_error& e) {
+    return true;
   }
 
   return true;
@@ -106,7 +111,7 @@ bool Volume::valid(string& error)
     return false;
   }
 
-  if (uuid.is_zero()) {
+  if (id.is_nil()) {
     error = "UUID cannot be zero.";
     return false;
   }

@@ -311,7 +311,7 @@ public:
     return 1;
   }
 
-  int peek_journal_fsid(uuid_d *fsid);
+  int peek_journal_fsid(boost::uuids::uuid *fsid);
 
   bool test_mount_in_use() {
     return false;
@@ -407,8 +407,8 @@ public:
     const hobject_t &oid    ///< [in] object
     );
 
-  void set_fsid(uuid_d u);
-  uuid_d get_fsid();
+  void set_fsid(const boost::uuids::uuid& u);
+  boost::uuids::uuid get_fsid();
 
   objectstore_perf_stat_t get_cur_stats();
 

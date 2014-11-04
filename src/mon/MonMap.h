@@ -15,6 +15,7 @@
 #ifndef CEPH_MONMAP_H
 #define CEPH_MONMAP_H
 
+#include <boost/uuid/uuid_generators.hpp>
 #include "msg/Message.h"
 #include "include/types.h"
 //#include "common/config.h"
@@ -26,7 +27,7 @@ namespace ceph {
 class MonMap {
  public:
   epoch_t epoch;       // what epoch/version of the monmap
-  uuid_d fsid;
+  boost::uuids::uuid fsid;
   map<string, entity_addr_t> mon_addr;
   utime_t last_changed;
   utime_t created;
@@ -59,7 +60,7 @@ class MonMap {
     memset(&fsid, 0, sizeof(fsid));
   }
 
-  uuid_d& get_fsid() { return fsid; }
+  const boost::uuids::uuid& get_fsid() { return fsid; }
 
   unsigned size() {
     return mon_addr.size();
@@ -178,7 +179,7 @@ class MonMap {
   void decode(bufferlist::iterator &p);
 
   void generate_fsid() {
-    fsid.generate_random();
+    fsid = boost::uuids::random_generator()();
   }
 
   // read from/write to a file

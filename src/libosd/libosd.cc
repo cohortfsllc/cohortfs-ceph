@@ -18,8 +18,6 @@
 #include "include/msgr.h"
 #include "include/color.h"
 
-#include "include/uuid.h"
-
 #define dout_subsys ceph_subsys_osd
 
 namespace global
@@ -100,14 +98,14 @@ public:
   void shutdown();
   void signal(int signum);
 
-  int get_volume(const char *name, uuid_t uuid);
-  int read(const char *object, const uuid_t volume,
+  int get_volume(const char *name, uint8_t id[16]);
+  int read(const char *object, const uint8_t volume[16],
 	   uint64_t offset, uint64_t length, char *data,
 	   int flags, libosd_io_completion_fn cb, void *user);
-  int write(const char *object, const uuid_t volume,
+  int write(const char *object, const uint8_t volume[16],
 	    uint64_t offset, uint64_t length, char *data,
 	    int flags, libosd_io_completion_fn cb, void *user);
-  int truncate(const char *object, const uuid_t volume, uint64_t offset,
+  int truncate(const char *object, const uint8_t volume[16], uint64_t offset,
 	       int flags, libosd_io_completion_fn cb, void *user);
 };
 
@@ -338,7 +336,7 @@ void LibOSD::signal(int signum)
   osd->handle_signal(signum);
 }
 
-int LibOSD::get_volume(const char *name, uuid_t uuid)
+int LibOSD::get_volume(const char *name, uint8_t id[16])
 {
   // wait for osdmap
   epoch_t epoch;
@@ -350,7 +348,7 @@ int LibOSD::get_volume(const char *name, uuid_t uuid)
   if (!osdmap->find_by_name(name, volume))
     return -ENOENT;
 
-  memcpy(uuid, volume->uuid.uuid, sizeof(uuid_t));
+  memcpy(id, &volume->id, sizeof(volume->id));
   return 0;
 }
 
@@ -426,16 +424,17 @@ public:
   }
 };
 
-int LibOSD::read(const char *object, const uuid_t volume,
+int LibOSD::read(const char *object, const uint8_t volume[16],
 		 uint64_t offset, uint64_t length, char *data,
 		 int flags, libosd_io_completion_fn cb, void *user)
 {
   const int client = 0;
   const long tid = 0;
   hobject_t oid = object_t(object);
-  uuid_d vol(volume);
+  boost::uuids::uuid vol;
   epoch_t epoch = 0;
   std::unique_ptr<SyncCompletion> sync;
+  memcpy(&vol, volume, sizeof(vol));
 
   if (!cb) {
     // set up a synchronous completion
@@ -502,16 +501,18 @@ public:
 
 #define WRITE_CB_FLAGS (LIBOSD_WRITE_CB_UNSTABLE | LIBOSD_WRITE_CB_STABLE)
 
-int LibOSD::write(const char *object, const uuid_t volume,
+int LibOSD::write(const char *object, const uint8_t volume[16],
 		  uint64_t offset, uint64_t length, char *data,
 		  int flags, libosd_io_completion_fn cb, void *user)
 {
   const int client = 0;
   const long tid = 0;
   hobject_t oid = object_t(object);
-  uuid_d vol(volume);
+  boost::uuids::uuid vol;
   epoch_t epoch = 0;
   std::unique_ptr<SyncCompletion> sync;
+
+  mempcpy(&vol, volume, sizeof(vol));
 
   if (!cb) {
     // when synchronous, flags must specify exactly one of UNSTABLE or STABLE
@@ -555,16 +556,18 @@ int LibOSD::write(const char *object, const uuid_t volume,
   return sync ? sync->wait() : 0;
 }
 
-int LibOSD::truncate(const char *object, const uuid_t volume,
+int LibOSD::truncate(const char *object, const uint8_t volume[16],
 		     uint64_t offset, int flags,
 		     libosd_io_completion_fn cb, void *user)
 {
   const int client = 0;
   const long tid = 0;
   hobject_t oid = object_t(object);
-  uuid_d vol(volume);
+  boost::uuids::uuid vol;
   epoch_t epoch = 0;
   std::unique_ptr<SyncCompletion> sync;
+
+  memcpy(&vol, volume, sizeof(vol));
 
   if (!cb) {
     // when synchronous, flags must specify exactly one of UNSTABLE or STABLE
@@ -690,19 +693,21 @@ void libosd_signal(int signum)
   }
 }
 
-int libosd_get_volume(struct libosd *osd, const char *name, uuid_t uuid)
+int libosd_get_volume(struct libosd *osd, const char *name,
+		      uint8_t id[16])
 {
   try {
-    return osd->get_volume(name, uuid);
+    return osd->get_volume(name, id);
   } catch (std::exception &e) {
     derr << "libosd_get_volume caught exception " << e.what() << dendl;
     return -EFAULT;
   }
 }
 
-int libosd_read(struct libosd *osd, const char *object, const uuid_t volume,
-		uint64_t offset, uint64_t length, char *data,
-		int flags, libosd_io_completion_fn cb, void *user)
+int libosd_read(struct libosd *osd, const char *object,
+		const uint8_t volume[16], uint64_t offset, uint64_t length,
+		char *data, int flags, libosd_io_completion_fn cb,
+		void *user)
 {
   try {
     return osd->read(object, volume, offset, length, data, flags, cb, user);
@@ -712,9 +717,9 @@ int libosd_read(struct libosd *osd, const char *object, const uuid_t volume,
   }
 }
 
-int libosd_write(struct libosd *osd, const char *object, const uuid_t volume,
-		 uint64_t offset, uint64_t length, char *data,
-		 int flags, libosd_io_completion_fn cb, void *user)
+int libosd_write(struct libosd *osd, const char *object, const uint8_t volume[16],
+		 uint64_t offset, uint64_t length, char *data, int flags,
+		 libosd_io_completion_fn cb, void *user)
 {
   try {
     return osd->write(object, volume, offset, length, data, flags, cb, user);
@@ -725,7 +730,7 @@ int libosd_write(struct libosd *osd, const char *object, const uuid_t volume,
 }
 
 int libosd_truncate(struct libosd *osd, const char *object,
-		    const uuid_t volume, uint64_t offset,
+		    const uint8_t volume[16], uint64_t offset,
 		    int flags, libosd_io_completion_fn cb, void *user)
 {
   try {

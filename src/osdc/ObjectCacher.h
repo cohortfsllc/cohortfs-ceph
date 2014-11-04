@@ -143,7 +143,7 @@ class ObjectCacher {
     int ref;
     ObjectCacher *oc;
     object_t oid;
-    uuid_d volume;
+    boost::uuids::uuid volume;
     friend struct ObjectSet;
 
   public:
@@ -169,15 +169,11 @@ class ObjectCacher {
     Object(const Object& other);
     const Object& operator=(const Object& other);
 
-    Object(ObjectCacher *_oc, object_t o, ObjectSet *os, uuid_d& v,
-	   uint64_t ts, uint64_t tq) :
-      ref(0),
-      oc(_oc),
-      oid(o), volume(v), oset(os), set_item(this),
-      truncate_size(ts), truncate_seq(tq),
-      complete(false), exists(true),
-      last_write_tid(0), last_commit_tid(0),
-      dirty_or_tx(0) {
+    Object(ObjectCacher *_oc, object_t o, ObjectSet *os,
+	   const boost::uuids::uuid& v, uint64_t ts, uint64_t tq)
+      : ref(0), oc(_oc), oid(o), volume(v), oset(os), set_item(this),
+	truncate_size(ts), truncate_seq(tq), complete(false), exists(true),
+	last_write_tid(0), last_commit_tid(0), dirty_or_tx(0) {
       // add to set
       os->objects.push_back(&set_item);
     }
@@ -192,8 +188,8 @@ class ObjectCacher {
     object_t get_oid() { return oid; }
     ObjectSet *get_object_set() { return oset; }
 
-    uuid_d& get_volume() { return volume; }
-    void set_volume(uuid_d& v) { volume = v; }
+    const boost::uuids::uuid& get_volume() { return volume; }
+    void set_volume(const boost::uuids::uuid& v) { volume = v; }
 
     bool can_close() {
       if (lru_is_expireable()) {
@@ -280,7 +276,7 @@ class ObjectCacher {
   struct ObjectSet {
     void *parent;
 
-    uuid_d volume;
+    boost::uuids::uuid volume;
     inodeno_t ino;
     uint64_t truncate_seq, truncate_size;
 
@@ -289,7 +285,7 @@ class ObjectCacher {
     int dirty_or_tx;
     bool return_enoent;
 
-    ObjectSet(void *p, uuid_d _volume, inodeno_t i)
+    ObjectSet(void *p, const boost::uuids::uuid& _volume, inodeno_t i)
       : parent(p), volume(_volume), ino(i), truncate_seq(0),
 	truncate_size(0), dirty_or_tx(0),
 	return_enoent(false) {}
@@ -311,7 +307,7 @@ class ObjectCacher {
   flush_set_callback_t flush_set_callback;
   void *flush_set_callback_arg;
 
-  std::map<uuid_d, std::map<object_t, Object*> > objects;
+  std::map<boost::uuids::uuid, std::map<object_t, Object*> > objects;
 
   ceph_tid_t last_read_tid;
 
@@ -335,14 +331,15 @@ class ObjectCacher {
   Finisher finisher;
 
   // objects
-  Object *get_object_maybe(object_t oid, uuid_d &v) {
+  Object *get_object_maybe(object_t oid, const boost::uuids::uuid& v) {
     // have it?
     if (objects[v].count(oid))
       return objects[v][oid];
     return NULL;
   }
 
-  Object *get_object(object_t oid, ObjectSet *oset, uuid_d &v,
+  Object *get_object(object_t oid, ObjectSet *oset,
+		     const boost::uuids::uuid& v,
 		     uint64_t truncate_size, uint64_t truncate_seq);
   void close_object(Object *ob);
 
@@ -430,16 +427,15 @@ class ObjectCacher {
 	     bool external_call);
 
  public:
-  void bh_read_finish(uuid_d volume, object_t oid, ceph_tid_t tid,
-		      loff_t offset, uint64_t length,
-		      bufferlist &bl, int r,
-		      bool trust_enoent);
-  void bh_write_commit(uuid_d volume, object_t oid, loff_t offset,
+  void bh_read_finish(const boost::uuids::uuid& volume, object_t oid,
+		      ceph_tid_t tid, loff_t offset, uint64_t length,
+		      bufferlist &bl, int r, bool trust_enoent);
+  void bh_write_commit(const boost::uuids::uuid& volume, object_t oid, loff_t offset,
 		       uint64_t length, ceph_tid_t t, int r);
 
   class C_ReadFinish : public Context {
     ObjectCacher *oc;
-    uuid_d volume;
+    boost::uuids::uuid volume;
     object_t oid;
     loff_t start;
     uint64_t length;
@@ -471,14 +467,14 @@ class ObjectCacher {
 
   class C_WriteCommit : public Context {
     ObjectCacher *oc;
-    uuid_d volume;
+    boost::uuids::uuid volume;
     object_t oid;
     loff_t start;
     uint64_t length;
   public:
     ceph_tid_t tid;
-    C_WriteCommit(ObjectCacher *c, uuid_d _volume, object_t o, loff_t s,
-		  uint64_t l) :
+    C_WriteCommit(ObjectCacher *c, const boost::uuids::uuid& _volume,
+		  object_t o, loff_t s, uint64_t l) :
       oc(c), volume(_volume), oid(o), start(s), length(l), tid(0) {}
     void finish(int r) {
       oc->bh_write_commit(volume, oid, start, length, tid, r);

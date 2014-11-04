@@ -181,11 +181,11 @@ protected:
 
   // file data pools available to clients (via an ioctl).  first is
   // the default.
-  set<uuid_d> data_volumes;
+  set<boost::uuids::uuid> data_volumes;
   // where CAS objects go
-  uuid_d cas_uuid;
+  boost::uuids::uuid cas_uuid;
   // where fs metadata objects go
-  uuid_d metadata_uuid;
+  boost::uuids::uuid metadata_uuid;
   VolumeRef metadata_volume;
 
   /*
@@ -252,9 +252,9 @@ public:
   int get_tableserver() const { return tableserver; }
   int get_root() const { return root; }
 
-  const set<uuid_d> &get_data_volumes() const { return data_volumes; }
-  const uuid_d & get_first_data_volume() const { return *data_volumes.begin(); }
-  const uuid_d & get_cas_uuid() const { return cas_uuid; }
+  const set<boost::uuids::uuid>& get_data_volumes() const { return data_volumes; }
+  const boost::uuids::uuid& get_first_data_volume() const { return *data_volumes.begin(); }
+  const boost::uuids::uuid& get_cas_uuid() const { return cas_uuid; }
   VolumeRef get_metadata_volume(OSDMap *osdmap) {
     if (!metadata_volume) {
 	osdmap->find_by_uuid(metadata_uuid, metadata_volume);
@@ -262,10 +262,10 @@ public:
     assert(!!metadata_volume);
     return metadata_volume;
   }
-  uuid_d get_metadata_uuid() const {
+  boost::uuids::uuid get_metadata_uuid() const {
     return metadata_uuid;
   }
-  bool is_data_volume(uuid_d &volume) const {
+  bool is_data_volume(const boost::uuids::uuid& volume) const {
     return data_volumes.count(volume);
   }
 
@@ -309,11 +309,11 @@ public:
   }
 
   // data pools
-  void add_data_volume(uuid_d &uuid) {
+  void add_data_volume(const boost::uuids::uuid& uuid) {
     data_volumes.insert(uuid);
   }
-  int remove_data_volume(uuid_d &uuid) {
-    set<uuid_d>::iterator p = data_volumes.find(uuid);
+  int remove_data_volume(const boost::uuids::uuid& uuid) {
+    auto p = data_volumes.find(uuid);
     if (p == data_volumes.end())
       return -ENOENT;
     data_volumes.erase(p);

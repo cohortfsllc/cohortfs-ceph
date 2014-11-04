@@ -69,8 +69,8 @@ struct librados::IoCtxImpl {
   void flush_aio_writes_async(AioCompletionImpl *c);
   void flush_aio_writes();
 
-  uuid_d get_volume() {
-    return volume->uuid;
+  const boost::uuids::uuid& get_volume() {
+    return volume->id;
   }
 
   // io

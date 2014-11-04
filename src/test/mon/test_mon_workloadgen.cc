@@ -51,7 +51,6 @@
 #include "common/LogEntry.h"
 #include "auth/KeyRing.h"
 #include "auth/AuthAuthorizeHandler.h"
-#include "include/uuid.h"
 
 #include "messages/MOSDBoot.h"
 #include "messages/MOSDAlive.h"
@@ -396,14 +395,14 @@ class OSDStub : public TestStub
       monc.shutdown();
       return err;
     }
-    assert(!monc.get_fsid().is_zero());
+    assert(!monc.get_fsid().is_nil());
 
     monc.wait_auth_rotating(30.0);
 
 
     dout(10) << __func__ << " creating osd superblock" << dendl;
     sb.cluster_fsid = monc.monmap.fsid;
-    sb.osd_fsid.generate_random();
+    sb.osd_fsid = boost::uuids::random_generator()();
     sb.whoami = whoami;
     sb.compat_features = CompatSet();
     dout(20) << __func__ << " " << sb << dendl;

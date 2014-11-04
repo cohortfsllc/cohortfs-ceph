@@ -33,7 +33,8 @@ librados::IoCtxImpl::IoCtxImpl() :
 }
 
 librados::IoCtxImpl::IoCtxImpl(RadosClient *c, Objecter *objecter,
-			       Mutex *client_lock, const uuid_d &volume)
+			       Mutex *client_lock,
+			       const boost::uuids::uuid& volume)
   : ref_cnt(0), client(c), volume(volume), assert_ver(0),
     notify_timeout(c->cct->_conf->client_notify_timeout),
     aio_write_list_lock("librados::IoCtxImpl::aio_write_list_lock"),

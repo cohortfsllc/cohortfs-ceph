@@ -263,10 +263,10 @@ void MDCache::remove_inode(CInode *o)
 void MDCache::init_layouts()
 {
   default_file_layout = g_default_file_layout;
-  mds->mdsmap->get_metadata_uuid().copyout(default_file_layout.fl_uuid);
+  default_file_layout.fl_uuid =  mds->mdsmap->get_metadata_uuid();
 
   default_log_layout = g_default_file_layout;
-  mds->mdsmap->get_metadata_uuid().copyout(default_log_layout.fl_uuid);
+  default_log_layout.fl_uuid = mds->mdsmap->get_metadata_uuid();
   if (g_conf->mds_log_segment_size > 0) {
     default_log_layout.fl_object_size = g_conf->mds_log_segment_size;
     default_log_layout.fl_stripe_unit = g_conf->mds_log_segment_size;
@@ -312,7 +312,7 @@ CInode *MDCache::create_root_inode()
 {
   CInode *i = create_system_inode(MDS_INO_ROOT, S_IFDIR|0755);
   i->inode.layout = default_file_layout;
-  mds->mdsmap->get_first_data_volume().copyout(i->inode.layout.fl_uuid);
+  i->inode.layout.fl_uuid = mds->mdsmap->get_first_data_volume();
   return i;
 }
 
@@ -7348,7 +7348,7 @@ void MDCache::_open_ino_backtrace_fetched(inodeno_t ino, bufferlist& bl, int err
   inode_backtrace_t backtrace;
   if (err == 0) {
     ::decode(backtrace, bl);
-    if (backtrace.volume != info.volume->uuid && !backtrace.volume.is_zero()) {
+    if (backtrace.volume != info.volume->id && !backtrace.volume.is_nil()) {
       dout(10) << " old object in volume " << info.volume
 	       << ", retrying volume " << backtrace.volume << dendl;
       mds->osdmap->find_by_uuid(backtrace.volume, info.volume);
@@ -8582,7 +8582,7 @@ void MDCache::purge_stray(CDentry *dn)
 			  gather.new_sub());
   }
   // remove old backtrace objects
-  for (vector<uuid_d>::iterator p = pi->old_volumes.begin();
+  for (auto p = pi->old_volumes.begin();
        p != pi->old_volumes.end();
        ++p) {
     VolumeRef volume;

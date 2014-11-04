@@ -36,7 +36,7 @@ public:
   Filer *filer;
   Probe *probe;
   object_t oid;
-  uuid_d volume;
+  boost::uuids::uuid volume;
   uint64_t size;
   utime_t mtime;
   C_Probe(Filer *f, Probe *p, object_t o) : filer(f), probe(p), oid(o),

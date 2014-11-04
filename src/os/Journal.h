@@ -25,13 +25,13 @@
 
 class Journal {
 protected:
-  uuid_d fsid;
+  boost::uuids::uuid fsid;
   Finisher *finisher;
   Cond *do_sync_cond;
   bool wait_on_full;
 
 public:
-  Journal(uuid_d f, Finisher *fin, Cond *c=0) :
+  Journal(const boost::uuids::uuid& f, Finisher *fin, Cond *c=0) :
     fsid(f), finisher(fin), do_sync_cond(c),
     wait_on_full(false) { }
   virtual ~Journal() { }

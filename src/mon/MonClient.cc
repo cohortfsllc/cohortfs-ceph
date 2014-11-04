@@ -127,7 +127,7 @@ int MonClient::get_monmap_privately()
 
   ldout(cct, 10) << "have " << monmap.epoch << " fsid " << monmap.fsid << dendl;
 
-  while (monmap.fsid.is_zero()) {
+  while (monmap.fsid.is_nil()) {
     cur_mon = _pick_random_mon();
 
     /* XXX note, MonClient doesn't have multi-messenger problems, because
@@ -143,7 +143,7 @@ int MonClient::get_monmap_privately()
     interval.set_from_double(cct->_conf->mon_client_hunt_interval);
     map_cond.WaitInterval(cct, monc_lock, interval);
 
-    if (monmap.fsid.is_zero()) {
+    if (monmap.fsid.is_nil()) {
       messenger->mark_down(cur_con);  // nope, clean that connection up
     }
   }
@@ -165,7 +165,7 @@ int MonClient::get_monmap_privately()
 
   cur_con.reset(NULL);
 
-  if (!monmap.fsid.is_zero())
+  if (!monmap.fsid.is_nil())
     return 0;
   return -1;
 }

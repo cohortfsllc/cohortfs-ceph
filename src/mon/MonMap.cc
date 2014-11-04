@@ -2,6 +2,7 @@
 #include "MonMap.h"
 
 #include <algorithm>
+#include <boost/uuid/uuid_io.hpp>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -262,7 +263,7 @@ int MonMap::build_initial(CephContext *cct, ostream& errout)
   }
 
   // fsid from conf?
-  if (!cct->_conf->fsid.is_zero()) {
+  if (!cct->_conf->fsid.is_nil()) {
     fsid = cct->_conf->fsid;
   }
 

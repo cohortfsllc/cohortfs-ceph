@@ -63,7 +63,8 @@ class MDSMonitor : public PaxosService {
     }
   };
 
-  void create_new_fs(MDSMap &m, uuid_d &metadata_volume, uuid_d &data_volume);
+  void create_new_fs(MDSMap &m, const boost::uuids::uuid& metadata_volume,
+		     const boost::uuids::uuid& data_volume);
 
   version_t get_trim_to();
 

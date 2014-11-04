@@ -483,7 +483,7 @@ private:
   void fetch(Context *fin);
   void _fetched(bufferlist& bl, bufferlist& bl2, Context *fin);
 
-  void build_backtrace(uuid_d volume, inode_backtrace_t& bt);
+  void build_backtrace(const boost::uuids::uuid& volume, inode_backtrace_t& bt);
   void store_backtrace(Context *fin);
   void _stored_backtrace(version_t v, Context *fin);
   void _mark_dirty_parent(LogSegment *ls, bool dirty_pool=false);

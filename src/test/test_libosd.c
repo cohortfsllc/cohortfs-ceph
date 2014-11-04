@@ -9,7 +9,8 @@
 #include "libosd/ceph_osd.h"
 
 
-static int test_sync_write(struct libosd *osd, const uuid_t volume)
+static int test_sync_write(struct libosd *osd,
+			   const uint8_t volume[16])
 {
   char buf[64] = {};
   int r;
@@ -61,7 +62,7 @@ static int test_sync_write(struct libosd *osd, const uuid_t volume)
   return 0;
 }
 
-static int test_sync_read(struct libosd *osd, const uuid_t volume)
+static int test_sync_read(struct libosd *osd, const uint8_t volume[16])
 {
   char buf[64] = {};
   int r;
@@ -111,7 +112,7 @@ static int wait_for_completion(struct io_completion *io, int count)
   return io->result;
 }
 
-static int test_async_write(struct libosd *osd, const uuid_t volume)
+static int test_async_write(struct libosd *osd, const uint8_t volume[16])
 {
   char buf[64] = {};
   struct io_completion io1 = {
@@ -197,7 +198,7 @@ static int test_async_write(struct libosd *osd, const uuid_t volume)
   return 0;
 }
 
-static int test_async_read(struct libosd *osd, const uuid_t volume)
+static int test_async_read(struct libosd *osd, const uint8_t volume[16])
 {
   char buf[64] = {};
   struct io_completion io = {
@@ -227,7 +228,7 @@ static int test_async_read(struct libosd *osd, const uuid_t volume)
 }
 
 
-static int run_tests(struct libosd *osd, const uuid_t volume)
+static int run_tests(struct libosd *osd, const uint8_t volume[16])
 {
   int r = test_sync_write(osd, volume);
   if (r != 0) {
@@ -258,7 +259,7 @@ static int run_tests(struct libosd *osd, const uuid_t volume)
 
 int main(int argc, const char *argv[])
 {
-  uuid_t volume;
+  uint8_t volume[16];
   int r = 0;
   struct libosd_init_args args = {
     .id = 0,

@@ -39,8 +39,6 @@
 #include "FDCache.h"
 #include "WBThrottle.h"
 
-#include "include/uuid.h"
-
 
 // from include/linux/falloc.h:
 #ifndef FALLOC_FL_PUNCH_HOLE
@@ -100,14 +98,14 @@ public:
     return target_version;
   }
 
-  int peek_journal_fsid(uuid_d *fsid);
+  int peek_journal_fsid(boost::uuids::uuid *fsid);
 
 private:
   string basedir, journalpath;
   std::string current_fn;
   std::string current_op_seq_fn;
   std::string omap_dir;
-  uuid_d fsid;
+  boost::uuids::uuid fsid;
 
   size_t blk_size;	      ///< fs block size
 
@@ -132,7 +130,7 @@ private:
   int get_cdir(const coll_t &cid, char *s, int len);
 
   /// read a uuid from fd
-  int read_fsid(int fd, uuid_d *uuid);
+  int read_fsid(int fd, boost::uuids::uuid *uuid);
 
   /// lock fsid_fd
   int lock_fsid();
@@ -445,10 +443,10 @@ public:
 
   int dump_journal(ostream& out);
 
-  void set_fsid(uuid_d u) {
+  void set_fsid(const boost::uuids::uuid& u) {
     fsid = u;
   }
-  uuid_d get_fsid() { return fsid; }
+  boost::uuids::uuid get_fsid() { return fsid; }
 
   // DEBUG read error injection, an object is removed from both on delete()
   Mutex read_error_lock;

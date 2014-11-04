@@ -3734,8 +3734,11 @@ int Monitor::check_fsid()
     es.resize(pos);
 
   dout(10) << "check_fsid cluster_uuid contains '" << es << "'" << dendl;
-  uuid_d ondisk;
-  if (!ondisk.parse(es.c_str())) {
+  boost::uuids::string_generator parse;
+  boost::uuids::uuid ondisk;
+  try {
+    ondisk = parse(es);
+  } catch (std::runtime_error& e) {
     derr << "error: unable to parse uuid" << dendl;
     return -EINVAL;
   }

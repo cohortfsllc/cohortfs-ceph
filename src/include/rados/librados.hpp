@@ -2,6 +2,7 @@
 #ifndef __LIBRADOS_HPP
 #define __LIBRADOS_HPP
 
+#include <boost/uuid/uuid.hpp>
 #include <stdbool.h>
 #include <string>
 #include <list>
@@ -14,7 +15,6 @@
 
 #include "librados.h"
 #include "rados_types.hpp"
-#include "include/uuid.h"
 
 namespace librados
 {
@@ -516,7 +516,7 @@ namespace librados
 		       uint64_t expected_object_size,
 		       uint64_t expected_write_size);
 
-    uuid_d get_volume();
+    boost::uuids::uuid get_volume();
 
     config_t cct();
 

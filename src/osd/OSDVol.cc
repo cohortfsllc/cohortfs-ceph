@@ -59,7 +59,8 @@ void OSDVol::put()
 }
 
 
-OSDVol::OSDVol(OSDService *o, OSDMapRef curmap, uuid_d v) :
+OSDVol::OSDVol(OSDService *o, OSDMapRef curmap,
+	       const boost::uuids::uuid& v) :
   osd(o),
   cct(o->cct),
   osdriver(osd->store, coll_t()),

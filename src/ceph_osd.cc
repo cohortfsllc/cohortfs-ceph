@@ -15,7 +15,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <uuid/uuid.h>
+#include <boost/uuid/uuid_io.hpp>
 #include <boost/scoped_ptr.hpp>
 #include <cassert>
 
@@ -237,7 +237,7 @@ int main(int argc, const char **argv)
   }
 
   if (get_journal_fsid) {
-    uuid_d fsid;
+    boost::uuids::uuid fsid;
     int r = store->peek_journal_fsid(&fsid);
     if (r == 0)
       cout << fsid << std::endl;
@@ -245,7 +245,7 @@ int main(int argc, const char **argv)
   }
 
   string magic;
-  uuid_d cluster_fsid, osd_fsid;
+  boost::uuids::uuid cluster_fsid, osd_fsid;
   int w;
   int r = OSD::peek_meta(store, magic, cluster_fsid, osd_fsid, w);
   if (r < 0) {

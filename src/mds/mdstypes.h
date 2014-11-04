@@ -311,7 +311,7 @@ struct inode_t {
   // file (data access)
   ceph_dir_layout  dir_layout;	  // [dir only]
   ceph_file_layout layout;
-  vector <uuid_d> old_volumes;
+  vector <boost::uuids::uuid> old_volumes;
   uint64_t   size;	  // on directory, # dentries
   uint64_t   max_size_ever; // max size the file has ever been
   uint32_t   truncate_seq;
@@ -414,7 +414,7 @@ struct inode_t {
     backtrace_version = pv ? pv : version;
   }
 
-  void add_old_volume(uuid_d &uuid) {
+  void add_old_volume(const boost::uuids::uuid& uuid) {
     backtrace_version = version;
     old_volumes.push_back(uuid);
   }

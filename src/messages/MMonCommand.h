@@ -22,11 +22,11 @@ using std::vector;
 
 class MMonCommand : public PaxosServiceMessage {
  public:
-  uuid_d fsid;
+  boost::uuids::uuid fsid;
   vector<string> cmd;
 
   MMonCommand() : PaxosServiceMessage(MSG_MON_COMMAND, 0) {}
-  MMonCommand(const uuid_d &f)
+  MMonCommand(const boost::uuids::uuid &f)
     : PaxosServiceMessage(MSG_MON_COMMAND, 0),
       fsid(f)
   { }

@@ -16,6 +16,7 @@
 #ifndef CEPH_MMONELECTION_H
 #define CEPH_MMONELECTION_H
 
+#include <boost/uuid/uuid_io.hpp>
 #include "msg/Message.h"
 #include "mon/MonMap.h"
 
@@ -39,7 +40,7 @@ public:
     }
   }
 
-  uuid_d fsid;
+  boost::uuids::uuid fsid;
   int32_t op;
   epoch_t epoch;
   bufferlist monmap_bl;

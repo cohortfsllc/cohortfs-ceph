@@ -316,7 +316,7 @@ public:
     return my_addr;
   }
 
-  const uuid_d& get_fsid() {
+  const boost::uuids::uuid& get_fsid() {
     return monmap.fsid;
   }
 

@@ -21,10 +21,10 @@
 
 class MStatfs : public PaxosServiceMessage {
 public:
-  uuid_d fsid;
+  boost::uuids::uuid fsid;
 
   MStatfs() : PaxosServiceMessage(CEPH_MSG_STATFS, 0) {}
-  MStatfs(const uuid_d& f, ceph_tid_t t, version_t v) :
+  MStatfs(const boost::uuids::uuid& f, ceph_tid_t t, version_t v) :
     PaxosServiceMessage(CEPH_MSG_STATFS, v), fsid(f) {
     set_tid(t);
   }

@@ -992,7 +992,7 @@ int librados::IoCtx::set_alloc_hint(const std::string& o,
 				     expected_write_size);
 }
 
-uuid_d librados::IoCtx::get_volume()
+boost::uuids::uuid librados::IoCtx::get_volume()
 {
   return io_ctx_impl->get_volume();
 }
@@ -1627,11 +1627,12 @@ extern "C" rados_t rados_ioctx_get_cluster(rados_ioctx_t io)
   return (rados_t)ctx->client;
 }
 
-extern "C" void rados_ioctx_get_id(rados_ioctx_t io, uuid_t id)
+extern "C" void rados_ioctx_get_id(rados_ioctx_t io,
+				   uint8_t id[16])
 {
   librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
-  uuid_d u = ctx->get_volume();
-  uuid_copy(id, u.uuid);
+  boost::uuids::uuid u = ctx->get_volume();
+  memcpy(id, &u, sizeof(u));
 }
 
 extern "C" int rados_getxattr(rados_ioctx_t io, const char *o,

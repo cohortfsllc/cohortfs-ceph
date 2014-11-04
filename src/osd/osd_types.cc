@@ -15,6 +15,7 @@
  *
  */
 
+#include <boost/uuid/string_generator.hpp>
 #include "osd_types.h"
 #include "include/ceph_features.h"
 #include "OSDMap.h"
@@ -183,12 +184,16 @@ void osd_stat_t::generate_test_instances(std::list<osd_stat_t*>& o)
 
 const coll_t coll_t::META_COLL("meta");
 
-bool coll_t::is_vol(uuid_d& vol) const
+bool coll_t::is_vol(boost::uuids::uuid& vol) const
 {
-  const char *cstr(str.c_str());
+  boost::uuids::string_generator parse;
 
-  if (!vol.parse(cstr))
+  try {
+    vol = parse(str);
+  } catch (std::runtime_error& e) {
     return false;
+  }
+
   return true;
 }
 

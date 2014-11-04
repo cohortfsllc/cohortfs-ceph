@@ -15,6 +15,7 @@
 #ifndef CEPH_MOSDMARKMEDOWN_H
 #define CEPH_MOSDMARKMEDOWN_H
 
+#include <boost/uuid/uuid_io.hpp>
 #include "messages/PaxosServiceMessage.h"
 
 class MOSDMarkMeDown : public PaxosServiceMessage {
@@ -22,14 +23,14 @@ class MOSDMarkMeDown : public PaxosServiceMessage {
   static const int HEAD_VERSION = 1;
 
  public:
-  uuid_d fsid;
+  boost::uuids::uuid fsid;
   entity_inst_t target_osd;
   epoch_t epoch;
   bool ack;
 
   MOSDMarkMeDown()
     : PaxosServiceMessage(MSG_OSD_MARK_ME_DOWN, 0, HEAD_VERSION) { }
-  MOSDMarkMeDown(const uuid_d &fs, const entity_inst_t& f,
+  MOSDMarkMeDown(const boost::uuids::uuid &fs, const entity_inst_t& f,
 		 epoch_t e, bool ack)
     : PaxosServiceMessage(MSG_OSD_MARK_ME_DOWN, e, HEAD_VERSION),
       fsid(fs), target_osd(f), epoch(e), ack(ack) {}

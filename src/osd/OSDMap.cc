@@ -15,6 +15,9 @@
  *
  */
 
+#include <boost/uuid/nil_generator.hpp>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
 #include "OSDMap.h"
 
 #include "common/config.h"
@@ -157,9 +160,9 @@ int OSDMap::Incremental::get_net_marked_down(const OSDMap *previous) const
   return n;
 }
 
-int OSDMap::Incremental::identify_osd(uuid_d u) const
+int OSDMap::Incremental::identify_osd(const boost::uuids::uuid u) const
 {
-  for (map<int32_t,uuid_d>::const_iterator p = new_uuid.begin();
+  for (auto p = new_uuid.begin();
        p != new_uuid.end();
        ++p)
     if (p->second == u)
@@ -344,7 +347,7 @@ void OSDMap::Incremental::dump(Formatter *f) const
   f->close_section();
 
   f->open_array_section("new_uuid");
-  for (map<int32_t,uuid_d>::const_iterator p = new_uuid.begin(); p != new_uuid.end(); ++p) {
+  for (auto p = new_uuid.begin(); p != new_uuid.end(); ++p) {
     f->open_object_section("osd");
     f->dump_int("osd", p->first);
     f->dump_stream("uuid") << p->second;
@@ -373,13 +376,13 @@ void OSDMap::Incremental::vol_inc_add::decode(bufferlist::iterator &p)
 void OSDMap::Incremental::vol_inc_remove::encode(bufferlist& bl, uint64_t features) const
 {
   ::encode(sequence, bl);
-  ::encode(uuid, bl);
+  ::encode(id, bl);
 }
 
 void OSDMap::Incremental::vol_inc_remove::decode(bufferlist::iterator &p)
 {
   ::decode(sequence, p);
-  ::decode(uuid, p);
+  ::decode(id, p);
 }
 
 // ----------------------------------
@@ -517,7 +520,7 @@ int OSDMap::identify_osd(const entity_addr_t& addr) const
   return -1;
 }
 
-int OSDMap::identify_osd(const uuid_d& u) const
+int OSDMap::identify_osd(const boost::uuids::uuid& u) const
 {
   for (int i=0; i<max_osd; i++)
     if (exists(i) && get_uuid(i) == u)
@@ -653,7 +656,7 @@ int OSDMap::apply_incremental(const Incremental &inc)
     }
     if ((osd_state[i->first] & CEPH_OSD_EXISTS) &&
 	(s & CEPH_OSD_EXISTS))
-      (*osd_uuid)[i->first] = uuid_d();
+      (*osd_uuid)[i->first] = boost::uuids::nil_uuid();
     osd_state[i->first] ^= s;
   }
   for (map<int32_t,entity_addr_t>::const_iterator i = inc.new_up_client.begin();
@@ -690,8 +693,8 @@ int OSDMap::apply_incremental(const Incremental &inc)
     osd_xinfo[p->first] = p->second;
 
   // uuid
-  for (map<int32_t,uuid_d>::const_iterator p = inc.new_uuid.begin(); p != inc.new_uuid.end(); ++p)
-    (*osd_uuid)[p->first] = p->second;
+  for (const auto& p : inc.new_uuid)
+    (*osd_uuid)[p.first] = p.second;
 
   // blacklist
   for (map<entity_addr_t,utime_t>::const_iterator p = inc.new_blacklist.begin();
@@ -714,11 +717,8 @@ int OSDMap::apply_incremental(const Incremental &inc)
     add_volume(p->vol);
   }
 
-  for (vector<OSDMap::Incremental::vol_inc_remove>::const_iterator p =
-      inc.vol_removals.begin();
-      p != inc.vol_removals.end();
-      ++p) {
-    remove_volume(p->uuid);
+  for (const auto& removal : inc.vol_removals) {
+    remove_volume(removal.id);
   }
 
   return 0;
@@ -748,11 +748,8 @@ void OSDMap::encode(bufferlist& bl, uint64_t features) const
     uint32_t count;
     count = vols.by_uuid.size();
     ::encode(count, bl);
-    for (map<uuid_d,VolumeRef>::const_iterator v
-	   = vols.by_uuid.begin();
-	 v != vols.by_uuid.end();
-	 ++v) {
-      v->second->encode(bl);
+    for (const auto& v : vols.by_uuid) {
+      v.second->encode(bl);
     }
     ENCODE_FINISH(bl); // client-usable data
   }
@@ -803,7 +800,7 @@ void OSDMap::decode(bufferlist::iterator& bl)
     ::decode(count, bl);
     for (uint32_t i = 0; i < count; ++i) {
       VolumeRef v = Volume::decode_volume(bl);
-      vols.by_uuid[v->uuid] = v;
+      vols.by_uuid[v->id] = v;
     }
     DECODE_FINISH(bl); // client-usable data
   }
@@ -832,11 +829,8 @@ void OSDMap::post_decode()
   vols.by_name.clear();
 
   // build name map from uuid map (only uuid map is encoded)
-  for(map<uuid_d,VolumeRef>::const_iterator i
-	= vols.by_uuid.begin();
-      i != vols.by_uuid.end();
-      ++i) {
-    vols.by_name[i->second->name] = i->second;
+  for(const auto& v : vols.by_uuid) {
+    vols.by_name[v.second->name] = v.second;
   }
 }
 
@@ -906,11 +900,9 @@ void OSDMap::dump(Formatter *f) const
   f->close_section();
 
   f->open_array_section("volumes");
-  for(map<uuid_d,VolumeRef>::const_iterator i = vols.by_uuid.begin();
-      i != vols.by_uuid.end();
-      ++i) {
+  for(const auto& v : vols.by_uuid) {
     f->open_object_section("volume_info");
-    i->second->dump(f);
+    v.second->dump(f);
     f->close_section();
   }
   f->close_section();
@@ -922,7 +914,7 @@ void OSDMap::generate_test_instances(list<OSDMap*>& o)
 
   CephContext *cct = new CephContext(CODE_ENVIRONMENT_UTILITY);
   o.push_back(new OSDMap);
-  uuid_d fsid;
+  boost::uuids::uuid fsid;
   o.back()->build_simple(cct, 1, fsid, 16);
   o.back()->created = o.back()->modified = utime_t(1, 2);  // fix timestamp
   cct->put();
@@ -990,7 +982,7 @@ void OSDMap::print(ostream& out) const
       set<string> st;
       get_state(i, st);
       out << " " << st;
-      if (!get_uuid(i).is_zero())
+      if (!get_uuid(i).is_nil())
 	out << " " << get_uuid(i);
       out << "\n";
     }
@@ -1076,8 +1068,9 @@ void OSDMap::print_oneline_summary(ostream& out) const
     out << " nearfull";
 }
 
-int OSDMap::build_simple(CephContext *cct, epoch_t e, uuid_d &fsid,
-			  int nosd)
+int OSDMap::build_simple(CephContext *cct, epoch_t e,
+			 const boost::uuids::uuid& fsid,
+			 int nosd)
 {
   ldout(cct, 10) << "build_simple on " << num_osd
 		 << " osds." << dendl;
@@ -1123,11 +1116,12 @@ int OSDMap::build_simple(CephContext *cct, epoch_t e, uuid_d &fsid,
   return 0;
 }
 
-int OSDMap::create_volume(VolumeRef vol, uuid_d& out)
+int OSDMap::create_volume(VolumeRef vol,
+			  boost::uuids::uuid& out)
 {
-  vol->uuid.generate_random();
+  vol->id = boost::uuids::random_generator()();
   vol->last_update = epoch + 1;
-  out = vol->uuid;
+  out = vol->id;
   return add_volume(vol);
 }
 
@@ -1143,9 +1137,9 @@ int OSDMap::add_volume(VolumeRef vol) {
     return -EINVAL;
   }
 
-  if (vols.by_uuid.count(vol->uuid) > 0) {
+  if (vols.by_uuid.count(vol->id) > 0) {
     dout(0) << "attempt to add volume with existing uuid "
-	    << vol->uuid << dendl;
+	    << vol->id << dendl;
     return -EEXIST;
   }
 
@@ -1155,25 +1149,25 @@ int OSDMap::add_volume(VolumeRef vol) {
     return -EEXIST;
   }
 
-  vols.by_uuid[vol->uuid] = vol;
+  vols.by_uuid[vol->id] = vol;
   vols.by_name[vol->name] = vol;
   return 0;
 }
 
-int OSDMap::remove_volume(uuid_d uuid)
+int OSDMap::remove_volume(const boost::uuids::uuid& id)
 {
-  map<uuid_d,VolumeRef>::iterator i = vols.by_uuid.find(uuid);
+  auto i = vols.by_uuid.find(id);
 
   if (i == vols.by_uuid.end()) {
     dout(0) << "attempt to remove volume with non-existing uuid "
-	    << uuid << dendl;
+	    << id << dendl;
     return -ENOENT;
   }
 
   VolumeRef v = i->second;
 
   vols.by_name.erase(v->name);
-  vols.by_uuid.erase(uuid);
+  vols.by_uuid.erase(v->id);
 
   return 0;
 }

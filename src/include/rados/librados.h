@@ -26,7 +26,6 @@ extern "C" {
 #include <sys/types.h>
 #endif
 #include <string.h>
-#include <uuid/uuid.h>
 #include "rados_types.h"
 
 #include <sys/time.h>
@@ -551,7 +550,8 @@ rados_t rados_ioctx_get_cluster(rados_ioctx_t io);
  * @param id of the volume
  * @returns -ENOENT if the volume is not found
  */
-  void rados_volume_lookup(rados_t cluster, const char *vol_name, uuid_t id);
+  void rados_volume_lookup(rados_t cluster, const char *vol_name,
+			   uint8_t id[16]);
 
 /**
  * Get the name of a volume
@@ -562,7 +562,7 @@ rados_t rados_ioctx_get_cluster(rados_ioctx_t io);
  * @param maxlen size of buffer where name will be stored
  * @returns length of string stored, or -ERANGE if buffer too small
  */
-int rados_volume_reverse_lookup(rados_t cluster, uuid_t id, char *buf,
+int rados_volume_reverse_lookup(rados_t cluster, uint8_t id[16], char *buf,
 				size_t maxlen);
 
 /**
@@ -571,7 +571,7 @@ int rados_volume_reverse_lookup(rados_t cluster, uuid_t id, char *buf,
  * @param io the io context to query
  * @param id the uuid of the volume the io context uses
  */
-void rados_ioctx_get_id(rados_ioctx_t io, uuid_t id);
+void rados_ioctx_get_id(rados_ioctx_t io, uint8_t id[16]);
 
 /**
  * Get the volume name of the io context

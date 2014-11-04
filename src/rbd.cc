@@ -8,6 +8,7 @@
  * LGPL2.  See file COPYING.
  *
  */
+#include <boost/uuid/string_generator.hpp>
 #include "mon/MonClient.h"
 #include "mon/MonMap.h"
 #include "common/config.h"
@@ -1297,9 +1298,13 @@ static int do_kernel_rm(const char *dev)
 
 static string map_option_uuid_cb(const char *value_char)
 {
-  uuid_d u;
-  if (!u.parse(value_char))
+  boost::uuids::string_generator parse;
+  boost::uuids::uuid u;
+  try {
+    u = parse(value_char);
+  } catch (std::runtime_error& e) {
     return "";
+  }
 
   ostringstream oss;
   oss << u;

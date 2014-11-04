@@ -59,7 +59,7 @@ FakeWriteback::~FakeWriteback()
 }
 
 void FakeWriteback::read(const object_t& oid,
-			 const uuid_d& vol,
+			 const boost::uuids::uuid& vol,
 			 uint64_t off, uint64_t len,
 			 bufferlist *pbl, uint64_t trunc_size,
 			 uint32_t trunc_seq, Context *onfinish)
@@ -69,11 +69,11 @@ void FakeWriteback::read(const object_t& oid,
 }
 
 ceph_tid_t FakeWriteback::write(const object_t& oid,
-			   const uuid_d& vol,
-			   uint64_t off, uint64_t len,
-			   const bufferlist &bl, utime_t mtime,
-			   uint64_t trunc_size, uint32_t trunc_seq,
-			   Context *oncommit)
+				const boost::uuids::uuid& vol,
+				uint64_t off, uint64_t len,
+				const bufferlist &bl, utime_t mtime,
+				uint64_t trunc_size, uint32_t trunc_seq,
+				Context *oncommit)
 {
   C_Delay *wrapper = new C_Delay(m_cct, oncommit, m_lock, off, NULL, m_delay_ns);;
   m_finisher->queue(wrapper, 0);

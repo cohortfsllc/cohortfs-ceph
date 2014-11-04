@@ -22,12 +22,12 @@ using std::vector;
 
 class MMonJoin : public PaxosServiceMessage {
  public:
-  uuid_d fsid;
+  boost::uuids::uuid fsid;
   string name;
   entity_addr_t addr;
 
   MMonJoin() : PaxosServiceMessage(MSG_MON_JOIN, 0) {}
-  MMonJoin(uuid_d &f, string n, const entity_addr_t& a)
+  MMonJoin(const boost::uuids::uuid &f, string n, const entity_addr_t& a)
     : PaxosServiceMessage(MSG_MON_JOIN, 0),
       fsid(f), name(n), addr(a)
   { }

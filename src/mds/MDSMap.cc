@@ -13,6 +13,7 @@
  */
 
 
+#include <boost/uuid/string_generator.hpp>
 #include "MDSMap.h"
 
 #include <sstream>
@@ -138,8 +139,8 @@ void MDSMap::dump(Formatter *f) const
   }
   f->close_section();
   f->open_array_section("data_volumes");
-  for (set<uuid_d>::const_iterator p = data_volumes.begin(); p != data_volumes.end(); ++p)
-    f->dump_stream("uuid") << *p;
+  for (auto p : data_volumes)
+    f->dump_stream("uuid") << p;
   f->close_section();
   f->dump_stream("metadata_uuid") << metadata_uuid;
   f->dump_bool("inline_data", inline_data_enabled);
@@ -149,10 +150,12 @@ void MDSMap::generate_test_instances(list<MDSMap*>& ls)
 {
   MDSMap *m = new MDSMap();
   m->max_mds = 1;
-  uuid_d uuid1, uuid2, uuid3;
-  uuid1.parse("5a9e54a4-7740-4d03-b0fb-e1f3b899b185");
-  uuid2.parse("5edbdba8-af1a-4b48-8f2f-1ec5cf84efbe");
-  uuid3.parse("e9013f90-e7a3-4f69-bb85-bcf74559e68d");
+  boost::uuids::string_generator parse;
+
+  boost::uuids::uuid uuid1, uuid2, uuid3;
+  uuid1 = parse("5a9e54a4-7740-4d03-b0fb-e1f3b899b185");
+  uuid2 = parse("5edbdba8-af1a-4b48-8f2f-1ec5cf84efbe");
+  uuid3 = parse("e9013f90-e7a3-4f69-bb85-bcf74559e68d");
   m->metadata_uuid = uuid1;
   m->cas_uuid = uuid2;
   m->data_volumes.insert(uuid3);

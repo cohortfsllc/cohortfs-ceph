@@ -16,6 +16,8 @@
 #include <cassert>
 #include <fstream>
 #include <iostream>
+#include <boost/uuid/string_generator.hpp>
+#include <boost/uuid/nil_generator.hpp>
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/utsname.h>
@@ -197,7 +199,7 @@ void OSDService::init()
 #define dout_prefix *_dout
 
 int OSD::mkfs(CephContext *cct, ObjectStore *store, const string &dev,
-	      uuid_d fsid, int whoami)
+	      const boost::uuids::uuid& fsid, int whoami)
 {
   int ret;
 
@@ -235,7 +237,7 @@ int OSD::mkfs(CephContext *cct, ObjectStore *store, const string &dev,
       }
     } else {
       // create superblock
-      if (fsid.is_zero()) {
+      if (fsid.is_nil()) {
 	derr << "must specify cluster fsid" << dendl;
 	ret = -EINVAL;
 	goto umount_store;
@@ -316,7 +318,8 @@ free_store:
   return ret;
 }
 
-int OSD::write_meta(ObjectStore *store, uuid_d& cluster_fsid, uuid_d& osd_fsid, int whoami)
+int OSD::write_meta(ObjectStore *store, const boost::uuids::uuid& cluster_fsid,
+		    const boost::uuids::uuid& osd_fsid, int whoami)
 {
   char val[80];
   int r;
@@ -331,7 +334,7 @@ int OSD::write_meta(ObjectStore *store, uuid_d& cluster_fsid, uuid_d& osd_fsid, 
   if (r < 0)
     return r;
 
-  cluster_fsid.print(val);
+  strcpy(val, to_string(cluster_fsid).c_str());
   r = store->write_meta("ceph_fsid", val);
   if (r < 0)
     return r;
@@ -343,8 +346,8 @@ int OSD::write_meta(ObjectStore *store, uuid_d& cluster_fsid, uuid_d& osd_fsid, 
   return 0;
 }
 
-int OSD::peek_meta(ObjectStore *store, std::string& magic,
-		   uuid_d& cluster_fsid, uuid_d& osd_fsid, int& whoami)
+int OSD::peek_meta(ObjectStore *store, std::string& magic, boost::uuids::uuid& cluster_fsid,
+		   boost::uuids::uuid& osd_fsid, int& whoami)
 {
   string val;
 
@@ -361,17 +364,23 @@ int OSD::peek_meta(ObjectStore *store, std::string& magic,
   r = store->read_meta("ceph_fsid", &val);
   if (r < 0)
     return r;
-  r = cluster_fsid.parse(val.c_str());
-  if (r < 0)
-    return r;
+
+  boost::uuids::string_generator parse;
+  try {
+    cluster_fsid = parse(val);
+  } catch (std::runtime_error& e) {
+    return -EINVAL;
+  }
 
   r = store->read_meta("fsid", &val);
   if (r < 0) {
-    osd_fsid = uuid_d();
+    osd_fsid = boost::uuids::nil_uuid();
   } else {
-    r = osd_fsid.parse(val.c_str());
-    if (r < 0)
-      return r;
+    try {
+      osd_fsid = parse(val);
+    } catch (std::runtime_error& e) {
+      return -EINVAL;
+    }
   }
 
   return 0;
@@ -525,10 +534,7 @@ bool OSD::asok_command(string command, cmdmap_t& cmdmap, string format,
   } else if (command == "dump_watchers") {
     list<obj_watch_item_t> watchers;
     osd_lock.Lock();
-    for (std::map<uuid_d,OSDVolRef>::iterator it = vol_map.begin();
-	 it != vol_map.end();
-	 ++it) {
-
+    for (auto it = vol_map.begin(); it != vol_map.end(); ++it) {
       list<obj_watch_item_t> vol_watchers;
       OSDVolRef vol = it->second;
       vol->lock();
@@ -841,9 +847,7 @@ int OSD::shutdown()
   cct->_conf->set_val("debug_ms", "100");
   cct->_conf->apply_changes(NULL);
 
-  for (std::map<uuid_d, OSDVolRef>::iterator p = vol_map.begin();
-       p != vol_map.end();
-       ++p) {
+  for (auto p = vol_map.begin(); p != vol_map.end(); ++p) {
     dout(20) << " kicking vol " << p->first << dendl;
     p->second->lock();
     p->second->on_shutdown();
@@ -920,9 +924,7 @@ int OSD::shutdown()
   store = 0;
   dout(10) << "Store synced" << dendl;
 
-  for (map<uuid_d, OSDVolRef>::iterator p = vol_map.begin();
-       p != vol_map.end();
-       ++p) {
+  for (auto p = vol_map.begin(); p != vol_map.end(); ++p) {
     dout(20) << " kicking vol " << p->first << dendl;
     p->second->lock();
     if (p->second->ref != 1) {
@@ -993,7 +995,7 @@ void OSD::recursive_remove_collection(ObjectStore *store, coll_t tmp)
     store,
     coll_t());
 
-  uuid_d vol;
+  boost::uuids::uuid vol;
   tmp.is_vol(vol);
 
   ObjectStore::Transaction t;
@@ -1025,16 +1027,16 @@ void OSD::recursive_remove_collection(ObjectStore *store, coll_t tmp)
 // ======================================================
 // Volumes
 
-bool OSD::_have_vol(uuid_d volume)
+bool OSD::_have_vol(const boost::uuids::uuid& volume)
 {
   assert(osd_lock.is_locked());
   return vol_map.count(volume);
 }
 
-OSDVolRef OSD::_lookup_vol(const uuid_d& volid)
+OSDVolRef OSD::_lookup_vol(const boost::uuids::uuid& volid)
 {
   assert(osd_lock.is_locked());
-  map<uuid_d, OSDVolRef>::iterator i = vol_map.find(volid);
+  auto i = vol_map.find(volid);
   if (i != vol_map.end()) {
     OSDVolRef vol = i->second;
     service.lru.lru_touch(&*vol);
@@ -1044,7 +1046,7 @@ OSDVolRef OSD::_lookup_vol(const uuid_d& volid)
   }
 }
 
-OSDVolRef OSD::_load_vol(const uuid_d& volid)
+OSDVolRef OSD::_load_vol(const boost::uuids::uuid& volid)
 {
   assert(osd_lock.is_locked());
   OSDVol* vol = new OSDVol(&service, osdmap, volid);
@@ -1073,7 +1075,7 @@ void OSD::trim_vols(void)
   }
 }
 
-OSDVolRef OSD::_lookup_lock_vol(const uuid_d& volid)
+OSDVolRef OSD::_lookup_lock_vol(const boost::uuids::uuid& volid)
 {
   OSDVolRef vol = _lookup_vol(volid);
   if (vol)
@@ -2711,9 +2713,7 @@ void OSD::consume_map()
   int num_vols;
   list<OSDVolRef> to_remove;
   // scan volumes
-  for (std::unordered_map<uuid_d,VolRef*>::iterator it = vol_map.begin();
-       it != vol_map.end();
-       ++it) {
+  for (auto it = vol_map.begin(); it != vol_map.end(); ++it) {
     OSDVol *vol = it->second;
     vol->lock();
     num_vols++;
@@ -3046,7 +3046,7 @@ void OSD::handle_op(OpRequestRef op)
     }
   }
 
-  uuid_d volume = m->get_volume();
+  boost::uuids::uuid volume = m->get_volume();
   OSDVolRef vol = _lookup_vol(volume);
   if (!vol) {
     dout(7) << "hit non-existent volume " << volume << dendl;

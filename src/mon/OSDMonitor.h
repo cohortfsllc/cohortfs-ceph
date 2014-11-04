@@ -193,7 +193,7 @@ private:
   void send_incremental(epoch_t first, entity_inst_t& dest, bool onetime);
   void send_incremental(epoch_t first, ConnectionRef &con, bool onetime);
 
-  bool check_source(PaxosServiceMessage *m, uuid_d fsid);
+  bool check_source(PaxosServiceMessage *m, const boost::uuids::uuid& fsid);
 
   bool preprocess_mark_me_down(class MOSDMarkMeDown *m);
 
