@@ -3202,7 +3202,7 @@ void Server::handle_client_setlayout(MDRequestRef& mdr)
   // validate layout
   ceph_file_layout layout = cur->get_projected_inode()->layout;
   // save existing layout for later
-  uuid_d old_vol = layout.fl_uuid;
+  boost::uuids::uuid old_vol = layout.fl_uuid;
 
 #if 0
   if (req->head.args.setlayout.layout.fl_object_size > 0)
@@ -3438,7 +3438,7 @@ void Server::handle_set_vxattr(MDRequestRef& mdr, CInode *cur,
       name.find("ceph.dir.layout") == 0) {
     inode_t *pi;
     string rest;
-    uuid_d old_vol;
+    boost::uuids::uuid old_vol;
     if (name.find("ceph.dir.layout") == 0) {
       if (!cur->is_dir()) {
 	reply_request(mdr, -EINVAL);

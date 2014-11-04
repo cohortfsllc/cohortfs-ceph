@@ -1,5 +1,6 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 #include <gtest/gtest.h>
+#include <boost/uuid/uuid_generators.hpp>
 #include <stdlib.h>
 #include <limits.h>
 
@@ -19,7 +20,7 @@ using std::cerr;
 Finisher *finisher;
 Cond sync_cond;
 char path[200];
-uuid_d fsid;
+boost::uuids::uuid fsid;
 bool directio = false;
 bool aio = false;
 
@@ -112,13 +113,13 @@ int main(int argc, char **argv) {
 }
 
 TEST(TestFileJournal, Create) {
-  fsid.generate_random();
+  fsid = boost::uuids::random_generator()();
   FileJournal j(fsid, finisher, &sync_cond, path, directio, aio);
   ASSERT_EQ(0, j.create());
 }
 
 TEST(TestFileJournal, WriteSmall) {
-  fsid.generate_random();
+  fsid = boost::uuids::random_generator()();
   FileJournal j(fsid, finisher, &sync_cond, path, directio, aio);
   ASSERT_EQ(0, j.create());
   j.make_writeable();
@@ -132,7 +133,7 @@ TEST(TestFileJournal, WriteSmall) {
 }
 
 TEST(TestFileJournal, WriteBig) {
-  fsid.generate_random();
+  fsid = boost::uuids::random_generator()();
   FileJournal j(fsid, finisher, &sync_cond, path, directio, aio);
   ASSERT_EQ(0, j.create());
   j.make_writeable();
@@ -150,7 +151,7 @@ TEST(TestFileJournal, WriteBig) {
 }
 
 TEST(TestFileJournal, WriteMany) {
-  fsid.generate_random();
+  fsid = boost::uuids::random_generator()();
   FileJournal j(fsid, finisher, &sync_cond, path, directio, aio);
   ASSERT_EQ(0, j.create());
   j.make_writeable();
@@ -173,7 +174,7 @@ TEST(TestFileJournal, WriteMany) {
 }
 
 TEST(TestFileJournal, WriteManyVecs) {
-  fsid.generate_random();
+  fsid = boost::uuids::random_generator()();
   FileJournal j(fsid, finisher, &sync_cond, path, directio, aio);
   ASSERT_EQ(0, j.create());
   j.make_writeable();
@@ -210,7 +211,7 @@ TEST(TestFileJournal, WriteManyVecs) {
 }
 
 TEST(TestFileJournal, ReplaySmall) {
-  fsid.generate_random();
+  fsid = boost::uuids::random_generator()();
   FileJournal j(fsid, finisher, &sync_cond, path, directio, aio);
   ASSERT_EQ(0, j.create());
   j.make_writeable();
@@ -255,7 +256,7 @@ TEST(TestFileJournal, ReplaySmall) {
 }
 
 TEST(TestFileJournal, ReplayCorrupt) {
-  fsid.generate_random();
+  fsid = boost::uuids::random_generator()();
   FileJournal j(fsid, finisher, &sync_cond, path, directio, aio);
   ASSERT_EQ(0, j.create());
   j.make_writeable();
@@ -322,7 +323,7 @@ TEST(TestFileJournal, ReplayCorrupt) {
 }
 
 TEST(TestFileJournal, WriteTrim) {
-  fsid.generate_random();
+  fsid = boost::uuids::random_generator()();
   FileJournal j(fsid, finisher, &sync_cond, path, directio, aio);
   ASSERT_EQ(0, j.create());
   j.make_writeable();
@@ -360,7 +361,7 @@ TEST(TestFileJournal, WriteTrim) {
 }
 
 TEST(TestFileJournal, WriteTrimSmall) {
-  fsid.generate_random();
+  fsid = boost::uuids::random_generator()();
   FileJournal j(fsid, finisher, &sync_cond, path, directio);
   ASSERT_EQ(0, j.create());
   j.make_writeable();
@@ -403,7 +404,7 @@ TEST(TestFileJournal, ReplayDetectCorruptFooterMagic) {
   g_ceph_context->_conf->set_val("journal_write_header_frequency", "1");
   g_ceph_context->_conf->apply_changes(NULL);
 
-  fsid.generate_random();
+  fsid = boost::uuids::random_generator()();
   FileJournal j(fsid, finisher, &sync_cond, path, directio, aio);
   ASSERT_EQ(0, j.create());
   j.make_writeable();
@@ -453,7 +454,7 @@ TEST(TestFileJournal, ReplayDetectCorruptPayload) {
   g_ceph_context->_conf->set_val("journal_write_header_frequency", "1");
   g_ceph_context->_conf->apply_changes(NULL);
 
-  fsid.generate_random();
+  fsid = boost::uuids::random_generator()();
   FileJournal j(fsid, finisher, &sync_cond, path, directio, aio);
   ASSERT_EQ(0, j.create());
   j.make_writeable();
@@ -503,7 +504,7 @@ TEST(TestFileJournal, ReplayDetectCorruptHeader) {
   g_ceph_context->_conf->set_val("journal_write_header_frequency", "1");
   g_ceph_context->_conf->apply_changes(NULL);
 
-  fsid.generate_random();
+  fsid = boost::uuids::random_generator()();
   FileJournal j(fsid, finisher, &sync_cond, path, directio, aio);
   ASSERT_EQ(0, j.create());
   j.make_writeable();

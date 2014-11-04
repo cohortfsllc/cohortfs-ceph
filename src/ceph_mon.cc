@@ -225,10 +225,8 @@ int main(int argc, const char **argv)
 
   global_init(NULL, args, CEPH_ENTITY_TYPE_MON, CODE_ENVIRONMENT_DAEMON, flags);
 
-  uuid_d fsid;
   std::string val;
-  for (std::vector<const char*>::iterator i = args.begin();
-       i != args.end(); ) {
+  for (auto i = args.begin(); i != args.end(); ) {
     if (ceph_argparse_double_dash(args, i)) {
       break;
     } else if (ceph_argparse_flag(args, &i, "-h", "--help", (char*)NULL)) {
@@ -375,12 +373,12 @@ int main(int argc, const char **argv)
       }
     }
 
-    if (!g_conf->fsid.is_zero()) {
+    if (!g_conf->fsid.is_nil()) {
       monmap.fsid = g_conf->fsid;
       cout << argv[0] << ": set fsid to " << g_conf->fsid << std::endl;
     }
 
-    if (monmap.fsid.is_zero()) {
+    if (monmap.fsid.is_nil()) {
       cerr << argv[0] << ": generated monmap has no fsid; use '--fsid <uuid>'"
 	   << std::endl;
       exit(10);

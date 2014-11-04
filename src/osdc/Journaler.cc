@@ -53,7 +53,7 @@ void Journaler::set_layout(ceph_file_layout *l)
 {
   layout = *l;
 
-  assert(layout.fl_uuid == volume->uuid);
+  assert(layout.fl_uuid == volume->id);
   last_written.layout = layout;
   last_committed.layout = layout;
 

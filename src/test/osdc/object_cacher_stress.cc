@@ -7,6 +7,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <boost/uuid/nil_generator.hpp>
 #include <boost/scoped_ptr.hpp>
 
 #include "common/ceph_argparse.h"
@@ -66,7 +67,7 @@ int stress_test(uint64_t num_ops, uint64_t num_objs,
 
   std::atomic<uint64_t> outstanding_reads;
   vector<std::shared_ptr<op_data> > ops;
-  ObjectCacher::ObjectSet object_set(NULL, uuid_d(), 0);
+  ObjectCacher::ObjectSet object_set(NULL, boost::uuids::nil_uuid(), 0);
   ceph::buffer::ptr bp(max_op_len);
   ceph::bufferlist bl;
   bp.zero();

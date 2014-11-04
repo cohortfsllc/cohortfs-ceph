@@ -21,13 +21,11 @@
 
 #include "mds/MDSMap.h"
 
-#include <uuid/uuid.h>
-
 class MMDSBeacon : public PaxosServiceMessage {
 
   static const int HEAD_VERSION = 2;
 
-  uuid_d fsid;
+  boost::uuids::uuid fsid;
   uint64_t global_id;
   string name;
 
@@ -40,7 +38,7 @@ class MMDSBeacon : public PaxosServiceMessage {
 
  public:
   MMDSBeacon() : PaxosServiceMessage(MSG_MDS_BEACON, 0, HEAD_VERSION) { }
-  MMDSBeacon(const uuid_d &f, uint64_t g, string& n, epoch_t les, int st, version_t se) :
+  MMDSBeacon(const boost::uuids::uuid &f, uint64_t g, string& n, epoch_t les, int st, version_t se) :
     PaxosServiceMessage(MSG_MDS_BEACON, les, HEAD_VERSION),
     fsid(f), global_id(g), name(n), state(st), seq(se),
     standby_for_rank(-1) {
@@ -49,7 +47,7 @@ private:
   ~MMDSBeacon() {}
 
 public:
-  uuid_d& get_fsid() { return fsid; }
+  const boost::uuids::uuid& get_fsid() { return fsid; }
   uint64_t get_global_id() { return global_id; }
   string& get_name() { return name; }
   epoch_t get_last_epoch_seen() { return version; }

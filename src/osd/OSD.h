@@ -77,7 +77,7 @@ public:
   OSD *osd;
   LRU lru;
   CephContext *cct;
-  SharedPtrRegistry<uuid_d, ObjectStore::Sequencer> osr_registry;
+  SharedPtrRegistry<boost::uuids::uuid, ObjectStore::Sequencer> osr_registry;
   const int whoami;
   ObjectStore *&store;
   LogClient &clog;
@@ -361,7 +361,7 @@ public:
     return hobject_t(object_t(foo));
   }
 
-  static hobject_t make_vol_biginfo_oid(uuid_d vol) {
+  static hobject_t make_vol_biginfo_oid(const boost::uuids::uuid& vol) {
     stringstream ss;
     ss << "volinfo_" << vol;
     string s;
@@ -718,13 +718,13 @@ protected:
 
 protected:
   // -- placement groups --
-  std::map<uuid_d, OSDVolRef> vol_map;
+  std::map<boost::uuids::uuid, OSDVolRef> vol_map;
 
-  bool _have_vol(uuid_d volume);
-  OSDVolRef _lookup_vol(const uuid_d& volid);
-  OSDVolRef _load_vol(const uuid_d& volid);
+  bool _have_vol(const boost::uuids::uuid& volume);
+  OSDVolRef _lookup_vol(const boost::uuids::uuid& volid);
+  OSDVolRef _load_vol(const boost::uuids::uuid& volid);
   void trim_vols(void);
-  OSDVolRef _lookup_lock_vol(const uuid_d& volid);
+  OSDVolRef _lookup_lock_vol(const boost::uuids::uuid& volid);
 
   // -- boot --
   void start_boot();
@@ -789,7 +789,7 @@ protected:
   static int find_osd_dev(char *result, int whoami);
   static int mkfs(CephContext *cct, ObjectStore *store,
 		  const string& dev,
-		  uuid_d fsid, int whoami);
+		  const boost::uuids::uuid& fsid, int whoami);
   /* remove any non-user xattrs from a map of them */
   void filter_xattrs(map<string, bufferptr>& attrs) {
     for (map<string, bufferptr>::iterator iter = attrs.begin();
@@ -802,11 +802,12 @@ protected:
   }
 
 private:
-  static int write_meta(ObjectStore *store,
-			uuid_d& cluster_fsid, uuid_d& osd_fsid, int whoami);
+  static int write_meta(ObjectStore *store, const boost::uuids::uuid& cluster_fsid,
+			const boost::uuids::uuid& osd_fsid, int whoami);
 public:
   static int peek_meta(ObjectStore *store, string& magic,
-		       uuid_d& cluster_fsid, uuid_d& osd_fsid, int& whoami);
+		       boost::uuids::uuid& cluster_fsid,
+		       boost::uuids::uuid& osd_fsid, int& whoami);
 
 
   // startup/shutdown

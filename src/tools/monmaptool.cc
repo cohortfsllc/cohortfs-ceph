@@ -19,6 +19,7 @@
 
 #include <iostream>
 #include <string>
+#include <boost/uuid/uuid_io.hpp>
 using namespace std;
 
 #include "common/config.h"
@@ -130,7 +131,7 @@ int main(int argc, const char **argv)
     monmap.created = ceph_clock_now(g_ceph_context);
     monmap.last_changed = monmap.created;
     srand(getpid() + time(0));
-    if (g_conf->fsid.is_zero()) {
+    if (g_conf->fsid.is_nil()) {
       monmap.generate_fsid();
       cout << me << ": generated fsid " << monmap.fsid << std::endl;
     }
@@ -158,7 +159,7 @@ int main(int argc, const char **argv)
     modified = true;
   }
 
-  if (!g_conf->fsid.is_zero()) {
+  if (!g_conf->fsid.is_nil()) {
     monmap.fsid = g_conf->fsid;
     cout << me << ": set fsid to " << monmap.fsid << std::endl;
     modified = true;

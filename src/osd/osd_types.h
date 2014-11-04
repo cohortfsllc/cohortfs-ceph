@@ -21,6 +21,8 @@
 #include <sstream>
 #include <stdio.h>
 #include <memory>
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_io.hpp>
 #include <boost/scoped_ptr.hpp>
 #include <boost/optional.hpp>
 
@@ -118,8 +120,8 @@ public:
     : str(str_)
   { }
 
-  explicit coll_t(uuid_d volume)
-    : str(volume.to_str())
+  explicit coll_t(const boost::uuids::uuid& volume)
+    : str(to_string(volume))
   { }
 
   const std::string& to_str() const {
@@ -134,7 +136,7 @@ public:
     return str < rhs.str;
   }
 
-  bool is_vol(uuid_d& volume) const;
+  bool is_vol(boost::uuids::uuid& volume) const;
   void encode(bufferlist& bl) const;
   void decode(bufferlist::iterator& bl);
   inline bool operator==(const coll_t& rhs) const {
@@ -413,7 +415,7 @@ WRITE_CLASS_ENCODER(object_stat_collection_t)
  * Probably not needed still.
  */
 struct vol_info_t {
-  uuid_d volume;
+  boost::uuids::uuid volume;
   eversion_t last_update;    // last object version applied to store.
   epoch_t last_epoch_started;// last epoch at which this volume
 			     // started on this osd
@@ -422,7 +424,7 @@ struct vol_info_t {
   vol_info_t()
     : last_epoch_started(0), last_user_version(0)
   { }
-  vol_info_t(uuid_d volume)
+  vol_info_t(const boost::uuids::uuid& volume)
     : volume(volume),
       last_epoch_started(0), last_user_version(0)
   { }
@@ -571,12 +573,12 @@ ostream& operator<<(ostream& out, const osd_peer_stat_t &stat);
 
 class ObjectExtent {
  public:
-  object_t    oid;	 // object id
-  uint64_t    offset;	 // in object
-  uint64_t    length;	 // in object
-  uint64_t    truncate_size;	// in object
+  object_t oid; // object id
+  uint64_t offset; // in object
+  uint64_t length; // in object
+  uint64_t truncate_size; // in object
 
-  uuid_d	volume;
+  boost::uuids::uuid volume;
 
   // off -> len.  extents in buffer being mapped (may be fragmented bc of striping!)
   vector<pair<uint64_t,uint64_t> >  buffer_extents;
@@ -599,7 +601,7 @@ inline ostream& operator<<(ostream& out, const ObjectExtent &ex)
 
 class OSDSuperblock {
 public:
-  uuid_d cluster_fsid, osd_fsid;
+  boost::uuids::uuid cluster_fsid, osd_fsid;
   int32_t whoami;    // my role in this fs.
   epoch_t current_epoch;	     // most recent epoch
   epoch_t oldest_map, newest_map;    // oldest/newest maps we have.

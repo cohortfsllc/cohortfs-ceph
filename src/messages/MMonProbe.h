@@ -16,6 +16,7 @@
 #ifndef CEPH_MMONPROBE_H
 #define CEPH_MMONPROBE_H
 
+#include <boost/uuid/uuid_io.hpp>
 #include "include/ceph_features.h"
 #include "msg/Message.h"
 #include "mon/MonMap.h"
@@ -46,7 +47,7 @@ public:
     }
   }
 
-  uuid_d fsid;
+  boost::uuids::uuid fsid;
   int32_t op;
   string name;
   set<int32_t> quorum;
@@ -58,7 +59,7 @@ public:
 
   MMonProbe()
     : Message(MSG_MON_PROBE, HEAD_VERSION, COMPAT_VERSION) {}
-  MMonProbe(const uuid_d& f, int o, const string& n, bool hej)
+  MMonProbe(const boost::uuids::uuid& f, int o, const string& n, bool hej)
     : Message(MSG_MON_PROBE, HEAD_VERSION, COMPAT_VERSION),
       fsid(f),
       op(o),

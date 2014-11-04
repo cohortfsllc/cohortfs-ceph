@@ -7,6 +7,8 @@
 #include "include/Context.h"
 #include "include/rbd/librbd.hpp"
 
+using namespace ceph;
+
 class RBDBackend : public Backend {
   std::map<std::string, std::shared_ptr<librbd::Image> > *m_images;
 public:

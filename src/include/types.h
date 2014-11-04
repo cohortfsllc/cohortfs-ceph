@@ -17,8 +17,14 @@
 // this is needed for ceph_fs to compile in userland
 #include "byteorder.h"
 
-#include "uuid.h"
-
+#include <set>
+#include <map>
+#include <unordered_map>
+#include <string>
+#include <vector>
+#include <list>
+#include <deque>
+#include <sstream>
 #include <netinet/in.h>
 #include <fcntl.h>
 #include <string.h>

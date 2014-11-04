@@ -92,7 +92,7 @@ public:
   int wait_for_latest_osdmap();
 
   int create_ioctx(const string &name, IoCtxImpl **io);
-  int create_ioctx(const uuid_d &volume, IoCtxImpl **io);
+  int create_ioctx(const boost::uuids::uuid& volume, IoCtxImpl **io);
   int get_fsid(std::string *s);
   int get_fs_stats(ceph_statfs& result);
 
@@ -119,8 +119,8 @@ public:
   bool put();
   void blacklist_self(bool set);
 
-  uuid_d lookup_volume(const string& name);
-  string lookup_volume(const uuid_d& name);
+  boost::uuids::uuid lookup_volume(const string& name);
+  string lookup_volume(const boost::uuids::uuid& name);
 };
 
 #endif

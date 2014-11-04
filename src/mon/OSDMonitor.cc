@@ -17,6 +17,8 @@
 
 #include <sstream>
 #include <cassert>
+#include <boost/uuid/nil_generator.hpp>
+#include <boost/uuid/string_generator.hpp>
 
 #include "boost/regex.hpp"
 
@@ -519,7 +521,8 @@ bool OSDMonitor::should_propose(double& delay)
 
 // failure --
 
-bool OSDMonitor::check_source(PaxosServiceMessage *m, uuid_d fsid) {
+bool OSDMonitor::check_source(PaxosServiceMessage *m,
+			      const boost::uuids::uuid& fsid) {
   // check permissions
   MonSession *session = m->get_session();
   if (!session)
@@ -935,7 +938,7 @@ bool OSDMonitor::preprocess_boot(MOSDBoot *m)
   }
 
   if (osdmap.exists(from) &&
-      !osdmap.get_uuid(from).is_zero() &&
+      !osdmap.get_uuid(from).is_nil() &&
       osdmap.get_uuid(from) != m->sb.osd_fsid) {
     dout(7) << __func__ << " from " << m->get_orig_source_inst()
 	    << " clashes with existing osd: different fsid"
@@ -1034,7 +1037,7 @@ bool OSDMonitor::prepare_boot(MOSDBoot *m)
     dout(10) << " setting osd." << from << " uuid to " << m->sb.osd_fsid << dendl;
     if (!osdmap.exists(from) || osdmap.get_uuid(from) != m->sb.osd_fsid) {
       // preprocess should have caught this;  if not, assert.
-      assert(!osdmap.exists(from) || osdmap.get_uuid(from).is_zero());
+      assert(!osdmap.exists(from) || osdmap.get_uuid(from).is_nil());
       pending_inc.new_uuid[from] = m->sb.osd_fsid;
     }
 
@@ -2069,7 +2072,7 @@ bool OSDMonitor::prepare_command_impl(MMonCommand *m,
 	  err = -EBUSY;
 	} else {
 	  pending_inc.new_state[osd] = osdmap.get_state(osd);
-	  pending_inc.new_uuid[osd] = uuid_d();
+	  pending_inc.new_uuid[osd] = boost::uuids::nil_uuid();
 	  pending_metadata_rm.insert(osd);
 	  if (any) {
 	    ss << ", osd." << osd;
@@ -2120,15 +2123,20 @@ bool OSDMonitor::prepare_command_impl(MMonCommand *m,
     int i = -1;
 
     // optional uuid provided?
-    uuid_d uuid;
+    boost::uuids::uuid id;
     string uuidstr;
     if (cmd_getval(g_ceph_context, cmdmap, "uuid", uuidstr)) {
-      if (!uuid.parse(uuidstr.c_str())) {
+      boost::uuids::string_generator parse;
+      try {
+	id = parse(uuidstr);
+      } catch (std::runtime_error& e) {
+	return false;
 	err = -EINVAL;
 	goto reply;
       }
-      dout(10) << " osd create got uuid " << uuid << dendl;
-      i = osdmap.identify_osd(uuid);
+
+      dout(10) << " osd create got uuid " << id << dendl;
+      i = osdmap.identify_osd(id);
       if (i >= 0) {
 	// osd already exists
 	err = 0;
@@ -2143,7 +2151,7 @@ bool OSDMonitor::prepare_command_impl(MMonCommand *m,
 	}
 	goto reply;
       }
-      i = pending_inc.identify_osd(uuid);
+      i = pending_inc.identify_osd(id);
       if (i >= 0) {
 	// osd is about to exist
 	wait_for_finished_proposal(new C_RetryMessage(this, m));
@@ -2170,8 +2178,8 @@ bool OSDMonitor::prepare_command_impl(MMonCommand *m,
 done:
     dout(10) << " creating osd." << i << dendl;
     pending_inc.new_state[i] |= CEPH_OSD_EXISTS | CEPH_OSD_NEW;
-    if (!uuid.is_zero())
-      pending_inc.new_uuid[i] = uuid;
+    if (!id.is_nil())
+      pending_inc.new_uuid[i] = id;
     if (f) {
       f->open_object_section("created_osd");
       f->dump_int("osdid", i);
@@ -2291,7 +2299,7 @@ done:
       err = -EINVAL;
       goto reply;
     }
-    pending_inc.include_removal(vol->uuid);
+    pending_inc.include_removal(vol->id);
     wait_for_finished_proposal(new Monitor::C_Command(
 				 mon, m, 0, rs,
 				 get_last_committed() + 1));
@@ -2306,10 +2314,7 @@ done:
       const boost::regex e(pattern);
       if (f)
 	f->open_array_section("volumes");
-      for (map<uuid_d,VolumeRef>::const_iterator v
-	     = osdmap.vols.by_uuid.begin();
-	   v != osdmap.vols.by_uuid.end();
-	   ++v) {
+      for (auto v = osdmap.vols.by_uuid.begin(); v != osdmap.vols.by_uuid.end(); ++v) {
 	if (!regex_search(v->second->name, e,
 		boost::regex_constants::match_any))
 	  continue;

@@ -11,7 +11,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${CLIKE_COMMON_FLAGS} -std=c11")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CLIKE_COMMON_FLAGS} -std=c++11 -Wnon-virtual-dtor -Wno-invalid-offsetof -Wno-unused-private-field -Wno-mismatched-tags")
 
 
-set(EXTRALIBS uuid rt dl)
+set(EXTRALIBS rt dl)
 if(${WITH_PROFILER})
   list(APPEND EXTRALIBS profiler)
 endif(${WITH_PROFILER})
@@ -256,7 +256,7 @@ if(${WITH_PROFILER})
   target_link_libraries(common PRIVATE profiler)
 endif(${WITH_PROFILER})
 
-target_link_libraries(common PRIVATE json_spirit ${CRYPTO_LIBS} rt uuid ${Boost_LIBRARIES} ${CDS_LIBS} ${EXTRALIBS})
+target_link_libraries(common PRIVATE json_spirit ${CRYPTO_LIBS} rt ${Boost_LIBRARIES} ${CDS_LIBS} ${EXTRALIBS})
 
 set(libglobal_srcs
   global/global_init.cc

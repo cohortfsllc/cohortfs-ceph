@@ -279,7 +279,7 @@ void CInode::pop_and_dirty_projected_inode(LogSegment *ls)
   assert(!projected_nodes.empty());
   dout(15) << "pop_and_dirty_projected_inode " << projected_nodes.front()->inode
 	   << " v" << projected_nodes.front()->inode->version << dendl;
-  uuid_d old_vol = inode.layout.fl_uuid;
+  boost::uuids::uuid old_vol = inode.layout.fl_uuid;
 
   mark_dirty(projected_nodes.front()->inode->version, ls);
   inode = *projected_nodes.front()->inode;
@@ -880,7 +880,8 @@ void CInode::_fetched(bufferlist& bl, bufferlist& bl2, Context *fin)
   }
 }
 
-void CInode::build_backtrace(uuid_d volume, inode_backtrace_t& bt)
+void CInode::build_backtrace(const boost::uuids::uuid& volume,
+			     inode_backtrace_t& bt)
 {
   bt.ino = inode.ino;
   bt.ancestors.clear();
@@ -894,7 +895,7 @@ void CInode::build_backtrace(uuid_d volume, inode_backtrace_t& bt)
     in = diri;
     pdn = in->get_parent_dn();
   }
-  vector<uuid_d>::iterator i = inode.old_volumes.begin();
+  auto i = inode.old_volumes.begin();
   while(i != inode.old_volumes.end()) {
     // don't add our own volume to old_volumes to avoid looping (e.g. setlayout 0, 1, 0)
     if (*i == volume) {
@@ -933,7 +934,7 @@ void CInode::store_backtrace(Context *fin)
   assert(!!mvol);
 
   inode_backtrace_t bt;
-  build_backtrace(volume->uuid, bt);
+  build_backtrace(volume->id, bt);
   bufferlist bl;
   ::encode(bt, bl);
 
@@ -955,11 +956,11 @@ void CInode::store_backtrace(Context *fin)
   volume->mutate_md(oid, op, ceph_clock_now(g_ceph_context), 0, NULL,
 		    gather.new_sub(), mdcache->mds->objecter);
 
-  set<uuid_d> old_volumes;
-  for (vector<uuid_d>::iterator p = inode.old_volumes.begin();
-      p != inode.old_volumes.end();
-      ++p) {
-    if (*p == volume->uuid || old_volumes.count(*p))
+  set<boost::uuids::uuid> old_volumes;
+  for (auto p = inode.old_volumes.begin();
+       p != inode.old_volumes.end();
+       ++p) {
+    if (*p == volume->id || old_volumes.count(*p))
       continue;
 
     ObjectOperation op;

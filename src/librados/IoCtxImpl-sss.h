@@ -30,7 +30,7 @@ class RadosClient;
 struct librados::IoCtxImpl {
   std::atomic<uint64_t> ref_cnt;
   RadosClient *client;
-  uuid_d volume;
+  boost::uuids::uuid volume;
   uint64_t assert_ver;
   map<object_t, uint64_t> assert_src_version;
   version_t last_objver;
@@ -47,7 +47,7 @@ struct librados::IoCtxImpl {
 
   IoCtxImpl();
   IoCtxImpl(RadosClient *c, Objecter *objecter, Mutex *client_lock,
-	    const uuid_d& volume);
+	    const boost::uuids::uuid& volume);
 
   void dup(const IoCtxImpl& rhs) {
     // Copy everything except the ref count
@@ -75,7 +75,7 @@ struct librados::IoCtxImpl {
   void flush_aio_writes_async(AioCompletionImpl *c);
   void flush_aio_writes();
 
-  uuid_d get_volume() {
+  boost::uuids::uuid& get_volume() {
     return volume;
   }
 

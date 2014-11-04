@@ -14,7 +14,7 @@
 
 /* note: no header guard */
 OPTION(host, OPT_STR, "localhost")
-OPTION(fsid, OPT_UUID, uuid_d())
+OPTION(fsid, OPT_UUID, boost::uuids::nil_uuid())
 OPTION(public_addr, OPT_ADDR, entity_addr_t())
 OPTION(cluster_addr, OPT_ADDR, entity_addr_t())
 OPTION(public_network, OPT_STR, "")
@@ -395,7 +395,7 @@ OPTION(osd_agent_hist_halflife, OPT_INT, 1000)
 // this amount below the threshold to disable.
 OPTION(osd_agent_slop, OPT_FLOAT, .02)
 
-OPTION(osd_uuid, OPT_UUID, uuid_d())
+OPTION(osd_uuid, OPT_UUID, boost::uuids::nil_uuid())
 OPTION(osd_data, OPT_STR, "/var/lib/ceph/osd/$cluster-$id")
 OPTION(osd_journal, OPT_STR, "/var/lib/ceph/osd/$cluster-$id/journal")
 OPTION(osd_journal_size, OPT_INT, 5120)		// in mb

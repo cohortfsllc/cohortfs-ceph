@@ -36,7 +36,7 @@ class MOSDOpReply : public Message {
   static const int COMPAT_VERSION = 2;
 
   hobject_t oid;
-  uuid_d volume;
+  boost::uuids::uuid volume;
   vector<OSDOp> ops;
   int64_t flags;
   int32_t result;
@@ -48,7 +48,7 @@ class MOSDOpReply : public Message {
 
 public:
   hobject_t get_oid() const { return oid; }
-  uuid_d   get_volume() const { return volume; }
+  const boost::uuids::uuid& get_volume() const { return volume; }
   int      get_flags() const { return flags; }
 
   bool     is_ondisk() const { return get_flags() & CEPH_OSD_FLAG_ONDISK; }

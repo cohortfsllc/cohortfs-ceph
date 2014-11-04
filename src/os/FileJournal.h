@@ -103,7 +103,7 @@ public:
     };
 
     uint64_t flags;
-    uuid_d fsid;
+    boost::uuids::uuid fsid;
     uint32_t block_size;
     uint32_t alignment;
     int64_t max_size;	// max size of journal ring buffer
@@ -135,7 +135,9 @@ public:
     }
 
     uint64_t get_fsid64() {
-      return *(uint64_t*)&fsid.uuid[0];
+      uint64_t fsid64;
+      memcpy(&fsid64, &fsid, sizeof(uint64_t));
+      return fsid64;
     }
 
     void encode(bufferlist& bl) const {
@@ -157,22 +159,6 @@ public:
     void decode(bufferlist::iterator& bl) {
       uint32_t v;
       ::decode(v, bl);
-      if (v < 2) {  // normally 0, but concievably 1
-	// decode old header_t struct (pre v0.40).
-	bl.advance(4); // skip uint32_t flags (it was unused by any old code)
-	flags = 0;
-	uint64_t tfsid;
-	::decode(tfsid, bl);
-	*(uint64_t*)&fsid.uuid[0] = tfsid;
-	*(uint64_t*)&fsid.uuid[8] = tfsid;
-	::decode(block_size, bl);
-	::decode(alignment, bl);
-	::decode(max_size, bl);
-	::decode(start, bl);
-	committed_up_to = 0;
-	start_seq = 0;
-	return;
-      }
       bufferlist em;
       ::decode(em, bl);
       bufferlist::iterator t = em.begin();
@@ -351,7 +337,8 @@ private:
   }
 
  public:
-  FileJournal(uuid_d fsid, Finisher *fin, Cond *sync_cond, const char *f, bool dio=false, bool ai=true, bool faio=false) :
+  FileJournal(const boost::uuids::uuid& fsid, Finisher *fin, Cond *sync_cond, const char *f,
+	      bool dio = false, bool ai = true, bool faio = false) :
     Journal(fsid, fin, sync_cond),
     journaled_seq(0),
     plug_journal_completions(false),
@@ -383,7 +370,7 @@ private:
   int create();
   int open(uint64_t fs_op_seq);
   void close();
-  int peek_fsid(uuid_d& fsid);
+  int peek_fsid(boost::uuids::uuid& fsid);
 
   int dump(ostream& out);
 

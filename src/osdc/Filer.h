@@ -47,7 +47,7 @@ class Filer {
   struct Probe {
     inodeno_t ino;
     ceph_file_layout layout;
-    uuid_d volume;
+    boost::uuids::uuid volume;
 
     uint64_t *psize;
     utime_t *pmtime;

@@ -16,6 +16,7 @@
 #include <sstream>
 #include <cassert>
 #include <cstdlib>
+#include <boost/uuid/string_generator.hpp>
 using namespace std;
 
 
@@ -1026,6 +1027,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       op = t.get_string(buf, 0);
     }
 
+    boost::uuids::string_generator parse;
     // high level ops ---------------------
     if (strcmp(op, "link") == 0) {
       const char *a = t.get_string(buf, p);
@@ -1397,11 +1399,11 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       int64_t ol = t.get_int();
       object_t oid = file_object_t(oh, ol);
       const char *a = t.get_string(buf, p);
-      uuid_d uuid;
-      uuid.parse(a);
+      boost::uuids::uuid id;
+      id = parse(a);
       lock.Lock();
       VolumeRef mvol;
-      client->osdmap->find_by_uuid(uuid, mvol);
+      client->osdmap->find_by_uuid(id, mvol);
       uint64_t size;
       utime_t mtime;
       client->objecter->stat(oid, mvol, &size, &mtime, 0,
@@ -1416,10 +1418,10 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       int64_t len = t.get_int();
       const char *a = t.get_string(buf, p);
       object_t oid = file_object_t(oh, ol);
-      uuid_d uuid;
-      uuid.parse(a);
+      boost::uuids::uuid id;
+      id = parse(a);
       VolumeRef mvol;
-      client->osdmap->find_by_uuid(uuid, mvol);
+      client->osdmap->find_by_uuid(id, mvol);
       lock.Lock();
       bufferlist bl;
       client->objecter->read(oid, mvol, off, len, &bl, 0,
@@ -1434,10 +1436,10 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       int64_t len = t.get_int();
       const char *a = t.get_string(buf, p);
       object_t oid = file_object_t(oh, ol);
-      uuid_d uuid;
-      uuid.parse(a);
+      boost::uuids::uuid id;
+      id = parse(a);
       VolumeRef mvol;
-      client->osdmap->find_by_uuid(uuid, mvol);
+      client->osdmap->find_by_uuid(id, mvol);
       lock.Lock();
       bufferptr bp(len);
       bufferlist bl;
@@ -1457,10 +1459,10 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       int64_t len = t.get_int();
       const char *a = t.get_string(buf, p);
       object_t oid = file_object_t(oh, ol);
-      uuid_d uuid;
-      uuid.parse(a);
+      boost::uuids::uuid id;
+      id = parse(a);
       VolumeRef mvol;
-      client->osdmap->find_by_uuid(uuid, mvol);
+      client->osdmap->find_by_uuid(id, mvol);
       lock.Lock();
       client->objecter->zero(oid, mvol, off, len,
 			     ceph_clock_now(client->cct), 0,
@@ -2241,10 +2243,11 @@ int SyntheticClient::create_objects(int nobj, int osize, int inflight)
 
   int unack = 0;
   int unsafe = 0;
-  uuid_d uuid;
-  uuid.parse("deac041b-4100-4c75-93a3-b9329b9cf9cf");
+  boost::uuids::string_generator parse;
+  boost::uuids::uuid id;
+  id = parse("deac041b-4100-4c75-93a3-b9329b9cf9cf");
   VolumeRef mvol;
-  client->osdmap->find_by_uuid(uuid, mvol);
+  client->osdmap->find_by_uuid(id, mvol);
 
   list<utime_t> starts;
 
@@ -2333,10 +2336,11 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
 
   int unack = 0;
   int unsafe = 0;
-  uuid_d uuid;
-  uuid.parse("deac041b-4100-4c75-93a3-b9329b9cf9cf");
+  boost::uuids::string_generator parse;
+  boost::uuids::uuid id;
+  id = parse("deac041b-4100-4c75-93a3-b9329b9cf9cf");
   VolumeRef mvol;
-  client->osdmap->find_by_uuid(uuid, mvol);
+  client->osdmap->find_by_uuid(id, mvol);
 
   while (1) {
     if (time_to_stop()) break;

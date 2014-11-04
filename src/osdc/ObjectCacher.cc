@@ -519,9 +519,7 @@ ObjectCacher::~ObjectCacher()
 {
   finisher.stop();
   // we should be empty.
-  for (map<uuid_d, map<object_t, Object *> >::iterator i = objects.begin();
-       i != objects.end();
-       ++i)
+  for (auto i = objects.begin(); i != objects.end(); ++i)
     assert(i->second.empty());
   assert(bh_lru_rest.lru_get_size() == 0);
   assert(bh_lru_dirty.lru_get_size() == 0);
@@ -531,7 +529,7 @@ ObjectCacher::~ObjectCacher()
 
 /* private */
 ObjectCacher::Object *ObjectCacher::get_object(object_t oid, ObjectSet *oset,
-					       uuid_d &v,
+					       const boost::uuids::uuid& v,
 					       uint64_t truncate_size,
 					       uint64_t truncate_seq)
 {
@@ -589,10 +587,9 @@ void ObjectCacher::bh_read(BufferHead *bh)
   ++reads_outstanding;
 }
 
-void ObjectCacher::bh_read_finish(uuid_d volume, object_t oid, ceph_tid_t tid,
-				  loff_t start, uint64_t length,
-				  bufferlist &bl, int r,
-				  bool trust_enoent)
+void ObjectCacher::bh_read_finish(const boost::uuids::uuid& volume, object_t oid,
+				  ceph_tid_t tid, loff_t start, uint64_t length,
+				  bufferlist &bl, int r, bool trust_enoent)
 {
   assert(lock.is_locked());
   ldout(cct, 7) << "bh_read_finish "
@@ -792,8 +789,9 @@ void ObjectCacher::bh_write(BufferHead *bh)
   mark_tx(bh);
 }
 
-void ObjectCacher::bh_write_commit(uuid_d volume, object_t oid, loff_t start,
-				   uint64_t length, ceph_tid_t tid, int r)
+void ObjectCacher::bh_write_commit(const boost::uuids::uuid& volume, object_t oid,
+				   loff_t start, uint64_t length, ceph_tid_t tid,
+				   int r)
 {
   assert(lock.is_locked());
   ldout(cct, 7) << "bh_write_commit "
@@ -1714,8 +1712,7 @@ uint64_t ObjectCacher::release_all()
   ldout(cct, 10) << "release_all" << dendl;
   uint64_t unclean = 0;
 
-  std::map<uuid_d, std::map<object_t, Object*> >::iterator i
-    = objects.begin();
+ auto i = objects.begin();
   while (i != objects.end()) {
     std::map<object_t, Object*>::iterator p = i->second.begin();
     while (p != i->second.end()) {
@@ -1805,14 +1802,8 @@ void ObjectCacher::verify_stats() const
 
   loff_t clean = 0, zero = 0, dirty = 0, rx = 0, tx = 0, missing = 0,
     error = 0;
-  for (map<uuid_d, map<object_t, Object*> >
-	 ::const_iterator i = objects.begin();
-       i != objects.end();
-       ++i) {
-    for (map<object_t, Object*>::const_iterator p
-	   = i->second.begin();
-	 p != i->second.end();
-	 ++p) {
+  for (auto i = objects.cbegin(); i != objects.cend(); ++i) {
+    for (auto p = i->second.cbegin(); p != i->second.cend(); ++p) {
       Object *ob = p->second;
       for (map<loff_t, BufferHead*>::const_iterator q = ob->data.begin();
 	   q != ob->data.end();

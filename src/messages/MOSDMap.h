@@ -25,7 +25,7 @@ class MOSDMap : public Message {
   static const int HEAD_VERSION = 3;
 
  public:
-  uuid_d fsid;
+  boost::uuids::uuid fsid;
   map<epoch_t, bufferlist> maps;
   map<epoch_t, bufferlist> incremental_maps;
   epoch_t oldest_map, newest_map;
@@ -57,7 +57,7 @@ class MOSDMap : public Message {
 
 
   MOSDMap() : Message(CEPH_MSG_OSD_MAP, HEAD_VERSION) { }
-  MOSDMap(const uuid_d &f, OSDMap *oc=0)
+  MOSDMap(const boost::uuids::uuid &f, OSDMap *oc = 0)
     : Message(CEPH_MSG_OSD_MAP, HEAD_VERSION),
       fsid(f),
       oldest_map(0), newest_map(0) {

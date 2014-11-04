@@ -12,7 +12,6 @@
 #ifndef CEPH_FS_H
 #define CEPH_FS_H
 
-#include <uuid/uuid.h>
 #ifdef __cplusplus
 #include "include/buffer.h"
 #include "include/encoding.h"
@@ -50,10 +49,12 @@ struct ceph_file_layout {
 	uint32_t fl_stripe_count;	   /* over this many objects */
 	uint32_t fl_object_size;	   /* until objects are this big, then move to
 				      new objects */
-	uuid_t fl_uuid;		   /* where this lives (can this not be on disk?) */
 #ifdef __cplusplus
+	boost::uuids::uuid fl_uuid; /* where this lives (can this not be on disk?) */
 	void encode(ceph::bufferlist &bl) const;
 	void decode(ceph::bufferlist::iterator &p);
+#else
+	uint8_t fl_uuid[16];
 #endif
 };
 #ifdef __cplusplus

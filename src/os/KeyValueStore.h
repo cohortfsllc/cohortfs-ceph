@@ -39,8 +39,6 @@ using namespace std;
 #include "SequencerPosition.h"
 #include "KeyValueDB.h"
 
-#include "include/uuid.h"
-
 enum kvstore_types {
     KV_TYPE_NONE = 0,
     KV_TYPE_LEVELDB,
@@ -153,7 +151,7 @@ class KeyValueStore : public ObjectStore,
   string basedir;
   std::string current_fn;
   std::string current_op_seq_fn;
-  uuid_d fsid;
+  boost::uuids::uuid fsid;
 
   int fsid_fd, op_fd, current_fd;
 
@@ -171,7 +169,7 @@ class KeyValueStore : public ObjectStore,
   int _create_current();
 
   /// read a uuid from fd
-  int read_fsid(int fd, uuid_d *uuid);
+  int read_fsid(int fd, boost::uuids::uuid *id);
 
   /// lock fsid_fd
   int lock_fsid();
@@ -371,7 +369,7 @@ class KeyValueStore : public ObjectStore,
   uint32_t get_target_version() {
     return target_version;
   }
-  int peek_journal_fsid(uuid_d *id) {
+  int peek_journal_fsid(boost::uuids::uuid *id) {
     *id = fsid;
     return 0;
   }
@@ -440,8 +438,8 @@ class KeyValueStore : public ObjectStore,
   void flush() {}
   void sync_and_flush() {}
 
-  void set_fsid(uuid_d u) { fsid = u; }
-  uuid_d get_fsid() { return fsid; }
+  void set_fsid(const boost::uuids::uuid& u) { fsid = u; }
+  boost::uuids::uuid get_fsid() { return fsid; }
 
   // attrs
   int getattr(const coll_t &cid, const hobject_t& oid, const char *name,

@@ -270,7 +270,7 @@ ceph_tid_t Objecter::linger_mutate(const object_t& oid, VolumeRef volume,
 {
   LingerOp *info = new LingerOp;
   info->target.oid = oid;
-  info->target.volume = volume->uuid;
+  info->target.volume = volume->id;
   info->mtime = mtime;
   info->target.flags = flags | CEPH_OSD_FLAG_WRITE;
   info->ops = op.ops;
@@ -295,7 +295,7 @@ ceph_tid_t Objecter::linger_read(const object_t& oid, VolumeRef volume,
 {
   LingerOp *info = new LingerOp;
   info->target.oid = oid;
-  info->target.volume = volume->uuid;
+  info->target.volume = volume->id;
   info->target.flags = flags;
   info->ops = op.ops;
   info->inbl = inbl;

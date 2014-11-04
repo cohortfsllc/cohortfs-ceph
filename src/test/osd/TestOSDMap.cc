@@ -31,14 +31,14 @@ public:
   OSDMapTest() {}
 
   void set_up_map() {
-    uuid_d fsid;
+    boost::uuids::uuid fsid;
     osdmap.build_simple(g_ceph_context, 0, fsid, num_osds);
     OSDMap::Incremental pending_inc(osdmap.get_epoch() + 1);
     pending_inc.fsid = osdmap.get_fsid();
     entity_addr_t sample_addr;
-    uuid_d sample_uuid;
+    boost::uuids::uuid sample_uuid;
     for (int i = 0; i < num_osds; ++i) {
-      sample_uuid.uuid[i] = i;
+      sample_uuid.data[i] = i;
       sample_addr.nonce = i;
       pending_inc.new_state[i] = CEPH_OSD_EXISTS | CEPH_OSD_NEW;
       pending_inc.new_up_client[i] = sample_addr;

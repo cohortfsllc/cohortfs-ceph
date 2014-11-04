@@ -96,7 +96,7 @@ public:
     /// feature bits we were encoded with.  the subsequent OSDMap
     /// encoding should match.
     uint64_t encode_features;
-    uuid_d fsid;
+    boost::uuids::uuid fsid;
     epoch_t epoch;   // new epoch; we are a diff from epoch-1 to epoch
     utime_t modified;
     int32_t new_flags;
@@ -112,7 +112,7 @@ public:
     map<int32_t,uint32_t> new_weight;
     map<int32_t,uint32_t> new_primary_affinity;
     map<int32_t,epoch_t> new_up_thru;
-    map<int32_t,uuid_d> new_uuid;
+    map<int32_t,boost::uuids::uuid> new_uuid;
     map<int32_t,osd_xinfo_t> new_xinfo;
 
     map<entity_addr_t,utime_t> new_blacklist;
@@ -122,7 +122,7 @@ public:
 
     int get_net_marked_out(const OSDMap *previous) const;
     int get_net_marked_down(const OSDMap *previous) const;
-    int identify_osd(uuid_d u) const;
+    int identify_osd(const boost::uuids::uuid u) const;
 
     void encode(bufferlist& bl, uint64_t features=CEPH_FEATURES_ALL) const;
     void decode(bufferlist::iterator &bl);
@@ -130,9 +130,8 @@ public:
     static void generate_test_instances(list<Incremental*>& o);
 
     Incremental(epoch_t e=0) :
-      encode_features(0),
+      encode_features(0), fsid(boost::uuids::nil_uuid()),
       epoch(e), new_flags(-1), new_max_osd(-1) {
-      memset(&fsid, 0, sizeof(fsid));
     }
     Incremental(bufferlist &bl) {
       bufferlist::iterator p = bl.begin();
@@ -153,7 +152,7 @@ public:
 
     struct vol_inc_remove {
       uint16_t sequence;
-      uuid_d uuid;
+      boost::uuids::uuid id;
 
       void encode(bufferlist& bl, uint64_t features = -1) const;
       void decode(bufferlist::iterator& bl);
@@ -172,16 +171,16 @@ public:
       vol_additions.push_back(increment);
     }
 
-    void include_removal(const uuid_d &uuid) {
+    void include_removal(const boost::uuids::uuid &id) {
       vol_inc_remove increment;
       increment.sequence = vol_next_sequence++;
-      increment.uuid = uuid;
+      increment.id = id;
       vol_removals.push_back(increment);
     }
   };
 
 private:
-  uuid_d fsid;
+  boost::uuids::uuid fsid;
   epoch_t epoch; // what epoch of the osd cluster descriptor is this
   utime_t created, modified; // epoch start time
 
@@ -192,7 +191,7 @@ private:
   vector<uint8_t> osd_state;
 
   struct {
-    map<uuid_d,VolumeRef> by_uuid;
+    map<boost::uuids::uuid,VolumeRef> by_uuid;
     map<string,VolumeRef> by_name;
   } vols;
 
@@ -208,7 +207,7 @@ private:
   vector<uint32_t>   osd_weight;   // 16.16 fixed point, 0x10000 = "in", 0 = "out"
   vector<osd_info_t> osd_info;
 
-  std::shared_ptr< vector<uuid_d> > osd_uuid;
+  std::shared_ptr< vector<boost::uuids::uuid> > osd_uuid;
   vector<osd_xinfo_t> osd_xinfo;
 
   std::unordered_map<entity_addr_t,utime_t> blacklist;
@@ -221,11 +220,12 @@ private:
   friend class MDS;
 
  public:
-  OSDMap() : epoch(0),
+  OSDMap() : fsid(boost::uuids::nil_uuid()),
+	     epoch(0),
 	     flags(0),
 	     num_osd(0), max_osd(0),
 	     osd_addrs(new addrs_s),
-	     osd_uuid(new vector<uuid_d>),
+	     osd_uuid(new vector<boost::uuids::uuid>),
 	     new_blacklist_entries(false) {
     memset(&fsid, 0, sizeof(fsid));
   }
@@ -240,15 +240,15 @@ public:
 
   void deepish_copy_from(const OSDMap& o) {
     *this = o;
-    osd_uuid.reset(new vector<uuid_d>(*o.osd_uuid));
+    osd_uuid.reset(new vector<boost::uuids::uuid>(*o.osd_uuid));
 
     // NOTE: this still references shared entity_addr_t's.
     osd_addrs.reset(new addrs_s(*o.osd_addrs));
   }
 
   // map info
-  const uuid_d& get_fsid() const { return fsid; }
-  void set_fsid(uuid_d& f) { fsid = f; }
+  boost::uuids::uuid get_fsid() const { return fsid; }
+  void set_fsid(const boost::uuids::uuid& f) { fsid = f; }
 
   epoch_t get_epoch() const { return epoch; }
   void inc_epoch() { epoch++; }
@@ -337,8 +337,8 @@ public:
     return !is_out(osd);
   }
 
-int identify_osd(const entity_addr_t& addr) const;
-  int identify_osd(const uuid_d& u) const;
+  int identify_osd(const entity_addr_t& addr) const;
+  int identify_osd(const boost::uuids::uuid& u) const;
 
   bool have_addr(const entity_addr_t& addr) const {
     return identify_osd(addr) >= 0;
@@ -382,7 +382,7 @@ int identify_osd(const entity_addr_t& addr) const;
     return entity_inst_t(entity_name_t::OSD(osd), get_hb_front_addr(osd));
   }
 
-  const uuid_d& get_uuid(int osd) const {
+  const boost::uuids::uuid& get_uuid(int osd) const {
     assert(exists(osd));
     return (*osd_uuid)[osd];
   }
@@ -483,7 +483,8 @@ public:
    * @param num_osd [in] number of OSDs if >= 0 or read from conf if < 0
    * @return **0** on success, negative errno on error.
    */
-  int build_simple(CephContext *cct, epoch_t e, uuid_d &fsid,
+  int build_simple(CephContext *cct, epoch_t e,
+		   const boost::uuids::uuid &fsid,
 		   int num_osd);
 private:
   void print_osd_line(int cur, ostream *out, Formatter *f) const;
@@ -499,12 +500,12 @@ public:
   static void generate_test_instances(list<OSDMap*>& o);
   bool check_new_blacklist_entries() const { return new_blacklist_entries; }
 
-  int create_volume(VolumeRef volume, uuid_d& out);
+  int create_volume(VolumeRef volume, boost::uuids::uuid& out);
   int add_volume(VolumeRef volume);
-  int remove_volume(uuid_d uuid);
+  int remove_volume(const boost::uuids::uuid& id);
 
-  bool vol_exists(const uuid_d& uuid) const {
-    map<uuid_d,VolumeRef>::const_iterator v = vols.by_uuid.find(uuid);
+  bool vol_exists(const boost::uuids::uuid& id) const {
+    auto v = vols.by_uuid.find(id);
     if (v == vols.by_uuid.end()) {
       return false;
     } else {
@@ -512,8 +513,8 @@ public:
     }
   }
 
-  bool find_by_uuid(const uuid_d& uuid, VolumeRef& vol) const {
-    map<uuid_d,VolumeRef>::const_iterator v = vols.by_uuid.find(uuid);
+  bool find_by_uuid(const boost::uuids::uuid& id, VolumeRef& vol) const {
+    auto v = vols.by_uuid.find(id);
     if (v == vols.by_uuid.end()) {
       return false;
     } else {

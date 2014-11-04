@@ -16,6 +16,7 @@
 #ifndef CEPH_MOSDOP_H
 #define CEPH_MOSDOP_H
 
+#include <boost/uuid/uuid_io.hpp>
 #include "msg/Message.h"
 #include "osd/osd_types.h"
 #include "include/ceph_features.h"
@@ -44,7 +45,7 @@ private:
   int32_t retry_attempt;   // 0 is first attempt.  -1 if we don't know.
 
   hobject_t oid;
-  uuid_d volume;
+  boost::uuids::uuid volume;
 public:
   vector<OSDOp> ops;
 
@@ -60,7 +61,7 @@ public:
 
   hobject_t& get_oid() { return oid; }
 
-  uuid_d get_volume() const {
+  const boost::uuids::uuid& get_volume() const {
     return volume;
   }
 
@@ -72,9 +73,9 @@ public:
 
   MOSDOp()
     : Message(CEPH_MSG_OSD_OP, HEAD_VERSION, COMPAT_VERSION) { }
-  MOSDOp(int inc, long tid,
-	 hobject_t& _oid, uuid_d& _volume , epoch_t _osdmap_epoch,
-	 int _flags)
+  MOSDOp(int inc, long tid, hobject_t& _oid,
+	 const boost::uuids::uuid& _volume,
+	 epoch_t _osdmap_epoch, int _flags)
     : Message(CEPH_MSG_OSD_OP, HEAD_VERSION, COMPAT_VERSION),
       client_inc(inc),
       osdmap_epoch(_osdmap_epoch), flags(_flags), retry_attempt(-1),

@@ -1023,7 +1023,7 @@ public:
   /**
    * check the journal uuid/fsid, without opening
    */
-  virtual int peek_journal_fsid(uuid_d *fsid) = 0;
+  virtual int peek_journal_fsid(boost::uuids::uuid *fsid) = 0;
 
   /**
    * write_meta - write a simple configuration key out-of-band
@@ -1372,8 +1372,8 @@ public:
   /**
    * Set and get internal fsid for this instance. No external data is modified
    */
-  virtual void set_fsid(uuid_d u) = 0;
-  virtual uuid_d get_fsid() = 0;
+  virtual void set_fsid(const boost::uuids::uuid& u) = 0;
+  virtual boost::uuids::uuid get_fsid() = 0;
 
   // DEBUG
   virtual void inject_data_error(const hobject_t &oid) {}

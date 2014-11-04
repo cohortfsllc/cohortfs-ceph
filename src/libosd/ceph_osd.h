@@ -14,7 +14,6 @@
 #define LIBCEPH_OSD_H
 
 #include <stdint.h>
-#include <uuid/uuid.h>
 
 /**
  * Completion callback for asynchronous io
@@ -61,27 +60,28 @@ struct libosd {
    * Look up a volume by name to get its uuid.
    * @see libosd_get_volume()
    */
-  virtual int get_volume(const char *name, uuid_t uuid) = 0;
+  virtual int get_volume(const char *name,
+			 uint8_t id[16]) = 0;
 
   /**
    * Read from an object.
    * @see libosd_read()
    */
-  virtual int read(const char *object, const uuid_t volume,
+  virtual int read(const char *object, const uint8_t volume[16],
 		   uint64_t offset, uint64_t length, char *data,
 		   int flags, libosd_io_completion_fn cb, void *user) = 0;
 
   /** Write to an object.
    * @see libosd_write()
    */
-  virtual int write(const char *object, const uuid_t volume,
+  virtual int write(const char *object, const uint8_t volume[16],
 		    uint64_t offset, uint64_t length, char *data,
 		    int flags, libosd_io_completion_fn cb, void *user) = 0;
 
   /** Truncate an object.
    * @see libosd_truncate()
    */
-  virtual int truncate(const char *object, const uuid_t volume,
+  virtual int truncate(const char *object, const uint8_t volume[16],
 		       uint64_t offset, int flags,
 		       libosd_io_completion_fn cb, void *user) = 0;
 
@@ -179,7 +179,8 @@ void libosd_signal(int signum);
  * @retval -ENOENT if not found.
  * @retval -ENODEV if the OSD is shutting down.
  */
-int libosd_get_volume(struct libosd *osd, const char *name, uuid_t uuid);
+int libosd_get_volume(struct libosd *osd, const char *name,
+		      uint8_t uuid[16]);
 
 /* Completion flags for libosd_read() */
 #define LIBOSD_READ_FLAGS_NONE	  0x0
@@ -202,7 +203,7 @@ int libosd_get_volume(struct libosd *osd, const char *name, uuid_t uuid);
  * request was submitted asynchronously, or a negative error code on failure.
  * @retval -ENODEV if the OSD is shutting down.
  */
-int libosd_read(struct libosd *osd, const char *object, const uuid_t volume,
+int libosd_read(struct libosd *osd, const char *object, const uint8_t volume[16],
 		uint64_t offset, uint64_t length, char *data,
 		int flags, libosd_io_completion_fn cb, void *user);
 
@@ -235,7 +236,7 @@ int libosd_read(struct libosd *osd, const char *object, const uuid_t volume,
  * exactly one of LIBOSD_WRITE_CB_UNSTABLE or LIBOSD_WRITE_CB_STABLE.
  * @retval -ENODEV if the OSD is shutting down.
  */
-int libosd_write(struct libosd *osd, const char *object, const uuid_t volume,
+int libosd_write(struct libosd *osd, const char *object, const uint8_t volume[16],
 		 uint64_t offset, uint64_t length, char *data,
 		 int flags, libosd_io_completion_fn cb, void *user);
 
@@ -260,7 +261,7 @@ int libosd_write(struct libosd *osd, const char *object, const uuid_t volume,
  * @retval -ENODEV if the OSD is shutting down.
  */
 int libosd_truncate(struct libosd *osd, const char *object,
-		    const uuid_t volume, uint64_t offset,
+		    const uint8_t volume[16], uint64_t offset,
 		    int flags, libosd_io_completion_fn cb, void *user);
 
 #ifdef __cplusplus

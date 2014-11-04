@@ -16,6 +16,8 @@
 #include <cassert>
 #include <iostream>
 #include <string>
+#include <boost/uuid/nil_generator.hpp>
+#include <boost/uuid/string_generator.hpp>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -85,21 +87,21 @@ librados::RadosClient::RadosClient(CephContext *cct_)
 {
 }
 
-uuid_d librados::RadosClient::lookup_volume(const string& name)
+boost::uuids::uuid librados::RadosClient::lookup_volume(const string& name)
 {
   Mutex::Locker l(lock);
 
   int r = wait_for_osdmap();
   if (r < 0)
-    return uuid_d();
+    return boost::uuids::nil_uuid();
   VolumeRef v;
   if (!osdmap.find_by_name(name, v)) {
-    return uuid_d();
+    return boost::uuids::nil_uuid();
   }
-  return v->uuid;
+  return v->id;
 }
 
-string librados::RadosClient::lookup_volume(const uuid_d& id)
+string librados::RadosClient::lookup_volume(const boost::uuids::uuid& id)
 {
   Mutex::Locker l(lock);
 
@@ -304,24 +306,29 @@ librados::RadosClient::~RadosClient()
 
 int librados::RadosClient::create_ioctx(const string &name, IoCtxImpl **io)
 {
-  uuid_d id;
+  boost::uuids::string_generator parse;
+  boost::uuids::uuid id;
   VolumeRef v;
   Mutex::Locker l(lock);
   int r = wait_for_osdmap();
   if (r < 0)
     return -EIO;
 
-  if (id.parse(name))
-    osdmap.find_by_uuid(id, v);
-  else if (!osdmap.find_by_name(name, v))
-    return -ENOENT;
-  else
-    *io = new librados::IoCtxImpl(this, objecter, &lock, v);
+  try {
+    id = parse(name);
+    if (!osdmap.find_by_uuid(id, v))
+      return -ENOENT;
+  } catch (std::runtime_error &e) {
+    if (!osdmap.find_by_name(name, v))
+      return -ENOENT;
+  }
+  
+  *io = new librados::IoCtxImpl(this, objecter, &lock, v);
 
   return 0;
 }
 
-int librados::RadosClient::create_ioctx(const uuid_d &id, IoCtxImpl **io)
+int librados::RadosClient::create_ioctx(const boost::uuids::uuid& id, IoCtxImpl **io)
 {
   Mutex::Locker l(lock);
   int r = wait_for_osdmap();

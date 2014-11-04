@@ -411,12 +411,12 @@ public:
   bool dirty_info;
 
   // vol state
-  const uuid_d id;
+  boost::uuids::uuid id;
   vol_info_t info;
-  static string get_info_key(uuid_d vol) {
+  static string get_info_key(boost::uuids::uuid& vol) {
     return stringify(vol) + "_info";
   }
-  static string get_epoch_key(uuid_d vol) {
+  static string get_epoch_key(boost::uuids::uuid& vol) {
     return stringify(vol) + "_epoch";
   }
 
@@ -544,7 +544,8 @@ public:
 
   friend class C_OSD_RepModify_Commit;
 
-  OSDVol(OSDService *o, OSDMapRef curmap, uuid_d vol);
+  OSDVol(OSDService *o, OSDMapRef curmap,
+	 const boost::uuids::uuid& vol);
 
   ~OSDVol();
 
@@ -554,7 +555,7 @@ private:
   OSDVol& operator=(const OSDVol& rhs);
 
 public:
-  uuid_d get_volid() const { return info.volume; }
+  const boost::uuids::uuid& get_volid() const { return info.volume; }
 
   bool  is_empty() const { return info.last_update == eversion_t(0,0); }
 

@@ -19,17 +19,16 @@
 #include "messages/PaxosServiceMessage.h"
 
 #include <deque>
-#include <uuid/uuid.h>
 
 class MLog : public PaxosServiceMessage {
 public:
-  uuid_d fsid;
+  boost::uuids::uuid fsid;
   std::deque<LogEntry> entries;
 
   MLog() : PaxosServiceMessage(MSG_LOG, 0) {}
-  MLog(const uuid_d& f, const std::deque<LogEntry>& e)
+  MLog(const boost::uuids::uuid& f, const std::deque<LogEntry>& e)
     : PaxosServiceMessage(MSG_LOG, 0), fsid(f), entries(e) { }
-  MLog(const uuid_d& f) : PaxosServiceMessage(MSG_LOG, 0), fsid(f) { }
+  MLog(const boost::uuids::uuid& f) : PaxosServiceMessage(MSG_LOG, 0), fsid(f) { }
 private:
   ~MLog() {}
 
