@@ -992,7 +992,7 @@ namespace ceph {
 #endif
       }
 
-      int write_file(const char *fn, int mode=644) {
+      int write_file(const char *fn, int mode = 0644) {
 	int fd = TEMP_FAILURE_RETRY(::open(fn, O_WRONLY|O_CREAT|O_TRUNC,
 					   mode));
 	if (fd < 0) {
