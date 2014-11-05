@@ -167,128 +167,61 @@ private:
     uint64_t ops, bytes;
     OpRequestRef osd_op;
   };
-  class OpSequencer : public Sequencer_impl {
-    Mutex qlock; // to protect q, for benefit of flush (peek/dequeue also protected by lock)
-    list<Op*> q;
-    list<uint64_t> jq;
-    Cond cond;
-  public:
-    Sequencer *parent;
-    Mutex apply_lock;  // for apply mutual exclusion
-
-    void queue_journal(uint64_t s) {
-      Mutex::Locker l(qlock);
-      jq.push_back(s);
-    }
-    void dequeue_journal() {
-      Mutex::Locker l(qlock);
-      jq.pop_front();
-      cond.Signal();
-    }
-    void queue(Op *o) {
-      Mutex::Locker l(qlock);
-      q.push_back(o);
-    }
-    Op *peek_queue() {
-      assert(apply_lock.is_locked());
-      return q.front();
-    }
-    Op *dequeue() {
-      assert(apply_lock.is_locked());
-      Mutex::Locker l(qlock);
-      Op *o = q.front();
-      q.pop_front();
-      cond.Signal();
-      return o;
-    }
-    void flush() {
-      Mutex::Locker l(qlock);
-
-      while (g_conf->filestore_blackhole)
-	cond.Wait(qlock);  // wait forever
-
-      // get max for journal _or_ op queues
-      uint64_t seq = 0;
-      if (!q.empty())
-	seq = q.back()->op;
-      if (!jq.empty() && jq.back() > seq)
-	seq = jq.back();
-
-      if (seq) {
-	// everything prior to our watermark to drain through either/both queues
-	while ((!q.empty() && q.front()->op <= seq) ||
-	       (!jq.empty() && jq.front() <= seq))
-	  cond.Wait(qlock);
-      }
-    }
-
-    OpSequencer()
-      : parent(0) {}
-    ~OpSequencer() {
-      assert(q.empty());
-    }
-
-    const string& get_name() const {
-      return parent->get_name();
-    }
-  };
-
-  friend ostream& operator<<(ostream& out, const OpSequencer& s);
 
   Mutex fdcache_lock;
   FDCache fdcache;
   WBThrottle wbthrottle;
 
   Sequencer default_osr;
-  deque<OpSequencer*> op_queue;
+  deque<Op*> op_queue;
   uint64_t op_queue_len, op_queue_bytes;
   Cond op_throttle_cond;
   Mutex op_throttle_lock;
   Finisher op_finisher;
 
   ThreadPool op_tp;
-  struct OpWQ : public ThreadPool::WorkQueue<OpSequencer> {
+  struct OpWQ : public ThreadPool::WorkQueue<Op> {
     FileStore *store;
     OpWQ(FileStore *fs, time_t timeout, time_t suicide_timeout, ThreadPool *tp)
-      : ThreadPool::WorkQueue<OpSequencer>("FileStore::OpWQ", timeout, suicide_timeout, tp), store(fs) {}
+      : ThreadPool::WorkQueue<Op>("FileStore::OpWQ", timeout, suicide_timeout, tp), store(fs) {}
 
-    bool _enqueue(OpSequencer *osr) {
-      store->op_queue.push_back(osr);
+    bool _enqueue(Op *o) {
+      store->op_queue.push_back(o);
       return true;
     }
-    void _dequeue(OpSequencer *o) {
+    void _dequeue(Op *o) {
       assert(0);
     }
     bool _empty() {
       return store->op_queue.empty();
     }
-    OpSequencer *_dequeue() {
+    Op *_dequeue() {
       if (store->op_queue.empty())
 	return NULL;
-      OpSequencer *osr = store->op_queue.front();
+      Op *o = store->op_queue.front();
       store->op_queue.pop_front();
-      return osr;
+      return o;
     }
-    void _process(OpSequencer *osr, ThreadPool::TPHandle &handle) {
-      store->_do_op(osr, handle);
+    void _process(Op *o, ThreadPool::TPHandle &handle) {
+      store->_do_op(o, handle);
     }
-    void _process_finish(OpSequencer *osr) {
-      store->_finish_op(osr);
+    void _process_finish(Op *o) {
+      store->_finish_op(o);
     }
     void _clear() {
       assert(store->op_queue.empty());
     }
   } op_wq;
 
-  void _do_op(OpSequencer *o, ThreadPool::TPHandle &handle);
-  void _finish_op(OpSequencer *o);
+  void _do_op(Op *o, ThreadPool::TPHandle &handle);
+  void _finish_op(Op *o);
   Op *build_op(list<Transaction*>& tls,
 	       Context *onreadable, Context *onreadable_sync,
 	       OpRequestRef osd_op);
-  void queue_op(OpSequencer *osr, Op *o);
+  void queue_op(Op *o);
   void op_queue_reserve_throttle(Op *o, ThreadPool::TPHandle *handle = NULL);
   void op_queue_release_throttle(Op *o);
-  void _journaled_ahead(OpSequencer *osr, Op *o, Context *ondisk);
+  void _journaled_ahead(Op *o, Context *ondisk);
   friend struct C_JournaledAhead;
   int write_version_stamp();
 
@@ -531,7 +464,7 @@ public:
 
   void dump_start(const std::string& file);
   void dump_stop();
-  void dump_transactions(list<ObjectStore::Transaction*>& ls, uint64_t seq, OpSequencer *osr);
+  void dump_transactions(list<ObjectStore::Transaction*>& ls, uint64_t seq);
 
 private:
   void _inject_failure();
@@ -606,8 +539,6 @@ private:
 
   friend class FileStoreBackend;
 };
-
-ostream& operator<<(ostream& out, const FileStore::OpSequencer& s);
 
 struct fiemap;
 
