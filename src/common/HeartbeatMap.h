@@ -47,7 +47,7 @@ struct heartbeat_handle_d {
   std::list<heartbeat_handle_d*>::iterator list_item;
 
   heartbeat_handle_d(const std::string& n)
-    : name(n), grace(0), suicide_grace(0)
+    : name(n), timeout(0), suicide_timeout(0), grace(0), suicide_grace(0)
   { }
 };
 
