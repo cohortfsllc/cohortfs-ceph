@@ -21,19 +21,22 @@
 
 
 struct RefCountedObject {
-  std::atomic<uint64_t> nref;
+  std::atomic<int64_t> nref;
   RefCountedObject() : nref(1) {}
   virtual ~RefCountedObject() {}
 
   RefCountedObject *get() {
+    assert(nref > 0);
     ++nref;
     return this;
   }
   RefCountedObject *add(int n) {
+    assert(nref > 0);
     nref += n;
     return this;
   }
   void put() {
+    assert(nref > 0);
     if (--nref == 0)
       delete this;
   }
@@ -85,7 +88,7 @@ struct RefCountedCond : public RefCountedObject {
  *
  */
 struct RefCountedWaitObject {
-  std::atomic<uint64_t> nref;
+  std::atomic<int64_t> nref;
   RefCountedCond *c;
 
   RefCountedWaitObject() : nref(1) {
@@ -96,6 +99,7 @@ struct RefCountedWaitObject {
   }
 
   RefCountedWaitObject *get() {
+    assert(nref > 0);
     ++nref;
     return this;
   }
@@ -104,6 +108,7 @@ struct RefCountedWaitObject {
     bool ret = false;
     RefCountedCond *cond = c;
     cond->get();
+    assert(nref > 0);
     if (--nref == 0) {
       cond->done();
       delete this;
@@ -117,6 +122,7 @@ struct RefCountedWaitObject {
     RefCountedCond *cond = c;
 
     cond->get();
+    assert(nref > 0);
     if (--nref == 0) {
       cond->done();
       delete this;
