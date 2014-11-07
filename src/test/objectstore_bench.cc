@@ -1,5 +1,15 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 /*
- *  Ceph ObjectStore benchmark
+ * Ceph - scalable distributed file system
+ *
+ * Copyright (C) 2014 CohortFS, LLC
+ *
+ * This is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License version 2.1, as published by the Free Software
+ * Foundation.  See file COPYING.
+ *
  */
 
 #include <chrono>
@@ -140,7 +150,12 @@ class OBS_Worker : public Thread
       uint64_t offset = 0;
       size_t len = size;
 
-      list<ObjectStore::Transaction*> tls;
+      // set up the finisher
+      Mutex lock;
+      Cond cond;
+      bool done = false;
+
+      C_GatherBuilder gather(new C_SafeCond(&lock, &cond, &done));
 
       std::cout << "Write cycle " << ix << std::endl;
       while (len) {
@@ -148,32 +163,23 @@ class OBS_Worker : public Thread
 
 	ObjectStore::Transaction *t = new ObjectStore::Transaction;
 	t->write(coll_t(), hobject_t(poid), offset, count, data);
+	t->register_on_complete(new ObjectStore::C_DeleteTransaction(t));
 
-	tls.push_back(t);
+	fs->queue_transaction(&seq, t, NULL, gather.new_sub());
 
 	offset += count;
 	len -= count;
       }
 
-      // set up the finisher
-      Mutex lock;
-      Cond cond;
-      bool done = false;
-
-      fs->queue_transactions(&seq, tls, NULL,
-			     new C_SafeCond(&lock, &cond, &done));
+      gather.activate();
 
       lock.Lock();
       while (!done)
 	cond.Wait(lock);
       lock.Unlock();
-
-      while (!tls.empty()) {
-	ObjectStore::Transaction *t = tls.front();
-	tls.pop_front();
-	delete t;
-      }
     }
+
+    seq.flush();
 
     return 0;
   }
@@ -277,15 +283,6 @@ int main(int argc, const char *argv[])
   auto t2 = std::chrono::high_resolution_clock::now();
   workers.clear();
 
-  // remove the object
-  ObjectStore::Transaction t;
-  for (vector<object_t>::iterator i = oids.begin(); i != oids.end(); ++i)
-    t.remove(coll_t(), hobject_t(*i));
-  fs->apply_transaction(t);
-
-  fs->umount();
-  delete fs;
-
   using std::chrono::duration_cast;
   using std::chrono::microseconds;
   auto duration = duration_cast<microseconds>(t2 - t1);
@@ -294,6 +291,25 @@ int main(int argc, const char *argv[])
   dout(0) << "Wrote " << total << " in "
       << duration.count() << "us, at a rate of " << rate << "/s"
       << dendl;
+
+  // set up the finisher
+  Mutex lock;
+  Cond cond;
+  bool done = false;
+
+  // remove the object
+  ObjectStore::Transaction t;
+  for (vector<object_t>::iterator i = oids.begin(); i != oids.end(); ++i)
+    t.remove(coll_t(), hobject_t(*i));
+  fs->apply_transaction(t, new C_SafeCond(&lock, &cond, &done));
+
+  lock.Lock();
+  while (!done)
+    cond.Wait(lock);
+  lock.Unlock();
+
+  fs->umount();
+  delete fs;
 
   return 0;
 }
