@@ -800,6 +800,10 @@ int Pipe::connect()
   int rc;
   struct msghdr msg;
   struct iovec msgvec[2];
+#ifdef SQUEAKY_CLEAN_VALGRIND
+  memset(&msg, 0, sizeof(msg));
+  memset(msgvec, 0, sizeof(msgvec));
+#endif /* SQUEAKY_CLEAN_VALGRIND */
   int msglen;
   char banner[strlen(CEPH_BANNER) + 1];	 // extra byte makes coverity happy
   entity_addr_t paddr;

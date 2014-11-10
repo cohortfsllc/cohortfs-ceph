@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 /*
  * ceph_fs.h - Ceph constants and data types to share between kernel and
  * user space.
@@ -206,6 +208,9 @@ struct ceph_client_mount {
 struct ceph_mon_subscribe_item {
 	uint64_t start;
 	uint8_t flags;
+#if defined(__cplusplus) && defined(SQUEAKY_CLEAN_VALGRIND)
+  ceph_mon_subscribe_item() : start(0), flags(0) {}
+#endif
 };
 
 struct ceph_mon_subscribe_ack {
