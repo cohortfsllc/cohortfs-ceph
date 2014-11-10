@@ -6,6 +6,10 @@ add_definitions("-DHAVE_CONFIG_H -D__CEPH__ -D_FILE_OFFSET_BITS=64 -D_REENTRANT 
 
 set(CLIKE_COMMON_FLAGS "-Wall -Wtype-limits -Wignored-qualifiers -Winit-self -Wpointer-arith -Werror=format-security -fno-strict-aliasing -fsigned-char -fPIC")
 
+if(${WITH_SQUEAKY_CLEAN_VALGRIND})
+  set(CLIKE_COMMON_FLAGS "${CLIKE_COMMON_FLAGS} -DSQUEAKY_CLEAN_VALGRIND=1")
+endif(${WITH_SQUEAKY_CLEAN_VALGRIND})
+
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${CLIKE_COMMON_FLAGS} -std=c11")
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CLIKE_COMMON_FLAGS} -std=c++11 -Wnon-virtual-dtor -Wno-invalid-offsetof -Wno-unused-private-field -Wno-mismatched-tags")

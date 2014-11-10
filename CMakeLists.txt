@@ -113,6 +113,8 @@ endif(${WITH_FUSE})
 # probably fuse etc need this -- how to check? XXX
 option(WITH_MDS "MDS is here" ON)
 
+option(WITH_SQUEAKY_CLEAN_VALGRIND "Do memory initialization that may hurt performance" OFF)
+
 # needs mds and? XXX
 option(WITH_CLIENT "Client is here" ON)
 option(WITH_LIBCEPHFS "libcephfs client library" ON)
