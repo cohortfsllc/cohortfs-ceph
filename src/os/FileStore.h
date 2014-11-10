@@ -23,6 +23,7 @@
 #include <boost/scoped_ptr.hpp>
 #include <fstream>
 #include <unordered_map>
+#include <ztracer.hpp>
 #include "include/types.h"
 #include "CollectionIndex.h"
 
@@ -156,6 +157,8 @@ private:
     }
   } sync_thread;
 
+  ZTracer::ZTraceEndpointRef trace_endpoint;
+
   // -- op workqueue --
   struct Op {
     utime_t start;
@@ -164,6 +167,7 @@ private:
     Context *onreadable, *onreadable_sync;
     uint64_t ops, bytes;
     OpRequestRef osd_op;
+    ZTracer::ZTraceRef trace;
   };
   class OpSequencer : public Sequencer_impl {
     Mutex qlock; // to protect q, for benefit of flush (peek/dequeue also protected by lock)
