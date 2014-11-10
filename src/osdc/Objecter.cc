@@ -617,7 +617,6 @@ Objecter::OSDSession *Objecter::get_session(int osd)
   OSDSession *s = new OSDSession(osd);
   osd_sessions[osd] = s;
   s->con = messenger->get_connection(osdmap->get_inst(osd));
-  s->con->get();
   return s;
 }
 
@@ -627,10 +626,9 @@ void Objecter::reopen_session(OSDSession *s)
   ldout(cct, 10) << "reopen_session osd." << s->osd << " session, addr now " << inst << dendl;
   if (s->con) {
     messenger->mark_down(s->con);
-    s->con->put();
+    s->con = nullptr;
   }
   s->con = messenger->get_connection(inst);
-  s->con->get();
   s->incarnation++;
 }
 
