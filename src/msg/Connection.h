@@ -41,11 +41,11 @@ class Messenger;
 struct Connection : public boost::intrusive_ref_counter<Connection> {
   Mutex lock;
   Messenger *msgr;
-  RefCountedObject *priv;
   int peer_type;
   entity_addr_t peer_addr;
   utime_t last_keepalive_ack;
 private:
+  RefCountedObject *priv;
   uint64_t features;
 public:
   bool failed; // true if we are a lossy connection that has failed.
@@ -56,8 +56,8 @@ public:
 public:
   Connection(Messenger *m)
     : msgr(m),
-      priv(NULL),
       peer_type(-1),
+      priv(nullptr),
       features(0),
       failed(false) { }
 
@@ -66,6 +66,7 @@ public:
     if (priv) {
       //generic_dout(0) << "~Connection " << this << " dropping priv " << priv << dendl;
       priv->put();
+      priv = nullptr;
     }
   }
 
@@ -80,7 +81,7 @@ public:
     Mutex::Locker l(lock);
     if (priv)
       return priv->get();
-    return NULL;
+    return nullptr;
   }
 
   virtual bool is_connected() = 0;
