@@ -206,12 +206,12 @@ private:
   void handle_subscribe_ack(MMonSubscribeAck* m);
 
   bool _sub_want(string what, version_t start, unsigned flags) {
-    if (sub_have.count(what) &&
-	sub_have[what].start == start &&
-	sub_have[what].flags == flags)
+    map<string,ceph_mon_subscribe_item>::const_iterator i = sub_have.find(what);
+    if (i != sub_have.cend() &&
+	i->second.start == start &&
+	i->second.flags == flags)
       return false;
-    sub_have[what].start = start;
-    sub_have[what].flags = flags;
+    sub_have.emplace(what, ceph_mon_subscribe_item(start, flags));
     return true;
   }
   void _sub_got(string what, version_t got) {
