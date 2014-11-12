@@ -67,6 +67,9 @@ OUTPUT_VARIABLE CEPH_PYTHON_SET_PATH)
 include_directories(".")
 #include_directories("./include")
 
+add_subdirectory(blkin)
+include_directories(blkin)
+
 if(${WITH_TCMALLOC})
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free")
   set(TCMALLOC_LIBS tcmalloc)
@@ -409,7 +412,7 @@ add_library(os_filestore SHARED $<TARGET_OBJECTS:os_filestore_objs>)
 if(${HAVE_LIBAIO})
   target_link_libraries(os_filestore aio)
 endif(${HAVE_LIBAIO})
-target_link_libraries(os_filestore common os)
+target_link_libraries(os_filestore common os blkin)
 set_target_properties(os_filestore PROPERTIES VERSION "1.0.0" SOVERSION "1")
 install(TARGETS os_filestore DESTINATION lib/os-modules)
 
