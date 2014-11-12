@@ -255,5 +255,8 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 set(OperatingSystem "Mac OS X")
 endif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 
+set(CMAKE_CTEST_COMMAND ctest -V)
+add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND})
+
 add_subdirectory(src)
 add_subdirectory(man)

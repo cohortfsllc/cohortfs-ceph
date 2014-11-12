@@ -42,12 +42,13 @@ target_link_libraries(test_crypt
   ${TCMALLOC_LIBS}
   )
 
-if(0)
+if(0) #why is this conditional here?
 # test_rados
 add_executable(test_rados
   osd/TestRados.cc
   osd/TestOpStat.cc
-  osd/Object.cc osd/RadosModel.cc
+  osd/Object.cc 
+  osd/RadosModel.cc
   $<TARGET_OBJECTS:heap_profiler_objs>
   )
 target_link_libraries(test_rados
@@ -171,6 +172,45 @@ target_link_libraries(get_command_descriptions
   ${CMAKE_DL_LIBS}
   )
 
+## Build tests
+# These should all use explicit _CXXFLAGS so avoid basename conflicts
+
+set(WITH_BUILD_TESTS ON)
+if(${WITH_BUILD_TESTS})
+set(build_libcommon_srcs
+  buildtest_skeleton.cc
+  )
+add_executable(test_build_libcommon
+  ${build_libcommon_srcs}
+  $<TARGET_OBJECTS:common_objs>
+  )
+target_link_libraries(test_build_libcommon json_spirit  rt uuid ${Boost_LIBRARIES} ${CDS_LIBS} pthread ${CRYPTO_LIBS} ${EXTRALIBS} global)
+
+set(build_librados_srcs
+  buildtest_skeleton.cc
+    )
+  add_executable(test_build_librados
+  ${build_librados_srcs}
+  $<TARGET_OBJECTS:librados_objs>
+    )
+target_link_libraries(test_build_librados pthread ${CRYPTO_LIBS} ${EXTRALIBS} global osdc osd global common cls_lock_client)
+ 
+if(${WITH_RADOSGW})
+  set(build_librgw_srcs
+  buildtest_skeleton.cc
+    )
+  add_executable(test_build_librgw
+  ${build_librgw_srcs}
+  $<TARGET_OBJECTS:rgw_objs>
+    )
+target_link_libraries(test_build_librgw rgw_a librados
+    cls_rgw_client cls_lock_client cls_refcount_client
+    cls_log_client cls_statelog_client cls_version_client
+    cls_replica_log_client cls_user_client
+    curl expat global fcgi resolv ${TCMALLOC_LIBS} pthread ${CRYPTO_LIBS} ${EXTRALIBS} global)
+endif(${WITH_RADOSGW})
+endif(${WITH_BUILD_TESTS})
+
 ## Benchmarks
 
 # smalliobench
@@ -273,7 +313,7 @@ target_link_libraries(kvstorebench librados global boost_filesystem
 
 ## System tests
 
-if(0)
+if(0) #no endif(0) for these, why is this conditional here?
 # systest
 set(libsystest_srcs system/cross_process_sem.cc
   system/systest_runnable.cc
@@ -344,8 +384,35 @@ add_executable(bench_log
   )
 target_link_libraries(bench_log global pthread rt ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
 
+#Make check starts here
 ## Unit tests
 
+add_custom_target(test_shell_scripts ALL
+  COMMAND chmod 755 ${CMAKE_BINARY_DIR}/mon/osd-pool-create.sh
+  COMMENT "Shell Scripts have permission")
+
+#  ${CMAKE_BINARY_DIR}/init-ceph ${CMAKE_BINARY_DIR}/ceph-debugpack
+#  ${CMAKE_BINARY_DIR}/ceph-coverage ${CMAKE_BINARY_DIR}/ceph
+#  DEPENDS ${CMAKE_BINARY_DIR}/mkcephfs ${CMAKE_BINARY_DIR}/init-ceph
+#  ${CMAKE_BINARY_DIR}/ceph-debugpack ${CMAKE_BINARY_DIR}/ceph-coverage
+#  ${CMAKE_BINARY_DIR}/ceph COMMENT "Shell Scripts have permission")
+
+#check_SCRIPTS += 
+#	unittest_bufferlist.sh 
+#	test/encoding/check-generated.sh 
+#	test/mon/osd-pool-create.sh 
+#	test/mon/misc.sh 
+#	test/mon/osd-crush.sh 
+#	test/mon/osd-erasure-code-profile.sh 
+#	test/mon/mkfs.sh 
+#	test/ceph-disk.sh 
+#	test/mon/mon-handle-forward.sh 
+#	test/vstart_wrapped_tests.sh
+#
+#EXTRA_DIST += 
+#	$(srcdir)/test/mon/mon-test-helpers.sh 
+#	$(srcdir)/test/osd/osd-test-helpers.sh
+#
 set(UNITTEST_LIBS gtest_main ${PTHREAD_LIBS})
 set(UNITTEST_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I${CMAKE_SOURCE_DIR}/src/gtest/include -I${CMAKE_BINARY_DIR}/src/gtest/include -fno-strict-aliasing")
 
@@ -940,6 +1007,13 @@ target_link_libraries(unittest_on_exit
   ${UNITTEST_LIBS})
 set_target_properties(unittest_on_exit PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
+
+# ceph_argparse.py missing
+# make check ends
+
+add_executable(test_check EXCLUDE_FROM_ALL )
+add_test(test_check test_check)
+add_dependencies(check test_check)
 
 if(${WITH_RADOSGW})
   # test_cors
@@ -1714,7 +1788,7 @@ target_link_libraries(test_get_blkdev_size
   ${CMAKE_DL_LIBS}
   )
 
-
+# the ones we added in except for the fio stuff?
 add_executable(simple_server
   messenger/simple_server.cc
   messenger/simple_dispatcher.cc
@@ -1754,7 +1828,7 @@ if (WITH_FIO)
     ${EXTRA_LIBS})
   install(TARGETS fio_ceph_filestore DESTINATION lib)
 endif (WITH_FIO)
-
+# the ones we added in except for the fio stuff?
 # osbench
 add_executable(osbench objectstore_bench.cc)
 target_link_libraries(osbench os global boost_filesystem ${EXTRA_LIBS})
@@ -1769,7 +1843,7 @@ target_link_libraries(pagesetbench os global boost_filesystem boost_system)
 
 # test_direct_messenger
 add_executable(test_direct_messenger messenger/test_direct_messenger.cc)
-target_link_libraries(test_direct_messenger global)
+target_link_libraries(test_direct_messenger global boost_system)
 
 # test_libosd
 add_executable(test_libosd test_libosd.c $<TARGET_OBJECTS:heap_profiler_objs>)

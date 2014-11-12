@@ -233,12 +233,15 @@ else()
   list(APPEND libcommon_files perfglue/disabled_stubs.cc)
 endif(${WITH_PROFILER})
 
+add_library(common_objs OBJECT ${libcommon_files})
+set(libcommon_objs $<TARGET_OBJECTS:common_objs>
+  $<TARGET_OBJECTS:common_mountcephfs_objs>)
+
 if(${ENABLE_SHARED})
-  list(APPEND libcommon_files $<TARGET_OBJECTS:global_common_objs>)
+  list(APPEND libcommon_objs $<TARGET_OBJECTS:global_common_objs>)
 endif(${ENABLE_SHARED})
 
-add_library(common ${CEPH_SHARED} ${libcommon_files}
-  $<TARGET_OBJECTS:common_mountcephfs_objs>)
+add_library(common ${CEPH_SHARED} ${libcommon_objs})
 if(${ENABLE_SHARED})
   set_target_properties(common PROPERTIES OUTPUT_NAME ceph-common
     VERSION "1.0.0" SOVERSION "1" LINK_FLAGS "-Wl,-export-dynamic")
@@ -296,8 +299,10 @@ set(librados_srcs
   librados/RadosClient.cc
   librados/IoCtxImpl.cc
   )
-add_library(librados ${CEPH_SHARED} ${librados_srcs}
+add_library(librados_objs OBJECT ${librados_srcs})
+add_library(librados ${CEPH_SHARED} 
   $<TARGET_OBJECTS:cls_references_objs>
+  $<TARGET_OBJECTS:librados_objs>
   $<TARGET_OBJECTS:heap_profiler_objs>)
 add_dependencies(librados osdc)
 target_link_libraries(librados PRIVATE osdc osd os global common cls_lock_client
@@ -699,7 +704,8 @@ if(${WITH_RADOSGW})
     rgw/rgw_rest_client.cc rgw/rgw_metadata.cc rgw/rgw_rest_config.cc
     rgw/rgw_rest_conn.cc rgw/rgw_rest_log.cc rgw/rgw_rest_metadata.cc
     rgw/rgw_rest_opstate.cc rgw/rgw_rest_replica_log.cc ${kvs_srcs})
-  add_executable(radosgw ${radosgw_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
+  add_library(radosgw_objs OBJECT ${radosgw_srcs})
+  add_executable(radosgw $<TARGET_OBJECTS:radosgw_objs> $<TARGET_OBJECTS:heap_profiler_objs>)
   target_link_libraries(radosgw rgw_a librados
     cls_rgw_client cls_lock_client cls_refcount_client
     cls_log_client cls_statelog_client cls_version_client
