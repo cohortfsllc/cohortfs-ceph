@@ -407,8 +407,7 @@ set(os_filestore_files
   os/ZFSFileStoreBackend.cc
 )
 
-add_library(os_filestore_objs OBJECT ${os_filestore_files})
-add_library(os_filestore SHARED $<TARGET_OBJECTS:os_filestore_objs>)
+add_library(os_filestore SHARED ${os_filestore_files})
 if(${HAVE_LIBAIO})
   target_link_libraries(os_filestore aio)
 endif(${HAVE_LIBAIO})

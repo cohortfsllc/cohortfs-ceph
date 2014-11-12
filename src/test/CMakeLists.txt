@@ -82,20 +82,18 @@ target_link_libraries(test_rewrite_latency common ${CMAKE_DL_LIBS}
 # streamtest
 add_executable(streamtest
   streamtest.cc
-  $<TARGET_OBJECTS:os_filestore_objs>
   $<TARGET_OBJECTS:heap_profiler_objs>
   )
-target_link_libraries(streamtest os global leveldb aio boost_filesystem
+target_link_libraries(streamtest os_filestore global leveldb aio
   boost_system ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
 
 # test_trans
 add_executable(test_trans
   test_trans.cc
-  $<TARGET_OBJECTS:os_filestore_objs>
   $<TARGET_OBJECTS:heap_profiler_objs>
   )
-target_link_libraries(test_trans os global leveldb aio boost_filesystem
-  boost_system ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
+target_link_libraries(test_trans os_filestore global leveldb aio
+  ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
 
 # test_keys
 add_executable(test_keys
@@ -235,10 +233,9 @@ set(smalliobenchfs_srcs
   )
 add_executable(smalliobenchfs
   ${smalliobenchfs_srcs}
-  $<TARGET_OBJECTS:os_filestore_objs>
   $<TARGET_OBJECTS:heap_profiler_objs>
   )
-target_link_libraries(smalliobenchfs librados boost_program_options os global
+target_link_libraries(smalliobenchfs librados boost_program_options os_filestore global
   leveldb aio boost_filesystem boost_system ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
 
 # smalliobenchdumb
@@ -1676,13 +1673,12 @@ endif(${WITH_CLIENT})
 
 add_executable(test_objectstore
   objectstore/store_test.cc
-  $<TARGET_OBJECTS:os_filestore_objs>
   $<TARGET_OBJECTS:heap_profiler_objs>
   )
 set_target_properties(test_objectstore PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 target_link_libraries(test_objectstore
-  os leveldb aio boost_filesystem boost_system
+  os_filestore leveldb aio
   ${UNITTEST_LIBS}
   global
   ${EXTRALIBS}
@@ -1706,11 +1702,10 @@ add_executable(test_filestore_idempotent
   objectstore/test_idempotent.cc
   objectstore/FileStoreTracker.cc
   common/ObjectContents.cc
-  $<TARGET_OBJECTS:os_filestore_objs>
   $<TARGET_OBJECTS:heap_profiler_objs>
   )
 target_link_libraries(test_filestore_idempotent
-  os global leveldb aio boost_filesystem boost_system
+  os_filestore global leveldb aio
   ${EXTRALIBS}
   ${TCMALLOC_LIBS}
   ${CMAKE_DL_LIBS}
@@ -1721,11 +1716,10 @@ add_executable(test_filestore_idempotent_sequence
   objectstore/DeterministicOpSequence.cc
   objectstore/TestObjectStoreState.cc
   objectstore/FileStoreDiff.cc
-  $<TARGET_OBJECTS:os_filestore_objs>
   $<TARGET_OBJECTS:heap_profiler_objs>
   )
 target_link_libraries(test_filestore_idempotent_sequence
-  os global leveldb aio boost_filesystem boost_system
+  os_filestore global leveldb aio
   ${EXTRALIBS}
   ${TCMALLOC_LIBS}
   ${CMAKE_DL_LIBS}
@@ -1733,15 +1727,14 @@ target_link_libraries(test_filestore_idempotent_sequence
 
 add_executable(test_xattr_bench
   xattr_bench.cc
-  $<TARGET_OBJECTS:os_filestore_objs>
   $<TARGET_OBJECTS:heap_profiler_objs>
   )
 set_target_properties(test_xattr_bench PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 target_link_libraries(test_xattr_bench
-  os
+  os_filestore
   ${UNITTEST_LIBS}
-  global leveldb aio boost_filesystem boost_system
+  global leveldb aio
   ${EXTRALIBS}
   ${TCMALLOC_LIBS}
   ${CMAKE_DL_LIBS}
@@ -1749,15 +1742,14 @@ target_link_libraries(test_xattr_bench
 
 add_executable(test_filejournal
   test_filejournal.cc
-  $<TARGET_OBJECTS:os_filestore_objs>
   $<TARGET_OBJECTS:heap_profiler_objs>
   )
 set_target_properties(test_filejournal PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 target_link_libraries(test_filejournal
-  os
+  os_filestore
   ${UNITTEST_LIBS}
-  global leveldb aio boost_filesystem boost_system
+  global leveldb aio
   ${EXTRALIBS}
   ${TCMALLOC_LIBS}
   ${CMAKE_DL_LIBS}
