@@ -208,8 +208,10 @@ struct ceph_client_mount {
 struct ceph_mon_subscribe_item {
 	uint64_t start;
 	uint8_t flags;
-#if defined(__cplusplus) && defined(SQUEAKY_CLEAN_VALGRIND)
+#if defined(__cplusplus)
   ceph_mon_subscribe_item() : start(0), flags(0) {}
+  ceph_mon_subscribe_item(uint64_t _start, uint8_t _flags)
+    : start(_start), flags(_flags) {}
 #endif
 };
 
