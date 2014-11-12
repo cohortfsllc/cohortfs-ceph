@@ -18,9 +18,6 @@
 #include "Connection.h"
 
 PipeConnection::~PipeConnection() {
-    if (priv) {
-	priv->put();
-    }
     if (pipe) {
 	pipe->put();
 	pipe = NULL;
