@@ -27,9 +27,9 @@ if (HAVE_XIO)
 endif(HAVE_XIO)
 
 
-if(WITH_CDS)
+if(HAVE_CDS)
 list(APPEND EXTRALIBS ${CDS_LIBS})
-endif(WITH_CDS)
+endif(HAVE_CDS)
 
 set(CRYPTO_LIBS cryptopp)
 
@@ -260,7 +260,7 @@ if(${WITH_PROFILER})
   target_link_libraries(common PRIVATE profiler)
 endif(${WITH_PROFILER})
 
-target_link_libraries(common PRIVATE json_spirit ${CRYPTO_LIBS} rt ${Boost_LIBRARIES} ${CDS_LIBS} ${EXTRALIBS})
+target_link_libraries(common PRIVATE json_spirit ${CRYPTO_LIBS} rt ${Boost_LIBRARIES} ${EXTRALIBS})
 
 set(libglobal_srcs
   global/global_init.cc

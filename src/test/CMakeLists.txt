@@ -1757,7 +1757,7 @@ endif (WITH_FIO)
 
 # osbench
 add_executable(osbench objectstore_bench.cc)
-target_link_libraries(osbench os global boost_filesystem ${CDS_LIBS})
+target_link_libraries(osbench os global boost_filesystem ${EXTRA_LIBS})
 
 # mmapbench
 add_executable(mmapbench mmap_bench.cc)
