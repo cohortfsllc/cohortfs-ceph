@@ -64,6 +64,7 @@ extern "C" {
 #include <iomanip>
 
 #include <unordered_map>
+#include <boost/optional.hpp>
 
 #include "object.h"
 #include "intarith.h"
@@ -86,6 +87,13 @@ typedef off_t off64_t;
 #endif
 
 // -- io helpers --
+
+template <typename T>
+inline std::ostream &operator << (std::ostream &out, boost::optional<T> const &maybe) {
+  if (maybe)
+    out << *maybe;
+  return out;
+}
 
 template<class A, class B>
 inline std::ostream& operator<<(std::ostream& out, const std::pair<A,B>& v) {
