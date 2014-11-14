@@ -90,9 +90,6 @@ inline ostream& operator<<(ostream& out, const FSSuperblock& sb)
   return out << "sb(" << sb.compat_features << ")";
 }
 
-#define FILESTORE_TFLAG_NONE         0x0000
-#define FILESTORE_TFLAG_REF          0x0001
-
 class FileStore : public JournalingObjectStore,
 		  public md_config_obs_t
 {
@@ -139,7 +136,7 @@ public:
       // update slot for queued Ops to find
       get<0>(c_slot) = fc;
       // then mark it for release when t is cleaned up
-      get<2>(c_slot) |= FILESTORE_TFLAG_REF;
+      get<2>(c_slot) |= ObjectStore::Transaction::FLAG_REF;
     }
     return fc;
   } /* get_slot_collection */
@@ -157,7 +154,7 @@ public:
 	// update slot for queued Ops to find
 	get<0>(o_slot) = fo;
 	// then mark it for release when t is cleaned up
-	get<2>(o_slot) |= FILESTORE_TFLAG_REF;
+	get<2>(o_slot) |= ObjectStore::Transaction::FLAG_REF;
       }
     }
     return fo;

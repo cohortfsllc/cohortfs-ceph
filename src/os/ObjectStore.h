@@ -356,6 +356,9 @@ public:
       OP_SETALLOCHINT = 39,  // ch, oid, object_size, write_size
     };
 
+    static const uint32_t FLAG_NONE = 0x0000;
+    static const uint32_t FLAG_REF = 0x0001;
+
     struct Op {
       uint32_t op;
       uint16_t c1_ix, c2_ix; // Collection slot offsets
@@ -394,6 +397,8 @@ public:
     }
 
   private:
+    ObjectStore *os;
+    
     // Handle arrays, which UL may provide, if already open
     vector<col_slot_t> col_slots;
     vector<obj_slot_t> obj_slots;
@@ -1052,22 +1057,33 @@ public:
 
     // etc.
     Transaction(size_t op_count_hint = 0) :
-      largest_data_len(0), largest_data_off(0), replica(false),
+      os(nullptr), largest_data_len(0), largest_data_off(0), replica(false),
       tolerate_collection_add_enoent(false) {
       ops.reserve(op_count_hint);
     }
 
     Transaction(bufferlist::iterator &dp) :
-      largest_data_len(0), largest_data_off(0), replica(false),
+      os(nullptr), largest_data_len(0), largest_data_off(0), replica(false),
       tolerate_collection_add_enoent(false) {
       decode(dp);
     }
 
     Transaction(bufferlist &nbl) :
-      largest_data_len(0), largest_data_off(0), replica(false),
+      os(nullptr), largest_data_len(0), largest_data_off(0), replica(false),
       tolerate_collection_add_enoent(false) {
       bufferlist::iterator dp = nbl.begin();
       decode(dp);
+    }
+
+    virtual ~Transaction() {
+      if (!! os) {
+	vector<obj_slot_t>::const_iterator iter;
+	for (iter = obj_slots.begin(); iter != obj_slots.end(); ++iter) {
+	  if (!! get<0>(*iter) && (get<2>(*iter) & FLAG_REF)) {
+	    os->put_object(get<0>(*iter));
+	  }
+	}
+      }
     }
 
     void encode(bufferlist& bl) const {

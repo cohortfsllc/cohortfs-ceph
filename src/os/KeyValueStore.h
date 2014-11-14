@@ -144,8 +144,6 @@ class StripObjectMap: public GenericObjectMap {
   static const uint64_t default_strip_size = 1024;
 };
 
-#define KVSTORE_TFLAG_NONE         0x0000
-#define KVSTORE_TFLAG_REF          0x0001
 
 class KeyValueStore : public ObjectStore,
 		      public md_config_obs_t {
@@ -165,7 +163,7 @@ class KeyValueStore : public ObjectStore,
       // update slot for queued Ops to find
       get<0>(c_slot) = ch;
       // then mark it for release when t is cleaned up
-      get<2>(c_slot) |= KVSTORE_TFLAG_REF;
+      get<2>(c_slot) |= ObjectStore::Transaction::FLAG_REF;
     }
     return ch;
   } /* get_slot_collection */
@@ -181,7 +179,7 @@ class KeyValueStore : public ObjectStore,
       // update slot for queued Ops to find
       get<0>(o_slot) = oh;
       // then mark it for release when t is cleaned up
-      get<2>(o_slot) |= KVSTORE_TFLAG_REF;
+      get<2>(o_slot) |= ObjectStore::Transaction::FLAG_REF;
     }
     return oh;
   }

@@ -24,8 +24,6 @@
 #include <atomic>
 #include <boost/intrusive_ptr.hpp>
 
-#define MEMSTORE_TFLAG_NONE         0x0000
-#define MEMSTORE_TFLAG_REF          0x0001
 
 class MemStore : public ObjectStore {
 private:
@@ -181,7 +179,7 @@ public:
       // update slot for queued Ops to find
       get<0>(c_slot) = c;
       // then mark it for release when t is cleaned up
-      get<2>(c_slot) |= MEMSTORE_TFLAG_REF;
+      get<2>(c_slot) |= ObjectStore::Transaction::FLAG_REF;
     }
     return c;
   } /* get_slot_collection */
@@ -197,7 +195,7 @@ public:
       // update slot for queued Ops to find
       get<0>(o_slot) = oh;
       // then mark it for release when t is cleaned up
-      get<2>(o_slot) |= MEMSTORE_TFLAG_REF;
+      get<2>(o_slot) |= ObjectStore::Transaction::FLAG_REF;
     }
     return oh;
   } /* get_slot_object */
