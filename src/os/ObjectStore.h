@@ -1088,7 +1088,7 @@ public:
       ::decode(col_slots, bl);
       ::decode(obj_slots, bl);
       ::decode(ops, bl);
-//      ::encode(os_flags, bl); // skip flags, 100% internal atm
+      os_flags = 0; // skip flags, 100% internal atm
       ::decode(col_ix, bl);
       ::decode(obj_ix, bl);
       ::decode(largest_data_len, bl);
