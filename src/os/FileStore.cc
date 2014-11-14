@@ -1960,9 +1960,10 @@ unsigned FileStore::_do_transaction(
       r = -ENOENT;
       fc = get_slot_collection(t, i->c1_ix);
       if (fc) {
-	fo = get_slot_object(t, fc, i->o1_ix, true /* create */);
+	fo = get_slot_object(t, fc, i->o1_ix, spos, true /* create */);
 	if (fo) {
-	  r = _touch(fc, fo);
+	  if (_check_replay_guard(fc, fo, spos) > 0)
+	    r = _touch(fc, fo);
 	}
       }
       break;
@@ -1971,7 +1972,7 @@ unsigned FileStore::_do_transaction(
       r = -ENOENT;
       fc = get_slot_collection(t, i->c1_ix);
       if (fc) {
-	fo = get_slot_object(t, fc, i->o1_ix, true /* create */);
+	fo = get_slot_object(t, fc, i->o1_ix, spos, true /* create */);
 	if (fo) {
 	  if (_check_replay_guard(fc, fo, spos) > 0)
 	    r = _write(fc, fo, i->off, i->len, i->data, t.get_replica());
@@ -1982,7 +1983,7 @@ unsigned FileStore::_do_transaction(
       r = -ENOENT;
       fc = get_slot_collection(t, i->c1_ix);
       if (fc) {
-	fo = get_slot_object(t, fc, i->o1_ix, true /* create */);
+	fo = get_slot_object(t, fc, i->o1_ix, spos, true /* create */);
 	if (fo) {
 	  if (_check_replay_guard(fc, fo, spos) > 0)
 	    r = _zero(fc, fo, i->off, i->len);
@@ -1998,7 +1999,7 @@ unsigned FileStore::_do_transaction(
       r = -ENOENT;
       fc = get_slot_collection(t, i->c1_ix);
       if (fc) {
-	fo = get_slot_object(t, fc, i->o1_ix, true /* create */);
+	fo = get_slot_object(t, fc, i->o1_ix, spos, true /* create */);
 	if (fo) {
 	  if (_check_replay_guard(fc, fo, spos) > 0)
 	    r = _truncate(fc, fo, i->off);
@@ -2010,7 +2011,7 @@ unsigned FileStore::_do_transaction(
       r = -ENOENT;
       fc = get_slot_collection(t, i->c1_ix);
       if (fc) {
-	fo = get_slot_object(t, fc, i->o1_ix, false /* create */);
+	fo = get_slot_object(t, fc, i->o1_ix, spos, false /* create */);
 	if (fo) {
 	  if (_check_replay_guard(fc, fo, spos) > 0)
 	    r = _remove(fc, fo->get_oid(), spos);
@@ -2022,7 +2023,7 @@ unsigned FileStore::_do_transaction(
       r = -ENOENT;
       fc = get_slot_collection(t, i->c1_ix);
       if (fc) {
-	fo = get_slot_object(t, fc, i->o1_ix, true /* create */);
+	fo = get_slot_object(t, fc, i->o1_ix, spos, true /* create */);
 	if (fo) {
 	  if (_check_replay_guard(fc, fo, spos) > 0) {
 	    bufferlist &bl = i->data;
@@ -2042,7 +2043,7 @@ unsigned FileStore::_do_transaction(
       r = -ENOENT;
       fc = get_slot_collection(t, i->c1_ix);
       if (fc) {
-	fo = get_slot_object(t, fc, i->o1_ix, true /* create */);
+	fo = get_slot_object(t, fc, i->o1_ix, spos, true /* create */);
 	if (fo) {
 	  if (_check_replay_guard(fc, fo, spos) > 0)
 	    r = _setattrs(fc, fo, i->xattrs, spos);
@@ -2057,7 +2058,7 @@ unsigned FileStore::_do_transaction(
       r = -ENOENT;
       fc = get_slot_collection(t, i->c1_ix);
       if (fc) {
-	fo = get_slot_object(t, fc, i->o1_ix, false /* create */);
+	fo = get_slot_object(t, fc, i->o1_ix, spos, false /* create */);
 	if (fo) {
 	  if (_check_replay_guard(fc, fo, spos) > 0)
 	    r = _rmattr(fc, fo, i->name.c_str(), spos);
@@ -2069,7 +2070,7 @@ unsigned FileStore::_do_transaction(
       r = -ENOENT;
       fc = get_slot_collection(t, i->c1_ix);
       if (fc) {
-	fo = get_slot_object(t, fc, i->o1_ix, false /* create */);
+	fo = get_slot_object(t, fc, i->o1_ix, spos, false /* create */);
 	if (fo) {
 	  if (_check_replay_guard(fc, fo, spos) > 0)
 	    r = _rmattrs(fc, fo, spos);
@@ -2081,9 +2082,9 @@ unsigned FileStore::_do_transaction(
       r = -ENOENT;
       fc = get_slot_collection(t, i->c1_ix);
       if (fc) {
-	fo = get_slot_object(t, fc, i->o1_ix, true /* create */);
+	fo = get_slot_object(t, fc, i->o1_ix, spos, true /* create */);
 	if (fo) {
-	  fo2 = get_slot_object(t, fc, i->o2_ix, true /* create */);
+	  fo2 = get_slot_object(t, fc, i->o2_ix, spos, true /* create */);
 	  if (fo2) {
 	    r = _clone(fc, fo, fo2, spos);
 	  }
@@ -2095,9 +2096,9 @@ unsigned FileStore::_do_transaction(
       r = -ENOENT;
       fc = get_slot_collection(t, i->c1_ix);
       if (fc) {
-	fo = get_slot_object(t, fc, i->o1_ix, true /* create */);
+	fo = get_slot_object(t, fc, i->o1_ix, spos, true /* create */);
 	if (fo) {
-	  fo2 = get_slot_object(t, fc, i->o2_ix, true /* create */);
+	  fo2 = get_slot_object(t, fc, i->o2_ix, spos, true /* create */);
 	  if (fo2) {
 	    r = _clone_range(fc, fo, fo2, i->off, i->len, i->off, spos);
 	  }
@@ -2109,9 +2110,9 @@ unsigned FileStore::_do_transaction(
       r = -ENOENT;
       fc = get_slot_collection(t, i->c1_ix);
       if (fc) {
-	fo = get_slot_object(t, fc, i->o1_ix, true /* create */);
+	fo = get_slot_object(t, fc, i->o1_ix, spos, true /* create */);
 	if (fo) {
-	  fo2 = get_slot_object(t, fc, i->o2_ix, true /* create */);
+	  fo2 = get_slot_object(t, fc, i->o2_ix, spos, true /* create */);
 	  if (fo2) {
 	    r = _clone_range(fc, fo, fo2, i->off, i->len, i->off2, spos);
 	  }
@@ -2163,7 +2164,7 @@ unsigned FileStore::_do_transaction(
       r = -ENOENT;
       fc = get_slot_collection(t, i->c1_ix);
       if (fc) {
-	fo = get_slot_object(t, fc, i->o1_ix, false /* !create */);
+	fo = get_slot_object(t, fc, i->o1_ix, spos, false /* !create */);
 	if (fo) {
 	  r = _omap_clear(fc, fo, spos);
 	}
@@ -2174,7 +2175,7 @@ unsigned FileStore::_do_transaction(
       r = -ENOENT;
       fc = get_slot_collection(t, i->c1_ix);
       if (fc) {
-	fo = get_slot_object(t, fc, i->o1_ix, true /* create */);
+	fo = get_slot_object(t, fc, i->o1_ix, spos, true /* create */);
 	if (fo) {
 	  r = _omap_setkeys(fc, fo, i->attrs, spos);
 	}
@@ -2185,7 +2186,7 @@ unsigned FileStore::_do_transaction(
       r = -ENOENT;
       fc = get_slot_collection(t, i->c1_ix);
       if (fc) {
-	fo = get_slot_object(t, fc, i->o1_ix, false /* !create */);
+	fo = get_slot_object(t, fc, i->o1_ix, spos, false /* !create */);
 	if (fo) {
 	  r = _omap_rmkeys(fc, fo, i->keys, spos);
 	}
@@ -2196,7 +2197,7 @@ unsigned FileStore::_do_transaction(
       r = -ENOENT;
       fc = get_slot_collection(t, i->c1_ix);
       if (fc) {
-	fo = get_slot_object(t, fc, i->o1_ix, false /* !create */);
+	fo = get_slot_object(t, fc, i->o1_ix, spos, false /* !create */);
 	if (fo) {
 	  r = _omap_rmkeyrange(fc, fo, i->name, i->name2, spos);
 	}
@@ -2206,7 +2207,7 @@ unsigned FileStore::_do_transaction(
       r = -ENOENT;
       fc = get_slot_collection(t, i->c1_ix);
       if (fc) {
-	fo = get_slot_object(t, fc, i->o1_ix, true /* !create */);
+	fo = get_slot_object(t, fc, i->o1_ix, spos, true /* !create */);
 	if (fo) {
 	  r = _omap_setheader(fc, fo, i->data, spos);
 	}
@@ -2217,7 +2218,7 @@ unsigned FileStore::_do_transaction(
       r = -ENOENT;
       fc = get_slot_collection(t, i->c1_ix);
       if (fc) {
-	fo = get_slot_object(t, fc, i->o1_ix, false /* !create */);
+	fo = get_slot_object(t, fc, i->o1_ix, spos, false /* !create */);
 	if (fo) {
 	  if (_check_replay_guard(fc, fo, spos) > 0)
 	    r = _set_alloc_hint(fc, fo, i->value1, i->value2);
@@ -2354,17 +2355,27 @@ bool FileStore::exists(CollectionHandle ch, const hobject_t& oid)
 
 FileStore::FSObject* FileStore::get_object(FSCollection* fc,
 					   const hobject_t& oid,
+					   const SequencerPosition& spos,
 					   bool create)
 {
-  FSObject* oh = new FSObject(oid);
-  (void) lfn_open(fc, oid, create, &(oh->fd));
+  FDRef fd;
+  FSObject* oh = nullptr;
+  int r = lfn_open(fc, oid, false, &fd);
+  if ((r < 0) &&
+      create &&
+      _check_global_replay_guard(fc, spos)) {
+      r = lfn_open(fc, oid, true, &fd);
+  }
+  if (r == 0)
+    oh = new FSObject(oid, fd);
   return oh;
 }
 
 ObjectHandle FileStore::get_object(CollectionHandle ch,
 				   const hobject_t& oid)
 {
-  return get_object(static_cast<FSCollection*>(ch), oid);
+  static SequencerPosition dummy_spos;
+  return get_object(static_cast<FSCollection*>(ch), oid, dummy_spos, false);
 }
 
 void FileStore::put_object(FSObject* fo)

@@ -122,9 +122,9 @@ public:
   class FSObject : public ObjectStore::Object
   {
   public:
-    FSObject(const hobject_t& oid)
+    FSObject(const hobject_t& oid, const FDRef& _fd)
       : ObjectStore::Object(oid) {
-      // TODO:  do something
+      fd = _fd;
     }
     FDRef fd;
   };
@@ -145,13 +145,14 @@ public:
   } /* get_slot_collection */
 
   inline FSObject* get_slot_object(Transaction& t, FSCollection* fc,
-				   uint16_t o_ix, bool create) {
+				   uint16_t o_ix, const SequencerPosition& spos,
+				   bool create) {
     obj_slot_t& o_slot = t.o_slot(o_ix);
     FSObject* fo = static_cast<FSObject*>(get<0>(o_slot));
     if (fo)
       return fo;
     if (create) {
-      fo = static_cast<FSObject*>(get_object(fc, get<1>(o_slot), create));
+      fo = static_cast<FSObject*>(get_object(fc, get<1>(o_slot), spos, create));
       if (fo) {
 	// update slot for queued Ops to find
 	get<0>(o_slot) = fo;
@@ -462,7 +463,8 @@ public:
   ObjectHandle get_object(CollectionHandle ch, const hobject_t& oid);
   void put_object(ObjectHandle oh);
 
-  FSObject* get_object(FSCollection* fc, const hobject_t& oid, bool create);
+  FSObject* get_object(FSCollection* fc, const hobject_t& oid,
+		       const SequencerPosition& spos, bool create);
   void put_object(FSObject* fo);
 
   int stat(
