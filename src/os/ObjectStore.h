@@ -114,6 +114,10 @@ public:
   typedef Object* ObjectHandle;
   typedef Collection* CollectionHandle;
 
+  typedef std::tuple<ObjectStore::CollectionHandle, coll_t, uint8_t> col_slot_t;
+  typedef std::tuple<ObjectStore::ObjectHandle, hobject_t, uint8_t> obj_slot_t;
+
+
   /**
    * create - create an ObjectStore instance.
    *
@@ -351,9 +355,6 @@ public:
 
       OP_SETALLOCHINT = 39,  // ch, oid, object_size, write_size
     };
-
-    typedef std::tuple<CollectionHandle, coll_t, uint8_t> col_slot_t;
-    typedef std::tuple<ObjectHandle, hobject_t, uint8_t> obj_slot_t;
 
     struct Op {
       uint32_t op;
@@ -1071,7 +1072,12 @@ public:
 
     void encode(bufferlist& bl) const {
       ENCODE_START(8, 8, bl);
+      ::encode(col_slots, bl);
+      ::encode(obj_slots, bl);
       ::encode(ops, bl);
+//      ::encode(os_flags, bl); // skip flags, 100% internal atm
+      ::encode(col_ix, bl);
+      ::encode(obj_ix, bl);
       ::encode(largest_data_len, bl);
       ::encode(largest_data_off, bl);
       ::encode(tolerate_collection_add_enoent, bl);
@@ -1079,7 +1085,12 @@ public:
     }
     void decode(bufferlist::iterator &bl) {
       DECODE_START(8, bl);
+      ::decode(col_slots, bl);
+      ::decode(obj_slots, bl);
       ::decode(ops, bl);
+//      ::encode(os_flags, bl); // skip flags, 100% internal atm
+      ::decode(col_ix, bl);
+      ::decode(obj_ix, bl);
       ::decode(largest_data_len, bl);
       ::decode(largest_data_off, bl);
       ::decode(tolerate_collection_add_enoent, bl);
@@ -1615,15 +1626,50 @@ public:
   virtual void inject_mdata_error(const hobject_t &oid) {}
 };
 
+typedef ObjectStore::Collection* CollectionHandle;
+typedef ObjectStore::Object* ObjectHandle;
+
+inline void encode(const ObjectStore::col_slot_t &c_slot, bufferlist &bl)
+{
+  // XXX conditionally inspect handle and encode it's cid, if present
+  ObjectStore::CollectionHandle c = get<0>(c_slot);
+  if (!!c)
+    encode(c->get_cid(), bl);
+  else
+    encode(get<1>(c_slot), bl);
+  encode(get<2>(c_slot), bl);
+}
+
+inline void decode(ObjectStore::col_slot_t &c_slot, bufferlist::iterator &p)
+{
+  // decode(get<0>(c_slot), p); // we never encode handles
+  get<0>(c_slot) = nullptr;
+  decode(get<1>(c_slot), p);
+  decode(get<2>(c_slot), p);
+}
+
+inline void encode(const ObjectStore::obj_slot_t &o_slot, bufferlist &bl)
+{
+  // XXX conditionally inspect handle and encode it's cid, if present
+  ObjectStore::ObjectHandle o = get<0>(o_slot);
+  if (!!o)
+    encode(o->get_oid(), bl);
+  else
+    encode(get<1>(o_slot), bl);
+  encode(get<2>(o_slot), bl);
+}
+
+inline void decode(ObjectStore::obj_slot_t &o_slot, bufferlist::iterator &p)
+{
+  // decode(get<0>(o_slot), p); // we never encode handles
+  get<0>(o_slot) = nullptr;
+  decode(get<1>(o_slot), p);
+  decode(get<2>(o_slot), p);
+}
+
 WRITE_CLASS_ENCODER(ObjectStore::Transaction::Op)
 WRITE_CLASS_ENCODER(ObjectStore::Transaction)
 
 ostream& operator<<(ostream& out, const ObjectStore::Sequencer& s);
-
-typedef ObjectStore::Collection* CollectionHandle;
-typedef ObjectStore::Object* ObjectHandle;
-
-typedef std::tuple<CollectionHandle, coll_t, uint8_t> col_slot_t;
-typedef std::tuple<ObjectHandle, hobject_t, uint8_t> obj_slot_t;
 
 #endif /* CEPH_OBJECTSTORE_H */

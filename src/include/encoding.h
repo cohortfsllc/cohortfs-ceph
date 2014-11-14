@@ -280,6 +280,7 @@ inline void decode(T &o, bufferlist& bl)
 #include <map>
 #include <deque>
 #include <vector>
+#include <tuple>
 #include <string>
 #include <boost/optional.hpp>
 
