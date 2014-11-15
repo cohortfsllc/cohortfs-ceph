@@ -2630,25 +2630,30 @@ int FileStore::_write(FSCollection* fc, FSObject* fo,
   dout(15) << "write " << fc->get_cid() << "/" << fo->get_oid() << " "
 	   << offset << "~" << len << dendl;
   int r;
-  int64_t actual;
+  int64_t nwritten = 0;
 
-  // XXX seek
-  actual = ::lseek64(**fo->fd, offset, SEEK_SET); // XXXX pwritev?
-  if (actual < 0) {
-    r = -errno;
-    dout(0) << "write lseek64 to " << offset << " failed: " << cpp_strerror(r)
-	    << dendl;
-    goto out;
-  }
-  if (actual != (int64_t)offset) {
-    dout(0) << "write lseek64 to " << offset << " gave bad offset " << actual
-	    << dendl;
-    r = -EIO;
-    goto out;
+  //  pwritev up to 256 segments at a time (allocate w/alloca), until done
+  list<ceph::buffer::ptr>::const_iterator pb = bl.buffers().begin();
+  struct iovec *iov;
+  int ilen, iov_ix, n_iov = std::min(256UL, bl.buffers().size());
+  iov = static_cast<struct iovec*>(::alloca(n_iov));
+
+  for (ilen = 0 /*, pb = bl.begin() */; pb != bl.buffers().end(); ++pb) {
+    for (iov_ix = 0; (iov_ix < n_iov) && (pb != bl.buffers().end());
+	 ++iov_ix, ++pb) {
+      iov->iov_base = (void*) pb->c_str();
+      iov->iov_len = pb->length();
+      ilen += pb->length();
+    }
+    nwritten = ::pwritev(**fo->fd, iov, iov_ix+1, offset);
+    if (nwritten < 0) {
+      r = -EIO;
+      goto out;
+    }
+    offset += ilen; // XXX do short pwritevs happen?
   }
 
-  // write
-  r = bl.write_fd(**fo->fd);
+  // pretend it all worked
   if (r == 0)
     r = bl.length();
 
