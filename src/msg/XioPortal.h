@@ -34,6 +34,152 @@ extern "C" {
 
 class XioMessenger;
 
+class XioDecoder : public Thread
+{
+private:
+
+  struct SubmitQueue
+  {
+    const static int nlanes = 7;
+
+    struct Lane
+    {
+      uint32_t size;
+      XioRecvMsg::Queue q;
+      pthread_spinlock_t sp;
+      CACHE_PAD(0);
+    };
+
+    Lane qlane[nlanes];
+
+    SubmitQueue() {
+      int ix;
+      Lane* lane;
+      for (ix = 0; ix < nlanes; ++ix) {
+	lane = &qlane[ix];
+	pthread_spin_init(&lane->sp, PTHREAD_PROCESS_PRIVATE);
+	lane->size = 0;
+      }
+    }
+
+    inline Lane* get_lane(XioConnection *xcon) {
+      return &qlane[((uint64_t) xcon) % nlanes];
+    }
+
+    void enq(XioRecvMsg* in_msg) {
+      Lane* lane = get_lane(in_msg->xcon);
+      pthread_spin_lock(&lane->sp);
+      lane->q.push_back(*in_msg);
+      ++(lane->size);
+      pthread_spin_unlock(&lane->sp);
+    }
+
+    void deq(XioRecvMsg::Queue &decode_q) {
+      int ix;
+      Lane* lane;
+
+      for (ix = 0; ix < nlanes; ++ix) {
+	lane = &qlane[ix];
+	pthread_spin_lock(&lane->sp);
+	if (lane->size > 0) {
+	  XioRecvMsg::Queue::const_iterator i1 = decode_q.end();
+	  decode_q.splice(i1, lane->q);
+	  lane->size = 0;
+	}
+	pthread_spin_unlock(&lane->sp);
+      }
+    }
+  };
+
+  friend class XioConnection;
+
+  bool _shutdown;
+  bool drained;
+  bool idle;
+
+  pthread_spinlock_t sp;
+  pthread_mutex_t mtx;
+  pthread_cond_t cv;
+
+  // queues of decodable
+  SubmitQueue decode_q;
+
+  ceph_msg_header scratch_header;
+  ceph_msg_footer scratch_footer;
+
+public:
+  XioDecoder() :
+    _shutdown(false), drained(false), idle(false)
+    {
+      pthread_spin_init(&sp, PTHREAD_PROCESS_PRIVATE);
+      pthread_mutex_init(&mtx, NULL);
+      pthread_cond_init(&cv, NULL);
+    }
+
+    void *entry()
+    {
+      int size;
+      XioRecvMsg::Queue q;
+      XioRecvMsg::Queue::iterator q_iter;
+      XioRecvMsg* in_msg;
+
+      struct timespec ts;
+      const int ms_100 = 1000000 * 100;
+
+      do {
+	decode_q.deq(q);
+	size = q.size();
+
+	if (! size) {
+	  (void) clock_gettime(CLOCK_REALTIME_COARSE, &ts);
+	  ts.tv_nsec += ms_100;
+	  pthread_mutex_lock(&mtx);
+	  pthread_cond_timedwait(&cv, &mtx, &ts);
+	  pthread_mutex_unlock(&mtx);
+	  // at worst, we shut down in a few 100 ms
+	  if (_shutdown)
+	    break;
+	  continue;
+	}
+
+	if (size > 0) {
+	  q_iter = q.begin();
+	  while (q_iter != q.end()) {
+	    in_msg = &(*q_iter);
+	    q_iter = q.erase(q_iter);
+	    in_msg->xcon->decode_dispatch(this, in_msg); // disposes in_msg
+	  }
+	}
+      } while (!_shutdown);
+
+      /* shutting down */
+      return NULL;
+    }
+
+  void enqueue_for_decode(XioRecvMsg* in_msg) {
+
+    if (_shutdown) {
+      decode_q.enq(in_msg);
+    }
+
+    /* prod the decoder thread if it appears to be idle;  we will tolerate
+     * just missing a decoder going idle */
+    if (idle) {
+      pthread_cond_signal(&cv);
+    }
+  }
+
+  void shutdown() {
+    pthread_spin_lock(&sp);
+    _shutdown = true;
+    pthread_spin_unlock(&sp);
+
+    pthread_mutex_lock(&mtx);
+    pthread_cond_signal(&cv);
+    pthread_mutex_unlock(&mtx);
+  }
+}; /* XioDecoder */
+
 class XioPortal : public Thread
 {
 private:
@@ -101,6 +247,7 @@ private:
   struct xio_context *ctx;
   struct xio_server *server;
   SubmitQueue submit_q;
+  XioDecoder decoder;
   pthread_spinlock_t sp;
   pthread_mutex_t mtx;
   void *ev_loop;
@@ -113,13 +260,14 @@ private:
 
   friend class XioPortals;
   friend class XioMessenger;
+  friend class XioConnection;
 
 public:
   XioPortal(XioMessenger *_msgr) :
-  msgr(_msgr), ctx(NULL), server(NULL), submit_q(), xio_uri(""),
-  portal_id(NULL), _shutdown(false), drained(false),
-  magic(0),
-  special_handling(0)
+    msgr(_msgr), ctx(NULL), server(NULL), submit_q(), decoder(), xio_uri(""),
+    portal_id(NULL), _shutdown(false), drained(false),
+    magic(0),
+    special_handling(0)
     {
       pthread_spin_init(&sp, PTHREAD_PROCESS_PRIVATE);
       pthread_mutex_init(&mtx, NULL);
@@ -173,6 +321,9 @@ public:
       XioConnection *xcon;
       XioSubmit *xs;
       XioMsg *xmsg;
+
+      /* decoder thread */
+      decoder.create();
 
       do {
 	submit_q.deq(send_q);
@@ -241,6 +392,7 @@ public:
 	pthread_spin_lock(&sp);
 	xio_context_stop_loop(ctx, false);
 	_shutdown = true;
+	decoder.shutdown();
 	pthread_spin_unlock(&sp);
     }
 };

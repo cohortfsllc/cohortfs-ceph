@@ -135,6 +135,96 @@ int XioConnection::passive_setup()
   return (0);
 }
 
+static inline XioRecvMsg* pool_alloc_xio_recv_msg(
+  XioConnection *xcon, const buffer::ptr& p)
+{
+  struct xio_mempool_obj mp_mem;
+  int e = xpool_alloc(xio_msgr_noreg_mpool, sizeof(XioRecvMsg), &mp_mem);
+  if (!!e)
+    return NULL;
+  XioRecvMsg *in_msg = static_cast<XioRecvMsg*>(mp_mem.addr);
+  new (in_msg) XioRecvMsg(xcon, p, mp_mem);
+  return in_msg;
+}
+
+int XioConnection::decode_dispatch(XioDecoder* d, XioRecvMsg* in_msg)
+{
+  XioMessenger *msgr = static_cast<XioMessenger*>(get_messenger());
+
+  XioMsgHdr hdr(d->scratch_header, d->scratch_footer, in_msg->header_buf());
+
+  if (magic & (MSG_MAGIC_TRACE_XCON)) {
+    print_xio_msg_hdr("decode_dispatch", hdr, NULL);
+    dout(11) << "XioConnection.cc:on_msg_req msg detail"
+	     << " payload: " << in_msg->payload.length()
+	     << " (" << in_msg->payload.buffers().size() << ")"
+	     << " middle: " << in_msg->middle.length()
+	     << " (" << in_msg->middle.buffers().size() << ")"
+	     << " data: " << in_msg->data.length()
+	     << " (" << in_msg->data.buffers().size() << ")"
+	     << dendl;
+    dout(11) << "XioConnection.cc:on_msg_req payload dump: ";
+    in_msg->payload.hexdump( *_dout );
+    *_dout << dendl;
+  }
+
+
+  Message *m =
+    decode_message(msgr->cct,
+		   msgr->crcflags,
+		   d->scratch_header, d->scratch_footer,
+		   in_msg->payload, in_msg->middle, in_msg->data);
+
+  if (m) {
+    /* completion */
+    m->set_connection(this);
+
+    /* trace flag */
+    m->set_magic(magic);
+
+    /* update timestamps */
+    m->set_recv_stamp(in_msg->get_t1());
+    m->set_recv_complete_stamp(in_msg->get_t1());
+    m->set_seq(d->scratch_header.seq);
+
+    /* MP-SAFE */
+    state.set_in_seq(d->scratch_header.seq);
+
+    /* XXXX validate peer type */
+    if (peer_type != (int) hdr.peer_type) { /* XXX isn't peer_type -1? */
+      peer_type = hdr.peer_type;
+      peer_addr = hdr.addr;
+      peer.addr = peer_addr;
+      peer.name = hdr.hdr->src;
+      if (xio_conn_type == XioConnection::PASSIVE) {
+	/* XXX kick off feature/authn/authz negotiation
+	 * nb:  very possibly the active side should initiate this, but
+	 * for now, call a passive hook so OSD and friends can create
+	 * sessions without actually negotiating
+	 */
+	passive_setup();
+      }
+    }
+
+    if (magic & (MSG_MAGIC_TRACE_XCON)) {
+      dout(4) << "decode m is " << m->get_type() << dendl;
+    }
+
+    /* dispatch it */
+    msgr->ds_dispatch(m);
+  } else {
+    /* responds for undecoded messages and frees hook */
+    dout(4) << "decode m failed" << dendl;
+  }
+
+  /* release in_msg */
+  struct xio_mempool_obj *mp = &in_msg->mp_this;
+  in_msg->~XioRecvMsg();
+  xpool_free(sizeof(XioRecvMsg), mp);
+
+  return 0;
+}
+
 #define uint_to_timeval(tv, s) ((tv).tv_sec = (s), (tv).tv_usec = 0)
 
 int XioConnection::on_msg_req(struct xio_session *session,
@@ -163,7 +253,8 @@ int XioConnection::on_msg_req(struct xio_session *session,
   in_seq.append(req);
   if (in_seq.cnt > 0) {
     if (unlikely(magic & (MSG_MAGIC_TRACE_XCON))) {
-      dout(11) << __func__ << " in_seq.cnt > 0 (" << in_seq.cnt << ")" << dendl;
+      dout(11) << __func__ << " in_seq.cnt > 0 (" << in_seq.cnt << ")"
+	       << dendl;
     }
     return 0;
   }
@@ -174,221 +265,147 @@ int XioConnection::on_msg_req(struct xio_session *session,
     dout(11) << __func__ << " start decode" << dendl;
   }
 
-  XioMessenger *msgr = static_cast<XioMessenger*>(get_messenger());
-  ceph_msg_header header;
-  ceph_msg_footer footer;
-  buffer::list payload, middle, data;
-
-  struct timeval t1, t2;
-
+  /* unpack sequence */
   list<struct xio_msg *>& msg_seq = in_seq.seq;
   list<struct xio_msg *>::iterator msg_iter = msg_seq.begin();
 
   dout(11) << __func__ << " " << "msg_seq.size()="  << msg_seq.size()
-	  << dendl;
+	   << dendl;
 
   treq = *msg_iter;
-  XioMsgHdr hdr(header, footer,
-		buffer::create_static(treq->in.header.iov_len,
-				    (char*) treq->in.header.iov_base));
 
-  uint_to_timeval(t1, treq->timestamp);
+  XioRecvMsg* in_msg = pool_alloc_xio_recv_msg(
+    this, buffer::create_static(treq->in.header.iov_len,
+				(char*) treq->in.header.iov_base));
 
-  if (magic & (MSG_MAGIC_TRACE_XCON)) {
-      print_xio_msg_hdr("on_msg_req", hdr, NULL);
-  }
-
-  struct xio_iovec_ex *msg_iov, *iovs;
-  buffer::ptr bp;
-  unsigned int ix, blen, iov_len, msg_off = 0;
-  uint32_t take_len, left_len = 0;
-
-  ix = 0;
-  blen = header.front_len;
-  while (blen && (msg_iter != msg_seq.end())) {
-    treq = *msg_iter;
-    iov_len = vmsg_sglist_nents(&treq->in);
-    iovs = vmsg_sglist(&treq->in);
-    for (; blen && (ix < iov_len); ++ix) {
-      msg_iov = &iovs[ix];
-      bp = buffer::ptr(buffer::ptr_to_raw(msg_iov->user_context));
-      /* XXX need to detect any buffer which needs to be
-       * split due to coalescing of a segment (front, middle,
-       * data) boundary */
-      take_len = MIN(blen, msg_iov->iov_len);
-      if (take_len == msg_iov->iov_len)
-	payload.append(bp);
-      else {
-	// XXXX this means we need to deal with disposing bp when
-	// consumed?  I think no.
-	payload.append(buffer::ptr(bp, msg_off, take_len));
-      }
-      blen -= take_len;
-      if (! blen) {
-	left_len = msg_iov->iov_len - take_len;
-	if (left_len)
-	  msg_off += take_len;
-      }
-    }
-    /* XXX as above, if a buffer is split, then we needed to track
-     * the new start (carry) and not advance */
-    if (ix == iov_len) {
-      ++msg_iter;
-      msg_off = 0;
-      ix = 0;
-    }
-  }
-
-  blen = header.middle_len;
-
-  if (blen && left_len) {
-    middle.append(bp, msg_off, left_len);
-    blen -= left_len;
-    left_len = 0;
-  }
-
-  while (blen && (msg_iter != msg_seq.end())) {
-    treq = *msg_iter;
-    iov_len = vmsg_sglist_nents(&treq->in);
-    iovs = vmsg_sglist(&treq->in);
-    for (; blen && (ix < iov_len); ++ix) {
-      msg_iov = &iovs[ix];
-      bp = buffer::ptr(buffer::ptr_to_raw(msg_iov->user_context));
-      /* XXX need to detect any buffer which needs to be
-       * split due to coalescing of a segment (front, middle,
-       * data) boundary */
-      take_len = MIN(blen, msg_iov->iov_len);
-      if (take_len == msg_iov->iov_len)
-	middle.append(bp);
-      else {
-	// XXXX this means we need to deal with disposing bp when
-	// consumed?
-	middle.append(buffer::ptr(bp, msg_off, take_len));
-      }
-      blen -= take_len;
-      if (! blen) {
-	left_len = msg_iov->iov_len - take_len;
-	if (left_len)
-	  msg_off += take_len;
-      }
-    }
-    /* XXX as above, if a buffer is split, then we needed to track
-     * the new start (carry) and not advance */
-    if (ix == iov_len) {
-      ++msg_iter;
-      msg_off = 0;
-      ix = 0;
-    }
-  }
-
-  blen = header.data_len;
-
-  if (blen && left_len) {
-    data.append(bp, msg_off, left_len);
-    blen -= left_len;
-    left_len = 0;
-  }
-
-  while (blen && (msg_iter != msg_seq.end())) {
-    treq = *msg_iter;
-    iov_len = vmsg_sglist_nents(&treq->in);
-    iovs = vmsg_sglist(&treq->in);
-    for (; blen && (ix < iov_len); ++ix) {
-      msg_iov = &iovs[ix];
-      bp = buffer::ptr(buffer::ptr_to_raw(msg_iov->user_context));
-      /* XXX need to detect any buffer which needs to be
-       * split due to coalescing of a segment (front, middle,
-       * data) boundary */
-      take_len = MIN(blen, msg_iov->iov_len);
-      if (take_len == msg_iov->iov_len)
-	data.append(bp);
-      else {
-	// XXXX this means we need to deal with disposing bp when
-	// consumed?
-	data.append(buffer::ptr(bp, msg_off, take_len));
-      }
-      blen -= take_len;
-      if (! blen) {
-	left_len = msg_iov->iov_len - take_len;
-	if (left_len)
-	  msg_off += take_len;
-      }
-    }
-    /* XXX as above, if a buffer is split, then we needed to track
-     * the new start (carry) and not advance */
-    if (ix == iov_len) {
-      ++msg_iter;
-      msg_off = 0;
-      ix = 0;
-    }
-  }
-
-  if (magic & (MSG_MAGIC_TRACE_XCON)) {
-    dout(11) << "XioConnection.cc:on_msg_req msg detail"
-	     << " payload: " << payload.length()
-	     << " (" << payload.buffers().size() << ")"
-	     << " middle: " << middle.length()
-	     << " (" << middle.buffers().size() << ")"
-	     << " data: " << data.length()
-	     << " (" << data.buffers().size() << ")"
-	     << dendl;
-    dout(11) << "XioConnection.cc:on_msg_req payload dump: ";
-    payload.hexdump( *_dout );
-    *_dout << dendl;
-  }
-
-  in_seq.release(); // release Accelio msgs, clear buffers
-
-  uint_to_timeval(t2, treq->timestamp);
-
-  /* update connection timestamp */
+  /* update msg and connection timestamps */
+  uint_to_timeval(in_msg->get_t1(), treq->timestamp);
   recv.set(treq->timestamp);
 
-  Message *m =
-    decode_message(msgr->cct, msgr->crcflags, header, footer, payload,
-		   middle, data);
+  struct xio_iovec_ex *msg_iov, *iovs;
+  uint32_t ix = 0, blen, iov_len, msg_off = 0;
+  uint32_t take_len, left_len = 0;
+  buffer::ptr bp;
 
-  if (m) {
-    /* completion */
-    m->set_connection(this);
+  blen = in_msg->front_len;
 
-    /* trace flag */
-    m->set_magic(magic);
-
-    /* update timestamps */
-    m->set_recv_stamp(t1);
-    m->set_recv_complete_stamp(t2);
-    m->set_seq(header.seq);
-
-    /* MP-SAFE */
-    state.set_in_seq(header.seq);
-
-    /* XXXX validate peer type */
-    if (peer_type != (int) hdr.peer_type) { /* XXX isn't peer_type -1? */
-      peer_type = hdr.peer_type;
-      peer_addr = hdr.addr;
-      peer.addr = peer_addr;
-      peer.name = hdr.hdr->src;
-      if (xio_conn_type == XioConnection::PASSIVE) {
-	/* XXX kick off feature/authn/authz negotiation
-	 * nb:  very possibly the active side should initiate this, but
-	 * for now, call a passive hook so OSD and friends can create
-	 * sessions without actually negotiating
-	 */
-	passive_setup();
+  while (blen && (msg_iter != msg_seq.end())) {
+    treq = *msg_iter;
+    iov_len = vmsg_sglist_nents(&treq->in);
+    iovs = vmsg_sglist(&treq->in);
+    for (; blen && (ix < iov_len); ++ix) {
+      msg_iov = &iovs[ix];
+      bp = buffer::ptr(buffer::ptr_to_raw(msg_iov->user_context));
+      /* XXX need to detect any buffer which needs to be
+       * split due to coalescing of a segment (front, middle,
+       * data) boundary */
+      take_len = MIN(blen, msg_iov->iov_len);
+      if (take_len == msg_iov->iov_len)
+	in_msg->payload.append(bp);
+      else {
+	in_msg->payload.append(buffer::ptr(bp, msg_off, take_len));
+      }
+      blen -= take_len;
+      if (! blen) {
+	left_len = msg_iov->iov_len - take_len;
+	if (left_len)
+	  msg_off += take_len;
       }
     }
-
-    if (magic & (MSG_MAGIC_TRACE_XCON)) {
-      dout(4) << "decode m is " << m->get_type() << dendl;
+    /* XXX as above, if a buffer is split, then we needed to track
+     * the new start (carry) and not advance */
+    if (ix == iov_len) {
+      ++msg_iter;
+      msg_off = 0;
+      ix = 0;
     }
-
-    /* dispatch it */
-    msgr->ds_dispatch(m);
-  } else {
-    /* responds for undecoded messages and frees hook */
-    dout(4) << "decode m failed" << dendl;
   }
+
+  blen = in_msg->middle_len;
+
+  if (blen && left_len) {
+    in_msg->middle.append(bp, msg_off, left_len);
+    blen -= left_len;
+    left_len = 0;
+  }
+
+  while (blen && (msg_iter != msg_seq.end())) {
+    treq = *msg_iter;
+    iov_len = vmsg_sglist_nents(&treq->in);
+    iovs = vmsg_sglist(&treq->in);
+    for (; blen && (ix < iov_len); ++ix) {
+      msg_iov = &iovs[ix];
+      bp = buffer::ptr(buffer::ptr_to_raw(msg_iov->user_context));
+      /* XXX need to detect any buffer which needs to be
+       * split due to coalescing of a segment (front, middle,
+       * data) boundary */
+      take_len = MIN(blen, msg_iov->iov_len);
+      if (take_len == msg_iov->iov_len)
+	in_msg->middle.append(bp);
+      else {
+	in_msg->middle.append(buffer::ptr(bp, msg_off, take_len));
+      }
+      blen -= take_len;
+      if (! blen) {
+	left_len = msg_iov->iov_len - take_len;
+	if (left_len)
+	  msg_off += take_len;
+      }
+    }
+    /* XXX as above, if a buffer is split, then we needed to track
+     * the new start (carry) and not advance */
+    if (ix == iov_len) {
+      ++msg_iter;
+      msg_off = 0;
+      ix = 0;
+    }
+  }
+
+  blen = in_msg->data_len;
+
+  if (blen && left_len) {
+    in_msg->data.append(bp, msg_off, left_len);
+    blen -= left_len;
+    left_len = 0;
+  }
+
+  while (blen && (msg_iter != msg_seq.end())) {
+    treq = *msg_iter;
+    iov_len = vmsg_sglist_nents(&treq->in);
+    iovs = vmsg_sglist(&treq->in);
+    for (; blen && (ix < iov_len); ++ix) {
+      msg_iov = &iovs[ix];
+      bp = buffer::ptr(buffer::ptr_to_raw(msg_iov->user_context));
+      /* XXX need to detect any buffer which needs to be
+       * split due to coalescing of a segment (front, middle,
+       * data) boundary */
+      take_len = MIN(blen, msg_iov->iov_len);
+      if (take_len == msg_iov->iov_len)
+	in_msg->data.append(bp);
+      else {
+	in_msg->data.append(buffer::ptr(bp, msg_off, take_len));
+      }
+      blen -= take_len;
+      if (! blen) {
+	left_len = msg_iov->iov_len - take_len;
+	if (left_len)
+	  msg_off += take_len;
+      }
+    }
+    /* XXX as above, if a buffer is split, then we needed to track
+     * the new start (carry) and not advance */
+    if (ix == iov_len) {
+      ++msg_iter;
+      msg_off = 0;
+      ix = 0;
+    }
+  }
+
+  /* enqueue for out-of-line decode */
+  portal->decoder.enqueue_for_decode(in_msg);
+
+  /* release Accelio msgs */
+  in_seq.release();
 
   return 0;
 }

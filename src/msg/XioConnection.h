@@ -33,6 +33,8 @@ namespace bi = boost::intrusive;
 
 class XioPortal;
 class XioMessenger;
+class XioConnection;
+class XioDecoder;
 class XioMsg;
 
 class XioMsgCnt
@@ -47,6 +49,58 @@ public:
       buffer::list::iterator bl_iter = bl.begin();
       ::decode(msg_cnt, bl_iter);
     }
+};
+
+class XioRecvMsg
+{
+private:
+  XioConnection *xcon;
+  struct xio_mempool_obj mp_this;
+  bi::list_member_hook<> decode_list;
+
+  friend class XioDecoder;
+  friend class XioConnection;
+
+public:
+  __le32 msg_cnt;
+  __le32 front_len; /* bytes in main payload */
+  __le32 middle_len;/* bytes in middle payload */
+  __le32 data_len;  /* bytes of data payload */
+  __le16 data_off;  /* sender: include full offset;
+		       receiver: mask against ~PAGE_MASK */
+  buffer::list bl; // header
+  buffer::list payload, middle, data; // incoming msg
+
+  struct timeval t1, t2;
+
+  typedef bi::list< XioRecvMsg,
+		    bi::member_hook< XioRecvMsg,
+				     bi::list_member_hook<>,
+				     &XioRecvMsg::decode_list >
+		    > Queue;
+
+  XioRecvMsg(XioConnection *_xcon, const buffer::ptr& p,
+	     struct xio_mempool_obj& _mp)
+    : xcon(_xcon),
+      mp_this(_mp)
+    {
+      bl.append(p);
+      buffer::list::iterator bl_iter = bl.begin();
+      ::decode(msg_cnt, bl_iter);
+      ::decode(front_len, bl);
+      ::decode(middle_len, bl);
+      ::decode(data_len, bl);
+      ::decode(data_off, bl);
+    }
+
+  ~XioRecvMsg() {}
+
+  struct timeval& get_t1() { return t1; }
+  struct timeval& get_t2() { return t2; }
+
+  const buffer::ptr& header_buf() {
+    return bl.buffers().front();
+  }
 };
 
 #define XMSGR_ASSIGN_BUF 0x01 /* safe for marked pointers, etc */
@@ -248,6 +302,8 @@ public:
 
   int on_msg_error(struct xio_session *session, enum xio_status error,
 		   struct xio_msg  *msg, void *conn_user_context);
+
+  int decode_dispatch(XioDecoder* d, XioRecvMsg* in_msg);
 
   void msg_send_fail(XioMsg *xmsg, int code);
 
