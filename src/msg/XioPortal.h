@@ -125,6 +125,7 @@ public:
 
       struct timespec ts;
       const int ms_100 = 1000000 * 100;
+      const int ms_500 = 1000000 * 500;
 
       do {
 	decode_q.deq(q);
@@ -132,7 +133,7 @@ public:
 
 	if (! size) {
 	  (void) clock_gettime(CLOCK_REALTIME_COARSE, &ts);
-	  ts.tv_nsec += ms_100;
+	  ts.tv_sec += 5;
 	  pthread_mutex_lock(&mtx);
 	  pthread_cond_timedwait(&cv, &mtx, &ts);
 	  pthread_mutex_unlock(&mtx);

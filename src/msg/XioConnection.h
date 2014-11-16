@@ -58,6 +58,9 @@ private:
   struct xio_mempool_obj mp_this;
   bi::list_member_hook<> decode_list;
 
+  char buf[256];
+  int len;
+
   friend class XioDecoder;
   friend class XioConnection;
 
@@ -79,18 +82,23 @@ public:
 				     &XioRecvMsg::decode_list >
 		    > Queue;
 
-  XioRecvMsg(XioConnection *_xcon, const buffer::ptr& p,
-	     struct xio_mempool_obj& _mp)
+   XioRecvMsg(XioConnection *_xcon, struct xio_msg* msg,
+	      struct xio_mempool_obj& _mp)
     : xcon(_xcon),
       mp_this(_mp)
     {
+      memcpy(buf, msg->in.header.iov_base, msg->in.header.iov_len);
+      len = msg->in.header.iov_len;
+
+      buffer::ptr p(buffer::create_static(len, buf));
+
       bl.append(p);
       buffer::list::iterator bl_iter = bl.begin();
       ::decode(msg_cnt, bl_iter);
-      ::decode(front_len, bl);
-      ::decode(middle_len, bl);
-      ::decode(data_len, bl);
-      ::decode(data_off, bl);
+      ::decode(front_len, bl_iter);
+      ::decode(middle_len, bl_iter);
+      ::decode(data_len, bl_iter);
+      ::decode(data_off, bl_iter);
     }
 
   ~XioRecvMsg() {}

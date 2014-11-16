@@ -136,20 +136,23 @@ int XioConnection::passive_setup()
 }
 
 static inline XioRecvMsg* pool_alloc_xio_recv_msg(
-  XioConnection *xcon, const buffer::ptr& p)
+  XioConnection *xcon, struct xio_msg *msg)
 {
   struct xio_mempool_obj mp_mem;
   int e = xpool_alloc(xio_msgr_noreg_mpool, sizeof(XioRecvMsg), &mp_mem);
   if (!!e)
     return NULL;
   XioRecvMsg *in_msg = static_cast<XioRecvMsg*>(mp_mem.addr);
-  new (in_msg) XioRecvMsg(xcon, p, mp_mem);
+  new (in_msg) XioRecvMsg(xcon, msg, mp_mem);
   return in_msg;
 }
 
 int XioConnection::decode_dispatch(XioDecoder* d, XioRecvMsg* in_msg)
 {
   XioMessenger *msgr = static_cast<XioMessenger*>(get_messenger());
+
+  buffer::ptr p(buffer::create_static(
+		  in_msg->len, in_msg->buf));
 
   XioMsgHdr hdr(d->scratch_header, d->scratch_footer, in_msg->header_buf());
 
@@ -274,9 +277,7 @@ int XioConnection::on_msg_req(struct xio_session *session,
 
   treq = *msg_iter;
 
-  XioRecvMsg* in_msg = pool_alloc_xio_recv_msg(
-    this, buffer::create_static(treq->in.header.iov_len,
-				(char*) treq->in.header.iov_base));
+  XioRecvMsg* in_msg = pool_alloc_xio_recv_msg(this, treq);
 
   /* update msg and connection timestamps */
   uint_to_timeval(in_msg->get_t1(), treq->timestamp);
