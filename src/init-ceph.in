@@ -38,13 +38,21 @@ usage_exit() {
 
 # behave if we are not completely installed (e.g., Debian "removed,
 # config remains" state)
-test -f $BINDIR/ceph_common.sh || exit 0
+test -f $LIBDIR/ceph_common.sh || exit 0
 
-. $BINDIR/ceph_common.sh
+. $LIBDIR/ceph_common.sh
 
 EXIT_STATUS=0
 
-export LD_LIBRARY_PATH=/opt/accelio-up2/lib/:/opt/ofed/lib
+XIO_PREFIX=@Xio_PREFIX@
+OFED_PREFIX=@OFED_PREFIX@
+
+if [ -n "${XIO_PREFIX}" ]; then
+	export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:@XIO_PREFIX@
+fi
+if [ -n "${OFED_PREFIX}" ]; then
+	export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:@OFED_PREFIX@
+fi
 
 signal_daemon() {
     name=$1
@@ -320,19 +328,6 @@ for name in $what; do
 		fi
 	    fi
 
-	    if [ "$type" = "osd" ]; then
-		get_conf update_crush "" "osd crush update on start"
-		if [ "${update_crush:-1}" = "1" -o "${update_crush:-1}" = "true" ]; then
-		    # update location in crush
-		    get_conf osd_location_hook "$BINDIR/ceph-crush-location" "osd crush location hook"
-		    osd_location=`$osd_location_hook --cluster ceph --id $id --type osd`
-		    get_conf osd_weight "" "osd crush initial weight"
-		    defaultweight="$(df -P -k $osd_data/. | tail -1 | awk '{ print sprintf("%.2f",$2/1073741824) }')"
-		    get_conf osd_keyring "$osd_data/keyring" "keyring"
-		    do_cmd "timeout 30 $BINDIR/ceph -c $conf --name=osd.$id --keyring=$osd_keyring osd crush create-or-move -- $id ${osd_weight:-${defaultweight:-1}} $osd_location"
-		fi
-	    fi
-
 	    echo Starting Ceph $name on $host...
 	    mkdir -p $run_dir
 	    get_conf pre_start_eval "" "pre start eval"
@@ -445,12 +440,5 @@ for name in $what; do
 	    ;;
     esac
 done
-
-# activate latent osds?
-if [ "$command" = "start" -a "$BINDIR" != "." ]; then
-    if [ "$*" = "" ] || echo $* | grep -q ^osd\$ ; then
-	ceph-disk activate-all
-    fi
-fi
 
 exit $EXIT_STATUS
