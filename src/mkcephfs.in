@@ -47,8 +47,6 @@
 
 set -e
 
-trap 'echo "\nWARNING: mkcephfs is now deprecated in favour of ceph-deploy. Please see: \n http://github.com/ceph/ceph-deploy"' EXIT
-
 # if we start up as ./mkcephfs, assume everything else is in the
 # current directory too.
 if [ `dirname $0` = "." ] && [ $PWD != "/etc/init.d" ]; then
@@ -57,8 +55,11 @@ if [ `dirname $0` = "." ] && [ $PWD != "/etc/init.d" ]; then
     ETCDIR=.
 else
     BINDIR=@bindir@
-    LIBDIR=@libdir@/ceph
+    LIBDIRBASE=@libdir@
+    LIBDIR=${LIBDIRBASE}/ceph
     ETCDIR=@sysconfdir@/ceph
+    export LD_LIBRARY_PATH="${LIBDIRBASE}"
+    export PYTHONPATH="${LIBDIRBASE}/python2.7/site-packages"
 fi
 
 usage_exit() {
@@ -486,14 +487,14 @@ if [ $allhosts -eq 1 ]; then
 
 	    if [ $nocopyconf -eq 0 ]; then
 		# also put conf at /etc/ceph/ceph.conf
-		scp -q $dir/conf $host:/etc/ceph/ceph.conf
+		scp -q $dir/conf $host:${ETCDIR}/ceph.conf
 	    fi
 	else
 	    rdir=$dir
 
 	    if [ $nocopyconf -eq 0 ]; then
 		# also put conf at /etc/ceph/ceph.conf
-		cp $dir/conf /etc/ceph/ceph.conf
+		cp $dir/conf ${ETCDIR}/ceph.conf
 	    fi
 	fi
 
@@ -533,14 +534,14 @@ if [ $allhosts -eq 1 ]; then
 
 	    if [ $nocopyconf -eq 0 ]; then
 		# also put conf at /etc/ceph/ceph.conf
-		scp -q $dir/conf $host:/etc/ceph/ceph.conf
+		scp -q $dir/conf $host:${ETCDIR}/ceph.conf
 	    fi
 	else
 	    rdir=$dir
 
 	    if [ $nocopyconf -eq 0 ]; then
 	        # also put conf at /etc/ceph/ceph.conf
-		cp $dir/conf /etc/ceph/ceph.conf
+		cp $dir/conf ${ETCDIR}/ceph.conf
 	    fi
 	fi
 
@@ -554,7 +555,7 @@ if [ $allhosts -eq 1 ]; then
 
     # admin keyring
     if [ -z "$adminkeyring" ]; then
-	get_conf adminkeyring "/etc/ceph/keyring" "keyring" global
+	get_conf adminkeyring "${ETCDIR}/keyring" "keyring" global
     fi
     echo "placing client.admin keyring in $adminkeyring"
     cp $dir/keyring.admin $adminkeyring
