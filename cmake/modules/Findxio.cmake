@@ -7,9 +7,9 @@
 
 set(_xio_include_path ${HT_DEPENDENCY_INCLUDE_DIR})
 set(_xio_lib_path ${HT_DEPENDENCY_LIB_DIR})
-if (EXISTS ${WITH_XIO})
-  list(APPEND _xio_include_path "${WITH_XIO}/include")
-  list(APPEND _xio_lib_path "${WITH_XIO}/lib")
+if (EXISTS ${XIO_PREFIX})
+ list(APPEND _xio_include_path "${XIO_PREFIX}/include")
+ list(APPEND _xio_lib_path "${XIO_PREFIX}/lib")
 else()
   list(APPEND _xio_include_path /usr/include /usr/local/include /opt/accelio/include)
   list(APPEND _xio_lib_path /lib /usr/lib /usr/local/lib /opt/accelio/lib)
