@@ -68,7 +68,7 @@ include_directories(".")
 #include_directories("./include")
 
 add_subdirectory(blkin)
-include_directories(blkin)
+include_directories(blkin/blkin-lib)
 
 if(${WITH_TCMALLOC})
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free")
