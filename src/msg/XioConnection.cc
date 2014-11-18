@@ -138,6 +138,19 @@ int XioConnection::passive_setup()
 
 #define uint_to_timeval(tv, s) ((tv).tv_sec = (s), (tv).tv_usec = 0)
 
+static inline XioCompletionHook* pool_alloc_xio_completion_hook(
+  XioConnection *xcon, Message *m, XioInSeq& msg_seq)
+{
+  struct xio_mempool_obj mp_mem;
+  int e = xpool_alloc(xio_msgr_noreg_mpool,
+		      sizeof(XioCompletionHook), &mp_mem);
+  if (!!e)
+    return NULL;
+  XioCompletionHook *xhook = (XioCompletionHook*) mp_mem.addr;
+  new (xhook) XioCompletionHook(xcon, m, msg_seq, mp_mem);
+  return xhook;
+}
+
 int XioConnection::on_msg_req(struct xio_session *session,
 			      struct xio_msg *req,
 			      int more_in_batch,
