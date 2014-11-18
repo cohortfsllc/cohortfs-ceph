@@ -424,7 +424,7 @@ FileStore::FileStore(const std::string &base, const std::string &jdev, const cha
   force_sync(false), sync_epoch(0),
   timer(g_ceph_context, sync_entry_timeo_lock),
   stop(false), sync_thread(this),
-  trace_endpoint(ZTracer::ZTraceEndpoint::create("0.0.0.0", 0, "FileStore")),
+  trace_endpoint(ZTracer::ZTraceEndpoint::create("0.0.0.0", 0, "FileStore (" + basedir + ")")),
   fdcache(g_ceph_context),
   wbthrottle(g_ceph_context),
   default_osr("default"),
@@ -1634,6 +1634,7 @@ void FileStore::_finish_op(OpSequencer *osr)
   dout(10) << "_finish_op " << o << " seq " << o->op << " " << *osr << "/" << osr->parent << dendl;
   osr->apply_lock.Unlock();  // locked in _do_op
   o->trace->event("_finish_op");
+  o->trace->event("end");
 
   // called with tp lock held
   op_queue_release_throttle(o);
@@ -1651,19 +1652,6 @@ void FileStore::_finish_op(OpSequencer *osr)
 }
 
 
-struct C_JournaledInParallel : public Context {
-  ZTracer::ZTraceRef trace;
-  Context *ondisk;
-  C_JournaledInParallel(ZTracer::ZTraceRef &parent, Context *ondisk)
-    : trace(ZTracer::ZTrace::create("journal", parent)), ondisk(ondisk) {
-    trace->event("parallel journal started");
-  }
-  void finish(int r) {
-    trace->event("parallel journal finished");
-    ondisk->complete(r);
-  }
-};
-
 struct C_JournaledAhead : public Context {
   FileStore *fs;
   FileStore::OpSequencer *osr;
@@ -1674,19 +1662,6 @@ struct C_JournaledAhead : public Context {
     fs(f), osr(os), o(o), ondisk(ondisk) { }
   void finish(int r) {
     fs->_journaled_ahead(osr, o, ondisk);
-  }
-};
-
-struct C_JournaledTrailing : public Context {
-  ZTracer::ZTraceRef trace;
-  Context *ondisk;
-  C_JournaledTrailing(ZTracer::ZTraceRef &parent, Context *ondisk)
-    : trace(ZTracer::ZTrace::create("journal", parent)), ondisk(ondisk) {
-    trace->event("trailing journal started");
-  }
-  void finish(int r) {
-    trace->event("trailing journal finished");
-    ondisk->complete(r);
   }
 };
 
@@ -1721,39 +1696,38 @@ int FileStore::queue_transactions(Sequencer *posr, list<Transaction*> &tls,
     dout(5) << "queue_transactions new " << *osr << "/" << osr->parent << dendl;
   }
 
+  ZTracer::ZTraceRef trace = ZTracer::ZTrace::create("op", trace_endpoint);
+
   if (journal && journal->is_writeable() && !m_filestore_journal_trailing) {
     Op *o = build_op(tls, onreadable, onreadable_sync, osd_op);
     op_queue_reserve_throttle(o, handle);
     journal->throttle();
     uint64_t op_num = submit_manager.op_submit_start();
     o->op = op_num;
-    {
-      stringstream ss;
-      ss << "op." << o->op;
-      o->trace = ZTracer::ZTrace::create(ss.str(), trace_endpoint);
-    }
+    o->trace = trace;
+    o->trace->keyval("opnum", op_num);
 
     if (m_filestore_do_dump)
       dump_transactions(o->tls, o->op, osr);
 
     if (m_filestore_journal_parallel) {
       dout(5) << "queue_transactions (parallel) " << o->op << " " << o->tls << dendl;
+      o->trace->keyval("journal mode", "parallel");
 
-      _op_journal_transactions(o->tls, o->op,
-			       new C_JournaledInParallel(o->trace, ondisk),
-			       osd_op);
+      _op_journal_transactions(o->tls, o->op, ondisk, osd_op, o->trace);
 
       // queue inside submit_manager op submission lock
       queue_op(osr, o);
     } else if (m_filestore_journal_writeahead) {
       dout(5) << "queue_transactions (writeahead) " << o->op << " " << o->tls << dendl;
+      o->trace->keyval("journal mode", "writeahead");
 
       osr->queue_journal(o->op);
 
       o->trace->event("writeahead journal started");
       _op_journal_transactions(o->tls, o->op,
 			       new C_JournaledAhead(this, osr, o, ondisk),
-			       osd_op);
+			       osd_op, o->trace);
     } else {
       assert(0);
     }
@@ -1763,12 +1737,7 @@ int FileStore::queue_transactions(Sequencer *posr, list<Transaction*> &tls,
 
   uint64_t op = submit_manager.op_submit_start();
   dout(5) << "queue_transactions (trailing journal) " << op << " " << tls << dendl;
-  ZTracer::ZTraceRef trace;
-  {
-    stringstream ss;
-    ss << "op." << op;
-    trace = ZTracer::ZTrace::create(ss.str(), trace_endpoint);
-  }
+  trace->keyval("journal mode", "trailing");
 
   if (m_filestore_do_dump)
     dump_transactions(tls, op, osr);
@@ -1779,9 +1748,7 @@ int FileStore::queue_transactions(Sequencer *posr, list<Transaction*> &tls,
   int r = do_transactions(tls, op);
 
   if (r >= 0) {
-    _op_journal_transactions(tls, op,
-			     new C_JournaledTrailing(trace, ondisk),
-			     osd_op);
+    _op_journal_transactions(tls, op, ondisk, osd_op, trace);
   } else {
     delete ondisk;
   }
@@ -1796,6 +1763,7 @@ int FileStore::queue_transactions(Sequencer *posr, list<Transaction*> &tls,
   submit_manager.op_submit_finish(op);
   trace->event("op_apply_finish");
   apply_manager.op_apply_finish(op);
+  trace->event("end");
 
   return r;
 }

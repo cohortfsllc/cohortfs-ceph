@@ -245,7 +245,7 @@ void JournalingObjectStore::ApplyManager::commit_finish()
 
 void JournalingObjectStore::_op_journal_transactions(
   list<ObjectStore::Transaction*>& tls, uint64_t op,
-  Context *onjournal, OpRequestRef osd_op)
+  Context *onjournal, OpRequestRef osd_op, ZTracer::ZTraceRef trace)
 {
   dout(10) << "op_journal_transactions " << op << " " << tls << dendl;
 
@@ -263,7 +263,7 @@ void JournalingObjectStore::_op_journal_transactions(
       }
       ::encode(*t, tbl);
     }
-    journal->submit_entry(op, tbl, data_align, onjournal, osd_op);
+    journal->submit_entry(op, tbl, data_align, onjournal, osd_op, trace);
   } else if (onjournal) {
     apply_manager.add_waiter(op, onjournal);
   }

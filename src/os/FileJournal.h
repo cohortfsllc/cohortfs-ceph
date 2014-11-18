@@ -24,6 +24,7 @@ using std::deque;
 #include "common/Mutex.h"
 #include "common/Thread.h"
 #include "common/Throttle.h"
+#include <ztracer.hpp>
 
 #ifdef HAVE_LIBAIO
 # include <libaio.h>
@@ -42,9 +43,10 @@ public:
     Context *finish;
     utime_t start;
     OpRequestRef op;
-    completion_item(uint64_t o, Context *c, utime_t s,
-		    OpRequestRef opref)
-      : seq(o), finish(c), start(s), op(opref) {}
+    ZTracer::ZTraceRef trace;
+    completion_item(uint64_t o, Context *c, utime_t s, OpRequestRef opref,
+	ZTracer::ZTraceRef trace)
+      : seq(o), finish(c), start(s), op(opref), trace(trace) {}
     completion_item() : seq(0), finish(0), start(0) {}
   };
   struct write_item {
@@ -52,13 +54,16 @@ public:
     bufferlist bl;
     int alignment;
     OpRequestRef op;
-    write_item(uint64_t s, bufferlist& b, int al, OpRequestRef opref) :
-      seq(s), alignment(al), op(opref) {
+    ZTracer::ZTraceRef trace;
+    write_item(uint64_t s, bufferlist& b, int al, OpRequestRef opref,
+	ZTracer::ZTraceRef trace)
+      : seq(s), alignment(al), op(opref), trace(trace) {
       bl.claim(b);
     }
     write_item() : seq(0), alignment(0) {}
   };
 
+  ZTracer::ZTraceEndpointRef trace_endpoint;
   Mutex finisher_lock;
   Cond finisher_cond;
   uint64_t journaled_seq;
@@ -90,7 +95,8 @@ public:
 
   void submit_entry(uint64_t seq, bufferlist& bl, int alignment,
 		    Context *oncommit,
-		    OpRequestRef osd_op = OpRequestRef());
+		    OpRequestRef osd_op = OpRequestRef(),
+		    ZTracer::ZTraceRef parent = ZTracer::ZTraceRef());
   /// End protected by finisher_lock
 
   /*
@@ -361,7 +367,8 @@ private:
     throttle_bytes(g_ceph_context, "filestore_bytes"),
     write_stop(false),
     write_thread(this),
-    write_finish_thread(this) { }
+    write_finish_thread(this),
+    trace_endpoint(ZTracer::ZTraceEndpoint::create("0.0.0.0", 0, string("Journal (") + f + ")")) {}
   ~FileJournal() {
     delete[] zero_buf;
   }

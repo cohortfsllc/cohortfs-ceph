@@ -190,6 +190,8 @@ private:
     void queue(Op *o) {
       Mutex::Locker l(qlock);
       q.push_back(o);
+      if (o->trace)
+	o->trace->keyval("queue depth", q.size());
     }
     Op *peek_queue() {
       assert(apply_lock.is_locked());

@@ -111,7 +111,8 @@ protected:
   int journal_replay(uint64_t fs_op_seq);
 
   void _op_journal_transactions(list<ObjectStore::Transaction*>& tls, uint64_t op,
-				Context *onjournal, OpRequestRef osd_op);
+				Context *onjournal, OpRequestRef osd_op,
+				ZTracer::ZTraceRef trace);
 
   virtual int do_transactions(list<ObjectStore::Transaction*>& tls, uint64_t op_seq) = 0;
 
