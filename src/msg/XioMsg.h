@@ -24,6 +24,7 @@ extern "C" {
 #include "XioConnection.h"
 #include "msg/msg_types.h"
 #include "XioPool.h"
+#include "XioInSeq.h"
 
 namespace bi = boost::intrusive;
 
@@ -272,7 +273,110 @@ public:
       /* submit queue ref */
       xcon->put();
     }
-};
+}; /* XioMsg */
+
+class XioCompletionHook : public Message::CompletionHook
+{
+private:
+  XioConnection *xcon;
+  XioInSeq msg_seq;
+  XioPool rsp_pool;
+  atomic_t nrefs;
+  bool cl_flag;
+  friend class XioConnection;
+  friend class XioMessenger;
+public:
+  struct xio_mempool_obj mp_this;
+
+  XioCompletionHook(XioConnection *_xcon, Message *_m, XioInSeq& _msg_seq,
+		    struct xio_mempool_obj& _mp) :
+    CompletionHook(_m),
+    xcon(_xcon->get()),
+    msg_seq(_msg_seq),
+    rsp_pool(xio_msgr_noreg_mpool),
+    nrefs(1),
+    cl_flag(false),
+    mp_this(_mp)
+    {
+      ++xcon->n_reqs; // atomicity by portal thread
+    }
+
+  virtual void finish(int r) {
+    this->put();
+  }
+
+  virtual void complete(int r) {
+    finish(r);
+  }
+
+  int release_msgs();
+
+  XioCompletionHook* get() {
+    nrefs.inc(); return this;
+  }
+  virtual void set_message(Message *_m) {
+    m = _m;
+  }
+
+  void put(int n) {
+    int refs = nrefs.sub(n);
+    if (refs == 0) {
+      /* in Marcus' new system, refs reaches 0 twice:  once in
+       * Message lifecycle, and again after xio_release_msg.
+       */
+      if (!cl_flag && release_msgs())
+	return;
+      struct xio_mempool_obj *mp = &this->mp_this;
+      this->~XioCompletionHook();
+      xpool_free(sizeof(XioCompletionHook), mp);
+    }
+  }
+
+  void put() {
+    put(1);
+  }
+
+  XioInSeq& get_seq() { return msg_seq; }
+
+  void claim(int r) {}
+
+  XioPool& get_pool() { return rsp_pool; }
+
+  void on_err_finalize(XioConnection *xcon) {
+    /* can't decode message; even with one-way must free
+     * xio_msg structures, and then xiopool
+     */
+    this->finish(-1);
+  }
+
+  ~XioCompletionHook() {
+    --xcon->n_reqs; // atomicity by portal thread
+    xcon->put();
+  }
+}; /* XioCompletionHook */
+
+struct XioRsp : public XioSubmit
+{
+  XioCompletionHook *xhook;
+public:
+  XioRsp(XioConnection *_xcon, XioCompletionHook *_xhook)
+    : XioSubmit(XioSubmit::INCOMING_MSG_RELEASE, _xcon /* not xcon! */),
+      xhook(_xhook->get()) {
+      // submit queue ref
+      xcon->get();
+    };
+
+  struct xio_msg* dequeue() {
+    return xhook->get_seq().dequeue();
+  }
+
+  XioCompletionHook *get_xhook() { return xhook; }
+
+  void finalize() {
+    xcon->put();
+    xhook->put();
+  }
+}; /* XioRsp */
 
 void print_xio_msg_hdr(const char *tag,  const XioMsgHdr &hdr,
 		       const struct xio_msg *msg);

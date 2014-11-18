@@ -89,6 +89,7 @@ XioConnection::XioConnection(XioMessenger* m,
   session(NULL),
   conn(NULL),
   magic(m->get_magic()),
+  n_reqs(0),
   send_ctr(0),
   in_seq(this)
 {

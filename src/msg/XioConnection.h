@@ -67,6 +67,7 @@ private:
   atomic_t send;
   atomic_t recv;
   uint32_t magic;
+  uint32_t n_reqs; // Accelio-initiated reqs in progress (!counting partials)
   uint32_t special_handling;
   uint32_t send_ctr;
 
