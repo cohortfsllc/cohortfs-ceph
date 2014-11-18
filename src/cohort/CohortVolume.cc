@@ -827,7 +827,7 @@ int CohortVolume::removexattr(const object_t& oid, const char *name,
   assert(osds.size() == stripes);
 
   for(size_t stripe = 0; stripe < stripes; ++stripe) {
-    vector<OSDOp> ops;
+    vector<OSDOp> ops(1);
     ops[0].op.op = CEPH_OSD_OP_RMXATTR;
     ops[0].op.xattr.name_len = (name ? strlen(name) : 0);
     ops[0].op.xattr.value_len = 0;
@@ -863,7 +863,7 @@ int CohortVolume::setxattr(const object_t& oid, const char *name,
   assert(osds.size() == stripes);
 
   for(size_t stripe = 0; stripe < stripes; ++stripe) {
-    vector<OSDOp> ops;
+    vector<OSDOp> ops(1);
     ops[0].op.op = CEPH_OSD_OP_SETXATTR;
     ops[0].op.xattr.name_len = (name ? strlen(name) : 0);
     ops[0].op.xattr.value_len = bl.length();
@@ -892,7 +892,7 @@ int CohortVolume::getxattrs(const object_t& oid,
   if (rc < 0)
     return rc;
   C_GetAttrs *fin = new C_GetAttrs(attrset, onfinish);
-  vector<OSDOp> ops;
+  vector<OSDOp> ops(1);
   ops[0].op.op = CEPH_OSD_OP_GETXATTRS;
   Objecter::Op *o
     = new Objecter::Op(hobject_t(oid, DATA, 0), id,
@@ -925,7 +925,7 @@ int CohortVolume::trunc(const object_t& oid,
     uint64_t zero;
     uint64_t stripetrunclen;
     stripe_extent(0, trunc_size, stripe, zero, stripetrunclen);
-    vector<OSDOp> ops;
+    vector<OSDOp> ops(1);
     ops[0].op.op = CEPH_OSD_OP_TRUNCATE;
     ops[0].op.extent.offset = stripetrunclen;
     ops[0].op.extent.truncate_size = stripetrunclen;
