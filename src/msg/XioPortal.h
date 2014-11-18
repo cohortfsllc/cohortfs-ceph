@@ -34,13 +34,15 @@ extern "C" {
 
 class XioMessenger;
 
+#define ndecoders 4
+
 class XioDecoder : public Thread
 {
 private:
 
   struct SubmitQueue
   {
-    const static int nlanes = 7;
+    const static int nlanes = 5;
 
     struct Lane
     {
@@ -80,13 +82,15 @@ private:
 
       for (ix = 0; ix < nlanes; ++ix) {
 	lane = &qlane[ix];
-	pthread_spin_lock(&lane->sp);
 	if (lane->size > 0) {
-	  XioRecvMsg::Queue::const_iterator i1 = decode_q.end();
-	  decode_q.splice(i1, lane->q);
-	  lane->size = 0;
+	  pthread_spin_lock(&lane->sp);
+	  if (lane->size > 0) {
+	    XioRecvMsg::Queue::const_iterator i1 = decode_q.end();
+	    decode_q.splice(i1, lane->q);
+	    lane->size = 0;
+	  }
+	  pthread_spin_unlock(&lane->sp);
 	}
-	pthread_spin_unlock(&lane->sp);
       }
     }
   };
@@ -124,8 +128,6 @@ public:
       XioRecvMsg* in_msg;
 
       struct timespec ts;
-      const int ms_100 = 1000000 * 100;
-      const int ms_500 = 1000000 * 500;
 
       do {
 	decode_q.deq(q);
@@ -133,7 +135,7 @@ public:
 
 	if (! size) {
 	  (void) clock_gettime(CLOCK_REALTIME_COARSE, &ts);
-	  ts.tv_sec += 5;
+	  ts.tv_sec += 1;
 	  pthread_mutex_lock(&mtx);
 	  pthread_cond_timedwait(&cv, &mtx, &ts);
 	  pthread_mutex_unlock(&mtx);
@@ -159,7 +161,7 @@ public:
 
   void enqueue_for_decode(XioRecvMsg* in_msg) {
 
-    if (_shutdown) {
+    if (! _shutdown) {
       decode_q.enq(in_msg);
     }
 
@@ -232,13 +234,15 @@ private:
 
 	for (ix = 0; ix < nlanes; ++ix) {
 	  lane = &qlane[ix];
-	  pthread_spin_lock(&lane->sp);
 	  if (lane->size > 0) {
-	    XioSubmit::Queue::const_iterator i1 = send_q.end();
-	    send_q.splice(i1, lane->q);
+	    pthread_spin_lock(&lane->sp);
+	    if (lane->size > 0) {
+	      XioSubmit::Queue::const_iterator i1 = send_q.end();
+	      send_q.splice(i1, lane->q);
 	    lane->size = 0;
+	    }
+	    pthread_spin_unlock(&lane->sp);
 	  }
-	  pthread_spin_unlock(&lane->sp);
 	}
       }
 
@@ -248,7 +252,7 @@ private:
   struct xio_context *ctx;
   struct xio_server *server;
   SubmitQueue submit_q;
-  XioDecoder decoder;
+  XioDecoder decoder[ndecoders];
   pthread_spinlock_t sp;
   pthread_mutex_t mtx;
   void *ev_loop;
@@ -265,7 +269,7 @@ private:
 
 public:
   XioPortal(XioMessenger *_msgr) :
-    msgr(_msgr), ctx(NULL), server(NULL), submit_q(), decoder(), xio_uri(""),
+    msgr(_msgr), ctx(NULL), server(NULL), submit_q(), xio_uri(""),
     portal_id(NULL), _shutdown(false), drained(false),
     magic(0),
     special_handling(0)
@@ -312,6 +316,12 @@ public:
       };
     }
 
+  void enqueue_for_decode(XioRecvMsg* in_msg) {
+    static int d_ix;
+    int ix = ++d_ix;
+    decoder[(ix % ndecoders)].enqueue_for_decode(in_msg);
+  }
+
   void *entry()
     {
       int size, code = 0;
@@ -324,7 +334,9 @@ public:
       XioMsg *xmsg;
 
       /* decoder thread */
-      decoder.create();
+      for (int ix = 0; ix  < ndecoders; ++ix) {
+	decoder[ix].create();
+      }
 
       do {
 	submit_q.deq(send_q);
@@ -393,7 +405,9 @@ public:
 	pthread_spin_lock(&sp);
 	xio_context_stop_loop(ctx, false);
 	_shutdown = true;
-	decoder.shutdown();
+	for (int ix = 0; ix < ndecoders; ++ix) {
+	  decoder[ix].shutdown();
+	}
 	pthread_spin_unlock(&sp);
     }
 };

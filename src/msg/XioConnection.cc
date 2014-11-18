@@ -135,24 +135,35 @@ int XioConnection::passive_setup()
   return (0);
 }
 
+static uint32_t xio_recv_cnt;
+
+static uint32_t pcount;
+
 static inline XioRecvMsg* pool_alloc_xio_recv_msg(
   XioConnection *xcon, struct xio_msg *msg)
 {
   struct xio_mempool_obj mp_mem;
+retry:
+#if 1
   int e = xpool_alloc(xio_msgr_noreg_mpool, sizeof(XioRecvMsg), &mp_mem);
-  if (!!e)
-    return NULL;
+  if (!!e) {
+    goto retry;
+  }
   XioRecvMsg *in_msg = static_cast<XioRecvMsg*>(mp_mem.addr);
   new (in_msg) XioRecvMsg(xcon, msg, mp_mem);
+#else
+  XioRecvMsg* in_msg = new XioRecvMsg(xcon, msg, mp_mem);
+  if (! in_msg) {
+    abort();
+  }
+#endif
+  ++xio_recv_cnt;
   return in_msg;
 }
 
 int XioConnection::decode_dispatch(XioDecoder* d, XioRecvMsg* in_msg)
 {
   XioMessenger *msgr = static_cast<XioMessenger*>(get_messenger());
-
-  buffer::ptr p(buffer::create_static(
-		  in_msg->len, in_msg->buf));
 
   XioMsgHdr hdr(d->scratch_header, d->scratch_footer, in_msg->header_buf());
 
@@ -221,10 +232,16 @@ int XioConnection::decode_dispatch(XioDecoder* d, XioRecvMsg* in_msg)
   }
 
   /* release in_msg */
+#if 1
   struct xio_mempool_obj *mp = &in_msg->mp_this;
   in_msg->~XioRecvMsg();
   xpool_free(sizeof(XioRecvMsg), mp);
-
+#else
+  delete(in_msg);
+//  --xio_recv_cnt;
+//  if ((++pcount % 30000) == 0) std::cout << "xio_recv_cnt: "
+//					 << xio_recv_cnt << std::endl;
+#endif
   return 0;
 }
 
@@ -403,7 +420,7 @@ int XioConnection::on_msg_req(struct xio_session *session,
   }
 
   /* enqueue for out-of-line decode */
-  portal->decoder.enqueue_for_decode(in_msg);
+  portal->enqueue_for_decode(in_msg);
 
   /* release Accelio msgs */
   in_seq.release();

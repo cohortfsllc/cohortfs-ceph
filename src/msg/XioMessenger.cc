@@ -316,7 +316,7 @@ XioMessenger::XioMessenger(CephContext *cct, entity_name_t name,
 				       XMSG_MEMPOOL_QUANTUM_SMALL);
       (void) xio_mempool_add_allocator(xio_msgr_noreg_mpool, 1024,
 				       cct->_conf->xio_mp_min,
-				       cct->_conf->xio_mp_max_1k,
+				       2000000 /* cct->_conf->xio_mp_max_1k */,
 				       XMSG_MEMPOOL_QUANTUM_SMALL);
       (void) xio_mempool_add_allocator(xio_msgr_noreg_mpool, getpagesize(),
 				       cct->_conf->xio_mp_min,

@@ -60,14 +60,14 @@ public:
     ::encode(hdr->seq, bl);
     ::encode(hdr->tid, bl);
     ::encode(hdr->type, bl);
-    ::encode(hdr->priority, bl);
-    ::encode(hdr->version, bl);
+    //::encode(hdr->priority, bl);
+    //::encode(hdr->version, bl);
     ::encode(hdr->src.type, bl);
     ::encode(hdr->src.num, bl);
-    ::encode(hdr->compat_version, bl);
-    ::encode(hdr->crc, bl);
-    ::encode(peer_type, bl);
-    ::encode(addr, bl);
+    //::encode(hdr->compat_version, bl);
+    //::encode(hdr->crc, bl);
+    //::encode(peer_type, bl);
+    //::encode(addr, bl);
   }
 
   inline void encode_ftr(buffer::list& bl) const {
@@ -80,7 +80,7 @@ public:
 
   inline void encode(buffer::list& bl) const {
     encode_hdr(bl);
-    encode_ftr(bl);
+    //encode_ftr(bl);
   }
 
   inline void decode_hdr(buffer::list::iterator& bl) {
@@ -92,14 +92,14 @@ public:
     ::decode(hdr->seq, bl);
     ::decode(hdr->tid, bl);
     ::decode(hdr->type, bl);
-    ::decode(hdr->priority, bl);
-    ::decode(hdr->version, bl);
+    //::decode(hdr->priority, bl);
+    //::decode(hdr->version, bl);
     ::decode(hdr->src.type, bl);
     ::decode(hdr->src.num, bl);
-    ::decode(hdr->compat_version, bl);
-    ::decode(hdr->crc, bl);
-    ::decode(peer_type, bl);
-    ::decode(addr, bl);
+    //::decode(hdr->compat_version, bl);
+    //::decode(hdr->crc, bl);
+    //::decode(peer_type, bl);
+    //::decode(addr, bl);
   }
 
   inline void decode_ftr(buffer::list::iterator& bl) {
@@ -112,7 +112,7 @@ public:
 
   inline void decode(buffer::list::iterator& bl) {
     decode_hdr(bl);
-    decode_ftr(bl);
+//    decode_ftr(bl);
   }
 
   virtual ~XioMsgHdr()
