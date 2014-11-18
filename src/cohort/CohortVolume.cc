@@ -231,6 +231,35 @@ void CohortVolume::encode(bufferlist& bl) const
   ::encode(erasure, bl);
 }
 
+static string indent(size_t k)
+{
+  return string(k / 8, '\t') + string(k % 8, ' ');
+}
+
+static void default_placer(uint32_t blocks,
+			   bufferlist& text,
+			   vector<std::string>& sym)
+{
+  const string funcname = "placer";
+  sym.push_back(funcname);
+  text.append(
+    "#include <stdbool.h>\n\n"
+
+    "struct erasure_params;\n\n"
+
+    "int " + funcname + "(void *ctx, const char* uuid, size_t size, const char* id,\n"
+    + indent(sizeof("int ") + funcname.length())
+    + "struct erasure_params *erasure, bool(*test)(void*, int),\n"
+    + indent(sizeof("int ") + funcname.length()) + "bool(*place)(void*, int))\n"
+    "{\n"
+    "\tfor(int i = 0; i < " + to_string(blocks) + "; ++i) {\n"
+    "\t\tplace(ctx, i);\n"
+    "\t}\n"
+    "\treturn 0;\n"
+    "}\n");
+}
+			   
+
 VolumeRef CohortVolume::create(const string& name,
 			       const epoch_t last_update,
 			       const string& place_text,
@@ -251,9 +280,6 @@ VolumeRef CohortVolume::create(const string& name,
   v->id = boost::uuids::random_generator()();
   v->name = name;
   v->last_update = last_update;
-  v->place_text.append(place_text);
-
-  boost::algorithm::split(v->symbols, sym_str, boost::algorithm::is_any_of(" \t"));
 
   if (!erasure_params::fill_out(erasure_type, data_blocks,
 				code_blocks, word_size,
@@ -261,6 +287,19 @@ VolumeRef CohortVolume::create(const string& name,
 				v->erasure,
 				error_message))
     goto error;
+
+  if ((place_text.empty() && !sym_str.empty()) ||
+      (sym_str.empty() && !place_text.empty())) {
+    error_message = "If you have symbols you must have place text and vice versa.";
+    goto error;
+  }
+
+  if (!place_text.empty()) {
+    v->place_text.append(place_text);
+    boost::algorithm::split(v->symbols, sym_str, boost::algorithm::is_any_of(" \t"));
+  } else {
+    default_placer(v->erasure.k + v->erasure.m, v->place_text, v->symbols);
+  }
 
   return VolumeRef(v);
 

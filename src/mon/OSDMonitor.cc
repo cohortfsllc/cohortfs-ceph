@@ -2243,18 +2243,19 @@ done:
     VolumeRef vol;
 
     cmd_getval(g_ceph_context, cmdmap, "volumeName", name);
-    cmd_getval(g_ceph_context, cmdmap, "placeCode", place_text);
-    cmd_getval(g_ceph_context, cmdmap, "placeSymbols", symbols);
-    cmd_getval(g_ceph_context, cmdmap, "erasureType", erasure_type);
-    cmd_getval(g_ceph_context, cmdmap, "erasureSize", size, int64_t(4096));
     cmd_getval(g_ceph_context, cmdmap, "erasureDataBlocks",
 	       data_blocks, int64_t(1));
+    cmd_getval(g_ceph_context, cmdmap, "erasureSize", size, int64_t(4096));
+    cmd_getval(g_ceph_context, cmdmap, "erasureType", erasure_type,
+	       string("no_erasure"));
     cmd_getval(g_ceph_context, cmdmap, "erasureCodeBlocks", code_blocks,
 	       int64_t(0));
     cmd_getval(g_ceph_context, cmdmap, "erasureWordSize",
 	       word_size, int64_t(0));
     cmd_getval(g_ceph_context, cmdmap, "erasurePktSize", packet_size,
 	       int64_t(0));
+    cmd_getval(g_ceph_context, cmdmap, "placeCode", place_text, string());
+    cmd_getval(g_ceph_context, cmdmap, "placeSymbols", symbols, string());
 
     /* Only one volume type for now, when we implement more I'll
        come back and complexify this. */
