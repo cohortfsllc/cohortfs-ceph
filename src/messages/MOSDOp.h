@@ -175,6 +175,8 @@ public:
       ::encode(ops[i].op, payload);
 
     ::encode(retry_attempt, payload);
+
+    encode_trace(payload);
   }
 
   virtual void decode_payload() {
@@ -197,6 +199,8 @@ public:
 
     ::decode(retry_attempt, p);
     OSDOp::split_osd_op_vector_in_data(ops, data);
+
+    decode_trace(p, "MOSDOp", true);
   }
 
   void clear_buffers() {

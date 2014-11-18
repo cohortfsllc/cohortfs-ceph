@@ -1696,7 +1696,12 @@ int FileStore::queue_transactions(Sequencer *posr, list<Transaction*> &tls,
     dout(5) << "queue_transactions new " << *osr << "/" << osr->parent << dendl;
   }
 
-  ZTracer::ZTraceRef trace = ZTracer::ZTrace::create("op", trace_endpoint);
+  ZTracer::ZTraceRef trace;
+  if (osd_op->get_req()->trace)
+    trace = ZTracer::ZTrace::create("op", osd_op->get_req()->trace,
+                                    trace_endpoint);
+  else
+    trace = ZTracer::ZTrace::create("op", trace_endpoint);
 
   if (journal && journal->is_writeable() && !m_filestore_journal_trailing) {
     Op *o = build_op(tls, onreadable, onreadable_sync, osd_op);

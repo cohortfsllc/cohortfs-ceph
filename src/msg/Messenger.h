@@ -28,6 +28,7 @@ using namespace std;
 #include "include/types.h"
 #include "include/ceph_features.h"
 #include "auth/Crypto.h"
+#include <ztracer.hpp>
 
 #include <errno.h>
 #include <sstream>
@@ -39,6 +40,9 @@ class Timer;
 class Messenger {
 private:
   list<Dispatcher*> dispatchers;
+  ZTracer::ZTraceEndpointRef trace_endpoint;
+
+  void set_endpoint_addr(const sockaddr_storage &addr, int port);
 
 protected:
   /// the "name" of the local daemon. eg client.99
@@ -180,8 +184,18 @@ protected:
   /**
    * set messenger's address
    */
-  virtual void set_myaddr(const entity_addr_t& a) { my_inst.addr = a; }
+  virtual void set_myaddr(const entity_addr_t& a) {
+    my_inst.addr = a;
+    set_endpoint_addr(a.addr, a.get_port());
+  }
 public:
+  /**
+   * @return the zipkin trace endpoint
+   */
+  const ZTracer::ZTraceEndpointRef& get_trace_endpoint() const {
+    return trace_endpoint;
+  }
+
   /**
    * Retrieve the Messenger's name.
    *

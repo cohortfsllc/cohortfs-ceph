@@ -259,7 +259,7 @@ if(${WITH_PROFILER})
   target_link_libraries(common PRIVATE profiler)
 endif(${WITH_PROFILER})
 
-target_link_libraries(common PRIVATE json_spirit ${CRYPTO_LIBS} rt ${Boost_LIBRARIES} ${EXTRALIBS})
+target_link_libraries(common PRIVATE json_spirit ${CRYPTO_LIBS} rt ${Boost_LIBRARIES} ${EXTRALIBS} blkin)
 
 set(libglobal_srcs
   global/global_init.cc
@@ -411,7 +411,7 @@ add_library(os_filestore SHARED ${os_filestore_files})
 if(${HAVE_LIBAIO})
   target_link_libraries(os_filestore aio)
 endif(${HAVE_LIBAIO})
-target_link_libraries(os_filestore common os blkin)
+target_link_libraries(os_filestore common os)
 set_target_properties(os_filestore PROPERTIES VERSION "1.0.0" SOVERSION "1")
 install(TARGETS os_filestore DESTINATION lib/os-modules)
 

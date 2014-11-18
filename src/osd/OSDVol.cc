@@ -191,6 +191,8 @@ void OSDVol::queue_op(OpRequestRef op)
     waiting_for_map.push_back(op);
     return;
   }
+  if (op->get_req()->trace)
+    op->get_req()->trace->event("queue_op");
   osd->op_wq.queue(make_pair(OSDVolRef(this), op));
 }
 
@@ -401,6 +403,9 @@ void OSDVol::do_op(OpRequestRef op)
 {
   MOSDOp *m = static_cast<MOSDOp*>(op->get_req());
   assert(m->get_header().type == CEPH_MSG_OSD_OP);
+
+  if (op->get_req()->trace)
+    op->get_req()->trace->event("do_op", trace_endpoint);
 
   if (get_osdmap()->is_blacklisted(m->get_source_addr())) {
     dout(10) << "do_op " << m->get_source_addr() << " is blacklisted" << dendl;

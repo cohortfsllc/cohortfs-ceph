@@ -28,6 +28,7 @@
 
 #include "common/RefCountedObj.h"
 #include "msg/Connection.h"
+#include <ztracer.hpp>
 
 #include "common/debug.h"
 #include "common/config.h"
@@ -402,6 +403,13 @@ public:
   virtual void dump(Formatter *f) const;
 
   void encode(uint64_t features, int crcflags);
+
+  // zipkin tracing
+protected:
+  void encode_trace(bufferlist &bl) const;
+  void decode_trace(bufferlist::iterator &p, const char *name, bool create);
+public:
+  ZTracer::ZTraceRef trace;
 };
 typedef boost::intrusive_ptr<Message> MessageRef;
 
