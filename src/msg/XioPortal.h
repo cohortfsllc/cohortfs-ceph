@@ -141,6 +141,21 @@ public:
   int bind(struct xio_session_ops *ops, const string &base_uri,
 	   uint16_t port, uint16_t *assigned_port);
 
+  void release_xio_rsp(XioRsp* xrsp) {
+    struct xio_msg *msg = xrsp->dequeue();
+    struct xio_msg *next_msg = NULL;
+    while (msg) {
+      next_msg = static_cast<struct xio_msg *>(msg->user_context);
+      int code = xio_release_msg(msg);
+      if (unlikely(code)) {
+	/* very unlikely, so log it */
+	xrsp->xcon->msg_release_fail(msg, code);
+      }
+      msg =  next_msg;
+    }
+    xrsp->finalize(); /* unconditional finalize */
+  }
+
   void enqueue_for_send(XioConnection *xcon, XioSubmit *xs)
     {
       if (! _shutdown) {
@@ -190,36 +205,46 @@ public:
 	  while (q_iter != send_q.end()) {
 	    xs = &(*q_iter);
 	    xcon = xs->xcon;
-	    xmsg = static_cast<XioMsg*>(xs);
 
-	    /* guard Accelio send queue */
-	    xio_qdepth = xcon->xio_queue_depth();
-	    if (unlikely((xcon->send_ctr + xmsg->hdr.msg_cnt) > xio_qdepth)) {
-	      ++q_iter;
-	      continue;
-	    }
+// XioMsg
+	    switch(xs->type) {
+	    case XioSubmit::OUTGOING_MSG: /* it was an outgoing 1-way */
+	      xmsg = static_cast<XioMsg*>(xs);
 
-	    q_iter = send_q.erase(q_iter);
-
-	    /* XXX we know we are not racing with a disconnect
-	     * thread */
-	    if (unlikely(!xcon->conn))
-	      code = ENOTCONN;
-	    else {
-	      msg = &xmsg->req_0.msg;
-	      code = xio_send_msg(xcon->conn, msg);
-	      /* header trace moved here to capture xio serial# */
-	      if (dlog_p(ceph_subsys_xio, 11)) {
-		print_xio_msg_hdr("xio_send_msg", xmsg->hdr, msg);
-		print_ceph_msg("xio_send_msg", xmsg->m);
+	      /* guard Accelio send queue */
+	      xio_qdepth = xcon->xio_queue_depth();
+	      if (unlikely((xcon->send_ctr + xmsg->hdr.msg_cnt) > xio_qdepth)) {
+		++q_iter;
+		continue;
 	      }
-	    }
-	    if (unlikely(code)) {
-	      xcon->msg_send_fail(xmsg, code);
-	    } else {
-	      xcon->send.set(msg->timestamp); // need atomic?
-	      xcon->send_ctr += xmsg->hdr.msg_cnt; // only inc if cb promised
-	    }
+
+	      q_iter = send_q.erase(q_iter);
+
+	      /* XXX we know we are not racing with a disconnect
+	       * thread */
+	      if (unlikely(!xcon->conn))
+		code = ENOTCONN;
+	      else {
+		msg = &xmsg->req_0.msg;
+		code = xio_send_msg(xcon->conn, msg);
+		/* header trace moved here to capture xio serial# */
+		if (dlog_p(ceph_subsys_xio, 11)) {
+		  print_xio_msg_hdr("xio_send_msg", xmsg->hdr, msg);
+		  print_ceph_msg("xio_send_msg", xmsg->m);
+		}
+	      }
+	      if (unlikely(code)) {
+		xcon->msg_send_fail(xmsg, code);
+	      } else {
+		xcon->send.set(msg->timestamp); // need atomic?
+		xcon->send_ctr += xmsg->hdr.msg_cnt; // only inc if cb promised
+	      }
+	      break;
+	    default:
+	      /* INCOMING_MSG_RELEASE */
+	      release_xio_rsp(static_cast<XioRsp*>(xs));
+	      break;
+	    } /* switch(xs->type) */
 	  }
 	}
 

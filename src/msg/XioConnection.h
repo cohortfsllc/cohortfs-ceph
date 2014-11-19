@@ -24,7 +24,7 @@ extern "C" {
 #include "Connection.h"
 #include "Messenger.h"
 #include "include/atomic.h"
-
+#include "XioInSeq.h"
 
 #define XIO_ALL_FEATURES (CEPH_FEATURES_ALL & \
 			  ~CEPH_FEATURE_MSGR_KEEPALIVE2)
@@ -100,31 +100,7 @@ private:
   } state;
 
   /* batching */
-  struct msg_seq {
-    XioConnection *xcon;
-    bool p;
-    int cnt;
-    std::list<struct xio_msg *> seq;
-
-    msg_seq(XioConnection *_xcon) : xcon(_xcon), p(false) {}
-
-    void append(struct xio_msg* req) {
-      seq.push_back(req); --cnt;
-    }
-
-    void release() {
-      std::list<struct xio_msg *>::iterator iter;
-      for (iter = seq.begin(); iter != seq.end(); ++iter) {
-	struct xio_msg *msg = *iter;
-	int code = xio_release_msg(msg);
-	if (unlikely(code)) {
-	  /* very unlikely */
-	  xcon->msg_release_fail(msg, code);
-	}
-      }
-      seq.clear();
-    }
-  } in_seq;
+  XioInSeq in_seq;
 
   // conns_entity_map comparison functor
   struct EntityComp
