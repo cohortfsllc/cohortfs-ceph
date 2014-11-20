@@ -780,6 +780,8 @@ namespace OSDC {
       return op_submit(o);
     }
 
+    int create_volume(const string& name, Context *onfinish);
+
     // ---------------------------
     // df stats
   private:

@@ -569,6 +569,7 @@ namespace librados
     int conf_parse_env(const char *env) const;
     int conf_set(const char *option, const char *value);
     int conf_get(const char *option, std::string &val);
+    int volume_create(const string &name);
 
 
     uint64_t get_instance_id();

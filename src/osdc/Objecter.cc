@@ -1385,4 +1385,22 @@ namespace OSDC {
 
     monc->send_mon_message(m);
   }
+
+  int Objecter::create_volume(const string& name, Context *onfinish)
+  {
+    ldout(cct, 10) << "create_volume name=" << name << dendl;
+
+    if (osdmap->vol_exists(name) > 0)
+      return -EEXIST;
+
+    vector<string> cmd;
+    cmd.push_back("{\"prefix\":\"osd volume create\", ");
+    cmd.push_back("\"volumeName\":\"" + name + "\"");
+
+    bufferlist bl;
+    monc->start_mon_command(cmd, bl, nullptr, nullptr,
+			    onfinish);
+    
+    return 0;
+  }
 };

@@ -513,6 +513,15 @@ public:
     }
   }
 
+  bool vol_exists(const string& name) const {
+    auto v = vols.by_name.find(name);
+    if (v == vols.by_name.end()) {
+      return false;
+    } else {
+      return true;
+    }
+  }
+
   bool find_by_uuid(const boost::uuids::uuid& id, VolumeRef& vol) const {
     auto v = vols.by_uuid.find(id);
     if (v == vols.by_uuid.end()) {

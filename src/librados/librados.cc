@@ -1129,6 +1129,13 @@ int librados::Rados::wait_for_latest_osdmap()
   return client->wait_for_latest_osdmap();
 }
 
+int librados::Rados::volume_create(const string &name)
+{
+  string str(name);
+  return client->vol_create(str);
+}
+
+
 librados::AioCompletion *librados::Rados::aio_create_completion()
 {
   AioCompletionImpl *c = new AioCompletionImpl;
@@ -2550,3 +2557,11 @@ extern "C" int rados_aio_read_op_operate(rados_read_op_t read_op,
   return ctx->aio_operate_read(obj, (librados::ObjectReadOperation*)read_op,
 			       c, flags, NULL);
 }
+
+extern "C" int rados_volume_create(rados_t cluster, const char *name)
+{
+  librados::RadosClient *radosp = (librados::RadosClient *)cluster;
+  string sname(name);
+  return radosp->vol_create(sname);
+}
+
