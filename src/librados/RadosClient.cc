@@ -499,6 +499,29 @@ int librados::RadosClient::vol_create(string& name)
   return reply;
 }
 
+int librados::RadosClient::vol_delete(string& name)
+{
+  int reply;
+
+  Mutex mylock;
+  Cond cond;
+  bool done;
+  Context *onfinish = new C_SafeCond(&mylock, &cond, &done, &reply);
+  lock.Lock();
+  reply = objecter->delete_volume(name, onfinish);
+  lock.Unlock();
+
+  if (reply < 0) {
+    delete onfinish;
+  } else {
+    mylock.Lock();
+    while(!done)
+      cond.Wait(mylock);
+    mylock.Unlock();
+  }
+  return reply;
+}
+
 void librados::RadosClient::get() {
   Mutex::Locker l(lock);
   assert(refcnt > 0);

@@ -95,6 +95,7 @@ public:
   int create_ioctx(const boost::uuids::uuid& volume, IoCtxImpl **io);
   int get_fsid(std::string *s);
   int get_fs_stats(ceph_statfs& result);
+  int vol_delete(string& name);
   int vol_create(string& name);
 
   // watch/notify

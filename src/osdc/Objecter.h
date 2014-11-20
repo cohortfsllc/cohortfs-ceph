@@ -781,6 +781,7 @@ namespace OSDC {
     }
 
     int create_volume(const string& name, Context *onfinish);
+    int delete_volume(const string& name, Context *onfinish);
 
     // ---------------------------
     // df stats

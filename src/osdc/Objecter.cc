@@ -1403,4 +1403,19 @@ namespace OSDC {
     
     return 0;
   }
+
+  int Objecter::delete_volume(const string& name, Context *onfinish)
+  {
+    ldout(cct, 10) << "delete_volume name=" << name << dendl;
+
+    vector<string> cmd;
+    cmd.push_back("{\"prefix\":\"osd volume delete\", ");
+    cmd.push_back("\"volumeName\":\"" + name + "\"");
+
+    bufferlist bl;
+    monc->start_mon_command(cmd, bl, nullptr, nullptr,
+			    onfinish);
+    
+    return 0;
+  }
 };

@@ -1135,6 +1135,12 @@ int librados::Rados::volume_create(const string &name)
   return client->vol_create(str);
 }
 
+int librados::Rados::volume_delete(const string &name)
+{
+  string str(name);
+  return client->vol_delete(str);
+}
+
 
 librados::AioCompletion *librados::Rados::aio_create_completion()
 {
@@ -2565,3 +2571,10 @@ extern "C" int rados_volume_create(rados_t cluster, const char *name)
   return radosp->vol_create(sname);
 }
 
+
+extern "C" int rados_volume_delete(rados_t cluster, const char *name)
+{
+  librados::RadosClient *radosp = (librados::RadosClient *)cluster;
+  string sname(name);
+  return radosp->vol_delete(sname);
+}
