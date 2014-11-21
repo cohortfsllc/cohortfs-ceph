@@ -297,6 +297,10 @@ void MDLog::trim(int m)
     LogSegment *ls = p->second;
     assert(ls);
     ++p;
+    if (ls == get_current_segment()) {
+      dout(5) << "trim segment " << ls->offset << ", is current seg, can't expire" << dendl;
+      continue;
+    }
 
     if (ls->end > journaler->get_write_safe_pos()) {
       dout(5) << "trim segment " << ls->offset << ", not fully flushed yet, safe "
