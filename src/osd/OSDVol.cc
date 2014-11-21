@@ -58,6 +58,18 @@ void OSDVol::put()
     delete this;
 }
 
+static ZTracer::ZTraceEndpointRef create_trace_endpoint(OSDMapRef osdmap,
+    const boost::uuids::uuid& v)
+{
+  stringstream name;
+  name << "OSDVol";
+
+  VolumeRef vol;
+  if (osdmap->find_by_uuid(v, vol))
+    name << ": " << vol->name;
+
+  return ZTracer::ZTraceEndpoint::create("0.0.0.0", 0, name.str());
+}
 
 OSDVol::OSDVol(OSDService *o, OSDMapRef curmap,
 	       const boost::uuids::uuid& v) :
@@ -65,6 +77,7 @@ OSDVol::OSDVol(OSDService *o, OSDMapRef curmap,
   cct(o->cct),
   osdriver(osd->store, coll_t()),
   osdmap_ref(curmap), last_persisted_osdmap_ref(curmap),
+  trace_endpoint(create_trace_endpoint(curmap, v)),
   ref(0), deleting(false), dirty_info(false),
   id(v), info(v),
   osr(osd->osr_registry.lookup_or_create(v, (stringify(v)))),
@@ -191,8 +204,9 @@ void OSDVol::queue_op(OpRequestRef op)
     waiting_for_map.push_back(op);
     return;
   }
-  if (op->get_req()->trace)
-    op->get_req()->trace->event("queue_op");
+  ZTracer::ZTrace *trace = op->get_req()->get_trace().get();
+  if (trace)
+    trace->event("queue_op");
   osd->op_wq.queue(make_pair(OSDVolRef(this), op));
 }
 
@@ -404,8 +418,9 @@ void OSDVol::do_op(OpRequestRef op)
   MOSDOp *m = static_cast<MOSDOp*>(op->get_req());
   assert(m->get_header().type == CEPH_MSG_OSD_OP);
 
-  if (op->get_req()->trace)
-    op->get_req()->trace->event("do_op", trace_endpoint);
+  ZTracer::ZTrace *trace = op->get_req()->get_trace().get();
+  if (trace)
+    trace->event("do_op", trace_endpoint);
 
   if (get_osdmap()->is_blacklisted(m->get_source_addr())) {
     dout(10) << "do_op " << m->get_source_addr() << " is blacklisted" << dendl;
