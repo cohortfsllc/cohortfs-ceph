@@ -18,7 +18,6 @@
 #include <stdlib.h>
 #include <ostream>
 #include <cassert>
-#include <boost/smart_ptr/intrusive_ref_counter.hpp>
 
 #include <boost/intrusive_ptr.hpp>
 // Because intusive_ptr clobbers our assert...
@@ -38,7 +37,7 @@
 
 class Messenger;
 
-struct Connection : public boost::intrusive_ref_counter<Connection> {
+struct Connection : public RefCountedObject {
   Mutex lock;
   Messenger *msgr;
   int peer_type;
@@ -59,9 +58,13 @@ public:
       peer_type(-1),
       priv(nullptr),
       features(0),
-      failed(false) { }
+      failed(false) {
+    // we are managed exlusively by ConnectionRef; make it so you can
+    //	 ConnectionRef foo = new Connection;
+    nref = 0;
+  }
 
-  virtual ~Connection() {
+  ~Connection() {
     //generic_dout(0) << "~Connection " << this << dendl;
     if (priv) {
       //generic_dout(0) << "~Connection " << this << " dropping priv " << priv << dendl;
