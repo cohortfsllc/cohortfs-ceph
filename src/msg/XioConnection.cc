@@ -369,6 +369,10 @@ int XioConnection::on_msg_req(struct xio_session *session,
     /* completion */
     m->set_connection(this);
 
+    /* reply hook */
+    m_hook->set_message(m);
+    m->set_completion_hook(m_hook);
+
     /* trace flag */
     m->set_magic(magic);
 
