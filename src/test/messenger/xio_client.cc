@@ -66,6 +66,7 @@ int main(int argc, const char **argv)
 	int n_dsize = 0;
 	int n_nfrags = 1;
 	bool dfast = false;
+	bool redup = true; // continuously re-dispatch
 
 	struct timespec ts;
 	ts.tv_sec = 5;
@@ -93,6 +94,9 @@ int main(int argc, const char **argv)
 	  } else if (ceph_argparse_witharg(args, arg_iter, &val, "--nfrags",
 				    (char*) NULL)) {
 	    n_nfrags = atoi(val.c_str());
+	  } else if (ceph_argparse_flag(args, arg_iter, &val, "--once",
+					(char*) NULL)) {
+	    redup = false;
 	  } else if (ceph_argparse_flag(args, arg_iter, "--dfast",
 					   (char*) NULL)) {
 	    dfast = true;
@@ -120,8 +124,9 @@ int main(int argc, const char **argv)
 				     0 /* portals */,
 				     dstrategy);
 
-	static_cast<XioMessenger*>(messenger)->set_special_handling(
-	  MSG_SPECIAL_HANDLING_REDUPE);
+	if (redup)
+	  static_cast<XioMessenger*>(messenger)->set_special_handling(
+	    MSG_SPECIAL_HANDLING_REDUPE);
 
 	if (n_dsize)
 	  (void) static_cast<XioMessenger*>(messenger)->pool_hint(n_dsize);
