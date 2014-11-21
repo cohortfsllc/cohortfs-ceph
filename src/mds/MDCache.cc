@@ -5261,7 +5261,11 @@ void MDCache::_recovered(CInode *in, int r, uint64_t size, utime_t mtime)
   dout(10) << "_recovered r=" << r << " size=" << size << " mtime=" << mtime
 	   << " for " << *in << dendl;
 
-  if (r != 0) {
+  switch (r) {
+  case ENOENT:	/* treat this as "zero" -- success case. */
+  case 0:
+    break;
+  default:
     dout(0) << "recovery error! " << r << dendl;
     if (r == -EBLACKLISTED) {
       mds->suicide();
