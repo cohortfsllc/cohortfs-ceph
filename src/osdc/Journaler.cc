@@ -170,6 +170,12 @@ void Journaler::_finish_reread_head(int r, bufferlist& bl, Context *finish)
   //read on-disk header into
   assert(bl.length() || r < 0 );
 
+  if (r > 0) {
+    ldout(cct, 10) << "non-error " << r << " rereading journal from disk"
+		  << dendl;
+    r = 0;
+  }
+
   // unpack header
   Header h;
   bufferlist::iterator p = bl.begin();
@@ -187,7 +193,7 @@ void Journaler::_finish_read_head(int r, bufferlist& bl)
   assert(state == STATE_READHEAD);
 
   if (r < 0) {
-    ldout(cct, 0) << "error getting journal off disk"
+    ldout(cct, 0) << "error " << r << " getting journal off disk"
 		  << dendl;
     list<Context*> ls;
     ls.swap(waitfor_recover);
@@ -356,8 +362,13 @@ void Journaler::write_head(Context *oncommit)
   ::encode(last_written, bl);
 
   object_t oid = file_object_t(ino, 0);
+#if 0
   volume->write_full(oid, bl, ceph_clock_now(cct), 0,
 		       NULL, new C_WriteHead(this, last_written, oncommit), objecter);
+#else
+  volume->write(oid, 0, bl.length(), bl, ceph_clock_now(cct), 0,
+		NULL, new C_WriteHead(this, last_written, oncommit), objecter);
+#endif
 }
 
 void Journaler::_finish_write_head(int r, Header &wrote, Context *oncommit)
