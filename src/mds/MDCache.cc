@@ -4414,6 +4414,15 @@ void MDCache::handle_cache_rejoin_ack(MMDSCacheRejoin *ack)
 	  mds->locker->eval_gather(lock);
       }
     }
+
+    if (rejoin_gather.empty() &&     // make sure we've gotten our FULL inodes, too.
+	rejoin_ack_gather.empty()) {
+      // finally, kickstart past snap parent opens
+      kickstart_rejoin_done();
+    } else {
+      dout(7) << "still need rejoin from (" << rejoin_gather << ")"
+	      << ", rejoin_ack from (" << rejoin_ack_gather << ")" << dendl;
+    }
   } else {
     // survivor.
     mds->queue_waiters(rejoin_waiters);
@@ -4577,6 +4586,13 @@ void MDCache::rejoin_gather_finish()
   // signal completion of fetches, rejoin_gather_finish, etc.
   assert(rejoin_ack_gather.count(mds->whoami));
   rejoin_ack_gather.erase(mds->whoami);
+
+  // did we already get our acks too?
+  // this happens when the rejoin_gather has to wait on a MISSING/FULL exchange.
+  if (rejoin_ack_gather.empty()) {
+    // finally, kickstart past snap parent opens
+    kickstart_rejoin_done();
+  }
 }
 
 class C_MDC_RejoinOpenInoFinish: public Context {
@@ -4886,6 +4902,18 @@ void MDCache::do_delayed_cap_imports()
   dout(10) << "do_delayed_cap_imports" << dendl;
 
   assert(delayed_imported_caps.empty());
+}
+
+/* (this was once the tail end of "MDCache::open_snap_parents()") */
+void MDCache::kickstart_rejoin_done()
+{
+  dout(10) << "kickstart_rejoin_done" << dendl;
+  assert(rejoin_waiters.empty());
+  dout(10) << "kickstart_rejoin_done - all open" << dendl;
+  do_delayed_cap_imports();
+
+  start_files_to_recover(rejoin_recover_q, rejoin_check_q);
+  mds->rejoin_done();
 }
 
 bool MDCache::open_undef_inodes_dirfrags()

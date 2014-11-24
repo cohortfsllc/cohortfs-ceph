@@ -484,6 +484,7 @@ public:
 		     uint64_t p_cap_id, ceph_seq_t p_seq, ceph_seq_t p_mseq,
 		     int peer, int p_flags);
   void do_delayed_cap_imports();
+  void kickstart_rejoin_done();
 
   bool open_undef_inodes_dirfrags();
   void opened_undef_inode(CInode *in);
