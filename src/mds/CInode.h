@@ -481,7 +481,7 @@ private:
   void store(Context *fin);
   void _stored(version_t cv, Context *fin);
   void fetch(Context *fin);
-  void _fetched(bufferlist& bl, bufferlist& bl2, Context *fin);
+  void _fetched(int r, bufferlist& bl, bufferlist& bl2, Context *fin);
 
   void build_backtrace(const boost::uuids::uuid& volume, inode_backtrace_t& bt);
   void store_backtrace(Context *fin);

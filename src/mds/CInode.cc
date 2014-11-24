@@ -825,7 +825,7 @@ struct C_Inode_Fetched : public Context {
   Context *fin;
   C_Inode_Fetched(CInode *i, Context *f) : in(i), fin(f) {}
   void finish(int r) {
-    in->_fetched(bl, bl2, fin);
+    in->_fetched(r, bl, bl2, fin);
   }
 };
 
@@ -854,11 +854,18 @@ void CInode::fetch(Context *fin)
   gather.activate();
 }
 
-void CInode::_fetched(bufferlist& bl, bufferlist& bl2, Context *fin)
+void CInode::_fetched(int r, bufferlist& bl, bufferlist& bl2, Context *fin)
 {
-  dout(10) << "_fetched got " << bl.length() << " and " << bl2.length()
-	   << dendl;
+  dout(10) << "_fetched got " << r << ", buffer " << bl.length()
+	   << " and " << bl2.length() << dendl;
   bufferlist::iterator p;
+
+  if (r < 0) {
+    /* XXX */
+    /* I don't know what to do here; this is a normal event! */
+    /* rd.getxattr("inode") above - always returns -ENODATA here; */
+    /* backwards hack? */
+  }
   if (bl2.length())
     p = bl2.begin();
   else
