@@ -244,4 +244,7 @@
 /* Use ceph assert override */
 #cmakedefine USE_CEPH_ASSERT
 
+/* Default system ceph path */
+#define CEPH_CONF_SYS_DEFAULT @sysconfdir@/ceph
+
 #endif /* CONFIG_H */
