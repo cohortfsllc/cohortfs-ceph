@@ -2,44 +2,29 @@
 // vim: ts=8 sw=2 smarttab
 
 #include "Dispatcher.h"
-#include "msg/DirectMessenger.h"
-#include "msg/FastStrategy.h"
-#include "osd/OSD.h"
+
+#include "msg/Messenger.h"
 
 #define dout_subsys ceph_subsys_osd
 
-LibOSDDispatcher::LibOSDDispatcher(CephContext *cct, OSD *osd)
-  : Dispatcher(cct),
+#undef dout_prefix
+#define dout_prefix (*_dout << "libosd ")
+
+namespace ceph
+{
+namespace osd
+{
+
+Dispatcher::Dispatcher(CephContext *cct, Messenger *ms, ConnectionRef conn)
+  : ::Dispatcher(cct),
+    ms(ms),
+    conn(conn),
     next_tid(0)
 {
-  DirectMessenger *cmsgr = new DirectMessenger(cct,
-      entity_name_t::CLIENT(osd->get_nodeid()), // XXX
-      "direct osd client", 0, new FastStrategy());
-  DirectMessenger *smsgr = new DirectMessenger(cct,
-      entity_name_t::OSD(osd->get_nodeid()),
-      "direct osd server", 0, new FastStrategy());
-
-  cmsgr->set_direct_peer(smsgr);
-  smsgr->set_direct_peer(cmsgr);
-
-  cmsgr->add_dispatcher_head(this);
-  smsgr->add_dispatcher_head(osd);
-
-  ms_client = cmsgr;
-  ms_server = smsgr;
 }
 
-LibOSDDispatcher::~LibOSDDispatcher()
+void Dispatcher::shutdown()
 {
-  delete ms_client;
-  delete ms_server;
-}
-
-void LibOSDDispatcher::shutdown()
-{
-  ms_client->shutdown();
-  ms_server->shutdown();
-
   // drop any outstanding requests
   tid_lock.lock();
   for (cb_map::iterator i = callbacks.begin(); i != callbacks.end(); ++i) {
@@ -50,13 +35,7 @@ void LibOSDDispatcher::shutdown()
   tid_lock.unlock();
 }
 
-void LibOSDDispatcher::wait()
-{
-  ms_client->wait();
-  ms_server->wait();
-}
-
-void LibOSDDispatcher::send_request(Message *m, OnReply *c)
+void Dispatcher::send_request(Message *m, OnReply *c)
 {
   // register tid/callback
   tid_lock.lock();
@@ -65,22 +44,11 @@ void LibOSDDispatcher::send_request(Message *m, OnReply *c)
   callbacks.insert(cb_map::value_type(tid, c));
   tid_lock.unlock();
 
-  // get connection
-  ConnectionRef conn = ms_client->get_connection(ms_server->get_myinst());
-  if (conn->get_priv() == NULL) {
-    // create an osd session
-    OSD::Session *s = new OSD::Session;
-    s->con = conn;
-    s->entity_name.set_name(ms_client->get_myname());
-    s->auid = CEPH_AUTH_UID_DEFAULT;
-    conn->set_priv(s);
-  }
-
   // send to server messenger
-  ms_client->send_message(m, conn.get());
+  ms->send_message(m, conn.get());
 }
 
-bool LibOSDDispatcher::ms_dispatch(Message *m)
+bool Dispatcher::ms_dispatch(Message *m)
 {
   const ceph_tid_t tid = m->get_tid();
   tid_lock.lock();
@@ -88,12 +56,14 @@ bool LibOSDDispatcher::ms_dispatch(Message *m)
   if (i == callbacks.end()) {
     tid_lock.unlock();
     // drop messages that aren't replies
+    ldout(cct, 10) << "ms_dispatch dropping " << *m << dendl;
     return false;
   }
 
+  ldout(cct, 10) << "ms_dispatch " << *m << dendl;
   OnReply *c = i->second;
 
-  bool last_reply = c == NULL || c->is_last_reply(m);
+  bool last_reply = c == nullptr || c->is_last_reply(m);
   if (last_reply)
     callbacks.erase(i);
   tid_lock.unlock();
@@ -105,3 +75,6 @@ bool LibOSDDispatcher::ms_dispatch(Message *m)
   }
   return true;
 }
+
+} // namespace osd
+} // namespace ceph

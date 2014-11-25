@@ -1,17 +1,21 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
-#ifndef CEPH_LIBOSD_DISPATCHER
-#define CEPH_LIBOSD_DISPATCHER
+#ifndef CEPH_LIBOSD_DISPATCHER_H
+#define CEPH_LIBOSD_DISPATCHER_H
 
 #include "msg/Dispatcher.h"
 #include "include/Spinlock.h"
 
 class CephContext;
-class DirectMessenger;
 class OSD;
 
-class LibOSDDispatcher : public Dispatcher {
+namespace ceph
+{
+namespace osd
+{
+
+class Dispatcher : public ::Dispatcher {
 public:
   struct OnReply {
     virtual ~OnReply() {}
@@ -22,8 +26,8 @@ public:
   };
 
 private:
-  // direct messenger pair
-  DirectMessenger *ms_client, *ms_server;
+  Messenger *ms;
+  ConnectionRef conn;
 
   Spinlock tid_lock; // protects next_tid and callback map
   ceph_tid_t next_tid;
@@ -31,13 +35,11 @@ private:
   cb_map callbacks;
 
 public:
-  LibOSDDispatcher(CephContext *cct, OSD *osd);
-  ~LibOSDDispatcher();
+  Dispatcher(CephContext *cct, Messenger *ms, ConnectionRef conn);
 
   void send_request(Message *m, OnReply *c);
 
   void shutdown();
-  void wait();
 
   bool ms_dispatch(Message *m);
 
@@ -45,4 +47,7 @@ public:
   void ms_handle_remote_reset(Connection *con) {}
 };
 
-#endif // CEPH_LIBOSD_DISPATCHER
+} // namespace osd
+} // namespace ceph
+
+#endif // CEPH_LIBOSD_DISPATCHER_H
