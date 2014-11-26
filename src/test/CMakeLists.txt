@@ -1776,3 +1776,9 @@ add_executable(test_libosd test_libosd.c $<TARGET_OBJECTS:heap_profiler_objs>)
 set_target_properties(test_libosd PROPERTIES LINKER_LANGUAGE C)
 target_link_libraries(test_libosd PRIVATE osd os global
   boost_filesystem boost_system ${TCMALLOC_LIBS})
+
+# test_libosd_proxy
+add_executable(test_libosd_proxy test_libosd_proxy.c $<TARGET_OBJECTS:heap_profiler_objs>)
+set_target_properties(test_libosd_proxy PROPERTIES LINKER_LANGUAGE C)
+target_link_libraries(test_libosd_proxy PRIVATE osd os global
+  boost_filesystem boost_system ${TCMALLOC_LIBS})
