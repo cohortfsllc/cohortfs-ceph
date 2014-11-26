@@ -214,7 +214,7 @@ option(USE_CEPH_ASSERT "Use Ceph's assert override" ON)
 option(WITH_CAPNP "use Capn Proto" ON)
 if(WITH_CAPNP)
 	find_package(capnproto REQUIRED)
-endif(WITH_CDS)
+endif(WITH_CAPNP)
 
 
 # Now create a useable config.h
