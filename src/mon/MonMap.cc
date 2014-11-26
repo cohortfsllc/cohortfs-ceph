@@ -44,6 +44,7 @@ void MonMap::encode(bufferlist& blist, uint64_t features) const
     ::encode(mon_addr, blist);
     ::encode(last_changed, blist);
     ::encode(created, blist);
+    return;
   }
 
   ENCODE_START(3, 3, blist);
