@@ -1776,3 +1776,16 @@ add_executable(test_libosd test_libosd.c $<TARGET_OBJECTS:heap_profiler_objs>)
 set_target_properties(test_libosd PROPERTIES LINKER_LANGUAGE C)
 target_link_libraries(test_libosd PRIVATE osd os global
   boost_filesystem boost_system ${TCMALLOC_LIBS})
+
+set(CAPNP_LIBS capnp kj)
+
+# capnp_osdmap
+set(capnp_osdmap_srcs capnp/testOsdMap.cc capnp/OSDMap.capnp.c++)
+add_executable(capnp_osdmap
+  ${capnp_osdmap_srcs}
+#   $<TARGET_OBJECTS:heap_profiler_objs>
+  )
+target_link_libraries(capnp_osdmap global ${CMAKE_DL_LIBS} ${CAPNP_LIBS} ${TCMALLOC_LIBS}
+  ${UNITTEST_LIBS})
+set_target_properties(capnp_osdmap PROPERTIES COMPILE_FLAGS
+  ${UNITTEST_CXX_FLAGS})

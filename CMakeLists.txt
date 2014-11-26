@@ -211,6 +211,12 @@ endif(WITH_CDS)
 
 option(USE_CEPH_ASSERT "Use Ceph's assert override" ON)
 
+option(WITH_CAPNP "use Capn Proto" ON)
+if(WITH_CAPNP)
+	find_package(capnproto REQUIRED)
+endif(WITH_CDS)
+
+
 # Now create a useable config.h
 configure_file(
   ${PROJECT_SOURCE_DIR}/src/include/config-h.in.cmake

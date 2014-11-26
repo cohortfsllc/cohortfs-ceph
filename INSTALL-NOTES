@@ -1,0 +1,36 @@
+1. Make sure you have all components as described here:
+
+    http://ceph.com/docs/master/install/build-ceph/
+
+2. On Ubuntu I also seemed to have to do the following:
+
+   sudo apt-get install libudev-dev
+   sudo apt-get install libblkid-dev
+
+3. cd <top-directory-of-branch>
+
+4. mkdir build
+
+5. cd build
+
+6. <one of>
+
+    a. cmake -DWITH_RADOSGW=OFF -DWITH_CDS=OFF -DCDS_LIBS= ..
+    b. cmake ..
+    c. cmake -DWITH_TESTS=OFF ..
+
+7. make
+
+
+# Note: at one point there were some issues with using
+  CHECK_INCLUDE_FILES rather than CHECK_INCLUDE_FILE_CXX for C++
+  include files. This no longer seems to be an issue, but I keep the
+  information here in case the issue ever raises its head.
+
+    diff --cc CMakeLists.txt
+
+      --CHECK_INCLUDE_FILES("boost/random/discrete_distribution.hpp" HAVE_BOOST_RANDOM_DISCRETE_DISTRIBUTION)
+      ++CHECK_INCLUDE_FILE_CXX("boost/random/discrete_distribution.hpp" HAVE_BOOST_RANDOM_DISCRETE_DISTRIBUTION)
+
+      --CHECK_INCLUDE_FILES("leveldb/filter_policy.h" HAVE_LEVELDB_FILTER_POLICY)
+      ++CHECK_INCLUDE_FILE_CXX("leveldb/filter_policy.h" HAVE_LEVELDB_FILTER_POLICY)

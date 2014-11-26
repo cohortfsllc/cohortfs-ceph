@@ -28,6 +28,7 @@
 aclocal.m4
 ar-lib
 autom4te.cache
+build
 build-stamp
 ceph.spec
 compile
@@ -40,6 +41,7 @@ configure-stamp
 core
 cscope.*
 depcomp
+fontconfig
 gmon.out
 install-sh
 libtool
