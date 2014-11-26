@@ -41,6 +41,7 @@
 #include <set>
 #include <map>
 #include <unordered_set>
+#include <boost/range/adaptor/map.hpp>
 
 /*
  * we track up to two intervals during which the osd was alive and
@@ -261,6 +262,9 @@ public:
 
   bool is_blacklisted(const entity_addr_t& a) const;
   void get_blacklist(list<pair<entity_addr_t,utime_t > > *bl) const;
+  const std::unordered_map<entity_addr_t,utime_t> &get_blacklist() const {
+    return blacklist;
+  }
 
   /***** cluster state *****/
   /* osds */
@@ -532,8 +536,20 @@ public:
     }
   }
 
+  size_t get_volume_count() const {
+    return vols.by_uuid.size();
+  }
+
+  const map<boost::uuids::uuid,VolumeRef> &get_volumes() const {
+    return vols.by_uuid;
+  }
+
   bool volmap_empty(void) const {
     return vols.by_uuid.empty();
+  }
+
+  const std::shared_ptr<addrs_s> get_osd_addrs() const {
+    return osd_addrs;
   }
 };
 WRITE_CLASS_ENCODER_FEATURES(OSDMap)
