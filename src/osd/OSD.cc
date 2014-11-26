@@ -2710,10 +2710,7 @@ void OSD::consume_map()
 
   notify_state_observers(state, to);
 
-  for (std::map<uuid_d,OSDVolRef>::iterator it = vol_map.begin();
-       it != vol_map.end();
-       ++it) {
-
+  for (auto it = vol_map.begin(); it != vol_map.end(); ++it) {
     OSDVolRef vol = it->second;
     vol->lock();
     advance_vol(to, vol);
@@ -2743,10 +2740,7 @@ void OSD::take_waiters(list<OpRequestRef>& ls) {
   finished_lock.Lock();
   finished.splice(finished.end(), ls);
   finished_lock.Unlock();
-  for (std::map<uuid_d,OSDVolRef>::iterator it = vol_map.begin();
-       it != vol_map.end();
-       ++it) {
-
+  for (auto it = vol_map.begin(); it != vol_map.end(); ++it) {
     OSDVolRef vol = it->second;
     vol->take_waiters();
   }
