@@ -438,7 +438,7 @@ set(osdc_osd_srcs osdc/Objecter.cc osdc/Striper.cc)
 
 set(libosd_srcs
   libosd/libosd.cc
-  libosd/proxy.cc
+  libosd/remote.cc
   libosd/Context.cc
   libosd/Objecter.cc
   libosd/Dispatcher.cc

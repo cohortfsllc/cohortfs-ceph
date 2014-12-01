@@ -6,76 +6,76 @@
 #include <pthread.h>
 #include <errno.h>
 
-#include "libosd/ceph_osd_proxy.h"
+#include "libosd/ceph_osd_remote.h"
 
 
-static int test_sync_write(struct libosd_proxy *osd,
+static int test_sync_write(struct libosd_remote *osd,
 			   const uint8_t volume[16])
 {
   char buf[64] = {};
   int r;
 
   // flags=NONE -> EINVAL
-  r = libosd_proxy_write(osd, "sync-inval0", volume, 0, sizeof(buf), buf,
-			 LIBOSD_WRITE_FLAGS_NONE, NULL, NULL);
+  r = libosd_remote_write(osd, "sync-inval0", volume, 0, sizeof(buf), buf,
+			  LIBOSD_WRITE_FLAGS_NONE, NULL, NULL);
   if (r != -EINVAL) {
-    fprintf(stderr, "libosd_proxy_write(flags=NONE) returned %d, "
+    fprintf(stderr, "libosd_remote_write(flags=NONE) returned %d, "
 	"expected -EINVAL\n", r);
     return -1;
   }
 
   // flags=UNSTABLE|STABLE -> EINVAL
-  r = libosd_proxy_write(osd, "sync-inval2", volume, 0, sizeof(buf), buf,
-			 LIBOSD_WRITE_CB_UNSTABLE | LIBOSD_WRITE_CB_STABLE,
-			 NULL, NULL);
+  r = libosd_remote_write(osd, "sync-inval2", volume, 0, sizeof(buf), buf,
+			  LIBOSD_WRITE_CB_UNSTABLE | LIBOSD_WRITE_CB_STABLE,
+			  NULL, NULL);
   if (r != -EINVAL) {
-    fprintf(stderr, "libosd_proxy_write(flags=UNSTABLE|STABLE) returned %d, "
+    fprintf(stderr, "libosd_remote_write(flags=UNSTABLE|STABLE) returned %d, "
 	"expected -EINVAL\n", r);
     return -1;
   }
 
   // flags=UNSTABLE
-  r = libosd_proxy_write(osd, "sync-unstable", volume, 0, sizeof(buf), buf,
-			 LIBOSD_WRITE_CB_UNSTABLE, NULL, NULL);
+  r = libosd_remote_write(osd, "sync-unstable", volume, 0, sizeof(buf), buf,
+			  LIBOSD_WRITE_CB_UNSTABLE, NULL, NULL);
   if (r < 0) {
-    fprintf(stderr, "libosd_proxy_write(flags=UNSTABLE) failed with %d\n", r);
+    fprintf(stderr, "libosd_remote_write(flags=UNSTABLE) failed with %d\n", r);
     return r;
   }
   if (r != sizeof(buf)) {
-    fprintf(stderr, "libosd_proxy_write(flags=UNSTABLE) wrote %d bytes, "
+    fprintf(stderr, "libosd_remote_write(flags=UNSTABLE) wrote %d bytes, "
        " expected %ld\n", r, sizeof(buf));
     return -1;
   }
 
   // flags=STABLE
-  r = libosd_proxy_write(osd, "sync-stable", volume, 0, sizeof(buf), buf,
-			 LIBOSD_WRITE_CB_STABLE, NULL, NULL);
+  r = libosd_remote_write(osd, "sync-stable", volume, 0, sizeof(buf), buf,
+			  LIBOSD_WRITE_CB_STABLE, NULL, NULL);
   if (r < 0) {
-    fprintf(stderr, "libosd_proxy_write(flags=STABLE) failed with %d\n", r);
+    fprintf(stderr, "libosd_remote_write(flags=STABLE) failed with %d\n", r);
     return r;
   }
   if (r != sizeof(buf)) {
-    fprintf(stderr, "libosd_proxy_write(flags=STABLE) wrote %d bytes, "
+    fprintf(stderr, "libosd_remote_write(flags=STABLE) wrote %d bytes, "
        " expected %ld\n", r, sizeof(buf));
     return -1;
   }
   return 0;
 }
 
-static int test_sync_read(struct libosd_proxy *osd, const uint8_t volume[16])
+static int test_sync_read(struct libosd_remote *osd, const uint8_t volume[16])
 {
   char buf[64] = {};
   int r;
 
   // read object created by test_sync_write()
-  r = libosd_proxy_read(osd, "sync-stable", volume, 0, sizeof(buf), buf,
-			LIBOSD_READ_FLAGS_NONE, NULL, NULL);
+  r = libosd_remote_read(osd, "sync-stable", volume, 0, sizeof(buf), buf,
+			 LIBOSD_READ_FLAGS_NONE, NULL, NULL);
   if (r < 0) {
-    fprintf(stderr, "libosd_proxy_read() failed with %d\n", r);
+    fprintf(stderr, "libosd_remote_read() failed with %d\n", r);
     return r;
   }
   if (r != sizeof(buf)) {
-    fprintf(stderr, "libosd_proxy_read() read %d bytes, expected %ld\n",
+    fprintf(stderr, "libosd_remote_read() read %d bytes, expected %ld\n",
 	r, sizeof(buf));
     return -1;
   }
@@ -112,7 +112,7 @@ static int wait_for_completion(struct io_completion *io, int count)
   return io->result;
 }
 
-static int test_async_write(struct libosd_proxy *osd, const uint8_t volume[16])
+static int test_async_write(struct libosd_remote *osd, const uint8_t volume[16])
 {
   char buf[64] = {};
   struct io_completion io1 = {
@@ -133,19 +133,19 @@ static int test_async_write(struct libosd_proxy *osd, const uint8_t volume[16])
   int r;
 
   // flags=NONE -> EINVAL
-  r = libosd_proxy_write(osd, "async-inval0", volume, 0, sizeof(buf), buf,
-			 LIBOSD_WRITE_FLAGS_NONE, completion_cb, NULL);
+  r = libosd_remote_write(osd, "async-inval0", volume, 0, sizeof(buf), buf,
+			  LIBOSD_WRITE_FLAGS_NONE, completion_cb, NULL);
   if (r != -EINVAL) {
-    fprintf(stderr, "libosd_proxy_write(flags=NONE) returned %d, "
+    fprintf(stderr, "libosd_remote_write(flags=NONE) returned %d, "
 	"expected -EINVAL\n", r);
     return -1;
   }
 
   // flags=UNSTABLE
-  r = libosd_proxy_write(osd, "async-unstable", volume, 0, sizeof(buf), buf,
-			 LIBOSD_WRITE_CB_UNSTABLE, completion_cb, &io1);
+  r = libosd_remote_write(osd, "async-unstable", volume, 0, sizeof(buf), buf,
+			  LIBOSD_WRITE_CB_UNSTABLE, completion_cb, &io1);
   if (r != 0) {
-    fprintf(stderr, "libosd_proxy_write(flags=UNSTABLE) failed with %d\n", r);
+    fprintf(stderr, "libosd_remote_write(flags=UNSTABLE) failed with %d\n", r);
     return r;
   }
   r = wait_for_completion(&io1, 1);
@@ -160,10 +160,10 @@ static int test_async_write(struct libosd_proxy *osd, const uint8_t volume[16])
   }
 
   // flags=STABLE
-  r = libosd_proxy_write(osd, "async-stable", volume, 0, sizeof(buf), buf,
+  r = libosd_remote_write(osd, "async-stable", volume, 0, sizeof(buf), buf,
 			 LIBOSD_WRITE_CB_STABLE, completion_cb, &io2);
   if (r != 0) {
-    fprintf(stderr, "libosd_proxy_write(flags=STABLE) failed with %d\n", r);
+    fprintf(stderr, "libosd_remote_write(flags=STABLE) failed with %d\n", r);
     return r;
   }
   r = wait_for_completion(&io2, 1);
@@ -178,11 +178,11 @@ static int test_async_write(struct libosd_proxy *osd, const uint8_t volume[16])
   }
 
   // flags=UNSTABLE|STABLE
-  r = libosd_proxy_write(osd, "async-unstable-stable", volume, 0, sizeof(buf),
+  r = libosd_remote_write(osd, "async-unstable-stable", volume, 0, sizeof(buf),
 			 buf, LIBOSD_WRITE_CB_UNSTABLE | LIBOSD_WRITE_CB_STABLE,
 			 completion_cb, &io3);
   if (r != 0) {
-    fprintf(stderr, "libosd_proxy_write(flags=UNSTABLE|STABLE) failed with %d\n", r);
+    fprintf(stderr, "libosd_remote_write(flags=UNSTABLE|STABLE) failed with %d\n", r);
     return r;
   }
   r = wait_for_completion(&io3, 2); // wait for both callbacks
@@ -198,7 +198,7 @@ static int test_async_write(struct libosd_proxy *osd, const uint8_t volume[16])
   return 0;
 }
 
-static int test_async_read(struct libosd_proxy *osd, const uint8_t volume[16])
+static int test_async_read(struct libosd_remote *osd, const uint8_t volume[16])
 {
   char buf[64] = {};
   struct io_completion io = {
@@ -208,10 +208,10 @@ static int test_async_read(struct libosd_proxy *osd, const uint8_t volume[16])
   };
   int r;
 
-  r = libosd_proxy_read(osd, "async-stable", volume, 0, sizeof(buf), buf,
-			LIBOSD_READ_FLAGS_NONE, completion_cb, &io);
+  r = libosd_remote_read(osd, "async-stable", volume, 0, sizeof(buf), buf,
+			 LIBOSD_READ_FLAGS_NONE, completion_cb, &io);
   if (r != 0) {
-    fprintf(stderr, "libosd_proxy_read() failed with %d\n", r);
+    fprintf(stderr, "libosd_remote_read() failed with %d\n", r);
     return r;
   }
   r = wait_for_completion(&io, 1);
@@ -228,7 +228,7 @@ static int test_async_read(struct libosd_proxy *osd, const uint8_t volume[16])
 }
 
 
-static int run_tests(struct libosd_proxy *osd, const uint8_t volume[16])
+static int run_tests(struct libosd_remote *osd, const uint8_t volume[16])
 {
   int r = test_sync_write(osd, volume);
   if (r != 0) {
@@ -253,7 +253,7 @@ static int run_tests(struct libosd_proxy *osd, const uint8_t volume[16])
     fprintf(stderr, "test_async_read() failed with %d\n", r);
     return r;
   }
-  puts("libosd_proxy tests passed");
+  puts("libosd_remote tests passed");
   return 0;
 }
 
@@ -261,23 +261,23 @@ int main(int argc, const char *argv[])
 {
   uint8_t volume[16];
   int r = 0;
-  struct libosd_proxy_args args = {
+  struct libosd_remote_args args = {
     .id = 0,
     .config = NULL,
   };
-  struct libosd_proxy *osd = libosd_proxy_init(&args);
+  struct libosd_remote *osd = libosd_remote_init(&args);
   if (osd == NULL) {
     fputs("osd init failed\n", stderr);
     return -1;
   }
 
-  r = libosd_proxy_get_volume(osd, "rbd", volume);
+  r = libosd_remote_get_volume(osd, "rbd", volume);
   if (r != 0) {
-    fprintf(stderr, "libosd_proxy_get_volume() failed with %d\n", r);
+    fprintf(stderr, "libosd_remote_get_volume() failed with %d\n", r);
   } else {
     r = run_tests(osd, volume);
   }
 
-  libosd_proxy_cleanup(osd);
+  libosd_remote_cleanup(osd);
   return r;
 }

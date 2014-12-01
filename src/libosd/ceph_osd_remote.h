@@ -3,70 +3,70 @@
 */
 
 /** \file
- * Contains the C and C++ APIs for Ceph's LibOSD proxy, which allows an
+ * Contains the C and C++ APIs for Ceph's remote LibOSD, which allows an
  * application to communicate with an out-of-process OSD with an interface
  * similar to @libosd.
  */
 
-#ifndef LIBCEPH_OSD_PROXY_H
-#define LIBCEPH_OSD_PROXY_H
+#ifndef LIBCEPH_OSD_REMOTE_H
+#define LIBCEPH_OSD_REMOTE_H
 
 #include "ceph_osd.h"
 
 #ifdef __cplusplus
 
 /**
- * The abstract C++ libosd_proxy interface, whose member functions take
+ * The abstract C++ libosd_remote interface, whose member functions take
  * the same arguments as the C interface.
  *
- * Must be created with libosd_proxy_init() and destroyed with
- * libosd_proxy_cleanup().
+ * Must be created with libosd_remote_init() and destroyed with
+ * libosd_remote_cleanup().
  */
-struct libosd_proxy {
+struct libosd_remote {
   const int whoami; /**< osd instance id */
-  libosd_proxy(int name) : whoami(name) {}
+  libosd_remote(int name) : whoami(name) {}
 
   /**
    * Look up a volume by name to get its uuid.
-   * @see libosd_proxy_get_volume()
+   * @see libosd_remote_get_volume()
    */
   virtual int get_volume(const char *name, uint8_t id[16]) = 0;
 
   /**
    * Read from an object.
-   * @see libosd_proxy_read()
+   * @see libosd_remote_read()
    */
   virtual int read(const char *object, const uint8_t volume[16],
 		   uint64_t offset, uint64_t length, char *data,
 		   int flags, libosd_io_completion_fn cb, void *user) = 0;
 
   /** Write to an object.
-   * @see libosd_proxy_write()
+   * @see libosd_remote_write()
    */
   virtual int write(const char *object, const uint8_t volume[16],
 		    uint64_t offset, uint64_t length, char *data,
 		    int flags, libosd_io_completion_fn cb, void *user) = 0;
 
   /** Truncate an object.
-   * @see libosd_proxy_truncate()
+   * @see libosd_remote_truncate()
    */
   virtual int truncate(const char *object, const uint8_t volume[16],
 		       uint64_t offset, int flags,
 		       libosd_io_completion_fn cb, void *user) = 0;
 
 protected:
-  /** Destructor protected: must be deleted by libosd_proxy_cleanup() */
-  virtual ~libosd_proxy() {}
+  /** Destructor protected: must be deleted by libosd_remote_cleanup() */
+  virtual ~libosd_remote() {}
 };
 
 /* C interface */
 extern "C" {
 #else
-struct libosd_proxy;
+struct libosd_remote;
 #endif /* __cplusplus */
 
-/** Initialization arguments for libosd_proxy_init() */
-struct libosd_proxy_args {
+/** Initialization arguments for libosd_remote_init() */
+struct libosd_remote_args {
   int id;		/**< osd instance id */
   const char *config;	/**< path to ceph configuration file */
   const char *cluster;	/**< ceph cluster name (default "ceph") */
@@ -80,21 +80,21 @@ struct libosd_proxy_args {
  *
  * @param args	  Initialization arguments
  *
- * @return A pointer to the new libosd_proxy instance, or NULL on failure.
+ * @return A pointer to the new libosd_remote instance, or NULL on failure.
  */
-struct libosd_proxy* libosd_proxy_init(const struct libosd_proxy_args *args);
+struct libosd_remote* libosd_remote_init(const struct libosd_remote_args *args);
 
 /**
- * Release resources associated with an osd proxy.
+ * Release resources associated with an osd remote.
  *
- * @param osd	  The libosd_proxy object returned by libosd_proxy_init()
+ * @param osd	  The libosd_remote object returned by libosd_remote_init()
  */
-void libosd_proxy_cleanup(struct libosd_proxy *osd);
+void libosd_remote_cleanup(struct libosd_remote *osd);
 
 /**
  * Look up a volume by name to get its uuid.
  *
- * @param osd	  The libosd_proxy object returned by libosd_proxy_init()
+ * @param osd	  The libosd_remote object returned by libosd_remote_init()
  * @param name    The volume name in the osd map
  * @param uuid    The uuid to be assigned
  *
@@ -102,16 +102,16 @@ void libosd_proxy_cleanup(struct libosd_proxy *osd);
  * @retval -ENOENT if not found.
  * @retval -ENODEV if the OSD is unreachable.
  */
-int libosd_proxy_get_volume(struct libosd_proxy *osd, const char *name,
-                            uint8_t uuid[16]);
+int libosd_remote_get_volume(struct libosd_remote *osd, const char *name,
+                             uint8_t uuid[16]);
 
 /**
  * Read from an object. The function is asynchronous is a callback function
  * is given.
  *
- * @param osd	  The libosd_proxy object returned by libosd_proxy_init()
+ * @param osd	  The libosd_remote object returned by libosd_remote_init()
  * @param object  The object name string
- * @param volume  The volume uuid returned by libosd_proxy_get_volume()
+ * @param volume  The volume uuid returned by libosd_remote_get_volume()
  * @param offset  Offset into the object
  * @param length  Number of bytes to read
  * @param data	  Buffer to receive the object data
@@ -123,18 +123,18 @@ int libosd_proxy_get_volume(struct libosd_proxy *osd, const char *name,
  * request was submitted asynchronously, or a negative error code on failure.
  * @retval -ENODEV if the OSD is unreachable.
  */
-int libosd_proxy_read(struct libosd_proxy *osd, const char *object,
-                      const uint8_t volume[16], uint64_t offset,
-                      uint64_t length, char *data, int flags,
-                      libosd_io_completion_fn cb, void *user);
+int libosd_remote_read(struct libosd_remote *osd, const char *object,
+                       const uint8_t volume[16], uint64_t offset,
+                       uint64_t length, char *data, int flags,
+                       libosd_io_completion_fn cb, void *user);
 
 /**
  * Write to an object. The function is asynchronous if a callback function
  * is given.
  *
- * @param osd	  The libosd_proxy object returned by libosd_proxy_init()
+ * @param osd	  The libosd_remote object returned by libosd_remote_init()
  * @param object  The object name string
- * @param volume  The volume uuid returned by libosd_proxy_get_volume()
+ * @param volume  The volume uuid returned by libosd_remote_get_volume()
  * @param offset  Offset into the object
  * @param length  Number of bytes to write
  * @param data	  Buffer to receive the object data
@@ -150,18 +150,18 @@ int libosd_proxy_read(struct libosd_proxy *osd, const char *object,
  * exactly one of LIBOSD_WRITE_CB_UNSTABLE or LIBOSD_WRITE_CB_STABLE.
  * @retval -ENODEV if the OSD is unreachable.
  */
-int libosd_proxy_write(struct libosd_proxy *osd, const char *object,
-                       const uint8_t volume[16], uint64_t offset,
-                       uint64_t length, char *data, int flags,
-                       libosd_io_completion_fn cb, void *user);
+int libosd_remote_write(struct libosd_remote *osd, const char *object,
+                        const uint8_t volume[16], uint64_t offset,
+                        uint64_t length, char *data, int flags,
+                        libosd_io_completion_fn cb, void *user);
 
 /**
  * Truncate an object. The function is asynchronous if a callback function
  * is given.
  *
- * @param osd	  The libosd_proxy object returned by libosd_proxy_init()
+ * @param osd	  The libosd_remote object returned by libosd_remote_init()
  * @param object  The object name string
- * @param volume  The volume uuid returned by libosd_proxy_get_volume()
+ * @param volume  The volume uuid returned by libosd_remote_get_volume()
  * @param offset  Offset into the object
  * @param flags	  LIBOSD_WRITE_ flags
  * @param cb	  Truncate completion callback (optional)
@@ -175,12 +175,12 @@ int libosd_proxy_write(struct libosd_proxy *osd, const char *object,
  * exactly one of LIBOSD_WRITE_CB_UNSTABLE or LIBOSD_WRITE_CB_STABLE.
  * @retval -ENODEV if the OSD is unreachable.
  */
-int libosd_proxy_truncate(struct libosd_proxy *osd, const char *object,
-                          const uint8_t volume[16], uint64_t offset,
-                          int flags, libosd_io_completion_fn cb, void *user);
+int libosd_remote_truncate(struct libosd_remote *osd, const char *object,
+                           const uint8_t volume[16], uint64_t offset,
+                           int flags, libosd_io_completion_fn cb, void *user);
 
 #ifdef __cplusplus
 } /* extern "C" */
 #endif /* __cplusplus */
 
-#endif /* LIBCEPH_OSD_PROXY_H */
+#endif /* LIBCEPH_OSD_REMOTE_H */
