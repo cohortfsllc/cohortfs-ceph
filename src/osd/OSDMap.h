@@ -219,6 +219,7 @@ private:
 
   friend class OSDMonitor;
   friend class MDS;
+  friend class OSDMapCapnP;
 
  public:
   OSDMap() : fsid(boost::uuids::nil_uuid()),
