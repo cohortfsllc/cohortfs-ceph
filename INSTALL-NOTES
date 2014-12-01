@@ -4,8 +4,13 @@
 
 2. On Ubuntu I also seemed to have to do the following:
 
-   sudo apt-get install libudev-dev
-   sudo apt-get install libblkid-dev
+    sudo apt-get install capnproto
+    sudo apt-get install libboost1.55-dev
+    sudo apt-get install libboost-regex1.55-dev
+    sudo apt-get install libboost-filesystem1.55-dev
+    sudo apt-get install libboost-thread1.55-dev
+    sudo apt-get install libboost-program-options1.55-dev
+    sudo apt-get install libcrypto++-dev
 
 3. cd <top-directory-of-branch>
 
