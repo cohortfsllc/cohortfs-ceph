@@ -33,13 +33,6 @@ endif(HAVE_CDS)
 
 set(CRYPTO_LIBS cryptopp)
 
-set(bindir ${CMAKE_INSTALL_PREFIX}/bin)
-set(sbindir ${CMAKE_INSTALL_PREFIX}/sbin)
-set(libdir ${CMAKE_INSTALL_PREFIX}/lib)
-set(sysconfdir ${CMAKE_INSTALL_PREFIX}/etc)
-set(pkgdatadir ${CMAKE_INSTALL_PREFIX}/share)
-set(prefix ${CMAKE_INSTALL_PREFIX})
-
 set(GCOV_PREFIX_STRIP 4)
 
 get_git_head_revision(GIT_REFSPEC CEPH_GIT_VER)

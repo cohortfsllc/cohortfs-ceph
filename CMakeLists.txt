@@ -215,6 +215,13 @@ endif(WITH_CDS)
 
 option(USE_CEPH_ASSERT "Use Ceph's assert override" ON)
 
+set(bindir ${CMAKE_INSTALL_PREFIX}/bin)
+set(sbindir ${CMAKE_INSTALL_PREFIX}/sbin)
+set(libdir ${CMAKE_INSTALL_PREFIX}/lib)
+set(sysconfdir ${CMAKE_INSTALL_PREFIX}/etc)
+set(pkgdatadir ${CMAKE_INSTALL_PREFIX}/share)
+set(prefix ${CMAKE_INSTALL_PREFIX})
+
 # Now create a useable config.h
 configure_file(
   ${PROJECT_SOURCE_DIR}/src/include/config-h.in.cmake
