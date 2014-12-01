@@ -12,25 +12,20 @@
 class ContDesc {
 public:
   int objnum;
-  int cursnap;
   unsigned seqnum;
-  string prefix;
-  string oid;
+  std::string prefix;
+  std::string oid;
 
   ContDesc() :
-    objnum(0), cursnap(0),
-    seqnum(0), prefix("") {}
+    objnum(0), seqnum(0), prefix("") {}
 
   ContDesc(int objnum,
-	   int cursnap,
 	   unsigned seqnum,
-	   const string &prefix) :
-    objnum(objnum), cursnap(cursnap),
-    seqnum(seqnum), prefix(prefix) {}
+	   const std::string &prefix) :
+    objnum(objnum), seqnum(seqnum), prefix(prefix) {}
 
   bool operator==(const ContDesc &rhs) {
     return (rhs.objnum == objnum &&
-	    rhs.cursnap == cursnap &&
 	    rhs.seqnum == seqnum &&
 	    rhs.prefix == prefix &&
 	    rhs.oid == oid);
@@ -48,7 +43,7 @@ public:
 };
 WRITE_CLASS_ENCODER(ContDesc)
 
-ostream &operator<<(ostream &out, const ContDesc &rhs);
+std::ostream &operator<<(std::ostream &out, const ContDesc &rhs);
 
 class ContentsGenerator {
 public:
@@ -97,11 +92,11 @@ public:
   virtual uint64_t get_length(const ContDesc &in) = 0;
 
   virtual void get_ranges_map(
-    const ContDesc &cont, map<uint64_t, uint64_t> &out) = 0;
+    const ContDesc &cont, std::map<uint64_t, uint64_t> &out) = 0;
   void get_ranges(const ContDesc &cont, interval_set<uint64_t> &out) {
-    map<uint64_t, uint64_t> ranges;
+    std::map<uint64_t, uint64_t> ranges;
     get_ranges_map(cont, ranges);
-    for (map<uint64_t, uint64_t>::iterator i = ranges.begin();
+    for (auto i = ranges.begin();
 	 i != ranges.end();
 	 ++i) {
       out.insert(i->first, i->second);
@@ -207,7 +202,7 @@ public:
     min_stride_size(min_stride_size),
     max_stride_size(max_stride_size) {}
   void get_ranges_map(
-    const ContDesc &cont, map<uint64_t, uint64_t> &out);
+    const ContDesc &cont, std::map<uint64_t, uint64_t> &out);
   uint64_t get_length(const ContDesc &in) {
     RandWrap rand(in.seqnum);
     return (rand() % max_length);
@@ -219,8 +214,8 @@ class AttrGenerator : public RandGenerator {
 public:
   AttrGenerator(uint64_t max_len) : max_len(max_len) {}
   void get_ranges_map(
-    const ContDesc &cont, map<uint64_t, uint64_t> &out) {
-    out.insert(make_pair(0, get_length(cont)));
+    const ContDesc &cont, std::map<uint64_t, uint64_t> &out) {
+    out.insert(std::make_pair(0, get_length(cont)));
   }
   uint64_t get_length(const ContDesc &in) {
     RandWrap rand(in.seqnum);
@@ -238,7 +233,6 @@ public:
 
 class AppendGenerator : public RandGenerator {
   uint64_t off;
-  uint64_t alignment;
   uint64_t min_append_size;
   uint64_t max_append_size;
   uint64_t max_append_total;
@@ -252,26 +246,23 @@ class AppendGenerator : public RandGenerator {
 public:
   AppendGenerator(
     uint64_t off,
-    uint64_t alignment,
     uint64_t min_append_size,
     uint64_t _max_append_size,
     uint64_t max_append_multiple) :
-    off(off), alignment(alignment),
-    min_append_size(round_up(min_append_size, alignment)),
-    max_append_size(round_up(_max_append_size, alignment)) {
-    if (_max_append_size == min_append_size)
-      max_append_size += alignment;
+    off(off),
+    min_append_size(min_append_size),
+    max_append_size(_max_append_size) {
     max_append_total = max_append_multiple * max_append_size;
   }
   uint64_t get_append_size(const ContDesc &in) {
     RandWrap rand(in.seqnum);
-    return round_up(rand() % max_append_total, alignment);
+    return rand() % max_append_total;
   }
   uint64_t get_length(const ContDesc &in) {
     return off + get_append_size(in);
   }
   void get_ranges_map(
-    const ContDesc &cont, map<uint64_t, uint64_t> &out);
+    const ContDesc &cont, std::map<uint64_t, uint64_t> &out);
 };
 
 class ObjectDesc {
@@ -279,7 +270,7 @@ public:
   ObjectDesc()
     : exists(false), dirty(false),
       version(0) {}
-  ObjectDesc(const ContDesc &init, ContentsGenerator *cont_gen)
+  ObjectDesc(const ContDesc &init, std::shared_ptr<ContentsGenerator> cont_gen)
     : exists(false), dirty(false),
       version(0) {
     layers.push_front(make_pair(cont_gen, init));
@@ -289,12 +280,12 @@ public:
   public:
     uint64_t pos;
     ObjectDesc &obj;
-    list<pair<list<pair<std::shared_ptr<ContentsGenerator>,
-			ContDesc> >::iterator,
-	      uint64_t> > stack;
-    map<ContDesc,ContentsGenerator::iterator> cont_iters;
+    std::list<std::pair<std::list<std::pair<std::shared_ptr<ContentsGenerator>,
+			     ContDesc> >::iterator,
+		   uint64_t> > stack;
+    std::map<ContDesc,ContentsGenerator::iterator> cont_iters;
     uint64_t limit;
-    list<pair<std::shared_ptr<ContentsGenerator>,
+    std::list<std::pair<std::shared_ptr<ContentsGenerator>,
 	      ContDesc> >::iterator cur_cont;
 
     iterator(ObjectDesc &obj) :
@@ -313,8 +304,7 @@ public:
       if (cur_cont == obj.layers.end()) {
 	return '\0';
       } else {
-	map<ContDesc,ContentsGenerator::iterator>::iterator j = cont_iters.find(
-	  cur_cont->second);
+	auto j = cont_iters.find(cur_cont->second);
 	assert(j != cont_iters.end());
 	return *(j->second);
       }
@@ -348,20 +338,20 @@ public:
   }
 
   // takes ownership of gen
-  void update(ContentsGenerator *gen, const ContDesc &next);
+  void update(std::shared_ptr<ContentsGenerator> gen, const ContDesc &next);
   bool check(bufferlist &to_check);
   const ContDesc &most_recent();
-  ContentsGenerator *most_recent_gen() {
-    return layers.begin()->first.get();
+  std::shared_ptr<ContentsGenerator> most_recent_gen() {
+    return layers.begin()->first;
   }
-  map<string, ContDesc> attrs; // Both omap and xattrs
+  std::map<std::string, ContDesc> attrs; // Both omap and xattrs
   bufferlist header;
   bool exists;
   bool dirty;
 
   uint64_t version;
 private:
-  list<pair<std::shared_ptr<ContentsGenerator>, ContDesc> > layers;
+  std::list<std::pair<std::shared_ptr<ContentsGenerator>, ContDesc> > layers;
 };
 
 #endif

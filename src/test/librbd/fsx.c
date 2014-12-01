@@ -106,10 +106,10 @@ int			logcount = 0;	/* total ops */
 char *original_buf; /* a pointer to the original data */
 char *good_buf; /* a pointer to the correct data */
 char *temp_buf; /* a pointer to the current data */
-char *pool; /* name of the pool our test image is in */
+char *volume; /* name of the volume our test image is in */
 char *iname; /* name of our test image */
 rados_t cluster; /* handle for our test cluster */
-rados_ioctx_t ioctx; /* handle for our test pool */
+rados_ioctx_t ioctx; /* handle for our test volume */
 rbd_image_t image; /* handle for our test image */
 
 char dirpath[1024];
@@ -481,7 +481,6 @@ int
 create_image()
 {
 	int r;
-	int order = 0;
 	r = rados_create(&cluster, NULL);
 	if (r < 0) {
 		simple_err("Could not create cluster handle", r);
@@ -498,17 +497,17 @@ create_image()
 		simple_err("Error connecting to cluster", r);
 		goto failed_shutdown;
 	}
-	r = rados_pool_create(cluster, pool);
+	r = rados_volume_create(cluster, volume);
 	if (r < 0 && r != -EEXIST) {
-		simple_err("Error creating pool", r);
+		simple_err("Error creating volume", r);
 		goto failed_shutdown;
 	}
-	r = rados_ioctx_create(cluster, pool, &ioctx);
+	r = rados_ioctx_create(cluster, volume, &ioctx);
 	if (r < 0) {
 		simple_err("Error creating ioctx", r);
 		goto failed_shutdown;
 	}
-	r = rbd_create(ioctx, iname, 0, &order);
+	r = rbd_create(ioctx, iname, 0);
 	if (r < 0) {
 		simple_err("Error creating image", r);
 		goto failed_open;
@@ -965,7 +964,7 @@ usage(void)
 	-W: mapped write operations DISabled\n\
 	-R: read() system calls only (mapped reads disabled)\n\
 	-Z: O_DIRECT (use -R, -W, -r and -w too)\n\
-	poolname: this is REQUIRED (no default)\n\
+	volumename: this is REQUIRED (no default)\n\
 	imagename: this is REQUIRED (no default)\n");
 	exit(89);
 }
@@ -1290,7 +1289,7 @@ main(int argc, char **argv)
 	argv += optind;
 	if (argc != 2)
 		usage();
-	pool = argv[0];
+	volume = argv[0];
 	iname = argv[1];
 
 	signal(SIGHUP,	cleanup);

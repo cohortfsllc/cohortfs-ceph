@@ -35,7 +35,7 @@ using namespace librados;
 static void usage(void)
 {
   cerr << "--oid	   set object id to 'operate' on" << std::endl;
-  cerr << "--pool	   set pool to 'operate' on" << std::endl;
+  cerr << "--volume	   set volume to 'operate' on" << std::endl;
 }
 
 int main(int argc, const char **argv)
@@ -49,7 +49,7 @@ int main(int argc, const char **argv)
 
   string val;
   string oid("ceph_test_object");
-  string pool_name("test_pool");
+  string volume_name("test_volume");
   for (std::vector<const char*>::iterator i = args.begin(); i != args.end(); ) {
     if (ceph_argparse_double_dash(args, i)) {
       break;
@@ -57,8 +57,8 @@ int main(int argc, const char **argv)
     else if (ceph_argparse_witharg(args, i, &val, "--oid", "-o", (char*)NULL)) {
       oid = val;
     }
-    else if (ceph_argparse_witharg(args, i, &val, "--pool", "-p", (char*)NULL)) {
-      pool_name = val;
+    else if (ceph_argparse_witharg(args, i, &val, "--volume", "-p", (char*)NULL)) {
+      volume_name = val;
     }
     else {
       cerr << "unknown command line option: " << *i << std::endl;
@@ -82,23 +82,23 @@ int main(int argc, const char **argv)
      return 1;
   }
 
-  librados::ObjectWriteOperation o;
   IoCtx ioctx;
-  if (rados.pool_lookup(pool_name.c_str()) <= 0) {
-    ret = rados.pool_create(pool_name.c_str());
+  if (rados.lookup_volume(volume_name).is_nil()) {
+    ret = rados.volume_create(volume_name.c_str());
     if (ret) {
-       cerr << "failed to create pool named '" << pool_name
+       cerr << "failed to create volume named '" << volume_name
 	    << "': error " << ret << std::endl;
        return 1;
     }
   }
-  ret = rados.ioctx_create(pool_name.c_str(), ioctx);
+  ret = rados.ioctx_create(volume_name.c_str(), ioctx);
   if (ret) {
-     cerr << "failed to create ioctx for pool '" << pool_name
+     cerr << "failed to create ioctx for volume '" << volume_name
 	  << "': error " << ret << std::endl;
      return 1;
   }
-  librados::ObjectWriteOperation op;
+  librados::ObjectWriteOperation o(ioctx);
+  librados::ObjectWriteOperation op(ioctx);
   op.create(true);
   ret = ioctx.operate(oid, &op);
   if (ret) {

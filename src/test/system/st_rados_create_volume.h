@@ -12,38 +12,38 @@
 *
 */
 
-#ifndef TEST_SYSTEM_ST_RADOS_CREATE_POOL_H
-#define TEST_SYSTEM_ST_RADOS_CREATE_POOL_H
+#ifndef TEST_SYSTEM_ST_RADOS_CREATE_VOLUME_H
+#define TEST_SYSTEM_ST_RADOS_CREATE_VOLUME_H
 
 #include "systest_runnable.h"
 
 class CrossProcessSem;
 
 /*
- * st_rados_create_pool
+ * st_rados_create_volume
  *
  * Waits, then posts to setup_sem.
- * Creates a pool and populates it with some objects.
- * Then, calls pool_setup_sem->post()
+ * Creates a volume and populates it with some objects.
+ * Then, calls volume_setup_sem->post()
  */
-class StRadosCreatePool : public SysTestRunnable
+class StRadosCreateVolume : public SysTestRunnable
 {
 public:
   static std::string get_random_buf(int sz);
-  StRadosCreatePool(int argc, const char **argv,
+  StRadosCreateVolume(int argc, const char **argv,
 		    CrossProcessSem *setup_sem,
-		    CrossProcessSem *pool_setup_sem,
-		    CrossProcessSem *close_create_pool_sem,
-		    const std::string &pool_name,
+		    CrossProcessSem *volume_setup_sem,
+		    CrossProcessSem *close_create_volume_sem,
+		    const std::string &volume_name,
 		    int num_objects,
 		    const std::string &suffix);
-  ~StRadosCreatePool();
+  ~StRadosCreateVolume();
   virtual int run();
 private:
   CrossProcessSem *m_setup_sem;
-  CrossProcessSem *m_pool_setup_sem;
-  CrossProcessSem *m_close_create_pool;
-  std::string m_pool_name;
+  CrossProcessSem *m_volume_setup_sem;
+  CrossProcessSem *m_close_create_volume;
+  std::string m_volume_name;
   int m_num_objects;
   std::string m_suffix;
 };

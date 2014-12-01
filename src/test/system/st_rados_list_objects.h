@@ -22,8 +22,8 @@ class CrossProcessSem;
 /*
  * st_rados_list_objects
  *
- * 1. calls pool_setup_sem->wait()
- * 2. calls pool_setup_sem->post()
+ * 1. calls volume_setup_sem->wait()
+ * 2. calls volume_setup_sem->post()
  * 3. list some objects
  * 4. modify_sem->wait()
  * 5. list some objects
@@ -33,19 +33,19 @@ class StRadosListObjects : public SysTestRunnable
 public:
   static std::string get_random_buf(int sz);
   StRadosListObjects(int argc, const char **argv,
-		     const std::string &pool_name,
+		     const std::string &volume_name,
 		     bool accept_list_errors,
 		     int midway_cnt,
-		     CrossProcessSem *pool_setup_sem,
+		     CrossProcessSem *volume_setup_sem,
 		     CrossProcessSem *midway_sem_wait,
 		     CrossProcessSem *midway_sem_post);
   ~StRadosListObjects();
   virtual int run();
 private:
-  std::string m_pool_name;
+  std::string m_volume_name;
   bool m_accept_list_errors;
   int m_midway_cnt;
-  CrossProcessSem *m_pool_setup_sem;
+  CrossProcessSem *m_volume_setup_sem;
   CrossProcessSem *m_midway_sem_wait;
   CrossProcessSem *m_midway_sem_post;
 };

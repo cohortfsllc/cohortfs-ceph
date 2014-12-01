@@ -11,19 +11,19 @@
 #include <string>
 #include <vector>
 
-static librados::ObjectWriteOperation *new_op() {
-  return new librados::ObjectWriteOperation();
+static librados::ObjectWriteOperation *new_op(librados::IoCtx& ioctx) {
+  return new librados::ObjectWriteOperation(ioctx);
 }
 
 TEST(cls_rgw, test_implicit) /* test refcount using implicit referencing of newly created objects */
 {
   librados::Rados rados;
   librados::IoCtx ioctx;
-  string pool_name = get_temp_pool_name();
+  string volume_name = get_temp_volume_name();
 
-  /* create pool */
-  ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
-  ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
+  /* create volume */
+  ASSERT_EQ("", create_one_volume_pp(volume_name, rados));
+  ASSERT_EQ(0, rados.ioctx_create(volume_name.c_str(), ioctx));
 
   /* add chains */
   string oid = "obj";
@@ -50,7 +50,7 @@ TEST(cls_rgw, test_implicit) /* test refcount using implicit referencing of newl
   string oldtag = "oldtag";
   string newtag = "newtag";
 
-  librados::ObjectWriteOperation *op = new_op();
+  librados::ObjectWriteOperation *op = new_op(ioctx);
   cls_refcount_get(*op, newtag, true);
   ASSERT_EQ(0, ioctx.operate(oid, op));
 
@@ -69,7 +69,7 @@ TEST(cls_rgw, test_implicit) /* test refcount using implicit referencing of newl
 
   /* drop reference to oldtag */
 
-  op = new_op();
+  op = new_op(ioctx);
   cls_refcount_put(*op, oldtag, true);
   ASSERT_EQ(0, ioctx.operate(oid, op));
 
@@ -83,7 +83,7 @@ TEST(cls_rgw, test_implicit) /* test refcount using implicit referencing of newl
 
   /* drop oldtag reference again, op should return success, wouldn't do anything */
 
-  op = new_op();
+  op = new_op(ioctx);
   cls_refcount_put(*op, oldtag, true);
   ASSERT_EQ(0, ioctx.operate(oid, op));
 
@@ -96,7 +96,7 @@ TEST(cls_rgw, test_implicit) /* test refcount using implicit referencing of newl
   delete op;
 
   /* drop newtag reference, make sure object removed */
-  op = new_op();
+  op = new_op(ioctx);
   cls_refcount_put(*op, newtag, true);
   ASSERT_EQ(0, ioctx.operate(oid, op));
 
@@ -104,20 +104,20 @@ TEST(cls_rgw, test_implicit) /* test refcount using implicit referencing of newl
 
   delete op;
 
-  /* remove pool */
+  /* remove volume */
   ioctx.close();
-  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
+  ASSERT_EQ(0, destroy_one_volume_pp(volume_name, rados));
 }
 
 TEST(cls_rgw, test_explicit) /* test refcount using implicit referencing of newly created objects */
 {
   librados::Rados rados;
   librados::IoCtx ioctx;
-  string pool_name = get_temp_pool_name();
+  string volume_name = get_temp_volume_name();
 
-  /* create pool */
-  ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
-  ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
+  /* create volume */
+  ASSERT_EQ("", create_one_volume_pp(volume_name, rados));
+  ASSERT_EQ(0, rados.ioctx_create(volume_name.c_str(), ioctx));
 
   /* add chains */
   string oid = "obj";
@@ -139,7 +139,7 @@ TEST(cls_rgw, test_explicit) /* test refcount using implicit referencing of newl
 
   string newtag = "newtag";
 
-  librados::ObjectWriteOperation *op = new_op();
+  librados::ObjectWriteOperation *op = new_op(ioctx);
   cls_refcount_get(*op, newtag);
   ASSERT_EQ(0, ioctx.operate(oid, op));
 
@@ -159,7 +159,7 @@ TEST(cls_rgw, test_explicit) /* test refcount using implicit referencing of newl
 
   string nosuchtag = "nosuchtag";
 
-  op = new_op();
+  op = new_op(ioctx);
   cls_refcount_put(*op, nosuchtag);
   ASSERT_EQ(0, ioctx.operate(oid, op));
 
@@ -172,7 +172,7 @@ TEST(cls_rgw, test_explicit) /* test refcount using implicit referencing of newl
   delete op;
 
   /* drop newtag reference, make sure object removed */
-  op = new_op();
+  op = new_op(ioctx);
   cls_refcount_put(*op, newtag);
   ASSERT_EQ(0, ioctx.operate(oid, op));
 
@@ -180,20 +180,20 @@ TEST(cls_rgw, test_explicit) /* test refcount using implicit referencing of newl
 
   delete op;
 
-  /* remove pool */
+  /* remove volume */
   ioctx.close();
-  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
+  ASSERT_EQ(0, destroy_one_volume_pp(volume_name, rados));
 }
 
 TEST(cls_rgw, set) /* test refcount using implicit referencing of newly created objects */
 {
   librados::Rados rados;
   librados::IoCtx ioctx;
-  string pool_name = get_temp_pool_name();
+  string volume_name = get_temp_volume_name();
 
-  /* create pool */
-  ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
-  ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
+  /* create volume */
+  ASSERT_EQ("", create_one_volume_pp(volume_name, rados));
+  ASSERT_EQ(0, rados.ioctx_create(volume_name.c_str(), ioctx));
 
   /* add chains */
   string oid = "obj";
@@ -222,7 +222,7 @@ TEST(cls_rgw, set) /* test refcount using implicit referencing of newly created 
 
   /* set reference list, verify */
 
-  librados::ObjectWriteOperation *op = new_op();
+  librados::ObjectWriteOperation *op = new_op(ioctx);
   cls_refcount_set(*op, tag_refs);
   ASSERT_EQ(0, ioctx.operate(oid, op));
 
@@ -244,7 +244,7 @@ TEST(cls_rgw, set) /* test refcount using implicit referencing of newly created 
   /* remove all refs */
 
   for (int i = 0; i < TAGS_NUM; i++) {
-    op = new_op();
+    op = new_op(ioctx);
     cls_refcount_put(*op, tags[i]);
     ASSERT_EQ(0, ioctx.operate(oid, op));
     delete op;
@@ -252,7 +252,7 @@ TEST(cls_rgw, set) /* test refcount using implicit referencing of newly created 
 
   ASSERT_EQ(-ENOENT, ioctx.stat(oid, NULL, NULL));
 
-  /* remove pool */
+  /* remove volume */
   ioctx.close();
-  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
+  ASSERT_EQ(0, destroy_one_volume_pp(volume_name, rados));
 }

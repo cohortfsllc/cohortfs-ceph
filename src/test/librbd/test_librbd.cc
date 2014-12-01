@@ -41,134 +41,82 @@
 
 using namespace std;
 
-static int get_features(bool *old_format, uint64_t *features)
+static int create_image(rados_ioctx_t ioctx, const char *name, uint64_t size)
 {
-  const char *c = getenv("RBD_FEATURES");
-  if (c) {
-    stringstream ss;
-    ss << c;
-    ss >> *features;
-    if (ss.fail())
-      return -EINVAL;
-    *old_format = false;
-    cout << "using new format!" << std::endl;
-  } else {
-    *old_format = true;
-    cout << "using old format" << std::endl;
-  }
-
-  return 0;
-}
-
-static int create_image_full(rados_ioctx_t ioctx, const char *name,
-			      uint64_t size, int *order, int old_format,
-			      uint64_t features)
-{
-  if (old_format) {
-    return rbd_create(ioctx, name, size, order);
-  } else {
-    return rbd_create2(ioctx, name, size, features, order);
-  }
-}
-
-static int create_image(rados_ioctx_t ioctx, const char *name,
-			uint64_t size, int *order)
-{
-  bool old_format;
-  uint64_t features;
-
-  int r = get_features(&old_format, &features);
-  if (r < 0)
-    return r;
-  return create_image_full(ioctx, name, size, order, old_format, features);
+  return rbd_create(ioctx, name, size);
 }
 
 static int create_image_pp(librbd::RBD &rbd,
 			   librados::IoCtx &ioctx,
 			   const char *name,
-			   uint64_t size, int *order) {
-  bool old_format;
-  uint64_t features;
-  int r = get_features(&old_format, &features);
-  if (r < 0)
-    return r;
-  if (old_format) {
-    return rbd.create(ioctx, name, size, order);
-  } else {
-    return rbd.create2(ioctx, name, size, features, order);
-  }
+			   uint64_t size)  {
+  return rbd.create(ioctx, name, size);
 }
 
 TEST(LibRBD, CreateAndStat)
 {
   rados_t cluster;
   rados_ioctx_t ioctx;
-  string pool_name = get_temp_pool_name();
-  ASSERT_EQ("", create_one_pool(pool_name, &cluster));
-  ASSERT_EQ(0, rados_ioctx_create(cluster, pool_name.c_str(), &ioctx));
+  string volume_name = get_temp_volume_name();
+  ASSERT_EQ("", create_one_volume(volume_name, &cluster));
+  ASSERT_EQ(0, rados_ioctx_create(cluster, volume_name.c_str(), &ioctx));
 
   rbd_image_info_t info;
   rbd_image_t image;
-  int order = 0;
   const char *name = "testimg";
   uint64_t size = 2 << 20;
 
-  ASSERT_EQ(0, create_image(ioctx, name, size, &order));
+  ASSERT_EQ(0, create_image(ioctx, name, size));
   ASSERT_EQ(0, rbd_open(ioctx, name, &image));
   ASSERT_EQ(0, rbd_stat(image, &info, sizeof(info)));
-  printf("image has size %"PRIu64" and order %d\n",
-	 info.size, info.order);
+  printf("image has size %" PRIu64 ".\n", info.size);
   ASSERT_EQ(info.size, size);
-  ASSERT_EQ(info.order, order);
   ASSERT_EQ(0, rbd_close(image));
 
   rados_ioctx_destroy(ioctx);
-  ASSERT_EQ(0, destroy_one_pool(pool_name, &cluster));
+  ASSERT_EQ(0, destroy_one_volume(volume_name, &cluster));
 }
 
 TEST(LibRBD, CreateAndStatPP)
 {
   librados::Rados rados;
   librados::IoCtx ioctx;
-  string pool_name = get_temp_pool_name();
+  string volume_name = get_temp_volume_name();
 
-  ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
-  ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
+  ASSERT_EQ("", create_one_volume_pp(volume_name, rados));
+  ASSERT_EQ(0, rados.ioctx_create(volume_name.c_str(), ioctx));
 
   {
     librbd::RBD rbd;
     librbd::image_info_t info;
     librbd::Image image;
-    int order = 0;
     const char *name = "testimg";
     uint64_t size = 2 << 20;
 
-    ASSERT_EQ(0, create_image_pp(rbd, ioctx, name, size, &order));
+    ASSERT_EQ(0, create_image_pp(rbd, ioctx, name, size));
     ASSERT_EQ(0, rbd.open(ioctx, image, name));
     ASSERT_EQ(0, image.stat(info, sizeof(info)));
     ASSERT_EQ(info.size, size);
-    ASSERT_EQ(info.order, order);
   }
 
   ioctx.close();
-  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
+  ASSERT_EQ(0, destroy_one_volume_pp(volume_name, rados));
 }
 
 TEST(LibRBD, ResizeAndStat)
 {
   rados_t cluster;
   rados_ioctx_t ioctx;
-  string pool_name = get_temp_pool_name();
-  ASSERT_EQ("", create_one_pool(pool_name, &cluster));
-  rados_ioctx_create(cluster, pool_name.c_str(), &ioctx);
+  string volume_name = get_temp_volume_name();
+  ASSERT_EQ("", create_one_volume(volume_name, &cluster));
+  rados_ioctx_create(cluster, volume_name.c_str(), &ioctx);
 
   rbd_image_info_t info;
   rbd_image_t image;
-  int order = 0;
   const char *name = "testimg";
   uint64_t size = 2 << 20;
 
-  ASSERT_EQ(0, create_image(ioctx, name, size, &order));
+  ASSERT_EQ(0, create_image(ioctx, name, size));
   ASSERT_EQ(0, rbd_open(ioctx, name, &image));
 
   ASSERT_EQ(0, rbd_resize(image, size * 4));
@@ -182,27 +130,26 @@ TEST(LibRBD, ResizeAndStat)
   ASSERT_EQ(0, rbd_close(image));
 
   rados_ioctx_destroy(ioctx);
-  ASSERT_EQ(0, destroy_one_pool(pool_name, &cluster));
+  ASSERT_EQ(0, destroy_one_volume(volume_name, &cluster));
 }
 
 TEST(LibRBD, ResizeAndStatPP)
 {
   librados::Rados rados;
   librados::IoCtx ioctx;
-  string pool_name = get_temp_pool_name();
+  string volume_name = get_temp_volume_name();
 
-  ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
-  ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
+  ASSERT_EQ("", create_one_volume_pp(volume_name, rados));
+  ASSERT_EQ(0, rados.ioctx_create(volume_name.c_str(), ioctx));
 
   {
     librbd::RBD rbd;
     librbd::image_info_t info;
     librbd::Image image;
-    int order = 0;
     const char *name = "testimg";
     uint64_t size = 2 << 20;
 
-    ASSERT_EQ(0, create_image_pp(rbd, ioctx, name, size, &order));
+    ASSERT_EQ(0, create_image_pp(rbd, ioctx, name, size));
     ASSERT_EQ(0, rbd.open(ioctx, image, name));
 
     ASSERT_EQ(0, image.resize(size * 4));
@@ -215,11 +162,12 @@ TEST(LibRBD, ResizeAndStatPP)
   }
 
   ioctx.close();
-  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
+  ASSERT_EQ(0, destroy_one_volume_pp(volume_name, rados));
 }
 
 int test_ls(rados_ioctx_t io_ctx, size_t num_expected, ...)
 {
+#if 0
   int num_images, i, j;
   char *names, *cur_name;
   va_list ap;
@@ -262,34 +210,36 @@ int test_ls(rados_ioctx_t io_ctx, size_t num_expected, ...)
   free(names);
 
   return num_images;
+#endif
+  return 0;
 }
 
 TEST(LibRBD, TestCreateLsDelete)
 {
   rados_t cluster;
   rados_ioctx_t ioctx;
-  string pool_name = get_temp_pool_name();
-  ASSERT_EQ("", create_one_pool(pool_name, &cluster));
-  rados_ioctx_create(cluster, pool_name.c_str(), &ioctx);
+  string volume_name = get_temp_volume_name();
+  ASSERT_EQ("", create_one_volume(volume_name, &cluster));
+  rados_ioctx_create(cluster, volume_name.c_str(), &ioctx);
 
-  int order = 0;
   const char *name = "testimg";
   const char *name2 = "testimg2";
   uint64_t size = 2 << 20;
 
-  ASSERT_EQ(0, create_image(ioctx, name, size, &order));
+  ASSERT_EQ(0, create_image(ioctx, name, size));
   ASSERT_EQ(1, test_ls(ioctx, 1, name));
-  ASSERT_EQ(0, create_image(ioctx, name2, size, &order));
+  ASSERT_EQ(0, create_image(ioctx, name2, size));
   ASSERT_EQ(2, test_ls(ioctx, 2, name, name2));
   ASSERT_EQ(0, rbd_remove(ioctx, name));
   ASSERT_EQ(1, test_ls(ioctx, 1, name2));
 
   rados_ioctx_destroy(ioctx);
-  ASSERT_EQ(0, destroy_one_pool(pool_name, &cluster));
+  ASSERT_EQ(0, destroy_one_volume(volume_name, &cluster));
 }
 
 int test_ls_pp(librbd::RBD& rbd, librados::IoCtx& io_ctx, size_t num_expected, ...)
 {
+#if 0
   int r;
   size_t i;
   va_list ap;
@@ -299,7 +249,7 @@ int test_ls_pp(librbd::RBD& rbd, librados::IoCtx& io_ctx, size_t num_expected, .
     r = 0;
   assert(r >= 0);
   cout << "num images is: " << names.size() << endl
-	    << "expected: " << num_expected << endl;
+       << "expected: " << num_expected << endl;
   int num = names.size();
 
   for (i = 0; i < names.size(); i++) {
@@ -319,35 +269,36 @@ int test_ls_pp(librbd::RBD& rbd, librados::IoCtx& io_ctx, size_t num_expected, .
   assert(names.empty());
 
   return num;
+#endif
+  return 0;
 }
 
 TEST(LibRBD, TestCreateLsDeletePP)
 {
   librados::Rados rados;
   librados::IoCtx ioctx;
-  string pool_name = get_temp_pool_name();
+  string volume_name = get_temp_volume_name();
 
-  ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
-  ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
+  ASSERT_EQ("", create_one_volume_pp(volume_name, rados));
+  ASSERT_EQ(0, rados.ioctx_create(volume_name.c_str(), ioctx));
 
   {
     librbd::RBD rbd;
     librbd::Image image;
-    int order = 0;
     const char *name = "testimg";
     const char *name2 = "testimg2";
     uint64_t size = 2 << 20;
 
-    ASSERT_EQ(0, create_image_pp(rbd, ioctx, name, size, &order));
+    ASSERT_EQ(0, create_image_pp(rbd, ioctx, name, size));
     ASSERT_EQ(1, test_ls_pp(rbd, ioctx, 1, name));
-    ASSERT_EQ(0, rbd.create(ioctx, name2, size, &order));
+    ASSERT_EQ(0, rbd.create(ioctx, name2, size));
     ASSERT_EQ(2, test_ls_pp(rbd, ioctx, 2, name, name2));
     ASSERT_EQ(0, rbd.remove(ioctx, name));
     ASSERT_EQ(1, test_ls_pp(rbd, ioctx, 1, name2));
   }
 
   ioctx.close();
-  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
+  ASSERT_EQ(0, destroy_one_volume_pp(volume_name, rados));
 }
 
 
@@ -363,19 +314,18 @@ TEST(LibRBD, TestCopy)
 {
   rados_t cluster;
   rados_ioctx_t ioctx;
-  string pool_name = get_temp_pool_name();
-  ASSERT_EQ("", create_one_pool(pool_name, &cluster));
-  rados_ioctx_create(cluster, pool_name.c_str(), &ioctx);
+  string volume_name = get_temp_volume_name();
+  ASSERT_EQ("", create_one_volume(volume_name, &cluster));
+  rados_ioctx_create(cluster, volume_name.c_str(), &ioctx);
 
   rbd_image_t image;
-  int order = 0;
   const char *name = "testimg";
   const char *name2 = "testimg2";
   const char *name3 = "testimg3";
 
   uint64_t size = 2 << 20;
 
-  ASSERT_EQ(0, create_image(ioctx, name, size, &order));
+  ASSERT_EQ(0, create_image(ioctx, name, size));
   ASSERT_EQ(0, rbd_open(ioctx, name, &image));
   ASSERT_EQ(1, test_ls(ioctx, 1, name));
   ASSERT_EQ(0, rbd_copy(image, ioctx, name2));
@@ -386,7 +336,7 @@ TEST(LibRBD, TestCopy)
   ASSERT_EQ(0, rbd_close(image));
 
   rados_ioctx_destroy(ioctx);
-  ASSERT_EQ(0, destroy_one_pool(pool_name, &cluster));
+  ASSERT_EQ(0, destroy_one_volume(volume_name, &cluster));
 }
 
 class PrintProgress : public librbd::ProgressContext
@@ -404,22 +354,21 @@ TEST(LibRBD, TestCopyPP)
 {
   librados::Rados rados;
   librados::IoCtx ioctx;
-  string pool_name = get_temp_pool_name();
+  string volume_name = get_temp_volume_name();
 
-  ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
-  ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
+  ASSERT_EQ("", create_one_volume_pp(volume_name, rados));
+  ASSERT_EQ(0, rados.ioctx_create(volume_name.c_str(), ioctx));
 
   {
     librbd::RBD rbd;
     librbd::Image image;
-    int order = 0;
     const char *name = "testimg";
     const char *name2 = "testimg2";
     const char *name3 = "testimg3";
     uint64_t size = 2 << 20;
     PrintProgress pp;
 
-    ASSERT_EQ(0, create_image_pp(rbd, ioctx, name, size, &order));
+    ASSERT_EQ(0, create_image_pp(rbd, ioctx, name, size));
     ASSERT_EQ(0, rbd.open(ioctx, image, name));
     ASSERT_EQ(1, test_ls_pp(rbd, ioctx, 1, name));
     ASSERT_EQ(0, image.copy(ioctx, name2));
@@ -429,7 +378,7 @@ TEST(LibRBD, TestCopyPP)
   }
 
   ioctx.close();
-  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
+  ASSERT_EQ(0, destroy_one_volume_pp(volume_name, rados));
 }
 
 #define TEST_IO_SIZE 512
@@ -530,16 +479,15 @@ TEST(LibRBD, TestIO)
 {
   rados_t cluster;
   rados_ioctx_t ioctx;
-  string pool_name = get_temp_pool_name();
-  ASSERT_EQ("", create_one_pool(pool_name, &cluster));
-  rados_ioctx_create(cluster, pool_name.c_str(), &ioctx);
+  string volume_name = get_temp_volume_name();
+  ASSERT_EQ("", create_one_volume(volume_name, &cluster));
+  rados_ioctx_create(cluster, volume_name.c_str(), &ioctx);
 
   rbd_image_t image;
-  int order = 0;
   const char *name = "testimg";
   uint64_t size = 2 << 20;
 
-  ASSERT_EQ(0, create_image(ioctx, name, size, &order));
+  ASSERT_EQ(0, create_image(ioctx, name, size));
   ASSERT_EQ(0, rbd_open(ioctx, name, &image));
 
   char test_data[TEST_IO_SIZE + 1];
@@ -592,23 +540,22 @@ TEST(LibRBD, TestIO)
   ASSERT_EQ(0, rbd_close(image));
 
   rados_ioctx_destroy(ioctx);
-  ASSERT_EQ(0, destroy_one_pool(pool_name, &cluster));
+  ASSERT_EQ(0, destroy_one_volume(volume_name, &cluster));
 }
 
 TEST(LibRBD, TestEmptyDiscard)
 {
   rados_t cluster;
   rados_ioctx_t ioctx;
-  string pool_name = get_temp_pool_name();
-  ASSERT_EQ("", create_one_pool(pool_name, &cluster));
-  rados_ioctx_create(cluster, pool_name.c_str(), &ioctx);
+  string volume_name = get_temp_volume_name();
+  ASSERT_EQ("", create_one_volume(volume_name, &cluster));
+  rados_ioctx_create(cluster, volume_name.c_str(), &ioctx);
 
   rbd_image_t image;
-  int order = 0;
   const char *name = "testimg";
   uint64_t size = 20 << 20;
 
-  ASSERT_EQ(0, create_image(ioctx, name, size, &order));
+  ASSERT_EQ(0, create_image(ioctx, name, size));
   ASSERT_EQ(0, rbd_open(ioctx, name, &image));
 
   aio_discard_test_data(image, 0, 1*1024*1024);
@@ -617,18 +564,18 @@ TEST(LibRBD, TestEmptyDiscard)
   ASSERT_EQ(0, rbd_close(image));
 
   rados_ioctx_destroy(ioctx);
-  ASSERT_EQ(0, destroy_one_pool(pool_name, &cluster));
+  ASSERT_EQ(0, destroy_one_volume(volume_name, &cluster));
 }
 
 
 void simple_write_cb_pp(librbd::completion_t cb, void *arg)
 {
-  cout << "write completion cb called!" << endl;
+  cout << "write completion cb called!" << std::endl;
 }
 
 void simple_read_cb_pp(librbd::completion_t cb, void *arg)
 {
-  cout << "read completion cb called!" << endl;
+  cout << "read completion cb called!" << std::endl;
 }
 
 void aio_write_test_data(librbd::Image& image, const char *test_data, off_t off)
@@ -708,19 +655,18 @@ TEST(LibRBD, TestIOPP)
 {
   librados::Rados rados;
   librados::IoCtx ioctx;
-  string pool_name = get_temp_pool_name();
+  string volume_name = get_temp_volume_name();
 
-  ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
-  ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
+  ASSERT_EQ("", create_one_volume_pp(volume_name, rados));
+  ASSERT_EQ(0, rados.ioctx_create(volume_name.c_str(), ioctx));
 
   {
     librbd::RBD rbd;
     librbd::Image image;
-    int order = 0;
     const char *name = "testimg";
     uint64_t size = 2 << 20;
 
-    ASSERT_EQ(0, create_image_pp(rbd, ioctx, name, size, &order));
+    ASSERT_EQ(0, create_image_pp(rbd, ioctx, name, size));
     ASSERT_EQ(0, rbd.open(ioctx, image, name));
 
     char test_data[TEST_IO_SIZE + 1];
@@ -758,7 +704,7 @@ TEST(LibRBD, TestIOPP)
   }
 
   ioctx.close();
-  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
+  ASSERT_EQ(0, destroy_one_volume_pp(volume_name, rados));
 }
 
 
@@ -766,21 +712,20 @@ TEST(LibRBD, LockingPP)
 {
   librados::Rados rados;
   librados::IoCtx ioctx;
-  string pool_name = get_temp_pool_name();
+  string volume_name = get_temp_volume_name();
 
-  ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
-  ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
+  ASSERT_EQ("", create_one_volume_pp(volume_name, rados));
+  ASSERT_EQ(0, rados.ioctx_create(volume_name.c_str(), ioctx));
 
   {
     librbd::RBD rbd;
     librbd::Image image;
-    int order = 0;
     const char *name = "testimg";
     uint64_t size = 2 << 20;
     std::string cookie1 = "foo";
     std::string cookie2 = "bar";
 
-    ASSERT_EQ(0, create_image_pp(rbd, ioctx, name, size, &order));
+    ASSERT_EQ(0, create_image_pp(rbd, ioctx, name, size));
     ASSERT_EQ(0, rbd.open(ioctx, image, name));
 
     // no lockers initially
@@ -830,24 +775,23 @@ TEST(LibRBD, LockingPP)
   }
 
   ioctx.close();
-  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
+  ASSERT_EQ(0, destroy_one_volume_pp(volume_name, rados));
 }
 
 TEST(LibRBD, FlushAio)
 {
   rados_t cluster;
   rados_ioctx_t ioctx;
-  string pool_name = get_temp_pool_name();
-  ASSERT_EQ("", create_one_pool(pool_name, &cluster));
-  rados_ioctx_create(cluster, pool_name.c_str(), &ioctx);
+  string volume_name = get_temp_volume_name();
+  ASSERT_EQ("", create_one_volume(volume_name, &cluster));
+  rados_ioctx_create(cluster, volume_name.c_str(), &ioctx);
 
   rbd_image_t image;
-  int order = 0;
   const char *name = "testimg";
   uint64_t size = 2 << 20;
   size_t num_aios = 256;
 
-  ASSERT_EQ(0, create_image(ioctx, name, size, &order));
+  ASSERT_EQ(0, create_image(ioctx, name, size));
   ASSERT_EQ(0, rbd_open(ioctx, name, &image));
 
   char test_data[TEST_IO_SIZE + 1];
@@ -879,27 +823,26 @@ TEST(LibRBD, FlushAio)
   ASSERT_EQ(0, rbd_close(image));
   ASSERT_EQ(0, rbd_remove(ioctx, name));
   rados_ioctx_destroy(ioctx);
-  ASSERT_EQ(0, destroy_one_pool(pool_name, &cluster));
+  ASSERT_EQ(0, destroy_one_volume(volume_name, &cluster));
 }
 
 TEST(LibRBD, FlushAioPP)
 {
   librados::Rados rados;
   librados::IoCtx ioctx;
-  string pool_name = get_temp_pool_name();
+  string volume_name = get_temp_volume_name();
 
-  ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
-  ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
+  ASSERT_EQ("", create_one_volume_pp(volume_name, rados));
+  ASSERT_EQ(0, rados.ioctx_create(volume_name.c_str(), ioctx));
 
   {
     librbd::RBD rbd;
     librbd::Image image;
-    int order = 0;
     const char *name = "testimg";
     uint64_t size = 2 << 20;
     size_t num_aios = 256;
 
-    ASSERT_EQ(0, create_image_pp(rbd, ioctx, name, size, &order));
+    ASSERT_EQ(0, create_image_pp(rbd, ioctx, name, size));
     ASSERT_EQ(0, rbd.open(ioctx, image, name));
 
     char test_data[TEST_IO_SIZE + 1];
@@ -933,7 +876,7 @@ TEST(LibRBD, FlushAioPP)
   }
 
   ioctx.close();
-  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
+  ASSERT_EQ(0, destroy_one_volume_pp(volume_name, rados));
 }
 
 
@@ -990,16 +933,15 @@ TEST(LibRBD, ZeroLengthWrite)
 {
   rados_t cluster;
   rados_ioctx_t ioctx;
-  string pool_name = get_temp_pool_name();
-  ASSERT_EQ("", create_one_pool(pool_name, &cluster));
-  rados_ioctx_create(cluster, pool_name.c_str(), &ioctx);
+  string volume_name = get_temp_volume_name();
+  ASSERT_EQ("", create_one_volume(volume_name, &cluster));
+  rados_ioctx_create(cluster, volume_name.c_str(), &ioctx);
 
   rbd_image_t image;
-  int order = 0;
   const char *name = "testimg";
   uint64_t size = 2 << 20;
 
-  ASSERT_EQ(0, create_image(ioctx, name, size, &order));
+  ASSERT_EQ(0, create_image(ioctx, name, size));
   ASSERT_EQ(0, rbd_open(ioctx, name, &image));
 
   char read_data[1];
@@ -1010,7 +952,7 @@ TEST(LibRBD, ZeroLengthWrite)
   ASSERT_EQ(0, rbd_close(image));
 
   rados_ioctx_destroy(ioctx);
-  ASSERT_EQ(0, destroy_one_pool(pool_name, &cluster));
+  ASSERT_EQ(0, destroy_one_volume(volume_name, &cluster));
 }
 
 
@@ -1018,16 +960,15 @@ TEST(LibRBD, ZeroLengthDiscard)
 {
   rados_t cluster;
   rados_ioctx_t ioctx;
-  string pool_name = get_temp_pool_name();
-  ASSERT_EQ("", create_one_pool(pool_name, &cluster));
-  rados_ioctx_create(cluster, pool_name.c_str(), &ioctx);
+  string volume_name = get_temp_volume_name();
+  ASSERT_EQ("", create_one_volume(volume_name, &cluster));
+  rados_ioctx_create(cluster, volume_name.c_str(), &ioctx);
 
   rbd_image_t image;
-  int order = 0;
   const char *name = "testimg";
   uint64_t size = 2 << 20;
 
-  ASSERT_EQ(0, create_image(ioctx, name, size, &order));
+  ASSERT_EQ(0, create_image(ioctx, name, size));
   ASSERT_EQ(0, rbd_open(ioctx, name, &image));
 
   const char *data = "blah";
@@ -1040,23 +981,22 @@ TEST(LibRBD, ZeroLengthDiscard)
   ASSERT_EQ(0, rbd_close(image));
 
   rados_ioctx_destroy(ioctx);
-  ASSERT_EQ(0, destroy_one_pool(pool_name, &cluster));
+  ASSERT_EQ(0, destroy_one_volume(volume_name, &cluster));
 }
 
 TEST(LibRBD, ZeroLengthRead)
 {
   rados_t cluster;
   rados_ioctx_t ioctx;
-  string pool_name = get_temp_pool_name();
-  ASSERT_EQ("", create_one_pool(pool_name, &cluster));
-  rados_ioctx_create(cluster, pool_name.c_str(), &ioctx);
+  string volume_name = get_temp_volume_name();
+  ASSERT_EQ("", create_one_volume(volume_name, &cluster));
+  rados_ioctx_create(cluster, volume_name.c_str(), &ioctx);
 
   rbd_image_t image;
-  int order = 0;
   const char *name = "testimg";
   uint64_t size = 2 << 20;
 
-  ASSERT_EQ(0, create_image(ioctx, name, size, &order));
+  ASSERT_EQ(0, create_image(ioctx, name, size));
   ASSERT_EQ(0, rbd_open(ioctx, name, &image));
 
   char read_data[1];
@@ -1065,7 +1005,7 @@ TEST(LibRBD, ZeroLengthRead)
   ASSERT_EQ(0, rbd_close(image));
 
   rados_ioctx_destroy(ioctx);
-  ASSERT_EQ(0, destroy_one_pool(pool_name, &cluster));
+  ASSERT_EQ(0, destroy_one_volume(volume_name, &cluster));
 }
 
 int main(int argc, char **argv)

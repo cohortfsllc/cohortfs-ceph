@@ -14,9 +14,8 @@ using namespace librados;
 
 typedef RadosTest LibRadosList;
 typedef RadosTestPP LibRadosListPP;
-typedef RadosTestEC LibRadosListEC;
-typedef RadosTestECPP LibRadosListECPP;
 
+#if 0
 TEST_F(LibRadosList, ListObjects) {
   char buf[128];
   memset(buf, 0xcc, sizeof(buf));
@@ -631,3 +630,4 @@ TEST_F(LibRadosListECPP, ListObjectsStartPP) {
     ++p;
   }
 }
+#endif

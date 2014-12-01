@@ -20,7 +20,7 @@ class cls_replica_log_Test : public ::testing::Test {
 public:
   librados::Rados rados;
   librados::IoCtx ioctx;
-  string pool_name;
+  string volume_name;
   string oid;
   string entity;
   string marker;
@@ -29,9 +29,9 @@ public:
   cls_replica_log_progress_marker progress;
 
   void SetUp() {
-    pool_name = get_temp_pool_name();
-    ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
-    ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
+    volume_name = get_temp_volume_name();
+    ASSERT_EQ("", create_one_volume_pp(volume_name, rados));
+    ASSERT_EQ(0, rados.ioctx_create(volume_name.c_str(), ioctx));
     oid = "obj";
     ASSERT_EQ(0, ioctx.create(oid, true));
   }
@@ -43,7 +43,7 @@ public:
     entries.push_back(make_pair("tester_obj1", time));
     time.set_from_double(20);
     cls_replica_log_prepare_marker(progress, entity, marker, time, &entries);
-    librados::ObjectWriteOperation opw;
+    librados::ObjectWriteOperation opw(ioctx);
     cls_replica_log_update_bound(opw, progress);
     ASSERT_EQ(0, ioctx.operate(oid, &opw));
   }
@@ -83,7 +83,7 @@ TEST_F(cls_replica_log_Test, test_bad_update)
   time.set_from_double(15);
   cls_replica_log_progress_marker bad_marker;
   cls_replica_log_prepare_marker(bad_marker, entity, marker, time, &entries);
-  librados::ObjectWriteOperation badw;
+  librados::ObjectWriteOperation badw(ioctx);
   cls_replica_log_update_bound(badw, bad_marker);
   ASSERT_EQ(-EINVAL, ioctx.operate(oid, &badw));
 }
@@ -92,7 +92,7 @@ TEST_F(cls_replica_log_Test, test_bad_delete)
 {
   add_marker();
 
-  librados::ObjectWriteOperation badd;
+  librados::ObjectWriteOperation badd(ioctx);
   cls_replica_log_delete_bound(badd, entity);
   ASSERT_EQ(-ENOTEMPTY, ioctx.operate(oid, &badd));
 }
@@ -101,11 +101,11 @@ TEST_F(cls_replica_log_Test, test_good_delete)
 {
   add_marker();
 
-  librados::ObjectWriteOperation opc;
+  librados::ObjectWriteOperation opc(ioctx);
   progress.items.clear();
   cls_replica_log_update_bound(opc, progress);
   ASSERT_EQ(0, ioctx.operate(oid, &opc));
-  librados::ObjectWriteOperation opd;
+  librados::ObjectWriteOperation opd(ioctx);
   cls_replica_log_delete_bound(opd, entity);
   ASSERT_EQ(0, ioctx.operate(oid, &opd));
 
@@ -131,15 +131,15 @@ TEST_F(cls_replica_log_Test, test_double_delete)
 {
   add_marker();
 
-  librados::ObjectWriteOperation opc;
+  librados::ObjectWriteOperation opc(ioctx);
   progress.items.clear();
   cls_replica_log_update_bound(opc, progress);
   ASSERT_EQ(0, ioctx.operate(oid, &opc));
-  librados::ObjectWriteOperation opd;
+  librados::ObjectWriteOperation opd(ioctx);
   cls_replica_log_delete_bound(opd, entity);
   ASSERT_EQ(0, ioctx.operate(oid, &opd));
 
-  librados::ObjectWriteOperation opd2;
+  librados::ObjectWriteOperation opd2(ioctx);
   cls_replica_log_delete_bound(opd2, entity);
   ASSERT_EQ(0, ioctx.operate(oid, &opd2));
 

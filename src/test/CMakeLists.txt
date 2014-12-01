@@ -42,7 +42,6 @@ target_link_libraries(test_crypt
   ${TCMALLOC_LIBS}
   )
 
-if(0) #why is this conditional here?
 # test_rados
 add_executable(test_rados
   osd/TestRados.cc
@@ -68,7 +67,6 @@ add_executable(test_mutate
   )
 target_link_libraries(test_mutate global librados ${CMAKE_DL_LIBS}
   ${TCMALLOC_LIBS})
-endif(0)
 
 # test_rewrite_latency
 add_executable(test_rewrite_latency
@@ -149,7 +147,7 @@ if(WITH_RADOSGW)
     expat
     fcgi
     resolv)
-endif (WITH_RADOSGW)
+endif(WITH_RADOSGW)
 
 add_executable(ceph-dencoder ${dencoder_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
 target_link_libraries(ceph-dencoder ${dencoder_dependencies})
@@ -312,13 +310,12 @@ target_link_libraries(kvstorebench librados global boost_filesystem
 
 ## System tests
 
-if(0) #no endif(0) for these, why is this conditional here?
 # systest
 set(libsystest_srcs system/cross_process_sem.cc
   system/systest_runnable.cc
   system/systest_settings.cc
-  system/st_rados_create_pool.cc
-  system/st_rados_delete_pool.cc
+  system/st_rados_create_volume.cc
+  system/st_rados_delete_volume.cc
   system/st_rados_list_objects.cc
   system/st_rados_watch.cc
   system/st_rados_notify.cc)
@@ -332,35 +329,35 @@ add_executable(test_rados_list_parallel
 target_link_libraries(test_rados_list_parallel librados systest global pthread
   rt ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
 
-# test_rados_open_pools_parallel
-set(test_rados_open_pools_parallel_srcs system/rados_open_pools_parallel.cc)
-add_executable(test_rados_open_pools_parallel
-  ${test_rados_open_pools_parallel_srcs}
+# test_rados_open_volumess_parallel
+set(test_rados_open_volumes_parallel_srcs system/rados_open_volumes_parallel.cc)
+add_executable(test_rados_open_volumes_parallel
+  ${test_rados_open_volumes_parallel_srcs}
   $<TARGET_OBJECTS:heap_profiler_objs>
   )
-target_link_libraries(test_rados_open_pools_parallel librados systest global
+target_link_libraries(test_rados_open_volumes_parallel librados systest global
   pthread rt ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
 
-# test_rados_delete_pools_parallel
-set(test_rados_delete_pools_parallel_srcs
-  system/rados_delete_pools_parallel.cc
-  system/st_rados_create_pool.cc
-  system/st_rados_delete_pool.cc
+# test_rados_delete_volumes_parallel
+set(test_rados_delete_volumes_parallel_srcs
+  system/rados_delete_volumes_parallel.cc
+  system/st_rados_create_volume.cc
+  system/st_rados_delete_volume.cc
   system/st_rados_list_objects.cc
 
   )
-add_executable(test_rados_delete_pools_parallel
-  ${test_rados_delete_pools_parallel_srcs}
+add_executable(test_rados_delete_volumes_parallel
+  ${test_rados_delete_volumes_parallel_srcs}
   $<TARGET_OBJECTS:heap_profiler_objs>
   )
-target_link_libraries(test_rados_delete_pools_parallel librados systest global
+target_link_libraries(test_rados_delete_volumes_parallel librados systest global
   pthread rt ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
 
 # test_rados_watch_notify
 set(test_rados_watch_notify_srcs
   system/rados_watch_notify.cc
-  system/st_rados_create_pool.cc
-  system/st_rados_delete_pool.cc
+  system/st_rados_create_volume.cc
+  system/st_rados_delete_volume.cc
   system/st_rados_delete_objs.cc
   system/st_rados_watch.cc
   system/st_rados_notify.cc
@@ -371,7 +368,6 @@ add_executable(test_rados_watch_notify
   )
 target_link_libraries(test_rados_watch_notify librados systest global
   pthread rt ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
-endif()
 
 # bench_log
 set(bench_log_srcs
@@ -424,7 +420,7 @@ set(UNITTEST_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I${CMAKE_SOURCE_DIR}/src/gtest/inclu
 
 if (WITH_CLIENT)
   list(APPEND UNITTEST_LIBS cephfs boost_system)
-endif (WITH_CLIENT)
+endif(WITH_CLIENT)
 
 # unittest_encoding
 set(unittest_encoding_srcs
@@ -998,21 +994,6 @@ set_target_properties(unittest_libcephfs_config PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 endif(${WITH_CLIENT})
 
-# unittest_lfnindex
-if(0) # Relies on hash foo we don't use any more.
-set(unittest_lfnindex_srcs os/TestLFNIndex.cc)
-add_executable(unittest_lfnindex EXCLUDE_FROM_ALL
-  ${unittest_lfnindex_srcs}
-  $<TARGET_OBJECTS:heap_profiler_objs>
-  )
-add_test(unittest_lfnindex unittest_lfnindex)
-add_dependencies(check unittest_lfnindex)
-target_link_libraries(unittest_lfnindex os global ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
-set_target_properties(unittest_lfnindex PROPERTIES COMPILE_FLAGS
-  ${UNITTEST_CXX_FLAGS})
-endif(0)
-
 # unittest_librados_config
 set(unittest_librados_config_srcs librados/librados_config.cc)
 add_executable(unittest_librados_config EXCLUDE_FROM_ALL
@@ -1242,7 +1223,6 @@ if(${WITH_RADOSGW})
     ${UNITTEST_CXX_FLAGS})
 endif(${WITH_RADOSGW})
 
-if(0)
 # radostest
 set(libradostest_srcs librados/test.cc librados/TestCase.cc)
 add_library(radostest STATIC ${libradostest_srcs})
@@ -1287,26 +1267,6 @@ target_link_libraries(test_librbd_fsx
   ${TCMALLOC_LIBS}
   ${CRYPTO_LIBS}
   ${EXTRALIBS}
-  )
-
-add_executable(test_cls_rbd
-  cls_rbd/test_cls_rbd.cc
-  $<TARGET_OBJECTS:heap_profiler_objs>
-  )
-set_target_properties(test_cls_rbd PROPERTIES COMPILE_FLAGS
-  ${UNITTEST_CXX_FLAGS})
-target_link_libraries(test_cls_rbd
-  librbd
-  cls_rbd
-  cls_lock
-  librados
-  global
-  ${UNITTEST_LIBS}
-  ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS}
-  ${CRYPTO_LIBS}
-  ${EXTRALIBS}
-  radostest
   )
 
 add_executable(test_cls_refcount
@@ -1450,7 +1410,6 @@ if(${WITH_RADOSGW})
     ${CMAKE_DL_LIBS}
     radostest)
 endif(${WITH_RADOSGW})
-endif(0)
 
 add_executable(test_mon_workloadgen
   mon/test_mon_workloadgen.cc
@@ -1462,22 +1421,6 @@ target_link_libraries(test_mon_workloadgen
   ${TCMALLOC_LIBS}
   ${CMAKE_DL_LIBS}
   )
-
-if(0)
-add_executable(test_rados_api_cmd
-  librados/cmd.cc
-  $<TARGET_OBJECTS:heap_profiler_objs>
-  )
-set_target_properties(test_rados_api_cmd PROPERTIES COMPILE_FLAGS
-  ${UNITTEST_CXX_FLAGS})
-target_link_libraries(test_rados_api_cmd
-  librados
-  global
-  ${UNITTEST_LIBS}
-  ${EXTRALIBS}
-  ${TCMALLOC_LIBS}
-  ${CMAKE_DL_LIBS}
-  radostest)
 
 add_executable(test_rados_api_io
   librados/io.cc
@@ -1557,30 +1500,14 @@ target_link_libraries(test_rados_api_list
   ${CMAKE_DL_LIBS}
   radostest)
 
-add_executable(test_rados_api_pool
-  librados/pool.cc
+add_executable(test_rados_api_volume
+  librados/volume.cc
   $<TARGET_OBJECTS:heap_profiler_objs>
   )
-set_target_properties(test_rados_api_pool PROPERTIES COMPILE_FLAGS
+set_target_properties(test_rados_api_volume PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS}
   )
-target_link_libraries(test_rados_api_pool
-  librados
-  global
-  ${UNITTEST_LIBS}
-  ${EXTRALIBS}
-  ${TCMALLOC_LIBS}
-  ${CMAKE_DL_LIBS}
-  radostest
-  )
-
-add_executable(test_rados_api_stat
-  librados/stat.cc
-  $<TARGET_OBJECTS:heap_profiler_objs>
-  )
-set_target_properties(test_rados_api_stat PROPERTIES COMPILE_FLAGS
-  ${UNITTEST_CXX_FLAGS})
-target_link_libraries(test_rados_api_stat
+target_link_libraries(test_rados_api_volume
   librados
   global
   ${UNITTEST_LIBS}
@@ -1635,6 +1562,7 @@ target_link_libraries(test_rados_api_misc
   ${EXTRALIBS}
   ${TCMALLOC_LIBS}
   ${CMAKE_DL_LIBS}
+  boost_system
   radostest
   )
 
@@ -1653,7 +1581,6 @@ target_link_libraries(test_rados_api_lock
   ${CMAKE_DL_LIBS}
   radostest
   )
-endif(0)
 
 if(${WITH_CLIENT})
   add_executable(test_libcephfs
@@ -1764,7 +1691,6 @@ target_link_libraries(test_filejournal
   ${CMAKE_DL_LIBS}
   )
 
-if(0)
 add_executable(test_stress_watch
   test_stress_watch.cc
   $<TARGET_OBJECTS:heap_profiler_objs>
@@ -1780,7 +1706,6 @@ target_link_libraries(test_stress_watch
   ${TCMALLOC_LIBS}
   ${CMAKE_DL_LIBS}
   )
-endif(0)
 
 add_executable(test_objectcacher_stress
   osdc/object_cacher_stress.cc

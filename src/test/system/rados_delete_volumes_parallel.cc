@@ -14,8 +14,8 @@
 
 #include "cross_process_sem.h"
 #include "include/rados/librados.h"
-#include "st_rados_create_pool.h"
-#include "st_rados_delete_pool.h"
+#include "st_rados_create_volume.h"
+#include "st_rados_delete_volume.h"
 #include "st_rados_list_objects.h"
 #include "systest_runnable.h"
 #include "systest_settings.h"
@@ -38,12 +38,12 @@ using std::vector;
 static int g_num_objects = 50;
 
 /*
- * rados_delete_pools_parallel
+ * rados_delete_volumes_parallel
  *
  * This tests creation and deletion races.
  *
- * EXPECT:	      * can delete a pool while another user is using it
- *		      * operations on pools return error codes after the pools
+ * EXPECT:	      * can delete a volume while another user is using it
+ *		      * operations on volumes return error codes after the volumes
  *			are deleted
  *
  * DO NOT EXPECT      * hangs, crashes
@@ -57,23 +57,23 @@ const char *get_id_str()
 int main(int argc, const char **argv)
 {
   const char *num_objects = getenv("NUM_OBJECTS");
-  std::string pool = "foo";
+  std::string volume = "foo";
   if (num_objects) {
     g_num_objects = atoi(num_objects);
     if (g_num_objects == 0)
       return 100;
   }
 
-  CrossProcessSem *pool_setup_sem = NULL;
-  RETURN1_IF_NONZERO(CrossProcessSem::create(0, &pool_setup_sem));
-  CrossProcessSem *delete_pool_sem = NULL;
-  RETURN1_IF_NONZERO(CrossProcessSem::create(0, &delete_pool_sem));
+  CrossProcessSem *volume_setup_sem = NULL;
+  RETURN1_IF_NONZERO(CrossProcessSem::create(0, &volume_setup_sem));
+  CrossProcessSem *delete_volume_sem = NULL;
+  RETURN1_IF_NONZERO(CrossProcessSem::create(0, &delete_volume_sem));
 
-  // first test: create a pool, then delete that pool
+  // first test: create a volume, then delete that volume
   {
-    StRadosCreatePool r1(argc, argv, NULL, pool_setup_sem, NULL,
-			 pool, 50, ".obj");
-    StRadosDeletePool r2(argc, argv, pool_setup_sem, NULL, pool);
+    StRadosCreateVolume r1(argc, argv, NULL, volume_setup_sem, NULL,
+			 volume, 50, ".obj");
+    StRadosDeleteVolume r2(argc, argv, volume_setup_sem, NULL, volume);
     vector < SysTestRunnable* > vec;
     vec.push_back(&r1);
     vec.push_back(&r2);
@@ -84,16 +84,16 @@ int main(int argc, const char **argv)
     }
   }
 
-  // second test: create a pool, the list objects in that pool while it's
+  // second test: create a volume, the list objects in that volume while it's
   // being deleted.
-  RETURN1_IF_NONZERO(pool_setup_sem->reinit(0));
-  RETURN1_IF_NONZERO(delete_pool_sem->reinit(0));
+  RETURN1_IF_NONZERO(volume_setup_sem->reinit(0));
+  RETURN1_IF_NONZERO(delete_volume_sem->reinit(0));
   {
-    StRadosCreatePool r1(argc, argv, NULL, pool_setup_sem, NULL,
-			 pool, g_num_objects, ".obj");
-    StRadosDeletePool r2(argc, argv, delete_pool_sem, NULL, pool);
-    StRadosListObjects r3(argc, argv, pool, true, g_num_objects / 2,
-			  pool_setup_sem, NULL, delete_pool_sem);
+    StRadosCreateVolume r1(argc, argv, NULL, volume_setup_sem, NULL,
+			 volume, g_num_objects, ".obj");
+    StRadosDeleteVolume r2(argc, argv, delete_volume_sem, NULL, volume);
+    StRadosListObjects r3(argc, argv, volume, true, g_num_objects / 2,
+			  volume_setup_sem, NULL, delete_volume_sem);
     vector < SysTestRunnable* > vec;
     vec.push_back(&r1);
     vec.push_back(&r2);

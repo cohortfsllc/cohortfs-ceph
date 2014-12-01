@@ -16,17 +16,17 @@
 #include <string>
 #include <vector>
 
-static librados::ObjectWriteOperation *new_op() {
-  return new librados::ObjectWriteOperation();
+static librados::ObjectWriteOperation *new_op(const librados::IoCtx& ioctx) {
+  return new librados::ObjectWriteOperation(ioctx);
 }
 
-static librados::ObjectReadOperation *new_rop() {
-  return new librados::ObjectReadOperation();
+static librados::ObjectReadOperation *new_rop(const librados::IoCtx& ioctx) {
+  return new librados::ObjectReadOperation(ioctx);
 }
 
-static void reset_rop(librados::ObjectReadOperation **pop) {
+static void reset_rop(librados::ObjectReadOperation **pop, const librados::IoCtx& ioctx) {
   delete *pop;
-  *pop = new_rop();
+  *pop = new_rop(ioctx);
 }
 
 static int read_bl(bufferlist& bl, int *i)
@@ -65,7 +65,7 @@ void generate_log(librados::IoCtx& ioctx, string& oid, int max, utime_t& start_t
 {
   string section = "global";
 
-  librados::ObjectWriteOperation *op = new_op();
+  librados::ObjectWriteOperation *op = new_op(ioctx);
 
   int i;
 
@@ -109,11 +109,11 @@ TEST(cls_rgw, test_log_add_same_time)
 {
   librados::Rados rados;
   librados::IoCtx ioctx;
-  string pool_name = get_temp_pool_name();
+  string volume_name = get_temp_volume_name();
 
-  /* create pool */
-  ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
-  ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
+  /* create volume */
+  ASSERT_EQ("", create_one_volume_pp(volume_name, rados));
+  ASSERT_EQ(0, rados.ioctx_create(volume_name.c_str(), ioctx));
 
   /* add chains */
   string oid = "obj";
@@ -125,7 +125,7 @@ TEST(cls_rgw, test_log_add_same_time)
   utime_t start_time = ceph_clock_now(g_ceph_context);
   generate_log(ioctx, oid, 10, start_time, false);
 
-  librados::ObjectReadOperation *rop = new_rop();
+  librados::ObjectReadOperation *rop = new_rop(ioctx);
 
   list<cls_log_entry> entries;
   bool truncated;
@@ -173,7 +173,7 @@ TEST(cls_rgw, test_log_add_same_time)
     check_entry(entry, start_time, i, false);
   }
 
-  reset_rop(&rop);
+  reset_rop(&rop, ioctx);
 
   /* check list again, now want to be truncated*/
 
@@ -193,11 +193,11 @@ TEST(cls_rgw, test_log_add_different_time)
 {
   librados::Rados rados;
   librados::IoCtx ioctx;
-  string pool_name = get_temp_pool_name();
+  string volume_name = get_temp_volume_name();
 
-  /* create pool */
-  ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
-  ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
+  /* create volume */
+  ASSERT_EQ("", create_one_volume_pp(volume_name, rados));
+  ASSERT_EQ(0, rados.ioctx_create(volume_name.c_str(), ioctx));
 
   /* add chains */
   string oid = "obj";
@@ -209,7 +209,7 @@ TEST(cls_rgw, test_log_add_different_time)
   utime_t start_time = ceph_clock_now(g_ceph_context);
   generate_log(ioctx, oid, 10, start_time, true);
 
-  librados::ObjectReadOperation *rop = new_rop();
+  librados::ObjectReadOperation *rop = new_rop(ioctx);
 
   list<cls_log_entry> entries;
   bool truncated;
@@ -246,7 +246,7 @@ TEST(cls_rgw, test_log_add_different_time)
     check_entry(entry, start_time, i, true);
   }
 
-  reset_rop(&rop);
+  reset_rop(&rop, ioctx);
 
   /* check list again with shifted time */
   utime_t next_time = get_time(start_time, 1, true);
@@ -260,7 +260,7 @@ TEST(cls_rgw, test_log_add_different_time)
   ASSERT_EQ(9, (int)entries.size());
   ASSERT_EQ(0, (int)truncated);
 
-  reset_rop(&rop);
+  reset_rop(&rop, ioctx);
 
   marker.clear();
 
@@ -286,11 +286,11 @@ TEST(cls_rgw, test_log_trim)
 {
   librados::Rados rados;
   librados::IoCtx ioctx;
-  string pool_name = get_temp_pool_name();
+  string volume_name = get_temp_volume_name();
 
-  /* create pool */
-  ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
-  ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
+  /* create volume */
+  ASSERT_EQ("", create_one_volume_pp(volume_name, rados));
+  ASSERT_EQ(0, rados.ioctx_create(volume_name.c_str(), ioctx));
 
   /* add chains */
   string oid = "obj";
@@ -302,7 +302,7 @@ TEST(cls_rgw, test_log_trim)
   utime_t start_time = ceph_clock_now(g_ceph_context);
   generate_log(ioctx, oid, 10, start_time, true);
 
-  librados::ObjectReadOperation *rop = new_rop();
+  librados::ObjectReadOperation *rop = new_rop(ioctx);
 
   list<cls_log_entry> entries;
   bool truncated;

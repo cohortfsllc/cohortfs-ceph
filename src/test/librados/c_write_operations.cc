@@ -5,19 +5,26 @@
 #include "gtest/gtest.h"
 
 TEST(LibradosCWriteOps, NewDelete) {
-  rados_write_op_t op = rados_create_write_op();
+  rados_t cluster;
+  rados_ioctx_t ioctx;
+  std::string volume_name = get_temp_volume_name();
+  ASSERT_EQ("", create_one_volume(volume_name, &cluster));
+  rados_ioctx_create(cluster, volume_name.c_str(), &ioctx);
+  rados_write_op_t op = rados_create_write_op(ioctx);
   ASSERT_TRUE(op);
   rados_release_write_op(op);
+  rados_ioctx_destroy(ioctx);
+  ASSERT_EQ(0, destroy_one_volume(volume_name, &cluster));
 }
 
 TEST(LibRadosCWriteOps, assertExists) {
   rados_t cluster;
   rados_ioctx_t ioctx;
-  std::string pool_name = get_temp_pool_name();
-  ASSERT_EQ("", create_one_pool(pool_name, &cluster));
-  rados_ioctx_create(cluster, pool_name.c_str(), &ioctx);
+  std::string volume_name = get_temp_volume_name();
+  ASSERT_EQ("", create_one_volume(volume_name, &cluster));
+  rados_ioctx_create(cluster, volume_name.c_str(), &ioctx);
 
-  rados_write_op_t op = rados_create_write_op();
+  rados_write_op_t op = rados_create_write_op(ioctx);
   ASSERT_TRUE(op);
   rados_write_op_assert_exists(op);
 
@@ -25,7 +32,7 @@ TEST(LibRadosCWriteOps, assertExists) {
   ASSERT_EQ(-2, rados_write_op_operate(op, ioctx, "test", NULL, 0));
   rados_release_write_op(op);
 
-  rados_write_op_t op2 = rados_create_write_op();
+  rados_write_op_t op2 = rados_create_write_op(ioctx);
   ASSERT_TRUE(op2);
   rados_write_op_assert_exists(op2);
 
@@ -37,18 +44,18 @@ TEST(LibRadosCWriteOps, assertExists) {
 
   rados_ioctx_destroy(ioctx);
   rados_release_write_op(op2);
-  ASSERT_EQ(0, destroy_one_pool(pool_name, &cluster));
+  ASSERT_EQ(0, destroy_one_volume(volume_name, &cluster));
 }
 
 TEST(LibRadosCWriteOps, Xattrs) {
   rados_t cluster;
   rados_ioctx_t ioctx;
-  std::string pool_name = get_temp_pool_name();
-  ASSERT_EQ("", create_one_pool(pool_name, &cluster));
-  rados_ioctx_create(cluster, pool_name.c_str(), &ioctx);
+  std::string volume_name = get_temp_volume_name();
+  ASSERT_EQ("", create_one_volume(volume_name, &cluster));
+  rados_ioctx_create(cluster, volume_name.c_str(), &ioctx);
 
   // Create an object with an xattr
-  rados_write_op_t op = rados_create_write_op();
+  rados_write_op_t op = rados_create_write_op(ioctx);
   ASSERT_TRUE(op);
   rados_write_op_create(op, LIBRADOS_CREATE_EXCLUSIVE, NULL);
   rados_write_op_setxattr(op, "key", "value", 5);
@@ -56,7 +63,7 @@ TEST(LibRadosCWriteOps, Xattrs) {
   rados_release_write_op(op);
 
   // Check that xattr exists, if it does, delete it.
-  op = rados_create_write_op();
+  op = rados_create_write_op(ioctx);
   ASSERT_TRUE(op);
   rados_write_op_create(op, LIBRADOS_CREATE_IDEMPOTENT, NULL);
   rados_write_op_cmpxattr(op, "key", LIBRADOS_CMPXATTR_OP_EQ, "value", 5);
@@ -66,7 +73,7 @@ TEST(LibRadosCWriteOps, Xattrs) {
 
   // Check the xattr exits, if it does, add it again (will fail) with -125
   // (ECANCELED)
-  op = rados_create_write_op();
+  op = rados_create_write_op(ioctx);
   ASSERT_TRUE(op);
   rados_write_op_cmpxattr(op, "key", LIBRADOS_CMPXATTR_OP_EQ, "value", 5);
   rados_write_op_setxattr(op, "key", "value", 5);
@@ -74,18 +81,18 @@ TEST(LibRadosCWriteOps, Xattrs) {
 
   rados_release_write_op(op);
   rados_ioctx_destroy(ioctx);
-  ASSERT_EQ(0, destroy_one_pool(pool_name, &cluster));
+  ASSERT_EQ(0, destroy_one_volume(volume_name, &cluster));
 }
 
 TEST(LibRadosCWriteOps, Write) {
   rados_t cluster;
   rados_ioctx_t ioctx;
-  std::string pool_name = get_temp_pool_name();
-  ASSERT_EQ("", create_one_pool(pool_name, &cluster));
-  rados_ioctx_create(cluster, pool_name.c_str(), &ioctx);
+  std::string volume_name = get_temp_volume_name();
+  ASSERT_EQ("", create_one_volume(volume_name, &cluster));
+  rados_ioctx_create(cluster, volume_name.c_str(), &ioctx);
 
   // Create an object, write and write full to it
-  rados_write_op_t op = rados_create_write_op();
+  rados_write_op_t op = rados_create_write_op(ioctx);
   ASSERT_TRUE(op);
   rados_write_op_create(op, LIBRADOS_CREATE_EXCLUSIVE, NULL);
   rados_write_op_write(op, "four", 4, 0);
@@ -96,7 +103,7 @@ TEST(LibRadosCWriteOps, Write) {
   rados_release_write_op(op);
 
   // Truncate and append
-  op = rados_create_write_op();
+  op = rados_create_write_op(ioctx);
   ASSERT_TRUE(op);
   rados_write_op_truncate(op, 1);
   rados_write_op_append(op, "hi", 2);
@@ -105,7 +112,7 @@ TEST(LibRadosCWriteOps, Write) {
   rados_release_write_op(op);
 
   // zero and remove
-  op = rados_create_write_op();
+  op = rados_create_write_op(ioctx);
   ASSERT_TRUE(op);
   rados_write_op_zero(op, 0, 3);
   rados_write_op_remove(op);
@@ -115,18 +122,18 @@ TEST(LibRadosCWriteOps, Write) {
   rados_release_write_op(op);
 
   rados_ioctx_destroy(ioctx);
-  ASSERT_EQ(0, destroy_one_pool(pool_name, &cluster));
+  ASSERT_EQ(0, destroy_one_volume(volume_name, &cluster));
 }
 
 TEST(LibRadosCWriteOps, Exec) {
   rados_t cluster;
   rados_ioctx_t ioctx;
-  std::string pool_name = get_temp_pool_name();
-  ASSERT_EQ("", create_one_pool(pool_name, &cluster));
-  rados_ioctx_create(cluster, pool_name.c_str(), &ioctx);
+  std::string volume_name = get_temp_volume_name();
+  ASSERT_EQ("", create_one_volume(volume_name, &cluster));
+  rados_ioctx_create(cluster, volume_name.c_str(), &ioctx);
 
   int rval = 1;
-  rados_write_op_t op = rados_create_write_op();
+  rados_write_op_t op = rados_create_write_op(ioctx);
   rados_write_op_exec(op, "hello", "record_hello", "test", 4, &rval);
   ASSERT_EQ(0, rados_write_op_operate(op, ioctx, "test", NULL, 0));
   rados_release_write_op(op);
@@ -138,5 +145,5 @@ TEST(LibRadosCWriteOps, Exec) {
   ASSERT_EQ(0, strcmp("Hello, test!", hi));
 
   rados_ioctx_destroy(ioctx);
-  ASSERT_EQ(0, destroy_one_pool(pool_name, &cluster));
+  ASSERT_EQ(0, destroy_one_volume(volume_name, &cluster));
 }

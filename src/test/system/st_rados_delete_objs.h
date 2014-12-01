@@ -23,7 +23,7 @@ class CrossProcessSem;
  * st_rados_delete_objs
  *
  * Waits on setup_sem, posts to it,
- * deletes num_objs objects from the pool,
+ * deletes num_objs objects from the volume,
  * and posts to deleted_sem.
  */
 class StRadosDeleteObjs : public SysTestRunnable
@@ -33,7 +33,7 @@ public:
 		    CrossProcessSem *setup_sem,
 		    CrossProcessSem *deleted_sem,
 		    int num_objs,
-		    const std::string &pool_name,
+		    const std::string &volume_name,
 		    const std::string &suffix);
   ~StRadosDeleteObjs();
   virtual int run();
@@ -41,7 +41,7 @@ private:
   CrossProcessSem *m_setup_sem;
   CrossProcessSem *m_deleted_sem;
   int m_num_objs;
-  std::string m_pool_name;
+  std::string m_volume_name;
   std::string m_suffix;
 };
 

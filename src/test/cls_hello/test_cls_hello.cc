@@ -23,10 +23,10 @@ using namespace librados;
 
 TEST(ClsHello, SayHello) {
   Rados cluster;
-  std::string pool_name = get_temp_pool_name();
-  ASSERT_EQ("", create_one_pool_pp(pool_name, cluster));
+  std::string volume_name = get_temp_volume_name();
+  ASSERT_EQ("", create_one_volume_pp(volume_name, cluster));
   IoCtx ioctx;
-  cluster.ioctx_create(pool_name.c_str(), ioctx);
+  cluster.ioctx_create(volume_name.c_str(), ioctx);
 
   bufferlist in, out;
   ASSERT_EQ(-ENOENT, ioctx.exec("myobject", "hello", "say_hello", in, out));
@@ -46,15 +46,15 @@ TEST(ClsHello, SayHello) {
   in.append(buf, sizeof(buf));
   ASSERT_EQ(-EINVAL, ioctx.exec("myobject", "hello", "say_hello", in, out));
 
-  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, cluster));
+  ASSERT_EQ(0, destroy_one_volume_pp(volume_name, cluster));
 }
 
 TEST(ClsHello, RecordHello) {
   Rados cluster;
-  std::string pool_name = get_temp_pool_name();
-  ASSERT_EQ("", create_one_pool_pp(pool_name, cluster));
+  std::string volume_name = get_temp_volume_name();
+  ASSERT_EQ("", create_one_volume_pp(volume_name, cluster));
   IoCtx ioctx;
-  cluster.ioctx_create(pool_name.c_str(), ioctx);
+  cluster.ioctx_create(volume_name.c_str(), ioctx);
 
   bufferlist in, out;
   ASSERT_EQ(0, ioctx.exec("myobject", "hello", "record_hello", in, out));
@@ -73,15 +73,15 @@ TEST(ClsHello, RecordHello) {
   ASSERT_EQ(0, ioctx.exec("myobject2", "hello", "replay", in, out));
   ASSERT_EQ(std::string("Hello, Tester!"), std::string(out.c_str(), out.length()));
 
-  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, cluster));
+  ASSERT_EQ(0, destroy_one_volume_pp(volume_name, cluster));
 }
 
 TEST(ClsHello, WriteReturnData) {
   Rados cluster;
-  std::string pool_name = get_temp_pool_name();
-  ASSERT_EQ("", create_one_pool_pp(pool_name, cluster));
+  std::string volume_name = get_temp_volume_name();
+  ASSERT_EQ("", create_one_volume_pp(volume_name, cluster));
   IoCtx ioctx;
-  cluster.ioctx_create(pool_name.c_str(), ioctx);
+  cluster.ioctx_create(volume_name.c_str(), ioctx);
 
   bufferlist in, out;
   ASSERT_EQ(0, ioctx.exec("myobject", "hello", "writes_dont_return_data", in, out));
@@ -94,15 +94,15 @@ TEST(ClsHello, WriteReturnData) {
   ASSERT_EQ(std::string("too much input data!"), std::string(out.c_str(), out.length()));
   ASSERT_EQ(-ENOENT, ioctx.getxattr("myobject2", "foo", out));
 
-  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, cluster));
+  ASSERT_EQ(0, destroy_one_volume_pp(volume_name, cluster));
 }
 
 TEST(ClsHello, Loud) {
   Rados cluster;
-  std::string pool_name = get_temp_pool_name();
-  ASSERT_EQ("", create_one_pool_pp(pool_name, cluster));
+  std::string volume_name = get_temp_volume_name();
+  ASSERT_EQ("", create_one_volume_pp(volume_name, cluster));
   IoCtx ioctx;
-  cluster.ioctx_create(pool_name.c_str(), ioctx);
+  cluster.ioctx_create(volume_name.c_str(), ioctx);
 
   bufferlist in, out;
   ASSERT_EQ(0, ioctx.exec("myobject", "hello", "record_hello", in, out));
@@ -113,15 +113,15 @@ TEST(ClsHello, Loud) {
   ASSERT_EQ(0, ioctx.exec("myobject", "hello", "replay", in, out));
   ASSERT_EQ(std::string("HELLO, WORLD!"), std::string(out.c_str(), out.length()));
 
-  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, cluster));
+  ASSERT_EQ(0, destroy_one_volume_pp(volume_name, cluster));
 }
 
 TEST(ClsHello, BadMethods) {
   Rados cluster;
-  std::string pool_name = get_temp_pool_name();
-  ASSERT_EQ("", create_one_pool_pp(pool_name, cluster));
+  std::string volume_name = get_temp_volume_name();
+  ASSERT_EQ("", create_one_volume_pp(volume_name, cluster));
   IoCtx ioctx;
-  cluster.ioctx_create(pool_name.c_str(), ioctx);
+  cluster.ioctx_create(volume_name.c_str(), ioctx);
 
   bufferlist in, out;
 
@@ -129,5 +129,5 @@ TEST(ClsHello, BadMethods) {
   ASSERT_EQ(-EIO, ioctx.exec("myobject", "hello", "bad_reader", in, out));
   ASSERT_EQ(-EIO, ioctx.exec("myobject", "hello", "bad_writer", in, out));
 
-  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, cluster));
+  ASSERT_EQ(0, destroy_one_volume_pp(volume_name, cluster));
 }

@@ -16,10 +16,10 @@ using std::string;
 
 TEST(LibRadosCls, DNE) {
   Rados cluster;
-  std::string pool_name = get_temp_pool_name();
-  ASSERT_EQ("", create_one_pool_pp(pool_name, cluster));
+  std::string volume_name = get_temp_volume_name();
+  ASSERT_EQ("", create_one_volume_pp(volume_name, cluster));
   IoCtx ioctx;
-  cluster.ioctx_create(pool_name.c_str(), ioctx);
+  cluster.ioctx_create(volume_name.c_str(), ioctx);
 
   // create an object
   string oid = "foo";
@@ -33,5 +33,5 @@ TEST(LibRadosCls, DNE) {
   ASSERT_EQ(-EOPNOTSUPP, ioctx.exec(oid, "lock", "doesnotexistasdfasdfasdf", bl, bl));
 
   ioctx.close();
-  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, cluster));
+  ASSERT_EQ(0, destroy_one_volume_pp(volume_name, cluster));
 }

@@ -1,4 +1,4 @@
-// -*- mode:C; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
 #include "include/types.h"
@@ -16,21 +16,23 @@
 #include <string>
 #include <vector>
 
-static librados::ObjectWriteOperation *new_op() {
-  return new librados::ObjectWriteOperation();
+static librados::ObjectWriteOperation *new_op(librados::IoCtx& ioctx) {
+  return new librados::ObjectWriteOperation(ioctx);
 }
 
-static librados::ObjectReadOperation *new_rop() {
-  return new librados::ObjectReadOperation();
+static librados::ObjectReadOperation *new_rop(librados::IoCtx& ioctx) {
+  return new librados::ObjectReadOperation(ioctx);
 }
 
-static void reset_op(librados::ObjectWriteOperation **pop) {
+static void reset_op(librados::ObjectWriteOperation **pop,
+		     librados::IoCtx& ioctx) {
   delete *pop;
-  *pop = new_op();
+  *pop = new_op(ioctx);
 }
-static void reset_rop(librados::ObjectReadOperation **pop) {
+static void reset_rop(librados::ObjectReadOperation **pop,
+		      librados::IoCtx& ioctx) {
   delete *pop;
-  *pop = new_rop();
+  *pop = new_rop(ioctx);
 }
 
 void add_log(librados::ObjectWriteOperation *op, const string& client_id, const string& op_id, string& obj, uint32_t state)
@@ -64,7 +66,7 @@ static void get_entries_by_object(librados::IoCtx& ioctx, string& oid,
   /* search everything */
   string empty_str, marker;
 
-  librados::ObjectReadOperation *rop = new_rop();
+  librados::ObjectReadOperation *rop = new_rop(ioctx);
   bufferlist obl;
   bool truncated;
   cls_statelog_list(*rop, empty_str, op_id, object, marker, 0, entries, &marker, &truncated);
@@ -79,7 +81,7 @@ static void get_entries_by_client_id(librados::IoCtx& ioctx, string& oid,
   /* search everything */
   string empty_str, marker;
 
-  librados::ObjectReadOperation *rop = new_rop();
+  librados::ObjectReadOperation *rop = new_rop(ioctx);
   bufferlist obl;
   bool truncated;
   cls_statelog_list(*rop, client_id, op_id, empty_str, marker, 0, entries, &marker, &truncated);
@@ -99,11 +101,11 @@ TEST(cls_rgw, test_statelog_basic)
 {
   librados::Rados rados;
   librados::IoCtx ioctx;
-  string pool_name = get_temp_pool_name();
+  string volume_name = get_temp_volume_name();
 
-  /* create pool */
-  ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
-  ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
+  /* create volume */
+  ASSERT_EQ("", create_one_volume_pp(volume_name, rados));
+  ASSERT_EQ(0, rados.ioctx_create(volume_name.c_str(), ioctx));
 
   string oid = "obj";
 
@@ -116,7 +118,7 @@ TEST(cls_rgw, test_statelog_basic)
   const int num_ops = 10;
   string op_ids[num_ops];
 
-  librados::ObjectWriteOperation *op = new_op();
+  librados::ObjectWriteOperation *op = new_op(ioctx);
 
   for (int i = 0; i < num_ops; i++) {
     next_op_id(op_ids[i], &id);
@@ -126,7 +128,7 @@ TEST(cls_rgw, test_statelog_basic)
   }
   ASSERT_EQ(0, ioctx.operate(oid, op));
 
-  librados::ObjectReadOperation *rop = new_rop();
+  librados::ObjectReadOperation *rop = new_rop(ioctx);
 
   list<cls_statelog_entry> entries;
   bool truncated;
@@ -146,7 +148,7 @@ TEST(cls_rgw, test_statelog_basic)
     ASSERT_EQ(0, ioctx.operate(oid, rop, &obl));
     ASSERT_EQ(1, (int)entries.size());
 
-    reset_rop(&rop);
+    reset_rop(&rop, ioctx);
     marker.clear();
     cls_statelog_list(*rop, cid, op_id, obj, marker, 0, entries, &marker, &truncated);
     obl.clear();
@@ -179,7 +181,7 @@ TEST(cls_rgw, test_statelog_basic)
     string op_id;
     bufferlist obl;
 
-    reset_rop(&rop);
+    reset_rop(&rop, ioctx);
     cls_statelog_list(*rop, cid, op_id, obj, marker, 0, entries, &marker, &truncated);
     ASSERT_EQ(0, ioctx.operate(oid, rop, &obl));
     ASSERT_EQ(2, (int)entries.size());
@@ -193,7 +195,7 @@ TEST(cls_rgw, test_statelog_basic)
   cls_statelog_entry e = entries.front();
   entries.pop_front();
 
-  reset_op(&op);
+  reset_op(&op, ioctx);
   cls_statelog_remove_by_client(*op, e.client_id, e.op_id);
   ASSERT_EQ(0, ioctx.operate(oid, op));
 

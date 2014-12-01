@@ -62,7 +62,7 @@ int StRadosNotify::run()
 
   printf("%s: notifying object %s\n", get_id_str(), m_obj_name.c_str());
   RETURN1_IF_NOT_VAL(m_notify_retcode,
-		     rados_notify(io_ctx, m_obj_name.c_str(), 0, NULL, 0));
+		     rados_notify(io_ctx, m_obj_name.c_str(), NULL, 0));
   if (m_notified_sem) {
     m_notified_sem->post();
   }

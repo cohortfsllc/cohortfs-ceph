@@ -62,6 +62,7 @@ namespace librados
     bool is_complete_and_cb();
     bool is_safe_and_cb();
     int get_return_value();
+    uint64_t get_version();
     void release();
     AioCompletionImpl *pc;
   };
@@ -447,6 +448,7 @@ namespace librados
 		     std::string *tag,
 		     std::list<librados::locker_t> *lockers);
 
+    uint64_t get_last_version();
 
     int aio_read(const std::string& oid, AioCompletion *c,
 		 bufferlist *pbl, size_t len, uint64_t off);
@@ -594,6 +596,8 @@ namespace librados
     static AioCompletion *aio_create_completion(void *cb_arg, callback_t cb_complete,
 						callback_t cb_safe);
 
+    boost::uuids::uuid lookup_volume(const string& name);
+    string lookup_volume(const boost::uuids::uuid& name);
     friend std::ostream& operator<<(std::ostream &oss, const Rados& r);
   private:
     // We don't allow assignment or copying

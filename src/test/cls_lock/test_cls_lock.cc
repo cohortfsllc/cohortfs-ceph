@@ -23,11 +23,12 @@
 #include "test/librados/test.h"
 #include "gtest/gtest.h"
 
-using namespace librados;
 
 #include "cls/lock/cls_lock_client.h"
 #include "cls/lock/cls_lock_ops.h"
 
+using std::cout;
+using namespace librados;
 using namespace rados::cls::lock;
 
 void lock_info(IoCtx *ioctx, string& oid, string& name, map<locker_id_t, locker_info_t>& lockers,
@@ -63,10 +64,10 @@ void lock_info(IoCtx *ioctx, string& oid, string& name, map<locker_id_t, locker_
 
 TEST(ClsLock, TestMultiLocking) {
   Rados cluster;
-  std::string pool_name = get_temp_pool_name();
-  ASSERT_EQ("", create_one_pool_pp(pool_name, cluster));
+  std::string volume_name = get_temp_volume_name();
+  ASSERT_EQ("", create_one_volume_pp(volume_name, cluster));
   IoCtx ioctx;
-  cluster.ioctx_create(pool_name.c_str(), ioctx);
+  cluster.ioctx_create(volume_name.c_str(), ioctx);
   ClsLockType lock_type_shared = LOCK_SHARED;
   ClsLockType lock_type_exclusive = LOCK_EXCLUSIVE;
 
@@ -74,7 +75,7 @@ TEST(ClsLock, TestMultiLocking) {
   Rados cluster2;
   IoCtx ioctx2;
   ASSERT_EQ("", connect_cluster_pp(cluster2));
-  cluster2.ioctx_create(pool_name.c_str(), ioctx2);
+  cluster2.ioctx_create(volume_name.c_str(), ioctx2);
 
   string oid = "foo";
   bufferlist bl;
@@ -150,21 +151,21 @@ TEST(ClsLock, TestMultiLocking) {
   l.set_description(description);
   ASSERT_EQ(0, l.lock_shared(&ioctx, oid));
 
-  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, cluster));
+  ASSERT_EQ(0, destroy_one_volume_pp(volume_name, cluster));
 }
 
 TEST(ClsLock, TestMeta) {
   Rados cluster;
-  std::string pool_name = get_temp_pool_name();
-  ASSERT_EQ("", create_one_pool_pp(pool_name, cluster));
+  std::string volume_name = get_temp_volume_name();
+  ASSERT_EQ("", create_one_volume_pp(volume_name, cluster));
   IoCtx ioctx;
-  cluster.ioctx_create(pool_name.c_str(), ioctx);
+  cluster.ioctx_create(volume_name.c_str(), ioctx);
 
 
   Rados cluster2;
   IoCtx ioctx2;
   ASSERT_EQ("", connect_cluster_pp(cluster2));
-  cluster2.ioctx_create(pool_name.c_str(), ioctx2);
+  cluster2.ioctx_create(volume_name.c_str(), ioctx2);
 
   string oid = "foo";
   bufferlist bl;
@@ -211,15 +212,15 @@ TEST(ClsLock, TestMeta) {
   l.set_tag(new_tag);
   ASSERT_EQ(0, l.lock_exclusive(&ioctx, oid));
 
-  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, cluster));
+  ASSERT_EQ(0, destroy_one_volume_pp(volume_name, cluster));
 }
 
 TEST(ClsLock, TestCookie) {
   Rados cluster;
-  std::string pool_name = get_temp_pool_name();
-  ASSERT_EQ("", create_one_pool_pp(pool_name, cluster));
+  std::string volume_name = get_temp_volume_name();
+  ASSERT_EQ("", create_one_volume_pp(volume_name, cluster));
   IoCtx ioctx;
-  cluster.ioctx_create(pool_name.c_str(), ioctx);
+  cluster.ioctx_create(volume_name.c_str(), ioctx);
 
   string oid = "foo";
   string lock_name = "mylock";
@@ -247,15 +248,15 @@ TEST(ClsLock, TestCookie) {
   lock_info(&ioctx, oid, lock_name, lockers);
   ASSERT_EQ(2, (int)lockers.size());
 
-  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, cluster));
+  ASSERT_EQ(0, destroy_one_volume_pp(volume_name, cluster));
 }
 
 TEST(ClsLock, TestMultipleLocks) {
   Rados cluster;
-  std::string pool_name = get_temp_pool_name();
-  ASSERT_EQ("", create_one_pool_pp(pool_name, cluster));
+  std::string volume_name = get_temp_volume_name();
+  ASSERT_EQ("", create_one_volume_pp(volume_name, cluster));
   IoCtx ioctx;
-  cluster.ioctx_create(pool_name.c_str(), ioctx);
+  cluster.ioctx_create(volume_name.c_str(), ioctx);
 
   string oid = "foo";
   Lock l("lock1");
@@ -269,15 +270,15 @@ TEST(ClsLock, TestMultipleLocks) {
 
   ASSERT_EQ(2, (int)locks.size());
 
-  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, cluster));
+  ASSERT_EQ(0, destroy_one_volume_pp(volume_name, cluster));
 }
 
 TEST(ClsLock, TestLockDuration) {
   Rados cluster;
-  std::string pool_name = get_temp_pool_name();
-  ASSERT_EQ("", create_one_pool_pp(pool_name, cluster));
+  std::string volume_name = get_temp_volume_name();
+  ASSERT_EQ("", create_one_volume_pp(volume_name, cluster));
   IoCtx ioctx;
-  cluster.ioctx_create(pool_name.c_str(), ioctx);
+  cluster.ioctx_create(volume_name.c_str(), ioctx);
 
   string oid = "foo";
   Lock l("lock");
@@ -296,5 +297,5 @@ TEST(ClsLock, TestLockDuration) {
   sleep(dur.sec());
   ASSERT_EQ(0, l.lock_exclusive(&ioctx, oid));
 
-  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, cluster));
+  ASSERT_EQ(0, destroy_one_volume_pp(volume_name, cluster));
 }

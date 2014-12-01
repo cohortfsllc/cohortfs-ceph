@@ -1329,6 +1329,17 @@ void rados_write_op_setxattr(rados_write_op_t write_op,
 void rados_write_op_rmxattr(rados_write_op_t write_op, const char *name);
 
 /**
+ * Create the object
+ * @param write_op operation to add this action to
+ * @param exclusive set to either LIBRADOS_CREATE_EXCLUSIVE or
+   LIBRADOS_CREATE_IDEMPOTENT
+ * will error if the object already exists.
+ */
+void rados_write_op_create(rados_write_op_t write_op,
+                           int exclusive,
+                           const char* category);
+
+/**
  * Write to offset
  * @param write_op operation to add this action to
  * @param offset offset to write to
@@ -1914,6 +1925,10 @@ typedef void (*rados_log_callback_t)(void *arg,
 int rados_monitor_log(rados_t cluster, const char *level, rados_log_callback_t cb, void *arg);
 int rados_volume_create(rados_t cluster, const char *name);
 int rados_volume_delete(rados_t cluster, const char *name);
+int rados_volume_by_name(rados_t cluster, const char* name, uint8_t out_id[16]);
+int rados_volume_by_id(rados_t cluster, const uint8_t in_id[16], size_t len, char *out_name);
+
+
 
 /** @} Mon/OSD/PG commands */
 

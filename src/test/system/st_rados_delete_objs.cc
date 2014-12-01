@@ -24,13 +24,13 @@ StRadosDeleteObjs::StRadosDeleteObjs(int argc, const char **argv,
 				     CrossProcessSem *setup_sem,
 				     CrossProcessSem *deleted_sem,
 				     int num_objs,
-				     const std::string &pool_name,
+				     const std::string &volume_name,
 				     const std::string &suffix)
   : SysTestRunnable(argc, argv),
     m_setup_sem(setup_sem),
     m_deleted_sem(deleted_sem),
     m_num_objs(num_objs),
-    m_pool_name(pool_name),
+    m_volume_name(volume_name),
     m_suffix(suffix)
 {
 }
@@ -51,8 +51,8 @@ int StRadosDeleteObjs::run()
   m_setup_sem->post();
 
   rados_ioctx_t io_ctx;
-  rados_pool_create(cl, m_pool_name.c_str());
-  RETURN1_IF_NONZERO(rados_ioctx_create(cl, m_pool_name.c_str(), &io_ctx));
+  rados_volume_create(cl, m_volume_name.c_str());
+  RETURN1_IF_NONZERO(rados_ioctx_create(cl, m_volume_name.c_str(), &io_ctx));
 
   for (int i = 0; i < m_num_objs; ++i) {
     char oid[128];

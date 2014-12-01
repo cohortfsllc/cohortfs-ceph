@@ -29,16 +29,16 @@ using std::ostringstream;
 
 StRadosListObjects::
 StRadosListObjects(int argc, const char **argv,
-		   const std::string &pool_name,
+		   const std::string &volume_name,
 		   bool accept_list_errors,
 		   int midway_cnt,
-		   CrossProcessSem *pool_setup_sem,
+		   CrossProcessSem *volume_setup_sem,
 		   CrossProcessSem *midway_sem_wait,
 		   CrossProcessSem *midway_sem_post)
   : SysTestRunnable(argc, argv),
     m_accept_list_errors(accept_list_errors),
     m_midway_cnt(midway_cnt),
-    m_pool_setup_sem(pool_setup_sem),
+    m_volume_setup_sem(volume_setup_sem),
     m_midway_sem_wait(midway_sem_wait),
     m_midway_sem_post(midway_sem_post)
 {
@@ -52,17 +52,18 @@ StRadosListObjects::
 int StRadosListObjects::
 run()
 {
+#if 0
   rados_t cl;
   RETURN1_IF_NONZERO(rados_create(&cl, NULL));
   rados_conf_parse_argv(cl, m_argc, m_argv);
   RETURN1_IF_NONZERO(rados_conf_read_file(cl, NULL));
   rados_conf_parse_env(cl, NULL);
   RETURN1_IF_NONZERO(rados_connect(cl));
-  m_pool_setup_sem->wait();
-  m_pool_setup_sem->post();
+  m_volume_setup_sem->wait();
+  m_volume_setup_sem->post();
 
   rados_ioctx_t io_ctx;
-  rados_pool_create(cl, "foo");
+  rados_volume_create(cl, "foo");
   RETURN1_IF_NONZERO(rados_ioctx_create(cl, "foo", &io_ctx));
 
   int saw = 0;
@@ -99,5 +100,6 @@ run()
   rados_ioctx_destroy(io_ctx);
   rados_shutdown(cl);
 
+#endif
   return 0;
 }

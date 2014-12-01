@@ -11,7 +11,6 @@ void ContDesc::encode(bufferlist &bl) const
 {
   ENCODE_START(1, 1, bl);
   ::encode(objnum, bl);
-  ::encode(cursnap, bl);
   ::encode(seqnum, bl);
   ::encode(prefix, bl);
   ::encode(oid, bl);
@@ -22,44 +21,38 @@ void ContDesc::decode(bufferlist::iterator &bl)
 {
   DECODE_START(1, bl);
   ::decode(objnum, bl);
-  ::decode(cursnap, bl);
   ::decode(seqnum, bl);
   ::decode(prefix, bl);
   ::decode(oid, bl);
   DECODE_FINISH(bl);
 }
 
-ostream &operator<<(ostream &out, const ContDesc &rhs)
+std::ostream &operator<<(std::ostream &out, const ContDesc &rhs)
 {
   return out << "(ObjNum " << rhs.objnum
-	     << " snap " << rhs.cursnap
 	     << " seq_num " << rhs.seqnum
     //<< " prefix " << rhs.prefix
 	     << ")";
 }
 
 void AppendGenerator::get_ranges_map(
-  const ContDesc &cont, map<uint64_t, uint64_t> &out) {
+  const ContDesc &cont, std::map<uint64_t, uint64_t> &out) {
   RandWrap rand(cont.seqnum);
   uint64_t pos = off;
   uint64_t limit = off + get_append_size(cont);
   while (pos < limit) {
-    uint64_t segment_length = round_up(
-      rand() % (max_append_size - min_append_size),
-      alignment) + min_append_size;
+    uint64_t segment_length = rand() % (max_append_size - min_append_size) + min_append_size;
     assert(segment_length >= min_append_size);
     if (segment_length + pos > limit) {
       segment_length = limit - pos;
     }
-    if (alignment)
-      assert(segment_length % alignment == 0);
-    out.insert(make_pair(pos, segment_length));
+    out.insert(std::make_pair(pos, segment_length));
     pos += segment_length;
   }
 }
 
 void VarLenGenerator::get_ranges_map(
-  const ContDesc &cont, map<uint64_t, uint64_t> &out) {
+  const ContDesc &cont, std::map<uint64_t, uint64_t> &out) {
   RandWrap rand(cont.seqnum);
   uint64_t pos = 0;
   uint64_t limit = get_length(cont);
@@ -72,7 +65,7 @@ void VarLenGenerator::get_ranges_map(
       segment_length = limit - pos;
     }
     if (include) {
-      out.insert(make_pair(pos, segment_length));
+      out.insert(std::make_pair(pos, segment_length));
       include = false;
     } else {
       include = true;
@@ -137,12 +130,11 @@ ObjectDesc::iterator &ObjectDesc::iterator::advance(bool init) {
   }
 
   if (!cont_iters.count(cur_cont->second)) {
-    cont_iters.insert(pair<ContDesc,ContentsGenerator::iterator>(
+    cont_iters.insert(std::pair<ContDesc,ContentsGenerator::iterator>(
 			cur_cont->second,
 			cur_cont->first->get_iterator(cur_cont->second)));
   }
-  map<ContDesc,ContentsGenerator::iterator>::iterator j = cont_iters.find(
-    cur_cont->second);
+  auto j = cont_iters.find(cur_cont->second);
   assert(j != cont_iters.end());
   j->second.seek(pos);
   return *this;
@@ -152,7 +144,7 @@ const ContDesc &ObjectDesc::most_recent() {
   return layers.begin()->second;
 }
 
-void ObjectDesc::update(ContentsGenerator *gen, const ContDesc &next) {
+void ObjectDesc::update(std::shared_ptr<ContentsGenerator> gen, const ContDesc &next) {
   layers.push_front(make_pair(gen, next));
   return;
 }

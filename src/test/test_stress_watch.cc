@@ -36,15 +36,15 @@ public:
 };
 
 struct WatcherUnwatcher : public Thread {
-  string pool;
-  WatcherUnwatcher(string& _pool) : pool(_pool) {}
+  string volume;
+  WatcherUnwatcher(string& _volume) : volume(_volume) {}
 
   void *entry() {
     Rados cluster;
     connect_cluster_pp(cluster);
     while (!stop_flag) {
       IoCtx ioctx;
-      cluster.ioctx_create(pool.c_str(), ioctx);
+      cluster.ioctx_create(volume.c_str(), ioctx);
 
       uint64_t handle;
       WatchNotifyTestCtx watch_ctx;
@@ -65,13 +65,13 @@ INSTANTIATE_TEST_CASE_P(WatchStressTests, WatchStress,
 TEST_P(WatchStress, Stress1) {
   ASSERT_EQ(0, sem_init(&sem, 0, 0));
   Rados ncluster;
-  std::string pool_name = get_temp_pool_name();
-  ASSERT_EQ("", create_one_pool_pp(pool_name, ncluster));
+  std::string volume_name = get_temp_volume_name();
+  ASSERT_EQ("", create_one_volume_pp(volume_name, ncluster));
   IoCtx nioctx;
-  ncluster.ioctx_create(pool_name.c_str(), nioctx);
+  ncluster.ioctx_create(volume_name.c_str(), nioctx);
   WatchNotifyTestCtx ctx;
 
-  WatcherUnwatcher *thr = new WatcherUnwatcher(pool_name);
+  WatcherUnwatcher *thr = new WatcherUnwatcher(volume_name);
   thr->create();
   ASSERT_EQ(0, nioctx.create("foo", false));
 
@@ -83,7 +83,7 @@ TEST_P(WatchStress, Stress1) {
     WatchNotifyTestCtx ctx;
 
     connect_cluster_pp(cluster);
-    cluster.ioctx_create(pool_name.c_str(), ioctx);
+    cluster.ioctx_create(volume_name.c_str(), ioctx);
     ASSERT_EQ(0, ioctx.watch("foo", 0, &handle, &ctx));
 
     bool do_blacklist = i % 2;
@@ -94,7 +94,7 @@ TEST_P(WatchStress, Stress1) {
     }
 
     bufferlist bl2;
-    ASSERT_EQ(0, nioctx.notify("foo", 0, bl2));
+    ASSERT_EQ(0, nioctx.notify("foo", bl2));
 
     if (do_blacklist) {
       sleep(1); // Give a change to see an incorrect notify
@@ -113,6 +113,6 @@ TEST_P(WatchStress, Stress1) {
   stop_flag = true;
   thr->join();
   nioctx.close();
-  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, ncluster));
+  ASSERT_EQ(0, destroy_one_volume_pp(volume_name, ncluster));
   sem_destroy(&sem);
 }

@@ -14,8 +14,8 @@
 
 #include "cross_process_sem.h"
 #include "include/rados/librados.h"
-#include "st_rados_create_pool.h"
-#include "st_rados_delete_pool.h"
+#include "st_rados_create_volume.h"
+#include "st_rados_delete_volume.h"
 #include "st_rados_delete_objs.h"
 #include "st_rados_watch.h"
 #include "st_rados_notify.h"
@@ -43,9 +43,9 @@ using std::vector;
 /*
  * rados_watch_notify
  *
- * This tests watch/notify with pool and object deletion.
+ * This tests watch/notify with volume and object deletion.
  *
- * EXPECT:	      * notifies to a deleted object or pool are not received
+ * EXPECT:	      * notifies to a deleted object or volume are not received
  *		      * notifies to existing objects are received
  *
  * DO NOT EXPECT      * hangs, crashes
@@ -58,7 +58,7 @@ const char *get_id_str()
 
 int main(int argc, const char **argv)
 {
-  std::string pool = "foo." + stringify(getpid());
+  std::string volume = "foo." + stringify(getpid());
   CrossProcessSem *setup_sem = NULL;
   RETURN1_IF_NONZERO(CrossProcessSem::create(0, &setup_sem));
   CrossProcessSem *watch_sem = NULL;
@@ -66,13 +66,13 @@ int main(int argc, const char **argv)
   CrossProcessSem *notify_sem = NULL;
   RETURN1_IF_NONZERO(CrossProcessSem::create(0, &notify_sem));
 
-  // create a pool and an object, watch the object, notify.
+  // create a volume and an object, watch the object, notify.
   {
-    StRadosCreatePool r1(argc, argv, NULL, setup_sem, NULL, pool, 1, ".obj");
+    StRadosCreateVolume r1(argc, argv, NULL, setup_sem, NULL, volume, 1, ".obj");
     StRadosWatch r2(argc, argv, setup_sem, watch_sem, notify_sem,
-		    1, 0, pool, "0.obj");
+		    1, 0, volume, "0.obj");
     StRadosNotify r3(argc, argv, setup_sem, watch_sem, notify_sem,
-		     0, pool, "0.obj");
+		     0, volume, "0.obj");
     vector<SysTestRunnable*> vec;
     vec.push_back(&r1);
     vec.push_back(&r2);
@@ -88,15 +88,15 @@ int main(int argc, const char **argv)
   RETURN1_IF_NONZERO(watch_sem->reinit(0));
   RETURN1_IF_NONZERO(notify_sem->reinit(0));
 
-  // create a pool and an object, watch a non-existent object,
+  // create a volume and an object, watch a non-existent object,
   // notify non-existent object.watch
-  pool += ".";
+  volume += ".";
   {
-    StRadosCreatePool r1(argc, argv, NULL, setup_sem, NULL, pool, 0, ".obj");
+    StRadosCreateVolume r1(argc, argv, NULL, setup_sem, NULL, volume, 0, ".obj");
     StRadosWatch r2(argc, argv, setup_sem, watch_sem, notify_sem,
-		    0, -ENOENT, pool, "0.obj");
+		    0, -ENOENT, volume, "0.obj");
     StRadosNotify r3(argc, argv, setup_sem, watch_sem, notify_sem,
-		     -ENOENT, pool, "0.obj");
+		     -ENOENT, volume, "0.obj");
     vector<SysTestRunnable*> vec;
     vec.push_back(&r1);
     vec.push_back(&r2);
@@ -116,26 +116,26 @@ int main(int argc, const char **argv)
   RETURN1_IF_NONZERO(CrossProcessSem::create(0, &finished_notifies_sem));
   CrossProcessSem *deleted_sem = NULL;
   RETURN1_IF_NONZERO(CrossProcessSem::create(0, &deleted_sem));
-  CrossProcessSem *second_pool_sem = NULL;
-  RETURN1_IF_NONZERO(CrossProcessSem::create(0, &second_pool_sem));
+  CrossProcessSem *second_volume_sem = NULL;
+  RETURN1_IF_NONZERO(CrossProcessSem::create(0, &second_volume_sem));
 
-  // create a pool and an object, watch the object, notify,
-  // then delete the pool.
-  // Create a new pool and write to it to make the osd get the updated map,
-  // then try notifying on the deleted pool.
-  pool += ".";
+  // create a volume and an object, watch the object, notify,
+  // then delete the volume.
+  // Create a new volume and write to it to make the osd get the updated map,
+  // then try notifying on the deleted volume.
+  volume += ".";
   {
-    StRadosCreatePool r1(argc, argv, NULL, setup_sem, NULL, pool, 1, ".obj");
+    StRadosCreateVolume r1(argc, argv, NULL, setup_sem, NULL, volume, 1, ".obj");
     StRadosWatch r2(argc, argv, setup_sem, watch_sem, finished_notifies_sem,
-		    1, 0, pool, "0.obj");
+		    1, 0, volume, "0.obj");
     StRadosNotify r3(argc, argv, setup_sem, watch_sem, notify_sem,
-		     0, pool, "0.obj");
-    StRadosDeletePool r4(argc, argv, notify_sem, deleted_sem, pool);
-    StRadosCreatePool r5(argc, argv, deleted_sem, second_pool_sem, NULL,
+		     0, volume, "0.obj");
+    StRadosDeleteVolume r4(argc, argv, notify_sem, deleted_sem, volume);
+    StRadosCreateVolume r5(argc, argv, deleted_sem, second_volume_sem, NULL,
 			 "bar", 1, ".obj");
-    StRadosNotify r6(argc, argv, second_pool_sem, NULL, finished_notifies_sem,
+    StRadosNotify r6(argc, argv, second_volume_sem, NULL, finished_notifies_sem,
 		     0, "bar", "0.obj");
-    StRadosDeletePool r7(argc, argv, finished_notifies_sem, NULL, "bar");
+    StRadosDeleteVolume r7(argc, argv, finished_notifies_sem, NULL, "bar");
     vector<SysTestRunnable*> vec;
     vec.push_back(&r1);
     vec.push_back(&r2);
@@ -157,20 +157,20 @@ int main(int argc, const char **argv)
   RETURN1_IF_NONZERO(finished_notifies_sem->reinit(0));
   RETURN1_IF_NONZERO(deleted_sem->reinit(0));
 
-  // create a pool and an object, watch the object, notify,
+  // create a volume and an object, watch the object, notify,
   // then delete the object, notify
   if (false) {
     // this test is currently broken, pending the resolution of bug #2339
-  pool += ".";
+  volume += ".";
   {
-    StRadosCreatePool r1(argc, argv, NULL, setup_sem, NULL, pool, 1, ".obj");
+    StRadosCreateVolume r1(argc, argv, NULL, setup_sem, NULL, volume, 1, ".obj");
     StRadosWatch r2(argc, argv, setup_sem, watch_sem, finished_notifies_sem,
-		    1, 0, pool, "0.obj");
+		    1, 0, volume, "0.obj");
     StRadosNotify r3(argc, argv, setup_sem, watch_sem, notify_sem,
-		     0, pool, "0.obj");
-    StRadosDeleteObjs r4(argc, argv, notify_sem, deleted_sem, 1, pool, ".obj");
+		     0, volume, "0.obj");
+    StRadosDeleteObjs r4(argc, argv, notify_sem, deleted_sem, 1, volume, ".obj");
     StRadosNotify r5(argc, argv, setup_sem, deleted_sem, finished_notifies_sem,
-		     -ENOENT, pool, "0.obj");
+		     -ENOENT, volume, "0.obj");
 
     vector<SysTestRunnable*> vec;
     vec.push_back(&r1);

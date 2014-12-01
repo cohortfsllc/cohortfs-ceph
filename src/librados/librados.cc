@@ -445,6 +445,12 @@ int librados::AioCompletion::AioCompletion::get_return_value()
   return c->get_return_value();
 }
 
+uint64_t librados::AioCompletion::AioCompletion::get_version()
+{
+  AioCompletionImpl *c = (AioCompletionImpl *)pc;
+  return c->get_version();
+}
+
 void librados::AioCompletion::AioCompletion::release()
 {
   AioCompletionImpl *c = (AioCompletionImpl *)pc;
@@ -848,6 +854,11 @@ int librados::IoCtx::list_lockers(const std::string &oid,
   return tmp_lockers.size();
 }
 
+uint64_t librados::IoCtx::get_last_version()
+{
+  return io_ctx_impl->last_version();
+}
+
 int librados::IoCtx::aio_read(const std::string& oid, librados::AioCompletion *c,
 			      bufferlist *pbl, size_t len, uint64_t off)
 {
@@ -1157,6 +1168,47 @@ librados::AioCompletion *librados::Rados::aio_create_completion(
   assert(r == 0);
   return new AioCompletion(c);
 }
+
+boost::uuids::uuid librados::Rados::lookup_volume(const string& name)
+{
+  return client->lookup_volume(name);
+}
+
+string librados::Rados::lookup_volume(const boost::uuids::uuid& name)
+{
+  return client->lookup_volume(name);
+}
+
+extern "C" int rados_volume_by_name(rados_t cluster, const char* name,
+				    uint8_t out_id[16])
+{
+  librados::RadosClient *client = (librados::RadosClient *)cluster;
+  boost::uuids::uuid id = client->lookup_volume(string(name));
+  if (id.is_nil()) {
+    return -ENOENT;
+  } else {
+    memcpy(out_id, &id, 16);
+    return 0;
+  }
+}
+
+extern "C" int rados_volume_by_id(rados_t cluster, const uint8_t in_id[16],
+				  size_t len, char *out_name)
+{
+  librados::RadosClient *client = (librados::RadosClient *)cluster;
+  boost::uuids::uuid id;
+  memcpy(&id, in_id, 16);
+  std::string name = client->lookup_volume(id);
+  if (name.empty()) {
+    return -ENOENT;
+  } else if (name.size() > len) {
+    return -ERANGE;
+  } else {  
+    strcpy(out_name, name.c_str());
+    return name.size();
+  }
+}
+
 
 librados::ObjectOperation::ObjectOperation(const IoCtx& ctx)
   : impl(ctx.io_ctx_impl->volume->op())

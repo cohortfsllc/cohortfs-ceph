@@ -24,7 +24,7 @@ public:
   class TypeStatus {
   public:
     map<TestOp*,uint64_t> inflight;
-    multiset<uint64_t> latencies;
+    std::multiset<uint64_t> latencies;
     void begin(TestOp *in)
     {
       assert(!inflight.count(in));

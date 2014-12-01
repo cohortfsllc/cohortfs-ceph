@@ -4,7 +4,6 @@
 
 #include "mds/mdstypes.h"
 #include "include/buffer.h"
-#include "include/rbd_types.h"
 #include "include/rados/librados.h"
 #include "include/rados/librados.hpp"
 #include "include/stringify.h"
@@ -50,36 +49,8 @@ TEST_F(LibRadosMiscPP, WaitOSDMapPP) {
   ASSERT_EQ(0, cluster.wait_for_latest_osdmap());
 }
 
-TEST_F(LibRadosMisc, Exec) {
-  char buf[128];
-  memset(buf, 0xcc, sizeof(buf));
-  ASSERT_EQ(0, rados_write(ioctx, "foo", buf, sizeof(buf), 0));
-  char buf2[512];
-  int res = rados_exec(ioctx, "foo", "rbd", "get_all_features",
-			  NULL, 0, buf2, sizeof(buf2));
-  ASSERT_GT(res, 0);
-  bufferlist bl;
-  bl.append(buf2, res);
-  bufferlist::iterator iter = bl.begin();
-  uint64_t all_features;
-  ::decode(all_features, iter);
-  ASSERT_EQ(all_features, (uint64_t)RBD_FEATURES_ALL);
-}
-
-TEST_F(LibRadosMiscPP, ExecPP) {
-  bufferlist bl;
-  ASSERT_EQ(0, ioctx.write("foo", bl, 0, 0));
-  bufferlist bl2, out;
-  int r = ioctx.exec("foo", "rbd", "get_all_features", bl2, out);
-  ASSERT_EQ(0, r);
-  bufferlist::iterator iter = out.begin();
-  uint64_t all_features;
-  ::decode(all_features, iter);
-  ASSERT_EQ(all_features, (uint64_t)RBD_FEATURES_ALL);
-}
-
 TEST_F(LibRadosMiscPP, Operate1PP) {
-  ObjectWriteOperation o;
+  ObjectWriteOperation o(ioctx);
   {
     bufferlist bl;
     o.write(0, bl);
@@ -93,7 +64,7 @@ TEST_F(LibRadosMiscPP, Operate1PP) {
   }
   ASSERT_EQ(0, ioctx.operate("foo", &o));
 
-  ObjectWriteOperation empty;
+  ObjectWriteOperation empty(ioctx);
   ASSERT_EQ(0, ioctx.operate("foo", &empty));
 
   {
@@ -101,7 +72,7 @@ TEST_F(LibRadosMiscPP, Operate1PP) {
     ASSERT_GT(ioctx.getxattr("foo", "key1", bl), 0);
     ASSERT_EQ(0, strcmp(bl.c_str(), val1.c_str()));
   }
-  ObjectWriteOperation o2;
+  ObjectWriteOperation o2(ioctx);
   {
     bufferlist bl;
     bl.append(val1);
@@ -109,7 +80,7 @@ TEST_F(LibRadosMiscPP, Operate1PP) {
     o2.rmxattr("key1");
   }
   ASSERT_EQ(-ECANCELED, ioctx.operate("foo", &o2));
-  ObjectWriteOperation o3;
+  ObjectWriteOperation o3(ioctx);
   {
     bufferlist bl;
     bl.append(val1);
@@ -119,7 +90,7 @@ TEST_F(LibRadosMiscPP, Operate1PP) {
 }
 
 TEST_F(LibRadosMiscPP, Operate2PP) {
-  ObjectWriteOperation o;
+  ObjectWriteOperation o(ioctx);
   {
     bufferlist bl;
     bl.append("abcdefg");
@@ -145,22 +116,22 @@ TEST_F(LibRadosMiscPP, BigObjectPP) {
   ASSERT_EQ(0, ioctx.write("foo", bl, bl.length(), 0));
 
   {
-    ObjectWriteOperation o;
+    ObjectWriteOperation o(ioctx);
     o.truncate(500000000000ull);
     ASSERT_EQ(-EFBIG, ioctx.operate("foo", &o));
   }
   {
-    ObjectWriteOperation o;
+    ObjectWriteOperation o(ioctx);
     o.zero(500000000000ull, 1);
     ASSERT_EQ(-EFBIG, ioctx.operate("foo", &o));
   }
   {
-    ObjectWriteOperation o;
+    ObjectWriteOperation o(ioctx);
     o.zero(1, 500000000000ull);
     ASSERT_EQ(-EFBIG, ioctx.operate("foo", &o));
   }
   {
-    ObjectWriteOperation o;
+    ObjectWriteOperation o(ioctx);
     o.zero(500000000000ull, 500000000000ull);
     ASSERT_EQ(-EFBIG, ioctx.operate("foo", &o));
   }
@@ -184,7 +155,7 @@ TEST_F(LibRadosMiscPP, AioOperatePP) {
   AioCompletion *my_completion_null = NULL;
   ASSERT_NE(my_completion, my_completion_null);
 
-  ObjectWriteOperation o;
+  ObjectWriteOperation o(ioctx);
   {
     bufferlist bl;
     o.write(0, bl);
@@ -210,38 +181,13 @@ TEST_F(LibRadosMiscPP, AioOperatePP) {
   ASSERT_EQ(1024U, size);
 }
 
-TEST_F(LibRadosMiscPP, CloneRangePP) {
-  char buf[64];
-  memset(buf, 0xcc, sizeof(buf));
-  bufferlist bl;
-  bl.append(buf, sizeof(buf));
-  ASSERT_EQ(0, ioctx.write("foo", bl, sizeof(buf), 0));
-  ioctx.locator_set_key("foo");
-  ASSERT_EQ(0, ioctx.clone_range("bar", 0, "foo", 0, sizeof(buf)));
-  bufferlist bl2;
-  ASSERT_EQ(sizeof(buf), (size_t)ioctx.read("bar", bl2, sizeof(buf), 0));
-  ASSERT_EQ(0, memcmp(buf, bl2.c_str(), sizeof(buf)));
-}
-
-TEST_F(LibRadosMisc, CloneRange) {
-  char buf[128];
-  memset(buf, 0xcc, sizeof(buf));
-  ASSERT_EQ(0, rados_write(ioctx, "src", buf, sizeof(buf), 0));
-  rados_ioctx_locator_set_key(ioctx, "src");
-  ASSERT_EQ(0, rados_clone_range(ioctx, "dst", 0, "src", 0, sizeof(buf)));
-  char buf2[sizeof(buf)];
-  memset(buf2, 0, sizeof(buf2));
-  ASSERT_EQ((int)sizeof(buf2), rados_read(ioctx, "dst", buf2, sizeof(buf2), 0));
-  ASSERT_EQ(0, memcmp(buf, buf2, sizeof(buf)));
-}
-
 TEST_F(LibRadosMiscPP, AssertExistsPP) {
   char buf[64];
   memset(buf, 0xcc, sizeof(buf));
   bufferlist bl;
   bl.append(buf, sizeof(buf));
 
-  ObjectWriteOperation op;
+  ObjectWriteOperation op(ioctx);
   op.assert_exists();
   op.write(0, bl);
   ASSERT_EQ(-ENOENT, ioctx.operate("asdffoo", &op));
@@ -285,89 +231,6 @@ TEST_F(LibRadosMiscPP, BigAttrPP) {
     ASSERT_EQ(0, ioctx.setxattr("foo", n, bl));
     ASSERT_EQ((int)bl.length(), ioctx.getxattr("foo", n, got));
     ASSERT_TRUE(bl.contents_equal(got));
-  }
-}
-
-TEST_F(LibRadosMiscPP, CopyPP) {
-  bufferlist bl, x;
-  bl.append("hi there");
-  x.append("bar");
-
-  // small object
-  bufferlist blc = bl;
-  bufferlist xc = x;
-  ASSERT_EQ(0, ioctx.write_full("foo", blc));
-  ASSERT_EQ(0, ioctx.setxattr("foo", "myattr", xc));
-
-  version_t uv = ioctx.get_last_version();
-  {
-    // pass future version
-    ObjectWriteOperation op;
-    op.copy_from("foo", ioctx, uv + 1);
-    ASSERT_EQ(-EOVERFLOW, ioctx.operate("foo.copy", &op));
-  }
-  {
-    // pass old version
-    ObjectWriteOperation op;
-    op.copy_from("foo", ioctx, uv - 1);
-    ASSERT_EQ(-ERANGE, ioctx.operate("foo.copy", &op));
-  }
-  {
-    ObjectWriteOperation op;
-    op.copy_from("foo", ioctx, uv);
-    ASSERT_EQ(0, ioctx.operate("foo.copy", &op));
-
-    bufferlist bl2, x2;
-    ASSERT_EQ((int)bl.length(), ioctx.read("foo.copy", bl2, 10000, 0));
-    ASSERT_TRUE(bl.contents_equal(bl2));
-    ASSERT_EQ((int)x.length(), ioctx.getxattr("foo.copy", "myattr", x2));
-    ASSERT_TRUE(x.contents_equal(x2));
-  }
-
-  // small object without a version
-  {
-    ObjectWriteOperation op;
-    op.copy_from("foo", ioctx, 0);
-    ASSERT_EQ(0, ioctx.operate("foo.copy2", &op));
-
-    bufferlist bl2, x2;
-    ASSERT_EQ((int)bl.length(), ioctx.read("foo.copy2", bl2, 10000, 0));
-    ASSERT_TRUE(bl.contents_equal(bl2));
-    ASSERT_EQ((int)x.length(), ioctx.getxattr("foo.copy2", "myattr", x2));
-    ASSERT_TRUE(x.contents_equal(x2));
-  }
-
-  // do a big object
-  bl.append(buffer::create(g_conf->osd_copyfrom_max_chunk * 3));
-  bl.zero();
-  bl.append("tail");
-  blc = bl;
-  xc = x;
-  ASSERT_EQ(0, ioctx.write_full("big", blc));
-  ASSERT_EQ(0, ioctx.setxattr("big", "myattr", xc));
-
-  {
-    ObjectWriteOperation op;
-    op.copy_from("big", ioctx, ioctx.get_last_version());
-    ASSERT_EQ(0, ioctx.operate("big.copy", &op));
-
-    bufferlist bl2, x2;
-    ASSERT_EQ((int)bl.length(), ioctx.read("big.copy", bl2, bl.length(), 0));
-    ASSERT_TRUE(bl.contents_equal(bl2));
-    ASSERT_EQ((int)x.length(), ioctx.getxattr("foo.copy", "myattr", x2));
-    ASSERT_TRUE(x.contents_equal(x2));
-  }
-
-  {
-    ObjectWriteOperation op;
-    op.copy_from("big", ioctx, 0);
-    ASSERT_EQ(0, ioctx.operate("big.copy2", &op));
-
-    bufferlist bl2, x2;
-    ASSERT_EQ((int)bl.length(), ioctx.read("big.copy2", bl2, bl.length(), 0));
-    ASSERT_TRUE(bl.contents_equal(bl2));
-    ASSERT_EQ((int)x.length(), ioctx.getxattr("foo.copy2", "myattr", x2));
-    ASSERT_TRUE(x.contents_equal(x2));
   }
 }
 

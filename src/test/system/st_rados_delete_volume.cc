@@ -14,28 +14,28 @@
 
 #include "cross_process_sem.h"
 #include "include/rados/librados.h"
-#include "st_rados_delete_pool.h"
+#include "st_rados_delete_volume.h"
 #include "systest_runnable.h"
 #include "systest_settings.h"
 
 #include <errno.h>
 
-StRadosDeletePool::StRadosDeletePool(int argc, const char **argv,
-				     CrossProcessSem *pool_setup_sem,
-				     CrossProcessSem *delete_pool_sem,
-				     const std::string &pool_name)
+StRadosDeleteVolume::StRadosDeleteVolume(int argc, const char **argv,
+				     CrossProcessSem *volume_setup_sem,
+				     CrossProcessSem *delete_volume_sem,
+				     const std::string &volume_name)
     : SysTestRunnable(argc, argv),
-      m_pool_setup_sem(pool_setup_sem),
-      m_delete_pool_sem(delete_pool_sem),
-      m_pool_name(pool_name)
+      m_volume_setup_sem(volume_setup_sem),
+      m_delete_volume_sem(delete_volume_sem),
+      m_volume_name(volume_name)
 {
 }
 
-StRadosDeletePool::~StRadosDeletePool()
+StRadosDeleteVolume::~StRadosDeleteVolume()
 {
 }
 
-int StRadosDeletePool::run()
+int StRadosDeleteVolume::run()
 {
   rados_t cl;
   RETURN1_IF_NONZERO(rados_create(&cl, NULL));
@@ -43,17 +43,17 @@ int StRadosDeletePool::run()
   RETURN1_IF_NONZERO(rados_conf_read_file(cl, NULL));
   rados_conf_parse_env(cl, NULL);
   RETURN1_IF_NONZERO(rados_connect(cl));
-  m_pool_setup_sem->wait();
-  m_pool_setup_sem->post();
+  m_volume_setup_sem->wait();
+  m_volume_setup_sem->post();
 
   rados_ioctx_t io_ctx;
-  rados_pool_create(cl, m_pool_name.c_str());
-  RETURN1_IF_NONZERO(rados_ioctx_create(cl, m_pool_name.c_str(), &io_ctx));
+  rados_volume_create(cl, m_volume_name.c_str());
+  RETURN1_IF_NONZERO(rados_ioctx_create(cl, m_volume_name.c_str(), &io_ctx));
   rados_ioctx_destroy(io_ctx);
-  printf("%s: deleting pool %s\n", get_id_str(), m_pool_name.c_str());
-  RETURN1_IF_NONZERO(rados_pool_delete(cl, m_pool_name.c_str()));
-  if (m_delete_pool_sem)
-    m_delete_pool_sem->post();
+  printf("%s: deleting volume %s\n", get_id_str(), m_volume_name.c_str());
+  RETURN1_IF_NONZERO(rados_volume_delete(cl, m_volume_name.c_str()));
+  if (m_delete_volume_sem)
+    m_delete_volume_sem->post();
   rados_shutdown(cl);
   return 0;
 }

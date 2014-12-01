@@ -14,7 +14,7 @@
 
 #include "cross_process_sem.h"
 #include "include/rados/librados.h"
-#include "st_rados_create_pool.h"
+#include "st_rados_create_volume.h"
 #include "systest_runnable.h"
 #include "systest_settings.h"
 
@@ -27,7 +27,7 @@
 
 using std::ostringstream;
 
-std::string StRadosCreatePool::
+std::string StRadosCreateVolume::
 get_random_buf(int sz)
 {
   ostringstream oss;
@@ -38,30 +38,30 @@ get_random_buf(int sz)
   return oss.str();
 }
 
-StRadosCreatePool::
-StRadosCreatePool(int argc, const char **argv,
+StRadosCreateVolume::
+StRadosCreateVolume(int argc, const char **argv,
 		  CrossProcessSem *setup_sem,
-		  CrossProcessSem *pool_setup_sem,
-		  CrossProcessSem *close_create_pool,
-		  const std::string &pool_name,
+		  CrossProcessSem *volume_setup_sem,
+		  CrossProcessSem *close_create_volume,
+		  const std::string &volume_name,
 		  int num_objects,
 		  const std::string &suffix)
   : SysTestRunnable(argc, argv),
     m_setup_sem(setup_sem),
-    m_pool_setup_sem(pool_setup_sem),
-    m_close_create_pool(close_create_pool),
-    m_pool_name(pool_name),
+    m_volume_setup_sem(volume_setup_sem),
+    m_close_create_volume(close_create_volume),
+    m_volume_name(volume_name),
     m_num_objects(num_objects),
     m_suffix(suffix)
 {
 }
 
-StRadosCreatePool::
-~StRadosCreatePool()
+StRadosCreateVolume::
+~StRadosCreateVolume()
 {
 }
 
-int StRadosCreatePool::
+int StRadosCreateVolume::
 run()
 {
   rados_t cl;
@@ -81,10 +81,10 @@ run()
 
   RETURN1_IF_NONZERO(rados_connect(cl));
 
-  printf("%s: creating pool %s\n", get_id_str(), m_pool_name.c_str());
-  rados_pool_create(cl, m_pool_name.c_str());
+  printf("%s: creating volume %s\n", get_id_str(), m_volume_name.c_str());
+  rados_volume_create(cl, m_volume_name.c_str());
   rados_ioctx_t io_ctx;
-  RETURN1_IF_NONZERO(rados_ioctx_create(cl, m_pool_name.c_str(), &io_ctx));
+  RETURN1_IF_NONZERO(rados_ioctx_create(cl, m_volume_name.c_str(), &io_ctx));
 
   for (int i = 0; i < m_num_objects; ++i) {
     char oid[128];
@@ -100,10 +100,10 @@ run()
     }
   }
   printf("%s: finishing.\n", get_id_str());
-  if (m_pool_setup_sem)
-    m_pool_setup_sem->post();
-  if (m_close_create_pool)
-    m_close_create_pool->wait();
+  if (m_volume_setup_sem)
+    m_volume_setup_sem->post();
+  if (m_close_create_volume)
+    m_close_create_volume->wait();
   rados_ioctx_destroy(io_ctx);
   rados_shutdown(cl);
   return 0;
