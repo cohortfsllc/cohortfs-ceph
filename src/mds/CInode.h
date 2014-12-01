@@ -49,7 +49,6 @@ class MDCache;
 class LogSegment;
 class Session;
 class MClientCaps;
-struct ObjectOperation;
 class EMetaBlob;
 
 ostream& operator<<(ostream& out, CInode& in);

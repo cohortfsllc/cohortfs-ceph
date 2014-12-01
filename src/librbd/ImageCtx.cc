@@ -7,9 +7,7 @@
 #include "common/errno.h"
 
 #include "librbd/internal.h"
-#if 0
 #include "librbd/WatchCtx.h"
-#endif
 
 #include "librbd/ImageCtx.h"
 
@@ -33,16 +31,13 @@ namespace librbd {
       flush_encountered(false),
       exclusive_locked(false),
       name(image_name),
-#if 0
       wctx(NULL),
-#endif
       refresh_seq(0),
       last_refresh(0),
       size(0),
       object_cacher(NULL), writeback_handler(NULL), object_set(NULL)
   {
-    md_ctx.dup(p);
-    data_ctx.dup(p);
+    io_ctx.dup(p);
 
     memset(&header, 0, sizeof(header));
 
@@ -70,7 +65,7 @@ namespace librbd {
 				       cct->_conf->rbd_cache_target_dirty,
 				       cct->_conf->rbd_cache_max_dirty_age,
 				       cct->_conf->rbd_cache_block_writes_upfront);
-      object_set = new ObjectCacher::ObjectSet(NULL, data_ctx.get_volume(), 0);
+      object_set = new ObjectCacher::ObjectSet(NULL, io_ctx.get_volume(), 0);
       object_set->return_enoent = true;
       object_cacher->start();
     }
@@ -94,7 +89,7 @@ namespace librbd {
   int ImageCtx::init() {
     int r;
 
-    r = check_exists(md_ctx, name, NULL);
+    r = check_exists(io_ctx, name, NULL);
     if (r < 0) {
       lderr(cct) << "error finding header: " << cpp_strerror(r) << dendl;
       return r;
@@ -228,19 +223,21 @@ namespace librbd {
     cache_lock.Unlock();
   }
 
-#if 0
   int ImageCtx::register_watch() {
+#if 0
     assert(!wctx);
     wctx = new WatchCtx(this);
-    return md_ctx.watch(header_oid, 0, &(wctx->cookie), wctx);
+    return io_ctx.watch(header_oid, 0, &(wctx->cookie), wctx);
+#endif
   }
 
   void ImageCtx::unregister_watch() {
+#if 0
     assert(wctx);
     wctx->invalidate();
-    md_ctx.unwatch(header_oid, wctx->cookie);
+    io_ctx.unwatch(header_oid, wctx->cookie);
     delete wctx;
     wctx = NULL;
-  }
 #endif
+  }
 }

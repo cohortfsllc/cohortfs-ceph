@@ -233,13 +233,12 @@ int librados::RadosClient::connect()
   }
   messenger->set_myname(entity_name_t::CLIENT(monclient.get_global_id()));
 
-  objecter->init_unlocked();
   lock.Lock();
 
   timer.init();
 
   objecter->set_client_incarnation(0);
-  objecter->init_locked();
+  objecter->init();
   monclient.renew_subs();
 
   finisher.start();
@@ -271,15 +270,13 @@ void librados::RadosClient::shutdown()
   bool need_objecter = false;
   if (objecter && state == CONNECTED) {
     need_objecter = true;
-    objecter->shutdown_locked();
+    objecter->shutdown();
   }
   state = DISCONNECTED;
   instance_id = 0;
   timer.shutdown();   // will drop+retake lock
   lock.Unlock();
   monclient.shutdown();
-  if (need_objecter)
-    objecter->shutdown_unlocked();
   if (messenger) {
     messenger->shutdown();
     messenger->wait();

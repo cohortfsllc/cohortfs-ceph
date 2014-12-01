@@ -44,7 +44,7 @@ KvStoreBench::KvStoreBench()
 
 KvStoreBench::~KvStoreBench()
 {
-  librados::ObjectWriteOperation owo;
+    librados::ObjectWriteOperation owo(io_ctx);
   owo.remove();
   io_ctx.operate(client_name + ".done-setting", &owo);
   delete kvs;
@@ -251,7 +251,7 @@ int KvStoreBench::test_random_insertions() {
   time_t t;
   if (client_name[client_name.size() - 1] != '0' && client_name != "admin") {
     do {
-      librados::ObjectReadOperation oro;
+      librados::ObjectReadOperation oro(io_ctx);
       oro.stat(&uint, &t, &err);
       err = io_ctx.operate(prev_rid + ".done-setting", &oro, NULL);
       if (verbose) cout << "reading " << prev_rid << ": err = " << err
@@ -267,14 +267,14 @@ int KvStoreBench::test_random_insertions() {
     return err;
   }
 
-  librados::ObjectWriteOperation owo;
+  librados::ObjectWriteOperation owo(io_ctx);
   owo.create(true);
   io_ctx.operate(client_name + ".done-setting", &owo);
   cout << "created " << client_name + ".done-setting. waiting for "
       << last_rid << ".done-setting" << std::endl;
 
   do {
-    librados::ObjectReadOperation oro;
+      librados::ObjectReadOperation oro(io_ctx);
     oro.stat(&uint, &t, &err);
     err = io_ctx.operate(last_rid + ".done-setting", &oro, NULL);
   } while (err != 0);

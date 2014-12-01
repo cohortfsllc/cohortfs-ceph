@@ -23,6 +23,8 @@
 #undef dout_prefix
 #define dout_prefix *_dout
 
+using std::cout;
+
 struct Foo : public Thread {
   void *entry() {
     dout(0) << "foo started" << dendl;

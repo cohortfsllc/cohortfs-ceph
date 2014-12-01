@@ -6,6 +6,8 @@
 
 #include "osdc/Striper.h"
 
+using std::cout;
+
 TEST(Striper, Stripe1)
 {
   ceph_file_layout l;

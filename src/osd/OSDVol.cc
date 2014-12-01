@@ -444,7 +444,7 @@ void OSDVol::do_op(OpRequestRef op)
 
     if (!ceph_osd_op_type_multi(osd_op.op.op))
       continue;
-    if (osd_op.oid.name.length()) {
+    if (osd_op.oid.oid.name.length()) {
       // For Stripulation
       hobject_t src_oid(osd_op.oid);
       if (!src_obc.count(src_oid)) {

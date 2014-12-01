@@ -225,7 +225,7 @@ int OmapBench::run() {
 int OmapBench::print_written_omap() {
   for (int i = 1; i <= objects; i++) {
     int err = 0;
-    librados::ObjectReadOperation key_read;
+    librados::ObjectReadOperation key_read(io_ctx);
     set<string> out_keys;
     map<string, bufferlist> out_vals;
     std::stringstream objstrm;
@@ -240,8 +240,8 @@ int OmapBench::print_written_omap() {
       return err;
     }
 
-    librados::ObjectReadOperation val_read;
-    val_read.omap_get_vals_by_keys(out_keys, &out_vals, &err);
+    librados::ObjectReadOperation val_read(io_ctx);
+    val_read.omap_get_vals_by_keys(out_keys, out_vals, &err);
     if (err < 0) {
       cout << "error " << err;
       cout << " getting omap value set " << std::endl;
@@ -297,7 +297,7 @@ void OmapBench::print_results() {
 
 int OmapBench::write_omap_asynchronously(AioWriter *aiow,
     const std::map<std::string,bufferlist> &omap) {
-  librados::ObjectWriteOperation owo;
+  librados::ObjectWriteOperation owo(io_ctx);
   owo.create(false);
   owo.omap_clear();
   owo.omap_set(omap);

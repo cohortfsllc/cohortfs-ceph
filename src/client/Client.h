@@ -25,10 +25,6 @@
 #include <map>
 #include <fstream>
 #include <exception>
-using std::set;
-using std::map;
-using std::fstream;
-
 #include <unordered_map>
 
 #include "include/filepath.h"
@@ -52,6 +48,11 @@ using std::fstream;
 
 #include "osdc/ObjectCacher.h"
 
+using std::set;
+using std::map;
+using std::fstream;
+
+
 class MDSMap;
 class OSDMap;
 class MonClient;
@@ -71,7 +72,6 @@ struct LeaseStat;
 struct InodeStat;
 
 class Filer;
-class Objecter;
 class WritebackHandler;
 
 enum {

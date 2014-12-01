@@ -438,6 +438,7 @@ OPTION(osd_class_dir, OPT_STR, CEPH_PKGLIBDIR "/rados-classes") // where rados p
 OPTION(osd_open_classes_on_start, OPT_BOOL, true)
 OPTION(osd_check_for_log_corruption, OPT_BOOL, false)
 OPTION(osd_default_notify_timeout, OPT_U32, 30) // default notify timeout in seconds
+OPTION(osd_erasure_code_directory, OPT_STR, CEPH_PKGLIBDIR"/erasure-code") // default for the erasure-code-directory=XXX property of osd pool create
 
 OPTION(osd_command_max_records, OPT_INT, 256)
 OPTION(osd_verify_sparse_read_holes, OPT_BOOL, false)  // read fiemap-reported holes and verify they are zeros

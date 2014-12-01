@@ -74,7 +74,7 @@ namespace librbd {
 
   void trim_image(ImageCtx *ictx, uint64_t newsize, ProgressContext& prog_ctx)
   {
-    CephContext *cct = (CephContext *)ictx->data_ctx.cct();
+    CephContext *cct = (CephContext *)ictx->io_ctx.cct();
     uint64_t size = ictx->get_current_size();
 
     if (newsize < size) {
@@ -82,10 +82,10 @@ namespace librbd {
       Context *req_comp = new C_SimpleThrottle(&throttle);
       librados::AioCompletion *rados_completion =
 	librados::Rados::aio_create_completion(req_comp, NULL, rados_ctx_cb);
-      librados::ObjectWriteOperation op;
+      librados::ObjectWriteOperation op(ictx->io_ctx);
       op.truncate(newsize);
-      ictx->data_ctx.aio_operate(ictx->image_oid, rados_completion,
-				 &op, 0);
+      ictx->io_ctx.aio_operate(ictx->image_oid, rados_completion,
+			       &op, 0);
       rados_completion->release();
       int r = throttle.wait_for_ret();
       if (r < 0) {
@@ -211,7 +211,7 @@ namespace librbd {
     string last_read = "";
     do {
       map<string, bufferlist> outbl;
-      r = io_ctx.omap_get_vals(src_oid, last_read, MAX_READ, &outbl);
+      r = io_ctx.omap_get_vals(src_oid, last_read, MAX_READ, outbl);
       if (r < 0) {
 	lderr(cct) << "error reading source object omap values: "
 		   << cpp_strerror(r) << dendl;
@@ -233,7 +233,7 @@ namespace librbd {
       return -EEXIST;
     }
 
-    librados::ObjectWriteOperation op;
+    librados::ObjectWriteOperation op(io_ctx);
     op.create(true);
     op.write_full(databl);
     if (!omap_values.empty())
@@ -349,7 +349,7 @@ namespace librbd {
     bufferlist bl;
     ictx->header.image_size = size;
     bl.append((const char *)&(ictx->header), sizeof(ictx->header));
-    r = ictx->md_ctx.write(ictx->header_oid, bl, bl.length(), 0);
+    r = ictx->io_ctx.write(ictx->header_oid, bl, bl.length(), 0);
 
     // TODO: remove this useless check
     if (r == -ERANGE)
@@ -359,7 +359,7 @@ namespace librbd {
       lderr(cct) << "error writing header: " << cpp_strerror(-r) << dendl;
       return r;
     } else {
-      notify_change(ictx->md_ctx, ictx->header_oid, ictx);
+      notify_change(ictx->io_ctx, ictx->header_oid, ictx);
     }
 
     return 0;
@@ -426,13 +426,13 @@ namespace librbd {
     {
       int r;
       ictx->lockers.clear();
-      r = read_header(ictx->md_ctx, ictx->header_oid, &ictx->header);
+      r = read_header(ictx->io_ctx, ictx->header_oid, &ictx->header);
       if (r < 0) {
 	lderr(cct) << "Error reading header: " << cpp_strerror(r) << dendl;
 	return r;
       }
       ClsLockType lock_type = LOCK_NONE;
-      r = rados::cls::lock::get_lock_info(&ictx->md_ctx, ictx->header_oid,
+      r = rados::cls::lock::get_lock_info(&ictx->io_ctx, ictx->header_oid,
 					  RBD_LOCK_NAME, &ictx->lockers,
 					  &lock_type, &ictx->lock_tag);
 
@@ -580,7 +580,7 @@ namespace librbd {
     }
     int r;
     SimpleThrottle throttle(cct->_conf->rbd_concurrent_management_ops, false);
-    uint64_t len = src->data_ctx.op_size();
+    uint64_t len = src->io_ctx.op_size();
     for (uint64_t offset = 0; offset < src_size; offset += len) {
       bufferlist *bl = new bufferlist();
       Context *ctx = new C_CopyRead(&throttle, dest, offset, bl);
@@ -613,7 +613,6 @@ namespace librbd {
     if (r < 0)
       return r;
 
-#if 0
     if (!ictx->read_only) {
       r = ictx->register_watch();
       if (r < 0) {
@@ -622,7 +621,6 @@ namespace librbd {
 	goto err_close;
       }
     }
-#endif
 
     ictx->md_lock.get_write();
     r = ictx_refresh(ictx);
@@ -645,10 +643,8 @@ namespace librbd {
     else
       flush(ictx);
 
-#if 0
     if (ictx->wctx)
       ictx->unregister_watch();
-#endif
 
     delete ictx;
   }
@@ -702,12 +698,12 @@ namespace librbd {
      * duplicate that code.
      */
     RWLock::RLocker locker(ictx->md_lock);
-    r = rados::cls::lock::lock(&ictx->md_ctx, ictx->header_oid, RBD_LOCK_NAME,
+    r = rados::cls::lock::lock(&ictx->io_ctx, ictx->header_oid, RBD_LOCK_NAME,
 			       exclusive ? LOCK_EXCLUSIVE : LOCK_SHARED,
 			       cookie, tag, "", utime_t(), 0);
     if (r < 0)
       return r;
-    notify_change(ictx->md_ctx, ictx->header_oid, ictx);
+    notify_change(ictx->io_ctx, ictx->header_oid, ictx);
     return 0;
   }
 
@@ -722,11 +718,11 @@ namespace librbd {
       return r;
 
     RWLock::RLocker locker(ictx->md_lock);
-    r = rados::cls::lock::unlock(&ictx->md_ctx, ictx->header_oid,
+    r = rados::cls::lock::unlock(&ictx->io_ctx, ictx->header_oid,
 				 RBD_LOCK_NAME, cookie);
     if (r < 0)
       return r;
-    notify_change(ictx->md_ctx, ictx->header_oid, ictx);
+    notify_change(ictx->io_ctx, ictx->header_oid, ictx);
     return 0;
   }
 
@@ -747,11 +743,11 @@ namespace librbd {
       return -EINVAL;
     }
     RWLock::RLocker locker(ictx->md_lock);
-    r = rados::cls::lock::break_lock(&ictx->md_ctx, ictx->header_oid,
+    r = rados::cls::lock::break_lock(&ictx->io_ctx, ictx->header_oid,
 				     RBD_LOCK_NAME, cookie, lock_client);
     if (r < 0)
       return r;
-    notify_change(ictx->md_ctx, ictx->header_oid, ictx);
+    notify_change(ictx->io_ctx, ictx->header_oid, ictx);
     return 0;
   }
 
@@ -786,7 +782,7 @@ namespace librbd {
 
     start_time = ceph_clock_now(ictx->cct);
     while (left > 0) {
-      uint64_t read_len = ictx->data_ctx.op_size();
+      uint64_t read_len = ictx->io_ctx.op_size();
 
       bufferlist bl;
 
@@ -1046,7 +1042,7 @@ namespace librbd {
     } else {
       librados::AioCompletion *rados_completion =
 	librados::Rados::aio_create_completion(req_comp, NULL, rados_ctx_cb);
-      ictx->data_ctx.aio_flush_async(rados_completion);
+      ictx->io_ctx.aio_flush_async(rados_completion);
       rados_completion->release();
     }
     c->finish_adding_requests(cct);
@@ -1077,7 +1073,7 @@ namespace librbd {
     if (ictx->object_cacher) {
       r = ictx->flush_cache();
     } else {
-      r = ictx->data_ctx.aio_flush();
+      r = ictx->io_ctx.aio_flush();
     }
 
     if (r)

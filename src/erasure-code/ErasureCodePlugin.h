@@ -27,6 +27,7 @@ extern "C" {
 }
 
 namespace ceph {
+  using std::ostream;
 
   class ErasureCodePlugin {
   public:

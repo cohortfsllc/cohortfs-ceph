@@ -30,7 +30,10 @@ class RadosClient;
 struct librados::IoCtxImpl {
   std::atomic<uint64_t> ref_cnt;
   RadosClient *client;
-  VolumeRef volume;
+  std::shared_ptr<const Volume> volume;
+  uint64_t assert_ver;
+  map<object_t, uint64_t> assert_src_version;
+  version_t last_objver;
   uint32_t notify_timeout;
 
   Mutex aio_write_list_lock;
@@ -44,12 +47,15 @@ struct librados::IoCtxImpl {
 
   IoCtxImpl();
   IoCtxImpl(RadosClient *c, Objecter *objecter, Mutex *client_lock,
-	    VolumeRef volume);
+	    const std::shared_ptr <const Volume>& volume);
 
   void dup(const IoCtxImpl& rhs) {
     // Copy everything except the ref count
     client = rhs.client;
     volume = rhs.volume;
+    assert_ver = rhs.assert_ver;
+    assert_src_version = rhs.assert_src_version;
+    last_objver = rhs.last_objver;
     notify_timeout = rhs.notify_timeout;
     lock = rhs.lock;
     objecter = rhs.objecter;
@@ -73,8 +79,11 @@ struct librados::IoCtxImpl {
     return volume->id;
   }
 
+  std::unique_ptr<ObjOp> prepare_assert_ops();
+
   // io
   int create(const object_t& oid, bool exclusive);
+  int create(const object_t& oid, bool exclusive, const std::string& category);
   int write(const object_t& oid, bufferlist& bl, size_t len, uint64_t off);
   int append(const object_t& oid, bufferlist& bl, size_t len);
   int write_full(const object_t& oid, bufferlist& bl);
@@ -82,7 +91,6 @@ struct librados::IoCtxImpl {
   int sparse_read(const object_t& oid, std::map<uint64_t,uint64_t>& m,
 		  bufferlist& bl, size_t len, uint64_t off);
   int remove(const object_t& oid);
-  uint64_t op_size(void);
   int stat(const object_t& oid, uint64_t *psize, time_t *pmtime);
   int trunc(const object_t& oid, uint64_t size);
 
@@ -93,12 +101,30 @@ struct librados::IoCtxImpl {
   int getxattrs(const object_t& oid, map<string, bufferlist>& attrset);
   int rmxattr(const object_t& oid, const char *name);
 
-  int operate(const object_t& oid, ::ObjectOperation *o, time_t *pmtime, int flags=0);
-  int operate_read(const object_t& oid, ::ObjectOperation *o, bufferlist *pbl, int flags=0);
-  int aio_operate(const object_t& oid, ::ObjectOperation *o,
+  int operate(const object_t& oid, std::unique_ptr<ObjOp>& o, time_t *pmtime,
+	      int flags=0);
+  int operate(const object_t& oid, librados::ObjectOperation *op,
+	      time_t *pmtime, int flags=0) {
+    return operate(oid, op->impl, pmtime, flags);
+  }
+  int operate_read(const object_t& oid, std::unique_ptr<ObjOp>& o,
+		   bufferlist *pbl, int flags=0);
+  int operate_read(const object_t& oid, librados::ObjectOperation *op,
+		   bufferlist *pbl, int flags=0) {
+    return operate_read(oid, op->impl, pbl, flags);
+  }
+  int aio_operate(const object_t& oid, std::unique_ptr<ObjOp>& o,
 		  AioCompletionImpl *c, int flags);
-  int aio_operate_read(const object_t& oid, ::ObjectOperation *o,
+  int aio_operate(const object_t& oid, librados::ObjectOperation *op,
+		  AioCompletionImpl *c, int flags) {
+    return aio_operate(oid, op->impl, c, flags);
+  }
+  int aio_operate_read(const object_t& oid, std::unique_ptr<ObjOp>& o,
 		       AioCompletionImpl *c, int flags, bufferlist *pbl);
+  int aio_operate_read(const object_t& oid, librados::ObjectOperation *op,
+		       AioCompletionImpl *c, int flags, bufferlist *pbl) {
+    return aio_operate_read(oid, op->impl, c, flags, pbl);
+  }
 
   struct C_aio_Ack : public Context {
     librados::AioCompletionImpl *c;
@@ -129,9 +155,6 @@ struct librados::IoCtxImpl {
 		      size_t len, uint64_t off);
   int aio_write(const object_t &oid, AioCompletionImpl *c,
 		const bufferlist& bl, size_t len, uint64_t off);
-  int aio_zero(const object_t &oid, AioCompletionImpl *c,
-	       size_t len, uint64_t off);
-  int aio_trunc(const object_t &oid, AioCompletionImpl *c, size_t size);
   int aio_append(const object_t &oid, AioCompletionImpl *c,
 		 const bufferlist& bl, size_t len);
   int aio_write_full(const object_t &oid, AioCompletionImpl *c,
@@ -141,6 +164,7 @@ struct librados::IoCtxImpl {
 	       const char *method, bufferlist& inbl, bufferlist *outbl);
   int aio_stat(const object_t& oid, AioCompletionImpl *c, uint64_t *psize, time_t *pmtime);
 
+  void set_sync_op_version(version_t ver);
   int watch(const object_t& oid, uint64_t ver, uint64_t *cookie, librados::WatchCtx *ctx);
   int unwatch(const object_t& oid, uint64_t cookie);
   int notify(const object_t& oid, bufferlist& bl);
@@ -153,7 +177,12 @@ struct librados::IoCtxImpl {
 		     uint64_t expected_write_size);
 
   version_t last_version();
+  void set_assert_version(uint64_t ver);
+  void set_assert_src_version(const object_t& oid, uint64_t ver);
   void set_notify_timeout(uint32_t timeout);
+  uint64_t op_size() const {
+    return volume->op_size();
+  }
 
   struct C_NotifyComplete : public librados::WatchCtx {
     Mutex *lock;

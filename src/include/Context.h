@@ -138,9 +138,12 @@ public:
  * C_Contexts - set of Contexts
  */
 class C_Contexts : public Context {
+private:
+  C_Contexts **itknows;
 public:
   std::list<Context*> contexts;
 
+  C_Contexts(C_Contexts **myname = NULL) : itknows(myname) { }
   void add(Context* c) {
     contexts.push_back(c);
   }
@@ -149,6 +152,8 @@ public:
   }
   void finish(int r) {
     finish_contexts(contexts, r);
+    if (itknows)
+      *itknows = NULL;
   }
   bool empty() { return contexts.empty(); }
 

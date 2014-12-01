@@ -213,21 +213,21 @@ static int do_copy(IoCtx& io_ctx, const string& objname,
 {
   string oid(objname);
   bufferlist outdata;
-  librados::ObjectReadOperation read_op;
+  librados::ObjectReadOperation read_op(io_ctx);
   string start_after;
 
 #define COPY_CHUNK_SIZE (4 * 1024 * 1024)
   read_op.read(0, COPY_CHUNK_SIZE, &outdata, NULL);
 
   map<std::string, bufferlist> attrset;
-  read_op.getxattrs(&attrset, NULL);
+  read_op.getxattrs(attrset, NULL);
 
   bufferlist omap_header;
   read_op.omap_get_header(&omap_header, NULL);
 
 #define OMAP_CHUNK 1000
   map<string, bufferlist> omap;
-  read_op.omap_get_vals(start_after, OMAP_CHUNK, &omap, NULL);
+  read_op.omap_get_vals(start_after, OMAP_CHUNK, omap, NULL);
 
   bufferlist opbl;
   int ret = io_ctx.operate(oid, &read_op, &opbl);
@@ -235,7 +235,7 @@ static int do_copy(IoCtx& io_ctx, const string& objname,
     return ret;
   }
 
-  librados::ObjectWriteOperation write_op;
+  librados::ObjectWriteOperation write_op(io_ctx);
   string target_oid(target_obj);
 
   /* reset dest if exists */
@@ -279,7 +279,7 @@ static int do_copy(IoCtx& io_ctx, const string& objname,
     start_after = iter->first;
 
     omap.clear();
-    ret = io_ctx.omap_get_vals(oid, start_after, OMAP_CHUNK, &omap);
+    ret = io_ctx.omap_get_vals(oid, start_after, OMAP_CHUNK, omap);
     if (ret < 0)
       goto err;
 
@@ -1299,7 +1299,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     }
 
     map<string, bufferlist> values;
-    ret = io_ctx.omap_get_vals_by_keys(oid, keys, &values);
+    ret = io_ctx.omap_get_vals_by_keys(oid, keys, values);
     if (ret < 0) {
       cerr << "error getting omap value " << vol_name << "/" << oid << "/"
 	   << key << ": " << cpp_strerror(ret) << std::endl;
@@ -1350,7 +1350,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     int MAX_READ = 512;
     do {
       map<string, bufferlist> values;
-      ret = io_ctx.omap_get_vals(oid, last_read, MAX_READ, &values);
+      ret = io_ctx.omap_get_vals(oid, last_read, MAX_READ, values);
       if (ret < 0) {
 	cerr << "error getting omap keys " << vol_name << "/" << oid << ": "
 	     << cpp_strerror(ret) << std::endl;
@@ -1557,7 +1557,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     if (vol_name.empty() || nargs.size() < 2)
       usage_exit();
 
-    librados::ObjectReadOperation read;
+    librados::ObjectReadOperation read(io_ctx);
     set<string> out_keys;
     read.omap_get_keys("", LONG_MAX, &out_keys, &ret);
     io_ctx.operate(nargs[1], &read, NULL);

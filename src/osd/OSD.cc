@@ -173,9 +173,8 @@ void OSDService::shutdown()
   {
     Mutex::Locker l(objecter_lock);
     objecter_timer.shutdown();
-    objecter->shutdown_locked();
+    objecter->shutdown();
   }
-  objecter->shutdown_unlocked();
   objecter_finisher.stop();
 
   osdmap = OSDMapRef();
@@ -186,11 +185,10 @@ void OSDService::init()
 {
   {
     objecter_finisher.start();
-    objecter->init_unlocked();
     Mutex::Locker l(objecter_lock);
     objecter_timer.init();
     objecter->set_client_incarnation(0);
-    objecter->init_locked();
+    objecter->init();
   }
   watch_timer.init();
 }
@@ -3228,7 +3226,7 @@ int OSD::init_op_flags(OpRequestRef op)
       op->set_read();
 
     // set READ flag if there are src_oids
-    if (iter->oid.name.length())
+    if (iter->oid.oid.name.length())
       op->set_read();
 
     switch (iter->op.op) {

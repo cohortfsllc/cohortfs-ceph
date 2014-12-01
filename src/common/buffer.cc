@@ -1462,7 +1462,7 @@ int buffer::list::read_fd_zero_copy(int fd, size_t len)
 #endif
 }
 
-int buffer::list::write_file(const char *fn, int mode)
+int buffer::list::write_file(const char *fn, int mode) const
 {
   int fd = TEMP_FAILURE_RETRY(::open(fn, O_WRONLY|O_CREAT|O_TRUNC, mode));
   if (fd < 0) {

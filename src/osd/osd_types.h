@@ -1007,13 +1007,18 @@ ostream& operator<<(ostream& out, const object_info_t& oi);
 
 struct OSDOp {
   ceph_osd_op op;
-  object_t oid;
+  hobject_t oid;
 
   bufferlist indata, outdata;
   int32_t rval;
 
-  OSDOp() : rval(0) {
+  Context *ctx;
+  bufferlist* out_bl;
+  int* out_rval;
+
+  OSDOp(int the_op = 0) : rval(0), ctx(NULL), out_bl(NULL), out_rval(NULL) {
     memset(&op, 0, sizeof(ceph_osd_op));
+    op.op = the_op;
   }
 
   /**

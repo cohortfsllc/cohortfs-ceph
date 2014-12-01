@@ -31,15 +31,12 @@ namespace librbd {
 
     void complete(int r)
     {
-      if (should_complete(r)) {
-	if (m_hide_enoent && r == -ENOENT)
-	  r = 0;
-	m_completion->complete(r);
-	delete this;
-      }
+      if (m_hide_enoent && r == -ENOENT)
+	r = 0;
+      m_completion->complete(r);
+      delete this;
     }
 
-    virtual bool should_complete(int r) = 0;
     virtual int send() = 0;
 
   protected:
@@ -61,7 +58,6 @@ namespace librbd {
 		   false) {
     }
     virtual ~AioRead() {}
-    virtual bool should_complete(int r);
     virtual int send();
 
     ceph::bufferlist &data() {
@@ -73,14 +69,15 @@ namespace librbd {
 
   class AbstractWrite : public AioRequest {
   public:
-    AbstractWrite();
     AbstractWrite(ImageCtx *ictx, const std::string &oid,
 		  uint64_t object_off, uint64_t len,
 		  Context *completion,
 		  bool hide_enoent);
     virtual ~AbstractWrite() {}
-    virtual bool should_complete(int r);
-    virtual int send() = 0;
+    virtual int send();
+
+  protected:
+    librados::ObjectWriteOperation m_write;
   };
 
   class AioWrite : public AbstractWrite {
@@ -92,11 +89,14 @@ namespace librbd {
       : AbstractWrite(ictx, oid,
 		      object_off, data.length(),
 		      completion, false),
-	m_write_data(data) { }
+	m_write_data(data) {
+      m_write.write(m_off, m_write_data);
+
+    }
     virtual ~AioWrite() {}
-    virtual int send();
 
   private:
+    void add_write_ops(librados::ObjectWriteOperation &wr);
     ceph::bufferlist m_write_data;
   };
 
@@ -107,9 +107,10 @@ namespace librbd {
       : AbstractWrite(ictx, oid,
 		      0, 0,
 		      completion,
-		      true) { }
+		      true) {
+      m_write.remove();
+    }
     virtual ~AioRemove() {}
-    virtual int send();
   };
 
   class AioTruncate : public AbstractWrite {
@@ -121,7 +122,6 @@ namespace librbd {
 		      completion,
 		      true) { }
     virtual ~AioTruncate() {}
-    virtual int send();
   };
 
   class AioZero : public AbstractWrite {
@@ -132,9 +132,10 @@ namespace librbd {
       : AbstractWrite(ictx, oid,
 		      object_off, object_len,
 		      completion,
-		      true) { }
+		      true) {
+      m_write.truncate(object_off);
+    }
     virtual ~AioZero() {}
-    virtual int send();
   };
 
 }

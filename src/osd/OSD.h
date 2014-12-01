@@ -62,7 +62,6 @@ class ObjectStore;
 class OSDMap;
 class MLog;
 class MClass;
-class Objecter;
 
 class Watch;
 class Notification;
@@ -70,6 +69,12 @@ class Notification;
 class AuthAuthorizeHandlerRegistry;
 
 typedef std::shared_ptr<ObjectStore::Sequencer> SequencerRef;
+
+namespace OSDC {
+  class Objecter;
+};
+
+using OSDC::Objecter;
 
 class OSD;
 class OSDService {

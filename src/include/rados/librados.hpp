@@ -4,17 +4,19 @@
 
 #include <boost/uuid/uuid.hpp>
 #include <stdbool.h>
+#include <memory>
 #include <string>
 #include <list>
 #include <map>
 #include <set>
 #include <vector>
 #include <utility>
-#include "memory.h"
 #include "buffer.h"
 
 #include "librados.h"
 #include "rados_types.hpp"
+#include "include/Context.h"
+#include "osdc/ObjectOperation.h"
 
 namespace librados
 {
@@ -23,7 +25,6 @@ namespace librados
   struct AioCompletionImpl;
   class IoCtx;
   struct IoCtxImpl;
-  class ObjectOperationImpl;
   class RadosClient;
 
   typedef void *config_t;
@@ -107,8 +108,19 @@ namespace librados
   class ObjectOperation
   {
   public:
-    ObjectOperation();
-    virtual ~ObjectOperation();
+    ObjectOperation(const IoCtx& ctx);
+    ObjectOperation(const ObjectOperation& other) :
+      impl(other.impl->clone()) { }
+    ObjectOperation(ObjectOperation&& other) {
+      swap(impl, other.impl);
+    }
+    ObjectOperation& operator= (const ObjectOperation& rhs) {
+      impl = rhs.impl->clone();
+      return *this;
+    }
+
+
+    virtual ~ObjectOperation() = default;
 
     size_t size();
     void set_op_flags(ObjectOperationFlags flags);
@@ -120,8 +132,12 @@ namespace librados
     void src_cmpxattr(const std::string& src_oid,
 		      const char *name, int op, uint64_t v);
     void exec(const char *cls, const char *method, bufferlist& inbl);
-    void exec(const char *cls, const char *method, bufferlist& inbl, bufferlist *obl, int *prval);
-    void exec(const char *cls, const char *method, bufferlist& inbl, ObjectOperationCompletion *completion);
+    void exec(const char *cls, const char *method, bufferlist& inbl,
+	      bufferlist *obl, Context *ctx, int *prval);
+    void exec(const char *cls, const char *method, bufferlist& inbl,
+	      bufferlist *obl, int *prval);
+    void exec(const char *cls, const char *method, bufferlist& inbl,
+	      ObjectOperationCompletion *completion);
     /**
      * Guard operatation with a check that the object already exists
      */
@@ -150,11 +166,10 @@ namespace librados
       int *prval);
 
   protected:
-    ObjectOperationImpl *impl;
-    ObjectOperation(const ObjectOperation& rhs);
-    ObjectOperation& operator=(const ObjectOperation& rhs);
+    std::unique_ptr<ObjOp> impl;
     friend class IoCtx;
     friend class Rados;
+    friend struct IoCtxImpl;
   };
 
   /*
@@ -167,7 +182,8 @@ namespace librados
   protected:
     time_t *pmtime;
   public:
-    ObjectWriteOperation() : pmtime(NULL) {}
+    ObjectWriteOperation(const IoCtx &ctx)
+      : ObjectOperation(ctx), pmtime(NULL) {}
     ~ObjectWriteOperation() {}
 
     void mtime(time_t *pt) {
@@ -175,6 +191,7 @@ namespace librados
     }
 
     void create(bool exclusive);
+    void create(bool exclusive, const string& category);
     void write(uint64_t off, const bufferlist& bl);
     void write_full(const bufferlist& bl);
     void append(const bufferlist& bl);
@@ -230,13 +247,15 @@ namespace librados
   class ObjectReadOperation : public ObjectOperation
   {
   public:
-    ObjectReadOperation() {}
+    ObjectReadOperation(const IoCtx& ctx) : ObjectOperation(ctx) {}
     ~ObjectReadOperation() {}
 
     void stat(uint64_t *psize, time_t *pmtime, int *prval);
     void getxattr(const char *name, bufferlist *pbl, int *prval);
-    void getxattrs(std::map<std::string, bufferlist> *pattrs, int *prval);
+    void getxattrs(std::map<std::string, bufferlist> &pattrs, int *prval);
     void read(size_t off, uint64_t len, bufferlist *pbl, int *prval);
+    void read(size_t off, uint64_t len, bufferlist *pbl, int *prval,
+	      Context *ctx);
     /**
      * see aio_sparse_read()
      */
@@ -256,7 +275,7 @@ namespace librados
     void omap_get_vals(
       const std::string &start_after,
       uint64_t max_return,
-      std::map<std::string, bufferlist> *out_vals,
+      std::map<std::string, bufferlist> &out_vals,
       int *prval);
 
     /**
@@ -274,7 +293,7 @@ namespace librados
       const std::string &start_after,
       const std::string &filter_prefix,
       uint64_t max_return,
-      std::map<std::string, bufferlist> *out_vals,
+      std::map<std::string, bufferlist> &out_vals,
       int *prval);
 
 
@@ -309,7 +328,7 @@ namespace librados
      * @param prval [out] place error code in prval upon completion
      */
     void omap_get_vals_by_keys(const std::set<std::string> &keys,
-			       std::map<std::string, bufferlist> *map,
+			       std::map<std::string, bufferlist> &map,
 			       int *prval);
 
     /**
@@ -383,12 +402,12 @@ namespace librados
     int omap_get_vals(const std::string& oid,
 		      const std::string& start_after,
 		      uint64_t max_return,
-		      std::map<std::string, bufferlist> *out_vals);
+		      std::map<std::string, bufferlist> &out_vals);
     int omap_get_vals(const std::string& oid,
 		      const std::string& start_after,
 		      const std::string& filter_prefix,
 		      uint64_t max_return,
-		      std::map<std::string, bufferlist> *out_vals);
+		      std::map<std::string, bufferlist> &out_vals);
     int omap_get_keys(const std::string& oid,
 		      const std::string& start_after,
 		      uint64_t max_return,
@@ -397,7 +416,7 @@ namespace librados
 			bufferlist *bl);
     int omap_get_vals_by_keys(const std::string& oid,
 			      const std::set<std::string>& keys,
-			      std::map<std::string, bufferlist> *vals);
+			      std::map<std::string, bufferlist> &vals);
     int omap_set(const std::string& oid,
 		 const std::map<std::string, bufferlist>& map);
     int omap_set_header(const std::string& oid,
@@ -436,9 +455,6 @@ namespace librados
 			size_t len, uint64_t off);
     int aio_write(const std::string& oid, AioCompletion *c, const bufferlist& bl,
 		  size_t len, uint64_t off);
-    int aio_trunc(const std::string& oid, AioCompletion *c, size_t size);
-    int aio_zero(const std::string& oid, AioCompletion *c,
-		 size_t len, uint64_t off);
     int aio_append(const std::string& oid, AioCompletion *c, const bufferlist& bl,
 		  size_t len);
     int aio_write_full(const std::string& oid, AioCompletion *c, const bufferlist& bl);
@@ -525,6 +541,7 @@ namespace librados
     IoCtx(IoCtxImpl *io_ctx_impl_);
 
     friend class Rados; // Only Rados can use our private constructor to create IoCtxes.
+    friend class ObjectOperation;
 
     IoCtxImpl *io_ctx_impl;
   };

@@ -21,6 +21,8 @@
 #undef dout_prefix
 #define dout_prefix *_dout
 
+using namespace std;
+
 struct io {
   utime_t start, ack, commit;
   bool done() {

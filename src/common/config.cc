@@ -57,6 +57,7 @@ using std::ostringstream;
 using std::pair;
 using std::set;
 using std::string;
+using std::cout;
 
 const char *CEPH_CONF_FILE_DEFAULT = "CEPH_CONF_SYS_DEFAULT/$cluster.conf, ~/.ceph/$cluster.conf, $cluster.conf";
 

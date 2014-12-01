@@ -183,23 +183,21 @@ class Filer {
     Striper::file_to_extents(cct, ino, layout, offset, len, 0,
 			     extents);
     if (extents.size() == 1) {
-      vector<OSDOp> ops(1);
-      ops[0].op.op = CEPH_OSD_OP_TRIMTRUNC;
-      ops[0].op.extent.truncate_seq = truncate_seq;
-      ops[0].op.extent.truncate_size = extents[0].offset;
-      objecter->_modify(extents[0].oid, volume, ops, mtime,
-			flags, onack, oncommit);
+      std::unique_ptr<ObjOp> op(volume->op());
+      op->add_op(CEPH_OSD_OP_TRIMTRUNC);
+      op->add_truncate(extents[0].offset, truncate_seq);
+      objecter->_modify(extents[0].oid, volume, op, mtime, flags, onack,
+			oncommit);
     } else {
       C_GatherBuilder gack(onack);
       C_GatherBuilder gcom(oncommit);
       for (vector<ObjectExtent>::iterator p = extents.begin();
 	   p != extents.end();
 	   ++p) {
-	vector<OSDOp> ops(1);
-	ops[0].op.op = CEPH_OSD_OP_TRIMTRUNC;
-	ops[0].op.extent.truncate_size = p->offset;
-	ops[0].op.extent.truncate_seq = truncate_seq;
-	objecter->_modify(p->oid, volume, ops, mtime, flags,
+	std::unique_ptr<ObjOp> op(volume->op());
+	op->add_op(CEPH_OSD_OP_TRIMTRUNC);
+	op->add_truncate(p->offset, truncate_seq);
+	objecter->_modify(p->oid, volume, op, mtime, flags,
 			  onack ? gack.new_sub() : 0,
 			  oncommit ? gcom.new_sub() : 0);
       }

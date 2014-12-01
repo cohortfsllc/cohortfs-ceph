@@ -324,14 +324,11 @@ COMMAND("osd blacklist " \
 	"osd", "rw", "cli,rest")
 COMMAND("osd volume create "					 \
 	"name=volumeName,type=CephString "			 \
-	"name=erasureDataBlocks,type=CephInt,range=1,req=false " \
-	"name=erasureSize,type=CephInt,range=65536,req=false "	 \
-	"name=erasureType,type=CephString,req=false "		 \
-	"name=erasureCodeBlocks,type=CephInt,range=0,req=false " \
-	"name=erasureWordSize,type=CephInt,range=0,req=false "	 \
-	"name=erasurePktSize,type=CephInt,range=0,req=false ",	 \
+	"name=stripeUnit,type=CephInt,req=false "		 \
+	"name=erasurePluginName,type=CephString,req=false "	 \
+	"name=erasureParams,type=CephString,req=false "		 \
 	"name=placeCode,type=CephString,req=false "		 \
-	"name=placeSymbols,type=CephString,req=false "		 \
+	"name=placeSymbols,type=CephString,req=false ",		 \
 	"Create a new volume",					 \
 	"osd", "rw", "cli,rest")
 COMMAND("osd volume remove "		   \

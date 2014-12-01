@@ -15,6 +15,7 @@
  *
  */
 
+#include <string>
 #include <sstream>
 #include <cassert>
 #include <boost/uuid/nil_generator.hpp>
@@ -2229,31 +2230,24 @@ done:
   } else if (prefix == "osd volume create") {
     /* Factor this out into its own function sometime. */
     string name;
+    int32_t stripe_unit; // This is the /desired/ stripe unit. You
+			 // are not guaranteed to get it, but it
+			 // will probably be close.
+    string plugin;
+    string params;
     string place_text;
     string symbols;
-    string erasure_type;
-    int64_t data_blocks;
-    int64_t code_blocks;
-    int64_t word_size;
-    int64_t packet_size;
-    int64_t size;
     epoch_t last_update = osdmap.epoch;
     string error_message;
 
     VolumeRef vol;
 
     cmd_getval(g_ceph_context, cmdmap, "volumeName", name);
-    cmd_getval(g_ceph_context, cmdmap, "erasureDataBlocks",
-	       data_blocks, int64_t(1));
-    cmd_getval(g_ceph_context, cmdmap, "erasureSize", size, int64_t(4096));
-    cmd_getval(g_ceph_context, cmdmap, "erasureType", erasure_type,
-	       string("no_erasure"));
-    cmd_getval(g_ceph_context, cmdmap, "erasureCodeBlocks", code_blocks,
-	       int64_t(0));
-    cmd_getval(g_ceph_context, cmdmap, "erasureWordSize",
-	       word_size, int64_t(0));
-    cmd_getval(g_ceph_context, cmdmap, "erasurePktSize", packet_size,
-	       int64_t(0));
+    cmd_getval(g_ceph_context, cmdmap, "stripeUnit", stripe_unit, 32768);
+    cmd_getval(g_ceph_context, cmdmap, "erasurePluginName", plugin,
+	       string("jerasure"));
+    cmd_getval(g_ceph_context, cmdmap, "erasureParams", params,
+	       string("technique=reed_sol_van k=2 m=1"));
     cmd_getval(g_ceph_context, cmdmap, "placeCode", place_text, string());
     cmd_getval(g_ceph_context, cmdmap, "placeSymbols", symbols, string());
 
@@ -2265,10 +2259,9 @@ done:
       err = -EINVAL;
       goto reply;
     }
-    vol = CohortVolume::create(name, last_update, place_text,
-			       symbols, erasure_type, data_blocks,
-			       code_blocks, word_size, packet_size,
-			       size, error_message);
+    vol = CohortVolume::create(name, stripe_unit, plugin, params,
+			       last_update, place_text,
+			       symbols, error_message);
     if (vol) {
       ss << "volume: " << vol << " created.";
       pending_inc.include_addition(vol);

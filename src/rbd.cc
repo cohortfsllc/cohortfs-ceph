@@ -62,6 +62,8 @@
 
 #define RBD_DIFF_BANNER "rbd diff v1\n"
 
+using std::cout;
+
 #if 0
 static string dir_oid = RBD_DIRECTORY;
 #endif

@@ -37,12 +37,16 @@
 #define CEPH_MDS_PROTOCOL    23 /* cluster internal */
 
 
+namespace OSDC {
+  class Objecter;
+};
+using OSDC::Objecter;
+
 class filepath;
 
 class MonClient;
 
 class OSDMap;
-class Objecter;
 class Filer;
 
 class Server;

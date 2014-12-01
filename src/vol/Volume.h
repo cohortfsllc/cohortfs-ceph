@@ -15,13 +15,14 @@
 #ifndef VOL_VOLUME_H
 #define VOL_VOLUME_H
 
-#include <errno.h>
 #include <string>
 #include <map>
 #include <vector>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <boost/uuid/nil_generator.hpp>
+#include <functional>
+#include <cerrno>
 #include "include/types.h"
 #include "common/Formatter.h"
 #include <boost/uuid/uuid.hpp>
@@ -31,10 +32,7 @@
 #include "osd/osd_types.h"
 
 class OSDMap;
-class Objecter;
-struct ObjectOperation;
-
-using namespace std;
+class ObjOp;
 
 enum vol_type {
   CohortVol,
@@ -43,14 +41,14 @@ enum vol_type {
 
 class Volume;
 typedef std::shared_ptr<Volume> VolumeRef;
-typedef std::shared_ptr<const Volume> VolumeCRef;
 
 class Volume
 {
 private:
   static const std::string typestrings[];
 
-  typedef VolumeRef(*factory)(bufferlist::iterator& bl, uint8_t v, vol_type t);
+  typedef std::shared_ptr<Volume>(*factory)(bufferlist::iterator& bl,
+					    uint8_t v, vol_type t);
 
   /* Factory Protocol
 
@@ -100,7 +98,7 @@ public:
   virtual ~Volume() { };
 
   static bool valid_name(const string& name, string& error);
-  virtual bool valid(string& error);
+  virtual bool valid(string& error) const;
   static const string& type_string(vol_type type);
   static VolumeRef decode_volume(bufferlist::iterator& bl);
   /* Each child class should call its parent's dump method as it's first
@@ -118,65 +116,13 @@ public:
   static string get_info_key(const boost::uuids::uuid& vol) {
     return stringify(vol) + "_info";
   }
-  static string get_biginfo_key(const boost::uuids::uuid& vol) {
-    return stringify(vol) + "_biginfo";
-  }
 
-  virtual uint64_t op_size() = 0;
+  virtual uint64_t op_size() const = 0;
 
-  virtual int place(const object_t& object,
-		    const OSDMap& map,
-		    const unsigned int rule_index,
-		    vector<int>& osds) = 0;
-
-  virtual int create(const object_t& oid, utime_t mtime,
-		     int global_flags, Context *onack,
-		     Context *oncommit, Objecter *objecter) = 0;
-  virtual int write(const object_t& oid, uint64_t off, uint64_t len,
-		    const bufferlist &bl, utime_t mtime, int flags,
-		    Context *onack, Context *oncommit, Objecter *objecter) = 0;
-  virtual int append(const object_t& oid, uint64_t len, const bufferlist &bl,
-		     utime_t mtime, int flags, Context *onack,
-		     Context *oncommit, Objecter *objecter) = 0;
-  virtual int write_full(const object_t& oid, const bufferlist &bl,
-			 utime_t mtime, int flags, Context *onack,
-			 Context *oncommit, Objecter *objecter) = 0;
-  virtual int md_read(const object_t& oid, ObjectOperation& op,
-		      bufferlist *pbl, int flags, Context *onack,
-		      Objecter *objecter) = 0;
-  virtual int read(const object_t& oid, uint64_t off, uint64_t len,
-		   bufferlist *pbl, int flags, Context *onfinish,
-		   Objecter *objecter) = 0;
-  virtual int read_full(const object_t& oid, bufferlist *pbl, int flags,
-			Context *onfinish, Objecter *objecter) = 0;
-  virtual int remove(const object_t& oid, utime_t mtime, int flags,
-		     Context *onack, Context *oncommit,
-		     Objecter *objecter) = 0;
-  virtual int stat(const object_t& oid, uint64_t *psize,
-		   utime_t *pmtime, int flags, Context *onfinish,
-		   Objecter *objecter) = 0;
-  virtual int getxattr(const object_t& oid, const char *name,
-		       bufferlist *pbl, int flags, Context *onfinish,
-		       Objecter *objecter) = 0;
-  virtual int removexattr(const object_t& oid, const char *name,
-			  utime_t mtime, int flags, Context *onack,
-			  Context *oncommit, Objecter *objecter) = 0;
-  virtual int setxattr(const object_t& oid, const char *name,
-		       const bufferlist &bl, utime_t mtime, int flags,
-		       Context *onack, Context *oncommit,
-		       Objecter *objecter) = 0;
-  virtual int getxattrs(const object_t& oid, map<string,bufferlist>& attrset,
-			int flags, Context *onfinish, Objecter *objecter) = 0;
-  virtual int trunc(const object_t& oid, utime_t mtime, int flags,
-		    uint64_t trunc_size, uint32_t trunc_seq,
-		    Context *onack, Context *oncommit,
-		    Objecter *objecter) = 0;
-  virtual int zero(const object_t& oid, uint64_t off, uint64_t len,
-		   utime_t mtime, int flags, Context *onack,
-		   Context *oncommit, Objecter *objecter) = 0;
-  virtual int mutate_md(const object_t& oid, ObjectOperation& op,
-			utime_t mtime, int flags, Context *onack,
-			Context *oncommit, Objecter *objecter) = 0;
+  virtual size_t place(const object_t& object,
+		       const OSDMap& map,
+		       const std::function<void(int)>& f) const = 0;
+  virtual std::unique_ptr<ObjOp> op() const = 0;
 };
 
 WRITE_CLASS_ENCODER(Volume)

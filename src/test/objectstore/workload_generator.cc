@@ -31,6 +31,8 @@
 
 #include "TestObjectStoreState.h"
 
+using std::cout;
+
 static const char *our_name = NULL;
 void usage();
 

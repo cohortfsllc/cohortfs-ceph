@@ -27,21 +27,13 @@ namespace librbd {
 			 uint64_t off, uint64_t len,
 			 Context *completion,
 			 bool hide_enoent) :
-    m_ictx(ictx), m_ioctx(&ictx->data_ctx), m_oid(oid),
+    m_ictx(ictx), m_ioctx(&ictx->io_ctx), m_oid(oid),
     m_off(off), m_len(len), m_completion(completion),
     m_hide_enoent(hide_enoent) {}
 
   AioRequest::~AioRequest() { }
 
   /** read **/
-
-  bool AioRead::should_complete(int r)
-  {
-    ldout(m_ictx->cct, 20) << "should_complete " << this << " " << m_oid
-			   << " " << m_off << "~" << m_len << " r = "
-			   << r << dendl;
-    return true;
-  }
 
   int AioRead::send() {
     ldout(m_ictx->cct, 20) << "send " << this << " " << m_oid << " "
@@ -50,7 +42,7 @@ namespace librbd {
     librados::AioCompletion *rados_completion =
       librados::Rados::aio_create_completion(this, rados_req_cb, NULL);
     int r;
-    librados::ObjectReadOperation op;
+    librados::ObjectReadOperation op(*m_ioctx);
     r = m_ioctx->aio_read(m_oid, rados_completion, &m_read_data, m_len, m_off);
 
     rados_completion->release();
@@ -59,64 +51,21 @@ namespace librbd {
 
   /** write **/
 
-  AbstractWrite::AbstractWrite() {
-  }
-
   AbstractWrite::AbstractWrite(ImageCtx *ictx, const std::string &oid,
 			       uint64_t object_off, uint64_t len,
 			       Context *completion,
 			       bool hide_enoent)
-    : AioRequest(ictx, oid, object_off, len, completion, hide_enoent) { }
+    : AioRequest(ictx, oid, object_off, len, completion, hide_enoent),
+      m_write(*m_ioctx) { }
 
-  bool AbstractWrite::should_complete(int r)
-  {
-    ldout(m_ictx->cct, 20) << "write " << this << " " << m_oid << " " << m_off
-			   << "~" << m_len << " should_complete: r = " << r
-			   << dendl;
-
-    return true;
-  }
-
-  int AioWrite::send() {
-    ldout(m_ictx->cct, 20) << "send " << this << " " << m_oid << " " << m_off
-			   << "~" << m_len << dendl;
-    librados::AioCompletion *rados_completion =
-      librados::Rados::aio_create_completion(this, NULL, rados_req_cb);
-    int r;
-    r = m_ioctx->aio_write(m_oid, rados_completion, m_write_data, m_len,
-			   m_off);
-    rados_completion->release();
-    return r;
-  }
-
-  int AioRemove::send() {
-    ldout(m_ictx->cct, 20) << "send " << this << " " << m_oid << dendl;
-    librados::AioCompletion *rados_completion =
-      librados::Rados::aio_create_completion(this, NULL, rados_req_cb);
-    int r;
-    r = m_ioctx->aio_remove(m_oid, rados_completion);
-    rados_completion->release();
-    return r;
-  }
-
-  int AioTruncate::send() {
+  int AbstractWrite::send() {
     ldout(m_ictx->cct, 20) << "send " << this << " " << m_oid << " "
-			   << m_len << dendl;
+			   << m_off << "~" << m_len << dendl;
     librados::AioCompletion *rados_completion =
       librados::Rados::aio_create_completion(this, NULL, rados_req_cb);
     int r;
-    r = m_ioctx->aio_trunc(m_oid, rados_completion, m_len);
-    rados_completion->release();
-    return r;
-  }
-
-  int AioZero::send() {
-    ldout(m_ictx->cct, 20) << "send " << this << " " << m_oid << " " << m_off
-			   << "~" << m_len << dendl;
-    librados::AioCompletion *rados_completion =
-      librados::Rados::aio_create_completion(this, NULL, rados_req_cb);
-    int r;
-    r = m_ioctx->aio_zero(m_oid, rados_completion, m_len, m_off);
+    assert(m_write.size());
+    r = m_ioctx->aio_operate(m_oid, rados_completion, &m_write);
     rados_completion->release();
     return r;
   }

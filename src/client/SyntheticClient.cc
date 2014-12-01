@@ -2366,17 +2366,10 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
     if (write) {
       dout(10) << "write to " << oid << dendl;
 
-      ObjectOperation m;
-      OSDOp op;
-      op.op.op = CEPH_OSD_OP_WRITE;
-      op.op.extent.offset = 0;
-      op.op.extent.length = osize;
-      op.indata = bl;
-      m.ops.push_back(op);
+      unique_ptr<ObjOp> m(mvol->op());
+      m->write(0, osize, bl);
       if (do_sync) {
-	OSDOp op;
-	op.op.op = CEPH_OSD_OP_STARTSYNC;
-	m.ops.push_back(op);
+	m->add_op(CEPH_OSD_OP_STARTSYNC);
       }
       client->objecter->mutate(oid, mvol, m, ceph_clock_now(client->cct), 0,
 			       NULL, new C_Ref(lock, cond, &unack));

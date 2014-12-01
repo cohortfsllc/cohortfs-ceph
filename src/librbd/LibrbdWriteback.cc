@@ -99,11 +99,11 @@ namespace librbd {
     Context *req = new C_Request(m_ictx->cct, onfinish, &m_lock);
     librados::AioCompletion *rados_completion =
       librados::Rados::aio_create_completion(req, context_cb, NULL);
-    librados::ObjectReadOperation op;
+    librados::ObjectReadOperation op(m_ictx->io_ctx);
     op.read(off, len, pbl, NULL);
     // Volume is actually unused since it's in data_ctx
-    int r = m_ictx->data_ctx.aio_operate(oid.name, rados_completion, &op,
-					 0, NULL);
+    int r = m_ictx->io_ctx.aio_operate(oid.name, rados_completion, &op,
+				       0, NULL);
     rados_completion->release();
     assert(r >= 0);
   }

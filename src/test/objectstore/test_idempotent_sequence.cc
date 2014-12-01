@@ -122,7 +122,7 @@ int run_get_last_op(std::string& filestore_path, std::string& journal_path)
   store->umount();
   delete store;
 
-  cout << txn << std::endl;
+  std::cout << txn << std::endl;
   return 0;
 }
 

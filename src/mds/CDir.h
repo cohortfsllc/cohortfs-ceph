@@ -39,8 +39,6 @@ class MDCache;
 class MDCluster;
 class Context;
 
-struct ObjectOperation;
-
 ostream& operator<<(ostream& out, class CDir& dir);
 class CDir : public MDSCacheObject {
   /*

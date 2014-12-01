@@ -1266,10 +1266,11 @@ void CDir::_omap_fetch(const string& want_dn)
   C_Dir_OMAP_Fetched *fin = new C_Dir_OMAP_Fetched(this, want_dn);
   object_t oid = get_ondisk_object();
   VolumeRef volume(cache->mds->get_metadata_volume());
-  ObjectOperation rd;
-  rd.omap_get_header(&fin->hdrbl, &fin->ret1);
-  rd.omap_get_vals("", "", (uint64_t)-1, &fin->omap, &fin->ret2);
-  volume->md_read(oid, rd, NULL, 0, fin, cache->mds->objecter);
+  unique_ptr<ObjOp> rd = volume->op();
+  rd->omap_get_header(&fin->hdrbl, &fin->ret1);
+  rd->omap_get_vals("", "", (uint64_t)-1, fin->omap, &fin->ret2);
+  cache->mds->objecter->read(oid, volume, rd, NULL, 0,
+			     fin);
 }
 
 void CDir::_omap_fetched(bufferlist& hdrbl, map<string, bufferlist>& omap,
@@ -1439,16 +1440,17 @@ void CDir::_omap_commit(int op_prio)
     }
 
     if (write_size >= max_write_size) {
-      ObjectOperation op;
-      op.priority = op_prio;
+      unique_ptr<ObjOp> op(volume->op());
+      op->priority = op_prio;
 
       if (!to_set.empty())
-	op.omap_set(to_set);
+	op->omap_set(to_set);
       if (!to_remove.empty())
-	op.omap_rm_keys(to_remove);
+	op->omap_rm_keys(to_remove);
 
-      volume->mutate_md(oid, op, ceph_clock_now(g_ceph_context), 0, NULL,
-			gather.new_sub(), cache->mds->objecter);
+      cache->mds->objecter->mutate(oid, volume, op,
+				   ceph_clock_now(g_ceph_context), 0, NULL,
+				   gather.new_sub());
 
       write_size = 0;
       to_set.clear();
@@ -1456,8 +1458,8 @@ void CDir::_omap_commit(int op_prio)
     }
   }
 
-  ObjectOperation op;
-  op.priority = op_prio;
+  unique_ptr<ObjOp> op(volume->op());
+  op->priority = op_prio;
 
   /*
    * save the header at the last moment.. If we were to send it off
@@ -1470,15 +1472,15 @@ void CDir::_omap_commit(int op_prio)
    */
   bufferlist header;
   ::encode(fnode, header);
-  op.omap_set_header(header);
+  op->omap_set_header(header);
 
   if (!to_set.empty())
-    op.omap_set(to_set);
+    op->omap_set(to_set);
   if (!to_remove.empty())
-    op.omap_rm_keys(to_remove);
+    op->omap_rm_keys(to_remove);
 
-  volume->mutate_md(oid, op, ceph_clock_now(g_ceph_context), 0, NULL,
-		    gather.new_sub(), cache->mds->objecter);
+  cache->mds->objecter->mutate(oid, volume, op, ceph_clock_now(g_ceph_context),
+			       0, NULL, gather.new_sub());
 
   gather.activate();
 }

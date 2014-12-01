@@ -146,9 +146,10 @@
 #include <memory>
 #include "include/buffer.h"
 
-using namespace std;
-
 namespace ceph {
+  using std::set;
+  using std::map;
+  using std::vector;
 
   class ErasureCodeInterface {
   public:

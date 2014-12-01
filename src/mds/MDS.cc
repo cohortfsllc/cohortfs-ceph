@@ -353,15 +353,13 @@ int MDS::init(int wanted_state)
   while (monc->wait_auth_rotating(30.0) < 0) {
     derr << "unable to obtain rotating service keys; retrying" << dendl;
   }
-  objecter->init_unlocked();
-
   mds_lock.Lock();
   if (want_state == CEPH_MDS_STATE_DNE) {
     mds_lock.Unlock();
     return 0;
   }
 
-  objecter->init_locked();
+  objecter->init();
 
   monc->sub_want("mdsmap", 0, 0);
   monc->renew_subs();
@@ -1533,7 +1531,7 @@ void MDS::suicide()
   mdcache->shutdown();
 
   if (objecter->initialized)
-    objecter->shutdown_locked();
+    objecter->shutdown();
 
   monc->shutdown();
 

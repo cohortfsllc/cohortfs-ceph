@@ -70,9 +70,8 @@ int MDSUtility::init()
 
   // Initialize Objecter and wait for OSD map
   objecter->set_client_incarnation(0);
-  objecter->init_unlocked();
   lock.Lock();
-  objecter->init_locked();
+  objecter->init();
   lock.Unlock();
   objecter->wait_for_osd_map();
   timer.init();
@@ -104,9 +103,8 @@ void MDSUtility::shutdown()
 {
   lock.Lock();
   timer.shutdown();
-  objecter->shutdown_locked();
+  objecter->shutdown();
   lock.Unlock();
-  objecter->shutdown_unlocked();
   monc->shutdown();
   messenger->shutdown();
   messenger->wait();

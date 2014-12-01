@@ -589,7 +589,7 @@ int FileJournal::dump(ostream& out)
     }
     f.close_section();
     f.close_section();
-    f.flush(cout);
+    f.flush(std::cout);
   }
 
   f.close_section();

@@ -104,7 +104,7 @@ protected:
   const uint32_t index_version;
 
   /// true if retry injection is enabled
-  struct RetryException : public exception {};
+  struct RetryException : public std::exception {};
   bool error_injection_enabled;
   bool error_injection_on;
   double error_injection_probability;

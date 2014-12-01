@@ -133,7 +133,7 @@ int cls_user_get_header_async(IoCtx& io_ctx, string& oid, RGWGetUserHeader_CB *c
   bufferlist in, out;
   cls_user_get_header_op call;
   ::encode(call, in);
-  ObjectReadOperation op;
+  ObjectReadOperation op(io_ctx);
   op.exec("user", "get_header", in, new ClsUserGetHeaderCtx(NULL, ctx, NULL)); /* no need to pass pret, as we'll call ctx->handle_response() with correct error */
   AioCompletion *c = librados::Rados::aio_create_completion(NULL, NULL, NULL);
   int r = io_ctx.aio_operate(oid, c, &op, NULL);

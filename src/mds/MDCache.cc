@@ -5273,7 +5273,7 @@ void MDCache::do_file_recover()
       C_MDC_Recover *fin = new C_MDC_Recover(this, in);
       object_t oid = CInode::get_object_name(in->inode.ino, frag_t(), "");
       // 0 or CEPH_OSD_FLAG_RWORDERED?
-      in->volume->stat(oid, &fin->size, &fin->mtime, 0, fin, mds->objecter);
+      mds->objecter->stat(oid, in->volume, &fin->size, &fin->mtime, 0, fin);
     } else {
       dout(10) << "do_file_recover skipping " << in->inode.size
 	       << " " << *in << dendl;
@@ -5379,9 +5379,9 @@ void MDCache::_truncate_inode(CInode *in, LogSegment *ls)
 
   in->auth_pin(this);
 
-  in->volume->trunc(oid, ceph_clock_now(NULL), 0,
-		    pi->truncate_size, pi->truncate_seq,
-		    0, new C_MDC_TruncateFinish(this, in, ls), mds->objecter);
+  mds->objecter->trunc(oid, in->volume, ceph_clock_now(NULL), 0,
+		       pi->truncate_size, pi->truncate_seq,
+		       0, new C_MDC_TruncateFinish(this, in, ls));
 }
 
 struct C_MDC_TruncateLogged : public Context {
@@ -6389,12 +6389,6 @@ void MDCache::shutdown_check()
   // this
   dout(0) << "lru size now " << lru.lru_get_size() << dendl;
   dout(0) << "log len " << mds->mdlog->get_num_events() << dendl;
-
-
-  if (mds->objecter->is_active()) {
-    dout(0) << "objecter still active" << dendl;
-    mds->objecter->dump_active();
-  }
 }
 
 
@@ -6545,7 +6539,6 @@ bool MDCache::shutdown_pass()
   // filer active?
   if (mds->objecter->is_active()) {
     dout(7) << "objecter still active" << dendl;
-    mds->objecter->dump_active();
     return false;
   }
 
@@ -8597,8 +8590,8 @@ void MDCache::purge_stray(CDentry *dn)
       uint64_t num = (to + period - 1) / period;
       dout(10) << "purge_stray 0~" << to << " objects 0~" << num
 	       << " on " << *in << dendl;
-      in->volume->zero(oid, 0, 0, ceph_clock_now(mds->objecter->cct), 0,
-			      0, gather.new_sub(), mds->objecter);
+      mds->objecter->zero(oid, in->volume, 0, 0, ceph_clock_now(mds->objecter->cct), 0,
+			  0, gather.new_sub());
     }
   }
 
@@ -10643,15 +10636,15 @@ void MDCache::_fragment_committed(dirfrag_t basedirfrag, list<CDir*>& resultfrag
        p != uf.old_frags.end();
        ++p) {
     object_t oid = CInode::get_object_name(basedirfrag.ino, *p, "");
-    ObjectOperation op;
+    unique_ptr<ObjOp> op = volume->op();
     if (*p == frag_t()) {
       // backtrace object
       dout(10) << " truncate orphan dirfrag " << oid << dendl;
-      op.truncate(0);
-      op.omap_clear();
+      op->truncate(0);
+      op->omap_clear();
     } else {
       dout(10) << " removing orphan dirfrag " << oid << dendl;
-      op.remove();
+      op->remove();
     }
     mds->objecter->mutate(oid, volume, op, ceph_clock_now(g_ceph_context),
 			  0, NULL, gather.new_sub());

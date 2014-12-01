@@ -35,6 +35,8 @@
 #undef dout_prefix
 #define dout_prefix *_dout << "memstore(" << path << ") "
 
+using std::min;
+
 /* Factory method */
 ObjectStore* MemStore_factory(CephContext* cct,
 			      const std::string& data,

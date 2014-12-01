@@ -92,8 +92,8 @@ void Dumper::dump(const char *dump_file)
 
   lock.Lock();
   object_t oid = file_object_t(ino, 0);
-  volume->read(oid, start, len, &bl, 0,
-	       new C_SafeCond(&localLock, &cond, &done), objecter);
+  objecter->read(oid, volume, start, len, &bl, 0,
+		 new C_SafeCond(&localLock, &cond, &done));
   lock.Unlock();
   localLock.Lock();
   while (!done)
@@ -196,9 +196,9 @@ void Dumper::undump(const char *dump_file)
     uint64_t l = MIN(left, 1024*1024);
     j.read_fd(fd, l);
     cout << " writing " << pos << "~" << l << std::endl;
-    volume->write(oid, pos, l, j,
-		ceph_clock_now(g_ceph_context), 0, NULL,
-		new C_SafeCond(&lock, &cond, &done), objecter);
+    objecter->write(oid, volume, pos, l, j,
+		    ceph_clock_now(g_ceph_context), 0, NULL,
+		    new C_SafeCond(&lock, &cond, &done));
 
     lock.Lock();
     while (!done)

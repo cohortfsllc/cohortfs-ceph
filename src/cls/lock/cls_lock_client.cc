@@ -58,7 +58,7 @@ namespace rados {
 	       const string& description, const utime_t& duration,
 	       uint8_t flags)
       {
-	ObjectWriteOperation op;
+	ObjectWriteOperation op(*ioctx);
 	lock(&op, name, type, cookie, tag, description, duration, flags);
 	return ioctx->operate(oid, &op);
       }
@@ -78,7 +78,7 @@ namespace rados {
       int unlock(IoCtx *ioctx, const string& oid,
 		 const string& name, const string& cookie)
       {
-	ObjectWriteOperation op;
+	ObjectWriteOperation op(*ioctx);
 	unlock(&op, name, cookie);
 	return ioctx->operate(oid, &op);
       }
@@ -100,7 +100,7 @@ namespace rados {
 		     const string& name, const string& cookie,
 		     const entity_name_t& locker)
       {
-	ObjectWriteOperation op;
+	ObjectWriteOperation op(*ioctx);
 	break_lock(&op, name, cookie, locker);
 	return ioctx->operate(oid, &op);
       }
@@ -165,7 +165,7 @@ namespace rados {
 			map<locker_id_t, locker_info_t> *lockers,
 			ClsLockType *type, string *tag)
       {
-	ObjectReadOperation op;
+	ObjectReadOperation op(*ioctx);
 	get_lock_info_start(&op, name);
 	bufferlist out;
 	int r = ioctx->operate(oid, &op, &out);

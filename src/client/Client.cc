@@ -347,11 +347,7 @@ int Client::init()
     return r;
   }
 
-  client_lock.Unlock();
-  objecter->init_unlocked();
-  client_lock.Lock();
-
-  objecter->init_locked();
+  objecter->init();
 
   monclient->set_want_keys(CEPH_ENTITY_TYPE_MDS | CEPH_ENTITY_TYPE_OSD);
   monclient->sub_want("mdsmap", 0, 0);
@@ -419,9 +415,8 @@ void Client::shutdown()
   assert(initialized);
   initialized = false;
   timer.shutdown();
-  objecter->shutdown_locked();
+  objecter->shutdown();
   client_lock.Unlock();
-  objecter->shutdown_unlocked();
   monclient->shutdown();
 }
 
@@ -5421,10 +5416,11 @@ int Client::uninline_data(Inode *in, Context *onfinish)
   snprintf(oid_buf, sizeof(oid_buf), "%llx.00000000", (long long unsigned)in->ino);
   object_t oid = oid_buf;
 
-  ObjectOperation create_ops;
-  create_ops.create(false);
   VolumeRef mvol;
   objecter->osdmap->find_by_uuid(in->layout.fl_uuid, mvol);
+
+  unique_ptr<ObjOp> create_ops = mvol->op();
+  create_ops->create(false);
   if (!mvol) {
     onfinish->complete(-ENXIO);
     return 0;
@@ -5441,14 +5437,14 @@ int Client::uninline_data(Inode *in, Context *onfinish)
   bufferlist inline_version_bl;
   ::encode(in->inline_version, inline_version_bl);
 
-  ObjectOperation uninline_ops;
-  uninline_ops.cmpxattr("inline_version",
-			CEPH_OSD_CMPXATTR_OP_GT,
-			CEPH_OSD_CMPXATTR_MODE_U64,
-			inline_version_bl);
+  unique_ptr<ObjOp> uninline_ops = mvol->op();
+  uninline_ops->cmpxattr("inline_version",
+			 CEPH_OSD_CMPXATTR_OP_GT,
+			 CEPH_OSD_CMPXATTR_MODE_U64,
+			 inline_version_bl);
   bufferlist inline_data = in->inline_data;
-  uninline_ops.write(0, inline_data, in->truncate_size, in->truncate_seq);
-  uninline_ops.setxattr("inline_version", inline_version_bl);
+  uninline_ops->write(0, inline_data, in->truncate_size, in->truncate_seq);
+  uninline_ops->setxattr("inline_version", inline_version_bl);
 
   objecter->mutate(oid,
 		   mvol,
@@ -5746,7 +5742,7 @@ int Client::_read_sync(Fh *f, uint64_t off, uint64_t len, bufferlist *bl,
 
     int wanted = left;
     object_t oid = file_object_t(in->ino, 0);
-    f->vol->read(oid, pos, left, &tbl, 0, onfinish, objecter);
+    objecter->read(oid, f->vol, pos, left, &tbl, 0, onfinish);
     client_lock.Unlock();
     flock.Lock();
     while (!done)
@@ -5974,8 +5970,8 @@ int Client::_write(Fh *f, int64_t offset, uint64_t size, const char *buf)
     get_cap_ref(in, CEPH_CAP_FILE_BUFFER);  // released by onsafe callback
 
     object_t oid = file_object_t(in->ino, 0);
-    r = f->vol->write(oid, offset, size, bl, ceph_clock_now(cct), 0,
-		  onfinish, onsafe, objecter);
+    r = objecter->write(oid, f->vol, offset, size, bl, ceph_clock_now(cct), 0,
+			onfinish, onsafe);
     if (r < 0)
       goto done;
 
@@ -7954,9 +7950,9 @@ int Client::_fallocate(Fh *fh, int mode, int64_t offset, int64_t length)
 
       _invalidate_inode_cache(in, offset, length);
       object_t oid = file_object_t(in->ino, 0);
-      r = mvol->zero(oid, offset, length,
-		      ceph_clock_now(cct),
-		      0, onfinish, onsafe, objecter);
+      r = objecter->zero(oid, mvol, offset, length,
+			 ceph_clock_now(cct),
+			 0, onfinish, onsafe);
       if (r < 0)
 	goto done;
 

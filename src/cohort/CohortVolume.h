@@ -11,10 +11,9 @@
 #define COHORT_COHORTVOLUME_H
 
 #include "vol/Volume.h"
-#include "cohort/erasure.h"
+#include "erasure-code/ErasureCodeInterface.h"
 #include "common/RWLock.h"
-
-struct writestripe;
+#include "osdc/ObjectOperation.h"
 
 /* Superclass of all Cohort volume types, supporting dynamically
    generated placement. */
@@ -22,19 +21,26 @@ struct writestripe;
 class CohortVolume : public Volume
 {
   typedef Volume inherited;
+  friend struct C_MultiStat;
+  friend struct C_MultiRead;
 
 protected:
-  RWLock compile_lock;
-  void compile(epoch_t epoch);
+  string erasure_plugin;
+  map<string, string> erasure_params;
+  ceph::ErasureCodeInterfaceRef erasure;
+  uint32_t suggested_unit; // Specified by the user
+  uint32_t stripe_unit; // Actually used after consulting with
+			// erasure code plugin
+  mutable RWLock compile_lock;
+  void compile(epoch_t epoch) const;
 
   bufferlist place_text;
   vector<std::string> symbols;
-  erasure_params erasure;
 
   /* These are internal and are not serialized */
-  vector<void*> entry_points;
-  epoch_t compiled_epoch;
-  void *place_shared;
+  mutable vector<void*> entry_points;
+  mutable epoch_t compiled_epoch;
+  mutable void *place_shared;
 
   CohortVolume(vol_type t)
     : Volume(t),
@@ -43,92 +49,23 @@ protected:
       compiled_epoch(0),
       place_shared(NULL) { }
 
-  void make_stripes(uint64_t off, unsigned len,
-		    bufferlist &blin,
-		    vector<writestripe> &stripes);
-
-  size_t ostripe(const uint64_t off) {
-    return (off / erasure.size) % erasure.k;
-  }
-  uint64_t stripe_offset(const uint64_t off) {
-    uint64_t sw = erasure.k * erasure.size;
-    return (off / sw) * erasure.size + off % erasure.size;
-  }
-
-  /* I protest having to use these types of failure. One day we need
-     to remove all the 'le64' and 'u32' and such from the Cohort
-     versions of Ceph. */
-
-  void stripe_extent(const uint64_t off, const uint64_t len,
-		     const size_t stripe, uint64_t &stripeoff,
-		     uint64_t &stripelen) {
-    size_t first = ostripe(off);
-    size_t span = osd_span(off, len);
-    if ((span == 0 && !first) ||
-	((span < erasure.k) &&
-	 (stripe > ((first + span - 1) % erasure.k)))) {
-      stripeoff = 0;
-      stripelen = 0;
-      return;
-    }
-    uint64_t last_byte = len ? off + len - 1 : 0;
-    size_t last = ostripe(last_byte);
-    uint64_t stripe_last_byte;
-
-    if (first == stripe) {
-      stripeoff = stripe_offset(off);
-    } else {
-      stripeoff = stripe_offset(
-	(off / erasure.size) * erasure.size + erasure.size *
-	(stripe > first ? stripe - first : erasure.k - first + stripe));
-    }
-
-    if (len == 0) {
-      stripelen = 0;
-      return;
-    }
-
-    if (last == stripe) {
-      stripe_last_byte = stripe_offset(last_byte);
-    } else {
-      uint64_t filled_byte = (last_byte + 1) % erasure.size == 0 ?
-	last_byte : (last_byte / erasure.size + 1) * erasure.size - 1;
-      stripe_last_byte = stripe_offset(
-	filled_byte - erasure.size *
-	(stripe < last ? last - stripe : last + erasure.k - stripe));
-    }
-    stripelen = stripe_last_byte + 1 - stripeoff;
-  }
-
-  size_t osd_span(const uint64_t off, const uint64_t len) {
-    uint32_t first = off / erasure.size;
-    if (len == 0) {
-      return 0;
-    }
-    uint32_t last = (off + len - 1) / erasure.size;
-    return min(last - first + 1, erasure.k);
-  }
-  object_t stripulate(const object_t& oid, bool code, uint16_t num);
-  object_t data_stripe(const object_t& oid, size_t stripe);
-
   public:
 
   ~CohortVolume();
 
   static const uint64_t one_op;
 
-  uint64_t op_size() {
-    return one_op * erasure.k;
+  uint64_t op_size() const {
+    return one_op * erasure->get_chunk_count();
   }
 
   virtual uint32_t num_rules(void);
 
-  virtual int place(const object_t& object,
-		    const OSDMap& map,
-		    const unsigned int rule_index,
-		    vector<int>& osds);
+  virtual size_t place(const object_t& object,
+		       const OSDMap& map,
+		       const std::function<void(int)>& f) const;
 
-  virtual int update(VolumeCRef v);
+  virtual int update(const std::shared_ptr<const Volume>& v);
 
   virtual void dump(Formatter *f) const;
   virtual void decode_payload(bufferlist::iterator& bl, uint8_t v);
@@ -137,67 +74,78 @@ protected:
   friend VolumeRef CohortVolFactory(bufferlist::iterator& bl, uint8_t v,
 				    vol_type t);
 
-  static VolumeRef create(const string& name, const epoch_t last_update,
+  static VolumeRef create(const string& name, uint32_t _suggested_width,
+			  const string& erasure_plugin,
+			  const string& erasure_params,
+			  const epoch_t last_update,
 			  const string& place_text, const string& symbols,
-			  const string& erasure_type,
-			  int64_t data_blocks, int64_t code_blocks,
-			  int64_t word_size, int64_t packet_size,
-			  int64_t size, string& error_message);
+			  string& error_message);
 
-  virtual int create(const object_t& oid, utime_t mtime,
-		     int global_flags, Context *onack, Context *oncommit,
-		     Objecter *objecter);
-  virtual int write(const object_t& oid, uint64_t off, uint64_t len,
-		    const bufferlist &bl, utime_t mtime, int flags,
-		    Context *onack, Context *oncommit, Objecter *objecter);
+  virtual void fixup_stripe_unit();
 
-  virtual int append(const object_t& oid, uint64_t len, const bufferlist &bl,
-		     utime_t mtime, int flags, Context *onack,
-		     Context *oncommit, Objecter *objecter);
+  virtual std::unique_ptr<ObjOp> op() const;
 
-  virtual int write_full(const object_t& oid, const bufferlist &bl,
-			 utime_t mtime, int flags, Context *onack,
-			 Context *oncommit, Objecter *objecter);
-  virtual int md_read(const object_t& oid, ObjectOperation& op,
-		      bufferlist *pbl, int flags, Context *onack,
-		      Objecter *objecter);
-  virtual int read(const object_t& oid, uint64_t off, uint64_t len,
-		   bufferlist *pbl, int flags, Context *onfinish,
-		   Objecter *objecter);
-  virtual int read_full(const object_t& oid, bufferlist *pbl, int flags,
-			Context *onfinish, Objecter *objecter) {
-    /* NB. SIZE_MAX == ObjectStore::read_entire */
-    return read(oid, 0, SIZE_MAX, pbl, flags, onfinish,
-		objecter);
-  }
-  virtual int remove(const object_t& oid, utime_t mtime, int flags,
-		     Context *onack, Context *oncommit, Objecter *objecter);
-  virtual int stat(const object_t& oid, uint64_t *psize,
-		   utime_t *pmtime, int flags, Context *onfinish,
-		   Objecter *objecter);
-  virtual int getxattr(const object_t& oid, const char *name,
-		       bufferlist *pbl, int flags, Context *onfinish,
-		       Objecter *objecter);
-  virtual int removexattr(const object_t& oid, const char *name,
-			  utime_t mtime, int flags,
-			  Context *onack, Context *oncommit,
-			  Objecter *objecter);
-  virtual int setxattr(const object_t& oid, const char *name,
-		       const bufferlist &bl,
-		       utime_t mtime, int flags, Context *onack,
-		       Context *oncommit, Objecter *objecter);
-  virtual int getxattrs(const object_t& oid,
-			map<string, bufferlist>& attrset, int flags,
-			Context *onfinish, Objecter *objecter);
-  virtual int trunc(const object_t& oid, utime_t mtime, int flags,
-		    uint64_t trunc_size, uint32_t trunc_seq,
-		    Context *onack, Context *oncommit, Objecter *objecter);
-  virtual int zero(const object_t& oid, uint64_t off, uint64_t len,
-		   utime_t mtime, int flags, Context *onack, Context *oncommit,
-		   Objecter *objecter);
-  virtual int mutate_md(const object_t& oid, ObjectOperation& op,
-			utime_t mtime, int flags, Context *onack,
-			Context *oncommit, Objecter *objecter);
+  class StripulatedOp : public ObjOp {
+    friend CohortVolume;
+    const CohortVolume& v;
+    // ops[n][m] is the mth operation in the nth stride
+    vector<vector<OSDOp> > ops;
+    size_t logical_operations;
+
+    virtual ~StripulatedOp() { }
+
+    StripulatedOp(const CohortVolume& v);
+    virtual size_t size() {
+      return logical_operations;
+    }
+    virtual size_t width() {
+      return v.erasure->get_chunk_count();
+    }
+    virtual void add_op(const int op);
+    virtual void add_version(const uint64_t ver);
+    virtual void add_oid(const hobject_t &oid);
+    virtual void add_single_return(bufferlist* bl, int* rval = NULL,
+				   Context *ctx = NULL);
+
+    virtual void add_replicated_data(const bufferlist& bl);
+    virtual void add_striped_data(const uint64_t off,
+				  const bufferlist& bl);
+    virtual void add_striped_range(const uint64_t off,
+				   const uint64_t len);
+    virtual void add_xattr(const string &name, const bufferlist& data);
+    virtual void add_xattr(const string &name, bufferlist* data);
+    virtual void add_xattr_cmp(const string &name, uint8_t cmp_op,
+			       const uint8_t cmp_mode,
+			       const bufferlist& data);
+
+    virtual void add_call(const string &cname, const string &method,
+			  const bufferlist &indata, bufferlist *const outbl,
+			  Context *const ctx, int *const prval);
+
+    virtual void add_watch(const uint64_t cookie, const uint64_t ver,
+			   const uint8_t flag, const bufferlist& inbl);
+
+    virtual void add_alloc_hint(const uint64_t expected_object_size,
+				const uint64_t expected_write_size);
+    virtual void add_truncate(const uint64_t truncate_size,
+			      const uint32_t truncate_seq);
+
+    virtual void add_read_ctx(const uint64_t off, const uint64_t len,
+			      bufferlist *bl, int *rval = NULL,
+			      Context *ctx = NULL);
+    virtual void add_sparse_read_ctx(uint64_t off, uint64_t len,
+				     std::map<uint64_t,uint64_t> *m,
+				     bufferlist *data_bl, int *rval,
+				     Context *ctx);
+    virtual void set_op_flags(const uint32_t flags);
+    virtual void clear_op_flags(const uint32_t flags);
+    virtual void add_stat_ctx(uint64_t *s, utime_t *m, int *rval,
+			      Context *ctx = NULL);
+    virtual std::unique_ptr<ObjOp> clone();
+    virtual void realize(
+      const object_t& oid,
+      const std::function<void(hobject_t&&, vector<OSDOp>&&)>& f);
+  };
 };
 
 #endif // COHORT_COHORTVOLUME_H

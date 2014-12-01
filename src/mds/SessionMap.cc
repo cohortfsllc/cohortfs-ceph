@@ -72,7 +72,7 @@ void SessionMap::load(Context *onload)
   C_SM_Load *c = new C_SM_Load(this);
   object_t oid = get_object_name();
   VolumeRef volume(mds->get_metadata_volume());
-  volume->read_full(oid, &c->bl, 0, c, mds->objecter);
+  mds->objecter->read_full(oid, volume, &c->bl, 0, c);
 }
 
 void SessionMap::_load_finish(int r, bufferlist &bl)
@@ -126,8 +126,8 @@ void SessionMap::save(Context *onsave, version_t needv)
   committing = version;
   object_t oid = get_object_name();
   VolumeRef volume(mds->get_metadata_volume());
-  volume->write_full(oid, bl, ceph_clock_now(g_ceph_context), 0,
-		     NULL, new C_SM_Save(this, version), mds->objecter);
+  mds->objecter->write_full(oid, volume, bl, ceph_clock_now(g_ceph_context), 0,
+			    NULL, new C_SM_Save(this, version));
 }
 
 void SessionMap::_save_finish(version_t v)

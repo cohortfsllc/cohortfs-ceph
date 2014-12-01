@@ -64,7 +64,7 @@ int cls_log_trim(librados::IoCtx& io_ctx, const string& oid, const utime_t& from
   bool done = false;
 
   do {
-    ObjectWriteOperation op;
+    ObjectWriteOperation op(io_ctx);
 
     cls_log_trim(op, from_time, to_time, from_marker, to_marker);
 

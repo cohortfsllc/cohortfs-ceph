@@ -105,7 +105,7 @@ bool Volume::valid_name(const string &name, string &error)
   return true;
 }
 
-bool Volume::valid(string& error)
+bool Volume::valid(string& error) const
 {
   if (!valid_name(name, error)) {
     return false;

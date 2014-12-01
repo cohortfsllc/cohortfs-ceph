@@ -29,6 +29,8 @@
 #define PLUGIN_VERSION_FUNCTION "__erasure_code_version"
 
 using namespace ceph;
+using std::string;
+using std::list;
 
 ErasureCodePluginRegistry ErasureCodePluginRegistry::singleton;
 

@@ -18,8 +18,6 @@
 #define CEPH_MESSENGER_H
 
 #include <map>
-using namespace std;
-
 #include "Message.h"
 #include "Dispatcher.h"
 #include "common/Mutex.h"

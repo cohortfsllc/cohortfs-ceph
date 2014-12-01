@@ -27,6 +27,7 @@
 #include "ErasureCodeInterface.h"
 
 namespace ceph {
+  using std::ostream;
 
   class ErasureCode : public ErasureCodeInterface {
   public:
