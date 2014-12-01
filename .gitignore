@@ -19,6 +19,8 @@
 *.tmp
 *.pyc
 *.pyo
+*.capnp.c++
+*.capnp.h
 .cproject
 .deps
 .dirstamp
