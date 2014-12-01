@@ -461,7 +461,7 @@ if(${ENABLE_SHARED})
   set_target_properties(osd PROPERTIES OUTPUT_NAME ceph-osd VERSION "1.0.0"
     SOVERSION "1" LINK_FLAGS "-Wl,-export-dynamic")
   install(TARGETS osd DESTINATION lib)
-  install(FILES ${CMAKE_SOURCE_DIR}/src/libosd/ceph_osd.h DESTINATION include)
+  install(FILES libosd/ceph_osd.h libosd/ceph_osd_remote.h DESTINATION include)
 endif(${ENABLE_SHARED})
 target_link_libraries(osd PRIVATE common os global dl leveldb ${EXTRALIBS})
 
