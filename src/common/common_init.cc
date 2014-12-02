@@ -12,6 +12,8 @@
  *
  */
 
+#include <ztracer.hpp>
+
 #include "common/ceph_argparse.h"
 #include "common/ceph_context.h"
 #include "common/ceph_crypto.h"
@@ -115,6 +117,7 @@ void complain_about_parse_errors(CephContext *cct,
 void common_init_finish(CephContext *cct, int flags)
 {
   ceph::crypto::init(cct);
+  ZTracer::ztrace_init();
 
   if (!(flags & CINIT_FLAG_NO_DAEMON_ACTIONS))
     cct->start_service_thread();
