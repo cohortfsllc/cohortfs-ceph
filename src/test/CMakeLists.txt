@@ -384,24 +384,29 @@ add_executable(bench_log
 target_link_libraries(bench_log global pthread rt ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
 
 #Make check starts here
+add_custom_target(test_helpers ALL COMMAND chmod 755 
+  ${CMAKE_SOURCE_DIR}/src/test/mon/mon-test-helpers.sh
+  ${CMAKE_SOURCE_DIR}/src/test/osd/osd-test-helpers.sh
+  COMMENT "test helper shell scripts have permission and symlinks have been made")
+
+add_custom_target(symlinks ALL COMMAND
+  ln -s ${CMAKE_SOURCE_DIR}/src/test/ ${CMAKE_BINARY_DIR}/src/test/ &&
+  ln -s ${CMAKE_BINARY_DIR}/src/ceph-mon ${CMAKE_BINARY_DIR}/src/test/ &&
+  ln -s ${CMAKE_BINARY_DIR}/ceph ${CMAKE_BINARY_DIR}/src/test/ &&
+  ln -s ${CMAKE_SOURCE_DIR}/qa/ ${CMAKE_BINARY_DIR}/src/
+  COMMENT "Symlinks have been created")
 
 add_test(NAME ceph_argparse_py COMMAND python ${CMAKE_SOURCE_DIR}/src/test/pybind/test_ceph_argparse.py)
 add_dependencies(check ceph_argparse_py)
 
-add_test(NAME unittest_bufferlist_shell COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/unittest_bufferlist.sh) 
+add_test(NAME unittest_bufferlist_shell COMMAND bash ${CMAKE_SOURCE_DIR}/src/unittest_bufferlist.sh) 
 add_dependencies(check unittest_bufferlist_shell)
 
 add_test(NAME check_generated COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/encoding/check-generated.sh)
 add_dependencies(check check_generated)
 
-add_test(NAME osd_pool_create COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/mon/osd-pool-create.sh) 
-add_dependencies(check osd_pool_create)
-
 add_test(NAME misc COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/mon/misc.sh)
 add_dependencies(check misc)
-
-add_test(NAME osd_crush COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/mon/osd-crush.sh)
-add_dependencies(check osd_crush)
 
 add_test(NAME osd_erasure_code_profile COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/mon/osd-erasure-code-profile.sh) 
 add_dependencies(check osd_erasure_code_profile)
