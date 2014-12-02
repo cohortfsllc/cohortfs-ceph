@@ -745,7 +745,8 @@ public:
     ZTracer::ZTraceRef trace;
 
     Op(const hobject_t& o, const boost::uuids::uuid& volume, vector<OSDOp>& op,
-       int f, Context *ac, Context *co, version_t *ov = NULL) :
+       int f, Context *ac, Context *co, version_t *ov,
+       ZTracer::ZTraceRef parent, ZTracer::ZTraceEndpointRef endpoint) :
       session(NULL), session_item(this), incarnation(0),
       target(o, volume, f),
       con(NULL),
@@ -768,6 +769,10 @@ public:
 	out_handler[i] = NULL;
 	out_rval[i] = NULL;
       }
+      if (parent)
+        trace = ZTracer::ZTrace::create("op", parent, endpoint);
+      else
+        trace = ZTracer::ZTrace::create("op", endpoint);
     }
     ~Op() {
       while (!out_handler.empty()) {
@@ -1097,10 +1102,12 @@ public:
   // mid-level helpers
   Op *prepare_mutate_op(const object_t& oid, VolumeRef volume,
 			ObjectOperation& op, utime_t mtime, int flags,
-			Context *onack, Context *oncommit, version_t *objver = NULL) {
+			Context *onack, Context *oncommit,
+                        version_t *objver = NULL,
+                        ZTracer::ZTraceRef trace = ZTracer::ZTraceRef()) {
     Op *o = new Op(oid, volume->id, op.ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
-		   onack, oncommit, objver);
+		   onack, oncommit, objver, trace, trace_endpoint);
     o->priority = op.priority;
     o->mtime = mtime;
     o->out_rval.swap(op.out_rval);
@@ -1109,17 +1116,19 @@ public:
   ceph_tid_t mutate(const object_t& oid, VolumeRef volume,
 		    ObjectOperation& op, utime_t mtime, int flags,
 		    Context *onack, Context *oncommit,
-		    version_t *objver = NULL) {
+		    version_t *objver = NULL,
+                    ZTracer::ZTraceRef trace = ZTracer::ZTraceRef()) {
     Op *o = prepare_mutate_op(oid, volume, op, mtime, flags, onack,
-			      oncommit, objver);
+			      oncommit, objver, trace);
     return op_submit(o);
   }
   Op *prepare_read_op(const object_t& oid, VolumeRef volume,
 		      ObjectOperation& op, bufferlist *pbl, int flags,
-		      Context *onack, version_t *objver = NULL) {
+		      Context *onack, version_t *objver = NULL,
+                      ZTracer::ZTraceRef trace = ZTracer::ZTraceRef()) {
     Op *o = new Op(oid, volume->id, op.ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_READ, onack,
-		   NULL, objver);
+		   NULL, objver, trace, trace_endpoint);
     o->priority = op.priority;
     o->outbl = pbl;
     o->out_bl.swap(op.out_bl);
@@ -1129,8 +1138,9 @@ public:
   }
   ceph_tid_t read(const object_t& oid, VolumeRef volume,
 		  ObjectOperation& op, bufferlist *pbl, int flags,
-		  Context *onack, version_t *objver = NULL) {
-    Op *o = prepare_read_op(oid, volume, op, pbl, flags, onack, objver);
+		  Context *onack, version_t *objver = NULL,
+                  ZTracer::ZTraceRef trace = ZTracer::ZTraceRef()) {
+    Op *o = prepare_read_op(oid, volume, op, pbl, flags, onack, objver, trace);
     return op_submit(o);
   }
   ceph_tid_t linger_mutate(const object_t& oid, VolumeRef volume,
@@ -1174,14 +1184,15 @@ public:
   ceph_tid_t stat(const object_t& oid, VolumeRef volume,
 		  uint64_t *psize, utime_t *pmtime, int flags,
 		  Context *onfinish, version_t *objver = NULL,
-		  ObjectOperation *extra_ops = NULL) {
+		  ObjectOperation *extra_ops = NULL,
+                  ZTracer::ZTraceRef trace = ZTracer::ZTraceRef()) {
     vector<OSDOp> ops;
     int i = init_ops(ops, 1, extra_ops);
     ops[i].op.op = CEPH_OSD_OP_STAT;
     C_Stat *fin = new C_Stat(psize, pmtime, onfinish);
     Op *o = new Op(oid, volume->id, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_READ,
-		   fin, 0, objver);
+		   fin, 0, objver, trace, trace_endpoint);
     o->outbl = &fin->bl;
     return op_submit(o);
   }
@@ -1190,7 +1201,8 @@ public:
 		  uint64_t off, uint64_t len, bufferlist *pbl, int flags,
 		  Context *onfinish,
 		  version_t *objver = NULL,
-		  ObjectOperation *extra_ops = NULL) {
+		  ObjectOperation *extra_ops = NULL,
+                  ZTracer::ZTraceRef trace = ZTracer::ZTraceRef()) {
     vector<OSDOp> ops;
     int i = init_ops(ops, 1, extra_ops);
     ops[i].op.op = CEPH_OSD_OP_READ;
@@ -1200,7 +1212,7 @@ public:
     ops[i].op.extent.truncate_seq = 0;
     Op *o = new Op(oid, volume->id, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_READ,
-		   onfinish, 0, objver);
+		   onfinish, 0, objver, trace, trace_endpoint);
     o->outbl = pbl;
     return op_submit(o);
   }
@@ -1209,7 +1221,8 @@ public:
 			uint64_t off, uint64_t len, bufferlist *pbl, int flags,
 			uint64_t trunc_size, uint32_t trunc_seq,
 			Context *onfinish, version_t *objver = NULL,
-			ObjectOperation *extra_ops = NULL) {
+			ObjectOperation *extra_ops = NULL,
+                        ZTracer::ZTraceRef trace = ZTracer::ZTraceRef()) {
     vector<OSDOp> ops;
     int i = init_ops(ops, 1, extra_ops);
     ops[i].op.op = CEPH_OSD_OP_READ;
@@ -1219,14 +1232,15 @@ public:
     ops[i].op.extent.truncate_seq = trunc_seq;
     Op *o = new Op(oid, volume->id, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_READ,
-		   onfinish, 0, objver);
+		   onfinish, 0, objver, trace, trace_endpoint);
     o->outbl = pbl;
     return op_submit(o);
   }
   ceph_tid_t getxattr(const object_t& oid, VolumeRef volume,
 		      const char *name, bufferlist *pbl, int flags,
 		      Context *onfinish, version_t *objver = NULL,
-		      ObjectOperation *extra_ops = NULL) {
+		      ObjectOperation *extra_ops = NULL,
+                      ZTracer::ZTraceRef trace = ZTracer::ZTraceRef()) {
     vector<OSDOp> ops;
     int i = init_ops(ops, 1, extra_ops);
     ops[i].op.op = CEPH_OSD_OP_GETXATTR;
@@ -1236,7 +1250,7 @@ public:
       ops[i].indata.append(name);
     Op *o = new Op(oid, volume->id, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_READ,
-		   onfinish, 0, objver);
+		   onfinish, 0, objver, trace, trace_endpoint);
     o->outbl = pbl;
     return op_submit(o);
   }
@@ -1244,14 +1258,15 @@ public:
   ceph_tid_t getxattrs(const object_t& oid, VolumeRef volume,
 		       map<string,bufferlist>& attrset, int flags,
 		       Context *onfinish, version_t *objver = NULL,
-		       ObjectOperation *extra_ops = NULL) {
+		       ObjectOperation *extra_ops = NULL,
+                       ZTracer::ZTraceRef trace = ZTracer::ZTraceRef()) {
     vector<OSDOp> ops;
     int i = init_ops(ops, 1, extra_ops);
     ops[i].op.op = CEPH_OSD_OP_GETXATTRS;
     C_GetAttrs *fin = new C_GetAttrs(attrset, onfinish);
     Op *o = new Op(oid, volume->id, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_READ,
-		   fin, 0, objver);
+		   fin, 0, objver, trace, trace_endpoint);
     o->outbl = &fin->bl;
     return op_submit(o);
   }
@@ -1259,19 +1274,22 @@ public:
   ceph_tid_t read_full(const object_t& oid, VolumeRef volume,
 		       bufferlist *pbl, int flags, Context *onfinish,
 		       version_t *objver = NULL,
-		       ObjectOperation *extra_ops = NULL) {
+		       ObjectOperation *extra_ops = NULL,
+                       ZTracer::ZTraceRef trace = ZTracer::ZTraceRef()) {
     return read(oid, volume, 0, 0, pbl,
 		flags | global_op_flags | CEPH_OSD_FLAG_READ, onfinish,
-		objver);
+		objver, extra_ops, trace);
   }
 
   // writes
   ceph_tid_t _modify(const object_t& oid, VolumeRef volume,
 		     vector<OSDOp>& ops, utime_t mtime, int flags,
 		     Context *onack, Context *oncommit,
-		     version_t *objver = NULL) {
+		     version_t *objver = NULL,
+                     ZTracer::ZTraceRef trace = ZTracer::ZTraceRef()) {
     Op *o = new Op(oid, volume->id, ops, flags | global_op_flags |
-		   CEPH_OSD_FLAG_WRITE, onack, oncommit, objver);
+		   CEPH_OSD_FLAG_WRITE, onack, oncommit, objver,
+                   trace, trace_endpoint);
     o->mtime = mtime;
     return op_submit(o);
   }
@@ -1279,7 +1297,8 @@ public:
 		   uint64_t off, uint64_t len, const bufferlist &bl,
 		   utime_t mtime, int flags, Context *onack, Context *oncommit,
 		   version_t *objver = NULL,
-		   ObjectOperation *extra_ops = NULL) {
+		   ObjectOperation *extra_ops = NULL,
+                   ZTracer::ZTraceRef trace = ZTracer::ZTraceRef()) {
     vector<OSDOp> ops;
     int i = init_ops(ops, 1, extra_ops);
     ops[i].op.op = CEPH_OSD_OP_WRITE;
@@ -1290,7 +1309,7 @@ public:
     ops[i].indata = bl;
     Op *o = new Op(oid, volume->id, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
-		   onack, oncommit, objver);
+		   onack, oncommit, objver, trace, trace_endpoint);
     o->mtime = mtime;
     return op_submit(o);
   }
@@ -1298,7 +1317,8 @@ public:
 		    uint64_t len, const bufferlist &bl, utime_t mtime,
 		    int flags, Context *onack, Context *oncommit,
 		    version_t *objver = NULL,
-		    ObjectOperation *extra_ops = NULL) {
+		    ObjectOperation *extra_ops = NULL,
+                    ZTracer::ZTraceRef trace = ZTracer::ZTraceRef()) {
     vector<OSDOp> ops;
     int i = init_ops(ops, 1, extra_ops);
     ops[i].op.op = CEPH_OSD_OP_APPEND;
@@ -1309,7 +1329,7 @@ public:
     ops[i].indata = bl;
     Op *o = new Op(oid, volume->id, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
-		   onack, oncommit, objver);
+		   onack, oncommit, objver, trace, trace_endpoint);
     o->mtime = mtime;
     return op_submit(o);
   }
@@ -1318,7 +1338,8 @@ public:
 			 utime_t mtime, int flags, uint64_t trunc_size,
 			 uint32_t trunc_seq, Context *onack, Context *oncommit,
 			 version_t *objver = NULL,
-			 ObjectOperation *extra_ops = NULL) {
+			 ObjectOperation *extra_ops = NULL,
+                         ZTracer::ZTraceRef trace = ZTracer::ZTraceRef()) {
     vector<OSDOp> ops;
     int i = init_ops(ops, 1, extra_ops);
     ops[i].op.op = CEPH_OSD_OP_WRITE;
@@ -1329,7 +1350,7 @@ public:
     ops[i].indata = bl;
     Op *o = new Op(oid, volume->id, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
-		   onack, oncommit, objver);
+		   onack, oncommit, objver, trace, trace_endpoint);
     o->mtime = mtime;
     return op_submit(o);
   }
@@ -1337,7 +1358,8 @@ public:
 			const bufferlist &bl, utime_t mtime, int flags,
 			Context *onack, Context *oncommit,
 			version_t *objver = NULL,
-			ObjectOperation *extra_ops = NULL) {
+			ObjectOperation *extra_ops = NULL,
+                        ZTracer::ZTraceRef trace = ZTracer::ZTraceRef()) {
     vector<OSDOp> ops;
     int i = init_ops(ops, 1, extra_ops);
     ops[i].op.op = CEPH_OSD_OP_WRITEFULL;
@@ -1346,7 +1368,7 @@ public:
     ops[i].indata = bl;
     Op *o = new Op(oid, volume->id, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
-		   onack, oncommit, objver);
+		   onack, oncommit, objver, trace, trace_endpoint);
     o->mtime = mtime;
     return op_submit(o);
   }
@@ -1355,7 +1377,8 @@ public:
 		   utime_t mtime, int flags, uint64_t trunc_size,
 		   uint32_t trunc_seq, Context *onack, Context *oncommit,
 		   version_t *objver = NULL,
-		   ObjectOperation *extra_ops = NULL) {
+		   ObjectOperation *extra_ops = NULL,
+                   ZTracer::ZTraceRef trace = ZTracer::ZTraceRef()) {
     vector<OSDOp> ops;
     int i = init_ops(ops, 1, extra_ops);
     ops[i].op.op = CEPH_OSD_OP_TRUNCATE;
@@ -1364,7 +1387,7 @@ public:
     ops[i].op.extent.truncate_seq = trunc_seq;
     Op *o = new Op(oid, volume->id, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
-		   onack, oncommit, objver);
+		   onack, oncommit, objver, trace, trace_endpoint);
     o->mtime = mtime;
     return op_submit(o);
   }
@@ -1373,7 +1396,8 @@ public:
 		  uint64_t off, uint64_t len, utime_t mtime, int flags,
 		  Context *onack, Context *oncommit,
 		  version_t *objver = NULL,
-		  ObjectOperation *extra_ops = NULL) {
+		  ObjectOperation *extra_ops = NULL,
+                  ZTracer::ZTraceRef trace = ZTracer::ZTraceRef()) {
     vector<OSDOp> ops;
     int i = init_ops(ops, 1, extra_ops);
     ops[i].op.op = CEPH_OSD_OP_ZERO;
@@ -1381,7 +1405,7 @@ public:
     ops[i].op.extent.length = len;
     Op *o = new Op(oid, volume->id, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
-		   onack, oncommit, objver);
+		   onack, oncommit, objver, trace, trace_endpoint);
     o->mtime = mtime;
     return op_submit(o);
   }
@@ -1390,14 +1414,15 @@ public:
 		    utime_t mtime, int global_flags, int create_flags,
 		    Context *onack, Context *oncommit,
 		    version_t *objver = NULL,
-		    ObjectOperation *extra_ops = NULL) {
+		    ObjectOperation *extra_ops = NULL,
+                    ZTracer::ZTraceRef trace = ZTracer::ZTraceRef()) {
     vector<OSDOp> ops;
     int i = init_ops(ops, 1, extra_ops);
     ops[i].op.op = CEPH_OSD_OP_CREATE;
     ops[i].op.flags = create_flags;
     Op *o = new Op(oid, volume->id, ops,
 		   global_flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
-		   onack, oncommit, objver);
+		   onack, oncommit, objver, trace, trace_endpoint);
     o->mtime = mtime;
     return op_submit(o);
   }
@@ -1405,13 +1430,14 @@ public:
   ceph_tid_t remove(const object_t& oid, VolumeRef volume,
 		    utime_t mtime, int flags, Context *onack,
 		    Context *oncommit, version_t *objver = NULL,
-		    ObjectOperation *extra_ops = NULL) {
+		    ObjectOperation *extra_ops = NULL,
+                    ZTracer::ZTraceRef trace = ZTracer::ZTraceRef()) {
     vector<OSDOp> ops;
     int i = init_ops(ops, 1, extra_ops);
     ops[i].op.op = CEPH_OSD_OP_DELETE;
     Op *o = new Op(oid, volume->id, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
-		   onack, oncommit, objver);
+		   onack, oncommit, objver, trace, trace_endpoint);
     o->mtime = mtime;
     return op_submit(o);
   }
@@ -1419,20 +1445,23 @@ public:
   ceph_tid_t lock(const object_t& oid, VolumeRef volume, int op,
 		  int flags, Context *onack, Context *oncommit,
 		  version_t *objver = NULL,
-		  ObjectOperation *extra_ops = NULL) {
+		  ObjectOperation *extra_ops = NULL,
+                  ZTracer::ZTraceRef trace = ZTracer::ZTraceRef()) {
     vector<OSDOp> ops;
     int i = init_ops(ops, 1, extra_ops);
     ops[i].op.op = op;
     Op *o = new Op(oid, volume->id, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
-		   onack, oncommit, objver);
+		   onack, oncommit, objver, trace, trace_endpoint);
     return op_submit(o);
   }
   ceph_tid_t setxattr(const object_t& oid, VolumeRef volume,
 		      const char *name, const bufferlist &bl,
 		      utime_t mtime, int flags,
-	      Context *onack, Context *oncommit,
-	      version_t *objver = NULL, ObjectOperation *extra_ops = NULL) {
+                      Context *onack, Context *oncommit,
+                      version_t *objver = NULL,
+                      ObjectOperation *extra_ops = NULL,
+                      ZTracer::ZTraceRef trace = ZTracer::ZTraceRef()) {
     vector<OSDOp> ops;
     int i = init_ops(ops, 1, extra_ops);
     ops[i].op.op = CEPH_OSD_OP_SETXATTR;
@@ -1443,7 +1472,7 @@ public:
     ops[i].indata.append(bl);
     Op *o = new Op(oid, volume->id, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
-		   onack, oncommit, objver);
+		   onack, oncommit, objver, trace, trace_endpoint);
     o->mtime = mtime;
     return op_submit(o);
   }
@@ -1451,7 +1480,8 @@ public:
 			 const char *name, utime_t mtime, int flags,
 			 Context *onack, Context *oncommit,
 			 version_t *objver = NULL,
-			 ObjectOperation *extra_ops = NULL) {
+			 ObjectOperation *extra_ops = NULL,
+                         ZTracer::ZTraceRef trace = ZTracer::ZTraceRef()) {
     vector<OSDOp> ops;
     int i = init_ops(ops, 1, extra_ops);
     ops[i].op.op = CEPH_OSD_OP_RMXATTR;
@@ -1461,7 +1491,7 @@ public:
       ops[i].indata.append(name);
     Op *o = new Op(oid, volume->id, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
-		   onack, oncommit, objver);
+		   onack, oncommit, objver, trace, trace_endpoint);
     o->mtime = mtime;
     return op_submit(o);
   }
