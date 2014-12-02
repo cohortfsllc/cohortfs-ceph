@@ -28,6 +28,8 @@
 #include "include/rados/rados_types.h"
 #include "include/rados/rados_types.hpp"
 
+#include <ztracer.hpp>
+
 #include <list>
 #include <map>
 #include <memory>
@@ -643,6 +645,7 @@ private:
   int global_op_flags; // flags which are applied to each IO op
   bool keep_balanced_budget;
   bool honor_osdmap_full;
+  ZTracer::ZTraceEndpointRef trace_endpoint;
 
 public:
   void maybe_request_map();
@@ -739,6 +742,7 @@ public:
 
     /// true if we should resend this message on failure
     bool should_resend;
+    ZTracer::ZTraceRef trace;
 
     Op(const hobject_t& o, const boost::uuids::uuid& volume, vector<OSDOp>& op,
        int f, Context *ac, Context *co, version_t *ov = NULL) :
@@ -1003,6 +1007,7 @@ public:
     num_unacked(0), num_uncommitted(0),
     global_op_flags(0),
     keep_balanced_budget(false), honor_osdmap_full(true),
+    trace_endpoint(ZTracer::ZTraceEndpoint::create("0.0.0.0", 0, "Objecter")),
     last_seen_osdmap_version(0),
     last_seen_pgmap_version(0),
     client_lock(l), timer(t),
