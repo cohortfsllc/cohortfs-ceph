@@ -384,11 +384,6 @@ add_executable(bench_log
 target_link_libraries(bench_log global pthread rt ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
 
 #Make check starts here
-add_custom_target(test_helpers ALL COMMAND chmod 755 
-  ${CMAKE_SOURCE_DIR}/src/test/mon/mon-test-helpers.sh
-  ${CMAKE_SOURCE_DIR}/src/test/osd/osd-test-helpers.sh
-  COMMENT "test helper shell scripts have permission and symlinks have been made")
-
 add_custom_target(symlinks ALL COMMAND
   ln -s ${CMAKE_SOURCE_DIR}/src/test/ ${CMAKE_BINARY_DIR}/src/test/ &&
   ln -s ${CMAKE_BINARY_DIR}/src/ceph-mon ${CMAKE_BINARY_DIR}/src/test/ &&
