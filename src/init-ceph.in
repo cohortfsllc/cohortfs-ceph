@@ -119,6 +119,7 @@ monaddr=
 dofsmount=1
 dofsumount=0
 verbose=0
+skiposd=0
 
 while echo $1 | grep -q '^-'; do     # FIXME: why not '^-'?
 case $1 in
@@ -130,6 +131,9 @@ case $1 in
 	    ;;
     --novalgrind)
 	    dovalgrind=0
+	    ;;
+    --skiposd)
+	    skiposd=1
 	    ;;
     --allhosts | -a)
 	    allhosts=1;
@@ -198,6 +202,12 @@ for name in $what; do
     cluster=`echo $conf | awk -F'/' '{print $(NF)}' | cut -d'.' -f 1`
     num=$id
     name="$type.$id"
+
+    if [ "$skiposd" = "1" ]; then
+	    if [ "$type" = "osd" ]; then
+		    continue
+	    fi
+    fi
 
     check_host || continue
 
