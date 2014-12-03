@@ -1610,7 +1610,7 @@ struct xio_mempool_obj* get_xio_mp(const buffer::ptr& bp)
   }
   return NULL;
 }
+#endif // HAVE_XIO
 
 } // namespace ceph
 
-#endif // HAVE_XIO
