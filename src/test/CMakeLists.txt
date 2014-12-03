@@ -1957,3 +1957,7 @@ add_executable(test_libosd_remote test_libosd_remote.c $<TARGET_OBJECTS:heap_pro
 set_target_properties(test_libosd_remote PROPERTIES LINKER_LANGUAGE C)
 target_link_libraries(test_libosd_remote PRIVATE osd os global
   boost_filesystem boost_system ${TCMALLOC_LIBS})
+
+# dout_benchmark
+add_executable(dout_benchmark dout_benchmark.cc)
+target_link_libraries(dout_benchmark common global)  
