@@ -1,3 +1,3 @@
 #!/bin/sh
 
-capnp compile -oc++ OSDMap.capnp
+capnp compile -oc++ ceph-common.capnp OSDMap.capnp

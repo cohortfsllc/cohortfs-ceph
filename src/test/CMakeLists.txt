@@ -1780,7 +1780,11 @@ target_link_libraries(test_libosd PRIVATE osd os global
 set(CAPNP_LIBS capnp kj)
 
 # capnp_osdmap
-set(capnp_osdmap_srcs capnp/testOsdMap.cc capnp/OSDMap.capnp.c++)
+set(capnp_osdmap_srcs
+  capnp/testOsdMap.cc
+  capnp/ceph-common.capnp.c++
+  capnp/OSDMap.capnp.c++
+  )
 add_executable(capnp_osdmap
   ${capnp_osdmap_srcs}
 #   $<TARGET_OBJECTS:heap_profiler_objs>
