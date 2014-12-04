@@ -159,8 +159,10 @@ void Log::submit_entry(Entry *e)
 #ifdef HAVE_LTTNG
   // signal lttng tracepoints directly from the submitting thread,
   // regardless of log levels; lttng user will filter the events
-  if (m_lttng_enabled)
+  if (m_lttng_enabled) {
     tracepoint(ceph, log, e->m_prio, e->m_subsys, e->get_str().c_str());
+  return;
+  }
 #endif // HAVE_LTTNG
 
   // avoid queueing if all other logging is disabled

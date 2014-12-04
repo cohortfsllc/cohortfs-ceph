@@ -1957,3 +1957,7 @@ add_executable(test_libosd_remote test_libosd_remote.c $<TARGET_OBJECTS:heap_pro
 set_target_properties(test_libosd_remote PROPERTIES LINKER_LANGUAGE C)
 target_link_libraries(test_libosd_remote PRIVATE osd os global
   boost_filesystem boost_system ${TCMALLOC_LIBS})
+
+# lttng_stream_test
+add_executable(lttng_stream_test lttng_stream_test.cc)
+target_link_libraries(lttng_stream_test common global)
