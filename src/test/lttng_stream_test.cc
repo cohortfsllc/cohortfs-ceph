@@ -35,7 +35,7 @@ int main(int argc, const char *argv[])
   int the_int = 4351352;
   string the_string = "cohortFS";
   auto t1 = std::chrono::high_resolution_clock::now();
-  for(int i = 0; i < 1000000; i++) {
+  for(int i = 0; i < 100000; i++) {
     dout(1) << the_int << the_string << the_int
       << the_string << the_int << the_string
       << the_int << the_string << dendl;
