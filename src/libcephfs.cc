@@ -1502,6 +1502,14 @@ extern "C" uint32_t ceph_ll_file_layout(class ceph_mount_info *cmount,
   return (cmount->get_client()->ll_file_layout(in, layout));
 }
 
+extern "C" int ceph_ll_file_key(class ceph_mount_info *cmount,
+					Inode *in,
+					char *buf,
+					uint32_t bufsize)
+{
+  return (cmount->get_client()->ll_file_key(in, buf, bufsize));
+}
+
 #if 0
 extern "C" int ceph_ll_get_stripe_osd(class ceph_mount_info *cmount,
 				      Inode *in, uint64_t blockno,

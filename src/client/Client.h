@@ -815,6 +815,7 @@ public:
 			  int *cookie, int *eol, int uid, int gid);
   uint32_t ll_stripe_unit(Inode *in);
   int ll_file_layout(Inode *in, ceph_file_layout *layout);
+  int ll_file_key(Inode *in, char *buf, uint32_t bufsize);
 
   int ll_read(Fh *fh, loff_t off, loff_t len, bufferlist *bl);
   int ll_write(Fh *fh, loff_t off, loff_t len, const char *data);

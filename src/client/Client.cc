@@ -7492,6 +7492,12 @@ int Client::ll_file_layout(Inode *in, ceph_file_layout *layout)
   return 0;
 }
 
+int Client::ll_file_key(Inode *in, char *buf, uint32_t bufsize)
+{
+  Mutex::Locker lock(client_lock);
+  return (snprintf(buf, bufsize, "%llx", (long long unsigned)in->ino));
+}
+
 #if 0
 /* Currently we cannot take advantage of redundancy in reads, since we
    would have to go through all possible placement groups (a
