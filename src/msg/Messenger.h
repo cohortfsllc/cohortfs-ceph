@@ -40,7 +40,7 @@ class Timer;
 class Messenger {
 private:
   list<Dispatcher*> dispatchers;
-  ZTracer::ZTraceEndpointRef trace_endpoint;
+  ZTracer::Endpoint trace_endpoint;
 
   void set_endpoint_addr(const sockaddr_storage &addr, int port);
 
@@ -129,7 +129,8 @@ public:
    * or use the create() function.
    */
   Messenger(CephContext *cct_, entity_name_t w)
-    : my_inst(),
+    : trace_endpoint(NULL, 0, "Messenger"),
+      my_inst(),
       default_send_priority(CEPH_MSG_PRIO_DEFAULT), started(false),
       magic(0), cct(cct_),
       crcflags(get_default_crc_flags(cct->_conf))
@@ -192,8 +193,8 @@ public:
   /**
    * @return the zipkin trace endpoint
    */
-  const ZTracer::ZTraceEndpointRef& get_trace_endpoint() const {
-    return trace_endpoint;
+  const ZTracer::Endpoint* get_trace_endpoint() const {
+    return &trace_endpoint;
   }
 
   /**

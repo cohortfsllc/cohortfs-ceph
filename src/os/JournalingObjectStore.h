@@ -112,7 +112,7 @@ protected:
 
   void _op_journal_transactions(list<ObjectStore::Transaction*>& tls, uint64_t op,
 				Context *onjournal, OpRequestRef osd_op,
-				ZTracer::ZTraceRef trace);
+				ZTracer::Trace *trace);
 
   virtual int do_transactions(list<ObjectStore::Transaction*>& tls, uint64_t op_seq) = 0;
 

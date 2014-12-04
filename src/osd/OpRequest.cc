@@ -16,6 +16,11 @@
 OpRequest::OpRequest(Message *req)
   : rmw_flags(0), request(req), hit_flag_points(0), latest_flag_point(0)
 {
+  Messenger *msgr = req->get_connection()->get_messenger();
+  if (req->trace_info.trace_id)
+    trace.init("op", msgr->get_trace_endpoint(), &req->trace_info, true);
+  else
+    trace.init("op", msgr->get_trace_endpoint());
 }
 
 void OpRequest::_dump(utime_t now, Formatter *f) const

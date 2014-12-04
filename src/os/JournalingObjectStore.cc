@@ -245,7 +245,7 @@ void JournalingObjectStore::ApplyManager::commit_finish()
 
 void JournalingObjectStore::_op_journal_transactions(
   list<ObjectStore::Transaction*>& tls, uint64_t op,
-  Context *onjournal, OpRequestRef osd_op, ZTracer::ZTraceRef trace)
+  Context *onjournal, OpRequestRef osd_op, ZTracer::Trace *trace)
 {
   dout(10) << "op_journal_transactions " << op << " " << tls << dendl;
 

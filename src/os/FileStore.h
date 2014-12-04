@@ -157,7 +157,7 @@ private:
     }
   } sync_thread;
 
-  ZTracer::ZTraceEndpointRef trace_endpoint;
+  ZTracer::Endpoint trace_endpoint;
 
   // -- op workqueue --
   struct Op {
@@ -167,7 +167,7 @@ private:
     Context *onreadable, *onreadable_sync;
     uint64_t ops, bytes;
     OpRequestRef osd_op;
-    ZTracer::ZTraceRef trace;
+    ZTracer::Trace trace;
   };
   class OpSequencer : public Sequencer_impl {
     Mutex qlock; // to protect q, for benefit of flush (peek/dequeue also protected by lock)
@@ -190,8 +190,7 @@ private:
     void queue(Op *o) {
       Mutex::Locker l(qlock);
       q.push_back(o);
-      if (o->trace)
-	o->trace->keyval("queue depth", q.size());
+      o->trace.keyval("queue depth", q.size());
     }
     Op *peek_queue() {
       assert(apply_lock.is_locked());

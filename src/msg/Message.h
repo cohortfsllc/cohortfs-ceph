@@ -139,6 +139,8 @@
 
 namespace bi = boost::intrusive;
 
+WRITE_RAW_ENCODER(blkin_trace_info)
+
 class Message : public RefCountedObject {
 protected:
   ceph_msg_header  header;	// headerelope
@@ -166,6 +168,8 @@ protected:
   bi::list_member_hook<> dispatch_q;
 
 public:
+  blkin_trace_info trace_info; // zipkin tracing
+
   class CompletionHook : public Context {
   protected:
     Message *m;
@@ -213,6 +217,7 @@ public:
       dispatch_throttle_size(0) {
     memset(&header, 0, sizeof(header));
     memset(&footer, 0, sizeof(footer));
+    memset(&trace_info, 0, sizeof(trace_info));
   };
   Message(int t, int version=1, int compat_version=0)
     : connection(NULL),
@@ -228,6 +233,7 @@ public:
     header.priority = 0;  // undef
     header.data_off = 0;
     memset(&footer, 0, sizeof(footer));
+    memset(&trace_info, 0, sizeof(trace_info));
   }
 
   Message *get() {
@@ -403,13 +409,6 @@ public:
   virtual void dump(Formatter *f) const;
 
   void encode(uint64_t features, int crcflags);
-
-  // zipkin tracing
-protected:
-  void encode_trace(bufferlist &bl) const;
-  void decode_trace(bufferlist::iterator &p, const char *name, bool create);
-public:
-  ZTracer::ZTraceRef trace;
 };
 typedef boost::intrusive_ptr<Message> MessageRef;
 

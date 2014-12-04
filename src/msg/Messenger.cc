@@ -31,7 +31,8 @@ void Messenger::set_endpoint_addr(const sockaddr_storage &ss, int port)
   getnameinfo((struct sockaddr *)&ss, hostlen, buf, sizeof(buf),
       NULL, 0, NI_NUMERICHOST);
 
-  trace_endpoint = ZTracer::ZTraceEndpoint::create(buf, port, "Messenger");
+  trace_endpoint.copy_ip(buf);
+  trace_endpoint.set_port(port);
 }
 
 /*

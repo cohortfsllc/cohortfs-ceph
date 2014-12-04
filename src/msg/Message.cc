@@ -645,35 +645,3 @@ Message *decode_message(CephContext *cct, int crcflags, bufferlist::iterator& p)
   ::decode(da, p);
   return decode_message(cct, crcflags, h, f, fr, mi, da);
 }
-
-void Message::encode_trace(bufferlist &bl) const
-{
-  unsigned char exist = trace ? 1 : 0;
-  ::encode(exist, bl);
-  if (exist) {
-    blkin_trace_info info;
-    trace->get_trace_info(&info);
-    ::encode(info.trace_id, bl);
-    ::encode(info.span_id, bl);
-    ::encode(info.parent_span_id, bl);
-  }
-}
-
-void Message::decode_trace(bufferlist::iterator &p,
-			   const char *name, bool create)
-{
-  Messenger *m = get_connection()->get_messenger();
-
-  unsigned char exist;
-  ::decode(exist, p);
-  if (exist) {
-    blkin_trace_info info;
-    ::decode(info.trace_id, p);
-    ::decode(info.span_id, p);
-    ::decode(info.parent_span_id, p);
-
-    trace = ZTracer::ZTrace::create(name, m->get_trace_endpoint(), &info, false);
-  } else if (create) {
-    trace = ZTracer::ZTrace::create(name, m->get_trace_endpoint());
-  }
-}

@@ -830,11 +830,10 @@ void FileJournal::queue_completions_thru(uint64_t seq)
 	     << " lat " << lat << dendl;
     if (next.finish)
       finisher->queue(next.finish);
-    if (next.trace) {
-      next.trace->event("queued completion");
-      next.trace->keyval("completed through", seq);
-      next.trace->event("end");
-    }
+
+    next.trace.event("queued completion");
+    next.trace.keyval("completed through", seq);
+    next.trace.event("end");
   }
   finisher_cond.Signal();
 }
@@ -870,7 +869,7 @@ int FileJournal::prepare_single_write(bufferlist& bl, off64_t& queue_pos, uint64
 	   << " (ebl alignment " << alignment << ")"
 	   << dendl;
 
-  next_write.trace->event("prepare_single_write");
+  next_write.trace.event("prepare_single_write");
 
   // add it this entry
   entry_header_t h;
@@ -1408,7 +1407,7 @@ void FileJournal::check_aio_completion()
 
 void FileJournal::submit_entry(uint64_t seq, bufferlist& e, int alignment,
 			       Context *oncommit, OpRequestRef osd_op,
-			       ZTracer::ZTraceRef parent)
+			       ZTracer::Trace *parent)
 {
   // dump on queue
   dout(5) << "submit_entry seq " << seq
@@ -1420,17 +1419,16 @@ void FileJournal::submit_entry(uint64_t seq, bufferlist& e, int alignment,
   throttle_ops.take(1);
   throttle_bytes.take(e.length());
 
-  ZTracer::ZTraceRef trace = ZTracer::ZTrace::create("journal", parent,
-      trace_endpoint);
-  trace->event("submit_entry");
-  trace->keyval("seq", seq);
+  ZTracer::Trace trace("journal", &trace_endpoint, parent);
+  trace.event("submit_entry");
+  trace.keyval("seq", seq);
   {
     Mutex::Locker l1(writeq_lock);  // ** lock **
     Mutex::Locker l2(completions_lock);	 // ** lock **
     utime_t now = ceph_clock_now(g_ceph_context);
-    completions.push_back(completion_item(seq, oncommit, now, osd_op, trace));
-    writeq.push_back(write_item(seq, e, alignment, osd_op, trace));
-    trace->keyval("queue depth", writeq.size());
+    completions.push_back(completion_item(seq, oncommit, now, osd_op, &trace));
+    writeq.push_back(write_item(seq, e, alignment, osd_op, &trace));
+    trace.keyval("queue depth", writeq.size());
     writeq_cond.Signal();
   }
 }

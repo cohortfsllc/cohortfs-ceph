@@ -889,10 +889,8 @@ ceph_tid_t Objecter::_op_submit(Op *op)
   op->tid = mytid;
   assert(client_inc >= 0);
 
-  if (op->trace) {
-    op->trace->keyval("tid", op->tid);
-    op->trace->event("op_submit", trace_endpoint);
-  }
+  op->trace.keyval("tid", op->tid);
+  op->trace.event("op_submit", &trace_endpoint);
 
   // pick target
   num_homeless_ops++;  // initially; recalc_op_target() will decrement if it finds a target
@@ -1143,8 +1141,7 @@ void Objecter::finish_op(Op *op)
   if (op->ontimeout)
     timer.cancel_event(op->ontimeout);
 
-  if (op->trace)
-    op->trace->event("finish_op", trace_endpoint);
+  op->trace.event("finish_op", &trace_endpoint);
   delete op;
 }
 
@@ -1191,13 +1188,10 @@ void Objecter::send_op(Op *op)
   m->set_mtime(op->mtime);
   m->set_retry_attempt(op->attempts++);
 
-  if (op->trace) {
-    op->trace->keyval("want onack", op->onack ? 1 : 0);
-    op->trace->keyval("want oncommit", op->oncommit ? 1 : 0);
-    op->trace->event("send_op", trace_endpoint);
-
-    m->trace = op->trace;
-  }
+  op->trace.keyval("want onack", op->onack ? 1 : 0);
+  op->trace.keyval("want oncommit", op->oncommit ? 1 : 0);
+  op->trace.event("send_op", &trace_endpoint);
+  m->trace_info = *op->trace.get_info();
 
   if (op->replay_version != eversion_t())
     m->set_version(op->replay_version);	 // we're replaying this op!
@@ -1303,8 +1297,7 @@ void Objecter::handle_osd_op_reply(MOSDOpReply *m)
   if (rc == -EAGAIN) {
     ldout(cct, 7) << " got -EAGAIN, resubmitting" << dendl;
     unregister_op(op);
-    if (op->trace)
-      op->trace->event("reply with EAGAIN", trace_endpoint);
+    op->trace.event("reply with EAGAIN", &trace_endpoint);
     _op_submit(op);
     m->put();
     return;
@@ -1355,16 +1348,14 @@ void Objecter::handle_osd_op_reply(MOSDOpReply *m)
     onack = op->onack;
     op->onack = 0;  // only do callback once
     num_unacked--;
-    if (op->trace)
-      op->trace->event("onack", trace_endpoint);
+    op->trace.event("onack", &trace_endpoint);
   }
   if (op->oncommit && (m->is_ondisk() || rc)) {
     ldout(cct, 15) << "handle_osd_op_reply safe" << dendl;
     oncommit = op->oncommit;
     op->oncommit = 0;
     num_uncommitted--;
-    if (op->trace)
-      op->trace->event("oncommit", trace_endpoint);
+    op->trace.event("oncommit", &trace_endpoint);
   }
 
   // got data?

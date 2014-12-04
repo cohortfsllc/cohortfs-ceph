@@ -274,7 +274,7 @@ protected:
   OSDMapRef osdmap_ref;
   OSDMapRef last_persisted_osdmap_ref;
 
-  ZTracer::ZTraceEndpointRef trace_endpoint;
+  ZTracer::Endpoint trace_endpoint;
 
   void queue_op(OpRequestRef op);
   void take_op_map_waiters();
