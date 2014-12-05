@@ -652,8 +652,10 @@ int CohortVolume::read(const object_t& oid, uint64_t off, uint64_t len,
     assert(ops[0].op.extent.length <= one_op);
     ops[0].op.extent.truncate_size = 0;
     ops[0].op.extent.truncate_seq = 0;
+    hobject_t hobj = hobject_t(oid, DATA, stripe);
+    cout << "CohortVolume::read oid " << hobj << std::endl;
     Objecter::Op *o
-      = new Objecter::Op(hobject_t(oid, DATA, stripe), id, ops,
+      = new Objecter::Op(hobj, id, ops,
 			 flags | CEPH_OSD_FLAG_READ, mr, 0, NULL);
     o->outbl = &mr->reads[stripe];
     o->osd = osds[stripe];

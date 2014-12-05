@@ -94,7 +94,8 @@ int Objecter::read(const char *object, const uint8_t volume[16],
 {
   const int client = 0;
   const long tid = 0;
-  hobject_t oid = object_t(object);
+  object_t poid = object_t(object);
+  hobject_t oid = hobject_t(poid, DATA);
   boost::uuids::uuid vol;
   epoch_t epoch = 0;
   std::unique_ptr<SyncCompletion> sync;
@@ -109,6 +110,8 @@ int Objecter::read(const char *object, const uint8_t volume[16],
     sync.reset(new SyncCompletion());
     user = sync.get();
   }
+
+  cout << "Objecter::read oid " << oid << " poid " << poid << " oname " << object << std::endl;
 
   // set up osd read op
   MOSDOp *m = new MOSDOp(client, tid, oid, vol, epoch, 0);
@@ -171,10 +174,13 @@ int Objecter::write(const char *object, const uint8_t volume[16],
 {
   const int client = 0;
   const long tid = 0;
-  hobject_t oid = object_t(object);
+  object_t poid = object_t(object);
+  hobject_t oid = hobject_t(poid, DATA);
   boost::uuids::uuid vol;
   epoch_t epoch = 0;
   std::unique_ptr<SyncCompletion> sync;
+
+  cout << "Objecter::write oid " << oid << " poid " << poid << " oname " << object << std::endl;
 
   mempcpy(&vol, volume, sizeof(vol));
 

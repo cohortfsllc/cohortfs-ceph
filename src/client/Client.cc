@@ -5754,6 +5754,7 @@ int Client::_read_sync(Fh *f, uint64_t off, uint64_t len, bufferlist *bl,
     flock.Unlock();
     client_lock.Lock();
 
+    ldout(cct, 10) << "_read_sync oid " << oid << " ret " << r << dendl;
     // if we get ENOENT from OSD, assume 0 bytes returned
     if (r == -ENOENT)
       r = 0;
@@ -5978,6 +5979,8 @@ int Client::_write(Fh *f, int64_t offset, uint64_t size, const char *buf)
 		  onfinish, onsafe, objecter);
     if (r < 0)
       goto done;
+
+    ldout(cct, 10) << "_write oid " << oid << " ret " << r << dendl;
 
     client_lock.Unlock();
     flock.Lock();
@@ -7495,7 +7498,10 @@ int Client::ll_file_layout(Inode *in, ceph_file_layout *layout)
 int Client::ll_file_key(Inode *in, char *buf, uint32_t bufsize)
 {
   Mutex::Locker lock(client_lock);
-  return (snprintf(buf, bufsize, "%llx", (long long unsigned)in->ino));
+  file_object_t fo(in->ino, 0);
+  object_t oid = fo;
+  ldout(cct, 10) << "ll_file_key oid " << oid << dendl;
+  return (snprintf(buf, bufsize, "%s", fo.c_str()));
 }
 
 #if 0
