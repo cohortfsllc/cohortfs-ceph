@@ -390,10 +390,10 @@ add_custom_target(test_helpers ALL COMMAND chmod 755
   COMMENT "test helper shell scripts have permission and symlinks have been made")
 
 add_custom_target(symlinks ALL COMMAND
-  ln -s ${CMAKE_SOURCE_DIR}/src/test/ ${CMAKE_BINARY_DIR}/src/test/ &&
-  ln -s ${CMAKE_BINARY_DIR}/src/ceph-mon ${CMAKE_BINARY_DIR}/src/test/ &&
-  ln -s ${CMAKE_BINARY_DIR}/ceph ${CMAKE_BINARY_DIR}/src/test/ &&
-  ln -s ${CMAKE_SOURCE_DIR}/qa/ ${CMAKE_BINARY_DIR}/src/
+  ln -sf ${CMAKE_SOURCE_DIR}/src/test/ ${CMAKE_BINARY_DIR}/src/test/ &&
+  ln -sf ${CMAKE_BINARY_DIR}/src/ceph-mon ${CMAKE_BINARY_DIR}/src/test/ &&
+  ln -sf ${CMAKE_BINARY_DIR}/ceph ${CMAKE_BINARY_DIR}/src/test/ &&
+  ln -sf ${CMAKE_SOURCE_DIR}/qa/ ${CMAKE_BINARY_DIR}/src/
   COMMENT "Symlinks have been created")
 
 add_test(NAME ceph_argparse_py COMMAND python ${CMAKE_SOURCE_DIR}/src/test/pybind/test_ceph_argparse.py)
