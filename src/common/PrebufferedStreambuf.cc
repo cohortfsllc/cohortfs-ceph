@@ -5,13 +5,12 @@
 
 using namespace std;
 
-PrebufferedStreambuf::PrebufferedStreambuf(size_t len) : m_len(0)
+PrebufferedStreambuf::PrebufferedStreambuf(string &str)
+  : m_buf(str),
+    m_len(str.size())
 {
-  // reserve memory for the buffer
-  m_buf.resize(len);
-
   // init output buffer
-  setp(&m_buf[0], &m_buf[0] + len);
+  setp(&m_buf[0], &m_buf[0] + m_len);
 
   // so we underflow on first read
   setg(pptr(), pptr(), pptr());
