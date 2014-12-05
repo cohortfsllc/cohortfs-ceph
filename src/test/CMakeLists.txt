@@ -184,7 +184,7 @@ add_executable(test_build_libcommon
   ${build_libcommon_srcs}
   $<TARGET_OBJECTS:common_objs>
   )
-target_link_libraries(test_build_libcommon json_spirit  rt uuid ${Boost_LIBRARIES} ${CDS_LIBS} pthread ${CRYPTO_LIBS} ${EXTRALIBS} global)
+target_link_libraries(test_build_libcommon json_spirit  rt lttng-ust pthread global ${Boost_LIBRARIES} ${CDS_LIBS} ${CRYPTO_LIBS} ${EXTRALIBS})
 
 set(build_librados_srcs
   buildtest_skeleton.cc
@@ -390,10 +390,10 @@ add_custom_target(test_helpers ALL COMMAND chmod 755
   COMMENT "test helper shell scripts have permission and symlinks have been made")
 
 add_custom_target(symlinks ALL COMMAND
-  ln -s ${CMAKE_SOURCE_DIR}/src/test/ ${CMAKE_BINARY_DIR}/src/test/ &&
-  ln -s ${CMAKE_BINARY_DIR}/src/ceph-mon ${CMAKE_BINARY_DIR}/src/test/ &&
-  ln -s ${CMAKE_BINARY_DIR}/ceph ${CMAKE_BINARY_DIR}/src/test/ &&
-  ln -s ${CMAKE_SOURCE_DIR}/qa/ ${CMAKE_BINARY_DIR}/src/
+  ln -sf ${CMAKE_SOURCE_DIR}/src/test/ ${CMAKE_BINARY_DIR}/src/test/ &&
+  ln -sf ${CMAKE_BINARY_DIR}/src/ceph-mon ${CMAKE_BINARY_DIR}/src/test/ &&
+  ln -sf ${CMAKE_BINARY_DIR}/ceph ${CMAKE_BINARY_DIR}/src/test/ &&
+  ln -sf ${CMAKE_SOURCE_DIR}/qa/ ${CMAKE_BINARY_DIR}/src/
   COMMENT "Symlinks have been created")
 
 add_test(NAME ceph_argparse_py COMMAND python ${CMAKE_SOURCE_DIR}/src/test/pybind/test_ceph_argparse.py)

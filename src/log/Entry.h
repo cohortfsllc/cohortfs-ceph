@@ -21,25 +21,27 @@ struct Entry {
   pthread_t m_thread;
   short m_prio, m_subsys;
   Entry *m_next;
+  std::string str;
 
   PrebufferedStreambuf m_streambuf;
 
   Entry()
     : m_thread(0), m_prio(0), m_subsys(0),
       m_next(NULL),
-      m_streambuf(CEPH_LOG_ENTRY_PREALLOC)
+      str(CEPH_LOG_ENTRY_PREALLOC, 0),
+      m_streambuf(str)
   {}
-  Entry(utime_t s, pthread_t t, short pr, short sub,
-	const char *msg = NULL)
+  Entry(utime_t s, pthread_t t, short pr, short sub)
     : m_stamp(s), m_thread(t), m_prio(pr), m_subsys(sub),
       m_next(NULL),
-      m_streambuf(CEPH_LOG_ENTRY_PREALLOC)
-  {
-    if (msg) {
-      ostream os(&m_streambuf);
-      os << msg;
-    }
-  }
+      str(CEPH_LOG_ENTRY_PREALLOC, 0),
+      m_streambuf(str)
+  {}
+  Entry(utime_t s, pthread_t t, short pr, short sub, std::string &prealloc)
+    : m_stamp(s), m_thread(t), m_prio(pr), m_subsys(sub),
+      m_next(NULL),
+      m_streambuf(prealloc)
+  {}
 
   void set_str(const std::string &s) {
     ostream os(&m_streambuf);
