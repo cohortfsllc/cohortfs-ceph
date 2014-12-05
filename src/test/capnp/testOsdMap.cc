@@ -83,6 +83,44 @@ long time_diff_milliseconds(timeval start, timeval end) {
  */
 struct OSDMapCapnP {
 
+  static void set_up_volumes(OSDMap &osdmap, int num_volumes) {
+    // boost::uuids::uuid uuid_memo;
+    for (int i = 0; i < num_volumes; ++i) {
+      // VolumeRef vr(new CohortVolume(CohortVol));
+      // osdmap.create_volume(vr, uuid_memo);
+    }
+  }
+
+  static void set_up_map(OSDMap &osdmap, int num_osds) {
+    boost::uuids::uuid fsid;
+    osdmap.build_simple(g_ceph_context, 0, fsid, num_osds);
+    osdmap.set_flag(1<<3);
+    osdmap.set_flag(1<<10);
+    osdmap.set_flag(1<<21);
+    std::cout << "creating fake flags " << std::hex <<
+      osdmap.get_flags() << std::endl;
+
+    osdmap.created.tv.tv_sec = 999;
+    osdmap.created.tv.tv_nsec = 888;
+
+    OSDMap::Incremental pending_inc(osdmap.get_epoch() + 1);
+    pending_inc.fsid = osdmap.get_fsid();
+    entity_addr_t sample_addr;
+    boost::uuids::uuid sample_uuid;
+    for (int i = 0; i < num_osds; ++i) {
+      sample_uuid.data[i] = i;
+      sample_addr.nonce = i;
+      pending_inc.new_state[i] = CEPH_OSD_EXISTS | CEPH_OSD_NEW;
+      pending_inc.new_up_client[i] = sample_addr;
+      pending_inc.new_up_cluster[i] = sample_addr;
+      pending_inc.new_hb_back_up[i] = sample_addr;
+      pending_inc.new_hb_front_up[i] = sample_addr;
+      pending_inc.new_weight[i] = CEPH_OSD_IN;
+      pending_inc.new_uuid[i] = sample_uuid;
+    }
+    osdmap.apply_incremental(pending_inc);
+  }
+
   static void encodeOSDMap(const OSDMap &map,
 			   Captain::OSDMap::Builder &msg) {
     const int volumeVersion = 0;
@@ -209,6 +247,8 @@ struct OSDMapCapnP {
 
     std::cout << "decoding flags " << std::hex << r.getFlags() << std::endl;
 
+    std::cout << "decoding created " << decodeUTime(r.getCreated()) << std::endl;
+
     boost::uuids::uuid fsid;
     {
       Captain::Uuid::Reader r2 = r.getFsid();
@@ -312,39 +352,6 @@ struct OSDMapCapnP {
 }; // struct OSDMapCapnP
 
 
-void set_up_volumes(OSDMap &osdmap, int num_volumes) {
-  // boost::uuids::uuid uuid_memo;
-  for (int i = 0; i < num_volumes; ++i) {
-    // VolumeRef vr(new CohortVolume(CohortVol));
-    // osdmap.create_volume(vr, uuid_memo);
-  }
-}
-
-void set_up_map(OSDMap &osdmap, int num_osds) {
-  boost::uuids::uuid fsid;
-  osdmap.build_simple(g_ceph_context, 0, fsid, num_osds);
-  osdmap.set_flag(1<<3);
-  osdmap.set_flag(1<<10);
-  osdmap.set_flag(1<<21);
-  std::cout << "creating fake flags " << std::hex <<
-    osdmap.get_flags() << std::endl;
-  OSDMap::Incremental pending_inc(osdmap.get_epoch() + 1);
-  pending_inc.fsid = osdmap.get_fsid();
-  entity_addr_t sample_addr;
-  boost::uuids::uuid sample_uuid;
-  for (int i = 0; i < num_osds; ++i) {
-    sample_uuid.data[i] = i;
-    sample_addr.nonce = i;
-    pending_inc.new_state[i] = CEPH_OSD_EXISTS | CEPH_OSD_NEW;
-    pending_inc.new_up_client[i] = sample_addr;
-    pending_inc.new_up_cluster[i] = sample_addr;
-    pending_inc.new_hb_back_up[i] = sample_addr;
-    pending_inc.new_hb_front_up[i] = sample_addr;
-    pending_inc.new_weight[i] = CEPH_OSD_IN;
-    pending_inc.new_uuid[i] = sample_uuid;
-  }
-  osdmap.apply_incremental(pending_inc);
-}
 
 
 void test_present_encode(const OSDMap &osdMap, int iterations = 1000) {
@@ -480,8 +487,8 @@ int main(int argc, char* argv[]) {
   // our map is flat, so just try and split across OSDs, not hosts or whatever
   g_ceph_context->_conf->set_val("osd_crush_chooseleaf_type", "0", false);
 
-  set_up_map(osdmap, num_osds);
-  set_up_volumes(osdmap, num_volumes);
+  OSDMapCapnP::set_up_map(osdmap, num_osds);
+  OSDMapCapnP::set_up_volumes(osdmap, num_volumes);
 
   const bool skip = true;
   if (!skip) {

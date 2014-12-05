@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+
 #include "ceph-common.capnp.h"
 
 
@@ -5,7 +7,7 @@ using namespace kj;
 
 
 inline void encodeUuid(Captain::Uuid::Builder to,
-		const boost::uuids::uuid &from) {
+                       const boost::uuids::uuid &from) {
   std::cout << "size of uuid is " << sizeof(from) << std::endl;
   to.initUuid(sizeof(from));
   ::capnp::Data::Reader data(reinterpret_cast<const byte*>(&from),
@@ -15,7 +17,7 @@ inline void encodeUuid(Captain::Uuid::Builder to,
 
 
 inline void decodeUuid(boost::uuids::uuid &uuid,
-		const Captain::Uuid::Reader &from) {
+                       const Captain::Uuid::Reader &from) {
   memcpy(&uuid, from.getUuid().begin(), from.getUuid().size());
 }
 
@@ -28,7 +30,7 @@ inline boost::uuids::uuid decodeUuid(const Captain::Uuid::Reader &from) {
 
 
 inline void encodeEntityAddr(Captain::EntityAddr::Builder to,
-		      const entity_addr_t &from) {
+                             const entity_addr_t &from) {
   to.setType(from.type);
   to.setNonce(from.nonce);
 
@@ -39,7 +41,7 @@ inline void encodeEntityAddr(Captain::EntityAddr::Builder to,
 
 
 inline void decodeEntityAddr(entity_addr_t &to,
-		      Captain::EntityAddr::Reader from) {
+                             Captain::EntityAddr::Reader from) {
   to.type = from.getType();
   to.nonce = from.getNonce();
   assert(sizeof(to.addr) == from.getAddr().size());
@@ -55,7 +57,7 @@ inline entity_addr_t decodeEntityAddr(Captain::EntityAddr::Reader from) {
 
 
 inline void encodeListEntityAddr(::capnp::List<Captain::EntityAddr>::Builder to,
-			  vector<std::shared_ptr<entity_addr_t> > from) {
+                                 vector<std::shared_ptr<entity_addr_t> > from) {
   vector<std::shared_ptr<entity_addr_t> >::const_iterator c;
   int i;
   for (c = from.begin(), i = 0; c != from.end(); ++i, ++c) {
@@ -66,11 +68,11 @@ inline void encodeListEntityAddr(::capnp::List<Captain::EntityAddr>::Builder to,
 
 
 inline void decodeListEntityAddr(vector<std::shared_ptr<entity_addr_t> > &to,
-			  ::capnp::List<Captain::EntityAddr>::Reader from) {
+                                 ::capnp::List<Captain::EntityAddr>::Reader from) {
   for (auto c = from.begin(); c != from.end(); ++c) {
     entity_addr_t *entityAddr = new entity_addr_t();
     decodeEntityAddr(*entityAddr, *c);
-    to.push_back(shared_ptr<entity_addr_t>(entityAddr));
+    to.push_back(std::shared_ptr<entity_addr_t>(entityAddr));
   }
 }
 
