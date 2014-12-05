@@ -14,11 +14,13 @@
 #include "common/common_init.h"
 
 #include <capnp/message.h>
-#include <capnp/serialize-packed.h>
+// #include <capnp/serialize-packed.h>
+#include <capnp/serialize.h>
 
 #include <iostream>
 #include <map>
 #include <sys/time.h>
+#include <boost/uuid/random_generator.hpp>
 
 #include "OSDMap.capnp.h"
 #include "capnp-common.h"
@@ -29,6 +31,10 @@ using namespace kj;
 
 
 typedef kj::ArrayPtr<const kj::ArrayPtr<const ::capnp::word>> segments_t;
+
+
+const bool encode_fsid = true;
+
 
 size_t total_size(const segments_t &segments) {
   size_t total = 0;
@@ -94,14 +100,17 @@ struct OSDMapCapnP {
   static void set_up_map(OSDMap &osdmap, int num_osds) {
     boost::uuids::uuid fsid;
     osdmap.build_simple(g_ceph_context, 0, fsid, num_osds);
+
+    /*
     osdmap.set_flag(1<<3);
     osdmap.set_flag(1<<10);
     osdmap.set_flag(1<<21);
     std::cout << "creating fake flags " << std::hex <<
-      osdmap.get_flags() << std::endl;
+    osdmap.get_flags() << std::dec << std::endl;
 
     osdmap.created.tv.tv_sec = 999;
     osdmap.created.tv.tv_nsec = 888;
+    */
 
     OSDMap::Incremental pending_inc(osdmap.get_epoch() + 1);
     pending_inc.fsid = osdmap.get_fsid();
@@ -118,24 +127,34 @@ struct OSDMapCapnP {
       pending_inc.new_weight[i] = CEPH_OSD_IN;
       pending_inc.new_uuid[i] = sample_uuid;
     }
+
     osdmap.apply_incremental(pending_inc);
   }
 
   static void encodeOSDMap(const OSDMap &map,
-			   Captain::OSDMap::Builder &msg) {
+			   Captain::OSDMap::Builder msg) {
     const int volumeVersion = 0;
 
     msg.setMaxOsd(map.get_max_osd());
-    encodeUuid(msg.initFsid(), map.get_fsid());
-
-    std::cout << "encoding maxOSD to " << map.get_max_osd() << std::endl;
-    std::cout << "encoding flags " << std::hex << map.get_flags() << std::endl;
-    std::cout << "encoding fsid " << map.get_fsid() << std::endl;
+    if (encode_fsid) {
+      encodeUuid(msg.initFsid(), map.get_fsid());
+    }
 
     msg.initEpoch().setEpoch(map.get_epoch());
     encodeUTime(msg.initCreated(), map.get_created());
     encodeUTime(msg.initModified(), map.get_modified());
     msg.setFlags(map.get_flags());
+
+    std::cout << "encoding maxOSD to " << map.get_max_osd() << std::endl;
+    std::cout << "encoding fsid " << map.get_fsid() << std::endl;
+    std::cout << "encoding epoch " << map.get_epoch() << std::endl;
+    std::cout << "encoding created " << map.get_created() << " " <<
+      map.get_created().tv.tv_sec << " " <<
+      map.get_created().tv.tv_nsec << std::endl;
+    std::cout << "encoding modified " << map.get_modified() << std::endl;
+    std::cout << "encoding flags " << std::hex << map.get_flags() <<
+      std::dec << std::endl;
+    /*
 
     // osd states and weights
 
@@ -231,6 +250,8 @@ struct OSDMapCapnP {
 	encodeUTime(cto->initTime(), cfrom->second);
       }
     } // scope block
+
+    */
   } // buildOSDMapMessage
 
 
@@ -245,15 +266,8 @@ struct OSDMapCapnP {
     int32_t maxOsd = r.getMaxOsd();
     std::cout << "decoding maxOSD to " << maxOsd << std::endl;
 
-    std::cout << "decoding flags " << std::hex << r.getFlags() << std::endl;
-
-    std::cout << "decoding created " << decodeUTime(r.getCreated()) << std::endl;
-
     boost::uuids::uuid fsid;
-    {
-      Captain::Uuid::Reader r2 = r.getFsid();
-      fsid = decodeUuid(r2);
-    }
+    fsid = decodeUuid(r.getFsid());
     std::cout << "decoding fsid " << fsid << std::endl;
 
     m.build_simple(g_ceph_context,
@@ -261,12 +275,12 @@ struct OSDMapCapnP {
 		   fsid,
 		   maxOsd);
 
-    // fsid set by call to build_simple above
     m.epoch = r.getEpoch().getEpoch();
     m.created = decodeUTime(r.getCreated());
     m.modified = decodeUTime(r.getModified());
     m.flags = r.getFlags();
-    // max osd set by call to build_simple above
+
+    /*
 	
     for (int i = 0; i < maxOsd; ++i) {
       m.set_state(i, r.getOsdState()[i]);
@@ -346,6 +360,9 @@ struct OSDMapCapnP {
       }
     } // scope block
 
+    */
+
+    std::cout << "Done decoding." << std::endl;
     return m;
   } // function decodeOSDMap
 
@@ -429,12 +446,12 @@ void map_to_file(const OSDMap &osdMap, int fd) {
     messageBuilder.initRoot<Captain::OSDMap>();
 
   OSDMapCapnP::encodeOSDMap(osdMap, message);
-  ::capnp::writePackedMessageToFd(fd, messageBuilder);
+  ::capnp::writeMessageToFd(fd, messageBuilder);
 }
 
 
 Captain::OSDMap::Reader file_to_reader(int fd) {
-  ::capnp::PackedFdMessageReader messageReader(fd);
+  ::capnp::StreamFdMessageReader messageReader(fd);
   Captain::OSDMap::Reader mapReader =
     messageReader.getRoot<Captain::OSDMap>();
   return mapReader;
@@ -476,10 +493,13 @@ int main(int argc, char* argv[]) {
   const int num_osds = 100;
   const int num_volumes = 20;
   const int iterations = 10000;
+  const char* path = "/tmp/osdmap.message";
+
   OSDMap osdmap;
   std::vector<const char *> preargs;
   std::vector<const char*> args(argv, argv+argc);
-  global_init(&preargs, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY,
+  global_init(&preargs, args, CEPH_ENTITY_TYPE_CLIENT,
+	      CODE_ENVIRONMENT_UTILITY,
 	      CINIT_FLAG_NO_DEFAULT_CONFIG_FILE);
   common_init_finish(g_ceph_context);
   // make sure we have 3 copies, or some tests won't work
@@ -505,11 +525,12 @@ int main(int argc, char* argv[]) {
     test_present_decode(bl, iterations);
   }
 
-  int fd = open("/tmp/capnp.message", O_RDWR | O_CREAT, 0666);
+  int fd = open(path, O_RDWR | O_CREAT | O_TRUNC, 0666);
   map_to_file(osdmap, fd);
-  lseek(fd, 0, SEEK_SET); // seek to start so we can read it back in
-  Captain::OSDMap::Reader reader = file_to_reader(fd);
   close(fd);
 
-  test_capnp_decode(reader, iterations);
+  fd = open(path, O_RDONLY);
+  Captain::OSDMap::Reader reader = file_to_reader(fd);
+  test_capnp_decode(reader, 1);
+  close(fd);
 }

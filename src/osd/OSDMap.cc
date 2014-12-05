@@ -1081,7 +1081,7 @@ int OSDMap::build_simple(CephContext *cct, epoch_t e,
   set_fsid(fsid);
   created = modified = ceph_clock_now(cct);
 
-  if (nosd >=  0) {
+  if (nosd >= 0) {
     set_max_osd(nosd);
   } else {
     // count osds
