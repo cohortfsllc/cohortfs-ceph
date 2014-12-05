@@ -188,18 +188,16 @@ void Log::submit_entry(Entry *e)
 
 Entry *Log::create_entry(int level, int subsys)
 {
-  if (true) {
+  // if lttng logging, thread_local string going into streambuf
+  if (m_lttng_enabled) {
+    thread_local std::string prealloc;
+    return new Entry(ceph_clock_now(NULL),
+		   pthread_self(),
+		   level, subsys, prealloc);
+  } else {
     return new Entry(ceph_clock_now(NULL),
 		   pthread_self(),
 		   level, subsys);
-  } else {
-    // kludge for perf testing
-    Entry *e = m_recent.dequeue();
-    e->m_stamp = ceph_clock_now(NULL);
-    e->m_thread = pthread_self();
-    e->m_prio = level;
-    e->m_subsys = subsys;
-    return e;
   }
 }
 
