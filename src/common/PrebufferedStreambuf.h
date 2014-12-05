@@ -25,7 +25,7 @@ class PrebufferedStreambuf
   typedef traits_ty::pos_type pos_type;
   typedef traits_ty::off_type off_type;
 
-  std::string m_buf;
+  std::string &m_buf;
   pos_type m_len;
 
 protected:
@@ -36,7 +36,7 @@ protected:
       std::ios_base::openmode which = std::ios_base::in | std::ios_base::out);
 
 public:
-  PrebufferedStreambuf(size_t len);
+  PrebufferedStreambuf(std::string &str);
 
   // called when the buffer fills up
   int_type overflow(int_type c);
