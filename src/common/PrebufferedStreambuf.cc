@@ -3,6 +3,9 @@
 
 #include "common/PrebufferedStreambuf.h"
 
+// minimum size of first reallocation
+#define MIN_REALLOC_SIZE 64
+
 using namespace std;
 
 PrebufferedStreambuf::PrebufferedStreambuf(string &str)
@@ -22,6 +25,8 @@ PrebufferedStreambuf::int_type PrebufferedStreambuf::overflow(int_type c)
   if (m_buf.size() < m_buf.capacity()) {
     // overflow after get_str()
     m_buf.resize(m_buf.capacity());
+  } else if (old_len * 2 < MIN_REALLOC_SIZE) {
+    m_buf.resize(MIN_REALLOC_SIZE);
   } else {
     // double buffer length
     m_buf.resize(old_len * 2);

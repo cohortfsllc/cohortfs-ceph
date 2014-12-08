@@ -29,6 +29,20 @@ TEST(PrebufferedStreambuf, Simple)
   ASSERT_EQ("test", out);
 }
 
+TEST(PrebufferedStreambuf, SimpleNoPrealloc)
+{
+  std::string sbstr;
+  PrebufferedStreambuf sb(sbstr);
+
+  std::ostream os(&sb);
+  os << "test";
+
+  std::istream is(&sb);
+  std::string out;
+  getline(is, out);
+  ASSERT_EQ("test", out);
+}
+
 TEST(PrebufferedStreambuf, Multiline)
 {
   std::string sbstr(10, '\0');
