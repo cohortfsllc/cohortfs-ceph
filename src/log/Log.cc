@@ -190,7 +190,7 @@ Entry *Log::create_entry(int level, int subsys)
 {
   // if lttng logging, thread_local string going into streambuf
   if (m_lttng_enabled) {
-    thread_local std::string prealloc;
+    thread_local std::string prealloc(CEPH_LOG_ENTRY_PREALLOC, 0);
     return new Entry(ceph_clock_now(NULL),
 		   pthread_self(),
 		   level, subsys, prealloc);
