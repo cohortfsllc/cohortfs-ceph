@@ -5,7 +5,7 @@
 
 #define TRACEPOINT_PROVIDER ceph
 #undef TRACEPOINT_INCLUDE
-#define TRACEPOINT_INCLUDE "/home/ali/ceph-local/src/log/LttngLog.h"
+#define TRACEPOINT_INCLUDE "log/LttngLog.h"
 
 #if !defined(CEPH_LOG_LTTNGLOG_H) || defined(TRACEPOINT_HEADER_MULTI_READ)
 #define CEPH_LOG_LTTNGLOG_H
