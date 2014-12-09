@@ -12,18 +12,18 @@ struct OSDMap {
     created       @3 :Ceph.UTime;
     modified      @4 :Ceph.UTime;
     flags         @5 :UInt32;
-#    structV       @6 :UInt8;
-#    structCompat  @7 :UInt8;
-#    structLen     @8 :UInt32;
-#    osdState      @9 :List(UInt8);
-#    osdWeight    @10 :List(UInt32);
-#    volumes      @11 :List(Volume);
-#    hbBackAddr   @12 :List(Ceph.EntityAddr);
-#    osdInfo      @13 :List(OsdInfo);
-#    blacklist    @14 :List(Ceph.EntityAddrUTimePair);
-#    clusterAddr  @15 :List(Ceph.EntityAddr);
-#    osdUuid      @16 :List(Ceph.Uuid);
-#    osdXInfo     @17 :List(OsdXInfo);
+    structV       @6 :UInt8;
+    structCompat  @7 :UInt8;
+    structLen     @8 :UInt32;
+    osdState      @9 :List(UInt8);
+    osdWeight    @10 :List(UInt32);
+    osdInfo      @11 :List(OsdInfo);
+    osdXInfo     @12 :List(OsdXInfo);
+#    volumes      @13 :List(Volume);
+#    hbBackAddr   @14 :List(Ceph.EntityAddr);
+#    blacklist    @15 :List(Ceph.EntityAddrUTimePair);
+#    clusterAddr  @16 :List(Ceph.EntityAddr);
+#    osdUuid      @17 :List(Ceph.Uuid);
 #    hbFrontAddr  @18 :List(Ceph.EntityAddr);
 }
 

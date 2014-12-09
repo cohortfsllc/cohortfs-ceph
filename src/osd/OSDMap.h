@@ -178,7 +178,7 @@ public:
       increment.id = id;
       vol_removals.push_back(increment);
     }
-  };
+  }; // class Incremental
 
 private:
   boost::uuids::uuid fsid;

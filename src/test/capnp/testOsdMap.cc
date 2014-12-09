@@ -126,19 +126,22 @@ struct OSDMapCapnP {
       pending_inc.new_hb_front_up[i] = sample_addr;
       pending_inc.new_weight[i] = CEPH_OSD_IN;
       pending_inc.new_uuid[i] = sample_uuid;
+      pending_inc.new_xinfo[i].laggy_interval = i;
     }
 
     osdmap.apply_incremental(pending_inc);
+
+    for (int i = 0; i < num_osds; ++i) {
+      osdmap.osd_info[i].up_from = i;
+    }
   }
 
   static void encodeOSDMap(const OSDMap &map,
 			   Captain::OSDMap::Builder msg) {
-    const int volumeVersion = 0;
+    // const int volumeVersion = 0;
 
     msg.setMaxOsd(map.get_max_osd());
-    if (encode_fsid) {
-      encodeUuid(msg.initFsid(), map.get_fsid());
-    }
+    encodeUuid(msg.initFsid(), map.get_fsid());
 
     msg.initEpoch().setEpoch(map.get_epoch());
     encodeUTime(msg.initCreated(), map.get_created());
@@ -154,9 +157,8 @@ struct OSDMapCapnP {
     std::cout << "encoding modified " << map.get_modified() << std::endl;
     std::cout << "encoding flags " << std::hex << map.get_flags() <<
       std::dec << std::endl;
-    /*
 
-    // osd states and weights
+    // osd states, weights, infos, and xinfos
 
     ::capnp::List<uint8_t>::Builder osdState =
 	msg.initOsdState(map.get_max_osd());
@@ -165,8 +167,10 @@ struct OSDMapCapnP {
     ::capnp::List<Captain::OsdInfo>::Builder osdInfos =
 	msg.initOsdInfo(map.get_max_osd());
     ::capnp::List<Captain::OsdXInfo>::Builder osdXInfos =
-	msg.initOsdXInfo(map.get_max_osd());
+    	msg.initOsdXInfo(map.get_max_osd());
+
     for (int i = 0; i < map.get_max_osd(); ++i) {
+      std::cout << "encoding w i as " << i << std::endl;
       osdState.set(i, map.get_state(i));
       osdWeight.set(i, map.get_weight(i));
 
@@ -188,6 +192,15 @@ struct OSDMapCapnP {
       }
     }
 
+    std::cout << "encoded first and last states: " <<
+      map.get_state(0) << " , " <<
+      map.get_state(map.max_osd - 1) << std::endl;
+
+    std::cout << "encoded first and last weights: " <<
+      map.get_weight(0) << " , " <<
+      map.get_weight(map.max_osd - 1) << std::endl;
+
+    /*
     // volumes
 
     { // scope block so i and c are only valid for loop
@@ -280,22 +293,33 @@ struct OSDMapCapnP {
     m.modified = decodeUTime(r.getModified());
     m.flags = r.getFlags();
 
-    /*
-	
+    assert(r.hasOsdInfo());
+    assert(r.hasOsdXInfo());
+
+    auto infoReader = r.getOsdInfo();
+    assert(infoReader.size() == (unsigned) maxOsd);
+
+    auto xInfoReader = r.getOsdXInfo();
+    assert(xInfoReader.size() == (unsigned) maxOsd);
+
     for (int i = 0; i < maxOsd; ++i) {
+      std::cout << "i is " << i << std::endl;
       m.set_state(i, r.getOsdState()[i]);
       m.set_weight(i, r.getOsdWeight()[i]);
+
       {
 	osd_info_t &m_info = m.osd_info[i];
-	Captain::OsdInfo::Reader r_info = r.getOsdInfo()[i];
+	Captain::OsdInfo::Reader r_info = infoReader[i];
 
 	m_info.up_from = r_info.getUpFrom().getEpoch();
 	m_info.up_thru = r_info.getUpThru().getEpoch();
 	m_info.down_at = r_info.getDownAt().getEpoch();
       }
+
+      /*
       {
 	osd_xinfo_t &m_xinfo = m.osd_xinfo[i];
-	Captain::OsdXInfo::Reader r_xinfo = r.getOsdXInfo()[i];
+	Captain::OsdXInfo::Reader r_xinfo = xInfoReader[i];
 
 	m_xinfo.down_stamp = decodeUTime(r_xinfo.getDownStamp());
 	m_xinfo.laggy_probability = r_xinfo.getLaggyProbability();
@@ -303,7 +327,18 @@ struct OSDMapCapnP {
 	  (float)r_xinfo.getLaggyInterval() / (float)0xffffffff;
 	m_xinfo.features = r_xinfo.getFeatures();
       }
+      */
     } // for loop
+
+    std::cout << "decoded first and last states: " <<
+      m.get_state(0) << " , " <<
+      m.get_state(maxOsd - 1) << std::endl;
+
+    std::cout << "decoded first and last weights: " <<
+      m.get_weight(0) << " , " <<
+      m.get_weight(maxOsd - 1) << std::endl;
+
+    /*
 
     // volumes
 
@@ -519,7 +554,7 @@ int main(int argc, char* argv[]) {
     osdmap.encode(bl);
     // dump_bufferlist(bl);
 
-    segments_t segments = map_to_segments(osdmap);
+    // segments_t segments = map_to_segments(osdmap);
     // dump_segments(segments);
 
     test_present_decode(bl, iterations);
