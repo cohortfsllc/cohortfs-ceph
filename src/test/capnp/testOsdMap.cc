@@ -126,7 +126,10 @@ struct OSDMapCapnP {
       pending_inc.new_hb_front_up[i] = sample_addr;
       pending_inc.new_weight[i] = CEPH_OSD_IN;
       pending_inc.new_uuid[i] = sample_uuid;
-      pending_inc.new_xinfo[i].laggy_interval = i;
+      osd_xinfo_t ox;
+      ox.laggy_interval = i;
+      ox.laggy_probability = (float) i/150.0f;
+      pending_inc.new_xinfo[i] = ox;
     }
 
     osdmap.apply_incremental(pending_inc);
@@ -186,7 +189,8 @@ struct OSDMapCapnP {
 	const osd_xinfo_t &xinfo = map.get_xinfo(i);
 
 	encodeUTime(osdXInfo.initDownStamp(), xinfo.down_stamp);
-	osdXInfo.setLaggyProbability(xinfo.laggy_probability * 0xffffffffu);
+	osdXInfo.setLaggyProbability((uint32_t) (xinfo.laggy_probability *
+						 0xffffffffu));
 	osdXInfo.setLaggyInterval(xinfo.laggy_interval);
 	osdXInfo.setFeatures(xinfo.features);
       }
@@ -316,18 +320,16 @@ struct OSDMapCapnP {
 	m_info.down_at = r_info.getDownAt().getEpoch();
       }
 
-      /*
       {
 	osd_xinfo_t &m_xinfo = m.osd_xinfo[i];
 	Captain::OsdXInfo::Reader r_xinfo = xInfoReader[i];
 
 	m_xinfo.down_stamp = decodeUTime(r_xinfo.getDownStamp());
-	m_xinfo.laggy_probability = r_xinfo.getLaggyProbability();
-	m_xinfo.laggy_interval =
-	  (float)r_xinfo.getLaggyInterval() / (float)0xffffffff;
+	m_xinfo.laggy_interval = r_xinfo.getLaggyInterval();
+	m_xinfo.laggy_probability =
+	  (float)r_xinfo.getLaggyProbability() / (float)0xffffffff;
 	m_xinfo.features = r_xinfo.getFeatures();
       }
-      */
     } // for loop
 
     std::cout << "decoded first and last states: " <<
@@ -337,6 +339,14 @@ struct OSDMapCapnP {
     std::cout << "decoded first and last weights: " <<
       m.get_weight(0) << " , " <<
       m.get_weight(maxOsd - 1) << std::endl;
+
+    std::cout << "decoded first and last upfrom: " <<
+      m.osd_info[0].up_from << " , " <<
+      m.osd_info[maxOsd - 1].up_from << std::endl;
+
+    std::cout << "decoded first and last laggy intervals: " <<
+      m.osd_xinfo[0].laggy_interval << " , " <<
+      m.osd_xinfo[maxOsd - 1].laggy_interval << std::endl;
 
     /*
 
@@ -525,7 +535,7 @@ void test_capnp_decode(Captain::OSDMap::Reader reader,
 
 
 int main(int argc, char* argv[]) {
-  const int num_osds = 100;
+  const int num_osds = 94; // works @ 94 ; fails @ 95
   const int num_volumes = 20;
   const int iterations = 10000;
   const char* path = "/tmp/osdmap.message";
