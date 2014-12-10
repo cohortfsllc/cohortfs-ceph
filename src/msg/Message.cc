@@ -590,6 +590,16 @@ Message *decode_message(CephContext *cct, int crcflags,
     return 0;
   }
 
+  if (m->trace) {
+    m->trace.event("decode_message");
+    {
+      ostringstream oss;
+      oss << m->get_source_addr();
+      m->trace.keyval("From", oss.str().c_str());
+    }
+    m->trace.keyval("Receiver", cct->_conf->name.to_cstr());
+  }
+
   // done!
   return m;
 }

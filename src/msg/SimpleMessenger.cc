@@ -414,6 +414,7 @@ void SimpleMessenger::submit_message(Message *m, Connection *con,
     *_dout << dendl;
     m->clear_payload();
   }
+  m->trace.event("SimpleMessenger::submit_message");
 
   // existing connection?
   if (con) {
