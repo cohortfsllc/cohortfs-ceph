@@ -1191,7 +1191,7 @@ void Objecter::send_op(Op *op)
   op->trace.keyval("want onack", op->onack ? 1 : 0);
   op->trace.keyval("want oncommit", op->oncommit ? 1 : 0);
   op->trace.event("send_op", &trace_endpoint);
-  m->trace_info = *op->trace.get_info();
+  m->trace = op->trace;
 
   if (op->replay_version != eversion_t())
     m->set_version(op->replay_version);	 // we're replaying this op!

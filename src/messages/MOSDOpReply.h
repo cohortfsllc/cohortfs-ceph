@@ -149,7 +149,7 @@ public:
 
     ::encode(replay_version, payload);
     ::encode(user_version, payload);
-    ::encode(trace_info, payload);
+    encode_trace(payload);
   }
   virtual void decode_payload() {
     bufferlist::iterator p = payload.begin();
@@ -174,7 +174,7 @@ public:
     OSDOp::split_osd_op_vector_out_data(ops, data);
     ::decode(replay_version, p);
     ::decode(user_version, p);
-    ::decode(trace_info, p);
+    decode_trace(p, "MOSDOpReply", true);
   }
 
   const char *get_type_name() const { return "osd_op_reply"; }

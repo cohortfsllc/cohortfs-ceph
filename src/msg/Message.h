@@ -139,8 +139,6 @@
 
 namespace bi = boost::intrusive;
 
-WRITE_RAW_ENCODER(blkin_trace_info)
-
 class Message : public RefCountedObject {
 protected:
   ceph_msg_header  header;	// headerelope
@@ -168,7 +166,10 @@ protected:
   bi::list_member_hook<> dispatch_q;
 
 public:
-  blkin_trace_info trace_info; // zipkin tracing
+  // zipkin tracing
+  ZTracer::Trace trace;
+  void encode_trace(bufferlist &bl) const;
+  void decode_trace(bufferlist::iterator &p, const char *name, bool create);
 
   class CompletionHook : public Context {
   protected:
@@ -217,7 +218,6 @@ public:
       dispatch_throttle_size(0) {
     memset(&header, 0, sizeof(header));
     memset(&footer, 0, sizeof(footer));
-    memset(&trace_info, 0, sizeof(trace_info));
   };
   Message(int t, int version=1, int compat_version=0)
     : connection(NULL),
@@ -233,7 +233,6 @@ public:
     header.priority = 0;  // undef
     header.data_off = 0;
     memset(&footer, 0, sizeof(footer));
-    memset(&trace_info, 0, sizeof(trace_info));
   }
 
   Message *get() {
@@ -415,7 +414,8 @@ typedef boost::intrusive_ptr<Message> MessageRef;
 extern Message *decode_message(CephContext *cct, int crcflags,
 			       ceph_msg_header &header,
 			       ceph_msg_footer& footer, bufferlist& front,
-			       bufferlist& middle, bufferlist& data);
+			       bufferlist& middle, bufferlist& data,
+                               Connection *conn = nullptr);
 inline std::ostream& operator<<(std::ostream& out, Message& m) {
   m.print(out);
   if (m.get_header().version)

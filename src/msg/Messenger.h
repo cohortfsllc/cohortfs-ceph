@@ -129,7 +129,7 @@ public:
    * or use the create() function.
    */
   Messenger(CephContext *cct_, entity_name_t w)
-    : trace_endpoint(NULL, 0, "Messenger"),
+    : trace_endpoint("0.0.0.0", 0, "Messenger"),
       my_inst(),
       default_send_priority(CEPH_MSG_PRIO_DEFAULT), started(false),
       magic(0), cct(cct_),

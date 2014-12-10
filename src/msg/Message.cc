@@ -204,7 +204,7 @@ Message *decode_message(CephContext *cct, int crcflags,
 			ceph_msg_header& header,
 			ceph_msg_footer& footer,
 			bufferlist& front, bufferlist& middle,
-			bufferlist& data)
+			bufferlist& data, Connection *conn)
 {
   // verify crc
   if (crcflags & MSG_CRC_HEADER) {
@@ -565,6 +565,7 @@ Message *decode_message(CephContext *cct, int crcflags,
     return 0;
   }
 
+  m->set_connection(conn);
   m->set_header(header);
   m->set_footer(footer);
   m->set_payload(front);
@@ -593,6 +594,28 @@ Message *decode_message(CephContext *cct, int crcflags,
   return m;
 }
 
+
+WRITE_RAW_ENCODER(blkin_trace_info)
+
+void Message::encode_trace(bufferlist &bl) const
+{
+  ::encode(*trace.get_info(), bl);
+}
+
+void Message::decode_trace(bufferlist::iterator &p,
+                           const char *name, bool create)
+{
+  Messenger *msgr = connection ? connection->get_messenger() : NULL;
+  const ZTracer::Endpoint *endpoint = msgr ? msgr->get_trace_endpoint() : NULL;
+
+  blkin_trace_info info;
+  ::decode(info, p);
+  if (info.trace_id) {
+    trace.init(name, endpoint, &info, true);
+  } else if (create) {
+    trace.init(name, endpoint);
+  }
+}
 
 // This routine is not used for ordinary messages, but only when encapsulating a message
 // for forwarding and routing.	It's also used in a backward compatibility test, which only

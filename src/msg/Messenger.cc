@@ -19,19 +19,21 @@ Messenger *Messenger::create(CephContext *cct,
 
 void Messenger::set_endpoint_addr(const sockaddr_storage &ss, int port)
 {
-  char buf[NI_MAXHOST] = { 0 };
   size_t hostlen;
-
   if (ss.ss_family == AF_INET)
     hostlen = sizeof(struct sockaddr_in);
   else if (ss.ss_family == AF_INET6)
     hostlen = sizeof(struct sockaddr_in6);
   else
-    hostlen = sizeof(struct sockaddr_storage);
-  getnameinfo((struct sockaddr *)&ss, hostlen, buf, sizeof(buf),
-      NULL, 0, NI_NUMERICHOST);
+    hostlen = 0;
 
-  trace_endpoint.copy_ip(buf);
+  if (hostlen) {
+    char buf[NI_MAXHOST] = { 0 };
+    getnameinfo((struct sockaddr *)&ss, hostlen, buf, sizeof(buf),
+                NULL, 0, NI_NUMERICHOST);
+
+    trace_endpoint.copy_ip(buf);
+  }
   trace_endpoint.set_port(port);
 }
 
