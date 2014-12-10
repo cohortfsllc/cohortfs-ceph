@@ -32,8 +32,10 @@ TEST(Log, Simple)
       Entry *e = new Entry(ceph_clock_now(NULL),
 			   pthread_self(),
 			   l,
-			   sys,
-			   "hello world");
+			   sys);
+        ostream os(&e->m_streambuf);
+        os << "hello world";
+
       log.submit_entry(e);
     }
   }
@@ -75,9 +77,13 @@ TEST(Log, ManyGatherLog)
   log.reopen_log_file();
   for (int i=0; i<many; i++) {
     int l = 10;
-    if (subs.should_gather(1, l))
-      log.submit_entry(new Entry(ceph_clock_now(NULL), pthread_self(), l, 1,
-				 "this is a long string asdf asdf asdf asdf asdf asdf asd fasd fasdf "));
+    if (subs.should_gather(1, l)) {
+      Entry *e = new Entry(ceph_clock_now(NULL), pthread_self(), l, 1);
+        ostream os(&e->m_streambuf);
+        os << "this is a long string asdf asdf asdf asdf asdf asdf asd fasd fasdf";
+
+        log.submit_entry(e);
+    }
   }
   log.flush();
   log.stop();
@@ -161,7 +167,8 @@ TEST(Log, ManyGatherLogPrebufOverflow)
     int l = 10;
     if (subs.should_gather(1, l)) {
       Entry *e = new Entry(ceph_clock_now(NULL), pthread_self(), l, 1);
-      PrebufferedStreambuf psb(20);
+      std::string foo(20,0);
+      PrebufferedStreambuf psb(foo);
       ostream oss(&psb);
       oss << "this i a long stream asdf asdf asdf asdf asdf asdf asdf asdf asdf as fd";
       //e->m_str = oss.str();

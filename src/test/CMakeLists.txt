@@ -390,6 +390,7 @@ add_custom_target(symlinks ALL COMMAND
   ln -sf ${CMAKE_BINARY_DIR}/ceph ${CMAKE_BINARY_DIR}/src/test/ &&
   ln -sf ${CMAKE_SOURCE_DIR}/qa/ ${CMAKE_BINARY_DIR}/src/
   COMMENT "Symlinks have been created")
+add_dependencies(check symlinks)
 
 add_test(NAME ceph_argparse_py COMMAND python ${CMAKE_SOURCE_DIR}/src/test/pybind/test_ceph_argparse.py)
 add_dependencies(check ceph_argparse_py)
