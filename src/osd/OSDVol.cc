@@ -73,7 +73,7 @@ OSDVol::OSDVol(OSDService *o, OSDMapRef curmap,
 {
   // construct name for trace_endpoint
   {
-    stringstream name;
+    ostringstream name;
     name << "OSDVol";
 
     VolumeRef vol;
@@ -203,7 +203,7 @@ void OSDVol::queue_op(OpRequestRef op)
     waiting_for_map.push_back(op);
     return;
   }
-  op->trace.event("queue_op");
+  op->trace.event("queue_op", &trace_endpoint);
   osd->op_wq.queue(make_pair(OSDVolRef(this), op));
 }
 
@@ -2298,6 +2298,15 @@ void OSDVol::eval_mutation(Mutation *mutation)
 	reply->add_flags(CEPH_OSD_FLAG_ACK | CEPH_OSD_FLAG_ONDISK);
 	dout(10) << " sending commit on " << mutation->tid << " "
 		 << reply << dendl;
+
+        if (mutation->ctx->op->trace) {
+          mutation->ctx->op->trace.event("eval_mutation sending commit",
+                                         &trace_endpoint);
+          // send reply with a child span
+          Messenger *msgr = m->get_connection()->get_messenger();
+          reply->trace.init("MOSDOpReply", msgr->get_trace_endpoint(),
+                            &mutation->ctx->op->trace);
+        }
 	osd->send_message_osd_client(reply, m->get_connection());
 	mutation->sent_disk = true;
 	mutation->ctx->op->mark_commit_sent();
@@ -2319,6 +2328,15 @@ void OSDVol::eval_mutation(Mutation *mutation)
 	  reply->set_reply_versions(mutation->ctx->at_version,
 				    mutation->ctx->user_at_version);
 	  reply->add_flags(CEPH_OSD_FLAG_ACK);
+
+          if ((*i)->trace) {
+            (*i)->trace.event("eval_mutation sending ack", &trace_endpoint);
+            // send reply with a child span
+            Messenger *msgr = m->get_connection()->get_messenger();
+            reply->trace.init("MOSDOpReply", msgr->get_trace_endpoint(),
+                              &(*i)->trace);
+          }
+
 	  osd->send_message_osd_client(reply, m->get_connection());
 	}
 	waiting_for_ack.erase(mutation->v);
@@ -2337,6 +2355,16 @@ void OSDVol::eval_mutation(Mutation *mutation)
 	reply->add_flags(CEPH_OSD_FLAG_ACK);
 	dout(10) << " sending ack on " << mutation->tid << " " << reply
 		 << dendl;
+
+        if (mutation->ctx->op->trace) {
+          mutation->ctx->op->trace.event("eval_mutation sending ack",
+                                         &trace_endpoint);
+          // send reply with a child span
+          Messenger *msgr = m->get_connection()->get_messenger();
+          reply->trace.init("MOSDOpReply", msgr->get_trace_endpoint(),
+                            &mutation->ctx->op->trace);
+        }
+
 	assert(entity_name_t::TYPE_OSD != m->get_connection()->peer_type);
 	osd->send_message_osd_client(reply, m->get_connection());
       }
