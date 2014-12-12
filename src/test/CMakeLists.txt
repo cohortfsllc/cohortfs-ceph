@@ -184,7 +184,7 @@ add_executable(test_build_libcommon
   ${build_libcommon_srcs}
   $<TARGET_OBJECTS:common_objs>
   )
-target_link_libraries(test_build_libcommon json_spirit  rt lttng-ust pthread global ${Boost_LIBRARIES} ${CRYPTO_LIBS} ${EXTRALIBS})
+target_link_libraries(test_build_libcommon json_spirit  rt pthread global ${Boost_LIBRARIES} ${CRYPTO_LIBS} ${EXTRALIBS})
 
 set(build_librados_srcs
   buildtest_skeleton.cc
@@ -1955,5 +1955,7 @@ target_link_libraries(test_libosd_remote PRIVATE osd os global
   boost_filesystem boost_system ${TCMALLOC_LIBS})
 
 # lttng_stream_test
-add_executable(lttng_stream_test lttng_stream_test.cc)
-target_link_libraries(lttng_stream_test common global)
+if (HAVE_LTTNG)
+  add_executable(lttng_stream_test lttng_stream_test.cc)
+  target_link_libraries(lttng_stream_test common global)
+endif(HAVE_LTTNG)

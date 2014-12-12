@@ -31,6 +31,10 @@ if(HAVE_CDS)
 list(APPEND EXTRALIBS ${CDS_LIBS})
 endif(HAVE_CDS)
 
+if (HAVE_LTTNG)
+  list(APPEND EXTRALIBS ${LTTNG_UST_LIBRARY})
+endif(HAVE_LTTNG)
+
 set(CRYPTO_LIBS cryptopp)
 
 set(GCOV_PREFIX_STRIP 4)
@@ -256,7 +260,7 @@ if(${WITH_PROFILER})
   target_link_libraries(common PRIVATE profiler)
 endif(${WITH_PROFILER})
 
-target_link_libraries(common PRIVATE json_spirit ${CRYPTO_LIBS} rt lttng-ust ${Boost_LIBRARIES} ${EXTRALIBS})
+target_link_libraries(common PRIVATE json_spirit ${CRYPTO_LIBS} rt ${Boost_LIBRARIES} ${EXTRALIBS})
 
 set(libglobal_srcs
   global/global_init.cc

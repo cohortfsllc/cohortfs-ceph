@@ -155,7 +155,7 @@ endif(${WITH_FCGI})
 
 option(WITH_LTTNG "LTTng is enabled" ON)
 if(${WITH_LTTNG})
-  find_package(LTTng REQUIRED)
+  find_package(LTTng)
 set(HAVE_LTTNG ${LTTNG_FOUND})
 endif(${WITH_LTTNG})
 

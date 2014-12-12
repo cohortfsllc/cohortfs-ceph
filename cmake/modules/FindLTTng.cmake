@@ -32,7 +32,7 @@ find_path(LTTNG_INCLUDE_DIR
 
 find_path(LTTNG_LIBRARY_DIR
           NAMES liblttng-ust.so
-          PATHS ${LTTNG_PATH_HINT}
+          PATHS /usr/lib ${LTTNG_PATH_HINT}
           DOC "The LTTng libraries")
 
 find_library(LTTNG_UST_LIBRARY lttng-ust PATHS ${LTTNG_LIBRARY_DIR})
@@ -49,17 +49,20 @@ find_program(LTTNG_EXECUTABLE
   PATHS ${LTTNG_PATH_HINT}/bin
   NO_DEFAULT_PATH
   DOC "The LTTNG command line tool")
-find_program(LEX_PROGRAM
+find_program(LTTNG_PROGRAM
   NAMES ${LTTNG_NAMES}
   PATHS ${LTTNG_PATH_HINT}/bin
   DOC "The LTTNG command line tool")
 
-# handle the QUIETLY and REQUIRED arguments and set PRELUDE_FOUND to TRUE if
+# handle the QUIETLY and REQUIRED arguments and set LTTNG_FOUND to TRUE if
 # all listed variables are TRUE
 include(FindPackageHandleStandardArgs)
-FIND_PACKAGE_HANDLE_STANDARD_ARGS(LTTNG
-                                  REQUIRED_VARS LTTNG_INCLUDE_DIR LTTNG_LIBRARY_DIR)
-# VERSION FPHSA options not handled by CMake version < 2.8.2)
-#                                  VERSION_VAR)
+FIND_PACKAGE_HANDLE_STANDARD_ARGS(LTTNG DEFAULT_MSG LTTNG_INCLUDE_DIR LTTNG_LIBRARY_DIR)
+if (NOT LTTNG_FOUND)
+	if (LTTng_FIND_REQUIRED)
+		message(FATAL_ERROR "LTTng not found")
+	endif ()
+endif ()
+
 mark_as_advanced(LTTNG_INCLUDE_DIR)
 mark_as_advanced(LTTNG_LIBRARY_DIR)
