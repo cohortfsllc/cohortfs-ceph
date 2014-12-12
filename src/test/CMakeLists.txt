@@ -184,7 +184,7 @@ add_executable(test_build_libcommon
   ${build_libcommon_srcs}
   $<TARGET_OBJECTS:common_objs>
   )
-target_link_libraries(test_build_libcommon json_spirit  rt lttng-ust pthread global ${Boost_LIBRARIES} ${CDS_LIBS} ${CRYPTO_LIBS} ${EXTRALIBS})
+target_link_libraries(test_build_libcommon json_spirit  rt lttng-ust pthread global ${Boost_LIBRARIES} ${CRYPTO_LIBS} ${EXTRALIBS})
 
 set(build_librados_srcs
   buildtest_skeleton.cc
