@@ -564,6 +564,12 @@ add_executable(ceph-authtool ${ceph_authtool_srcs})
 target_link_libraries(ceph-authtool global ${EXTRALIBS})
 install(TARGETS ceph-authtool DESTINATION bin)
 
+set(ceph_babeltrace_wrapper_srcs
+  tools/ceph_babeltrace_wrapper.cc
+  )
+add_executable(ceph_babeltrace_wrapper ${ceph_babeltrace_wrapper_srcs})
+install(TARGETS ceph_babeltrace_wrapper DESTINATION bin)
+
 set(ceph_mon_store_converter_srcs
   tools/mon_store_converter.cc
   )
