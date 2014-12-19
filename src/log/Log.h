@@ -10,6 +10,7 @@
 
 #include "Entry.h"
 #include "EntryQueue.h"
+#include "common/entity_name.h"
 #include "SubsystemMap.h"
 
 namespace ceph {
@@ -21,6 +22,7 @@ class Log : private Thread
 
   SubsystemMap *m_subs;
 
+  EntityName *m_name;
   pthread_mutex_t m_queue_mutex;
   pthread_mutex_t m_flush_mutex;
   pthread_cond_t m_cond_loggers;
@@ -47,7 +49,7 @@ class Log : private Thread
   void _log_message(const char *s, bool crash);
 
 public:
-  Log(SubsystemMap *s);
+  Log(SubsystemMap *s, EntityName *name);
   virtual ~Log();
 
   void set_flush_on_exit();

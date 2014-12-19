@@ -568,6 +568,7 @@ set(ceph_babeltrace_wrapper_srcs
   tools/ceph_babeltrace_wrapper.cc
   )
 add_executable(ceph_babeltrace_wrapper ${ceph_babeltrace_wrapper_srcs})
+target_link_libraries(ceph_babeltrace_wrapper common)
 install(TARGETS ceph_babeltrace_wrapper DESTINATION bin)
 
 set(ceph_mon_store_converter_srcs
@@ -578,6 +579,15 @@ add_executable(ceph_mon_store_converter ${ceph_mon_store_converter_srcs}
 target_link_libraries(ceph_mon_store_converter os global leveldb
   boost_filesystem boost_system)
 install(TARGETS ceph_mon_store_converter DESTINATION bin)
+
+if(WITH_BABELTRACE_CEPH)
+  set(babeltrace_ceph_srcs
+    tools/ceph_log_plugin.cc
+  )
+  add_executable(babeltrace_ceph ${babeltrace_ceph_srcs})
+  target_link_libraries(babeltrace_ceph glib-2.0 babeltrace babeltrace-ctf)
+  install(TARGETS babeltrace_ceph DESTINATION bin)
+endif(WITH_BABELTRACE_CEPH)
 
 configure_file(${CMAKE_SOURCE_DIR}/src/mkcephfs.in
   ${CMAKE_BINARY_DIR}/mkcephfs @ONLY)

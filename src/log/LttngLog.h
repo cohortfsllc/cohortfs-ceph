@@ -15,8 +15,11 @@
 TRACEPOINT_EVENT(
        ceph,
        log,
-       TP_ARGS(short, prio, short, subsys, const char *, message),
+       TP_ARGS(long, thread, int, entity_type, const char *, entity_name, short, prio, short, subsys, const char *, message),
        TP_FIELDS(
+             ctf_integer(long, thread, thread)
+             ctf_integer(int, entity_type, entity_type)
+             ctf_string(entity_name, entity_name)
              ctf_integer(short, prio, prio)
              ctf_integer(short, subsys, subsys)
              ctf_string(msg, message)

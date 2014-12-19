@@ -159,6 +159,13 @@ if(${WITH_LTTNG})
 set(HAVE_LTTNG ${LTTNG_FOUND})
 endif(${WITH_LTTNG})
 
+option(WITH_BABELTRACE_CEPH "Babeltrace Logging plugin is being built" OFF)
+if(${WITH_BABELTRACE_CEPH})
+  find_package(babletrace)
+  find_package(glib)
+set(HAVE_BABELTRACE_CEPH ${BABELTRACE_CEPH_FOUND})
+  endif(${WITH_BABELTRACE_CEPH})
+
 option(WITH_PROFILER "The Profiler is here" ON)
 if(${WITH_PROFILER})
 find_package(profiler REQUIRED)

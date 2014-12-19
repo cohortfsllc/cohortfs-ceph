@@ -27,6 +27,8 @@
 #define DEFAULT_MAX_RECENT 10000
 
 #define PREALLOC 1000000
+#include <sys/types.h>
+
 
 using std::cerr;
 using std::cout;
@@ -43,9 +45,10 @@ static void log_on_exit(void *p)
     l->flush();
 }
 
-Log::Log(SubsystemMap *s)
+Log::Log(SubsystemMap *s, EntityName *name)
   : m_indirect_this(NULL),
     m_subs(s),
+    m_name(name),
     m_new(), m_recent(),
     m_fd(-1),
     m_syslog_log(-2), m_syslog_crash(-2),
@@ -160,7 +163,7 @@ void Log::submit_entry(Entry *e)
   // signal lttng tracepoints directly from the submitting thread,
   // regardless of log levels; lttng user will filter the events
   if (m_lttng_enabled) {
-    tracepoint(ceph, log, e->m_prio, e->m_subsys, e->get_str().c_str());
+    tracepoint(ceph, log, e->m_thread, m_name->get_type(), m_name->get_id().c_str(), e->m_prio, e->m_subsys, e->get_str().c_str());
   return;
   }
 #endif // HAVE_LTTNG
