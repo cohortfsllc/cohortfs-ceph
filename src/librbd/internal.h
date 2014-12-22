@@ -89,6 +89,7 @@ namespace librbd {
   void close_image(ImageCtx *ictx);
 
   /* cooperative locking */
+#if 0
   int list_lockers(ImageCtx *ictx,
 		   std::list<locker_t> *locks,
 		   bool *exclusive,
@@ -100,6 +101,7 @@ namespace librbd {
   int unlock(ImageCtx *ictx, const std::string& cookie);
   int break_lock(ImageCtx *ictx, const std::string& client,
 		 const std::string& cookie);
+#endif
 
   void trim_image(ImageCtx *ictx, uint64_t newsize, ProgressContext& prog_ctx);
 

@@ -8,7 +8,9 @@
 #include "common/dout.h"
 #include "common/errno.h"
 #include "common/Throttle.h"
+#if 0
 #include "cls/lock/cls_lock_client.h"
+#endif /* 0 */
 #include "include/stringify.h"
 
 #include "librbd/AioCompletion.h"
@@ -422,7 +424,6 @@ namespace librbd {
     ictx->refresh_lock.Lock();
     int refresh_seq = ictx->refresh_seq;
     ictx->refresh_lock.Unlock();
-
     {
       int r;
       ictx->lockers.clear();
@@ -431,6 +432,7 @@ namespace librbd {
 	lderr(cct) << "Error reading header: " << cpp_strerror(r) << dendl;
 	return r;
       }
+#if 0
       ClsLockType lock_type = LOCK_NONE;
       r = rados::cls::lock::get_lock_info(&ictx->io_ctx, ictx->header_oid,
 					  RBD_LOCK_NAME, &ictx->lockers,
@@ -449,6 +451,7 @@ namespace librbd {
 	return r;
       }
       ictx->exclusive_locked = (lock_type == LOCK_EXCLUSIVE);
+#endif
       ictx->size = ictx->header.image_size;
     }
 
@@ -649,6 +652,7 @@ namespace librbd {
     delete ictx;
   }
 
+#if 0
   int list_lockers(ImageCtx *ictx,
 		   std::list<locker_t> *lockers,
 		   bool *exclusive,
@@ -680,7 +684,9 @@ namespace librbd {
 
     return 0;
   }
+#endif
 
+#if 0
   int lock(ImageCtx *ictx, bool exclusive, const string& cookie,
 	   const string& tag)
   {
@@ -750,6 +756,7 @@ namespace librbd {
     notify_change(ictx->io_ctx, ictx->header_oid, ictx);
     return 0;
   }
+#endif
 
   void rbd_ctx_cb(completion_t cb, void *arg)
   {

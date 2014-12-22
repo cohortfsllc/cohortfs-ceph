@@ -708,6 +708,7 @@ TEST(LibRBD, TestIOPP)
 }
 
 
+#if 0
 TEST(LibRBD, LockingPP)
 {
   librados::Rados rados;
@@ -777,6 +778,7 @@ TEST(LibRBD, LockingPP)
   ioctx.close();
   ASSERT_EQ(0, destroy_one_volume_pp(volume_name, rados));
 }
+#endif
 
 TEST(LibRBD, FlushAio)
 {

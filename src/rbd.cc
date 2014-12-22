@@ -357,6 +357,7 @@ static int do_resize(librbd::Image& image, uint64_t size)
   return 0;
 }
 
+#if 0
 static int do_lock_list(librbd::Image& image, Formatter *f)
 {
   list<librbd::locker_t> lockers;
@@ -424,6 +425,7 @@ static int do_lock_remove(librbd::Image& image, const char *client,
 {
   return image.break_lock(client, cookie);
 }
+#endif
 
 static void rbd_bencher_completion(void *c, void *pc);
 
@@ -1979,6 +1981,7 @@ if (!set_conf_param(v, p1, p2, p3)) { \
     }
     break;
 
+#if 0
   case OPT_LOCK_LIST:
     r = do_lock_list(image, formatter.get());
     if (r < 0) {
@@ -2011,6 +2014,7 @@ if (!set_conf_param(v, p1, p2, p3)) { \
       return -r;
     }
     break;
+#endif
 
   case OPT_BENCH_WRITE:
     r = do_bench_write(image, bench_io_size, bench_io_threads, bench_bytes, bench_pattern);

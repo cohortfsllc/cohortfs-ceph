@@ -33,11 +33,13 @@ namespace librbd {
   typedef void *completion_t;
   typedef void (*callback_t)(completion_t cb, void *arg);
 
+#if 0
   typedef struct {
     std::string client;
     std::string cookie;
     std::string address;
   } locker_t;
+#endif
 
   typedef rbd_image_info_t image_info_t;
 
@@ -104,12 +106,14 @@ public:
   uint64_t get_stripe_count() const;
 
   /* advisory locking (see librbd.h for details) */
+#if 0
   int list_lockers(std::list<locker_t> *lockers,
 		   bool *exclusive, std::string *tag);
   int lock_exclusive(const std::string& cookie);
   int lock_shared(const std::string& cookie, const std::string& tag);
   int unlock(const std::string& cookie);
   int break_lock(const std::string& client, const std::string& cookie);
+#endif
 
   /* I/O */
   ssize_t read(uint64_t ofs, size_t len, ceph::bufferlist& bl);

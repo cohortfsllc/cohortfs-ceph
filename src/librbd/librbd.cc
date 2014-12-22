@@ -237,6 +237,7 @@ namespace librbd {
     return librbd::copy(srcctx, destctx, pctx);
   }
 
+#if 0
   int Image::list_lockers(std::list<librbd::locker_t> *lockers,
 			  bool *exclusive, string *tag)
   {
@@ -267,6 +268,7 @@ namespace librbd {
     ImageCtx *ictx = (ImageCtx *)ctx;
     return librbd::break_lock(ictx, client, cookie);
   }
+#endif
 
   ssize_t Image::read(uint64_t ofs, size_t len, bufferlist& bl)
   {
@@ -520,6 +522,7 @@ extern "C" int rbd_get_size(rbd_image_t image, uint64_t *size)
   return librbd::get_size(ictx, size);
 }
 
+#if 0
 extern "C" ssize_t rbd_list_lockers(rbd_image_t image, int *exclusive,
 				    char *tag, size_t *tag_len,
 				    char *clients, size_t *clients_len,
@@ -601,6 +604,7 @@ extern "C" int rbd_break_lock(rbd_image_t image, const char *client,
   librbd::ImageCtx *ictx = (librbd::ImageCtx *)image;
   return librbd::break_lock(ictx, client, cookie ? cookie : "");
 }
+#endif
 
 /* I/O */
 extern "C" ssize_t rbd_read(rbd_image_t image, uint64_t ofs, size_t len,

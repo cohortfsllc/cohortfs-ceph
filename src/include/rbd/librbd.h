@@ -102,6 +102,7 @@ int rbd_copy_with_progress(rbd_image_t image, rados_ioctx_t dest_p, const char *
 			   librbd_progress_fn_t cb, void *cbdata);
 int rbd_copy_with_progress2(rbd_image_t src, rbd_image_t dest,
 			   librbd_progress_fn_t cb, void *cbdata);
+#if 0
 
 /**
  * @defgroup librbd_h_locking Advisory Locking
@@ -197,6 +198,7 @@ int rbd_unlock(rbd_image_t image, const char *cookie);
  * @returns -ENOENT if the lock is not held by the specified (client, cookie) pair
  */
 int rbd_break_lock(rbd_image_t image, const char *client, const char *cookie);
+#endif
 
 /** @} locking */
 

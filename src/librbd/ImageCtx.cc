@@ -229,6 +229,7 @@ namespace librbd {
     wctx = new WatchCtx(this);
     return io_ctx.watch(header_oid, 0, &(wctx->cookie), wctx);
 #endif
+    return 0;
   }
 
   void ImageCtx::unregister_watch() {
