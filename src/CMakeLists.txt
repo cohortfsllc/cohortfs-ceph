@@ -222,7 +222,9 @@ set(libcommon_files
   common/address_helper.cc
   common/linux_version.c
   vol/Volume.cc
+  vol/Placer.cc
   cohort/CohortVolume.cc
+  cohort/ErasureCPlacer.cc
   osdc/Objecter.cc
   ${arch_files}
   ${auth_files}

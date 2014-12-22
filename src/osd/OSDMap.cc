@@ -188,6 +188,8 @@ void OSDMap::Incremental::encode(bufferlist& bl, uint64_t features) const
     ::encode(new_state, bl);
     ::encode(new_weight, bl);
     ::encode(new_primary_affinity, bl);
+    ::encode(placer_additions, bl);
+    ::encode(placer_removals, bl);
     ::encode(vol_additions, bl);
     ::encode(vol_removals, bl);
     ENCODE_FINISH(bl); // client-usable data
@@ -234,6 +236,8 @@ void OSDMap::Incremental::decode(bufferlist::iterator& bl)
     ::decode(new_state, bl);
     ::decode(new_weight, bl);
     ::decode(new_primary_affinity, bl);
+    ::decode(placer_additions, bl);
+    ::decode(placer_removals, bl);
     ::decode(vol_additions, bl);
     ::decode(vol_removals, bl);
     DECODE_FINISH(bl); // client-usable data
@@ -380,6 +384,30 @@ void OSDMap::Incremental::vol_inc_remove::encode(bufferlist& bl, uint64_t featur
 }
 
 void OSDMap::Incremental::vol_inc_remove::decode(bufferlist::iterator &p)
+{
+  ::decode(sequence, p);
+  ::decode(id, p);
+}
+
+void OSDMap::Incremental::placer_inc_add::encode(bufferlist& bl, uint64_t features) const
+{
+  ::encode(sequence, bl);
+  ::encode(*placer, bl);
+}
+
+void OSDMap::Incremental::placer_inc_add::decode(bufferlist::iterator &p)
+{
+  ::decode(sequence, p);
+  placer = Placer::decode_placer(p);
+}
+
+void OSDMap::Incremental::placer_inc_remove::encode(bufferlist& bl, uint64_t features) const
+{
+  ::encode(sequence, bl);
+  ::encode(id, bl);
+}
+
+void OSDMap::Incremental::placer_inc_remove::decode(bufferlist::iterator &p)
 {
   ::decode(sequence, p);
   ::decode(id, p);
@@ -710,10 +738,18 @@ int OSDMap::apply_incremental(const Incremental &inc)
 
   calc_num_osds();
 
+  for (vector<OSDMap::Incremental::placer_inc_add>::const_iterator p =
+      inc.placer_additions.begin();
+      p != inc.placer_additions.end();
+      ++p) {
+    add_placer(p->placer);
+  }
+
   for (vector<OSDMap::Incremental::vol_inc_add>::const_iterator p =
       inc.vol_additions.begin();
       p != inc.vol_additions.end();
       ++p) {
+    p->vol->init(this);
     add_volume(p->vol);
   }
 
@@ -746,6 +782,12 @@ void OSDMap::encode(bufferlist& bl, uint64_t features) const
     ::encode(osd_addrs->client_addr, bl);
 
     uint32_t count;
+    count = placers.by_uuid.size();
+    ::encode(count, bl);
+    for (const auto& p : placers.by_uuid) {
+      p.second->encode(bl);
+    }
+
     count = vols.by_uuid.size();
     ::encode(count, bl);
     for (const auto& v : vols.by_uuid) {
@@ -793,13 +835,21 @@ void OSDMap::decode(bufferlist::iterator& bl)
     ::decode(osd_weight, bl);
     ::decode(osd_addrs->client_addr, bl);
 
-    // Volumes
-
+    // Placers
     uint32_t count;
+    placers.by_uuid.clear();
+    ::decode(count, bl);
+    for (uint32_t i = 0; i < count; ++i) {
+      PlacerRef v = Placer::decode_placer(bl);
+      placers.by_uuid[v->id] = v;
+    }
+
+    // Volumes
     vols.by_uuid.clear();
     ::decode(count, bl);
     for (uint32_t i = 0; i < count; ++i) {
       VolumeRef v = Volume::decode_volume(bl);
+      v->init(this);
       vols.by_uuid[v->id] = v;
     }
     DECODE_FINISH(bl); // client-usable data
@@ -1116,19 +1166,11 @@ int OSDMap::build_simple(CephContext *cct, epoch_t e,
   return 0;
 }
 
-int OSDMap::create_volume(VolumeRef vol,
-			  boost::uuids::uuid& out)
-{
-  vol->id = boost::uuids::random_generator()();
-  vol->last_update = epoch + 1;
-  out = vol->id;
-  return add_volume(vol);
-}
-
 /*
  * Generates a UUID for the new volume and tries to add it to the
  * DB. Returns the uuid generated in the uuid_out parameter.
  */
+
 int OSDMap::add_volume(VolumeRef vol) {
   std::stringstream ss;
   if (!vol->valid(ss)) {
@@ -1160,6 +1202,41 @@ int OSDMap::remove_volume(const boost::uuids::uuid& id)
 
   vols.by_name.erase(v->name);
   vols.by_uuid.erase(v->id);
+
+  return 0;
+}
+
+int OSDMap::add_placer(PlacerRef placer) {
+  std::stringstream ss;
+  if (!placer->valid(ss)) {
+    return -EINVAL;
+  }
+
+  if (placers.by_uuid.count(placer->id) > 0) {
+    return -EEXIST;
+  }
+
+  if (placers.by_name.count(placer->name) > 0) {
+    return -EEXIST;
+  }
+
+  placers.by_uuid[placer->id] = placer;
+  placers.by_name[placer->name] = placer;
+  return 0;
+}
+
+int OSDMap::remove_placer(const boost::uuids::uuid& id)
+{
+  auto i = placers.by_uuid.find(id);
+
+  if (i == placers.by_uuid.end()) {
+    return -ENOENT;
+  }
+
+  PlacerRef v = i->second;
+
+  placers.by_name.erase(v->name);
+  placers.by_uuid.erase(v->id);
 
   return 0;
 }

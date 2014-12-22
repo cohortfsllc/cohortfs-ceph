@@ -50,6 +50,7 @@
 #include "include/str_list.h"
 #include "include/str_map.h"
 #include "cohort/CohortVolume.h"
+#include "cohort/ErasureCPlacer.h"
 
 #define dout_subsys ceph_subsys_mon
 #undef dout_prefix
@@ -2237,8 +2238,8 @@ done:
     string params;
     string place_text;
     string symbols;
-    string error_message;
 
+    PlacerRef placer;
     VolumeRef vol;
 
     cmd_getval(mon->cct, cmdmap, "volumeName", name);
@@ -2253,13 +2254,29 @@ done:
     /* Only one volume type for now, when we implement more I'll
        come back and complexify this. */
 
-    if (!Volume::valid_name(name, ss)) {
+    if (!Placer::valid_name(name, ss)) {
       err = -EINVAL;
       goto reply;
     }
-    vol = CohortVolume::create(mon->cct, name, stripe_unit, plugin, params,
+    placer = ErasureCPlacer::create(mon->cct, name, stripe_unit, plugin, params,
 			       place_text, symbols, ss);
-    if (!vol) {
+    if (placer) {
+      ss << "placer: " << placer << " created.";
+      pending_inc.include_addition(placer);
+    } else {
+      err = -EINVAL;
+      goto reply;
+    }
+    vol = CohortVolume::create(mon->cct, name, placer, ss);
+    if (vol) {
+      ss << "volume: " << vol << " created.";
+      pending_inc.include_addition(vol);
+      wait_for_finished_proposal(new Monitor::C_Command(
+				   mon, m, 0, rs,
+				   get_last_committed() + 1));
+
+      return true;
+    } else {
       err = -EINVAL;
       goto reply;
     }
@@ -2271,8 +2288,8 @@ done:
     return true;
   } else if (prefix == "osd volume remove") {
     string name;
-    string error_message;
     VolumeRef vol;
+    PlacerRef placer;
 
     cmd_getval(mon->cct, cmdmap, "volumeName", name);
     if (!osdmap.find_by_name(name, vol)) {
@@ -2280,7 +2297,14 @@ done:
       err = -EINVAL;
       goto reply;
     }
-    pending_inc.include_removal(vol->id);
+    pending_inc.include_removal(vol);
+    cmd_getval(g_ceph_context, cmdmap, "placerName", name);
+    if (!osdmap.find_by_name(name, placer)) {
+      ss << "placer named " << name << " not found";
+      err = -EINVAL;
+      goto reply;
+    }
+    pending_inc.include_removal(placer);
     wait_for_finished_proposal(new Monitor::C_Command(
 				 mon, m, 0, rs,
 				 get_last_committed() + 1));

@@ -41,322 +41,43 @@ VolumeRef CohortVolFactory(bufferlist::iterator& bl, uint8_t v, vol_type t)
   return VolumeRef(vol);
 }
 
-/* Epoch should be the current epoch of the OSDMap. */
-
-int CohortVolume::compile(CephContext* cct) const
-{
-  const char namelate[] = "/tmp/cohortplacerXXXXXX";
-  char cfilename[sizeof(namelate) + 10];
-  char objfilename[sizeof(namelate) + 10];
-  char sofilename[sizeof(namelate) + 10];
-  pid_t child;
-
-  strcpy(cfilename, namelate);
-  int fd = mkstemp(cfilename);
-  if (fd < 0) {
-    lsubdout(cct, volume, -1) << "Unable to generate a temporary filename."
-			      << dendl;
-    return -errno;
-  }
-  close(fd);
-  unlink(cfilename);
-
-  strcpy(objfilename, cfilename);
-  strcpy(sofilename, cfilename);
-
-  strcat(cfilename, ".c");
-  strcat(objfilename, ".o");
-  strcat(sofilename, ".so");
-
-  const char *cargv[] = {
-    [0] = "gcc", [1] = "-std=c11", [2] = "-O3", [3] = "-fPIC",
-    [4] = "-c", [5] = cfilename, [6] = "-o", [7] = objfilename,
-    [8] = NULL
-  };
-
-  const char *largv[] = {
-    [0] = "gcc", [1] = "-shared", [2] = "-o",
-    [3] = sofilename, [4] = objfilename, [5] = "-lm",
-    [6] = "-lc", [7] = NULL
-  };
-
-  /* Better error handling, when we figure out what to do on
-     error. Also figure out some directory we should be using,
-     possibly under /var/lib.  Also come back and deal with
-     concurrency.  We don't want to restrict this to a single thread
-     but we don't want a placement function jumping through here while
-     we're messing with it. */
-
-  if (place_shared) {
-    dlclose(place_shared); /* It's not like we can do anything on error. */
-    place_shared = NULL;
-  }
-
-  place_text.write_file(cfilename);
-
-  child = fork();
-  if (!child) {
-    execvp("gcc", (char **)cargv);
-  } else {
-  cretry:
-    int status = 0;
-    waitpid(child, &status, 0);
-    if (!(WIFEXITED(status) || WIFSIGNALED(status))) {
-      goto cretry;
-    } else if (WIFSIGNALED(status)) {
-      lsubdout(cct, volume, -1)
-	<< "gcc died with signal " << WTERMSIG(status)<< dendl;
-      return -EDOM;
-    } else if (WIFEXITED(status) && WEXITSTATUS(status) != 0) {
-      lsubdout(cct, volume, -1)
-	<< "gcc returned failing status " << WEXITSTATUS(status) << dendl;
-      return -EDOM;
-    }
-  }
-
-  unlink(cfilename);
-
-  child = fork();
-  if (!child) {
-    execvp("gcc", (char **)largv);
-  } else {
-  lretry:
-    int status = 0;
-    waitpid(child, &status, 0);
-    if (!(WIFEXITED(status) || WIFSIGNALED(status))) {
-      goto lretry;
-    } else if (WIFSIGNALED(status)) {
-      lsubdout(cct, volume, -1)
-	<< "gcc died with signal " << WTERMSIG(status) << dendl;
-      return -EDOM;
-    } else if (WIFEXITED(status) && WEXITSTATUS(status) != 0) {
-      lsubdout(cct, volume, -1)
-	<< "gcc returned failing status " << WEXITSTATUS(status) << dendl;
-      return -EDOM;
-    }
-  }
-
-  unlink(objfilename);
-  place_shared = dlopen(sofilename, RTLD_LAZY | RTLD_GLOBAL);
-  if (!place_shared) {
-    lsubdout(cct, volume, -1)
-      << "failed loading library: " << dlerror() << dendl;
-    return -EDOM;
-  }
-  unlink(sofilename);
-
-  for(vector<string>::size_type i = 0;
-      i < symbols.size();
-      ++i) {
-    void *sym = dlsym(place_shared, symbols[i].c_str());
-    if (!sym) {
-      lsubdout(cct, volume, -1)
-	<< "failed loading symbol: " << dlerror() << dendl;
-      return -EDOM;
-    }
-    entry_points.push_back(sym);
-  }
-
-  return 0;
-}
-
-int CohortVolume::_attach(CephContext* cct, stringstream* ss) const
-{
-  Mutex::Locker l(lock);
-  int r;
-  stringstream rs;
-
-  if (attached)
-    return 0;
-
-  r = compile(cct);
-  if (r < 0) {
-    return r;
-  }
-
-  // This is sort of a brokenness in how the erasure code interface
-  // handles things.
-  map<string, string> copy_params(erasure_params);
-  copy_params["directory"] = cct->_conf->osd_erasure_code_directory;
-  ceph::ErasureCodePluginRegistry::instance().factory(
-    cct,
-    erasure_plugin,
-    copy_params,
-    &erasure,
-    rs);
-
-  if (ss) {
-    *ss << rs.str();
-  }
-
-  if (!erasure) {
-    // So we don't leave things hanging around on error
-    if (place_shared) {
-      dlclose(place_shared);
-      place_shared = NULL;
-      lsubdout(cct, volume, -1) << rs.str() << dendl;
-
-    }
-    return -EDOM;
-  }
-
-  stripe_unit = erasure->get_chunk_size(suggested_unit *
-					erasure->get_data_chunk_count());
-  attached = true;
-  return 0;
-}
-
-void CohortVolume::detach()
-{
-  Mutex::Locker l(lock);
-  if (!attached)
-    return;
-
-  erasure.reset();
-  if (place_shared) {
-    dlclose(place_shared);
-    place_shared = NULL;
-  }
-  stripe_unit = 0;
-  attached = false;
-}
-
-CohortVolume::~CohortVolume(void)
-{
-  detach();
-}
 
 int CohortVolume::update(const shared_ptr<const Volume>& v)
 {
   return 0;
 }
 
-uint32_t CohortVolume::num_rules(void)
+void CohortVolume::init(OSDMap *map)
 {
-  return entry_points.size();
-}
-
-struct placement_context
-{
-  const OSDMap* map;
-  const void* f;
-  ssize_t* count;
-};
-
-/* Return 'true' if the OSD is marked as 'in' */
-
-static bool test_osd(void *data, int osd)
-{
-  placement_context *context = (placement_context *)data;
-  return context->map->is_in(osd);
-}
-
-/* This function adds an OSD to the list returned to the client ONLY
-   if the OSD is marked in. */
-
-static bool return_osd(void *data, int osd)
-{
-  placement_context *context = (placement_context *)data;
-  if (context->map->is_up(osd)) {
-    (*(std::function<void(int)>*) context->f)(osd);
-    return true;
-  } else {
-    (*(std::function<void(int)>*) context->f)(-1);
-    return true;
+  PlacerRef pl;
+  inited = map->find_by_uuid(placer_id, pl);
+  if (inited) {
+    placer = ErasureCPlacerRef(std::static_pointer_cast<ErasureCPlacer>(pl));
   }
-}
-
-
-ssize_t CohortVolume::place(const object_t& object,
-			    const OSDMap& map,
-			    const std::function<void(int)>& f) const
-{
-  ssize_t count = 0;
-  placement_context context = {
-    .map = &map,
-    .f = (void *) &f,
-    .count = &count
-  };
-
-  assert(attached);
-
-  place_func entry_point = (place_func) entry_points[0];
-
-  entry_point(&context, id.data, object.name.length(), object.name.data(),
-	      test_osd, return_osd);
-
-  return count;
 }
 
 void CohortVolume::dump(Formatter *f) const
 {
   inherited::dump(f);
-  f->dump_stream("place_text") << place_text;
-  f->dump_stream("symbols") << symbols;
-  f->dump_stream("erasure") << erasure;
 }
 
 void CohortVolume::decode_payload(bufferlist::iterator& bl, uint8_t v)
 {
   inherited::decode_payload(bl, v);
-
-  ::decode(place_text, bl);
-  ::decode(symbols, bl);
-  entry_points.reserve(symbols.size());
-  ::decode(erasure_plugin, bl);
-  ::decode(erasure_params, bl);
-  ::decode(suggested_unit, bl);
 }
 
 void CohortVolume::encode(bufferlist& bl) const
 {
   inherited::encode(bl);
-
-  ::encode(place_text, bl);
-  ::encode(symbols, bl);
-  ::encode(erasure_plugin, bl);
-  ::encode(erasure_params, bl);
-  ::encode(suggested_unit, bl);
-}
-
-static string indent(size_t k)
-{
-  return string(k / 8, '\t') + string(k % 8, ' ');
-}
-
-static void default_placer(uint32_t blocks,
-			   bufferlist& text,
-			   vector<std::string>& sym)
-{
-  const string funcname = "placer";
-  sym.push_back(funcname);
-  text.append(
-    "#include <stddef.h>\n"
-    "#include <stdbool.h>\n\n"
-
-    "int " + funcname + "(void *ctx, const char* uuid, size_t size, const char* id,\n"
-    + indent(sizeof("int ") + funcname.length())
-    + "bool(*test)(void*, int), bool(*place)(void*, int))\n"
-    "{\n"
-    "\tfor(int i = 0; i < " + to_string(blocks) + "; ++i) {\n"
-    "\t\tplace(ctx, i);\n"
-    "\t}\n"
-    "\treturn 0;\n"
-    "}\n");
 }
 
 VolumeRef CohortVolume::create(CephContext *cct,
 			       const string& name,
-			       const int64_t _suggested_unit,
-			       const string& erasure_plugin,
-			       const string& erasure_paramstring,
-			       const string& place_text, const string& sym_str,
+			       PlacerRef placer,
 			       std::stringstream& ss)
 
 {
   CohortVolume *v = new CohortVolume(CohortVol);
-  map<string, string> copy_params;
-  std::stringstream es;
 
   if (!valid_name(name, ss)) {
     goto error;
@@ -364,50 +85,9 @@ VolumeRef CohortVolume::create(CephContext *cct,
 
   v->id = boost::uuids::random_generator()();
   v->name = name;
-
-  if ((place_text.empty() && !sym_str.empty()) ||
-      (sym_str.empty() && !place_text.empty())) {
-    ss << "If you have symbols you must have place text and vice versa.";
+  v->placer = ErasureCPlacerRef(std::static_pointer_cast<ErasureCPlacer>(placer));
+  if (!v->placer)
     goto error;
-  }
-
-  v->erasure_plugin = erasure_plugin;
-  get_str_map(erasure_paramstring, &v->erasure_params);
-  v->suggested_unit = _suggested_unit;
-
-  // This stuff is in attach, too, but we need to initialize the
-  // erasure code plugin before we can create the default placer.
-
-  copy_params = v->erasure_params;
-  copy_params["directory"] = cct->_conf->osd_erasure_code_directory;
-  ceph::ErasureCodePluginRegistry::instance().factory(
-    cct,
-    v->erasure_plugin,
-    copy_params,
-    &v->erasure,
-    es);
-
-  if (!v->erasure) {
-    ss << es.str(); // Factory writes output even on success, which is
-		    // kind of confusing if an error happens later.
-    goto error;
-  }
-
-  v->stripe_unit = v->erasure->get_chunk_size(
-    v->suggested_unit * v->erasure->get_data_chunk_count());
-  if (!place_text.empty()) {
-    v->place_text.append(place_text);
-    boost::algorithm::split(v->symbols, sym_str,
-			    boost::algorithm::is_any_of(" \t"));
-  } else {
-    default_placer(v->erasure->get_chunk_count(), v->place_text, v->symbols);
-  }
-  if (v->compile(cct) < 0) {
-    goto error;
-  }
-
-  v->attached = true;
-  v->detach();
 
   return VolumeRef(v);
 
@@ -433,10 +113,10 @@ struct C_GetAttrs : public Context {
 };
 
 CohortVolume::StripulatedOp::StripulatedOp(
-  const CohortVolume& v) : v(v), logical_operations(0)
+  const ErasureCPlacer& pl) : pl(pl), logical_operations(0)
 
 {
-  ops.resize(v.erasure->get_chunk_count());
+  ops.resize(pl.get_chunk_count());
 }
 
 void CohortVolume::StripulatedOp::add_op(const int op)
@@ -479,11 +159,11 @@ void CohortVolume::StripulatedOp::add_striped_data(const uint64_t off,
 						   const bufferlist& in)
 {
   bufferlist bl(in);
-  const uint32_t stripe_width = v.stripe_unit *
-    v.erasure->get_data_chunk_count();
+  const uint32_t stripe_width = pl.get_stripe_unit() *
+    pl.get_data_chunk_count();
   set<int> want;
   uint64_t total_real_length = off + bl.length();
-  for (unsigned i = 0; i < v.erasure->get_chunk_count(); ++i) {
+  for (unsigned i = 0; i < pl.get_chunk_count(); ++i) {
     want.insert(i);
   }
   budget += bl.length();
@@ -498,18 +178,18 @@ void CohortVolume::StripulatedOp::add_striped_data(const uint64_t off,
     map<int, bufferlist> encoded;
     bufferlist buf;
     buf.substr_of(bl, i, stripe_width);
-    int r = v.erasure->encode(want, buf, &encoded);
+    int r = pl.encode(want, buf, &encoded);
     assert(r == 0);
     for (auto &p : encoded) {
-      assert(p.second.length() == v.stripe_unit);
+      assert(p.second.length() == pl.get_stripe_unit());
       ops[p.first].back().indata.claim_append(p.second);
     }
   }
 
   for (auto &o : ops) {
-    o.back().op.extent.offset = off / v.erasure->get_data_chunk_count();
+    o.back().op.extent.offset = off / pl.get_data_chunk_count();
     o.back().op.extent.length = bl.length()
-      / v.erasure->get_data_chunk_count();
+      / pl.get_data_chunk_count();
     o.back().op.extent.total_real_length = total_real_length;
   }
 }
@@ -517,8 +197,8 @@ void CohortVolume::StripulatedOp::add_striped_data(const uint64_t off,
 void CohortVolume::StripulatedOp::add_striped_range(const uint64_t off,
 						    const uint64_t len)
 {
-  const uint32_t stripe_width = v.stripe_unit *
-    v.erasure->get_data_chunk_count();
+  const uint32_t stripe_width = pl.get_stripe_unit() *
+    pl.get_data_chunk_count();
   uint64_t actual_len = len;
   uint64_t total_real_length = off + len;
   assert(off % stripe_width == 0);
@@ -526,9 +206,9 @@ void CohortVolume::StripulatedOp::add_striped_range(const uint64_t off,
     actual_len += stripe_width - ((off + len % stripe_width));
 
   for (auto &o : ops) {
-    o.back().op.extent.offset = off / v.erasure->get_data_chunk_count();
+    o.back().op.extent.offset = off / pl.get_data_chunk_count();
     o.back().op.extent.length = actual_len
-      / v.erasure->get_data_chunk_count();
+      / pl.get_data_chunk_count();
     o.back().op.extent.total_real_length = total_real_length;
   }
 }
@@ -546,7 +226,7 @@ void CohortVolume::StripulatedOp::add_truncate(const uint64_t truncate_size,
 }
 
 struct C_MultiRead : public Context {
-  const CohortVolume& v;
+  const ErasureCPlacer& pl;
   uint64_t off;
   map<int, bufferlist> resultbl;
   bufferlist *outbl;
@@ -554,9 +234,9 @@ struct C_MultiRead : public Context {
   Context *onfinish;
   uint64_t total_real_length;
 
-  C_MultiRead(const CohortVolume& v, uint64_t _off, bufferlist *_outbl, int* rval,
+  C_MultiRead(const ErasureCPlacer& pl, uint64_t _off, bufferlist *_outbl, int* rval,
 	      Context *onfinish)
-    : v(v), off(_off), outbl(_outbl), rval(rval), onfinish(onfinish),
+    : pl(pl), off(_off), outbl(_outbl), rval(rval), onfinish(onfinish),
       total_real_length(UINT64_MAX) { }
 
   void finish(int r) {
@@ -567,18 +247,18 @@ struct C_MultiRead : public Context {
 			   return x.second.length() < y.second.length();
 			 })->second.length();
 
-    for (uint64_t i = 0; i < stride_size; i += v.stripe_unit) {
+    for (uint64_t i = 0; i < stride_size; i += pl.get_stripe_unit()) {
       map<int, bufferlist> chunks;
       for (auto &p : resultbl) {
-	if (chunks.size() == v.erasure->get_data_chunk_count()) {
+	if (chunks.size() == pl.get_data_chunk_count()) {
 	  break;
 	}
-	if (p.second.length() < i + v.stripe_unit) {
+	if (p.second.length() < i + pl.get_stripe_unit()) {
 	  continue;
 	}
-	chunks[p.first].substr_of(p.second, i, v.stripe_unit);
+	chunks[p.first].substr_of(p.second, i, pl.get_stripe_unit());
       }
-      if (chunks.size() < v.erasure->get_data_chunk_count()) {
+      if (chunks.size() < pl.get_data_chunk_count()) {
 	if (rval)
 	  *rval = r;
 	if (onfinish)
@@ -586,7 +266,7 @@ struct C_MultiRead : public Context {
 	return;
       }
       bufferlist stripebuf;
-      int s = v.erasure->decode_concat(chunks, &stripebuf);
+      int s = pl.decode_concat(chunks, &stripebuf);
       if (s != 0) {
 	r = s;
 	goto done;
@@ -621,23 +301,23 @@ void CohortVolume::StripulatedOp::read(uint64_t off, uint64_t len,
 				       Context* ctx)
 {
   budget += len;
-  const uint32_t stripe_width = v.stripe_unit *
-    v.erasure->get_data_chunk_count();
+  const uint32_t stripe_width = pl.get_stripe_unit() *
+    pl.get_data_chunk_count();
   uint64_t actual_len = len;
   assert(off % stripe_width == 0);
   if (len % stripe_width)
     actual_len += stripe_width - ((off + len % stripe_width));
-  C_MultiRead* mr = new C_MultiRead(v, off, bl, rval, ctx);
+  C_MultiRead* mr = new C_MultiRead(pl, off, bl, rval, ctx);
   C_GatherBuilder gather;
 
   add_op(CEPH_OSD_OP_STAT);
   add_stat_ctx(&mr->total_real_length, nullptr, nullptr, gather.new_sub());
   add_op(CEPH_OSD_OP_READ);
-  for (uint32_t stride = 0; stride < v.erasure->get_chunk_count(); ++stride) {
+  for (uint32_t stride = 0; stride < pl.get_chunk_count(); ++stride) {
     ops[stride].back().op.extent.offset = off
-      / v.erasure->get_data_chunk_count();
+      / pl.get_data_chunk_count();
     ops[stride].back().op.extent.length = actual_len
-      / v.erasure->get_data_chunk_count();
+      / pl.get_data_chunk_count();
     ops[stride].back().ctx = gather.new_sub();
     auto p = mr->resultbl.emplace(stride, len / stripe_width);
     ops[stride].back().out_bl = &(p.first->second);
@@ -742,8 +422,8 @@ void CohortVolume::StripulatedOp::add_watch(const uint64_t cookie,
 void CohortVolume::StripulatedOp::add_alloc_hint(
   const uint64_t expected_object_size, const uint64_t expected_write_size)
 {
-  const uint32_t stripe_width = v.stripe_unit *
-    v.erasure->get_data_chunk_count();
+  const uint32_t stripe_width = pl.get_stripe_unit() *
+    pl.get_data_chunk_count();
   for (auto &v : ops) {
     OSDOp &osd_op = v.back();
     osd_op.op.alloc_hint.expected_object_size
@@ -770,16 +450,15 @@ void CohortVolume::StripulatedOp::clear_op_flags(const uint32_t flags)
 }
 
 struct C_MultiStat : public Context {
-  const CohortVolume &v;
   vector<bufferlist> bls;
   uint64_t *s;
   utime_t *m;
   int *rval;
   Context *ctx;
 
-  C_MultiStat(const CohortVolume &v, uint64_t *_s, utime_t *_m,
+  C_MultiStat(const ErasureCPlacer &pl, uint64_t *_s, utime_t *_m,
 	      int *_rval, Context *_ctx)
-    : v(v), bls(v.erasure->get_chunk_count()), s(_s), m(_m),
+    : bls(pl.get_chunk_count()), s(_s), m(_m),
       rval(_rval), ctx(_ctx) { }
 
   void finish(int r) {
@@ -821,8 +500,8 @@ void CohortVolume::StripulatedOp::add_stat_ctx(uint64_t *s, utime_t *m,
 					       int *rval, Context *ctx)
 {
   C_GatherBuilder gather;
-  C_MultiStat *f = new C_MultiStat(v, s, m, rval, ctx);
-  for (uint32_t stride = 0; stride < v.erasure->get_chunk_count(); ++stride) {
+  C_MultiStat *f = new C_MultiStat(pl, s, m, rval, ctx);
+  for (uint32_t stride = 0; stride < pl.get_chunk_count(); ++stride) {
     OSDOp &osd_op = ops[stride].back();
     osd_op.out_bl = &(f->bls[stride]);
     osd_op.ctx = gather.new_sub();
@@ -839,8 +518,8 @@ unique_ptr<ObjOp> CohortVolume::StripulatedOp::clone()
 
 unique_ptr<ObjOp> CohortVolume::op() const
 {
-  assert(attached);
-  return unique_ptr<ObjOp>(new StripulatedOp(*this));
+  assert(placer->is_attached());
+  return unique_ptr<ObjOp>(new StripulatedOp(*placer));
 }
 
 void CohortVolume::StripulatedOp::realize(
@@ -849,7 +528,7 @@ void CohortVolume::StripulatedOp::realize(
 {
   for(size_t i = 0; i < ops.size(); ++i) {
     f(hobject_t(oid,
-		i < v.erasure->get_data_chunk_count() ? DATA : ECC,
+		i < pl.get_data_chunk_count() ? DATA : ECC,
 		i),
       std::move(ops[i]));
   }

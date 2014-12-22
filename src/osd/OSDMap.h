@@ -31,6 +31,7 @@
 #include "common/Mutex.h"
 #include "common/Clock.h"
 #include "vol/Volume.h"
+#include "vol/Placer.h"
 
 #include "include/ceph_features.h"
 
@@ -171,11 +172,48 @@ public:
       vol_additions.push_back(increment);
     }
 
-    void include_removal(const boost::uuids::uuid &id) {
+    void include_removal(const VolumeRef vol) {
       vol_inc_remove increment;
       increment.sequence = vol_next_sequence++;
-      increment.id = id;
+      increment.id = vol->id;
       vol_removals.push_back(increment);
+    }
+
+    struct placer_inc_add {
+      uint16_t sequence;
+      PlacerRef placer;
+
+      void encode(bufferlist& bl, uint64_t features = -1) const;
+      void decode(bufferlist::iterator& bl);
+      void decode(bufferlist& bl);
+    };
+
+    struct placer_inc_remove {
+      uint16_t sequence;
+      boost::uuids::uuid id;
+
+      void encode(bufferlist& bl, uint64_t features = -1) const;
+      void decode(bufferlist::iterator& bl);
+      void decode(bufferlist& bl);
+    };
+
+    version_t placer_version;
+    uint16_t placer_next_sequence;
+    vector<placer_inc_add> placer_additions;
+    vector<placer_inc_remove> placer_removals;
+
+    void include_addition(PlacerRef placer) {
+      placer_inc_add increment;
+      increment.sequence = placer_next_sequence++;
+      increment.placer = placer;
+      placer_additions.push_back(increment);
+    }
+
+    void include_removal(const PlacerRef placer) {
+      placer_inc_remove increment;
+      increment.sequence = placer_next_sequence++;
+      increment.id = placer->id;
+      placer_removals.push_back(increment);
     }
   };
 
@@ -189,6 +227,11 @@ private:
   int num_osd;	       // not saved
   int32_t max_osd;
   vector<uint8_t> osd_state;
+
+  struct {
+    map<boost::uuids::uuid,PlacerRef> by_uuid;
+    map<string,PlacerRef> by_name;
+  } placers;
 
   struct {
     map<boost::uuids::uuid,VolumeRef> by_uuid;
@@ -500,7 +543,45 @@ public:
   static void generate_test_instances(list<OSDMap*>& o);
   bool check_new_blacklist_entries() const { return new_blacklist_entries; }
 
-  int create_volume(VolumeRef volume, boost::uuids::uuid& out);
+  // Placers
+  /*int create_placer(PlacerRef placer, boost::uuids::uuid& out);*/
+  int add_placer(PlacerRef placer);
+  int remove_placer(const boost::uuids::uuid& id);
+
+  bool placer_exists(const boost::uuids::uuid& id) const {
+    auto v = placers.by_uuid.find(id);
+    if (v == placers.by_uuid.end()) {
+      return false;
+    } else {
+      return true;
+    }
+  }
+
+  bool find_by_uuid(const boost::uuids::uuid& id, PlacerRef& placer) const {
+    auto v = placers.by_uuid.find(id);
+    if (v == placers.by_uuid.end()) {
+      return false;
+    } else {
+      placer = v->second;
+      return true;
+    }
+  }
+  bool find_by_name(const string& name, PlacerRef& placer) const {
+    map<string,PlacerRef>::const_iterator v = placers.by_name.find(name);
+    if (v == placers.by_name.end()) {
+      return false;
+    } else {
+      placer = v->second;
+      return true;
+    }
+  }
+
+  bool placermap_empty(void) const {
+    return placers.by_uuid.empty();
+  }
+
+  // Volumes
+  /*int create_volume(VolumeRef volume, boost::uuids::uuid& out);*/
   int add_volume(VolumeRef volume);
   int remove_volume(const boost::uuids::uuid& id);
 
@@ -549,6 +630,8 @@ WRITE_CLASS_ENCODER_FEATURES(OSDMap)
 WRITE_CLASS_ENCODER_FEATURES(OSDMap::Incremental)
 WRITE_CLASS_ENCODER(OSDMap::Incremental::vol_inc_add)
 WRITE_CLASS_ENCODER(OSDMap::Incremental::vol_inc_remove)
+WRITE_CLASS_ENCODER(OSDMap::Incremental::placer_inc_add)
+WRITE_CLASS_ENCODER(OSDMap::Incremental::placer_inc_remove)
 
 typedef std::shared_ptr<const OSDMap> OSDMapRef;
 

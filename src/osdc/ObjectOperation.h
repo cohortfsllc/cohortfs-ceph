@@ -55,9 +55,12 @@ public:
   virtual void add_oid(const hobject_t &oid) = 0;
   virtual void add_single_return(bufferlist* bl, int* rval = NULL,
 				 Context* ctx = NULL) = 0;
+  /* Add input data to an op that is replicated across all targets */
   virtual void add_replicated_data(const bufferlist& bl) = 0;
+  /* Add input data to an op that is striped across targets */
   virtual void add_striped_data(const uint64_t off,
 				const bufferlist& bl) = 0;
+  /* Add offset/length pair striped across targets */
   virtual void add_striped_range(const uint64_t off,
 				 const uint64_t len) = 0;
   virtual void add_xattr(const string &name, bufferlist* data = NULL) = 0;

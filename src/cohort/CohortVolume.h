@@ -1,5 +1,5 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
-// vim: ts=8 sw=2 smarttab
+// vim: ts=8 sw=2 smarttab ft=cpp
 /*
  * Copyright (C) 2013, CohortFS, LLC <info@cohortfs.com>
  * All rights reserved.
@@ -11,9 +11,9 @@
 #define COHORT_COHORTVOLUME_H
 
 #include "vol/Volume.h"
-#include "erasure-code/ErasureCodeInterface.h"
 #include "common/RWLock.h"
 #include "osdc/ObjectOperation.h"
+#include "ErasureCPlacer.h"
 
 /* Superclass of all Cohort volume types, supporting dynamically
    generated placement. */
@@ -25,66 +25,30 @@ class CohortVolume : public Volume
   friend struct C_MultiRead;
 
 protected:
-  string erasure_plugin;
-  map<string, string> erasure_params;
-  uint32_t suggested_unit; // Specified by the user
-  bufferlist place_text;
-  vector<std::string> symbols;
-
-private:
-  /* These are internal and are not serialized */
-  mutable bool attached;
-  mutable Mutex lock;
-  mutable vector<void*> entry_points;
-  mutable void *place_shared;
-  mutable ceph::ErasureCodeInterfaceRef erasure;
-  mutable uint32_t stripe_unit; // Actually used after consulting with
-				// erasure code plugin
-  int compile(CephContext* cct) const;
-
-
-protected:
-
+  ErasureCPlacerRef placer;
   CohortVolume(vol_type t)
-    : Volume(t), place_text(), symbols(), attached(false), entry_points(),
-      place_shared(NULL), stripe_unit(0) { }
+    : Volume(t) {}
+  virtual PlacerRef getPlacer() const {
+	  return PlacerRef(std::static_pointer_cast<Placer>(placer));
+  }
 
   public:
 
-  ~CohortVolume();
+  ~CohortVolume() {}
 
   static const uint64_t one_op;
 
-  int _attach(CephContext* cct, stringstream *ss = nullptr) const;
-
-  virtual int attach(CephContext* cct) {
-    if (attached)
-      return 0;
-    return _attach(cct);
-  }
-
-  virtual void detach();
-
   virtual ssize_t op_size() const {
-    assert(attached);
-    return one_op * erasure->get_chunk_count();
+	  return placer->op_size();
   }
 
   virtual int32_t quorum() const {
-    if (!attached) {
-      abort();
-    }
-    return erasure->get_data_chunk_count();
+	  return placer->quorum();
   }
-
-  virtual uint32_t num_rules(void);
-
-  virtual ssize_t place(const object_t& object,
-			const OSDMap& map,
-			const std::function<void(int)>& f) const;
 
   virtual int update(const std::shared_ptr<const Volume>& v);
 
+  virtual void init(OSDMap *map);
   virtual void dump(Formatter *f) const;
   virtual void decode_payload(bufferlist::iterator& bl, uint8_t v);
   virtual void encode(bufferlist& bl) const;
@@ -93,29 +57,26 @@ protected:
 				    vol_type t);
 
   static VolumeRef create(CephContext *cct, const string& name,
-			  int64_t _suggested_width,
-			  const string& erasure_plugin,
-			  const string& erasure_params,
-			  const string& place_text, const string& symbols,
+			  PlacerRef placer,
 			  std::stringstream& ss);
 
   virtual std::unique_ptr<ObjOp> op() const;
 
   class StripulatedOp : public ObjOp {
     friend CohortVolume;
-    const CohortVolume& v;
+    const ErasureCPlacer& pl;
     // ops[n][m] is the mth operation in the nth stride
     vector<vector<OSDOp> > ops;
     size_t logical_operations;
 
     virtual ~StripulatedOp() { }
 
-    StripulatedOp(const CohortVolume& v);
+    StripulatedOp(const ErasureCPlacer& pl);
     virtual size_t size() {
       return logical_operations;
     }
     virtual size_t width() {
-      return v.erasure->get_chunk_count();
+      return pl.get_chunk_count();
     }
     virtual void read(uint64_t off, uint64_t len, bufferlist *bl,
 		      uint64_t truncate_size, uint32_t truncate_seq,
