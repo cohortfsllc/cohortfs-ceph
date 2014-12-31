@@ -1,3 +1,8 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
+
+#include <arpa/inet.h>
+#include <netdb.h>
 
 #include "include/types.h"
 #include "Messenger.h"
@@ -10,6 +15,26 @@ Messenger *Messenger::create(CephContext *cct,
 			     uint64_t nonce)
 {
   return new SimpleMessenger(cct, name, lname, nonce);
+}
+
+void Messenger::set_endpoint_addr(const sockaddr_storage &ss, int port)
+{
+  size_t hostlen;
+  if (ss.ss_family == AF_INET)
+    hostlen = sizeof(struct sockaddr_in);
+  else if (ss.ss_family == AF_INET6)
+    hostlen = sizeof(struct sockaddr_in6);
+  else
+    hostlen = 0;
+
+  if (hostlen) {
+    char buf[NI_MAXHOST] = { 0 };
+    getnameinfo((struct sockaddr *)&ss, hostlen, buf, sizeof(buf),
+                NULL, 0, NI_NUMERICHOST);
+
+    trace_endpoint.copy_ip(buf);
+  }
+  trace_endpoint.set_port(port);
 }
 
 /*

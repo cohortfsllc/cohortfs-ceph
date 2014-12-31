@@ -175,6 +175,11 @@ public:
       ::encode(ops[i].op, payload);
 
     ::encode(retry_attempt, payload);
+    encode_trace(payload);
+
+    ostringstream oss;
+    oss << get_reqid();
+    trace.keyval("Reqid", oss.str().c_str());
   }
 
   virtual void decode_payload() {
@@ -196,7 +201,12 @@ public:
       ::decode(ops[i].op, p);
 
     ::decode(retry_attempt, p);
+    decode_trace(p, "MOSDOp", true);
     OSDOp::split_osd_op_vector_in_data(ops, data);
+
+    ostringstream oss;
+    oss << get_reqid();
+    trace.keyval("Reqid", oss.str().c_str());
   }
 
   void clear_buffers() {
