@@ -31,8 +31,9 @@
 
 #include "common/Timer.h"
 #include "common/WorkQueue.h"
-
 #include "common/Mutex.h"
+#include "common/zipkin_trace.h"
+
 #include "IndexManager.h"
 #include "ObjectMap.h"
 #include "SequencerPosition.h"
@@ -156,6 +157,8 @@ private:
     }
   } sync_thread;
 
+  ZTracer::Endpoint trace_endpoint;
+
   // -- op workqueue --
   struct Op {
     utime_t start;
@@ -164,6 +167,7 @@ private:
     Context *onreadable, *onreadable_sync;
     uint64_t ops, bytes;
     OpRequestRef osd_op;
+    ZTracer::Trace trace;
   };
   class OpSequencer : public Sequencer_impl {
     Mutex qlock; // to protect q, for benefit of flush (peek/dequeue also protected by lock)
@@ -186,6 +190,7 @@ private:
     void queue(Op *o) {
       Mutex::Locker l(qlock);
       q.push_back(o);
+      o->trace.keyval("queue depth", q.size());
     }
     Op *peek_queue() {
       assert(apply_lock.is_locked());

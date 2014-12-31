@@ -24,6 +24,7 @@ using std::deque;
 #include "common/Mutex.h"
 #include "common/Thread.h"
 #include "common/Throttle.h"
+#include "common/zipkin_trace.h"
 
 #ifdef HAVE_LIBAIO
 # include <libaio.h>
@@ -42,9 +43,10 @@ public:
     Context *finish;
     utime_t start;
     OpRequestRef op;
-    completion_item(uint64_t o, Context *c, utime_t s,
-		    OpRequestRef opref)
-      : seq(o), finish(c), start(s), op(opref) {}
+    ZTracer::Trace trace;
+    completion_item(uint64_t o, Context *c, utime_t s, OpRequestRef opref,
+	ZTracer::Trace *trace)
+      : seq(o), finish(c), start(s), op(opref), trace(*trace) {}
     completion_item() : seq(0), finish(0), start(0) {}
   };
   struct write_item {
@@ -52,13 +54,16 @@ public:
     bufferlist bl;
     int alignment;
     OpRequestRef op;
-    write_item(uint64_t s, bufferlist& b, int al, OpRequestRef opref) :
-      seq(s), alignment(al), op(opref) {
+    ZTracer::Trace trace;
+    write_item(uint64_t s, bufferlist& b, int al, OpRequestRef opref,
+	ZTracer::Trace *trace)
+      : seq(s), alignment(al), op(opref), trace(*trace) {
       bl.claim(b);
     }
     write_item() : seq(0), alignment(0) {}
   };
 
+  ZTracer::Endpoint trace_endpoint;
   Mutex finisher_lock;
   Cond finisher_cond;
   uint64_t journaled_seq;
@@ -90,7 +95,8 @@ public:
 
   void submit_entry(uint64_t seq, bufferlist& bl, int alignment,
 		    Context *oncommit,
-		    OpRequestRef osd_op = OpRequestRef());
+		    OpRequestRef osd_op = OpRequestRef(),
+		    ZTracer::Trace *parent = NULL);
   /// End protected by finisher_lock
 
   /*
@@ -340,6 +346,7 @@ private:
   FileJournal(const boost::uuids::uuid& fsid, Finisher *fin, Cond *sync_cond, const char *f,
 	      bool dio = false, bool ai = true, bool faio = false) :
     Journal(fsid, fin, sync_cond),
+    trace_endpoint("0.0.0.0", 0, NULL),
     journaled_seq(0),
     plug_journal_completions(false),
     fn(f),
@@ -361,7 +368,10 @@ private:
     throttle_bytes(g_ceph_context, "filestore_bytes"),
     write_stop(false),
     write_thread(this),
-    write_finish_thread(this) { }
+    write_finish_thread(this)
+  {
+    trace_endpoint.copy_name(string("Journal (") + f + ")");
+  }
   ~FileJournal() {
     delete[] zero_buf;
   }
