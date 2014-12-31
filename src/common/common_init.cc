@@ -23,6 +23,7 @@
 #include "common/safe_io.h"
 #include "common/version.h"
 #include "include/color.h"
+#include "common/zipkin_trace.h"
 
 #include <errno.h>
 #include <deque>
@@ -115,6 +116,7 @@ void complain_about_parse_errors(CephContext *cct,
 void common_init_finish(CephContext *cct, int flags)
 {
   ceph::crypto::init(cct);
+  ZTracer::ztrace_init();
 
   if (!(flags & CINIT_FLAG_NO_DAEMON_ACTIONS))
     cct->start_service_thread();

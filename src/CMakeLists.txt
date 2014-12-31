@@ -71,6 +71,11 @@ OUTPUT_VARIABLE CEPH_PYTHON_SET_PATH)
 include_directories(".")
 #include_directories("./include")
 
+if(HAVE_LTTNG)
+  add_subdirectory(blkin)
+  include_directories(blkin/blkin-lib)
+endif(HAVE_LTTNG)
+
 if(${WITH_TCMALLOC})
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free")
   set(TCMALLOC_LIBS tcmalloc)
@@ -258,6 +263,9 @@ set_source_files_properties(${CMAKE_SOURCE_DIR}/src/common/version.cc
 if(${WITH_PROFILER})
   target_link_libraries(common PRIVATE profiler)
 endif(${WITH_PROFILER})
+if(HAVE_LTTNG)
+  target_link_libraries(common PRIVATE blkin)
+endif(HAVE_LTTNG)
 
 target_link_libraries(common PRIVATE erasure_code json_spirit ${CRYPTO_LIBS} rt ${Boost_LIBRARIES} ${EXTRALIBS})
 
