@@ -26,6 +26,7 @@ QueueStrategy::QueueStrategy(int _n_threads)
 void QueueStrategy::ds_dispatch(Message *m) {
   QSThread *thrd;
   lock.Lock();
+  m->trace.event("QueueStrategy::ds_dispatch");
   mqueue.push_back(*m);
   if (disp_threads.size()) {
     if (! disp_threads.empty()) {

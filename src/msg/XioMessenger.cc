@@ -905,6 +905,8 @@ assert(req->out.pdata_iov.nents || !nbuffers);
     tail->next = NULL;
   }
 
+  m->trace.event("XioPortal::enqueue_for_send");
+  m->trace.keyval("xio segments", xmsg->hdr.msg_cnt);
   xcon->portal->enqueue_for_send(xcon, xmsg);
 
   return code;
