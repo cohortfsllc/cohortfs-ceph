@@ -167,14 +167,16 @@ static int on_ow_msg_send_complete(struct xio_session *session,
 
 static int on_msg_error(struct xio_session *session,
 			enum xio_status error,
+			enum xio_msg_direction dir,
 			struct xio_msg  *msg,
 			void *conn_user_context)
 {
   /* XIO promises to flush back undelivered messages */
   XioConnection *xcon =
     static_cast<XioConnection*>(conn_user_context);
+  CephContext *cct = xcon->get_messenger()->cct;
 
-  dout(4) << "msg error session: " << session
+  ldout(cct,4) << "msg error session: " << session
     << " error: " << xio_strerror(error) << " msg: " << msg
     << " conn_user_context " << conn_user_context << dendl;
 
@@ -268,34 +270,36 @@ XioMessenger::XioMessenger(CephContext *cct, entity_name_t name,
 
       xio_init();
 
-      unsigned xopt;
-
+      int xopt;
       xopt = xio_log::get_level();
       xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_LOG_LEVEL,
-		  &xopt, sizeof(unsigned));
+		  &xopt, sizeof(xopt));
       xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_LOG_FN,
 		  (const void*)xio_log::log_dout, sizeof(xio_log_fn));
 
       xopt = 1;
       xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_DISABLE_HUGETBL,
-		  &xopt, sizeof(unsigned));
+		  &xopt, sizeof(xopt));
 
       xopt = XIO_MSGR_IOVLEN;
       xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_IN_IOVLEN,
-		  &xopt, sizeof(unsigned));
+		  &xopt, sizeof(xopt));
       xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_OUT_IOVLEN,
-		  &xopt, sizeof(unsigned));
+		  &xopt, sizeof(xopt));
 
-      xopt = cct->_conf->xio_queue_depth; // defaults to 512
-      xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_QUEUE_DEPTH,
-		  &xopt, sizeof(unsigned));
+      /* enable flow-control */
+      xopt = 1;
+      xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_ENABLE_FLOW_CONTROL,
+		  &xopt, sizeof(xopt));
 
-      /* and set 0 threshold for buffer callouts */
-      xopt = 0;
-      xio_set_opt(NULL, XIO_OPTLEVEL_RDMA, XIO_OPTNAME_TRANS_BUF_THRESHOLD,
-		  &xopt, sizeof(unsigned));
-      xio_set_opt(NULL, XIO_OPTLEVEL_TCP, XIO_OPTNAME_TRANS_BUF_THRESHOLD,
-		  &xopt, sizeof(unsigned));
+      /* and set threshold for buffer callouts */
+      xopt = 16384;
+      xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_INLINE_DATA,
+		  &xopt, sizeof(xopt));
+      xopt = 216;
+      xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_INLINE_HEADER,
+		  &xopt, sizeof(xopt));
+
 
       /* unregistered pool */
 #define XMSG_MEMPOOL_QUANTUM_SMALL 4096
@@ -988,8 +992,18 @@ ConnectionRef XioMessenger::get_connection(const entity_inst_t& dest)
 
     /* this should cause callbacks with user context of conn, but
      * we can always set it explicitly */
-    xcon->conn = xio_connect(xcon->session, this->portals.get_portal0()->ctx,
-			     0, NULL, xcon);
+    struct xio_connection_params xcp = {
+      .session           = xcon->session,
+      .ctx               = this->portals.get_portal0()->ctx,
+      .conn_idx          = 0, /* XXX auto_count */
+      .enable_tos        = 0,
+      .tos               = 0,
+      .pad               = 0,
+      .out_addr          = NULL,
+      .conn_user_context = xcon
+    };
+
+    xcon->conn = xio_connect(&xcp);
     xcon->connected = true;
 
     /* sentinel ref */
