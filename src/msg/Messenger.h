@@ -615,6 +615,7 @@ public:
 #endif
 
     m->set_dispatch_stamp(ceph_clock_now(cct));
+    m->trace.event("ms_deliver_dispatch");
     for (list<Dispatcher*>::iterator p = dispatchers.begin();
 	 p != dispatchers.end();
 	 ++p) {
