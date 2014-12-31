@@ -789,6 +789,9 @@ namespace OSDC {
     op->tid = ++last_tid;
     assert(client_inc >= 0);
 
+    op->trace.keyval("tid", op->tid);
+    op->trace.event("op_submit", &trace_endpoint);
+
     // pick target
     num_homeless_ops++;  // initially; recalc_op_target() will decrement if it finds a target
     recalc_op_target(op);
@@ -992,6 +995,7 @@ namespace OSDC {
     if (op->ontimeout)
       timer.cancel_event(op->ontimeout);
 
+    op->trace.event("finish_op", &trace_endpoint);
     delete op;
   }
 
@@ -1012,6 +1016,11 @@ namespace OSDC {
     m->ops = subop.ops;
     m->set_mtime(subop.parent.mtime);
     m->set_retry_attempt(subop.attempts++);
+
+    subop.parent.trace.keyval("want onack", subop.parent.onack ? 1 : 0);
+    subop.parent.trace.keyval("want oncommit", subop.parent.oncommit ? 1 : 0);
+    subop.parent.trace.event("send_op", &trace_endpoint);
+    m->trace = subop.parent.trace;
 
     if (subop.replay_version != eversion_t())
       m->set_version(subop.replay_version);	 // we're replaying this op!
@@ -1118,6 +1127,7 @@ namespace OSDC {
 
     if (rc == -EAGAIN) {
       ldout(cct, 7) << " got -EAGAIN, resubmitting" << dendl;
+      subop->parent.trace.event("reply with EAGAIN", &trace_endpoint);
       unregister_op(&subop->parent);
       _op_submit(&subop->parent);
       m->put();
@@ -1177,12 +1187,14 @@ namespace OSDC {
 	onack = subop->parent.onack;
 	subop->parent.onack = 0;  // only do callback once
 	num_unacked--;
+        subop->parent.trace.event("onack", &trace_endpoint);
       }
       if (subop->parent.oncommit && (m->is_ondisk() || rc)) {
 	ldout(cct, 15) << "handle_osd_op_reply safe" << dendl;
 	oncommit = subop->parent.oncommit;
 	subop->parent.oncommit = 0;
 	num_uncommitted--;
+        subop->parent.trace.event("oncommit", &trace_endpoint);
       }
 
       // done with this tid?
