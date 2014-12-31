@@ -2972,11 +2972,16 @@ void OSDService::reply_op_error(OpRequestRef op, int err, eversion_t v,
   int flags;
   flags = m->get_flags() & (CEPH_OSD_FLAG_ACK|CEPH_OSD_FLAG_ONDISK);
 
+  op->trace.event("reply_op_error");
+  op->trace.keyval("result", err);
+
   MOSDOpReply *reply = new MOSDOpReply(m, err, osdmap->get_epoch(), flags,
 				       true);
+  Messenger *msgr = m->get_connection()->get_messenger();
+  reply->trace.init("MOSDOpReply", msgr->get_trace_endpoint(), &op->trace);
+
   reply->set_reply_versions(v, uv);
-  m->get_connection()->get_messenger()->send_message(reply,
-						     m->get_connection());
+  msgr->send_message(reply, m->get_connection());
 }
 
 void OSD::handle_op(OpRequestRef op)

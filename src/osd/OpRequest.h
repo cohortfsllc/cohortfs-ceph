@@ -90,6 +90,8 @@ private:
   OpRequest(Message *req);
 
 public:
+  ZTracer::Trace trace; // zipkin trace
+
   bool been_queued_for_vol() { return hit_flag_points & flag_queued_for_vol; }
   bool been_reached_vol() { return hit_flag_points & flag_reached_vol; }
   bool been_delayed() { return hit_flag_points & flag_delayed; }

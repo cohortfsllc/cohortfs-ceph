@@ -58,19 +58,31 @@ void OSDVol::put()
     delete this;
 }
 
-
 OSDVol::OSDVol(OSDService *o, OSDMapRef curmap,
 	       const boost::uuids::uuid& v) :
   osd(o),
   cct(o->cct),
   osdriver(osd->store, coll_t()),
   osdmap_ref(curmap), last_persisted_osdmap_ref(curmap),
+  trace_endpoint("0.0.0.0", 0, NULL),
   ref(0), deleting(false), dirty_info(false),
   id(v), info(v),
   osr(osd->osr_registry.lookup_or_create(v, (stringify(v)))),
   finish_sync_event(NULL), coll(v),
   last_became_active(ceph_clock_now(cct))
 {
+  // construct name for trace_endpoint
+  {
+    ostringstream name;
+    name << "OSDVol";
+
+    VolumeRef vol;
+    if (osdmap_ref->find_by_uuid(v, vol))
+      name << ": " << vol->name;
+
+    trace_endpoint.copy_name(name.str());
+  }
+
   // RAII, Baby
 
   Mutex::Locker l(_lock);
@@ -191,6 +203,7 @@ void OSDVol::queue_op(OpRequestRef op)
     waiting_for_map.push_back(op);
     return;
   }
+  op->trace.event("queue_op", &trace_endpoint);
   osd->op_wq.queue(make_pair(OSDVolRef(this), op));
 }
 
@@ -401,6 +414,8 @@ void OSDVol::do_op(OpRequestRef op)
 {
   MOSDOp *m = static_cast<MOSDOp*>(op->get_req());
   assert(m->get_header().type == CEPH_MSG_OSD_OP);
+
+  op->trace.event("do_op", &trace_endpoint);
 
   if (get_osdmap()->is_blacklisted(m->get_source_addr())) {
     dout(10) << "do_op " << m->get_source_addr() << " is blacklisted" << dendl;
@@ -2283,6 +2298,15 @@ void OSDVol::eval_mutation(Mutation *mutation)
 	reply->add_flags(CEPH_OSD_FLAG_ACK | CEPH_OSD_FLAG_ONDISK);
 	dout(10) << " sending commit on " << mutation->tid << " "
 		 << reply << dendl;
+
+        if (mutation->ctx->op->trace) {
+          mutation->ctx->op->trace.event("eval_mutation sending commit",
+                                         &trace_endpoint);
+          // send reply with a child span
+          Messenger *msgr = m->get_connection()->get_messenger();
+          reply->trace.init("MOSDOpReply", msgr->get_trace_endpoint(),
+                            &mutation->ctx->op->trace);
+        }
 	osd->send_message_osd_client(reply, m->get_connection());
 	mutation->sent_disk = true;
 	mutation->ctx->op->mark_commit_sent();
@@ -2304,6 +2328,15 @@ void OSDVol::eval_mutation(Mutation *mutation)
 	  reply->set_reply_versions(mutation->ctx->at_version,
 				    mutation->ctx->user_at_version);
 	  reply->add_flags(CEPH_OSD_FLAG_ACK);
+
+          if ((*i)->trace) {
+            (*i)->trace.event("eval_mutation sending ack", &trace_endpoint);
+            // send reply with a child span
+            Messenger *msgr = m->get_connection()->get_messenger();
+            reply->trace.init("MOSDOpReply", msgr->get_trace_endpoint(),
+                              &(*i)->trace);
+          }
+
 	  osd->send_message_osd_client(reply, m->get_connection());
 	}
 	waiting_for_ack.erase(mutation->v);
@@ -2322,6 +2355,16 @@ void OSDVol::eval_mutation(Mutation *mutation)
 	reply->add_flags(CEPH_OSD_FLAG_ACK);
 	dout(10) << " sending ack on " << mutation->tid << " " << reply
 		 << dendl;
+
+        if (mutation->ctx->op->trace) {
+          mutation->ctx->op->trace.event("eval_mutation sending ack",
+                                         &trace_endpoint);
+          // send reply with a child span
+          Messenger *msgr = m->get_connection()->get_messenger();
+          reply->trace.init("MOSDOpReply", msgr->get_trace_endpoint(),
+                            &mutation->ctx->op->trace);
+        }
+
 	assert(entity_name_t::TYPE_OSD != m->get_connection()->peer_type);
 	osd->send_message_osd_client(reply, m->get_connection());
       }
