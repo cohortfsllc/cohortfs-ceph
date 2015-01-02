@@ -28,7 +28,7 @@ endif(HAVE_XIO)
 
 
 if(HAVE_CDS)
-list(APPEND EXTRALIBS ${CDS_LIBS})
+  list(APPEND EXTRALIBS ${CDS_LIBS})
 endif(HAVE_CDS)
 
 if (HAVE_LTTNG)
@@ -74,6 +74,7 @@ include_directories(".")
 if(HAVE_LTTNG)
   add_subdirectory(blkin)
   include_directories(blkin/blkin-lib)
+  include_directories(blkin)
 endif(HAVE_LTTNG)
 
 if(${WITH_TCMALLOC})
