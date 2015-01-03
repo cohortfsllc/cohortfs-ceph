@@ -20,6 +20,7 @@
 extern "C" {
 #include "libxio.h"
 }
+#include <atomic>
 #include <boost/lexical_cast.hpp>
 #include "SimplePolicyMessenger.h"
 #include "XioConnection.h"
@@ -217,7 +218,7 @@ public:
 	    if (unlikely(code)) {
 	      xcon->msg_send_fail(xmsg, code);
 	    } else {
-	      xcon->send.store(msg->timestamp, memory_order_relaxed);
+	      xcon->send.store(msg->timestamp, std::memory_order_relaxed);
 	      xcon->send_ctr += xmsg->hdr.msg_cnt; // only inc if cb promised
 	    }
 	  }

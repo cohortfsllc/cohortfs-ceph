@@ -28,7 +28,7 @@
 Mutex mtx;
 std::atomic<bool> initialized;
 
-std::atomic<uint64_t> XioMessenger::nInstances;
+std::atomic<uint32_t> XioMessenger::nInstances;
 
 struct xio_mempool *xio_msgr_reg_mpool;
 struct xio_mempool *xio_msgr_noreg_mpool;
@@ -809,7 +809,7 @@ int XioMessenger::send_message(Message *m, Connection *con)
 	     << " (" << data.buffers().size() << ")"
 	     << dendl;
       dout(11) << "XioMessenger::send_message: front payload dump:";
-      payload.hexdump( *_dout );
+      payload.hexdump(*_dout);
       *_dout << dendl;
   }
 
@@ -848,8 +848,9 @@ int XioMessenger::send_message(Message *m, Connection *con)
     // case 15:
       dout(4) << __func__ << "stop 43 " << m->get_type() << " " << *m << dendl;
       buffer::list &payload = m->get_payload();
-      dout(4) << __func__ << "payload dump:" << dendl;
-      payload.hexdump(cout);
+      dout(4) << __func__ << "payload dump:";
+      payload.hexdump(*_dout);
+      *_dout << dendl;
     }
   }
 

@@ -31,7 +31,7 @@ extern "C" {
 class XioMessenger : public SimplePolicyMessenger
 {
 private:
-  static atomic<uint64_t> nInstances;
+  static std::atomic<uint32_t> nInstances;
   std::atomic<uint32_t> nsessions;
   std::atomic<uint32_t> shutdown_called;
   Spinlock conns_sp;

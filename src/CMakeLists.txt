@@ -577,7 +577,7 @@ set(ceph_babeltrace_wrapper_srcs
   tools/ceph_babeltrace_wrapper.cc
   )
 add_executable(ceph_babeltrace_wrapper ${ceph_babeltrace_wrapper_srcs})
-target_link_libraries(ceph_babeltrace_wrapper common)
+target_link_libraries(ceph_babeltrace_wrapper common ${EXTRALIBS})
 install(TARGETS ceph_babeltrace_wrapper DESTINATION bin)
 
 set(ceph_mon_store_converter_srcs
