@@ -28,15 +28,17 @@ struct Entry {
   Entry()
     : m_thread(0), m_prio(0), m_subsys(0),
       m_next(NULL),
-      str(CEPH_LOG_ENTRY_PREALLOC, 0),
       m_streambuf(str)
-  {}
+  {
+    str.reserve(CEPH_LOG_ENTRY_PREALLOC);
+  }
   Entry(utime_t s, pthread_t t, short pr, short sub)
     : m_stamp(s), m_thread(t), m_prio(pr), m_subsys(sub),
       m_next(NULL),
-      str(CEPH_LOG_ENTRY_PREALLOC, 0),
       m_streambuf(str)
-  {}
+  {
+    str.reserve(CEPH_LOG_ENTRY_PREALLOC);
+  }
   Entry(utime_t s, pthread_t t, short pr, short sub, std::string &prealloc)
     : m_stamp(s), m_thread(t), m_prio(pr), m_subsys(sub),
       m_next(NULL),
