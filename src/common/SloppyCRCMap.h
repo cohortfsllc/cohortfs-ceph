@@ -6,6 +6,7 @@
 
 #include "include/types.h"
 #include "include/encoding.h"
+#include "common/Formatter.h"
 
 #include <map>
 #include <ostream>

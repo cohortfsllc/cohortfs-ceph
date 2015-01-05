@@ -20,4 +20,7 @@ struct FailedAssertion {
 };
 }
 
+using ceph::register_assert_context;
+using ceph::FailedAssertion;
+
 #endif

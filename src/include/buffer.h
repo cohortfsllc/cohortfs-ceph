@@ -751,4 +751,8 @@ struct xio_mempool_obj* get_xio_mp(const buffer::ptr& bp);
 
 } // namespace ceph
 
+using ceph::buffer;
+using ceph::bufferlist;
+using ceph::bufferptr;
+
 #endif

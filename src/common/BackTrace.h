@@ -31,4 +31,6 @@ struct BackTrace {
 
 }
 
+using ceph::BackTrace;
+
 #endif

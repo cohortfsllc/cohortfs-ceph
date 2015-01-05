@@ -16,6 +16,7 @@
 #include "include/encoding.h"
 #include "include/types.h"
 #include <errno.h>
+#include "common/Formatter.h"
 
 class JSONObj;
 

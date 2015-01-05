@@ -7,6 +7,7 @@
 #include "include/encoding.h"
 #include "include/types.h"
 #include "include/utime.h"
+#include "common/Formatter.h"
 
 /*
  * this needs to be compatible with with rgw_bucket, as it replaces it

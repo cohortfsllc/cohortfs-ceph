@@ -3,6 +3,7 @@
 
 #include "include/encoding.h"
 #include "include/types.h"
+#include "common/Formatter.h"
 
 class JSONObj;
 

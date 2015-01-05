@@ -17,6 +17,7 @@
 #include <list>
 
 #include "include/encoding.h"
+#include "common/Formatter.h"
 
 namespace ceph {
   class Formatter;

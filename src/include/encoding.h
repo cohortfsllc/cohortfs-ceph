@@ -22,8 +22,6 @@
 #include "buffer.h"
 #include "assert.h"
 
-using namespace ceph;
-
 /*
  * Notes on feature encoding:
  *

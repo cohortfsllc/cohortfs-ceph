@@ -24,6 +24,7 @@
 namespace ceph {
   class Formatter;
 }
+using ceph::Formatter;
 
 inline bool operator==(const sockaddr_in& a, const sockaddr_in& b) {
   return strncmp((const char*)&a, (const char*)&b, sizeof(a)) == 0;

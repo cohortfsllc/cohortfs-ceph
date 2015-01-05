@@ -147,4 +147,10 @@ class XMLFormatter : public Formatter {
 };
 
 }
+
+using ceph::Formatter;
+using ceph::JSONFormatter;
+using ceph::XMLFormatter;
+using ceph::new_formatter;
+
 #endif

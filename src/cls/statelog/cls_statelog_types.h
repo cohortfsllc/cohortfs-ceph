@@ -5,6 +5,7 @@
 #include "include/types.h"
 
 #include "include/utime.h"
+#include "common/Formatter.h"
 
 class JSONObj;
 

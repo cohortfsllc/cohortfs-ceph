@@ -28,6 +28,8 @@
  *
  */
 
+using ceph::Formatter;
+
 class DecayRate {
   double k;		// k = ln(.5)/half_life
 

@@ -81,4 +81,7 @@ class HeartbeatMap {
 };
 
 }
+
+using ceph::heartbeat_handle_d;
+
 #endif
