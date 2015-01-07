@@ -154,14 +154,18 @@ int main(int argc, const char **argv)
   utime_t end = now;
   end += seconds;
   off_t pos = 0;
+
+  CollectionHandle ch = fs->open_collection(coll_t());
+
   //cout << "stop at " << end << std::endl;
   cout << "# offset\tack\tcommit" << std::endl;
   while (now < end) {
-    object_t poid("streamtest");
-
+    object_t oid("streamtest");
     set_start(pos, ceph_clock_now(g_ceph_context));
     ObjectStore::Transaction *t = new ObjectStore::Transaction;
-    t->write(coll_t(), hobject_t(poid), pos, bytes, bl);
+    (void) t->push_col(ch);
+    (void) t->push_oid(hobject_t(oid));
+    t->write(pos, bytes, bl);
     fs->queue_transaction(NULL, t, new C_Ack(pos), new C_Commit(pos));
     pos += bytes;
 
@@ -187,6 +191,7 @@ int main(int argc, const char **argv)
   cout << "avg commit\t" << (total_commit / (double)total_num) << std::endl;
   cout << "tput\t" << prettybyte_t((double)(total_num * bytes) / (double)(end-start)) << "/sec" << std::endl;
 
+  fs->close_collection(ch);
   fs->umount();
 
 }

@@ -26,7 +26,8 @@
 #include "os/ObjectStore.h"
 
 void usage(const string &name) {
-  std::cerr << "Usage: " << name << " [new|continue] store_path store_journal db_path"
+  std::cerr << "Usage: " << name
+	    << " [new|continue] store_path store_journal db_path"
 	    << std::endl;
 }
 
@@ -68,17 +69,19 @@ int main(int argc, char **argv) {
   boost::scoped_ptr<KeyValueDB> db(_db);
   boost::scoped_ptr<ObjectStore> store(new FileStore(g_ceph_context, store_path, store_dev));
 
-
+  coll_t cid("coll");
   if (start_new) {
     std::cerr << "mkfs" << std::endl;
     assert(!store->mkfs());
     ObjectStore::Transaction t;
     assert(!store->mount());
-    t.create_collection(coll_t("coll"));
+    t.create_collection(cid);
     store->apply_transaction(t);
   } else {
     assert(!store->mount());
   }
+
+  ObjectStore::CollectionHandle ch = store->open_collection(cid);
 
   FileStoreTracker tracker(store.get(), db.get());
 
@@ -86,7 +89,7 @@ int main(int argc, char **argv) {
   for (unsigned i = 0; i < 10; ++i) {
     stringstream stream;
     stream << "Object_" << i;
-    tracker.verify("coll", stream.str(), true);
+    tracker.verify(FileStoreTracker::obj_desc_t(ch, stream.str()), true);
     objects.insert(stream.str());
   }
 
@@ -95,19 +98,17 @@ int main(int argc, char **argv) {
     for (unsigned j = 0; j < 100; ++j) {
       int val = rand() % 100;
       if (val < 30) {
-	t.write("coll", *rand_choose(objects));
+	t.write(ch, *rand_choose(objects));
       } else if (val < 60) {
-	t.clone("coll", *rand_choose(objects),
-		*rand_choose(objects));
+	t.clone(ch, *rand_choose(objects), *rand_choose(objects));
       } else if (val < 70) {
-	t.remove("coll", *rand_choose(objects));
+	t.remove(ch, *rand_choose(objects));
       } else {
-	t.clone_range("coll", *rand_choose(objects),
-		      *rand_choose(objects));
+	t.clone_range(ch, *rand_choose(objects), *rand_choose(objects));
       }
     }
     tracker.submit_transaction(t);
-    tracker.verify("coll", *rand_choose(objects));
+    tracker.verify(FileStoreTracker::obj_desc_t(ch, *rand_choose(objects)));
   }
   return 0;
 }

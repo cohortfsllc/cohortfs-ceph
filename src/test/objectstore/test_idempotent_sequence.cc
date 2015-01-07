@@ -112,13 +112,17 @@ int run_get_last_op(std::string& filestore_path, std::string& journal_path)
   coll_t txn_coll("meta");
   hobject_t txn_object(object_t("txn"));
   bufferlist bl;
-  store->read(txn_coll, txn_object, 0, 100, bl);
+  CollectionHandle ch = store->open_collection(txn_coll);
+  ObjectHandle oh = store->get_object(ch, txn_object);
+  store->read(ch, oh, 0, 100, bl);
   int32_t txn = 0;
   if (bl.length()) {
     bufferlist::iterator p = bl.begin();
     ::decode(txn, p);
   }
 
+  store->put_object(oh);
+  store->close_collection(ch);
   store->umount();
   delete store;
 

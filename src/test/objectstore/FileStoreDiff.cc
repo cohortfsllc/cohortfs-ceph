@@ -57,7 +57,8 @@ bool FileStoreDiff::diff_attrs(std::map<std::string,bufferptr>& b,
     }
 
     if (!b_it->second.cmp(a_it->second)) {
-      dout(0) << "diff_attrs contents mismatch on attr " << b_it->first << dendl;
+      dout(0) << "diff_attrs contents mismatch on attr " << b_it->first
+	      << dendl;
       ret = true;
       continue;
     }
@@ -80,7 +81,8 @@ static bool diff_omap(std::map<std::string,bufferlist>& b,
     }
 
     if (!(b_it->second == a_it->second)) {
-      dout(0) << "diff_attrs contents mismatch on attr " << b_it->first << dendl;
+      dout(0) << "diff_attrs contents mismatch on attr " << b_it->first
+	      << dendl;
       ret = true;
       continue;
     }
@@ -124,7 +126,8 @@ bool FileStoreDiff::diff_objects_stat(struct stat& a, struct stat& b)
   return ret;
 }
 
-bool FileStoreDiff::diff_objects(FileStore *a_store, FileStore *b_store, coll_t coll)
+bool FileStoreDiff::diff_objects(FileStore *a_store, FileStore *b_store,
+				 coll_t coll)
 {
   dout(2) << __func__ << " coll "  << coll << dendl;
 
@@ -132,16 +135,25 @@ bool FileStoreDiff::diff_objects(FileStore *a_store, FileStore *b_store, coll_t 
 
   int err;
   std::vector<hobject_t> b_objects, a_objects;
-  err = b_store->collection_list(coll, b_objects);
+
+  ObjectStore::CollectionHandle a_ch = a_store->open_collection(coll);
+  ObjectStore::CollectionHandle b_ch = b_store->open_collection(coll);
+
+  err = b_store->collection_list(b_ch, b_objects);
   if (err < 0) {
     dout(0) << "diff_objects list on verify coll " << coll.to_str()
 	    << " returns " << err << dendl;
+    a_store->close_collection(a_ch);
+    b_store->close_collection(b_ch);
     return true;
   }
-  err = a_store->collection_list(coll, a_objects);
+
+  err = a_store->collection_list(a_ch, a_objects);
   if (err < 0) {
     dout(0) << "diff_objects list on store coll " << coll.to_str()
 	      << " returns " << err << dendl;
+    a_store->close_collection(a_ch);
+    b_store->close_collection(b_ch);
     return true;
   }
 
@@ -164,17 +176,24 @@ bool FileStoreDiff::diff_objects(FileStore *a_store, FileStore *b_store, coll_t 
     }
 
     struct stat b_stat, a_stat;
-    err = b_store->stat(coll, b_obj, &b_stat);
+
+    ObjectStore::ObjectHandle b_oh = b_store->get_object(b_ch, b_obj);
+    err = b_store->stat(b_ch, b_oh, &b_stat);
     if (err < 0) {
       dout(0) << "diff_objects error stating B object "
 	      << coll.to_str() << "/" << b_obj.oid.name << dendl;
       ret = true;
+      continue;
     }
-    err = a_store->stat(coll, a_obj, &a_stat);
+
+    ObjectStore::ObjectHandle a_oh = a_store->get_object(a_ch, a_obj);
+    err = a_store->stat(a_ch, a_oh, &a_stat);
     if (err < 0) {
       dout(0) << "diff_objects error stating A object "
 	  << coll << "/" << a_obj << dendl;
       ret = true;
+      b_store->put_object(b_oh);
+      continue;
     }
 
     if (diff_objects_stat(a_stat, b_stat)) {
@@ -184,8 +203,8 @@ bool FileStoreDiff::diff_objects(FileStore *a_store, FileStore *b_store, coll_t 
     }
 
     bufferlist a_obj_bl, b_obj_bl;
-    b_store->read(coll, b_obj, 0, b_stat.st_size, b_obj_bl);
-    a_store->read(coll, a_obj, 0, a_stat.st_size, a_obj_bl);
+    b_store->read(b_ch, b_oh, 0, b_stat.st_size, b_obj_bl);
+    a_store->read(a_ch, a_oh, 0, a_stat.st_size, a_obj_bl);
 
     if (!a_obj_bl.contents_equal(b_obj_bl)) {
       dout(0) << "diff_objects content mismatch on "
@@ -194,16 +213,17 @@ bool FileStoreDiff::diff_objects(FileStore *a_store, FileStore *b_store, coll_t 
     }
 
     std::map<std::string, bufferptr> a_obj_attrs_map, b_obj_attrs_map;
-    err = a_store->getattrs(coll, a_obj, a_obj_attrs_map);
+    err = a_store->getattrs(a_ch, a_oh, a_obj_attrs_map);
     if (err < 0) {
-      dout(0) << "diff_objects getattrs on A object " << coll << "/" << a_obj
-	      << " returns " << err << dendl;
+      dout(0) << "diff_objects getattrs on A object " << coll << "/"
+	      << a_obj << " returns " << err << dendl;
       ret = true;
     }
-    err = b_store->getattrs(coll, b_obj, b_obj_attrs_map);
+
+    err = b_store->getattrs(b_ch, b_oh, b_obj_attrs_map);
     if (err < 0) {
-      dout(0) << "diff_objects getattrs on B object " << coll << "/" << b_obj
-	      << "returns " << err << dendl;
+      dout(0) << "diff_objects getattrs on B object " << coll << "/"
+	      << b_obj << "returns " << err << dendl;
       ret = true;
     }
 
@@ -216,27 +236,27 @@ bool FileStoreDiff::diff_objects(FileStore *a_store, FileStore *b_store, coll_t 
 
     std::map<std::string, bufferlist> a_obj_omap, b_obj_omap;
     std::set<std::string> a_omap_keys, b_omap_keys;
-    err = a_store->omap_get_keys(coll, a_obj, &a_omap_keys);
+    err = a_store->omap_get_keys(a_ch, a_oh, &a_omap_keys);
     if (err < 0) {
       dout(0) << "diff_objects getomap on A object " << coll << "/" << a_obj
 	      << " returns " << err << dendl;
       ret = true;
     }
-    err = a_store->omap_get_values(coll, a_obj, a_omap_keys, &a_obj_omap);
+    err = a_store->omap_get_values(a_ch, a_oh, a_omap_keys, &a_obj_omap);
     if (err < 0) {
       dout(0) << "diff_objects getomap on A object " << coll << "/" << a_obj
 	      << " returns " << err << dendl;
       ret = true;
     }
-    err = b_store->omap_get_keys(coll, b_obj, &b_omap_keys);
+    err = b_store->omap_get_keys(b_ch, b_oh, &b_omap_keys);
     if (err < 0) {
-      dout(0) << "diff_objects getomap on A object " << coll << "/" << b_obj
+      dout(0) << "diff_objects getomap on B object " << coll << "/" << b_obj
 	      << " returns " << err << dendl;
       ret = true;
     }
-    err = b_store->omap_get_values(coll, b_obj, b_omap_keys, &b_obj_omap);
+    err = b_store->omap_get_values(b_ch, b_oh, b_omap_keys, &b_obj_omap);
     if (err < 0) {
-      dout(0) << "diff_objects getomap on A object " << coll << "/" << b_obj
+      dout(0) << "diff_objects getomap on B object " << coll << "/" << b_obj
 	      << " returns " << err << dendl;
       ret = true;
     }
@@ -246,24 +266,35 @@ bool FileStoreDiff::diff_objects(FileStore *a_store, FileStore *b_store, coll_t 
 	      << coll << "/" << b_obj << dendl;
       ret = true;
     }
+    a_store->put_object(a_oh);
+    b_store->put_object(b_oh);
   }
+
+  a_store->close_collection(a_ch);
+  b_store->close_collection(b_ch);
 
   return ret;
 }
 
-bool FileStoreDiff::diff_coll_attrs(FileStore *a_store, FileStore *b_store, coll_t coll)
+bool FileStoreDiff::diff_coll_attrs(FileStore *a_store, FileStore *b_store,
+				    coll_t coll)
 {
   bool ret = false;
 
   int err;
   std::map<std::string, bufferptr> b_coll_attrs, a_coll_attrs;
-  err = b_store->collection_getattrs(coll, b_coll_attrs);
+
+  ObjectStore::CollectionHandle a_ch = a_store->open_collection(coll);
+  ObjectStore::CollectionHandle b_ch = b_store->open_collection(coll);
+
+  err = b_store->collection_getattrs(b_ch, b_coll_attrs);
   if (err < 0) {
     dout(0) << "diff_attrs getattrs on verify coll " << coll.to_str()
 	<< "returns " << err << dendl;
     ret = true;
   }
-  err = a_store->collection_getattrs(coll, a_coll_attrs);
+
+  err = a_store->collection_getattrs(a_ch, a_coll_attrs);
   if (err < 0) {
     dout(0) << "diff_attrs getattrs on A coll " << coll.to_str()
 	      << "returns " << err << dendl;
@@ -276,6 +307,10 @@ bool FileStoreDiff::diff_coll_attrs(FileStore *a_store, FileStore *b_store, coll
     ret = true;
   }
 
+done:
+  a_store->close_collection(a_ch);
+  b_store->close_collection(b_ch);
+
   return diff_attrs(b_coll_attrs, a_coll_attrs) || ret;
 }
 
@@ -284,6 +319,7 @@ bool FileStoreDiff::diff()
   bool ret = false;
 
   std::vector<coll_t> a_coll_list, b_coll_list;
+
   a_store->list_collections(a_coll_list);
   b_store->list_collections(b_coll_list);
 

@@ -114,13 +114,13 @@ int main(int argc, char **argv) {
 
 TEST(TestFileJournal, Create) {
   fsid = boost::uuids::random_generator()();
-  FileJournal j(fsid, finisher, &sync_cond, path, directio, aio);
+  FileJournal j(NULL /* os */, fsid, finisher, &sync_cond, path, directio, aio);
   ASSERT_EQ(0, j.create());
 }
 
 TEST(TestFileJournal, WriteSmall) {
   fsid = boost::uuids::random_generator()();
-  FileJournal j(fsid, finisher, &sync_cond, path, directio, aio);
+  FileJournal j(NULL /* os */, fsid, finisher, &sync_cond, path, directio, aio);
   ASSERT_EQ(0, j.create());
   j.make_writeable();
 
@@ -134,7 +134,7 @@ TEST(TestFileJournal, WriteSmall) {
 
 TEST(TestFileJournal, WriteBig) {
   fsid = boost::uuids::random_generator()();
-  FileJournal j(fsid, finisher, &sync_cond, path, directio, aio);
+  FileJournal j(NULL /* os */, fsid, finisher, &sync_cond, path, directio, aio);
   ASSERT_EQ(0, j.create());
   j.make_writeable();
 
@@ -152,7 +152,7 @@ TEST(TestFileJournal, WriteBig) {
 
 TEST(TestFileJournal, WriteMany) {
   fsid = boost::uuids::random_generator()();
-  FileJournal j(fsid, finisher, &sync_cond, path, directio, aio);
+  FileJournal j(NULL /* os */, fsid, finisher, &sync_cond, path, directio, aio);
   ASSERT_EQ(0, j.create());
   j.make_writeable();
 
@@ -175,7 +175,7 @@ TEST(TestFileJournal, WriteMany) {
 
 TEST(TestFileJournal, WriteManyVecs) {
   fsid = boost::uuids::random_generator()();
-  FileJournal j(fsid, finisher, &sync_cond, path, directio, aio);
+  FileJournal j(NULL /* os */, fsid, finisher, &sync_cond, path, directio, aio);
   ASSERT_EQ(0, j.create());
   j.make_writeable();
 
@@ -212,7 +212,7 @@ TEST(TestFileJournal, WriteManyVecs) {
 
 TEST(TestFileJournal, ReplaySmall) {
   fsid = boost::uuids::random_generator()();
-  FileJournal j(fsid, finisher, &sync_cond, path, directio, aio);
+  FileJournal j(NULL /* os */, fsid, finisher, &sync_cond, path, directio, aio);
   ASSERT_EQ(0, j.create());
   j.make_writeable();
 
@@ -257,7 +257,7 @@ TEST(TestFileJournal, ReplaySmall) {
 
 TEST(TestFileJournal, ReplayCorrupt) {
   fsid = boost::uuids::random_generator()();
-  FileJournal j(fsid, finisher, &sync_cond, path, directio, aio);
+  FileJournal j(NULL /* os */, fsid, finisher, &sync_cond, path, directio, aio);
   ASSERT_EQ(0, j.create());
   j.make_writeable();
 
@@ -324,7 +324,7 @@ TEST(TestFileJournal, ReplayCorrupt) {
 
 TEST(TestFileJournal, WriteTrim) {
   fsid = boost::uuids::random_generator()();
-  FileJournal j(fsid, finisher, &sync_cond, path, directio, aio);
+  FileJournal j(NULL /* os */, fsid, finisher, &sync_cond, path, directio, aio);
   ASSERT_EQ(0, j.create());
   j.make_writeable();
 
@@ -362,7 +362,7 @@ TEST(TestFileJournal, WriteTrim) {
 
 TEST(TestFileJournal, WriteTrimSmall) {
   fsid = boost::uuids::random_generator()();
-  FileJournal j(fsid, finisher, &sync_cond, path, directio);
+  FileJournal j(NULL /* os */, fsid, finisher, &sync_cond, path, directio);
   ASSERT_EQ(0, j.create());
   j.make_writeable();
 
@@ -405,7 +405,7 @@ TEST(TestFileJournal, ReplayDetectCorruptFooterMagic) {
   g_ceph_context->_conf->apply_changes(NULL);
 
   fsid = boost::uuids::random_generator()();
-  FileJournal j(fsid, finisher, &sync_cond, path, directio, aio);
+  FileJournal j(NULL /* os */, fsid, finisher, &sync_cond, path, directio, aio);
   ASSERT_EQ(0, j.create());
   j.make_writeable();
 
@@ -455,7 +455,7 @@ TEST(TestFileJournal, ReplayDetectCorruptPayload) {
   g_ceph_context->_conf->apply_changes(NULL);
 
   fsid = boost::uuids::random_generator()();
-  FileJournal j(fsid, finisher, &sync_cond, path, directio, aio);
+  FileJournal j(NULL /* os */, fsid, finisher, &sync_cond, path, directio, aio);
   ASSERT_EQ(0, j.create());
   j.make_writeable();
 
@@ -505,7 +505,7 @@ TEST(TestFileJournal, ReplayDetectCorruptHeader) {
   g_ceph_context->_conf->apply_changes(NULL);
 
   fsid = boost::uuids::random_generator()();
-  FileJournal j(fsid, finisher, &sync_cond, path, directio, aio);
+  FileJournal j(NULL /* os */, fsid, finisher, &sync_cond, path, directio, aio);
   ASSERT_EQ(0, j.create());
   j.make_writeable();
 
