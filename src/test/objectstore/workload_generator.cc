@@ -182,8 +182,9 @@ void WorkloadGenerator::init_args(vector<const char*> args)
       _suppress_ops_or_die(val);
     } else if (ceph_argparse_witharg(args, i, &val,
 	"--test-show-stats-period", (char*) NULL)) {
-      m_stats_show_interval = strtoll(val.c_str(), NULL, 10) * 1s;
-    } else if (ceph_argparse_flag(args, &i, "--test-show-stats", (char*) NULL)) {
+      m_stats_show_secs = strtoll(val.c_str(), NULL, 10);
+    } else if (ceph_argparse_flag(args, &i, "--test-show-stats",
+				  (char*) NULL)) {
       m_do_stats = true;
     } else if (ceph_argparse_flag(args, &i, "--help", (char*) NULL)) {
       usage();
@@ -198,7 +199,8 @@ int WorkloadGenerator::get_uniform_random_value(int min, int max)
   return value(m_rng);
 }
 
-TestObjectStoreState::coll_entry_t *WorkloadGenerator::get_rnd_coll_entry(bool erase = false)
+TestObjectStoreState::coll_entry_t *WorkloadGenerator::get_rnd_coll_entry(
+  bool erase = false)
 {
   int index = get_uniform_random_value(0, m_collections_ids.size()-1);
   coll_entry_t *entry = get_coll_at(index, erase);
@@ -249,8 +251,9 @@ void WorkloadGenerator::get_filled_byte_array(bufferlist& bl, size_t size)
 }
 
 void WorkloadGenerator::do_write_object(ObjectStore::Transaction *t,
-					coll_t coll, oid_t oid,
-					C_StatState *stat)
+					coll_t coll, hoid_t oid,
+					uint16_t c_ix, uint16_t o_ix,
+					C_StatState* stat)
 {
   if (m_suppress_write_data) {
     dout(5) << __func__ << " suppressed" << dendl;
@@ -270,11 +273,12 @@ void WorkloadGenerator::do_write_object(ObjectStore::Transaction *t,
   if (m_do_stats && (stat != NULL))
     stat->written_data += bl.length();
 
-  t->write(coll, oid, 0, bl.length(), bl);
+  t->write(c_ix, o_ix, 0, bl.length(), bl);
 }
 
 void WorkloadGenerator::do_setattr_object(ObjectStore::Transaction *t,
-					  coll_t coll, oid_t oid,
+					  coll_t coll, hoid_t oid,
+					  uint16_t c_ix, uint16_t o_ix,
 					  C_StatState *stat)
 {
   if (m_suppress_write_xattr_obj) {
@@ -294,11 +298,13 @@ void WorkloadGenerator::do_setattr_object(ObjectStore::Transaction *t,
   if (m_do_stats && (stat != NULL))
       stat->written_data += bl.length();
 
-  t->setattr(coll, oid, "objxattr", bl);
+  t->setattr(c_ix, o_ix, "objxattr", bl);
 }
 
 void WorkloadGenerator::do_setattr_collection(ObjectStore::Transaction *t,
-					      coll_t coll, C_StatState *stat)
+					      coll_t coll,
+					      uint16_t c_ix,
+					      C_StatState *stat)
 {
   if (m_suppress_write_xattr_coll) {
     dout(5) << __func__ << " suppressed" << dendl;
@@ -316,11 +322,13 @@ void WorkloadGenerator::do_setattr_collection(ObjectStore::Transaction *t,
   if (m_do_stats && (stat != NULL))
       stat->written_data += bl.length();
 
-  t->collection_setattr(coll, "collxattr", bl);
+  t->collection_setattr(c_ix, "collxattr", bl);
 }
 
 void WorkloadGenerator::do_append_log(ObjectStore::Transaction *t,
-				      coll_entry_t *entry, C_StatState *stat)
+				      coll_entry_t *entry,
+				      uint16_t c_ix, uint16_t o_ix,
+				      C_StatState *stat)
 {
   if (m_suppress_write_log) {
     dout(5) << __func__ << " suppressed" << dendl;
@@ -340,7 +348,7 @@ void WorkloadGenerator::do_append_log(ObjectStore::Transaction *t,
       stat->written_data += bl.length();
 
   uint64_t s = pg_log_size[entry->m_coll];
-  t->write(META_COLL, log_obj, s, bl.length(), bl);
+  t->write(c_ix, o_ix, s, bl.length(), bl);
   pg_log_size[entry->m_coll] += bl.length();
 }
 
@@ -350,17 +358,24 @@ void WorkloadGenerator::do_destroy_collection(ObjectStore::Transaction *t,
 {
   m_nr_runs = 0;
   entry->m_osr.flush();
-  vector<oid_t> ls;
-  m_store->collection_list(entry->m_coll, ls);
+  vector<hoid_t> ls;
+  ObjectStore::CollectionHandle ch =
+    m_store->open_collection(entry->m_coll);
+  m_store->collection_list(ch, ls);
   dout(2) << __func__ << " coll " << entry->m_coll
       << " (" << ls.size() << " objects)" << dendl;
 
-  for (vector<oid_t>::iterator it = ls.begin(); it < ls.end(); ++it) {
-    t->remove(entry->m_coll, *it);
+  t->push_col(ch);
+  for (vector<hoid_t>::iterator it = ls.begin(); it < ls.end(); ++it) {
+    (void) t->push_oid(*it);
+    t->remove();
   }
 
-  t->remove_collection(entry->m_coll);
-  t->remove(META_COLL, entry->m_meta_obj);
+  uint16_t c_ix = t->push_cid(entry->m_coll);
+  t->remove_collection(c_ix);
+  c_ix = t->push_cid(META_COLL);
+  uint16_t o_ix = t->push_oid(entry->m_meta_obj);
+  t->remove(c_ix, o_ix);
 }
 
 TestObjectStoreState::coll_entry_t
@@ -375,10 +390,17 @@ TestObjectStoreState::coll_entry_t
   }
   m_collections.insert(make_pair(entry->m_id, entry));
 
-  dout(2) << __func__ << " id " << entry->m_id << " coll " << entry->m_coll << dendl;
+  dout(2) << __func__ << " id " << entry->m_id << " coll " << entry->m_coll
+	  << dendl;
+
   t->create_collection(entry->m_coll);
-  dout(2) << __func__ << " meta " << META_COLL << "/" << entry->m_meta_obj << dendl;
-  t->touch(META_COLL, entry->m_meta_obj);
+  dout(2) << __func__ << " meta " << META_COLL << "/" << entry->m_meta_obj
+	  << dendl;
+
+  uint16_t c_ix = t->push_cid(META_COLL);
+  uint16_t o_ix = t->push_oid(entry->m_meta_obj);
+  t->touch(c_ix, o_ix);
+
   return entry;
 }
 
@@ -447,7 +469,8 @@ void WorkloadGenerator::run()
 
       entry = do_create_collection(t, stat_state);
       if (!entry) {
-	dout(0) << __func__ << " something went terribly wrong creating coll" << dendl;
+	dout(0) << __func__ << " something went terribly wrong creating coll"
+		<< dendl;
 	break;
       }
 
@@ -467,10 +490,16 @@ void WorkloadGenerator::run()
     } else {
       oid_t *oid = get_rnd_obj(entry);
 
-      do_write_object(t, entry->m_coll, *oid, stat_state);
-      do_setattr_object(t, entry->m_coll, *oid, stat_state);
-      do_setattr_collection(t, entry->m_coll, stat_state);
-      do_append_log(t, entry, stat_state);
+      uint16_t c_ix = t->push_cid(entry->m_coll);
+      uint16_t o_ix = t->push_oid(*obj);
+
+      uint16_t cm_ix = t->push_cid(META_COLL);
+      uint16_t om_ix = t->push_oid(entry->m_meta_obj);
+
+      do_write_object(t, entry->m_coll, *obj, c_ix, o_ix, stat_state);
+      do_setattr_object(t, entry->m_coll, *obj, c_ix, o_ix, stat_state);
+      do_setattr_collection(t, entry->m_coll, c_ix, stat_state);
+      do_append_log(t, entry, cm_ix, om_ix, stat_state);
 
       c = new C_OnReadable(this, t);
     }

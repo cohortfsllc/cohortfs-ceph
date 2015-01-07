@@ -69,8 +69,9 @@ int main(int argc, const char **argv)
   for (int i=0; i<mb; i++) {
     char f[30];
     snprintf(f, sizeof(f), "foo%d\n", i);
-    oid_t soid(f);
-    t.write(coll_t(), soid, 0, bl.length(), bl);
+    hoid_t soid(oid_t(f));
+    t.push_oid(soid);
+    t.write(0, bl.length(), bl);
   }
 
   dout(0) << "starting thread" << dendl;

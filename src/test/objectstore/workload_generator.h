@@ -103,13 +103,19 @@ class WorkloadGenerator : public TestObjectStoreState {
   void get_filled_byte_array(bufferlist& bl, size_t size);
 
   void do_write_object(ObjectStore::Transaction *t,
-      coll_t coll, oid_t oid, C_StatState *stat);
+		       coll_t coll, hoid_t oid,
+		       uint16_t c_ix, uint16_t o_ix,
+		       C_StatState *stat);
   void do_setattr_object(ObjectStore::Transaction *t,
-      coll_t coll, oid_t oid, C_StatState *stat);
+			 coll_t coll, hoid_t oid,
+			 uint16_t c_ix, uint16_t o_ix,
+			 C_StatState *stat);
   void do_setattr_collection(ObjectStore::Transaction *t, coll_t coll,
-      C_StatState *stat);
+			     uint16_t c_ix,
+			     C_StatState *stat);
   void do_append_log(ObjectStore::Transaction *t, coll_entry_t *entry,
-      C_StatState *stat);
+		     uint16_t c_ix, uint16_t o_ix,
+		     C_StatState *stat);
 
   bool should_destroy_collection() {
     return ((m_destroy_coll_every_nr_runs > 0) &&

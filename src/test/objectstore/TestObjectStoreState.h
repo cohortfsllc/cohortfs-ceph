@@ -32,16 +32,18 @@ public:
   struct coll_entry_t {
     int m_id;
     coll_t m_coll;
-    oid_t m_meta_obj;
+    ObjectStore* os;
     ObjectStore::Sequencer m_osr;
+    oid_t m_meta_obj;
     map<int, oid_t*> m_objects;
     int m_next_object_id;
 
     coll_entry_t(int i, char *coll_buf, char *meta_obj_buf)
-    : m_id(i), m_coll(coll_buf),
-      m_meta_obj(meta_obj_buf),
-      m_osr(coll_buf), m_next_object_id(0) {
-    }
+      : m_id(i), m_coll(coll_buf),
+	m_osr(coll_buf), m_meta_obj(oid_t(meta_obj_buf)),
+	m_next_object_id(0)
+      {}
+
     ~coll_entry_t();
 
     oid_t *touch_obj(int id);

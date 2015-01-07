@@ -154,14 +154,18 @@ int main(int argc, const char **argv)
   ceph::mono_time start = now;
   ceph::mono_time end = now + seconds * 1s;
   off_t pos = 0;
+
+  CollectionHandle ch = fs->open_collection(coll_t());
+
   //cout << "stop at " << end << std::endl;
   cout << "# offset\tack\tcommit" << std::endl;
   while (now < end) {
-    oid_t poid("streamtest");
-
+    hoid_t oid(oid_t("streamtest"));
     set_start(pos, ceph::mono_clock::now());
     ObjectStore::Transaction *t = new ObjectStore::Transaction;
-    t->write(coll_t(), poid, pos, bytes, bl);
+    (void) t->push_col(ch);
+    (void) t->push_oid(oid);
+    t->write(pos, bytes, bl);
     fs->queue_transaction(NULL, t, new C_Ack(pos), new C_Commit(pos));
     pos += bytes;
 
@@ -177,6 +181,7 @@ int main(int argc, const char **argv)
 				   ceph::span_to_double(end-start)) << "/sec"
        << std::endl;
 
+  fs->close_collection(ch);
   fs->umount();
 
 }
