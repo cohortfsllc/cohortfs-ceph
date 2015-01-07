@@ -107,11 +107,12 @@ uint64_t do_run(ObjectStore *store, int attrsize, int numattrs,
     for (int i = 0; i < transsize; ++i) {
       stringstream obj_str;
       obj_str << i;
-      t.touch(coll_t(coll_str.str()),
-	      obj_str.str());
+      t.push_oid(hoid_t(oid_t(obj_str.str())));
+      t.touch();
       objects.insert(obj_str.str());
     }
-    collections[coll_str.str()] = make_pair(objects, new ObjectStore::Sequencer(coll_str.str()));
+    collections[coll_str.str()] =
+      make_pair(objects, new ObjectStore::Sequencer(coll_str.str()));
   }
   store->apply_transaction(t);
 
@@ -133,11 +134,12 @@ uint64_t do_run(ObjectStore *store, int attrsize, int numattrs,
     for (set<string>::iterator oid = iter->second.first.begin();
 	 oid != iter->second.first.end();
 	 ++oid) {
+      uint16_t c_ix = t->push_cid(coll_t(iter->first));
+      uint16_t o_ix = t->push_oid(hoid_t(oid_t(*oid)));
       for (int j = 0; j < numattrs; ++j) {
 	stringstream ss;
 	ss << i << ", " << j << ", " << *oid;
-	t->setattr(coll_t(iter->first),
-		   *oid,
+	t->setattr(c_ix, o_ix,
 		   ss.str().c_str(),
 		   bl);
       }

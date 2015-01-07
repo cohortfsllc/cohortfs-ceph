@@ -42,17 +42,21 @@ void TestFileStoreBackend::write(
     osrs.insert(make_pair(coll_str, ObjectStore::Sequencer(coll_str)));
   ObjectStore::Sequencer *osr = &(osrs.find(coll_str)->second);
 
-
+  // inefficient, but clear
   coll_t c(coll_str);
-  oid_t h(oid.substr(sep+1));
-  t->write(c, h, offset, bl.length(), bl);
+  hoid_t h(oid_t(oid.substr(sep+1)));
+  (void) t->push_cid(c);
+  (void) t->push_oid(h);
+  t->write(offset, bl.length(), bl); // uses current c_ix and h_ix
 
   if (write_infos) {
     bufferlist bl2;
     for (uint64_t j = 0; j < 128; ++j) bl2.append(0);
     coll_t meta("meta");
-    oid_t info(string("info_")+coll_str);
-    t->write(meta, info, 0, bl2.length(), bl2);
+    hoid_t info(oid_t(string("info_")+coll_str));
+    (void) t->push_cid(meta);
+    (void) t->push_oid(info);
+    t->write(0, bl2.length(), bl2);
   }
 
   os->queue_transaction(
@@ -73,7 +77,22 @@ void TestFileStoreBackend::read(
   assert(sep != string::npos);
   assert(sep + 1 < oid.size());
   coll_t c(oid.substr(0, sep));
-  oid_t h(oid.substr(sep+1));
-  os->read(c, h, offset, length, *bl);
+  hoid_t h(oid_t(oid.substr(sep+1)));
+  ObjectStore::CollectionHandle ch = os->open_collection(c);
+  if (! ch) {
+    derr << "TestFileStoreBackend::read: error opening collection " << c
+	 << dendl;
+    return;
+  }
+  ObjectStore::ObjectHandle oh = os->get_object(ch, h);
+  if (! oh) {
+    derr << "TestFileStoreBackend::read: error instantiating object " << c
+	 << dendl;
+    os->close_collection(ch);
+    return;
+  }
+  os->read(ch, oh, offset, length, *bl);
+  os->put_object(oh);
+  os->close_collection(ch);
   finisher.queue(on_complete);
 }

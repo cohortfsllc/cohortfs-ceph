@@ -27,7 +27,8 @@ typedef boost::mt11213b rngen_t;
 
 class DeterministicOpSequence : public TestObjectStoreState {
  public:
-  DeterministicOpSequence(ObjectStore *store, std::string status = std::string());
+  DeterministicOpSequence(ObjectStore *store,
+			  std::string status = std::string());
   virtual ~DeterministicOpSequence();
 
   virtual void generate(int seed, int num_txs);
@@ -93,6 +94,5 @@ class DeterministicOpSequence : public TestObjectStoreState {
   bool _prepare_colls(rngen_t& gen,
       coll_entry_t* &orig_coll, coll_entry_t* &new_coll);
 };
-
 
 #endif /* FILESTORE_DTRMNSTC_SEQ_OPS_H_ */

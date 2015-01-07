@@ -122,12 +122,14 @@ ObjectStore *fs;
 
 class OBS_Worker : public Thread
 {
-  oid_t poid;
+  hoid_t oid;
+  ObjectStore::CollectionHandle ch;
 
  public:
   OBS_Worker() { }
 
-  void set_obj(const oid_t &oid) { poid = oid; }
+  void set_oid(const hoid_t& _oid) { oid = _oid; }
+  void set_coll(ObjectStore::CollectionHandle _ch) { ch = _ch; }
 
   void *entry() {
     bufferlist data;
@@ -138,12 +140,6 @@ class OBS_Worker : public Thread
 
     // use a sequencer for each thread so they don't serialize each other
     ObjectStore::Sequencer seq("osbench worker");
-
-    // when we know a stable collection and/or object by handle, we
-    // can establish them ahead-of-time and save work processing the
-    // transactions in ObjectStore, here we'll do just the collection
-    // to exercise object lookups
-    ObjectStore::CollectionHandle ch = fs->open_collection(coll_t());
 
     for (int ix = 0; ix < repeats; ++ix) {
       uint64_t offset = 0;
@@ -157,7 +153,7 @@ class OBS_Worker : public Thread
 
 	ObjectStore::Transaction *t = new ObjectStore::Transaction;
 	t->push_col(ch);
-	t->push_oid(poid);
+	t->push_oid(oid);
 
 	// use the internal offsets for col/cid, obj/oid for brevity
 	t->write(offset, count, data);
@@ -188,13 +184,15 @@ class OBS_Worker : public Thread
 
     // return ObjectStore handles
     fs->close_collection(ch);
-    
+
     return 0;
   }
 };
 
 int main(int argc, const char *argv[])
 {
+  int ret;
+
   // command-line arguments
   vector<const char*> args;
   argv_to_vec(argc, argv, args);
@@ -261,29 +259,42 @@ int main(int argc, const char *argv[])
 
   dout(10) << "created objectstore " << fs << dendl;
 
+  coll_t cid;
   ObjectStore::Transaction ft;
-  ft.create_collection(coll_t());
+  ret = ft.create_collection(cid);
   fs->apply_transaction(ft);
+  if (ret) {
+      derr << "objectstore_bench: error while creating collection " << cid
+	   << " apply_transaction returned " << ret << dendl;
+      return 1;
+  }
 
-  std::vector<oid_t> objs;
+  CollectionHandle ch = fs->open_collection(cid);
+  if (! ch) {
+    derr << "objectstore_bench: error opening collection " << cid << dendl;
+    return 1;
+  }
+
+  std::vector<hoid_t> oids;
   if (multi_object) {
-    objs.resize(n_threads);
+    oids.resize(n_threads);
     for (int i = 0; i < n_threads; i++) {
       stringstream oss;
       oss << "osbench-thread-" << i;
-      objs[i].name = oss.str();
+      oids[i] = hoid_t(oid_t(oss.str()));
     }
   } else {
-    objs.push_back(oid_t("osbench"));
+    oids.push_back(hoid_t(oid_t("osbench")));
   }
 
   std::vector<OBS_Worker> workers(n_threads);
   auto t1 = std::chrono::high_resolution_clock::now();
   for (int i = 0; i < n_threads; i++) {
+    workers[i].set_coll(ch);
     if (multi_object)
-      workers[i].set_obj(objs[i]);
+      workers[i].set_oid(oids[i]);
     else
-      workers[i].set_obj(objs[0]);
+      workers[i].set_oid(oids[0]);
     workers[i].create();
   }
   for (auto &worker : workers)
@@ -293,10 +304,16 @@ int main(int argc, const char *argv[])
 
   // remove the object
   ObjectStore::Transaction t;
-  for (vector<oid_t>::iterator i = objs.begin(); i != objs.end(); ++i)
-    t.remove(coll_t(), oid_t(*i));
+  uint16_t c_ix, o_ix;
+  c_ix = t.push_col(ch);
+  for (vector<hoid_t>::iterator i = oids.begin();
+       i != oids.end(); ++i) {
+    o_ix = t.push_oid(*i);
+    t.remove(c_ix, o_ix);
+  }
   fs->apply_transaction(t);
 
+  fs->close_collection(ch);
   fs->umount();
   delete fs;
 

@@ -36,11 +36,11 @@ void TestObjectStoreState::init(int colls, int objs)
 {
   dout(5) << "init " << colls << " colls " << objs << " objs" << dendl;
 
-  ObjectStore::Transaction *t;
-  t = new ObjectStore::Transaction;
+  ObjectStore::Transaction *t = new ObjectStore::Transaction;
+  uint16_t c_ix, cm_ix, o_ix, om_ix;
 
-  t->create_collection(META_COLL);
-  t->create_collection(TEMP_COLL);
+  (void) t->create_collection(META_COLL);
+  (void) t->create_collection(TEMP_COLL);
   m_store->apply_transaction(*t);
 
   wait_for_ready();
@@ -53,12 +53,19 @@ void TestObjectStoreState::init(int colls, int objs)
 	<< " meta " << entry->m_meta_obj.name << dendl;
 
     t = new ObjectStore::Transaction;
-    t->create_collection(entry->m_coll);
-    t->touch(META_COLL, entry->m_meta_obj);
 
+    // update meta
+    cm_ix = t->push_cid(META_COLL);
+    om_ix = t->push_oid(entry->m_meta_obj);
+    t->touch(cm_ix, om_ix);
+
+    // create_collection
+    c_ix = t->create_collection(entry->m_coll);
     for (int i = 0; i < objs; i++) {
-      oid_t *oid = entry->touch_obj(i + baseid);
-      t->touch(entry->m_coll, *oid);
+      oid_t *obj = entry->touch_obj(i + baseid);
+      o_ix = t->push_oid(hoid_t(*obj));
+      // create obj in m_coll
+      t->touch(c_ix, o_ix);
       assert(i + baseid == m_num_objects);
       m_num_objects++;
     }
@@ -72,7 +79,7 @@ void TestObjectStoreState::init(int colls, int objs)
     m_collections_ids.push_back(coll_id);
     m_next_coll_nr++;
   }
-  dout(5) << "init has " << m_in_flight << "in-flight transactions" << dendl;
+  dout(5) << "init has " << m_in_flight << " in-flight transactions" << dendl;
   wait_for_done();
   dout(5) << "init finished" << dendl;
 }
@@ -99,9 +106,11 @@ TestObjectStoreState::get_coll(int key, bool erase)
     entry = it->second;
     if (erase) {
       m_collections.erase(it);
-      vector<int>::iterator cid_it = m_collections_ids.begin()+(entry->m_id);
-      dout(20) << __func__ << " removing key " << key << " coll_id " << entry->m_id
-	      << " iterator's entry id " << (*cid_it) << dendl;
+      vector<int>::iterator cid_it =
+	m_collections_ids.begin()+(entry->m_id);
+      dout(20) << __func__ << " removing key " << key << " coll_id "
+	       << entry->m_id << " iterator's entry id " << (*cid_it)
+	       << dendl;
       m_collections_ids.erase(cid_it);
     }
   }
@@ -136,8 +145,8 @@ TestObjectStoreState::get_coll_at(int pos, bool erase)
   if (erase) {
     m_collections.erase(coll_id);
     vector<int>::iterator it = m_collections_ids.begin()+(pos);
-    dout(20) << __func__ << " removing pos " << pos << " coll_id " << coll_id
-	    << " iterator's entry id " << (*it) << dendl;
+    dout(20) << __func__ << " removing pos " << pos << " coll_id "
+	     << coll_id << " iterator's entry id " << (*it) << dendl;
     m_collections_ids.erase(it);
   }
 
@@ -232,7 +241,8 @@ oid_t *TestObjectStoreState::coll_entry_t::get_obj_at(int pos, int *key)
  * @param pos The map's position in which the object lies.
  * @return The object or NULL in case of error.
  */
-oid_t *TestObjectStoreState::coll_entry_t::remove_obj_at(int pos, int *key)
+oid_t *TestObjectStoreState::coll_entry_t::remove_obj_at(int pos,
+							 int *key)
 {
   return get_obj_at(pos, true, key);
 }

@@ -588,6 +588,10 @@ public:
       op.o1_ix = obj_ix;
     }
 
+    void touch() {
+      touch(col_ix, obj_ix);
+    }
+
     /**
      * Write data to an offset within an object. If the object is too
      * small, it is expanded as needed.	 It is possible to specify an
@@ -810,7 +814,7 @@ public:
       op.c1_ix = col_ix;
       // future ops at col_ix will fail
     }
-    
+
     /**
      * Add object to another collection (DEPRECATED)
      *
