@@ -104,6 +104,7 @@ SUBSYS(javaclient, 1, 5)
 SUBSYS(asok, 1, 5)
 SUBSYS(throttle, 1, 1)
 SUBSYS(xio, 1, 5)
+SUBSYS(volume, 1, 5)
 
 OPTION(key, OPT_STR, "")
 OPTION(keyfile, OPT_STR, "")

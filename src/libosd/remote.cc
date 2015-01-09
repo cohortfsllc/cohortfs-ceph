@@ -27,7 +27,8 @@ namespace ceph
 namespace osd
 {
 
-class LibOSDRemote : public libosd_remote, private Objecter, private ::Dispatcher {
+class LibOSDRemote : public libosd_remote, private Objecter,
+		     private ::Dispatcher {
  private:
   Context ctx;
   std::unique_ptr<Messenger> ms;
@@ -49,7 +50,7 @@ class LibOSDRemote : public libosd_remote, private Objecter, private ::Dispatche
   // Dispatcher for MOSDMap
   bool ms_dispatch(Message *m);
   bool ms_get_authorizer(int dest_type, AuthAuthorizer **authorizer,
-                         bool force_new);
+			 bool force_new);
   bool ms_handle_reset(Connection *con) { return false; }
   void ms_handle_remote_reset(Connection *con) {}
 
@@ -69,13 +70,13 @@ class LibOSDRemote : public libosd_remote, private Objecter, private ::Dispatche
 	   uint64_t offset, uint64_t length, char *data,
 	   int flags, libosd_io_completion_fn cb, void *user) {
     return Objecter::read(object, volume, offset, length,
-                          data, flags, cb, user);
+			  data, flags, cb, user);
   }
   int write(const char *object, const uint8_t volume[16],
 	    uint64_t offset, uint64_t length, char *data,
 	    int flags, libosd_io_completion_fn cb, void *user) {
     return Objecter::write(object, volume, offset, length,
-                           data, flags, cb, user);
+			   data, flags, cb, user);
   }
   int truncate(const char *object, const uint8_t volume[16], uint64_t offset,
 	       int flags, libosd_io_completion_fn cb, void *user) {

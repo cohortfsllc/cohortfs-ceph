@@ -10637,6 +10637,9 @@ void MDCache::_fragment_committed(dirfrag_t basedirfrag, list<CDir*>& resultfrag
        ++p) {
     object_t oid = CInode::get_object_name(basedirfrag.ino, *p, "");
     unique_ptr<ObjOp> op = volume->op();
+    if (!op) {
+      dout(0) << "Unable to attach volume " << volume << dendl;
+    }
     if (*p == frag_t()) {
       // backtrace object
       dout(10) << " truncate orphan dirfrag " << oid << dendl;
@@ -10653,6 +10656,7 @@ void MDCache::_fragment_committed(dirfrag_t basedirfrag, list<CDir*>& resultfrag
   assert(gather.has_subs());
   gather.activate();
 }
+
 
 void MDCache::_fragment_finish(dirfrag_t basedirfrag, list<CDir*>& resultfrags)
 {

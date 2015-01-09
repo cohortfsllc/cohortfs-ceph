@@ -200,7 +200,7 @@ public:
 	}
 	catch (ceph::buffer::error& e) {
 	  if (rval)
-	    *rval = -EIO;
+	    *rval = -EDOM;
 	}
       }
     }
@@ -220,7 +220,7 @@ public:
 	}
 	catch (ceph::buffer::error& e) {
 	  if (rval)
-	    *rval = -EIO;
+	    *rval = -EDOM;
 	}
       }
     }
@@ -253,7 +253,7 @@ public:
 	}
 	catch (ceph::buffer::error& e) {
 	  if (rval)
-	    *rval = -EIO;
+	    *rval = -EDOM;
 	}
       }
     }

@@ -1130,22 +1130,16 @@ int OSDMap::create_volume(VolumeRef vol,
  * DB. Returns the uuid generated in the uuid_out parameter.
  */
 int OSDMap::add_volume(VolumeRef vol) {
-  string error_message;
-  if (!vol->valid(error_message)) {
-    dout(0) << "attempt to add invalid volume: " << error_message
-	    << dendl;
+  std::stringstream ss;
+  if (!vol->valid(ss)) {
     return -EINVAL;
   }
 
   if (vols.by_uuid.count(vol->id) > 0) {
-    dout(0) << "attempt to add volume with existing uuid "
-	    << vol->id << dendl;
     return -EEXIST;
   }
 
   if (vols.by_name.count(vol->name) > 0) {
-    dout(0) << "attempt to add volume with existing name \""
-	    << vol->name << "\"" << dendl;
     return -EEXIST;
   }
 

@@ -27,27 +27,27 @@ class CohortVolume : public Volume
 protected:
   string erasure_plugin;
   map<string, string> erasure_params;
-  ceph::ErasureCodeInterfaceRef erasure;
   uint32_t suggested_unit; // Specified by the user
-  uint32_t stripe_unit; // Actually used after consulting with
-			// erasure code plugin
-  mutable RWLock compile_lock;
-  void compile(epoch_t epoch) const;
-
   bufferlist place_text;
   vector<std::string> symbols;
 
+private:
   /* These are internal and are not serialized */
+  mutable bool attached;
+  mutable Mutex lock;
   mutable vector<void*> entry_points;
-  mutable epoch_t compiled_epoch;
   mutable void *place_shared;
+  mutable ceph::ErasureCodeInterfaceRef erasure;
+  mutable uint32_t stripe_unit; // Actually used after consulting with
+				// erasure code plugin
+  int compile(std::stringstream &ss) const;
+
+
+protected:
 
   CohortVolume(vol_type t)
-    : Volume(t),
-      place_text(), symbols(),
-      entry_points(),
-      compiled_epoch(0),
-      place_shared(NULL) { }
+    : Volume(t), place_text(), symbols(), attached(false), entry_points(),
+      place_shared(NULL), stripe_unit(0) { }
 
   public:
 
@@ -55,15 +55,31 @@ protected:
 
   static const uint64_t one_op;
 
-  uint64_t op_size() const {
+  int _attach(std::stringstream &ss) const;
+
+  virtual int attach(std::stringstream &ss) {
+    if (attached)
+      return 0;
+    return _attach(ss);
+  }
+
+  virtual void detach();
+
+  virtual ssize_t op_size() const {
+    if (!attached) {
+      std::stringstream(ss);
+      int r = _attach(ss);
+      if (r < 0)
+	return r;
+    }
     return one_op * erasure->get_chunk_count();
   }
 
   virtual uint32_t num_rules(void);
 
-  virtual size_t place(const object_t& object,
-		       const OSDMap& map,
-		       const std::function<void(int)>& f) const;
+  virtual ssize_t place(const object_t& object,
+			const OSDMap& map,
+			const std::function<void(int)>& f) const;
 
   virtual int update(const std::shared_ptr<const Volume>& v);
 
@@ -77,11 +93,8 @@ protected:
   static VolumeRef create(const string& name, uint32_t _suggested_width,
 			  const string& erasure_plugin,
 			  const string& erasure_params,
-			  const epoch_t last_update,
 			  const string& place_text, const string& symbols,
-			  string& error_message);
-
-  virtual void fixup_stripe_unit();
+			  std::stringstream& ss);
 
   virtual std::unique_ptr<ObjOp> op() const;
 

@@ -184,6 +184,11 @@ class Filer {
 			     extents);
     if (extents.size() == 1) {
       std::unique_ptr<ObjOp> op(volume->op());
+      if (!op) {
+	const uint32_t dout_subsys = ceph_subsys_volume;
+	ldout(cct, 0) << "Unable to attach volume " << volume << dendl;
+	return -EDOM;
+      }
       op->add_op(CEPH_OSD_OP_TRIMTRUNC);
       op->add_truncate(extents[0].offset, truncate_seq);
       objecter->_modify(extents[0].oid, volume, op, mtime, flags, onack,
@@ -195,6 +200,11 @@ class Filer {
 	   p != extents.end();
 	   ++p) {
 	std::unique_ptr<ObjOp> op(volume->op());
+	if (!op) {
+	  const uint32_t dout_subsys = ceph_subsys_volume;
+	  ldout(cct, 0) << "Unable to attach volume " << volume << dendl;
+	  return -EDOM;
+	}
 	op->add_op(CEPH_OSD_OP_TRIMTRUNC);
 	op->add_truncate(p->offset, truncate_seq);
 	objecter->_modify(p->oid, volume, op, mtime, flags,
@@ -284,7 +294,5 @@ class Filer {
 	    int flags,
 	    Context *onfinish);
 };
-
-
 
 #endif

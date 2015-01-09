@@ -795,6 +795,11 @@ void CInode::store(Context *fin)
   object_t oid = CInode::get_object_name(ino(), frag_t(), ".inode");
   VolumeRef mvol(mdcache->mds->get_metadata_volume());
   unique_ptr<ObjOp> m(mvol->op());
+  if (!m) {
+    dout(0) << "Unable to attach volume " << mvol << dendl;
+    fin->complete(-EDOM);
+    return;
+  }
 
   // encode
   bufferlist bl;
@@ -842,6 +847,11 @@ void CInode::fetch(Context *fin)
   assert(!!volume);
 
   unique_ptr<ObjOp> rd = volume->op();
+  if (!rd) {
+    dout(0) << "Unable to attach volume " << volume << dendl;
+    fin->complete(-EDOM);
+    return;
+  }
   rd->getxattr("inode", &c->bl, NULL);
 
   mdcache->mds->objecter->read(oid, volume, rd, (bufferlist*)NULL, 0,
@@ -947,6 +957,11 @@ void CInode::store_backtrace(Context *fin)
   ::encode(bt, bl);
 
   unique_ptr<ObjOp> op = mvol->op();
+  if (!op) {
+    dout(0) << "Unable to attach volume " << mvol << dendl;
+    fin->complete(-EDOM);
+    return;
+  }
   op->create(false);
   op->setxattr("parent", bl);
 
@@ -976,6 +991,11 @@ void CInode::store_backtrace(Context *fin)
     mdcache->mds->osdmap->find_by_uuid(*p, ovol);
 
     unique_ptr<ObjOp> op = ovol->op();
+    if (!op) {
+      dout(0) << "Unable to attach volume " << ovol << dendl;
+      fin->complete(-EDOM);
+      return;
+    }
     op->create(false);
     op->setxattr("parent", bl);
 

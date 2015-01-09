@@ -1267,6 +1267,10 @@ void CDir::_omap_fetch(const string& want_dn)
   object_t oid = get_ondisk_object();
   VolumeRef volume(cache->mds->get_metadata_volume());
   unique_ptr<ObjOp> rd = volume->op();
+  if (!rd) {
+    dout(0) << "Unable to attach volume " << volume << dendl;
+    return;
+  }
   rd->omap_get_header(&fin->hdrbl, &fin->ret1);
   rd->omap_get_vals("", "", (uint64_t)-1, fin->omap, &fin->ret2);
   cache->mds->objecter->read(oid, volume, rd, NULL, 0,
@@ -1441,6 +1445,10 @@ void CDir::_omap_commit(int op_prio)
 
     if (write_size >= max_write_size) {
       unique_ptr<ObjOp> op(volume->op());
+      if (!op) {
+	dout(0) << "Unable to attach volume " << volume << dendl;
+	return;
+      }
       op->priority = op_prio;
 
       if (!to_set.empty())
@@ -1459,6 +1467,10 @@ void CDir::_omap_commit(int op_prio)
   }
 
   unique_ptr<ObjOp> op(volume->op());
+  if (!op) {
+    dout(0) << "Unable to attach volume " << volume << dendl;
+    return;
+  }
   op->priority = op_prio;
 
   /*

@@ -9,6 +9,7 @@
 
 #include <atomic>
 #include <cstring>
+#include <cstdio>
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -42,26 +43,29 @@ VolumeRef CohortVolFactory(bufferlist::iterator& bl, uint8_t v, vol_type t)
 
 /* Epoch should be the current epoch of the OSDMap. */
 
-void CohortVolume::compile(epoch_t epoch) const
+int CohortVolume::compile(std::stringstream &ss) const
 {
-  const size_t uuid_strlen = 37;
-  char uuidstring[uuid_strlen];
-  char cfilename[uuid_strlen + 10];
-  char objfilename[uuid_strlen + 10];
-  char sofilename[uuid_strlen + 10];
-
+  const char namelate[] = "/tmp/cohortplacerXXXXXX";
+  char cfilename[sizeof(namelate) + 10];
+  char objfilename[sizeof(namelate) + 10];
+  char sofilename[sizeof(namelate) + 10];
   pid_t child;
 
-  strcpy(uuidstring, to_string(id).c_str());
-  strcpy(cfilename, "/tmp/");
-  strcat(cfilename, uuidstring);
+  strcpy(cfilename, namelate);
+  int fd = mkstemp(cfilename);
+  if (fd < 0) {
+    ss << "Unable to generate a temporary filename.";
+    return -errno;
+  }
+  close(fd);
+  unlink(cfilename);
+
   strcpy(objfilename, cfilename);
   strcpy(sofilename, cfilename);
+
   strcat(cfilename, ".c");
   strcat(objfilename, ".o");
   strcat(sofilename, ".so");
-
-  unlink(sofilename);
 
   const char *cargv[] = {
     [0] = "gcc", [1] = "-std=c11", [2] = "-O3", [3] = "-fPIC",
@@ -74,10 +78,6 @@ void CohortVolume::compile(epoch_t epoch) const
     [3] = sofilename, [4] = objfilename, [5] = "-lm",
     [6] = "-lc", [7] = NULL
   };
-
-  if (compiled_epoch >= last_update) {
-    return;
-  }
 
   /* Better error handling, when we figure out what to do on
      error. Also figure out some directory we should be using,
@@ -102,6 +102,12 @@ void CohortVolume::compile(epoch_t epoch) const
     waitpid(child, &status, 0);
     if (!(WIFEXITED(status) || WIFSIGNALED(status))) {
       goto cretry;
+    } else if (WIFSIGNALED(status)) {
+      ss << "gcc died with signal ";
+      return -EDOM;
+    } else if (WIFEXITED(status) && WEXITSTATUS(status) != 0) {
+      ss << "gcc returned failing status " << WTERMSIG(status);
+      return -EDOM;
     }
   }
 
@@ -116,27 +122,93 @@ void CohortVolume::compile(epoch_t epoch) const
     waitpid(child, &status, 0);
     if (!(WIFEXITED(status) || WIFSIGNALED(status))) {
       goto lretry;
+    } else if (WIFSIGNALED(status)) {
+      ss << "gcc died with signal " << WTERMSIG(status);
+      return -EDOM;
+    } else if (WIFEXITED(status) && WEXITSTATUS(status) != 0) {
+      ss << "gcc returned failing status " << WTERMSIG(status);
+      return -EDOM;
     }
   }
 
   unlink(objfilename);
   place_shared = dlopen(sofilename, RTLD_LAZY | RTLD_GLOBAL);
+  if (!place_shared) {
+    ss << "failed loading library: " << dlerror();
+    return -EDOM;
+  }
+  unlink(sofilename);
 
   for(vector<string>::size_type i = 0;
       i < symbols.size();
       ++i) {
-    entry_points.push_back(dlsym(place_shared, symbols[i].c_str()));
+    void *sym = dlsym(place_shared, symbols[i].c_str());
+    if (!sym) {
+      ss << "failed loading symbol: " << dlerror();
+      return -EDOM;
+    }
+    entry_points.push_back(sym);
   }
 
-  compiled_epoch = epoch;
+  return 0;
+}
+
+int CohortVolume::_attach(std::stringstream &ss) const
+{
+  Mutex::Locker l(lock);
+  int r;
+
+  if (attached)
+    return 0;
+
+  r = compile(ss);
+  if (r < 0) {
+    return r;
+  }
+
+  // This is sort of a brokenness in how the erasure code interface
+  // handles things.
+  map<string, string> copy_params(erasure_params);
+  copy_params["directory"] = g_conf->osd_erasure_code_directory;
+  ceph::ErasureCodePluginRegistry::instance().factory(
+    erasure_plugin,
+    copy_params,
+    &erasure,
+    ss);
+
+  if (!erasure) {
+    // So we don't leave things hanging around on error
+    if (place_shared) {
+      dlclose(place_shared);
+      place_shared = NULL;
+    }
+    return -EDOM;
+  }
+
+  stripe_unit = erasure->get_chunk_size(suggested_unit *
+					erasure->get_data_chunk_count());
+  attached = true;
+  return 0;
+}
+
+void CohortVolume::detach()
+{
+  Mutex::Locker l(lock);
+  if (!attached)
+    return;
+
+  erasure.reset();
+  if (place_shared) {
+    dlclose(place_shared);
+    place_shared = NULL;
+  }
+  stripe_unit = 0;
+  attached = false;
 }
 
 CohortVolume::~CohortVolume(void)
 {
-  if (place_shared) {
-    dlclose(place_shared); /* It's not like we can do anything on error. */
-    place_shared = NULL;
-  }
+  detach();
 }
 
 int CohortVolume::update(const shared_ptr<const Volume>& v)
@@ -153,7 +225,7 @@ struct placement_context
 {
   const OSDMap* map;
   const void* f;
-  size_t* count;
+  ssize_t* count;
 };
 
 /* Return 'true' if the OSD is marked as 'in' */
@@ -179,29 +251,29 @@ static bool return_osd(void *data, int osd)
 }
 
 
-size_t CohortVolume::place(const object_t& object,
-			   const OSDMap& map,
-			   const std::function<void(int)>& f) const
+ssize_t CohortVolume::place(const object_t& object,
+			    const OSDMap& map,
+			    const std::function<void(int)>& f) const
 {
-  size_t count = 0;
+  ssize_t count = 0;
   placement_context context = {
     .map = &map,
     .f = (void *) &f,
     .count = &count
   };
 
-  compile_lock.get_read();
-  if ((compiled_epoch < last_update) || !place_shared) {
-    compile_lock.unlock();
-    compile_lock.get_write();
-    compile(map.get_epoch());
+  if (!attached) {
+    std::stringstream ss;
+    int r = _attach(ss);
+    if (r < 0)
+      return r;
   }
+
 
   place_func entry_point = (place_func) entry_points[0];
 
   entry_point(&context, id.data, object.name.length(), object.name.data(),
 	      test_osd, return_osd);
-  compile_lock.unlock();
 
   return count;
 }
@@ -216,7 +288,6 @@ void CohortVolume::dump(Formatter *f) const
 
 void CohortVolume::decode_payload(bufferlist::iterator& bl, uint8_t v)
 {
-  std::stringstream ss;
   inherited::decode_payload(bl, v);
 
   ::decode(place_text, bl);
@@ -224,14 +295,7 @@ void CohortVolume::decode_payload(bufferlist::iterator& bl, uint8_t v)
   entry_points.reserve(symbols.size());
   ::decode(erasure_plugin, bl);
   ::decode(erasure_params, bl);
-  erasure.reset();
-  ceph::ErasureCodePluginRegistry::instance().factory(
-    erasure_plugin,
-    erasure_params,
-    &erasure,
-    ss);
   ::decode(suggested_unit, bl);
-  fixup_stripe_unit();
 }
 
 void CohortVolume::encode(bufferlist& bl) const
@@ -275,56 +339,63 @@ VolumeRef CohortVolume::create(const string& name,
 			       const uint32_t _suggested_unit,
 			       const string& erasure_plugin,
 			       const string& erasure_paramstring,
-			       const epoch_t last_update,
 			       const string& place_text, const string& sym_str,
-			       string& error_message)
+			       std::stringstream& ss)
 
 {
   CohortVolume *v = new CohortVolume(CohortVol);
-  stringstream ss;
-  int r;
+  map<string, string> copy_params;
+  std::stringstream es;
 
-
-  if (!valid_name(name, error_message))
+  if (!valid_name(name, ss)) {
     goto error;
+  }
 
   v->id = boost::uuids::random_generator()();
   v->name = name;
-  v->last_update = last_update;
 
   if ((place_text.empty() && !sym_str.empty()) ||
       (sym_str.empty() && !place_text.empty())) {
-    error_message
-      = "If you have symbols you must have place text and vice versa.";
+    ss << "If you have symbols you must have place text and vice versa.";
     goto error;
   }
 
   v->erasure_plugin = erasure_plugin;
   get_str_map(erasure_paramstring, &v->erasure_params);
+  v->suggested_unit = _suggested_unit;
 
-  // This really belongs in the factory proper, but we're trying to
-  // keep compatibility with Ceph's erasure code system
-  v->erasure_params["directory"] = g_conf->osd_erasure_code_directory;
-  r = ceph::ErasureCodePluginRegistry::instance().factory(
+  // This stuff is in attach, too, but we need to initialize the
+  // erasure code plugin before we can create the default placer.
+
+  copy_params = v->erasure_params;
+  copy_params["directory"] = g_conf->osd_erasure_code_directory;
+  ceph::ErasureCodePluginRegistry::instance().factory(
     v->erasure_plugin,
-    v->erasure_params,
+    copy_params,
     &v->erasure,
-    ss);
+    es);
 
-  if (r < 0) {
-    error_message = ss.str();
+  if (!v->erasure) {
+    ss << es.str(); // Factory writes output even on success, which is
+		    // kind of confusing if an error happens later.
     goto error;
   }
 
-  v->suggested_unit = _suggested_unit;
-  v->fixup_stripe_unit();
-
+  v->stripe_unit = v->erasure->get_chunk_size(
+    v->suggested_unit * v->erasure->get_data_chunk_count());
   if (!place_text.empty()) {
     v->place_text.append(place_text);
-    boost::algorithm::split(v->symbols, sym_str, boost::algorithm::is_any_of(" \t"));
+    boost::algorithm::split(v->symbols, sym_str,
+			    boost::algorithm::is_any_of(" \t"));
   } else {
     default_placer(v->erasure->get_chunk_count(), v->place_text, v->symbols);
   }
+  if (v->compile(ss) < 0) {
+    goto error;
+  }
+
+  v->attached = true;
+  v->detach();
 
   return VolumeRef(v);
 
@@ -332,13 +403,6 @@ error:
 
   delete v;
   return VolumeRef();
-}
-
-void CohortVolume::fixup_stripe_unit()
-{
-
-  stripe_unit = erasure->get_chunk_size(suggested_unit *
-					erasure->get_data_chunk_count());
 }
 
 struct C_GetAttrs : public Context {
@@ -706,7 +770,7 @@ struct C_MultiStat : public Context {
 	    *m = std::max(mtime, *m);
 	} catch (ceph::buffer::error& e) {
 	  if (rval)
-	    *rval = -EIO;
+	    *rval = -EDOM;
 	}
       }
     }
@@ -737,6 +801,11 @@ unique_ptr<ObjOp> CohortVolume::StripulatedOp::clone()
 
 unique_ptr<ObjOp> CohortVolume::op() const
 {
+  if (!attached) {
+    std::stringstream ss;
+    if (_attach(ss) < 0)
+      return nullptr;
+  }
   return unique_ptr<ObjOp>(new StripulatedOp(*this));
 }
 

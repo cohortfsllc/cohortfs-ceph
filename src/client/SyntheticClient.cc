@@ -2367,6 +2367,8 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
       dout(10) << "write to " << oid << dendl;
 
       unique_ptr<ObjOp> m(mvol->op());
+      if (!m)
+	return -EDOM;
       m->write(0, osize, bl);
       if (do_sync) {
 	m->add_op(CEPH_OSD_OP_STARTSYNC);

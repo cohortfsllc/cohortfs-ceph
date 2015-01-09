@@ -309,7 +309,7 @@ int librados::RadosClient::create_ioctx(const string &name, IoCtxImpl **io)
   Mutex::Locker l(lock);
   int r = wait_for_osdmap();
   if (r < 0)
-    return -EIO;
+    return -EDOM;
 
   try {
     id = parse(name);
@@ -319,7 +319,11 @@ int librados::RadosClient::create_ioctx(const string &name, IoCtxImpl **io)
     if (!osdmap.find_by_name(name, v))
       return -ENOENT;
   }
-  
+
+  r = v->attach(cct);
+  if (r < 0)
+    return r;
+
   *io = new librados::IoCtxImpl(this, objecter, &lock, v);
 
   return 0;
@@ -331,10 +335,14 @@ int librados::RadosClient::create_ioctx(const boost::uuids::uuid& id, IoCtxImpl 
   int r = wait_for_osdmap();
   VolumeRef volume;
   if (r < 0)
-    return -EIO;
+    return -EDOM;
 
   if (!osdmap.find_by_uuid(id, volume))
     return -EEXIST;
+
+  r = volume->attach(cct);
+  if (r < 0)
+    return r;
 
   *io = new librados::IoCtxImpl(this, objecter, &lock, volume);
   return 0;

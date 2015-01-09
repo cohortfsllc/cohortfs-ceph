@@ -26,8 +26,6 @@
 #define L_IS_PRINTABLE(c) (isprint(c))
 #endif
 
-#define dout_subsys ceph_subsys_mon
-
 WRITE_RAW_ENCODER(vol_type);
 
 using std::stringstream;
@@ -68,26 +66,26 @@ void Volume::encode(bufferlist& bl) const
   ::encode(last_update, bl);
 }
 
-bool Volume::valid_name(const string &name, string &error)
+bool Volume::valid_name(const string &name, std::stringstream &ss)
 {
   if (name.empty()) {
-    error = "volume name may not be empty";
+    ss << "volume name may not be empty";
     return false;
   }
 
   if (L_IS_WHITESPACE(*name.begin())) {
-    error = "volume name may not begin with space characters";
+    ss << "volume name may not begin with space characters";
     return false;
   }
 
   if (L_IS_WHITESPACE(*name.rbegin())) {
-    error = "volume name may not end with space characters";
+    ss << "volume name may not end with space characters";
     return false;
   }
 
   for (string::const_iterator c = name.begin(); c != name.end(); ++c) {
     if (!L_IS_PRINTABLE(*c)) {
-      error = "volume name can only contain printable characters";
+      ss << "volume name can only contain printable characters";
       return false;
     }
   }
@@ -96,7 +94,7 @@ bool Volume::valid_name(const string &name, string &error)
   try {
     boost::uuids::string_generator parse;
     parse(name);
-    error = "volume name cannot match the form of UUIDs";
+    ss << "volume name cannot match the form of UUIDs";
     return false;
   } catch (std::runtime_error& e) {
     return true;
@@ -105,14 +103,14 @@ bool Volume::valid_name(const string &name, string &error)
   return true;
 }
 
-bool Volume::valid(string& error) const
+bool Volume::valid(std::stringstream& ss) const
 {
-  if (!valid_name(name, error)) {
+  if (!valid_name(name, ss)) {
     return false;
   }
 
   if (id.is_nil()) {
-    error = "UUID cannot be zero.";
+    ss << "UUID cannot be zero.";
     return false;
   }
 

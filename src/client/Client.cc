@@ -5420,6 +5420,9 @@ int Client::uninline_data(Inode *in, Context *onfinish)
   objecter->osdmap->find_by_uuid(in->layout.fl_uuid, mvol);
 
   unique_ptr<ObjOp> create_ops = mvol->op();
+  if (!create_ops) {
+    return -EDOM;
+  }
   create_ops->create(false);
   if (!mvol) {
     onfinish->complete(-ENXIO);
@@ -5438,6 +5441,9 @@ int Client::uninline_data(Inode *in, Context *onfinish)
   ::encode(in->inline_version, inline_version_bl);
 
   unique_ptr<ObjOp> uninline_ops = mvol->op();
+  if (!uninline_ops)
+    return -EDOM;
+
   uninline_ops->cmpxattr("inline_version",
 			 CEPH_OSD_CMPXATTR_OP_GT,
 			 CEPH_OSD_CMPXATTR_MODE_U64,

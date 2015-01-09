@@ -42,6 +42,7 @@ enum vol_type {
 class Volume;
 typedef std::shared_ptr<Volume> VolumeRef;
 
+inline ostream& operator<<(ostream& out, const Volume& vol);
 class Volume
 {
 private:
@@ -97,8 +98,8 @@ public:
 
   virtual ~Volume() { };
 
-  static bool valid_name(const string& name, string& error);
-  virtual bool valid(string& error) const;
+  static bool valid_name(const string& name, std::stringstream& ss);
+  virtual bool valid(std::stringstream& ss) const;
   static const string& type_string(vol_type type);
   static VolumeRef decode_volume(bufferlist::iterator& bl);
   /* Each child class should call its parent's dump method as it's first
@@ -117,19 +118,42 @@ public:
     return stringify(vol) + "_info";
   }
 
-  virtual uint64_t op_size() const = 0;
-
-  virtual size_t place(const object_t& object,
-		       const OSDMap& map,
-		       const std::function<void(int)>& f) const = 0;
+  // Attach performs post-decode initialization of the volume. If you
+  // call attach, you are guaranteed that the following functions will
+  // execute without error. Otherwise, you have to check the return
+  // values. This function returns non-zero on error.
+  virtual int attach(std::stringstream &ss) {
+    return 0;
+  };
+  int attach(CephContext *cct) {
+    std::stringstream ss;
+    int r = attach(ss);
+    if (r < 0) {
+      lsubdout(cct, volume, -1) << "volume: " << *this <<
+	": unable to attach: " << ss.str() << dendl;
+    }
+    return r;
+  };
+  // This function exists, at present, for the use of the monitor at
+  // volume creation time, so it can attempt to instantiate a volume
+  // and return a useful error on failure. It is not thread safe.
+  virtual void detach(void) {};
+  // Returns negative POSIX error code on error.
+  virtual ssize_t place(const object_t& object,
+			const OSDMap& map,
+			const std::function<void(int)>& f) const = 0;
+  // Returns NULL on error.
   virtual std::unique_ptr<ObjOp> op() const = 0;
+  // Returns negative POSIX error code on error.
+  virtual ssize_t op_size() const = 0;
+
 };
 
 WRITE_CLASS_ENCODER(Volume)
 
 inline ostream& operator<<(ostream& out, const Volume& vol) {
-  return out << Volume::type_string(vol.type) << " : "
-	     << vol.id << " : " << vol.name;
+  return out << vol.name << "(" << vol.id << ","
+	     << Volume::type_string(vol.type) << ")";
 }
 
 #endif // VOL_VOLUME_H

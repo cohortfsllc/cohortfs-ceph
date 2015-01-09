@@ -2237,7 +2237,6 @@ done:
     string params;
     string place_text;
     string symbols;
-    epoch_t last_update = osdmap.epoch;
     string error_message;
 
     VolumeRef vol;
@@ -2254,14 +2253,12 @@ done:
     /* Only one volume type for now, when we implement more I'll
        come back and complexify this. */
 
-    if (!Volume::valid_name(name, error_message)) {
-      ss << error_message;
+    if (!Volume::valid_name(name, ss)) {
       err = -EINVAL;
       goto reply;
     }
     vol = CohortVolume::create(name, stripe_unit, plugin, params,
-			       last_update, place_text,
-			       symbols, error_message);
+			       place_text, symbols, ss);
     if (vol) {
       ss << "volume: " << vol << " created.";
       pending_inc.include_addition(vol);
@@ -2271,7 +2268,6 @@ done:
 
       return true;
     } else {
-      ss << error_message;
       err = -EINVAL;
       goto reply;
     }
