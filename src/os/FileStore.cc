@@ -2158,7 +2158,7 @@ unsigned FileStore::_do_transaction(
 
     case Transaction::OP_MKCOLL:
       // XXX fix replay guard
-      r = _create_collection(fc->get_cid(), spos);
+      r = _create_collection(std::get<1>(t.c_slot(i->c1_ix)), spos);
       if (!r) {
 	(void) get_slot_collection(t, i->c1_ix);
       }
@@ -3861,7 +3861,7 @@ ObjectStore::CollectionHandle FileStore::open_collection(const coll_t& cid)
   cpath += "/current/";
   cpath += cid.to_str();
   /* we know it exists (but should we be idempotent?) */
-  int dirfd = ::open(cpath.c_str(), O_RDWR|O_CREAT, 0644);
+  int dirfd = ::open(cpath.c_str(), O_RDONLY, 0644);
   if (dirfd < 0) {
     derr << "FileStore::open_collection(" << cid << ") failed ("
 	 << cpp_strerror(-errno) << dendl;
@@ -4073,7 +4073,7 @@ int FileStore::_create_collection(
   dout(10) << "create_collection " << fn << " = " << r << dendl;
   if (r < 0)
     return r;
-  int dirfd = ::open(fn, O_RDWR, 0644);
+  int dirfd = ::open(fn, O_RDONLY, 0644);
   if (dirfd < 0) {
     derr << "FileStore::_create_collection(" << c << ") failed ("
 	 << cpp_strerror(-errno) << dendl;

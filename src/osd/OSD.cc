@@ -201,6 +201,15 @@ int OSD::mkfs(CephContext *cct, ObjectStore *store, const string &dev,
     OSDSuperblock sb;
     bufferlist sbbl;
 
+    ObjectStore::Transaction t;
+    t.create_collection(coll_t::META_COLL);
+    ret = store->apply_transaction(t);
+    if (ret) {
+      derr << "OSD::mkfs: error while creating meta collection: "
+          << "apply_transaction returned " << ret << dendl;
+      goto umount_store;
+    }
+
     meta_col = store->open_collection(coll_t::META_COLL);
     assert(meta_col);
 
@@ -279,17 +288,6 @@ int OSD::mkfs(CephContext *cct, ObjectStore *store, const string &dev,
 	bufferlist bl;
 	::encode(sb, bl);
 
-	ObjectStore::Transaction t;
-	t.create_collection(coll_t::META_COLL);
-	ret = store->apply_transaction(t);
-	if (ret) {
-	  derr << "OSD::mkfs: error while creating meta collection: "
-	       << "apply_transaction returned " << ret << dendl;
-	  goto umount_store;
-	}
-
-	meta_col = store->open_collection(coll_t::META_COLL);
-	assert(meta_col);
 	t = ObjectStore::Transaction(); // XXX
 	c_ix = t.push_col(meta_col);
 	o_ix = t.push_oid(OSD_SUPERBLOCK_POBJECT);
