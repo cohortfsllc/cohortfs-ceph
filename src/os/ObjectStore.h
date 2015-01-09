@@ -795,17 +795,17 @@ public:
 
     /// Create a collection
     int create_collection(const coll_t& cid) {
-      (void) push_cid(cid);
+      auto cix = push_cid(cid);
       ops.push_back(Op(OP_MKCOLL));
       Op &op = ops.back();
-      op.c1_ix = col_ix;
-      return col_ix;
+      op.c1_ix = cix;
+      return cix;
     }
 
     /// remove the collection, the collection must be empty
     void remove_collection(const coll_t& cid) {
-      (void) push_cid(cid);
-      remove_collection(col_ix);
+      auto cix = push_cid(cid);
+      remove_collection(cix);
     }
 
     void remove_collection(int col_ix) {
