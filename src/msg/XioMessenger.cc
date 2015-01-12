@@ -287,16 +287,15 @@ XioMessenger::XioMessenger(CephContext *cct, entity_name_t name,
       xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_OUT_IOVLEN,
 		  &xopt, sizeof(xopt));
 
-      /* enable flow-control */
-      xopt = 1;
+      /* disable flow-control */
+      xopt = 0;
       xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_ENABLE_FLOW_CONTROL,
 		  &xopt, sizeof(xopt));
 
       /* and set threshold for buffer callouts */
-      xopt = 16384;
+      xopt = 0;
       xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_INLINE_DATA,
 		  &xopt, sizeof(xopt));
-      xopt = 216;
       xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_INLINE_HEADER,
 		  &xopt, sizeof(xopt));
 

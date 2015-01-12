@@ -19,7 +19,6 @@
 #include "msg/Message.h"
 
 #ifdef HAVE_XIO
-#include "messages/MPing.h"
 extern "C" {
 #include "libxio.h"
 }
