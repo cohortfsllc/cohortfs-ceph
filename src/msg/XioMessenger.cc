@@ -296,6 +296,7 @@ XioMessenger::XioMessenger(CephContext *cct, entity_name_t name,
       xopt = 0;
       xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_INLINE_DATA,
 		  &xopt, sizeof(xopt));
+      xopt = 216;
       xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_INLINE_HEADER,
 		  &xopt, sizeof(xopt));
 
