@@ -20,15 +20,15 @@
 #include <map>
 #include <memory>
 #include <sstream>
-#include <boost/intrusive/slist.hpp>
+#include <boost/intrusive/set.hpp>
 #include "include/types.h"
 #include "include/buffer.h"
 
 #include "osd/OSDMap.h"
 #include "messages/MOSDOp.h"
 
-#include "common/admin_socket.h"
 #include "common/Timer.h"
+#include "common/RWLock.h"
 #include "common/zipkin_trace.h"
 #include "include/rados/rados_types.h"
 #include "include/rados/rados_types.hpp"
@@ -45,34 +45,36 @@ class MOSDOpReply;
 class MOSDMap;
 
 namespace OSDC {
-  using boost::intrusive::slist;
-  using boost::intrusive::slist_base_hook;
+  using boost::intrusive::set;
+  using boost::intrusive::set_base_hook;
   using boost::intrusive::link_mode;
   using boost::intrusive::auto_unlink;
   using boost::intrusive::constant_time_size;
   using std::vector;
-  using std::set;
   using std::string;
   using std::shared_ptr;
   using std::unique_ptr;
   using std::move;
 
-  class Objecter {
+  class Objecter: public Dispatcher {
   public:
     Messenger *messenger;
     MonClient *monc;
+  private:
     OSDMap    *osdmap;
+  public:
     CephContext *cct;
 
-    bool initialized;
+    std::atomic<bool> initialized;
 
   private:
-    ceph_tid_t last_tid;
-    int client_inc;
+    std::atomic<uint64_t> last_tid;
+    std::atomic<uint32_t> client_inc;
     uint64_t max_linger_id;
-    int num_unacked;
-    int num_uncommitted;
-    int global_op_flags; // flags which are applied to each IO op
+    std::atomic<uint32_t> num_unacked;
+    std::atomic<uint32_t> num_uncommitted;
+    // flags which are applied to each IO op
+    std::atomic<uint32_t> global_op_flags;
     bool keep_balanced_budget;
     bool honor_osdmap_full;
     ZTracer::Endpoint trace_endpoint;
@@ -81,11 +83,13 @@ namespace OSDC {
     void maybe_request_map();
   private:
 
-    version_t last_seen_osdmap_version;
-    version_t last_seen_pgmap_version;
+    int _maybe_request_map();
 
-    Mutex &client_lock;
-    SafeTimer &timer;
+    version_t last_seen_osdmap_version;
+
+    RWLock rwlock;
+    Mutex timer_lock;
+    SafeTimer timer;
 
     class C_Tick : public Context {
       Objecter *ob;
@@ -98,14 +102,11 @@ namespace OSDC {
     void tick();
 
   public:
-    /*** track pending operations ***/
-    // read
-  public:
 
     struct OSDSession;
     struct Op;
 
-    struct SubOp : public slist_base_hook<link_mode<auto_unlink> > {
+    struct SubOp : public set_base_hook<link_mode<auto_unlink> > {
       ceph_tid_t tid;
       int incarnation;
       OSDSession *session;
@@ -131,7 +132,8 @@ namespace OSDC {
 	  attempts(0), done(false), parent(p) { }
     };
 
-    struct op_base {
+    struct op_base : public set_base_hook<link_mode<auto_unlink> >,
+		     public RefCountedObject {
       int flags;
       object_t oid;
       shared_ptr<const Volume> volume;
@@ -142,18 +144,22 @@ namespace OSDC {
       version_t *objver;
       ceph_tid_t tid;
       epoch_t map_dne_bound;
-
       bool paused;
+      uint16_t priority;
+      bool should_resend;
+
+      Mutex lock;
 
       op_base() : flags(0), volume(nullptr), op(nullptr), outbl(nullptr),
-		  tid(0), map_dne_bound(0),
-		  paused(false) { }
+		  tid(0), map_dne_bound(0), paused(false), priority(0),
+		  should_resend(true) { }
 
       op_base(object_t oid, const shared_ptr<const Volume>& volume,
 	      unique_ptr<ObjOp>& _op, int flags, version_t* ov)
 	: flags(flags), oid(oid), volume(volume),
 	  op(move(_op)), outbl(nullptr), objver(ov),
-	  tid(0), map_dne_bound(0), paused(false) {
+	  tid(0), map_dne_bound(0), paused(false), priority(0),
+	  should_resend(true) {
 	if (objver)
 	  *objver = 0;
       }
@@ -163,8 +169,12 @@ namespace OSDC {
       Context *onack, *oncommit, *ontimeout;
       epoch_t *reply_epoch;
       bool budgeted;
-      /// true if we should resend this message on failure
-      bool should_resend;
+      // true if the throttle budget is get/put on a series of OPs,
+      // instead of per OP basis, when this flag is set, the budget is
+      // acquired before sending the very first OP of the series and
+      // released upon receiving the last OP reply.
+      bool ctx_budgeted;
+      bool finished;
       ZTracer::Trace trace;
 
       Op(const object_t& o, const shared_ptr<const Volume>& volume,
@@ -174,7 +184,7 @@ namespace OSDC {
 	op_base(o, volume, _op, f, ov),
 	onack(ac), oncommit(co),
 	ontimeout(NULL), reply_epoch(NULL),
-	budgeted(false), should_resend(true) {
+	budgeted(false), finished(false) {
 	subops.reserve(op->width());
 	op->realize(
 	  oid,
@@ -199,6 +209,16 @@ namespace OSDC {
 						   latest(0) {}
       void finish(int r);
     };
+
+    struct C_Command_Map_Latest : public Context {
+      Objecter *objecter;
+      uint64_t tid;
+      version_t latest;
+      C_Command_Map_Latest(Objecter *o, ceph_tid_t t) :
+	objecter(o), tid(t), latest(0) {}
+      void finish(int r);
+    };
+
 
     struct C_Stat : public Context {
       bufferlist bl;
@@ -237,7 +257,7 @@ namespace OSDC {
       }
     };
 
-    struct StatfsOp {
+    struct StatfsOp : public set_base_hook<link_mode<auto_unlink> > {
       ceph_tid_t tid;
       struct ceph_statfs *stats;
       Context *onfinish, *ontimeout;
@@ -247,12 +267,13 @@ namespace OSDC {
 
     // -- lingering ops --
 
-    struct LingerOp : public RefCountedObject,
-		      public op_base {
+    struct LingerOp : public op_base {
       uint64_t linger_id;
       bufferlist inbl;
       bool registered;
+      bool canceled;
       Context *on_reg_ack, *on_reg_commit;
+      ceph_tid_t register_tid;
 
       LingerOp() : linger_id(0),
 		   registered(false),
@@ -267,12 +288,12 @@ namespace OSDC {
 
     struct C_Linger_Ack : public Context {
       Objecter *objecter;
-      LingerOp *info;
-      C_Linger_Ack(Objecter *o, LingerOp *l) : objecter(o), info(l) {
-	info->get();
+      LingerOp& info;
+      C_Linger_Ack(Objecter *o, LingerOp& l) : objecter(o), info(l) {
+	info.get();
       }
       ~C_Linger_Ack() {
-	info->put();
+	info.put();
       }
       void finish(int r) {
 	objecter->_linger_ack(info, r);
@@ -280,13 +301,13 @@ namespace OSDC {
     };
 
     struct C_Linger_Commit : public Context {
-      Objecter *objecter;
-      LingerOp *info;
-      C_Linger_Commit(Objecter *o, LingerOp *l) : objecter(o), info(l) {
-	info->get();
+      Objecter* objecter;
+      LingerOp& info;
+      C_Linger_Commit(Objecter *o, LingerOp& l) : objecter(o), info(l) {
+	info.get();
       }
       ~C_Linger_Commit() {
-	info->put();
+	info.put();
       }
       void finish(int r) {
 	objecter->_linger_commit(info, r);
@@ -303,26 +324,34 @@ namespace OSDC {
     };
 
     // -- osd sessions --
-    struct OSDSession {
-      slist<SubOp, constant_time_size<false> > subops;
-      slist<SubOp, constant_time_size<false> > linger_subops;
+    struct OSDSession : public set_base_hook<link_mode<auto_unlink> >,
+			public RefCountedObject {
+      RWLock lock;
+      set<SubOp, constant_time_size<false> > subops;
+      set<SubOp, constant_time_size<false> > linger_subops;
       int osd;
       int incarnation;
+      int num_locks;
       ConnectionRef con;
 
-      OSDSession(int o) : osd(o), incarnation(0), con(NULL) {}
-    };
-    map<int,OSDSession*> osd_sessions;
+      OSDSession(CephContext *cct, int o) :
+	osd(o), incarnation(0), con(NULL) { }
+      ~OSDSession();
 
+      bool is_homeless() { return (osd == -1); }
+    };
+    set<OSDSession, constant_time_size<false> > osd_sessions;
 
   private:
-    // pending ops
-    map<ceph_tid_t,Op*> inflight_ops; // Should probably be an slist
-    map<ceph_tid_t,SubOp*> subops;
-    int num_homeless_ops;
-    map<uint64_t, LingerOp*> linger_ops;
-    map<ceph_tid_t,StatfsOp*> statfs_ops;
+    set<Op, constant_time_size<false> > inflight_ops;
+    set<LingerOp, constant_time_size<false> > linger_ops;
+    set<StatfsOp, constant_time_size<false> > statfs_ops;
 
+    OSDSession *homeless_session;
+
+    // ops waiting for an osdmap with a new volume or confirmation
+    // that the volume does not exist (may be expanded to other uses
+    // later)
     map<uint64_t, LingerOp*> check_latest_map_lingers;
     map<ceph_tid_t, Op*> check_latest_map_ops;
 
@@ -330,37 +359,61 @@ namespace OSDC {
 
     double mon_timeout, osd_timeout;
 
-    void send_subop(SubOp &subop, int flags);
-    void send_op(Op *op);
-    void cancel_op(Op *op);
-    void finish_op(Op *op);
-    enum recalc_op_target_result {
-      RECALC_OP_TARGET_NO_ACTION = 0,
-      RECALC_OP_TARGET_NEED_RESEND,
-      RECALC_OP_TARGET_OSD_DNE,
-      RECALC_OP_TARGET_OSD_DOWN,
+    MOSDOp *_prepare_osd_subop(SubOp& op);
+    void _send_subop(SubOp& op, MOSDOp *m = nullptr);
+    void _cancel_linger_op(LingerOp& op);
+    void _cancel_op(Op& op);
+    void _finish_subop(OSDSession *session, ceph_tid_t tid);
+    void _finish_op(Op& op); // Releases op.lock
+
+    enum target_result {
+      TARGET_NO_ACTION = 0,
+      TARGET_NEED_RESEND,
+      TARGET_VOLUME_DNE
     };
     bool osdmap_full_flag() const;
-    bool target_should_be_paused(op_base *op);
+    bool target_should_be_paused(op_base& op);
 
-    int calc_target(op_base *t);
-    int recalc_op_target(Op *op);
-    bool recalc_linger_op_target(LingerOp *op);
+    int _calc_targets(op_base& t, bool any_change=false);
+    int _map_session(SubOp& subop, OSDSession **s,
+		     RWLock::Context& lc);
 
-    void send_linger(LingerOp *info);
-    void _linger_ack(LingerOp *info, int r);
-    void _linger_commit(LingerOp *info, int r);
+    void _session_subop_assign(OSDSession& to, SubOp& subop);
+    void _session_subop_remove(OSDSession& from, SubOp& subop);
+    void _session_linger_subop_assign(OSDSession& to, SubOp& subop);
+    void _session_linger_subop_remove(OSDSession& from, SubOp& subop);
 
-    void _send_op_map_check(Op *op);
-    void op_cancel_map_check(Op *op);
+    int _get_osd_session(int osd, RWLock::Context& lc,
+			 OSDSession **session);
+    int _assign_subop_target_session(SubOp& op, RWLock::Context& lc,
+				     bool src_session_locked,
+				     bool dst_session_locked);
+    int _get_subop_target_session(SubOp& op, RWLock::Context& lc,
+				  OSDSession** session);
+    int _recalc_linger_op_targets(LingerOp& op, RWLock::Context& lc);
+
+    void _linger_submit(LingerOp& info);
+    void _send_linger(LingerOp& info);
+    void _linger_ack(LingerOp& info, int r);
+    void _linger_commit(LingerOp& info, int r);
+
+    void _check_op_volume_dne(Op& op, bool session_locked);
+    void _send_op_map_check(Op& op);
+    void _op_cancel_map_check(Op& op);
+    void _check_linger_volume_dne(LingerOp *op, bool *need_unregister);
     void _send_linger_map_check(LingerOp *op);
-    void linger_cancel_map_check(LingerOp *op);
+    void _linger_cancel_map_check(LingerOp *op);
 
-    void kick_requests(OSDSession *session);
+    void kick_requests(OSDSession& session);
+    void _kick_requests(OSDSession& session,
+			map<uint64_t, LingerOp *>& lresend);
+    void _linger_ops_resend(map<uint64_t, LingerOp *>& lresend);
 
-    OSDSession *get_session(int osd);
-    void reopen_session(OSDSession *session);
-    void close_session(OSDSession *session);
+    int _get_session(int osd, OSDSession **session, RWLock::Context& lc);
+    void put_session(OSDSession& s);
+    void get_session(OSDSession& s);
+    void _reopen_session(OSDSession& session);
+    void close_session(OSDSession& session);
 
     void resend_mon_ops();
 
@@ -370,52 +423,66 @@ namespace OSDC {
      * and returned whenever an op is removed from the map
      * If throttle_op needs to throttle it will unlock client_lock.
      */
-    void throttle_op(Op *op, uint64_t op_size = 0);
-    void take_op_budget(Op *op) {
-      uint64_t op_budget = op->op->get_budget();
+    int calc_op_budget(Op& op);
+    void _throttle_op(Op& op, int op_size=0);
+    int _take_op_budget(Op& op) {
+      assert(rwlock.is_locked());
+      int op_budget = calc_op_budget(op);
       if (keep_balanced_budget) {
-	throttle_op(op, op_budget);
+	_throttle_op(op, op_budget);
       } else {
 	op_throttle_bytes.take(op_budget);
 	op_throttle_ops.take(1);
       }
-      op->budgeted = true;
+      op.budgeted = true;
+      return op_budget;
     }
-    void put_op_budget(Op *op) {
-      assert(op->budgeted);
-      uint64_t op_budget = op->op->get_budget();
+    void put_op_budget_bytes(int op_budget) {
+      assert(op_budget >= 0);
       op_throttle_bytes.put(op_budget);
       op_throttle_ops.put(1);
+    }
+    void put_op_budget(Op& op) {
+      assert(op.budgeted);
+      int op_budget = calc_op_budget(op);
+      put_op_budget_bytes(op_budget);
     }
     Throttle op_throttle_bytes, op_throttle_ops;
 
   public:
     Objecter(CephContext *cct_, Messenger *m, MonClient *mc,
-	     OSDMap *om, Mutex& l, SafeTimer& t, double mon_timeout,
-	     double osd_timeout) :
-      messenger(m), monc(mc), osdmap(om), cct(cct_),
-      initialized(false),
-      last_tid(0), client_inc(-1), max_linger_id(0),
+	     double mon_timeout, double osd_timeout) :
+      Dispatcher(cct_), messenger(m), monc(mc),
+      osdmap(new OSDMap), cct(cct_),
+      initialized(false), last_tid(0),
+      client_inc(-1), max_linger_id(0),
       num_unacked(0), num_uncommitted(0),
       global_op_flags(0),
       keep_balanced_budget(false), honor_osdmap_full(true),
       trace_endpoint("0.0.0.0", 0, "Objecter"),
       last_seen_osdmap_version(0),
-      last_seen_pgmap_version(0),
-      client_lock(l), timer(t),
+      timer(cct, timer_lock, false),
       tick_event(NULL),
-      num_homeless_ops(0),
+      homeless_session(new OSDSession(cct, -1)),
       mon_timeout(mon_timeout),
       osd_timeout(osd_timeout),
-      op_throttle_bytes(cct, "objecter_bytes", cct->_conf->objecter_inflight_op_bytes),
+      op_throttle_bytes(cct, "objecter_bytes",
+			cct->_conf->objecter_inflight_op_bytes),
       op_throttle_ops(cct, "objecter_ops", cct->_conf->objecter_inflight_ops)
       { }
-    ~Objecter() {
-      assert(!tick_event);
-    }
+    ~Objecter();
 
     void init();
+    void start();
     void shutdown();
+
+    const OSDMap *get_osdmap_read() {
+      rwlock.get_read();
+      return osdmap;
+    }
+    void put_osdmap_read() {
+      rwlock.put_read();
+    }
 
     /**
      * Tell the objecter to throttle outgoing ops according to its
@@ -424,57 +491,86 @@ namespace OSDC {
      * incoming messages reduce the used budget low enough for
      * the ops to continue going; then it will lock client_lock again.
      */
+
     void set_balanced_budget() { keep_balanced_budget = true; }
     void unset_balanced_budget() { keep_balanced_budget = false; }
 
     void set_honor_osdmap_full() { honor_osdmap_full = true; }
     void unset_honor_osdmap_full() { honor_osdmap_full = false; }
 
-    void scan_requests(bool force_resend,
-		       bool force_resend_writes,
-		       map<ceph_tid_t, Op*>& need_resend,
-		       list<LingerOp*>& need_resend_linger);
-
+    void _scan_requests(OSDSession& session,
+			bool force_resend,
+			bool force_resend_writes,
+			map<ceph_tid_t, SubOp*>& need_resend,
+			list<LingerOp*>& need_resend_linger);
     // messages
   public:
-    void dispatch(Message *m);
+    bool ms_dispatch(Message *m);
+    bool ms_can_fast_dispatch_any() const {
+      return false;
+    }
+    bool ms_can_fast_dispatch(Message *m) const {
+      switch (m->get_type()) {
+      case CEPH_MSG_OSD_OPREPLY:
+	/* sadly, we need to solve a deadlock before reenabling.
+	 * See tracker issue #9462 */
+	return false;
+      default:
+	return false;
+      }
+    }
+    void ms_fast_dispatch(Message *m) {
+      ms_dispatch(m);
+    }
+
     void handle_osd_op_reply(MOSDOpReply *m);
     void handle_osd_map(MOSDMap *m);
     void wait_for_osd_map();
 
   private:
-    // low-level
-    ceph_tid_t _op_submit(Op *op);
-    inline void unregister_op(Op *op);
+    bool _promote_lock_check_race(RWLock::Context& lc);
 
+    // low-level
+    ceph_tid_t _op_submit(Op& op, RWLock::Context& lc);
+    ceph_tid_t _op_submit_with_budget(Op& op, RWLock::Context& lc,
+				      int *ctx_budget = nullptr);
     // public interface
   public:
-    ceph_tid_t op_submit_special(Op *op); // Stupid Stupid Stupid
-    ceph_tid_t op_submit(Op *op);
+    ceph_tid_t op_submit(Op *op, int* ctx_budget = nullptr);
     bool is_active() {
-      return !(inflight_ops.empty() && linger_ops.empty());
+      return !(inflight_ops.empty() && linger_ops.empty() &&
+	       statfs_ops.empty());
     }
 
-    /**
-     * Output in-flight requests
-     */
     int get_client_incarnation() const { return client_inc; }
     void set_client_incarnation(int inc) { client_inc = inc; }
 
-    void wait_for_new_map(Context *c, epoch_t epoch, int err=0);
+    // wait for epoch; true if we already have it
+    bool wait_for_map(epoch_t epoch, Context *c, int err=0);
+    void _wait_for_new_map(Context *c, epoch_t epoch, int err=0);
     void wait_for_latest_osdmap(Context *fin);
+    void get_latest_version(epoch_t oldest, epoch_t neweset, Context *fin);
     void _get_latest_version(epoch_t oldest, epoch_t neweset, Context *fin);
 
     /** Get the current set of global op flags */
     int get_global_op_flags() { return global_op_flags; }
-    /** Add a flag to the global op flags */
-    void add_global_op_flags(int flag) { global_op_flags |= flag; }
-    /** Clear the passed flags from the global op flag set */
-    void clear_global_op_flag(int flags) { global_op_flags &= ~flags; }
+    /** Add a flag to the global op flags, not really atomic operation */
+    void add_global_op_flags(int flag) {
+      global_op_flags |= flag;
+    }
+    /** Clear the passed flags from the global op flag set, not really
+	atomic operation */
+    void clear_global_op_flag(int flags) {
+      global_op_flags &= ~flags;
+    }
 
     /// cancel an in-progress request with the given return code
+  private:
     int op_cancel(ceph_tid_t tid, int r);
+    friend class C_CancelOp;
 
+
+  public:
     // mid-level helpers
     Op *prepare_mutate_op(const object_t& oid,
 			  const shared_ptr<const Volume>& volume,
@@ -531,6 +627,7 @@ namespace OSDC {
 			   bufferlist *outbl, int flags, Context *onack,
 			   version_t *objver);
     void unregister_linger(uint64_t linger_id);
+    void _unregister_linger(uint64_t linger_id);
 
     unique_ptr<ObjOp> init_ops(
       const shared_ptr<const Volume>& vol,
@@ -847,110 +944,129 @@ namespace OSDC {
     // ---------------------------
     // df stats
   private:
-    void fs_stats_submit(StatfsOp *op);
+    void _fs_stats_submit(StatfsOp& op);
   public:
     void handle_fs_stats_reply(MStatfsReply *m);
     void get_fs_stats(struct ceph_statfs& result, Context *onfinish);
     int statfs_op_cancel(ceph_tid_t tid, int r);
-    void finish_statfs_op(StatfsOp *op);
-
-    // ---------------------------
-    // some scatter/gather hackery
-
-    void _sg_read_finish(vector<ObjectExtent>& extents,
-			 vector<bufferlist>& resultbl,
-			 bufferlist *bl, Context *onfinish);
-
-    struct C_SGRead : public Context {
-      Objecter *objecter;
-      vector<ObjectExtent> extents;
-      vector<bufferlist> resultbl;
-      bufferlist *bl;
-      Context *onfinish;
-      C_SGRead(Objecter *ob,
-	       vector<ObjectExtent>& e, vector<bufferlist>& r,
-	       bufferlist *b, Context *c) :
-	objecter(ob), bl(b), onfinish(c) {
-	extents.swap(e);
-	resultbl.swap(r);
-      }
-      void finish(int r) {
-	objecter->_sg_read_finish(extents, resultbl, bl, onfinish);
-      }
-    };
-
-    void sg_read_trunc(vector<ObjectExtent>& extents,
-		       const shared_ptr<const Volume>& volume,
-		       bufferlist *bl, int flags, uint64_t trunc_size,
-		       uint32_t trunc_seq, Context *onfinish) {
-      if (extents.size() == 1) {
-	read_trunc(extents[0].oid, volume, extents[0].offset,
-		   extents[0].length, bl, flags, extents[0].truncate_size,
-		   trunc_seq, onfinish);
-      } else {
-	C_GatherBuilder gather;
-	vector<bufferlist> resultbl(extents.size());
-	int i=0;
-	for (vector<ObjectExtent>::iterator p = extents.begin();
-	     p != extents.end(); ++p) {
-	  read_trunc(p->oid, volume, p->offset, p->length,
-		     &resultbl[i++], flags, p->truncate_size, trunc_seq,
-		     gather.new_sub());
-	}
-	gather.set_finisher(new C_SGRead(this, extents, resultbl, bl, onfinish));
-	gather.activate();
-      }
-    }
-
-    void sg_read(vector<ObjectExtent>& extents,
-		 const shared_ptr<const Volume>& volume, bufferlist *bl,
-		 int flags, Context *onfinish) {
-      sg_read_trunc(extents, volume, bl, flags, 0, 0, onfinish);
-    }
-
-    void sg_write_trunc(vector<ObjectExtent>& extents,
-			const shared_ptr<const Volume>& volume,
-			const bufferlist& bl, utime_t mtime, int flags,
-			uint64_t trunc_size, uint32_t trunc_seq, Context *onack,
-			Context *oncommit) {
-      if (extents.size() == 1) {
-	write_trunc(extents[0].oid, volume, extents[0].offset,
-		    extents[0].length, bl, mtime, flags,
-		    extents[0].truncate_size, trunc_seq, onack, oncommit);
-      } else {
-	C_GatherBuilder gack(onack);
-	C_GatherBuilder gcom(oncommit);
-	for (vector<ObjectExtent>::iterator p = extents.begin();
-	     p != extents.end(); ++p) {
-	  bufferlist cur;
-	  for (vector<pair<uint64_t,uint64_t> >::iterator bit
-		 = p->buffer_extents.begin();
-	       bit != p->buffer_extents.end();
-	       ++bit)
-	    bl.copy(bit->first, bit->second, cur);
-	  assert(cur.length() == p->length);
-	  write_trunc(p->oid, volume, p->offset, p->length,
-		      cur, mtime, flags, p->truncate_size, trunc_seq,
-		      onack ? gack.new_sub():0,
-		      oncommit ? gcom.new_sub():0);
-	}
-	gack.activate();
-	gcom.activate();
-      }
-    }
-
-    void sg_write(vector<ObjectExtent>& extents,
-		  const shared_ptr<const Volume>& volume,
-		  const bufferlist& bl, utime_t mtime, int flags, Context *onack,
-		  Context *oncommit) {
-      sg_write_trunc(extents, volume, bl, mtime, flags, 0, 0, onack, oncommit);
-    }
+    void _finish_statfs_op(StatfsOp& op);
 
     void ms_handle_connect(Connection *con);
-    void ms_handle_reset(Connection *con);
+    bool ms_handle_reset(Connection *con);
     void ms_handle_remote_reset(Connection *con);
+    bool ms_get_authorizer(int dest_type,
+			   AuthAuthorizer **authorizer,
+			   bool force_new);
+
     void blacklist_self(bool set);
+    VolumeRef vol_by_uuid(const boost::uuids::uuid& id);
+    VolumeRef vol_by_name(const string& name);
   };
+
+  inline bool operator==(const Objecter::OSDSession &l,
+			 const Objecter::OSDSession &r) {
+    return l.osd == r.osd;
+  }
+  inline bool operator!=(const Objecter::OSDSession &l,
+			 const Objecter::OSDSession &r) {
+    return l.osd != r.osd;
+  }
+
+  inline bool operator>(const Objecter::OSDSession &l,
+			const Objecter::OSDSession &r) {
+    return l.osd > r.osd;
+  }
+  inline bool operator<(const Objecter::OSDSession &l,
+			const Objecter::OSDSession &r) {
+    return l.osd < r.osd;
+  }
+  inline bool operator>=(const Objecter::OSDSession &l,
+			 const Objecter::OSDSession &r) {
+    return l.osd >= r.osd;
+  }
+  inline bool operator<=(const Objecter::OSDSession &l,
+			 const Objecter::OSDSession &r) {	\
+    return l.osd <= r.osd;
+  }
+
+
+  inline bool operator==(const Objecter::SubOp &l,
+			 const Objecter::SubOp &r) {
+    return l.tid == r.tid;
+  }
+  inline bool operator!=(const Objecter::SubOp &l,
+			 const Objecter::SubOp &r) {
+    return l.tid != r.tid;
+  }
+
+  inline bool operator>(const Objecter::SubOp &l,
+			const Objecter::SubOp &r) {
+    return l.tid > r.tid;
+  }
+  inline bool operator<(const Objecter::SubOp &l,
+			const Objecter::SubOp &r) {
+    return l.tid < r.tid;
+  }
+  inline bool operator>=(const Objecter::SubOp &l,
+			 const Objecter::SubOp &r) {
+    return l.tid >= r.tid;
+  }
+  inline bool operator<=(const Objecter::SubOp &l,
+			 const Objecter::SubOp &r) {
+    return l.tid <= r.tid;
+  }
+
+  inline bool operator==(const Objecter::op_base &l,
+			 const Objecter::op_base &r) {
+    return l.tid == r.tid;
+  }
+  inline bool operator!=(const Objecter::op_base &l,
+			 const Objecter::op_base &r) {
+    return l.tid != r.tid;
+  }
+
+  inline bool operator>(const Objecter::op_base &l,
+			const Objecter::op_base &r) {
+    return l.tid > r.tid;
+  }
+  inline bool operator<(const Objecter::op_base &l,
+			const Objecter::op_base &r) {
+    return l.tid < r.tid;
+  }
+  inline bool operator>=(const Objecter::op_base &l,
+			 const Objecter::op_base &r) {
+    return l.tid >= r.tid;
+  }
+  inline bool operator<=(const Objecter::op_base &l,
+			 const Objecter::op_base &r) {
+    return l.tid <= r.tid;
+  }
+
+  inline bool operator==(const Objecter::StatfsOp &l,
+			 const Objecter::StatfsOp &r) {
+    return l.tid == r.tid;
+  }
+  inline bool operator!=(const Objecter::StatfsOp &l,
+			 const Objecter::StatfsOp &r) {
+    return l.tid != r.tid;
+  }
+
+  inline bool operator>(const Objecter::StatfsOp &l,
+			const Objecter::StatfsOp &r) {
+    return l.tid > r.tid;
+  }
+  inline bool operator<(const Objecter::StatfsOp &l,
+			const Objecter::StatfsOp &r) {
+    return l.tid < r.tid;
+  }
+  inline bool operator>=(const Objecter::StatfsOp &l,
+			 const Objecter::StatfsOp &r) {
+    return l.tid >= r.tid;
+  }
+  inline bool operator<=(const Objecter::StatfsOp &l,
+			 const Objecter::StatfsOp &r) {
+    return l.tid <= r.tid;
+  }
 };
 
 using OSDC::Objecter;

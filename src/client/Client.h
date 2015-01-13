@@ -26,7 +26,7 @@
 #include <fstream>
 #include <exception>
 #include <unordered_map>
-
+#include "common/admin_socket.h"
 #include "include/filepath.h"
 #include "include/interval_set.h"
 #include "include/lru.h"
@@ -207,7 +207,6 @@ class Client : public Dispatcher {
 
   // cluster descriptors
   MDSMap *mdsmap;
-  OSDMap *osdmap;
 
   SafeTimer timer;
 

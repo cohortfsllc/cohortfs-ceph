@@ -178,7 +178,6 @@ class TestStub : public Dispatcher
 
 class ClientStub : public TestStub
 {
-  OSDMap osdmap;
   ObjecterRef objecter;
   rngen_t gen;
 
@@ -249,8 +248,7 @@ class ClientStub : public TestStub
     dout(10) << "ClientStub::" << __func__ << " starting messenger at "
 	    << messenger->get_myaddr() << dendl;
 
-    objecter.reset(new Objecter(cct, messenger.get(), &monc, &osdmap,
-				lock, timer, 0, 0));
+    objecter.reset(new Objecter(cct, messenger.get(), &monc, 0, 0));
     assert(objecter.get() != NULL);
     objecter->set_balanced_budget();
 
@@ -275,18 +273,13 @@ class ClientStub : public TestStub
     }
     monc.wait_auth_rotating(30.0);
 
-    lock.Lock();
     timer.init();
     objecter->set_client_incarnation(0);
     objecter->init();
     monc.renew_subs();
 
-    while (osdmap.get_epoch() == 0) {
-      dout(1) << "ClientStub::" << __func__ << " waiting for osdmap" << dendl;
-      cond.Wait(lock);
-    }
+    objecter->wait_for_osd_map();
 
-    lock.Unlock();
     dout(10) << "ClientStub::" << __func__ << " done" << dendl;
 
     return 0;

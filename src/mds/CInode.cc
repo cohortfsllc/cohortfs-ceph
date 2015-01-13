@@ -893,7 +893,9 @@ void CInode::_fetched(int r, bufferlist& bl, bufferlist& bl2, Context *fin)
   } else {
     decode_store(p);
     dout(10) << "_fetched " << *this << dendl;
-    mdcache->mds->osdmap->find_by_uuid(inode.layout.fl_uuid, volume);
+    const OSDMap* osdmap = mdcache->mds->objecter->get_osdmap_read();
+    osdmap->find_by_uuid(inode.layout.fl_uuid, volume);
+    mdcache->mds->objecter->put_osdmap_read();
     fin->complete(0);
   }
 }
@@ -988,7 +990,11 @@ void CInode::store_backtrace(Context *fin)
       continue;
 
     VolumeRef ovol;
-    mdcache->mds->osdmap->find_by_uuid(*p, ovol);
+    {
+      const OSDMap* osdmap = mdcache->mds->objecter->get_osdmap_read();
+      osdmap->find_by_uuid(*p, ovol);
+      mdcache->mds->objecter->put_osdmap_read();
+    }
 
     unique_ptr<ObjOp> op = ovol->op();
     if (!op) {

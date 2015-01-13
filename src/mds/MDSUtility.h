@@ -31,7 +31,6 @@
 class MDSUtility : public Dispatcher {
 protected:
   Objecter *objecter;
-  OSDMap *osdmap;
   MDSMap *mdsmap;
   Messenger *messenger;
   MonClient *monc;

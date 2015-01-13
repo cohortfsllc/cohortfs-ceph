@@ -71,7 +71,11 @@ int Filer::probe(inodeno_t ino,
 
   Probe *probe = new Probe(ino, *layout, start_from, end, pmtime, flags, fwd,
 			   onfinish);
-  objecter->osdmap->find_by_uuid(layout->fl_uuid, probe->mvol);
+  {
+    const OSDMap* osdmap = objecter->get_osdmap_read();
+    osdmap->find_by_uuid(layout->fl_uuid, probe->mvol);
+    objecter->put_osdmap_read();
+  }
 
   // period (bytes before we jump unto a new set of object(s))
   uint64_t period = (uint64_t)layout->fl_stripe_count *
@@ -248,7 +252,11 @@ int Filer::purge_range(inodeno_t ino,
   if (num_obj == 1) {
 	// XXX should find way to pass volref down to here? mdw
     VolumeRef volref;
-    objecter->osdmap->find_by_uuid(layout->fl_uuid, volref);
+    {
+      const OSDMap* osdmap = objecter->get_osdmap_read();
+      osdmap->find_by_uuid(layout->fl_uuid, volref);
+      objecter->put_osdmap_read();
+    }
     object_t oid = file_object_t(ino, first_obj);
     objecter->remove(oid, volref, mtime, flags, NULL, oncommit);
     return 0;
@@ -294,7 +302,12 @@ void Filer::_do_purge_range(PurgeRange *pr, int fin)
   while (pr->num > 0 && max > 0) {
     object_t oid = file_object_t(pr->ino, pr->first);
     VolumeRef volref;
-    objecter->osdmap->find_by_uuid(pr->layout.fl_uuid, volref);
+    {
+      const OSDMap* osdmap = objecter->get_osdmap_read();
+      osdmap->find_by_uuid(pr->layout.fl_uuid, volref);
+      objecter->put_osdmap_read();
+    }
+
     objecter->remove(oid, volref, pr->mtime, pr->flags,
 		     NULL, new C_PurgeRange(this, pr));
     pr->uncommitted++;

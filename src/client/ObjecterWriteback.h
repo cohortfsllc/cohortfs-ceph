@@ -17,7 +17,11 @@ public:
 		    bufferlist *pbl, uint64_t trunc_size,  uint32_t trunc_seq,
 		    Context *onfinish) {
     VolumeRef volref;
-    m_objecter->osdmap->find_by_uuid(volume, volref);
+    {
+      const OSDMap* osdmap = m_objecter->get_osdmap_read();
+      osdmap->find_by_uuid(volume, volref);
+      m_objecter->put_osdmap_read();
+    }
     m_objecter->read_trunc(oid, volref, off, len, pbl, 0,
 			   trunc_size, trunc_seq, onfinish);
   }
@@ -33,7 +37,11 @@ public:
 		      const bufferlist &bl, utime_t mtime, uint64_t trunc_size,
 		      uint32_t trunc_seq, Context *oncommit) {
     VolumeRef volref;
-    m_objecter->osdmap->find_by_uuid(volume, volref);
+    {
+      const OSDMap* osdmap = m_objecter->get_osdmap_read();
+      osdmap->find_by_uuid(volume, volref);
+      m_objecter->put_osdmap_read();
+    }
     return m_objecter->write_trunc(oid, volref, off, len, bl,
 				   mtime, 0, trunc_size, trunc_seq, NULL,
 				   oncommit);
@@ -44,7 +52,11 @@ public:
 			  int op, int flags, Context *onack,
 			  Context *oncommit) {
     VolumeRef volref;
-    m_objecter->osdmap->find_by_uuid(volume, volref);
+    {
+      const OSDMap* osdmap = m_objecter->get_osdmap_read();
+      osdmap->find_by_uuid(volume, volref);
+      m_objecter->put_osdmap_read();
+    }
     return m_objecter->lock(oid, volref, op, flags, onack, oncommit);
   }
 

@@ -4678,7 +4678,11 @@ bool MDCache::process_imported_caps()
       continue;
 
     VolumeRef volume;
-    mds->osdmap->find_by_uuid(in->inode.layout.fl_uuid, volume);
+    {
+      const OSDMap* osdmap = mds->objecter->get_osdmap_read();
+      osdmap->find_by_uuid(in->inode.layout.fl_uuid, volume);
+      mds->objecter->put_osdmap_read();
+    }
 
     cap_imports_num_opening++;
     dout(10) << "  opening missing ino " << p->first << dendl;
@@ -7377,7 +7381,12 @@ void MDCache::_open_ino_backtrace_fetched(inodeno_t ino, bufferlist& bl, int err
     if (backtrace.volume != info.volume->id && !backtrace.volume.is_nil()) {
       dout(10) << " old object in volume " << info.volume
 	       << ", retrying volume " << backtrace.volume << dendl;
-      mds->osdmap->find_by_uuid(backtrace.volume, info.volume);
+      {
+	const OSDMap* osdmap = mds->objecter->get_osdmap_read();
+	osdmap->find_by_uuid(backtrace.volume, info.volume);
+	mds->objecter->put_osdmap_read();
+      }
+
       C_MDC_OpenInoBacktraceFetched *fin = new C_MDC_OpenInoBacktraceFetched(this, ino);
       fetch_backtrace(ino, info.volume, fin->bl, fin);
       return;
@@ -7785,8 +7794,11 @@ void MDCache::open_ino(inodeno_t ino, VolumeRef volume, Context* fin,
     info.waiters.push_back(fin);
   } else {
     open_ino_info_t& info = opening_inodes[ino];
-    if (!volume)
-	mds->osdmap->find_by_uuid(default_file_layout.fl_uuid, volume);
+    if (!volume) {
+      const OSDMap* osdmap = mds->objecter->get_osdmap_read();
+      osdmap->find_by_uuid(default_file_layout.fl_uuid, volume);
+      mds->objecter->put_osdmap_read();
+    }
     info.checked.insert(mds->get_nodeid());
     info.want_replica = want_replica;
     info.want_xlocked = want_xlocked;
@@ -8600,7 +8612,11 @@ void MDCache::purge_stray(CDentry *dn)
   // remove the backtrace object if it was not purged
   if (!gather.has_subs()) {
     VolumeRef volume;
-    mds->osdmap->find_by_uuid(pi->layout.fl_uuid, volume);
+    {
+      const OSDMap* osdmap = mds->objecter->get_osdmap_read();
+      osdmap->find_by_uuid(pi->layout.fl_uuid, volume);
+      mds->objecter->put_osdmap_read();
+    }
     dout(10) << "purge_stray remove backtrace object " << poid
 	     << " volume " << volume << dendl;
     mds->objecter->remove(poid, volume,
@@ -8612,7 +8628,11 @@ void MDCache::purge_stray(CDentry *dn)
        p != pi->old_volumes.end();
        ++p) {
     VolumeRef volume;
-    mds->osdmap->find_by_uuid(*p, volume);
+    {
+      const OSDMap* osdmap = mds->objecter->get_osdmap_read();
+      osdmap->find_by_uuid(*p, volume);
+      mds->objecter->put_osdmap_read();
+    }
     mds->objecter->remove(poid, volume, ceph_clock_now(g_ceph_context), 0,
 			  NULL, gather.new_sub());
   }

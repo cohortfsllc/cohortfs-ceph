@@ -96,7 +96,6 @@ class MDS : public Dispatcher {
   Messenger *messenger;
   MonClient *monc;
   MDSMap *mdsmap;
-  OSDMap *osdmap;
   Objecter *objecter;
   LogClient clog;
 
@@ -183,7 +182,7 @@ class MDS : public Dispatcher {
   ceph_tid_t issue_tid() { return ++last_tid; }
 
   VolumeRef get_metadata_volume() const {
-    return mdsmap->get_metadata_volume(osdmap);
+    return mdsmap->get_metadata_volume(objecter);
   }
 
   // -- waiters --
@@ -274,7 +273,6 @@ class MDS : public Dispatcher {
   // who am i etc
   int get_nodeid() { return whoami; }
   MDSMap *get_mds_map() { return mdsmap; }
-  OSDMap *get_osd_map() { return osdmap; }
 
   void send_message_mds(Message *m, int mds);
   void forward_message_mds(Message *req, int mds);

@@ -27,7 +27,7 @@ int Resetter::init(int rank)
   }
 
   inodeno_t ino = MDS_INO_LOG_OFFSET + rank;
-  journaler = new Journaler(ino, mdsmap->get_metadata_volume(objecter->osdmap),
+  journaler = new Journaler(ino, mdsmap->get_metadata_volume(objecter),
 			    CEPH_FS_ONDISK_MAGIC,
 			    objecter, &timer);
 

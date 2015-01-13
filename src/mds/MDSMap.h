@@ -23,6 +23,7 @@
 #include "osd/OSDMap.h"
 #include "vol/Volume.h"
 #include "msg/Message.h"
+#include "osdc/Objecter.h"
 
 #include <set>
 #include <map>
@@ -255,9 +256,9 @@ public:
   const set<boost::uuids::uuid>& get_data_volumes() const { return data_volumes; }
   const boost::uuids::uuid& get_first_data_volume() const { return *data_volumes.begin(); }
   const boost::uuids::uuid& get_cas_uuid() const { return cas_uuid; }
-  VolumeRef get_metadata_volume(OSDMap *osdmap) {
+  VolumeRef get_metadata_volume(Objecter *objecter) {
     if (!metadata_volume) {
-	osdmap->find_by_uuid(metadata_uuid, metadata_volume);
+      metadata_volume = objecter->vol_by_uuid(metadata_uuid);
     }
     assert(!!metadata_volume);
     return metadata_volume;

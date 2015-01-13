@@ -179,10 +179,8 @@ Client::Client(Messenger *m, MonClient *mc)
   messenger = m;
 
   // osd interfaces
-  osdmap = new OSDMap;	   // initially blank.. see mount()
   mdsmap = new MDSMap;
-  objecter = new Objecter(cct, messenger, monclient, osdmap, client_lock, timer,
-			  0, 0);
+  objecter = new Objecter(cct, messenger, monclient, 0, 0);
   objecter->set_client_incarnation(0);	// client always 0, for now.
   writeback_handler = new ObjecterWriteback(objecter);
   objectcacher = new ObjectCacher(cct, *writeback_handler, client_lock,
@@ -207,7 +205,6 @@ Client::~Client()
   delete writeback_handler;
 
   delete objecter;
-  delete osdmap;
   delete mdsmap;
 }
 
@@ -1778,43 +1775,34 @@ bool Client::ms_dispatch(Message *m)
   }
 
   switch (m->get_type()) {
-    // osd
-  case CEPH_MSG_OSD_OPREPLY:
-    objecter->handle_osd_op_reply((MOSDOpReply*)m);
-    break;
-  case CEPH_MSG_OSD_MAP:
-    objecter->handle_osd_map((class MOSDMap*)m);
-    break;
-  case CEPH_MSG_STATFS_REPLY:
-    objecter->handle_fs_stats_reply((MStatfsReply*)m);
-    break;
-
-
     // mounting and mds sessions
   case CEPH_MSG_MDS_MAP:
     handle_mds_map(static_cast<MMDSMap*>(m));
+    return true;
     break;
   case CEPH_MSG_CLIENT_SESSION:
     handle_client_session(static_cast<MClientSession*>(m));
+    return true;
     break;
 
     // requests
   case CEPH_MSG_CLIENT_REQUEST_FORWARD:
     handle_client_request_forward(static_cast<MClientRequestForward*>(m));
+    return true;
     break;
   case CEPH_MSG_CLIENT_REPLY:
     handle_client_reply(static_cast<MClientReply*>(m));
+    return true;
     break;
 
   case CEPH_MSG_CLIENT_CAPS:
     handle_caps(static_cast<MClientCaps*>(m));
+    return true;
     break;
   case CEPH_MSG_CLIENT_LEASE:
     handle_lease(static_cast<MClientLease*>(m));
+    return true;
     break;
-
-  default:
-    return false;
   }
 
   // unmounting?
@@ -1831,8 +1819,7 @@ bool Client::ms_dispatch(Message *m)
 	       << "+" << inode_map.size() << dendl;
     }
   }
-
-  return true;
+  return false;
 }
 
 
@@ -3350,11 +3337,6 @@ int Client::mount(const std::string &mount_root)
   mounted = true;
 
   tick(); // start tick
-
-  ldout(cct, 2) << "mounted: have osdmap " << osdmap->get_epoch()
-	  << " and mdsmap " << mdsmap->get_epoch()
-	  << dendl;
-
 
   // hack: get+pin root inode.
   //  fuse assumes it's always there.
@@ -5244,7 +5226,11 @@ Fh *Client::_create_fh(Inode *in, int flags, int cmode)
   assert(in);
   f->inode = in;
   f->inode->get();
-  objecter->osdmap->find_by_uuid(in->layout.fl_uuid, f->vol);
+  {
+    const OSDMap* osdmap = objecter->get_osdmap_read();
+    osdmap->find_by_uuid(in->layout.fl_uuid, f->vol);
+    objecter->put_osdmap_read();
+  }
 
   ldout(cct, 10) << "_create_fh " << in->ino << " mode " << cmode << dendl;
 
@@ -5417,7 +5403,11 @@ int Client::uninline_data(Inode *in, Context *onfinish)
   object_t oid = oid_buf;
 
   VolumeRef mvol;
-  objecter->osdmap->find_by_uuid(in->layout.fl_uuid, mvol);
+  {
+    const OSDMap* osdmap = objecter->get_osdmap_read();
+    osdmap->find_by_uuid(in->layout.fl_uuid, mvol);
+    objecter->put_osdmap_read();
+  }
 
   unique_ptr<ObjOp> create_ops = mvol->op();
   if (!create_ops) {
@@ -5848,8 +5838,15 @@ int Client::_write(Fh *f, int64_t offset, uint64_t size, const char *buf)
   if ((uint64_t)(offset+size) > mdsmap->get_max_filesize()) //too large!
     return -EFBIG;
 
-  if (osdmap->test_flag(CEPH_OSDMAP_FULL))
-    return -ENOSPC;
+  {
+    const OSDMap* osdmap = objecter->get_osdmap_read();
+    bool full = osdmap->test_flag(CEPH_OSDMAP_FULL);
+    objecter->put_osdmap_read();
+    if (full) {
+      return -ENOSPC;
+    }
+  }
+
 
   //ldout(cct, 7) << "write fh " << fh << " size " << size << " offset " << offset << dendl;
   Inode *in = f->inode;
@@ -7462,17 +7459,26 @@ int Client::ll_link(Inode *parent, Inode *newparent, const char *newname,
 
 int Client::ll_num_osds(void)
 {
-  Mutex::Locker lock(client_lock);
-  return osdmap->get_num_osds();
+  const OSDMap* osdmap = objecter->get_osdmap_read();
+  int num_osds = osdmap->get_num_osds();
+  objecter->put_osdmap_read();
+  return num_osds;
 }
 
 int Client::ll_osdaddr(int osd, uint32_t *addr)
 {
   Mutex::Locker lock(client_lock);
-  entity_addr_t g = osdmap->get_addr(osd);
+  entity_addr_t g;
+  bool exists;
+  {
+    const OSDMap* osdmap = objecter->get_osdmap_read();
+    g = osdmap->get_addr(osd);
+    exists = osdmap->exists(osd);
+    objecter->put_osdmap_read();
+  }
   uint32_t nb_addr = (g.in4_addr()).sin_addr.s_addr;
 
-  if (!(osdmap->exists(osd))) {
+  if (!exists) {
     return -1;
   }
 
@@ -7718,7 +7724,11 @@ int Client::ll_read_block(Inode *in, uint64_t blockid,
   Context *onfinish = new C_SafeCond(&flock, &cond, &done, &r);
   bufferlist bl;
   VolumeRef mvol;
-  objecter->osdmap->find_by_uuid(in->layout.fl_uuid, mvol);
+  {
+    const OSDMap* osdmap = objecter->get_osdmap_read();
+    osdmap->find_by_uuid(in->layout.fl_uuid, mvol);
+    objecter->put_osdmap_read();
+  }
   if (!mvol)
     return -ENXIO;
 
@@ -7787,7 +7797,12 @@ int Client::ll_write_block(Inode *in, uint64_t blockid,
   /* lock just in time */
   client_lock.Lock();
   VolumeRef mvol;
-  objecter->osdmap->find_by_uuid(layout->fl_uuid, mvol);
+  {
+    const OSDMap* osdmap = objecter->get_osdmap_read();
+    osdmap->find_by_uuid(in->layout.fl_uuid, mvol);
+    objecter->put_osdmap_read();
+  }
+
   if (!mvol)
     return -ENXIO;
 
@@ -7891,7 +7906,15 @@ int Client::_fallocate(Fh *fh, int mode, int64_t offset, int64_t length)
   if ((mode & FALLOC_FL_PUNCH_HOLE) && !(mode & FALLOC_FL_KEEP_SIZE))
     return -EOPNOTSUPP;
 
-  if (osdmap->test_flag(CEPH_OSDMAP_FULL) && !(mode & FALLOC_FL_PUNCH_HOLE))
+  bool full;
+  {
+    const OSDMap* osdmap = objecter->get_osdmap_read();
+    full = (osdmap->test_flag(CEPH_OSDMAP_FULL) &&
+	    !(mode & FALLOC_FL_PUNCH_HOLE));
+    objecter->put_osdmap_read();
+  }
+
+  if (full)
     return -ENOSPC;
 
   Inode *in = fh->inode;
@@ -7945,7 +7968,11 @@ int Client::_fallocate(Fh *fh, int mode, int64_t offset, int64_t length)
       Context *onfinish = new C_SafeCond(&flock, &cond, &done);
       Context *onsafe = new C_Client_SyncCommit(this, in);
       VolumeRef mvol;
-      objecter->osdmap->find_by_uuid(in->layout.fl_uuid, mvol);
+      {
+	const OSDMap* osdmap = objecter->get_osdmap_read();
+	osdmap->find_by_uuid(in->layout.fl_uuid, mvol);
+	objecter->put_osdmap_read();
+      }
       if (!mvol) {
 	r = -ENXIO;
 	goto done;
@@ -8191,12 +8218,16 @@ int Client::get_file_stripe_address(int fd, loff_t offset,
 
 int Client::get_osd_addr(int osd, entity_addr_t& addr)
 {
-  Mutex::Locker lock(client_lock);
+  bool exists;
+  {
+    const OSDMap* osdmap = objecter->get_osdmap_read();
+    exists = osdmap->exists(osd);
+    addr = osdmap->get_addr(osd);
+    objecter->put_osdmap_read();
+  }
 
-  if (!osdmap->exists(osd))
+  if (!exists)
     return -ENOENT;
-
-  addr = osdmap->get_addr(osd);
 
   return 0;
 }
@@ -8224,12 +8255,12 @@ int Client::enumerate_layout(int fd, vector<ObjectExtent>& result,
  */
 int Client::get_local_osd()
 {
-  Mutex::Locker lock(client_lock);
-
+  const OSDMap* osdmap = objecter->get_osdmap_read();
   if (osdmap->get_epoch() != local_osd_epoch) {
     local_osd = osdmap->find_osd_on_ip(messenger->get_myaddr());
     local_osd_epoch = osdmap->get_epoch();
   }
+  objecter->put_osdmap_read();
   return local_osd;
 }
 

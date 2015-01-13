@@ -1403,7 +1403,11 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       id = parse(a);
       lock.Lock();
       VolumeRef mvol;
-      client->osdmap->find_by_uuid(id, mvol);
+      {
+	const OSDMap* osdmap = client->objecter->get_osdmap_read();
+	osdmap->find_by_uuid(id, mvol);
+	client->objecter->put_osdmap_read();
+      }
       uint64_t size;
       utime_t mtime;
       client->objecter->stat(oid, mvol, &size, &mtime, 0,
@@ -1421,7 +1425,11 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       boost::uuids::uuid id;
       id = parse(a);
       VolumeRef mvol;
-      client->osdmap->find_by_uuid(id, mvol);
+      {
+	const OSDMap* osdmap = client->objecter->get_osdmap_read();
+	osdmap->find_by_uuid(id, mvol);
+	client->objecter->put_osdmap_read();
+      }
       lock.Lock();
       bufferlist bl;
       client->objecter->read(oid, mvol, off, len, &bl, 0,
@@ -1439,7 +1447,11 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       boost::uuids::uuid id;
       id = parse(a);
       VolumeRef mvol;
-      client->osdmap->find_by_uuid(id, mvol);
+      {
+	const OSDMap* osdmap = client->objecter->get_osdmap_read();
+	osdmap->find_by_uuid(id, mvol);
+	client->objecter->put_osdmap_read();
+      }
       lock.Lock();
       bufferptr bp(len);
       bufferlist bl;
@@ -1462,7 +1474,11 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       boost::uuids::uuid id;
       id = parse(a);
       VolumeRef mvol;
-      client->osdmap->find_by_uuid(id, mvol);
+      {
+	const OSDMap* osdmap = client->objecter->get_osdmap_read();
+	osdmap->find_by_uuid(id, mvol);
+	client->objecter->put_osdmap_read();
+      }
       lock.Lock();
       client->objecter->zero(oid, mvol, off, len,
 			     ceph_clock_now(client->cct), 0,
@@ -2247,7 +2263,11 @@ int SyntheticClient::create_objects(int nobj, int osize, int inflight)
   boost::uuids::uuid id;
   id = parse("deac041b-4100-4c75-93a3-b9329b9cf9cf");
   VolumeRef mvol;
-  client->osdmap->find_by_uuid(id, mvol);
+  {
+    const OSDMap* osdmap = client->objecter->get_osdmap_read();
+    osdmap->find_by_uuid(id, mvol);
+    client->objecter->put_osdmap_read();
+  }
 
   list<utime_t> starts;
 
@@ -2340,7 +2360,11 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
   boost::uuids::uuid id;
   id = parse("deac041b-4100-4c75-93a3-b9329b9cf9cf");
   VolumeRef mvol;
-  client->osdmap->find_by_uuid(id, mvol);
+  {
+    const OSDMap* osdmap = client->objecter->get_osdmap_read();
+    osdmap->find_by_uuid(id, mvol);
+    client->objecter->put_osdmap_read();
+  }
 
   while (1) {
     if (time_to_stop()) break;
@@ -3423,7 +3447,11 @@ int SyntheticClient::chunk_file(string &filename)
     return ret;
 
   VolumeRef mvol;
-  client->osdmap->find_by_uuid(inode.layout.fl_uuid, mvol);
+  {
+    const OSDMap* osdmap = client->objecter->get_osdmap_read();
+    osdmap->find_by_uuid(inode.layout.fl_uuid, mvol);
+    client->objecter->put_osdmap_read();
+  }
 
   uint64_t pos = 0;
   bufferlist from_before;

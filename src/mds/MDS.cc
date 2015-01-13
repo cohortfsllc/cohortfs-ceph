@@ -110,10 +110,8 @@ MDS::MDS(const std::string &n, Messenger *m, MonClient *mc) :
   monc->set_messenger(messenger);
 
   mdsmap = new MDSMap;
-  osdmap = new OSDMap;
 
-  objecter = new Objecter(m->cct, messenger, monc, osdmap, mds_lock, timer,
-			  0, 0);
+  objecter = new Objecter(m->cct, messenger, monc, 0, 0);
   objecter->unset_honor_osdmap_full();
 
   mdcache = new MDCache(this);
@@ -157,7 +155,6 @@ MDS::~MDS() {
   if (inotable) { delete inotable; inotable = NULL; }
   if (anchorserver) { delete anchorserver; anchorserver = NULL; }
   if (anchorclient) { delete anchorclient; anchorclient = NULL; }
-  if (osdmap) { delete osdmap; osdmap = 0; }
   if (mdsmap) { delete mdsmap; mdsmap = 0; }
 
   if (server) { delete server; server = 0; }
@@ -370,11 +367,15 @@ int MDS::init(int wanted_state)
   while (true) {
     objecter->maybe_request_map();
     objecter->wait_for_osd_map();
-    if (objecter->osdmap->get_num_up_osds() > 0) {
+    const OSDMap* osdmap = objecter->get_osdmap_read();
+    if (osdmap->get_num_up_osds() > 0) {
 	break;
     } else {
-	derr << "*** no OSDs are up as of epoch " << objecter->osdmap->get_epoch() << ", waiting" << dendl;
+	derr << "*** no OSDs are up as of epoch "
+	     << osdmap->get_epoch() << ", waiting" << dendl;
     }
+    objecter->put_osdmap_read();
+
     sleep(10);
   }
 
@@ -581,7 +582,7 @@ void MDS::handle_mds_beacon(MMDSBeacon *m)
 }
 
 void MDS::request_osdmap(Context *c) {
-  objecter->wait_for_new_map(c, osdmap->get_epoch());
+  objecter->wait_for_latest_osdmap(c);
 }
 
 /* This function DOES put the passed message before returning*/
@@ -1210,6 +1211,7 @@ void MDS::replay_start()
 
   calc_recovery_set();
 
+  const OSDMap* osdmap = objecter->get_osdmap_read();
   dout(1) << " need osdmap epoch " << mdsmap->get_last_failure_osd_epoch()
 	  <<", have " << osdmap->get_epoch()
 	  << dendl;
@@ -1217,11 +1219,15 @@ void MDS::replay_start()
   // start?
   if (osdmap->get_epoch() >= mdsmap->get_last_failure_osd_epoch()) {
     boot_start();
+    objecter->put_osdmap_read();
+    osdmap = nullptr;
   } else {
     dout(1) << " waiting for osdmap " << mdsmap->get_last_failure_osd_epoch()
 	    << " (which blacklists prior instance)" << dendl;
-    objecter->wait_for_new_map(new C_MDS_BootStart(this, 0),
-			       mdsmap->get_last_failure_osd_epoch());
+    objecter->put_osdmap_read();
+    osdmap = nullptr;
+    objecter->wait_for_map(mdsmap->get_last_failure_osd_epoch(),
+			   new C_MDS_BootStart(this, 0));
   }
 }
 
@@ -1253,11 +1259,11 @@ inline void MDS::standby_replay_restart()
 {
   dout(1) << "standby_replay_restart" << (standby_replaying ? " (as standby)":" (final takeover pass)") << dendl;
 
-  if (!standby_replaying && osdmap->get_epoch() < mdsmap->get_last_failure_osd_epoch()) {
+  if (!standby_replaying) {
     dout(1) << " waiting for osdmap " << mdsmap->get_last_failure_osd_epoch()
 	    << " (which blacklists prior instance)" << dendl;
-    objecter->wait_for_new_map(new C_MDS_BootStart(this, 3),
-			       mdsmap->get_last_failure_osd_epoch());
+    objecter->wait_for_map(mdsmap->get_last_failure_osd_epoch(),
+			   new C_MDS_BootStart(this, 3));
   } else {
     mdlog->get_journaler()->reread_head_and_probe(
       new C_MDS_StandbyReplayRestartFinish(this, mdlog->get_journaler()->get_read_pos()));
@@ -1643,32 +1649,22 @@ bool MDS::handle_core_message(Message *m)
   case CEPH_MSG_MDS_MAP:
     ALLOW_MESSAGES_FROM(CEPH_ENTITY_TYPE_MON | CEPH_ENTITY_TYPE_MDS);
     handle_mds_map(static_cast<MMDSMap*>(m));
+    return true;
     break;
   case MSG_MDS_BEACON:
     ALLOW_MESSAGES_FROM(CEPH_ENTITY_TYPE_MON);
     handle_mds_beacon(static_cast<MMDSBeacon*>(m));
+    return true;
     break;
 
     // misc
   case MSG_MON_COMMAND:
     ALLOW_MESSAGES_FROM(CEPH_ENTITY_TYPE_MON);
     handle_command(static_cast<MMonCommand*>(m));
+    return true;
     break;
-
-    // OSD
-  case CEPH_MSG_OSD_OPREPLY:
-    ALLOW_MESSAGES_FROM(CEPH_ENTITY_TYPE_OSD);
-    objecter->handle_osd_op_reply((class MOSDOpReply*)m);
-    break;
-  case CEPH_MSG_OSD_MAP:
-    ALLOW_MESSAGES_FROM(CEPH_ENTITY_TYPE_MON | CEPH_ENTITY_TYPE_OSD);
-    objecter->handle_osd_map((MOSDMap*)m);
-    break;
-
-  default:
-    return false;
   }
-  return true;
+  return false;
 }
 
 /*

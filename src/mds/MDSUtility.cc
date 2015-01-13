@@ -26,8 +26,7 @@ MDSUtility::MDSUtility() :
   monc = new MonClient(g_ceph_context);
   messenger = Messenger::create(g_ceph_context, entity_name_t::CLIENT(), "mds", getpid());
   mdsmap = new MDSMap();
-  osdmap = new OSDMap();
-  objecter = new Objecter(g_ceph_context, messenger, monc, osdmap, lock, timer, 0, 0);
+  objecter = new Objecter(g_ceph_context, messenger, monc, 0, 0);
 }
 
 
@@ -36,7 +35,6 @@ MDSUtility::~MDSUtility()
   delete objecter;
   delete monc;
   delete messenger;
-  delete osdmap;
   delete mdsmap;
   assert(waiting_for_mds_map == NULL);
 }
@@ -115,19 +113,12 @@ bool MDSUtility::ms_dispatch(Message *m)
 {
    Mutex::Locker locker(lock);
    switch (m->get_type()) {
-   case CEPH_MSG_OSD_OPREPLY:
-     objecter->handle_osd_op_reply((MOSDOpReply *)m);
-     break;
-   case CEPH_MSG_OSD_MAP:
-     objecter->handle_osd_map((MOSDMap*)m);
-     break;
    case CEPH_MSG_MDS_MAP:
      handle_mds_map((MMDSMap*)m);
+     return true;
      break;
-   default:
-     return false;
    }
-   return true;
+   return false;
 }
 
 

@@ -75,6 +75,16 @@ protected:
     return one_op * erasure->get_chunk_count();
   }
 
+  virtual int32_t quorum() const {
+    if (!attached) {
+      std::stringstream(ss);
+      int r = _attach(ss);
+      if (r < 0)
+	return r;
+    }
+    return erasure->get_chunk_count();
+  }
+
   virtual uint32_t num_rules(void);
 
   virtual ssize_t place(const object_t& object,
