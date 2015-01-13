@@ -29,6 +29,7 @@
 
 #include "common/admin_socket.h"
 #include "common/Timer.h"
+#include "common/RWLock.h"
 #include "common/zipkin_trace.h"
 #include "include/rados/rados_types.h"
 #include "include/rados/rados_types.hpp"
@@ -57,22 +58,26 @@ namespace OSDC {
   using std::unique_ptr;
   using std::move;
 
-  class Objecter {
+  class Objecter: public Dispatcher {
   public:
     Messenger *messenger;
     MonClient *monc;
+  private:
     OSDMap    *osdmap;
+  public:
     CephContext *cct;
 
-    bool initialized;
+    std:::atomic<bool> initialized;
 
   private:
-    ceph_tid_t last_tid;
-    int client_inc;
+    std::atomic<uint64_t> last_tid;
+    std::atomic<uint32_t> inflight_ops;
+    std::atomic<uint32_t> client_inc;
     uint64_t max_linger_id;
-    int num_unacked;
-    int num_uncommitted;
-    int global_op_flags; // flags which are applied to each IO op
+    std::atomic<uint32_t> num_unacked;
+    std::atomic<uint32_t> num_uncommitted;
+    // flags which are applied to each IO op
+    std::atomic<uint32_t> global_op_flags;
     bool keep_balanced_budget;
     bool honor_osdmap_full;
     ZTracer::Endpoint trace_endpoint;
@@ -81,11 +86,13 @@ namespace OSDC {
     void maybe_request_map();
   private:
 
-    version_t last_seen_osdmap_version;
-    version_t last_seen_pgmap_version;
+    int _maybe_request_map();
 
-    Mutex &client_lock;
-    SafeTimer &timer;
+    version_t last_seen_osdmap_version;
+
+    RWLock rwlock;
+    Mutex timer_lock;
+    SafeTimer timer;
 
     class C_Tick : public Context {
       Objecter *ob;
@@ -97,9 +104,16 @@ namespace OSDC {
     void schedule_tick();
     void tick();
 
-  public:
-    /*** track pending operations ***/
-    // read
+    class RequestStateHook : public AdminSocketHook {
+      Objecter *m_objecter;
+    public:
+      RequestStateHook(Objecter *objecter);
+      bool call(std::string command, cmdmap_t& cmdmap, std::string format,
+		bufferlist& out);
+    };
+
+    RequestStateHook *m_request_state_hook;
+
   public:
 
     struct OSDSession;
@@ -163,6 +177,11 @@ namespace OSDC {
       Context *onack, *oncommit, *ontimeout;
       epoch_t *reply_epoch;
       bool budgeted;
+      // true if the throttle budget is get/put on a series of OPs,
+      // instead of per OP basis, when this flag is set, the budget is
+      // acquired before sending the very first OP of the series and
+      // released upon receiving the last OP reply.
+      bool ctx_budgeted;
       /// true if we should resend this message on failure
       bool should_resend;
       ZTracer::Trace trace;
@@ -199,6 +218,16 @@ namespace OSDC {
 						   latest(0) {}
       void finish(int r);
     };
+
+    struct C_Command_Map_Latest : public Context {
+      Objecter *objecter;
+      uint64_t tid;
+      version_t latest;
+      C_Command_Map_Latest(Objecter *o, ceph_tid_t t) :
+	objecter(o), tid(t), latest(0) {}
+      void finish(int r);
+    };
+
 
     struct C_Stat : public Context {
       bufferlist bl;
@@ -303,37 +332,58 @@ namespace OSDC {
     };
 
     // -- osd sessions --
-    struct OSDSession {
+    struct OSDSession : public RefCountedObject {
+      RWLock lock;
+      Mutex **completion_locks;
       slist<SubOp, constant_time_size<false> > subops;
       slist<SubOp, constant_time_size<false> > linger_subops;
       int osd;
       int incarnation;
+      int num_locks;
       ConnectionRef con;
 
-      OSDSession(int o) : osd(o), incarnation(0), con(NULL) {}
+      OSDSession(CephContext *cct, int o) :
+	osd(o), incarnation(0), con(NULL) {
+	num_locks = cct->_conf->objecter_completion_locks_per_session;
+	completion_locks = new Mutex *[num_locks];
+	for (int i = 0; i < num_locks; i++) {
+	  completion_locks[i] = new Mutex;
+	}
+      }
+      ~OSDSession();
+
+      Mutex *get_lock(object_t& oid);
+      bool is_homeless() { return (osd == -1); }
     };
     map<int,OSDSession*> osd_sessions;
 
 
   private:
-    // pending ops
-    map<ceph_tid_t,Op*> inflight_ops; // Should probably be an slist
-    map<ceph_tid_t,SubOp*> subops;
-    int num_homeless_ops;
     map<uint64_t, LingerOp*> linger_ops;
     map<ceph_tid_t,StatfsOp*> statfs_ops;
+    std::atomic<uint32_t> num_homeless_ops;
 
+    OSDSession *homeless_session;
+
+    // ops waiting for an osdmap with a new volume or confirmation
+    // that the volume does not exist (may be expanded to other uses
+    // later)
     map<uint64_t, LingerOp*> check_latest_map_lingers;
     map<ceph_tid_t, Op*> check_latest_map_ops;
+
+    //map<ceph_tid_t,Op*> inflight_ops; // Should probably be an slist
+    //map<ceph_tid_t,SubOp*> subops;
 
     map<epoch_t,list< pair<Context*, int> > > waiting_for_map;
 
     double mon_timeout, osd_timeout;
 
+    MOSDOp *_prepare_osd_op(Op *op);
     void send_subop(SubOp &subop, int flags);
-    void send_op(Op *op);
-    void cancel_op(Op *op);
-    void finish_op(Op *op);
+    void _send_op(Op *op, MOSDOp *m = nullptr);
+    void _cancel_linger_op(Op *op);
+    void finish_op(OSDSession *session, ceph_tid_t tid);
+    void _finish_op(Op *op);
     enum recalc_op_target_result {
       RECALC_OP_TARGET_NO_ACTION = 0,
       RECALC_OP_TARGET_NEED_RESEND,
@@ -343,23 +393,45 @@ namespace OSDC {
     bool osdmap_full_flag() const;
     bool target_should_be_paused(op_base *op);
 
-    int calc_target(op_base *t);
-    int recalc_op_target(Op *op);
-    bool recalc_linger_op_target(LingerOp *op);
+    int _calc_target(op_base *t, bool any_change=false);
+    int _map_session(op_base *op, OSDSession **s,
+		     RWLock::Context& lc);
 
-    void send_linger(LingerOp *info);
+    void _session_op_assign(OSDSession *s, Op *op);
+    void _session_op_remove(OSDSession *s, Op *op);
+    void _session_linger_op_assign(OSDSession *to, LingerOp *op);
+    void _session_linger_op_remove(OSDSession *from, LingerOp *op);
+
+    int _get_osd_session(int osd, RWLock::Context& lc,
+			 OSDSession **session);
+    int _assign_op_target_session(Op *op, RWLock::Context& lc,
+				  bool src_session_locked,
+				  bool dst_session_locked);
+    int _get_op_target_session(Op *op, RWLock::Context& lc,
+			       OSDSession **session);
+    int _recalc_linger_op_target(LingerOp *op, RWLock::Context& lc);
+
+    void _linger_submit(LingerOp *info);
+    void _send_linger(LingerOp *info);
     void _linger_ack(LingerOp *info, int r);
     void _linger_commit(LingerOp *info, int r);
 
+    void _check_op_volume_dne(Op *op, bool session_locked);
     void _send_op_map_check(Op *op);
-    void op_cancel_map_check(Op *op);
+    void _op_cancel_map_check(Op *op);
+    void _check_linger_pool_dne(LingerOp *op, bool *need_unregister);
     void _send_linger_map_check(LingerOp *op);
-    void linger_cancel_map_check(LingerOp *op);
+    void _linger_cancel_map_check(LingerOp *op);
 
     void kick_requests(OSDSession *session);
+    void _kick_requests(OSDSession *session, map<uint64_t,
+			LingerOp *>& lresend);
+    void _linger_ops_resend(map<uint64_t, LingerOp *>& lresend);
 
-    OSDSession *get_session(int osd);
-    void reopen_session(OSDSession *session);
+    int _get_session(int osd, OSDSession **session, RWLock::Context& lc);
+    void put_session(OSDSession *s);
+    void get_session(OSDSession *s);
+    void _reopen_session(OSDSession *session);
     void close_session(OSDSession *session);
 
     void resend_mon_ops();
@@ -370,52 +442,68 @@ namespace OSDC {
      * and returned whenever an op is removed from the map
      * If throttle_op needs to throttle it will unlock client_lock.
      */
-    void throttle_op(Op *op, uint64_t op_size = 0);
-    void take_op_budget(Op *op) {
-      uint64_t op_budget = op->op->get_budget();
+    int calc_op_budget(Op *op);
+    void _throttle_op(Op *op, int op_size=0);
+    int _take_op_budget(Op *op) {
+      assert(rwlock.is_locked());
+      int op_budget = calc_op_budget(op);
       if (keep_balanced_budget) {
-	throttle_op(op, op_budget);
+	_throttle_op(op, op_budget);
       } else {
 	op_throttle_bytes.take(op_budget);
 	op_throttle_ops.take(1);
       }
       op->budgeted = true;
+      return op_budget;
+    }
+    void put_op_budget_bytes(int op_budget) {
+      assert(op_budget >= 0);
+      op_throttle_bytes.put(op_budget);
+      op_throttle_ops.put(1);
     }
     void put_op_budget(Op *op) {
       assert(op->budgeted);
-      uint64_t op_budget = op->op->get_budget();
-      op_throttle_bytes.put(op_budget);
-      op_throttle_ops.put(1);
+      int op_budget = calc_op_budget(op);
+      put_op_budget_bytes(op_budget);
     }
     Throttle op_throttle_bytes, op_throttle_ops;
 
   public:
     Objecter(CephContext *cct_, Messenger *m, MonClient *mc,
-	     OSDMap *om, Mutex& l, SafeTimer& t, double mon_timeout,
-	     double osd_timeout) :
-      messenger(m), monc(mc), osdmap(om), cct(cct_),
-      initialized(false),
-      last_tid(0), client_inc(-1), max_linger_id(0),
+	     double mon_timeout, double osd_timeout) :
+      Dispatcher(cct), messenger(m), monc(mc),
+      osdmap(new OSDMap), cct(cct_),
+      initialized(false), last_tid(0),
+      client_inc(-1), max_linger_id(0),
       num_unacked(0), num_uncommitted(0),
       global_op_flags(0),
       keep_balanced_budget(false), honor_osdmap_full(true),
       trace_endpoint("0.0.0.0", 0, "Objecter"),
       last_seen_osdmap_version(0),
-      last_seen_pgmap_version(0),
-      client_lock(l), timer(t),
+      timer(cct, timer_lock, false),
       tick_event(NULL),
+      m_request_state_hook(NULL),
       num_homeless_ops(0),
+      homeless_session(new OSDSession(cct, -1)),
       mon_timeout(mon_timeout),
       osd_timeout(osd_timeout),
-      op_throttle_bytes(cct, "objecter_bytes", cct->_conf->objecter_inflight_op_bytes),
+      op_throttle_bytes(cct, "objecter_bytes",
+			cct->_conf->objecter_inflight_op_bytes),
       op_throttle_ops(cct, "objecter_ops", cct->_conf->objecter_inflight_ops)
       { }
-    ~Objecter() {
-      assert(!tick_event);
-    }
+    ~Objecter();
 
     void init();
+    void start();
     void shutdown();
+
+    const OSDMap *get_osdmap_read() {
+      rwlock.get_read();
+      return osdmap;
+    }
+    void put_osdmap_read() {
+      rwlock.put_read();
+    }
 
     /**
      * Tell the objecter to throttle outgoing ops according to its
@@ -424,56 +512,100 @@ namespace OSDC {
      * incoming messages reduce the used budget low enough for
      * the ops to continue going; then it will lock client_lock again.
      */
+
     void set_balanced_budget() { keep_balanced_budget = true; }
     void unset_balanced_budget() { keep_balanced_budget = false; }
 
     void set_honor_osdmap_full() { honor_osdmap_full = true; }
     void unset_honor_osdmap_full() { honor_osdmap_full = false; }
 
-    void scan_requests(bool force_resend,
-		       bool force_resend_writes,
-		       map<ceph_tid_t, Op*>& need_resend,
-		       list<LingerOp*>& need_resend_linger);
-
+    void _scan_requests(OSDSession *s,
+			bool force_resend,
+			bool force_resend_writes,
+			map<ceph_tid_t, Op*>& need_resend,
+			list<LingerOp*>& need_resend_linger);
     // messages
   public:
-    void dispatch(Message *m);
+    bool ms_dispatch(Message *m);
+    bool ms_can_fast_dispatch_any() const {
+      return false;
+    }
+    bool ms_can_fast_dispatch(Message *m) const {
+      switch (m->get_type()) {
+      case CEPH_MSG_OSD_OPREPLY:
+	/* sadly, we need to solve a deadlock before reenabling.
+	 * See tracker issue #9462 */
+	return false;
+      default:
+	return false;
+      }
+    }
+    void ms_fast_dispatch(Message *m) {
+      ms_dispatch(m);
+    }
+
     void handle_osd_op_reply(MOSDOpReply *m);
     void handle_osd_map(MOSDMap *m);
     void wait_for_osd_map();
 
   private:
+    bool _promote_lock_check_race(RWLock::Context& lc);
+
     // low-level
-    ceph_tid_t _op_submit(Op *op);
+    ceph_tid_t _op_submit(Op *op, RWLock::Context& lc);
+    ceph_tid_t _op_submit_with_budget(Op *op, RWLock::Context& lc,
+				      int *ctx_budget = nullptr);
     inline void unregister_op(Op *op);
 
     // public interface
   public:
-    ceph_tid_t op_submit_special(Op *op); // Stupid Stupid Stupid
-    ceph_tid_t op_submit(Op *op);
+    ceph_tid_t op_submit(Op *op, int *ctx_budget = nullptr);
     bool is_active() {
-      return !(inflight_ops.empty() && linger_ops.empty());
+      return !((!inflight_ops.read()) && linger_ops.empty() &&
+	       statfs_ops.empty());
     }
 
     /**
      * Output in-flight requests
      */
-    int get_client_incarnation() const { return client_inc; }
-    void set_client_incarnation(int inc) { client_inc = inc; }
+    void _dump_active(OSDSession *s);
+    void _dump_active();
+    void dump_active();
+    void dump_requests(Formatter *fmt);
+    void _dump_ops(const OSDSession *s, Formatter *fmt);
+    void dump_ops(Formatter *fmt);
+    void _dump_linger_ops(const OSDSession *s, Formatter *fmt);
+    void dump_linger_ops(Formatter *fmt);
+    void dump_command_ops(Formatter *fmt);
+    void dump_statfs_ops(Formatter *fmt) const;
 
-    void wait_for_new_map(Context *c, epoch_t epoch, int err=0);
+    int get_client_incarnation() const { return client_inc.read(); }
+    void set_client_incarnation(int inc) { client_inc.set(inc); }
+
+    // wait for epoch; true if we already have it
+    bool wait_for_map(epoch_t epoch, Context *c, int err=0);
+    void _wait_for_new_map(Context *c, epoch_t epoch, int err=0);
     void wait_for_latest_osdmap(Context *fin);
+    void get_latest_version(epoch_t oldest, epoch_t neweset, Context *fin);
     void _get_latest_version(epoch_t oldest, epoch_t neweset, Context *fin);
 
     /** Get the current set of global op flags */
-    int get_global_op_flags() { return global_op_flags; }
-    /** Add a flag to the global op flags */
-    void add_global_op_flags(int flag) { global_op_flags |= flag; }
-    /** Clear the passed flags from the global op flag set */
-    void clear_global_op_flag(int flags) { global_op_flags &= ~flags; }
+    int get_global_op_flags() { return global_op_flags.read(); }
+    /** Add a flag to the global op flags, not really atomic operation */
+    void add_global_op_flags(int flag) {
+      global_op_flags.set(global_op_flags.read() | flag);
+    }
+    /** Clear the passed flags from the global op flag set, not really
+	atomic operation */
+    void clear_global_op_flag(int flags) {
+      global_op_flags.set(global_op_flags.read() & ~flags);
+    }
 
     /// cancel an in-progress request with the given return code
-    int op_cancel(ceph_tid_t tid, int r);
+  private:
+    int op_cancel(OSDSession *s, ceph_tid_t tid, int r);
+    friend class C_CancelOp;
+
 
     // mid-level helpers
     Op *prepare_mutate_op(const object_t& oid,
@@ -531,6 +663,7 @@ namespace OSDC {
 			   bufferlist *outbl, int flags, Context *onack,
 			   version_t *objver);
     void unregister_linger(uint64_t linger_id);
+    void _unregister_linger(uint64_t linger_id);
 
     unique_ptr<ObjOp> init_ops(
       const shared_ptr<const Volume>& vol,
@@ -847,108 +980,20 @@ namespace OSDC {
     // ---------------------------
     // df stats
   private:
-    void fs_stats_submit(StatfsOp *op);
+    void _fs_stats_submit(StatfsOp *op);
   public:
     void handle_fs_stats_reply(MStatfsReply *m);
     void get_fs_stats(struct ceph_statfs& result, Context *onfinish);
     int statfs_op_cancel(ceph_tid_t tid, int r);
-    void finish_statfs_op(StatfsOp *op);
-
-    // ---------------------------
-    // some scatter/gather hackery
-
-    void _sg_read_finish(vector<ObjectExtent>& extents,
-			 vector<bufferlist>& resultbl,
-			 bufferlist *bl, Context *onfinish);
-
-    struct C_SGRead : public Context {
-      Objecter *objecter;
-      vector<ObjectExtent> extents;
-      vector<bufferlist> resultbl;
-      bufferlist *bl;
-      Context *onfinish;
-      C_SGRead(Objecter *ob,
-	       vector<ObjectExtent>& e, vector<bufferlist>& r,
-	       bufferlist *b, Context *c) :
-	objecter(ob), bl(b), onfinish(c) {
-	extents.swap(e);
-	resultbl.swap(r);
-      }
-      void finish(int r) {
-	objecter->_sg_read_finish(extents, resultbl, bl, onfinish);
-      }
-    };
-
-    void sg_read_trunc(vector<ObjectExtent>& extents,
-		       const shared_ptr<const Volume>& volume,
-		       bufferlist *bl, int flags, uint64_t trunc_size,
-		       uint32_t trunc_seq, Context *onfinish) {
-      if (extents.size() == 1) {
-	read_trunc(extents[0].oid, volume, extents[0].offset,
-		   extents[0].length, bl, flags, extents[0].truncate_size,
-		   trunc_seq, onfinish);
-      } else {
-	C_GatherBuilder gather;
-	vector<bufferlist> resultbl(extents.size());
-	int i=0;
-	for (vector<ObjectExtent>::iterator p = extents.begin();
-	     p != extents.end(); ++p) {
-	  read_trunc(p->oid, volume, p->offset, p->length,
-		     &resultbl[i++], flags, p->truncate_size, trunc_seq,
-		     gather.new_sub());
-	}
-	gather.set_finisher(new C_SGRead(this, extents, resultbl, bl, onfinish));
-	gather.activate();
-      }
-    }
-
-    void sg_read(vector<ObjectExtent>& extents,
-		 const shared_ptr<const Volume>& volume, bufferlist *bl,
-		 int flags, Context *onfinish) {
-      sg_read_trunc(extents, volume, bl, flags, 0, 0, onfinish);
-    }
-
-    void sg_write_trunc(vector<ObjectExtent>& extents,
-			const shared_ptr<const Volume>& volume,
-			const bufferlist& bl, utime_t mtime, int flags,
-			uint64_t trunc_size, uint32_t trunc_seq, Context *onack,
-			Context *oncommit) {
-      if (extents.size() == 1) {
-	write_trunc(extents[0].oid, volume, extents[0].offset,
-		    extents[0].length, bl, mtime, flags,
-		    extents[0].truncate_size, trunc_seq, onack, oncommit);
-      } else {
-	C_GatherBuilder gack(onack);
-	C_GatherBuilder gcom(oncommit);
-	for (vector<ObjectExtent>::iterator p = extents.begin();
-	     p != extents.end(); ++p) {
-	  bufferlist cur;
-	  for (vector<pair<uint64_t,uint64_t> >::iterator bit
-		 = p->buffer_extents.begin();
-	       bit != p->buffer_extents.end();
-	       ++bit)
-	    bl.copy(bit->first, bit->second, cur);
-	  assert(cur.length() == p->length);
-	  write_trunc(p->oid, volume, p->offset, p->length,
-		      cur, mtime, flags, p->truncate_size, trunc_seq,
-		      onack ? gack.new_sub():0,
-		      oncommit ? gcom.new_sub():0);
-	}
-	gack.activate();
-	gcom.activate();
-      }
-    }
-
-    void sg_write(vector<ObjectExtent>& extents,
-		  const shared_ptr<const Volume>& volume,
-		  const bufferlist& bl, utime_t mtime, int flags, Context *onack,
-		  Context *oncommit) {
-      sg_write_trunc(extents, volume, bl, mtime, flags, 0, 0, onack, oncommit);
-    }
+    void _finish_statfs_op(StatfsOp *op);
 
     void ms_handle_connect(Connection *con);
-    void ms_handle_reset(Connection *con);
+    bool ms_handle_reset(Connection *con);
     void ms_handle_remote_reset(Connection *con);
+    bool ms_get_authorizer(int dest_type,
+			   AuthAuthorizer **authorizer,
+			   bool force_new);
+
     void blacklist_self(bool set);
   };
 };

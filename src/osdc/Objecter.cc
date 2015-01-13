@@ -15,8 +15,6 @@
 #include <algorithm>
 #include "Objecter.h"
 #include "osd/OSDMap.h"
-#include "Filer.h"
-#include "Striper.h"
 
 #include "mon/MonClient.h"
 
@@ -1252,7 +1250,7 @@ namespace OSDC {
   void Objecter::fs_stats_submit(StatfsOp *op)
   {
     ldout(cct, 10) << "fs_stats_submit" << op->tid << dendl;
-    monc->send_mon_message(new MStatfs(monc->get_fsid(), op->tid, last_seen_pgmap_version));
+    monc->send_mon_message(new MStatfs(monc->get_fsid(), op->tid));
     op->last_submit = ceph_clock_now(cct);
   }
 
@@ -1268,8 +1266,6 @@ namespace OSDC {
       StatfsOp *op = statfs_ops[tid];
       ldout(cct, 10) << "have request " << tid << " at " << op << dendl;
       *(op->stats) = m->h.st;
-      if (m->h.version > last_seen_pgmap_version)
-	last_seen_pgmap_version = m->h.version;
       op->onfinish->complete(0);
       finish_statfs_op(op);
     } else {
