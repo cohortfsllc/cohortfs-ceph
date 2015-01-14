@@ -61,8 +61,6 @@ std::atomic<uint64_t> rados_instance;
 bool librados::RadosClient::ms_get_authorizer(int dest_type,
 					      AuthAuthorizer **authorizer,
 					      bool force_new) {
-  //ldout(cct, 0) << "RadosClient::ms_get_authorizer type=" << dest_type << dendl;
-  /* monitor authorization is being handled on different layer */
   if (dest_type == CEPH_ENTITY_TYPE_MON)
     return true;
   *authorizer = monclient.auth->build_authorizer(dest_type);
@@ -78,12 +76,12 @@ librados::RadosClient::RadosClient(CephContext *cct_)
     messenger(NULL),
     instance_id(0),
     objecter(NULL),
-    osdmap_epoch(0),
+    lock("librados::RadosClient::lock"),
     timer(cct, lock),
     refcnt(1),
     log_last_version(0), log_cb(NULL), log_cb_arg(NULL),
     finisher(cct),
-    max_watch_cookie(0)
+    max_watch_notify_cookie(0)
 {
 }
 
@@ -160,22 +158,13 @@ int librados::RadosClient::connect()
     return -EISCONN;
   state = CONNECTING;
 
-  /* dout and friends use g_ceph_context to print stuff.  If we want
-   * to use dout to debug library calls, these have to be set.	There's
-   * no way for python code (ie, the ceph command) to set them (or know
-   * that it should).  Eventually, should use ldout(cct,x)
-   * everywhere (and make sure cct is passed more places).  For now, ...
-   */
-  if (!g_ceph_context) g_ceph_context = cct;
-
   // get monmap
   err = monclient.build_initial_monmap();
   if (err < 0)
     goto out;
 
   err = -ENOMEM;
-  nonce = getpid() + (1000000 * ++rados_instance);
-
+  nonce = getpid() + (1000000 * (uint64_t)rados_instance.inc());
 #ifdef HAVE_XIO
   if (cct->_conf->client_rdma) {
     XioMessenger *xmsgr
@@ -192,6 +181,9 @@ int librados::RadosClient::connect()
 				    "radosclient", nonce);
   }
 
+  if (!messenger)
+    goto out;
+
   // require OSDREPLYMUX feature.  this means we will fail to talk to
   // old servers.  this is necessary because otherwise we won't know
   // how to decompose the reply data into its consituent pieces.
@@ -202,7 +194,7 @@ int librados::RadosClient::connect()
   ldout(cct, 1) << "starting objecter" << dendl;
 
   err = -ENOMEM;
-  objecter = new Objecter(cct, messenger, &monclient, &osdmap, lock, timer,
+  objecter = new Objecter(cct, messenger, &monclient,
 			  cct->_conf->rados_mon_op_timeout,
 			  cct->_conf->rados_osd_op_timeout);
   if (!objecter)
@@ -211,7 +203,9 @@ int librados::RadosClient::connect()
 
   monclient.set_messenger(messenger);
 
-  messenger->add_dispatcher_head(this);
+  objecter->init();
+  messenger->add_dispatcher_tail(objecter);
+  messenger->add_dispatcher_tail(this);
 
   messenger->start();
 
@@ -233,12 +227,12 @@ int librados::RadosClient::connect()
   }
   messenger->set_myname(entity_name_t::CLIENT(monclient.get_global_id()));
 
+  objecter->set_client_incarnation(0);
+  objecter->start();
   lock.Lock();
 
   timer.init();
 
-  objecter->set_client_incarnation(0);
-  objecter->init();
   monclient.renew_subs();
 
   finisher.start();
@@ -268,14 +262,15 @@ void librados::RadosClient::shutdown()
     finisher.stop();
   }
   bool need_objecter = false;
-  if (objecter && state == CONNECTED) {
+  if (objecter && objecter->initialized.read()) {
     need_objecter = true;
-    objecter->shutdown();
   }
   state = DISCONNECTED;
   instance_id = 0;
   timer.shutdown();   // will drop+retake lock
   lock.Unlock();
+  if (need_objecter)
+    objecter->shutdown();
   monclient.shutdown();
   if (messenger) {
     messenger->shutdown();

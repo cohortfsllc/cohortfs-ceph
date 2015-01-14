@@ -27,7 +27,6 @@
 #include "osd/OSDMap.h"
 #include "messages/MOSDOp.h"
 
-#include "common/admin_socket.h"
 #include "common/Timer.h"
 #include "common/RWLock.h"
 #include "common/zipkin_trace.h"
@@ -103,16 +102,6 @@ namespace OSDC {
 
     void schedule_tick();
     void tick();
-
-    class RequestStateHook : public AdminSocketHook {
-      Objecter *m_objecter;
-    public:
-      RequestStateHook(Objecter *objecter);
-      bool call(std::string command, cmdmap_t& cmdmap, std::string format,
-		bufferlist& out);
-    };
-
-    RequestStateHook *m_request_state_hook;
 
   public:
 
@@ -389,6 +378,7 @@ namespace OSDC {
       RECALC_OP_TARGET_NEED_RESEND,
       RECALC_OP_TARGET_OSD_DNE,
       RECALC_OP_TARGET_OSD_DOWN,
+      RECALC_OP_TARGET,VOL_DNE
     };
     bool osdmap_full_flag() const;
     bool target_should_be_paused(op_base *op);
@@ -564,20 +554,6 @@ namespace OSDC {
       return !((!inflight_ops.read()) && linger_ops.empty() &&
 	       statfs_ops.empty());
     }
-
-    /**
-     * Output in-flight requests
-     */
-    void _dump_active(OSDSession *s);
-    void _dump_active();
-    void dump_active();
-    void dump_requests(Formatter *fmt);
-    void _dump_ops(const OSDSession *s, Formatter *fmt);
-    void dump_ops(Formatter *fmt);
-    void _dump_linger_ops(const OSDSession *s, Formatter *fmt);
-    void dump_linger_ops(Formatter *fmt);
-    void dump_command_ops(Formatter *fmt);
-    void dump_statfs_ops(Formatter *fmt) const;
 
     int get_client_incarnation() const { return client_inc.read(); }
     void set_client_incarnation(int inc) { client_inc.set(inc); }

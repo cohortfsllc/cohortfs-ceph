@@ -48,7 +48,6 @@ private:
     CONNECTED,
   } state;
 
-  OSDMap osdmap;
   MonClient monclient;
   Messenger *messenger;
 
@@ -57,14 +56,13 @@ private:
   bool _dispatch(Message *m);
   bool ms_dispatch(Message *m);
 
-  bool ms_get_authorizer(int dest_type, AuthAuthorizer **authorizer, bool force_new);
+  bool ms_get_authorizer(int dest_type, AuthAuthorizer **authorizer,
+			 bool force_new);
   void ms_handle_connect(Connection *con);
   bool ms_handle_reset(Connection *con);
   void ms_handle_remote_reset(Connection *con);
 
   Objecter *objecter;
-
-  epoch_t osdmap_epoch;
 
   Mutex lock;
   Cond cond;
@@ -93,18 +91,20 @@ public:
 
   int create_ioctx(const string &name, IoCtxImpl **io);
   int create_ioctx(const boost::uuids::uuid& volume, IoCtxImpl **io);
+
   int get_fsid(std::string *s);
   int get_fs_stats(ceph_statfs& result);
-  int vol_delete(string& name);
-  int vol_create(string& name);
 
   // watch/notify
-  uint64_t max_watch_cookie;
-  map<uint64_t, librados::WatchContext *> watchers;
+  uint64_t max_watch_notify_cookie;
+  map<uint64_t, librados::WatchNotifyInfo *> watch_notify_info;
 
-  void register_watcher(librados::WatchContext *wc, uint64_t *cookie);
-  void unregister_watcher(uint64_t cookie);
-  void watch_notify(MWatchNotify *m);
+  void register_watch_notify_callback(librados::WatchNotifyInfo *wc,
+				      uint64_t *cookie);
+  void unregister_watch_notify_callback(uint64_t cookie);
+  void handle_watch_notify(MWatchNotify *m);
+  void do_watch_notify(MWatchNotify *m);
+
   int mon_command(const vector<string>& cmd, const bufferlist &inbl,
 		  bufferlist *outbl, string *outs);
   int mon_command(int rank,
@@ -120,9 +120,6 @@ public:
   void get();
   bool put();
   void blacklist_self(bool set);
-
-  boost::uuids::uuid lookup_volume(const string& name);
-  string lookup_volume(const boost::uuids::uuid& name);
 };
 
 #endif
