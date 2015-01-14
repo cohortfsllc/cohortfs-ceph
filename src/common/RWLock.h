@@ -17,32 +17,53 @@
 #ifndef CEPH_RWLock_Posix__H
 #define CEPH_RWLock_Posix__H
 
+#include <cassert>
 #include <pthread.h>
-
 class RWLock
 {
   mutable pthread_rwlock_t L;
+  mutable std::atomic<uint32_t> nrlock, nwlock;
 
 public:
-  RWLock() {
+  RWLock(const RWLock& other) = delete;
+  const RWLock& operator=(const RWLock& other) = delete;
+
+  RWLock() : nrlock(0), nwlock(0) {
     pthread_rwlock_init(&L, NULL);
   }
 
+  bool is_locked() const {
+    return (nrlock > 0) || (nwlock > 0);
+  }
+
+  bool is_wlocked() const {
+    return (nwlock > 0);
+  }
   virtual ~RWLock() {
     pthread_rwlock_unlock(&L);
     pthread_rwlock_destroy(&L);
   }
 
   void unlock() const {
-    pthread_rwlock_unlock(&L);
+    if (nwlock > 0) {
+      --nwlock;
+    } else {
+      assert(nrlock > 0);
+      --nrlock;
+    }
+    int r = pthread_rwlock_unlock(&L);
+    assert(r == 0);
   }
 
   // read
   void get_read() const {
-    pthread_rwlock_rdlock(&L);
+    int r = pthread_rwlock_rdlock(&L);
+    assert(r == 0);
+    ++nrlock;
   }
   bool try_get_read() const {
     if (pthread_rwlock_tryrdlock(&L) == 0) {
+      ++nrlock;
       return true;
     }
     return false;
@@ -53,10 +74,14 @@ public:
 
   // write
   void get_write() {
-    pthread_rwlock_wrlock(&L);
+    int r = pthread_rwlock_wrlock(&L);
+    assert(r == 0);
+    ++nwlock;
+
   }
   bool try_get_write() {
     if (pthread_rwlock_trywrlock(&L) == 0) {
+      ++nwlock;
       return true;
     }
     return false;
@@ -65,30 +90,119 @@ public:
     unlock();
   }
 
+  void get(bool for_write) {
+    if (for_write) {
+      get_write();
+    } else {
+      get_read();
+    }
+  }
+
 public:
   class RLocker {
     const RWLock &m_lock;
 
+    bool locked;
+
   public:
     RLocker(const RWLock& lock) : m_lock(lock) {
       m_lock.get_read();
+      locked = true;
+    }
+    void unlock() {
+      assert(locked);
+      m_lock.unlock();
+      locked = false;
     }
     ~RLocker() {
-      m_lock.put_read();
+      if (locked) {
+	m_lock.unlock();
+      }
     }
   };
 
   class WLocker {
     RWLock &m_lock;
 
+    bool locked;
+
   public:
     WLocker(RWLock& lock) : m_lock(lock) {
       m_lock.get_write();
+      locked = true;
+    }
+    void unlock() {
+      assert(locked);
+      m_lock.unlock();
+      locked = false;
     }
     ~WLocker() {
-      m_lock.put_write();
+      if (locked) {
+	m_lock.unlock();
+      }
+    }
+  };
+
+  class Context {
+    RWLock& lock;
+
+  public:
+    enum LockState {
+      Untaken = 0,
+      TakenForRead = 1,
+      TakenForWrite = 2,
+    };
+
+  private:
+    LockState state;
+
+  public:
+    Context(RWLock& l) : lock(l) {}
+    Context(RWLock& l, LockState s) : lock(l), state(s) {}
+
+    void get_write() {
+      assert(state == Untaken);
+
+      lock.get_write();
+      state = TakenForWrite;
+    }
+
+    void get_read() {
+      assert(state == Untaken);
+
+      lock.get_read();
+      state = TakenForRead;
+    }
+
+    void unlock() {
+      assert(state != Untaken);
+      lock.unlock();
+      state = Untaken;
+    }
+
+    void promote() {
+      assert(state == TakenForRead);
+      unlock();
+      get_write();
+    }
+
+    LockState get_state() { return state; }
+    void set_state(LockState s) {
+      state = s;
+    }
+
+    bool is_locked() {
+      return (state != Untaken);
+    }
+
+    bool is_rlocked() {
+      return (state == TakenForRead);
+    }
+
+    bool is_wlocked() {
+      return (state == TakenForWrite);
     }
   };
 };
 
-#endif // !_Mutex_Posix_
+#endif /* CEPH_RWLock_Posix__H */

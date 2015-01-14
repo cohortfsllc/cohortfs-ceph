@@ -116,21 +116,22 @@ namespace OSDC {
       statfs_ops.erase(i->first);
     }
 
+#ifdef LINGER
     ldout(cct, 20) << __func__ << " clearing up homeless session..." << dendl;
-    while (!homeless_session->linger_ops.empty()) {
-      std::map<uint64_t, LingerOp*>::iterator i
-	= homeless_session->linger_ops.begin();
-      ldout(cct, 10) << " linger_op " << i->first << dendl;
+    while (!homeless_session->linger_subops.empty()) {
+      auto i = homeless_session->linger_subops.begin();
+      ldout(cct, 10) << " linger_op " << i->tid << dendl;
       {
 	RWLock::WLocker wl(homeless_session->lock);
-	_session_linger_op_remove(homeless_session, i->second);
+	_session_linger_subop_remove(homeless_session, *i);
       }
       linger_ops.erase(i->second->linger_id);
       i->second->put();
     }
+#endif
 
     while(!homeless_session->ops.empty()) {
-      std::map<ceph_tid_t, Op*>::iterator i = homeless_session->ops.begin();
+      auto = homeless_session->ops.begin();
       ldout(cct, 10) << " op " << i->first << dendl;
       {
 	RWLock::WLocker wl(homeless_session->lock);

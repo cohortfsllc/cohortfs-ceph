@@ -66,11 +66,10 @@ namespace OSDC {
   public:
     CephContext *cct;
 
-    std:::atomic<bool> initialized;
+    std::atomic<bool> initialized;
 
   private:
     std::atomic<uint64_t> last_tid;
-    std::atomic<uint32_t> inflight_ops;
     std::atomic<uint32_t> client_inc;
     uint64_t max_linger_id;
     std::atomic<uint32_t> num_unacked;
@@ -134,7 +133,7 @@ namespace OSDC {
 	  attempts(0), done(false), parent(p) { }
     };
 
-    struct op_base {
+    struct op_base : public RefCountedObject {
       int flags;
       object_t oid;
       shared_ptr<const Volume> volume;
@@ -147,6 +146,8 @@ namespace OSDC {
       epoch_t map_dne_bound;
 
       bool paused;
+
+      Mutex lock;
 
       op_base() : flags(0), volume(nullptr), op(nullptr), outbl(nullptr),
 		  tid(0), map_dne_bound(0),
@@ -265,8 +266,7 @@ namespace OSDC {
 
     // -- lingering ops --
 
-    struct LingerOp : public RefCountedObject,
-		      public op_base {
+    struct LingerOp : public op_base {
       uint64_t linger_id;
       bufferlist inbl;
       bool registered;
@@ -323,7 +323,7 @@ namespace OSDC {
     // -- osd sessions --
     struct OSDSession : public RefCountedObject {
       RWLock lock;
-      Mutex **completion_locks;
+      Mutex **completion_locks; // Needed?
       slist<SubOp, constant_time_size<false> > subops;
       slist<SubOp, constant_time_size<false> > linger_subops;
       int osd;
@@ -333,7 +333,9 @@ namespace OSDC {
 
       OSDSession(CephContext *cct, int o) :
 	osd(o), incarnation(0), con(NULL) {
-	num_locks = cct->_conf->objecter_completion_locks_per_session;
+	// We may not need or want this. It's not as if we need to
+	// serialize all object responses
+	num_locks = 32;
 	completion_locks = new Mutex *[num_locks];
 	for (int i = 0; i < num_locks; i++) {
 	  completion_locks[i] = new Mutex;
@@ -348,9 +350,9 @@ namespace OSDC {
 
 
   private:
+    map<ceph_tid_t, Op*> inflight_ops;
     map<uint64_t, LingerOp*> linger_ops;
     map<ceph_tid_t,StatfsOp*> statfs_ops;
-    std::atomic<uint32_t> num_homeless_ops;
 
     OSDSession *homeless_session;
 
@@ -360,19 +362,18 @@ namespace OSDC {
     map<uint64_t, LingerOp*> check_latest_map_lingers;
     map<ceph_tid_t, Op*> check_latest_map_ops;
 
-    //map<ceph_tid_t,Op*> inflight_ops; // Should probably be an slist
-    //map<ceph_tid_t,SubOp*> subops;
-
     map<epoch_t,list< pair<Context*, int> > > waiting_for_map;
 
     double mon_timeout, osd_timeout;
 
     MOSDOp *_prepare_osd_op(Op *op);
-    void send_subop(SubOp &subop, int flags);
+    void _send_subop(SubOp &subop, int flags);
     void _send_op(Op *op, MOSDOp *m = nullptr);
     void _cancel_linger_op(Op *op);
-    void finish_op(OSDSession *session, ceph_tid_t tid);
+    void _finish_subop(OSDSession *session, ceph_tid_t tid);
+    void _finish_subop(SubOp& subop);
     void _finish_op(Op *op);
+
     enum recalc_op_target_result {
       RECALC_OP_TARGET_NO_ACTION = 0,
       RECALC_OP_TARGET_NEED_RESEND,
@@ -387,19 +388,19 @@ namespace OSDC {
     int _map_session(op_base *op, OSDSession **s,
 		     RWLock::Context& lc);
 
-    void _session_op_assign(OSDSession *s, Op *op);
-    void _session_op_remove(OSDSession *s, Op *op);
-    void _session_linger_op_assign(OSDSession *to, LingerOp *op);
-    void _session_linger_op_remove(OSDSession *from, LingerOp *op);
+    void _session_subop_assign(OSDSession* s, SubOp& subop);
+    void _session_subop_remove(OSDSession* s, SubOp& subop);
+    void _session_linger_subop_assign(OSDSession* to, SubOp& subop);
+    void _session_linger_subop_remove(OSDSession* from, SubOp& subop);
 
     int _get_osd_session(int osd, RWLock::Context& lc,
 			 OSDSession **session);
-    int _assign_op_target_session(Op *op, RWLock::Context& lc,
-				  bool src_session_locked,
-				  bool dst_session_locked);
-    int _get_op_target_session(Op *op, RWLock::Context& lc,
-			       OSDSession **session);
-    int _recalc_linger_op_target(LingerOp *op, RWLock::Context& lc);
+    int _assign_subop_target_session(SubOp& op, RWLock::Context& lc,
+				     bool src_session_locked,
+				     bool dst_session_locked);
+    int _get_subop_target_session(SubOp& op, RWLock::Context& lc,
+				  OSDSession** session);
+    int _recalc_linger_op_targets(LingerOp *op, RWLock::Context& lc);
 
     void _linger_submit(LingerOp *info);
     void _send_linger(LingerOp *info);
@@ -407,15 +408,15 @@ namespace OSDC {
     void _linger_commit(LingerOp *info, int r);
 
     void _check_op_volume_dne(Op *op, bool session_locked);
-    void _send_op_map_check(Op *op);
+    void _send_subop_map_check(Op *op);
     void _op_cancel_map_check(Op *op);
-    void _check_linger_pool_dne(LingerOp *op, bool *need_unregister);
+    void _check_linger_volume_dne(LingerOp *op, bool *need_unregister);
     void _send_linger_map_check(LingerOp *op);
     void _linger_cancel_map_check(LingerOp *op);
 
     void kick_requests(OSDSession *session);
-    void _kick_requests(OSDSession *session, map<uint64_t,
-			LingerOp *>& lresend);
+    void _kick_requests(OSDSession *session,
+			map<uint64_t, LingerOp *>& lresend);
     void _linger_ops_resend(map<uint64_t, LingerOp *>& lresend);
 
     int _get_session(int osd, OSDSession **session, RWLock::Context& lc);
@@ -461,7 +462,7 @@ namespace OSDC {
   public:
     Objecter(CephContext *cct_, Messenger *m, MonClient *mc,
 	     double mon_timeout, double osd_timeout) :
-      Dispatcher(cct), messenger(m), monc(mc),
+      Dispatcher(cct_), messenger(m), monc(mc),
       osdmap(new OSDMap), cct(cct_),
       initialized(false), last_tid(0),
       client_inc(-1), max_linger_id(0),
@@ -472,8 +473,6 @@ namespace OSDC {
       last_seen_osdmap_version(0),
       timer(cct, timer_lock, false),
       tick_event(NULL),
-      m_request_state_hook(NULL),
-      num_homeless_ops(0),
       homeless_session(new OSDSession(cct, -1)),
       mon_timeout(mon_timeout),
       osd_timeout(osd_timeout),
@@ -551,12 +550,12 @@ namespace OSDC {
   public:
     ceph_tid_t op_submit(Op *op, int *ctx_budget = nullptr);
     bool is_active() {
-      return !((!inflight_ops.read()) && linger_ops.empty() &&
+      return !(inflight_ops.empty() && linger_ops.empty() &&
 	       statfs_ops.empty());
     }
 
-    int get_client_incarnation() const { return client_inc.read(); }
-    void set_client_incarnation(int inc) { client_inc.set(inc); }
+    int get_client_incarnation() const { return client_inc; }
+    void set_client_incarnation(int inc) { client_inc = inc; }
 
     // wait for epoch; true if we already have it
     bool wait_for_map(epoch_t epoch, Context *c, int err=0);
@@ -566,15 +565,15 @@ namespace OSDC {
     void _get_latest_version(epoch_t oldest, epoch_t neweset, Context *fin);
 
     /** Get the current set of global op flags */
-    int get_global_op_flags() { return global_op_flags.read(); }
+    int get_global_op_flags() { return global_op_flags; }
     /** Add a flag to the global op flags, not really atomic operation */
     void add_global_op_flags(int flag) {
-      global_op_flags.set(global_op_flags.read() | flag);
+      global_op_flags |= flag;
     }
     /** Clear the passed flags from the global op flag set, not really
 	atomic operation */
     void clear_global_op_flag(int flags) {
-      global_op_flags.set(global_op_flags.read() & ~flags);
+      global_op_flags &= ~flags;
     }
 
     /// cancel an in-progress request with the given return code
