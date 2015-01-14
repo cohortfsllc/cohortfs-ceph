@@ -5980,6 +5980,7 @@ int Client::statfs(const char *path, struct statvfs *stbuf)
   unique_lock cl(client_lock);
   tout(cct) << "statfs" << std::endl;
 
+#if 0
   ceph_statfs stats;
 
   std::mutex lock;
@@ -5995,6 +5996,7 @@ int Client::statfs(const char *path, struct statvfs *stbuf)
     cond.wait(l);
   l.unlock();
   cl.lock();
+#endif
 
   memset(stbuf, 0, sizeof(*stbuf));
 
@@ -6008,17 +6010,29 @@ int Client::statfs(const char *path, struct statvfs *stbuf)
   const int CEPH_BLOCK_SHIFT = 22;
   stbuf->f_frsize = 1 << CEPH_BLOCK_SHIFT;
   stbuf->f_bsize = 1 << CEPH_BLOCK_SHIFT;
+#if 0
   stbuf->f_blocks = stats.kb >> (CEPH_BLOCK_SHIFT - 10);
   stbuf->f_bfree = stats.kb_avail >> (CEPH_BLOCK_SHIFT - 10);
   stbuf->f_bavail = stats.kb_avail >> (CEPH_BLOCK_SHIFT - 10);
   stbuf->f_files = stats.num_objects;
+#else
+  stbuf->f_blocks = 0x10000000 >> (CEPH_BLOCK_SHIFT - 10);
+  stbuf->f_bfree = 0x1000000 >> (CEPH_BLOCK_SHIFT - 10);
+  stbuf->f_bavail = 0x1000000 >> (CEPH_BLOCK_SHIFT - 10);
+  stbuf->f_files = 1;
+#endif
   stbuf->f_ffree = -1;
   stbuf->f_favail = -1;
   stbuf->f_fsid = -1;	    // ??
   stbuf->f_flag = 0;	    // ??
   stbuf->f_namemax = NAME_MAX;
 
+  ldout(cct, 10) << "Client::statfs done" << dendl;
+#if 0
   return rval;
+#else
+  return 0;
+#endif
 }
 
 int Client::ll_statfs(Inode *in, struct statvfs *stbuf)
