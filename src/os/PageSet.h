@@ -125,9 +125,7 @@ public:
 
     // loop in reverse so we can provide hints to avl_set::insert_check()
     //	and get O(1) insertions after the first
-    uint64_t position = offset + length;
-    if ((position & ~(PageSize-1)) == position)
-      position--;
+    uint64_t position = offset + length - 1;
 
     while (length) {
       const uint64_t page_offset = position & ~(PageSize-1);
@@ -158,8 +156,9 @@ public:
 	cur = insert.first;
       }
 
-      position -= PageSize;
-      length -= std::min(length, PageSize);
+      int c = std::min(length, (position & (PageSize-1)) + 1);
+      position -= c;
+      length -= c;
     }
     return cur;
   }
