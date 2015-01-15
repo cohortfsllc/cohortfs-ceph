@@ -374,17 +374,15 @@ namespace OSDC {
     void _finish_subop(SubOp& subop);
     void _finish_op(Op *op);
 
-    enum recalc_op_target_result {
-      RECALC_OP_TARGET_NO_ACTION = 0,
-      RECALC_OP_TARGET_NEED_RESEND,
-      RECALC_OP_TARGET_OSD_DNE,
-      RECALC_OP_TARGET_OSD_DOWN,
-      RECALC_OP_TARGET,VOL_DNE
+    enum target_result {
+      TARGET_NO_ACTION = 0,
+      TARGET_NEED_RESEND,
+      TARGET_VOLUME_DNE
     };
     bool osdmap_full_flag() const;
     bool target_should_be_paused(op_base *op);
 
-    int _calc_target(op_base *t, bool any_change=false);
+    int _calc_targets(op_base *t, bool any_change=false);
     int _map_session(op_base *op, OSDSession **s,
 		     RWLock::Context& lc);
 
@@ -508,8 +506,7 @@ namespace OSDC {
     void set_honor_osdmap_full() { honor_osdmap_full = true; }
     void unset_honor_osdmap_full() { honor_osdmap_full = false; }
 
-    void _scan_requests(OSDSession *s,
-			bool force_resend,
+    void _scan_requests(bool force_resend,
 			bool force_resend_writes,
 			map<ceph_tid_t, Op*>& need_resend,
 			list<LingerOp*>& need_resend_linger);

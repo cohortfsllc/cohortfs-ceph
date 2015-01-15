@@ -130,14 +130,13 @@ namespace OSDC {
     }
 #endif
 
-    while(!homeless_session->ops.empty()) {
-      auto = homeless_session->ops.begin();
-      ldout(cct, 10) << " op " << i->first << dendl;
+    while(!homeless_session->subops.empty()) {
+      auto i = homeless_session->subops.begin();
+      ldout(cct, 10) << " op " << i->tid << dendl;
       {
 	RWLock::WLocker wl(homeless_session->lock);
-	_session_op_remove(homeless_session, i->second);
+	_session_subop_remove(homeless_session, *i);
       }
-      i->second->put();
     }
 
     if (tick_event) {
@@ -321,7 +320,7 @@ namespace OSDC {
   bool Objecter::ms_dispatch(Message *m)
   {
     ldout(cct, 10) << __func__ << " " << cct << " " << *m << dendl;
-    if (!initialized.read())
+    if (!initialized)
       return false;
 
     switch (m->get_type()) {
@@ -344,8 +343,7 @@ namespace OSDC {
     return false;
   }
 
-  void Objecter::_scan_requests(OSDSession *s,
-				bool force_resend,
+  void Objecter::_scan_requests(bool force_resend,
 				bool force_resend_writes,
 				map<ceph_tid_t, Op*>& need_resend,
 				list<LingerOp*>& need_resend_linger)
@@ -355,8 +353,6 @@ namespace OSDC {
     list<uint64_t> unregister_lingers;
 
     RWLock::Context lc(rwlock, RWLock::Context::TakenForWrite);
-
-    s->lock.get_write();
 
 #ifdef LINGER
     // check for changed linger mappings (_before_ regular ops)
@@ -377,7 +373,7 @@ namespace OSDC {
 	need_resend_linger.push_back(op);
 	_linger_cancel_map_check(op);
 	break;
-      case RECALC_OP_TARGET_POOL_DNE:
+      case RECALC_OP_TARGET_VOLUME_DNE:
 	_check_linger_pool_dne(op, &unregister);
 	if (unregister) {
 	  ldout(cct, 10) << " need to unregister linger op " << op->linger_id << dendl;
@@ -392,33 +388,35 @@ namespace OSDC {
     // turns the data structures/model used here inside out
 
     // Check for changed request mappings
-    map<ceph_tid_t,Op*>::iterator p = s->ops.begin();
-    while (p != s->ops.end()) {
-      Op *op = p->second;
-      // check_op_pool_dne() may touch ops; prevent iterator invalidation
+    auto p = inflight_ops.begin();
+    while (p != inflight_ops.end()) {
+      Op* op = p->second;
+      // check_op_volume_dne() may touch ops; prevent iterator invalidation
       ++p;
       ldout(cct, 10) << " checking op " << op->tid << dendl;
-      int r = _calc_target(&op->target);
+      int r = _calc_targets(op);
       switch (r) {
-      case RECALC_OP_TARGET_NO_ACTION:
+      case TARGET_NO_ACTION:
 	if (!force_resend &&
-	    (!force_resend_writes || !(op->target.flags &
-				       CEPH_OSD_FLAG_WRITE)))
+	    (!force_resend_writes || !(op->flags & CEPH_OSD_FLAG_WRITE)))
 	  break;
-      case RECALC_OP_TARGET_NEED_RESEND:
-	if (op->session) {
-	  _session_op_remove(op->session, op);
+      case TARGET_NEED_RESEND:
+	for(auto &subop : op->subops) {
+	  OSDSession* s = subop.session;
+	  s->lock.get_write();
+	  if (subop.session == s) {
+	    _session_subop_remove(s, subop);
+	  }
+	  s->lock.put_write();
 	}
 	need_resend[op->tid] = op;
 	_op_cancel_map_check(op);
 	break;
-      case RECALC_OP_TARGET_POOL_DNE:
-	_check_op_pool_dne(op, true);
+      case TARGET_VOLUME_DNE:
+	_check_op_volume_dne(op, true);
 	break;
       }
     }
-
-    s->lock.unlock();
 
     for (auto &linger : unregister_lingers) {
       _unregister_linger(linger);
@@ -473,7 +471,6 @@ namespace OSDC {
 	    ldout(cct, 3) << "handle_osd_map decoding full epoch "
 			  << e << dendl;
 	    osdmap->decode(m->maps[e]);
-	    logger->inc(l_osdc_map_full);
 	  } else {
 	    if (e && e > m->get_oldest()) {
 	      ldout(cct, 3) << "handle_osd_map requesting missing epoch "
@@ -491,17 +488,13 @@ namespace OSDC {
 	  }
 
 	  was_full = was_full || osdmap_full_flag();
-	  _scan_requests(homeless_session, skipped_map, was_full,
-			 need_resend, need_resend_linger,
-			 need_resend_command);
+	  _scan_requests(skipped_map, was_full, need_resend,
+			 need_resend_linger);
 
 	  // osd addr changes?
 	  for (map<int,OSDSession*>::iterator p = osd_sessions.begin();
 	       p != osd_sessions.end(); ) {
 	    OSDSession *s = p->second;
-	    _scan_requests(s, skipped_map, was_full,
-			   need_resend, need_resend_linger,
-			   need_resend_command);
 	    ++p;
 	    if (!osdmap->is_up(s->osd) ||
 		(s->con &&
@@ -516,19 +509,11 @@ namespace OSDC {
       } else {
 	// first map.  we want the full thing.
 	if (m->maps.count(m->get_last())) {
-	  for (map<int,OSDSession*>::iterator p = osd_sessions.begin();
-	       p != osd_sessions.end(); ++p) {
-	    OSDSession *s = p->second;
-	    _scan_requests(s, false, false, need_resend, need_resend_linger,
-			   need_resend_command);
-	  }
+	  _scan_requests(false, false, need_resend, need_resend_linger);
 	  ldout(cct, 3) << "handle_osd_map decoding full epoch "
 			<< m->get_last() << dendl;
 	  osdmap->decode(m->maps[m->get_last()]);
 
-	  _scan_requests(homeless_session, false, false,
-			 need_resend, need_resend_linger,
-			 need_resend_command);
 	} else {
 	  ldout(cct, 3) << "handle_osd_map hmm, i want a full map, requesting"
 			<< dendl;
@@ -1480,59 +1465,31 @@ namespace OSDC {
       (messenger->get_myname().type() != entity_name_t::TYPE_MDS);
   }
 
-  int Objecter::_calc_target(op_target_t *t, bool any_change)
+  int Objecter::_calc_target(op_base *t, bool any_change)
   {
     assert(rwlock.is_locked());
 
     bool is_read = t->flags & CEPH_OSD_FLAG_READ;
     bool is_write = t->flags & CEPH_OSD_FLAG_WRITE;
-
-    const pg_pool_t *pi = osdmap->get_pg_pool(t->base_oloc.pool);
-    bool force_resend = false;
-    bool need_check_tiering = false;
-    if (pi && osdmap->get_epoch() == pi->last_force_op_resend) {
-      force_resend = true;
-    }
-    if (t->target_oid.name.empty() || force_resend) {
-      t->target_oid = t->base_oid;
-      need_check_tiering = true;
-    }
-    if (t->target_oloc.empty() || force_resend) {
-      t->target_oloc = t->base_oloc;
-      need_check_tiering = true;
-    }
-
-    if (need_check_tiering &&
-	(t->flags & CEPH_OSD_FLAG_IGNORE_OVERLAY) == 0) {
-      if (pi) {
-	if (is_read && pi->has_read_tier())
-	  t->target_oloc.pool = pi->read_tier;
-	if (is_write && pi->has_write_tier())
-	  t->target_oloc.pool = pi->write_tier;
-      }
-    }
-
-    pg_t pgid;
-    if (t->precalc_pgid) {
-      assert(t->base_oid.name.empty()); // make sure this is a listing op
-      ldout(cct, 10) << __func__ << " have " << t->base_pgid << " pool "
-		     << osdmap->have_pg_pool(t->base_pgid.pool()) << dendl;
-      if (!osdmap->have_pg_pool(t->base_pgid.pool()))
-      return RECALC_OP_TARGET_POOL_DNE;
-      pgid = osdmap->raw_pg_to_pg(t->base_pgid);
-    } else {
-      int ret = osdmap->object_locator_to_pg(t->target_oid, t->target_oloc,
-					   pgid);
-      if (ret == -ENOENT) {
-	t->osd = -1;
-	return RECALC_OP_TARGET_POOL_DNE;
-      }
-    }
-    int primary;
-    vector<int> acting;
-    osdmap->pg_to_acting_osds(pgid, &acting, &primary);
-
     bool need_resend = false;
+
+    if (!osdmap->vol_exists(op_base->volume.id)) {
+      return RECALC_OP_TARGET_VOL_DNE;
+    }
+
+    // Volume should know how many OSDs to supply for its own
+    // operations. But it never hurts to fail spectacularly in case I
+    // goof up.
+    t->volume->place(
+      t->oid, *osdmap, [&](int osd) {
+	assert(i < t->subops.size());
+	if ((t->subops[i].osd != osd) && !t->subops[i].done) {
+	  t->subops[i].osd = osd;
+	  need_resend = true;
+	}
+	++i;
+      });
+    assert(i == t->subops.size());
 
     bool paused = target_should_be_paused(t);
     if (!paused && paused != t->paused) {
@@ -1540,58 +1497,6 @@ namespace OSDC {
       need_resend = true;
     }
 
-    if (t->pgid != pgid ||
-	is_pg_changed(
-	  t->primary, t->acting, primary, acting, t->used_replica || any_change) ||
-	force_resend) {
-      t->pgid = pgid;
-      t->acting = acting;
-      t->primary = primary;
-      ldout(cct, 10) << __func__ << " "
-		     << " pgid " << pgid << " acting " << acting << dendl;
-      t->used_replica = false;
-      if (primary == -1) {
-	t->osd = -1;
-      } else {
-	int osd;
-	bool read = is_read && !is_write;
-	if (read && (t->flags & CEPH_OSD_FLAG_BALANCE_READS)) {
-	  int p = rand() % acting.size();
-	  if (p)
-	    t->used_replica = true;
-	  osd = acting[p];
-	  ldout(cct, 10) << " chose random osd." << osd << " of " << acting << dendl;
-	} else if (read && (t->flags & CEPH_OSD_FLAG_LOCALIZE_READS) &&
-		   acting.size() > 1) {
-	  // look for a local replica.  prefer the primary if the
-	  // distance is the same.
-	  int best = -1;
-	  int best_locality = 0;
-	  for (unsigned i = 0; i < acting.size(); ++i) {
-	    int locality = osdmap->crush->get_common_ancestor_distance(
-	      cct, acting[i], crush_location);
-	    ldout(cct, 20) << __func__ << " localize: rank " << i
-			   << " osd." << acting[i]
-			   << " locality " << locality << dendl;
-	    if (i == 0 ||
-		(locality >= 0 && best_locality >= 0 &&
-		 locality < best_locality) ||
-		(best_locality < 0 && locality >= 0)) {
-	      best = i;
-	      best_locality = locality;
-	      if (i)
-		t->used_replica = true;
-	    }
-	  }
-	  assert(best >= 0);
-	  osd = acting[best];
-	} else {
-	  osd = primary;
-	}
-	t->osd = osd;
-      }
-      need_resend = true;
-    }
     if (need_resend) {
       return RECALC_OP_TARGET_NEED_RESEND;
     }
@@ -1686,7 +1591,7 @@ namespace OSDC {
     assert(from->lock.is_locked());
 
     if (from->is_homeless()) {
-      num_homeless_ops.dec();
+      --num_homeless_ops;
     }
 
     from->ops.erase(op->tid);
