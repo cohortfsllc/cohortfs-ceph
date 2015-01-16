@@ -1919,7 +1919,7 @@ typedef void (*rados_log_callback_t)(void *arg,
 				     const char *line,
 				     const char *who,
 				     uint64_t sec, uint64_t nsec,
-				     uint64_t seq, const char *level,
+				     uint64_t seq,
 				     const char *msg);
 
 int rados_monitor_log(rados_t cluster, const char *level, rados_log_callback_t cb, void *arg);

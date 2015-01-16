@@ -95,6 +95,10 @@ public:
   int get_fsid(std::string *s);
   int get_fs_stats(ceph_statfs& result);
 
+  int vol_delete(string& name);
+  int vol_create(string& name);
+
+
   // watch/notify
   uint64_t max_watch_notify_cookie;
   map<uint64_t, librados::WatchNotifyInfo *> watch_notify_info;
@@ -120,6 +124,8 @@ public:
   void get();
   bool put();
   void blacklist_self(bool set);
+  boost::uuids::uuid lookup_volume(const string& name);
+  string lookup_volume(const boost::uuids::uuid& name);
 };
 
 #endif
