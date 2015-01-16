@@ -109,7 +109,7 @@ class Filer {
     vector<ObjectExtent> extents;
     Striper::file_to_extents(cct, ino, layout, offset, len, 0,
 			     extents);
-    objecter->sg_read(extents, volume, bl, flags, onfinish);
+    //objecter->sg_read(extents, volume, bl, flags, onfinish);
     return 0;
   }
 
@@ -126,8 +126,8 @@ class Filer {
     vector<ObjectExtent> extents;
     Striper::file_to_extents(cct, ino, layout, offset, len,
 			     truncate_size, extents);
-    objecter->sg_read_trunc(extents, volume, bl, flags,
-			    truncate_size, truncate_seq, onfinish);
+    //objecter->sg_read_trunc(extents, volume, bl, flags,
+    //		    truncate_size, truncate_seq, onfinish);
     return 0;
   }
 
@@ -144,8 +144,8 @@ class Filer {
     vector<ObjectExtent> extents;
     Striper::file_to_extents(cct, ino, layout, offset, len, 0,
 			     extents);
-    objecter->sg_write(extents, volume, bl, mtime, flags, onack,
-		       oncommit);
+    //objecter->sg_write(extents, volume, bl, mtime, flags, onack,
+    //	       oncommit);
     return 0;
   }
 
@@ -164,8 +164,8 @@ class Filer {
     vector<ObjectExtent> extents;
     Striper::file_to_extents(cct, ino, layout, offset, len,
 			     truncate_size, extents);
-    objecter->sg_write_trunc(extents, volume, bl, mtime, flags, truncate_size,
-			     truncate_seq, onack, oncommit);
+    //objecter->sg_write_trunc(extents, volume, bl, mtime, flags, truncate_size,
+    //		     truncate_seq, onack, oncommit);
     return 0;
   }
 

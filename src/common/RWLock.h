@@ -17,8 +17,10 @@
 #ifndef CEPH_RWLock_Posix__H
 #define CEPH_RWLock_Posix__H
 
+#include <atomic>
 #include <cassert>
 #include <pthread.h>
+
 class RWLock
 {
   mutable pthread_rwlock_t L;

@@ -20,7 +20,7 @@
 #include <map>
 #include <memory>
 #include <sstream>
-#include <boost/intrusive/slist.hpp>
+#include <boost/intrusive/set.hpp>
 #include "include/types.h"
 #include "include/buffer.h"
 
@@ -45,13 +45,12 @@ class MOSDOpReply;
 class MOSDMap;
 
 namespace OSDC {
-  using boost::intrusive::slist;
-  using boost::intrusive::slist_base_hook;
+  using boost::intrusive::set;
+  using boost::intrusive::set_base_hook;
   using boost::intrusive::link_mode;
   using boost::intrusive::auto_unlink;
   using boost::intrusive::constant_time_size;
   using std::vector;
-  using std::set;
   using std::string;
   using std::shared_ptr;
   using std::unique_ptr;
@@ -107,7 +106,7 @@ namespace OSDC {
     struct OSDSession;
     struct Op;
 
-    struct SubOp : public slist_base_hook<link_mode<auto_unlink> > {
+    struct SubOp : public set_base_hook<link_mode<auto_unlink> > {
       ceph_tid_t tid;
       int incarnation;
       OSDSession *session;
@@ -133,7 +132,8 @@ namespace OSDC {
 	  attempts(0), done(false), parent(p) { }
     };
 
-    struct op_base : public RefCountedObject {
+    struct op_base : public set_base_hook<link_mode<auto_unlink> >,
+		     public RefCountedObject {
       int flags;
       object_t oid;
       shared_ptr<const Volume> volume;
@@ -256,7 +256,7 @@ namespace OSDC {
       }
     };
 
-    struct StatfsOp {
+    struct StatfsOp : public set_base_hook<link_mode<auto_unlink> > {
       ceph_tid_t tid;
       struct ceph_statfs *stats;
       Context *onfinish, *ontimeout;
@@ -270,7 +270,9 @@ namespace OSDC {
       uint64_t linger_id;
       bufferlist inbl;
       bool registered;
+      bool canceled;
       Context *on_reg_ack, *on_reg_commit;
+      ceph_tid_t register_tid;
 
       LingerOp() : linger_id(0),
 		   registered(false),
@@ -285,12 +287,12 @@ namespace OSDC {
 
     struct C_Linger_Ack : public Context {
       Objecter *objecter;
-      LingerOp *info;
-      C_Linger_Ack(Objecter *o, LingerOp *l) : objecter(o), info(l) {
-	info->get();
+      LingerOp& info;
+      C_Linger_Ack(Objecter *o, LingerOp& l) : objecter(o), info(l) {
+	info.get();
       }
       ~C_Linger_Ack() {
-	info->put();
+	info.put();
       }
       void finish(int r) {
 	objecter->_linger_ack(info, r);
@@ -298,13 +300,13 @@ namespace OSDC {
     };
 
     struct C_Linger_Commit : public Context {
-      Objecter *objecter;
-      LingerOp *info;
-      C_Linger_Commit(Objecter *o, LingerOp *l) : objecter(o), info(l) {
-	info->get();
+      Objecter* objecter;
+      LingerOp& info;
+      C_Linger_Commit(Objecter *o, LingerOp& l) : objecter(o), info(l) {
+	info.get();
       }
       ~C_Linger_Commit() {
-	info->put();
+	info.put();
       }
       void finish(int r) {
 	objecter->_linger_commit(info, r);
@@ -321,11 +323,12 @@ namespace OSDC {
     };
 
     // -- osd sessions --
-    struct OSDSession : public RefCountedObject {
+    struct OSDSession : public set_base_hook<link_mode<auto_unlink> >,
+			public RefCountedObject {
       RWLock lock;
       Mutex **completion_locks; // Needed?
-      slist<SubOp, constant_time_size<false> > subops;
-      slist<SubOp, constant_time_size<false> > linger_subops;
+      set<SubOp, constant_time_size<false> > subops;
+      set<SubOp, constant_time_size<false> > linger_subops;
       int osd;
       int incarnation;
       int num_locks;
@@ -346,13 +349,12 @@ namespace OSDC {
       Mutex *get_lock(object_t& oid);
       bool is_homeless() { return (osd == -1); }
     };
-    map<int,OSDSession*> osd_sessions;
-
+    set<OSDSession, constant_time_size<false> > osd_sessions;
 
   private:
-    map<ceph_tid_t, Op*> inflight_ops;
-    map<uint64_t, LingerOp*> linger_ops;
-    map<ceph_tid_t,StatfsOp*> statfs_ops;
+    set<Op, constant_time_size<false> > inflight_ops;
+    set<LingerOp, constant_time_size<false> > linger_ops;
+    set<StatfsOp, constant_time_size<false> > statfs_ops;
 
     OSDSession *homeless_session;
 
@@ -366,13 +368,13 @@ namespace OSDC {
 
     double mon_timeout, osd_timeout;
 
-    MOSDOp *_prepare_osd_op(Op *op);
+    MOSDOp *_prepare_osd_op(Op& op);
     void _send_subop(SubOp &subop, int flags);
-    void _send_op(Op *op, MOSDOp *m = nullptr);
-    void _cancel_linger_op(Op *op);
+    void _send_op(Op& op, MOSDOp *m = nullptr);
+    void _cancel_linger_op(Op& op);
     void _finish_subop(OSDSession *session, ceph_tid_t tid);
     void _finish_subop(SubOp& subop);
-    void _finish_op(Op *op);
+    void _finish_op(Op& op);
 
     enum target_result {
       TARGET_NO_ACTION = 0,
@@ -380,16 +382,16 @@ namespace OSDC {
       TARGET_VOLUME_DNE
     };
     bool osdmap_full_flag() const;
-    bool target_should_be_paused(op_base *op);
+    bool target_should_be_paused(op_base& op);
 
-    int _calc_targets(op_base *t, bool any_change=false);
-    int _map_session(op_base *op, OSDSession **s,
+    int _calc_targets(op_base& t, bool any_change=false);
+    int _map_session(op_base& op, OSDSession **s,
 		     RWLock::Context& lc);
 
-    void _session_subop_assign(OSDSession* s, SubOp& subop);
-    void _session_subop_remove(OSDSession* s, SubOp& subop);
-    void _session_linger_subop_assign(OSDSession* to, SubOp& subop);
-    void _session_linger_subop_remove(OSDSession* from, SubOp& subop);
+    void _session_subop_assign(OSDSession& to, SubOp& subop);
+    void _session_subop_remove(OSDSession& from, SubOp& subop);
+    void _session_linger_subop_assign(OSDSession& to, SubOp& subop);
+    void _session_linger_subop_remove(OSDSession& from, SubOp& subop);
 
     int _get_osd_session(int osd, RWLock::Context& lc,
 			 OSDSession **session);
@@ -398,30 +400,30 @@ namespace OSDC {
 				     bool dst_session_locked);
     int _get_subop_target_session(SubOp& op, RWLock::Context& lc,
 				  OSDSession** session);
-    int _recalc_linger_op_targets(LingerOp *op, RWLock::Context& lc);
+    int _recalc_linger_op_targets(LingerOp& op, RWLock::Context& lc);
 
-    void _linger_submit(LingerOp *info);
-    void _send_linger(LingerOp *info);
-    void _linger_ack(LingerOp *info, int r);
-    void _linger_commit(LingerOp *info, int r);
+    void _linger_submit(LingerOp& info);
+    void _send_linger(LingerOp& info);
+    void _linger_ack(LingerOp& info, int r);
+    void _linger_commit(LingerOp& info, int r);
 
-    void _check_op_volume_dne(Op *op, bool session_locked);
-    void _send_subop_map_check(Op *op);
-    void _op_cancel_map_check(Op *op);
+    void _check_op_volume_dne(Op& op, bool session_locked);
+    void _send_op_map_check(Op& op);
+    void _op_cancel_map_check(Op& op);
     void _check_linger_volume_dne(LingerOp *op, bool *need_unregister);
     void _send_linger_map_check(LingerOp *op);
     void _linger_cancel_map_check(LingerOp *op);
 
-    void kick_requests(OSDSession *session);
-    void _kick_requests(OSDSession *session,
+    void kick_requests(OSDSession& session);
+    void _kick_requests(OSDSession& session,
 			map<uint64_t, LingerOp *>& lresend);
     void _linger_ops_resend(map<uint64_t, LingerOp *>& lresend);
 
     int _get_session(int osd, OSDSession **session, RWLock::Context& lc);
-    void put_session(OSDSession *s);
-    void get_session(OSDSession *s);
-    void _reopen_session(OSDSession *session);
-    void close_session(OSDSession *session);
+    void put_session(OSDSession& s);
+    void get_session(OSDSession& s);
+    void _reopen_session(OSDSession& session);
+    void close_session(OSDSession& session);
 
     void resend_mon_ops();
 
@@ -431,9 +433,9 @@ namespace OSDC {
      * and returned whenever an op is removed from the map
      * If throttle_op needs to throttle it will unlock client_lock.
      */
-    int calc_op_budget(Op *op);
-    void _throttle_op(Op *op, int op_size=0);
-    int _take_op_budget(Op *op) {
+    int calc_op_budget(Op& op);
+    void _throttle_op(Op& op, int op_size=0);
+    int _take_op_budget(Op& op) {
       assert(rwlock.is_locked());
       int op_budget = calc_op_budget(op);
       if (keep_balanced_budget) {
@@ -442,7 +444,7 @@ namespace OSDC {
 	op_throttle_bytes.take(op_budget);
 	op_throttle_ops.take(1);
       }
-      op->budgeted = true;
+      op.budgeted = true;
       return op_budget;
     }
     void put_op_budget_bytes(int op_budget) {
@@ -450,8 +452,8 @@ namespace OSDC {
       op_throttle_bytes.put(op_budget);
       op_throttle_ops.put(1);
     }
-    void put_op_budget(Op *op) {
-      assert(op->budgeted);
+    void put_op_budget(Op& op) {
+      assert(op.budgeted);
       int op_budget = calc_op_budget(op);
       put_op_budget_bytes(op_budget);
     }
@@ -538,14 +540,14 @@ namespace OSDC {
     bool _promote_lock_check_race(RWLock::Context& lc);
 
     // low-level
-    ceph_tid_t _op_submit(Op *op, RWLock::Context& lc);
-    ceph_tid_t _op_submit_with_budget(Op *op, RWLock::Context& lc,
+    ceph_tid_t _op_submit(Op& op, RWLock::Context& lc);
+    ceph_tid_t _op_submit_with_budget(Op& op, RWLock::Context& lc,
 				      int *ctx_budget = nullptr);
-    inline void unregister_op(Op *op);
+    inline void unregister_op(Op& op);
 
     // public interface
   public:
-    ceph_tid_t op_submit(Op *op, int *ctx_budget = nullptr);
+    ceph_tid_t op_submit(Op *op, int* ctx_budget = nullptr);
     bool is_active() {
       return !(inflight_ops.empty() && linger_ops.empty() &&
 	       statfs_ops.empty());
@@ -575,10 +577,11 @@ namespace OSDC {
 
     /// cancel an in-progress request with the given return code
   private:
-    int op_cancel(OSDSession *s, ceph_tid_t tid, int r);
+    int op_cancel(ceph_tid_t tid, int r);
     friend class C_CancelOp;
 
 
+  public:
     // mid-level helpers
     Op *prepare_mutate_op(const object_t& oid,
 			  const shared_ptr<const Volume>& volume,
@@ -952,12 +955,12 @@ namespace OSDC {
     // ---------------------------
     // df stats
   private:
-    void _fs_stats_submit(StatfsOp *op);
+    void _fs_stats_submit(StatfsOp& op);
   public:
     void handle_fs_stats_reply(MStatfsReply *m);
     void get_fs_stats(struct ceph_statfs& result, Context *onfinish);
     int statfs_op_cancel(ceph_tid_t tid, int r);
-    void _finish_statfs_op(StatfsOp *op);
+    void _finish_statfs_op(StatfsOp& op);
 
     void ms_handle_connect(Connection *con);
     bool ms_handle_reset(Connection *con);
@@ -967,7 +970,114 @@ namespace OSDC {
 			   bool force_new);
 
     void blacklist_self(bool set);
+    VolumeRef vol_by_uuid(const boost::uuids::uuid& id);
+    VolumeRef vol_by_name(const string& name);
   };
+
+  inline bool operator==(const Objecter::OSDSession &l,
+			 const Objecter::OSDSession &r) {
+    return l.osd == r.osd;
+  }
+  inline bool operator!=(const Objecter::OSDSession &l,
+			 const Objecter::OSDSession &r) {
+    return l.osd != r.osd;
+  }
+
+  inline bool operator>(const Objecter::OSDSession &l,
+			const Objecter::OSDSession &r) {
+    return l.osd > r.osd;
+  }
+  inline bool operator<(const Objecter::OSDSession &l,
+			const Objecter::OSDSession &r) {
+    return l.osd < r.osd;
+  }
+  inline bool operator>=(const Objecter::OSDSession &l,
+			 const Objecter::OSDSession &r) {
+    return l.osd >= r.osd;
+  }
+  inline bool operator<=(const Objecter::OSDSession &l,
+			 const Objecter::OSDSession &r) {	\
+    return l.osd <= r.osd;
+  }
+
+
+  inline bool operator==(const Objecter::SubOp &l,
+			 const Objecter::SubOp &r) {
+    return l.tid == r.tid;
+  }
+  inline bool operator!=(const Objecter::SubOp &l,
+			 const Objecter::SubOp &r) {
+    return l.tid != r.tid;
+  }
+
+  inline bool operator>(const Objecter::SubOp &l,
+			const Objecter::SubOp &r) {
+    return l.tid > r.tid;
+  }
+  inline bool operator<(const Objecter::SubOp &l,
+			const Objecter::SubOp &r) {
+    return l.tid < r.tid;
+  }
+  inline bool operator>=(const Objecter::SubOp &l,
+			 const Objecter::SubOp &r) {
+    return l.tid >= r.tid;
+  }
+  inline bool operator<=(const Objecter::SubOp &l,
+			 const Objecter::SubOp &r) {
+    return l.tid <= r.tid;
+  }
+
+  inline bool operator==(const Objecter::op_base &l,
+			 const Objecter::op_base &r) {
+    return l.tid == r.tid;
+  }
+  inline bool operator!=(const Objecter::op_base &l,
+			 const Objecter::op_base &r) {
+    return l.tid != r.tid;
+  }
+
+  inline bool operator>(const Objecter::op_base &l,
+			const Objecter::op_base &r) {
+    return l.tid > r.tid;
+  }
+  inline bool operator<(const Objecter::op_base &l,
+			const Objecter::op_base &r) {
+    return l.tid < r.tid;
+  }
+  inline bool operator>=(const Objecter::op_base &l,
+			 const Objecter::op_base &r) {
+    return l.tid >= r.tid;
+  }
+  inline bool operator<=(const Objecter::op_base &l,
+			 const Objecter::op_base &r) {
+    return l.tid <= r.tid;
+  }
+
+  inline bool operator==(const Objecter::StatfsOp &l,
+			 const Objecter::StatfsOp &r) {
+    return l.tid == r.tid;
+  }
+  inline bool operator!=(const Objecter::StatfsOp &l,
+			 const Objecter::StatfsOp &r) {
+    return l.tid != r.tid;
+  }
+
+  inline bool operator>(const Objecter::StatfsOp &l,
+			const Objecter::StatfsOp &r) {
+    return l.tid > r.tid;
+  }
+  inline bool operator<(const Objecter::StatfsOp &l,
+			const Objecter::StatfsOp &r) {
+    return l.tid < r.tid;
+  }
+  inline bool operator>=(const Objecter::StatfsOp &l,
+			 const Objecter::StatfsOp &r) {
+    return l.tid >= r.tid;
+  }
+  inline bool operator<=(const Objecter::StatfsOp &l,
+			 const Objecter::StatfsOp &r) {
+    return l.tid <= r.tid;
+  }
 };
 
 using OSDC::Objecter;

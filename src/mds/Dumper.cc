@@ -38,7 +38,7 @@ int Dumper::init(int rank_)
   }
 
   inodeno_t ino = MDS_INO_LOG_OFFSET + rank;
-  journaler = new Journaler(ino, mdsmap->get_metadata_volume(objecter->osdmap),
+  journaler = new Journaler(ino, mdsmap->get_metadata_volume(objecter),
 			    CEPH_FS_ONDISK_MAGIC, objecter, &timer);
   return 0;
 }
@@ -75,7 +75,7 @@ void Dumper::dump(const char *dump_file)
   int r = 0;
   Cond cond;
   Mutex localLock;
-  VolumeRef volume(mdsmap->get_metadata_volume(objecter->osdmap));
+  VolumeRef volume(mdsmap->get_metadata_volume(objecter));
 
   r = recover_journal();
   if (r) {
@@ -165,7 +165,7 @@ void Dumper::undump(const char *dump_file)
   h.write_pos = start+len;
   h.magic = CEPH_FS_ONDISK_MAGIC;
 
-  VolumeRef volume(mdsmap->get_metadata_volume(objecter->osdmap));
+  VolumeRef volume(mdsmap->get_metadata_volume(objecter));
   h.layout = g_default_file_layout;
   volume->id = h.layout.fl_uuid;
 

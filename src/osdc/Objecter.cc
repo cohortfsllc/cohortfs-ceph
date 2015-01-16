@@ -48,6 +48,42 @@ namespace OSDC {
   using ceph::new_formatter;
   using std::all_of;
 
+  struct ObjComp {
+    bool operator()(const int osd, const Objecter::OSDSession& c) const {
+      return osd < c.osd;
+    }
+
+    bool operator()(const Objecter::OSDSession& c, const int osd) const {
+      return c.osd < osd;
+    }
+
+    bool operator()(const ceph_tid_t tid, const Objecter::op_base& b) const {
+      return tid < b.tid;
+    }
+
+    bool operator()(const Objecter::op_base& b, const ceph_tid_t tid) const {
+      return b.tid < tid;
+    }
+
+    bool operator()(const ceph_tid_t tid, const Objecter::SubOp& s) const {
+      return tid < s.tid;
+    }
+
+    bool operator()(const Objecter::SubOp& s, const ceph_tid_t tid) const {
+      return s.tid < tid;
+    }
+
+    bool operator()(const ceph_tid_t tid, const Objecter::StatfsOp& s) const {
+      return tid < s.tid;
+    }
+
+    bool operator()(const Objecter::StatfsOp& s, const ceph_tid_t tid) const {
+      return s.tid < tid;
+    }
+  };
+
+  ObjComp oc;
+
   Mutex *Objecter::OSDSession::get_lock(object_t& oid)
   {
 #define HASH_PRIME 1021
@@ -92,10 +128,9 @@ namespace OSDC {
 
     initialized = false;
 
-    map<int,OSDSession*>::iterator p;
     while (!osd_sessions.empty()) {
-      p = osd_sessions.begin();
-      close_session(p->second);
+      auto p = osd_sessions.begin();
+      close_session(*p);
     }
 
     while (!check_latest_map_lingers.empty()) {
@@ -111,9 +146,9 @@ namespace OSDC {
     }
 
     while(!statfs_ops.empty()) {
-      map<ceph_tid_t, StatfsOp*>::iterator i = statfs_ops.begin();
-      delete i->second;
-      statfs_ops.erase(i->first);
+      auto i = statfs_ops.begin();
+      i->unlink();
+      delete &(*i);
     }
 
 #ifdef LINGER
@@ -135,7 +170,7 @@ namespace OSDC {
       ldout(cct, 10) << " op " << i->tid << dendl;
       {
 	RWLock::WLocker wl(homeless_session->lock);
-	_session_subop_remove(homeless_session, *i);
+	_session_subop_remove(*homeless_session, *i);
       }
     }
 
@@ -151,9 +186,9 @@ namespace OSDC {
     }
   }
 
-#ifdef LINGER
-  void Objecter::_send_linger(LingerOp *info)
+  void Objecter::_send_linger(LingerOp& info)
   {
+#ifdef LINGER
     assert(rwlock.is_wlocked());
 
     RWLock::Context lc(rwlock, RWLock::Context::TakenForWrite);
@@ -190,19 +225,23 @@ namespace OSDC {
       // first send
       info->register_tid = _op_submit_with_budget(o, lc);
     }
+#endif // LINGER
   }
 
-  void Objecter::_linger_ack(LingerOp *info, int r)
+  void Objecter::_linger_ack(LingerOp& info, int r)
   {
+#ifdef LINGER
     ldout(cct, 10) << "_linger_ack " << info->linger_id << dendl;
     if (info->on_reg_ack) {
       info->on_reg_ack->complete(r);
       info->on_reg_ack = NULL;
     }
+#endif // LINGER
   }
 
-  void Objecter::_linger_commit(LingerOp *info, int r)
+  void Objecter::_linger_commit(LingerOp& info, int r)
   {
+#ifdef LINGER
     ldout(cct, 10) << "_linger_commit " << info->linger_id << dendl;
     if (info->on_reg_commit) {
       info->on_reg_commit->complete(r);
@@ -212,16 +251,20 @@ namespace OSDC {
     // only tell the user the first time we do this
     info->registered = true;
     info->pobjver = NULL;
+#endif // LINGER
   }
 
   void Objecter::unregister_linger(uint64_t linger_id)
   {
+#ifdef LINGER
     RWLock::WLocker wl(rwlock);
     _unregister_linger(linger_id);
+#endif // LINGER
   }
 
   void Objecter::_unregister_linger(uint64_t linger_id)
   {
+#ifdef LINGER
     assert(rwlock.is_wlocked());
     ldout(cct, 20) << __func__ << " linger_id=" << linger_id << dendl;
 
@@ -238,16 +281,18 @@ namespace OSDC {
       info->put();
 
     }
+#endif // LINGER
   }
 
   ceph_tid_t Objecter::linger_mutate(const object_t& oid,
-				     const shared_ptr<const volume>& volume,
-				     ObjectOperation& op,
+				     const shared_ptr<const Volume>& volume,
+				     unique_ptr<ObjOp>& op,
 				     utime_t mtime,
 				     bufferlist& inbl, int flags,
 				     Context *onack, Context *oncommit,
 				     version_t *objver)
   {
+#ifdef LINGER
     LingerOp *info = new LingerOp;
     info->base_oid = oid;
     info->volume = volume;
@@ -263,16 +308,19 @@ namespace OSDC {
     RWLock::WLocker wl(rwlock);
     _linger_submit(info);
     return info->linger_id;
+#endif // LINGER
+    return 0;
   }
 
   ceph_tid_t Objecter::linger_read(const object_t& oid,
-				   const object_locator_t& oloc,
-				   ObjectOperation& op,
+				   const shared_ptr<const Volume>& volume,
+				   unique_ptr<ObjOp>& op,
 				   bufferlist& inbl, bufferlist *poutbl,
 				   int flags,
 				   Context *onfinish,
 				   version_t *objver)
   {
+#ifdef LINGER
     LingerOp *info = new LingerOp;
     info->target.base_oid = oid;
     info->target.base_oloc = oloc;
@@ -288,10 +336,13 @@ namespace OSDC {
     RWLock::WLocker wl(rwlock);
     _linger_submit(info);
     return info->linger_id;
+#endif // LINGER
+    return 0;
   }
 
-  void Objecter::_linger_submit(LingerOp *info)
+  void Objecter::_linger_submit(LingerOp& info)
   {
+#ifdef LINGER
     assert(rwlock.is_wlocked());
     RWLock::Context lc(rwlock, RWLock::Context::TakenForWrite);
 
@@ -314,8 +365,8 @@ namespace OSDC {
     put_session(s);
 
     _send_linger(info);
-  }
 #endif /* LINGER */
+  }
 
   bool Objecter::ms_dispatch(Message *m)
   {
@@ -390,26 +441,26 @@ namespace OSDC {
     // Check for changed request mappings
     auto p = inflight_ops.begin();
     while (p != inflight_ops.end()) {
-      Op* op = p->second;
+      Op& op = *p;
       // check_op_volume_dne() may touch ops; prevent iterator invalidation
       ++p;
-      ldout(cct, 10) << " checking op " << op->tid << dendl;
+      ldout(cct, 10) << " checking op " << op.tid << dendl;
       int r = _calc_targets(op);
       switch (r) {
       case TARGET_NO_ACTION:
 	if (!force_resend &&
-	    (!force_resend_writes || !(op->flags & CEPH_OSD_FLAG_WRITE)))
+	    (!force_resend_writes || !(op.flags & CEPH_OSD_FLAG_WRITE)))
 	  break;
       case TARGET_NEED_RESEND:
-	for(auto &subop : op->subops) {
+	for(auto &subop : op.subops) {
 	  OSDSession* s = subop.session;
 	  s->lock.get_write();
 	  if (subop.session == s) {
-	    _session_subop_remove(s, subop);
+	    _session_subop_remove(*s, subop);
 	  }
 	  s->lock.put_write();
 	}
-	need_resend[op->tid] = op;
+	need_resend[op.tid] = &op;
 	_op_cancel_map_check(op);
 	break;
       case TARGET_VOLUME_DNE:
@@ -492,20 +543,18 @@ namespace OSDC {
 			 need_resend_linger);
 
 	  // osd addr changes?
-	  for (map<int,OSDSession*>::iterator p = osd_sessions.begin();
-	       p != osd_sessions.end(); ) {
-	    OSDSession *s = p->second;
+	  for (auto p = osd_sessions.begin(); p != osd_sessions.end(); ) {
+	    OSDSession& s = *p;
 	    ++p;
-	    if (!osdmap->is_up(s->osd) ||
-		(s->con &&
-		 s->con->get_peer_addr() != osdmap->get_inst(s->osd).addr)) {
+	    if (!osdmap->is_up(s.osd) ||
+		(s.con &&
+		 s.con->get_peer_addr() != osdmap->get_inst(s.osd).addr)) {
 	      close_session(s);
 	    }
 	  }
 
 	  assert(e == osdmap->get_epoch());
 	}
-
       } else {
 	// first map.  we want the full thing.
 	if (m->maps.count(m->get_last())) {
@@ -535,6 +584,7 @@ namespace OSDC {
 
     RWLock::Context lc(rwlock, RWLock::Context::TakenForWrite);
 
+#ifdef MULTI
     // resend requests
     for (map<ceph_tid_t, Op*>::iterator p = need_resend.begin();
 	 p != need_resend.end(); ++p) {
@@ -563,6 +613,8 @@ namespace OSDC {
       s->lock.unlock();
       put_session(s);
     }
+#endif
+#ifdef LINGER
     for (list<LingerOp*>::iterator p = need_resend_linger.begin();
 	 p != need_resend_linger.end(); ++p) {
       LingerOp *op = *p;
@@ -580,14 +632,7 @@ namespace OSDC {
 	_send_linger(op);
       }
     }
-    for (map<ceph_tid_t,CommandOp*>::iterator p = need_resend_command.begin();
-	 p != need_resend_command.end(); ++p) {
-      CommandOp *c = p->second;
-      _assign_command_session(c);
-      if (c->session && !c->session->is_homeless()) {
-	_send_command(c);
-      }
-    }
+#endif
 
     // finish any Contexts that were waiting on a map update
     map<epoch_t,list< pair< Context*, int > > >::iterator p =
@@ -640,34 +685,37 @@ namespace OSDC {
     if (op->map_dne_bound == 0)
       op->map_dne_bound = latest;
 
-    objecter->_check_op_vol_dne(op, false);
+    objecter->_check_op_volume_dne(*op, false);
 
     op->put();
   }
 
-  void Objecter::_check_op_vol_dne(Op *op, bool session_locked)
+  void Objecter::_check_op_volume_dne(Op& op, bool session_locked)
   {
     assert(rwlock.is_wlocked());
 
-    ldout(cct, 10) << "check_op_vol_dne tid " << op->tid
+    ldout(cct, 10) << "check_op_volume_dne tid " << op.tid
 		   << " current " << osdmap->get_epoch()
-		   << " map_dne_bound " << op->map_dne_bound
+		   << " map_dne_bound " << op.map_dne_bound
 		   << dendl;
-    if (op->map_dne_bound > 0) {
-      if (osdmap->get_epoch() >= op->map_dne_bound) {
+    if (op.map_dne_bound > 0) {
+      if (osdmap->get_epoch() >= op.map_dne_bound) {
 	// we had a new enough map
-	ldout(cct, 10) << "check_op_pool_dne tid " << op->tid
-		       << " concluding volume " << op->target.volume << " dne"
+	ldout(cct, 10) << "check_op_volume_dne tid " << op.tid
+		       << " concluding volume " << op.volume << " dne"
 		       << dendl;
-	if (op->onack) {
-	  op->onack->complete(-ENXIO);
+	if (op.onack) {
+	  op.onack->complete(-ENXIO);
+	  op.onack = nullptr;
 	}
-	if (op->oncommit) {
-	  op->oncommit->complete(-ENXIO);
+	if (op.oncommit) {
+	  op.oncommit->complete(-ENXIO);
+	  op.oncommit = nullptr;
 	}
 
+#ifdef MULTI
 	OSDSession *s = op->session;
-	assert(s != NULL);
+	assert(s);
 
 	if (!session_locked) {
 	  s->lock.get_write();
@@ -676,29 +724,30 @@ namespace OSDC {
 	if (!session_locked) {
 	  s->lock.unlock();
 	}
+#endif // MULTI
       }
     } else {
       _send_op_map_check(op);
     }
   }
 
-  void Objecter::_send_op_map_check(Op *op)
+  void Objecter::_send_op_map_check(Op& op)
   {
     assert(rwlock.is_wlocked());
     // ask the monitor
-    if (check_latest_map_ops.count(op->tid) == 0) {
-      op->get();
-      check_latest_map_ops[op->tid] = op;
-      C_Op_Map_Latest *c = new C_Op_Map_Latest(this, op->tid);
+    if (check_latest_map_ops.count(op.tid) == 0) {
+      op.get();
+      check_latest_map_ops[op.tid] = &op;
+      C_Op_Map_Latest *c = new C_Op_Map_Latest(this, op.tid);
       monc->get_version("osdmap", &c->latest, NULL, c);
     }
   }
 
-  void Objecter::_op_cancel_map_check(Op *op)
+  void Objecter::_op_cancel_map_check(Op& op)
   {
     assert(rwlock.is_wlocked());
     map<ceph_tid_t, Op*>::iterator iter =
-      check_latest_map_ops.find(op->tid);
+      check_latest_map_ops.find(op.tid);
     if (iter != check_latest_map_ops.end()) {
       Op *op = iter->second;
       op->put();
@@ -730,7 +779,7 @@ namespace OSDC {
       op->map_dne_bound = latest;
 
     bool unregister;
-    objecter->_check_linger_vol_dne(op, &unregister);
+    objecter->_check_linger_volume_dne(op, &unregister);
 
     if (unregister) {
       objecter->_unregister_linger(op->linger_id);
@@ -739,7 +788,7 @@ namespace OSDC {
     op->put();
   }
 
-  void Objecter::_check_linger_vol_dne(LingerOp *op, bool *need_unregister)
+  void Objecter::_check_linger_volume_dne(LingerOp *op, bool *need_unregister)
   {
     assert(rwlock.is_wlocked());
 
@@ -806,106 +855,105 @@ namespace OSDC {
       return 0;
     }
 
-    map<int,OSDSession*>::iterator p = osd_sessions.find(osd);
+    auto p = osd_sessions.find(osd, oc);
     if (p != osd_sessions.end()) {
-      OSDSession *s = p->second;
-      s->get();
-      *session = s;
-      ldout(cct, 20) << __func__ << " s=" << s << " osd=" << osd << " "
-		     << s->get_nref() << dendl;
+      OSDSession& s = *p;
+      s.get();
+      *session = &s;
       return 0;
     }
     if (!lc.is_wlocked()) {
       return -EAGAIN;
     }
     OSDSession *s = new OSDSession(cct, osd);
-    osd_sessions[osd] = s;
+    osd_sessions.insert(*s);
     s->con = messenger->get_connection(osdmap->get_inst(osd));
     s->get();
     *session = s;
     ldout(cct, 20) << __func__ << " s=" << s << " osd=" << osd << " "
-		   << s->get_nref() << dendl;
+		   << s->nref << dendl;
     return 0;
   }
 
-  void Objecter::put_session(Objecter::OSDSession *s)
+  void Objecter::put_session(OSDSession& s)
   {
-    if (s && !s->is_homeless()) {
-      ldout(cct, 20) << __func__ << " s=" << s << " osd=" << s->osd << " "
-		     << s->get_nref() << dendl;
-      s->put();
+    if (!s.is_homeless()) {
+      s.put();
     }
   }
 
-  void Objecter::get_session(Objecter::OSDSession *s)
+  void Objecter::get_session(OSDSession& s)
   {
-    assert(s != NULL);
-
-    if (!s->is_homeless()) {
-      ldout(cct, 20) << __func__ << " s=" << s << " osd=" << s->osd << " "
-		     << s->get_nref() << dendl;
-      s->get();
+    if (!s.is_homeless()) {
+      s.get();
     }
   }
 
-  void Objecter::_reopen_session(OSDSession *s)
+  void Objecter::_reopen_session(OSDSession& s)
   {
-    assert(s->lock.is_locked());
+    assert(s.lock.is_locked());
 
-    entity_inst_t inst = osdmap->get_inst(s->osd);
-    ldout(cct, 10) << "reopen_session osd." << s->osd
+    entity_inst_t inst = osdmap->get_inst(s.osd);
+    ldout(cct, 10) << "reopen_session osd." << s.osd
 		   << " session, addr now " << inst << dendl;
-    if (s->con) {
-      s->con->mark_down();
+    if (s.con) {
+      messenger->mark_down(s.con);
     }
-    s->con = messenger->get_connection(inst);
-    s->incarnation++;
+    s.con = messenger->get_connection(inst);
+    s.incarnation++;
   }
 
-  void Objecter::close_session(OSDSession *s)
+  void Objecter::close_session(OSDSession& s)
   {
     assert(rwlock.is_wlocked());
 
-    ldout(cct, 10) << "close_session for osd." << s->osd << dendl;
-    if (s->con) {
-      s->con->mark_down();
+    ldout(cct, 10) << "close_session for osd." << s.osd << dendl;
+    if (s.con) {
+      messenger->mark_down(s.con);
     }
-    s->lock.get_write();
+    s.lock.get_write();
 
     std::list<LingerOp*> homeless_lingers;
-    std::list<CommandOp*> homeless_commands;
     std::list<Op*> homeless_ops;
 
-    while(!s->linger_ops.empty()) {
+#ifdef LINGER
+    while(!s->linger_subops.empty()) {
       std::map<uint64_t, LingerOp*>::iterator i = s->linger_ops.begin();
       ldout(cct, 10) << " linger_op " << i->first << dendl;
       _session_linger_op_remove(s, i->second);
       homeless_lingers.push_back(i->second);
     }
+#endif
 
-    while(!s->ops.empty()) {
-      std::map<ceph_tid_t, Op*>::iterator i = s->ops.begin();
+#ifdef MULTI
+    while(!s->subops.empty()) {
+      auto i = s->subops.begin();
       ldout(cct, 10) << " op " << i->first << dendl;
-      _session_op_remove(s, i->second);
+      _session_subop_remove(s, i->second);
       homeless_ops.push_back(i->second);
     }
+#endif // MULTI
 
-    osd_sessions.erase(s->osd);
-    s->lock.unlock();
+    osd_sessions.erase(s);
+    s.lock.unlock();
     put_session(s);
 
     // Assign any leftover ops to the homeless session
+#ifdef LINGER
     {
       RWLock::WLocker wl(homeless_session->lock);
       for (std::list<LingerOp*>::iterator i = homeless_lingers.begin();
 	   i != homeless_lingers.end(); ++i) {
-	_session_linger_op_assign(homeless_session, *i);
+	_session_linger_subop_assign(homeless_session, *i);
       }
+#endif // LINGER
+#ifdef MULTI
       for (std::list<Op*>::iterator i = homeless_ops.begin();
 	   i != homeless_ops.end(); ++i) {
 	_session_op_assign(homeless_session, *i);
       }
     }
+#endif // MULTI
   }
 
   void Objecter::wait_for_osd_map()
@@ -1024,21 +1072,21 @@ namespace OSDC {
     return false;
   }
 
-  void Objecter::kick_requests(OSDSession *session)
+  void Objecter::kick_requests(OSDSession& session)
   {
-    ldout(cct, 10) << "kick_requests for osd." << session->osd << dendl;
+    ldout(cct, 10) << "kick_requests for osd." << session.osd << dendl;
 
     map<uint64_t, LingerOp *> lresend;
     RWLock::WLocker wl(rwlock);
 
-    session->lock.get_write();
+    session.lock.get_write();
     _kick_requests(session, lresend);
-    session->lock.unlock();
+    session.lock.unlock();
 
     _linger_ops_resend(lresend);
   }
 
-  void Objecter::_kick_requests(OSDSession *session,
+  void Objecter::_kick_requests(OSDSession& session,
 				map<uint64_t, LingerOp *>& lresend)
   {
     assert(rwlock.is_locked());
@@ -1047,20 +1095,20 @@ namespace OSDC {
     map<ceph_tid_t,Op*> resend;  // resend in tid order
 
 
-    for (auto &subop : session->subops) {
+    for (auto &subop : session.subops) {
       if (subop.parent.should_resend) {
 	if (!subop.parent.paused)
-	  if (!op->paused)
-	    resend[subop.parent.tid] = &subop.parent;
+	  resend[subop.parent.tid] = &subop.parent;
       } else {
-	_cancel_linger_op(&subop.parent);
+	_cancel_linger_op(subop.parent); // TODO: WTF?
       }
     }
     while (!resend.empty()) {
-      _send_op(resend.begin()->second);
+      _send_op(*resend.begin()->second);
       resend.erase(resend.begin());
     }
 
+#ifdef LINGER
     // resend lingers
     for (auto j = session->linger_ops.begin();
 	 j != session->linger_ops.end(); ++j) {
@@ -1069,6 +1117,7 @@ namespace OSDC {
       assert(lresend.count(j->first) == 0);
       lresend[j->first] = op;
     }
+#endif
   }
 
   void Objecter::_linger_ops_resend(map<uint64_t, LingerOp *>& lresend)
@@ -1078,7 +1127,7 @@ namespace OSDC {
     while (!lresend.empty()) {
       LingerOp *op = lresend.begin()->second;
       if (!op->canceled) {
-	_send_linger(op);
+	_send_linger(*op);
       }
       op->put();
       lresend.erase(lresend.begin());
@@ -1108,7 +1157,7 @@ namespace OSDC {
       return;
     }
 
-    set<OSDSession*> toping;
+    std::set<OSDSession*> toping;
 
     int r = 0;
 
@@ -1120,15 +1169,13 @@ namespace OSDC {
 
     do {
       laggy_ops = 0;
-      for (auto siter : osd_sessions) {
-	OSDSession *s = siter.second;
-	for (auto& kv : subops) {
-	  SubOp* subop = kv.second;
-	  assert(subop->session);
-	  if (subop->session && subop->stamp < cutoff) {
-	    ldout(cct, 2) << " tid " << kv.first << " on osd."
-			  << subop->session->osd << " is laggy" << dendl;
-	    toping.insert(subop->session);
+      for (auto& s : osd_sessions) {
+	for (auto& subop : s.subops) {
+	  assert(subop.session);
+	  if (subop.session && subop.stamp < cutoff) {
+	    ldout(cct, 2) << " tid " << subop.tid << " on osd."
+			  << subop.session->osd << " is laggy" << dendl;
+	    toping.insert(subop.session);
 	    ++laggy_ops;
 	  }
 	}
@@ -1143,23 +1190,26 @@ namespace OSDC {
 			 << dendl;
 	  toping.insert(op->session);
 	}
-      }
 #endif
+      }
+
+#ifdef MULTI
       if (num_homeless_ops || !toping.empty()) {
 	r = _maybe_request_map();
 	if (r == -EAGAIN) {
 	  toping.clear();
 	}
       }
+#endif // MULTI
     } while (r == -EAGAIN);
 
     if (!toping.empty()) {
       // send a ping to these osds, to ensure we detect any session resets
       // (osd reply message policy is lossy)
-      for (set<OSDSession*>::const_iterator i = toping.begin();
+      for (auto i = toping.begin();
 	   i != toping.end();
 	   ++i) {
-	(*i)->con->send_message(new MPing);
+	messenger->send_message(new MPing, (*i)->con);
       }
     }
 
@@ -1173,12 +1223,12 @@ namespace OSDC {
 
     ldout(cct, 10) << "resend_mon_ops" << dendl;
 
-    for (auto kv : statfs_ops) {
-      _fs_stats_submit(kv.second);
+    for (auto& statfs_op : statfs_ops) {
+      _fs_stats_submit(statfs_op);
     }
 
     for (auto kv : check_latest_map_ops) {
-      C_Op_Map_Latest *c = new C_Op_Map_Latest(this, p->second->tid);
+      C_Op_Map_Latest *c = new C_Op_Map_Latest(this, kv.second->tid);
       monc->get_version("osdmap", &c->latest, NULL, c);
     }
 
@@ -1209,21 +1259,17 @@ namespace OSDC {
   {
     RWLock::RLocker rl(rwlock);
     RWLock::Context lc(rwlock, RWLock::Context::TakenForRead);
-    return _op_submit_with_budget(op, lc, ctx_budget);
+    return _op_submit_with_budget(*op, lc, ctx_budget);
   }
 
-  ceph_tid_t Objecter::_op_submit_with_budget(Op *op, RWLock::Context& lc,
+  ceph_tid_t Objecter::_op_submit_with_budget(Op& op, RWLock::Context& lc,
 					      int *ctx_budget)
   {
-    assert(initialized.read());
-
-    assert(op->ops.size() == op->out_bl.size());
-    assert(op->ops.size() == op->out_rval.size());
-    assert(op->ops.size() == op->out_handler.size());
+    assert(initialized);
 
     // throttle.  before we look at any state, because
     // take_op_budget() may drop our lock while it blocks.
-    if (!op->ctx_budgeted || (ctx_budget && (*ctx_budget == -1))) {
+    if (!op.ctx_budgeted || (ctx_budget && (*ctx_budget == -1))) {
       int op_budget = _take_op_budget(op);
       // take and pass out the budget for the first OP
       // in the context session
@@ -1236,27 +1282,25 @@ namespace OSDC {
 
     if (osd_timeout > 0) {
       Mutex::Locker l(timer_lock);
-      op->ontimeout = new C_CancelOp(tid, this);
-      timer.add_event_after(osd_timeout, op->ontimeout);
+      op.ontimeout = new C_CancelOp(tid, this);
+      timer.add_event_after(osd_timeout, op.ontimeout);
     }
 
     return tid;
   }
 
-  ceph_tid_t Objecter::_op_submit(Op *op, RWLock::Context& lc)
+  ceph_tid_t Objecter::_op_submit(Op& op, RWLock::Context& lc)
   {
     assert(rwlock.is_locked());
 
-    op->trace.keyval("tid", op->tid);
-    op->trace.event("op_submit", &trace_endpoint);
-
-    ldout(cct, 10) << __func__ << " op " << op << dendl;
+    op.trace.keyval("tid", op.tid);
+    op.trace.event("op_submit", &trace_endpoint);
 
     // pick target
 
     // This function no longer creates the session
-    const bool check_for_latest_map = _calc_target(&op->target)
-      == RECALC_OP_TARGET_VOL_DNE;
+    const bool check_for_latest_map = _calc_targets(op)
+      == TARGET_VOLUME_DNE;
 
 #if MULTI
     // Try to get a session, including a retry if we need to take write lock
@@ -1275,52 +1319,45 @@ namespace OSDC {
       lc.promote();
     }
 
-    //inflight_ops[op->tid] = op;
-    ++inflight_ops;
+    inflight_ops.insert(op);
 
     // add to gather set(s)
-    if (op->onack) {
-      num_unacked.inc();
+    if (op.onack) {
+      ++num_unacked;
     } else {
       ldout(cct, 20) << " note: not requesting ack" << dendl;
     }
-    if (op->oncommit) {
-      num_uncommitted.inc();
+    if (op.oncommit) {
+      ++num_uncommitted;
     } else {
       ldout(cct, 20) << " note: not requesting commit" << dendl;
     }
 
     // send?
-    ldout(cct, 10) << "_op_submit oid " << op->target.base_oid
-		   << " " << op->target.base_oloc << " "
-		   << op->target.target_oloc
-		   << " " << op->ops << " tid " << op->tid
-		   << " osd." << (!s->is_homeless() ? s->osd : -1)
-		   << dendl;
+    ldout(cct, 10) << "_op_submit oid " << op.oid
+		   << " " << op.volume << " "
+		   << " tid " << op.tid << dendl;
 
-    assert(op->target.flags & (CEPH_OSD_FLAG_READ|CEPH_OSD_FLAG_WRITE));
+    assert(op.flags & (CEPH_OSD_FLAG_READ | CEPH_OSD_FLAG_WRITE));
 
     bool need_send = false;
 
-    if ((op->target.flags & CEPH_OSD_FLAG_WRITE) &&
+    if ((op.flags & CEPH_OSD_FLAG_WRITE) &&
 	osdmap->test_flag(CEPH_OSDMAP_PAUSEWR)) {
-      ldout(cct, 10) << " paused modify " << op << " tid " << last_tid
-		     << dendl;
-      op->paused = true;
+      op.paused = true;
       _maybe_request_map();
-    } else if ((op->target.flags & CEPH_OSD_FLAG_READ) &&
+    } else if ((op.flags & CEPH_OSD_FLAG_READ) &&
 	       osdmap->test_flag(CEPH_OSDMAP_PAUSERD)) {
-      ldout(cct, 10) << " paused read " << op << " tid " << last_tid << dendl;
-      op->target.paused = true;
+      op.paused = true;
       _maybe_request_map();
-    } else if ((op->target.flags & CEPH_OSD_FLAG_WRITE) &&
+    } else if ((op.flags & CEPH_OSD_FLAG_WRITE) &&
 	       osdmap_full_flag()) {
-      ldout(cct, 0) << " FULL, paused modify " << op << " tid " << last_tid
-		    << dendl;
-      op->target.paused = true;
+      op.paused = true;
       _maybe_request_map();
+#ifdef MULTI
     } else if (!s->is_homeless()) {
       need_send = true;
+#endif // MULTI
     } else {
       _maybe_request_map();
     }
@@ -1330,18 +1367,18 @@ namespace OSDC {
       m = _prepare_osd_op(op);
     }
 
+#ifdef MULTI
     s->lock.get_write();
     if (op->tid == 0)
       op->tid = last_tid.inc();
     _session_op_assign(s, op);
 
-#if MULTI
     if (all_of(op->subops.cbegin(),
 	       op->subops.cend(),
 	       [](const SubOp& s){return s.session;})) {
       send_op(op);
     }
-#endif MULTI
+#endif //MULTI
 
     if (need_send) {
       _send_op(op, m);
@@ -1349,23 +1386,25 @@ namespace OSDC {
 
     // Last chance to touch Op here, after giving up session lock it can be
     // freed at any time by response handler.
-    ceph_tid_t tid = op->tid;
+    ceph_tid_t tid = op.tid;
     if (check_for_latest_map) {
       _send_op_map_check(op);
     }
-    op = NULL;
 
+#ifdef MULTI
     s->lock.unlock();
     put_session(s);
+#endif // MULTI
 
-    ldout(cct, 5) << num_unacked.read() << " unacked, " << num_uncommitted
+    ldout(cct, 5) << num_unacked << " unacked, " << num_uncommitted
 		  << " uncommitted" << dendl;
 
     return tid;
   }
 
-  int Objecter::op_cancel(OSDSession *s, ceph_tid_t tid, int r)
+  int Objecter::op_cancel(ceph_tid_t tid, int r)
   {
+#ifdef MULTI
     assert(initialized);
 
     s->lock.get_write();
@@ -1396,61 +1435,18 @@ namespace OSDC {
     _finish_op(op);
     s->lock.unlock();
 
+#endif
     return 0;
   }
 
-  int Objecter::op_cancel(ceph_tid_t tid, int r)
-  {
-    int ret = 0;
-
-    rwlock.get_write();
-
-  start:
-
-    for (auto &s = osd_sessions) {
-      s.lock.get_read();
-      if (s.ops.find(tid) != s.ops.end()) {
-	s.lock.unlock();
-	ret = op_cancel(s, tid, r);
-	if (ret == -ENOENT) {
-	  /* oh no! raced, maybe tid moved to another session, restarting */
-	  goto start;
-	}
-	rwlock.unlock();
-	return ret;
-      }
-      s.lock.unlock();
-    }
-
-    // Handle case where the op is in homeless session
-    homeless_session->lock.get_read();
-    if (homeless_session->ops.find(tid) != homeless_session->ops.end()) {
-      homeless_session->lock.unlock();
-      ret = op_cancel(homeless_session, tid, r);
-      if (ret == -ENOENT) {
-	/* oh no! raced, maybe tid moved to another session, restarting */
-	goto start;
-      } else {
-	rwlock.unlock();
-	return ret;
-      }
-    } else {
-      homeless_session->lock.unlock();
-    }
-
-    rwlock.unlock();
-
-    return ret;
-  }
-
-  bool Objecter::target_should_be_paused(op_base *t)
+  bool Objecter::target_should_be_paused(op_base& t)
   {
     bool pauserd = osdmap->test_flag(CEPH_OSDMAP_PAUSERD);
     bool pausewr = osdmap->test_flag(CEPH_OSDMAP_PAUSEWR) ||
       osdmap_full_flag();
 
-    return (t->flags & CEPH_OSD_FLAG_READ && pauserd) ||
-      (t->flags & CEPH_OSD_FLAG_WRITE && pausewr);
+    return (t.flags & CEPH_OSD_FLAG_READ && pauserd) ||
+      (t.flags & CEPH_OSD_FLAG_WRITE && pausewr);
   }
 
 
@@ -1465,76 +1461,44 @@ namespace OSDC {
       (messenger->get_myname().type() != entity_name_t::TYPE_MDS);
   }
 
-  int Objecter::_calc_target(op_base *t, bool any_change)
+  int Objecter::_calc_targets(op_base& t, bool any_change)
   {
     assert(rwlock.is_locked());
 
-    bool is_read = t->flags & CEPH_OSD_FLAG_READ;
-    bool is_write = t->flags & CEPH_OSD_FLAG_WRITE;
     bool need_resend = false;
 
-    if (!osdmap->vol_exists(op_base->volume.id)) {
-      return RECALC_OP_TARGET_VOL_DNE;
+    if (!osdmap->vol_exists(t.volume->id)) {
+      return TARGET_VOLUME_DNE;
     }
 
     // Volume should know how many OSDs to supply for its own
     // operations. But it never hurts to fail spectacularly in case I
     // goof up.
-    t->volume->place(
-      t->oid, *osdmap, [&](int osd) {
-	assert(i < t->subops.size());
-	if ((t->subops[i].osd != osd) && !t->subops[i].done) {
-	  t->subops[i].osd = osd;
+    uint32_t i = 0;
+    t.volume->place(
+      t.oid, *osdmap, [&](int osd) {
+	assert(i < t.subops.size());
+	if ((t.subops[i].osd != osd) && !t.subops[i].done) {
+	  t.subops[i].osd = osd;
 	  need_resend = true;
 	}
 	++i;
       });
-    assert(i == t->subops.size());
+    assert(i == t.subops.size());
 
     bool paused = target_should_be_paused(t);
-    if (!paused && paused != t->paused) {
-      t->paused = false;
+    if (!paused && paused != t.paused) {
+      t.paused = false;
       need_resend = true;
     }
 
     if (need_resend) {
-      return RECALC_OP_TARGET_NEED_RESEND;
+      return TARGET_NEED_RESEND;
     }
-    return RECALC_OP_TARGET_NO_ACTION;
+    return TARGET_NO_ACTION;
   }
 
-  int Objecter::calc_target(op_base *t)
-  {
-    // Oh, yay!
-    size_t i = 0;
-    bool need_resend = false;
-
-    // Volume should know how many OSDs to supply for its own
-    // operations. But it never hurts to fail spectacularly in case I
-    // goof up.
-    t->volume->place(
-      t->oid, *osdmap, [&](int osd) {
-	assert(i < t->subops.size());
-	if ((t->subops[i].osd != osd) && !t->subops[i].done) {
-	  t->subops[i].osd = osd;
-	  need_resend = true;
-	}
-	++i;
-      });
-    assert(i == t->subops.size());
-
-    bool paused = target_should_be_paused(t);
-    if (!paused && paused != t->paused) {
-      t->paused = false;
-      need_resend = true;
-    }
-
-    if (need_resend) {
-      return RECALC_OP_TARGET_NEED_RESEND;
-    }
-    return RECALC_OP_TARGET_NO_ACTION;
-  }
-
+#ifdef MULTI
   int Objecter::recalc_op_target(Op *op)
   {
     int r = calc_target(op);
@@ -1557,50 +1521,46 @@ namespace OSDC {
     }
     return r;
   }
+#endif
 
-  int Objecter::_map_session(op_target_t *target, OSDSession **s,
+  int Objecter::_map_session(op_base& op, OSDSession **s,
 			     RWLock::Context& lc)
   {
-    int r = _calc_target(target);
+    int r = _calc_targets(op);
     if (r < 0) {
       return r;
     }
+#ifdef MULTI
     return _get_session(target->osd, s, lc);
+#else
+    return 0;
+#endif // MULTI
   }
 
-  void Objecter::_session_op_assign(OSDSession *to, Op *op)
+  void Objecter::_session_subop_assign(OSDSession& to, SubOp& subop)
   {
-    assert(to->lock.is_locked());
-    assert(op->session == NULL);
-    assert(op->tid);
+    assert(to.lock.is_locked());
+    assert(subop.session == NULL);
+    assert(subop.tid);
 
     get_session(to);
-    op->session = to;
-    to->ops[op->tid] = op;
-
-    if (to->is_homeless()) {
-      num_homeless_ops.inc();
-    }
-
-    ldout(cct, 15) << __func__ << " " << to->osd << " " << op->tid << dendl;
+    subop.session = &to;
+    to.subops.insert(subop);
   }
 
-  void Objecter::_session_op_remove(OSDSession *from, Op *op)
+  void Objecter::_session_subop_remove(OSDSession& from, SubOp& subop)
   {
-    assert(op->session == from);
-    assert(from->lock.is_locked());
+    assert(subop.session == &from);
+    assert(from.lock.is_locked());
 
-    if (from->is_homeless()) {
-      --num_homeless_ops;
-    }
-
-    from->ops.erase(op->tid);
+    from.subops.erase(subop);
     put_session(from);
-    op->session = NULL;
+    subop.session = nullptr;
 
-    ldout(cct, 15) << __func__ << " " << from->osd << " " << op->tid << dendl;
+    ldout(cct, 15) << __func__ << " " << from.osd << " " << subop.tid << dendl;
   }
 
+#ifdef LINGER
   void Objecter::_session_linger_op_assign(OSDSession *to, LingerOp *op)
   {
     assert(to->lock.is_wlocked());
@@ -1634,6 +1594,7 @@ namespace OSDC {
     ldout(cct, 15) << __func__ << " " << from->osd << " " << op->linger_id
 		   << dendl;
   }
+#endif
 
   int Objecter::_get_osd_session(int osd, RWLock::Context& lc,
 				 OSDSession **psession)
@@ -1654,10 +1615,10 @@ namespace OSDC {
     return 0;
   }
 
-  int Objecter::_get_op_target_session(Op *op, RWLock::Context& lc,
-				       OSDSession **psession)
+  int Objecter::_get_subop_target_session(SubOp& subop, RWLock::Context& lc,
+					  OSDSession **session)
   {
-    return _get_osd_session(op->target.osd, lc, psession);
+    return _get_osd_session(subop.osd, lc, session);
   }
 
   bool Objecter::_promote_lock_check_race(RWLock::Context& lc)
@@ -1667,9 +1628,10 @@ namespace OSDC {
     return (epoch == osdmap->get_epoch());
   }
 
-  int Objecter::_recalc_linger_op_target(LingerOp *linger_op,
+  int Objecter::_recalc_linger_op_targets(LingerOp& linger_op,
 					 RWLock::Context& lc)
   {
+#ifdef LINGER
     assert(rwlock.is_wlocked());
 
     int r = _calc_target(&linger_op->target, true);
@@ -1702,10 +1664,13 @@ namespace OSDC {
       return RECALC_OP_TARGET_NEED_RESEND;
     }
       return r;
+#endif // LINGER
+      return 0;
   }
 
-  void Objecter::_cancel_linger_op(Op *op)
+  void Objecter::_cancel_linger_op(Op& op)
   {
+#ifdef LINGER
     ldout(cct, 15) << "cancel_op " << op->tid << dendl;
 
     assert(!op->should_resend);
@@ -1713,67 +1678,54 @@ namespace OSDC {
     delete op->oncommit;
 
     _finish_op(op);
+#endif // LINGER
   }
 
-  void Objecter::_finish_op(Op *op)
+  void Objecter::_finish_op(Op& op)
   {
-    ldout(cct, 15) << "finish_op " << op->tid << dendl;
+    ldout(cct, 15) << "finish_op " << op.tid << dendl;
 
+#ifdef MULTI
     assert(op->session->lock.is_wlocked());
+#endif // MULTI
 
-    if (!op->ctx_budgeted && op->budgeted)
+    if (!op.ctx_budgeted && op.budgeted)
       put_op_budget(op);
 
-    if (op->ontimeout) {
+    if (op.ontimeout) {
       Mutex::Locker l(timer_lock);
-      timer.cancel_event(op->ontimeout);
+      timer.cancel_event(op.ontimeout);
     }
 
-    for(auto& subop : op->subops) {
+    for(auto& subop : op.subops) {
       subop.unlink();
-      subops.erase(subop.tid);
     }
 
-
+#ifdef MULTI
     _session_op_remove(op->session, op);
+#endif // MULTI
 
-    assert(check_latest_map_ops.find(op->tid) == check_latest_map_ops.end());
+    assert(check_latest_map_ops.find(op.tid) == check_latest_map_ops.end());
 
-    inflight_ops.dec();
+    inflight_ops.erase(op);
 
-    op->trace.event("finish_op", &trace_endpoint);
+    op.trace.event("finish_op", &trace_endpoint);
 
-    op->put();
+    op.put();
   }
 
-  void objecter::finish_op(osdsession *session, ceph_tid_t tid)
-  {
-    ldout(cct, 15) << "finish_op " << tid << dendl;
-    rwlock::rlocker rl(rwlock);
-
-    rwlock::wlocker wl(session->lock);
-
-    map<ceph_tid_t, op *>::iterator iter = session->ops.find(tid);
-    if (iter == session->ops.end())
-      return;
-
-    op *op = iter->second;
-
-    _finish_op(op);
-  }
-
-  MOSDOp *Objecter::_prepare_osd_op(Op *op)
+  MOSDOp *Objecter::_prepare_osd_op(Op& op)
   {
     assert(rwlock.is_locked());
 
-    int flags = op->target.flags;
-    flags |= CEPH_OSD_FLAG_KNOWN_REDIR;
+#ifdef MULTI
+    int flags = op.target.flags;
     if (op->oncommit)
       flags |= CEPH_OSD_FLAG_ONDISK;
     if (op->onack)
       flags |= CEPH_OSD_FLAG_ACK;
 
-    op->target.paused = false;
+    op->paused = false;
     op->stamp = ceph_clock_now(cct);
 
     MOSDOp *m = new MOSDOp(client_inc.read(), op->tid,
@@ -1795,6 +1747,8 @@ namespace OSDC {
       m->set_priority(cct->_conf->osd_client_op_priority);
 
     return m;
+#endif // MULTI
+    return nullptr;
   }
 
 
@@ -1832,10 +1786,11 @@ namespace OSDC {
     messenger->send_message(m, subop.session->con);
   }
 
-  void Objecter::_send_op(Op *op, MOSDOp *m)
+  void Objecter::_send_op(Op& op, MOSDOp *m)
   {
+#ifdef MULTI
     assert(rwlock.is_locked());
-    assert(op->session->lock.is_locked());
+    assert(op.session->lock.is_locked());
 
     if (!m) {
       assert(op->tid > 0);
@@ -1853,9 +1808,11 @@ namespace OSDC {
     m->set_tid(op->tid);
 
     op->session->con->send_message(m);
+#endif // MULTI
   }
 
-  void Objecter::_send_op(Op *op)
+#ifdef MULTI
+  void Objecter::_send_op(Op& op)
   {
     int flags = op->flags;
     if (op->oncommit)
@@ -1872,28 +1829,14 @@ namespace OSDC {
       send_subop(subop, flags);
     }
   }
+#endif // MULTI
 
-  int Objecter::calc_op_budget(Op *op)
+  int Objecter::calc_op_budget(Op& op)
   {
-    int op_budget = 0;
-    for (vector<OSDOp>::iterator i = op->ops.begin();
-	 i != op->ops.end();
-	 ++i) {
-      if (i->op.op & CEPH_OSD_OP_MODE_WR) {
-	op_budget += i->indata.length();
-      } else if (ceph_osd_op_mode_read(i->op.op)) {
-	if (ceph_osd_op_type_data(i->op.op)) {
-	  if ((int64_t)i->op.extent.length > 0)
-	    op_budget += (int64_t)i->op.extent.length;
-	} else if (ceph_osd_op_type_attr(i->op.op)) {
-	  op_budget += i->op.xattr.name_len + i->op.xattr.value_len;
-	}
-      }
-    }
-    return op_budget;
+    return op.op->get_budget();
   }
 
-  void Objecter::_throttle_op(Op *op, int op_budget)
+  void Objecter::_throttle_op(Op& op, int op_budget)
   {
     assert(rwlock.is_locked());
 
@@ -1913,36 +1856,22 @@ namespace OSDC {
     }
   }
 
-  void Objecter::throttle_op(Op *op, uint64_t op_budget)
+  void Objecter::unregister_op(Op& op)
   {
-    if (!op_budget)
-      op_budget = op->op->get_budget();
-    if (!op_throttle_bytes.get_or_fail(op_budget)) { //couldn't take right now
-      client_lock.Unlock();
-      op_throttle_bytes.get(op_budget);
-      client_lock.Lock();
-    }
-    if (!op_throttle_ops.get_or_fail(1)) { //couldn't take right now
-      client_lock.Unlock();
-      op_throttle_ops.get(1);
-      client_lock.Lock();
-    }
-  }
-
-  void Objecter::unregister_op(Op *op)
-  {
+#ifdef MULTI
     op->session->lock.get_write();
     op->session->ops.erase(op->tid);
     op->session->lock.unlock();
     put_session(op->session);
     op->session = NULL;
-
-    --inflight_ops.dec();
+#endif // MULTI
+    op.unlink();
   }
 
 
   void Objecter::handle_osd_op_reply(MOSDOpReply *m)
   {
+#ifdef MULTI
     ldout(cct, 10) << "in handle_osd_op_reply" << dendl;
 
     // get pio
@@ -1951,14 +1880,14 @@ namespace OSDC {
     int osd_num = (int)m->get_source().num();
 
     RWLock::RLocker l(rwlock);
-    if (!initialized.read()) {
+    if (!initialized) {
       m->put();
       return;
     }
 
     RWLock::Context lc(rwlock, RWLock::Context::TakenForRead);
 
-    map<int, OSDSession *>::iterator siter = osd_sessions.find(osd_num);
+    auto siter = osd_sessions.find(osd_num, oc);
     if (siter == osd_sessions.end()) {
       ldout(cct, 7) << "handle_osd_op_reply " << tid
 		    << (m->is_ondisk() ? " ondisk":(m->is_onnvram() ?
@@ -1968,10 +1897,10 @@ namespace OSDC {
       return;
     }
 
-    OSDSession *s = siter->second;
+    OSDSession& s = *siter;
     get_session(s);
 
-    s->lock.get_write();
+    s.lock.get_write();
 
     map<ceph_tid_t, Op *>::iterator iter = s->ops.find(tid);
     if (iter == s->ops.end()) {
@@ -2148,8 +2077,10 @@ namespace OSDC {
 
     m->put();
     put_session(s);
+#endif // MULTI
   }
 
+#ifdef MULTI
   /* This function DOES put the passed message before returning */
   void Objecter::handle_osd_op_reply(MOSDOpReply *m)
   {
@@ -2291,6 +2222,7 @@ namespace OSDC {
       m->put();
     }
   }
+#endif // MULTI
 
   class C_CancelStatfsOp : public Context
   {
@@ -2309,8 +2241,8 @@ namespace OSDC {
     ldout(cct, 10) << "get_fs_stats" << dendl;
     RWLock::WLocker l(rwlock);
 
-    StatfsOp *op = new StatfsOp;
-    op->tid = last_tid.inc();
+    StatfsOp* op = new StatfsOp;
+    op->tid = ++last_tid;
     op->stats = &result;
     op->onfinish = onfinish;
     op->ontimeout = NULL;
@@ -2319,27 +2251,24 @@ namespace OSDC {
       op->ontimeout = new C_CancelStatfsOp(op->tid, this);
       timer.add_event_after(mon_timeout, op->ontimeout);
     }
-    statfs_ops[op->tid] = op;
+    statfs_ops.insert(*op);
 
-    _fs_stats_submit(op);
+    _fs_stats_submit(*op);
   }
 
-  void Objecter::_fs_stats_submit(StatfsOp *op)
+  void Objecter::_fs_stats_submit(StatfsOp& op)
   {
     assert(rwlock.is_wlocked());
 
-    ldout(cct, 10) << "fs_stats_submit" << op->tid << dendl;
-    monc->send_mon_message(new MStatfs(monc->get_fsid(), op->tid,
-				       last_seen_pgmap_version));
-    op->last_submit = ceph_clock_now(cct);
-
-    logger->inc(l_osdc_statfs_send);
+    ldout(cct, 10) << "fs_stats_submit" << op.tid << dendl;
+    monc->send_mon_message(new MStatfs(monc->get_fsid(), op.tid, 0));
+    op.last_submit = ceph_clock_now(cct);
   }
 
   void Objecter::handle_fs_stats_reply(MStatfsReply *m)
   {
     RWLock::WLocker wl(rwlock);
-    if (!initialized.read()) {
+    if (!initialized) {
       m->put();
       return;
     }
@@ -2347,13 +2276,12 @@ namespace OSDC {
     ldout(cct, 10) << "handle_fs_stats_reply " << *m << dendl;
     ceph_tid_t tid = m->get_tid();
 
-    if (statfs_ops.count(tid)) {
-      StatfsOp *op = statfs_ops[tid];
-      ldout(cct, 10) << "have request " << tid << " at " << op << dendl;
-      *(op->stats) = m->h.st;
-      if (m->h.version > last_seen_pgmap_version)
-	last_seen_pgmap_version = m->h.version;
-      op->onfinish->complete(0);
+    auto stiter = statfs_ops.find(tid, oc);
+    if (stiter != statfs_ops.end()) {
+      StatfsOp& op = *stiter;
+      ldout(cct, 10) << "have request " << tid << dendl;
+      *(op.stats) = m->h.st;
+      op.onfinish->complete(0);
       _finish_statfs_op(op);
     } else {
       ldout(cct, 10) << "unknown request " << tid << dendl;
@@ -2364,11 +2292,11 @@ namespace OSDC {
 
   int Objecter::statfs_op_cancel(ceph_tid_t tid, int r)
   {
-    assert(initialized.read());
+    assert(initialized);
 
     RWLock::WLocker wl(rwlock);
 
-    map<ceph_tid_t, StatfsOp*>::iterator it = statfs_ops.find(tid);
+    auto it = statfs_ops.find(tid, oc);
     if (it == statfs_ops.end()) {
       ldout(cct, 10) << __func__ << " tid " << tid << " dne" << dendl;
       return -ENOENT;
@@ -2376,25 +2304,25 @@ namespace OSDC {
 
     ldout(cct, 10) << __func__ << " tid " << tid << dendl;
 
-    StatfsOp *op = it->second;
-    if (op->onfinish)
-      op->onfinish->complete(r);
+    StatfsOp& op = *it;
+    if (op.onfinish)
+      op.onfinish->complete(r);
     _finish_statfs_op(op);
     return 0;
   }
 
-  void Objecter::_finish_statfs_op(StatfsOp *op)
+  void Objecter::_finish_statfs_op(StatfsOp& op)
   {
     assert(rwlock.is_wlocked());
 
-    statfs_ops.erase(op->tid);
+    op.unlink();
 
-    if (op->ontimeout) {
+    if (op.ontimeout) {
       Mutex::Locker l(timer_lock);
-      timer.cancel_event(op->ontimeout);
+      timer.cancel_event(op.ontimeout);
     }
 
-    delete op;
+    delete &op;
   }
 
   void Objecter::ms_handle_connect(Connection *con)
@@ -2417,18 +2345,18 @@ namespace OSDC {
       if (osd >= 0) {
 	ldout(cct, 1) << "ms_handle_reset on osd." << osd << dendl;
 	rwlock.get_write();
-	if (!initialized.read()) {
+	if (!initialized) {
 	  rwlock.put_write();
 	  return false;
 	}
-	map<int,OSDSession*>::iterator p = osd_sessions.find(osd);
+	auto p = osd_sessions.find(osd, oc);
 	if (p != osd_sessions.end()) {
-	  OSDSession *session = p->second;
+	  OSDSession& session = *p;
 	  map<uint64_t, LingerOp *> lresend;
-	  session->lock.get_write();
+	  session.lock.get_write();
 	  _reopen_session(session);
 	  _kick_requests(session, lresend);
-	  session->lock.unlock();
+	  session.lock.unlock();
 	  _linger_ops_resend(lresend);
 	  rwlock.unlock();
 	  maybe_request_map();
@@ -2518,8 +2446,8 @@ namespace OSDC {
   {
     // Caller is responsible for re-assigning or
     // destroying any ops that were assigned to us
-    assert(ops.empty());
-    assert(linger_ops.empty());
+    assert(subops.empty());
+    assert(linger_subops.empty());
 
     for (int i = 0; i < num_locks; i++) {
       delete completion_locks[i];
@@ -2531,19 +2459,33 @@ namespace OSDC {
   {
     delete osdmap;
 
-    assert(homeless_session->get_nref() == 1);
-    assert(num_homeless_ops == 0);
+    assert(homeless_session->nref== 1);
+    assert(homeless_session->subops.empty());
+    assert(homeless_session->linger_subops.empty());
     homeless_session->put();
 
     assert(osd_sessions.empty());
     assert(statfs_ops.empty());
-    assert(pool_ops.empty());
     assert(waiting_for_map.empty());
     assert(linger_ops.empty());
     assert(check_latest_map_lingers.empty());
     assert(check_latest_map_ops.empty());
 
     assert(!tick_event);
-    assert(!m_request_state_hook);
   }
+
+  VolumeRef Objecter::vol_by_uuid(const boost::uuids::uuid& id) {
+    RWLock::RLocker rl(rwlock);
+    VolumeRef v;
+    osdmap->find_by_uuid(id, v);
+    return v;
+  }
+
+  VolumeRef Objecter::vol_by_name(const string& name) {
+    RWLock::RLocker rl(rwlock);
+    VolumeRef v;
+    osdmap->find_by_name(name, v);
+    return v;
+  }
+
 };
