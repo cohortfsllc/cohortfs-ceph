@@ -378,10 +378,11 @@ void CohortVolume::make_stripes(uint64_t off, unsigned len,
   }
 }
 
-int CohortVolume::write(const object_t& oid, uint64_t off, uint64_t len,
-			const bufferlist &bl,
-			utime_t mtime, int flags, Context *onack,
-			Context *oncommit, Objecter *objecter)
+int CohortVolume::write_trunc(const object_t& oid, uint64_t off, uint64_t len,
+                              const bufferlist &bl, utime_t mtime, int flags,
+                              uint64_t trunc_size, uint32_t trunc_seq,
+                              Context *onack, Context *oncommit,
+                              Objecter *objecter)
 {
   vector<int> osds;
   vector<writestripe> stripes(erasure.k);
@@ -407,8 +408,8 @@ int CohortVolume::write(const object_t& oid, uint64_t off, uint64_t len,
     ops[0].op.extent.offset = stripes[stripe].off;
     ops[0].op.extent.length = stripes[stripe].len;
     assert(ops[0].op.extent.length <= one_op);
-    ops[0].op.extent.truncate_size = 0;
-    ops[0].op.extent.truncate_seq = 0;
+    ops[0].op.extent.truncate_size = trunc_size;
+    ops[0].op.extent.truncate_seq = trunc_seq;
     ops[0].indata = stripes[stripe].bl;
     Objecter::Op *o
       = new Objecter::Op(hobject_t(oid, DATA, stripe), id,

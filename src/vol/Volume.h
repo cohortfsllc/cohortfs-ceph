@@ -135,6 +135,11 @@ public:
   virtual int write(const object_t& oid, uint64_t off, uint64_t len,
 		    const bufferlist &bl, utime_t mtime, int flags,
 		    Context *onack, Context *oncommit, Objecter *objecter) = 0;
+  virtual int write_trunc(const object_t& oid, uint64_t off, uint64_t len,
+                          const bufferlist &bl, utime_t mtime, int flags,
+                          uint64_t trunc_size, uint32_t trunc_seq,
+                          Context *onack, Context *oncommit,
+                          Objecter *objecter) = 0;
   virtual int append(const object_t& oid, uint64_t len, const bufferlist &bl,
 		     utime_t mtime, int flags, Context *onack,
 		     Context *oncommit, Objecter *objecter) = 0;

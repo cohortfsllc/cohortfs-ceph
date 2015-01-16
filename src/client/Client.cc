@@ -5975,8 +5975,9 @@ int Client::_write(Fh *f, int64_t offset, uint64_t size, const char *buf)
     get_cap_ref(in, CEPH_CAP_FILE_BUFFER);  // released by onsafe callback
 
     object_t oid = file_object_t(in->ino, 0);
-    r = f->vol->write(oid, offset, size, bl, ceph_clock_now(cct), 0,
-		  onfinish, onsafe, objecter);
+    r = f->vol->write_trunc(oid, offset, size, bl, ceph_clock_now(cct), 0,
+                            in->truncate_size, in->truncate_seq,
+                            onfinish, onsafe, objecter);
     if (r < 0)
       goto done;
 

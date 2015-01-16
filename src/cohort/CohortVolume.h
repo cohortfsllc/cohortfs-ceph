@@ -149,7 +149,14 @@ protected:
 		     Objecter *objecter);
   virtual int write(const object_t& oid, uint64_t off, uint64_t len,
 		    const bufferlist &bl, utime_t mtime, int flags,
-		    Context *onack, Context *oncommit, Objecter *objecter);
+		    Context *onack, Context *oncommit, Objecter *objecter) {
+    return write_trunc(oid, off, len, bl, mtime, flags, 0, 0,
+                       onack, oncommit, objecter);
+  }
+  virtual int write_trunc(const object_t& oid, uint64_t off, uint64_t len,
+                          const bufferlist &bl, utime_t mtime, int flags,
+                          uint64_t trunc_size, uint32_t trunc_seq,
+                          Context *onack, Context *oncommit, Objecter *objecter);
 
   virtual int append(const object_t& oid, uint64_t len, const bufferlist &bl,
 		     utime_t mtime, int flags, Context *onack,
