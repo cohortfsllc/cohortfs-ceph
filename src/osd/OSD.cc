@@ -138,8 +138,8 @@ OSDService::OSDService(OSD *osd) :
   op_wq(osd->op_wq),
   class_handler(osd->class_handler),
   objecter_timer(osd->client_messenger->cct, objecter_lock),
-  objecter(new Objecter(osd->client_messenger->cct, osd->objecter_messenger, osd->monc, &objecter_osdmap,
-			objecter_lock, objecter_timer, 0, 0)),
+  objecter(new Objecter(osd->client_messenger->cct, osd->objecter_messenger,
+			osd->monc, 0, 0)),
   objecter_finisher(osd->client_messenger->cct),
   objecter_dispatcher(this),
   watch_timer(osd->client_messenger->cct, watch_lock),
@@ -1961,7 +1961,7 @@ bool OSD::heartbeat_dispatch(Message *m)
 bool OSDService::ObjecterDispatcher::ms_dispatch(Message *m)
 {
   Mutex::Locker l(osd->objecter_lock);
-  osd->objecter->dispatch(m);
+  osd->objecter->ms_dispatch(m);
   return true;
 }
 
