@@ -330,6 +330,8 @@ int librados::RadosClient::create_ioctx(const string &name, IoCtxImpl **io)
 
   *io = new librados::IoCtxImpl(this, objecter, &lock, v);
 
+  return 0;
+
 err:
 
   objecter->put_osdmap_read();
