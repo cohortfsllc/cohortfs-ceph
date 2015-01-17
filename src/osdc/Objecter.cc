@@ -1164,14 +1164,12 @@ namespace OSDC {
 #endif
       }
 
-#ifdef MULTI
-      if (num_homeless_ops || !toping.empty()) {
+      if (!homeless_session->subops.empty() || !toping.empty()) {
 	r = _maybe_request_map();
 	if (r == -EAGAIN) {
 	  toping.clear();
 	}
       }
-#endif // MULTI
     } while (r == -EAGAIN);
 
     if (!toping.empty()) {
@@ -1263,11 +1261,10 @@ namespace OSDC {
   ceph_tid_t Objecter::_op_submit(Op& op, RWLock::Context& lc)
   {
     assert(rwlock.is_locked());
+    assert(op.lock.is_locked());
 
     op.trace.keyval("tid", op.tid);
     op.trace.event("op_submit", &trace_endpoint);
-
-#ifdef MULTI
 
     // pick target
 
@@ -1277,14 +1274,20 @@ namespace OSDC {
 
     // Try to get sessions, including a retry if we need to take write lock
     for (auto& subop : op.subops) {
-      int r = _get_session(subop.osd, &subop.session, lc);
+      OSDSession *session = nullptr;
+      if (subop.tid == 0)
+	subop.tid = ++last_tid;
+      int r = _get_session(subop.osd, &session, lc);
       if (r == -EAGAIN) {
-	assert(!&subop.session);
+	assert(!session);
 	lc.promote();
-	r = _get_session(subop.osd, &subop.session, lc);
+	r = _get_session(subop.osd, &session, lc);
 	assert(r == 0);
       }
-      assert(subop.session);  // may be homeless
+      assert(session);  // may be homeless
+      session->lock.get_write();
+      _session_subop_assign(*session, subop);
+      session->lock.unlock();
     }
 
     // We may need to take wlock if we will need to _set_op_map_check later.
@@ -1327,30 +1330,24 @@ namespace OSDC {
 	       osdmap_full_flag()) {
       op.paused = true;
       _maybe_request_map();
-    } else if (!s->is_homeless()) {
+    } else if (all_of(op.subops.cbegin(),
+		      op.subops.cend(),
+		      [](const SubOp& subop){
+			return !subop.session->is_homeless();})) {
       need_send = true;
     } else {
       _maybe_request_map();
     }
 
     MOSDOp *m = NULL;
-    if (need_send) {
-      m = _prepare_osd_op(op);
-    }
-
-    s->lock.get_write();
-    if (op->tid == 0)
-      op->tid = last_tid.inc();
-    _session_op_assign(s, op);
-
-    if (all_of(op->subops.cbegin(),
-	       op->subops.cend(),
-	       [](const SubOp& s){return s.session;})) {
-      send_op(op);
-    }
-
-    if (need_send) {
-      _send_op(op, m);
+    for (auto& subop : op.subops) {
+      if (need_send) {
+	subop.session->lock.get_read();
+	m = _prepare_osd_subop(subop);
+	_send_subop(subop, m);
+	subop.session->lock.unlock();
+      }
+      put_session(*subop.session);
     }
 
     // Last chance to touch Op here, after giving up session lock it can be
@@ -1360,15 +1357,10 @@ namespace OSDC {
       _send_op_map_check(op);
     }
 
-    s->lock.unlock();
-    put_session(s);
-
     ldout(cct, 5) << num_unacked << " unacked, " << num_uncommitted
 		  << " uncommitted" << dendl;
 
     return tid;
-#endif // MULTI
-    return 0;
   }
 
   int Objecter::op_cancel(ceph_tid_t tid, int r)
