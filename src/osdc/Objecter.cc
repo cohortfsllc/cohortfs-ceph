@@ -1891,8 +1891,9 @@ namespace OSDC {
       if (oncommit) {
 	oncommit->complete(rc);
       }
+    } else {
+      subop.parent.lock.Unlock();
     }
-    subop.parent.lock.Unlock();
     m->put();
     put_session(s);
   }
