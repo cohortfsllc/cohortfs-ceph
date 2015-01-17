@@ -1365,38 +1365,34 @@ namespace OSDC {
 
   int Objecter::op_cancel(ceph_tid_t tid, int r)
   {
-#ifdef MULTI
     assert(initialized);
 
-    s->lock.get_write();
+    Op* op;
+    {
+      RWLock::RLocker l(rwlock);
 
-    map<ceph_tid_t, Op*>::iterator p = s->ops.find(tid);
-    if (p == s->ops.end()) {
-      ldout(cct, 10) << __func__ << " tid " << tid << " dne" << dendl;
-      return -ENOENT;
+      auto p = inflight_ops.find(tid, oc);
+      if (p == inflight_ops.end()) {
+	ldout(cct, 10) << __func__ << " tid " << tid << " dne" << dendl;
+	return -ENOENT;
+      }
+      op = &(*p);
+      _op_cancel_map_check(*op);
     }
 
-    if (s->con) {
-      ldout(cct, 20) << " revoking rx buffer for " << tid
-		     << " on " << s->con << dendl;
-      s->con->revoke_rx_buffer(tid);
+    {
+      Mutex::Locker l(op->lock);
+      ldout(cct, 10) << __func__ << " tid " << tid << dendl;
+      if (op->onack) {
+	op->onack->complete(r);
+	op->onack = nullptr;
+      }
+      if (op->oncommit) {
+	op->oncommit->complete(r);
+	op->oncommit = nullptr;
+      }
+      _finish_op(*op);
     }
-
-    ldout(cct, 10) << __func__ << " tid " << tid << dendl;
-    Op *op = p->second;
-    if (op->onack) {
-      op->onack->complete(r);
-      op->onack = NULL;
-    }
-    if (op->oncommit) {
-      op->oncommit->complete(r);
-      op->oncommit = NULL;
-    }
-    _op_cancel_map_check(op);
-    _finish_op(op);
-    s->lock.unlock();
-
-#endif
     return 0;
   }
 
@@ -1624,11 +1620,14 @@ namespace OSDC {
 
     assert(check_latest_map_ops.find(op.tid) == check_latest_map_ops.end());
 
-    inflight_ops.erase(op);
-
     op.trace.event("finish_op", &trace_endpoint);
 
     op.lock.Unlock();
+
+    {
+      RWLock::WLocker l(rwlock);
+      inflight_ops.erase(op);
+    }
 
     op.put();
   }
@@ -2155,5 +2154,4 @@ namespace OSDC {
     osdmap->find_by_name(name, v);
     return v;
   }
-
 };

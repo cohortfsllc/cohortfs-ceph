@@ -364,7 +364,7 @@ namespace OSDC {
     void _cancel_linger_op(LingerOp& op);
     void _cancel_op(Op& op);
     void _finish_subop(OSDSession *session, ceph_tid_t tid);
-    void _finish_op(Op& op);
+    void _finish_op(Op& op); // Releases op.lock
 
     enum target_result {
       TARGET_NO_ACTION = 0,
