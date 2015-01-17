@@ -1892,7 +1892,7 @@ namespace OSDC {
 	oncommit->complete(rc);
       }
     }
-    subop.parent.lock.Lock();
+    subop.parent.lock.Unlock();
     m->put();
     put_session(s);
   }
