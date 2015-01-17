@@ -422,7 +422,7 @@ bool librados::RadosClient::_dispatch(Message *m)
 
 int librados::RadosClient::wait_for_osdmap()
 {
-  assert(lock.is_locked());
+  assert(!lock.is_locked_by_me());
 
   if (objecter == NULL) {
     return -ENOTCONN;
@@ -468,7 +468,7 @@ int librados::RadosClient::wait_for_osdmap()
 
 int librados::RadosClient::wait_for_latest_osdmap()
 {
-  Mutex mylock("RadosClient::wait_for_latest_osdmap");
+  Mutex mylock;
   Cond cond;
   bool done;
 
