@@ -914,21 +914,18 @@ namespace OSDC {
     put_session(s);
 
     // Assign any leftover ops to the homeless session
-#ifdef LINGER
     {
+#ifdef LINGER
       RWLock::WLocker wl(homeless_session->lock);
       for (std::list<LingerOp*>::iterator i = homeless_lingers.begin();
 	   i != homeless_lingers.end(); ++i) {
 	_session_linger_subop_assign(homeless_session, *i);
       }
 #endif // LINGER
-#ifdef MULTI
-      for (std::list<Op*>::iterator i = homeless_ops.begin();
-	   i != homeless_ops.end(); ++i) {
-	_session_op_assign(homeless_session, *i);
+      for (auto i : homeless_ops) {
+	_session_subop_assign(*homeless_session, *i);
       }
     }
-#endif // MULTI
   }
 
   void Objecter::wait_for_osd_map()
