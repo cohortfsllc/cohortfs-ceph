@@ -1228,6 +1228,7 @@ namespace OSDC {
   {
     RWLock::RLocker rl(rwlock);
     RWLock::Context lc(rwlock, RWLock::Context::TakenForRead);
+    Mutex::Locker l(op->lock);
     return _op_submit_with_budget(*op, lc, ctx_budget);
   }
 
