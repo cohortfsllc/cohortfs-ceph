@@ -144,20 +144,22 @@ namespace OSDC {
       version_t *objver;
       ceph_tid_t tid;
       epoch_t map_dne_bound;
-
       bool paused;
+      uint16_t priority;
+      bool should_resend;
 
       Mutex lock;
 
       op_base() : flags(0), volume(nullptr), op(nullptr), outbl(nullptr),
-		  tid(0), map_dne_bound(0),
-		  paused(false) { }
+		  tid(0), map_dne_bound(0), paused(false), priority(0),
+		  should_resend(true) { }
 
       op_base(object_t oid, const shared_ptr<const Volume>& volume,
 	      unique_ptr<ObjOp>& _op, int flags, version_t* ov)
 	: flags(flags), oid(oid), volume(volume),
 	  op(move(_op)), outbl(nullptr), objver(ov),
-	  tid(0), map_dne_bound(0), paused(false) {
+	  tid(0), map_dne_bound(0), paused(false), priority(0),
+	  should_resend(true) {
 	if (objver)
 	  *objver = 0;
       }
@@ -172,8 +174,7 @@ namespace OSDC {
       // acquired before sending the very first OP of the series and
       // released upon receiving the last OP reply.
       bool ctx_budgeted;
-      /// true if we should resend this message on failure
-      bool should_resend;
+      bool finished;
       ZTracer::Trace trace;
 
       Op(const object_t& o, const shared_ptr<const Volume>& volume,
@@ -183,7 +184,7 @@ namespace OSDC {
 	op_base(o, volume, _op, f, ov),
 	onack(ac), oncommit(co),
 	ontimeout(NULL), reply_epoch(NULL),
-	budgeted(false), should_resend(true) {
+	budgeted(false), finished(false) {
 	subops.reserve(op->width());
 	op->realize(
 	  oid,
@@ -326,7 +327,6 @@ namespace OSDC {
     struct OSDSession : public set_base_hook<link_mode<auto_unlink> >,
 			public RefCountedObject {
       RWLock lock;
-      Mutex **completion_locks; // Needed?
       set<SubOp, constant_time_size<false> > subops;
       set<SubOp, constant_time_size<false> > linger_subops;
       int osd;
@@ -335,18 +335,9 @@ namespace OSDC {
       ConnectionRef con;
 
       OSDSession(CephContext *cct, int o) :
-	osd(o), incarnation(0), con(NULL) {
-	// We may not need or want this. It's not as if we need to
-	// serialize all object responses
-	num_locks = 32;
-	completion_locks = new Mutex *[num_locks];
-	for (int i = 0; i < num_locks; i++) {
-	  completion_locks[i] = new Mutex;
-	}
-      }
+	osd(o), incarnation(0), con(NULL) { }
       ~OSDSession();
 
-      Mutex *get_lock(object_t& oid);
       bool is_homeless() { return (osd == -1); }
     };
     set<OSDSession, constant_time_size<false> > osd_sessions;
@@ -368,12 +359,11 @@ namespace OSDC {
 
     double mon_timeout, osd_timeout;
 
-    MOSDOp *_prepare_osd_op(Op& op);
-    void _send_subop(SubOp &subop, int flags);
-    void _send_op(Op& op, MOSDOp *m = nullptr);
-    void _cancel_linger_op(Op& op);
+    MOSDOp *_prepare_osd_subop(SubOp& op);
+    void _send_subop(SubOp& op, MOSDOp *m = nullptr);
+    void _cancel_linger_op(LingerOp& op);
+    void _cancel_op(Op& op);
     void _finish_subop(OSDSession *session, ceph_tid_t tid);
-    void _finish_subop(SubOp& subop);
     void _finish_op(Op& op);
 
     enum target_result {
@@ -385,7 +375,7 @@ namespace OSDC {
     bool target_should_be_paused(op_base& op);
 
     int _calc_targets(op_base& t, bool any_change=false);
-    int _map_session(op_base& op, OSDSession **s,
+    int _map_session(SubOp& subop, OSDSession **s,
 		     RWLock::Context& lc);
 
     void _session_subop_assign(OSDSession& to, SubOp& subop);
@@ -508,9 +498,10 @@ namespace OSDC {
     void set_honor_osdmap_full() { honor_osdmap_full = true; }
     void unset_honor_osdmap_full() { honor_osdmap_full = false; }
 
-    void _scan_requests(bool force_resend,
+    void _scan_requests(OSDSession& session,
+			bool force_resend,
 			bool force_resend_writes,
-			map<ceph_tid_t, Op*>& need_resend,
+			map<ceph_tid_t, SubOp*>& need_resend,
 			list<LingerOp*>& need_resend_linger);
     // messages
   public:
@@ -543,8 +534,6 @@ namespace OSDC {
     ceph_tid_t _op_submit(Op& op, RWLock::Context& lc);
     ceph_tid_t _op_submit_with_budget(Op& op, RWLock::Context& lc,
 				      int *ctx_budget = nullptr);
-    inline void unregister_op(Op& op);
-
     // public interface
   public:
     ceph_tid_t op_submit(Op *op, int* ctx_budget = nullptr);

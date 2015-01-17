@@ -1012,11 +1012,12 @@ struct OSDOp {
   bufferlist indata, outdata;
   int32_t rval;
 
-  Context *ctx;
+  Context* ctx;
   bufferlist* out_bl;
   int* out_rval;
 
-  OSDOp(int the_op = 0) : rval(0), ctx(NULL), out_bl(NULL), out_rval(NULL) {
+  OSDOp(int the_op = 0) : rval(0), ctx(nullptr), out_bl(nullptr),
+			  out_rval(nullptr) {
     memset(&op, 0, sizeof(ceph_osd_op));
     op.op = the_op;
   }
