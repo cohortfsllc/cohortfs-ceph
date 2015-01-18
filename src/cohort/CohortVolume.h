@@ -82,7 +82,7 @@ protected:
       if (r < 0)
 	return r;
     }
-    return erasure->get_chunk_count();
+    return erasure->get_data_chunk_count();
   }
 
   virtual uint32_t num_rules(void);

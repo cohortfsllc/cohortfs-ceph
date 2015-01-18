@@ -167,6 +167,8 @@ namespace OSDC {
 
     struct Op : public op_base {
       Context *onack, *oncommit, *ontimeout;
+      uint32_t acks, commits;
+      int rc;
       epoch_t *reply_epoch;
       bool budgeted;
       // true if the throttle budget is get/put on a series of OPs,
@@ -182,9 +184,9 @@ namespace OSDC {
 	 int f, Context *ac, Context *co, version_t *ov,
 	 ZTracer::Trace *parent) :
 	op_base(o, volume, _op, f, ov),
-	onack(ac), oncommit(co),
-	ontimeout(NULL), reply_epoch(NULL),
-	budgeted(false), finished(false) {
+	onack(ac), oncommit(co), ontimeout(NULL),
+	acks(0), commits(0), rc(0), reply_epoch(NULL),
+	budgeted(false), ctx_budgeted(false), finished(false) {
 	subops.reserve(op->width());
 	op->realize(
 	  oid,
@@ -363,7 +365,7 @@ namespace OSDC {
     void _send_subop(SubOp& op, MOSDOp *m = nullptr);
     void _cancel_linger_op(LingerOp& op);
     void _cancel_op(Op& op);
-    void _finish_subop(OSDSession *session, ceph_tid_t tid);
+    void _finish_subop(SubOp& subop);
     void _finish_op(Op& op); // Releases op.lock
 
     enum target_result {
@@ -523,7 +525,8 @@ namespace OSDC {
       ms_dispatch(m);
     }
 
-    void handle_osd_op_reply(MOSDOpReply *m);
+    void handle_osd_subop_reply(MOSDOpReply *m);
+    bool possibly_complete_op(Op& op, bool do_or_die = false);
     void handle_osd_map(MOSDMap *m);
     void wait_for_osd_map();
 
