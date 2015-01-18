@@ -47,6 +47,7 @@ namespace OSDC {
   using ceph::Formatter;
   using ceph::new_formatter;
   using std::all_of;
+  using std::count_if;
 
   struct ObjComp {
     bool operator()(const int osd, const Objecter::OSDSession& c) const {
@@ -367,7 +368,7 @@ namespace OSDC {
     switch (m->get_type()) {
       // these we exlusively handle
     case CEPH_MSG_OSD_OPREPLY:
-      handle_osd_op_reply(static_cast<MOSDOpReply*>(m));
+      handle_osd_subop_reply(static_cast<MOSDOpReply*>(m));
       return true;
 
     case CEPH_MSG_STATFS_REPLY:
@@ -1331,10 +1332,11 @@ namespace OSDC {
 	       osdmap_full_flag()) {
       op.paused = true;
       _maybe_request_map();
-    } else if (all_of(op.subops.cbegin(),
-		      op.subops.cend(),
-		      [](const SubOp& subop){
-			return !subop.session->is_homeless();})) {
+    } else if (count_if(op.subops.cbegin(),
+			op.subops.cend(),
+			[](const SubOp& subop){
+			  return !subop.session->is_homeless();})
+	       >= op.volume->quorum()) {
       need_send = true;
     } else {
       _maybe_request_map();
@@ -1383,6 +1385,8 @@ namespace OSDC {
 
     {
       Mutex::Locker l(op->lock);
+      // Give it one last chance
+      possibly_complete_op(*op, true);
       ldout(cct, 10) << __func__ << " tid " << tid << dendl;
       if (op->onack) {
 	op->onack->complete(r);
@@ -1437,7 +1441,7 @@ namespace OSDC {
       t.oid, *osdmap, [&](int osd) {
 	if (likely((i < t.subops.size()) && !t.subops[i].done &&
 		   (t.subops[i].osd != osd))) {
-	  t.subops[i].osd = osd;
+	  t.subops[i].osd = osdmap->is_up(osd) ? osd : -1;
 	  need_resend = true;
 	}
 	++i;
@@ -1599,10 +1603,34 @@ namespace OSDC {
     _finish_op(op);
   }
 
+  void Objecter::_finish_subop(SubOp& subop)
+  {
+    assert(subop.parent.lock.is_locked());
+    for (auto& op : subop.ops) {
+      bufferlist bl;
+      if (op.out_bl)
+	// So contexts depending ont his don't crash.
+	*op.out_bl = bl;
+      if (op.out_rval)
+	*op.out_rval = -ETIMEDOUT;
+      if (op.ctx) {
+	op.ctx->complete(op.rval);
+	op.ctx = nullptr;
+      }
+    }
+    if (subop.session) {
+      RWLock::RLocker l(subop.session->lock);
+      _session_subop_remove(*subop.session, subop);
+    }
+  }
+
+
   void Objecter::_finish_op(Op& op)
   {
     assert(op.lock.is_locked());
     ldout(cct, 15) << "finish_op " << op.tid << dendl;
+
+    op.finished = true;
 
     if (!op.ctx_budgeted && op.budgeted)
       put_op_budget(op);
@@ -1613,10 +1641,7 @@ namespace OSDC {
     }
 
     for (auto& subop : op.subops) {
-      if (subop.session) {
-	RWLock::RLocker l(subop.session->lock);
-	_session_subop_remove(*subop.session, subop);
-      }
+      _finish_subop(subop);
     }
 
     assert(check_latest_map_ops.find(op.tid) == check_latest_map_ops.end());
@@ -1717,7 +1742,7 @@ namespace OSDC {
     }
   }
 
-  void Objecter::handle_osd_op_reply(MOSDOpReply *m)
+  void Objecter::handle_osd_subop_reply(MOSDOpReply *m)
   {
     ldout(cct, 10) << "in handle_osd_op_reply" << dendl;
 
@@ -1846,39 +1871,78 @@ namespace OSDC {
       }
     }
 
-    subop.parent.lock.Lock();
     s.lock.unlock();
+
+    subop.parent.lock.Lock();
     subop.done = true;
 
-    if (!subop.parent.finished &&
-	all_of(subop.parent.subops.cbegin(),
-	       subop.parent.subops.cend(),
-	       [](const SubOp& s){return s.done;})) {
+    if (subop.parent.onack) {
+      ldout(cct, 15) << "handle_osd_subop_reply ack" << dendl;
+      subop.replay_version = m->get_replay_version();
+      if (!subop.done)
+	++subop.parent.acks; // Don't double count acks
+    }
+
+    if (subop.parent.oncommit && (m->is_ondisk() || rc)) {
+      ldout(cct, 15) << "handle_osd_subop_reply safe" << dendl;
+      ++subop.parent.commits; // Don't double count acks
+    }
+
+    if (subop.parent.rc != 0)
+      subop.parent.rc = rc;
+
+    possibly_complete_op(subop.parent);
+
+    m->put();
+    put_session(s);
+  }
+
+  bool Objecter::possibly_complete_op(Op& op, bool do_or_die)
+  {
+    assert(op.lock.is_locked());
+
+    if (op.finished) {
+      // Someone else got here first, be happy.
+      return true;
+    }
+
+    uint32_t done = 0;
+    uint32_t homeless = 0;
+    uint32_t still_coming = 0;
+
+    for (auto& subop : op.subops) {
+      if (subop.done)
+	done++;
+      else if (subop.session->is_homeless())
+	homeless++;
+      else
+	still_coming++;
+    }
+
+    if (!op.finished && done >= op.volume->quorum() &&
+	(do_or_die || !still_coming)) {
       // ack|commit -> ack
       Context *onack = nullptr;
       Context *oncommit = nullptr;
 
-      if (subop.parent.onack) {
-	ldout(cct, 15) << "handle_osd_op_reply ack" << dendl;
-	subop.replay_version = m->get_replay_version();
-	onack = subop.parent.onack;
-	subop.parent.onack = 0;  // only do callback once
+      if (op.acks >= op.volume->quorum()) {
+	onack = op.onack;
+	op.onack = 0;  // only do callback once
 	num_unacked--;
-	subop.parent.trace.event("onack", &trace_endpoint);
+	op.trace.event("onack", &trace_endpoint);
       }
-      if (subop.parent.oncommit && (m->is_ondisk() || rc)) {
-	ldout(cct, 15) << "handle_osd_op_reply safe" << dendl;
-	oncommit = subop.parent.oncommit;
-	subop.parent.oncommit = 0;
+      if (op.commits >= op.volume->quorum()) {
+	oncommit = op.oncommit;
+	op.oncommit = 0;
 	num_uncommitted--;
-	subop.parent.trace.event("oncommit", &trace_endpoint);
+	op.trace.event("oncommit", &trace_endpoint);
       }
 
       // done with this tid?
-      if (!subop.parent.onack && !subop.parent.oncommit) {
+      if (!op.onack && !op.oncommit) {
 	ldout(cct, 15) << "handle_osd_op_reply completed tid "
-		       << subop.parent.tid << dendl;
-	_finish_op(subop.parent); // This releases the lock.
+		       << op.tid << dendl;
+	_finish_op(op); // This releases the lock.
       }
 
       ldout(cct, 5) << num_unacked << " unacked, "
@@ -1886,16 +1950,16 @@ namespace OSDC {
 
       // do callbacks
       if (onack) {
-	onack->complete(rc);
+	onack->complete(op.rc);
       }
       if (oncommit) {
-	oncommit->complete(rc);
+	oncommit->complete(op.rc);
       }
+      return true;
     } else {
-      subop.parent.lock.Unlock();
+      op.lock.Unlock();
     }
-    m->put();
-    put_session(s);
+    return false;
   }
 
   class C_CancelStatfsOp : public Context
