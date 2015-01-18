@@ -245,9 +245,10 @@ static bool return_osd(void *data, int osd)
   if (context->map->is_in(osd)) {
     (*(std::function<void(int)>*) context->f)(osd);
     return true;
+  } else {
+    (*(std::function<void(int)>*) context->f)(osd);
+    return true;
   }
-
-  return false;
 }
 
 

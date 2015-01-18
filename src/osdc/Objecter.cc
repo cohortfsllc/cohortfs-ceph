@@ -1441,15 +1441,15 @@ namespace OSDC {
       t.oid, *osdmap, [&](int osd) {
 	if (likely((i < t.subops.size()) && !t.subops[i].done &&
 		   (t.subops[i].osd != osd))) {
-	  t.subops[i].osd = osdmap->is_up(osd) ? osd : -1;
+	  t.subops[i].osd = osd;
 	  need_resend = true;
 	}
 	++i;
       });
 
     if (unlikely(i < t.subops.size())) {
-      for (auto& subop : t.subops) {
-	subop.osd = -1;
+      for (;i < t.subops.size(); ++i) {
+	t.subops[i].osd = -1;
       }
     }
 
