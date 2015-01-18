@@ -186,7 +186,7 @@ namespace OSDC {
 	op_base(o, volume, _op, f, ov),
 	onack(ac), oncommit(co), ontimeout(NULL),
 	acks(0), commits(0), rc(0), reply_epoch(NULL),
-	budgeted(false), finished(false) {
+	budgeted(false), ctx_budgeted(false), finished(false) {
 	subops.reserve(op->width());
 	op->realize(
 	  oid,

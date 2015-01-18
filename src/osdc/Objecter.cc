@@ -1779,7 +1779,7 @@ namespace OSDC {
 
     auto iter = s.subops.find(tid, oc);
     if (iter == s.subops.end()) {
-      ldout(cct, 7) << "handle_osd_op_reply " << tid
+      ldout(cct, 7) << "handle_osd_subop_reply " << tid
 		    << (m->is_ondisk() ? " ondisk" :
 			(m->is_onnvram() ? " onnvram" : " ack"))
 		    << " ... stray" << dendl;
@@ -1790,7 +1790,7 @@ namespace OSDC {
     }
 
 
-    ldout(cct, 7) << "handle_osd_op_reply " << tid
+    ldout(cct, 7) << "handle_osd_subop_reply " << tid
 		  << (m->is_ondisk() ? " ondisk"
 		      : (m->is_onnvram() ? " onnvram" : " ack"))
 		  << " v " << m->get_replay_version() << " uv "
@@ -1836,8 +1836,6 @@ namespace OSDC {
     }
     s.lock.unlock();
 
-    subop.parent.lock.Lock();
-
     // per-op result demuxing
     vector<OSDOp> out_ops;
     m->claim_ops(out_ops);
@@ -1862,9 +1860,13 @@ namespace OSDC {
 	ldout(cct, 10) << " op " << i << " handler " << subop.ops[i].ctx
 		       << dendl;
 	subop.ops[i].ctx->complete(out_ops[i].rval);
-	subop.ops[i].ctx = nullptr;
       }
+      subop.ops[i].out_bl = nullptr;
+      subop.ops[i].out_rval = nullptr;
+      subop.ops[i].ctx = nullptr;
     }
+
+    subop.parent.lock.Lock();
 
     if (subop.parent.objver &&
 	(*subop.parent.objver < m->get_user_version()))
