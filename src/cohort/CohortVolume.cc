@@ -246,7 +246,7 @@ static bool return_osd(void *data, int osd)
     (*(std::function<void(int)>*) context->f)(osd);
     return true;
   } else {
-    (*(std::function<void(int)>*) context->f)(osd);
+    (*(std::function<void(int)>*) context->f)(-1);
     return true;
   }
 }
