@@ -1344,7 +1344,7 @@ namespace OSDC {
 
     MOSDOp *m = NULL;
     for (auto& subop : op.subops) {
-      if (need_send) {
+      if (need_send && !subop.session->is_homeless()) {
 	subop.session->lock.get_read();
 	m = _prepare_osd_subop(subop);
 	_send_subop(subop, m);
