@@ -1771,6 +1771,9 @@ namespace OSDC {
 
     OSDSession& s = *siter;
     get_session(s);
+    l.unlock();
+    lc.set_state(RWLock::Context::Untaken);
+
 
     s.lock.get_write();
 
@@ -1831,17 +1834,9 @@ namespace OSDC {
       m->put();
       return;
     }
+    s.lock.unlock();
 
-    l.unlock();
-    lc.set_state(RWLock::Context::Untaken);
-
-    if (subop.parent.objver &&
-	(*subop.parent.objver < m->get_user_version()))
-      *subop.parent.objver = m->get_user_version();
-
-    if (subop.parent.reply_epoch &&
-	*subop.parent.reply_epoch < m->get_map_epoch())
-      *subop.parent.reply_epoch = m->get_map_epoch();
+    subop.parent.lock.Lock();
 
     // per-op result demuxing
     vector<OSDOp> out_ops;
@@ -1871,10 +1866,14 @@ namespace OSDC {
       }
     }
 
-    s.lock.unlock();
+    if (subop.parent.objver &&
+	(*subop.parent.objver < m->get_user_version()))
+      *subop.parent.objver = m->get_user_version();
 
-    subop.parent.lock.Lock();
-    subop.done = true;
+    if (subop.parent.reply_epoch &&
+	*subop.parent.reply_epoch < m->get_map_epoch())
+      *subop.parent.reply_epoch = m->get_map_epoch();
+
 
     if (subop.parent.onack) {
       ldout(cct, 15) << "handle_osd_subop_reply ack" << dendl;
@@ -1890,6 +1889,8 @@ namespace OSDC {
 
     if (subop.parent.rc != 0)
       subop.parent.rc = rc;
+
+    subop.done = true;
 
     possibly_complete_op(subop.parent);
 
