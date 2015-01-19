@@ -314,6 +314,9 @@ XioMessenger::XioMessenger(CephContext *cct, entity_name_t name,
       xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_INLINE_HEADER,
 		  &xopt, sizeof(xopt));
 
+      /* enable fork */
+      xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_ENABLE_FORK_INIT,
+                  &xopt, sizeof(xopt));
 
       /* unregistered pool */
 #define XMSG_MEMPOOL_QUANTUM_SMALL 4096
