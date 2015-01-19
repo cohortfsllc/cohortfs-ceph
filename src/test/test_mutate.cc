@@ -85,7 +85,7 @@ int main(int argc, const char **argv)
   }
 
   IoCtx ioctx;
-  if (rados.lookup_volume(volume_name).is_nil()) {
+  if (!rados.lookup_volume(volume_name)) {
     ret = rados.volume_create(volume_name.c_str());
     if (ret) {
        cerr << "failed to create volume named '" << volume_name

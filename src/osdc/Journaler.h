@@ -151,28 +151,20 @@ private:
 
   // header
   ceph::real_time last_wrote_head;
-  void _finish_write_head(int r, Header &wrote, Context *oncommit);
-  class C_WriteHead;
-  friend class C_WriteHead;
+  void _finish_write_head(int r, Header &wrote, OSDC::op_callback&& oncommit);
+  class WriteHead;
+  friend class WriteHead;
 
   std::vector<Context*> waitfor_recover;
-  void read_head(Context *on_finish, bufferlist *bl);
+  void read_head(OSDC::read_callback&& on_finish);
   void _finish_read_head(int r, bufferlist& bl);
-  void _finish_reread_head(int r, bufferlist& bl, Context *finish);
-  void probe(Context *finish, uint64_t *end);
+  void _finish_reread_head(int r, bufferlist& bl, OSDC::op_callback&& finish);
+  void probe(OSDC::stat_callback&& finish);
   void _finish_probe_end(int r, uint64_t end);
-  void _finish_reprobe(int r, uint64_t end, Context *onfinish);
-  void _finish_reread_head_and_probe(int r, Context *onfinish);
-  class C_ReadHead;
-  friend class C_ReadHead;
-  class C_ProbeEnd;
-  friend class C_ProbeEnd;
-  class C_RereadHead;
-  friend class C_RereadHead;
-  class C_ReProbe;
-  friend class C_ReProbe;
-  class C_RereadHeadProbe;
-  friend class C_RereadHeadProbe;
+  void _finish_reprobe(int r, uint64_t end, OSDC::op_callback&& onfinish);
+  void _finish_reread_head_and_probe(int r, OSDC::op_callback&& onfinish);
+  class ReProbe;
+  friend class ReProbe;
 
 
 
@@ -191,8 +183,8 @@ private:
 
   void _do_flush(unsigned amount = 0);
   void _finish_flush(int r, uint64_t start, ceph::mono_time stamp);
-  class C_Flush;
-  friend class C_Flush;
+  class Flush;
+  friend class Flush;
 
   // reader
   uint64_t read_pos;	  // logical read position, where next entry starts.
@@ -214,8 +206,6 @@ private:
   void _assimilate_prefetch();
   void _issue_read(uint64_t len);  // read some more
   void _prefetch();		// maybe read ahead
-  class C_Read;
-  friend class C_Read;
   class C_RetryRead;
   friend class C_RetryRead;
 
@@ -226,12 +216,9 @@ private:
   map<uint64_t, std::vector<Context*> > waitfor_trim;
 
   void _trim_finish(int r, uint64_t to);
-  class C_Trim;
-  friend class C_Trim;
 
   void _issue_prezero();
   void _prezeroed(int r, uint64_t from, uint64_t len);
-  friend struct C_Journaler_Prezero;
 
   // only init_headers when following or first reading off-disk
   void init_headers(Header& h) {
@@ -301,10 +288,10 @@ public:
    */
   void create();
   void recover(Context *onfinish);
-  void reread_head(Context *onfinish);
-  void reprobe(Context *onfinish);
-  void reread_head_and_probe(Context *onfinish);
-  void write_head(Context *onsave=0);
+  void reread_head(OSDC::op_callback&& onfinish);
+  void reprobe(OSDC::op_callback&& onfinish);
+  void reread_head_and_probe(OSDC::op_callback&& onfinish);
+  void write_head(OSDC::op_callback&& onsave = nullptr);
 
   void set_readonly();
   void set_writeable();
@@ -321,7 +308,7 @@ public:
 
   // write
   uint64_t append_entry(bufferlist& bl);
-  void wait_for_flush(Context *onsafe = 0);
+  void wait_for_flush(Context* onsafe = nullptr);
   void flush(Context *onsafe = 0);
 
   // read

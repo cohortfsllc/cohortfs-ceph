@@ -56,12 +56,12 @@ oid_t SessionMap::get_object_name()
   return oid_t(s);
 }
 
-class C_SM_Load : public Context {
+class SM_Load {
   SessionMap *sessionmap;
 public:
   bufferlist bl;
-  C_SM_Load(SessionMap *cm) : sessionmap(cm) {}
-  void finish(int r) {
+  SM_Load(SessionMap *cm) : sessionmap(cm) {}
+  void operator()(int r) {
     sessionmap->_load_finish(r, bl);
   }
 };
@@ -73,10 +73,12 @@ void SessionMap::load(Context *onload)
   if (onload)
     waiting_for_load.push_back(onload);
 
-  C_SM_Load *c = new C_SM_Load(this);
+  OSDC::op_callback c(SM_Load(this));
   oid_t oid = get_object_name();
   VolumeRef volume(mds->get_metadata_volume());
-  mds->objecter->read_full(oid, volume, &c->bl, 0, c);
+  mds->objecter->read_full(oid, volume,
+			   &c.target<SM_Load>()->bl, 0,
+			   std::move(c));
 }
 
 void SessionMap::_load_finish(int r, bufferlist &bl)
@@ -101,12 +103,12 @@ void SessionMap::_load_finish(int r, bufferlist &bl)
 // ----------------
 // SAVE
 
-class C_SM_Save : public Context {
+class SM_Save {
   SessionMap *sessionmap;
   version_t version;
 public:
-  C_SM_Save(SessionMap *cm, version_t v) : sessionmap(cm), version(v) {}
-  void finish(int r) {
+  SM_Save(SessionMap *cm, version_t v) : sessionmap(cm), version(v) {}
+  void operator()(int r) {
     assert(r == 0);
     sessionmap->_save_finish(version);
   }
@@ -131,7 +133,7 @@ void SessionMap::save(Context *onsave, version_t needv)
   oid_t oid = get_object_name();
   VolumeRef volume(mds->get_metadata_volume());
   mds->objecter->write_full(oid, volume, bl, ceph::real_clock::now(), 0,
-			    NULL, new C_SM_Save(this, version));
+			    NULL, SM_Save(this, version));
 }
 
 void SessionMap::_save_finish(version_t v)

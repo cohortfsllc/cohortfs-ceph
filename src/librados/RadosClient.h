@@ -38,7 +38,6 @@ class XioMessenger;
 class librados::RadosClient : public Dispatcher
 {
 public:
-  CephContext *cct;
   md_config_t *conf;
 private:
   enum {
@@ -61,8 +60,6 @@ private:
   bool ms_handle_reset(Connection *con);
   void ms_handle_remote_reset(Connection *con);
 
-  Objecter *objecter;
-
   std::mutex lock;
   typedef std::unique_lock<std::mutex> unique_lock;
   typedef std::lock_guard<std::mutex> lock_guard;
@@ -76,9 +73,14 @@ private:
 
   int wait_for_osdmap();
 
+  static CephContext* construct_cct(const string& clustername = string("ceph"),
+				    const string& id = string());
+
 public:
+  Objecter *objecter;
   Finisher finisher;
 
+  RadosClient();
   RadosClient(CephContext *cct_);
   ~RadosClient();
   int ping_monitor(string mon_id, string *result);
@@ -101,6 +103,7 @@ public:
 
   // watch/notify
   uint64_t max_watch_notify_cookie;
+  bool own_cct;
   map<uint64_t, librados::WatchNotifyInfo *> watch_notify_info;
 
   void register_watch_notify_callback(librados::WatchNotifyInfo *wc,
@@ -124,8 +127,8 @@ public:
   void get();
   bool put();
   void blacklist_self(bool set);
-  boost::uuids::uuid lookup_volume(const string& name);
-  string lookup_volume(const boost::uuids::uuid& name);
+  std::shared_ptr<const Volume> lookup_volume(const string& name);
+  std::shared_ptr<const Volume> lookup_volume(const boost::uuids::uuid& name);
 };
 
 #endif

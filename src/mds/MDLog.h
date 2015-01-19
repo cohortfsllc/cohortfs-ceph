@@ -25,6 +25,8 @@
 #include "LogSegment.h"
 
 #include <list>
+#include "osdc/Objecter.h"
+#include "common/MultiCallback.h"
 
 class Journaler;
 class LogEvent;
@@ -172,8 +174,8 @@ private:
   LogEvent *cur_event;
 public:
   void start_entry(LogEvent *e);
-  void submit_entry(LogEvent *e, Context *c = 0);
-  void start_submit_entry(LogEvent *e, Context *c = 0) {
+  void submit_entry(LogEvent *e, Context* c = nullptr);
+  void start_submit_entry(LogEvent *e, Context* c = nullptr) {
     start_entry(e);
     submit_entry(e, c);
   }
@@ -186,13 +188,18 @@ public:
   }
 
 private:
-  class C_MaybeExpiredSegment : public Context {
+  // Should actually be void, but we have to match the op_callback
+  // signature for the moment.
+  class MaybeExpiredSegment : public cohort::SimpleMultiCallback<int> {
+    friend cohort::MultiCallback;
     MDLog *mdlog;
     LogSegment *ls;
     int op_prio;
+    MaybeExpiredSegment(MDLog *mdl, LogSegment *s, int p)
+      : mdlog(mdl), ls(s), op_prio(p) {}
   public:
-    C_MaybeExpiredSegment(MDLog *mdl, LogSegment *s, int p) : mdlog(mdl), ls(s), op_prio(p) {}
-    void finish(int res) {
+    void work(int res) { }
+    void finish() {
       mdlog->_maybe_expired(ls, op_prio);
     }
   };
@@ -206,10 +213,10 @@ public:
   void trim(int max=-1);
 
 private:
-  void write_head(Context *onfinish);
+  void write_head(OSDC::op_callback&& onfinish);
 
 public:
-  void create(VolumeRef &v, Context *onfinish);  // fresh, empty log!
+  void create(VolumeRef &v, OSDC::op_callback&& onfinish);  // fresh, empty log!
   void open(VolumeRef &v, Context *onopen);   // append() or replay() to follow!
   void append();
   void replay(VolumeRef &v, Context *onfinish);

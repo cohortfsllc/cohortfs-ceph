@@ -36,14 +36,6 @@ using std::dec;
 extern void dout_emergency(const char * const str);
 extern void dout_emergency(const std::string &str);
 
-// intentionally conflict with endl
-class _bad_endl_use_dendl_t { public: _bad_endl_use_dendl_t(int) {} };
-static const _bad_endl_use_dendl_t endl = 0;
-inline std::ostream& operator<<(std::ostream& out, _bad_endl_use_dendl_t) {
-  assert(0 && "you are using the wrong endl.. use std::endl or dendl");
-  return out;
-}
-
 // generic macros
 #define dout_prefix *_dout
 

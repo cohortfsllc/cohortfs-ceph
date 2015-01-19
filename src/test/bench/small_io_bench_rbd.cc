@@ -94,32 +94,33 @@ int main(int argc, char **argv)
   ops.insert(make_pair(vm["write-ratio"].as<double>(), Bencher::WRITE));
   ops.insert(make_pair(1-vm["write-ratio"].as<double>(), Bencher::READ));
 
-  librados::Rados rados;
-  librados::IoCtx ioctx;
-  int r = rados.init(vm["ceph-client-id"].as<string>().c_str());
+  librados::Rados legacy;
+  shared_ptr<const Volume> volume;
+  int r = legacy.init(vm["ceph-client-id"].as<string>().c_str());
   if (r < 0) {
     cerr << "error in init r=" << r << std::endl;
     return -r;
   }
-  r = rados.conf_read_file(NULL);
+  r = legacy.conf_read_file(NULL);
   if (r < 0) {
     cerr << "error in conf_read_file r=" << r << std::endl;
     return -r;
   }
-  r = rados.conf_parse_env(NULL);
+  r = legacy.conf_parse_env(NULL);
   if (r < 0) {
     cerr << "error in conf_parse_env r=" << r << std::endl;
     return -r;
   }
-  r = rados.connect();
+  r = legacy.connect();
   if (r < 0) {
     cerr << "error in connect r=" << r << std::endl;
     return -r;
   }
-  r = rados.ioctx_create(vm["pool-name"].as<string>().c_str(), ioctx);
-  if (r < 0) {
-    cerr << "error in ioctx_create r=" << r << std::endl;
-    return -r;
+  librados::RadosClient* rados = legacy.client;
+  volume = rados->lookup_volume(vm["pool-name"].as<string>());
+  if (!volume) {
+    cerr << "unable to find volume" << r << std::endl;
+    return ENOENT;
   }
 
   ostream *detailed_ops = 0;
@@ -133,23 +134,14 @@ int main(int argc, char **argv)
     detailed_ops = &cerr;
   }
 
-  librbd::RBD rbd;
-  {
+  try {
     map<string, std::shared_ptr<librbd::Image> > images;
     uint64_t image_size = ((uint64_t)vm["image-size"].as<unsigned>()) << 20;
     for (set<string>::const_iterator i = image_names.begin();
 	 i != image_names.end(); ++i) {
-      r = rbd.create(ioctx, i->c_str(), image_size);
-      if (r < 0) {
-	cerr << "error creating image " << *i << " r=" << r << std::endl;
-	return -r;
-      }
-      std::shared_ptr<librbd::Image> image(new librbd::Image());
-      r = rbd.open(ioctx, *image, i->c_str());
-      if (r < 0) {
-	cerr << "error opening image " << *i << " r=" << r << std::endl;
-	return -r;
-      }
+      librbd::Image::create(rados, volume, *i, image_size);
+      std::shared_ptr<librbd::Image> image(
+	new librbd::Image(rados, volume, *i));
       images[*i] = image;
     }
 
@@ -188,13 +180,18 @@ int main(int argc, char **argv)
       vm["max-ops"].as<unsigned>());
 
     bencher.run_bench();
+
+    for (set<string>::const_iterator i = image_names.begin();
+	 i != image_names.end(); ++i) {
+      librbd::Image::remove(rados, volume, *i);
+    }
+  } catch (std::error_condition& e) {
+    cerr << "failed benching: "
+	 << e.message();
+    return e.value();
   }
 
-  for (set<string>::const_iterator i = image_names.begin();
-       i != image_names.end(); ++i) {
-    rbd.remove(ioctx, i->c_str());
-  }
-  rados.shutdown();
+  legacy.shutdown();
   if (vm["op-dump-file"].as<string>().size()) {
     myfile.close();
   }

@@ -3,6 +3,7 @@
 #ifndef BENCHERH
 #define BENCHERH
 
+#include <condition_variable>
 #include <utility>
 #include "distribution.h"
 #include "stat_collector.h"

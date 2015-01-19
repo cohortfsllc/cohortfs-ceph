@@ -12,7 +12,6 @@
 
 #include <mutex>
 #include "vol/Volume.h"
-#include "osdc/ObjectOperation.h"
 #include "ErasureCPlacer.h"
 
 /* Superclass of all Cohort volume types, supporting dynamically
@@ -83,6 +82,10 @@ protected:
 		      int *rval = NULL, Context* ctx = NULL);
     virtual void read_full(bufferlist *bl,
 		      int *rval = NULL, Context* ctx = NULL);
+    virtual void read(uint64_t off, uint64_t len, uint64_t truncate_size,
+		      uint32_t truncate_seq,
+		      std::function<void(int, bufferlist&&)>&& f);
+    virtual void read_full(std::function<void(int, bufferlist&&)>&& f);
     virtual void add_op(const int op);
     virtual void add_version(const uint64_t ver);
     virtual void add_obj(const oid_t& o);
@@ -119,6 +122,8 @@ protected:
     virtual void clear_op_flags(const uint32_t flags);
     virtual void add_stat_ctx(uint64_t *s, ceph::real_time *m, int *rval,
 			      Context *ctx = NULL);
+    virtual void add_stat_cb(std::function<void(
+			       int, uint64_t, ceph::real_time)>&& cb);
     virtual std::unique_ptr<ObjOp> clone();
     virtual void realize(
       const oid_t& o,

@@ -50,6 +50,7 @@
 #include "MDSTableServer.h"
 
 #include "Locker.h"
+#include "common/MultiCallback.h"
 
 #define dout_subsys ceph_subsys_mds
 #undef DOUT_COND
@@ -62,7 +63,9 @@
 // -----------------------
 // LogSegment
 
-void LogSegment::try_to_expire(MDS *mds, C_GatherBuilder &gather_bld, int op_prio)
+void LogSegment::try_to_expire(MDS *mds,
+			       cohort::SimpleMultiCallback<int>& multi,
+			       int op_prio)
 {
   CephContext* cct = mds->cct;
   set<CDir*> commit;
@@ -91,7 +94,7 @@ void LogSegment::try_to_expire(MDS *mds, C_GatherBuilder &gather_bld, int op_pri
     dout(20) << " dirty_inode " << **p << dendl;
     assert((*p)->is_auth());
     if ((*p)->is_base()) {
-      (*p)->store(gather_bld.new_sub());
+      (*p)->store(multi.add_ctx());
     } else
       commit.insert((*p)->get_parent_dn()->get_dir());
   }
@@ -104,10 +107,10 @@ void LogSegment::try_to_expire(MDS *mds, C_GatherBuilder &gather_bld, int op_pri
       assert(dir->is_auth());
       if (dir->can_auth_pin()) {
 	dout(15) << "try_to_expire committing " << *dir << dendl;
-	dir->commit(0, gather_bld.new_sub(), false, op_prio);
+	dir->commit(0, multi.add_ctx(), false, op_prio);
       } else {
 	dout(15) << "try_to_expire waiting for unfreeze on " << *dir << dendl;
-	dir->add_waiter(CDir::WAIT_UNFREEZE, gather_bld.new_sub());
+	dir->add_waiter(CDir::WAIT_UNFREEZE, multi.add_ctx());
       }
     }
   }
@@ -117,7 +120,7 @@ void LogSegment::try_to_expire(MDS *mds, C_GatherBuilder &gather_bld, int op_pri
        p != uncommitted_masters.end();
        ++p) {
     dout(10) << "try_to_expire waiting for slaves to ack commit on " << *p << dendl;
-    mds->mdcache->wait_for_uncommitted_master(*p, gather_bld.new_sub());
+    mds->mdcache->wait_for_uncommitted_master(*p, multi.add_ctx());
   }
 
   // uncommitted fragments
@@ -125,24 +128,24 @@ void LogSegment::try_to_expire(MDS *mds, C_GatherBuilder &gather_bld, int op_pri
        p != uncommitted_fragments.end();
        ++p) {
     dout(10) << "try_to_expire waiting for uncommitted fragment " << *p << dendl;
-    mds->mdcache->wait_for_uncommitted_fragment(*p, gather_bld.new_sub());
+    mds->mdcache->wait_for_uncommitted_fragment(*p, multi.add_ctx());
   }
 
   // nudge scatterlocks
   for (elist<CInode*>::iterator p = dirty_dirfrag_dir.begin(); !p.end(); ++p) {
     CInode *in = *p;
     dout(10) << "try_to_expire waiting for dirlock flush on " << *in << dendl;
-    mds->locker->scatter_nudge(&in->filelock, gather_bld.new_sub());
+    mds->locker->scatter_nudge(&in->filelock, multi.add_ctx());
   }
   for (elist<CInode*>::iterator p = dirty_dirfrag_dirfragtree.begin(); !p.end(); ++p) {
     CInode *in = *p;
     dout(10) << "try_to_expire waiting for dirfragtreelock flush on " << *in << dendl;
-    mds->locker->scatter_nudge(&in->dirfragtreelock, gather_bld.new_sub());
+    mds->locker->scatter_nudge(&in->dirfragtreelock, multi.add_ctx());
   }
   for (elist<CInode*>::iterator p = dirty_dirfrag_nest.begin(); !p.end(); ++p) {
     CInode *in = *p;
     dout(10) << "try_to_expire waiting for nest flush on " << *in << dendl;
-    mds->locker->scatter_nudge(&in->nestlock, gather_bld.new_sub());
+    mds->locker->scatter_nudge(&in->nestlock, multi.add_ctx());
   }
 
   assert(cct->_conf->mds_kill_journal_expire_at != 2);
@@ -186,7 +189,7 @@ void LogSegment::try_to_expire(MDS *mds, C_GatherBuilder &gather_bld, int op_pri
       }
     }
     if (le) {
-      mds->mdlog->submit_entry(le, gather_bld.new_sub());
+      mds->mdlog->submit_entry(le, multi.add_ctx());
       dout(10) << "try_to_expire waiting for open files to rejournal" << dendl;
     }
   }
@@ -199,10 +202,10 @@ void LogSegment::try_to_expire(MDS *mds, C_GatherBuilder &gather_bld, int op_pri
     assert(in->is_auth());
     if (in->can_auth_pin()) {
       dout(15) << "try_to_expire waiting for storing backtrace on " << *in << dendl;
-      in->store_backtrace(gather_bld.new_sub());
+      in->store_backtrace(multi.add_ctx());
     } else {
       dout(15) << "try_to_expire waiting for unfreeze on " << *in << dendl;
-      in->add_waiter(CInode::WAIT_UNFREEZE, gather_bld.new_sub());
+      in->add_waiter(CInode::WAIT_UNFREEZE, multi.add_ctx());
     }
   }
 
@@ -215,7 +218,7 @@ void LogSegment::try_to_expire(MDS *mds, C_GatherBuilder &gather_bld, int op_pri
     MDSlaveUpdate *su = *p;
     dout(10) << "try_to_expire waiting on slave update " << su << dendl;
     assert(su->waiter == 0);
-    su->waiter = gather_bld.new_sub();
+    su->waiter = multi.add_ctx();
   }
 
   // idalloc
@@ -224,7 +227,7 @@ void LogSegment::try_to_expire(MDS *mds, C_GatherBuilder &gather_bld, int op_pri
 	      << ", committed is " << mds->inotable->get_committed_version()
 	      << " (" << mds->inotable->get_committing_version() << ")"
 	      << dendl;
-    mds->inotable->save(gather_bld.new_sub(), inotablev);
+    mds->inotable->save(multi.add_ctx(), inotablev);
   }
 
   // sessionmap
@@ -233,7 +236,7 @@ void LogSegment::try_to_expire(MDS *mds, C_GatherBuilder &gather_bld, int op_pri
 	      << ", committed is " << mds->sessionmap.committed
 	      << " (" << mds->sessionmap.committing << ")"
 	      << dendl;
-    mds->sessionmap.save(gather_bld.new_sub(), sessionmapv);
+    mds->sessionmap.save(multi.add_ctx(), sessionmapv);
   }
 
   // pending commit atids
@@ -247,7 +250,7 @@ void LogSegment::try_to_expire(MDS *mds, C_GatherBuilder &gather_bld, int op_pri
       dout(10) << "try_to_expire " << get_mdstable_name(p->first) << " transaction " << *q
 	       << " pending commit (not yet acked), waiting" << dendl;
       assert(!client->has_committed(*q));
-      client->wait_for_ack(*q, gather_bld.new_sub());
+      client->wait_for_ack(*q, multi.add_ctx());
     }
   }
 
@@ -259,7 +262,7 @@ void LogSegment::try_to_expire(MDS *mds, C_GatherBuilder &gather_bld, int op_pri
     if (p->second > server->get_committed_version()) {
       dout(10) << "try_to_expire waiting for " << get_mdstable_name(p->first)
 	       << " to save, need " << p->second << dendl;
-      server->save(gather_bld.new_sub());
+      server->save(multi.add_ctx());
     }
   }
 
@@ -268,13 +271,13 @@ void LogSegment::try_to_expire(MDS *mds, C_GatherBuilder &gather_bld, int op_pri
        p != truncating_inodes.end();
        ++p) {
     dout(10) << "try_to_expire waiting for truncate of " << **p << dendl;
-    (*p)->add_waiter(CInode::WAIT_TRUNC, gather_bld.new_sub());
+    (*p)->add_waiter(CInode::WAIT_TRUNC, multi.add_ctx());
   }
 
   // FIXME client requests...?
   // audit handling of anchor transactions?
 
-  if (gather_bld.has_subs()) {
+  if (!multi.empty()) {
     dout(6) << "LogSegment(" << offset << ").try_to_expire waiting" << dendl;
     mds->mdlog->flush();
   } else {

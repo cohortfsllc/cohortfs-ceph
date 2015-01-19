@@ -23,6 +23,7 @@
 #include "CInode.h"
 #include "CDentry.h"
 #include "CDir.h"
+#include "common/MultiCallback.h"
 
 #include <unordered_set>
 
@@ -66,7 +67,8 @@ class LogSegment {
   map<int,version_t> tablev;
 
   // try to expire
-  void try_to_expire(MDS *mds, C_GatherBuilder &gather_bld, int op_prio);
+  void try_to_expire(MDS *mds, cohort::SimpleMultiCallback<int>& multi,
+		     int op_prio);
 
   // cons
   LogSegment(loff_t off) :

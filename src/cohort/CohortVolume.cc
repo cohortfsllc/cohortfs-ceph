@@ -219,11 +219,17 @@ struct C_MultiRead : public Context {
   int* rval;
   Context *onfinish;
   uint64_t total_real_length;
+  std::function<void(int, bufferlist&&)> f;
 
   C_MultiRead(const Placer& pl, uint64_t _off, bufferlist *_outbl, int* rval,
 	      Context *onfinish)
     : pl(pl), off(_off), outbl(_outbl), rval(rval), onfinish(onfinish),
       total_real_length(UINT64_MAX) { }
+
+  C_MultiRead(const Placer& pl, uint64_t _off,
+	      std::function<void(int, bufferlist&&)>&& _f)
+    : pl(pl), off(_off), outbl(nullptr), rval(nullptr), onfinish(nullptr),
+      total_real_length(UINT64_MAX), f(_f) { }
 
   void finish(int r) {
     bufferlist bl;
@@ -233,14 +239,16 @@ struct C_MultiRead : public Context {
       goto done;
     }
 
-    if ((total_real_length < UINT64_MAX) &&
-	(off + bl.length()) > total_real_length) {
-      outbl->substr_of(bl, 0, total_real_length - off);
-    } else {
-      outbl->claim_append(bl);
+    if (outbl) {
+      if ((total_real_length < UINT64_MAX) &&
+	  (off + bl.length()) > total_real_length) {
+	outbl->substr_of(bl, 0, total_real_length - off);
+      } else {
+	outbl->claim_append(bl);
+      }
+      r = outbl->length();
     }
 
-    r = outbl->length();
 
   done:
 
@@ -250,6 +258,21 @@ struct C_MultiRead : public Context {
 
     if (onfinish) {
       onfinish->complete(outbl->length());
+    }
+
+    if (f) {
+      if (r < 0) {
+	f(r, bufferlist());
+      } else {
+	bufferlist tbl;
+	if ((total_real_length < UINT64_MAX) &&
+	    (off + bl.length()) > total_real_length) {
+	  tbl.substr_of(bl, 0, total_real_length - off);
+	} else {
+	  tbl.claim_append(bl);
+	}
+	f(tbl.length(), std::move(tbl));
+      }
     }
   }
 };
@@ -285,6 +308,36 @@ void CohortVolume::StripulatedOp::read(uint64_t off, uint64_t len,
   gather.activate();
 }
 
+void CohortVolume::StripulatedOp::read(
+  uint64_t off, uint64_t len, uint64_t truncate_size,
+  uint32_t truncate_seq, std::function<void(int, bufferlist&&)>&& f)
+{
+  budget += len;
+  const uint32_t stripe_size = pl.get_stripe_unit() *
+    pl.get_data_chunk_count();
+  uint64_t actual_len = len;
+  uint64_t resid = (off + len) % stripe_size;
+  if (resid)
+    actual_len += (stripe_size - resid);
+  C_MultiRead* mr = new C_MultiRead(pl, off, std::move(f));
+  C_GatherBuilder gather;
+
+  add_op(CEPH_OSD_OP_STAT);
+  add_stat_ctx(&mr->total_real_length, nullptr, nullptr, gather.new_sub());
+  add_op(CEPH_OSD_OP_READ);
+  for (uint32_t stride = 0; stride < pl.get_chunk_count(); ++stride) {
+    ops[stride].back().op.extent.offset = off
+      / pl.get_data_chunk_count();
+    ops[stride].back().op.extent.length = actual_len
+      / pl.get_data_chunk_count();
+    ops[stride].back().ctx = gather.new_sub();
+    auto p = mr->resultbl.emplace(stride, len / stripe_size);
+    ops[stride].back().out_bl = &(p.first->second);
+  }
+  gather.set_finisher(mr);
+  gather.activate();
+}
+
 void CohortVolume::StripulatedOp::read_full(bufferlist *bl,
 		      int *rval, Context* ctx)
 {
@@ -298,6 +351,26 @@ void CohortVolume::StripulatedOp::read_full(bufferlist *bl,
   ops[0].back().op.extent.length = CEPH_READ_ENTIRE;
   ops[0].back().ctx = gather.new_sub();
   ops[0].back().out_bl = bl;
+  gather.set_finisher(mr);
+  gather.activate();
+}
+
+void CohortVolume::StripulatedOp::read_full(
+  std::function<void(int, bufferlist&&)>&& f)
+{
+  C_MultiRead* mr = new C_MultiRead(pl, 0, std::move(f));
+  C_GatherBuilder gather;
+
+  add_op(CEPH_OSD_OP_STAT);
+  add_stat_ctx(&mr->total_real_length, nullptr, nullptr, gather.new_sub());
+  add_op(CEPH_OSD_OP_READ);
+  for (uint32_t stride = 0; stride < pl.get_chunk_count(); ++stride) {
+    ops[stride].back().op.extent.offset = 0;
+    ops[stride].back().op.extent.length = CEPH_READ_ENTIRE;
+    ops[stride].back().ctx = gather.new_sub();
+    auto p = mr->resultbl.emplace(stride, 0);
+    ops[stride].back().out_bl = &(p.first->second);
+  }
   gather.set_finisher(mr);
   gather.activate();
 }
@@ -431,26 +504,33 @@ struct C_MultiStat : public Context {
   ceph::real_time *m;
   int *rval;
   Context *ctx;
+  // Hack
+  std::function<void(int, uint64_t, ceph::real_time)> f;
 
   C_MultiStat(const Placer &pl, uint64_t *_s, ceph::real_time *_m,
 	      int *_rval, Context *_ctx)
     : bls(pl.get_chunk_count()), s(_s), m(_m),
       rval(_rval), ctx(_ctx) { }
+  C_MultiStat(const Placer &pl, uint64_t *_s, ceph::real_time *_m,
+	      int *_rval, std::function<void(
+		int, uint64_t, ceph::real_time)>&& _f)
+    : bls(pl.get_chunk_count()), s(_s), m(_m),
+      rval(_rval), ctx(0), f(std::move(_f)) { }
 
   void finish(int r) {
     bool got_one = false;
     uint64_t rtl = 0;
+    ceph::real_time mtime;
     for (auto &b : bls) {
       bufferlist::iterator p = b.begin();
       try {
-	uint64_t size;
-	ceph::real_time mtime;
-	::decode(size, p);
-	::decode(mtime, p);
+	uint64_t _size;
+	ceph::real_time _mtime;
+	::decode(_size, p);
+	::decode(_mtime, p);
 	::decode(rtl, p);
-	if (m)
-	  *m = std::max(mtime, *m);
 	got_one = true;
+	mtime = std::max(mtime, _mtime);
       } catch (ceph::buffer::error& e) {
 	if (r != 0)
 	  r = -EDOM;
@@ -461,11 +541,16 @@ struct C_MultiStat : public Context {
       if (s) {
 	*s = rtl;
       }
+      if (m)
+	*m = mtime;
       r = 0;
     }
 
     if (ctx)
       ctx->complete(r);
+
+    if (f)
+      f(r, rtl, mtime);
 
     if (rval)
       *rval = r;
@@ -479,6 +564,21 @@ void CohortVolume::StripulatedOp::add_stat_ctx(uint64_t *s,
 {
   C_GatherBuilder gather;
   C_MultiStat *f = new C_MultiStat(pl, s, m, rval, ctx);
+  for (uint32_t stride = 0; stride < pl.get_chunk_count(); ++stride) {
+    OSDOp &osd_op = ops[stride].back();
+    osd_op.out_bl = &(f->bls[stride]);
+    osd_op.ctx = gather.new_sub();
+  }
+  gather.set_finisher(f);
+  gather.activate();
+}
+
+void CohortVolume::StripulatedOp::add_stat_cb(
+  std::function<void(int, uint64_t, ceph::real_time)>&& cb)
+{
+  C_GatherBuilder gather;
+  C_MultiStat *f = new C_MultiStat(pl, nullptr, nullptr, nullptr,
+				   std::move(cb));
   for (uint32_t stride = 0; stride < pl.get_chunk_count(); ++stride) {
     OSDOp &osd_op = ops[stride].back();
     osd_op.out_bl = &(f->bls[stride]);

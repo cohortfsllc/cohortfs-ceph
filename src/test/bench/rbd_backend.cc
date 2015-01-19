@@ -3,49 +3,39 @@
 #include "rbd_backend.h"
 #include <boost/tuple/tuple.hpp>
 
-typedef boost::tuple<Context*, Context*> arg_type;
-
-void on_complete(void *completion, void *_arg) {
-  arg_type *arg = static_cast<arg_type*>(_arg);
-  librbd::RBD::AioCompletion *comp =
-    static_cast<librbd::RBD::AioCompletion *>(completion);
-  ssize_t r = comp->get_return_value();
-  assert(r >= 0);
-  arg->get<0>()->complete(0);
-  if (arg->get<1>())
-    arg->get<1>()->complete(0);
-  comp->release();
-  delete arg;
-}
+typedef boost::tuple<OSDC::op_callback&&, OSDC::op_callback&&> arg_type;
 
 void RBDBackend::write(
-  const std::string &oid_t,
+  const std::string &oid,
   uint64_t offset,
   const bufferlist &bl,
-  Context *on_write_applied,
-  Context *on_commit)
+  OSDC::op_callback&& on_write_applied,
+  OSDC::op_callback&& on_commit)
 {
   bufferlist &bl_non_const = const_cast<bufferlist&>(bl);
-  std::shared_ptr<librbd::Image> image = (*m_images)[oid_t];
-  void *arg = static_cast<void *>(new arg_type(on_commit, on_write_applied));
-  librbd::RBD::AioCompletion *completion =
-    new librbd::RBD::AioCompletion(arg, on_complete);
-  int r = image->aio_write(offset, (size_t) bl_non_const.length(),
-			   bl_non_const, completion);
-  assert(r >= 0);
+  std::shared_ptr<librbd::Image> image = (*m_images)[oid];
+  try {
+    image->write(offset, bl_non_const.length(),
+		 bl_non_const, std::move(on_write_applied),
+		 std::move(on_commit));
+  } catch (std::error_condition &e) {
+    std::cerr << "Error writing to RBD image: "
+	      << e.message() << std::endl;
+  }
 }
 
 void RBDBackend::read(
-  const std::string &oid_t,
+  const std::string &oid,
   uint64_t offset,
   uint64_t length,
   bufferlist *bl,
-  Context *on_read_complete)
+  OSDC::op_callback&& on_read_complete)
 {
-  std::shared_ptr<librbd::Image> image = (*m_images)[oid_t];
-  void *arg = static_cast<void *>(new arg_type(on_read_complete, NULL));
-  librbd::RBD::AioCompletion *completion =
-    new librbd::RBD::AioCompletion(arg, on_complete);
-  int r = image->aio_read(offset, (size_t) length, *bl, completion);
-  assert(r >= 0);
+  std::shared_ptr<librbd::Image> image = (*m_images)[oid];
+  try{
+    image->read(offset, length, bl, std::move(on_read_complete));
+  } catch (std::error_condition &e) {
+    std::cerr << "Error writing to RBD image: "
+	      << e.message() << std::endl;
+  }
 }

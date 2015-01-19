@@ -33,10 +33,7 @@ int64_t rados_volume_lookup(rados_t cluster, const char *volume_name);
 TEST(LibRadosVolumes, VolumeLookup) {
   rados_t cluster;
   std::string volume_name = get_temp_volume_name();
-  uint8_t volume_id[16];
   ASSERT_EQ("", create_one_volume(volume_name, &cluster));
-  ASSERT_GT(rados_volume_by_name(cluster, volume_name.c_str(),
-				 volume_id), 0);
   ASSERT_EQ(0, destroy_one_volume(volume_name, &cluster));
 }
 
@@ -45,8 +42,6 @@ TEST(LibRadosVolumes, VolumeLookup2) {
   std::string volume_name = get_temp_volume_name();
   ASSERT_EQ("", create_one_volume(volume_name, &cluster));
   uint8_t volume_id[16];
-  ASSERT_GT(rados_volume_by_name(cluster, volume_name.c_str(),
-				 volume_id), 0);
   rados_ioctx_t ioctx;
   ASSERT_EQ(0, rados_ioctx_create(cluster, volume_name.c_str(), &ioctx));
   uint8_t volume_id2[16];
@@ -59,11 +54,8 @@ TEST(LibRadosVolumes, VolumeLookup2) {
 TEST(LibRadosVolumes, VolumeDelete) {
   rados_t cluster;
   std::string volume_name = get_temp_volume_name();
-  uint8_t volume_id[16];
   ASSERT_EQ("", create_one_volume(volume_name, &cluster));
   ASSERT_EQ(0, rados_volume_delete(cluster, volume_name.c_str()));
-  ASSERT_GT(rados_volume_by_name(cluster, volume_name.c_str(),
-				 volume_id), 0);
   ASSERT_EQ(0, rados_volume_create(cluster, volume_name.c_str()));
   ASSERT_EQ(0, destroy_one_volume(volume_name, &cluster));
 }

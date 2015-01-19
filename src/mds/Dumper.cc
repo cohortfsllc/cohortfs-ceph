@@ -72,13 +72,9 @@ int Dumper::recover_journal()
 
 void Dumper::dump(const char *dump_file)
 {
-  bool done = false;
-  int r = 0;
-  std::condition_variable cond;
-  std::mutex localLock;
   VolumeRef volume(mdsmap->get_metadata_volume(objecter));
 
-  r = recover_journal();
+  int r = recover_journal();
   if (r) {
     return;
   }
@@ -91,16 +87,14 @@ void Dumper::dump(const char *dump_file)
 
   bufferlist bl;
 
+  OSDC::CB_Waiter w;
   unique_lock l(lock);
   oid_t oid = file_oid(ino, 0);
   objecter->read(oid, volume, start, len, &bl, 0,
-		 new C_SafeCond(&localLock, &cond, &done));
+		 std::ref(w));
   l.unlock();
 
-  unique_lock ll(localLock);
-  while (!done)
-    cond.wait(ll);
-  ll.unlock();
+  r = w.wait();
 
   std::cout << "read " << bl.length() << " bytes at offset " << start << std::endl;
 
@@ -174,17 +168,15 @@ void Dumper::undump(const char *dump_file)
 
   oid_t oid = file_oid(ino, 0);
 
-  bool done = false;
   std::condition_variable cond;
 
   std::cout << "writing header " << oid << std::endl;
+  OSDC::CB_Waiter w;
   objecter->write_full(oid, volume, hbl,
 		       ceph::real_clock::now(),
-		       0, NULL, new C_SafeCond(&lock, &cond, &done));
+		       0, NULL, std::ref(w));
 
-  unique_lock l(lock);
-  cond.wait(l, [&](){ return done; });
-  l.unlock();
+  r = w.wait();
 
   // read
   uint64_t pos = start;
@@ -195,13 +187,12 @@ void Dumper::undump(const char *dump_file)
     uint64_t l = MIN(left, 1024*1024);
     j.read_fd(fd, l);
     std::cout << " writing " << pos << "~" << l << std::endl;
+    w.reset();
     objecter->write(oid, volume, pos, l, j,
 		    ceph::real_clock::now(), 0, NULL,
-		    new C_SafeCond(&lock, &cond, &done));
+		    std::ref(w));
 
-    unique_lock ulck(lock);
-    cond.wait(ulck, [&](){ return done; });
-    ulck.unlock();
+    r = w.wait();
 
     pos += l;
     left -= l;

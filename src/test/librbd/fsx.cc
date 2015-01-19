@@ -1,4 +1,4 @@
-// -*- mode:C; tab-width:8; c-basic-offset:8; indent-tabs-mode:t -*-
+// -*- mode:C++; tab-width:8; c-basic-offset:8; indent-tabs-mode:t -*-
 /*
  *	Copyright (C) 1991, NeXT Computer, Inc.	 All Rights Reserverd.
  *
@@ -34,8 +34,12 @@
 #include <errno.h>
 #include <math.h>
 
-#include "include/rados/librados.h"
-#include "include/rbd/librbd.h"
+#include "librados/RadosClient.h"
+#include "librbd/Image.h"
+
+using namespace std;
+using namespace librados;
+using namespace librbd;
 
 #define NUMPRINTCOLUMNS 32	/* # columns of data to print on each line */
 
@@ -103,16 +107,16 @@ int			logcount = 0;	/* total ops */
 #undef PAGE_MASK
 #define PAGE_MASK (PAGE_SIZE - 1)
 
-char *original_buf; /* a pointer to the original data */
-char *good_buf; /* a pointer to the correct data */
-char *temp_buf; /* a pointer to the current data */
-char *volume; /* name of the volume our test image is in */
-char *iname; /* name of our test image */
-rados_t cluster; /* handle for our test cluster */
-rados_ioctx_t ioctx; /* handle for our test volume */
-rbd_image_t image; /* handle for our test image */
+bufferlist original_buf; /* a pointer to the original data */
+bufferlist good_buf; /* a pointer to the correct data */
+bufferlist temp_buf; /* a pointer to the current data */
+string volume; /* name of the volume our test image is in */
+string iname; /* name of our test image */
+RadosClient* cluster; /* handle for our test cluster */
+VolumeRef vol; /* handle for our test volume */
+Image image; /* handle for our test image */
 
-char dirpath[1024];
+string& dirpath;
 
 off_t file_size = 0;
 off_t biggest = 0;
@@ -1127,8 +1131,8 @@ test_fallocate()
 int
 main(int argc, char **argv)
 {
-	int	i, style, ch, ret;
-	char	*endp;
+	int i, style, ch, ret;
+	char *endp;
 	char goodfile[1024];
 	char logfile[1024];
 

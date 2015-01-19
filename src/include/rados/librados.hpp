@@ -17,15 +17,17 @@
 #include "rados_types.hpp"
 #include "include/Context.h"
 #include "osdc/ObjectOperation.h"
+#include "osdc/Objecter.h"
+#include "vol/Volume.h"
 
 namespace librados
 {
   using ceph::bufferlist;
 
+  class RadosClient;
   struct AioCompletionImpl;
   class IoCtx;
   struct IoCtxImpl;
-  class RadosClient;
 
   typedef void *config_t;
 
@@ -596,14 +598,17 @@ namespace librados
     static AioCompletion *aio_create_completion(void *cb_arg, callback_t cb_complete,
 						callback_t cb_safe);
 
-    boost::uuids::uuid lookup_volume(const string& name);
-    string lookup_volume(const boost::uuids::uuid& name);
+    std::shared_ptr<const Volume> lookup_volume(const string& name);
+    std::shared_ptr<const Volume> lookup_volume(const boost::uuids::uuid& name);
+
+    Objecter* objecter();
+
     friend std::ostream& operator<<(std::ostream &oss, const Rados& r);
+    RadosClient *client;
   private:
     // We don't allow assignment or copying
     Rados(const Rados& rhs);
     const Rados& operator=(const Rados& rhs);
-    RadosClient *client;
   };
 }
 

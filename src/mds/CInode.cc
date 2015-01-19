@@ -37,6 +37,7 @@
 #include "include/ceph_hash.h"
 
 #include "common/config.h"
+#include "common/MultiCallback.h"
 
 #define dout_subsys ceph_subsys_mds
 #undef dout_prefix
@@ -788,13 +789,25 @@ void CInode::mark_clean()
 // per-inode storage
 // (currently for root inode only)
 
-struct C_Inode_Stored : public Context {
+struct C_Inode_Stored {
   CInode *in;
   version_t version;
-  Context *fin;
-  C_Inode_Stored(CInode *i, version_t v, Context *f) : in(i), version(v),
-						       fin(f) {}
+  Context* fin;
+  C_Inode_Stored(CInode *i, version_t v, Context* f)
+    : in(i), version(v), fin(f) {}
   void finish(int r) {
+    assert(r == 0);
+    in->_stored(version, fin);
+  }
+};
+
+struct CB_Inode_Stored {
+  CInode *in;
+  version_t version;
+  Context* fin;
+  CB_Inode_Stored(CInode *i, version_t v, Context* f)
+    : in(i), version(v), fin(f) {}
+  void operator()(int r) {
     assert(r == 0);
     in->_stored(version, fin);
   }
@@ -828,7 +841,7 @@ void CInode::store(Context *fin)
 
   mdcache->mds->objecter->mutate(oid, volume, m, ceph::real_clock::now(),
 				 0, NULL,
-				 new C_Inode_Stored(this, get_version(), fin));
+				 CB_Inode_Stored(this, get_version(), fin));
 }
 
 void CInode::_stored(version_t v, Context *fin)
@@ -840,13 +853,20 @@ void CInode::_stored(version_t v, Context *fin)
   fin->complete(0);
 }
 
-struct C_Inode_Fetched : public Context {
+class Inode_Fetched : public cohort::SimpleMultiCallback<int> {
+  friend class cohort::MultiCallback;
+public:
   CInode *in;
   bufferlist bl, bl2;
   Context *fin;
-  C_Inode_Fetched(CInode *i, Context *f) : in(i), fin(f) {}
-  void finish(int r) {
-    in->_fetched(r, bl, bl2, fin);
+private:
+  Inode_Fetched(CInode *i, Context *f) : in(i), fin(f) {}
+public:
+  void work(int r) {
+    assert(r == 0);
+  }
+  void finish() {
+    in->_fetched(0, bl, bl2, fin);
   }
 };
 
@@ -854,8 +874,7 @@ void CInode::fetch(Context *fin)
 {
   dout(10) << "fetch" << dendl;
 
-  C_Inode_Fetched *c = new C_Inode_Fetched(this, fin);
-  C_GatherBuilder gather(c);
+  auto& fetched = cohort::MultiCallback::create<Inode_Fetched>(this, fin);
 
   oid_t oid = CInode::get_object_name(ino(), frag_t(), "");
   volume = mdcache->mds->get_metadata_volume();
@@ -871,17 +890,17 @@ void CInode::fetch(Context *fin)
     fin->complete(-EDOM);
     return;
   }
-  rd->getxattr("inode", &c->bl, NULL);
+  rd->getxattr("inode", &fetched.bl, NULL);
 
-  mdcache->mds->objecter->read(oid, volume, rd, (bufferlist*)NULL, 0,
-			       gather.new_sub());
+  mdcache->mds->objecter->read(oid, volume, rd, nullptr, 0,
+			       fetched.add());
 
   // read from separate object too
   oid_t obj2 = CInode::get_object_name(ino(), frag_t(), ".inode");
-  mdcache->mds->objecter->read_full(obj2, volume, &c->bl2, 0,
-				    gather.new_sub());
+  mdcache->mds->objecter->read_full(obj2, volume, &fetched.bl2, 0,
+				    fetched.add());
 
-  gather.activate();
+  fetched.activate();
 }
 
 void CInode::_fetched(int r, bufferlist& bl, bufferlist& bl2, Context *fin)
@@ -946,14 +965,20 @@ void CInode::build_backtrace(const boost::uuids::uuid& volume,
     ++i;
   }
 }
-
-struct C_Inode_StoredBacktrace : public Context {
+class Inode_StoredBacktrace : public cohort::SimpleMultiCallback<int> {
+  friend class cohort::MultiCallback;
+public:
   CInode *in;
   version_t version;
   Context *fin;
-  C_Inode_StoredBacktrace(CInode *i, version_t v, Context *f) : in(i), version(v), fin(f) {}
-  void finish(int r) {
+private:
+  Inode_StoredBacktrace(CInode *i, version_t v, Context *f)
+    : in(i), version(v), fin(f) {}
+public:
+  void work(int r) {
     assert(r == 0);
+  }
+  void finish() {
     in->_stored_backtrace(version, fin);
   }
 };
@@ -992,50 +1017,42 @@ void CInode::store_backtrace(Context *fin)
   op->setxattr("parent", bl);
 
   oid_t oid = get_object_name(ino(), frag_t(), "");
-  Context *fin2 = new C_Inode_StoredBacktrace(this, inode.backtrace_version,
-					      fin);
+  auto& fin2 = cohort::MultiCallback::create<Inode_StoredBacktrace>(
+    this, inode.backtrace_version, fin);
 
   if (!state_test(STATE_DIRTYPOOL) || inode.old_volumes.empty()) {
-    mdcache->mds->objecter->mutate(oid, mvol, op,
-				   ceph::real_clock::now(), 0, NULL,
-				   fin2);
-    return;
-  }
+    mdcache->mds->objecter->mutate(oid, mvol, op, ceph::real_clock::now(),
+				   0, NULL, fin2.add());
 
-  C_GatherBuilder gather(fin2);
-  mdcache->mds->objecter->mutate(oid, mvol, op, ceph::real_clock::now(),
-				 0, NULL, gather.new_sub());
+  } else {
+    mdcache->mds->objecter->mutate(oid, mvol, op, ceph::real_clock::now(),
+				   0, NULL, fin2.add());
 
-  set<boost::uuids::uuid> old_volumes;
-  for (auto p = inode.old_volumes.begin();
-       p != inode.old_volumes.end();
-       ++p) {
-    if (*p == volume->id || old_volumes.count(*p))
-      continue;
+    set<boost::uuids::uuid> old_volumes;
+    for (const auto& p : inode.old_volumes) {
+      if (p == volume->id || old_volumes.count(p))
+	continue;
 
-    VolumeRef ovol(mdcache->mds->objecter->vol_by_uuid(*p));
-    int r = ovol->attach(mdcache->mds->objecter->cct);
-    if (r) {
-      dout(0) << "Unable to attach volume " << ovol << " error=" << r << dendl;
-      fin->complete(-EDOM);
-      return;
+      VolumeRef ovol(mdcache->mds->objecter->vol_by_uuid(p));
+      int r = ovol->attach(mdcache->mds->objecter->cct);
+      if (r) {
+	dout(0) << "Unable to attach volume " << ovol << " error=" << r
+		<< dendl;
+	fin->complete(r);
+	return;
+      }
+
+      std::unique_ptr<ObjOp> op = ovol->op();
+      op->create(false);
+      op->setxattr("parent", bl);
+
+      mdcache->mds->objecter->mutate(oid, ovol, op,
+				     ceph::real_clock::now(),
+				     0, NULL, fin2.add());
+      old_volumes.insert(p);
     }
-
-    std::unique_ptr<ObjOp> op = ovol->op();
-    if (!op) {
-      dout(0) << "Unable to make operation for volume " << ovol << dendl;
-      fin->complete(-EDOM);
-      return;
-    }
-    op->create(false);
-    op->setxattr("parent", bl);
-
-    mdcache->mds->objecter->mutate(oid, ovol, op,
-				   ceph::real_clock::now(),
-				   0, NULL, gather.new_sub());
-    old_volumes.insert(*p);
   }
-  gather.activate();
+  fin2.activate();
 }
 
 void CInode::_stored_backtrace(version_t v, Context *fin)
@@ -1554,6 +1571,17 @@ struct C_Inode_FragUpdate : public Context {
 
   C_Inode_FragUpdate(CInode *i, CDir *d, MutationRef& m) : in(i), dir(d), mut(m) {}
   void finish(int r) {
+    in->_finish_frag_update(dir, mut);
+  }
+};
+
+struct CB_Inode_FragUpdate {
+  CInode *in;
+  CDir *dir;
+  MutationRef mut;
+
+  CB_Inode_FragUpdate(CInode *i, CDir *d, MutationRef& m) : in(i), dir(d), mut(m) {}
+  void operator()(int r) {
     in->_finish_frag_update(dir, mut);
   }
 };

@@ -4,29 +4,21 @@
 #include <unistd.h>
 
 template<typename T>
-struct C_Holder : public Context {
+struct Holder {
   T obj;
-  C_Holder(T obj) : obj(obj) {}
-  void finish(int r) {
+  Holder(T obj) : obj(obj) {}
+  void operator()(int r) {
     return;
   }
 };
 
 struct OnDelete {
-  Context *c;
-  OnDelete(Context *c) : c(c) {}
-  ~OnDelete() { c->complete(0); }
+  std::function<void(int)> c;
+  OnDelete(std::function<void(int)>&& _c) : c(std::move(_c)) {}
+  ~OnDelete() { c(0); }
 };
 
-struct Cleanup : public Context {
-  Bencher *bench;
-  Cleanup(Bencher *bench) : bench(bench) {}
-  void finish(int r) {
-    bench->complete_op();
-  }
-};
-
-struct OnWriteApplied : public Context {
+struct OnWriteApplied {
   Bencher *bench;
   uint64_t seq;
   std::shared_ptr<OnDelete> on_delete;
@@ -34,12 +26,12 @@ struct OnWriteApplied : public Context {
     Bencher *bench, uint64_t seq,
     std::shared_ptr<OnDelete> on_delete
     ) : bench(bench), seq(seq), on_delete(on_delete) {}
-  void finish(int r) {
+  void operator()(int r) {
     bench->stat_collector->write_applied(seq);
   }
 };
 
-struct OnWriteCommit : public Context {
+struct OnWriteCommit {
   Bencher *bench;
   uint64_t seq;
   std::shared_ptr<OnDelete> on_delete;
@@ -47,20 +39,21 @@ struct OnWriteCommit : public Context {
     Bencher *bench, uint64_t seq,
     std::shared_ptr<OnDelete> on_delete
     ) : bench(bench), seq(seq), on_delete(on_delete) {}
-  void finish(int r) {
+  void operator()(int r) {
     bench->stat_collector->write_committed(seq);
   }
 };
 
-struct OnReadComplete : public Context {
+struct OnReadComplete {
   Bencher *bench;
   uint64_t seq;
-  boost::scoped_ptr<bufferlist> bl;
+  bufferlist* bl;
   OnReadComplete(Bencher *bench, uint64_t seq, bufferlist *bl) :
     bench(bench), seq(seq), bl(bl) {}
-  void finish(int r) {
+  void operator()(int r) {
     bench->stat_collector->read_complete(seq);
     bench->complete_op();
+    delete bl;
   }
 };
 
@@ -124,8 +117,8 @@ void Bencher::init(
 	*i,
 	0,
 	bl,
-	new C_Holder<std::shared_ptr<OnFinish> >(on_finish),
-	new C_Holder<std::shared_ptr<OnFinish> >(on_finish)
+	Holder<std::shared_ptr<OnFinish> >(on_finish),
+	Holder<std::shared_ptr<OnFinish> >(on_finish)
 	);
     }
   }
@@ -154,7 +147,7 @@ void Bencher::run_bench()
     switch (op_type) {
       case WRITE: {
 	std::shared_ptr<OnDelete> on_delete(
-	  new OnDelete(new Cleanup(this)));
+	  new OnDelete([this](int r) { complete_op(); }));
 	stat_collector->start_write(seq, length);
 	while (bl.length() < length) {
 	  bl.append(rand());
@@ -163,9 +156,9 @@ void Bencher::run_bench()
 	  obj_name,
 	  offset,
 	  bl,
-	  new OnWriteApplied(
+	  OnWriteApplied(
 	    this, seq, on_delete),
-	  new OnWriteCommit(
+	  OnWriteCommit(
 	    this, seq, on_delete)
 	  );
 	break;
@@ -178,7 +171,7 @@ void Bencher::run_bench()
 	  offset,
 	  length,
 	  read_bl,
-	  new OnReadComplete(
+	  OnReadComplete(
 	    this, seq, read_bl)
 	  );
 	break;

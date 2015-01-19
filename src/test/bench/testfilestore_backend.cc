@@ -7,14 +7,21 @@
 extern CephContext* cct;
 
 struct C_DeleteTransWrapper : public Context {
-  Context *c;
+  std::function<void(int)> c;
   ObjectStore::Transaction *t;
   C_DeleteTransWrapper(
-    ObjectStore::Transaction *t,
-    Context *c) : c(c), t(t) {}
+    ObjectStore::Transaction *t, std::function<void(int)>&& c) : c(c), t(t) {}
   void finish(int r) {
-    c->complete(r);
+    c(r);
     delete t;
+  }
+};
+
+struct C_DumbWrapper : public Context {
+  std::function<void(int)> c;
+  C_DumbWrapper(std::function<void(int)>&& c) : c(c) {}
+  void finish(int r) {
+    c(r);
   }
 };
 
@@ -29,8 +36,8 @@ void TestFileStoreBackend::write(
   const string &oid,
   uint64_t offset,
   const bufferlist &bl,
-  Context *on_applied,
-  Context *on_commit)
+  std::function<void(int)>&& on_applied,
+  std::function<void(int)>&& on_commit)
 {
   ObjectStore::Transaction *t = new ObjectStore::Transaction;
   size_t sep = oid.find("/");
@@ -58,8 +65,8 @@ void TestFileStoreBackend::write(
   os->queue_transaction(
     osr,
     t,
-    new C_DeleteTransWrapper(t, on_applied),
-    on_commit);
+    new C_DeleteTransWrapper(t, std::move(on_applied)),
+    new C_DumbWrapper(std::move(on_commit)));
 }
 
 void TestFileStoreBackend::read(
@@ -67,7 +74,7 @@ void TestFileStoreBackend::read(
   uint64_t offset,
   uint64_t length,
   bufferlist *bl,
-  Context *on_complete)
+  std::function<void(int)>&& on_complete)
 {
   size_t sep = oid.find("/");
   assert(sep != string::npos);
@@ -75,5 +82,5 @@ void TestFileStoreBackend::read(
   coll_t c(oid.substr(0, sep));
   oid_t h(oid.substr(sep+1));
   os->read(c, h, offset, length, *bl);
-  finisher.queue(on_complete);
+  finisher.queue(new C_DumbWrapper(std::move(on_complete)));
 }

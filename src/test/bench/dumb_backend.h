@@ -4,7 +4,6 @@
 #define DUMBBACKEND
 
 #include "backend.h"
-#include "include/Context.h"
 #include "os/ObjectStore.h"
 #include "common/WorkQueue.h"
 #include "common/Semaphore.h"
@@ -18,14 +17,14 @@ class DumbBackend : public Backend {
     const string oid;
     bufferlist bl;
     uint64_t offset;
-    Context *on_applied;
-    Context *on_commit;
+    std::function<void(int)> on_applied;
+    std::function<void(int)> on_commit;
     write_item(
       const string &oid,
       const bufferlist &bl,
       uint64_t offset,
-      Context *on_applied,
-      Context *on_commit) :
+      std::function<void(int)>&& on_applied,
+      std::function<void(int)>&& on_commit) :
       oid(oid), bl(bl), offset(offset), on_applied(on_applied),
       on_commit(on_commit) {}
   };
@@ -56,7 +55,7 @@ class DumbBackend : public Backend {
   void sync_loop();
 
   std::mutex pending_commit_mutex;
-  set<Context*> pending_commits;
+  std::list<std::function<void(int)>> pending_commits;
 
   class WriteQueue : public ThreadPool::WorkQueue<write_item> {
     deque<write_item*> item_queue;
@@ -89,8 +88,8 @@ class DumbBackend : public Backend {
 	item->oid,
 	item->offset,
 	item->bl,
-	item->on_applied,
-	item->on_commit);
+	std::move(item->on_applied),
+	std::move(item->on_commit));
     }
     void _clear() {
       return item_queue.clear();
@@ -104,8 +103,8 @@ class DumbBackend : public Backend {
     const string &oid_t,
     uint64_t offset,
     const bufferlist &bl,
-    Context *on_applied,
-    Context *on_commit);
+    std::function<void(int)>&& on_applied,
+    std::function<void(int)>&& on_commit);
 
 public:
   DumbBackend(
@@ -146,12 +145,13 @@ public:
     const string &oid_t,
     uint64_t offset,
     const bufferlist &bl,
-    Context *on_applied,
-    Context *on_commit) {
+    std::function<void(int)>&& on_applied,
+    std::function<void(int)>&& on_commit) {
     sem.Get();
     queue.queue(
       new write_item(
-	oid_t, bl, offset, on_applied, on_commit));
+	oid_t, bl, offset, std::move(on_applied),
+	std::move(on_commit)));
   }
 
   void read(
@@ -159,7 +159,7 @@ public:
     uint64_t offset,
     uint64_t length,
     bufferlist *bl,
-    Context *on_complete);
+    std::function<void(int)>&& on_complete);
 };
 
 #endif

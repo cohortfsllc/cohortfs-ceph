@@ -32,6 +32,7 @@
 #include "osdc/Objecter.h"
 
 #include "common/config.h"
+#include "common/MultiCallback.h"
 
 #define dout_subsys ceph_subsys_mds
 #undef dout_prefix
@@ -1245,7 +1246,7 @@ void CDir::fetch(Context *c, const string& want_dn, bool ignore_authpinnability)
   _omap_fetch(want_dn);
 }
 
-class C_Dir_OMAP_Fetched : public Context {
+class CB_Dir_OMAP_Fetched {
  protected:
   CDir *dir;
   string want_dn;
@@ -1254,8 +1255,8 @@ class C_Dir_OMAP_Fetched : public Context {
   map<string, bufferlist> omap;
   int ret1, ret2;
 
-  C_Dir_OMAP_Fetched(CDir *d, const string& w) : dir(d), want_dn(w) { }
-  void finish(int r) {
+  CB_Dir_OMAP_Fetched(CDir *d, const string& w) : dir(d), want_dn(w) { }
+  void operator()(int r) {
     if (r >= 0) r = ret1;
     if (r >= 0) r = ret2;
     dir->_omap_fetched(hdrbl, omap, want_dn, r);
@@ -1264,9 +1265,9 @@ class C_Dir_OMAP_Fetched : public Context {
 
 void CDir::_omap_fetch(const string& want_dn)
 {
-  C_Dir_OMAP_Fetched *fin = new C_Dir_OMAP_Fetched(this, want_dn);
   oid_t oid = get_ondisk_object();
   VolumeRef volume(cache->mds->get_metadata_volume());
+  CB_Dir_OMAP_Fetched fin(this, want_dn);
   if (!volume) {
     dout(0) << "Unable to attach volume " << volume << dendl;
     return;
@@ -1276,10 +1277,10 @@ void CDir::_omap_fetch(const string& want_dn)
     dout(0) << "Unable to make operation for volume " << volume << dendl;
     return;
   }
-  rd->omap_get_header(&fin->hdrbl, &fin->ret1);
-  rd->omap_get_vals("", "", (uint64_t)-1, fin->omap, &fin->ret2);
+  rd->omap_get_header(&fin.hdrbl, &fin.ret1);
+  rd->omap_get_vals("", "", (uint64_t)-1, fin.omap, &fin.ret2);
   cache->mds->objecter->read(oid, volume, rd, NULL, 0,
-			     fin);
+			     std::ref(fin));
 }
 
 void CDir::_omap_fetched(bufferlist& hdrbl, map<string, bufferlist>& omap,
@@ -1394,13 +1395,16 @@ void CDir::commit(version_t want, Context *c, bool ignore_authpinnability, int o
   _commit(want, op_prio);
 }
 
-class C_Dir_Committed : public Context {
+class Dir_Committed : public cohort::SimpleMultiCallback<int> {
+  friend class cohort::MultiCallback;
   CDir *dir;
   version_t version;
+  Dir_Committed(CDir *d, version_t v) : dir(d), version(v) { } ;
 public:
-  C_Dir_Committed(CDir *d, version_t v) : dir(d), version(v) { }
-  void finish(int r) {
+  void work(int r) {
     assert(r == 0);
+  }
+  void finish() {
     dir->_committed(version);
   }
 };
@@ -1422,7 +1426,8 @@ void CDir::_omap_commit(int op_prio)
   set<string> to_remove;
   map<string, bufferlist> to_set;
 
-  C_GatherBuilder gather(new C_Dir_Committed(this, get_version()));
+  auto& committed = cohort::MultiCallback::create<Dir_Committed>(
+    this, get_version());
 
   oid_t oid = get_ondisk_object();
   VolumeRef volume(cache->mds->get_metadata_volume());
@@ -1467,7 +1472,7 @@ void CDir::_omap_commit(int op_prio)
 
       cache->mds->objecter->mutate(oid, volume, op,
 				   ceph::real_clock::now(), 0, NULL,
-				   gather.new_sub());
+				   committed.add());
 
       write_size = 0;
       to_set.clear();
@@ -1501,9 +1506,9 @@ void CDir::_omap_commit(int op_prio)
     op->omap_rm_keys(to_remove);
 
   cache->mds->objecter->mutate(oid, volume, op, ceph::real_clock::now(),
-			       0, NULL, gather.new_sub());
+			       0, NULL, committed.add());
 
-  gather.activate();
+  committed.activate();
 }
 
 void CDir::_encode_dentry(CDentry *dn, bufferlist& bl)

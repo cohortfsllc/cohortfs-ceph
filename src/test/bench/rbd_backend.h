@@ -4,8 +4,7 @@
 #define CEPH_TEST_SMALLIOBENCH_RBD_BACKEND_H
 
 #include "backend.h"
-#include "include/Context.h"
-#include "include/rbd/librbd.hpp"
+#include "librbd/Image.h"
 
 using namespace ceph;
 
@@ -18,15 +17,15 @@ public:
     const std::string &oid_t,
     uint64_t offset,
     const bufferlist &bl,
-    Context *on_applied,
-    Context *on_commit);
+    OSDC::op_callback&& on_applied,
+    OSDC::op_callback&& on_commit);
 
   void read(
     const std::string &oid_t,
     uint64_t offset,
     uint64_t length,
     bufferlist *bl,
-    Context *on_complete);
+    OSDC::op_callback&& on_complete);
 };
 
 #endif

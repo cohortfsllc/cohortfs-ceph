@@ -14,8 +14,8 @@ void DumbBackend::_write(
   const string &oid_t,
   uint64_t offset,
   const bufferlist &bl,
-  Context *on_applied,
-  Context *on_commit)
+  std::function<void(int)>&& on_applied,
+  std::function<void(int)>&& on_commit)
 {
   string full_path(get_full_path(oid_t));
   int fd = ::open(
@@ -33,7 +33,7 @@ void DumbBackend::_write(
     return;
   }
   bl.write_fd(fd);
-  on_applied->complete(0);
+  on_applied(0);
   if (do_fsync)
     ::fsync(fd);
 #ifdef HAVE_SYNC_FILE_RANGE
@@ -56,7 +56,7 @@ void DumbBackend::_write(
   ::close(fd);
   {
     lock_guard l(pending_commit_mutex);
-    pending_commits.insert(on_commit);
+    pending_commits.emplace_back(std::move(on_commit));
   }
   sem.Put();
 }
@@ -66,7 +66,7 @@ void DumbBackend::read(
   uint64_t offset,
   uint64_t length,
   bufferlist *bl,
-  Context *on_complete)
+  std::function<void(int)>&& on_complete)
 {
   string full_path(get_full_path(oid_t));
   int fd = ::open(
@@ -83,7 +83,7 @@ void DumbBackend::read(
 
   bl->read_fd(fd, length);
   ::close(fd);
-  on_complete->complete(0);
+  on_complete(0);
 }
 
 void DumbBackend::sync_loop()
@@ -106,10 +106,10 @@ void DumbBackend::sync_loop()
 #endif
     {
       lock_guard l(pending_commit_mutex);
-      for (set<Context*>::iterator i = pending_commits.begin();
+      for (auto i = pending_commits.begin();
 	   i != pending_commits.end();
 	   pending_commits.erase(i++)) {
-	(*i)->complete(0);
+	(*i)(0);
       }
     }
     tp.unpause();

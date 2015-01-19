@@ -511,11 +511,6 @@ void librados::IoCtx::dup(const IoCtx& rhs)
   io_ctx_impl->dup(*rhs.io_ctx_impl);
 }
 
-string librados::IoCtx::get_volume_name()
-{
-  return io_ctx_impl->client->lookup_volume(get_volume());
-}
-
 int librados::IoCtx::create(const std::string& oid, bool exclusive)
 {
   return io_ctx_impl->create(oid, exclusive);
@@ -855,14 +850,6 @@ int librados::IoCtx::aio_exec(const std::string& oid,
   return io_ctx_impl->aio_exec(oid, c->pc, cls, method, inbl, outbl);
 }
 
-int librados::IoCtx::aio_sparse_read(const std::string& oid, librados::AioCompletion *c,
-				     std::map<uint64_t,uint64_t> *m, bufferlist *data_bl,
-				     size_t len, uint64_t off)
-{
-  return io_ctx_impl->aio_sparse_read(oid, c->pc,
-				      m, data_bl, len, off);
-}
-
 int librados::IoCtx::aio_write(const std::string& oid, librados::AioCompletion *c,
 			       const bufferlist& bl, size_t len, uint64_t off)
 {
@@ -1145,46 +1132,15 @@ librados::AioCompletion *librados::Rados::aio_create_completion(
   return new AioCompletion(c);
 }
 
-boost::uuids::uuid librados::Rados::lookup_volume(const string& name)
+std::shared_ptr<const Volume> librados::Rados::lookup_volume(const string& name)
 {
   return client->lookup_volume(name);
 }
 
-string librados::Rados::lookup_volume(const boost::uuids::uuid& name)
+std::shared_ptr<const Volume> librados::Rados::lookup_volume(const boost::uuids::uuid& name)
 {
   return client->lookup_volume(name);
 }
-
-extern "C" int rados_volume_by_name(rados_t cluster, const char* name,
-				    uint8_t out_id[16])
-{
-  librados::RadosClient *client = (librados::RadosClient *)cluster;
-  boost::uuids::uuid id = client->lookup_volume(string(name));
-  if (id.is_nil()) {
-    return -ENOENT;
-  } else {
-    memcpy(out_id, &id, 16);
-    return 0;
-  }
-}
-
-extern "C" int rados_volume_by_id(rados_t cluster, const uint8_t in_id[16],
-				  size_t len, char *out_name)
-{
-  librados::RadosClient *client = (librados::RadosClient *)cluster;
-  boost::uuids::uuid id;
-  memcpy(&id, in_id, 16);
-  std::string name = client->lookup_volume(id);
-  if (name.empty()) {
-    return -ENOENT;
-  } else if (name.size() > len) {
-    return -ERANGE;
-  } else {  
-    strcpy(out_name, name.c_str());
-    return name.size();
-  }
-}
-
 
 librados::ObjectOperation::ObjectOperation(const IoCtx& ctx)
   : impl(ctx.io_ctx_impl->volume->op())

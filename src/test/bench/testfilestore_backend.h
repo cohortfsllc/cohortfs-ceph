@@ -23,15 +23,15 @@ public:
     const string &oid_t,
     uint64_t offset,
     const bufferlist &bl,
-    Context *on_applied,
-    Context *on_commit);
+    std::function<void(int)>&& on_applied,
+    std::function<void(int)>&& on_commit);
 
   void read(
     const string &oid_t,
     uint64_t offset,
     uint64_t length,
     bufferlist *bl,
-    Context *on_complete);
+    std::function<void(int)>&& on_complete);
 };
 
 #endif

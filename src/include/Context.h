@@ -63,6 +63,10 @@ class Context {
     finish(r);
     delete this;
   }
+  // Make all contexts also function objects
+  void operator()(int r) {
+    complete(r);
+  }
 };
 
 /**

@@ -25,7 +25,9 @@
 #include "osd/osd_types.h"
 #include "osdc/Objecter.h"
 
-class RadosClient;
+namespace librados {
+  class RadosClient;
+};
 
 struct librados::IoCtxImpl {
   std::atomic<uint64_t> ref_cnt;
@@ -126,33 +128,30 @@ struct librados::IoCtxImpl {
     return aio_operate_read(oid, op->impl, c, flags, pbl);
   }
 
-  struct C_aio_Ack : public Context {
+  struct CB_aio_Ack {
     librados::AioCompletionImpl *c;
-    C_aio_Ack(AioCompletionImpl *_c);
-    void finish(int r);
+    CB_aio_Ack(AioCompletionImpl *_c);
+    void operator()(int r);
   };
 
-  struct C_aio_stat_Ack : public Context {
+  struct CB_aio_stat_Ack {
     librados::AioCompletionImpl *c;
+    uint64_t* psize;
     time_t *pmtime;
-    ceph::real_time mtime;
-    C_aio_stat_Ack(AioCompletionImpl *_c, time_t *pm);
-    void finish(int r);
+    CB_aio_stat_Ack(AioCompletionImpl *_c, uint64_t* ps, time_t* pm);
+    void operator()(int r, uint64_t s, ceph::real_time t);
   };
 
-  struct C_aio_Safe : public Context {
+  struct CB_aio_Safe {
     AioCompletionImpl *c;
-    C_aio_Safe(AioCompletionImpl *_c);
-    void finish(int r);
+    CB_aio_Safe(AioCompletionImpl *_c);
+    void operator()(int r);
   };
 
   int aio_read(const oid_t oid, AioCompletionImpl *c,
 	       bufferlist *pbl, size_t len, uint64_t off);
   int aio_read(oid_t oid, AioCompletionImpl *c,
 	       char *buf, size_t len, uint64_t off);
-  int aio_sparse_read(const oid_t oid, AioCompletionImpl *c,
-		      std::map<uint64_t,uint64_t> *m, bufferlist *data_bl,
-		      size_t len, uint64_t off);
   int aio_write(const oid_t &oid, AioCompletionImpl *c,
 		const bufferlist& bl, size_t len, uint64_t off);
   int aio_append(const oid_t &oid, AioCompletionImpl *c,
