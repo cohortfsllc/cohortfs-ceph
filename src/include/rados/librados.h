@@ -1925,8 +1925,6 @@ typedef void (*rados_log_callback_t)(void *arg,
 int rados_monitor_log(rados_t cluster, const char *level, rados_log_callback_t cb, void *arg);
 int rados_volume_create(rados_t cluster, const char *name);
 int rados_volume_delete(rados_t cluster, const char *name);
-int rados_volume_by_name(rados_t cluster, const char* name, uint8_t out_id[16]);
-int rados_volume_by_id(rados_t cluster, const uint8_t in_id[16], size_t len, char *out_name);
 
 
 

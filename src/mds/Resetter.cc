@@ -83,13 +83,11 @@ void Resetter::reset()
   journaler->set_writeable();
 
   cout << "writing journal head" << std::endl;
-  journaler->write_head(new C_SafeCond(&mylock, &cond, &done, &r));
+  OSDC::CB_Waiter w;
+  journaler->write_head(std::ref(w));
   lock.unlock();
 
-  myl.lock();
-  while (!done)
-    cond.wait(myl);
-  myl.unlock();
+  r = w.wait();
 
   l.lock();
   assert(r == 0);

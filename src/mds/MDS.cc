@@ -71,6 +71,8 @@
 #include "perfglue/cpu_profiler.h"
 #include "perfglue/heap_profiler.h"
 
+#include "common/MultiCallback.h"
+
 
 #define dout_subsys ceph_subsys_mds
 #undef dout_prefix
@@ -1057,11 +1059,15 @@ public:
   }
 };
 
-class C_MDS_CreateFinish : public Context {
+class MDS_CreateFinish : public cohort::SimpleMultiCallback<int> {
+  friend class cohort::MultiCallback;
   MDS *mds;
+  MDS_CreateFinish(MDS *m) : mds(m) {}
 public:
-  C_MDS_CreateFinish(MDS *m) : mds(m) {}
-  void finish(int r) { mds->creating_done(); }
+  void work(int _r) { }
+  void finish() {
+    mds->creating_done();
+  }
 };
 
 void MDS::boot_create(int telomere)
@@ -1093,43 +1099,43 @@ void MDS::boot_create(int telomere)
     return;
   }
 
-  C_GatherBuilder fin(new C_MDS_CreateFinish(this));
+  auto& fin = cohort::MultiCallback::create<MDS_CreateFinish>(this);
 
   // start with a fresh journal
   dout(10) << "boot_create creating fresh journal" << dendl;
-  mdlog->create(v, fin.new_sub());
+  mdlog->create(v, fin.add());
 
   // open new journal segment, but do not journal subtree map (yet)
   mdlog->prepare_new_segment();
 
   if (whoami == mdsmap->get_root()) {
     dout(3) << "boot_create creating fresh hierarchy" << dendl;
-    mdcache->create_empty_hierarchy(v, fin.get());
+    mdcache->create_empty_hierarchy(v, fin);
   }
 
   dout(3) << "boot_create creating mydir hierarchy" << dendl;
-  mdcache->create_mydir_hierarchy(v, fin.get());
+  mdcache->create_mydir_hierarchy(v, fin);
 
   // fixme: fake out inotable (reset, pretend loaded)
   dout(10) << "boot_create creating fresh inotable table" << dendl;
   inotable->reset();
-  inotable->save(fin.new_sub());
+  inotable->save(fin.add_ctx());
 
   // write empty sessionmap
-  sessionmap.save(fin.new_sub());
+  sessionmap.save(fin.add_ctx());
 
   // initialize tables
   if (mdsmap->get_tableserver() == whoami) {
     dout(10) << "boot_create creating fresh anchortable" << dendl;
     anchorserver->reset();
-    anchorserver->save(fin.new_sub());
+    anchorserver->save(fin.add_ctx());
   }
 
   assert(cct->_conf->mds_kill_create_at != 1);
 
   // ok now journal it
   mdlog->journal_segment_subtree_map();
-  mdlog->wait_for_safe(fin.new_sub());
+  mdlog->wait_for_safe(fin.add_ctx());
   mdlog->flush();
 
   fin.activate();
@@ -1300,13 +1306,13 @@ void MDS::replay_start(unique_lock& ml)
 }
 
 
-class MDS::C_MDS_StandbyReplayRestartFinish : public Context {
+class MDS::MDS_StandbyReplayRestartFinish {
   MDS *mds;
   uint64_t old_read_pos;
 public:
-  C_MDS_StandbyReplayRestartFinish(MDS *mds_, uint64_t old_read_pos_) :
+  MDS_StandbyReplayRestartFinish(MDS *mds_, uint64_t old_read_pos_) :
     mds(mds_), old_read_pos(old_read_pos_) {}
-  void finish(int r) {
+  void operator()(int r) {
     MDS::unique_lock ml(mds->mds_lock);
     mds->_standby_replay_restart_finish(ml, r, old_read_pos);
   }
@@ -1341,7 +1347,8 @@ inline void MDS::standby_replay_restart()
     }
   } else {
     mdlog->get_journaler()->reread_head_and_probe(
-      new C_MDS_StandbyReplayRestartFinish(this, mdlog->get_journaler()->get_read_pos()));
+      MDS_StandbyReplayRestartFinish(this,
+				     mdlog->get_journaler()->get_read_pos()));
   }
 }
 

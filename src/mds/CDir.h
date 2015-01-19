@@ -270,9 +270,9 @@ protected:
 
   friend class CDirDiscover;
   friend class CDirExport;
-  friend class C_Dir_TMAP_Fetched;
-  friend class C_Dir_OMAP_Fetched;
-  friend class C_Dir_Committed;
+  friend class CB_Dir_TMAP_Fetched;
+  friend class CB_Dir_OMAP_Fetched;
+  friend class Dir_Committed;
 
  public:
   CDir(CephContext* _cct, CInode *in, frag_t fg, MDCache *mdcache, bool auth);

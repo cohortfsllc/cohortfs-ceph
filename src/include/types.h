@@ -48,7 +48,6 @@ using std::istringstream;
 
 #include "ceph_fs.h"
 #include "ceph_frag.h"
-#include "rbd_types.h"
 
 extern "C" {
 #include <stdint.h>

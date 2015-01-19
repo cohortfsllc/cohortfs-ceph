@@ -50,6 +50,7 @@
 #include "AioCompletionImpl.h"
 #include "IoCtxImpl.h"
 #include "RadosClient.h"
+#include "common/ceph_argparse.h"
 
 
 #define dout_subsys ceph_subsys_rados
@@ -68,49 +69,74 @@ bool librados::RadosClient::ms_get_authorizer(int dest_type,
   return *authorizer != NULL;
 }
 
-librados::RadosClient::RadosClient(CephContext *cct_)
-  : Dispatcher(cct_),
-    cct(cct_),
-    conf(cct_->_conf),
+CephContext* librados::RadosClient::construct_cct(const string& clustername,
+						  const string& id)
+{
+  CephInitParameters iparams(CEPH_ENTITY_TYPE_CLIENT);
+  if (!id.empty()) {
+    iparams.name.set(CEPH_ENTITY_TYPE_CLIENT, id);
+  }
+  CephContext *cct = common_preinit(iparams, CODE_ENVIRONMENT_LIBRARY, 0);
+  if (!clustername.empty())
+    cct->_conf->cluster = clustername;
+  cct->_conf->parse_env(); // environment variables override
+  cct->_conf->apply_changes(NULL);
+  cct->init();
+  return cct;
+}
+
+librados::RadosClient::RadosClient()
+  : Dispatcher(construct_cct()),
+    conf(cct->_conf),
     state(DISCONNECTED),
-    monclient(cct_),
+    monclient(cct),
     messenger(NULL),
     instance_id(0),
-    objecter(NULL),
-    lock(),
     refcnt(1),
     log_last_version(0), log_cb(NULL), log_cb_arg(NULL),
+    objecter(nullptr),
     finisher(cct),
-    max_watch_notify_cookie(0)
+    max_watch_notify_cookie(0),
+    own_cct(true)
 {
 }
 
-boost::uuids::uuid librados::RadosClient::lookup_volume(const string& name)
+librados::RadosClient::RadosClient(CephContext *cct_)
+  : Dispatcher(cct_),
+    conf(cct->_conf),
+    state(DISCONNECTED),
+    monclient(cct),
+    messenger(NULL),
+    instance_id(0),
+    refcnt(1),
+    log_last_version(0), log_cb(NULL), log_cb_arg(NULL),
+    objecter(nullptr),
+    finisher(cct),
+    max_watch_notify_cookie(0),
+    own_cct(false)
+{
+}
+
+std::shared_ptr<const Volume> librados::RadosClient::lookup_volume(
+  const string& name)
 {
   int r = wait_for_osdmap();
   if (r < 0)
-    return boost::uuids::nil_uuid();
+    return nullptr;
 
-  boost::uuids::uuid id = boost::uuids::nil_uuid();
   VolumeRef v = objecter->vol_by_name(name);
-  if (v) {
-    id = v->id;
-  }
-  return id;
+  return v;
 }
 
-string librados::RadosClient::lookup_volume(const boost::uuids::uuid& id)
+std::shared_ptr<const Volume> librados::RadosClient::lookup_volume(
+  const boost::uuids::uuid& id)
 {
   int r = wait_for_osdmap();
   if (r < 0)
-    return string();
+    return nullptr;
 
   VolumeRef v = objecter->vol_by_uuid(id);
-  string name;
-  if (v) {
-    name = v->name;
-  }
-  return name;
+  return v;
 }
 
 int librados::RadosClient::get_fsid(std::string *s)
@@ -298,8 +324,8 @@ librados::RadosClient::~RadosClient()
     delete messenger;
   if (objecter)
     delete objecter;
-  common_cleanup(cct);
-  cct = NULL;
+  if (own_cct)
+    common_cleanup(cct);
 }
 
 int librados::RadosClient::create_ioctx(const string &name, IoCtxImpl **io)

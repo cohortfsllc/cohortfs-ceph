@@ -5293,10 +5293,10 @@ void Client::unlock_fh_pos(Fh *f)
   f->pos_locked = false;
 }
 
-int Client::uninline_data(Inode *in, Context *onfinish)
+int Client::uninline_data(Inode *in, OSDC::op_callback&& onfinish)
 {
   if (!in->inline_data.length()) {
-    onfinish->complete(0);
+    onfinish(0);
     return 0;
   }
 
@@ -5336,7 +5336,7 @@ int Client::uninline_data(Inode *in, Context *onfinish)
 		   ceph::real_clock::now(),
 		   0,
 		   NULL,
-		   onfinish);
+		   move(onfinish));
 
   return 0;
 }
@@ -5394,19 +5394,13 @@ retry:
   if (r < 0)
     return r;
 
-  std::mutex uninline_flock;
-  std::condition_variable uninline_cond;
-  bool uninline_done = false;
-  int uninline_ret = 0;
-  Context *onuninline = NULL;
+  bool uninline = false;
+  OSDC::CB_Waiter w;
 
   if (in->inline_version < CEPH_INLINE_NONE) {
     if (!(have & CEPH_CAP_FILE_CACHE)) {
-      onuninline = new C_SafeCond(&uninline_flock,
-				  &uninline_cond,
-				  &uninline_done,
-				  &uninline_ret);
-      uninline_data(in, onuninline);
+      uninline = true;
+      uninline_data(in, std::ref(w));
     } else {
       uint32_t len = in->inline_data.length();
 
@@ -5474,12 +5468,9 @@ success:
 done:
   // done!
 
-  if (onuninline) {
+  if (uninline) {
     cl.unlock();
-    unique_lock ufl(uninline_flock);
-    while (!uninline_done)
-      uninline_cond.wait(ufl);
-    ufl.unlock();
+    int uninline_ret = w.wait();
     cl.lock();
 
     if (uninline_ret >= 0 || uninline_ret == -ECANCELED) {
@@ -5507,21 +5498,16 @@ int Client::_read_sync(Fh *f, uint64_t off, uint64_t len, bufferlist *bl,
 
   ldout(cct, 10) << "_read_sync " << *in << " " << off << "~" << len << dendl;
 
-  std::mutex flock;
-  std::condition_variable cond;
+  OSDC::CB_Waiter w;
   while (left > 0) {
     int r = 0;
-    bool done = false;
-    Context *onfinish = new C_SafeCond(&flock, &cond, &done, &r);
     bufferlist tbl;
 
     int wanted = left;
     oid_t oid = file_oid(in->ino, 0);
-    objecter->read(oid, in->volume, pos, left, &tbl, 0, onfinish);
+    objecter->read(oid, in->volume, pos, left, &tbl, 0, std::ref(w));
     cl.unlock();
-    unique_lock fl(flock);
-    cond.wait(fl, [&](){ return done; });
-    fl.unlock();
+    w.wait();
     cl.lock();
 
     // if we get ENOENT from OSD, assume 0 bytes returned
@@ -5557,6 +5543,7 @@ int Client::_read_sync(Fh *f, uint64_t off, uint64_t len, bufferlist *bl,
       *checkeof = true;
       return read;
     }
+    w.reset();
   }
   return read;
 }
@@ -5566,15 +5553,15 @@ int Client::_read_sync(Fh *f, uint64_t off, uint64_t len, bufferlist *bl,
  * we keep count of uncommitted sync writes on the inode, so that
  * fsync can DDRT.
  */
-class C_Client_SyncCommit : public Context {
-  Client *cl;
-  Inode *in;
+class CB_Client_SyncCommit {
+  Client& cl;
+  Inode& in;
 public:
-  C_Client_SyncCommit(Client *c, Inode *i) : cl(c), in(i) {
-    in->get();
+  CB_Client_SyncCommit(Client *c, Inode *i) : cl(*c), in(*i) {
+    in.get();
   }
-  void finish(int) {
-    cl->sync_write_commit(in);
+  void operator()(int) {
+    cl.sync_write_commit(&in);
   }
 };
 
@@ -5678,21 +5665,15 @@ int Client::_write(Fh *f, int64_t offset, uint64_t size, const char *buf,
   if (r < 0)
     return r;
 
-  std::mutex uninline_flock;
-  std::condition_variable uninline_cond;
-  bool uninline_done = false;
-  int uninline_ret = 0;
-  Context *onuninline = NULL;
+  bool uninline = false;
+  OSDC::CB_Waiter w;
 
   if (in->inline_version < CEPH_INLINE_NONE) {
     if (endoff > cct->_conf->client_max_inline_size ||
 	endoff > CEPH_INLINE_MAX_SIZE ||
 	!(have & CEPH_CAP_FILE_BUFFER)) {
-      onuninline = new C_SafeCond(&uninline_flock,
-				  &uninline_cond,
-				  &uninline_done,
-				  &uninline_ret);
-      uninline_data(in, onuninline);
+      uninline = true;
+      uninline_data(in, std::ref(w));
     } else {
       get_cap_ref(in, CEPH_CAP_FILE_BUFFER);
 
@@ -5717,27 +5698,19 @@ int Client::_write(Fh *f, int64_t offset, uint64_t size, const char *buf,
 
   {
     // simple, non-atomic sync write
-    std::mutex flock;
-    std::condition_variable cond;
-    bool done = false;
-    Context *onfinish = new C_SafeCond(&flock, &cond, &done);
-    Context *onsafe = new C_Client_SyncCommit(this, in);
+    OSDC::CB_Waiter w;
 
     unsafe_sync_write++;
     get_cap_ref(in, CEPH_CAP_FILE_BUFFER);  // released by onsafe callback
 
     oid_t oid = file_oid(in->ino, 0);
     r = objecter->write(oid, in->volume, offset, size, bl,
-			ceph::real_clock::now(), 0, onfinish, onsafe);
+			ceph::real_clock::now(), 0, std::ref(w),
+			CB_Client_SyncCommit(this, in));
     if (r < 0)
       goto done;
 
-    cl.unlock();
-    unique_lock fl(flock);
-
-    while (!done)
-      cond.wait(fl);
-    fl.unlock();
+    w.wait();
     cl.lock();
   }
 
@@ -5771,12 +5744,9 @@ success:
 
 done:
 
-  if (onuninline) {
+  if (uninline) {
     cl.unlock();
-    unique_lock ufl(uninline_flock);
-    while (!uninline_done)
-      uninline_cond.wait(ufl);
-    ufl.unlock();
+    int uninline_ret = w.wait();
     cl.lock();
 
     if (uninline_ret >= 0 || uninline_ret == -ECANCELED) {
@@ -7619,11 +7589,8 @@ int Client::_fallocate(Fh *fh, int mode, int64_t offset, int64_t length,
   if (r < 0)
     return r;
 
-  std::mutex uninline_flock;
-  std::condition_variable uninline_cond;
-  bool uninline_done = false;
-  int uninline_ret = 0;
-  Context *onuninline = NULL;
+  bool uninline = false;
+  OSDC::CB_Waiter uiw;
 
   if (mode & FALLOC_FL_PUNCH_HOLE) {
     if (in->inline_version < CEPH_INLINE_NONE &&
@@ -7647,18 +7614,11 @@ int Client::_fallocate(Fh *fh, int mode, int64_t offset, int64_t length,
       mark_caps_dirty(in, CEPH_CAP_FILE_WR);
     } else {
       if (in->inline_version < CEPH_INLINE_NONE) {
-	onuninline = new C_SafeCond(&uninline_flock,
-				    &uninline_cond,
-				    &uninline_done,
-				    &uninline_ret);
-	uninline_data(in, onuninline);
+	uninline = true;
+	uninline_data(in, std::ref(uiw));
       }
 
-      std::mutex flock;
-      std::condition_variable cond;
-      bool done = false;
-      Context *onfinish = new C_SafeCond(&flock, &cond, &done);
-      Context *onsafe = new C_Client_SyncCommit(this, in);
+      OSDC::CB_Waiter w;
       unsafe_sync_write++;
       get_cap_ref(in, CEPH_CAP_FILE_BUFFER);
 
@@ -7666,7 +7626,7 @@ int Client::_fallocate(Fh *fh, int mode, int64_t offset, int64_t length,
       oid_t oid = file_oid(in->ino, 0);
       r = objecter->zero(oid, in->volume, offset, length,
 			 ceph::real_clock::now(),
-			 0, onfinish, onsafe);
+			 0, std::ref(w), CB_Client_SyncCommit(this, in));
       if (r < 0)
 	goto done;
 
@@ -7674,10 +7634,7 @@ int Client::_fallocate(Fh *fh, int mode, int64_t offset, int64_t length,
       mark_caps_dirty(in, CEPH_CAP_FILE_WR);
 
       cl.unlock();
-      unique_lock fl(flock);
-      while (!done)
-	cond.wait(fl);
-      fl.unlock();
+      r = w.wait();
       cl.lock();
     }
   } else if (!(mode & FALLOC_FL_KEEP_SIZE)) {
@@ -7695,12 +7652,9 @@ int Client::_fallocate(Fh *fh, int mode, int64_t offset, int64_t length,
 
 done:
 
-  if (onuninline) {
+  if (uninline) {
     cl.unlock();
-    unique_lock ufl(uninline_flock);
-    while (!uninline_done)
-      uninline_cond.wait(ufl);
-    ufl.unlock();
+    int uninline_ret = uiw.wait();
     cl.lock();
 
     if (uninline_ret >= 0 || uninline_ret == -ECANCELED) {

@@ -30,6 +30,8 @@
 
 #include "messages/MClientRequest.h"
 #include "messages/MMDSSlaveRequest.h"
+#include "osdc/Objecter.h"
+#include "common/MultiCallback.h"
 
 class MDS;
 class Session;
@@ -516,7 +518,7 @@ public:
   void do_file_recover();
   void _recovered(CInode *in, int r, uint64_t size, ceph::real_time mtime);
 
-  void purge_prealloc_ino(inodeno_t ino, Context *fin);
+  void purge_prealloc_ino(inodeno_t ino, OSDC::op_callback&& fin);
 
 
 
@@ -677,8 +679,10 @@ public:
   CInode *create_system_inode(VolumeRef &v, inodeno_t ino, int mode);
   CInode *create_root_inode(VolumeRef &v);
 
-  void create_empty_hierarchy(VolumeRef &v, C_Gather *gather);
-  void create_mydir_hierarchy(VolumeRef &v, C_Gather *gather);
+  void create_empty_hierarchy(VolumeRef &v,
+			      cohort::SimpleMultiCallback<int>& multi);
+  void create_mydir_hierarchy(VolumeRef &v,
+			      cohort::SimpleMultiCallback<int>& gather);
 
   bool is_open() { return open; }
   void wait_for_open(Context *c) {
@@ -796,7 +800,7 @@ protected:
   void do_open_ino_peer(inodeno_t ino, open_ino_info_t& info);
   void handle_open_ino(MMDSOpenIno *m);
   void handle_open_ino_reply(MMDSOpenInoReply *m);
-  friend class C_MDC_OpenInoBacktraceFetched;
+  friend class CB_MDC_OpenInoBacktraceFetched;
   friend struct C_MDC_OpenInoTraverseDir;
   friend struct C_MDC_OpenInoParentOpened;
 
@@ -855,7 +859,8 @@ public:
   }
 protected:
   void scan_stray_dir(dirfrag_t next=dirfrag_t());
-  void fetch_backtrace(inodeno_t ino, VolumeRef volume, bufferlist& bl, Context *fin);
+  void fetch_backtrace(inodeno_t ino, VolumeRef volume, bufferlist& bl,
+		       OSDC::op_callback&& fin);
   void purge_stray(CDentry *dn);
   void _purge_stray_purged(CDentry *dn, int r=0);
   void _purge_stray_logged(CDentry *dn, version_t pdv, LogSegment *ls);
@@ -864,7 +869,7 @@ protected:
   friend class C_MDC_FetchedBacktrace;
   friend class C_MDC_PurgeStrayLogged;
   friend class C_MDC_PurgeStrayLoggedTruncate;
-  friend class C_MDC_PurgeStrayPurged;
+  friend class MDC_PurgeStrayPurged;
   void reintegrate_stray(CDentry *dn, CDentry *rlink);
   void migrate_stray(CDentry *dn, int dest);
 
@@ -974,7 +979,7 @@ private:
   friend class C_MDC_FragmentPrep;
   friend class C_MDC_FragmentStore;
   friend class C_MDC_FragmentCommit;
-  friend class C_MDC_FragmentFinish;
+  friend class MDC_FragmentFinish;
 
   void handle_fragment_notify(MMDSFragmentNotify *m);
 

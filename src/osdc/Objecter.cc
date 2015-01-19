@@ -675,11 +675,11 @@ namespace OSDC {
 		       << " concluding volume " << op.volume << " dne"
 		       << dendl;
 	if (op.onack) {
-	  op.onack->complete(-ENXIO);
+	  op.onack(-ENXIO);
 	  op.onack = nullptr;
 	}
 	if (op.oncommit) {
-	  op.oncommit->complete(-ENXIO);
+	  op.oncommit(-ENXIO);
 	  op.oncommit = nullptr;
 	}
 
@@ -1166,15 +1166,15 @@ namespace OSDC {
   ceph_tid_t Objecter::read_full(const oid_t& oid,
 				 const shared_ptr<const Volume>& volume,
 				 bufferlist *pbl, int flags,
-				 Context *onfinish, version_t *objver,
+				 op_callback&& onfinish, version_t *objver,
 				 const unique_ptr<ObjOp>& extra_ops,
 				 ZTracer::Trace *trace)
   {
     unique_ptr<ObjOp> ops = init_ops(volume, extra_ops);
     ops->read_full(pbl);
     Op *o = new Op(oid, volume, ops,
-      flags | global_op_flags | CEPH_OSD_FLAG_READ,
-      onfinish, 0, objver, trace);
+		   flags | global_op_flags | CEPH_OSD_FLAG_READ,
+		   move(onfinish), 0, objver, trace);
     return op_submit(o);
   }
 
@@ -1339,11 +1339,11 @@ namespace OSDC {
     }
     ldout(cct, 10) << __func__ << " tid " << tid << dendl;
     if (op->onack) {
-      op->onack->complete(r);
+      op->onack(r);
       op->onack = nullptr;
     }
     if (op->oncommit) {
-      op->oncommit->complete(r);
+      op->oncommit(r);
       op->oncommit = nullptr;
     }
     _finish_op(*op, ol);
@@ -1543,9 +1543,7 @@ namespace OSDC {
     ldout(cct, 15) << "cancel_op " << op.tid << dendl;
     assert(!op.should_resend);
     Op::unique_lock ol(op.lock);
-    delete op.onack;
     op.onack = nullptr;
-    delete op.oncommit;
     op.oncommit = nullptr;
     _finish_op(op, ol);
   }
@@ -1874,19 +1872,19 @@ namespace OSDC {
     if (!op.finished && done >= op.volume->quorum() &&
 	(do_or_die || !still_coming)) {
       // ack|commit -> ack
-      Context *onack = nullptr;
-      Context *oncommit = nullptr;
+      op_callback onack = nullptr;
+      op_callback oncommit = nullptr;
 
       if (op.onack && op.acks >= op.volume->quorum()) {
-	onack = op.onack;
-	op.onack = 0;  // only do callback once
+	onack = move(op.onack);
+	op.onack = nullptr;  // only do callback once
 	assert(num_unacked > 0);
 	num_unacked--;
 	op.trace.event("onack", &trace_endpoint);
       }
       if (op.oncommit && op.commits >= op.volume->quorum()) {
-	oncommit = op.oncommit;
-	op.oncommit = 0;
+	oncommit = move(op.oncommit);
+	op.oncommit = nullptr;
 	assert(num_uncommitted > 0);
 	num_uncommitted--;
 	op.trace.event("oncommit", &trace_endpoint);
@@ -1906,10 +1904,10 @@ namespace OSDC {
 
       // do callbacks
       if (onack) {
-	onack->complete(op.rc);
+	onack(op.rc);
       }
       if (oncommit) {
-	oncommit->complete(op.rc);
+	oncommit(op.rc);
       }
       return true;
     } else {

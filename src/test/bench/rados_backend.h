@@ -4,7 +4,6 @@
 #define RADOSBACKENDH
 
 #include "backend.h"
-#include "include/Context.h"
 #include "include/buffer.h"
 #include "include/rados/librados.hpp"
 
@@ -20,15 +19,15 @@ public:
     const std::string &oid_t,
     uint64_t offset,
     const ceph::bufferlist &bl,
-    Context *on_applied,
-    Context *on_commit);
+    OSDC::op_callback&& on_applied,
+    OSDC::op_callback&& on_commit);
 
   void read(
     const std::string &oid_t,
     uint64_t offset,
     uint64_t length,
     bufferlist *bl,
-    Context *on_complete);
+    OSDC::op_callback&& on_complete);
 };
 
 #endif

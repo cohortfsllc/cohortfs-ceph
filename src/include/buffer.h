@@ -676,7 +676,7 @@ typedef buffer::ptr bufferptr;
 typedef buffer::list bufferlist;
 typedef buffer::hash bufferhash;
 
-inline bool operator>(bufferlist& l, bufferlist& r) {
+inline bool operator>(const bufferlist& l, const bufferlist& r) {
   for (unsigned p = 0; ; p++) {
     if (l.length() > p && r.length() == p) return true;
     if (l.length() == p) return false;
@@ -684,7 +684,7 @@ inline bool operator>(bufferlist& l, bufferlist& r) {
     if (l[p] < r[p]) return false;
   }
 }
-inline bool operator>=(bufferlist& l, bufferlist& r) {
+inline bool operator>=(const bufferlist& l, const bufferlist& r) {
   for (unsigned p = 0; ; p++) {
     if (l.length() > p && r.length() == p) return true;
     if (r.length() == p && l.length() == p) return true;
@@ -694,7 +694,7 @@ inline bool operator>=(bufferlist& l, bufferlist& r) {
   }
 }
 
-inline bool operator==(bufferlist &l, bufferlist &r) {
+inline bool operator==(const bufferlist &l, const bufferlist &r) {
   if (l.length() != r.length())
     return false;
   for (unsigned p = 0; p < l.length(); p++) {
@@ -703,10 +703,10 @@ inline bool operator==(bufferlist &l, bufferlist &r) {
   }
   return true;
 }
-inline bool operator<(bufferlist& l, bufferlist& r) {
+inline bool operator<(const bufferlist& l, const bufferlist& r) {
   return r > l;
 }
-inline bool operator<=(bufferlist& l, bufferlist& r) {
+inline bool operator<=(const bufferlist& l, const bufferlist& r) {
   return r >= l;
 }
 

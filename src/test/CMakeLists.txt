@@ -1168,19 +1168,19 @@ target_link_libraries(test_librbd
   radostest
   )
 
-add_executable(test_librbd_fsx
-  librbd/fsx.c
-  )
-target_link_libraries(test_librbd_fsx
-  librbd
-  librados
-  global
-  m
-  ${CMAKE_DL_LIBS}
-  ${ALLOC_LIBS}
-  ${CRYPTO_LIBS}
-  ${EXTRALIBS}
-  )
+#add_executable(test_librbd_fsx
+#  librbd/fsx.cc
+#  )
+#target_link_libraries(test_librbd_fsx
+#  librbd
+#  librados
+#  global
+#  m
+#  ${CMAKE_DL_LIBS}
+#  ${ALLOC_LIBS}
+#  ${CRYPTO_LIBS}
+#  ${EXTRALIBS}
+#  )
 
 add_executable(test_cls_refcount
   cls_refcount/test_cls_refcount.cc

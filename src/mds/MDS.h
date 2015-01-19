@@ -302,7 +302,7 @@ class MDS : public Dispatcher {
   void standby_replay_restart();
   void _standby_replay_restart_finish(unique_lock& ml, int r,
 				      uint64_t old_read_pos);
-  class C_MDS_StandbyReplayRestartFinish;
+  class MDS_StandbyReplayRestartFinish;
 
   void reopen_log();
 

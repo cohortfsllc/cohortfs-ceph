@@ -36,6 +36,7 @@ using namespace std;
 #include <sys/statvfs.h>
 
 #include "common/errno.h"
+#include "common/MultiCallback.h"
 
 #define dout_subsys ceph_subsys_client
 #undef dout_prefix
@@ -954,6 +955,26 @@ void SyntheticClient::up()
   clear_dir();
 }
 
+class MultiWait : public cohort::SimpleMultiCallback<int> {
+  friend cohort::MultiCallback;
+  OSDC::CB_Waiter w;
+  int r;
+  MultiWait() : r(0) {}
+  virtual void work(int _r) {
+    if (r != 0)
+      r = _r;
+  };
+  void finish(void) {
+    w(r);
+  }
+public:
+  static int wait(std::reference_wrapper<SimpleMultiCallback<int> > p) {
+    MultiWait& mw
+      = static_cast<MultiWait&>(p.get());
+    return mw.w.wait();
+  }
+};
+
 int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
 {
   ldout(client->cct, 4) << "play trace prefix '" << prefix << "'" << dendl;
@@ -999,11 +1020,8 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
 
   // for object traces
   std::mutex lock;
-  std::condition_variable cond;
-  bool ack;
-  bool safe;
-  C_GatherBuilder safeg(new C_SafeCond(&lock, &cond, &safe));
-  Context *safegref = safeg.new_sub();	// take a ref
+  auto& mw = cohort::MultiCallback::create<MultiWait>();
+  auto mwref = mw.add();
 
   while (!t.end()) {
 
@@ -1414,10 +1432,11 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
 			      << " error=" << r << dendl;
 	continue;
       }
-      client->objecter->stat(oid, mvol, &size, &mtime, 0,
-			     new C_SafeCond(&lock, &cond, &ack));
-      while (!ack) cond.wait(l);
       l.unlock();
+      OSDC::CB_Waiter w;
+      client->objecter->stat(oid, mvol, &size, &mtime, 0,
+			     std::ref(w));
+      r = w.wait();
     }
     else if (strcmp(op, "o_read") == 0) {
       int64_t oh = t.get_int();
@@ -1436,10 +1455,11 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       }
       std::unique_lock<std::mutex> l(lock);
       bufferlist bl;
-      client->objecter->read(oid, mvol, off, len, &bl, 0,
-			     new C_SafeCond(&lock, &cond, &ack));
-      while (!ack) cond.wait(l);
       l.unlock();
+      OSDC::CB_Waiter w;
+      client->objecter->read(oid, mvol, off, len, &bl, 0,
+			     std::ref(w));
+      r = w.wait();
     }
     else if (strcmp(op, "o_write") == 0) {
       int64_t oh = t.get_int();
@@ -1461,13 +1481,14 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       bufferptr bp(len);
       bufferlist bl;
       bl.push_back(bp);
+      OSDC::CB_Waiter w;
       client->objecter->write(oid, mvol, off, len, bl,
 			      ceph::real_clock::now(), 0,
-			      new C_SafeCond(&lock, &cond, &ack),
-			      safeg.new_sub());
-      safeg.activate();
-      while (!ack) cond.wait(l);
+			      std::ref(w),
+			      mw.add());
+      mw.activate();
       l.unlock();
+      r = w.wait();
     }
     else if (strcmp(op, "o_zero") == 0) {
       int64_t oh = t.get_int();
@@ -1485,14 +1506,12 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
 			      << " error=" << r << dendl;
 	continue;
       }
-      std::unique_lock<std::mutex> l(lock);
+      OSDC::CB_Waiter w;
       client->objecter->zero(oid, mvol, off, len,
 			     ceph::real_clock::now(), 0,
-			     new C_SafeCond(&lock, &cond, &ack),
-			     safeg.new_sub());
-      safeg.activate();
-      while (!ack) cond.wait(l);
-      l.unlock();
+			     std::ref(w),
+			     mw.add());
+      r = w.wait();
     }
 
 
@@ -1507,13 +1526,8 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
   ldout(client->cct, 10) << "trace finished on line " << t.get_line() << dendl;
 
   // wait for safe after an object trace
-  safegref->complete(0);
-  std::unique_lock<std::mutex> l(lock);
-  while (!safe) {
-    ldout(client->cct, 10) << "waiting for safe" << dendl;
-    cond.wait(l);
-  }
-  l.unlock();
+  mwref(0);
+  MultiWait::wait(mw);
 
   // close open files
   for (std::unordered_map<int64_t, int64_t>::iterator fi = open_files.begin();
@@ -2217,19 +2231,19 @@ int SyntheticClient::read_file(const std::string& fn, int size,
 
 
 
-class C_Ref : public Context {
+class CB_Ref {
   std::mutex& lock;
   std::condition_variable& cond;
-  int *ref;
+  int& ref;
 public:
-  C_Ref(std::mutex &l, std::condition_variable &c, int *r)
+  CB_Ref(std::mutex &l, std::condition_variable &c, int& r)
     : lock(l), cond(c), ref(r) {
     std::lock_guard<std::mutex> lg(lock);
-    (*ref)++;
+    ref++;
   }
-  void finish(int) {
+  void operator()(int) {
     std::lock_guard<std::mutex> l(lock);
-    (*ref)--;
+    ref--;
     cond.notify_all();
   }
 };
@@ -2296,8 +2310,8 @@ int SyntheticClient::create_objects(int nobj, int osize, int inflight)
     Client::unique_lock cl(client->client_lock);
     client->objecter->write(oid, mvol, 0, osize, bl,
 			    ceph::real_clock::now(), 0,
-			    new C_Ref(lock, cond, &unack),
-			    new C_Ref(lock, cond, &unsafe));
+			    CB_Ref(lock, cond, unack),
+			    CB_Ref(lock, cond, unsafe));
     cl.unlock();
 
     std::unique_lock<std::mutex> l(lock);
@@ -2409,12 +2423,12 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
 	m->add_op(CEPH_OSD_OP_STARTSYNC);
       }
       client->objecter->mutate(oid, mvol, m, ceph::real_clock::now(), 0,
-			       NULL, new C_Ref(lock, cond, &unack));
+			       NULL, CB_Ref(lock, cond, unack));
     } else {
       ldout(client->cct, 10) << "read from " << oid << dendl;
       bufferlist inbl;
       client->objecter->read(oid, mvol, 0, osize, &inbl, 0,
-			     new C_Ref(lock, cond, &unack));
+			     CB_Ref(lock, cond, unack));
     }
     cl.unlock();
 

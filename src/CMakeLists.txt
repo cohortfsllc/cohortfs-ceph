@@ -693,19 +693,14 @@ if(${WITH_CLIENT})
 endif(${WITH_CLIENT})
 
 if(${WITH_RBD})
-  set(librbd_srcs librbd/librbd.cc librbd/AioCompletion.cc
-    librbd/AioRequest.cc librbd/ImageCtx.cc
-    librbd/internal.cc librbd/WatchCtx.cc)
+  set(librbd_srcs librbd/Image.cc)
   add_library(librbd ${CEPH_SHARED} ${librbd_srcs})
   target_link_libraries(librbd PRIVATE cls_lock_client ${CMAKE_DL_LIBS})
   if(${ENABLE_SHARED})
     set_target_properties(librbd PROPERTIES VERSION "1.0.0" SOVERSION "1" OUTPUT_NAME rbd
       LINK_FLAGS "-Wl,-export-dynamic")
   endif(${ENABLE_SHARED})
-  install(DIRECTORY "${CMAKE_SOURCE_DIR}/src/include/rbd" DESTINATION include)
   install(TARGETS librados librbd DESTINATION lib)
-  install(FILES include/rbd/librbd.h include/rbd/librbd.hpp
-    DESTINATION include/rbd)
   set(rbd_srcs rbd.cc common/TextTable.cc)
   set(rbd_mountcephfs_files common/secret.c)
   add_library(rbd_mountcephfs_objs OBJECT ${rbd_mountcephfs_files})

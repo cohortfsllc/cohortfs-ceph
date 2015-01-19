@@ -3,8 +3,9 @@
 #ifndef BACKENDH
 #define BACKENDH
 
+#include <functional>
+#include <mutex>
 #include "include/buffer.h"
-#include "include/Context.h"
 
 class Backend {
 public:
@@ -14,15 +15,15 @@ public:
     const std::string &oid_t,
     uint64_t offset,
     const ceph::bufferlist &bl,
-    Context *on_applied,
-    Context *on_commit) = 0;
+    std::function<void(int)>&& on_applied,
+    std::function<void(int)>&& on_commit) = 0;
 
   virtual void read(
     const std::string &oid_t,
     uint64_t offset,
     uint64_t length,
     ceph::bufferlist *bl,
-    Context *on_complete) = 0;
+    std::function<void(int)>&& on_complete) = 0;
   virtual ~Backend() {}
 };
 

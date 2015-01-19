@@ -67,9 +67,9 @@ void MDLog::handle_journaler_write_error(int r)
   }
 }
 
-void MDLog::write_head(Context *c)
+void MDLog::write_head(OSDC::op_callback&& c)
 {
-  journaler->write_head(c);
+  journaler->write_head(std::move(c));
 }
 
 uint64_t MDLog::get_read_pos()
@@ -89,13 +89,13 @@ uint64_t MDLog::get_safe_pos()
 
 
 
-void MDLog::create(VolumeRef &v, Context *c)
+void MDLog::create(VolumeRef &v, OSDC::op_callback&& c)
 {
   ldout(mds->cct, 5) << "create empty log" << dendl;
   init_journaler(v);
   journaler->set_writeable();
   journaler->create();
-  journaler->write_head(c);
+  journaler->write_head(std::move(c));
 }
 
 void MDLog::open(VolumeRef &v, Context *c)
@@ -127,7 +127,7 @@ void MDLog::start_entry(LogEvent *e)
   e->set_start_off(get_write_pos());
 }
 
-void MDLog::submit_entry(LogEvent *le, Context *c)
+void MDLog::submit_entry(LogEvent *le, Context* c)
 {
   assert(!mds->is_any_replay());
   assert(le == cur_event);
@@ -330,18 +330,19 @@ void MDLog::trim(int m)
 
 void MDLog::try_expire(LogSegment *ls, int op_prio)
 {
-  C_GatherBuilder gather_bld;
-  ls->try_to_expire(mds, gather_bld, op_prio);
-  if (gather_bld.has_subs()) {
+  auto& mexp = cohort::MultiCallback
+    ::create<MaybeExpiredSegment>(this, ls, op_prio);
+  ls->try_to_expire(mds, mexp, op_prio);
+  if (!mexp.empty()) {
     assert(expiring_segments.count(ls) == 0);
     expiring_segments.insert(ls);
     expiring_events += ls->num_events;
     ldout(mds->cct, 5) << "try_expire expiring segment " << ls->offset << dendl;
-    gather_bld.set_finisher(new C_MaybeExpiredSegment(this, ls, op_prio));
-    gather_bld.activate();
+    mexp.activate();
   } else {
     ldout(mds->cct, 10) << "try_expire expired segment " << ls->offset << dendl;
     _expired(ls);
+    mexp.discard();
   }
 }
 
@@ -482,16 +483,10 @@ void MDLog::_replay_thread(VolumeRef &v)
 	   * the MDS is going to either shut down or restart when
 	   * we return this error, doing it synchronously is fine
 	   * -- as long as we drop the main mds lock--. */
-	  std::mutex mylock;
-	  std::condition_variable cond;
-	  bool done = false;
-	  int err = 0;
-	  journaler->reread_head(new C_SafeCond(&mylock, &cond, &done, &err));
+	  OSDC::CB_Waiter w;
+	  journaler->reread_head(std::ref(w));
 	  ml.unlock();
-	  MDS::unique_lock myl(mylock);
-	  while (!done)
-	    cond.wait(myl);
-	  myl.unlock();
+	  int err = w.wait();
 	  if (err) { // well, crap
 	    ldout(mds->cct, 0) << "got error while reading head: "
 			       << cpp_strerror(err)

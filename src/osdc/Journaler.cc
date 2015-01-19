@@ -62,46 +62,14 @@ ostream& operator<<(ostream& out, Journaler::Header &h)
 	     << ")";
 }
 
-class Journaler::C_ReadHead : public Context {
+class Journaler::ReProbe {
   Journaler *ls;
+  OSDC::op_callback onfinish;
 public:
-  bufferlist bl;
-  C_ReadHead(Journaler *l) : ls(l) {}
-  void finish(int r) {
-    ls->_finish_read_head(r, bl);
-  }
-};
-
-class Journaler::C_RereadHead : public Context {
-  Journaler *ls;
-  Context *onfinish;
-public:
-  bufferlist bl;
-  C_RereadHead(Journaler *l, Context *onfinish_) : ls (l), onfinish(onfinish_){}
-  void finish(int r) {
-    ls->_finish_reread_head(r, bl, onfinish);
-  }
-};
-
-class Journaler::C_ProbeEnd : public Context {
-  Journaler *ls;
-public:
-  uint64_t end;
-  C_ProbeEnd(Journaler *l) : ls(l), end(-1) {}
-  void finish(int r) {
-    ls->_finish_probe_end(r, end);
-  }
-};
-
-class Journaler::C_ReProbe : public Context {
-  Journaler *ls;
-  Context *onfinish;
-public:
-  uint64_t end;
-  C_ReProbe(Journaler *l, Context *onfinish_) :
-    ls(l), onfinish(onfinish_), end(0) {}
-  void finish(int r) {
-    ls->_finish_reprobe(r, end, onfinish);
+  ReProbe(Journaler *l, OSDC::op_callback&& onfinish_) :
+    ls(l), onfinish(std::move(onfinish_)) {}
+  void operator()(int r, uint64_t end, ceph::real_time) {
+    ls->_finish_reprobe(r, end, std::move(onfinish));
   }
 };
 
@@ -121,16 +89,17 @@ void Journaler::recover(Context *onread)
 
   ldout(cct, 1) << "read_head" << dendl;
   state = STATE_READHEAD;
-  C_ReadHead *fin = new C_ReadHead(this);
-  read_head(fin, &fin->bl);
+  read_head([this](int r, bufferlist&& bl) {
+      _finish_read_head(r, bl);
+    });
 }
 
-void Journaler::read_head(Context *on_finish, bufferlist *bl)
+void Journaler::read_head(OSDC::read_callback&& on_finish)
 {
   assert(state == STATE_READHEAD || state == STATE_REREADHEAD);
 
   oid_t oid = file_oid(ino, 0);
-  objecter->read_full(oid, volume, bl, 0, on_finish);
+  objecter->read_full(oid, volume, std::move(on_finish));
 }
 
 /**
@@ -141,17 +110,20 @@ void Journaler::read_head(Context *on_finish, bufferlist *bl)
  * Also, don't call this until the Journaler has finished its recovery and has
  * gone STATE_ACTIVE!
  */
-void Journaler::reread_head(Context *onfinish)
+void Journaler::reread_head(OSDC::op_callback&& onfinish)
 {
   ldout(cct, 10) << "reread_head" << dendl;
   assert(state == STATE_ACTIVE);
 
   state = STATE_REREADHEAD;
-  C_RereadHead *fin = new C_RereadHead(this, onfinish);
-  read_head(fin, &fin->bl);
+  read_head(
+    [this, &onfinish](int r, bufferlist&& bl) {
+      _finish_reread_head(r, bl, std::move(onfinish));
+    });
 }
 
-void Journaler::_finish_reread_head(int r, bufferlist& bl, Context *finish)
+void Journaler::_finish_reread_head(int r, bufferlist& bl,
+				    OSDC::op_callback&& finish)
 {
   //read on-disk header into
   assert(bl.length() || r < 0 );
@@ -171,7 +143,7 @@ void Journaler::_finish_reread_head(int r, bufferlist& bl, Context *finish)
   trimmed_pos = trimming_pos = h.trimmed_pos;
   init_headers(h);
   state = STATE_ACTIVE;
-  finish->complete(r);
+  finish(r);
 }
 
 void Journaler::_finish_read_head(int r, bufferlist& bl)
@@ -225,39 +197,41 @@ void Journaler::_finish_read_head(int r, bufferlist& bl)
   init_headers(h);
 
   ldout(cct, 1) << "_finish_read_head " << h << ".  probing for end of log (from " << write_pos << ")..." << dendl;
-  C_ProbeEnd *fin = new C_ProbeEnd(this);
   state = STATE_PROBING;
-  probe(fin, &fin->end);
+  probe([this](int r, uint64_t end, ceph::real_time) {
+      _finish_probe_end(r, end);
+    });
 }
 
-void Journaler::probe(Context *finish, uint64_t *end)
+void Journaler::probe(OSDC::stat_callback&& finish)
 {
   ldout(cct, 1) << "probing for end of the log" << dendl;
   assert(state == STATE_PROBING || state == STATE_REPROBING);
   oid_t oid = file_oid(ino, 0);
-  objecter->stat(oid, volume, end, NULL, CEPH_OSD_FLAG_RWORDERED,
-		 finish);
+  objecter->stat(oid, volume, CEPH_OSD_FLAG_RWORDERED,
+		 std::move(finish));
 }
 
-void Journaler::reprobe(Context *finish)
+void Journaler::reprobe(OSDC::op_callback&& finish)
 {
   ldout(cct, 10) << "reprobe" << dendl;
   assert(state == STATE_ACTIVE);
 
   state = STATE_REPROBING;
-  C_ReProbe *fin = new C_ReProbe(this, finish);
-  probe(fin, &fin->end);
+  probe(ReProbe(this, std::move(finish)));
 }
 
 
-void Journaler::_finish_reprobe(int r, uint64_t new_end, Context *onfinish) {
+void Journaler::_finish_reprobe(int r, uint64_t new_end,
+				OSDC::op_callback&& onfinish)
+{
   assert(new_end >= write_pos || r < 0);
   ldout(cct, 1) << "_finish_reprobe new_end = " << new_end
 	  << " (header had " << write_pos << ")."
 	  << dendl;
   prezeroing_pos = prezero_pos = write_pos = flush_pos = safe_pos = new_end;
   state = STATE_ACTIVE;
-  onfinish->complete(r);
+  onfinish(r);
 }
 
 void Journaler::_finish_probe_end(int r, uint64_t end)
@@ -290,45 +264,37 @@ out:
   finish_contexts(vs, r);
 }
 
-class Journaler::C_RereadHeadProbe : public Context
-{
-  Journaler *ls;
-  Context *final_finish;
-public:
-  C_RereadHeadProbe(Journaler *l, Context *finish) :
-    ls(l), final_finish(finish) {}
-  void finish(int r) {
-    ls->_finish_reread_head_and_probe(r, final_finish);
-  }
-};
-
-void Journaler::reread_head_and_probe(Context *onfinish)
+void Journaler::reread_head_and_probe(OSDC::op_callback&& onfinish)
 {
   assert(state == STATE_ACTIVE);
-  reread_head(new C_RereadHeadProbe(this, onfinish));
-}
+  reread_head([this, &onfinish](int r) {
+      _finish_reread_head_and_probe(r, std::move(onfinish));
+    });
+};
 
-void Journaler::_finish_reread_head_and_probe(int r, Context *onfinish)
+void Journaler::_finish_reread_head_and_probe(int r,
+					      OSDC::op_callback&& onfinish)
 {
   assert(!r); //if we get an error, we're boned
-  reprobe(onfinish);
+  reprobe(std::move(onfinish));
 }
 
 
 // WRITING
 
-class Journaler::C_WriteHead : public Context {
+class Journaler::WriteHead {
 public:
   Journaler *ls;
   Header h;
-  Context *oncommit;
-  C_WriteHead(Journaler *l, Header& h_, Context *c) : ls(l), h(h_), oncommit(c) {}
-  void finish(int r) {
-    ls->_finish_write_head(r, h, oncommit);
+  OSDC::op_callback oncommit;
+  WriteHead(Journaler *l, Header& h_, OSDC::op_callback&& c)
+    : ls(l), h(h_), oncommit(std::move(c)) {}
+  void operator()(int r) {
+    ls->_finish_write_head(r, h, std::move(oncommit));
   }
 };
 
-void Journaler::write_head(Context *oncommit)
+void Journaler::write_head(OSDC::op_callback&& oncommit)
 {
   assert(!readonly);
   assert(state == STATE_ACTIVE);
@@ -344,16 +310,12 @@ void Journaler::write_head(Context *oncommit)
   ::encode(last_written, bl);
 
   oid_t oid = file_oid(ino, 0);
-#if 0
-  objecter->write_full(oid, volume, bl, ceph::real_clock::now(), 0,
-		       NULL, new C_WriteHead(this, last_written, oncommit));
-#else
   objecter->write(oid, volume, 0, bl.length(), bl, ceph::real_clock::now(), 0,
-		  NULL, new C_WriteHead(this, last_written, oncommit));
-#endif
+		  NULL, WriteHead(this, last_written, std::move(oncommit)));
 }
 
-void Journaler::_finish_write_head(int r, Header &wrote, Context *oncommit)
+void Journaler::_finish_write_head(int r, Header &wrote,
+				   OSDC::op_callback&& oncommit)
 {
   if (r < 0) {
     lderr(cct) << "_finish_write_head got " << cpp_strerror(r) << dendl;
@@ -364,7 +326,7 @@ void Journaler::_finish_write_head(int r, Header &wrote, Context *oncommit)
   ldout(cct, 10) << "_finish_write_head " << wrote << dendl;
   last_committed = wrote;
   if (oncommit) {
-    oncommit->complete(r);
+    oncommit(r);
   }
 
   trim();  // trim?
@@ -373,14 +335,14 @@ void Journaler::_finish_write_head(int r, Header &wrote, Context *oncommit)
 
 /***************** WRITING *******************/
 
-class Journaler::C_Flush : public Context {
+class Journaler::Flush {
   Journaler *ls;
   uint64_t start;
   ceph::mono_time stamp;
 public:
-  C_Flush(Journaler *l, int64_t s, ceph::mono_time st)
+  Flush(Journaler *l, int64_t s, ceph::mono_time st)
     : ls(l), start(s), stamp(st) {}
-  void finish(int r) {
+  void operator()(int r) {
     ls->_finish_flush(r, start, stamp);
   }
 };
@@ -512,13 +474,15 @@ void Journaler::_do_flush(unsigned amount)
     int64_t newlen = prezero_pos - flush_pos - period;
     if (newlen <= 0) {
       ldout(cct, 10) << "_do_flush wanted to do " << flush_pos << "~" << len
-	       << " already too close to prezero_pos " << prezero_pos << ", zeroing first" << dendl;
+		     << " already too close to prezero_pos " << prezero_pos
+		     << ", zeroing first" << dendl;
       waiting_for_zero = true;
       return;
     }
     if (newlen < len) {
-      ldout(cct, 10) << "_do_flush wanted to do " << flush_pos << "~" << len << " but hit prezero_pos " << prezero_pos
-	       << ", will do " << flush_pos << "~" << newlen << dendl;
+      ldout(cct, 10) << "_do_flush wanted to do " << flush_pos << "~" << len
+		     << " but hit prezero_pos " << prezero_pos
+		     << ", will do " << flush_pos << "~" << newlen << dendl;
       len = newlen;
     } else {
       waiting_for_zero = false;
@@ -532,7 +496,6 @@ void Journaler::_do_flush(unsigned amount)
   // flush _start_ pos to _finish_flush
   ceph::mono_time now = ceph::mono_clock::now();
 
-  Context *onsafe = new C_Flush(this, flush_pos, now);	// on COMMIT
   pending_safe.insert(flush_pos);
 
   bufferlist write_bl;
@@ -545,7 +508,8 @@ void Journaler::_do_flush(unsigned amount)
   }
 
   objecter->write(file_oid(ino, 0), volume, flush_pos, len, write_bl,
-		  ceph::real_clock::now(), 0, NULL, onsafe);
+		  ceph::real_clock::now(), 0, nullptr,
+		  Flush(this, flush_pos, now));
 
   flush_pos += len;
   assert(write_buf.length() == write_pos - flush_pos);
@@ -560,7 +524,7 @@ void Journaler::_do_flush(unsigned amount)
 
 
 
-void Journaler::wait_for_flush(Context *onsafe)
+void Journaler::wait_for_flush(Context* onsafe)
 {
   assert(!readonly);
 
@@ -573,7 +537,7 @@ void Journaler::wait_for_flush(Context *onsafe)
 		   << flush_pos << "/" << safe_pos << dendl;
     if (onsafe) {
       onsafe->complete(0);
-      onsafe = 0;
+      onsafe = nullptr;
     }
     return;
   }
@@ -583,7 +547,7 @@ void Journaler::wait_for_flush(Context *onsafe)
     waitfor_safe[write_pos].push_back(onsafe);
 }
 
-void Journaler::flush(Context *onsafe)
+void Journaler::flush(Context* onsafe)
 {
   assert(!readonly);
 
@@ -595,6 +559,7 @@ void Journaler::flush(Context *onsafe)
       << write_pos << "/" << flush_pos << "/" << safe_pos << dendl;
     if (onsafe) {
       onsafe->complete(0);
+      onsafe = nullptr;
     }
   } else {
     if (1) {
@@ -630,15 +595,6 @@ void Journaler::flush(Context *onsafe)
 
 /*************** prezeroing ******************/
 
-struct C_Journaler_Prezero : public Context {
-  Journaler *journaler;
-  uint64_t from, len;
-  C_Journaler_Prezero(Journaler *j, uint64_t f, uint64_t l) : journaler(j), from(f), len(l) {}
-  void finish(int r) {
-    journaler->_prezeroed(r, from, len);
-  }
-};
-
 void Journaler::_issue_prezero()
 {
   assert(prezeroing_pos >= flush_pos);
@@ -669,14 +625,18 @@ void Journaler::_issue_prezero()
     uint64_t len;
     if (prezeroing_pos % period == 0) {
       len = period;
-      ldout(cct, 10) << "_issue_prezero removing " << prezeroing_pos << "~" << period << " (full period)" << dendl;
+      ldout(cct, 10) << "_issue_prezero removing " << prezeroing_pos << "~"
+		     << period << " (full period)" << dendl;
     } else {
       len = period - (prezeroing_pos % period);
-      ldout(cct, 10) << "_issue_prezero zeroing " << prezeroing_pos << "~" << len << " (partial period)" << dendl;
+      ldout(cct, 10) << "_issue_prezero zeroing " << prezeroing_pos << "~"
+		     << len << " (partial period)" << dendl;
     }
-    Context *c = new C_Journaler_Prezero(this, prezeroing_pos, len);
-    objecter->zero(file_oid(ino, 0), volume, prezeroing_pos, len, ceph::real_clock::now(),
-		   0, NULL, c);
+    objecter->zero(file_oid(ino, 0), volume, prezeroing_pos, len,
+		   ceph::real_clock::now(), 0, NULL,
+		   [=](int r) {
+		     _prezeroed(r, prezeroing_pos, len);
+		   });
     prezeroing_pos += len;
   }
 }
@@ -718,18 +678,6 @@ void Journaler::_prezeroed(int r, uint64_t start, uint64_t len)
 
 
 /***************** READING *******************/
-
-
-class Journaler::C_Read : public Context {
-  Journaler *ls;
-  uint64_t offset;
-public:
-  bufferlist bl;
-  C_Read(Journaler *l, uint64_t o) : ls(l), offset(o) {}
-  void finish(int r) {
-    ls->_finish_read(r, offset, bl);
-  }
-};
 
 class Journaler::C_RetryRead : public Context {
   Journaler *ls;
@@ -849,8 +797,10 @@ void Journaler::_issue_read(uint64_t len)
     uint64_t l = e - rp;
     if (l > len)
       l = len;
-    C_Read *c = new C_Read(this, rp);
-    objecter->read(file_oid(ino, 0), volume, rp, l, &c->bl, 0, c);
+    objecter->read(file_oid(ino, 0), volume, rp, l, 0,
+		   [=](int r, bufferlist&& bl){
+		     _finish_read(r, rp, bl);
+		   });
     rp += l;
     len -= l;
   }
@@ -1018,25 +968,11 @@ void Journaler::wait_for_readable(Context *onreadable)
 /***************** TRIMMING *******************/
 
 
-class Journaler::C_Trim : public Context {
-  Journaler *ls;
-  uint64_t to;
-public:
-  C_Trim(Journaler *l, int64_t t) : ls(l), to(t) {}
-  void finish(int r) {
-    ls->_trim_finish(r, to);
-  }
-};
-
 void Journaler::trim()
 {
   assert(!readonly);
-#if 0
-  uint64_t period = get_layout_period();
-#else
 // XXX need something better mdw 20150215
   uint64_t period = (1<<22);	// was layout_period: = stripe_count * object_size
-#endif
   uint64_t trim_to = last_committed.expire_pos;
   trim_to -= trim_to % period;
   ldout(cct, 10) << "trim last_commited head was " << last_committed
@@ -1066,7 +1002,10 @@ void Journaler::trim()
   // delete range of objects
   // XXX: does this release storage?  Maybe need volume->purge_range ?
   objecter->zero(file_oid(ino, 0), volume, trimming_pos, trim_to - trimming_pos,
-		 ceph::real_clock::now(), 0, NULL, new C_Trim(this, trim_to));
+		 ceph::real_clock::now(), 0, NULL,
+		 [=](int r){
+		   _trim_finish(r, trim_to);
+		 });
   trimming_pos = trim_to;
 }
 
