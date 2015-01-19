@@ -84,6 +84,9 @@ librados::RadosClient::RadosClient(CephContext *cct_)
     finisher(cct),
     max_watch_notify_cookie(0)
 {
+  // global_init_set_globals():
+  g_ceph_context = cct;
+  g_conf = cct->_conf;
 }
 
 boost::uuids::uuid librados::RadosClient::lookup_volume(const string& name)
@@ -295,6 +298,10 @@ librados::RadosClient::~RadosClient()
     delete messenger;
   if (objecter)
     delete objecter;
+  if (cct == g_ceph_context) {
+    g_ceph_context = NULL;
+    g_conf = NULL;
+  }
   cct->put();
   cct = NULL;
 }
