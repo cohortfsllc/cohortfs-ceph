@@ -137,7 +137,7 @@ int CohortVolume::compile(std::stringstream &ss) const
     ss << "failed loading library: " << dlerror();
     return -EDOM;
   }
-  unlink(sofilename);
+  //unlink(sofilename);
 
   for(vector<string>::size_type i = 0;
       i < symbols.size();
