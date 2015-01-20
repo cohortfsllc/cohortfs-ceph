@@ -1834,7 +1834,16 @@ namespace OSDC {
       m->put();
       return;
     }
+    subop.parent.lock.Lock(); // So we can't race with _finish_op
     s.lock.unlock();
+    subop.parent.get();
+    if (subop.parent.finished) {
+      subop.parent.lock.Unlock();
+      subop.parent.put();
+      m->put();
+      put_session(s);
+      return;
+    }
 
     // per-op result demuxing
     vector<OSDOp> out_ops;
@@ -1866,8 +1875,6 @@ namespace OSDC {
       subop.ops[i].ctx = nullptr;
     }
 
-    subop.parent.lock.Lock();
-
     if (subop.parent.objver &&
 	(*subop.parent.objver < m->get_user_version()))
       *subop.parent.objver = m->get_user_version();
@@ -1895,7 +1902,8 @@ namespace OSDC {
     subop.done = true;
 
     possibly_complete_op(subop.parent);
-
+    assert(!subop.parent.lock.is_locked_by_me());
+    subop.parent.put();
     m->put();
     put_session(s);
   }
@@ -1906,6 +1914,7 @@ namespace OSDC {
 
     if (op.finished) {
       // Someone else got here first, be happy.
+      op.lock.Unlock();
       return true;
     }
 
@@ -1931,14 +1940,14 @@ namespace OSDC {
       if (op.onack && op.acks >= op.volume->quorum()) {
 	onack = op.onack;
 	op.onack = 0;  // only do callback once
-  assert(num_unacked > 0);
+	assert(num_unacked > 0);
 	num_unacked--;
 	op.trace.event("onack", &trace_endpoint);
       }
       if (op.oncommit && op.commits >= op.volume->quorum()) {
 	oncommit = op.oncommit;
 	op.oncommit = 0;
-  assert(num_uncommitted > 0);
+	assert(num_uncommitted > 0);
 	num_uncommitted--;
 	op.trace.event("oncommit", &trace_endpoint);
       }
@@ -1949,7 +1958,7 @@ namespace OSDC {
 		       << op.tid << dendl;
 	_finish_op(op); // This releases the lock.
       } else {
-        op.lock.Unlock();
+	op.lock.Unlock();
       }
 
       ldout(cct, 5) << num_unacked << " unacked, "
