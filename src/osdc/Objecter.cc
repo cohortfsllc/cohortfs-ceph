@@ -916,8 +916,8 @@ namespace OSDC {
 
     // Assign any leftover ops to the homeless session
     {
-#ifdef LINGER
       RWLock::WLocker wl(homeless_session->lock);
+#ifdef LINGER
       for (std::list<LingerOp*>::iterator i = homeless_lingers.begin();
 	   i != homeless_lingers.end(); ++i) {
 	_session_linger_subop_assign(homeless_session, *i);
@@ -1386,7 +1386,9 @@ namespace OSDC {
     {
       Mutex::Locker l(op->lock);
       // Give it one last chance
-      possibly_complete_op(*op, true);
+      if (possibly_complete_op(*op, true)) {
+	return 0;
+      }
       ldout(cct, 10) << __func__ << " tid " << tid << dendl;
       if (op->onack) {
 	op->onack->complete(r);
