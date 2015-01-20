@@ -242,7 +242,7 @@ static bool test_osd(void *data, int osd)
 static bool return_osd(void *data, int osd)
 {
   placement_context *context = (placement_context *)data;
-  if (context->map->is_in(osd)) {
+  if (context->map->is_up(osd)) {
     (*(std::function<void(int)>*) context->f)(osd);
     return true;
   } else {
