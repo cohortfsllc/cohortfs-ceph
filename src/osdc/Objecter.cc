@@ -1946,6 +1946,8 @@ namespace OSDC {
 	ldout(cct, 15) << "handle_osd_op_reply completed tid "
 		       << op.tid << dendl;
 	_finish_op(op); // This releases the lock.
+      } else {
+        op.lock.Unlock();
       }
 
       ldout(cct, 5) << num_unacked << " unacked, "
