@@ -1928,15 +1928,17 @@ namespace OSDC {
       Context *onack = nullptr;
       Context *oncommit = nullptr;
 
-      if (op.acks >= op.volume->quorum()) {
+      if (op.onack && op.acks >= op.volume->quorum()) {
 	onack = op.onack;
 	op.onack = 0;  // only do callback once
+  assert(num_unacked > 0);
 	num_unacked--;
 	op.trace.event("onack", &trace_endpoint);
       }
-      if (op.commits >= op.volume->quorum()) {
+      if (op.oncommit && op.commits >= op.volume->quorum()) {
 	oncommit = op.oncommit;
 	op.oncommit = 0;
+  assert(num_uncommitted > 0);
 	num_uncommitted--;
 	op.trace.event("oncommit", &trace_endpoint);
       }
