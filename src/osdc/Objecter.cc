@@ -1834,8 +1834,8 @@ namespace OSDC {
       m->put();
       return;
     }
-    subop.parent.lock.Lock(); // So we can't race with _finish_op
     s.lock.unlock();
+    subop.parent.lock.Lock(); // So we can't race with _finish_op
     subop.parent.get();
     if (subop.parent.finished) {
       subop.parent.lock.Unlock();
