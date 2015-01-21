@@ -337,7 +337,7 @@ static void default_placer(uint32_t blocks,
 }
 
 VolumeRef CohortVolume::create(const string& name,
-			       const uint32_t _suggested_unit,
+			       const int64_t _suggested_unit,
 			       const string& erasure_plugin,
 			       const string& erasure_paramstring,
 			       const string& place_text, const string& sym_str,
