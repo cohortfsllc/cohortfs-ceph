@@ -1479,7 +1479,7 @@ namespace OSDC {
 
   void Objecter::_session_subop_assign(OSDSession& to, SubOp& subop)
   {
-    assert(to.lock.is_locked());
+    assert(to.lock.is_wlocked());
     assert(subop.session == NULL);
     assert(subop.tid);
 
@@ -1491,7 +1491,7 @@ namespace OSDC {
   void Objecter::_session_subop_remove(OSDSession& from, SubOp& subop)
   {
     assert(subop.session == &from);
-    assert(from.lock.is_locked());
+    assert(from.lock.is_wlocked());
 
     subop.unlink();
     put_session(from);
@@ -1513,7 +1513,7 @@ namespace OSDC {
   void Objecter::_session_linger_subop_remove(OSDSession& from, SubOp& subop)
   {
     assert(&from == subop.session);
-    assert(from.lock.is_locked());
+    assert(from.lock.is_wlocked());
 
     from.linger_subops.erase(subop);
     put_session(from);
@@ -1621,7 +1621,7 @@ namespace OSDC {
       }
     }
     if (subop.session) {
-      RWLock::RLocker l(subop.session->lock);
+      RWLock::WLocker l(subop.session->lock);
       _session_subop_remove(*subop.session, subop);
     }
   }
