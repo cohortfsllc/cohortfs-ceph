@@ -100,7 +100,7 @@ protected:
   friend VolumeRef CohortVolFactory(bufferlist::iterator& bl, uint8_t v,
 				    vol_type t);
 
-  static VolumeRef create(const string& name, uint32_t _suggested_width,
+  static VolumeRef create(const string& name, int64_t _suggested_width,
 			  const string& erasure_plugin,
 			  const string& erasure_params,
 			  const string& place_text, const string& symbols,

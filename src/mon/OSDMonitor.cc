@@ -2230,7 +2230,7 @@ done:
   } else if (prefix == "osd volume create") {
     /* Factor this out into its own function sometime. */
     string name;
-    int32_t stripe_unit; // This is the /desired/ stripe unit. You
+    int64_t stripe_unit; // This is the /desired/ stripe unit. You
 			 // are not guaranteed to get it, but it
 			 // will probably be close.
     string plugin;
@@ -2242,7 +2242,7 @@ done:
     VolumeRef vol;
 
     cmd_getval(g_ceph_context, cmdmap, "volumeName", name);
-    cmd_getval(g_ceph_context, cmdmap, "stripeUnit", stripe_unit, 32768);
+    cmd_getval(g_ceph_context, cmdmap, "stripeUnit", stripe_unit, 32768L);
     cmd_getval(g_ceph_context, cmdmap, "erasurePluginName", plugin,
 	       string("jerasure"));
     cmd_getval(g_ceph_context, cmdmap, "erasureParams", params,
