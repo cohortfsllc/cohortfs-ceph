@@ -59,7 +59,10 @@ using std::set;
 using std::string;
 using std::cout;
 
-const char *CEPH_CONF_FILE_DEFAULT = "CEPH_CONF_SYS_DEFAULT/$cluster.conf, ~/.ceph/$cluster.conf, $cluster.conf";
+/* http://stackoverflow.com/questions/13741048/return-quoted-string-in-c-macro */
+#define quote_1(x)	#x
+#define quote_2(x)	quote_1(x)
+const char *CEPH_CONF_FILE_DEFAULT = quote_2(CEPH_CONF_SYS_DEFAULT) "/$cluster.conf, ~/.ceph/$cluster.conf, $cluster.conf";
 
 // file layouts
 struct ceph_file_layout g_default_file_layout = {
