@@ -169,12 +169,12 @@ int ErasureCodeLrc::layers_init()
     if (layer.parameters.find("directory") == layer.parameters.end())
       layer.parameters["directory"] = directory;
     stringstream ss;
-    err = registry.factory(layer.parameters["plugin"],
+    err = registry.factory(cct, layer.parameters["plugin"],
 			   layer.parameters,
 			   &layer.erasure_code,
 			   ss);
     if (err) {
-      derr << ss.str() << dendl;
+      lderr(cct) << ss.str() << dendl;
       return err;
     }
   }
@@ -441,7 +441,7 @@ int ErasureCodeLrc::init(const map<string,string> &parameters,
 
   string description_string = parameters_rw.find("layers")->second;
 
-  dout(10) << "init(" << description_string << ")" << dendl;
+  ldout(cct,10) << "init(" << description_string << ")" << dendl;
 
   r = layers_parse(description_string, description, ss);
   if (r)
@@ -487,7 +487,7 @@ int ErasureCodeLrc::minimum_to_decode(const set<int> &want_to_read,
 				      const set<int> &available_chunks,
 				      set<int> *minimum)
 {
-  dout(20) << __func__ << " want_to_read " << want_to_read
+  ldout(cct, 20) << __func__ << " want_to_read " << want_to_read
 	   << " available_chunks " << available_chunks << dendl;
   {
     set<int> erasures_total;
@@ -510,7 +510,7 @@ int ErasureCodeLrc::minimum_to_decode(const set<int> &want_to_read,
     //
     if (erasures_want.empty()) {
       *minimum = want_to_read;
-      dout(20) << __func__ << " minimum == want_to_read == "
+      ldout(cct,20) << __func__ << " minimum == want_to_read == "
 	       << want_to_read << dendl;
       return 0;
     }
@@ -590,7 +590,7 @@ int ErasureCodeLrc::minimum_to_decode(const set<int> &want_to_read,
 	if (minimum->count(*i))
 	  minimum->erase(*i);
       }
-      dout(20) << __func__ << " minimum = " << *minimum << dendl;
+      ldout(cct,20) << __func__ << " minimum = " << *minimum << dendl;
       return 0;
     }
   }
@@ -644,13 +644,13 @@ int ErasureCodeLrc::minimum_to_decode(const set<int> &want_to_read,
       // recover, use all available chunks.
       //
       *minimum = available_chunks;
-      dout(20) << __func__ << " minimum == available_chunks == "
+      ldout(cct,20) << __func__ << " minimum == available_chunks == "
 	       << available_chunks << dendl;
       return 0;
     }
   }
 
-  derr << __func__ << " not enough chunks in " << available_chunks
+  lderr(cct) << __func__ << " not enough chunks in " << available_chunks
        << " to read " << want_to_read << dendl;
   return -EIO;
 }
@@ -684,7 +684,7 @@ int ErasureCodeLrc::encode_chunks(const set<int> &want_to_encode,
     int err = layer.erasure_code->encode_chunks(layer_want_to_encode,
 						&layer_encoded);
     if (err) {
-      derr << __func__ << " layer " << layer.chunks_map
+      lderr(cct) << __func__ << " layer " << layer.chunks_map
 	   << " failed with " << err << " trying to encode "
 	   << layer_want_to_encode << dendl;
       return err;
@@ -746,7 +746,7 @@ int ErasureCodeLrc::decode_chunks(const set<int> &want_to_read,
 						   layer_chunks,
 						   &layer_decoded);
       if (err) {
-	derr << __func__ << " layer " << layer->chunks_map
+	lderr(cct) << __func__ << " layer " << layer->chunks_map
 	     << " failed with " << err << " trying to decode "
 	     << layer_want_to_read << " with " << available_chunks << dendl;
 	return err;
@@ -770,7 +770,7 @@ int ErasureCodeLrc::decode_chunks(const set<int> &want_to_read,
   }
 
   if (want_to_read_erasures.size() > 0) {
-    derr << __func__ << " want to read " << want_to_read
+    lderr(cct) << __func__ << " want to read " << want_to_read
 	 << " with available_chunks = " << available_chunks
 	 << " end up being unable to read " << want_to_read_erasures << dendl;
     return -EIO;

@@ -53,7 +53,7 @@ static string get_variant() {
 
 class ErasureCodePluginSelectJerasure : public ErasureCodePlugin {
 public:
-  virtual int factory(const map<string,string> &parameters,
+  virtual int factory(CephContext *cct, const map<string,string> &parameters,
 		      ErasureCodeInterfaceRef *erasure_code) {
     ErasureCodePluginRegistry &instance = ErasureCodePluginRegistry::instance();
     stringstream ss;
@@ -62,35 +62,35 @@ public:
     if (parameters.count("jerasure-name"))
       name = parameters.find("jerasure-name")->second;
     if (parameters.count("jerasure-variant")) {
-      dout(10) << "jerasure-variant " 
+      ldout(cct,10) << "jerasure-variant " 
 	       << parameters.find("jerasure-variant")->second << dendl;
-      ret = instance.factory(name + "_" + parameters.find("jerasure-variant")->second,
+      ret = instance.factory(cct, name + "_" + parameters.find("jerasure-variant")->second,
 			     parameters, erasure_code, ss);
     } else {
       string variant = get_variant();
-      dout(10) << variant << " plugin" << dendl;
-      ret = instance.factory(name + "_" + variant, parameters, erasure_code, ss);
+      ldout(cct,10) << variant << " plugin" << dendl;
+      ret = instance.factory(cct, name + "_" + variant, parameters, erasure_code, ss);
     }
     if (ret)
-      derr << ss.str() << dendl;
+      lderr(cct) << ss.str() << dendl;
     return ret;
   }
 };
 
 const char *__erasure_code_version() { return CEPH_GIT_NICE_VER; }
 
-int __erasure_code_init(char *plugin_name, char *directory)
+int __erasure_code_init(CephContext *cct, char *plugin_name, char *directory)
 {
   ErasureCodePluginRegistry &instance = ErasureCodePluginRegistry::instance();
   string variant = get_variant();
   ErasureCodePlugin *plugin;
   stringstream ss;
-  int r = instance.load(plugin_name + string("_") + variant,
+  int r = instance.load(cct, plugin_name + string("_") + variant,
 			directory, &plugin, ss);
   if (r) {
-    derr << ss.str() << dendl;
+    lderr(cct) << ss.str() << dendl;
     return r;
   }
-  dout(10) << ss.str() << dendl;
+  ldout(cct,10) << ss.str() << dendl;
   return instance.add(plugin_name, new ErasureCodePluginSelectJerasure());
 }

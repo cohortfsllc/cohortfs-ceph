@@ -26,13 +26,18 @@
 
 #include "ErasureCodeInterface.h"
 
+class CephContext;
+
 namespace ceph {
   using std::ostream;
 
   class ErasureCode : public ErasureCodeInterface {
+  protected:
+    CephContext *cct;
   public:
     vector<int> chunk_mapping;
 
+    ErasureCode(CephContext *cct) : cct(cct) {}
     virtual ~ErasureCode() {}
 
     virtual unsigned int get_coding_chunk_count() const {

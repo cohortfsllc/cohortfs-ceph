@@ -33,28 +33,29 @@ static ostream& _prefix(std::ostream* _dout)
 
 class ErasureCodePluginJerasure : public ErasureCodePlugin {
 public:
-  virtual int factory(const map<std::string,std::string> &parameters,
+  virtual int factory(CephContext *cct,
+                      const map<std::string,std::string> &parameters,
 		      ErasureCodeInterfaceRef *erasure_code) {
     ErasureCodeJerasure *interface;
     std::string t;
     if (parameters.find("technique") != parameters.end())
       t = parameters.find("technique")->second;
     if (t == "reed_sol_van") {
-      interface = new ErasureCodeJerasureReedSolomonVandermonde();
+      interface = new ErasureCodeJerasureReedSolomonVandermonde(cct);
     } else if (t == "reed_sol_r6_op") {
-      interface = new ErasureCodeJerasureReedSolomonRAID6();
+      interface = new ErasureCodeJerasureReedSolomonRAID6(cct);
     } else if (t == "cauchy_orig") {
-      interface = new ErasureCodeJerasureCauchyOrig();
+      interface = new ErasureCodeJerasureCauchyOrig(cct);
     } else if (t == "cauchy_good") {
-      interface = new ErasureCodeJerasureCauchyGood();
+      interface = new ErasureCodeJerasureCauchyGood(cct);
     } else if (t == "liberation") {
-      interface = new ErasureCodeJerasureLiberation();
+      interface = new ErasureCodeJerasureLiberation(cct);
     } else if (t == "blaum_roth") {
-      interface = new ErasureCodeJerasureBlaumRoth();
+      interface = new ErasureCodeJerasureBlaumRoth(cct);
     } else if (t == "liber8tion") {
-      interface = new ErasureCodeJerasureLiber8tion();
+      interface = new ErasureCodeJerasureLiber8tion(cct);
     } else {
-      derr << "technique=" << t << " is not a valid coding technique. "
+      lderr(cct) << "technique=" << t << " is not a valid coding technique. "
 	   << " Choose one of the following: "
 	   << "reed_sol_van, reed_sol_r6_op, cauchy_orig, "
 	   << "cauchy_good, liberation, blaum_roth, liber8tion"
@@ -76,14 +77,14 @@ extern int  gfp_is_composite[];
 
 const char *__erasure_code_version() { return CEPH_GIT_NICE_VER; }
 
-int __erasure_code_init(char *plugin_name, char *directory)
+int __erasure_code_init(CephContext *cct, char *plugin_name, char *directory)
 {
   ErasureCodePluginRegistry &instance = ErasureCodePluginRegistry::instance();
   int w[] = { 4, 8, 16, 32 };
   for(int i = 0; i < 4; i++) {
     int r = galois_init_default_field(w[i]);
     if (r) {
-      derr << "failed to gf_init_easy(" << w[i] << ")" << dendl;
+      lderr(cct) << "failed to gf_init_easy(" << w[i] << ")" << dendl;
       return -r;
     }
   }

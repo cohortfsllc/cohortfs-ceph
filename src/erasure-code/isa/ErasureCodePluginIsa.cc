@@ -35,7 +35,8 @@ class ErasureCodePluginIsa : public ErasureCodePlugin {
 public:
   ErasureCodeIsaTableCache tcache;
 
-  virtual int factory(const map<std::string, std::string> &parameters,
+  virtual int factory(CephContext *cct,
+                      const map<std::string, std::string> &parameters,
                       ErasureCodeInterfaceRef *erasure_code)
   {
     ErasureCodeIsa *interface;
@@ -43,14 +44,14 @@ public:
     if (parameters.find("technique") != parameters.end())
       t = parameters.find("technique")->second;
     if ((t == "reed_sol_van")) {
-      interface = new ErasureCodeIsaDefault(tcache,
+      interface = new ErasureCodeIsaDefault(cct, tcache,
                                             ErasureCodeIsaDefault::kVandermonde);
     } else {
       if ((t == "cauchy")) {
-        interface = new ErasureCodeIsaDefault(tcache,
+        interface = new ErasureCodeIsaDefault(cct, tcache,
                                               ErasureCodeIsaDefault::kCauchy);
       } else {
-        derr << "technique=" << t << " is not a valid coding technique. "
+        lderr(cct) << "technique=" << t << " is not a valid coding technique. "
           << " Choose one of the following: "
           << "reed_sol_van,"
           << "cauchy" << dendl;
@@ -73,7 +74,7 @@ const char *__erasure_code_version()
 
 // -----------------------------------------------------------------------------
 
-int __erasure_code_init(char *plugin_name, char *directory)
+int __erasure_code_init(CephContext *cct, char *plugin_name, char *directory)
 {
   ErasureCodePluginRegistry &instance = ErasureCodePluginRegistry::instance();
 

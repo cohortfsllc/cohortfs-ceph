@@ -45,7 +45,7 @@ _prefix(std::ostream* _dout)
 void
 ErasureCodeIsa::init(const map<string, string> &parameters)
 {
-  dout(10) << "technique=" << technique << dendl;
+  ldout(cct,10) << "technique=" << technique << dendl;
   map<string, string>::const_iterator parameter;
   parameter = parameters.find("ruleset-root");
   if (parameter != parameters.end())
@@ -55,7 +55,7 @@ ErasureCodeIsa::init(const map<string, string> &parameters)
     ruleset_failure_domain = parameter->second;
   ostringstream ss;
   if (parse(parameters, &ss))
-    derr << ss.str() << dendl;
+    lderr(cct) << ss.str() << dendl;
   prepare();
 }
 
@@ -66,11 +66,11 @@ ErasureCodeIsa::get_chunk_size(unsigned int object_size) const
 {
   unsigned alignment = get_alignment();
   unsigned chunk_size = ( object_size + k - 1 ) / k;
-  dout(20) << "get_chunk_size: chunk_size " << chunk_size
+  ldout(cct,20) << "get_chunk_size: chunk_size " << chunk_size
            << " must be modulo " << alignment << dendl;
   unsigned modulo = chunk_size % alignment;
   if (modulo) {
-    dout(10) << "get_chunk_size: " << chunk_size
+    ldout(cct,10) << "get_chunk_size: " << chunk_size
              << " padded to " << chunk_size + alignment - modulo << dendl;
     chunk_size += alignment - modulo;
   }
@@ -195,7 +195,7 @@ ErasureCodeIsaDefault::isa_decode(int *erasures,
   if (m == 1) {
     // single parity decoding
     assert(1 == nerrs);
-    dout(20) << "isa_decode: reconstruct using region xor [" <<
+    ldout(cct,20) << "isa_decode: reconstruct using region xor [" <<
       erasures[0] << "]" << dendl;
     region_xor(recover_source, recover_target[0], k, blocksize);
     return 0;
@@ -206,7 +206,7 @@ ErasureCodeIsaDefault::isa_decode(int *erasures,
       (nerrs == 1) &&
       (erasures[0] < (k + 1))) {
     // use xor decoding if a data chunk is missing or the first coding chunk
-    dout(20) << "isa_decode: reconstruct using region xor [" <<
+    ldout(cct,20) << "isa_decode: reconstruct using region xor [" <<
       erasures[0] << "]" << dendl;
     assert(1 == s);
     assert(k == r);
@@ -270,7 +270,7 @@ ErasureCodeIsaDefault::isa_decode(int *erasures,
     // does not help. Therefor we keep the code simpler.
     // --------------------------------------------------------
     if (gf_invert_matrix(b, d, k) < 0) {
-      dout(0) << "isa_decode: bad matrix" << dendl;
+      ldout(cct,0) << "isa_decode: bad matrix" << dendl;
       return -1;
     }
 
@@ -374,7 +374,7 @@ ErasureCodeIsaDefault::prepare()
     tcache.getEncodingCoefficient(matrixtype, k, m);
 
   if (!*p_enc_coeff) {
-    dout(10) << "[ cache tables ] creating coeff for k=" <<
+    ldout(cct,10) << "[ cache tables ] creating coeff for k=" <<
       k << " m=" << m << dendl;
     // build encoding coefficients which need to be computed once for each (k,m)
     encode_coeff = (unsigned char*) malloc(k * (m + k));
@@ -393,7 +393,7 @@ ErasureCodeIsaDefault::prepare()
   }
 
   if (!*p_enc_table) {
-    dout(10) << "[ cache tables ] creating tables for k=" <<
+    ldout(cct,10) << "[ cache tables ] creating tables for k=" <<
       k << " m=" << m << dendl;
     // build encoding table which needs to be computed once for each (k,m)
     encode_tbls = (unsigned char*) malloc(k * (m + k)*32);
@@ -410,7 +410,7 @@ ErasureCodeIsaDefault::prepare()
   unsigned memory_lru_cache =
     k * (m + k) * 32 * tcache.decoding_tables_lru_length;
 
-  dout(10) << "[ cache memory ] = " << memory_lru_cache << " bytes" <<
+  ldout(cct,10) << "[ cache memory ] = " << memory_lru_cache << " bytes" <<
     " [ matrix ] = " <<
     ((matrixtype == kVandermonde) ? "Vandermonde" : "Cauchy") << dendl;
 

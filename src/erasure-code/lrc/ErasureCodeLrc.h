@@ -72,8 +72,9 @@ public:
   };
   vector<Step> ruleset_steps;
 
-  ErasureCodeLrc() :
-    chunk_count(0), data_chunk_count(0), ruleset_root("default")
+  ErasureCodeLrc(CephContext *cct) :
+    ceph::ErasureCode(cct), chunk_count(0), data_chunk_count(0),
+    ruleset_root("default")
   {
     ruleset_steps.push_back(Step("chooseleaf", "host", 0));
   }

@@ -42,6 +42,7 @@ class ErasureCodeIsaTableCache {
   // ---------------------------------------------------------------------------
 
 public:
+  CephContext *cct;
 
   // the cache size is sufficient up to (12,4) decodings
 
@@ -55,8 +56,8 @@ public:
   typedef std::map< std::string, lru_entry_t > lru_map_t;
   typedef std::list< std::string > lru_list_t;
 
-  ErasureCodeIsaTableCache() :
-  codec_tables_guard("isa-lru-cache")
+  ErasureCodeIsaTableCache(CephContext *cct) :
+  cct(cct), codec_tables_guard("isa-lru-cache")
   {
   }
 
