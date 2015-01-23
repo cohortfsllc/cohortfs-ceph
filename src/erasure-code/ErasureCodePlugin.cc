@@ -87,7 +87,8 @@ ErasureCodePlugin *ErasureCodePluginRegistry::get(const std::string &name)
     return 0;
 }
 
-int ErasureCodePluginRegistry::factory(const std::string &plugin_name,
+int ErasureCodePluginRegistry::factory(CephContext *cct,
+                                       const std::string &plugin_name,
 				       const map<std::string,std::string> &parameters,
 				       ErasureCodeInterfaceRef *erasure_code,
 				       ostream &ss)
@@ -100,21 +101,22 @@ int ErasureCodePluginRegistry::factory(const std::string &plugin_name,
     if (plugin == 0) {
       loading = true;
       assert(parameters.count("directory") != 0);
-      r = load(plugin_name, parameters.find("directory")->second, &plugin, ss);
+      r = load(cct, plugin_name, parameters.find("directory")->second, &plugin, ss);
       loading = false;
       if (r != 0)
 	return r;
     }
   }
 
-  return plugin->factory(parameters, erasure_code);
+  return plugin->factory(cct, parameters, erasure_code);
 }
 
 static const char *an_older_version() {
   return "an older version";
 }
 
-int ErasureCodePluginRegistry::load(const std::string &plugin_name,
+int ErasureCodePluginRegistry::load(CephContext *cct,
+                                    const std::string &plugin_name,
 				    const std::string &directory,
 				    ErasureCodePlugin **plugin,
 				    ostream &ss)
@@ -139,11 +141,12 @@ int ErasureCodePluginRegistry::load(const std::string &plugin_name,
     return -EXDEV;
   }
 
-  int (*erasure_code_init)(const char *, const char *) =
-    (int (*)(const char *, const char *))dlsym(library, PLUGIN_INIT_FUNCTION);
+  typedef int (*ec_init_fn)(CephContext *, const char *, const char *);
+  ec_init_fn erasure_code_init = (ec_init_fn)dlsym(library,
+                                                   PLUGIN_INIT_FUNCTION);
   if (erasure_code_init) {
     std::string name = plugin_name;
-    int r = erasure_code_init(name.c_str(), directory.c_str());
+    int r = erasure_code_init(cct, name.c_str(), directory.c_str());
     if (r != 0) {
       ss << "erasure_code_init(" << plugin_name
 	 << "," << directory 
@@ -174,7 +177,8 @@ int ErasureCodePluginRegistry::load(const std::string &plugin_name,
   return 0;
 }
 
-int ErasureCodePluginRegistry::preload(const std::string &plugins,
+int ErasureCodePluginRegistry::preload(CephContext *cct,
+                                       const std::string &plugins,
 				       const std::string &directory,
 				       ostream &ss)
 {
@@ -185,7 +189,7 @@ int ErasureCodePluginRegistry::preload(const std::string &plugins,
        i != plugins_list.end();
        ++i) {
     ErasureCodePlugin *plugin;
-    int r = load(*i, directory, &plugin, ss);
+    int r = load(cct, *i, directory, &plugin, ss);
     if (r)
       return r;
   }

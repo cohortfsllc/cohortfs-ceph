@@ -241,7 +241,7 @@ ErasureCodeIsaTableCache::getDecodingTableFromCache(std::string &signature,
   // LRU decoding matrix cache
   // --------------------------------------------------------------------------
 
-  dout(12) << "[ get table    ] = " << signature << dendl;
+  ldout(cct,12) << "[ get table    ] = " << signature << dendl;
 
   // we try to fetch a decoding table from an LRU cache
   bool found = false;
@@ -255,11 +255,11 @@ ErasureCodeIsaTableCache::getDecodingTableFromCache(std::string &signature,
     getDecodingTablesLru(matrixtype);
 
   if (decode_tbls_map->count(signature)) {
-    dout(12) << "[ cached table ] = " << signature << dendl;
+    ldout(cct,12) << "[ cached table ] = " << signature << dendl;
     // copy the table out of the cache
     memcpy(table, (*decode_tbls_map)[signature].second.c_str(), k * (m + k)*32);
     // find item in LRU queue and push back
-    dout(12) << "[ cache size   ] = " << decode_tbls_lru->size() << dendl;
+    ldout(cct,12) << "[ cache size   ] = " << decode_tbls_lru->size() << dendl;
     decode_tbls_lru->splice((*decode_tbls_map)[signature].first, *decode_tbls_lru, decode_tbls_lru->end());
     found = true;
   }
@@ -280,7 +280,7 @@ ErasureCodeIsaTableCache::putDecodingTableToCache(std::string &signature,
   // LRU decoding matrix cache
   // --------------------------------------------------------------------------
 
-  dout(12) << "[ put table    ] = " << signature << dendl;
+  ldout(cct,12) << "[ put table    ] = " << signature << dendl;
 
   // we store a new table to the cache
 
@@ -296,7 +296,7 @@ ErasureCodeIsaTableCache::putDecodingTableToCache(std::string &signature,
 
   // evt. shrink the LRU queue/map
   if ((int) decode_tbls_lru->size() >= ErasureCodeIsaTableCache::decoding_tables_lru_length) {
-    dout(12) << "[ shrink lru   ] = " << signature << dendl;
+    ldout(cct,12) << "[ shrink lru   ] = " << signature << dendl;
     // reuse old buffer
     cachetable = (*decode_tbls_map)[decode_tbls_lru->front()].second;
     if ((int) cachetable.length() != (k * (m + k)*32)) {
@@ -314,12 +314,12 @@ ErasureCodeIsaTableCache::putDecodingTableToCache(std::string &signature,
     // add to the end of lru
     decode_tbls_lru->push_back(signature);
   } else {
-    dout(12) << "[ store table  ] = " << signature << dendl;
+    ldout(cct,12) << "[ store table  ] = " << signature << dendl;
     // allocate a new buffer
     cachetable = buffer::create(k * (m + k)*32);
     decode_tbls_lru->push_back(signature);
     (*decode_tbls_map)[signature] = std::make_pair(decode_tbls_lru->begin(), cachetable);
-    dout(12) << "[ cache size   ] = " << decode_tbls_lru->size() << dendl;
+    ldout(cct,12) << "[ cache size   ] = " << decode_tbls_lru->size() << dendl;
   }
 
   // copy-in the new table

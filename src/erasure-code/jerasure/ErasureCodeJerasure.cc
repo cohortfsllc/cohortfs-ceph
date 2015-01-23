@@ -39,7 +39,7 @@ static ostream& _prefix(std::ostream* _dout)
 
 void ErasureCodeJerasure::init(const map<string,string> &parameters)
 {
-  dout(10) << "technique=" << technique << dendl;
+  ldout(cct,10) << "technique=" << technique << dendl;
   map<string,string>::const_iterator parameter;
   parameter = parameters.find("ruleset-root");
   if (parameter != parameters.end())
@@ -49,7 +49,7 @@ void ErasureCodeJerasure::init(const map<string,string> &parameters)
     ruleset_failure_domain = parameter->second;
   ostringstream ss;
   if (parse(parameters, &ss))
-    derr << ss.str() << dendl;
+    lderr(cct) << ss.str() << dendl;
   prepare();
 }
 
@@ -77,12 +77,12 @@ unsigned int ErasureCodeJerasure::get_chunk_size(unsigned int object_size) const
     unsigned chunk_size = object_size / k;
     if (object_size % k)
       chunk_size++;
-    dout(20) << "get_chunk_size: chunk_size " << chunk_size
+    ldout(cct,20) << "get_chunk_size: chunk_size " << chunk_size
 	     << " must be modulo " << alignment << dendl; 
     assert(alignment <= chunk_size);
     unsigned modulo = chunk_size % alignment;
     if (modulo) {
-      dout(10) << "get_chunk_size: " << chunk_size
+      ldout(cct,10) << "get_chunk_size: " << chunk_size
 	       << " padded to " << chunk_size + alignment - modulo << dendl;
       chunk_size += alignment - modulo;
     }

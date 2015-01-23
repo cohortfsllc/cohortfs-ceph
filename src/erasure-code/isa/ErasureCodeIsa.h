@@ -52,8 +52,9 @@ public:
   string ruleset_root;
   string ruleset_failure_domain;
 
-  ErasureCodeIsa(const char *_technique,
+  ErasureCodeIsa(CephContext *cct, const char *_technique,
 		 ErasureCodeIsaTableCache &_tcache) :
+  ErasureCode(cct),
   tcache(_tcache),
   technique(_technique),
   ruleset_root("default"),
@@ -123,10 +124,10 @@ public:
   unsigned char* encode_coeff; // encoding coefficient
   unsigned char* encode_tbls; // encoding table
 
-  ErasureCodeIsaDefault(ErasureCodeIsaTableCache &_tcache,
+  ErasureCodeIsaDefault(CephContext *cct, ErasureCodeIsaTableCache &_tcache,
 			int matrix = kVandermonde) :
 
-  ErasureCodeIsa("default", _tcache),
+  ErasureCodeIsa(cct, "default", _tcache),
   encode_coeff(0), encode_tbls(0)
   {
     matrixtype = matrix;

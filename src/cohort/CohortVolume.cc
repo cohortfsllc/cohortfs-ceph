@@ -171,6 +171,7 @@ int CohortVolume::_attach(std::stringstream &ss) const
   map<string, string> copy_params(erasure_params);
   copy_params["directory"] = g_conf->osd_erasure_code_directory;
   ceph::ErasureCodePluginRegistry::instance().factory(
+    g_ceph_context,
     erasure_plugin,
     copy_params,
     &erasure,
@@ -370,6 +371,7 @@ VolumeRef CohortVolume::create(const string& name,
   copy_params = v->erasure_params;
   copy_params["directory"] = g_conf->osd_erasure_code_directory;
   ceph::ErasureCodePluginRegistry::instance().factory(
+    g_ceph_context,
     v->erasure_plugin,
     copy_params,
     &v->erasure,

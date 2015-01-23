@@ -33,7 +33,8 @@ public:
   string ruleset_failure_domain;
   bool per_chunk_alignment;
 
-  ErasureCodeJerasure(const char *_technique) :
+  ErasureCodeJerasure(CephContext *cct, const char *_technique) :
+    ErasureCode(cct),
     DEFAULT_K(2),
     DEFAULT_M(1),
     DEFAULT_W(8),
@@ -82,8 +83,8 @@ class ErasureCodeJerasureReedSolomonVandermonde : public ErasureCodeJerasure {
 public:
   int *matrix;
 
-  ErasureCodeJerasureReedSolomonVandermonde() :
-    ErasureCodeJerasure("reed_sol_van"),
+  ErasureCodeJerasureReedSolomonVandermonde(CephContext *cct) :
+    ErasureCodeJerasure(cct, "reed_sol_van"),
     matrix(0)
   {
     DEFAULT_K = 7;
@@ -112,8 +113,8 @@ class ErasureCodeJerasureReedSolomonRAID6 : public ErasureCodeJerasure {
 public:
   int *matrix;
 
-  ErasureCodeJerasureReedSolomonRAID6() :
-    ErasureCodeJerasure("reed_sol_r6_op"),
+  ErasureCodeJerasureReedSolomonRAID6(CephContext *cct) :
+    ErasureCodeJerasure(cct, "reed_sol_r6_op"),
     matrix(0)
   {
     DEFAULT_K = 7;
@@ -144,8 +145,8 @@ public:
   int **schedule;
   int packetsize;
 
-  ErasureCodeJerasureCauchy(const char *technique) :
-    ErasureCodeJerasure(technique),
+  ErasureCodeJerasureCauchy(CephContext *cct, const char *technique) :
+    ErasureCodeJerasure(cct, technique),
     bitmatrix(0),
     schedule(0)
   {
@@ -175,8 +176,8 @@ public:
 
 class ErasureCodeJerasureCauchyOrig : public ErasureCodeJerasureCauchy {
 public:
-  ErasureCodeJerasureCauchyOrig() :
-    ErasureCodeJerasureCauchy("cauchy_orig")
+  ErasureCodeJerasureCauchyOrig(CephContext *cct) :
+    ErasureCodeJerasureCauchy(cct, "cauchy_orig")
   {}
 
   virtual void prepare();
@@ -184,8 +185,8 @@ public:
 
 class ErasureCodeJerasureCauchyGood : public ErasureCodeJerasureCauchy {
 public:
-  ErasureCodeJerasureCauchyGood() :
-    ErasureCodeJerasureCauchy("cauchy_good")
+  ErasureCodeJerasureCauchyGood(CephContext *cct) :
+    ErasureCodeJerasureCauchy(cct, "cauchy_good")
   {}
 
   virtual void prepare();
@@ -198,8 +199,9 @@ public:
   int **schedule;
   int packetsize;
 
-  ErasureCodeJerasureLiberation(const char *technique = "liberation") :
-    ErasureCodeJerasure(technique),
+  ErasureCodeJerasureLiberation(CephContext *cct,
+                                const char *technique = "liberation") :
+    ErasureCodeJerasure(cct, technique),
     bitmatrix(0),
     schedule(0)
   {
@@ -229,8 +231,8 @@ public:
 
 class ErasureCodeJerasureBlaumRoth : public ErasureCodeJerasureLiberation {
 public:
-  ErasureCodeJerasureBlaumRoth() :
-    ErasureCodeJerasureLiberation("blaum_roth")
+  ErasureCodeJerasureBlaumRoth(CephContext *cct) :
+    ErasureCodeJerasureLiberation(cct, "blaum_roth")
   {
     DEFAULT_W = 6;
   }
@@ -241,8 +243,8 @@ public:
 
 class ErasureCodeJerasureLiber8tion : public ErasureCodeJerasureLiberation {
 public:
-  ErasureCodeJerasureLiber8tion() :
-    ErasureCodeJerasureLiberation("liber8tion")
+  ErasureCodeJerasureLiber8tion(CephContext *cct) :
+    ErasureCodeJerasureLiberation(cct, "liber8tion")
   {
     DEFAULT_K = 2;
     DEFAULT_M = 2;

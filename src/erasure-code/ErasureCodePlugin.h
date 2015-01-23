@@ -21,9 +21,11 @@
 #include "common/Mutex.h"
 #include "ErasureCodeInterface.h"
 
+class CephContext;
+
 extern "C" {
   const char *__erasure_code_version();
-  int __erasure_code_init(char *plugin_name, char *directory);
+  int __erasure_code_init(CephContext *cct, char *plugin_name, char *directory);
 }
 
 namespace ceph {
@@ -37,7 +39,8 @@ namespace ceph {
       library(0) {}
     virtual ~ErasureCodePlugin() {}
 
-    virtual int factory(const map<std::string,std::string> &parameters,
+    virtual int factory(CephContext *cct,
+                        const map<std::string,std::string> &parameters,
 			ErasureCodeInterfaceRef *erasure_code) = 0;
   };
 
@@ -57,7 +60,8 @@ namespace ceph {
       return singleton;
     }
 
-    int factory(const std::string &plugin,
+    int factory(CephContext *cct,
+                const std::string &plugin,
 		const map<std::string,std::string> &parameters,
 		ErasureCodeInterfaceRef *erasure_code,
 		ostream &ss);
@@ -66,12 +70,14 @@ namespace ceph {
     int remove(const std::string &name);
     ErasureCodePlugin *get(const std::string &name);
 
-    int load(const std::string &plugin_name,
+    int load(CephContext *cct,
+             const std::string &plugin_name,
 	     const std::string &directory,
 	     ErasureCodePlugin **plugin,
 	     ostream &ss);
 
-    int preload(const std::string &plugins,
+    int preload(CephContext *cct,
+                const std::string &plugins,
 		const std::string &directory,
 		ostream &ss);
   };

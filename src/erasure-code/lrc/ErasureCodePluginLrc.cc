@@ -33,15 +33,16 @@ static ostream& _prefix(std::ostream* _dout)
 
 class ErasureCodePluginLrc : public ErasureCodePlugin {
 public:
-  virtual int factory(const map<std::string,std::string> &parameters,
+  virtual int factory(CephContext *cct,
+                      const map<std::string,std::string> &parameters,
 		      ErasureCodeInterfaceRef *erasure_code) {
     ErasureCodeLrc *interface;
-    interface = new ErasureCodeLrc();
+    interface = new ErasureCodeLrc(cct);
     stringstream ss;
     assert(parameters.count("directory") != 0);
     int r = interface->init(parameters, &ss);
     if (r) {
-      derr << ss.str() << dendl;
+      lderr(cct) << ss.str() << dendl;
       delete interface;
       return r;
     }
@@ -52,7 +53,7 @@ public:
 
 const char *__erasure_code_version() { return CEPH_GIT_NICE_VER; }
 
-int __erasure_code_init(char *plugin_name, char *directory)
+int __erasure_code_init(CephContext *cct, char *plugin_name, char *directory)
 {
   ErasureCodePluginRegistry &instance = ErasureCodePluginRegistry::instance();
   return instance.add(plugin_name, new ErasureCodePluginLrc());
