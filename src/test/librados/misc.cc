@@ -7,7 +7,6 @@
 #include "include/rados/librados.h"
 #include "include/rados/librados.hpp"
 #include "include/stringify.h"
-#include "global/global_context.h"
 #include "global/global_init.h"
 #include "common/ceph_argparse.h"
 #include "common/common_init.h"
@@ -27,6 +26,7 @@ using std::string;
 
 typedef RadosTest LibRadosMisc;
 typedef RadosTestPP LibRadosMiscPP;
+static CephContext* cct;
 
 TEST(LibRadosMiscVersion, Version) {
   int major, minor, extra;
@@ -206,17 +206,17 @@ TEST_F(LibRadosMiscPP, BigAttrPP) {
 
   bufferlist got;
 
-  cout << "osd_max_attr_size = " << g_conf->osd_max_attr_size << std::endl;
-  if (g_conf->osd_max_attr_size) {
+  cout << "osd_max_attr_size = " << cct->_conf->osd_max_attr_size << std::endl;
+  if (cct->_conf->osd_max_attr_size) {
     bl.clear();
     got.clear();
-    bl.append(buffer::create(g_conf->osd_max_attr_size));
+    bl.append(buffer::create(cct->_conf->osd_max_attr_size));
     ASSERT_EQ(0, ioctx.setxattr("foo", "one", bl));
     ASSERT_EQ((int)bl.length(), ioctx.getxattr("foo", "one", got));
     ASSERT_TRUE(bl.contents_equal(got));
 
     bl.clear();
-    bl.append(buffer::create(g_conf->osd_max_attr_size+1));
+    bl.append(buffer::create(cct->_conf->osd_max_attr_size+1));
     ASSERT_EQ(-EFBIG, ioctx.setxattr("foo", "one", bl));
   } else {
     cout << "osd_max_attr_size == 0; skipping test" << std::endl;
@@ -225,7 +225,7 @@ TEST_F(LibRadosMiscPP, BigAttrPP) {
   for (int i=0; i<1000; i++) {
     bl.clear();
     got.clear();
-    bl.append(buffer::create(MIN(g_conf->osd_max_attr_size, 1024)));
+    bl.append(buffer::create(MIN(cct->_conf->osd_max_attr_size, 1024)));
     char n[10];
     snprintf(n, sizeof(n), "a%d", i);
     ASSERT_EQ(0, ioctx.setxattr("foo", n, bl));
@@ -241,8 +241,9 @@ int main(int argc, char **argv)
   vector<const char*> args;
   argv_to_vec(argc, (const char **)argv, args);
 
-  global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
-  common_init_finish(g_ceph_context);
+  cct = global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT,
+		    CODE_ENVIRONMENT_UTILITY, 0);
+  common_init_finish(cct);
 
   return RUN_ALL_TESTS();
 }

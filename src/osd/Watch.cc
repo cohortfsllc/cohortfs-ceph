@@ -89,7 +89,7 @@ public:
 void Notify::do_timeout()
 {
   assert(lock.is_locked_by_me());
-  dout(10) << "timeout" << dendl;
+  ldout(osd->osd->cct, 10) << "timeout" << dendl;
   cb = NULL;
   if (is_discarded()) {
     lock.Unlock();
@@ -145,14 +145,14 @@ void Notify::unregister_cb()
 void Notify::start_watcher(WatchRef watch)
 {
   Mutex::Locker l(lock);
-  dout(10) << "start_watcher" << dendl;
+  ldout(osd->osd->cct, 10) << "start_watcher" << dendl;
   watchers.insert(watch);
 }
 
 void Notify::complete_watcher(WatchRef watch)
 {
   Mutex::Locker l(lock);
-  dout(10) << "complete_watcher" << dendl;
+  ldout(osd->osd->cct, 10) << "complete_watcher" << dendl;
   if (is_discarded())
     return;
   assert(in_progress_watchers > 0);
@@ -163,7 +163,7 @@ void Notify::complete_watcher(WatchRef watch)
 
 void Notify::maybe_complete_notify()
 {
-  dout(10) << "maybe_complete_notify -- "
+  ldout(osd->osd->cct, 10) << "maybe_complete_notify -- "
 	   << in_progress_watchers
 	   << " in progress watchers " << dendl;
   if (!in_progress_watchers) {
@@ -211,7 +211,7 @@ public:
   }
   void finish(int) { assert(0); /* not used */ }
   void complete(int) {
-    dout(10) << "HandleWatchTimeout" << dendl;
+    ldout(watch->osd->osd->cct, 10) << "HandleWatchTimeout" << dendl;
     boost::intrusive_ptr<OSDVol> vol(watch->vol);
     OSDService *osd(watch->osd);
     osd->watch_lock.Unlock();
@@ -234,7 +234,7 @@ public:
     canceled = true;
   }
   void finish(int) {
-    dout(10) << "HandleWatchTimeoutDelayed" << dendl;
+    ldout(watch->osd->osd->cct, 10) << "HandleWatchTimeoutDelayed" << dendl;
     assert(watch->vol->is_locked());
     watch->cb = NULL;
     if (!watch->is_discarded() && !canceled)
@@ -270,11 +270,11 @@ Watch::Watch(
     addr(addr),
     entity(entity),
     discarded(false) {
-  dout(10) << "Watch()" << dendl;
+  ldout(osd->osd->cct, 10) << "Watch()" << dendl;
 }
 
 Watch::~Watch() {
-  dout(10) << "~Watch" << dendl;
+  ldout(osd->osd->cct, 10) << "~Watch" << dendl;
   // users must have called remove() or discard() prior to this point
   assert(!obc);
   assert(!conn);
@@ -292,7 +292,7 @@ Context *Watch::get_delayed_cb()
 void Watch::register_cb()
 {
   Mutex::Locker l(osd->watch_lock);
-  dout(15) << "registering callback, timeout: " << timeout << dendl;
+  ldout(osd->osd->cct, 15) << "registering callback, timeout: " << timeout << dendl;
   cb = new HandleWatchTimeout(self.lock());
   osd->watch_timer.add_event_after(
     timeout,
@@ -301,10 +301,10 @@ void Watch::register_cb()
 
 void Watch::unregister_cb()
 {
-  dout(15) << "unregister_cb" << dendl;
+  ldout(osd->osd->cct, 15) << "unregister_cb" << dendl;
   if (!cb)
     return;
-  dout(15) << "actually registered, cancelling" << dendl;
+  ldout(osd->osd->cct, 15) << "actually registered, cancelling" << dendl;
   cb->cancel();
   {
     Mutex::Locker l(osd->watch_lock);
@@ -315,7 +315,7 @@ void Watch::unregister_cb()
 
 void Watch::connect(ConnectionRef con)
 {
-  dout(10) << "connecting" << dendl;
+  ldout(osd->osd->cct, 10) << "connecting" << dendl;
   conn = con;
   OSD::Session* sessionref(static_cast<OSD::Session*>(con->get_priv()));
   sessionref->wstate.addWatch(self.lock());
@@ -330,14 +330,14 @@ void Watch::connect(ConnectionRef con)
 
 void Watch::disconnect()
 {
-  dout(10) << "disconnect" << dendl;
+  ldout(osd->osd->cct, 10) << "disconnect" << dendl;
   conn = ConnectionRef();
   register_cb();
 }
 
 void Watch::discard()
 {
-  dout(10) << "discard" << dendl;
+  ldout(osd->osd->cct, 10) << "discard" << dendl;
   for (map<uint64_t, NotifyRef>::iterator i = in_progress_notifies.begin();
        i != in_progress_notifies.end();
        ++i) {
@@ -370,7 +370,7 @@ bool Watch::is_discarded()
 
 void Watch::remove()
 {
-  dout(10) << "remove" << dendl;
+  ldout(osd->osd->cct, 10) << "remove" << dendl;
   for (map<uint64_t, NotifyRef>::iterator i = in_progress_notifies.begin();
        i != in_progress_notifies.end();
        ++i) {
@@ -381,7 +381,7 @@ void Watch::remove()
 
 void Watch::start_notify(NotifyRef notif)
 {
-  dout(10) << "start_notify " << notif->notify_id << dendl;
+  ldout(osd->osd->cct, 10) << "start_notify " << notif->notify_id << dendl;
   assert(in_progress_notifies.find(notif->notify_id) ==
 	 in_progress_notifies.end());
   in_progress_notifies[notif->notify_id] = notif;
@@ -392,13 +392,13 @@ void Watch::start_notify(NotifyRef notif)
 
 void Watch::cancel_notify(NotifyRef notif)
 {
-  dout(10) << "cancel_notify " << notif->notify_id << dendl;
+  ldout(osd->osd->cct, 10) << "cancel_notify " << notif->notify_id << dendl;
   in_progress_notifies.erase(notif->notify_id);
 }
 
 void Watch::send_notify(NotifyRef notif)
 {
-  dout(10) << "send_notify" << dendl;
+  ldout(osd->osd->cct, 10) << "send_notify" << dendl;
   MWatchNotify *notify_msg = new MWatchNotify(
     cookie, notif->version, notif->notify_id,
     WATCH_NOTIFY, notif->payload);
@@ -407,7 +407,7 @@ void Watch::send_notify(NotifyRef notif)
 
 void Watch::notify_ack(uint64_t notify_id)
 {
-  dout(10) << "notify_ack" << dendl;
+  ldout(osd->osd->cct, 10) << "notify_ack" << dendl;
   map<uint64_t, NotifyRef>::iterator i = in_progress_notifies.find(notify_id);
   if (i != in_progress_notifies.end()) {
     i->second->complete_watcher(self.lock());

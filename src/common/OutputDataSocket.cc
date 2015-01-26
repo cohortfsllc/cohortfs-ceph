@@ -13,6 +13,7 @@
  */
 
 
+#include "common/ceph_context.h"
 #include "common/Thread.h"
 #include "common/OutputDataSocket.h"
 #include "common/config.h"

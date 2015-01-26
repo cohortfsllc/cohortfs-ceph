@@ -133,7 +133,7 @@ int FileStore::peek_journal_fsid(boost::uuids::uuid *fsid)
   // make sure we don't try to use aio or direct_io (and get annoying
   // error messages from failing to do so); performance implications
   // should be irrelevant for this use
-  FileJournal j(*fsid, 0, 0, journalpath.c_str(), false, false);
+  FileJournal j(cct, *fsid, 0, 0, journalpath.c_str(), false, false);
   return j.peek_fsid(*fsid);
 }
 
@@ -477,7 +477,7 @@ FileStore::FileStore(CephContext *_cct, const std::string &base, const std::stri
 
   cct->_conf->add_observer(this);
 
-  generic_backend = new GenericFileStoreBackend(this);
+  generic_backend = new GenericFileStoreBackend(cct, this);
   backend = generic_backend;
 
   superblock.compat_features = get_fs_initial_compat_set();
@@ -519,8 +519,9 @@ int FileStore::open_journal()
 {
   if (journalpath.length()) {
     dout(10) << "open_journal at " << journalpath << dendl;
-    journal = new FileJournal(fsid, &finisher, &sync_cond, journalpath.c_str(),
-			      m_journal_dio, m_journal_aio, m_journal_force_aio);
+    journal = new FileJournal(cct, fsid, &finisher, &sync_cond,
+			      journalpath.c_str(), m_journal_dio,
+			      m_journal_aio, m_journal_force_aio);
   }
   return 0;
 }
@@ -532,7 +533,8 @@ int FileStore::dump_journal(ostream& out)
   if (!journalpath.length())
     return -EINVAL;
 
-  FileJournal *journal = new FileJournal(fsid, &finisher, &sync_cond, journalpath.c_str(), m_journal_dio);
+  FileJournal *journal = new FileJournal(cct, fsid, &finisher, &sync_cond,
+					 journalpath.c_str(), m_journal_dio);
   r = journal->dump(out);
   delete journal;
   return r;
@@ -633,15 +635,15 @@ int FileStore::mkfs()
 
   if (basefs.f_type == BTRFS_SUPER_MAGIC) {
 #if defined(__linux__)
-    backend = new BtrfsFileStoreBackend(this);
+    backend = new BtrfsFileStoreBackend(cct, this);
 #endif
   } else if (basefs.f_type == XFS_SUPER_MAGIC) {
 #ifdef HAVE_LIBXFS
-    backend = new XfsFileStoreBackend(this);
+    backend = new XfsFileStoreBackend(cct, this);
 #endif
   } else if (basefs.f_type == ZFS_SUPER_MAGIC) {
 #ifdef HAVE_LIBZFS
-    backend = new ZFSFileStoreBackend(this);
+    backend = new ZFSFileStoreBackend(cct, this);
 #endif
   }
 
@@ -828,7 +830,7 @@ int FileStore::_detect_fs()
   if (st.f_type == BTRFS_SUPER_MAGIC) {
 #if defined(__linux__)
     dout(0) << "mount detected btrfs" << dendl;
-    backend = new BtrfsFileStoreBackend(this);
+    backend = new BtrfsFileStoreBackend(cct, this);
     m_fs_type = FS_TYPE_BTRFS;
 
     wbthrottle.set_fs(WBThrottle::BTRFS);
@@ -2819,10 +2821,10 @@ public:
 
   void finish(int r) {
     BackTrace *bt = new BackTrace(1);
-    generic_dout(-1) << "FileStore: sync_entry timed out after "
-	   << m_commit_timeo << " seconds.\n";
-    bt->print(*_dout);
-    *_dout << dendl;
+    //generic_dout(-1) << "FileStore: sync_entry timed out after "
+    //	     << m_commit_timeo << " seconds.\n";
+    //bt->print(*_dout);
+    //*_dout << dendl;
     delete bt;
     abort();
   }

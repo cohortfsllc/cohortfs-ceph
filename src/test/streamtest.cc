@@ -23,6 +23,8 @@
 
 using namespace std;
 
+CephContext* cct;
+
 struct io {
   utime_t start, ack, commit;
   bool done() {
@@ -89,14 +91,14 @@ struct C_Ack : public Context {
   off_t off;
   C_Ack(off_t o) : off(o) {}
   void finish(int r) {
-    set_ack(off, ceph_clock_now(g_ceph_context));
+    set_ack(off, ceph_clock_now(cct));
   }
 };
 struct C_Commit : public Context {
   off_t off;
   C_Commit(off_t o) : off(o) {}
   void finish(int r) {
-    set_commit(off, ceph_clock_now(g_ceph_context));
+    set_commit(off, ceph_clock_now(cct));
   }
 };
 
@@ -107,8 +109,9 @@ int main(int argc, const char **argv)
   argv_to_vec(argc, argv, args);
   env_to_vec(args);
 
-  global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
-  common_init_finish(g_ceph_context);
+  cct = global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT,
+		    CODE_ENVIRONMENT_UTILITY, 0);
+  common_init_finish(cct);
 
   // args
   if (args.size() < 3) return -1;
@@ -133,7 +136,7 @@ int main(int argc, const char **argv)
   cout << "#dev " << filename
        << ", " << seconds << " seconds, " << bytes << " bytes per write" << std::endl;
 
-  ObjectStore *fs = new FileStore(g_ceph_context, filename, journal);
+  ObjectStore *fs = new FileStore(cct, filename, journal);
 
   if (fs->mkfs() < 0) {
     cout << "mkfs failed" << std::endl;
@@ -149,7 +152,7 @@ int main(int argc, const char **argv)
   ft.create_collection(coll_t());
   fs->apply_transaction(ft);
 
-  utime_t now = ceph_clock_now(g_ceph_context);
+  utime_t now = ceph_clock_now(cct);
   utime_t start = now;
   utime_t end = now;
   end += seconds;
@@ -159,7 +162,7 @@ int main(int argc, const char **argv)
   while (now < end) {
     object_t poid("streamtest");
 
-    set_start(pos, ceph_clock_now(g_ceph_context));
+    set_start(pos, ceph_clock_now(cct));
     ObjectStore::Transaction *t = new ObjectStore::Transaction;
     t->write(coll_t(), hobject_t(poid), pos, bytes, bl);
     fs->queue_transaction(NULL, t, new C_Ack(pos), new C_Commit(pos));
@@ -167,7 +170,7 @@ int main(int argc, const char **argv)
 
     throttle();
 
-    now = ceph_clock_now(g_ceph_context);
+    now = ceph_clock_now(cct);
 
     // wait?
     /*

@@ -23,6 +23,7 @@
 #include "FakeWriteback.h"
 
 using std::setw;
+static CephContext* cct;
 
 // XXX: Only tests default namespace
 struct op_data {
@@ -56,18 +57,17 @@ int stress_test(uint64_t num_ops, uint64_t num_objs,
 		uint64_t max_op_len, float percent_reads)
 {
   Mutex lock;
-  FakeWriteback writeback(g_ceph_context, &lock, delay_ns);
+  FakeWriteback writeback(cct, &lock, delay_ns);
 
-  ObjectCacher obc(g_ceph_context, writeback, lock, NULL, NULL,
-		   g_conf->client_oc_size,
-		   g_conf->client_oc_max_objects,
-		   g_conf->client_oc_max_dirty,
-		   g_conf->client_oc_target_dirty,
-		   g_conf->client_oc_max_dirty_age,
+  ObjectCacher obc(cct, writeback, lock, NULL, NULL,
+		   cct->_conf->client_oc_size,
+		   cct->_conf->client_oc_max_objects,
+		   cct->_conf->client_oc_max_dirty,
+		   cct->_conf->client_oc_target_dirty,
+		   cct->_conf->client_oc_max_dirty_age,
 		   true);
   obc.start();
 
-  std::atomic<uint64_t> outstanding_reads;
   vector<std::shared_ptr<op_data> > ops;
   ObjectCacher::ObjectSet object_set(NULL, boost::uuids::nil_uuid(), 0);
   ceph::buffer::ptr bp(max_op_len);
@@ -179,7 +179,8 @@ int main(int argc, const char **argv)
   std::vector<const char*> args;
   argv_to_vec(argc, argv, args);
   env_to_vec(args);
-  global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
+  cct = global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT,
+		    CODE_ENVIRONMENT_UTILITY, 0);
 
   long long delay_ns = 0;
   long long num_ops = 1000;

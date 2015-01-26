@@ -1,4 +1,5 @@
 
+#include "common/ceph_context.h"
 #include "include/types.h"
 #include "MemoryModel.h"
 #include "common/config.h"

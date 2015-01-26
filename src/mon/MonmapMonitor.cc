@@ -42,7 +42,7 @@ static ostream& _prefix(std::ostream *_dout, Monitor *mon) {
 
 void MonmapMonitor::create_initial()
 {
-  dout(10) << "create_initial using current monmap" << dendl;
+  ldout(mon->cct, 10) << "create_initial using current monmap" << dendl;
   pending_map = *mon->monmap;
   pending_map.epoch = 1;
 }
@@ -53,11 +53,11 @@ void MonmapMonitor::update_from_paxos(bool *need_bootstrap)
   if (version <= mon->monmap->get_epoch())
     return;
 
-  dout(10) << __func__ << " version " << version
+  ldout(mon->cct, 10) << __func__ << " version " << version
 	   << ", my v " << mon->monmap->epoch << dendl;
 
   if (need_bootstrap && version != mon->monmap->get_epoch()) {
-    dout(10) << " signaling that we need a bootstrap" << dendl;
+    ldout(mon->cct, 10) << " signaling that we need a bootstrap" << dendl;
     *need_bootstrap = true;
   }
 
@@ -67,7 +67,7 @@ void MonmapMonitor::update_from_paxos(bool *need_bootstrap)
   assert(ret == 0);
   assert(monmap_bl.length());
 
-  dout(10) << "update_from_paxos got " << version << dendl;
+  ldout(mon->cct, 10) << "update_from_paxos got " << version << dendl;
   mon->monmap->decode(monmap_bl);
 
   if (mon->store->exists("mkfs", "monmap")) {
@@ -81,13 +81,13 @@ void MonmapMonitor::create_pending()
 {
   pending_map = *mon->monmap;
   pending_map.epoch++;
-  pending_map.last_changed = ceph_clock_now(g_ceph_context);
-  dout(10) << "create_pending monmap epoch " << pending_map.epoch << dendl;
+  pending_map.last_changed = ceph_clock_now(mon->cct);
+  ldout(mon->cct, 10) << "create_pending monmap epoch " << pending_map.epoch << dendl;
 }
 
 void MonmapMonitor::encode_pending(MonitorDBStore::Transaction *t)
 {
-  dout(10) << "encode_pending epoch " << pending_map.epoch << dendl;
+  ldout(mon->cct, 10) << "encode_pending epoch " << pending_map.epoch << dendl;
 
   assert(mon->monmap->epoch + 1 == pending_map.epoch ||
 	 pending_map.epoch == 1);  // special case mkfs!
@@ -102,7 +102,7 @@ void MonmapMonitor::on_active()
 {
   if (get_last_committed() >= 1 && !mon->has_ever_joined) {
     // make note of the fact that i was, once, part of the quorum.
-    dout(10) << "noting that i was, once, part of an active quorum." << dendl;
+    ldout(mon->cct, 10) << "noting that i was, once, part of an active quorum." << dendl;
 
     /* This is some form of nasty in-breeding we have between the MonmapMonitor
        and the Monitor itself. We should find a way to get rid of it given our
@@ -162,7 +162,7 @@ bool MonmapMonitor::preprocess_command(MMonCommand *m)
   }
 
   string prefix;
-  cmd_getval(g_ceph_context, cmdmap, "prefix", prefix);
+  cmd_getval(mon->cct, cmdmap, "prefix", prefix);
 
   MonSession *session = m->get_session();
   if (!session) {
@@ -183,7 +183,7 @@ bool MonmapMonitor::preprocess_command(MMonCommand *m)
 
     epoch_t epoch;
     int64_t epochnum;
-    cmd_getval(g_ceph_context, cmdmap, "epoch", epochnum, (int64_t)0);
+    cmd_getval(mon->cct, cmdmap, "epoch", epochnum, (int64_t)0);
     epoch = epochnum;
 
     MonMap *p = mon->monmap;
@@ -208,7 +208,7 @@ bool MonmapMonitor::preprocess_command(MMonCommand *m)
       ss << "got monmap epoch " << p->get_epoch();
     } else if (prefix == "mon dump") {
       string format;
-      cmd_getval(g_ceph_context, cmdmap, "format", format, string("plain"));
+      cmd_getval(mon->cct, cmdmap, "format", format, string("plain"));
       stringstream ds;
       boost::scoped_ptr<Formatter> f(new_formatter(format));
       if (f) {
@@ -252,7 +252,7 @@ reply:
 
 bool MonmapMonitor::prepare_update(PaxosServiceMessage *m)
 {
-  dout(7) << "prepare_update " << *m << " from " << m->get_orig_source_inst() << dendl;
+  ldout(mon->cct, 7) << "prepare_update " << *m << " from " << m->get_orig_source_inst() << dendl;
 
   switch (m->get_type()) {
   case MSG_MON_COMMAND:
@@ -281,7 +281,7 @@ bool MonmapMonitor::prepare_command(MMonCommand *m)
   }
 
   string prefix;
-  cmd_getval(g_ceph_context, cmdmap, "prefix", prefix);
+  cmd_getval(mon->cct, cmdmap, "prefix", prefix);
 
   MonSession *session = m->get_session();
   if (!session) {
@@ -291,9 +291,9 @@ bool MonmapMonitor::prepare_command(MMonCommand *m)
 
   if (prefix == "mon add") {
     string name;
-    cmd_getval(g_ceph_context, cmdmap, "name", name);
+    cmd_getval(mon->cct, cmdmap, "name", name);
     string addrstr;
-    cmd_getval(g_ceph_context, cmdmap, "addr", addrstr);
+    cmd_getval(mon->cct, cmdmap, "addr", addrstr);
     entity_addr_t addr;
     bufferlist rdata;
 
@@ -343,7 +343,7 @@ bool MonmapMonitor::prepare_command(MMonCommand *m)
     }
 
     pending_map.add(name, addr);
-    pending_map.last_changed = ceph_clock_now(g_ceph_context);
+    pending_map.last_changed = ceph_clock_now(mon->cct);
     getline(ss, rs);
     wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs,
 						     get_last_committed() + 1));
@@ -351,7 +351,7 @@ bool MonmapMonitor::prepare_command(MMonCommand *m)
 
   } else if (prefix == "mon remove") {
     string name;
-    cmd_getval(g_ceph_context, cmdmap, "name", name);
+    cmd_getval(mon->cct, cmdmap, "name", name);
     if (!pending_map.contains(name)) {
       err = 0;
       ss << "mon " << name << " does not exist or has already been removed";
@@ -365,7 +365,7 @@ bool MonmapMonitor::prepare_command(MMonCommand *m)
     }
     entity_addr_t addr = pending_map.get_addr(name);
     pending_map.remove(name);
-    pending_map.last_changed = ceph_clock_now(g_ceph_context);
+    pending_map.last_changed = ceph_clock_now(mon->cct);
     ss << "removed mon." << name << " at " << addr << ", there are now " << pending_map.size() << " monitors" ;
     getline(ss, rs);
     // send reply immediately in case we get removed
@@ -383,23 +383,23 @@ out:
 
 bool MonmapMonitor::preprocess_join(MMonJoin *join)
 {
-  dout(10) << "preprocess_join " << join->name << " at " << join->addr << dendl;
+  ldout(mon->cct, 10) << "preprocess_join " << join->name << " at " << join->addr << dendl;
 
   MonSession *session = join->get_session();
   if (!session ||
       !session->is_capable("mon", MON_CAP_W | MON_CAP_X)) {
-    dout(10) << " insufficient caps" << dendl;
+    ldout(mon->cct, 10) << " insufficient caps" << dendl;
     join->put();
     return true;
   }
 
   if (pending_map.contains(join->name) && !pending_map.get_addr(join->name).is_blank_ip()) {
-    dout(10) << " already have " << join->name << dendl;
+    ldout(mon->cct, 10) << " already have " << join->name << dendl;
     join->put();
     return true;
   }
   if (pending_map.contains(join->addr) && pending_map.get_name(join->addr) == join->name) {
-    dout(10) << " already have " << join->addr << dendl;
+    ldout(mon->cct, 10) << " already have " << join->addr << dendl;
     join->put();
     return true;
   }
@@ -407,13 +407,13 @@ bool MonmapMonitor::preprocess_join(MMonJoin *join)
 }
 bool MonmapMonitor::prepare_join(MMonJoin *join)
 {
-  dout(0) << "adding/updating " << join->name << " at " << join->addr << " to monitor cluster" << dendl;
+  ldout(mon->cct, 0) << "adding/updating " << join->name << " at " << join->addr << " to monitor cluster" << dendl;
   if (pending_map.contains(join->name))
     pending_map.remove(join->name);
   if (pending_map.contains(join->addr))
     pending_map.remove(pending_map.get_name(join->addr));
   pending_map.add(join->name, join->addr);
-  pending_map.last_changed = ceph_clock_now(g_ceph_context);
+  pending_map.last_changed = ceph_clock_now(mon->cct);
   join->put();
   return true;
 }
@@ -455,14 +455,14 @@ void MonmapMonitor::get_health(list<pair<health_status_t, string> >& summary,
 int MonmapMonitor::get_monmap(bufferlist &bl)
 {
   version_t latest_ver = get_last_committed();
-  dout(10) << __func__ << " ver " << latest_ver << dendl;
+  ldout(mon->cct, 10) << __func__ << " ver " << latest_ver << dendl;
 
   if (!mon->store->exists(get_service_name(), stringify(latest_ver)))
     return -ENOENT;
 
   int err = get_version(latest_ver, bl);
   if (err < 0) {
-    dout(1) << __func__ << " error obtaining monmap: "
+    ldout(mon->cct, 1) << __func__ << " error obtaining monmap: "
 	    << cpp_strerror(err) << dendl;
     return err;
   }
@@ -471,7 +471,7 @@ int MonmapMonitor::get_monmap(bufferlist &bl)
 
 int MonmapMonitor::get_monmap(MonMap &m)
 {
-  dout(10) << __func__ << dendl;
+  ldout(mon->cct, 10) << __func__ << dendl;
   bufferlist monmap_bl;
 
   int err = get_monmap(monmap_bl);

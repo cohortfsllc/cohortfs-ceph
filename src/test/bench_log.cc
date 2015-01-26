@@ -12,6 +12,8 @@
 using std::cout;
 using std::cerr;
 
+static CephContext* cct;
+
 struct T : public Thread {
   int num;
   set<int> myset;
@@ -42,7 +44,7 @@ int main(int argc, const char **argv)
   argv_to_vec(argc, argv, args);
   env_to_vec(args);
 
-  global_init(NULL, args, CEPH_ENTITY_TYPE_OSD, CODE_ENVIRONMENT_UTILITY, 0);
+  cct = global_init(NULL, args, CEPH_ENTITY_TYPE_OSD, CODE_ENVIRONMENT_UTILITY, 0);
 
   utime_t start = ceph_clock_now(NULL);
 
@@ -64,7 +66,7 @@ int main(int argc, const char **argv)
   t -= start;
   cout << " flushing.. " << t << " so far ..." << std::endl;
 
-  g_ceph_context->_log->flush();
+  cct->_log->flush();
 
   utime_t end = ceph_clock_now(NULL);
   utime_t dur = end - start;

@@ -56,10 +56,12 @@ class MDCache;
 class Locker {
 private:
   MDS *mds;
+  CephContext* cct;
   MDCache *mdcache;
 
  public:
-  Locker(MDS *m, MDCache *c) : mds(m), mdcache(c) {}
+  Locker(MDS *m, MDCache *c);
+  ~Locker();
 
   SimpleLock *get_lock(int lock_type, MDSCacheObjectInfo &info);
 

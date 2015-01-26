@@ -265,7 +265,9 @@ public:
 
 protected:
   OSDService *osd;
+public:
   CephContext *cct;
+protected:
   OSDriver osdriver;
 
   // Ops waiting for map, should be queued at back

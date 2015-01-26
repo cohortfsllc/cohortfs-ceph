@@ -58,7 +58,8 @@ int MDBalancer::proc_message(Message *m)
     break;
 
   default:
-    dout(1) << " balancer unknown message " << m->get_type() << dendl;
+    ldout(mds->cct, 1) << " balancer unknown message " << m->get_type()
+		       << dendl;
     assert(0);
     m->put();
     break;
@@ -72,15 +73,16 @@ int MDBalancer::proc_message(Message *m)
 
 void MDBalancer::tick()
 {
-  static int num_bal_times = g_conf->mds_bal_max;
-  static utime_t first = ceph_clock_now(g_ceph_context);
-  utime_t now = ceph_clock_now(g_ceph_context);
+  static int num_bal_times = mds->cct->_conf->mds_bal_max;
+  static utime_t first = ceph_clock_now(mds->cct);
+  utime_t now = ceph_clock_now(mds->cct);
   utime_t elapsed = now;
   elapsed -= first;
 
   // sample?
-  if ((double)now - (double)last_sample > g_conf->mds_bal_sample_interval) {
-    dout(15) << "tick last_sample now " << now << dendl;
+  if ((double)now - (double)last_sample
+      > mds->cct->_conf->mds_bal_sample_interval) {
+    ldout(mds->cct, 15) << "tick last_sample now " << now << dendl;
     last_sample = now;
   }
 
@@ -88,21 +90,23 @@ void MDBalancer::tick()
   if (last_heartbeat == utime_t())
     last_heartbeat = now;
   if (mds->get_nodeid() == 0 &&
-      g_conf->mds_bal_interval > 0 &&
+      mds->cct->_conf->mds_bal_interval > 0 &&
       (num_bal_times ||
-       (g_conf->mds_bal_max_until >= 0 &&
-	elapsed.sec() > g_conf->mds_bal_max_until)) &&
+       (mds->cct->_conf->mds_bal_max_until >= 0 &&
+	elapsed.sec() > mds->cct->_conf->mds_bal_max_until)) &&
       mds->is_active() &&
-      now.sec() - last_heartbeat.sec() >= g_conf->mds_bal_interval) {
+      now.sec() - last_heartbeat.sec() >= mds->cct->_conf->mds_bal_interval) {
     last_heartbeat = now;
     send_heartbeat();
     num_bal_times--;
   }
 
   // hash?
-  if ((g_conf->mds_bal_frag || g_conf->mds_thrash_fragments) &&
-      g_conf->mds_bal_fragment_interval > 0 &&
-      now.sec() - last_fragment.sec() > g_conf->mds_bal_fragment_interval) {
+  if ((mds->cct->_conf->mds_bal_frag ||
+       mds->cct->_conf->mds_thrash_fragments) &&
+      mds->cct->_conf->mds_bal_fragment_interval > 0 &&
+      now.sec() - last_fragment.sec()
+      > mds->cct->_conf->mds_bal_fragment_interval) {
     last_fragment = now;
     do_fragmenting();
   }
@@ -125,7 +129,7 @@ public:
 
 double mds_load_t::mds_load()
 {
-  switch(g_conf->mds_bal_mode) {
+  switch(mds_bal_mode) {
   case 0:
     return
       .8 * auth.meta_load() +
@@ -146,7 +150,7 @@ double mds_load_t::mds_load()
 
 mds_load_t MDBalancer::get_load(utime_t now)
 {
-  mds_load_t load(now);
+  mds_load_t load(mds->cct->_conf->mds_bal_mode, now);
 
   if (mds->mdcache->get_root()) {
     list<CDir*> ls;
@@ -158,7 +162,7 @@ mds_load_t MDBalancer::get_load(utime_t now)
       load.all.add(now, mds->mdcache->decayrate, (*p)->pop_nested);
     }
   } else {
-    dout(20) << "get_load no root, no load" << dendl;
+    ldout(mds->cct, 20) << "get_load no root, no load" << dendl;
   }
 
   load.req_rate = mds->get_req_rate();
@@ -168,21 +172,21 @@ mds_load_t MDBalancer::get_load(utime_t now)
   if (cpu.is_open())
     cpu >> load.cpu_load_avg;
 
-  dout(15) << "get_load " << load << dendl;
+  ldout(mds->cct, 15) << "get_load " << load << dendl;
   return load;
 }
 
 void MDBalancer::send_heartbeat()
 {
-  utime_t now = ceph_clock_now(g_ceph_context);
+  utime_t now = ceph_clock_now(mds->cct);
 
   if (mds->mdsmap->is_degraded()) {
-    dout(10) << "send_heartbeat degraded" << dendl;
+    ldout(mds->cct, 10) << "send_heartbeat degraded" << dendl;
     return;
   }
 
   if (!mds->mdcache->is_open()) {
-    dout(5) << "not open" << dendl;
+    ldout(mds->cct, 5) << "not open" << dendl;
     mds->mdcache->wait_for_open(new C_Bal_SendHeartbeat(mds));
     return;
   }
@@ -212,11 +216,11 @@ void MDBalancer::send_heartbeat()
   mds_import_map[ mds->get_nodeid() ] = import_map;
 
 
-  dout(5) << "mds." << mds->get_nodeid() << " epoch " << beat_epoch << " load " << load << dendl;
+  ldout(mds->cct, 5) << "mds." << mds->get_nodeid() << " epoch " << beat_epoch << " load " << load << dendl;
   for (map<int, float>::iterator it = import_map.begin();
        it != import_map.end();
        ++it) {
-    dout(5) << "  import_map from " << it->first << " -> " << it->second << dendl;
+    ldout(mds->cct, 5) << "  import_map from " << it->first << " -> " << it->second << dendl;
   }
 
 
@@ -238,24 +242,24 @@ void MDBalancer::handle_heartbeat(MHeartbeat *m)
   typedef map<int, mds_load_t> mds_load_map_t;
 
   int who = m->get_source().num();
-  dout(25) << "=== got heartbeat " << m->get_beat() << " from " << m->get_source().num() << " " << m->get_load() << dendl;
+  ldout(mds->cct, 25) << "=== got heartbeat " << m->get_beat() << " from " << m->get_source().num() << " " << m->get_load() << dendl;
 
   if (!mds->is_active())
     goto out;
 
   if (!mds->mdcache->is_open()) {
-    dout(10) << "opening root on handle_heartbeat" << dendl;
+    ldout(mds->cct, 10) << "opening root on handle_heartbeat" << dendl;
     mds->mdcache->wait_for_open(new C_MDS_RetryMessage(mds, m));
     return;
   }
 
   if (mds->mdsmap->is_degraded()) {
-    dout(10) << " degraded, ignoring" << dendl;
+    ldout(mds->cct, 10) << " degraded, ignoring" << dendl;
     goto out;
   }
 
   if (who == 0) {
-    dout(20) << " from mds0, new epoch" << dendl;
+    ldout(mds->cct, 20) << " from mds0, new epoch" << dendl;
     beat_epoch = m->get_beat();
     send_heartbeat();
 
@@ -272,7 +276,7 @@ void MDBalancer::handle_heartbeat(MHeartbeat *m)
   }
   mds_import_map[ who ] = m->get_import_map();
 
-  //dout(0) << "  load is " << load << " have " << mds_load.size() << dendl;
+  //ldout(mds->cct, 0) << "  load is " << load << " have " << mds_load.size() << dendl;
 
   {
     unsigned cluster_size = mds->get_mds_map()->get_num_in_mds();
@@ -291,7 +295,7 @@ void MDBalancer::handle_heartbeat(MHeartbeat *m)
 
 void MDBalancer::export_empties()
 {
-  dout(5) << "export_empties checking for empty imports" << dendl;
+  ldout(mds->cct, 5) << "export_empties checking for empty imports" << dendl;
 
   for (map<CDir*,set<CDir*> >::iterator it = mds->mdcache->subtrees.begin();
        it != mds->mdcache->subtrees.end();
@@ -320,7 +324,7 @@ double MDBalancer::try_match(int ex, double& maxex,
   double howmuch = MIN(maxex, maxim);
   if (howmuch <= 0) return 0.0;
 
-  dout(5) << "	 - mds." << ex << " exports " << howmuch << " to mds." << im << dendl;
+  ldout(mds->cct, 5) << "	 - mds." << ex << " exports " << howmuch << " to mds." << im << dendl;
 
   if (ex == mds->get_nodeid())
     my_targets[im] += howmuch;
@@ -347,12 +351,12 @@ void MDBalancer::queue_merge(CDir *dir)
 void MDBalancer::do_fragmenting()
 {
   if (split_queue.empty() && merge_queue.empty()) {
-    dout(20) << "do_fragmenting has nothing to do" << dendl;
+    ldout(mds->cct, 20) << "do_fragmenting has nothing to do" << dendl;
     return;
   }
 
   if (!split_queue.empty()) {
-    dout(10) << "do_fragmenting " << split_queue.size() << " dirs marked for possible splitting" << dendl;
+    ldout(mds->cct, 10) << "do_fragmenting " << split_queue.size() << " dirs marked for possible splitting" << dendl;
 
     set<dirfrag_t> q;
     q.swap(split_queue);
@@ -365,13 +369,13 @@ void MDBalancer::do_fragmenting()
 	  !dir->is_auth())
 	continue;
 
-      dout(10) << "do_fragmenting splitting " << *dir << dendl;
-      mds->mdcache->split_dir(dir, g_conf->mds_bal_split_bits);
+      ldout(mds->cct, 10) << "do_fragmenting splitting " << *dir << dendl;
+      mds->mdcache->split_dir(dir, mds->cct->_conf->mds_bal_split_bits);
     }
   }
 
   if (!merge_queue.empty()) {
-    dout(10) << "do_fragmenting " << merge_queue.size() << " dirs marked for possible merging" << dendl;
+    ldout(mds->cct, 10) << "do_fragmenting " << merge_queue.size() << " dirs marked for possible merging" << dendl;
 
     set<dirfrag_t> q;
     q.swap(merge_queue);
@@ -385,7 +389,7 @@ void MDBalancer::do_fragmenting()
 	  dir->get_frag() == frag_t())	// ok who's the joker?
 	continue;
 
-      dout(10) << "do_fragmenting merging " << *dir << dendl;
+      ldout(mds->cct, 10) << "do_fragmenting merging " << *dir << dendl;
 
       CInode *diri = dir->get_inode();
 
@@ -395,7 +399,7 @@ void MDBalancer::do_fragmenting()
 	list<CDir*> sibs;
 	bool complete = diri->get_dirfrags_under(sibfg, sibs);
 	if (!complete) {
-	  dout(10) << "	 not all sibs under " << sibfg << " in cache (have " << sibs << ")" << dendl;
+	  ldout(mds->cct, 10) << "	 not all sibs under " << sibfg << " in cache (have " << sibs << ")" << dendl;
 	  break;
 	}
 	bool all = true;
@@ -407,10 +411,10 @@ void MDBalancer::do_fragmenting()
 	  }
 	}
 	if (!all) {
-	  dout(10) << "	 not all sibs under " << sibfg << " " << sibs << " should_merge" << dendl;
+	  ldout(mds->cct, 10) << "	 not all sibs under " << sibfg << " " << sibs << " should_merge" << dendl;
 	  break;
 	}
-	dout(10) << "  all sibs under " << sibfg << " " << sibs << " should merge" << dendl;
+	ldout(mds->cct, 10) << "  all sibs under " << sibfg << " " << sibs << " should merge" << dendl;
 	fg = fg.parent();
       }
 
@@ -424,7 +428,7 @@ void MDBalancer::do_fragmenting()
 
 void MDBalancer::prep_rebalance(int beat)
 {
-  if (g_conf->mds_thrash_exports) {
+  if (mds->cct->_conf->mds_thrash_exports) {
     //we're going to randomly export to all the mds in the cluster
     my_targets.clear();
     set<int> up_mds;
@@ -436,14 +440,14 @@ void MDBalancer::prep_rebalance(int beat)
   } else {
     int cluster_size = mds->get_mds_map()->get_num_in_mds();
     int whoami = mds->get_nodeid();
-    rebalance_time = ceph_clock_now(g_ceph_context);
+    rebalance_time = ceph_clock_now(mds->cct);
 
     // reset
     my_targets.clear();
     imported.clear();
     exported.clear();
 
-    dout(5) << " prep_rebalance: cluster loads are" << dendl;
+    ldout(mds->cct, 5) << " prep_rebalance: cluster loads are" << dendl;
 
     mds->mdcache->migrator->clear_export_queue();
 
@@ -454,7 +458,7 @@ void MDBalancer::prep_rebalance(int beat)
       double metald = m->second.auth.meta_load(rebalance_time, mds->mdcache->decayrate);
       double mdsld = m->second.mds_load();
       load_fac = metald / mdsld;
-      dout(7) << " load_fac is " << load_fac
+      ldout(mds->cct, 7) << " load_fac is " << load_fac
 	      << " <- " << m->second.auth << " " << metald
 	      << " / " << mdsld
 	      << dendl;
@@ -463,7 +467,7 @@ void MDBalancer::prep_rebalance(int beat)
     double total_load = 0;
     multimap<double,int> load_map;
     for (int i=0; i<cluster_size; i++) {
-      map<int, mds_load_t>::value_type val(i, mds_load_t(ceph_clock_now(g_ceph_context)));
+      map<int, mds_load_t>::value_type val(i, mds_load_t(ceph_clock_now(mds->cct)));
       std::pair < map<int, mds_load_t>::iterator, bool > r(mds_load.insert(val));
       mds_load_t &load(r.first->second);
 
@@ -471,7 +475,7 @@ void MDBalancer::prep_rebalance(int beat)
       mds_meta_load[i] = l;
 
       if (whoami == 0)
-	dout(0) << "  mds." << i
+	ldout(mds->cct, 0) << "  mds." << i
 		<< " " << load
 		<< " = " << load.mds_load()
 		<< " ~ " << l << dendl;
@@ -484,14 +488,14 @@ void MDBalancer::prep_rebalance(int beat)
 
     // target load
     target_load = total_load / (double)cluster_size;
-    dout(5) << "prep_rebalance:	 my load " << my_load
+    ldout(mds->cct, 5) << "prep_rebalance:	 my load " << my_load
 	    << "   target " << target_load
 	    << "   total " << total_load
 	    << dendl;
 
     // under or over?
-    if (my_load < target_load * (1.0 + g_conf->mds_bal_min_rebalance)) {
-      dout(5) << "  i am underloaded or barely overloaded, doing nothing." << dendl;
+    if (my_load < target_load * (1.0 + mds->cct->_conf->mds_bal_min_rebalance)) {
+      ldout(mds->cct, 5) << "  i am underloaded or barely overloaded, doing nothing." << dendl;
       last_epoch_under = beat_epoch;
       show_imports();
       return;
@@ -501,11 +505,11 @@ void MDBalancer::prep_rebalance(int beat)
 
     // am i over long enough?
     if (last_epoch_under && beat_epoch - last_epoch_under < 2) {
-      dout(5) << "  i am overloaded, but only for " << (beat_epoch - last_epoch_under) << " epochs" << dendl;
+      ldout(mds->cct, 5) << "  i am overloaded, but only for " << (beat_epoch - last_epoch_under) << " epochs" << dendl;
       return;
     }
 
-    dout(5) << "  i am sufficiently overloaded" << dendl;
+    ldout(mds->cct, 5) << "  i am sufficiently overloaded" << dendl;
 
 
     // first separate exporters and importers
@@ -518,11 +522,11 @@ void MDBalancer::prep_rebalance(int beat)
 	 it != load_map.end();
 	 ++it) {
       if (it->first < target_load) {
-	dout(15) << "	mds." << it->second << " is importer" << dendl;
+	ldout(mds->cct, 15) << "	mds." << it->second << " is importer" << dendl;
 	importers.insert(pair<double,int>(it->first,it->second));
 	importer_set.insert(it->second);
       } else {
-	dout(15) << "	mds." << it->second << " is exporter" << dendl;
+	ldout(mds->cct, 15) << "	mds." << it->second << " is exporter" << dendl;
 	exporters.insert(pair<double,int>(it->first,it->second));
 	exporter_set.insert(it->second);
       }
@@ -534,7 +538,7 @@ void MDBalancer::prep_rebalance(int beat)
     if (true) {
       // analyze import_map; do any matches i can
 
-      dout(15) << "  matching exporters to import sources" << dendl;
+      ldout(mds->cct, 15) << "  matching exporters to import sources" << dendl;
 
       // big -> small exporters
       for (multimap<double,int>::reverse_iterator ex = exporters.rbegin();
@@ -560,7 +564,7 @@ void MDBalancer::prep_rebalance(int beat)
     if (1) {
       if (beat % 2 == 1) {
 	// old way
-	dout(15) << "  matching big exporters to big importers" << dendl;
+	ldout(mds->cct, 15) << "  matching big exporters to big importers" << dendl;
 	// big exporters to big importers
 	multimap<double,int>::reverse_iterator ex = exporters.rbegin();
 	multimap<double,int>::iterator im = importers.begin();
@@ -576,7 +580,7 @@ void MDBalancer::prep_rebalance(int beat)
 	}
       } else {
 	// new way
-	dout(15) << "  matching small exporters to big importers" << dendl;
+	ldout(mds->cct, 15) << "  matching small exporters to big importers" << dendl;
 	// small exporters to big importers
 	multimap<double,int>::iterator ex = exporters.begin();
 	multimap<double,int>::iterator im = importers.begin();
@@ -603,8 +607,8 @@ void MDBalancer::try_rebalance()
   if (!check_targets())
     return;
 
-  if (g_conf->mds_thrash_exports) {
-    dout(5) << "mds_thrash is on; not performing standard rebalance operation!"
+  if (mds->cct->_conf->mds_thrash_exports) {
+    ldout(mds->cct, 5) << "mds_thrash is on; not performing standard rebalance operation!"
 	    << dendl;
     return;
   }
@@ -622,11 +626,11 @@ void MDBalancer::try_rebalance()
     if (im->get_inode()->is_stray()) continue;
 
     double pop = im->pop_auth_subtree.meta_load(rebalance_time, mds->mdcache->decayrate);
-    if (g_conf->mds_bal_idle_threshold > 0 &&
-	pop < g_conf->mds_bal_idle_threshold &&
+    if (mds->cct->_conf->mds_bal_idle_threshold > 0 &&
+	pop < mds->cct->_conf->mds_bal_idle_threshold &&
 	im->inode != mds->mdcache->get_root() &&
 	im->inode->authority().first != mds->get_nodeid()) {
-      dout(0) << " exporting idle (" << pop << ") import " << *im
+      ldout(mds->cct, 0) << " exporting idle (" << pop << ") import " << *im
 	      << " back to mds." << im->inode->authority().first
 	      << dendl;
       mds->mdcache->migrator->export_dir_nicely(im, im->inode->authority().first);
@@ -635,7 +639,7 @@ void MDBalancer::try_rebalance()
 
     import_pop_map[ pop ] = im;
     int from = im->inode->authority().first;
-    dout(15) << "  map: i imported " << *im << " from " << from << dendl;
+    ldout(mds->cct, 15) << "  map: i imported " << *im << " from " << from << dendl;
     import_from_map.insert(pair<int,CDir*>(from, im));
   }
 
@@ -654,10 +658,10 @@ void MDBalancer::try_rebalance()
 	double fac = 1.0;
 	if (false && total_goal > 0 && total_sent > 0) {
 	fac = total_goal / total_sent;
-	dout(0) << " total sent is " << total_sent << " / " << total_goal << " -> fac 1/ " << fac << dendl;
+	ldout(mds->cct, 0) << " total sent is " << total_sent << " / " << total_goal << " -> fac 1/ " << fac << dendl;
 	if (fac > 1.0) fac = 1.0;
 	}
-	fac = .9 - .4 * ((float)g_conf->num_mds / 128.0);  // hack magic fixme
+	fac = .9 - .4 * ((float)mds->cct->_conf->num_mds / 128.0);  // hack magic fixme
       */
 
     int target = (*it).first;
@@ -667,7 +671,7 @@ void MDBalancer::try_rebalance()
     if (amount < MIN_OFFLOAD) continue;
     if (amount / target_load < .2) continue;
 
-    dout(5) << "want to send " << amount << " to mds." << target
+    ldout(mds->cct, 5) << "want to send " << amount << " to mds." << target
       //<< " .. " << (*it).second << " * " << load_fac
 	    << " -> " << amount
 	    << dendl;//" .. fudge is " << fudge << dendl;
@@ -678,12 +682,12 @@ void MDBalancer::try_rebalance()
 
     // search imports from target
     if (import_from_map.count(target)) {
-      dout(5) << " aha, looking through imports from target mds." << target << dendl;
+      ldout(mds->cct, 5) << " aha, looking through imports from target mds." << target << dendl;
       pair<multimap<int,CDir*>::iterator, multimap<int,CDir*>::iterator> p =
 	import_from_map.equal_range(target);
       while (p.first != p.second) {
 	CDir *dir = (*p.first).second;
-	dout(5) << "considering " << *dir << " from " << (*p.first).first << dendl;
+	ldout(mds->cct, 5) << "considering " << *dir << " from " << (*p.first).first << dendl;
 	multimap<int,CDir*>::iterator plast = p.first++;
 
 	if (dir->inode->is_base() ||
@@ -694,7 +698,7 @@ void MDBalancer::try_rebalance()
 	assert(dir->inode->authority().first == target);  // cuz that's how i put it in the map, dummy
 
 	if (pop <= amount-have) {
-	  dout(0) << "reexporting " << *dir
+	  ldout(mds->cct, 0) << "reexporting " << *dir
 		  << " pop " << pop
 		  << " back to mds." << target << dendl;
 	  mds->mdcache->migrator->export_dir_nicely(dir, target);
@@ -702,7 +706,7 @@ void MDBalancer::try_rebalance()
 	  import_from_map.erase(plast);
 	  import_pop_map.erase(pop);
 	} else {
-	  dout(5) << "can't reexport " << *dir << ", too big " << pop << dendl;
+	  ldout(mds->cct, 5) << "can't reexport " << *dir << ", too big " << pop << dendl;
 	}
 	if (amount-have < MIN_OFFLOAD) break;
       }
@@ -724,7 +728,7 @@ void MDBalancer::try_rebalance()
 
 	double pop = (*import).first;
 	if (pop < amount-have || pop < MIN_REEXPORT) {
-	  dout(0) << "reexporting " << *imp
+	  ldout(mds->cct, 0) << "reexporting " << *imp
 		  << " pop " << pop
 		  << " back to mds." << imp->inode->authority()
 		  << dendl;
@@ -757,7 +761,7 @@ void MDBalancer::try_rebalance()
     total_sent += have;
 
     for (list<CDir*>::iterator it = exports.begin(); it != exports.end(); ++it) {
-      dout(0) << "   - exporting "
+      ldout(mds->cct, 0) << "   - exporting "
 	       << (*it)->pop_auth_subtree
 	       << " "
 	       << (*it)->pop_auth_subtree.meta_load(rebalance_time, mds->mdcache->decayrate)
@@ -768,7 +772,7 @@ void MDBalancer::try_rebalance()
     }
   }
 
-  dout(5) << "rebalance done" << dendl;
+  ldout(mds->cct, 5) << "rebalance done" << dendl;
   show_imports();
 }
 
@@ -800,7 +804,7 @@ bool MDBalancer::check_targets()
     old_prev_targets[i->first] = 0;
 
     if (!map_targets.count(i->first)) {
-      dout(20) << " target mds." << i->first << " not in map's export_targets" << dendl;
+      ldout(mds->cct, 20) << " target mds." << i->first << " not in map's export_targets" << dendl;
       send = true;
       ok = false;
     }
@@ -814,15 +818,15 @@ bool MDBalancer::check_targets()
       old_prev_targets.erase(p++);
       continue;
     }
-    dout(20) << " target mds." << p->first << " has been non-target for " << p->second << dendl;
-    if (p->second < g_conf->mds_bal_target_removal_min)
+    ldout(mds->cct, 20) << " target mds." << p->first << " has been non-target for " << p->second << dendl;
+    if (p->second < mds->cct->_conf->mds_bal_target_removal_min)
       want_targets.insert(p->first);
-    if (p->second >= g_conf->mds_bal_target_removal_max)
+    if (p->second >= mds->cct->_conf->mds_bal_target_removal_max)
       send = true;
     ++p;
   }
 
-  dout(10) << "check_targets have " << map_targets << " need " << need_targets << " want " << want_targets << dendl;
+  ldout(mds->cct, 10) << "check_targets have " << map_targets << " need " << need_targets << " want " << want_targets << dendl;
 
   if (send) {
     MMDSLoadTargets* m = new MMDSLoadTargets(mds->monc->get_global_id(), want_targets);
@@ -838,18 +842,18 @@ void MDBalancer::find_exports(CDir *dir,
 			      set<CDir*>& already_exporting)
 {
   double need = amount - have;
-  if (need < amount * g_conf->mds_bal_min_start)
+  if (need < amount * mds->cct->_conf->mds_bal_min_start)
     return;   // good enough!
-  double needmax = need * g_conf->mds_bal_need_max;
-  double needmin = need * g_conf->mds_bal_need_min;
-  double midchunk = need * g_conf->mds_bal_midchunk;
-  double minchunk = need * g_conf->mds_bal_minchunk;
+  double needmax = need * mds->cct->_conf->mds_bal_need_max;
+  double needmin = need * mds->cct->_conf->mds_bal_need_min;
+  double midchunk = need * mds->cct->_conf->mds_bal_midchunk;
+  double minchunk = need * mds->cct->_conf->mds_bal_minchunk;
 
   list<CDir*> bigger_rep, bigger_unrep;
   multimap<double, CDir*> smaller;
 
   double dir_pop = dir->pop_auth_subtree.meta_load(rebalance_time, mds->mdcache->decayrate);
-  dout(7) << " find_exports in " << dir_pop << " " << *dir << " need " << need << " (" << needmin << " - " << needmax << ")" << dendl;
+  ldout(mds->cct, 7) << " find_exports in " << dir_pop << " " << *dir << " need " << need << " (" << needmin << " - " << needmax << ")" << dendl;
 
   double subdir_sum = 0;
   for (CDir::map_t::iterator it = dir->begin();
@@ -873,7 +877,7 @@ void MDBalancer::find_exports(CDir *dir,
       // how popular?
       double pop = subdir->pop_auth_subtree.meta_load(rebalance_time, mds->mdcache->decayrate);
       subdir_sum += pop;
-      dout(15) << "   subdir pop " << pop << " " << *subdir << dendl;
+      ldout(mds->cct, 15) << "   subdir pop " << pop << " " << *subdir << dendl;
 
       if (pop < minchunk) continue;
 
@@ -894,7 +898,7 @@ void MDBalancer::find_exports(CDir *dir,
 	smaller.insert(pair<double,CDir*>(pop, subdir));
     }
   }
-  dout(15) << "	  sum " << subdir_sum << " / " << dir_pop << dendl;
+  ldout(mds->cct, 15) << "	  sum " << subdir_sum << " / " << dir_pop << dendl;
 
   // grab some sufficiently big small items
   multimap<double,CDir*>::reverse_iterator it;
@@ -905,7 +909,7 @@ void MDBalancer::find_exports(CDir *dir,
     if ((*it).first < midchunk)
       break;  // try later
 
-    dout(7) << "   taking smaller " << *(*it).second << dendl;
+    ldout(mds->cct, 7) << "   taking smaller " << *(*it).second << dendl;
 
     exports.push_back((*it).second);
     already_exporting.insert((*it).second);
@@ -918,7 +922,7 @@ void MDBalancer::find_exports(CDir *dir,
   for (list<CDir*>::iterator it = bigger_unrep.begin();
        it != bigger_unrep.end();
        ++it) {
-    dout(15) << "   descending into " << **it << dendl;
+    ldout(mds->cct, 15) << "   descending into " << **it << dendl;
     find_exports(*it, amount, exports, have, already_exporting);
     if (have > needmin)
       return;
@@ -928,7 +932,7 @@ void MDBalancer::find_exports(CDir *dir,
   for (;
        it != smaller.rend();
        ++it) {
-    dout(7) << "   taking (much) smaller " << it->first << " " << *(*it).second << dendl;
+    ldout(mds->cct, 7) << "   taking (much) smaller " << it->first << " " << *(*it).second << dendl;
 
     exports.push_back((*it).second);
     already_exporting.insert((*it).second);
@@ -941,7 +945,7 @@ void MDBalancer::find_exports(CDir *dir,
   for (list<CDir*>::iterator it = bigger_rep.begin();
        it != bigger_rep.end();
        ++it) {
-    dout(7) << "   descending into replicated " << **it << dendl;
+    ldout(mds->cct, 7) << "   descending into replicated " << **it << dendl;
     find_exports(*it, amount, exports, have, already_exporting);
     if (have > needmin)
       return;
@@ -965,7 +969,7 @@ void MDBalancer::hit_inode(utime_t now, CInode *in, int type, int who)
     in->popularity[MDS_POP_CURDOM].pop[type].hit(now);
     in->popularity[MDS_POP_ANYDOM].pop[type].hit(now);
 
-    dout(20) << "hit_inode " << type << " pop "
+    ldout(mds->cct, 20) << "hit_inode " << type << " pop "
 	     << in->popularity[MDS_POP_JUSTME].pop[type].get(now) << " me, "
 	     << in->popularity[MDS_POP_NESTED].pop[type].get(now) << " nested, "
 	     << in->popularity[MDS_POP_CURDOM].pop[type].get(now) << " curdom, "
@@ -973,7 +977,7 @@ void MDBalancer::hit_inode(utime_t now, CInode *in, int type, int who)
 	     << " on " << *in
 	     << dendl;
   } else {
-    dout(20) << "hit_inode " << type << " pop "
+    ldout(mds->cct, 20) << "hit_inode " << type << " pop "
 	     << in->popularity[MDS_POP_JUSTME].pop[type].get(now) << " me, "
 	     << in->popularity[MDS_POP_NESTED].pop[type].get(now) << " nested, "
 	     << " on " << *in
@@ -992,30 +996,31 @@ void MDBalancer::hit_dir(utime_t now, CDir *dir, int type, int who, double amoun
   double v = dir->pop_me.get(type).hit(now, amount);
 
   //if (dir->ino() == inodeno_t(0x10000000000))
-  //dout(0) << "hit_dir " << type << " pop " << v << " in " << *dir << dendl;
+  //ldout(mds->cct, 0) << "hit_dir " << type << " pop " << v << " in " << *dir << dendl;
 
   // split/merge
-  if (g_conf->mds_bal_frag && g_conf->mds_bal_fragment_interval > 0 &&
+  if (mds->cct->_conf->mds_bal_frag &&
+      mds->cct->_conf->mds_bal_fragment_interval > 0 &&
       !dir->inode->is_base() &&	       // not root/base (for now at least)
       dir->is_auth()) {
 
-    dout(20) << "hit_dir " << type << " pop is " << v << ", frag " << dir->get_frag()
+    ldout(mds->cct, 20) << "hit_dir " << type << " pop is " << v << ", frag " << dir->get_frag()
 	     << " size " << dir->get_frag_size() << dendl;
 
     // split
-    if (g_conf->mds_bal_split_size > 0 &&
+    if (mds->cct->_conf->mds_bal_split_size > 0 &&
 	(dir->should_split() ||
-	 (v > g_conf->mds_bal_split_rd && type == META_POP_IRD) ||
-	 (v > g_conf->mds_bal_split_wr && type == META_POP_IWR)) &&
+	 (v > mds->cct->_conf->mds_bal_split_rd && type == META_POP_IRD) ||
+	 (v > mds->cct->_conf->mds_bal_split_wr && type == META_POP_IWR)) &&
 	split_queue.count(dir->dirfrag()) == 0) {
-      dout(10) << "hit_dir " << type << " pop is " << v << ", putting in split_queue: " << *dir << dendl;
+      ldout(mds->cct, 10) << "hit_dir " << type << " pop is " << v << ", putting in split_queue: " << *dir << dendl;
       split_queue.insert(dir->dirfrag());
     }
 
     // merge?
     if (dir->get_frag() != frag_t() && dir->should_merge() &&
 	merge_queue.count(dir->dirfrag()) == 0) {
-      dout(10) << "hit_dir " << type << " pop is " << v << ", putting in merge_queue: " << *dir << dendl;
+      ldout(mds->cct, 10) << "hit_dir " << type << " pop is " << v << ", putting in merge_queue: " << *dir << dendl;
       merge_queue.insert(dir->dirfrag());
     }
   }
@@ -1035,7 +1040,7 @@ void MDBalancer::hit_dir(utime_t now, CDir *dir, int type, int who, double amoun
 
     //if (dir->ino() == inodeno_t(0x10000000002))
     if (pop_sp > 0) {
-      dout(20) << "hit_dir " << type << " pop " << dir_pop << " spread " << pop_sp
+      ldout(mds->cct, 20) << "hit_dir " << type << " pop " << dir_pop << " spread " << pop_sp
 	      << " " << dir->pop_spread.last[0]
 	      << " " << dir->pop_spread.last[1]
 	      << " " << dir->pop_spread.last[2]
@@ -1045,13 +1050,13 @@ void MDBalancer::hit_dir(utime_t now, CDir *dir, int type, int who, double amoun
 
     if (dir->is_auth() && !dir->is_ambiguous_auth()) {
       if (!dir->is_rep() &&
-	  dir_pop >= g_conf->mds_bal_replicate_threshold) {
+	  dir_pop >= mds->cct->_conf->mds_bal_replicate_threshold) {
 	// replicate
 	float rdp = dir->pop_me.get(META_POP_IRD).get(now, mds->mdcache->decayrate);
 	rd_adj = rdp / mds->get_mds_map()->get_num_in_mds() - rdp;
 	rd_adj /= 2.0;	// temper somewhat
 
-	dout(0) << "replicating dir " << *dir << " pop " << dir_pop << " .. rdp " << rdp << " adj " << rd_adj << dendl;
+	ldout(mds->cct, 0) << "replicating dir " << *dir << " pop " << dir_pop << " .. rdp " << rdp << " adj " << rd_adj << dendl;
 
 	dir->dir_rep = CDir::REP_ALL;
 	mds->mdcache->send_dir_updates(dir, true);
@@ -1063,9 +1068,9 @@ void MDBalancer::hit_dir(utime_t now, CDir *dir, int type, int who, double amoun
 
       if (dir->ino() != 1 &&
 	  dir->is_rep() &&
-	  dir_pop < g_conf->mds_bal_unreplicate_threshold) {
+	  dir_pop < mds->cct->_conf->mds_bal_unreplicate_threshold) {
 	// unreplicate
-	dout(0) << "unreplicating dir " << *dir << " pop " << dir_pop << dendl;
+	ldout(mds->cct, 0) << "unreplicating dir " << *dir << " pop " << dir_pop << dendl;
 
 	dir->dir_rep = CDir::REP_NONE;
 	mds->mdcache->send_dir_updates(dir);

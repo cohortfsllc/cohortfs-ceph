@@ -45,6 +45,8 @@ using namespace librados;
 using std::cout;
 using std::cerr;
 
+static CephContext* cct;
+
 int rados_tool_sync(const std::map < std::string, std::string > &opts,
 		    std::vector<const char*> &args);
 
@@ -460,7 +462,7 @@ public:
   }
 
   float time_passed() {
-    utime_t now = ceph_clock_now(g_ceph_context);
+    utime_t now = ceph_clock_now(cct);
     now -= start_time;
     uint64_t ns = now.nsec();
     float total = ns / 1000000000;
@@ -651,7 +653,7 @@ uint64_t LoadGen::gen_next_op()
 
 int LoadGen::run()
 {
-  start_time = ceph_clock_now(g_ceph_context);
+  start_time = ceph_clock_now(cct);
   utime_t end_time = start_time;
   end_time += run_length;
   utime_t stamp_time = start_time;
@@ -660,9 +662,9 @@ int LoadGen::run()
   while (1) {
     lock.Lock();
     utime_t one_second(1, 0);
-    cond.WaitInterval(g_ceph_context, lock, one_second);
+    cond.WaitInterval(cct, lock, one_second);
     lock.Unlock();
-    utime_t now = ceph_clock_now(g_ceph_context);
+    utime_t now = ceph_clock_now(cct);
 
     if (now > end_time)
       break;
@@ -1070,7 +1072,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
   }
 
   // open rados
-  ret = rados.init_with_context(g_ceph_context);
+  ret = rados.init_with_context(cct);
   if (ret) {
      cerr << "couldn't initialize rados! error " << ret << std::endl;
      ret = -1;
@@ -1456,7 +1458,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
       operation = OP_RAND_READ;
     else
       usage_exit();
-    RadosBencher bencher(g_ceph_context, rados, io_ctx);
+    RadosBencher bencher(cct, rados, io_ctx);
     bencher.set_show_time(show_time);
     ret = bencher.aio_bench(operation, seconds, num_objs,
 			    concurrent_ios, op_size, cleanup, run_name);
@@ -1466,7 +1468,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
   else if (strcmp(nargs[0], "cleanup") == 0) {
     if (vol_name.empty())
       usage_exit();
-    RadosBencher bencher(g_ceph_context, rados, io_ctx);
+    RadosBencher bencher(cct, rados, io_ctx);
     ret = bencher.clean_up(prefix, concurrent_ios, run_name);
     if (ret != 0)
       cerr << "error during cleanup: " << ret << std::endl;
@@ -1617,8 +1619,8 @@ int main(int argc, const char **argv)
   argv_to_vec(argc, argv, args);
   env_to_vec(args);
 
-  global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
-  common_init_finish(g_ceph_context);
+  cct = global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
+  common_init_finish(cct);
 
   std::map < std::string, std::string > opts;
   std::vector<const char*>::iterator i;

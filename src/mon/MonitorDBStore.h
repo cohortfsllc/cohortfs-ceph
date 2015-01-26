@@ -35,6 +35,8 @@ class MonitorDBStore
 
  public:
 
+  CephContext* cct;
+
   struct Op {
     uint8_t type;
     string prefix;
@@ -245,7 +247,6 @@ class MonitorDBStore
 	compact.push_back(make_pair(op.prefix, make_pair(op.key, op.endkey)));
 	break;
       default:
-	derr << __func__ << " unknown op type " << op.type << dendl;
 	abort();
 	break;
       }
@@ -270,8 +271,11 @@ class MonitorDBStore
     pair<string,string> last_key;
     bufferlist crc_bl;
 
-    StoreIteratorImpl() : done(false) { }
-    virtual ~StoreIteratorImpl() { }
+    StoreIteratorImpl() :
+      done(false) {
+    }
+    virtual ~StoreIteratorImpl() {
+    }
 
     bool add_chunk_entry(Transaction &tx,
 			 string &prefix,
@@ -296,12 +300,6 @@ class MonitorDBStore
       last_key.first = prefix;
       last_key.second = key;
 
-      if (g_conf->mon_sync_debug) {
-	::encode(prefix, crc_bl);
-	::encode(key, crc_bl);
-	::encode(value, crc_bl);
-      }
-
       return true;
     }
 
@@ -309,8 +307,6 @@ class MonitorDBStore
 
   public:
     uint32_t crc() {
-      if (g_conf->mon_sync_debug)
-	return crc_bl.crc32c(0);
       return 0;
     }
     pair<string,string> get_last_key() {
@@ -390,7 +386,7 @@ class MonitorDBStore
       iter->seek_to_first();
 
     return std::shared_ptr<StoreIteratorImpl>(
-	new WholeStoreIteratorImpl(iter, prefixes)
+      new WholeStoreIteratorImpl(iter, prefixes)
     );
   }
 
@@ -435,9 +431,6 @@ class MonitorDBStore
 	return 0;
       // we're not expecting any other negative return value, and we can't
       // just return a negative value if we're returning a version_t
-      generic_dout(0) << "MonitorDBStore::get() error obtaining"
-		      << " (" << prefix << ":" << key << "): "
-		      << cpp_strerror(err) << dendl;
       assert(0 == "error obtaining key");
     }
 
@@ -488,22 +481,23 @@ class MonitorDBStore
 
   void init_options() {
     db->init();
-    if (g_conf->mon_leveldb_write_buffer_size)
-      db->options.write_buffer_size = g_conf->mon_leveldb_write_buffer_size;
-    if (g_conf->mon_leveldb_cache_size)
-      db->options.cache_size = g_conf->mon_leveldb_cache_size;
-    if (g_conf->mon_leveldb_block_size)
-      db->options.block_size = g_conf->mon_leveldb_block_size;
-    if (g_conf->mon_leveldb_bloom_size)
-      db->options.bloom_size = g_conf->mon_leveldb_bloom_size;
-    if (g_conf->mon_leveldb_compression)
-      db->options.compression_enabled = g_conf->mon_leveldb_compression;
-    if (g_conf->mon_leveldb_max_open_files)
-      db->options.max_open_files = g_conf->mon_leveldb_max_open_files;
-    if (g_conf->mon_leveldb_paranoid)
-      db->options.paranoid_checks = g_conf->mon_leveldb_paranoid;
-    if (g_conf->mon_leveldb_log.length())
-      db->options.log_file = g_conf->mon_leveldb_log;
+    if (cct->_conf->mon_leveldb_write_buffer_size)
+      db->options.write_buffer_size
+	= cct->_conf->mon_leveldb_write_buffer_size;
+    if (cct->_conf->mon_leveldb_cache_size)
+      db->options.cache_size = cct->_conf->mon_leveldb_cache_size;
+    if (cct->_conf->mon_leveldb_block_size)
+      db->options.block_size = cct->_conf->mon_leveldb_block_size;
+    if (cct->_conf->mon_leveldb_bloom_size)
+      db->options.bloom_size = cct->_conf->mon_leveldb_bloom_size;
+    if (cct->_conf->mon_leveldb_compression)
+      db->options.compression_enabled = cct->_conf->mon_leveldb_compression;
+    if (cct->_conf->mon_leveldb_max_open_files)
+      db->options.max_open_files = cct->_conf->mon_leveldb_max_open_files;
+    if (cct->_conf->mon_leveldb_paranoid)
+      db->options.paranoid_checks = cct->_conf->mon_leveldb_paranoid;
+    if (cct->_conf->mon_leveldb_log.length())
+      db->options.log_file = cct->_conf->mon_leveldb_log;
   }
 
   int open(ostream &out) {
@@ -528,8 +522,9 @@ class MonitorDBStore
     return db->get_estimated_size(extras);
   }
 
-  MonitorDBStore(const string& path) :
-    db(0), do_dump(false), dump_fd(-1) {
+  MonitorDBStore(CephContext* _cct, const string& path) :
+    db(0), do_dump(false), dump_fd(-1), cct(_cct) {
+    cct->get();
     string::const_reverse_iterator rit;
     int pos = 0;
     for (rit = path.rbegin(); rit != path.rend(); ++rit, ++pos) {
@@ -540,31 +535,29 @@ class MonitorDBStore
     os << path.substr(0, path.size() - pos) << "/store.db";
     string full_path = os.str();
 
-    LevelDBStore *db_ptr = new LevelDBStore(g_ceph_context, full_path);
+    LevelDBStore *db_ptr = new LevelDBStore(cct, full_path);
     if (!db_ptr) {
-      derr << __func__ << " error initializing level db back storage in "
-		<< full_path << dendl;
       assert(0 != "MonitorDBStore: error initializing level db back storage");
     }
     db.reset(db_ptr);
 
-    if (g_conf->mon_debug_dump_transactions) {
+    if (cct->_conf->mon_debug_dump_transactions) {
       do_dump = true;
       dump_fd = ::open(
-	g_conf->mon_debug_dump_location.c_str(),
+	cct->_conf->mon_debug_dump_location.c_str(),
 	O_CREAT|O_APPEND|O_WRONLY, 0644);
       if (!dump_fd) {
 	dump_fd = -errno;
-	derr << "Could not open log file, got "
-	     << cpp_strerror(dump_fd) << dendl;
       }
     }
   }
-  MonitorDBStore(LevelDBStore *db_ptr) :
-    db(0), do_dump(false), dump_fd(-1) {
+  MonitorDBStore(CephContext* _cct, LevelDBStore *db_ptr) :
+    db(0), do_dump(false), dump_fd(-1), cct(_cct) {
+    cct->get();
     db.reset(db_ptr);
   }
   ~MonitorDBStore() {
+    cct->put();
     if (do_dump)
       ::close(dump_fd);
   }

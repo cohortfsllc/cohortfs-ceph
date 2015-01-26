@@ -54,7 +54,7 @@ public:
   }
 
   virtual void finish_epoch() {
-    generic_dout(20) << "HealthMonitor::finish_epoch()" << dendl;
+    lgeneric_dout(mon->cct, 20) << "HealthMonitor::finish_epoch()" << dendl;
     for (map<int,HealthService*>::iterator it = services.begin();
 	 it != services.end(); ++it) {
       assert(it->second != NULL);

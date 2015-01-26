@@ -25,6 +25,8 @@
 #include "os/KeyValueDB.h"
 #include "os/ObjectStore.h"
 
+CephContext* cct;
+
 void usage(const string &name) {
   std::cerr << "Usage: " << name << " [new|continue] store_path store_journal db_path"
 	    << std::endl;
@@ -46,9 +48,9 @@ int main(int argc, char **argv) {
   vector<const char*> args;
   argv_to_vec(argc, (const char **)argv, args);
 
-  global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
-  common_init_finish(g_ceph_context);
-  g_ceph_context->_conf->apply_changes(NULL);
+  cct = global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
+  common_init_finish(cct);
+  cct->_conf->apply_changes(NULL);
 
   std::cerr << "args: " << args << std::endl;
   if (args.size() < 4) {
@@ -63,10 +65,11 @@ int main(int argc, char **argv) {
   bool start_new = false;
   if (string(args[0]) == string("new")) start_new = true;
 
-  LevelDBStore *_db = new LevelDBStore(g_ceph_context, db_path);
+  LevelDBStore *_db = new LevelDBStore(cct, db_path);
   assert(!_db->create_and_open(std::cerr));
   boost::scoped_ptr<KeyValueDB> db(_db);
-  boost::scoped_ptr<ObjectStore> store(new FileStore(g_ceph_context, store_path, store_dev));
+  boost::scoped_ptr<ObjectStore> store(new FileStore(cct, store_path,
+						     store_dev));
 
 
   if (start_new) {

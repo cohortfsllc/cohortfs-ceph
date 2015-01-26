@@ -22,9 +22,6 @@ typedef void (*signal_handler_t)(int);
 
 void install_sighandler(int signum, signal_handler_t handler, int flags);
 
-// handles SIGHUP
-void sighup_handler(int signum);
-
 /// initialize async signal handler framework
 void init_async_signal_handler();
 

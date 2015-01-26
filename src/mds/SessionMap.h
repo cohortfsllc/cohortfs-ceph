@@ -232,6 +232,7 @@ class MDS;
 class SessionMap {
 private:
   MDS *mds;
+  CephContext* cct;
   std::unordered_map<entity_name_t, Session*> session_map;
 public:
   map<int,xlist<Session*>* > by_state;
@@ -241,14 +242,16 @@ public:	 // i am lazy
   map<version_t, list<Context*> > commit_waiters;
 
 public:
-  SessionMap(MDS *m) : mds(m),
-		       version(0), projected(0), committing(0), committed(0),
-		       commit_waiters()
-  { }
+  SessionMap(MDS *m);
 
   //for the dencoder
   SessionMap() : mds(NULL), version(0), projected(0),
 		 committing(0), committed(0) {}
+
+  ~SessionMap() {
+    if (cct)
+      cct->put();
+  }
 
   // sessions
   bool empty() { return session_map.empty(); }
@@ -284,7 +287,7 @@ public:
     } else {
       s = session_map[i.name] = new Session;
       s->info.inst = i;
-      s->last_cap_renew = ceph_clock_now(g_ceph_context);
+      s->last_cap_renew = ceph_clock_now(cct);
     }
     return s;
   }
@@ -307,7 +310,7 @@ public:
       if (by_state.count(session->state) == 0)
 	by_state[session->state] = new xlist<Session*>;
       by_state[session->state]->push_back(&session->item_session_list);
-      session->last_cap_renew = ceph_clock_now(g_ceph_context);
+      session->last_cap_renew = ceph_clock_now(cct);
     } else {
       assert(0);  // hrm, should happen?
     }

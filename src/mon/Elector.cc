@@ -38,7 +38,7 @@ void Elector::init()
   epoch = mon->store->get(Monitor::MONITOR_NAME, "election_epoch");
   if (!epoch)
     epoch = 1;
-  dout(1) << "init, last seen epoch " << epoch << dendl;
+  ldout(mon->cct, 1) << "init, last seen epoch " << epoch << dendl;
 }
 
 void Elector::shutdown()
@@ -49,7 +49,7 @@ void Elector::shutdown()
 
 void Elector::bump_epoch(epoch_t e)
 {
-  dout(10) << "bump_epoch " << epoch << " to " << e << dendl;
+  ldout(mon->cct, 10) << "bump_epoch " << epoch << " to " << e << dendl;
   assert(epoch <= e);
   epoch = e;
   MonitorDBStore::Transaction t;
@@ -67,10 +67,10 @@ void Elector::bump_epoch(epoch_t e)
 void Elector::start()
 {
   if (!participating) {
-    dout(0) << "not starting new election -- not participating" << dendl;
+    ldout(mon->cct, 0) << "not starting new election -- not participating" << dendl;
     return;
   }
-  dout(5) << "start -- can i be leader?" << dendl;
+  ldout(mon->cct, 5) << "start -- can i be leader?" << dendl;
 
   acked_me.clear();
   init();
@@ -78,7 +78,7 @@ void Elector::start()
   // start by trying to elect me
   if (epoch % 2 == 0)
     bump_epoch(epoch+1);  // odd == election cycle
-  start_stamp = ceph_clock_now(g_ceph_context);
+  start_stamp = ceph_clock_now(mon->cct);
   electing_me = true;
   acked_me[mon->rank] = CEPH_FEATURES_ALL;
   leader_acked = -1;
@@ -95,7 +95,7 @@ void Elector::start()
 
 void Elector::defer(int who)
 {
-  dout(5) << "defer to " << who << dendl;
+  ldout(mon->cct, 5) << "defer to " << who << dendl;
 
   if (electing_me) {
     // drop out
@@ -105,7 +105,7 @@ void Elector::defer(int who)
 
   // ack them
   leader_acked = who;
-  ack_stamp = ceph_clock_now(g_ceph_context);
+  ack_stamp = ceph_clock_now(mon->cct);
   MMonElection *m = new MMonElection(MMonElection::OP_ACK, epoch, mon->monmap);
   m->sharing_bl = mon->get_supported_commands_bl();
   mon->messenger->send_message(m, mon->monmap->get_inst(who));
@@ -120,7 +120,7 @@ void Elector::reset_timer(double plus)
   // set the timer
   cancel_timer();
   expire_event = new C_ElectionExpire(this);
-  mon->timer.add_event_after(g_conf->mon_lease + plus,
+  mon->timer.add_event_after(mon->cct->_conf->mon_lease + plus,
 			     expire_event);
 }
 
@@ -135,7 +135,7 @@ void Elector::cancel_timer()
 
 void Elector::expire()
 {
-  dout(5) << "election timer expired" << dendl;
+  ldout(mon->cct, 5) << "election timer expired" << dendl;
 
   // did i win?
   if (electing_me &&
@@ -197,14 +197,14 @@ void Elector::victory()
 
 void Elector::handle_propose(MMonElection *m)
 {
-  dout(5) << "handle_propose from " << m->get_source() << dendl;
+  ldout(mon->cct, 5) << "handle_propose from " << m->get_source() << dendl;
   int from = m->get_source().num();
 
   assert(m->epoch % 2 == 1); // election
   uint64_t required_features = mon->get_required_features();
   if ((required_features ^ m->get_connection()->get_features()) &
       required_features) {
-    dout(5) << " ignoring propose from mon" << from
+    ldout(mon->cct, 5) << " ignoring propose from mon" << from
 	    << " without required features" << dendl;
     nak_old_peer(m);
     return;
@@ -215,12 +215,12 @@ void Elector::handle_propose(MMonElection *m)
     if (epoch % 2 == 0 &&    // in a non-election cycle
 	mon->quorum.count(from) == 0) {	 // from someone outside the quorum
       // a mon just started up, call a new election so they can rejoin!
-      dout(5) << " got propose from old epoch, quorum is " << mon->quorum
+      ldout(mon->cct, 5) << " got propose from old epoch, quorum is " << mon->quorum
 	      << ", " << m->get_source() << " must have just started" << dendl;
       // we may be active; make sure we reset things in the monitor appropriately.
       mon->start_election();
     } else {
-      dout(5) << " ignoring old propose" << dendl;
+      ldout(mon->cct, 5) << " ignoring old propose" << dendl;
       m->put();
       return;
     }
@@ -230,7 +230,7 @@ void Elector::handle_propose(MMonElection *m)
     // i would win over them.
     if (leader_acked >= 0) {	    // we already acked someone
       assert(leader_acked < from);  // and they still win, of course
-      dout(5) << "no, we already acked " << leader_acked << dendl;
+      ldout(mon->cct, 5) << "no, we already acked " << leader_acked << dendl;
     } else {
       // wait, i should win!
       if (!electing_me) {
@@ -245,7 +245,7 @@ void Elector::handle_propose(MMonElection *m)
       defer(from);
     } else {
       // ignore them!
-      dout(5) << "no, we already acked " << leader_acked << dendl;
+      ldout(mon->cct, 5) << "no, we already acked " << leader_acked << dendl;
     }
   }
 
@@ -254,12 +254,12 @@ void Elector::handle_propose(MMonElection *m)
 
 void Elector::handle_ack(MMonElection *m)
 {
-  dout(5) << "handle_ack from " << m->get_source() << dendl;
+  ldout(mon->cct, 5) << "handle_ack from " << m->get_source() << dendl;
   int from = m->get_source().num();
 
   assert(m->epoch % 2 == 1); // election
   if (m->epoch > epoch) {
-    dout(5) << "woah, that's a newer epoch, i must have rebooted.  bumping and re-starting!" << dendl;
+    ldout(mon->cct, 5) << "woah, that's a newer epoch, i must have rebooted.  bumping and re-starting!" << dendl;
     bump_epoch(m->epoch);
     start();
     m->put();
@@ -269,7 +269,7 @@ void Elector::handle_ack(MMonElection *m)
   uint64_t required_features = mon->get_required_features();
   if ((required_features ^ m->get_connection()->get_features()) &
       required_features) {
-    dout(5) << " ignoring ack from mon" << from
+    ldout(mon->cct, 5) << " ignoring ack from mon" << from
 	    << " without required features" << dendl;
     return;
   }
@@ -294,7 +294,7 @@ void Elector::handle_ack(MMonElection *m)
 
 void Elector::handle_victory(MMonElection *m)
 {
-  dout(5) << "handle_victory from " << m->get_source() << " quorum_features " << m->quorum_features << dendl;
+  ldout(mon->cct, 5) << "handle_victory from " << m->get_source() << " quorum_features " << m->quorum_features << dendl;
   int from = m->get_source().num();
 
   assert(from < mon->rank);
@@ -304,7 +304,7 @@ void Elector::handle_victory(MMonElection *m)
 
   // i should have seen this election if i'm getting the victory.
   if (m->epoch != epoch + 1) {
-    dout(5) << "woah, that's a funny epoch, i must have rebooted.  bumping and re-starting!" << dendl;
+    ldout(mon->cct, 5) << "woah, that's a funny epoch, i must have rebooted.  bumping and re-starting!" << dendl;
     bump_epoch(m->epoch);
     start();
     m->put();
@@ -337,7 +337,7 @@ void Elector::nak_old_peer(MMonElection *m)
 
   if (supported_features & CEPH_FEATURE_OSDMAP_ENC) {
     uint64_t required_features = mon->get_required_features();
-    dout(10) << "sending nak to peer " << m->get_source()
+    ldout(mon->cct, 10) << "sending nak to peer " << m->get_source()
 	     << " that only supports " << supported_features
 	     << " of the required " << required_features << dendl;
 
@@ -352,7 +352,7 @@ void Elector::nak_old_peer(MMonElection *m)
 
 void Elector::handle_nak(MMonElection *m)
 {
-  dout(1) << "handle_nak from " << m->get_source()
+  ldout(mon->cct, 1) << "handle_nak from " << m->get_source()
 	  << " quorum_features " << m->quorum_features << dendl;
 
   CompatSet other;
@@ -360,8 +360,8 @@ void Elector::handle_nak(MMonElection *m)
   other.decode(bi);
   CompatSet diff = Monitor::get_supported_features().unsupported(other);
 
-  derr << "Shutting down because I do not support required monitor features: { "
-       << diff << " }" << dendl;
+  lderr(mon->cct) << "Shutting down because I do not support required monitor features: { "
+		  << diff << " }" << dendl;
 
   exit(0);
   // the end!
@@ -378,7 +378,7 @@ void Elector::dispatch(Message *m)
 	return;
       }
       if (m->get_source().num() >= mon->monmap->size()) {
-	dout(5) << " ignoring bogus election message with bad mon rank "
+	ldout(mon->cct, 5) << " ignoring bogus election message with bad mon rank "
 		<< m->get_source() << dendl;
 	m->put();
 	return;
@@ -388,14 +388,14 @@ void Elector::dispatch(Message *m)
 
       // assume an old message encoding would have matched
       if (em->fsid != mon->monmap->fsid) {
-	dout(0) << " ignoring election msg fsid "
+	ldout(mon->cct, 0) << " ignoring election msg fsid "
 		<< em->fsid << " != " << mon->monmap->fsid << dendl;
 	m->put();
 	return;
       }
 
       if (!mon->monmap->contains(m->get_source_addr())) {
-	dout(1) << "discarding election message: " << m->get_source_addr()
+	ldout(mon->cct, 1) << "discarding election message: " << m->get_source_addr()
 		<< " not in my monmap " << *mon->monmap << dendl;
 	m->put();
 	return;
@@ -404,7 +404,7 @@ void Elector::dispatch(Message *m)
       MonMap *peermap = new MonMap;
       peermap->decode(em->monmap_bl);
       if (peermap->epoch > mon->monmap->epoch) {
-	dout(0) << m->get_source_inst() << " has newer monmap epoch " << peermap->epoch
+	ldout(mon->cct, 0) << m->get_source_inst() << " has newer monmap epoch " << peermap->epoch
 		<< " > my epoch " << mon->monmap->epoch
 		<< ", taking it"
 		<< dendl;
@@ -421,7 +421,7 @@ void Elector::dispatch(Message *m)
 	return;
       }
       if (peermap->epoch < mon->monmap->epoch) {
-	dout(0) << m->get_source_inst() << " has older monmap epoch " << peermap->epoch
+	ldout(mon->cct, 0) << m->get_source_inst() << " has older monmap epoch " << peermap->epoch
 		<< " < my epoch " << mon->monmap->epoch
 		<< dendl;
       }
@@ -434,7 +434,7 @@ void Elector::dispatch(Message *m)
       }
 
       if (em->epoch < epoch) {
-	dout(5) << "old epoch, dropping" << dendl;
+	ldout(mon->cct, 5) << "old epoch, dropping" << dendl;
 	em->put();
 	break;
       }

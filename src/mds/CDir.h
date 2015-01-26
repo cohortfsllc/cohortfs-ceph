@@ -158,6 +158,7 @@ public:
  public:
   // context
   MDCache  *cache;
+  CephContext *cct;
 
   CInode	  *inode;  // my inode
   frag_t	   frag;   // my frag
@@ -277,10 +278,11 @@ protected:
   friend class C_Dir_Committed;
 
  public:
-  CDir(CInode *in, frag_t fg, MDCache *mdcache, bool auth);
+  CDir(CephContext* _cct, CInode *in, frag_t fg, MDCache *mdcache, bool auth);
   ~CDir() {
     g_num_dir--;
     g_num_dirs++;
+    cct->put();
   }
 
 
@@ -340,10 +342,10 @@ public:
   void merge(list<CDir*>& subs, list<Context*>& waiters, bool replay);
 
   bool should_split() {
-    return (int)get_frag_size() > g_conf->mds_bal_split_size;
+    return (int)get_frag_size() > cct->_conf->mds_bal_split_size;
   }
   bool should_merge() {
-    return (int)get_frag_size() < g_conf->mds_bal_merge_size;
+    return (int)get_frag_size() < cct->_conf->mds_bal_merge_size;
   }
 
 private:

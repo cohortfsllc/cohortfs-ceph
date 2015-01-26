@@ -26,6 +26,8 @@
 namespace po = boost::program_options;
 using namespace std;
 
+CephContext* cct;
+
 struct MorePrinting : public DetailedStatCollector::AdditionalPrinting {
   CephContext *cct;
   MorePrinting(CephContext *cct) : cct(cct) {}
@@ -98,12 +100,12 @@ int main(int argc, char **argv)
     ceph_options.push_back(i->c_str());
   }
 
-  global_init(
+  cct = global_init(
     &def_args, ceph_options, CEPH_ENTITY_TYPE_CLIENT,
     CODE_ENVIRONMENT_UTILITY,
     CINIT_FLAG_NO_DEFAULT_CONFIG_FILE);
-  common_init_finish(g_ceph_context);
-  g_ceph_context->_conf->apply_changes(NULL);
+  common_init_finish(cct);
+  cct->_conf->apply_changes(NULL);
 
   if (!vm.count("filestore-path") || !vm.count("journal-path")) {
     cout << "Must provide filestore-path and journal-path" << std::endl
@@ -124,7 +126,7 @@ int main(int argc, char **argv)
   ops.insert(make_pair(vm["write-ratio"].as<double>(), Bencher::WRITE));
   ops.insert(make_pair(1-vm["write-ratio"].as<double>(), Bencher::READ));
 
-  FileStore fs(g_ceph_context, vm["filestore-path"].as<string>(),
+  FileStore fs(cct, vm["filestore-path"].as<string>(),
 	       vm["journal-path"].as<string>());
 
   if (fs.mkfs() < 0) {
@@ -151,7 +153,7 @@ int main(int argc, char **argv)
   std::shared_ptr<StatCollector> col(
     new DetailedStatCollector(
       1, new JSONFormatter, detailed_ops, &cout,
-      new MorePrinting(g_ceph_context)));
+      new MorePrinting(cct)));
 
   cout << "Creating objects.." << std::endl;
   bufferlist bl;

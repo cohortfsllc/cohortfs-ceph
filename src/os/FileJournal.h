@@ -343,9 +343,10 @@ private:
   }
 
  public:
-  FileJournal(const boost::uuids::uuid& fsid, Finisher *fin, Cond *sync_cond, const char *f,
+  FileJournal(CephContext* _cct, const boost::uuids::uuid& fsid,
+	      Finisher *fin, Cond *sync_cond, const char *f,
 	      bool dio = false, bool ai = true, bool faio = false) :
-    Journal(fsid, fin, sync_cond),
+    Journal(_cct, fsid, fin, sync_cond),
     trace_endpoint("0.0.0.0", 0, NULL),
     journaled_seq(0),
     plug_journal_completions(false),
@@ -364,8 +365,8 @@ private:
     full_state(FULL_NOTFULL),
     fd(-1),
     writing_seq(0),
-    throttle_ops(g_ceph_context, "filestore_ops"),
-    throttle_bytes(g_ceph_context, "filestore_bytes"),
+    throttle_ops(cct, "filestore_ops"),
+    throttle_bytes(cct, "filestore_bytes"),
     write_stop(false),
     write_thread(this),
     write_finish_thread(this)

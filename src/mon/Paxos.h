@@ -145,6 +145,7 @@ class Paxos {
   /**
    * The Monitor to which this Paxos class is associated with.
    */
+  CephContext *cct;
   Monitor *mon;
 
   // my state machine info
@@ -1002,24 +1003,11 @@ public:
    * @param m A monitor
    * @param mid A machine id
    */
-  Paxos(Monitor *m, const string &name)
-		 : mon(m),
-		   paxos_name(name),
-		   state(STATE_RECOVERING),
-		   first_committed(0),
-		   last_pn(0),
-		   last_committed(0),
-		   accepted_pn(0),
-		   accepted_pn_from(0),
-		   num_last(0),
-		   uncommitted_v(0), uncommitted_pn(0),
-		   collect_timeout_event(0),
-		   lease_renew_event(0),
-		   lease_ack_timeout_event(0),
-		   lease_timeout_event(0),
-		   accept_timeout_event(0),
-		   clock_drift_warned(0),
-		   trimming(false) { }
+  Paxos(Monitor *m, const string &name);
+
+  ~Paxos() {
+    cct->put();
+  }
 
   const string get_name() const {
     return paxos_name;
@@ -1157,7 +1145,7 @@ public:
    */
   bool should_trim() {
     int available_versions = get_version() - get_first_committed();
-    int maximum_versions = g_conf->paxos_min + g_conf->paxos_trim_min;
+    int maximum_versions = cct->_conf->paxos_min + cct->_conf->paxos_trim_min;
 
     if (trimming || (available_versions <= maximum_versions))
       return false;

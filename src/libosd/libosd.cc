@@ -3,7 +3,6 @@
 
 #include "ceph_osd.h"
 
-#include "Context.h"
 #include "Dispatcher.h"
 #include "Messengers.h"
 #include "Objecter.h"
@@ -37,7 +36,6 @@ namespace osd
 {
 
 class LibOSD : private Objecter, public libosd, private OSDStateObserver {
-  Context ctx;
   libosd_callbacks *callbacks;
   void *user;
   Finisher *finisher; // thread to send callbacks to user
@@ -82,13 +80,13 @@ public:
 	   uint64_t offset, uint64_t length, char *data,
 	   int flags, libosd_io_completion_fn cb, void *user) {
     return Objecter::read(object, volume, offset, length,
-                          data, flags, cb, user);
+			  data, flags, cb, user);
   }
   int write(const char *object, const uint8_t volume[16],
 	    uint64_t offset, uint64_t length, char *data,
 	    int flags, libosd_io_completion_fn cb, void *user) {
     return Objecter::write(object, volume, offset, length,
-                           data, flags, cb, user);
+			   data, flags, cb, user);
   }
   int truncate(const char *object, const uint8_t volume[16], uint64_t offset,
 	       int flags, libosd_io_completion_fn cb, void *user) {
@@ -133,7 +131,8 @@ int LibOSD::init(const struct libosd_init_args *args)
   user = args->user;
 
   // create the CephContext and parse the configuration
-  int r = ctx.create(args->id, args->config, args->cluster);
+  int r = ceph::osd::context_create(args->id, args->config, args->cluster,
+				    cct);
   if (r != 0)
     return r;
 
@@ -142,44 +141,44 @@ int LibOSD::init(const struct libosd_init_args *args)
 
   // create and bind messengers
   ms = new OSDMessengers();
-  r = ms->create(ctx.cct, ctx.conf, me, pid);
+  r = ms->create(cct, cct->_conf, me, pid);
   if (r != 0) {
     derr << TEXT_RED << " ** ERROR: messenger creation failed: "
-         << cpp_strerror(-r) << TEXT_NORMAL << dendl;
+	 << cpp_strerror(-r) << TEXT_NORMAL << dendl;
     return r;
   }
 
-  r = ms->bind(ctx.cct, ctx.conf);
+  r = ms->bind(cct, cct->_conf);
   if (r != 0) {
     derr << TEXT_RED << " ** ERROR: bind failed: " << cpp_strerror(-r)
-         << TEXT_NORMAL << dendl;
+	 << TEXT_NORMAL << dendl;
     return r;
   }
 
   // the store
-  ObjectStore *store = ObjectStore::create(ctx.cct,
-      ctx.conf->osd_objectstore,
-      ctx.conf->osd_data,
-      ctx.conf->osd_journal);
+  ObjectStore *store = ObjectStore::create(cct,
+					   cct->_conf->osd_objectstore,
+					   cct->_conf->osd_data,
+					   cct->_conf->osd_journal);
   if (!store) {
     derr << "unable to create object store" << dendl;
     return -ENODEV;
   }
 
-  common_init_finish(ctx.cct, 0);
+  common_init_finish(cct, 0);
 
   // monitor client
-  monc = new MonClient(ctx.cct);
+  monc = new MonClient(cct);
   r = monc->build_initial_monmap();
   if (r < 0)
     return r;
 
   // create osd
-  osd = new OSD(ctx.cct, store, whoami,
-      ms->cluster, ms->client, ms->client_xio,
-      ms->client_hb, ms->front_hb, ms->back_hb,
-      ms->objecter, ms->objecter_xio,
-      monc, ctx.conf->osd_data, ctx.conf->osd_journal);
+  osd = new OSD(cct, store, whoami,
+		ms->cluster, ms->client, ms->client_xio,
+		ms->client_hb, ms->front_hb, ms->back_hb,
+		ms->objecter, ms->objecter_xio,
+		monc, cct->_conf->osd_data, cct->_conf->osd_journal);
 
   // set up the dispatcher
   init_dispatcher(osd);
@@ -188,12 +187,12 @@ int LibOSD::init(const struct libosd_init_args *args)
   r = osd->pre_init();
   if (r < 0) {
     derr << TEXT_RED << " ** ERROR: osd pre_init failed: " << cpp_strerror(-r)
-         << TEXT_NORMAL << dendl;
+	 << TEXT_NORMAL << dendl;
     return r;
   }
 
   // start callback finisher thread
-  finisher = new Finisher(ctx.cct);
+  finisher = new Finisher(cct);
   finisher->start();
 
   // register for state change notifications
@@ -208,7 +207,7 @@ int LibOSD::init(const struct libosd_init_args *args)
   r = osd->init();
   if (r < 0) {
     derr << TEXT_RED << " ** ERROR: osd init failed: " << cpp_strerror(-r)
-         << TEXT_NORMAL << dendl;
+	 << TEXT_NORMAL << dendl;
     return r;
   }
   return 0;
@@ -219,10 +218,10 @@ void LibOSD::init_dispatcher(OSD *osd)
   const entity_name_t name(entity_name_t::CLIENT(whoami));
 
   // construct and attach the direct messenger pair
-  ms_client = new DirectMessenger(ctx.cct, name, "direct osd client",
-                                  0, new FastStrategy());
-  ms_server = new DirectMessenger(ctx.cct, name, "direct osd server",
-                                  0, new FastStrategy());
+  ms_client = new DirectMessenger(cct, name, "direct osd client",
+				  0, new FastStrategy());
+  ms_server = new DirectMessenger(cct, name, "direct osd server",
+				  0, new FastStrategy());
 
   ms_client->set_direct_peer(ms_server);
   ms_server->set_direct_peer(ms_client);
@@ -241,7 +240,7 @@ void LibOSD::init_dispatcher(OSD *osd)
   conn->set_priv(s);
 
   // allocate the dispatcher
-  dispatcher.reset(new Dispatcher(ctx.cct, ms_client, conn));
+  dispatcher.reset(new Dispatcher(cct, ms_client, conn));
 
   ms_client->add_dispatcher_head(dispatcher.get());
 }
@@ -260,7 +259,7 @@ struct C_StateCb : public ::Context {
 
 void LibOSD::on_osd_state(int state, epoch_t epoch)
 {
-  dout(1) << "on_osd_state " << state << " epoch " << epoch << dendl;
+  ldout(cct, 1) << "on_osd_state " << state << " epoch " << epoch << dendl;
 
   Mutex::Locker lock(osdmap.mtx);
   if (osdmap.state != state) {
@@ -352,7 +351,6 @@ struct libosd* libosd_init(const struct libosd_init_args *args)
     std::pair<osdmap::iterator, bool> result =
       osds.insert(osdmap::value_type(args->id, nullptr));
     if (!result.second) {
-      derr << "libosd_init found existing osd." << args->id << dendl;
       return nullptr;
     }
 
@@ -363,7 +361,6 @@ struct libosd* libosd_init(const struct libosd_init_args *args)
     if (osd->init(args) == 0)
       return osd;
   } catch (std::exception &e) {
-    derr << "libosd_init caught exception " << e.what() << dendl;
   }
 
   // remove from the map of osds
@@ -380,7 +377,7 @@ void libosd_join(struct libosd *osd)
   try {
     osd->join();
   } catch (std::exception &e) {
-    derr << "libosd_join caught exception " << e.what() << dendl;
+    lderr(osd->cct) << "libosd_join caught exception " << e.what() << dendl;
   }
 }
 
@@ -389,7 +386,7 @@ void libosd_shutdown(struct libosd *osd)
   try {
     osd->shutdown();
   } catch (std::exception &e) {
-    derr << "libosd_shutdown caught exception " << e.what() << dendl;
+    lderr(osd->cct) << "libosd_shutdown caught exception " << e.what() << dendl;
   }
 }
 
@@ -415,7 +412,8 @@ void libosd_signal(int signum)
     try {
       osd.second->signal(signum);
     } catch (std::exception &e) {
-      derr << "libosd_signal caught exception " << e.what() << dendl;
+      lderr(osd.second->cct)
+	<< "libosd_signal caught exception " << e.what() << dendl;
     }
   }
 }
@@ -426,7 +424,7 @@ int libosd_get_volume(struct libosd *osd, const char *name,
   try {
     return osd->get_volume(name, id);
   } catch (std::exception &e) {
-    derr << "libosd_get_volume caught exception " << e.what() << dendl;
+    lderr(osd->cct) << "libosd_get_volume caught exception " << e.what() << dendl;
     return -EFAULT;
   }
 }
@@ -439,7 +437,7 @@ int libosd_read(struct libosd *osd, const char *object,
   try {
     return osd->read(object, volume, offset, length, data, flags, cb, user);
   } catch (std::exception &e) {
-    derr << "libosd_read caught exception " << e.what() << dendl;
+    lderr(osd->cct) << "libosd_read caught exception " << e.what() << dendl;
     return -EFAULT;
   }
 }
@@ -451,7 +449,7 @@ int libosd_write(struct libosd *osd, const char *object, const uint8_t volume[16
   try {
     return osd->write(object, volume, offset, length, data, flags, cb, user);
   } catch (std::exception &e) {
-    derr << "libosd_write caught exception " << e.what() << dendl;
+    lderr(osd->cct) << "libosd_write caught exception " << e.what() << dendl;
     return -EFAULT;
   }
 }
@@ -463,7 +461,8 @@ int libosd_truncate(struct libosd *osd, const char *object,
   try {
     return osd->truncate(object, volume, offset, flags, cb, user);
   } catch (std::exception &e) {
-    derr << "libosd_truncate caught exception " << e.what() << dendl;
+    lderr(osd->cct) << "libosd_truncate caught exception " << e.what()
+		    << dendl;
     return -EFAULT;
   }
 }

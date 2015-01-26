@@ -148,7 +148,6 @@ class KeyValueStore : public ObjectStore,
   static const uint32_t target_version = 1;
 
  private:
-  CephContext *cct;
   string basedir;
   std::string current_fn;
   std::string current_op_seq_fn;

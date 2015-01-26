@@ -44,6 +44,14 @@ static ostream& _prefix(std::ostream *_dout, const string& dir) {
 #include <sstream>
 #include <sys/file.h>
 
+MonitorStore::MonitorStore(CephContext* _cct, const std::string &d)
+  : cct(_cct), dir(d), lock_fd(-1) {
+  cct->get();
+}
+MonitorStore::~MonitorStore() {
+  cct->put();
+}
+
 int MonitorStore::mount()
 {
   char t[1024];
@@ -70,11 +78,12 @@ int MonitorStore::mount()
   l.l_len = 0;
   int r = ::fcntl(lock_fd, F_SETLK, &l);
   if (r < 0) {
-    dout(0) << "failed to lock " << t << ", is another ceph-mon still running?" << dendl;
+    dout(0) << "failed to lock " << t
+	    << ", is another ceph-mon still running?" << dendl;
     return -errno;
   }
 
-  if ((!g_conf->chdir.empty()) && (dir[0] != '/')) {
+  if ((!cct->_conf->chdir.empty()) && (dir[0] != '/')) {
     // combine it with the cwd, in case fuse screws things up (i.e. fakefuse)
     string old = dir;
     char cwd[PATH_MAX];
@@ -114,7 +123,7 @@ int MonitorStore::mkfs()
   assert (0 == close_err);
 
   dout(0) << "created monfs at " << dir << " for "
-	  << g_conf->name.get_id() << dendl;
+	  << cct->_conf->name.get_id() << dendl;
   return 0;
 }
 
@@ -390,8 +399,8 @@ void MonitorStore::put_bl_sn_map(const char *a,
   dout(15) <<  "put_bl_sn_map " << a << "/[" << first << ".." << last << "]" << dendl;
 
   // only do a big sync if there are several values, or if the feature is disabled.
-  if (g_conf->mon_sync_fs_threshold <= 0 ||
-      last - first < (unsigned)g_conf->mon_sync_fs_threshold) {
+  if (cct->_conf->mon_sync_fs_threshold <= 0 ||
+      last - first < (unsigned)cct->_conf->mon_sync_fs_threshold) {
     // just do them individually
     for (map<version_t,bufferlist>::iterator p = start; p != end; ++p) {
       put_bl_sn(p->second, a, p->first);

@@ -7,8 +7,6 @@
 
 #include "include/utime.h"
 #include "common/Clock.h"
-#include "global/global_context.h"
-
 #include "gtest/gtest.h"
 #include "test/librados/test.h"
 
@@ -122,7 +120,7 @@ TEST(cls_rgw, test_log_add_same_time)
   ASSERT_EQ(0, ioctx.create(oid, true));
 
   /* generate log */
-  utime_t start_time = ceph_clock_now(g_ceph_context);
+  utime_t start_time = ceph_clock_now(nullptr);
   generate_log(ioctx, oid, 10, start_time, false);
 
   librados::ObjectReadOperation *rop = new_rop(ioctx);
@@ -206,7 +204,7 @@ TEST(cls_rgw, test_log_add_different_time)
   ASSERT_EQ(0, ioctx.create(oid, true));
 
   /* generate log */
-  utime_t start_time = ceph_clock_now(g_ceph_context);
+  utime_t start_time = ceph_clock_now(nullptr);
   generate_log(ioctx, oid, 10, start_time, true);
 
   librados::ObjectReadOperation *rop = new_rop(ioctx);
@@ -299,7 +297,7 @@ TEST(cls_rgw, test_log_trim)
   ASSERT_EQ(0, ioctx.create(oid, true));
 
   /* generate log */
-  utime_t start_time = ceph_clock_now(g_ceph_context);
+  utime_t start_time = ceph_clock_now(nullptr);
   generate_log(ioctx, oid, 10, start_time, true);
 
   librados::ObjectReadOperation *rop = new_rop(ioctx);

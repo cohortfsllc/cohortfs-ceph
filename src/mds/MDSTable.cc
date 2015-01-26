@@ -38,6 +38,14 @@ public:
   }
 };
 
+MDSTable::MDSTable(MDS *m, const char *n, bool is_per_mds) :
+  mds(m), cct(mds->cct), table_name(n), per_mds(is_per_mds),
+  state(STATE_UNDEF),
+  version(0), committing_version(0), committed_version(0),
+  projected_version(0) {
+  cct->get();
+}
+
 void MDSTable::save(Context *onfinish, version_t v)
 {
   if (v > 0 && v <= committing_version) {
@@ -62,7 +70,7 @@ void MDSTable::save(Context *onfinish, version_t v)
   // write (async)
   object_t oid = get_object_name();
   VolumeRef volume(mds->get_metadata_volume());
-  mds->objecter->write_full(oid, volume, bl, ceph_clock_now(g_ceph_context), 0,
+  mds->objecter->write_full(oid, volume, bl, ceph_clock_now(cct), 0,
 			    NULL, new C_MT_Save(this, version));
 }
 

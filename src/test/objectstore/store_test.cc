@@ -34,6 +34,7 @@
 
 #include <unordered_map>
 typedef boost::mt11213b gen_type;
+static CephContext* cct;
 
 #if GTEST_HAS_PARAM_TEST
 
@@ -50,7 +51,7 @@ public:
       return;
     }
 
-    ObjectStore *store_ = ObjectStore::create(g_ceph_context,
+    ObjectStore *store_ = ObjectStore::create(cct,
 					      string(GetParam()),
 					      string("store_test_temp_dir"),
 					      string("store_test_temp_journal"));
@@ -969,11 +970,11 @@ TEST(EXT4StoreTest, _detect_fs) {
   // without user_xattr, ext4 fails
   //
   {
-    g_ceph_context->_conf->set_val("filestore_xattr_use_omap", "true");
+    cct->_conf->set_val("filestore_xattr_use_omap", "true");
     EXPECT_EQ(::system((string("mount -o loop,nouser_xattr ") + disk + " " + mnt).c_str()), 0);
     EXPECT_EQ(::chdir(mnt.c_str()), 0);
     EXPECT_EQ(::mkdir(dir.c_str(), 0755), 0);
-    FileStore store(g_ceph_context, dir, journal);
+    FileStore store(cct, dir, journal);
     EXPECT_EQ(store._detect_fs(), -ENOTSUP);
     EXPECT_EQ(::chdir(".."), 0);
     EXPECT_EQ(::umount(mnt.c_str()), 0);
@@ -982,10 +983,10 @@ TEST(EXT4StoreTest, _detect_fs) {
   // mounted with user_xattr, ext4 fails if filestore_xattr_use_omap is false
   //
   {
-    g_ceph_context->_conf->set_val("filestore_xattr_use_omap", "false");
+    cct->_conf->set_val("filestore_xattr_use_omap", "false");
     EXPECT_EQ(::system((string("mount -o loop,user_xattr ") + disk + " " + mnt).c_str()), 0);
     EXPECT_EQ(::chdir(mnt.c_str()), 0);
-    FileStore store(g_ceph_context, dir, journal);
+    FileStore store(cct, dir, journal);
     EXPECT_EQ(store._detect_fs(), -ENOTSUP);
     EXPECT_EQ(::chdir(".."), 0);
     EXPECT_EQ(::umount(mnt.c_str()), 0);
@@ -994,10 +995,10 @@ TEST(EXT4StoreTest, _detect_fs) {
   // mounted with user_xattr, ext4 succeeds if filestore_xattr_use_omap is true
   //
   {
-    g_ceph_context->_conf->set_val("filestore_xattr_use_omap", "true");
+    cct->_conf->set_val("filestore_xattr_use_omap", "true");
     EXPECT_EQ(::system((string("mount -o loop,user_xattr ") + disk + " " + mnt).c_str()), 0);
     EXPECT_EQ(::chdir(mnt.c_str()), 0);
-    FileStore store(g_ceph_context, dir, journal);
+    FileStore store(cct, dir, journal);
     EXPECT_EQ(store._detect_fs(), 0);
     EXPECT_EQ(::chdir(".."), 0);
     EXPECT_EQ(::umount(mnt.c_str()), 0);
@@ -1009,13 +1010,14 @@ int main(int argc, char **argv) {
   vector<const char*> args;
   argv_to_vec(argc, (const char **)argv, args);
 
-  global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
-  common_init_finish(g_ceph_context);
-  g_ceph_context->_conf->set_val("osd_journal_size", "400");
-  g_ceph_context->_conf->set_val("filestore_index_retry_probability", "0.5");
-  g_ceph_context->_conf->set_val("filestore_op_thread_timeout", "1000");
-  g_ceph_context->_conf->set_val("filestore_op_thread_suicide_timeout", "10000");
-  g_ceph_context->_conf->apply_changes(NULL);
+  cct = global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT,
+		    CODE_ENVIRONMENT_UTILITY, 0);
+  common_init_finish(cct);
+  cct->_conf->set_val("osd_journal_size", "400");
+  cct->_conf->set_val("filestore_index_retry_probability", "0.5");
+  cct->_conf->set_val("filestore_op_thread_timeout", "1000");
+  cct->_conf->set_val("filestore_op_thread_suicide_timeout", "10000");
+  cct->_conf->apply_changes(NULL);
 
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

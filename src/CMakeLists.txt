@@ -245,9 +245,6 @@ add_library(common_objs OBJECT ${libcommon_files})
 set(libcommon_objs $<TARGET_OBJECTS:common_objs>
   $<TARGET_OBJECTS:common_mountcephfs_objs>)
 
-# do NOT make common depend on global.  If you think
-#  you need this, check for and get rid of "dout()" calls.
-
 add_library(common ${CEPH_SHARED} ${libcommon_objs})
 if(${ENABLE_SHARED})
   set_target_properties(common PROPERTIES OUTPUT_NAME ceph-common
@@ -272,11 +269,9 @@ set(libglobal_srcs
   global/global_init.cc
   global/pidfile.cc
   global/signal_handler.cc
-  global/global_context.cc
   )
 add_library(global STATIC
-  ${libglobal_srcs}
-  )
+  ${libglobal_srcs})
 target_link_libraries(global PRIVATE common ${CMAKE_THREAD_LIBS_INIT} ${CRYPTO_LIBS} m ${EXTRALIBS})
 if(${ENABLE_SHARED})
   set_target_properties(global PROPERTIES OUTPUT_NAME ceph-global VERSION "1.0.0" SOVERSION "1"

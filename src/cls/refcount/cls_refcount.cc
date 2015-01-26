@@ -13,8 +13,6 @@
 #include "cls/refcount/cls_refcount_ops.h"
 #include "common/Clock.h"
 
-#include "global/global_context.h"
-
 CLS_VER(1,0)
 CLS_NAME(refcount)
 

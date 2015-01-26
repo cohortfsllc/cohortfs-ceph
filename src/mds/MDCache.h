@@ -78,6 +78,7 @@ class MDCache {
  public:
   // my master
   MDS *mds;
+  CephContext* cct;
 
   // -- my cache --
   LRU lru;   // dentry lru for expiring items from cache

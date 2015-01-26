@@ -11,8 +11,7 @@ using namespace std;
 
 #include "include/types.h"
 
-#include "global/global_context.h"
-
+#include "common/ceph_context.h"
 #include "Message.h"
 #include "Pipe.h"
 #include "messages/MGenericMessage.h"

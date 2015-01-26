@@ -72,7 +72,7 @@ void LogMonitor::tick()
 {
   if (!is_active()) return;
 
-  dout(10) << *this << dendl;
+  ldout(mon->cct, 10) << *this << dendl;
 
   if (!mon->is_leader()) return;
 
@@ -80,10 +80,10 @@ void LogMonitor::tick()
 
 void LogMonitor::create_initial()
 {
-  dout(10) << "create_initial -- creating initial map" << dendl;
+  ldout(mon->cct, 10) << "create_initial -- creating initial map" << dendl;
   LogEntry e;
   memset(&e.who, 0, sizeof(e.who));
-  e.stamp = ceph_clock_now(g_ceph_context);
+  e.stamp = ceph_clock_now(mon->cct);
   e.type = CLOG_INFO;
   std::stringstream ss;
   ss << "mkfs " << mon->monmap->get_fsid();
@@ -94,9 +94,9 @@ void LogMonitor::create_initial()
 
 void LogMonitor::update_from_paxos(bool *need_bootstrap)
 {
-  dout(10) << __func__ << dendl;
+  ldout(mon->cct, 10) << __func__ << dendl;
   version_t version = get_last_committed();
-  dout(10) << __func__ << " version " << version
+  ldout(mon->cct, 10) << __func__ << " version " << version
 	   << " summary v " << summary.version << dendl;
   if (version == summary.version)
     return;
@@ -105,15 +105,15 @@ void LogMonitor::update_from_paxos(bool *need_bootstrap)
   bufferlist blog;
 
   version_t latest_full = get_version_latest_full();
-  dout(10) << __func__ << " latest full " << latest_full << dendl;
+  ldout(mon->cct, 10) << __func__ << " latest full " << latest_full << dendl;
   if ((latest_full > 0) && (latest_full > summary.version)) {
     bufferlist latest_bl;
     get_version_full(latest_full, latest_bl);
     assert(latest_bl.length() != 0);
-    dout(7) << __func__ << " loading summary e" << latest_full << dendl;
+    ldout(mon->cct, 7) << __func__ << " loading summary e" << latest_full << dendl;
     bufferlist::iterator p = latest_bl.begin();
     ::decode(summary, p);
-    dout(7) << __func__ << " loaded summary e" << summary.version << dendl;
+    ldout(mon->cct, 7) << __func__ << " loaded summary e" << summary.version << dendl;
   }
 
   // walk through incrementals
@@ -129,14 +129,15 @@ void LogMonitor::update_from_paxos(bool *need_bootstrap)
     while (!p.end()) {
       LogEntry le;
       le.decode(p);
-      dout(7) << "update_from_paxos applying incremental log " << summary.version+1 <<	" " << le << dendl;
+      ldout(mon->cct, 7) << "update_from_paxos applying incremental log "
+			 << summary.version+1 <<	" " << le << dendl;
 
-      if (g_conf->mon_cluster_log_to_syslog) {
-	le.log_to_syslog(g_conf->mon_cluster_log_to_syslog_level,
-			 g_conf->mon_cluster_log_to_syslog_facility);
+      if (mon->cct->_conf->mon_cluster_log_to_syslog) {
+	le.log_to_syslog(mon->cct->_conf->mon_cluster_log_to_syslog_level,
+			 mon->cct->_conf->mon_cluster_log_to_syslog_facility);
       }
-      if (g_conf->mon_cluster_log_file.length()) {
-	int min = string_to_syslog_level(g_conf->mon_cluster_log_file_level);
+      if (mon->cct->_conf->mon_cluster_log_file.length()) {
+	int min = string_to_syslog_level(mon->cct->_conf->mon_cluster_log_file_level);
 	int l = clog_type_to_syslog_level(le.type);
 	if (l <= min) {
 	  stringstream ss;
@@ -153,14 +154,14 @@ void LogMonitor::update_from_paxos(bool *need_bootstrap)
 
 
   if (blog.length()) {
-    int fd = ::open(g_conf->mon_cluster_log_file.c_str(), O_WRONLY|O_APPEND|O_CREAT, 0600);
+    int fd = ::open(mon->cct->_conf->mon_cluster_log_file.c_str(), O_WRONLY|O_APPEND|O_CREAT, 0600);
     if (fd < 0) {
       int err = -errno;
-      dout(1) << "unable to write to " << g_conf->mon_cluster_log_file << ": " << cpp_strerror(err) << dendl;
+      ldout(mon->cct, 1) << "unable to write to " << mon->cct->_conf->mon_cluster_log_file << ": " << cpp_strerror(err) << dendl;
     } else {
       int err = blog.write_fd(fd);
       if (err < 0) {
-	dout(1) << "error writing to " << g_conf->mon_cluster_log_file
+	ldout(mon->cct, 1) << "error writing to " << mon->cct->_conf->mon_cluster_log_file
 		<< ": " << cpp_strerror(err) << dendl;
       }
       VOID_TEMP_FAILURE_RETRY(::close(fd));
@@ -185,14 +186,14 @@ void LogMonitor::create_pending()
 {
   pending_log.clear();
   pending_summary = summary;
-  dout(10) << "create_pending v " << (get_last_committed() + 1) << dendl;
+  ldout(mon->cct, 10) << "create_pending v " << (get_last_committed() + 1) << dendl;
 }
 
 void LogMonitor::encode_pending(MonitorDBStore::Transaction *t)
 {
   version_t version = get_last_committed() + 1;
   bufferlist bl;
-  dout(10) << __func__ << " v" << version << dendl;
+  ldout(mon->cct, 10) << __func__ << " v" << version << dendl;
   uint8_t v = 1;
   ::encode(v, bl);
   multimap<utime_t,LogEntry>::iterator p;
@@ -205,7 +206,7 @@ void LogMonitor::encode_pending(MonitorDBStore::Transaction *t)
 
 void LogMonitor::encode_full(MonitorDBStore::Transaction *t)
 {
-  dout(10) << __func__ << " log v " << summary.version << dendl;
+  ldout(mon->cct, 10) << __func__ << " log v " << summary.version << dendl;
   assert(get_last_committed() == summary.version);
 
   bufferlist summary_bl;
@@ -217,7 +218,7 @@ void LogMonitor::encode_full(MonitorDBStore::Transaction *t)
 
 version_t LogMonitor::get_trim_to()
 {
-  unsigned max = g_conf->mon_max_log_epochs;
+  unsigned max = mon->cct->_conf->mon_max_log_epochs;
   version_t version = get_last_committed();
   if (mon->is_leader() && version > max)
     return version - max;
@@ -226,7 +227,7 @@ version_t LogMonitor::get_trim_to()
 
 bool LogMonitor::preprocess_query(PaxosServiceMessage *m)
 {
-  dout(10) << "preprocess_query " << *m << " from " << m->get_orig_source_inst() << dendl;
+  ldout(mon->cct, 10) << "preprocess_query " << *m << " from " << m->get_orig_source_inst() << dendl;
   switch (m->get_type()) {
   case MSG_MON_COMMAND:
     return preprocess_command(static_cast<MMonCommand*>(m));
@@ -243,7 +244,7 @@ bool LogMonitor::preprocess_query(PaxosServiceMessage *m)
 
 bool LogMonitor::prepare_update(PaxosServiceMessage *m)
 {
-  dout(10) << "prepare_update " << *m << " from " << m->get_orig_source_inst() << dendl;
+  ldout(mon->cct, 10) << "prepare_update " << *m << " from " << m->get_orig_source_inst() << dendl;
   switch (m->get_type()) {
   case MSG_MON_COMMAND:
     return prepare_command(static_cast<MMonCommand*>(m));
@@ -258,14 +259,14 @@ bool LogMonitor::prepare_update(PaxosServiceMessage *m)
 
 bool LogMonitor::preprocess_log(MLog *m)
 {
-  dout(10) << "preprocess_log " << *m << " from " << m->get_orig_source() << dendl;
+  ldout(mon->cct, 10) << "preprocess_log " << *m << " from " << m->get_orig_source() << dendl;
   int num_new = 0;
 
   MonSession *session = m->get_session();
   if (!session)
     goto done;
   if (!session->is_capable("log", MON_CAP_W)) {
-    dout(0) << "preprocess_log got MLog from entity with insufficient privileges "
+    ldout(mon->cct, 0) << "preprocess_log got MLog from entity with insufficient privileges "
 	    << session->caps << dendl;
     goto done;
   }
@@ -277,7 +278,7 @@ bool LogMonitor::preprocess_log(MLog *m)
       num_new++;
   }
   if (!num_new) {
-    dout(10) << "  nothing new" << dendl;
+    ldout(mon->cct, 10) << "  nothing new" << dendl;
     goto done;
   }
 
@@ -290,10 +291,10 @@ bool LogMonitor::preprocess_log(MLog *m)
 
 bool LogMonitor::prepare_log(MLog *m)
 {
-  dout(10) << "prepare_log " << *m << " from " << m->get_orig_source() << dendl;
+  ldout(mon->cct, 10) << "prepare_log " << *m << " from " << m->get_orig_source() << dendl;
 
   if (m->fsid != mon->monmap->fsid) {
-    dout(0) << "handle_log on fsid " << m->fsid << " != " << mon->monmap->fsid
+    ldout(mon->cct, 0) << "handle_log on fsid " << m->fsid << " != " << mon->monmap->fsid
 	    << dendl;
     m->put();
     return false;
@@ -302,7 +303,7 @@ bool LogMonitor::prepare_log(MLog *m)
   for (deque<LogEntry>::iterator p = m->entries.begin();
        p != m->entries.end();
        ++p) {
-    dout(10) << " logging " << *p << dendl;
+    ldout(mon->cct, 10) << " logging " << *p << dendl;
     if (!pending_summary.contains(p->key())) {
       pending_summary.add(*p);
       pending_log.insert(pair<utime_t,LogEntry>(p->stamp, *p));
@@ -314,7 +315,7 @@ bool LogMonitor::prepare_log(MLog *m)
 
 void LogMonitor::_updated_log(MLog *m)
 {
-  dout(7) << "_updated_log for " << m->get_orig_source_inst() << dendl;
+  ldout(mon->cct, 7) << "_updated_log for " << m->get_orig_source_inst() << dendl;
   mon->send_reply(m, new MLogAck(m->fsid, m->entries.rbegin()->seq));
 
   m->put();
@@ -323,8 +324,9 @@ void LogMonitor::_updated_log(MLog *m)
 bool LogMonitor::should_propose(double& delay)
 {
   // commit now if we have a lot of pending events
-  if (g_conf->mon_max_log_entries_per_event > 0 &&
-      pending_log.size() >= (unsigned)g_conf->mon_max_log_entries_per_event)
+  if (mon->cct->_conf->mon_max_log_entries_per_event > 0 &&
+      pending_log.size()
+      >= (unsigned)mon->cct->_conf->mon_max_log_entries_per_event)
     return true;
 
   // otherwise fall back to generic policy
@@ -363,7 +365,7 @@ bool LogMonitor::prepare_command(MMonCommand *m)
   }
 
   string prefix;
-  cmd_getval(g_ceph_context, cmdmap, "prefix", prefix);
+  cmd_getval(mon->cct, cmdmap, "prefix", prefix);
 
   MonSession *session = m->get_session();
   if (!session) {
@@ -373,7 +375,7 @@ bool LogMonitor::prepare_command(MMonCommand *m)
 
   if (prefix == "log") {
     vector<string> logtext;
-    cmd_getval(g_ceph_context, cmdmap, "logtext", logtext);
+    cmd_getval(mon->cct, cmdmap, "logtext", logtext);
     LogEntry le;
     le.who = m->get_orig_source_inst();
     le.stamp = m->get_recv_stamp();
@@ -410,7 +412,7 @@ int LogMonitor::sub_name_to_id(const string& n)
 
 void LogMonitor::check_subs()
 {
-  dout(10) << __func__ << dendl;
+  ldout(mon->cct, 10) << __func__ << dendl;
   for (map<string, xlist<Subscription*>*>::iterator i = mon->session_map.subs.begin();
        i != mon->session_map.subs.end();
        ++i) {
@@ -423,14 +425,14 @@ void LogMonitor::check_subs()
 
 void LogMonitor::check_sub(Subscription *s)
 {
-  dout(10) << __func__ << " client wants " << s->type << " ver " << s->next << dendl;
+  ldout(mon->cct, 10) << __func__ << " client wants " << s->type << " ver " << s->next << dendl;
 
   int sub_level = sub_name_to_id(s->type);
   assert(sub_level >= 0);
 
   version_t summary_version = summary.version;
   if (s->next > summary_version) {
-    dout(10) << __func__ << " client " << s->session->inst
+    ldout(mon->cct, 10) << __func__ << " client " << s->session->inst
 	    << " requested version (" << s->next << ") is greater than ours ("
 	    << summary_version << "), which means we already sent him"
 	    << " everything we have." << dendl;
@@ -443,7 +445,7 @@ void LogMonitor::check_sub(Subscription *s)
     /* First timer, heh? */
     bool ret = _create_sub_summary(mlog, sub_level);
     if (!ret) {
-      dout(1) << __func__ << " ret = " << ret << dendl;
+      ldout(mon->cct, 1) << __func__ << " ret = " << ret << dendl;
       mlog->put();
       return;
     }
@@ -452,7 +454,7 @@ void LogMonitor::check_sub(Subscription *s)
     _create_sub_incremental(mlog, sub_level, s->next);
   }
 
-  dout(1) << __func__ << " sending message to " << s->session->inst
+  ldout(mon->cct, 1) << __func__ << " sending message to " << s->session->inst
 	  << " with " << mlog->entries.size() << " entries"
 	  << " (version " << mlog->version << ")" << dendl;
 
@@ -473,7 +475,7 @@ void LogMonitor::check_sub(Subscription *s)
  */
 bool LogMonitor::_create_sub_summary(MLog *mlog, int level)
 {
-  dout(10) << __func__ << dendl;
+  ldout(mon->cct, 10) << __func__ << dendl;
 
   assert(mlog != NULL);
 
@@ -504,11 +506,11 @@ bool LogMonitor::_create_sub_summary(MLog *mlog, int level)
  */
 void LogMonitor::_create_sub_incremental(MLog *mlog, int level, version_t sv)
 {
-  dout(10) << __func__ << " level " << level << " ver " << sv
+  ldout(mon->cct, 10) << __func__ << " level " << level << " ver " << sv
 	  << " cur summary ver " << summary.version << dendl;
 
   if (sv < get_first_committed()) {
-    dout(10) << __func__ << " skipped from " << sv
+    ldout(mon->cct, 10) << __func__ << " skipped from " << sv
 	     << " to first_committed " << get_first_committed() << dendl;
     LogEntry le;
     le.stamp = ceph_clock_now(NULL);
@@ -534,7 +536,7 @@ void LogMonitor::_create_sub_incremental(MLog *mlog, int level, version_t sv)
       le.decode(p);
 
       if (le.type < level) {
-	dout(20) << __func__ << " requested " << level
+	ldout(mon->cct, 20) << __func__ << " requested " << level
 		 << " entry " << le.type << dendl;
 	continue;
       }
@@ -544,7 +546,7 @@ void LogMonitor::_create_sub_incremental(MLog *mlog, int level, version_t sv)
     mlog->version = sv++;
   }
 
-  dout(10) << __func__ << " incremental message ready ("
-	   << mlog->entries.size() << " entries)" << dendl;
+  ldout(mon->cct, 10) << __func__ << " incremental message ready ("
+		      << mlog->entries.size() << " entries)" << dendl;
 }
 

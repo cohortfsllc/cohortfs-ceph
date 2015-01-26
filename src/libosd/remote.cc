@@ -3,7 +3,6 @@
 
 #include "ceph_osd_remote.h"
 
-#include "Context.h"
 #include "Dispatcher.h"
 #include "Objecter.h"
 
@@ -30,7 +29,6 @@ namespace osd
 class LibOSDRemote : public libosd_remote, private Objecter,
 		     private ::Dispatcher {
  private:
-  Context ctx;
   std::unique_ptr<Messenger> ms;
   std::unique_ptr<MonClient> monc;
 
@@ -111,38 +109,39 @@ LibOSDRemote::~LibOSDRemote()
 int LibOSDRemote::init(const struct libosd_remote_args *args)
 {
   // create the CephContext and parse the configuration
-  int r = ctx.create(args->id, args->config, args->cluster);
+  int r = ceph::osd::context_create(args->id, args->config, args->cluster,
+				    ctx);
   if (r != 0)
     return r;
 
-  // fix Dispatcher's cct
-  ::Dispatcher::cct = ctx.cct;
+  // fix Dispatcher's ctx
+  ::Dispatcher::cct = ctx;
 
-  common_init_finish(ctx.cct, 0);
+  common_init_finish(ctx, 0);
 
   // create messenger for the monitor and osd
 #ifdef HAVE_XIO
-  if (ctx.conf->client_rdma) {
-    XioMessenger *xmsgr = new XioMessenger(ctx.cct, entity_name_t::CLIENT(-1),
-                                           "libosd remote", getpid(), 1,
-                                           new FastStrategy());
+  if (ctx->_conf->client_rdma) {
+    XioMessenger *xmsgr = new XioMessenger(ctx, entity_name_t::CLIENT(-1),
+					   "libosd remote", getpid(), 1,
+					   new FastStrategy());
     xmsgr->set_port_shift(111);
     ms.reset(xmsgr);
   } else
-    ms.reset(Messenger::create(ctx.cct, entity_name_t::CLIENT(-1),
-                               "libosd remote", getpid()));
+    ms.reset(Messenger::create(ctx, entity_name_t::CLIENT(-1),
+			       "libosd remote", getpid()));
 #else
-  ms.reset(Messenger::create(ctx.cct, entity_name_t::CLIENT(-1),
-                             "libosd remote", getpid()));
+  ms.reset(Messenger::create(ctx, entity_name_t::CLIENT(-1),
+			     "libosd remote", getpid()));
 #endif
   ms->start();
 
   // monitor client
-  monc.reset(new MonClient(ctx.cct));
+  monc.reset(new MonClient(ctx));
   r = monc->build_initial_monmap();
   if (r < 0) {
-    lderr(ctx.cct) << "failed to build initial monmap: "
-        << cpp_strerror(-r) << dendl;
+    lderr(ctx) << "failed to build initial monmap: "
+		   << cpp_strerror(-r) << dendl;
     return r;
   }
 
@@ -151,15 +150,15 @@ int LibOSDRemote::init(const struct libosd_remote_args *args)
 
   r = monc->init();
   if (r < 0) {
-    lderr(ctx.cct) << "failed to initialize monclient: "
-        << cpp_strerror(-r) << dendl;
+    lderr(ctx) << "failed to initialize monclient: "
+		   << cpp_strerror(-r) << dendl;
     return r;
   }
 
-  r = monc->authenticate(ctx.conf->client_mount_timeout);
+  r = monc->authenticate(ctx->_conf->client_mount_timeout);
   if (r < 0) {
-    lderr(ctx.cct) << "failed to authenticate monclient: "
-        << cpp_strerror(-r) << dendl;
+    lderr(ctx) << "failed to authenticate monclient: "
+		   << cpp_strerror(-r) << dendl;
     return r;
   }
   ms->set_myname(entity_name_t::CLIENT(monc->get_global_id()));
@@ -169,7 +168,7 @@ int LibOSDRemote::init(const struct libosd_remote_args *args)
   monc->sub_want("osdmap", 0, CEPH_SUBSCRIBE_ONETIME);
   monc->renew_subs();
 
-  ldout(ctx.cct, 1) << "waiting for osd map" << dendl;
+  ldout(ctx, 1) << "waiting for osd map" << dendl;
 
   // wait for an OSDMap that shows osd.whoami is up
   Mutex::Locker lock(mtx);
@@ -190,7 +189,7 @@ void LibOSDRemote::init_dispatcher(const entity_inst_t &inst)
   ConnectionRef conn = ms->get_connection(inst);
 
   // create a dispatcher for osd replies
-  dispatcher.reset(new osd::Dispatcher(ctx.cct, ms.get(), conn));
+  dispatcher.reset(new osd::Dispatcher(ctx, ms.get(), conn));
 
   ms->add_dispatcher_head(dispatcher.get());
 }
@@ -211,24 +210,24 @@ bool LibOSDRemote::wait_for_active(epoch_t *epoch)
 
 void LibOSDRemote::handle_osd_map(MOSDMap *m)
 {
-  ldout(ctx.cct, 3) << "handle_osd_map " << *m << dendl;
+  ldout(ctx, 3) << "handle_osd_map " << *m << dendl;
 
   Mutex::Locker lock(mtx);
 
   if (m->get_last() <= map.get_epoch()) {
     // already have everything
-    ldout(ctx.cct, 3) << "ignoring epochs ["
-        << m->get_first() << "," << m->get_last()
-        << "] <= " << map.get_epoch() << dendl;
+    ldout(ctx, 3) << "ignoring epochs ["
+		      << m->get_first() << "," << m->get_last()
+		      << "] <= " << map.get_epoch() << dendl;
   } else if (map.get_epoch() == 0) {
     // need a full map
     auto f = m->maps.find(m->get_last());
     if (f == m->maps.end()) {
-      ldout(ctx.cct, 3) << "requesting a full map" << dendl;
+      ldout(ctx, 3) << "requesting a full map" << dendl;
       if (monc->sub_want("osdmap", 0, CEPH_SUBSCRIBE_ONETIME))
-        monc->renew_subs();
+	monc->renew_subs();
     } else {
-      ldout(ctx.cct, 3) << "decoding full epoch " << m->get_last() << dendl;
+      ldout(ctx, 3) << "decoding full epoch " << m->get_last() << dendl;
       map.decode(f->second);
     }
   } else {
@@ -236,33 +235,34 @@ void LibOSDRemote::handle_osd_map(MOSDMap *m)
     for (epoch_t e = map.get_epoch() + 1; e <= m->get_last(); e++) {
       // apply the incremental if we have epoch-1
       if (map.get_epoch() == e-1) {
-        auto i = m->incremental_maps.find(e);
-        if (i != m->incremental_maps.end()) {
-          ldout(ctx.cct, 3) << "applying incremental epoch " << e << dendl;
-          OSDMap::Incremental inc(i->second);
-          map.apply_incremental(inc);
-          continue;
-        }
+	auto i = m->incremental_maps.find(e);
+	if (i != m->incremental_maps.end()) {
+	  ldout(ctx, 3) << "applying incremental epoch " << e << dendl;
+	  OSDMap::Incremental inc(i->second);
+	  map.apply_incremental(inc);
+	  continue;
+	}
       }
 
       // decode the full map if we have it
       auto f = m->maps.find(e);
       if (f != m->maps.end()) {
-        ldout(ctx.cct, 3) << "decoding full epoch " << e << dendl;
-        map.decode(f->second);
-        continue;
+	ldout(ctx, 3) << "decoding full epoch " << e << dendl;
+	map.decode(f->second);
+	continue;
       }
 
       if (e <= m->get_oldest()) {
-        ldout(ctx.cct, 3) << "missing epoch " << e
-            << ", jumping to oldest epoch " << m->get_oldest() << dendl;
-        e = m->get_oldest() - 1;
-        continue;
+	ldout(ctx, 3) << "missing epoch " << e
+			  << ", jumping to oldest epoch " << m->get_oldest()
+			  << dendl;
+	e = m->get_oldest() - 1;
+	continue;
       }
 
-      ldout(ctx.cct, 3) << "requesting missing epoch " << e << dendl;
+      ldout(ctx, 3) << "requesting missing epoch " << e << dendl;
       if (monc->sub_want("osdmap", e, CEPH_SUBSCRIBE_ONETIME))
-        monc->renew_subs();
+	monc->renew_subs();
       break;
     }
   }
@@ -273,11 +273,11 @@ void LibOSDRemote::handle_osd_map(MOSDMap *m)
 
   if (map.get_epoch() > 0 && !dispatcher) {
     if (!map.is_up(whoami)) {
-      ldout(ctx.cct, 3) << "osd." << whoami << " is not up at epoch "
-          << map.get_epoch() << dendl;
+      ldout(ctx, 3) << "osd." << whoami << " is not up at epoch "
+			<< map.get_epoch() << dendl;
       // wait for next epoch
       if (monc->sub_want("osdmap", map.get_epoch()+1, CEPH_SUBSCRIBE_ONETIME))
-        monc->renew_subs();
+	monc->renew_subs();
       return;
     }
 
@@ -286,9 +286,9 @@ void LibOSDRemote::handle_osd_map(MOSDMap *m)
 }
 
 bool LibOSDRemote::ms_get_authorizer(int dest_type, AuthAuthorizer **authorizer,
-                                    bool force_new)
+				     bool force_new)
 {
-  ldout(ctx.cct, 3) << "ms_get_authorizer" << dendl;
+  ldout(ctx, 3) << "ms_get_authorizer" << dendl;
   *authorizer = monc->auth->build_authorizer(dest_type);
   return *authorizer != NULL;
 }
@@ -337,7 +337,7 @@ struct libosd_remote* libosd_remote_init(const struct libosd_remote_args *args)
     if (osd->init(args) == 0)
       return osd;
   } catch (std::exception &e) {
-    derr << "libosd_remote_init caught exception " << e.what() << dendl;
+    //derr << "libosd_remote_init caught exception " << e.what() << dendl;
   }
 
   delete osd;
@@ -352,50 +352,54 @@ void libosd_remote_cleanup(struct libosd_remote *osd)
 }
 
 int libosd_remote_get_volume(struct libosd_remote *osd, const char *name,
-                            uint8_t id[16])
+			     uint8_t id[16])
 {
   try {
     return osd->get_volume(name, id);
   } catch (std::exception &e) {
-    derr << "libosd_remote_get_volume caught exception " << e.what() << dendl;
+    lderr(osd->ctx) << "libosd_remote_get_volume caught exception "
+		    << e.what() << dendl;
     return -EFAULT;
   }
 }
 
 int libosd_remote_read(struct libosd_remote *osd, const char *object,
-                      const uint8_t volume[16], uint64_t offset,
-                      uint64_t length, char *data, int flags,
-                      libosd_io_completion_fn cb, void *user)
+		       const uint8_t volume[16], uint64_t offset,
+		       uint64_t length, char *data, int flags,
+		       libosd_io_completion_fn cb, void *user)
 {
   try {
     return osd->read(object, volume, offset, length, data, flags, cb, user);
   } catch (std::exception &e) {
-    derr << "libosd_remote_read caught exception " << e.what() << dendl;
+    lderr(osd->ctx) << "libosd_remote_read caught exception " << e.what()
+		    << dendl;
     return -EFAULT;
   }
 }
 
 int libosd_remote_write(struct libosd_remote *osd, const char *object,
-                       const uint8_t volume[16], uint64_t offset,
-                       uint64_t length, char *data, int flags,
-                       libosd_io_completion_fn cb, void *user)
+			const uint8_t volume[16], uint64_t offset,
+			uint64_t length, char *data, int flags,
+			libosd_io_completion_fn cb, void *user)
 {
   try {
     return osd->write(object, volume, offset, length, data, flags, cb, user);
   } catch (std::exception &e) {
-    derr << "libosd_remote_write caught exception " << e.what() << dendl;
+    lderr(osd->ctx) << "libosd_remote_write caught exception "
+		    << e.what() << dendl;
     return -EFAULT;
   }
 }
 
 int libosd_remote_truncate(struct libosd_remote *osd, const char *object,
-                          const uint8_t volume[16], uint64_t offset,
-                          int flags, libosd_io_completion_fn cb, void *user)
+			   const uint8_t volume[16], uint64_t offset,
+			   int flags, libosd_io_completion_fn cb, void *user)
 {
   try {
     return osd->truncate(object, volume, offset, flags, cb, user);
   } catch (std::exception &e) {
-    derr << "libosd_remote_truncate caught exception " << e.what() << dendl;
+    lderr(osd->ctx) << "libosd_remote_truncate caught exception "
+		    << e.what() << dendl;
     return -EFAULT;
   }
 }

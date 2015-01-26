@@ -25,6 +25,11 @@
 #undef dout_prefix
 #define dout_prefix *_dout << "mds." << mds->get_nodeid() << ".sessionmap "
 
+SessionMap::SessionMap(MDS *m)
+  : mds(m), cct(mds->cct), version(0), projected(0), committing(0),
+    committed(0), commit_waiters() {
+  cct->get();
+}
 
 void SessionMap::dump()
 {
@@ -126,7 +131,7 @@ void SessionMap::save(Context *onsave, version_t needv)
   committing = version;
   object_t oid = get_object_name();
   VolumeRef volume(mds->get_metadata_volume());
-  mds->objecter->write_full(oid, volume, bl, ceph_clock_now(g_ceph_context), 0,
+  mds->objecter->write_full(oid, volume, bl, ceph_clock_now(cct), 0,
 			    NULL, new C_SM_Save(this, version));
 }
 
@@ -166,7 +171,7 @@ void SessionMap::encode(bufferlist& bl) const
 
 void SessionMap::decode(bufferlist::iterator& p)
 {
-  utime_t now = ceph_clock_now(g_ceph_context);
+  utime_t now = ceph_clock_now(cct);
   uint64_t pre;
   ::decode(pre, p);
   if (pre == (uint64_t)-1) {

@@ -22,6 +22,7 @@
 #include "Dispatcher.h"
 #include "common/Mutex.h"
 #include "common/Cond.h"
+#include "common/ceph_context.h"
 #include "common/zipkin_trace.h"
 #include "include/Context.h"
 #include "include/types.h"

@@ -56,7 +56,7 @@ bool AuthMonitor::check_rotate()
   rot_inc.op = KeyServerData::AUTH_INC_SET_ROTATING;
   if (!mon->key_server.updated_rotating(rot_inc.rotating_bl, last_rotating_ver))
     return false;
-  dout(10) << __func__ << " updated rotating" << dendl;
+  ldout(mon->cct, 10) << __func__ << " updated rotating" << dendl;
   push_cephx_inc(rot_inc);
   return true;
 }
@@ -69,7 +69,7 @@ void AuthMonitor::tick()
 {
   if (!is_active()) return;
 
-  dout(10) << *this << dendl;
+  ldout(mon->cct, 10) << *this << dendl;
 
   if (!mon->is_leader()) return;
 
@@ -79,7 +79,7 @@ void AuthMonitor::tick()
 
 void AuthMonitor::on_active()
 {
-  dout(10) << "AuthMonitor::on_active()" << dendl;
+  ldout(mon->cct, 10) << "AuthMonitor::on_active()" << dendl;
 
   if (!mon->is_leader())
     return;
@@ -88,7 +88,7 @@ void AuthMonitor::on_active()
 
 void AuthMonitor::create_initial()
 {
-  dout(10) << "create_initial -- creating initial map" << dendl;
+  ldout(mon->cct, 10) << "create_initial -- creating initial map" << dendl;
 
   // initialize rotating keys
   last_rotating_ver = 0;
@@ -118,7 +118,7 @@ void AuthMonitor::create_initial()
 
 void AuthMonitor::update_from_paxos(bool *need_bootstrap)
 {
-  dout(10) << __func__ << dendl;
+  ldout(mon->cct, 10) << __func__ << dendl;
   version_t version = get_last_committed();
   version_t keys_ver = mon->key_server.get_ver();
   if (version == keys_ver)
@@ -127,7 +127,7 @@ void AuthMonitor::update_from_paxos(bool *need_bootstrap)
 
   version_t latest_full = get_version_latest_full();
 
-  dout(10) << __func__ << " version " << version << " keys ver " << keys_ver
+  ldout(mon->cct, 10) << __func__ << " version " << version << " keys ver " << keys_ver
 	   << " latest " << latest_full << dendl;
 
   if ((latest_full > 0) && (latest_full > keys_ver)) {
@@ -135,8 +135,8 @@ void AuthMonitor::update_from_paxos(bool *need_bootstrap)
     int err = get_version_full(latest_full, latest_bl);
     assert(err == 0);
     assert(latest_bl.length() != 0);
-    dout(7) << __func__ << " loading summary e " << latest_full << dendl;
-    dout(7) << __func__ << " latest length " << latest_bl.length() << dendl;
+    ldout(mon->cct, 7) << __func__ << " loading summary e " << latest_full << dendl;
+    ldout(mon->cct, 7) << __func__ << " latest length " << latest_bl.length() << dendl;
     bufferlist::iterator p = latest_bl.begin();
     uint8_t struct_v;
     ::decode(struct_v, p);
@@ -146,7 +146,7 @@ void AuthMonitor::update_from_paxos(bool *need_bootstrap)
     keys_ver = latest_full;
   }
 
-  dout(10) << __func__ << " key server version " << mon->key_server.get_ver() << dendl;
+  ldout(mon->cct, 10) << __func__ << " key server version " << mon->key_server.get_ver() << dendl;
 
   // walk through incrementals
   while (version > keys_ver) {
@@ -161,7 +161,7 @@ void AuthMonitor::update_from_paxos(bool *need_bootstrap)
     if (keys_ver == 0)
       mon->key_server.clear_secrets();
 
-    dout(20) << __func__ << " walking through version " << (keys_ver+1)
+    ldout(mon->cct, 20) << __func__ << " walking through version " << (keys_ver+1)
 	     << " len " << bl.length() << dendl;
 
     bufferlist::iterator p = bl.begin();
@@ -199,7 +199,7 @@ void AuthMonitor::update_from_paxos(bool *need_bootstrap)
   if (last_allocated_id == 0)
     last_allocated_id = max_global_id;
 
-  dout(10) << "update_from_paxos() last_allocated_id=" << last_allocated_id
+  ldout(mon->cct, 10) << "update_from_paxos() last_allocated_id=" << last_allocated_id
 	   << " max_global_id=" << max_global_id
 	   << " format_version " << format_version
 	   << dendl;
@@ -209,8 +209,8 @@ void AuthMonitor::increase_max_global_id()
 {
   assert(mon->is_leader());
 
-  max_global_id += g_conf->mon_globalid_prealloc;
-  dout(10) << "increasing max_global_id to " << max_global_id << dendl;
+  max_global_id += mon->cct->_conf->mon_globalid_prealloc;
+  ldout(mon->cct, 10) << "increasing max_global_id to " << max_global_id << dendl;
   Incremental inc;
   inc.inc_type = GLOBAL_ID;
   inc.max_global_id = max_global_id;
@@ -225,12 +225,12 @@ bool AuthMonitor::should_propose(double& delay)
 void AuthMonitor::create_pending()
 {
   pending_auth.clear();
-  dout(10) << "create_pending v " << (get_last_committed() + 1) << dendl;
+  ldout(mon->cct, 10) << "create_pending v " << (get_last_committed() + 1) << dendl;
 }
 
 void AuthMonitor::encode_pending(MonitorDBStore::Transaction *t)
 {
-  dout(10) << __func__ << " v " << (get_last_committed() + 1) << dendl;
+  ldout(mon->cct, 10) << __func__ << " v " << (get_last_committed() + 1) << dendl;
 
   bufferlist bl;
 
@@ -248,13 +248,13 @@ void AuthMonitor::encode_pending(MonitorDBStore::Transaction *t)
 void AuthMonitor::encode_full(MonitorDBStore::Transaction *t)
 {
   version_t version = mon->key_server.get_ver();
-  dout(10) << __func__ << " auth v " << version << dendl;
+  ldout(mon->cct, 10) << __func__ << " auth v " << version << dendl;
   assert(get_last_committed() == version);
 
   bufferlist full_bl;
   Mutex::Locker l(mon->key_server.get_lock());
   if (mon->key_server.has_secrets()) {
-    dout(20) << __func__ << " key server has secrets!" << dendl;
+    ldout(mon->cct, 20) << __func__ << " key server has secrets!" << dendl;
     uint8_t v = 1;
     ::encode(v, full_bl);
     ::encode(max_global_id, full_bl);
@@ -263,14 +263,14 @@ void AuthMonitor::encode_full(MonitorDBStore::Transaction *t)
     put_version_full(t, version, full_bl);
     put_version_latest_full(t, version);
   } else {
-    dout(20) << __func__
+    ldout(mon->cct, 20) << __func__
 	     << " key server has no secrets; do not put them in tx" << dendl;
   }
 }
 
 version_t AuthMonitor::get_trim_to()
 {
-  unsigned max = g_conf->paxos_max_join_drift * 2;
+  unsigned max = mon->cct->_conf->paxos_max_join_drift * 2;
   version_t version = get_last_committed();
   if (mon->is_leader() && (version > max))
     return version - max;
@@ -279,7 +279,7 @@ version_t AuthMonitor::get_trim_to()
 
 bool AuthMonitor::preprocess_query(PaxosServiceMessage *m)
 {
-  dout(10) << "preprocess_query " << *m << " from " << m->get_orig_source_inst() << dendl;
+  ldout(mon->cct, 10) << "preprocess_query " << *m << " from " << m->get_orig_source_inst() << dendl;
   switch (m->get_type()) {
   case MSG_MON_COMMAND:
     return preprocess_command((MMonCommand*)m);
@@ -299,7 +299,7 @@ bool AuthMonitor::preprocess_query(PaxosServiceMessage *m)
 
 bool AuthMonitor::prepare_update(PaxosServiceMessage *m)
 {
-  dout(10) << "prepare_update " << *m << " from " << m->get_orig_source_inst() << dendl;
+  ldout(mon->cct, 10) << "prepare_update " << *m << " from " << m->get_orig_source_inst() << dendl;
   switch (m->get_type()) {
   case MSG_MON_COMMAND:
     return prepare_command((MMonCommand*)m);
@@ -317,7 +317,7 @@ bool AuthMonitor::prepare_update(PaxosServiceMessage *m)
 uint64_t AuthMonitor::assign_global_id(MAuth *m, bool should_increase_max)
 {
   int total_mon = mon->monmap->size();
-  dout(10) << "AuthMonitor::assign_global_id m=" << *m << " mon=" << mon->rank << "/" << total_mon
+  ldout(mon->cct, 10) << "AuthMonitor::assign_global_id m=" << *m << " mon=" << mon->rank << "/" << total_mon
 	   << " last_allocated=" << last_allocated_id << " max_global_id=" <<  max_global_id << dendl;
 
   uint64_t next_global_id = last_allocated_id + 1;
@@ -325,7 +325,7 @@ uint64_t AuthMonitor::assign_global_id(MAuth *m, bool should_increase_max)
   if (remainder)
     remainder = total_mon - remainder;
   next_global_id += remainder + mon->rank;
-  dout(10) << "next_global_id should be " << next_global_id << dendl;
+  ldout(mon->cct, 10) << "next_global_id should be " << next_global_id << dendl;
 
   // if we can't bump the max, bail out now on an out-of-bounds gid
   if (next_global_id > max_global_id &&
@@ -338,7 +338,7 @@ uint64_t AuthMonitor::assign_global_id(MAuth *m, bool should_increase_max)
 
   // bump the max?
   while (mon->is_leader() &&
-	 next_global_id >= max_global_id - g_conf->mon_globalid_prealloc / 2) {
+	 next_global_id >= max_global_id - mon->cct->_conf->mon_globalid_prealloc / 2) {
     increase_max_global_id();
   }
 
@@ -353,11 +353,11 @@ uint64_t AuthMonitor::assign_global_id(MAuth *m, bool should_increase_max)
 
 bool AuthMonitor::prep_auth(MAuth *m, bool paxos_writable)
 {
-  dout(10) << "prep_auth() blob_size=" << m->get_auth_payload().length() << dendl;
+  ldout(mon->cct, 10) << "prep_auth() blob_size=" << m->get_auth_payload().length() << dendl;
 
   MonSession *s = (MonSession *)m->get_connection()->get_priv();
   if (!s) {
-    dout(10) << "no session, dropping" << dendl;
+    ldout(mon->cct, 10) << "no session, dropping" << dendl;
     m->put();
     return true;
   }
@@ -382,7 +382,7 @@ bool AuthMonitor::prep_auth(MAuth *m, bool paxos_writable)
       ::decode(entity_name, indata);
       ::decode(s->global_id, indata);
     } catch (const buffer::error &e) {
-      dout(10) << "failed to decode initial auth message" << dendl;
+      ldout(mon->cct, 10) << "failed to decode initial auth message" << dendl;
       ret = -EINVAL;
       goto reply;
     }
@@ -393,18 +393,18 @@ bool AuthMonitor::prep_auth(MAuth *m, bool paxos_writable)
       if (entity_name.get_type() == CEPH_ENTITY_TYPE_MON ||
 	  entity_name.get_type() == CEPH_ENTITY_TYPE_OSD ||
 	  entity_name.get_type() == CEPH_ENTITY_TYPE_MDS) {
-	if (g_conf->cephx_cluster_require_signatures ||
-	    g_conf->cephx_require_signatures) {
-	  dout(1) << m->get_source_inst()
+	if (mon->cct->_conf->cephx_cluster_require_signatures ||
+	    mon->cct->_conf->cephx_require_signatures) {
+	  ldout(mon->cct, 1) << m->get_source_inst()
 		  << " supports cephx but not signatures and"
 		  << " 'cephx [cluster] require signatures = true';"
 		  << " disallowing cephx" << dendl;
 	  supported.erase(CEPH_AUTH_CEPHX);
 	}
       } else {
-	if (g_conf->cephx_service_require_signatures ||
-	    g_conf->cephx_require_signatures) {
-	  dout(1) << m->get_source_inst()
+	if (mon->cct->_conf->cephx_service_require_signatures ||
+	    mon->cct->_conf->cephx_require_signatures) {
+	  ldout(mon->cct, 1) << m->get_source_inst()
 		  << " supports cephx but not signatures and"
 		  << " 'cephx [service] require signatures = true';"
 		  << " disallowing cephx" << dendl;
@@ -421,16 +421,16 @@ bool AuthMonitor::prep_auth(MAuth *m, bool paxos_writable)
     else
       type = mon->auth_service_required.pick(supported);
 
-    s->auth_handler = get_auth_service_handler(type, g_ceph_context, &mon->key_server);
-    dout(1) << "set auth_handler " << s->auth_handler << " from type " << type << dendl;
+    s->auth_handler = get_auth_service_handler(type, mon->cct, &mon->key_server);
+    ldout(mon->cct, 1) << "set auth_handler " << s->auth_handler << " from type " << type << dendl;
     if (!s->auth_handler) {
-      dout(1) << "client did not provide supported auth type" << dendl;
+      ldout(mon->cct, 1) << "client did not provide supported auth type" << dendl;
       ret = -ENOTSUP;
       goto reply;
     }
     start = true;
   } else if (!s->auth_handler) {
-      dout(10) << "protocol specified but no s->auth_handler" << dendl;
+      ldout(mon->cct, 10) << "protocol specified but no s->auth_handler" << dendl;
       ret = -EINVAL;
       goto reply;
   }
@@ -446,7 +446,7 @@ bool AuthMonitor::prep_auth(MAuth *m, bool paxos_writable)
       s->auth_handler = NULL;
 
       if (mon->is_leader() && paxos_writable) {
-	dout(10) << "increasing global id, waitlisting message" << dendl;
+	ldout(mon->cct, 10) << "increasing global id, waitlisting message" << dendl;
 	wait_for_active(new C_RetryMessage(this, m));
 	goto done;
       }
@@ -454,7 +454,7 @@ bool AuthMonitor::prep_auth(MAuth *m, bool paxos_writable)
       s->put();
 
       if (!mon->is_leader()) {
-	dout(10) << "not the leader, requesting more ids from leader" << dendl;
+	ldout(mon->cct, 10) << "not the leader, requesting more ids from leader" << dendl;
 	int leader = mon->get_leader();
 	MMonGlobalID *req = new MMonGlobalID();
 	req->old_max_id = max_global_id;
@@ -495,7 +495,8 @@ bool AuthMonitor::prep_auth(MAuth *m, bool paxos_writable)
       try {
 	::decode(str, p);
       } catch (const buffer::error &err) {
-	derr << "corrupt cap data for " << entity_name << " in auth db" << dendl;
+	lderr(mon->cct) << "corrupt cap data for " << entity_name
+			<< " in auth db" << dendl;
 	str.clear();
       }
       s->caps.parse(str, NULL);
@@ -503,12 +504,12 @@ bool AuthMonitor::prep_auth(MAuth *m, bool paxos_writable)
     }
   } catch (const buffer::error &err) {
     ret = -EINVAL;
-    dout(0) << "caught error when trying to handle auth request, probably malformed request" << dendl;
+    ldout(mon->cct, 0) << "caught error when trying to handle auth request, probably malformed request" << dendl;
   }
 
 reply:
   reply = new MAuthReply(proto, &response_bl, ret, s->global_id);
-  dout(1) << "prep_auth sending " << *reply << dendl;
+  ldout(mon->cct, 1) << "prep_auth sending " << *reply << dendl;
   mon->send_reply(m, reply);
   m->put();
 done:
@@ -531,7 +532,7 @@ bool AuthMonitor::preprocess_command(MMonCommand *m)
   }
 
   string prefix;
-  cmd_getval(g_ceph_context, cmdmap, "prefix", prefix);
+  cmd_getval(mon->cct, cmdmap, "prefix", prefix);
   if (prefix == "auth add" ||
       prefix == "auth del" ||
       prefix == "auth get-or-create" ||
@@ -549,7 +550,7 @@ bool AuthMonitor::preprocess_command(MMonCommand *m)
 
   // entity might not be supplied, but if it is, it should be valid
   string entity_name;
-  cmd_getval(g_ceph_context, cmdmap, "entity", entity_name);
+  cmd_getval(mon->cct, cmdmap, "entity", entity_name);
   EntityName entity;
   if (!entity_name.empty() && !entity.from_str(entity_name)) {
     ss << "invalid entity_auth " << entity_name;
@@ -558,7 +559,7 @@ bool AuthMonitor::preprocess_command(MMonCommand *m)
   }
 
   string format;
-  cmd_getval(g_ceph_context, cmdmap, "format", format, string("plain"));
+  cmd_getval(mon->cct, cmdmap, "format", format, string("plain"));
   boost::scoped_ptr<Formatter> f(new_formatter(format));
 
   if (prefix == "auth export") {
@@ -657,8 +658,8 @@ void AuthMonitor::import_keyring(KeyRing& keyring)
     auth_inc.name = p->first;
     auth_inc.auth = p->second;
     auth_inc.op = KeyServerData::AUTH_INC_ADD;
-    dout(10) << " importing " << auth_inc.name << dendl;
-    dout(30) << "    " << auth_inc.auth << dendl;
+    ldout(mon->cct, 10) << " importing " << auth_inc.name << dendl;
+    ldout(mon->cct, 30) << "    " << auth_inc.auth << dendl;
     push_cephx_inc(auth_inc);
   }
 }
@@ -683,10 +684,10 @@ bool AuthMonitor::prepare_command(MMonCommand *m)
   string entity_name;
   EntityName entity;
 
-  cmd_getval(g_ceph_context, cmdmap, "prefix", prefix);
+  cmd_getval(mon->cct, cmdmap, "prefix", prefix);
 
   string format;
-  cmd_getval(g_ceph_context, cmdmap, "format", format, string("plain"));
+  cmd_getval(mon->cct, cmdmap, "format", format, string("plain"));
   boost::scoped_ptr<Formatter> f(new_formatter(format));
 
   MonSession *session = m->get_session();
@@ -695,14 +696,14 @@ bool AuthMonitor::prepare_command(MMonCommand *m)
     return true;
   }
 
-  cmd_getval(g_ceph_context, cmdmap, "caps", caps_vec);
+  cmd_getval(mon->cct, cmdmap, "caps", caps_vec);
   if ((caps_vec.size() % 2) != 0) {
     ss << "bad capabilities request; odd number of arguments";
     err = -EINVAL;
     goto done;
   }
 
-  cmd_getval(g_ceph_context, cmdmap, "entity", entity_name);
+  cmd_getval(mon->cct, cmdmap, "entity", entity_name);
   if (!entity_name.empty() && !entity.from_str(entity_name)) {
     ss << "bad entity name";
     err = -EINVAL;
@@ -842,13 +843,13 @@ bool AuthMonitor::prepare_command(MMonCommand *m)
     if (has_keyring) {
       auth_inc.auth.key = new_inc.key;
     } else {
-      dout(10) << "AuthMonitor::prepare_command generating random key for "
+      ldout(mon->cct, 10) << "AuthMonitor::prepare_command generating random key for "
 	       << auth_inc.name << dendl;
-      auth_inc.auth.key.create(g_ceph_context, CEPH_CRYPTO_AES);
+      auth_inc.auth.key.create(mon->cct, CEPH_CRYPTO_AES);
     }
 
-    dout(10) << " importing " << auth_inc.name << dendl;
-    dout(30) << "    " << auth_inc.auth << dendl;
+    ldout(mon->cct, 10) << " importing " << auth_inc.name << dendl;
+    ldout(mon->cct, 30) << "    " << auth_inc.auth << dendl;
     push_cephx_inc(auth_inc);
 
     ss << "added key for " << auth_inc.name;
@@ -917,7 +918,7 @@ bool AuthMonitor::prepare_command(MMonCommand *m)
     KeyServerData::Incremental auth_inc;
     auth_inc.op = KeyServerData::AUTH_INC_ADD;
     auth_inc.name = entity;
-    auth_inc.auth.key.create(g_ceph_context, CEPH_CRYPTO_AES);
+    auth_inc.auth.key.create(mon->cct, CEPH_CRYPTO_AES);
     for (vector<string>::iterator it = caps_vec.begin();
 	 it != caps_vec.end(); it += 2)
       ::encode(*(it+1), auth_inc.auth.caps[*it]);
@@ -995,7 +996,7 @@ done:
 
 bool AuthMonitor::prepare_global_id(MMonGlobalID *m)
 {
-  dout(10) << "AuthMonitor::prepare_global_id" << dendl;
+  ldout(mon->cct, 10) << "AuthMonitor::prepare_global_id" << dendl;
   increase_max_global_id();
 
   m->put();
@@ -1006,11 +1007,11 @@ void AuthMonitor::upgrade_format()
 {
   unsigned int current = 1;
   if (format_version >= current) {
-    dout(20) << __func__ << " format " << format_version << " is current" << dendl;
+    ldout(mon->cct, 20) << __func__ << " format " << format_version << " is current" << dendl;
     return;
   }
 
-  dout(1) << __func__ << " upgrading from format " << format_version << " to " << current << dendl;
+  ldout(mon->cct, 1) << __func__ << " upgrading from format " << format_version << " to " << current << dendl;
   bool changed = false;
   map<EntityName, EntityAuth>::iterator p;
   for (p = mon->key_server.secrets_begin();
@@ -1025,7 +1026,7 @@ void AuthMonitor::upgrade_format()
       ::decode(mon_caps, it);
     }
     catch (buffer::error) {
-      dout(10) << __func__ << " unable to parse mon cap for "
+      ldout(mon->cct, 10) << __func__ << " unable to parse mon cap for "
 	       << p->first << dendl;
       continue;
     }
@@ -1048,7 +1049,7 @@ void AuthMonitor::upgrade_format()
     }
 
     if (new_caps.length() > 0) {
-      dout(5) << __func__ << " updating " << p->first << " mon cap from "
+      ldout(mon->cct, 5) << __func__ << " updating " << p->first << " mon cap from "
 	      << mon_caps << " to " << new_caps << dendl;
 
       bufferlist bl;
@@ -1066,8 +1067,8 @@ void AuthMonitor::upgrade_format()
 
   if (changed) {
     // note new format
-    dout(10) << __func__ << " proposing update from format " << format_version
-	     << " -> " << current << dendl;
+    ldout(mon->cct, 10) << __func__ << " proposing update from format " << format_version
+			<< " -> " << current << dendl;
     format_version = current;
     propose_pending();
   }

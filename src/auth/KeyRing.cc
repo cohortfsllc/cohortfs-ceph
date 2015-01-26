@@ -18,6 +18,7 @@
 #include <sstream>
 #include <algorithm>
 
+#include "common/ceph_context.h"
 #include "auth/AuthMethodList.h"
 #include "auth/Crypto.h"
 #include "auth/KeyRing.h"

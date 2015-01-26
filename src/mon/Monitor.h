@@ -566,8 +566,8 @@ public:
   void handle_get_version(MMonGetVersion *m);
   void handle_subscribe(MMonSubscribe *m);
   void handle_mon_get_map(MMonGetMap *m);
-  static void _generate_command_map(map<string,cmd_vartype>& cmdmap,
-				    map<string,string> &param_str_map);
+  void _generate_command_map(map<string,cmd_vartype>& cmdmap,
+			     map<string,string> &param_str_map);
   static const MonCommand *_get_moncommand(const string &cmd_prefix,
 					   MonCommand *cmds, int cmds_size);
   bool _allowed_command(MonSession *s, string &module, string &prefix,
@@ -792,7 +792,7 @@ public:
 
     void _init() {
       assert(!store);
-      MonitorStore *store_ptr = new MonitorStore(path);
+      MonitorStore *store_ptr = new MonitorStore(db->cct, path);
       store.reset(store_ptr);
     }
 
@@ -841,7 +841,7 @@ public:
   void get_leader_supported_commands(const MonCommand **cmds, int *count);
   /// the Monitor owns this pointer once you pass it in
   void set_leader_supported_commands(const MonCommand *cmds, int size);
-  static bool is_keyring_required();
+  bool is_keyring_required();
 };
 
 #define CEPH_MON_FEATURE_INCOMPAT_BASE CompatSet::Feature (1, "initial feature set (~v.18)")

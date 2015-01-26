@@ -12,7 +12,6 @@
  */
 
 #include "objclass/objclass.h"
-#include "global/global_context.h"
 
 #include "cls_replica_log_types.h"
 #include "cls_replica_log_ops.h"

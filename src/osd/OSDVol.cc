@@ -2438,7 +2438,7 @@ OSDVol::Mutation *OSDVol::simple_mutation_create(ObjectContextRef obc)
   OpContext *ctx = new OpContext(OpRequestRef(), reqid, ops,
 				 &obc->obs, this);
   ctx->op_t = new ObjectStore::Transaction;
-  ctx->mtime = ceph_clock_now(g_ceph_context);
+  ctx->mtime = ceph_clock_now(osd->osd->cct);
   ctx->obc = obc;
   Mutation *mutation = new_mutation(ctx, obc, tid);
   return mutation;

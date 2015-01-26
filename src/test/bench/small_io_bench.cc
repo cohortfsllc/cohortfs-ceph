@@ -14,6 +14,7 @@
 #include <fstream>
 
 #include "common/Formatter.h"
+#include "common/code_environment.h"
 
 #include "bencher.h"
 #include "rados_backend.h"
@@ -22,6 +23,8 @@
 
 namespace po = boost::program_options;
 using namespace std;
+
+CephContext* cct;
 
 int main(int argc, char **argv)
 {
@@ -67,6 +70,8 @@ int main(int argc, char **argv)
   po::variables_map vm;
   po::store(po::parse_command_line(argc, argv, desc), vm);
   po::notify(vm);
+
+  cct = new CephContext(CODE_ENVIRONMENT_UTILITY);
 
   if (vm.count("help")) {
     cout << desc << std::endl;

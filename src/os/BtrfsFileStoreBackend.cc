@@ -51,12 +51,12 @@
 #define ALIGNED(x, by) (!((x) % (by)))
 #define ALIGN_UP(x, by) (ALIGNED((x), (by)) ? (x) : (ALIGN_DOWN((x), (by)) + (by)))
 
-BtrfsFileStoreBackend::BtrfsFileStoreBackend(FileStore *fs):
-    GenericFileStoreBackend(fs), has_clone_range(false),
-    has_snap_create(false), has_snap_destroy(false),
-    has_snap_create_v2(false), has_wait_sync(false), stable_commits(false),
-    m_filestore_btrfs_clone_range(g_conf->filestore_btrfs_clone_range),
-    m_filestore_btrfs_snap (g_conf->filestore_btrfs_snap) { }
+BtrfsFileStoreBackend::BtrfsFileStoreBackend(CephContext* _cct, FileStore *fs):
+  GenericFileStoreBackend(_cct, fs), has_clone_range(false),
+  has_snap_create(false), has_snap_destroy(false),
+  has_snap_create_v2(false), has_wait_sync(false), stable_commits(false),
+  m_filestore_btrfs_clone_range(cct->_conf->filestore_btrfs_clone_range),
+  m_filestore_btrfs_snap(cct->_conf->filestore_btrfs_snap) { }
 
 int BtrfsFileStoreBackend::detect_features()
 {

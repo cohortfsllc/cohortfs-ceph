@@ -174,6 +174,7 @@ public:
 
  public:
   MDCache *mdcache;
+  CephContext *cct;
 
   // inode contents proper
   inode_t inode; // the inode itself
@@ -371,43 +372,14 @@ private:
   friend class CInodeExport;
 
  public:
+
   // ---------------------------
-  CInode(MDCache *c, bool auth = true) :
-    mdcache(c),
-    last_journaled(0), //last_open_journaled(0),
-    stickydir_ref(0),
-    parent(0),
-    inode_auth(CDIR_AUTH_DEFAULT),
-    replica_caps_wanted(0),
-    item_dirty(this), item_caps(this), item_open_file(this),
-    item_dirty_parent(this),
-    item_dirty_dirfrag_dir(this),
-    item_dirty_dirfrag_nest(this),
-    item_dirty_dirfrag_dirfragtree(this),
-    auth_pins(0), nested_auth_pins(0),
-    auth_pin_freeze_allowance(0),
-    nested_anchors(0),
-    pop(ceph_clock_now(g_ceph_context)),
-    versionlock(this, &versionlock_type),
-    authlock(this, &authlock_type),
-    linklock(this, &linklock_type),
-    dirfragtreelock(this, &dirfragtreelock_type),
-    filelock(this, &filelock_type),
-    xattrlock(this, &xattrlock_type),
-    nestlock(this, &nestlock_type),
-    flocklock(this, &flocklock_type),
-    policylock(this, &policylock_type),
-    loner_cap(-1), want_loner_cap(-1)
-  {
-    g_num_ino++;
-    g_num_inoa++;
-    state = 0;
-    if (auth) state_set(STATE_AUTH);
-  };
+  CInode(MDCache *c, bool auth = true);
   ~CInode() {
     g_num_ino--;
     g_num_inos++;
     close_dirfrags();
+    cct->put();
   }
 
 
@@ -731,7 +703,7 @@ public:
 
   // -- reference counting --
   void bad_put(int by) {
-    generic_dout(0) << " bad put " << *this << " by " << by << " " << pin_name(by) << " was " << ref
+    lgeneric_dout(cct, 0) << " bad put " << *this << " by " << by << " " << pin_name(by) << " was " << ref
 #ifdef MDS_REF_SET
 		    << " (" << ref_map << ")"
 #endif
@@ -742,7 +714,7 @@ public:
     assert(ref > 0);
   }
   void bad_get(int by) {
-    generic_dout(0) << " bad get " << *this << " by " << by << " " << pin_name(by) << " was " << ref
+    lgeneric_dout(cct, 0) << " bad get " << *this << " by " << by << " " << pin_name(by) << " was " << ref
 #ifdef MDS_REF_SET
 		    << " (" << ref_map << ")"
 #endif

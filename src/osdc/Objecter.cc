@@ -619,7 +619,6 @@ namespace OSDC {
 	put_session(s);
       }
       if (!op->session->is_homeless()) {
-	logger->inc(l_osdc_linger_resend);
 	_send_linger(op);
       }
     }

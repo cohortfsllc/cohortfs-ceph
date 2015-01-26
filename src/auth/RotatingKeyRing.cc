@@ -1,6 +1,7 @@
 #include <errno.h>
 #include <map>
 
+#include "common/ceph_context.h"
 #include "common/config.h"
 #include "common/debug.h"
 #include "include/str_list.h"

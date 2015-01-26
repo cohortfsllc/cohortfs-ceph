@@ -53,7 +53,6 @@ LogEvent *LogEvent::decode(bufferlist& bl)
       DECODE_FINISH(p);
     }
     catch (const buffer::error &e) {
-      generic_dout(0) << "failed to decode LogEvent (type maybe " << type << ")" << dendl;
       return NULL;
     }
   } else { // we are using classic encoding
@@ -64,9 +63,6 @@ LogEvent *LogEvent::decode(bufferlist& bl)
 
 LogEvent *LogEvent::decode_event(bufferlist& bl, bufferlist::iterator& p, uint32_t type)
 {
-  int length = bl.length() - p.get_off();
-  generic_dout(15) << "decode_log_event type " << type << ", size " << length << dendl;
-
   // create event
   LogEvent *le;
   switch (type) {
@@ -95,7 +91,6 @@ LogEvent *LogEvent::decode_event(bufferlist& bl, bufferlist::iterator& p, uint32
   case EVENT_TABLESERVER: le = new ETableServer; break;
 
   default:
-    generic_dout(0) << "uh oh, unknown log event type " << type << " length " << length << dendl;
     return NULL;
   }
 
@@ -104,7 +99,6 @@ LogEvent *LogEvent::decode_event(bufferlist& bl, bufferlist::iterator& p, uint32
     le->decode(p);
   }
   catch (const buffer::error &e) {
-    generic_dout(0) << "failed to decode LogEvent type " << type << dendl;
     delete le;
     return NULL;
   }

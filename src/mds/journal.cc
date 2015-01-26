@@ -64,11 +64,12 @@
 
 void LogSegment::try_to_expire(MDS *mds, C_GatherBuilder &gather_bld, int op_prio)
 {
+  CephContext* cct = mds->cct;
   set<CDir*> commit;
 
   dout(6) << "LogSegment(" << offset << ").try_to_expire" << dendl;
 
-  assert(g_conf->mds_kill_journal_expire_at != 1);
+  assert(cct->_conf->mds_kill_journal_expire_at != 1);
 
   // commit dirs
   for (elist<CDir*>::iterator p = new_dirfrags.begin(); !p.end(); ++p) {
@@ -144,7 +145,7 @@ void LogSegment::try_to_expire(MDS *mds, C_GatherBuilder &gather_bld, int op_pri
     mds->locker->scatter_nudge(&in->nestlock, gather_bld.new_sub());
   }
 
-  assert(g_conf->mds_kill_journal_expire_at != 2);
+  assert(cct->_conf->mds_kill_journal_expire_at != 2);
 
   // open files
   if (!open_files.empty()) {
@@ -190,7 +191,7 @@ void LogSegment::try_to_expire(MDS *mds, C_GatherBuilder &gather_bld, int op_pri
     }
   }
 
-  assert(g_conf->mds_kill_journal_expire_at != 3);
+  assert(cct->_conf->mds_kill_journal_expire_at != 3);
 
   // backtraces to be stored/updated
   for (elist<CInode*>::iterator p = dirty_parent_inodes.begin(); !p.end(); ++p) {
@@ -205,7 +206,7 @@ void LogSegment::try_to_expire(MDS *mds, C_GatherBuilder &gather_bld, int op_pri
     }
   }
 
-  assert(g_conf->mds_kill_journal_expire_at != 4);
+  assert(cct->_conf->mds_kill_journal_expire_at != 4);
 
   // slave updates
   for (elist<MDSlaveUpdate*>::iterator p = slave_updates.begin(member_offset(MDSlaveUpdate,
@@ -277,7 +278,7 @@ void LogSegment::try_to_expire(MDS *mds, C_GatherBuilder &gather_bld, int op_pri
     dout(6) << "LogSegment(" << offset << ").try_to_expire waiting" << dendl;
     mds->mdlog->flush();
   } else {
-    assert(g_conf->mds_kill_journal_expire_at != 5);
+    assert(cct->_conf->mds_kill_journal_expire_at != 5);
     dout(6) << "LogSegment(" << offset << ").try_to_expire success" << dendl;
   }
 }
@@ -299,6 +300,7 @@ EMetaBlob::EMetaBlob(MDLog *mdlog) : opened_ino(0), renamed_dirino(0),
 void EMetaBlob::add_dir_context(CDir *dir, int mode)
 {
   MDS *mds = dir->cache->mds;
+  CephContext *cct = mds->cct;
 
   list<CDentry*> parents;
 
@@ -491,6 +493,7 @@ void EMetaBlob::fullbit::generate_test_instances(list<EMetaBlob::fullbit*>& ls)
 
 void EMetaBlob::fullbit::update_inode(MDS *mds, CInode *in)
 {
+  CephContext* cct = mds->cct;
   in->inode = inode;
   in->xattrs = xattrs;
   if (in->inode.is_dir()) {
@@ -893,11 +896,12 @@ void EMetaBlob::generate_test_instances(list<EMetaBlob*>& ls)
 
 void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
 {
+  CephContext* cct = mds->cct;
   dout(10) << "EMetaBlob.replay " << lump_map.size() << " dirlumps by " << client_name << dendl;
 
   assert(logseg);
 
-  assert(g_conf->mds_kill_journal_replay_at != 1);
+  assert(cct->_conf->mds_kill_journal_replay_at != 1);
 
   for (list<std::shared_ptr<fullbit> >::iterator p = roots.begin(); p != roots.end(); ++p) {
     CInode *in = mds->mdcache->get_inode((*p)->inode.ino);
@@ -1076,7 +1080,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
       }
       if (p->is_dirty_parent())
 	in->_mark_dirty_parent(logseg, p->is_dirty_pool());
-      assert(g_conf->mds_kill_journal_replay_at != 2);
+      assert(cct->_conf->mds_kill_journal_replay_at != 2);
     }
 
     // remote dentries
@@ -1140,7 +1144,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
     }
   }
 
-  assert(g_conf->mds_kill_journal_replay_at != 3);
+  assert(cct->_conf->mds_kill_journal_replay_at != 3);
 
   if (renamed_dirino) {
     if (renamed_diri) {
@@ -1353,7 +1357,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
   // update segment
   update_segment(logseg);
 
-  assert(g_conf->mds_kill_journal_replay_at != 4);
+  assert(cct->_conf->mds_kill_journal_replay_at != 4);
 }
 
 // -----------------------
@@ -1368,6 +1372,7 @@ void ESession::update_segment()
 
 void ESession::replay(MDS *mds)
 {
+  CephContext* cct = mds->cct;
   if (mds->sessionmap.version >= cmapv) {
     dout(10) << "ESession.replay sessionmap " << mds->sessionmap.version
 	     << " >= " << cmapv << ", noop" << dendl;
@@ -1510,6 +1515,7 @@ void ESessions::update_segment()
 
 void ESessions::replay(MDS *mds)
 {
+  CephContext* cct = mds->cct;
   if (mds->sessionmap.version >= cmapv) {
     dout(10) << "ESessions.replay sessionmap " << mds->sessionmap.version
 	     << " >= " << cmapv << ", noop" << dendl;
@@ -1579,6 +1585,7 @@ void ETableServer::update_segment()
 
 void ETableServer::replay(MDS *mds)
 {
+  CephContext* cct = mds->cct;
   MDSTableServer *server = mds->get_table_server(table);
   if (server->get_version() >= version) {
     dout(10) << "ETableServer.replay " << get_mdstable_name(table)
@@ -1656,6 +1663,7 @@ void ETableClient::generate_test_instances(list<ETableClient*>& ls)
 
 void ETableClient::replay(MDS *mds)
 {
+  CephContext *cct = mds->cct;
   dout(10) << " ETableClient.replay " << get_mdstable_name(table)
 	   << " op " << get_mdstableserver_opname(op)
 	   << " tid " << tid << dendl;
@@ -1725,6 +1733,7 @@ void EUpdate::update_segment()
 
 void EUpdate::replay(MDS *mds)
 {
+  CephContext* cct = mds->cct;
   metablob.replay(mds, _segment);
 
   if (had_slaves) {
@@ -1803,6 +1812,7 @@ void EOpen::update_segment()
 
 void EOpen::replay(MDS *mds)
 {
+  CephContext* cct = mds->cct;
   dout(10) << "EOpen.replay " << dendl;
   metablob.replay(mds, _segment);
 
@@ -1825,6 +1835,7 @@ void EOpen::replay(MDS *mds)
 
 void ECommitted::replay(MDS *mds)
 {
+  CephContext* cct = mds->cct;
   if (mds->mdcache->uncommitted_masters.count(reqid)) {
     dout(10) << "ECommitted.replay " << reqid << dendl;
     mds->mdcache->uncommitted_masters[reqid].ls->uncommitted_masters.erase(reqid);
@@ -2096,6 +2107,7 @@ void ESlaveUpdate::generate_test_instances(list<ESlaveUpdate*>& ls)
 
 void ESlaveUpdate::replay(MDS *mds)
 {
+  CephContext* cct = mds->cct;
   MDSlaveUpdate *su;
   switch (op) {
   case ESlaveUpdate::OP_PREPARE:
@@ -2196,6 +2208,7 @@ void ESubtreeMap::generate_test_instances(list<ESubtreeMap*>& ls)
 
 void ESubtreeMap::replay(MDS *mds)
 {
+  CephContext* cct = mds->cct;
   if (expire_pos && expire_pos > mds->mdlog->journaler->get_expire_pos())
     mds->mdlog->journaler->set_expire_pos(expire_pos);
 
@@ -2288,7 +2301,7 @@ void ESubtreeMap::replay(MDS *mds)
       dout(0) << "journal subtrees: " << subtrees << dendl;
       dout(0) << "journal ambig_subtrees: " << ambiguous_subtrees << dendl;
       mds->mdcache->show_subtrees();
-      assert(!g_conf->mds_debug_subtrees || errors == 0);
+      assert(!cct->_conf->mds_debug_subtrees || errors == 0);
     }
     return;
   }
@@ -2326,6 +2339,7 @@ void ESubtreeMap::replay(MDS *mds)
 
 void EFragment::replay(MDS *mds)
 {
+  CephContext* cct = mds->cct;
   dout(10) << "EFragment.replay " << op_name(op) << " " << ino << " " << basefrag << " by " << bits << dendl;
 
   list<CDir*> resultfrags;
@@ -2370,7 +2384,7 @@ void EFragment::replay(MDS *mds)
   }
 
   metablob.replay(mds, _segment);
-  if (in && g_conf->mds_debug_frag)
+  if (in && cct->_conf->mds_debug_frag)
     in->verify_dirfrags();
 }
 
@@ -2449,6 +2463,7 @@ void dirfrag_rollback::decode(bufferlist::iterator &bl)
 
 void EExport::replay(MDS *mds)
 {
+  CephContext* cct = mds->cct;
   dout(10) << "EExport.replay " << base << dendl;
   metablob.replay(mds, _segment);
 
@@ -2523,6 +2538,7 @@ void EImportStart::update_segment()
 
 void EImportStart::replay(MDS *mds)
 {
+  CephContext* cct = mds->cct;
   dout(10) << "EImportStart.replay " << base << " bounds " << bounds << dendl;
   //metablob.print(*_dout);
   metablob.replay(mds, _segment);
@@ -2596,6 +2612,7 @@ void EImportStart::generate_test_instances(list<EImportStart*>& ls)
 
 void EImportFinish::replay(MDS *mds)
 {
+  CephContext* cct = mds->cct;
   if (mds->mdcache->have_ambiguous_import(base)) {
     dout(10) << "EImportFinish.replay " << base << " success=" << success << dendl;
     if (success) {
@@ -2678,6 +2695,7 @@ void EResetJournal::generate_test_instances(list<EResetJournal*>& ls)
 
 void EResetJournal::replay(MDS *mds)
 {
+  CephContext* cct = mds->cct;
   dout(1) << "EResetJournal" << dendl;
 
   mds->sessionmap.wipe();

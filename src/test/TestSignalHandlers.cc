@@ -30,6 +30,8 @@
 
 using std::string;
 
+static CephContext* cct;
+
 // avoid compiler warning about dereferencing NULL pointer
 static int* get_null()
 {
@@ -70,8 +72,9 @@ int main(int argc, const char **argv)
   argv_to_vec(argc, argv, args);
   env_to_vec(args);
 
-  global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
-  common_init_finish(g_ceph_context);
+  cct = global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT,
+		    CODE_ENVIRONMENT_UTILITY, 0);
+  common_init_finish(cct);
 
   test_fn_t fn = NULL;
   for (std::vector<const char*>::iterator i = args.begin(); i != args.end(); ) {

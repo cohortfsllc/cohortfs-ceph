@@ -34,7 +34,7 @@ static ostream& _prefix(std::ostream *_dout, Monitor *mon, Paxos *paxos, string 
 
 bool PaxosService::dispatch(PaxosServiceMessage *m)
 {
-  dout(10) << "dispatch " << *m << " from " << m->get_orig_source_inst() << dendl;
+  ldout(mon->cct, 10) << "dispatch " << *m << " from " << m->get_orig_source_inst() << dendl;
 
   if (mon->is_shutdown()) {
     m->put();
@@ -44,7 +44,7 @@ bool PaxosService::dispatch(PaxosServiceMessage *m)
   // make sure this message isn't forwarded from a previous election epoch
   if (m->rx_election_epoch &&
       m->rx_election_epoch < mon->get_epoch()) {
-    dout(10) << " discarding forwarded message from previous election epoch "
+    ldout(mon->cct, 10) << " discarding forwarded message from previous election epoch "
 	     << m->rx_election_epoch << " < " << mon->get_epoch() << dendl;
     m->put();
     return true;
@@ -56,7 +56,7 @@ bool PaxosService::dispatch(PaxosServiceMessage *m)
   if (!m->get_connection()->is_connected() &&
       m->get_connection() != mon->con_self &&
       m->get_connection()->get_messenger() != NULL) {
-    dout(10) << " discarding message from disconnected client "
+    ldout(mon->cct, 10) << " discarding message from disconnected client "
 	     << m->get_source_inst() << " " << *m << dendl;
     m->put();
     return true;
@@ -64,7 +64,7 @@ bool PaxosService::dispatch(PaxosServiceMessage *m)
 
   // make sure our map is readable and up to date
   if (!is_readable(m->version)) {
-    dout(10) << " waiting for paxos -> readable (v" << m->version << ")" << dendl;
+    ldout(mon->cct, 10) << " waiting for paxos -> readable (v" << m->version << ")" << dendl;
     wait_for_readable(new C_RetryMessage(this, m), m->version);
     return true;
   }
@@ -81,7 +81,7 @@ bool PaxosService::dispatch(PaxosServiceMessage *m)
 
   // writeable?
   if (!is_writeable()) {
-    dout(10) << " waiting for paxos -> writeable" << dendl;
+    ldout(mon->cct, 10) << " waiting for paxos -> writeable" << dendl;
     wait_for_writeable(new C_RetryMessage(this, m));
     return true;
   }
@@ -96,14 +96,14 @@ bool PaxosService::dispatch(PaxosServiceMessage *m)
 	// delay a bit
 	if (!proposal_timer) {
 	  proposal_timer = new C_Propose(this);
-	  dout(10) << " setting proposal_timer " << proposal_timer << " with delay of " << delay << dendl;
+	  ldout(mon->cct, 10) << " setting proposal_timer " << proposal_timer << " with delay of " << delay << dendl;
 	  mon->timer.add_event_after(delay, proposal_timer);
 	} else {
-	  dout(10) << " proposal_timer already set" << dendl;
+	  ldout(mon->cct, 10) << " proposal_timer already set" << dendl;
 	}
       }
     } else {
-      dout(10) << " not proposing" << dendl;
+      ldout(mon->cct, 10) << " not proposing" << dendl;
     }
   }
   return true;
@@ -117,12 +117,12 @@ void PaxosService::refresh(bool *need_bootstrap)
 
   version_t new_format = get_value("format_version");
   if (new_format != format_version) {
-    dout(1) << __func__ << " upgraded, format " << format_version << " -> " << new_format << dendl;
+    ldout(mon->cct, 1) << __func__ << " upgraded, format " << format_version << " -> " << new_format << dendl;
     on_upgrade();
   }
   format_version = new_format;
 
-  dout(10) << __func__ << dendl;
+  ldout(mon->cct, 10) << __func__ << dendl;
 
   update_from_paxos(need_bootstrap);
 }
@@ -130,14 +130,14 @@ void PaxosService::refresh(bool *need_bootstrap)
 
 void PaxosService::remove_legacy_versions()
 {
-  dout(10) << __func__ << dendl;
+  ldout(mon->cct, 10) << __func__ << dendl;
   if (!mon->store->exists(get_service_name(), "conversion_first"))
     return;
 
   version_t cf = mon->store->get(get_service_name(), "conversion_first");
   version_t fc = get_first_committed();
 
-  dout(10) << __func__ << " conversion_first " << cf
+  ldout(mon->cct, 10) << __func__ << " conversion_first " << cf
 	   << " first committed " << fc << dendl;
 
   MonitorDBStore::Transaction t;
@@ -154,11 +154,11 @@ bool PaxosService::should_propose(double& delay)
   if (get_last_committed() <= 1)
     delay = 0.0;
   else {
-    utime_t now = ceph_clock_now(g_ceph_context);
-    if ((now - paxos->last_commit_time) > g_conf->paxos_propose_interval)
-      delay = (double)g_conf->paxos_min_wait;
+    utime_t now = ceph_clock_now(mon->cct);
+    if ((now - paxos->last_commit_time) > mon->cct->_conf->paxos_propose_interval)
+      delay = (double)mon->cct->_conf->paxos_min_wait;
     else
-      delay = (double)(g_conf->paxos_propose_interval + paxos->last_commit_time
+      delay = (double)(mon->cct->_conf->paxos_propose_interval + paxos->last_commit_time
 		       - now);
   }
   return true;
@@ -167,14 +167,14 @@ bool PaxosService::should_propose(double& delay)
 
 void PaxosService::propose_pending()
 {
-  dout(10) << "propose_pending" << dendl;
+  ldout(mon->cct, 10) << "propose_pending" << dendl;
   assert(have_pending);
   assert(!proposing);
   assert(mon->is_leader());
   assert(is_active());
 
   if (proposal_timer) {
-    dout(10) << " canceling proposal_timer " << proposal_timer << dendl;
+    ldout(mon->cct, 10) << " canceling proposal_timer " << proposal_timer << dendl;
     mon->timer.cancel_event(proposal_timer);
     proposal_timer = NULL;
   }
@@ -200,7 +200,7 @@ void PaxosService::propose_pending()
     t.put(get_service_name(), "format_version", format_version);
   }
 
-  dout(30) << __func__ << " transaction dump:\n";
+  ldout(mon->cct, 30) << __func__ << " transaction dump:\n";
   JSONFormatter f(true);
   t.dump(&f);
   f.flush(*_dout);
@@ -223,14 +223,14 @@ bool PaxosService::should_stash_full()
    */
   return (!latest_full ||
 	  (latest_full <= get_trim_to()) ||
-	  (get_last_committed() - latest_full > (unsigned)g_conf->paxos_stash_full_interval));
+	  (get_last_committed() - latest_full > (unsigned)mon->cct->_conf->paxos_stash_full_interval));
 }
 
 void PaxosService::restart()
 {
-  dout(10) << "restart" << dendl;
+  ldout(mon->cct, 10) << "restart" << dendl;
   if (proposal_timer) {
-    dout(10) << " canceling proposal_timer " << proposal_timer << dendl;
+    ldout(mon->cct, 10) << " canceling proposal_timer " << proposal_timer << dendl;
     mon->timer.cancel_event(proposal_timer);
     proposal_timer = 0;
   }
@@ -248,7 +248,7 @@ void PaxosService::restart()
 
 void PaxosService::election_finished()
 {
-  dout(10) << "election_finished" << dendl;
+  ldout(mon->cct, 10) << "election_finished" << dendl;
 
   finish_contexts(waiting_for_finished_proposal, -EAGAIN);
 
@@ -259,21 +259,21 @@ void PaxosService::election_finished()
 void PaxosService::_active()
 {
   if (is_proposing()) {
-    dout(10) << "_acting - proposing" << dendl;
+    ldout(mon->cct, 10) << "_acting - proposing" << dendl;
     return;
   }
   if (!is_active()) {
-    dout(10) << "_active - not active" << dendl;
+    ldout(mon->cct, 10) << "_active - not active" << dendl;
     wait_for_active(new C_Active(this));
     return;
   }
-  dout(10) << "_active" << dendl;
+  ldout(mon->cct, 10) << "_active" << dendl;
 
   remove_legacy_versions();
 
   // create pending state?
   if (mon->is_leader() && is_active()) {
-    dout(7) << "_active creating new pending" << dendl;
+    ldout(mon->cct, 7) << "_active creating new pending" << dendl;
     if (!have_pending) {
       create_pending();
       have_pending = true;
@@ -287,9 +287,9 @@ void PaxosService::_active()
     }
   } else {
     if (!mon->is_leader()) {
-      dout(7) << __func__ << " we are not the leader, hence we propose nothing!" << dendl;
+      ldout(mon->cct, 7) << __func__ << " we are not the leader, hence we propose nothing!" << dendl;
     } else if (!is_active()) {
-      dout(7) << __func__ << " we are not active, hence we propose nothing!" << dendl;
+      ldout(mon->cct, 7) << __func__ << " we are not active, hence we propose nothing!" << dendl;
     }
   }
 
@@ -313,7 +313,7 @@ void PaxosService::shutdown()
   cancel_events();
 
   if (proposal_timer) {
-    dout(10) << " canceling proposal_timer " << proposal_timer << dendl;
+    ldout(mon->cct, 10) << " canceling proposal_timer " << proposal_timer << dendl;
     mon->timer.cancel_event(proposal_timer);
     proposal_timer = 0;
   }
@@ -333,23 +333,23 @@ void PaxosService::maybe_trim()
     return;
 
   version_t to_remove = trim_to - get_first_committed();
-  if (g_conf->paxos_service_trim_min > 0 &&
-      to_remove < (version_t)g_conf->paxos_service_trim_min) {
-    dout(10) << __func__ << " trim_to " << trim_to << " would only trim " << to_remove
-	     << " < paxos_service_trim_min " << g_conf->paxos_service_trim_min << dendl;
+  if (mon->cct->_conf->paxos_service_trim_min > 0 &&
+      to_remove < (version_t)mon->cct->_conf->paxos_service_trim_min) {
+    ldout(mon->cct, 10) << __func__ << " trim_to " << trim_to << " would only trim " << to_remove
+	     << " < paxos_service_trim_min " << mon->cct->_conf->paxos_service_trim_min << dendl;
     return;
   }
 
-  if (g_conf->paxos_service_trim_max > 0 &&
-      to_remove > (version_t)g_conf->paxos_service_trim_max) {
-    dout(10) << __func__ << " trim_to " << trim_to << " would only trim " << to_remove
-	     << " > paxos_service_trim_max, limiting to " << g_conf->paxos_service_trim_max
+  if (mon->cct->_conf->paxos_service_trim_max > 0 &&
+      to_remove > (version_t)mon->cct->_conf->paxos_service_trim_max) {
+    ldout(mon->cct, 10) << __func__ << " trim_to " << trim_to << " would only trim " << to_remove
+	     << " > paxos_service_trim_max, limiting to " << mon->cct->_conf->paxos_service_trim_max
 	     << dendl;
-    trim_to = get_first_committed() + g_conf->paxos_service_trim_max;
+    trim_to = get_first_committed() + mon->cct->_conf->paxos_service_trim_max;
     to_remove = trim_to - get_first_committed();
   }
 
-  dout(10) << __func__ << " trimming to " << trim_to << ", " << to_remove << " states" << dendl;
+  ldout(mon->cct, 10) << __func__ << " trimming to " << trim_to << ", " << to_remove << " states" << dendl;
   MonitorDBStore::Transaction t;
   trim(&t, get_first_committed(), trim_to);
   put_first_committed(&t, trim_to);
@@ -365,21 +365,21 @@ void PaxosService::maybe_trim()
 void PaxosService::trim(MonitorDBStore::Transaction *t,
 			version_t from, version_t to)
 {
-  dout(10) << __func__ << " from " << from << " to " << to << dendl;
+  ldout(mon->cct, 10) << __func__ << " from " << from << " to " << to << dendl;
   assert(from != to);
 
   for (version_t v = from; v < to; ++v) {
-    dout(20) << __func__ << " " << v << dendl;
+    ldout(mon->cct, 20) << __func__ << " " << v << dendl;
     t->erase(get_service_name(), v);
 
     string full_key = mon->store->combine_strings("full", v);
     if (mon->store->exists(get_service_name(), full_key)) {
-      dout(20) << __func__ << " " << full_key << dendl;
+      ldout(mon->cct, 20) << __func__ << " " << full_key << dendl;
       t->erase(get_service_name(), full_key);
     }
   }
-  if (g_conf->mon_compact_on_trim) {
-    dout(20) << " compacting prefix " << get_service_name() << dendl;
+  if (mon->cct->_conf->mon_compact_on_trim) {
+    ldout(mon->cct, 20) << " compacting prefix " << get_service_name() << dendl;
     t->compact_range(get_service_name(), stringify(from - 1), stringify(to));
   }
 }

@@ -387,17 +387,17 @@ int MDS::init(int wanted_state)
 
   timer.init();
 
-  if (wanted_state==MDSMap::STATE_BOOT && g_conf->mds_standby_replay)
+  if (wanted_state==MDSMap::STATE_BOOT && cct->_conf->mds_standby_replay)
     wanted_state = MDSMap::STATE_STANDBY_REPLAY;
   // starting beacon.  this will induce an MDSMap from the monitor
   want_state = wanted_state;
   if (wanted_state==MDSMap::STATE_STANDBY_REPLAY ||
       wanted_state==MDSMap::STATE_ONESHOT_REPLAY) {
-    g_conf->set_val_or_die("mds_standby_replay", "true");
-    g_conf->apply_changes(NULL);
+    cct->_conf->set_val_or_die("mds_standby_replay", "true");
+    cct->_conf->apply_changes(NULL);
     if ( wanted_state == MDSMap::STATE_ONESHOT_REPLAY &&
-	(g_conf->mds_standby_for_rank == -1) &&
-	g_conf->mds_standby_for_name.empty()) {
+	(cct->_conf->mds_standby_for_rank == -1) &&
+	cct->_conf->mds_standby_for_name.empty()) {
       // uh-oh, must specify one or the other!
       dout(0) << "Specified oneshot replay mode but not an MDS!" << dendl;
       suicide();
@@ -406,8 +406,8 @@ int MDS::init(int wanted_state)
     standby_type = wanted_state;
   }
 
-  standby_for_rank = g_conf->mds_standby_for_rank;
-  standby_for_name.assign(g_conf->mds_standby_for_name);
+  standby_for_rank = cct->_conf->mds_standby_for_rank;
+  standby_for_name.assign(cct->_conf->mds_standby_for_name);
 
   if (wanted_state == MDSMap::STATE_STANDBY_REPLAY &&
       standby_for_rank == -1) {
@@ -437,7 +437,7 @@ void MDS::reset_tick()
 
   // schedule
   tick_event = new C_MDS_Tick(this);
-  timer.add_event_after(g_conf->mds_tick_interval, tick_event);
+  timer.add_event_after(cct->_conf->mds_tick_interval, tick_event);
 }
 
 void MDS::tick()
@@ -463,7 +463,7 @@ void MDS::tick()
   }
 
   // log
-  utime_t now = ceph_clock_now(g_ceph_context);
+  utime_t now = ceph_clock_now(cct);
   mds_load_t load = balancer->get_load(now);
 
 
@@ -504,7 +504,7 @@ void MDS::beacon_send()
 	   << " (currently " << ceph_mds_state_name(state) << ")"
 	   << dendl;
 
-  beacon_seq_stamp[beacon_last_seq] = ceph_clock_now(g_ceph_context);
+  beacon_seq_stamp[beacon_last_seq] = ceph_clock_now(cct);
 
   MMDSBeacon *beacon = new MMDSBeacon(monc->get_fsid(), monc->get_global_id(), name, mdsmap->get_epoch(),
 				      want_state, beacon_last_seq);
@@ -521,7 +521,7 @@ void MDS::beacon_send()
   // schedule next sender
   if (beacon_sender) timer.cancel_event(beacon_sender);
   beacon_sender = new C_MDS_BeaconSender(this);
-  timer.add_event_after(g_conf->mds_beacon_interval, beacon_sender);
+  timer.add_event_after(cct->_conf->mds_beacon_interval, beacon_sender);
 }
 
 
@@ -530,13 +530,13 @@ bool MDS::is_laggy()
   if (beacon_last_acked_stamp == utime_t())
     return false;
 
-  utime_t now = ceph_clock_now(g_ceph_context);
+  utime_t now = ceph_clock_now(cct);
   utime_t since = now - beacon_last_acked_stamp;
-  if (since > g_conf->mds_beacon_grace) {
-    dout(5) << "is_laggy " << since << " > " << g_conf->mds_beacon_grace
+  if (since > cct->_conf->mds_beacon_grace) {
+    dout(5) << "is_laggy " << since << " > " << cct->_conf->mds_beacon_grace
 	    << " since last acked beacon" << dendl;
     was_laggy = true;
-    if (since > (g_conf->mds_beacon_grace*2)) {
+    if (since > (cct->_conf->mds_beacon_grace*2)) {
       // maybe it's not us?
       dout(5) << "initiating monitor reconnect; maybe we're not the slow one"
 	      << dendl;
@@ -557,14 +557,14 @@ void MDS::handle_mds_beacon(MMDSBeacon *m)
   if (beacon_seq_stamp.count(seq)) {
     assert(beacon_seq_stamp[seq] > beacon_last_acked_stamp);
     beacon_last_acked_stamp = beacon_seq_stamp[seq];
-    utime_t now = ceph_clock_now(g_ceph_context);
+    utime_t now = ceph_clock_now(cct);
     utime_t rtt = now - beacon_last_acked_stamp;
 
     dout(10) << "handle_mds_beacon " << ceph_mds_state_name(m->get_state())
 	     << " seq " << m->get_seq()
 	     << " rtt " << rtt << dendl;
 
-    if (was_laggy && rtt < g_conf->mds_beacon_grace) {
+    if (was_laggy && rtt < cct->_conf->mds_beacon_grace) {
       dout(0) << "handle_mds_beacon no longer laggy" << dendl;
       was_laggy = false;
       laggy_until = now;
@@ -597,7 +597,7 @@ void MDS::handle_command(MMonCommand *m)
     else {
       std::ostringstream oss;
       mds_lock.Unlock();
-      g_conf->injectargs(m->cmd[1], &oss);
+      cct->_conf->injectargs(m->cmd[1], &oss);
       mds_lock.Lock();
       derr << "injectargs:" << dendl;
       derr << oss.str() << dendl;
@@ -804,7 +804,7 @@ void MDS::handle_mds_map(MMDSMap *m)
 	dout(10) << "not in map yet" << dendl;
       } else {
 	// did i get kicked by someone else?
-	if (g_conf->mds_enforce_unique_name) {
+	if (cct->_conf->mds_enforce_unique_name) {
 	  if (uint64_t existing = mdsmap->find_mds_gid_by_name(name)) {
 	    MDSMap::mds_info_t& i = mdsmap->get_info_gid(existing);
 	    if (i.global_id > monc->get_global_id()) {
@@ -844,7 +844,7 @@ void MDS::handle_mds_map(MMDSMap *m)
     objecter->set_client_incarnation(incarnation);
 
   // for debug
-  if (g_conf->mds_dump_cache_on_map)
+  if (cct->_conf->mds_dump_cache_on_map)
     mdcache->dump_cache();
 
   // did it change?
@@ -909,7 +909,7 @@ void MDS::handle_mds_map(MMDSMap *m)
       rejoin_joint_start();
 
     // did we finish?
-    if (g_conf->mds_dump_cache_after_rejoin &&
+    if (cct->_conf->mds_dump_cache_after_rejoin &&
 	oldmap->is_rejoining() && !mdsmap->is_rejoining())
       mdcache->dump_cache();	  // for DEBUG only
 
@@ -1068,7 +1068,7 @@ void MDS::boot_create()
     anchorserver->save(fin.new_sub());
   }
 
-  assert(g_conf->mds_kill_create_at != 1);
+  assert(cct->_conf->mds_kill_create_at != 1);
 
   // ok now journal it
   mdlog->journal_segment_subtree_map();
@@ -1293,7 +1293,7 @@ void MDS::replay_done()
 
   if (is_standby_replay()) {
     dout(10) << "setting replay timer" << dendl;
-    timer.add_event_after(g_conf->mds_replay_interval,
+    timer.add_event_after(cct->_conf->mds_replay_interval,
 			  new C_MDS_StandbyReplayRestart(this));
     return;
   }
@@ -1309,18 +1309,18 @@ void MDS::replay_done()
   mdlog->get_journaler()->set_writeable();
   mdlog->get_journaler()->trim_tail();
 
-  if (g_conf->mds_wipe_sessions) {
+  if (cct->_conf->mds_wipe_sessions) {
     dout(1) << "wiping out client sessions" << dendl;
     sessionmap.wipe();
     sessionmap.save(new C_NoopContext);
   }
-  if (g_conf->mds_wipe_ino_prealloc) {
+  if (cct->_conf->mds_wipe_ino_prealloc) {
     dout(1) << "wiping out ino prealloc from sessions" << dendl;
     sessionmap.wipe_ino_prealloc();
     sessionmap.save(new C_NoopContext);
   }
-  if (g_conf->mds_skip_ino) {
-    inodeno_t i = g_conf->mds_skip_ino;
+  if (cct->_conf->mds_skip_ino) {
+    inodeno_t i = cct->_conf->mds_skip_ino;
     dout(1) << "skipping " << i << " inodes" << dendl;
     inotable->skip_inos(i);
     inotable->save(new C_NoopContext);
@@ -1844,20 +1844,20 @@ bool MDS::_dispatch(Message *m)
 
   // hack: thrash exports
   static utime_t start;
-  utime_t now = ceph_clock_now(g_ceph_context);
+  utime_t now = ceph_clock_now(cct);
   if (start == utime_t())
     start = now;
   /*double el = now - start;
   if (el > 30.0 &&
     el < 60.0)*/
-  for (int i=0; i<g_conf->mds_thrash_exports; i++) {
+  for (int i=0; i<cct->_conf->mds_thrash_exports; i++) {
     set<int> s;
     if (!is_active()) break;
     mdsmap->get_mds_set(s, MDSMap::STATE_ACTIVE);
     if (s.size() < 2 || mdcache->get_num_inodes() < 10)
       break;  // need peers for this to work.
 
-    dout(7) << "mds thrashing exports pass " << (i+1) << "/" << g_conf->mds_thrash_exports << dendl;
+    dout(7) << "mds thrashing exports pass " << (i+1) << "/" << cct->_conf->mds_thrash_exports << dendl;
 
     // pick a random dir inode
     CInode *in = mdcache->hack_pick_random_inode();
@@ -1884,10 +1884,10 @@ bool MDS::_dispatch(Message *m)
     mdcache->migrator->export_dir_nicely(dir,dest);
   }
   // hack: thrash fragments
-  for (int i=0; i<g_conf->mds_thrash_fragments; i++) {
+  for (int i=0; i<cct->_conf->mds_thrash_fragments; i++) {
     if (!is_active()) break;
     if (mdcache->get_num_fragmenting_dirs() > 5) break;
-    dout(7) << "mds thrashing fragments pass " << (i+1) << "/" << g_conf->mds_thrash_fragments << dendl;
+    dout(7) << "mds thrashing fragments pass " << (i+1) << "/" << cct->_conf->mds_thrash_fragments << dendl;
 
     // pick a random dir inode
     CInode *in = mdcache->hack_pick_random_inode();

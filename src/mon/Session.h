@@ -38,6 +38,7 @@ struct Subscription {
 };
 
 struct MonSession : public RefCountedObject {
+  CephContext* cct;
   ConnectionRef con;
   entity_inst_t inst;
   utime_t until;
@@ -57,12 +58,13 @@ struct MonSession : public RefCountedObject {
   ConnectionRef proxy_con;
   uint64_t proxy_tid;
 
-  MonSession(const entity_inst_t& i, Connection *c) :
-    con(c), inst(i), closed(false), item(this),
+  MonSession(CephContext* _cct, const entity_inst_t& i, Connection *c) :
+    cct(_cct), con(c), inst(i), closed(false), item(this),
     auid(0),
     global_id(0), notified_global_id(0), auth_handler(NULL),
     proxy_con(NULL), proxy_tid(0) {
-    time_established = ceph_clock_now(g_ceph_context);
+    cct->get();
+    time_established = ceph_clock_now(cct);
   }
   ~MonSession() {
     //generic_dout(0) << "~MonSession " << this << dendl;
@@ -70,11 +72,12 @@ struct MonSession : public RefCountedObject {
     assert(!item.is_on_list());
     assert(sub_map.empty());
     delete auth_handler;
+    cct->put();
   }
 
   bool is_capable(string service, int mask) {
     map<string,string> args;
-    return caps.is_capable(g_ceph_context,
+    return caps.is_capable(cct,
 			   inst.name,
 			   service, "", args,
 			   mask & MON_CAP_R, mask & MON_CAP_W, mask & MON_CAP_X);
@@ -117,8 +120,9 @@ struct MonSessionMap {
     s->put();
   }
 
-  MonSession *new_session(const entity_inst_t& i, Connection *c) {
-    MonSession *s = new MonSession(i, c);
+  MonSession *new_session(CephContext* cct, const entity_inst_t& i,
+			  Connection *c) {
+    MonSession *s = new MonSession(cct, i, c);
     sessions.push_back(&s->item);
     if (i.name.is_osd())
       by_osd.insert(pair<int,MonSession*>(i.name.num(), s));

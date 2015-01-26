@@ -21,6 +21,8 @@
 #include "os/FileStore.h"
 #include "common/config.h"
 
+extern CephContext* cct;
+
 class FileStoreDiff {
 
  private:

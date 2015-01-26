@@ -12,6 +12,7 @@
  *
  */
 
+#include "common/ceph_context.h"
 #include "Cond.h"
 #include "Mutex.h"
 #include "Thread.h"

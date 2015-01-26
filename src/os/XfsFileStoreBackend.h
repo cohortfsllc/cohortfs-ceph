@@ -22,7 +22,7 @@ private:
   bool m_has_extsize;
   int set_extsize(int fd, unsigned int val);
 public:
-  XfsFileStoreBackend(FileStore *fs);
+  XfsFileStoreBackend(CephContext* cct, FileStore *fs);
   ~XfsFileStoreBackend() {};
   int detect_features();
   int set_alloc_hint(int fd, uint64_t hint);

@@ -187,11 +187,8 @@ ClassHandler::ClassMethod *ClassHandler::ClassData::register_method(const char *
 {
   /* no need for locking, called under the class_init mutex */
   if (!flags) {
-    derr << "register_method " << name << "." << mname << " flags " << flags << " " << (void*)func
-	 << " FAILED -- flags must be non-zero" << dendl;
     return NULL;
   }
-  dout(10) << "register_method " << name << "." << mname << " flags " << flags << " " << (void*)func << dendl;
   ClassMethod& method = methods_map[mname];
   method.func = func;
   method.name = mname;
@@ -205,7 +202,6 @@ ClassHandler::ClassMethod *ClassHandler::ClassData::register_cxx_method(const ch
 									cls_method_cxx_call_t func)
 {
   /* no need for locking, called under the class_init mutex */
-  dout(10) << "register_cxx_method " << name << "." << mname << " flags " << flags << " " << (void*)func << dendl;
   ClassMethod& method = methods_map[mname];
   method.cxx_func = func;
   method.name = mname;

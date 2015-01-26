@@ -64,6 +64,13 @@ static ostream& _prefix(std::ostream *_dout, MDS *mds) {
   return *_dout << "mds." << mds->get_nodeid() << ".locker ";
 }
 
+Locker::Locker(MDS *m, MDCache *c) : mds(m), cct(mds->cct), mdcache(c) {
+  cct->get();
+}
+Locker::~Locker() {
+  cct->put();
+}
+
 /* This function DOES put the passed message before returning */
 void Locker::dispatch(Message *m)
 {
@@ -2889,7 +2896,7 @@ void Locker::handle_client_lease(MClientLease *m)
 	m->h.seq = ++l->seq;
 	m->clear_payload();
 
-	utime_t now = ceph_clock_now(g_ceph_context);
+	utime_t now = ceph_clock_now(cct);
 	now += mdcache->client_lease_durations[pool];
 	mdcache->touch_client_lease(l, pool, now);
 
@@ -3679,7 +3686,7 @@ void Locker::mark_updated_scatterlock(ScatterLock *lock)
 	     << " - already on list since " << lock->get_update_stamp() << dendl;
   } else {
     updated_scatterlocks.push_back(lock->get_updated_item());
-    utime_t now = ceph_clock_now(g_ceph_context);
+    utime_t now = ceph_clock_now(cct);
     lock->set_update_stamp(now);
     dout(10) << "mark_updated_scatterlock " << *lock
 	     << " - added at " << now << dendl;
@@ -3802,7 +3809,7 @@ void Locker::scatter_tick()
   dout(10) << "scatter_tick" << dendl;
 
   // updated
-  utime_t now = ceph_clock_now(g_ceph_context);
+  utime_t now = ceph_clock_now(cct);
   int n = updated_scatterlocks.size();
   while (!updated_scatterlocks.empty()) {
     ScatterLock *lock = updated_scatterlocks.front();
@@ -3815,7 +3822,8 @@ void Locker::scatter_tick()
 	       << *lock << " " << *lock->get_parent() << dendl;
       continue;
     }
-    if (now - lock->get_update_stamp() < g_conf->mds_scatter_nudge_interval)
+    if (now - lock->get_update_stamp()
+	< cct->_conf->mds_scatter_nudge_interval)
       break;
     updated_scatterlocks.pop_front();
     scatter_nudge(lock, 0);

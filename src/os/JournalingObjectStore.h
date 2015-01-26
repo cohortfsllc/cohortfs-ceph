@@ -21,7 +21,6 @@
 
 class JournalingObjectStore : public ObjectStore {
 protected:
-  CephContext *cct;
   Journal *journal;
   Finisher finisher;
 
@@ -130,8 +129,7 @@ public:
 
 public:
   JournalingObjectStore(CephContext *_cct, const std::string& path)
-    : ObjectStore(path),
-      cct(_cct),
+    : ObjectStore(_cct, path),
       journal(NULL),
       finisher(cct),
       submit_manager(cct),

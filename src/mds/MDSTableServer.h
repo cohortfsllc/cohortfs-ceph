@@ -24,7 +24,6 @@ public:
   int table;
   map<version_t,mds_table_pending_t> pending_for_mds;  // ** child should encode this! **
 
-
 private:
   void handle_prepare(MMDSTableRequest *m);
   void _prepare_logged(MMDSTableRequest *m, version_t tid);

@@ -14,8 +14,6 @@
 
 static ClassHandler *ch;
 
-#define dout_subsys ceph_subsys_objclass
-
 void cls_initialize(ClassHandler *h)
 {
   ch = h;
@@ -179,6 +177,12 @@ int cls_get_request_origin(cls_method_context_t hctx, entity_inst_t *origin)
   OSDVol::OpContext **pctx = static_cast<OSDVol::OpContext **>(hctx);
   *origin = (*pctx)->op->get_req()->get_orig_source_inst();
   return 0;
+}
+
+CephContext* cls_cxx_context(cls_method_context_t hctx)
+{
+  OSDVol::OpContext **pctx = (OSDVol::OpContext **)hctx;
+  return (*pctx)->vol->cct;
 }
 
 int cls_cxx_create(cls_method_context_t hctx, bool exclusive)
@@ -552,14 +556,12 @@ int cls_gen_rand_base64(char *dest, int size) /* size should be the required str
 
   ret = cls_gen_random_bytes(buf, sizeof(buf));
   if (ret < 0) {
-    generic_derr << "cannot get random bytes: " << ret << dendl;
     return -1;
   }
 
   ret = ceph_armor(tmp_dest, &tmp_dest[sizeof(tmp_dest)],
 		   (const char *)buf, ((const char *)buf) + ((size - 1) * 3 + 4 - 1) / 4);
   if (ret < 0) {
-    generic_derr << "ceph_armor failed" << dendl;
     return -1;
   }
   tmp_dest[ret] = '\0';
@@ -608,7 +610,6 @@ int cls_log(int level, const char *format, ...)
      va_end(ap);
 #define MAX_SIZE 8196
      if ((n > -1 && n < size) || size > MAX_SIZE) {
-       dout(level) << buf << dendl;
        return n;
      }
      size *= 2;

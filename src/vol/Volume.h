@@ -122,18 +122,7 @@ public:
   // call attach, you are guaranteed that the following functions will
   // execute without error. Otherwise, you have to check the return
   // values. This function returns non-zero on error.
-  virtual int attach(CephContext *cct, std::stringstream &ss) {
-    return 0;
-  };
-  int attach(CephContext *cct) {
-    std::stringstream ss;
-    int r = attach(cct, ss);
-    if (r < 0) {
-      lsubdout(cct, volume, -1) << "volume: " << *this <<
-	": unable to attach: " << ss.str() << dendl;
-    }
-    return r;
-  };
+  virtual int attach(CephContext *cct) = 0;
   // This function exists, at present, for the use of the monitor at
   // volume creation time, so it can attempt to instantiate a volume
   // and return a useful error on failure. It is not thread safe.

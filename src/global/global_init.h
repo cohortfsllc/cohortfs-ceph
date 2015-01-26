@@ -30,16 +30,17 @@ class CephContext;
  * daemons and utility programs need to call. It takes care of a lot of
  * initialization, including setting up g_ceph_context.
  */
-void global_init(std::vector < const char * > *alt_def_args,
-		 std::vector < const char* >& args,
-		 uint32_t module_type, code_environment_t code_env, int flags);
+CephContext* global_init(std::vector < const char * > *alt_def_args,
+			 std::vector < const char* >& args,
+			 uint32_t module_type, code_environment_t code_env,
+			 int flags);
 
 // just the first half; enough to get config parsed but doesn't start up the
 // cct or log.
-void global_pre_init(std::vector < const char * > *alt_def_args,
-		     std::vector < const char* >& args,
-		     uint32_t module_type, code_environment_t code_env,
-		     int flags);
+CephContext* global_pre_init(std::vector < const char * > *alt_def_args,
+			     std::vector < const char* >& args,
+			     uint32_t module_type, code_environment_t code_env,
+			     int flags);
 
 /*
  * perform all of the steps that global_init_daemonize performs just prior
@@ -74,7 +75,7 @@ void global_init_daemonize(CephContext *cct, int flags);
  *
  * If this is called, it *must* be called before common_init_finish
  */
-void global_init_chdir(const CephContext *cct);
+void global_init_chdir(CephContext *cct);
 
 /*
  * Explicitly shut down stderr. Usually, you don't need to do

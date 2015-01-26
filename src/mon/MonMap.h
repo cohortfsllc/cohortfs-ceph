@@ -16,6 +16,7 @@
 #define CEPH_MONMAP_H
 
 #include <boost/uuid/uuid_generators.hpp>
+#include "common/ceph_context.h"
 #include "msg/Message.h"
 #include "include/types.h"
 //#include "common/config.h"

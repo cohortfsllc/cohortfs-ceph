@@ -39,7 +39,8 @@ class DataHealthService :
   void share_stats();
 
   void force_shutdown() {
-    generic_dout(0) << "** Shutdown via Data Health Service **" << dendl;
+    lgeneric_dout(mon->cct, 0)
+      << "** Shutdown via Data Health Service **" << dendl;
     queue_async_signal(SIGINT);
   }
 
@@ -61,12 +62,12 @@ public:
     HealthService(m),
     last_warned_percent(0)
   {
-    set_update_period(g_conf->mon_health_data_update_interval);
+    set_update_period(mon->cct->_conf->mon_health_data_update_interval);
   }
   virtual ~DataHealthService() { }
 
   virtual void init() {
-    generic_dout(20) << "data_health " << __func__ << dendl;
+    lgeneric_dout(mon->cct, 20) << "data_health " << __func__ << dendl;
     start_tick();
   }
 

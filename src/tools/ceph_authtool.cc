@@ -17,7 +17,7 @@
 
 #include "common/ConfUtils.h"
 #include "common/ceph_argparse.h"
-#include "global/global_context.h"
+#include "common/ceph_context.h"
 #include "global/global_init.h"
 #include "auth/Crypto.h"
 #include "auth/Auth.h"
@@ -25,6 +25,8 @@
 
 using std::cout;
 using std::cerr;
+
+CephContext *g_ceph_context;
 
 #include <sstream>
 
@@ -74,8 +76,9 @@ int main(int argc, const char **argv)
   map<string,bufferlist> caps;
   std::string fn;
 
-  global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY,
-	      CINIT_FLAG_NO_DEFAULT_CONFIG_FILE);
+  g_ceph_context = global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT,
+			       CODE_ENVIRONMENT_UTILITY,
+			       CINIT_FLAG_NO_DEFAULT_CONFIG_FILE);
   std::vector<const char*>::iterator i;
   for (i = args.begin(); i != args.end(); ) {
     std::string val;
@@ -144,7 +147,7 @@ int main(int argc, const char **argv)
   }
 
   common_init_finish(g_ceph_context);
-  EntityName ename(g_conf->name);
+  EntityName ename(g_ceph_context->_conf->name);
 
   if (gen_print_key) {
     CryptoKey key;

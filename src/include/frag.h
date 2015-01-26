@@ -24,6 +24,7 @@
 
 #include "buffer.h"
 #include "ceph_frag.h"
+#include "common/ceph_context.h"
 #include "common/dout.h"
 
 /*

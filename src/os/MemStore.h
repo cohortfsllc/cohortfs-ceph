@@ -295,12 +295,12 @@ private:
   void dump_all();
 
 public:
-  MemStore(CephContext *cct, const string& path)
-    : ObjectStore(path),
-      tx_tp(g_ceph_context, "MemStore::tx_tp",
-	    g_conf->filestore_op_threads, "memstore_tx_threads"),
-      tx_wq(this, g_conf->filestore_op_thread_timeout,
-	    g_conf->filestore_op_thread_suicide_timeout, &tx_tp),
+  MemStore(CephContext *_cct, const string& path)
+    : ObjectStore(_cct, path),
+      tx_tp(cct, "MemStore::tx_tp",
+	    cct->_conf->filestore_op_threads, "memstore_tx_threads"),
+      tx_wq(this, cct->_conf->filestore_op_thread_timeout,
+	    cct->_conf->filestore_op_thread_suicide_timeout, &tx_tp),
       finisher(cct) { }
   ~MemStore() { }
 

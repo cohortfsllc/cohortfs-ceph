@@ -14,6 +14,7 @@
 
 
 #include <errno.h>
+#include "common/ceph_context.h"
 
 #include "CephxClientHandler.h"
 #include "CephxProtocol.h"

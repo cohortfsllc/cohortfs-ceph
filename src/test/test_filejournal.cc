@@ -17,6 +17,8 @@
 using std::cout;
 using std::cerr;
 
+CephContext* cct;
+
 Finisher *finisher;
 Cond sync_cond;
 char path[200];
@@ -65,15 +67,15 @@ int main(int argc, char **argv) {
   vector<const char*> args;
   argv_to_vec(argc, (const char **)argv, args);
 
-  global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
-  common_init_finish(g_ceph_context);
+  cct = global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
+  common_init_finish(cct);
 
   char mb[10];
   sprintf(mb, "%u", size_mb);
-  g_ceph_context->_conf->set_val("osd_journal_size", mb);
-  g_ceph_context->_conf->apply_changes(NULL);
+  cct->_conf->set_val("osd_journal_size", mb);
+  cct->_conf->apply_changes(NULL);
 
-  finisher = new Finisher(g_ceph_context);
+  finisher = new Finisher(cct);
 
   if (!args.empty()) {
     size_t copy_len = std::min(sizeof(path)-1, strlen(args[0]));
@@ -114,13 +116,13 @@ int main(int argc, char **argv) {
 
 TEST(TestFileJournal, Create) {
   fsid = boost::uuids::random_generator()();
-  FileJournal j(fsid, finisher, &sync_cond, path, directio, aio);
+  FileJournal j(cct, fsid, finisher, &sync_cond, path, directio, aio);
   ASSERT_EQ(0, j.create());
 }
 
 TEST(TestFileJournal, WriteSmall) {
   fsid = boost::uuids::random_generator()();
-  FileJournal j(fsid, finisher, &sync_cond, path, directio, aio);
+  FileJournal j(cct, fsid, finisher, &sync_cond, path, directio, aio);
   ASSERT_EQ(0, j.create());
   j.make_writeable();
 
@@ -134,7 +136,7 @@ TEST(TestFileJournal, WriteSmall) {
 
 TEST(TestFileJournal, WriteBig) {
   fsid = boost::uuids::random_generator()();
-  FileJournal j(fsid, finisher, &sync_cond, path, directio, aio);
+  FileJournal j(cct, fsid, finisher, &sync_cond, path, directio, aio);
   ASSERT_EQ(0, j.create());
   j.make_writeable();
 
@@ -152,7 +154,7 @@ TEST(TestFileJournal, WriteBig) {
 
 TEST(TestFileJournal, WriteMany) {
   fsid = boost::uuids::random_generator()();
-  FileJournal j(fsid, finisher, &sync_cond, path, directio, aio);
+  FileJournal j(cct, fsid, finisher, &sync_cond, path, directio, aio);
   ASSERT_EQ(0, j.create());
   j.make_writeable();
 
@@ -175,7 +177,7 @@ TEST(TestFileJournal, WriteMany) {
 
 TEST(TestFileJournal, WriteManyVecs) {
   fsid = boost::uuids::random_generator()();
-  FileJournal j(fsid, finisher, &sync_cond, path, directio, aio);
+  FileJournal j(cct, fsid, finisher, &sync_cond, path, directio, aio);
   ASSERT_EQ(0, j.create());
   j.make_writeable();
 
@@ -212,7 +214,7 @@ TEST(TestFileJournal, WriteManyVecs) {
 
 TEST(TestFileJournal, ReplaySmall) {
   fsid = boost::uuids::random_generator()();
-  FileJournal j(fsid, finisher, &sync_cond, path, directio, aio);
+  FileJournal j(cct, fsid, finisher, &sync_cond, path, directio, aio);
   ASSERT_EQ(0, j.create());
   j.make_writeable();
 
@@ -257,7 +259,7 @@ TEST(TestFileJournal, ReplaySmall) {
 
 TEST(TestFileJournal, ReplayCorrupt) {
   fsid = boost::uuids::random_generator()();
-  FileJournal j(fsid, finisher, &sync_cond, path, directio, aio);
+  FileJournal j(cct, fsid, finisher, &sync_cond, path, directio, aio);
   ASSERT_EQ(0, j.create());
   j.make_writeable();
 
@@ -324,7 +326,7 @@ TEST(TestFileJournal, ReplayCorrupt) {
 
 TEST(TestFileJournal, WriteTrim) {
   fsid = boost::uuids::random_generator()();
-  FileJournal j(fsid, finisher, &sync_cond, path, directio, aio);
+  FileJournal j(cct, fsid, finisher, &sync_cond, path, directio, aio);
   ASSERT_EQ(0, j.create());
   j.make_writeable();
 
@@ -362,7 +364,7 @@ TEST(TestFileJournal, WriteTrim) {
 
 TEST(TestFileJournal, WriteTrimSmall) {
   fsid = boost::uuids::random_generator()();
-  FileJournal j(fsid, finisher, &sync_cond, path, directio);
+  FileJournal j(cct, fsid, finisher, &sync_cond, path, directio);
   ASSERT_EQ(0, j.create());
   j.make_writeable();
 
@@ -400,12 +402,12 @@ TEST(TestFileJournal, WriteTrimSmall) {
 }
 
 TEST(TestFileJournal, ReplayDetectCorruptFooterMagic) {
-  g_ceph_context->_conf->set_val("journal_ignore_corruption", "true");
-  g_ceph_context->_conf->set_val("journal_write_header_frequency", "1");
-  g_ceph_context->_conf->apply_changes(NULL);
+  cct->_conf->set_val("journal_ignore_corruption", "true");
+  cct->_conf->set_val("journal_write_header_frequency", "1");
+  cct->_conf->apply_changes(NULL);
 
   fsid = boost::uuids::random_generator()();
-  FileJournal j(fsid, finisher, &sync_cond, path, directio, aio);
+  FileJournal j(cct, fsid, finisher, &sync_cond, path, directio, aio);
   ASSERT_EQ(0, j.create());
   j.make_writeable();
 
@@ -450,12 +452,12 @@ TEST(TestFileJournal, ReplayDetectCorruptFooterMagic) {
 }
 
 TEST(TestFileJournal, ReplayDetectCorruptPayload) {
-  g_ceph_context->_conf->set_val("journal_ignore_corruption", "true");
-  g_ceph_context->_conf->set_val("journal_write_header_frequency", "1");
-  g_ceph_context->_conf->apply_changes(NULL);
+  cct->_conf->set_val("journal_ignore_corruption", "true");
+  cct->_conf->set_val("journal_write_header_frequency", "1");
+  cct->_conf->apply_changes(NULL);
 
   fsid = boost::uuids::random_generator()();
-  FileJournal j(fsid, finisher, &sync_cond, path, directio, aio);
+  FileJournal j(cct, fsid, finisher, &sync_cond, path, directio, aio);
   ASSERT_EQ(0, j.create());
   j.make_writeable();
 
@@ -500,12 +502,12 @@ TEST(TestFileJournal, ReplayDetectCorruptPayload) {
 }
 
 TEST(TestFileJournal, ReplayDetectCorruptHeader) {
-  g_ceph_context->_conf->set_val("journal_ignore_corruption", "true");
-  g_ceph_context->_conf->set_val("journal_write_header_frequency", "1");
-  g_ceph_context->_conf->apply_changes(NULL);
+  cct->_conf->set_val("journal_ignore_corruption", "true");
+  cct->_conf->set_val("journal_write_header_frequency", "1");
+  cct->_conf->apply_changes(NULL);
 
   fsid = boost::uuids::random_generator()();
-  FileJournal j(fsid, finisher, &sync_cond, path, directio, aio);
+  FileJournal j(cct, fsid, finisher, &sync_cond, path, directio, aio);
   ASSERT_EQ(0, j.create());
   j.make_writeable();
 

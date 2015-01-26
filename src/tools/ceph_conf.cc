@@ -29,6 +29,8 @@
 using std::deque;
 using std::string;
 
+static CephContext* cct;
+
 static void usage()
 {
   // TODO: add generic_usage once cerr/derr issues are resolved
@@ -75,7 +77,7 @@ static int list_sections(const std::string &prefix,
 			 const std::map<string,string>& filter_key_value)
 {
   std::vector <std::string> sections;
-  int ret = g_conf->get_all_sections(sections);
+  int ret = cct->_conf->get_all_sections(sections);
   if (ret)
     return 2;
   for (std::vector<std::string>::const_iterator p = sections.begin();
@@ -89,7 +91,7 @@ static int list_sections(const std::string &prefix,
     int r = 0;
     for (std::list<string>::const_iterator q = filter_key.begin(); q != filter_key.end(); ++q) {
       string v;
-      r = g_conf->get_val_from_conf_file(sec, q->c_str(), v, false);
+      r = cct->_conf->get_val_from_conf_file(sec, q->c_str(), v, false);
       if (r < 0)
 	break;
     }
@@ -100,7 +102,7 @@ static int list_sections(const std::string &prefix,
 	 q != filter_key_value.end();
 	 ++q) {
       string v;
-      r = g_conf->get_val_from_conf_file(sec, q->first.c_str(), v, false);
+      r = cct->_conf->get_val_from_conf_file(sec, q->first.c_str(), v, false);
       if (r < 0 || v != q->second) {
 	r = -1;
 	break;
@@ -121,9 +123,9 @@ static int lookup(const std::deque<std::string> &sections,
   for (deque<string>::const_iterator s = sections.begin(); s != sections.end(); ++s) {
     my_sections.push_back(*s);
   }
-  g_conf->get_my_sections(my_sections);
+  cct->_conf->get_my_sections(my_sections);
   std::string val;
-  int ret = g_conf->get_val_from_conf_file(my_sections, key.c_str(), val, true);
+  int ret = cct->_conf->get_val_from_conf_file(my_sections, key.c_str(), val, true);
   if (ret == -ENOENT)
     return 1;
   else if (ret == 0) {
@@ -158,8 +160,8 @@ int main(int argc, const char **argv)
   env_to_vec(args);
   vector<const char*> orig_args = args;
 
-  global_pre_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_DAEMON,
-		  CINIT_FLAG_NO_DAEMON_ACTIONS);
+  cct = global_pre_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT,
+			CODE_ENVIRONMENT_DAEMON, CINIT_FLAG_NO_DAEMON_ACTIONS);
 
   // do not common_init_finish(); do not start threads; do not do any of thing
   // wonky things the daemon whose conf we are examining would do (like initialize

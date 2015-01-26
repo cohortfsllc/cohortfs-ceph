@@ -27,7 +27,6 @@
 #include "common/Mutex.h"
 #include "common/Clock.h"
 #include "common/Formatter.h"
-#include "global/global_context.h"
 #include "include/rados/librados.hpp"
 #include <cfloat>
 #include <queue>

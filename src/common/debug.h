@@ -20,16 +20,16 @@
 /* Global version of the stuff in common/dout.h
  */
 
-#define dout(v) ldout((g_ceph_context), v)
+#define dout(v) ldout((cct), v)
 
-#define pdout(v, p) lpdout((g_ceph_context), v, p)
+#define pdout(v, p) lpdout((cct), v, p)
 
-#define dlog_p(sub, v) ldlog_p1((g_ceph_context), sub, v)
+#define dlog_p(sub, v) ldlog_p1((cct), sub, v)
 
-#define generic_dout(v) lgeneric_dout((g_ceph_context), v)
+#define generic_dout(v) lgeneric_dout((cct), v)
 
-#define derr lderr((g_ceph_context))
+#define derr lderr((cct))
 
-#define generic_derr lgeneric_derr((g_ceph_context))
+#define generic_derr lgeneric_derr((cct))
 
 #endif

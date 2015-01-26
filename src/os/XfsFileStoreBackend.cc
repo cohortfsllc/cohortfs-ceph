@@ -30,8 +30,8 @@
 #undef dout_prefix
 #define dout_prefix *_dout << "xfsfilestorebackend(" << get_basedir_path() << ") "
 
-XfsFileStoreBackend::XfsFileStoreBackend(FileStore *fs):
-  GenericFileStoreBackend(fs), m_has_extsize(false) { }
+XfsFileStoreBackend::XfsFileStoreBackend(CephContext* cct, FileStore *fs):
+  GenericFileStoreBackend(cct, fs), m_has_extsize(false) { }
 
 /*
  * Set extsize attr on a file to val.  Should be a free-standing

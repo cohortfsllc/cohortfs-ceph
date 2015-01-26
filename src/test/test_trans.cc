@@ -23,6 +23,8 @@
 #undef dout_prefix
 #define dout_prefix *_dout
 
+static CephContext* cct;
+
 using std::cout;
 
 struct Foo : public Thread {
@@ -40,8 +42,9 @@ int main(int argc, const char **argv)
   argv_to_vec(argc, argv, args);
   env_to_vec(args);
 
-  global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
-  common_init_finish(g_ceph_context);
+  cct = global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT,
+		    CODE_ENVIRONMENT_UTILITY, 0);
+  common_init_finish(cct);
 
   // args
   if (args.size() < 2) return -1;
@@ -51,7 +54,7 @@ int main(int argc, const char **argv)
   cout << "#dev " << filename << std::endl;
   cout << "#mb " << mb << std::endl;
 
-  ObjectStore *fs = new FileStore(g_ceph_context, filename, NULL);
+  ObjectStore *fs = new FileStore(cct, filename, NULL);
   if (fs->mount() < 0) {
     cout << "mount failed" << std::endl;
     return -1;

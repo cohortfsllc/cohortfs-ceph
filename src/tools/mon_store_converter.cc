@@ -30,8 +30,9 @@
 
 using namespace std;
 
-class MonitorStoreConverter {
+CephContext* cct;
 
+class MonitorStoreConverter {
   boost::scoped_ptr<MonitorDBStore> db;
   boost::scoped_ptr<MonitorStore> store;
 
@@ -43,17 +44,23 @@ class MonitorStoreConverter {
   string MONITOR_NAME;
 
  public:
-  MonitorStoreConverter(string &store_path, string &db_store_path)
+  MonitorStoreConverter(string &store_path,
+			string &db_store_path)
     : db(0), store(0),
       highest_last_pn(0), highest_accepted_pn(0),
       MONITOR_NAME("monitor")
   {
-    MonitorStore *store_ptr = new MonitorStore(store_path);
+    cct->get();
+    MonitorStore *store_ptr = new MonitorStore(cct, store_path);
     assert(!store_ptr->mount());
     store.reset(store_ptr);
 
-    MonitorDBStore *db_ptr = new MonitorDBStore(db_store_path);
+    MonitorDBStore *db_ptr = new MonitorDBStore(cct, db_store_path);
     db.reset(db_ptr);
+  }
+
+  ~MonitorStoreConverter() {
+    cct->put();
   }
 
   int convert() {
@@ -314,11 +321,11 @@ int main(int argc, const char *argv[])
   const char *our_name = argv[0];
   argv_to_vec(argc, argv, args);
 
-  global_init(&def_args, args,
-	      CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY,
-	      CINIT_FLAG_NO_DEFAULT_CONFIG_FILE);
-  common_init_finish(g_ceph_context);
-  g_ceph_context->_conf->apply_changes(NULL);
+  cct = global_init(&def_args, args,
+		    CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY,
+		    CINIT_FLAG_NO_DEFAULT_CONFIG_FILE);
+  common_init_finish(cct);
+  cct->_conf->apply_changes(NULL);
 
   if (args.empty()) {
     usage(our_name);

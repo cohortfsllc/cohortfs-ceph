@@ -38,11 +38,20 @@ inline bool operator==(ceph_filelock& l, ceph_filelock& r) {
 
 class ceph_lock_state_t {
 public:
+  CephContext* cct;
   multimap<uint64_t, ceph_filelock> held_locks;	   // current locks
   multimap<uint64_t, ceph_filelock> waiting_locks; // locks waiting for other locks
   // both of the above are keyed by starting offset
   map<client_t, int> client_held_lock_counts;
   map<client_t, int> client_waiting_lock_counts;
+
+  ceph_lock_state_t(CephContext* _cct) : cct(_cct) {
+    cct->get();
+  }
+
+  ~ceph_lock_state_t() {
+    cct->put();
+  }
 
   /**
    * Check if a lock is on the waiting_locks list.

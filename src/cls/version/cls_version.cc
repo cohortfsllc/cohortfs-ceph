@@ -14,8 +14,6 @@
 #include "cls/version/cls_version_ops.h"
 #include "common/Clock.h"
 
-#include "global/global_context.h"
-
 CLS_VER(1,0)
 CLS_NAME(version)
 
