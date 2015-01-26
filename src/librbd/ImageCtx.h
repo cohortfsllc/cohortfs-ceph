@@ -57,7 +57,9 @@ namespace librbd {
     std::string header_oid;
     std::string image_oid;
 
-    ObjectCacher *object_cacher;
+#if 0
+//FIXME!  ObjectCacher *object_cacher;
+#endif
     LibrbdWriteback *writeback_handler;
     ObjectCacher::ObjectSet *object_set;
 
@@ -68,14 +70,19 @@ namespace librbd {
     uint64_t get_current_size() const;
     uint64_t get_image_size() const;
 
+#if 0
+//FIXME! needs OSDRead&etc... -- Dan? Adam?  -mdw 20150105
     void aio_read_from_cache(object_t o, bufferlist *bl, size_t len,
 			     uint64_t off, Context *onfinish);
     void write_to_cache(object_t o, bufferlist& bl, size_t len, uint64_t off,
 			Context *onfinish);
     int read_from_cache(object_t o, bufferlist *bl, size_t len, uint64_t off);
+#endif
     void user_flushed();
+#if 0
     void flush_cache_aio(Context *onfinish);
-    int flush_cache();
+//FIXME!    int flush_cache();
+#endif
     void shutdown_cache();
     void invalidate_cache();
     void clear_nonexistence_cache();
