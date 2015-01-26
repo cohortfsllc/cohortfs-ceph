@@ -95,6 +95,7 @@ int stress_test(uint64_t num_ops, uint64_t num_objs,
     ops.push_back(op);
     std::cout << "op " << i << " " << (is_read ? "read" : "write")
 	      << " " << op->extent << "\n";
+#if 0
     if (op->is_read) {
       ObjectCacher::OSDRead *rd = obc.prepare_read(&op->result, 0);
       rd->extents.push_back(op->extent);
@@ -115,6 +116,9 @@ int stress_test(uint64_t num_ops, uint64_t num_objs,
       obc.writex(wr, &object_set, lock, NULL);
       lock.Unlock();
     }
+#else
+      assert(0);	// FIXME!
+#endif
   }
 
   // check that all reads completed

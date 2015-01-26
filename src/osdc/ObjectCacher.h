@@ -13,7 +13,6 @@
 #include "common/Thread.h"
 
 #include "Objecter.h"
-#include "Striper.h"
 
 class CephContext;
 class WritebackHandler;
@@ -26,10 +25,11 @@ class ObjectCacher {
   class C_ReadFinish;
 
   typedef void (*flush_set_callback_t) (void *p, ObjectSet *oset);
-
+#if 0
+// Adam will fix. -mdw 20150105
   // read scatter/gather
   struct OSDRead {
-    vector<ObjectExtent> extents;
+//FIXME!    vector<ObjectExtent> extents;
     map<object_t, bufferlist*> read_data;  // bits of data as they come back
     bufferlist *bl;
     int flags;
@@ -42,7 +42,7 @@ class ObjectCacher {
 
   // write scatter/gather
   struct OSDWrite {
-    vector<ObjectExtent> extents;
+//FIXME!    vector<ObjectExtent> extents;
     bufferlist bl;
     utime_t mtime;
     int flags;
@@ -54,6 +54,7 @@ class ObjectCacher {
 			  int f) {
     return new OSDWrite(b, mt, f);
   }
+#endif
 
 
 
@@ -248,12 +249,14 @@ class ObjectCacher {
     void try_merge_bh(BufferHead *bh);
 
     bool is_cached(loff_t off, loff_t len);
+#if 0
     int map_read(OSDRead *rd,
 		 map<loff_t, BufferHead*>& hits,
 		 map<loff_t, BufferHead*>& missing,
 		 map<loff_t, BufferHead*>& rx,
 		 map<loff_t, BufferHead*>& errors);
     BufferHead *map_write(OSDWrite *wr);
+#endif
 
     void truncate(loff_t s);
     void discard(loff_t off, loff_t len);
@@ -423,8 +426,10 @@ class ObjectCacher {
   int64_t reads_outstanding;
   Cond read_cond;
 
+#if 0
   int _readx(OSDRead *rd, ObjectSet *oset, Context *onfinish,
 	     bool external_call);
+#endif
 
  public:
   void bh_read_finish(const boost::uuids::uuid& volume, object_t oid,
@@ -513,6 +518,8 @@ class ObjectCacher {
   }
 
 
+#if 0
+// Adam will fix. -mdw 20150105
   class C_RetryRead : public Context {
     ObjectCacher *oc;
     OSDRead *rd;
@@ -545,12 +552,15 @@ class ObjectCacher {
   int readx(OSDRead *rd, ObjectSet *oset, Context *onfinish);
   int writex(OSDWrite *wr, ObjectSet *oset, Mutex& wait_on_lock,
 	     Context *onfreespace);
-  bool is_cached(ObjectSet *oset, vector<ObjectExtent>& extents);
+//FIXME!  bool is_cached(ObjectSet *oset, vector<ObjectExtent>& extents);
+#endif
 
 private:
+#if 0
   // write blocking
   int _wait_for_write(OSDWrite *wr, uint64_t len, ObjectSet *oset, Mutex& lock,
 		      Context *onfreespace);
+#endif
   void maybe_wait_for_writeback(uint64_t len);
   bool _flush_set_finish(C_GatherBuilder *gather, Context *onfinish);
 
@@ -560,8 +570,11 @@ public:
   bool set_is_dirty_or_committing(ObjectSet *oset);
 
   bool flush_set(ObjectSet *oset, Context *onfinish=0);
-  bool flush_set(ObjectSet *oset, vector<ObjectExtent>& ex,
+#if 0
+// Adam will fix. -mdw 20150105
+//FIXME!  bool flush_set(ObjectSet *oset, vector<ObjectExtent>& ex,
 		 Context *onfinish = 0);
+#endif
   void flush_all(Context *onfinish = 0);
 
   void purge_set(ObjectSet *oset);
@@ -570,7 +583,7 @@ public:
   loff_t release_set(ObjectSet *oset);
   uint64_t release_all();
 
-  void discard_set(ObjectSet *oset, vector<ObjectExtent>& ex);
+//FIXME!  void discard_set(ObjectSet *oset, vector<ObjectExtent>& ex);
 
   /**
    * Retry any in-flight reads that get -ENOENT instead of marking
@@ -601,11 +614,13 @@ public:
 
   // file functions
 
+#if 0
+// Adam will fix. -mdw 20150105
   /*** async+caching (non-blocking) file interface ***/
   int file_is_cached(ObjectSet *oset, ceph_file_layout *layout,
 		     loff_t offset, uint64_t len) {
-    vector<ObjectExtent> extents;
-    Striper::file_to_extents(cct, oset->ino, layout, offset, len,
+//FIXME!    vector<ObjectExtent> extents;
+//FIXME!    Striper::file_to_extents(cct, oset->ino, layout, offset, len,
 			     oset->truncate_size, extents);
     return is_cached(oset, extents);
   }
@@ -616,7 +631,7 @@ public:
 		int flags,
 		Context *onfinish) {
     OSDRead *rd = prepare_read(bl, flags);
-    Striper::file_to_extents(cct, oset->ino, layout, offset, len,
+//FIXME!    Striper::file_to_extents(cct, oset->ino, layout, offset, len,
 			     oset->truncate_size, rd->extents);
     return readx(rd, oset, onfinish);
   }
@@ -626,18 +641,19 @@ public:
 		 bufferlist& bl, utime_t mtime, int flags,
 		 Mutex& wait_on_lock) {
     OSDWrite *wr = prepare_write(bl, mtime, flags);
-    Striper::file_to_extents(cct, oset->ino, layout, offset, len,
+//FIXME!    Striper::file_to_extents(cct, oset->ino, layout, offset, len,
 			     oset->truncate_size, wr->extents);
     return writex(wr, oset, wait_on_lock, NULL);
   }
 
   bool file_flush(ObjectSet *oset, ceph_file_layout *layout,
 		  loff_t offset, uint64_t len, Context *onfinish) {
-    vector<ObjectExtent> extents;
-    Striper::file_to_extents(cct, oset->ino, layout, offset, len,
+//FIXME!    vector<ObjectExtent> extents;
+//FIXME!    Striper::file_to_extents(cct, oset->ino, layout, offset, len,
 			     oset->truncate_size, extents);
     return flush_set(oset, extents, onfinish);
   }
+#endif
 };
 
 

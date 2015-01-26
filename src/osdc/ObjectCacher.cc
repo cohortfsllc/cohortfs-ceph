@@ -1,6 +1,16 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
+/*
+ * NB
+ *  This version of objectcacher will need changes to work with
+ *  cohortfs volumes.  Adam promises to do this.  Also Dan says he's
+ *  going on a witch hunt to get rid of ObjectExtent.  For now,
+ *  the mds won't use this, and I've "if 0"'d some egregious bits here
+ *  that will especially need changes from Adam/Dan before they can be useful again.
+ * -mdw 20150105
+ */
+
 #include <limits.h>
 
 #include "msg/Messenger.h"
@@ -168,6 +178,7 @@ bool ObjectCacher::Object::is_cached(loff_t cur, loff_t left)
   return true;
 }
 
+#if 0
 /*
  * map a range of bytes into buffer_heads.
  * - create missing buffer_heads as necessary.
@@ -268,6 +279,7 @@ int ObjectCacher::Object::map_read(OSDRead *rd,
   }
   return 0;
 }
+#endif
 
 void ObjectCacher::Object::audit_buffers()
 {
@@ -302,6 +314,7 @@ void ObjectCacher::Object::audit_buffers()
   }
 }
 
+#if 0
 /*
  * map a range of extents on an object's buffer cache.
  * - combine any bh's we're writing into one
@@ -422,6 +435,7 @@ ObjectCacher::BufferHead *ObjectCacher::Object::map_write(OSDWrite *wr)
 
   return final;
 }
+#endif
 
 void ObjectCacher::Object::truncate(loff_t s)
 {
@@ -950,6 +964,7 @@ void ObjectCacher::trim()
 
 /* public */
 
+#if 0
 bool ObjectCacher::is_cached(ObjectSet *oset, vector<ObjectExtent>& extents)
 {
   assert(lock.is_locked());
@@ -1281,6 +1296,7 @@ int ObjectCacher::writex(OSDWrite *wr, ObjectSet *oset, Mutex& wait_on_lock,
   trim();
   return r;
 }
+#endif
 
 void ObjectCacher::C_WaitForWrite::finish(int r)
 {
@@ -1314,6 +1330,7 @@ void ObjectCacher::maybe_wait_for_writeback(uint64_t len)
   }
 }
 
+#if 0
 // blocking wait for write.
 int ObjectCacher::_wait_for_write(OSDWrite *wr, uint64_t len, ObjectSet *oset, Mutex& lock, Context *onfreespace)
 {
@@ -1356,6 +1373,7 @@ int ObjectCacher::_wait_for_write(OSDWrite *wr, uint64_t len, ObjectSet *oset, M
   }
   return ret;
 }
+#endif
 
 void ObjectCacher::flusher_entry()
 {
@@ -1567,6 +1585,7 @@ bool ObjectCacher::flush_set(ObjectSet *oset, Context *onfinish)
   return _flush_set_finish(&gather, onfinish);
 }
 
+#if 0
 // flush.  non-blocking, takes callback.
 // returns true if already flushed
 bool ObjectCacher::flush_set(ObjectSet *oset, vector<ObjectExtent>& exv, Context *onfinish)
@@ -1606,6 +1625,7 @@ bool ObjectCacher::flush_set(ObjectSet *oset, vector<ObjectExtent>& exv, Context
 
   return _flush_set_finish(&gather, onfinish);
 }
+#endif
 
 void ObjectCacher::purge_set(ObjectSet *oset)
 {
@@ -1761,6 +1781,7 @@ void ObjectCacher::clear_nonexistence(ObjectSet *oset)
   }
 }
 
+#if 0
 /**
  * discard object extents from an ObjectSet by removing the objects in exls from the in-memory oset.
  */
@@ -1794,6 +1815,7 @@ void ObjectCacher::discard_set(ObjectSet *oset, vector<ObjectExtent>& exls)
       were_dirty && oset->dirty_or_tx == 0)
     flush_set_callback(flush_set_callback_arg, oset);
 }
+#endif
 
 void ObjectCacher::verify_stats() const
 {
