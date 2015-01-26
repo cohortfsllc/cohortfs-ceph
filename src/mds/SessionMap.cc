@@ -16,10 +16,10 @@
 #include "MDS.h"
 #include "MDCache.h"
 #include "SessionMap.h"
-#include "osdc/Filer.h"
 
 #include "common/config.h"
 #include "common/errno.h"
+#include "osdc/Objecter.h"
 
 #define dout_subsys ceph_subsys_mds
 #undef dout_prefix

@@ -18,12 +18,10 @@
 #include "MDS.h"
 #include "MDLog.h"
 
-#include "osdc/Filer.h"
-
 #include "include/types.h"
 
 #include "common/config.h"
-
+#include "osdc/Objecter.h"
 
 #define dout_subsys ceph_subsys_mds
 #undef dout_prefix

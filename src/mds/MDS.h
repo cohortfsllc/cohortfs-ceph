@@ -47,7 +47,6 @@ class filepath;
 class MonClient;
 
 class OSDMap;
-class Filer;
 
 class Server;
 class Locker;

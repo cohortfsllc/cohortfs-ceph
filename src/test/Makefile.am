@@ -322,11 +322,6 @@ unittest_workqueue_CXXFLAGS = $(UNITTEST_CXXFLAGS)
 unittest_workqueue_LDADD = $(UNITTEST_LDADD) $(CEPH_GLOBAL)
 check_PROGRAMS += unittest_workqueue
 
-unittest_striper_SOURCES = test/test_striper.cc
-unittest_striper_CXXFLAGS = $(UNITTEST_CXXFLAGS)
-unittest_striper_LDADD = $(LIBOSDC) $(UNITTEST_LDADD) $(CEPH_GLOBAL)
-check_PROGRAMS += unittest_striper
-
 unittest_prebufferedstreambuf_SOURCES = test/test_prebufferedstreambuf.cc
 unittest_prebufferedstreambuf_CXXFLAGS = $(UNITTEST_CXXFLAGS)
 unittest_prebufferedstreambuf_LDADD = $(LIBCOMMON) $(UNITTEST_LDADD) $(EXTRALIBS)

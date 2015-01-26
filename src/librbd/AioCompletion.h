@@ -13,8 +13,6 @@
 #include "librbd/ImageCtx.h"
 #include "librbd/internal.h"
 
-#include "osdc/Striper.h"
-
 namespace librbd {
 
   class AioRead;

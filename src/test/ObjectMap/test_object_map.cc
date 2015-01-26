@@ -520,7 +520,7 @@ public:
   virtual void SetUp() {
     char *path = getenv("OBJECT_MAP_PATH");
     if (!path) {
-      db.reset(new DBObjectMap(new KeyValueDBMemory()));
+      db.reset(new DBObjectMap(g_ceph_context, new KeyValueDBMemory()));
       tester.db = db.get();
       return;
     }
@@ -531,7 +531,7 @@ public:
     LevelDBStore *store = new LevelDBStore(g_ceph_context, strpath);
     assert(!store->create_and_open(cerr));
 
-    db.reset(new DBObjectMap(store));
+    db.reset(new DBObjectMap(g_ceph_context, store));
     tester.db = db.get();
   }
 

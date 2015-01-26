@@ -58,7 +58,6 @@
 #define CEPH_JOURNALER_H
 
 #include "Objecter.h"
-// #include "Filer.h"
 
 #include <list>
 #include <map>
@@ -148,7 +147,6 @@ private:
 
   const char *magic;
   Objecter *objecter;
-//  Filer filer;
 
   SafeTimer *timer;
 

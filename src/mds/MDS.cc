@@ -29,7 +29,6 @@
 
 #include "osd/OSDMap.h"
 #include "osdc/Objecter.h"
-#include "osdc/Filer.h"
 #include "osdc/Journaler.h"
 
 #include "MDSMap.h"

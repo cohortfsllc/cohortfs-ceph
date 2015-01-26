@@ -46,7 +46,6 @@
 #include "common/safe_io.h"
 #include "common/MemoryModel.h"
 #include "osdc/Journaler.h"
-#include "osdc/Filer.h"
 
 #include "events/ESubtreeMap.h"
 #include "events/EUpdate.h"
@@ -4677,11 +4676,16 @@ bool MDCache::process_imported_caps()
     if (cap_imports_missing.count(p->first) > 0)
       continue;
 
+	// XXX error processing here?
     VolumeRef volume;
     {
       const OSDMap* osdmap = mds->objecter->get_osdmap_read();
       osdmap->find_by_uuid(in->inode.layout.fl_uuid, volume);
       mds->objecter->put_osdmap_read();
+    }
+    int r = volume->attach(mds->objecter->cct);
+    if (r) {
+      dout(0) << "Unable to attach volume " << volume << " error=" << r << dendl;
     }
 
     cap_imports_num_opening++;
@@ -5327,6 +5331,12 @@ void MDCache::purge_prealloc_ino(inodeno_t ino, Context *fin)
 {
   object_t oid = CInode::get_object_name(ino, frag_t(), "");
   VolumeRef volume(mds->get_metadata_volume());
+// XXX error recovery?
+  int r = volume->attach(mds->objecter->cct);
+  if (r) {
+    dout(0) << "Unable to attach volume " << volume << " error=" << r << dendl;
+    return;
+  }
 
   dout(10) << "purge_prealloc_ino " << ino << " oid " << oid << dendl;
   mds->objecter->remove(oid, volume, ceph_clock_now(g_ceph_context), 0, 0, fin);
@@ -7387,6 +7397,12 @@ void MDCache::_open_ino_backtrace_fetched(inodeno_t ino, bufferlist& bl, int err
 	mds->objecter->put_osdmap_read();
       }
 
+// XXX error recovery?
+      int r = info.volume->attach(mds->objecter->cct);
+      if (r) {
+	dout(0) << "Unable to attach volume " << info.volume << " error=" << r << dendl;
+	return;
+      }
       C_MDC_OpenInoBacktraceFetched *fin = new C_MDC_OpenInoBacktraceFetched(this, ino);
       fetch_backtrace(ino, info.volume, fin->bl, fin);
       return;
@@ -7397,6 +7413,12 @@ void MDCache::_open_ino_backtrace_fetched(inodeno_t ino, bufferlist& bl, int err
       dout(10) << " no object in volume " << info.volume
 	       << ", retrying volume " << meta_volume << dendl;
       info.volume = meta_volume;
+// XXX error recovery?
+      int r = info.volume->attach(mds->objecter->cct);
+      if (r) {
+	dout(0) << "Unable to attach volume " << info.volume << " error=" << r << dendl;
+	return;
+      }
       C_MDC_OpenInoBacktraceFetched *fin = new C_MDC_OpenInoBacktraceFetched(this, ino);
       fetch_backtrace(ino, info.volume, fin->bl, fin);
       return;
@@ -7627,6 +7649,12 @@ void MDCache::do_open_ino(inodeno_t ino, open_ino_info_t& info, int err)
     assert(!info.ancestors.empty());
     info.checking = mds->get_nodeid();
     VolumeRef mvol(mds->get_metadata_volume());
+// XXX error recovery?
+    int r = mvol->attach(mds->objecter->cct);
+    if (r) {
+      dout(0) << "Unable to attach volume " << mvol << " error=" << r << dendl;
+      return;
+    }
     open_ino(info.ancestors[0].dirino, mvol,
 	     new C_MDC_OpenInoParentOpened(this, ino), info.want_replica);
   }
@@ -7798,6 +7826,11 @@ void MDCache::open_ino(inodeno_t ino, VolumeRef volume, Context* fin,
       const OSDMap* osdmap = mds->objecter->get_osdmap_read();
       osdmap->find_by_uuid(default_file_layout.fl_uuid, volume);
       mds->objecter->put_osdmap_read();
+    }
+// XXX error recovery?
+    int r = volume->attach(mds->objecter->cct);
+    if (r) {
+      dout(0) << "Unable to attach volume " << volume << " error=" << r << dendl;
     }
     info.checked.insert(mds->get_nodeid());
     info.want_replica = want_replica;
@@ -8572,6 +8605,12 @@ void MDCache::purge_stray(CDentry *dn)
 
   if (in->is_dir()) {
     VolumeRef volume(mds->get_metadata_volume());
+    int r = volume->attach(mds->objecter->cct);
+// XXX error recovery?
+    if (r) {
+      dout(0) << "Unable to attach volume " << volume << " error=" << r << dendl;
+      return;
+    }
     list<frag_t> ls;
     if (!in->dirfragtree.is_leaf(frag_t()))
       in->dirfragtree.get_leaves(ls);
@@ -8617,6 +8656,12 @@ void MDCache::purge_stray(CDentry *dn)
       osdmap->find_by_uuid(pi->layout.fl_uuid, volume);
       mds->objecter->put_osdmap_read();
     }
+// XXX error recovery?
+    int r = volume->attach(mds->objecter->cct);
+    if (r) {
+      dout(0) << "Unable to attach volume " << volume << " error=" << r << dendl;
+      return;
+    }
     dout(10) << "purge_stray remove backtrace object " << poid
 	     << " volume " << volume << dendl;
     mds->objecter->remove(poid, volume,
@@ -8632,6 +8677,12 @@ void MDCache::purge_stray(CDentry *dn)
       const OSDMap* osdmap = mds->objecter->get_osdmap_read();
       osdmap->find_by_uuid(*p, volume);
       mds->objecter->put_osdmap_read();
+    }
+// XXX error recovery?
+    int r = volume->attach(mds->objecter->cct);
+    if (r) {
+      dout(0) << "Unable to attach volume " << volume << " error=" << r << dendl;
+      return;
     }
     mds->objecter->remove(poid, volume, ceph_clock_now(g_ceph_context), 0,
 			  NULL, gather.new_sub());
@@ -10652,6 +10703,12 @@ void MDCache::_fragment_committed(dirfrag_t basedirfrag, list<CDir*>& resultfrag
   C_GatherBuilder gather(new C_MDC_FragmentFinish(this, basedirfrag, resultfrags));
 
   VolumeRef volume(mds->get_metadata_volume());
+// XXX error recovery?
+  int r = volume->attach(mds->objecter->cct);
+  if (r) {
+    dout(0) << "Unable to attach volume " << volume << " error=" << r << dendl;
+    return;
+  }
   for (list<frag_t>::iterator p = uf.old_frags.begin();
        p != uf.old_frags.end();
        ++p) {
