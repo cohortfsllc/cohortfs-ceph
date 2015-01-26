@@ -102,11 +102,11 @@ int main(int argc, const char **argv)
   ObjectStore *src = 0, *dst = 0;
 
   if (strcmp(args[0], "filestore") == 0)
-    src = new FileStore(args[1], NULL);
+    src = new FileStore(g_ceph_context, args[1], NULL);
   else usage();
 
   if (strcmp(args[2], "filestore") == 0)
-    dst = new FileStore(args[3], NULL);
+    dst = new FileStore(g_ceph_context, args[3], NULL);
   else usage();
 
   return dupstore(src, dst);

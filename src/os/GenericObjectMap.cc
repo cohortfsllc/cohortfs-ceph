@@ -587,7 +587,7 @@ int GenericObjectMap::init(bool do_upgrade)
     state.decode(bliter);
     if (state.v < 1) { // Needs upgrade
       if (!do_upgrade) {
-	dout(1) << "GenericObjbectMap requires an upgrade,"
+	ldout(cct, 1) << "GenericObjbectMap requires an upgrade,"
 		<< " set filestore_update_to"
 		<< dendl;
 	return -ENOTSUP;
@@ -602,7 +602,7 @@ int GenericObjectMap::init(bool do_upgrade)
     state.v = 1;
     state.seq = 1;
   }
-  dout(20) << "(init)genericobjectmap: seq is " << state.seq << dendl;
+  ldout(cct, 20) << "(init)genericobjectmap: seq is " << state.seq << dendl;
   return 0;
 }
 
@@ -789,7 +789,7 @@ int GenericObjectMap::need_parent(GenericObjectMapIterator iter)
 
 int GenericObjectMap::write_state(KeyValueDB::Transaction t)
 {
-  dout(20) << __func__ << " seq is " << state.seq << dendl;
+  ldout(cct, 20) << __func__ << " seq is " << state.seq << dendl;
   bufferlist bl;
   state.encode(bl);
   map<string, bufferlist> to_write;
@@ -867,7 +867,7 @@ GenericObjectMap::Header GenericObjectMap::lookup_parent(Header input)
   set<string> keys;
   keys.insert(PARENT_KEY);
 
-  dout(20) << "lookup_parent: parent " << input->parent
+  ldout(cct, 20) << "lookup_parent: parent " << input->parent
        << " for seq " << input->seq << dendl;
 
   int r = db->get(parent_seq_prefix(input->parent), keys, &out);
@@ -884,7 +884,7 @@ GenericObjectMap::Header GenericObjectMap::lookup_parent(Header input)
   header->seq = input->parent;
   bufferlist::iterator iter = out.begin()->second.begin();
   header->decode(iter);
-  dout(20) << "lookup_parent: parent seq is " << header->seq << " with parent "
+  ldout(cct, 20) << "lookup_parent: parent seq is " << header->seq << " with parent "
 	   << header->parent << dendl;
   in_use.insert(header->seq);
   return header;
@@ -904,7 +904,7 @@ GenericObjectMap::Header GenericObjectMap::lookup_create_header(
 
 void GenericObjectMap::set_parent_header(Header header, KeyValueDB::Transaction t)
 {
-  dout(20) << __func__ << " setting seq " << header->seq << dendl;
+  ldout(cct, 20) << __func__ << " setting seq " << header->seq << dendl;
   map<string, bufferlist> to_write;
   header->encode(to_write[PARENT_KEY]);
   t->set(parent_seq_prefix(header->seq), to_write);
@@ -912,7 +912,7 @@ void GenericObjectMap::set_parent_header(Header header, KeyValueDB::Transaction 
 
 void GenericObjectMap::clear_header(Header header, KeyValueDB::Transaction t)
 {
-  dout(20) << __func__ << " clearing seq " << header->seq << dendl;
+  ldout(cct, 20) << __func__ << " clearing seq " << header->seq << dendl;
   t->rmkeys_by_prefix(user_prefix(header, string()));
   t->rmkeys_by_prefix(complete_prefix(header));
   set<string> keys;
@@ -925,7 +925,7 @@ void GenericObjectMap::remove_header(const coll_t &cid,
 				     const hobject_t &oid, Header header,
 				     KeyValueDB::Transaction t)
 {
-  dout(20) << __func__ << " removing " << header->seq
+  ldout(cct, 20) << __func__ << " removing " << header->seq
 	   << " cid " << cid << " oid " << oid << dendl;
   set<string> to_remove;
   to_remove.insert(header_key(cid, oid));
@@ -935,7 +935,7 @@ void GenericObjectMap::remove_header(const coll_t &cid,
 void GenericObjectMap::set_header(const coll_t &cid, const hobject_t &oid,
 				  _Header header, KeyValueDB::Transaction t)
 {
-  dout(20) << __func__ << " setting " << header.seq
+  ldout(cct, 20) << __func__ << " setting " << header.seq
 	   << " cid " << cid << " oid " << oid << " parent seq "
 	   << header.parent << dendl;
   map<string, bufferlist> to_set;
@@ -977,7 +977,7 @@ int GenericObjectMap::list_objects(const coll_t &cid, hobject_t start, int max,
   }
 
   if (out->size())
-    dout(20) << "objects: " << *out << dendl;
+    ldout(cct, 20) << "objects: " << *out << dendl;
 
   return 0;
 }

@@ -973,7 +973,7 @@ TEST(EXT4StoreTest, _detect_fs) {
     EXPECT_EQ(::system((string("mount -o loop,nouser_xattr ") + disk + " " + mnt).c_str()), 0);
     EXPECT_EQ(::chdir(mnt.c_str()), 0);
     EXPECT_EQ(::mkdir(dir.c_str(), 0755), 0);
-    FileStore store(dir, journal);
+    FileStore store(g_ceph_context, dir, journal);
     EXPECT_EQ(store._detect_fs(), -ENOTSUP);
     EXPECT_EQ(::chdir(".."), 0);
     EXPECT_EQ(::umount(mnt.c_str()), 0);
@@ -985,7 +985,7 @@ TEST(EXT4StoreTest, _detect_fs) {
     g_ceph_context->_conf->set_val("filestore_xattr_use_omap", "false");
     EXPECT_EQ(::system((string("mount -o loop,user_xattr ") + disk + " " + mnt).c_str()), 0);
     EXPECT_EQ(::chdir(mnt.c_str()), 0);
-    FileStore store(dir, journal);
+    FileStore store(g_ceph_context, dir, journal);
     EXPECT_EQ(store._detect_fs(), -ENOTSUP);
     EXPECT_EQ(::chdir(".."), 0);
     EXPECT_EQ(::umount(mnt.c_str()), 0);
@@ -997,7 +997,7 @@ TEST(EXT4StoreTest, _detect_fs) {
     g_ceph_context->_conf->set_val("filestore_xattr_use_omap", "true");
     EXPECT_EQ(::system((string("mount -o loop,user_xattr ") + disk + " " + mnt).c_str()), 0);
     EXPECT_EQ(::chdir(mnt.c_str()), 0);
-    FileStore store(dir, journal);
+    FileStore store(g_ceph_context, dir, journal);
     EXPECT_EQ(store._detect_fs(), 0);
     EXPECT_EQ(::chdir(".."), 0);
     EXPECT_EQ(::umount(mnt.c_str()), 0);

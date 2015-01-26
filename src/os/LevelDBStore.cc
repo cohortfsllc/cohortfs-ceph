@@ -12,14 +12,14 @@ int LevelDBStore::init()
 {
   // init defaults.  caller can override these if they want
   // prior to calling open.
-  options.write_buffer_size = g_conf->leveldb_write_buffer_size;
-  options.cache_size = g_conf->leveldb_cache_size;
-  options.block_size = g_conf->leveldb_block_size;
-  options.bloom_size = g_conf->leveldb_bloom_size;
-  options.compression_enabled = g_conf->leveldb_compression;
-  options.paranoid_checks = g_conf->leveldb_paranoid;
-  options.max_open_files = g_conf->leveldb_max_open_files;
-  options.log_file = g_conf->leveldb_log;
+  options.write_buffer_size = cct->_conf->leveldb_write_buffer_size;
+  options.cache_size = cct->_conf->leveldb_cache_size;
+  options.block_size = cct->_conf->leveldb_block_size;
+  options.bloom_size = cct->_conf->leveldb_bloom_size;
+  options.compression_enabled = cct->_conf->leveldb_compression;
+  options.paranoid_checks = cct->_conf->leveldb_paranoid;
+  options.max_open_files = cct->_conf->leveldb_max_open_files;
+  options.log_file = cct->_conf->leveldb_log;
   return 0;
 }
 
@@ -72,10 +72,10 @@ int LevelDBStore::do_open(ostream &out, bool create_if_missing)
     return -EINVAL;
   }
 
-  if (g_conf->leveldb_compact_on_mount) {
-    derr << "Compacting leveldb store..." << dendl;
+  if (cct->_conf->leveldb_compact_on_mount) {
+    lderr(cct) << "Compacting leveldb store..." << dendl;
     compact();
-    derr << "Finished compacting leveldb store" << dendl;
+    lderr(cct) << "Finished compacting leveldb store" << dendl;
   }
 
   return 0;

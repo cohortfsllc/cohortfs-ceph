@@ -66,7 +66,7 @@ int main(int argc, char **argv) {
   LevelDBStore *_db = new LevelDBStore(g_ceph_context, db_path);
   assert(!_db->create_and_open(std::cerr));
   boost::scoped_ptr<KeyValueDB> db(_db);
-  boost::scoped_ptr<ObjectStore> store(new FileStore(store_path, store_dev));
+  boost::scoped_ptr<ObjectStore> store(new FileStore(g_ceph_context, store_path, store_dev));
 
 
   if (start_new) {

@@ -171,7 +171,7 @@ int main(int argc, char **argv) {
   string store_path(args[1]);
   string store_dev(args[2]);
 
-  boost::scoped_ptr<ObjectStore> store(new FileStore(store_path, store_dev));
+  boost::scoped_ptr<ObjectStore> store(new FileStore(g_ceph_context, store_path, store_dev));
 
   std::cerr << "mkfs starting" << std::endl;
   assert(!store->mkfs());

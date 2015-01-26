@@ -136,7 +136,7 @@ class StripObjectMap: public GenericObjectMap {
     set<string> *keys
     );
 
-  StripObjectMap(KeyValueDB *db): GenericObjectMap(db) {}
+  StripObjectMap(CephContext *c, KeyValueDB *db): GenericObjectMap(c, db) {}
 
   static const uint64_t default_strip_size = 1024;
 };
@@ -148,6 +148,7 @@ class KeyValueStore : public ObjectStore,
   static const uint32_t target_version = 1;
 
  private:
+  CephContext *cct;
   string basedir;
   std::string current_fn;
   std::string current_op_seq_fn;
@@ -357,7 +358,7 @@ class KeyValueStore : public ObjectStore,
 
  public:
 
-  KeyValueStore(const std::string &base,
+  KeyValueStore(CephContext *_cct, const std::string &base,
 		const char *internal_name = "keyvaluestore-dev",
 		bool update_to=false);
   ~KeyValueStore();

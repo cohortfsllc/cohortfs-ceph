@@ -61,11 +61,11 @@ ObjectStore* ObjectStore::create(CephContext* cct,
       if (bf::exists(p)) {
 	module = ::dlopen(p.c_str(), RTLD_NOW);
 	if (! module) {
-	  dout(0) << __func__  << " failed to load ObjectStore module "
+	  ldout(cct, 0) << __func__  << " failed to load ObjectStore module "
 		  << bname << ":\n" << dlerror() << dendl;
 	  return NULL;
 	}
-	dout(11) << "load ObjectStore module " << bname << " (" << p << ")"
+	ldout(cct, 11) << "load ObjectStore module " << bname << " (" << p << ")"
 		 << dendl;
       }
     }
@@ -75,7 +75,7 @@ ObjectStore* ObjectStore::create(CephContext* cct,
 	dlsym(module, OBJECTSTORE_INIT_FUNC));
 
     if (! dllinit) {
-      dout(0) << __func__ << " " << OBJECTSTORE_INIT_FUNC << " failed "
+      ldout(cct, 0) << __func__ << " " << OBJECTSTORE_INIT_FUNC << " failed "
 	      << name << " (" << p << ")" << dendl;
       goto out;
     }
@@ -85,7 +85,7 @@ ObjectStore* ObjectStore::create(CephContext* cct,
       modules[name] = factory;
       os = factory(cct, data, journal);
     } else {
-      dout(0) << __func__  << " ObjectStore factory failed "
+      ldout(cct, 0) << __func__  << " ObjectStore factory failed "
 	      << " (" << p << ")" << dendl;
     }
 

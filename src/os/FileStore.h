@@ -176,6 +176,7 @@ private:
     Cond cond;
   public:
     Sequencer *parent;
+    FileStore *store;
     Mutex apply_lock;  // for apply mutual exclusion
 
     void queue_journal(uint64_t s) {
@@ -207,7 +208,7 @@ private:
     void flush() {
       Mutex::Locker l(qlock);
 
-      while (g_conf->filestore_blackhole)
+      while (store->cct->_conf->filestore_blackhole)
 	cond.Wait(qlock);  // wait forever
 
       // get max for journal _or_ op queues
@@ -225,8 +226,8 @@ private:
       }
     }
 
-    OpSequencer()
-      : parent(0) {}
+    OpSequencer(FileStore *_store)
+      : parent(0), store(_store) {}
     ~OpSequencer() {
       assert(q.empty());
     }
@@ -315,7 +316,7 @@ public:
 		 bool force_clear_omap=false);
 
 public:
-  FileStore(const std::string &base, const std::string &jdev, const char *internal_name = "filestore", bool update_to=false);
+  FileStore(CephContext *_cct, const std::string &base, const std::string &jdev, const char *internal_name = "filestore", bool update_to=false);
   ~FileStore();
 
   int _detect_fs();

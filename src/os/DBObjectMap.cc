@@ -969,7 +969,7 @@ int DBObjectMap::init(bool do_upgrade)
     state.decode(bliter);
     if (state.v < 1) { // Needs upgrade
       if (!do_upgrade) {
-	dout(1) << "DOBjbectMap requires an upgrade,"
+	ldout(cct, 1) << "DOBjbectMap requires an upgrade,"
 		<< " set filestore_update_to"
 		<< dendl;
 	return -ENOTSUP;
@@ -984,7 +984,7 @@ int DBObjectMap::init(bool do_upgrade)
     state.v = 1;
     state.seq = 1;
   }
-  dout(20) << "(init)dbobjectmap: seq is " << state.seq << dendl;
+  ldout(cct, 20) << "(init)dbobjectmap: seq is " << state.seq << dendl;
   return 0;
 }
 
@@ -996,7 +996,7 @@ int DBObjectMap::sync(const hobject_t *oid,
     assert(spos);
     Header header = lookup_map_header(*oid);
     if (header) {
-      dout(10) << "oid: " << *oid << " setting spos to "
+      ldout(cct, 10) << "oid: " << *oid << " setting spos to "
 	       << *spos << dendl;
       header->spos = *spos;
       set_map_header(*oid, *header, t);
@@ -1006,7 +1006,7 @@ int DBObjectMap::sync(const hobject_t *oid,
 }
 
 int DBObjectMap::write_state(KeyValueDB::Transaction _t) {
-  dout(20) << "dbobjectmap: seq is " << state.seq << dendl;
+  ldout(cct, 20) << "dbobjectmap: seq is " << state.seq << dendl;
   KeyValueDB::Transaction t = _t ? _t : db->get_transaction();
   bufferlist bl;
   state.encode(bl);
@@ -1064,7 +1064,7 @@ DBObjectMap::Header DBObjectMap::lookup_parent(Header input)
   set<string> keys;
   keys.insert(HEADER_KEY);
 
-  dout(20) << "lookup_parent: parent " << input->parent
+  ldout(cct, 20) << "lookup_parent: parent " << input->parent
        << " for seq " << input->seq << dendl;
   int r = db->get(sys_parent_prefix(input), keys, &out);
   if (r < 0) {
@@ -1080,7 +1080,7 @@ DBObjectMap::Header DBObjectMap::lookup_parent(Header input)
   header->seq = input->parent;
   bufferlist::iterator iter = out.begin()->second.begin();
   header->decode(iter);
-  dout(20) << "lookup_parent: parent seq is " << header->seq << " with parent "
+  ldout(cct, 20) << "lookup_parent: parent seq is " << header->seq << " with parent "
        << header->parent << dendl;
   in_use.insert(header->seq);
   return header;
@@ -1101,7 +1101,7 @@ DBObjectMap::Header DBObjectMap::lookup_create_map_header(
 
 void DBObjectMap::clear_header(Header header, KeyValueDB::Transaction t)
 {
-  dout(20) << "clear_header: clearing seq " << header->seq << dendl;
+  ldout(cct, 20) << "clear_header: clearing seq " << header->seq << dendl;
   t->rmkeys_by_prefix(user_prefix(header));
   t->rmkeys_by_prefix(sys_prefix(header));
   t->rmkeys_by_prefix(complete_prefix(header));
@@ -1113,7 +1113,7 @@ void DBObjectMap::clear_header(Header header, KeyValueDB::Transaction t)
 
 void DBObjectMap::set_header(Header header, KeyValueDB::Transaction t)
 {
-  dout(20) << "set_header: setting seq " << header->seq << dendl;
+  ldout(cct, 20) << "set_header: setting seq " << header->seq << dendl;
   map<string, bufferlist> to_write;
   header->encode(to_write[HEADER_KEY]);
   t->set(sys_prefix(header), to_write);
@@ -1123,7 +1123,7 @@ void DBObjectMap::remove_map_header(const hobject_t &oid,
 				    Header header,
 				    KeyValueDB::Transaction t)
 {
-  dout(20) << "remove_map_header: removing " << header->seq
+  ldout(cct, 20) << "remove_map_header: removing " << header->seq
 	   << " oid " << oid << dendl;
   set<string> to_remove;
   to_remove.insert(map_header_key(coll_t(), oid));
@@ -1133,7 +1133,7 @@ void DBObjectMap::remove_map_header(const hobject_t &oid,
 void DBObjectMap::set_map_header(const hobject_t &oid, _Header header,
 				 KeyValueDB::Transaction t)
 {
-  dout(20) << "set_map_header: setting " << header.seq
+  ldout(cct, 20) << "set_map_header: setting " << header.seq
 	   << " oid " << oid << " parent seq "
 	   << header.parent << dendl;
   map<string, bufferlist> to_set;
@@ -1148,15 +1148,15 @@ bool DBObjectMap::check_spos(const hobject_t &oid,
   if (!spos || *spos > header->spos) {
     stringstream out;
     if (spos)
-      dout(10) << "oid: " << oid << " not skipping op, *spos "
+      ldout(cct, 10) << "oid: " << oid << " not skipping op, *spos "
 	       << *spos << dendl;
     else
-      dout(10) << "oid: " << oid << " not skipping op, *spos "
+      ldout(cct, 10) << "oid: " << oid << " not skipping op, *spos "
 	       << "empty" << dendl;
-    dout(10) << " > header.spos " << header->spos << dendl;
+    ldout(cct, 10) << " > header.spos " << header->spos << dendl;
     return false;
   } else {
-    dout(10) << "oid: " << oid << " skipping op, *spos " << *spos
+    ldout(cct, 10) << "oid: " << oid << " skipping op, *spos " << *spos
 	     << " <= header.spos " << header->spos << dendl;
     return true;
   }

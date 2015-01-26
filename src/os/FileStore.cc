@@ -88,7 +88,7 @@ ObjectStore* FileStore_factory(CephContext* cct,
 			       const std::string& data,
 			       const std::string& journal)
 {
-  return new FileStore(data, journal);
+  return new FileStore(cct, data, journal);
 }
 
 /* DLL machinery */
@@ -396,7 +396,7 @@ int FileStore::lfn_unlink(const coll_t &cid, const hobject_t& o,
 	assert(!m_filestore_fail_eio || r != -EIO);
 	return r;
       }
-      if (g_conf->filestore_debug_inject_read_err) {
+      if (cct->_conf->filestore_debug_inject_read_err) {
 	debug_obj_on_delete(o);
       }
       wbthrottle.clear_object(o); // should be only non-cache ref
@@ -412,56 +412,56 @@ int FileStore::lfn_unlink(const coll_t &cid, const hobject_t& o,
   return index->unlink(o);
 }
 
-FileStore::FileStore(const std::string &base, const std::string &jdev, const char *name, bool do_update) :
-  JournalingObjectStore(base),
+FileStore::FileStore(CephContext *_cct, const std::string &base, const std::string &jdev, const char *name, bool do_update) :
+  JournalingObjectStore(_cct, base),
   basedir(base), journalpath(jdev),
   blk_size(0),
   fsid_fd(-1), op_fd(-1),
   basedir_fd(-1), current_fd(-1),
   generic_backend(NULL), backend(NULL),
   index_manager(),
-  ondisk_finisher(g_ceph_context),
+  ondisk_finisher(cct),
   force_sync(false), sync_epoch(0),
-  timer(g_ceph_context, sync_entry_timeo_lock),
+  timer(cct, sync_entry_timeo_lock),
   stop(false), sync_thread(this),
   trace_endpoint("0.0.0.0", 0, NULL),
-  fdcache(g_ceph_context),
-  wbthrottle(g_ceph_context),
+  fdcache(cct),
+  wbthrottle(cct),
   default_osr("default"),
   op_queue_len(0), op_queue_bytes(0),
-  op_finisher(g_ceph_context),
-  op_tp(g_ceph_context, "FileStore::op_tp", g_conf->filestore_op_threads, "filestore_op_threads"),
-  op_wq(this, g_conf->filestore_op_thread_timeout,
-	g_conf->filestore_op_thread_suicide_timeout, &op_tp),
-  m_filestore_commit_timeout(g_conf->filestore_commit_timeout),
-  m_filestore_journal_parallel(g_conf->filestore_journal_parallel ),
-  m_filestore_journal_trailing(g_conf->filestore_journal_trailing),
-  m_filestore_journal_writeahead(g_conf->filestore_journal_writeahead),
-  m_filestore_fiemap_threshold(g_conf->filestore_fiemap_threshold),
-  m_filestore_max_sync_interval(g_conf->filestore_max_sync_interval),
-  m_filestore_min_sync_interval(g_conf->filestore_min_sync_interval),
-  m_filestore_fail_eio(g_conf->filestore_fail_eio),
-  m_filestore_replica_fadvise(g_conf->filestore_replica_fadvise),
+  op_finisher(cct),
+  op_tp(cct, "FileStore::op_tp", cct->_conf->filestore_op_threads, "filestore_op_threads"),
+  op_wq(this, cct->_conf->filestore_op_thread_timeout,
+	cct->_conf->filestore_op_thread_suicide_timeout, &op_tp),
+  m_filestore_commit_timeout(cct->_conf->filestore_commit_timeout),
+  m_filestore_journal_parallel(cct->_conf->filestore_journal_parallel ),
+  m_filestore_journal_trailing(cct->_conf->filestore_journal_trailing),
+  m_filestore_journal_writeahead(cct->_conf->filestore_journal_writeahead),
+  m_filestore_fiemap_threshold(cct->_conf->filestore_fiemap_threshold),
+  m_filestore_max_sync_interval(cct->_conf->filestore_max_sync_interval),
+  m_filestore_min_sync_interval(cct->_conf->filestore_min_sync_interval),
+  m_filestore_fail_eio(cct->_conf->filestore_fail_eio),
+  m_filestore_replica_fadvise(cct->_conf->filestore_replica_fadvise),
   do_update(do_update),
-  m_journal_dio(g_conf->journal_dio),
-  m_journal_aio(g_conf->journal_aio),
-  m_journal_force_aio(g_conf->journal_force_aio),
-  m_filestore_queue_max_ops(g_conf->filestore_queue_max_ops),
-  m_filestore_queue_max_bytes(g_conf->filestore_queue_max_bytes),
-  m_filestore_queue_committing_max_ops(g_conf->filestore_queue_committing_max_ops),
-  m_filestore_queue_committing_max_bytes(g_conf->filestore_queue_committing_max_bytes),
+  m_journal_dio(cct->_conf->journal_dio),
+  m_journal_aio(cct->_conf->journal_aio),
+  m_journal_force_aio(cct->_conf->journal_force_aio),
+  m_filestore_queue_max_ops(cct->_conf->filestore_queue_max_ops),
+  m_filestore_queue_max_bytes(cct->_conf->filestore_queue_max_bytes),
+  m_filestore_queue_committing_max_ops(cct->_conf->filestore_queue_committing_max_ops),
+  m_filestore_queue_committing_max_bytes(cct->_conf->filestore_queue_committing_max_bytes),
   m_filestore_do_dump(false),
   m_filestore_dump_fmt(true),
-  m_filestore_sloppy_crc(g_conf->filestore_sloppy_crc),
-  m_filestore_sloppy_crc_block_size(g_conf->filestore_sloppy_crc_block_size),
-  m_filestore_max_alloc_hint_size(g_conf->filestore_max_alloc_hint_size),
+  m_filestore_sloppy_crc(cct->_conf->filestore_sloppy_crc),
+  m_filestore_sloppy_crc_block_size(cct->_conf->filestore_sloppy_crc_block_size),
+  m_filestore_max_alloc_hint_size(cct->_conf->filestore_max_alloc_hint_size),
   m_fs_type(FS_TYPE_NONE),
   m_filestore_max_inline_xattr_size(0),
   m_filestore_max_inline_xattrs(0)
 {
   trace_endpoint.copy_name("FileStore (" + basedir + ")");
 
-  m_filestore_kill_at = g_conf->filestore_kill_at;
+  m_filestore_kill_at = cct->_conf->filestore_kill_at;
 
   ostringstream oss;
   oss << basedir << "/current";
@@ -475,7 +475,7 @@ FileStore::FileStore(const std::string &base, const std::string &jdev, const cha
   omss << basedir << "/current/omap";
   omap_dir = omss.str();
 
-  g_ceph_context->_conf->add_observer(this);
+  cct->_conf->add_observer(this);
 
   generic_backend = new GenericFileStoreBackend(this);
   backend = generic_backend;
@@ -485,7 +485,7 @@ FileStore::FileStore(const std::string &base, const std::string &jdev, const cha
 
 FileStore::~FileStore()
 {
-  g_ceph_context->_conf->remove_observer(this);
+  cct->_conf->remove_observer(this);
 
   delete generic_backend;
 }
@@ -845,8 +845,8 @@ int FileStore::_detect_fs()
     // wbthrottle is constructed with fs(WBThrottle::XFS)
     if (m_filestore_replica_fadvise) {
       dout(1) << " disabling 'filestore replica fadvise' due to known issues with fadvise(DONTNEED) on xfs" << dendl;
-      g_conf->set_val("filestore_replica_fadvise", "false");
-      g_conf->apply_changes(NULL);
+      cct->_conf->set_val("filestore_replica_fadvise", "false");
+      cct->_conf->apply_changes(NULL);
       assert(m_filestore_replica_fadvise == false);
     }
   } else if (st.f_type == ZFS_SUPER_MAGIC) {
@@ -1280,25 +1280,25 @@ int FileStore::mount()
   }
 
   {
-    LevelDBStore *omap_store = new LevelDBStore(g_ceph_context, omap_dir);
+    LevelDBStore *omap_store = new LevelDBStore(cct, omap_dir);
 
     omap_store->init();
-    if (g_conf->osd_leveldb_write_buffer_size)
-      omap_store->options.write_buffer_size = g_conf->osd_leveldb_write_buffer_size;
-    if (g_conf->osd_leveldb_cache_size)
-      omap_store->options.cache_size = g_conf->osd_leveldb_cache_size;
-    if (g_conf->osd_leveldb_block_size)
-      omap_store->options.block_size = g_conf->osd_leveldb_block_size;
-    if (g_conf->osd_leveldb_bloom_size)
-      omap_store->options.bloom_size = g_conf->osd_leveldb_bloom_size;
-    if (g_conf->osd_leveldb_compression)
-      omap_store->options.compression_enabled = g_conf->osd_leveldb_compression;
-    if (g_conf->osd_leveldb_paranoid)
-      omap_store->options.paranoid_checks = g_conf->osd_leveldb_paranoid;
-    if (g_conf->osd_leveldb_max_open_files)
-      omap_store->options.max_open_files = g_conf->osd_leveldb_max_open_files;
-    if (g_conf->osd_leveldb_log.length())
-      omap_store->options.log_file = g_conf->osd_leveldb_log;
+    if (cct->_conf->osd_leveldb_write_buffer_size)
+      omap_store->options.write_buffer_size = cct->_conf->osd_leveldb_write_buffer_size;
+    if (cct->_conf->osd_leveldb_cache_size)
+      omap_store->options.cache_size = cct->_conf->osd_leveldb_cache_size;
+    if (cct->_conf->osd_leveldb_block_size)
+      omap_store->options.block_size = cct->_conf->osd_leveldb_block_size;
+    if (cct->_conf->osd_leveldb_bloom_size)
+      omap_store->options.bloom_size = cct->_conf->osd_leveldb_bloom_size;
+    if (cct->_conf->osd_leveldb_compression)
+      omap_store->options.compression_enabled = cct->_conf->osd_leveldb_compression;
+    if (cct->_conf->osd_leveldb_paranoid)
+      omap_store->options.paranoid_checks = cct->_conf->osd_leveldb_paranoid;
+    if (cct->_conf->osd_leveldb_max_open_files)
+      omap_store->options.max_open_files = cct->_conf->osd_leveldb_max_open_files;
+    if (cct->_conf->osd_leveldb_log.length())
+      omap_store->options.log_file = cct->_conf->osd_leveldb_log;
 
     stringstream err;
     if (omap_store->create_and_open(err)) {
@@ -1308,13 +1308,13 @@ int FileStore::mount()
       goto close_current_fd;
     }
 
-    if (g_conf->osd_compact_leveldb_on_mount) {
+    if (cct->_conf->osd_compact_leveldb_on_mount) {
       derr << "Compacting store..." << dendl;
       omap_store->compact();
       derr << "...finished compacting store" << dendl;
     }
 
-    DBObjectMap *dbomap = new DBObjectMap(omap_store);
+    DBObjectMap *dbomap = new DBObjectMap(cct, omap_store);
     ret = dbomap->init(do_update);
     if (ret < 0) {
       delete dbomap;
@@ -1323,7 +1323,7 @@ int FileStore::mount()
     }
     stringstream err2;
 
-    if (g_conf->filestore_debug_omap_check && !dbomap->check(err2)) {
+    if (cct->_conf->filestore_debug_omap_check && !dbomap->check(err2)) {
       derr << err2.str() << dendl;;
       delete dbomap;
       ret = -EINVAL;
@@ -1413,7 +1413,7 @@ int FileStore::mount()
 
   {
     stringstream err2;
-    if (g_conf->filestore_debug_omap_check && !object_map->check(err2)) {
+    if (cct->_conf->filestore_debug_omap_check && !object_map->check(err2)) {
       derr << err2.str() << dendl;;
       ret = -EINVAL;
       goto close_current_fd;
@@ -1532,7 +1532,7 @@ FileStore::Op *FileStore::build_op(list<Transaction*>& tls,
   }
 
   Op *o = new Op;
-  o->start = ceph_clock_now(g_ceph_context);
+  o->start = ceph_clock_now(cct);
   o->tls.swap(tls);
   o->onreadable = onreadable;
   o->onreadable_sync = onreadable_sync;
@@ -1605,12 +1605,12 @@ void FileStore::_do_op(OpSequencer *osr, ThreadPool::TPHandle &handle)
 {
   wbthrottle.throttle();
   // inject a stall?
-  if (g_conf->filestore_inject_stall) {
-    int orig = g_conf->filestore_inject_stall;
+  if (cct->_conf->filestore_inject_stall) {
+    int orig = cct->_conf->filestore_inject_stall;
     dout(5) << "_do_op filestore_inject_stall " << orig << ", sleeping" << dendl;
-    for (int n = 0; n < g_conf->filestore_inject_stall; n++)
+    for (int n = 0; n < cct->_conf->filestore_inject_stall; n++)
       sleep(1);
-    g_conf->set_val("filestore_inject_stall", "0");
+    cct->_conf->set_val("filestore_inject_stall", "0");
     dout(5) << "_do_op done stalling" << dendl;
   }
 
@@ -1638,7 +1638,7 @@ void FileStore::_finish_op(OpSequencer *osr)
   // called with tp lock held
   op_queue_release_throttle(o);
 
-  utime_t lat = ceph_clock_now(g_ceph_context);
+  utime_t lat = ceph_clock_now(cct);
   lat -= o->start;
 
   if (o->onreadable_sync) {
@@ -1673,7 +1673,7 @@ int FileStore::queue_transactions(Sequencer *posr, list<Transaction*> &tls,
   Context *onreadable_sync;
   ObjectStore::Transaction::collect_contexts(
     tls, &onreadable, &ondisk, &onreadable_sync);
-  if (g_conf->filestore_blackhole) {
+  if (cct->_conf->filestore_blackhole) {
     dout(0) << "queue_transactions filestore_blackhole = TRUE, dropping transaction" << dendl;
     delete ondisk;
     delete onreadable;
@@ -1689,7 +1689,7 @@ int FileStore::queue_transactions(Sequencer *posr, list<Transaction*> &tls,
     osr = static_cast<OpSequencer *>(posr->p);
     dout(5) << "queue_transactions existing " << *osr << "/" << osr->parent << dendl; //<< " w/ q " << osr->q << dendl;
   } else {
-    osr = new OpSequencer;
+    osr = new OpSequencer(this);
     osr->parent = posr;
     posr->p = osr;
     dout(5) << "queue_transactions new " << *osr << "/" << osr->parent << dendl;
@@ -2308,7 +2308,7 @@ unsigned FileStore::_do_transaction(
 	assert(0 == "unexpected error");
 
 	if (r == -EMFILE) {
-	  dump_open_fds(g_ceph_context);
+	  dump_open_fds(cct);
 	}
       }
     }
@@ -2350,7 +2350,7 @@ int FileStore::stat(
 	     << " = " << r
 	     << " (size " << st->st_size << ")" << dendl;
   }
-  if (g_conf->filestore_debug_inject_read_err &&
+  if (cct->_conf->filestore_debug_inject_read_err &&
       debug_mdata_eio(oid)) {
     return -EIO;
   } else {
@@ -2416,7 +2416,7 @@ int FileStore::read(
 
   dout(10) << "FileStore::read " << cid << "/" << oid << " " << offset << "~"
 	   << got << "/" << len << dendl;
-  if (g_conf->filestore_debug_inject_read_err &&
+  if (cct->_conf->filestore_debug_inject_read_err &&
       debug_data_eio(oid)) {
     return -EIO;
   } else {
@@ -2582,7 +2582,7 @@ int FileStore::_write(const coll_t &cid, const hobject_t& oid,
 
   // flush?
   if (!replaying &&
-      g_conf->filestore_wbthrottle_enable)
+      cct->_conf->filestore_wbthrottle_enable)
     wbthrottle.queue_wb(fd, oid, offset, len, replica);
   lfn_close(fd);
 
@@ -2839,10 +2839,10 @@ void FileStore::sync_entry()
     utime_t min_interval;
     min_interval.set_from_double(m_filestore_min_sync_interval);
 
-    utime_t startwait = ceph_clock_now(g_ceph_context);
+    utime_t startwait = ceph_clock_now(cct);
     if (!force_sync) {
       dout(20) << "sync_entry waiting for max_interval " << max_interval << dendl;
-      sync_cond.WaitInterval(g_ceph_context, lock, max_interval);
+      sync_cond.WaitInterval(cct, lock, max_interval);
     } else {
       dout(20) << "sync_entry not waiting, force_sync set" << dendl;
     }
@@ -2852,7 +2852,7 @@ void FileStore::sync_entry()
       force_sync = false;
     } else {
       // wait for at least the min interval
-      utime_t woke = ceph_clock_now(g_ceph_context);
+      utime_t woke = ceph_clock_now(cct);
       woke -= startwait;
       dout(20) << "sync_entry woke after " << woke << dendl;
       if (woke < min_interval) {
@@ -2860,7 +2860,7 @@ void FileStore::sync_entry()
 	t -= woke;
 	dout(20) << "sync_entry waiting for another " << t
 		 << " to reach min interval " << min_interval << dendl;
-	sync_cond.WaitInterval(g_ceph_context, lock, t);
+	sync_cond.WaitInterval(cct, lock, t);
       }
     }
 
@@ -2871,7 +2871,7 @@ void FileStore::sync_entry()
 
     op_tp.pause();
     if (apply_manager.commit_start()) {
-      utime_t start = ceph_clock_now(g_ceph_context);
+      utime_t start = ceph_clock_now(cct);
       uint64_t cp = apply_manager.get_committing_seq();
 
       sync_entry_timeo_lock.Lock();
@@ -2885,7 +2885,7 @@ void FileStore::sync_entry()
 
       dout(15) << "sync_entry committing " << cp << " sync_epoch " << sync_epoch << dendl;
       stringstream errstream;
-      if (g_conf->filestore_debug_omap_check && !object_map->check(errstream)) {
+      if (cct->_conf->filestore_debug_omap_check && !object_map->check(errstream)) {
 	derr << errstream.str() << dendl;
 	assert(0);
       }
@@ -2943,7 +2943,7 @@ void FileStore::sync_entry()
 	}
       }
 
-      utime_t done = ceph_clock_now(g_ceph_context);
+      utime_t done = ceph_clock_now(cct);
       utime_t lat = done - start;
       utime_t dur = done - startwait;
       dout(10) << "sync_entry commit took " << lat << ", interval was " << dur << dendl;
@@ -3049,7 +3049,7 @@ void FileStore::flush()
 {
   dout(10) << "flush" << dendl;
 
-  if (g_conf->filestore_blackhole) {
+  if (cct->_conf->filestore_blackhole) {
     // wait forever
     Mutex lock;
     Cond cond;
@@ -3287,7 +3287,7 @@ int FileStore::getattr(const coll_t &cid, const hobject_t& oid, const char *name
  out:
   dout(10) << "getattr " << cid << "/" << oid << " '" << name << "' = " << r << dendl;
   assert(!m_filestore_fail_eio || r != -EIO);
-  if (g_conf->filestore_debug_inject_read_err &&
+  if (cct->_conf->filestore_debug_inject_read_err &&
       debug_mdata_eio(oid)) {
     return -EIO;
   } else {
@@ -3364,7 +3364,7 @@ int FileStore::getattrs(const coll_t &cid, const hobject_t& oid, map<string,buff
   dout(10) << "getattrs " << cid << "/" << oid << " = " << r << dendl;
   assert(!m_filestore_fail_eio || r != -EIO);
 
-  if (g_conf->filestore_debug_inject_read_err &&
+  if (cct->_conf->filestore_debug_inject_read_err &&
       debug_mdata_eio(oid)) {
     return -EIO;
   } else {
@@ -4279,7 +4279,7 @@ void FileStore::_inject_failure()
     dout(5) << "_inject_failure " << (final+1) << " -> " << final << dendl;
     if (final == 0) {
       derr << "_inject_failure KILLING" << dendl;
-      g_ceph_context->_log->flush();
+      cct->_log->flush();
       _exit(1);
     }
   }
@@ -4508,31 +4508,31 @@ void FileStore::set_xattr_limits_via_conf()
 
   switch(m_fs_type) {
     case FS_TYPE_XFS:
-      fs_xattr_size = g_conf->filestore_max_inline_xattr_size_xfs;
-      fs_xattrs = g_conf->filestore_max_inline_xattrs_xfs;
+      fs_xattr_size = cct->_conf->filestore_max_inline_xattr_size_xfs;
+      fs_xattrs = cct->_conf->filestore_max_inline_xattrs_xfs;
       break;
     case FS_TYPE_BTRFS:
-      fs_xattr_size = g_conf->filestore_max_inline_xattr_size_btrfs;
-      fs_xattrs = g_conf->filestore_max_inline_xattrs_btrfs;
+      fs_xattr_size = cct->_conf->filestore_max_inline_xattr_size_btrfs;
+      fs_xattrs = cct->_conf->filestore_max_inline_xattrs_btrfs;
       break;
     case FS_TYPE_ZFS:
     case FS_TYPE_OTHER:
-      fs_xattr_size = g_conf->filestore_max_inline_xattr_size_other;
-      fs_xattrs = g_conf->filestore_max_inline_xattrs_other;
+      fs_xattr_size = cct->_conf->filestore_max_inline_xattr_size_other;
+      fs_xattrs = cct->_conf->filestore_max_inline_xattrs_other;
       break;
     default:
       assert(!"Unknown fs type");
   }
 
   //Use override value if set
-  if (g_conf->filestore_max_inline_xattr_size)
-    m_filestore_max_inline_xattr_size = g_conf->filestore_max_inline_xattr_size;
+  if (cct->_conf->filestore_max_inline_xattr_size)
+    m_filestore_max_inline_xattr_size = cct->_conf->filestore_max_inline_xattr_size;
   else
     m_filestore_max_inline_xattr_size = fs_xattr_size;
 
   //Use override value if set
-  if (g_conf->filestore_max_inline_xattrs)
-    m_filestore_max_inline_xattrs = g_conf->filestore_max_inline_xattrs;
+  if (cct->_conf->filestore_max_inline_xattrs)
+    m_filestore_max_inline_xattrs = cct->_conf->filestore_max_inline_xattrs;
   else
     m_filestore_max_inline_xattrs = fs_xattrs;
 }

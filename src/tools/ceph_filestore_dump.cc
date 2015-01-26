@@ -1227,7 +1227,7 @@ int main(int argc, char **argv)
     exit(1);
   }
 
-  ObjectStore *fs = new FileStore(fspath, jpath);
+  ObjectStore *fs = new FileStore(g_ceph_context, fspath, jpath);
 
   int r = fs->mount();
   if (r < 0) {

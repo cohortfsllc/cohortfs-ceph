@@ -51,6 +51,7 @@
  * complete set to reflect the change @see rm_keys.
  */
 class DBObjectMap : public ObjectMap {
+  CephContext *cct;
 public:
   boost::scoped_ptr<KeyValueDB> db;
 
@@ -67,7 +68,7 @@ public:
   set<uint64_t> in_use;
   set<hobject_t> map_header_in_use;
 
-  DBObjectMap(KeyValueDB *db) : db(db)
+  DBObjectMap(CephContext * c, KeyValueDB *db) : cct(c), db(db)
     {}
 
   int set_keys(

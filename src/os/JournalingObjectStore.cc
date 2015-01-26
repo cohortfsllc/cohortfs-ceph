@@ -13,13 +13,13 @@
 
 void JournalingObjectStore::journal_start()
 {
-  dout(10) << "journal_start" << dendl;
+  ldout(cct, 10) << "journal_start" << dendl;
   finisher.start();
 }
 
 void JournalingObjectStore::journal_stop()
 {
-  dout(10) << "journal_stop" << dendl;
+  ldout(cct, 10) << "journal_stop" << dendl;
   finisher.stop();
   if (journal) {
     journal->close();
@@ -31,13 +31,13 @@ void JournalingObjectStore::journal_stop()
 
 int JournalingObjectStore::journal_replay(uint64_t fs_op_seq)
 {
-  dout(10) << "journal_replay fs op_seq " << fs_op_seq << dendl;
+  ldout(cct, 10) << "journal_replay fs op_seq " << fs_op_seq << dendl;
 
-  if (g_conf->journal_replay_from) {
-    dout(0) << "journal_replay forcing replay from " << g_conf->journal_replay_from
+  if (cct->_conf->journal_replay_from) {
+    ldout(cct, 0) << "journal_replay forcing replay from " << cct->_conf->journal_replay_from
 	    << " instead of " << fs_op_seq << dendl;
     // the previous op is the last one committed
-    fs_op_seq = g_conf->journal_replay_from - 1;
+    fs_op_seq = cct->_conf->journal_replay_from - 1;
   }
 
   uint64_t op_seq = fs_op_seq;
@@ -48,7 +48,7 @@ int JournalingObjectStore::journal_replay(uint64_t fs_op_seq)
 
   int err = journal->open(op_seq);
   if (err < 0) {
-    dout(3) << "journal_replay open failed with "
+    ldout(cct, 3) << "journal_replay open failed with "
 	    << cpp_strerror(err) << dendl;
     delete journal;
     journal = 0;
@@ -62,17 +62,17 @@ int JournalingObjectStore::journal_replay(uint64_t fs_op_seq)
     bufferlist bl;
     uint64_t seq = op_seq + 1;
     if (!journal->read_entry(bl, seq)) {
-      dout(3) << "journal_replay: end of journal, done." << dendl;
+      ldout(cct, 3) << "journal_replay: end of journal, done." << dendl;
       break;
     }
 
     if (seq <= op_seq) {
-      dout(3) << "journal_replay: skipping old op seq " << seq << " <= " << op_seq << dendl;
+      ldout(cct, 3) << "journal_replay: skipping old op seq " << seq << " <= " << op_seq << dendl;
       continue;
     }
     assert(op_seq == seq-1);
 
-    dout(3) << "journal_replay: applying op seq " << seq << dendl;
+    ldout(cct, 3) << "journal_replay: applying op seq " << seq << dendl;
     bufferlist::iterator p = bl.begin();
     list<Transaction*> tls;
     while (!p.end()) {
@@ -91,7 +91,7 @@ int JournalingObjectStore::journal_replay(uint64_t fs_op_seq)
       tls.pop_front();
     }
 
-    dout(3) << "journal_replay: r = " << r << ", op_seq now " << op_seq << dendl;
+    ldout(cct, 3) << "journal_replay: r = " << r << ", op_seq now " << op_seq << dendl;
   }
 
   replaying = false;
@@ -114,10 +114,10 @@ uint64_t JournalingObjectStore::ApplyManager::op_apply_start(uint64_t op)
   Mutex::Locker l(apply_lock);
   while (blocked) {
     // note: this only happens during journal replay
-    dout(10) << "op_apply_start blocked, waiting" << dendl;
+    ldout(cct, 10) << "op_apply_start blocked, waiting" << dendl;
     blocked_cond.Wait(apply_lock);
   }
-  dout(10) << "op_apply_start " << op << " open_ops " << open_ops << " -> " << (open_ops+1) << dendl;
+  ldout(cct, 10) << "op_apply_start " << op << " open_ops " << open_ops << " -> " << (open_ops+1) << dendl;
   assert(!blocked);
   assert(op > committed_seq);
   open_ops++;
@@ -127,7 +127,7 @@ uint64_t JournalingObjectStore::ApplyManager::op_apply_start(uint64_t op)
 void JournalingObjectStore::ApplyManager::op_apply_finish(uint64_t op)
 {
   Mutex::Locker l(apply_lock);
-  dout(10) << "op_apply_finish " << op << " open_ops " << open_ops
+  ldout(cct, 10) << "op_apply_finish " << op << " open_ops " << open_ops
 	   << " -> " << (open_ops-1)
 	   << ", max_applied_seq " << max_applied_seq << " -> " << MAX(op, max_applied_seq)
 	   << dendl;
@@ -150,15 +150,15 @@ uint64_t JournalingObjectStore::SubmitManager::op_submit_start()
 {
   lock.Lock();
   uint64_t op = ++op_seq;
-  dout(10) << "op_submit_start " << op << dendl;
+  ldout(cct, 10) << "op_submit_start " << op << dendl;
   return op;
 }
 
 void JournalingObjectStore::SubmitManager::op_submit_finish(uint64_t op)
 {
-  dout(10) << "op_submit_finish " << op << dendl;
+  ldout(cct, 10) << "op_submit_finish " << op << dendl;
   if (op != op_submitted + 1) {
-    dout(0) << "op_submit_finish " << op << " expected " << (op_submitted + 1)
+    ldout(cct, 0) << "op_submit_finish " << op << " expected " << (op_submitted + 1)
 	    << ", OUT OF ORDER" << dendl;
     assert(0 == "out of order op_submit_finish");
   }
@@ -183,20 +183,20 @@ bool JournalingObjectStore::ApplyManager::commit_start()
   uint64_t _committing_seq = 0;
   {
     Mutex::Locker l(apply_lock);
-    dout(10) << "commit_start max_applied_seq " << max_applied_seq
+    ldout(cct, 10) << "commit_start max_applied_seq " << max_applied_seq
 	     << ", open_ops " << open_ops
 	     << dendl;
     blocked = true;
     while (open_ops > 0) {
-      dout(10) << "commit_start waiting for " << open_ops << " open ops to drain" << dendl;
+      ldout(cct, 10) << "commit_start waiting for " << open_ops << " open ops to drain" << dendl;
       blocked_cond.Wait(apply_lock);
     }
     assert(open_ops == 0);
-    dout(10) << "commit_start blocked, all open_ops have completed" << dendl;
+    ldout(cct, 10) << "commit_start blocked, all open_ops have completed" << dendl;
     {
       Mutex::Locker l(com_lock);
       if (max_applied_seq == committed_seq) {
-	dout(10) << "commit_start nothing to do" << dendl;
+	ldout(cct, 10) << "commit_start nothing to do" << dendl;
 	blocked = false;
 	assert(commit_waiters.empty());
 	goto out;
@@ -204,7 +204,7 @@ bool JournalingObjectStore::ApplyManager::commit_start()
 
       _committing_seq = committing_seq = max_applied_seq;
 
-      dout(10) << "commit_start committing " << committing_seq
+      ldout(cct, 10) << "commit_start committing " << committing_seq
 	       << ", still blocked" << dendl;
     }
   }
@@ -220,7 +220,7 @@ void JournalingObjectStore::ApplyManager::commit_started()
 {
   Mutex::Locker l(apply_lock);
   // allow new ops. (underlying fs should now be committing all prior ops)
-  dout(10) << "commit_started committing " << committing_seq << ", unblocking" << dendl;
+  ldout(cct, 10) << "commit_started committing " << committing_seq << ", unblocking" << dendl;
   blocked = false;
   blocked_cond.Signal();
 }
@@ -228,7 +228,7 @@ void JournalingObjectStore::ApplyManager::commit_started()
 void JournalingObjectStore::ApplyManager::commit_finish()
 {
   Mutex::Locker l(com_lock);
-  dout(10) << "commit_finish thru " << committing_seq << dendl;
+  ldout(cct, 10) << "commit_finish thru " << committing_seq << dendl;
 
   if (journal)
     journal->committed_thru(committing_seq);
@@ -247,7 +247,7 @@ void JournalingObjectStore::_op_journal_transactions(
   list<ObjectStore::Transaction*>& tls, uint64_t op,
   Context *onjournal, OpRequestRef osd_op, ZTracer::Trace *trace)
 {
-  dout(10) << "op_journal_transactions " << op << " " << tls << dendl;
+  ldout(cct, 10) << "op_journal_transactions " << op << " " << tls << dendl;
 
   if (journal && journal->is_writeable()) {
     bufferlist tbl;
@@ -257,7 +257,7 @@ void JournalingObjectStore::_op_journal_transactions(
 	 p != tls.end(); ++p) {
       ObjectStore::Transaction *t = *p;
       if (t->get_data_length() > data_len &&
-	(int)t->get_data_length() >= g_conf->journal_align_min_size) {
+	(int)t->get_data_length() >= cct->_conf->journal_align_min_size) {
 	data_len = t->get_data_length();
 	data_align = (t->get_data_alignment() - tbl.length()) & ~CEPH_PAGE_MASK;
       }

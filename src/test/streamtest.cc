@@ -133,7 +133,7 @@ int main(int argc, const char **argv)
   cout << "#dev " << filename
        << ", " << seconds << " seconds, " << bytes << " bytes per write" << std::endl;
 
-  ObjectStore *fs = new FileStore(filename, journal);
+  ObjectStore *fs = new FileStore(g_ceph_context, filename, journal);
 
   if (fs->mkfs() < 0) {
     cout << "mkfs failed" << std::endl;

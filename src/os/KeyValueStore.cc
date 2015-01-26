@@ -64,7 +64,7 @@ ObjectStore* KVStore_factory(CephContext* cct,
 			     const std::string& data,
 			     const std::string& journal)
 {
-  return new KeyValueStore(data);
+  return new KeyValueStore(cct, data);
 }
 
 /* DLL machinery */
@@ -506,9 +506,10 @@ int KeyValueStore::_create_current()
 
 // =========== KeyValueStore API Implementation ==============
 
-KeyValueStore::KeyValueStore(const std::string &base,
+KeyValueStore::KeyValueStore(CephContext *_cct, const std::string &base,
 			     const char *name, bool do_update) :
   ObjectStore(base),
+  cct(_cct),
   basedir(base),
   fsid_fd(-1), op_fd(-1), current_fd(-1),
   kv_type(KV_TYPE_NONE),
@@ -852,7 +853,7 @@ int KeyValueStore::mount()
       goto close_current_fd;
     }
 
-    StripObjectMap *dbomap = new StripObjectMap(store);
+    StripObjectMap *dbomap = new StripObjectMap(cct, store);
     ret = dbomap->init(do_update);
     if (ret < 0) {
       delete dbomap;

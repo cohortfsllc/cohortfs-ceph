@@ -67,6 +67,7 @@
 // implement write transaction to use it. @see StripObjectMap
 class GenericObjectMap {
  public:
+  CephContext *cct;
   boost::scoped_ptr<KeyValueDB> db;
 
   /**
@@ -80,7 +81,7 @@ class GenericObjectMap {
    */
   set<uint64_t> in_use;
 
-  GenericObjectMap(KeyValueDB *db) : db(db) {}
+  GenericObjectMap(CephContext *c, KeyValueDB *db) : cct(c), db(db) {}
 
   int get(
     const coll_t &cid,

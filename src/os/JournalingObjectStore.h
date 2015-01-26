@@ -21,17 +21,19 @@
 
 class JournalingObjectStore : public ObjectStore {
 protected:
+  CephContext *cct;
   Journal *journal;
   Finisher finisher;
 
 
   class SubmitManager {
+    CephContext *cct;
     Mutex lock;
     uint64_t op_seq;
     uint64_t op_submitted;
   public:
-    SubmitManager() :
-      op_seq(0), op_submitted(0)
+    SubmitManager(CephContext *_cct) :
+      cct(_cct), op_seq(0), op_submitted(0)
     {}
     uint64_t op_submit_start();
     void op_submit_finish(uint64_t op);
@@ -45,6 +47,7 @@ protected:
   } submit_manager;
 
   class ApplyManager {
+    CephContext *cct;
     Journal *&journal;
     Finisher &finisher;
 
@@ -59,7 +62,8 @@ protected:
     uint64_t committing_seq, committed_seq;
 
   public:
-    ApplyManager(Journal *&j, Finisher &f) :
+    ApplyManager(CephContext *_cct, Journal *&j, Finisher &f) :
+      cct(_cct),
       journal(j), finisher(f),
       blocked(false),
       open_ops(0),
@@ -125,11 +129,13 @@ public:
   }
 
 public:
-  JournalingObjectStore(const std::string& path)
+  JournalingObjectStore(CephContext *_cct, const std::string& path)
     : ObjectStore(path),
+      cct(_cct),
       journal(NULL),
-      finisher(g_ceph_context),
-      apply_manager(journal, finisher),
+      finisher(cct),
+      submit_manager(cct),
+      apply_manager(cct, journal, finisher),
       replaying(false) {}
 
 };
