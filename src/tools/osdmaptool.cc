@@ -30,6 +30,8 @@ using namespace std;
 #include "common/ceph_argparse.h"
 #include "global/global_init.h"
 
+static CephContext* cct;
+
 void usage()
 {
   cout << " usage: [--print] [--createsimple <numosd> [--clobber] ] <mapfilename>" << std::endl;
@@ -45,9 +47,10 @@ int main(int argc, const char **argv)
   argv_to_vec(argc, argv, args);
   env_to_vec(args);
 
-  global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY,
-	      CINIT_FLAG_NO_DEFAULT_CONFIG_FILE);
-  common_init_finish(g_ceph_context);
+  cct = global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT,
+		    CODE_ENVIRONMENT_UTILITY,
+		    CINIT_FLAG_NO_DEFAULT_CONFIG_FILE);
+  common_init_finish(cct);
 
   const char *me = argv[0];
 
@@ -151,7 +154,7 @@ int main(int argc, const char **argv)
       num_osd = -1;
     }
     boost::uuids::uuid fsid = boost::uuids::nil_uuid();
-    osdmap.build_simple(g_ceph_context, 0, fsid, num_osd);
+    osdmap.build_simple(cct, 0, fsid, num_osd);
     modified = true;
   }
 

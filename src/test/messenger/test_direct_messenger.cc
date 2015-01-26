@@ -8,6 +8,7 @@
 #include "msg/FastStrategy.h"
 #include "messages/MDataPing.h"
 
+CephContext* cct;
 
 int main(int argc, const char *argv[]) {
   // command-line arguments
@@ -15,16 +16,16 @@ int main(int argc, const char *argv[]) {
   argv_to_vec(argc, argv, args);
   env_to_vec(args);
 
-  global_init(NULL, args, CEPH_ENTITY_TYPE_OSD,
-      CODE_ENVIRONMENT_UTILITY, 0);
-  common_init_finish(g_ceph_context);
+  cct = global_init(NULL, args, CEPH_ENTITY_TYPE_OSD,
+		    CODE_ENVIRONMENT_UTILITY, 0);
+  common_init_finish(cct);
 
   const entity_name_t entity1 = entity_name_t::GENERIC(1);
   const entity_name_t entity2 = entity_name_t::GENERIC(2);
 
-  DirectMessenger *m1 = new DirectMessenger(g_ceph_context,
+  DirectMessenger *m1 = new DirectMessenger(cct,
       entity1, "m1", 0, new FastStrategy());
-  DirectMessenger *m2 = new DirectMessenger(g_ceph_context,
+  DirectMessenger *m2 = new DirectMessenger(cct,
       entity2, "m2", 0, new FastStrategy());
 
   m1->set_direct_peer(m2);
@@ -50,7 +51,7 @@ int main(int argc, const char *argv[]) {
       return true;
     }
   };
-  m1->add_dispatcher_head(new ClientDispatcher(g_ceph_context,
+  m1->add_dispatcher_head(new ClientDispatcher(cct,
 	new C_SafeCond(&mtx, &cond, &done)));
 
   class ServerDispatcher : public Dispatcher {
@@ -68,7 +69,7 @@ int main(int argc, const char *argv[]) {
       return true;
     }
   };
-  m2->add_dispatcher_head(new ServerDispatcher(g_ceph_context));
+  m2->add_dispatcher_head(new ServerDispatcher(cct));
 
   // send message to m2
   m1->send_message(new MDataPing(), m2->get_myinst());

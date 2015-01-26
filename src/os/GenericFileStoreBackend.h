@@ -20,13 +20,17 @@
 class SloppyCRCMap;
 
 class GenericFileStoreBackend : public FileStoreBackend {
+protected:
+  CephContext* cct;
 private:
   bool ioctl_fiemap;
   bool m_filestore_fiemap;
   bool m_filestore_fsync_flushes_journal_data;
 public:
-  GenericFileStoreBackend(FileStore *fs);
-  virtual ~GenericFileStoreBackend() {};
+  GenericFileStoreBackend(CephContext* cct, FileStore *fs);
+  virtual ~GenericFileStoreBackend() {
+    cct->put();
+  };
 
   virtual int detect_features();
   virtual int create_current();

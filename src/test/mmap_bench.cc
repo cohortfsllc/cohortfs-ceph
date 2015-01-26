@@ -13,6 +13,8 @@
 
 #define dout_subsys ceph_subsys_filestore
 
+static CephContext* cct;
+
 static void usage()
 {
 	derr << "usage: objectstore-bench [flags]\n"
@@ -148,8 +150,8 @@ int main(int argc, const char *argv[])
 	argv_to_vec(argc, argv, args);
 	env_to_vec(args);
 
-	global_init(NULL, args, CEPH_ENTITY_TYPE_OSD,
-			CODE_ENVIRONMENT_UTILITY, 0);
+	cct = global_init(NULL, args, CEPH_ENTITY_TYPE_OSD,
+			  CODE_ENVIRONMENT_UTILITY, 0);
 
 	string val;
 	vector<const char*>::iterator i = args.begin();
@@ -180,7 +182,7 @@ int main(int argc, const char *argv[])
 		}
 	}
 
-	common_init_finish(g_ceph_context);
+	common_init_finish(cct);
 
 	// create object store
 	dout(0) << "size " << size << dendl;

@@ -26,16 +26,20 @@
 
 class Journal {
 protected:
+  CephContext* cct;
   boost::uuids::uuid fsid;
   Finisher *finisher;
   Cond *do_sync_cond;
   bool wait_on_full;
 
 public:
-  Journal(const boost::uuids::uuid& f, Finisher *fin, Cond *c=0) :
-    fsid(f), finisher(fin), do_sync_cond(c),
-    wait_on_full(false) { }
-  virtual ~Journal() { }
+  Journal(CephContext* _cct, const boost::uuids::uuid& f, Finisher *fin,
+	  Cond *c=0) : cct(_cct), fsid(f), finisher(fin), do_sync_cond(c),
+		       wait_on_full(false) {
+
+    cct->get();
+  }
+  virtual ~Journal() { cct->put(); }
 
   virtual int check() = 0;   ///< check if journal appears valid
   virtual int create() = 0;  ///< create a fresh journal

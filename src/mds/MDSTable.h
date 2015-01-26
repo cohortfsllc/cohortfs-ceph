@@ -25,6 +25,7 @@ class MDS;
 class MDSTable {
  protected:
   MDS *mds;
+  CephContext* cct;
 
   const char *table_name;
   bool per_mds;
@@ -42,11 +43,10 @@ class MDSTable {
   map<version_t, list<Context*> > waitfor_save;
 
 public:
-  MDSTable(MDS *m, const char *n, bool is_per_mds) :
-    mds(m), table_name(n), per_mds(is_per_mds),
-    state(STATE_UNDEF),
-    version(0), committing_version(0), committed_version(0), projected_version(0) {}
-  virtual ~MDSTable() {}
+  MDSTable(MDS *m, const char *n, bool is_per_mds);
+  virtual ~MDSTable() {
+    cct->put();
+  }
 
   version_t get_version() { return version; }
   version_t get_committed_version() { return committed_version; }

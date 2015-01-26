@@ -110,7 +110,6 @@ public:
   /**
    * @} //Authentication
    */
-protected:
   CephContext *cct;
 private:
   Dispatcher(const Dispatcher &rhs);

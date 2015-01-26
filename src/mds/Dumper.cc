@@ -179,7 +179,7 @@ void Dumper::undump(const char *dump_file)
 
   cout << "writing header " << oid << std::endl;
   objecter->write_full(oid, volume, hbl,
-		       ceph_clock_now(g_ceph_context),
+		       ceph_clock_now(cct),
 		       0, NULL, new C_SafeCond(&lock, &cond, &done));
 
   lock.Lock();
@@ -197,7 +197,7 @@ void Dumper::undump(const char *dump_file)
     j.read_fd(fd, l);
     cout << " writing " << pos << "~" << l << std::endl;
     objecter->write(oid, volume, pos, l, j,
-		    ceph_clock_now(g_ceph_context), 0, NULL,
+		    ceph_clock_now(cct), 0, NULL,
 		    new C_SafeCond(&lock, &cond, &done));
 
     lock.Lock();

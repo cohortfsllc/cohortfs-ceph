@@ -19,6 +19,7 @@
 #endif
 
 
+static CephContext* cct;
 #define dout_subsys ceph_subsys_filestore
 
 static void usage()
@@ -186,8 +187,8 @@ int main(int argc, const char *argv[])
   argv_to_vec(argc, argv, args);
   env_to_vec(args);
 
-  global_init(NULL, args, CEPH_ENTITY_TYPE_OSD,
-	      CODE_ENVIRONMENT_UTILITY, 0);
+  cct = global_init(NULL, args, CEPH_ENTITY_TYPE_OSD,
+		    CODE_ENVIRONMENT_UTILITY, 0);
 
   string val;
   vector<const char*>::iterator i = args.begin();
@@ -218,22 +219,22 @@ int main(int argc, const char *argv[])
     }
   }
 
-  common_init_finish(g_ceph_context);
+  common_init_finish(cct);
 
   // create object store
-  dout(0) << "objectstore " << g_conf->osd_objectstore << dendl;
-  dout(0) << "data " << g_conf->osd_data << dendl;
-  dout(0) << "journal " << g_conf->osd_journal << dendl;
+  dout(0) << "objectstore " << cct->_conf->osd_objectstore << dendl;
+  dout(0) << "data " << cct->_conf->osd_data << dendl;
+  dout(0) << "journal " << cct->_conf->osd_journal << dendl;
   dout(0) << "size " << size << dendl;
   dout(0) << "block-size " << block_size << dendl;
   dout(0) << "repeats " << repeats << dendl;
 
-  fs = ObjectStore::create(g_ceph_context,
-			   g_conf->osd_objectstore,
-			   g_conf->osd_data,
-			   g_conf->osd_journal);
+  fs = ObjectStore::create(cct,
+			   cct->_conf->osd_objectstore,
+			   cct->_conf->osd_data,
+			   cct->_conf->osd_journal);
   if (fs == NULL) {
-    derr << "bad objectstore type " << g_conf->osd_objectstore << dendl;
+    derr << "bad objectstore type " << cct->_conf->osd_objectstore << dendl;
     return 1;
   }
   if (fs->mkfs() < 0) {

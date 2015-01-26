@@ -50,7 +50,14 @@ using namespace std;
 #include "auth/KeyRing.h"
 
 
+static CephContext* cct;
+
 #define dout_subsys ceph_subsys_mds
+
+void sighup_handler(int signum)
+{
+  cct->reopen_logs();
+}
 
 void usage()
 {
@@ -77,7 +84,7 @@ void usage()
 static int do_cmds_special_action(const std::string &action,
 				  const std::string &dump_file, int rank)
 {
-  common_init_finish(g_ceph_context, CINIT_FLAG_NO_DAEMON_ACTIONS);
+  common_init_finish(cct, CINIT_FLAG_NO_DAEMON_ACTIONS);
 
   if (action == "dump-journal") {
     dout(0) << "dumping journal for mds." << rank << " to " << dump_file << dendl;
@@ -148,7 +155,8 @@ int main(int argc, const char **argv)
   argv_to_vec(argc, argv, args);
   env_to_vec(args);
 
-  global_init(NULL, args, CEPH_ENTITY_TYPE_MDS, CODE_ENVIRONMENT_DAEMON, 0);
+  cct = global_init(NULL, args, CEPH_ENTITY_TYPE_MDS, CODE_ENVIRONMENT_DAEMON,
+		    0);
 
   // mds specific args
   int shadow = 0;
@@ -200,8 +208,8 @@ int main(int argc, const char **argv)
       shadow = MDSMap::STATE_ONESHOT_REPLAY;
       char rb[32];
       snprintf(rb, sizeof(rb), "%d", r);
-      g_conf->set_val("mds_standby_for_rank", rb);
-      g_conf->apply_changes(NULL);
+      cct->_conf->set_val("mds_standby_for_rank", rb);
+      cct->_conf->apply_changes(NULL);
     }
     else if (ceph_argparse_witharg(args, i, &val, "--hot-standby", (char*)NULL)) {
       int r = parse_rank("hot-standby", val);
@@ -213,8 +221,8 @@ int main(int argc, const char **argv)
       shadow = MDSMap::STATE_STANDBY_REPLAY;
       char rb[32];
       snprintf(rb, sizeof(rb), "%d", r);
-      g_conf->set_val("mds_standby_for_rank", rb);
-      g_conf->apply_changes(NULL);
+      cct->_conf->set_val("mds_standby_for_rank", rb);
+      cct->_conf->apply_changes(NULL);
     }
     else {
       derr << "Error: can't understand argument: " << *i << "\n" << dendl;
@@ -222,7 +230,7 @@ int main(int argc, const char **argv)
     }
   }
 
-  pick_addresses(g_ceph_context, CEPH_PICK_ADDRESS_PUBLIC);
+  pick_addresses(cct, CEPH_PICK_ADDRESS_PUBLIC);
 
   // Check for special actions
   if (!action.empty()) {
@@ -230,19 +238,19 @@ int main(int argc, const char **argv)
   }
 
   // Normal startup
-  if (g_conf->name.has_default_id()) {
+  if (cct->_conf->name.has_default_id()) {
     derr << "must specify '-i name' with the ceph-mds instance name" << dendl;
     usage();
   }
 
-  Messenger *simple_msgr = Messenger::create(g_ceph_context,
-					   entity_name_t::MDS(-1), "mds",
-					   getpid());
+  Messenger *simple_msgr = Messenger::create(cct,
+					     entity_name_t::MDS(-1), "mds",
+					     getpid());
   simple_msgr->set_cluster_protocol(CEPH_MDS_PROTOCOL);
 
 #if defined(HAVE_XIO)
   XioMessenger *xmsgr = new XioMessenger(
-    g_ceph_context,
+    cct,
     entity_name_t::MDS(-1),
     "xio mds",
     0 /* nonce */,
@@ -253,7 +261,7 @@ int main(int argc, const char **argv)
   xmsgr->set_port_shift(111);;
 #endif
 
-  cout << "starting " << g_conf->name << " at " << simple_msgr->get_myaddr()
+  cout << "starting " << cct->_conf->name << " at " << simple_msgr->get_myaddr()
        << std::endl;
   uint64_t supported =
     CEPH_FEATURE_UID |
@@ -273,7 +281,7 @@ int main(int argc, const char **argv)
 							 CEPH_FEATURE_UID));
   simple_msgr->set_policy(entity_name_t::TYPE_CLIENT,
 			  Messenger::Policy::stateful_server(supported, 0));
-  int r = simple_msgr->bind(g_conf->public_addr);
+  int r = simple_msgr->bind(cct->_conf->public_addr);
   if (r < 0)
     exit(1);
 
@@ -294,21 +302,21 @@ int main(int argc, const char **argv)
 #endif
 
   if (shadow != MDSMap::STATE_ONESHOT_REPLAY)
-    global_init_daemonize(g_ceph_context, 0);
-  common_init_finish(g_ceph_context);
+    global_init_daemonize(cct, 0);
+  common_init_finish(cct);
 
   // get monmap
-  MonClient mc(g_ceph_context);
+  MonClient mc(cct);
   if (mc.build_initial_monmap() < 0)
     return -1;
-  global_init_chdir(g_ceph_context);
+  global_init_chdir(cct);
 
   simple_msgr->start();
 #if defined(HAVE_XIO)
   xmsgr->start();
 #endif
 
-  Messenger *cluster_msgr = (g_conf->cluster_rdma) ?
+  Messenger *cluster_msgr = (cct->_conf->cluster_rdma) ?
 #if defined(HAVE_XIO)
     xmsgr
 #else
@@ -317,7 +325,7 @@ int main(int argc, const char **argv)
     : simple_msgr;
 
   // start mds
-  mds = new MDS(g_conf->name.get_id().c_str(), cluster_msgr, &mc);
+  mds = new MDS(cct->_conf->name.get_id().c_str(), cluster_msgr, &mc);
 
   // in case we have to respawn...
   mds->orig_argc = argc;
@@ -336,7 +344,7 @@ int main(int argc, const char **argv)
   register_async_signal_handler_oneshot(SIGINT, handle_mds_signal);
   register_async_signal_handler_oneshot(SIGTERM, handle_mds_signal);
 
-  if (g_conf->inject_early_sigterm)
+  if (cct->_conf->inject_early_sigterm)
     kill(getpid(), SIGTERM);
 
   simple_msgr->wait();
@@ -362,7 +370,7 @@ int main(int argc, const char **argv)
   if (mds->is_stopped())
     delete mds;
 
-  g_ceph_context->put();
+  cct->put();
 
   // cd on exit, so that gmon.out (if any) goes into a separate directory for each node.
   char s[20];

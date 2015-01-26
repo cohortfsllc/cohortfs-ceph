@@ -14,8 +14,6 @@
 #include "cls_log_types.h"
 #include "cls_log_ops.h"
 
-#include "global/global_context.h"
-
 CLS_VER(1,0)
 CLS_NAME(log)
 

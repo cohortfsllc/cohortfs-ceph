@@ -21,6 +21,8 @@
 #include <boost/random/uniform_int.hpp>
 #include "os/ObjectStore.h"
 
+extern CephContext* cct;
+
 typedef boost::mt11213b rngen_t;
 
 class TestObjectStoreState {

@@ -25,6 +25,8 @@
 #include "common/ceph_argparse.h"
 #include "global/global_init.h"
 
+static CephContext* cct;
+
 static void usage(ostream &out)
 {
   out << "usage: get_command_descriptions [options ...]" << std::endl;
@@ -82,8 +84,9 @@ int main(int argc, char **argv) {
   vector<const char*> args;
   argv_to_vec(argc, (const char **)argv, args);
 
-  global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
-  common_init_finish(g_ceph_context);
+  cct = global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT,
+		    CODE_ENVIRONMENT_UTILITY, 0);
+  common_init_finish(cct);
 
   if (args.empty()) {
     usage(cerr);

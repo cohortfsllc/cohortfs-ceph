@@ -41,7 +41,7 @@ static ostream& _prefix(std::ostream *_dout, const Monitor *mon,
 
 void HealthMonitor::init()
 {
-  dout(10) << __func__ << dendl;
+  ldout(mon->cct, 10) << __func__ << dendl;
   assert(services.empty());
   services[HealthService::SERVICE_HEALTH_DATA] = new DataHealthService(mon);
 
@@ -58,7 +58,7 @@ bool HealthMonitor::service_dispatch(Message *m)
   MMonHealth *hm = (MMonHealth*)m;
   int service_type = hm->get_service_type();
   if (services.count(service_type) == 0) {
-    dout(1) << __func__ << " service type " << service_type
+    ldout(mon->cct, 1) << __func__ << " service type " << service_type
 	    << " not registered -- drop message!" << dendl;
     m->put();
     return false;
@@ -68,8 +68,8 @@ bool HealthMonitor::service_dispatch(Message *m)
 
 void HealthMonitor::service_shutdown()
 {
-  dout(0) << "HealthMonitor::service_shutdown "
-	  << services.size() << " services" << dendl;
+  ldout(mon->cct, 0) << "HealthMonitor::service_shutdown "
+		     << services.size() << " services" << dendl;
   for (map<int,HealthService*>::iterator it = services.begin();
       it != services.end();
        ++it) {

@@ -127,6 +127,8 @@ MDCache::MDCache(MDS *m) :
   delayed_eval_stray(member_offset(CDentry, item_stray))
 {
   mds = m;
+  cct = mds->cct;
+  cct->get();
   migrator = new Migrator(mds, this);
   root = NULL;
   myin = NULL;
@@ -139,9 +141,9 @@ MDCache::MDCache(MDS *m) :
   num_inodes_with_caps = 0;
   num_caps = 0;
 
-  max_dir_commit_size = g_conf->mds_dir_max_commit_size ?
-			(g_conf->mds_dir_max_commit_size << 20) :
-			(0.9 *(g_conf->osd_max_write_size << 20));
+  max_dir_commit_size = cct->_conf->mds_dir_max_commit_size ?
+			(cct->_conf->mds_dir_max_commit_size << 20) :
+			(0.9 *(cct->_conf->osd_max_write_size << 20));
 
   discover_last_tid = 0;
   open_ino_last_tid = 0;
@@ -158,10 +160,10 @@ MDCache::MDCache(MDS *m) :
   cap_imports_num_opening = 0;
 
   opening_root = open = false;
-  lru.lru_set_max(g_conf->mds_cache_size);
-  lru.lru_set_midpoint(g_conf->mds_cache_mid);
+  lru.lru_set_max(cct->_conf->mds_cache_size);
+  lru.lru_set_midpoint(cct->_conf->mds_cache_mid);
 
-  decayrate.set_halflife(g_conf->mds_decay_halflife);
+  decayrate.set_halflife(cct->_conf->mds_decay_halflife);
 
   memset(&default_log_layout, 0, sizeof(default_log_layout));
 
@@ -170,6 +172,7 @@ MDCache::MDCache(MDS *m) :
 
 MDCache::~MDCache()
 {
+  cct->put();
   delete migrator;
   //delete renamer;
 }
@@ -266,9 +269,9 @@ void MDCache::init_layouts()
 
   default_log_layout = g_default_file_layout;
   default_log_layout.fl_uuid = mds->mdsmap->get_metadata_uuid();
-  if (g_conf->mds_log_segment_size > 0) {
-    default_log_layout.fl_object_size = g_conf->mds_log_segment_size;
-    default_log_layout.fl_stripe_unit = g_conf->mds_log_segment_size;
+  if (cct->_conf->mds_log_segment_size > 0) {
+    default_log_layout.fl_object_size = cct->_conf->mds_log_segment_size;
+    default_log_layout.fl_stripe_unit = cct->_conf->mds_log_segment_size;
   }
 }
 
@@ -281,14 +284,14 @@ CInode *MDCache::create_system_inode(inodeno_t ino, int mode)
   in->inode.mode = 0500 | mode;
   in->inode.size = 0;
   in->inode.ctime =
-    in->inode.mtime = ceph_clock_now(g_ceph_context);
+    in->inode.mtime = ceph_clock_now(cct);
   in->inode.nlink = 1;
   in->inode.truncate_size = -1ull;
 
   memset(&in->inode.dir_layout, 0, sizeof(in->inode.dir_layout));
   if (in->inode.is_dir()) {
     memset(&in->inode.layout, 0, sizeof(in->inode.layout));
-    in->inode.dir_layout.dl_dir_hash = g_conf->mds_default_dir_hash;
+    in->inode.dir_layout.dl_dir_hash = cct->_conf->mds_default_dir_hash;
     ++in->inode.rstat.rsubdirs;
   } else {
     in->inode.layout = default_file_layout;
@@ -740,7 +743,7 @@ void MDCache::adjust_subtree_auth(CDir *dir, pair<int,int> auth, bool do_eval)
 
     // adjust recursive pop counters
     if (dir->is_auth()) {
-      utime_t now = ceph_clock_now(g_ceph_context);
+      utime_t now = ceph_clock_now(cct);
       CDir *p = dir->get_parent_dir();
       while (p) {
 	p->pop_auth_subtree.sub(now, decayrate, dir->pop_auth_subtree);
@@ -818,7 +821,7 @@ void MDCache::try_subtree_merge_at(CDir *dir, bool do_eval)
 
     // adjust popularity?
     if (dir->is_auth()) {
-      utime_t now = ceph_clock_now(g_ceph_context);
+      utime_t now = ceph_clock_now(cct);
       CDir *p = dir->get_parent_dir();
       while (p) {
 	p->pop_auth_subtree.add(now, decayrate, dir->pop_auth_subtree);
@@ -1027,7 +1030,7 @@ void MDCache::get_force_dirfrag_bound_set(vector<dirfrag_t>& dfs, set<CDir*>& bo
 
     fragtree_t tmpdft;
     for (set<frag_t>::iterator q = p->second.begin(); q != p->second.end(); ++q)
-      tmpdft.force_to_leaf(g_ceph_context, *q);
+      tmpdft.force_to_leaf(cct, *q);
 
     for (set<frag_t>::iterator q = p->second.begin(); q != p->second.end(); ++q) {
       frag_t fg = *q;
@@ -1429,7 +1432,7 @@ void MDCache::predirty_journal_parents(MutationRef mut, EMetaBlob *blob,
 
   // declare now?
   if (mut->now == utime_t())
-    mut->now = ceph_clock_now(g_ceph_context);
+    mut->now = ceph_clock_now(cct);
 
   if (in->is_base())
     return;
@@ -1535,12 +1538,12 @@ void MDCache::predirty_journal_parents(MutationRef mut, EMetaBlob *blob,
 
     // delay propagating until later?
     if (!stop && !first &&
-	g_conf->mds_dirstat_min_interval > 0) {
+	cct->_conf->mds_dirstat_min_interval > 0) {
       if (pin->last_dirstat_prop.sec() > 0) {
 	double since_last_prop = mut->now - pin->last_dirstat_prop;
-	if (since_last_prop < g_conf->mds_dirstat_min_interval) {
+	if (since_last_prop < cct->_conf->mds_dirstat_min_interval) {
 	  dout(10) << "predirty_journal_parents last prop " << since_last_prop
-		   << " < " << g_conf->mds_dirstat_min_interval
+		   << " < " << cct->_conf->mds_dirstat_min_interval
 		   << ", stopping" << dendl;
 	  stop = true;
 	} else {
@@ -1606,7 +1609,7 @@ void MDCache::predirty_journal_parents(MutationRef mut, EMetaBlob *blob,
 
       if (parent->get_frag() == frag_t()) { // i.e., we are the only frag
 	if (pi->dirstat.size() < 0)
-	  assert(!"negative dirstat size" == g_conf->mds_verify_scatter);
+	  assert(!"negative dirstat size" == cct->_conf->mds_verify_scatter);
 	if (pi->dirstat.size() != pf->fragstat.size()) {
 	  mds->clog.error() << "unmatched fragstat size on single dirfrag "
 	     << parent->dirfrag() << ", inode has " << pi->dirstat
@@ -1615,7 +1618,7 @@ void MDCache::predirty_journal_parents(MutationRef mut, EMetaBlob *blob,
 	  // trust the dirfrag for now
 	  pi->dirstat = pf->fragstat;
 
-	  assert(!"unmatched fragstat size" == g_conf->mds_verify_scatter);
+	  assert(!"unmatched fragstat size" == cct->_conf->mds_verify_scatter);
 	}
       }
     }
@@ -1655,7 +1658,7 @@ void MDCache::predirty_journal_parents(MutationRef mut, EMetaBlob *blob,
 	  // trust the dirfrag for now
 	  pi->rstat = pf->rstat;
 
-	  assert(!"unmatched rstat rbytes" == g_conf->mds_verify_scatter);
+	  assert(!"unmatched rstat rbytes" == cct->_conf->mds_verify_scatter);
 	}
       }
     }
@@ -4233,7 +4236,7 @@ void MDCache::handle_cache_rejoin_ack(MMDSCacheRejoin *ack)
 	}
       }
       // barebones dirfrag; the full dirfrag loop below will clean up.
-      dir = diri->add_dirfrag(new CDir(diri, p->first.frag, this, false));
+      dir = diri->add_dirfrag(new CDir(cct, diri, p->first.frag, this, false));
       if (MDS_INO_MDSDIR(from) == p->first.ino ||
 	  (dir->authority() != CDIR_AUTH_UNDEF &&
 	   dir->authority().first != from))
@@ -5339,7 +5342,7 @@ void MDCache::purge_prealloc_ino(inodeno_t ino, Context *fin)
   }
 
   dout(10) << "purge_prealloc_ino " << ino << " oid " << oid << dendl;
-  mds->objecter->remove(oid, volume, ceph_clock_now(g_ceph_context), 0, 0, fin);
+  mds->objecter->remove(oid, volume, ceph_clock_now(cct), 0, 0, fin);
 }
 
 
@@ -5507,7 +5510,7 @@ bool MDCache::trim(int max)
 {
   // trim LRU
   if (max < 0) {
-    max = g_conf->mds_cache_size;
+    max = cct->_conf->mds_cache_size;
     if (!max) return false;
   }
   dout(7) << "trim max=" << max << "  cur=" << lru.lru_get_size() << dendl;
@@ -6309,7 +6312,7 @@ void MDCache::dentry_remove_replica(CDentry *dn, int from, set<SimpleLock *>& ga
 
 void MDCache::trim_client_leases()
 {
-  utime_t now = ceph_clock_now(g_ceph_context);
+  utime_t now = ceph_clock_now(cct);
 
   dout(10) << "trim_client_leases" << dendl;
 
@@ -6334,7 +6337,7 @@ void MDCache::trim_client_leases()
 
 void MDCache::check_memory_usage()
 {
-  static MemoryModel mm(g_ceph_context);
+  static MemoryModel mm(cct);
   static MemoryModel::snap last;
   mm.sample(&last);
   static MemoryModel::snap baseline = last;
@@ -6351,20 +6354,20 @@ void MDCache::check_memory_usage()
 	   << ", malloc " << last.malloc << " mmap " << last.mmap
 	   << ", baseline " << baseline.get_heap()
 	   << ", buffers " << (buffer::get_total_alloc() >> 10)
-	   << ", max " << g_conf->mds_mem_max
+	   << ", max " << cct->_conf->mds_mem_max
 	   << ", " << num_inodes_with_caps << " / " << inode_map.size() << " inodes have caps"
 	   << ", " << num_caps << " caps, " << caps_per_inode << " caps per inode"
 	   << dendl;
 
   /*int size = last.get_total();
-  if (size > g_conf->mds_mem_max * .9) {
-    float ratio = (float)g_conf->mds_mem_max * .9 / (float)size;
+  if (size > cct->_conf->mds_mem_max * .9) {
+    float ratio = (float)cct->_conf->mds_mem_max * .9 / (float)size;
     if (ratio < 1.0)
       mds->server->recall_client_state(ratio);
   } else
     */
-  if (num_inodes_with_caps > g_conf->mds_cache_size) {
-    float ratio = (float)g_conf->mds_cache_size * .9 / (float)num_inodes_with_caps;
+  if (num_inodes_with_caps > cct->_conf->mds_cache_size) {
+    float ratio = (float)cct->_conf->mds_cache_size * .9 / (float)num_inodes_with_caps;
     if (ratio < 1.0)
       mds->server->recall_client_state(ratio);
   }
@@ -6387,18 +6390,18 @@ public:
 
 void MDCache::shutdown_check()
 {
-  dout(0) << "shutdown_check at " << ceph_clock_now(g_ceph_context) << dendl;
+  dout(0) << "shutdown_check at " << ceph_clock_now(cct) << dendl;
 
   // cache
   char old_val[32] = { 0 };
   char *o = old_val;
-  g_conf->get_val("debug_mds", &o, sizeof(old_val));
-  g_conf->set_val("debug_mds", "10");
-  g_conf->apply_changes(NULL);
+  cct->_conf->get_val("debug_mds", &o, sizeof(old_val));
+  cct->_conf->set_val("debug_mds", "10");
+  cct->_conf->apply_changes(NULL);
   show_cache();
-  g_conf->set_val("debug_mds", old_val);
-  g_conf->apply_changes(NULL);
-  mds->timer.add_event_after(g_conf->mds_shutdown_check, new C_MDC_ShutdownCheck(this));
+  cct->_conf->set_val("debug_mds", old_val);
+  cct->_conf->apply_changes(NULL);
+  mds->timer.add_event_after(cct->_conf->mds_shutdown_check, new C_MDC_ShutdownCheck(this));
 
   // this
   dout(0) << "lru size now " << lru.lru_get_size() << dendl;
@@ -6410,10 +6413,10 @@ void MDCache::shutdown_start()
 {
   dout(2) << "shutdown_start" << dendl;
 
-  if (g_conf->mds_shutdown_check)
-    mds->timer.add_event_after(g_conf->mds_shutdown_check, new C_MDC_ShutdownCheck(this));
+  if (cct->_conf->mds_shutdown_check)
+    mds->timer.add_event_after(cct->_conf->mds_shutdown_check, new C_MDC_ShutdownCheck(this));
 
-  //  g_conf->debug_mds = 10;
+  //  cct->_conf->debug_mds = 10;
 }
 
 
@@ -7291,7 +7294,7 @@ void MDCache::open_remote_dentry(CDentry *dn, bool projected, Context *fin, bool
   dout(10) << "open_remote_dentry " << *dn << dendl;
   CDentry::linkage_t *dnl = projected ? dn->get_projected_linkage() : dn->get_linkage();
   inodeno_t ino = dnl->get_remote_ino();
-  int mode = g_conf->mds_open_remote_link_mode;
+  int mode = cct->_conf->mds_open_remote_link_mode;
   Context *fin2 =  new C_MDC_OpenRemoteDentry(this, dn, ino, fin, want_xlocked, mode);
   if (mode == 0)
     open_remote_ino(ino, fin2, want_xlocked); // anchor
@@ -8619,7 +8622,7 @@ void MDCache::purge_stray(CDentry *dn)
 	 p != ls.end();
 	 ++p) {
       dout(10) << "purge_stray remove dirfrag " << oid << dendl;
-      mds->objecter->remove(oid, volume, ceph_clock_now(g_ceph_context),
+      mds->objecter->remove(oid, volume, ceph_clock_now(cct),
 			    0, NULL, gather.new_sub());
     }
     assert(gather.has_subs());
@@ -8665,7 +8668,7 @@ void MDCache::purge_stray(CDentry *dn)
     dout(10) << "purge_stray remove backtrace object " << poid
 	     << " volume " << volume << dendl;
     mds->objecter->remove(poid, volume,
-			  ceph_clock_now(g_ceph_context), 0, NULL,
+			  ceph_clock_now(cct), 0, NULL,
 			  gather.new_sub());
   }
   // remove old backtrace objects
@@ -8684,7 +8687,7 @@ void MDCache::purge_stray(CDentry *dn)
       dout(0) << "Unable to attach volume " << volume << " error=" << r << dendl;
       return;
     }
-    mds->objecter->remove(poid, volume, ceph_clock_now(g_ceph_context), 0,
+    mds->objecter->remove(poid, volume, ceph_clock_now(cct), 0,
 			  NULL, gather.new_sub());
   }
   assert(gather.has_subs());
@@ -9573,11 +9576,11 @@ CDir *MDCache::add_replica_dir(bufferlist::iterator& p, CInode *diri, int from,
     if (!diri->dirfragtree.is_leaf(df.frag)) {
       dout(7) << "add_replica_dir forcing frag " << df.frag << " to leaf in the fragtree "
 	      << diri->dirfragtree << dendl;
-      diri->dirfragtree.force_to_leaf(g_ceph_context, df.frag);
+      diri->dirfragtree.force_to_leaf(cct, df.frag);
     }
 
     // add replica.
-    dir = diri->add_dirfrag( new CDir(diri, df.frag, this, false) );
+    dir = diri->add_dirfrag( new CDir(cct, diri, df.frag, this, false) );
     dir->decode_replica(p);
 
     // is this a dir_auth delegation boundary?
@@ -9600,12 +9603,13 @@ CDir *MDCache::forge_replica_dir(CInode *diri, frag_t fg, int from)
   assert(mds->mdsmap->get_state(from) < MDSMap::STATE_REJOIN);
 
   // forge a replica.
-  CDir *dir = diri->add_dirfrag( new CDir(diri, fg, this, false) );
+  CDir *dir = diri->add_dirfrag( new CDir(cct, diri, fg, this, false) );
 
   // i'm assuming this is a subtree root.
   adjust_subtree_auth(dir, from);
 
-  dout(7) << "forge_replica_dir added " << *dir << " while mds." << from << " is down" << dendl;
+  dout(7) << "forge_replica_dir added " << *dir << " while mds." << from
+	  << " is down" << dendl;
 
   return dir;
 }
@@ -10035,7 +10039,7 @@ void MDCache::adjust_dir_fragments(CInode *diri,
   // adjust fragtree
   // yuck.  we may have discovered the inode while it was being fragmented.
   if (!diri->dirfragtree.is_leaf(basefrag))
-    diri->dirfragtree.force_to_leaf(g_ceph_context, basefrag);
+    diri->dirfragtree.force_to_leaf(cct, basefrag);
 
   if (bits > 0)
     diri->dirfragtree.split(basefrag, bits);
@@ -10121,7 +10125,7 @@ void MDCache::adjust_dir_fragments(CInode *diri,
     }
 
     // merge
-    CDir *f = new CDir(diri, basefrag, this, srcfrags.front()->is_auth());
+    CDir *f = new CDir(cct, diri, basefrag, this, srcfrags.front()->is_auth());
     f->merge(srcfrags, waiters, replay);
     diri->add_dirfrag(f);
 
@@ -10201,7 +10205,7 @@ void MDCache::split_dir(CDir *dir, int bits)
   fragment_info_t& info = fragments[dir->dirfrag()];
   info.dirs.push_back(dir);
   info.bits = bits;
-  info.last_cum_auth_pins_change = ceph_clock_now(g_ceph_context);
+  info.last_cum_auth_pins_change = ceph_clock_now(cct);
 
   C_GatherBuilder gather(new C_MDC_FragmentFrozen(this, dir->dirfrag()));
   fragment_freeze_dirs(dirs, gather);
@@ -10238,7 +10242,7 @@ void MDCache::merge_dir(CInode *diri, frag_t frag)
   fragment_info_t& info = fragments[df];
   info.dirs = dirs;
   info.bits = -bits;
-  info.last_cum_auth_pins_change = ceph_clock_now(g_ceph_context);
+  info.last_cum_auth_pins_change = ceph_clock_now(cct);
 
   C_GatherBuilder gather(new C_MDC_FragmentFrozen(this, dirfrag_t(diri->ino(),
 								  frag)));
@@ -10384,9 +10388,9 @@ void MDCache::find_stale_fragment_freeze()
 {
   dout(10) << "find_stale_fragment_freeze" << dendl;
   // see comment in Migrator::find_stale_export_freeze()
-  utime_t now = ceph_clock_now(g_ceph_context);
+  utime_t now = ceph_clock_now(cct);
   utime_t cutoff = now;
-  cutoff -= g_conf->mds_freeze_tree_timeout;
+  cutoff -= cct->_conf->mds_freeze_tree_timeout;
 
   for (map<dirfrag_t,fragment_info_t>::iterator p = fragments.begin();
        p != fragments.end(); ) {
@@ -10547,7 +10551,7 @@ void MDCache::dispatch_fragment_dir(MDRequestRef& mdr)
   list<Context*> waiters;
   adjust_dir_fragments(diri, info.dirs, basedirfrag.frag, info.bits,
 		       info.resultfrags, waiters, false);
-  if (g_conf->mds_debug_frag)
+  if (cct->_conf->mds_debug_frag)
     diri->verify_dirfrags();
   mds->queue_waiters(waiters);
 
@@ -10726,7 +10730,7 @@ void MDCache::_fragment_committed(dirfrag_t basedirfrag, list<CDir*>& resultfrag
       dout(10) << " removing orphan dirfrag " << oid << dendl;
       op->remove();
     }
-    mds->objecter->mutate(oid, volume, op, ceph_clock_now(g_ceph_context),
+    mds->objecter->mutate(oid, volume, op, ceph_clock_now(cct),
 			  0, NULL, gather.new_sub());
   }
 
@@ -10783,7 +10787,7 @@ void MDCache::handle_fragment_notify(MMDSFragmentNotify *notify)
     list<Context*> waiters;
     list<CDir*> resultfrags;
     adjust_dir_fragments(diri, base, bits, resultfrags, waiters, false);
-    if (g_conf->mds_debug_frag)
+    if (cct->_conf->mds_debug_frag)
       diri->verify_dirfrags();
 
     for (list<CDir*>::iterator p = resultfrags.begin(); p != resultfrags.end(); ++p)
@@ -10933,7 +10937,7 @@ void MDCache::rollback_uncommitted_fragments()
       ls->dirty_dirfrag_dirfragtree.push_back(&diri->item_dirty_dirfrag_dirfragtree);
     }
 
-    if (g_conf->mds_debug_frag)
+    if (cct->_conf->mds_debug_frag)
       diri->verify_dirfrags();
 
     for (list<frag_t>::iterator q = old_frags.begin(); q != old_frags.end(); ++q)
@@ -10961,7 +10965,7 @@ void MDCache::show_subtrees(int dbl)
 {
   //dout(10) << "show_subtrees" << dendl;
 
-  if (!g_conf->subsys.should_gather(ceph_subsys_mds, dbl))
+  if (!cct->_conf->subsys.should_gather(ceph_subsys_mds, dbl))
     return;  // i won't print anything.
 
   if (subtrees.empty()) {

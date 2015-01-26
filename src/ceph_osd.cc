@@ -51,6 +51,13 @@ using namespace std;
 #define dout_subsys ceph_subsys_osd
 
 OSD *osd = NULL;
+static CephContext* cct;
+
+static void sighup_handler(int signum)
+{
+  cct->reopen_logs();
+}
+
 
 void handle_osd_signal(int signum)
 {
@@ -72,7 +79,7 @@ int main(int argc, const char **argv)
   argv_to_vec(argc, argv, args);
   env_to_vec(args);
 
-  global_init(NULL, args, CEPH_ENTITY_TYPE_OSD, CODE_ENVIRONMENT_DAEMON, 0);
+  cct = global_init(NULL, args, CEPH_ENTITY_TYPE_OSD, CODE_ENVIRONMENT_DAEMON, 0);
   ceph_heap_profiler_init();
 
   // osd specific args
@@ -119,118 +126,118 @@ int main(int argc, const char **argv)
 
   // whoami
   char *end;
-  const char *id = g_conf->name.get_id().c_str();
+  const char *id = cct->_conf->name.get_id().c_str();
   int whoami = strtol(id, &end, 10);
   if (*end || end == id || whoami < 0) {
     derr << "must specify '-i #' where # is the osd number" << dendl;
     usage();
   }
 
-  if (g_conf->osd_data.empty()) {
+  if (cct->_conf->osd_data.empty()) {
     derr << "must specify '--osd-data=foo' data path" << dendl;
     usage();
   }
 
   // the store
-  ObjectStore *store = ObjectStore::create(g_ceph_context,
-					   g_conf->osd_objectstore,
-					   g_conf->osd_data,
-					   g_conf->osd_journal);
+  ObjectStore *store = ObjectStore::create(cct,
+					   cct->_conf->osd_objectstore,
+					   cct->_conf->osd_data,
+					   cct->_conf->osd_journal);
   if (!store) {
     derr << "unable to create object store" << dendl;
     return -ENODEV;
   }
 
   if (mkfs) {
-    common_init_finish(g_ceph_context);
-    MonClient mc(g_ceph_context);
+    common_init_finish(cct);
+    MonClient mc(cct);
     if (mc.build_initial_monmap() < 0)
       return -1;
     if (mc.get_monmap_privately() < 0)
       return -1;
 
-    int err = OSD::mkfs(g_ceph_context, store, g_conf->osd_data,
+    int err = OSD::mkfs(cct, store, cct->_conf->osd_data,
 			mc.monmap.fsid, whoami);
     if (err < 0) {
       derr << TEXT_RED << " ** ERROR: error creating empty object store in "
-	   << g_conf->osd_data << ": " << cpp_strerror(-err) << TEXT_NORMAL << dendl;
+	   << cct->_conf->osd_data << ": " << cpp_strerror(-err) << TEXT_NORMAL << dendl;
       exit(1);
     }
-    derr << "created object store " << g_conf->osd_data;
-    if (!g_conf->osd_journal.empty())
-      *_dout << " journal " << g_conf->osd_journal;
+    derr << "created object store " << cct->_conf->osd_data;
+    if (!cct->_conf->osd_journal.empty())
+      *_dout << " journal " << cct->_conf->osd_journal;
     *_dout << " for osd." << whoami << " fsid " << mc.monmap.fsid << dendl;
   }
   if (mkkey) {
-    common_init_finish(g_ceph_context);
+    common_init_finish(cct);
     KeyRing *keyring = KeyRing::create_empty();
     if (!keyring) {
       derr << "Unable to get a Ceph keyring." << dendl;
       return 1;
     }
 
-    EntityName ename(g_conf->name);
+    EntityName ename(cct->_conf->name);
     EntityAuth eauth;
 
-    int ret = keyring->load(g_ceph_context, g_conf->keyring);
+    int ret = keyring->load(cct, cct->_conf->keyring);
     if (ret == 0 &&
 	keyring->get_auth(ename, eauth)) {
-      derr << "already have key in keyring " << g_conf->keyring << dendl;
+      derr << "already have key in keyring " << cct->_conf->keyring << dendl;
     } else {
-      eauth.key.create(g_ceph_context, CEPH_CRYPTO_AES);
+      eauth.key.create(cct, CEPH_CRYPTO_AES);
       keyring->add(ename, eauth);
       bufferlist bl;
       keyring->encode_plaintext(bl);
-      int r = bl.write_file(g_conf->keyring.c_str(), 0600);
+      int r = bl.write_file(cct->_conf->keyring.c_str(), 0600);
       if (r)
-	derr << TEXT_RED << " ** ERROR: writing new keyring to " << g_conf->keyring
+	derr << TEXT_RED << " ** ERROR: writing new keyring to " << cct->_conf->keyring
 	     << ": " << cpp_strerror(r) << TEXT_NORMAL << dendl;
       else
-	derr << "created new key in keyring " << g_conf->keyring << dendl;
+	derr << "created new key in keyring " << cct->_conf->keyring << dendl;
     }
   }
   if (mkfs || mkkey)
     exit(0);
   if (mkjournal) {
-    common_init_finish(g_ceph_context);
+    common_init_finish(cct);
     int err = store->mkjournal();
     if (err < 0) {
-      derr << TEXT_RED << " ** ERROR: error creating fresh journal " << g_conf->osd_journal
-	   << " for object store " << g_conf->osd_data
+      derr << TEXT_RED << " ** ERROR: error creating fresh journal " << cct->_conf->osd_journal
+	   << " for object store " << cct->_conf->osd_data
 	   << ": " << cpp_strerror(-err) << TEXT_NORMAL << dendl;
       exit(1);
     }
-    derr << "created new journal " << g_conf->osd_journal
-	 << " for object store " << g_conf->osd_data << dendl;
+    derr << "created new journal " << cct->_conf->osd_journal
+	 << " for object store " << cct->_conf->osd_data << dendl;
     exit(0);
   }
   if (flushjournal) {
-    common_init_finish(g_ceph_context);
+    common_init_finish(cct);
     int err = store->mount();
     if (err < 0) {
-      derr << TEXT_RED << " ** ERROR: error flushing journal " << g_conf->osd_journal
-	   << " for object store " << g_conf->osd_data
+      derr << TEXT_RED << " ** ERROR: error flushing journal " << cct->_conf->osd_journal
+	   << " for object store " << cct->_conf->osd_data
 	   << ": " << cpp_strerror(-err) << TEXT_NORMAL << dendl;
       exit(1);
     }
     store->sync_and_flush();
     store->umount();
-    derr << "flushed journal " << g_conf->osd_journal
-	 << " for object store " << g_conf->osd_data
+    derr << "flushed journal " << cct->_conf->osd_journal
+	 << " for object store " << cct->_conf->osd_data
 	 << dendl;
     exit(0);
   }
   if (dump_journal) {
-    common_init_finish(g_ceph_context);
+    common_init_finish(cct);
     int err = store->dump_journal(cout);
     if (err < 0) {
-      derr << TEXT_RED << " ** ERROR: error dumping journal " << g_conf->osd_journal
-	   << " for object store " << g_conf->osd_data
+      derr << TEXT_RED << " ** ERROR: error dumping journal " << cct->_conf->osd_journal
+	   << " for object store " << cct->_conf->osd_data
 	   << ": " << cpp_strerror(-err) << TEXT_NORMAL << dendl;
       exit(1);
     }
-    derr << "dumped journal " << g_conf->osd_journal
-	 << " for object store " << g_conf->osd_data
+    derr << "dumped journal " << cct->_conf->osd_journal
+	 << " for object store " << cct->_conf->osd_data
 	 << dendl;
     exit(0);
 
@@ -250,7 +257,7 @@ int main(int argc, const char **argv)
   int r = OSD::peek_meta(store, magic, cluster_fsid, osd_fsid, w);
   if (r < 0) {
     derr << TEXT_RED << " ** ERROR: unable to open OSD superblock on "
-	 << g_conf->osd_data << ": " << cpp_strerror(-r)
+	 << cct->_conf->osd_data << ": " << cpp_strerror(-r)
 	 << TEXT_NORMAL << dendl;
     if (r == -ENOTSUP) {
       derr << TEXT_RED << " **	      please verify that underlying storage "
@@ -279,24 +286,24 @@ int main(int argc, const char **argv)
 
   // create and bind messengers
   OSDMessengers ms;
-  r = ms.create(g_ceph_context, g_conf, entity_name_t::OSD(whoami), getpid());
+  r = ms.create(cct, cct->_conf, entity_name_t::OSD(whoami), getpid());
   if (r != 0)
     return r;
 
-  r = ms.bind(g_ceph_context, g_conf);
+  r = ms.bind(cct, cct->_conf);
   if (r != 0)
     return r;
 
   // Set up crypto, daemonize, etc.
-  global_init_daemonize(g_ceph_context, 0);
-  common_init_finish(g_ceph_context);
+  global_init_daemonize(cct, 0);
+  common_init_finish(cct);
 
-  MonClient mc(g_ceph_context);
+  MonClient mc(cct);
   if (mc.build_initial_monmap() < 0)
     return -1;
-  global_init_chdir(g_ceph_context);
+  global_init_chdir(cct);
 
-  osd = new OSD(g_ceph_context,
+  osd = new OSD(cct,
 		store,
 		whoami,
 		ms.cluster,
@@ -308,8 +315,8 @@ int main(int argc, const char **argv)
 		ms.objecter,
 		ms.objecter_xio,
 		&mc,
-		g_conf->osd_data,
-		g_conf->osd_journal);
+		cct->_conf->osd_data,
+		cct->_conf->osd_journal);
 
   int err = osd->pre_init();
   if (err < 0) {
@@ -336,7 +343,7 @@ int main(int argc, const char **argv)
 
   osd->final_init();
 
-  if (g_conf->inject_early_sigterm)
+  if (cct->_conf->inject_early_sigterm)
     kill(getpid(), SIGTERM);
 
   ms.wait();
@@ -348,7 +355,7 @@ int main(int argc, const char **argv)
 
   // done
   delete osd;
-  g_ceph_context->put();
+  cct->put();
 
   // cd on exit, so that gmon.out (if any) goes into a separate directory for each node.
   char s[20];

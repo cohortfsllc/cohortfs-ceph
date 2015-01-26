@@ -43,7 +43,7 @@ VolumeRef CohortVolFactory(bufferlist::iterator& bl, uint8_t v, vol_type t)
 
 /* Epoch should be the current epoch of the OSDMap. */
 
-int CohortVolume::compile(std::stringstream &ss) const
+int CohortVolume::compile(CephContext* cct) const
 {
   const char namelate[] = "/tmp/cohortplacerXXXXXX";
   char cfilename[sizeof(namelate) + 10];
@@ -54,7 +54,8 @@ int CohortVolume::compile(std::stringstream &ss) const
   strcpy(cfilename, namelate);
   int fd = mkstemp(cfilename);
   if (fd < 0) {
-    ss << "Unable to generate a temporary filename.";
+    lsubdout(cct, volume, -1) << "Unable to generate a temporary filename."
+			      << dendl;
     return -errno;
   }
   close(fd);
@@ -103,10 +104,12 @@ int CohortVolume::compile(std::stringstream &ss) const
     if (!(WIFEXITED(status) || WIFSIGNALED(status))) {
       goto cretry;
     } else if (WIFSIGNALED(status)) {
-      ss << "gcc died with signal ";
+      lsubdout(cct, volume, -1)
+	<< "gcc died with signal " << WTERMSIG(status)<< dendl;
       return -EDOM;
     } else if (WIFEXITED(status) && WEXITSTATUS(status) != 0) {
-      ss << "gcc returned failing status " << WTERMSIG(status);
+      lsubdout(cct, volume, -1)
+	<< "gcc returned failing status " << WEXITSTATUS(status) << dendl;
       return -EDOM;
     }
   }
@@ -123,10 +126,12 @@ int CohortVolume::compile(std::stringstream &ss) const
     if (!(WIFEXITED(status) || WIFSIGNALED(status))) {
       goto lretry;
     } else if (WIFSIGNALED(status)) {
-      ss << "gcc died with signal " << WTERMSIG(status);
+      lsubdout(cct, volume, -1)
+	<< "gcc died with signal " << WTERMSIG(status) << dendl;
       return -EDOM;
     } else if (WIFEXITED(status) && WEXITSTATUS(status) != 0) {
-      ss << "gcc returned failing status " << WTERMSIG(status);
+      lsubdout(cct, volume, -1)
+	<< "gcc returned failing status " << WEXITSTATUS(status) << dendl;
       return -EDOM;
     }
   }
@@ -134,7 +139,8 @@ int CohortVolume::compile(std::stringstream &ss) const
   unlink(objfilename);
   place_shared = dlopen(sofilename, RTLD_LAZY | RTLD_GLOBAL);
   if (!place_shared) {
-    ss << "failed loading library: " << dlerror();
+    lsubdout(cct, volume, -1)
+      << "failed loading library: " << dlerror() << dendl;
     return -EDOM;
   }
   unlink(sofilename);
@@ -144,7 +150,8 @@ int CohortVolume::compile(std::stringstream &ss) const
       ++i) {
     void *sym = dlsym(place_shared, symbols[i].c_str());
     if (!sym) {
-      ss << "failed loading symbol: " << dlerror();
+      lsubdout(cct, volume, -1)
+	<< "failed loading symbol: " << dlerror() << dendl;
       return -EDOM;
     }
     entry_points.push_back(sym);
@@ -153,15 +160,16 @@ int CohortVolume::compile(std::stringstream &ss) const
   return 0;
 }
 
-int CohortVolume::_attach(CephContext *cct, std::stringstream &ss) const
+int CohortVolume::_attach(CephContext* cct, stringstream* ss) const
 {
   Mutex::Locker l(lock);
   int r;
+  stringstream rs;
 
   if (attached)
     return 0;
 
-  r = compile(ss);
+  r = compile(cct);
   if (r < 0) {
     return r;
   }
@@ -175,13 +183,19 @@ int CohortVolume::_attach(CephContext *cct, std::stringstream &ss) const
     erasure_plugin,
     copy_params,
     &erasure,
-    ss);
+    rs);
+
+  if (ss) {
+    *ss << rs.str();
+  }
 
   if (!erasure) {
     // So we don't leave things hanging around on error
     if (place_shared) {
       dlclose(place_shared);
       place_shared = NULL;
+      lsubdout(cct, volume, -1) << rs.str() << dendl;
+
     }
     return -EDOM;
   }
@@ -388,7 +402,7 @@ VolumeRef CohortVolume::create(CephContext *cct,
   } else {
     default_placer(v->erasure->get_chunk_count(), v->place_text, v->symbols);
   }
-  if (v->compile(ss) < 0) {
+  if (v->compile(cct) < 0) {
     goto error;
   }
 

@@ -100,7 +100,7 @@ ostream& operator<<(ostream& out, CDir& dir)
   out << " " << dir.fnode.fragstat;
   if (!(dir.fnode.fragstat == dir.fnode.accounted_fragstat))
     out << "/" << dir.fnode.accounted_fragstat;
-  if (g_conf->mds_debug_scatterstat && dir.is_projected()) {
+  if (dir.cct->_conf->mds_debug_scatterstat && dir.is_projected()) {
     fnode_t *pf = dir.get_projected_fnode();
     out << "->" << pf->fragstat;
     if (!(pf->fragstat == pf->accounted_fragstat))
@@ -111,7 +111,7 @@ ostream& operator<<(ostream& out, CDir& dir)
   out << " " << dir.fnode.rstat;
   if (!(dir.fnode.rstat == dir.fnode.accounted_rstat))
     out << "/" << dir.fnode.accounted_rstat;
-  if (g_conf->mds_debug_scatterstat && dir.is_projected()) {
+  if (dir.cct->_conf->mds_debug_scatterstat && dir.is_projected()) {
     fnode_t *pf = dir.get_projected_fnode();
     out << "->" << pf->rstat;
     if (!(pf->rstat == pf->accounted_rstat))
@@ -142,7 +142,8 @@ void CDir::print(ostream& out)
 
 ostream& CDir::print_db_line_prefix(ostream& out)
 {
-  return out << ceph_clock_now(g_ceph_context) << " mds." << cache->mds->get_nodeid() << ".cache.dir(" << this->dirfrag() << ") ";
+  return out << ceph_clock_now(cct) << " mds." << cache->mds->get_nodeid()
+	     << ".cache.dir(" << this->dirfrag() << ") ";
 }
 
 
@@ -150,13 +151,13 @@ ostream& CDir::print_db_line_prefix(ostream& out)
 // -------------------------------------------------------------------
 // CDir
 
-CDir::CDir(CInode *in, frag_t fg, MDCache *mdcache, bool auth) :
-  dirty_rstat_inodes(member_offset(CInode, dirty_rstat_item)),
+CDir::CDir(CephContext* cct, CInode *in, frag_t fg, MDCache *mdcache,
+	   bool auth) :
+  cct(in->cct), dirty_rstat_inodes(member_offset(CInode, dirty_rstat_item)),
   item_dirty(this), item_new(this),
-  pop_me(ceph_clock_now(g_ceph_context)),
-  pop_nested(ceph_clock_now(g_ceph_context)),
-  pop_auth_subtree(ceph_clock_now(g_ceph_context)),
-  pop_auth_subtree_nested(ceph_clock_now(g_ceph_context))
+  pop_me(ceph_clock_now(cct)), pop_nested(ceph_clock_now(cct)),
+  pop_auth_subtree(ceph_clock_now(cct)),
+  pop_auth_subtree_nested(ceph_clock_now(cct)), pop_spread(cct)
 {
   g_num_dir++;
   g_num_dira++;
@@ -205,7 +206,7 @@ CDir::CDir(CInode *in, frag_t fg, MDCache *mdcache, bool auth) :
  */
 bool CDir::check_rstats()
 {
-  if (!g_conf->mds_debug_scatterstat)
+  if (!cct->_conf->mds_debug_scatterstat)
     return true;
 
   dout(25) << "check_rstats on " << this << dendl;
@@ -290,7 +291,7 @@ CDentry* CDir::add_null_dentry(const string& dname)
   assert(lookup(dname) == 0);
 
   // create dentry
-  CDentry* dn = new CDentry(dname, inode->hash_dentry_name(dname));
+  CDentry* dn = new CDentry(cct, dname, inode->hash_dentry_name(dname));
   if (is_auth())
     dn->state_set(CDentry::STATE_AUTH);
   cache->lru.lru_insert_mid(dn);
@@ -326,7 +327,7 @@ CDentry* CDir::add_null_dentry(const string& dname)
    assert(lookup(dname) == 0);
 
    // create dentry
-   CDentry* dn = new CDentry(dname, inode->hash_dentry_name(dname));
+   CDentry* dn = new CDentry(cct, dname, inode->hash_dentry_name(dname));
    if (is_auth())
      dn->state_set(CDentry::STATE_AUTH);
    cache->lru.lru_insert_mid(dn);
@@ -367,7 +368,7 @@ CDentry* CDir::add_remote_dentry(const string& dname, inodeno_t ino,
   assert(lookup(dname) == 0);
 
   // create dentry
-  CDentry* dn = new CDentry(dname, inode->hash_dentry_name(dname), ino,
+  CDentry* dn = new CDentry(cct, dname, inode->hash_dentry_name(dname), ino,
 			    d_type);
   if (is_auth())
     dn->state_set(CDentry::STATE_AUTH);
@@ -742,7 +743,7 @@ void CDir::split(int bits, list<CDir*>& subs, list<Context*>& waiters, bool repl
   // create subfrag dirs
   int n = 0;
   for (list<frag_t>::iterator p = frags.begin(); p != frags.end(); ++p) {
-    CDir *f = new CDir(inode, *p, cache, is_auth());
+    CDir *f = new CDir(cct, inode, *p, cache, is_auth());
     f->state_set(state & (MASK_STATE_FRAGMENT_KEPT | STATE_COMPLETE));
     f->replica_map = replica_map;
     f->dir_auth = dir_auth;
@@ -1467,7 +1468,7 @@ void CDir::_omap_commit(int op_prio)
 	op->omap_rm_keys(to_remove);
 
       cache->mds->objecter->mutate(oid, volume, op,
-				   ceph_clock_now(g_ceph_context), 0, NULL,
+				   ceph_clock_now(cct), 0, NULL,
 				   gather.new_sub());
 
       write_size = 0;
@@ -1501,7 +1502,7 @@ void CDir::_omap_commit(int op_prio)
   if (!to_remove.empty())
     op->omap_rm_keys(to_remove);
 
-  cache->mds->objecter->mutate(oid, volume, op, ceph_clock_now(g_ceph_context),
+  cache->mds->objecter->mutate(oid, volume, op, ceph_clock_now(cct),
 			       0, NULL, gather.new_sub());
 
   gather.activate();

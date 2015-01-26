@@ -24,6 +24,7 @@
  */
 struct libosd_remote {
   const int whoami; /**< osd instance id */
+  CephContext* ctx;
   libosd_remote(int name) : whoami(name) {}
 
   /**

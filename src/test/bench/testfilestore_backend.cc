@@ -4,6 +4,8 @@
 #include "global/global_init.h"
 #include "os/ObjectStore.h"
 
+extern CephContext* cct;
+
 struct C_DeleteTransWrapper : public Context {
   Context *c;
   ObjectStore::Transaction *t;
@@ -18,7 +20,7 @@ struct C_DeleteTransWrapper : public Context {
 
 TestFileStoreBackend::TestFileStoreBackend(
   ObjectStore *os, bool write_infos)
-  : os(os), finisher(g_ceph_context), write_infos(write_infos)
+  : os(os), finisher(cct), write_infos(write_infos)
 {
   finisher.start();
 }

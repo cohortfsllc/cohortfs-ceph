@@ -782,11 +782,8 @@ inline void decode(dirfrag_load_vec_t& c, const utime_t &t, bufferlist::iterator
 inline ostream& operator<<(ostream& out, dirfrag_load_vec_t& dl)
 {
   // ugliness!
-  utime_t now = ceph_clock_now(g_ceph_context);
-  DecayRate rate(g_conf->mds_decay_halflife);
-  return out << "[" << dl.vec[0].get(now, rate) << "," << dl.vec[1].get(now, rate)
-	     << " " << dl.meta_load(now, rate)
-	     << "]";
+  return out << "[" << dl.vec[0].get_last() << ","
+	     << dl.vec[1].get_last() << "]";
 }
 
 
@@ -799,6 +796,7 @@ inline ostream& operator<<(ostream& out, dirfrag_load_vec_t& dl)
  */
 
 struct mds_load_t {
+  int mds_bal_mode;
   dirfrag_load_vec_t auth;
   dirfrag_load_vec_t all;
 
@@ -808,13 +806,17 @@ struct mds_load_t {
 
   double cpu_load_avg;
 
+  mds_load_t(int _mds_bal_mode, const utime_t &t) :
+    mds_bal_mode(_mds_bal_mode), auth(t), all(t), req_rate(0),
+    cache_hit_rate(0), queue_len(0), cpu_load_avg(0)
+  {}
   mds_load_t(const utime_t &t) :
-    auth(t), all(t), req_rate(0), cache_hit_rate(0),
-    queue_len(0), cpu_load_avg(0)
+    mds_bal_mode(-1), auth(t), all(t), req_rate(0),
+    cache_hit_rate(0), queue_len(0), cpu_load_avg(0)
   {}
   // mostly for the dencoder infrastructure
   mds_load_t() :
-    auth(), all(),
+    mds_bal_mode(-1), auth(), all(),
     req_rate(0), cache_hit_rate(0), queue_len(0), cpu_load_avg(0)
   {}
 
@@ -849,7 +851,7 @@ public:
   DecayCounter count;
 
 public:
-  load_spread_t() : p(0), n(0), count(ceph_clock_now(g_ceph_context))
+  load_spread_t(CephContext* cct) : p(0), n(0), count(ceph_clock_now(cct))
   {
     for (int i=0; i<MAX; i++)
       last[i] = -1;

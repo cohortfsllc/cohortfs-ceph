@@ -14,6 +14,7 @@
 
 #include <algorithm>
 
+#include "common/ceph_context.h"
 #include "common/Mutex.h"
 #include "common/config.h"
 #include "common/debug.h"

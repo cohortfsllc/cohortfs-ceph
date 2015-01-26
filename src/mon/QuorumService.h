@@ -51,7 +51,7 @@ protected:
 
   QuorumService(Monitor *m) :
     tick_event(NULL),
-    tick_period(g_conf->mon_tick_interval),
+    tick_period(m->cct->_conf->mon_tick_interval),
     mon(m),
     epoch(0)
   {
@@ -64,7 +64,7 @@ protected:
   }
 
   void start_tick() {
-    generic_dout(10) << __func__ << dendl;
+    lgeneric_dout(mon->cct, 10) << __func__ << dendl;
 
     cancel_tick();
     if (tick_period <= 0)
@@ -99,7 +99,7 @@ public:
   }
 
   void finish() {
-    generic_dout(20) << "QuorumService::finish" << dendl;
+    lgeneric_dout(mon->cct, 20) << "QuorumService::finish" << dendl;
     finish_epoch();
   }
 
@@ -117,7 +117,7 @@ public:
   }
 
   void shutdown() {
-    generic_dout(0) << "quorum service shutdown" << dendl;
+    lgeneric_dout(mon->cct, 0) << "quorum service shutdown" << dendl;
     cancel_tick();
     service_shutdown();
   }

@@ -32,11 +32,12 @@
 #include "TestObjectStoreState.h"
 
 using std::cout;
-
 static const char *our_name = NULL;
 void usage();
 
 boost::scoped_ptr<WorkloadGenerator> wrkldgen;
+CephContext* cct;
+
 
 #define dout_subsys ceph_subsys_
 
@@ -62,16 +63,16 @@ WorkloadGenerator::WorkloadGenerator(vector<const char*> args)
   m_nr_runs = 0;
 
   init_args(args);
-  dout(0) << "data	      = " << g_conf->osd_data << dendl;
-  dout(0) << "journal	      = " << g_conf->osd_journal << dendl;
-  dout(0) << "journal size    = " << g_conf->osd_journal_size << dendl;
+  dout(0) << "data	      = " << cct->_conf->osd_data << dendl;
+  dout(0) << "journal	      = " << cct->_conf->osd_journal << dendl;
+  dout(0) << "journal size    = " << cct->_conf->osd_journal_size << dendl;
 
-  err = ::mkdir(g_conf->osd_data.c_str(), 0755);
+  err = ::mkdir(cct->_conf->osd_data.c_str(), 0755);
   assert(err == 0 || (err < 0 && errno == EEXIST));
-  ObjectStore *store_ptr = ObjectStore::create(g_ceph_context,
-					       g_conf->osd_objectstore,
-					       g_conf->osd_data,
-					       g_conf->osd_journal);
+  ObjectStore *store_ptr = ObjectStore::create(cct,
+					       cct->_conf->osd_objectstore,
+					       cct->_conf->osd_data,
+					       cct->_conf->osd_journal);
   m_store.reset(store_ptr);
   err = m_store->mkfs();
   assert(err == 0);
@@ -562,11 +563,11 @@ int main(int argc, const char *argv[])
 //  def_args.push_back("workload_gen_dir/journal");
   argv_to_vec(argc, argv, args);
 
-  global_init(&def_args, args,
-      CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY,
-      CINIT_FLAG_NO_DEFAULT_CONFIG_FILE);
-  common_init_finish(g_ceph_context);
-  g_ceph_context->_conf->apply_changes(NULL);
+  cct = global_init(&def_args, args,
+		    CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY,
+		    CINIT_FLAG_NO_DEFAULT_CONFIG_FILE);
+  common_init_finish(cct);
+  cct->_conf->apply_changes(NULL);
 
   WorkloadGenerator *wrkldgen_ptr = new WorkloadGenerator(args);
   wrkldgen.reset(wrkldgen_ptr);

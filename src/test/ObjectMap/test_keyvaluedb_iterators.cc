@@ -25,6 +25,8 @@
 
 using namespace std;
 
+static CephContext* cct;
+
 string store_path;
 
 class IteratorTest : public ::testing::Test
@@ -36,7 +38,7 @@ public:
   virtual void SetUp() {
     assert(!store_path.empty());
 
-    LevelDBStore *db_ptr = new LevelDBStore(g_ceph_context, store_path);
+    LevelDBStore *db_ptr = new LevelDBStore(cct, store_path);
     assert(!db_ptr->create_and_open(std::cerr));
     db.reset(db_ptr);
     mock.reset(new KeyValueDBMemory());
@@ -1771,8 +1773,8 @@ int main(int argc, char *argv[])
   vector<const char*> args;
   argv_to_vec(argc, (const char **) argv, args);
 
-  global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
-  common_init_finish(g_ceph_context);
+  cct = global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
+  common_init_finish(cct);
   ::testing::InitGoogleTest(&argc, argv);
 
   if (argc < 2) {

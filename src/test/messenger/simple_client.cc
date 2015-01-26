@@ -33,6 +33,8 @@ using namespace std;
 
 #define dout_subsys ceph_subsys_simple_client
 
+static CephContext* cct;
+
 void usage(ostream& out)
 {
   out << "usage: xio_client [options]\n"
@@ -69,8 +71,8 @@ int main(int argc, const char **argv)
 	argv_to_vec(argc, argv, args);
 	env_to_vec(args);
 
-	global_init(NULL, args, CEPH_ENTITY_TYPE_ANY, CODE_ENVIRONMENT_UTILITY,
-		    0);
+	cct = global_init(NULL, args, CEPH_ENTITY_TYPE_ANY,
+			  CODE_ENVIRONMENT_UTILITY, 0);
 
 	for (arg_iter = args.begin(); arg_iter != args.end();) {
 	  if (ceph_argparse_witharg(args, arg_iter, &val, "--addr",
@@ -102,7 +104,7 @@ int main(int argc, const char **argv)
 	  "initial msgs (pipe depth) " << n_msgs << " " <<
 	  "data buffer size " << n_dsize << std::endl;
 
-	messenger = Messenger::create(g_ceph_context,
+	messenger = Messenger::create(cct,
 				      entity_name_t::GENERIC(),
 				      "client",
 				      getpid());

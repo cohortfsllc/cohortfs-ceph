@@ -18,6 +18,7 @@
 #include <map>
 #include <cassert>
 #include <boost/intrusive_ptr.hpp>
+#include "common/ceph_context.h"
 #include "include/xlist.h"
 #include "common/Mutex.h"
 #include "common/Cond.h"

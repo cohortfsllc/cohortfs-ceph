@@ -18,6 +18,8 @@
 
 #include <errno.h>
 
+#include "common/ceph_context.h"
+#include "common/code_environment.h"
 #include "include/types.h"
 #include "common/Clock.h"
 #include "osd/OSDMap.h"
@@ -58,8 +60,6 @@ using namespace std;
      * = can fail
 
 */
-
-class CephContext;
 
 extern CompatSet get_mdsmap_compat_set_all();
 extern CompatSet get_mdsmap_compat_set_default();
@@ -215,12 +215,23 @@ public:
 
   friend class MDSMonitor;
 
+  CephContext *cct;
+
 public:
-  MDSMap()
+  MDSMap(CephContext* _cct = nullptr)
     : epoch(0), flags(0), last_failure(0), last_failure_osd_epoch(0),
       tableserver(0), root(0), session_timeout(0), session_autoclose(0),
-      max_file_size(0), cas_uuid(), metadata_volume(0), max_mds(0),
-      inline_data_enabled(false) {
+      max_file_size(0), cas_uuid(), metadata_volume(0), max_mds(0) {
+    if (_cct) {
+      cct = _cct;
+      cct->get();
+    } else {
+      cct = new CephContext(CODE_ENVIRONMENT_LIBRARY);
+    }
+  }
+
+  ~MDSMap() {
+    cct->put();
   }
 
   bool get_inline_data_enabled() { return inline_data_enabled; }
@@ -420,7 +431,7 @@ public:
       if ((p->second.standby_for_rank == MDS_NO_STANDBY_PREF ||
 	   p->second.standby_for_rank == MDS_MATCHED_ACTIVE ||
 	   (p->second.standby_for_rank == MDS_STANDBY_ANY &&
-	    g_conf->mon_force_standby_active))) {
+	    cct->_conf->mon_force_standby_active))) {
 	return p->first;
       }
     }

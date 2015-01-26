@@ -40,7 +40,7 @@ private:
   mutable ceph::ErasureCodeInterfaceRef erasure;
   mutable uint32_t stripe_unit; // Actually used after consulting with
 				// erasure code plugin
-  int compile(std::stringstream &ss) const;
+  int compile(CephContext* cct) const;
 
 
 protected:
@@ -55,12 +55,12 @@ protected:
 
   static const uint64_t one_op;
 
-  int _attach(CephContext *cct, std::stringstream &ss) const;
+  int _attach(CephContext* cct, stringstream *ss = nullptr) const;
 
-  virtual int attach(CephContext *cct, std::stringstream &ss) {
+  virtual int attach(CephContext* cct) {
     if (attached)
       return 0;
-    return _attach(cct, ss);
+    return _attach(cct);
   }
 
   virtual void detach();
@@ -72,8 +72,7 @@ protected:
 
   virtual int32_t quorum() const {
     if (!attached) {
-	// autoattach = bad!
-	return -ENOENT;
+      abort();
     }
     return erasure->get_data_chunk_count();
   }

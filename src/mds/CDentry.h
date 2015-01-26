@@ -60,6 +60,7 @@ class CDentry : public MDSCacheObject, public LRUObject {
 private:
   static boost::pool<> pool;
 public:
+  CephContext* cct;
   static void *operator new(size_t num_bytes) {
     void *n = pool.malloc();
     if (!n)
@@ -166,25 +167,25 @@ public:
 
  public:
   // cons
-  CDentry(const string& n, uint32_t h) :
-    name(n), hash(h),
-    dir(0),
+  CDentry(CephContext* _cct, const string& n, uint32_t h) :
+    cct(_cct), name(n), hash(h), dir(0),
     version(0), projected_version(0),
     item_dirty(this),
     auth_pins(0), nested_auth_pins(0), nested_anchors(0),
     lock(this, &lock_type),
     versionlock(this, &versionlock_type) {
+    cct->get();
     g_num_dn++;
     g_num_dna++;
   }
-  CDentry(const string& n, uint32_t h, inodeno_t ino, unsigned char dt) :
-    name(n), hash(h),
-    dir(0),
-    version(0), projected_version(0),
-    item_dirty(this),
+  CDentry(CephContext* _cct, const string& n, uint32_t h, inodeno_t ino,
+	  unsigned char dt) :
+    cct(_cct), name(n), hash(h), dir(0),
+    version(0), projected_version(0), item_dirty(this),
     auth_pins(0), nested_auth_pins(0), nested_anchors(0),
     lock(this, &lock_type),
     versionlock(this, &versionlock_type) {
+    cct->get();
     g_num_dn++;
     g_num_dna++;
     linkage.remote_ino = ino;
@@ -193,6 +194,7 @@ public:
   ~CDentry() {
     g_num_dn--;
     g_num_dns++;
+    cct->put();
   }
 
 

@@ -18,15 +18,15 @@
 
 
 MDSUtility::MDSUtility() :
-  Dispatcher(g_ceph_context),
+  Dispatcher(cct),
   objecter(NULL),
-  timer(g_ceph_context, lock),
+  timer(cct, lock),
   waiting_for_mds_map(NULL)
 {
-  monc = new MonClient(g_ceph_context);
-  messenger = Messenger::create(g_ceph_context, entity_name_t::CLIENT(), "mds", getpid());
+  monc = new MonClient(cct);
+  messenger = Messenger::create(cct, entity_name_t::CLIENT(), "mds", getpid());
   mdsmap = new MDSMap();
-  objecter = new Objecter(g_ceph_context, messenger, monc, 0, 0);
+  objecter = new Objecter(cct, messenger, monc, 0, 0);
 }
 
 
@@ -43,7 +43,7 @@ MDSUtility::~MDSUtility()
 int MDSUtility::init()
 {
   // Initialize Messenger
-  int r = messenger->bind(g_conf->public_addr);
+  int r = messenger->bind(cct->_conf->public_addr);
   if (r < 0)
     return r;
 

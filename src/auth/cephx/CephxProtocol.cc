@@ -12,6 +12,7 @@
  *
  */
 
+#include "common/ceph_context.h"
 #include "CephxProtocol.h"
 #include "common/Clock.h"
 #include "common/config.h"

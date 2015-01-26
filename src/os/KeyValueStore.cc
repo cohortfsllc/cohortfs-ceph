@@ -206,7 +206,6 @@ int StripObjectMap::file_to_extents(uint64_t offset, size_t len,
     extents.push_back(StripExtent(start, 0, offset+len-strip_offset));
 
   assert(extents.size());
-  dout(10) << "file_to_extents done " << dendl;
   return 0;
 }
 
@@ -287,17 +286,13 @@ uint64_t KeyValueStore::SubmitManager::op_submit_start()
 {
   lock.Lock();
   uint64_t op = ++op_seq;
-  dout(10) << "op_submit_start " << op << dendl;
   return op;
 }
 
 void KeyValueStore::SubmitManager::op_submit_finish(uint64_t op)
 {
-  dout(10) << "op_submit_finish " << op << dendl;
   if (op != op_submitted + 1) {
-      dout(0) << "op_submit_finish " << op << " expected " << (op_submitted + 1)
-	  << ", OUT OF ORDER" << dendl;
-      assert(0 == "out of order op_submit_finish");
+    assert(0 == "out of order op_submit_finish");
   }
   op_submitted = op;
   lock.Unlock();
@@ -330,8 +325,8 @@ int KeyValueStore::BufferTransaction::lookup_cached_header(
   }
 
   if (r < 0) {
-    dout(10) << __func__  << " " << cid << "/" << oid << " "
-	     << " r = " << r << dendl;
+    ldout(store->cct, 10) << __func__  << " " << cid << "/" << oid << " "
+			  << " r = " << r << dendl;
     return r;
   }
 
@@ -362,8 +357,9 @@ int KeyValueStore::BufferTransaction::get_buffer_keys(
     int r = store->backend->get_values_with_header(strip_header, prefix,
 						   need_lookup, out);
     if (r < 0) {
-      dout(10) << __func__  << " " << strip_header.cid << "/"
-	       << strip_header.oid << " " << " r = " << r << dendl;
+      ldout(store->cct, 10) << __func__  << " " << strip_header.cid << "/"
+			    << strip_header.oid << " " << " r = " << r
+			    << dendl;
       return r;
     }
   }
@@ -462,14 +458,14 @@ int KeyValueStore::BufferTransaction::submit_transaction()
 
     r = store->backend->save_strip_header(header, spos, t);
     if (r < 0) {
-      dout(10) << __func__ << " save strip header failed " << dendl;
+      ldout(store->cct, 10) << __func__ << " save strip header failed " << dendl;
       goto out;
     }
   }
 
 out:
 
-  dout(5) << __func__ << " r = " << r << dendl;
+  ldout(store->cct, 5) << __func__ << " r = " << r << dendl;
   return store->backend->submit_transaction(t);
 }
 
@@ -508,22 +504,21 @@ int KeyValueStore::_create_current()
 
 KeyValueStore::KeyValueStore(CephContext *_cct, const std::string &base,
 			     const char *name, bool do_update) :
-  ObjectStore(base),
-  cct(_cct),
+  ObjectStore(_cct, base),
   basedir(base),
   fsid_fd(-1), op_fd(-1), current_fd(-1),
   kv_type(KV_TYPE_NONE),
   backend(NULL),
-  ondisk_finisher(g_ceph_context),
+  ondisk_finisher(cct),
   default_osr("default"),
   op_queue_len(0), op_queue_bytes(0),
-  op_finisher(g_ceph_context),
-  op_tp(g_ceph_context, "KeyValueStore::op_tp",
-	g_conf->keyvaluestore_op_threads, "keyvaluestore_op_threads"),
-  op_wq(this, g_conf->keyvaluestore_op_thread_timeout,
-	g_conf->keyvaluestore_op_thread_suicide_timeout, &op_tp),
-  m_keyvaluestore_queue_max_ops(g_conf->keyvaluestore_queue_max_ops),
-  m_keyvaluestore_queue_max_bytes(g_conf->keyvaluestore_queue_max_bytes),
+  op_finisher(cct),
+  op_tp(cct, "KeyValueStore::op_tp",
+	cct->_conf->keyvaluestore_op_threads, "keyvaluestore_op_threads"),
+  op_wq(this, cct->_conf->keyvaluestore_op_thread_timeout,
+	cct->_conf->keyvaluestore_op_thread_suicide_timeout, &op_tp),
+  m_keyvaluestore_queue_max_ops(cct->_conf->keyvaluestore_queue_max_ops),
+  m_keyvaluestore_queue_max_bytes(cct->_conf->keyvaluestore_queue_max_bytes),
   do_update(do_update)
 {
   ostringstream oss;
@@ -534,12 +529,12 @@ KeyValueStore::KeyValueStore(CephContext *_cct, const std::string &base,
   sss << basedir << "/current/commit_op_seq";
   current_op_seq_fn = sss.str();
 
-  g_ceph_context->_conf->add_observer(this);
+  cct->_conf->add_observer(this);
 }
 
 KeyValueStore::~KeyValueStore()
 {
-  g_ceph_context->_conf->remove_observer(this);
+  cct->_conf->remove_observer(this);
 }
 
 int KeyValueStore::statfs(struct statfs *buf)
@@ -635,7 +630,7 @@ int KeyValueStore::mkfs()
   {
     KeyValueDB *store;
     if (kv_type == KV_TYPE_LEVELDB) {
-      store = new LevelDBStore(g_ceph_context, current_fn);
+      store = new LevelDBStore(cct, current_fn);
     } else {
       derr << "KeyValueStore::mkfs error: unknown backend type" << kv_type << dendl;
       ret = -1;
@@ -835,7 +830,7 @@ int KeyValueStore::mount()
   {
     KeyValueDB *store;
     if (kv_type == KV_TYPE_LEVELDB) {
-      store = new LevelDBStore(g_ceph_context, current_fn);
+      store = new LevelDBStore(cct, current_fn);
     } else {
       derr << "KeyValueStore::mount error: unknown backend type" << kv_type
 	   << dendl;
@@ -862,7 +857,7 @@ int KeyValueStore::mount()
     }
     stringstream err2;
 
-    if (g_conf->keyvaluestore_debug_check_backend && !dbomap->check(err2)) {
+    if (cct->_conf->keyvaluestore_debug_check_backend && !dbomap->check(err2)) {
       derr << err2.str() << dendl;;
       delete dbomap;
       ret = -EINVAL;
@@ -985,7 +980,7 @@ KeyValueStore::Op *KeyValueStore::build_op(list<Transaction*>& tls,
   }
 
   Op *o = new Op;
-  o->start = ceph_clock_now(g_ceph_context);
+  o->start = ceph_clock_now(cct);
   o->tls.swap(tls);
   o->ondisk = ondisk;
   o->onreadable = onreadable;
@@ -1074,7 +1069,7 @@ void KeyValueStore::_finish_op(OpSequencer *osr)
   osr->apply_lock.Unlock();  // locked in _do_op
   op_queue_release_throttle(o);
 
-  utime_t lat = ceph_clock_now(g_ceph_context);
+  utime_t lat = ceph_clock_now(cct);
   lat -= o->start;
 
   if (o->onreadable_sync) {
@@ -1318,7 +1313,7 @@ unsigned KeyValueStore::_do_transaction(Transaction& transaction,
 	assert(0 == "unexpected error");
 
 	if (r == -EMFILE) {
-	  dump_open_fds(g_ceph_context);
+	  dump_open_fds(cct);
 	}
       }
     }

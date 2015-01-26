@@ -12,6 +12,7 @@
  *
  */
 
+#include "common/ceph_context.h"
 #include "common/debug.h"
 #include "AuthSessionHandler.h"
 #include "cephx/CephxSessionHandler.h"

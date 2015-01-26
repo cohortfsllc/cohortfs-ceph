@@ -1,5 +1,7 @@
 #include "auth/Crypto.h"
 #include "common/Clock.h"
+#include "common/ceph_context.h"
+#include "common/code_environment.h"
 
 #include "common/config.h"
 #include "common/debug.h"
@@ -13,7 +15,8 @@ int main(int argc, char *argv[])
   char aes_key[AES_KEY_LEN];
   memset(aes_key, 0x77, sizeof(aes_key));
   bufferptr keybuf(aes_key, sizeof(aes_key));
-  CryptoKey key(CEPH_CRYPTO_AES, ceph_clock_now(g_ceph_context), keybuf);
+  CephContext* cct = new CephContext(CODE_ENVIRONMENT_UTILITY);
+  CryptoKey key(CEPH_CRYPTO_AES, ceph_clock_now(cct), keybuf);
 
   const char *msg="hello! this is a message\n";
   char pad[16];
@@ -25,9 +28,10 @@ int main(int argc, char *argv[])
 
   bufferlist enc_out;
   std::string error;
-  key.encrypt(g_ceph_context, enc_in, enc_out, error);
+  key.encrypt(cct, enc_in, enc_out, error);
   if (!error.empty()) {
     dout(0) << "couldn't encode! error " << error << dendl;
+    cct->put();
     exit(1);
   }
 
@@ -42,15 +46,16 @@ int main(int argc, char *argv[])
 
   dec_in = enc_out;
 
-  key.decrypt(g_ceph_context, dec_in, dec_out, error);
+  key.decrypt(cct, dec_in, dec_out, error);
   if (!error.empty()) {
     dout(0) << "couldn't decode! error " << error << dendl;
+    cct->put();
     exit(1);
   }
 
   dout(0) << "decoded len: " << dec_out.length() << dendl;
   dout(0) << "decoded msg: " << dec_out.c_str() << dendl;
 
+  cct->put();
   return 0;
 }
-

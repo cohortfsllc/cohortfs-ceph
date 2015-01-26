@@ -17,7 +17,7 @@
 #define CEPH_DOUT_H
 
 #include <cassert>
-#include "global/global_context.h"
+#include "common/ceph_context.h"
 #include "common/config.h"
 #include "common/likely.h"
 #include "common/Clock.h"

@@ -17,7 +17,6 @@
 #include "include/rbd/librbd.h"
 #include "include/rbd/librbd.hpp"
 
-#include "global/global_context.h"
 #include "global/global_init.h"
 #include "common/ceph_argparse.h"
 
@@ -40,6 +39,7 @@
 #include "include/stringify.h"
 
 using namespace std;
+static CephContext* cct;
 
 static int create_image(rados_ioctx_t ioctx, const char *name, uint64_t size)
 {
@@ -1017,8 +1017,8 @@ int main(int argc, char **argv)
   vector<const char*> args;
   argv_to_vec(argc, (const char **)argv, args);
 
-  global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
-  common_init_finish(g_ceph_context);
+  cct = global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
+  common_init_finish(cct);
 
   return RUN_ALL_TESTS();
 }

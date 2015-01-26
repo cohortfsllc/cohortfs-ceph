@@ -12,6 +12,7 @@
  *
  */
 
+#include "common/ceph_context.h"
 #include "common/pick_address.h"
 
 #include <netdb.h>

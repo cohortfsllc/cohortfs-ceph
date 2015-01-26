@@ -24,7 +24,6 @@
 #include "common/safe_io.h"
 #include "common/signal.h"
 #include "common/version.h"
-#include "global/global_context.h"
 #include "global/global_init.h"
 #include "global/pidfile.h"
 #include "global/signal_handler.h"
@@ -37,13 +36,7 @@
 
 #define dout_subsys ceph_subsys_
 
-static void global_init_set_globals(CephContext *cct)
-{
-  g_ceph_context = cct;
-  g_conf = cct->_conf;
-}
-
-static void output_ceph_version()
+static void output_ceph_version(CephContext* cct)
 {
   char buf[1024];
   snprintf(buf, sizeof(buf), "%s, process %s, pid %d",
@@ -59,20 +52,18 @@ static const char* c_str_or_null(const std::string &str)
   return str.c_str();
 }
 
-void global_pre_init(std::vector < const char * > *alt_def_args,
-		     std::vector < const char* >& args,
-		     uint32_t module_type, code_environment_t code_env,
-		     int flags)
+CephContext* global_pre_init(std::vector < const char * > *alt_def_args,
+			     std::vector < const char* >& args,
+			     uint32_t module_type, code_environment_t code_env,
+			     int flags)
 {
   // You can only call global_init once.
-  assert(!g_ceph_context);
   std::string conf_file_list;
   std::string cluster = "ceph";
   CephInitParameters iparams = ceph_argparse_early_args(args, module_type, flags,
 							&cluster, &conf_file_list);
   CephContext *cct = common_preinit(iparams, code_env, flags);
   cct->_conf->cluster = cluster;
-  global_init_set_globals(cct);
   md_config_t *conf = cct->_conf;
 
   if (alt_def_args)
@@ -111,51 +102,59 @@ void global_pre_init(std::vector < const char * > *alt_def_args,
 
   // Now we're ready to complain about config file parse errors
   complain_about_parse_errors(cct, &parse_errors);
+
+  return cct;
 }
 
 CDS_Env* global_cds_env;
 
-void global_init(std::vector < const char * > *alt_def_args,
-		 std::vector < const char* >& args,
-		 uint32_t module_type, code_environment_t code_env, int flags)
+CephContext* global_init(std::vector < const char * > *alt_def_args,
+			 std::vector < const char* >& args,
+			 uint32_t module_type, code_environment_t code_env,
+			 int flags)
+
 {
-  global_pre_init(alt_def_args, args, module_type, code_env, flags);
+  CephContext* cct = global_pre_init(alt_def_args, args, module_type,
+				     code_env, flags);
 
   // CDS hooks (later will specialize)
   global_cds_env = new CDS_Env();
 
   // init context (starts thread(s)
-  g_ceph_context->init();
+  cct->init();
 
   // signal stuff
   int siglist[] = { SIGPIPE, 0 };
   block_signals(siglist, NULL);
 
-  if (g_conf->log_flush_on_exit)
-    g_ceph_context->_log->set_flush_on_exit();
+  if (cct->_conf->log_flush_on_exit)
+    cct->_log->set_flush_on_exit();
 
-  if (g_conf->run_dir.length() &&
+  if (cct->_conf->run_dir.length() &&
       code_env == CODE_ENVIRONMENT_DAEMON &&
       !(flags & CINIT_FLAG_NO_DAEMON_ACTIONS)) {
-    int r = ::mkdir(g_conf->run_dir.c_str(), 0755);
+    int r = ::mkdir(cct->_conf->run_dir.c_str(), 0755);
     if (r < 0 && errno != EEXIST) {
       r = -errno;
-      derr << "warning: unable to create " << g_conf->run_dir << ": " << cpp_strerror(r) << dendl;
+      derr << "warning: unable to create " << cct->_conf->run_dir << ": "
+	   << cpp_strerror(r) << dendl;
     }
   }
-  register_assert_context(g_ceph_context);
+  register_assert_context(cct);
 
   // call all observers now.  this has the side-effect of configuring
   // and opening the log file immediately.
-  g_conf->call_all_observers();
+  cct->_conf->call_all_observers();
 
   if (code_env == CODE_ENVIRONMENT_DAEMON && !(flags & CINIT_FLAG_NO_DAEMON_ACTIONS))
-    output_ceph_version();
+    output_ceph_version(cct);
+
+  return cct;
 }
 
-void global_print_banner(void)
+void global_print_banner(CephContext* cct)
 {
-  output_ceph_version();
+  output_ceph_version(cct);
 }
 
 static void pidfile_remove_void(void)
@@ -172,8 +171,8 @@ int global_init_prefork(CephContext *cct, int flags)
     return -1;
 
   // stop log thread
-  g_ceph_context->_log->flush();
-  g_ceph_context->_log->stop();
+  cct->_log->flush();
+  cct->_log->stop();
   return 0;
 }
 
@@ -197,7 +196,7 @@ void global_init_daemonize(CephContext *cct, int flags)
 void global_init_postfork_start(CephContext *cct)
 {
   // restart log thread
-  g_ceph_context->_log->start();
+  cct->_log->start();
 
   if (atexit(pidfile_remove_void)) {
     derr << "global_init_daemonize: failed to set pidfile_remove function "
@@ -227,7 +226,7 @@ void global_init_postfork_start(CephContext *cct)
     exit(1);
   }
 
-  pidfile_write(g_conf);
+  pidfile_write(cct);
 }
 
 void global_init_postfork_finish(CephContext *cct, int flags)
@@ -248,7 +247,7 @@ void global_init_postfork_finish(CephContext *cct, int flags)
 }
 
 
-void global_init_chdir(const CephContext *cct)
+void global_init_chdir(CephContext *cct)
 {
   const md_config_t *conf = cct->_conf;
   if (conf->chdir.empty())

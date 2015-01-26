@@ -18,6 +18,7 @@
 #include "include/types.h"
 #include "include/buffer.h"
 
+#include "common/ceph_context.h"
 #include "common/compiler_extensions.h"
 
 #include <iosfwd>
@@ -25,14 +26,15 @@
 #include <errno.h>
 
 class MonitorStore {
+  CephContext* cct;
   string dir;
   int lock_fd;
 
   void write_bl_ss(bufferlist& bl, const char *a, const char *b,
 		  bool append);
 public:
-  MonitorStore(const std::string &d) : dir(d), lock_fd(-1) { }
-  ~MonitorStore() { }
+  MonitorStore(CephContext* _cct, const std::string &d);
+  ~MonitorStore();
 
   int mkfs();  // wipe
   int mount();

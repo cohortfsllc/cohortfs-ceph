@@ -47,11 +47,6 @@ void install_sighandler(int signum, signal_handler_t handler, int flags)
   }
 }
 
-void sighup_handler(int signum)
-{
-  g_ceph_context->reopen_logs();
-}
-
 /// --- safe handler ---
 
 #include "common/Thread.h"

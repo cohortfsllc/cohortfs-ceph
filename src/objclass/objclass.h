@@ -8,6 +8,7 @@
 
 #include "../include/types.h"
 #include "msg/msg_types.h"
+#include "common/ceph_context.h"
 
 extern "C" {
 #endif
@@ -90,6 +91,8 @@ extern void class_fini(void);
 
 #ifdef __cplusplus
 }
+
+extern CephContext* cls_cxx_context(cls_method_context_t hctx);
 
 typedef int (*cls_method_cxx_call_t)(cls_method_context_t ctx,
 				     class buffer::list *inbl, class buffer::list *outbl);

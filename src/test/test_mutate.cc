@@ -30,6 +30,8 @@
 using std::cerr;
 using std::string;
 
+static CephContext* cct;
+
 using namespace librados;
 
 static void usage(void)
@@ -44,8 +46,8 @@ int main(int argc, const char **argv)
   vector<const char*> args;
   argv_to_vec(argc, argv, args);
   env_to_vec(args);
-  global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
-  common_init_finish(g_ceph_context);
+  cct = global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
+  common_init_finish(cct);
 
   string val;
   string oid("ceph_test_object");
@@ -69,7 +71,7 @@ int main(int argc, const char **argv)
   }
 
   Rados rados;
-  if (rados.init_with_context(g_ceph_context) < 0) {
+  if (rados.init_with_context(cct) < 0) {
      cerr << "couldn't initialize rados!" << std::endl;
      return 1;
   }

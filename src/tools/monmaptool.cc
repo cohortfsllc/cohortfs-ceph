@@ -29,6 +29,8 @@ using namespace std;
 #include "mon/MonMap.h"
 #include "include/str_list.h"
 
+static CephContext* cct;
+
 void usage()
 {
   cout << " usage: [--print] [--create [--clobber][--fsid uuid]] [--generate] [--set-initial-members] [--add name 1.2.3.4:567] [--rm name] <mapfilename>" << std::endl;
@@ -52,9 +54,10 @@ int main(int argc, const char **argv)
   map<string,entity_addr_t> add;
   list<string> rm;
 
-  global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY,
-	      CINIT_FLAG_NO_DEFAULT_CONFIG_FILE);
-  common_init_finish(g_ceph_context);
+  cct = global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT,
+		    CODE_ENVIRONMENT_UTILITY,
+		    CINIT_FLAG_NO_DEFAULT_CONFIG_FILE);
+  common_init_finish(cct);
   std::string val;
   for (std::vector<const char*>::iterator i = args.begin(); i != args.end(); ) {
     if (ceph_argparse_double_dash(args, i)) {
@@ -128,10 +131,10 @@ int main(int argc, const char **argv)
 
   if (create) {
     monmap.epoch = 0;
-    monmap.created = ceph_clock_now(g_ceph_context);
+    monmap.created = ceph_clock_now(cct);
     monmap.last_changed = monmap.created;
     srand(getpid() + time(0));
-    if (g_conf->fsid.is_nil()) {
+    if (cct->_conf->fsid.is_nil()) {
       monmap.generate_fsid();
       cout << me << ": generated fsid " << monmap.fsid << std::endl;
     }
@@ -139,7 +142,7 @@ int main(int argc, const char **argv)
   }
 
   if (generate) {
-    int r = monmap.build_initial(g_ceph_context, cerr);
+    int r = monmap.build_initial(cct, cerr);
     if (r < 0)
       return r;
   }
@@ -147,11 +150,11 @@ int main(int argc, const char **argv)
   if (filter) {
     // apply initial members
     list<string> initial_members;
-    get_str_list(g_conf->mon_initial_members, initial_members);
+    get_str_list(cct->_conf->mon_initial_members, initial_members);
     if (!initial_members.empty()) {
       cout << "initial_members " << initial_members << ", filtering seed monmap" << std::endl;
       set<entity_addr_t> removed;
-      monmap.set_initial_members(g_ceph_context, initial_members,
+      monmap.set_initial_members(cct, initial_members,
 				 string(), entity_addr_t(),
 				 &removed);
       cout << "removed " << removed << std::endl;
@@ -159,8 +162,8 @@ int main(int argc, const char **argv)
     modified = true;
   }
 
-  if (!g_conf->fsid.is_nil()) {
-    monmap.fsid = g_conf->fsid;
+  if (!cct->_conf->fsid.is_nil()) {
+    monmap.fsid = cct->_conf->fsid;
     cout << me << ": set fsid to " << monmap.fsid << std::endl;
     modified = true;
   }

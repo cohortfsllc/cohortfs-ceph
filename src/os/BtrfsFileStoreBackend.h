@@ -29,7 +29,7 @@ private:
   bool m_filestore_btrfs_clone_range;
   bool m_filestore_btrfs_snap;
 public:
-  BtrfsFileStoreBackend(FileStore *fs);
+  BtrfsFileStoreBackend(CephContext* _cct, FileStore *fs);
   ~BtrfsFileStoreBackend() {};
   int detect_features();
   bool can_checkpoint();

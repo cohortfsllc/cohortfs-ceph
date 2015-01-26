@@ -14,8 +14,6 @@
 #include "cls_statelog_types.h"
 #include "cls_statelog_ops.h"
 
-#include "global/global_context.h"
-
 CLS_VER(1,0)
 CLS_NAME(statelog)
 

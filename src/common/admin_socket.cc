@@ -13,6 +13,7 @@
  */
 
 
+#include "common/ceph_context.h"
 #include "common/Thread.h"
 #include "common/admin_socket.h"
 #include "common/admin_socket_client.h"

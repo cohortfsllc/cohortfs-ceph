@@ -13,6 +13,7 @@
  */
 
 #include <cxxabi.h>
+#include "common/ceph_context.h"
 #include "common/cmdparse.h"
 #include "include/str_list.h"
 #include "json_spirit/json_spirit.h"

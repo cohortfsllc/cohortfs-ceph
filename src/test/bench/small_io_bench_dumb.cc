@@ -25,6 +25,8 @@
 #include "os/FileStore.h"
 #include "dumb_backend.h"
 
+CephContext* cct;
+
 namespace po = boost::program_options;
 using namespace std;
 
@@ -89,12 +91,12 @@ int main(int argc, char **argv)
     ceph_options.push_back(i->c_str());
   }
 
-  global_init(
+  cct = global_init(
     &def_args, ceph_options, CEPH_ENTITY_TYPE_CLIENT,
     CODE_ENVIRONMENT_UTILITY,
     CINIT_FLAG_NO_DEFAULT_CONFIG_FILE);
-  common_init_finish(g_ceph_context);
-  g_ceph_context->_conf->apply_changes(NULL);
+  common_init_finish(cct);
+  cct->_conf->apply_changes(NULL);
 
   if (!vm.count("filestore-path")) {
     cout << "Must provide filestore-path" << std::endl
@@ -214,7 +216,7 @@ int main(int argc, char **argv)
       vm["sync-interval"].as<unsigned>(),
       sync_fd,
       10,
-      g_ceph_context),
+      cct),
     vm["num-concurrent-ops"].as<unsigned>(),
     vm["duration"].as<unsigned>(),
     vm["max-ops"].as<unsigned>());

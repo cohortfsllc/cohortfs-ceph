@@ -37,6 +37,7 @@ using namespace std;
 
 #define dout_subsys ceph_subsys_ms
 
+static CephContext* cct;
 Messenger *messenger = 0;
 
 Mutex test_lock;
@@ -47,7 +48,7 @@ uint64_t received = 0;
 class Admin : public Dispatcher {
 public:
   Admin()
-    : Dispatcher(g_ceph_context)
+    : Dispatcher(cct)
   {
   }
 private:
@@ -76,13 +77,13 @@ int main(int argc, const char **argv, const char *envp[]) {
   argv_to_vec(argc, argv, args);
   env_to_vec(args);
 
-  global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
-  common_init_finish(g_ceph_context);
+  cct = global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
+  common_init_finish(cct);
 
   dout(0) << "i am mon " << args[0] << dendl;
 
   // get monmap
-  MonClient mc(g_ceph_context);
+  MonClient mc(cct);
   if (mc.build_initial_monmap() < 0)
     return -1;
 
@@ -92,12 +93,12 @@ int main(int argc, const char **argv, const char *envp[]) {
   ostringstream ss;
   ss << mc.monmap.get_addr(whoami);
   std::string sss(ss.str());
-  g_ceph_context->_conf->set_val("public_addr", sss.c_str());
-  g_ceph_context->_conf->apply_changes(NULL);
-  Messenger *rank = Messenger::create(g_ceph_context,
+  cct->_conf->set_val("public_addr", sss.c_str());
+  cct->_conf->apply_changes(NULL);
+  Messenger *rank = Messenger::create(cct,
 				      entity_name_t::MON(whoami), "tester",
 				      getpid());
-  int err = rank->bind(g_ceph_context->_conf->public_addr);
+  int err = rank->bind(cct->_conf->public_addr);
   if (err < 0)
     return 1;
 

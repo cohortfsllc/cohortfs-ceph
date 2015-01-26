@@ -18,6 +18,7 @@
 #include "stdlib.h"
 
 using namespace std;
+static CephContext* cct;
 
 template <typename T>
 typename T::iterator rand_choose(T &cont) {
@@ -520,7 +521,7 @@ public:
   virtual void SetUp() {
     char *path = getenv("OBJECT_MAP_PATH");
     if (!path) {
-      db.reset(new DBObjectMap(g_ceph_context, new KeyValueDBMemory()));
+      db.reset(new DBObjectMap(cct, new KeyValueDBMemory()));
       tester.db = db.get();
       return;
     }
@@ -528,10 +529,10 @@ public:
     string strpath(path);
 
     cerr << "using path " << strpath << std::endl;;
-    LevelDBStore *store = new LevelDBStore(g_ceph_context, strpath);
+    LevelDBStore *store = new LevelDBStore(cct, strpath);
     assert(!store->create_and_open(cerr));
 
-    db.reset(new DBObjectMap(g_ceph_context, store));
+    db.reset(new DBObjectMap(cct, store));
     tester.db = db.get();
   }
 
@@ -546,8 +547,8 @@ int main(int argc, char **argv) {
   vector<const char*> args;
   argv_to_vec(argc, (const char **)argv, args);
 
-  global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
-  common_init_finish(g_ceph_context);
+  cct = global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
+  common_init_finish(cct);
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

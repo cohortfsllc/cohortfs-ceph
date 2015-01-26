@@ -12,6 +12,7 @@
  *
  */
 
+#include "common/ceph_context.h"
 #include "CephxSessionHandler.h"
 #include "CephxProtocol.h"
 

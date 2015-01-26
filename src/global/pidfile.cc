@@ -33,14 +33,14 @@
 
 static char pid_file[PATH_MAX] = "";
 
-int pidfile_write(const md_config_t *conf)
+int pidfile_write(CephContext *cct)
 {
   int ret, fd;
 
-  if (conf->pid_file.empty()) {
+  if (cct->_conf->pid_file.empty()) {
     return pidfile_remove();
   }
-  snprintf(pid_file, PATH_MAX, "%s", conf->pid_file.c_str());
+  snprintf(pid_file, PATH_MAX, "%s", cct->_conf->pid_file.c_str());
 
   fd = TEMP_FAILURE_RETRY(::open(pid_file,
 				 O_CREAT|O_TRUNC|O_WRONLY, 0644));

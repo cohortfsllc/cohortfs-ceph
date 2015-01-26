@@ -15,11 +15,13 @@
 #ifndef CEPH_COMMON_PIDFILE_H
 #define CEPH_COMMON_PIDFILE_H
 
+#include "common/ceph_context.h"
+
 struct md_config_t;
 
 // Write a pidfile with the current pid, using the configuration in the
 // provided conf structure.
-int pidfile_write(const md_config_t *conf);
+int pidfile_write(CephContext* cct);
 
 // Remove the pid file that was previously written by pidfile_write.
 // This is safe to call in a signal handler context.

@@ -17,6 +17,7 @@
 
 #include "include/types.h"
 #include "include/Context.h"
+#include "common/ceph_context.h"
 #include "mds_table_types.h"
 
 class MDS;
@@ -25,7 +26,8 @@ class MMDSTableRequest;
 
 class MDSTableClient {
 protected:
-  MDS *mds;
+  MDS* mds;
+  CephContext* cct;
   int table;
 
   uint64_t last_reqid;
@@ -66,9 +68,10 @@ protected:
   void _logged_ack(version_t tid);
 
 public:
-  MDSTableClient(MDS *m, int tab) :
-    mds(m), table(tab), last_reqid(~0ULL), server_ready(false) {}
-  virtual ~MDSTableClient() {}
+  MDSTableClient(MDS *m, int tab);
+  virtual ~MDSTableClient() {
+    cct->put();
+  }
 
   void handle_request(MMDSTableRequest *m);
 

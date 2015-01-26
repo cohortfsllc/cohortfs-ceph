@@ -58,6 +58,7 @@
 #include "messages/MLog.h"
 
 using namespace std;
+static CephContext* cct;
 
 #define dout_subsys ceph_subsys_
 #undef dout_prefix
@@ -88,10 +89,10 @@ class TestStub : public Dispatcher
     TestStub *s;
     C_Tick(TestStub *stub) : s(stub) {}
     void finish(int r) {
-      generic_dout(20) << "C_Tick::" << __func__ << dendl;
+      lgeneric_dout(::cct, 20) << "C_Tick::" << __func__ << dendl;
       if (r == -ECANCELED) {
-	generic_dout(20) << "C_Tick::" << __func__
-			<< " shutdown" << dendl;
+	lgeneric_dout(::cct, 20) << "C_Tick::" << __func__
+				 << " shutdown" << dendl;
 	return;
       }
       s->tick();
@@ -331,8 +332,8 @@ class OSDStub : public TestStub
     messenger.reset(Messenger::create(cct, entity_name_t::OSD(whoami),
 				      ss.str().c_str(), getpid()));
 
-    Throttle throttler(g_ceph_context, "osd_client_bytes",
-	g_conf->osd_client_message_size_cap);
+    Throttle throttler(cct, "osd_client_bytes",
+	cct->_conf->osd_client_message_size_cap);
     uint64_t supported =
       CEPH_FEATURE_UID |
       CEPH_FEATURE_NOSRCADDR;
@@ -347,8 +348,9 @@ class OSDStub : public TestStub
     messenger->set_policy(entity_name_t::TYPE_OSD,
 	Messenger::Policy::stateless_server(0,0));
 
-    dout(10) << __func__ << " public addr " << g_conf->public_addr << dendl;
-    int err = messenger->bind(g_conf->public_addr);
+    dout(10) << __func__ << " public addr "
+	     << cct->_conf->public_addr << dendl;
+    int err = messenger->bind(cct->_conf->public_addr);
     if (err < 0)
       exit(1);
 
@@ -364,8 +366,8 @@ class OSDStub : public TestStub
     Mutex::Locker l(lock);
 
     dout(1) << __func__ << " fsid " << monc.monmap.fsid
-	    << " osd_fsid " << g_conf->osd_uuid << dendl;
-    dout(1) << __func__ << " name " << g_conf->name << dendl;
+	    << " osd_fsid " << cct->_conf->osd_uuid << dendl;
+    dout(1) << __func__ << " name " << cct->_conf->name << dendl;
 
     timer.init();
     messenger->add_dispatcher_head(this);
@@ -735,12 +737,12 @@ int main(int argc, const char *argv[])
   our_name = argv[0];
   argv_to_vec(argc, argv, args);
 
-  global_init(&def_args, args,
-	      CEPH_ENTITY_TYPE_OSD, CODE_ENVIRONMENT_UTILITY,
-	      0);
+  cct = global_init(&def_args, args,
+		    CEPH_ENTITY_TYPE_OSD, CODE_ENVIRONMENT_UTILITY,
+		    0);
 
-  common_init_finish(g_ceph_context);
-  g_ceph_context->_conf->apply_changes(NULL);
+  common_init_finish(cct);
+  cct->_conf->apply_changes(NULL);
 
   set<int> stub_ids;
   double duration = 300.0;
@@ -789,7 +791,7 @@ int main(int argc, const char *argv[])
     int whoami = *i;
 
     std::cout << __func__ << " starting stub." << whoami << std::endl;
-    OSDStub *stub = new OSDStub(whoami, g_ceph_context);
+    OSDStub *stub = new OSDStub(whoami, cct);
     int err = stub->init();
     if (err < 0) {
       std::cerr << "** osd stub error: " << cpp_strerror(-err) << std::endl;
@@ -799,7 +801,7 @@ int main(int argc, const char *argv[])
   }
 
   std::cout << __func__ << " starting client stub" << std::endl;
-  ClientStub *cstub = new ClientStub(g_ceph_context);
+  ClientStub *cstub = new ClientStub(cct);
   int err = cstub->init();
   if (err < 0) {
     std::cerr << "** client stub error: " << cpp_strerror(-err) << std::endl;
@@ -812,7 +814,7 @@ int main(int argc, const char *argv[])
   register_async_signal_handler_oneshot(SIGTERM, handle_test_signal);
 
   shutdown_lock.Lock();
-  shutdown_timer = new SafeTimer(g_ceph_context, shutdown_lock);
+  shutdown_timer = new SafeTimer(cct, shutdown_lock);
   shutdown_timer->init();
   if (duration != 0) {
     std::cout << __func__

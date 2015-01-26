@@ -7,6 +7,7 @@
 #include <ostream>
 using std::ostream;
 
+#include "common/ceph_context.h"
 #include "include/types.h"
 #include "msg/msg_types.h"
 

@@ -20,7 +20,6 @@
 #include "detailed_stat_collector.h"
 #include "distribution.h"
 #include "global/global_init.h"
-#include "global/global_context.h"
 #include "common/WorkQueue.h"
 #include "common/Semaphore.h"
 #include "common/Finisher.h"
@@ -28,6 +27,9 @@
 
 namespace po = boost::program_options;
 using namespace std;
+
+CephContext* cct;
+
 class Queueable {
 public:
   virtual void queue(unsigned *) = 0;
@@ -138,12 +140,12 @@ int main(int argc, char **argv)
     ceph_options.push_back(i->c_str());
   }
 
-  global_init(
+  cct = global_init(
     &def_args, ceph_options, CEPH_ENTITY_TYPE_CLIENT,
     CODE_ENVIRONMENT_UTILITY,
     CINIT_FLAG_NO_DEFAULT_CONFIG_FILE);
-  common_init_finish(g_ceph_context);
-  g_ceph_context->_conf->apply_changes(NULL);
+  common_init_finish(cct);
+  cct->_conf->apply_changes(NULL);
 
   if (vm.count("help")) {
     cout << desc << std::endl;
@@ -168,7 +170,7 @@ int main(int argc, char **argv)
     if (*i == 'q') {
       ThreadPool *tp =
 	new ThreadPool(
-	  g_ceph_context, ss.str(), vm["num-threads"].as<unsigned>(), 0);
+	  cct, ss.str(), vm["num-threads"].as<unsigned>(), 0);
       wqs.push_back(
 	new WQWrapper(
 	  new PassAlong(tp, wqs.back()),
@@ -177,7 +179,7 @@ int main(int argc, char **argv)
     } else if (*i == 'f') {
       wqs.push_back(
 	new FinisherWrapper(
-	  g_ceph_context, wqs.back()));
+	  cct, wqs.back()));
     }
     ++num;
   }

@@ -17,7 +17,6 @@
 #include "common/Mutex.h"
 #include "common/Cond.h"
 #include "include/utime.h"
-#include "global/global_context.h"
 #include "common/ceph_argparse.h"
 #include "test/omap_bench.h"
 
@@ -133,10 +132,10 @@ Writer::Writer(OmapBench *omap_bench) : ob(omap_bench) {
   oid = name.str();
 }
 void Writer::start_time() {
-  begin_time = ceph_clock_now(g_ceph_context);
+  begin_time = ceph_clock_now(nullptr);
 }
 void Writer::stop_time() {
-  end_time = ceph_clock_now(g_ceph_context);
+  end_time = ceph_clock_now(nullptr);
 }
 double Writer::get_time() {
   return (end_time - begin_time) * 1000;

@@ -7,7 +7,6 @@
 
 #include "include/utime.h"
 #include "common/Clock.h"
-#include "global/global_context.h"
 
 #include "gtest/gtest.h"
 #include "test/librados/test.h"
@@ -40,7 +39,7 @@ void add_log(librados::ObjectWriteOperation *op, const string& client_id, const 
   bufferlist bl;
   ::encode(state, bl);
 
-  utime_t ts = ceph_clock_now(g_ceph_context);
+  utime_t ts = ceph_clock_now(nullptr);
 
   cls_statelog_add(*op, client_id, op_id, obj, ts, state, bl);
 }

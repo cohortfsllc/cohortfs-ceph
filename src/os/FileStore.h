@@ -616,9 +616,8 @@ ostream& operator<<(ostream& out, const FileStore::OpSequencer& s);
 struct fiemap;
 
 class FileStoreBackend {
-private:
-  FileStore *filestore;
 protected:
+  FileStore *filestore;
   int get_basedir_fd() {
     return filestore->basedir_fd;
   }

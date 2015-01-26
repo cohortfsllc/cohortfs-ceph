@@ -77,6 +77,8 @@ map<string, string> map_options; // -o / --options map
 
 #define dout_subsys ceph_subsys_rbd
 
+static CephContext* cct;
+
 void usage()
 {
   cout <<
@@ -462,7 +464,7 @@ struct rbd_bencher {
     while (in_flight > max) {
       utime_t dur;
       dur.set_from_double(.2);
-      cond.WaitInterval(g_ceph_context, lock, dur);
+      cond.WaitInterval(cct, lock, dur);
     }
   }
 
@@ -888,7 +890,7 @@ static int do_watch(librados::IoCtx& pp, const char *imgname)
 static int do_kernel_add(const char *volname, const char *imgname)
 {
   MonMap monmap;
-  int r = monmap.build_initial(g_ceph_context, cerr);
+  int r = monmap.build_initial(cct, cerr);
   if (r < 0)
     return r;
 
@@ -900,23 +902,23 @@ static int do_kernel_add(const char *volname, const char *imgname)
       oss << ",";
   }
 
-  const char *user = g_conf->name.get_id().c_str();
+  const char *user = cct->_conf->name.get_id().c_str();
   oss << " name=" << user;
 
   char key_name[strlen(user) + strlen("client.") + 1];
   snprintf(key_name, sizeof(key_name), "client.%s", user);
 
   KeyRing keyring;
-  r = keyring.from_ceph_context(g_ceph_context);
-  if (r == -ENOENT && !(g_conf->keyfile.length() ||
-			g_conf->key.length()))
+  r = keyring.from_ceph_context(cct);
+  if (r == -ENOENT && !(cct->_conf->keyfile.length() ||
+			cct->_conf->key.length()))
     r = 0;
   if (r < 0) {
     cerr << "rbd: failed to get secret: " << cpp_strerror(r) << std::endl;
     return r;
   }
   CryptoKey secret;
-  if (keyring.get_secret(g_conf->name, secret)) {
+  if (keyring.get_secret(cct->_conf->name, secret)) {
     string secret_str;
     secret.encode_base64(secret_str);
 
@@ -1517,7 +1519,7 @@ int main(int argc, const char **argv)
   env_to_vec(args);
 
   int opt_cmd = OPT_NO_CMD;
-  global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
+  cct = global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
 
   const char *volname = NULL;
   uint64_t size = 0;  // in bytes
@@ -1541,7 +1543,7 @@ int main(int argc, const char **argv)
     if (ceph_argparse_double_dash(args, i)) {
       break;
     } else if (ceph_argparse_witharg(args, i, &val, "--secret", (char*)NULL)) {
-      int r = g_conf->set_val("keyfile", val.c_str());
+      int r = cct->_conf->set_val("keyfile", val.c_str());
       assert(r == 0);
     } else if (ceph_argparse_flag(args, &i, "-h", "--help", (char*)NULL)) {
       usage();
@@ -1603,7 +1605,7 @@ int main(int argc, const char **argv)
     }
   }
 
-  common_init_finish(g_ceph_context);
+  common_init_finish(cct);
 
   i = args.begin();
   if (i == args.end()) {
@@ -1787,7 +1789,7 @@ if (!set_conf_param(v, p1, p2, p3)) { \
   bool talk_to_cluster = (opt_cmd != OPT_MAP &&
 			  opt_cmd != OPT_UNMAP &&
 			  opt_cmd != OPT_SHOWMAPPED);
-  if (talk_to_cluster && rados.init_with_context(g_ceph_context) < 0) {
+  if (talk_to_cluster && rados.init_with_context(cct) < 0) {
     cerr << "rbd: couldn't initialize rados!" << std::endl;
     return EXIT_FAILURE;
   }

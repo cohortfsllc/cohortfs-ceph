@@ -53,11 +53,14 @@
 #define ALIGNED(x, by) (!((x) % (by)))
 #define ALIGN_UP(x, by) (ALIGNED((x), (by)) ? (x) : (ALIGN_DOWN((x), (by)) + (by)))
 
-GenericFileStoreBackend::GenericFileStoreBackend(FileStore *fs):
-  FileStoreBackend(fs),
-  ioctl_fiemap(false),
-  m_filestore_fiemap(g_conf->filestore_fiemap),
-  m_filestore_fsync_flushes_journal_data(g_conf->filestore_fsync_flushes_journal_data) {}
+GenericFileStoreBackend::GenericFileStoreBackend(CephContext* _cct,
+						 FileStore *fs) :
+  FileStoreBackend(fs), cct(_cct), ioctl_fiemap(false),
+  m_filestore_fiemap(cct->_conf->filestore_fiemap),
+  m_filestore_fsync_flushes_journal_data(
+    cct->_conf->filestore_fsync_flushes_journal_data) {
+  cct->get();
+}
 
 int GenericFileStoreBackend::detect_features()
 {

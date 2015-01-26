@@ -31,6 +31,8 @@ using namespace std;
 
 #define dout_subsys ceph_subsys_simple_server
 
+static CephContext* cct;
+
 
 int main(int argc, const char **argv)
 {
@@ -52,8 +54,8 @@ int main(int argc, const char **argv)
 	argv_to_vec(argc, argv, args);
 	env_to_vec(args);
 
-	global_init(NULL, args, CEPH_ENTITY_TYPE_ANY, CODE_ENVIRONMENT_DAEMON,
-		    0);
+	cct = global_init(NULL, args, CEPH_ENTITY_TYPE_ANY,
+			  CODE_ENVIRONMENT_DAEMON, 0);
 
 	for (arg_iter = args.begin(); arg_iter != args.end();) {
 	  if (ceph_argparse_witharg(args, arg_iter, &val, "--addr",
@@ -73,7 +75,7 @@ int main(int argc, const char **argv)
 	dest_str += port;
 	entity_addr_from_url(&bind_addr, dest_str.c_str());
 
-	messenger = Messenger::create(g_ceph_context,
+	messenger = Messenger::create(cct,
 				      entity_name_t::GENERIC(),
 				      "simple_server",
 				      0 /* nonce */);
@@ -88,7 +90,7 @@ int main(int argc, const char **argv)
 
 	// Set up crypto, daemonize, etc.
 	//global_init_daemonize(g_ceph_context, 0);
-	common_init_finish(g_ceph_context);
+	common_init_finish(cct);
 
 	dispatcher = new SimpleDispatcher(messenger);
 

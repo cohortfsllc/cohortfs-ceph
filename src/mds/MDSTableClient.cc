@@ -34,6 +34,11 @@
 #undef dout_prefix
 #define dout_prefix *_dout << "mds." << mds->get_nodeid() << ".tableclient(" << get_mdstable_name(table) << ") "
 
+MDSTableClient::MDSTableClient(MDS *m, int tab) :
+  mds(m), cct(mds->cct), table(tab), last_reqid(~0ULL), server_ready(false) {
+  cct->get();
+}
+
 
 void MDSTableClient::handle_request(class MMDSTableRequest *m)
 {
@@ -52,7 +57,7 @@ void MDSTableClient::handle_request(class MMDSTableRequest *m)
     if (pending_prepare.count(reqid)) {
       dout(10) << "got agree on " << reqid << " atid " << tid << dendl;
 
-      assert(g_conf->mds_kill_mdstable_at != 3);
+      assert(cct->_conf->mds_kill_mdstable_at != 3);
 
       Context *onfinish = pending_prepare[reqid].onfinish;
       *pending_prepare[reqid].ptid = tid;
@@ -89,7 +94,7 @@ void MDSTableClient::handle_request(class MMDSTableRequest *m)
 	pending_commit[tid]->pending_commit_tids[table].count(tid)) {
       dout(10) << "got ack on tid " << tid << ", logging" << dendl;
 
-      assert(g_conf->mds_kill_mdstable_at != 7);
+      assert(cct->_conf->mds_kill_mdstable_at != 7);
 
       // remove from committing list
       pending_commit[tid]->pending_commit_tids[table].erase(tid);
@@ -127,7 +132,7 @@ void MDSTableClient::_logged_ack(version_t tid)
 {
   dout(10) << "_logged_ack " << tid << dendl;
 
-  assert(g_conf->mds_kill_mdstable_at != 8);
+  assert(cct->_conf->mds_kill_mdstable_at != 8);
 
   // kick any waiters (LogSegment trim)
   if (ack_waiters.count(tid)) {
@@ -174,7 +179,7 @@ void MDSTableClient::commit(version_t tid, LogSegment *ls)
   pending_commit[tid] = ls;
   ls->pending_commit_tids[table].insert(tid);
 
-  assert(g_conf->mds_kill_mdstable_at != 4);
+  assert(cct->_conf->mds_kill_mdstable_at != 4);
 
   if (server_ready) {
     // send message

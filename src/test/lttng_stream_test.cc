@@ -7,6 +7,8 @@
 #include "common/debug.h"
 
 #define dout_subsys ceph_subsys_osd
+
+static CephContext* cct;
 /*
 struct example_message {
   example_message(int num_ints, int num_strings) 
@@ -25,10 +27,10 @@ int main(int argc, const char *argv[])
   argv_to_vec(argc, argv, args);
   env_to_vec(args);
 
-  global_init(NULL, args, CEPH_ENTITY_TYPE_OSD,
-              CODE_ENVIRONMENT_UTILITY, 0);
+  cct = global_init(NULL, args, CEPH_ENTITY_TYPE_OSD,
+		    CODE_ENVIRONMENT_UTILITY, 0);
 
-  common_init_finish(g_ceph_context);
+  common_init_finish(cct);
 
 //  thread_local string foo("", 1024); // stand-in for thread-local buffer
 

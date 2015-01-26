@@ -176,7 +176,7 @@ public:
     int crcflags = MSG_CRC_DATA | MSG_CRC_HEADER;
     p.seek(seek);
     try {
-      Message *n = decode_message(g_ceph_context, crcflags, p);
+      Message *n = decode_message(nullptr, crcflags, p);
       if (!n)
 	throw std::runtime_error("failed to decode");
       if (n->get_type() != m_object->get_type()) {

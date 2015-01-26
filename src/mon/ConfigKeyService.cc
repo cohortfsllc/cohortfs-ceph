@@ -89,9 +89,9 @@ void ConfigKeyService::store_list(stringstream &ss)
 
 bool ConfigKeyService::service_dispatch(Message *m)
 {
-  dout(10) << __func__ << " " << *m << dendl;
+  ldout(mon->cct, 10) << __func__ << " " << *m << dendl;
   if (!in_quorum()) {
-    dout(1) << __func__ << " not in quorum -- ignore message" << dendl;
+    ldout(mon->cct, 1) << __func__ << " not in quorum -- ignore message" << dendl;
     m->put();
     return false;
   }
@@ -115,9 +115,9 @@ bool ConfigKeyService::service_dispatch(Message *m)
     return false;
   }
 
-  cmd_getval(g_ceph_context, cmdmap, "prefix", prefix);
+  cmd_getval(mon->cct, cmdmap, "prefix", prefix);
   string key;
-  cmd_getval(g_ceph_context, cmdmap, "key", key);
+  cmd_getval(mon->cct, cmdmap, "key", key);
 
   if (prefix == "config-key get") {
     ret = store_get(key, rdata);
@@ -137,17 +137,17 @@ bool ConfigKeyService::service_dispatch(Message *m)
 
     bufferlist data;
     string val;
-    if (cmd_getval(g_ceph_context, cmdmap, "val", val)) {
+    if (cmd_getval(mon->cct, cmdmap, "val", val)) {
       // they specified a value in the command instead of a file
       data.append(val);
     } else if (cmd->get_data_len() > 0) {
       // they specified '-i <file>'
       data = cmd->get_data();
     }
-    if (data.length() > (size_t) g_conf->mon_config_key_max_entry_size) {
+    if (data.length() > (size_t) mon->cct->_conf->mon_config_key_max_entry_size) {
       ret = -EFBIG; // File too large
       ss << "error: entry size limited to "
-	 << g_conf->mon_config_key_max_entry_size << " bytes. "
+	 << mon->cct->_conf->mon_config_key_max_entry_size << " bytes. "
 	 << "Use 'mon config key max entry size' to manually adjust";
       goto out;
     }
