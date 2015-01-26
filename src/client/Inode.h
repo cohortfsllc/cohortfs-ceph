@@ -122,7 +122,9 @@ class Inode {
   map<int,int> open_by_mode;
   map<int,int> cap_refs;
 
+#if 0
   ObjectCacher::ObjectSet oset;
+#endif
 
   uint64_t     reported_size, wanted_max_size, requested_max_size;
 
@@ -179,7 +181,9 @@ class Inode {
       flags(0), dir_hashed(false), dir_replicated(false), auth_cap(NULL),
       dirty_caps(0), flushing_caps(0), flushing_cap_seq(0), shared_gen(0),
       cache_gen(0), cap_item(this), flushing_cap_item(this), last_flush_tid(0),
+#if 0
       oset((void *)this, newlayout->fl_uuid, ino),
+#endif
       reported_size(0), wanted_max_size(0), requested_max_size(0),
       _ref(0), ll_ref(0), dir(0), dn_set()
   {

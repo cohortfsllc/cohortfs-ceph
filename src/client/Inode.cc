@@ -35,8 +35,10 @@ ostream& operator<<(ostream &out, Inode &in)
   if (in.flags & I_COMPLETE)
     out << " COMPLETE";
 
+#if 0
   if (in.is_file())
     out << " " << in.oset;
+#endif
 
   if (!in.dn_set.empty())
     out << " parents=" << in.dn_set;

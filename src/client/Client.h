@@ -46,7 +46,11 @@
 #include "common/compiler_extensions.h"
 #include "common/cmdparse.h"
 
+#if 0
 #include "osdc/ObjectCacher.h"
+#else
+#include "osdc/Objecter.h"
+#endif
 
 using std::set;
 using std::map;
@@ -71,7 +75,6 @@ struct DirStat;
 struct LeaseStat;
 struct InodeStat;
 
-class Filer;
 class WritebackHandler;
 
 enum {
@@ -296,7 +299,12 @@ public:
   void sync_write_commit(Inode *in);
 
 protected:
+#if 0
+  /* Adam promises to rewrite objectcacher to make it useful.
+   * Meanwhile, he says don't use it.  -mdw 20150105
+   */
   ObjectCacher *objectcacher;
+#endif
   Objecter *objecter;     // (non-blocking) osd interface
   WritebackHandler      *writeback_handler;
 
@@ -484,7 +492,9 @@ protected:
   bool _flush(Inode *in, Context *c=NULL);
   void _flush_range(Inode *in, int64_t off, uint64_t size);
   void _flushed(Inode *in);
+#if 0
   void flush_set_callback(ObjectCacher::ObjectSet *oset);
+#endif
 
   void close_release(Inode *in);
   void close_safe(Inode *in);
@@ -746,11 +756,11 @@ public:
   int get_pool_replication(int64_t pool);
   int64_t get_pool_id(const char *pool_name);
   string get_pool_name(int64_t pool);
-#endif
   int get_osd_crush_location(int id, vector<pair<string, string> >& path);
 
   int enumerate_layout(int fd, vector<ObjectExtent>& result,
 		       loff_t length, loff_t offset);
+#endif
 
   // expose caps
   int get_caps_issued(int fd);
