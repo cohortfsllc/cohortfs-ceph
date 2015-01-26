@@ -1954,7 +1954,7 @@ int Pipe::read_message(Message **pm, AuthSessionHandler* auth_handler)
   }
 
   if (msgr->cct->_conf->xio_trace_xcon) {
-    dout(4) << "pipe decode m is " << message->get_type() << dendl;
+    ldout(msgr->cct,4) << "pipe decode m is " << message->get_type() << dendl;
   }
 
   //

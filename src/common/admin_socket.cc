@@ -18,7 +18,7 @@
 #include "common/admin_socket_client.h"
 #include "common/config.h"
 #include "common/cmdparse.h"
-#include "common/dout.h"
+#include "common/debug.h"
 #include "common/errno.h"
 #include "common/pipe.h"
 #include "common/safe_io.h"

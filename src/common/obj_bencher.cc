@@ -26,7 +26,7 @@
 #include <time.h>
 #include <sstream>
 #include <vector>
-#include "global/global_context.h"
+// #include "global/global_context.h"
 
 using std::cout;
 using std::cerr;
@@ -702,7 +702,7 @@ int ObjBencher::rand_read_bench(int seconds_to_run, int num_objects, int concurr
 
   lock.Lock();
   data.finished = 0;
-  data.start_time = ceph_clock_now(g_ceph_context);
+  data.start_time = ceph_clock_now(cct);
   lock.Unlock();
 
   pthread_t print_thread;
@@ -712,7 +712,7 @@ int ObjBencher::rand_read_bench(int seconds_to_run, int num_objects, int concurr
   //start initial reads
   for (int i = 0; i < concurrentios; ++i) {
     index[i] = i;
-    start_times[i] = ceph_clock_now(g_ceph_context);
+    start_times[i] = ceph_clock_now(cct);
     create_completion(i, _aio_cb, (void *)&lc);
     r = aio_read(name[i], i, contents[i], data.object_size);
     if (r < 0) { //naughty, doesn't clean up heap -- oh, or handle the print thread!
@@ -731,7 +731,7 @@ int ObjBencher::rand_read_bench(int seconds_to_run, int num_objects, int concurr
   int rand_id;
 
   slot = 0;
-  while (seconds_to_run && (ceph_clock_now(g_ceph_context) < finish_time)) {
+  while (seconds_to_run && (ceph_clock_now(cct) < finish_time)) {
     lock.Lock();
     int old_slot = slot;
     bool found = false;
@@ -764,7 +764,7 @@ int ObjBencher::rand_read_bench(int seconds_to_run, int num_objects, int concurr
       lock.Unlock();
       goto ERR;
     }
-    data.cur_latency = ceph_clock_now(g_ceph_context) - start_times[slot];
+    data.cur_latency = ceph_clock_now(cct) - start_times[slot];
     total_latency += data.cur_latency;
     if( data.cur_latency > data.max_latency) data.max_latency = data.cur_latency;
     if (data.cur_latency < data.min_latency) data.min_latency = data.cur_latency;
@@ -776,7 +776,7 @@ int ObjBencher::rand_read_bench(int seconds_to_run, int num_objects, int concurr
     cur_contents = contents[slot];
 
     //start new read and check data if requested
-    start_times[slot] = ceph_clock_now(g_ceph_context);
+    start_times[slot] = ceph_clock_now(cct);
     contents[slot] = new bufferlist();
     create_completion(slot, _aio_cb, (void *)&lc);
     r = aio_read(newName, slot, contents[slot], data.object_size);
@@ -807,7 +807,7 @@ int ObjBencher::rand_read_bench(int seconds_to_run, int num_objects, int concurr
       lock.Unlock();
       goto ERR;
     }
-    data.cur_latency = ceph_clock_now(g_ceph_context) - start_times[slot];
+    data.cur_latency = ceph_clock_now(cct) - start_times[slot];
     total_latency += data.cur_latency;
     if (data.cur_latency > data.max_latency) data.max_latency = data.cur_latency;
     if (data.cur_latency < data.min_latency) data.min_latency = data.cur_latency;
@@ -824,7 +824,7 @@ int ObjBencher::rand_read_bench(int seconds_to_run, int num_objects, int concurr
     delete contents[slot];
   }
 
-  runtime = ceph_clock_now(g_ceph_context) - data.start_time;
+  runtime = ceph_clock_now(cct) - data.start_time;
   lock.Lock();
   data.done = true;
   lock.Unlock();
