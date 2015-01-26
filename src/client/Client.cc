@@ -12,6 +12,13 @@
  *
  */
 
+/*
+ * NB This version IGNORES client_oc and behaves as if
+ *  it were always false.  This is because that feature depends
+ *  on objectcacher, which needs to be rewritten to be useful
+ *  with cohort volumes.  Adam promised he'll do just that.
+ *  Sometime.  Soon.  Just not yet.  -mdw 20150105.
+ */
 
 // unix-ey fs stuff
 #include <unistd.h>
@@ -57,7 +64,6 @@ using namespace std;
 #include "osd/OSDMap.h"
 #include "mon/MonMap.h"
 
-#include "osdc/Filer.h"
 #include "osdc/WritebackHandler.h"
 
 #include "common/Cond.h"
@@ -89,11 +95,13 @@ using namespace std;
 
 
 
+#if 0
 void client_flush_set_callback(void *p, ObjectCacher::ObjectSet *oset)
 {
   Client *client = static_cast<Client*>(p);
   client->flush_set_callback(oset);
 }
+#endif
 
 
 // -------------
@@ -183,6 +191,7 @@ Client::Client(Messenger *m, MonClient *mc)
   objecter = new Objecter(cct, messenger, monclient, 0, 0);
   objecter->set_client_incarnation(0);	// client always 0, for now.
   writeback_handler = new ObjecterWriteback(objecter);
+#if 0
   objectcacher = new ObjectCacher(cct, *writeback_handler, client_lock,
 				  client_flush_set_callback, // all commit callback
 				  (void*)this,
@@ -192,6 +201,7 @@ Client::Client(Messenger *m, MonClient *mc)
 				  cct->_conf->client_oc_target_dirty,
 				  cct->_conf->client_oc_max_dirty_age,
 				  true);
+#endif
 }
 
 
@@ -201,7 +211,9 @@ Client::~Client()
 
   tear_down_cache();
 
+#if 0
   delete objectcacher;
+#endif
   delete writeback_handler;
 
   delete objecter;
@@ -329,7 +341,9 @@ int Client::init()
 
   timer.init();
 
+#if 0
   objectcacher->start();
+#endif
 
   // ok!
   messenger->add_dispatcher_head(this);
@@ -339,7 +353,9 @@ int Client::init()
     // need to do cleanup because we're in an intermediate init state
     timer.shutdown();
     client_lock.Unlock();
+#if 0
     objectcacher->stop();
+#endif
     monclient->shutdown();
     return r;
   }
@@ -406,7 +422,9 @@ void Client::shutdown()
     async_dentry_invalidator.stop();
   }
 
+#if 0
   objectcacher->stop();	 // outside of client_lock! this does a join.
+#endif
 
   client_lock.Lock();
   assert(initialized);
@@ -479,7 +497,9 @@ void Client::update_inode_file_bits(Inode *in,
   ldout(cct, 25) << "truncate_seq: mds " << truncate_seq <<  " local "
 	   << in->truncate_seq << " time_warp_seq: mds " << time_warp_seq
 	   << " local " << in->time_warp_seq << dendl;
+#if 0
   uint64_t prior_size = in->size;
+#endif
 
   if (inline_version > in->inline_version) {
     in->inline_data = inline_data;
@@ -495,12 +515,14 @@ void Client::update_inode_file_bits(Inode *in,
       ldout(cct, 10) << "truncate_seq " << in->truncate_seq << " -> "
 	       << truncate_seq << dendl;
       in->truncate_seq = truncate_seq;
+#if 0
       in->oset.truncate_seq = truncate_seq;
 
       // truncate cached file data
       if (prior_size > size) {
 	_invalidate_inode_cache(in, truncate_size, prior_size - truncate_size);
       }
+#endif
     }
 
     // truncate inline data
@@ -516,7 +538,9 @@ void Client::update_inode_file_bits(Inode *in,
       ldout(cct, 10) << "truncate_size " << in->truncate_size << " -> "
 	       << truncate_size << dendl;
       in->truncate_size = truncate_size;
+#if 0
       in->oset.truncate_size = truncate_size;
+#endif
     } else {
       ldout(cct, 0) << "Hmmm, truncate_seq && truncate_size changed on non-file inode!" << dendl;
     }
@@ -2035,8 +2059,10 @@ void Client::put_inode(Inode *in, int n)
     remove_all_caps(in);
 
     ldout(cct, 10) << "put_inode deleting " << *in << dendl;
+#if 0
     bool unclean = objectcacher->release_set(&in->oset);
     assert(!unclean);
+#endif
     inode_map.erase(in->vino());
     in->cap_item.remove_myself();
     if (in == root)
@@ -2243,9 +2269,11 @@ int Client::get_caps(Inode *in, int need, int want, int *phave, loff_t endoff)
 int Client::get_caps_used(Inode *in)
 {
   unsigned used = in->caps_used();
+#if 0
   if (!(used & CEPH_CAP_FILE_CACHE) &&
       !objectcacher->set_is_empty(&in->oset))
     used |= CEPH_CAP_FILE_CACHE;
+#endif
   return used;
 }
 
@@ -2518,9 +2546,11 @@ void Client::_invalidate_inode_cache(Inode *in)
 {
   ldout(cct, 10) << "_invalidate_inode_cache " << *in << dendl;
 
+#if 0
   // invalidate our userspace inode cache
   if (cct->_conf->client_oc)
     objectcacher->release_set(&in->oset);
+#endif
 
   _schedule_invalidate_callback(in, 0, 0, false);
 }
@@ -2529,12 +2559,14 @@ void Client::_invalidate_inode_cache(Inode *in, int64_t off, int64_t len)
 {
   ldout(cct, 10) << "_invalidate_inode_cache " << *in << " " << off << "~" << len << dendl;
 
+#if 0
   // invalidate our userspace inode cache
   if (cct->_conf->client_oc) {
     vector<ObjectExtent> ls;
-    Striper::file_to_extents(cct, in->ino, &in->layout, off, len, in->truncate_size, ls);
+//FIXME!    Striper::file_to_extents(cct, in->ino, &in->layout, off, len, in->truncate_size, ls);
     objectcacher->discard_set(&in->oset, ls);
   }
+#endif
 
   _schedule_invalidate_callback(in, off, len, true);
 }
@@ -2564,25 +2596,32 @@ bool Client::_flush(Inode *in, Context *onfinish)
 {
   ldout(cct, 10) << "_flush " << *in << dendl;
 
+#if 0
   if (!in->oset.dirty_or_tx) {
+#endif
     ldout(cct, 10) << " nothing to flush" << dendl;
     if (onfinish)
       onfinish->complete(0);
     return true;
+#if 0
   }
 
   if (!onfinish) {
     onfinish = new C_Client_PutInode(this, in);
   }
   return objectcacher->flush_set(&in->oset, onfinish);
+#endif
 }
 
 void Client::_flush_range(Inode *in, int64_t offset, uint64_t size)
 {
   assert(client_lock.is_locked());
+#if 0
   if (!in->oset.dirty_or_tx) {
+#endif
     ldout(cct, 10) << " nothing to flush" << dendl;
     return;
+#if 0
   }
 
   Mutex flock;
@@ -2600,8 +2639,10 @@ void Client::_flush_range(Inode *in, int64_t offset, uint64_t size)
     flock.Unlock();
     client_lock.Lock();
   }
+#endif
 }
 
+#if 0
 void Client::flush_set_callback(ObjectCacher::ObjectSet *oset)
 {
   //  Mutex::Locker l(client_lock);
@@ -2617,6 +2658,7 @@ void Client::_flushed(Inode *in)
 
   put_cap_ref(in, CEPH_CAP_FILE_CACHE | CEPH_CAP_FILE_BUFFER);
 }
+#endif
 
 
 
@@ -3416,6 +3458,7 @@ void Client::unmount()
     mount_cond.Wait(client_lock);
   }
 
+#if 0
   if (cct->_conf->client_oc) {
     // flush/release all buffered data
     std::unordered_map<vinodeno_t, Inode*>::iterator next;
@@ -3437,6 +3480,7 @@ void Client::unmount()
       }
     }
   }
+#endif
 
   flush_caps();
   wait_sync_caps(last_flush_seq);
@@ -5231,6 +5275,7 @@ Fh *Client::_create_fh(Inode *in, int flags, int cmode)
     osdmap->find_by_uuid(in->layout.fl_uuid, f->vol);
     objecter->put_osdmap_read();
   }
+  if (f->vol) f->vol->attach(cct);
 
   ldout(cct, 10) << "_create_fh " << in->ino << " mode " << cmode << dendl;
 
@@ -5246,12 +5291,14 @@ int Client::_release_fh(Fh *f)
 
     if (in->put_open_ref(f->mode)) {
       _flush(in);
+#if 0
       // release clean pages too, if we dont want RDCACHE
       if (in->cap_refs[CEPH_CAP_FILE_CACHE] == 0 &&
 	  !(in->caps_wanted() & CEPH_CAP_FILE_CACHE) &&
 	  !objectcacher->set_is_empty(&in->oset))
 	_invalidate_inode_cache(in);
       else
+#endif
 	check_caps(in, false);
     }
 
@@ -5408,16 +5455,21 @@ int Client::uninline_data(Inode *in, Context *onfinish)
     osdmap->find_by_uuid(in->layout.fl_uuid, mvol);
     objecter->put_osdmap_read();
   }
+  if (!mvol) {
+    onfinish->complete(-ENXIO);
+    return 0;
+  }
+  int r = mvol->attach(cct);
+  if (r) {
+    onfinish->complete(r);
+    return 0;
+  }
 
   unique_ptr<ObjOp> create_ops = mvol->op();
   if (!create_ops) {
     return -EDOM;
   }
   create_ops->create(false);
-  if (!mvol) {
-    onfinish->complete(-ENXIO);
-    return 0;
-  }
 
   objecter->mutate(oid,
 		   mvol,
@@ -5480,7 +5532,9 @@ int Client::read(int fd, char *buf, loff_t size, loff_t offset)
 
 int Client::_read(Fh *f, int64_t offset, uint64_t size, bufferlist *bl)
 {
+#if 0
   const md_config_t *conf = cct->_conf;
+#endif
   Inode *in = f->inode;
 
   //bool lazy = f->mode == CEPH_FILE_MODE_LAZY;
@@ -5541,6 +5595,7 @@ retry:
     }
   }
 
+#if 0
   if (!conf->client_debug_force_sync_read &&
       (cct->_conf->client_oc && (have & CEPH_CAP_FILE_CACHE))) {
 
@@ -5550,7 +5605,9 @@ retry:
     r = _read_async(f, offset, size, bl);
     if (r < 0)
       goto done;
-  } else {
+  } else
+#endif
+  {
     bool checkeof = false;
     r = _read_sync(f, offset, size, bl, &checkeof);
     if (r < 0)
@@ -5617,6 +5674,7 @@ done:
   return r < 0 ? r : bl->length();
 }
 
+#if 0
 int Client::_read_async(Fh *f, uint64_t off, uint64_t len, bufferlist *bl)
 {
   const md_config_t *conf = cct->_conf;
@@ -5713,6 +5771,7 @@ int Client::_read_async(Fh *f, uint64_t off, uint64_t len, bufferlist *bl)
   }
   return r;
 }
+#endif
 
 int Client::_read_sync(Fh *f, uint64_t off, uint64_t len, bufferlist *bl,
 		       bool *checkeof)
@@ -5934,6 +5993,7 @@ int Client::_write(Fh *f, int64_t offset, uint64_t size, const char *buf)
     }
   }
 
+#if 0
   if (cct->_conf->client_oc && (have & CEPH_CAP_FILE_BUFFER)) {
     // do buffered write
     if (!in->oset.dirty_or_tx)
@@ -5957,7 +6017,9 @@ int Client::_write(Fh *f, int64_t offset, uint64_t size, const char *buf)
     if ((f->flags & O_SYNC) || (f->flags & O_DSYNC)) {
       _flush_range(in, offset, size);
     }
-  } else {
+  } else
+#endif
+  {
     // simple, non-atomic sync write
     Mutex flock;
     Cond cond;
@@ -6094,12 +6156,14 @@ int Client::_fsync(Fh *f, bool syncdataonly)
 
   ldout(cct, 3) << "_fsync(" << f << ", " << (syncdataonly ? "dataonly)":"data+metadata)") << dendl;
 
+#if 0
   if (cct->_conf->client_oc) {
     object_cacher_completion = new C_SafeCond(&lock, &cond, &done, &r);
     in->get(); // take a reference; C_SafeCond doesn't and _flush won't either
     _flush(in, object_cacher_completion);
     ldout(cct, 15) << "using return-valued form of _fsync" << dendl;
   }
+#endif
 
   if (!syncdataonly && (in->dirty_caps & ~CEPH_CAP_ANY_FILE_WR)) {
     for (map<int, Cap*>::iterator iter = in->caps.begin(); iter != in->caps.end(); ++iter) {
@@ -6324,8 +6388,12 @@ int Client::sync_fs()
 
 int64_t Client::drop_caches()
 {
+#if 0
   Mutex::Locker l(client_lock);
   return objectcacher->release_all();
+#else
+  return -1;
+#endif
 }
 
 
@@ -7500,41 +7568,6 @@ int Client::ll_file_layout(Inode *in, ceph_file_layout *layout)
   return 0;
 }
 
-#if 0
-/* Currently we cannot take advantage of redundancy in reads, since we
-   would have to go through all possible placement groups (a
-   potentially quite large number determined by a hash), and use CRUSH
-   to calculate the appropriate set of OSDs for each placement group,
-   then index into that.  An array with one entry per OSD is much more
-   tractable and works for demonstration purposes. */
-
-int Client::ll_get_stripe_osd(Inode *in, uint64_t blockno,
-			      ceph_file_layout* layout)
-{
-  Mutex::Locker lock(client_lock);
-  inodeno_t ino = ll_get_inodeno(in);
-  uint32_t object_size = layout->fl_object_size;
-  uint32_t su = layout->fl_stripe_unit;
-  uint32_t stripe_count = layout->fl_stripe_count;
-  uint64_t stripes_per_object = object_size / su;
-
-  uint64_t stripeno = blockno / stripe_count;	 // which horizontal stripe	   (Y)
-  uint64_t stripepos = blockno % stripe_count;	 // which object in the object set (X)
-  uint64_t objectsetno = stripeno / stripes_per_object;	      // which object set
-//  uint64_t objectno = objectsetno * stripe_count + stripepos;	 // object id
-
-  object_t oid = file_object_t(ino);
-  ceph_object_layout olayout
-    = objecter->osdmap->file_to_object_layout(oid, *layout, "");
-
-  pg_t pg = (pg_t)olayout.ol_pgid;
-  vector<int> osds;
-  int primary;
-  osdmap->pg_to_osds(pg, &osds, &primary);
-  return osds[0];
-}
-#endif
-
 /* Return the offset of the block, internal to the object */
 
 uint64_t Client::ll_get_internal_offset(Inode *in, uint64_t blockno)
@@ -7731,6 +7764,7 @@ int Client::ll_read_block(Inode *in, uint64_t blockid,
   }
   if (!mvol)
     return -ENXIO;
+  mvol->attach(cct);
 
   objecter->read(oid,
 		 mvol,
@@ -7805,6 +7839,7 @@ int Client::ll_write_block(Inode *in, uint64_t blockid,
 
   if (!mvol)
     return -ENXIO;
+  mvol->attach(cct);
 
   objecter->write(oid,
 		  mvol,
@@ -7977,6 +8012,7 @@ int Client::_fallocate(Fh *fh, int mode, int64_t offset, int64_t length)
 	r = -ENXIO;
 	goto done;
       }
+      mvol->attach(cct);
 
       unsafe_sync_write++;
       get_cap_ref(in, CEPH_CAP_FILE_BUFFER);
@@ -8114,108 +8150,6 @@ int Client::fdescribe_layout(int fd, ceph_file_layout *lp)
   return 0;
 }
 
-
-#if 0
-// expose osdmap
-
-int64_t Client::get_pool_id(const char *pool_name)
-{
-  Mutex::Locker lock(client_lock);
-  return osdmap->lookup_pg_pool_name(pool_name);
-}
-
-string Client::get_pool_name(int64_t pool)
-{
-  Mutex::Locker lock(client_lock);
-  if (!osdmap->have_pg_pool(pool))
-    return string();
-  return osdmap->get_pool_name(pool);
-}
-
-int Client::get_pool_replication(int64_t pool)
-{
-  Mutex::Locker lock(client_lock);
-  if (!osdmap->have_pg_pool(pool))
-    return -ENOENT;
-  return osdmap->get_pg_pool(pool)->get_size();
-}
-
-int Client::get_file_extent_osd(int fd, loff_t off, loff_t *len, int& osd)
-{
-  Mutex::Locker lock(client_lock);
-
-  Fh *f = get_filehandle(fd);
-  if (!f)
-    return -EBADF;
-  Inode *in = f->inode;
-
-  vector<ObjectExtent> extents;
-  Striper::file_to_extents(cct, in->ino, &in->layout, off, 1, in->truncate_size, extents);
-  assert(extents.size() == 1);
-
-  pg_t pg = osdmap->object_locator_to_pg(extents[0].oid, extents[0].oloc);
-  osdmap->pg_to_osd(pg, osd);
-  if (osd == -1)
-    return -EINVAL;
-
-  /*
-   * Return the remainder of the extent (stripe unit)
-   *
-   * If length = 1 is passed to Striper::file_to_extents we get a single
-   * extent back, but its length is one so we still need to compute the length
-   * to the end of the stripe unit.
-   *
-   * If length = su then we may get 1 or 2 objects back in the extents vector
-   * which would have to be examined. Even then, the offsets are local to the
-   * object, so matching up to the file offset is extra work.
-   *
-   * It seems simpler to stick with length = 1 and manually compute the
-   * remainder.
-   */
-  if (len) {
-    uint64_t su = in->layout.fl_stripe_unit;
-    *len = su - (off % su);
-  }
-
-  return 0;
-}
-
-int Client::get_osd_crush_location(int id, vector<pair<string, string> >& path)
-{
-  Mutex::Locker lock(client_lock);
-  if (id < 0)
-    return -EINVAL;
-  return osdmap->crush->get_full_location_ordered(id, path);
-}
-
-int Client::get_file_stripe_address(int fd, loff_t offset,
-				    entity_addr_t& address)
-{
-  Mutex::Locker lock(client_lock);
-
-  Fh *f = get_filehandle(fd);
-  if (!f)
-    return -EBADF;
-  Inode *in = f->inode;
-
-  // which object?
-  vector<ObjectExtent> extents;
-  Striper::file_to_extents(cct, in->ino, &in->layout, offset, 1, in->truncate_size, extents);
-  assert(extents.size() == 1);
-
-  // now we have the object and its 'layout'
-  pg_t pg = osdmap->object_locator_to_pg(extents[0].oid, extents[0].oloc);
-  int osd;
-  osdmap->pg_to_osd(pg, osd);
-  if (osd == -1)
-    return -EINVAL;
-
-  address = osdmap->get_addr(osd);
-
-  return 0;
-}
-#endif
-
 int Client::get_osd_addr(int osd, entity_addr_t& addr)
 {
   bool exists;
@@ -8232,22 +8166,13 @@ int Client::get_osd_addr(int osd, entity_addr_t& addr)
   return 0;
 }
 
+#if 0
 int Client::enumerate_layout(int fd, vector<ObjectExtent>& result,
 			     loff_t length, loff_t offset)
 {
-  Mutex::Locker lock(client_lock);
-
-  Fh *f = get_filehandle(fd);
-  if (!f)
-    return -EBADF;
-  Inode *in = f->inode;
-
-  // map to a list of extents
-  Striper::file_to_extents(cct, in->ino, &in->layout, offset, length, in->truncate_size, result);
-
-  ldout(cct, 3) << "enumerate_layout(" << fd << ", " << length << ", " << offset << ") = 0" << dendl;
-  return 0;
+  return -EBADF;
 }
+#endif
 
 
 /*
