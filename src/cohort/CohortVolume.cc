@@ -153,7 +153,7 @@ int CohortVolume::compile(std::stringstream &ss) const
   return 0;
 }
 
-int CohortVolume::_attach(std::stringstream &ss) const
+int CohortVolume::_attach(CephContext *cct, std::stringstream &ss) const
 {
   Mutex::Locker l(lock);
   int r;
@@ -169,9 +169,9 @@ int CohortVolume::_attach(std::stringstream &ss) const
   // This is sort of a brokenness in how the erasure code interface
   // handles things.
   map<string, string> copy_params(erasure_params);
-  copy_params["directory"] = g_conf->osd_erasure_code_directory;
+  copy_params["directory"] = cct->_conf->osd_erasure_code_directory;
   ceph::ErasureCodePluginRegistry::instance().factory(
-    g_ceph_context,
+    cct,
     erasure_plugin,
     copy_params,
     &erasure,
@@ -264,13 +264,7 @@ ssize_t CohortVolume::place(const object_t& object,
     .count = &count
   };
 
-  if (!attached) {
-    std::stringstream ss;
-    int r = _attach(ss);
-    if (r < 0)
-      return r;
-  }
-
+  assert(attached);
 
   place_func entry_point = (place_func) entry_points[0];
 
@@ -337,7 +331,8 @@ static void default_placer(uint32_t blocks,
     "}\n");
 }
 
-VolumeRef CohortVolume::create(const string& name,
+VolumeRef CohortVolume::create(CephContext *cct,
+			       const string& name,
 			       const int64_t _suggested_unit,
 			       const string& erasure_plugin,
 			       const string& erasure_paramstring,
@@ -370,9 +365,9 @@ VolumeRef CohortVolume::create(const string& name,
   // erasure code plugin before we can create the default placer.
 
   copy_params = v->erasure_params;
-  copy_params["directory"] = g_conf->osd_erasure_code_directory;
+  copy_params["directory"] = cct->_conf->osd_erasure_code_directory;
   ceph::ErasureCodePluginRegistry::instance().factory(
-    g_ceph_context,
+    cct,
     v->erasure_plugin,
     copy_params,
     &v->erasure,
@@ -804,11 +799,7 @@ unique_ptr<ObjOp> CohortVolume::StripulatedOp::clone()
 
 unique_ptr<ObjOp> CohortVolume::op() const
 {
-  if (!attached) {
-    std::stringstream ss;
-    if (_attach(ss) < 0)
-      return nullptr;
-  }
+  assert(attached);
   return unique_ptr<ObjOp>(new StripulatedOp(*this));
 }
 

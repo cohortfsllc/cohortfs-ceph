@@ -2257,20 +2257,18 @@ done:
       err = -EINVAL;
       goto reply;
     }
-    vol = CohortVolume::create(name, stripe_unit, plugin, params,
+    vol = CohortVolume::create(g_ceph_context, name, stripe_unit, plugin, params,
 			       place_text, symbols, ss);
-    if (vol) {
-      ss << "volume: " << vol << " created.";
-      pending_inc.include_addition(vol);
-      wait_for_finished_proposal(new Monitor::C_Command(
-				   mon, m, 0, rs,
-				   get_last_committed() + 1));
-
-      return true;
-    } else {
+    if (!vol) {
       err = -EINVAL;
       goto reply;
     }
+    ss << "volume: " << vol << " created.";
+    pending_inc.include_addition(vol);
+    wait_for_finished_proposal(new Monitor::C_Command(
+				 mon, m, 0, rs,
+				 get_last_committed() + 1));
+    return true;
   } else if (prefix == "osd volume remove") {
     string name;
     string error_message;

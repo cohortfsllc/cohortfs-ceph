@@ -55,32 +55,25 @@ protected:
 
   static const uint64_t one_op;
 
-  int _attach(std::stringstream &ss) const;
+  int _attach(CephContext *cct, std::stringstream &ss) const;
 
-  virtual int attach(std::stringstream &ss) {
+  virtual int attach(CephContext *cct, std::stringstream &ss) {
     if (attached)
       return 0;
-    return _attach(ss);
+    return _attach(cct, ss);
   }
 
   virtual void detach();
 
   virtual ssize_t op_size() const {
-    if (!attached) {
-      std::stringstream(ss);
-      int r = _attach(ss);
-      if (r < 0)
-	return r;
-    }
+    assert(attached);
     return one_op * erasure->get_chunk_count();
   }
 
   virtual int32_t quorum() const {
     if (!attached) {
-      std::stringstream(ss);
-      int r = _attach(ss);
-      if (r < 0)
-	return r;
+	// autoattach = bad!
+	return -ENOENT;
     }
     return erasure->get_data_chunk_count();
   }
@@ -100,7 +93,8 @@ protected:
   friend VolumeRef CohortVolFactory(bufferlist::iterator& bl, uint8_t v,
 				    vol_type t);
 
-  static VolumeRef create(const string& name, int64_t _suggested_width,
+  static VolumeRef create(CephContext *cct, const string& name,
+			  int64_t _suggested_width,
 			  const string& erasure_plugin,
 			  const string& erasure_params,
 			  const string& place_text, const string& symbols,
