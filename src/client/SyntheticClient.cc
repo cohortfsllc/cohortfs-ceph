@@ -23,7 +23,6 @@ using namespace std;
 #include "common/config.h"
 #include "SyntheticClient.h"
 #include "osdc/Objecter.h"
-#include "osdc/Filer.h"
 
 
 #include "include/filepath.h"
@@ -234,10 +233,11 @@ void parse_syn_options(vector<const char*>& args)
       } else if (strcmp(args[i], "lookupino") == 0) {
 	syn_modes.push_back(SYNCLIENT_MODE_LOOKUPINO);
 	syn_sargs.push_back(args[++i]);
-
+#if 0
       } else if (strcmp(args[i], "chunkfile") == 0) {
 	syn_modes.push_back(SYNCLIENT_MODE_CHUNK);
 	syn_sargs.push_back(args[++i]);
+#endif
       } else {
 	cerr << "unknown syn arg " << args[i] << std::endl;
 	abort();
@@ -664,6 +664,7 @@ int SyntheticClient::run()
       }
       break;
 
+#if 0
     case SYNCLIENT_MODE_CHUNK:
       if (run_me()) {
 	string sarg1 = get_sarg(0);
@@ -671,6 +672,7 @@ int SyntheticClient::run()
       }
       did_run_me();
       break;
+#endif
 
 
     case SYNCLIENT_MODE_OVERLOAD_OSD_0:
@@ -1410,6 +1412,11 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       }
       uint64_t size;
       utime_t mtime;
+      int r = mvol->attach(g_ceph_context);
+      if (r) {
+	dout(0) << "Unable to attach volume " << mvol << " error=" << r << dendl;
+	continue;
+      }
       client->objecter->stat(oid, mvol, &size, &mtime, 0,
 			     new C_SafeCond(&lock, &cond, &ack));
       while (!ack) cond.Wait(lock);
@@ -1429,6 +1436,11 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
 	const OSDMap* osdmap = client->objecter->get_osdmap_read();
 	osdmap->find_by_uuid(id, mvol);
 	client->objecter->put_osdmap_read();
+      }
+      int r = mvol->attach(g_ceph_context);
+      if (r) {
+	dout(0) << "Unable to attach volume " << mvol << " error=" << r << dendl;
+	continue;
       }
       lock.Lock();
       bufferlist bl;
@@ -1451,6 +1463,11 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
 	const OSDMap* osdmap = client->objecter->get_osdmap_read();
 	osdmap->find_by_uuid(id, mvol);
 	client->objecter->put_osdmap_read();
+      }
+      int r = mvol->attach(g_ceph_context);
+      if (r) {
+	dout(0) << "Unable to attach volume " << mvol << " error=" << r << dendl;
+	continue;
       }
       lock.Lock();
       bufferptr bp(len);
@@ -1478,6 +1495,11 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
 	const OSDMap* osdmap = client->objecter->get_osdmap_read();
 	osdmap->find_by_uuid(id, mvol);
 	client->objecter->put_osdmap_read();
+      }
+      int r = mvol->attach(g_ceph_context);
+      if (r) {
+	dout(0) << "Unable to attach volume " << mvol << " error=" << r << dendl;
+	continue;
       }
       lock.Lock();
       client->objecter->zero(oid, mvol, off, len,
@@ -2268,6 +2290,11 @@ int SyntheticClient::create_objects(int nobj, int osize, int inflight)
     osdmap->find_by_uuid(id, mvol);
     client->objecter->put_osdmap_read();
   }
+  int r = mvol->attach(g_ceph_context);
+  if (r) {
+    dout(0) << "Unable to attach volume " << mvol << " error=" << r << dendl;
+    return 1;
+  }
 
   list<utime_t> starts;
 
@@ -2364,6 +2391,11 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
     const OSDMap* osdmap = client->objecter->get_osdmap_read();
     osdmap->find_by_uuid(id, mvol);
     client->objecter->put_osdmap_read();
+  }
+  int r = mvol->attach(g_ceph_context);
+  if (r) {
+    dout(0) << "Unable to attach volume " << mvol << " error=" << r << dendl;
+    return 1;
   }
 
   while (1) {
@@ -3427,6 +3459,7 @@ int SyntheticClient::lookup_ino(inodeno_t ino)
   return r;
 }
 
+#if 0
 int SyntheticClient::chunk_file(string &filename)
 {
   int fd = client->open(filename.c_str(), O_RDONLY);
@@ -3492,3 +3525,4 @@ int SyntheticClient::chunk_file(string &filename)
   delete filer;
   return 0;
 }
+#endif
