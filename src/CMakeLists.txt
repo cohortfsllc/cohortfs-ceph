@@ -223,7 +223,6 @@ set(libcommon_files
   common/linux_version.c
   vol/Volume.cc
   cohort/CohortVolume.cc
-  osdc/Striper.cc
   osdc/Objecter.cc
   ${arch_files}
   ${auth_files}
@@ -246,9 +245,8 @@ add_library(common_objs OBJECT ${libcommon_files})
 set(libcommon_objs $<TARGET_OBJECTS:common_objs>
   $<TARGET_OBJECTS:common_mountcephfs_objs>)
 
-if(${ENABLE_SHARED})
-  list(APPEND libcommon_objs $<TARGET_OBJECTS:global_common_objs>)
-endif(${ENABLE_SHARED})
+# do NOT make common depend on global.  If you think
+#  you need this, check for and get rid of "dout()" calls.
 
 add_library(common ${CEPH_SHARED} ${libcommon_objs})
 if(${ENABLE_SHARED})
@@ -274,14 +272,10 @@ set(libglobal_srcs
   global/global_init.cc
   global/pidfile.cc
   global/signal_handler.cc
-  )
-set(global_common_files
   global/global_context.cc
   )
-add_library(global_common_objs OBJECT ${global_common_files})
 add_library(global STATIC
   ${libglobal_srcs}
-  $<TARGET_OBJECTS:global_common_objs>
   )
 target_link_libraries(global PRIVATE common ${CMAKE_THREAD_LIBS_INIT} ${CRYPTO_LIBS} m ${EXTRALIBS})
 if(${ENABLE_SHARED})
@@ -298,11 +292,7 @@ set(osdc_files
   )
 set(osdc_rbd_files
   osdc/ObjectCacher.cc
-  osdc/Striper.cc
   )
-if(${WITH_CLIENT} OR ${WITH_MDS})
-  list(APPEND osdc_files osdc/Filer.cc)
-endif(${WITH_CLIENT} OR ${WITH_MDS})
 add_library(osdc_rbd_objs OBJECT ${osdc_rbd_files})
 add_library(osdc STATIC ${osdc_files} $<TARGET_OBJECTS:osdc_rbd_objs>)
 
@@ -451,7 +441,7 @@ install(TARGETS os_memstore DESTINATION lib/os-modules)
 set(cls_references_files objclass/class_api.cc)
 add_library(cls_references_objs OBJECT ${cls_references_files})
 
-set(osdc_osd_srcs osdc/Objecter.cc osdc/Striper.cc)
+set(osdc_osd_srcs osdc/Objecter.cc)
 
 set(libosd_srcs
   libosd/libosd.cc
