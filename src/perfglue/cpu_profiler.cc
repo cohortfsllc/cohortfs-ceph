@@ -15,7 +15,7 @@
 #include "common/LogClient.h"
 #include "perfglue/cpu_profiler.h"
 
-#include <google/profiler.h>
+#include <gperftools/profiler.h>
 
 void cpu_profiler_handle_command(const std::vector<std::string> &cmd,
 				 ostream& out)
