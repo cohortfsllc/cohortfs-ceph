@@ -1153,8 +1153,6 @@ int OSDMap::remove_volume(const boost::uuids::uuid& id)
   auto i = vols.by_uuid.find(id);
 
   if (i == vols.by_uuid.end()) {
-    dout(0) << "attempt to remove volume with non-existing uuid "
-	    << id << dendl;
     return -ENOENT;
   }
 
