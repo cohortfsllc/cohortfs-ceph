@@ -794,9 +794,20 @@ void CInode::store(Context *fin)
 
   object_t oid = CInode::get_object_name(ino(), frag_t(), ".inode");
   VolumeRef mvol(mdcache->mds->get_metadata_volume());
+  if (!mvol) {
+    dout(0) << "Unable to find metadata volume " << mdcache->mds->mdsmap->get_metadata_uuid() << dendl;
+    fin->complete(-EDOM);
+    return;
+  }
+  int r = mvol->attach(mdcache->mds->objecter->cct);
+  if (r) {
+    dout(0) << "Unable to attach volume " << mvol << " error=" << r << dendl;
+    fin->complete(-EDOM);
+    return;
+  }
   unique_ptr<ObjOp> m(mvol->op());
   if (!m) {
-    dout(0) << "Unable to attach volume " << mvol << dendl;
+    dout(0) << "Unable to make operation for volume " << mvol << dendl;
     fin->complete(-EDOM);
     return;
   }
@@ -845,10 +856,16 @@ void CInode::fetch(Context *fin)
   object_t oid = CInode::get_object_name(ino(), frag_t(), "");
   VolumeRef volume(mdcache->mds->get_metadata_volume());
   assert(!!volume);
+  int r = volume->attach(mdcache->mds->objecter->cct);
+  if (r) {
+    dout(0) << "Unable to attach volume " << volume << " error=" << r << dendl;
+    fin->complete(-EDOM);
+    return;
+  }
 
   unique_ptr<ObjOp> rd = volume->op();
   if (!rd) {
-    dout(0) << "Unable to attach volume " << volume << dendl;
+    dout(0) << "Unable to make operation for volume " << volume << dendl;
     fin->complete(-EDOM);
     return;
   }
@@ -896,6 +913,7 @@ void CInode::_fetched(int r, bufferlist& bl, bufferlist& bl2, Context *fin)
     const OSDMap* osdmap = mdcache->mds->objecter->get_osdmap_read();
     osdmap->find_by_uuid(inode.layout.fl_uuid, volume);
     mdcache->mds->objecter->put_osdmap_read();
+    int r = volume->attach(mdcache->mds->objecter->cct);	// XXX here or elsewhere?
     fin->complete(0);
   }
 }
@@ -952,6 +970,12 @@ void CInode::store_backtrace(Context *fin)
     mvol = volume;
 
   assert(!!mvol);
+  int r = mvol->attach(mdcache->mds->objecter->cct);
+  if (r) {
+    dout(0) << "Unable to attach volume " << mvol << " error=" << r << dendl;
+    fin->complete(-EDOM);
+    return;
+  }
 
   inode_backtrace_t bt;
   build_backtrace(volume->id, bt);
@@ -960,7 +984,7 @@ void CInode::store_backtrace(Context *fin)
 
   unique_ptr<ObjOp> op = mvol->op();
   if (!op) {
-    dout(0) << "Unable to attach volume " << mvol << dendl;
+    dout(0) << "Unable to make operation for volume " << mvol << dendl;
     fin->complete(-EDOM);
     return;
   }
@@ -995,10 +1019,16 @@ void CInode::store_backtrace(Context *fin)
       osdmap->find_by_uuid(*p, ovol);
       mdcache->mds->objecter->put_osdmap_read();
     }
+    int r = ovol->attach(mdcache->mds->objecter->cct);
+    if (r) {
+      dout(0) << "Unable to attach volume " << ovol << " error=" << r << dendl;
+      fin->complete(-EDOM);
+      return;
+    }
 
     unique_ptr<ObjOp> op = ovol->op();
     if (!op) {
-      dout(0) << "Unable to attach volume " << ovol << dendl;
+      dout(0) << "Unable to make operation for volume " << ovol << dendl;
       fin->complete(-EDOM);
       return;
     }
