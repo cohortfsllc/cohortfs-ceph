@@ -2610,23 +2610,23 @@ int FileStore::_write(FSCollection* fc, FSObject* fo,
 
   dout(15) << "write " << fc->get_cid() << "/" << fo->get_oid() << " "
 	   << offset << "~" << len << dendl;
-  int r;
-  int64_t nwritten = 0;
+  int r = 0;
+  int fd = **fo->fd;
 
   //  pwritev up to 256 segments at a time (allocate w/alloca), until done
-  list<ceph::buffer::ptr>::const_iterator pb = bl.buffers().begin();
-  struct iovec *iov;
-  int ilen, iov_ix, n_iov = std::min(256UL, bl.buffers().size());
-  iov = static_cast<struct iovec*>(::alloca(n_iov));
+  int iov_ix, n_iov = std::min(256UL, bl.buffers().size());
+  struct iovec *iov = static_cast<struct iovec*>(::alloca(n_iov));
 
-  for (ilen = 0 /*, pb = bl.begin() */; pb != bl.buffers().end(); ++pb) {
+  auto pb = bl.buffers().begin();
+  while (pb != bl.buffers().end()) {
+    int ilen = 0;
     for (iov_ix = 0; (iov_ix < n_iov) && (pb != bl.buffers().end());
 	 ++iov_ix, ++pb) {
-      iov->iov_base = (void*) pb->c_str();
-      iov->iov_len = pb->length();
+      iov[iov_ix].iov_base = (void*) pb->c_str();
+      iov[iov_ix].iov_len = pb->length();
       ilen += pb->length();
     }
-    nwritten = ::pwritev(**fo->fd, iov, iov_ix+1, offset);
+    auto nwritten = ::pwritev(fd, iov, iov_ix, offset);
     if (nwritten < 0) {
       r = -EIO;
       goto out;
