@@ -149,12 +149,18 @@ int main(int argc, const char **argv)
     if (mc.get_monmap_privately() < 0)
       return -1;
 
-    int err = OSD::mkfs(g_ceph_context, store, g_conf->osd_data,
-			mc.monmap.fsid, whoami);
-    if (err < 0) {
-      derr << TEXT_RED << " ** ERROR: error creating empty object store in "
-	   << g_conf->osd_data << ": " << cpp_strerror(-err) << TEXT_NORMAL << dendl;
-      exit(1);
+    try {
+      int err = OSD::mkfs(g_ceph_context, store, g_conf->osd_data,
+	  mc.monmap.fsid, whoami);
+      if (err < 0) {
+	derr << TEXT_RED << " ** ERROR: error creating empty object store in "
+	  << g_conf->osd_data << ": " << cpp_strerror(-err) << TEXT_NORMAL << dendl;
+	exit(1);
+      }
+    } catch (const std::exception &e) {
+	derr << TEXT_RED << " ** ERROR: error creating empty object store in "
+	  << g_conf->osd_data << ": " << e.what() << TEXT_NORMAL << dendl;
+	exit(1);
     }
     derr << "created object store " << g_conf->osd_data;
     if (!g_conf->osd_journal.empty())
