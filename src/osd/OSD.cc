@@ -169,141 +169,130 @@ void OSDService::shutdown()
 int OSD::mkfs(CephContext *cct, ObjectStore *store, const string &dev,
 	      const boost::uuids::uuid& fsid, int whoami)
 {
-  int ret;
+  ObjectStore::Transaction t;
   CollectionHandle meta_col(NULL);
-  try {
-    // if we are fed a uuid for this osd, use it.
-    store->set_fsid(cct->_conf->osd_uuid);
+  ObjectHandle oh;
+  bool create_superblock = true;
+  OSDSuperblock sb;
+  bufferlist sbbl;
 
-    ret = store->mkfs();
-    if (ret) {
-      derr << "OSD::mkfs: ObjectStore::mkfs failed with error " << ret << dendl;
-      goto free_store;
-    }
+  // if we are fed a uuid for this osd, use it.
+  store->set_fsid(cct->_conf->osd_uuid);
 
-    ret = store->mount();
-    if (ret) {
-      derr << "OSD::mkfs: couldn't mount ObjectStore: error " << ret << dendl;
-      goto free_store;
-    }
+  int ret = store->mkfs();
+  if (ret) {
+    derr << "OSD::mkfs: ObjectStore::mkfs failed with error " << ret << dendl;
+    goto free_store;
+  }
 
-    OSDSuperblock sb;
-    bufferlist sbbl;
+  ret = store->mount();
+  if (ret) {
+    derr << "OSD::mkfs: couldn't mount ObjectStore: error " << ret << dendl;
+    goto free_store;
+  }
+  t.create_collection(coll_t::META_COLL);
+  ret = store->apply_transaction(t);
+  if (ret) {
+    derr << "OSD::mkfs: error while creating meta collection: "
+      << "apply_transaction returned " << ret << dendl;
+    goto umount_store;
+  }
 
-    ObjectStore::Transaction t;
-    t.create_collection(coll_t::META_COLL);
-    ret = store->apply_transaction(t);
-    if (ret) {
-      derr << "OSD::mkfs: error while creating meta collection: "
-          << "apply_transaction returned " << ret << dendl;
-      goto umount_store;
-    }
+  meta_col = store->open_collection(coll_t::META_COLL);
+  assert(meta_col);
 
-    meta_col = store->open_collection(coll_t::META_COLL);
-    assert(meta_col);
-
-    bool create_superblock = true;
-    ObjectHandle oh = store->get_object(meta_col, OSD_SUPERBLOCK_POBJECT);
-    if (oh) {
-      ret = store->read(meta_col, oh, 0, CEPH_READ_ENTIRE, sbbl);
-      store->put_object(oh);
-      if (ret >= 0) {
-	dout(0) << " have superblock" << dendl;
-	if (whoami != sb.whoami) {
-	  derr << "provided osd id " << whoami << " != superblock's "
-	       << sb.whoami << dendl;
-	  ret = -EINVAL;
-	  goto umount_store;
-	}
-	if (fsid != sb.cluster_fsid) {
-	  derr << "provided cluster fsid " << fsid << " != superblock's "
-	       << sb.cluster_fsid << dendl;
-	  ret = -EINVAL;
-	  goto umount_store;
-	}
-	create_superblock = false;
-      }
-    }
-    if (create_superblock) {
-      if (fsid.is_nil()) {
-	derr << "must specify cluster fsid" << dendl;
+  oh = store->get_object(meta_col, OSD_SUPERBLOCK_POBJECT);
+  if (oh) {
+    ret = store->read(meta_col, oh, 0, CEPH_READ_ENTIRE, sbbl);
+    store->put_object(oh);
+    if (ret >= 0) {
+      dout(0) << " have superblock" << dendl;
+      if (whoami != sb.whoami) {
+	derr << "provided osd id " << whoami << " != superblock's "
+	     << sb.whoami << dendl;
 	ret = -EINVAL;
 	goto umount_store;
       }
-
-      sb.cluster_fsid = fsid;
-      sb.osd_fsid = store->get_fsid();
-      sb.whoami = whoami;
-      sb.compat_features = get_osd_initial_compat_set();
-
-      uint16_t c_ix;
-      uint16_t o_ix;
-
-      // benchmark?
-      if (cct->_conf->osd_auto_weight) {
-	bufferlist bl;
-	bufferptr bp(1048576);
-	bp.zero();
-	bl.push_back(bp);
-	dout(0) << "testing disk bandwidth..." << dendl;
-	ceph::mono_time start = ceph::mono_clock::now();
-	oid_t oid("disk_bw_test");
-	for (int i=0; i<1000; i++) {
-	  ObjectStore::Transaction *t =
-	    new ObjectStore::Transaction(1);
-	  c_ix = t->push_col(meta_col);
-	  o_ix = t->push_oid(hoid_t(oid)); // XXXX
-	  t->write(c_ix, o_ix, i*bl.length(), bl.length(), bl);
-	  store->queue_transaction_and_cleanup(NULL, t);
-	}
-	store->sync();
-	ceph::timespan elapsed = ceph::mono_clock::now() - start;
-	dout(0) << "measured "
-		<< (1000.0 / ceph::span_to_double(elapsed))
-		<< " mb/sec" << dendl;
-	ObjectStore::Transaction tr;
-	c_ix = tr.push_col(meta_col);
-	o_ix = tr.push_oid(hoid_t(oid)); // XXXX
-	tr.remove(c_ix, o_ix);
-	ret = store->apply_transaction(tr);
-	if (ret) {
-	  derr << "OSD::mkfs: error while benchmarking: "
-	    "apply_transaction returned " << ret << dendl;
-	  goto umount_store;
-	}
-      }
-
-      bufferlist bl;
-      ::encode(sb, bl);
-
-      t = ObjectStore::Transaction(); // XXX
-      c_ix = t.push_col(meta_col);
-      o_ix = t.push_oid(OSD_SUPERBLOCK_POBJECT);
-      t.write(c_ix, o_ix, 0, bl.length(), bl);
-      ret = store->apply_transaction(t);
-      if (ret) {
-	derr << "OSD::mkfs: error while writing OSD_SUPERBLOCK_POBJECT: "
-	  << "apply_transaction returned " << ret << dendl;
+      if (fsid != sb.cluster_fsid) {
+	derr << "provided cluster fsid " << fsid << " != superblock's "
+	     << sb.cluster_fsid << dendl;
+	ret = -EINVAL;
 	goto umount_store;
       }
-    } /* create super */
+      create_superblock = false;
+    }
+  }
 
-    store->sync_and_flush();
-
-    ret = write_meta(store, sb.cluster_fsid, sb.osd_fsid, whoami);
-    if (ret) {
-      derr << "OSD::mkfs: failed to write fsid file: error " << ret << dendl;
+  if (create_superblock) {
+    if (fsid.is_nil()) {
+      derr << "must specify cluster fsid" << dendl;
+      ret = -EINVAL;
       goto umount_store;
     }
 
-  }
-  catch (const std::exception &se) {
-    derr << "OSD::mkfs: caught exception " << se.what() << dendl;
-    ret = 1000;
-  }
-  catch (...) {
-    derr << "OSD::mkfs: caught unknown exception." << dendl;
-    ret = 1000;
+    sb.cluster_fsid = fsid;
+    sb.osd_fsid = store->get_fsid();
+    sb.whoami = whoami;
+    sb.compat_features = get_osd_initial_compat_set();
+
+    uint16_t c_ix;
+    uint16_t o_ix;
+
+    // benchmark?
+    if (cct->_conf->osd_auto_weight) {
+      bufferlist bl;
+      bufferptr bp(1048576);
+      bp.zero();
+      bl.push_back(bp);
+      dout(0) << "testing disk bandwidth..." << dendl;
+      ceph::mono_time start = ceph::mono_clock::now();
+      oid_t oid("disk_bw_test");
+      for (int i=0; i<1000; i++) {
+	ObjectStore::Transaction *t =
+	  new ObjectStore::Transaction(1);
+	c_ix = t->push_col(meta_col);
+	o_ix = t->push_oid(hoid_t(oid)); // XXXX
+	t->write(c_ix, o_ix, i*bl.length(), bl.length(), bl);
+	store->queue_transaction_and_cleanup(NULL, t);
+      }
+      store->sync();
+      ceph::timespan elapsed = ceph::mono_clock::now() - start;
+      dout(0) << "measured "
+	      << (1000.0 / ceph::span_to_double(elapsed))
+	      << " mb/sec" << dendl;
+      ObjectStore::Transaction tr;
+      c_ix = tr.push_col(meta_col);
+      o_ix = tr.push_oid(hoid_t(oid)); // XXXX
+      tr.remove(c_ix, o_ix);
+      ret = store->apply_transaction(tr);
+      if (ret) {
+	derr << "OSD::mkfs: error while benchmarking: "
+	  "apply_transaction returned " << ret << dendl;
+	goto umount_store;
+      }
+    }
+
+    bufferlist bl;
+    ::encode(sb, bl);
+
+    t = ObjectStore::Transaction(); // XXX
+    c_ix = t.push_col(meta_col);
+    o_ix = t.push_oid(OSD_SUPERBLOCK_POBJECT);
+    t.write(c_ix, o_ix, 0, bl.length(), bl);
+    ret = store->apply_transaction(t);
+    if (ret) {
+      derr << "OSD::mkfs: error while writing OSD_SUPERBLOCK_POBJECT: "
+	<< "apply_transaction returned " << ret << dendl;
+      goto umount_store;
+    }
+  } /* create super */
+
+  store->sync_and_flush();
+
+  ret = write_meta(store, sb.cluster_fsid, sb.osd_fsid, whoami);
+  if (ret) {
+    derr << "OSD::mkfs: failed to write fsid file: error " << ret << dendl;
+    goto umount_store;
   }
 
 umount_store:

@@ -156,11 +156,19 @@ int main(int argc, const char **argv)
     if (mc.get_monmap_privately() < 0)
       return -1;
 
-    int err = OSD::mkfs(cct, store, cct->_conf->osd_data,
-			mc.monmap.fsid, whoami);
-    if (err < 0) {
+    try {
+      int err = OSD::mkfs(cct, store, cct->_conf->osd_data, mc.monmap.fsid,
+			  whoami);
+      if (err < 0) {
+	derr << TEXT_RED << " ** ERROR: error creating empty object store in "
+	     << cct->_conf->osd_data << ": " << cpp_strerror(-err)
+	     << TEXT_NORMAL << dendl;
+	exit(1);
+      }
+    } catch (const std::exception& e) {
       derr << TEXT_RED << " ** ERROR: error creating empty object store in "
-	   << cct->_conf->osd_data << ": " << cpp_strerror(-err) << TEXT_NORMAL << dendl;
+	   << cct->_conf->osd_data << ": " << e.what()
+	   << TEXT_NORMAL << dendl;
       exit(1);
     }
     derr << "created object store " << cct->_conf->osd_data;
@@ -168,6 +176,7 @@ int main(int argc, const char **argv)
       *_dout << " journal " << cct->_conf->osd_journal;
     *_dout << " for osd." << whoami << " fsid " << mc.monmap.fsid << dendl;
   }
+
   if (mkkey) {
     common_init_finish(cct);
     KeyRing *keyring = KeyRing::create_empty();
