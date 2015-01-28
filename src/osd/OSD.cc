@@ -308,7 +308,7 @@ int OSD::mkfs(CephContext *cct, ObjectStore *store, const string &dev,
     bufferlist bl;
     ::encode(sb, bl);
 
-    t = ObjectStore::Transaction(); // XXX
+    t.clear();
     c_ix = t.push_col(meta_col);
     o_ix = t.push_oid(OSD_SUPERBLOCK_POBJECT);
     t.write(c_ix, o_ix, 0, bl.length(), bl);
@@ -1036,7 +1036,7 @@ void OSD::recursive_remove_collection(ObjectStore *store, coll_t cid)
     if (removed > 300) {
       int r = store->apply_transaction(t);
       assert(r == 0);
-      t = ObjectStore::Transaction();
+      t.clear();
       c_ix = t.push_col(ch);
       removed = 0;
     }
