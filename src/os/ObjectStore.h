@@ -397,6 +397,24 @@ public:
 
     // member hook for intrusive work queue
     bi::list_member_hook<> queue_hook;
+
+    // copy and assignment disabled because of object handle ref counting
+  private:
+    Transaction(const Transaction &rhs);
+    Transaction& operator=(const Transaction &rhs);
+
+    void put_objects() {
+      if (os) {
+	for (auto iter = obj_slots.begin(); iter != obj_slots.end(); ++iter) {
+	  if (std::get<2>(*iter) & FLAG_REF) {
+	    os->put_object(std::get<0>(*iter));
+	    std::get<0>(*iter) = nullptr;
+	    std::get<2>(*iter) &= ~FLAG_REF;
+	  }
+	}
+      }
+    }
+
   public:
     typedef bi::list<Transaction,
 		     bi::member_hook<Transaction,
@@ -1066,16 +1084,21 @@ public:
       decode(dp);
     }
 
-    virtual ~Transaction() {
-      if (!! os) {
-	using std::get;
-	vector<obj_slot_t>::const_iterator iter;
-	for (iter = obj_slots.begin(); iter != obj_slots.end(); ++iter) {
-	  if (!! get<0>(*iter) && (get<2>(*iter) & FLAG_REF)) {
-	    os->put_object(get<0>(*iter));
-	  }
-	}
-      }
+    ~Transaction() {
+      put_objects();
+    }
+
+    // restore Transaction to a newly-constructed state for reuse
+    void clear() {
+      put_objects(); // drop existing object refs
+      os = nullptr;
+      os_flags = 0;
+      col_slots.clear();
+      obj_slots.clear();
+      ops.clear();
+      col_ix = obj_ix = 0;
+      largest_data_len = largest_data_off = 0;
+      replica = tolerate_collection_add_enoent = false;
     }
 
     void encode(bufferlist& bl) const {
