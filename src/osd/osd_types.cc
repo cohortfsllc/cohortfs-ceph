@@ -707,6 +707,7 @@ void object_info_t::copy_user_bits(const object_info_t& other)
   last_reqid = other.last_reqid;
   truncate_seq = other.truncate_seq;
   truncate_size = other.truncate_size;
+  total_real_length = other.total_real_length;
   flags = other.flags;
   user_version = other.user_version;
 }
@@ -723,6 +724,7 @@ void object_info_t::encode(bufferlist& bl) const
   ::encode(wrlock_by, bl);
   ::encode(truncate_seq, bl);
   ::encode(truncate_size, bl);
+  ::encode(total_real_length, bl);
   ::encode(user_version, bl);
   ::encode(watchers, bl);
   uint32_t _flags = flags;
@@ -742,6 +744,7 @@ void object_info_t::decode(bufferlist::iterator& bl)
   ::decode(wrlock_by, bl);
   ::decode(truncate_seq, bl);
   ::decode(truncate_size, bl);
+  ::decode(total_real_length, bl);
   ::decode(user_version, bl);
   ::decode(watchers, bl);
   uint32_t _flags;
@@ -765,6 +768,7 @@ void object_info_t::dump(Formatter *f) const
   f->dump_stream("wrlock_by") << wrlock_by;
   f->dump_unsigned("truncate_seq", truncate_seq);
   f->dump_unsigned("truncate_size", truncate_size);
+  f->dump_unsigned("total_real_length", total_real_length);
   f->open_object_section("watchers");
   for (map<pair<uint64_t, entity_name_t>,watch_info_t>::const_iterator p =
 	 watchers.begin(); p != watchers.end(); ++p) {

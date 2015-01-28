@@ -118,6 +118,9 @@ protected:
     virtual size_t width() {
       return v.erasure->get_chunk_count();
     }
+    virtual void read(uint64_t off, uint64_t len, bufferlist *bl,
+		      uint64_t truncate_size, uint32_t truncate_seq,
+		      int *rval = NULL, Context* ctx = NULL);
     virtual void add_op(const int op);
     virtual void add_version(const uint64_t ver);
     virtual void add_oid(const hobject_t &oid);
@@ -147,9 +150,6 @@ protected:
     virtual void add_truncate(const uint64_t truncate_size,
 			      const uint32_t truncate_seq);
 
-    virtual void add_read_ctx(const uint64_t off, const uint64_t len,
-			      bufferlist *bl, int *rval = NULL,
-			      Context *ctx = NULL);
     virtual void add_sparse_read_ctx(uint64_t off, uint64_t len,
 				     std::map<uint64_t,uint64_t> *m,
 				     bufferlist *data_bl, int *rval,

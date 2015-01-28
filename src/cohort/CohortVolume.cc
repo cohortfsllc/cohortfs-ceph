@@ -468,6 +468,7 @@ void CohortVolume::StripulatedOp::add_striped_data(const uint64_t off,
   const uint32_t stripe_width = v.stripe_unit *
     v.erasure->get_data_chunk_count();
   set<int> want;
+  uint64_t total_real_length = off + bl.length();
   for (unsigned i = 0; i < v.erasure->get_chunk_count(); ++i) {
     want.insert(i);
   }
@@ -495,6 +496,7 @@ void CohortVolume::StripulatedOp::add_striped_data(const uint64_t off,
     o.back().op.extent.offset = off / v.erasure->get_data_chunk_count();
     o.back().op.extent.length = bl.length()
       / v.erasure->get_data_chunk_count();
+    o.back().op.extent.total_real_length = total_real_length;
   }
 }
 
@@ -504,6 +506,7 @@ void CohortVolume::StripulatedOp::add_striped_range(const uint64_t off,
   const uint32_t stripe_width = v.stripe_unit *
     v.erasure->get_data_chunk_count();
   uint64_t actual_len = len;
+  uint64_t total_real_length = off + len;
   assert(off % stripe_width == 0);
   if (len % stripe_width)
     actual_len += stripe_width - ((off + len % stripe_width));
@@ -512,6 +515,7 @@ void CohortVolume::StripulatedOp::add_striped_range(const uint64_t off,
     o.back().op.extent.offset = off / v.erasure->get_data_chunk_count();
     o.back().op.extent.length = actual_len
       / v.erasure->get_data_chunk_count();
+    o.back().op.extent.total_real_length = total_real_length;
   }
 }
 
@@ -529,16 +533,20 @@ void CohortVolume::StripulatedOp::add_truncate(const uint64_t truncate_size,
 
 struct C_MultiRead : public Context {
   const CohortVolume& v;
+  uint64_t off;
   map<int, bufferlist> resultbl;
-  bufferlist *bl;
+  bufferlist *outbl;
   int* rval;
   Context *onfinish;
-  C_MultiRead(const CohortVolume& v, map<int, bufferlist>& _resultbl,
-	      bufferlist *bl, int* rval, Context *onfinish) :
-    v(v), bl(bl), rval(rval), onfinish(onfinish) {
-    resultbl.swap(_resultbl);
-  }
+  uint64_t total_real_length;
+
+  C_MultiRead(const CohortVolume& v, uint64_t _off, bufferlist *_outbl, int* rval,
+	      Context *onfinish)
+    : v(v), off(_off), outbl(_outbl), rval(rval), onfinish(onfinish),
+      total_real_length(UINT64_MAX) { }
+
   void finish(int r) {
+    bufferlist bl;
     uint64_t stride_size
       = std::max_element(resultbl.begin(), resultbl.end(),
 			 [](pair<int, bufferlist> x, pair<int, bufferlist> y) {
@@ -569,27 +577,34 @@ struct C_MultiRead : public Context {
 	r = s;
 	goto done;
       }
-      bl->claim_append(stripebuf);
+      bl.claim_append(stripebuf);
     }
 
-    r = bl->length();
+    if ((total_real_length < UINT64_MAX) &&
+	(off + bl.length()) > total_real_length) {
+      outbl->substr_of(bl, 0, total_real_length - off);
+    } else {
+      outbl->claim_append(bl);
+    }
+
+    r = outbl->length();
 
   done:
 
     if (rval) {
-      *rval = bl->length();
+      *rval = outbl->length();
     }
 
     if (onfinish) {
-      onfinish->complete(bl->length());
+      onfinish->complete(outbl->length());
     }
   }
 };
 
-void CohortVolume::StripulatedOp::add_read_ctx(const uint64_t off,
-					       const uint64_t len,
-					       bufferlist *bl,
-					       int *rval, Context *ctx)
+void CohortVolume::StripulatedOp::read(uint64_t off, uint64_t len,
+				       bufferlist *bl, uint64_t truncate_size,
+				       uint32_t truncate_seq, int *rval,
+				       Context* ctx)
 {
   budget += len;
   const uint32_t stripe_width = v.stripe_unit *
@@ -598,19 +613,22 @@ void CohortVolume::StripulatedOp::add_read_ctx(const uint64_t off,
   assert(off % stripe_width == 0);
   if (len % stripe_width)
     actual_len += stripe_width - ((off + len % stripe_width));
-
-  map<int, bufferlist> resultbl;
+  C_MultiRead* mr = new C_MultiRead(v, off, bl, rval, ctx);
   C_GatherBuilder gather;
+
+  add_op(CEPH_OSD_OP_STAT);
+  add_stat_ctx(&mr->total_real_length, nullptr, nullptr, gather.new_sub());
+  add_op(CEPH_OSD_OP_READ);
   for (uint32_t stride = 0; stride < v.erasure->get_chunk_count(); ++stride) {
     ops[stride].back().op.extent.offset = off
       / v.erasure->get_data_chunk_count();
     ops[stride].back().op.extent.length = actual_len
       / v.erasure->get_data_chunk_count();
     ops[stride].back().ctx = gather.new_sub();
-    auto p = resultbl.emplace(stride, len / stripe_width);
+    auto p = mr->resultbl.emplace(stride, len / stripe_width);
     ops[stride].back().out_bl = &(p.first->second);
   }
-  gather.set_finisher(new C_MultiRead(v, resultbl, bl, rval, ctx));
+  gather.set_finisher(mr);
   gather.activate();
 }
 
@@ -745,35 +763,43 @@ struct C_MultiStat : public Context {
   int *rval;
   Context *ctx;
 
-  C_MultiStat(const CohortVolume &v, uint64_t *_s, utime_t *_m, int *_rval,
-	      Context *_ctx)
-    : v(v), bls(v.erasure->get_chunk_count()), s(_s), m(_m), rval(_rval),
-      ctx(_ctx) { }
+  C_MultiStat(const CohortVolume &v, uint64_t *_s, utime_t *_m,
+	      int *_rval, Context *_ctx)
+    : v(v), bls(v.erasure->get_chunk_count()), s(_s), m(_m),
+      rval(_rval), ctx(_ctx) { }
 
   void finish(int r) {
-    if (rval)
-      *rval = r;
-
-    if (r >= 0) {
-     for (auto &b : bls) {
-	bufferlist::iterator p = b.begin();
-	try {
-	  uint64_t size;
-	  utime_t mtime;
-	  ::decode(size, p);
-	  ::decode(mtime, p);
-	  if (s)
-	    *s += size;
-	  if (m)
-	    *m = std::max(mtime, *m);
-	} catch (ceph::buffer::error& e) {
-	  if (rval)
-	    *rval = -EDOM;
-	}
+    bool got_one = false;
+    uint64_t rtl = 0;
+    for (auto &b : bls) {
+      bufferlist::iterator p = b.begin();
+      try {
+	uint64_t size;
+	utime_t mtime;
+	::decode(size, p);
+	::decode(mtime, p);
+	::decode(rtl, p);
+	if (m)
+	  *m = std::max(mtime, *m);
+	got_one = true;
+      } catch (ceph::buffer::error& e) {
+	if (r != 0)
+	  r = -EDOM;
       }
     }
+
+    if (got_one) {
+      if (s) {
+	*s = rtl;
+      }
+      r = 0;
+    }
+
     if (ctx)
       ctx->complete(r);
+
+    if (rval)
+      *rval = r;
   }
 };
 

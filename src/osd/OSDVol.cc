@@ -1153,6 +1153,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	if (obs.exists) {
 	  ::encode(oi.size, osd_op.outdata);
 	  ::encode(oi.mtime, osd_op.outdata);
+	  ::encode(oi.total_real_length, osd_op.outdata);
 	  dout(10) << "stat oi has " << oi.size << " " << oi.mtime << dendl;
 	}
 	ctx->delta_stats.num_rd++;
@@ -1400,6 +1401,9 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 
 
 	uint32_t seq = oi.truncate_seq;
+	if (oi.total_real_length < op.extent.total_real_length) {
+	  oi.total_real_length = op.extent.total_real_length;
+	}
 	if (seq && (seq > op.extent.truncate_seq) &&
 	    (op.extent.offset + op.extent.length > oi.size)) {
 	  // old write, arrived after trimtrunc
@@ -1474,6 +1478,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  oi.size = op.extent.length + op.extent.offset;
 	  ctx->delta_stats.num_bytes += oi.size;
 	}
+	oi.total_real_length = op.extent.total_real_length;
 	ctx->delta_stats.num_wr++;
 	ctx->delta_stats.num_wr_kb += SHIFT_ROUND_UP(op.extent.length, 10);
       }
@@ -1492,6 +1497,9 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  ch.insert(op.extent.offset, op.extent.length);
 	  ctx->modified_ranges.union_of(ch);
 	  ctx->delta_stats.num_wr++;
+	  if (oi.total_real_length < op.extent.total_real_length) {
+	    oi.total_real_length = op.extent.total_real_length;
+	  }
 	} else {
 	  // no-op
 	}
@@ -1558,6 +1566,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  ctx->delta_stats.num_bytes -= oi.size;
 	  ctx->delta_stats.num_bytes += op.extent.offset;
 	  oi.size = op.extent.offset;
+	  oi.total_real_length = op.extent.total_real_length;
 	}
 	ctx->delta_stats.num_wr++;
 	// do no set exists, or we will break above DELETE -> TRUNCATE munging.
@@ -1669,6 +1678,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	newop.op.extent.offset = oi.size;
 	newop.op.extent.length = op.extent.length;
 	newop.op.extent.truncate_seq = oi.truncate_seq;
+	newop.op.extent.total_real_length = op.extent.total_real_length;
 	newop.indata = osd_op.indata;
 	result = do_osd_ops(ctx, nops);
 	osd_op.outdata.claim(newop.outdata);

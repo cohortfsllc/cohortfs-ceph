@@ -78,8 +78,6 @@ public:
   virtual void clear_op_flags(const uint32_t flags) = 0;
   virtual void add_stat_ctx(uint64_t *s, utime_t *m, int *rval,
 			    Context *ctx = NULL) = 0;
-  virtual void add_read_ctx(uint64_t off, uint64_t len, bufferlist *bl,
-			    int *rval, Context *ctx = NULL) = 0;
   virtual void add_sparse_read_ctx(uint64_t off, uint64_t len,
 				   std::map<uint64_t,uint64_t> *m,
 				   bufferlist *data_bl, int *rval,
@@ -114,18 +112,13 @@ public:
   // object data
   void read(uint64_t off, uint64_t len, bufferlist *bl,
 	    int *rval = NULL, Context* ctx = NULL) {
-    add_op(CEPH_OSD_OP_READ);
-    add_read_ctx(off, len, bl, rval, ctx);
+    read(off, len, bl, 0, 0, rval, ctx);
   }
 
   // object data
-  void read(uint64_t off, uint64_t len, bufferlist *bl,
-	    uint64_t truncate_size, uint32_t truncate_seq, int *rval = NULL,
-	    Context* ctx = NULL) {
-    add_op(CEPH_OSD_OP_READ);
-    add_read_ctx(off, len, bl, rval, ctx);
-    add_truncate(truncate_size, truncate_seq);
-  }
+  virtual void read(uint64_t off, uint64_t len, bufferlist *bl,
+		    uint64_t truncate_size, uint32_t truncate_seq,
+		    int *rval = NULL, Context* ctx = NULL) = 0;
 
   void sparse_read(uint64_t off, uint64_t len, std::map<uint64_t,uint64_t> *m,
 		   bufferlist *bl, int *rval) {

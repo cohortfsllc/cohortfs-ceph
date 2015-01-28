@@ -306,6 +306,7 @@ struct ceph_osd_op {
 			uint64_t offset, length;
 			uint64_t truncate_size;
 			uint32_t truncate_seq;
+			uint64_t total_real_length;
 		} extent;
 		struct {
 			uint32_t name_len;

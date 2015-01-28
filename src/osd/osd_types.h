@@ -714,6 +714,7 @@ struct object_info_t {
   osd_reqid_t wrlock_by;   // [head]
 
   uint64_t truncate_seq, truncate_size;
+  uint64_t total_real_length;
 
   map<pair<uint64_t, entity_name_t>, watch_info_t> watchers;
 
