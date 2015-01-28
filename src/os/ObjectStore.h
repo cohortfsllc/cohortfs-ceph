@@ -1045,19 +1045,22 @@ public:
 
     // etc.
     Transaction(size_t op_count_hint = 0) :
-      os(nullptr), largest_data_len(0), largest_data_off(0), replica(false),
+      os(nullptr), os_flags(0), col_ix(0), obj_ix(0),
+      largest_data_len(0), largest_data_off(0), replica(false),
       tolerate_collection_add_enoent(false) {
       ops.reserve(op_count_hint);
     }
 
     Transaction(bufferlist::iterator &dp) :
-      os(nullptr), largest_data_len(0), largest_data_off(0), replica(false),
+      os(nullptr), os_flags(0), col_ix(0), obj_ix(0),
+      largest_data_len(0), largest_data_off(0), replica(false),
       tolerate_collection_add_enoent(false) {
       decode(dp);
     }
 
     Transaction(bufferlist &nbl) :
-      os(nullptr), largest_data_len(0), largest_data_off(0), replica(false),
+      os(nullptr), os_flags(0), col_ix(0), obj_ix(0),
+      largest_data_len(0), largest_data_off(0), replica(false),
       tolerate_collection_add_enoent(false) {
       bufferlist::iterator dp = nbl.begin();
       decode(dp);
