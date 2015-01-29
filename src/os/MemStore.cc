@@ -829,7 +829,7 @@ void MemStore::_do_transaction(Transaction& t, ThreadPool::TPHandle &handle)
       break;
 
     case Transaction::OP_MKCOLL:
-      r = _create_collection(c->get_cid());
+      r = _create_collection(std::get<1>(t.c_slot(i->c1_ix)));
       if (!r) {
 	(void) get_slot_collection(t, i->c1_ix);
       }
