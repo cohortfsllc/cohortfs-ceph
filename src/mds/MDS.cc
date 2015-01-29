@@ -327,6 +327,8 @@ int MDS::init(int wanted_state)
   dout(10) << sizeof(Capability) << "\tCapability " << dendl;
   dout(10) << sizeof(xlist<void*>::item) << "\t xlist<>::item	*2=" << 2*sizeof(xlist<void*>::item) << dendl;
 
+  objecter->init();
+  messenger->add_dispatcher_tail(objecter);
   messenger->add_dispatcher_tail(this);
 
   // get monmap
@@ -355,12 +357,12 @@ int MDS::init(int wanted_state)
     return 0;
   }
 
-  objecter->init();
-
   monc->sub_want("mdsmap", 0, 0);
   monc->renew_subs();
 
   mds_lock.Unlock();
+
+  objecter->start();
 
   // verify that osds support tmap2omap
   while (true) {
