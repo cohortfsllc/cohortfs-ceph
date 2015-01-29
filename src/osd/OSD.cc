@@ -995,18 +995,19 @@ int OSD::read_superblock(CollectionHandle meta)
   bufferlist bl;
   bufferlist::iterator p;
   ObjectHandle oh = nullptr;
-  int r = 0;
 
   oh = store->get_object(meta, OSD_SUPERBLOCK_POBJECT);
-  if (likely(!!oh)) {
-    int r = store->read(meta, oh, 0, store->read_entire, bl);
-    if (r == 0) {
-      p = bl.begin();
-      ::decode(superblock, p);
-      store->put_object(oh);
-      dout(10) << "read_superblock " << superblock << dendl;
-    }
-  }
+  if (unlikely(!oh))
+    return -ENOENT;
+
+  int r = store->read(meta, oh, 0, store->read_entire, bl);
+  store->put_object(oh);
+  if (r < 0)
+    return r;
+
+  p = bl.begin();
+  ::decode(superblock, p);
+  dout(10) << "read_superblock " << superblock << dendl;
   return r;
 }
 
