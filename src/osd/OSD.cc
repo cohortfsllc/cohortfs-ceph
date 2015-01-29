@@ -129,7 +129,8 @@ CompatSet OSD::get_osd_compat_set() {
 OSDService::OSDService(OSD *osd) :
   osd(osd), lru(20), // More sophisticated later
   cct(osd->cct),
-  whoami(osd->whoami), store(osd->store), clog(osd->clog),
+  whoami(osd->whoami), store(osd->store),
+  meta_col(nullptr), clog(osd->clog),
   infos_oid(OSD::make_infos_oid()),
   cluster_messenger(osd->cluster_messenger),
   client_messenger(osd->client_messenger),
@@ -147,11 +148,13 @@ OSDService::OSDService(OSD *osd) :
   cur_ratio(0),
   state(NOT_STOPPING)
 {
-  meta_col = store->open_collection(coll_t::META_COLL);
 }
 
 OSDService::~OSDService()
-{ }
+{
+  if (meta_col) store->close_collection(meta_col);
+  delete objecter;
+}
 
 void OSDService::need_heartbeat_peer_update()
 {
@@ -171,6 +174,12 @@ void OSDService::shutdown()
 
 void OSDService::init()
 {
+  meta_col = store->open_collection(coll_t::META_COLL);
+  assert(meta_col);
+  {
+    objecter->set_client_incarnation(0);
+    objecter->init();
+  }
   watch_timer.init();
 }
 
