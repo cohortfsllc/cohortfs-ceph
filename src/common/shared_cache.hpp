@@ -90,7 +90,7 @@ public:
   ~SharedLRU() {
     contents.clear();
     lru.clear();
-    assert(weak_refs.empty());
+    //assert(weak_refs.empty());
   }
 
   void clear(K key) {
