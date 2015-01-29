@@ -194,11 +194,14 @@ public:
 				      uint16_t o_ix, bool create) {
     using std::get;
     obj_slot_t& o_slot = t.o_slot(o_ix);
-    ObjectHandle oh = static_cast<ObjectHandle>(get<0>(o_slot));
+    ObjectHandle oh = get<0>(o_slot);
     if (oh)
       return oh;
-    else {
-      oh = MemStore::get_object(c, get<1>(o_slot));
+
+    auto oid = get<1>(o_slot);
+    auto object = create ? c->get_or_create_object(oid) : c->get_object(oid);
+    oh = static_cast<ObjectHandle>(object.get());
+    if (oh) {
       // update slot for queued Ops to find
       get<0>(o_slot) = oh;
       // then mark it for release when t is cleaned up
@@ -395,8 +398,9 @@ public:
 
   ObjectHandle get_object(CollectionHandle ch,
 			  const hoid_t& oid) {
+    MemCollection *coll = static_cast<MemCollection*>(ch);
     // find Object as intrusive_ptr<T>, explicit ref, return
-    ObjectRef o = static_cast<MemStore::Object*>(get_object(ch, oid));
+    ObjectRef o = coll->get_object(oid);
     if (!o)
       return NULL;
     intrusive_ptr_add_ref(o.get());
