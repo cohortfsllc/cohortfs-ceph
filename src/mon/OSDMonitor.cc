@@ -2298,7 +2298,7 @@ done:
       goto reply;
     }
     pending_inc.include_removal(vol);
-    cmd_getval(g_ceph_context, cmdmap, "placerName", name);
+    cmd_getval(mon->cct, cmdmap, "placerName", name);
     if (!osdmap.find_by_name(name, placer)) {
       ss << "placer named " << name << " not found";
       err = -EINVAL;

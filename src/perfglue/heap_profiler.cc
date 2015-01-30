@@ -17,7 +17,6 @@
 #include "heap_profiler.h"
 #include "common/environment.h"
 #include "common/LogClient.h"
-#include "global/global_context.h"
 #include "common/debug.h"
 
 bool ceph_using_tcmalloc()
@@ -25,12 +24,12 @@ bool ceph_using_tcmalloc()
   return true;
 }
 
-void ceph_heap_profiler_init()
+void ceph_heap_profiler_init(CephContext* cct)
 {
   // Two other interesting environment variables to set are:
   // HEAP_PROFILE_ALLOCATION_INTERVAL, HEAP_PROFILE_INUSE_INTERVAL
   if (get_env_bool("CEPH_HEAP_PROFILER_INIT")) {
-    ceph_heap_profiler_start();
+    ceph_heap_profiler_start(cct);
   }
 }
 
@@ -49,27 +48,28 @@ bool ceph_heap_profiler_running()
   return IsHeapProfilerRunning();
 }
 
-static void get_profile_name(char *profile_name, int profile_name_len)
+static void get_profile_name(CephContext* cct, char *profile_name,
+			     int profile_name_len)
 {
   char path[PATH_MAX];
-  snprintf(path, sizeof(path), "%s", g_conf->log_file.c_str());
+  snprintf(path, sizeof(path), "%s", cct->_conf->log_file.c_str());
   char *last_slash = rindex(path, '/');
 
   if (last_slash == NULL) {
     snprintf(profile_name, profile_name_len, "./%s.profile",
-	     g_conf->name.to_cstr());
+	     cct->_conf->name.to_cstr());
   }
   else {
     last_slash[1] = '\0';
     snprintf(profile_name, profile_name_len, "%s/%s.profile",
-	     path, g_conf->name.to_cstr());
+	     path, cct->_conf->name.to_cstr());
   }
 }
 
-void ceph_heap_profiler_start()
+void ceph_heap_profiler_start(CephContext* cct)
 {
   char profile_name[PATH_MAX];
-  get_profile_name(profile_name, sizeof(profile_name));
+  get_profile_name(cct, profile_name, sizeof(profile_name));
   generic_dout(0) << "turning on heap profiler with prefix "
 		  << profile_name << dendl;
   HeapProfilerStart(profile_name);
@@ -85,7 +85,8 @@ void ceph_heap_profiler_dump(const char *reason)
   HeapProfilerDump(reason);
 }
 
-void ceph_heap_profiler_handle_command(const std::vector<std::string>& cmd,
+void ceph_heap_profiler_handle_command(CephContext* cct,
+				       const std::vector<std::string>& cmd,
 				       ostream& out)
 {
   if (cmd.size() == 1 && cmd[0] == "dump") {
@@ -95,22 +96,22 @@ void ceph_heap_profiler_handle_command(const std::vector<std::string>& cmd,
     }
     char *heap_stats = new char[1024];
     ceph_heap_profiler_stats(heap_stats, 1024);
-    out << g_conf->name << "dumping heap profile now.\n"
+    out << cct->_conf->name << "dumping heap profile now.\n"
 	<< heap_stats;
     ceph_heap_profiler_dump("admin request");
   } else if (cmd.size() == 1 && cmd[0] == "start_profiler") {
-    ceph_heap_profiler_start();
-    out << g_conf->name << " started profiler";
+    ceph_heap_profiler_start(cct);
+    out << cct->_conf->name << " started profiler";
   } else if (cmd.size() == 1 && cmd[0] == "stop_profiler") {
     ceph_heap_profiler_stop();
-    out << g_conf->name << " stopped profiler";
+    out << cct->_conf->name << " stopped profiler";
   } else if (cmd.size() == 1 && cmd[0] == "release") {
     ceph_heap_release_free_memory();
-    out << g_conf->name << " releasing free RAM back to system.";
+    out << cct->_conf->name << " releasing free RAM back to system.";
   } else if (cmd.size() == 1 && cmd[0] == "stats") {
     char *heap_stats = new char[1024];
     ceph_heap_profiler_stats(heap_stats, 1024);
-    out << g_conf->name << "tcmalloc heap stats:"
+    out << cct->_conf->name << "tcmalloc heap stats:"
 	<< heap_stats;
   } else {
     out << "unknown command " << cmd;

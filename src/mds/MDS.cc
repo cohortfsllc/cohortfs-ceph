@@ -696,7 +696,7 @@ void MDS::handle_command(MMonCommand *m)
      ostringstream ss;
      vector<std::string> cmdargs;
      cmdargs.insert(cmdargs.begin(), m->cmd.begin()+1, m->cmd.end());
-     ceph_heap_profiler_handle_command(cmdargs, ss);
+     ceph_heap_profiler_handle_command(cct, cmdargs, ss);
      clog.info() << ss.str();
    }
  } else dout(0) << "unrecognized command! " << m->cmd << dendl;

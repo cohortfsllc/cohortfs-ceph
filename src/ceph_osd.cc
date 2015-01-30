@@ -80,7 +80,7 @@ int main(int argc, const char **argv)
   env_to_vec(args);
 
   cct = global_init(NULL, args, CEPH_ENTITY_TYPE_OSD, CODE_ENVIRONMENT_DAEMON, 0);
-  ceph_heap_profiler_init();
+  ceph_heap_profiler_init(cct);
 
   // osd specific args
   bool mkfs = false;

@@ -15,7 +15,7 @@
 
 bool ceph_using_tcmalloc() { return false; }
 
-void ceph_heap_profiler_init() { return; }
+void ceph_heap_profiler_init(CephContext* cct) { return; }
 
 void ceph_heap_profiler_stats(char *buf, int length) { return; }
 
@@ -23,11 +23,12 @@ void ceph_heap_release_free_memory() { return; }
 
 bool ceph_heap_profiler_running() { return false; }
 
-void ceph_heap_profiler_start() { return; }
+void ceph_heap_profiler_start(CephContext* cct) { return; }
 
 void ceph_heap_profiler_stop() { return; }
 
 void ceph_heap_profiler_dump(const char *reason) { return; }
 
-void ceph_heap_profiler_handle_command(const std::vector<std::string>& cmd,
+void ceph_heap_profiler_handle_command(CephContext* cct,
+				       const std::vector<std::string>& cmd,
 				       std::ostream& out) { return; }

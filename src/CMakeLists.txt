@@ -507,9 +507,9 @@ if(${WITH_MDS})
     mds/SessionMap.cc
     osdc/Journaler.cc
     )
-  add_library(mds ${mds_srcs})
+  add_library(mds ${mds_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
   set(ceph_mds_srcs ceph_mds.cc)
-  add_executable(ceph-mds ${ceph_mds_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
+  add_executable(ceph-mds ${ceph_mds_srcs})
   target_link_libraries(ceph-mds mds osdc ${CMAKE_DL_LIBS} global
     ${TCMALLOC_LIBS} boost_system boost_thread)
   install(TARGETS ceph-mds DESTINATION bin)

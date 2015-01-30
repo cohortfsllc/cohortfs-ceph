@@ -29,7 +29,7 @@ bool ceph_using_tcmalloc();
 /*
  * Configure the heap profiler
  */
-void ceph_heap_profiler_init();
+void ceph_heap_profiler_init(CephContext* cct);
 
 void ceph_heap_profiler_stats(char *buf, int length);
 
@@ -37,13 +37,14 @@ void ceph_heap_release_free_memory();
 
 bool ceph_heap_profiler_running();
 
-void ceph_heap_profiler_start();
+void ceph_heap_profiler_start(CephContext* cct);
 
 void ceph_heap_profiler_stop();
 
 void ceph_heap_profiler_dump(const char *reason);
 
-void ceph_heap_profiler_handle_command(const std::vector<std::string> &cmd,
+void ceph_heap_profiler_handle_command(CephContext* cct,
+				       const std::vector<std::string>& cmd,
 				       std::ostream& out);
 
 #endif /* HEAP_PROFILER_H_ */

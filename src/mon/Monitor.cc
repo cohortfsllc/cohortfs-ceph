@@ -2347,7 +2347,7 @@ void Monitor::handle_command(MMonCommand *m)
       // XXX 1-element vector, change at callee or make vector here?
       vector<string> heapcmd_vec;
       get_str_vec(heapcmd, heapcmd_vec);
-      ceph_heap_profiler_handle_command(heapcmd_vec, ds);
+      ceph_heap_profiler_handle_command(cct, heapcmd_vec, ds);
       rdata.append(ds);
       rs = "";
       r = 0;
