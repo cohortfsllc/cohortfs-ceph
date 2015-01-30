@@ -494,7 +494,13 @@ public:
     bool get_replica() { return replica; }
 
     void swap(Transaction& other) {
+      std::swap(os, other.os);
+      std::swap(col_slots, other.col_slots);
+      std::swap(obj_slots, other.obj_slots);
       std::swap(ops, other.ops);
+      std::swap(os_flags, other.os_flags);
+      std::swap(col_ix, other.col_ix);
+      std::swap(obj_ix, other.obj_ix);
       std::swap(largest_data_len, other.largest_data_len);
       std::swap(largest_data_off, other.largest_data_off);
       std::swap(on_applied, other.on_applied);
