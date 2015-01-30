@@ -229,16 +229,17 @@ void OSDVol::_activate_committed(epoch_t e)
  */
 void OSDVol::init(void)
 {
-  ObjectStore::Transaction *t = new ObjectStore::Transaction;
-  t->create_collection(cid);
+  ObjectStore::Transaction t;
+  t.create_collection(cid);
   dirty_info = true;
-  write_info(*t);
-  int r = osd->store->apply_transaction(*t);
+  write_info(t);
+  int r = osd->store->apply_transaction(t);
   if (r < 0) {
     throw std::system_error(-r, std::system_category(),
 			    "initializing volume");
   }
   coll = osd->store->open_collection(cid);
+  assert(coll);
 }
 
 void OSDVol::write_info(ObjectStore::Transaction& t)
@@ -267,21 +268,19 @@ void OSDVol::read_info()
   set<string> keys;
   keys.insert(k);
   map<string,bufferlist> values;
-  ObjectHandle oh =
-    osd->store->get_object(osd->meta_col, osd->infos_oid);
-  if (oh) {
-    int r = osd->store->omap_get_values(osd->meta_col, oh, keys, &values);
-    if (r < 0) {
-      osd->store->put_object(oh);
-      throw std::system_error(-r, std::system_category(),
-			      "reading volume info");
-    }
-    assert(values.size() == 1);
-    bufferlist bl = values[k];
-    bufferlist::iterator p = bl.begin();
-    ::decode(info, p);
-    osd->store->put_object(oh);
+  ObjectHandle oh = osd->store->get_object(osd->meta_col, osd->infos_oid);
+  assert(oh);
+
+  int r = osd->store->omap_get_values(osd->meta_col, oh, keys, &values);
+  osd->store->put_object(oh);
+  if (r < 0) {
+    throw std::system_error(-r, std::system_category(),
+	"reading volume info");
   }
+  assert(values.size() == 1);
+  bufferlist bl = values[k];
+  bufferlist::iterator p = bl.begin();
+  ::decode(info, p);
 }
 
 void OSDVol::requeue_object_waiters(map<hobject_t, list<OpRequestRef> >& m)
