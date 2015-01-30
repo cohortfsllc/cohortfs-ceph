@@ -127,8 +127,6 @@ public:
     };
     list<NotifyAck> notify_acks;
 
-    uint64_t bytes_written, bytes_read;
-
     utime_t mtime;
     eversion_t at_version;       // vol's current version pointer
     version_t user_at_version;   // vol's current user version pointer
@@ -177,7 +175,7 @@ public:
       op(_op), reqid(_reqid), ops(_ops), obs(_obs),
       new_obs(_obs->oi, _obs->exists),
       modify(false), user_modify(false),
-      bytes_written(0), bytes_read(0), user_at_version(0),
+      user_at_version(0),
       current_osd_subop_num(0),
       op_t(NULL),
       data_off(0), reply(NULL), vol(_vol),

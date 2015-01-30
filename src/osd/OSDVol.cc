@@ -1991,8 +1991,6 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
       result = -EOPNOTSUPP;
     }
 
-    ctx->bytes_read += osd_op.outdata.length();
-
     fail:
     osd_op.rval = result;
     if (result < 0 && (op.flags & CEPH_OSD_OP_FLAG_FAILOK))
@@ -2202,7 +2200,6 @@ void OSDVol::finish_ctx(OpContext *ctx)
       ctx->user_at_version = ctx->at_version.version;
     ctx->new_obs.oi.user_version = ctx->user_at_version;
   }
-  ctx->bytes_written = ctx->op_t->get_encoded_bytes();
 
   if (ctx->new_obs.exists) {
     // on the head object
