@@ -1997,9 +1997,6 @@ inline int OSDVol::_delete_oid(OpContext *ctx, bool no_whiteout)
 
 void OSDVol::make_writeable(OpContext *ctx)
 {
-  const hobject_t& soid = ctx->obs->oi.soid;
-  ObjectStore::Transaction *t = new ObjectStore::Transaction();
-
   if ((ctx->new_obs.exists &&
        ctx->new_obs.oi.is_omap()) &&
       (!ctx->obc->obs.exists ||
@@ -2012,15 +2009,7 @@ void OSDVol::make_writeable(OpContext *ctx)
        ctx->obc->obs.oi.is_omap())) {
     --ctx->delta_stats.num_objects_omap;
   }
-
-  // prepend transaction to op_t
-  t->append(*ctx->op_t);
-  delete ctx->op_t;
-  ctx->op_t = t;
-
-  dout(20) << "make_writeable " << soid << dendl;
 }
-
 
 void OSDVol::write_update_size_and_usage(
   object_stat_sum_t& delta_stats, object_info_t& oi,

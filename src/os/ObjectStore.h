@@ -534,20 +534,6 @@ public:
       std::swap(on_applied_sync, other.on_applied_sync);
     }
 
-    /// Append the operations of the parameter to this Transaction. Those operations are removed from the parameter Transaction
-    void append(Transaction& other) {
-      ops.insert(ops.end(), other.ops.begin(), other.ops.end());
-      other.ops.clear();
-
-      if (other.largest_data_len > largest_data_len) {
-	largest_data_len = other.largest_data_len;
-	largest_data_off = other.largest_data_off;
-      }
-      on_applied.splice(on_applied.end(), other.on_applied);
-      on_commit.splice(on_commit.end(), other.on_commit);
-      on_applied_sync.splice(on_applied_sync.end(), other.on_applied_sync);
-    }
-
     /** Inquires about the Transaction as a whole. */
 
     /// How big is the encoded Transaction buffer?
