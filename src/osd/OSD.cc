@@ -174,7 +174,6 @@ void OSDService::shutdown()
 
 void OSDService::init()
 {
-  meta_col = store->open_collection(coll_t::META_COLL);
   assert(meta_col);
   {
     objecter->set_client_incarnation(0);
@@ -618,22 +617,20 @@ int OSD::init()
 
   dout(2) << "boot" << dendl;
 
-  CollectionHandle meta_col = store->open_collection(coll_t::META_COLL);
-  if (! meta_col) {
+  service.meta_col = store->open_collection(coll_t::META_COLL);
+  if (!service.meta_col) {
     derr << "OSD::init() : unable to open osd meta collection" << dendl;
     r = -EINVAL;
     goto out;
   }
 
   // read superblock
-  r = read_superblock(meta_col);
+  r = read_superblock(service.meta_col);
   if (r < 0) {
     derr << "OSD::init() : unable to read osd superblock" << dendl;
     r = -EINVAL;
     goto out;
   }
-  
-  assert(meta_col);
 
   if (osd_compat.compare(superblock.compat_features) < 0) {
     derr << "The disk uses features unsupported by the executable." << dendl;
@@ -668,7 +665,7 @@ int OSD::init()
     // do anything else
     dout(5) << "Upgrading superblock adding: " << diff << dendl;
     ObjectStore::Transaction t;
-    write_superblock(meta_col, t);
+    write_superblock(service.meta_col, t);
     r = store->apply_transaction(t);
     if (r < 0)
       goto out;
@@ -678,10 +675,10 @@ int OSD::init()
   uint16_t c_ix;
   uint16_t o_ix;
   
-  if (!store->exists(meta_col, service.infos_oid)) {
+  if (!store->exists(service.meta_col, service.infos_oid)) {
     dout(10) << "init creating/touching snapmapper object" << dendl;
     ObjectStore::Transaction t;
-    c_ix = t.push_col(meta_col);
+    c_ix = t.push_col(service.meta_col);
     o_ix = t.push_oid(service.infos_oid);
     t.touch(c_ix, o_ix);
     r = store->apply_transaction(t);
