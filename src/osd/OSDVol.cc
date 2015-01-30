@@ -91,6 +91,8 @@ OSDVol::OSDVol(OSDService *o, OSDMapRef curmap, const boost::uuids::uuid& v)
   } else {
     init();
   }
+  coll = osd->store->open_collection(cid);
+  assert(coll);
 }
 
 OSDVol::~OSDVol()
@@ -238,8 +240,6 @@ void OSDVol::init(void)
     throw std::system_error(-r, std::system_category(),
 			    "initializing volume");
   }
-  coll = osd->store->open_collection(cid);
-  assert(coll);
 }
 
 void OSDVol::write_info(ObjectStore::Transaction& t)
