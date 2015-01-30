@@ -1706,7 +1706,8 @@ inline void encode(const ObjectStore::obj_slot_t &o_slot, bufferlist &bl)
     encode(o->get_oid(), bl);
   else
     encode(get<1>(o_slot), bl);
-  encode(get<2>(o_slot), bl);
+  const auto flags = get<2>(o_slot) & ~ObjectStore::Transaction::FLAG_REF;
+  encode(flags, bl);
 }
 
 inline void decode(ObjectStore::obj_slot_t &o_slot, bufferlist::iterator &p)
