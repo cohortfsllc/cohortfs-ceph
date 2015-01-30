@@ -20,7 +20,6 @@
 #include "/usr/include/asm-generic/errno.h"
 #include "/usr/include/asm-generic/errno-base.h"
 #include "common/ceph_context.h"
-#include "common/Clock.h"
 #include "include/types.h"
 
 
@@ -36,7 +35,8 @@
 using namespace std;
 using ceph::bufferlist;
 
-bool index_data::is_timed_out(utime_t now, utime_t timeout) const {
+bool index_data::is_timed_out(ceph::real_time now,
+			      ceph::timespan timeout) const {
   return prefix != "" && now - ts > timeout;
 }
 
@@ -50,19 +50,18 @@ void IndexCache::push(const string &key, const index_data &idata) {
     return;
   }
   index_data old_idata;
-  map<key_data, pair<index_data, utime_t> >::iterator old_it =
-      k2itmap.lower_bound(key_data(key));
+  auto old_it = k2itmap.lower_bound(key_data(key));
   if (old_it != k2itmap.end()) {
     t2kmap.erase(old_it->second.second);
     k2itmap.erase(old_it);
   }
-  map<key_data, pair<index_data, utime_t> >::iterator new_it =
+  auto new_it =
       k2itmap.find(idata.kdata);
   if (new_it != k2itmap.end()) {
-    utime_t old_time = new_it->second.second;
+    auto old_time = new_it->second.second;
     t2kmap.erase(old_time);
   }
-  utime_t time = ceph_clock_now(nullptr);
+  ceph::real_time time = ceph::real_clock::now();
   k2itmap[idata.kdata] = make_pair(idata, time);
   t2kmap[time] = idata.kdata;
   if ((int)k2itmap.size() > cache_size) {
@@ -76,11 +75,11 @@ void IndexCache::push(const index_data &idata) {
     return;
   }
   if (k2itmap.count(idata.kdata) > 0) {
-    utime_t old_time = k2itmap[idata.kdata].second;
+    ceph::real_time old_time = k2itmap[idata.kdata].second;
     t2kmap.erase(old_time);
     k2itmap.erase(idata.kdata);
   }
-  utime_t time = ceph_clock_now(nullptr);
+  auto time = ceph::real_clock::now();
   k2itmap[idata.kdata] = make_pair(idata, time);
   t2kmap[time] = idata.kdata;
   if ((int)k2itmap.size() > cache_size) {
@@ -92,8 +91,8 @@ void IndexCache::pop() {
   if (cache_size == 0) {
     return;
   }
-  map<utime_t, key_data>::iterator it = t2kmap.begin();
-  utime_t time = it->first;
+  auto it = t2kmap.begin();
+  ceph::real_time time = it->first;
   key_data kdata = it->second;
   k2itmap.erase(kdata);
   t2kmap.erase(time);
@@ -104,7 +103,7 @@ void IndexCache::erase(key_data kdata) {
     return;
   }
   if (k2itmap.count(kdata) > 0) {
-    utime_t c = k2itmap[kdata].second;
+    auto c = k2itmap[kdata].second;
     k2itmap.erase(kdata);
     t2kmap.erase(c);
   }
@@ -117,8 +116,7 @@ int IndexCache::get(const string &key, index_data *idata) const {
   if ((int)k2itmap.size() == 0) {
     return -ENODATA;
   }
-  map<key_data, pair<index_data, utime_t> >::const_iterator it =
-      k2itmap.lower_bound(key_data(key));
+  auto it = k2itmap.lower_bound(key_data(key));
   if (it == k2itmap.end() || !(it->second.first.min_kdata < key_data(key))) {
     return -ENODATA;
   } else {
@@ -132,8 +130,7 @@ int IndexCache::get(const string &key, index_data *idata,
   if (cache_size == 0) {
     return -ENODATA;
   }
-  map<key_data, pair<index_data, utime_t> >::const_iterator it =
-      k2itmap.lower_bound(key_data(key));
+  auto it = k2itmap.lower_bound(key_data(key));
   if (it == k2itmap.end() || ++it == k2itmap.end()) {
     return -ENODATA;
   } else {
@@ -191,7 +188,7 @@ int KvFlatBtreeAsync::next(const index_data &idata, index_data * out_data)
     out_data->kdata.parse(kvs.begin()->first);
     bufferlist::iterator b = kvs.begin()->second.begin();
     out_data->decode(b);
-    if (idata.is_timed_out(ceph_clock_now(nullptr),timeout)) {
+    if (idata.is_timed_out(ceph::real_clock::now(),timeout)) {
       if (verbose) cout << client_name << " THINKS THE OTHER CLIENT DIED."
 	  << std::endl;
       //the client died after deleting the object. clean up.
@@ -218,7 +215,7 @@ int KvFlatBtreeAsync::prev(const index_data &idata, index_data * out_data)
     if (verbose) cout << "\t\t\t" << client_name
 	<< "-prev: getting index failed with error "
 	<< err << std::endl;
-    if (idata.is_timed_out(ceph_clock_now(nullptr),timeout)) {
+    if (idata.is_timed_out(ceph::real_clock::now(),timeout)) {
       if (verbose) cout << client_name << " THINKS THE OTHER CLIENT DIED."
 	  << std::endl;
       //the client died after deleting the object. clean up.
@@ -247,13 +244,13 @@ int KvFlatBtreeAsync::read_index(const string &key, index_data * idata,
     if (verbose) cout << "\t" << client_name
 	<< "-read_index: getting index_data for " << key
 	<< " from cache" << std::endl;
-    icache_lock.Lock();
+    unique_lock icl(icache_lock);
     if (next_idata != NULL) {
       err = icache.get(key, idata, next_idata);
     } else {
       err = icache.get(key, idata);
     }
-    icache_lock.Unlock();
+    icl.unlock();
 
     if (err == 0) {
       //if (verbose) cout << "CACHE SUCCESS" << std::endl;
@@ -278,7 +275,7 @@ int KvFlatBtreeAsync::read_index(const string &key, index_data * idata,
 		     cache_size / cache_refresh: 2),
 		    kvmap, &err);
   err = io_ctx.operate(index_name, &oro, NULL);
-  utime_t mytime = ceph_clock_now(nullptr);
+  auto mytime = ceph::real_clock::now();
   if (err < 0){
     cerr << "\t" << client_name
 	<< "-read_index: getting keys failed with "
@@ -295,22 +292,22 @@ int KvFlatBtreeAsync::read_index(const string &key, index_data * idata,
     index_data this_idata;
     this_idata.decode(blit);
     if (this_idata.is_timed_out(mytime, timeout)) {
-      if (verbose) cout << client_name
-	  << " THINKS THE OTHER CLIENT DIED. (mytime is "
-	<< mytime.sec() << "." << mytime.usec() << ", idata.ts is "
-	<< this_idata.ts.sec() << "." << this_idata.ts.usec()
-	<< ", it has been " << (mytime - this_idata.ts).sec()
-	<< '.' << (mytime - this_idata.ts).usec()
-	<< ", timeout is " << timeout << ")" << std::endl;
+      if (verbose)
+	cout << client_name
+	     << " THINKS THE OTHER CLIENT DIED. (mytime is "
+	     << mytime << ", idata.ts is "
+	     << this_idata.ts << "." << ", it has been "
+	     << (mytime - this_idata.ts)
+	     << ", timeout is " << timeout << ")" << std::endl;
       //the client died after deleting the object. clean up.
       if (cleanup(this_idata, -EPREFIX) == -ESUICIDE) {
 	return -ESUICIDE;
       }
       return read_index(key, idata, next_idata, force_update);
     }
-    icache_lock.Lock();
+    unique_lock icl(icache_lock);
     icache.push(this_idata);
-    icache_lock.Unlock();
+    icl.unlock();
   }
   bufferlist::iterator b = kvmap.begin()->second.begin();
   idata->decode(b);
@@ -320,17 +317,17 @@ int KvFlatBtreeAsync::read_index(const string &key, index_data * idata,
       << ", idata is " << idata->str() << std::endl;
 
   assert(idata->obj != "");
-  icache_lock.Lock();
+  unique_lock icl(icache_lock);
   icache.push(key, *idata);
-  icache_lock.Unlock();
+  icl.unlock();
 
   if (next_idata != NULL && idata->kdata.prefix != "1") {
     next_idata->kdata.parse((++kvmap.begin())->first);
     bufferlist::iterator nb = (++kvmap.begin())->second.begin();
     next_idata->decode(nb);
-    icache_lock.Lock();
+    icl.lock();
     icache.push(*next_idata);
-    icache_lock.Unlock();
+    icl.unlock();
   }
   return err;
 }
@@ -369,9 +366,9 @@ int KvFlatBtreeAsync::split(const index_data &idata) {
 
   //for lower half object
   map<std::string, bufferlist>::const_iterator it = args.odata.omap.begin();
-  client_index_lock.Lock();
+  unique_lock cil(client_index_lock);
   to_create.push_back(object_data(to_string(client_name, client_index++)));
-  client_index_lock.Unlock();
+  cil.unlock();
   for (int i = 0; i < k; i++) {
     to_create[0].omap.insert(*it);
     ++it;
@@ -380,11 +377,11 @@ int KvFlatBtreeAsync::split(const index_data &idata) {
   to_create[0].max_kdata = key_data(to_create[0].omap.rbegin()->first);
 
   //for upper half object
-  client_index_lock.Lock();
+  cil.lock();
   to_create.push_back(object_data(to_create[0].max_kdata,
 	args.odata.max_kdata,
 	to_string(client_name, client_index++)));
-  client_index_lock.Unlock();
+  cil.unlock();
   to_create[1].omap.insert(
       ++args.odata.omap.find(to_create[0].omap.rbegin()->first),
       args.odata.omap.end());
@@ -417,7 +414,7 @@ int KvFlatBtreeAsync::split(const index_data &idata) {
   if (verbose) cout << "\t\t" << client_name << "-split: done splitting."
       << std::endl;
   /////END CRITICAL SECTION/////
-  icache_lock.Lock();
+  unique_lock icl(icache_lock);
   for (vector<delete_data>::iterator it = out_data.to_delete.begin();
       it != out_data.to_delete.end(); ++it) {
     icache.erase(it->max);
@@ -426,7 +423,7 @@ int KvFlatBtreeAsync::split(const index_data &idata) {
       it != out_data.to_create.end(); ++it) {
     icache.push(index_data(*it));
   }
-  icache_lock.Unlock();
+  icl.unlock();
   return err;
 }
 
@@ -540,9 +537,9 @@ int KvFlatBtreeAsync::rebalance(const index_data &idata1,
   }
 
   //this is the high object. it gets created regardless of rebalance or merge.
-  client_index_lock.Lock();
+  unique_lock cil(client_index_lock);
   string o2w = to_string(client_name, client_index++);
-  client_index_lock.Unlock();
+  cil.unlock();
   index_data idata;
   vector<object_data> to_create;
   vector<object_data> to_delete;
@@ -584,9 +581,9 @@ int KvFlatBtreeAsync::rebalance(const index_data &idata1,
     map<std::string, bufferlist> write1_map;
     map<std::string, bufferlist> write2_map;
     map<std::string, bufferlist>::iterator it;
-    client_index_lock.Lock();
+    unique_lock cil(client_index_lock);
     string o1w = to_string(client_name, client_index++);
-    client_index_lock.Unlock();
+    cil.unlock();
     int target_size_1 = ceil(((int)args1.odata.size + (int)args2.odata.size)
 	/ 2.0);
     if (args1.odata.max_kdata != idata1.kdata) {
@@ -651,7 +648,7 @@ int KvFlatBtreeAsync::rebalance(const index_data &idata1,
   if (err < 0) {
     return err;
   }
-  icache_lock.Lock();
+  unique_lock icl(icache_lock);
   for (vector<delete_data>::iterator it = out_data.to_delete.begin();
       it != out_data.to_delete.end(); ++it) {
     icache.erase(it->max);
@@ -660,7 +657,7 @@ int KvFlatBtreeAsync::rebalance(const index_data &idata1,
       it != out_data.to_create.end(); ++it) {
     icache.push(index_data(*it));
   }
-  icache_lock.Unlock();
+  icl.unlock();
   if (verbose) cout << "\t\t" << client_name << "-rebalance: done rebalancing."
 		    << std::endl;
   /////END CRITICAL SECTION/////
@@ -721,7 +718,7 @@ void KvFlatBtreeAsync::set_up_prefix_index(
   std::map<std::string, pair<bufferlist, int> > assertions;
   map<string, bufferlist> to_insert;
   idata->prefix = "1";
-  idata->ts = ceph_clock_now(nullptr);
+  idata->ts = ceph::real_clock::now();
   for(vector<object_data>::const_iterator it = to_create.begin();
       it != to_create.end();
       ++it) {
@@ -1380,7 +1377,7 @@ int KvFlatBtreeAsync::set(const string &key, const bufferlist &val,
       << (update_on_existing? "updating " : "setting ")
       << key << std::endl;
   int err = 0;
-  utime_t mytime;
+  ceph::real_time mytime;
   index_data idata(key);
 
   if (verbose) cout << "\t" << client_name << ": finding oid" << std::endl;
@@ -1502,7 +1499,7 @@ int KvFlatBtreeAsync::remove(const string &key) {
   if (verbose) cout << client_name << ": removing " << key << std::endl;
   int err = 0;
   string obj;
-  utime_t mytime;
+  ceph::real_time mytime;
   index_data idata;
   index_data next_idata;
 
@@ -1672,13 +1669,13 @@ int KvFlatBtreeAsync::get(const string &key, bufferlist *val) {
   if (verbose) cout << client_name << ": getting " << key << std::endl;
   int err = 0;
   index_data idata;
-  utime_t mytime;
+  ceph::real_time mytime;
 
   if ((((KeyValueStructure *)this)->*KvFlatBtreeAsync::interrupt)() == 1 ) {
     return -ESUICIDE;
   }
   err = read_index(key, &idata, NULL, false);
-  mytime = ceph_clock_now(nullptr);
+  mytime = ceph::real_clock::now();
   if (err < 0) {
     if (verbose) cout << "getting oid failed with code " << err << std::endl;
     return err;
@@ -1922,7 +1919,7 @@ int KvFlatBtreeAsync::set_many(const map<string, bufferlist> &in_map) {
   if (verbose) cout << "\t\t" << client_name << "-split: done splitting."
       << std::endl;
   /////END CRITICAL SECTION/////
-  icache_lock.Lock();
+  unique_lock icl(icache_lock);
   for (vector<delete_data>::iterator it = idata.to_delete.begin();
       it != idata.to_delete.end(); ++it) {
     icache.erase(it->max);
@@ -1931,7 +1928,7 @@ int KvFlatBtreeAsync::set_many(const map<string, bufferlist> &in_map) {
       it != idata.to_create.end(); ++it) {
     icache.push(index_data(*it));
   }
-  icache_lock.Unlock();
+  icl.unlock();
   return err;
 }
 
@@ -2071,7 +2068,7 @@ bool KvFlatBtreeAsync::is_consistent() {
 	  io_ctx.aio_operate(dit->obj, aioc, &oro, NULL);
 	  aioc->wait_for_safe();
 	  err = aioc->get_return_value();
-	  if (ceph_clock_now(nullptr) - idata.ts > timeout) {
+	  if (ceph::real_clock::now() - idata.ts > timeout) {
 	    if (err < 0) {
 	      aioc->release();
 	      if (err == -ENOENT) {

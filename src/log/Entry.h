@@ -4,7 +4,7 @@
 #ifndef __CEPH_LOG_ENTRY_H
 #define __CEPH_LOG_ENTRY_H
 
-#include "include/utime.h"
+#include "include/ceph_time.h"
 #include "common/PrebufferedStreambuf.h"
 #include <pthread.h>
 #include <string>
@@ -17,7 +17,7 @@ namespace log {
 using std::ostream;
 
 struct Entry {
-  utime_t m_stamp;
+  ceph::real_time m_stamp;
   pthread_t m_thread;
   short m_prio, m_subsys;
   Entry *m_next;
@@ -32,14 +32,14 @@ struct Entry {
   {
     str.reserve(CEPH_LOG_ENTRY_PREALLOC);
   }
-  Entry(utime_t s, pthread_t t, short pr, short sub)
+  Entry(ceph::real_time s, pthread_t t, short pr, short sub)
     : m_stamp(s), m_thread(t), m_prio(pr), m_subsys(sub),
       m_next(NULL),
       m_streambuf(str)
   {
     str.reserve(CEPH_LOG_ENTRY_PREALLOC);
   }
-  Entry(utime_t s, pthread_t t, short pr, short sub, std::string &prealloc)
+  Entry(ceph::real_time s, pthread_t t, short pr, short sub, std::string &prealloc)
     : m_stamp(s), m_thread(t), m_prio(pr), m_subsys(sub),
       m_next(NULL),
       m_streambuf(prealloc)

@@ -10,7 +10,7 @@
 struct cls_user_set_buckets_op {
   list<cls_user_bucket_entry> entries;
   bool add;
-  utime_t time; /* op time */
+  ceph::real_time time; /* op time */
 
   cls_user_set_buckets_op() : add(false) {}
 
@@ -154,7 +154,7 @@ struct cls_user_get_header_ret {
 WRITE_CLASS_ENCODER(cls_user_get_header_ret)
 
 struct cls_user_complete_stats_sync_op {
-  utime_t time;
+  ceph::real_time time;
 
   cls_user_complete_stats_sync_op() {}
 

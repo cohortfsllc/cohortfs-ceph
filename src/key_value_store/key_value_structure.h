@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 /*
  * Interface for key-value store using librados
  *
@@ -15,7 +17,6 @@
 #define KEY_VALUE_STRUCTURE_HPP_
 
 #include "include/rados/librados.hpp"
-#include "include/utime.h"
 #include <vector>
 
 using std::string;

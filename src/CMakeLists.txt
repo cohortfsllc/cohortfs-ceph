@@ -4,7 +4,7 @@ add_definitions("-DCEPH_LIBDIR=${LIBRARY_OUTPUT_PATH}")
 add_definitions("-DCEPH_PKGLIBDIR=\"${CMAKE_INSTALL_PREFIX}/lib\"")
 add_definitions("-DHAVE_CONFIG_H -D__CEPH__ -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_THREAD_SAFE -D__STDC_FORMAT_MACROS -D_GNU_SOURCE")
 
-set(CLIKE_COMMON_FLAGS "-Wall -Wtype-limits -Wignored-qualifiers -Winit-self -Wpointer-arith -Werror=format-security -fno-strict-aliasing -fsigned-char -fno-omit-frame-pointer -fPIC")
+set(CLIKE_COMMON_FLAGS "-Wall -Wtype-limits -Wignored-qualifiers -Winit-self -Wpointer-arith -Werror=format-security -Wno-vla -fno-strict-aliasing -fsigned-char -fno-omit-frame-pointer -fPIC")
 
 # sort out which allocator to use
 if(${ALLOCATOR} STREQUAL "jemalloc")
@@ -41,7 +41,7 @@ endif(${WITH_SQUEAKY_CLEAN_VALGRIND})
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${CLIKE_COMMON_FLAGS} -std=c11")
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CLIKE_COMMON_FLAGS} -std=c++11 -Wnon-virtual-dtor -Wno-invalid-offsetof -Wno-unused-private-field -Wno-mismatched-tags")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CLIKE_COMMON_FLAGS} -std=c++14 -Wnon-virtual-dtor -Wno-invalid-offsetof -Wno-unused-private-field -Wno-mismatched-tags")
 
 
 set(EXTRALIBS rt dl)
@@ -170,9 +170,7 @@ set(libcommon_files
   common/admin_socket_client.cc
   common/cmdparse.cc
   common/escape.c
-  common/Clock.cc
   common/Throttle.cc
-  common/Timer.cc
   common/Finisher.cc
   common/environment.cc
   common/sctp_crc32.c

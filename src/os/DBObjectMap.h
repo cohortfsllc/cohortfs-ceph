@@ -2,19 +2,19 @@
 #ifndef DBOBJECTMAP_DB_H
 #define DBOBJECTMAP_DB_H
 
-#include "include/buffer.h"
-#include <set>
+#include <condition_variable>
 #include <map>
+#include <mutex>
+#include <set>
 #include <string>
-
 #include <vector>
+
 #include <boost/scoped_ptr.hpp>
 
+#include "include/buffer.h"
 #include "ObjectMap.h"
 #include "KeyValueDB.h"
 #include "osd/osd_types.h"
-#include "common/Mutex.h"
-#include "common/Cond.h"
 
 /**
  * DBObjectMap: Implements ObjectMap in terms of KeyValueDB
@@ -58,9 +58,11 @@ public:
   /**
    * Serializes access to next_seq as well as the in_use set
    */
-  Mutex header_lock;
-  Cond header_cond;
-  Cond map_header_cond;
+  std::mutex header_lock;
+  typedef std::unique_lock<std::mutex> unique_lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  std::condition_variable header_cond;
+  std::condition_variable map_header_cond;
 
   /**
    * Set of headers currently in use
@@ -396,15 +398,15 @@ private:
    */
   Header _generate_new_header(const oid &obj, Header parent);
   Header generate_new_header(const oid &obj, Header parent) {
-    Mutex::Locker l(header_lock);
+    lock_guard l(header_lock);
     return _generate_new_header(obj, parent);
   }
 
-  /// Lookup leaf header for c obj
-  Header _lookup_map_header(const oid &obj);
+  /// Lookup leaf header for c oid
+  Header _lookup_map_header(const oid &obj, unique_lock& hl);
   Header lookup_map_header(const oid &obj) {
-    Mutex::Locker l(header_lock);
-    return _lookup_map_header(obj);
+    unique_lock hl(header_lock);
+    return _lookup_map_header(obj, hl);
   }
 
   /// Lookup header node for input
@@ -455,9 +457,9 @@ private:
     RemoveMapHeaderOnDelete(DBObjectMap *db, const oid &obj) :
       db(db), obj(obj) {}
     void operator() (_Header *header) {
-      Mutex::Locker l(db->header_lock);
+      lock_guard l(db->header_lock);
       db->map_header_in_use.erase(obj);
-      db->map_header_cond.Signal();
+      db->map_header_cond.notify_all();
       delete header;
     }
   };
@@ -473,9 +475,9 @@ private:
     RemoveOnDelete(DBObjectMap *db) :
       db(db) {}
     void operator() (_Header *header) {
-      Mutex::Locker l(db->header_lock);
+      lock_guard l(db->header_lock);
       db->in_use.erase(header->seq);
-      db->header_cond.Signal();
+      db->header_cond.notify_all();
       delete header;
     }
   };

@@ -20,13 +20,13 @@
 MDSUtility::MDSUtility() :
   Dispatcher(cct),
   objecter(NULL),
-  timer(cct, lock),
+  timer(lock),
   waiting_for_mds_map(NULL)
 {
   monc = new MonClient(cct);
   messenger = Messenger::create(cct, entity_name_t::CLIENT(), "mds", getpid());
   mdsmap = new MDSMap();
-  objecter = new Objecter(cct, messenger, monc, 0, 0);
+  objecter = new Objecter(cct, messenger, monc);
 }
 
 
@@ -68,29 +68,29 @@ int MDSUtility::init()
 
   // Initialize Objecter and wait for OSD map
   objecter->set_client_incarnation(0);
-  lock.Lock();
+  unique_lock l(lock);
   objecter->init();
-  lock.Unlock();
+  l.unlock();
   objecter->wait_for_osd_map();
   timer.init();
 
   // Prepare to receive MDS map and request it
-  Mutex init_lock;
-  Cond cond;
+  std::mutex init_lock;
+  std::condition_variable cond;
   bool done = false;
   assert(!mdsmap->get_epoch());
-  lock.Lock();
+  l.lock();
   waiting_for_mds_map = new C_SafeCond(&init_lock, &cond, &done, NULL);
-  lock.Unlock();
+  l.unlock();
   monc->sub_want("mdsmap", 0, CEPH_SUBSCRIBE_ONETIME);
   monc->renew_subs();
 
   // Wait for MDS map
   dout(4) << "waiting for MDS map..." << dendl;
-  init_lock.Lock();
+  unique_lock il(init_lock);
   while (!done)
-    cond.Wait(init_lock);
-  init_lock.Unlock();
+    cond.wait(il);
+  il.unlock();
   dout(4) << "Got MDS map " << mdsmap->get_epoch() << dendl;
 
   return 0;
@@ -99,10 +99,10 @@ int MDSUtility::init()
 
 void MDSUtility::shutdown()
 {
-  lock.Lock();
-  timer.shutdown();
+  unique_lock l(lock);
+  timer.shutdown(l);
   objecter->shutdown();
-  lock.Unlock();
+  l.unlock();
   monc->shutdown();
   messenger->shutdown();
   messenger->wait();
@@ -111,14 +111,14 @@ void MDSUtility::shutdown()
 
 bool MDSUtility::ms_dispatch(Message *m)
 {
-   Mutex::Locker locker(lock);
-   switch (m->get_type()) {
-   case CEPH_MSG_MDS_MAP:
-     handle_mds_map((MMDSMap*)m);
-     return true;
-     break;
-   }
-   return false;
+  unique_lock l(lock);
+  switch (m->get_type()) {
+  case CEPH_MSG_MDS_MAP:
+    handle_mds_map((MMDSMap*)m);
+    return true;
+    break;
+  }
+  return false;
 }
 
 
@@ -139,7 +139,7 @@ bool MDSUtility::ms_get_authorizer(int dest_type, AuthAuthorizer **authorizer,
     return true;
 
   if (force_new) {
-    if (monc->wait_auth_rotating(10) < 0)
+    if (monc->wait_auth_rotating(10s) < 0)
       return false;
   }
 

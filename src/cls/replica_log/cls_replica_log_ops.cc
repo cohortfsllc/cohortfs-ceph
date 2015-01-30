@@ -57,7 +57,7 @@ generate_test_instances(std::list<cls_replica_log_get_bounds_op*>& ls)
 void cls_replica_log_get_bounds_ret::dump(Formatter *f) const
 {
   f->dump_string("position_marker", position_marker);
-  oldest_time.gmtime(f->dump_stream("oldest_time"));
+  f->dump_stream("oldest_time") << oldest_time;
   encode_json("entity_markers", markers, f);
 }
 
@@ -72,7 +72,7 @@ generate_test_instances(std::list<cls_replica_log_get_bounds_ret*>& ls)
   for (i = samples.begin(); i != samples.end(); ++i) {
     ls.push_back(new cls_replica_log_get_bounds_ret());
     ls.back()->markers.push_back(*(*i));
-    ls.back()->oldest_time.set_from_double(1000*count);
+    ls.back()->oldest_time = ceph::real_time(count * 1000s);
     ls.back()->position_marker = ls.back()->markers.front().position_marker;
     samples_whole.push_back(*(*i));
   }

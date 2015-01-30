@@ -65,7 +65,7 @@ public:
   /// Returns next key
   virtual int get_next(
     const K &key,	///< [in] key after which to get next
-    pair<K, V> *next	///< [out] first key after key
+    std::pair<K, V> *next	///< [out] first key after key
     ) = 0; ///< @return 0 on success, -ENOENT if there is no next
 
   virtual ~StoreDriver() {}
@@ -83,7 +83,7 @@ private:
 
   SharedPtrRegistry<K, boost::optional<V> > in_progress;
   typedef typename SharedPtrRegistry<K, boost::optional<V> >::VPtr VPtr;
-  typedef ContainerContext<set<VPtr> > TransHolder;
+  typedef ContainerContext<std::set<VPtr> > TransHolder;
 
 public:
   MapCacher(StoreDriver<K, V> *driver) : driver(driver) {}
@@ -91,11 +91,11 @@ public:
   /// Fetch first key/value pair after specified key
   int get_next(
     K key,		 ///< [in] key after which to get next
-    pair<K, V> *next	 ///< [out] next key
+    std::pair<K, V> *next	 ///< [out] next key
     ) {
     while (true) {
-      pair<K, boost::optional<V> > cached;
-      pair<K, V> store;
+      std::pair<K, boost::optional<V> > cached;
+      std::pair<K, V> store;
       bool got_cached = in_progress.get_next(key, &cached);
 
       bool got_store = false;
@@ -131,11 +131,11 @@ public:
 
   /// Adds operation setting keys to Transaction
   void set_keys(
-    const map<K, V> &keys,  ///< [in] keys/values to set
+    const std::map<K, V> &keys,  ///< [in] keys/values to set
     Transaction<K, V> *t    ///< [out] transaction to use
     ) {
     std::set<VPtr> vptrs;
-    for (typename map<K, V>::const_iterator i = keys.begin();
+    for (typename std::map<K, V>::const_iterator i = keys.begin();
 	 i != keys.end();
 	 ++i) {
       VPtr ip = in_progress.lookup_or_create(i->first, i->second);
@@ -148,11 +148,11 @@ public:
 
   /// Adds operation removing keys to Transaction
   void remove_keys(
-    const set<K> &keys,	 ///< [in]
+    const std::set<K> &keys,	 ///< [in]
     Transaction<K, V> *t ///< [out] transaction to use
     ) {
     std::set<VPtr> vptrs;
-    for (typename set<K>::const_iterator i = keys.begin();
+    for (typename std::set<K>::const_iterator i = keys.begin();
 	 i != keys.end();
 	 ++i) {
       boost::optional<V> empty;
@@ -166,12 +166,12 @@ public:
 
   /// Gets keys, uses cached values for unstable keys
   int get_keys(
-    const set<K> &keys_to_get, ///< [in] set of keys to fetch
-    map<K, V> *got	       ///< [out] keys gotten
+    const std::set<K> &keys_to_get, ///< [in] set of keys to fetch
+    std::map<K, V> *got	       ///< [out] keys gotten
     ) {
-    set<K> to_get;
-    map<K, V> _got;
-    for (typename set<K>::const_iterator i = keys_to_get.begin();
+    std::set<K> to_get;
+    std::map<K, V> _got;
+    for (typename std::set<K>::const_iterator i = keys_to_get.begin();
 	 i != keys_to_get.end();
 	 ++i) {
       VPtr val = in_progress.lookup(*i);
@@ -186,7 +186,7 @@ public:
     int r = driver->get_keys(to_get, &_got);
     if (r < 0)
       return r;
-    for (typename map<K, V>::iterator i = _got.begin();
+    for (typename std::map<K, V>::iterator i = _got.begin();
 	 i != _got.end();
 	 ++i) {
       got->insert(*i);

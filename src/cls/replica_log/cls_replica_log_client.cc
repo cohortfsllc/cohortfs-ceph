@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
  *
@@ -14,27 +16,26 @@
 
 using namespace librados;
 
-void cls_replica_log_prepare_marker(cls_replica_log_progress_marker& progress,
-				    const string& entity, const string& marker,
-				    const utime_t& time,
-				    const list<pair<string, utime_t> > *entries)
+void cls_replica_log_prepare_marker(
+    cls_replica_log_progress_marker& progress, const string& entity,
+    const string& marker, const ceph::real_time& time,
+    const list<pair<string, ceph::real_time> > *entries)
 {
   progress.entity_id = entity;
   progress.position_marker = marker;
   progress.position_time = time;
   if (entries) {
-    list<pair<string, utime_t> >::const_iterator i;
-    for (i = entries->begin(); i != entries->end(); ++i) {
-      cls_replica_log_item_marker item(i->first, i->second);
+    for (const auto& i : *entries) {
+      cls_replica_log_item_marker item(i.first, i.second);
       progress.items.push_back(item);
     }
   }
 }
 
-void cls_replica_log_extract_marker(const cls_replica_log_progress_marker& progress,
-				    string& entity, string& marker,
-				    utime_t& time,
-				    list<pair<string, utime_t> >& entries)
+void cls_replica_log_extract_marker(
+  const cls_replica_log_progress_marker& progress,
+  string& entity, string& marker, ceph::real_time& time,
+  list<pair<string, ceph::real_time> >& entries)
 {
   entity = progress.entity_id;
   marker = progress.position_marker;
@@ -64,9 +65,9 @@ void cls_replica_log_delete_bound(librados::ObjectWriteOperation& o,
 }
 
 int cls_replica_log_get_bounds(librados::IoCtx& io_ctx, const string& oid,
-				string& position_marker,
-				utime_t& oldest_time,
-				list<cls_replica_log_progress_marker>& markers)
+			       string& position_marker,
+			       ceph::real_time& oldest_time,
+			       list<cls_replica_log_progress_marker>& markers)
 {
   bufferlist in;
   bufferlist out;

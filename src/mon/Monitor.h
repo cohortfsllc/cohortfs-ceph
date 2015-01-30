@@ -23,6 +23,7 @@
 #ifndef CEPH_MONITOR_H
 #define CEPH_MONITOR_H
 
+#include <mutex>
 #include "include/types.h"
 #include "msg/Messenger.h"
 
@@ -84,8 +85,10 @@ public:
   int rank;
   Messenger *messenger, *xmsgr;
   ConnectionRef con_self;
-  Mutex lock;
-  SafeTimer timer;
+  std::mutex lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
+  SafeTimer<ceph::real_clock> timer;
 
   /// true if we have ever joined a quorum.  if false, we are either a
   /// new cluster, a newly joining monitor, or a just-upgraded
@@ -153,7 +156,7 @@ public:
   bool is_leader() const { return state == STATE_LEADER; }
   bool is_peon() const { return state == STATE_PEON; }
 
-  const utime_t &get_leader_since() const;
+  const ceph::mono_time &get_leader_since() const;
 
   // -- elector --
 private:
@@ -166,8 +169,9 @@ private:
 
   int leader;		 // current leader (to best of knowledge)
   set<int> quorum;	 // current active set of monitors (if !starting)
-  utime_t leader_since;	 // when this monitor became the leader, if it is the leader
-  utime_t exited_quorum; // time detected as not in quorum; 0 if in
+  ceph::mono_time leader_since;	 // when this monitor became the
+				 // leader, if it is the leader
+  ceph::mono_time exited_quorum; // time detected as not in quorum; 0 if in
   uint64_t quorum_features;  ///< intersection of quorum member feature bits
   bufferlist supported_commands_bl; // encoded MonCommands we support
 
@@ -201,7 +205,7 @@ private:
   struct SyncProvider {
     entity_inst_t entity;  ///< who
     uint64_t cookie;	   ///< unique cookie for this sync attempt
-    utime_t timeout;	   ///< when we give up and expire this attempt
+    ceph::mono_time timeout; ///< when we give up and expire this attempt
     version_t last_committed; ///< last paxos version on peer
     pair<string,string> last_key; ///< last key sent to (or on) peer
     bool full;		   ///< full scan?
@@ -209,8 +213,8 @@ private:
 
     SyncProvider() : cookie(0), last_committed(0), full(false) {}
 
-    void reset_timeout(CephContext *cct, int grace) {
-      timeout = ceph_clock_now(cct);
+    void reset_timeout(ceph::timespan grace) {
+      timeout = ceph::mono_clock::now();
       timeout += grace;
     }
   };
@@ -397,14 +401,14 @@ private:
    *  - Once all the quorum members have pong'ed, the leader will share the
    *	clock skew and latency maps with all the monitors in the quorum.
    */
-  map<entity_inst_t, utime_t> timecheck_waiting;
-  map<entity_inst_t, double> timecheck_skews;
-  map<entity_inst_t, double> timecheck_latencies;
+  map<entity_inst_t, ceph::real_time> timecheck_waiting;
+  map<entity_inst_t, ceph::signedspan> timecheck_skews;
+  map<entity_inst_t, ceph::timespan> timecheck_latencies;
   // odd value means we are mid-round; even value means the round has
   // finished.
   version_t timecheck_round;
   unsigned int timecheck_acks;
-  utime_t timecheck_round_start;
+  ceph::mono_time timecheck_round_start;
   /**
    * Time Check event.
    */
@@ -427,8 +431,8 @@ private:
   void timecheck_report();
   void timecheck();
   health_status_t timecheck_status(ostringstream &ss,
-				   const double skew_bound,
-				   const double latency);
+				   const ceph::signedspan& skew_bound,
+				   const ceph::timespan& latency);
   void handle_timecheck_leader(MTimeCheck *m);
   void handle_timecheck_peon(MTimeCheck *m);
   void handle_timecheck(MTimeCheck *m);
@@ -445,7 +449,7 @@ private:
     uint64_t kb_used;
     uint64_t kb_avail;
     unsigned int latest_avail_ratio;
-    utime_t last_update;
+    ceph::real_time last_update;
   };
 
   struct MonStats {
@@ -687,9 +691,9 @@ public:
   //on forwarded messages, so we create a non-locking version for this class
   bool _ms_dispatch(Message *m);
   bool ms_dispatch(Message *m) {
-    lock.Lock();
+    unique_lock l(lock);
     bool ret = _ms_dispatch(m);
-    lock.Unlock();
+    l.unlock();
     return ret;
   }
   // dissociate message handling from session and connection logic

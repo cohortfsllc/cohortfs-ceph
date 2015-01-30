@@ -80,9 +80,10 @@ public:
     int32_t pending;
     ceph_seq_t seq;
     ceph_seq_t mseq;
-    utime_t last_issue_stamp;
+    ceph::real_time last_issue_stamp;
     Export() {}
-    Export(int64_t id, int w, int i, int p, ceph_seq_t s, ceph_seq_t m, utime_t lis) :
+    Export(int64_t id, int w, int i, int p, ceph_seq_t s, ceph_seq_t m,
+	   ceph::real_time lis) :
       cap_id(id), wanted(w), issued(i), pending(p),
       seq(s), mseq(m), last_issue_stamp(lis) {}
     void encode(bufferlist &bl) const;
@@ -109,7 +110,7 @@ private:
 
   uint32_t _wanted;	// what the client wants (ideally)
 
-  utime_t last_issue_stamp;
+  ceph::real_time last_issue_stamp;
 
 
   // track in-flight caps --------------
@@ -247,10 +248,10 @@ public:
   void inc_mseq() { mseq++; }
 
   ceph_seq_t get_last_sent() { return last_sent; }
-  utime_t get_last_issue_stamp() { return last_issue_stamp; }
+  const ceph::real_time& get_last_issue_stamp() { return last_issue_stamp; }
 
   void set_last_issue() { last_issue = last_sent; }
-  void set_last_issue_stamp(utime_t t) { last_issue_stamp = t; }
+  void set_last_issue_stamp(ceph::real_time t) { last_issue_stamp = t; }
 
   void set_cap_id(uint64_t i) { cap_id = i; }
   uint64_t get_cap_id() { return cap_id; }

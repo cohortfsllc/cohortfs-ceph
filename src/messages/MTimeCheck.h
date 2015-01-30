@@ -28,9 +28,9 @@ struct MTimeCheck : public Message
   version_t epoch;
   version_t round;
 
-  utime_t timestamp;
-  map<entity_inst_t, double> skews;
-  map<entity_inst_t, double> latencies;
+  ceph::real_time timestamp;
+  map<entity_inst_t, ceph::signedspan> skews;
+  map<entity_inst_t, ceph::timespan> latencies;
 
   MTimeCheck() : Message(MSG_TIMECHECK, HEAD_VERSION) { }
   MTimeCheck(int op) :

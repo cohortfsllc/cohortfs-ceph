@@ -69,7 +69,7 @@ void MDSMap::mds_info_t::dump(Formatter *f) const
   f->dump_stream("state") << ceph_mds_state_name(state);
   f->dump_int("state_seq", state_seq);
   f->dump_stream("addr") << addr;
-  if (laggy_since != utime_t())
+  if (laggy_since != ceph::real_time::min())
     f->dump_stream("laggy_since") << laggy_since;
 
   f->dump_int("standby_for_rank", standby_for_rank);

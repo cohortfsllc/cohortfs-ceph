@@ -29,9 +29,6 @@
 #include <set>
 #include <map>
 #include <string>
-using namespace std;
-
-
 #include "CInode.h"
 
 class CDentry;
@@ -254,7 +251,7 @@ protected:
   dirfrag_load_vec_t pop_auth_subtree;
   dirfrag_load_vec_t pop_auth_subtree_nested;
 
-  utime_t last_popularity_sample;
+  ceph::mono_time last_popularity_sample;
 
   load_spread_t pop_spread;
 
@@ -524,11 +521,12 @@ public:
 
   // -- import/export --
   void encode_export(bufferlist& bl);
-  void finish_export(utime_t now);
+  void finish_export(ceph::real_time now);
   void abort_export() {
     put(PIN_TEMPEXPORTING);
   }
-  void decode_import(bufferlist::iterator& blp, utime_t now, LogSegment *ls);
+  void decode_import(bufferlist::iterator& blp, ceph::real_time now,
+		     LogSegment *ls);
 
 
   // -- auth pins --

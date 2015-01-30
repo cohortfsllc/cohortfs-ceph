@@ -22,9 +22,9 @@ class ScatterLock : public SimpleLock {
 
   struct more_bits_t {
     int state_flags;
-    utime_t last_scatter;
+    ceph::mono_time last_scatter;
     xlist<ScatterLock*>::item item_updated;
-    utime_t update_stamp;
+    ceph::mono_time update_stamp;
 
     more_bits_t(ScatterLock *lock) :
       state_flags(0),
@@ -98,11 +98,11 @@ public:
 
   xlist<ScatterLock*>::item *get_updated_item() { return &more()->item_updated; }
 
-  utime_t get_update_stamp() {
+  ceph::mono_time get_update_stamp() {
     return more()->update_stamp;
   }
 
-  void set_update_stamp(utime_t t) { more()->update_stamp = t; }
+  void set_update_stamp(ceph::mono_time t) { more()->update_stamp = t; }
 
   void set_scatter_wanted() {
     more()->state_flags |= SCATTER_WANTED;
@@ -174,8 +174,8 @@ public:
     }
   }
 
-  void set_last_scatter(utime_t t) { more()->last_scatter = t; }
-  utime_t get_last_scatter() {
+  void set_last_scatter(ceph::mono_time t) { more()->last_scatter = t; }
+  ceph::mono_time get_last_scatter() {
     return more()->last_scatter;
   }
 

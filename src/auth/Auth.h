@@ -87,18 +87,19 @@ struct AuthTicket {
   EntityName name;
   uint64_t global_id; /* global instance id */
   uint64_t auid;
-  utime_t created, renew_after, expires;
+  ceph::real_time created, renew_after, expires;
   AuthCapsInfo caps;
   uint32_t flags;
 
   AuthTicket() : global_id(0), auid(CEPH_AUTH_UID_DEFAULT), flags(0){}
 
-  void init_timestamps(utime_t now, double ttl) {
+  void init_timestamps(ceph::real_time now,
+		       ceph::timespan ttl) {
     created = now;
     expires = now;
     expires += ttl;
     renew_after = now;
-    renew_after += ttl / 2.0;
+    renew_after += ttl / 2;
   }
 
   void encode(bufferlist& bl) const {
@@ -150,7 +151,7 @@ struct AuthAuthorizer {
 
 struct ExpiringCryptoKey {
   CryptoKey key;
-  utime_t expiration;
+  ceph::real_time expiration;
 
   void encode(bufferlist& bl) const {
     uint8_t struct_v = 1;
@@ -170,7 +171,8 @@ WRITE_CLASS_ENCODER(ExpiringCryptoKey);
 static inline std::ostream& operator<<(std::ostream& out,
 				       const ExpiringCryptoKey& c)
 {
-  return out << c.key << " expires " << c.expiration;
+  return out << c.key << " expires "
+	     << c.expiration;
 }
 
 struct RotatingSecrets {
@@ -202,7 +204,7 @@ struct RotatingSecrets {
   bool need_new_secrets() const {
     return secrets.size() < KEY_ROTATE_NUM;
   }
-  bool need_new_secrets(utime_t now) const {
+  bool need_new_secrets(ceph::real_time now) const {
     return secrets.size() < KEY_ROTATE_NUM || current().expiration <= now;
   }
 

@@ -18,7 +18,6 @@
 
 #include "include/types.h"
 #include "common/entity_name.h"
-#include "common/Clock.h"
 #include "common/signal.h"
 #include "common/ceph_argparse.h"
 #include "common/errno.h"
@@ -82,15 +81,17 @@
 // cons/des
 MDS::MDS(const std::string &n, Messenger *m, MonClient *mc) :
   Dispatcher(m->cct),
-  timer(m->cct, mds_lock),
-  authorize_handler_cluster_registry(new AuthAuthorizeHandlerRegistry(m->cct,
-								      m->cct->_conf->auth_supported.length() ?
-								      m->cct->_conf->auth_supported :
-								      m->cct->_conf->auth_cluster_required)),
-  authorize_handler_service_registry(new AuthAuthorizeHandlerRegistry(m->cct,
-								      m->cct->_conf->auth_supported.length() ?
-								      m->cct->_conf->auth_supported :
-								      m->cct->_conf->auth_service_required)),
+  timer(mds_lock),
+  authorize_handler_cluster_registry(new AuthAuthorizeHandlerRegistry(
+				       m->cct,
+				       m->cct->_conf->auth_supported.length() ?
+				       m->cct->_conf->auth_supported :
+				       m->cct->_conf->auth_cluster_required)),
+  authorize_handler_service_registry(new AuthAuthorizeHandlerRegistry(
+				       m->cct,
+				       m->cct->_conf->auth_supported.length() ?
+				       m->cct->_conf->auth_supported :
+				       m->cct->_conf->auth_service_required)),
   name(n),
   whoami(-1), incarnation(0),
   standby_for_rank(MDSMap::MDS_NO_STANDBY_PREF),
@@ -111,7 +112,7 @@ MDS::MDS(const std::string &n, Messenger *m, MonClient *mc) :
 
   mdsmap = new MDSMap;
 
-  objecter = new Objecter(m->cct, messenger, monc, 0, 0);
+  objecter = new Objecter(m->cct, messenger, monc);
   objecter->unset_honor_osdmap_full();
 
   mdcache = new MDCache(this);
@@ -144,7 +145,7 @@ MDS::MDS(const std::string &n, Messenger *m, MonClient *mc) :
 }
 
 MDS::~MDS() {
-  Mutex::Locker lock(mds_lock);
+  lock_guard lock(mds_lock);
 
   delete authorize_handler_service_registry;
   delete authorize_handler_cluster_registry;
@@ -343,27 +344,26 @@ int MDS::init(int wanted_state)
   // tell monc about log_client so it will know about mon session resets
   monc->set_log_client(&clog);
 
+  unique_lock ml(mds_lock, std::defer_lock);
   int r = monc->authenticate();
   if (r < 0) {
     derr << "ERROR: failed to authenticate: " << cpp_strerror(-r) << dendl;
-    mds_lock.Lock();
-    suicide();
-    mds_lock.Unlock();
+    suicide(ml);
     return r;
   }
-  while (monc->wait_auth_rotating(30.0) < 0) {
+  while (monc->wait_auth_rotating(30s) < 0) {
     derr << "unable to obtain rotating service keys; retrying" << dendl;
   }
-  mds_lock.Lock();
+  ml.lock();
   if (want_state == CEPH_MDS_STATE_DNE) {
-    mds_lock.Unlock();
+    ml.unlock();
     return 0;
   }
 
   monc->sub_want("mdsmap", 0, 0);
   monc->renew_subs();
 
-  mds_lock.Unlock();
+  ml.unlock();
 
   objecter->start();
 
@@ -372,9 +372,10 @@ int MDS::init(int wanted_state)
     int num_osds;
     objecter->maybe_request_map();
     objecter->wait_for_osd_map();
-    const OSDMap* osdmap = objecter->get_osdmap_read();
+    Objecter::shared_lock l;
+    const OSDMap* osdmap = objecter->get_osdmap_read(l);
     num_osds = osdmap->get_num_up_osds();
-    objecter->put_osdmap_read();
+    l.unlock();
     if (num_osds > 0) {
 	break;
     } else {
@@ -385,11 +386,11 @@ int MDS::init(int wanted_state)
     sleep(10);
   }
 
-  mds_lock.Lock();
   if (want_state == CEPH_MDS_STATE_DNE) {
-    suicide();	// we could do something more graceful here
+    suicide(ml); // we could do something more graceful here
   }
 
+  ml.lock();
   timer.init();
 
   if (wanted_state==MDSMap::STATE_BOOT && cct->_conf->mds_standby_replay)
@@ -400,12 +401,12 @@ int MDS::init(int wanted_state)
       wanted_state==MDSMap::STATE_ONESHOT_REPLAY) {
     cct->_conf->set_val_or_die("mds_standby_replay", "true");
     cct->_conf->apply_changes(NULL);
-    if ( wanted_state == MDSMap::STATE_ONESHOT_REPLAY &&
+    if (wanted_state == MDSMap::STATE_ONESHOT_REPLAY &&
 	(cct->_conf->mds_standby_for_rank == -1) &&
 	cct->_conf->mds_standby_for_name.empty()) {
       // uh-oh, must specify one or the other!
       dout(0) << "Specified oneshot replay mode but not an MDS!" << dendl;
-      suicide();
+      suicide(ml);
     }
     want_state = MDSMap::STATE_BOOT;
     standby_type = wanted_state;
@@ -430,7 +431,7 @@ int MDS::init(int wanted_state)
   // schedule tick
   reset_tick();
 
-  mds_lock.Unlock();
+  ml.unlock();
 
   return 0;
 }
@@ -442,7 +443,8 @@ void MDS::reset_tick()
 
   // schedule
   tick_event = new C_MDS_Tick(this);
-  timer.add_event_after(cct->_conf->mds_tick_interval, tick_event);
+  timer.add_event_after(
+    ceph::span_from_double(cct->_conf->mds_tick_interval), tick_event);
 }
 
 void MDS::tick()
@@ -468,7 +470,7 @@ void MDS::tick()
   }
 
   // log
-  utime_t now = ceph_clock_now(cct);
+  ceph::real_time now = ceph::real_clock::now();
   mds_load_t load = balancer->get_load(now);
 
 
@@ -509,9 +511,10 @@ void MDS::beacon_send()
 	   << " (currently " << ceph_mds_state_name(state) << ")"
 	   << dendl;
 
-  beacon_seq_stamp[beacon_last_seq] = ceph_clock_now(cct);
+  beacon_seq_stamp[beacon_last_seq] = ceph::mono_clock::now();
 
-  MMDSBeacon *beacon = new MMDSBeacon(monc->get_fsid(), monc->get_global_id(), name, mdsmap->get_epoch(),
+  MMDSBeacon *beacon = new MMDSBeacon(monc->get_fsid(), monc->get_global_id(),
+				      name, mdsmap->get_epoch(),
 				      want_state, beacon_last_seq);
   beacon->set_standby_for_rank(standby_for_rank);
   beacon->set_standby_for_name(standby_for_name);
@@ -526,22 +529,22 @@ void MDS::beacon_send()
   // schedule next sender
   if (beacon_sender) timer.cancel_event(beacon_sender);
   beacon_sender = new C_MDS_BeaconSender(this);
-  timer.add_event_after(cct->_conf->mds_beacon_interval, beacon_sender);
+  timer.add_event_after(ceph::span_from_double(
+			  cct->_conf->mds_beacon_interval), beacon_sender);
 }
 
 
 bool MDS::is_laggy()
 {
-  if (beacon_last_acked_stamp == utime_t())
+  if (beacon_last_acked_stamp == ceph::mono_time::min())
     return false;
 
-  utime_t now = ceph_clock_now(cct);
-  utime_t since = now - beacon_last_acked_stamp;
-  if (since > cct->_conf->mds_beacon_grace) {
+  ceph::timespan since = ceph::mono_clock::now() - beacon_last_acked_stamp;
+  if (since > ceph::span_from_double(cct->_conf->mds_beacon_grace)) {
     dout(5) << "is_laggy " << since << " > " << cct->_conf->mds_beacon_grace
 	    << " since last acked beacon" << dendl;
     was_laggy = true;
-    if (since > (cct->_conf->mds_beacon_grace*2)) {
+    if (since > (ceph::span_from_double(cct->_conf->mds_beacon_grace*2))) {
       // maybe it's not us?
       dout(5) << "initiating monitor reconnect; maybe we're not the slow one"
 	      << dendl;
@@ -562,14 +565,15 @@ void MDS::handle_mds_beacon(MMDSBeacon *m)
   if (beacon_seq_stamp.count(seq)) {
     assert(beacon_seq_stamp[seq] > beacon_last_acked_stamp);
     beacon_last_acked_stamp = beacon_seq_stamp[seq];
-    utime_t now = ceph_clock_now(cct);
-    utime_t rtt = now - beacon_last_acked_stamp;
+    ceph::mono_time now = ceph::mono_clock::now();
+    ceph::timespan rtt = now - beacon_last_acked_stamp;
 
     dout(10) << "handle_mds_beacon " << ceph_mds_state_name(m->get_state())
 	     << " seq " << m->get_seq()
 	     << " rtt " << rtt << dendl;
 
-    if (was_laggy && rtt < cct->_conf->mds_beacon_grace) {
+    if (was_laggy && rtt < ceph::span_from_double(
+	  cct->_conf->mds_beacon_grace)) {
       dout(0) << "handle_mds_beacon no longer laggy" << dendl;
       was_laggy = false;
       laggy_until = now;
@@ -592,7 +596,7 @@ void MDS::request_osdmap(Context *c) {
 }
 
 /* This function DOES put the passed message before returning*/
-void MDS::handle_command(MMonCommand *m)
+void MDS::handle_command(MMonCommand *m, unique_lock& ml)
 {
   dout(10) << "handle_command args: " << m->cmd << dendl;
   if (m->cmd[0] == "injectargs") {
@@ -601,9 +605,9 @@ void MDS::handle_command(MMonCommand *m)
     }
     else {
       std::ostringstream oss;
-      mds_lock.Unlock();
+      ml.unlock();
       cct->_conf->injectargs(m->cmd[1], &oss);
-      mds_lock.Lock();
+      ml.lock();
       derr << "injectargs:" << dendl;
       derr << oss.str() << dendl;
     }
@@ -615,10 +619,10 @@ void MDS::handle_command(MMonCommand *m)
       mdcache->dump_cache();
   }
   else if (m->cmd[0] == "exit") {
-    suicide();
+    suicide(ml);
   }
   else if (m->cmd[0] == "respawn") {
-    respawn();
+    respawn(ml);
   }
   else if (m->cmd[0] == "session" && m->cmd[1] == "kill") {
     Session *session = sessionmap.get_session(entity_name_t(CEPH_ENTITY_TYPE_CLIENT,
@@ -709,7 +713,7 @@ void MDS::handle_command(MMonCommand *m)
 }
 
 /* This function deletes the passed message before returning. */
-void MDS::handle_mds_map(MMDSMap *m)
+void MDS::handle_mds_map(MMDSMap *m, MDS::unique_lock& ml)
 {
   version_t epoch = m->get_epoch();
   dout(5) << "handle_mds_map epoch " << epoch << " from " << m->get_source() << dendl;
@@ -751,7 +755,7 @@ void MDS::handle_mds_map(MMDSMap *m)
     dout(0) << "handle_mds_map mdsmap compatset " << mdsmap->compat
 	    << " not writeable with daemon features " << mdsmap_compat
 	    << ", killing myself" << dendl;
-    suicide();
+    suicide(ml);
     goto out;
   }
 
@@ -816,7 +820,7 @@ void MDS::handle_mds_map(MMDSMap *m)
 	      dout(1) << "handle_mds_map i (" << addr
 		      << ") dne in the mdsmap, new instance has larger gid " << i.global_id
 		      << ", suicide" << dendl;
-	      suicide();
+	      suicide(ml);
 	      goto out;
 	    }
 	  }
@@ -824,7 +828,7 @@ void MDS::handle_mds_map(MMDSMap *m)
 
 	dout(1) << "handle_mds_map i (" << addr
 	    << ") dne in the mdsmap, respawning myself" << dendl;
-	respawn();
+	respawn(ml);
       }
       goto out;
     }
@@ -873,7 +877,7 @@ void MDS::handle_mds_map(MMDSMap *m)
       if (is_active()) {
 	active_start();
       } else if (is_any_replay()) {
-	replay_start();
+	replay_start(ml);
       } else if (is_resolve()) {
 	resolve_start();
       } else if (is_reconnect()) {
@@ -885,10 +889,10 @@ void MDS::handle_mds_map(MMDSMap *m)
       } else if (is_creating()) {
 	boot_create();
       } else if (is_starting()) {
-	boot_start();
+	boot_start(ml);
       } else if (is_stopping()) {
 	assert(oldstate == MDSMap::STATE_ACTIVE);
-	stopping_start();
+	stopping_start(ml);
       }
     }
   }
@@ -1094,20 +1098,23 @@ class C_MDS_BootStart : public Context {
   int nextstep;
 public:
   C_MDS_BootStart(MDS *m, int n) : mds(m), nextstep(n) {}
-  void finish(int r) { mds->boot_start(nextstep, r); }
+  void finish(int r) {
+    MDS::unique_lock ml(mds->mds_lock, std::defer_lock);
+    mds->boot_start(ml, nextstep, r);
+  }
 };
 
-void MDS::boot_start(int step, int r)
+void MDS::boot_start(unique_lock& ml, int step, int r)
 {
   VolumeRef v = get_metadata_volume();
   if (r < 0) {
     if (is_standby_replay() && (r == -EAGAIN)) {
       dout(0) << "boot_start encountered an error EAGAIN"
 	      << ", respawning since we fell behind journal" << dendl;
-      respawn();
+      respawn(ml);
     } else {
       dout(0) << "boot_start encountered an error, failing" << dendl;
-      suicide();
+      suicide(ml);
       return;
     }
   }
@@ -1173,7 +1180,7 @@ void MDS::boot_start(int step, int r)
 
   case 4:
     if (is_any_replay()) {
-      replay_done();
+      replay_done(ml);
       break;
     }
     step++;
@@ -1208,7 +1215,7 @@ void MDS::calc_recovery_set()
 }
 
 
-void MDS::replay_start()
+void MDS::replay_start(unique_lock& ml)
 {
   dout(1) << "replay_start" << dendl;
   Context *c;
@@ -1220,20 +1227,21 @@ void MDS::replay_start()
 
   calc_recovery_set();
 
-  const OSDMap* osdmap = objecter->get_osdmap_read();
+  Objecter::shared_lock l;
+  const OSDMap* osdmap = objecter->get_osdmap_read(l);
   dout(1) << " need osdmap epoch " << mdsmap->get_last_failure_osd_epoch()
 	  <<", have " << osdmap->get_epoch()
 	  << dendl;
 
   // start?
   if (osdmap->get_epoch() >= mdsmap->get_last_failure_osd_epoch()) {
-    boot_start();
-    objecter->put_osdmap_read();
+    boot_start(ml);
+    l.unlock();
     osdmap = nullptr;
   } else {
     dout(1) << " waiting for osdmap " << mdsmap->get_last_failure_osd_epoch()
 	    << " (which blacklists prior instance)" << dendl;
-    objecter->put_osdmap_read();
+    l.unlock();
     osdmap = nullptr;
     c = new C_OnFinisher(new C_MDS_BootStart(this, 0), &finisher);
     if (objecter->wait_for_map(mdsmap->get_last_failure_osd_epoch(), c)) {
@@ -1251,19 +1259,21 @@ public:
   C_MDS_StandbyReplayRestartFinish(MDS *mds_, uint64_t old_read_pos_) :
     mds(mds_), old_read_pos(old_read_pos_) {}
   void finish(int r) {
-    mds->_standby_replay_restart_finish(r, old_read_pos);
+    MDS::unique_lock ml(mds->mds_lock);
+    mds->_standby_replay_restart_finish(ml, r, old_read_pos);
   }
 };
 
-void MDS::_standby_replay_restart_finish(int r, uint64_t old_read_pos)
+void MDS::_standby_replay_restart_finish(unique_lock& ml, int r,
+					 uint64_t old_read_pos)
 {
   if (old_read_pos < mdlog->get_journaler()->get_trimmed_pos()) {
     dout(0) << "standby MDS fell behind active MDS journal's expire_pos, restarting" << dendl;
-    respawn(); /* we're too far back, and this is easier than
-		  trying to reset everything in the cache, etc */
+    respawn(ml); /* we're too far back, and this is easier than
+		    trying to reset everything in the cache, etc */
   } else {
     mdlog->standby_trim_segments();
-    boot_start(3, r);
+    boot_start(ml, 3, r);
   }
 }
 
@@ -1296,20 +1306,21 @@ public:
   }
 };
 
-void MDS::replay_done()
+void MDS::replay_done(unique_lock& ml)
 {
   dout(1) << "replay_done" << (standby_replaying ? " (as standby)" : "") << dendl;
 
   if (is_oneshot_replay()) {
     dout(2) << "hack.  journal looks ok.  shutting down." << dendl;
-    suicide();
+    suicide(ml);
     return;
   }
 
   if (is_standby_replay()) {
     dout(10) << "setting replay timer" << dendl;
-    timer.add_event_after(cct->_conf->mds_replay_interval,
-			  new C_MDS_StandbyReplayRestart(this));
+    timer.add_event_after(
+      ceph::span_from_double(cct->_conf->mds_replay_interval),
+      new C_MDS_StandbyReplayRestart(this));
     return;
   }
 
@@ -1499,7 +1510,7 @@ void MDS::handle_mds_failure(int who)
   anchorclient->handle_mds_failure(who);
 }
 
-void MDS::stopping_start()
+void MDS::stopping_start(unique_lock& ml)
 {
   dout(2) << "stopping_start" << dendl;
 
@@ -1507,7 +1518,7 @@ void MDS::stopping_start()
     // we're the only mds up!
     dout(0) << "we are the last MDS, and have mounted clients: we cannot" <<
       "flush our journal.  suicide!" << dendl;
-    suicide();
+    suicide(ml);
   }
 
   mdcache->shutdown_start();
@@ -1525,14 +1536,13 @@ void MDS::handle_signal(int signum)
 {
   assert(signum == SIGINT || signum == SIGTERM);
   derr << "*** got signal " << sys_siglist[signum] << " ***" << dendl;
-  mds_lock.Lock();
-  suicide();
-  mds_lock.Unlock();
+  unique_lock ml(mds_lock, std::defer_lock);
+  suicide(ml);
+  ml.unlock();
 }
 
-void MDS::suicide()
+void MDS::suicide(unique_lock& ml)
 {
-  assert(mds_lock.is_locked());
   want_state = CEPH_MDS_STATE_DNE; // whatever.
 
   dout(1) << "suicide.	wanted " << ceph_mds_state_name(want_state)
@@ -1551,7 +1561,14 @@ void MDS::suicide()
   }
   timer.cancel_all_events();
   //timer.join();
-  timer.shutdown();
+  bool unlock = false;
+  if (!ml) {
+    unlock = true;
+    ml.lock();
+  }
+  timer.shutdown(ml);
+  if (unlock)
+    ml.unlock();
 
   // shut down cache
   mdcache->shutdown();
@@ -1565,7 +1582,7 @@ void MDS::suicide()
   messenger->shutdown();
 }
 
-void MDS::respawn()
+void MDS::respawn(unique_lock& ml)
 {
   dout(1) << "respawn" << dendl;
 
@@ -1602,7 +1619,7 @@ void MDS::respawn()
 
   dout(0) << "respawn execv " << orig_argv[0]
 	  << " failed with " << cpp_strerror(errno) << dendl;
-  suicide();
+  suicide(ml);
 }
 
 
@@ -1611,17 +1628,18 @@ void MDS::respawn()
 bool MDS::ms_dispatch(Message *m)
 {
   bool ret;
-  mds_lock.Lock();
+  unique_lock ml(mds_lock);
   if (want_state == CEPH_MDS_STATE_DNE) {
     dout(10) << " stopping, discarding " << *m << dendl;
     m->put();
     ret = true;
   } else {
     inc_dispatch_depth();
-    ret = _dispatch(m);
+    ret = _dispatch(m, ml);
+    assert(ml);
     dec_dispatch_depth();
   }
-  mds_lock.Unlock();
+  ml.unlock();
   return ret;
 }
 
@@ -1634,7 +1652,7 @@ bool MDS::ms_get_authorizer(int dest_type, AuthAuthorizer **authorizer, bool for
     return true;
 
   if (force_new) {
-    if (monc->wait_auth_rotating(10) < 0)
+    if (monc->wait_auth_rotating(10s) < 0)
       return false;
   }
 
@@ -1657,7 +1675,7 @@ do { \
 /*
  * high priority messages we always process
  */
-bool MDS::handle_core_message(Message *m)
+bool MDS::handle_core_message(Message *m, unique_lock& ml)
 {
   switch (m->get_type()) {
   case CEPH_MSG_MON_MAP:
@@ -1668,7 +1686,7 @@ bool MDS::handle_core_message(Message *m)
     // MDS
   case CEPH_MSG_MDS_MAP:
     ALLOW_MESSAGES_FROM(CEPH_ENTITY_TYPE_MON | CEPH_ENTITY_TYPE_MDS);
-    handle_mds_map(static_cast<MMDSMap*>(m));
+    handle_mds_map(static_cast<MMDSMap*>(m), ml);
     return true;
     break;
   case MSG_MDS_BEACON:
@@ -1680,7 +1698,7 @@ bool MDS::handle_core_message(Message *m)
     // misc
   case MSG_MON_COMMAND:
     ALLOW_MESSAGES_FROM(CEPH_ENTITY_TYPE_MON);
-    handle_command(static_cast<MMonCommand*>(m));
+    handle_command(static_cast<MMonCommand*>(m), ml);
     return true;
     break;
   }
@@ -1788,15 +1806,16 @@ bool MDS::is_stale_message(Message *m)
 
 /* If this function returns true, it has put the message. If it returns false,
  * it has not put the message. */
-bool MDS::_dispatch(Message *m)
+bool MDS::_dispatch(Message *m, unique_lock& ml)
 {
+  assert(ml);
   if (is_stale_message(m)) {
     m->put();
     return true;
   }
 
   // core
-  if (!handle_core_message(m)) {
+  if (!handle_core_message(m, ml)) {
     if (is_laggy()) {
       dout(10) << " laggy, deferring " << *m << dendl;
       waiting_for_nolaggy.push_back(m);
@@ -1824,8 +1843,8 @@ bool MDS::_dispatch(Message *m)
       ls.pop_front();
 
       // give other threads (beacon!) a chance
-      mds_lock.Unlock();
-      mds_lock.Lock();
+      ml.unlock();
+      ml.lock();
     }
   }
 
@@ -1846,8 +1865,8 @@ bool MDS::_dispatch(Message *m)
     }
 
     // give other threads (beacon!) a chance
-    mds_lock.Unlock();
-    mds_lock.Lock();
+    ml.unlock();
+    ml.lock();
   }
 
   // done with all client replayed requests?
@@ -1862,13 +1881,10 @@ bool MDS::_dispatch(Message *m)
   }
 
   // hack: thrash exports
-  static utime_t start;
-  utime_t now = ceph_clock_now(cct);
-  if (start == utime_t())
+  static ceph::mono_time start = ceph::mono_time::min();
+  ceph::mono_time now = ceph::mono_clock::now();
+  if (start == ceph::mono_time::min())
     start = now;
-  /*double el = now - start;
-  if (el > 30.0 &&
-    el < 60.0)*/
   for (int i=0; i<cct->_conf->mds_thrash_exports; i++) {
     set<int> s;
     if (!is_active()) break;
@@ -1955,7 +1971,7 @@ bool MDS::_dispatch(Message *m)
 
 void MDS::ms_handle_connect(Connection *con)
 {
-  Mutex::Locker l(mds_lock);
+  lock_guard l(mds_lock);
   dout(5) << "ms_handle_connect on " << con->get_peer_addr() << dendl;
   if (want_state == CEPH_MDS_STATE_DNE)
     return;
@@ -1964,7 +1980,7 @@ void MDS::ms_handle_connect(Connection *con)
 
 bool MDS::ms_handle_reset(Connection *con)
 {
-  Mutex::Locker l(mds_lock);
+  lock_guard l(mds_lock);
   dout(5) << "ms_handle_reset on " << con->get_peer_addr() << dendl;
   if (want_state == CEPH_MDS_STATE_DNE)
     return false;
@@ -1991,7 +2007,7 @@ bool MDS::ms_handle_reset(Connection *con)
 
 void MDS::ms_handle_remote_reset(Connection *con)
 {
-  Mutex::Locker l(mds_lock);
+  lock_guard l(mds_lock);
   dout(5) << "ms_handle_remote_reset on " << con->get_peer_addr() << dendl;
   if (want_state == CEPH_MDS_STATE_DNE)
     return;
@@ -2019,7 +2035,7 @@ bool MDS::ms_verify_authorizer(Connection *con, int peer_type,
 			       int protocol, bufferlist& authorizer_data, bufferlist& authorizer_reply,
 			       bool& is_valid, CryptoKey& session_key)
 {
-  Mutex::Locker l(mds_lock);
+  lock_guard l(mds_lock);
   if (want_state == CEPH_MDS_STATE_DNE)
     return false;
 
@@ -2091,7 +2107,7 @@ bool MDS::ms_verify_authorizer(Connection *con, int peer_type,
 
 void MDS::ms_handle_accept(Connection *con)
 {
-  Mutex::Locker l(mds_lock);
+  lock_guard l(mds_lock);
   Session *s = static_cast<Session *>(con->get_priv());
   dout(10) << "ms_handle_accept " << con->get_peer_addr() << " con " << con << " session " << s << dendl;
   if (s) {

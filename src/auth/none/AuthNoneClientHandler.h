@@ -35,7 +35,7 @@ public:
   int get_protocol() const { return CEPH_AUTH_NONE; }
 
   AuthAuthorizer *build_authorizer(uint32_t service_id) const {
-    RWLock::RLocker l(lock);
+    shared_lock l(lock);
     AuthNoneAuthorizer *auth = new AuthNoneAuthorizer();
     if (auth) {
       auth->build_authorizer(cct->_conf->name, global_id);
@@ -46,7 +46,7 @@ public:
   bool need_tickets() { return false; }
 
   void set_global_id(uint64_t id) {
-    RWLock::WLocker l(lock);
+    unique_lock l(lock);
     global_id = id;
   }
 private:

@@ -1859,7 +1859,7 @@ void ECommitted::generate_test_instances(list<ECommitted*>& ls)
 {
   ls.push_back(new ECommitted);
   ls.push_back(new ECommitted);
-  ls.back()->stamp = utime_t(1, 2);
+  ls.back()->stamp = ceph::real_time(1s + 2ns);
   ls.back()->reqid = metareqid_t(entity_name_t::CLIENT(123), 456);
 }
 
@@ -2496,7 +2496,7 @@ void EExport::decode(bufferlist::iterator &bl)
 
 void EExport::dump(Formatter *f) const
 {
-  f->dump_float("stamp", (double)stamp);
+  f->dump_stream("stamp") << stamp;
   /*f->open_object_section("Metablob");
   metablob.dump(f); // sadly we don't have this; dunno if we'll get it
   f->close_section();*/

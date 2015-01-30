@@ -32,8 +32,6 @@
 
 #include "LogSegment.h"
 
-#include "common/Clock.h"
-
 #include "messages/MLock.h"
 #include "messages/MClientCaps.h"
 #include "include/ceph_hash.h"
@@ -61,7 +59,8 @@ LockType CInode::policylock_type(CEPH_LOCK_IPOLICY);
 //int cinode_pins[CINODE_NUM_PINS];  // counts
 ostream& CInode::print_db_line_prefix(ostream& out)
 {
-  return out << ceph_clock_now(cct) << " mds." << mdcache->mds->get_nodeid()
+  return out << ceph::real_clock::now() << " mds."
+	     << mdcache->mds->get_nodeid()
 	     << ".cache.ino(" << inode.ino << ") ";
 }
 
@@ -234,7 +233,8 @@ CInode::CInode(MDCache *c, bool auth) :
   item_caps(this), item_open_file(this), item_dirty_parent(this),
   item_dirty_dirfrag_dir(this), item_dirty_dirfrag_nest(this),
   item_dirty_dirfrag_dirfragtree(this), auth_pins(0), nested_auth_pins(0),
-  auth_pin_freeze_allowance(0), nested_anchors(0), pop(ceph_clock_now(cct)),
+  auth_pin_freeze_allowance(0), nested_anchors(0),
+  pop(ceph::real_clock::now()),
   versionlock(this, &versionlock_type), authlock(this, &authlock_type),
   linklock(this, &linklock_type), dirfragtreelock(this, &dirfragtreelock_type),
   filelock(this, &filelock_type), xattrlock(this, &xattrlock_type),
@@ -815,12 +815,7 @@ void CInode::store(Context *fin)
   assert(is_base());
 
   oid obj = CInode::get_object_name(ino(), frag_t(), ".inode");
-  unique_ptr<ObjOp> m(volume->op());
-  if (!m) {
-    dout(0) << "Unable to make operation for volume " << volume << dendl;
-    fin->complete(-EDOM);
-    return;
-  }
+  std::unique_ptr<ObjOp> m(volume->op());
 
   // encode
   bufferlist bl;
@@ -832,7 +827,7 @@ void CInode::store(Context *fin)
   m->write_full(bl);
 
 
-  mdcache->mds->objecter->mutate(obj, volume, m, ceph_clock_now(cct),
+  mdcache->mds->objecter->mutate(obj, volume, m, ceph::real_clock::now(),
 				 0, NULL,
 				 new C_Inode_Stored(this, get_version(), fin));
 }
@@ -871,7 +866,7 @@ void CInode::fetch(Context *fin)
     return;
   }
 
-  unique_ptr<ObjOp> rd = volume->op();
+  std::unique_ptr<ObjOp> rd = volume->op();
   if (!rd) {
     dout(0) << "Unable to make operation for volume " << volume << dendl;
     fin->complete(-EDOM);
@@ -988,7 +983,7 @@ void CInode::store_backtrace(Context *fin)
   bufferlist bl;
   ::encode(bt, bl);
 
-  unique_ptr<ObjOp> op = mvol->op();
+  std::unique_ptr<ObjOp> op = mvol->op();
   if (!op) {
     dout(0) << "Unable to make operation for volume " << mvol << dendl;
     fin->complete(-EDOM);
@@ -1003,13 +998,13 @@ void CInode::store_backtrace(Context *fin)
 
   if (!state_test(STATE_DIRTYPOOL) || inode.old_volumes.empty()) {
     mdcache->mds->objecter->mutate(obj, mvol, op,
-				   ceph_clock_now(cct), 0, NULL,
+				   ceph::real_clock::now(), 0, NULL,
 				   fin2);
     return;
   }
 
   C_GatherBuilder gather(fin2);
-  mdcache->mds->objecter->mutate(obj, mvol, op, ceph_clock_now(cct),
+  mdcache->mds->objecter->mutate(obj, mvol, op, ceph::real_clock::now(),
 				 0, NULL, gather.new_sub());
 
   set<boost::uuids::uuid> old_volumes;
@@ -1021,9 +1016,12 @@ void CInode::store_backtrace(Context *fin)
 
     VolumeRef ovol;
     {
-      const OSDMap* osdmap = mdcache->mds->objecter->get_osdmap_read();
+      // Obviously what we really want is a type that combines a
+      // pointer with a lock.
+      Objecter::shared_lock l;
+      const OSDMap* osdmap = mdcache->mds->objecter->get_osdmap_read(l);
       osdmap->find_by_uuid(*p, ovol);
-      mdcache->mds->objecter->put_osdmap_read();
+      l.unlock();
     }
     int r = ovol->attach(mdcache->mds->objecter->cct);
     if (r) {
@@ -1032,7 +1030,7 @@ void CInode::store_backtrace(Context *fin)
       return;
     }
 
-    unique_ptr<ObjOp> op = ovol->op();
+    std::unique_ptr<ObjOp> op = ovol->op();
     if (!op) {
       dout(0) << "Unable to make operation for volume " << ovol << dendl;
       fin->complete(-EDOM);
@@ -1042,7 +1040,7 @@ void CInode::store_backtrace(Context *fin)
     op->setxattr("parent", bl);
 
     mdcache->mds->objecter->mutate(obj, ovol, op,
-				   ceph_clock_now(cct),
+				   ceph::real_clock::now(),
 				   0, NULL, gather.new_sub());
     old_volumes.insert(*p);
   }
@@ -1271,7 +1269,7 @@ void CInode::encode_lock_state(int type, bufferlist& bl)
 void CInode::decode_lock_state(int type, bufferlist& bl)
 {
   bufferlist::iterator p = bl.begin();
-  utime_t tm;
+  ceph::real_time tm;
 
   switch (type) {
   case CEPH_LOCK_IAUTH:
@@ -2297,7 +2295,7 @@ Capability *CInode::reconnect_cap(client_t client, ceph_mds_cap_reconnect& icr, 
     cap->reset_seq();
     cap->set_cap_id(icr.cap_id);
   }
-  cap->set_last_issue_stamp(ceph_clock_now(cct));
+  cap->set_last_issue_stamp(ceph::real_clock::now());
   return cap;
 }
 
@@ -2530,7 +2528,7 @@ int CInode::encode_inodestat(bufferlist& bl, Session *session,
   bool plocal = versionlock.get_last_wrlock_client() == client;
 
   inode_t *i = (pfile|pauth|plink|pxattr|plocal) ? pi : oi;
-  i->ctime.encode_timeval(&e.ctime);
+  e.ctime = ceph::time_to_spec(i->ctime);
 
   dout(20) << " pfile " << pfile << " pauth " << pauth << " plink " << plink << " pxattr " << pxattr
 	   << " plocal " << plocal
@@ -2542,8 +2540,8 @@ int CInode::encode_inodestat(bufferlist& bl, Session *session,
   e.size = i->size;
   e.truncate_seq = i->truncate_seq;
   e.truncate_size = i->truncate_size;
-  i->mtime.encode_timeval(&e.mtime);
-  i->atime.encode_timeval(&e.atime);
+  e.mtime = ceph::time_to_spec(i->mtime);
+  e.atime = ceph::time_to_spec(i->atime);
   e.time_warp_seq = i->time_warp_seq;
 
   // max_size is min of projected, actual
@@ -2566,7 +2564,7 @@ int CInode::encode_inodestat(bufferlist& bl, Session *session,
   }
 
   // nest (do same as file... :/)
-  i->rstat.rctime.encode_timeval(&e.rctime);
+  e.rctime = ceph::time_to_spec(i->rstat.rctime);
   e.rbytes = i->rstat.rbytes;
   e.rfiles = i->rstat.rfiles;
   e.rsubdirs = i->rstat.rsubdirs;
@@ -2626,7 +2624,7 @@ int CInode::encode_inodestat(bufferlist& bl, Session *session,
     cap->issue_norevoke(issue);
     issue = cap->pending();
     cap->set_last_issue();
-    cap->set_last_issue_stamp(ceph_clock_now(cct));
+    cap->set_last_issue_stamp(ceph::real_clock::now());
     cap->clear_new();
     e.cap.caps = issue;
     e.cap.wanted = cap->wanted();
@@ -2705,7 +2703,7 @@ void CInode::encode_cap_message(MClientCaps *m, Capability *cap)
   inode_t *oi = &inode;
   inode_t *pi = get_projected_inode();
   inode_t *i = (pfile|pauth|plink|pxattr) ? pi : oi;
-  i->ctime.encode_timeval(&m->head.ctime);
+  m->head.ctime = ceph::time_to_spec(i->ctime);
 
   dout(20) << "encode_cap_message pfile " << pfile
 	   << " pauth " << pauth << " plink " << plink << " pxattr " << pxattr
@@ -2715,8 +2713,8 @@ void CInode::encode_cap_message(MClientCaps *m, Capability *cap)
   m->head.size = i->size;
   m->head.truncate_seq = i->truncate_seq;
   m->head.truncate_size = i->truncate_size;
-  i->mtime.encode_timeval(&m->head.mtime);
-  i->atime.encode_timeval(&m->head.atime);
+  m->head.mtime = ceph::time_to_spec(i->mtime);
+  m->head.atime = ceph::time_to_spec(i->atime);
   m->head.time_warp_seq = i->time_warp_seq;
 
   if (cap->client_inline_version < i->inline_version) {
@@ -2894,7 +2892,7 @@ void CInode::encode_export(bufferlist& bl)
   get(PIN_TEMPEXPORTING);
 }
 
-void CInode::finish_export(utime_t now)
+void CInode::finish_export(ceph::real_time now)
 {
   state &= MASK_STATE_EXPORT_KEPT;
 
@@ -2927,7 +2925,7 @@ void CInode::decode_import(bufferlist::iterator& p,
     _mark_dirty_parent(ls);
   }
 
-  ::decode(pop, ceph_clock_now(cct), p);
+  ::decode(pop, p);
 
   ::decode(replica_map, p);
   if (!replica_map.empty())

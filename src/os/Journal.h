@@ -16,7 +16,8 @@
 #ifndef CEPH_JOURNAL_H
 #define CEPH_JOURNAL_H
 
-#include <errno.h>
+#include <cerrno>
+#include <mutex>
 
 #include "include/buffer.h"
 #include "include/Context.h"
@@ -29,13 +30,14 @@ protected:
   CephContext* cct;
   boost::uuids::uuid fsid;
   Finisher *finisher;
-  Cond *do_sync_cond;
+  std::condition_variable *do_sync_cond;
   bool wait_on_full;
 
 public:
   Journal(CephContext* _cct, const boost::uuids::uuid& f, Finisher *fin,
-	  Cond *c=0) : cct(_cct), fsid(f), finisher(fin), do_sync_cond(c),
-		       wait_on_full(false) {
+	  std::condition_variable *c = nullptr)
+    : cct(_cct), fsid(f), finisher(fin), do_sync_cond(c),
+      wait_on_full(false) {
 
     cct->get();
   }

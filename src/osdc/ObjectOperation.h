@@ -16,7 +16,6 @@
 #define CEPH_OSDC_OBJECTOPERATION_H
 
 #include <memory>
-#include "include/utime.h"
 #include "include/Context.h"
 #include "include/rados/rados_types.h"
 #include "osd/osd_types.h"
@@ -80,7 +79,7 @@ public:
 			    const uint32_t truncate_seq) = 0;
   virtual void set_op_flags(const uint32_t flags) = 0;
   virtual void clear_op_flags(const uint32_t flags) = 0;
-  virtual void add_stat_ctx(uint64_t *s, utime_t *m, int *rval,
+  virtual void add_stat_ctx(uint64_t *s, ceph::real_time *m, int *rval,
 			    Context *ctx = NULL) = 0;
   virtual void add_sparse_read_ctx(uint64_t off, uint64_t len,
 				   std::map<uint64_t,uint64_t> *m,
@@ -108,7 +107,7 @@ public:
     add_metadata(bl);
   }
 
-  void stat(uint64_t *size, utime_t *mtime, int *rval = NULL) {
+  void stat(uint64_t *size, ceph::real_time *mtime, int *rval = NULL) {
     add_op(CEPH_OSD_OP_STAT);
     add_stat_ctx(size, mtime, rval);
   }

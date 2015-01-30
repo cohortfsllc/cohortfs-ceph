@@ -15,26 +15,21 @@
 #ifndef CEPH_FINISHER_H
 #define CEPH_FINISHER_H
 
-#include "common/Mutex.h"
-#include "common/Cond.h"
+#include <mutex>
+#include <condition_variable>
+#include "include/Context.h"
 #include "common/Thread.h"
 #include "common/ceph_context.h"
 
 class CephContext;
 
-enum {
-  l_finisher_first = 997082,
-  l_finisher_queue_len,
-  l_finisher_last
-};
-
 class Finisher {
   CephContext *cct;
-  Mutex		 finisher_lock;
-  Cond		 finisher_cond, finisher_empty_cond;
-  bool		 finisher_stop, finisher_running;
-  vector<Context*> finisher_queue;
-  list<pair<Context*,int> > finisher_queue_rval;
+  std::mutex finisher_lock;
+  std::condition_variable finisher_cond, finisher_empty_cond;
+  bool finisher_stop, finisher_running;
+  std::vector<Context*> finisher_queue;
+  std::list<std::pair<Context*,int> > finisher_queue_rval;
 
   void *finisher_thread_entry();
 
@@ -46,27 +41,27 @@ class Finisher {
 
  public:
   void queue(Context *c, int r = 0) {
-    finisher_lock.Lock();
+    std::unique_lock<std::mutex> l(finisher_lock);
     if (r) {
-      finisher_queue_rval.push_back(pair<Context*, int>(c, r));
+      finisher_queue_rval.push_back(std::pair<Context*, int>(c, r));
       finisher_queue.push_back(NULL);
     } else
       finisher_queue.push_back(c);
-    finisher_cond.Signal();
-    finisher_lock.Unlock();
+    finisher_cond.notify_all();
+    l.unlock();
   }
-  void queue(vector<Context*>& ls) {
-    finisher_lock.Lock();
+  void queue(std::vector<Context*>& ls) {
+    std::unique_lock<std::mutex> l(finisher_lock);
     finisher_queue.insert(finisher_queue.end(), ls.begin(), ls.end());
-    finisher_cond.Signal();
-    finisher_lock.Unlock();
+    finisher_cond.notify_all();
+    l.unlock();
     ls.clear();
   }
-  void queue(deque<Context*>& ls) {
-    finisher_lock.Lock();
+  void queue(std::deque<Context*>& ls) {
+    std::unique_lock<std::mutex> l(finisher_lock);
     finisher_queue.insert(finisher_queue.end(), ls.begin(), ls.end());
-    finisher_cond.Signal();
-    finisher_lock.Unlock();
+    finisher_cond.notify_all();
+    l.unlock();
     ls.clear();
   }
 
@@ -78,8 +73,8 @@ class Finisher {
   Finisher(CephContext *cct_) :
     cct(cct_), finisher_stop(false), finisher_running(false),
     finisher_thread(this) {}
-  Finisher(CephContext *cct_, string name) :
-    cct(cct_), finisher_lock("Finisher::finisher_lock"),
+  Finisher(CephContext *cct_, std::string name) :
+    cct(cct_),
     finisher_stop(false), finisher_running(false),
     finisher_thread(this) {
   }

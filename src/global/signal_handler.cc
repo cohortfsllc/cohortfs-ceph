@@ -12,18 +12,19 @@
  *
  */
 
+#include <mutex>
+#include <sstream>
+#include <poll.h>
+#include <signal.h>
+#include <stdlib.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include "common/BackTrace.h"
 #include "common/config.h"
 #include "common/debug.h"
 #include "global/pidfile.h"
 #include "global/signal_handler.h"
 
-#include <poll.h>
-#include <signal.h>
-#include <sstream>
-#include <stdlib.h>
-#include <sys/stat.h>
-#include <sys/types.h>
 
 void install_sighandler(int signum, signal_handler_t handler, int flags)
 {
@@ -82,7 +83,9 @@ struct SignalHandler : public Thread {
   safe_handler *handlers[32];
 
   /// to protect the handlers array
-  Mutex lock;
+  std::mutex lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
 
   SignalHandler()
     : stop(false)
@@ -121,7 +124,7 @@ struct SignalHandler : public Thread {
       // build fd list
       struct pollfd fds[33];
 
-      lock.Lock();
+      unique_lock l(lock);
       int num_fds = 0;
       fds[num_fds].fd = pipefd[0];
       fds[num_fds].events = POLLIN | POLLERR;
@@ -135,7 +138,7 @@ struct SignalHandler : public Thread {
 	  ++num_fds;
 	}
       }
-      lock.Unlock();
+      l.unlock();
 
       // wait for data on any of those pipes
       int r = poll(fds, num_fds, -1);
@@ -147,7 +150,7 @@ struct SignalHandler : public Thread {
 	// consume byte from signal socket, if any.
 	r = read(pipefd[0], &v, 1);
 
-	lock.Lock();
+	l.lock();
 	for (unsigned signum=0; signum<32; signum++) {
 	  if (handlers[signum]) {
 	    r = read(handlers[signum]->pipefd[0], &v, 1);
@@ -156,7 +159,7 @@ struct SignalHandler : public Thread {
 	    }
 	  }
 	}
-	lock.Unlock();
+	l.unlock();
       } else {
 	//cout << "no data, got r=" << r << " errno=" << errno << std::endl;
       }
@@ -199,9 +202,9 @@ void SignalHandler::register_handler(int signum, signal_handler_t handler, bool 
   assert(r == 0);
 
   h->handler = handler;
-  lock.Lock();
+  unique_lock l(lock);
   handlers[signum] = h;
-  lock.Unlock();
+  l.unlock();
 
   // signal thread so that it sees our new handler
   signal_thread();
@@ -230,9 +233,9 @@ void SignalHandler::unregister_handler(int signum, signal_handler_t handler)
   signal(signum, SIG_DFL);
 
   // _then_ remove our handlers entry
-  lock.Lock();
+  unique_lock l(lock);
   handlers[signum] = NULL;
-  lock.Unlock();
+  l.unlock();
 
   // this will wake up select() so that worker thread sees our handler is gone
   close(h->pipefd[0]);

@@ -92,14 +92,14 @@ LevelDBStore::~LevelDBStore()
 void LevelDBStore::close()
 {
   // stop compaction thread
-  compact_queue_lock.Lock();
+  unique_lock cql(compact_queue_lock);
   if (compact_thread.is_started()) {
     compact_queue_stop = true;
-    compact_queue_cond.Signal();
-    compact_queue_lock.Unlock();
+    compact_queue_cond.notify_all();
+    cql.unlock();
     compact_thread.join();
   } else {
-    compact_queue_lock.Unlock();
+    cql.unlock();
   }
 }
 
@@ -211,24 +211,24 @@ void LevelDBStore::compact()
 
 void LevelDBStore::compact_thread_entry()
 {
-  compact_queue_lock.Lock();
+  unique_lock cql(compact_queue_lock);
   while (!compact_queue_stop) {
     while (!compact_queue.empty()) {
       pair<string,string> range = compact_queue.front();
       compact_queue.pop_front();
-      compact_queue_lock.Unlock();
+      cql.unlock();
       compact_range(range.first, range.second);
-      compact_queue_lock.Lock();
+      cql.lock();
       continue;
     }
-    compact_queue_cond.Wait(compact_queue_lock);
+    compact_queue_cond.wait(cql);
   }
-  compact_queue_lock.Unlock();
+  cql.unlock();
 }
 
 void LevelDBStore::compact_range_async(const string& start, const string& end)
 {
-  Mutex::Locker l(compact_queue_lock);
+  lock_guard l(compact_queue_lock);
 
   // try to merge adjacent ranges.  this is O(n), but the queue should
   // be short.	note that we do not cover all overlap cases and merge
@@ -257,7 +257,7 @@ void LevelDBStore::compact_range_async(const string& start, const string& end)
     // no merge, new entry.
     compact_queue.push_back(make_pair(start, end));
   }
-  compact_queue_cond.Signal();
+  compact_queue_cond.notify_all();
   if (!compact_thread.is_started()) {
     compact_thread.create();
   }

@@ -5,13 +5,14 @@
 #define CEPH_CLIENT_METAREQUEST_H
 
 
+#include <condition_variable>
+#include <mutex>
+
 #include "include/types.h"
 #include "msg/msg_types.h"
 #include "include/xlist.h"
 #include "include/filepath.h"
 #include "mds/mdstypes.h"
-
-#include "common/Mutex.h"
 
 #include "messages/MClientRequest.h"
 
@@ -41,7 +42,7 @@ public:
 
   int regetattr_mask;	       // getattr mask if i need to re-stat after a traceless reply
 
-  utime_t  sent_stamp;
+  ceph::mono_time sent_stamp;
   int	   mds;		       // who i am asking
   int	   resend_mds;	       // someone wants you to (re)send the request here
   bool	   send_to_auth;       // must send to auth mds
@@ -69,10 +70,12 @@ public:
 
   xlist<MetaRequest*>::item item;
   xlist<MetaRequest*>::item unsafe_item;
-  Mutex lock; //for get/set sync
+  std::mutex lock; //for get/set sync
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
 
-  Cond	*caller_cond;	       // who to take up
-  Cond	*dispatch_cond;	       // who to kick back
+  std::condition_variable *caller_cond;   // who to take up
+  std::condition_variable *dispatch_cond; // who to kick back
 
   Inode *target;
 

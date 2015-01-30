@@ -268,14 +268,16 @@ public:
 protected:
   void handle_inode_file_caps(class MInodeFileCaps *m);
 
-  void file_update_finish(CInode *in, MutationRef& mut, bool share, client_t client, Capability *cap,
-			  MClientCaps *ack);
+  void file_update_finish(CInode *in, MutationRef& mut, bool share,
+			  client_t client, Capability *cap, MClientCaps *ack);
 public:
-  void calc_new_client_ranges(CInode *in, uint64_t size, map<client_t, client_writeable_range_t>& new_ranges);
+  void calc_new_client_ranges(CInode *in, uint64_t size,
+			      map<client_t, client_writeable_range_t>&
+			      new_ranges);
   bool check_inode_max_size(CInode *in, bool force_wrlock=false,
 			    bool update_size=false, uint64_t newsize=0,
 			    bool update_max=false, uint64_t newmax=0,
-			    utime_t mtime=utime_t());
+			    ceph::real_time mtime = ceph::real_time::min());
   void share_inode_max_size(CInode *in, Capability *only_cap=0);
 
 private:
@@ -289,7 +291,8 @@ private:
 public:
   void handle_client_lease(struct MClientLease *m);
 
-  void issue_client_lease(CDentry *dn, client_t client, bufferlist &bl, utime_t now, Session *session);
+  void issue_client_lease(CDentry *dn, client_t client, bufferlist &bl,
+			  ceph::real_time now, Session *session);
   void revoke_client_leases(SimpleLock *lock);
 };
 

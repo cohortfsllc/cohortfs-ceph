@@ -28,7 +28,6 @@
 #include <boost/uuid/uuid.hpp>
 #include "include/stringify.h"
 #include "include/encoding.h"
-#include "include/utime.h"
 #include "osd/osd_types.h"
 #include "Placer.h"
 

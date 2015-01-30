@@ -3,12 +3,13 @@
 #ifndef CEPH_OBJECTCACHER_H
 #define CEPH_OBJECTCACHER_H
 
+#include <condition_variable>
+#include <mutex>
 #include "include/types.h"
 #include "include/lru.h"
 #include "include/Context.h"
 #include "include/xlist.h"
 
-#include "common/Cond.h"
 #include "common/Finisher.h"
 #include "common/Thread.h"
 
@@ -83,7 +84,7 @@ class ObjectCacher {
     bufferlist	bl;
     ceph_tid_t last_write_tid;	// version of bh (if non-zero)
     ceph_tid_t last_read_tid;	// tid of last read op (if any)
-    utime_t last_write;
+    ceph::real_time last_write;
     int error; // holds return value for failed reads
 
     map< loff_t, list<Context*> > waitfor_read;
@@ -301,10 +302,10 @@ class ObjectCacher {
  private:
   WritebackHandler& writeback_handler;
 
-  Mutex& lock;
+  std::mutex& lock;
 
   uint64_t max_dirty, target_dirty, max_size, max_objects;
-  utime_t max_dirty_age;
+  ceph::timespan max_dirty_age;
   bool block_writes_upfront;
 
   flush_set_callback_t flush_set_callback;
@@ -318,7 +319,7 @@ class ObjectCacher {
   LRU	bh_lru_dirty, bh_lru_rest;
   LRU	ob_lru;
 
-  Cond flusher_cond;
+  std::condition_variable flusher_cond;
   bool flusher_stop;
   void flusher_entry();
   class FlusherThread : public Thread {
@@ -347,7 +348,7 @@ class ObjectCacher {
   void close_object(Object *ob);
 
   // bh stats
-  Cond	stat_cond;
+  std::condition_variable stat_cond;
 
   loff_t stat_clean;
   loff_t stat_zero;
@@ -424,7 +425,7 @@ class ObjectCacher {
   void purge(Object *o);
 
   int64_t reads_outstanding;
-  Cond read_cond;
+  std::condition_variable read_cond;
 
 #if 0
   int _readx(OSDRead *rd, ObjectSet *oset, Context *onfinish,
@@ -497,12 +498,12 @@ class ObjectCacher {
     Context *m_onfinish;
   };
 
-  ObjectCacher(CephContext *cct_, WritebackHandler& wb, Mutex& l,
+  ObjectCacher(CephContext *cct_, WritebackHandler& wb, std::mutex& l,
 	       flush_set_callback_t flush_callback,
 	       void *flush_callback_arg,
 	       uint64_t max_bytes, uint64_t max_objects,
-	       uint64_t max_dirty, uint64_t target_dirty, double max_age,
-	       bool block_writes_upfront);
+	       uint64_t max_dirty, uint64_t target_dirty,
+	       ceph::timespan max_age, bool block_writes_upfront);
   ~ObjectCacher();
 
   void start() {
@@ -510,10 +511,10 @@ class ObjectCacher {
   }
   void stop() {
     assert(flusher_thread.is_started());
-    lock.Lock();  // hmm.. watch out for deadlock!
+    std::unique_lock<std::mutex> l(lock);
     flusher_stop = true;
-    flusher_cond.Signal();
-    lock.Unlock();
+    flusher_cond.notify_all();
+    l.unlock();
     flusher_thread.join();
   }
 
@@ -561,7 +562,7 @@ private:
   int _wait_for_write(OSDWrite *wr, uint64_t len, ObjectSet *oset, Mutex& lock,
 		      Context *onfreespace);
 #endif
-  void maybe_wait_for_writeback(uint64_t len);
+  void maybe_wait_for_writeback(uint64_t len, std::unique_lock<std::mutex>& l);
   bool _flush_set_finish(C_GatherBuilder *gather, Context *onfinish);
 
 public:
@@ -604,8 +605,8 @@ public:
   void set_max_size(int64_t v) {
     max_size = v;
   }
-  void set_max_dirty_age(double a) {
-    max_dirty_age.set_from_double(a);
+void set_max_dirty_age(ceph::timespan a) {
+    max_dirty_age = a;
   }
   void set_max_objects(int64_t v) {
     max_objects = v;

@@ -15,8 +15,6 @@
 #ifndef CEPH_MOSDPING_H
 #define CEPH_MOSDPING_H
 
-#include "common/Clock.h"
-
 #include "msg/Message.h"
 #include "osd/osd_types.h"
 
@@ -51,9 +49,10 @@ class MOSDPing : public Message {
   epoch_t map_epoch, peer_as_of_epoch;
   uint8_t op;
   osd_peer_stat_t peer_stat;
-  utime_t stamp;
+  ceph::real_time stamp;
 
-  MOSDPing(const boost::uuids::uuid& f, epoch_t e, uint8_t o, utime_t s)
+  MOSDPing(const boost::uuids::uuid& f, epoch_t e, uint8_t o,
+	   ceph::real_time s)
     : Message(MSG_OSD_PING, HEAD_VERSION, COMPAT_VERSION),
       fsid(f), map_epoch(e), peer_as_of_epoch(0), op(o), stamp(s)
   { }

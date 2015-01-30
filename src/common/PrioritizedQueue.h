@@ -15,13 +15,13 @@
 #ifndef PRIORITY_QUEUE_H
 #define PRIORITY_QUEUE_H
 
-#include "common/Mutex.h"
 #include "common/Formatter.h"
 
-#include <map>
-#include <utility>
-#include <list>
 #include <algorithm>
+#include <list>
+#include <map>
+#include <mutex>
+#include <utility>
 
 /**
  * Manages queue for normal and strict priority items

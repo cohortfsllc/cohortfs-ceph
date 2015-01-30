@@ -8,8 +8,6 @@
 #include "stat_collector.h"
 #include "backend.h"
 #include <boost/scoped_ptr.hpp>
-#include "common/Mutex.h"
-#include "common/Cond.h"
 #include "common/Thread.h"
 
 struct OnWriteApplied;
@@ -33,8 +31,10 @@ private:
   const uint64_t max_duration;
   const uint64_t max_ops;
 
-  Mutex lock;
-  Cond open_ops_cond;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
+  std::mutex lock;
+  std::condition_variable open_ops_cond;
   uint64_t open_ops;
   void start_op();
   void drain_ops();
@@ -68,7 +68,6 @@ public:
     max_in_flight(max_in_flight),
     max_duration(max_duration),
     max_ops(max_ops),
-    lock("Bencher::lock"),
     open_ops(0)
   {}
   Bencher(
@@ -89,12 +88,11 @@ public:
     max_in_flight(max_in_flight),
     max_duration(max_duration),
     max_ops(max_ops),
-    lock("Bencher::lock"),
     open_ops(0)
   {}
 
   void init(
-    const set<std::string> &objects,
+    const std::set<std::string> &objects,
     uint64_t size,
     std::ostream *out
     );
@@ -112,26 +110,26 @@ public:
 
 class SequentialLoad :
   public Distribution<
-  boost::tuple<string, uint64_t, uint64_t, Bencher::OpType> > {
-  set<string> objects;
+  boost::tuple<std::string, uint64_t, uint64_t, Bencher::OpType> > {
+  std::set<std::string> objects;
   uint64_t size;
   uint64_t length;
-  set<string>::iterator object_pos;
+  std::set<std::string>::iterator object_pos;
   uint64_t cur_pos;
   boost::scoped_ptr<Distribution<Bencher::OpType> > op_dist;
   SequentialLoad(const SequentialLoad &other);
 public:
   SequentialLoad(
-    const set<string> &_objects, uint64_t size,
+    const std::set<std::string> &_objects, uint64_t size,
     uint64_t length,
     Distribution<Bencher::OpType> *op_dist)
     : objects(_objects), size(size), length(length),
       object_pos(objects.begin()), cur_pos(0),
       op_dist(op_dist) {}
 
-  boost::tuple<string, uint64_t, uint64_t, Bencher::OpType>
+  boost::tuple<std::string, uint64_t, uint64_t, Bencher::OpType>
   operator()() {
-    boost::tuple<string, uint64_t, uint64_t, Bencher::OpType> ret =
+    boost::tuple<std::string, uint64_t, uint64_t, Bencher::OpType> ret =
       boost::make_tuple(*object_pos, cur_pos, length, (*op_dist)());
     cur_pos += length;
     if (cur_pos > size) {

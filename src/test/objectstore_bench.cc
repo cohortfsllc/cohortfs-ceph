@@ -18,6 +18,8 @@
 #include <cds/intrusive/skip_list_hp.h> //cds intrusive skip lists
 #endif
 
+typedef std::lock_guard<std::mutex> lock_guard;
+typedef std::unique_lock<std::mutex> unique_lock;
 
 static CephContext* cct;
 #define dout_subsys ceph_subsys_filestore
@@ -157,17 +159,16 @@ class OBS_Worker : public Thread
       }
 
       // set up the finisher
-      Mutex lock;
-      Cond cond;
+      std::mutex lock;
+      std::condition_variable cond;
       bool done = false;
 
       fs->queue_transactions(&seq, tls, NULL,
 			     new C_SafeCond(&lock, &cond, &done));
 
-      lock.Lock();
-      while (!done)
-	cond.Wait(lock);
-      lock.Unlock();
+      unique_lock l(lock);
+      cond.wait(l, [&](){ return done; });
+      l.unlock();
 
       while (!tls.empty()) {
 	ObjectStore::Transaction *t = tls.front();

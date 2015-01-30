@@ -17,18 +17,18 @@
 #ifndef CEPH_GENERICOBJECTMAP_H
 #define CEPH_GENERICOBJECTMAP_H
 
-#include "include/buffer.h"
-#include <set>
+#include <condition_variable>
 #include <map>
+#include <mutex>
+#include <set>
 #include <string>
 #include <vector>
 #include <boost/scoped_ptr.hpp>
 
+#include "include/buffer.h"
 #include "ObjectMap.h"
 #include "KeyValueDB.h"
 #include "osd/osd_types.h"
-#include "common/Mutex.h"
-#include "common/Cond.h"
 #include "common/simple_cache.hpp"
 
 
@@ -73,8 +73,10 @@ class GenericObjectMap {
   /**
    * Serializes access to next_seq as well as the in_use set
    */
-  Mutex header_lock;
-  Cond header_cond;
+  std::mutex header_lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
+  std::condition_variable header_cond;
 
   /**
    * Set of headers currently in use
@@ -214,8 +216,8 @@ class GenericObjectMap {
   typedef std::shared_ptr<_Header> Header;
 
   Header lookup_header(const coll_t &cid, const oid &obj) {
-    Mutex::Locker l(header_lock);
-    return _lookup_header(cid, obj);
+    unique_lock l(header_lock);
+    return _lookup_header(l, cid, obj);
   }
 
   /// Lookup or create header for c obj
@@ -396,12 +398,12 @@ protected:
 			      Header parent, KeyValueDB::Transaction t);
   Header generate_new_header(const coll_t &cid, const oid &obj,
 			     Header parent, KeyValueDB::Transaction t) {
-    Mutex::Locker l(header_lock);
+    lock_guard l(header_lock);
     return _generate_new_header(cid, obj, parent, t);
   }
 
   // Lookup leaf header for c obj
-  Header _lookup_header(const coll_t &cid, const oid &obj);
+  Header _lookup_header(unique_lock& l, const coll_t &cid, const oid &obj);
 
   // Lookup header node for input
   Header lookup_parent(Header input);
@@ -438,9 +440,9 @@ protected:
     RemoveOnDelete(GenericObjectMap *db) :
       db(db) {}
     void operator() (_Header *header) {
-      Mutex::Locker l(db->header_lock);
+      unique_lock l(db->header_lock);
       db->in_use.erase(header->seq);
-      db->header_cond.Signal();
+      db->header_cond.notify_all();
       delete header;
     }
   };

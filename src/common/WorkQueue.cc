@@ -15,7 +15,7 @@
 #include <sstream>
 
 #include "include/types.h"
-#include "include/utime.h"
+#include "include/ceph_time.h"
 #include "WorkQueue.h"
 
 #include "common/config.h"
@@ -76,18 +76,17 @@ void ThreadPool::handle_conf_change(const struct md_config_t *conf,
     int v = atoi(buf);
     free(buf);
     if (v > 0) {
-      _lock.Lock();
+      std::lock_guard<std::mutex> l(_lock);
       _num_threads = v;
       start_threads();
-      _cond.SignalAll();
-      _lock.Unlock();
+      _cond.notify_all();
     }
   }
 }
 
 void ThreadPool::worker(WorkThread *wt)
 {
-  _lock.Lock();
+  std::unique_lock<std::mutex> l(_lock);
   ldout(cct,10) << "worker start" << dendl;
 
   std::stringstream ss;
@@ -119,17 +118,18 @@ void ThreadPool::worker(WorkThread *wt)
 	  processing++;
 	  ldout(cct,12) << "worker wq " << wq->name << " start processing " << item
 			<< " (" << processing << " active)" << dendl;
-	  TPHandle tp_handle(cct, hb, wq->timeout_interval, wq->suicide_interval);
+	  TPHandle tp_handle(cct, hb,
+			     wq->timeout_interval, wq->suicide_interval);
 	  tp_handle.reset_tp_timeout();
-	  _lock.Unlock();
+	  l.unlock();
 	  wq->_void_process(item, tp_handle);
-	  _lock.Lock();
+	  l.lock();
 	  wq->_void_process_finish(item);
 	  processing--;
 	  ldout(cct,15) << "worker wq " << wq->name << " done processing " << item
 			<< " (" << processing << " active)" << dendl;
 	  if (_pause || _draining)
-	    _wait_cond.Signal();
+	    _wait_cond.notify_all();
 	  did = true;
 	  break;
 	}
@@ -139,19 +139,19 @@ void ThreadPool::worker(WorkThread *wt)
     }
 
     ldout(cct,20) << "worker waiting" << dendl;
-    cct->get_heartbeat_map()->reset_timeout(hb, 4, 0);
-    _cond.WaitInterval(cct, _lock, utime_t(2, 0));
+    cct->get_heartbeat_map()->reset_timeout(hb, std::chrono::seconds(4),
+					    ceph::timespan(0));
+    _cond.wait_for(l, 2s);
   }
   ldout(cct,1) << "worker finish" << dendl;
 
   cct->get_heartbeat_map()->remove_worker(hb);
 
-  _lock.Unlock();
+  l.unlock();
 }
 
 void ThreadPool::start_threads()
 {
-  assert(_lock.is_locked());
   while (_threads.size() < _num_threads) {
     WorkThread *wt = new WorkThread(this);
     ldout(cct, 10) << "start_threads creating and starting " << wt << dendl;
@@ -162,7 +162,6 @@ void ThreadPool::start_threads()
 
 void ThreadPool::join_old_threads()
 {
-  assert(_lock.is_locked());
   while (!_old_threads.empty()) {
     ldout(cct, 10) << "join_old_threads joining and deleting " << _old_threads.front() << dendl;
     _old_threads.front()->join();
@@ -180,9 +179,10 @@ void ThreadPool::start()
     cct->_conf->add_observer(this);
   }
 
-  _lock.Lock();
-  start_threads();
-  _lock.Unlock();
+  {
+    std::lock_guard<std::mutex> l(_lock);
+    start_threads();
+  }
   ldout(cct,15) << "started" << dendl;
 }
 
@@ -195,11 +195,11 @@ void ThreadPool::stop(bool clear_after)
     cct->_conf->remove_observer(this);
   }
 
-  _lock.Lock();
+  std::unique_lock<std::mutex> l(_lock);
   _stop = true;
-  _cond.Signal();
+  _cond.notify_all();
   join_old_threads();
-  _lock.Unlock();
+  l.unlock();
   for (set<WorkThread*>::iterator p = _threads.begin();
        p != _threads.end();
        ++p) {
@@ -207,51 +207,51 @@ void ThreadPool::stop(bool clear_after)
     delete *p;
   }
   _threads.clear();
-  _lock.Lock();
+  l.lock();
   for (unsigned i=0; i<work_queues.size(); i++)
     work_queues[i]->_clear();
   _stop = false;
-  _lock.Unlock();
+  l.unlock();
   ldout(cct,15) << "stopped" << dendl;
 }
 
 void ThreadPool::pause()
 {
   ldout(cct,10) << "pause" << dendl;
-  _lock.Lock();
+  std::unique_lock<std::mutex> l(_lock);
   _pause++;
   while (processing)
-    _wait_cond.Wait(_lock);
-  _lock.Unlock();
+    _wait_cond.wait(l);
+  l.unlock();
   ldout(cct,15) << "paused" << dendl;
 }
 
 void ThreadPool::pause_new()
 {
   ldout(cct,10) << "pause_new" << dendl;
-  _lock.Lock();
+  std::unique_lock<std::mutex> l(_lock);
   _pause++;
-  _lock.Unlock();
+  l.unlock();
 }
 
 void ThreadPool::unpause()
 {
   ldout(cct,10) << "unpause" << dendl;
-  _lock.Lock();
+  std::unique_lock<std::mutex> l(_lock);
   assert(_pause > 0);
   _pause--;
-  _cond.Signal();
-  _lock.Unlock();
+  _cond.notify_all();
+  l.unlock();
 }
 
 void ThreadPool::drain(WorkQueue_* wq)
 {
   ldout(cct,10) << "drain" << dendl;
-  _lock.Lock();
+  std::unique_lock<std::mutex> l(_lock);
   _draining++;
   while (processing || (wq != NULL && !wq->_empty()))
-    _wait_cond.Wait(_lock);
+    _wait_cond.wait(l);
   _draining--;
-  _lock.Unlock();
+  l.unlock();
 }
 

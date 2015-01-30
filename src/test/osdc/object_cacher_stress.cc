@@ -4,6 +4,7 @@
 #include <atomic>
 #include <cstdlib>
 #include <ctime>
+#include <mutex>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -13,7 +14,6 @@
 #include "common/ceph_argparse.h"
 #include "common/common_init.h"
 #include "common/config.h"
-#include "common/Mutex.h"
 #include "global/global_init.h"
 #include "include/buffer.h"
 #include "include/Context.h"
@@ -21,6 +21,9 @@
 #include "osdc/ObjectCacher.h"
 
 #include "FakeWriteback.h"
+
+typedef std::lock_guard<std::mutex> lock_guard;
+typedef std::unique_lock<std::mutex> unique_lock;
 
 using std::setw;
 static CephContext* cct;
@@ -53,18 +56,18 @@ public:
 };
 
 int stress_test(uint64_t num_ops, uint64_t num_objs,
-		uint64_t max_obj_size, uint64_t delay_ns,
+		uint64_t max_obj_size, ceph::timespan delay,
 		uint64_t max_op_len, float percent_reads)
 {
-  Mutex lock;
-  FakeWriteback writeback(cct, &lock, delay_ns);
+  std::mutex lock;
+  FakeWriteback writeback(cct, &lock, delay);
 
   ObjectCacher obc(cct, writeback, lock, NULL, NULL,
 		   cct->_conf->client_oc_size,
 		   cct->_conf->client_oc_max_objects,
 		   cct->_conf->client_oc_max_dirty,
 		   cct->_conf->client_oc_target_dirty,
-		   cct->_conf->client_oc_max_dirty_age,
+		   ceph::span_from_double(cct->_conf->client_oc_max_dirty_age),
 		   true);
   obc.start();
 
@@ -80,7 +83,7 @@ int stress_test(uint64_t num_ops, uint64_t num_objs,
 	    << setw(10) << "ops: " << num_ops << "\n"
 	    << setw(10) << "objects: " << num_objs << "\n"
 	    << setw(10) << "obj size: " << max_obj_size << "\n"
-	    << setw(10) << "delay: " << delay_ns << "\n"
+	    << setw(10) << "delay: " << delay << "\n"
 	    << setw(10) << "max op len: " << max_op_len << "\n"
 	    << setw(10) << "percent reads: " << percent_reads << "\n\n";
 
@@ -101,9 +104,9 @@ int stress_test(uint64_t num_ops, uint64_t num_objs,
       rd->extents.push_back(op->extent);
       ++outstanding_reads;
       Context *completion = new C_Count(op.get(), &outstanding_reads);
-      lock.Lock();
+      unique_lock l(lock);
       int r = obc.readx(rd, &object_set, completion);
-      lock.Unlock();
+      l.unlock();
       assert(r >= 0);
       if ((uint64_t)r == length)
 	completion->complete(r);
@@ -112,9 +115,9 @@ int stress_test(uint64_t num_ops, uint64_t num_objs,
     } else {
       ObjectCacher::OSDWrite *wr = obc.prepare_write(bl, utime_t(), 0);
       wr->extents.push_back(op->extent);
-      lock.Lock();
+      unique_lock l(lock);
       obc.writex(wr, &object_set, lock, NULL);
-      lock.Unlock();
+      l.unlock();
     }
 #else
       assert(0);	// FIXME!
@@ -139,28 +142,28 @@ int stress_test(uint64_t num_ops, uint64_t num_objs,
     }
   }
 
-  lock.Lock();
+  unique_lock l(lock);
   obc.release_set(&object_set);
-  lock.Unlock();
+  l.unlock();
 
   int r = 0;
-  Mutex mylock;
-  Cond cond;
+  std::mutex mylock;
+  std::condition_variable cond;
   bool done;
   Context *onfinish = new C_SafeCond(&mylock, &cond, &done, &r);
-  lock.Lock();
+  l.lock();
   bool already_flushed = obc.flush_set(&object_set, onfinish);
   std::cout << "already flushed = " << already_flushed << std::endl;
-  lock.Unlock();
-  mylock.Lock();
+  l.unlock();
+  unique_lock ml(mylock);
   while (!done) {
-    cond.Wait(mylock);
+    cond.wait(ml);
   }
-  mylock.Unlock();
+  ml.unlock();
 
-  lock.Lock();
+  l.lock();
   bool unclean = obc.release_set(&object_set);
-  lock.Unlock();
+  l.unlock();
 
   if (unclean) {
     std::cout << "unclean buffers left over!" << std::endl;
@@ -183,6 +186,7 @@ int main(int argc, const char **argv)
 		    CODE_ENVIRONMENT_UTILITY, 0);
 
   long long delay_ns = 0;
+  ceph::timespan delay = 0ns;
   long long num_ops = 1000;
   long long obj_bytes = 4 << 20;
   long long max_len = 128 << 10;
@@ -192,11 +196,13 @@ int main(int argc, const char **argv)
   std::ostringstream err;
   std::vector<const char*>::iterator i;
   for (i = args.begin(); i != args.end();) {
-    if (ceph_argparse_withlonglong(args, i, &delay_ns, &err, "--delay-ns", (char*)NULL)) {
+    if (ceph_argparse_withlonglong(args, i, &delay_ns, &err, "--delay-ns",
+				   (char*)NULL)) {
       if (!err.str().empty()) {
 	cerr << argv[0] << ": " << err.str() << std::endl;
 	return EXIT_FAILURE;
       }
+      delay = delay_ns * 1ns;
     } else if (ceph_argparse_withlonglong(args, i, &num_ops, &err, "--ops", (char*)NULL)) {
       if (!err.str().empty()) {
 	cerr << argv[0] << ": " << err.str() << std::endl;
@@ -234,5 +240,5 @@ int main(int argc, const char **argv)
   }
 
   srandom(seed);
-  return stress_test(num_ops, num_objs, obj_bytes, delay_ns, max_len, percent_reads);
+  return stress_test(num_ops, num_objs, obj_bytes, delay, max_len, percent_reads);
 }

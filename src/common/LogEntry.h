@@ -15,8 +15,8 @@
 #ifndef CEPH_LOGENTRY_H
 #define CEPH_LOGENTRY_H
 
+#include "include/ceph_time.h"
 #include "include/types.h"
-#include "include/utime.h"
 #include "include/encoding.h"
 #include "msg/msg_types.h" // for entity_inst_t
 
@@ -43,11 +43,12 @@ int string_to_syslog_facility(string s);
 
 struct LogEntryKey {
   entity_inst_t who;
-  utime_t stamp;
+  ceph::real_time stamp;
   uint64_t seq;
 
   LogEntryKey() : seq(0) {}
-  LogEntryKey(const entity_inst_t& w, utime_t t, uint64_t s) : who(w), stamp(t), seq(s) {}
+  LogEntryKey(const entity_inst_t& w, ceph::real_time t, uint64_t s)
+    : who(w), stamp(t), seq(s) {}
 
   void encode(bufferlist& bl) const;
   void decode(bufferlist::iterator& bl);
@@ -62,7 +63,7 @@ static inline bool operator==(const LogEntryKey& l, const LogEntryKey& r) {
 
 struct LogEntry {
   entity_inst_t who;
-  utime_t stamp;
+  ceph::real_time stamp;
   uint64_t seq;
   clog_type type;
   string msg;

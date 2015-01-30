@@ -8,10 +8,8 @@
 #include <errno.h>
 
 #include "include/types.h"
-#include "include/utime.h"
 #include "objclass/objclass.h"
 #include "cls/refcount/cls_refcount_ops.h"
-#include "common/Clock.h"
 
 CLS_VER(1,0)
 CLS_NAME(refcount)

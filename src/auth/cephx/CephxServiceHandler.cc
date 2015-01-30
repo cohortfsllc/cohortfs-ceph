@@ -109,11 +109,14 @@ int CephxServiceHandler::handle_request(bufferlist::iterator& indata, bufferlist
 	should_enc_ticket = true;
       }
 
-      info.ticket.init_timestamps(ceph_clock_now(cct), cct->_conf->auth_mon_ticket_ttl);
+      info.ticket.init_timestamps(ceph::real_clock::now(),
+				  ceph::span_from_double(
+				    cct->_conf->auth_mon_ticket_ttl));
       info.ticket.name = entity_name;
       info.ticket.global_id = global_id;
       info.ticket.auid = eauth.auid;
-      info.validity += cct->_conf->auth_mon_ticket_ttl;
+      info.validity += ceph::span_from_double(
+	cct->_conf->auth_mon_ticket_ttl);
 
       if (auid) *auid = eauth.auid;
 
@@ -161,14 +164,17 @@ int CephxServiceHandler::handle_request(bufferlist::iterator& indata, bufferlist
       vector<CephXSessionAuthInfo> info_vec;
       for (uint32_t service_id = 1; service_id <= ticket_req.keys; service_id <<= 1) {
 	if (ticket_req.keys & service_id) {
-	  ldout(cct, 10) << " adding key for service " << ceph_entity_type_name(service_id) << dendl;
+	  ldout(cct, 10) << " adding key for service "
+			 << ceph_entity_type_name(service_id) << dendl;
 	  CephXSessionAuthInfo info;
-	  int r = key_server->build_session_auth_info(service_id, auth_ticket_info, info);
+	  int r = key_server->build_session_auth_info(service_id,
+						      auth_ticket_info, info);
 	  if (r < 0) {
 	    ret = r;
 	    break;
 	  }
-	  info.validity += cct->_conf->auth_service_ticket_ttl;
+	  info.validity += ceph::span_from_double(
+	    cct->_conf->auth_service_ticket_ttl);
 	  info_vec.push_back(info);
 	}
       }

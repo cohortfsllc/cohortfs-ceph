@@ -16,12 +16,12 @@
 #ifndef CEPH_FILEJOURNAL_H
 #define CEPH_FILEJOURNAL_H
 
+#include <condition_variable>
 #include <deque>
+#include <mutex>
 using std::deque;
 
 #include "Journal.h"
-#include "common/Cond.h"
-#include "common/Mutex.h"
 #include "common/Thread.h"
 #include "common/Throttle.h"
 #include "common/zipkin_trace.h"
@@ -41,13 +41,14 @@ public:
   struct completion_item {
     uint64_t seq;
     Context *finish;
-    utime_t start;
+    ceph::mono_time start;
     OpRequestRef op;
     ZTracer::Trace trace;
-    completion_item(uint64_t o, Context *c, utime_t s, OpRequestRef opref,
-	ZTracer::Trace *trace)
+    completion_item(uint64_t o, Context *c, ceph::mono_time s,
+		    OpRequestRef opref, ZTracer::Trace *trace)
       : seq(o), finish(c), start(s), op(opref), trace(*trace) {}
-    completion_item() : seq(0), finish(0), start(0) {}
+    completion_item() : seq(0), finish(0),
+			start(ceph::mono_time::min()) {}
   };
   struct write_item {
     uint64_t seq;
@@ -63,32 +64,34 @@ public:
     write_item() : seq(0), alignment(0) {}
   };
 
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
   ZTracer::Endpoint trace_endpoint;
-  Mutex finisher_lock;
-  Cond finisher_cond;
+  std::mutex finisher_lock;
+  std::condition_variable finisher_cond;
   uint64_t journaled_seq;
   bool plug_journal_completions;
 
-  Mutex writeq_lock;
-  Cond writeq_cond;
+  std::mutex writeq_lock;
+  std::condition_variable writeq_cond;
   deque<write_item> writeq;
   bool writeq_empty();
   write_item &peek_write();
   void pop_write();
 
-  Mutex completions_lock;
+  std::mutex completions_lock;
   deque<completion_item> completions;
   bool completions_empty() {
-    Mutex::Locker l(completions_lock);
+    lock_guard l(completions_lock);
     return completions.empty();
   }
   completion_item completion_peek_front() {
-    Mutex::Locker l(completions_lock);
+    lock_guard l(completions_lock);
     assert(!completions.empty());
     return completions.front();
   }
   void completion_pop_front() {
-    Mutex::Locker l(completions_lock);
+    lock_guard l(completions_lock);
     assert(!completions.empty());
     completions.pop_front();
   }
@@ -239,9 +242,9 @@ private:
       delete[] iov;
     }
   };
-  Mutex aio_lock;
-  Cond aio_cond;
-  Cond write_finish_cond;
+  std::mutex aio_lock;
+  std::condition_variable aio_cond;
+  std::condition_variable write_finish_cond;
   io_context_t aio_ctx;
   list<aio_info> aio_queue;
   int aio_num, aio_bytes;
@@ -278,10 +281,10 @@ private:
   void put_throttle(uint64_t ops, uint64_t bytes);
 
   // write thread
-  Mutex write_lock;
+  std::mutex write_lock;
   bool write_stop;
 
-  Cond commit_cond;
+  std::condition_variable commit_cond;
 
   int _open(bool wr, bool create=false);
   int _open_block_device();
@@ -299,7 +302,7 @@ private:
   int check_for_full(uint64_t seq, off64_t pos, off64_t size);
   int prepare_multi_write(bufferlist& bl, uint64_t& orig_ops, uint64_t& orig_bytee);
   int prepare_single_write(bufferlist& bl, off64_t& queue_pos, uint64_t& orig_ops, uint64_t& orig_bytes);
-  void do_write(bufferlist& bl);
+  void do_write(bufferlist& bl, unique_lock& wl);
 
   void write_finish_thread_entry();
   void check_aio_completion();
@@ -344,8 +347,9 @@ private:
 
  public:
   FileJournal(CephContext* _cct, const boost::uuids::uuid& fsid,
-	      Finisher *fin, Cond *sync_cond, const char *f,
-	      bool dio = false, bool ai = true, bool faio = false) :
+	      Finisher *fin, std::condition_variable *sync_cond,
+	      const char *f, bool dio = false, bool ai = true,
+	      bool faio = false) :
     Journal(_cct, fsid, fin, sync_cond),
     trace_endpoint("0.0.0.0", 0, NULL),
     journaled_seq(0),

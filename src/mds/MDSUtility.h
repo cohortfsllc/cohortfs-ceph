@@ -35,8 +35,10 @@ protected:
   Messenger *messenger;
   MonClient *monc;
 
-  Mutex lock;
-  SafeTimer timer;
+  std::mutex lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
+  SafeTimer<ceph::mono_clock> timer;
 
   Context *waiting_for_mds_map;
 

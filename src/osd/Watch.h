@@ -14,12 +14,13 @@
 #ifndef CEPH_WATCH_H
 #define CEPH_WATCH_H
 
-#include <boost/intrusive_ptr.hpp>
+#include <mutex>
 #include <set>
+
+#include <boost/intrusive_ptr.hpp>
 
 #include "msg/Messenger.h"
 #include "include/Context.h"
-#include "common/Mutex.h"
 
 enum WatcherState {
   WATCHER_PENDING,
@@ -68,7 +69,9 @@ class Notify {
 
   OSDService *osd;
   CancelableContext *cb;
-  Mutex lock;
+  std::mutex lock;
+  typedef std::unique_lock<std::mutex> unique_lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
 
 
   /// true if this notify is being discarded
@@ -80,7 +83,7 @@ class Notify {
   void maybe_complete_notify();
 
   /// Called on Notify timeout
-  void do_timeout();
+  void do_timeout(unique_lock& nl);
 
   Notify(
     ConnectionRef client,
@@ -247,11 +250,11 @@ public:
  * Lives in the OSD::Session object of an OSD connection
  */
 class WatchConState {
-  Mutex lock;
+  std::mutex lock;
+  typedef std::unique_lock<std::mutex> unique_lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
   std::set<WatchRef> watches;
 public:
-  WatchConState() : lock("WatchConState") {}
-
   /// Add a watch
   void addWatch(
     WatchRef watch ///< [in] Ref to new watch object

@@ -1,10 +1,7 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 
 #include "bencher.h"
-#include "include/utime.h"
 #include <unistd.h>
-#include "common/Mutex.h"
-#include "common/Cond.h"
 
 template<typename T>
 struct C_Holder : public Context {
@@ -70,43 +67,41 @@ struct OnReadComplete : public Context {
 };
 
 void Bencher::start_op() {
-  Mutex::Locker l(lock);
-  while (open_ops >= max_in_flight)
-    open_ops_cond.Wait(lock);
+  unique_lock l(lock);
+  open_ops_cond.wait(l, [&](){ return open_ops < max_in_flight; });
   ++open_ops;
 }
 
 void Bencher::drain_ops() {
-  Mutex::Locker l(lock);
-  while (open_ops)
-    open_ops_cond.Wait(lock);
+  unique_lock l(lock);
+  open_ops_cond.wait(l, [&](){ return !open_ops; });
 }
 
 void Bencher::complete_op() {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   assert(open_ops > 0);
   --open_ops;
-  open_ops_cond.Signal();
+  open_ops_cond.notify_all();
 }
 
 struct OnFinish {
   bool *done;
-  Mutex *lock;
-  Cond *cond;
+  std::mutex *lock;
+  std::condition_variable *cond;
   OnFinish(
     bool *done,
-    Mutex *lock,
-    Cond *cond) :
+    std::mutex *lock,
+    std::condition_variable *cond) :
     done(done), lock(lock), cond(cond) {}
   ~OnFinish() {
-    Mutex::Locker l(*lock);
+    std::unique_lock<std::mutex> l(*lock);
     *done = true;
-    cond->Signal();
+    cond->notify_all();
   }
 };
 
 void Bencher::init(
-  const set<std::string> &objects,
+  const std::set<std::string> &objects,
   uint64_t size,
   std::ostream *out
   )
@@ -115,14 +110,14 @@ void Bencher::init(
   for (uint64_t i = 0; i < size; ++i) {
     bl.append(0);
   }
-  Mutex lock;
-  Cond cond;
+  std::mutex lock;
+  std::condition_variable cond;
   bool done = 0;
   {
     std::shared_ptr<OnFinish> on_finish(
       new OnFinish(&done, &lock, &cond));
     uint64_t num = 0;
-    for (set<std::string>::const_iterator i = objects.begin();
+    for (auto i = objects.begin();
 	 i != objects.end();
 	 ++i, ++num) {
       if (!(num % 20))
@@ -137,9 +132,8 @@ void Bencher::init(
     }
   }
   {
-    Mutex::Locker l(lock);
-    while (!done)
-      cond.Wait(lock);
+    unique_lock l(lock);
+    cond.wait(l, [&](){ return done; });
   }
 }
 
@@ -155,7 +149,7 @@ void Bencher::run_bench()
     uint64_t seq = stat_collector->next_seq();
     boost::tuple<std::string, uint64_t, uint64_t, OpType> next =
       (*op_dist)();
-    string obj_name = next.get<0>();
+    std::string obj_name = next.get<0>();
     uint64_t offset = next.get<1>();
     uint64_t length = next.get<2>();
     OpType op_type = next.get<3>();

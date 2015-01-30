@@ -16,13 +16,16 @@
 #define CEPH_HEARTBEATMAP_H
 
 #include <atomic>
+#include <condition_variable>
+#include <mutex>
+#include <shared_mutex>
 #include <string>
 #include <list>
 #include <time.h>
 #include <pthread.h>
 
+#include "include/ceph_time.h"
 
-#include "RWLock.h"
 
 class CephContext;
 
@@ -41,13 +44,15 @@ namespace ceph {
 
 struct heartbeat_handle_d {
   std::string name;
-  std::atomic<uint64_t> timeout;
-  std::atomic<uint64_t> suicide_timeout;
-  time_t grace, suicide_grace;
+  // We really want atomic timepoints, look into that later
+  std::atomic<ceph_timespec> timeout;
+  std::atomic<ceph_timespec> suicide_timeout;
+  timespan grace, suicide_grace;
   std::list<heartbeat_handle_d*>::iterator list_item;
 
   heartbeat_handle_d(const std::string& n)
-    : name(n), timeout(0), suicide_timeout(0), grace(0), suicide_grace(0)
+    : name(n), timeout(0), suicide_timeout(0),
+      grace(timespan(0)), suicide_grace(timespan(0))
   { }
 };
 
@@ -58,7 +63,8 @@ class HeartbeatMap {
   void remove_worker(heartbeat_handle_d *h);
 
   // reset the timeout so that it expects another touch within grace amount of time
-  void reset_timeout(heartbeat_handle_d *h, time_t grace, time_t suicide_grace);
+  void reset_timeout(heartbeat_handle_d *h,
+		     timespan grace, timespan suicide_grace);
   // clear the timeout so that it's not checked on
   void clear_timeout(heartbeat_handle_d *h);
 
@@ -73,11 +79,14 @@ class HeartbeatMap {
 
  private:
   CephContext *m_cct;
-  RWLock m_rwlock;
-  time_t m_inject_unhealthy_until;
+  std::shared_timed_mutex m_rwlock;
+  typedef std::shared_lock<std::shared_timed_mutex> shared_lock;
+  typedef std::unique_lock<std::shared_timed_mutex> unique_lock;
+  ceph::mono_time m_inject_unhealthy_until;
   std::list<heartbeat_handle_d*> m_workers;
 
-  bool _check(heartbeat_handle_d *h, const char *who, time_t now);
+  bool _check(heartbeat_handle_d *h, const char *who,
+	      ceph::mono_time now);
 };
 
 }

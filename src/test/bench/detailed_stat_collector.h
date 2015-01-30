@@ -3,16 +3,18 @@
 #ifndef DETAILEDSTATCOLLECTERH
 #define DETAILEDSTATCOLLECTERH
 
-#include "stat_collector.h"
-#include "common/Formatter.h"
-#include <boost/scoped_ptr.hpp>
-#include "common/Mutex.h"
-#include "common/Cond.h"
-#include "include/utime.h"
+#include <condition_variable>
 #include <list>
 #include <map>
-#include <boost/tuple/tuple.hpp>
+#include <mutex>
 #include <ostream>
+
+#include <boost/tuple/tuple.hpp>
+#include <boost/scoped_ptr.hpp>
+
+#include "include/ceph_time.h"
+#include "stat_collector.h"
+#include "common/Formatter.h"
 
 class DetailedStatCollector : public StatCollector {
 public:
@@ -23,15 +25,15 @@ public:
   };
 private:
   struct Op {
-    string type;
-    utime_t start;
-    double latency;
+    std::string type;
+    ceph::mono_time start;
+    ceph::timespan latency;
     uint64_t size;
     uint64_t seq;
     Op(
-      string type,
-      utime_t start,
-      double latency,
+      std::string type,
+      ceph::mono_time start,
+      ceph::timespan latency,
       uint64_t size,
       uint64_t seq)
       : type(type), start(start), latency(latency),
@@ -41,10 +43,10 @@ private:
   class Aggregator {
     uint64_t recent_size;
     uint64_t total_size;
-    double recent_latency;
-    double total_latency;
-    utime_t last;
-    utime_t first;
+    ceph::timespan recent_latency;
+    ceph::timespan total_latency;
+    ceph::mono_time last;
+    ceph::mono_time first;
     uint64_t recent_ops;
     uint64_t total_ops;
     bool started;
@@ -54,30 +56,32 @@ private:
     void add(const Op &op);
     void dump(Formatter *f);
   };
-  const double bin_size;
+  const ceph::timespan bin_size;
   boost::scoped_ptr<Formatter> f;
   ostream *out;
   ostream *summary_out;
   boost::scoped_ptr<AdditionalPrinting> details;
-  utime_t last_dump;
+  ceph::mono_time last_dump;
 
-  Mutex lock;
-  Cond cond;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
+  std::mutex lock;
+  std::condition_variable cond;
 
-  map<string, Aggregator> aggregators;
+  std::map<std::string, Aggregator> aggregators;
 
-  map<uint64_t, pair<uint64_t, utime_t> > not_applied;
-  map<uint64_t, pair<uint64_t, utime_t> > not_committed;
-  map<uint64_t, pair<uint64_t, utime_t> > not_read;
+  std::map<uint64_t, std::pair<uint64_t, ceph::mono_time> > not_applied;
+  std::map<uint64_t, std::pair<uint64_t, ceph::mono_time> > not_committed;
+  std::map<uint64_t, std::pair<uint64_t, ceph::mono_time> > not_read;
 
   uint64_t cur_seq;
 
   void dump(
-    const string &type,
-    boost::tuple<utime_t, utime_t, uint64_t, uint64_t> stuff);
+    const std::string &type,
+    boost::tuple<ceph::mono_time, ceph::mono_time, uint64_t, uint64_t> stuff);
 public:
   DetailedStatCollector(
-    double bin_size,
+    ceph::timespan bin_size,
     Formatter *formatter,
     ostream *out,
     ostream *summary_out,

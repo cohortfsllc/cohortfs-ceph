@@ -14,7 +14,9 @@
 #define TEST_OBJECTSTORE_STATE_H_
 
 #include <atomic>
+#include <condition_variable>
 #include <map>
+#include <mutex>
 #include <vector>
 #include <boost/scoped_ptr.hpp>
 #include <boost/random/mersenne_twister.hpp>
@@ -70,19 +72,19 @@ public:
 
   int m_max_in_flight;
   std::atomic<int> m_in_flight;
-  Mutex m_finished_lock;
-  Cond m_finished_cond;
+  std::mutex m_finished_lock;
+  std::condition_variable m_finished_cond;
 
   void wait_for_ready() {
-    Mutex::Locker locker(m_finished_lock);
+    std::unique_lock<std::mutex> mfl(m_finished_lock);
     while ((m_max_in_flight > 0) && (m_in_flight >= m_max_in_flight))
-      m_finished_cond.Wait(m_finished_lock);
+      m_finished_cond.wait(mfl);
   }
 
   void wait_for_done() {
-    Mutex::Locker locker(m_finished_lock);
+    std::unique_lock<std::mutex> mfl(m_finished_lock);
     while (m_in_flight)
-      m_finished_cond.Wait(m_finished_lock);
+      m_finished_cond.wait(mfl);
   }
 
   void set_max_in_flight(int max) {
@@ -139,9 +141,9 @@ public:
 	ObjectStore::Transaction *t) : m_state(state), m_tx(t) { }
 
     void finish(int r) {
-      Mutex::Locker locker(m_state->m_finished_lock);
+      std::lock_guard<std::mutex> locker(m_state->m_finished_lock);
       m_state->dec_in_flight();
-      m_state->m_finished_cond.Signal();
+      m_state->m_finished_cond.notify_all();
 
       delete m_tx;
     }

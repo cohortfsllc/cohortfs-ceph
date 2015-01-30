@@ -5,7 +5,6 @@
 #include "include/types.h"
 
 class Inode;
-class Cond;
 
 // file handle for any open file state
 
@@ -18,7 +17,7 @@ struct Fh {
 
   int flags;
   bool pos_locked; // pos is currently in use
-  list<Cond*> pos_waiters; // waiters for pos
+  list<std::condition_variable*> pos_waiters; // waiters for pos
 
   // readahead state
   loff_t last_pos;

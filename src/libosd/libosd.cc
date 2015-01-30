@@ -1,6 +1,8 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
+#include <condition_variable>
+#include <mutex>
 #include "ceph_osd.h"
 
 #include "Dispatcher.h"
@@ -24,8 +26,9 @@ namespace
 {
 // Maintain a map to prevent multiple OSDs with the same name
 // TODO: allow same name with different cluster name
-Mutex osd_lock;
-
+std::mutex osd_lock;
+typedef std::unique_lock<std::mutex> unique_osd_lock;
+typedef std::lock_guard<std::mutex> osd_lock_guard;
 typedef std::map<int, libosd*> osdmap;
 osdmap osds;
 }
@@ -46,9 +49,11 @@ class LibOSD : private Objecter, public libosd, private OSDStateObserver {
   OSDMessengers *ms;
   DirectMessenger *ms_client, *ms_server; // DirectMessenger pair
 
-  struct {
-    Mutex mtx;
-    Cond cond;
+  struct _osdmap {
+    std::mutex mtx;
+    std::condition_variable cond;
+    typedef std::unique_lock<std::mutex> unique_lock;
+    typedef std::lock_guard<std::mutex> lock_guard;
     int state;
     epoch_t epoch;
     bool shutdown;
@@ -261,10 +266,10 @@ void LibOSD::on_osd_state(int state, epoch_t epoch)
 {
   ldout(cct, 1) << "on_osd_state " << state << " epoch " << epoch << dendl;
 
-  Mutex::Locker lock(osdmap.mtx);
+  _osdmap::lock_guard lock(osdmap.mtx);
   if (osdmap.state != state) {
     osdmap.state = state;
-    osdmap.cond.Signal();
+    osdmap.cond.notify_all();
 
     if (state == OSD::STATE_ACTIVE) {
       if (callbacks && callbacks->osd_active)
@@ -284,10 +289,10 @@ void LibOSD::on_osd_state(int state, epoch_t epoch)
 
 bool LibOSD::wait_for_active(epoch_t *epoch)
 {
-  Mutex::Locker lock(osdmap.mtx);
+  _osdmap::unique_lock l(osdmap.mtx);
   while (osdmap.state != OSD::STATE_ACTIVE
       && osdmap.state != OSD::STATE_STOPPING)
-    osdmap.cond.Wait(osdmap.mtx);
+    osdmap.cond.wait(l);
 
   *epoch = osdmap.epoch;
   return osdmap.state != OSD::STATE_STOPPING;
@@ -303,9 +308,9 @@ void LibOSD::join()
 
 void LibOSD::shutdown()
 {
-  osdmap.mtx.Lock();
+  _osdmap::unique_lock l(osdmap.mtx);
   osdmap.shutdown = true;
-  osdmap.mtx.Unlock();
+  l.unlock();
 
   osd->shutdown();
 }
@@ -345,7 +350,7 @@ struct libosd* libosd_init(const struct libosd_init_args *args)
   ceph::osd::LibOSD *osd;
   {
     // protect access to the map of osds
-    Mutex::Locker lock(osd_lock);
+    osd_lock_guard lock(osd_lock);
 
     // existing osd with this name?
     std::pair<osdmap::iterator, bool> result =
@@ -364,9 +369,9 @@ struct libosd* libosd_init(const struct libosd_init_args *args)
   }
 
   // remove from the map of osds
-  osd_lock.Lock();
+  unique_osd_lock ol(osd_lock);
   osds.erase(args->id);
-  osd_lock.Unlock();
+  ol.unlock();
 
   delete osd;
   return nullptr;
@@ -398,15 +403,15 @@ void libosd_cleanup(struct libosd *osd)
   delete static_cast<ceph::osd::LibOSD*>(osd);
 
   // remove from the map of osds
-  osd_lock.Lock();
+  unique_osd_lock ol(osd_lock);
   osds.erase(id);
-  osd_lock.Unlock();
+  ol.unlock();
 }
 
 void libosd_signal(int signum)
 {
   // signal all osds under list lock
-  Mutex::Locker lock(osd_lock);
+  osd_lock_guard lock(osd_lock);
 
   for (auto osd : osds) {
     try {

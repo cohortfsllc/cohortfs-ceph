@@ -6,8 +6,9 @@
 
 #include <atomic>
 #include <list>
-#include "Mutex.h"
-#include "Cond.h"
+#include <mutex>
+#include <condition_variable>
+#include "include/Context.h"
 
 class CephContext;
 
@@ -16,8 +17,8 @@ class Throttle {
   std::string name;
   std::atomic<int64_t> count;
   std::atomic<int64_t> max;
-  Mutex lock;
-  std::list<Cond*> cond;
+  std::mutex lock;
+  std::list<std::condition_variable*> cond;
 
 public:
   Throttle(CephContext *cct, std::string n, int64_t m = 0);
@@ -34,7 +35,7 @@ private:
        (c >= m && cur > m));     // except for large c
   }
 
-  bool _wait(int64_t c);
+  bool _wait(int64_t c, std::unique_lock<std::mutex>& l);
 
 public:
   int64_t get_current() {
@@ -76,8 +77,8 @@ public:
   void end_op(int r);
   int wait_for_ret();
 private:
-  Mutex m_lock;
-  Cond m_cond;
+  std::mutex m_lock;
+  std::condition_variable m_cond;
   uint64_t m_max;
   uint64_t m_current;
   int m_ret;

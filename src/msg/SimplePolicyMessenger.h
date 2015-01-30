@@ -22,7 +22,7 @@ class SimplePolicyMessenger : public Messenger
 {
 private:
   /// lock protecting policy
-  Mutex policy_lock;
+  std::mutex policy_lock;
   /// the default Policy we use for Pipes
   Policy default_policy;
   /// map specifying different Policies for specific peer types
@@ -43,7 +43,7 @@ public:
    * @return A const Policy reference.
    */
   virtual Policy get_policy(int t) {
-    Mutex::Locker l(policy_lock);
+    std::lock_guard<std::mutex> l(policy_lock);
     map<int, Policy>::iterator iter =
       policy_map.find(t);
     if (iter != policy_map.end())
@@ -53,7 +53,7 @@ public:
   }
 
   virtual Policy get_default_policy() {
-    Mutex::Locker l(policy_lock);
+    std::lock_guard<std::mutex> l(policy_lock);
     return default_policy;
   }
 
@@ -66,7 +66,7 @@ public:
    * @param p The Policy to apply.
    */
   virtual void set_default_policy(Policy p) {
-    Mutex::Locker l(policy_lock);
+    std::lock_guard<std::mutex> l(policy_lock);
     default_policy = p;
   }
   /**
@@ -78,7 +78,7 @@ public:
    * @param p The policy to apply.
    */
   virtual void set_policy(int type, Policy p) {
-    Mutex::Locker l(policy_lock);
+    std::lock_guard<std::mutex> l(policy_lock);
     policy_map[type] = p;
   }
 
@@ -96,7 +96,7 @@ public:
   void set_policy_throttlers(int type,
 			     Throttle *byte_throttle,
 			     Throttle *msg_throttle) {
-    Mutex::Locker l(policy_lock);
+    std::lock_guard<std::mutex> l(policy_lock);
     map<int, Policy>::iterator iter =
       policy_map.find(type);
     if (iter != policy_map.end()) {

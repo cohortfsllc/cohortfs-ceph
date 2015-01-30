@@ -319,7 +319,7 @@ COMMAND("osd create " \
 COMMAND("osd blacklist " \
 	"name=blacklistop,type=CephChoices,strings=add|rm " \
 	"name=addr,type=CephEntityAddr " \
-	"name=expire,type=CephFloat,range=0.0,req=false", \
+	"name=expire,type=CephInt,range=0,req=false", \
 	"add (optionally until <expire> seconds from now) or remove <addr> from blacklist", \
 	"osd", "rw", "cli,rest")
 COMMAND("osd placer create striped "			 \

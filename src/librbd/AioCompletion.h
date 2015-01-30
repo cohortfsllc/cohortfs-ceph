@@ -3,11 +3,12 @@
 #ifndef CEPH_LIBRBD_AIOCOMPLETION_H
 #define CEPH_LIBRBD_AIOCOMPLETION_H
 
-#include "common/Cond.h"
-#include "common/Mutex.h"
+#include <condition_variable>
+#include <mutex>
+
+#include "include/ceph_time.h"
 #include "common/ceph_context.h"
 #include "include/Context.h"
-#include "include/utime.h"
 #include "include/rbd/librbd.hpp"
 
 #include "librbd/ImageCtx.h"
@@ -38,8 +39,10 @@ namespace librbd {
    * this initial reference.
    */
   struct AioCompletion {
-    Mutex lock;
-    Cond cond;
+    std::recursive_mutex lock;
+    typedef std::lock_guard<std::recursive_mutex> lock_guard;
+    typedef std::unique_lock<std::recursive_mutex> unique_lock;
+    std::condition_variable_any cond;
     bool done;
     ssize_t rval;
     callback_t complete_cb;
@@ -50,15 +53,14 @@ namespace librbd {
     int ref;
     bool released;
     ImageCtx *ictx;
-    utime_t start_time;
+    ceph::mono_time start_time;
     aio_type_t aio_type;
 
     bufferlist *read_bl;
     char *read_buf;
     size_t read_buf_len;
 
-    AioCompletion() : lock(true),
-		      done(false), rval(0), complete_cb(NULL),
+    AioCompletion() : done(false), rval(0), complete_cb(NULL),
 		      complete_arg(NULL), rbd_comp(NULL),
 		      pending_count(0), building(true),
 		      ref(1), released(false), ictx(NULL),
@@ -69,17 +71,15 @@ namespace librbd {
     }
 
     int wait_for_complete() {
-      lock.Lock();
-      while (!done)
-	cond.Wait(lock);
-      lock.Unlock();
+      unique_lock l(lock);
+      cond.wait(l, [&](){ return done; });
       return 0;
     }
 
     void add_request() {
-      lock.Lock();
+      unique_lock l(lock);
       pending_count++;
-      lock.Unlock();
+      l.unlock();
       get();
     }
 
@@ -90,18 +90,15 @@ namespace librbd {
     void init_time(ImageCtx *i, aio_type_t t) {
       ictx = i;
       aio_type = t;
-      start_time = ceph_clock_now(ictx->cct);
+      start_time = ceph::mono_clock::now();
     }
 
     void complete() {
-      utime_t elapsed;
-      assert(lock.is_locked());
-      elapsed = ceph_clock_now(ictx->cct) - start_time;
       if (complete_cb) {
 	complete_cb(rbd_comp, complete_arg);
       }
       done = true;
-      cond.Signal();
+      cond.notify_all();
     }
 
     void set_complete_cb(void *cb_arg, callback_t cb) {
@@ -112,37 +109,35 @@ namespace librbd {
     void complete_request(CephContext *cct, ssize_t r);
 
     bool is_complete() {
-      Mutex::Locker l(lock);
+      lock_guard l(lock);
       return done;
     }
 
     ssize_t get_return_value() {
-      lock.Lock();
+      lock_guard l(lock);
       ssize_t r = rval;
-      lock.Unlock();
       return r;
     }
 
     void get() {
-      lock.Lock();
+      lock_guard l(lock);
       assert(ref > 0);
       ref++;
-      lock.Unlock();
     }
     void release() {
-      lock.Lock();
+      lock_guard l(lock);
       assert(!released);
       released = true;
-      put_unlock();
     }
     void put() {
-      lock.Lock();
-      put_unlock();
+      unique_lock l(lock);
+      put_unlock(l);
     }
-    void put_unlock() {
+    void put_unlock(unique_lock& l) {
       assert(ref > 0);
       int n = --ref;
-      lock.Unlock();
+      l.unlock();
+      l.release(); // Just so we don't have it pointint at bad memory.
       if (!n)
 	delete this;
     }

@@ -19,8 +19,6 @@
 
 #include <string>
 #include <set>
-using namespace std;
-
 #include "include/types.h"
 #include "include/buffer.h"
 #include "include/lru.h"

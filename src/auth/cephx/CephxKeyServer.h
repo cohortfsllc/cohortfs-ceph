@@ -189,7 +189,9 @@ WRITE_CLASS_ENCODER(KeyServerData::Incremental);
 class KeyServer : public KeyStore {
   CephContext *cct;
   KeyServerData data;
-  mutable Mutex lock;
+  mutable std::mutex lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
 
   int _rotate_secret(uint32_t service_id);
   bool _check_rotating_secrets();
@@ -227,7 +229,7 @@ public:
     ::encode(data, bl);
   }
   void decode(bufferlist::iterator& bl) {
-    Mutex::Locker l(lock);
+    lock_guard l(lock);
     ::decode(data, bl);
   }
   bool contains(const EntityName& name) const;
@@ -238,7 +240,7 @@ public:
     return encode_secrets(NULL, &ds);
   }
   version_t get_ver() const {
-    Mutex::Locker l(lock);
+    lock_guard l(lock);
     return data.version;
   }
 
@@ -250,17 +252,17 @@ public:
     data.apply_incremental(inc);
   }
   void set_ver(version_t ver) {
-    Mutex::Locker l(lock);
+    lock_guard l(lock);
     data.version = ver;
   }
 
   void add_auth(const EntityName& name, EntityAuth& auth) {
-    Mutex::Locker l(lock);
+    lock_guard l(lock);
     data.add_auth(name, auth);
   }
 
   void remove_secret(const EntityName& name) {
-    Mutex::Locker l(lock);
+    lock_guard l(lock);
     data.remove_secret(name);
   }
 
@@ -278,7 +280,7 @@ public:
   }
   */
   void clone_to(KeyServerData& dst) const {
-    Mutex::Locker l(lock);
+    lock_guard l(lock);
     dst = data;
   }
   void export_keyring(KeyRing& keyring) {
@@ -293,7 +295,9 @@ public:
 
   bool get_rotating_encrypted(const EntityName& name, bufferlist& enc_bl) const;
 
-  Mutex& get_lock() const { return lock; }
+  unique_lock get_lock() const {
+    return unique_lock(lock, std::defer_lock);
+  }
   bool get_service_caps(const EntityName& name, uint32_t service_id,
 			AuthCapsInfo& caps) const;
 

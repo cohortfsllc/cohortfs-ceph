@@ -111,11 +111,11 @@ public:
   // -- client leases --
 public:
   static const int client_lease_pools = 3;
-  float client_lease_durations[client_lease_pools];
+  ceph::timespan client_lease_durations[client_lease_pools];
 protected:
   xlist<ClientLease*> client_leases[client_lease_pools];
 public:
-  void touch_client_lease(ClientLease *r, int pool, utime_t ttl) {
+  void touch_client_lease(ClientLease *r, int pool, ceph::real_time ttl) {
     client_leases[pool].push_back(&r->item_lease);
     r->ttl = ttl;
   }
@@ -510,7 +510,7 @@ public:
   void start_files_to_recover(vector<CInode*>& recover_q, vector<CInode*>& check_q);
 
   void do_file_recover();
-  void _recovered(CInode *in, int r, uint64_t size, utime_t mtime);
+  void _recovered(CInode *in, int r, uint64_t size, ceph::real_time mtime);
 
   void purge_prealloc_ino(inodeno_t ino, Context *fin);
 
@@ -927,7 +927,7 @@ private:
     MDRequestRef mdr;
     // for deadlock detection
     bool has_frozen;
-    utime_t last_cum_auth_pins_change;
+    ceph::mono_time last_cum_auth_pins_change;
     int last_cum_auth_pins;
     int num_remote_waiters;	// number of remote authpin waiters
     fragment_info_t() : has_frozen(false), last_cum_auth_pins(0), num_remote_waiters(0) {}

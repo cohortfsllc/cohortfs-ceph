@@ -12,11 +12,11 @@
  *
  */
 
+#include <thread>
 #include <iostream>
 #include <errno.h>
 
 #include "include/types.h"
-#include "common/Clock.h"
 #include "msg/msg_types.h"
 #include "include/rados/librados.hpp"
 
@@ -282,19 +282,19 @@ TEST(ClsLock, TestLockDuration) {
 
   string oid = "foo";
   Lock l("lock");
-  utime_t dur(5, 0);
+  ceph::timespan dur = 5s;
   l.set_duration(dur);
-  utime_t start = ceph_clock_now(NULL);
+  auto start = ceph::real_clock::now();
   ASSERT_EQ(0, l.lock_exclusive(&ioctx, oid));
   int r = l.lock_exclusive(&ioctx, oid);
   if (r == 0) {
     // it's possible to get success if we were just really slow...
-    ASSERT_TRUE(ceph_clock_now(NULL) > start + dur);
+    ASSERT_TRUE(ceph::real_clock::now() > start + dur);
   } else {
     ASSERT_EQ(-EEXIST, r);
   }
 
-  sleep(dur.sec());
+  std::this_thread::sleep_for(dur);
   ASSERT_EQ(0, l.lock_exclusive(&ioctx, oid));
 
   ASSERT_EQ(0, destroy_one_volume_pp(volume_name, cluster));

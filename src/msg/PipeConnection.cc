@@ -25,43 +25,43 @@ PipeConnection::~PipeConnection() {
 }
 
 Pipe* PipeConnection::get_pipe() {
-    Mutex::Locker l(lock);
-    if (pipe)
-	return pipe->get();
-    return NULL;
+  std::lock_guard<std::mutex> l(lock);
+  if (pipe)
+    return pipe->get();
+  return NULL;
 }
 
 bool PipeConnection::try_get_pipe(Pipe **p) {
-    Mutex::Locker l(lock);
-    if (failed) {
-	*p = NULL;
-    } else {
-	if (pipe)
-	    *p = pipe->get();
-	else
-	    *p = NULL;
-    }
-    return !failed;
+  std::lock_guard<std::mutex> l(lock);
+  if (failed) {
+    *p = NULL;
+  } else {
+    if (pipe)
+      *p = pipe->get();
+    else
+      *p = NULL;
+  }
+  return !failed;
 }
 
 bool PipeConnection::clear_pipe(Pipe *old_p) {
-    Mutex::Locker l(lock);
+  std::lock_guard<std::mutex> l(lock);
 #if 0 /* XXX */
-    cout << __func__ << " pipe: " << pipe << " old_p: " << old_p <<
-	std::endl;
+  cout << __func__ << " pipe: " << pipe << " old_p: " << old_p <<
+    std::endl;
 #endif
-    if (old_p == pipe) {
-	pipe->put();
-	pipe = NULL;
-	failed = true;
-	return true;
-    }
-    return false;
+  if (old_p == pipe) {
+    pipe->put();
+    pipe = NULL;
+    failed = true;
+    return true;
+  }
+  return false;
 }
 
 void PipeConnection::reset_pipe(Pipe *p) {
-    Mutex::Locker l(lock);
-    if (pipe)
-	pipe->put();
-    pipe = p->get();
+  std::lock_guard<std::mutex> l(lock);
+  if (pipe)
+    pipe->put();
+  pipe = p->get();
 }

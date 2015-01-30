@@ -145,7 +145,7 @@ private:
 public:
   xlist<Capability*> caps;     // inodes with caps; front=most recently used
   xlist<ClientLease*> leases;  // metadata leases to clients
-  utime_t last_cap_renew;
+  ceph::mono_time last_cap_renew;
 
 public:
   version_t inc_push_seq() { return ++cap_push_seq; }
@@ -217,7 +217,7 @@ public:
     info.clear_meta();
 
     cap_push_seq = 0;
-    last_cap_renew = utime_t();
+    last_cap_renew = ceph::mono_time::min();
 
   }
 
@@ -287,7 +287,7 @@ public:
     } else {
       s = session_map[i.name] = new Session;
       s->info.inst = i;
-      s->last_cap_renew = ceph_clock_now(cct);
+      s->last_cap_renew = ceph::mono_clock::now();
     }
     return s;
   }
@@ -310,7 +310,7 @@ public:
       if (by_state.count(session->state) == 0)
 	by_state[session->state] = new xlist<Session*>;
       by_state[session->state]->push_back(&session->item_session_list);
-      session->last_cap_renew = ceph_clock_now(cct);
+      session->last_cap_renew = ceph::mono_clock::now();
     } else {
       assert(0);  // hrm, should happen?
     }

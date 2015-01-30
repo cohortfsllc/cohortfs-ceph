@@ -1,5 +1,7 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
+#include "include/ceph_time.h"
 #include "auth/Crypto.h"
-#include "common/Clock.h"
 #include "common/ceph_context.h"
 #include "common/code_environment.h"
 
@@ -16,7 +18,7 @@ int main(int argc, char *argv[])
   memset(aes_key, 0x77, sizeof(aes_key));
   bufferptr keybuf(aes_key, sizeof(aes_key));
   CephContext* cct = new CephContext(CODE_ENVIRONMENT_UTILITY);
-  CryptoKey key(CEPH_CRYPTO_AES, ceph_clock_now(cct), keybuf);
+  CryptoKey key(CEPH_CRYPTO_AES, ceph::real_clock::now(), keybuf);
 
   const char *msg="hello! this is a message\n";
   char pad[16];

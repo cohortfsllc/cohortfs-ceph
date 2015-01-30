@@ -181,7 +181,7 @@ int main(int argc, char **argv)
 
     Bencher bencher(
       gen,
-      new DetailedStatCollector(1, new JSONFormatter, detailed_ops, &cout),
+      new DetailedStatCollector(1s, new JSONFormatter, detailed_ops, &cout),
       new RBDBackend(&images),
       vm["num-concurrent-ops"].as<unsigned>(),
       vm["duration"].as<unsigned>(),

@@ -18,11 +18,9 @@
 #include <vector>
 
 #include "include/types.h"
-#include "include/utime.h"
 #include "objclass/objclass.h"
 
 #include "common/errno.h"
-#include "common/Clock.h"
 
 #include "cls/lock/cls_lock_types.h"
 #include "cls/lock/cls_lock_ops.h"
@@ -99,7 +97,7 @@ static int read_lock(cls_method_context_t hctx, const string& name, lock_info_t 
 
   /* now trim expired locks */
 
-  utime_t now = ceph_clock_now(cls_cxx_context(hctx));
+  auto now = ceph::real_clock::now();
 
   map<locker_id_t, locker_info_t>::iterator iter = lock->lockers.begin();
 
@@ -108,7 +106,7 @@ static int read_lock(cls_method_context_t hctx, const string& name, lock_info_t 
     ++next;
 
     struct locker_info_t& info = iter->second;
-    if (!info.expiration.is_zero() && info.expiration < now) {
+    if (info.expiration < now) {
       CLS_LOG(20, "expiring locker");
       lock->lockers.erase(iter);
     }
@@ -152,7 +150,7 @@ static int write_lock(cls_method_context_t hctx, const string& name, const lock_
 static int lock_obj(cls_method_context_t hctx,
 		    const string& name,
 		    ClsLockType lock_type,
-		    utime_t duration,
+		    ceph::timespan duration,
 		    const string& description,
 		    uint8_t flags,
 		    const string& cookie,
@@ -218,9 +216,9 @@ static int lock_obj(cls_method_context_t hctx,
 
   linfo.lock_type = lock_type;
   linfo.tag = tag;
-  utime_t expiration;
-  if (!duration.is_zero()) {
-    expiration = ceph_clock_now(cls_cxx_context(hctx));
+  ceph::real_time expiration = ceph::real_time::max();
+  if (duration != 0ns) {
+    expiration = ceph::real_clock::now();
     expiration += duration;
 
   }

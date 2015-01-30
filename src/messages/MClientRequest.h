@@ -175,9 +175,9 @@ public:
       if (head.args.setattr.mask & CEPH_SETATTR_SIZE)
 	out << " size=" << head.args.setattr.size;
       if (head.args.setattr.mask & CEPH_SETATTR_MTIME)
-	out << " mtime=" << utime_t(head.args.setattr.mtime);
+	out << " mtime=" << ceph::spec_to_time(head.args.setattr.mtime);
       if (head.args.setattr.mask & CEPH_SETATTR_ATIME)
-	out << " atime=" << utime_t(head.args.setattr.atime);
+	out << " atime=" << ceph::spec_to_time(head.args.setattr.atime);
     }
     if (head.op == CEPH_MDS_OP_SETFILELOCK ||
 	head.op == CEPH_MDS_OP_GETFILELOCK) {

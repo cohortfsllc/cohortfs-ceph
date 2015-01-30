@@ -55,7 +55,7 @@ void DumbBackend::_write(
 #endif
   ::close(fd);
   {
-    Mutex::Locker l(pending_commit_mutex);
+    lock_guard l(pending_commit_mutex);
     pending_commits.insert(on_commit);
   }
   sem.Put();
@@ -91,10 +91,10 @@ void DumbBackend::sync_loop()
   while (1) {
     sleep(sync_interval);
     {
-      Mutex::Locker l(sync_loop_mutex);
+      lock_guard l(sync_loop_mutex);
       if (sync_loop_stop != 0) {
 	sync_loop_stop = 2;
-	sync_loop_cond.Signal();
+	sync_loop_cond.notify_all();
 	break;
       }
     }
@@ -105,7 +105,7 @@ void DumbBackend::sync_loop()
     ::sync();
 #endif
     {
-      Mutex::Locker l(pending_commit_mutex);
+      lock_guard l(pending_commit_mutex);
       for (set<Context*>::iterator i = pending_commits.begin();
 	   i != pending_commits.end();
 	   pending_commits.erase(i++)) {

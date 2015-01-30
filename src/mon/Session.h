@@ -15,6 +15,7 @@
 #ifndef CEPH_MON_SESSION_H
 #define CEPH_MON_SESSION_H
 
+#include "include/ceph_time.h"
 #include "include/xlist.h"
 #include "msg/msg_types.h"
 
@@ -41,8 +42,7 @@ struct MonSession : public RefCountedObject {
   CephContext* cct;
   ConnectionRef con;
   entity_inst_t inst;
-  utime_t until;
-  utime_t time_established;
+  ceph::mono_time until;
   bool closed;
   xlist<MonSession*>::item item;
   set<uint64_t> routed_request_tids;
@@ -64,7 +64,6 @@ struct MonSession : public RefCountedObject {
     global_id(0), notified_global_id(0), auth_handler(NULL),
     proxy_con(NULL), proxy_tid(0) {
     cct->get();
-    time_established = ceph_clock_now(cct);
   }
   ~MonSession() {
     //generic_dout(0) << "~MonSession " << this << dendl;

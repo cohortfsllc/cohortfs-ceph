@@ -3,14 +3,16 @@
 #ifndef LEVEL_DB_STORE_H
 #define LEVEL_DB_STORE_H
 
+#include <cassert>
+#include <condition_variable>
+#include <set>
+#include <map>
+#include <mutex>
+#include <string>
+#include <boost/scoped_ptr.hpp>
 #include "include/types.h"
 #include "include/buffer.h"
 #include "KeyValueDB.h"
-#include <cassert>
-#include <set>
-#include <map>
-#include <string>
-#include <boost/scoped_ptr.hpp>
 #include "leveldb/db.h"
 #include "leveldb/env.h"
 #include "leveldb/write_batch.h"
@@ -42,8 +44,10 @@ class LevelDBStore : public KeyValueDB {
   int do_open(ostream &out, bool create_if_missing);
 
   // manage async compactions
-  Mutex compact_queue_lock;
-  Cond compact_queue_cond;
+  std::mutex compact_queue_lock;
+  typedef std::unique_lock<std::mutex> unique_lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  std::condition_variable compact_queue_cond;
   list< pair<string,string> > compact_queue;
   bool compact_queue_stop;
   class CompactThread : public Thread {

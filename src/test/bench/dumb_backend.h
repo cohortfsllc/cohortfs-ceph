@@ -50,12 +50,12 @@ class DumbBackend : public Backend {
   } thread;
   friend class SyncThread;
 
-  Mutex sync_loop_mutex;
-  Cond sync_loop_cond;
+  std::mutex sync_loop_mutex;
+  std::condition_variable sync_loop_cond;
   int sync_loop_stop; // 0 for running, 1 for stopping, 2 for stopped
   void sync_loop();
 
-  Mutex pending_commit_mutex;
+  std::mutex pending_commit_mutex;
   set<Context*> pending_commits;
 
   class WriteQueue : public ThreadPool::WorkQueue<write_item> {
@@ -65,7 +65,7 @@ class DumbBackend : public Backend {
   public:
     WriteQueue(
       DumbBackend *backend,
-      time_t ti,
+      ceph::timespan ti,
       ThreadPool *tp) :
       ThreadPool::WorkQueue<write_item>("DumbBackend::queue", ti, ti*10, tp),
       backend(backend) {}
@@ -125,7 +125,7 @@ public:
       tp(cct, "DumbBackend::tp", worker_threads),
       thread(this),
       sync_loop_stop(0),
-      queue(this, 20, &tp) {
+      queue(this, 20s, &tp) {
     thread.create();
     tp.start();
     for (unsigned i = 0; i < 10*worker_threads; ++i) {
@@ -134,11 +134,10 @@ public:
   }
   ~DumbBackend() {
     {
-      Mutex::Locker l(sync_loop_mutex);
+      unique_lock sll(sync_loop_mutex);
       if (sync_loop_stop == 0)
 	sync_loop_stop = 1;
-      while (sync_loop_stop < 2)
-	sync_loop_cond.Wait(sync_loop_mutex);
+      sync_loop_cond.wait(sll, [&](){ return sync_loop_stop >= 2; });
     }
     tp.stop();
     thread.join();

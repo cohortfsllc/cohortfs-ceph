@@ -2,11 +2,11 @@
 // vim: ts=8 sw=2 smarttab
 
 #include <cassert>
+#include <mutex>
 #include <errno.h>
 
 #include "common/ceph_context.h"
 #include "common/dout.h"
-#include "common/Mutex.h"
 #include "include/Context.h"
 #include "include/rados/librados.hpp"
 #include "include/rbd/librbd.hpp"
@@ -36,7 +36,7 @@ namespace librbd {
   }
 
   /**
-   * context to wrap another context in a Mutex
+   * context to wrap another context in a mutex
    *
    * @param cct cct
    * @param c context to finish
@@ -44,13 +44,13 @@ namespace librbd {
    */
   class C_Request : public Context {
   public:
-    C_Request(CephContext *cct, Context *c, Mutex *l)
+    C_Request(CephContext *cct, Context *c, std::mutex *l)
       : m_cct(cct), m_ctx(c), m_lock(l) {}
     virtual ~C_Request() {}
     virtual void finish(int r) {
       ldout(m_cct, 20) << "aio_cb completing " << dendl;
       {
-	Mutex::Locker l(*m_lock);
+	std::lock_guard<std::mutex> l(*m_lock);
 	m_ctx->complete(r);
       }
       ldout(m_cct, 20) << "aio_cb finished" << dendl;
@@ -58,7 +58,7 @@ namespace librbd {
   private:
     CephContext *m_cct;
     Context *m_ctx;
-    Mutex *m_lock;
+    std::mutex *m_lock;
   };
 
   class C_OrderedWrite : public Context {
@@ -70,7 +70,7 @@ namespace librbd {
     virtual void finish(int r) {
       ldout(m_cct, 20) << "C_OrderedWrite completing " << m_result << dendl;
       {
-	Mutex::Locker l(m_wb_handler->m_lock);
+	std::lock_guard<std::mutex> l(m_wb_handler->m_lock);
 	assert(!m_result->done);
 	m_result->done = true;
 	m_result->ret = r;
@@ -84,7 +84,7 @@ namespace librbd {
     LibrbdWriteback *m_wb_handler;
   };
 
-  LibrbdWriteback::LibrbdWriteback(ImageCtx *ictx, Mutex& lock)
+  LibrbdWriteback::LibrbdWriteback(ImageCtx *ictx, std::mutex& lock)
     : m_tid(0), m_lock(lock), m_ictx(ictx)
   {
   }
@@ -117,7 +117,8 @@ namespace librbd {
   ceph_tid_t LibrbdWriteback::write(const oid& obj,
 				    const boost::uuids::uuid& volume,
 				    uint64_t off, uint64_t len,
-				    const bufferlist &bl, utime_t mtime,
+				    const bufferlist &bl,
+				    ceph::real_time mtime,
 				    uint64_t trunc_size, uint32_t trunc_seq,
 				    Context *oncommit)
   {
@@ -132,9 +133,9 @@ namespace librbd {
 
   void LibrbdWriteback::complete_writes(const std::string& obj)
   {
-    assert(m_lock.is_locked());
+    // Must be called with m_)lock locked
     std::queue<write_result_d*>& results = m_writes[obj];
-    ldout(m_ictx->cct, 20) << "complete_writes() obj " << obj << dendl;
+    ldout(m_ictx->cct, 20) << "complete_writes() oid " << obj << dendl;
     std::list<write_result_d*> finished;
 
     while (!results.empty()) {

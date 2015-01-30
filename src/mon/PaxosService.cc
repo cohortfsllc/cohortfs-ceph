@@ -14,7 +14,6 @@
 
 #include <cassert>
 #include "PaxosService.h"
-#include "common/Clock.h"
 #include "Monitor.h"
 #include "MonitorDBStore.h"
 
@@ -88,15 +87,16 @@ bool PaxosService::dispatch(PaxosServiceMessage *m)
 
   // update
   if (prepare_update(m)) {
-    double delay = 0.0;
+    ceph::timespan delay = 0ns;
     if (should_propose(delay)) {
-      if (delay == 0.0) {
+      if (delay == 0ns) {
 	propose_pending();
       } else {
 	// delay a bit
 	if (!proposal_timer) {
 	  proposal_timer = new C_Propose(this);
-	  ldout(mon->cct, 10) << " setting proposal_timer " << proposal_timer << " with delay of " << delay << dendl;
+	  ldout(mon->cct, 10) << " setting proposal_timer " << proposal_timer
+			      << " with delay of " << delay << dendl;
 	  mon->timer.add_event_after(delay, proposal_timer);
 	} else {
 	  ldout(mon->cct, 10) << " proposal_timer already set" << dendl;
@@ -148,18 +148,20 @@ void PaxosService::remove_legacy_versions()
   mon->store->apply_transaction(t);
 }
 
-bool PaxosService::should_propose(double& delay)
+bool PaxosService::should_propose(ceph::timespan& delay)
 {
   // simple default policy: quick startup, then some damping.
   if (get_last_committed() <= 1)
-    delay = 0.0;
+    delay = 0ns;
   else {
-    utime_t now = ceph_clock_now(mon->cct);
-    if ((now - paxos->last_commit_time) > mon->cct->_conf->paxos_propose_interval)
-      delay = (double)mon->cct->_conf->paxos_min_wait;
+    ceph::real_time now = ceph::real_clock::now();
+    if ((now - paxos->last_commit_time) >
+	ceph::span_from_double(mon->cct->_conf->paxos_propose_interval))
+      delay = ceph::span_from_double(
+	mon->cct->_conf->paxos_min_wait);
     else
-      delay = (double)(mon->cct->_conf->paxos_propose_interval + paxos->last_commit_time
-		       - now);
+      delay = ceph::span_from_double(mon->cct->_conf->paxos_propose_interval) +
+	paxos->last_commit_time - now;
   }
   return true;
 }

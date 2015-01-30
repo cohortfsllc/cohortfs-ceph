@@ -26,6 +26,7 @@
 #include "common/config.h"
 #include "include/str_list.h"
 
+using std::cout;
 using std::deque;
 using std::string;
 

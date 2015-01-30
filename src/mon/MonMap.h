@@ -30,8 +30,8 @@ class MonMap {
   epoch_t epoch;       // what epoch/version of the monmap
   boost::uuids::uuid fsid;
   map<string, entity_addr_t> mon_addr;
-  utime_t last_changed;
-  utime_t created;
+  ceph::real_time last_changed;
+  ceph::real_time created;
 
   map<entity_addr_t,string> addr_name;
   vector<string> rank_name;

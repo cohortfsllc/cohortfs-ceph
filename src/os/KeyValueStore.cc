@@ -282,20 +282,22 @@ int StripObjectMap::get_with_header(const StripObjectHeader &header,
 }
 // =========== KeyValueStore::SubmitManager Implementation ==============
 
-uint64_t KeyValueStore::SubmitManager::op_submit_start()
+uint64_t KeyValueStore::SubmitManager::op_submit_start(unique_lock& sml)
 {
-  lock.Lock();
+  assert(!sml); // Whatever mutex sml references, it shouldn't be locked.
+  sml = unique_lock(lock);
   uint64_t op = ++op_seq;
   return op;
 }
 
-void KeyValueStore::SubmitManager::op_submit_finish(uint64_t op)
+void KeyValueStore::SubmitManager::op_submit_finish(unique_lock& sml,
+						    uint64_t op)
 {
   if (op != op_submitted + 1) {
     assert(0 == "out of order op_submit_finish");
   }
   op_submitted = op;
-  lock.Unlock();
+  sml.unlock();
 }
 
 
@@ -515,8 +517,8 @@ KeyValueStore::KeyValueStore(CephContext *_cct, const std::string &base,
   op_finisher(cct),
   op_tp(cct, "KeyValueStore::op_tp",
 	cct->_conf->keyvaluestore_op_threads, "keyvaluestore_op_threads"),
-  op_wq(this, cct->_conf->keyvaluestore_op_thread_timeout,
-	cct->_conf->keyvaluestore_op_thread_suicide_timeout, &op_tp),
+  op_wq(this, cct->_conf->keyvaluestore_op_thread_timeout * 1s,
+	cct->_conf->keyvaluestore_op_thread_suicide_timeout * 1s, &op_tp),
   m_keyvaluestore_queue_max_ops(cct->_conf->keyvaluestore_queue_max_ops),
   m_keyvaluestore_queue_max_bytes(cct->_conf->keyvaluestore_queue_max_bytes),
   do_update(do_update)
@@ -913,16 +915,16 @@ int KeyValueStore::umount()
 
 int KeyValueStore::get_max_object_name_length()
 {
-  lock.Lock();
+  unique_lock l(lock);
   int ret = pathconf(basedir.c_str(), _PC_NAME_MAX);
   if (ret < 0) {
     int err = errno;
-    lock.Unlock();
+    l.unlock();
     if (err == 0)
       return -EDOM;
     return -err;
   }
-  lock.Unlock();
+  l.unlock();
   return ret;
 }
 
@@ -953,13 +955,14 @@ int KeyValueStore::queue_transactions(Sequencer *posr, list<Transaction*> &tls,
 
   Op *o = build_op(tls, ondisk, onreadable, onreadable_sync, osd_op);
   op_queue_reserve_throttle(o, handle);
-  uint64_t op = submit_manager.op_submit_start();
+  unique_lock sml;
+  uint64_t op = submit_manager.op_submit_start(sml);
   o->op = op;
   dout(5) << "queue_transactions (trailing journal) " << op << " "
 	  << tls <<dendl;
   queue_op(osr, o);
 
-  submit_manager.op_submit_finish(op);
+  submit_manager.op_submit_finish(sml, op);
 
   return 0;
 }
@@ -980,7 +983,7 @@ KeyValueStore::Op *KeyValueStore::build_op(list<Transaction*>& tls,
   }
 
   Op *o = new Op;
-  o->start = ceph_clock_now(cct);
+  o->start = ceph::mono_clock::now();
   o->tls.swap(tls);
   o->ondisk = ondisk;
   o->onreadable = onreadable;
@@ -1011,7 +1014,7 @@ void KeyValueStore::op_queue_reserve_throttle(Op *o, ThreadPool::TPHandle *handl
   uint64_t max_bytes = m_keyvaluestore_queue_max_bytes;
 
   {
-    Mutex::Locker l(op_throttle_lock);
+    unique_lock otl(op_throttle_lock);
     while ((max_ops && (op_queue_len + 1) > max_ops) ||
 	   (max_bytes && op_queue_bytes	     // let single large ops through!
 	   && (op_queue_bytes + o->bytes) > max_bytes)) {
@@ -1020,7 +1023,7 @@ void KeyValueStore::op_queue_reserve_throttle(Op *o, ThreadPool::TPHandle *handl
 	      << dendl;
       if (handle)
 	handle->suspend_tp_timeout();
-      op_throttle_cond.Wait(op_throttle_lock);
+      op_throttle_cond.wait(otl);
       if (handle)
 	handle->reset_tp_timeout();
     }
@@ -1033,18 +1036,20 @@ void KeyValueStore::op_queue_reserve_throttle(Op *o, ThreadPool::TPHandle *handl
 void KeyValueStore::op_queue_release_throttle(Op *o)
 {
   {
-    Mutex::Locker l(op_throttle_lock);
+    lock_guard l(op_throttle_lock);
     op_queue_len--;
     op_queue_bytes -= o->bytes;
-    op_throttle_cond.Signal();
+    op_throttle_cond.notify_all();
   }
 }
 
-void KeyValueStore::_do_op(OpSequencer *osr, ThreadPool::TPHandle &handle)
+void KeyValueStore::_do_op(OpSequencer *osr, ThreadPool::TPHandle &handle,
+			   unique_lock& osral)
 {
   // FIXME: Suppose the collection of transaction only affect objects in the
   // one PG, so this lock will ensure no other concurrent write operation
-  osr->apply_lock.Lock();
+  assert(!osral);
+  osral = unique_lock(osr->apply_lock);
   Op *o = osr->peek_queue();
   dout(5) << "_do_op " << o << " seq " << o->op << " " << *osr << "/" << osr->parent << " start" << dendl;
   int r = _do_transactions(o->tls, o->op, &handle);
@@ -1061,16 +1066,15 @@ void KeyValueStore::_do_op(OpSequencer *osr, ThreadPool::TPHandle &handle)
   }
 }
 
-void KeyValueStore::_finish_op(OpSequencer *osr)
+void KeyValueStore::_finish_op(OpSequencer *osr,
+			       unique_lock& osral)
 {
+  assert(osral && osral.mutex() == &osr->apply_lock);
   Op *o = osr->dequeue();
 
   dout(10) << "_finish_op " << o << " seq " << o->op << " " << *osr << "/" << osr->parent << dendl;
-  osr->apply_lock.Unlock();  // locked in _do_op
+  osral.unlock();  // locked in _do_op
   op_queue_release_throttle(o);
-
-  utime_t lat = ceph_clock_now(cct);
-  lat -= o->start;
 
   if (o->onreadable_sync) {
     o->onreadable_sync->complete(0);

@@ -559,7 +559,8 @@ void osd_peer_stat_t::generate_test_instances(list<osd_peer_stat_t*>& o)
 {
   o.push_back(new osd_peer_stat_t);
   o.push_back(new osd_peer_stat_t);
-  o.back()->stamp = utime_t(1, 2);
+  o.back()->stamp = ceph::real_time(std::chrono::seconds(1) +
+				    std::chrono::nanoseconds(2));
 }
 
 ostream& operator<<(ostream& out, const osd_peer_stat_t &stat)

@@ -16,8 +16,8 @@
 #define CEPH_REFCOUNTEDOBJ_H
 
 #include <atomic>
-#include "common/Mutex.h"
-#include "common/Cond.h"
+#include <mutex>
+#include <condition_variable>
 
 
 struct RefCountedObject {
@@ -47,25 +47,23 @@ struct RefCountedObject {
 
 struct RefCountedCond : public RefCountedObject {
   bool complete;
-  Mutex lock;
-  Cond cond;
+  std::mutex lock;
+  std::condition_variable cond;
   int rval;
 
   RefCountedCond() : complete(false), rval(0) {}
 
   int wait() {
-    Mutex::Locker l(lock);
-    while (!complete) {
-      cond.Wait(lock);
-    }
+    std::unique_lock<std::mutex> l(lock);
+    cond.wait(l, [&](){ return complete; });
     return rval;
   }
 
   void done(int r) {
-    Mutex::Locker l(lock);
+    std::unique_lock<std::mutex> l(lock);
     rval = r;
     complete = true;
-    cond.SignalAll();
+    cond.notify_all();
   }
 
   void done() {

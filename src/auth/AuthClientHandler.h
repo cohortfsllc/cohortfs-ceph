@@ -15,12 +15,13 @@
 #ifndef CEPH_AUTHCLIENTHANDLER_H
 #define CEPH_AUTHCLIENTHANDLER_H
 
+#include <condition_variable>
+#include <mutex>
+#include <shared_mutex>
+
 
 #include "auth/Auth.h"
 
-#include "common/Mutex.h"
-#include "common/Cond.h"
-#include "common/RWLock.h"
 
 #include "common/Timer.h"
 
@@ -37,7 +38,9 @@ protected:
   uint32_t want;
   uint32_t have;
   uint32_t need;
-  RWLock lock;
+  mutable std::shared_timed_mutex lock;
+  typedef std::unique_lock<std::shared_timed_mutex> unique_lock;
+  typedef std::shared_lock<std::shared_timed_mutex> shared_lock;
 
 public:
   AuthClientHandler(CephContext *cct_)
@@ -47,12 +50,12 @@ public:
   void init(EntityName& n) { name = n; }
 
   void set_want_keys(uint32_t keys) {
-    RWLock::WLocker l(lock);
+    std::unique_lock<std::shared_timed_mutex> l(lock);
     want = keys | CEPH_ENTITY_TYPE_AUTH;
     validate_tickets();
   }
   void add_want_keys(uint32_t keys) {
-    RWLock::WLocker l(lock);
+    std::unique_lock<std::shared_timed_mutex> l(lock);
     want |= keys;
     validate_tickets();
   }

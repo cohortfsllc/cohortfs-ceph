@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 /*
  * Benchmarking suite for key-value store
  *
@@ -16,16 +18,12 @@
 
 #include "key_value_store/key_value_structure.h"
 #include "key_value_store/kv_flat_btree_async.h"
-#include "common/Clock.h"
-#include "common/Mutex.h"
-#include "common/Cond.h"
 
 #include <string>
 #include <climits>
 #include <cfloat>
 #include <iostream>
 
-using namespace std;
 using ceph::bufferlist;
 
 /**
@@ -45,20 +43,20 @@ class KvStoreBench;
  * measure latency
  */
 struct StopWatch {
-  utime_t begin_time;
-  utime_t end_time;
+  ceph::mono_time begin_time;
+  ceph::mono_time end_time;
 
   void start_time() {
-    begin_time = ceph_clock_now(nullptr);
+    begin_time = ceph::mono_clock::now();
   }
   void stop_time() {
-    end_time = ceph_clock_now(nullptr);
+    end_time = ceph::mono_clock::now();
   }
-  double get_time() {
-    return (end_time - begin_time) * 1000;
+  ceph::timespan get_time() {
+    return (end_time - begin_time);
   }
   void clear() {
-    begin_time = end_time = utime_t();
+    begin_time = end_time = ceph::mono_time::min();
   }
 };
 
@@ -115,10 +113,12 @@ protected:
   set<string> key_set;//set of keys already in the data set
   KeyValueStructure * kvs;
   kv_bench_data data;//stores throughput and latency from completed tests
-  Mutex data_lock;
-  Cond op_avail;//signaled when an op completes
+  std::mutex data_lock;
+  std::condition_variable op_avail;//signaled when an op completes
   int ops_in_flight;//number of operations currently in progress
-  Mutex ops_in_flight_lock;
+  std::mutex ops_in_flight_lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
   //these are used for cleanup and setup purposes - they are NOT passed to kvs!
   librados::Rados rados;
   string rados_id;

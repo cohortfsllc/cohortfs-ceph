@@ -115,7 +115,7 @@ bool ceph_resolve_file_search(const std::string& filename_list,
 }
 
 md_config_t::md_config_t()
-  : cluster("ceph"),
+  :
 
 #define OPTION_OPT_INT(name, def_val) name(def_val),
 #define OPTION_OPT_LONGLONG(name, def_val) name((1LL) * def_val),
@@ -144,7 +144,7 @@ md_config_t::md_config_t()
 #undef OPTION
 #undef SUBSYS
 #undef DEFAULT_SUBSYS
-  lock(true)
+  cluster("ceph")
 {
   init_subsys();
 }
@@ -168,7 +168,7 @@ md_config_t::~md_config_t()
 
 void md_config_t::add_observer(md_config_obs_t* observer_)
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   const char **keys = observer_->get_tracked_conf_keys();
   for (const char ** k = keys; *k; ++k) {
     obs_map_t::value_type val(*k, observer_);
@@ -178,7 +178,7 @@ void md_config_t::add_observer(md_config_obs_t* observer_)
 
 void md_config_t::remove_observer(md_config_obs_t* observer_)
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   bool found_obs = false;
   for (obs_map_t::iterator o = observers.begin(); o != observers.end(); ) {
     if (o->second == observer_) {
@@ -197,7 +197,7 @@ int md_config_t::parse_config_files(const char *conf_files,
 				    std::ostream *warnings,
 				    int flags)
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   if (internal_safe_to_start_threads)
     return -ENOSYS;
   if (!conf_files) {
@@ -220,8 +220,6 @@ int md_config_t::parse_config_files_impl(const std::list<std::string> &conf_file
 					 std::deque<std::string> *parse_errors,
 					 std::ostream *warnings)
 {
-  assert(lock.is_locked());
-
   // open new conf
   list<string>::const_iterator c;
   for (c = conf_files.begin(); c != conf_files.end(); ++c) {
@@ -294,7 +292,7 @@ int md_config_t::parse_config_files_impl(const std::list<std::string> &conf_file
 
 void md_config_t::parse_env()
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   if (internal_safe_to_start_threads)
     return;
   if (getenv("CEPH_KEYRING")) {
@@ -304,13 +302,13 @@ void md_config_t::parse_env()
 
 void md_config_t::show_config(std::ostream& out)
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   _show_config(&out, NULL);
 }
 
 void md_config_t::show_config(Formatter *f)
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   _show_config(NULL, f);
 }
 
@@ -352,7 +350,7 @@ void md_config_t::_show_config(std::ostream *out, Formatter *f)
 
 int md_config_t::parse_argv(std::vector<const char*>& args)
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   if (internal_safe_to_start_threads) {
     return -ENOSYS;
   }
@@ -543,7 +541,6 @@ int md_config_t::parse_option(std::vector<const char*>& args,
 int md_config_t::parse_injectargs(std::vector<const char*>& args,
 				  std::ostream *oss)
 {
-  assert(lock.is_locked());
   int ret = 0;
   for (std::vector<const char*>::iterator i = args.begin(); i != args.end(); ) {
     int r = parse_option(args, i, oss);
@@ -555,7 +552,7 @@ int md_config_t::parse_injectargs(std::vector<const char*>& args,
 
 void md_config_t::apply_changes(std::ostream *oss)
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   _apply_changes(oss);
 }
 
@@ -609,7 +606,7 @@ void md_config_t::_apply_changes(std::ostream *oss)
 
 void md_config_t::call_all_observers()
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
 
   expand_all_meta();
 
@@ -625,7 +622,7 @@ void md_config_t::call_all_observers()
 int md_config_t::injectargs(const std::string& s, std::ostream *oss)
 {
   int ret;
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   char b[s.length()+1];
   strcpy(b, s.c_str());
   std::vector<const char*> nargs;
@@ -662,7 +659,7 @@ void md_config_t::set_val_or_die(const char *key, const char *val)
 
 int md_config_t::set_val(const char *key, const char *val, bool meta)
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   if (!key)
     return -EINVAL;
   if (!val)
@@ -720,14 +717,12 @@ int md_config_t::set_val(const char *key, const char *val, bool meta)
 
 int md_config_t::get_val(const char *key, char **buf, int len) const
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   return _get_val(key, buf,len);
 }
 
 int md_config_t::_get_val(const char *key, char **buf, int len) const
 {
-  assert(lock.is_locked());
-
   if (!key)
     return -EINVAL;
 
@@ -811,13 +806,12 @@ int md_config_t::_get_val(const char *key, char **buf, int len) const
  */
 void md_config_t::get_my_sections(std::vector <std::string> &sections) const
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   _get_my_sections(sections);
 }
 
 void md_config_t::_get_my_sections(std::vector <std::string> &sections) const
 {
-  assert(lock.is_locked());
   sections.push_back(name.to_str());
 
   sections.push_back(name.get_type_name());
@@ -828,7 +822,7 @@ void md_config_t::_get_my_sections(std::vector <std::string> &sections) const
 // Return a list of all sections
 int md_config_t::get_all_sections(std::vector <std::string> &sections) const
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   for (ConfFile::const_section_iter_t s = cf.sections_begin();
        s != cf.sections_end(); ++s) {
     sections.push_back(s->first);
@@ -839,14 +833,13 @@ int md_config_t::get_all_sections(std::vector <std::string> &sections) const
 int md_config_t::get_val_from_conf_file(const std::vector <std::string> &sections,
 		    const char *key, std::string &out, bool emeta) const
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   return _get_val_from_conf_file(sections, key, out, emeta);
 }
 
 int md_config_t::_get_val_from_conf_file(const std::vector <std::string> &sections,
 					 const char *key, std::string &out, bool emeta) const
 {
-  assert(lock.is_locked());
   std::vector <std::string>::const_iterator s = sections.begin();
   std::vector <std::string>::const_iterator s_end = sections.end();
   for (; s != s_end; ++s) {
@@ -864,7 +857,6 @@ int md_config_t::_get_val_from_conf_file(const std::vector <std::string> &sectio
 
 int md_config_t::set_val_impl(const char *val, const config_option *opt)
 {
-  assert(lock.is_locked());
   int ret = set_val_raw(val, opt);
   if (ret)
     return ret;
@@ -874,7 +866,6 @@ int md_config_t::set_val_impl(const char *val, const config_option *opt)
 
 int md_config_t::set_val_raw(const char *val, const config_option *opt)
 {
-  assert(lock.is_locked());
   switch (opt->type) {
     case OPT_INT: {
       std::string err;
@@ -985,8 +976,6 @@ bool md_config_t::expand_meta(std::string &origval,
 			      std::list<config_option *> stack,
 			      std::ostream *oss) const
 {
-  assert(lock.is_locked());
-
   // no $ means no variable expansion is necessary
   if (origval.find("$") == string::npos)
     return false;

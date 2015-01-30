@@ -87,7 +87,7 @@ int MemStore::umount()
 int MemStore::_save()
 {
   dout(10) << __func__ << dendl;
-  Mutex::Locker l(apply_lock); // block any writer
+  apply_lock_guard l(apply_lock); // block any writer
   dump_all();
   set<coll_t> collections;
   for (map<coll_t,CollectionRef>::iterator p = coll_map.begin();
@@ -257,7 +257,7 @@ objectstore_perf_stat_t MemStore::get_cur_stats()
 
 MemStore::CollectionRef MemStore::get_collection(const coll_t &cid)
 {
-  RWLock::RLocker l(coll_lock);
+  shared_lock l(coll_lock);
   map<coll_t,CollectionRef>::iterator cp = coll_map.find(cid);
   if (cp == coll_map.end())
     return CollectionRef();
@@ -436,7 +436,7 @@ int MemStore::getattrs(const coll_t &cid, const oid& obj,
 int MemStore::list_collections(vector<coll_t>& ls)
 {
   dout(10) << __func__ << dendl;
-  RWLock::RLocker l(coll_lock);
+  shared_lock l(coll_lock);
   for (map<coll_t,CollectionRef>::iterator p = coll_map.begin();
        p != coll_map.end();
        ++p) {
@@ -448,7 +448,7 @@ int MemStore::list_collections(vector<coll_t>& ls)
 bool MemStore::collection_exists(const coll_t &cid)
 {
   dout(10) << __func__ << " " << cid << dendl;
-  RWLock::RLocker l(coll_lock);
+  shared_lock l(coll_lock);
   return coll_map.count(cid);
 }
 
@@ -459,7 +459,7 @@ int MemStore::collection_getattr(const coll_t &cid, const char *name,
   CollectionRef c = get_collection(cid);
   if (!c)
     return -ENOENT;
-  RWLock::RLocker lc(c->lock);
+  shared_lock lc(c->lock);
 
   if (!c->xattr.count(name))
     return -ENOENT;
@@ -476,7 +476,7 @@ int MemStore::collection_getattr(const coll_t &cid, const char *name, bufferlist
   CollectionRef c = get_collection(cid);
   if (!c)
     return -ENOENT;
-  RWLock::RLocker l(c->lock);
+  shared_lock l(c->lock);
 
   if (!c->xattr.count(name))
     return -ENOENT;
@@ -491,7 +491,7 @@ int MemStore::collection_getattrs(const coll_t &cid, map<string,bufferptr> &aset
   CollectionRef c = get_collection(cid);
   if (!c)
     return -ENOENT;
-  RWLock::RLocker l(c->lock);
+  shared_lock l(c->lock);
 
   aset = c->xattr;
   return 0;
@@ -503,7 +503,7 @@ bool MemStore::collection_empty(const coll_t &cid)
   CollectionRef c = get_collection(cid);
   if (!c)
     return -ENOENT;
-  RWLock::RLocker l(c->lock);
+  shared_lock l(c->lock);
 
   return c->object_map.empty();
 }
@@ -514,7 +514,7 @@ int MemStore::collection_list(const coll_t &cid, vector<oid>& o)
   CollectionRef c = get_collection(cid);
   if (!c)
     return -ENOENT;
-  RWLock::RLocker l(c->lock);
+  shared_lock l(c->lock);
 
   for (map<oid,ObjectRef>::iterator p = c->object_map.begin();
        p != c->object_map.end();
@@ -531,7 +531,7 @@ int MemStore::collection_list_partial(const coll_t &cid, oid start,
   CollectionRef c = get_collection(cid);
   if (!c)
     return -ENOENT;
-  RWLock::RLocker l(c->lock);
+  shared_lock l(c->lock);
 
   map<oid,ObjectRef>::iterator p = c->object_map.lower_bound(start);
   while (p != c->object_map.end() &&
@@ -554,7 +554,7 @@ int MemStore::collection_list_range(const coll_t &cid,
   CollectionRef c = get_collection(cid);
   if (!c)
     return -ENOENT;
-  RWLock::RLocker l(c->lock);
+  shared_lock l(c->lock);
 
   map<oid,ObjectRef>::iterator p = c->object_map.lower_bound(start);
   while (p != c->object_map.end() &&
@@ -699,7 +699,7 @@ int MemStore::queue_transactions(Sequencer *osr,
 				 ThreadPool::TPHandle *handle)
 {
   // fixme: ignore the Sequencer and serialize everything.
-  Mutex::Locker l(apply_lock);
+  apply_lock_guard l(apply_lock);
 
   for (list<Transaction*>::iterator p = tls.begin(); p != tls.end(); ++p)
     tx_wq.queue(*p);
@@ -1200,7 +1200,7 @@ int MemStore::_omap_setheader(const coll_t &cid, const oid &obj,
 int MemStore::_create_collection(const coll_t &cid)
 {
   dout(10) << __func__ << " " << cid << dendl;
-  RWLock::WLocker l(coll_lock);
+  unique_lock l(coll_lock);
   map<coll_t,CollectionRef>::iterator cp = coll_map.find(cid);
   if (cp != coll_map.end())
     return -EEXIST;
@@ -1211,12 +1211,12 @@ int MemStore::_create_collection(const coll_t &cid)
 int MemStore::_destroy_collection(const coll_t &cid)
 {
   dout(10) << __func__ << " " << cid << dendl;
-  RWLock::WLocker l(coll_lock);
+  unique_lock l(coll_lock);
   map<coll_t,CollectionRef>::iterator cp = coll_map.find(cid);
   if (cp == coll_map.end())
     return -ENOENT;
   {
-    RWLock::RLocker l2(cp->second->lock);
+    shared_lock l2(cp->second->lock);
     if (!cp->second->object_map.empty())
       return -ENOTEMPTY;
   }
@@ -1234,8 +1234,8 @@ int MemStore::_collection_add(const coll_t &cid, const coll_t &ocid,
   CollectionRef oc = get_collection(ocid);
   if (!oc)
     return -ENOENT;
-  RWLock::WLocker l1(MIN(c, oc)->lock);
-  RWLock::WLocker l2(MAX(c, oc)->lock);
+  unique_lock l1(MIN(c, oc)->lock);
+  unique_lock l2(MAX(c, oc)->lock);
 
   if (c->object_hash.count(obj))
     return -EEXIST;
@@ -1259,8 +1259,8 @@ int MemStore::_collection_move_rename(const coll_t &oldcid,
   CollectionRef oc = get_collection(oldcid);
   if (!oc)
     return -ENOENT;
-  RWLock::WLocker l1(MIN(c, oc)->lock);
-  RWLock::WLocker l2(MAX(c, oc)->lock);
+  unique_lock l1(MIN(c, oc)->lock);
+  unique_lock l2(MAX(c, oc)->lock);
 
   if (c->object_hash.count(obj))
     return -EEXIST;
@@ -1281,7 +1281,7 @@ int MemStore::_collection_setattr(const coll_t &cid, const char *name,
   map<coll_t,CollectionRef>::iterator cp = coll_map.find(cid);
   if (cp == coll_map.end())
     return -ENOENT;
-  RWLock::WLocker l(cp->second->lock);
+  unique_lock l(cp->second->lock);
 
   cp->second->xattr[name] = bufferptr((const char *)value, size);
   return 0;
@@ -1293,7 +1293,7 @@ int MemStore::_collection_setattrs(const coll_t &cid, map<string,bufferptr> &ase
   map<coll_t,CollectionRef>::iterator cp = coll_map.find(cid);
   if (cp == coll_map.end())
     return -ENOENT;
-  RWLock::WLocker l(cp->second->lock);
+  unique_lock l(cp->second->lock);
 
   for (map<string,bufferptr>::const_iterator p = aset.begin();
        p != aset.end();
@@ -1309,7 +1309,7 @@ int MemStore::_collection_rmattr(const coll_t &cid, const char *name)
   map<coll_t,CollectionRef>::iterator cp = coll_map.find(cid);
   if (cp == coll_map.end())
     return -ENOENT;
-  RWLock::WLocker l(cp->second->lock);
+  unique_lock l(cp->second->lock);
 
   if (cp->second->xattr.count(name) == 0)
     return -ENODATA;
@@ -1320,7 +1320,7 @@ int MemStore::_collection_rmattr(const coll_t &cid, const char *name)
 int MemStore::_collection_rename(const coll_t &cid, const coll_t &ncid)
 {
   dout(10) << __func__ << " " << cid << " -> " << ncid << dendl;
-  RWLock::WLocker l(coll_lock);
+  unique_lock l(coll_lock);
   if (coll_map.count(cid) == 0)
     return -ENOENT;
   if (coll_map.count(ncid))

@@ -25,6 +25,8 @@
 #include "common/ceph_argparse.h"
 #include "global/global_init.h"
 
+using std::cout;
+
 static CephContext* cct;
 
 static void usage(ostream &out)

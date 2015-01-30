@@ -19,9 +19,9 @@
 #endif
 
 #include <errno.h>
+#include <mutex>
+#include <condition_variable>
 
-#include "common/Mutex.h"
-#include "common/Cond.h"
 #include "common/config.h"
 #include "common/debug.h"
 #include "include/buffer.h"
@@ -40,14 +40,14 @@ static int set_version(const char *path, uint32_t version) {
 }
 
 void IndexManager::put_index(coll_t c) {
-  Mutex::Locker l(lock);
+  unique_lock l(lock);
   assert(col_indices.count(c));
   col_indices.erase(c);
-  cond.Signal();
+  cond.notify_all();
 }
 
 int IndexManager::init_index(coll_t c, const char *path, uint32_t version) {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   int r = set_version(path, version);
   if (r < 0)
     return r;
@@ -63,7 +63,7 @@ int IndexManager::build_index(coll_t c, const char *path, Index *index) {
 }
 
 int IndexManager::get_index(coll_t c, const char *path, Index *index) {
-  Mutex::Locker l(lock);
+  unique_lock l(lock);
   while (1) {
     if (!col_indices.count(c)) {
       int r = build_index(c, path, index);
@@ -73,7 +73,7 @@ int IndexManager::get_index(coll_t c, const char *path, Index *index) {
       col_indices[c] = (*index);
       break;
     } else {
-      cond.Wait(lock);
+      cond.wait(l);
     }
   }
   return 0;

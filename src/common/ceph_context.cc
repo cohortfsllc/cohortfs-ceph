@@ -14,6 +14,8 @@
 
 #include <time.h>
 
+#include <mutex>
+#include <condition_variable>
 #include "common/admin_socket.h"
 #include "common/Thread.h"
 #include "common/ceph_context.h"
@@ -25,8 +27,6 @@
 #include "log/Log.h"
 #include "auth/Crypto.h"
 #include "include/str_list.h"
-#include "common/Mutex.h"
-#include "common/Cond.h"
 
 #include <iostream>
 #include <pthread.h>
@@ -48,13 +48,15 @@ public:
   void *entry()
   {
     while (1) {
-      Mutex::Locker l(_lock);
+      std::unique_lock<std::mutex> l(_lock);
 
       if (_cct->_conf->heartbeat_interval) {
-	utime_t interval(_cct->_conf->heartbeat_interval, 0);
-	_cond.WaitInterval(_cct, _lock, interval);
-      } else
-	_cond.Wait(_lock);
+	ceph::timespan interval(ceph::span_from_double(
+				  _cct->_conf->heartbeat_interval));
+	_cond.wait_for(l, interval);
+      } else {
+	_cond.wait(l);
+      }
 
       if (_exit_thread) {
 	break;
@@ -71,21 +73,21 @@ public:
 
   void reopen_logs()
   {
-    Mutex::Locker l(_lock);
+    std::unique_lock<std::mutex> l(_lock);
     _reopen_logs = true;
-    _cond.Signal();
+    _cond.notify_all();
   }
 
   void exit_thread()
   {
-    Mutex::Locker l(_lock);
+    std::unique_lock<std::mutex> l(_lock);
     _exit_thread = true;
-    _cond.Signal();
+    _cond.notify_all();
   }
 
 private:
-  Mutex _lock;
-  Cond _cond;
+  std::mutex _lock;
+  std::condition_variable _cond;
   bool _reopen_logs;
   bool _exit_thread;
   CephContext *_cct;

@@ -18,6 +18,7 @@
 #include "mon/MonClient.h"
 #include "mds/events/EResetJournal.h"
 
+using std::cout;
 
 int Resetter::init(int rank)
 {
@@ -36,19 +37,19 @@ int Resetter::init(int rank)
 
 void Resetter::reset()
 {
-  Mutex mylock;
-  Cond cond;
+  std::mutex mylock;
+  std::condition_variable cond;
   bool done;
   int r;
 
-  lock.Lock();
+  unique_lock l(lock);
   journaler->recover(new C_SafeCond(&mylock, &cond, &done, &r));
-  lock.Unlock();
+  l.unlock();
 
-  mylock.Lock();
+  unique_lock myl(mylock);
   while (!done)
-    cond.Wait(mylock);
-  mylock.Unlock();
+    cond.wait(myl);
+  myl.unlock();
 
   if (r != 0) {
     if (r == -ENOENT) {
@@ -63,7 +64,7 @@ void Resetter::reset()
     }
   }
 
-  lock.Lock();
+  l.lock();
   uint64_t old_start = journaler->get_read_pos();
   uint64_t old_end = journaler->get_write_pos();
   uint64_t old_len = old_end - old_start;
@@ -83,14 +84,14 @@ void Resetter::reset()
 
   cout << "writing journal head" << std::endl;
   journaler->write_head(new C_SafeCond(&mylock, &cond, &done, &r));
-  lock.Unlock();
+  lock.unlock();
 
-  mylock.Lock();
+  myl.lock();
   while (!done)
-    cond.Wait(mylock);
-  mylock.Unlock();
+    cond.wait(myl);
+  myl.unlock();
 
-  lock.Lock();
+  l.lock();
   assert(r == 0);
 
   LogEvent *le = new EResetJournal;
@@ -102,12 +103,12 @@ void Resetter::reset()
   journaler->append_entry(bl);
   journaler->flush(new C_SafeCond(&mylock, &cond, &done,&r));
 
-  lock.Unlock();
+  l.unlock();
 
-  mylock.Lock();
+  myl.lock();
   while (!done)
-    cond.Wait(mylock);
-  mylock.Unlock();
+    cond.wait(myl);
+  myl.unlock();
 
   assert(r == 0);
 

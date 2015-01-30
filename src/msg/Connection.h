@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <ostream>
 #include <cassert>
+#include <mutex>
 
 #include <boost/intrusive_ptr.hpp>
 // Because intusive_ptr clobbers our assert...
@@ -38,11 +39,11 @@
 class Messenger;
 
 struct Connection : public RefCountedObject {
-  Mutex lock;
+  std::mutex lock;
   Messenger *msgr;
   int peer_type;
   entity_addr_t peer_addr;
-  utime_t last_keepalive_ack;
+  ceph::real_time last_keepalive_ack;
 private:
   RefCountedObject *priv;
   uint64_t features;
@@ -74,14 +75,14 @@ public:
   }
 
   void set_priv(RefCountedObject *o) {
-    Mutex::Locker l(lock);
+    std::lock_guard<std::mutex> l(lock);
     if (priv)
       priv->put();
     priv = o;
   }
 
   RefCountedObject *get_priv() {
-    Mutex::Locker l(lock);
+    std::lock_guard<std::mutex> l(lock);
     if (priv)
       return priv->get();
     return nullptr;
@@ -113,7 +114,7 @@ public:
   virtual void post_rx_buffer(ceph_tid_t tid, bufferlist& bl) {}
   virtual void revoke_rx_buffer(ceph_tid_t tid) {}
 
-  utime_t get_last_keepalive_ack() const {
+  ceph::real_time get_last_keepalive_ack() const {
     return last_keepalive_ack;
   }
 };
@@ -148,7 +149,7 @@ public:
   void reset_pipe(Pipe* p);
 
   bool is_connected() {
-    Mutex::Locker l(lock);
+    std::lock_guard<std::mutex> l(lock);
     return pipe != NULL;
   }
 
@@ -156,13 +157,13 @@ public:
   virtual bool post_buffers_p() { return true; }
 
   void post_rx_buffer(ceph_tid_t tid, bufferlist& bl) {
-    Mutex::Locker l(lock);
+    std::lock_guard<std::mutex> l(lock);
     ++rx_buffers_version;
     rx_buffers[tid] = pair<bufferlist,int>(bl, rx_buffers_version);
   }
 
   void revoke_rx_buffer(ceph_tid_t tid) {
-    Mutex::Locker l(lock);
+    std::lock_guard<std::mutex> l(lock);
     rx_buffers.erase(tid);
   }
 

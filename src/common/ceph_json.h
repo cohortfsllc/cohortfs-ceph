@@ -108,13 +108,17 @@ public:
   }
 
   template<class T>
-  static bool decode_json(const char *name, T& val, JSONObj *obj, bool mandatory = false);
+  static bool decode_json(const char *name, T& val, JSONObj *obj,
+			  bool mandatory = false);
 
   template<class C>
-  static bool decode_json(const char *name, C& container, void (*cb)(C&, JSONObj *obj), JSONObj *obj, bool mandatory = false);
+  static bool decode_json(const char *name, C& container,
+			  void (*cb)(C&, JSONObj *obj), JSONObj *obj,
+			  bool mandatory = false);
 
   template<class T>
-  static void decode_json(const char *name, T& val, T& default_val, JSONObj *obj);
+  static void decode_json(const char *name, T& val, T& default_val,
+			  JSONObj *obj);
 };
 
 template<class T>
@@ -136,8 +140,7 @@ void decode_json_obj(unsigned& val, JSONObj *obj);
 void decode_json_obj(int& val, JSONObj *obj);
 void decode_json_obj(bool& val, JSONObj *obj);
 void decode_json_obj(bufferlist& val, JSONObj *obj);
-class utime_t;
-void decode_json_obj(utime_t& val, JSONObj *obj);
+void decode_json_obj(ceph::real_time& val, JSONObj *obj);
 
 template<class T>
 void decode_json_obj(list<T>& l, JSONObj *obj)
@@ -260,8 +263,6 @@ static void encode_json(const char *name, const T& val, ceph::Formatter *f)
   f->close_section();
 }
 
-class utime_t;
-
 void encode_json(const char *name, const string& val, ceph::Formatter *f);
 void encode_json(const char *name, const char *val, ceph::Formatter *f);
 void encode_json(const char *name, bool val, ceph::Formatter *f);
@@ -270,7 +271,8 @@ void encode_json(const char *name, unsigned val, ceph::Formatter *f);
 void encode_json(const char *name, long val, ceph::Formatter *f);
 void encode_json(const char *name, unsigned long val, ceph::Formatter *f);
 void encode_json(const char *name, long long val, ceph::Formatter *f);
-void encode_json(const char *name, const utime_t& val, ceph::Formatter *f);
+void encode_json(const char *name, const ceph::real_time& val,
+		 ceph::Formatter *f);
 void encode_json(const char *name, const bufferlist& bl, ceph::Formatter *f);
 void encode_json(const char *name, long long val, ceph::Formatter *f);
 void encode_json(const char *name, long long unsigned val, ceph::Formatter *f);

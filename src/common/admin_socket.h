@@ -15,11 +15,12 @@
 #ifndef CEPH_COMMON_ADMIN_SOCKET_H
 #define CEPH_COMMON_ADMIN_SOCKET_H
 
-#include "common/Thread.h"
-#include "common/Mutex.h"
 
-#include <string>
 #include <map>
+#include <mutex>
+#include <string>
+
+#include "common/Thread.h"
 #include "include/buffer.h"
 #include "common/cmdparse.h"
 
@@ -90,7 +91,7 @@ private:
   int m_shutdown_rd_fd;
   int m_shutdown_wr_fd;
 
-  Mutex m_lock;	   // protects m_hooks, m_descs, m_help
+  std::mutex m_lock;	   // protects m_hooks, m_descs, m_help
   AdminSocketHook *m_version_hook, *m_help_hook, *m_getdescs_hook;
 
   std::map<std::string,AdminSocketHook*> m_hooks;

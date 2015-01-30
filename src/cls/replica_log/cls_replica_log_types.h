@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
  *
@@ -12,7 +14,6 @@
 #ifndef CLS_REPLICA_LOG_TYPES_H_
 #define CLS_REPLICA_LOG_TYPES_H_
 
-#include "include/utime.h"
 #include "include/encoding.h"
 #include "include/types.h"
 #include <errno.h>
@@ -22,10 +23,12 @@ class JSONObj;
 
 struct cls_replica_log_item_marker {
   string item_name; // the name of the item we're marking
-  utime_t item_timestamp; // the time stamp at which the item was outdated
+  ceph::real_time item_timestamp; // the time stamp at which the item
+				  // was outdated
 
   cls_replica_log_item_marker() {}
-  cls_replica_log_item_marker(const string& name, const utime_t& time) :
+  cls_replica_log_item_marker(const string& name,
+			      const ceph::real_time& time) :
     item_name(name), item_timestamp(time) {}
 
   void encode(bufferlist& bl) const {
@@ -44,28 +47,28 @@ struct cls_replica_log_item_marker {
 
   void dump(Formatter *f) const;
   void decode_json(JSONObj *obj);
-  static void generate_test_instances(std::list<cls_replica_log_item_marker*>& ls);
+  static void generate_test_instances(
+    std::list<cls_replica_log_item_marker*>&ls);
 };
 WRITE_CLASS_ENCODER(cls_replica_log_item_marker)
 
 struct cls_replica_log_progress_marker {
   string entity_id; // the name of the entity setting the progress marker
   string position_marker; // represents a log listing position on the master
-  utime_t position_time; // the timestamp associated with the position marker
+  ceph::real_time position_time; // the timestamp associated with the
+				 // position marker
   std::list<cls_replica_log_item_marker> items; /* any items not caught up
 						   to the position marker*/
 
   cls_replica_log_progress_marker() {}
   cls_replica_log_progress_marker(const string& entity, const string& marker,
-				  const utime_t& time ) :
-				    entity_id(entity), position_marker(marker),
-				    position_time(time) {}
-  cls_replica_log_progress_marker(const string& entity, const string& marker,
-				  const utime_t& time,
-				  const std::list<cls_replica_log_item_marker>& b) :
-				    entity_id(entity), position_marker(marker),
-				    position_time(time),
-				    items(b) {}
+				  const ceph::real_time& time) :
+    entity_id(entity), position_marker(marker), position_time(time) {}
+  cls_replica_log_progress_marker(
+    const string& entity, const string& marker, const ceph::real_time& time,
+    const std::list<cls_replica_log_item_marker>& b) :
+    entity_id(entity), position_marker(marker),
+    position_time(time), items(b) {}
 
   void encode(bufferlist& bl) const {
     ENCODE_START(1, 1, bl);
@@ -98,7 +101,8 @@ class cls_replica_log_bound {
    * let that work.
    */
   string position_marker; // represents a log listing position on the master
-  utime_t position_time; // the timestamp associated with the position marker
+  ceph::real_time position_time; // the timestamp associated with the
+				 // position marker
   bool marker_exists; // has the marker been set?
   cls_replica_log_progress_marker marker; // the status of the current locker
 
@@ -145,12 +149,12 @@ public:
     return position_marker;
   }
 
-  utime_t get_lowest_time_bound() {
+  ceph::real_time get_lowest_time_bound() {
     return position_time;
   }
 
-  utime_t get_oldest_time() {
-    utime_t oldest = position_time;
+  ceph::real_time get_oldest_time() {
+    ceph::real_time oldest = position_time;
     list<cls_replica_log_item_marker>::const_iterator i;
     for ( i = marker.items.begin(); i != marker.items.end(); ++i) {
       if (i->item_timestamp < oldest)

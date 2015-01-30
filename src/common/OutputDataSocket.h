@@ -15,13 +15,13 @@
 #ifndef CEPH_COMMON_OUTPUTDATASOCKET_H
 #define CEPH_COMMON_OUTPUTDATASOCKET_H
 
-#include "common/Thread.h"
-#include "common/Mutex.h"
-#include "common/Cond.h"
-
-#include <string>
-#include <map>
+#include <condition_variable>
 #include <list>
+#include <map>
+#include <mutex>
+#include <string>
+
+#include "common/Thread.h"
 #include "include/buffer.h"
 
 class CephContext;
@@ -63,8 +63,8 @@ protected:
 
   std::list<bufferlist> data;
 
-  Mutex m_lock;
-  Cond cond;
+  std::mutex lock;
+  std::condition_variable cond;
 
   bufferlist delim;
 };

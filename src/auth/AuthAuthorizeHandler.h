@@ -15,6 +15,7 @@
 #ifndef CEPH_AUTHAUTHORIZEHANDLER_H
 #define CEPH_AUTHAUTHORIZEHANDLER_H
 
+#include <mutex>
 #include "Auth.h"
 #include "AuthMethodList.h"
 #include "include/types.h"
@@ -39,7 +40,9 @@ struct AuthAuthorizeHandler {
 };
 
 class AuthAuthorizeHandlerRegistry {
-  Mutex m_lock;
+  std::mutex m_lock;
+  typedef std::unique_lock<std::mutex> unique_lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
   map<int,AuthAuthorizeHandler*> m_authorizers;
   AuthMethodList supported;
 

@@ -74,28 +74,28 @@ int MDBalancer::proc_message(Message *m)
 void MDBalancer::tick()
 {
   static int num_bal_times = mds->cct->_conf->mds_bal_max;
-  static utime_t first = ceph_clock_now(mds->cct);
-  utime_t now = ceph_clock_now(mds->cct);
-  utime_t elapsed = now;
-  elapsed -= first;
+  static ceph::mono_time first = ceph::mono_clock::now();
+  ceph::mono_time now = ceph::mono_clock::now();
+  ceph::timespan elapsed = now - first;
 
   // sample?
-  if ((double)now - (double)last_sample
-      > mds->cct->_conf->mds_bal_sample_interval) {
+  if (now - last_sample
+      > ceph::span_from_double(mds->cct->_conf->mds_bal_sample_interval)) {
     ldout(mds->cct, 15) << "tick last_sample now " << now << dendl;
     last_sample = now;
   }
 
   // balance?
-  if (last_heartbeat == utime_t())
+  if (last_heartbeat == ceph::mono_time::min())
     last_heartbeat = now;
   if (mds->get_nodeid() == 0 &&
       mds->cct->_conf->mds_bal_interval > 0 &&
       (num_bal_times ||
        (mds->cct->_conf->mds_bal_max_until >= 0 &&
-	elapsed.sec() > mds->cct->_conf->mds_bal_max_until)) &&
-      mds->is_active() &&
-      now.sec() - last_heartbeat.sec() >= mds->cct->_conf->mds_bal_interval) {
+	elapsed > ceph::span_from_double(mds->cct->_conf->mds_bal_max_until)))
+      && mds->is_active() &&
+      now - last_heartbeat >= ceph::span_from_double(
+	mds->cct->_conf->mds_bal_interval)) {
     last_heartbeat = now;
     send_heartbeat();
     num_bal_times--;
@@ -105,8 +105,8 @@ void MDBalancer::tick()
   if ((mds->cct->_conf->mds_bal_frag ||
        mds->cct->_conf->mds_thrash_fragments) &&
       mds->cct->_conf->mds_bal_fragment_interval > 0 &&
-      now.sec() - last_fragment.sec()
-      > mds->cct->_conf->mds_bal_fragment_interval) {
+      now - last_fragment
+      > ceph::span_from_double(mds->cct->_conf->mds_bal_fragment_interval)) {
     last_fragment = now;
     do_fragmenting();
   }
@@ -148,7 +148,7 @@ double mds_load_t::mds_load()
   return 0;
 }
 
-mds_load_t MDBalancer::get_load(utime_t now)
+mds_load_t MDBalancer::get_load(ceph::real_time now)
 {
   mds_load_t load(mds->cct->_conf->mds_bal_mode, now);
 
@@ -168,7 +168,7 @@ mds_load_t MDBalancer::get_load(utime_t now)
   load.req_rate = mds->get_req_rate();
   load.queue_len = mds->messenger->get_dispatch_queue_len();
 
-  ifstream cpu("/proc/loadavg");
+  std::ifstream cpu("/proc/loadavg");
   if (cpu.is_open())
     cpu >> load.cpu_load_avg;
 
@@ -178,7 +178,7 @@ mds_load_t MDBalancer::get_load(utime_t now)
 
 void MDBalancer::send_heartbeat()
 {
-  utime_t now = ceph_clock_now(mds->cct);
+  ceph::real_time now = ceph::real_clock::now();
 
   if (mds->mdsmap->is_degraded()) {
     ldout(mds->cct, 10) << "send_heartbeat degraded" << dendl;
@@ -440,7 +440,7 @@ void MDBalancer::prep_rebalance(int beat)
   } else {
     int cluster_size = mds->get_mds_map()->get_num_in_mds();
     int whoami = mds->get_nodeid();
-    rebalance_time = ceph_clock_now(mds->cct);
+    rebalance_time = ceph::real_clock::now();
 
     // reset
     my_targets.clear();
@@ -455,7 +455,8 @@ void MDBalancer::prep_rebalance(int beat)
     double load_fac = 1.0;
     map<int, mds_load_t>::iterator m = mds_load.find(whoami);
     if ((m != mds_load.end()) && (m->second.mds_load() > 0)) {
-      double metald = m->second.auth.meta_load(rebalance_time, mds->mdcache->decayrate);
+      double metald = m->second.auth.meta_load(rebalance_time,
+					       mds->mdcache->decayrate);
       double mdsld = m->second.mds_load();
       load_fac = metald / mdsld;
       ldout(mds->cct, 7) << " load_fac is " << load_fac
@@ -467,7 +468,8 @@ void MDBalancer::prep_rebalance(int beat)
     double total_load = 0;
     multimap<double,int> load_map;
     for (int i=0; i<cluster_size; i++) {
-      map<int, mds_load_t>::value_type val(i, mds_load_t(ceph_clock_now(mds->cct)));
+      map<int, mds_load_t>::value_type val(
+	i,mds_load_t(ceph::real_clock::now()));
       std::pair < map<int, mds_load_t>::iterator, bool > r(mds_load.insert(val));
       mds_load_t &load(r.first->second);
 
@@ -953,7 +955,7 @@ void MDBalancer::find_exports(CDir *dir,
 
 }
 
-void MDBalancer::hit_inode(utime_t now, CInode *in, int type, int who)
+void MDBalancer::hit_inode(ceph::real_time now, CInode *in, int type, int who)
 {
   // hit inode
   in->pop.get(type).hit(now, mds->mdcache->decayrate);
@@ -990,7 +992,8 @@ void MDBalancer::hit_inode(utime_t now, CInode *in, int type, int who)
 */
 
 
-void MDBalancer::hit_dir(utime_t now, CDir *dir, int type, int who, double amount)
+void MDBalancer::hit_dir(ceph::real_time now, CDir *dir, int type, int who,
+			 double amount)
 {
   // hit me
   double v = dir->pop_me.get(type).hit(now, amount);
@@ -1116,7 +1119,7 @@ void MDBalancer::hit_dir(utime_t now, CDir *dir, int type, int who, double amoun
  * NOTE: call me _after_ forcing *dir into a subtree root,
  *	 but _before_ doing the encode_export_dirs.
  */
-void MDBalancer::subtract_export(CDir *dir, utime_t now)
+void MDBalancer::subtract_export(CDir *dir, ceph::real_time now)
 {
   dirfrag_load_vec_t subload = dir->pop_auth_subtree;
 
@@ -1130,7 +1133,7 @@ void MDBalancer::subtract_export(CDir *dir, utime_t now)
 }
 
 
-void MDBalancer::add_import(CDir *dir, utime_t now)
+void MDBalancer::add_import(CDir *dir, ceph::real_time now)
 {
   dirfrag_load_vec_t subload = dir->pop_auth_subtree;
 

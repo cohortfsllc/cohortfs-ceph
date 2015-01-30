@@ -69,7 +69,7 @@ OSDVol::OSDVol(OSDService *o, OSDMapRef curmap,
   id(v), info(v),
   osr(osd->osr_registry.lookup_or_create(v, (stringify(v)))),
   finish_sync_event(NULL), coll(v),
-  last_became_active(ceph_clock_now(cct))
+  last_became_active(ceph::mono_clock::now())
 {
   // construct name for trace_endpoint
   {
@@ -85,7 +85,7 @@ OSDVol::OSDVol(OSDService *o, OSDMapRef curmap,
 
   // RAII, Baby
 
-  Mutex::Locker l(_lock);
+  lock_guard l(lock);
 
   if (osd->store->collection_exists(coll)) {
     read_info();
@@ -99,35 +99,21 @@ OSDVol::~OSDVol()
   on_shutdown();
 }
 
-void OSDVol::lock_suspend_timeout(ThreadPool::TPHandle &handle)
+OSDVol::unique_lock OSDVol::lock_suspend_timeout(ThreadPool::TPHandle &handle)
 {
   handle.suspend_tp_timeout();
-  lock();
+  unique_lock vl(lock);
   handle.reset_tp_timeout();
-}
-
-void OSDVol::lock()
-{
-  _lock.Lock();
-  // if we have unrecorded dirty state with the lock dropped, there is a bug
-  assert(!dirty_info);
-
-  dout(30) << "lock" << dendl;
+  return vl;
 }
 
 std::string OSDVol::gen_prefix() const
 {
   stringstream out;
   OSDMapRef mapref = osdmap_ref;
-  if (_lock.is_locked_by_me()) {
-    out << "osd." << osd->whoami
-	<< " vol_epoch: " << (mapref ? mapref->get_epoch():0)
-	<< " " << *this << " ";
-  } else {
-    out << "osd." << osd->whoami
-	<< " vol_epoch: " << (mapref ? mapref->get_epoch():0)
-	<< " vol[" << info.volume << "(unlocked)] ";
-  }
+  out << "osd." << osd->whoami
+      << " vol_epoch: " << (mapref ? mapref->get_epoch():0)
+      << " vol[" << info.volume << "(unlocked)] ";
   return out.str();
 }
 
@@ -153,9 +139,8 @@ struct C_Vol_ActivateCommitted : public Context {
   C_Vol_ActivateCommitted(OSDVol *v, epoch_t e)
     : vol(v), epoch(e) {}
   void finish(int r) {
-    vol->lock();
+    OSDVol::lock_guard vl(vol->lock);
     vol->_activate_committed(epoch);
-    vol->unlock();
   }
 };
 
@@ -178,22 +163,21 @@ void OSDVol::activate(ObjectStore::Transaction& t,
 
 void OSDVol::take_op_map_waiters()
 {
-  Mutex::Locker l(map_lock);
-  for (list<OpRequestRef>::iterator i = waiting_for_map.begin();
-       i != waiting_for_map.end();
-       ) {
+  lock_guard ml(map_lock);
+  for (auto i = waiting_for_map.begin();
+       i != waiting_for_map.end();) {
     if (op_must_wait_for_map(get_osdmap_with_maplock(), *i)) {
       break;
     } else {
       osd->op_wq.queue(make_pair(OSDVolRef(this), *i));
-      waiting_for_map.erase(i++);
+      waiting_for_map.erase(++i);
     }
   }
 }
 
 void OSDVol::queue_op(OpRequestRef op)
 {
-  Mutex::Locker l(map_lock);
+  lock_guard ml(map_lock);
   if (!waiting_for_map.empty()) {
     // preserve ordering
     waiting_for_map.push_back(op);
@@ -209,7 +193,7 @@ void OSDVol::queue_op(OpRequestRef op)
 
 void OSDVol::_activate_committed(epoch_t e)
 {
-  lock();
+  unique_lock l(lock);
   if (dirty_info) {
     ObjectStore::Transaction *t = new ObjectStore::Transaction;
     write_if_dirty(*t);
@@ -217,7 +201,7 @@ void OSDVol::_activate_committed(epoch_t e)
     assert(tr == 0);
   }
 
-  unlock();
+  l.unlock();
 }
 
 /**
@@ -581,21 +565,19 @@ void OSDVol::populate_obc_watchers(ObjectContextRef obc)
   dout(10) << "populate_obc_watchers " << obc->obs.oi.soid << dendl;
   assert(obc->watchers.empty());
   // populate unconnected_watchers
-  for (map<pair<uint64_t, entity_name_t>, watch_info_t>::iterator p =
-	obc->obs.oi.watchers.begin();
-       p != obc->obs.oi.watchers.end();
-       ++p) {
-    utime_t expire = last_became_active;
-    expire += p->second.timeout_seconds;
-    dout(10) << "  unconnected watcher " << p->first << " will expire " << expire << dendl;
+  for (const auto& p : obc->obs.oi.watchers) {
+    ceph::mono_time expire = last_became_active +
+      p.second.timeout_seconds * 1s;
+    dout(10) << "  unconnected watcher " << p.first << " will expire "
+	     << expire << dendl;
     WatchRef watch(
       Watch::makeWatchRef(
-	this, osd, obc, p->second.timeout_seconds, p->first.first,
-	p->first.second, p->second.addr));
+	this, osd, obc, p.second.timeout_seconds, p.first.first,
+	p.first.second, p.second.addr));
     watch->disconnect();
     obc->watchers.insert(
       make_pair(
-	make_pair(p->first.first, p->first.second),
+	make_pair(p.first.first, p.first.second),
 	watch));
   }
   // Look for watchers from blacklisted clients and drop
@@ -605,14 +587,14 @@ void OSDVol::populate_obc_watchers(ObjectContextRef obc)
 
 void OSDVol::check_blacklisted_obc_watchers(ObjectContextRef obc)
 {
-  dout(20) << "OSDVol::check_blacklisted_obc_watchers for obc " << obc->obs.oi.soid << dendl;
-  for (map<pair<uint64_t, entity_name_t>, WatchRef>::iterator k =
-	 obc->watchers.begin();
-	k != obc->watchers.end();
-	) {
+  dout(20) << "OSDVol::check_blacklisted_obc_watchers for obc "
+	   << obc->obs.oi.soid << dendl;
+  for (auto k = obc->watchers.begin();
+       k != obc->watchers.end();) {
     //Advance iterator now so handle_watch_timeout() can erase element
-    map<pair<uint64_t, entity_name_t>, WatchRef>::iterator j = k++;
-    dout(30) << "watch: Found " << j->second->get_entity() << " cookie " << j->second->get_cookie() << dendl;
+    auto j = k++;
+    dout(30) << "watch: Found " << j->second->get_entity()
+	     << " cookie " << j->second->get_cookie() << dendl;
     entity_addr_t ea = j->second->get_peer_addr();
     dout(30) << "watch: Check entity_addr_t " << ea << dendl;
     if (get_osdmap()->is_blacklisted(ea)) {
@@ -656,11 +638,11 @@ struct OnReadComplete : public Context {
     OSDVol *vol,
     OSDVol::OpContext *ctx) : vol(vol), opcontext(ctx) {}
   void finish(int r) {
-    vol->lock();
+    OSDVol::unique_lock vl(vol->lock);
     if (r < 0)
       opcontext->async_read_result = r;
     opcontext->finish_read(vol);
-    vol->unlock();
+    vl.unlock();
   }
   ~OnReadComplete() {}
 };
@@ -699,8 +681,7 @@ void OSDVol::execute_ctx(OpContext *ctx)
   MOSDOp *m = static_cast<MOSDOp*>(op->get_req());
   ObjectContextRef obc = ctx->obc;
   const oid& soid = obc->obs.oi.soid;
-  map<oid,ObjectContextRef>& src_obc = ctx->src_obc;
-  utime_t now = ceph_clock_now(cct);
+  map<oid, ObjectContextRef>& src_obc = ctx->src_obc;
 
   // this method must be idempotent since we may call it several times
   // before we finally apply the resulting transaction.
@@ -797,7 +778,7 @@ void OSDVol::execute_ctx(OpContext *ctx)
 
   mutation->src_obc.swap(src_obc); // and src_obc.
 
-  issue_mutation(mutation, now);
+  issue_mutation(mutation);
   eval_mutation(mutation);
   mutation->put();
 }
@@ -2175,7 +2156,7 @@ void OSDVol::finish_ctx(OpContext *ctx)
     ctx->new_obs.oi.version = ctx->at_version;
     ctx->new_obs.oi.prior_version = ctx->obs->oi.version;
     ctx->new_obs.oi.last_reqid = ctx->reqid;
-    if (ctx->mtime != utime_t()) {
+    if (ctx->mtime != ceph::real_time::min()) {
       ctx->new_obs.oi.mtime = ctx->mtime;
       dout(10) << " set mtime to " << ctx->new_obs.oi.mtime << dendl;
     } else {
@@ -2226,9 +2207,8 @@ public:
   C_OSD_MutationApplied(OSDVol *vol, OSDVol::Mutation *mutation)
   : vol(vol), mutation(mutation) {}
   void finish(int) {
-    vol->lock();
+    OSDVol::lock_guard vl(vol->lock);
     vol->mutations_all_applied(mutation.get());
-    vol->unlock();
   }
 };
 
@@ -2254,9 +2234,8 @@ public:
   C_OSD_MutationCommit(OSDVol *vol, OSDVol::Mutation *mutation)
     : vol(vol), mutation(mutation) {}
   void finish(int) {
-    vol->lock();
+    OSDVol::lock_guard vl(vol->lock);
     vol->mutations_all_committed(mutation.get());
-    vol->unlock();
   }
 };
 
@@ -2396,14 +2375,15 @@ void OSDVol::eval_mutation(Mutation *mutation)
       // that this will only be defined if the write is readable
       // _prior_ to being committed; it will not get set with
       // writeahead journaling, for instance.
-      if (mutation->ctx->readable_stamp == utime_t())
-	mutation->ctx->readable_stamp = ceph_clock_now(cct);
+      if (mutation->ctx->readable_stamp ==
+	  ceph::mono_time::min())
+	mutation->ctx->readable_stamp = ceph::mono_clock::now();
     }
   }
 
   // done.
   if (mutation->applied && mutation->committed) {
-    Mutex::Locker l(mutation_lock);
+    lock_guard ml(mutation_lock);
     mutation->done = true;
 
     release_op_ctx_locks(mutation->ctx);
@@ -2425,7 +2405,7 @@ OSDVol::Mutation *OSDVol::new_mutation(OpContext *ctx, ObjectContextRef obc,
 
   Mutation *mutation = new Mutation(ctx, obc, tid);
 
-  Mutex::Locker l(mutation_lock);
+  lock_guard ml(mutation_lock);
   mutation_queue.push_back(&mutation->queue_item);
   mutation->get();
 
@@ -2434,7 +2414,7 @@ OSDVol::Mutation *OSDVol::new_mutation(OpContext *ctx, ObjectContextRef obc,
 
 void OSDVol::remove_mutation(Mutation *mutation)
 {
-  assert(mutation_lock.is_locked());
+  // Should be called with mutation_lock locked
   dout(20) << __func__ << " " << mutation->tid << dendl;
   release_op_ctx_locks(mutation->ctx);
   mutation->ctx->finish(0);  // FIXME: return value here is sloppy
@@ -2451,7 +2431,7 @@ OSDVol::Mutation *OSDVol::simple_mutation_create(ObjectContextRef obc)
   OpContext *ctx = new OpContext(OpRequestRef(), reqid, ops,
 				 &obc->obs, this);
   ctx->op_t = new ObjectStore::Transaction;
-  ctx->mtime = ceph_clock_now(osd->osd->cct);
+  ctx->mtime = ceph::real_clock::now();
   ctx->obc = obc;
   Mutation *mutation = new_mutation(ctx, obc, tid);
   return mutation;
@@ -2460,7 +2440,7 @@ OSDVol::Mutation *OSDVol::simple_mutation_create(ObjectContextRef obc)
 void OSDVol::simple_mutation_submit(Mutation *mutation)
 {
   dout(20) << __func__ << " " << mutation->tid << dendl;
-  issue_mutation(mutation, mutation->ctx->mtime);
+  issue_mutation(mutation);
   eval_mutation(mutation);
   mutation->put();
 }
@@ -2482,7 +2462,7 @@ void OSDVol::handle_watch_timeout(WatchRef watch)
   OpContext *ctx = new OpContext(OpRequestRef(), reqid, ops,
 				 &obc->obs, this);
   ctx->op_t = new ObjectStore::Transaction();
-  ctx->mtime = ceph_clock_now(cct);
+  ctx->mtime = ceph::real_clock::now();
   ctx->at_version = get_next_version();
 
   entity_inst_t nobody;
@@ -2498,7 +2478,7 @@ void OSDVol::handle_watch_timeout(WatchRef watch)
   t->setattr(coll, obc->obs.oi.soid, OI_ATTR, bl);
 
   // obc ref swallowed by mutation!
-  issue_mutation(mutation, mutation->ctx->mtime);
+  issue_mutation(mutation);
   eval_mutation(mutation);
   mutation->put();
 }
@@ -2626,7 +2606,7 @@ void OSDVol::apply_mutations(bool requeue)
   list<OpRequestRef> rq;
 
   // apply all mutations
-  mutation_lock.Lock(); // Not exception safe, fix.
+  unique_lock ml(mutation_lock); // Not exception safe, fix.
   while (!mutation_queue.empty()) {
     Mutation *mutation = mutation_queue.front();
     mutation_queue.pop_front();
@@ -2655,7 +2635,7 @@ void OSDVol::apply_mutations(bool requeue)
 
     remove_mutation(mutation);
   }
-  mutation_lock.Unlock();
+  ml.unlock();
 
   if (requeue) {
     requeue_ops(rq);
@@ -2780,7 +2760,7 @@ void OSDVol::objects_read_async(const oid &hoid,
   on_complete->complete(r);
 }
 
-void OSDVol::issue_mutation(Mutation *mutation, utime_t now)
+void OSDVol::issue_mutation(Mutation *mutation)
 {
   OpContext *ctx = mutation->ctx;
   const oid& soid = ctx->obs->oi.soid;

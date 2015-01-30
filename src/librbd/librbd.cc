@@ -13,7 +13,6 @@
  */
 #include <errno.h>
 
-#include "common/Cond.h"
 #include "common/dout.h"
 #include "common/errno.h"
 #include "include/Context.h"

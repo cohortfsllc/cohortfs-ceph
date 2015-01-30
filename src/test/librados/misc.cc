@@ -206,7 +206,8 @@ TEST_F(LibRadosMiscPP, BigAttrPP) {
 
   bufferlist got;
 
-  cout << "osd_max_attr_size = " << cct->_conf->osd_max_attr_size << std::endl;
+  std::cout << "osd_max_attr_size = " << cct->_conf->osd_max_attr_size
+	    << std::endl;
   if (cct->_conf->osd_max_attr_size) {
     bl.clear();
     got.clear();
@@ -219,7 +220,7 @@ TEST_F(LibRadosMiscPP, BigAttrPP) {
     bl.append(buffer::create(cct->_conf->osd_max_attr_size+1));
     ASSERT_EQ(-EFBIG, ioctx.setxattr("foo", "one", bl));
   } else {
-    cout << "osd_max_attr_size == 0; skipping test" << std::endl;
+    std::cout << "osd_max_attr_size == 0; skipping test" << std::endl;
   }
 
   for (int i=0; i<1000; i++) {

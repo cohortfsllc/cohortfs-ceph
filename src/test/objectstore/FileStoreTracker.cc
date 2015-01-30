@@ -1,10 +1,10 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+#include <mutex>
 #include "FileStoreTracker.h"
 #include <stdlib.h>
 #include <iostream>
 #include <boost/scoped_ptr.hpp>
 #include "include/Context.h"
-#include "common/Mutex.h"
 
 class OnApplied : public Context {
   FileStoreTracker *tracker;
@@ -85,7 +85,7 @@ void FileStoreTracker::submit_transaction(Transaction &t)
 void FileStoreTracker::write(const pair<string, string> &obj,
 			     OutTransaction *out)
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   std::cerr << "Writing " << obj << std::endl;
   ObjectContents contents = get_current_content(obj);
 
@@ -115,7 +115,7 @@ void FileStoreTracker::remove(const pair<string, string> &obj,
 			      OutTransaction *out)
 {
   std::cerr << "Deleting " << obj << std::endl;
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   ObjectContents old_contents = get_current_content(obj);
   if (!old_contents.exists())
     return;
@@ -128,7 +128,7 @@ void FileStoreTracker::remove(const pair<string, string> &obj,
 void FileStoreTracker::clone_range(const pair<string, string> &from,
 				   const pair<string, string> &to,
 				   OutTransaction *out) {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   std::cerr << "CloningRange " << from << " to " << to << std::endl;
   assert(from.first == to.first);
   ObjectContents from_contents = get_current_content(from);
@@ -159,7 +159,7 @@ void FileStoreTracker::clone_range(const pair<string, string> &from,
 void FileStoreTracker::clone(const pair<string, string> &from,
 			     const pair<string, string> &to,
 			     OutTransaction *out) {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   std::cerr << "Cloning " << from << " to " << to << std::endl;
   assert(from.first == to.first);
   if (from.second == to.second) {
@@ -274,7 +274,7 @@ void _clean_forward(const pair<string, string> &obj,
 
 void FileStoreTracker::verify(const string &coll, const string &obj,
 			      bool on_start) {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   std::cerr << "Verifying " << make_pair(coll, obj) << std::endl;
 
   pair<uint64_t, uint64_t> valid_reads = get_valid_reads(make_pair(coll, obj));
@@ -403,7 +403,7 @@ void clear_obsolete(const pair<string, string> &obj,
 
 void FileStoreTracker::committed(const pair<string, string> &obj,
 				 uint64_t seq) {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   ObjStatus status = get_obj_status(obj, db);
   assert(status.last_committed < seq);
   status.last_committed = seq;
@@ -415,7 +415,7 @@ void FileStoreTracker::committed(const pair<string, string> &obj,
 
 void FileStoreTracker::applied(const pair<string, string> &obj,
 			       uint64_t seq) {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   std::cerr << "Applied " << obj << " version " << seq << std::endl;
   ObjStatus status = get_obj_status(obj, db);
   assert(status.last_applied < seq);

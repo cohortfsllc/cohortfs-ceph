@@ -17,8 +17,7 @@
 #include <stdint.h>
 #include <vector>
 
-#include <include/utime.h>
-#include "common/Mutex.h"
+#include <include/ceph_time.h>
 #include "include/xlist.h"
 #include "msg/Message.h"
 
@@ -71,7 +70,6 @@ public:
   void set_class_read();
   void set_class_write();
 
-  void _dump(utime_t now, Formatter *f) const;
   Message *get_req() const { return request; }
 
 private:
@@ -79,7 +77,7 @@ private:
   osd_reqid_t reqid;
   uint8_t hit_flag_points;
   uint8_t latest_flag_point;
-  utime_t dequeued_time;
+  ceph::real_time dequeued_time;
   static const uint8_t flag_queued_for_vol = 1 << 0;
   static const uint8_t flag_reached_vol = 1 << 1;
   static const uint8_t flag_delayed = 1 << 2;
@@ -144,10 +142,10 @@ public:
     latest_flag_point = flag_commit_sent;
   }
 
-  utime_t get_dequeued_time() const {
+  ceph::real_time get_dequeued_time() const {
     return dequeued_time;
   }
-  void set_dequeued_time(utime_t deq_time) {
+  void set_dequeued_time(ceph::real_time deq_time) {
     dequeued_time = deq_time;
   }
 

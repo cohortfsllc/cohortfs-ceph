@@ -5,9 +5,6 @@
 #include "cls/statelog/cls_statelog_types.h"
 #include "cls/statelog/cls_statelog_client.h"
 
-#include "include/utime.h"
-#include "common/Clock.h"
-
 #include "gtest/gtest.h"
 #include "test/librados/test.h"
 
@@ -34,12 +31,13 @@ static void reset_rop(librados::ObjectReadOperation **pop,
   *pop = new_rop(ioctx);
 }
 
-void add_log(librados::ObjectWriteOperation *op, const string& client_id, const string& op_id, string& obj, uint32_t state)
+void add_log(librados::ObjectWriteOperation *op, const string& client_id,
+	     const string& op_id, string& obj, uint32_t state)
 {
   bufferlist bl;
   ::encode(state, bl);
 
-  utime_t ts = ceph_clock_now(nullptr);
+  auto ts = ceph::real_clock::now();
 
   cls_statelog_add(*op, client_id, op_id, obj, ts, state, bl);
 }

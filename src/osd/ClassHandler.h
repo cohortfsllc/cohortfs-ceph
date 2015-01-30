@@ -3,12 +3,9 @@
 #ifndef CEPH_CLASSHANDLER_H
 #define CEPH_CLASSHANDLER_H
 
+#include <mutex>
 #include "include/types.h"
-
 #include "objclass/objclass.h"
-
-#include "common/Cond.h"
-#include "common/Mutex.h"
 #include "common/ceph_context.h"
 
 
@@ -26,11 +23,12 @@ public:
     cls_method_call_t func;
     cls_method_cxx_call_t cxx_func;
 
-    int exec(cls_method_context_t ctx, bufferlist& indata, bufferlist& outdata);
+    int exec(cls_method_context_t ctx, bufferlist& indata,
+	     bufferlist& outdata);
     void unregister();
 
     int get_flags() {
-      Mutex::Locker l(cls->handler->mutex);
+      ClassHandler::lock_guard l(cls->handler->mutex);
       return flags;
     }
 
@@ -67,14 +65,16 @@ public:
     void unregister_method(ClassMethod *method);
 
     ClassMethod *get_method(const char *mname) {
-      Mutex::Locker l(handler->mutex);
+      ClassHandler::lock_guard l(handler->mutex);
       return _get_method(mname);
     }
     int get_method_flags(const char *mname);
   };
 
 private:
-  Mutex mutex;
+  std::mutex mutex;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
   map<string, ClassData> classes;
 
   ClassData *_get_class(const string& cname);

@@ -17,6 +17,8 @@
 #ifndef CEPH_MDS_H
 #define CEPH_MDS_H
 
+#include <condition_variable>
+#include <mutex>
 #include "mdstypes.h"
 
 #include "msg/Dispatcher.h"
@@ -24,8 +26,6 @@
 #include "include/types.h"
 #include "include/Context.h"
 #include "common/DecayCounter.h"
-#include "common/Mutex.h"
-#include "common/Cond.h"
 #include "common/Timer.h"
 #include "common/LogClient.h"
 #include "common/Finisher.h"
@@ -78,8 +78,10 @@ class AuthAuthorizeHandlerRegistry;
 
 class MDS : public Dispatcher {
  public:
-  Mutex mds_lock;
-  SafeTimer timer;
+  std::mutex mds_lock;
+  typedef std::unique_lock<std::mutex> unique_lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  SafeTimer<ceph::mono_clock> timer;
 
   AuthAuthorizeHandlerRegistry *authorize_handler_cluster_registry;
   AuthAuthorizeHandlerRegistry *authorize_handler_service_registry;
@@ -211,13 +213,14 @@ class MDS : public Dispatcher {
 
   // -- keepalive beacon --
   version_t beacon_last_seq; // last seq sent to monitor
-  map<version_t,utime_t> beacon_seq_stamp; // seq # -> time sent
-  utime_t beacon_last_acked_stamp; // last time we sent a beacon that got acked
+  map<version_t,ceph::mono_time> beacon_seq_stamp; // seq # -> time sent
+  ceph::mono_time beacon_last_acked_stamp; // last time we sent a
+					   // beacon that got acked
   bool was_laggy;
-  utime_t laggy_until;
+  ceph::mono_time laggy_until;
 
   bool is_laggy();
-  utime_t get_laggy_until() { return laggy_until; }
+  const ceph::mono_time& get_laggy_until() { return laggy_until; }
 
   class C_MDS_BeaconSender : public Context {
     MDS *mds;
@@ -302,16 +305,17 @@ class MDS : public Dispatcher {
   void bcast_mds_map();	 // to mounted clients
 
   void boot_create();		  // i am new mds.
-  void boot_start(int step=0, int r=0);	   // starting|replay
+  void boot_start(unique_lock& ml, int step=0, int r=0); // starting|replay
 
   void calc_recovery_set();
 
-  void replay_start();
+  void replay_start(unique_lock& ml);
   void creating_done();
   void starting_done(VolumeRef &v);
-  void replay_done();
+  void replay_done(unique_lock& ml);
   void standby_replay_restart();
-  void _standby_replay_restart_finish(int r, uint64_t old_read_pos);
+  void _standby_replay_restart_finish(unique_lock& ml, int r,
+				      uint64_t old_read_pos);
   class C_MDS_StandbyReplayRestart;
   class C_MDS_StandbyReplayRestartFinish;
 
@@ -328,14 +332,14 @@ class MDS : public Dispatcher {
   void clientreplay_start();
   void clientreplay_done();
   void active_start();
-  void stopping_start();
+  void stopping_start(unique_lock& ml);
   void stopping_done();
 
   void handle_mds_recovery(int who);
   void handle_mds_failure(int who);
 
-  void suicide();
-  void respawn();
+  void suicide(unique_lock& ml);
+  void respawn(unique_lock& ml);
 
   void tick();
 
@@ -349,16 +353,16 @@ class MDS : public Dispatcher {
   void dec_dispatch_depth() { --dispatch_depth; }
 
   // messages
-  bool _dispatch(Message *m);
+  bool _dispatch(Message *m, unique_lock& ml);
 
   bool is_stale_message(Message *m);
 
-  bool handle_core_message(Message *m);
+  bool handle_core_message(Message *m, unique_lock& ml);
   bool handle_deferrable_message(Message *m);
 
   // special message types
-  void handle_command(class MMonCommand *m);
-  void handle_mds_map(class MMDSMap *m);
+  void handle_command(class MMonCommand *m, unique_lock& ml);
+  void handle_mds_map(class MMDSMap *m, unique_lock& ml);
 };
 
 
@@ -376,7 +380,9 @@ public:
   }
   virtual void finish(int r) {
     mds->inc_dispatch_depth();
-    mds->_dispatch(m);
+    MDS::unique_lock l(mds->mds_lock);
+    mds->_dispatch(m, l);
+    l.unlock();
     mds->dec_dispatch_depth();
   }
 };

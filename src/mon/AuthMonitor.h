@@ -17,7 +17,6 @@
 
 #include <map>
 #include <set>
-using namespace std;
 
 #include "include/ceph_features.h"
 #include "include/types.h"
@@ -125,7 +124,7 @@ private:
   }
 
   void on_active();
-  bool should_propose(double& delay);
+  bool should_propose(ceph::timespan& delay);
   void create_initial();
   void update_from_paxos(bool *need_bootstrap);
   void create_pending();  // prepare a new pending

@@ -8,9 +8,6 @@
 
 #include <expat.h>
 
-using namespace std;
-
-
 class XMLObj;
 
 class XMLObjIter {

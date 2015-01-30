@@ -91,7 +91,7 @@ protected:
     list<Context*> waiting_for_finish;
     MutationRef mut;
     // for freeze tree deadlock detection
-    utime_t last_cum_auth_pins_change;
+    ceph::mono_time last_cum_auth_pins_change;
     int last_cum_auth_pins;
     int num_remote_waiters; // number of remote authpin waiters
     export_state_t() : state(0), peer(0), tid(0), mut(),
@@ -244,7 +244,7 @@ public:
 			   map<client_t,entity_inst_t>& exported_client_map);
   void encode_export_inode_caps(CInode *in, bool auth_cap, bufferlist& bl,
 				map<client_t,entity_inst_t>& exported_client_map);
-  void finish_export_inode(CInode *in, utime_t now, int target,
+  void finish_export_inode(CInode *in, ceph::real_time now, int target,
 			   map<client_t,Capability::Import>& peer_imported,
 			   list<Context*>& finished);
   void finish_export_inode_caps(CInode *in, int target,
@@ -254,8 +254,8 @@ public:
   int encode_export_dir(bufferlist& exportbl,
 			CDir *dir,
 			map<client_t,entity_inst_t>& exported_client_map,
-			utime_t now);
-  void finish_export_dir(CDir *dir, utime_t now, int target,
+			ceph::real_time now);
+  void finish_export_dir(CDir *dir, ceph::real_time now, int target,
 			 map<inodeno_t,map<client_t,Capability::Import> >& peer_imported,
 			 list<Context*>& finished);
 
@@ -310,7 +310,8 @@ public:
 			EImportStart *le,
 			LogSegment *ls,
 			map<CInode*, map<client_t,Capability::Export> >& cap_imports,
-			list<ScatterLock*>& updated_scatterlocks, utime_t now);
+			list<ScatterLock*>& updated_scatterlocks,
+			ceph::real_time now);
 
 public:
   void import_reverse(CDir *dir);

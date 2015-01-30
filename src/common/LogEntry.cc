@@ -38,7 +38,10 @@ void LogEntryKey::dump(Formatter *f) const
 void LogEntryKey::generate_test_instances(list<LogEntryKey*>& o)
 {
   o.push_back(new LogEntryKey);
-  o.push_back(new LogEntryKey(entity_inst_t(), utime_t(1,2), 34));
+  o.push_back(new LogEntryKey(
+		  entity_inst_t(),
+		  ceph::real_time(1s + 2ns),
+		  34));
 }
 
 // ----

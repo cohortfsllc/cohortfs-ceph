@@ -1,14 +1,13 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 
-#include "common/Mutex.h"
-#include "common/Cond.h"
-#include "include/rados/librados.hpp"
 
+#include <condition_variable>
 #include <iostream>
-#include <sstream>
-#include <map>
-#include <set>
 #include <list>
+#include <map>
+#include <mutex>
+#include <set>
+#include <sstream>
 #include <string>
 #include <string.h>
 #include <stdlib.h>
@@ -19,11 +18,10 @@
 #include "test/librados/test.h"
 #include "common/sharedptr_registry.hpp"
 #include "common/errno.h"
+#include "include/rados/librados.hpp"
 
 #ifndef RADOSMODEL_H
 #define RADOSMODEL_H
-
-using namespace std;
 
 class RadosTestContext;
 class TestOpStat;
@@ -63,24 +61,24 @@ enum TestOpType {
 class TestWatchContext : public librados::WatchCtx {
   TestWatchContext(const TestWatchContext&);
 public:
-  Cond cond;
+  std::condition_variable cond;
   uint64_t handle;
   bool waiting;
-  Mutex lock;
+  std::mutex lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
   TestWatchContext() : handle(0), waiting(false) {}
   void notify(uint8_t opcode, uint64_t ver, bufferlist &bl) {
-    Mutex::Locker l(lock);
+    lock_guard l(lock);
     waiting = false;
-    cond.SignalAll();
+    cond.notify_all();
   }
   void start() {
-    Mutex::Locker l(lock);
+    lock_guard l(lock);
     waiting = true;
   }
-  void wait() {
-    Mutex::Locker l(lock);
-    while (waiting)
-      cond.Wait(lock);
+  void wait(unique_lock& l) {
+    cond.wait(l, [&](){ return !waiting; });
   }
   uint64_t &get_handle() {
     return handle;
@@ -145,8 +143,10 @@ public:
 
 class RadosTestContext {
 public:
-  Mutex state_lock;
-  Cond wait_cond;
+  std::mutex state_lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
+  std::condition_variable wait_cond;
   map<string,ObjectDesc> volume_obj_cont;
   set<string> oid_in_use;
   set<string> oid_not_in_use;
@@ -231,7 +231,7 @@ public:
   {
     assert(initialized);
     list<TestOp*> inflight;
-    state_lock.Lock();
+    unique_lock sl(state_lock);
 
     TestOp *next = gen->next(*this);
     TestOp *waiting = NULL;
@@ -244,16 +244,17 @@ public:
       if (next) {
 	inflight.push_back(next);
       }
-      state_lock.Unlock();
+      sl.unlock();
       if (next) {
 	(*inflight.rbegin())->begin();
       }
-      state_lock.Lock();
+      sl.lock();
       while (1) {
 	for (list<TestOp*>::iterator i = inflight.begin();
 	     i != inflight.end();) {
 	  if ((*i)->finished()) {
-	    cout << (*i)->num << ": done (" << (inflight.size()-1) << " left)" << std::endl;
+	    std::cout << (*i)->num << ": done (" << (inflight.size()-1)
+		      << " left)" << std::endl;
 	    delete *i;
 	    inflight.erase(i++);
 	  } else {
@@ -261,9 +262,10 @@ public:
 	  }
 	}
 
-	if (inflight.size() >= (unsigned) max_in_flight || (!next && !inflight.empty())) {
-	  cout << " waiting on " << inflight.size() << std::endl;
-	  wait();
+	if (inflight.size() >= (unsigned) max_in_flight ||
+	    (!next && !inflight.empty())) {
+	  std::cout << " waiting on " << inflight.size() << std::endl;
+	  wait(sl);
 	} else {
 	  break;
 	}
@@ -275,17 +277,17 @@ public:
 	next = gen->next(*this);
       }
     }
-    state_lock.Unlock();
+    sl.unlock();
   }
 
-  void wait()
+  void wait(unique_lock& sl)
   {
-    wait_cond.Wait(state_lock);
+    wait_cond.wait(sl);
   }
 
   void kick()
   {
-    wait_cond.Signal();
+    wait_cond.notify_all();
   }
 
   TestWatchContext *get_watch_context(const string &oid) {
@@ -377,10 +379,10 @@ public:
     if (j != volume_obj_cont.end()) {
       if (version)
 	j->second.version = version;
-      cout << __func__ << " oid " << oid
-	   << " v " << version << " " << j->second.most_recent()
-	   << " " << (j->second.exists ? "exists" : "dne")
-	   << std::endl;
+      std::cout << __func__ << " oid " << oid
+		<< " v " << version << " " << j->second.most_recent()
+		<< " " << (j->second.exists ? "exists" : "dne")
+		<< std::endl;
     }
   }
 
@@ -424,7 +426,7 @@ public:
     ContDesc cont;
     set<string> to_remove;
     {
-      Mutex::Locker l(context->state_lock);
+      RadosTestContext::lock_guard l(context->state_lock);
       ObjectDesc obj;
       if (!context->find_object(oid, &obj)) {
 	context->kick();
@@ -481,7 +483,7 @@ public:
 
   void _finish(CallbackInfo *info)
   {
-    Mutex::Locker l(context->state_lock);
+    RadosTestContext::lock_guard l(context->state_lock);
     done = true;
     context->update_object_version(oid, comp->get_version());
     context->oid_in_use.erase(oid);
@@ -518,7 +520,7 @@ public:
   {
     ContDesc cont;
     {
-      Mutex::Locker l(context->state_lock);
+      RadosTestContext::lock_guard l(context->state_lock);
       cont = ContDesc(context->seq_num, context->seq_num, "");
       context->oid_in_use.insert(oid);
       context->oid_not_in_use.erase(oid);
@@ -556,7 +558,7 @@ public:
     }
 
     {
-      Mutex::Locker l(context->state_lock);
+      RadosTestContext::lock_guard l(context->state_lock);
       context->update_object_header(oid, header);
       context->update_object_attrs(oid, omap);
     }
@@ -571,7 +573,7 @@ public:
 
   void _finish(CallbackInfo *info)
   {
-    Mutex::Locker l(context->state_lock);
+    RadosTestContext::lock_guard l(context->state_lock);
     int r;
     if ((r = comp->get_return_value())) {
       cerr << "err " << r << std::endl;
@@ -622,7 +624,7 @@ public:
 
   void _begin()
   {
-    context->state_lock.Lock();
+    RadosTestContext::unique_lock csl(context->state_lock);
     done = 0;
     stringstream acc;
     acc << context->prefix << "OID: " << oid << std::endl;
@@ -630,7 +632,7 @@ public:
 
     cont = ContDesc(context->seq_num, context->seq_num, prefix);
 
-    shared_ptr<ContentsGenerator> cont_gen;
+    std::shared_ptr<ContentsGenerator> cont_gen;
     if (do_append) {
       ObjectDesc old_value;
       bool found = context->find_object(oid, &old_value);
@@ -638,10 +640,12 @@ public:
 	old_value.most_recent_gen()->get_length(old_value.most_recent()) :
 	0;
       cont_gen.reset(new AppendGenerator(
-		       prev_length, context->min_stride_size, context->max_stride_size, 3));
+		       prev_length, context->min_stride_size,
+		       context->max_stride_size, 3));
     } else {
       cont_gen.reset(new VarLenGenerator(
-		       context->max_size, context->min_stride_size, context->max_stride_size));
+		       context->max_size, context->min_stride_size,
+		       context->max_stride_size));
     }
     context->update_object(cont_gen, oid, cont);
 
@@ -651,11 +655,11 @@ public:
     map<uint64_t, uint64_t> ranges;
 
     cont_gen->get_ranges_map(cont, ranges);
-    std::cout << num << ":  seq_num " << context->seq_num << " ranges " << ranges << std::endl;
+    std::cout << num << ":  seq_num " << context->seq_num << " ranges "
+	      << ranges << std::endl;
     context->seq_num++;
 
     waiting_on = ranges.size();
-    //cout << " waiting_on = " << waiting_on << std::endl;
     ContentsGenerator::iterator gen_pos = cont_gen->get_iterator(cont);
     uint64_t tid = 1;
     for (map<uint64_t, uint64_t>::iterator i = ranges.begin();
@@ -719,16 +723,17 @@ public:
       &read_op,
       librados::OPERATION_ORDER_READS_WRITES,  // order wrt previous write/update
       0);
-    context->state_lock.Unlock();
+    csl.unlock();
   }
 
   void _finish(CallbackInfo *info)
   {
     assert(info);
-    context->state_lock.Lock();
+    RadosTestContext::unique_lock csl(context->state_lock);
     uint64_t tid = info->id;
 
-    cout << num << ":  finishing write tid " << tid << " to " << context->prefix + oid << std::endl;
+    std::cout << num << ":  finishing write tid " << tid << " to "
+	      << context->prefix + oid << std::endl;
 
     if (tid <= last_acked_tid) {
       cerr << "Error: finished tid " << tid
@@ -768,7 +773,7 @@ public:
       context->kick();
       done = true;
     }
-    context->state_lock.Unlock();
+    csl.unlock();
   }
 
   bool finished()
@@ -795,10 +800,10 @@ public:
 
   void _begin()
   {
-    context->state_lock.Lock();
+    RadosTestContext::unique_lock csl(context->state_lock);
     if (context->get_watch_context(oid)) {
       context->kick();
-      context->state_lock.Unlock();
+      csl.unlock();
       return;
     }
 
@@ -813,7 +818,7 @@ public:
     context->remove_object(oid);
 
     interval_set<uint64_t> ranges;
-    context->state_lock.Unlock();
+    csl.unlock();
 
     int r = context->io_ctx.remove(context->prefix+oid);
     if (r && !(r == -ENOENT && !present)) {
@@ -821,11 +826,11 @@ public:
       assert(0);
     }
 
-    context->state_lock.Lock();
+    csl.lock();
     context->oid_in_use.erase(oid);
     context->oid_not_in_use.insert(oid);
     context->kick();
-    context->state_lock.Unlock();
+    csl.unlock();
   }
 
   string getType()
@@ -870,17 +875,18 @@ public:
 
   void _begin()
   {
-    context->state_lock.Lock();
+    RadosTestContext::unique_lock csl(context->state_lock);
     std::cout << num << ": read oid " << oid << std::endl;
     done = 0;
-    completion = context->rados.aio_create_completion((void *) this, &read_callback, 0);
+    completion = context->rados.aio_create_completion(
+      (void *) this, &read_callback, 0);
 
     context->oid_in_use.insert(oid);
     context->oid_not_in_use.erase(oid);
     assert(context->find_object(oid, &old_value));
 
     TestWatchContext *ctx = context->get_watch_context(oid);
-    context->state_lock.Unlock();
+    csl.unlock();
     if (ctx) {
       assert(old_value.exists);
       TestAlarm alarm;
@@ -895,7 +901,7 @@ public:
 	assert(0);
       }
       std::cerr << num << ":  notified, waiting" << std::endl;
-      ctx->wait();
+      ctx->wait(csl);
     }
 
     op.read(0,
@@ -927,7 +933,7 @@ public:
 
   void _finish(CallbackInfo *info)
   {
-    context->state_lock.Lock();
+    RadosTestContext::unique_lock csl(context->state_lock);
     assert(!done);
     context->oid_in_use.erase(oid);
     context->oid_not_in_use.insert(oid);
@@ -953,19 +959,22 @@ public:
 	headerbl = iter->second;
 	xattrs.erase(iter);
       }
-      cout << num << ":	 expect " << old_value.most_recent() << std::endl;
+      std::cout << num << ":	 expect " << old_value.most_recent()
+		<< std::endl;
       assert(!old_value.deleted());
       if (old_value.has_contents()) {
 	ContDesc to_check;
 	bufferlist::iterator p = headerbl.begin();
 	::decode(to_check, p);
 	if (to_check != old_value.most_recent()) {
-	  cerr << num << ": oid " << oid << " found incorrect object contents " << to_check
+	  cerr << num << ": oid " << oid << " found incorrect object contents "
+	       << to_check
 	       << ", expected " << old_value.most_recent() << std::endl;
 	  context->errors++;
 	}
 	if (!old_value.check(result)) {
-	  cerr << num << ": oid " << oid << " contents " << to_check << " corrupt" << std::endl;
+	  cerr << num << ": oid " << oid << " contents " << to_check
+	       << " corrupt" << std::endl;
 	  context->errors++;
 	}
 	if (context->errors) assert(0);
@@ -974,7 +983,8 @@ public:
       // Attributes
       if (!context->no_omap) {
 	if (!(old_value.header == header)) {
-	  cerr << num << ": oid " << oid << " header does not match, old size: "
+	  cerr << num << ": oid " << oid
+	       << " header does not match, old size: "
 	       << old_value.header.length() << " new size " << header.length()
 	       << std::endl;
 	  assert(old_value.header == header);
@@ -1047,7 +1057,7 @@ public:
     }
     context->kick();
     done = true;
-    context->state_lock.Unlock();
+    csl.unlock();
   }
 
   bool finished()
@@ -1074,23 +1084,22 @@ public:
 
   void _begin()
   {
-    context->state_lock.Lock();
+    RadosTestContext::unique_lock csl(context->state_lock);
     ObjectDesc contents;
     context->find_object(oid, &contents);
     if (contents.deleted()) {
       context->kick();
-      context->state_lock.Unlock();
+      csl.unlock();
       return;
     }
     context->oid_in_use.insert(oid);
     context->oid_not_in_use.erase(oid);
 
     TestWatchContext *ctx = context->get_watch_context(oid);
-    context->state_lock.Unlock();
+    csl.unlock();
     int r;
     if (!ctx) {
       {
-	Mutex::Locker l(context->state_lock);
 	ctx = context->watch(oid);
       }
 
@@ -1102,7 +1111,7 @@ public:
       r = context->io_ctx.unwatch(context->prefix+oid,
 				  ctx->get_handle());
       {
-	Mutex::Locker l(context->state_lock);
+	RadosTestContext::lock_guard l(context->state_lock);
 	context->unwatch(oid);
       }
     }
@@ -1113,7 +1122,7 @@ public:
     }
 
     {
-      Mutex::Locker l(context->state_lock);
+      RadosTestContext::lock_guard l(context->state_lock);
       context->oid_in_use.erase(oid);
       context->oid_not_in_use.insert(oid);
     }

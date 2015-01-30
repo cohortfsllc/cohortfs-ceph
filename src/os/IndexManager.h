@@ -14,10 +14,10 @@
 #ifndef OS_INDEXMANAGER_H
 #define OS_INDEXMANAGER_H
 
+#include <condition_variable>
 #include <map>
+#include <mutex>
 
-#include "common/Mutex.h"
-#include "common/Cond.h"
 #include "common/config.h"
 #include "common/debug.h"
 
@@ -43,8 +43,11 @@ typedef std::shared_ptr<CollectionIndex> Index;
  * removes the weak_ptr from col_indices and wakes waiters.
  */
 class IndexManager {
-  Mutex lock; ///< Lock for Index Manager
-  Cond cond;  ///< Cond for waiters on col_indices
+  std::mutex lock; ///< Lock for Index Manager
+  typedef std::unique_lock<std::mutex> unique_lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
+
+  std::condition_variable cond;  ///< Cond for waiters on col_indices
 
   /// Currently in use CollectionIndices
   map<coll_t,std::weak_ptr<CollectionIndex> > col_indices;

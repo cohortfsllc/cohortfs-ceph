@@ -1,4 +1,4 @@
-// -*- mode:C; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
 #ifndef CEPH_CLS_USER_TYPES_H
@@ -6,7 +6,6 @@
 
 #include "include/encoding.h"
 #include "include/types.h"
-#include "include/utime.h"
 #include "common/Formatter.h"
 
 /*
@@ -155,8 +154,8 @@ WRITE_CLASS_ENCODER(cls_user_stats)
  */
 struct cls_user_header {
   cls_user_stats stats;
-  utime_t last_stats_sync;     /* last time a full stats sync completed */
-  utime_t last_stats_update;   /* last time a stats update was done */
+  ceph::real_time last_stats_sync; /* last time a full stats sync completed */
+  ceph::real_time last_stats_update; /* last time a stats update was done */
 
   void encode(bufferlist& bl) const {
      ENCODE_START(1, 1, bl);

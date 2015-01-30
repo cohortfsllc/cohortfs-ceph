@@ -32,7 +32,7 @@ int CephxClientHandler::build_request(bufferlist& bl) const
 {
   ldout(cct, 10) << "build_request" << dendl;
 
-  RWLock::RLocker l(lock);
+  shared_lock l(lock);
 
   if (need & CEPH_ENTITY_TYPE_AUTH) {
     /* authenticate */
@@ -90,7 +90,7 @@ int CephxClientHandler::build_request(bufferlist& bl) const
 int CephxClientHandler::handle_response(int ret, bufferlist::iterator& indata)
 {
   ldout(cct, 10) << "handle_response ret = " << ret << dendl;
-  RWLock::WLocker l(lock);
+  unique_lock l(lock);
 
   if (ret < 0)
     return ret; // hrm!
@@ -175,7 +175,7 @@ int CephxClientHandler::handle_response(int ret, bufferlist::iterator& indata)
 
 AuthAuthorizer *CephxClientHandler::build_authorizer(uint32_t service_id) const
 {
-  RWLock::RLocker l(lock);
+  shared_lock l(lock);
   ldout(cct, 10) << "build_authorizer for service " << ceph_entity_type_name(service_id) << dendl;
   return tickets.build_authorizer(service_id);
 }
@@ -192,7 +192,7 @@ bool CephxClientHandler::build_rotating_request(bufferlist& bl) const
 
 void CephxClientHandler::prepare_build_request()
 {
-  RWLock::WLocker l(lock);
+  unique_lock l(lock);
   ldout(cct, 10) << "validate_tickets: want=" << want << " need=" << need
 		 << " have=" << have << dendl;
   validate_tickets();
@@ -210,7 +210,7 @@ void CephxClientHandler::validate_tickets()
 
 bool CephxClientHandler::need_tickets()
 {
-  RWLock::WLocker l(lock);
+  unique_lock l(lock);
   validate_tickets();
 
   ldout(cct, 20) << "need_tickets: want=" << want << " need=" << need << " have=" << have << dendl;

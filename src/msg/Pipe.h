@@ -71,9 +71,9 @@ class DispatchQueue;
      */
     class DelayedDelivery: public Thread {
       Pipe *pipe;
-      std::deque< pair<utime_t,Message*> > delay_queue;
-      Mutex delay_lock;
-      Cond delay_cond;
+      std::deque< pair<ceph::real_time,Message*> > delay_queue;
+      std::mutex delay_lock;
+      std::condition_variable delay_cond;
       bool stop_delayed_delivery;
 
     public:
@@ -84,18 +84,18 @@ class DispatchQueue;
 	discard();
       }
       void *entry();
-      void queue(utime_t release, Message *m) {
-	Mutex::Locker l(delay_lock);
+      void queue(ceph::real_time release, Message *m) {
+	std::lock_guard<std::mutex> l(delay_lock);
 	delay_queue.push_back(make_pair(release, m));
-	delay_cond.Signal();
+	delay_cond.notify_all();
       }
       void discard();
       void flush();
       void stop() {
-	delay_lock.Lock();
+	std::unique_lock<std::mutex> l(delay_lock);
 	stop_delayed_delivery = true;
-	delay_cond.Signal();
-	delay_lock.Unlock();
+	delay_cond.notify_all();
+	l.unlock();
       }
     } *delay_thread;
     friend class DelayedDelivery;
@@ -144,7 +144,7 @@ class DispatchQueue;
     entity_addr_t peer_addr;
     Messenger::Policy policy;
 
-    Mutex pipe_lock;
+    std::mutex pipe_lock;
     int state;
     std::atomic<bool> state_closed; // non-zero iff state = STATE_CLOSED
 
@@ -156,7 +156,7 @@ class DispatchQueue;
     friend class SimpleMessenger;
     PipeConnectionRef connection_state;
 
-    utime_t backoff;	     // backoff time
+    ceph::timespan backoff;	     // backoff time
 
     bool reader_running, reader_needs_join;
     bool writer_running;
@@ -164,10 +164,10 @@ class DispatchQueue;
     map<int, list<Message*> > out_q;  // priority queue for outbound msgs
     DispatchQueue *in_q;
     list<Message*> sent;
-    Cond cond;
+    std::condition_variable cond;
     bool send_keepalive;
     bool send_keepalive_ack;
-    utime_t keepalive_ack_stamp;
+    ceph::real_time keepalive_ack_stamp;
     bool halt_delivery; //if a pipe's queue is destroyed, stop adding to it
     bool close_on_empty;
 
@@ -177,11 +177,11 @@ class DispatchQueue;
 
     void set_socket_options();
 
-    int accept();   // server handshake
-    int connect();  // client handshake
+    int accept(std::unique_lock<std::mutex>& pl); // server handshake
+    int connect(std::unique_lock<std::mutex>& pl); // client handshake
     void reader();
     void writer();
-    void unlock_maybe_reap();
+    void unlock_maybe_reap(std::unique_lock<std::mutex>& pl);
 
     int randomize_out_seq();
 
@@ -202,9 +202,10 @@ class DispatchQueue;
     int do_sendmsg(struct msghdr *msg, int len, bool more=false);
     int write_ack(uint64_t s);
     int write_keepalive();
-    int write_keepalive2(char tag, const utime_t &t);
+    int write_keepalive2(char tag, const ceph::real_time &t);
 
-    void fault(bool reader=false);
+    void fault(std::unique_lock<std::mutex>& pl,
+	       bool reader=false);
 
     void was_session_reset();
 
@@ -218,7 +219,7 @@ class DispatchQueue;
     void start_reader();
     void start_writer();
     void maybe_start_delay_thread();
-    void join_reader();
+    void join_reader(std::unique_lock<std::mutex>& l);
 
     // public constructors
     static const Pipe& Server(int s);
@@ -246,17 +247,14 @@ class DispatchQueue;
     void stop();
 
     void _send(Message *m) {
-      assert(pipe_lock.is_locked());
       out_q[m->get_priority()].push_back(m);
-      cond.Signal();
+      cond.notify_all();
     }
     void _send_keepalive() {
-      assert(pipe_lock.is_locked());
       send_keepalive = true;
-      cond.Signal();
+      cond.notify_all();
     }
     Message *_get_next_outgoing() {
-      assert(pipe_lock.is_locked());
       Message *m = 0;
       while (!m && !out_q.empty()) {
 	map<int, list<Message*> >::reverse_iterator p = out_q.rbegin();

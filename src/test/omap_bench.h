@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 /*
  * Generate latency statistics for a configurable number of object map write
  * operations of configurable size.
@@ -14,8 +16,8 @@
 #ifndef OMAP_BENCH_HPP_
 #define OMAP_BENCH_HPP_
 
-#include "common/Mutex.h"
-#include "common/Cond.h"
+#include <mutex>
+#include <condition_variable>
 #include "include/rados/librados.hpp"
 #include <string>
 #include <map>
@@ -24,18 +26,18 @@
 using ceph::bufferlist;
 
 struct o_bench_data {
-  double avg_latency;
-  double min_latency;
-  double max_latency;
-  double total_latency;
+  ceph::timespan avg_latency;
+  ceph::timespan min_latency;
+  ceph::timespan max_latency;
+  ceph::timespan total_latency;
   int started_ops;
   int completed_ops;
-  std::map<int,int> freq_map;
-  pair<int,int> mode;
+  std::map<ceph::timespan,int> freq_map;
+  pair<ceph::timespan,int> mode;
   o_bench_data()
-  : avg_latency(0.0), min_latency(DBL_MAX), max_latency(0.0),
-    total_latency(0.0),
-    started_ops(0), completed_ops(0)
+    : avg_latency(0ns), min_latency(ceph::timespan::max()),
+      max_latency(0ns), total_latency(0ns),
+      started_ops(0), completed_ops(0)
   {}
 };
 
@@ -50,8 +52,8 @@ typedef int (OmapBench::*test_t)(omap_generator_t omap_gen);
 class Writer{
 protected:
   string oid;
-  utime_t begin_time;
-  utime_t end_time;
+  ceph::mono_time begin_time;
+  ceph::mono_time end_time;
   std::map<std::string,bufferlist> omap;
   OmapBench *ob;
   friend class OmapBench;
@@ -60,7 +62,7 @@ public:
   virtual ~Writer(){};
   virtual void start_time();
   virtual void stop_time();
-  virtual double get_time();
+  virtual ceph::timespan get_time();
   virtual string get_oid();
   virtual std::map<std::string,bufferlist> & get_omap();
 };
@@ -87,9 +89,11 @@ protected:
   omap_generator_t omap_generator;
 
   //aio things
-  Cond thread_is_free;
-  Mutex thread_is_free_lock;
-  Mutex  data_lock;
+  std::condition_variable thread_is_free;
+  std::mutex thread_is_free_lock;
+  std::mutex data_lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
   int busythreads_count;
   librados::callback_t comp;
   librados::callback_t safe;
@@ -102,7 +106,7 @@ protected:
   int entries_per_omap;
   int key_size;
   int value_size;
-  double increment;
+  int increment;
 
   friend class Writer;
   friend class AioWriter;

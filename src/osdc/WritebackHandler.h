@@ -30,7 +30,7 @@ class WritebackHandler {
 				 uint64_t read_len) = 0;
   virtual ceph_tid_t write(const oid& obj, const boost::uuids::uuid& volume,
 			   uint64_t off, uint64_t len,
-			   const bufferlist &bl, utime_t mtime,
+			   const bufferlist &bl, ceph::real_time mtime,
 			   uint64_t trunc_size, uint32_t trunc_seq,
 			   Context *oncommit) = 0;
   virtual ceph_tid_t lock(const oid& obj, const boost::uuids::uuid& volume,

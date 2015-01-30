@@ -53,9 +53,7 @@ namespace std {
 #include <set>
 using namespace std;
 
-#include "common/Mutex.h"
-
-Mutex trace_lock;
+std::mutex trace_lock;
 ofstream tracefile;
 
 #define traceout (tracefile.is_open() ? tracefile : cout)
@@ -66,7 +64,10 @@ bool do_timestamps = true;
 
 #define dout if (debug) cout
 
-Mutex lock;
+std::mutex lock;
+
+typedef std::lock_guard<std::mutex> lock_guard;
+typedef std::unique_lock<std::mutex> unique_lock;
 
 struct Inode {
     struct stat stbuf;
@@ -246,7 +247,7 @@ static void ft_ll_lookup(fuse_req_t req, fuse_ino_t pino, const char *name)
     struct fuse_entry_param fe;
     memset(&fe, 0, sizeof(fe));
 
-    lock.Lock();
+    unique_lock l(lock);
     Inode *parent = inode_map[pino];
     assert(parent);
 
@@ -293,12 +294,12 @@ static void ft_ll_lookup(fuse_req_t req, fuse_ino_t pino, const char *name)
 	    memcpy(&fe.attr, &in->stbuf, sizeof(in->stbuf));
 	}
     }
-    lock.Unlock();
+    l.unlock();
 
-    trace_lock.Lock();
+    unique_lock tl(trace_lock);
     print_time();
     traceout << "ll_lookup" << endl << pino << endl << name << endl << fe.attr.st_ino << endl;
-    trace_lock.Unlock();
+    tl.unlock();
 
     if (in)
 	fuse_reply_entry(req, &fe);
@@ -309,7 +310,7 @@ static void ft_ll_lookup(fuse_req_t req, fuse_ino_t pino, const char *name)
 static void ft_ll_forget(fuse_req_t req, fuse_ino_t ino, long unsigned nlookup)
 {
     if (ino != 1) {
-	lock.Lock();
+	unique_lock l(lock);
 	Inode *in = inode_map[ino];
 	if (in) {
 	    dout << "forget on " << ino << " ref " << in->ref << ", forget " << nlookup << endl;
@@ -322,13 +323,13 @@ static void ft_ll_forget(fuse_req_t req, fuse_ino_t ino, long unsigned nlookup)
 	} else {
 	    dout << "**** BAD **** forget " << nlookup << " on nonexistent inode " << ino << endl;
 	}
-	lock.Unlock();
+	l.unlock();
     }
 
-    trace_lock.Lock();
+    unique_lock tl(trace_lock);
     print_time();
     traceout << "ll_forget" << endl << ino << endl << nlookup << endl;
-    trace_lock.Unlock();
+    tl.unlock();
 
     fuse_reply_none(req);
 }
@@ -342,14 +343,14 @@ static void ft_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info 
     Inode *in = 0;
     struct stat attr;
 
-    lock.Lock();
+    unique_lock l(lock);
     in = inode_map[ino];
     if (in->fds.empty()) {
 	if (!make_inode_path(path, in))
 	    res = ENOENT;
     } else
 	fd = *in->fds.begin();
-    lock.Unlock();
+    l.unlock();
 
     if (fd > 0) {
 	res = ::fstat(fd, &attr);
@@ -361,15 +362,15 @@ static void ft_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info 
     if (res < 0) res = errno;
     if (ino == 1) attr.st_ino = 1;
 
-    trace_lock.Lock();
+    unique_lock tl(trace_lock);
     print_time();
     traceout << "ll_getattr" << endl << ino << endl;
-    trace_lock.Unlock();
+    tl.unlock();
 
     if (res == 0) {
-	lock.Lock();
+	l.lock();
 	memcpy(&in->stbuf, &attr, sizeof(attr));
-	lock.Unlock();
+	l.unlock();
 	fuse_reply_attr(req, &attr, 0);
     } else
 	fuse_reply_err(req, res);
@@ -383,16 +384,16 @@ static void ft_ll_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
     int fd = 0;
     int res = 0;
 
-    lock.Lock();
+    unique_lock l(lock);
     in = inode_map[ino];
     if (in->fds.empty() || (to_set & FUSE_SET_ATTR_MTIME)) {
 	if (!make_inode_path(path, in))
 	    res = ENOENT;
     } else
 	fd = *in->fds.begin();
-    lock.Unlock();
+    l.unlock();
 
-    trace_lock.Lock();
+    unique_lock tl(trace_lock);
     print_time();
     traceout << "ll_setattr" << endl << ino << endl;
     traceout << attr->st_mode << endl;
@@ -401,9 +402,10 @@ static void ft_ll_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
     traceout << attr->st_mtime << endl;
     traceout << attr->st_atime << endl;
     traceout << to_set << endl;
-    trace_lock.Unlock();
+    tl.unlock();
 
-    if (res == 0 && !has_perm(0010, in, fuse_req_ctx(req)->uid, fuse_req_ctx(req)->gid)) {
+    if (res == 0 && !has_perm(0010, in, fuse_req_ctx(req)->uid,
+			      fuse_req_ctx(req)->gid)) {
 	res = EPERM;
     } else if (res == 0) {
 	if (to_set & FUSE_SET_ATTR_MODE) {
@@ -434,11 +436,11 @@ static void ft_ll_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
     }
 
     if (res == 0) {
-	lock.Lock();
+	l.lock();
 	::lstat(path.c_str(), &in->stbuf);
 	if (ino == 1) in->stbuf.st_ino = 1;
 	memcpy(attr, &in->stbuf, sizeof(*attr));
-	lock.Unlock();
+	l.unlock();
 	fuse_reply_attr(req, attr, 0);
     } else
 	fuse_reply_err(req, res);
@@ -450,15 +452,15 @@ static void ft_ll_readlink(fuse_req_t req, fuse_ino_t ino)
     string path;
     int res = 0;
 
-    lock.Lock();
+    unique_lock l(lock);
     if (!make_ino_path(path, ino))
 	res = ENOENT;
-    lock.Unlock();
+    l.unlock();
 
-    trace_lock.Lock();
+    unique_lock tl(trace_lock);
     print_time();
     traceout << "ll_readlink" << endl << ino << endl;
-    trace_lock.Unlock();
+    tl.unlock();
 
     char buf[256];
     if (res == 0) res = readlink(path.c_str(), buf, 255);
@@ -477,11 +479,11 @@ static void ft_ll_opendir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info 
 {
     string path;
     int res = 0;
-    lock.Lock();
+    unique_lock l(lock);
     Inode *in = inode_map[ino];
     if (!make_inode_path(path, in))
 	res = ENOENT;
-    lock.Unlock();
+    l.unlock();
 
     DIR *dir = 0;
     if (res == 0 && !has_perm(0100, in, fuse_req_ctx(req)->uid, fuse_req_ctx(req)->gid))
@@ -489,10 +491,10 @@ static void ft_ll_opendir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info 
     else if (res == 0) dir = opendir(path.c_str());
     if (res < 0) res = errno;
 
-    trace_lock.Lock();
+    unique_lock tl(trace_lock);
     print_time();
     traceout << "ll_opendir" << endl << ino << endl << (unsigned long)dir << endl;
-    trace_lock.Unlock();
+    tl.unlock();
 
     if (dir) {
 	fi->fh = (long)dir;
@@ -540,10 +542,10 @@ static void ft_ll_releasedir(fuse_req_t req, fuse_ino_t ino,
 {
     DIR *dir = (DIR*)fi->fh;
 
-    trace_lock.Lock();
+    unique_lock tl(trace_lock);
     print_time();
     traceout << "ll_releasedir" << endl << (unsigned long)dir << endl;
-    trace_lock.Unlock();
+    tl.unlock();
 
     closedir(dir);
     fuse_reply_err(req, 0);
@@ -557,11 +559,11 @@ static void ft_ll_mknod(fuse_req_t req, fuse_ino_t parent, const char *name,
     string path;
     Inode *pin = 0;
     int res = 0;
-    lock.Lock();
+    unique_lock l(lock);
     pin = inode_map[parent];
     if (!make_inode_path(path, pin, name))
 	res = ENOENT;
-    lock.Unlock();
+    l.unlock();
 
     dout << "mknod " << path << endl;
     if (res == 0 && !has_perm(0010, pin, fuse_req_ctx(req)->uid, fuse_req_ctx(req)->gid))
@@ -577,17 +579,17 @@ static void ft_ll_mknod(fuse_req_t req, fuse_ino_t parent, const char *name,
 	memset(&fe, 0, sizeof(fe));
 	::lstat(path.c_str(), &fe.attr);
 	fe.ino = fe.attr.st_ino;
-	lock.Lock();
+	l.lock();
 	Inode *in = add_inode(pin, name, &fe.attr);
 	in->ref++;
-	lock.Unlock();
+	l.unlock();
     }
 
-    trace_lock.Lock();
+    unique_lcok tl(trace_lock);
     print_time();
     traceout << "ll_mknod" << endl << parent << endl << name << endl << mode << endl << rdev << endl;
     traceout << (res == 0 ? fe.ino:0) << endl;
-    trace_lock.Unlock();
+    tl.unlock();
 
     if (res == 0)
 	fuse_reply_entry(req, &fe);
@@ -601,11 +603,11 @@ static void ft_ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name,
     string path;
     Inode *pin = 0;
     int res = 0;
-    lock.Lock();
+    unique_lock l(lock);
     pin = inode_map[parent];
     if (!make_inode_path(path, pin, name))
 	res = ENOENT;
-    lock.Unlock();
+    l.unlock();
 
     if (res == 0 && !has_perm(0010, pin, fuse_req_ctx(req)->uid, fuse_req_ctx(req)->gid))
 	res = EPERM;
@@ -620,17 +622,17 @@ static void ft_ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name,
 	memset(&fe, 0, sizeof(fe));
 	::lstat(path.c_str(), &fe.attr);
 	fe.ino = fe.attr.st_ino;
-	lock.Lock();
+	l.lock();
 	Inode *in = add_inode(pin, name, &fe.attr);
 	in->ref++;
-	lock.Unlock();
+	l.unlock();
     }
 
-    trace_lock.Lock();
+    unique_lock tl(trace_lock);
     print_time();
     traceout << "ll_mkdir" << endl << parent << endl << name << endl << mode << endl;
     traceout << (res == 0 ? fe.ino:0) << endl;
-    trace_lock.Unlock();
+    tl.unlock();
 
     if (res == 0)
 	fuse_reply_entry(req, &fe);
@@ -644,11 +646,11 @@ static void ft_ll_symlink(fuse_req_t req, const char *value, fuse_ino_t parent, 
     Inode *pin = 0;
     int res = 0;
 
-    lock.Lock();
+    unique_lock l(lock);
     pin = inode_map[parent];
     if (!make_inode_path(path, pin, name))
 	res = ENOENT;
-    lock.Unlock();
+    l.unlock();
 
     if (res == 0 && !has_perm(0010, pin, fuse_req_ctx(req)->uid, fuse_req_ctx(req)->gid))
 	res = EPERM;
@@ -663,17 +665,17 @@ static void ft_ll_symlink(fuse_req_t req, const char *value, fuse_ino_t parent, 
 	memset(&fe, 0, sizeof(fe));
 	::lstat(path.c_str(), &fe.attr);
 	fe.ino = fe.attr.st_ino;
-	lock.Lock();
+	l.lock();
 	Inode *in = add_inode(pin, name, &fe.attr);
 	in->ref++;
-	lock.Unlock();
+	l.unlock();
     }
 
-    trace_lock.Lock();
+    unique_lock tl(trace_lock);
     print_time();
     traceout << "ll_symlink" << endl << parent << endl << name << endl << value << endl;
     traceout << (res == 0 ? fe.ino:0) << endl;
-    trace_lock.Unlock();
+    tl.unlock();
 
     if (res == 0)
 	fuse_reply_entry(req, &fe);
@@ -688,11 +690,11 @@ static void ft_ll_create(fuse_req_t req, fuse_ino_t parent, const char *name,
     Inode *pin = 0;
     int res = 0;
 
-    lock.Lock();
+    unique_lock l(lock);
     pin = inode_map[parent];
     if (!make_inode_path(path, pin, name))
 	res = ENOENT;
-    lock.Unlock();
+    l.unlock();
 
     dout << "create " << path << endl;
     int fd = 0;
@@ -712,15 +714,15 @@ static void ft_ll_create(fuse_req_t req, fuse_ino_t parent, const char *name,
     if (res == 0) {
 	::lstat(path.c_str(), &fe.attr);
 	fe.ino = fe.attr.st_ino;
-	lock.Lock();
+	l.lock();
 	Inode *in = add_inode(pin, name, &fe.attr);
 	in->ref++;
 	in->fds.insert(fd);
-	lock.Unlock();
+	l.unlock();
 	fi->fh = fd;
     }
 
-    trace_lock.Lock();
+    unique_lock tl(trace_lock);
     print_time();
     traceout << "ll_create" << endl
 	     << parent << endl
@@ -729,7 +731,7 @@ static void ft_ll_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	     << fi->flags << endl
 	     << (res == 0 ? fd:0) << endl
 	     << fe.ino << endl;
-    trace_lock.Unlock();
+    tl.unlock();
 
     if (res == 0)
 	fuse_reply_create(req, &fe, fi);
@@ -744,18 +746,18 @@ static void ft_ll_statfs(fuse_req_t req, fuse_ino_t ino)
     string path;
     int res = 0;
     if (ino) {
-	lock.Lock();
+	unique_lock l(lock);
 	if (!make_ino_path(path, ino))
 	    res = ENOENT;
-	lock.Unlock();
+	l.unlock();
     } else {
 	path = basedir;
     }
 
-    trace_lock.Lock();
+    unique_lock tl(trace_lock);
     print_time();
     traceout << "ll_statfs" << endl << ino << endl;
-    trace_lock.Unlock();
+    tl.unlock();
 
     struct statvfs stbuf;
     if (res == 0) res = statvfs(path.c_str(), &stbuf);
@@ -774,17 +776,17 @@ static void ft_ll_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
     Inode *in = 0;
     string dname(name);
     int res = 0;
-    lock.Lock();
+    unique_lock l(lock);
     pin = inode_map[parent];
     in = pin->lookup(dname);
     if (!make_inode_path(path, pin, name))
 	res = ENOENT;
-    lock.Unlock();
+    l.unlock();
 
-    trace_lock.Lock();
+    unique_lock tl(trace_lock);
     print_time();
     traceout << "ll_unlink" << endl << parent << endl << name << endl;
-    trace_lock.Unlock();
+    tl.unlock();
 
     if (res == 0 && !has_perm(0010, pin, fuse_req_ctx(req)->uid, fuse_req_ctx(req)->gid))
 	res = EPERM;
@@ -801,11 +803,11 @@ static void ft_ll_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 
     if (res == 0) {
 	// remove from out cache
-	lock.Lock();
+	l.lock();
 	string dname(name);
 	if (pin->lookup(dname))
 	    remove_dentry(pin, dname);
-	lock.Unlock();
+	l.unlock();
 	fuse_reply_err(req, 0);
     } else
 	fuse_reply_err(req, res);
@@ -817,16 +819,16 @@ static void ft_ll_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
     Inode *pin = 0;
     int res = 0;
 
-    lock.Lock();
+    unique_lock l(lock);
     pin = inode_map[parent];
     if (!make_inode_path(path, pin, name))
 	res = ENOENT;
-    lock.Unlock();
+    l.unlock();
 
-    trace_lock.Lock();
+    unique_lock tl(trace_lock);
     print_time();
     traceout << "ll_rmdir" << endl << parent << endl << name << endl;
-    trace_lock.Unlock();
+    tl.unlock();
 
     if (res == 0 && !has_perm(0010, pin, fuse_req_ctx(req)->uid, fuse_req_ctx(req)->gid))
 	res = EPERM;
@@ -835,11 +837,11 @@ static void ft_ll_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
 
     if (res == 0) {
 	// remove from out cache
-	lock.Lock();
+	l.lock();
 	string dname(name);
 	if (pin->lookup(dname))
 	    remove_dentry(pin, dname);
-	lock.Unlock();
+	l.unlock();
 	fuse_reply_err(req, 0);
     } else
 	fuse_reply_err(req, res);
@@ -854,23 +856,23 @@ static void ft_ll_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
     Inode *pin = 0;
     Inode *newpin = 0;
     int res = 0;
-    lock.Lock();
+    unique_lock l(lock);
     pin = inode_map[parent];
     if (!make_inode_path(path, pin, name))
 	res = ENOENT;
     newpin = inode_map[newparent];
     if (!make_inode_path(newpath, newpin, newname))
 	res = ENOENT;
-    lock.Unlock();
+    l.unlock();
 
-    trace_lock.Lock();
+    unique_lock tl(trace_lock);
     print_time();
     traceout << "ll_rename" << endl
 	     << parent << endl
 	     << name << endl
 	     << newparent << endl
 	     << newname << endl;
-    trace_lock.Unlock();
+    tl.unlock();
 
     if (res == 0 && (!has_perm(0010, pin, fuse_req_ctx(req)->uid, fuse_req_ctx(req)->gid) ||
 		     !has_perm(0010, newpin, fuse_req_ctx(req)->uid, fuse_req_ctx(req)->gid)))
@@ -881,7 +883,7 @@ static void ft_ll_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
     if (res == 0) {
 	string dname(name);
 	string newdname(newname);
-	lock.Lock();
+	l.lock();
 	Inode *in = pin->lookup(dname);
 	if (in) {
 	    add_dentry(newpin, newdname, in);
@@ -889,7 +891,7 @@ static void ft_ll_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 	} else {
 	    dout << "hrm, rename didn't have renamed inode.. " << path << " to " << newpath << endl;
 	}
-	lock.Unlock();
+	l.unlock();
 	fuse_reply_err(req, 0);
     } else
 	fuse_reply_err(req, res);
@@ -903,7 +905,7 @@ static void ft_ll_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent,
     Inode *in = 0;
     Inode *newpin = 0;
     int res = 0;
-    lock.Lock();
+    unique_lock l(lock);
     in = inode_map[ino];
     if (!make_inode_path(path, in))
 	res = ENOENT;
@@ -911,15 +913,15 @@ static void ft_ll_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent,
     newpin = inode_map[newparent];
     if (!make_inode_path(newpath, newpin, newname))
 	res = ENOENT;
-    lock.Unlock();
+    l.unlock();
 
-    trace_lock.Lock();
+    unique_lock tl(trace_lock);
     print_time();
     traceout << "ll_link" << endl
 	     << ino << endl
 	     << newparent << endl
 	     << newname << endl;
-    trace_lock.Unlock();
+    tl.unlock();
 
     //cout << "link " << path << " newpath " << newpath << endl;
     if (res == 0 && (!has_perm(0010, in, fuse_req_ctx(req)->uid, fuse_req_ctx(req)->gid) ||
@@ -933,12 +935,12 @@ static void ft_ll_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent,
 	memset(&fe, 0, sizeof(fe));
 	::lstat(newpath.c_str(), &fe.attr);
 
-	lock.Lock();
+	l.lock();
 	string newdname(newname);
 	add_dentry(newpin, newdname, in);
 	in->ref++;
 	memcpy(&in->stbuf, &fe.attr, sizeof(fe.attr));	 // re-read, bc we changed the link count
-	lock.Unlock();
+	l.unlock();
 
 	fe.ino = fe.attr.st_ino;
 	fuse_reply_entry(req, &fe);
@@ -952,11 +954,11 @@ static void ft_ll_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi
     Inode *in = 0;
     int res = 0;
 
-    lock.Lock();
+    unique_lock l(lock);
     in = inode_map[ino];
     if (!make_inode_path(path, in))
 	res = ENOENT;
-    lock.Unlock();
+    l.unlock();
 
     int want = 0100;
     if (fi->flags & O_RDWR) want |= 0010;
@@ -970,18 +972,18 @@ static void ft_ll_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi
 	if (fd <= 0) res = errno;
     }
 
-    trace_lock.Lock();
+    unique_lock tl(trace_lock);
     print_time();
     traceout << "ll_open" << endl
 	     << ino << endl
 	     << fi->flags << endl
 	     << (fd > 0 ? fd:0) << endl;;
-    trace_lock.Unlock();
+    tl.unlock();
 
     if (res == 0) {
-	lock.Lock();
+	l.lock();
 	in->fds.insert(fd);
-	lock.Unlock();
+	l.unlock();
 	fi->fh = fd;
 	fuse_reply_open(req, fi);
     } else
@@ -996,13 +998,13 @@ static void ft_ll_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
     int res = ::pread(fi->fh, buf, size, off);
 
     //cout << "read " << path << " " << off << "~" << size << endl;
-    trace_lock.Lock();
+    unique_lock tl(trace_lock);
     print_time();
     traceout << "ll_read" << endl
 	     << fi->fh << endl
 	     << off << endl
 	     << size << endl;
-    trace_lock.Unlock();
+    tl.unlock();
 
     if (res >= 0)
 	fuse_reply_buf(req, buf, res);
@@ -1016,13 +1018,13 @@ static void ft_ll_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
 {
     int res = ::pwrite(fi->fh, buf, size, off);
 
-    trace_lock.Lock();
+    unique_lock tl(trace_lock);
     print_time();
     traceout << "ll_write" << endl
 	     << fi->fh << endl
 	     << off << endl
 	     << size << endl;
-    trace_lock.Unlock();
+    tl.unlock();
 
     if (res >= 0)
 	fuse_reply_write(req, res);
@@ -1032,10 +1034,10 @@ static void ft_ll_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
 
 static void ft_ll_flush(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
-    trace_lock.Lock();
+    unique_lock tl(trace_lock);
     print_time();
     traceout << "ll_flush" << endl << fi->fh << endl;
-    trace_lock.Unlock();
+    tl.unlock();
 
     int res = ::fdatasync(fi->fh);
     //int res = ::close(dup(fi->fh));
@@ -1047,15 +1049,15 @@ static void ft_ll_flush(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *f
 
 static void ft_ll_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
-    trace_lock.Lock();
+    unique_lock tl(trace_lock);
     print_time();
     traceout << "ll_release" << endl << fi->fh << endl;
-    trace_lock.Unlock();
+    tl.unlock();
 
-    lock.Lock();
+    unique_lock l(lock);
     Inode *in = inode_map[ino];
     in->fds.erase(fi->fh);
-    lock.Unlock();
+    l.unlock();
 
     int res = ::close(fi->fh);
     if (res >= 0)
@@ -1067,10 +1069,10 @@ static void ft_ll_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info 
 static void ft_ll_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
 			  struct fuse_file_info *fi)
 {
-    trace_lock.Lock();
+    unique_lock tl(trace_lock);
     print_time();
     traceout << "ll_fsync" << endl << fi->fh << endl;
-    trace_lock.Unlock();
+    tl.unlock();
 
     int res = ::fsync(fi->fh);
     if (res >= 0)

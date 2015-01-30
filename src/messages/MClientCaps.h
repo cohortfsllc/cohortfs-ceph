@@ -46,9 +46,9 @@ class MClientCaps : public Message {
   uint64_t get_max_size() { return head.max_size;  }
   uint32_t get_truncate_seq() { return head.truncate_seq; }
   uint64_t get_truncate_size() { return head.truncate_size; }
-  utime_t get_ctime() { return utime_t(head.ctime); }
-  utime_t get_mtime() { return utime_t(head.mtime); }
-  utime_t get_atime() { return utime_t(head.atime); }
+  ceph::real_time get_ctime() { return ceph::spec_to_time(head.ctime); }
+  ceph::real_time get_mtime() { return ceph::spec_to_time(head.mtime); }
+  ceph::real_time get_atime() { return ceph::spec_to_time(head.atime); }
   uint32_t get_time_warp_seq() { return head.time_warp_seq; }
 
   int	    get_migrate_seq() { return head.migrate_seq; }
@@ -66,8 +66,12 @@ class MClientCaps : public Message {
   void set_op(int o) { head.op = o; }
 
   void set_size(loff_t s) { head.size = s; }
-  void set_mtime(const utime_t &t) { t.encode_timeval(&head.mtime); }
-  void set_atime(const utime_t &t) { t.encode_timeval(&head.atime); }
+  void set_mtime(const ceph::real_time &t) {
+    head.mtime = ceph::time_to_spec(t);
+  }
+  void set_atime(const ceph::real_time &t) {
+    head.atime = ceph::time_to_spec(t);
+  }
 
   void set_cap_peer(uint64_t id, ceph_seq_t seq, ceph_seq_t mseq, int mds, int flags) {
     peer.cap_id = id;
@@ -135,7 +139,7 @@ public:
     out << " size " << head.size << "/" << head.max_size;
     if (head.truncate_seq)
       out << " ts " << head.truncate_seq;
-    out << " mtime " << utime_t(head.mtime);
+    out << " mtime " << ceph::spec_to_time(head.mtime);
     if (head.time_warp_seq)
       out << " tws " << head.time_warp_seq;
 

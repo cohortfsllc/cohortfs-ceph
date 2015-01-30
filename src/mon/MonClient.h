@@ -55,8 +55,8 @@ enum MonClientState {
 
 struct MonClientPinger : public Dispatcher {
 
-  Mutex lock;
-  Cond ping_recvd_cond;
+  std::mutex lock;
+  std::condition_variable ping_recvd_cond;
   string *result;
   bool done;
 
@@ -66,22 +66,24 @@ struct MonClientPinger : public Dispatcher {
     done(false)
   { }
 
-  int wait_for_reply(double timeout = 0.0) {
-    utime_t until = ceph_clock_now(cct);
-    until += (timeout > 0 ? timeout : cct->_conf->client_mount_timeout);
+  int wait_for_reply() {
+    return wait_for_reply(ceph::span_from_double(
+			    cct->_conf->client_mount_timeout));
+  }
+
+  int wait_for_reply(ceph::timespan t) {
+    std::unique_lock<std::mutex> l(lock, std::adopt_lock);
+    ceph::mono_time until = ceph::mono_clock::now() + t;
     done = false;
 
-    int ret = 0;
-    while (!done) {
-      ret = ping_recvd_cond.WaitUntil(lock, until);
-      if (ret == -ETIMEDOUT)
-	break;
+    if (!ping_recvd_cond.wait_until(l, until, [&](){ return done; })) {
+      return -ETIMEDOUT;
     }
-    return ret;
+    return 0;
   }
 
   bool ms_dispatch(Message *m) {
-    Mutex::Locker l(lock);
+    std::lock_guard<std::mutex> l(lock);
     if (m->get_type() != CEPH_MSG_PING)
       return false;
 
@@ -91,14 +93,14 @@ struct MonClientPinger : public Dispatcher {
       ::decode(*result, p);
     }
     done = true;
-    ping_recvd_cond.SignalAll();
+    ping_recvd_cond.notify_all();
     m->put();
     return true;
   }
   bool ms_handle_reset(Connection *con) {
-    Mutex::Locker l(lock);
+    std::lock_guard<std::mutex> l(lock);
     done = true;
-    ping_recvd_cond.SignalAll();
+    ping_recvd_cond.notify_all();
     return true;
   }
   void ms_handle_remote_reset(Connection *con) {}
@@ -121,8 +123,8 @@ private:
 
   entity_addr_t my_addr;
 
-  Mutex monc_lock;
-  SafeTimer timer;
+  std::mutex monc_lock;
+  SafeTimer<ceph::mono_clock> timer;
   Finisher finisher;
 
   // Added to support session signatures.  PLR
@@ -145,7 +147,8 @@ private:
 
   void handle_monmap(MMonMap *m);
 
-  void handle_auth(MAuthReply *m);
+  void handle_auth(MAuthReply *m,
+		   std::unique_lock<std::mutex>& l);
 
   // monitor session
   bool hunting;
@@ -160,7 +163,7 @@ private:
   void tick();
   void schedule_tick();
 
-  Cond auth_cond;
+  std::condition_variable auth_cond;
 
   void handle_auth_rotating_response(MAuthRotating *m);
   // monclient
@@ -172,7 +175,7 @@ private:
 
   // authenticate
 private:
-  Cond map_cond;
+  std::condition_variable map_cond;
   int authenticate_err;
 
   list<Message*> waiting_for_session;
@@ -193,14 +196,14 @@ public:
 
   int _check_auth_tickets();
   int _check_auth_rotating();
-  int wait_auth_rotating(double timeout);
+  int wait_auth_rotating(ceph::timespan timeout);
 
-  int authenticate(double timeout=0.0);
+  int authenticate(ceph::timespan timeout = ceph::timespan(0));
 
   // mon subscriptions
 private:
   map<string,ceph_mon_subscribe_item> sub_have;	 // my subs, and current versions
-  utime_t sub_renew_sent, sub_renew_after;
+  ceph::mono_time sub_renew_sent, sub_renew_after;
 
   void _renew_subs();
   void handle_subscribe_ack(MMonSubscribeAck* m);
@@ -231,19 +234,19 @@ public:
   AuthClientHandler *auth;
 public:
   void renew_subs() {
-    Mutex::Locker l(monc_lock);
+    std::lock_guard<std::mutex> l(monc_lock);
     _renew_subs();
   }
   bool sub_want(string what, version_t start, unsigned flags) {
-    Mutex::Locker l(monc_lock);
+    std::lock_guard<std::mutex> l(monc_lock);
     return _sub_want(what, start, flags);
   }
   void sub_got(string what, version_t have) {
-    Mutex::Locker l(monc_lock);
+    std::lock_guard<std::mutex> l(monc_lock);
     _sub_got(what, have);
   }
   void sub_unwant(string what) {
-    Mutex::Locker l(monc_lock);
+    std::lock_guard<std::mutex> l(monc_lock);
     _sub_unwant(what);
   }
   /**
@@ -251,7 +254,7 @@ public:
    * the value, apply the passed-in flags as well; otherwise do nothing.
    */
   bool sub_want_increment(string what, version_t start, unsigned flags) {
-    Mutex::Locker l(monc_lock);
+    std::lock_guard<std::mutex> l(monc_lock);
     map<string,ceph_mon_subscribe_item>::iterator i =
 	    sub_have.find(what);
     if (i == sub_have.end() || i->second.start < start) {
@@ -293,7 +296,7 @@ public:
   int ping_monitor(const string &mon_id, string *result_reply);
 
   void send_mon_message(Message *m) {
-    Mutex::Locker l(monc_lock);
+    std::lock_guard<std::mutex> l(monc_lock);
     _send_mon_message(m);
   }
   /**
@@ -304,7 +307,7 @@ public:
    * to reconnect to another monitor.
    */
   void reopen_session(Context *cb=NULL) {
-    Mutex::Locker l(monc_lock);
+    std::lock_guard<std::mutex> l(monc_lock);
     if (cb) {
       delete session_established_context;
       session_established_context = cb;
@@ -321,19 +324,19 @@ public:
   }
 
   entity_addr_t get_mon_addr(unsigned i) {
-    Mutex::Locker l(monc_lock);
+    std::lock_guard<std::mutex> l(monc_lock);
     if (i < monmap.size())
       return monmap.get_addr(i);
     return entity_addr_t();
   }
   entity_inst_t get_mon_inst(unsigned i) {
-    Mutex::Locker l(monc_lock);
+    std::lock_guard<std::mutex> l(monc_lock);
     if (i < monmap.size())
       return monmap.get_inst(i);
     return entity_inst_t();
   }
   int get_num_mon() {
-    Mutex::Locker l(monc_lock);
+    std::lock_guard<std::mutex> l(monc_lock);
     return monmap.size();
   }
 

@@ -16,11 +16,11 @@
 #ifndef CEPH_MDLOG_H
 #define CEPH_MDLOG_H
 
+#include <condition_variable>
 #include "include/types.h"
 #include "include/Context.h"
 
 #include "common/Thread.h"
-#include "common/Cond.h"
 
 #include "LogSegment.h"
 
@@ -50,7 +50,7 @@ protected:
   Journaler *journaler;
 
   // -- replay --
-  Cond replay_cond;
+  std::condition_variable replay_cond;
 
   class ReplayThread : public Thread {
     MDLog *log;

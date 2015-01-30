@@ -23,8 +23,6 @@
 
 #include <map>
 #include <set>
-using namespace std;
-
 #include "include/types.h"
 #include "msg/Messenger.h"
 
@@ -44,39 +42,40 @@ class Monitor;
 /// information about a particular peer's failure reports for one osd
 struct failure_reporter_t {
   int num_reports;	    ///< reports from this reporter
-  utime_t failed_since;	    ///< when they think it failed
+  ceph::real_time failed_since;	///< when they think it failed
   MOSDFailure *msg;	    ///< most recent failure message
 
   failure_reporter_t() : num_reports(0), msg(NULL) {}
-  failure_reporter_t(utime_t s) : num_reports(1), failed_since(s), msg(NULL) {}
+  failure_reporter_t(ceph::real_time s) : num_reports(1), failed_since(s),
+					  msg(NULL) {}
 };
 
 /// information about all failure reports for one osd
 struct failure_info_t {
   map<int, failure_reporter_t> reporters;  ///< reporter -> # reports
-  utime_t max_failed_since;		   ///< most recent failed_since
+  ceph::real_time max_failed_since; ///< most recent failed_since
   int num_reports;
 
   failure_info_t() : num_reports(0) {}
 
-  utime_t get_failed_since() {
-    if (max_failed_since == utime_t() && !reporters.empty()) {
+  ceph::real_time get_failed_since() {
+    if (max_failed_since == ceph::real_time::min() && !reporters.empty()) {
       // the old max must have canceled; recalculate.
-      for (map<int, failure_reporter_t>::iterator p = reporters.begin();
-	   p != reporters.end();
-	   ++p)
-	if (p->second.failed_since > max_failed_since)
-	  max_failed_since = p->second.failed_since;
+      for (const auto& p : reporters) {
+	if (p.second.failed_since > max_failed_since)
+	  max_failed_since = p.second.failed_since;
+      }
     }
     return max_failed_since;
   }
 
   // set the message for the latest report.  return any old message we had,
   // if any, so we can discard it.
-  MOSDFailure *add_report(int who, utime_t failed_since, MOSDFailure *msg) {
+  MOSDFailure *add_report(int who, ceph::real_time failed_since,
+			  MOSDFailure *msg) {
     map<int, failure_reporter_t>::iterator p = reporters.find(who);
     if (p == reporters.end()) {
-      if (max_failed_since == utime_t())
+      if (max_failed_since == ceph::real_time::min())
 	max_failed_since = failed_since;
       else if (max_failed_since < failed_since)
 	max_failed_since = failed_since;
@@ -109,7 +108,7 @@ struct failure_info_t {
     num_reports -= p->second.num_reports;
     reporters.erase(p);
     if (reporters.empty())
-      max_failed_since = utime_t();
+      max_failed_since = ceph::real_time::min();
   }
 };
 
@@ -123,7 +122,7 @@ private:
   map<int, bufferlist> pending_metadata;
   set<int>	       pending_metadata_rm;
   map<int, failure_info_t> failure_info;
-  map<int,utime_t>    down_pending_out;	 // osd down -> out
+  map<int,ceph::real_time> down_pending_out; // osd down -> out
 
   map<int,double> osd_weight;
 
@@ -133,8 +132,8 @@ private:
    */
   map<int,epoch_t> osd_epoch;
 
-  void check_failures(utime_t now);
-  bool check_failure(utime_t now, int target_osd, failure_info_t& fi);
+  void check_failures(ceph::real_time now);
+  bool check_failure(ceph::real_time now, int target_osd, failure_info_t& fi);
 
   // svc
 public:
@@ -176,7 +175,7 @@ private:
   void handle_query(PaxosServiceMessage *m);
   bool preprocess_query(PaxosServiceMessage *m);  // true if processed.
   bool prepare_update(PaxosServiceMessage *m);
-  bool should_propose(double &delay);
+  bool should_propose(ceph::timespan &delay);
 
   version_t get_trim_to();
 
@@ -264,8 +263,8 @@ private:
   bool prepare_command(MMonCommand *m);
   bool prepare_command_impl(MMonCommand *m, map<string,cmd_vartype> &cmdmap);
 
-  void handle_osd_timeouts(const utime_t &now,
-			   std::map<int,utime_t> &last_osd_report);
+  void handle_osd_timeouts(const ceph::real_time &now,
+			   std::map<int,ceph::real_time> &last_osd_report);
   void mark_all_down();
 
   void send_latest(PaxosServiceMessage *m, epoch_t start=0);
@@ -273,7 +272,7 @@ private:
     send_incremental(m, start);
   }
 
-  epoch_t blacklist(const entity_addr_t& a, utime_t until);
+  epoch_t blacklist(const entity_addr_t& a, ceph::real_time until);
 
   void dump_info(Formatter *f);
   int dump_osd_metadata(int osd, Formatter *f, ostream *err);

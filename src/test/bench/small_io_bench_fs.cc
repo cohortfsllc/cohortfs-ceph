@@ -152,7 +152,7 @@ int main(int argc, char **argv)
 
   std::shared_ptr<StatCollector> col(
     new DetailedStatCollector(
-      1, new JSONFormatter, detailed_ops, &cout,
+      1s, new JSONFormatter, detailed_ops, &cout,
       new MorePrinting(cct)));
 
   cout << "Creating objects.." << std::endl;

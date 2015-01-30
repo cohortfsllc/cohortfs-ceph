@@ -17,8 +17,6 @@
 #define CEPH_MON_ELECTOR_H
 
 #include <map>
-using namespace std;
-
 #include "include/types.h"
 #include "msg/Message.h"
 
@@ -106,7 +104,7 @@ class Elector {
   /**
    * Holds the time at which we started the election.
    */
-  utime_t  start_stamp;
+  ceph::mono_time start_stamp;
   /**
    * Set containing all those that acked our proposal to become the Leader.
    *
@@ -128,7 +126,7 @@ class Elector {
   /**
    * Indicates when we have acked him
    */
-  utime_t   ack_stamp;
+  ceph::mono_time ack_stamp;
   /**
    * @}
    */

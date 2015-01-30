@@ -16,10 +16,13 @@
 #define CEPH_OBJECTER_H
 
 #include <boost/uuid/nil_generator.hpp>
+#include <condition_variable>
 #include <list>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <sstream>
+#include <shared_mutex>
 #include <boost/intrusive/set.hpp>
 #include "include/types.h"
 #include "include/buffer.h"
@@ -28,7 +31,6 @@
 #include "messages/MOSDOp.h"
 
 #include "common/Timer.h"
-#include "common/RWLock.h"
 #include "common/zipkin_trace.h"
 #include "include/rados/rados_types.h"
 #include "include/rados/rados_types.hpp"
@@ -81,15 +83,20 @@ namespace OSDC {
 
   public:
     void maybe_request_map();
+    typedef std::shared_lock<std::shared_timed_mutex> shared_lock;
   private:
 
-    int _maybe_request_map();
+    void _maybe_request_map();
 
     version_t last_seen_osdmap_version;
 
-    RWLock rwlock;
-    Mutex timer_lock;
-    SafeTimer timer;
+    std::shared_timed_mutex rwlock;
+    typedef std::unique_lock<std::shared_timed_mutex> unique_lock;
+
+    std::mutex timer_lock;
+    typedef std::lock_guard<std::mutex> timer_lock_guard;
+    typedef std::unique_lock<std::mutex> unique_timer_lock;
+    SafeTimer<ceph::mono_clock> timer;
 
     class C_Tick : public Context {
       Objecter *ob;
@@ -115,7 +122,7 @@ namespace OSDC {
       vector<OSDOp> ops;
 
       eversion_t replay_version; // for op replay
-      utime_t stamp;
+      ceph::mono_time stamp;
       int attempts;
       bool done;
       Op& parent;
@@ -139,7 +146,7 @@ namespace OSDC {
       shared_ptr<const Volume> volume;
       unique_ptr<ObjOp> op;
       vector<SubOp> subops;
-      utime_t mtime;
+      ceph::real_time mtime;
       bufferlist *outbl;
       version_t *objver;
       ceph_tid_t tid;
@@ -148,7 +155,9 @@ namespace OSDC {
       uint16_t priority;
       bool should_resend;
 
-      Mutex lock;
+      std::mutex lock;
+      typedef std::unique_lock<std::mutex> unique_lock;
+      typedef std::lock_guard<std::mutex> lock_guard;
 
       op_base() : flags(0), volume(nullptr), op(nullptr), outbl(nullptr),
 		  tid(0), map_dne_bound(0), paused(false), priority(0),
@@ -221,49 +230,11 @@ namespace OSDC {
       void finish(int r);
     };
 
-
-    struct C_Stat : public Context {
-      bufferlist bl;
-      uint64_t *psize;
-      utime_t *pmtime;
-      Context *fin;
-      C_Stat(uint64_t *ps, utime_t *pm, Context *c) :
-	psize(ps), pmtime(pm), fin(c) {}
-      void finish(int r) {
-	if (r >= 0) {
-	  bufferlist::iterator p = bl.begin();
-	  uint64_t s;
-	  utime_t m;
-	  ::decode(s, p);
-	  ::decode(m, p);
-	  if (psize)
-	    *psize = s;
-	  if (pmtime)
-	    *pmtime = m;
-	}
-	fin->complete(r);
-      }
-    };
-
-    struct C_GetAttrs : public Context {
-      bufferlist bl;
-      map<string,bufferlist>& attrset;
-      Context *fin;
-      C_GetAttrs(map<string, bufferlist>& set, Context *c) : attrset(set), fin(c) {}
-      void finish(int r) {
-	if (r >= 0) {
-	  bufferlist::iterator p = bl.begin();
-	  ::decode(attrset, p);
-	}
-	fin->complete(r);
-      }
-    };
-
     struct StatfsOp : public set_base_hook<link_mode<auto_unlink> > {
       ceph_tid_t tid;
       struct ceph_statfs *stats;
       Context *onfinish, *ontimeout;
-      utime_t last_submit;
+      ceph::mono_time last_submit;
     };
 
 
@@ -328,7 +299,10 @@ namespace OSDC {
     // -- osd sessions --
     struct OSDSession : public set_base_hook<link_mode<auto_unlink> >,
 			public RefCountedObject {
-      RWLock lock;
+      std::shared_timed_mutex lock;
+      typedef std::unique_lock<std::shared_timed_mutex> unique_lock;
+      typedef std::shared_lock<std::shared_timed_mutex> shared_lock;
+
       set<SubOp, constant_time_size<false> > subops;
       set<SubOp, constant_time_size<false> > linger_subops;
       int osd;
@@ -359,14 +333,14 @@ namespace OSDC {
 
     map<epoch_t,list< pair<Context*, int> > > waiting_for_map;
 
-    double mon_timeout, osd_timeout;
+    ceph::timespan mon_timeout, osd_timeout;
 
     MOSDOp *_prepare_osd_subop(SubOp& op);
     void _send_subop(SubOp& op, MOSDOp *m = nullptr);
     void _cancel_linger_op(LingerOp& op);
     void _cancel_op(Op& op);
     void _finish_subop(SubOp& subop);
-    void _finish_op(Op& op); // Releases op.lock
+    void _finish_op(Op& op, Op::unique_lock& ol); // Releases ol
 
     enum target_result {
       TARGET_NO_ACTION = 0,
@@ -376,30 +350,33 @@ namespace OSDC {
     bool osdmap_full_flag() const;
     bool target_should_be_paused(op_base& op);
 
-    int _calc_targets(op_base& t, bool any_change=false);
+    int _calc_targets(op_base& t, Op::unique_lock& ol);
     int _map_session(SubOp& subop, OSDSession **s,
-		     RWLock::Context& lc);
+		     Op::unique_lock& ol, unique_lock& lc);
 
     void _session_subop_assign(OSDSession& to, SubOp& subop);
     void _session_subop_remove(OSDSession& from, SubOp& subop);
     void _session_linger_subop_assign(OSDSession& to, SubOp& subop);
     void _session_linger_subop_remove(OSDSession& from, SubOp& subop);
 
-    int _get_osd_session(int osd, RWLock::Context& lc,
+    int _get_osd_session(int osd,
+			 shared_lock& rl, unique_lock& wl,
 			 OSDSession **session);
-    int _assign_subop_target_session(SubOp& op, RWLock::Context& lc,
-				     bool src_session_locked,
-				     bool dst_session_locked);
-    int _get_subop_target_session(SubOp& op, RWLock::Context& lc,
+    int _assign_subop_target_session(
+      SubOp& op, shared_lock& lc,
+      bool src_session_locked, bool dst_session_locked);
+    int _get_subop_target_session(SubOp& op,
+				  shared_lock& lc, unique_lock& wl,
 				  OSDSession** session);
-    int _recalc_linger_op_targets(LingerOp& op, RWLock::Context& lc);
+    int _recalc_linger_op_targets(LingerOp& op, shared_lock& rl,
+				  unique_lock& wl);
 
     void _linger_submit(LingerOp& info);
     void _send_linger(LingerOp& info);
     void _linger_ack(LingerOp& info, int r);
     void _linger_commit(LingerOp& info, int r);
 
-    void _check_op_volume_dne(Op& op, bool session_locked);
+    void _check_op_volume_dne(Op& op, Op::unique_lock& ol);
     void _send_op_map_check(Op& op);
     void _op_cancel_map_check(Op& op);
     void _check_linger_volume_dne(LingerOp *op, bool *need_unregister);
@@ -411,7 +388,8 @@ namespace OSDC {
 			map<uint64_t, LingerOp *>& lresend);
     void _linger_ops_resend(map<uint64_t, LingerOp *>& lresend);
 
-    int _get_session(int osd, OSDSession **session, RWLock::Context& lc);
+    int _get_session(int osd, OSDSession **session,
+		     unique_lock& lc);
     void put_session(OSDSession& s);
     void get_session(OSDSession& s);
     void _reopen_session(OSDSession& session);
@@ -426,12 +404,12 @@ namespace OSDC {
      * If throttle_op needs to throttle it will unlock client_lock.
      */
     int calc_op_budget(Op& op);
-    void _throttle_op(Op& op, int op_size=0);
-    int _take_op_budget(Op& op) {
-      assert(rwlock.is_locked());
+    void _throttle_op(Op& op, shared_lock& rl, unique_lock& wl,
+		      int op_size = 0);
+    int _take_op_budget(Op& op, shared_lock& rl, unique_lock& wl) {
       int op_budget = calc_op_budget(op);
       if (keep_balanced_budget) {
-	_throttle_op(op, op_budget);
+	_throttle_op(op, rl, wl, op_budget);
       } else {
 	op_throttle_bytes.take(op_budget);
 	op_throttle_ops.take(1);
@@ -453,7 +431,8 @@ namespace OSDC {
 
   public:
     Objecter(CephContext *cct_, Messenger *m, MonClient *mc,
-	     double mon_timeout, double osd_timeout) :
+	     ceph::timespan mon_timeout = std::chrono::seconds(0),
+	     ceph::timespan osd_timeout = std::chrono::seconds(0)) :
       Dispatcher(cct_), messenger(m), monc(mc),
       osdmap(new OSDMap), cct(cct_),
       initialized(false), last_tid(0),
@@ -463,7 +442,7 @@ namespace OSDC {
       keep_balanced_budget(false), honor_osdmap_full(true),
       trace_endpoint("0.0.0.0", 0, "Objecter"),
       last_seen_osdmap_version(0),
-      timer(cct, timer_lock, false),
+      timer(timer_lock, false),
       tick_event(NULL),
       homeless_session(new OSDSession(cct, -1)),
       mon_timeout(mon_timeout),
@@ -478,12 +457,10 @@ namespace OSDC {
     void start();
     void shutdown();
 
-    const OSDMap *get_osdmap_read() {
-      rwlock.get_read();
+    const OSDMap *get_osdmap_read(
+      shared_lock& l) {
+      l = shared_lock(rwlock);
       return osdmap;
-    }
-    void put_osdmap_read() {
-      rwlock.put_read();
     }
 
     /**
@@ -504,7 +481,8 @@ namespace OSDC {
 			bool force_resend,
 			bool force_resend_writes,
 			map<ceph_tid_t, SubOp*>& need_resend,
-			list<LingerOp*>& need_resend_linger);
+			list<LingerOp*>& need_resend_linger,
+			unique_lock& lc);
     // messages
   public:
     bool ms_dispatch(Message *m);
@@ -526,16 +504,19 @@ namespace OSDC {
     }
 
     void handle_osd_subop_reply(MOSDOpReply *m);
-    bool possibly_complete_op(Op& op, bool do_or_die = false);
+    bool possibly_complete_op(Op& op, Op::unique_lock& ol,
+			      bool do_or_die = false);
     void handle_osd_map(MOSDMap *m);
     void wait_for_osd_map();
 
   private:
-    bool _promote_lock_check_race(RWLock::Context& lc);
+    bool _promote_lock_check_race(shared_lock& rl, unique_lock& wl);
 
     // low-level
-    ceph_tid_t _op_submit(Op& op, RWLock::Context& lc);
-    ceph_tid_t _op_submit_with_budget(Op& op, RWLock::Context& lc,
+    ceph_tid_t _op_submit(Op& op, Op::unique_lock& ol, shared_lock& rl,
+			  unique_lock& wl);
+    ceph_tid_t _op_submit_with_budget(Op& op, Op::unique_lock& ol,
+				      shared_lock& rl, unique_lock& wl,
 				      int *ctx_budget = nullptr);
     // public interface
   public:
@@ -578,7 +559,7 @@ namespace OSDC {
     Op *prepare_mutate_op(const oid& obj,
 			  const shared_ptr<const Volume>& volume,
 			  unique_ptr<ObjOp>& op,
-			  utime_t mtime, int flags,
+			  ceph::real_time mtime, int flags,
 			  Context *onack, Context *oncommit,
 			  version_t *objver = NULL,
 			  ZTracer::Trace *trace = nullptr) {
@@ -591,7 +572,7 @@ namespace OSDC {
     ceph_tid_t mutate(const oid& obj,
 		      const shared_ptr<const Volume>& volume,
 		      unique_ptr<ObjOp>& op,
-		      utime_t mtime, int flags,
+		      ceph::real_time mtime, int flags,
 		      Context *onack, Context *oncommit,
 		      version_t *objver = NULL,
 		      ZTracer::Trace *trace = nullptr) {
@@ -621,7 +602,7 @@ namespace OSDC {
     }
     ceph_tid_t linger_mutate(const oid& obj,
 			     const shared_ptr<const Volume>& volume,
-			     unique_ptr<ObjOp>& op, utime_t mtime,
+			     unique_ptr<ObjOp>& op, ceph::real_time mtime,
 			     bufferlist& inbl, int flags, Context *onack,
 			     Context *onfinish, version_t *objver);
     ceph_tid_t linger_read(const oid& obj,
@@ -646,7 +627,7 @@ namespace OSDC {
     // high-level helpers
     ceph_tid_t stat(const oid& obj,
 		    const shared_ptr<const Volume>& volume,
-		    uint64_t *psize, utime_t *pmtime, int flags,
+		    uint64_t *psize, ceph::real_time *pmtime, int flags,
 		    Context *onfinish, version_t *objver = NULL,
 		    const unique_ptr<ObjOp>& extra_ops = nullptr,
 		    ZTracer::Trace *trace = nullptr) {
@@ -735,7 +716,7 @@ namespace OSDC {
     // writes
     ceph_tid_t _modify(const oid& obj,
 		       const shared_ptr<const Volume>& volume,
-		       unique_ptr<ObjOp>& ops, utime_t mtime, int flags,
+		       unique_ptr<ObjOp>& ops, ceph::real_time mtime, int flags,
 		       Context *onack, Context *oncommit,
 		       version_t *objver = NULL,
 		       ZTracer::Trace *trace = nullptr) {
@@ -747,7 +728,7 @@ namespace OSDC {
     ceph_tid_t write(const oid& obj,
 		     const shared_ptr<const Volume>& volume,
 		     uint64_t off, uint64_t len, const bufferlist &bl,
-		     utime_t mtime, int flags, Context *onack,
+		     ceph::real_time mtime, int flags, Context *onack,
 		     Context *oncommit, version_t *objver = NULL,
 		     const unique_ptr<ObjOp>& extra_ops = nullptr,
 		     ZTracer::Trace *trace = nullptr) {
@@ -763,7 +744,7 @@ namespace OSDC {
     }
     ceph_tid_t append(const oid& obj,
 		      const shared_ptr<const Volume>& volume,
-		      uint64_t len, const bufferlist &bl, utime_t mtime,
+		      uint64_t len, const bufferlist &bl, ceph::real_time mtime,
 		      int flags, Context *onack, Context *oncommit,
 		      version_t *objver = NULL,
 		      const unique_ptr<ObjOp>& extra_ops = nullptr,
@@ -781,7 +762,7 @@ namespace OSDC {
     ceph_tid_t write_trunc(const oid& obj,
 			   const shared_ptr<const Volume>& volume,
 			   uint64_t off, uint64_t len, const bufferlist &bl,
-			   utime_t mtime, int flags, uint64_t trunc_size,
+			   ceph::real_time mtime, int flags, uint64_t trunc_size,
 			   uint32_t trunc_seq, Context *onack,
 			   Context *oncommit, version_t *objver = NULL,
 			   const unique_ptr<ObjOp>& extra_ops = nullptr,
@@ -798,7 +779,7 @@ namespace OSDC {
     }
     ceph_tid_t write_full(const oid& obj,
 			  const shared_ptr<const Volume>& volume,
-			  const bufferlist &bl, utime_t mtime, int flags,
+			  const bufferlist &bl, ceph::real_time mtime, int flags,
 			  Context *onack, Context *oncommit,
 			  version_t *objver = NULL,
 			  const unique_ptr<ObjOp>& extra_ops = nullptr,
@@ -816,7 +797,7 @@ namespace OSDC {
 
     ceph_tid_t trunc(const oid& obj,
 		     const shared_ptr<const Volume>& volume,
-		     utime_t mtime, int flags, uint64_t trunc_size,
+		     ceph::real_time mtime, int flags, uint64_t trunc_size,
 		     uint32_t trunc_seq, Context *onack, Context *oncommit,
 		     version_t *objver = NULL,
 		     const unique_ptr<ObjOp>& extra_ops = nullptr,
@@ -834,7 +815,7 @@ namespace OSDC {
 
     ceph_tid_t zero(const oid& obj,
 		    const shared_ptr<const Volume>& volume,
-		    uint64_t off, uint64_t len, utime_t mtime, int flags,
+		    uint64_t off, uint64_t len, ceph::real_time mtime, int flags,
 		    Context *onack, Context *oncommit,
 		    version_t *objver = NULL,
 		    const unique_ptr<ObjOp>& extra_ops = nullptr,
@@ -852,7 +833,7 @@ namespace OSDC {
 
     ceph_tid_t create(const oid& obj,
 		      const shared_ptr<const Volume>& volume,
-		      utime_t mtime, int global_flags, int create_flags,
+		      ceph::real_time mtime, int global_flags, int create_flags,
 		      Context *onack, Context *oncommit,
 		      version_t *objver = NULL,
 		      const unique_ptr<ObjOp>& extra_ops = nullptr,
@@ -870,7 +851,7 @@ namespace OSDC {
 
     ceph_tid_t remove(const oid& obj,
 		      const shared_ptr<const Volume>& volume,
-		      utime_t mtime, int flags, Context *onack,
+		      ceph::real_time mtime, int flags, Context *onack,
 		      Context *oncommit, version_t *objver = NULL,
 		      const unique_ptr<ObjOp>& extra_ops = nullptr,
 		      ZTracer::Trace *trace = nullptr) {
@@ -904,7 +885,7 @@ namespace OSDC {
     ceph_tid_t setxattr(const oid& obj,
 			const shared_ptr<const Volume>& volume,
 			const char *name, const bufferlist &bl,
-			utime_t mtime, int flags,
+			ceph::real_time mtime, int flags,
 			Context *onack, Context *oncommit,
 			version_t *objver = NULL,
 			const unique_ptr<ObjOp>& extra_ops = nullptr,
@@ -921,7 +902,7 @@ namespace OSDC {
     }
     ceph_tid_t removexattr(const oid& obj,
 			   const shared_ptr<const Volume>& volume,
-			   const char *name, utime_t mtime, int flags,
+			   const char *name, ceph::real_time mtime, int flags,
 			   Context *onack, Context *oncommit,
 			   version_t *objver = NULL,
 			   const unique_ptr<ObjOp>& extra_ops = nullptr,

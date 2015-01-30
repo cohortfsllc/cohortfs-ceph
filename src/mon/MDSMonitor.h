@@ -20,8 +20,6 @@
 
 #include <map>
 #include <set>
-using namespace std;
-
 #include "include/types.h"
 #include "msg/Messenger.h"
 
@@ -79,7 +77,7 @@ class MDSMonitor : public PaxosService {
 
   bool preprocess_query(PaxosServiceMessage *m);  // true if processed.
   bool prepare_update(PaxosServiceMessage *m);
-  bool should_propose(double& delay);
+  bool should_propose(ceph::timespan& delay);
 
   void on_active();
 
@@ -100,12 +98,13 @@ class MDSMonitor : public PaxosService {
 
   // beacons
   struct beacon_info_t {
-    utime_t stamp;
+    ceph::mono_time stamp;
     uint64_t seq;
   };
   map<uint64_t, beacon_info_t> last_beacon;
 
-  bool try_standby_replay(MDSMap::mds_info_t& finfo, MDSMap::mds_info_t& ainfo);
+  bool try_standby_replay(MDSMap::mds_info_t& finfo,
+			  MDSMap::mds_info_t& ainfo);
 
 public:
   MDSMonitor(Monitor *mn, Paxos *p, string service_name)

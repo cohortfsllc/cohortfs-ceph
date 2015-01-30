@@ -28,7 +28,6 @@
 #include "auth/Crypto.h"
 #include "client/Client.h"
 #include "include/cephfs/libcephfs.h"
-#include "common/Mutex.h"
 #include "common/ceph_argparse.h"
 #include "common/common_init.h"
 #include "common/version.h"

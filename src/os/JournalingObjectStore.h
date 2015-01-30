@@ -15,9 +15,10 @@
 #ifndef CEPH_JOURNALINGOBJECTSTORE_H
 #define CEPH_JOURNALINGOBJECTSTORE_H
 
+#include <condition_variable>
+#include <mutex>
 #include "ObjectStore.h"
 #include "Journal.h"
-#include "common/RWLock.h"
 
 class JournalingObjectStore : public ObjectStore {
 protected:
@@ -27,17 +28,20 @@ protected:
 
   class SubmitManager {
     CephContext *cct;
-    Mutex lock;
+  public:
+    std::mutex lock;
+    typedef std::unique_lock<std::mutex> unique_lock;
+  private:
     uint64_t op_seq;
     uint64_t op_submitted;
   public:
     SubmitManager(CephContext *_cct) :
       cct(_cct), op_seq(0), op_submitted(0)
     {}
-    uint64_t op_submit_start();
-    void op_submit_finish(uint64_t op);
+    uint64_t op_submit_start(unique_lock& l);
+    void op_submit_finish(unique_lock& l, uint64_t op);
     void set_op_seq(uint64_t seq) {
-      Mutex::Locker l(lock);
+      unique_lock l(lock);
       op_submitted = op_seq = seq;
     }
     uint64_t get_op_seq() {
@@ -50,13 +54,14 @@ protected:
     Journal *&journal;
     Finisher &finisher;
 
-    Mutex apply_lock;
+    std::mutex apply_lock;
+    typedef std::unique_lock<std::mutex> unique_lock;
     bool blocked;
-    Cond blocked_cond;
+    std::condition_variable blocked_cond;
     int open_ops;
     uint64_t max_applied_seq;
 
-    Mutex com_lock;
+    std::mutex com_lock;
     map<version_t, vector<Context*> > commit_waiters;
     uint64_t committing_seq, committed_seq;
 
@@ -82,25 +87,25 @@ protected:
     void commit_started();
     void commit_finish();
     bool is_committing() {
-      Mutex::Locker l(com_lock);
+      unique_lock l(com_lock);
       return committing_seq != committed_seq;
     }
     uint64_t get_committed_seq() {
-      Mutex::Locker l(com_lock);
+      unique_lock l(com_lock);
       return committed_seq;
     }
     uint64_t get_committing_seq() {
-      Mutex::Locker l(com_lock);
+      unique_lock l(com_lock);
       return committing_seq;
     }
     void init_seq(uint64_t fs_op_seq) {
       {
-	Mutex::Locker l(com_lock);
+	unique_lock l(com_lock);
 	committed_seq = fs_op_seq;
 	committing_seq = fs_op_seq;
       }
       {
-	Mutex::Locker l(apply_lock);
+	unique_lock l(apply_lock);
 	max_applied_seq = fs_op_seq;
       }
     }

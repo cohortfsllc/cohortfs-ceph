@@ -1,4 +1,6 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+#include <mutex>
+#include <condition_variable>
 #include <gtest/gtest.h>
 #include <boost/uuid/uuid_generators.hpp>
 #include <stdlib.h>
@@ -11,7 +13,6 @@
 #include "common/Finisher.h"
 #include "os/FileJournal.h"
 #include "include/Context.h"
-#include "common/Mutex.h"
 #include "common/safe_io.h"
 
 using std::cout;
@@ -20,30 +21,30 @@ using std::cerr;
 CephContext* cct;
 
 Finisher *finisher;
-Cond sync_cond;
+std::condition_variable sync_cond;
 char path[200];
 boost::uuids::uuid fsid;
 bool directio = false;
 bool aio = false;
 
 // ----
-Cond cond;
-Mutex wait_lock;
+std::condition_variable cond;
+std::mutex wait_lock;
 bool done;
 
 void wait()
 {
-  wait_lock.Lock();
+  std::unique_lock<std::mutex> wl(wait_lock);
   while (!done)
-    cond.Wait(wait_lock);
-  wait_lock.Unlock();
+    cond.wait(wl);
+  wl.unlock();
 }
 
 // ----
 class C_Sync {
 public:
-  Cond cond;
-  Mutex lock;
+  std::condition_variable cond;
+  std::mutex lock;
   bool done;
   C_SafeCond *c;
 
@@ -52,12 +53,12 @@ public:
     c = new C_SafeCond(&lock, &cond, &done);
   }
   ~C_Sync() {
-    lock.Lock();
+    std::unique_lock<std::mutex> l(lock);
     //cout << "wait" << std::endl;
     while (!done)
-      cond.Wait(lock);
+      cond.wait(l);
     //cout << "waited" << std::endl;
-    lock.Unlock();
+    l.unlock();
   }
 };
 

@@ -10,6 +10,7 @@
  *
  */
 
+#include "include/ceph_time.h"
 #include "cls_replica_log_types.h"
 
 #include "common/Formatter.h"
@@ -32,10 +33,10 @@ generate_test_instances(std::list<cls_replica_log_item_marker*>& ls)
 {
   ls.push_back(new cls_replica_log_item_marker);
   ls.back()->item_name = "test_item_1";
-  ls.back()->item_timestamp.set_from_double(0);
+  ls.back()->item_timestamp = ceph::real_time::min();
   ls.push_back(new cls_replica_log_item_marker);
   ls.back()->item_name = "test_item_2";
-  ls.back()->item_timestamp.set_from_double(20);
+  ls.back()->item_timestamp = ceph::real_time(20s);
 }
 
 void cls_replica_log_progress_marker::dump(Formatter *f) const
@@ -61,7 +62,7 @@ generate_test_instances(std::list<cls_replica_log_progress_marker*>& ls)
   ls.push_back(new cls_replica_log_progress_marker);
   ls.back()->entity_id = "entity1";
   ls.back()->position_marker = "pos1";
-  ls.back()->position_time.set_from_double(20);
+  ls.back()->position_time = ceph::real_time(20s);
 
   std::list<cls_replica_log_item_marker*> test_items;
   cls_replica_log_item_marker::generate_test_instances(test_items);

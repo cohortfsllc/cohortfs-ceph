@@ -15,15 +15,16 @@
 #ifndef CEPH_SIMPLECACHE_H
 #define CEPH_SIMPLECACHE_H
 
-#include <map>
 #include <list>
+#include <map>
+#include <mutex>
 #include <memory>
-#include "common/Mutex.h"
-#include "common/Cond.h"
 
 template <class K, class V>
 class SimpleLRU {
-  Mutex lock;
+  std::mutex lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
   size_t max_size;
   map<K, typename list<pair<K, V> >::iterator> contents;
   list<pair<K, V> > lru;
@@ -46,12 +47,12 @@ public:
   SimpleLRU(size_t max_size) : max_size(max_size) {}
 
   void pin(K key, V val) {
-    Mutex::Locker l(lock);
+    lock_guard l(lock);
     pinned.insert(make_pair(key, val));
   }
 
   void clear_pinned(K e) {
-    Mutex::Locker l(lock);
+    lock_guard l(lock);
     for (typename map<K, V>::iterator i = pinned.begin();
 	 i != pinned.end() && i->first <= e;
 	 pinned.erase(i++)) {
@@ -63,13 +64,13 @@ public:
   }
 
   void set_size(size_t new_size) {
-    Mutex::Locker l(lock);
+    lock_guard l(lock);
     max_size = new_size;
     trim_cache();
   }
 
   bool lookup(K key, V *out) {
-    Mutex::Locker l(lock);
+    lock_guard l(lock);
     typename list<pair<K, V> >::iterator loc = contents.count(key) ?
       contents[key] : lru.end();
     if (loc != lru.end()) {
@@ -85,7 +86,7 @@ public:
   }
 
   void add(K key, V value) {
-    Mutex::Locker l(lock);
+    lock_guard l(lock);
     _add(key, value);
   }
 };

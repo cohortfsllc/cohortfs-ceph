@@ -23,7 +23,7 @@ void cls_user_set_buckets_op::generate_test_instances(list<cls_user_set_buckets_
     op->entries.push_back(e);
   }
   op->add = true;
-  op->time = utime_t(1, 0);
+  op->time = ceph::real_time(1s);
   ls.push_back(op);
 }
 
@@ -108,7 +108,7 @@ void cls_user_complete_stats_sync_op::generate_test_instances(list<cls_user_comp
 {
   ls.push_back(new cls_user_complete_stats_sync_op);
   cls_user_complete_stats_sync_op *op = new cls_user_complete_stats_sync_op;
-  op->time = utime_t(12345, 0);
+  op->time = ceph::real_time(12345s);
   ls.push_back(op);
 }
 

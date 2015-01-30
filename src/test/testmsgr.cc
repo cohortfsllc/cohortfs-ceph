@@ -12,9 +12,11 @@
  *
  */
 
-#include <sys/stat.h>
+#include <condition_variable>
 #include <iostream>
+#include <mutex>
 #include <string>
+#include <sys/stat.h>
 using namespace std;
 
 #include "common/config.h"
@@ -40,8 +42,8 @@ using namespace std;
 static CephContext* cct;
 Messenger *messenger = 0;
 
-Mutex test_lock;
-Cond cond;
+mutex test_lock;
+condition_variable cond;
 
 uint64_t received = 0;
 
@@ -56,10 +58,10 @@ private:
 
     //cerr << "got ping from " << m->get_source() << std::endl;
     dout(0) << "got ping from " << m->get_source() << dendl;
-    test_lock.Lock();
+    unique_lock<mutex> tl(test_lock);
     ++received;
-    cond.Signal();
-    test_lock.Unlock();
+    cond.notify_all();
+    tl.unlock();
 
     m->put();
     return true;
@@ -113,13 +115,13 @@ int main(int argc, const char **argv, const char *envp[]) {
   if (whoami == 0)
     isend = 100;
 
-  test_lock.Lock();
+  unique_lock<mutex> tl(test_lock);
   uint64_t sent = 0;
   while (1) {
     while (received + isend <= sent) {
       //cerr << "wait r " << received << " s " << sent << " is " << isend << std::endl;
       dout(0) << "wait r " << received << " s " << sent << " is " << isend << dendl;
-      cond.Wait(test_lock);
+      cond.wait(tl);
     }
 
     int t = rand() % mc.get_num_mon();
@@ -136,7 +138,7 @@ int main(int argc, const char **argv, const char *envp[]) {
     messenger->send_message(new MPing, mc.get_mon_inst(t));
     cerr << isend << "\t" << ++sent << "\t" << received << "\r";
   }
-  test_lock.Unlock();
+  tl.unlock();
 
   // wait for messenger to finish
   rank->wait();

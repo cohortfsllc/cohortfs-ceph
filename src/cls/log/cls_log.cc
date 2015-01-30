@@ -1,4 +1,4 @@
-// -*- mode:C; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
 #include <iostream>
@@ -7,8 +7,8 @@
 #include <stdlib.h>
 #include <errno.h>
 
+#include "include/ceph_time.h"
 #include "include/types.h"
-#include "include/utime.h"
 #include "objclass/objclass.h"
 
 #include "cls_log_types.h"
@@ -38,10 +38,13 @@ static int write_log_entry(cls_method_context_t hctx, string& index, cls_log_ent
   return 0;
 }
 
-static void get_index_time_prefix(utime_t& ts, string& index)
+static void get_index_time_prefix(ceph::real_time& ts, string& index)
 {
   char buf[32];
-  snprintf(buf, sizeof(buf), "%010ld.%06ld_", (long)ts.sec(), (long)ts.usec());
+  snprintf(buf, sizeof(buf), "%010ld.%06ld_",
+	   ceph::real_clock::to_time_t(ts),
+	   std::chrono::duration_cast<std::chrono::milliseconds>(
+	     ts.time_since_epoch() % 1s).count());
 
   index = log_index_prefix + buf;
 }
@@ -81,7 +84,8 @@ static int write_header(cls_method_context_t hctx, cls_log_header& header)
   return 0;
 }
 
-static void get_index(cls_method_context_t hctx, utime_t& ts, string& index)
+static void get_index(cls_method_context_t hctx, ceph::real_time& ts,
+		      string& index)
 {
   get_index_time_prefix(ts, index);
 
@@ -116,7 +120,7 @@ static int cls_log_add(cls_method_context_t hctx, bufferlist *in, bufferlist *ou
 
     string index;
 
-    utime_t timestamp = entry.timestamp;
+    ceph::real_time timestamp = entry.timestamp;
     if (timestamp < header.max_time)
       timestamp = header.max_time;
     else if (timestamp > header.max_time)
@@ -165,7 +169,8 @@ static int cls_log_list(cls_method_context_t hctx, bufferlist *in, bufferlist *o
   } else {
     from_index = op.marker;
   }
-  bool use_time_boundary = (!op.from_time.is_zero() && (op.to_time >= op.from_time));
+  bool use_time_boundary = (op.from_time != ceph::real_time::min() &&
+			    (op.to_time >= op.from_time));
 
   if (use_time_boundary)
     get_index_time_prefix(op.to_time, to_index);

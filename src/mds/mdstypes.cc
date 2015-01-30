@@ -41,7 +41,8 @@ void frag_info_t::generate_test_instances(list<frag_info_t*>& ls)
   ls.push_back(new frag_info_t);
   ls.push_back(new frag_info_t);
   ls.back()->version = 1;
-  ls.back()->mtime = utime_t(2, 3);
+  ls.back()->mtime = ceph::real_time(std::chrono::seconds(2) +
+				     std::chrono::nanoseconds(3));
   ls.back()->nfiles = 4;
   ls.back()->nsubdirs = 5;
 }
@@ -51,7 +52,7 @@ ostream& operator<<(ostream &out, const frag_info_t &f)
   if (f == frag_info_t())
     return out << "f()";
   out << "f(v" << f.version;
-  if (f.mtime != utime_t())
+  if (f.mtime != ceph::real_time::min())
     out << " m" << f.mtime;
   if (f.nfiles || f.nsubdirs)
     out << " " << f.size() << "=" << f.nfiles << "+" << f.nsubdirs;
@@ -107,7 +108,8 @@ void nest_info_t::generate_test_instances(list<nest_info_t*>& ls)
   ls.back()->rfiles = 3;
   ls.back()->rsubdirs = 4;
   ls.back()->ranchors = 5;
-  ls.back()->rctime = utime_t(7, 8);
+  ls.back()->rctime = ceph::real_time(std::chrono::seconds(7) +
+				      std::chrono::nanoseconds(8));
 }
 
 ostream& operator<<(ostream &out, const nest_info_t &n)
@@ -115,7 +117,7 @@ ostream& operator<<(ostream &out, const nest_info_t &n)
   if (n == nest_info_t())
     return out << "n()";
   out << "n(v" << n.version;
-  if (n.rctime != utime_t())
+  if (n.rctime != ceph::real_time::min())
     out << " rc" << n.rctime;
   if (n.rbytes)
     out << " b" << n.rbytes;
@@ -577,11 +579,11 @@ void inode_load_vec_t::encode(bufferlist &bl) const
   ENCODE_FINISH(bl);
 }
 
-void inode_load_vec_t::decode(const utime_t &t, bufferlist::iterator &p)
+void inode_load_vec_t::decode(bufferlist::iterator &p)
 {
   DECODE_START_LEGACY_COMPAT_LEN(2, 2, 2, p);
   for (int i=0; i<NUM; i++)
-    ::decode(vec[i], t, p);
+    ::decode(vec[i], p);
   DECODE_FINISH(p);
 }
 
@@ -598,7 +600,7 @@ void inode_load_vec_t::dump(Formatter *f)
 
 void inode_load_vec_t::generate_test_instances(list<inode_load_vec_t*>& ls)
 {
-  utime_t sample;
+  ceph::real_time sample;
   ls.push_back(new inode_load_vec_t(sample));
 }
 
@@ -619,7 +621,7 @@ void dirfrag_load_vec_t::dump(Formatter *f) const
 
 void dirfrag_load_vec_t::generate_test_instances(list<dirfrag_load_vec_t*>& ls)
 {
-  utime_t sample;
+  ceph::real_time sample;
   ls.push_back(new dirfrag_load_vec_t(sample));
 }
 
@@ -637,10 +639,10 @@ void mds_load_t::encode(bufferlist &bl) const {
   ENCODE_FINISH(bl);
 }
 
-void mds_load_t::decode(const utime_t &t, bufferlist::iterator &bl) {
+void mds_load_t::decode(bufferlist::iterator &bl) {
   DECODE_START_LEGACY_COMPAT_LEN(2, 2, 2, bl);
-  ::decode(auth, t, bl);
-  ::decode(all, t, bl);
+  ::decode(auth, bl);
+  ::decode(all, bl);
   ::decode(req_rate, bl);
   ::decode(cache_hit_rate, bl);
   ::decode(queue_len, bl);
@@ -664,7 +666,7 @@ void mds_load_t::dump(Formatter *f) const
 
 void mds_load_t::generate_test_instances(list<mds_load_t*>& ls)
 {
-  utime_t sample;
+  ceph::real_time sample;
   ls.push_back(new mds_load_t(sample));
 }
 

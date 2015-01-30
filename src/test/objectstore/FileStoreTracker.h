@@ -2,19 +2,21 @@
 
 #ifndef FILESTORE_TRACKER_H
 #define FILESTORE_TRACKER_H
+#include <mutex>
 #include "test/common/ObjectContents.h"
 #include "os/FileStore.h"
 #include "os/KeyValueDB.h"
 #include <boost/scoped_ptr.hpp>
 #include <list>
 #include <map>
-#include "common/Mutex.h"
 
 class FileStoreTracker {
   const static uint64_t SIZE = 4 * 1024;
   ObjectStore *store;
   KeyValueDB *db;
-  Mutex lock;
+  std::mutex lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
   uint64_t restart_seq;
 
   struct OutTransaction {

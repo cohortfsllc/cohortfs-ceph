@@ -65,7 +65,7 @@ void Capability::Export::generate_test_instances(list<Capability::Export*>& ls)
   ls.back()->issued = 2;
   ls.back()->pending = 3;
   ls.back()->mseq = 5;
-  ls.back()->last_issue_stamp = utime_t(6, 7);
+  ls.back()->last_issue_stamp = ceph::real_time(6s + 7ns);
 }
 
 void Capability::Import::encode(bufferlist &bl) const
@@ -165,7 +165,7 @@ void Capability::decode(bufferlist::iterator &bl)
 void Capability::dump(Formatter *f) const
 {
   f->dump_unsigned("last_sent", last_sent);
-  f->dump_unsigned("last_issue_stamp", last_issue_stamp);
+  f->dump_stream("last_issue_stamp") << last_issue_stamp;
   f->dump_unsigned("wanted", _wanted);
   f->dump_unsigned("pending", _pending);
 
@@ -183,7 +183,7 @@ void Capability::generate_test_instances(list<Capability*>& ls)
   ls.push_back(new Capability);
   ls.push_back(new Capability);
   ls.back()->last_sent = 11;
-  ls.back()->last_issue_stamp = utime_t(12, 13);
+  ls.back()->last_issue_stamp = ceph::real_time(12s + 13ns);
   ls.back()->_wanted = 14;
   ls.back()->_pending = 15;
   ls.back()->_revokes.push_back(revoke_info());

@@ -12,27 +12,6 @@
  *
  */
 
-/*
-time---->
-
-cccccccccccccccccca????????????????????????????????????????
-cccccccccccccccccca????????????????????????????????????????
-cccccccccccccccccca???????????????????????????????????????? leader
-cccccccccccccccccc?????????????????????????????????????????
-ccccc??????????????????????????????????????????????????????
-
-last_committed
-
-pn_from
-pn
-
-a 12v
-b 12v
-c 14v
-d
-e 12v
-*/
-
 /**
  * Paxos storage layout and behavior
  *
@@ -280,7 +259,7 @@ private:
    *
    * When the commit happened.
    */
-  utime_t last_commit_time;
+  ceph::real_time last_commit_time;
   /**
    * The last Proposal Number we have accepted.
    *
@@ -328,7 +307,7 @@ private:
    * keep leases. Each lease will have an expiration date, which may or may
    * not be extended.
    */
-  utime_t lease_expire;
+  ceph::real_time lease_expire;
   /**
    * List of callbacks waiting for our state to change into STATE_ACTIVE.
    */
@@ -520,7 +499,7 @@ private:
    * @todo Describe these variables
    * @{
    */
-  utime_t last_clock_drift_warn;
+  ceph::real_time last_clock_drift_warn;
   int clock_drift_warned;
   /**
    * @}
@@ -624,13 +603,13 @@ public:
     bufferlist bl;
     // for debug purposes. Will go away. Soon.
     bool proposed;
-    utime_t proposal_time;
+    ceph::mono_time proposal_time;
 
     C_Proposal(Context *c, bufferlist& proposal_bl) :
 	proposer_context(c),
 	bl(proposal_bl),
 	proposed(false),
-	proposal_time(ceph_clock_now(NULL))
+	proposal_time(ceph::mono_clock::now())
       { }
 
     void finish(int r) {
@@ -970,7 +949,7 @@ private:
   /**
    * @todo document sync function
    */
-  void warn_on_future_time(utime_t t, entity_name_t from);
+  void warn_on_future_time(ceph::real_time t, entity_name_t from);
 
   /**
    * Queue a new proposal by pushing it at the back of the queue; do not
@@ -1295,7 +1274,7 @@ inline ostream& operator<<(ostream& out, Paxos::C_Proposal& p)
 {
   string proposed = (p.proposed ? "proposed" : "unproposed");
   out << " " << proposed
-      << " queued " << (ceph_clock_now(NULL) - p.proposal_time)
+      << " queued " << (ceph::mono_clock::now() - p.proposal_time)
       << " tx dump:\n";
   MonitorDBStore::Transaction t;
   bufferlist::iterator p_it = p.bl.begin();

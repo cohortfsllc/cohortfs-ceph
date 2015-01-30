@@ -18,8 +18,8 @@
 
 #include <string>
 #include <map>
+#include <mutex>
 
-#include "common/Mutex.h"
 #include "Factory.h"
 #include "common/debug.h"
 #include <boost/filesystem.hpp>
@@ -29,7 +29,7 @@
 using namespace std;
 namespace bf = boost::filesystem;
 
-static Mutex mtx;
+static std::mutex mtx;
 static map<string, objectstore_factory_method> modules;
 
 ObjectStore* ObjectStore::create(CephContext* cct,
@@ -37,7 +37,7 @@ ObjectStore* ObjectStore::create(CephContext* cct,
 				 const string& data,
 				 const string& journal)
   {
-    Mutex::Locker lock(mtx);
+    std::unique_lock<std::mutex> lock(mtx);
 
     ObjectStore* os = NULL;
     objectstore_factory_method factory = NULL;

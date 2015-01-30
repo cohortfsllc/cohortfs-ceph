@@ -9,8 +9,6 @@
 
 #include "rgw_acl.h"
 
-using namespace std;
-
 class RGWAccessControlPolicy_SWIFT : public RGWAccessControlPolicy
 {
 public:

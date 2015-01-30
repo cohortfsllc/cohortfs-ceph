@@ -81,7 +81,7 @@ void MonmapMonitor::create_pending()
 {
   pending_map = *mon->monmap;
   pending_map.epoch++;
-  pending_map.last_changed = ceph_clock_now(mon->cct);
+  pending_map.last_changed = ceph::real_clock::now();
   ldout(mon->cct, 10) << "create_pending monmap epoch " << pending_map.epoch << dendl;
 }
 
@@ -343,10 +343,10 @@ bool MonmapMonitor::prepare_command(MMonCommand *m)
     }
 
     pending_map.add(name, addr);
-    pending_map.last_changed = ceph_clock_now(mon->cct);
+    pending_map.last_changed = ceph::real_clock::now();
     getline(ss, rs);
-    wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs,
-						     get_last_committed() + 1));
+    wait_for_finished_proposal(new Monitor::C_Command(
+				 mon, m, 0, rs, get_last_committed() + 1));
     return true;
 
   } else if (prefix == "mon remove") {
@@ -365,8 +365,9 @@ bool MonmapMonitor::prepare_command(MMonCommand *m)
     }
     entity_addr_t addr = pending_map.get_addr(name);
     pending_map.remove(name);
-    pending_map.last_changed = ceph_clock_now(mon->cct);
-    ss << "removed mon." << name << " at " << addr << ", there are now " << pending_map.size() << " monitors" ;
+    pending_map.last_changed = ceph::real_clock::now();
+    ss << "removed mon." << name << " at " << addr << ", there are now "
+       << pending_map.size() << " monitors" ;
     getline(ss, rs);
     // send reply immediately in case we get removed
     mon->reply_command(m, 0, rs, get_last_committed());
@@ -393,12 +394,14 @@ bool MonmapMonitor::preprocess_join(MMonJoin *join)
     return true;
   }
 
-  if (pending_map.contains(join->name) && !pending_map.get_addr(join->name).is_blank_ip()) {
+  if (pending_map.contains(join->name) &&
+      !pending_map.get_addr(join->name).is_blank_ip()) {
     ldout(mon->cct, 10) << " already have " << join->name << dendl;
     join->put();
     return true;
   }
-  if (pending_map.contains(join->addr) && pending_map.get_name(join->addr) == join->name) {
+  if (pending_map.contains(join->addr) &&
+      pending_map.get_name(join->addr) == join->name) {
     ldout(mon->cct, 10) << " already have " << join->addr << dendl;
     join->put();
     return true;
@@ -407,20 +410,21 @@ bool MonmapMonitor::preprocess_join(MMonJoin *join)
 }
 bool MonmapMonitor::prepare_join(MMonJoin *join)
 {
-  ldout(mon->cct, 0) << "adding/updating " << join->name << " at " << join->addr << " to monitor cluster" << dendl;
+  ldout(mon->cct, 0) << "adding/updating " << join->name << " at "
+		     << join->addr << " to monitor cluster" << dendl;
   if (pending_map.contains(join->name))
     pending_map.remove(join->name);
   if (pending_map.contains(join->addr))
     pending_map.remove(pending_map.get_name(join->addr));
   pending_map.add(join->name, join->addr);
-  pending_map.last_changed = ceph_clock_now(mon->cct);
+  pending_map.last_changed = ceph::real_clock::now();
   join->put();
   return true;
 }
 
-bool MonmapMonitor::should_propose(double& delay)
+bool MonmapMonitor::should_propose(ceph::timespan& delay)
 {
-  delay = 0.0;
+  delay = 0ns;
   return true;
 }
 
@@ -428,14 +432,16 @@ void MonmapMonitor::tick()
 {
 }
 
-void MonmapMonitor::get_health(list<pair<health_status_t, string> >& summary,
-			       list<pair<health_status_t, string> > *detail) const
+void MonmapMonitor::get_health(
+  list<pair<health_status_t, string> >& summary,
+  list<pair<health_status_t, string> > *detail) const
 {
   int max = mon->monmap->size();
   int actual = mon->get_quorum().size();
   if (actual < max) {
     ostringstream ss;
-    ss << (max-actual) << " mons down, quorum " << mon->get_quorum() << " " << mon->get_quorum_names();
+    ss << (max-actual) << " mons down, quorum " << mon->get_quorum() << " "
+       << mon->get_quorum_names();
     summary.push_back(make_pair(HEALTH_WARN, ss.str()));
     if (detail) {
       set<int> q = mon->get_quorum();

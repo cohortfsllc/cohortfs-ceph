@@ -15,7 +15,7 @@ public:
   int ref; // 1 if there's a dir beneath me.
   uint64_t offset;
   int lease_mds;
-  utime_t lease_ttl;
+  ceph::mono_time lease_ttl;
   uint64_t lease_gen;
   ceph_seq_t lease_seq;
   int cap_shared_gen;

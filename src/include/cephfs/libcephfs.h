@@ -50,11 +50,7 @@ extern "C" {
 
 #define CEPH_INO_ROOT  1
 
-struct ceph_file_layout;
-
-typedef struct _inodeno_t {
-  uint64_t val;
-} inodeno_t;
+typedef uint64_t inodeno_t;
 
 typedef struct vinodeno_t {
   inodeno_t ino;

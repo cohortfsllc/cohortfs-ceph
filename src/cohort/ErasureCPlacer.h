@@ -10,9 +10,9 @@
 #ifndef COHORT_ERASURECPLACER_H
 #define COHORT_ERASURECPLACER_H
 
+#include <mutex>
 #include "vol/Placer.h"
 #include "erasure-code/ErasureCodeInterface.h"
-#include "common/RWLock.h"
 #include "osdc/ObjectOperation.h"
 
 class ErasureCPlacer;
@@ -32,7 +32,9 @@ protected:
 private:
   /* These are internal and are not serialized */
   mutable bool attached;
-  mutable Mutex lock;
+  mutable std::mutex lock;
+  typedef std::unique_lock<std::mutex> unique_lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
   mutable vector<void*> entry_points;
   mutable void *place_shared;
   mutable ceph::ErasureCodeInterfaceRef erasure;

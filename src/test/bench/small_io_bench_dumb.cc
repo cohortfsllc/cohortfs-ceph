@@ -207,7 +207,7 @@ int main(int argc, char **argv)
 
   Bencher bencher(
     gen,
-    new DetailedStatCollector(1, new JSONFormatter, detailed_ops, &cout),
+    new DetailedStatCollector(1s, new JSONFormatter, detailed_ops, &cout),
     new DumbBackend(
       vm["filestore-path"].as<string>(),
       vm["fsync"].as<bool>(),

@@ -18,14 +18,16 @@ namespace rados {
       extern void lock(librados::ObjectWriteOperation *rados_op,
 		       const std::string& name, ClsLockType type,
 		       const std::string& cookie, const std::string& tag,
-		       const std::string& description, const utime_t& duration,
+		       const std::string& description,
+		       const ceph::timespan& duration,
 		       uint8_t flags);
 
       extern int lock(librados::IoCtx *ioctx,
 		      const std::string& oid,
 		      const std::string& name, ClsLockType type,
 		      const std::string& cookie, const std::string& tag,
-		      const std::string& description, const utime_t& duration,
+		      const std::string& description,
+		      const ceph::timespan& duration,
 		      uint8_t flags);
 
       extern void unlock(librados::ObjectWriteOperation *rados_op,
@@ -60,7 +62,7 @@ namespace rados {
 	std::string cookie;
 	std::string tag;
 	std::string description;
-	utime_t duration;
+	ceph::timespan duration;
 	uint8_t flags;
 
       public:
@@ -70,7 +72,7 @@ namespace rados {
 	void set_cookie(const std::string& c) { cookie = c; }
 	void set_tag(const std::string& t) { tag = t; }
 	void set_description(const std::string& desc) { description = desc; }
-	void set_duration(const utime_t& e) { duration = e; }
+	void set_duration(const ceph::timespan& e) { duration = e; }
 	void set_renew(bool renew) {
 	  if (renew) {
 	    flags |= LOCK_FLAG_RENEW;

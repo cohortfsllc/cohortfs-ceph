@@ -73,10 +73,10 @@ void SimpleMessenger::ready()
   ldout(cct,10) << "ready " << get_myaddr() << dendl;
   dispatch_queue.start();
 
-  lock.Lock();
+  std::unique_lock<std::mutex> l(lock);
   if (did_bind)
     accepter.start();
-  lock.Unlock();
+  l.unlock();
 }
 
 
@@ -109,11 +109,11 @@ int SimpleMessenger::_send_message(Message *m, const entity_inst_t& dest,
     return -EINVAL;
   }
 
-  lock.Lock();
+  std::unique_lock<std::mutex> l(lock);
   Pipe *pipe = _lookup_pipe(dest.addr);
   submit_message(m, (pipe ? pipe->connection_state.get() : NULL),
 		 dest.addr, dest.name.type(), lazy);
-  lock.Unlock();
+  lock.unlock();
   return 0;
 }
 
@@ -130,9 +130,9 @@ int SimpleMessenger::_send_message(Message *m, Connection *con, bool lazy)
       << " " << m << " con " << con
       << dendl;
 
-  lock.Lock();
+  std::unique_lock<std::mutex> l(lock);
   submit_message(m, con, con->get_peer_addr(), con->get_peer_type(), lazy);
-  lock.Unlock();
+  l.unlock();
   return 0;
 }
 
@@ -202,12 +202,12 @@ void SimpleMessenger::dispatch_throttle_release(uint64_t msize)
 void SimpleMessenger::reaper_entry()
 {
   ldout(cct,10) << "reaper_entry start" << dendl;
-  lock.Lock();
+  std::unique_lock<std::mutex> l(lock);
   while (!reaper_stop) {
     reaper();
-    reaper_cond.Wait(lock);
+    reaper_cond.wait(l);
   }
-  lock.Unlock();
+  l.unlock();
   ldout(cct,10) << "reaper_entry done" << dendl;
 }
 
@@ -217,14 +217,13 @@ void SimpleMessenger::reaper_entry()
 void SimpleMessenger::reaper()
 {
   ldout(cct,10) << "reaper" << dendl;
-  assert(lock.is_locked());
 
   while (!pipe_reap_queue.empty()) {
     Pipe *p = pipe_reap_queue.front();
     pipe_reap_queue.pop_front();
     ldout(cct,10) << "reaper reaping pipe " << p << " " <<
       p->get_peer_addr() << dendl;
-    p->pipe_lock.Lock();
+    std::unique_lock<std::mutex> pl(p->pipe_lock);
     p->discard_out_queue();
     if (p->connection_state) {
       // mark_down, mark_down_all, or fault() should have done this,
@@ -233,7 +232,7 @@ void SimpleMessenger::reaper()
       bool cleared = p->connection_state->clear_pipe(p);
       assert(!cleared);
     }
-    p->pipe_lock.Unlock();
+    pl.unlock();
     p->unregister_pipe();
     assert(pipes.count(p));
     pipes.erase(p);
@@ -250,24 +249,24 @@ void SimpleMessenger::reaper()
 void SimpleMessenger::queue_reap(Pipe *pipe)
 {
   ldout(cct,10) << "queue_reap " << pipe << dendl;
-  lock.Lock();
+  std::unique_lock<std::mutex> l(lock);
   pipe_reap_queue.push_back(pipe);
-  reaper_cond.Signal();
-  lock.Unlock();
+  reaper_cond.notify_all();
+  l.unlock();
 }
 
 
 
 int SimpleMessenger::bind(const entity_addr_t &bind_addr)
 {
-  lock.Lock();
+  std::unique_lock<std::mutex> l(lock);
   if (started) {
     ldout(cct,10) << "rank.bind already started" << dendl;
-    lock.Unlock();
+    l.unlock();
     return -1;
   }
   ldout(cct,10) << "rank.bind " << bind_addr << dendl;
-  lock.Unlock();
+  l.unlock();
 
   // bind to a socket
   set<int> avoid_ports;
@@ -288,7 +287,7 @@ int SimpleMessenger::rebind(const set<int>& avoid_ports)
 
 int SimpleMessenger::start()
 {
-  lock.Lock();
+  std::unique_lock<std::mutex> l(lock);
   ldout(cct,1) << "messenger.start" << dendl;
 
   // register at least one entity, first!
@@ -302,7 +301,7 @@ int SimpleMessenger::start()
     init_local_connection();
   }
 
-  lock.Unlock();
+  l.unlock();
 
   reaper_started = true;
   reaper_thread.create();
@@ -311,15 +310,15 @@ int SimpleMessenger::start()
 
 Pipe *SimpleMessenger::add_accept_pipe(int sd)
 {
-  lock.Lock();
+  std::unique_lock<std::mutex> l(lock);
   Pipe *p = new Pipe(this, Pipe::STATE_ACCEPTING, NULL);
   p->sd = sd;
-  p->pipe_lock.Lock();
+  std::unique_lock<std::mutex> pl(p->pipe_lock);
   p->start_reader();
-  p->pipe_lock.Unlock();
+  pl.unlock();
   pipes.insert(p);
   accepting_pipes.insert(p);
-  lock.Unlock();
+  l.unlock();
   return p;
 }
 
@@ -331,7 +330,6 @@ Pipe *SimpleMessenger::connect_rank(const entity_addr_t& addr,
 				    PipeConnection *con,
 				    Message *first)
 {
-  assert(lock.is_locked());
   assert(addr != my_inst.addr);
 
   ldout(cct,10) << "connect_rank to " << addr << ", creating pipe and registering" << dendl;
@@ -339,14 +337,14 @@ Pipe *SimpleMessenger::connect_rank(const entity_addr_t& addr,
   // create pipe
   Pipe *pipe = new Pipe(this, Pipe::STATE_CONNECTING,
 			static_cast<PipeConnection*>(con));
-  pipe->pipe_lock.Lock();
+  std::unique_lock<std::mutex> pl(pipe->pipe_lock);
   pipe->set_peer_type(type);
   pipe->set_peer_addr(addr);
   pipe->policy = get_policy(type);
   pipe->start_writer();
   if (first)
     pipe->_send(first);
-  pipe->pipe_lock.Unlock();
+  pl.unlock();
   pipe->register_pipe();
   pipes.insert(pipe);
 
@@ -372,7 +370,7 @@ bool SimpleMessenger::verify_authorizer(Connection *con, int peer_type,
 
 ConnectionRef SimpleMessenger::get_connection(const entity_inst_t& dest)
 {
-  Mutex::Locker l(lock);
+  std::unique_lock<std::mutex> l(lock);
   if (my_inst.addr == dest.addr) {
     // local
     return local_connection;
@@ -387,7 +385,7 @@ ConnectionRef SimpleMessenger::get_connection(const entity_inst_t& dest)
       pipe = connect_rank(dest.addr, dest.name.type(), NULL, NULL);
       ldout(cct, 10) << "get_connection " << dest << " new " << pipe << dendl;
     }
-    Mutex::Locker l(pipe->pipe_lock);
+    std::lock_guard<std::mutex> pl(pipe->pipe_lock);
     if (pipe->connection_state)
       return pipe->connection_state;
     // we failed too quickly!  retry.  FIXME.
@@ -427,15 +425,15 @@ void SimpleMessenger::submit_message(Message *m, Connection *con,
       return;
     }
     if (pipe) {
-      pipe->pipe_lock.Lock();
+      std::unique_lock<std::mutex> pl(pipe->pipe_lock);
       if (pipe->state != Pipe::STATE_CLOSED) {
 	ldout(cct,20) << "submit_message " << *m << " remote, " << dest_addr << ", have pipe." << dendl;
 	pipe->_send(m);
-	pipe->pipe_lock.Unlock();
+	pl.unlock();
 	pipe->put();
 	return;
       }
-      pipe->pipe_lock.Unlock();
+      pl.unlock();
       pipe->put();
       ldout(cct,20) << "submit_message " << *m << " remote, " << dest_addr
 		    << ", had pipe " << pipe << ", but it closed." << dendl;
@@ -473,7 +471,7 @@ int SimpleMessenger::send_keepalive(const entity_inst_t& dest)
   entity_addr_t dest_proc_addr = dest_addr;
   int ret = 0;
 
-  lock.Lock();
+  std::unique_lock<std::mutex> l(lock);
   {
     // local?
     if (my_inst.addr != dest_addr) {
@@ -481,10 +479,10 @@ int SimpleMessenger::send_keepalive(const entity_inst_t& dest)
       Pipe *pipe = _lookup_pipe(dest_proc_addr);
       if (pipe) {
 	// connected?
-	pipe->pipe_lock.Lock();
+	std::unique_lock<std::mutex> pl(pipe->pipe_lock);
 	ldout(cct,20) << "send_keepalive remote, " << dest_addr << ", have pipe." << dendl;
 	pipe->_send_keepalive();
-	pipe->pipe_lock.Unlock();
+	pl.unlock();
       } else {
 	ret = -EINVAL;
       }
@@ -493,7 +491,7 @@ int SimpleMessenger::send_keepalive(const entity_inst_t& dest)
       }
     }
   }
-  lock.Unlock();
+  l.unlock();
   return ret;
 }
 
@@ -505,9 +503,9 @@ int SimpleMessenger::send_keepalive(Connection *con)
   if (pipe) {
     ldout(cct,20) << "send_keepalive con " << con << ", have pipe." << dendl;
     assert(pipe->msgr == this);
-    pipe->pipe_lock.Lock();
+    std::unique_lock<std::mutex> pl(pipe->pipe_lock);
     pipe->_send_keepalive();
-    pipe->pipe_lock.Unlock();
+    pl.unlock();
     pipe->put();
   } else {
     ldout(cct,0) << "send_keepalive con " << con << ", no pipe." << dendl;
@@ -520,12 +518,12 @@ int SimpleMessenger::send_keepalive(Connection *con)
 
 void SimpleMessenger::wait()
 {
-  lock.Lock();
+  std::unique_lock<std::mutex> l(lock);
   if (!started) {
-    lock.Unlock();
+    l.unlock();
     return;
   }
-  lock.Unlock();
+  l.unlock();
 
   if(dispatch_queue.is_started()) {
     ldout(cct,10) << "wait: waiting for dispatch queue" << dendl;
@@ -543,36 +541,36 @@ void SimpleMessenger::wait()
 
   if (reaper_started) {
     ldout(cct,20) << "wait: stopping reaper thread" << dendl;
-    lock.Lock();
-    reaper_cond.Signal();
+    l.lock();
+    reaper_cond.notify_all();
     reaper_stop = true;
-    lock.Unlock();
+    l.unlock();
     reaper_thread.join();
     reaper_started = false;
     ldout(cct,20) << "wait: stopped reaper thread" << dendl;
   }
 
   // close+reap all pipes
-  lock.Lock();
+  l.lock();
   {
     ldout(cct,10) << "wait: closing pipes" << dendl;
 
     while (!rank_pipe.empty()) {
       Pipe *p = rank_pipe.begin()->second;
       p->unregister_pipe();
-      p->pipe_lock.Lock();
+      std::unique_lock<std::mutex> pl(p->pipe_lock);
       p->stop();
-      p->pipe_lock.Unlock();
+      pl.unlock();
     }
 
     reaper();
     ldout(cct,10) << "wait: waiting for pipes " << pipes << " to close" << dendl;
     while (!pipes.empty()) {
-      reaper_cond.Wait(lock);
+      reaper_cond.wait(l);
       reaper();
     }
   }
-  lock.Unlock();
+  l.unlock();
 
   ldout(cct,10) << "wait: done." << dendl;
   ldout(cct,1) << "shutdown complete." << dendl;
@@ -583,16 +581,16 @@ void SimpleMessenger::wait()
 void SimpleMessenger::mark_down_all()
 {
   ldout(cct,1) << "mark_down_all" << dendl;
-  lock.Lock();
+  std::unique_lock<std::mutex> l(lock);
   for (set<Pipe*>::iterator q = accepting_pipes.begin(); q != accepting_pipes.end(); ++q) {
     Pipe *p = *q;
     ldout(cct,5) << "mark_down_all accepting_pipe " << p << dendl;
-    p->pipe_lock.Lock();
+    std::unique_lock<std::mutex> pl(p->pipe_lock);
     p->stop();
     PipeConnectionRef con = p->connection_state;
     if (con && con->clear_pipe(p))
       dispatch_queue.queue_reset(con.get());
-    p->pipe_lock.Unlock();
+    pl.unlock();
   }
   accepting_pipes.clear();
 
@@ -602,24 +600,24 @@ void SimpleMessenger::mark_down_all()
     ldout(cct,5) << "mark_down_all " << it->first << " " << p << dendl;
     rank_pipe.erase(it);
     p->unregister_pipe();
-    p->pipe_lock.Lock();
+    std::unique_lock<std::mutex> pl(p->pipe_lock);
     p->stop();
     PipeConnectionRef con = p->connection_state;
     if (con && con->clear_pipe(p))
       dispatch_queue.queue_reset(con.get());
-    p->pipe_lock.Unlock();
+    pl.unlock();
   }
-  lock.Unlock();
+  l.unlock();
 }
 
 void SimpleMessenger::mark_down(const entity_addr_t& addr)
 {
-  lock.Lock();
+  std::unique_lock<std::mutex> l(lock);
   Pipe *p = _lookup_pipe(addr);
   if (p) {
     ldout(cct,1) << "mark_down " << addr << " -- " << p << dendl;
     p->unregister_pipe();
-    p->pipe_lock.Lock();
+    std::unique_lock<std::mutex> pl(p->pipe_lock);
     p->stop();
     if (p->connection_state) {
       // generate a reset event for the caller in this case, even
@@ -629,45 +627,45 @@ void SimpleMessenger::mark_down(const entity_addr_t& addr)
       if (con && con->clear_pipe(p))
 	dispatch_queue.queue_reset(con.get());
     }
-    p->pipe_lock.Unlock();
+    pl.unlock();
   } else {
     ldout(cct,1) << "mark_down " << addr << " -- pipe dne" << dendl;
   }
-  lock.Unlock();
+  l.unlock();
 }
 
 void SimpleMessenger::mark_down(Connection *con)
 {
   if (con == NULL)
     return;
-  lock.Lock();
+  std::unique_lock<std::mutex> l(lock);
   Pipe *p = static_cast<Pipe *>(static_cast<PipeConnection*>(con)->get_pipe());
   if (p) {
     ldout(cct,1) << "mark_down " << con << " -- " << p << dendl;
     assert(p->msgr == this);
     p->unregister_pipe();
-    p->pipe_lock.Lock();
+    std::unique_lock<std::mutex> pl(p->pipe_lock);
     p->stop();
     if (p->connection_state) {
       // do not generate a reset event for the caller in this case,
       // since they asked for it.
       p->connection_state->clear_pipe(p);
     }
-    p->pipe_lock.Unlock();
+    pl.unlock();
     p->put();
   } else {
     ldout(cct,1) << "mark_down " << con << " -- pipe dne" << dendl;
   }
-  lock.Unlock();
+  l.unlock();
 }
 
 void SimpleMessenger::mark_down_on_empty(Connection *con)
 {
-  lock.Lock();
+  std::unique_lock<std::mutex> l(lock);
   Pipe *p = static_cast<Pipe *>(static_cast<PipeConnection*>(con)->get_pipe());
   if (p) {
     assert(p->msgr == this);
-    p->pipe_lock.Lock();
+    std::unique_lock<std::mutex> pl(p->pipe_lock);
     p->unregister_pipe();
     if (p->out_q.empty()) {
       ldout(cct,1) << "mark_down_on_empty " << con << " -- " << p << " closing (queue is empty)" << dendl;
@@ -676,29 +674,29 @@ void SimpleMessenger::mark_down_on_empty(Connection *con)
       ldout(cct,1) << "mark_down_on_empty " << con << " -- " << p << " marking (queue is not empty)" << dendl;
       p->close_on_empty = true;
     }
-    p->pipe_lock.Unlock();
+    pl.unlock();
     p->put();
   } else {
     ldout(cct,1) << "mark_down_on_empty " << con << " -- pipe dne" << dendl;
   }
-  lock.Unlock();
+  l.unlock();
 }
 
 void SimpleMessenger::mark_disposable(Connection *con)
 {
-  lock.Lock();
+  std::unique_lock<std::mutex> l(lock);
   Pipe *p = static_cast<Pipe *>(static_cast<PipeConnection*>(con)->get_pipe());
   if (p) {
     ldout(cct,1) << "mark_disposable " << con << " -- " << p << dendl;
     assert(p->msgr == this);
-    p->pipe_lock.Lock();
+    std::unique_lock<std::mutex> pl(p->pipe_lock);
     p->policy.lossy = true;
-    p->pipe_lock.Unlock();
+    pl.unlock();
     p->put();
   } else {
     ldout(cct,1) << "mark_disposable " << con << " -- pipe dne" << dendl;
   }
-  lock.Unlock();
+  l.unlock();
 }
 
 void SimpleMessenger::learned_addr(const entity_addr_t &peer_addr_for_me)
@@ -712,7 +710,7 @@ void SimpleMessenger::learned_addr(const entity_addr_t &peer_addr_for_me)
   if (!need_addr)
     return;
 
-  lock.Lock();
+  std::unique_lock<std::mutex> l(lock);
   if (need_addr) {
     entity_addr_t t = peer_addr_for_me;
     t.set_port(my_inst.addr.get_port());
@@ -721,14 +719,14 @@ void SimpleMessenger::learned_addr(const entity_addr_t &peer_addr_for_me)
     need_addr = false;
     init_local_connection();
   }
-  lock.Unlock();
+  l.unlock();
 }
 
 void SimpleMessenger::unlearn_addr()
 {
-  lock.Lock();
+  std::unique_lock<std::mutex> l(lock);
   need_addr = true;
-  lock.Unlock();
+  l.unlock();
 }
 
 void SimpleMessenger::init_local_connection()

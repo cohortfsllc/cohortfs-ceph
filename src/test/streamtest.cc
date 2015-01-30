@@ -26,27 +26,25 @@ using namespace std;
 CephContext* cct;
 
 struct io {
-  utime_t start, ack, commit;
+  ceph::mono_time start, ack, commit;
   bool done() {
-    return ack.sec() && commit.sec();
+    return (ack != ceph::mono_time::min() &&
+	    commit != ceph::mono_time::min());
   }
 };
 map<off_t,io> writes;
-Cond cond;
-Mutex test_lock;
+std::condition_variable cond;
+std::mutex test_lock;
 
 unsigned concurrent = 1;
 void throttle()
 {
-  Mutex::Locker l(test_lock);
-  while (writes.size() >= concurrent) {
-    //generic_dout(0) << "waiting" << dendl;
-    cond.Wait(test_lock);
-  }
+  unique_lock<mutex> tl(test_lock);
+  cond.wait(tl, [&](){ return writes.size() < concurrent; });
 }
 
-double total_ack = 0;
-double total_commit = 0;
+ceph::timespan total_ack = 0ns;
+ceph::timespan total_commit = 0ns;
 int total_num = 0;
 
 void pr(off_t off)
@@ -59,27 +57,27 @@ void pr(off_t off)
   total_ack += (i.ack - i.start);
   total_commit += (i.commit - i.start);
   writes.erase(off);
-  cond.Signal();
+  cond.notify_all();
 }
 
-void set_start(off_t off, utime_t t)
+void set_start(off_t off, ceph::mono_time t)
 {
-  Mutex::Locker l(test_lock);
+  lock_guard<mutex> l(test_lock);
   writes[off].start = t;
 }
 
-void set_ack(off_t off, utime_t t)
+void set_ack(off_t off, ceph::mono_time t)
 {
-  Mutex::Locker l(test_lock);
+  lock_guard<mutex> l(test_lock);
   //generic_dout(0) << "ack " << off << dendl;
   writes[off].ack = t;
   if (writes[off].done())
     pr(off);
 }
 
-void set_commit(off_t off, utime_t t)
+void set_commit(off_t off, ceph::mono_time t)
 {
-  Mutex::Locker l(test_lock);
+  lock_guard<mutex> l(test_lock);
   //generic_dout(0) << "commit " << off << dendl;
   writes[off].commit = t;
   if (writes[off].done())
@@ -91,14 +89,14 @@ struct C_Ack : public Context {
   off_t off;
   C_Ack(off_t o) : off(o) {}
   void finish(int r) {
-    set_ack(off, ceph_clock_now(cct));
+    set_ack(off, ceph::mono_clock::now());
   }
 };
 struct C_Commit : public Context {
   off_t off;
   C_Commit(off_t o) : off(o) {}
   void finish(int r) {
-    set_commit(off, ceph_clock_now(cct));
+    set_commit(off, ceph::mono_clock::now());
   }
 };
 
@@ -152,17 +150,16 @@ int main(int argc, const char **argv)
   ft.create_collection(coll_t());
   fs->apply_transaction(ft);
 
-  utime_t now = ceph_clock_now(cct);
-  utime_t start = now;
-  utime_t end = now;
-  end += seconds;
+  ceph::mono_time now = ceph::mono_clock::now();
+  ceph::mono_time start = now;
+  ceph::mono_time end = now + seconds * 1s;
   off_t pos = 0;
   //cout << "stop at " << end << std::endl;
   cout << "# offset\tack\tcommit" << std::endl;
   while (now < end) {
     oid poid("streamtest");
 
-    set_start(pos, ceph_clock_now(cct));
+    set_start(pos, ceph::mono_clock::now());
     ObjectStore::Transaction *t = new ObjectStore::Transaction;
     t->write(coll_t(), poid, pos, bytes, bl);
     fs->queue_transaction(NULL, t, new C_Ack(pos), new C_Commit(pos));
@@ -170,25 +167,15 @@ int main(int argc, const char **argv)
 
     throttle();
 
-    now = ceph_clock_now(cct);
-
-    // wait?
-    /*
-    utime_t next = start;
-    next += interval;
-    if (now < next) {
-      float s = next - now;
-      s *= 1000 * 1000;	 // s -> us
-      //cout << "sleeping for " << s << " us" << std::endl;
-      usleep((int)s);
-    }
-    */
+    now = ceph::mono_clock::now();
   }
 
   cout << "total num " << total_num << std::endl;
-  cout << "avg ack\t" << (total_ack / (double)total_num) << std::endl;
-  cout << "avg commit\t" << (total_commit / (double)total_num) << std::endl;
-  cout << "tput\t" << prettybyte_t((double)(total_num * bytes) / (double)(end-start)) << "/sec" << std::endl;
+  cout << "avg ack\t" << (total_ack / total_num) << std::endl;
+  cout << "avg commit\t" << (total_commit / total_num) << std::endl;
+  cout << "tput\t" << prettybyte_t((double)(total_num * bytes) /
+				   ceph::span_to_double(end-start)) << "/sec"
+       << std::endl;
 
   fs->umount();
 

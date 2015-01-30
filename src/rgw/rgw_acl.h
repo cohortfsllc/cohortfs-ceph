@@ -10,9 +10,6 @@
 
 #include "common/debug.h"
 
-using namespace std;
-
-
 #define RGW_PERM_READ		 0x01
 #define RGW_PERM_WRITE		 0x02
 #define RGW_PERM_READ_ACP	 0x04

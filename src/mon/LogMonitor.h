@@ -17,8 +17,6 @@
 
 #include <map>
 #include <set>
-using namespace std;
-
 #include "include/types.h"
 #include "msg/Messenger.h"
 #include "PaxosService.h"
@@ -30,7 +28,7 @@ class MMonCommand;
 
 class LogMonitor : public PaxosService {
 private:
-  multimap<utime_t,LogEntry> pending_log;
+  multimap<ceph::real_time,LogEntry> pending_log;
   LogSummary pending_summary, summary;
 
   void create_initial();
@@ -47,7 +45,7 @@ private:
   bool prepare_log(MLog *m);
   void _updated_log(MLog *m);
 
-  bool should_propose(double& delay);
+  bool should_propose(ceph::timespan& delay);
 
   bool should_stash_full() {
     // commit a LogSummary on every commit

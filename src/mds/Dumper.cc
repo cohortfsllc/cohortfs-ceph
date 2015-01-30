@@ -47,17 +47,18 @@ int Dumper::init(int rank_)
 int Dumper::recover_journal()
 {
   bool done = false;
-  Cond cond;
-  Mutex localLock;
+  std::condition_variable cond;
+  std::mutex localLock;
   int r;
 
-  lock.Lock();
+  unique_lock l(lock);
   journaler->recover(new C_SafeCond(&localLock, &cond, &done, &r));
-  lock.Unlock();
-  localLock.Lock();
+  l.unlock();
+
+  unique_lock ll(localLock);
   while (!done)
-    cond.Wait(localLock);
-  localLock.Unlock();
+    cond.wait(ll);
+  ll.unlock();
 
   if (r < 0) { // Error
     derr << "error on recovery: " << cpp_strerror(r) << dendl;
@@ -73,8 +74,8 @@ void Dumper::dump(const char *dump_file)
 {
   bool done = false;
   int r = 0;
-  Cond cond;
-  Mutex localLock;
+  std::condition_variable cond;
+  std::mutex localLock;
   VolumeRef volume(mdsmap->get_metadata_volume(objecter));
 
   r = recover_journal();
@@ -86,21 +87,22 @@ void Dumper::dump(const char *dump_file)
   uint64_t len = end-start;
   inodeno_t ino = MDS_INO_LOG_OFFSET + rank;
 
-  cout << "journal is " << start << "~" << len << std::endl;
+  std::cout << "journal is " << start << "~" << len << std::endl;
 
   bufferlist bl;
 
-  lock.Lock();
+  unique_lock l(lock);
   oid obj = file_oid(ino, 0);
   objecter->read(obj, volume, start, len, &bl, 0,
 		 new C_SafeCond(&localLock, &cond, &done));
-  lock.Unlock();
-  localLock.Lock();
-  while (!done)
-    cond.Wait(localLock);
-  localLock.Unlock();
+  l.unlock();
 
-  cout << "read " << bl.length() << " bytes at offset " << start << std::endl;
+  unique_lock ll(localLock);
+  while (!done)
+    cond.wait(ll);
+  ll.unlock();
+
+  std::cout << "read " << bl.length() << " bytes at offset " << start << std::endl;
 
   int fd = ::open(dump_file, O_WRONLY|O_CREAT|O_TRUNC, 0644);
   if (fd >= 0) {
@@ -120,10 +122,10 @@ void Dumper::dump(const char *dump_file)
     bl.write_fd(fd);
     ::close(fd);
 
-    cout << "wrote " << bl.length() << " bytes at offset " << start << " to " << dump_file << "\n"
-	 << "NOTE: this is a _sparse_ file; you can\n"
-	 << "\t$ tar cSzf " << dump_file << ".tgz " << dump_file << "\n"
-	 << "	   to efficiently compress it while preserving sparseness." << std::endl;
+    std::cout << "wrote " << bl.length() << " bytes at offset " << start << " to " << dump_file << "\n"
+	      << "NOTE: this is a _sparse_ file; you can\n"
+	      << "\t$ tar cSzf " << dump_file << ".tgz " << dump_file << "\n"
+	      << "	   to efficiently compress it while preserving sparseness." << std::endl;
   } else {
     int err = errno;
     derr << "unable to open " << dump_file << ": " << cpp_strerror(err) << dendl;
@@ -132,7 +134,7 @@ void Dumper::dump(const char *dump_file)
 
 void Dumper::undump(const char *dump_file)
 {
-  cout << "undump " << dump_file << std::endl;
+  std::cout << "undump " << dump_file << std::endl;
 
   int fd = ::open(dump_file, O_RDONLY);
   if (fd < 0) {
@@ -155,7 +157,7 @@ void Dumper::undump(const char *dump_file)
   sscanf(strstr(buf, "start offset"), "start offset %llu", &start);
   sscanf(strstr(buf, "length"), "length %llu", &len);
 
-  cout << "start " << start << " len " << len << std::endl;
+  std::cout << "start " << start << " len " << len << std::endl;
 
   inodeno_t ino = MDS_INO_LOG_OFFSET + rank;
 
@@ -173,17 +175,16 @@ void Dumper::undump(const char *dump_file)
   oid obj = file_oid(ino, 0);
 
   bool done = false;
-  Cond cond;
+  std::condition_variable cond;
 
-  cout << "writing header " << obj << std::endl;
+  std::cout << "writing header " << obj << std::endl;
   objecter->write_full(obj, volume, hbl,
-		       ceph_clock_now(cct),
+		       ceph::real_clock::now(),
 		       0, NULL, new C_SafeCond(&lock, &cond, &done));
 
-  lock.Lock();
-  while (!done)
-    cond.Wait(lock);
-  lock.Unlock();
+  unique_lock l(lock);
+  cond.wait(l, [&](){ return done; });
+  l.unlock();
 
   // read
   uint64_t pos = start;
@@ -193,22 +194,21 @@ void Dumper::undump(const char *dump_file)
     lseek64(fd, pos, SEEK_SET);
     uint64_t l = MIN(left, 1024*1024);
     j.read_fd(fd, l);
-    cout << " writing " << pos << "~" << l << std::endl;
+    std::cout << " writing " << pos << "~" << l << std::endl;
     objecter->write(obj, volume, pos, l, j,
-		    ceph_clock_now(cct), 0, NULL,
+		    ceph::real_clock::now(), 0, NULL,
 		    new C_SafeCond(&lock, &cond, &done));
 
-    lock.Lock();
-    while (!done)
-      cond.Wait(lock);
-    lock.Unlock();
+    unique_lock ulck(lock);
+    cond.wait(ulck, [&](){ return done; });
+    ulck.unlock();
 
     pos += l;
     left -= l;
   }
 
   VOID_TEMP_FAILURE_RETRY(::close(fd));
-  cout << "done." << std::endl;
+  std::cout << "done." << std::endl;
 }
 
 
@@ -217,7 +217,7 @@ void Dumper::undump(const char *dump_file)
  */
 void Dumper::dump_entries()
 {
-  Mutex localLock;
+  std::mutex localLock;
   JSONFormatter jf(true);
 
   int r = recover_journal();
@@ -227,7 +227,7 @@ void Dumper::dump_entries()
 
   jf.open_array_section("log");
   bool got_data = true;
-  lock.Lock();
+  unique_lock l(lock);
   // Until the journal is empty, pop an event or wait for one to
   // be available.
   dout(10) << "Journaler read/write/size: "
@@ -246,27 +246,27 @@ void Dumper::dump_entries()
 	jf.open_object_section("log_event");
 	jf.dump_unsigned("type", le->get_type());
 	jf.dump_unsigned("start_off", le->get_start_off());
-	jf.dump_unsigned("stamp_sec", le->get_stamp().tv.tv_sec);
-	jf.dump_unsigned("stamp_nsec", le->get_stamp().tv.tv_nsec);
+	jf.dump_stream("stamp") << le->get_stamp();
 	le->dump(&jf);
 	jf.close_section();
 	delete le;
       }
     } else {
       bool done = false;
-      Cond cond;
+      std::condition_variable cond;
 
       journaler->wait_for_readable(new C_SafeCond(&localLock, &cond, &done));
-      lock.Unlock();
-      localLock.Lock();
+      lock.unlock();
+
+      unique_lock ll(localLock);
       while (!done)
-	cond.Wait(localLock);
-      localLock.Unlock();
-      lock.Lock();
+	cond.wait(ll);
+      ll.unlock();
+      l.lock();
     }
   }
-  lock.Unlock();
+  lock.unlock();
   jf.close_section();
-  jf.flush(cout);
+  jf.flush(std::cout);
   return;
 }

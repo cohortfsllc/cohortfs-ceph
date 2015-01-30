@@ -26,7 +26,7 @@
 class QuorumService
 {
   Context *tick_event;
-  double tick_period;
+  ceph::timespan tick_period;
 
   struct C_Tick : public Context {
     QuorumService *s;
@@ -51,7 +51,7 @@ protected:
 
   QuorumService(Monitor *m) :
     tick_event(NULL),
-    tick_period(m->cct->_conf->mon_tick_interval),
+    tick_period(ceph::span_from_double(m->cct->_conf->mon_tick_interval)),
     mon(m),
     epoch(0)
   {
@@ -67,14 +67,14 @@ protected:
     lgeneric_dout(mon->cct, 10) << __func__ << dendl;
 
     cancel_tick();
-    if (tick_period <= 0)
+    if (tick_period <= 0ns)
       return;
 
     tick_event = new C_Tick(this);
     mon->timer.add_event_after(tick_period, tick_event);
   }
 
-  void set_update_period(double t) {
+  void set_update_period(ceph::timespan t) {
     tick_period = t;
   }
 

@@ -15,7 +15,7 @@
 #ifndef CEPH_MDS_EUPDATE_H
 #define CEPH_MDS_EUPDATE_H
 
-#include "../LogEvent.h"
+#include "mds/LogEvent.h"
 #include "EMetaBlob.h"
 
 class EUpdate : public LogEvent {

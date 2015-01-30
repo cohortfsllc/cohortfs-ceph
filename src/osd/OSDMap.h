@@ -28,8 +28,6 @@
 #include "include/types.h"
 #include "osd_types.h"
 #include "msg/Message.h"
-#include "common/Mutex.h"
-#include "common/Clock.h"
 #include "vol/Volume.h"
 #include "vol/Placer.h"
 
@@ -67,11 +65,11 @@ WRITE_CLASS_ENCODER(osd_info_t)
 ostream& operator<<(ostream& out, const osd_info_t& info);
 
 struct osd_xinfo_t {
-  utime_t down_stamp; ///< timestamp when we were last marked down
+  ceph::real_time down_stamp; ///< timestamp when we were last marked down
   float laggy_probability; ///< encoded as uint32_t: 0 = definitely
-			   ///	not laggy, 0xffffffff definitely laggy
-  uint32_t laggy_interval; ///< average interval between being marked
-			   ///	laggy and recovering
+			   ///  not laggy, 0xffffffff definitely laggy
+  ceph::timespan laggy_interval; ///< average interval between being marked
+				 ///  laggy and recovering
   uint64_t features; ///< features supported by this osd we should know about
 
   osd_xinfo_t() : laggy_probability(0), laggy_interval(0),
@@ -99,7 +97,7 @@ public:
     uint64_t encode_features;
     boost::uuids::uuid fsid;
     epoch_t epoch;   // new epoch; we are a diff from epoch-1 to epoch
-    utime_t modified;
+    ceph::real_time modified;
     int32_t new_flags;
 
     // full (rare)
@@ -116,7 +114,7 @@ public:
     map<int32_t,boost::uuids::uuid> new_uuid;
     map<int32_t,osd_xinfo_t> new_xinfo;
 
-    map<entity_addr_t,utime_t> new_blacklist;
+    map<entity_addr_t,ceph::real_time> new_blacklist;
     vector<entity_addr_t> old_blacklist;
     map<int32_t, entity_addr_t> new_hb_back_up;
     map<int32_t, entity_addr_t> new_hb_front_up;
@@ -220,7 +218,7 @@ public:
 private:
   boost::uuids::uuid fsid;
   epoch_t epoch; // what epoch of the osd cluster descriptor is this
-  utime_t created, modified; // epoch start time
+  ceph::real_time created, modified; // epoch start time
 
   uint32_t flags;
 
@@ -253,7 +251,7 @@ private:
   std::shared_ptr< vector<boost::uuids::uuid> > osd_uuid;
   vector<osd_xinfo_t> osd_xinfo;
 
-  std::unordered_map<entity_addr_t,utime_t> blacklist;
+  std::unordered_map<entity_addr_t,ceph::real_time> blacklist;
 
   bool new_blacklist_entries;
 
@@ -299,11 +297,11 @@ public:
   void set_epoch(epoch_t e);
 
   /* stamps etc */
-  const utime_t& get_created() const { return created; }
-  const utime_t& get_modified() const { return modified; }
+  const ceph::real_time& get_created() const { return created; }
+  const ceph::real_time& get_modified() const { return modified; }
 
   bool is_blacklisted(const entity_addr_t& a) const;
-  void get_blacklist(list<pair<entity_addr_t,utime_t > > *bl) const;
+  void get_blacklist(list<pair<entity_addr_t,ceph::real_time > > *bl) const;
 
   /***** cluster state *****/
   /* osds */

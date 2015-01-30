@@ -55,8 +55,8 @@ class MMonPaxos : public Message {
   version_t pn_from;	     // i promise to accept after
   version_t pn;		     // with with proposal
   version_t uncommitted_pn;	// previous pn, if we are a LAST with an uncommitted value
-  utime_t lease_timestamp;
-  utime_t sent_timestamp;
+  ceph::real_time lease_timestamp;
+  ceph::real_time sent_timestamp;
 
   version_t latest_version;
   bufferlist latest_value;
@@ -64,7 +64,7 @@ class MMonPaxos : public Message {
   map<version_t,bufferlist> values;
 
   MMonPaxos() : Message(MSG_MON_PAXOS, HEAD_VERSION, COMPAT_VERSION) { }
-  MMonPaxos(epoch_t e, int o, utime_t now) :
+  MMonPaxos(epoch_t e, int o, ceph::real_time now) :
     Message(MSG_MON_PAXOS, HEAD_VERSION, COMPAT_VERSION),
     epoch(e),
     op(o),

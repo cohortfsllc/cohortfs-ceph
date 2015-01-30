@@ -65,7 +65,8 @@ public:
   // unimplemented Messenger interface
   void set_addr_unknowns(entity_addr_t &addr) {}
   int get_dispatch_queue_len() { return 0; }
-  double get_dispatch_queue_max_age(utime_t now) { return 0; }
+  ceph::timespan get_dispatch_queue_max_age() {
+    return ceph::timespan(0); }
   void set_cluster_protocol(int p) {}
   int lazy_send_message(Message *m, const entity_inst_t& dst) { return EINVAL; }
   int lazy_send_message(Message *m, Connection *con) { return EINVAL; }

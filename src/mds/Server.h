@@ -53,7 +53,7 @@ public:
 
 
   // -- sessions and recovery --
-  utime_t  reconnect_start;
+  ceph::mono_time reconnect_start;
   set<client_t> client_reconnect_gather;  // clients i need a reconnect msg from.
 
   Session *get_session(Message *m);

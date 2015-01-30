@@ -17,6 +17,8 @@
 #define XIO_MESSENGER_H
 
 #include <atomic>
+#include <condition_variable>
+#include <mutex>
 #include "SimplePolicyMessenger.h"
 extern "C" {
 #include "libxio.h"
@@ -25,7 +27,6 @@ extern "C" {
 #include "XioPortal.h"
 #include "DispatchStrategy.h"
 #include "common/Thread.h"
-#include "common/Mutex.h"
 #include "include/Spinlock.h"
 
 class XioMessenger : public SimplePolicyMessenger
@@ -42,8 +43,10 @@ private:
   XioLoopbackConnection loop_con;
   int port_shift;
   uint32_t special_handling;
-  Mutex sh_mtx;
-  Cond sh_cond;
+  std::mutex sh_mtx;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
+  std::condition_variable sh_cond;
 
 public:
   XioMessenger(CephContext *cct, entity_name_t name,
@@ -82,7 +85,7 @@ public:
   virtual int get_dispatch_queue_len()
     { return 0; } /* XXX bogus? */
 
-  virtual double get_dispatch_queue_max_age(utime_t now)
+  virtual double get_dispatch_queue_max_age()
     { return 0; } /* XXX bogus? */
 
   virtual void set_cluster_protocol(int p)

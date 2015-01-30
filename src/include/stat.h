@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #ifndef CEPH_STAT_H
 #define CEPH_STAT_H
 
@@ -25,14 +27,24 @@ static inline void stat_set_mtime_nsec(struct stat *st, uint32_t nsec)
   st->st_mtim.tv_nsec = nsec;
 }
 
+static inline void stat_set_mtime_nsec(struct stat *st, ceph::real_time t)
+{
+  st->st_mtim.tv_nsec = (t.time_since_epoch() % 1s).count();
+}
+
 static inline uint32_t stat_get_atime_nsec(struct stat *st)
 {
   return st->st_atim.tv_nsec;
 }
 
-static inline void stat_set_atime_nsec(struct stat *st, uint32_t nsec)
+static inline void stat_set_atime_nsec(struct stat *st, uint32_t nsec);
 {
   st->st_atim.tv_nsec = nsec;
+}
+
+static inline void stat_set_atime_nsec(struct stat *st, ceph::real_time t)
+{
+  st->st_atim.tv_nsec = (t.time_since_epoch() % 1s).count();
 }
 
 static inline uint32_t stat_get_ctime_nsec(struct stat *st)
@@ -43,6 +55,11 @@ static inline uint32_t stat_get_ctime_nsec(struct stat *st)
 static inline void stat_set_ctime_nsec(struct stat *st, uint32_t nsec)
 {
   st->st_ctim.tv_nsec = nsec;
+}
+
+static inline void stat_set_ctime_nsec(struct stat *st, ceph::real_time t)
+{
+  st->st_ctim.tv_nsec = (t.time_since_epoch() % 1s).count();
 }
 
 #elif defined(HAVE_STAT_ST_MTIMESPEC_TV_NSEC)
@@ -57,6 +74,11 @@ static inline void stat_set_mtime_nsec(struct stat *st, uint32_t nsec)
   st->st_mtimespec.tv_nsec = nsec;
 }
 
+static inline void stat_set_mtime_nsec(struct stat *st, ceph::real_time t)
+{
+  st->st_mtimespec.tv_nsec = (t.time_since_epoch() % 1s).count();
+}
+
 static inline uint32_t stat_get_atime_nsec(struct stat *st)
 {
   return st->st_atimespec.tv_nsec;
@@ -67,6 +89,11 @@ static inline void stat_set_atime_nsec(struct stat *st, uint32_t nsec)
   st->st_atimespec.tv_nsec = nsec;
 }
 
+static inline void stat_set_atime_nsec(struct stat *st, ceph::real_time t)
+{
+  st->st_atimespec.tv_nsec = (t.time_since_epoch() % 1s).count();
+}
+
 static inline uint32_t stat_get_ctime_nsec(struct stat *st)
 {
   return st->st_ctimespec.tv_nsec;
@@ -75,6 +102,11 @@ static inline uint32_t stat_get_ctime_nsec(struct stat *st)
 static inline void stat_set_ctime_nsec(struct stat *st, uint32_t nsec)
 {
   st->st_ctimespec.tv_nsec = nsec;
+}
+
+static inline void stat_set_ctime_nsec(struct stat *st, ceph::real_time t)
+{
+  st->st_ctimespec.tv_nsec = (t.time_since_epoch() % 1s).count();
 }
 
 #else
@@ -88,6 +120,10 @@ static inline void stat_set_mtime_nsec(struct stat *st, uint32_t nsec)
 {
 }
 
+static inline void stat_set_mtime_nsec(struct stat *st, ceph::real_time t)
+{
+}
+
 static inline uint32_t stat_get_atime_nsec(struct stat *st)
 {
   return 0;
@@ -97,12 +133,20 @@ static inline void stat_set_atime_nsec(struct stat *st, uint32_t nsec)
 {
 }
 
+static inline void stat_set_atime_nsec(struct stat *st, ceph::real_time t)
+{
+}
+
 static inline uint32_t stat_get_ctime_nsec(struct stat *st)
 {
   return 0;
 }
 
 static inline void stat_set_ctime_nsec(struct stat *st, uint32_t nsec)
+{
+}
+
+static inline void stat_set_ctime_nsec(struct stat *st, ceph::real_time t)
 {
 }
 
@@ -117,9 +161,26 @@ static inline uint32_t stat_get_mtime_sec(struct stat *st)
   return st->st_mtime;
 }
 
+static inline ceph::real_time stat_get_mtime(struct stat *st)
+{
+  return ceph::real_time(stat_get_mtime_sec(st) * 1s +
+			 stat_get_mtime_nsec(st) * 1ns);
+}
+
 static inline void stat_set_mtime_sec(struct stat *st, uint32_t sec)
 {
   st->st_mtime = sec;
+}
+
+static inline void stat_set_mtime_sec(struct stat *st, ceph::real_time t)
+{
+  st->st_mtime = ceph::real_clock::to_time_t(t);
+}
+
+static inline void stat_set_mtime(struct stat *st, ceph::real_time t)
+{
+  stat_set_mtime_sec(st, t);
+  stat_set_mtime_nsec(st, t);
 }
 
 static inline uint32_t stat_get_atime_sec(struct stat *st)
@@ -127,19 +188,55 @@ static inline uint32_t stat_get_atime_sec(struct stat *st)
   return st->st_atime;
 }
 
+static inline ceph::real_time stat_get_atime(struct stat *st)
+{
+  return ceph::real_time(stat_get_atime_sec(st) * 1s +
+			 stat_get_atime_nsec(st) * 1ns);
+}
+
 static inline void stat_set_atime_sec(struct stat *st, uint32_t sec)
 {
   st->st_atime = sec;
 }
+
+static inline void stat_set_atime_sec(struct stat *st, ceph::real_time t)
+{
+  st->st_atime = ceph::real_clock::to_time_t(t);
+}
+
+static inline void stat_set_atime(struct stat *st, ceph::real_time t)
+{
+  stat_set_atime_sec(st, t);
+  stat_set_atime_nsec(st, t);
+}
+
 
 static inline uint32_t stat_get_ctime_sec(struct stat *st)
 {
   return st->st_ctime;
 }
 
+static inline ceph::real_time stat_get_ctime(struct stat *st)
+{
+  return ceph::real_time(stat_get_ctime_sec(st) * 1s +
+			 stat_get_ctime_nsec(st) * 1ns);
+}
+
 static inline void stat_set_ctime_sec(struct stat *st, uint32_t sec)
 {
   st->st_ctime = sec;
+}
+
+static inline void stat_set_ctime_sec(struct stat *st,
+				      ceph::real_time t)
+{
+  st->st_ctime = ceph::real_clock::to_time_t(t);
+}
+
+static inline void stat_set_ctime(struct stat *st, ceph::real_time t)
+{
+  stat_set_ctime_sec(st, t);
+  stat_set_ctime_nsec(st, t);
 }
 
 #endif

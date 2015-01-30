@@ -14,7 +14,6 @@
 
 #include "common/ceph_context.h"
 #include "CephxProtocol.h"
-#include "common/Clock.h"
 #include "common/config.h"
 #include "common/debug.h"
 #include "include/buffer.h"
@@ -177,11 +176,12 @@ bool CephXTicketHandler::verify_service_ticket_reply(CryptoKey& secret,
 	   << " session_key " << msg_a.session_key
 	   << " validity=" << msg_a.validity << dendl;
   session_key = msg_a.session_key;
-  if (!msg_a.validity.is_zero()) {
-    expires = ceph_clock_now(cct);
+  if (!(msg_a.validity == ceph::timespan(0))) {
+    expires = ceph::mono_clock::now();
     expires += msg_a.validity;
     renew_after = expires;
-    renew_after -= ((double)msg_a.validity.sec() / 4);
+    renew_after -= ceph::span_from_double(ceph::span_to_double(
+					    msg_a.validity) / 4);
     ldout(cct, 10) << "ticket expires=" << expires << " renew_after=" << renew_after << dendl;
   }
 
@@ -192,7 +192,7 @@ bool CephXTicketHandler::verify_service_ticket_reply(CryptoKey& secret,
 bool CephXTicketHandler::have_key()
 {
   if (have_key_flag) {
-    have_key_flag = ceph_clock_now(cct) < expires;
+    have_key_flag = ceph::mono_clock::now() < expires;
   }
 
   return have_key_flag;
@@ -201,7 +201,8 @@ bool CephXTicketHandler::have_key()
 bool CephXTicketHandler::need_key() const
 {
   if (have_key_flag) {
-    return (!expires.is_zero()) && (ceph_clock_now(cct) >= renew_after);
+    return (!(expires == ceph::mono_time::min()) &&
+	    (ceph::mono_clock::now() >= renew_after));
   }
 
   return true;

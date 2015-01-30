@@ -133,7 +133,7 @@ private:
   const char *magic;
   Objecter *objecter;
 
-  SafeTimer *timer;
+  SafeTimer<ceph::mono_clock>* timer;
 
   class C_DelayFlush : public Context {
     Journaler *journaler;
@@ -158,7 +158,7 @@ private:
   int error;
 
   // header
-  utime_t last_wrote_head;
+  ceph::real_time last_wrote_head;
   void _finish_write_head(int r, Header &wrote, Context *oncommit);
   class C_WriteHead;
   friend class C_WriteHead;
@@ -197,8 +197,8 @@ private:
   std::set<uint64_t> pending_safe;
   std::map<uint64_t, std::list<Context*> > waitfor_safe; // when safe through given offset
 
-  void _do_flush(unsigned amount=0);
-  void _finish_flush(int r, uint64_t start, utime_t stamp);
+  void _do_flush(unsigned amount = 0);
+  void _finish_flush(int r, uint64_t start, ceph::mono_time stamp);
   class C_Flush;
   friend class C_Flush;
 
@@ -260,7 +260,7 @@ private:
 
 public:
   Journaler(inodeno_t ino_, VolumeRef vol_, const char *mag, Objecter *obj,
-	    SafeTimer *tim) :
+	    SafeTimer<ceph::mono_clock> *tim) :
     cct(obj->cct), last_written(mag), last_committed(mag),
     ino(ino_), volume(vol_), readonly(true), magic(mag),
     objecter(obj),

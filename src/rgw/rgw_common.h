@@ -34,8 +34,6 @@
 #include "cls/user/cls_user_types.h"
 #include "include/rados/librados.hpp"
 
-using namespace std;
-
 namespace ceph {
   class Formatter;
 }

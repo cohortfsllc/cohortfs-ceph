@@ -114,7 +114,7 @@ class MMDSSlaveRequest : public Message {
   bufferlist inode_export;
   version_t inode_export_v;
   bufferlist srci_replica;
-  utime_t now;
+  ceph::real_time now;
 
   bufferlist stray;  // stray dir + dentry
 

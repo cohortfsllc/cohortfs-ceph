@@ -17,7 +17,6 @@
 
 #include "msg/Message.h"
 #include <string>
-using namespace std;
 
 class MExportDirNotify : public Message {
   dirfrag_t base;

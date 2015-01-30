@@ -13,6 +13,7 @@
  */
 
 #include <atomic>
+#include <mutex>
 #include <fstream>
 #include <sstream>
 #include <sys/uio.h>
@@ -26,7 +27,6 @@
 #include "common/safe_io.h"
 #include "common/simple_spin.h"
 #include "common/strtol.h"
-#include "common/Mutex.h"
 #include "include/types.h"
 #include "include/compat.h"
 #include "common/likely.h"
@@ -181,7 +181,7 @@ static uint32_t simple_spinlock_t buffer_debug_lock = SIMPLE_SPINLOCK_INITIALIZE
 
   class buffer::raw_crc : public buffer::raw {
   public:
-    mutable Mutex crc_lock;
+    mutable std::mutex crc_lock;
     map<pair<size_t, size_t>, pair<uint32_t, uint32_t> > crc_map;
 
     raw_crc(unsigned l) : raw(l)
@@ -193,7 +193,7 @@ static uint32_t simple_spinlock_t buffer_debug_lock = SIMPLE_SPINLOCK_INITIALIZE
 
     virtual bool get_crc(const pair<size_t, size_t> &fromto,
 		 pair<uint32_t, uint32_t> *crc) const {
-      Mutex::Locker l(crc_lock);
+      std::lock_guard<std::mutex> l(crc_lock);
       map<pair<size_t, size_t>, pair<uint32_t, uint32_t> >::const_iterator i =
 	crc_map.find(fromto);
       if (i == crc_map.end())
@@ -204,12 +204,12 @@ static uint32_t simple_spinlock_t buffer_debug_lock = SIMPLE_SPINLOCK_INITIALIZE
 
     virtual void set_crc(const pair<size_t, size_t> &fromto,
 		 const pair<uint32_t, uint32_t> &crc) {
-      Mutex::Locker l(crc_lock);
+      std::lock_guard<std::mutex> l(crc_lock);
       crc_map[fromto] = crc;
     }
 
     virtual void invalidate_crc() {
-      Mutex::Locker l(crc_lock);
+      std::lock_guard<std::mutex> l(crc_lock);
       crc_map.clear();
     }
   };

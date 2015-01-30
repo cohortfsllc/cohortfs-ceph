@@ -19,8 +19,10 @@
 #define CEPH_OSD_TYPES_H
 
 #include <sstream>
-#include <stdio.h>
+#include <cstdio>
 #include <memory>
+#include <mutex>
+#include <condition_variable>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <boost/scoped_ptr.hpp>
@@ -30,7 +32,7 @@
 
 #include "msg/msg_types.h"
 #include "include/types.h"
-#include "include/utime.h"
+#include "include/ceph_time.h"
 #include "include/CompatSet.h"
 #include "common/histogram.h"
 #include "include/interval_set.h"
@@ -555,7 +557,7 @@ WRITE_CLASS_ENCODER(ObjectModDesc)
 // -----------------------------------------
 
 struct osd_peer_stat_t {
-  utime_t stamp;
+  ceph::real_time stamp;
 
   osd_peer_stat_t() { }
 
@@ -687,7 +689,7 @@ struct object_info_t {
   osd_reqid_t last_reqid;
 
   uint64_t size;
-  utime_t mtime;
+  ceph::real_time mtime;
 
   // note: these are currently encoded into a total 16 bits; see
   // encode()/decode() for the weirdness.
@@ -784,9 +786,9 @@ struct ObjectContext {
   Context *destructor_callback;
 
 private:
-  Mutex lock;
+  std::mutex lock;
 public:
-  Cond cond;
+  std::condition_variable cond;
   int unstable_writes, readers, writers_waiting, readers_waiting;
 
   // any entity in obs.oi.watchers MUST be in either watchers or unconnected_watchers.
@@ -928,38 +930,33 @@ public:
 
   // do simple synchronous mutual exclusion, for now.  now waitqueues or anything fancy.
   void ondisk_write_lock() {
-    lock.Lock();
+    std::unique_lock<std::mutex> l(lock);
     writers_waiting++;
-    while (readers_waiting || readers)
-      cond.Wait(lock);
+    cond.wait(l, [&](){ return !(readers_waiting || readers); });
     writers_waiting--;
     unstable_writes++;
-    lock.Unlock();
+    l.unlock();
   }
   void ondisk_write_unlock() {
-    lock.Lock();
+    std::lock_guard<std::mutex> l(lock);
     assert(unstable_writes > 0);
     unstable_writes--;
     if (!unstable_writes && readers_waiting)
-      cond.Signal();
-    lock.Unlock();
+      cond.notify_all();
   }
   void ondisk_read_lock() {
-    lock.Lock();
+    std::unique_lock<std::mutex> l(lock);
     readers_waiting++;
-    while (unstable_writes)
-      cond.Wait(lock);
+    cond.wait(l, [&](){ return !unstable_writes; });
     readers_waiting--;
     readers++;
-    lock.Unlock();
   }
   void ondisk_read_unlock() {
-    lock.Lock();
+    std::lock_guard<std::mutex> l(lock);
     assert(readers > 0);
     readers--;
     if (!readers && writers_waiting)
-      cond.Signal();
-    lock.Unlock();
+      cond.notify_all();
   }
 
   // attr cache

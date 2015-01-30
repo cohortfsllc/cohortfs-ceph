@@ -3,8 +3,6 @@
 
 #include "common/ceph_context.h"
 #include "common/dout.h"
-#include "common/Mutex.h"
-#include "common/RWLock.h"
 
 #include "librbd/AioCompletion.h"
 #include "librbd/ImageCtx.h"

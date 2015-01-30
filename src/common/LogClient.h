@@ -15,11 +15,11 @@
 #ifndef CEPH_LOGCLIENT_H
 #define CEPH_LOGCLIENT_H
 
-#include "common/LogEntry.h"
-#include "common/Mutex.h"
-
 #include <iosfwd>
+#include <mutex>
 #include <sstream>
+
+#include "common/LogEntry.h"
 #include "common/ceph_context.h"
 
 class LogClient;
@@ -106,7 +106,7 @@ private:
   Messenger *messenger;
   MonMap *monmap;
   bool is_mon;
-  Mutex log_lock;
+  std::mutex log_lock;
   version_t last_log_sent;
   version_t last_log;
   std::deque<LogEntry> log_queue;
