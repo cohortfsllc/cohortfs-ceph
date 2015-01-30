@@ -392,10 +392,6 @@ public:
       return obj_slots[ix];
     }
 
-    uint32_t& flags() {
-      return os_flags;
-    }
-
   private:
     ObjectStore *os;
 
@@ -405,9 +401,6 @@ public:
 
     // Ops reference collections and objects by slot (id or handle)
     vector<Op> ops;
-
-    // os backend-private flags
-    uint32_t os_flags;
 
     // current highest slot by type
     uint16_t col_ix; // cols ix (cid or col, if available)
@@ -524,7 +517,6 @@ public:
       std::swap(col_slots, other.col_slots);
       std::swap(obj_slots, other.obj_slots);
       std::swap(ops, other.ops);
-      std::swap(os_flags, other.os_flags);
       std::swap(col_ix, other.col_ix);
       std::swap(obj_ix, other.obj_ix);
       std::swap(largest_data_len, other.largest_data_len);
@@ -1092,21 +1084,21 @@ public:
 
     // etc.
     Transaction(size_t op_count_hint = 0) :
-      os(nullptr), os_flags(0), col_ix(0), obj_ix(0),
+      os(nullptr), col_ix(0), obj_ix(0),
       largest_data_len(0), largest_data_off(0), replica(false),
       tolerate_collection_add_enoent(false) {
       ops.reserve(op_count_hint);
     }
 
     Transaction(bufferlist::iterator &dp) :
-      os(nullptr), os_flags(0), col_ix(0), obj_ix(0),
+      os(nullptr), col_ix(0), obj_ix(0),
       largest_data_len(0), largest_data_off(0), replica(false),
       tolerate_collection_add_enoent(false) {
       decode(dp);
     }
 
     Transaction(bufferlist &nbl) :
-      os(nullptr), os_flags(0), col_ix(0), obj_ix(0),
+      os(nullptr), col_ix(0), obj_ix(0),
       largest_data_len(0), largest_data_off(0), replica(false),
       tolerate_collection_add_enoent(false) {
       bufferlist::iterator dp = nbl.begin();
@@ -1121,7 +1113,6 @@ public:
     void clear() {
       put_objects(); // drop existing object refs
       os = nullptr;
-      os_flags = 0;
       col_slots.clear();
       obj_slots.clear();
       ops.clear();
@@ -1135,7 +1126,6 @@ public:
       ::encode(col_slots, bl);
       ::encode(obj_slots, bl);
       ::encode(ops, bl);
-//      ::encode(os_flags, bl); // skip flags, 100% internal atm
       ::encode(col_ix, bl);
       ::encode(obj_ix, bl);
       ::encode(largest_data_len, bl);
@@ -1148,7 +1138,6 @@ public:
       ::decode(col_slots, bl);
       ::decode(obj_slots, bl);
       ::decode(ops, bl);
-      os_flags = 0; // skip flags, 100% internal atm
       ::decode(col_ix, bl);
       ::decode(obj_ix, bl);
       ::decode(largest_data_len, bl);
