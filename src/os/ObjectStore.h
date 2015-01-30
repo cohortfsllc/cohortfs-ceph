@@ -579,6 +579,9 @@ public:
     // Explicitly push a new collection slot, where the collection
     // is known by its identifier
     int push_cid(const coll_t& cid) {
+      for (uint16_t i = 0; i < col_ix; i++)
+        if (std::get<1>(col_slots[i]) == cid)
+          return i;
       col_slots.push_back(col_slot_t(nullptr, cid, 0));
       return col_ix++;
     }
@@ -586,17 +589,34 @@ public:
     // Explicitly push a new collection slot, where the collection
     // is known by its handle
     int push_col(const CollectionHandle ch) {
+      auto cid = ch->get_cid();
+      for (uint16_t i = 0; i < col_ix; i++) {
+        if (std::get<1>(col_slots[i]) == cid) {
+          std::get<0>(col_slots[i]) = ch; // set handle
+          return i;
+        }
+      }
       col_slots.push_back(col_slot_t(ch, ch->get_cid(), 0));
       return col_ix++;
     }
 
     // Ditto, for objects
     int push_oid(const hobject_t& oid) {
+      for (uint16_t i = 0; i < obj_ix; i++)
+        if (std::get<1>(obj_slots[i]) == oid)
+          return i;
       obj_slots.push_back(obj_slot_t(nullptr, oid, 0));
       return obj_ix++;
     }
 
     int push_obj(ObjectHandle oh) {
+      auto oid = oh->get_oid();
+      for (uint16_t i = 0; i < obj_ix; i++) {
+        if (std::get<1>(obj_slots[i]) == oid) {
+          std::get<0>(obj_slots[i]) = oh; // set handle
+          return i;
+        }
+      }
       obj_slots.push_back(obj_slot_t(oh, oh->get_oid(), 0));
       return obj_ix++;
     }
