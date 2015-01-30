@@ -237,7 +237,7 @@ int FileStore::lfn_open(const coll_t &cid,
 
   int fd, exist;
   if (!replaying) {
-    Mutex::Locker l(fdcache_lock);
+    lock_guard l(fdcache_lock);
     *outfd = fdcache.lookup(obj);
     if (*outfd)
       return 0;
@@ -280,7 +280,7 @@ int FileStore::lfn_open(const coll_t &cid,
   }
 
   if (!replaying) {
-    Mutex::Locker l(fdcache_lock);
+    lock_guard l(fdcache_lock);
     *outfd = fdcache.lookup(obj);
     if (*outfd) {
       VOID_TEMP_FAILURE_RETRY(::close(fd));
@@ -367,7 +367,7 @@ int FileStore::lfn_unlink(const coll_t &cid, const oid& o,
   int r = get_index(cid, &index);
   if (r < 0)
     return r;
-  Mutex::Locker l(fdcache_lock);
+  lock_guard l(fdcache_lock);
   {
     IndexedPath path;
     int exist;
@@ -422,7 +422,7 @@ FileStore::FileStore(CephContext *_cct, const std::string &base, const std::stri
   index_manager(),
   ondisk_finisher(cct),
   force_sync(false), sync_epoch(0),
-  timer(cct, sync_entry_timeo_lock),
+  timer(sync_entry_timeo_lock),
   stop(false), sync_thread(this),
   trace_endpoint("0.0.0.0", 0, NULL),
   fdcache(cct),
@@ -431,15 +431,18 @@ FileStore::FileStore(CephContext *_cct, const std::string &base, const std::stri
   op_queue_len(0), op_queue_bytes(0),
   op_finisher(cct),
   op_tp(cct, "FileStore::op_tp", cct->_conf->filestore_op_threads, "filestore_op_threads"),
-  op_wq(this, cct->_conf->filestore_op_thread_timeout,
-	cct->_conf->filestore_op_thread_suicide_timeout, &op_tp),
-  m_filestore_commit_timeout(cct->_conf->filestore_commit_timeout),
-  m_filestore_journal_parallel(cct->_conf->filestore_journal_parallel ),
+  op_wq(this, cct->_conf->filestore_op_thread_timeout * 1s,
+	cct->_conf->filestore_op_thread_suicide_timeout * 1s, &op_tp),
+  m_filestore_commit_timeout(ceph::span_from_double(
+			       cct->_conf->filestore_commit_timeout)),
+  m_filestore_journal_parallel(cct->_conf->filestore_journal_parallel),
   m_filestore_journal_trailing(cct->_conf->filestore_journal_trailing),
   m_filestore_journal_writeahead(cct->_conf->filestore_journal_writeahead),
   m_filestore_fiemap_threshold(cct->_conf->filestore_fiemap_threshold),
-  m_filestore_max_sync_interval(cct->_conf->filestore_max_sync_interval),
-  m_filestore_min_sync_interval(cct->_conf->filestore_min_sync_interval),
+  m_filestore_max_sync_interval(
+    ceph::span_from_double(cct->_conf->filestore_max_sync_interval)),
+  m_filestore_min_sync_interval(
+    ceph::span_from_double(cct->_conf->filestore_min_sync_interval)),
   m_filestore_fail_eio(cct->_conf->filestore_fail_eio),
   m_filestore_replica_fadvise(cct->_conf->filestore_replica_fadvise),
   do_update(do_update),
@@ -1402,10 +1405,10 @@ int FileStore::mount()
     }
 
     // stop sync thread
-    lock.Lock();
+    unique_lock l(lock);
     stop = true;
-    sync_cond.Signal();
-    lock.Unlock();
+    sync_cond.notify_all();
+    l.unlock();
     sync_thread.join();
 
     wbthrottle.stop();
@@ -1454,10 +1457,10 @@ int FileStore::umount()
 
   start_sync();
 
-  lock.Lock();
+  unique_lock l(lock);
   stop = true;
-  sync_cond.Signal();
-  lock.Unlock();
+  sync_cond.notify_all();
+  l.unlock();
   sync_thread.join();
   wbthrottle.stop();
   op_tp.stop();
@@ -1492,8 +1495,8 @@ int FileStore::umount()
   object_map.reset();
 
   {
-    Mutex::Locker l(sync_entry_timeo_lock);
-    timer.shutdown();
+    unique_lock l(sync_entry_timeo_lock);
+    timer.shutdown(l);
   }
 
   // nothing
@@ -1503,16 +1506,16 @@ int FileStore::umount()
 
 int FileStore::get_max_object_name_length()
 {
-  lock.Lock();
+  unique_lock l(lock);
   int ret = pathconf(basedir.c_str(), _PC_NAME_MAX);
   if (ret < 0) {
     int err = errno;
-    lock.Unlock();
+    l.unlock();
     if (err == 0)
       return -EDOM;
     return -err;
   }
-  lock.Unlock();
+  l.unlock();
   return ret;
 }
 
@@ -1534,7 +1537,7 @@ FileStore::Op *FileStore::build_op(list<Transaction*>& tls,
   }
 
   Op *o = new Op;
-  o->start = ceph_clock_now(cct);
+  o->start = ceph::mono_clock::now();
   o->tls.swap(tls);
   o->onreadable = onreadable;
   o->onreadable_sync = onreadable_sync;
@@ -1575,7 +1578,7 @@ void FileStore::op_queue_reserve_throttle(Op *o, ThreadPool::TPHandle *handle)
   }
 
   {
-    Mutex::Locker l(op_throttle_lock);
+    unique_lock otl(op_throttle_lock);
     while ((max_ops && (op_queue_len + 1) > max_ops) ||
 	   (max_bytes && op_queue_bytes	     // let single large ops through!
 	      && (op_queue_bytes + o->bytes) > max_bytes)) {
@@ -1583,7 +1586,7 @@ void FileStore::op_queue_reserve_throttle(Op *o, ThreadPool::TPHandle *handle)
 	      << op_queue_bytes + o->bytes << " > " << max_bytes << dendl;
       if (handle)
 	handle->suspend_tp_timeout();
-      op_throttle_cond.Wait(op_throttle_lock);
+      op_throttle_cond.wait(otl);
       if (handle)
 	handle->reset_tp_timeout();
     }
@@ -1596,15 +1599,17 @@ void FileStore::op_queue_reserve_throttle(Op *o, ThreadPool::TPHandle *handle)
 void FileStore::op_queue_release_throttle(Op *o)
 {
   {
-    Mutex::Locker l(op_throttle_lock);
+    lock_guard l(op_throttle_lock);
     op_queue_len--;
     op_queue_bytes -= o->bytes;
-    op_throttle_cond.Signal();
+    op_throttle_cond.notify_all();
   }
 }
 
-void FileStore::_do_op(OpSequencer *osr, ThreadPool::TPHandle &handle)
+void FileStore::_do_op(OpSequencer *osr, ThreadPool::TPHandle &handle,
+		       unique_lock& osral)
 {
+  assert(!osral);
   wbthrottle.throttle();
   // inject a stall?
   if (cct->_conf->filestore_inject_stall) {
@@ -1616,7 +1621,7 @@ void FileStore::_do_op(OpSequencer *osr, ThreadPool::TPHandle &handle)
     dout(5) << "_do_op done stalling" << dendl;
   }
 
-  osr->apply_lock.Lock();
+  osral.lock();
   Op *o = osr->peek_queue();
   o->trace.event("op_apply_start");
   apply_manager.op_apply_start(o->op);
@@ -1629,19 +1634,17 @@ void FileStore::_do_op(OpSequencer *osr, ThreadPool::TPHandle &handle)
 	   << ", finisher " << o->onreadable << " " << o->onreadable_sync << dendl;
 }
 
-void FileStore::_finish_op(OpSequencer *osr)
+void FileStore::_finish_op(OpSequencer *osr, unique_lock& osral)
 {
+  assert(osral);
   Op *o = osr->dequeue();
 
   dout(10) << "_finish_op " << o << " seq " << o->op << " " << *osr << "/" << osr->parent << dendl;
-  osr->apply_lock.Unlock();  // locked in _do_op
+  osral.unlock();  // locked in _do_op
   o->trace.event("_finish_op");
 
   // called with tp lock held
   op_queue_release_throttle(o);
-
-  utime_t lat = ceph_clock_now(cct);
-  lat -= o->start;
 
   if (o->onreadable_sync) {
     o->onreadable_sync->complete(0);
@@ -1689,7 +1692,8 @@ int FileStore::queue_transactions(Sequencer *posr, list<Transaction*> &tls,
     posr = &default_osr;
   if (posr->p) {
     osr = static_cast<OpSequencer *>(posr->p);
-    dout(5) << "queue_transactions existing " << *osr << "/" << osr->parent << dendl; //<< " w/ q " << osr->q << dendl;
+    dout(5) << "queue_transactions existing " << *osr << "/" << osr->parent
+	    << dendl; //<< " w/ q " << osr->q << dendl;
   } else {
     osr = new OpSequencer(this);
     osr->parent = posr;
@@ -1699,11 +1703,13 @@ int FileStore::queue_transactions(Sequencer *posr, list<Transaction*> &tls,
 
   ZTracer::Trace trace("op", &trace_endpoint, osd_op ? &osd_op->trace : NULL);
 
+  JournalingObjectStore::SubmitManager::unique_lock sml(
+    submit_manager.lock, std::defer_lock);
   if (journal && journal->is_writeable() && !m_filestore_journal_trailing) {
     Op *o = build_op(tls, onreadable, onreadable_sync, osd_op);
     op_queue_reserve_throttle(o, handle);
     journal->throttle();
-    uint64_t op_num = submit_manager.op_submit_start();
+    uint64_t op_num = submit_manager.op_submit_start(sml);
     o->op = op_num;
     o->trace = trace;
     o->trace.keyval("opnum", op_num);
@@ -1732,12 +1738,13 @@ int FileStore::queue_transactions(Sequencer *posr, list<Transaction*> &tls,
     } else {
       assert(0);
     }
-    submit_manager.op_submit_finish(op_num);
+    submit_manager.op_submit_finish(sml, op_num);
     return 0;
   }
 
-  uint64_t op = submit_manager.op_submit_start();
-  dout(5) << "queue_transactions (trailing journal) " << op << " " << tls << dendl;
+  uint64_t op = submit_manager.op_submit_start(sml);
+  dout(5) << "queue_transactions (trailing journal) " << op << " " << tls
+	  << dendl;
   trace.keyval("journal mode", "trailing");
 
   if (m_filestore_do_dump)
@@ -1761,7 +1768,7 @@ int FileStore::queue_transactions(Sequencer *posr, list<Transaction*> &tls,
   }
   op_finisher.queue(onreadable, r);
 
-  submit_manager.op_submit_finish(op);
+  submit_manager.op_submit_finish(sml, op);
   trace.event("op_apply_finish");
   apply_manager.op_apply_finish(op);
 
@@ -2823,37 +2830,36 @@ int FileStore::_clone_range(const coll_t &cid, const oid& oldoid, const oid& new
 
 class SyncEntryTimeout : public Context {
 public:
-  SyncEntryTimeout(int commit_timeo)
-    : m_commit_timeo(commit_timeo)
+  SyncEntryTimeout(CephContext* cct, ceph::timespan commit_timeo)
+    : cct(cct), m_commit_timeo(commit_timeo)
   {
   }
 
   void finish(int r) {
     BackTrace *bt = new BackTrace(1);
-    //generic_dout(-1) << "FileStore: sync_entry timed out after "
-    //	     << m_commit_timeo << " seconds.\n";
-    //bt->print(*_dout);
-    //*_dout << dendl;
+    generic_dout(-1) << "FileStore: sync_entry timed out after "
+		     << m_commit_timeo << " seconds.\n";
+    bt->print(*_dout);
+    *_dout << dendl;
     delete bt;
     abort();
   }
 private:
-  int m_commit_timeo;
+  CephContext* cct;
+  ceph::timespan m_commit_timeo;
 };
 
 void FileStore::sync_entry()
 {
-  lock.Lock();
+  unique_lock l(lock);
   while (!stop) {
-    utime_t max_interval;
-    max_interval.set_from_double(m_filestore_max_sync_interval);
-    utime_t min_interval;
-    min_interval.set_from_double(m_filestore_min_sync_interval);
+    ceph::timespan max_interval(m_filestore_max_sync_interval);
+    ceph::timespan min_interval(m_filestore_min_sync_interval);
 
-    utime_t startwait = ceph_clock_now(cct);
+    auto startwait = ceph::mono_clock::now();
     if (!force_sync) {
       dout(20) << "sync_entry waiting for max_interval " << max_interval << dendl;
-      sync_cond.WaitInterval(cct, lock, max_interval);
+      sync_cond.wait_for(l, max_interval);
     } else {
       dout(20) << "sync_entry not waiting, force_sync set" << dendl;
     }
@@ -2863,40 +2869,40 @@ void FileStore::sync_entry()
       force_sync = false;
     } else {
       // wait for at least the min interval
-      utime_t woke = ceph_clock_now(cct);
-      woke -= startwait;
+      ceph::timespan woke = ceph::mono_clock::now() - startwait;
       dout(20) << "sync_entry woke after " << woke << dendl;
       if (woke < min_interval) {
-	utime_t t = min_interval;
-	t -= woke;
+	ceph::timespan t = min_interval - woke;
 	dout(20) << "sync_entry waiting for another " << t
 		 << " to reach min interval " << min_interval << dendl;
-	sync_cond.WaitInterval(cct, lock, t);
+	sync_cond.wait_for(l, t);
       }
     }
 
     list<Context*> fin;
   again:
     fin.swap(sync_waiters);
-    lock.Unlock();
+    l.unlock();
 
     op_tp.pause();
     if (apply_manager.commit_start()) {
-      utime_t start = ceph_clock_now(cct);
+      auto start = ceph::mono_clock::now();
       uint64_t cp = apply_manager.get_committing_seq();
 
-      sync_entry_timeo_lock.Lock();
+      unique_lock setl(sync_entry_timeo_lock);
       SyncEntryTimeout *sync_entry_timeo =
-	new SyncEntryTimeout(m_filestore_commit_timeout);
+	new SyncEntryTimeout(cct, m_filestore_commit_timeout);
       timer.add_event_after(m_filestore_commit_timeout, sync_entry_timeo);
-      sync_entry_timeo_lock.Unlock();
+      setl.unlock();
 
       // make flusher stop flushing previously queued stuff
       sync_epoch++;
 
-      dout(15) << "sync_entry committing " << cp << " sync_epoch " << sync_epoch << dendl;
+      dout(15) << "sync_entry committing " << cp << " sync_epoch "
+	       << sync_epoch << dendl;
       stringstream errstream;
-      if (cct->_conf->filestore_debug_omap_check && !object_map->check(errstream)) {
+      if (cct->_conf->filestore_debug_omap_check &&
+	  !object_map->check(errstream)) {
 	derr << errstream.str() << dendl;
 	assert(0);
       }
@@ -2954,9 +2960,9 @@ void FileStore::sync_entry()
 	}
       }
 
-      utime_t done = ceph_clock_now(cct);
-      utime_t lat = done - start;
-      utime_t dur = done - startwait;
+      auto done = ceph::mono_clock::now();
+      ceph::timespan lat = done - start;
+      ceph::timespan dur = done - startwait;
       dout(10) << "sync_entry commit took " << lat << ", interval was " << dur << dendl;
 
       apply_manager.commit_finish();
@@ -2979,14 +2985,14 @@ void FileStore::sync_entry()
 
       dout(15) << "sync_entry committed to op_seq " << cp << dendl;
 
-      sync_entry_timeo_lock.Lock();
+      setl.lock();
       timer.cancel_event(sync_entry_timeo);
-      sync_entry_timeo_lock.Unlock();
+      setl.unlock();
     } else {
       op_tp.unpause();
     }
 
-    lock.Lock();
+    l.lock();
     finish_contexts(fin, 0);
     fin.clear();
     if (!sync_waiters.empty()) {
@@ -2999,14 +3005,14 @@ void FileStore::sync_entry()
     }
   }
   stop = false;
-  lock.Unlock();
+  l.unlock();
 }
 
 void FileStore::_start_sync()
 {
   if (!journal) {  // don't do a big sync if the journal is on
     dout(10) << "start_sync" << dendl;
-    sync_cond.Signal();
+    sync_cond.notify_all();
   } else {
     dout(10) << "start_sync - NOOP (journal is on)" << dendl;
   }
@@ -3014,34 +3020,34 @@ void FileStore::_start_sync()
 
 void FileStore::start_sync()
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   force_sync = true;
-  sync_cond.Signal();
+  sync_cond.notify_all();
 }
 
 void FileStore::start_sync(Context *onsafe)
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   sync_waiters.push_back(onsafe);
-  sync_cond.Signal();
+  sync_cond.notify_all();
   dout(10) << "start_sync" << dendl;
 }
 
 void FileStore::sync()
 {
-  Mutex l;
-  Cond c;
+  std::mutex lock;
+  std::condition_variable cond;
   bool done;
-  C_SafeCond *fin = new C_SafeCond(&l, &c, &done);
+  C_SafeCond *fin = new C_SafeCond(&lock, &cond, &done);
 
   start_sync(fin);
 
-  l.Lock();
+  unique_lock l(lock);
   while (!done) {
     dout(10) << "sync waiting" << dendl;
-    c.Wait(l);
+    cond.wait(l);
   }
-  l.Unlock();
+  l.unlock();
   dout(10) << "sync done" << dendl;
 }
 
@@ -3062,11 +3068,11 @@ void FileStore::flush()
 
   if (cct->_conf->filestore_blackhole) {
     // wait forever
-    Mutex lock;
-    Cond cond;
-    lock.Lock();
+    std::mutex lock;
+    std::condition_variable cond;
+    unique_lock l(lock);
     while (true)
-      cond.Wait(lock);
+      cond.wait(l);
     assert(0);
   }
 
@@ -3223,23 +3229,23 @@ int FileStore::_fsetattrs(int fd, map<string, bufferptr> &aset)
 
 // debug EIO injection
 void FileStore::inject_data_error(const oid &obj) {
-  Mutex::Locker l(read_error_lock);
+  lock_guard l(read_error_lock);
   dout(10) << __func__ << ": init error on " << obj << dendl;
   data_error_set.insert(obj);
 }
 void FileStore::inject_mdata_error(const oid &obj) {
-  Mutex::Locker l(read_error_lock);
+  lock_guard l(read_error_lock);
   dout(10) << __func__ << ": init error on " << obj << dendl;
   mdata_error_set.insert(obj);
 }
 void FileStore::debug_obj_on_delete(const oid &obj) {
-  Mutex::Locker l(read_error_lock);
+  lock_guard l(read_error_lock);
   dout(10) << __func__ << ": clear error on " << obj << dendl;
   data_error_set.erase(obj);
   mdata_error_set.erase(obj);
 }
 bool FileStore::debug_data_eio(const oid &obj) {
-  Mutex::Locker l(read_error_lock);
+  lock_guard l(read_error_lock);
   if (data_error_set.count(obj)) {
     dout(10) << __func__ << ": inject error on " << obj << dendl;
     return true;
@@ -3248,7 +3254,7 @@ bool FileStore::debug_data_eio(const oid &obj) {
   }
 }
 bool FileStore::debug_mdata_eio(const oid &obj) {
-  Mutex::Locker l(read_error_lock);
+  lock_guard l(read_error_lock);
   if (mdata_error_set.count(obj)) {
     dout(10) << __func__ << ": inject error on " << obj << dendl;
     return true;
@@ -3260,7 +3266,8 @@ bool FileStore::debug_mdata_eio(const oid &obj) {
 
 // objects
 
-int FileStore::getattr(const coll_t &cid, const oid& obj, const char *name, bufferptr &bp)
+int FileStore::getattr(const coll_t &cid, const oid& obj, const char *name,
+		       bufferptr &bp)
 {
   dout(15) << "getattr " << cid << "/" << obj << " '" << name << "'" << dendl;
   FDRef fd;
@@ -4426,7 +4433,7 @@ void FileStore::handle_conf_change(const struct md_config_t *conf,
       changed.count("filestore_max_inline_xattrs_xfs") ||
       changed.count("filestore_max_inline_xattrs_btrfs") ||
       changed.count("filestore_max_inline_xattrs_other")) {
-    Mutex::Locker l(lock);
+    lock_guard l(lock);
     set_xattr_limits_via_conf();
   }
   if (changed.count("filestore_min_sync_interval") ||
@@ -4441,13 +4448,17 @@ void FileStore::handle_conf_change(const struct md_config_t *conf,
       changed.count("filestore_sloppy_crc_block_size") ||
       changed.count("filestore_max_alloc_hint_size") ||
       changed.count("filestore_replica_fadvise")) {
-    Mutex::Locker l(lock);
-    m_filestore_min_sync_interval = conf->filestore_min_sync_interval;
-    m_filestore_max_sync_interval = conf->filestore_max_sync_interval;
+    lock_guard l(lock);
+    m_filestore_min_sync_interval
+      = ceph::span_from_double(conf->filestore_min_sync_interval);
+    m_filestore_max_sync_interval
+      = ceph::span_from_double(conf->filestore_max_sync_interval);
     m_filestore_queue_max_ops = conf->filestore_queue_max_ops;
     m_filestore_queue_max_bytes = conf->filestore_queue_max_bytes;
-    m_filestore_queue_committing_max_ops = conf->filestore_queue_committing_max_ops;
-    m_filestore_queue_committing_max_bytes = conf->filestore_queue_committing_max_bytes;
+    m_filestore_queue_committing_max_ops
+      = conf->filestore_queue_committing_max_ops;
+    m_filestore_queue_committing_max_bytes
+      = conf->filestore_queue_committing_max_bytes;
     m_filestore_kill_at = conf->filestore_kill_at;
     m_filestore_fail_eio = conf->filestore_fail_eio;
     m_filestore_replica_fadvise = conf->filestore_replica_fadvise;
@@ -4456,8 +4467,9 @@ void FileStore::handle_conf_change(const struct md_config_t *conf,
     m_filestore_max_alloc_hint_size = conf->filestore_max_alloc_hint_size;
   }
   if (changed.count("filestore_commit_timeout")) {
-    Mutex::Locker l(sync_entry_timeo_lock);
-    m_filestore_commit_timeout = conf->filestore_commit_timeout;
+    lock_guard l(sync_entry_timeo_lock);
+    m_filestore_commit_timeout
+      = ceph::span_from_double(conf->filestore_commit_timeout);
   }
   if (changed.count("filestore_dump_file")) {
     if (conf->filestore_dump_file.length() &&

@@ -15,12 +15,13 @@
 #ifndef CEPH_FDCACHE_H
 #define CEPH_FDCACHE_H
 
-#include <memory>
-#include <errno.h>
+#include <cerrno>
+#include <condition_variable>
 #include <cstdio>
+#include <memory>
+#include <mutex>
+
 #include "common/oid.h"
-#include "common/Mutex.h"
-#include "common/Cond.h"
 #include "common/shared_cache.hpp"
 #include "include/compat.h"
 #include "common/ceph_context.h"

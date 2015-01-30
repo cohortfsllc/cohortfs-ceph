@@ -15,8 +15,9 @@
 #ifndef CEPH_WORKQUEUE_H
 #define CEPH_WORKQUEUE_H
 
-#include "Mutex.h"
-#include "Cond.h"
+#include <condition_variable>
+#include <mutex>
+#include <condition_variable>
 #include "Thread.h"
 #include "common/config_obs.h"
 #include "common/HeartbeatMap.h"
@@ -26,25 +27,25 @@ class CephContext;
 class ThreadPool : public md_config_obs_t {
   CephContext *cct;
   string name;
-  Mutex _lock;
-  Cond _cond;
+  std::mutex _lock;
+  std::condition_variable _cond;
   bool _stop;
   int _pause;
   int _draining;
-  Cond _wait_cond;
+  std::condition_variable _wait_cond;
 
 public:
   class TPHandle {
     friend class ThreadPool;
     CephContext *cct;
     heartbeat_handle_d *hb;
-    time_t grace;
-    time_t suicide_grace;
+    ceph::timespan grace;
+    ceph::timespan suicide_grace;
     TPHandle(
       CephContext *cct,
       heartbeat_handle_d *hb,
-      time_t grace,
-      time_t suicide_grace)
+      ceph::timespan grace,
+      ceph::timespan suicide_grace)
       : cct(cct), hb(hb), grace(grace), suicide_grace(suicide_grace) {}
   public:
     void reset_tp_timeout();
@@ -54,8 +55,8 @@ private:
 
   struct WorkQueue_ {
     string name;
-    time_t timeout_interval, suicide_interval;
-    WorkQueue_(string n, time_t ti, time_t sti)
+    ceph::timespan timeout_interval, suicide_interval;
+    WorkQueue_(string n, ceph::timespan ti, ceph::timespan sti)
       : name(n), timeout_interval(ti), suicide_interval(sti)
     { }
     virtual ~WorkQueue_() {}
@@ -110,7 +111,8 @@ public:
     }
 
   public:
-    BatchWorkQueue(string n, time_t ti, time_t sti, ThreadPool* p)
+    BatchWorkQueue(string n, ceph::timespan ti,
+		   ceph::timespan sti, ThreadPool* p)
       : WorkQueue_(n, ti, sti), pool(p) {
       pool->add_work_queue(this);
     }
@@ -119,29 +121,21 @@ public:
     }
 
     bool queue(T *item) {
-      pool->_lock.Lock();
+      std::unique_lock<std::mutex> l(pool->_lock);
       bool r = _enqueue(item);
-      pool->_cond.SignalOne();
-      pool->_lock.Unlock();
+      pool->_cond.notify_one();
+      l.unlock();
       return r;
     }
     void dequeue(T *item) {
-      pool->_lock.Lock();
+      std::lock_guard<std::mutex> l(pool->_lock);
       _dequeue(item);
-      pool->_lock.Unlock();
     }
     void clear() {
-      pool->_lock.Lock();
+      std::lock_guard<std::mutex> l(pool->_lock);
       _clear();
-      pool->_lock.Unlock();
     }
 
-    void lock() {
-      pool->lock();
-    }
-    void unlock() {
-      pool->unlock();
-    }
     void wake() {
       pool->wake();
     }
@@ -155,7 +149,7 @@ public:
   };
   template<typename T, typename U = T>
   class WorkQueueVal : public WorkQueue_ {
-    Mutex _lock;
+    std::mutex _lock;
     ThreadPool *pool;
     list<U> to_process;
     list<U> to_finish;
@@ -171,7 +165,7 @@ public:
 
     void *_void_dequeue() {
       {
-	Mutex::Locker l(_lock);
+	std::lock_guard<std::mutex> l(_lock);
 	if (_empty())
 	  return 0;
 	U u = _dequeue();
@@ -180,25 +174,25 @@ public:
       return ((void*)1); // Not used
     }
     void _void_process(void *, TPHandle &handle) {
-      _lock.Lock();
+      std::unique_lock<std::mutex> l(_lock);
       assert(!to_process.empty());
       U u = to_process.front();
       to_process.pop_front();
-      _lock.Unlock();
+      l.unlock();
 
       _process(u, handle);
 
-      _lock.Lock();
+      l.lock();
       to_finish.push_back(u);
-      _lock.Unlock();
+      l.unlock();
     }
 
     void _void_process_finish(void *) {
-      _lock.Lock();
+      std::unique_lock<std::mutex> l(_lock);
       assert(!to_finish.empty());
       U u = to_finish.front();
       to_finish.pop_front();
-      _lock.Unlock();
+      l.unlock();
 
       _process_finish(u);
     }
@@ -206,7 +200,7 @@ public:
     void _clear() {}
 
   public:
-    WorkQueueVal(string n, time_t ti, time_t sti, ThreadPool *p)
+    WorkQueueVal(string n, ceph::timespan ti, ceph::timespan sti, ThreadPool *p)
       : WorkQueue_(n, ti, sti), pool(p) {
       pool->add_work_queue(this);
     }
@@ -214,24 +208,17 @@ public:
       pool->remove_work_queue(this);
     }
     void queue(T item) {
-      Mutex::Locker l(pool->_lock);
+      std::lock_guard<std::mutex> l(_lock);
       _enqueue(item);
-      pool->_cond.SignalOne();
+      pool->_cond.notify_one();
     }
     void queue_front(T item) {
-      Mutex::Locker l(pool->_lock);
+      std::lock_guard<std::mutex> l(_lock);
       _enqueue_front(item);
-      pool->_cond.SignalOne();
+      pool->_cond.notify_one();
     }
     void drain() {
       pool->drain(this);
-    }
-  protected:
-    void lock() {
-      pool->lock();
-    }
-    void unlock() {
-      pool->unlock();
     }
   };
   template<class T>
@@ -258,7 +245,8 @@ public:
     }
 
   public:
-    WorkQueue(string n, time_t ti, time_t sti, ThreadPool* p) : WorkQueue_(n, ti, sti), pool(p) {
+    WorkQueue(string n, ceph::timespan ti, ceph::timespan sti, ThreadPool* p)
+      : WorkQueue_(n, ti, sti), pool(p) {
       pool->add_work_queue(this);
     }
     ~WorkQueue() {
@@ -266,29 +254,21 @@ public:
     }
 
     bool queue(T *item) {
-      pool->_lock.Lock();
+      std::unique_lock<std::mutex> l(pool->_lock);
       bool r = _enqueue(item);
-      pool->_cond.SignalOne();
-      pool->_lock.Unlock();
+      pool->_cond.notify_one();
+      l.unlock();
       return r;
     }
     void dequeue(T *item) {
-      pool->_lock.Lock();
+      std::lock_guard<std::mutex> l(pool->_lock);
       _dequeue(item);
-      pool->_lock.Unlock();
     }
     void clear() {
-      pool->_lock.Lock();
+      std::lock_guard<std::mutex> l(pool->_lock);
       _clear();
-      pool->_lock.Unlock();
     }
 
-    void lock() {
-      pool->lock();
-    }
-    void unlock() {
-      pool->unlock();
-    }
     /// wake up the thread pool (without lock held)
     void wake() {
       pool->wake();
@@ -331,7 +311,7 @@ public:
 
   /// return number of threads currently running
   int get_num_threads() {
-    Mutex::Locker l(_lock);
+    std::lock_guard<std::mutex> l(_lock);
     return _num_threads;
   }
 
@@ -350,28 +330,20 @@ public:
     work_queues.resize(i-1);
   }
 
-  /// take thread pool lock
-  void lock() {
-    _lock.Lock();
-  }
-  /// release thread pool lock
-  void unlock() {
-    _lock.Unlock();
-  }
-
   /// wait for a kick on this thread pool
-  void wait(Cond &c) {
-    c.Wait(_lock);
+  void wait(std::condition_variable &c,
+	    std::unique_lock<std::mutex> l) {
+    c.wait(l);
   }
 
   /// wake up a waiter (with lock already held)
   void _wake() {
-    _cond.Signal();
+    _cond.notify_all();
   }
   /// wake up a waiter (without lock held)
   void wake() {
-    Mutex::Locker l(_lock);
-    _cond.Signal();
+    std::lock_guard<std::mutex> l(_lock);
+    _cond.notify_all();
   }
 
   /// start thread pool thread

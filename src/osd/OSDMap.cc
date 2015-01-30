@@ -15,6 +15,7 @@
  *
  */
 
+#include "include/ceph_time.h"
 #include <boost/uuid/nil_generator.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
@@ -81,7 +82,7 @@ void osd_xinfo_t::dump(Formatter *f) const
 {
   f->dump_stream("down_stamp") << down_stamp;
   f->dump_float("laggy_probability", laggy_probability);
-  f->dump_int("laggy_interval", laggy_interval);
+  f->dump_stream("laggy_interval") << laggy_interval;
   f->dump_int("features", features);
 }
 
@@ -115,9 +116,11 @@ void osd_xinfo_t::generate_test_instances(list<osd_xinfo_t*>& o)
 {
   o.push_back(new osd_xinfo_t);
   o.push_back(new osd_xinfo_t);
-  o.back()->down_stamp = utime_t(2, 3);
+  o.back()->down_stamp
+    = ceph::real_time(std::chrono::seconds(2) +
+		      std::chrono::nanoseconds(3));
   o.back()->laggy_probability = .123;
-  o.back()->laggy_interval = 123456;
+  o.back()->laggy_interval = 123456s;
 }
 
 ostream& operator<<(ostream& out, const osd_xinfo_t& xi)
@@ -328,7 +331,7 @@ void OSDMap::Incremental::dump(Formatter *f) const
   f->close_section();
 
     f->open_array_section("new_blacklist");
-  for (map<entity_addr_t,utime_t>::const_iterator p = new_blacklist.begin();
+  for (auto p = new_blacklist.begin();
        p != new_blacklist.end();
        ++p) {
     stringstream ss;
@@ -443,10 +446,11 @@ bool OSDMap::is_blacklisted(const entity_addr_t& a) const
   return false;
 }
 
-void OSDMap::get_blacklist(list<pair<entity_addr_t,utime_t> > *bl) const
+void OSDMap::get_blacklist(list<pair<entity_addr_t,
+			   ceph::real_time> > *bl) const
 {
-  for (std::unordered_map<entity_addr_t,utime_t>::const_iterator it = blacklist.begin() ;
-			 it != blacklist.end(); ++it) {
+  for (auto it = blacklist.begin() ;
+       it != blacklist.end(); ++it) {
     bl->push_back(*it);
   }
 }
@@ -725,7 +729,7 @@ int OSDMap::apply_incremental(const Incremental &inc)
     (*osd_uuid)[p.first] = p.second;
 
   // blacklist
-  for (map<entity_addr_t,utime_t>::const_iterator p = inc.new_blacklist.begin();
+  for (auto p = inc.new_blacklist.begin();
        p != inc.new_blacklist.end();
        ++p) {
     blacklist[p->first] = p->second;
@@ -948,7 +952,7 @@ void OSDMap::dump(Formatter *f) const
   f->close_section();
 
   f->open_array_section("blacklist");
-  for (std::unordered_map<entity_addr_t,utime_t>::const_iterator p = blacklist.begin();
+  for (auto p = blacklist.begin();
        p != blacklist.end();
        ++p) {
     stringstream ss;
@@ -982,7 +986,9 @@ void OSDMap::generate_test_instances(list<OSDMap*>& o)
   o.push_back(new OSDMap);
   boost::uuids::uuid fsid;
   o.back()->build_simple(cct, 1, fsid, 16);
-  o.back()->created = o.back()->modified = utime_t(1, 2);  // fix timestamp
+  o.back()->created = o.back()->modified
+    = ceph::real_time(std::chrono::seconds(1) +
+		      std::chrono::nanoseconds(2));  // fix timestamp
   common_cleanup(cct);
 }
 
@@ -1055,9 +1061,7 @@ void OSDMap::print(ostream& out) const
   }
   out << std::endl;
 
-  for (std::unordered_map<entity_addr_t,utime_t>::const_iterator p = blacklist.begin();
-       p != blacklist.end();
-       ++p)
+  for (auto p = blacklist.begin(); p != blacklist.end(); ++p)
     out << "blacklist " << p->first << " expires " << p->second << "\n";
 
   // ignore pg_swap_primary
@@ -1142,7 +1146,7 @@ int OSDMap::build_simple(CephContext *cct, epoch_t e,
 		 << " osds." << dendl;
   epoch = e;
   set_fsid(fsid);
-  created = modified = ceph_clock_now(cct);
+  created = modified = ceph::real_clock::now();
 
   if (nosd >=  0) {
     set_max_osd(nosd);

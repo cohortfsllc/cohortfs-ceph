@@ -24,7 +24,6 @@
 #include "common/errno.h"
 
 #include <vector>
-using namespace std;
 
 /***
  *
@@ -106,7 +105,7 @@ struct InodeStat {
   loff_t size, max_size;
   version_t truncate_seq;
   uint64_t truncate_size;
-  utime_t ctime, mtime, atime;
+  ceph::real_time ctime, mtime, atime;
   version_t time_warp_seq;
   bufferlist inline_data;
   version_t inline_version;
@@ -138,9 +137,9 @@ struct InodeStat {
     max_size = e.max_size;
     truncate_seq = e.truncate_seq;
     truncate_size = e.truncate_size;
-    ctime.decode_timeval(&e.ctime);
-    mtime.decode_timeval(&e.mtime);
-    atime.decode_timeval(&e.atime);
+    e.ctime = ceph::time_to_spec(ctime);
+    e.mtime = ceph::time_to_spec(mtime);
+    e.atime = ceph::time_to_spec(atime);
     time_warp_seq = e.time_warp_seq;
     mode = e.mode;
     uid = e.uid;
@@ -151,7 +150,7 @@ struct InodeStat {
     dirstat.nfiles = e.files;
     dirstat.nsubdirs = e.subdirs;
 
-    rstat.rctime.decode_timeval(&e.rctime);
+    rstat.rctime = ceph::spec_to_time(e.rctime);
     rstat.rbytes = e.rbytes;
     rstat.rfiles = e.rfiles;
     rstat.rsubdirs = e.rsubdirs;

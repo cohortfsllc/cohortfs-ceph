@@ -28,6 +28,9 @@
 #define PLUGIN_INIT_FUNCTION "__erasure_code_init"
 #define PLUGIN_VERSION_FUNCTION "__erasure_code_version"
 
+using std::mutex;
+using std::lock_guard;
+
 using namespace ceph;
 using std::string;
 using std::list;
@@ -35,9 +38,7 @@ using std::list;
 ErasureCodePluginRegistry ErasureCodePluginRegistry::singleton;
 
 ErasureCodePluginRegistry::ErasureCodePluginRegistry() :
-  lock("ErasureCodePluginRegistry::lock"),
-  loading(false),
-  disable_dlclose(false)
+  lock(), loading(false), disable_dlclose(false)
 {
 }
 
@@ -57,7 +58,6 @@ ErasureCodePluginRegistry::~ErasureCodePluginRegistry()
 
 int ErasureCodePluginRegistry::remove(const std::string &name)
 {
-  assert(lock.is_locked());
   if (plugins.find(name) == plugins.end())
     return -ENOENT;
   std::map<std::string,ErasureCodePlugin*>::iterator plugin = plugins.find(name);
@@ -69,9 +69,8 @@ int ErasureCodePluginRegistry::remove(const std::string &name)
 }
 
 int ErasureCodePluginRegistry::add(const std::string &name,
-                                   ErasureCodePlugin* plugin)
+				   ErasureCodePlugin* plugin)
 {
-  assert(lock.is_locked());
   if (plugins.find(name) != plugins.end())
     return -EEXIST;
   plugins[name] = plugin;
@@ -80,7 +79,6 @@ int ErasureCodePluginRegistry::add(const std::string &name,
 
 ErasureCodePlugin *ErasureCodePluginRegistry::get(const std::string &name)
 {
-  assert(lock.is_locked());
   if (plugins.find(name) != plugins.end())
     return plugins[name];
   else
@@ -95,7 +93,7 @@ int ErasureCodePluginRegistry::factory(CephContext *cct,
 {
   ErasureCodePlugin *plugin;
   {
-    Mutex::Locker l(lock);
+    std::lock_guard<mutex> l(lock);
     int r = 0;
     plugin = get(plugin_name);
     if (plugin == 0) {
@@ -121,7 +119,6 @@ int ErasureCodePluginRegistry::load(CephContext *cct,
 				    ErasureCodePlugin **plugin,
 				    ostream &ss)
 {
-  assert(lock.is_locked());
   std::string fname = directory + "/" PLUGIN_PREFIX
     + plugin_name + PLUGIN_SUFFIX;
   void *library = dlopen(fname.c_str(), RTLD_NOW);
@@ -182,7 +179,7 @@ int ErasureCodePluginRegistry::preload(CephContext *cct,
 				       const std::string &directory,
 				       ostream &ss)
 {
-  Mutex::Locker l(lock);
+  lock_guard<mutex> l(lock);
   list<string> plugins_list;
   get_str_list(plugins, plugins_list);
   for (list<string>::iterator i = plugins_list.begin();

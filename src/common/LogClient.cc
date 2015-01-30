@@ -20,6 +20,7 @@
 #include "msg/Message.h"
 
 #include "messages/MLog.h"
+
 #include "messages/MLogAck.h"
 #include "mon/MonMap.h"
 
@@ -38,6 +39,9 @@
 #include "common/config.h"
 
 #define dout_subsys ceph_subsys_monc
+
+using std::mutex;
+using std::lock_guard;
 
 LogClient::LogClient(CephContext *cct, Messenger *m, MonMap *mm,
 		     enum logclient_flag_t flags)
@@ -75,11 +79,11 @@ void LogClient::do_log(clog_type type, std::stringstream& ss)
 
 void LogClient::do_log(clog_type type, const std::string& s)
 {
-  Mutex::Locker l(log_lock);
+  lock_guard<mutex> l(log_lock);
   ldout(cct,0) << "log " << type << " : " << s << dendl;
   LogEntry e;
   e.who = messenger->get_myinst();
-  e.stamp = ceph_clock_now(cct);
+  e.stamp = ceph::real_clock::now();
   e.seq = ++last_log;
   e.type = type;
   e.msg = s;
@@ -106,19 +110,19 @@ void LogClient::do_log(clog_type type, const std::string& s)
 
 void LogClient::reset_session()
 {
-  Mutex::Locker l(log_lock);
+  lock_guard<mutex> l(log_lock);
   last_log_sent = last_log - log_queue.size();
 }
 
 Message *LogClient::get_mon_log_message()
 {
-  Mutex::Locker l(log_lock);
+  lock_guard<mutex> l(log_lock);
   return _get_mon_log_message();
 }
 
 bool LogClient::are_pending()
 {
-  Mutex::Locker l(log_lock);
+  lock_guard<mutex> l(log_lock);
   return last_log > last_log_sent;
 }
 
@@ -169,7 +173,7 @@ Message *LogClient::_get_mon_log_message()
 
 void LogClient::handle_log_ack(MLogAck *m)
 {
-  Mutex::Locker l(log_lock);
+  lock_guard<mutex> l(log_lock);
   ldout(cct,10) << "handle_log_ack " << *m << dendl;
 
   version_t last = m->last;

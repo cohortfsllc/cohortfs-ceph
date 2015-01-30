@@ -57,19 +57,19 @@ public:
   typedef std::list< std::string > lru_list_t;
 
   ErasureCodeIsaTableCache(CephContext *cct) :
-  cct(cct), codec_tables_guard("isa-lru-cache")
+  cct(cct)
   {
   }
 
   virtual ~ErasureCodeIsaTableCache();
 
-  Mutex codec_tables_guard; // mutex used to protect modifications in encoding/decoding table maps
+  std::mutex codec_tables_guard; // mutex used to protect modifications in encoding/decoding table maps
 
   bool getDecodingTableFromCache(std::string &signature,
-                                 unsigned char* &table,
-                                 int matrixtype,
-                                 int k,
-                                 int m);
+				 unsigned char* &table,
+				 int matrixtype,
+				 int k,
+				 int m);
 
   void putDecodingTableToCache(std::string&,
                                unsigned char*&,
@@ -98,8 +98,6 @@ private:
   lru_map_t* getDecodingTables(int matrix_type);
 
   lru_list_t* getDecodingTablesLru(int matrix_type);
-
-  Mutex* getLock();
 
 };
 

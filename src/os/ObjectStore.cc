@@ -59,18 +59,18 @@ unsigned ObjectStore::apply_transactions(Sequencer *osr,
 					 Context *ondisk)
 {
   // use op pool
-  Cond my_cond;
-  Mutex my_lock;
+  std::condition_variable my_cond;
+  std::mutex my_lock;
   int r = 0;
   bool done;
   C_SafeCond *onreadable = new C_SafeCond(&my_lock, &my_cond, &done, &r);
 
   queue_transactions(osr, tls, onreadable, ondisk);
 
-  my_lock.Lock();
+  std::unique_lock<std::mutex> myl(my_lock);
   while (!done)
-    my_cond.Wait(my_lock);
-  my_lock.Unlock();
+    my_cond.wait(myl);
+  myl.unlock();
   return r;
 }
 

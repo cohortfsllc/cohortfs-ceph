@@ -25,10 +25,7 @@ static inline int ceph_fsid_compare(const struct ceph_fsid *a,
  * ino, object, etc.
  */
 
-struct ceph_timespec {
-	uint32_t tv_sec;
-	uint32_t tv_nsec;
-};
+typedef uint64_t ceph_timespec;
 
 
 /*
@@ -337,7 +334,7 @@ struct ceph_osd_op {
 			uint8_t flags;
 		} copy_from;
 		struct {
-			struct ceph_timespec stamp;
+			ceph_timespec stamp;
 		} hit_set_get;
 		struct {
 			uint8_t flags;

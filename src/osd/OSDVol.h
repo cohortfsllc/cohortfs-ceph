@@ -34,7 +34,6 @@
 #include "os/ObjectStore.h"
 #include "msg/Messenger.h"
 #include "common/cmdparse.h"
-#include "common/tracked_int_ptr.hpp"
 #include "common/WorkQueue.h"
 #include "common/ceph_context.h"
 #include "common/LogClient.h"
@@ -75,6 +74,8 @@ class OSDVol : public LRUObject {
   static const int cur_struct_v = 0;
 
 public:
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
   std::string gen_prefix() const;
 
   struct OpContext;
@@ -130,7 +131,7 @@ public:
 
     uint64_t bytes_written, bytes_read;
 
-    utime_t mtime;
+    ceph::real_time mtime;
     eversion_t at_version;       // vol's current version pointer
     version_t user_at_version;   // vol's current user version pointer
 
@@ -146,7 +147,7 @@ public:
 
     MOSDOpReply *reply;
 
-    utime_t readable_stamp;  // when applied on all replicas
+    ceph::mono_time readable_stamp;  // when applied on all replicas
     OSDVol *vol;
 
     int num_read;    ///< count read ops
@@ -271,7 +272,7 @@ protected:
   OSDriver osdriver;
 
   // Ops waiting for map, should be queued at back
-  Mutex map_lock;
+  std::mutex map_lock;
   list<OpRequestRef> waiting_for_map;
   OSDMapRef osdmap_ref;
   OSDMapRef last_persisted_osdmap_ref;
@@ -282,31 +283,28 @@ protected:
   void take_op_map_waiters();
 
   void update_osdmap_ref(OSDMapRef newmap) {
-    assert(_lock.is_locked_by_me());
-    Mutex::Locker l(map_lock);
+    lock_guard l(map_lock);
     osdmap_ref = newmap;
   }
 
   OSDMapRef get_osdmap_with_maplock() const {
-    assert(map_lock.is_locked());
     assert(osdmap_ref);
     return osdmap_ref;
   }
 
   OSDMapRef get_osdmap() const {
-    assert(is_locked());
     assert(osdmap_ref);
     return osdmap_ref;
   }
 
   /** locking and reference counting.
    * I destroy myself when the reference count hits zero.
-   * lock() should be called before doing anything.
    * get() should be called on pointer copy (to another thread, etc.).
    * put() should be called on destruction of some previously copied pointer.
-   * put_unlock() when done with the current pointer (_most common_).
    */
-  Mutex _lock;
+public:
+  std::mutex lock;
+protected:
   std::atomic<uint64_t> ref;
 
   /**
@@ -372,7 +370,7 @@ protected:
 
   // replica ops
   // [primary|tail]
-  Mutex mutation_lock;
+  std::mutex mutation_lock;
   xlist<Mutation*> mutation_queue;
 
   friend class C_OSD_MutationApplied;
@@ -380,8 +378,9 @@ protected:
   void mutations_all_applied(Mutation *mutation);
   void mutations_all_committed(Mutation *mutation);
   void eval_mutation(Mutation *mutation);
-  void issue_mutation(Mutation *mutation, utime_t now);
-  Mutation *new_mutation(OpContext *ctx, ObjectContextRef obc, ceph_tid_t rep_tid);
+  void issue_mutation(Mutation *mutation);
+  Mutation *new_mutation(OpContext *ctx, ObjectContextRef obc,
+			 ceph_tid_t rep_tid);
   void remove_mutation(Mutation *mutation);
 
   Mutation *simple_mutation_create(ObjectContextRef obc);
@@ -395,19 +394,7 @@ public:
 
 
   int whoami();
-  void lock_suspend_timeout(ThreadPool::TPHandle &handle);
-  void lock();
-  void unlock() {
-    assert(!dirty_info);
-    _lock.Unlock();
-  }
-
-  void assert_locked() {
-    assert(_lock.is_locked());
-  }
-  bool is_locked() const {
-    return _lock.is_locked();
-  }
+  unique_lock lock_suspend_timeout(ThreadPool::TPHandle &handle);
 
   void get();
   void put();
@@ -626,7 +613,7 @@ public:
   // From the Backend
 protected:
   const coll_t coll;
-  utime_t last_became_active;
+  ceph::mono_time last_became_active;
 
   void on_shutdown();
 

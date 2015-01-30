@@ -212,7 +212,7 @@ int cls_cxx_stat(cls_method_context_t hctx, uint64_t *size, time_t *mtime)
   if (ret < 0)
     return ret;
   bufferlist::iterator iter = ops[0].outdata.begin();
-  utime_t ut;
+  ceph::real_time ut;
   uint64_t s;
   try {
     ::decode(s, iter);
@@ -223,7 +223,7 @@ int cls_cxx_stat(cls_method_context_t hctx, uint64_t *size, time_t *mtime)
   if (size)
     *size = s;
   if (mtime)
-    *mtime = ut.sec();
+    *mtime = ceph::real_clock::to_time_t(ut);
   return 0;
 }
 

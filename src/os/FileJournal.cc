@@ -610,16 +610,16 @@ void FileJournal::start_writer()
 void FileJournal::stop_writer()
 {
   {
-    Mutex::Locker l(write_lock);
+    lock_guard l(write_lock);
 #ifdef HAVE_LIBAIO
-    Mutex::Locker q(aio_lock);
+    lock_guard q(aio_lock);
 #endif
-    Mutex::Locker p(writeq_lock);
+    lock_guard p(writeq_lock);
     write_stop = true;
-    writeq_cond.Signal();
+    writeq_cond.notify_all();
 #ifdef HAVE_LIBAIO
-    aio_cond.Signal();
-    write_finish_cond.Signal();
+    aio_cond.notify_all();
+    write_finish_cond.notify_all();
 #endif
   }
   write_thread.join();
@@ -686,7 +686,7 @@ bufferptr FileJournal::prepare_header()
 {
   bufferlist bl;
   {
-    Mutex::Locker l(finisher_lock);
+    lock_guard l(finisher_lock);
     header.committed_up_to = journaled_seq;
   }
   ::encode(header, bl);
@@ -717,7 +717,7 @@ int FileJournal::check_for_full(uint64_t seq, off64_t pos, off64_t size)
     if (room < (header.max_size >> 1) &&
 	room + size > (header.max_size >> 1)) {
       dout(10) << " passing half full mark, triggering commit" << dendl;
-      do_sync_cond->SloppySignal();  // initiate a real commit so we can trim
+      do_sync_cond->notify_all();  // initiate a real commit so we can trim
     }
   }
 
@@ -815,15 +815,13 @@ void FileJournal::queue_write_fin(uint64_t seq, Context *fin)
 
 void FileJournal::queue_completions_thru(uint64_t seq)
 {
-  assert(finisher_lock.is_locked());
-  utime_t now = ceph_clock_now(cct);
+  auto now = ceph::mono_clock::now();
   while (!completions_empty()) {
     completion_item next = completion_peek_front();
     if (next.seq > seq)
       break;
     completion_pop_front();
-    utime_t lat = now;
-    lat -= next.start;
+    auto lat = now - next.start;
     dout(10) << "queue_completions_thru seq " << seq
 	     << " queueing seq " << next.seq
 	     << " " << next.finish
@@ -834,7 +832,7 @@ void FileJournal::queue_completions_thru(uint64_t seq)
     next.trace.event("queued completion");
     next.trace.keyval("completed through", seq);
   }
-  finisher_cond.Signal();
+  finisher_cond.notify_all();
 }
 
 int FileJournal::prepare_single_write(bufferlist& bl, off64_t& queue_pos, uint64_t& orig_ops, uint64_t& orig_bytes)
@@ -940,8 +938,9 @@ int FileJournal::write_bl(off64_t& pos, bufferlist& bl)
   return 0;
 }
 
-void FileJournal::do_write(bufferlist& bl)
+void FileJournal::do_write(bufferlist& bl, unique_lock& wl)
 {
+  assert(wl && wl.mutex() == &write_lock);
   // nothing to do?
   if (bl.length() == 0 && !must_write_header)
     return;
@@ -962,7 +961,7 @@ void FileJournal::do_write(bufferlist& bl)
 	   << (hbp.length() ? " + header":"")
 	   << dendl;
 
-  utime_t from = ceph_clock_now(cct);
+  auto from = ceph::mono_clock::now();
 
   // entry
   off64_t pos = write_pos;
@@ -973,7 +972,7 @@ void FileJournal::do_write(bufferlist& bl)
   if (write_pos >= header.max_size)
     write_pos = write_pos - header.max_size + get_top();
 
-  write_lock.Unlock();
+  wl.unlock();
 
   // split?
   off64_t split = 0;
@@ -1046,16 +1045,16 @@ void FileJournal::do_write(bufferlist& bl)
 #endif
   }
 
-  utime_t lat = ceph_clock_now(cct) - from;
+  auto lat = ceph::mono_clock::now() - from;
   dout(20) << "do_write latency " << lat << dendl;
 
-  write_lock.Lock();
+  wl.lock();
 
   assert(write_pos == pos);
   assert(write_pos % header.alignment == 0);
 
   {
-    Mutex::Locker locker(finisher_lock);
+    lock_guard locker(finisher_lock);
     journaled_seq = writing_seq;
 
     // kick finisher?
@@ -1079,9 +1078,8 @@ void FileJournal::flush()
 {
   dout(10) << "waiting for completions to empty" << dendl;
   {
-    Mutex::Locker l(finisher_lock);
-    while (!completions_empty())
-      finisher_cond.Wait(finisher_lock);
+    unique_lock fl(finisher_lock);
+    finisher_cond.wait(fl, [this](){ return completions_empty(); });
   }
   dout(10) << "flush waiting for finisher" << dendl;
   finisher->wait_for_empty();
@@ -1094,12 +1092,12 @@ void FileJournal::write_thread_entry()
   dout(10) << "write_thread_entry start" << dendl;
   while (1) {
     {
-      Mutex::Locker locker(writeq_lock);
+      unique_lock wql(writeq_lock);
       if (writeq.empty()) {
 	if (write_stop)
 	  break;
 	dout(20) << "write_thread_entry going to sleep" << dendl;
-	writeq_cond.Wait(writeq_lock);
+	writeq_cond.wait(wql);
 	dout(20) << "write_thread_entry woke up" << dendl;
 	continue;
       }
@@ -1107,7 +1105,7 @@ void FileJournal::write_thread_entry()
 
 #ifdef HAVE_LIBAIO
     if (aio) {
-      Mutex::Locker locker(aio_lock);
+      unique_lock aiol(aio_lock);
       // should we back off to limit aios in flight?  try to do this
       // adaptively so that we submit larger aios once we have lots of
       // them in flight.
@@ -1131,13 +1129,13 @@ void FileJournal::write_thread_entry()
 	dout(20) << "write_thread_entry deferring until more aios complete: "
 		 << aio_num << " aios with " << aio_bytes << " bytes needs " << min_new
 		 << " bytes to start a new aio (currently " << cur << " pending)" << dendl;
-	aio_cond.Wait(aio_lock);
+	aio_cond.wait(aiol);
 	dout(20) << "write_thread_entry woke up" << dendl;
       }
     }
 #endif
 
-    Mutex::Locker locker(write_lock);
+    unique_lock wl(write_lock);
     uint64_t orig_ops = 0;
     uint64_t orig_bytes = 0;
 
@@ -1145,7 +1143,7 @@ void FileJournal::write_thread_entry()
     int r = prepare_multi_write(bl, orig_ops, orig_bytes);
     if (r == -ENOSPC) {
       dout(20) << "write_thread_entry full, going to sleep (waiting for commit)" << dendl;
-      commit_cond.Wait(write_lock);
+      commit_cond.wait(wl);
       dout(20) << "write_thread_entry woke up" << dendl;
       continue;
     }
@@ -1155,9 +1153,9 @@ void FileJournal::write_thread_entry()
     if (aio)
       do_aio_write(bl);
     else
-      do_write(bl);
+      do_write(bl, wl);
 #else
-    do_write(bl);
+    do_write(bl, wl);
 #endif
     put_throttle(orig_ops, orig_bytes);
   }
@@ -1252,7 +1250,7 @@ void FileJournal::do_aio_write(bufferlist& bl)
  */
 int FileJournal::write_aio_bl(off64_t& pos, bufferlist& bl, uint64_t seq)
 {
-  Mutex::Locker locker(aio_lock);
+  lock_guard locker(aio_lock);
   align_bl(pos, bl);
 
   dout(20) << "write_aio_bl " << pos << "~" << bl.length() << " seq " << seq << dendl;
@@ -1302,7 +1300,7 @@ int FileJournal::write_aio_bl(off64_t& pos, bufferlist& bl, uint64_t seq)
     } while (false);
     pos += aio.len;
   }
-  write_finish_cond.Signal();
+  write_finish_cond.notify_all();
   return 0;
 }
 #endif
@@ -1313,12 +1311,12 @@ void FileJournal::write_finish_thread_entry()
   dout(10) << "write_finish_thread_entry enter" << dendl;
   while (true) {
     {
-      Mutex::Locker locker(aio_lock);
+      unique_lock aiol(aio_lock);
       if (aio_queue.empty()) {
 	if (write_stop)
 	  break;
 	dout(20) << "write_finish_thread_entry sleeping" << dendl;
-	write_finish_cond.Wait(aio_lock);
+	write_finish_cond.wait(aiol);
 	continue;
       }
     }
@@ -1336,7 +1334,7 @@ void FileJournal::write_finish_thread_entry()
     }
 
     {
-      Mutex::Locker locker(aio_lock);
+      lock_guard locker(aio_lock);
       for (int i=0; i<r; i++) {
 	aio_info *ai = (aio_info *)event[i].obj;
 	if (event[i].res != ai->len) {
@@ -1361,7 +1359,6 @@ void FileJournal::write_finish_thread_entry()
  */
 void FileJournal::check_aio_completion()
 {
-  assert(aio_lock.is_locked());
   dout(20) << "check_aio_completion" << dendl;
 
   bool completed_something = false;
@@ -1383,7 +1380,7 @@ void FileJournal::check_aio_completion()
   if (completed_something) {
     // kick finisher?
     //	only if we haven't filled up recently!
-    Mutex::Locker locker(finisher_lock);
+    lock_guard locker(finisher_lock);
     journaled_seq = new_journaled_seq;
     if (full_state != FULL_NOTFULL) {
       dout(10) << "check_aio_completion NOT queueing finisher seq " << journaled_seq
@@ -1399,7 +1396,7 @@ void FileJournal::check_aio_completion()
     }
 
     // maybe write queue was waiting for aio count to drop?
-    aio_cond.Signal();
+    aio_cond.notify_all();
   }
 }
 #endif
@@ -1422,33 +1419,31 @@ void FileJournal::submit_entry(uint64_t seq, bufferlist& e, int alignment,
   trace.event("submit_entry");
   trace.keyval("seq", seq);
   {
-    Mutex::Locker l1(writeq_lock);  // ** lock **
-    Mutex::Locker l2(completions_lock);	 // ** lock **
-    utime_t now = ceph_clock_now(cct);
+    lock_guard l1(writeq_lock);  // ** lock **
+    lock_guard l2(completions_lock);	 // ** lock **
+    auto now = ceph::mono_clock::now();
     completions.push_back(completion_item(seq, oncommit, now, osd_op, &trace));
     writeq.push_back(write_item(seq, e, alignment, osd_op, &trace));
     trace.keyval("queue depth", writeq.size());
-    writeq_cond.Signal();
+    writeq_cond.notify_all();
   }
 }
 
 bool FileJournal::writeq_empty()
 {
-  Mutex::Locker locker(writeq_lock);
+  lock_guard locker(writeq_lock);
   return writeq.empty();
 }
 
 FileJournal::write_item &FileJournal::peek_write()
 {
-  assert(write_lock.is_locked());
-  Mutex::Locker locker(writeq_lock);
+  lock_guard locker(writeq_lock);
   return writeq.front();
 }
 
 void FileJournal::pop_write()
 {
-  assert(write_lock.is_locked());
-  Mutex::Locker locker(writeq_lock);
+  lock_guard locker(writeq_lock);
   writeq.pop_front();
 }
 
@@ -1486,7 +1481,7 @@ void FileJournal::commit_start(uint64_t seq)
 
 void FileJournal::committed_thru(uint64_t seq)
 {
-  Mutex::Locker locker(write_lock);
+  lock_guard locker(write_lock);
 
   if (seq < last_committed_seq) {
     dout(5) << "committed_thru " << seq << " < last_committed_seq " << last_committed_seq << dendl;
@@ -1503,7 +1498,7 @@ void FileJournal::committed_thru(uint64_t seq)
 
   // completions!
   {
-    Mutex::Locker locker(finisher_lock);
+    lock_guard locker(finisher_lock);
     queue_completions_thru(seq);
     if (plug_journal_completions && seq >= header.start_seq) {
       dout(10) << " removing completion plug, queuing completions thru journaled_seq " << journaled_seq << dendl;
@@ -1535,7 +1530,7 @@ void FileJournal::committed_thru(uint64_t seq)
     pop_write();
   }
 
-  commit_cond.Signal();
+  commit_cond.notify_all();
 
   dout(10) << "committed_thru done" << dendl;
 }

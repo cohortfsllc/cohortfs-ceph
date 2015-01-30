@@ -340,7 +340,7 @@ bool AdminSocket::do_accept()
   else
     firstword = c.substr(0, c.find(" "));
 
-  m_lock.Lock();
+  std::unique_lock<std::mutex> l(m_lock);
   map<string,AdminSocketHook*>::iterator p;
   string match = c;
   while (match.size()) {
@@ -385,7 +385,7 @@ bool AdminSocket::do_accept()
 	rval = true;
     }
   }
-  m_lock.Unlock();
+  l.unlock();
 
   VOID_TEMP_FAILURE_RETRY(close(connection_fd));
   return rval;
@@ -394,7 +394,7 @@ bool AdminSocket::do_accept()
 int AdminSocket::register_command(std::string command, std::string cmddesc, AdminSocketHook *hook, std::string help)
 {
   int ret;
-  m_lock.Lock();
+  std::unique_lock<std::mutex> l(m_lock);
   if (m_hooks.count(command)) {
     ldout(m_cct, 5) << "register_command " << command << " hook " << hook << " EEXIST" << dendl;
     ret = -EEXIST;
@@ -405,14 +405,14 @@ int AdminSocket::register_command(std::string command, std::string cmddesc, Admi
     m_help[command] = help;
     ret = 0;
   }
-  m_lock.Unlock();
+  l.unlock();
   return ret;
 }
 
 int AdminSocket::unregister_command(std::string command)
 {
   int ret;
-  m_lock.Lock();
+  std::unique_lock<std::mutex> l(m_lock);
   if (m_hooks.count(command)) {
     ldout(m_cct, 5) << "unregister_command " << command << dendl;
     m_hooks.erase(command);
@@ -423,7 +423,7 @@ int AdminSocket::unregister_command(std::string command)
     ldout(m_cct, 5) << "unregister_command " << command << " ENOENT" << dendl;
     ret = -ENOENT;
   }
-  m_lock.Unlock();
+  l.unlock();
   return ret;
 }
 

@@ -38,7 +38,6 @@
 #include <set>
 #include <map>
 #include <iostream>
-using namespace std;
 
 class Context;
 class CDentry;
@@ -186,7 +185,7 @@ public:
   VolumeRef volume;
 
   uint64_t last_journaled; // log offset for the last time i was journaled
-  utime_t last_dirstat_prop;
+  ceph::real_time last_dirstat_prop;
 
   // list item node for when we have unpropagated rstat data
   elist<CInode*>::item dirty_rstat_item;
@@ -511,7 +510,7 @@ public:
 
   // -- import/export --
   void encode_export(bufferlist& bl);
-  void finish_export(utime_t now);
+  void finish_export(ceph::real_time now);
   void abort_export() {
     put(PIN_TEMPEXPORTING);
     assert(state_test(STATE_EXPORTINGCAPS));

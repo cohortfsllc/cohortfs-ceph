@@ -16,8 +16,8 @@
 #define CEPH_LIBRADOS_IOCTXIMPL_H
 
 #include <atomic>
-#include "common/Cond.h"
-#include "common/Mutex.h"
+#include <condition_variable>
+#include <mutex>
 #include "include/types.h"
 #include "include/rados/librados.h"
 #include "include/rados/librados.hpp"
@@ -36,17 +36,18 @@ struct librados::IoCtxImpl {
   version_t last_objver;
   uint32_t notify_timeout;
 
-  Mutex aio_write_list_lock;
+  std::mutex aio_write_list_lock;
+  typedef std::unique_lock<std::mutex> unique_lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
   ceph_tid_t aio_write_seq;
-  Cond aio_write_cond;
+  std::condition_variable aio_write_cond;
   xlist<AioCompletionImpl*> aio_write_list;
   map<ceph_tid_t, std::list<AioCompletionImpl*> > aio_write_waiters;
 
-  Mutex *lock;
   Objecter *objecter;
 
   IoCtxImpl();
-  IoCtxImpl(RadosClient *c, Objecter *objecter, Mutex *client_lock,
+  IoCtxImpl(RadosClient *c, Objecter *objecter,
 	    const std::shared_ptr <const Volume>& volume);
 
   void dup(const IoCtxImpl& rhs) {
@@ -57,7 +58,6 @@ struct librados::IoCtxImpl {
     assert_src_version = rhs.assert_src_version;
     last_objver = rhs.last_objver;
     notify_timeout = rhs.notify_timeout;
-    lock = rhs.lock;
     objecter = rhs.objecter;
   }
 
@@ -135,7 +135,7 @@ struct librados::IoCtxImpl {
   struct C_aio_stat_Ack : public Context {
     librados::AioCompletionImpl *c;
     time_t *pmtime;
-    utime_t mtime;
+    ceph::real_time mtime;
     C_aio_stat_Ack(AioCompletionImpl *_c, time_t *pm);
     void finish(int r);
   };
@@ -185,11 +185,13 @@ struct librados::IoCtxImpl {
   }
 
   struct C_NotifyComplete : public librados::WatchCtx {
-    Mutex *lock;
-    Cond *cond;
+    std::mutex *lock;
+    typedef std::unique_lock<std::mutex> unique_lock;
+    typedef std::lock_guard<std::mutex> lock_guard;
+    std::condition_variable *cond;
     bool *done;
 
-    C_NotifyComplete(Mutex *_l, Cond *_c, bool *_d);
+    C_NotifyComplete(std::mutex *_l, std::condition_variable *_c, bool *_d);
     void notify(uint8_t opcode, uint64_t ver, bufferlist& bl);
   };
 };
@@ -211,8 +213,10 @@ struct WatchNotifyInfo : public RefCountedWaitObject {
   librados::WatchCtx *watch_ctx;
 
   // notify that we initiated
-  Mutex *notify_lock;
-  Cond *notify_cond;
+  std::mutex *notify_lock;
+  typedef std::unique_lock<std::mutex> unique_lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  std::condition_variable *notify_cond;
   bool *notify_done;
   int *notify_rval;
 
@@ -234,9 +238,8 @@ struct WatchNotifyInfo : public RefCountedWaitObject {
     io_ctx_impl->put();
   }
 
-  void notify(Mutex *lock, uint8_t opcode, uint64_t ver, uint64_t notify_id,
-	      bufferlist& payload,
-	      int return_code);
+  void notify(std::mutex *lock, uint8_t opcode, uint64_t ver,
+	      uint64_t notify_id, bufferlist& payload, int return_code);
 };
 }
 

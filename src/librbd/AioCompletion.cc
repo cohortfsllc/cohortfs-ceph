@@ -19,15 +19,15 @@ namespace librbd {
 
   void AioCompletion::finish_adding_requests(CephContext *cct)
   {
-    ldout(cct, 20) << "AioCompletion::finish_adding_requests " << (void*)this << " pending " << pending_count << dendl;
-    lock.Lock();
+    ldout(cct, 20) << "AioCompletion::finish_adding_requests "
+		   << (void*)this << " pending " << pending_count << dendl;
+    lock_guard l(lock);
     assert(building);
     building = false;
     if (!pending_count) {
       finalize(cct, rval);
       complete();
     }
-    lock.Unlock();
   }
 
   void AioCompletion::finalize(CephContext *cct, ssize_t rval)
@@ -47,7 +47,7 @@ namespace librbd {
     ldout(cct, 20) << "AioCompletion::complete_request() "
 		   << (void *)this << " complete_cb=" << (void *)complete_cb
 		   << " pending " << pending_count << dendl;
-    lock.Lock();
+    unique_lock l(lock);
     if (rval >= 0) {
       if (r < 0 && r != -EEXIST)
 	rval = r;
@@ -60,7 +60,7 @@ namespace librbd {
       finalize(cct, rval);
       complete();
     }
-    put_unlock();
+    put_unlock(l);
   }
 
   void C_AioRead::finish(int r)
@@ -68,7 +68,7 @@ namespace librbd {
     ldout(m_cct, 10) << "C_AioRead::finish() " << this << " r = " << r << dendl;
     if (r >= 0 || r == -ENOENT) { // this was a sparse_read operation
       ldout(m_cct, 10) << " got " << " bl " << m_req->data().length() << dendl;
-      m_completion->lock.Lock();
+      AioCompletion::unique_lock cl(m_completion->lock);
       if (m_completion->read_buf) {
 	if (m_completion ->read_buf_len > m_req->data().length())
 	  memset(m_completion-> read_buf + m_req->data().length(), 0,
@@ -88,7 +88,7 @@ namespace librbd {
 	  m_completion->read_bl->append_zero(spare);
 	}
       }
-      m_completion->lock.Unlock();
+      cl.unlock();
       r = m_req->m_len;
     }
     m_completion->complete_request(m_cct, r);

@@ -34,7 +34,7 @@
 
 ostream& CDentry::print_db_line_prefix(ostream& out)
 {
-  return out << ceph_clock_now(cct)
+  return out << ceph::real_clock::now()
 	     << " mds." << dir->cache->mds->get_nodeid() << ".cache.den(" << dir->ino() << " " << name << ") ";
 }
 

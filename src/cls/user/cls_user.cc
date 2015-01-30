@@ -1,4 +1,4 @@
-// -*- mode:C; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
 #include <iostream>
@@ -8,7 +8,6 @@
 #include <errno.h>
 
 #include "include/types.h"
-#include "include/utime.h"
 #include "objclass/objclass.h"
 
 #include "cls_user_types.h"
@@ -107,21 +106,24 @@ static void add_header_stats(cls_user_stats *stats, cls_user_bucket_entry& entry
   stats->total_bytes_rounded += entry.size_rounded;
 }
 
-static void dec_header_stats(cls_user_stats *stats, cls_user_bucket_entry& entry)
+static void dec_header_stats(cls_user_stats *stats,
+			     cls_user_bucket_entry& entry)
 {
   stats->total_bytes -= entry.size;
   stats->total_bytes_rounded -= entry.size_rounded;
   stats->total_entries -= entry.count;
 }
 
-static void apply_entry_stats(const cls_user_bucket_entry& src_entry, cls_user_bucket_entry *target_entry)
+static void apply_entry_stats(const cls_user_bucket_entry& src_entry,
+			      cls_user_bucket_entry *target_entry)
 {
   target_entry->size = src_entry.size;
   target_entry->size_rounded = src_entry.size_rounded;
   target_entry->count = src_entry.count;
 }
 
-static int cls_user_set_buckets_info(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
+static int cls_user_set_buckets_info(cls_method_context_t hctx, bufferlist *in,
+				     bufferlist *out)
 {
   bufferlist::iterator in_iter = in->begin();
 

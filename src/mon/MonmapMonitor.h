@@ -22,8 +22,6 @@
 #include <map>
 #include <set>
 
-using namespace std;
-
 #include "include/types.h"
 #include "msg/Messenger.h"
 
@@ -77,7 +75,7 @@ class MonmapMonitor : public PaxosService {
    * Since monitors are pretty
    * important, this implementation will just write 0.0.
    */
-  bool should_propose(double& delay);
+  bool should_propose(ceph::timespan& delay);
 
   void tick();
 

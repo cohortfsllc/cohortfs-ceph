@@ -1,4 +1,4 @@
-// -*- mode:C; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
 #include <iostream>
@@ -8,7 +8,6 @@
 #include <errno.h>
 
 #include "include/types.h"
-#include "include/utime.h"
 #include "objclass/objclass.h"
 
 #include "cls_statelog_types.h"

@@ -216,27 +216,28 @@ namespace librbd {
 #endif
 
   void ImageCtx::shutdown_cache() {
-    md_lock.get_write();
+    unique_md_lock ml(md_lock);
     invalidate_cache();
-    md_lock.put_write();
 #if 0
-//FIXME!    object_cacher->stop();
+//FIXME!
+    object_cacher->stop();
 #endif
   }
 
   void ImageCtx::invalidate_cache() {
 #if 0
-//FIXME!    if (!object_cacher)
+//FIXME!
+    if (!object_cacher)
       return;
-    cache_lock.Lock();
+    unique_lock cl(cache_lock);
     object_cacher->release_set(object_set);
-    cache_lock.Unlock();
+    cl.unlock();
     int r = flush_cache();
     if (r)
       lderr(cct) << "flush_cache returned " << r << dendl;
-    cache_lock.Lock();
+    cl.lock();
     bool unclean = object_cacher->release_set(object_set);
-    cache_lock.Unlock();
+    cl.unlock();
     if (unclean)
       lderr(cct) << "could not release all objects from cache" << dendl;
 #endif
@@ -244,11 +245,12 @@ namespace librbd {
 
   void ImageCtx::clear_nonexistence_cache() {
 #if 0
-//FIXME!    if (!object_cacher)
+//FIXME!
+    if (!object_cacher)
       return;
-    cache_lock.Lock();
+    unique_lock cl(cache_lock);
     object_cacher->clear_nonexistence(object_set);
-    cache_lock.Unlock();
+    cl.unlock();
 #endif
   }
 

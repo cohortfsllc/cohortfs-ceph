@@ -54,7 +54,7 @@ WorkloadGenerator::WorkloadGenerator(vector<const char*> args)
     m_suppress_write_xattr_coll(false), m_suppress_write_log(false),
     m_do_stats(false),
     m_stats_finished_txs(0),
-    m_stats_show_secs(5),
+    m_stats_show_interval(5s),
     m_stats_total_written(0),
     m_stats_begin()
 {
@@ -182,7 +182,7 @@ void WorkloadGenerator::init_args(vector<const char*> args)
       _suppress_ops_or_die(val);
     } else if (ceph_argparse_witharg(args, i, &val,
 	"--test-show-stats-period", (char*) NULL)) {
-      m_stats_show_secs = strtoll(val.c_str(), NULL, 10);
+      m_stats_show_interval = strtoll(val.c_str(), NULL, 10) * 1s;
     } else if (ceph_argparse_flag(args, &i, "--test-show-stats", (char*) NULL)) {
       m_do_stats = true;
     } else if (ceph_argparse_flag(args, &i, "--help", (char*) NULL)) {
@@ -384,14 +384,14 @@ TestObjectStoreState::coll_entry_t
 
 void WorkloadGenerator::do_stats()
 {
-  utime_t now = ceph_clock_now(NULL);
-  m_stats_lock.Lock();
+  auto now = ceph::mono_clock::now();
+  unique_lock msl(m_stats_lock);
 
-  utime_t duration = (now - m_stats_begin);
+  ceph::timespan duration = (now - m_stats_begin);
 
-  // when cast to double, a utime_t behaves properly
-  double throughput = (m_stats_total_written / ((double) duration));
-  double tx_throughput (m_stats_finished_txs / ((double) duration));
+  double throughput = (m_stats_total_written /
+		       ceph::span_to_double(duration));
+  double tx_throughput (m_stats_finished_txs / ceph::span_to_double(duration));
 
   dout(0) << __func__
 	  << " written: " << m_stats_total_written
@@ -400,7 +400,7 @@ void WorkloadGenerator::do_stats()
 	  << " iops: " << tx_throughput << "/s"
 	  << dendl;
 
-  m_stats_lock.Unlock();
+  msl.unlock();
 }
 
 void WorkloadGenerator::run()
@@ -408,9 +408,9 @@ void WorkloadGenerator::run()
   bool create_coll = false;
   int ops_run = 0;
 
-  utime_t stats_interval(m_stats_show_secs, 0);
-  utime_t now = ceph_clock_now(NULL);
-  utime_t stats_time = now;
+  ceph::timespan stats_interval(m_stats_show_interval);
+  auto now = ceph::mono_clock::now();
+  auto stats_time = now;
   m_stats_begin = now;
 
   do {
@@ -424,10 +424,6 @@ void WorkloadGenerator::run()
       break;
     }
 
-    dout(5) << __func__
-	<< " m_finished_lock is-locked: " << m_finished_lock.is_locked()
-	<< " in-flight: " << m_in_flight << dendl;
-
     wait_for_ready();
 
     ObjectStore::Transaction *t = new ObjectStore::Transaction;
@@ -437,8 +433,8 @@ void WorkloadGenerator::run()
 
 
     if (m_do_stats) {
-      utime_t now = ceph_clock_now(NULL);
-      utime_t elapsed = now - stats_time;
+      auto now = ceph::mono_clock::now();
+      ceph::timespan elapsed = now - stats_time;
       if (elapsed >= stats_interval) {
 	do_stats();
 	stats_time = now;

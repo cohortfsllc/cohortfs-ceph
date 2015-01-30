@@ -17,17 +17,17 @@ namespace librbd {
 
   void WatchCtx::invalidate()
   {
-    Mutex::Locker l(lock);
+    lock_guard l(lock);
     valid = false;
   }
 
   void WatchCtx::notify(uint8_t opcode, uint64_t ver, bufferlist& bl)
   {
-    Mutex::Locker l(lock);
+    lock_guard l(lock);
     ldout(ictx->cct, 1) <<  " got notification opcode=" << (int)opcode
 			<< " ver=" << ver << " cookie=" << cookie << dendl;
     if (valid) {
-      Mutex::Locker lictx(ictx->refresh_lock);
+      ImageCtx::lock_guard lictx(ictx->refresh_lock);
       ++ictx->refresh_seq;
     }
   }

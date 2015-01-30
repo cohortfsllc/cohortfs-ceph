@@ -22,15 +22,18 @@
 #endif
 
 #include <cassert>
+#include <condition_variable>
 #include <iostream>
 #include <string>
 #include <map>
+#include <mutex>
 
 #include <boost/scoped_ptr.hpp>
 #include <boost/random/mersenne_twister.hpp>
 #include <boost/random/uniform_int.hpp>
 
 
+#include "include/ceph_time.h"
 #include "osd/osd_types.h"
 #include "osd/OSD.h"
 #include "osd/OSDMap.h"
@@ -45,8 +48,6 @@
 #include "common/config.h"
 #include "common/debug.h"
 #include "common/errno.h"
-#include "common/Cond.h"
-#include "common/Mutex.h"
 #include "common/strtol.h"
 #include "common/LogEntry.h"
 #include "auth/KeyRing.h"
@@ -57,7 +58,9 @@
 #include "messages/MOSDMap.h"
 #include "messages/MLog.h"
 
-using namespace std;
+typedef std::lock_guard<std::mutex> lock_guard;
+typedef std::unique_lock<std::mutex> unique_lock;
+
 static CephContext* cct;
 
 #define dout_subsys ceph_subsys_
@@ -78,12 +81,12 @@ class TestStub : public Dispatcher
   MessengerRef messenger;
   MonClient monc;
 
-  Mutex lock;
-  Cond cond;
-  SafeTimer timer;
+  std::mutex lock;
+  std::condition_variable cond;
+  SafeTimer<ceph::mono_clock> timer;
 
   bool do_shutdown;
-  double tick_seconds;
+  ceph::timespan tick_time;
 
   struct C_Tick : public Context {
     TestStub *s;
@@ -108,14 +111,14 @@ class TestStub : public Dispatcher
   virtual void _tick() { }
   // different stubs may have different needs; if a stub needs
   // to tick, then it must call this function.
-  void start_ticking(double t=1.0) {
-    tick_seconds = t;
-    if (t <= 0) {
+  void start_ticking(ceph::timespan t = 1s) {
+    tick_time = t;
+    if (t == 0s) {
       stop_ticking();
       return;
     }
     dout(20) << __func__ << " adding tick timer" << dendl;
-    timer.add_event_after(tick_seconds, new C_Tick(this));
+    timer.add_event_after(tick_time, new C_Tick(this));
   }
   // If we have a function to start ticking that the stubs can
   // use at their own discretion, then we should also have a
@@ -126,27 +129,27 @@ class TestStub : public Dispatcher
   // disable itself.
   void stop_ticking() {
     dout(20) << __func__ << " disable tick" << dendl;
-    tick_seconds = 0;
+    tick_time = 0s;
   }
 
  public:
   void tick() {
     std::cout << __func__ << std::endl;
-    if (do_shutdown || (tick_seconds <= 0)) {
+    if (do_shutdown || (tick_time == 0ns)) {
       std::cout << __func__ << " "
 		<< (do_shutdown ? "shutdown" : "stop ticking")
 		<< std::endl;
       return;
     }
     _tick();
-    timer.add_event_after(tick_seconds, new C_Tick(this));
+    timer.add_event_after(tick_time, new C_Tick(this));
   }
 
   virtual const string get_name() = 0;
   virtual int init() = 0;
 
   virtual int shutdown() {
-    Mutex::Locker l(lock);
+    unique_lock l(lock);
     do_shutdown = true;
     int r = _shutdown();
     if (r < 0) {
@@ -155,7 +158,7 @@ class TestStub : public Dispatcher
       return r;
     }
     monc.shutdown();
-    timer.shutdown();
+    timer.shutdown(l);
     messenger->shutdown();
     return 0;
   }
@@ -172,9 +175,9 @@ class TestStub : public Dispatcher
   TestStub(CephContext *cct, string who)
     : Dispatcher(cct),
       monc(cct),
-      timer(cct, lock),
+      timer(lock),
       do_shutdown(false),
-      tick_seconds(0.0) { }
+      tick_time(0s) { }
 };
 
 class ClientStub : public TestStub
@@ -184,12 +187,12 @@ class ClientStub : public TestStub
 
  protected:
   bool ms_dispatch(Message *m) {
-    Mutex::Locker l(lock);
+    lock_guard l(lock);
     dout(1) << "client::" << __func__ << " " << *m << dendl;
     switch (m->get_type()) {
     case CEPH_MSG_OSD_MAP:
       objecter->handle_osd_map((MOSDMap*)m);
-      cond.Signal();
+      cond.notify_all();
       break;
     }
     return true;
@@ -197,19 +200,19 @@ class ClientStub : public TestStub
 
   void ms_handle_connect(Connection *con) {
     dout(1) << "client::" << __func__ << " " << con << dendl;
-    Mutex::Locker l(lock);
+    lock_guard l(lock);
     objecter->ms_handle_connect(con);
   }
 
   void ms_handle_remote_reset(Connection *con) {
     dout(1) << "client::" << __func__ << " " << con << dendl;
-    Mutex::Locker l(lock);
+    lock_guard l(lock);
     objecter->ms_handle_remote_reset(con);
   }
 
   bool ms_handle_reset(Connection *con) {
     dout(1) << "client::" << __func__ << dendl;
-    Mutex::Locker l(lock);
+    lock_guard l(lock);
     objecter->ms_handle_reset(con);
     return false;
   }
@@ -249,7 +252,7 @@ class ClientStub : public TestStub
     dout(10) << "ClientStub::" << __func__ << " starting messenger at "
 	    << messenger->get_myaddr() << dendl;
 
-    objecter.reset(new Objecter(cct, messenger.get(), &monc, 0, 0));
+    objecter.reset(new Objecter(cct, messenger.get(), &monc));
     assert(objecter.get() != NULL);
     objecter->set_balanced_budget();
 
@@ -272,7 +275,7 @@ class ClientStub : public TestStub
       monc.shutdown();
       return err;
     }
-    monc.wait_auth_rotating(30.0);
+    monc.wait_auth_rotating(30s);
 
     timer.init();
     objecter->set_client_incarnation(0);
@@ -299,8 +302,8 @@ class OSDStub : public TestStub
   rngen_t gen;
   boost::uniform_int<> mon_osd_rng;
 
-  utime_t last_boot_attempt;
-  static const double STUB_BOOT_INTERVAL;
+  ceph::real_time last_boot_attempt;
+  static const ceph::timespan STUB_BOOT_INTERVAL;
 
 
  public:
@@ -363,7 +366,7 @@ class OSDStub : public TestStub
 
   int init() {
     dout(10) << __func__ << dendl;
-    Mutex::Locker l(lock);
+    lock_guard l(lock);
 
     dout(1) << __func__ << " fsid " << monc.monmap.fsid
 	    << " osd_fsid " << cct->_conf->osd_uuid << dendl;
@@ -389,7 +392,7 @@ class OSDStub : public TestStub
     }
     assert(!monc.get_fsid().is_nil());
 
-    monc.wait_auth_rotating(30.0);
+    monc.wait_auth_rotating(30s);
 
 
     dout(10) << __func__ << " creating osd superblock" << dendl;
@@ -414,8 +417,8 @@ class OSDStub : public TestStub
   void boot() {
     dout(1) << __func__ << " boot?" << dendl;
 
-    utime_t now = ceph_clock_now(messenger->cct);
-    if ((last_boot_attempt > 0.0)
+    auto now = ceph::real_clock::now();
+    if ((last_boot_attempt > ceph::real_time::min())
 	&& ((now - last_boot_attempt)) <= STUB_BOOT_INTERVAL) {
       dout(1) << __func__ << " backoff and try again later." << dendl;
       return;
@@ -476,7 +479,7 @@ class OSDStub : public TestStub
     dout(10) << __func__
 	     << " send " << num_entries << " log messages" << dendl;
 
-    utime_t now = ceph_clock_now(messenger->cct);
+    auto now = ceph::real_clock::now();
     int seq = 0;
     for (; num_entries > 0; --num_entries) {
       LogEntry e;
@@ -652,23 +655,23 @@ class OSDStub : public TestStub
   }
 };
 
-double const OSDStub::STUB_BOOT_INTERVAL = 10.0;
+ceph::timespan const OSDStub::STUB_BOOT_INTERVAL = 10s;
 
 #undef dout_prefix
 #define dout_prefix *_dout << "main "
 
 const char *our_name = NULL;
 vector<TestStub*> stubs;
-Mutex shutdown_lock;
-Cond shutdown_cond;
+std::mutex shutdown_lock;
+std::condition_variable shutdown_cond;
 Context *shutdown_cb = NULL;
-SafeTimer *shutdown_timer = NULL;
+SafeTimer<ceph::mono_clock> *shutdown_timer = nullptr;
 
 struct C_Shutdown : public Context
 {
   void finish(int r) {
     generic_dout(10) << "main::shutdown time has ran out" << dendl;
-    shutdown_cond.Signal();
+    shutdown_cond.notify_all();
   }
 };
 
@@ -678,10 +681,10 @@ void handle_test_signal(int signum)
     return;
 
   std::cerr << "*** Got signal " << sys_siglist[signum] << " ***" << std::endl;
-  Mutex::Locker l(shutdown_lock);
+  lock_guard l(shutdown_lock);
   if (shutdown_timer) {
     shutdown_timer->cancel_all_events();
-    shutdown_cond.Signal();
+    shutdown_cond.notify_all();
   }
 }
 
@@ -745,7 +748,7 @@ int main(int argc, const char *argv[])
   cct->_conf->apply_changes(NULL);
 
   set<int> stub_ids;
-  double duration = 300.0;
+  ceph::timespan duration = 300s;
 
   for (std::vector<const char*>::iterator i = args.begin(); i != args.end();) {
     string val;
@@ -765,8 +768,8 @@ int main(int argc, const char *argv[])
     } else if (ceph_argparse_witharg(args, i, &val,
 	"--duration", (char*) NULL)) {
       string err;
-      duration = (double) strict_strtol(val.c_str(), 10, &err);
-      if ((duration == 0) && (!err.empty())) {
+      duration = strict_strtol(val.c_str(), 10, &err) * 1s;
+      if ((duration == 0ns) && (!err.empty())) {
 	std::cerr << "** error parsing '--duration " << val << "': '"
 		  << err << std::endl;
 	exit(1);
@@ -813,20 +816,20 @@ int main(int argc, const char *argv[])
   register_async_signal_handler_oneshot(SIGINT, handle_test_signal);
   register_async_signal_handler_oneshot(SIGTERM, handle_test_signal);
 
-  shutdown_lock.Lock();
-  shutdown_timer = new SafeTimer(cct, shutdown_lock);
+  unique_lock sl(shutdown_lock);
+  shutdown_timer = new SafeTimer<ceph::mono_clock>(shutdown_lock);
   shutdown_timer->init();
-  if (duration != 0) {
+  if (duration != 0ns) {
     std::cout << __func__
 	    << " run test for " << duration << " seconds" << std::endl;
-    shutdown_timer->add_event_after((double) duration, new C_Shutdown);
+    shutdown_timer->add_event_after(duration, new C_Shutdown);
   }
-  shutdown_cond.Wait(shutdown_lock);
+  shutdown_cond.wait(sl);
 
-  shutdown_timer->shutdown();
+  shutdown_timer->shutdown(sl);
   delete shutdown_timer;
   shutdown_timer = NULL;
-  shutdown_lock.Unlock();
+  sl.unlock();
 
   unregister_async_signal_handler(SIGINT, handle_test_signal);
   unregister_async_signal_handler(SIGTERM, handle_test_signal);

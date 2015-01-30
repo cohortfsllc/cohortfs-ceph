@@ -23,6 +23,10 @@
 #include "include/cmp.h"
 #include "include/encoding.h"
 
+namespace ceph {
+  class Formatter;
+};
+
 /// Maximum supported object name length for Ceph, in bytes.
 static constexpr size_t MAX_CEPH_OBJECT_NAME_LEN = 4096;
 

@@ -50,7 +50,7 @@ class Inode {
   uint32_t rdev;    // if special file
 
   // affected by any inode change...
-  utime_t ctime;   // inode change time
+  ceph::real_time ctime;   // inode change time
 
   // perm (namespace permissions)
   uint32_t mode;
@@ -65,8 +65,8 @@ class Inode {
   uint64_t size; // on directory, # dentries
   uint32_t truncate_seq;
   uint64_t truncate_size;
-  utime_t mtime;   // file data modify time.
-  utime_t atime;   // file data access time.
+  ceph::real_time mtime;   // file data modify time.
+  ceph::real_time atime;   // file data access time.
   // count of (potential) mtime/atime timewarps (i.e., utimes())
   uint32_t time_warp_seq;
 
@@ -108,7 +108,7 @@ class Inode {
   uint64_t flushing_cap_seq;
   uint16_t flushing_cap_tid[CEPH_CAP_BITS];
   int shared_gen, cache_gen;
-  utime_t hold_caps_until;
+  ceph::mono_time hold_caps_until;
   xlist<Inode*>::item cap_item, flushing_cap_item;
   ceph_tid_t last_flush_tid;
 
@@ -130,8 +130,8 @@ class Inode {
   map<string,bufferptr> xattrs;
   map<frag_t,int> fragmap; // known frag -> mds mappings
 
-  list<Cond*> waitfor_caps;
-  list<Cond*> waitfor_commit;
+  list<std::condition_variable*> waitfor_caps;
+  list<std::condition_variable*> waitfor_commit;
 
   Dentry *get_first_parent() {
     assert(!dn_set.empty());

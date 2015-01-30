@@ -1,10 +1,12 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
+
 #ifndef CEPH_LRU_MAP_H
 #define CEPH_LRU_MAP_H
 
 #include <list>
 #include <map>
-#include "common/Mutex.h"
-
+#include <mutex>
 
 template <class K, class V>
 class lru_map {
@@ -16,7 +18,9 @@ class lru_map {
   std::map<K, entry> entries;
   std::list<K> entries_lru;
 
-  Mutex lock;
+  std::mutex lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
 
   size_t max;
 
@@ -77,14 +81,14 @@ bool lru_map<K, V>::_find(const K& key, V *value, UpdateContext *ctx)
 template <class K, class V>
 bool lru_map<K, V>::find(const K& key, V& value)
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   return _find(key, &value, NULL);
 }
 
 template <class K, class V>
 bool lru_map<K, V>::find_and_update(const K& key, V *value, UpdateContext *ctx)
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   return _find(key, value, ctx);
 }
 
@@ -115,14 +119,14 @@ void lru_map<K, V>::_add(const K& key, V& value)
 template <class K, class V>
 void lru_map<K, V>::add(const K& key, V& value)
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   _add(key, value);
 }
 
 template <class K, class V>
 void lru_map<K, V>::erase(const K& key)
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   typename std::map<K, entry>::iterator iter = entries.find(key);
   if (iter == entries.end())
     return;

@@ -123,7 +123,7 @@ void librados::ObjectOperation::src_cmpxattr(const std::string& src_obj,
 
 void librados::ObjectOperation::assert_exists()
 {
-  impl->stat(NULL, (utime_t*)NULL, NULL);
+  impl->stat(nullptr, nullptr, nullptr);
 }
 
 void librados::ObjectOperation::exec(const char *cls, const char *method,
@@ -174,10 +174,10 @@ void librados::ObjectOperation::exec(
 void librados::ObjectReadOperation::stat(uint64_t *psize, time_t *pmtime,
 					 int *prval)
 {
-  utime_t t;
+  ceph::real_time t;
   impl->stat(psize, &t, prval);
 
-  *pmtime = t.tv.tv_sec;
+  *pmtime = ceph::real_clock::to_time_t(t);
 }
 
 void librados::ObjectReadOperation::read(size_t off, uint64_t len,
@@ -750,11 +750,12 @@ int librados::IoCtx::lock_exclusive(const std::string &obj,
 				    const std::string &name,
 				    const std::string &cookie,
 				    const std::string &description,
-				    struct timeval * duration, uint8_t flags)
+				    struct timeval *duration, uint8_t flags)
 {
-  utime_t dur = utime_t();
+  ceph::timespan dur = 0s;
   if (duration)
-    dur.set_from_timeval(duration);
+    dur = (duration->tv_sec * 1s +
+	   duration->tv_usec * 1us);
 
   return rados::cls::lock::lock(this, obj, name, LOCK_EXCLUSIVE, cookie, "",
 				description, dur, flags);
@@ -767,9 +768,10 @@ int librados::IoCtx::lock_shared(const std::string &obj,
 				 const std::string &description,
 				 struct timeval * duration, uint8_t flags)
 {
-  utime_t dur = utime_t();
+  ceph::timespan dur = 0s;
   if (duration)
-    dur.set_from_timeval(duration);
+    dur = (duration->tv_sec * 1s +
+	   duration->tv_usec * 1us);
 
   return rados::cls::lock::lock(this, obj, name, LOCK_SHARED, cookie, tag,
 				description, dur, flags);

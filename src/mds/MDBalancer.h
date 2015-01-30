@@ -23,7 +23,6 @@ using std::list;
 using std::map;
 
 #include "include/types.h"
-#include "common/Clock.h"
 #include "CInode.h"
 
 
@@ -42,10 +41,11 @@ class MDBalancer {
   int last_epoch_under;
   int last_epoch_over;
 
-  utime_t last_heartbeat;
-  utime_t last_fragment;
-  utime_t last_sample;
-  utime_t rebalance_time; //ensure a consistent view of load for rebalance
+  ceph::mono_time last_heartbeat;
+  ceph::mono_time last_fragment;
+  ceph::mono_time last_sample;
+  ceph::real_time rebalance_time; //ensure a consistent view of load
+				  //for rebalance
 
   // todo
   set<dirfrag_t>   split_queue, merge_queue;
@@ -79,7 +79,7 @@ public:
     beat_epoch(0),
     last_epoch_under(0), last_epoch_over(0), my_load(0.0), target_load(0.0) { }
 
-  mds_load_t get_load(utime_t);
+  mds_load_t get_load(ceph::real_time);
 
   int proc_message(Message *m);
 
@@ -105,12 +105,14 @@ public:
 		    set<CDir*>& already_exporting);
 
 
-  void subtract_export(class CDir *ex, utime_t now);
-  void add_import(class CDir *im, utime_t now);
+  void subtract_export(class CDir *ex, ceph::real_time now);
+  void add_import(class CDir *im, ceph::real_time now);
 
-  void hit_inode(utime_t now, class CInode *in, int type, int who=-1);
-  void hit_dir(utime_t now, class CDir *dir, int type, int who=-1, double amount=1.0);
-  void hit_recursive(utime_t now, class CDir *dir, int type, double amount, double rd_adj);
+  void hit_inode(ceph::real_time now, class CInode *in, int type, int who=-1);
+  void hit_dir(ceph::real_time now, class CDir *dir, int type, int who=-1,
+	       double amount=1.0);
+  void hit_recursive(ceph::real_time now, class CDir *dir, int type,
+		     double amount, double rd_adj);
 
 
   void show_imports(bool external=false);

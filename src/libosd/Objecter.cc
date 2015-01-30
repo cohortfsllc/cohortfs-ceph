@@ -1,6 +1,8 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
+#include <condition_variable>
+#include <mutex>
 #include "ceph_osd.h"
 
 #include "Objecter.h"
@@ -18,27 +20,29 @@ namespace osd
 // helper class to wait on a libosd_io_completion_fn
 class SyncCompletion {
 private:
-  Mutex mutex;
-  Cond cond;
+  std::mutex mutex;
+  typedef std::unique_lock<std::mutex> unique_lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  std::condition_variable cond;
   bool done;
   int result;
   int length;
 
   void signal(int r, int len) {
-    Mutex::Locker lock(mutex);
+    lock_guard lock(mutex);
     done = true;
     result = r;
     length = len;
-    cond.Signal();
+    cond.notify_all();
   }
 
 public:
   SyncCompletion() : done(false) {}
 
   int wait() {
-    Mutex::Locker lock(mutex);
+    unique_lock lock(mutex);
     while (!done)
-      cond.Wait(mutex);
+      cond.wait(lock);
     return result != 0 ? result : length;
   }
 

@@ -217,7 +217,7 @@ void AuthMonitor::increase_max_global_id()
   pending_auth.push_back(inc);
 }
 
-bool AuthMonitor::should_propose(double& delay)
+bool AuthMonitor::should_propose(ceph::timespan& delay)
 {
   return (!pending_auth.empty());
 }
@@ -252,7 +252,7 @@ void AuthMonitor::encode_full(MonitorDBStore::Transaction *t)
   assert(get_last_committed() == version);
 
   bufferlist full_bl;
-  Mutex::Locker l(mon->key_server.get_lock());
+  auto l = mon->key_server.get_lock();
   if (mon->key_server.has_secrets()) {
     ldout(mon->cct, 20) << __func__ << " key server has secrets!" << dendl;
     uint8_t v = 1;

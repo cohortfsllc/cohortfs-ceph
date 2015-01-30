@@ -3,6 +3,7 @@
 #ifndef CEPH_LIBRBD_LIBRBDWRITEBACKHANDLER_H
 #define CEPH_LIBRBD_LIBRBDWRITEBACKHANDLER_H
 
+#include <mutex>
 #include <queue>
 
 #include "include/Context.h"
@@ -11,15 +12,13 @@
 #include "osd/osd_types.h"
 #include "osdc/WritebackHandler.h"
 
-class Mutex;
-
 namespace librbd {
 
   struct ImageCtx;
 
   class LibrbdWriteback : public WritebackHandler {
   public:
-    LibrbdWriteback(ImageCtx *ictx, Mutex& lock);
+    LibrbdWriteback(ImageCtx *ictx, std::mutex& lock);
     virtual ~LibrbdWriteback() {}
 
     virtual void read(const oid& obj, const boost::uuids::uuid& volume,
@@ -34,7 +33,7 @@ namespace librbd {
 
     virtual ceph_tid_t write(const oid& obj, const boost::uuids::uuid& volume,
 			     uint64_t off, uint64_t len,
-			     const bufferlist &bl, utime_t mtime,
+			     const bufferlist &bl, ceph::real_time mtime,
 			     uint64_t trunc_size, uint32_t trunc_seq,
 			     Context *oncommit);
 
@@ -54,7 +53,7 @@ namespace librbd {
     void complete_writes(const std::string& obj);
 
     ceph_tid_t m_tid;
-    Mutex& m_lock;
+    std::mutex& m_lock;
     librbd::ImageCtx *m_ictx;
     std::unordered_map<std::string, std::queue<write_result_d*> > m_writes;
     friend class C_OrderedWrite;

@@ -20,20 +20,6 @@ OpRequest::OpRequest(Message *req)
   trace.init("op", msgr->get_trace_endpoint(), &req->trace);
 }
 
-void OpRequest::_dump(utime_t now, Formatter *f) const
-{
-  Message *m = request;
-  f->dump_string("flag_point", state_string());
-  if (m->get_orig_source().is_client()) {
-    f->open_object_section("client_info");
-    stringstream client_name;
-    client_name << m->get_orig_source();
-    f->dump_string("client", client_name.str());
-    f->dump_int("tid", m->get_tid());
-    f->close_section(); // client_info
-  }
-}
-
 OpRequestRef OpRequest::create_request(Message *ref)
 {
   OpRequestRef retval(new OpRequest(ref));

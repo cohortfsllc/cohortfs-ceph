@@ -21,11 +21,11 @@
 #include <list>
 #include <map>
 #include <cassert>
+#include <condition_variable>
+#include <mutex>
 #include <unordered_map>
 #include <unordered_set>
 
-#include "common/Mutex.h"
-#include "common/Cond.h"
 #include "common/Thread.h"
 #include "common/Throttle.h"
 
@@ -96,8 +96,8 @@ public:
     return dispatch_queue.get_queue_len();
   }
 
-  double get_dispatch_queue_max_age(utime_t now) {
-    return dispatch_queue.get_max_age(now);
+  ceph::timespan get_dispatch_queue_max_age() {
+    return dispatch_queue.get_max_age();
   }
   /** @} Accessors */
 
@@ -111,17 +111,17 @@ public:
   }
 
   void set_default_policy(Policy p) {
-    Mutex::Locker l(policy_lock);
+    std::lock_guard<std::mutex> l(policy_lock);
     default_policy = p;
   }
 
   void set_policy(int type, Policy p) {
-    Mutex::Locker l(policy_lock);
+    std::lock_guard<std::mutex> l(policy_lock);
     policy_map[type] = p;
   }
 
   void set_policy_throttlers(int type, Throttle *byte_throttle, Throttle *msg_throttle) {
-    Mutex::Locker l(policy_lock);
+    std::lock_guard<std::mutex> l(policy_lock);
     if (policy_map.count(type)) {
       policy_map[type].throttler_bytes = byte_throttle;
       policy_map[type].throttler_messages = msg_throttle;
@@ -300,7 +300,7 @@ private:
   /// approximately unique ID set by the Constructor for use in entity_addr_t
   uint64_t nonce;
   /// overall lock used for SimpleMessenger data structures
-  Mutex lock;
+  std::mutex lock;
   /// true, specifying we haven't learned our addr; set false when we find it.
   // maybe this should be protected by the lock?
   bool need_addr;
@@ -342,7 +342,7 @@ private:
   int cluster_protocol;
 
   /// lock protecting policy
-  Mutex policy_lock;
+  std::mutex policy_lock;
   /// the default Policy we use for Pipes
   Policy default_policy;
   /// map specifying different Policies for specific peer types
@@ -352,10 +352,11 @@ private:
   Throttle dispatch_throttler;
 
   bool reaper_started, reaper_stop;
-  Cond reaper_cond;
+  std::condition_variable reaper_cond;
 
-  /// This Cond is slept on by wait() and signaled by dispatch_entry()
-  Cond	wait_cond;
+  /// This condition variable is slept on by wait() and signaled by
+  /// dispatch_entry()
+  std::condition_variable wait_cond;
 
   friend class Pipe;
 
@@ -439,14 +440,14 @@ public:
    * @return A const Policy reference.
    */
   Policy get_policy(int t) {
-    Mutex::Locker l(policy_lock);
+    std::lock_guard<std::mutex> l(policy_lock);
     if (policy_map.count(t))
       return policy_map[t];
     else
       return default_policy;
   }
   Policy get_default_policy() {
-    Mutex::Locker l(policy_lock);
+    std::lock_guard<std::mutex> l(policy_lock);
     return default_policy;
   }
 

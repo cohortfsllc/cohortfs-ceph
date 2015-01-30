@@ -16,27 +16,27 @@ void Finisher::start()
 
 void Finisher::stop()
 {
-  finisher_lock.Lock();
+  std::unique_lock<std::mutex> l(finisher_lock);
   finisher_stop = true;
-  finisher_cond.Signal();
-  finisher_lock.Unlock();
+  finisher_cond.notify_all();
+  l.unlock();
   finisher_thread.join();
 }
 
 void Finisher::wait_for_empty()
 {
-  finisher_lock.Lock();
+  std::unique_lock<std::mutex> l(finisher_lock);
   while (!finisher_queue.empty() || finisher_running) {
     ldout(cct, 10) << "wait_for_empty waiting" << dendl;
-    finisher_empty_cond.Wait(finisher_lock);
+    finisher_empty_cond.wait(l);
   }
   ldout(cct, 10) << "wait_for_empty empty" << dendl;
-  finisher_lock.Unlock();
+  l.unlock();
 }
 
 void *Finisher::finisher_thread_entry()
 {
-  finisher_lock.Lock();
+  std::unique_lock<std::mutex> l(finisher_lock);
   ldout(cct, 10) << "finisher_thread start" << dendl;
 
   while (!finisher_stop) {
@@ -46,7 +46,7 @@ void *Finisher::finisher_thread_entry()
       ls.swap(finisher_queue);
       ls_rval.swap(finisher_queue_rval);
       finisher_running = true;
-      finisher_lock.Unlock();
+      l.unlock();
       ldout(cct, 10) << "finisher_thread doing " << ls << dendl;
 
       for (vector<Context*>::iterator p = ls.begin();
@@ -64,22 +64,22 @@ void *Finisher::finisher_thread_entry()
       ldout(cct, 10) << "finisher_thread done with " << ls << dendl;
       ls.clear();
 
-      finisher_lock.Lock();
+      l.lock();
       finisher_running = false;
     }
     ldout(cct, 10) << "finisher_thread empty" << dendl;
-    finisher_empty_cond.Signal();
+    finisher_empty_cond.notify_all();
     if (finisher_stop)
       break;
 
     ldout(cct, 10) << "finisher_thread sleeping" << dendl;
-    finisher_cond.Wait(finisher_lock);
+    finisher_cond.wait(l);
   }
-  finisher_empty_cond.Signal();
+  finisher_empty_cond.notify_all();
 
   ldout(cct, 10) << "finisher_thread stop" << dendl;
   finisher_stop = false;
-  finisher_lock.Unlock();
+  l.unlock();
   return 0;
 }
 

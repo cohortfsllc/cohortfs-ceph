@@ -27,9 +27,9 @@ struct link_rollback {
   metareqid_t reqid;
   inodeno_t ino;
   bool was_inc;
-  utime_t old_ctime;
-  utime_t old_dir_mtime;
-  utime_t old_dir_rctime;
+  ceph::real_time old_ctime;
+  ceph::real_time old_dir_mtime;
+  ceph::real_time old_dir_rctime;
 
   link_rollback() : ino(0), was_inc(false) {}
 
@@ -63,12 +63,12 @@ WRITE_CLASS_ENCODER(rmdir_rollback)
 struct rename_rollback {
   struct drec {
     dirfrag_t dirfrag;
-    utime_t dirfrag_old_mtime;
-    utime_t dirfrag_old_rctime;
+    ceph::real_time dirfrag_old_mtime;
+    ceph::real_time dirfrag_old_rctime;
     inodeno_t ino, remote_ino;
     string dname;
     char remote_d_type;
-    utime_t old_ctime;
+    ceph::real_time old_ctime;
 
     drec() : remote_d_type((char)S_IFREG) {}
 
@@ -82,7 +82,7 @@ struct rename_rollback {
   metareqid_t reqid;
   drec orig_src, orig_dest;
   drec stray; // we know this is null, but we want dname, old mtime/rctime
-  utime_t ctime;
+  ceph::real_time ctime;
 
   void encode(bufferlist& bl) const;
   void decode(bufferlist::iterator& bl);

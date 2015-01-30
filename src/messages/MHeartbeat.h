@@ -33,7 +33,7 @@ class MHeartbeat : public Message {
   }
 
   MHeartbeat()
-    : Message(MSG_MDS_HEARTBEAT), load(utime_t()) { }
+    : Message(MSG_MDS_HEARTBEAT), load(ceph::real_time::min()) { }
   MHeartbeat(mds_load_t& load, int beat)
     : Message(MSG_MDS_HEARTBEAT),
       load(load) {
@@ -52,8 +52,7 @@ public:
   }
   void decode_payload() {
     bufferlist::iterator p = payload.begin();
-    utime_t now(ceph_clock_now(NULL));
-    ::decode(load, now, p);
+    ::decode(load, p);
     ::decode(beat, p);
     ::decode(import_map, p);
   }

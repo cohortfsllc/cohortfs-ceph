@@ -104,7 +104,7 @@ class PassAlong : public ThreadPool::WorkQueue<unsigned> {
   bool _empty() { return q.empty(); }
 public:
   PassAlong(ThreadPool *tp, Queueable *next) :
-    ThreadPool::WorkQueue<unsigned>("TestQueue", 100, 100, tp), next(next) {}
+    ThreadPool::WorkQueue<unsigned>("TestQueue", 100s, 100s, tp), next(next) {}
 };
 
 int main(int argc, char **argv)
@@ -152,7 +152,7 @@ int main(int argc, char **argv)
     return 1;
   }
 
-  DetailedStatCollector col(1, new JSONFormatter, 0, &cout);
+  DetailedStatCollector col(1s, new JSONFormatter, 0, &cout);
   Semaphore sem;
   for (unsigned i = 0; i < vm["queue-size"].as<unsigned>(); ++i)
     sem.Put();

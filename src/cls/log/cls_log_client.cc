@@ -27,8 +27,10 @@ void cls_log_add(librados::ObjectWriteOperation& op, cls_log_entry& entry)
   op.exec("log", "add", in);
 }
 
-void cls_log_add_prepare_entry(cls_log_entry& entry, const utime_t& timestamp,
-		 const string& section, const string& name, bufferlist& bl)
+void cls_log_add_prepare_entry(cls_log_entry& entry,
+			       const ceph::real_time& timestamp,
+			       const string& section, const string& name,
+			       bufferlist& bl)
 {
   entry.timestamp = timestamp;
   entry.section = section;
@@ -36,7 +38,8 @@ void cls_log_add_prepare_entry(cls_log_entry& entry, const utime_t& timestamp,
   entry.data = bl;
 }
 
-void cls_log_add(librados::ObjectWriteOperation& op, const utime_t& timestamp,
+void cls_log_add(librados::ObjectWriteOperation& op,
+		 const ceph::real_time& timestamp,
 		 const string& section, const string& name, bufferlist& bl)
 {
   cls_log_entry entry;
@@ -45,7 +48,9 @@ void cls_log_add(librados::ObjectWriteOperation& op, const utime_t& timestamp,
   cls_log_add(op, entry);
 }
 
-void cls_log_trim(librados::ObjectWriteOperation& op, const utime_t& from_time, const utime_t& to_time,
+void cls_log_trim(librados::ObjectWriteOperation& op,
+		  const ceph::real_time& from_time,
+		  const ceph::real_time& to_time,
 		  const string& from_marker, const string& to_marker)
 {
   bufferlist in;
@@ -58,7 +63,9 @@ void cls_log_trim(librados::ObjectWriteOperation& op, const utime_t& from_time, 
   op.exec("log", "trim", in);
 }
 
-int cls_log_trim(librados::IoCtx& io_ctx, const string& oid, const utime_t& from_time, const utime_t& to_time,
+int cls_log_trim(librados::IoCtx& io_ctx, const string& oid,
+		 const ceph::real_time& from_time,
+		 const ceph::real_time& to_time,
 		 const string& from_marker, const string& to_marker)
 {
   bool done = false;
@@ -106,7 +113,8 @@ public:
   }
 };
 
-void cls_log_list(librados::ObjectReadOperation& op, utime_t& from, utime_t& to,
+void cls_log_list(librados::ObjectReadOperation& op,
+		  ceph::real_time& from, ceph::real_time& to,
 		  const string& in_marker, int max_entries,
 		  list<cls_log_entry>& entries,
 		  string *out_marker, bool *truncated)

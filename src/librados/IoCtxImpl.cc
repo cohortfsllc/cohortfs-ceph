@@ -30,37 +30,33 @@ using std::unique_ptr;
 librados::IoCtxImpl::IoCtxImpl() :
   ref_cnt(0), client(NULL), volume(), assert_ver(0), last_objver(0),
   notify_timeout(30),
-  aio_write_list_lock("librados::IoCtxImpl::aio_write_list_lock"),
-  aio_write_seq(0), lock(NULL), objecter(NULL)
+  aio_write_seq(0), objecter(NULL)
 {
 }
 
 librados::IoCtxImpl::IoCtxImpl(RadosClient *c, Objecter *objecter,
-			       Mutex *client_lock,
 			       const shared_ptr<const Volume>& volume)
   : ref_cnt(0), client(c), volume(volume), assert_ver(0),
     notify_timeout(c->cct->_conf->client_notify_timeout),
-    aio_write_list_lock("librados::IoCtxImpl::aio_write_list_lock"),
-    aio_write_seq(0), lock(client_lock), objecter(objecter)
+    aio_write_seq(0), objecter(objecter)
 {
 }
 
 void librados::IoCtxImpl::queue_aio_write(AioCompletionImpl *c)
 {
   get();
-  aio_write_list_lock.Lock();
+  lock_guard awl(aio_write_list_lock);
   assert(c->io == this);
   c->aio_write_seq = ++aio_write_seq;
   ldout(client->cct, 20) << "queue_aio_write " << this << " completion " << c
 			 << " write_seq " << aio_write_seq << dendl;
   aio_write_list.push_back(&c->aio_write_list_item);
-  aio_write_list_lock.Unlock();
 }
 
 void librados::IoCtxImpl::complete_aio_write(AioCompletionImpl *c)
 {
   ldout(client->cct, 20) << "complete_aio_write " << c << dendl;
-  aio_write_list_lock.Lock();
+  lock_guard awl(aio_write_list_lock);
   assert(c->io == this);
   c->aio_write_list_item.remove_myself();
 
@@ -82,8 +78,7 @@ void librados::IoCtxImpl::complete_aio_write(AioCompletionImpl *c)
     aio_write_waiters.erase(waiters++);
   }
 
-  aio_write_cond.Signal();
-  aio_write_list_lock.Unlock();
+  aio_write_cond.notify_all();
   put();
 }
 
@@ -91,7 +86,7 @@ void librados::IoCtxImpl::flush_aio_writes_async(AioCompletionImpl *c)
 {
   ldout(client->cct, 20) << "flush_aio_writes_async " << this
 			 << " completion " << c << dendl;
-  Mutex::Locker l(aio_write_list_lock);
+  lock_guard awl(aio_write_list_lock);
   ceph_tid_t seq = aio_write_seq;
   if (aio_write_list.empty()) {
     ldout(client->cct, 20) << "flush_aio_writes_async no writes. (tid "
@@ -108,12 +103,12 @@ void librados::IoCtxImpl::flush_aio_writes_async(AioCompletionImpl *c)
 void librados::IoCtxImpl::flush_aio_writes()
 {
   ldout(client->cct, 20) << "flush_aio_writes" << dendl;
-  aio_write_list_lock.Lock();
+  unique_lock awl(aio_write_list_lock);
   ceph_tid_t seq = aio_write_seq;
   while (!aio_write_list.empty() &&
 	 aio_write_list.front()->aio_write_seq <= seq)
-    aio_write_cond.Wait(aio_write_list_lock);
-  aio_write_list_lock.Unlock();
+    aio_write_cond.wait(awl);
+  awl.unlock();
 }
 
 // IO
@@ -188,18 +183,15 @@ int librados::IoCtxImpl::write_full(const oid& obj, bufferlist& bl)
 int librados::IoCtxImpl::operate(const oid& obj, unique_ptr<ObjOp>& o,
 				 time_t *pmtime, int flags)
 {
-  utime_t ut;
-  if (pmtime) {
-    ut = utime_t(*pmtime, 0);
-  } else {
-    ut = ceph_clock_now(client->cct);
-  }
+  auto ut = pmtime ?
+    ceph::real_clock::from_time_t(*pmtime) :
+    ceph::real_clock::now();
 
   if (!o->size())
     return 0;
 
-  Mutex mylock;
-  Cond cond;
+  std::mutex mylock;
+  std::condition_variable cond;
   bool done;
   int r;
   version_t ver;
@@ -208,14 +200,12 @@ int librados::IoCtxImpl::operate(const oid& obj, unique_ptr<ObjOp>& o,
 
   Objecter::Op *objecter_op = objecter->prepare_mutate_op(
     obj, volume, o, ut, flags, NULL, oncommit, &ver);
-  lock->Lock();
-  objecter->op_submit(objecter_op);
-  lock->Unlock();
 
-  mylock.Lock();
-  while (!done)
-    cond.Wait(mylock);
-  mylock.Unlock();
+  objecter->op_submit(objecter_op);
+
+  unique_lock l(mylock);
+  cond.wait(l, [&](){ return done; });
+  l.unlock();
 
   set_sync_op_version(ver);
 
@@ -230,8 +220,8 @@ int librados::IoCtxImpl::operate_read(const oid& obj,
   if (!o->size())
     return 0;
 
-  Mutex mylock;
-  Cond cond;
+  std::mutex mylock;
+  std::condition_variable cond;
   bool done;
   int r;
   version_t ver;
@@ -241,14 +231,11 @@ int librados::IoCtxImpl::operate_read(const oid& obj,
   Objecter::Op *objecter_op = objecter->prepare_read_op(obj, volume,
 							o, pbl, flags,
 							onack, &ver);
-  lock->Lock();
   objecter->op_submit(objecter_op);
-  lock->Unlock();
 
-  mylock.Lock();
-  while (!done)
-    cond.Wait(mylock);
-  mylock.Unlock();
+  unique_lock l(mylock);
+  cond.wait(l, [&](){ return done; });
+  l.unlock();
 
   set_sync_op_version(ver);
 
@@ -269,7 +256,6 @@ int librados::IoCtxImpl::aio_operate_read(const oid &obj,
   Objecter::Op *objecter_op = objecter->prepare_read_op(obj, volume,
 							o, pbl, flags,
 							onack, &c->objver);
-  Mutex::Locker l(*lock);
   objecter->op_submit(objecter_op);
   return 0;
 }
@@ -279,7 +265,7 @@ int librados::IoCtxImpl::aio_operate(const oid& obj,
 				     AioCompletionImpl *c,
 				     int flags)
 {
-  utime_t ut = ceph_clock_now(client->cct);
+  auto ut = ceph::real_clock::now();
 
   Context *onack = new C_aio_Ack(c);
   Context *oncommit = new C_aio_Safe(c);
@@ -287,7 +273,6 @@ int librados::IoCtxImpl::aio_operate(const oid& obj,
   c->io = this;
   queue_aio_write(c);
 
-  Mutex::Locker l(*lock);
   objecter->mutate(obj, volume, o, ut, flags, onack, oncommit, &c->objver);
 
   return 0;
@@ -305,7 +290,6 @@ int librados::IoCtxImpl::aio_read(const oid obj, AioCompletionImpl *c,
   c->io = this;
   c->blp = pbl;
 
-  Mutex::Locker l(*lock);
   objecter->read(obj, volume, off, len, pbl, 0, onack, &c->objver);
   return 0;
 }
@@ -324,7 +308,6 @@ int librados::IoCtxImpl::aio_read(const oid obj, AioCompletionImpl *c,
   c->bl.push_back(buffer::create_static(len, buf));
   c->blp = &c->bl;
 
-  Mutex::Locker l(*lock);
   objecter->read(obj, volume, off, len, &c->bl, 0, onack, &c->objver);
 
   return 0;
@@ -358,7 +341,6 @@ int librados::IoCtxImpl::aio_sparse_read(const oid obj,
 
   onack->m_ops->sparse_read(off, len, m, data_bl, NULL);
 
-  Mutex::Locker l(*lock);
   objecter->read(obj, volume, onack->m_ops, NULL, 0, onack, &c->objver);
   return 0;
 }
@@ -367,7 +349,7 @@ int librados::IoCtxImpl::aio_write(const oid &obj, AioCompletionImpl *c,
 				   const bufferlist& bl, size_t len,
 				   uint64_t off)
 {
-  utime_t ut = ceph_clock_now(client->cct);
+  auto ut = ceph::real_clock::now();
   ldout(client->cct, 20) << "aio_write " << obj << " " << off << "~"
 			 << len << dendl;
 
@@ -377,9 +359,7 @@ int librados::IoCtxImpl::aio_write(const oid &obj, AioCompletionImpl *c,
   Context *onack = new C_aio_Ack(c);
   Context *onsafe = new C_aio_Safe(c);
 
-  Mutex::Locker l(*lock);
-  objecter->write(obj, volume,
-		  off, len, bl, ut, 0, onack, onsafe, &c->objver);
+  objecter->write(obj, volume, off, len, bl, ut, 0, onack, onsafe, &c->objver);
 
   return 0;
 }
@@ -387,7 +367,7 @@ int librados::IoCtxImpl::aio_write(const oid &obj, AioCompletionImpl *c,
 int librados::IoCtxImpl::aio_append(const oid &obj, AioCompletionImpl *c,
 				    const bufferlist& bl, size_t len)
 {
-  utime_t ut = ceph_clock_now(client->cct);
+  auto ut = ceph::real_clock::now();
 
   c->io = this;
   queue_aio_write(c);
@@ -395,7 +375,6 @@ int librados::IoCtxImpl::aio_append(const oid &obj, AioCompletionImpl *c,
   Context *onack = new C_aio_Ack(c);
   Context *onsafe = new C_aio_Safe(c);
 
-  Mutex::Locker l(*lock);
   objecter->append(obj, volume, len, bl, ut, 0, onack, onsafe, &c->objver);
 
   return 0;
@@ -405,7 +384,7 @@ int librados::IoCtxImpl::aio_write_full(const oid &obj,
 					AioCompletionImpl *c,
 					const bufferlist& bl)
 {
-  utime_t ut = ceph_clock_now(client->cct);
+  auto ut = ceph::real_clock::now();
 
   c->io = this;
   queue_aio_write(c);
@@ -413,7 +392,6 @@ int librados::IoCtxImpl::aio_write_full(const oid &obj,
   Context *onack = new C_aio_Ack(c);
   Context *onsafe = new C_aio_Safe(c);
 
-  Mutex::Locker l(*lock);
   objecter->write_full(obj, volume, bl, ut, 0, onack, onsafe, &c->objver);
 
   return 0;
@@ -421,7 +399,7 @@ int librados::IoCtxImpl::aio_write_full(const oid &obj,
 
 int librados::IoCtxImpl::aio_remove(const oid &obj, AioCompletionImpl *c)
 {
-  utime_t ut = ceph_clock_now(client->cct);
+  auto ut = ceph::real_clock::now();
 
   c->io = this;
   queue_aio_write(c);
@@ -429,7 +407,6 @@ int librados::IoCtxImpl::aio_remove(const oid &obj, AioCompletionImpl *c)
   Context *onack = new C_aio_Ack(c);
   Context *onsafe = new C_aio_Safe(c);
 
-  Mutex::Locker l(*lock);
   objecter->remove(obj, volume, ut, 0, onack, onsafe, &c->objver);
 
   return 0;
@@ -442,7 +419,6 @@ int librados::IoCtxImpl::aio_stat(const oid& obj, AioCompletionImpl *c,
   c->io = this;
   C_aio_stat_Ack *onack = new C_aio_stat_Ack(c, pmtime);
 
-  Mutex::Locker l(*lock);
   objecter->stat(obj, volume, psize, &onack->mtime, 0, onack, &c->objver);
 
   return 0;
@@ -480,7 +456,6 @@ int librados::IoCtxImpl::aio_exec(const oid& obj, AioCompletionImpl *c,
   c->is_read = true;
   c->io = this;
 
-  Mutex::Locker l(*lock);
   std::unique_ptr<ObjOp> rd = prepare_assert_ops();
   rd->call(cls, method, inbl);
   objecter->read(obj, volume, rd, outbl, 0, onack, &c->objver);
@@ -526,10 +501,11 @@ int librados::IoCtxImpl::sparse_read(const oid& obj,
   return m.size();
 }
 
-int librados::IoCtxImpl::stat(const oid& obj, uint64_t *psize, time_t *pmtime)
+int librados::IoCtxImpl::stat(const oid& obj, uint64_t *psize,
+			      time_t *pmtime)
 {
   uint64_t size;
-  utime_t mtime;
+  ceph::real_time mtime;
 
   if (!psize)
     psize = &size;
@@ -539,7 +515,7 @@ int librados::IoCtxImpl::stat(const oid& obj, uint64_t *psize, time_t *pmtime)
   int r = operate_read(obj, rd, NULL);
 
   if (r >= 0 && pmtime) {
-    *pmtime = mtime.sec();
+    *pmtime = ceph::real_clock::to_time_t(mtime);
   }
 
   return r;
@@ -583,9 +559,10 @@ int librados::IoCtxImpl::getxattrs(const oid& obj,
 
   attrset.clear();
   if (r >= 0) {
-    for (map<string,bufferlist>::iterator p = aset.begin(); p != aset.end(); ++p) {
-      ldout(client->cct, 10) << "IoCtxImpl::getxattrs: xattr=" << p->first << dendl;
-      attrset[p->first.c_str()] = p->second;
+    for (const auto& p : aset) {
+      ldout(client->cct, 10) << "IoCtxImpl::getxattrs: xattr=" << p.first
+			     << dendl;
+      attrset[p.first.c_str()] = p.second;
     }
   }
 
@@ -601,8 +578,8 @@ int librados::IoCtxImpl::watch(const oid& obj, uint64_t ver,
 			       uint64_t *cookie, librados::WatchCtx *ctx)
 {
   unique_ptr<ObjOp> wr = prepare_assert_ops();
-  Mutex mylock;
-  Cond cond;
+  std::mutex mylock;
+  std::condition_variable cond;
   bool done;
   int r;
   Context *onfinish = new C_SafeCond(&mylock, &cond, &done, &r);
@@ -610,25 +587,20 @@ int librados::IoCtxImpl::watch(const oid& obj, uint64_t ver,
 
   WatchNotifyInfo *wc = new WatchNotifyInfo(this, obj);
   wc->watch_ctx = ctx;
-  lock->Lock();
   client->register_watch_notify_callback(wc, cookie);
-  lock->Unlock();
   wr->watch(*cookie, ver, 1);
   bufferlist bl;
   wc->linger_id = objecter->linger_mutate(obj, volume, wr,
-					  ceph_clock_now(NULL), bl,
+					  ceph::real_clock::now(), bl,
 					  0, NULL, onfinish, &objver);
-  mylock.Lock();
-  while (!done)
-    cond.Wait(mylock);
-  mylock.Unlock();
+  unique_lock l(mylock);
+  cond.wait(l, [&](){ return done; });
+  l.unlock();
 
   set_sync_op_version(objver);
 
   if (r < 0) {
-    lock->Lock();
     client->unregister_watch_notify_callback(*cookie); // destroys wc
-    lock->Unlock();
   }
 
   return r;
@@ -652,26 +624,23 @@ int librados::IoCtxImpl::unwatch(const oid& obj, uint64_t cookie)
 {
   bufferlist inbl, outbl;
 
-  Mutex mylock;
-  Cond cond;
-  bool done;
+  std::mutex mylock;
+  std::condition_variable cond;
   int r;
+  bool done;
   Context *oncommit = new C_SafeCond(&mylock, &cond, &done, &r);
   version_t ver;
 
-  lock->Lock();
   client->unregister_watch_notify_callback(cookie); // destroys wc
-  lock->Unlock();
 
   unique_ptr<ObjOp> wr = prepare_assert_ops();
   wr->watch(cookie, 0, 0);
-  objecter->mutate(obj, volume, wr, ceph_clock_now(client->cct),
+  objecter->mutate(obj, volume, wr, ceph::real_clock::now(),
 		   0, NULL, oncommit, &ver);
 
-  mylock.Lock();
-  while (!done)
-    cond.Wait(mylock);
-  mylock.Unlock();
+  unique_lock l(mylock);
+  cond.wait(l, [&](){ return done; });
+  l.unlock();
 
   set_sync_op_version(ver);
 
@@ -682,13 +651,12 @@ int librados::IoCtxImpl::notify(const oid& obj, bufferlist& bl)
 {
   bufferlist inbl, outbl;
   // Construct WatchNotifyInfo
-  Cond cond_all;
-  Mutex mylock_all;
+  std::condition_variable cond_all;
+  std::mutex mylock_all;
   bool done_all = false;
   int r_notify = 0;
   unique_ptr<ObjOp> rd = prepare_assert_ops();
 
-  lock->Lock();
   WatchNotifyInfo *wc = new WatchNotifyInfo(this, obj);
   wc->notify_done = &done_all;
   wc->notify_lock = &mylock_all;
@@ -697,9 +665,7 @@ int librados::IoCtxImpl::notify(const oid& obj, bufferlist& bl)
 
   // Acquire cookie
   uint64_t cookie;
-  lock->Lock();
   client->register_watch_notify_callback(wc, &cookie);
-  lock->Unlock();
   uint32_t prot_ver = 1;
   uint32_t timeout = notify_timeout;
   ::encode(prot_ver, inbl);
@@ -710,20 +676,16 @@ int librados::IoCtxImpl::notify(const oid& obj, bufferlist& bl)
   version_t objver;
   wc->linger_id = objecter->linger_read(obj, volume, rd, inbl, NULL, 0,
 					&onack, &objver);
-  lock->Unlock();
 
   int r_issue = onack.wait();
 
   if (r_issue == 0) {
-    mylock_all.Lock();
-    while (!done_all)
-      cond_all.Wait(mylock_all);
-    mylock_all.Unlock();
+    unique_lock mla(mylock_all);
+    cond_all.wait(mla, [&](){ return done_all; });
+    mla.unlock();
   }
 
-  lock->Lock();
   client->unregister_watch_notify_callback(cookie);   // destroys wc
-  lock->Unlock();
 
   set_sync_op_version(objver);
 
@@ -768,12 +730,12 @@ librados::IoCtxImpl::C_aio_Ack::C_aio_Ack(AioCompletionImpl *_c) : c(_c)
 
 void librados::IoCtxImpl::C_aio_Ack::finish(int r)
 {
-  c->lock.Lock();
+  unique_lock cl(c->lock);
   c->rval = r;
   c->ack = true;
   if (c->is_read)
     c->safe = true;
-  c->cond.Signal();
+  c->cond.notify_all();
 
   if (r == 0 && c->blp && c->blp->length() > 0) {
     c->rval = c->blp->length();
@@ -786,7 +748,7 @@ void librados::IoCtxImpl::C_aio_Ack::finish(int r)
     c->io->client->finisher.queue(new C_AioSafe(c));
   }
 
-  c->put_unlock();
+  c->put_unlock(cl);
 }
 
 ///////////////////////////// C_aio_stat_Ack ////////////////////////////
@@ -800,20 +762,20 @@ librados::IoCtxImpl::C_aio_stat_Ack::C_aio_stat_Ack(AioCompletionImpl *_c,
 
 void librados::IoCtxImpl::C_aio_stat_Ack::finish(int r)
 {
-  c->lock.Lock();
+  unique_lock cl(c->lock);
   c->rval = r;
   c->ack = true;
-  c->cond.Signal();
+  c->cond.notify_all();
 
   if (r >= 0 && pmtime) {
-    *pmtime = mtime.sec();
+    *pmtime = ceph::real_clock::to_time_t(mtime);
   }
 
   if (c->callback_complete) {
     c->io->client->finisher.queue(new C_AioComplete(c));
   }
 
-  c->put_unlock();
+  c->put_unlock(cl);
 }
 
 //////////////////////////// C_aio_Safe ////////////////////////////////
@@ -825,13 +787,13 @@ librados::IoCtxImpl::C_aio_Safe::C_aio_Safe(AioCompletionImpl *_c) : c(_c)
 
 void librados::IoCtxImpl::C_aio_Safe::finish(int r)
 {
-  c->lock.Lock();
+  unique_lock cl(c->lock);
   if (!c->ack) {
     c->rval = r;
     c->ack = true;
   }
   c->safe = true;
-  c->cond.Signal();
+  c->cond.notify_all();
 
   if (c->callback_safe) {
     c->io->client->finisher.queue(new C_AioSafe(c));
@@ -839,14 +801,13 @@ void librados::IoCtxImpl::C_aio_Safe::finish(int r)
 
   c->io->complete_aio_write(c);
 
-  c->put_unlock();
+  c->put_unlock(cl);
 }
 
 ///////////////////////// C_NotifyComplete /////////////////////////////
 
-librados::IoCtxImpl::C_NotifyComplete::C_NotifyComplete(Mutex *_l,
-							Cond *_c,
-							bool *_d)
+librados::IoCtxImpl::C_NotifyComplete::C_NotifyComplete(
+  std::mutex *_l, std::condition_variable *_c, bool *_d)
   : lock(_l), cond(_c), done(_d)
 {
   *done = false;
@@ -856,9 +817,8 @@ void librados::IoCtxImpl::C_NotifyComplete::notify(uint8_t opcode,
 						   uint64_t ver,
 						   bufferlist& bl)
 {
-  lock->Lock();
+  lock_guard l(*lock);
   *done = true;
-  cond->Signal();
-  lock->Unlock();
+  cond->notify_all();
 }
 

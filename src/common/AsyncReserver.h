@@ -16,10 +16,10 @@
 #define ASYNC_RESERVER_H
 
 #include <map>
+#include <mutex>
 #include <utility>
 #include <list>
 
-#include "common/Mutex.h"
 #include "common/Finisher.h"
 
 /**
@@ -33,7 +33,9 @@ template <typename T>
 class AsyncReserver {
   Finisher *f;
   unsigned max_allowed;
-  Mutex lock;
+  std::mutex lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
 
   map<unsigned, list<pair<T, Context*> > > queues;
   map<T, pair<unsigned, typename list<pair<T, Context*> >::iterator > > queue_pointers;
@@ -61,7 +63,7 @@ public:
     : f(f), max_allowed(max_allowed) {}
 
   void set_max(unsigned max) {
-    Mutex::Locker l(lock);
+    lock_guard l(lock);
     max_allowed = max;
     do_queues();
   }
@@ -79,7 +81,7 @@ public:
     Context *on_reserved,     ///< [in] callback to be called on reservation
     unsigned prio
     ) {
-    Mutex::Locker l(lock);
+    lock_guard l(lock);
     assert(!queue_pointers.count(item) &&
 	   !in_progress.count(item));
     queues[prio].push_back(make_pair(item, on_reserved));
@@ -97,7 +99,7 @@ public:
   void cancel_reservation(
     T item		     ///< [in] key for reservation to cancel
     ) {
-    Mutex::Locker l(lock);
+    lock_guard l(lock);
     if (queue_pointers.count(item)) {
       unsigned prio = queue_pointers[item].first;
       delete queue_pointers[item].second->second;

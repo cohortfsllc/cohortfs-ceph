@@ -17,11 +17,11 @@
 
 #include <map>
 #include <cassert>
+#include <condition_variable>
+#include <mutex>
 #include <boost/intrusive_ptr.hpp>
 #include "common/ceph_context.h"
 #include "include/xlist.h"
-#include "common/Mutex.h"
-#include "common/Cond.h"
 #include "common/Thread.h"
 #include "common/RefCountedObj.h"
 #include "common/PrioritizedQueue.h"
@@ -66,13 +66,13 @@ class DispatchQueue {
 
   CephContext *cct;
   SimpleMessenger *msgr;
-  Mutex lock;
-  Cond cond;
+  std::mutex lock;
+  std::condition_variable cond;
 
   PrioritizedQueue<QueueItem, uint64_t> mqueue;
 
-  set<pair<double, Message*> > marrival;
-  map<Message *, set<pair<double, Message*> >::iterator> marrival_map;
+  set<pair<ceph::real_time, Message*> > marrival;
+  map<Message *, set<pair<ceph::real_time, Message*> >::iterator> marrival_map;
   void add_arrival(Message *m) {
     marrival_map.insert(
       make_pair(
@@ -82,8 +82,7 @@ class DispatchQueue {
       );
   }
   void remove_arrival(Message *m) {
-    map<Message *, set<pair<double, Message*> >::iterator>::iterator i =
-      marrival_map.find(m);
+    auto i = marrival_map.find(m);
     assert(i != marrival_map.end());
     marrival.erase(i->second);
     marrival_map.erase(i);
@@ -110,58 +109,58 @@ class DispatchQueue {
   bool stop;
   void local_delivery(Message *m, int priority);
 
-  double get_max_age(utime_t now);
+  ceph::timespan get_max_age();
 
   int get_queue_len() {
-    Mutex::Locker l(lock);
+    std::lock_guard<std::mutex> l(lock);
     return mqueue.length();
   }
 
   void queue_connect(Connection *con) {
-    Mutex::Locker l(lock);
+    std::lock_guard<std::mutex> l(lock);
     if (stop)
       return;
     mqueue.enqueue_strict(
       0,
       CEPH_MSG_PRIO_HIGHEST,
       QueueItem(D_CONNECT, con));
-    cond.Signal();
+    cond.notify_all();
   }
   void queue_accept(Connection *con) {
-    Mutex::Locker l(lock);
+    std::lock_guard<std::mutex> l(lock);
     if (stop)
       return;
     mqueue.enqueue_strict(
       0,
       CEPH_MSG_PRIO_HIGHEST,
       QueueItem(D_ACCEPT, con));
-    cond.Signal();
+    cond.notify_all();
   }
   void queue_remote_reset(Connection *con) {
-    Mutex::Locker l(lock);
+    std::lock_guard<std::mutex> l(lock);
     if (stop)
       return;
     mqueue.enqueue_strict(
       0,
       CEPH_MSG_PRIO_HIGHEST,
       QueueItem(D_BAD_REMOTE_RESET, con));
-    cond.Signal();
+    cond.notify_all();
   }
   void queue_reset(Connection *con) {
-    Mutex::Locker l(lock);
+    std::lock_guard<std::mutex> l(lock);
     if (stop)
       return;
     mqueue.enqueue_strict(
       0,
       CEPH_MSG_PRIO_HIGHEST,
       QueueItem(D_BAD_RESET, con));
-    cond.Signal();
+    cond.notify_all();
   }
 
   void enqueue(Message *m, int priority, uint64_t id);
   void discard_queue(uint64_t id);
   uint64_t get_id() {
-    Mutex::Locker l(lock);
+    std::lock_guard<std::mutex> l(lock);
     return next_pipe_id++;
   }
   void start();

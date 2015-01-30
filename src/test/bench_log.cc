@@ -1,10 +1,10 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
+#include "include/ceph_time.h"
 #include "include/types.h"
 #include "common/Thread.h"
 #include "common/debug.h"
-#include "common/Clock.h"
 #include "common/config.h"
 #include "common/ceph_argparse.h"
 #include "global/global_init.h"
@@ -46,7 +46,7 @@ int main(int argc, const char **argv)
 
   cct = global_init(NULL, args, CEPH_ENTITY_TYPE_OSD, CODE_ENVIRONMENT_UTILITY, 0);
 
-  utime_t start = ceph_clock_now(NULL);
+  auto start = ceph::mono_clock::now();
 
   list<T*> ls;
   for (int i=0; i<threads; i++) {
@@ -62,14 +62,13 @@ int main(int argc, const char **argv)
     delete t;
   }
 
-  utime_t t = ceph_clock_now(NULL);
-  t -= start;
+  ceph::timespan t = ceph::mono_clock::now() - start;
   cout << " flushing.. " << t << " so far ..." << std::endl;
 
   cct->_log->flush();
 
-  utime_t end = ceph_clock_now(NULL);
-  utime_t dur = end - start;
+  auto end = ceph::mono_clock::now();
+  ceph::timespan dur = end - start;
 
   cout << dur << std::endl;
   return 0;

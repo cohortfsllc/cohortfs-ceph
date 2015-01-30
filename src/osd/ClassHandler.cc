@@ -1,4 +1,5 @@
-
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #include "include/types.h"
 #include "msg/Message.h"
 #include "osd/OSD.h"
@@ -25,7 +26,7 @@
 
 int ClassHandler::open_class(const string& cname, ClassData **pcls)
 {
-  Mutex::Locker lock(mutex);
+  lock_guard lock(mutex);
   ClassData *cls = _get_class(cname);
   if (cls->status != ClassData::CLASS_OPEN) {
     int r = _load_class(cls);
@@ -164,13 +165,15 @@ int ClassHandler::_load_class(ClassData *cls)
 
 ClassHandler::ClassData *ClassHandler::register_class(const char *cname)
 {
-  assert(mutex.is_locked());
+  // Must be called with mutex locked
 
   ClassData *cls = _get_class(cname);
   dout(10) << "register_class " << cname << " status " << cls->status << dendl;
 
   if (cls->status != ClassData::CLASS_INITIALIZING) {
-    dout(0) << "class " << cname << " isn't loaded; is the class registering under the wrong name?" << dendl;
+    dout(0) << "class " << cname
+	    << " isn't loaded; is the class registering under the wrong name?"
+	    << dendl;
     return NULL;
   }
   return cls;
@@ -220,7 +223,7 @@ ClassHandler::ClassMethod *ClassHandler::ClassData::_get_method(const char *mnam
 
 int ClassHandler::ClassData::get_method_flags(const char *mname)
 {
-  Mutex::Locker l(handler->mutex);
+  ClassHandler::lock_guard hl(handler->mutex);
   ClassMethod *method = _get_method(mname);
   if (!method)
     return -ENOENT;

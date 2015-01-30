@@ -1017,10 +1017,10 @@ int DBObjectMap::write_state(KeyValueDB::Transaction _t) {
 }
 
 
-DBObjectMap::Header DBObjectMap::_lookup_map_header(const oid &obj)
+DBObjectMap::Header DBObjectMap::_lookup_map_header(const oid &obj,
+						    unique_lock& hl)
 {
-  while (map_header_in_use.count(obj))
-    header_cond.Wait(header_lock);
+  header_cond.wait(hl, [&](){ return map_header_in_use.count(obj) == 0; });
 
   map<string, bufferlist> out;
   set<string> to_get;
@@ -1057,9 +1057,9 @@ DBObjectMap::Header DBObjectMap::_generate_new_header(const oid &obj,
 
 DBObjectMap::Header DBObjectMap::lookup_parent(Header input)
 {
-  Mutex::Locker l(header_lock);
+  unique_lock hl(header_lock);
   while (in_use.count(input->parent))
-    header_cond.Wait(header_lock);
+    header_cond.wait(hl);
   map<string, bufferlist> out;
   set<string> keys;
   keys.insert(HEADER_KEY);
@@ -1090,8 +1090,8 @@ DBObjectMap::Header DBObjectMap::lookup_create_map_header(
   const oid &obj,
   KeyValueDB::Transaction t)
 {
-  Mutex::Locker l(header_lock);
-  Header header = _lookup_map_header(obj);
+  unique_lock hl(header_lock);
+  Header header = _lookup_map_header(obj, hl);
   if (!header) {
     header = _generate_new_header(obj, Header());
     set_map_header(obj, *header, t);

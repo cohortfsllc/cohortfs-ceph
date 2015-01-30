@@ -20,8 +20,6 @@
 #include <map>
 #include "Message.h"
 #include "Dispatcher.h"
-#include "common/Mutex.h"
-#include "common/Cond.h"
 #include "common/ceph_context.h"
 #include "common/zipkin_trace.h"
 #include "include/Context.h"
@@ -233,7 +231,7 @@ public:
    * Get age of oldest undelivered message
    * (0 if the queue is empty)
    */
-  virtual double get_dispatch_queue_max_age(utime_t now) = 0;
+  virtual ceph::timespan get_dispatch_queue_max_age() = 0;
   /**
    * Get the default crc flags for this messenger.
    * but not yet dispatched.
@@ -615,7 +613,7 @@ public:
 	      << std::endl;
 #endif
 
-    m->set_dispatch_stamp(ceph_clock_now(cct));
+    m->set_dispatch_stamp(ceph::mono_clock::now());
     m->trace.event("ms_deliver_dispatch");
     for (list<Dispatcher*>::iterator p = dispatchers.begin();
 	 p != dispatchers.end();

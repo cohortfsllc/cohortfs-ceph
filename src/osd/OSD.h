@@ -15,14 +15,19 @@
 #ifndef CEPH_OSD_H
 #define CEPH_OSD_H
 
-#include "boost/tuple/tuple.hpp"
+#include <shared_mutex>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <unordered_map>
+#include <unordered_set>
+
+#include <boost/tuple/tuple.hpp>
 
 #include "OSDVol.h"
 
 #include "msg/Dispatcher.h"
 
-#include "common/Mutex.h"
-#include "common/RWLock.h"
 #include "common/Timer.h"
 #include "common/WorkQueue.h"
 #include "common/LogClient.h"
@@ -37,11 +42,6 @@
 
 #include "auth/KeyRing.h"
 #include "OpRequest.h"
-
-#include <map>
-#include <memory>
-#include <unordered_map>
-#include <unordered_set>
 
 #include "Watch.h"
 #include "common/shared_cache.hpp"
@@ -79,6 +79,10 @@ using OSDC::Objecter;
 class OSD;
 class OSDService {
 public:
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
+  typedef std::shared_lock<std::shared_timed_mutex> shared_map_lock;
+  typedef std::unique_lock<std::shared_timed_mutex> unique_map_lock;
   OSD *osd;
   LRU lru;
   CephContext *cct;
@@ -99,14 +103,15 @@ public:
   void dequeue_vol(OSDVol *v, list<OpRequestRef> *dequeued);
 
   // -- superblock --
-  Mutex publish_lock, pre_publish_lock; // pre-publish orders before publish
+  // pre-publish orders before publish
+  std::mutex publish_lock, pre_publish_lock;
   OSDSuperblock superblock;
   OSDSuperblock get_superblock() {
-    Mutex::Locker l(publish_lock);
+    lock_guard l(publish_lock);
     return superblock;
   }
   void publish_superblock(const OSDSuperblock &block) {
-    Mutex::Locker l(publish_lock);
+    lock_guard l(publish_lock);
     superblock = block;
   }
 
@@ -114,11 +119,11 @@ public:
 
   OSDMapRef osdmap;
   OSDMapRef get_osdmap() {
-    Mutex::Locker l(publish_lock);
+    lock_guard l(publish_lock);
     return osdmap;
   }
   void publish_map(OSDMapRef map) {
-    Mutex::Locker l(publish_lock);
+    lock_guard l(publish_lock);
     osdmap = map;
   }
 
@@ -138,7 +143,7 @@ public:
    */
   OSDMapRef next_osdmap;
   void pre_publish_map(OSDMapRef map) {
-    Mutex::Locker l(pre_publish_lock);
+    lock_guard l(pre_publish_lock);
     next_osdmap = map;
   }
 
@@ -166,49 +171,27 @@ public:
   void reply_op_error(OpRequestRef op, int err);
   void reply_op_error(OpRequestRef op, int err, eversion_t v, version_t uv);
 
-  // -- Objecter, for teiring reads/writes from/to other OSDs --
-  Mutex objecter_lock;
-  SafeTimer objecter_timer;
-  OSDMap objecter_osdmap;
+  // -- Objecter, for tiering reads/writes from/to other OSDs --
   Objecter *objecter;
-  Finisher objecter_finisher;
-  struct ObjecterDispatcher : public Dispatcher {
-    OSDService *osd;
-    bool ms_dispatch(Message *m);
-    bool ms_handle_reset(Connection *con);
-    void ms_handle_remote_reset(Connection *con) {}
-    void ms_handle_connect(Connection *con);
-    bool ms_get_authorizer(int dest_type,
-			   AuthAuthorizer **authorizer,
-			   bool force_new);
-    ObjecterDispatcher(OSDService *o) : Dispatcher(cct), osd(o) {}
-  } objecter_dispatcher;
-  friend struct ObjecterDispatcher;
-
 
   // -- Watch --
-  Mutex watch_lock;
-  SafeTimer watch_timer;
+  std::mutex watch_lock;
+  SafeTimer<ceph::mono_clock> watch_timer;
   uint64_t next_notif_id;
   uint64_t get_next_id(epoch_t cur_epoch) {
-    Mutex::Locker l(watch_lock);
+    lock_guard l(watch_lock);
     return (((uint64_t)cur_epoch) << 32) | ((uint64_t)(next_notif_id++));
   }
 
   // -- tids --
   // for ops i issue
-  ceph_tid_t last_tid;
-  Mutex tid_lock;
+  std::atomic<ceph_tid_t> last_tid;
   ceph_tid_t get_tid() {
-    ceph_tid_t t;
-    tid_lock.Lock();
-    t = ++last_tid;
-    tid_lock.Unlock();
-    return t;
+    return ++last_tid;
   }
 
   // osd map cache (past osd maps)
-  Mutex map_cache_lock;
+  std::mutex map_cache_lock;
   SharedLRU<epoch_t, const OSDMap> map_cache;
   SimpleLRU<epoch_t, bufferlist> map_bl_cache;
   SimpleLRU<epoch_t, bufferlist> map_bl_inc_cache;
@@ -220,25 +203,25 @@ public:
     return ret;
   }
   OSDMapRef add_map(OSDMap *o) {
-    Mutex::Locker l(map_cache_lock);
+    lock_guard l(map_cache_lock);
     return _add_map(o);
   }
   OSDMapRef _add_map(OSDMap *o);
 
   void add_map_bl(epoch_t e, bufferlist& bl) {
-    Mutex::Locker l(map_cache_lock);
+    lock_guard l(map_cache_lock);
     return _add_map_bl(e, bl);
   }
   void pin_map_bl(epoch_t e, bufferlist &bl);
   void _add_map_bl(epoch_t e, bufferlist& bl);
   bool get_map_bl(epoch_t e, bufferlist& bl) {
-    Mutex::Locker l(map_cache_lock);
+    lock_guard l(map_cache_lock);
     return _get_map_bl(e, bl);
   }
   bool _get_map_bl(epoch_t e, bufferlist& bl);
 
   void add_map_inc_bl(epoch_t e, bufferlist& bl) {
-    Mutex::Locker l(map_cache_lock);
+    lock_guard l(map_cache_lock);
     return _add_map_inc_bl(e, bl);
   }
   void pin_map_inc_bl(epoch_t e, bufferlist &bl);
@@ -253,9 +236,9 @@ public:
   void shutdown();
 
   // -- OSD Full Status --
-  Mutex full_status_lock;
+  std::mutex full_status_lock;
   enum s_names { NONE, NEAR, FULL } cur_state;
-  time_t last_msg;
+  ceph::real_time last_msg;
   double cur_ratio;
   float get_full_ratio();
   float get_nearfull_ratio();
@@ -264,18 +247,18 @@ public:
 
 
   // -- stopping --
-  Mutex is_stopping_lock;
-  Cond is_stopping_cond;
+  std::mutex is_stopping_lock;
+  std::condition_variable is_stopping_cond;
   enum {
     NOT_STOPPING,
     PREPARING_TO_STOP,
     STOPPING } state;
   bool is_stopping() {
-    Mutex::Locker l(is_stopping_lock);
+    lock_guard l(is_stopping_lock);
     return state == STOPPING;
   }
   bool is_preparing_to_stop() {
-    Mutex::Locker l(is_stopping_lock);
+    lock_guard l(is_stopping_lock);
     return state == PREPARING_TO_STOP;
   }
   bool prepare_to_stop();
@@ -303,14 +286,16 @@ class OSD : public Dispatcher,
 	    public OSDStateNotifier {
   /** OSD **/
 public:
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
   // config observer bits
   virtual const char** get_tracked_conf_keys() const;
   virtual void handle_conf_change(const struct md_config_t *conf,
 				  const std::set <std::string> &changed);
 
 protected:
-  Mutex osd_lock;			// global lock
-  SafeTimer tick_timer;	   // safe timer (osd_lock)
+  std::mutex osd_lock;			// global lock
+  SafeTimer<ceph::mono_clock> tick_timer;	   // safe timer (osd_lock)
 
   AuthAuthorizeHandlerRegistry *authorize_handler_cluster_registry;
   AuthAuthorizeHandlerRegistry *authorize_handler_service_registry;
@@ -337,7 +322,7 @@ protected:
     }
   };
 
-  Cond dispatch_cond;
+  std::condition_variable dispatch_cond;
   int dispatch_running;
 
   void tick();
@@ -483,22 +468,26 @@ private:
     int peer;		///< peer
     ConnectionRef con_front;   ///< peer connection (front)
     ConnectionRef con_back;    ///< peer connection (back)
-    utime_t first_tx;	///< time we sent our first ping request
-    utime_t last_tx;	///< last time we sent a ping request
-    utime_t last_rx_front;  ///< last time we got a ping reply on the front side
-    utime_t last_rx_back;   ///< last time we got a ping reply on the back side
+    ceph::real_time first_tx;	///< time we sent our first ping request
+    ceph::real_time last_tx;	///< last time we sent a ping request
+    ceph::real_time last_rx_front;  ///< last time we got a ping reply
+				    ///  on the front side
+    ceph::real_time last_rx_back;   ///< last time we got a ping reply
+				    ///  on the back side
     epoch_t epoch;	///< most recent epoch we wanted this peer
 
-    bool is_unhealthy(utime_t cutoff) {
+    bool is_unhealthy(ceph::real_time cutoff) {
       return
 	! ((last_rx_front > cutoff ||
-	    (last_rx_front == utime_t() && (last_tx == utime_t() ||
-					    first_tx > cutoff))) &&
+	    (last_rx_front == ceph::real_time::min() &&
+	     (last_tx == ceph::real_time::min() ||
+	      first_tx > cutoff))) &&
 	   (last_rx_back > cutoff ||
-	    (last_rx_back == utime_t() && (last_tx == utime_t() ||
-					   first_tx > cutoff))));
+	    (last_rx_back == ceph::real_time::min() &&
+	     (last_tx == ceph::real_time::min() ||
+	      first_tx > cutoff))));
     }
-    bool is_healthy(utime_t cutoff) {
+    bool is_healthy(ceph::real_time cutoff) const {
       return last_rx_front > cutoff && last_rx_back > cutoff;
     }
 
@@ -508,18 +497,18 @@ private:
     int peer;
     HeartbeatSession(int p) : peer(p) {}
   };
-  Mutex heartbeat_lock;
+  std::mutex heartbeat_lock;
   map<int, int> debug_heartbeat_drops_remaining;
-  Cond heartbeat_cond;
+  std::condition_variable heartbeat_cond;
   bool heartbeat_stop;
   bool heartbeat_need_update;	///< true if we need to refresh our heartbeat peers
   epoch_t heartbeat_epoch;	///< last epoch we updated our heartbeat peers
   map<int,HeartbeatInfo> heartbeat_peers;  ///< map of osd id to HeartbeatInfo
-  utime_t last_mon_heartbeat;
+  ceph::real_time last_mon_heartbeat;
   Messenger *hbclient_messenger;
   Messenger *hb_front_server_messenger;
   Messenger *hb_back_server_messenger;
-  utime_t last_heartbeat_resample;   ///< last time we chose random peers in waiting-for-healthy state
+  ceph::mono_time last_heartbeat_resample;   ///< last time we chose random peers in waiting-for-healthy state
 
   bool heartbeat_reset(Connection *con);
   void heartbeat();
@@ -528,8 +517,8 @@ private:
   void need_heartbeat_peer_update();
 
   void heartbeat_kick() {
-    Mutex::Locker l(heartbeat_lock);
-    heartbeat_cond.Signal();
+    unique_lock l(heartbeat_lock);
+    heartbeat_cond.notify_all();
   }
 
   struct T_Heartbeat : public Thread {
@@ -567,18 +556,16 @@ private:
 
   // -- waiters --
   list<OpRequestRef> finished;
-  Mutex finished_lock;
+  std::mutex finished_lock;
 
   void take_waiters(list<OpRequestRef>& ls);
   void take_waiters_front(list<OpRequestRef>& ls) {
-    finished_lock.Lock();
+    lock_guard fl(finished_lock);
     finished.splice(finished.begin(), ls);
-    finished_lock.Unlock();
   }
   void take_waiter(OpRequestRef op) {
-    finished_lock.Lock();
+    lock_guard fl(finished_lock);
     finished.push_back(op);
-    finished_lock.Unlock();
   }
   void do_waiters();
 
@@ -586,23 +573,21 @@ private:
 
   struct OpWQ: public ThreadPool::WorkQueueVal<pair<OSDVolRef, OpRequestRef>,
 					       OSDVolRef > {
-    Mutex qlock;
+    std::mutex qlock;
     map<OSDVol*, list<OpRequestRef> > vol_for_processing;
     OSD *osd;
     PrioritizedQueue<pair<OSDVolRef, OpRequestRef>, entity_inst_t > pqueue;
-    OpWQ(OSD *o, time_t ti, ThreadPool *tp)
+    OpWQ(OSD *o, ceph::timespan ti, ThreadPool *tp)
       : ThreadPool::WorkQueueVal<pair<OSDVolRef, OpRequestRef>, OSDVolRef> (
-	"OSD::OpWQ", ti, ti*10, tp),
-	qlock("OpWQ::qlock"),
+	"OSD::OpWQ", ti, ti * 10, tp),
 	osd(o),
 	pqueue(o->cct->_conf->osd_op_pq_max_tokens_per_priority,
 	       o->cct->_conf->osd_op_pq_min_cost)
     {}
 
     void dump(Formatter *f) {
-      lock();
+      lock_guard ql(qlock);
       pqueue.dump(f);
-      unlock();
     }
 
     void _enqueue_front(pair<OSDVolRef, OpRequestRef> item);
@@ -617,7 +602,7 @@ private:
       }
     };
     void dequeue(OSDVol *vol, list<OpRequestRef> *dequeued = 0) {
-      lock();
+      lock_guard ql(qlock);
       if (!dequeued) {
 	pqueue.remove_by_filter(Pred(vol));
 	vol_for_processing.erase(vol);
@@ -637,7 +622,6 @@ private:
 	  vol_for_processing.erase(vol);
 	}
       }
-      unlock();
     }
     bool _empty() {
       return pqueue.empty();
@@ -659,11 +643,13 @@ protected:
   OSDMapRef get_osdmap() {
     return osdmap;
   }
-  utime_t had_map_since;
-  RWLock map_lock;
+  ceph::mono_time had_map_since;
+  std::shared_timed_mutex map_lock;
+  typedef std::unique_lock<std::shared_timed_mutex> unique_map_lock;
+  typedef std::shared_lock<std::shared_timed_mutex> shared_map_lock;
   list<OpRequestRef> waiting_for_osdmap;
 
-  Mutex peer_map_epoch_lock;
+  std::mutex peer_map_epoch_lock;
   map<int, epoch_t> peer_map_epoch;
 
   epoch_t get_peer_epoch(int p);
@@ -723,7 +709,8 @@ protected:
   OSDVolRef _lookup_vol(const boost::uuids::uuid& volid);
   OSDVolRef _load_vol(const boost::uuids::uuid& volid);
   void trim_vols(void);
-  OSDVolRef _lookup_lock_vol(const boost::uuids::uuid& volid);
+  OSDVolRef _lookup_lock_vol(const boost::uuids::uuid& volid,
+			     unique_lock& vl);
 
   // -- boot --
   void start_boot();
@@ -746,7 +733,7 @@ protected:
 			ThreadPool::TPHandle *handle);
 
   // -- failures --
-  map<int,utime_t> failure_queue;
+  map<int,ceph::real_time> failure_queue;
   map<int,entity_inst_t> failure_pending;
 
 

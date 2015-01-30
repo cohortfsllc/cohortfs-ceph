@@ -82,8 +82,8 @@ void MonMap::generate_test_instances(list<MonMap*>& o)
   o.push_back(new MonMap);
   o.push_back(new MonMap);
   o.back()->epoch = 1;
-  o.back()->last_changed = utime_t(123, 456);
-  o.back()->created = utime_t(789, 101112);
+  o.back()->last_changed = ceph::real_time(123s + 456ns);
+  o.back()->created = ceph::real_time(789s + 101112ns);
   o.back()->add("one", entity_addr_t());
 }
 

@@ -25,7 +25,8 @@
 
 #define dout_subsys ceph_subsys_mds
 #undef dout_prefix
-#define dout_prefix *_dout << "mds." << (mds ? mds->get_nodeid() : -1) << "." << table_name << ": "
+#define dout_prefix *_dout << "mds." << (mds ? mds->get_nodeid() : -1) << "." \
+  << table_name << ": "
 
 
 class C_MT_Save : public Context {
@@ -69,15 +70,16 @@ void MDSTable::save(Context *onfinish, version_t v)
   // write (async)
   oid obj = get_object_name();
   VolumeRef volume(mds->get_metadata_volume());
-  mds->objecter->write_full(obj, volume, bl, ceph_clock_now(cct), 0,
-			    NULL, new C_MT_Save(this, version));
+  mds->objecter->write_full(obj, volume, bl, ceph::real_clock::now(), 0,
+			    nullptr, new C_MT_Save(this, version));
 }
 
 void MDSTable::save_2(int r, version_t v)
 {
   dout(10) << "save_2 v " << v << dendl;
   if (r == -EBLACKLISTED) {
-    mds->suicide();
+    MDS::unique_lock l(mds->mds_lock, std::defer_lock);
+    mds->suicide(l);
     return;
   }
   if (r < 0) {
@@ -146,7 +148,8 @@ void MDSTable::load_2(int r, bufferlist& bl, Context *onfinish)
   assert(is_opening());
   state = STATE_ACTIVE;
   if (r == -EBLACKLISTED) {
-    mds->suicide();
+    MDS::unique_lock l(mds->mds_lock, std::defer_lock);
+    mds->suicide(l);
     return;
   }
   if (r < 0) {

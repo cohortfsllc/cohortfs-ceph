@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 /*
  * Generate latency statistics for a configurable number of write
  * operations of configurable size.
@@ -14,9 +16,6 @@
 #include "include/rados/librados.hpp"
 #include "include/Context.h"
 #include "common/ceph_context.h"
-#include "common/Mutex.h"
-#include "common/Cond.h"
-#include "include/utime.h"
 #include "common/ceph_argparse.h"
 #include "test/omap_bench.h"
 
@@ -126,19 +125,19 @@ int OmapBench::setup(int argc, const char** argv) {
 //Writer functions
 Writer::Writer(OmapBench *omap_bench) : ob(omap_bench) {
   stringstream name;
-  ob->data_lock.Lock();
+  OmapBench::unique_lock obdl(ob->data_lock);
   name << omap_bench->prefix << ++(ob->data.started_ops);
-  ob->data_lock.Unlock();
+  obdl.unlock();
   oid = name.str();
 }
 void Writer::start_time() {
-  begin_time = ceph_clock_now(nullptr);
+  begin_time = ceph::mono_clock::now();
 }
 void Writer::stop_time() {
-  end_time = ceph_clock_now(nullptr);
+  end_time = ceph::mono_clock::now();
 }
-double Writer::get_time() {
-  return (end_time - begin_time) * 1000;
+ceph::timespan Writer::get_time() {
+  return end_time - begin_time;
 }
 string Writer::get_oid() {
   return oid;
@@ -167,9 +166,9 @@ void AioWriter::set_aioc(librados::callback_t complete,
 void OmapBench::aio_is_safe(rados_completion_t c, void *arg) {
   AioWriter *aiow = reinterpret_cast<AioWriter *>(arg);
   aiow->stop_time();
-  Mutex * data_lock = &aiow->ob->data_lock;
-  Mutex * thread_is_free_lock = &aiow->ob->thread_is_free_lock;
-  Cond * thread_is_free = &aiow->ob->thread_is_free;
+  std::mutex* data_lock = &aiow->ob->data_lock;
+  std::mutex* thread_is_free_lock = &aiow->ob->thread_is_free_lock;
+  std::condition_variable* thread_is_free = &aiow->ob->thread_is_free;
   int &busythreads_count = aiow->ob->busythreads_count;
   o_bench_data &data = aiow->ob->data;
   int INCREMENT = aiow->ob->increment;
@@ -178,11 +177,11 @@ void OmapBench::aio_is_safe(rados_completion_t c, void *arg) {
     cout << "error writing AioCompletion";
     return;
   }
-  double time = aiow->get_time();
+  ceph::timespan time = aiow->get_time();
   delete aiow;
-  data_lock->Lock();
+  unique_lock dl(*data_lock);
   data.avg_latency = (data.avg_latency * data.completed_ops + time)
-      / (data.completed_ops + 1);
+    / (data.completed_ops + 1);
   data.completed_ops++;
   if (time < data.min_latency) {
     data.min_latency = time;
@@ -193,15 +192,15 @@ void OmapBench::aio_is_safe(rados_completion_t c, void *arg) {
   data.total_latency += time;
   ++(data.freq_map[time / INCREMENT]);
   if(data.freq_map[time/INCREMENT] > data.mode.second) {
-    data.mode.first = time/INCREMENT;
-    data.mode.second = data.freq_map[time/INCREMENT];
+    data.mode.first = time / INCREMENT;
+    data.mode.second = data.freq_map[time / INCREMENT];
   }
-  data_lock->Unlock();
+  dl.unlock();
 
-  thread_is_free_lock->Lock();
+  unique_lock tifl(*thread_is_free_lock);
   busythreads_count--;
-  thread_is_free->Signal();
-  thread_is_free_lock->Unlock();
+  thread_is_free->notify_all();
+  tifl.unlock();
 }
 
 string OmapBench::random_string(int len) {
@@ -268,19 +267,20 @@ void OmapBench::print_results() {
   cout << "Average latency:\t" << data.avg_latency;
   cout << "ms\nMinimum latency:\t" << data.min_latency;
   cout << "ms\nMaximum latency:\t" << data.max_latency;
-  cout << "ms\nMode latency:\t\t"<<"between "<<data.mode.first * increment;
-  cout << " and " <<data.mode.first * increment + increment;
+  cout << "ms\nMode latency:\t\t" << "between " << data.mode.first * increment;
+  cout << " and " << data.mode.first * increment + increment * 1s;
   cout << "ms\nTotal latency:\t\t" << data.total_latency;
   cout << "ms"<<std::endl;
   cout << std::endl;
   cout << "Histogram:" << std::endl;
-  for(int i = floor(data.min_latency / increment); i <
-      ceil(data.max_latency / increment); i++) {
+  for(ceph::timespan i = data.min_latency / increment;
+      i < data.max_latency / increment;
+      i += 1s) {
     cout << ">= "<< i * increment;
     cout << "ms";
     int spaces;
-    if (i == 0) spaces = 4;
-    else spaces = 3 - floor(log10(i));
+    if (i == 0ns) spaces = 4;
+    else spaces = 3 - floor(log10(ceph::span_to_double(i)));
     for (int j = 0; j < spaces; j++) {
       cout << " ";
     }
@@ -366,16 +366,13 @@ int OmapBench::test_write_objects_in_parallel(omap_generator_t omap_gen) {
   comp = NULL;
   AioWriter *this_aio_writer;
 
-  Mutex::Locker l(thread_is_free_lock);
+  unique_lock tifl(thread_is_free_lock);
   for (int i = 0; i < objects; i++) {
     assert(busythreads_count <= threads);
     //wait for a writer to be free
     if (busythreads_count == threads) {
-      int err = thread_is_free.Wait(thread_is_free_lock);
+      thread_is_free.wait(tifl);
       assert(busythreads_count < threads);
-      if (err < 0) {
-	return err;
-      }
     }
 
     //set up the write
@@ -398,7 +395,7 @@ int OmapBench::test_write_objects_in_parallel(omap_generator_t omap_gen) {
     }
   }
   while(busythreads_count > 0) {
-    thread_is_free.Wait(thread_is_free_lock);
+    thread_is_free.wait(tifl);
   }
 
   return 0;

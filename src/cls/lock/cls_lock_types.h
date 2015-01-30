@@ -1,13 +1,16 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #ifndef CEPH_CLS_LOCK_TYPES_H
 #define CEPH_CLS_LOCK_TYPES_H
 
+#include "include/ceph_time.h"
 #include "include/encoding.h"
 #include "include/types.h"
-#include "include/utime.h"
 #include "msg/msg_types.h"
 
 /* lock flags */
 #define LOCK_FLAG_RENEW 0x1	   /* idempotent lock acquire */
+
 
 enum ClsLockType {
   LOCK_NONE	 = 0,
@@ -70,13 +73,15 @@ namespace rados {
 
       struct locker_info_t
       {
-	utime_t expiration;  // expiration: non-zero means epoch of locker expiration
+	ceph::real_time expiration;  // expiration, max() means it
+				     // never expires.
 	entity_addr_t addr;  // addr: locker address
 	string description;  // description: locker description, may be empty
 
-	locker_info_t() {}
-	locker_info_t(const utime_t& _e, const entity_addr_t& _a,
-		      const string& _d) :  expiration(_e), addr(_a), description(_d) {}
+	locker_info_t() : expiration(ceph::real_time::max()) {}
+	locker_info_t(const ceph::real_time& _e, const entity_addr_t& _a,
+		      const string& _d)
+	  :  expiration(_e), addr(_a), description(_d) {}
 
 	void encode(bufferlist &bl) const {
 	  ENCODE_START(1, 1, bl);

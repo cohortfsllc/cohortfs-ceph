@@ -182,9 +182,9 @@ void Migrator::export_empty_import(CDir *dir)
 
 void Migrator::find_stale_export_freeze()
 {
-  utime_t now = ceph_clock_now(mds->cct);
-  utime_t cutoff = now;
-  cutoff -= mds->cct->_conf->mds_freeze_tree_timeout;
+  ceph::mono_time now = ceph::mono_clock::now();
+  ceph::mono_time cutoff = now - ceph::span_from_double(
+    mds->cct->_conf->mds_freeze_tree_timeout);
 
 
   /*
@@ -816,7 +816,7 @@ void Migrator::dispatch_export_dir(MDRequestRef& mdr)
   mds->send_message_mds(discover, it->second.peer);
   assert(mds->cct->_conf->mds_kill_export_at != 2);
 
-  it->second.last_cum_auth_pins_change = ceph_clock_now(mds->cct);
+  it->second.last_cum_auth_pins_change = ceph::mono_clock::now();
 
   // start the freeze, but hold it up with an auth_pin.
   dir->freeze_tree();
@@ -1199,7 +1199,7 @@ void Migrator::export_go_synced(CDir *dir, uint64_t tid)
   cache->adjust_subtree_auth(dir, mds->get_nodeid(), it->second.peer);
 
   // take away the popularity we're sending.
-  utime_t now = ceph_clock_now(mds->cct);
+  ceph::real_time now = ceph::real_clock::now();
   mds->balancer->subtract_export(dir, now);
 
   // fill export message with cache data
@@ -1303,9 +1303,10 @@ void Migrator::finish_export_inode_caps(CInode *in, int peer,
   mds->locker->eval(in, CEPH_CAP_LOCKS);
 }
 
-void Migrator::finish_export_inode(CInode *in, utime_t now, int peer,
-				   map<client_t,Capability::Import>& peer_imported,
-				   list<Context*>& finished)
+void Migrator::finish_export_inode(
+  CInode *in, ceph::real_time now, int peer,
+  map<client_t,Capability::Import>& peer_imported,
+  list<Context*>& finished)
 {
   ldout(mds->cct, 12) << "finish_export_inode " << *in << dendl;
 
@@ -1361,7 +1362,7 @@ void Migrator::finish_export_inode(CInode *in, utime_t now, int peer,
 int Migrator::encode_export_dir(bufferlist& exportbl,
 				CDir *dir,
 				map<client_t,entity_inst_t>& exported_client_map,
-				utime_t now)
+				ceph::real_time now)
 {
   int num_exported = 0;
 
@@ -1448,9 +1449,10 @@ int Migrator::encode_export_dir(bufferlist& exportbl,
   return num_exported;
 }
 
-void Migrator::finish_export_dir(CDir *dir, utime_t now, int peer,
-				 map<inodeno_t,map<client_t,Capability::Import> >& peer_imported,
-				 list<Context*>& finished)
+void Migrator::finish_export_dir(
+  CDir *dir, ceph::real_time now, int peer,
+  map<inodeno_t,map<client_t,Capability::Import> >& peer_imported,
+  list<Context*>& finished)
 {
   ldout(mds->cct, 10) << "finish_export_dir " << *dir << dendl;
 
@@ -1754,7 +1756,7 @@ void Migrator::export_finish(CDir *dir)
 
   // finish export (adjust local cache state)
   C_Contexts *fin = new C_Contexts;
-  finish_export_dir(dir, ceph_clock_now(mds->cct),
+  finish_export_dir(dir, ceph::real_clock::now(),
 		    it->second.peer, it->second.peer_imported, fin->contexts);
   dir->add_waiter(CDir::WAIT_UNFREEZE, fin);
 
@@ -2171,7 +2173,7 @@ void Migrator::handle_export_dir(MExportDir *m)
   assert(it->second.state == IMPORT_PREPPED);
   assert(it->second.tid == m->get_tid());
 
-  utime_t now = ceph_clock_now(mds->cct);
+  ceph::real_time now = ceph::real_clock::now();
   int oldauth = m->get_source().num();
   ldout(mds->cct, 7) << "handle_export_dir importing " << *dir << " from " << oldauth << dendl;
   assert(dir->is_auth() == false);
@@ -2767,13 +2769,11 @@ void Migrator::finish_import_inode_caps(CInode *in, int peer, bool auth_cap,
   }
 }
 
-int Migrator::decode_import_dir(bufferlist::iterator& blp,
-				int oldauth,
-				CDir *import_root,
-				EImportStart *le,
-				LogSegment *ls,
-				map<CInode*,map<client_t,Capability::Export> >& peer_exports,
-				list<ScatterLock*>& updated_scatterlocks, utime_t now)
+int Migrator::decode_import_dir(
+  bufferlist::iterator& blp, int oldauth, CDir *import_root,
+  EImportStart *le, LogSegment *ls,
+  map<CInode*,map<client_t,Capability::Export> >& peer_exports,
+  list<ScatterLock*>& updated_scatterlocks, ceph::real_time now)
 {
   // set up dir
   dirfrag_t df;

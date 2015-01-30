@@ -20,8 +20,6 @@
 #include "rgw_formats.h"
 
 
-using namespace std;
-
 // define as static when RGWBucket implementation compete
 extern void rgw_get_buckets_obj(const string& user_id, string& buckets_obj_id);
 

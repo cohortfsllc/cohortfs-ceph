@@ -23,7 +23,6 @@
 # include <pk11pub.h>
 #endif
 
-#include "common/Clock.h"
 #include "common/armor.h"
 #include "common/ceph_crypto.h"
 #include "common/config.h"
@@ -314,7 +313,7 @@ void CryptoAES::decrypt(const bufferptr& secret, const bufferlist& in,
 int CryptoKey::set_secret(CephContext *cct, int type, bufferptr& s)
 {
   this->type = type;
-  created = ceph_clock_now(cct);
+  created = ceph::real_clock::now();
 
   CryptoHandler *h = cct->get_crypto_handler(type);
   if (!h) {
@@ -334,7 +333,7 @@ int CryptoKey::set_secret(CephContext *cct, int type, bufferptr& s)
 int CryptoKey::create(CephContext *cct, int t)
 {
   type = t;
-  created = ceph_clock_now(cct);
+  created = ceph::real_clock::now();
 
   CryptoHandler *h = cct->get_crypto_handler(type);
   if (!h) {

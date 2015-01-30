@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
  *
@@ -24,10 +26,11 @@
  * @param time The timestamp associated with the marker
  * param entries A list of in-progress entries prior to the marker
  */
-void cls_replica_log_prepare_marker(cls_replica_log_progress_marker& progress,
-				    const string& entity, const string& marker,
-				    const utime_t& time,
-				    const list<pair<string, utime_t> > *entries);
+void cls_replica_log_prepare_marker(
+	cls_replica_log_progress_marker& progress,
+	const string& entity, const string& marker,
+	const ceph::real_time& time,
+	const list<pair<string, ceph::real_time> > *entries);
 
 /**
  * Extract a progress marker object into its components.
@@ -38,10 +41,10 @@ void cls_replica_log_prepare_marker(cls_replica_log_progress_marker& progress,
  * @param time [out] The timestamp associated with the marker
  * @param entries [out] List of in-progress entries prior to the marker
  */
-void cls_replica_log_extract_marker(const cls_replica_log_progress_marker& progress,
-				    string& entity, string& marker,
-				    utime_t& time,
-				    list<pair<string, utime_t> >& entries);
+void cls_replica_log_extract_marker(
+  const cls_replica_log_progress_marker& progress,
+  string& entity, string& marker, ceph::real_time& time,
+  list<pair<string, ceph::real_time> >& entries);
 
 /**
  * Add a progress marker update to a write op. The op will return 0 on
@@ -76,9 +79,9 @@ void cls_replica_log_delete_bound(librados::ObjectWriteOperation& op,
  * oldest in-progress item.
  * @param markers [out] List of progress markers for individual daemons
  */
-int cls_replica_log_get_bounds(librados::IoCtx& io_ctx, const string& oid,
-				string& position_marker,
-				utime_t& oldest_time,
-				list<cls_replica_log_progress_marker>& markers);
+int cls_replica_log_get_bounds(
+  librados::IoCtx& io_ctx, const string& oid, string& position_marker,
+  ceph::real_time& oldest_time,
+  list<cls_replica_log_progress_marker>& markers);
 
 #endif /* CLS_REPLICA_LOG_CLIENT_H_ */

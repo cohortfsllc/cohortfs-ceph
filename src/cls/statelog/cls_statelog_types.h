@@ -1,10 +1,12 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #ifndef CEPH_CLS_STATELOG_TYPES_H
 #define CEPH_CLS_STATELOG_TYPES_H
 
+#include "include/ceph_time.h"
 #include "include/encoding.h"
 #include "include/types.h"
 
-#include "include/utime.h"
 #include "common/Formatter.h"
 
 class JSONObj;
@@ -13,7 +15,7 @@ struct cls_statelog_entry {
   string client_id;
   string op_id;
   string object;
-  utime_t timestamp;
+  ceph::real_time timestamp;
   bufferlist data;
   uint32_t state; /* user defined state */
 

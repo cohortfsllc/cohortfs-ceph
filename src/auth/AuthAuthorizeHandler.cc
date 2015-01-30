@@ -18,7 +18,6 @@
 #include "cephx/CephxAuthorizeHandler.h"
 #include "none/AuthNoneAuthorizeHandler.h"
 #include "AuthMethodList.h"
-#include "common/Mutex.h"
 
 #define dout_subsys ceph_subsys_auth
 
@@ -28,7 +27,7 @@ AuthAuthorizeHandler *AuthAuthorizeHandlerRegistry::get_handler(int protocol)
     return NULL;
   }
 
-  Mutex::Locker l(m_lock);
+  lock_guard l(m_lock);
   map<int,AuthAuthorizeHandler*>::iterator iter = m_authorizers.find(protocol);
   if (iter != m_authorizers.end())
     return iter->second;

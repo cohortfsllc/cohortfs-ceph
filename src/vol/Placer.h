@@ -27,12 +27,10 @@
 #include <boost/uuid/uuid.hpp>
 #include "include/stringify.h"
 #include "include/encoding.h"
-#include "include/utime.h"
+#include "include/ceph_time.h"
 #include "osd/osd_types.h"
 
 class OSDMap;
-
-using namespace std;
 
 enum placer_type {
   ErasureCPlacerType,

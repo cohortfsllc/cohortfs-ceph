@@ -3,7 +3,7 @@
 #ifndef CEPH_LIBRBD_WATCHCTX_H
 #define CEPH_LIBRBD_WATCHCTX_H
 
-#include "common/Mutex.h"
+#include <mutex>
 #include "include/buffer.h"
 #include "include/rados/librados.hpp"
 
@@ -14,7 +14,9 @@ namespace librbd {
   class WatchCtx : public librados::WatchCtx {
     ImageCtx *ictx;
     bool valid;
-    Mutex lock;
+    std::mutex lock;
+    typedef std::lock_guard<std::mutex> lock_guard;
+    typedef std::unique_lock<std::mutex> unique_lock;
   public:
     uint64_t cookie;
     WatchCtx(ImageCtx *ctx) : ictx(ctx),

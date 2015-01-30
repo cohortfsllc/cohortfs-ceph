@@ -18,23 +18,23 @@
 #ifndef CEPH_KEYVALUESTORE_H
 #define CEPH_KEYVALUESTORE_H
 
-#include "include/types.h"
 
 #include <cassert>
-#include <map>
-#include <deque>
-#include <boost/scoped_ptr.hpp>
+#include <condition_variable>
 #include <fstream>
-using namespace std;
+#include <map>
+#include <mutex>
+#include <deque>
 
+#include <boost/scoped_ptr.hpp>
 
+#include "include/types.h"
 #include "ObjectStore.h"
 
 #include "common/WorkQueue.h"
 #include "common/Finisher.h"
 #include "common/fd.h"
 
-#include "common/Mutex.h"
 #include "GenericObjectMap.h"
 #include "SequencerPosition.h"
 #include "KeyValueDB.h"
@@ -164,7 +164,9 @@ class KeyValueStore : public ObjectStore,
 
   Finisher ondisk_finisher;
 
-  Mutex lock;
+  std::mutex lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
 
   int _create_current();
 
@@ -239,7 +241,7 @@ class KeyValueStore : public ObjectStore,
 
   // -- op workqueue --
   struct Op {
-    utime_t start;
+    ceph::mono_time start;
     uint64_t op;
     list<Transaction*> tls;
     Context *ondisk, *onreadable, *onreadable_sync;
@@ -247,32 +249,34 @@ class KeyValueStore : public ObjectStore,
     OpRequestRef osd_op;
   };
   class OpSequencer : public Sequencer_impl {
-    Mutex qlock; // to protect q, for benefit of flush (peek/dequeue also protected by lock)
+    std::mutex qlock; // to protect q, for benefit of flush (peek/dequeue also protected by lock)
     list<Op*> q;
     list<uint64_t> jq;
-    Cond cond;
+    std::condition_variable cond;
    public:
     Sequencer *parent;
-    Mutex apply_lock;  // for apply mutual exclusion
+    std::mutex apply_lock;  // for apply mutual exclusion
+    typedef std::lock_guard<std::mutex> lock_guard;
+    typedef std::unique_lock<std::mutex> unique_lock;
 
     void queue(Op *o) {
-      Mutex::Locker l(qlock);
+      lock_guard l(qlock);
       q.push_back(o);
     }
     Op *peek_queue() {
-      assert(apply_lock.is_locked());
+      // Must be called with apply_lock locked.
       return q.front();
     }
     Op *dequeue() {
-      assert(apply_lock.is_locked());
-      Mutex::Locker l(qlock);
+      // Must be called with apply_lock locked.
+      lock_guard l(qlock);
       Op *o = q.front();
       q.pop_front();
-      cond.Signal();
+      cond.notify_all();
       return o;
     }
     void flush() {
-      Mutex::Locker l(qlock);
+      unique_lock ql(qlock);
 
       // get max for journal _or_ op queues
       uint64_t seq = 0;
@@ -286,7 +290,7 @@ class KeyValueStore : public ObjectStore,
 	// queues
 	while ((!q.empty() && q.front()->op <= seq) ||
 		(!jq.empty() && jq.front() <= seq))
-	  cond.Wait(qlock);
+	  cond.wait(ql);
       }
     }
 
@@ -306,15 +310,15 @@ class KeyValueStore : public ObjectStore,
   Sequencer default_osr;
   deque<OpSequencer*> op_queue;
   uint64_t op_queue_len, op_queue_bytes;
-  Cond op_throttle_cond;
-  Mutex op_throttle_lock;
+  std::condition_variable op_throttle_cond;
+  std::mutex op_throttle_lock;
   Finisher op_finisher;
 
   ThreadPool op_tp;
   struct OpWQ : public ThreadPool::WorkQueue<OpSequencer> {
     KeyValueStore *store;
-    OpWQ(KeyValueStore *fs, time_t timeout, time_t suicide_timeout,
-	 ThreadPool *tp) :
+    OpWQ(KeyValueStore *fs, ceph::timespan timeout,
+	 ceph::timespan suicide_timeout, ThreadPool *tp) :
       ThreadPool::WorkQueue<OpSequencer>("KeyValueStore::OpWQ",
 					 timeout, suicide_timeout, tp),
       store(fs) {}
@@ -337,10 +341,15 @@ class KeyValueStore : public ObjectStore,
       return osr;
     }
     void _process(OpSequencer *osr, ThreadPool::TPHandle &handle) {
-      store->_do_op(osr, handle);
+      unique_lock osral;
+      store->_do_op(osr, handle, osral);
+      osral.release();
+      // ThreadPool worker takes a lock then immediately calls...
     }
     void _process_finish(OpSequencer *osr) {
-      store->_finish_op(osr);
+      // Threadpool worker has taken a lock, calls us...
+      unique_lock osral(osr->apply_lock, std::adopt_lock);
+      store->_finish_op(osr, osral);
     }
     void _clear() {
       assert(store->op_queue.empty());
@@ -351,9 +360,13 @@ class KeyValueStore : public ObjectStore,
 	       Context *onreadable_sync, OpRequestRef osd_op);
   void queue_op(OpSequencer *osr, Op *o);
   void op_queue_reserve_throttle(Op *o, ThreadPool::TPHandle *handle = NULL);
-  void _do_op(OpSequencer *osr, ThreadPool::TPHandle &handle);
+  // Must be given an UNLOCKED unique_lock. Doesn't matter what it's
+  // associated with.
+  void _do_op(OpSequencer *osr, ThreadPool::TPHandle &handle,
+	      unique_lock& osral);
   void op_queue_release_throttle(Op *o);
-  void _finish_op(OpSequencer *osr);
+  // Must be given the LOCKED unique_lock from _do_op.
+  void _finish_op(OpSequencer *osr, unique_lock& osral);
 
  public:
 
@@ -544,21 +557,23 @@ class KeyValueStore : public ObjectStore,
   static const uint32_t COLLECTION_VERSION = 1;
 
   class SubmitManager {
-    Mutex lock;
+    std::mutex lock;
     uint64_t op_seq;
     uint64_t op_submitted;
    public:
     SubmitManager() :
 	op_seq(0), op_submitted(0)
     {}
-    uint64_t op_submit_start();
-    void op_submit_finish(uint64_t op);
+    // Pass in a unique_lock (must not be locked!)
+    uint64_t op_submit_start(unique_lock& sml);
+    // Pass in a unique_lock (must be locked!), it will unlock it.
+    void op_submit_finish(unique_lock&, uint64_t op);
     void set_op_seq(uint64_t seq) {
-	Mutex::Locker l(lock);
-	op_submitted = op_seq = seq;
+      lock_guard l(lock);
+      op_submitted = op_seq = seq;
     }
     uint64_t get_op_seq() {
-	return op_seq;
+      return op_seq;
     }
   } submit_manager;
 };

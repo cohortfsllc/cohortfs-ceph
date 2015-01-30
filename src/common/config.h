@@ -20,11 +20,12 @@
 #include <vector>
 #include <map>
 #include <set>
+#include <mutex>
 
+#include <boost/uuid/nil_generator.hpp>
 #include <boost/uuid/uuid.hpp>
 #include "common/ConfUtils.h"
 #include "common/entity_name.h"
-#include "common/Mutex.h"
 #include "log/SubsystemMap.h"
 #include "common/config_obs.h"
 #include "msg/msg_types.h"
@@ -197,9 +198,6 @@ public:
 
   EntityName name;
 
-  /// cluster name
-  std::string cluster;
-
 #define OPTION_OPT_INT(name) const int name;
 #define OPTION_OPT_LONGLONG(name) const long long name;
 #define OPTION_OPT_STR(name) const std::string name;
@@ -227,13 +225,16 @@ public:
 #undef OPTION
 #undef SUBSYS
 #undef DEFAULT_SUBSYS
+  /// cluster name
+  std::string cluster;
 
   /** A lock that protects the md_config_t internals. It is
    * recursive, for simplicity.
    * It is best if this lock comes first in the lock hierarchy. We will
    * hold this lock when calling configuration observers.  */
-  mutable Mutex lock;
-
+  mutable std::recursive_mutex lock;
+  typedef std::unique_lock<std::recursive_mutex> unique_lock;
+  typedef std::lock_guard<std::recursive_mutex> lock_guard;
   friend class test_md_config_t;
 };
 

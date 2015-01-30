@@ -1,8 +1,8 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #include "include/rados/librados.h"
 #include "include/rados/librados.hpp"
-#include "include/utime.h"
 #include "common/Thread.h"
-#include "common/Clock.h"
 #include "test/librados/test.h"
 
 #include <atomic>

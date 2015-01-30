@@ -20,6 +20,7 @@
 #include <cstring>
 #include <cassert>
 
+#include "include/ceph_time.h"
 #include "Monitor.h"
 #include "common/version.h"
 
@@ -58,7 +59,6 @@
 #include "common/strtol.h"
 #include "common/ceph_argparse.h"
 #include "common/Timer.h"
-#include "common/Clock.h"
 #include "common/errno.h"
 #include "common/admin_socket.h"
 
@@ -132,7 +132,7 @@ Monitor::Monitor(CephContext* cct_, string nm, MonitorDBStore *s,
   messenger(m),
   xmsgr(xm),
   con_self(m ? m->get_loopback_connection() : NULL),
-  timer(cct_, lock),
+  timer(lock),
   has_ever_joined(false),
   monmap(map),
   clog(cct_, messenger, monmap, LogClient::FLAG_MON),
@@ -190,7 +190,7 @@ Monitor::Monitor(CephContext* cct_, string nm, MonitorDBStore *s,
   bool r = mon_caps->parse("allow *", NULL);
   assert(r);
 
-  exited_quorum = ceph_clock_now(cct);
+  exited_quorum = ceph::mono_clock::now();
 
   // assume our commands until we have an election.  this only means
   // we won't reply with EINVAL before the election; any command that
@@ -255,7 +255,7 @@ public:
 void Monitor::do_admin_command(string command, cmdmap_t& cmdmap, string format,
 			       ostream& ss)
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
 
   boost::scoped_ptr<Formatter> f(new_formatter(format));
 
@@ -379,7 +379,7 @@ void Monitor::write_features(MonitorDBStore::Transaction &t)
 
 int Monitor::preinit()
 {
-  lock.Lock();
+  unique_lock l(lock);
 
   dout(1) << "preinit fsid " << monmap->fsid << dendl;
 
@@ -389,7 +389,7 @@ int Monitor::preinit()
     if (r == -ENOENT)
       r = write_fsid();
     if (r < 0) {
-      lock.Unlock();
+      l.unlock();
       return r;
     }
   }
@@ -487,7 +487,7 @@ int Monitor::preinit()
       } else {
 	derr << "unable to load initial keyring " << cct->_conf->keyring
 	     << dendl;
-	lock.Unlock();
+	l.unlock();
 	return r;
       }
     }
@@ -497,7 +497,7 @@ int Monitor::preinit()
   AdminSocket* admin_socket = cct->get_admin_socket();
 
   // unlock while registering to avoid mon_lock -> admin socket lock dependency.
-  lock.Unlock();
+  l.unlock();
   r = admin_socket->register_command("mon_status", "mon_status", admin_hook,
 				     "show current monitor status");
   assert(r == 0);
@@ -531,16 +531,16 @@ int Monitor::preinit()
 				     admin_hook,
 				     "force monitor out of the quorum");
   assert(r == 0);
-  lock.Lock();
+  l.lock();
 
-  lock.Unlock();
+  l.unlock();
   return 0;
 }
 
 int Monitor::init()
 {
   dout(2) << "init" << dendl;
-  lock.Lock();
+  unique_lock l(lock);
 
   // start ticker
   timer.init();
@@ -559,7 +559,7 @@ int Monitor::init()
   get_locally_supported_monitor_commands(&cmds, &cmdsize);
   MonCommand::encode_array(cmds, cmdsize, supported_commands_bl);
 
-  lock.Unlock();
+  l.unlock();
   return 0;
 }
 
@@ -590,7 +590,7 @@ void Monitor::refresh_from_paxos(bool *need_bootstrap)
 void Monitor::shutdown()
 {
   dout(1) << "shutdown" << dendl;
-  lock.Lock();
+  unique_lock l(lock);
 
   state = STATE_SHUTDOWN;
 
@@ -615,12 +615,12 @@ void Monitor::shutdown()
   finish_contexts(waitfor_quorum, -ECANCELED);
   finish_contexts(maybe_wait_for_quorum, -ECANCELED);
 
-  timer.shutdown();
+  timer.shutdown(l);
 
   remove_all_sessions();
 
   // unlock before msgr shutdown...
-  lock.Unlock();
+  l.unlock();
 
   messenger->shutdown();  // last thing!  ceph_mon.cc will delete mon.
   if (xmsgr)
@@ -756,9 +756,9 @@ void Monitor::_reset()
   cancel_probe_timeout();
   timecheck_finish();
 
-  leader_since = utime_t();
+  leader_since = ceph::mono_time::min();
   if (!quorum.empty()) {
-    exited_quorum = ceph_clock_now(cct);
+    exited_quorum = ceph::mono_clock::now();
   }
   quorum.clear();
   outside_quorum.clear();
@@ -933,7 +933,8 @@ void Monitor::sync_reset_timeout()
   if (sync_timeout_event)
     timer.cancel_event(sync_timeout_event);
   sync_timeout_event = new C_SyncTimeout(this);
-  timer.add_event_after(cct->_conf->mon_sync_timeout, sync_timeout_event);
+  timer.add_event_after(
+    ceph::span_from_double(cct->_conf->mon_sync_timeout), sync_timeout_event);
 }
 
 void Monitor::sync_finish(version_t last_committed)
@@ -1050,7 +1051,7 @@ void Monitor::handle_sync_get_cookie(MMonSync *m)
   SyncProvider& sp = sync_providers[cookie];
   sp.cookie = cookie;
   sp.entity = m->get_source_inst();
-  sp.reset_timeout(cct, cct->_conf->mon_sync_timeout * 2);
+  sp.reset_timeout(ceph::span_from_double(cct->_conf->mon_sync_timeout * 2));
 
   set<string> sync_targets;
   if (m->op == MMonSync::OP_GET_COOKIE_FULL) {
@@ -1085,7 +1086,7 @@ void Monitor::handle_sync_get_chunk(MMonSync *m)
   assert(cct->_conf->mon_sync_provider_kill_at != 2);
 
   SyncProvider& sp = sync_providers[m->cookie];
-  sp.reset_timeout(cct, cct->_conf->mon_sync_timeout * 2);
+  sp.reset_timeout(ceph::span_from_double(cct->_conf->mon_sync_timeout * 2));
 
   if (sp.last_committed < paxos->get_first_committed() &&
       paxos->get_first_committed() > 1) {
@@ -1233,7 +1234,7 @@ void Monitor::sync_trim_providers()
 {
   dout(20) << __func__ << dendl;
 
-  utime_t now = ceph_clock_now(cct);
+  ceph::mono_time now = ceph::mono_clock::now();
   map<uint64_t,SyncProvider>::iterator p = sync_providers.begin();
   while (p != sync_providers.end()) {
     if (now > p->second.timeout) {
@@ -1263,9 +1264,10 @@ void Monitor::reset_probe_timeout()
 {
   cancel_probe_timeout();
   probe_timeout_event = new C_ProbeTimeout(this);
-  double t = cct->_conf->mon_probe_timeout;
+  ceph::timespan t = ceph::span_from_double(cct->_conf->mon_probe_timeout);
   timer.add_event_after(t, probe_timeout_event);
-  dout(10) << "reset_probe_timeout " << probe_timeout_event << " after " << t << " seconds" << dendl;
+  dout(10) << "reset_probe_timeout " << probe_timeout_event << " after "
+	   << t << " seconds" << dendl;
 }
 
 void Monitor::probe_timeout(int r)
@@ -1537,7 +1539,7 @@ void Monitor::win_standalone_election()
   win_election(1, q, CEPH_FEATURES_ALL, my_cmds, cmdsize);
 }
 
-const utime_t& Monitor::get_leader_since() const
+const ceph::mono_time& Monitor::get_leader_since() const
 {
   assert(state == STATE_LEADER);
   return leader_since;
@@ -1555,7 +1557,7 @@ void Monitor::win_election(epoch_t epoch, set<int>& active, uint64_t features,
 	   << " features " << features << dendl;
   assert(is_electing());
   state = STATE_LEADER;
-  leader_since = ceph_clock_now(cct);
+  leader_since = ceph::mono_clock::now();
   leader = rank;
   quorum = active;
   quorum_features = features;
@@ -1589,7 +1591,7 @@ void Monitor::win_election(epoch_t epoch, set<int>& active, uint64_t features,
 void Monitor::lose_election(epoch_t epoch, set<int> &q, int l, uint64_t features)
 {
   state = STATE_PEON;
-  leader_since = utime_t();
+  leader_since = ceph::mono_time::min();
   leader = l;
   quorum = q;
   outside_quorum.clear();
@@ -1609,7 +1611,7 @@ void Monitor::finish_election()
 {
   apply_quorum_to_compatset_features();
   timecheck_finish();
-  exited_quorum = utime_t();
+  exited_quorum = ceph::mono_time::min();
   finish_contexts(waitfor_quorum);
   finish_contexts(maybe_wait_for_quorum);
   resend_routed_requests();
@@ -1835,11 +1837,10 @@ void Monitor::get_health(string& status, bufferlist *detailbl, Formatter *f)
     list<string> warns;
     if (f)
       f->open_array_section("mons");
-    for (map<entity_inst_t,double>::iterator i = timecheck_skews.begin();
-	 i != timecheck_skews.end(); ++i) {
-      entity_inst_t inst = i->first;
-      double skew = i->second;
-      double latency = timecheck_latencies[inst];
+    for (const auto& i : timecheck_skews) {
+      entity_inst_t inst = i.first;
+      ceph::signedspan skew = i.second;
+      ceph::timespan latency = timecheck_latencies[inst];
       string name = monmap->get_name(inst.addr);
 
       ostringstream tcss;
@@ -1859,8 +1860,8 @@ void Monitor::get_health(string& status, bufferlist *detailbl, Formatter *f)
       if (f) {
 	f->open_object_section("mon");
 	f->dump_string("name", name.c_str());
-	f->dump_float("skew", skew);
-	f->dump_float("latency", latency);
+	f->dump_stream("skew") << skew;
+	f->dump_stream("latency") << latency;
 	f->dump_stream("health") << tcstatus;
 	if (tcstatus != HEALTH_OK)
 	  f->dump_stream("details") << tcss.str();
@@ -1938,7 +1939,7 @@ void Monitor::get_cluster_status(stringstream &ss, Formatter *f)
     monmap->dump(f);
     f->close_section();
     f->open_object_section("osdmap");
-    osdmon()->osdmap.print_summary(f, cout);
+    osdmon()->osdmap.print_summary(f, std::cout);
     f->close_section();
     f->open_object_section("mdsmap");
     mdsmon()->mdsmap.print_summary(f, NULL);
@@ -2019,7 +2020,7 @@ void Monitor::format_command_descriptions(const MonCommand *commands,
        cp < &commands[commands_size]; cp++) {
 
     ostringstream secname;
-    secname << "cmd" << setfill('0') << std::setw(3) << cmdnum;
+    secname << "cmd" << std::setfill('0') << std::setw(3) << cmdnum;
     dump_cmddesc_to_json(f, secname.str(),
 			 cp->cmdstring, cp->helpstring, cp->module,
 			 cp->req_perms, cp->availability);
@@ -2210,13 +2211,13 @@ void Monitor::handle_command(MMonCommand *m)
 
   if (prefix == "compact") {
     dout(1) << "triggering manual compaction" << dendl;
-    utime_t start = ceph_clock_now(cct);
+    ceph::mono_time  start = ceph::mono_clock::now();
     store->compact();
-    utime_t end = ceph_clock_now(cct);
-    end -= start;
-    dout(1) << "finished manual compaction in " << end << " seconds" << dendl;
+    ceph::timespan elapsed = ceph::mono_clock::now() - start;
+    dout(1) << "finished manual compaction in " << elapsed << " seconds"
+	    << dendl;
     ostringstream oss;
-    oss << "compacted leveldb in " << end;
+    oss << "compacted leveldb in " << elapsed;
     rs = oss.str();
     r = 0;
   }
@@ -2279,7 +2280,7 @@ void Monitor::handle_command(MMonCommand *m)
     f->open_object_section("report");
     f->dump_string("version", ceph_version_to_str());
     f->dump_string("commit", git_version_to_str());
-    f->dump_stream("timestamp") << ceph_clock_now(NULL);
+    f->dump_stream("timestamp") << ceph::real_clock::now();
 
     vector<string> tagsvec;
     cmd_getval(cct, cmdmap, "tags", tagsvec);
@@ -2695,8 +2696,8 @@ void Monitor::waitlist_or_zap_client(Message *m)
    * circumstances.
    */
   ConnectionRef con = m->get_connection();
-  utime_t too_old = ceph_clock_now(cct);
-  too_old -= cct->_conf->mon_lease;
+  ceph::real_time too_old = ceph::real_clock::now() -=
+    ceph::span_from_double(cct->_conf->mon_lease);
   if (m->get_recv_stamp() > too_old &&
       con->is_connected()) {
     dout(5) << "waitlisting message " << *m << dendl;
@@ -2756,7 +2757,7 @@ bool Monitor::_ms_dispatch(Message *m)
       return false;
     }
 
-    if (!exited_quorum.is_zero() && !src_is_mon) {
+    if (exited_quorum != ceph::mono_time::min() && !src_is_mon) {
       waitlist_or_zap_client(m);
       return true;
     }
@@ -2770,8 +2771,8 @@ bool Monitor::_ms_dispatch(Message *m)
       dout(10) << "setting timeout on session" << dendl;
       // set an initial timeout here, so we will trim this session even if they don't
       // do anything.
-      s->until = ceph_clock_now(cct);
-      s->until += cct->_conf->mon_subscribe_interval;
+      s->until = ceph::mono_clock::now() +
+	+ ceph::span_from_double(cct->_conf->mon_subscribe_interval);
     } else {
       //give it monitor caps; the peer type has been authenticated
       reuse_caps = false;
@@ -3010,8 +3011,9 @@ void Monitor::timecheck_start_round()
 
   if (timecheck_round % 2) {
     dout(10) << __func__ << " there's a timecheck going on" << dendl;
-    utime_t curr_time = ceph_clock_now(cct);
-    double max = cct->_conf->mon_timecheck_interval*3;
+    ceph::mono_time curr_time = ceph::mono_clock::now();
+    ceph::timespan max = ceph::span_from_double(
+      cct->_conf->mon_timecheck_interval * 3);
     if (curr_time - timecheck_round_start > max) {
       dout(10) << __func__ << " keep current round going" << dendl;
       goto out;
@@ -3025,14 +3027,16 @@ void Monitor::timecheck_start_round()
   assert(timecheck_round % 2 == 0);
   timecheck_acks = 0;
   timecheck_round ++;
-  timecheck_round_start = ceph_clock_now(cct);
+  timecheck_round_start = ceph::mono_clock::now();
   dout(10) << __func__ << " new " << timecheck_round << dendl;
 
   timecheck();
 out:
   dout(10) << __func__ << " setting up next event" << dendl;
   timecheck_event = new C_TimeCheck(this);
-  timer.add_event_after(cct->_conf->mon_timecheck_interval, timecheck_event);
+  timer.add_event_after(ceph::span_from_double(
+			  cct->_conf->mon_timecheck_interval),
+			timecheck_event);
 }
 
 void Monitor::timecheck_finish_round(bool success)
@@ -3040,7 +3044,7 @@ void Monitor::timecheck_finish_round(bool success)
   dout(10) << __func__ << " curr " << timecheck_round << dendl;
   assert(timecheck_round % 2);
   timecheck_round ++;
-  timecheck_round_start = utime_t();
+  timecheck_round_start = ceph::mono_time::min();
 
   if (success) {
     assert(timecheck_waiting.empty());
@@ -3051,9 +3055,8 @@ void Monitor::timecheck_finish_round(bool success)
 
   dout(10) << __func__ << " " << timecheck_waiting.size()
 	   << " peers still waiting:";
-  for (map<entity_inst_t,utime_t>::iterator p = timecheck_waiting.begin();
-      p != timecheck_waiting.end(); ++p) {
-    *_dout << " " << p->first.name;
+  for (const auto& p : timecheck_waiting) {
+    *_dout << " " << p.first.name;
   }
   *_dout << dendl;
   timecheck_waiting.clear();
@@ -3070,7 +3073,7 @@ void Monitor::timecheck_cleanup()
 {
   timecheck_round = 0;
   timecheck_acks = 0;
-  timecheck_round_start = utime_t();
+  timecheck_round_start = ceph::mono_clock::now();
 
   if (timecheck_event) {
     timer.cancel_event(timecheck_event);
@@ -3101,15 +3104,15 @@ void Monitor::timecheck_report()
     m->epoch = get_epoch();
     m->round = timecheck_round;
 
-    for (map<entity_inst_t, double>::iterator it = timecheck_skews.begin(); it != timecheck_skews.end(); ++it) {
-      double skew = it->second;
-      double latency = timecheck_latencies[it->first];
+    for (const auto& it : timecheck_skews) {
+      ceph::signedspan skew = it.second;
+      ceph::timespan latency = timecheck_latencies[it.first];
 
-      m->skews[it->first] = skew;
-      m->latencies[it->first] = latency;
+      m->skews[it.first] = skew;
+      m->latencies[it.first] = latency;
 
       if (do_output) {
-	dout(25) << __func__ << " " << it->first
+	dout(25) << __func__ << " " << it.first
 		 << " latency " << latency
 		 << " skew " << skew << dendl;
       }
@@ -3137,15 +3140,15 @@ void Monitor::timecheck()
 	   << " round " << timecheck_round << dendl;
 
   // we are at the eye of the storm; the point of reference
-  timecheck_skews[messenger->get_myinst()] = 0.0;
-  timecheck_latencies[messenger->get_myinst()] = 0.0;
+  timecheck_skews[messenger->get_myinst()] = ceph::signedspan::zero();
+  timecheck_latencies[messenger->get_myinst()] = ceph::timespan::min();
 
   for (set<int>::iterator it = quorum.begin(); it != quorum.end(); ++it) {
     if (monmap->get_name(*it) == name)
       continue;
 
     entity_inst_t inst = monmap->get_inst(*it);
-    utime_t curr_time = ceph_clock_now(cct);
+    ceph::real_time curr_time = ceph::real_clock::now();
     timecheck_waiting[inst] = curr_time;
     MTimeCheck *m = new MTimeCheck(MTimeCheck::OP_PING);
     m->epoch = get_epoch();
@@ -3156,14 +3159,14 @@ void Monitor::timecheck()
 }
 
 health_status_t Monitor::timecheck_status(ostringstream &ss,
-					  const double skew_bound,
-					  const double latency)
+					  const ceph::signedspan& skew_bound,
+					  const ceph::timespan& latency)
 {
   health_status_t status = HEALTH_OK;
-  double abs_skew = (skew_bound > 0 ? skew_bound : -skew_bound);
-  assert(latency >= 0);
 
-  if (abs_skew > cct->_conf->mon_clock_drift_allowed) {
+  ceph::timespan abs_skew = std::abs(skew_bound);
+
+  if (abs_skew > ceph::span_from_double(cct->_conf->mon_clock_drift_allowed)) {
     status = HEALTH_WARN;
     ss << "clock skew " << abs_skew << "s"
        << " > max " << cct->_conf->mon_clock_drift_allowed << "s";
@@ -3195,10 +3198,10 @@ void Monitor::handle_timecheck_leader(MTimeCheck *m)
     return;
   }
 
-  utime_t curr_time = ceph_clock_now(cct);
+  ceph::real_time curr_time = ceph::real_clock::now();
 
   assert(timecheck_waiting.count(other) > 0);
-  utime_t timecheck_sent = timecheck_waiting[other];
+  ceph::real_time timecheck_sent = timecheck_waiting[other];
   timecheck_waiting.erase(other);
   if (curr_time < timecheck_sent) {
     // our clock was readjusted -- drop everything until it all makes sense.
@@ -3210,20 +3213,18 @@ void Monitor::handle_timecheck_leader(MTimeCheck *m)
   }
 
   /* update peer latencies */
-  double latency = (double)(curr_time - timecheck_sent);
+  ceph::signedspan latency = curr_time - timecheck_sent;
 
   if (timecheck_latencies.count(other) == 0)
     timecheck_latencies[other] = latency;
   else {
-    double avg_latency = ((timecheck_latencies[other]*0.8)+(latency*0.2));
+    ceph::signedspan avg_latency = ((timecheck_latencies[other] * 8) +
+				    (latency * 2)) / 10;
     timecheck_latencies[other] = avg_latency;
   }
 
   /*
    * update skews
-   *
-   * some nasty thing goes on if we were to do 'a - b' between two utime_t,
-   * and 'a' happens to be lower than 'b'; so we use double instead.
    *
    * latency is always expected to be >= 0.
    *
@@ -3256,14 +3257,12 @@ void Monitor::handle_timecheck_leader(MTimeCheck *m)
    * may be masked by an even higher latency, but with high latencies
    * we probably have worse issues to deal with than just skewed clocks.
    */
-  assert(latency >= 0);
-
-  double delta = ((double) m->timestamp) - ((double) curr_time);
-  double abs_delta = (delta > 0 ? delta : -delta);
-  double skew_bound = abs_delta - latency;
-  if (skew_bound < 0)
-    skew_bound = 0;
-  else if (delta < 0)
+  ceph::signedspan delta = m->timestamp - curr_time;
+  ceph::timespan abs_delta = std::abs(delta);
+  ceph::signedspan skew_bound = abs_delta - latency;
+  if (skew_bound < ceph::signedspan::zero())
+    skew_bound = ceph::signedspan::zero();
+  else if (delta < ceph::signedspan::zero())
     skew_bound = -skew_bound;
 
   ostringstream ss;
@@ -3280,7 +3279,8 @@ void Monitor::handle_timecheck_leader(MTimeCheck *m)
   if (timecheck_skews.count(other) == 0) {
     timecheck_skews[other] = skew_bound;
   } else {
-    timecheck_skews[other] = (timecheck_skews[other]*0.8)+(skew_bound*0.2);
+    timecheck_skews[other] = ((timecheck_skews[other] * 8) +
+			      (skew_bound * 2)) / 10;
   }
 
   timecheck_acks++;
@@ -3326,7 +3326,7 @@ void Monitor::handle_timecheck_peon(MTimeCheck *m)
 
   assert((timecheck_round % 2) != 0);
   MTimeCheck *reply = new MTimeCheck(MTimeCheck::OP_PONG);
-  utime_t curr_time = ceph_clock_now(cct);
+  ceph::real_time curr_time = ceph::real_clock::now();
   reply->timestamp = curr_time;
   reply->epoch = m->epoch;
   reply->round = m->round;
@@ -3370,31 +3370,31 @@ void Monitor::handle_subscribe(MMonSubscribe *m)
     return;
   }
 
-  s->until = ceph_clock_now(cct);
-  s->until += cct->_conf->mon_subscribe_interval;
-  for (map<string,ceph_mon_subscribe_item>::iterator p = m->what.begin();
-       p != m->what.end();
-       ++p) {
-    // if there are any non-onetime subscriptions, we need to reply to start the resubscribe timer
-    if ((p->second.flags & CEPH_SUBSCRIBE_ONETIME) == 0)
+  s->until = ceph::mono_clock::now() + ceph::span_from_double(
+    cct->_conf->mon_subscribe_interval);
+  for (auto p : m->what) {
+    // if there are any non-onetime subscriptions, we need to reply to
+    // start the resubscribe timer
+    if ((p.second.flags & CEPH_SUBSCRIBE_ONETIME) == 0)
       reply = true;
 
-    session_map.add_update_sub(s, p->first, p->second.start,
-			       p->second.flags & CEPH_SUBSCRIBE_ONETIME,
-			       m->get_connection()->has_feature(CEPH_FEATURE_INCSUBOSDMAP));
+    session_map.add_update_sub(s, p.first, p.second.start,
+			       p.second.flags & CEPH_SUBSCRIBE_ONETIME,
+			       m->get_connection()->has_feature(
+				 CEPH_FEATURE_INCSUBOSDMAP));
 
-    if (p->first == "mdsmap") {
+    if (p.first == "mdsmap") {
       if ((int)s->is_capable("mds", MON_CAP_R)) {
 	mdsmon()->check_sub(s->sub_map["mdsmap"]);
       }
-    } else if (p->first == "osdmap") {
+    } else if (p.first == "osdmap") {
       if ((int)s->is_capable("osd", MON_CAP_R)) {
 	osdmon()->check_sub(s->sub_map["osdmap"]);
       }
-    } else if (p->first == "monmap") {
+    } else if (p.first == "monmap") {
       check_sub(s->sub_map["monmap"]);
-    } else if (logmon()->sub_name_to_id(p->first) >= 0) {
-      logmon()->check_sub(s->sub_map[p->first]);
+    } else if (logmon()->sub_name_to_id(p.first) >= 0) {
+      logmon()->check_sub(s->sub_map[p.first]);
     }
   }
 
@@ -3474,7 +3474,7 @@ bool Monitor::ms_handle_reset(Connection *con)
   if (is_shutdown())
     return false;
 
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
 
   dout(10) << "reset/close on session " << s->inst << dendl;
   if (!s->closed)
@@ -3670,7 +3670,8 @@ public:
 void Monitor::new_tick()
 {
   C_Mon_Tick *ctx = new C_Mon_Tick(this);
-  timer.add_event_after(cct->_conf->mon_tick_interval, ctx);
+  timer.add_event_after(
+    ceph::span_from_double(cct->_conf->mon_tick_interval), ctx);
 }
 
 void Monitor::tick()
@@ -3684,7 +3685,7 @@ void Monitor::tick()
   }
 
   // trim sessions
-  utime_t now = ceph_clock_now(cct);
+  ceph::mono_time now = ceph::mono_clock::now();
   xlist<MonSession*>::iterator p = session_map.sessions.begin();
   while (!p.end()) {
     MonSession *s = *p;
@@ -3694,13 +3695,14 @@ void Monitor::tick()
     if (s->inst.name.is_mon())
       continue;
 
-    if (!s->until.is_zero() && s->until < now) {
+    if (s->until != ceph::mono_time::min() && s->until < now) {
       dout(10) << " trimming session " << s->con << " " << s->inst
 	       << " (until " << s->until << " < now " << now << ")" << dendl;
       s->con->get_messenger()->mark_down(s->con);
       remove_session(s);
-    } else if (!exited_quorum.is_zero()) {
-      if (now > (exited_quorum + 2 * cct->_conf->mon_lease)) {
+    } else if (exited_quorum != ceph::mono_time::min()) {
+      if (now > (exited_quorum + ceph::span_from_double(
+		   2 * cct->_conf->mon_lease))) {
 	// boot the client Session because we've taken too long getting back in
 	dout(10) << " trimming session " << s->con << " " << s->inst
 		 << " because we've been out of quorum too long" << dendl;

@@ -1,4 +1,4 @@
-// -*- mode:C; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -24,8 +24,8 @@ public:
   string oid;
   string entity;
   string marker;
-  utime_t time;
-  list<pair<string, utime_t> > entries;
+  ceph::real_time time;
+  list<pair<string, ceph::real_time> > entries;
   cls_replica_log_progress_marker progress;
 
   void SetUp() {
@@ -39,9 +39,9 @@ public:
   void add_marker() {
     entity = "tester_entity";
     marker = "tester_marker1";
-    time.set_from_double(10);
+    time = ceph::real_time(10s);
     entries.push_back(make_pair("tester_obj1", time));
-    time.set_from_double(20);
+    time = ceph::real_time(20s);
     cls_replica_log_prepare_marker(progress, entity, marker, time, &entries);
     librados::ObjectWriteOperation opw(ioctx);
     cls_replica_log_update_bound(opw, progress);
@@ -54,17 +54,17 @@ TEST_F(cls_replica_log_Test, test_set_get_marker)
   add_marker();
 
   string reply_position_marker;
-  utime_t reply_time;
+  ceph::real_time reply_time;
   list<cls_replica_log_progress_marker> return_progress_list;
   ASSERT_EQ(0, cls_replica_log_get_bounds(ioctx, oid, reply_position_marker,
 					  reply_time, return_progress_list));
 
   ASSERT_EQ(reply_position_marker, marker);
-  ASSERT_EQ((double)10, (double)reply_time);
+  ASSERT_EQ(ceph::real_time(10s), reply_time);
   string response_entity;
   string response_marker;
-  utime_t response_time;
-  list<pair<string, utime_t> > response_item_list;
+  ceph::real_time response_time;
+  list<pair<string, ceph::real_time> > response_item_list;
 
   cls_replica_log_extract_marker(return_progress_list.front(),
 				 response_entity, response_marker,
@@ -80,7 +80,7 @@ TEST_F(cls_replica_log_Test, test_bad_update)
 {
   add_marker();
 
-  time.set_from_double(15);
+  ceph::real_time(15s);
   cls_replica_log_progress_marker bad_marker;
   cls_replica_log_prepare_marker(bad_marker, entity, marker, time, &entries);
   librados::ObjectWriteOperation badw(ioctx);
@@ -110,7 +110,7 @@ TEST_F(cls_replica_log_Test, test_good_delete)
   ASSERT_EQ(0, ioctx.operate(oid, &opd));
 
   string reply_position_marker;
-  utime_t reply_time;
+  ceph::real_time reply_time;
   list<cls_replica_log_progress_marker> return_progress_list;
   ASSERT_EQ(0, cls_replica_log_get_bounds(ioctx, oid, reply_position_marker,
 					  reply_time, return_progress_list));
@@ -120,7 +120,7 @@ TEST_F(cls_replica_log_Test, test_good_delete)
 TEST_F(cls_replica_log_Test, test_bad_get)
 {
   string reply_position_marker;
-  utime_t reply_time;
+  ceph::real_time reply_time;
   list<cls_replica_log_progress_marker> return_progress_list;
   ASSERT_EQ(-ENOENT,
 	    cls_replica_log_get_bounds(ioctx, oid, reply_position_marker,
@@ -144,7 +144,7 @@ TEST_F(cls_replica_log_Test, test_double_delete)
   ASSERT_EQ(0, ioctx.operate(oid, &opd2));
 
   string reply_position_marker;
-  utime_t reply_time;
+  ceph::real_time reply_time;
   list<cls_replica_log_progress_marker> return_progress_list;
   ASSERT_EQ(0, cls_replica_log_get_bounds(ioctx, oid, reply_position_marker,
 					  reply_time, return_progress_list));

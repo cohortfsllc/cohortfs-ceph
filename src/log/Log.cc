@@ -10,9 +10,9 @@
 #include <iostream>
 #include <sstream>
 
+#include "include/ceph_time.h"
 #include "common/errno.h"
 #include "common/safe_io.h"
-#include "common/Clock.h"
 #include "include/compat.h"
 #include "include/on_exit.h"
 
@@ -195,11 +195,11 @@ Entry *Log::create_entry(int level, int subsys)
   if (m_lttng_enabled) {
     thread_local std::string prealloc;
     prealloc.reserve(CEPH_LOG_ENTRY_PREALLOC);
-    return new Entry(ceph_clock_now(NULL),
+    return new Entry(ceph::real_clock::now(),
 		   pthread_self(),
 		   level, subsys, prealloc);
   } else {
-    return new Entry(ceph_clock_now(NULL),
+    return new Entry(ceph::real_clock::now(),
 		   pthread_self(),
 		   level, subsys);
   }
@@ -240,7 +240,10 @@ void Log::_flush(EntryQueue *t, EntryQueue *requeue, bool crash)
 
       if (crash)
 	buflen += snprintf(buf, sizeof(buf), "%6d> ", -t->m_len);
-      buflen += e->m_stamp.sprintf(buf + buflen, sizeof(buf)-buflen);
+
+      time_t tt = ceph::real_clock::to_time_t(e->m_stamp);
+      buflen += snprintf(buf + buflen, sizeof(buf)-buflen, "%s",
+			 std::ctime(&tt));
       buflen += snprintf(buf + buflen, sizeof(buf)-buflen, " %lx %2d ",
 			(unsigned long)e->m_thread, e->m_prio);
 

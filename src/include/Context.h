@@ -17,11 +17,12 @@
 #define CEPH_CONTEXT_H
 
 #include <cassert>
+#include <condition_variable>
 #include <list>
-#include <vector>
-#include <set>
 #include <memory>
-#include "common/Mutex.h"
+#include <mutex>
+#include <set>
+#include <vector>
 
 /*
  * GenContext - abstract callback class
@@ -53,7 +54,7 @@ class Context {
  protected:
   virtual void finish(int r) = 0;
 
- public:
+ public: 
   Context() {}
   virtual ~Context() {}	      // we want a virtual destructor!!!
   virtual void complete(int r) {
@@ -184,19 +185,19 @@ private:
   Context *onfinish;
   int sub_created_count;
   int sub_existing_count;
-  Mutex lock;
+  std::recursive_mutex lock;
   bool activated;
 
   void sub_finish(Context* sub, int r) {
-    lock.Lock();
+    std::unique_lock<std::recursive_mutex> l(lock);
     --sub_existing_count;
     if (r < 0 && result == 0)
       result = r;
     if ((activated == false) || (sub_existing_count != 0)) {
-      lock.Unlock();
+      l.unlock();
       return;
     }
-    lock.Unlock();
+    l.unlock();
     delete_me();
   }
 
@@ -225,27 +226,27 @@ private:
   C_Gather(Context *onfinish_)
     : result(0), onfinish(onfinish_),
       sub_created_count(0), sub_existing_count(0),
-      lock(true), activated(false) {}
+      activated(false) {}
 public:
   ~C_Gather() {}
   void set_finisher(Context *onfinish_) {
-    Mutex::Locker l(lock);
+    std::lock_guard<std::recursive_mutex> l(lock);
     assert(!onfinish);
     onfinish = onfinish_;
   }
   void activate() {
-    lock.Lock();
+    std::unique_lock<std::recursive_mutex> l(lock);
     assert(activated == false);
     activated = true;
     if (sub_existing_count != 0) {
-      lock.Unlock();
+      l.unlock();
       return;
     }
-    lock.Unlock();
+    l.unlock();
     delete_me();
   }
   Context *new_sub() {
-    Mutex::Locker l(lock);
+    std::lock_guard<std::recursive_mutex> l(lock);
     assert(activated == false);
     sub_created_count++;
     sub_existing_count++;
@@ -321,14 +322,14 @@ public:
     assert(!activated);
     if (c_gather == NULL)
       return 0;
-    Mutex::Locker l(c_gather->lock);
+    std::lock_guard<std::recursive_mutex> l(c_gather->lock);
     return c_gather->sub_created_count;
   }
   int num_subs_remaining() {
     assert(!activated);
     if (c_gather == NULL)
       return 0;
-    Mutex::Locker l(c_gather->lock);
+    std::lock_guard<std::recursive_mutex> l(c_gather->lock);
     return c_gather->sub_existing_count;
   }
 
@@ -336,6 +337,88 @@ private:
   C_Gather *c_gather;
   Context *finisher;
   bool activated;
+};
+
+/**
+ * context to signal a cond
+ *
+ * Generic context to signal a cond and store the return value.  We
+ * assume the caller is holding the appropriate lock.
+ */
+class C_Cond : public Context {
+  std::condition_variable *cond;
+  bool *done; ///< true if finish() has been called
+  int *rval; ///< return value
+
+public:
+  C_Cond(std::condition_variable *c, bool *d, int *r)
+    : cond(c), done(d), rval(r) {
+    *done = false;
+  }
+  void finish(int r) {
+    *done = true;
+    *rval = r;
+    cond->notify_all();
+  }
+};
+
+/**
+ * context to signal a cond, protected by a lock
+ *
+ * Generic context to signal a cond under a specific lock. We take the
+ * lock in the finish() callback, so the finish() caller must not
+ * already hold it.
+ */
+class C_SafeCond : public Context {
+  std::mutex *lock; ///< Mutex to take
+  std::condition_variable *cond; ///< Cond to signal
+  bool *done; ///< true after finish() has been called
+  int *rval; ///< return value (optional)
+public:
+  C_SafeCond(std::mutex *l, std::condition_variable *c, bool *d, int *r=0)
+    : lock(l), cond(c), done(d), rval(r) {
+    *done = false;
+  }
+  void finish(int r) {
+    std::unique_lock<std::mutex> l(*lock);
+    if (rval)
+      *rval = r;
+    *done = true;
+    cond->notify_all();
+    l.unlock();
+  }
+};
+
+/**
+ * Context providing a simple wait() mechanism to wait for completion
+ *
+ * The context will not be deleted as part of complete and must live
+ * until wait() returns.
+ */
+class C_SaferCond : public Context {
+  std::mutex lock; ///< Mutex to take
+  std::condition_variable cond; ///< Cond to signal
+  bool done; ///< true after finish() has been called
+  int rval; ///< return value
+public:
+  C_SaferCond() : lock(), done(false), rval(0) {}
+  void finish(int r) { complete(r); }
+
+  /// We overload complete in order to not delete the context
+  void complete(int r) {
+    std::unique_lock<std::mutex> l(lock);
+    done = true;
+    rval = r;
+    cond.notify_all();
+  }
+
+  /// Returns rval once the Context is called
+  int wait() {
+    std::unique_lock<std::mutex> l(lock);
+    while (!done)
+      cond.wait(l);
+    return rval;
+  }
 };
 
 #endif

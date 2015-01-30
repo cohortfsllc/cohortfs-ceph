@@ -78,7 +78,7 @@ void OSDMonitor::create_initial()
     newmap.build_simple(mon->cct, 0, mon->monmap->fsid, 0);
   }
   newmap.set_epoch(1);
-  newmap.created = newmap.modified = ceph_clock_now(mon->cct);
+  newmap.created = newmap.modified = ceph::real_clock::now();
 
   // encode into pending incremental
   newmap.encode(pending_inc.fullmap, mon->quorum_features);
@@ -223,8 +223,9 @@ void OSDMonitor::update_from_paxos(bool *need_bootstrap)
       // populate down -> out map
       if (osdmap.is_in(o) &&
 	  down_pending_out.count(o) == 0) {
-	ldout(mon->cct, 10) << " adding osd." << o << " to down_pending_out map" << dendl;
-	down_pending_out[o] = ceph_clock_now(mon->cct);
+	ldout(mon->cct, 10) << " adding osd." << o
+			    << " to down_pending_out map" << dendl;
+	down_pending_out[o] = ceph::real_clock::now();
       }
     }
   }
@@ -309,7 +310,7 @@ void OSDMonitor::encode_pending(MonitorDBStore::Transaction *t)
 	   << dendl;
 
   // finalize up pending_inc
-  pending_inc.modified = ceph_clock_now(mon->cct);
+  pending_inc.modified = ceph::real_clock::now();
 
   bufferlist bl;
 
@@ -485,20 +486,22 @@ bool OSDMonitor::prepare_update(PaxosServiceMessage *m)
   return false;
 }
 
-bool OSDMonitor::should_propose(double& delay)
+bool OSDMonitor::should_propose(ceph::timespan& delay)
 {
   ldout(mon->cct, 10) << "should_propose" << dendl;
 
-  // if full map, propose immediately!	any subsequent changes will be clobbered.
+  // if full map, propose immediately! any subsequent changes will be
+  // clobbered.
   if (pending_inc.fullmap.length())
     return true;
 
   // adjust osd weights?
   if (!osd_weight.empty() &&
       osd_weight.size() == (unsigned)osdmap.get_max_osd()) {
-    ldout(mon->cct, 0) << " adjusting osd weights based on " << osd_weight << dendl;
+    ldout(mon->cct, 0) << " adjusting osd weights based on "
+		       << osd_weight << dendl;
     osdmap.adjust_osd_weights(osd_weight, pending_inc);
-    delay = 0.0;
+    delay = 0ns;
     osd_weight.clear();
     return true;
   }
@@ -728,7 +731,7 @@ bool OSDMonitor::can_mark_in(int i)
   return true;
 }
 
-void OSDMonitor::check_failures(utime_t now)
+void OSDMonitor::check_failures(ceph::real_time now)
 {
   for (map<int,failure_info_t>::iterator p = failure_info.begin();
        p != failure_info.end();
@@ -737,14 +740,16 @@ void OSDMonitor::check_failures(utime_t now)
   }
 }
 
-bool OSDMonitor::check_failure(utime_t now, int target_osd, failure_info_t& fi)
+bool OSDMonitor::check_failure(ceph::real_time now, int target_osd,
+			       failure_info_t& fi)
 {
-  utime_t orig_grace(mon->cct->_conf->osd_heartbeat_grace, 0);
-  utime_t max_failed_since = fi.get_failed_since();
-  utime_t failed_for = now - max_failed_since;
+  ceph::timespan orig_grace(std::chrono::seconds(
+			      mon->cct->_conf->osd_heartbeat_grace));
+  ceph::real_time max_failed_since = fi.get_failed_since();
+  ceph::timespan failed_for = now - max_failed_since;
 
-  utime_t grace = orig_grace;
-  double my_grace = 0, peer_grace = 0;
+  ceph::timespan grace = orig_grace;
+  ceph::timespan my_grace = 0ns, peer_grace = 0ns;
   if (mon->cct->_conf->mon_osd_adjust_heartbeat_grace) {
     double halflife = (double)mon->cct->_conf->mon_osd_laggy_halflife;
     double decay_k = ::log(.5) / halflife;
@@ -752,10 +757,13 @@ bool OSDMonitor::check_failure(utime_t now, int target_osd, failure_info_t& fi)
     // scale grace period based on historical probability of 'lagginess'
     // (false positive failures due to slowness).
     const osd_xinfo_t& xi = osdmap.get_xinfo(target_osd);
-    double decay = exp((double)failed_for * decay_k);
+    double decay = exp(ceph::span_to_double(failed_for) * decay_k);
     ldout(mon->cct, 20) << " halflife " << halflife << " decay_k " << decay_k
-	     << " failed_for " << failed_for << " decay " << decay << dendl;
-    my_grace = decay * (double)xi.laggy_interval * xi.laggy_probability;
+			<< " failed_for " << failed_for << " decay "
+			<< decay << dendl;
+    my_grace = ceph::span_from_double(decay *
+				      ceph::span_to_double(xi.laggy_interval) *
+				      xi.laggy_probability);
     grace += my_grace;
 
     // consider the peers reporting a failure a proxy for a potential
@@ -768,9 +776,10 @@ bool OSDMonitor::check_failure(utime_t now, int target_osd, failure_info_t& fi)
 	 p != fi.reporters.end();
 	 ++p) {
       const osd_xinfo_t& xi = osdmap.get_xinfo(p->first);
-      utime_t elapsed = now - xi.down_stamp;
-      double decay = exp((double)elapsed * decay_k);
-      peer_grace += decay * (double)xi.laggy_interval * xi.laggy_probability;
+      ceph::timespan elapsed = now - xi.down_stamp;
+      double decay = exp(ceph::span_to_double(elapsed) * decay_k);
+      peer_grace += ceph::span_from_double(
+	decay * ceph::span_to_double(xi.laggy_interval) * xi.laggy_probability);
     }
     peer_grace /= (double)fi.reporters.size();
     grace += peer_grace;
@@ -814,8 +823,11 @@ bool OSDMonitor::prepare_failure(MOSDFailure *m)
   assert(osdmap.get_addr(target_osd) == m->get_target().addr);
 
   // calculate failure time
-  utime_t now = ceph_clock_now(mon->cct);
-  utime_t failed_since = m->get_recv_stamp() - utime_t(m->failed_for ? m->failed_for : mon->cct->_conf->osd_heartbeat_grace, 0);
+  ceph::real_time now = ceph::real_clock::now();
+  ceph::real_time failed_since
+    = m->get_recv_stamp() - (m->failed_for ?
+			     m->failed_for * 1s :
+			     mon->cct->_conf->osd_heartbeat_grace * 1s);
 
   if (m->if_osd_failed()) {
     // add a report
@@ -1052,11 +1064,14 @@ bool OSDMonitor::prepare_boot(MOSDBoot *m)
       xi.laggy_interval *= (1.0 - mon->cct->_conf->mon_osd_laggy_weight);
       ldout(mon->cct, 10) << " not laggy, new xi " << xi << dendl;
     } else {
-      if (xi.down_stamp.sec()) {
-	int interval = ceph_clock_now(mon->cct).sec() - xi.down_stamp.sec();
-	xi.laggy_interval =
-	  interval * mon->cct->_conf->mon_osd_laggy_weight +
-	  xi.laggy_interval * (1.0 - mon->cct->_conf->mon_osd_laggy_weight);
+      if (xi.down_stamp > ceph::real_time::min()) {
+	ceph::timespan interval = ceph::real_clock::now() - xi.down_stamp;
+	// Ideally we should make all these parameters stop being doubles
+	xi.laggy_interval = ceph::span_from_double(
+	  ceph::span_to_double(interval) *
+	  mon->cct->_conf->mon_osd_laggy_weight +
+	  ceph::span_to_double(xi.laggy_interval) *
+	  (1.0 - mon->cct->_conf->mon_osd_laggy_weight));
       }
       xi.laggy_probability =
 	mon->cct->_conf->mon_osd_laggy_weight +
@@ -1336,7 +1351,7 @@ void OSDMonitor::send_incremental(epoch_t first, entity_inst_t& dest, bool oneti
   }
 }
 
-epoch_t OSDMonitor::blacklist(const entity_addr_t& a, utime_t until)
+epoch_t OSDMonitor::blacklist(const entity_addr_t& a, ceph::real_time until)
 {
   ldout(mon->cct, 10) << "blacklist " << a << " until " << until << dendl;
   pending_inc.new_blacklist[a] = until;
@@ -1386,7 +1401,7 @@ void OSDMonitor::tick()
 
   if (!mon->is_leader()) return;
 
-  utime_t now = ceph_clock_now(mon->cct);
+  ceph::real_time now = ceph::real_clock::now();
 
   // mark osds down?
   check_failures(now);
@@ -1401,34 +1416,38 @@ void OSDMonitor::tick()
   if (can_mark_out(-1)) {
     set<int> down_cache;  // quick cache of down subtrees
 
-    map<int,utime_t>::iterator i = down_pending_out.begin();
+    auto i = down_pending_out.begin();
     while (i != down_pending_out.end()) {
       int o = i->first;
-      utime_t down = now;
-      down -= i->second;
+      ceph::timespan down = now - i->second;
       ++i;
 
       if (osdmap.is_down(o) &&
 	  osdmap.is_in(o) &&
 	  can_mark_out(o)) {
-	utime_t orig_grace(mon->cct->_conf->mon_osd_down_out_interval, 0);
-	utime_t grace = orig_grace;
-	double my_grace = 0.0;
+	ceph::timespan orig_grace
+	  = mon->cct->_conf->mon_osd_down_out_interval * 1s;
+	ceph::timespan grace = orig_grace;
+	ceph::timespan my_grace = 0s;
 
 	if (mon->cct->_conf->mon_osd_adjust_down_out_interval) {
 	  // scale grace period the same way we do the heartbeat grace.
 	  const osd_xinfo_t& xi = osdmap.get_xinfo(o);
 	  double halflife = (double)mon->cct->_conf->mon_osd_laggy_halflife;
 	  double decay_k = ::log(.5) / halflife;
-	  double decay = exp((double)down * decay_k);
-	  ldout(mon->cct, 20) << "osd." << o << " laggy halflife " << halflife << " decay_k " << decay_k
-		   << " down for " << down << " decay " << decay << dendl;
-	  my_grace = decay * (double)xi.laggy_interval * xi.laggy_probability;
+	  double decay = exp(ceph::span_to_double(down) * decay_k);
+	  ldout(mon->cct, 20) << "osd." << o << " laggy halflife "
+			      << halflife << " decay_k " << decay_k
+			      << " down for " << down << " decay " << decay
+			      << dendl;
+	  my_grace = ceph::span_from_double(decay * ceph::span_to_double(
+					      xi.laggy_interval)
+					    * xi.laggy_probability);
 	  grace += my_grace;
 	}
 
 	if (mon->cct->_conf->mon_osd_down_out_interval > 0 &&
-	    down.sec() >= grace) {
+	    down >= grace) {
 	  ldout(mon->cct, 10) << "tick marking osd." << o << " OUT after " << down
 		   << " sec (target " << grace << " = " << orig_grace << " + " << my_grace << ")" << dendl;
 	  pending_inc.new_weight[o] = CEPH_OSD_OUT;
@@ -1452,12 +1471,12 @@ void OSDMonitor::tick()
   }
 
   // expire blacklisted items?
-  for (std::unordered_map<entity_addr_t,utime_t>::iterator p = osdmap.blacklist.begin();
-       p != osdmap.blacklist.end();
-       ++p) {
-    if (p->second < now) {
-      ldout(mon->cct, 10) << "expiring blacklist item " << p->first << " expired " << p->second << " < now " << now << dendl;
-      pending_inc.old_blacklist.push_back(p->first);
+  for (auto& p : osdmap.blacklist) {
+    if (p.second < now) {
+      ldout(mon->cct, 10) << "expiring blacklist item " << p.first
+			  << " expired " << p.second << " < now " << now
+			  << dendl;
+      pending_inc.old_blacklist.push_back(p.first);
       do_propose = true;
     }
   }
@@ -1472,29 +1491,33 @@ void OSDMonitor::tick()
     propose_pending();
 }
 
-void OSDMonitor::handle_osd_timeouts(const utime_t &now,
-				     std::map<int,utime_t> &last_osd_report)
+void OSDMonitor::handle_osd_timeouts(
+  const ceph::real_time &now, std::map<int,ceph::real_time> &last_osd_report)
 {
-  utime_t timeo(mon->cct->_conf->mon_osd_report_timeout, 0);
+  ceph::timespan timeo = mon->cct->_conf->mon_osd_report_timeout * 1s;
   int max_osd = osdmap.get_max_osd();
   bool new_down = false;
 
   for (int i=0; i < max_osd; ++i) {
-    ldout(mon->cct, 30) << "handle_osd_timeouts: checking up on osd " << i << dendl;
+    ldout(mon->cct, 30) << "handle_osd_timeouts: checking up on osd "
+			<< i << dendl;
     if (!osdmap.exists(i))
       continue;
     if (!osdmap.is_up(i))
       continue;
-    const std::map<int,utime_t>::const_iterator t = last_osd_report.find(i);
+    const std::map<int,ceph::real_time>::const_iterator t
+      = last_osd_report.find(i);
     if (t == last_osd_report.end()) {
       // it wasn't in the map; start the timer.
       last_osd_report[i] = now;
     } else if (can_mark_down(i)) {
-      utime_t diff = now - t->second;
+    ceph::timespan diff = now - t->second;
       if (diff > timeo) {
-	mon->clog.info() << "osd." << i << " marked down after no pg stats for " << diff << "seconds\n";
-	lderr(mon->cct) << "no osd or pg stats from osd." << i << " since " << t->second << ", " << diff
-	     << " seconds ago.	marking down" << dendl;
+	mon->clog.info() << "osd." << i << " marked down after no pg stats "
+			 << "for " << diff << "seconds\n";
+	lderr(mon->cct) << "no osd stats from osd." << i << " since "
+			<< t->second << ", " << diff
+			<< " seconds ago.	marking down" << dendl;
 	pending_inc.new_state[i] = CEPH_OSD_UP;
 	new_down = true;
       }
@@ -1755,18 +1778,16 @@ bool OSDMonitor::preprocess_command(MMonCommand *m)
     if (f)
       f->open_array_section("blacklist");
 
-    for (std::unordered_map<entity_addr_t,utime_t>::iterator p = osdmap.blacklist.begin();
-	 p != osdmap.blacklist.end();
-	 ++p) {
+    for (const auto& p : osdmap.blacklist) {
       if (f) {
 	f->open_object_section("entry");
-	f->dump_stream("addr") << p->first;
-	f->dump_stream("until") << p->second;
+	f->dump_stream("addr") << p.first;
+	f->dump_stream("until") << p.second;
 	f->close_section();
       } else {
 	stringstream ss;
 	string s;
-	ss << p->first << " " << p->second;
+	ss << p.first << " " << p.second;
 	getline(ss, s);
 	s += "\n";
 	rdata.append(s);
@@ -2108,7 +2129,8 @@ bool OSDMonitor::prepare_command_impl(MMonCommand *m,
     }
     if (osdmap.exists(id)) {
       pending_inc.new_weight[id] = ww;
-      ss << "reweighted osd." << id << " to " << w << " (" << ios::hex << ww << ios::dec << ")";
+      ss << "reweighted osd." << id << " to " << w << " (" << std::ios::hex
+	 << ww << std::ios::dec << ")";
       getline(ss, rs);
       wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs,
 						get_last_committed() + 1));
@@ -2199,11 +2221,11 @@ done:
       string blacklistop;
       cmd_getval(mon->cct, cmdmap, "blacklistop", blacklistop);
       if (blacklistop == "add") {
-	utime_t expires = ceph_clock_now(mon->cct);
-	double d;
+	ceph::real_time expires = ceph::real_clock::now();
+	int d;
 	// default one hour
-	cmd_getval(mon->cct, cmdmap, "expire", d, double(60*60));
-	expires += d;
+	cmd_getval(mon->cct, cmdmap, "expire", d, 60*60);
+	expires += d * 1s;
 
 	pending_inc.new_blacklist[addr] = expires;
 	ss << "blacklisting " << addr << " until " << expires << " (" << d << " sec)";

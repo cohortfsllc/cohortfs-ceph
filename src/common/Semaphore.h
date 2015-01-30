@@ -41,10 +41,14 @@ public:
 
 #else // !HAVE_SEMAPHORE_H
 
+#include <condition_variable>
+#include <mutex>
+
 class Semaphore
 {
-  Mutex m;
-  Cond c;
+  std::mutex m;
+  typedef std::unique_lock<std::mutex> unique_lock;
+  std::condition_variable c;
   unsigned int count;
 
   public:
@@ -56,22 +60,22 @@ class Semaphore
 
   void Put()
   {
-    m.Lock();
+    unique_lock l(m);
     count++;
-    c.Signal();
-    m.Unlock();
+    c.notify_all();
+    l.unlock();
   }
 
   void Get()
   {
-    m.Lock();
+    unique_lock l(m);
     while(count == 0) {
-      c.Wait(m);
+      c.wait(l);
     }
     count--;
-    m.Unlock();
+    l.unlock();
   }
-};
+;
 
 #endif // !HAVE_SEMAPHORE_H
 

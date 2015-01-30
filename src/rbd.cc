@@ -435,8 +435,10 @@ struct rbd_bencher;
 
 struct rbd_bencher {
   librbd::Image *image;
-  Mutex lock;
-  Cond cond;
+  std::mutex lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
+  std::condition_variable cond;
   int in_flight;
 
   rbd_bencher(librbd::Image *i)
@@ -447,7 +449,7 @@ struct rbd_bencher {
   bool start_write(int max, uint64_t off, uint64_t len, bufferlist& bl)
   {
     {
-      Mutex::Locker l(lock);
+      lock_guard l(lock);
       if (in_flight >= max)
 	return false;
       in_flight++;
@@ -460,11 +462,9 @@ struct rbd_bencher {
   }
 
   void wait_for(int max) {
-    Mutex::Locker l(lock);
+    unique_lock l(lock);
     while (in_flight > max) {
-      utime_t dur;
-      dur.set_from_double(.2);
-      cond.WaitInterval(cct, lock, dur);
+      cond.wait_for(l, 200ms);
     }
   }
 
@@ -480,10 +480,10 @@ void rbd_bencher_completion(void *vc, void *pc)
     cout << "write error: " << cpp_strerror(ret) << std::endl;
     assert(0 == ret);
   }
-  b->lock.Lock();
+  rbd_bencher::unique_lock rbl(b->lock);
   b->in_flight--;
-  b->cond.Signal();
-  b->lock.Unlock();
+  b->cond.notify_all();
+  rbl.unlock();
   c->release();
 }
 
@@ -510,8 +510,8 @@ static int do_bench_write(librbd::Image& image, uint64_t io_size,
   bufferlist bl;
   bl.push_back(bp);
 
-  utime_t start = ceph_clock_now(NULL);
-  utime_t last;
+  ceph::mono_time start = ceph::mono_clock::now();
+  ceph::timespan last = 0ns;
   unsigned ios = 0;
 
   uint64_t size = 0;
@@ -547,14 +547,16 @@ static int do_bench_write(librbd::Image& image, uint64_t io_size,
       }
     }
 
-    utime_t now = ceph_clock_now(NULL);
-    utime_t elapsed = now - start;
-    if (elapsed.sec() != last.sec()) {
-      printf("%5d  %8d	%8.2lf	%8.2lf\n",
-	     (int)elapsed,
+    ceph::mono_time now = ceph::mono_clock::now();
+    ceph::timespan elapsed = now - start;
+    if ((elapsed > last ? elapsed - last : last - elapsed) > 1s) {
+      printf("%5ld  %8d	%8.2lf	%8.2lf\n",
+	     std::chrono::duration_cast<
+	     std::chrono::seconds>(elapsed).count(),
 	     (int)(ios - io_threads),
-	     (double)(ios - io_threads) / elapsed,
-	     (double)(off - io_threads * io_size) / elapsed);
+	     (double)(ios - io_threads) / ceph::span_to_double(elapsed),
+	     (double)(off - io_threads * io_size) /
+	     ceph::span_to_double(elapsed));
       last = elapsed;
     }
   }
@@ -564,11 +566,12 @@ static int do_bench_write(librbd::Image& image, uint64_t io_size,
     cerr << "Error flushing data at the end: " << cpp_strerror(r) << std::endl;
   }
 
-  utime_t now = ceph_clock_now(NULL);
-  double elapsed = now - start;
+  ceph::timespan elapsed = ceph::mono_clock::now() - start;
 
-  printf("elapsed: %5d	ops: %8d  ops/sec: %8.2lf  bytes/sec: %8.2lf\n",
-	 (int)elapsed, ios, (double)ios / elapsed, (double)off / elapsed);
+  printf("elapsed: %5ld	ops: %8d  ops/sec: %8.2lf  bytes/sec: %8.2lf\n",
+	 std::chrono::duration_cast<std::chrono::seconds>(elapsed).count(),
+	 ios, (double)ios / ceph::span_to_double(elapsed),
+	 (double)off / ceph::span_to_double(elapsed));
 
   return 0;
 }

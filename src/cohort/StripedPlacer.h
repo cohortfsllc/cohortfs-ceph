@@ -11,7 +11,6 @@
 #define COHORT_STRIPEDPLACER_H
 
 #include "vol/Placer.h"
-#include "common/RWLock.h"
 #include "osdc/ObjectOperation.h"
 
 class StripedPlacer;
@@ -27,7 +26,9 @@ protected:
 
 private:
   /* These are internal and are not serialized */
-  mutable Mutex lock;
+  mutable std::mutex lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
 
 protected:
 

@@ -40,7 +40,7 @@ private:
   uint32_t client_inc;
   uint32_t osdmap_epoch;
   uint32_t flags;
-  utime_t mtime;
+  ceph::real_time mtime;
   eversion_t reassert_version;
   int32_t retry_attempt;   // 0 is first attempt.  -1 if we don't know.
 
@@ -69,7 +69,7 @@ public:
 
   eversion_t get_version() { return reassert_version; }
 
-  utime_t get_mtime() { return mtime; }
+  ceph::real_time get_mtime() { return mtime; }
 
   MOSDOp()
     : Message(CEPH_MSG_OSD_OP, HEAD_VERSION, COMPAT_VERSION) { }
@@ -87,7 +87,7 @@ private:
 
 public:
   void set_version(eversion_t v) { reassert_version = v; }
-  void set_mtime(utime_t mt) { mtime = mt; }
+  void set_mtime(ceph::real_time mt) { mtime = mt; }
 
   // ops
   void add_simple_op(int o, uint64_t off, uint64_t len) {

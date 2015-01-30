@@ -216,7 +216,7 @@ struct CephXSessionAuthInfo {
   AuthTicket ticket;
   CryptoKey session_key;
   CryptoKey service_secret;
-  utime_t validity;
+  ceph::timespan validity;
 };
 
 
@@ -293,7 +293,7 @@ struct CephXTicketHandler {
   uint32_t service_id;
   CryptoKey session_key;
   CephXTicketBlob ticket;	 // opaque to us
-  utime_t renew_after, expires;
+  ceph::mono_time renew_after, expires;
   bool have_key_flag;
 
   CephXTicketHandler(CephContext *cct_, uint32_t service_id_)
@@ -350,7 +350,7 @@ private:
 /* A */
 struct CephXServiceTicket {
   CryptoKey session_key;
-  utime_t validity;
+  ceph::timespan validity;
 
   void encode(bufferlist& bl) const {
     uint8_t struct_v = 1;

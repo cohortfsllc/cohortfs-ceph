@@ -42,11 +42,8 @@
 
 
 #include <string>
-using namespace std;
-
 #include "include/buffer.h"
 #include "include/Context.h"
-#include "include/utime.h"
 
 class MDS;
 class LogSegment;
@@ -59,7 +56,7 @@ class LogEvent {
   static LogEvent *decode_event(bufferlist& bl, bufferlist::iterator& p, uint32_t type);
 
 protected:
-  utime_t stamp;
+  ceph::real_time stamp;
 
   friend class MDLog;
 
@@ -76,8 +73,8 @@ protected:
   uint64_t get_start_off() const { return _start_off; }
   void set_start_off(uint64_t o) { _start_off = o; }
 
-  utime_t get_stamp() const { return stamp; }
-  void set_stamp(utime_t t) { stamp = t; }
+  const ceph::real_time&  get_stamp() const { return stamp; }
+  void set_stamp(ceph::real_time t) { stamp = t; }
 
   // encoding
   virtual void encode(bufferlist& bl) const = 0;
@@ -93,7 +90,7 @@ protected:
     ENCODE_FINISH(bl);
   }
 
-  virtual void print(ostream& out) const {
+  virtual void print(std::ostream& out) const {
     out << "event(" << _type << ")";
   }
 
@@ -110,7 +107,7 @@ protected:
 
 };
 
-inline ostream& operator<<(ostream& out, LogEvent& le) {
+inline std::ostream& operator<<(std::ostream& out, LogEvent& le) {
   le.print(out);
   return out;
 }

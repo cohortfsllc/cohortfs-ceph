@@ -1,12 +1,10 @@
-// -*- mode:C; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
 #include "include/types.h"
 #include "cls/log/cls_log_types.h"
 #include "cls/log/cls_log_client.h"
 
-#include "include/utime.h"
-#include "common/Clock.h"
 #include "gtest/gtest.h"
 #include "test/librados/test.h"
 
@@ -22,7 +20,8 @@ static librados::ObjectReadOperation *new_rop(const librados::IoCtx& ioctx) {
   return new librados::ObjectReadOperation(ioctx);
 }
 
-static void reset_rop(librados::ObjectReadOperation **pop, const librados::IoCtx& ioctx) {
+static void reset_rop(librados::ObjectReadOperation **pop,
+		      const librados::IoCtx& ioctx) {
   delete *pop;
   *pop = new_rop(ioctx);
 }
@@ -41,7 +40,8 @@ static int read_bl(bufferlist& bl, int *i)
   return 0;
 }
 
-void add_log(librados::ObjectWriteOperation *op, utime_t& timestamp, string& section, string&name, int i)
+void add_log(librados::ObjectWriteOperation *op, ceph::real_time& timestamp,
+	     string& section, string& name, int i)
 {
   bufferlist bl;
   ::encode(i, bl);
@@ -59,7 +59,8 @@ string get_name(int i)
   return name_prefix + buf;
 }
 
-void generate_log(librados::IoCtx& ioctx, string& oid, int max, utime_t& start_time, bool modify_time)
+void generate_log(librados::IoCtx& ioctx, string& oid, int max,
+		  ceph::real_time& start_time, bool modify_time)
 {
   string section = "global";
 
@@ -68,11 +69,10 @@ void generate_log(librados::IoCtx& ioctx, string& oid, int max, utime_t& start_t
   int i;
 
   for (i = 0; i < max; i++) {
-    uint32_t secs = start_time.sec();
+    ceph::real_time ts(start_time);
     if (modify_time)
-      secs += i;
+      ts += 1s;
 
-    utime_t ts(secs, start_time.nsec());
     string name = get_name(i);
 
     add_log(op, ts, section, name, i);
@@ -83,19 +83,16 @@ void generate_log(librados::IoCtx& ioctx, string& oid, int max, utime_t& start_t
   delete op;
 }
 
-utime_t get_time(utime_t& start_time, int i, bool modify_time)
+ceph::real_time get_time(ceph::real_time& start_time, int i, bool modify_time)
 {
-  uint32_t secs = start_time.sec();
-  if (modify_time)
-    secs += i;
-  return utime_t(secs, start_time.nsec());
+  return modify_time ? start_time + 1s : start_time;
 }
 
-void check_entry(cls_log_entry& entry, utime_t& start_time, int i, bool modified_time)
+void check_entry(cls_log_entry& entry, ceph::real_time& start_time, int i, bool modified_time)
 {
   string section = "global";
   string name = get_name(i);
-  utime_t ts = get_time(start_time, i, modified_time);
+  ceph::real_time ts = get_time(start_time, i, modified_time);
 
   ASSERT_EQ(section, entry.section);
   ASSERT_EQ(name, entry.name);
@@ -120,7 +117,7 @@ TEST(cls_rgw, test_log_add_same_time)
   ASSERT_EQ(0, ioctx.create(oid, true));
 
   /* generate log */
-  utime_t start_time = ceph_clock_now(nullptr);
+  ceph::real_time start_time = ceph::real_clock::now();
   generate_log(ioctx, oid, 10, start_time, false);
 
   librados::ObjectReadOperation *rop = new_rop(ioctx);
@@ -130,7 +127,7 @@ TEST(cls_rgw, test_log_add_same_time)
 
   /* check list */
 
-  utime_t to_time = get_time(start_time, 1, true);
+  ceph::real_time to_time = get_time(start_time, 1, true);
 
   string marker;
 
@@ -204,7 +201,7 @@ TEST(cls_rgw, test_log_add_different_time)
   ASSERT_EQ(0, ioctx.create(oid, true));
 
   /* generate log */
-  utime_t start_time = ceph_clock_now(nullptr);
+  ceph::real_time start_time = ceph::real_clock::now();
   generate_log(ioctx, oid, 10, start_time, true);
 
   librados::ObjectReadOperation *rop = new_rop(ioctx);
@@ -212,12 +209,13 @@ TEST(cls_rgw, test_log_add_different_time)
   list<cls_log_entry> entries;
   bool truncated;
 
-  utime_t to_time = utime_t(start_time.sec() + 10, start_time.nsec());
+  ceph::real_time to_time = start_time + 10s;
 
   string marker;
 
   /* check list */
-  cls_log_list(*rop, start_time, to_time, marker, 0, entries, &marker, &truncated);
+  cls_log_list(*rop, start_time, to_time, marker, 0, entries, &marker,
+	       &truncated);
 
   bufferlist obl;
   ASSERT_EQ(0, ioctx.operate(oid, rop, &obl));
@@ -247,7 +245,7 @@ TEST(cls_rgw, test_log_add_different_time)
   reset_rop(&rop, ioctx);
 
   /* check list again with shifted time */
-  utime_t next_time = get_time(start_time, 1, true);
+  ceph::real_time next_time = get_time(start_time, 1, true);
 
   marker.clear();
 
@@ -297,7 +295,7 @@ TEST(cls_rgw, test_log_trim)
   ASSERT_EQ(0, ioctx.create(oid, true));
 
   /* generate log */
-  utime_t start_time = ceph_clock_now(nullptr);
+  ceph::real_time start_time = ceph::real_clock::now();
   generate_log(ioctx, oid, 10, start_time, true);
 
   librados::ObjectReadOperation *rop = new_rop(ioctx);
@@ -308,12 +306,12 @@ TEST(cls_rgw, test_log_trim)
   /* check list */
 
   /* trim */
-  utime_t to_time = get_time(start_time, 10, true);
+  ceph::real_time to_time = get_time(start_time, 10, true);
 
   for (int i = 0; i < 10; i++) {
-    utime_t trim_time = get_time(start_time, i, true);
+    ceph::real_time trim_time = get_time(start_time, i, true);
 
-    utime_t zero_time;
+    ceph::real_time zero_time;
     string start_marker, end_marker;
 
     ASSERT_EQ(0, cls_log_trim(ioctx, oid, zero_time, trim_time, start_marker, end_marker));

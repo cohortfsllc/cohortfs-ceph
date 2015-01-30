@@ -10,8 +10,8 @@
 #ifndef COHORT_COHORTVOLUME_H
 #define COHORT_COHORTVOLUME_H
 
+#include <mutex>
 #include "vol/Volume.h"
-#include "common/RWLock.h"
 #include "osdc/ObjectOperation.h"
 #include "ErasureCPlacer.h"
 
@@ -117,7 +117,7 @@ protected:
 				     Context *ctx);
     virtual void set_op_flags(const uint32_t flags);
     virtual void clear_op_flags(const uint32_t flags);
-    virtual void add_stat_ctx(uint64_t *s, utime_t *m, int *rval,
+    virtual void add_stat_ctx(uint64_t *s, ceph::real_time *m, int *rval,
 			      Context *ctx = NULL);
     virtual std::unique_ptr<ObjOp> clone();
     virtual void realize(

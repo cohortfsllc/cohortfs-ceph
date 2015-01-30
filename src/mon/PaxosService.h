@@ -426,7 +426,7 @@ public:
    *		       spamming.
    * @returns 'true' if the Paxos system should propose; 'false' otherwise.
    */
-  virtual bool should_propose(double &delay);
+  virtual bool should_propose(ceph::timespan &delay);
 
   /**
    * @defgroup PaxosService_h_courtesy Courtesy functions

@@ -144,7 +144,7 @@ void Paxos::collect(version_t oldpn)
     if (*p == mon->rank) continue;
 
     MMonPaxos *collect = new MMonPaxos(mon->get_epoch(), MMonPaxos::OP_COLLECT,
-				       ceph_clock_now(cct));
+				       ceph::real_clock::now());
     collect->last_committed = last_committed;
     collect->first_committed = first_committed;
     collect->pn = accepted_pn;
@@ -153,8 +153,9 @@ void Paxos::collect(version_t oldpn)
 
   // set timeout event
   collect_timeout_event = new C_CollectTimeout(this);
-  mon->timer.add_event_after(cct->_conf->mon_accept_timeout,
-			     collect_timeout_event);
+  mon->timer.add_event_after(
+    ceph::span_from_double(cct->_conf->mon_accept_timeout),
+    collect_timeout_event);
 }
 
 
@@ -180,7 +181,7 @@ void Paxos::handle_collect(MMonPaxos *collect)
 
   // reply
   MMonPaxos *last = new MMonPaxos(mon->get_epoch(), MMonPaxos::OP_LAST,
-				  ceph_clock_now(cct));
+				  ceph::real_clock::now());
   last->last_committed = last_committed;
   last->first_committed = first_committed;
 
@@ -477,7 +478,7 @@ void Paxos::handle_last(MMonPaxos *last)
 	  dout(10) << " sending commit to mon." << p->first << dendl;
 	  MMonPaxos *commit = new MMonPaxos(mon->get_epoch(),
 					    MMonPaxos::OP_COMMIT,
-					    ceph_clock_now(cct));
+					    ceph::real_clock::now());
 	  share_state(commit, peer_first_committed[p->first], p->second);
 	  mon->messenger->send_message(commit, mon->monmap->get_inst(p->first));
 	}
@@ -610,7 +611,7 @@ void Paxos::begin(bufferlist& v)
 
     dout(10) << " sending begin to mon." << *p << dendl;
     MMonPaxos *begin = new MMonPaxos(mon->get_epoch(), MMonPaxos::OP_BEGIN,
-				     ceph_clock_now(cct));
+				     ceph::real_clock::now());
     begin->values[last_committed+1] = new_value;
     begin->last_committed = last_committed;
     begin->pn = accepted_pn;
@@ -620,8 +621,9 @@ void Paxos::begin(bufferlist& v)
 
   // set timeout event
   accept_timeout_event = new C_AcceptTimeout(this);
-  mon->timer.add_event_after(cct->_conf->mon_accept_timeout,
-			     accept_timeout_event);
+  mon->timer.add_event_after(
+    ceph::span_from_double(cct->_conf->mon_accept_timeout),
+    accept_timeout_event);
 }
 
 // peon
@@ -642,7 +644,7 @@ void Paxos::handle_begin(MMonPaxos *begin)
 
   // set state.
   state = STATE_UPDATING;
-  lease_expire = utime_t();  // cancel lease
+  lease_expire = ceph::real_time::min();  // cancel lease
 
   // yes.
   version_t v = last_committed+1;
@@ -668,7 +670,7 @@ void Paxos::handle_begin(MMonPaxos *begin)
 
   // reply
   MMonPaxos *accept = new MMonPaxos(mon->get_epoch(), MMonPaxos::OP_ACCEPT,
-				    ceph_clock_now(cct));
+				    ceph::real_clock::now());
   accept->pn = accepted_pn;
   accept->last_committed = last_committed;
   mon->messenger->send_message(accept, begin->get_source_inst());
@@ -754,7 +756,7 @@ void Paxos::commit()
   // cancel lease - it was for the old value.
   //  (this would only happen if message layer lost the 'begin', but
   //   leader still got a majority and committed with out us.)
-  lease_expire = utime_t();  // cancel lease
+  lease_expire = ceph::real_time::min();  // cancel lease
 
   assert(cct->_conf->paxos_kill_at != 7);
 
@@ -762,7 +764,7 @@ void Paxos::commit()
 
   // commit locally
   last_committed++;
-  last_commit_time = ceph_clock_now(cct);
+  last_commit_time = ceph::real_clock::now();
   t.put(get_name(), "last_committed", last_committed);
 
   // decode the value and apply its transaction to the store.
@@ -792,7 +794,7 @@ void Paxos::commit()
 
     dout(10) << " sending commit to mon." << *p << dendl;
     MMonPaxos *commit = new MMonPaxos(mon->get_epoch(), MMonPaxos::OP_COMMIT,
-				      ceph_clock_now(cct));
+				      ceph::real_clock::now());
     commit->values[last_committed] = new_value;
     commit->pn = accepted_pn;
     commit->last_committed = last_committed;
@@ -834,8 +836,8 @@ void Paxos::extend_lease()
   assert(mon->is_leader());
   //assert(is_active());
 
-  lease_expire = ceph_clock_now(cct);
-  lease_expire += cct->_conf->mon_lease;
+  lease_expire = ceph::real_clock::now() + ceph::span_from_double(
+    cct->_conf->mon_lease);
   acked_lease.clear();
   acked_lease.insert(mon->rank);
 
@@ -848,7 +850,7 @@ void Paxos::extend_lease()
 
     if (*p == mon->rank) continue;
     MMonPaxos *lease = new MMonPaxos(mon->get_epoch(), MMonPaxos::OP_LEASE,
-				     ceph_clock_now(cct));
+				     ceph::real_clock::now());
     lease->last_committed = last_committed;
     lease->lease_timestamp = lease_expire;
     lease->first_committed = first_committed;
@@ -859,30 +861,32 @@ void Paxos::extend_lease()
   //  if old timeout is still in place, leave it.
   if (!lease_ack_timeout_event) {
     lease_ack_timeout_event = new C_LeaseAckTimeout(this);
-    mon->timer.add_event_after(cct->_conf->mon_lease_ack_timeout,
+    mon->timer.add_event_after(ceph::span_from_double(
+				 cct->_conf->mon_lease_ack_timeout),
 			       lease_ack_timeout_event);
   }
 
   // set renew event
   lease_renew_event = new C_LeaseRenew(this);
-  utime_t at = lease_expire;
-  at -= cct->_conf->mon_lease;
-  at += cct->_conf->mon_lease_renew_interval;
+  ceph::real_time at = lease_expire;
+  at -= ceph::span_from_double(cct->_conf->mon_lease);
+  at += ceph::span_from_double(cct->_conf->mon_lease_renew_interval);
   mon->timer.add_event_at(at, lease_renew_event);
 }
 
-void Paxos::warn_on_future_time(utime_t t, entity_name_t from)
+void Paxos::warn_on_future_time(ceph::real_time t, entity_name_t from)
 {
-  utime_t now = ceph_clock_now(cct);
+  ceph::real_time now = ceph::real_clock::now();
   if (t > now) {
-    utime_t diff = t - now;
-    if (diff > cct->_conf->mon_clock_drift_allowed) {
-      utime_t warn_diff = now - last_clock_drift_warn;
+    ceph::timespan diff = t - now;
+    if (diff > ceph::span_from_double(cct->_conf->mon_clock_drift_allowed)) {
+      ceph::timespan warn_diff = now - last_clock_drift_warn;
       if (warn_diff >
-	  pow(cct->_conf->mon_clock_drift_warn_backoff, clock_drift_warned)) {
+	  ceph::span_from_double(pow(cct->_conf->mon_clock_drift_warn_backoff,
+				     clock_drift_warned))) {
 	mon->clog.warn() << "message from " << from << " was stamped " << diff
 			 << "s in the future, clocks not synchronized";
-	last_clock_drift_warn = ceph_clock_now(cct);
+	last_clock_drift_warn = ceph::real_clock::now();
 	++clock_drift_warned;
       }
     }
@@ -916,7 +920,7 @@ void Paxos::commit_proposal()
   C_Proposal *proposal = static_cast<C_Proposal*>(proposals.front());
   assert(proposal->proposed);
   dout(10) << __func__ << " proposal " << proposal << " took "
-	   << (ceph_clock_now(NULL) - proposal->proposal_time)
+	   << ceph::mono_clock::now() - proposal->proposal_time
 	   << " to finish" << dendl;
   proposals.pop_front();
   proposal->complete(0);
@@ -959,10 +963,12 @@ void Paxos::handle_lease(MMonPaxos *lease)
   if (lease_expire < lease->lease_timestamp) {
     lease_expire = lease->lease_timestamp;
 
-    utime_t now = ceph_clock_now(cct);
+    ceph::real_time now = ceph::real_clock::now();
     if (lease_expire < now) {
-      utime_t diff = now - lease_expire;
-      derr << "lease_expire from " << lease->get_source_inst() << " is " << diff << " seconds in the past; mons are probably laggy (or possibly clocks are too skewed)" << dendl;
+      ceph::timespan diff = now - lease_expire;
+      derr << "lease_expire from " << lease->get_source_inst() << " is "
+	   << diff << " seconds in the past; mons are probably laggy "
+	   << "(or possibly clocks are too skewed)" << dendl;
     }
   }
 
@@ -973,10 +979,10 @@ void Paxos::handle_lease(MMonPaxos *lease)
 
   // ack
   MMonPaxos *ack = new MMonPaxos(mon->get_epoch(), MMonPaxos::OP_LEASE_ACK,
-				 ceph_clock_now(cct));
+				 ceph::real_clock::now());
   ack->last_committed = last_committed;
   ack->first_committed = first_committed;
-  ack->lease_timestamp = ceph_clock_now(cct);
+  ack->lease_timestamp = ceph::real_clock::now();
   mon->messenger->send_message(ack, lease->get_source_inst());
 
   // (re)set timeout event.
@@ -1041,7 +1047,9 @@ void Paxos::reset_lease_timeout()
   if (lease_timeout_event)
     mon->timer.cancel_event(lease_timeout_event);
   lease_timeout_event = new C_LeaseTimeout(this);
-  mon->timer.add_event_after(cct->_conf->mon_lease_ack_timeout, lease_timeout_event);
+  mon->timer.add_event_after(
+    ceph::span_from_double(cct->_conf->mon_lease_ack_timeout),
+			   lease_timeout_event);
 }
 
 void Paxos::lease_timeout()
@@ -1176,7 +1184,7 @@ void Paxos::leader_init()
   }
 
   state = STATE_RECOVERING;
-  lease_expire = utime_t();
+  lease_expire = ceph::real_time::min();
   dout(10) << "leader_init -- starting paxos recovery" << dendl;
   collect(0);
 }
@@ -1187,7 +1195,7 @@ void Paxos::peon_init()
   new_value.clear();
 
   state = STATE_RECOVERING;
-  lease_expire = utime_t();
+  lease_expire = ceph::real_time::min();
   dout(10) << "peon_init -- i am a peon" << dendl;
 
   // start a timer, in case the leader never manages to issue a lease
@@ -1275,7 +1283,8 @@ void Paxos::dispatch(PaxosServiceMessage *m)
 
 bool Paxos::is_readable(version_t v)
 {
-  dout(1) << "is_readable now=" << ceph_clock_now(cct) << " lease_expire=" << lease_expire
+  dout(1) << "is_readable now=" << ceph::real_clock::now()
+	  << " lease_expire=" << lease_expire
 	  << " has v" << v << " lc " << last_committed << dendl;
   if (v > last_committed)
     return false;
@@ -1305,7 +1314,7 @@ version_t Paxos::read_current(bufferlist &bl)
 bool Paxos::is_lease_valid()
 {
   return ((mon->get_quorum().size() == 1)
-      || (ceph_clock_now(cct) < lease_expire));
+	  || (ceph::real_clock::now() < lease_expire));
 }
 
 // -- WRITE --
@@ -1378,4 +1387,3 @@ bool Paxos::is_consistent()
 {
   return (first_committed <= last_committed);
 }
-

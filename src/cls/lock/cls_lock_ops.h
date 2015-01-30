@@ -1,8 +1,10 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #ifndef CEPH_CLS_LOCK_OPS_H
 #define CEPH_CLS_LOCK_OPS_H
 
+#include "include/ceph_time.h"
 #include "include/types.h"
-#include "include/utime.h"
 #include "cls/lock/cls_lock_types.h"
 
 struct cls_lock_lock_op
@@ -12,7 +14,7 @@ struct cls_lock_lock_op
   string cookie;
   string tag;
   string description;
-  utime_t duration;
+  ceph::timespan duration;
   uint8_t flags;
 
   cls_lock_lock_op() : type(LOCK_NONE), flags(0) {}

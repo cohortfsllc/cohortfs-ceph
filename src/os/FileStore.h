@@ -18,11 +18,13 @@
 
 #include <atomic>
 #include <cassert>
-#include <map>
+#include <condition_variable>
 #include <deque>
-#include <boost/scoped_ptr.hpp>
 #include <fstream>
+#include <map>
+#include <mutex>
 #include <unordered_map>
+#include <boost/scoped_ptr.hpp>
 #include "include/types.h"
 #include "CollectionIndex.h"
 
@@ -31,7 +33,6 @@
 
 #include "common/Timer.h"
 #include "common/WorkQueue.h"
-#include "common/Mutex.h"
 #include "common/zipkin_trace.h"
 
 #include "IndexManager.h"
@@ -102,6 +103,8 @@ public:
   int peek_journal_fsid(boost::uuids::uuid *fsid);
 
 private:
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
   string basedir, journalpath;
   std::string current_fn;
   std::string current_op_seq_fn;
@@ -137,13 +140,13 @@ private:
   int lock_fsid();
 
   // sync thread
-  Mutex lock;
+  std::mutex lock;
   bool force_sync;
-  Cond sync_cond;
+  std::condition_variable sync_cond;
   uint64_t sync_epoch;
 
-  Mutex sync_entry_timeo_lock;
-  SafeTimer timer;
+  std::mutex sync_entry_timeo_lock;
+  SafeTimer<ceph::mono_clock> timer;
 
   list<Context*> sync_waiters;
   bool stop;
@@ -161,7 +164,7 @@ private:
 
   // -- op workqueue --
   struct Op {
-    utime_t start;
+    ceph::mono_time start;
     uint64_t op;
     list<Transaction*> tls;
     Context *onreadable, *onreadable_sync;
@@ -170,46 +173,48 @@ private:
     ZTracer::Trace trace;
   };
   class OpSequencer : public Sequencer_impl {
-    Mutex qlock; // to protect q, for benefit of flush (peek/dequeue also protected by lock)
+  public:
+    typedef std::lock_guard<std::mutex> lock_guard;
+    typedef std::unique_lock<std::mutex> unique_lock;
+  private:
+    std::mutex qlock; // to protect q, for benefit of flush (peek/dequeue also protected by lock)
     list<Op*> q;
     list<uint64_t> jq;
-    Cond cond;
+    std::condition_variable cond;
   public:
     Sequencer *parent;
     FileStore *store;
-    Mutex apply_lock;  // for apply mutual exclusion
+    std::mutex apply_lock;  // for apply mutual exclusion
 
     void queue_journal(uint64_t s) {
-      Mutex::Locker l(qlock);
+      lock_guard l(qlock);
       jq.push_back(s);
     }
     void dequeue_journal() {
-      Mutex::Locker l(qlock);
+      lock_guard l(qlock);
       jq.pop_front();
-      cond.Signal();
+      cond.notify_all();
     }
     void queue(Op *o) {
-      Mutex::Locker l(qlock);
+      lock_guard l(qlock);
       q.push_back(o);
       o->trace.keyval("queue depth", q.size());
     }
     Op *peek_queue() {
-      assert(apply_lock.is_locked());
       return q.front();
     }
     Op *dequeue() {
-      assert(apply_lock.is_locked());
-      Mutex::Locker l(qlock);
+      lock_guard l(qlock);
       Op *o = q.front();
       q.pop_front();
-      cond.Signal();
+      cond.notify_all();
       return o;
     }
     void flush() {
-      Mutex::Locker l(qlock);
+      unique_lock ql(qlock);
 
-      while (store->cct->_conf->filestore_blackhole)
-	cond.Wait(qlock);  // wait forever
+      // wait forever
+      cond.wait(ql, [&](){ return !store->cct->_conf->filestore_blackhole; });
 
       // get max for journal _or_ op queues
       uint64_t seq = 0;
@@ -222,7 +227,7 @@ private:
 	// everything prior to our watermark to drain through either/both queues
 	while ((!q.empty() && q.front()->op <= seq) ||
 	       (!jq.empty() && jq.front() <= seq))
-	  cond.Wait(qlock);
+	  cond.wait(ql);
       }
     }
 
@@ -239,22 +244,24 @@ private:
 
   friend ostream& operator<<(ostream& out, const OpSequencer& s);
 
-  Mutex fdcache_lock;
+  std::mutex fdcache_lock;
   FDCache fdcache;
   WBThrottle wbthrottle;
 
   Sequencer default_osr;
   deque<OpSequencer*> op_queue;
   uint64_t op_queue_len, op_queue_bytes;
-  Cond op_throttle_cond;
-  Mutex op_throttle_lock;
+  std::condition_variable op_throttle_cond;
+  std::mutex op_throttle_lock;
   Finisher op_finisher;
 
   ThreadPool op_tp;
   struct OpWQ : public ThreadPool::WorkQueue<OpSequencer> {
     FileStore *store;
-    OpWQ(FileStore *fs, time_t timeout, time_t suicide_timeout, ThreadPool *tp)
-      : ThreadPool::WorkQueue<OpSequencer>("FileStore::OpWQ", timeout, suicide_timeout, tp), store(fs) {}
+    OpWQ(FileStore *fs, ceph::timespan timeout,
+	 ceph::timespan suicide_timeout, ThreadPool *tp)
+      : ThreadPool::WorkQueue<OpSequencer>("FileStore::OpWQ", timeout,
+					   suicide_timeout, tp), store(fs) {}
 
     bool _enqueue(OpSequencer *osr) {
       store->op_queue.push_back(osr);
@@ -274,18 +281,32 @@ private:
       return osr;
     }
     void _process(OpSequencer *osr, ThreadPool::TPHandle &handle) {
-      store->_do_op(osr, handle);
+      unique_lock osral(osr->apply_lock, std::defer_lock);
+      store->_do_op(osr, handle, osral);
+      // Yuck. Fortunately all that happens now is that the threadpool
+      // worker takes a lock and then...
+      osral.release();
     }
     void _process_finish(OpSequencer *osr) {
-      store->_finish_op(osr);
+      unique_lock osral(osr->apply_lock, std::adopt_lock);
+      store->_finish_op(osr, osral);
+      // Since the worker queue isn't going to throw an exception
+      // acquiring its own lock. Or if it does we have bigger
+      // problems, we're safe for the stuff we actually want to worry
+      // about.
     }
     void _clear() {
       assert(store->op_queue.empty());
     }
   } op_wq;
 
-  void _do_op(OpSequencer *o, ThreadPool::TPHandle &handle);
-  void _finish_op(OpSequencer *o);
+  // We take an unlocked lock on the osr->apply_lock and give back a
+  // locked one.
+  void _do_op(OpSequencer *o, ThreadPool::TPHandle &handle,
+	      unique_lock& osral);
+  // We take a locked lock on the osr->apply_lock and give back an
+  // unlocked one.
+  void _finish_op(OpSequencer *o, unique_lock& osral);
   Op *build_op(list<Transaction*>& tls,
 	       Context *onreadable, Context *onreadable_sync,
 	       OpRequestRef osd_op);
@@ -316,7 +337,9 @@ public:
 		 bool force_clear_omap=false);
 
 public:
-  FileStore(CephContext *_cct, const std::string &base, const std::string &jdev, const char *internal_name = "filestore", bool update_to=false);
+  FileStore(CephContext *_cct, const std::string &base,
+	    const std::string &jdev, const char *internal_name = "filestore",
+	    bool update_to = false);
   ~FileStore();
 
   int _detect_fs();
@@ -386,7 +409,8 @@ public:
    *
    * @param fd open fd on the file/object in question
    * @param spos sequencerposition for an operation we could apply/replay
-   * @return 1 if we can apply (maybe replay) this operation, -1 if spos has already been applied, 0 if it was in progress
+   * @return 1 if we can apply (maybe replay) this operation, -1 if spos has
+   *        already been applied, 0 if it was in progress
    */
   int _check_replay_guard(int fd, const SequencerPosition& spos);
   int _check_replay_guard(const coll_t &cid, const SequencerPosition& spos);
@@ -455,7 +479,7 @@ public:
   boost::uuids::uuid get_fsid() { return fsid; }
 
   // DEBUG read error injection, an object is removed from both on delete()
-  Mutex read_error_lock;
+  std::mutex read_error_lock;
   set<oid> data_error_set; // read() will return -EIO
   set<oid> mdata_error_set; // getattr(),stat() will return -EIO
   void inject_data_error(const oid &obj);
@@ -557,13 +581,13 @@ private:
   virtual const char** get_tracked_conf_keys() const;
   virtual void handle_conf_change(const struct md_config_t *conf,
 			  const std::set <std::string> &changed);
-  float m_filestore_commit_timeout;
+  ceph::timespan m_filestore_commit_timeout;
   bool m_filestore_journal_parallel;
   bool m_filestore_journal_trailing;
   bool m_filestore_journal_writeahead;
   int m_filestore_fiemap_threshold;
-  double m_filestore_max_sync_interval;
-  double m_filestore_min_sync_interval;
+  ceph::timespan m_filestore_max_sync_interval;
+  ceph::timespan m_filestore_min_sync_interval;
   bool m_filestore_fail_eio;
   bool m_filestore_replica_fadvise;
   int do_update;

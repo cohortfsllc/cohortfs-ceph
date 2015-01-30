@@ -68,8 +68,10 @@ class WBThrottle : Thread, public md_config_obs_t {
 
   CephContext *cct;
   bool stopping;
-  Mutex lock;
-  Cond cond;
+  std::mutex lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
+  std::condition_variable cond;
 
 
   /**
@@ -78,9 +80,8 @@ class WBThrottle : Thread, public md_config_obs_t {
   list<oid> lru;
   map<oid, list<oid>::iterator> rev_lru;
   void remove_object(const oid &obj) {
-    assert(lock.is_locked());
-    map<oid, list<oid>::iterator>::iterator iter =
-      rev_lru.find(obj);
+    // We must hold lock here.
+    auto iter = rev_lru.find(obj);
     if (iter == rev_lru.end())
       return;
 
@@ -103,7 +104,7 @@ class WBThrottle : Thread, public md_config_obs_t {
   map<oid, pair<PendingWB, FDRef> > pending_wbs;
 
   /// get next flush to perform
-  bool get_next_should_flush(
+  bool get_next_should_flush(unique_lock& l,
     boost::tuple<oid, FDRef, PendingWB> *next ///< [out] next to flush
     ); ///< @return false if we are shutting down
 public:
@@ -124,7 +125,7 @@ public:
   void stop();
   /// Set fs as XFS or BTRFS
   void set_fs(FS new_fs) {
-    Mutex::Locker l(lock);
+    lock_guard l(lock);
     fs = new_fs;
     set_from_conf();
   }

@@ -41,7 +41,7 @@ bool KeyServerData::get_service_secret(CephContext *cct, uint32_t service_id,
   if (secrets.secrets.size() > 1)
     ++riter;
 
-  if (riter->second.expiration < ceph_clock_now(cct))
+  if (riter->second.expiration < ceph::real_clock::now())
     ++riter;   // "current" key has expired, use "next" key instead
 
   secret_id = riter->first;
@@ -141,7 +141,7 @@ KeyServer::KeyServer(CephContext *cct_, KeyRing *extra_secrets)
 
 int KeyServer::start_server()
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
 
   _check_rotating_secrets();
   _dump_rotating_secrets();
@@ -189,8 +189,11 @@ int KeyServer::_rotate_secret(uint32_t service_id)
 {
   RotatingSecrets& r = data.rotating_secrets[service_id];
   int added = 0;
-  utime_t now = ceph_clock_now(cct);
-  double ttl = service_id == CEPH_ENTITY_TYPE_AUTH ? cct->_conf->auth_mon_ticket_ttl : cct->_conf->auth_service_ticket_ttl;
+  ceph::real_time now = ceph::real_clock::now();
+  ceph::timespan ttl = ceph::span_from_double(
+    service_id == CEPH_ENTITY_TYPE_AUTH ?
+    cct->_conf->auth_mon_ticket_ttl :
+    cct->_conf->auth_service_ticket_ttl);
 
   while (r.need_new_secrets(now)) {
     ExpiringCryptoKey ek;
@@ -198,7 +201,7 @@ int KeyServer::_rotate_secret(uint32_t service_id)
     if (r.empty()) {
       ek.expiration = now;
     } else {
-      utime_t next_ttl = now;
+      ceph::real_time next_ttl = now;
       next_ttl += ttl;
       ek.expiration = MAX(next_ttl, r.next().expiration);
     }
@@ -215,28 +218,29 @@ int KeyServer::_rotate_secret(uint32_t service_id)
 
 bool KeyServer::get_secret(const EntityName& name, CryptoKey& secret) const
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   return data.get_secret(name, secret);
 }
 
 bool KeyServer::get_auth(const EntityName& name, EntityAuth& auth) const
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   return data.get_auth(name, auth);
 }
 
 bool KeyServer::get_caps(const EntityName& name, const string& type,
 	      AuthCapsInfo& caps_info) const
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
 
   return data.get_caps(cct, name, type, caps_info);
 }
 
 bool KeyServer::get_service_secret(uint32_t service_id,
-	      ExpiringCryptoKey& secret, uint64_t& secret_id) const
+				   ExpiringCryptoKey& secret,
+				   uint64_t& secret_id) const
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
 
   return data.get_service_secret(cct, service_id, secret, secret_id);
 }
@@ -244,7 +248,7 @@ bool KeyServer::get_service_secret(uint32_t service_id,
 bool KeyServer::get_service_secret(uint32_t service_id,
 		CryptoKey& secret, uint64_t& secret_id) const
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
 
   return data.get_service_secret(cct, service_id, secret, secret_id);
 }
@@ -252,7 +256,7 @@ bool KeyServer::get_service_secret(uint32_t service_id,
 bool KeyServer::get_service_secret(uint32_t service_id,
 		uint64_t secret_id, CryptoKey& secret) const
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
 
   return data.get_service_secret(cct, service_id, secret_id, secret);
 }
@@ -277,7 +281,7 @@ bool KeyServer::generate_secret(EntityName& name, CryptoKey& secret)
   if (!generate_secret(secret))
     return false;
 
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
 
   EntityAuth auth;
   auth.key = secret;
@@ -289,14 +293,14 @@ bool KeyServer::generate_secret(EntityName& name, CryptoKey& secret)
 
 bool KeyServer::contains(const EntityName& name) const
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
 
   return data.contains(name);
 }
 
 int KeyServer::encode_secrets(Formatter *f, stringstream *ds) const
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
 
   if (f)
     f->open_array_section("auth_dump");
@@ -361,9 +365,10 @@ void KeyServer::encode_plaintext(bufferlist &bl)
   bl.append(os.str());
 }
 
-bool KeyServer::updated_rotating(bufferlist& rotating_bl, version_t& rotating_ver)
+bool KeyServer::updated_rotating(bufferlist& rotating_bl,
+				 version_t& rotating_ver)
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
 
   _check_rotating_secrets();
 
@@ -380,7 +385,7 @@ bool KeyServer::updated_rotating(bufferlist& rotating_bl, version_t& rotating_ve
 bool KeyServer::get_rotating_encrypted(const EntityName& name,
 	bufferlist& enc_bl) const
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
 
   map<EntityName, EntityAuth>::const_iterator mapiter = data.find_name(name);
   if (mapiter == data.secrets_end())
@@ -413,7 +418,7 @@ bool KeyServer::_get_service_caps(const EntityName& name, uint32_t service_id,
 bool KeyServer::get_service_caps(const EntityName& name, uint32_t service_id,
 				 AuthCapsInfo& caps_info) const
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   return _get_service_caps(name, service_id, caps_info);
 }
 
@@ -423,7 +428,9 @@ int KeyServer::_build_session_auth_info(uint32_t service_id, CephXServiceTicketI
 {
   info.service_id = service_id;
   info.ticket = auth_ticket_info.ticket;
-  info.ticket.init_timestamps(ceph_clock_now(cct), cct->_conf->auth_service_ticket_ttl);
+  info.ticket.init_timestamps(ceph::real_clock::now(),
+			      ceph::span_from_double(
+				cct->_conf->auth_service_ticket_ttl));
 
   generate_secret(info.session_key);
 
@@ -444,7 +451,7 @@ int KeyServer::build_session_auth_info(uint32_t service_id, CephXServiceTicketIn
     return -EPERM;
   }
 
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
 
   return _build_session_auth_info(service_id, auth_ticket_info, info);
 }

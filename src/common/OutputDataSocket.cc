@@ -277,9 +277,9 @@ void OutputDataSocket::handle_connection(int fd)
 {
   bufferlist bl;
 
-  m_lock.Lock();
+  std::unique_lock<std::mutex> l(lock);
   init_connection(bl);
-  m_lock.Unlock();
+  l.unlock();
 
   if (bl.length()) {
     /* need to special case the connection init buffer output, as it needs
@@ -298,14 +298,14 @@ void OutputDataSocket::handle_connection(int fd)
     return;
 
   do {
-    m_lock.Lock();
-    cond.Wait(m_lock);
+    l.lock();
+    cond.wait(l);
 
     if (going_down) {
-      m_lock.Unlock();
+      l.unlock();
       break;
     }
-    m_lock.Unlock();
+    l.unlock();
 
     ret = dump_data(fd);
   } while (ret >= 0);
@@ -313,12 +313,12 @@ void OutputDataSocket::handle_connection(int fd)
 
 int OutputDataSocket::dump_data(int fd)
 {
-  m_lock.Lock();
+  std::unique_lock<std::mutex> ul(lock);
   list<bufferlist> l;
   l = data;
   data.clear();
   data_size = 0;
-  m_lock.Unlock();
+  ul.unlock();
 
   for (list<bufferlist>::iterator iter = l.begin(); iter != l.end(); ++iter) {
     bufferlist& bl = *iter;
@@ -377,10 +377,10 @@ bool OutputDataSocket::init(const std::string &path)
 
 void OutputDataSocket::shutdown()
 {
-  m_lock.Lock();
+  std::unique_lock<std::mutex> l(lock);
   going_down = true;
-  cond.Signal();
-  m_lock.Unlock();
+  cond.notify_all();
+  l.unlock();
 
   if (m_shutdown_wr_fd < 0)
     return;
@@ -406,7 +406,7 @@ void OutputDataSocket::shutdown()
 
 void OutputDataSocket::append_output(bufferlist& bl)
 {
-  Mutex::Locker l(m_lock);
+  std::unique_lock<std::mutex> l(lock);
 
   if (data_size + bl.length() > data_max_backlog) {
     ldout(m_cct, 20) << "dropping data output, max backlog reached" << dendl;
@@ -415,5 +415,5 @@ void OutputDataSocket::append_output(bufferlist& bl)
 
   data_size += bl.length();
 
-  cond.Signal();
+  cond.notify_all();
 }

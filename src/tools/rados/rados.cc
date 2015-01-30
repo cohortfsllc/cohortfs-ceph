@@ -12,6 +12,9 @@
  *
  */
 
+#include <condition_variable>
+#include <mutex>
+
 #include "include/types.h"
 
 #include "include/rados/librados.hpp"
@@ -19,9 +22,9 @@
 using namespace librados;
 
 #include "common/config.h"
+#include "common/strtol.h"
 #include "common/ceph_argparse.h"
 #include "global/global_init.h"
-#include "common/Cond.h"
 #include "common/debug.h"
 #include "common/errno.h"
 #include "common/Formatter.h"
@@ -406,7 +409,7 @@ class LoadGen {
 
   map<int, obj_info> objs;
 
-  utime_t start_time;
+  ceph::mono_time start_time;
 
   bool going_down;
 
@@ -420,7 +423,7 @@ public:
   size_t max_ops;
   size_t max_backlog;
   size_t target_throughput;
-  int run_length;
+  ceph::timespan run_length;
 
   enum {
     OP_READ,
@@ -462,16 +465,14 @@ public:
   }
 
   float time_passed() {
-    utime_t now = ceph_clock_now(cct);
-    now -= start_time;
-    uint64_t ns = now.nsec();
-    float total = ns / 1000000000;
-    total += now.sec();
-    return total;
+    ceph::timespan elapsed = ceph::mono_clock::now() - start_time;
+    return ceph::span_to_double(elapsed);
   }
 
-  Mutex lock;
-  Cond cond;
+  std::mutex lock;
+  typedef std::unique_lock<std::mutex> unique_lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  std::condition_variable cond;
 
   LoadGen(Rados *_rados) : rados(_rados), going_down(false) {
     read_percent = 80;
@@ -481,7 +482,7 @@ public:
     target_throughput = 5 * 1024 * 1024; // B/sec
     max_op_len = 2 * 1024 * 1024;
     max_backlog = target_throughput * 2;
-    run_length = 60;
+    run_length = 60s;
 
     total_sent = 0;
     total_completed = 0;
@@ -495,7 +496,7 @@ public:
   void io_cb(completion_t c, LoadGenOp *op) {
     total_completed += op->len;
 
-    Mutex::Locker l(lock);
+    unique_lock l(lock);
 
     double rate = (double)cur_completed_rate() / (1024 * 1024);
     cout.precision(3);
@@ -510,7 +511,7 @@ public:
 
     delete op;
 
-    cond.Signal();
+    cond.notify_all();
   }
 };
 
@@ -637,14 +638,14 @@ void LoadGen::gen_op(LoadGenOp *op)
 
 uint64_t LoadGen::gen_next_op()
 {
-  lock.Lock();
+  unique_lock l(lock);
 
   LoadGenOp *op = new LoadGenOp(this);
   gen_op(op);
   op->id = max_op++;
   pending_ops[op->id] = op;
 
-  lock.Unlock();
+  l.unlock();
 
   run_op(op);
 
@@ -653,33 +654,34 @@ uint64_t LoadGen::gen_next_op()
 
 int LoadGen::run()
 {
-  start_time = ceph_clock_now(cct);
-  utime_t end_time = start_time;
+  start_time = ceph::mono_clock::now();
+  auto end_time = start_time;
   end_time += run_length;
-  utime_t stamp_time = start_time;
-  uint32_t total_sec = 0;
+  auto stamp_time = start_time;
+  ceph::timespan total_time = 0s;
 
+  unique_lock l(lock, std::defer_lock);
   while (1) {
-    lock.Lock();
-    utime_t one_second(1, 0);
-    cond.WaitInterval(cct, lock, one_second);
-    lock.Unlock();
-    utime_t now = ceph_clock_now(cct);
+    l.lock();
+    cond.wait_for(l, 1s);
+    l.unlock();
+    auto now = ceph::mono_clock::now();
 
     if (now > end_time)
       break;
 
     uint64_t expected = total_expected();
-    lock.Lock();
+    l.lock();
     uint64_t sent = total_sent;
     uint64_t completed = total_completed;
-    lock.Unlock();
+    l.unlock();
 
-    if (now - stamp_time >= utime_t(1, 0)) {
+    if (now - stamp_time >= 1s) {
       double rate = (double)cur_completed_rate() / (1024 * 1024);
-      ++total_sec;
+      total_time += 1s;
       cout.precision(3);
-      cout << std::setw(5) << total_sec << ": throughput=" << rate  << "MB/sec" << " pending data=" << sent - completed << std::endl;
+      cout << std::setw(5) << total_time << ": throughput=" << rate
+	   << "MB/sec" << " pending data=" << sent - completed << std::endl;
       stamp_time = now;
     }
 
@@ -692,14 +694,14 @@ int LoadGen::run()
 
   // get a reference to all pending requests
   vector<librados::AioCompletion *> completions;
-  lock.Lock();
+  l.lock();
   going_down = true;
   map<int, LoadGenOp *>::iterator iter;
   for (iter = pending_ops.begin(); iter != pending_ops.end(); ++iter) {
     LoadGenOp *op = iter->second;
     completions.push_back(op->completion);
   }
-  lock.Unlock();
+  l.unlock();
 
   cout << "waiting for all operations to complete" << std::endl;
 
@@ -903,7 +905,7 @@ static int do_lock_cmd(std::vector<const char*> &nargs,
     rados::cls::lock::Lock l(lock_name);
     l.set_cookie(lock_cookie);
     l.set_tag(lock_tag);
-    l.set_duration(utime_t(lock_duration, 0));
+    l.set_duration(lock_duration * 1s);
     l.set_description(lock_description);
     int ret;
     switch (lock_type) {
@@ -969,7 +971,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
   uint64_t target_throughput = 0;
   int64_t read_percent = -1;
   uint64_t num_objs = 0;
-  int run_length = 0;
+  ceph::timespan run_length = 0ns;
 
   bool show_time = false;
 
@@ -1044,7 +1046,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
   }
   i = opts.find("run-length");
   if (i != opts.end()) {
-    run_length = strtol(i->second.c_str(), NULL, 10);
+    run_length = strtol(i->second.c_str(), NULL, 10) * 1s;
   }
   i = opts.find("show-time");
   if (i != opts.end()) {
@@ -1542,7 +1544,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
       lg.read_percent = read_percent;
     if (num_objs)
       lg.num_objs = num_objs;
-    if (run_length)
+    if (run_length > 0ns)
       lg.run_length = run_length;
 
     cout << "run length " << run_length << " seconds" << std::endl;

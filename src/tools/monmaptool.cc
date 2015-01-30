@@ -33,7 +33,9 @@ static CephContext* cct;
 
 void usage()
 {
-  cout << " usage: [--print] [--create [--clobber][--fsid uuid]] [--generate] [--set-initial-members] [--add name 1.2.3.4:567] [--rm name] <mapfilename>" << std::endl;
+  cout << " usage: [--print] [--create [--clobber][--fsid uuid]] [--generate]"
+       << " [--set-initial-members] [--add name 1.2.3.4:567] [--rm name]"
+       << " <mapfilename>" << std::endl;
   exit(1);
 }
 
@@ -131,7 +133,7 @@ int main(int argc, const char **argv)
 
   if (create) {
     monmap.epoch = 0;
-    monmap.created = ceph_clock_now(cct);
+    monmap.created = ceph::real_clock::now();
     monmap.last_changed = monmap.created;
     srand(getpid() + time(0));
     if (cct->_conf->fsid.is_nil()) {

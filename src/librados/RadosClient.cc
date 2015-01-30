@@ -77,8 +77,8 @@ librados::RadosClient::RadosClient(CephContext *cct_)
     messenger(NULL),
     instance_id(0),
     objecter(NULL),
-    lock("librados::RadosClient::lock"),
-    timer(cct, lock),
+    lock(),
+    timer(lock),
     refcnt(1),
     log_last_version(0), log_cb(NULL), log_cb_arg(NULL),
     finisher(cct),
@@ -92,13 +92,14 @@ boost::uuids::uuid librados::RadosClient::lookup_volume(const string& name)
   if (r < 0)
     return boost::uuids::nil_uuid();
 
-  const OSDMap *osdmap = objecter->get_osdmap_read();
+  Objecter::shared_lock ol;
+  const OSDMap *osdmap = objecter->get_osdmap_read(ol);
   VolumeRef v;
   boost::uuids::uuid id = boost::uuids::nil_uuid();
   if (osdmap->find_by_name(name, v)) {
     id = v->id;
   }
-  objecter->put_osdmap_read();
+  ol.unlock();
   return id;
 }
 
@@ -108,13 +109,14 @@ string librados::RadosClient::lookup_volume(const boost::uuids::uuid& id)
   if (r < 0)
     return string();
 
-  const OSDMap *osdmap = objecter->get_osdmap_read();
+  Objecter::shared_lock ol;
+  const OSDMap *osdmap = objecter->get_osdmap_read(ol);
   VolumeRef v;
   string name;
   if (osdmap->find_by_uuid(id, v)) {
     name = v->name;
   }
-  objecter->put_osdmap_read();
+  ol.unlock();
   return name;
 }
 
@@ -122,7 +124,7 @@ int librados::RadosClient::get_fsid(std::string *s)
 {
   if (!s)
     return -EINVAL;
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   ostringstream oss;
   oss << monclient.get_fsid();
   *s = oss.str();
@@ -151,6 +153,7 @@ int librados::RadosClient::ping_monitor(const string mon_id, string *result)
 
 int librados::RadosClient::connect()
 {
+  unique_lock l(lock, std::defer_lock);
   common_init_finish(cct);
 
   int err;
@@ -200,10 +203,13 @@ int librados::RadosClient::connect()
 
   err = -ENOMEM;
   objecter = new Objecter(cct, messenger, &monclient,
-			  cct->_conf->rados_mon_op_timeout,
-			  cct->_conf->rados_osd_op_timeout);
+			  ceph::span_from_double(
+			    cct->_conf->rados_mon_op_timeout),
+			  ceph::span_from_double(
+			    cct->_conf->rados_osd_op_timeout));
   if (!objecter)
     goto out;
+
   objecter->set_balanced_budget();
 
   monclient.set_messenger(messenger);
@@ -224,7 +230,8 @@ int librados::RadosClient::connect()
     goto out;
   }
 
-  err = monclient.authenticate(conf->client_mount_timeout);
+  err = monclient.authenticate(ceph::span_from_double(
+				 conf->client_mount_timeout));
   if (err) {
     ldout(cct, 0) << conf->name << " authentication error " << cpp_strerror(-err) << dendl;
     shutdown();
@@ -234,7 +241,7 @@ int librados::RadosClient::connect()
 
   objecter->set_client_incarnation(0);
   objecter->start();
-  lock.Lock();
+  l.lock();
 
   timer.init();
 
@@ -245,7 +252,7 @@ int librados::RadosClient::connect()
   state = CONNECTED;
   instance_id = monclient.get_global_id();
 
-  lock.Unlock();
+  l.unlock();
 
   ldout(cct, 1) << "init done" << dendl;
   err = 0;
@@ -258,9 +265,9 @@ int librados::RadosClient::connect()
 
 void librados::RadosClient::shutdown()
 {
-  lock.Lock();
+  unique_lock l(lock);
   if (state == DISCONNECTED) {
-    lock.Unlock();
+    l.unlock();
     return;
   }
   if (state == CONNECTED) {
@@ -272,8 +279,8 @@ void librados::RadosClient::shutdown()
   }
   state = DISCONNECTED;
   instance_id = 0;
-  timer.shutdown();   // will drop+retake lock
-  lock.Unlock();
+  timer.shutdown(l);   // will drop+retake lock
+  l.unlock();
   if (need_objecter)
     objecter->shutdown();
   monclient.shutdown();
@@ -308,7 +315,8 @@ int librados::RadosClient::create_ioctx(const string &name, IoCtxImpl **io)
   if (r < 0)
     return r;
 
-  const OSDMap *osdmap = objecter->get_osdmap_read();
+  Objecter::shared_lock ol;
+  const OSDMap *osdmap = objecter->get_osdmap_read(ol);
   try {
     id = parse(name);
     if (!osdmap->find_by_uuid(id, v)) {
@@ -321,20 +329,20 @@ int librados::RadosClient::create_ioctx(const string &name, IoCtxImpl **io)
       goto err;
     }
   }
-  objecter->put_osdmap_read();
+  ol.unlock();
 
   r = v->attach(cct);
   if (r < 0) {
     return r;
   }
 
-  *io = new librados::IoCtxImpl(this, objecter, &lock, v);
+  *io = new librados::IoCtxImpl(this, objecter, v);
 
   return 0;
 
 err:
 
-  objecter->put_osdmap_read();
+  ol.unlock();
   return r;
 }
 
@@ -345,23 +353,24 @@ int librados::RadosClient::create_ioctx(const boost::uuids::uuid& id, IoCtxImpl 
     return r;
   VolumeRef volume;
 
-  const OSDMap *osdmap = objecter->get_osdmap_read();
+  Objecter::shared_lock ol;
+  const OSDMap *osdmap = objecter->get_osdmap_read(ol);
   if (!osdmap->find_by_uuid(id, volume)) {
     r = -ENOENT;
     goto err;
   }
-  objecter->put_osdmap_read();
+  ol.unlock();
 
   r = volume->attach(cct);
   if (r < 0) {
     goto err;
   }
 
-  *io = new librados::IoCtxImpl(this, objecter, &lock, volume);
+  *io = new librados::IoCtxImpl(this, objecter, volume);
   return 0;
 
 err:
-  objecter->put_osdmap_read();
+  ol.unlock();
   return r;
 }
 
@@ -395,12 +404,13 @@ void librados::RadosClient::ms_handle_remote_reset(Connection *con)
 
 bool librados::RadosClient::_dispatch(Message *m)
 {
+  unique_lock l(lock, std::defer_lock);
   switch (m->get_type()) {
   // OSD
   case CEPH_MSG_OSD_MAP:
-    lock.Lock();
-    cond.Signal();
-    lock.Unlock();
+    l.lock();
+    cond.notify_all();
+    l.unlock();
     m->put();
     break;
 
@@ -424,44 +434,43 @@ bool librados::RadosClient::_dispatch(Message *m)
 
 int librados::RadosClient::wait_for_osdmap()
 {
-  assert(!lock.is_locked_by_me());
+  // Must be called with lock locked
 
   if (objecter == NULL) {
     return -ENOTCONN;
   }
 
   bool need_map = false;
-  const OSDMap *osdmap = objecter->get_osdmap_read();
+  Objecter::shared_lock ol;
+  const OSDMap *osdmap = objecter->get_osdmap_read(ol);
   if (osdmap->get_epoch() == 0) {
     need_map = true;
   }
-  objecter->put_osdmap_read();
 
   if (need_map) {
-    Mutex::Locker l(lock);
+    unique_lock l(lock);
 
-    utime_t timeout;
+    ceph::timespan timeout = 0s;
     if (cct->_conf->rados_mon_op_timeout > 0)
-      timeout.set_from_double(cct->_conf->rados_mon_op_timeout);
+      timeout = ceph::span_from_double((cct->_conf->rados_mon_op_timeout));
 
-    const OSDMap *osdmap = objecter->get_osdmap_read();
     if (osdmap->get_epoch() == 0) {
       ldout(cct, 10) << __func__ << " waiting" << dendl;
-      utime_t start = ceph_clock_now(cct);
+      auto start = ceph::mono_clock::now();
       while (osdmap->get_epoch() == 0) {
-	objecter->put_osdmap_read();
-	cond.WaitInterval(cct, lock, timeout);
-	utime_t elapsed = ceph_clock_now(cct) - start;
-	if (!timeout.is_zero() && elapsed > timeout) {
+	ol.unlock();
+	cond.wait_for(l, timeout);
+	ceph::timespan elapsed = ceph::mono_clock::now() - start;
+	if (timeout > 0s && elapsed > timeout) {
 	  lderr(cct) << "timed out waiting for first osdmap from monitors"
 		     << dendl;
 	  return -ETIMEDOUT;
 	}
-	osdmap = objecter->get_osdmap_read();
+	ol.lock();
       }
       ldout(cct, 10) << __func__ << " done waiting" << dendl;
     }
-    objecter->put_osdmap_read();
+    ol.unlock();
     return 0;
   } else {
     return 0;
@@ -470,32 +479,31 @@ int librados::RadosClient::wait_for_osdmap()
 
 int librados::RadosClient::wait_for_latest_osdmap()
 {
-  Mutex mylock;
-  Cond cond;
+  std::mutex mylock;
+  std::condition_variable cond;
   bool done;
 
   objecter->wait_for_latest_osdmap(new C_SafeCond(&mylock, &cond, &done));
 
-  mylock.Lock();
-  while (!done)
-    cond.Wait(mylock);
-  mylock.Unlock();
+  unique_lock l(mylock);
+  cond.wait(l, [&](){ return done; });
+  l.unlock();
 
   return 0;
 }
 
 int librados::RadosClient::get_fs_stats(ceph_statfs& stats)
 {
-  Mutex mylock;
-  Cond cond;
+  std::mutex mylock;
+  std::condition_variable cond;
   bool done;
   int ret = 0;
 
   objecter->get_fs_stats(stats, new C_SafeCond(&mylock, &cond, &done, &ret));
 
-  mylock.Lock();
-  while (!done) cond.Wait(mylock);
-  mylock.Unlock();
+  unique_lock l(mylock);
+  cond.wait(l, [&](){ return done; });
+  l.unlock();
 
   return ret;
 }
@@ -504,22 +512,19 @@ int librados::RadosClient::get_fs_stats(ceph_statfs& stats)
 int librados::RadosClient::vol_create(string& name)
 {
   int reply;
-
-  Mutex mylock;
-  Cond cond;
+  std::mutex mylock;
+  std::condition_variable cond;
   bool done;
   Context *onfinish = new C_SafeCond(&mylock, &cond, &done, &reply);
-  lock.Lock();
+
   reply = objecter->create_volume(name, onfinish);
-  lock.Unlock();
 
   if (reply < 0) {
     delete onfinish;
   } else {
-    mylock.Lock();
-    while(!done)
-      cond.Wait(mylock);
-    mylock.Unlock();
+    unique_lock l(mylock);
+    cond.wait(l, [&](){ return done; });
+    l.unlock();
   }
   return reply;
 }
@@ -527,41 +532,37 @@ int librados::RadosClient::vol_create(string& name)
 int librados::RadosClient::vol_delete(string& name)
 {
   int reply;
-
-  Mutex mylock;
-  Cond cond;
+  std::mutex mylock;
+  std::condition_variable cond;
   bool done;
   Context *onfinish = new C_SafeCond(&mylock, &cond, &done, &reply);
-  lock.Lock();
+
   reply = objecter->delete_volume(name, onfinish);
-  lock.Unlock();
 
   if (reply < 0) {
     delete onfinish;
   } else {
-    mylock.Lock();
-    while(!done)
-      cond.Wait(mylock);
-    mylock.Unlock();
+    unique_lock l(mylock);
+    cond.wait(l, [&](){ return done; });
+    l.unlock();
   }
   return reply;
 }
 
 void librados::RadosClient::get() {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   assert(refcnt > 0);
   refcnt++;
 }
 
 bool librados::RadosClient::put() {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   assert(refcnt > 0);
   refcnt--;
   return (refcnt == 0);
 }
 
 void librados::RadosClient::blacklist_self(bool set) {
-  Mutex::Locker l(lock);
   objecter->blacklist_self(set);
 }
 
@@ -572,7 +573,7 @@ void librados::RadosClient::register_watch_notify_callback(
   WatchNotifyInfo *wc,
   uint64_t *cookie)
 {
-  assert(lock.is_locked_by_me());
+  lock_guard l(lock);
   wc->cookie = *cookie = ++max_watch_notify_cookie;
   ldout(cct,10) << __func__ << " cookie " << wc->cookie << dendl;
   watch_notify_info[wc->cookie] = wc;
@@ -581,7 +582,7 @@ void librados::RadosClient::register_watch_notify_callback(
 void librados::RadosClient::unregister_watch_notify_callback(uint64_t cookie)
 {
   ldout(cct,10) << __func__ << " cookie " << cookie << dendl;
-  assert(lock.is_locked_by_me());
+  unique_lock l(lock);
   map<uint64_t, WatchNotifyInfo *>::iterator iter =
     watch_notify_info.find(cookie);
   if (iter != watch_notify_info.end()) {
@@ -590,12 +591,12 @@ void librados::RadosClient::unregister_watch_notify_callback(uint64_t cookie)
       objecter->unregister_linger(ctx->linger_id);
 
     watch_notify_info.erase(iter);
-    lock.Unlock();
+    l.unlock();
     ldout(cct, 10) << __func__ << " dropping reference, waiting ctx="
 		   << (void *)ctx << dendl;
     ctx->put_wait();
     ldout(cct, 10) << __func__ << " done ctx=" << (void *)ctx << dendl;
-    lock.Lock();
+    l.lock();
   }
 }
 
@@ -611,7 +612,7 @@ struct C_DoWatchNotify : public Context {
 
 void librados::RadosClient::handle_watch_notify(MWatchNotify *m)
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
 
   if (watch_notify_info.count(m->cookie)) {
     ldout(cct,10) << __func__ << " queueing async " << *m << dendl;
@@ -627,7 +628,7 @@ void librados::RadosClient::handle_watch_notify(MWatchNotify *m)
 
 void librados::RadosClient::do_watch_notify(MWatchNotify *m)
 {
-  Mutex::Locker l(lock);
+  unique_lock l(lock);
   map<uint64_t, WatchNotifyInfo *>::iterator iter =
     watch_notify_info.find(m->cookie);
   if (iter != watch_notify_info.end()) {
@@ -636,21 +637,21 @@ void librados::RadosClient::do_watch_notify(MWatchNotify *m)
     if (wc->notify_lock) {
       // we sent a notify and it completed (or failed)
       ldout(cct,10) << __func__ << " completed notify " << *m << dendl;
-      wc->notify_lock->Lock();
+      WatchNotifyInfo::unique_lock nl(*wc->notify_lock);
       *wc->notify_done = true;
       // TODO
       // *wc->notify_rval = m->return_code;
-      wc->notify_cond->Signal();
-      wc->notify_lock->Unlock();
+      wc->notify_cond->notify_all();
+      nl.unlock();
     } else {
       // we are watcher and got a notify
       ldout(cct,10) << __func__ << " got notify " << *m << dendl;
       wc->get();
 
       // trigger the callback
-      lock.Unlock();
+      l.unlock();
       wc->watch_ctx->notify(m->opcode, m->ver, m->bl);
-      lock.Lock();
+      l.lock();
 
       // send ACK back to the OSD
       wc->io_ctx_impl->_notify_ack(wc->obj, m->notify_id, m->ver, m->cookie);
@@ -668,18 +669,18 @@ int librados::RadosClient::mon_command(const vector<string>& cmd,
 				       const bufferlist &inbl,
 				       bufferlist *outbl, string *outs)
 {
-  Mutex mylock;
-  Cond cond;
+  std::mutex mylock;
+  std::condition_variable cond;
   bool done;
   int rval;
-  lock.Lock();
+
   monclient.start_mon_command(cmd, inbl, outbl, outs,
 			       new C_SafeCond(&mylock, &cond, &done, &rval));
-  lock.Unlock();
-  mylock.Lock();
-  while (!done)
-    cond.Wait(mylock);
-  mylock.Unlock();
+
+
+  unique_lock l(mylock);
+  cond.wait(l, [&](){ return done; });
+  l.unlock();
   return rval;
 }
 
@@ -687,18 +688,16 @@ int librados::RadosClient::mon_command(int rank, const vector<string>& cmd,
 				       const bufferlist &inbl,
 				       bufferlist *outbl, string *outs)
 {
-  Mutex mylock;
-  Cond cond;
+  std::mutex mylock;
+  std::condition_variable cond;
   bool done;
   int rval;
-  lock.Lock();
+
   monclient.start_mon_command(rank, cmd, inbl, outbl, outs,
 			      new C_SafeCond(&mylock, &cond, &done, &rval));
-  lock.Unlock();
-  mylock.Lock();
-  while (!done)
-    cond.Wait(mylock);
-  mylock.Unlock();
+  unique_lock l(mylock);
+  cond.wait(l, [&](){ return done; });
+  l.unlock();
   return rval;
 }
 
@@ -706,18 +705,17 @@ int librados::RadosClient::mon_command(string name, const vector<string>& cmd,
 				       const bufferlist &inbl,
 				       bufferlist *outbl, string *outs)
 {
-  Mutex mylock;
-  Cond cond;
+  std::mutex mylock;
+  std::condition_variable cond;
   bool done;
   int rval;
-  lock.Lock();
+
   monclient.start_mon_command(name, cmd, inbl, outbl, outs,
 			       new C_SafeCond(&mylock, &cond, &done, &rval));
-  lock.Unlock();
-  mylock.Lock();
-  while (!done)
-    cond.Wait(mylock);
-  mylock.Unlock();
+
+  unique_lock l(mylock);
+  cond.wait(l, [&](){ return done; });
+  l.unlock();
   return rval;
 }
 
@@ -766,7 +764,7 @@ int librados::RadosClient::monitor_log(const string& level,
 
 void librados::RadosClient::handle_log(MLog *m)
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   ldout(cct, 10) << __func__ << " version " << m->version << dendl;
 
   if (log_last_version < m->version) {
@@ -780,8 +778,7 @@ void librados::RadosClient::handle_log(MLog *m)
 	ss << e.stamp << " " << e.who.name << " " << " " << e.msg;
 	string line = ss.str();
 	string who = stringify(e.who);
-	struct timespec stamp;
-	e.stamp.to_timespec(&stamp);
+	struct timespec stamp = ceph::time_to_timespec(e.stamp);
 
 	ldout(cct, 20) << __func__ << " delivering " << ss.str() << dendl;
 	log_cb(log_cb_arg, line.c_str(), who.c_str(),

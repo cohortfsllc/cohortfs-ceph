@@ -1,10 +1,12 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #include <iostream>
 #include <include/types.h>
 #include <limits.h>
 #include <errno.h>
+#include "common/strtol.h"
 
 #include "common/ceph_json.h"
-#include "include/utime.h"
 
 // for testing DELETE ME
 #include <fstream>
@@ -430,16 +432,51 @@ void decode_json_obj(bufferlist& val, JSONObj *obj)
   }
 }
 
-void decode_json_obj(utime_t& val, JSONObj *obj)
+void decode_json_obj(ceph::real_time& val, JSONObj *obj)
 {
   string s = obj->get_data();
-  uint64_t epoch;
-  uint64_t nsec;
-  int r = utime_t::parse_date(s, &epoch, &nsec);
-  if (r == 0) {
-    val = utime_t(epoch, nsec);
+  struct tm tm;
+  memset(&tm, 0, sizeof(tm));
+  val = ceph::real_time::min();
+
+  const char *p = strptime(s.c_str(), "%Y-%m-%d", &tm);
+  if (p) {
+    if (*p == ' ') {
+      p++;
+      p = strptime(p, " %H:%M:%S", &tm);
+      if (!p)
+	throw JSONDecoder::err("failed to decode ceph::real_time");
+      if (*p == '.') {
+	++p;
+	unsigned i;
+	char buf[10]; /* 9 digit + null termination */
+	for (i = 0; (i < sizeof(buf) - 1) && isdigit(*p); ++i, ++p) {
+	  buf[i] = *p;
+	}
+	for (; i < sizeof(buf) - 1; ++i) {
+	  buf[i] = '0';
+	}
+	buf[i] = '\0';
+	string err;
+	val += ceph::timespan((ceph_timespec)strict_strtol(buf, 10, &err));
+	if (!err.empty()) {
+	  throw JSONDecoder::err("failed to decode ceph::real_time");
+	}
+      }
+    }
   } else {
-    throw JSONDecoder::err("failed to decode utime_t");
+    int sec, usec;
+    int r = sscanf(s.c_str(), "%d.%d", &sec, &usec);
+    if (r != 2) {
+      throw JSONDecoder::err("failed to decode ceph::real_time");
+    }
+
+    time_t tt = sec;
+    gmtime_r(&tt, &tm);
+
+    val += std::chrono::microseconds(usec);
+    time_t t = timegm(&tm);
+    val += std::chrono::seconds(t);
   }
 }
 
@@ -494,9 +531,9 @@ void encode_json(const char *name, long long val, Formatter *f)
   f->dump_int(name, val);
 }
 
-void encode_json(const char *name, const utime_t& val, Formatter *f)
+void encode_json(const char *name, const ceph::real_time& val, Formatter *f)
 {
-  val.gmtime(f->dump_stream(name));
+  f->dump_stream(name) << val;
 }
 
 void encode_json(const char *name, const bufferlist& bl, Formatter *f)

@@ -45,11 +45,11 @@ class WorkloadGenerator : public TestObjectStoreState {
   static const size_t log_append_bytes = 1024;
 
   struct C_StatState {
-    utime_t start;
+    ceph::mono_time start;
     unsigned int written_data;
     WorkloadGenerator *wrkldgen;
 
-    C_StatState(WorkloadGenerator *state, utime_t s)
+    C_StatState(WorkloadGenerator *state, ceph::mono_time s)
       : start(s), written_data(0), wrkldgen(state) { }
   };
 
@@ -79,11 +79,13 @@ class WorkloadGenerator : public TestObjectStoreState {
   bool m_do_stats;
 
   int m_stats_finished_txs;
-  Mutex m_stats_lock;
-  int m_stats_show_secs;
+  std::mutex m_stats_lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
+  ceph::timespan m_stats_show_interval;
 
   size_t m_stats_total_written;
-  utime_t m_stats_begin;
+  ceph::mono_time m_stats_begin;
 
  private:
 
@@ -166,11 +168,12 @@ public:
     void finish(int r) {
       ctx->complete(r);
 
-      stat_state->wrkldgen->m_stats_lock.Lock();
+      WorkloadGenerator::unique_lock sswmsl(stat_state->
+					    wrkldgen->m_stats_lock);
 
       stat_state->wrkldgen->m_stats_total_written += stat_state->written_data;
       stat_state->wrkldgen->m_stats_finished_txs ++;
-      stat_state->wrkldgen->m_stats_lock.Unlock();
+      sswmsl.unlock();
     }
   };
 

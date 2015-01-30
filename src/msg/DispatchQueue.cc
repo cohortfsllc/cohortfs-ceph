@@ -28,17 +28,17 @@
 #undef dout_prefix
 #define dout_prefix *_dout << "-- " << msgr->get_myaddr() << " "
 
-double DispatchQueue::get_max_age(utime_t now) {
-  Mutex::Locker l(lock);
+ceph::timespan DispatchQueue::get_max_age() {
+  std::lock_guard<std::mutex> l(lock);
   if (marrival.empty())
-    return 0;
+    return ceph::timespan(0);
   else
-    return (now - marrival.begin()->first);
+    return (ceph::real_clock::now() - marrival.begin()->first);
 }
 
 void DispatchQueue::enqueue(Message *m, int priority, uint64_t id)
 {
-  Mutex::Locker l(lock);
+  std::lock_guard<std::mutex> l(lock);
   ldout(cct,20) << "queue " << m << " prio " << priority << dendl;
   m->trace.event("DispatchQueue::enqueue");
   m->trace.keyval("Priority", priority);
@@ -50,14 +50,14 @@ void DispatchQueue::enqueue(Message *m, int priority, uint64_t id)
     mqueue.enqueue(
       id, priority, m->get_cost(), QueueItem(m));
   }
-  cond.Signal();
+  cond.notify_all();
 }
 
 void DispatchQueue::local_delivery(Message *m, int priority)
 {
-  Mutex::Locker l(lock);
+  std::lock_guard<std::mutex> l(lock);
   m->set_connection(msgr->local_connection.get());
-  m->set_recv_stamp(ceph_clock_now(msgr->cct));
+  m->set_recv_stamp(ceph::real_clock::now());
   add_arrival(m);
   if (priority >= CEPH_MSG_PRIO_LOW) {
     mqueue.enqueue_strict(
@@ -66,7 +66,7 @@ void DispatchQueue::local_delivery(Message *m, int priority)
     mqueue.enqueue(
       0, priority, m->get_cost(), QueueItem(m));
   }
-  cond.Signal();
+  cond.notify_all();
 }
 
 /*
@@ -80,13 +80,13 @@ void DispatchQueue::local_delivery(Message *m, int priority)
  */
 void DispatchQueue::entry()
 {
-  lock.Lock();
+  std::unique_lock<std::mutex> l(lock);
   while (true) {
     while (!mqueue.empty()) {
       QueueItem qitem = mqueue.dequeue();
       if (!qitem.is_code())
 	remove_arrival(qitem.get_message());
-      lock.Unlock();
+      l.unlock();
 
       if (qitem.is_code()) {
 	switch (qitem.get_code()) {
@@ -131,19 +131,19 @@ void DispatchQueue::entry()
 	}
       }
 
-      lock.Lock();
+      l.lock();
     }
     if (stop)
       break;
 
     // wait for something to be put on queue
-    cond.Wait(lock);
+    cond.wait(l);
   }
-  lock.Unlock();
+  l.unlock();
 }
 
 void DispatchQueue::discard_queue(uint64_t id) {
-  Mutex::Locker l(lock);
+  std::lock_guard<std::mutex> l(lock);
   list<QueueItem> removed;
   mqueue.remove_by_class(id, &removed);
   for (list<QueueItem>::iterator i = removed.begin();
@@ -172,8 +172,8 @@ void DispatchQueue::wait()
 void DispatchQueue::shutdown()
 {
   // stop my dispatch thread
-  lock.Lock();
+  std::unique_lock<std::mutex> l(lock);
   stop = true;
-  cond.Signal();
-  lock.Unlock();
+  cond.notify_all();
+  l.unlock();
 }

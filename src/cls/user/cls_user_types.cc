@@ -88,8 +88,8 @@ void cls_user_stats::generate_test_instances(list<cls_user_stats*>& ls)
 void cls_user_gen_test_header(cls_user_header *h)
 {
   cls_user_gen_test_stats(&h->stats);
-  h->last_stats_sync = utime_t(1, 0);
-  h->last_stats_update = utime_t(2, 0);
+  h->last_stats_sync = ceph::real_time(1s);
+  h->last_stats_update = ceph::real_time(2s);
 }
 
 void cls_user_header::dump(Formatter *f) const

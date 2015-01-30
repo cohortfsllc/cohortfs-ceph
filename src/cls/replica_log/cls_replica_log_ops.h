@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
  *
@@ -73,21 +75,22 @@ struct cls_replica_log_get_bounds_op {
   }
 
   void dump(Formatter *f) const;
-  static void generate_test_instances(std::list<cls_replica_log_get_bounds_op*>& ls);
+  static void generate_test_instances(
+    std::list<cls_replica_log_get_bounds_op*>& ls);
 };
 WRITE_CLASS_ENCODER(cls_replica_log_get_bounds_op)
 
 struct cls_replica_log_get_bounds_ret {
   string position_marker; // oldest log listing position on the master
-  utime_t oldest_time; // oldest timestamp associated with position or an item
+  ceph::real_time oldest_time; // oldest timestamp associated with
+			       // position or an item
   std::list<cls_replica_log_progress_marker> markers;
 
   cls_replica_log_get_bounds_ret() {}
-  cls_replica_log_get_bounds_ret(const string& pos_marker,
-    const utime_t& time,
+  cls_replica_log_get_bounds_ret(
+    const string& pos_marker, const ceph::real_time& time,
     const std::list<cls_replica_log_progress_marker>& m) :
-    position_marker(pos_marker), oldest_time(time), markers(m)
-  {}
+    position_marker(pos_marker), oldest_time(time), markers(m) {}
   void encode(bufferlist& bl) const {
     ENCODE_START(1, 1, bl);
     ::encode(position_marker, bl);

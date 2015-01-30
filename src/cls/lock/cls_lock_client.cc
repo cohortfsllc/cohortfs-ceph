@@ -36,7 +36,7 @@ namespace rados {
 		const string& name, ClsLockType type,
 		const string& cookie, const string& tag,
 		const string& description,
-		const utime_t& duration, uint8_t flags)
+		const ceph::timespan& duration, uint8_t flags)
       {
 	cls_lock_lock_op op;
 	op.name = name;
@@ -55,7 +55,7 @@ namespace rados {
 	       const string& oid,
 	       const string& name, ClsLockType type,
 	       const string& cookie, const string& tag,
-	       const string& description, const utime_t& duration,
+	       const string& description, const ceph::timespan& duration,
 	       uint8_t flags)
       {
 	ObjectWriteOperation op(*ioctx);

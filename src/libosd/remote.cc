@@ -1,6 +1,9 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
+#include <condition_variable>
+#include <mutex>
+#include "include/ceph_time.h"
 #include "ceph_osd_remote.h"
 
 #include "Dispatcher.h"
@@ -32,13 +35,15 @@ class LibOSDRemote : public libosd_remote, private Objecter,
   std::unique_ptr<Messenger> ms;
   std::unique_ptr<MonClient> monc;
 
-  Mutex mtx;
-  Cond cond; // signaled on updates to map.epoch
+  std::mutex mtx;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
+  std::condition_variable cond; // signaled on updates to map.epoch
   OSDMap map;
 
   bool shutdown;
   int waiters;
-  Cond shutdown_cond; // signaled on waiters->0
+  std::condition_variable shutdown_cond; // signaled on waiters->0
 
   // Objecter
   bool wait_for_active(epoch_t *epoch);
@@ -93,10 +98,10 @@ LibOSDRemote::LibOSDRemote(int whoami)
 LibOSDRemote::~LibOSDRemote()
 {
   // allow any threads waiting on a map to see 'shutdown'
-  Mutex::Locker lock(mtx);
+  unique_lock lock(mtx);
   shutdown = true;
   while (waiters)
-    shutdown_cond.Wait(mtx);
+    shutdown_cond.wait(lock);
 
   if (monc)
     monc->shutdown();
@@ -155,7 +160,8 @@ int LibOSDRemote::init(const struct libosd_remote_args *args)
     return r;
   }
 
-  r = monc->authenticate(ctx->_conf->client_mount_timeout);
+  r = monc->authenticate(ceph::span_from_double(
+			   ctx->_conf->client_mount_timeout));
   if (r < 0) {
     lderr(ctx) << "failed to authenticate monclient: "
 		   << cpp_strerror(-r) << dendl;
@@ -171,12 +177,12 @@ int LibOSDRemote::init(const struct libosd_remote_args *args)
   ldout(ctx, 1) << "waiting for osd map" << dendl;
 
   // wait for an OSDMap that shows osd.whoami is up
-  Mutex::Locker lock(mtx);
+  unique_lock lock(mtx);
   ++waiters;
   while (!map.is_up(whoami) && !shutdown)
-    cond.Wait(mtx);
+    cond.wait(lock);
   if (--waiters == 0)
-    shutdown_cond.Signal();
+    shutdown_cond.notify_all();
 
   return shutdown ? -1 : 0;
 }
@@ -196,15 +202,15 @@ void LibOSDRemote::init_dispatcher(const entity_inst_t &inst)
 
 bool LibOSDRemote::wait_for_active(epoch_t *epoch)
 {
-  Mutex::Locker lock(mtx);
+  unique_lock lock(mtx);
   ++waiters;
   while (!map.is_up(whoami) && !shutdown)
-    cond.Wait(mtx);
+    cond.wait(lock);
 
   *epoch = map.get_epoch();
 
   if (--waiters == 0)
-    shutdown_cond.Signal();
+    shutdown_cond.notify_all();
   return !shutdown;
 }
 
@@ -212,7 +218,7 @@ void LibOSDRemote::handle_osd_map(MOSDMap *m)
 {
   ldout(ctx, 3) << "handle_osd_map " << *m << dendl;
 
-  Mutex::Locker lock(mtx);
+  lock_guard lock(mtx);
 
   if (m->get_last() <= map.get_epoch()) {
     // already have everything
@@ -269,7 +275,7 @@ void LibOSDRemote::handle_osd_map(MOSDMap *m)
 
   m->put();
   monc->sub_got("osdmap", map.get_epoch());
-  cond.Signal();
+  cond.notify_all();
 
   if (map.get_epoch() > 0 && !dispatcher) {
     if (!map.is_up(whoami)) {
@@ -306,9 +312,9 @@ bool LibOSDRemote::ms_dispatch(Message *m)
 int LibOSDRemote::get_volume(const char *name, uint8_t id[16])
 {
   // wait for osdmap (doesn't matter whether our osd is up yet)
-  Mutex::Locker lock(mtx);
+  unique_lock lock(mtx);
   while (map.get_epoch() == 0 && !shutdown)
-    cond.Wait(mtx);
+    cond.wait(lock);
 
   if (shutdown)
     return -ENODEV;

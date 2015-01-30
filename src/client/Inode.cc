@@ -1,6 +1,7 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
+#include "include/ceph_time.h"
 #include "MetaSession.h"
 #include "Inode.h"
 #include "Dentry.h"
@@ -12,7 +13,7 @@ ostream& operator<<(ostream &out, Inode &in)
       << "ref=" << in._ref
       << " cap_refs=" << in.cap_refs
       << " open=" << in.open_by_mode
-      << " mode=" << oct << in.mode << dec
+      << " mode=" << std::oct << in.mode << std::dec
       << " size=" << in.size << "/" << in.max_size
       << " mtime=" << in.mtime
       << " caps=" << ccap_string(in.caps_issued());
@@ -128,7 +129,7 @@ bool Inode::cap_is_valid(Cap* cap)
     << "cap expire  " << cap->session->cap_ttl << std::endl
     << "cur time    " << ceph_clock_now(cct) << std::endl;*/
   if ((cap->session->cap_gen <= cap->gen)
-      && (ceph_clock_now(cct) < cap->session->cap_ttl)) {
+      && (ceph::mono_clock::now() < cap->session->cap_ttl)) {
     return true;
   }
   return true;

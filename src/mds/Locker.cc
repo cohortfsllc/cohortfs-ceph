@@ -1968,11 +1968,12 @@ class C_MDL_CheckMaxSize : public Context {
   uint64_t newsize;
   bool update_max;
   uint64_t new_max_size;
-  utime_t mtime;
+  ceph::real_time mtime;
 
 public:
   C_MDL_CheckMaxSize(Locker *l, CInode *i, bool _update_size, uint64_t _newsize,
-		     bool _update_max, uint64_t _new_max_size, utime_t _mtime) :
+		     bool _update_max, uint64_t _new_max_size,
+		     ceph::real_time _mtime) :
     locker(l), in(i),
     update_size(_update_size), newsize(_newsize),
     update_max(_update_max), new_max_size(_new_max_size),
@@ -2015,7 +2016,7 @@ void Locker::calc_new_client_ranges(CInode *in, uint64_t size, map<client_t,clie
 bool Locker::check_inode_max_size(CInode *in, bool force_wrlock,
 				  bool update_size, uint64_t new_size,
 				  bool update_max, uint64_t new_max_size,
-				  utime_t new_mtime)
+				  ceph::real_time new_mtime)
 {
   assert(in->is_auth());
 
@@ -2503,9 +2504,9 @@ void Locker::_update_cap_fields(CInode *in, int dirty, MClientCaps *m,
 {
   // file
   if (dirty & (CEPH_CAP_FILE_EXCL|CEPH_CAP_FILE_WR)) {
-    utime_t atime = m->get_atime();
-    utime_t mtime = m->get_mtime();
-    utime_t ctime = m->get_ctime();
+    ceph::real_time atime = m->get_atime();
+    ceph::real_time mtime = m->get_mtime();
+    ceph::real_time ctime = m->get_ctime();
     uint64_t size = m->get_size();
     version_t inline_version = m->inline_version;
 
@@ -2560,7 +2561,7 @@ void Locker::_update_cap_fields(CInode *in, int dirty, MClientCaps *m,
       pi->gid = m->head.gid;
     }
     if (m->head.mode != pi->mode) {
-      dout(7) << "  mode " << oct << pi->mode
+      dout(7) << "  mode " << std::oct << pi->mode
 	      << " -> " << m->head.mode << dec
 	      << " for " << *in << dendl;
       pi->mode = m->head.mode;
@@ -2642,11 +2643,9 @@ bool Locker::_do_cap_update(CInode *in, Capability *cap,
       }
       if (!in->filelock.can_wrlock(client) &&
 	  !in->filelock.can_force_wrlock(client)) {
-	C_MDL_CheckMaxSize *cms = new C_MDL_CheckMaxSize(this, in,
-							 false, 0,
-							 forced_change_max,
-							 new_max,
-							 utime_t());
+	C_MDL_CheckMaxSize *cms = new C_MDL_CheckMaxSize(
+	  this, in, false, 0, forced_change_max, new_max,
+	  ceph::real_time::min());
 
 	in->filelock.add_waiter(SimpleLock::WAIT_STABLE, cms);
 	change_max = false;
@@ -2890,11 +2889,13 @@ void Locker::handle_client_lease(MClientLease *m)
 	      << (!dn->lock.can_lease(client)?", revoking lease":"") << dendl;
       if (dn->lock.can_lease(client)) {
 	int pool = 1;	// fixme.. do something smart!
-	m->h.duration_ms = (int)(1000 * mdcache->client_lease_durations[pool]);
+	m->h.duration_ms =
+	  std::chrono::duration_cast<std::chrono::milliseconds>(
+	    mdcache->client_lease_durations[pool]).count();
 	m->h.seq = ++l->seq;
 	m->clear_payload();
 
-	utime_t now = ceph_clock_now(cct);
+	ceph::real_time now = ceph::real_clock::now();
 	now += mdcache->client_lease_durations[pool];
 	mdcache->touch_client_lease(l, pool, now);
 
@@ -2911,7 +2912,8 @@ void Locker::handle_client_lease(MClientLease *m)
 
 
 void Locker::issue_client_lease(CDentry *dn, client_t client,
-			       bufferlist &bl, utime_t now, Session *session)
+				bufferlist &bl, ceph::real_time now,
+				Session *session)
 {
   CInode *diri = dn->get_dir()->get_inode();
   if (!diri->is_stray() &&  // do not issue dn leases in stray dir!
@@ -2929,7 +2931,8 @@ void Locker::issue_client_lease(CDentry *dn, client_t client,
     LeaseStat e;
     e.mask = 1 | CEPH_LOCK_DN;	// old and new bit values
     e.seq = ++l->seq;
-    e.duration_ms = (int)(1000 * mdcache->client_lease_durations[pool]);
+    e.duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+      mdcache-> client_lease_durations[pool]).count();
     ::encode(e, bl);
     dout(20) << "issue_client_lease seq " << e.seq << " dur " << e.duration_ms << "ms "
 	     << " on " << *dn << dendl;
@@ -3684,7 +3687,7 @@ void Locker::mark_updated_scatterlock(ScatterLock *lock)
 	     << " - already on list since " << lock->get_update_stamp() << dendl;
   } else {
     updated_scatterlocks.push_back(lock->get_updated_item());
-    utime_t now = ceph_clock_now(cct);
+    ceph::mono_time now = ceph::mono_clock::now();
     lock->set_update_stamp(now);
     dout(10) << "mark_updated_scatterlock " << *lock
 	     << " - added at " << now << dendl;
@@ -3807,7 +3810,7 @@ void Locker::scatter_tick()
   dout(10) << "scatter_tick" << dendl;
 
   // updated
-  utime_t now = ceph_clock_now(cct);
+  ceph::mono_time now = ceph::mono_clock::now();
   int n = updated_scatterlocks.size();
   while (!updated_scatterlocks.empty()) {
     ScatterLock *lock = updated_scatterlocks.front();
@@ -3820,8 +3823,8 @@ void Locker::scatter_tick()
 	       << *lock << " " << *lock->get_parent() << dendl;
       continue;
     }
-    if (now - lock->get_update_stamp()
-	< cct->_conf->mds_scatter_nudge_interval)
+    if (now - lock->get_update_stamp() <
+	ceph::span_from_double(cct->_conf->mds_scatter_nudge_interval))
       break;
     updated_scatterlocks.pop_front();
     scatter_nudge(lock, 0);

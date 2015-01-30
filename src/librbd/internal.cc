@@ -77,9 +77,8 @@ namespace librbd {
 
   void image_info(ImageCtx *ictx, image_info_t& info, size_t infosize)
   {
-    ictx->md_lock.get_read();
+    ImageCtx::shared_md_lock ml(ictx->md_lock);
     info.size = ictx->get_image_size();
-    ictx->md_lock.put_read();
   }
 
   void trim_image(ImageCtx *ictx, uint64_t newsize, ProgressContext& prog_ctx)
@@ -132,11 +131,12 @@ namespace librbd {
   int notify_change(IoCtx& io_ctx, const string& oid, ImageCtx *ictx)
   {
     if (ictx) {
-      ictx->refresh_lock.Lock();
-      ldout(ictx->cct, 20) << "notify_change refresh_seq = " << ictx->refresh_seq
-			   << " last_refresh = " << ictx->last_refresh << dendl;
+      ImageCtx::lock_guard rl(ictx->refresh_lock);
+      ldout(ictx->cct, 20) << "notify_change refresh_seq = "
+			   << ictx->refresh_seq
+			   << " last_refresh = " << ictx->last_refresh
+			   << dendl;
       ++ictx->refresh_seq;
-      ictx->refresh_lock.Unlock();
     }
 
     bufferlist bl;
@@ -284,7 +284,7 @@ namespace librbd {
     int r = ictx_check(ictx);
     if (r < 0)
       return r;
-    RWLock::RLocker l(ictx->md_lock);
+    ImageCtx::shared_md_lock ml(ictx->md_lock);
     *size = ictx->get_image_size();
     return 0;
   }
@@ -315,9 +315,9 @@ namespace librbd {
       }
       assert(watchers.size() == 1);
 
-      ictx->md_lock.get_read();
+      ImageCtx::shared_md_lock ml(ictx->md_lock);
       trim_image(ictx, 0, prog_ctx);
-      ictx->md_lock.put_read();
+      ml.unlock();
 
       close_image(ictx);
 
@@ -388,7 +388,7 @@ namespace librbd {
     if (r < 0)
       return r;
 
-    RWLock::WLocker l(ictx->md_lock);
+    ImageCtx::unique_md_lock ml(ictx->md_lock);
 #if 0
     if (size < ictx->size && ictx->object_cacher) {
       // need to invalidate since we're deleting objects, and
@@ -407,12 +407,12 @@ namespace librbd {
   {
     CephContext *cct = ictx->cct;
     ldout(cct, 20) << "ictx_check " << ictx << dendl;
-    ictx->refresh_lock.Lock();
+    ImageCtx::unique_lock rl(ictx->refresh_lock);
     bool needs_refresh = ictx->last_refresh != ictx->refresh_seq;
-    ictx->refresh_lock.Unlock();
+    rl.unlock();
 
     if (needs_refresh) {
-      RWLock::WLocker l(ictx->md_lock);
+      ImageCtx::unique_md_lock ml(ictx->md_lock);
 
       int r = ictx_refresh(ictx);
       if (r < 0) {
@@ -431,9 +431,9 @@ namespace librbd {
 
     ldout(cct, 20) << "ictx_refresh " << ictx << dendl;
 
-    ictx->refresh_lock.Lock();
+    ImageCtx::unique_lock rl(ictx->refresh_lock);
     int refresh_seq = ictx->refresh_seq;
-    ictx->refresh_lock.Unlock();
+    rl.unlock();
     {
       int r;
       ictx->lockers.clear();
@@ -465,9 +465,9 @@ namespace librbd {
       ictx->size = ictx->header.image_size;
     }
 
-    ictx->refresh_lock.Lock();
+    rl.lock();
     ictx->last_refresh = refresh_seq;
-    ictx->refresh_lock.Unlock();
+    rl.unlock();
 
     return 0;
   }
@@ -500,9 +500,9 @@ namespace librbd {
     ldout(cct, 20) << "copy " << src->name
 		   << " -> " << destname << dendl;
 
-    src->md_lock.get_read();
+    ImageCtx::shared_md_lock ml(src->md_lock);
     uint64_t src_size = src->get_image_size();
-    src->md_lock.put_read();
+    ml.unlock();
 
     int r = create(dest_md_ctx, destname, src_size);
     if (r < 0) {
@@ -577,13 +577,13 @@ namespace librbd {
 
   int copy(ImageCtx *src, ImageCtx *dest, ProgressContext &prog_ctx)
   {
-    src->md_lock.get_read();
+    ImageCtx::shared_md_lock sml(src->md_lock);
     uint64_t src_size = src->get_image_size();
-    src->md_lock.put_read();
+    sml.unlock();
 
-    dest->md_lock.get_read();
+    ImageCtx::shared_md_lock dml(dest->md_lock);
     uint64_t dest_size = dest->get_image_size();
-    dest->md_lock.put_read();
+    dml.unlock();
 
     CephContext *cct = src->cct;
     if (dest_size < src_size) {
@@ -626,6 +626,7 @@ namespace librbd {
     if (r < 0)
       return r;
 
+    ImageCtx::unique_md_lock ml(ictx->md_lock, std::defer_lock);
     if (!ictx->read_only) {
       r = ictx->register_watch();
       if (r < 0) {
@@ -635,9 +636,9 @@ namespace librbd {
       }
     }
 
-    ictx->md_lock.get_write();
+    ml.lock();
     r = ictx_refresh(ictx);
-    ictx->md_lock.put_write();
+    ml.unlock();
     if (r < 0)
       goto err_close;
 
@@ -676,7 +677,7 @@ namespace librbd {
     if (r < 0)
       return r;
 
-    RWLock::RLocker locker(ictx->md_lock);
+    ImageCtx::shared_md_lock ml(ictx->md_lock);
     if (exclusive)
       *exclusive = ictx->exclusive_locked;
     if (tag)
@@ -715,10 +716,10 @@ namespace librbd {
      * checks that we think we will succeed. But for now, let's not
      * duplicate that code.
      */
-    RWLock::RLocker locker(ictx->md_lock);
+    ImageCtx::shared_md_lock ml(ictx->md_lock);
     r = rados::cls::lock::lock(&ictx->io_ctx, ictx->header_oid, RBD_LOCK_NAME,
 			       exclusive ? LOCK_EXCLUSIVE : LOCK_SHARED,
-			       cookie, tag, "", utime_t(), 0);
+			       cookie, tag, "", 0s, 0);
     if (r < 0)
       return r;
     notify_change(ictx->io_ctx, ictx->header_oid, ictx);
@@ -735,7 +736,7 @@ namespace librbd {
     if (r < 0)
       return r;
 
-    RWLock::RLocker locker(ictx->md_lock);
+    ImageCtx::shared_md_lock ml(ictx->md_lock);
     r = rados::cls::lock::unlock(&ictx->io_ctx, ictx->header_oid,
 				 RBD_LOCK_NAME, cookie);
     if (r < 0)
@@ -760,7 +761,7 @@ namespace librbd {
 		       << "'" << dendl;
       return -EINVAL;
     }
-    RWLock::RLocker locker(ictx->md_lock);
+    ImageCtx::shared_md_lock ml(ictx->md_lock);
     r = rados::cls::lock::break_lock(&ictx->io_ctx, ictx->header_oid,
 				     RBD_LOCK_NAME, cookie, lock_client);
     if (r < 0)
@@ -782,8 +783,6 @@ namespace librbd {
 		       int (*cb)(uint64_t, size_t, const char *, void *),
 		       void *arg)
   {
-    utime_t start_time, elapsed;
-
     ldout(ictx->cct, 20) << "read_iterate " << ictx << " off = " << off
 			 << " len = " << len << dendl;
 
@@ -799,14 +798,13 @@ namespace librbd {
     int64_t total_read = 0;
     uint64_t left = mylen;
 
-    start_time = ceph_clock_now(ictx->cct);
     while (left > 0) {
       uint64_t read_len = ictx->io_ctx.op_size();
 
       bufferlist bl;
 
-      Mutex mylock;
-      Cond cond;
+      std::mutex mylock;
+      std::condition_variable cond;
       bool done;
       int ret;
 
@@ -819,10 +817,9 @@ namespace librbd {
 	return r;
       }
 
-      mylock.Lock();
-      while (!done)
-	cond.Wait(mylock);
-      mylock.Unlock();
+      std::unique_lock<std::mutex> myl(mylock);
+      cond.wait(myl, [&](){ return done; });
+      myl.unlock();
 
       if (ret < 0)
 	return ret;
@@ -836,7 +833,6 @@ namespace librbd {
       off += ret;
     }
 
-    elapsed = ceph_clock_now(ictx->cct) - start_time;
     return total_read;
   }
 
@@ -853,8 +849,8 @@ namespace librbd {
 
   ssize_t read(ImageCtx *ictx, uint64_t ofs, size_t len, char *buf)
   {
-    Mutex mylock;
-    Cond cond;
+    std::mutex mylock;
+    std::condition_variable cond;
     bool done;
     int ret;
 
@@ -867,23 +863,20 @@ namespace librbd {
       return r;
     }
 
-    mylock.Lock();
-    while (!done)
-      cond.Wait(mylock);
-    mylock.Unlock();
+    std::unique_lock<std::mutex> myl(mylock);
+    cond.wait(myl, [&](){ return done; });
+    myl.unlock();
 
     return ret;
   }
 
   ssize_t write(ImageCtx *ictx, uint64_t off, size_t len, const char *buf)
   {
-    utime_t start_time, elapsed;
     ldout(ictx->cct, 20) << "write " << ictx << " off = " << off << " len = "
 			 << len << dendl;
 
-    start_time = ceph_clock_now(ictx->cct);
-    Mutex mylock;
-    Cond cond;
+    std::mutex mylock;
+    std::condition_variable cond;
     bool done;
     int ret;
 
@@ -901,27 +894,23 @@ namespace librbd {
       return r;
     }
 
-    mylock.Lock();
-    while (!done)
-      cond.Wait(mylock);
-    mylock.Unlock();
+    std::unique_lock<std::mutex> myl(mylock);
+    cond.wait(myl, [&](){ return done; });
+    myl.unlock();
 
     if (ret < 0)
       return ret;
 
-    elapsed = ceph_clock_now(ictx->cct) - start_time;
     return mylen;
   }
 
   int discard(ImageCtx *ictx, uint64_t off, uint64_t len)
   {
-    utime_t start_time, elapsed;
     ldout(ictx->cct, 20) << "discard " << ictx << " off = " << off << " len = "
 			 << len << dendl;
 
-    start_time = ceph_clock_now(ictx->cct);
-    Mutex mylock;
-    Cond cond;
+    std::mutex mylock;
+    std::condition_variable cond;
     bool done;
     int ret;
 
@@ -934,15 +923,13 @@ namespace librbd {
       return r;
     }
 
-    mylock.Lock();
-    while (!done)
-      cond.Wait(mylock);
-    mylock.Unlock();
+    std::unique_lock<std::mutex> myl(mylock);
+    cond.wait(myl, [&](){ return done; });
+    myl.unlock();
 
     if (ret < 0)
       return ret;
 
-    elapsed = ceph_clock_now(ictx->cct) - start_time;
     return len;
   }
 
@@ -1022,9 +1009,9 @@ namespace librbd {
   // validate extent against image size; clip to image size if necessary
   int clip_io(ImageCtx *ictx, uint64_t off, uint64_t *len)
   {
-    ictx->md_lock.get_read();
+    ImageCtx::shared_md_lock ml(ictx->md_lock);
     uint64_t image_size = ictx->get_image_size();
-    ictx->md_lock.put_read();
+    ml.unlock();
 
     // special-case "len == 0" requests: always valid
     if (*len == 0)
@@ -1194,7 +1181,7 @@ namespace librbd {
   done:
 #if 0
     if (ictx->object_cacher) {
-      Mutex::Locker l(ictx->cache_lock);
+      ImageCtx::lock_guard l(ictx->cache_lock);
       ObjectExtent x(ictx->image_oid, off, len, 0);
       vector<ObjectExtent> xs;
       xs.push_back(x);

@@ -4,8 +4,8 @@
 #ifndef CEPH_CLIENT_METASESSION_H
 #define CEPH_CLIENT_METASESSION_H
 
+#include "include/ceph_time.h"
 #include "include/types.h"
-#include "include/utime.h"
 #include "msg/msg_types.h"
 #include "include/xlist.h"
 
@@ -21,7 +21,8 @@ struct MetaSession {
   ConnectionRef con;
   version_t seq;
   uint64_t cap_gen;
-  utime_t cap_ttl, last_cap_renew_request;
+  ceph::mono_time cap_ttl;
+  ceph::mono_time last_cap_renew_request;
   uint64_t cap_renew_seq;
   int num_caps;
   entity_inst_t inst;

@@ -23,7 +23,8 @@ public:
 
   int get_op() const { return head.op; }
   version_t get_seq() const { return head.seq; }
-  utime_t get_stamp() const { return utime_t(head.stamp); }
+  ceph::real_time get_stamp() const {
+    return ceph::real_time(ceph::timespan(head.stamp)); }
   int get_max_caps() const { return head.max_caps; }
   int get_max_leases() const { return head.max_leases; }
 
@@ -34,12 +35,12 @@ public:
     head.op = o;
     head.seq = s;
   }
-  MClientSession(int o, utime_t st) :
+  MClientSession(int o, ceph::real_time st) :
     Message(CEPH_MSG_CLIENT_SESSION) {
     memset(&head, 0, sizeof(head));
     head.op = o;
     head.seq = 0;
-    st.encode_timeval(&head.stamp);
+    head.stamp = st.time_since_epoch().count();
   }
 private:
   ~MClientSession() {}

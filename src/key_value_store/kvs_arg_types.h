@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 /*
  * Argument types used by cls_kvs.cc
  *
@@ -13,7 +15,6 @@
 #include "include/encoding.h"
 #include "key_value_store/kv_flat_btree_async.h"
 
-using namespace std;
 using ceph::bufferlist;
 
 struct assert_size_args {

@@ -181,15 +181,15 @@ class SyntheticClient {
   }
   void did_run_me() {
     run_only = -1;
-    run_until = utime_t();
+    run_until = ceph::mono_time::min();
   }
 
   // run() will do one of these things:
   list<int> modes;
   list<string> sargs;
   list<int> iargs;
-  utime_t run_start;
-  utime_t run_until;
+  ceph::mono_time run_start;
+  ceph::mono_time run_until;
 
   client_t run_only;
   client_t exclude;
@@ -202,12 +202,13 @@ class SyntheticClient {
   }
 
   bool time_to_stop() {
-    utime_t now = ceph_clock_now(client->cct);
+    ceph::mono_time now = ceph::mono_clock::now();
     if (0) cout << "time_to_stop .. now " << now
 		<< " until " << run_until
 		<< " start " << run_start
 		<< std::endl;
-    if (run_until.sec() && now > run_until)
+    if (run_until > ceph::mono_time::min() &&
+	now > run_until)
       return true;
     else
       return false;

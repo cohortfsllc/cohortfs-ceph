@@ -130,7 +130,7 @@ void SessionMap::save(Context *onsave, version_t needv)
   committing = version;
   oid obj = get_object_name();
   VolumeRef volume(mds->get_metadata_volume());
-  mds->objecter->write_full(obj, volume, bl, ceph_clock_now(cct), 0,
+  mds->objecter->write_full(obj, volume, bl, ceph::real_clock::now(), 0,
 			    NULL, new C_SM_Save(this, version));
 }
 
@@ -170,7 +170,7 @@ void SessionMap::encode(bufferlist& bl) const
 
 void SessionMap::decode(bufferlist::iterator& p)
 {
-  utime_t now = ceph_clock_now(cct);
+  ceph::mono_time now = ceph::mono_clock::now();
   uint64_t pre;
   ::decode(pre, p);
   if (pre == (uint64_t)-1) {

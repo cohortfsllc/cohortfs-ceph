@@ -29,8 +29,6 @@
 #include "LogSegment.h"
 
 #include "include/Context.h"
-#include "common/Clock.h"
-
 #include "osdc/Objecter.h"
 
 #include "common/config.h"
@@ -142,7 +140,7 @@ void CDir::print(ostream& out)
 
 ostream& CDir::print_db_line_prefix(ostream& out)
 {
-  return out << ceph_clock_now(cct) << " mds." << cache->mds->get_nodeid()
+  return out << ceph::real_clock::now() << " mds." << cache->mds->get_nodeid()
 	     << ".cache.dir(" << this->dirfrag() << ") ";
 }
 
@@ -155,9 +153,10 @@ CDir::CDir(CephContext* cct, CInode *in, frag_t fg, MDCache *mdcache,
 	   bool auth) :
   cct(in->cct), dirty_rstat_inodes(member_offset(CInode, dirty_rstat_item)),
   item_dirty(this), item_new(this),
-  pop_me(ceph_clock_now(cct)), pop_nested(ceph_clock_now(cct)),
-  pop_auth_subtree(ceph_clock_now(cct)),
-  pop_auth_subtree_nested(ceph_clock_now(cct)), pop_spread(cct)
+  pop_me(ceph::real_clock::now()), pop_nested(ceph::real_clock::now()),
+  pop_auth_subtree(ceph::real_clock::now()),
+  pop_auth_subtree_nested(ceph::real_clock::now()), pop_spread(cct)
+
 {
   g_num_dir++;
   g_num_dira++;
@@ -1271,7 +1270,7 @@ void CDir::_omap_fetch(const string& want_dn)
     dout(0) << "Unable to attach volume " << volume << dendl;
     return;
   }
-  unique_ptr<ObjOp> rd = volume->op();
+  std::unique_ptr<ObjOp> rd = volume->op();
   if (!rd) {
     dout(0) << "Unable to make operation for volume " << volume << dendl;
     return;
@@ -1453,7 +1452,7 @@ void CDir::_omap_commit(int op_prio)
     }
 
     if (write_size >= max_write_size) {
-      unique_ptr<ObjOp> op(volume->op());
+      std::unique_ptr<ObjOp> op(volume->op());
       if (!op) {
 	dout(0) << "Unable to make operation for volume " << volume << dendl;
 	return;
@@ -1466,7 +1465,7 @@ void CDir::_omap_commit(int op_prio)
 	op->omap_rm_keys(to_remove);
 
       cache->mds->objecter->mutate(obj, volume, op,
-				   ceph_clock_now(cct), 0, NULL,
+				   ceph::real_clock::now(), 0, NULL,
 				   gather.new_sub());
 
       write_size = 0;
@@ -1475,7 +1474,7 @@ void CDir::_omap_commit(int op_prio)
     }
   }
 
-  unique_ptr<ObjOp> op(volume->op());
+  std::unique_ptr<ObjOp> op(volume->op());
   if (!op) {
     dout(0) << "Unable to make operation for volume " << volume << dendl;
     return;
@@ -1500,7 +1499,7 @@ void CDir::_omap_commit(int op_prio)
   if (!to_remove.empty())
     op->omap_rm_keys(to_remove);
 
-  cache->mds->objecter->mutate(obj, volume, op, ceph_clock_now(cct),
+  cache->mds->objecter->mutate(obj, volume, op, ceph::real_clock::now(),
 			       0, NULL, gather.new_sub());
 
   gather.activate();
@@ -1703,7 +1702,7 @@ void CDir::encode_export(bufferlist& bl)
   get(PIN_TEMPEXPORTING);
 }
 
-void CDir::finish_export(utime_t now)
+void CDir::finish_export(ceph::real_time now)
 {
   state &= MASK_STATE_EXPORT_KEPT;
   pop_auth_subtree_nested.sub(now, cache->decayrate, pop_auth_subtree);
@@ -1712,7 +1711,9 @@ void CDir::finish_export(utime_t now)
   put(PIN_TEMPEXPORTING);
 }
 
-void CDir::decode_import(bufferlist::iterator& blp, utime_t now, LogSegment *ls)
+void CDir::decode_import(bufferlist::iterator& blp,
+			 ceph::real_time now,
+			 LogSegment *ls)
 {
   ::decode(fnode, blp);
   projected_version = fnode.version;
@@ -1730,8 +1731,8 @@ void CDir::decode_import(bufferlist::iterator& blp, utime_t now, LogSegment *ls)
 
   ::decode(dir_rep, blp);
 
-  ::decode(pop_me, now, blp);
-  ::decode(pop_auth_subtree, now, blp);
+  ::decode(pop_me, blp);
+  ::decode(pop_auth_subtree, blp);
   pop_auth_subtree_nested.add(now, cache->decayrate, pop_auth_subtree);
 
   ::decode(dir_rep_by, blp);

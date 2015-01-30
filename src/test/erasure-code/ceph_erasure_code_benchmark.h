@@ -19,8 +19,6 @@
 
 #include <string>
 
-using namespace std;
-
 class ErasureCodeBench {
   int in_size;
   int max_iterations;

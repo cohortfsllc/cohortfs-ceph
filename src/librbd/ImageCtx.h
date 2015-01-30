@@ -8,8 +8,8 @@
 #include <string>
 #include <vector>
 
-#include "common/Mutex.h"
-#include "common/RWLock.h"
+#include <mutex>
+#include <shared_mutex>
 #include "include/buffer.h"
 #include "include/rbd/librbd.hpp"
 #include "include/rbd_types.h"
@@ -47,11 +47,17 @@ namespace librbd {
      * Lock ordering:
      * md_lock, cache_lock, refresh_lock
      */
-    RWLock md_lock; // protects access to the mutable image metadata
-		    // that isn't guarded by other locks below (size,
-		    // image locks, etc)
-    Mutex cache_lock; // used as client_lock for the ObjectCacher
-    Mutex refresh_lock; // protects refresh_seq and last_refresh
+    std::shared_timed_mutex md_lock; // protects access to the mutable
+				     // image metadata that isn't
+				     // guarded by other locks below
+				     // (size, image locks, etc)
+    typedef std::shared_lock<std::shared_timed_mutex> shared_md_lock;
+    typedef std::unique_lock<std::shared_timed_mutex> unique_md_lock;
+    std::mutex cache_lock; // used as client_lock for the ObjectCacher
+    std::mutex refresh_lock; // protects refresh_seq and last_refresh
+    typedef std::lock_guard<std::mutex> lock_guard;
+    typedef std::unique_lock<std::mutex> unique_lock;
+
 
     uint64_t size;
     std::string header_obj;

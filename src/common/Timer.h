@@ -15,37 +15,76 @@
 #ifndef CEPH_TIMER_H
 #define CEPH_TIMER_H
 
-#include "Cond.h"
-#include "Mutex.h"
-
+#include <condition_variable>
 #include <map>
+#include <mutex>
+#include <sstream>
+#include <signal.h>
+#include <sys/time.h>
+#include <math.h>
+#include <include/Context.h>
+
+#include "include/ceph_time.h"
+#include "common/Thread.h"
 
 class CephContext;
-class Context;
+
+template <class TC>
 class SafeTimerThread;
 
+template <class TC>
 class SafeTimer
 {
+  typedef std::multimap <typename TC::time_point, Context *> scheduled_map_t;
+  typedef std::map < Context*,
+		     typename scheduled_map_t::iterator > event_lookup_map_t;
+
   // This class isn't supposed to be copied
   SafeTimer(const SafeTimer &rhs);
   SafeTimer& operator=(const SafeTimer &rhs);
 
-  CephContext *cct;
-  Mutex& lock;
-  Cond cond;
+  std::mutex& lock;
+  std::condition_variable cond;
   bool safe_callbacks;
 
-  friend class SafeTimerThread;
-  SafeTimerThread *thread;
+  friend class SafeTimerThread<TC>;
+  SafeTimerThread<TC> *thread;
 
-  void timer_thread();
-  void _shutdown();
+  void timer_thread() {
+    std::unique_lock<std::mutex> l(lock);
+    while (!stopping) {
+      typename TC::time_point now = TC::now();
 
-  std::multimap<utime_t, Context*> schedule;
-  std::map<Context*, std::multimap<utime_t, Context*>::iterator> events;
+      while (!schedule.empty()) {
+	auto p = schedule.begin();
+
+	// is the future now?
+	if (p->first > now)
+	  break;
+
+	Context *callback = p->second;
+	events.erase(callback);
+	schedule.erase(p);
+
+	if (!safe_callbacks)
+	  l.unlock();
+	callback->complete(0);
+	if (!safe_callbacks)
+	  l.lock();
+      }
+
+      if (schedule.empty())
+	cond.wait(l);
+      else
+	cond.wait_until(l, schedule.begin()->first);
+    }
+  }
+
+  std::multimap<typename TC::time_point, Context*> schedule;
+  std::map<Context*,
+	   typename std::multimap<typename TC::time_point,
+				  Context*>::iterator> events;
   bool stopping;
-
-  void dump(const char *caller = 0) const;
 
 public:
   /* Safe callbacks determines whether callbacks are called with the lock
@@ -58,8 +97,16 @@ public:
    * If you are able to relax requirements on cancelled callbacks, then
    * setting safe_callbacks = false eliminates the lock cycle issue.
    * */
-  SafeTimer(CephContext *cct, Mutex &l, bool safe_callbacks=true);
-  ~SafeTimer();
+  SafeTimer(std::mutex& l, bool safe_callbacks=true)
+    : lock(l),
+      safe_callbacks(safe_callbacks),
+      thread(NULL),
+      stopping(false) { }
+
+  ~SafeTimer() {
+    assert(thread == NULL);
+  }
+
 
   /* Call with the event_lock UNLOCKED.
    *
@@ -67,13 +114,47 @@ public:
    *
    * If there are any events that still have to run, they will need to take
    * the event_lock first. */
-  void init();
-  void shutdown();
+  void init() {
+    thread = new SafeTimerThread<TC>(this);
+    thread->create();
+  }
+
+  void shutdown(std::unique_lock<std::mutex>& l) {
+    if (thread) {
+      cancel_all_events();
+      stopping = true;
+      cond.notify_all();
+      l.unlock();
+      thread->join();
+      l.lock();
+      delete thread;
+      thread = NULL;
+    }
+  }
 
   /* Schedule an event in the future
    * Call with the event_lock LOCKED */
-  void add_event_after(double seconds, Context *callback);
-  void add_event_at(utime_t when, Context *callback);
+  void add_event_after(typename TC::duration duration, Context *callback) {
+    typename TC::time_point when = TC::now();
+    when += duration;
+    add_event_at(when, callback);
+  }
+
+  void add_event_at(typename TC::time_point when, Context *callback) {
+    typename scheduled_map_t::value_type s_val(when, callback);
+    auto i = schedule.insert(s_val);
+
+    typename event_lookup_map_t::value_type e_val(callback, i);
+    auto rval = events.insert(e_val);
+
+    /* If you hit this, you tried to insert the same Context* twice. */
+    assert(rval.second);
+
+    /* If the event we have just inserted comes before everything
+     * else, we need to adjust our timeout. */
+    if (i == schedule.begin())
+      cond.notify_all();
+  }
 
   /* Cancel an event.
    * Call with the event_lock LOCKED
@@ -81,7 +162,18 @@ public:
    * Returns true if the callback was cancelled.
    * Returns false if you never addded the callback in the first place.
    */
-  bool cancel_event(Context *callback);
+  bool cancel_event(Context *callback) {
+    auto p = events.find(callback);
+    if (p == events.end()) {
+      return false;
+    }
+
+    delete p->first;
+
+    schedule.erase(p->second);
+    events.erase(p);
+    return true;
+  }
 
   /* Cancel all events.
    * Call with the event_lock LOCKED
@@ -89,7 +181,25 @@ public:
    * When this function returns, all events have been cancelled, and there are no
    * more in progress.
    */
-  void cancel_all_events();
-
+  void cancel_all_events() {
+    while (!events.empty()) {
+      auto p = events.begin();
+      delete p->first;
+      schedule.erase(p->second);
+      events.erase(p);
+    }
+  }
 };
+
+template <typename TC>
+class SafeTimerThread : public Thread {
+  SafeTimer<TC> *parent;
+public:
+  SafeTimerThread(SafeTimer<TC> *s) : parent(s) {}
+  void *entry() {
+    parent->timer_thread();
+    return NULL;
+  }
+};
+
 #endif

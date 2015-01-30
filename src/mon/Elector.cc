@@ -78,7 +78,7 @@ void Elector::start()
   // start by trying to elect me
   if (epoch % 2 == 0)
     bump_epoch(epoch+1);  // odd == election cycle
-  start_stamp = ceph_clock_now(mon->cct);
+  start_stamp = ceph::mono_clock::now();
   electing_me = true;
   acked_me[mon->rank] = CEPH_FEATURES_ALL;
   leader_acked = -1;
@@ -86,7 +86,8 @@ void Elector::start()
   // bcast to everyone else
   for (unsigned i=0; i<mon->monmap->size(); ++i) {
     if ((int)i == mon->rank) continue;
-    Message *m = new MMonElection(MMonElection::OP_PROPOSE, epoch, mon->monmap);
+    Message *m = new MMonElection(MMonElection::OP_PROPOSE, epoch,
+				  mon->monmap);
     mon->messenger->send_message(m, mon->monmap->get_inst(i));
   }
 
@@ -105,7 +106,7 @@ void Elector::defer(int who)
 
   // ack them
   leader_acked = who;
-  ack_stamp = ceph_clock_now(mon->cct);
+  ack_stamp = ceph::mono_clock::now();
   MMonElection *m = new MMonElection(MMonElection::OP_ACK, epoch, mon->monmap);
   m->sharing_bl = mon->get_supported_commands_bl();
   mon->messenger->send_message(m, mon->monmap->get_inst(who));
@@ -120,8 +121,9 @@ void Elector::reset_timer(double plus)
   // set the timer
   cancel_timer();
   expire_event = new C_ElectionExpire(this);
-  mon->timer.add_event_after(mon->cct->_conf->mon_lease + plus,
-			     expire_event);
+  mon->timer.add_event_after(
+    ceph::span_from_double(mon->cct->_conf->mon_lease + plus),
+    expire_event);
 }
 
 

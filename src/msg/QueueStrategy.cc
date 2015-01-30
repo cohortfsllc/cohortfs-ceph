@@ -25,24 +25,23 @@ QueueStrategy::QueueStrategy(int _n_threads)
 
 void QueueStrategy::ds_dispatch(Message *m) {
   QSThread *thrd;
-  lock.Lock();
+  lock_guard l(lock);
   m->trace.event("QueueStrategy::ds_dispatch");
   mqueue.push_back(*m);
   if (disp_threads.size()) {
     if (! disp_threads.empty()) {
       thrd = &(disp_threads.front());
       disp_threads.pop_front();
-      thrd->cond.Signal();
+      thrd->cond.notify_all();
     }
   }
-  lock.Unlock();
 }
 
 void QueueStrategy::entry(QSThread *thrd)
 {
   Message *m = NULL;
   for (;;) {
-    lock.Lock();
+    unique_lock l(lock);
     for (;;) {
       if (! mqueue.empty()) {
 	m = &(mqueue.front());
@@ -53,9 +52,9 @@ void QueueStrategy::entry(QSThread *thrd)
       if (stop)
 	break;
       disp_threads.push_front(*thrd);
-      thrd->cond.Wait(lock);
+      thrd->cond.wait(l);
     }
-    lock.Unlock();
+    l.unlock();
     if (stop) {
 	if (!m) break;
 	m->put();
@@ -68,42 +67,40 @@ void QueueStrategy::entry(QSThread *thrd)
 void QueueStrategy::shutdown()
 {
   QSThread *thrd;
-  lock.Lock();
+  lock_guard l(lock);
   stop = true;
   while (disp_threads.size()) {
     thrd = &(disp_threads.front());
     disp_threads.pop_front();
-    thrd->cond.Signal();
+    thrd->cond.notify_all();
   }
-  lock.Unlock();
 }
 
 void QueueStrategy::wait()
 {
   QSThread *thrd;
-  lock.Lock();
+  unique_lock l(lock);
   assert(stop);
   while (disp_threads.size()) {
     thrd = &(disp_threads.front());
     disp_threads.pop_front();
-    lock.Unlock();
+    l.unlock();
 
     // join outside of lock
     thrd->join();
 
-    lock.Lock();
+    l.lock();
   }
-  lock.Unlock();
+  l.unlock();
 }
 
 void QueueStrategy::start()
 {
   QSThread *thrd;
   assert(!stop);
-  lock.Lock();
+  lock_guard l(lock);
   for (int ix = 0; ix < n_threads; ++ix) {
     thrd = new QSThread(this);
     thrd->create();
   }
-  lock.Unlock();
 }

@@ -61,7 +61,7 @@ static void generate_test_addr(entity_addr_t& a, int nonce, int port)
 void locker_info_t::generate_test_instances(list<locker_info_t*>& o)
 {
   locker_info_t *i = new locker_info_t;
-  i->expiration = utime_t(5, 0);
+  i->expiration = ceph::real_time(5s);
   generate_test_addr(i->addr, 1, 2);
   i->description = "description";
   o.push_back(i);

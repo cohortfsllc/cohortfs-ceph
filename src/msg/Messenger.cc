@@ -6,6 +6,7 @@
 
 #include "include/types.h"
 #include "Messenger.h"
+#include "common/strtol.h"
 
 #include "SimpleMessenger.h"
 

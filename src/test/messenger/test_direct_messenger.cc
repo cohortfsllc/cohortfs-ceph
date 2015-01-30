@@ -1,6 +1,8 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
+#include <condition_variable>
+#include <mutex>
 #include "global/global_init.h"
 #include "common/ceph_argparse.h"
 
@@ -32,8 +34,8 @@ int main(int argc, const char *argv[]) {
   m2->set_direct_peer(m1);
 
   // condition variable to wait on ping reply
-  Mutex mtx("test_direct_messenger");
-  Cond cond;
+  std::mutex mtx;
+  std::condition_variable cond;
   bool done;
 
   class ClientDispatcher : public Dispatcher {
@@ -75,10 +77,10 @@ int main(int argc, const char *argv[]) {
   m1->send_message(new MDataPing(), m2->get_myinst());
 
   // wait for response
-  mtx.Lock();
+  std::unique_lock<std::mutex> l(mtx);
   while (!done)
-    cond.Wait(mtx);
-  mtx.Unlock();
+    cond.wait(l);
+  l.unlock();
 
   std::cout << "Done" << std::endl;
   return 0;

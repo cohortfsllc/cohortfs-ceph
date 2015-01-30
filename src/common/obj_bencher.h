@@ -14,8 +14,9 @@
 #ifndef CEPH_OBJ_BENCHER_H
 #define CEPH_OBJ_BENCHER_H
 
+#include <mutex>
+
 #include "common/config.h"
-#include "common/Cond.h"
 #include "common/ceph_context.h"
 
 struct bench_interval_data {
@@ -25,7 +26,7 @@ struct bench_interval_data {
 
 struct bench_history {
   vector<double> bandwidth;
-  vector<double> latency;
+  vector<ceph::timespan> latency;
 };
 
 struct bench_data {
@@ -36,13 +37,13 @@ struct bench_data {
   int in_flight; //number of reads/writes being waited on
   int started;
   int finished;
-  double min_latency;
-  double max_latency;
-  double avg_latency;
+  ceph::timespan min_latency;
+  ceph::timespan max_latency;
+  ceph::timespan avg_latency;
   struct bench_interval_data idata; // data that is updated by time intervals and not by events
   struct bench_history history; // data history, used to calculate stddev
-  utime_t cur_latency; //latency of last completed transaction
-  utime_t start_time; //start time for benchmark
+  ceph::timespan cur_latency; //latency of last completed transaction
+  ceph::mono_time start_time; //start time for benchmark
   char *object_contents; //pointer to the contents written to each object
 };
 
@@ -55,17 +56,23 @@ class ObjBencher {
 public:
   CephContext *cct;
 protected:
-  Mutex lock;
+  std::mutex lock;
+  typedef std::unique_lock<std::mutex> unique_lock;
+  typedef std::lock_guard <std::mutex> lock_guard;
 
   static void *status_printer(void *bencher);
 
   struct bench_data data;
 
-  int fetch_bench_metadata(const std::string& metadata_file, int* object_size, int* num_objects, int* prevPid);
+  int fetch_bench_metadata(const std::string& metadata_file, int* object_size,
+			   int* num_objects, int* prevPid);
 
-  int write_bench(int secondsToRun, int maxObjects, int concurrentios, const string& run_name_meta);
-  int seq_read_bench(int secondsToRun, int concurrentios, int num_objects, int writePid);
-  int rand_read_bench(int secondsToRun, int num_objects, int concurrentios, int writePid);
+  int write_bench(int secondsToRun, int maxObjects, int concurrentios,
+		  const string& run_name_meta);
+  int seq_read_bench(int secondsToRun, int concurrentios, int num_objects,
+		     int writePid);
+  int rand_read_bench(int secondsToRun, int num_objects, int concurrentios,
+		      int writePid);
 
   int clean_up(int num_objects, int prevPid, int concurrentios);
 
@@ -79,15 +86,19 @@ protected:
   virtual int completion_wait(int slot) = 0;
   virtual int completion_ret(int slot) = 0;
 
-  virtual int aio_read(const std::string& oid, int slot, bufferlist *pbl, size_t len) = 0;
-  virtual int aio_write(const std::string& oid, int slot, bufferlist& bl, size_t len) = 0;
+  virtual int aio_read(const std::string& oid, int slot, bufferlist *pbl,
+		       size_t len) = 0;
+  virtual int aio_write(const std::string& oid, int slot, bufferlist& bl,
+			size_t len) = 0;
   virtual int aio_remove(const std::string& oid, int slot) = 0;
-  virtual int sync_read(const std::string& oid, bufferlist& bl, size_t len) = 0;
-  virtual int sync_write(const std::string& oid, bufferlist& bl, size_t len) = 0;
+  virtual int sync_read(const std::string& oid, bufferlist& bl,
+			size_t len) = 0;
+  virtual int sync_write(const std::string& oid, bufferlist& bl,
+			 size_t len) = 0;
   virtual int sync_remove(const std::string& oid) = 0;
 
   ostream& out(ostream& os);
-  ostream& out(ostream& os, utime_t& t);
+  ostream& out(ostream& os, const ceph::real_time& t);
 public:
   ObjBencher(CephContext *cct_) : show_time(false), cct(cct_) {}
   virtual ~ObjBencher() {}

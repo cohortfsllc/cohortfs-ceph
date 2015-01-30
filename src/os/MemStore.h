@@ -16,9 +16,11 @@
 #ifndef CEPH_MEMSTORE_H
 #define CEPH_MEMSTORE_H
 
+#include <mutex>
+#include <shared_mutex>
 #include <unordered_map>
+
 #include "common/Finisher.h"
-#include "common/RWLock.h"
 #include "ObjectStore.h"
 #include "PageSet.h"
 
@@ -30,7 +32,9 @@ private:
 public:
   struct Object {
     Spinlock alloc_lock;
-    RWLock omap_lock;
+    std::shared_timed_mutex omap_lock;
+    typedef std::unique_lock<std::shared_timed_mutex> unique_lock;
+    typedef std::shared_lock<std::shared_timed_mutex> shared_lock;
     page_set data;
     size_t data_len;
     map<string,bufferptr> xattr;
@@ -90,7 +94,9 @@ public:
     std::unordered_map<oid, ObjectRef> object_hash;  ///< for lookup
     map<oid, ObjectRef> object_map;	 ///< for iteration
     map<string,bufferptr> xattr;
-    RWLock lock;   ///< for object_{map,hash}
+    std::shared_timed_mutex lock;
+    typedef std::unique_lock<std::shared_timed_mutex> unique_lock;
+    typedef std::shared_lock<std::shared_timed_mutex> shared_lock;
 
     // NOTE: The lock only needs to protect the object_map/hash, not the
     // contents of individual objects.	The osd is already sequencing
@@ -98,16 +104,16 @@ public:
     // level.
 
     ObjectRef get_object(oid obj) {
-      RWLock::RLocker l(lock);
-      std::unordered_map<oid, ObjectRef>::iterator o = object_hash.find(obj);
+      shared_lock l(lock);
+      auto o = object_hash.find(obj);
       if (o == object_hash.end())
 	return ObjectRef();
       return o->second;
     }
 
     ObjectRef get_or_create_object(oid obj) {
-      RWLock::WLocker l(lock);
-      std::unordered_map<oid, ObjectRef>::iterator i = object_hash.find(obj);
+      unique_lock l(lock);
+      auto i = object_hash.find(obj);
       if (i != object_hash.end())
 	return i->second;
       ObjectRef o(new Object);
@@ -159,35 +165,35 @@ private:
       : c(c), o(o), it(o->omap.begin()) {}
 
     int seek_to_first() {
-      RWLock::RLocker l(o->omap_lock);
+      shared_lock l(o->omap_lock);
       it = o->omap.begin();
       return 0;
     }
     int upper_bound(const string &after) {
-      RWLock::RLocker l(o->omap_lock);
+      shared_lock l(o->omap_lock);
       it = o->omap.upper_bound(after);
       return 0;
     }
     int lower_bound(const string &to) {
-      RWLock::RLocker l(o->omap_lock);
+      shared_lock l(o->omap_lock);
       it = o->omap.lower_bound(to);
       return 0;
     }
     bool valid() {
-      RWLock::RLocker l(o->omap_lock);
+      shared_lock l(o->omap_lock);
       return it != o->omap.end();
     }
     int next() {
-      RWLock::RLocker l(o->omap_lock);
+      shared_lock l(o->omap_lock);
       ++it;
       return 0;
     }
     string key() {
-      RWLock::RLocker l(o->omap_lock);
+      shared_lock l(o->omap_lock);
       return it->first;
     }
     bufferlist value() {
-      RWLock::RLocker l(o->omap_lock);
+      shared_lock l(o->omap_lock);
       return it->second;
     }
     int status() {
@@ -202,8 +208,8 @@ private:
   class TransactionWQ : public ThreadPool::WorkQueue<Transaction> {
     MemStore *store;
   public:
-    TransactionWQ(MemStore *store, time_t timeout,
-		  time_t suicide_timeout, ThreadPool *tp)
+    TransactionWQ(MemStore *store, ceph::timespan timeout,
+		  ceph::timespan suicide_timeout, ThreadPool *tp)
       : ThreadPool::WorkQueue<Transaction>("MemStore::TransactionWQ",
 					   timeout, suicide_timeout, tp),
 	store(store) {}
@@ -237,8 +243,12 @@ private:
   } tx_wq;
 
   map<coll_t, CollectionRef> coll_map;
-  RWLock coll_lock;    ///< rwlock to protect coll_map
-  Mutex apply_lock;    ///< serialize all updates
+  std::shared_timed_mutex coll_lock;
+  typedef std::unique_lock<std::shared_timed_mutex> unique_lock;
+  typedef std::shared_lock<std::shared_timed_mutex> shared_lock;
+  std::mutex apply_lock;    ///< serialize all updates
+  typedef std::unique_lock<std::mutex> unique_apply_lock;
+  typedef std::unique_lock<std::mutex> apply_lock_guard;
 
   CollectionRef get_collection(const coll_t &cid);
 
@@ -299,8 +309,8 @@ public:
     : ObjectStore(_cct, path),
       tx_tp(cct, "MemStore::tx_tp",
 	    cct->_conf->filestore_op_threads, "memstore_tx_threads"),
-      tx_wq(this, cct->_conf->filestore_op_thread_timeout,
-	    cct->_conf->filestore_op_thread_suicide_timeout, &tx_tp),
+      tx_wq(this, cct->_conf->filestore_op_thread_timeout * 1s,
+	    cct->_conf->filestore_op_thread_suicide_timeout * 1s, &tx_tp),
       finisher(cct) { }
   ~MemStore() { }
 

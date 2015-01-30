@@ -15,7 +15,6 @@
 #ifndef CEPH_MON_TYPES_H
 #define CEPH_MON_TYPES_H
 
-#include "include/utime.h"
 #include "common/Formatter.h"
 
 #define PAXOS_MDSMAP	 0
@@ -51,7 +50,7 @@ struct LevelDBStoreStats {
   uint64_t bytes_sst;
   uint64_t bytes_log;
   uint64_t bytes_misc;
-  utime_t last_update;
+  ceph::real_time last_update;
 
   void dump(Formatter *f) const {
     assert(f != NULL);
@@ -92,7 +91,7 @@ struct DataStats {
   uint64_t kb_used;
   uint64_t kb_avail;
   int latest_avail_percent;
-  utime_t last_update;
+  ceph::real_time last_update;
 
   LevelDBStoreStats store_stats;
 

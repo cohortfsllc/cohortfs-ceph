@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #include <errno.h>
 #include <map>
 
@@ -17,19 +19,19 @@
 
 bool RotatingKeyRing::need_new_secrets() const
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   return secrets.need_new_secrets();
 }
 
-bool RotatingKeyRing::need_new_secrets(utime_t now) const
+bool RotatingKeyRing::need_new_secrets(ceph::real_time now) const
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   return secrets.need_new_secrets(now);
 }
 
 void RotatingKeyRing::set_secrets(RotatingSecrets& s)
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   secrets = s;
   dump_rotating();
 }
@@ -45,14 +47,14 @@ void RotatingKeyRing::dump_rotating() const
 
 bool RotatingKeyRing::get_secret(const EntityName& name, CryptoKey& secret) const
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   return keyring->get_secret(name, secret);
 }
 
 bool RotatingKeyRing::get_service_secret(uint32_t service_id_, uint64_t secret_id,
 					 CryptoKey& secret) const
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
 
   if (service_id_ != this->service_id) {
     ldout(cct, 0) << "do not have service " << ceph_entity_type_name(service_id_)

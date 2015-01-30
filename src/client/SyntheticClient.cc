@@ -16,6 +16,7 @@
 #include <sstream>
 #include <cassert>
 #include <cstdlib>
+#include <thread>
 #include <boost/uuid/string_generator.hpp>
 using namespace std;
 
@@ -267,7 +268,7 @@ SyntheticClient::SyntheticClient(Client *client, int w)
   this->iargs = syn_iargs;
   this->sargs = syn_sargs;
 
-  run_start = ceph_clock_now(client->cct);
+  run_start = ceph::mono_clock::now();
 }
 
 
@@ -315,21 +316,15 @@ int SyntheticClient::run()
     return -1;
   }
 
-  //run_start = ceph_clock_now(client->cct);
-  run_until = utime_t(0,0);
+  run_until = ceph::mono_time::min();
   ldout(client->cct, 5) << "run" << dendl;
 
   int seq = 0;
 
-  for (list<int>::iterator it = modes.begin();
-       it != modes.end();
-       ++it) {
-    int mode = *it;
+  for (const auto& mode : modes) {
     ldout(client->cct, 3) << "mode " << mode << dendl;
 
     switch (mode) {
-
-
       // WHO?
 
     case SYNCLIENT_MODE_ONLY:
@@ -375,11 +370,11 @@ int SyntheticClient::run()
 	if (run_me()) {
 	  if (iarg1) {
 	    ldout(client->cct, 2) << "until " << iarg1 << dendl;
-	    utime_t dur(iarg1,0);
+	    ceph::timespan dur = iarg1 * 1s;
 	    run_until = run_start + dur;
 	  } else {
 	    ldout(client->cct, 2) << "until " << iarg1 << " (no limit)" << dendl;
-	    run_until = utime_t(0,0);
+	    run_until = ceph::mono_time::min();
 	  }
 	}
       }
@@ -425,9 +420,9 @@ int SyntheticClient::run()
 	iargs.pop_front();
 	if (iarg1 && run_me()) {
 	  ldout(client->cct, 2) << "sleepuntil " << iarg1 << dendl;
-	  utime_t at = ceph_clock_now(client->cct) - run_start;
-	  if (at.sec() < iarg1)
-	    sleep(iarg1 - at.sec());
+	  ceph::timespan at = ceph::mono_clock::now() - run_start;
+	  if (at < iarg1 * 1s)
+	    std::this_thread::sleep_for(iarg1 * 1s - at);
 	}
 	did_run_me();
       }
@@ -775,24 +770,27 @@ int SyntheticClient::run()
 	snprintf(realtfile, sizeof(realtfile), tfile.c_str(), (int)client->get_nodeid().v);
 
 	if (run_me()) {
-	  ldout(client->cct, 0) << "trace " << tfile << " prefix=" << prefix << " count=" << iarg1 << " data=" << playdata << dendl;
+	  ldout(client->cct, 0) << "trace " << tfile << " prefix=" << prefix
+				<< " count=" << iarg1 << " data=" << playdata
+				<< dendl;
 
 	  Trace t(realtfile);
 
 	  if (iarg1 == 0) iarg1 = 1; // play trace at least once!
 
 	  for (int i=0; i<iarg1; i++) {
-	    utime_t start = ceph_clock_now(client->cct);
+	    ceph::mono_time start = ceph::mono_clock::now();
 
 	    if (time_to_stop()) break;
 	    play_trace(t, prefix, !playdata);
 	    if (time_to_stop()) break;
 	    if (iarg1 > 1) clean_dir(prefix);  // clean only if repeat
 
-	    utime_t lat = ceph_clock_now(client->cct);
-	    lat -= start;
+	    ceph::timespan lat = ceph::mono_clock::now() - start;
 
-	    ldout(client->cct, 0) << " trace " << tfile << " loop " << (i+1) << "/" << iarg1 << " done in " << (double)lat << " seconds" << dendl;
+	    ldout(client->cct, 0) << " trace " << tfile << " loop " << (i+1)
+				  << "/" << iarg1 << " done in " << lat
+				  << " seconds" << dendl;
 	  }
 	  ldout(client->cct, 1) << "done " << dendl;
 	}
@@ -964,7 +962,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
   char buf[1024];
   char buf2[1024];
 
-  utime_t start = ceph_clock_now(client->cct);
+  auto start = ceph::mono_clock::now();
 
   std::unordered_map<int64_t, int64_t> open_files;
   std::unordered_map<int64_t, dir_result_t*> open_dirs;
@@ -995,13 +993,13 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
   } else
     client->ll_get_inode(vinodeno_t(1));
 
-  utime_t last_status = start;
+  ceph::mono_time last_status = start;
 
   int n = 0;
 
   // for object traces
-  Mutex lock;
-  Cond cond;
+  std::mutex lock;
+  std::condition_variable cond;
   bool ack;
   bool safe;
   C_GatherBuilder safeg(new C_SafeCond(&lock, &cond, &safe));
@@ -1011,10 +1009,11 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
 
     if (++n == 100) {
       n = 00;
-      utime_t now = last_status;
-      if (now - last_status > 1.0) {
+      auto now = last_status;
+      if (now - last_status > 1s) {
 	last_status = now;
-	ldout(client->cct, 1) << "play_trace at line " << t.get_line() << dendl;
+	ldout(client->cct, 1) << "play_trace at line " << t.get_line()
+			      << dendl;
       }
     }
 
@@ -1405,24 +1404,26 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       const char *a = t.get_string(buf, p);
       boost::uuids::uuid id;
       id = parse(a);
-      lock.Lock();
+      std::unique_lock<std::mutex> l(lock);
       VolumeRef mvol;
       {
-	const OSDMap* osdmap = client->objecter->get_osdmap_read();
+	Objecter::shared_lock ol;
+	const OSDMap* osdmap = client->objecter->get_osdmap_read(ol);
 	osdmap->find_by_uuid(id, mvol);
-	client->objecter->put_osdmap_read();
+	ol.unlock();
       }
       uint64_t size;
-      utime_t mtime;
+      ceph::real_time mtime;
       int r = mvol->attach(client->cct);
       if (r) {
-	ldout(client->cct, 0) << "Unable to attach volume " << mvol << " error=" << r << dendl;
+	ldout(client->cct, 0) << "Unable to attach volume " << mvol
+			      << " error=" << r << dendl;
 	continue;
       }
       client->objecter->stat(obj, mvol, &size, &mtime, 0,
 			     new C_SafeCond(&lock, &cond, &ack));
-      while (!ack) cond.Wait(lock);
-      lock.Unlock();
+      while (!ack) cond.wait(l);
+      l.unlock();
     }
     else if (strcmp(op, "o_read") == 0) {
       int64_t oh = t.get_int();
@@ -1435,21 +1436,22 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       id = parse(a);
       VolumeRef mvol;
       {
-	const OSDMap* osdmap = client->objecter->get_osdmap_read();
+	Objecter::shared_lock ol;
+	const OSDMap* osdmap = client->objecter->get_osdmap_read(ol);
 	osdmap->find_by_uuid(id, mvol);
-	client->objecter->put_osdmap_read();
+	ol.unlock();
       }
       int r = mvol->attach(client->cct);
       if (r) {
 	ldout(client->cct, 0) << "Unable to attach volume " << mvol << " error=" << r << dendl;
 	continue;
       }
-      lock.Lock();
+      std::unique_lock<std::mutex> l(lock);
       bufferlist bl;
       client->objecter->read(obj, mvol, off, len, &bl, 0,
 			     new C_SafeCond(&lock, &cond, &ack));
-      while (!ack) cond.Wait(lock);
-      lock.Unlock();
+      while (!ack) cond.wait(l);
+      l.unlock();
     }
     else if (strcmp(op, "o_write") == 0) {
       int64_t oh = t.get_int();
@@ -1462,26 +1464,28 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       id = parse(a);
       VolumeRef mvol;
       {
-	const OSDMap* osdmap = client->objecter->get_osdmap_read();
+	Objecter::shared_lock ol;
+	const OSDMap* osdmap = client->objecter->get_osdmap_read(ol);
 	osdmap->find_by_uuid(id, mvol);
-	client->objecter->put_osdmap_read();
+	ol.unlock();
       }
       int r = mvol->attach(client->cct);
       if (r) {
-	ldout(client->cct, 0) << "Unable to attach volume " << mvol << " error=" << r << dendl;
+	ldout(client->cct, 0) << "Unable to attach volume " << mvol
+			      << " error=" << r << dendl;
 	continue;
       }
-      lock.Lock();
+      std::unique_lock<std::mutex> l(lock);
       bufferptr bp(len);
       bufferlist bl;
       bl.push_back(bp);
       client->objecter->write(obj, mvol, off, len, bl,
-			      ceph_clock_now(client->cct), 0,
+			      ceph::real_clock::now(), 0,
 			      new C_SafeCond(&lock, &cond, &ack),
 			      safeg.new_sub());
       safeg.activate();
-      while (!ack) cond.Wait(lock);
-      lock.Unlock();
+      while (!ack) cond.wait(l);
+      l.unlock();
     }
     else if (strcmp(op, "o_zero") == 0) {
       int64_t oh = t.get_int();
@@ -1494,28 +1498,31 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       id = parse(a);
       VolumeRef mvol;
       {
-	const OSDMap* osdmap = client->objecter->get_osdmap_read();
+	Objecter::shared_lock ol;
+	const OSDMap* osdmap = client->objecter->get_osdmap_read(ol);
 	osdmap->find_by_uuid(id, mvol);
-	client->objecter->put_osdmap_read();
+	ol.unlock();
       }
       int r = mvol->attach(client->cct);
       if (r) {
-	ldout(client->cct, 0) << "Unable to attach volume " << mvol << " error=" << r << dendl;
+	ldout(client->cct, 0) << "Unable to attach volume " << mvol
+			      << " error=" << r << dendl;
 	continue;
       }
-      lock.Lock();
+      std::unique_lock<std::mutex> l(lock);
       client->objecter->zero(obj, mvol, off, len,
-			     ceph_clock_now(client->cct), 0,
+			     ceph::real_clock::now(), 0,
 			     new C_SafeCond(&lock, &cond, &ack),
 			     safeg.new_sub());
       safeg.activate();
-      while (!ack) cond.Wait(lock);
-      lock.Unlock();
+      while (!ack) cond.wait(l);
+      l.unlock();
     }
 
 
     else {
-      ldout(client->cct, 0) << (t.get_line()-1) << ": *** trace hit unrecognized symbol '"
+      ldout(client->cct, 0) << (t.get_line()-1)
+			    << ": *** trace hit unrecognized symbol '"
 	      << op << "' " << dendl;
       abort();
     }
@@ -1525,12 +1532,12 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
 
   // wait for safe after an object trace
   safegref->complete(0);
-  lock.Lock();
+  std::unique_lock<std::mutex> l(lock);
   while (!safe) {
     ldout(client->cct, 10) << "waiting for safe" << dendl;
-    cond.Wait(lock);
+    cond.wait(l);
   }
-  lock.Unlock();
+  l.unlock();
 
   // close open files
   for (std::unordered_map<int64_t, int64_t>::iterator fi = open_files.begin();
@@ -1821,31 +1828,27 @@ int SyntheticClient::read_dirs(const char *basedir, int dirs, int files, int dep
 
   // children
   char d[500];
-  ldout(client->cct, 3) << "read_dirs " << basedir << " dirs " << dirs << " files " << files << " depth " << depth << dendl;
+  ldout(client->cct, 3) << "read_dirs " << basedir << " dirs " << dirs
+			<< " files " << files << " depth " << depth << dendl;
 
   list<string> contents;
-  utime_t s = ceph_clock_now(client->cct);
   int r = client->getdir(basedir, contents);
-  utime_t e = ceph_clock_now(client->cct);
-  e -= s;
   if (r < 0) {
-    ldout(client->cct, 0) << "read_dirs couldn't readdir " << basedir << ", stopping" << dendl;
+    ldout(client->cct, 0) << "read_dirs couldn't readdir " << basedir
+			  << ", stopping" << dendl;
     return -1;
   }
 
   for (int i=0; i<files; i++) {
     snprintf(d, sizeof(d), "%s/file.%d", basedir, i);
-    utime_t s = ceph_clock_now(client->cct);
     if (client->lstat(d, &st) < 0) {
       ldout(client->cct, 2) << "read_dirs failed stat on " << d << ", stopping" << dendl;
       return -1;
     }
-    utime_t e = ceph_clock_now(client->cct);
-    e -= s;
   }
 
   if (depth > 0)
-    for (int i=0; i<dirs; i++) {
+    for (int i = 0; i < dirs; i++) {
       snprintf(d, sizeof(d), "%s/dir.%d", basedir, i);
       if (read_dirs(d, dirs, files, depth-1) < 0) return -1;
     }
@@ -1878,10 +1881,11 @@ int SyntheticClient::make_files(int num, int count, int priv, bool more)
 
   // files
   struct stat st;
-  utime_t start = ceph_clock_now(client->cct);
-  for (int c=0; c<count; c++) {
-    for (int n=0; n<num; n++) {
-      snprintf(d, sizeof(d), "dir.%d.run%d/file.client%d.%d", priv ? whoami:0, c, whoami, n);
+  ceph::mono_time start = ceph::mono_clock::now();
+  for (int c = 0; c < count; c++) {
+    for (int n = 0; n < num; n++) {
+      snprintf(d, sizeof(d), "dir.%d.run%d/file.client%d.%d",
+	       priv ? whoami : 0, c, whoami, n);
 
       client->mknod(d, 0644);
 
@@ -1895,9 +1899,10 @@ int SyntheticClient::make_files(int num, int count, int priv, bool more)
       if (time_to_stop()) return 0;
     }
   }
-  utime_t end = ceph_clock_now(client->cct);
-  end -= start;
-  ldout(client->cct, 0) << "makefiles time is " << end << " or " << ((double)end / (double)num) <<" per file" << dendl;
+  ceph::timespan end = ceph::mono_clock::now() - start;
+  ldout(client->cct, 0) << "makefiles time is " << end << " or "
+			<< (ceph::span_to_double(end) / (double)num)
+			<<" per file" << dendl;
 
   return 0;
 }
@@ -1913,25 +1918,23 @@ int SyntheticClient::link_test()
   client->mkdir("orig", 0755);
   client->mkdir("copy", 0755);
 
-  utime_t start = ceph_clock_now(client->cct);
-  for (int i=0; i<num; i++) {
+  ceph::mono_time start = ceph::mono_clock::now();
+  for (int i = 0; i < num; i++) {
     snprintf(d, sizeof(d), "orig/file.%d", i);
     client->mknod(d, 0755);
   }
-  utime_t end = ceph_clock_now(client->cct);
-  end -= start;
+  ceph::timespan end = ceph::mono_clock::now() - start;
 
   ldout(client->cct, 0) << "orig " << end << dendl;
 
   // link
-  start = ceph_clock_now(client->cct);
+  start = ceph::mono_clock::now();
   for (int i=0; i<num; i++) {
     snprintf(d, sizeof(d), "orig/file.%d", i);
     snprintf(e, sizeof(e), "copy/file.%d", i);
     client->link(d, e);
   }
-  end = ceph_clock_now(client->cct);
-  end -= start;
+  end = ceph::mono_clock::now() - start;
   ldout(client->cct, 0) << "copy " << end << dendl;
 
   return 0;
@@ -2054,12 +2057,12 @@ int SyntheticClient::write_file(string& fn, int size, loff_t wrsize)   // size i
     return fd;
   }
 
-  utime_t from = ceph_clock_now(client->cct);
-  utime_t start = from;
+  ceph::mono_time from = ceph::mono_clock::now();
+  ceph::mono_time start = from;
   uint64_t bytes = 0, total = 0;
 
 
-  for (loff_t i=0; i<chunks; i++) {
+  for (loff_t i = 0; i < chunks; i++) {
     if (time_to_stop()) {
       ldout(client->cct, 0) << "stopping" << dendl;
       break;
@@ -2082,10 +2085,11 @@ int SyntheticClient::write_file(string& fn, int size, loff_t wrsize)   // size i
     bytes += wrsize;
     total += wrsize;
 
-    utime_t now = ceph_clock_now(client->cct);
-    if (now - from >= 1.0) {
-      double el = now - from;
-      ldout(client->cct, 0) << "write " << (bytes / el / 1048576.0) << " MB/sec" << dendl;
+    auto now = ceph::mono_clock::now();
+    if (now - from >= 1s) {
+      double el = ceph::span_to_double(now - from);
+      ldout(client->cct, 0) << "write " << (bytes / el / 1048576.0)
+			    << " MB/sec" << dendl;
       from = now;
       bytes = 0;
     }
@@ -2093,10 +2097,11 @@ int SyntheticClient::write_file(string& fn, int size, loff_t wrsize)   // size i
 
   client->fsync(fd, true);
 
-  utime_t stop = ceph_clock_now(client->cct);
-  double el = stop - start;
-  ldout(client->cct, 0) << "write total " << (total / el / 1048576.0) << " MB/sec ("
-	  << total << " bytes in " << el << " seconds)" << dendl;
+  auto stop = ceph::mono_clock::now();
+  double el = ceph::span_to_double(stop - start);
+  ldout(client->cct, 0) << "write total " << (total / el / 1048576.0)
+			<< " MB/sec (" << total << " bytes in " << el
+			<< " seconds)" << dendl;
 
   client->close(fd);
   delete[] buf;
@@ -2104,14 +2109,14 @@ int SyntheticClient::write_file(string& fn, int size, loff_t wrsize)   // size i
   return 0;
 }
 
-int SyntheticClient::write_fd(int fd, int size, int wrsize)   // size is in MB, wrsize in bytes
+// size is in MB, wrsize in bytes
+int SyntheticClient::write_fd(int fd, int size, int wrsize)
 {
   //uint64_t wrsize = 1024*256;
   char *buf = new char[wrsize+100];   // 1 MB
   memset(buf, 7, wrsize);
   uint64_t chunks = (uint64_t)size * (uint64_t)(1024*1024) / (uint64_t)wrsize;
 
-  //ldout(client->cct, 5) << "SyntheticClient::write_fd: writing to fd " << fd << dendl;
   if (fd < 0) {
     delete[] buf;
     return fd;
@@ -2170,8 +2175,8 @@ int SyntheticClient::read_file(const std::string& fn, int size,
     return fd;
   }
 
-  utime_t from = ceph_clock_now(client->cct);
-  utime_t start = from;
+  auto from = ceph::mono_clock::now();
+  auto start = from;
   uint64_t bytes = 0, total = 0;
 
   for (unsigned i=0; i<chunks; i++) {
@@ -2186,10 +2191,11 @@ int SyntheticClient::read_file(const std::string& fn, int size,
     bytes += rdsize;
     total += rdsize;
 
-    utime_t now = ceph_clock_now(client->cct);
-    if (now - from >= 1.0) {
-      double el = now - from;
-      ldout(client->cct, 0) << "read " << (bytes / el / 1048576.0) << " MB/sec" << dendl;
+    auto now = ceph::mono_clock::now();
+    if (now - from >= 1s) {
+      double el = ceph::span_to_double(now - from);
+      ldout(client->cct, 0) << "read " << (bytes / el / 1048576.0)
+			    << " MB/sec" << dendl;
       from = now;
       bytes = 0;
     }
@@ -2215,12 +2221,15 @@ int SyntheticClient::read_file(const std::string& fn, int size,
       }
     }
     if (bad && !ignoreprint)
-      ldout(client->cct, 0) << " + " << (bad-1) << " other bad 16-byte bits in this block" << dendl;
+      ldout(client->cct, 0)
+	<< " + " << (bad-1) << " other bad 16-byte bits in this block"
+	<< dendl;
   }
 
-  utime_t stop = ceph_clock_now(client->cct);
-  double el = stop - start;
-  ldout(client->cct, 0) << "read total " << (total / el / 1048576.0) << " MB/sec ("
+  auto stop = ceph::mono_clock::now();
+  double el = ceph::span_to_double(stop - start);
+  ldout(client->cct, 0) << "read total " << (total / el / 1048576.0)
+			<< " MB/sec ("
 	  << total << " bytes in " << el << " seconds)" << dendl;
 
   client->close(fd);
@@ -2233,20 +2242,19 @@ int SyntheticClient::read_file(const std::string& fn, int size,
 
 
 class C_Ref : public Context {
-  Mutex& lock;
-  Cond& cond;
+  std::mutex& lock;
+  std::condition_variable& cond;
   int *ref;
 public:
-  C_Ref(Mutex &l, Cond &c, int *r) : lock(l), cond(c), ref(r) {
-    lock.Lock();
+  C_Ref(std::mutex &l, std::condition_variable &c, int *r)
+    : lock(l), cond(c), ref(r) {
+    std::lock_guard<std::mutex> lg(lock);
     (*ref)++;
-    lock.Unlock();
   }
   void finish(int) {
-    lock.Lock();
+    std::lock_guard<std::mutex> l(lock);
     (*ref)--;
-    cond.Signal();
-    lock.Unlock();
+    cond.notify_all();
   }
 };
 
@@ -2278,8 +2286,10 @@ int SyntheticClient::create_objects(int nobj, int osize, int inflight)
   bufferlist bl;
   bl.push_back(bp);
 
-  Mutex lock;
-  Cond cond;
+  std::mutex lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
+  std::condition_variable cond;
 
   int unack = 0;
   int unsafe = 0;
@@ -2288,17 +2298,19 @@ int SyntheticClient::create_objects(int nobj, int osize, int inflight)
   id = parse("deac041b-4100-4c75-93a3-b9329b9cf9cf");
   VolumeRef mvol;
   {
-    const OSDMap* osdmap = client->objecter->get_osdmap_read();
+    Objecter::shared_lock ol;
+    const OSDMap* osdmap = client->objecter->get_osdmap_read(ol);
     osdmap->find_by_uuid(id, mvol);
-    client->objecter->put_osdmap_read();
+    ol.unlock();
   }
   int r = mvol->attach(client->cct);
   if (r) {
-    ldout(client->cct, 0) << "Unable to attach volume " << mvol << " error=" << r << dendl;
+    ldout(client->cct, 0) << "Unable to attach volume " << mvol << " error="
+			  << r << dendl;
     return 1;
   }
 
-  list<utime_t> starts;
+  list<ceph::mono_time> starts;
 
   for (int i=start; i<end; i += inc) {
     if (time_to_stop()) break;
@@ -2306,40 +2318,39 @@ int SyntheticClient::create_objects(int nobj, int osize, int inflight)
     oid obj = file_oid(999, i);
 
     if (i % inflight == 0) {
-      ldout(client->cct, 6) << "create_objects " << i << "/" << (nobj+1) << dendl;
+      ldout(client->cct, 6) << "create_objects " << i << "/"
+			    << (nobj + 1) << dendl;
     }
     ldout(client->cct, 10) << "writing " << obj << dendl;
 
-    starts.push_back(ceph_clock_now(client->cct));
-    client->client_lock.Lock();
+    starts.push_back(ceph::mono_clock::now());
+    Client::unique_lock cl(client->client_lock);
     client->objecter->write(obj, mvol, 0, osize, bl,
-			    ceph_clock_now(client->cct), 0,
+			    ceph::real_clock::now(), 0,
 			    new C_Ref(lock, cond, &unack),
 			    new C_Ref(lock, cond, &unsafe));
-    client->client_lock.Unlock();
+    cl.unlock();
 
-    lock.Lock();
+    std::unique_lock<std::mutex> l(lock);
     while (unack > inflight) {
       ldout(client->cct, 20) << "waiting for " << unack << " unack" << dendl;
-      cond.Wait(lock);
+      cond.wait(l);
     }
-    lock.Unlock();
+    l.unlock();
 
-    utime_t lat = ceph_clock_now(client->cct);
-    lat -= starts.front();
     starts.pop_front();
   }
 
-  lock.Lock();
+  unique_lock l(lock);
   while (unack > 0) {
     ldout(client->cct, 20) << "waiting for " << unack << " unack" << dendl;
-    cond.Wait(lock);
+    cond.wait(l);
   }
   while (unsafe > 0) {
     ldout(client->cct, 10) << "waiting for " << unsafe << " unsafe" << dendl;
-    cond.Wait(lock);
+    cond.wait(l);
   }
-  lock.Unlock();
+  l.unlock();
 
   ldout(client->cct, 5) << "create_objects done" << dendl;
   return 0;
@@ -2349,12 +2360,13 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
 			       int overlappc,
 			       double rskew, double wskew)
 {
-  ldout(client->cct, 5) << "object_rw " << nobj << " size=" << osize << " with "
-	  << wrpc << "% writes"
-	  << ", " << overlappc << "% overlap"
-	  << ", rskew = " << rskew
-	  << ", wskew = " << wskew
-	  << dendl;
+  ldout(client->cct, 5) << "object_rw " << nobj << " size=" << osize
+			<< " with "
+			<< wrpc << "% writes"
+			<< ", " << overlappc << "% overlap"
+			<< ", rskew = " << rskew
+			<< ", wskew = " << wskew
+			<< dendl;
 
   bufferptr bp(osize);
   bp.zero();
@@ -2380,8 +2392,10 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
     prime += 2;
   }
 
-  Mutex lock;
-  Cond cond;
+  std::mutex lock;
+  typedef std::unique_lock<std::mutex> unique_lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  std::condition_variable cond;
 
   int unack = 0;
   int unsafe = 0;
@@ -2390,9 +2404,10 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
   id = parse("deac041b-4100-4c75-93a3-b9329b9cf9cf");
   VolumeRef mvol;
   {
-    const OSDMap* osdmap = client->objecter->get_osdmap_read();
+    Objecter::shared_lock ol;
+    const OSDMap* osdmap = client->objecter->get_osdmap_read(ol);
     osdmap->find_by_uuid(id, mvol);
-    client->objecter->put_osdmap_read();
+    ol.unlock();
   }
   int r = mvol->attach(client->cct);
   if (r) {
@@ -2415,12 +2430,12 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
       if (pnoremap >= overlappc)
 	o = (o*prime) % nobj;	 // remap
     } else {
-      o = (long)trunc(pow(r, rskew) * (double)nobj);  // exponentially skew towards 0
+      // exponentially skew towards 0
+      o = (long)trunc(pow(r, rskew) * (double)nobj);
     }
     oid obj = file_oid(999, o);
 
-    client->client_lock.Lock();
-    utime_t start = ceph_clock_now(client->cct);
+    Client::unique_lock cl(client->client_lock);
     if (write) {
       ldout(client->cct, 10) << "write to " << obj << dendl;
 
@@ -2431,7 +2446,7 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
       if (do_sync) {
 	m->add_op(CEPH_OSD_OP_STARTSYNC);
       }
-      client->objecter->mutate(obj, mvol, m, ceph_clock_now(client->cct), 0,
+      client->objecter->mutate(obj, mvol, m, ceph::real_clock::now(), 0,
 			       NULL, new C_Ref(lock, cond, &unack));
     } else {
       ldout(client->cct, 10) << "read from " << obj << dendl;
@@ -2439,26 +2454,23 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
       client->objecter->read(obj, mvol, 0, osize, &inbl, 0,
 			     new C_Ref(lock, cond, &unack));
     }
-    client->client_lock.Unlock();
+    cl.unlock();
 
-    lock.Lock();
+    unique_lock l(lock);
     while (unack > 0) {
       ldout(client->cct, 20) << "waiting for " << unack << " unack" << dendl;
-      cond.Wait(lock);
+      cond.wait(l);
     }
-    lock.Unlock();
-
-    utime_t lat = ceph_clock_now(client->cct);
-    lat -= start;
+    l.unlock();
   }
 
 
-  lock.Lock();
+  unique_lock l(lock);
   while (unsafe > 0) {
     ldout(client->cct, 10) << "waiting for " << unsafe << " unsafe" << dendl;
-    cond.Wait(lock);
+    cond.wait(l);
   }
-  lock.Unlock();
+  l.unlock();
   return 0;
 }
 
@@ -2466,7 +2478,8 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
 
 
 
-int SyntheticClient::read_random(string& fn, int size, int rdsize)   // size is in MB, wrsize in bytes
+// size is in MB, wrsize in bytes
+int SyntheticClient::read_random(string& fn, int size, int rdsize)
 {
   __uint64_t chunks = (__uint64_t)size * (__uint64_t)(1024*1024) / (__uint64_t)rdsize;
 
@@ -2849,29 +2862,7 @@ int SyntheticClient::random_walk(int num_req)
 
     if (op == CEPH_MDS_OP_SYMLINK) {
     }
-    /*
-    if (op == CEPH_MDS_OP_CHMOD) {
-      if (contents.empty())
-	op = CEPH_MDS_OP_READDIR;
-      else
-	r = client->chmod( get_random_sub(), rand() & 0755 );
-    }
 
-    if (op == CEPH_MDS_OP_CHOWN) {
-      if (contents.empty())	    r = client->chown( cwd.c_str(), rand(), rand() );
-      else
-	r = client->chown( get_random_sub(), rand(), rand() );
-    }
-
-    if (op == CEPH_MDS_OP_UTIME) {
-      struct utimbuf b;
-      memset(&b, 1, sizeof(b));
-      if (contents.empty())
-	r = client->utime( cwd.c_str(), &b );
-      else
-	r = client->utime( get_random_sub(), &b );
-    }
-    */
     if (op == CEPH_MDS_OP_LINK) {
     }
 
@@ -3493,19 +3484,20 @@ int SyntheticClient::chunk_file(string &filename)
   while (pos < size) {
     int get = MIN(size-pos, 1048576);
 
-    Mutex flock;
-    Cond cond;
+    std::mutex flock;
+    std::condition_variable cond;
     bool done;
     bufferlist bl;
 
-    flock.Lock();
+    unique_lock fl(flock);
     Context *onfinish = new C_SafeCond(&flock, &cond, &done);
     filer->read(inode.ino, mvol, &inode.layout, pos, get, &bl, 0, onfinish);
     while (!done)
-      cond.Wait(flock);
-    flock.Unlock();
+      cond.Wait(fl);
+    fl.unlock();
 
-    ldout(client->cct, 0) << "got " << bl.length() << " bytes at " << pos << dendl;
+    ldout(client->cct, 0) << "got " << bl.length() << " bytes at " << pos
+			  << dendl;
 
     if (from_before.length()) {
       ldout(client->cct, 0) << " including bit from previous block" << dendl;

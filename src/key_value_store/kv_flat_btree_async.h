@@ -20,12 +20,12 @@
 #define EPREFIX 136
 #define EFIRSTOBJ 138
 
+#include <mutex>
+
 #include "key_value_store/key_value_structure.h"
-#include "include/utime.h"
+#include "include/ceph_time.h"
 #include "include/types.h"
 #include "include/encoding.h"
-#include "common/Mutex.h"
-#include "common/Clock.h"
 #include "common/Formatter.h"
 #include "include/rados/librados.hpp"
 #include <cfloat>
@@ -33,7 +33,6 @@
 #include <sstream>
 #include <stdarg.h>
 
-using namespace std;
 using ceph::bufferlist;
 
 enum {
@@ -287,7 +286,7 @@ struct index_data {
   //the kdata of the previous index entry
   key_data min_kdata;
 
-  utime_t ts; //time that a split/merge started
+  ceph::real_time ts; //time that a split/merge started
 
   //objects to be created
   vector<create_data > to_create;
@@ -322,7 +321,7 @@ struct index_data {
   }
 
   //true if there is a prefix and now - ts > timeout.
-  bool is_timed_out(utime_t now, utime_t timeout) const;
+  bool is_timed_out(ceph::real_time now, ceph::timespan timeout) const;
 
   void encode(bufferlist &bl) const {
     ENCODE_START(1,1,bl);
@@ -364,7 +363,10 @@ struct index_data {
     strm << '(' << min_kdata.encoded() << "/" << kdata.encoded() << ','
 	<< prefix;
     if (prefix == "1") {
-      strm << ts.sec() << '.' << ts.usec();
+      strm << std::chrono::duration_cast<
+	std::chrono::seconds>(ts.time_since_epoch()).count()
+	   << '.' << std::chrono::duration_cast<
+	     std::chrono::milliseconds>(ts.time_since_epoch() % 1s).count();
       for(vector<create_data>::const_iterator it = to_create.begin();
 	  it != to_create.end(); ++it) {
 	  strm << '(' << it->min.encoded() << '/' << it->max.encoded() << '|'
@@ -390,8 +392,8 @@ WRITE_CLASS_ENCODER(index_data)
  */
 class IndexCache {
 protected:
-  map<key_data, pair<index_data, utime_t> > k2itmap;
-  map<utime_t, key_data> t2kmap;
+  map<key_data, pair<index_data, ceph::real_time> > k2itmap;
+  map<ceph::real_time, key_data> t2kmap;
   int cache_size;
 
 public:
@@ -482,17 +484,19 @@ protected:
   string pool_name;
   injection_t interrupt;
   int wait_ms;
-  utime_t timeout; //declare a client dead if it goes this long without
-		   //finishing a split/merge
+  ceph::timespan timeout; //declare a client dead if it goes this long
+			  //without finishing a split/merge
   int cache_size;
   double cache_refresh; //read cache_size / cache_refresh entries each time the
 			//index is read
   bool verbose;//if true, display lots of debug output
 
   //shared variables protected with mutexes
-  Mutex client_index_lock;
+  std::mutex client_index_lock;
   int client_index; //names of new objects are client_name.client_index
-  Mutex icache_lock;
+  std::mutex icache_lock;
+  typedef std::unique_lock<std::mutex> unique_lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
   IndexCache icache;
   friend struct index_data;
 
@@ -727,7 +731,7 @@ KvFlatBtreeAsync(int k_val, string name, int cache, double cache_r,
     client_name(string(name).append(".")),
     pool_name("data"),
     interrupt(&KeyValueStructure::nothing),
-    timeout(100000,0),
+    timeout(100000s),
     cache_size(cache),
     cache_refresh(cache_r),
     verbose(verb),

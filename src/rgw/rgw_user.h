@@ -16,8 +16,6 @@
 #include "common/Formatter.h"
 #include "rgw_formats.h"
 
-using namespace std;
-
 #define RGW_USER_ANON_ID "anonymous"
 
 #define SECRET_KEY_LEN 40

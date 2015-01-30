@@ -63,7 +63,7 @@ void MDSMonitor::print_map(MDSMap &m, int dbl)
 void MDSMonitor::create_new_fs(MDSMap &m, const boost::uuids::uuid& metadata_vol)
 {
   m.max_mds = mon->cct->_conf->max_mds;
-  m.created = ceph_clock_now(mon->cct);
+  m.created = ceph::real_clock::now();
   m.metadata_uuid = metadata_vol;
   m.compat = get_mdsmap_compat_set_default();
 
@@ -123,7 +123,7 @@ void MDSMonitor::encode_pending(MonitorDBStore::Transaction *t)
 {
   ldout(mon->cct, 10) << "encode_pending e" << pending_mdsmap.epoch << dendl;
 
-  pending_mdsmap.modified = ceph_clock_now(mon->cct);
+  pending_mdsmap.modified = ceph::real_clock::now();
 
   // print map iff 'debug mon = 30' or higher
   print_map(pending_mdsmap, 30);
@@ -184,7 +184,7 @@ void MDSMonitor::_note_beacon(MMDSBeacon *m)
   version_t seq = m->get_seq();
 
   ldout(mon->cct, 15) << "_note_beacon " << *m << " noting time" << dendl;
-  last_beacon[gid].stamp = ceph_clock_now(mon->cct);
+  last_beacon[gid].stamp = ceph::mono_clock::now();
   last_beacon[gid].seq = seq;
 }
 
@@ -411,7 +411,7 @@ bool MDSMonitor::prepare_beacon(MMDSBeacon *m)
     }
 
     // initialize the beacon timer
-    last_beacon[gid].stamp = ceph_clock_now(mon->cct);
+    last_beacon[gid].stamp = ceph::mono_clock::now();
     last_beacon[gid].seq = seq;
 
     // new incompat?
@@ -499,7 +499,7 @@ bool MDSMonitor::prepare_offload_targets(MMDSLoadTargets *m)
   return true;
 }
 
-bool MDSMonitor::should_propose(double& delay)
+bool MDSMonitor::should_propose(ceph::timespan& delay)
 {
   // delegate to PaxosService to assess whether we should propose
   return PaxosService::should_propose(delay);
@@ -703,10 +703,11 @@ void MDSMonitor::fail_mds_gid(uint64_t gid)
   MDSMap::mds_info_t& info = pending_mdsmap.mds_info[gid];
   ldout(mon->cct, 10) << "fail_mds_gid " << gid << " mds." << info.name << " rank " << info.rank << dendl;
 
-  utime_t until = ceph_clock_now(mon->cct);
-  until += mon->cct->_conf->mds_blacklist_interval;
+  ceph::real_time until = ceph::real_clock::now() +
+    ceph::span_from_double(mon->cct->_conf->mds_blacklist_interval);
 
-  pending_mdsmap.last_failure_osd_epoch = mon->osdmon()->blacklist(info.addr, until);
+  pending_mdsmap.last_failure_osd_epoch
+    = mon->osdmon()->blacklist(info.addr, until);
 
   if (info.rank >= 0) {
     if (info.state == MDSMap::STATE_CREATING) {
@@ -1140,21 +1141,19 @@ void MDSMonitor::tick()
   }
 
   // check beacon timestamps
-  utime_t now = ceph_clock_now(mon->cct);
-  utime_t cutoff = now;
-  cutoff -= mon->cct->_conf->mds_beacon_grace;
+  ceph::mono_time cutoff = ceph::mono_clock::now() -
+    ceph::span_from_double(mon->cct->_conf->mds_beacon_grace);
 
   // make sure last_beacon is fully populated
-  for (map<uint64_t,MDSMap::mds_info_t>::iterator p = pending_mdsmap.mds_info.begin();
-       p != pending_mdsmap.mds_info.end();
-       ++p) {
-    if (last_beacon.count(p->first) == 0) {
-      const MDSMap::mds_info_t& info = p->second;
-      ldout(mon->cct, 10) << " adding " << p->second.addr << " mds." << info.rank << "." << info.inc
-	       << " " << ceph_mds_state_name(info.state)
-	       << " to last_beacon" << dendl;
-      last_beacon[p->first].stamp = ceph_clock_now(mon->cct);
-      last_beacon[p->first].seq = 0;
+  for (auto& p : pending_mdsmap.mds_info) {
+    if (last_beacon.count(p.first) == 0) {
+      const MDSMap::mds_info_t& info = p.second;
+      ldout(mon->cct, 10) << " adding " << p.second.addr << " mds."
+			  << info.rank << "." << info.inc
+			  << " " << ceph_mds_state_name(info.state)
+			  << " to last_beacon" << dendl;
+      last_beacon[p.first].stamp = ceph::mono_clock::now();
+      last_beacon[p.first].seq = 0;
     }
   }
 
@@ -1165,7 +1164,7 @@ void MDSMonitor::tick()
     map<uint64_t, beacon_info_t>::iterator p = last_beacon.begin();
     while (p != last_beacon.end()) {
       uint64_t gid = p->first;
-      utime_t since = p->second.stamp;
+      ceph::mono_time since = p->second.stamp;
       uint64_t seq = p->second.seq;
       ++p;
 
@@ -1223,9 +1222,10 @@ void MDSMonitor::tick()
 	    si.state == MDSMap::STATE_CREATING ||
 	    si.state == MDSMap::STATE_STARTING) {
 	  // blacklist laggy mds
-	  utime_t until = now;
-	  until += mon->cct->_conf->mds_blacklist_interval;
-	  pending_mdsmap.last_failure_osd_epoch = mon->osdmon()->blacklist(info.addr, until);
+	  ceph::real_time until = ceph::real_clock::now() +
+	    ceph::span_from_double(mon->cct->_conf->mds_blacklist_interval);
+	  pending_mdsmap.last_failure_osd_epoch
+	    = mon->osdmon()->blacklist(info.addr, until);
 	  propose_osdmap = true;
 	}
 	pending_mdsmap.mds_info.erase(gid);
@@ -1242,16 +1242,18 @@ void MDSMonitor::tick()
 	if (info.state == MDSMap::STATE_STANDBY ||
 	    info.state == MDSMap::STATE_STANDBY_REPLAY) {
 	  // remove it
-	  ldout(mon->cct, 10) << " removing " << gid << " " << info.addr << " mds." << info.rank << "." << info.inc
-		   << " " << ceph_mds_state_name(info.state)
-		   << " (laggy)" << dendl;
+	  ldout(mon->cct, 10) << " removing " << gid << " " << info.addr
+			      << " mds." << info.rank << "." << info.inc
+			      << " " << ceph_mds_state_name(info.state)
+			      << " (laggy)" << dendl;
 	  pending_mdsmap.mds_info.erase(gid);
 	  do_propose = true;
 	} else if (!info.laggy()) {
-	  ldout(mon->cct, 10) << " marking " << gid << " " << info.addr << " mds." << info.rank << "." << info.inc
-		   << " " << ceph_mds_state_name(info.state)
-		   << " laggy" << dendl;
-	  info.laggy_since = now;
+	  ldout(mon->cct, 10) << " marking " << gid << " " << info.addr
+			      << " mds." << info.rank << "." << info.inc
+			      << " " << ceph_mds_state_name(info.state)
+			      << " laggy" << dendl;
+	  info.laggy_since = ceph::real_clock::now();
 	  do_propose = true;
 	}
 	last_beacon.erase(gid);
@@ -1276,7 +1278,9 @@ void MDSMonitor::tick()
       sgid = pending_mdsmap.find_replacement_for(f, name);
       if (sgid) {
 	MDSMap::mds_info_t& si = pending_mdsmap.mds_info[sgid];
-	ldout(mon->cct, 0) << " taking over failed mds." << f << " with " << sgid << "/" << si.name << " " << si.addr << dendl;
+	ldout(mon->cct, 0) << " taking over failed mds." << f << " with "
+			   << sgid << "/" << si.name << " " << si.addr
+			   << dendl;
 	si.state = MDSMap::STATE_REPLAY;
 	si.rank = f;
 	si.inc = ++pending_mdsmap.inc[f];

@@ -15,8 +15,8 @@
 #ifndef CEPH_LIBRADOS_AIOCOMPLETIONIMPL_H
 #define CEPH_LIBRADOS_AIOCOMPLETIONIMPL_H
 
-#include "common/Cond.h"
-#include "common/Mutex.h"
+#include <condition_variable>
+#include <mutex>
 
 #include "include/buffer.h"
 #include "include/rados/librados.h"
@@ -27,8 +27,10 @@
 class IoCtxImpl;
 
 struct librados::AioCompletionImpl {
-  Mutex lock;
-  Cond cond;
+  std::mutex lock;
+  typedef std::unique_lock<std::mutex> unique_lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  std::condition_variable cond;
   int ref, rval;
   bool released;
   bool ack, safe;
@@ -57,108 +59,99 @@ struct librados::AioCompletionImpl {
 			io(NULL), aio_write_seq(0), aio_write_list_item(this) { }
 
   int set_complete_callback(void *cb_arg, rados_callback_t cb) {
-    lock.Lock();
+    lock_guard l(lock);
     callback_complete = cb;
     callback_complete_arg = cb_arg;
-    lock.Unlock();
     return 0;
   }
   int set_safe_callback(void *cb_arg, rados_callback_t cb) {
-    lock.Lock();
+    lock_guard l(lock);
     callback_safe = cb;
     callback_safe_arg = cb_arg;
-    lock.Unlock();
     return 0;
   }
   int wait_for_complete() {
-    lock.Lock();
+    unique_lock l(lock);
     while (!ack)
-      cond.Wait(lock);
-    lock.Unlock();
+      cond.wait(l);
+    l.unlock();
     return 0;
   }
   int wait_for_safe() {
-    lock.Lock();
+    unique_lock l(lock);
     while (!safe)
-      cond.Wait(lock);
-    lock.Unlock();
+      cond.wait(l);
+    l.unlock();
     return 0;
   }
   int is_complete() {
-    lock.Lock();
+    lock_guard l(lock);
     int r = ack;
-    lock.Unlock();
     return r;
   }
   int is_safe() {
-    lock.Lock();
+    lock_guard l(lock);
     int r = safe;
-    lock.Unlock();
     return r;
   }
   int wait_for_complete_and_cb() {
-    lock.Lock();
+    unique_lock l(lock);
     while (!ack || callback_complete)
-      cond.Wait(lock);
-    lock.Unlock();
+      cond.wait(l);
+    l.unlock();
     return 0;
   }
   int wait_for_safe_and_cb() {
-    lock.Lock();
+    unique_lock l(lock);
     while (!safe || callback_safe)
-      cond.Wait(lock);
-    lock.Unlock();
+      cond.wait(l);
+    l.unlock();
     return 0;
   }
   int is_complete_and_cb() {
-    lock.Lock();
+    lock_guard l(lock);
     int r = ack && !callback_complete;
-    lock.Unlock();
     return r;
   }
   int is_safe_and_cb() {
-    lock.Lock();
+    lock_guard l(lock);
     int r = safe && !callback_safe;
-    lock.Unlock();
     return r;
   }
   int get_return_value() {
-    lock.Lock();
+    lock_guard l(lock);
     int r = rval;
-    lock.Unlock();
     return r;
   }
   uint64_t get_version() {
-    lock.Lock();
+    lock_guard l(lock);
     version_t v = objver;
-    lock.Unlock();
     return v;
   }
 
   void get() {
-    lock.Lock();
+    lock_guard l(lock);
     _get();
-    lock.Unlock();
   }
   void _get() {
-    assert(lock.is_locked());
     assert(ref > 0);
     ++ref;
   }
   void release() {
-    lock.Lock();
+    unique_lock l(lock);
     assert(!released);
     released = true;
-    put_unlock();
+    put_unlock(l);
   }
   void put() {
-    lock.Lock();
-    put_unlock();
+    unique_lock l(lock);
+    put_unlock(l);
   }
-  void put_unlock() {
+  void put_unlock(unique_lock& l) {
+    assert(l && l.mutex() == &lock);
     assert(ref > 0);
     int n = --ref;
-    lock.Unlock();
+    l.unlock();
     if (!n)
       delete this;
   }
@@ -177,10 +170,10 @@ struct C_AioComplete : public Context {
     void *cb_arg = c->callback_complete_arg;
     cb(c, cb_arg);
 
-    c->lock.Lock();
+    librados::AioCompletionImpl::unique_lock cl(c->lock);
     c->callback_complete = NULL;
-    c->cond.Signal();
-    c->put_unlock();
+    c->cond.notify_all();
+    c->put_unlock(cl);
   }
 };
 
@@ -196,10 +189,10 @@ struct C_AioSafe : public Context {
     void *cb_arg = c->callback_safe_arg;
     cb(c, cb_arg);
 
-    c->lock.Lock();
+    librados::AioCompletionImpl::unique_lock cl(c->lock);
     c->callback_safe = NULL;
-    c->cond.Signal();
-    c->put_unlock();
+    c->cond.notify_all();
+    c->put_unlock(cl);
   }
 };
 
@@ -219,11 +212,11 @@ struct C_AioCompleteAndSafe : public Context {
   }
 
   void finish(int r) {
-    c->lock.Lock();
+    librados::AioCompletionImpl::unique_lock cl(c->lock);
     c->rval = r;
     c->ack = true;
     c->safe = true;
-    c->lock.Unlock();
+    cl.unlock();
     rados_callback_t cb_complete = c->callback_complete;
     void *cb_complete_arg = c->callback_complete_arg;
     if (cb_complete)
@@ -234,11 +227,11 @@ struct C_AioCompleteAndSafe : public Context {
     if (cb_safe)
       cb_safe(c, cb_safe_arg);
 
-    c->lock.Lock();
+    cl.lock();
     c->callback_complete = NULL;
     c->callback_safe = NULL;
-    c->cond.Signal();
-    c->put_unlock();
+    c->cond.notify_all();
+    c->put_unlock(cl);
   }
 };
 

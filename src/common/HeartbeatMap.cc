@@ -14,10 +14,12 @@
 
 #include <time.h>
 #include <sys/types.h>
+#include <sys/time.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
 
+#include "include/ceph_time.h"
 #include "HeartbeatMap.h"
 #include "ceph_context.h"
 #include "common/errno.h"
@@ -31,7 +33,7 @@ namespace ceph {
 
 HeartbeatMap::HeartbeatMap(CephContext *cct)
   : m_cct(cct),
-    m_inject_unhealthy_until(0)
+    m_inject_unhealthy_until(ceph::mono_time::min())
 {
 }
 
@@ -42,56 +44,53 @@ HeartbeatMap::~HeartbeatMap()
 
 heartbeat_handle_d *HeartbeatMap::add_worker(string name)
 {
-  m_rwlock.get_write();
+  unique_lock l(m_rwlock);
   ldout(m_cct, 10) << "add_worker '" << name << "'" << dendl;
   heartbeat_handle_d *h = new heartbeat_handle_d(name);
   m_workers.push_front(h);
   h->list_item = m_workers.begin();
-  m_rwlock.put_write();
+  l.unlock();
   return h;
 }
 
 void HeartbeatMap::remove_worker(heartbeat_handle_d *h)
 {
-  m_rwlock.get_write();
+  unique_lock l(m_rwlock);
   ldout(m_cct, 10) << "remove_worker '" << h->name << "'" << dendl;
   m_workers.erase(h->list_item);
-  m_rwlock.put_write();
+  l.unlock();
   delete h;
 }
 
-bool HeartbeatMap::_check(heartbeat_handle_d *h, const char *who, time_t now)
+bool HeartbeatMap::_check(heartbeat_handle_d *h, const char *who,
+			  ceph::mono_time now)
 {
   bool healthy = true;
-  time_t was;
+  ceph::mono_time was;
 
-  was = h->timeout;
-  if (was && was < now) {
-    ldout(m_cct, 1) << who << " '" << h->name << "'"
-		    << " had timed out after " << h->grace << dendl;
+  was = mono_time(timespan(h->timeout));
+  if (was > was.min() && was < now) {
     healthy = false;
   }
-  was = h->suicide_timeout;
-  if (was && was < now) {
-    ldout(m_cct, 1) << who << " '" << h->name << "'"
-		    << " had suicide timed out after " << h->suicide_grace << dendl;
+  was = mono_time(timespan(h->suicide_timeout));
+  if (was > was.min() && was < now) {
     assert(0 == "hit suicide timeout");
   }
   return healthy;
 }
 
-void HeartbeatMap::reset_timeout(heartbeat_handle_d *h, time_t grace, time_t suicide_grace)
+void HeartbeatMap::reset_timeout(heartbeat_handle_d *h,
+				 timespan grace,
+				 timespan suicide_grace)
 {
-  ldout(m_cct, 20) << "reset_timeout '" << h->name << "' grace " << grace
-		   << " suicide " << suicide_grace << dendl;
-  time_t now = time(NULL);
+  mono_time now = mono_clock::now();
   _check(h, "reset_timeout", now);
 
-  h->timeout = (now + grace);
+  h->timeout = (now + grace).time_since_epoch().count();
   h->grace = grace;
 
-  if (suicide_grace)
-    h->suicide_timeout = (now + suicide_grace);
+  if (suicide_grace > ceph::timespan(0))
+    h->suicide_timeout = (now + suicide_grace).time_since_epoch().count();
   else
     h->suicide_timeout = 0;
   h->suicide_grace = suicide_grace;
@@ -100,7 +99,7 @@ void HeartbeatMap::reset_timeout(heartbeat_handle_d *h, time_t grace, time_t sui
 void HeartbeatMap::clear_timeout(heartbeat_handle_d *h)
 {
   ldout(m_cct, 20) << "clear_timeout '" << h->name << "'" << dendl;
-  time_t now = time(NULL);
+  mono_time now = mono_clock::now();
   _check(h, "clear_timeout", now);
   h->timeout = 0;
   h->suicide_timeout = 0;
@@ -108,17 +107,19 @@ void HeartbeatMap::clear_timeout(heartbeat_handle_d *h)
 
 bool HeartbeatMap::is_healthy()
 {
-  m_rwlock.get_read();
-  time_t now = time(NULL);
+  shared_lock l(m_rwlock);
+  ceph::mono_time now = ceph::mono_clock::now();
   if (m_cct->_conf->heartbeat_inject_failure) {
-    ldout(m_cct, 0) << "is_healthy injecting failure for next " << m_cct->_conf->heartbeat_inject_failure << " seconds" << dendl;
-    m_inject_unhealthy_until = now + m_cct->_conf->heartbeat_inject_failure;
+    ldout(m_cct, 0) << "is_healthy injecting failure for next "
+		    << m_cct->_conf->heartbeat_inject_failure << " seconds"
+		    << dendl;
+    m_inject_unhealthy_until = now + ceph::span_from_double(
+      m_cct->_conf->heartbeat_inject_failure);
     m_cct->_conf->set_val("heartbeat_inject_failure", "0");
   }
 
   bool healthy = true;
   if (now < m_inject_unhealthy_until) {
-    ldout(m_cct, 0) << "is_healthy = false, injected failure for next " << (m_inject_unhealthy_until - now) << " seconds" << dendl;
     healthy = false;
   }
 
@@ -130,7 +131,7 @@ bool HeartbeatMap::is_healthy()
       healthy = false;
     }
   }
-  m_rwlock.put_read();
+  l.unlock();
   ldout(m_cct, 20) << "is_healthy = " << (healthy ? "healthy" : "NOT HEALTHY") << dendl;
   return healthy;
 }

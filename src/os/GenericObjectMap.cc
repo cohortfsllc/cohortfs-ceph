@@ -801,7 +801,7 @@ int GenericObjectMap::write_state(KeyValueDB::Transaction t)
 // NOTE(haomai): It may occur dead lock if thread A hold header A try to header
 // B and thread hold header B try to get header A
 GenericObjectMap::Header GenericObjectMap::_lookup_header(
-    const coll_t &cid, const oid &obj)
+  unique_lock& l, const coll_t &cid, const oid &obj)
 {
   set<string> to_get;
   to_get.insert(header_key(cid, obj));
@@ -821,7 +821,7 @@ GenericObjectMap::Header GenericObjectMap::_lookup_header(
     header.decode(iter);
 
     while (in_use.count(header.seq)) {
-      header_cond.Wait(header_lock);
+      header_cond.wait(l);
 
       // Another thread is hold this header, wait for it.
       // Because the seq of this object may change, such as clone
@@ -860,9 +860,9 @@ GenericObjectMap::Header GenericObjectMap::_generate_new_header(
 
 GenericObjectMap::Header GenericObjectMap::lookup_parent(Header input)
 {
-  Mutex::Locker l(header_lock);
+  unique_lock l(header_lock);
   while (in_use.count(input->parent))
-    header_cond.Wait(header_lock);
+    header_cond.wait(l);
   map<string, bufferlist> out;
   set<string> keys;
   keys.insert(PARENT_KEY);
@@ -893,8 +893,8 @@ GenericObjectMap::Header GenericObjectMap::lookup_parent(Header input)
 GenericObjectMap::Header GenericObjectMap::lookup_create_header(
     const coll_t &cid, const oid &obj, KeyValueDB::Transaction t)
 {
-  Mutex::Locker l(header_lock);
-  Header header = _lookup_header(cid, obj);
+  unique_lock l(header_lock);
+  Header header = _lookup_header(l, cid, obj);
   if (!header) {
     header = _generate_new_header(cid, obj, Header(), t);
     set_header(cid, obj, *header, t);
@@ -947,7 +947,7 @@ int GenericObjectMap::list_objects(const coll_t &cid, oid start, int max,
 				   vector<oid> *out, oid *next)
 {
   // FIXME
-  Mutex::Locker l(header_lock);
+  lock_guard l(header_lock);
 
   int size = 0;
   KeyValueDB::Iterator iter = db->get_iterator(OIDO_SEQ_PREFIX);

@@ -12,26 +12,31 @@
  *
  */
 
-#include <stdio.h>
-#include <time.h>
-#include <string.h>
+#include <condition_variable>
+#include <cstdio>
+#include <cstring>
+#include <ctime>
 #include <iostream>
+#include <mutex>
 #include <sstream>
-#include "os/FileStore.h"
-#include "include/Context.h"
-#include "common/ceph_argparse.h"
-#include "global/global_init.h"
-#include "common/Mutex.h"
-#include "common/Cond.h"
+#include <unordered_map>
+
 #include <boost/scoped_ptr.hpp>
 #include <boost/random/mersenne_twister.hpp>
 #include <boost/random/uniform_int.hpp>
 #include <boost/random/binomial_distribution.hpp>
+
 #include <gtest/gtest.h>
 
-#include <unordered_map>
+#include "os/FileStore.h"
+#include "include/Context.h"
+#include "common/ceph_argparse.h"
+#include "global/global_init.h"
 
 static CephContext* cct;
+
+typedef std::lock_guard<std::mutex> lock_guard;
+typedef std::unique_lock<std::mutex> unique_lock;
 
 void usage(const string &name) {
   std::cerr << "Usage: " << name << " [xattr|omap] store_path store_journal"
@@ -54,24 +59,24 @@ typename T::iterator rand_choose(T &cont) {
 
 class OnApplied : public Context {
 public:
-  Mutex *lock;
-  Cond *cond;
+  std::mutex *lock;
+  std::condition_variable *cond;
   int *in_progress;
   ObjectStore::Transaction *t;
-  OnApplied(Mutex *lock,
-	    Cond *cond,
+  OnApplied(std::mutex *lock,
+	    std::condition_variable *cond,
 	    int *in_progress,
 	    ObjectStore::Transaction *t)
     : lock(lock), cond(cond),
       in_progress(in_progress), t(t) {
-    Mutex::Locker l(*lock);
+    lock_guard l(*lock);
     (*in_progress)++;
   }
 
   void finish(int r) {
-    Mutex::Locker l(*lock);
+    lock_guard l(*lock);
     (*in_progress)--;
-    cond->Signal();
+    cond->notify_all();
   }
 };
 
@@ -89,8 +94,8 @@ uint64_t do_run(ObjectStore *store, int attrsize, int numattrs,
 		int run,
 		int transsize, int ops,
 		ostream &out) {
-  Mutex lock;
-  Cond cond;
+  std::mutex lock;
+  std::condition_variable cond;
   int in_flight = 0;
   ObjectStore::Transaction t;
   map<string, pair<set<string>, ObjectStore::Sequencer*> > collections;
@@ -118,9 +123,9 @@ uint64_t do_run(ObjectStore *store, int attrsize, int numattrs,
   uint64_t start = get_time();
   for (int i = 0; i < ops; ++i) {
     {
-      Mutex::Locker l(lock);
+      unique_lock l(lock);
       while (in_flight >= THREADS)
-	cond.Wait(lock);
+	cond.wait(l);
     }
     ObjectStore::Transaction *t = new ObjectStore::Transaction;
     map<string, pair<set<string>, ObjectStore::Sequencer*> >::iterator iter =
@@ -142,9 +147,9 @@ uint64_t do_run(ObjectStore *store, int attrsize, int numattrs,
 					   t));
   }
   {
-    Mutex::Locker l(lock);
+    unique_lock l(lock);
     while (in_flight)
-      cond.Wait(lock);
+      cond.wait(l);
   }
   return get_time() - start;
 }

@@ -18,6 +18,7 @@
 #include <memory>
 #include <unordered_map>
 #include <boost/uuid/uuid.hpp>
+#include "include/ceph_time.h"
 #include "byteorder.h"
 #include "buffer.h"
 #include "assert.h"
@@ -173,6 +174,44 @@ inline void encode(const char *s, bufferlist& bl)
   encode(len, bl);
   bl.append(s, len);
 }
+
+// Time, to deal with template/namespace interaction problems.
+
+inline void encode(const ceph::timespan &v, bufferlist& bl) {
+  uint64_t vv = v.count();
+  encode_raw(vv, bl);
+}
+
+inline void decode(ceph::timespan &v, bufferlist::iterator& p) {
+  uint64_t vv;
+  decode_raw(vv, p);
+  v = ceph::timespan(vv);
+}
+
+inline void encode(const ceph::signedspan &v, bufferlist& bl) {
+  int64_t vv = v.count();
+  encode_raw(vv, bl);
+}
+
+inline void decode(ceph::signedspan &v, bufferlist::iterator& p) {
+  int64_t vv;
+  decode_raw(vv, p);
+  v = ceph::signedspan(vv);
+}
+
+inline void encode(const ceph::real_time &v, bufferlist& bl) {
+  uint64_t vv = v.time_since_epoch().count();
+  encode_raw(vv, bl);
+}
+
+inline void decode(ceph::real_time &v, bufferlist::iterator& p) {
+  uint64_t vv;
+  decode_raw(vv, p);
+  v = ceph::real_time(ceph::timespan(vv));
+}
+
+// No encode/decode methods for mono_time, since the epoch is "some
+// time after the machine was turned on"
 
 
 // array

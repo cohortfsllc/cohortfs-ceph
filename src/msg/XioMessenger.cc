@@ -13,6 +13,7 @@
  *
  */
 
+#include <mutex>
 #include <arpa/inet.h>
 #include <boost/lexical_cast.hpp>
 #include <set>
@@ -25,7 +26,7 @@
 
 #define dout_subsys ceph_subsys_xio
 
-Mutex mtx;
+std::mutex mtx;
 std::atomic<bool> initialized;
 
 std::atomic<uint32_t> XioMessenger::nInstances;
@@ -263,8 +264,7 @@ XioMessenger::XioMessenger(CephContext *cct, entity_name_t name,
     dispatch_strategy(ds),
     loop_con(this),
     port_shift(0),
-    special_handling(0),
-    sh_mtx("XioMessenger sh_mtx")
+    special_handling(0)
 {
 
   if (cct->_conf->xio_trace_xcon)
@@ -276,7 +276,7 @@ XioMessenger::XioMessenger(CephContext *cct, entity_name_t name,
   /* package init */
   if (!initialized) {
 
-    mtx.Lock();
+    unique_lock l(mtx);
     if (!initialized) {
 
       xio_init();
@@ -316,7 +316,7 @@ XioMessenger::XioMessenger(CephContext *cct, entity_name_t name,
 
       /* enable fork */
       xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_ENABLE_FORK_INIT,
-                  &xopt, sizeof(xopt));
+		  &xopt, sizeof(xopt));
 
       /* unregistered pool */
 #define XMSG_MEMPOOL_QUANTUM_SMALL 4096
@@ -417,7 +417,7 @@ XioMessenger::XioMessenger(CephContext *cct, entity_name_t name,
       /* mark initialized */
       initialized = true;
     }
-    mtx.Unlock();
+    l.unlock();
   }
 
   dispatch_strategy->set_messenger(this);
@@ -553,9 +553,9 @@ int XioMessenger::session_event(struct xio_session *session,
     ldout(cct,2) << "xio_session_teardown " << session << dendl;
     xio_session_destroy(session);
     if (--nsessions == 0) {
-      Mutex::Locker lck(sh_mtx);
+      lock_guard lck(sh_mtx);
       if (nsessions.load() == 0)
-	sh_cond.Signal();
+	sh_cond.notify_all();
     }
     break;
   default:
@@ -945,9 +945,9 @@ int XioMessenger::shutdown()
   }
   conns_sp.unlock();
   while(nsessions.load() > 0) {
-    Mutex::Locker lck(sh_mtx);
+    unique_lock lck(sh_mtx);
     if (nsessions.load() > 0)
-      sh_cond.Wait(sh_mtx);
+      sh_cond.wait(lck);
   }
   portals.shutdown();
   dispatch_strategy->shutdown();

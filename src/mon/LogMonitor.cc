@@ -83,13 +83,13 @@ void LogMonitor::create_initial()
   ldout(mon->cct, 10) << "create_initial -- creating initial map" << dendl;
   LogEntry e;
   memset(&e.who, 0, sizeof(e.who));
-  e.stamp = ceph_clock_now(mon->cct);
+  e.stamp = ceph::real_clock::now();
   e.type = CLOG_INFO;
   std::stringstream ss;
   ss << "mkfs " << mon->monmap->get_fsid();
   e.msg = ss.str();
   e.seq = 0;
-  pending_log.insert(pair<utime_t,LogEntry>(e.stamp, e));
+  pending_log.insert(pair<ceph::real_time,LogEntry>(e.stamp, e));
 }
 
 void LogMonitor::update_from_paxos(bool *need_bootstrap)
@@ -196,7 +196,7 @@ void LogMonitor::encode_pending(MonitorDBStore::Transaction *t)
   ldout(mon->cct, 10) << __func__ << " v" << version << dendl;
   uint8_t v = 1;
   ::encode(v, bl);
-  multimap<utime_t,LogEntry>::iterator p;
+  multimap<ceph::real_time,LogEntry>::iterator p;
   for (p = pending_log.begin(); p != pending_log.end(); ++p)
     p->second.encode(bl);
 
@@ -306,7 +306,7 @@ bool LogMonitor::prepare_log(MLog *m)
     ldout(mon->cct, 10) << " logging " << *p << dendl;
     if (!pending_summary.contains(p->key())) {
       pending_summary.add(*p);
-      pending_log.insert(pair<utime_t,LogEntry>(p->stamp, *p));
+      pending_log.insert(pair<ceph::real_time,LogEntry>(p->stamp, *p));
     }
   }
   wait_for_finished_proposal(new C_Log(this, m));
@@ -321,7 +321,7 @@ void LogMonitor::_updated_log(MLog *m)
   m->put();
 }
 
-bool LogMonitor::should_propose(double& delay)
+bool LogMonitor::should_propose(ceph::timespan& delay)
 {
   // commit now if we have a lot of pending events
   if (mon->cct->_conf->mon_max_log_entries_per_event > 0 &&
@@ -383,9 +383,10 @@ bool LogMonitor::prepare_command(MMonCommand *m)
     le.type = CLOG_INFO;
     le.msg = str_join(logtext, " ");
     pending_summary.add(le);
-    pending_log.insert(pair<utime_t,LogEntry>(le.stamp, le));
-    wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, string(),
-					      get_last_committed() + 1));
+    pending_log.insert(pair<ceph::real_time,LogEntry>(le.stamp, le));
+    wait_for_finished_proposal(new Monitor::C_Command(
+				 mon, m, 0, string(),
+				 get_last_committed() + 1));
     return true;
   }
 
@@ -513,7 +514,7 @@ void LogMonitor::_create_sub_incremental(MLog *mlog, int level, version_t sv)
     ldout(mon->cct, 10) << __func__ << " skipped from " << sv
 	     << " to first_committed " << get_first_committed() << dendl;
     LogEntry le;
-    le.stamp = ceph_clock_now(NULL);
+    le.stamp = ceph::real_clock::now();
     le.type = CLOG_WARN;
     ostringstream ss;
     ss << "skipped log messages from " << sv << " to " << get_first_committed();

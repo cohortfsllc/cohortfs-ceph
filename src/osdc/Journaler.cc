@@ -336,17 +336,17 @@ void Journaler::write_head(Context *oncommit)
   last_written.write_pos = safe_pos;
   ldout(cct, 10) << "write_head " << last_written << dendl;
 
-  last_wrote_head = ceph_clock_now(cct);
+  last_wrote_head = ceph::real_clock::now();
 
   bufferlist bl;
   ::encode(last_written, bl);
 
   oid obj = file_oid(ino, 0);
 #if 0
-  objecter->write_full(obj, volume, bl, ceph_clock_now(cct), 0,
+  objecter->write_full(obj, volume, bl, ceph::real_clock::now(), 0,
 		       NULL, new C_WriteHead(this, last_written, oncommit));
 #else
-  objecter->write(obj, volume, 0, bl.length(), bl, ceph_clock_now(cct), 0,
+  objecter->write(obj, volume, 0, bl.length(), bl, ceph::real_clock::now(), 0,
 		  NULL, new C_WriteHead(this, last_written, oncommit));
 #endif
 }
@@ -374,15 +374,16 @@ void Journaler::_finish_write_head(int r, Header &wrote, Context *oncommit)
 class Journaler::C_Flush : public Context {
   Journaler *ls;
   uint64_t start;
-  utime_t stamp;
+  ceph::mono_time stamp;
 public:
-  C_Flush(Journaler *l, int64_t s, utime_t st) : ls(l), start(s), stamp(st) {}
+  C_Flush(Journaler *l, int64_t s, ceph::mono_time st)
+    : ls(l), start(s), stamp(st) {}
   void finish(int r) {
     ls->_finish_flush(r, start, stamp);
   }
 };
 
-void Journaler::_finish_flush(int r, uint64_t start, utime_t stamp)
+void Journaler::_finish_flush(int r, uint64_t start, ceph::mono_time stamp)
 {
   assert(!readonly);
   if (r < 0) {
@@ -525,7 +526,7 @@ void Journaler::_do_flush(unsigned amount)
 
   // submit write for anything pending
   // flush _start_ pos to _finish_flush
-  utime_t now = ceph_clock_now(cct);
+  ceph::mono_time now = ceph::mono_clock::now();
 
   Context *onsafe = new C_Flush(this, flush_pos, now);	// on COMMIT
   pending_safe.insert(flush_pos);
@@ -539,9 +540,8 @@ void Journaler::_do_flush(unsigned amount)
     write_buf.splice(0, len, &write_bl);
   }
 
-  oid obj = file_oid(ino, 0);
-  objecter->write(obj, volume, flush_pos, len, write_bl, ceph_clock_now(cct),
-		  0, NULL, onsafe);
+  objecter->write(file_oid(ino, 0), volume, flush_pos, len, write_bl,
+		  ceph::real_clock::now(), 0, NULL, onsafe);
 
   flush_pos += len;
   assert(write_buf.length() == write_pos - flush_pos);
@@ -595,7 +595,9 @@ void Journaler::flush(Context *onsafe)
 	if (delay_flush_event)
 	  timer->cancel_event(delay_flush_event);
 	delay_flush_event = new C_DelayFlush(this);
-	timer->add_event_after(cct->_conf->journaler_batch_interval, delay_flush_event);
+	timer->add_event_after(ceph::span_from_double(
+				 cct->_conf->journaler_batch_interval),
+			       delay_flush_event);
       } else {
 	ldout(cct, 20) << "flush not delaying flush" << dendl;
 	_do_flush();
@@ -608,7 +610,9 @@ void Journaler::flush(Context *onsafe)
   }
 
   // write head?
-  if (last_wrote_head.sec() + cct->_conf->journaler_write_head_interval < ceph_clock_now(cct).sec()) {
+  if (last_wrote_head + ceph::span_from_double(
+	cct->_conf->journaler_write_head_interval) <
+      ceph::real_clock::now()) {
     write_head();
   }
 }
@@ -661,9 +665,8 @@ void Journaler::_issue_prezero()
       ldout(cct, 10) << "_issue_prezero zeroing " << prezeroing_pos << "~" << len << " (partial period)" << dendl;
     }
     Context *c = new C_Journaler_Prezero(this, prezeroing_pos, len);
-    oid obj = file_oid(ino, 0);
-    objecter->zero(obj, volume, prezeroing_pos, len, ceph_clock_now(cct), 0,
-		   NULL, c);
+    objecter->zero(file_oid(ino, 0), volume, prezeroing_pos, len, ceph::real_clock::now(),
+		   0, NULL, c);
     prezeroing_pos += len;
   }
 }
@@ -1051,10 +1054,9 @@ void Journaler::trim()
 	   << dendl;
 
   // delete range of objects
-  oid obj = file_oid(ino, 0);
   // XXX: does this release storage?  Maybe need volume->purge_range ?
-  objecter->zero(obj, volume, trimming_pos, trim_to - trimming_pos,
-		 ceph_clock_now(cct), 0, NULL, new C_Trim(this, trim_to));
+  objecter->zero(file_oid(ino, 0), volume, trimming_pos, trim_to - trimming_pos,
+		 ceph::real_clock::now(), 0, NULL, new C_Trim(this, trim_to));
   trimming_pos = trim_to;
 }
 

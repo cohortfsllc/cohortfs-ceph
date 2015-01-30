@@ -21,7 +21,6 @@
 #include "common/ceph_context.h"
 #include "common/code_environment.h"
 #include "include/types.h"
-#include "common/Clock.h"
 #include "osd/OSDMap.h"
 #include "vol/Volume.h"
 #include "msg/Message.h"
@@ -30,8 +29,6 @@
 #include <set>
 #include <map>
 #include <string>
-using namespace std;
-
 #include "common/config.h"
 
 #include "include/CompatSet.h"
@@ -133,7 +130,7 @@ public:
     int32_t state;
     version_t state_seq;
     entity_addr_t addr;
-    utime_t laggy_since;
+    ceph::real_time laggy_since;
     int32_t standby_for_rank;
     string standby_for_name;
     set<int32_t> export_targets;
@@ -141,8 +138,8 @@ public:
     mds_info_t() : global_id(0), rank(-1), inc(0), state(STATE_STANDBY),
 		   state_seq(0), standby_for_rank(MDS_NO_STANDBY_PREF) { }
 
-    bool laggy() const { return !(laggy_since == utime_t()); }
-    void clear_laggy() { laggy_since = utime_t(); }
+    bool laggy() const { return !(laggy_since == ceph::real_time::min()); }
+    void clear_laggy() { laggy_since = ceph::real_time::min(); }
 
     entity_inst_t get_inst() const {
       return entity_inst_t(entity_name_t::MDS(rank), addr);
@@ -169,7 +166,7 @@ protected:
   // osd epoch of last failure; any mds entering replay needs at least
   // this osdmap to ensure the blacklist propagates.
   epoch_t last_failure_osd_epoch;
-  utime_t created, modified;
+  ceph::real_time created, modified;
 
   // which MDS has anchortable
   int32_t tableserver;
@@ -227,8 +224,8 @@ public:
   bool get_inline_data_enabled() { return inline_data_enabled; }
   void set_inline_data_enabled(bool enabled) { inline_data_enabled = enabled; }
 
-  utime_t get_session_timeout() {
-    return utime_t(session_timeout,0);
+  ceph::timespan get_session_timeout() {
+    return session_timeout * 1s;
   }
   uint64_t get_max_filesize() { return max_file_size; }
 
@@ -240,10 +237,10 @@ public:
   epoch_t get_epoch() const { return epoch; }
   void inc_epoch() { epoch++; }
 
-  const utime_t& get_created() const { return created; }
-  void set_created(utime_t ct) { modified = created = ct; }
-  const utime_t& get_modified() const { return modified; }
-  void set_modified(utime_t mt) { modified = mt; }
+  const ceph::real_time& get_created() const { return created; }
+  void set_created(ceph::real_time ct) { modified = created = ct; }
+  const ceph::real_time& get_modified() const { return modified; }
+  void set_modified(ceph::real_time& mt) { modified = mt; }
 
   epoch_t get_last_failure() const { return last_failure; }
   epoch_t get_last_failure_osd_epoch() const { return last_failure_osd_epoch; }

@@ -16,6 +16,8 @@
 
 #include "include/types.h"
 
+#include <condition_variable>
+#include <mutex>
 #include <string>
 #include <list>
 #include <set>
@@ -33,15 +35,11 @@ using std::fstream;
 
 #include <ext/hash_map>
 
-#include "common/Mutex.h"
-#include "common/Cond.h"
 #include "common/config.h"
 
 class Client;
 
 typedef boost::icl::interval<uint64_t>::type barrier_interval;
-
-using namespace std;
 
 /*
  * we keep count of uncommitted writes on the inode, so that
@@ -68,7 +66,7 @@ private:
   barrier_interval iv;
   enum CBlockSync_State state;
   Barrier *barrier;
-  int *rval; /* see Cond.h */
+  int *rval;
 
 public:
   boost::intrusive::list_member_hook<> intervals_hook;
@@ -89,7 +87,7 @@ typedef boost::intrusive::list< C_Block_Sync,
 class Barrier
 {
 private:
-  Cond cond;
+  std::condition_variable cond;
   boost::icl::interval_set<uint64_t> span;
   BlockSyncList write_list;
 
@@ -114,7 +112,9 @@ class BarrierContext
 private:
   Client *cl;
   uint64_t ino;
-  Mutex lock;
+  std::mutex lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
 
   // writes not claimed by a commit
   BlockSyncList outstanding_writes;

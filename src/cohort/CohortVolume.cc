@@ -41,7 +41,6 @@ VolumeRef CohortVolFactory(bufferlist::iterator& bl, uint8_t v, vol_type t)
   return VolumeRef(vol);
 }
 
-
 int CohortVolume::update(const shared_ptr<const Volume>& v)
 {
   return 0;
@@ -429,11 +428,11 @@ void CohortVolume::StripulatedOp::clear_op_flags(const uint32_t flags)
 struct C_MultiStat : public Context {
   vector<bufferlist> bls;
   uint64_t *s;
-  utime_t *m;
+  ceph::real_time *m;
   int *rval;
   Context *ctx;
 
-  C_MultiStat(const Placer &pl, uint64_t *_s, utime_t *_m,
+  C_MultiStat(const Placer &pl, uint64_t *_s, ceph::real_time *_m,
 	      int *_rval, Context *_ctx)
     : bls(pl.get_chunk_count()), s(_s), m(_m),
       rval(_rval), ctx(_ctx) { }
@@ -445,7 +444,7 @@ struct C_MultiStat : public Context {
       bufferlist::iterator p = b.begin();
       try {
 	uint64_t size;
-	utime_t mtime;
+	ceph::real_time mtime;
 	::decode(size, p);
 	::decode(mtime, p);
 	::decode(rtl, p);
@@ -473,8 +472,10 @@ struct C_MultiStat : public Context {
   }
 };
 
-void CohortVolume::StripulatedOp::add_stat_ctx(uint64_t *s, utime_t *m,
-					       int *rval, Context *ctx)
+void CohortVolume::StripulatedOp::add_stat_ctx(uint64_t *s,
+					       ceph::real_time *m,
+					       int *rval,
+					       Context *ctx)
 {
   C_GatherBuilder gather;
   C_MultiStat *f = new C_MultiStat(pl, s, m, rval, ctx);

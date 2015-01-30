@@ -435,9 +435,9 @@ void Server::find_idle_sessions()
 
   // timeout/stale
   //  (caps go stale, lease die)
-  utime_t now = ceph_clock_now(mds->cct);
-  utime_t cutoff = now;
-  cutoff -= mds->cct->_conf->mds_session_timeout;
+  ceph::mono_time now = ceph::mono_clock::now();
+  ceph::mono_time  cutoff = now -= ceph::span_from_double(
+    mds->cct->_conf->mds_session_timeout);
   while (1) {
     Session *session = mds->sessionmap.get_oldest_session(Session::STATE_OPEN);
     if (!session) break;
@@ -457,8 +457,7 @@ void Server::find_idle_sessions()
   }
 
   // autoclose
-  cutoff = now;
-  cutoff -= mds->cct->_conf->mds_session_autoclose;
+  cutoff = now - ceph::span_from_double(mds->cct->_conf->mds_session_autoclose);
 
   // don't kick clients if we've been laggy
   if (mds->laggy_until > cutoff) {
@@ -472,21 +471,24 @@ void Server::find_idle_sessions()
     if (!session)
       break;
     if (session->is_importing()) {
-      ldout(mds->cct, 10) << "stopping at importing session " << session->info.inst << dendl;
+      ldout(mds->cct, 10) << "stopping at importing session "
+			  << session->info.inst << dendl;
       break;
     }
     assert(session->is_stale());
     if (session->last_cap_renew >= cutoff) {
-      ldout(mds->cct, 20) << "oldest stale session is " << session->info.inst << " and sufficiently new ("
-	       << session->last_cap_renew << ")" << dendl;
+      ldout(mds->cct, 20) << "oldest stale session is "
+			  << session->info.inst << " and sufficiently new ("
+			  << session->last_cap_renew << ")" << dendl;
       break;
     }
 
-    utime_t age = now;
-    age -= session->last_cap_renew;
+    ceph::timespan age = now - session->last_cap_renew;
     mds->clog.info() << "closing stale session " << session->info.inst
 	<< " after " << age << "\n";
-    ldout(mds->cct, 10) << "autoclosing stale session " << session->info.inst << " last " << session->last_cap_renew << dendl;
+    ldout(mds->cct, 10) << "autoclosing stale session "
+			<< session->info.inst << " last "
+			<< session->last_cap_renew << dendl;
     kill_session(session);
   }
 }
@@ -555,7 +557,7 @@ void Server::reconnect_clients()
 
   // clients will get the mdsmap and discover we're reconnecting via the monitor.
 
-  reconnect_start = ceph_clock_now(mds->cct);
+  reconnect_start = ceph::mono_clock::now();
   ldout(mds->cct, 1) << "reconnect_clients -- " << client_reconnect_gather.size() << " sessions" << dendl;
   mds->sessionmap.dump();
 }
@@ -574,8 +576,7 @@ void Server::handle_client_reconnect(MClientReconnect *m)
     return;
   }
 
-  utime_t delay = ceph_clock_now(mds->cct);
-  delay -= reconnect_start;
+  ceph::timespan delay = ceph::mono_clock::now() - reconnect_start;
   ldout(mds->cct, 10) << " reconnect_start " << reconnect_start << " delay " << delay << dendl;
 
   if (!mds->is_reconnect()) {
@@ -657,9 +658,9 @@ void Server::reconnect_gather_finish()
 
 void Server::reconnect_tick()
 {
-  utime_t reconnect_end = reconnect_start;
-  reconnect_end += mds->cct->_conf->mds_reconnect_timeout;
-  if (ceph_clock_now(mds->cct) >= reconnect_end &&
+  ceph::mono_time reconnect_end = reconnect_start +
+    ceph::span_from_double(mds->cct->_conf->mds_reconnect_timeout);
+  if (ceph::mono_clock::now() >= reconnect_end &&
       !client_reconnect_gather.empty()) {
     ldout(mds->cct, 10) << "reconnect timed out" << dendl;
     for (set<client_t>::iterator p = client_reconnect_gather.begin();
@@ -837,7 +838,8 @@ void Server::early_reply(MDRequestRef& mdr, CInode *tracei, CDentry *tracedn)
 
   mdr->did_early_reply = true;
 
-  utime_t lat = ceph_clock_now(mds->cct) - mdr->client_request->get_recv_stamp();
+  ceph::timespan lat = ceph::real_clock::now() -
+    mdr->client_request->get_recv_stamp();
   ldout(mds->cct, 20) << "lat " << lat << dendl;
 }
 
@@ -876,7 +878,8 @@ void Server::reply_request(MDRequestRef& mdr, MClientReply *reply, CInode *trace
 
   if (!did_early_reply && !is_replay) {
 
-    utime_t lat = ceph_clock_now(mds->cct) - mdr->client_request->get_recv_stamp();
+    ceph::timespan lat = ceph::real_clock::now()
+      - mdr->client_request->get_recv_stamp();
     ldout(mds->cct, 20) << "lat " << lat << dendl;
 
     if (tracei)
@@ -974,7 +977,7 @@ void Server::set_trace_dist(Session *session, MClientReply *reply,
   bufferlist bl;
   int whoami = mds->get_nodeid();
   client_t client = session->get_client();
-  utime_t now = ceph_clock_now(mds->cct);
+  ceph::real_time now = ceph::real_clock::now();
 
   // dir + dentry?
   if (dn) {
@@ -2221,7 +2224,7 @@ void Server::handle_client_getattr(MDRequestRef& mdr, bool is_lookup)
 
   mdr->getattr_caps = mask;
 
-  mds->balancer->hit_inode(ceph_clock_now(mds->cct), ref, META_POP_IRD,
+  mds->balancer->hit_inode(ceph::real_clock::now(), ref, META_POP_IRD,
 			   mdr->client_request->get_source().num());
 
   // reply
@@ -2423,7 +2426,7 @@ void Server::handle_client_open(MDRequestRef& mdr)
   }
 
   // hit pop
-  mdr->now = ceph_clock_now(mds->cct);
+  mdr->now = ceph::real_clock::now();
   if (cmode == CEPH_FILE_MODE_RDWR ||
       cmode == CEPH_FILE_MODE_WR)
     mds->balancer->hit_inode(mdr->now, cur, META_POP_IWR);
@@ -2535,7 +2538,7 @@ void Server::handle_client_openc(MDRequestRef& mdr)
   // created null dn.
 
   // create inode.
-  mdr->now = ceph_clock_now(mds->cct);
+  mdr->now = ceph::real_clock::now();
 
   CInode *in = prepare_new_inode(mdr, dn->get_dir(), inodeno_t(req->head.ino),
 				 req->head.args.open.mode | S_IFREG);
@@ -2644,7 +2647,7 @@ void Server::handle_client_readdir(MDRequestRef& mdr)
   dir->verify_fragstat();
 #endif
 
-  mdr->now = ceph_clock_now(mds->cct);
+  mdr->now = ceph::real_clock::now();
 
   unsigned max = req->head.args.readdir.max_entries;
   if (!max)
@@ -2770,7 +2773,8 @@ void Server::handle_client_readdir(MDRequestRef& mdr)
 	   << " complete=" << (int)complete << dendl;
 
   // bump popularity.  NOTE: this doesn't quite capture it.
-  mds->balancer->hit_dir(ceph_clock_now(mds->cct), dir, META_POP_IRD, -1, numfiles);
+  mds->balancer->hit_dir(ceph::real_clock::now(), dir,
+			 META_POP_IRD, -1, numfiles);
 
   // reply
   reply_request(mdr, reply, diri);
@@ -3011,7 +3015,7 @@ void Server::handle_client_setattr(MDRequestRef& mdr)
 
   pi = cur->project_inode();
 
-  utime_t now = ceph_clock_now(mds->cct);
+  ceph::real_time now = ceph::real_clock::now();
 
   if (mask & CEPH_SETATTR_MODE)
     pi->mode = (pi->mode & ~07777) | (req->head.args.setattr.mode & 07777);
@@ -3021,9 +3025,9 @@ void Server::handle_client_setattr(MDRequestRef& mdr)
     pi->gid = req->head.args.setattr.gid;
 
   if (mask & CEPH_SETATTR_MTIME)
-    pi->mtime = req->head.args.setattr.mtime;
+    pi->mtime = ceph::spec_to_time(req->head.args.setattr.mtime);
   if (mask & CEPH_SETATTR_ATIME)
-    pi->atime = req->head.args.setattr.atime;
+    pi->atime = ceph::spec_to_time(req->head.args.setattr.atime);
   if (mask & (CEPH_SETATTR_ATIME | CEPH_SETATTR_MTIME))
     pi->time_warp_seq++;   // maybe not a timewarp, but still a serialization point.
   if (mask & CEPH_SETATTR_SIZE) {
@@ -3079,7 +3083,7 @@ void Server::do_open_truncate(MDRequestRef& mdr, int cmode)
 
   // prepare
   inode_t *pi = in->project_inode();
-  pi->mtime = pi->ctime = ceph_clock_now(mds->cct);
+  pi->mtime = pi->ctime = ceph::real_clock::now();
   pi->version = in->pre_dirty();
 
   uint64_t old_size = MAX(pi->size, mdr->client_request->head.args.open.old_size);
@@ -3240,7 +3244,7 @@ void Server::handle_client_setxattr(MDRequestRef& mdr)
   map<string,bufferptr> *px = new map<string,bufferptr>;
   inode_t *pi = cur->project_inode(px);
   pi->version = cur->pre_dirty();
-  pi->ctime = ceph_clock_now(mds->cct);
+  pi->ctime = ceph::real_clock::now();
   pi->xattr_version++;
   px->erase(name);
   if (!(flags & CEPH_XATTR_REMOVE)) {
@@ -3292,7 +3296,7 @@ void Server::handle_client_removexattr(MDRequestRef& mdr)
   map<string,bufferptr> *px = new map<string,bufferptr>;
   inode_t *pi = cur->project_inode(px);
   pi->version = cur->pre_dirty();
-  pi->ctime = ceph_clock_now(mds->cct);
+  pi->ctime = ceph::real_clock::now();
   pi->xattr_version++;
   px->erase(name);
 
@@ -3380,7 +3384,7 @@ void Server::handle_client_mknod(MDRequestRef& mdr)
   if ((mode & S_IFMT) == 0)
     mode |= S_IFREG;
 
-  mdr->now = ceph_clock_now(mds->cct);
+  mdr->now = ceph::real_clock::now();
 
   CInode *newi = prepare_new_inode(mdr, dn->get_dir(), inodeno_t(req->head.ino),
 				   mode);
@@ -3449,7 +3453,7 @@ void Server::handle_client_mkdir(MDRequestRef& mdr)
     return;
 
   // new inode
-  mdr->now = ceph_clock_now(mds->cct);
+  mdr->now = ceph::real_clock::now();
 
   unsigned mode = req->head.args.mkdir.mode;
   mode &= ~S_IFMT;
@@ -3516,7 +3520,7 @@ void Server::handle_client_symlink(MDRequestRef& mdr)
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
     return;
 
-  mdr->now = ceph_clock_now(mds->cct);
+  mdr->now = ceph::real_clock::now();
 
   unsigned mode = S_IFLNK | 0777;
   CInode *newi = prepare_new_inode(mdr, dn->get_dir(), inodeno_t(req->head.ino), mode);
@@ -3590,8 +3594,8 @@ void Server::handle_client_link(MDRequestRef& mdr)
     return;
 
   // pick mtime
-  if (mdr->now == utime_t())
-    mdr->now = ceph_clock_now(mds->cct);
+  if (mdr->now == ceph::real_time::min())
+    mdr->now = ceph::real_clock::now();
 
   // does the target need an anchor?
   if (targeti->is_auth()) {
@@ -4229,8 +4233,8 @@ void Server::handle_client_unlink(MDRequestRef& mdr)
   }
 
   // yay!
-  if (mdr->now == utime_t())
-    mdr->now = ceph_clock_now(mds->cct);
+  if (mdr->now == ceph::real_time::min())
+    mdr->now = ceph::real_clock::now();
 
   // get stray dn ready?
   if (dnl->is_primary()) {
@@ -5052,8 +5056,8 @@ void Server::handle_client_rename(MDRequestRef& mdr)
   }
 
   // -- declare now --
-  if (mdr->now == utime_t())
-    mdr->now = ceph_clock_now(mds->cct);
+  if (mdr->now == ceph::real_time::min())
+    mdr->now = ceph::real_clock::now();
 
   // -- prepare anchor updates --
   if (!linkmerge || srcdnl->is_primary()) {
@@ -6091,7 +6095,8 @@ void Server::_commit_slave_rename(MDRequestRef& mdr, int r,
   }
 }
 
-void _rollback_repair_dir(MutationRef& mut, CDir *dir, rename_rollback::drec &r, utime_t ctime,
+void _rollback_repair_dir(MutationRef& mut, CDir *dir,
+			  rename_rollback::drec &r, ceph::real_time ctime,
 			  bool isdir, int linkunlink, nest_info_t &rstat)
 {
   fnode_t *pf;

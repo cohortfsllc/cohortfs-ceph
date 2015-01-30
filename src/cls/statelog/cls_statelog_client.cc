@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #include <errno.h>
 
 #include "include/types.h"
@@ -26,8 +28,11 @@ void cls_statelog_add(librados::ObjectWriteOperation& op, cls_statelog_entry& en
   op.exec("statelog", "add", in);
 }
 
-void cls_statelog_add_prepare_entry(cls_statelog_entry& entry, const string& client_id, const string& op_id,
-		 const string& object, const utime_t& timestamp, uint32_t state, bufferlist& bl)
+void cls_statelog_add_prepare_entry(cls_statelog_entry& entry,
+				    const string& client_id,
+				    const string& op_id, const string& object,
+				    const ceph::real_time& timestamp,
+				    uint32_t state, bufferlist& bl)
 {
   entry.client_id = client_id;
   entry.op_id = op_id;
@@ -37,8 +42,10 @@ void cls_statelog_add_prepare_entry(cls_statelog_entry& entry, const string& cli
   entry.data = bl;
 }
 
-void cls_statelog_add(librados::ObjectWriteOperation& op, const string& client_id, const string& op_id,
-		 const string& object, const utime_t& timestamp, uint32_t state, bufferlist& bl)
+void cls_statelog_add(librados::ObjectWriteOperation& op,
+		      const string& client_id, const string& op_id,
+		      const string& object, const ceph::real_time& timestamp,
+		      uint32_t state, bufferlist& bl)
 
 {
   cls_statelog_entry entry;
@@ -72,8 +79,9 @@ class StateLogListCtx : public ObjectOperationCompletion {
   string *marker;
   bool *truncated;
 public:
-  StateLogListCtx(list<cls_statelog_entry> *_entries, string *_marker, bool *_truncated) :
-				      entries(_entries), marker(_marker), truncated(_truncated) {}
+  StateLogListCtx(list<cls_statelog_entry> *_entries, string *_marker,
+		  bool *_truncated) : entries(_entries), marker(_marker),
+				      truncated(_truncated) {}
   void handle_completion(int r, bufferlist& outbl) {
     if (r >= 0) {
       cls_statelog_list_ret ret;

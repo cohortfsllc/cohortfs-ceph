@@ -15,8 +15,8 @@
 #ifndef CEPH_ROTATINGKEYRING_H
 #define CEPH_ROTATINGKEYRING_H
 
+#include <mutex>
 #include "common/config.h"
-#include "common/Mutex.h"
 
 #include "auth/Crypto.h"
 #include "auth/Auth.h"
@@ -32,7 +32,9 @@ class RotatingKeyRing : public KeyStore {
   uint32_t service_id;
   RotatingSecrets secrets;
   KeyRing *keyring;
-  mutable Mutex lock;
+  mutable std::mutex lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
 
 public:
   RotatingKeyRing(CephContext *cct_, uint32_t s, KeyRing *kr) :
@@ -41,7 +43,7 @@ public:
     keyring(kr) {}
 
   bool need_new_secrets() const;
-  bool need_new_secrets(utime_t now) const;
+  bool need_new_secrets(ceph::real_time t) const;
   void set_secrets(RotatingSecrets& s);
   void dump_rotating() const;
   bool get_secret(const EntityName& name, CryptoKey& secret) const;

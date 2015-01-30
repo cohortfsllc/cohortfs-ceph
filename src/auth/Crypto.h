@@ -1,4 +1,4 @@
-// -*- mode:C; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -16,7 +16,7 @@
 #define CEPH_AUTH_CRYPTO_H
 
 #include "include/types.h"
-#include "include/utime.h"
+#include "include/ceph_time.h"
 
 #include "common/Formatter.h"
 #include "include/buffer.h"
@@ -32,7 +32,7 @@ class CryptoHandler;
 class CryptoKey {
 protected:
   uint16_t type;
-  utime_t created;
+  ceph::real_time created;
   bufferptr secret;
 
   // cache a pointer to the handler, so we don't have to look it up
@@ -41,7 +41,9 @@ protected:
 
 public:
   CryptoKey() : type(0), ch(NULL) { }
-  CryptoKey(int t, utime_t c, bufferptr& s) : type(t), created(c), secret(s), ch(NULL) { }
+  CryptoKey(int t, ceph::real_time c, bufferptr& s) : type(t),
+    created(c),
+    secret(s), ch(NULL) { }
 
   void encode(bufferlist& bl) const {
     ::encode(type, bl);
@@ -60,7 +62,7 @@ public:
   }
 
   int get_type() const { return type; }
-  utime_t get_created() const { return created; }
+  ceph::real_time get_created() const { return created; }
   void print(std::ostream& out) const;
 
   int set_secret(CephContext *cct, int type, bufferptr& s);

@@ -21,7 +21,6 @@
 
 #include <vector>
 #include <string>
-using namespace std;
 
 
 class MDiscover : public Message {

@@ -12,9 +12,12 @@
  *
  */
 
+#include <condition_variable>
+#include <iostream>
+#include <mutex>
+
 #include <stdio.h>
 #include <string.h>
-#include <iostream>
 #include <time.h>
 #include <sys/mount.h>
 #include "os/ObjectStore.h"
@@ -23,8 +26,6 @@
 #include "include/Context.h"
 #include "common/ceph_argparse.h"
 #include "global/global_init.h"
-#include "common/Mutex.h"
-#include "common/Cond.h"
 #include "common/errno.h"
 #include <boost/scoped_ptr.hpp>
 #include <boost/random/mersenne_twister.hpp>
@@ -37,6 +38,10 @@ typedef boost::mt11213b gen_type;
 static CephContext* cct;
 
 #if GTEST_HAS_PARAM_TEST
+
+typedef std::lock_guard<std::mutex> lock_guard;
+typedef std::unique_lock<std::mutex> unique_lock;
+
 
 class StoreTest : public ::testing::TestWithParam<const char*> {
 public:
@@ -311,8 +316,8 @@ public:
   ObjectStore *store;
   ObjectStore::Sequencer *osr;
 
-  Mutex lock;
-  Cond cond;
+  std::mutex lock;
+  std::condition_variable cond;
 
   class C_SyntheticOnReadable : public Context {
   public:
@@ -324,14 +329,14 @@ public:
       : state(state), t(t), hoid(hoid) {}
 
     void finish(int r) {
-      Mutex::Locker locker(state->lock);
+      lock_guard locker(state->lock);
       ASSERT_TRUE(state->in_flight_objects.count(hoid));
       ASSERT_EQ(r, 0);
       state->in_flight_objects.erase(hoid);
       if (state->contents.count(hoid))
 	state->available_objects.insert(hoid);
       --(state->in_flight);
-      state->cond.Signal();
+      state->cond.notify_all();
     }
   };
 
@@ -364,9 +369,9 @@ public:
     return store->apply_transaction(t);
   }
 
-  oid get_uniform_random_object() {
+  oid get_uniform_random_object(unique_lock& l) {
     while (in_flight >= max_in_flight || available_objects.empty())
-      cond.Wait(lock);
+      cond.wait(l);
     boost::uniform_int<> choose(0, available_objects.size() - 1);
     int index = choose(*rng);
     set<oid>::iterator i = available_objects.begin();
@@ -375,15 +380,15 @@ public:
     return ret;
   }
 
-  void wait_for_ready() {
+  void wait_for_ready(unique_lock& l) {
     while (in_flight >= max_in_flight)
-      cond.Wait(lock);
+      cond.wait(l);
   }
 
   void wait_for_done() {
-    Mutex::Locker locker(lock);
+    unique_lock l(lock);
     while (in_flight)
-      cond.Wait(lock);
+      cond.wait(l);
   }
 
   bool can_create() {
@@ -395,10 +400,10 @@ public:
   }
 
   int touch() {
-    Mutex::Locker locker(lock);
+    unique_lock l(lock);
     if (!can_create())
       return -ENOSPC;
-    wait_for_ready();
+    wait_for_ready(l);
     oid new_obj = object_gen->create_object(rng);
     available_objects.erase(new_obj);
     ObjectStore::Transaction *t = new ObjectStore::Transaction;
@@ -411,12 +416,12 @@ public:
   }
 
   int write() {
-    Mutex::Locker locker(lock);
+    unique_lock l(lock);
     if (!can_unlink())
       return -ENOENT;
-    wait_for_ready();
+    wait_for_ready(l);
 
-    oid new_obj = get_uniform_random_object();
+    oid new_obj = get_uniform_random_object(l);
     available_objects.erase(new_obj);
     ObjectStore::Transaction *t = new ObjectStore::Transaction;
 
@@ -426,7 +431,7 @@ public:
     uint64_t len = u2(*rng);
     bufferlist bl;
     if (offset > len)
-      swap(offset, len);
+      std::swap(offset, len);
 
     filled_byte_array(bl, len);
 
@@ -454,17 +459,17 @@ public:
     uint64_t offset = u1(*rng);
     uint64_t len = u2(*rng);
     if (offset > len)
-      swap(offset, len);
+      std::swap(offset, len);
 
     oid obj;
     int r;
     {
-      Mutex::Locker locker(lock);
+      unique_lock l(lock);
       if (!can_unlink())
 	return ;
-      wait_for_ready();
+      wait_for_ready(l);
 
-      obj = get_uniform_random_object();
+      obj = get_uniform_random_object(l);
     }
     bufferlist bl, result;
     r = store->read(cid, obj, offset, len, result);
@@ -482,12 +487,12 @@ public:
   }
 
   int truncate() {
-    Mutex::Locker locker(lock);
+    unique_lock l(lock);
     if (!can_unlink())
       return -ENOENT;
-    wait_for_ready();
+    wait_for_ready(l);
 
-    oid obj = get_uniform_random_object();
+    oid obj = get_uniform_random_object(l);
     available_objects.erase(obj);
     ObjectStore::Transaction *t = new ObjectStore::Transaction;
 
@@ -509,9 +514,8 @@ public:
   }
 
   void scan() {
-    Mutex::Locker locker(lock);
-    while (in_flight)
-      cond.Wait(lock);
+    unique_lock l(lock);
+    cond.wait(l, [&](){ return in_flight; });
     vector<oid> objects;
     set<oid> objects_set, objects_set2;
     oid next, current;
@@ -547,10 +551,10 @@ public:
   void stat() {
     oid hoid;
     {
-      Mutex::Locker locker(lock);
+      unique_lock l(lock);
       if (!can_unlink())
 	return ;
-      hoid = get_uniform_random_object();
+      hoid = get_uniform_random_object(l);
       in_flight_objects.insert(hoid);
       available_objects.erase(hoid);
       ++in_flight;
@@ -560,33 +564,35 @@ public:
     ASSERT_EQ(0, r);
     ASSERT_TRUE(buf.st_size == contents[hoid].length());
     {
-      Mutex::Locker locker(lock);
+      lock_guard locker(lock);
       --in_flight;
-      cond.Signal();
+      cond.notify_all();
       in_flight_objects.erase(hoid);
       available_objects.insert(hoid);
     }
   }
 
   int unlink() {
-    Mutex::Locker locker(lock);
+    unique_lock l(lock);
     if (!can_unlink())
       return -ENOENT;
-    oid to_remove = get_uniform_random_object();
+    oid to_remove = get_uniform_random_object(l);
     ObjectStore::Transaction *t = new ObjectStore::Transaction;
     t->remove(cid, to_remove);
     ++in_flight;
     available_objects.erase(to_remove);
     in_flight_objects.insert(to_remove);
     contents.erase(to_remove);
-    return store->queue_transaction(osr, t, new C_SyntheticOnReadable(this, t, to_remove));
+    return store->queue_transaction(osr, t, new C_SyntheticOnReadable(
+				      this, t, to_remove));
   }
 
   void print_internal_state() {
-    Mutex::Locker locker(lock);
+    lock_guard locker(lock);
     cerr << "available_objects: " << available_objects.size()
 	 << " in_flight_objects: " << in_flight_objects.size()
-	 << " total objects: " << in_flight_objects.size() + available_objects.size()
+	 << " total objects: " << in_flight_objects.size()
+      + available_objects.size()
 	 << " in_flight " << in_flight << std::endl;
   }
 };

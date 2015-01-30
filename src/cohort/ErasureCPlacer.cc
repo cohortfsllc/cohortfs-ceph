@@ -160,7 +160,7 @@ int ErasureCPlacer::compile(CephContext* cct) const
 
 int ErasureCPlacer::_attach(CephContext* cct, std::stringstream* ss) const
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   int r;
   stringstream rs;
 
@@ -206,7 +206,7 @@ int ErasureCPlacer::_attach(CephContext* cct, std::stringstream* ss) const
 
 void ErasureCPlacer::detach()
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   if (!attached)
     return;
 

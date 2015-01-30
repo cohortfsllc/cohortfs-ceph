@@ -8,6 +8,8 @@
 
 class Backend {
 public:
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
   virtual void write(
     const std::string &oid,
     uint64_t offset,

@@ -15,9 +15,9 @@
 #ifndef CEPH_DECAYCOUNTER_H
 #define CEPH_DECAYCOUNTER_H
 
-#include "include/utime.h"
-
 #include <math.h>
+#include "include/ceph_time.h"
+#include "common/Formatter.h"
 
 /**
  *
@@ -49,16 +49,16 @@ public:
   double val;		// value
   double delta;		// delta since last decay
   double vel;		// recent velocity
-  utime_t last_decay;	// time of last decay
+  ceph::real_time last_decay;	// time of last decay
 
  public:
 
   void encode(bufferlist& bl) const;
-  void decode(const utime_t &t, bufferlist::iterator& p);
+  void decode(bufferlist::iterator& p);
   void dump(Formatter *f) const;
   static void generate_test_instances(std::list<DecayCounter*>& ls);
 
-  DecayCounter(const utime_t &now)
+  DecayCounter(const ceph::real_time &now)
     : val(0), delta(0), vel(0), last_decay(now)
   {
   }
@@ -66,16 +66,11 @@ public:
   // these two functions are for the use of our dencoder testing infrastructure
   DecayCounter() : val(0), delta(0), vel(0), last_decay() {}
 
-  void decode(bufferlist::iterator& p) {
-    utime_t fake_time;
-    decode(fake_time, p);
-  }
-
   /**
    * reading
    */
 
-  double get(utime_t now, const DecayRate& rate) {
+  double get(ceph::real_time now, const DecayRate& rate) {
     decay(now, rate);
     return val;
   }
@@ -88,7 +83,7 @@ public:
     return vel;
   }
 
-  utime_t get_last_decay() {
+  ceph::real_time get_last_decay() {
     return last_decay;
   }
 
@@ -96,7 +91,7 @@ public:
    * adjusting
    */
 
-  double hit(utime_t now, const DecayRate& rate, double v = 1.0) {
+  double hit(ceph::real_time now, const DecayRate& rate, double v = 1.0) {
     decay(now, rate);
     delta += v;
     return val+delta;
@@ -105,7 +100,7 @@ public:
   void adjust(double a) {
     val += a;
   }
-  void adjust(utime_t now, const DecayRate& rate, double a) {
+  void adjust(ceph::real_time now, const DecayRate& rate, double a) {
     decay(now, rate);
     val += a;
   }
@@ -119,17 +114,17 @@ public:
    * decay etc.
    */
 
-  void reset(utime_t now) {
+  void reset(ceph::real_time now) {
     last_decay = now;
     val = delta = 0;
   }
 
-  void decay(utime_t now, const DecayRate &rate);
+  void decay(ceph::real_time now, const DecayRate &rate);
 };
 
 inline void encode(const DecayCounter &c, bufferlist &bl) { c.encode(bl); }
-inline void decode(DecayCounter &c, const utime_t &t, bufferlist::iterator &p) {
-  c.decode(t, p);
+inline void decode(DecayCounter &c, bufferlist::iterator &p) {
+  c.decode(p);
 }
 
 #endif

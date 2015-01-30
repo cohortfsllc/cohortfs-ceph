@@ -147,7 +147,7 @@ int DataHealthService::update_store_stats(DataStats &ours)
   ours.store_stats.bytes_sst = extra["sst"];
   ours.store_stats.bytes_log = extra["log"];
   ours.store_stats.bytes_misc = extra["misc"];
-  ours.last_update = ceph_clock_now(mon->cct);
+  ours.last_update = ceph::real_clock::now();
 
   return 0;
 }
@@ -172,7 +172,7 @@ int DataHealthService::update_stats()
   ldout(mon->cct, 0) << __func__ << " avail " << ours.latest_avail_percent << "%"
 	  << " total " << ours.kb_total << " used " << ours.kb_used << " avail " << ours.kb_avail
 	  << dendl;
-  ours.last_update = ceph_clock_now(mon->cct);
+  ours.last_update = ceph::real_clock::now();
 
   return update_store_stats(ours);
 }

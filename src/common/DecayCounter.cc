@@ -14,19 +14,19 @@
 
 #include "DecayCounter.h"
 #include "Formatter.h"
+#include "include/encoding.h"
 
 void DecayCounter::encode(bufferlist& bl) const
 {
-  ENCODE_START(4, 4, bl);
+  ENCODE_START(1, 1, bl);
   ::encode(val, bl);
   ::encode(delta, bl);
-  ::encode(vel, bl);
   ENCODE_FINISH(bl);
 }
 
-void DecayCounter::decode(const utime_t &t, bufferlist::iterator &p)
+void DecayCounter::decode(bufferlist::iterator &p)
 {
-  DECODE_START_LEGACY_COMPAT_LEN(4, 4, 4, p);
+  DECODE_START(1, p);
   if (struct_v < 2) {
     double half_life;
     ::decode(half_life, p);
@@ -50,30 +50,28 @@ void DecayCounter::dump(Formatter *f) const
 
 void DecayCounter::generate_test_instances(std::list<DecayCounter*>& ls)
 {
-  utime_t fake_time;
-  DecayCounter *counter = new DecayCounter(fake_time);
+  DecayCounter *counter = new DecayCounter(ceph::real_clock::now());
   counter->val = 3.0;
   counter->delta = 2.0;
   counter->vel = 1.0;
   ls.push_back(counter);
-  counter = new DecayCounter(fake_time);
+  counter = new DecayCounter(ceph::real_clock::now());
   ls.push_back(counter);
 }
 
-void DecayCounter::decay(utime_t now, const DecayRate &rate)
+void DecayCounter::decay(ceph::real_time now, const DecayRate &rate)
 {
-  utime_t el = now;
-  el -= last_decay;
+  ceph::timespan el = now - last_decay;
 
-  if (el.sec() >= 1) {
+  if (el >= 1s) {
     // calculate new value
-    double newval = (val+delta) * exp((double)el * rate.k);
+    double newval = (val+delta) * exp(ceph::span_to_double(el) * rate.k);
     if (newval < .01)
       newval = 0.0;
 
     // calculate velocity approx
-    vel += (newval - val) * (double)el;
-    vel *= exp((double)el * rate.k);
+    vel += (newval - val) * ceph::span_to_double(el);
+    vel *= exp(ceph::span_to_double(el) * rate.k);
 
     val = newval;
     delta = 0;

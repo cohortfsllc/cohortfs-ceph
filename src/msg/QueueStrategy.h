@@ -16,6 +16,7 @@
 #ifndef QUEUE_STRATEGY_H
 #define QUEUE_STRATEGY_H
 
+#include <mutex>
 #include <boost/intrusive/list.hpp>
 #include "DispatchStrategy.h"
 #include "Messenger.h"
@@ -23,7 +24,9 @@
 namespace bi = boost::intrusive;
 
 class QueueStrategy : public DispatchStrategy {
-  Mutex lock;
+  std::mutex lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
   int n_threads;
   bool stop;
 

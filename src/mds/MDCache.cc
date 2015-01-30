@@ -148,9 +148,9 @@ MDCache::MDCache(MDS *m) :
 
   last_cap_id = 0;
 
-  client_lease_durations[0] = 5.0;
-  client_lease_durations[1] = 30.0;
-  client_lease_durations[2] = 300.0;
+  client_lease_durations[0] = 5s;
+  client_lease_durations[1] = 30s;
+  client_lease_durations[2] = 300s;
 
   resolves_pending = false;
   rejoins_pending = false;
@@ -266,7 +266,7 @@ CInode *MDCache::create_system_inode(VolumeRef &v, inodeno_t ino, int mode)
   in->inode.mode = 0500 | mode;
   in->inode.size = 0;
   in->inode.ctime =
-    in->inode.mtime = ceph_clock_now(cct);
+    in->inode.mtime = ceph::real_clock::now();
   in->inode.nlink = 1;
   in->inode.truncate_size = -1ull;
 
@@ -464,10 +464,12 @@ struct C_MDS_RetryOpenRoot : public Context {
   VolumeRef vol;
   C_MDS_RetryOpenRoot(MDCache *c, VolumeRef &v) : cache(c), vol(v) {}
   void finish(int r) {
-    if (r < 0)
-      cache->mds->suicide();
-    else
+    if (r < 0) {
+      MDS::unique_lock ml(cache->mds->mds_lock, std::defer_lock);
+      cache->mds->suicide(ml);
+    } else {
       cache->open_root(vol);
+    }
   }
 };
 
@@ -720,7 +722,7 @@ void MDCache::adjust_subtree_auth(CDir *dir, pair<int,int> auth, bool do_eval)
 
     // adjust recursive pop counters
     if (dir->is_auth()) {
-      utime_t now = ceph_clock_now(cct);
+      ceph::real_time now = ceph::real_clock::now();
       CDir *p = dir->get_parent_dir();
       while (p) {
 	p->pop_auth_subtree.sub(now, decayrate, dir->pop_auth_subtree);
@@ -798,7 +800,7 @@ void MDCache::try_subtree_merge_at(CDir *dir, bool do_eval)
 
     // adjust popularity?
     if (dir->is_auth()) {
-      utime_t now = ceph_clock_now(cct);
+      ceph::real_time now = ceph::real_clock::now();
       CDir *p = dir->get_parent_dir();
       while (p) {
 	p->pop_auth_subtree.add(now, decayrate, dir->pop_auth_subtree);
@@ -1408,8 +1410,8 @@ void MDCache::predirty_journal_parents(MutationRef mut, EMetaBlob *blob,
   assert(mds->mdlog->entry_is_open());
 
   // declare now?
-  if (mut->now == utime_t())
-    mut->now = ceph_clock_now(cct);
+  if (mut->now == ceph::real_time::min())
+    mut->now = ceph::real_clock::now();
 
   if (in->is_base())
     return;
@@ -1516,9 +1518,10 @@ void MDCache::predirty_journal_parents(MutationRef mut, EMetaBlob *blob,
     // delay propagating until later?
     if (!stop && !first &&
 	cct->_conf->mds_dirstat_min_interval > 0) {
-      if (pin->last_dirstat_prop.sec() > 0) {
-	double since_last_prop = mut->now - pin->last_dirstat_prop;
-	if (since_last_prop < cct->_conf->mds_dirstat_min_interval) {
+      if (pin->last_dirstat_prop > ceph::real_time::min()) {
+	ceph::timespan since_last_prop = mut->now - pin->last_dirstat_prop;
+	if (since_last_prop < ceph::span_from_double(
+	      cct->_conf->mds_dirstat_min_interval)) {
 	  dout(10) << "predirty_journal_parents last prop " << since_last_prop
 		   << " < " << cct->_conf->mds_dirstat_min_interval
 		   << ", stopping" << dendl;
@@ -5217,7 +5220,7 @@ struct C_MDC_Recover : public Context {
   MDCache *mdc;
   CInode *in;
   uint64_t size;
-  utime_t mtime;
+  ceph::real_time mtime;
   C_MDC_Recover(MDCache *m, CInode *i) : mdc(m), in(i), size(0) {}
   void finish(int r) {
     mdc->_recovered(in, r, size, mtime);
@@ -5261,7 +5264,8 @@ void MDCache::do_file_recover()
   }
 }
 
-void MDCache::_recovered(CInode *in, int r, uint64_t size, utime_t mtime)
+void MDCache::_recovered(CInode *in, int r, uint64_t size,
+			 ceph::real_time mtime)
 {
   dout(10) << "_recovered r=" << r << " size=" << size << " mtime=" << mtime
 	   << " for " << *in << dendl;
@@ -5273,7 +5277,9 @@ void MDCache::_recovered(CInode *in, int r, uint64_t size, utime_t mtime)
   default:
     dout(0) << "recovery error! " << r << dendl;
     if (r == -EBLACKLISTED) {
-      mds->suicide();
+      MDS::unique_lock l(mds->mds_lock);
+      mds->suicide(l);
+      l.unlock();
       return;
     }
     assert(0 == "unexpected error from osd during recovery");
@@ -5306,14 +5312,14 @@ void MDCache::purge_prealloc_ino(inodeno_t ino, Context *fin)
     return;
   }
 
-  dout(10) << "purge_prealloc_ino " << ino << " obj " << obj << dendl;
-  mds->objecter->remove(obj, volume, ceph_clock_now(cct), 0, 0, fin);
+  dout(10) << "purge_prealloc_ino " << ino << " oid " << obj << dendl;
+  mds->objecter->remove(obj, volume, ceph::real_clock::now(), 0, 0, fin);
 }
 
 
 
 
-// ===============================================================================
+// ============================================================================
 
 
 
@@ -5361,7 +5367,7 @@ void MDCache::_truncate_inode(CInode *in, LogSegment *ls)
 
   in->auth_pin(this);
 
-  mds->objecter->trunc(obj, in->volume, ceph_clock_now(NULL), 0,
+  mds->objecter->trunc(obj, in->volume, ceph::real_clock::now(), 0,
 		       pi->truncate_size, pi->truncate_seq,
 		       0, new C_MDC_TruncateFinish(this, in, ls));
 }
@@ -6277,7 +6283,7 @@ void MDCache::dentry_remove_replica(CDentry *dn, int from, set<SimpleLock *>& ga
 
 void MDCache::trim_client_leases()
 {
-  utime_t now = ceph_clock_now(cct);
+  ceph::real_time now = ceph::real_clock::now();
 
   dout(10) << "trim_client_leases" << dendl;
 
@@ -6355,7 +6361,7 @@ public:
 
 void MDCache::shutdown_check()
 {
-  dout(0) << "shutdown_check at " << ceph_clock_now(cct) << dendl;
+  dout(0) << "shutdown_check at " << ceph::real_clock::now() << dendl;
 
   // cache
   char old_val[32] = { 0 };
@@ -6366,7 +6372,9 @@ void MDCache::shutdown_check()
   show_cache();
   cct->_conf->set_val("debug_mds", old_val);
   cct->_conf->apply_changes(NULL);
-  mds->timer.add_event_after(cct->_conf->mds_shutdown_check, new C_MDC_ShutdownCheck(this));
+  mds->timer.add_event_after(
+    ceph::span_from_double(cct->_conf->mds_shutdown_check),
+    new C_MDC_ShutdownCheck(this));
 
   // this
   dout(0) << "lru size now " << lru.lru_get_size() << dendl;
@@ -6379,7 +6387,9 @@ void MDCache::shutdown_start()
   dout(2) << "shutdown_start" << dendl;
 
   if (cct->_conf->mds_shutdown_check)
-    mds->timer.add_event_after(cct->_conf->mds_shutdown_check, new C_MDC_ShutdownCheck(this));
+    mds->timer.add_event_after(
+      ceph::span_from_double(cct->_conf->mds_shutdown_check),
+			     new C_MDC_ShutdownCheck(this));
 
   //  cct->_conf->debug_mds = 10;
 }
@@ -7360,9 +7370,10 @@ void MDCache::_open_ino_backtrace_fetched(inodeno_t ino, bufferlist& bl, int err
       dout(10) << " old object in volume " << info.volume
 	       << ", retrying volume " << backtrace.volume << dendl;
       {
-	const OSDMap* osdmap = mds->objecter->get_osdmap_read();
+	Objecter::shared_lock l;
+	const OSDMap* osdmap = mds->objecter->get_osdmap_read(l);
 	osdmap->find_by_uuid(backtrace.volume, info.volume);
-	mds->objecter->put_osdmap_read();
+	l.unlock();
       }
 
 // XXX error recovery?
@@ -8580,7 +8591,7 @@ void MDCache::purge_stray(CDentry *dn)
 	 p != ls.end();
 	 ++p) {
       dout(10) << "purge_stray remove dirfrag " << obj << dendl;
-      mds->objecter->remove(obj, volume, ceph_clock_now(cct),
+      mds->objecter->remove(obj, volume, ceph::real_clock::now(),
 			    0, NULL, gather.new_sub());
     }
     assert(gather.has_subs());
@@ -8603,7 +8614,8 @@ void MDCache::purge_stray(CDentry *dn)
       uint64_t num = (to + period - 1) / period;
       dout(10) << "purge_stray 0~" << to << " objects 0~" << num
 	       << " on " << *in << dendl;
-      mds->objecter->zero(obj, in->volume, 0, 0, ceph_clock_now(mds->objecter->cct), 0,
+      mds->objecter->zero(obj, in->volume, 0, 0,
+			  ceph::real_clock::now(), 0,
 			  0, gather.new_sub());
     }
   }
@@ -8616,7 +8628,7 @@ void MDCache::purge_stray(CDentry *dn)
     dout(10) << "purge_stray remove backtrace object " << poid
 	     << " volume " << in->volume << dendl;
     mds->objecter->remove(poid, in->volume,
-			  ceph_clock_now(cct), 0, NULL,
+			  ceph::real_clock::now(), 0, NULL,
 			  gather.new_sub());
   }
   // remove old backtrace objects
@@ -8625,9 +8637,10 @@ void MDCache::purge_stray(CDentry *dn)
        ++p) {
     VolumeRef volume;
     {
-      const OSDMap* osdmap = mds->objecter->get_osdmap_read();
+      Objecter::shared_lock l;
+      const OSDMap* osdmap = mds->objecter->get_osdmap_read(l);
       osdmap->find_by_uuid(*p, volume);
-      mds->objecter->put_osdmap_read();
+      l.unlock();
     }
 // XXX error recovery?
     int r = volume->attach(mds->objecter->cct);
@@ -8635,7 +8648,7 @@ void MDCache::purge_stray(CDentry *dn)
       dout(0) << "Unable to attach volume " << volume << " error=" << r << dendl;
       return;
     }
-    mds->objecter->remove(poid, volume, ceph_clock_now(cct), 0,
+    mds->objecter->remove(poid, volume, ceph::real_clock::now(), 0,
 			  NULL, gather.new_sub());
   }
   assert(gather.has_subs());
@@ -10153,7 +10166,7 @@ void MDCache::split_dir(CDir *dir, int bits)
   fragment_info_t& info = fragments[dir->dirfrag()];
   info.dirs.push_back(dir);
   info.bits = bits;
-  info.last_cum_auth_pins_change = ceph_clock_now(cct);
+  info.last_cum_auth_pins_change = ceph::mono_clock::now();
 
   C_GatherBuilder gather(new C_MDC_FragmentFrozen(this, dir->dirfrag()));
   fragment_freeze_dirs(dirs, gather);
@@ -10190,7 +10203,7 @@ void MDCache::merge_dir(CInode *diri, frag_t frag)
   fragment_info_t& info = fragments[df];
   info.dirs = dirs;
   info.bits = -bits;
-  info.last_cum_auth_pins_change = ceph_clock_now(cct);
+  info.last_cum_auth_pins_change = ceph::mono_clock::now();
 
   C_GatherBuilder gather(new C_MDC_FragmentFrozen(this, dirfrag_t(diri->ino(),
 								  frag)));
@@ -10336,9 +10349,9 @@ void MDCache::find_stale_fragment_freeze()
 {
   dout(10) << "find_stale_fragment_freeze" << dendl;
   // see comment in Migrator::find_stale_export_freeze()
-  utime_t now = ceph_clock_now(cct);
-  utime_t cutoff = now;
-  cutoff -= cct->_conf->mds_freeze_tree_timeout;
+  ceph::mono_time now = ceph::mono_clock::now();
+  ceph::mono_time cutoff = now - ceph::span_from_double(
+    cct->_conf->mds_freeze_tree_timeout);
 
   for (map<dirfrag_t,fragment_info_t>::iterator p = fragments.begin();
        p != fragments.end(); ) {
@@ -10676,7 +10689,7 @@ void MDCache::_fragment_committed(dirfrag_t basedirfrag, list<CDir*>& resultfrag
       dout(10) << " removing orphan dirfrag " << obj << dendl;
       op->remove();
     }
-    mds->objecter->mutate(obj, volume, op, ceph_clock_now(cct),
+    mds->objecter->mutate(obj, volume, op, ceph::real_clock::now(),
 			  0, NULL, gather.new_sub());
   }
 

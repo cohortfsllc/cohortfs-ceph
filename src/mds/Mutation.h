@@ -37,7 +37,7 @@ struct MutationImpl {
   metareqid_t reqid;
   uint32_t attempt;	 // which attempt for this request
   LogSegment *ls;  // the log segment i'm committing to
-  utime_t now;
+  ceph::real_time now;
 
   // flag mutation as slave
   int slave_to_mds;		   // this is a slave request if >= 0.

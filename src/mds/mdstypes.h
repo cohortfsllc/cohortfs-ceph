@@ -8,10 +8,7 @@
 #include <ostream>
 #include <set>
 #include <map>
-using namespace std;
-
 #include "common/config.h"
-#include "common/Clock.h"
 #include "common/DecayCounter.h"
 #include "include/Context.h"
 
@@ -116,7 +113,7 @@ struct scatter_info_t {
 
 struct frag_info_t : public scatter_info_t {
   // this frag
-  utime_t mtime;
+  ceph::real_time mtime;
   int64_t nfiles;	 // files
   int64_t nsubdirs;	 // subdirs
 
@@ -161,7 +158,7 @@ ostream& operator<<(ostream &out, const frag_info_t &f);
 
 struct nest_info_t : public scatter_info_t {
   // this frag + children
-  utime_t rctime;
+  ceph::real_time rctime;
   int64_t rbytes;
   int64_t rfiles;
   int64_t rsubdirs;
@@ -297,7 +294,7 @@ struct inode_t {
   uint32_t  rdev;    // if special file
 
   // affected by any inode change...
-  utime_t    ctime;   // inode change time
+  ceph::real_time ctime;   // inode change time
 
   // perm (namespace permissions)
   uint32_t   mode;
@@ -316,8 +313,8 @@ struct inode_t {
   uint32_t   truncate_seq;
   uint64_t   truncate_size, truncate_from;
   uint32_t   truncate_pending;
-  utime_t    mtime;   // file data modify time.
-  utime_t    atime;   // file data access time.
+  ceph::real_time mtime;   // file data modify time.
+  ceph::real_time atime;   // file data access time.
   uint32_t   time_warp_seq;  // count of (potential) mtime/atime timewarps (i.e., utimes())
   bufferlist inline_data;
   version_t  inline_version;
@@ -558,12 +555,12 @@ WRITE_CLASS_ENCODER(cap_reconnect_t)
 
 // compat for pre-FLOCK feature
 struct old_ceph_mds_cap_reconnect {
-	uint64_t cap_id;
-	uint32_t wanted;
-	uint32_t issued;
+  uint64_t cap_id;
+  uint32_t wanted;
+  uint32_t issued;
   uint64_t old_size;
-  struct ceph_timespec old_mtime, old_atime;
-	uint64_t pathbase; /* base ino for our path to this ino */
+  ceph_timespec old_mtime, old_atime;
+  uint64_t pathbase; /* base ino for our path to this ino */
 };
 WRITE_RAW_ENCODER(old_ceph_mds_cap_reconnect)
 
@@ -662,7 +659,7 @@ class inode_load_vec_t {
   static const int NUM = 2;
   std::vector < DecayCounter > vec;
 public:
-  inode_load_vec_t(const utime_t &now)
+  inode_load_vec_t(const ceph::real_time& now)
      : vec(NUM, DecayCounter(now))
   {}
   // for dencoder infrastructure
@@ -673,27 +670,25 @@ public:
     assert(t < NUM);
     return vec[t];
   }
-  void zero(utime_t now) {
+ void zero(ceph::real_time now) {
     for (int i=0; i<NUM; i++)
       vec[i].reset(now);
   }
   void encode(bufferlist &bl) const;
-  void decode(const utime_t &t, bufferlist::iterator &p);
-  // for dencoder
-  void decode(bufferlist::iterator& p) { utime_t sample; decode(sample, p); }
+  void decode(bufferlist::iterator &p);
   void dump(Formatter *f);
   static void generate_test_instances(list<inode_load_vec_t*>& ls);
 };
 inline void encode(const inode_load_vec_t &c, bufferlist &bl) { c.encode(bl); }
-inline void decode(inode_load_vec_t & c, const utime_t &t, bufferlist::iterator &p) {
-  c.decode(t, p);
+inline void decode(inode_load_vec_t &c, bufferlist::iterator &p) {
+  c.decode(p);
 }
 
 class dirfrag_load_vec_t {
 public:
   static const int NUM = 5;
   std::vector < DecayCounter > vec;
-  dirfrag_load_vec_t(const utime_t &now)
+  dirfrag_load_vec_t(const ceph::real_time &now)
      : vec(NUM, DecayCounter(now))
   { }
   // for dencoder infrastructure
@@ -706,16 +701,11 @@ public:
       ::encode(vec[i], bl);
     ENCODE_FINISH(bl);
   }
-  void decode(const utime_t &t, bufferlist::iterator &p) {
+  void decode(bufferlist::iterator &p) {
     DECODE_START_LEGACY_COMPAT_LEN(2, 2, 2, p);
     for (int i=0; i<NUM; i++)
-      ::decode(vec[i], t, p);
+      ::decode(vec[i], p);
     DECODE_FINISH(p);
-  }
-  // for dencoder infrastructure
-  void decode(bufferlist::iterator& p) {
-    utime_t sample;
-    decode(sample, p);
   }
   void dump(Formatter *f) const;
   static void generate_test_instances(list<dirfrag_load_vec_t*>& ls);
@@ -724,15 +714,15 @@ public:
     assert(t < NUM);
     return vec[t];
   }
-  void adjust(utime_t now, const DecayRate& rate, double d) {
+  void adjust(ceph::real_time now, const DecayRate& rate, double d) {
     for (int i=0; i<NUM; i++)
       vec[i].adjust(now, rate, d);
   }
-  void zero(utime_t now) {
+  void zero(ceph::real_time now) {
     for (int i=0; i<NUM; i++)
       vec[i].reset(now);
   }
-  double meta_load(utime_t now, const DecayRate& rate) {
+  double meta_load(ceph::real_time now, const DecayRate& rate) {
     return
       1*vec[META_POP_IRD].get(now, rate) +
       2*vec[META_POP_IWR].get(now, rate) +
@@ -749,11 +739,11 @@ public:
       4*vec[META_POP_STORE].get_last();
   }
 
-  void add(utime_t now, DecayRate& rate, dirfrag_load_vec_t& r) {
-    for (int i=0; i<dirfrag_load_vec_t::NUM; i++)
+  void add(ceph::real_time now, DecayRate& rate, dirfrag_load_vec_t& r) {
+    for (int i = 0; i < dirfrag_load_vec_t::NUM; i++)
       vec[i].adjust(r.vec[i].get(now, rate));
   }
-  void sub(utime_t now, DecayRate& rate, dirfrag_load_vec_t& r) {
+  void sub(ceph::real_time now, DecayRate& rate, dirfrag_load_vec_t& r) {
     for (int i=0; i<dirfrag_load_vec_t::NUM; i++)
       vec[i].adjust(-r.vec[i].get(now, rate));
   }
@@ -764,8 +754,8 @@ public:
 };
 
 inline void encode(const dirfrag_load_vec_t &c, bufferlist &bl) { c.encode(bl); }
-inline void decode(dirfrag_load_vec_t& c, const utime_t &t, bufferlist::iterator &p) {
-  c.decode(t, p);
+inline void decode(dirfrag_load_vec_t& c, bufferlist::iterator &p) {
+  c.decode(p);
 }
 
 inline ostream& operator<<(ostream& out, dirfrag_load_vec_t& dl)
@@ -795,11 +785,11 @@ struct mds_load_t {
 
   double cpu_load_avg;
 
-  mds_load_t(int _mds_bal_mode, const utime_t &t) :
+  mds_load_t(int _mds_bal_mode, const ceph::real_time &t) :
     mds_bal_mode(_mds_bal_mode), auth(t), all(t), req_rate(0),
     cache_hit_rate(0), queue_len(0), cpu_load_avg(0)
   {}
-  mds_load_t(const utime_t &t) :
+  mds_load_t(const ceph::real_time &t) :
     mds_bal_mode(-1), auth(t), all(t), req_rate(0),
     cache_hit_rate(0), queue_len(0), cpu_load_avg(0)
   {}
@@ -811,15 +801,13 @@ struct mds_load_t {
 
   double mds_load();  // defiend in MDBalancer.cc
   void encode(bufferlist& bl) const;
-  void decode(const utime_t& now, bufferlist::iterator& bl);
-  //this one is for dencoder infrastructure
-  void decode(bufferlist::iterator& bl) { utime_t sample; decode(sample, bl); }
+  void decode(bufferlist::iterator& bl);
   void dump(Formatter *f) const;
   static void generate_test_instances(list<mds_load_t*>& ls);
 };
 inline void encode(const mds_load_t &c, bufferlist &bl) { c.encode(bl); }
-inline void decode(mds_load_t &c, const utime_t &t, bufferlist::iterator &p) {
-  c.decode(t, p);
+inline void decode(mds_load_t &c, bufferlist::iterator &p) {
+  c.decode(p);
 }
 
 inline ostream& operator<<( ostream& out, mds_load_t& load )
@@ -840,13 +828,14 @@ public:
   DecayCounter count;
 
 public:
-  load_spread_t(CephContext* cct) : p(0), n(0), count(ceph_clock_now(cct))
+  load_spread_t(CephContext* cct) : p(0), n(0),
+				    count(ceph::real_clock::now())
   {
     for (int i=0; i<MAX; i++)
       last[i] = -1;
   }
 
-  double hit(utime_t now, const DecayRate& rate, int who) {
+  double hit(ceph::real_time now, const DecayRate& rate, int who) {
     for (int i=0; i<n; i++)
       if (last[i] == who)
 	return count.get_last();
@@ -860,7 +849,7 @@ public:
 
     return count.hit(now, rate);
   }
-  double get(utime_t now, const DecayRate& rate) {
+  double get(ceph::real_time now, const DecayRate& rate) {
     return count.get(now, rate);
   }
 };
@@ -895,7 +884,7 @@ struct ClientLease {
   MDSCacheObject *parent;
 
   ceph_seq_t seq;
-  utime_t ttl;
+  ceph::real_time ttl;
   xlist<ClientLease*>::item item_session_lease; // per-session list
   xlist<ClientLease*>::item item_lease;		// global list
 

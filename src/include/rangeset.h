@@ -24,7 +24,6 @@
 
 #include <map>
 #include <iostream>
-using namespace std;
 
 //typedef int T;
 
