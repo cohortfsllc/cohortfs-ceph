@@ -189,6 +189,7 @@ set(libcommon_files
   common/errno.cc
   common/util.cc
   common/SloppyCRCMap.cc
+  common/cohort_lru.cc
   log/Log.cc
   log/SubsystemMap.cc
   mon/MonCap.cc
