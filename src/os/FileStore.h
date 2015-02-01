@@ -110,16 +110,50 @@ public:
       : ObjectStore::Collection(cid), fd(fd), fdcache(NULL) {
       // TODO:  do something
     }
+
     friend class FileStore;
   };
 
   class FSObject : public ObjectStore::Object
   {
   public:
-    FSObject(const hoid_t& oid, const FDRef& _fd)
-      : ObjectStore::Object(oid) {
+    /* XXXX bogus ctor! needs Casey! */
+    FSObject(FSCollection* _fc, const hoid_t& oid)
+      : ObjectStore::Object(oid), fc(_fc) {
+    }
+
+    FSObject(FSCollection* _fc, const hoid_t& oid,
+	     const FDRef& _fd)
+      : ObjectStore::Object(oid), fc(_fc) {
       fd = _fd;
     }
+
+    virtual bool reclaim() {
+      fc->obj_cache.remove(oid.hk, this, cohort::lru::FLAG_NONE);
+      return true;
+    }
+
+    struct FSObjectFactory : public cohort::lru::ObjectFactory
+    {
+      FSCollection* fc;
+      const hoid_t oid;
+
+      FSObjectFactory(FSCollection* _fc, const hoid_t& _oid)
+	: fc(_fc), oid(_oid) {}
+
+      void recycle (cohort::lru::Object* o) {
+	  /* re-use an existing object */
+	  o->~Object(); // call lru::Object virtual dtor
+	  // placement new!
+	  new (o) FSObject(fc, oid);
+      }
+
+      cohort::lru::Object* alloc() {
+	return new FSObject(fc, oid);
+      }
+    };
+
+    FSCollection* fc;
     FDRef fd;
   };
 

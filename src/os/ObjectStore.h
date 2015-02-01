@@ -22,6 +22,7 @@
 #include "include/types.h"
 #include "osd/osd_types.h"
 #include "common/WorkQueue.h"
+#include "common/cohort_lru.h"
 #include "ObjectMap.h"
 
 #include <errno.h>
@@ -49,8 +50,6 @@ namespace bi = boost::intrusive;
  * low-level interface to the local OSD file system
  */
 
-class Logger;
-
 static inline void encode(const map<string,bufferptr>* attrset,
 			  bufferlist &bl) {
   ::encode(*attrset, bl);
@@ -59,28 +58,83 @@ static inline void encode(const map<string,bufferptr>* attrset,
 class ObjectStore {
 protected:
   CephContext* cct;
-  string path;
+  std::string path;
 
 public:
 
-  class Collection {
-  public:
-    const coll_t cid;
-  public:
-    Collection(const coll_t& _cid) : cid(_cid)
-      {}
-    const coll_t& get_cid() {
-      return cid;
-    }
-  };
+  class Object : public cohort::lru::Object {
+  private:
+    cohort::lru::set_hook_type oid_hook;
 
-  class Object {
+  protected:
+    hoid_t oid;
+
   public:
-    const hoid_t oid;
-    Object(const hoid_t& _oid) : oid(_oid)
+    explicit Object(const hoid_t& _oid) : oid(_oid)
       {}
+
     const hoid_t& get_oid() {
       return oid;
+    }
+
+    /* per ObjectStore LRU */
+    const static int n_lanes = 17; // # of lanes in LRU system
+
+    typedef cohort::lru::LRU<n_lanes> ObjLRU;
+
+    const static int n_partitions = 3;
+    const static int cache_size = 373; // per-partiion cache size
+
+    /* per-volume lookup table */
+    struct OidLT
+    {
+      // for internal ordering
+      bool operator()(const Object& lhs,  const Object& rhs) const
+	{  return lhs.oid < rhs.oid; }
+
+      // for external search by hoid_t
+      bool operator()(const hoid_t& oid, const Object& o) const
+	{  return oid < o.oid; }
+
+      bool operator()(const Object& o, const hoid_t& oid) const
+	{  return o.oid < oid;  }
+    };
+
+    struct OidEQ
+    {
+      bool operator()(const Object& lhs,  const Object& rhs) const
+	{  return lhs.oid == rhs.oid; }
+
+      bool operator()(const hoid_t& oid, const Object& o) const
+	{  return oid == o.oid; }
+
+      bool operator()(const Object& o, const hoid_t& oid) const
+	{  return o.oid == oid;  }
+    };
+
+    typedef bi::member_hook<Object, cohort::lru::set_hook_type,
+			    &Object::oid_hook> OidHook;
+
+    typedef cohort::lru::RbtreeX<
+      Object, OidLT, OidEQ, hoid_t, OidHook, n_partitions, cache_size>
+    ObjCache;
+
+  private:
+    friend class Collection;
+  };
+
+  class Collection {
+  protected:
+    Object::ObjCache obj_cache;
+
+  public:
+    const coll_t cid;
+
+    Collection(const coll_t& _cid) : cid(_cid)
+      {}
+
+    const coll_t& get_cid() {
+      return cid;
     }
   };
 
@@ -89,7 +143,6 @@ public:
 
   typedef std::tuple<ObjectStore::CollectionHandle, coll_t, uint8_t> col_slot_t;
   typedef std::tuple<ObjectStore::ObjectHandle, hoid_t, uint8_t> obj_slot_t;
-
 
   /**
    * create - create an ObjectStore instance.
@@ -1290,10 +1343,9 @@ public:
   }
 
  public:
-  ObjectStore(CephContext* _cct, const std::string& path_)
-    : cct(_cct), path(path_) {
-  }
-  virtual ~ObjectStore() {};
+  ObjectStore(CephContext* _cct, const std::string& _path) :
+    path(_path), obj_lru(311 /* XXX move to conf */) {}
+  virtual ~ObjectStore() {}
 
  private:
   // no copying
@@ -1710,6 +1762,9 @@ public:
   // DEBUG
   virtual void inject_data_error(const hoid_t &oid) {}
   virtual void inject_mdata_error(const hoid_t &oid) {}
+
+protected:
+  Object::ObjLRU obj_lru;
 };
 
 typedef ObjectStore::Collection* CollectionHandle;
