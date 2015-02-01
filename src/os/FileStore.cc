@@ -2379,6 +2379,7 @@ FileStore::FSObject* FileStore::get_object(FSCollection* fc,
 					   const SequencerPosition& spos,
 					   bool create)
 {
+#if 0
   FDRef fd;
   FSObject* oh = nullptr;
   int r = lfn_open(fc, oid, false, &fd);
@@ -2388,7 +2389,41 @@ FileStore::FSObject* FileStore::get_object(FSCollection* fc,
       r = lfn_open(fc, oid, true, &fd);
   }
   if (r == 0)
-    oh = new FSObject(oid, fd);
+    oh = new FSObject(fc, oid, fd);
+#else
+  FSObject* oh = nullptr;
+  uint64_t hk = XXH64(oid.oid.name.c_str(), oid.oid.name.size(), 667);
+  Object::ObjCache::Latch lat;
+retry:
+  oh = static_cast<FSObject*>(
+    fc->obj_cache.find_latch(hk, oid, lat, Object::ObjCache::FLAG_LOCK));
+  /* LATCHED */
+  if (oh) {
+    /* need initial ref from LRU (fast path) */
+    if (! obj_lru.ref(oh, cohort::lru::FLAG_INITIAL)) {
+      lat.mtx->unlock();
+      goto retry; /* !LATCHED */
+    }
+    /* LATCHED */
+  } else {
+    /* allocate and insert "new" Object */
+    /* XXX Casey will integrate CollectionIndex */
+    FSObject::FSObjectFactory prototype(fc, oid, hk);
+    oh = static_cast<FSObject*>(
+      obj_lru.insert(&prototype,
+		     cohort::lru::Edge::MRU,
+		     cohort::lru::FLAG_INITIAL));
+    if (oh) {
+      fc->obj_cache.insert_latched(oh, lat, Object::ObjCache::FLAG_UNLOCK);
+      goto out; /* !LATCHED */
+    } else {
+      lat.mtx->unlock();
+      goto retry; /* !LATCHED */
+    }
+  }
+  lat.mtx->unlock(); /* !LATCHED */
+out:
+#endif
   return oh;
 }
 
@@ -2401,7 +2436,7 @@ ObjectHandle FileStore::get_object(CollectionHandle ch,
 
 void FileStore::put_object(FSObject* fo)
 {
-  delete fo;
+  obj_lru.unref(fo, cohort::lru::FLAG_NONE);
 }
 
 void FileStore::put_object(ObjectHandle oh)
