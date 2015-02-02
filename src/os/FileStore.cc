@@ -4077,9 +4077,9 @@ int FileStore::_destroy_collection(FSCollection* fc)
 
   do {
     ulf = false;
-    while ((r = ::readdir_r(d, (struct dirent *)&fn, &dt)) == 0) {
-      ::unlinkat(fc->fd, dt->d_name, 0);
-      ulf = true;
+    while ((r = ::readdir_r(d, (struct dirent *)&fn, &dt)) == 0 && dt) {
+      if (::unlinkat(fc->fd, dt->d_name, 0) == 0)
+        ulf = true;
     }
     if (ulf)
       ::rewinddir(d);
