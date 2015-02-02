@@ -609,7 +609,9 @@ public:
     }
 
     void touch() {
-      touch(col_ix, obj_ix);
+      assert(col_ix > 0);
+      assert(obj_ix > 0);
+      touch(col_ix - 1, obj_ix - 1);
     }
 
     /**
@@ -639,7 +641,9 @@ public:
     }
 
     void write(uint64_t off, uint64_t len, const bufferlist& data) {
-      write(col_ix, obj_ix, off, len, data);
+      assert(col_ix > 0);
+      assert(obj_ix > 0);
+      write(col_ix - 1, obj_ix - 1, off, len, data);
     }
 
     /**
@@ -657,7 +661,9 @@ public:
     }
 
     void zero(uint64_t off, uint64_t len) {
-      zero(col_ix, obj_ix, off, len);
+      assert(col_ix > 0);
+      assert(obj_ix > 0);
+      zero(col_ix - 1, obj_ix - 1, off, len);
     }
 
     /// Discard all data in the object beyond the specified size.
@@ -670,7 +676,9 @@ public:
     }
 
     void truncate(uint64_t off) {
-      truncate(col_ix, obj_ix, off);
+      assert(col_ix > 0);
+      assert(obj_ix > 0);
+      truncate(col_ix - 1, obj_ix - 1, off);
     }
 
     /// Remove an object. All four parts of the object are removed.
@@ -682,7 +690,9 @@ public:
     }
 
     void remove() {
-      remove(col_ix, obj_ix);
+      assert(col_ix > 0);
+      assert(obj_ix > 0);
+      remove(col_ix - 1, obj_ix - 1);
     }
 
     /// Set an xattr of an object
@@ -705,7 +715,9 @@ public:
 
     /// Set an xattr of an object
     void setattr(const string& s, bufferlist& val) {
-      setattr(col_ix, obj_ix, s, val);
+      assert(col_ix > 0);
+      assert(obj_ix > 0);
+      setattr(col_ix - 1, obj_ix - 1, s, val);
     }
 
     /// Set multiple xattrs of an object
@@ -732,11 +744,15 @@ public:
     }
 
     void setattrs(map<string, bufferlist>& attrset) {
-      setattrs(col_ix, obj_ix, attrset);
+      assert(col_ix > 0);
+      assert(obj_ix > 0);
+      setattrs(col_ix - 1, obj_ix - 1, attrset);
     }
 
     void setattrs(map<string, bufferptr>& attrset) {
-      setattrs(col_ix, obj_ix, attrset);
+      assert(col_ix > 0);
+      assert(obj_ix > 0);
+      setattrs(col_ix - 1, obj_ix - 1, attrset);
     }
 
     /// remove an xattr from an object
@@ -754,12 +770,16 @@ public:
     }
 
     void rmattr(const char* name) {
+      assert(col_ix > 0);
+      assert(obj_ix > 0);
       string n(name);
-      rmattr(col_ix, obj_ix, n);
+      rmattr(col_ix - 1, obj_ix - 1, n);
     }
 
     void rmattr(const string& s) {
-      rmattr(col_ix, obj_ix, s);
+      assert(col_ix > 0);
+      assert(obj_ix > 0);
+      rmattr(col_ix - 1, obj_ix - 1, s);
     }
 
     /// remove all xattrs from an object
@@ -771,7 +791,9 @@ public:
     }
 
     void rmattrs() {
-      rmattrs(col_ix, obj_ix);
+      assert(col_ix > 0);
+      assert(obj_ix > 0);
+      rmattrs(col_ix - 1, obj_ix - 1);
     }
 
     /**
@@ -895,12 +917,14 @@ public:
     }
 
     void collection_setattr(const char* name, bufferlist& val) {
+      assert(col_ix > 0);
       string n(name);
-      collection_setattr(col_ix, n, val);
+      collection_setattr(col_ix - 1, n, val);
     }
 
     void collection_setattr(const string& name, bufferlist& val) {
-      collection_setattr(col_ix, name, val);
+      assert(col_ix > 0);
+      collection_setattr(col_ix - 1, name, val);
     }
 
     /// Remove an xattr from a collection
@@ -937,11 +961,13 @@ public:
     }
 
     void collection_setattrs(map<string, bufferlist>& aset) {
-      collection_setattrs(col_ix, aset);
+      assert(col_ix > 0);
+      collection_setattrs(col_ix - 1, aset);
     }
 
     void collection_setattrs(map<string, bufferptr>& aset) {
-      collection_setattrs(col_ix, aset);
+      assert(col_ix > 0);
+      collection_setattrs(col_ix - 1, aset);
     }
 
     /// Change the name of a collection
@@ -965,7 +991,9 @@ public:
     }
 
     void omap_clear() {
-      omap_clear(col_ix, obj_ix);
+      assert(col_ix > 0);
+      assert(obj_ix > 0);
+      omap_clear(col_ix - 1, obj_ix - 1);
     }
 
     /// Set keys on oid omap.  Replaces duplicate keys.
@@ -984,7 +1012,9 @@ public:
     void omap_setkeys(
       const map<string, bufferlist> &attrset ///< [in] Replacement keys and values
       ) {
-      omap_setkeys(col_ix, obj_ix, attrset);
+      assert(col_ix > 0);
+      assert(obj_ix > 0);
+      omap_setkeys(col_ix - 1, obj_ix - 1, attrset);
     }
 
     /// Remove keys from oid omap
@@ -1003,7 +1033,9 @@ public:
     void omap_rmkeys(
       const set<string> &keys ///< [in] Keys to clear
       ) {
-      omap_rmkeys(col_ix, obj_ix, keys);
+      assert(col_ix > 0);
+      assert(obj_ix > 0);
+      omap_rmkeys(col_ix - 1, obj_ix - 1, keys);
     }
 
 
@@ -1038,7 +1070,9 @@ public:
     void omap_setheader(
       const bufferlist &bl  ///< [in] Header value
       ) {
-      omap_setheader(bl);
+      assert(col_ix > 0);
+      assert(obj_ix > 0);
+      omap_setheader(col_ix - 1, obj_ix - 1, bl);
     }
 
     void set_alloc_hint(
@@ -1059,7 +1093,9 @@ public:
       uint64_t expected_object_size,
       uint64_t expected_write_size
     ) {
-      set_alloc_hint(col_ix, obj_ix, expected_object_size,
+      assert(col_ix > 0);
+      assert(obj_ix > 0);
+      set_alloc_hint(col_ix - 1, obj_ix - 1, expected_object_size,
 		     expected_write_size);
     }
 
