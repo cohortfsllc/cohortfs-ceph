@@ -365,9 +365,9 @@ public:
       return obj_slots[ix];
     }
 
-  private:
     ObjectStore* os;
 
+  private:
     // Handle arrays, which UL may provide, if already open
     vector<col_slot_t> col_slots;
     vector<obj_slot_t> obj_slots;
