@@ -423,6 +423,18 @@ public:
     Transaction(const Transaction &rhs);
     Transaction& operator=(const Transaction &rhs);
 
+    void close_collections() {
+      if (os) {
+	for (auto iter = col_slots.begin(); iter != col_slots.end(); ++iter) {
+	  if (std::get<2>(*iter) & FLAG_REF) {
+	    os->close_collection(std::get<0>(*iter));
+	    std::get<0>(*iter) = nullptr;
+	    std::get<2>(*iter) &= ~FLAG_REF;
+	  }
+	}
+      }
+    }
+
     void put_objects() {
       if (os) {
 	for (auto iter = obj_slots.begin(); iter != obj_slots.end(); ++iter) {
@@ -1143,11 +1155,14 @@ public:
 
     ~Transaction() {
       put_objects();
+      close_collections();
     }
 
     // restore Transaction to a newly-constructed state for reuse
     void clear() {
-      put_objects(); // drop existing object refs
+      // drop existing refs
+      put_objects();
+      close_collections();
       os = nullptr;
       col_slots.clear();
       obj_slots.clear();
