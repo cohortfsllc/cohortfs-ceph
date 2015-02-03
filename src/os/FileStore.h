@@ -136,6 +136,7 @@ public:
       get<0>(c_slot) = fc;
       // then mark it for release when t is cleaned up
       get<2>(c_slot) |= ObjectStore::Transaction::FLAG_REF;
+      t.os = this;
     }
     return fc;
   } /* get_slot_collection */
@@ -155,6 +156,7 @@ public:
 	get<0>(o_slot) = fo;
 	// then mark it for release when t is cleaned up
 	get<2>(o_slot) |= ObjectStore::Transaction::FLAG_REF;
+        t.os = this;
       }
     }
     return fo;
