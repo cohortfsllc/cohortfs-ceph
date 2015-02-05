@@ -52,10 +52,11 @@ void usage()
 int main(int argc, const char **argv, const char *envp[]) {
   //cerr << "ceph-fuse starting " << myrank << "/" << world << std::endl;
   vector<const char*> args;
+  static CephContext* fuse_cct;
   argv_to_vec(argc, argv, args);
   env_to_vec(args);
 
-  global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_DAEMON,
+  fuse_cct = global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_DAEMON,
 	      CINIT_FLAG_UNPRIVILEGED_DAEMON_DEFAULTS);
 
   // args for fuse
@@ -64,8 +65,8 @@ int main(int argc, const char **argv, const char *envp[]) {
   vec_to_argv(argv[0], args, &newargc, &newargv);
 
   // FUSE will chdir("/"); be ready.
-  g_ceph_context->_conf->set_val("chdir", "/");
-  g_ceph_context->_conf->apply_changes(NULL);
+  fuse_cct->_conf->set_val("chdir", "/");
+  fuse_cct->_conf->apply_changes(NULL);
 
   // check for 32-bit arch
   if (sizeof(long) == 4) {
@@ -79,34 +80,34 @@ int main(int argc, const char **argv, const char *envp[]) {
   int fd[2] = {0, 0};  // parent's, child's
   pid_t childpid = 0;
   bool restart_log = false;
-  if (g_conf->daemonize) {
+  if (fuse_cct->_conf->daemonize) {
     int r = socketpair(AF_UNIX, SOCK_STREAM, 0, fd);
     if (r < 0) {
       cerr << "ceph-fuse[" << getpid() << "]: unable to create socketpair: " << cpp_strerror(errno) << std::endl;
       exit(1);
     }
 
-    g_ceph_context->_log->stop();
+    fuse_cct->_log->stop();
     restart_log = true;
 
     childpid = fork();
   }
 
   if (childpid == 0) {
-    common_init_finish(g_ceph_context);
+    common_init_finish(fuse_cct);
 
     //cout << "child, mounting" << std::endl;
     ::close(fd[0]);
 
     if (restart_log)
-      g_ceph_context->_log->start();
+      fuse_cct->_log->start();
 
     // get monmap
     Messenger *messenger = NULL;
     Client *client;
     CephFuse *cfuse;
 
-    MonClient mc(g_ceph_context);
+    MonClient mc(fuse_cct);
     int r = mc.build_initial_monmap();
     if (r == -EINVAL)
       usage();
@@ -115,9 +116,9 @@ int main(int argc, const char **argv, const char *envp[]) {
 
     // start up network
 #if defined(HAVE_XIO)
-    if (g_conf->client_rdma) {
+    if (fuse_cct->_conf->client_rdma) {
       XioMessenger *xmsgr
-	= new XioMessenger(g_ceph_context, entity_name_t::CLIENT(-1),
+	= new XioMessenger(fuse_cct, entity_name_t::CLIENT(-1),
 			   "xio client", getpid(), 0 /* portals */,
 			   new QueueStrategy(2) /* dispatch strategy */);
       xmsgr->set_port_shift(111);
@@ -125,12 +126,12 @@ int main(int argc, const char **argv, const char *envp[]) {
 
     }
     else {
-      messenger = Messenger::create(g_ceph_context,
+      messenger = Messenger::create(fuse_cct,
 				    entity_name_t::CLIENT(), "client",
 				    getpid());
     }
 #else
-      messenger = Messenger::create(g_ceph_context,
+      messenger = Messenger::create(fuse_cct,
 				    entity_name_t::CLIENT(), "client",
 				    getpid());
 #endif
@@ -158,7 +159,7 @@ int main(int argc, const char **argv, const char *envp[]) {
 
     // start up fuse
     // use my argc, argv (make sure you pass a mount point!)
-    r = client->mount(g_conf->client_mountpoint.c_str());
+    r = client->mount(fuse_cct->_conf->client_mountpoint.c_str());
     if (r < 0) {
       cerr << "ceph-fuse[" << getpid() << "]: ceph mount failed with " << cpp_strerror(-r) << std::endl;
       goto out_shutdown;
@@ -190,14 +191,14 @@ int main(int argc, const char **argv, const char *envp[]) {
     delete client;
   out_mc_start_failed:
 
-    if (g_conf->daemonize) {
+    if (fuse_cct->_conf->daemonize) {
       //cout << "child signalling parent with " << r << std::endl;
       static int foo = 0;
       foo += ::write(fd[1], &r, sizeof(r));
     }
 
     delete messenger;
-    g_ceph_context->put();
+    fuse_cct->put();
     free(newargv);
 
     //cout << "child done" << std::endl;

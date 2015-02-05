@@ -684,7 +684,7 @@ static void do_init(void *data, fuse_conn_info *bar)
     uint32_t r = 0;
     int err = safe_write(cfuse->fd_on_success, &r, sizeof(r));
     if (err) {
-      derr << "fuse_ll: do_init: safe_write failed with error "
+      lderr(cfuse->client->cct) << "fuse_ll: do_init: safe_write failed with error "
 	   << cpp_strerror(err) << dendl;
       abort();
     }
@@ -813,21 +813,21 @@ int CephFuse::Handle::init(int argc, const char *argv[])
 
   char *mountpoint;
   if (fuse_parse_cmdline(&args, &mountpoint, NULL, NULL) == -1) {
-    derr << "fuse_parse_cmdline failed." << dendl;
+    lderr(client->cct) << "fuse_parse_cmdline failed." << dendl;
     ret = EINVAL;
     goto done;
   }
 
   ch = fuse_mount(mountpoint, &args);
   if (!ch) {
-    derr << "fuse_mount(mountpoint=" << mountpoint << ") failed." << dendl;
+    lderr(client->cct) << "fuse_mount(mountpoint=" << mountpoint << ") failed." << dendl;
     ret = EIO;
     goto done;
   }
 
   se = fuse_lowlevel_new(&args, &fuse_ll_oper, sizeof(fuse_ll_oper), this);
   if (!se) {
-    derr << "fuse_lowlevel_new failed" << dendl;
+    lderr(client->cct) << "fuse_lowlevel_new failed" << dendl;
     ret = EDOM;
     goto done;
   }
@@ -835,7 +835,7 @@ int CephFuse::Handle::init(int argc, const char *argv[])
   signal(SIGTERM, SIG_DFL);
   signal(SIGINT, SIG_DFL);
   if (fuse_set_signal_handlers(se) == -1) {
-    derr << "fuse_set_signal_handlers failed" << dendl;
+    lderr(client->cct) << "fuse_set_signal_handlers failed" << dendl;
     ret = ENOSYS;
     goto done;
   }
