@@ -7568,6 +7568,13 @@ int Client::ll_file_layout(Inode *in, ceph_file_layout *layout)
   return 0;
 }
 
+int Client::ll_file_key(Inode *in, char *buf, uint32_t bufsize)
+{
+  Mutex::Locker lock(client_lock);
+  file_object_t fo(in->ino, 0);
+  return (snprintf(buf, bufsize, "%s", fo.c_str()));
+}
+
 /* Return the offset of the block, internal to the object */
 
 uint64_t Client::ll_get_internal_offset(Inode *in, uint64_t blockno)
