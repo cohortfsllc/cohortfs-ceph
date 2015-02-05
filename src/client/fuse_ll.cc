@@ -454,8 +454,10 @@ static void fuse_ll_flush(fuse_req_t req, fuse_ino_t ino,
 }
 
 #ifdef FUSE_IOCTL_COMPAT
-static void fuse_ll_ioctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg, struct fuse_file_info *fi,
-			  unsigned flags, const void *in_buf, size_t in_bufsz, size_t out_bufsz)
+static void fuse_ll_ioctl(fuse_req_t req, fuse_ino_t ino, int cmd,
+			  void *arg, struct fuse_file_info *fi,
+			  unsigned flags, const void *in_buf,
+			  size_t in_bufsz, size_t out_bufsz)
 {
   CephFuse::Handle *cfuse = (CephFuse::Handle *)fuse_req_userdata(req);
 
@@ -464,20 +466,22 @@ static void fuse_ll_ioctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg, st
     return;
   }
 
-  switch(cmd) {
-    case CEPH_IOC_GET_LAYOUT: {
-      struct ceph_file_layout layout;
-      struct ceph_ioctl_layout l;
-      Fh *fh = (Fh*)fi->fh;
-      cfuse->client->ll_file_layout(fh->inode, &layout);
-      l.stripe_unit = layout.fl_stripe_unit;
-      l.stripe_count = layout.fl_stripe_count;
-      l.object_size = layout.fl_object_size;
-      fuse_reply_ioctl(req, 0, &l, sizeof(struct ceph_ioctl_layout));
-    }
+  switch (cmd) {
+    // This can't be good, but judging by the 'narrowing' warning,
+    // it's happening anyway.
+  case (int)CEPH_IOC_GET_LAYOUT: {
+    struct ceph_file_layout layout;
+    struct ceph_ioctl_layout l;
+    Fh *fh = (Fh*)fi->fh;
+    cfuse->client->ll_file_layout(fh->inode, &layout);
+    l.stripe_unit = layout.fl_stripe_unit;
+    l.stripe_count = layout.fl_stripe_count;
+    l.object_size = layout.fl_object_size;
+    fuse_reply_ioctl(req, 0, &l, sizeof(struct ceph_ioctl_layout));
+  }
     break;
-    default:
-      fuse_reply_err(req, EINVAL);
+  default:
+    fuse_reply_err(req, EINVAL);
   }
 }
 #endif
@@ -698,53 +702,53 @@ static void do_init(void *data, fuse_conn_info *bar)
 }
 
 const static struct fuse_lowlevel_ops fuse_ll_oper = {
- init: do_init,
- destroy: 0,
- lookup: fuse_ll_lookup,
- forget: fuse_ll_forget,
- getattr: fuse_ll_getattr,
- setattr: fuse_ll_setattr,
- readlink: fuse_ll_readlink,
- mknod: fuse_ll_mknod,
- mkdir: fuse_ll_mkdir,
- unlink: fuse_ll_unlink,
- rmdir: fuse_ll_rmdir,
- symlink: fuse_ll_symlink,
- rename: fuse_ll_rename,
- link: fuse_ll_link,
- open: fuse_ll_open,
- read: fuse_ll_read,
- write: fuse_ll_write,
- flush: fuse_ll_flush,
- release: fuse_ll_release,
- fsync: fuse_ll_fsync,
- opendir: fuse_ll_opendir,
- readdir: fuse_ll_readdir,
- releasedir: fuse_ll_releasedir,
- fsyncdir: 0,
- statfs: fuse_ll_statfs,
- setxattr: fuse_ll_setxattr,
- getxattr: fuse_ll_getxattr,
- listxattr: fuse_ll_listxattr,
- removexattr: fuse_ll_removexattr,
- access: fuse_ll_access,
- create: fuse_ll_create,
- getlk: 0,
- setlk: 0,
- bmap: 0,
+  .init = do_init,
+  .destroy = 0,
+  .lookup = fuse_ll_lookup,
+  .forget = fuse_ll_forget,
+  .getattr = fuse_ll_getattr,
+  .setattr = fuse_ll_setattr,
+  .readlink = fuse_ll_readlink,
+  .mknod = fuse_ll_mknod,
+  .mkdir = fuse_ll_mkdir,
+  .unlink = fuse_ll_unlink,
+  .rmdir = fuse_ll_rmdir,
+  .symlink = fuse_ll_symlink,
+  .rename = fuse_ll_rename,
+  .link = fuse_ll_link,
+  .open = fuse_ll_open,
+  .read = fuse_ll_read,
+  .write = fuse_ll_write,
+  .flush = fuse_ll_flush,
+  .release = fuse_ll_release,
+  .fsync = fuse_ll_fsync,
+  .opendir = fuse_ll_opendir,
+  .readdir = fuse_ll_readdir,
+  .releasedir = fuse_ll_releasedir,
+  .fsyncdir = 0,
+  .statfs = fuse_ll_statfs,
+  .setxattr = fuse_ll_setxattr,
+  .getxattr = fuse_ll_getxattr,
+  .listxattr = fuse_ll_listxattr,
+  .removexattr = fuse_ll_removexattr,
+  .access = fuse_ll_access,
+  .create = fuse_ll_create,
+  .getlk = 0,
+  .setlk = 0,
+  .bmap = 0,
 #if FUSE_VERSION >= FUSE_MAKE_VERSION(2, 8)
 #ifdef FUSE_IOCTL_COMPAT
- ioctl: fuse_ll_ioctl,
+  .ioctl = fuse_ll_ioctl,
 #else
- ioctl: 0,
+  .ioctl = 0,
 #endif
- poll: 0,
+  .poll = 0,
 #if FUSE_VERSION > FUSE_MAKE_VERSION(2, 9)
- write_buf: 0,
- retrieve_reply: 0,
- forget_multi: 0,
- flock: 0,
- fallocate: fuse_ll_fallocate
+  .write_buf = 0,
+  .retrieve_reply = 0,
+  .forget_multi = 0,
+  .flock = 0,
+  .fallocate = fuse_ll_fallocate
 #endif
 #endif
 };
