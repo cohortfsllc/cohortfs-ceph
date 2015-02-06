@@ -15,7 +15,7 @@
 #ifndef OS_KEYVALUESTORE_H
 #define OS_KEYVALUESTORE_H
 
-#include "IndexManager.h" // fixes Formatter decl?
+#include "common/oid.h"
 #include "SequencerPosition.h"
 #include <string>
 #include <vector>
