@@ -17,8 +17,6 @@
 
 #include "common/oid.h"
 #include "SequencerPosition.h"
-#include <string>
-#include <vector>
 
 /**
  * Encapsulates the FileStore key value store
