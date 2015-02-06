@@ -1766,3 +1766,8 @@ if (HAVE_LTTNG)
   add_executable(lttng_stream_test lttng_stream_test.cc)
   target_link_libraries(lttng_stream_test common global)
 endif(HAVE_LTTNG)
+
+# test_filenamer
+add_executable(test_filenamer test_filenamer.cc)
+target_link_libraries(test_filenamer os common ${UNITTEST_LIBS})
+set_target_properties(test_filenamer PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})

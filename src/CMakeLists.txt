@@ -376,6 +376,7 @@ set(libos_srcs
   os/ObjectStore.cc
   os/Factory.cc
   os/JournalingObjectStore.cc
+  os/HashPrefixFileNamer.cc
   os/LevelDBStore.cc
   os/DBObjectMap.cc
   os/WBThrottle.cc
