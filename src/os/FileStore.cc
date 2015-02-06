@@ -296,7 +296,6 @@ FileStore::FileStore(CephContext* _cct, const std::string& base, const std::stri
   fsid_fd(-1), op_fd(-1),
   basedir_fd(-1), current_fd(-1),
   generic_backend(NULL), backend(NULL),
-  index_manager(),
   ondisk_finisher(cct),
   force_sync(false), sync_epoch(0),
   stop(false), sync_thread(this),

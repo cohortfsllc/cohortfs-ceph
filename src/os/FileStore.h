@@ -35,7 +35,6 @@
 #include "common/WorkQueue.h"
 #include "common/zipkin_trace.h"
 
-#include "IndexManager.h"
 #include "ObjectMap.h"
 #include "SequencerPosition.h"
 #include "FDCache.h"
@@ -179,11 +178,6 @@ private:
   FileStoreBackend *backend;
 
   deque<uint64_t> snaps;
-
-  // Indexed Collections
-  IndexManager index_manager;
-  int get_index(const coll_t& c, Index *index);
-  int init_index(const coll_t& c);
 
   // ObjectMap
   boost::scoped_ptr<ObjectMap> object_map;
