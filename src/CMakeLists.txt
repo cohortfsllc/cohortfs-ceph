@@ -221,6 +221,8 @@ set(libcommon_files
   common/pick_address.cc
   common/address_helper.cc
   common/linux_version.c
+  xxHash-r39/xxhash.c
+  xxHash-r39/xxhsum.c
   vol/Volume.cc
   cohort/CohortVolume.cc
   osdc/Objecter.cc
