@@ -366,16 +366,18 @@ int MDS::init(int wanted_state)
 
   // verify that osds support tmap2omap
   while (true) {
+    int num_osds;
     objecter->maybe_request_map();
     objecter->wait_for_osd_map();
     const OSDMap* osdmap = objecter->get_osdmap_read();
-    if (osdmap->get_num_up_osds() > 0) {
+    num_osds = osdmap->get_num_up_osds();
+    objecter->put_osdmap_read();
+    if (num_osds > 0) {
 	break;
     } else {
 	derr << "*** no OSDs are up as of epoch "
 	     << osdmap->get_epoch() << ", waiting" << dendl;
     }
-    objecter->put_osdmap_read();
 
     sleep(10);
   }
