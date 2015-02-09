@@ -5335,9 +5335,8 @@ void MDCache::purge_prealloc_ino(inodeno_t ino, Context *fin)
   object_t oid = CInode::get_object_name(ino, frag_t(), "");
   VolumeRef volume(mds->get_metadata_volume());
 // XXX error recovery?
-  int r = volume->attach(mds->objecter->cct);
-  if (r) {
-    dout(0) << "Unable to attach volume " << volume << " error=" << r << dendl;
+  if (!volume) {
+    dout(0) << "Unable to attach volume " << volume << dendl;
     return;
   }
 
@@ -7417,9 +7416,8 @@ void MDCache::_open_ino_backtrace_fetched(inodeno_t ino, bufferlist& bl, int err
 	       << ", retrying volume " << meta_volume << dendl;
       info.volume = meta_volume;
 // XXX error recovery?
-      int r = info.volume->attach(mds->objecter->cct);
-      if (r) {
-	dout(0) << "Unable to attach volume " << info.volume << " error=" << r << dendl;
+      if (!meta_volume) {
+	dout(0) << "Unable to attach volume " << info.volume << dendl;
 	return;
       }
       C_MDC_OpenInoBacktraceFetched *fin = new C_MDC_OpenInoBacktraceFetched(this, ino);
@@ -7653,9 +7651,8 @@ void MDCache::do_open_ino(inodeno_t ino, open_ino_info_t& info, int err)
     info.checking = mds->get_nodeid();
     VolumeRef mvol(mds->get_metadata_volume());
 // XXX error recovery?
-    int r = mvol->attach(mds->objecter->cct);
-    if (r) {
-      dout(0) << "Unable to attach volume " << mvol << " error=" << r << dendl;
+    if (!mvol) {
+      dout(0) << "Unable to attach volume " << mvol << dendl;
       return;
     }
     open_ino(info.ancestors[0].dirino, mvol,
@@ -8608,10 +8605,9 @@ void MDCache::purge_stray(CDentry *dn)
 
   if (in->is_dir()) {
     VolumeRef volume(mds->get_metadata_volume());
-    int r = volume->attach(mds->objecter->cct);
 // XXX error recovery?
-    if (r) {
-      dout(0) << "Unable to attach volume " << volume << " error=" << r << dendl;
+    if (!volume) {
+      dout(0) << "Unable to attach volume " << volume << dendl;
       return;
     }
     list<frag_t> ls;
@@ -10707,10 +10703,8 @@ void MDCache::_fragment_committed(dirfrag_t basedirfrag, list<CDir*>& resultfrag
   C_GatherBuilder gather(new C_MDC_FragmentFinish(this, basedirfrag, resultfrags));
 
   VolumeRef volume(mds->get_metadata_volume());
-// XXX error recovery?
-  int r = volume->attach(mds->objecter->cct);
-  if (r) {
-    dout(0) << "Unable to attach volume " << volume << " error=" << r << dendl;
+  if (!volume) {
+    dout(0) << "Unable to attach volume " << volume << dendl;
     return;
   }
   for (list<frag_t>::iterator p = uf.old_frags.begin();

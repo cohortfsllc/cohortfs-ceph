@@ -181,7 +181,12 @@ class MDS : public Dispatcher {
   ceph_tid_t issue_tid() { return ++last_tid; }
 
   VolumeRef get_metadata_volume() const {
-    return mdsmap->get_metadata_volume(objecter);
+    VolumeRef volume(mdsmap->get_metadata_volume(objecter));
+    if (!volume)
+      return NULL;
+    if (volume->attach(objecter->cct))
+      return NULL;
+    return volume;
   }
 
   // -- waiters --

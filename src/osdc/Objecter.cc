@@ -380,7 +380,7 @@ namespace OSDC {
     // MDS, OSD
     case CEPH_MSG_OSD_MAP:
       handle_osd_map(static_cast<MOSDMap*>(m));
-      return false;
+      return true;
     }
     return false;
   }

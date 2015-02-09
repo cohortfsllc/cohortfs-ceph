@@ -820,12 +820,6 @@ void CInode::store(Context *fin)
     fin->complete(-EDOM);
     return;
   }
-  int r = mvol->attach(mdcache->mds->objecter->cct);
-  if (r) {
-    dout(0) << "Unable to attach volume " << mvol << " error=" << r << dendl;
-    fin->complete(-EDOM);
-    return;
-  }
   unique_ptr<ObjOp> m(mvol->op());
   if (!m) {
     dout(0) << "Unable to make operation for volume " << mvol << dendl;
@@ -876,10 +870,8 @@ void CInode::fetch(Context *fin)
 
   object_t oid = CInode::get_object_name(ino(), frag_t(), "");
   VolumeRef volume(mdcache->mds->get_metadata_volume());
-  assert(!!volume);
-  int r = volume->attach(mdcache->mds->objecter->cct);
-  if (r) {
-    dout(0) << "Unable to attach volume " << volume << " error=" << r << dendl;
+  if (!volume) {
+    dout(0) << "Unable to attach volume " << volume << dendl;
     fin->complete(-EDOM);
     return;
   }
@@ -993,10 +985,8 @@ void CInode::store_backtrace(Context *fin)
   else
     mvol = volume;
 
-  assert(!!mvol);
-  int r = mvol->attach(mdcache->mds->objecter->cct);
-  if (r) {
-    dout(0) << "Unable to attach volume " << mvol << " error=" << r << dendl;
+  if (!mvol) {
+    dout(0) << "Unable to attach volume " << mvol << dendl;
     fin->complete(-EDOM);
     return;
   }
