@@ -157,10 +157,17 @@ public:
 
   private:
     LockState state;
+    bool do_release;
 
   public:
-    Context(RWLock& l) : lock(l) {}
-    Context(RWLock& l, LockState s) : lock(l), state(s) {}
+    Context(RWLock& l) : lock(l), do_release(false) {}
+    Context(RWLock& l, LockState s) : lock(l), state(s), do_release(false) {}
+    Context(RWLock& l, LockState s, bool r) : lock(l), state(s), do_release(r) {}
+    ~Context() {
+      if (do_release && state != Untaken) {
+	lock.unlock();
+      }
+    }
 
     void get_write() {
       assert(state == Untaken);
