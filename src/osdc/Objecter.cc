@@ -465,7 +465,8 @@ namespace OSDC {
 
   void Objecter::handle_osd_map(MOSDMap *m)
   {
-    RWLock::WLocker wl(rwlock);
+    RWLock::Context lc(rwlock, RWLock::Context::Untaken, true);
+    lc.get_write();
     if (!initialized)
       return;
 
@@ -577,8 +578,6 @@ namespace OSDC {
       assert(r == 0);
     }
 
-    RWLock::Context lc(rwlock, RWLock::Context::TakenForWrite);
-
     // resend requests
     for (auto& kv : need_resend) {
       SubOp* subop = kv.second;
@@ -623,6 +622,11 @@ namespace OSDC {
       }
     }
 #endif
+
+	// XXX does not appear to be a safe way to demote a write to a read lock.
+	// this may be bad? -mdw 20150209
+    lc.unlock();
+    lc.get_read();
 
     // finish any Contexts that were waiting on a map update
     map<epoch_t,list< pair< Context*, int > > >::iterator p =
