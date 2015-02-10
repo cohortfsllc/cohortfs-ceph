@@ -149,7 +149,7 @@ public:
   // Returns negative POSIX error code on error.
   virtual ssize_t op_size() const = 0;
   // Returns minimum number of subops that need to be placed to continue
-  virtual int32_t quorum() const = 0;
+  virtual uint32_t quorum() const = 0;
 };
 
 WRITE_CLASS_ENCODER(Volume)

@@ -93,7 +93,7 @@ public:
 	  return one_op * erasure->get_chunk_count();
   }
 
-  virtual int32_t quorum() const {
+  virtual uint32_t quorum() const {
 	  if (!attached) {
       abort();
     }
@@ -145,15 +145,11 @@ public:
   virtual void serialize_data(bufferlist &bl);
   virtual void serialize_code(bufferlist &bl);
 
-  int encode(const set<int> &want_to_encode,
-		     const bufferlist &in,
-		     map<int, bufferlist> *encoded) const {
-    return erasure->encode(want_to_encode, in, encoded);
-  };
-  int decode_concat(const map<int, bufferlist> &chunks,
-		    bufferlist *decoded) const {
-    return erasure->decode_concat(chunks, decoded);
-  };
+  // Data and metadata operations using the placer
+  virtual void add_data(const uint64_t off, bufferlist& in,
+			vector<StrideExtent>& out) const;
+  virtual int get_data(map<int, bufferlist> &strides, bufferlist
+			    *decoded) const;
 };
 
 #endif // COHORT_ERASURECPLACER_H

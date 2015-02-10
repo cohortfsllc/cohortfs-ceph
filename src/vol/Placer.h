@@ -36,6 +36,7 @@ using namespace std;
 
 enum placer_type {
   ErasureCPlacerType,
+  StripedPlacerType,
   NotAPlacerType
 };
 
@@ -99,12 +100,14 @@ public:
   struct StrideExtent {
     uint64_t offset;
     uint64_t length;
+    bufferlist bl;
     uint64_t truncate_size;
     uint32_t truncate_seq;
 
     StrideExtent():
       offset(),
       length(),
+      bl(),
       truncate_size(),
       truncate_seq()
     { }
@@ -147,7 +150,7 @@ public:
   // Returns negative POSIX error code on error.
   virtual ssize_t op_size() const = 0;
   // Returns minimum number of subops that need to be placed to continue
-  virtual int32_t quorum() const = 0;
+  virtual uint32_t quorum() const = 0;
 
   virtual void make_strides(const object_t& oid,
 			    uint64_t offset, uint64_t len,
@@ -159,6 +162,16 @@ public:
 
   virtual void serialize_data(bufferlist &bl) = 0;
   virtual void serialize_code(bufferlist &bl) = 0;
+
+  virtual size_t get_chunk_count() const = 0;
+  virtual size_t get_data_chunk_count() const = 0;
+  virtual uint32_t get_stripe_unit() const = 0;
+
+  // Data and metadata operations using the placer
+  virtual void add_data(const uint64_t off, bufferlist& in,
+			vector<StrideExtent>& out) const = 0;
+  virtual int get_data(map<int, bufferlist> &strides,
+		    bufferlist *decoded) const = 0;
 };
 
 WRITE_CLASS_ENCODER(Placer)

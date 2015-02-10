@@ -25,7 +25,7 @@ class CohortVolume : public Volume
   friend struct C_MultiRead;
 
 protected:
-  ErasureCPlacerRef placer;
+  PlacerRef placer;
   CohortVolume(vol_type t)
     : Volume(t) {}
   virtual PlacerRef getPlacer() const {
@@ -42,7 +42,7 @@ protected:
 	  return placer->op_size();
   }
 
-  virtual int32_t quorum() const {
+  virtual uint32_t quorum() const {
 	  return placer->quorum();
   }
 
@@ -64,14 +64,14 @@ protected:
 
   class StripulatedOp : public ObjOp {
     friend CohortVolume;
-    const ErasureCPlacer& pl;
+    const Placer& pl;
     // ops[n][m] is the mth operation in the nth stride
     vector<vector<OSDOp> > ops;
     size_t logical_operations;
 
     virtual ~StripulatedOp() { }
 
-    StripulatedOp(const ErasureCPlacer& pl);
+    StripulatedOp(const Placer& pl);
     virtual size_t size() {
       return logical_operations;
     }
@@ -87,11 +87,10 @@ protected:
     virtual void add_single_return(bufferlist* bl, int* rval = NULL,
 				   Context *ctx = NULL);
 
-    virtual void add_replicated_data(const bufferlist& bl);
-    virtual void add_striped_data(const uint64_t off,
-				  const bufferlist& bl);
-    virtual void add_striped_range(const uint64_t off,
-				   const uint64_t len);
+    virtual void add_metadata(const bufferlist& bl);
+    virtual void add_metadata_range(const uint64_t off, const uint64_t len);
+    virtual void add_data(const uint64_t off, const bufferlist& bl);
+    virtual void add_data_range(const uint64_t off, const uint64_t len);
     virtual void add_xattr(const string &name, const bufferlist& data);
     virtual void add_xattr(const string &name, bufferlist* data);
     virtual void add_xattr_cmp(const string &name, uint8_t cmp_op,

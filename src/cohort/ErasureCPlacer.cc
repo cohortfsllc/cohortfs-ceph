@@ -524,3 +524,68 @@ void ErasureCPlacer::serialize_code(bufferlist &bl)
 {
   return;
 }
+
+void ErasureCPlacer::add_data(const uint64_t off, bufferlist& in,
+			      vector<StrideExtent>& out) const
+{
+  const uint32_t stripe_size = get_stripe_unit() * get_data_chunk_count();
+  set<int> want;
+  for (unsigned i = 0; i < get_chunk_count(); ++i) {
+    want.insert(i);
+  }
+  assert(in.length());
+  assert(off % stripe_size == 0);
+  assert(out.size() == get_chunk_count());
+
+  // Pad
+  if (in.length() % stripe_size)
+    in.append_zero(stripe_size - ((off + in.length()) % stripe_size));
+
+  for (uint64_t i = 0; i < in.length(); i += stripe_size) {
+    map<int, bufferlist> encoded;
+    bufferlist buf;
+    buf.substr_of(in, i, stripe_size);
+    int r = erasure->encode(want, buf, &encoded);
+    assert(r == 0);
+    for (auto &p : encoded) {
+      assert(p.second.length() == get_stripe_unit());
+      assert(p.first <= (int)out.size());
+      out[p.first].bl.claim_append(p.second);
+      out[p.first].offset = off / get_data_chunk_count();
+      out[p.first].length = in.length() / get_data_chunk_count();
+    }
+  }
+}
+
+int ErasureCPlacer::get_data(map<int, bufferlist> &strides,
+			     bufferlist *decoded) const
+{
+  uint64_t stride_size
+    = std::max_element(strides.begin(), strides.end(),
+		       [](pair<int, bufferlist> x, pair<int, bufferlist> y) {
+		       return x.second.length() < y.second.length();
+		       })->second.length();
+
+  for (uint64_t i = 0; i < stride_size; i += get_stripe_unit()) {
+    map<int, bufferlist> chunks;
+    for (auto &p : strides) {
+      if (chunks.size() == get_data_chunk_count()) {
+	break;
+      }
+      if (p.second.length() < i + get_stripe_unit()) {
+	continue;
+      }
+      chunks[p.first].substr_of(p.second, i, get_stripe_unit());
+    }
+    if (chunks.size() < get_data_chunk_count()) {
+      return -1;
+    }
+    bufferlist stripebuf;
+    int s = erasure->decode_concat(chunks, &stripebuf);
+    if (s != 0)
+      return s;
+    decoded->claim_append(stripebuf);
+  }
+
+  return 0;
+};

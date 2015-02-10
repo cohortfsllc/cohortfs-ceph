@@ -31,13 +31,18 @@ WRITE_RAW_ENCODER(placer_type);
 using std::stringstream;
 
 const std::string Placer::typestrings[] = {
-  "ErasureCPlacer", "NotAPlacerType"
+  "ErasureCPlacer",
+  "StripedPlacer",
+  "NotAPlacerType"
 };
 
 PlacerRef ErasureCPlacerFactory(bufferlist::iterator& bl, uint8_t v);
+PlacerRef StripedPlacerFactory(bufferlist::iterator& bl, uint8_t v);
 
 const Placer::factory Placer::factories[] = {
-  ErasureCPlacerFactory, NULL
+  ErasureCPlacerFactory,
+  StripedPlacerFactory,
+  NULL
 };
 
 

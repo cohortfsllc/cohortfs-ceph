@@ -55,14 +55,15 @@ public:
   virtual void add_oid(const hobject_t &oid) = 0;
   virtual void add_single_return(bufferlist* bl, int* rval = NULL,
 				 Context* ctx = NULL) = 0;
-  /* Add input data to an op that is replicated across all targets */
-  virtual void add_replicated_data(const bufferlist& bl) = 0;
-  /* Add input data to an op that is striped across targets */
-  virtual void add_striped_data(const uint64_t off,
-				const bufferlist& bl) = 0;
-  /* Add offset/length pair striped across targets */
-  virtual void add_striped_range(const uint64_t off,
-				 const uint64_t len) = 0;
+  /* Add metadata (or commands) to an op */
+  virtual void add_metadata(const bufferlist& bl) = 0;
+  /* Add a metadata offset/length */
+  virtual void add_metadata_range(const uint64_t off, const uint64_t len) = 0;
+  /* Add data to an op */
+  virtual void add_data(const uint64_t off, const bufferlist& bl) = 0;
+  /* Add a data offset/length */
+  virtual void add_data_range(const uint64_t off, const uint64_t len) = 0;
+
   virtual void add_xattr(const string &name, bufferlist* data = NULL) = 0;
   virtual void add_xattr(const string &name, const bufferlist &data) = 0;
   virtual void add_xattr_cmp(const string &name, uint8_t cmp_op,
@@ -104,7 +105,7 @@ public:
       set_op_flags(CEPH_OSD_OP_FLAG_EXCL);
     bufferlist bl;
     ::encode(category, bl);
-    add_replicated_data(bl);
+    add_metadata(bl);
   }
 
   void stat(uint64_t *size, utime_t *mtime, int *rval = NULL) {
@@ -133,7 +134,7 @@ public:
 	     uint64_t truncate_size = 0,
 	     uint32_t truncate_seq = 0) {
     add_op(CEPH_OSD_OP_WRITE);
-    add_striped_data(off, bl);
+    add_data(off, bl);
     add_truncate(truncate_size, truncate_seq);
   }
   void write(uint64_t off, uint64_t len, const bufferlist& bl,
@@ -142,34 +143,34 @@ public:
     add_op(CEPH_OSD_OP_WRITE);
     bufferlist buf;
     buf.substr_of(bl, 0, len);
-    add_striped_data(off, buf);
+    add_data(off, buf);
     add_truncate(truncate_size, truncate_seq);
   }
   void write_full(const bufferlist& bl) {
     add_op(CEPH_OSD_OP_WRITEFULL);
-    add_striped_data(0, bl);
+    add_data(0, bl);
   }
   void append(const bufferlist& bl) {
     add_op(CEPH_OSD_OP_APPEND);
-    add_striped_data(0, bl);
+    add_data(0, bl);
   }
   void append(const uint64_t len, const bufferlist& bl) {
     add_op(CEPH_OSD_OP_APPEND);
     bufferlist buf;
     buf.substr_of(buf, 0, len);
-    add_striped_data(0,  bl);
+    add_data(0,  bl);
   }
   void zero(uint64_t off, uint64_t len) {
     add_op(CEPH_OSD_OP_ZERO);
-    add_striped_range(off, len);
+    add_data_range(off, len);
   }
   void truncate(uint64_t len) {
     add_op(CEPH_OSD_OP_TRUNCATE);
-    add_striped_range(0, len);
+    add_data_range(0, len);
   }
   void truncate(uint64_t len, uint32_t truncate_seq) {
     add_op(CEPH_OSD_OP_TRUNCATE);
-    add_striped_range(0, len);
+    add_data_range(0, len);
     add_truncate(len, truncate_seq);
   }
   void remove() {
@@ -301,7 +302,7 @@ public:
     bufferlist bl;
     ::encode(start_after, bl);
     ::encode(max_to_get, bl);
-    add_replicated_data(bl);
+    add_metadata(bl);
     if (rval || out_set) {
       C_ObjectOperation_decodekeys *h =
 	new C_ObjectOperation_decodekeys(out_set, rval);
@@ -319,7 +320,7 @@ public:
     ::encode(start_after, bl);
     ::encode(max_to_get, bl);
     ::encode(filter_prefix, bl);
-    add_replicated_data(bl);
+    add_metadata(bl);
     C_ObjectOperation_decodevals *h =
       new C_ObjectOperation_decodevals(out_set, rval);
     add_single_return(&h->bl, rval, h);
@@ -331,7 +332,7 @@ public:
     add_op(CEPH_OSD_OP_OMAPGETVALSBYKEYS);
     bufferlist bl;
     ::encode(to_get, bl);
-    add_replicated_data(bl);
+    add_metadata(bl);
     C_ObjectOperation_decodevals *h =
       new C_ObjectOperation_decodevals(out_set, rval);
     add_single_return(&h->bl, rval, h);
@@ -342,7 +343,7 @@ public:
     add_op(CEPH_OSD_OP_OMAP_CMP);
     bufferlist bl;
     ::encode(assertions, bl);
-    add_replicated_data(bl);
+    add_metadata(bl);
     if (rval) {
       add_single_return(NULL, rval, NULL);
     }
@@ -357,12 +358,12 @@ public:
     bufferlist bl;
     ::encode(map, bl);
     add_op(CEPH_OSD_OP_OMAPSETVALS);
-    add_replicated_data(bl);
+    add_metadata(bl);
   }
 
   void omap_set_header(bufferlist &bl) {
     add_op(CEPH_OSD_OP_OMAPSETHEADER);
-    add_replicated_data(bl);
+    add_metadata(bl);
   }
 
   void omap_clear() {
@@ -373,7 +374,7 @@ public:
     bufferlist bl;
     ::encode(to_remove, bl);
     add_op(CEPH_OSD_OP_OMAPRMKEYS);
-    add_replicated_data(bl);
+    add_metadata(bl);
   }
 
   // object classes

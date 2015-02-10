@@ -225,6 +225,7 @@ set(libcommon_files
   vol/Placer.cc
   cohort/CohortVolume.cc
   cohort/ErasureCPlacer.cc
+  cohort/StripedPlacer.cc
   osdc/Objecter.cc
   ${arch_files}
   ${auth_files}
