@@ -469,17 +469,8 @@ static void fuse_ll_ioctl(fuse_req_t req, fuse_ino_t ino, int cmd,
   switch (cmd) {
     // This can't be good, but judging by the 'narrowing' warning,
     // it's happening anyway.
-  case (int)CEPH_IOC_GET_LAYOUT: {
-    struct ceph_file_layout layout;
-    struct ceph_ioctl_layout l;
-    Fh *fh = (Fh*)fi->fh;
-    cfuse->client->ll_file_layout(fh->inode, &layout);
-    l.stripe_unit = layout.fl_stripe_unit;
-    l.stripe_count = layout.fl_stripe_count;
-    l.object_size = layout.fl_object_size;
-    fuse_reply_ioctl(req, 0, &l, sizeof(struct ceph_ioctl_layout));
-  }
-    break;
+//  case (int)CEPH_IOC_GET_LAYOUT:	-- placeholder
+//  break;
   default:
     fuse_reply_err(req, EINVAL);
   }

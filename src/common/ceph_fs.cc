@@ -11,48 +11,6 @@
  */
 #include "include/types.h"
 
-void ceph_file_layout::encode(bufferlist &bl) const {
-    ::encode(fl_stripe_unit, bl);
-    ::encode(fl_stripe_count, bl);
-    ::encode(fl_object_size, bl);
-    ::encode_raw(fl_uuid, bl);
-}
-void ceph_file_layout::decode(bufferlist::iterator &bl) {
-    ::decode(fl_stripe_unit, bl);
-    ::decode(fl_stripe_count, bl);
-    ::decode(fl_object_size, bl);
-    ::decode_raw(fl_uuid, bl);
-}
-void ceph_dir_layout::encode(bufferlist &bl) const {
-	::encode(dl_dir_hash, bl);
-}
-void ceph_dir_layout::decode(bufferlist::iterator &bl) {
-	::decode(dl_dir_hash, bl);
-}
-
-/*
- * return true if @layout appears to be valid
- */
-int ceph_file_layout_is_valid(const struct ceph_file_layout *layout)
-{
-	uint32_t su = layout->fl_stripe_unit;
-	uint32_t sc = layout->fl_stripe_count;
-	uint32_t os = layout->fl_object_size;
-
-	/* stripe unit, object size must be non-zero, 64k increment */
-	if (!su || (su & (CEPH_MIN_STRIPE_UNIT-1)))
-		return 0;
-	if (!os || (os & (CEPH_MIN_STRIPE_UNIT-1)))
-		return 0;
-	/* object size must be a multiple of stripe unit */
-	if (os < su || os % su)
-		return 0;
-	/* stripe count must be non-zero */
-	if (!sc)
-		return 0;
-	return 1;
-}
-
 
 int ceph_flags_to_mode(int flags)
 {

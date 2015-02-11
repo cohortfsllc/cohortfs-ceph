@@ -94,8 +94,6 @@
 
 using namespace std;
 
-extern struct ceph_file_layout g_default_file_layout;
-
 #include "common/config.h"
 
 #define dout_subsys ceph_subsys_mds
@@ -164,8 +162,6 @@ MDCache::MDCache(MDS *m) :
   lru.lru_set_midpoint(cct->_conf->mds_cache_mid);
 
   decayrate.set_halflife(cct->_conf->mds_decay_halflife);
-
-  memset(&default_log_layout, 0, sizeof(default_log_layout));
 
   did_shutdown_log_cap = false;
 }
@@ -262,19 +258,6 @@ void MDCache::remove_inode(CInode *o)
 
 
 
-void MDCache::init_layouts()
-{
-  default_file_layout = g_default_file_layout;
-  default_file_layout.fl_uuid =  mds->mdsmap->get_metadata_uuid();
-
-  default_log_layout = g_default_file_layout;
-  default_log_layout.fl_uuid = mds->mdsmap->get_metadata_uuid();
-  if (cct->_conf->mds_log_segment_size > 0) {
-    default_log_layout.fl_object_size = cct->_conf->mds_log_segment_size;
-    default_log_layout.fl_stripe_unit = cct->_conf->mds_log_segment_size;
-  }
-}
-
 CInode *MDCache::create_system_inode(inodeno_t ino, int mode)
 {
   dout(0) << "creating system inode with ino:" << ino << dendl;
@@ -288,13 +271,9 @@ CInode *MDCache::create_system_inode(inodeno_t ino, int mode)
   in->inode.nlink = 1;
   in->inode.truncate_size = -1ull;
 
-  memset(&in->inode.dir_layout, 0, sizeof(in->inode.dir_layout));
   if (in->inode.is_dir()) {
-    memset(&in->inode.layout, 0, sizeof(in->inode.layout));
-    in->inode.dir_layout.dl_dir_hash = cct->_conf->mds_default_dir_hash;
     ++in->inode.rstat.rsubdirs;
   } else {
-    in->inode.layout = default_file_layout;
     ++in->inode.rstat.rfiles;
   }
   in->inode.accounted_rstat = in->inode.rstat;
@@ -313,8 +292,6 @@ CInode *MDCache::create_system_inode(inodeno_t ino, int mode)
 CInode *MDCache::create_root_inode()
 {
   CInode *i = create_system_inode(MDS_INO_ROOT, S_IFDIR|0755);
-  i->inode.layout = default_file_layout;
-  i->inode.layout.fl_uuid = mds->mdsmap->get_first_data_volume();
   return i;
 }
 
@@ -1375,8 +1352,8 @@ void MDCache::journal_dirty_inode(MutationImpl *mut, EMetaBlob *metablob,
   } else {
     CDentry *dn = in->get_projected_parent_dn();
     if (in->get_projected_inode()->is_backtrace_updated()) {
-      bool dirty_vol = in->get_projected_inode()->layout.fl_uuid !=
-			in->get_previous_projected_inode()->layout.fl_uuid;
+      bool dirty_vol = in->get_projected_inode()->volume !=
+			in->get_previous_projected_inode()->volume;
       metablob->add_primary_dentry(dn, in, true, true, dirty_vol);
     } else {
       metablob->add_primary_dentry(dn, in, true);
@@ -4679,13 +4656,6 @@ bool MDCache::process_imported_caps()
     if (cap_imports_missing.count(p->first) > 0)
       continue;
 
-	// XXX error processing here?
-    VolumeRef volume;
-    {
-      const OSDMap* osdmap = mds->objecter->get_osdmap_read();
-      osdmap->find_by_uuid(in->inode.layout.fl_uuid, volume);
-      mds->objecter->put_osdmap_read();
-    }
     int r = volume->attach(mds->objecter->cct);
     if (r) {
       dout(0) << "Unable to attach volume " << volume << " error=" << r << dendl;
@@ -4693,7 +4663,7 @@ bool MDCache::process_imported_caps()
 
     cap_imports_num_opening++;
     dout(10) << "  opening missing ino " << p->first << dendl;
-    open_ino(p->first, volume, new C_MDC_RejoinOpenInoFinish(this, p->first), false);
+    open_ino(p->first, in->volume, new C_MDC_RejoinOpenInoFinish(this, p->first), false);
   }
 
   if (cap_imports_num_opening > 0)
@@ -7822,12 +7792,8 @@ void MDCache::open_ino(inodeno_t ino, VolumeRef volume, Context* fin,
     info.waiters.push_back(fin);
   } else {
     open_ino_info_t& info = opening_inodes[ino];
-    if (!volume) {
-      const OSDMap* osdmap = mds->objecter->get_osdmap_read();
-      osdmap->find_by_uuid(default_file_layout.fl_uuid, volume);
-      mds->objecter->put_osdmap_read();
-    }
-// XXX error recovery?
+    assert(!!volume);
+// used to be find_by_uuid if !volume - must fix upstream of here.
     int r = volume->attach(mds->objecter->cct);
     if (r) {
       dout(0) << "Unable to attach volume " << volume << " error=" << r << dendl;
@@ -8626,6 +8592,7 @@ void MDCache::purge_stray(CDentry *dn)
     return;
   }
 
+#if 0
   if (in->is_file()) {
     uint64_t period = (uint64_t)in->inode.layout.fl_object_size *
 		      (uint64_t)in->inode.layout.fl_stripe_count;
@@ -8644,26 +8611,15 @@ void MDCache::purge_stray(CDentry *dn)
 			  0, gather.new_sub());
     }
   }
+#endif
 
   inode_t *pi = in->get_projected_inode();
   object_t poid = CInode::get_object_name(pi->ino, frag_t(), "");
   // remove the backtrace object if it was not purged
   if (!gather.has_subs()) {
-    VolumeRef volume;
-    {
-      const OSDMap* osdmap = mds->objecter->get_osdmap_read();
-      osdmap->find_by_uuid(pi->layout.fl_uuid, volume);
-      mds->objecter->put_osdmap_read();
-    }
-// XXX error recovery?
-    int r = volume->attach(mds->objecter->cct);
-    if (r) {
-      dout(0) << "Unable to attach volume " << volume << " error=" << r << dendl;
-      return;
-    }
     dout(10) << "purge_stray remove backtrace object " << poid
-	     << " volume " << volume << dendl;
-    mds->objecter->remove(poid, volume,
+	     << " volume " << in->volume << dendl;
+    mds->objecter->remove(poid, in->volume,
 			  ceph_clock_now(cct), 0, NULL,
 			  gather.new_sub());
   }

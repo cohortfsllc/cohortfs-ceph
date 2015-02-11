@@ -213,8 +213,6 @@ struct ltstr
 #include "encoding.h"
 
 WRITE_RAW_ENCODER(ceph_fsid)
-// WRITE_RAW_ENCODER(ceph_file_layout)
-// WRITE_RAW_ENCODER(ceph_dir_layout)
 WRITE_RAW_ENCODER(ceph_mds_session_head)
 WRITE_RAW_ENCODER(ceph_mds_request_head)
 WRITE_RAW_ENCODER(ceph_mds_request_release)
@@ -330,8 +328,6 @@ static inline bool file_mode_is_readonly(int mode) {
 namespace ceph {
   class Formatter;
 }
-void dump(const ceph_file_layout& l, ceph::Formatter *f);
-void dump(const ceph_dir_layout& l, ceph::Formatter *f);
 
 
 // --

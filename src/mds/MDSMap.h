@@ -221,7 +221,7 @@ public:
   MDSMap(CephContext* _cct = nullptr)
     : epoch(0), flags(0), last_failure(0), last_failure_osd_epoch(0),
       tableserver(0), root(0), session_timeout(0), session_autoclose(0),
-      max_file_size(0), cas_uuid(), metadata_volume(0), max_mds(0) {
+      max_file_size(0), metadata_volume(0), max_mds(0) {
     if (_cct) {
       cct = _cct;
       cct->get();
@@ -264,9 +264,6 @@ public:
   int get_tableserver() const { return tableserver; }
   int get_root() const { return root; }
 
-  const set<boost::uuids::uuid>& get_data_volumes() const { return data_volumes; }
-  const boost::uuids::uuid& get_first_data_volume() const { return *data_volumes.begin(); }
-  const boost::uuids::uuid& get_cas_uuid() const { return cas_uuid; }
   VolumeRef get_metadata_volume(Objecter *objecter) {
     if (!metadata_volume) {
       metadata_volume = objecter->vol_by_uuid(metadata_uuid);
@@ -276,9 +273,6 @@ public:
   }
   boost::uuids::uuid get_metadata_uuid() const {
     return metadata_uuid;
-  }
-  bool is_data_volume(const boost::uuids::uuid& volume) const {
-    return data_volumes.count(volume);
   }
 
   const map<uint64_t,mds_info_t>& get_mds_info() { return mds_info; }
@@ -318,18 +312,6 @@ public:
 	 ++p)
       if (p->second.state == state) ++n;
     return n;
-  }
-
-  // data pools
-  void add_data_volume(const boost::uuids::uuid& uuid) {
-    data_volumes.insert(uuid);
-  }
-  int remove_data_volume(const boost::uuids::uuid& uuid) {
-    auto p = data_volumes.find(uuid);
-    if (p == data_volumes.end())
-      return -ENOENT;
-    data_volumes.erase(p);
-    return 0;
   }
 
   // sets

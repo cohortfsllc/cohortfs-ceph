@@ -600,7 +600,7 @@ void Client::_fragmap_remove_non_leaves(Inode *in)
       ++p;
 }
 
-Inode * Client::add_update_inode(InodeStat *st, utime_t from,
+Inode * Client::add_update_inode(InodeStat *st, VolumeRef volume, utime_t from,
 				 MetaSession *session)
 {
   Inode *in;
@@ -610,7 +610,7 @@ Inode * Client::add_update_inode(InodeStat *st, utime_t from,
     ldout(cct, 12) << "add_update_inode had " << *in << " caps "
 		   << ccap_string(st->cap.caps) << dendl;
   } else {
-    in = new Inode(cct, st->vino, &st->layout);
+    in = new Inode(cct, st->vino, volume->uuid);
     inode_map[st->vino] = in;
     if (!root) {
       root = in;
@@ -990,7 +990,7 @@ Inode* Client::insert_trace(MetaRequest *request, MetaSession *session)
   }
 
   if (reply->head.is_dentry) {
-    Inode *diri = add_update_inode(&dirst, request->sent_stamp, session);
+    Inode *diri = add_update_inode(&dirst, dir->inode->volume, request->sent_stamp, session);
     update_dir_dist(diri, &dst);  // dir stat info is attached to ..
 
     if (in) {
@@ -4285,7 +4285,8 @@ int Client::fill_stat(Inode *in, struct stat *st, frag_info_t *dirstat,
     st->st_size = in->size;
     st->st_blocks = (in->size + 511) >> 9;
   }
-  st->st_blksize = MAX(in->layout.fl_stripe_unit, 4096);
+  // XXX how to figure out stripe size?
+  st->st_blksize = MAX(0/*stripe_unit*/, 4096);
 
   if (dirstat)
     *dirstat = in->dirstat;
@@ -5088,8 +5089,7 @@ int Client::getdir(const char *relpath, list<string>& contents)
 
 
 /****** file i/o **********/
-int Client::open(const char *relpath, int flags, mode_t mode, int stripe_unit,
-    int stripe_count, int object_size, const char *data_pool)
+int Client::open(const char *relpath, int flags, mode_t mode)
 {
   ldout(cct, 3) << "open enter(" << relpath << ", " << flags << "," << mode << ") = " << dendl;
   Mutex::Locker lock(client_lock);
@@ -5113,8 +5113,7 @@ int Client::open(const char *relpath, int flags, mode_t mode, int stripe_unit,
     r = path_walk(dirpath, &dir);
     if (r < 0)
       return r;
-    r = _create(dir, dname.c_str(), flags, mode, &in, &fh, stripe_unit,
-		stripe_count, object_size, data_pool, &created);
+    r = _create(dir, dname.c_str(), flags, mode, &in, &fh, &created);
   }
   if (r < 0)
     goto out;
@@ -5274,7 +5273,7 @@ Fh *Client::_create_fh(Inode *in, int flags, int cmode)
   f->inode->get();
   {
     const OSDMap* osdmap = objecter->get_osdmap_read();
-    osdmap->find_by_uuid(in->layout.fl_uuid, f->vol);
+    osdmap->find_by_uuid(in->uuid, f->vol);
     objecter->put_osdmap_read();
     if (!f->vol) {
 	ldout(cct,3) << "__create_fh: cannot find volume "
@@ -5459,7 +5458,7 @@ int Client::uninline_data(Inode *in, Context *onfinish)
   VolumeRef mvol;
   {
     const OSDMap* osdmap = objecter->get_osdmap_read();
-    osdmap->find_by_uuid(in->layout.fl_uuid, mvol);
+    osdmap->find_by_uuid(in->uuid, mvol);
     objecter->put_osdmap_read();
   }
   if (!mvol) {
@@ -5712,7 +5711,7 @@ int Client::_read_async(Fh *f, uint64_t off, uint64_t len, bufferlist *bl)
       l = MAX(l, conf->client_readahead_min);
     if (conf->client_readahead_max_bytes)
       l = MIN(l, conf->client_readahead_max_bytes);
-    loff_t p = in->layout.fl_stripe_count * in->layout.fl_object_size;
+    loff_t p = 1<<22 ; // stripe_unit * object_size
     if (conf->client_readahead_max_periods)
       l = MIN(l, conf->client_readahead_max_periods * p);
 
@@ -5721,7 +5720,8 @@ int Client::_read_async(Fh *f, uint64_t off, uint64_t len, bufferlist *bl)
       l -= (off+l) % p;
     else {
       // align readahead with stripe unit if we cross su boundary
-      int su = in->layout.fl_stripe_unit;
+// XXX how to figure out stripe size?
+      int su = 1<<22;	// stripe_unit
       if ((off+l)/su != off/su) l -= (off+l) % su;
     }
 
@@ -5736,12 +5736,12 @@ int Client::_read_async(Fh *f, uint64_t off, uint64_t len, bufferlist *bl)
 		   << off << "~" << l << " min " << min
 		   << " (caller wants " << off << "~" << len << ")" << dendl;
     if (l > (loff_t)len) {
-      if (objectcacher->file_is_cached(&in->oset, &in->layout,
+      if (objectcacher->file_is_cached(&in->oset, &in->uuid,
 				       off, min))
 	ldout(cct, 20) << "readahead already have min" << dendl;
       else {
 	Context *onfinish = new C_Readahead(this, in);
-	int r = objectcacher->file_read(&in->oset, &in->layout,
+	int r = objectcacher->file_read(&in->oset, &in->uuid,
 					off, l, NULL, 0, onfinish);
 	if (r == 0) {
 	  ldout(cct, 20) << "readahead initiated, c " << onfinish << dendl;
@@ -5760,7 +5760,7 @@ int Client::_read_async(Fh *f, uint64_t off, uint64_t len, bufferlist *bl)
   Cond cond;
   bool done = false;
   Context *onfinish = new C_SafeCond(&flock, &cond, &done, &rvalue);
-  r = objectcacher->file_read(&in->oset, &in->layout,
+  r = objectcacher->file_read(&in->oset, &in->uuid,
 			      off, len, bl, 0, onfinish);
   if (r == 0) {
     get_cap_ref(in, CEPH_CAP_FILE_CACHE);
@@ -6009,7 +6009,7 @@ int Client::_write(Fh *f, int64_t offset, uint64_t size, const char *buf)
     get_cap_ref(in, CEPH_CAP_FILE_BUFFER);
 
     // async, caching, non-blocking.
-    r = objectcacher->file_write(&in->oset, &in->layout,
+    r = objectcacher->file_write(&in->oset, &in->uuid,
 				 offset, size, bl, ceph_clock_now(cct), 0,
 				 client_lock);
 
@@ -7052,8 +7052,7 @@ int Client::ll_mknod(Inode *parent, const char *name, mode_t mode,
 }
 
 int Client::_create(Inode *dir, const char *name, int flags, mode_t mode,
-		    Inode **inp, Fh **fhp, int stripe_unit, int stripe_count,
-		    int object_size, const char *data_pool, bool *created,
+		    Inode **inp, Fh **fhp, bool *created,
 		    int uid, int gid)
 {
   ldout(cct, 3) << "_create(" << dir->ino << " " << name << ", 0" << oct <<
@@ -7066,17 +7065,6 @@ int Client::_create(Inode *dir, const char *name, int flags, mode_t mode,
   if (cmode < 0)
     return -EINVAL;
 
-#if 0
-  int64_t pool_id = -1;
-  if (data_pool && *data_pool) {
-    pool_id = osdmap->lookup_pg_pool_name(data_pool);
-    if (pool_id < 0)
-      return -EINVAL;
-    if (pool_id > 0xffffffffll)
-      return -ERANGE;  // bummer!
-  }
-#endif
-
   MetaRequest *req = new MetaRequest(CEPH_MDS_OP_CREATE);
 
   filepath path;
@@ -7087,12 +7075,6 @@ int Client::_create(Inode *dir, const char *name, int flags, mode_t mode,
   req->head.args.open.flags = flags | O_CREAT;
   req->head.args.open.mode = mode;
 
-  req->head.args.open.stripe_unit = stripe_unit;
-  req->head.args.open.stripe_count = stripe_count;
-  req->head.args.open.object_size = object_size;
-#if 0
-  req->head.args.open.pool = pool_id;
-#endif
   req->dentry_drop = CEPH_CAP_FILE_SHARED;
   req->dentry_unless = CEPH_CAP_FILE_EXCL;
 
@@ -7120,9 +7102,6 @@ int Client::_create(Inode *dir, const char *name, int flags, mode_t mode,
   trim_cache();
 
   ldout(cct, 3) << "create(" << path << ", 0" << oct << mode << dec
-		<< " layout " << stripe_unit
-		<< ' ' << stripe_count
-		<< ' ' << object_size
 		<<") = " << res << dendl;
   return res;
 
@@ -7562,6 +7541,7 @@ int Client::ll_osdaddr(int osd, uint32_t *addr)
   return 0;
 }
 
+#if 0
 uint32_t Client::ll_stripe_unit(Inode *in)
 {
   Mutex::Locker lock(client_lock);
@@ -7594,6 +7574,7 @@ uint64_t Client::ll_get_internal_offset(Inode *in, uint64_t blockno)
 
   return (blockno % stripes_per_object) * su;
 }
+#endif
 
 int Client::ll_opendir(Inode *in, dir_result_t** dirpp, int uid, int gid)
 {
@@ -7755,6 +7736,7 @@ int Client::ll_read(Fh *fh, loff_t off, loff_t len, bufferlist *bl)
   return _read(fh, off, len, bl);
 }
 
+#if 0
 int Client::ll_read_block(Inode *in, uint64_t blockid,
 			  char *buf,
 			  uint64_t offset,
@@ -7798,6 +7780,7 @@ int Client::ll_read_block(Inode *in, uint64_t blockid,
 
   return r;
 }
+#endif
 
 /* It appears that the OSD doesn't return success unless the entire
    buffer was written, return the write length on success. */
@@ -8131,39 +8114,6 @@ int Client::ll_release(Fh *fh)
 // =========================================
 // layout
 
-// expose file layouts
-
-int Client::describe_layout(const char *relpath, ceph_file_layout *lp)
-{
-  Mutex::Locker lock(client_lock);
-
-  filepath path(relpath);
-  Inode *in;
-  int r = path_walk(path, &in);
-  if (r < 0)
-    return r;
-
-  *lp = in->layout;
-
-  ldout(cct, 3) << "describe_layout(" << relpath << ") = 0" << dendl;
-  return 0;
-}
-
-int Client::fdescribe_layout(int fd, ceph_file_layout *lp)
-{
-  Mutex::Locker lock(client_lock);
-
-  Fh *f = get_filehandle(fd);
-  if (!f)
-    return -EBADF;
-  Inode *in = f->inode;
-
-  *lp = in->layout;
-
-  ldout(cct, 3) << "fdescribe_layout(" << fd << ") = 0" << dendl;
-  return 0;
-}
-
 int Client::get_osd_addr(int osd, entity_addr_t& addr)
 {
   bool exists;
@@ -8179,14 +8129,6 @@ int Client::get_osd_addr(int osd, entity_addr_t& addr)
 
   return 0;
 }
-
-#if 0
-int Client::enumerate_layout(int fd, vector<ObjectExtent>& result,
-			     loff_t length, loff_t offset)
-{
-  return -EBADF;
-}
-#endif
 
 
 /*

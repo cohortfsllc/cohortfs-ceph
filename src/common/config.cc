@@ -64,13 +64,6 @@ using std::cout;
 #define quote_2(x)	quote_1(x)
 const char *CEPH_CONF_FILE_DEFAULT = quote_2(CEPH_CONF_SYS_DEFAULT) "/$cluster.conf, ~/.ceph/$cluster.conf, $cluster.conf";
 
-// file layouts
-struct ceph_file_layout g_default_file_layout = {
-  .fl_stripe_unit = 1<<22,
-  .fl_stripe_count = 1,
-  .fl_object_size = 1<<22
-};
-
 #define _STR(x) #x
 #define STRINGIFY(x) _STR(x)
 
