@@ -138,10 +138,6 @@ void MDSMap::dump(Formatter *f) const
     f->close_section();
   }
   f->close_section();
-  f->open_array_section("data_volumes");
-  for (auto p : data_volumes)
-    f->dump_stream("uuid") << p;
-  f->close_section();
   f->dump_stream("metadata_uuid") << metadata_uuid;
   f->dump_bool("inline_data", inline_data_enabled);
 }
@@ -152,17 +148,10 @@ void MDSMap::generate_test_instances(list<MDSMap*>& ls)
   m->max_mds = 1;
   boost::uuids::string_generator parse;
 
-  boost::uuids::uuid uuid1, uuid2, uuid3;
+  boost::uuids::uuid uuid1, uuid2;
   uuid1 = parse("5a9e54a4-7740-4d03-b0fb-e1f3b899b185");
   uuid2 = parse("5edbdba8-af1a-4b48-8f2f-1ec5cf84efbe");
-  uuid3 = parse("e9013f90-e7a3-4f69-bb85-bcf74559e68d");
   m->metadata_uuid = uuid1;
-  m->cas_uuid = uuid2;
-  m->data_volumes.insert(uuid3);
-#if 0
-  m->metadata_pool = 1;
-  m->cas_pool = 2;
-#endif
   m->compat = get_mdsmap_compat_set_all();
 
   // these aren't the defaults, just in case anybody gets confused
@@ -191,7 +180,6 @@ void MDSMap::print(ostream& out)
       << "up\t" << up << "\n"
       << "failed\t" << failed << "\n"
       << "stopped\t" << stopped << "\n";
-  out << "data_volumes\t" << data_volumes << "\n";
   out << "metadata_volume\t" << metadata_uuid << "\n";
   out << "inline_data\t" << (inline_data_enabled ? "enabled" : "disabled") << "\n";
 
@@ -431,8 +419,6 @@ void MDSMap::encode(bufferlist& bl, uint64_t features) const
   ::encode(max_file_size, bl);
   ::encode(max_mds, bl);
   ::encode(mds_info, bl, features);
-  ::encode(data_volumes, bl);
-  ::encode(cas_uuid, bl);
 
   // kclient ignores everything from here
   uint16_t ev = 87;
@@ -464,10 +450,6 @@ void MDSMap::decode(bufferlist::iterator& p)
   ::decode(max_file_size, p);
   ::decode(max_mds, p);
   ::decode(mds_info, p);
-  if (1) {
-    ::decode(data_volumes, p);
-    ::decode(cas_uuid, p);
-  }
 
   // kclient ignores everything from here
   uint16_t ev = 87;

@@ -1140,12 +1140,6 @@ void Server::dispatch_client_request(MDRequestRef& mdr)
   case CEPH_MDS_OP_SETATTR:
     handle_client_setattr(mdr);
     break;
-  case CEPH_MDS_OP_SETLAYOUT:
-    handle_client_setlayout(mdr);
-    break;
-  case CEPH_MDS_OP_SETDIRLAYOUT:
-    handle_client_setdirlayout(mdr);
-    break;
   case CEPH_MDS_OP_SETXATTR:
     handle_client_setxattr(mdr);
     break;
@@ -1803,8 +1797,7 @@ CDentry* Server::prepare_stray_dentry(MDRequestRef& mdr, CInode *in)
  *
  * create a new inode.	set c/m/atime.	hit dir pop.
  */
-CInode* Server::prepare_new_inode(MDRequestRef& mdr, CDir *dir, inodeno_t useino, unsigned mode,
-				  ceph_file_layout *layout)
+CInode* Server::prepare_new_inode(MDRequestRef& mdr, CDir *dir, inodeno_t useino, unsigned mode)
 {
   CInode *in = new CInode(mdcache);
 
@@ -1845,20 +1838,7 @@ CInode* Server::prepare_new_inode(MDRequestRef& mdr, CDir *dir, inodeno_t useino
 
   in->inode.mode = mode;
 
-  memset(&in->inode.dir_layout, 0, sizeof(in->inode.dir_layout));
-  if (in->inode.is_dir()) {
-    in->inode.dir_layout.dl_dir_hash = mds->cct->_conf->mds_default_dir_hash;
-    memset(&in->inode.layout, 0, sizeof(in->inode.layout));
-  } else if (layout) {
-    in->inode.layout = *layout;
-  } else {
-    in->inode.layout = mds->mdcache->default_file_layout;
-  }
-  {
-    const OSDMap* osdmap = mds->objecter->get_osdmap_read();
-    osdmap->find_by_uuid(in->inode.layout.fl_uuid, in->volume);
-    mds->objecter->put_osdmap_read();
-  }
+  in->inode.volume = volume;
 
   in->inode.truncate_size = -1ull;  // not truncated, yet!
   in->inode.truncate_seq = 1; /* starting with 1, 0 is kept for no-truncation logic */
@@ -1992,7 +1972,6 @@ CInode* Server::rdlock_path_pin_ref(MDRequestRef& mdr, int n,
 				    set<SimpleLock*> &rdlocks,
 				    bool want_auth,
 				    bool no_want_auth,
-				    ceph_file_layout **layout,
 				    bool no_lookup)    // true if we cannot return a null dentry lease
 {
   MClientRequest *req = mdr->client_request;
@@ -2067,8 +2046,7 @@ CInode* Server::rdlock_path_pin_ref(MDRequestRef& mdr, int n,
  */
 CDentry* Server::rdlock_path_xlock_dentry(MDRequestRef& mdr, int n,
 					  set<SimpleLock*>& rdlocks, set<SimpleLock*>& wrlocks, set<SimpleLock*>& xlocks,
-					  bool okexist, bool mustexist, bool alwaysxlock,
-					  ceph_file_layout **layout)
+					  bool okexist, bool mustexist, bool alwaysxlock)
 {
   MClientRequest *req = mdr->client_request;
   const filepath& refpath = n ? req->get_filepath2() : req->get_filepath();
@@ -2216,7 +2194,7 @@ void Server::handle_client_getattr(MDRequestRef& mdr, bool is_lookup)
     return;
   }
 
-  CInode *ref = rdlock_path_pin_ref(mdr, 0, rdlocks, false, false, NULL, !is_lookup);
+  CInode *ref = rdlock_path_pin_ref(mdr, 0, rdlocks, false, false, !is_lookup);
   if (!ref) return;
 
   /*
@@ -2536,49 +2514,9 @@ void Server::handle_client_openc(MDRequestRef& mdr)
 
   bool excl = (req->head.args.open.flags & O_EXCL);
   set<SimpleLock*> rdlocks, wrlocks, xlocks;
-  ceph_file_layout *dir_layout = NULL;
   CDentry *dn = rdlock_path_xlock_dentry(mdr, 0, rdlocks, wrlocks, xlocks,
-					 !excl, false, false, &dir_layout);
+					 !excl, false, false);
   if (!dn) return;
-  // set layout
-  ceph_file_layout layout;
-  if (dir_layout)
-    layout = *dir_layout;
-  else
-    layout = mds->mdcache->default_file_layout;
-
-  // fill in any special params from client
-  if (req->head.args.open.stripe_unit)
-    layout.fl_stripe_unit = req->head.args.open.stripe_unit;
-  if (req->head.args.open.stripe_count)
-    layout.fl_stripe_count = req->head.args.open.stripe_count;
-  if (req->head.args.open.object_size)
-    layout.fl_object_size = req->head.args.open.object_size;
-#if 0
-  if (req->get_connection()->has_feature(CEPH_FEATURE_CREATEPOOLID) &&
-      (int32_t)req->head.args.open.pool >= 0) {
-    layout.fl_pg_pool = req->head.args.open.pool;
-
-    // make sure we have as new a map as the client
-    if (req->get_mdsmap_epoch() > mds->mdsmap->get_epoch()) {
-      mds->wait_for_mdsmap(req->get_mdsmap_epoch(), new C_MDS_RetryRequest(mdcache, mdr));
-      return;
-    }
-  }
-#endif
-
-  if (!ceph_file_layout_is_valid(&layout)) {
-    ldout(mds->cct, 10) << " invalid initial file layout" << dendl;
-    reply_request(mdr, -EINVAL);
-    return;
-  }
-#if 0
-  if (!mds->mdsmap->is_data_pool(layout.fl_pg_pool)) {
-    ldout(mds->cct, 10) << " invalid data pool " << layout.fl_pg_pool << dendl;
-    reply_request(mdr, -EINVAL);
-    return;
-  }
-#endif
 
   CInode *diri = dn->get_dir()->get_inode();
   rdlocks.insert(&diri->authlock);
@@ -2601,17 +2539,13 @@ void Server::handle_client_openc(MDRequestRef& mdr)
   mdr->now = ceph_clock_now(mds->cct);
 
   CInode *in = prepare_new_inode(mdr, dn->get_dir(), inodeno_t(req->head.ino),
-				 req->head.args.open.mode | S_IFREG, &layout);
+				 req->head.args.open.mode | S_IFREG);
   assert(in);
 
   // it's a file.
   dn->push_projected_linkage(in);
 
   in->inode.version = dn->pre_dirty();
-#if 0
-  if (layout.fl_pg_pool != mdcache->default_file_layout.fl_pg_pool)
-    in->inode.add_old_pool(mdcache->default_file_layout.fl_pg_pool);
-#endif
   in->inode.update_backtrace();
   if (cmode & CEPH_FILE_MODE_WR) {
     in->inode.client_ranges[client].range.first = 0;
@@ -3185,248 +3119,11 @@ void Server::do_open_truncate(MDRequestRef& mdr, int cmode)
 }
 
 
-/* This function cleans up the passed mdr */
-void Server::handle_client_setlayout(MDRequestRef& mdr)
-{
-  MClientRequest *req = mdr->client_request;
-  set<SimpleLock*> rdlocks, wrlocks, xlocks;
-  CInode *cur = rdlock_path_pin_ref(mdr, 0, rdlocks, true);
-  if (!cur) return;
-
-  if (!cur->is_file()) {
-    reply_request(mdr, -EINVAL);
-    return;
-  }
-  if (cur->get_projected_inode()->size ||
-      cur->get_projected_inode()->truncate_seq > 1) {
-    reply_request(mdr, -ENOTEMPTY);
-    return;
-  }
-
-  // validate layout
-  ceph_file_layout layout = cur->get_projected_inode()->layout;
-  // save existing layout for later
-  boost::uuids::uuid old_vol = layout.fl_uuid;
-
-#if 0
-  if (req->head.args.setlayout.layout.fl_object_size > 0)
-    layout.fl_object_size = req->head.args.setlayout.layout.fl_object_size;
-  if (req->head.args.setlayout.layout.fl_stripe_unit > 0)
-    layout.fl_stripe_unit = req->head.args.setlayout.layout.fl_stripe_unit;
-  if (req->head.args.setlayout.layout.fl_stripe_count > 0)
-    layout.fl_stripe_count=req->head.args.setlayout.layout.fl_stripe_count;
-#endif
-#if 0
-  if (req->head.args.setlayout.layout.fl_pg_pool > 0) {
-    layout.fl_pg_pool = req->head.args.setlayout.layout.fl_pg_pool;
-
-    // make sure we have as new a map as the client
-    if (req->get_mdsmap_epoch() > mds->mdsmap->get_epoch()) {
-      mds->wait_for_mdsmap(req->get_mdsmap_epoch(), new C_MDS_RetryRequest(mdcache, mdr));
-      return;
-    }
-  }
-#endif
-  if (!ceph_file_layout_is_valid(&layout)) {
-    ldout(mds->cct, 10) << "bad layout" << dendl;
-    reply_request(mdr, -EINVAL);
-    return;
-  }
-#if 0
-  if (!mds->mdsmap->is_data_pool(layout.fl_pg_pool)) {
-    ldout(mds->cct, 10) << " invalid data pool " << layout.fl_pg_pool << dendl;
-    reply_request(mdr, -EINVAL);
-    return;
-  }
-#endif
-
-  xlocks.insert(&cur->filelock);
-  if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
-    return;
-
-  // project update
-  inode_t *pi = cur->project_inode();
-  pi->layout = layout;
-  // add the old pool to the inode
-  pi->add_old_volume(old_vol);
-  pi->version = cur->pre_dirty();
-  pi->ctime = ceph_clock_now(mds->cct);
-
-  // log + wait
-  mdr->ls = mdlog->get_current_segment();
-  EUpdate *le = new EUpdate(mdlog, "setlayout");
-  mdlog->start_entry(le);
-  le->metablob.add_client_req(req->get_reqid(), req->get_oldest_client_tid());
-  mdcache->predirty_journal_parents(mdr, &le->metablob, cur, 0, PREDIRTY_PRIMARY, false);
-  mdcache->journal_dirty_inode(mdr.get(), &le->metablob, cur);
-
-  journal_and_reply(mdr, cur, 0, le, new C_MDS_inode_update_finish(mds, mdr, cur));
-}
-
-void Server::handle_client_setdirlayout(MDRequestRef& mdr)
-{
-  MClientRequest *req = mdr->client_request;
-  set<SimpleLock*> rdlocks, wrlocks, xlocks;
-  ceph_file_layout *dir_layout = NULL;
-  CInode *cur = rdlock_path_pin_ref(mdr, 0, rdlocks, true, false, &dir_layout);
-  if (!cur) return;
-
-  if (!cur->is_dir()) {
-    reply_request(mdr, -ENOTDIR);
-    return;
-  }
-
-  xlocks.insert(&cur->policylock);
-  if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
-    return;
-
-  // validate layout
-  inode_t *pi = cur->get_projected_inode();
-  ceph_file_layout layout;
-  if (pi->has_layout())
-    layout = pi->layout;
-  else if (dir_layout)
-    layout = *dir_layout;
-  else
-    layout = mds->mdcache->default_file_layout;
-
-#if 0
-  if (req->head.args.setlayout.layout.fl_object_size > 0)
-    layout.fl_object_size = req->head.args.setlayout.layout.fl_object_size;
-  if (req->head.args.setlayout.layout.fl_stripe_unit > 0)
-    layout.fl_stripe_unit = req->head.args.setlayout.layout.fl_stripe_unit;
-  if (req->head.args.setlayout.layout.fl_stripe_count > 0)
-    layout.fl_stripe_count=req->head.args.setlayout.layout.fl_stripe_count;
-#endif
-#if 0
-  if (req->head.args.setlayout.layout.fl_pg_pool > 0) {
-    layout.fl_pg_pool = req->head.args.setlayout.layout.fl_pg_pool;
-    // make sure we have as new a map as the client
-    if (req->get_mdsmap_epoch() > mds->mdsmap->get_epoch()) {
-      mds->wait_for_mdsmap(req->get_mdsmap_epoch(), new C_MDS_RetryRequest(mdcache, mdr));
-      return;
-    }
-  }
-#endif
-  if (!ceph_file_layout_is_valid(&layout)) {
-    ldout(mds->cct, 10) << "bad layout" << dendl;
-    reply_request(mdr, -EINVAL);
-    return;
-  }
-#if 0
-  if (!mds->mdsmap->is_data_pool(layout.fl_pg_pool)) {
-    ldout(mds->cct, 10) << " invalid data pool " << layout.fl_pg_pool << dendl;
-    reply_request(mdr, -EINVAL);
-    return;
-  }
-#endif
-
-  pi = cur->project_inode();
-  pi->layout = layout;
-  pi->version = cur->pre_dirty();
-
-  // log + wait
-  mdr->ls = mdlog->get_current_segment();
-  EUpdate *le = new EUpdate(mdlog, "setlayout");
-  mdlog->start_entry(le);
-  le->metablob.add_client_req(req->get_reqid(), req->get_oldest_client_tid());
-  mdcache->predirty_journal_parents(mdr, &le->metablob, cur, 0, PREDIRTY_PRIMARY, false);
-  mdcache->journal_dirty_inode(mdr.get(), &le->metablob, cur);
-
-  journal_and_reply(mdr, cur, 0, le, new C_MDS_inode_update_finish(mds, mdr, cur));
-}
-
-
 
 
 // XATTRS
 
-// parse a map of keys/values.
-namespace qi = boost::spirit::qi;
-
-template <typename Iterator>
-struct keys_and_values
-  : qi::grammar<Iterator, std::map<string, string>()>
-{
-    keys_and_values()
-      : keys_and_values::base_type(query)
-    {
-      query =  pair >> *(qi::lit(' ') >> pair);
-      pair  =  key >> '=' >> value;
-      key   =  qi::char_("a-zA-Z_") >> *qi::char_("a-zA-Z_0-9");
-      value = +qi::char_("a-zA-Z_0-9");
-    }
-    qi::rule<Iterator, std::map<string, string>()> query;
-    qi::rule<Iterator, std::pair<string, string>()> pair;
-    qi::rule<Iterator, string()> key, value;
-};
-
-int Server::parse_layout_vxattr(string name, string value, ceph_file_layout *layout)
-{
-  ldout(mds->cct, 20) << "parse_layout_vxattr name " << name << " value '" << value << "'" << dendl;
-  try {
-    if (name == "layout") {
-      string::iterator begin = value.begin();
-      string::iterator end = value.end();
-      keys_and_values<string::iterator> p;    // create instance of parser
-      std::map<string, string> m;	      // map to receive results
-      if (!qi::parse(begin, end, p, m)) {     // returns true if successful
-	return -EINVAL;
-      }
-      string left(begin, end);
-      ldout(mds->cct, 10) << " parsed " << m << " left '" << left << "'" << dendl;
-      if (begin != end)
-	return -EINVAL;
-      for (map<string,string>::iterator q = m.begin(); q != m.end(); ++q) {
-	int r = parse_layout_vxattr(string("layout.") + q->first, q->second, layout);
-	if (r < 0)
-	  return r;
-      }
-#if 0
-    } else if (name == "layout.object_size") {
-      layout->fl_object_size = boost::lexical_cast<unsigned>(value);
-    } else if (name == "layout.stripe_unit") {
-      layout->fl_stripe_unit = boost::lexical_cast<unsigned>(value);
-    } else if (name == "layout.stripe_count") {
-      layout->fl_stripe_count = boost::lexical_cast<unsigned>(value);
-#endif
-#if 0
-    } else if (name == "layout.pool") {
-      try {
-	layout->fl_pg_pool = boost::lexical_cast<unsigned>(value);
-      } catch (boost::bad_lexical_cast const&) {
-	int64_t pool = mds->osdmap->lookup_pg_pool_name(value);
-	if (pool < 0) {
-	  ldout(mds->cct, 10) << " unknown pool " << value << dendl;
-	  return -ENOENT;
-	}
-	layout->fl_pg_pool = pool;
-      }
-#endif
-    } else {
-      ldout(mds->cct, 10) << " unknown layout vxattr " << name << dendl;
-      return -EINVAL;
-    }
-  } catch (boost::bad_lexical_cast const&) {
-    ldout(mds->cct, 10) << "bad vxattr value, unable to parse int for " << name << dendl;
-    return -EINVAL;
-  }
-
-  if (!ceph_file_layout_is_valid(layout)) {
-    ldout(mds->cct, 10) << "bad layout" << dendl;
-    return -EINVAL;
-  }
-#if 0
-  if (!mds->mdsmap->is_data_pool(layout->fl_pg_pool)) {
-    ldout(mds->cct, 10) << " invalid data pool " << layout->fl_pg_pool << dendl;
-    return -EINVAL;
-  }
-#endif
-  return 0;
-}
-
 void Server::handle_set_vxattr(MDRequestRef& mdr, CInode *cur,
-			       ceph_file_layout *dir_layout,
 			       set<SimpleLock*> rdlocks,
 			       set<SimpleLock*> wrlocks,
 			       set<SimpleLock*> xlocks)
@@ -3437,84 +3134,12 @@ void Server::handle_set_vxattr(MDRequestRef& mdr, CInode *cur,
   string value (bl.c_str(), bl.length());
   ldout(mds->cct, 10) << "handle_set_vxattr " << name << " val " << value.length() << " bytes on " << *cur << dendl;
 
+#if 0
   // layout?
-  if (name.find("ceph.file.layout") == 0 ||
-      name.find("ceph.dir.layout") == 0) {
+  if (name.find("ceph.file.XXX") == 0) {
     inode_t *pi;
     string rest;
     boost::uuids::uuid old_vol;
-    if (name.find("ceph.dir.layout") == 0) {
-      if (!cur->is_dir()) {
-	reply_request(mdr, -EINVAL);
-	return;
-      }
-
-      ceph_file_layout layout;
-      if (cur->get_projected_inode()->has_layout())
-	layout = cur->get_projected_inode()->layout;
-      else if (dir_layout)
-	layout = *dir_layout;
-      else
-	layout = mds->mdcache->default_file_layout;
-
-      rest = name.substr(name.find("layout"));
-      int r = parse_layout_vxattr(rest, value, &layout);
-      if (r < 0) {
-	if (r == -ENOENT) {
-	  if (!mdr->waited_for_osdmap) {
-	    // send request to get latest map, but don't wait if
-	    // we don't get anything newer than what we have
-	    mdr->waited_for_osdmap = true;
-	    mds->request_osdmap(
-		  new C_MDS_RetryRequest(mdcache, mdr));
-	    return;
-	  }
-	  r = -EINVAL;
-	}
-	reply_request(mdr, r);
-	return;
-      }
-
-      xlocks.insert(&cur->policylock);
-      if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
-	return;
-
-      pi = cur->project_inode();
-      cur->get_projected_inode()->layout = layout;
-    } else {
-      if (!cur->is_file()) {
-	reply_request(mdr, -EINVAL);
-	return;
-      }
-      ceph_file_layout layout = cur->get_projected_inode()->layout;
-      rest = name.substr(name.find("layout"));
-      int r = parse_layout_vxattr(rest, value, &layout);
-      if (r < 0) {
-	if (r == -ENOENT) {
-	  if (!mdr->waited_for_osdmap) {
-	    // send request to get latest map, but don't wait if
-	    // we don't get anything newer than what we have
-	    mdr->waited_for_osdmap = true;
-	    mds->request_osdmap(
-		  new C_MDS_RetryRequest(mdcache, mdr));
-	    return;
-	  }
-	  r = -EINVAL;
-	}
-	reply_request(mdr, r);
-	return;
-      }
-
-      xlocks.insert(&cur->filelock);
-      if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
-	return;
-
-      pi = cur->project_inode();
-      old_vol = pi->layout.fl_uuid;
-      pi->add_old_volume(old_vol);
-      pi->layout = layout;
-      pi->ctime = ceph_clock_now(mds->cct);
-    }
 
     pi->version = cur->pre_dirty();
     if (cur->is_file())
@@ -3531,6 +3156,7 @@ void Server::handle_set_vxattr(MDRequestRef& mdr, CInode *cur,
     journal_and_reply(mdr, cur, 0, le, new C_MDS_inode_update_finish(mds, mdr, cur));
     return;
   }
+#endif
 
   ldout(mds->cct, 10) << " unknown vxattr " << name << dendl;
   reply_request(mdr, -EINVAL);
@@ -3543,41 +3169,10 @@ void Server::handle_remove_vxattr(MDRequestRef& mdr, CInode *cur,
 {
   MClientRequest *req = mdr->client_request;
   string name(req->get_path2());
-  if (name == "ceph.dir.layout") {
-    if (!cur->is_dir()) {
-      reply_request(mdr, -ENODATA);
-      return;
-    }
-    if (cur->is_root()) {
-      ldout(mds->cct, 10) << "can't remove layout policy on the root directory" << dendl;
-      reply_request(mdr, -EINVAL);
-      return;
-    }
-
-    if (!cur->get_projected_inode()->has_layout()) {
-      reply_request(mdr, -ENODATA);
-      return;
-    }
-
-    xlocks.insert(&cur->policylock);
-    if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
-      return;
-
-    cur->project_inode();
-    cur->get_projected_inode()->clear_layout();
-    cur->get_projected_inode()->version = cur->pre_dirty();
-
-    // log + wait
-    mdr->ls = mdlog->get_current_segment();
-    EUpdate *le = new EUpdate(mdlog, "remove dir layout vxattr");
-    mdlog->start_entry(le);
-    le->metablob.add_client_req(req->get_reqid(), req->get_oldest_client_tid());
-    mdcache->predirty_journal_parents(mdr, &le->metablob, cur, 0, PREDIRTY_PRIMARY, false);
-    mdcache->journal_dirty_inode(mdr.get(), &le->metablob, cur);
-
-    journal_and_reply(mdr, cur, 0, le, new C_MDS_inode_update_finish(mds, mdr, cur));
-    return;
+#if 0
+  if (name == "ceph.XXX") {
   }
+#endif
 
   reply_request(mdr, -ENODATA);
 }
@@ -3611,11 +3206,7 @@ void Server::handle_client_setxattr(MDRequestRef& mdr)
   set<SimpleLock*> rdlocks, wrlocks, xlocks;
   CInode *cur;
 
-  ceph_file_layout *dir_layout = NULL;
-  if (name.find("ceph.dir.layout") == 0)
-    cur = rdlock_path_pin_ref(mdr, 0, rdlocks, true, false, &dir_layout);
-  else
-    cur = rdlock_path_pin_ref(mdr, 0, rdlocks, true);
+  cur = rdlock_path_pin_ref(mdr, 0, rdlocks, true);
   if (!cur)
     return;
 
@@ -3623,7 +3214,7 @@ void Server::handle_client_setxattr(MDRequestRef& mdr)
 
   // magic ceph.* namespace?
   if (name.find("ceph.") == 0) {
-    handle_set_vxattr(mdr, cur, dir_layout, rdlocks, wrlocks, xlocks);
+    handle_set_vxattr(mdr, cur, rdlocks, wrlocks, xlocks);
     return;
   }
 
@@ -3675,12 +3266,8 @@ void Server::handle_client_removexattr(MDRequestRef& mdr)
   MClientRequest *req = mdr->client_request;
   string name(req->get_path2());
   set<SimpleLock*> rdlocks, wrlocks, xlocks;
-  ceph_file_layout *dir_layout = NULL;
   CInode *cur;
-  if (name == "ceph.dir.layout")
-    cur = rdlock_path_pin_ref(mdr, 0, rdlocks, true, false, &dir_layout);
-  else
-    cur = rdlock_path_pin_ref(mdr, 0, rdlocks, true);
+  cur = rdlock_path_pin_ref(mdr, 0, rdlocks, true);
   if (!cur)
     return;
 
@@ -3783,9 +3370,7 @@ void Server::handle_client_mknod(MDRequestRef& mdr)
   MClientRequest *req = mdr->client_request;
   client_t client = mdr->get_client();
   set<SimpleLock*> rdlocks, wrlocks, xlocks;
-  ceph_file_layout *dir_layout = NULL;
-  CDentry *dn = rdlock_path_xlock_dentry(mdr, 0, rdlocks, wrlocks, xlocks, false, false, false,
-					 &dir_layout);
+  CDentry *dn = rdlock_path_xlock_dentry(mdr, 0, rdlocks, wrlocks, xlocks, false, false, false);
   if (!dn) return;
   CInode *diri = dn->get_dir()->get_inode();
   rdlocks.insert(&diri->authlock);
@@ -3796,17 +3381,10 @@ void Server::handle_client_mknod(MDRequestRef& mdr)
   if ((mode & S_IFMT) == 0)
     mode |= S_IFREG;
 
-  // set layout
-  ceph_file_layout layout;
-  if (dir_layout && S_ISREG(mode))
-    layout = *dir_layout;
-  else
-    layout = mds->mdcache->default_file_layout;
-
   mdr->now = ceph_clock_now(mds->cct);
 
   CInode *newi = prepare_new_inode(mdr, dn->get_dir(), inodeno_t(req->head.ino),
-				   mode, &layout);
+				   mode);
   assert(newi);
 
   dn->push_projected_linkage(newi);
@@ -3814,10 +3392,6 @@ void Server::handle_client_mknod(MDRequestRef& mdr)
   newi->inode.rdev = req->head.args.mknod.rdev;
   newi->inode.version = dn->pre_dirty();
   newi->inode.rstat.rfiles = 1;
-#if 0
-  if (layout.fl_pg_pool != mdcache->default_file_layout.fl_pg_pool)
-    newi->inode.add_old_volume(mdcache->default_file_layout.fl_pg_pool);
-#endif
   newi->inode.update_backtrace();
 
   // if the client created a _regular_ file via MKNOD, it's highly likely they'll
