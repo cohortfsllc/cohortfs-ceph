@@ -102,7 +102,6 @@ struct InodeStat {
   version_t version;
   ceph_mds_reply_cap cap;
 
-  ceph_file_layout layout;
   unsigned mode, uid, gid, nlink, rdev;
   loff_t size, max_size;
   version_t truncate_seq;
@@ -121,8 +120,6 @@ struct InodeStat {
   version_t xattr_version;
   bufferlist xattrbl;
 
-  ceph_dir_layout dir_layout;
-
   //map<string, bufferptr> xattrs;
 
  public:
@@ -136,7 +133,6 @@ struct InodeStat {
     ::decode(e, p);
     vino.ino = inodeno_t(e.ino);
     version = e.version;
-    layout = e.layout;
     cap = e.cap;
     size = e.size;
     max_size = e.max_size;
@@ -169,10 +165,7 @@ struct InodeStat {
     }
     ::decode(symlink, p);
 
-    if (features & CEPH_FEATURE_DIRLAYOUTHASH)
-      ::decode(dir_layout, p);
-    else
-      memset(&dir_layout, 0, sizeof(dir_layout));
+      // was (features & CEPH_FEATURE_DIRLAYOUTHASH) && ::decode(dir_layout, p);
 
     xattr_version = e.xattr_version;
     ::decode(xattrbl, p);

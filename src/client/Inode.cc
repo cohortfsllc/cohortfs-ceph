@@ -43,9 +43,6 @@ ostream& operator<<(ostream &out, Inode &in)
   if (!in.dn_set.empty())
     out << " parents=" << in.dn_set;
 
-  if (in.is_dir() && in.has_dir_layout())
-    out << " has_dir_layout";
-
   out << ' ' << &in << ")";
   return out;
 }
@@ -309,14 +306,7 @@ void Inode::dump(Formatter *f) const
   f->dump_stream("atime") << atime;
   f->dump_int("time_warp_seq", time_warp_seq);
 
-  f->open_object_section("layout");
-  ::dump(layout, f);
-  f->close_section();
-  if (is_dir()) {
-    f->open_object_section("dir_layout");
-    ::dump(dir_layout, f);
-    f->close_section();
-  }
+  f->dump_stream("uuid") << uuid;
 
   f->dump_unsigned("version", version);
   f->dump_unsigned("xattr_version", xattr_version);

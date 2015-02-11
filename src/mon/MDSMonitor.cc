@@ -60,15 +60,12 @@ void MDSMonitor::print_map(MDSMap &m, int dbl)
   *_dout << dendl;
 }
 
-void MDSMonitor::create_new_fs(MDSMap &m, const boost::uuids::uuid& metadata_vol,
-			       const boost::uuids::uuid& data_vol)
+void MDSMonitor::create_new_fs(MDSMap &m, const boost::uuids::uuid& metadata_vol)
 {
   boost::uuids::uuid zero_uuid;
   m.max_mds = mon->cct->_conf->max_mds;
   m.created = ceph_clock_now(mon->cct);
-  m.data_volumes.insert(data_vol);
   m.metadata_uuid = metadata_vol;
-  m.cas_uuid = zero_uuid;
   m.compat = get_mdsmap_compat_set_default();
 
   m.session_timeout = mon->cct->_conf->mds_session_timeout;

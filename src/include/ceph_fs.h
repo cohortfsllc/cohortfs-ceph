@@ -40,46 +40,7 @@
 /* arbitrary limit on max # of monitors (cluster of 3 is typical) */
 #define CEPH_MAX_MON   31
 
-/*
- * ceph_file_layout - describe data layout for a file/inode
- */
-
-struct ceph_file_layout {
-	/* file -> object mapping */
-	uint32_t fl_stripe_unit;	   /* stripe unit, in bytes.  must be multiple
-				      of page size. */
-	uint32_t fl_stripe_count;	   /* over this many objects */
-	uint32_t fl_object_size;	   /* until objects are this big, then move to
-				      new objects */
-#ifdef __cplusplus
-	boost::uuids::uuid fl_uuid; /* where this lives (can this not be on disk?) */
-	void encode(ceph::bufferlist &bl) const;
-	void decode(ceph::bufferlist::iterator &p);
-#else
-	uint8_t fl_uuid[16];
-#endif
-};
-#ifdef __cplusplus
-WRITE_CLASS_ENCODER(ceph_file_layout)
-#endif
-
-#define CEPH_MIN_STRIPE_UNIT 65536
-
-int ceph_file_layout_is_valid(const struct ceph_file_layout *layout);
-
-struct ceph_dir_layout {
-	uint8_t	  dl_dir_hash;	 /* see ceph_hash.h for ids */
-	uint8_t	  dl_unused1;
-	uint16_t  dl_unused2;
-	uint32_t  dl_unused3;
-#ifdef __cplusplus
-	void encode(bufferlist &bl) const;
-	void decode(bufferlist::iterator &p);
-#endif
-};
-#ifdef __cplusplus
-WRITE_CLASS_ENCODER(ceph_dir_layout)
-#endif
+// #define CEPH_MIN_STRIPE_UNIT 65536
 
 /* crypto algorithms */
 #define CEPH_CRYPTO_NONE 0x0
@@ -381,18 +342,15 @@ union ceph_mds_request_args {
 	struct {
 		uint32_t flags;
 		uint32_t mode;
-		uint32_t stripe_unit;	     /* layout for newly created file */
-		uint32_t stripe_count;	     /* ... */
-		uint32_t object_size;
+		uint32_t unused2;	/* was once stripe_unit */
+		uint32_t unused3;	/* was once stripe_count */
+		uint32_t unused4;	/* was once object_size */
 		uint32_t unused;		     /* used to be preferred */
 		uint64_t old_size;	     /* if O_TRUNC */
 	} open;
 	struct {
 		uint32_t flags;
 	} setxattr;
-	struct {
-		struct ceph_file_layout layout;
-	} setlayout;
 	struct {
 		uint8_t rule; /* currently fcntl or flock */
 		uint8_t type; /* shared, exclusive, remove*/
@@ -468,7 +426,6 @@ struct ceph_mds_reply_inode {
 	uint64_t version;		       /* inode version */
 	uint64_t xattr_version;	       /* version for xattr blob */
 	struct ceph_mds_reply_cap cap; /* caps issued for this inode */
-	struct ceph_file_layout layout;
 	struct ceph_timespec ctime, mtime, atime;
 	uint32_t time_warp_seq;
 	uint64_t size, max_size, truncate_size;
@@ -479,7 +436,7 @@ struct ceph_mds_reply_inode {
 	struct ceph_timespec rctime;
 	struct ceph_frag_tree_head fragtree;  /* (must be at end of struct) */
 };
-/* followed by frag array, symlink string, dir layout, xattr blob */
+/* followed by frag array, symlink string, xattr blob */
 
 /* reply_lease follows dname, and reply_inode */
 struct ceph_mds_reply_lease {
@@ -668,7 +625,6 @@ struct ceph_mds_caps {
 			uint64_t size, max_size, truncate_size;
 			uint32_t truncate_seq;
 			struct ceph_timespec mtime, atime, ctime;
-			struct ceph_file_layout layout;
 			uint32_t time_warp_seq;
 		};
 		/* export message */

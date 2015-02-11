@@ -60,8 +60,7 @@ class Inode {
   int32_t nlink;
 
   // file (data access)
-  ceph_dir_layout dir_layout;
-  ceph_file_layout layout;
+  uuid_d uuid;
   uint64_t size; // on directory, # dentries
   uint32_t truncate_seq;
   uint64_t truncate_size;
@@ -88,15 +87,8 @@ class Inode {
   bool is_dir()     const { return (mode & S_IFMT) == S_IFDIR; }
   bool is_file()    const { return (mode & S_IFMT) == S_IFREG; }
 
-  bool has_dir_layout() const {
-    for (unsigned c = 0; c < sizeof(layout); c++)
-      if (*((const char *)&layout + c))
-	return true;
-    return false;
-  }
-
   uint32_t hash_dentry_name(const string &dn) {
-    int which = dir_layout.dl_dir_hash;
+    int which = 0;	// was: dir_layout.dl_dir_hash
     if (!which)
       which = CEPH_STR_HASH_LINUX;
     return ceph_str_hash(which, dn.data(), dn.length());
@@ -174,21 +166,18 @@ class Inode {
     ll_ref -= n;
   }
 
-  Inode(CephContext *cct_, vinodeno_t vino, ceph_file_layout *newlayout)
+  Inode(CephContext *cct_, vinodeno_t vino, uuid_d& uuid_)
     : cct(cct_), ino(vino.ino), rdev(0), mode(0), uid(0), gid(0), nlink(0),
+      uuid(uuid_),
       size(0), truncate_seq(1), truncate_size(-1), time_warp_seq(0),
       max_size(0), version(0), xattr_version(0), inline_version(0),
       flags(0), dir_hashed(false), dir_replicated(false), auth_cap(NULL),
       dirty_caps(0), flushing_caps(0), flushing_cap_seq(0), shared_gen(0),
       cache_gen(0), cap_item(this), flushing_cap_item(this), last_flush_tid(0),
-#if 0
-      oset((void *)this, newlayout->fl_uuid, ino),
-#endif
       reported_size(0), wanted_max_size(0), requested_max_size(0),
       _ref(0), ll_ref(0), dir(0), dn_set()
   {
     memset(&dir_layout, 0, sizeof(dir_layout));
-    memset(&layout, 0, sizeof(layout));
     memset(&flushing_cap_tid, 0, sizeof(uint16_t)*CEPH_CAP_BITS);
   }
   ~Inode() { }

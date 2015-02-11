@@ -166,8 +166,6 @@ void Dumper::undump(const char *dump_file)
   h.magic = CEPH_FS_ONDISK_MAGIC;
 
   VolumeRef volume(mdsmap->get_metadata_volume(objecter));
-  h.layout = g_default_file_layout;
-  h.layout.fl_uuid = volume->id;
 
   bufferlist hbl;
   ::encode(h, hbl);

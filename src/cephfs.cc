@@ -62,13 +62,18 @@ int main (int argc, char **argv) {
   }
 
   if (CMD_SHOW_LAYOUT == cmd) {
+#if 0
     struct ceph_ioctl_layout layout;
     memset(&layout, 0, sizeof(layout));
     err = ioctl(fd, CEPH_IOC_GET_LAYOUT, (unsigned long)&layout);
+#else
+    err = -1;
+#endif
     if (err) {
       cerr << "Error getting layout: " << cpp_strerror(errno) << endl;
       return 1;
     }
+#if 0
     if (layout.stripe_unit == 0) {
       cerr << "layout not specified" << endl;
     } else {
@@ -77,6 +82,7 @@ int main (int argc, char **argv) {
       cout << "layout.stripe_unit:   " << layout.stripe_unit << endl;
       cout << "layout.stripe_count:  " << layout.stripe_count << endl;
     }
+#endif
   } else if (CMD_SHOW_LOC == cmd) {
     struct ceph_ioctl_dataloc location;
     location.file_offset = file_offset;
@@ -95,6 +101,7 @@ int main (int argc, char **argv) {
     cout << "location.osd:	    " << location.osd << endl;
 //    cout << "osd address:	      " << location.osd_addr << endl;
   } else if (CMD_SET_LAYOUT == cmd) {
+#if 0
     struct ceph_ioctl_layout layout;
     memset(&layout, 0, sizeof(layout));
     int ioctl_num = (dir ? CEPH_IOC_SET_LAYOUT_POLICY : CEPH_IOC_SET_LAYOUT);
@@ -119,6 +126,9 @@ int main (int argc, char **argv) {
     struct ceph_ioctl_layout layout;
     memset(&layout, 0, sizeof(layout));
     err = ioctl(fd, CEPH_IOC_GET_LAYOUT, (unsigned long)&layout);
+#else
+    err = -1;
+#endif
     if (err) {
       cerr << "Error getting layout: " << cpp_strerror(errno) << endl;
       return 1;

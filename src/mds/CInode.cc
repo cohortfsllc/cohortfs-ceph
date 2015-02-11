@@ -299,13 +299,13 @@ void CInode::pop_and_dirty_projected_inode(LogSegment *ls)
   assert(!projected_nodes.empty());
   dout(15) << "pop_and_dirty_projected_inode " << projected_nodes.front()->inode
 	   << " v" << projected_nodes.front()->inode->version << dendl;
-  boost::uuids::uuid old_vol = inode.layout.fl_uuid;
+  boost::uuids::uuid old_vol = inode.volume->uuid;
 
   mark_dirty(projected_nodes.front()->inode->version, ls);
   inode = *projected_nodes.front()->inode;
 
   if (inode.is_backtrace_updated())
-    _mark_dirty_parent(ls, old_vol != inode.layout.fl_uuid);
+    _mark_dirty_parent(ls, old_vol != inode.volume->uuid);
 
   map<string,bufferptr> *px = projected_nodes.front()->xattrs;
   if (px) {
@@ -325,7 +325,7 @@ void CInode::pop_and_dirty_projected_inode(LogSegment *ls)
 
 uint32_t CInode::hash_dentry_name(const string &dn)
 {
-  int which = inode.dir_layout.dl_dir_hash;
+  int which = 0;	// was inode.dir_layout.dl_dir_hash
   if (!which)
     which = CEPH_STR_HASH_LINUX;
   return ceph_str_hash(which, dn.data(), dn.length());
@@ -924,7 +924,7 @@ void CInode::_fetched(int r, bufferlist& bl, bufferlist& bl2, Context *fin)
     decode_store(p);
     dout(10) << "_fetched " << *this << dendl;
     const OSDMap* osdmap = mdcache->mds->objecter->get_osdmap_read();
-    osdmap->find_by_uuid(inode.layout.fl_uuid, volume);
+    osdmap->find_by_uuid(inode.volume->uuid, volume);
     mdcache->mds->objecter->put_osdmap_read();
     int r = volume->attach(mdcache->mds->objecter->cct);	// XXX here or elsewhere?
     if (r < 0) {
@@ -1114,14 +1114,7 @@ void CInode::decode_store(bufferlist::iterator& bl) {
     ::decode(symlink, bl);
   ::decode(dirfragtree, bl);
   ::decode(xattrs, bl);
-  if (struct_v == 2 && inode.is_dir()) {
-    bool default_layout_exists;
-    ::decode(default_layout_exists, bl);
-    if (default_layout_exists) {
-      ::decode(struct_v, bl); // this was a default_file_layout
-      ::decode(inode.layout, bl); // but we only care about the layout portion
-    }
-  }
+  // NB deleted obselete code here for struct_v == 2 .. default_layout_exists
   DECODE_FINISH(bl);
 }
 
@@ -1183,7 +1176,7 @@ void CInode::encode_lock_state(int type, bufferlist& bl)
       ::encode(inode.atime, bl);
       ::encode(inode.time_warp_seq, bl);
       if (!is_dir()) {
-	::encode(inode.layout, bl);
+        // formerly encoded inode.layout here
 	::encode(inode.size, bl);
 	::encode(inode.truncate_seq, bl);
 	::encode(inode.truncate_size, bl);
@@ -1271,7 +1264,7 @@ void CInode::encode_lock_state(int type, bufferlist& bl)
   case CEPH_LOCK_IPOLICY:
     if (inode.is_dir()) {
       ::encode(inode.version, bl);
-      ::encode(inode.layout, bl);
+      // formerly encoded inode.layout here
     }
     break;
 
@@ -1364,7 +1357,7 @@ void CInode::decode_lock_state(int type, bufferlist& bl)
       ::decode(inode.atime, p);
       ::decode(inode.time_warp_seq, p);
       if (!is_dir()) {
-	::decode(inode.layout, p);
+	// formerly decoded inode.layout here
 	::decode(inode.size, p);
 	::decode(inode.truncate_seq, p);
 	::decode(inode.truncate_size, p);
@@ -1488,7 +1481,7 @@ void CInode::decode_lock_state(int type, bufferlist& bl)
   case CEPH_LOCK_IPOLICY:
     if (inode.is_dir()) {
       ::decode(inode.version, p);
-      ::decode(inode.layout, p);
+      // formerly decoded inode.layout here
     }
     break;
 
@@ -2543,7 +2536,6 @@ int CInode::encode_inodestat(bufferlist& bl, Session *session,
   bool pxattr = xattrlock.is_xlocked_by_client(client) || get_loner() == client;
 
   bool plocal = versionlock.get_last_wrlock_client() == client;
-  bool ppolicy = policylock.is_xlocked_by_client(client) || get_loner()==client;
 
   inode_t *i = (pfile|pauth|plink|pxattr|plocal) ? pi : oi;
   i->ctime.encode_timeval(&e.ctime);
@@ -2555,11 +2547,6 @@ int CInode::encode_inodestat(bufferlist& bl, Session *session,
 
   // file
   i = pfile ? pi:oi;
-  if (is_dir()) {
-    e.layout = (ppolicy ? pi : oi)->layout;
-  } else {
-    e.layout = i->layout;
-  }
   e.size = i->size;
   e.truncate_seq = i->truncate_seq;
   e.truncate_size = i->truncate_size;
@@ -2702,10 +2689,7 @@ int CInode::encode_inodestat(bufferlist& bl, Session *session,
     ::encode(p->second, bl);
   }
   ::encode(symlink, bl);
-  if (session->connection->has_feature(CEPH_FEATURE_DIRLAYOUTHASH)) {
-    i = pfile ? pi : oi;
-    ::encode(i->dir_layout, bl);
-  }
+  // XXX formerly encoded (pfile?pi:oi)->dir_layout, if CEPH_FEATURE_DIRLAYOUTHASH
   ::encode(xbl, bl);
   if (session->connection->has_feature(CEPH_FEATURE_MDS_INLINE_DATA)) {
     ::encode(inline_version, bl);
@@ -2736,7 +2720,6 @@ void CInode::encode_cap_message(MClientCaps *m, Capability *cap)
 	   << " ctime " << i->ctime << dendl;
 
   i = pfile ? pi:oi;
-  m->head.layout = i->layout;
   m->head.size = i->size;
   m->head.truncate_seq = i->truncate_seq;
   m->head.truncate_size = i->truncate_size;

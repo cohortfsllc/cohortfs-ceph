@@ -514,7 +514,8 @@ protected:
 			      utime_t mtime, utime_t atime,
 			      version_t inline_version,
 			      bufferlist& inline_data, int issued);
-  Inode *add_update_inode(InodeStat *st, utime_t ttl, MetaSession *session);
+  Inode *add_update_inode(InodeStat *st, VolumeRef volume, utime_t ttl,
+			  MetaSession *session);
   Dentry *insert_dentry_inode(Dir *dir, const string& dname, LeaseStat *dlease,
 			      Inode *in, utime_t from, MetaSession *session,
 			      bool set_offset, Dentry *old_dentry = NULL);
@@ -601,8 +602,7 @@ private:
   int _open(Inode *in, int flags, mode_t mode, Fh **fhp,
 	    int uid = -1, int gid = -1);
   int _create(Inode *in, const char *name, int flags, mode_t mode, Inode **inp,
-	      Fh **fhp, int stripe_unit, int stripe_count, int object_size,
-	      const char *data_pool, bool *created = NULL, int uid = -1,
+	      Fh **fhp, bool *created = NULL, int uid = -1,
 	      int gid=-1);
   loff_t _lseek(Fh *fh, loff_t offset, int whence);
   int _read(Fh *fh, int64_t offset, uint64_t size, bufferlist *bl);
@@ -707,8 +707,6 @@ public:
   // file ops
   int mknod(const char *path, mode_t mode, dev_t rdev=0);
   int open(const char *path, int flags, mode_t mode=0);
-  int open(const char *path, int flags, mode_t mode, int stripe_unit,
-	   int stripe_count, int object_size, const char *data_pool);
   int lookup_hash(inodeno_t ino, inodeno_t dirino, const char *name);
   int lookup_ino(inodeno_t ino, Inode **inode=NULL);
   int lookup_parent(Inode *in, Inode **parent=NULL);
@@ -743,8 +741,10 @@ public:
   int lazyio_synchronize(int fd, loff_t offset, size_t count);
 
   // expose file layout
+#if 0
   int describe_layout(const char *path, ceph_file_layout* layout);
   int fdescribe_layout(int fd, ceph_file_layout* layout);
+#endif
   int get_file_stripe_address(int fd, loff_t offset,
 			      entity_addr_t& address);
   int get_file_extent_osd(int fd, loff_t off, loff_t *len, int& osd);
@@ -752,15 +752,6 @@ public:
 
   // expose osdmap
   int get_local_osd();
-#if 0
-  int get_pool_replication(int64_t pool);
-  int64_t get_pool_id(const char *pool_name);
-  string get_pool_name(int64_t pool);
-  int get_osd_crush_location(int id, vector<pair<string, string> >& path);
-
-  int enumerate_layout(int fd, vector<ObjectExtent>& result,
-		       loff_t length, loff_t offset);
-#endif
 
   // expose caps
   int get_caps_issued(int fd);
@@ -809,6 +800,7 @@ public:
   int ll_create(Inode *parent, const char *name, mode_t mode, int flags,
 		struct stat *attr, Inode **out, Fh **fhp, int uid = -1,
 		int gid = -1);
+#if 0
   int ll_read_block(Inode *in, uint64_t blockid, char *buf,  uint64_t offset,
 		    uint64_t length, ceph_file_layout* layout);
 
@@ -816,6 +808,7 @@ public:
 		     char* buf, uint64_t offset,
 		     uint64_t length, ceph_file_layout* layout,
 		     uint32_t sync);
+#endif
   int ll_commit_blocks(Inode *in, uint64_t offset, uint64_t length);
 
   int ll_statfs(Inode *in, struct statvfs *stbuf);
@@ -823,7 +816,6 @@ public:
   int ll_listxattr_chunks(Inode *in, char *names, size_t size,
 			  int *cookie, int *eol, int uid, int gid);
   uint32_t ll_stripe_unit(Inode *in);
-  int ll_file_layout(Inode *in, ceph_file_layout *layout);
   int ll_file_key(Inode *in, char *buf, uint32_t bufsize);
 
   int ll_read(Fh *fh, loff_t off, loff_t len, bufferlist *bl);
@@ -833,8 +825,6 @@ public:
   int ll_fsync(Fh *fh, bool syncdataonly);
   int ll_fallocate(Fh *fh, int mode, loff_t offset, loff_t length);
   int ll_release(Fh *fh);
-  int ll_get_stripe_osd(struct Inode *in, uint64_t blockno,
-			ceph_file_layout* layout);
   uint64_t ll_get_internal_offset(struct Inode *in, uint64_t blockno);
 
   int ll_num_osds(void);

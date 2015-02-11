@@ -419,15 +419,9 @@ void EMetaBlob::fullbit::decode(bufferlist::iterator &bl) {
     ::decode(symlink, bl);
   if (inode.is_dir()) {
     ::decode(dirfragtree, bl);
-    if ((struct_v == 2) || (struct_v == 3)) {
-      bool dir_layout_exists;
-      ::decode(dir_layout_exists, bl);
-      if (dir_layout_exists) {
-	uint8_t dir_struct_v;
-	::decode(dir_struct_v, bl); // default_file_layout version
-	::decode(inode.layout, bl); // and actual layout, that we care about
-      }
-    }
+#if 0
+    // deleted obselete code struct_v == 2 || 3 ... decode dir_layout_exists ...
+#endif
   }
   if (struct_v >= 6) {
     ::decode(state, bl);
