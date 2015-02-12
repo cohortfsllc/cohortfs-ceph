@@ -16,13 +16,7 @@ public:
 		    uint64_t off, uint64_t len,
 		    bufferlist *pbl, uint64_t trunc_size,  uint32_t trunc_seq,
 		    Context *onfinish) {
-    VolumeRef volref;
-    {
-      Objecter::shared_lock l;
-      const OSDMap* osdmap = m_objecter->get_osdmap_read(l);
-      osdmap->find_by_uuid(volume, volref);
-      l.unlock();
-    }
+    VolumeRef volref = m_objecter->vol_by_uuid(volume);
     m_objecter->read_trunc(obj, volref, off, len, pbl, 0,
 			   trunc_size, trunc_seq, onfinish);
   }
@@ -38,13 +32,7 @@ public:
 			   const bufferlist &bl, ceph::real_time mtime,
 			   uint64_t trunc_size,
 			   uint32_t trunc_seq, Context *oncommit) {
-    VolumeRef volref;
-    {
-      Objecter::shared_lock l;
-      const OSDMap* osdmap = m_objecter->get_osdmap_read(l);
-      osdmap->find_by_uuid(volume, volref);
-      l.unlock();
-    }
+    VolumeRef volref = m_objecter->vol_by_uuid(volume);
     return m_objecter->write_trunc(obj, volref, off, len, bl,
 				   mtime, 0, trunc_size, trunc_seq, NULL,
 				   oncommit);
@@ -54,13 +42,7 @@ public:
 			  const boost::uuids::uuid& volume,
 			  int op, int flags, Context *onack,
 			  Context *oncommit) {
-    VolumeRef volref;
-    {
-      Objecter::shared_lock l;
-      const OSDMap* osdmap = m_objecter->get_osdmap_read(l);
-      osdmap->find_by_uuid(volume, volref);
-      l.unlock();
-    }
+    VolumeRef volref = m_objecter->vol_by_uuid(volume);
     return m_objecter->lock(obj, volref, op, flags, onack, oncommit);
   }
 

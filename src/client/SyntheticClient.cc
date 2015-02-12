@@ -1405,13 +1405,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       boost::uuids::uuid id;
       id = parse(a);
       std::unique_lock<std::mutex> l(lock);
-      VolumeRef mvol;
-      {
-	Objecter::shared_lock ol;
-	const OSDMap* osdmap = client->objecter->get_osdmap_read(ol);
-	osdmap->find_by_uuid(id, mvol);
-	ol.unlock();
-      }
+      VolumeRef mvol = client->objecter->vol_by_uuid(id);
       uint64_t size;
       ceph::real_time mtime;
       int r = mvol->attach(client->cct);
@@ -1434,13 +1428,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       oid obj = file_oid(oh, ol);
       boost::uuids::uuid id;
       id = parse(a);
-      VolumeRef mvol;
-      {
-	Objecter::shared_lock ol;
-	const OSDMap* osdmap = client->objecter->get_osdmap_read(ol);
-	osdmap->find_by_uuid(id, mvol);
-	ol.unlock();
-      }
+      VolumeRef mvol = client->objecter->vol_by_uuid(id);
       int r = mvol->attach(client->cct);
       if (r) {
 	ldout(client->cct, 0) << "Unable to attach volume " << mvol << " error=" << r << dendl;
@@ -1462,13 +1450,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       oid obj = file_oid(oh, ol);
       boost::uuids::uuid id;
       id = parse(a);
-      VolumeRef mvol;
-      {
-	Objecter::shared_lock ol;
-	const OSDMap* osdmap = client->objecter->get_osdmap_read(ol);
-	osdmap->find_by_uuid(id, mvol);
-	ol.unlock();
-      }
+      VolumeRef mvol = client->objecter->vol_by_uuid(id);
       int r = mvol->attach(client->cct);
       if (r) {
 	ldout(client->cct, 0) << "Unable to attach volume " << mvol
@@ -1496,13 +1478,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       oid obj = file_oid(oh, ol);
       boost::uuids::uuid id;
       id = parse(a);
-      VolumeRef mvol;
-      {
-	Objecter::shared_lock ol;
-	const OSDMap* osdmap = client->objecter->get_osdmap_read(ol);
-	osdmap->find_by_uuid(id, mvol);
-	ol.unlock();
-      }
+      VolumeRef mvol = client->objecter->vol_by_uuid(id);
       int r = mvol->attach(client->cct);
       if (r) {
 	ldout(client->cct, 0) << "Unable to attach volume " << mvol
@@ -2296,13 +2272,7 @@ int SyntheticClient::create_objects(int nobj, int osize, int inflight)
   boost::uuids::string_generator parse;
   boost::uuids::uuid id;
   id = parse("deac041b-4100-4c75-93a3-b9329b9cf9cf");
-  VolumeRef mvol;
-  {
-    Objecter::shared_lock ol;
-    const OSDMap* osdmap = client->objecter->get_osdmap_read(ol);
-    osdmap->find_by_uuid(id, mvol);
-    ol.unlock();
-  }
+  VolumeRef mvol = client->objecter->vol_by_uuid(id);
   int r = mvol->attach(client->cct);
   if (r) {
     ldout(client->cct, 0) << "Unable to attach volume " << mvol << " error="
@@ -2402,13 +2372,7 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
   boost::uuids::string_generator parse;
   boost::uuids::uuid id;
   id = parse("deac041b-4100-4c75-93a3-b9329b9cf9cf");
-  VolumeRef mvol;
-  {
-    Objecter::shared_lock ol;
-    const OSDMap* osdmap = client->objecter->get_osdmap_read(ol);
-    osdmap->find_by_uuid(id, mvol);
-    ol.unlock();
-  }
+  VolumeRef mvol = client->objecter->vol_by_uuid(id);
   int r = mvol->attach(client->cct);
   if (r) {
     ldout(client->cct, 0) << "Unable to attach volume " << mvol << " error=" << r << dendl;
@@ -3472,13 +3436,7 @@ int SyntheticClient::chunk_file(string &filename)
   if (ret < 0)
     return ret;
 
-  VolumeRef mvol;
-  {
-    const OSDMap* osdmap = client->objecter->get_osdmap_read();
-    osdmap->find_by_uuid(inode.layout.fl_uuid, mvol);
-    client->objecter->put_osdmap_read();
-  }
-
+  VolumeRef mvol = client->objecter->vol_by_uuid(id, mvol);
   uint64_t pos = 0;
   bufferlist from_before;
   while (pos < size) {
