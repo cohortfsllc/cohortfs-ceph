@@ -2379,19 +2379,19 @@ FileStore::FSObject* FileStore::get_object(FSCollection* fc,
 					   const SequencerPosition& spos,
 					   bool create)
 {
-#if 0
+  /* XXXX temporary */
   FDRef fd;
   FSObject* oh = nullptr;
+
   int r = lfn_open(fc, oid, false, &fd);
   if ((r < 0) &&
       create &&
       _check_global_replay_guard(fc, spos)) {
       r = lfn_open(fc, oid, true, &fd);
   }
-  if (r == 0)
-    oh = new FSObject(fc, oid, fd);
-#else
-  FSObject* oh = nullptr;
+  if (r != 0)
+    return oh;
+
   uint64_t hk = XXH64(oid.oid.name.c_str(), oid.oid.name.size(), 667);
   //std::tuple<uint64_t, hobject_t&> k(std::make_tuple(hk, oid));
   std::tuple<uint64_t, const hobject_t&> k(hk, oid);
@@ -2410,7 +2410,7 @@ retry:
   } else {
     /* allocate and insert "new" Object */
     /* XXX Casey will integrate CollectionIndex */
-    FSObject::FSObjectFactory prototype(fc, oid, hk);
+    FSObject::FSObjectFactory prototype(fc, oid, hk, fd);
     oh = static_cast<FSObject*>(
       obj_lru.insert(&prototype,
 		     cohort::lru::Edge::MRU,
@@ -2425,7 +2425,6 @@ retry:
   }
   lat.mtx->unlock(); /* !LATCHED */
 out:
-#endif
   return oh;
 }
 
