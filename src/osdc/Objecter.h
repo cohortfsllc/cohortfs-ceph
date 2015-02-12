@@ -60,13 +60,15 @@ namespace OSDC {
   using std::shared_ptr;
   using std::unique_ptr;
   using std::move;
+  using std::function;
 
   class Objecter: public Dispatcher {
   public:
     Messenger *messenger;
     MonClient *monc;
   private:
-    OSDMap    *osdmap;
+    OSDMap *osdmap;
+    vector<function<void()> > osdmap_notifiers;
   public:
     CephContext *cct;
 
@@ -518,6 +520,11 @@ namespace OSDC {
 			      bool do_or_die = false);
     void handle_osd_map(MOSDMap *m);
     void wait_for_osd_map();
+
+    // The function supplied is called with no lock. If it wants to do
+    // something with the OSDMap, it can call with_osdmap on a
+    // captured objecter.
+    void add_osdmap_notifier(const function<void()>& f);
 
   private:
     bool _promote_lock_check_race(shunique_lock& sl);
