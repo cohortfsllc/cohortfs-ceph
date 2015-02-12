@@ -309,8 +309,7 @@ struct inode_t {
   bool	     anchored;		// auth only?
 
   // file (data access)
-  ceph_dir_layout  dir_layout;	  // [dir only]
-  ceph_file_layout layout;
+  boost::uuids::uuid volume;
   vector <boost::uuids::uuid> old_volumes;
   uint64_t   size;	  // on directory, # dentries
   uint64_t   max_size_ever; // max size the file has ever been
@@ -346,8 +345,6 @@ struct inode_t {
 	      time_warp_seq(0),
 	      inline_version(1),
 	      version(0), file_data_version(0), xattr_version(0), backtrace_version(0) {
-    clear_layout();
-    memset(&dir_layout, 0, sizeof(dir_layout));
   }
 
   // file type
@@ -368,21 +365,13 @@ struct inode_t {
     truncate_pending++;
   }
 
-  bool has_layout() const {
-    // why on earth is there no converse of memchr() in string.h?
-    const char *p = (const char *)&layout;
-    for (size_t i = 0; i < sizeof(layout); i++)
-      if (p[i] != '\0')
-	return true;
-    return false;
-  }
-
-  void clear_layout() {
-    memset(&layout, 0, sizeof(layout));
-  }
-
   uint64_t get_layout_size_increment() {
-    return (uint64_t)layout.fl_object_size * (uint64_t)layout.fl_stripe_count;
+// XXX how to calculate?  is this necessary?  &c.  mdw 20150212
+#if 0
+    return object_size * stripe_count;
+#else
+    return 4096;
+#endif
   }
 
   bool is_dirty_rstat() const { return !(rstat == accounted_rstat); }

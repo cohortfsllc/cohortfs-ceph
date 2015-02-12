@@ -608,7 +608,7 @@ Inode * Client::add_update_inode(InodeStat *st, VolumeRef volume, utime_t from,
     ldout(cct, 12) << "add_update_inode had " << *in << " caps "
 		   << ccap_string(st->cap.caps) << dendl;
   } else {
-    in = new Inode(cct, st->vino, volume->uuid);
+    in = new Inode(cct, st->vino, volume->id);
     inode_map[st->vino] = in;
     if (!root) {
       root = in;
@@ -667,13 +667,6 @@ Inode * Client::add_update_inode(InodeStat *st, VolumeRef volume, utime_t from,
 
     in->dirstat = st->dirstat;
     in->rstat = st->rstat;
-
-    if (in->is_dir()) {
-      in->dir_layout = st->dir_layout;
-      ldout(cct, 20) << " dir hash is " << (int)in->dir_layout.dl_dir_hash << dendl;
-    }
-
-    in->layout = st->layout;
 
     update_inode_file_bits(in, st->truncate_seq, st->truncate_size, st->size,
 			   st->time_warp_seq, st->ctime, st->mtime, st->atime,
@@ -882,7 +875,7 @@ void Client::insert_readdir_results(MetaRequest *request, MetaSession *session,
       else
 	ldout(cct, 15) << " pd is '" << pd->first << "' dn " << pd->second << dendl;
 
-      Inode *in = add_update_inode(&ist, request->sent_stamp, session);
+      Inode *in = add_update_inode(&ist, diri->volume, request->sent_stamp, session);
       Dentry *dn;
       if (pd != dir->dentry_map.end() &&
 	  pd->first == dname) {
@@ -1043,9 +1036,7 @@ int Client::choose_target_mds(MetaRequest *req)
 		   << *in << dendl;
     if (req->path.depth()) {
       hash = in->hash_dentry_name(req->path[0]);
-      ldout(cct, 20) << "choose_target_mds inode dir hash is "
-		     << (int)in->dir_layout.dl_dir_hash
-	       << " on " << req->path[0]
+      ldout(cct, 20) << "choose_target_mds inode dir hash on " << req->path[0]
 	       << " => " << hash << dendl;
       is_hash = true;
     }
@@ -1057,8 +1048,7 @@ int Client::choose_target_mds(MetaRequest *req)
     } else {
       in = de->dir->parent_inode;
       hash = in->hash_dentry_name(de->name);
-      ldout(cct, 20) << "choose_target_mds dentry dir hash is "
-		     << (int)in->dir_layout.dl_dir_hash << " on " << de->name
+      ldout(cct, 20) << "choose_target_mds dentry dir hash on " << de->name
 	       << " => " << hash << dendl;
       is_hash = true;
     }
@@ -2335,7 +2325,6 @@ void Client::send_cap(Inode *in, MetaSession *session, Cap *cap,
     m->head.xattr_version = in->xattr_version;
   }
 
-  m->head.layout = in->layout;
   m->head.size = in->size;
   m->head.max_size = in->max_size;
   m->head.truncate_seq = in->truncate_seq;
@@ -3225,8 +3214,6 @@ void Client::handle_cap_grant(MetaSession *session, Inode *in, Cap *cap, MClient
 		<< " caps now " << ccap_string(new_caps)
 		<< " was " << ccap_string(old_caps) << dendl;
   cap->seq = m->get_seq();
-
-  in->layout = m->head.layout;
 
   // update inode
   int implemented = 0;
@@ -7748,7 +7735,7 @@ int Client::ll_read_block(Inode *in, uint64_t blockid,
   VolumeRef mvol;
   {
     const OSDMap* osdmap = objecter->get_osdmap_read();
-    osdmap->find_by_uuid(in->layout.fl_uuid, mvol);
+    osdmap->find_by_uuid(in->uuid, mvol);
     objecter->put_osdmap_read();
   }
   if (!mvol)
@@ -7823,7 +7810,7 @@ int Client::ll_write_block(Inode *in, uint64_t blockid,
   VolumeRef mvol;
   {
     const OSDMap* osdmap = objecter->get_osdmap_read();
-    osdmap->find_by_uuid(in->layout.fl_uuid, mvol);
+    osdmap->find_by_uuid(in->uuid, mvol);
     objecter->put_osdmap_read();
   }
 
@@ -7995,7 +7982,7 @@ int Client::_fallocate(Fh *fh, int mode, int64_t offset, int64_t length)
       VolumeRef mvol;
       {
 	const OSDMap* osdmap = objecter->get_osdmap_read();
-	osdmap->find_by_uuid(in->layout.fl_uuid, mvol);
+	osdmap->find_by_uuid(in->uuid, mvol);
 	objecter->put_osdmap_read();
       }
       if (!mvol) {

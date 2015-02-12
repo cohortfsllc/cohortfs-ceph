@@ -92,7 +92,7 @@ void MDLog::create(Context *c)
   ldout(mds->cct, 5) << "create empty log" << dendl;
   init_journaler();
   journaler->set_writeable();
-  journaler->create(&mds->mdcache->default_log_layout);
+  journaler->create();
   journaler->write_head(c);
 }
 
@@ -171,8 +171,11 @@ void MDLog::submit_entry(LogEvent *le, Context *c)
 
   // start a new segment?
   //  FIXME: should this go elsewhere?
+#if 0
+// XXX segments?  do we need them? mdw 20150215
   uint64_t last_seg = get_last_segment_offset();
   uint64_t period = journaler->get_layout_period();
+#endif
   // start a new segment if there are none or if we reach end of last segment
   if (le->get_type() == EVENT_SUBTREEMAP ||
       (le->get_type() == EVENT_IMPORTFINISH && mds->is_resolve())) {
@@ -180,10 +183,12 @@ void MDLog::submit_entry(LogEvent *le, Context *c)
     // don not insert ESubtreeMap among EImportFinish events that finish
     // disambiguate imports. Because the ESubtreeMap reflects the subtree
     // state when all EImportFinish events are replayed.
+#if 0
   } else if (journaler->get_write_pos()/period != last_seg/period) {
     ldout(mds->cct, 10) << "submit_entry also starting new segment: last = " << last_seg
 	     << ", cur pos = " << journaler->get_write_pos() << dendl;
     start_new_segment();
+#endif
   } else if (mds->cct->_conf->mds_debug_subtrees &&
 	     le->get_type() != EVENT_SUBTREEMAP_TEST) {
     // debug: journal this every time to catch subtree replay bugs.
