@@ -212,6 +212,13 @@ int librados::RadosClient::connect()
   messenger->add_dispatcher_tail(objecter);
   messenger->add_dispatcher_tail(this);
 
+  // To wake up any waiters whenever a new OSDMap comes in.
+  objecter->add_osdmap_notifier([&](){
+      unique_lock rcl(lock);
+      cond.notify_all();
+      rcl.unlock();
+    });
+
   messenger->start();
 
   ldout(cct, 1) << "setting wanted keys" << dendl;
@@ -385,14 +392,6 @@ bool librados::RadosClient::_dispatch(Message *m)
 {
   unique_lock l(lock, std::defer_lock);
   switch (m->get_type()) {
-  // OSD
-  case CEPH_MSG_OSD_MAP:
-    l.lock();
-    cond.notify_all();
-    l.unlock();
-    m->put();
-    break;
-
   case CEPH_MSG_MDS_MAP:
     break;
 

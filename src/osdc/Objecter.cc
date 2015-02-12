@@ -643,6 +643,13 @@ namespace OSDC {
     if (!waiting_for_map.empty()) {
       _maybe_request_map();
     }
+
+    // Unlock before calling notifiers
+    shl.unlock();
+
+    for (const auto& f : osdmap_notifiers) {
+      f();
+    }
   }
 
   // op volume check
@@ -932,6 +939,10 @@ namespace OSDC {
     wl.unlock();
     cond.wait(l, [&](){ return done; });
     l.unlock();
+  }
+
+  void Objecter::add_osdmap_notifier(const function<void()>& f) {
+    osdmap_notifiers.push_back(f);
   }
 
   struct C_Objecter_GetVersion : public Context {
