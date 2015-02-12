@@ -92,14 +92,11 @@ boost::uuids::uuid librados::RadosClient::lookup_volume(const string& name)
   if (r < 0)
     return boost::uuids::nil_uuid();
 
-  Objecter::shared_lock ol;
-  const OSDMap *osdmap = objecter->get_osdmap_read(ol);
-  VolumeRef v;
   boost::uuids::uuid id = boost::uuids::nil_uuid();
-  if (osdmap->find_by_name(name, v)) {
+  VolumeRef v = objecter->vol_by_name(name);
+  if (v) {
     id = v->id;
   }
-  ol.unlock();
   return id;
 }
 
@@ -109,14 +106,11 @@ string librados::RadosClient::lookup_volume(const boost::uuids::uuid& id)
   if (r < 0)
     return string();
 
-  Objecter::shared_lock ol;
-  const OSDMap *osdmap = objecter->get_osdmap_read(ol);
-  VolumeRef v;
+  VolumeRef v = objecter->vol_by_uuid(id);
   string name;
-  if (osdmap->find_by_uuid(id, v)) {
+  if (v) {
     name = v->name;
   }
-  ol.unlock();
   return name;
 }
 
@@ -315,21 +309,18 @@ int librados::RadosClient::create_ioctx(const string &name, IoCtxImpl **io)
   if (r < 0)
     return r;
 
-  Objecter::shared_lock ol;
-  const OSDMap *osdmap = objecter->get_osdmap_read(ol);
   try {
     id = parse(name);
-    if (!osdmap->find_by_uuid(id, v)) {
-      r = -ENOENT;
-      goto err;
+    v = objecter->vol_by_uuid(id);
+    if (!v) {
+      return -ENOENT;
     }
   } catch (std::runtime_error &e) {
-    if (!osdmap->find_by_name(name, v)) {
-      r = -ENOENT;
-      goto err;
+    v = objecter->vol_by_name(name);
+    if (!v) {
+      return -ENOENT;
     }
   }
-  ol.unlock();
 
   r = v->attach(cct);
   if (r < 0) {
@@ -339,11 +330,6 @@ int librados::RadosClient::create_ioctx(const string &name, IoCtxImpl **io)
   *io = new librados::IoCtxImpl(this, objecter, v);
 
   return 0;
-
-err:
-
-  ol.unlock();
-  return r;
 }
 
 int librados::RadosClient::create_ioctx(const boost::uuids::uuid& id, IoCtxImpl **io)
@@ -354,24 +340,18 @@ int librados::RadosClient::create_ioctx(const boost::uuids::uuid& id, IoCtxImpl 
   VolumeRef volume;
 
   Objecter::shared_lock ol;
-  const OSDMap *osdmap = objecter->get_osdmap_read(ol);
-  if (!osdmap->find_by_uuid(id, volume)) {
-    r = -ENOENT;
-    goto err;
+  volume = objecter->vol_by_uuid(id);
+  if (!volume) {
+    return -ENOENT;
   }
-  ol.unlock();
 
   r = volume->attach(cct);
   if (r < 0) {
-    goto err;
+    return r;
   }
 
   *io = new librados::IoCtxImpl(this, objecter, volume);
   return 0;
-
-err:
-  ol.unlock();
-  return r;
 }
 
 bool librados::RadosClient::ms_dispatch(Message *m)

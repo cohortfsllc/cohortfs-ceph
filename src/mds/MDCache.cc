@@ -7371,13 +7371,7 @@ void MDCache::_open_ino_backtrace_fetched(inodeno_t ino, bufferlist& bl, int err
     if (backtrace.volume != info.volume->id && !backtrace.volume.is_nil()) {
       dout(10) << " old object in volume " << info.volume
 	       << ", retrying volume " << backtrace.volume << dendl;
-      {
-	Objecter::shared_lock l;
-	const OSDMap* osdmap = mds->objecter->get_osdmap_read(l);
-	osdmap->find_by_uuid(backtrace.volume, info.volume);
-	l.unlock();
-      }
-
+    info.volume = mds->objecter->vol_by_uuid(backtrace.volume);
 // XXX error recovery?
       int r = info.volume->attach(mds->objecter->cct);
       if (r) {
@@ -8637,13 +8631,7 @@ void MDCache::purge_stray(CDentry *dn)
   for (auto p = pi->old_volumes.begin();
        p != pi->old_volumes.end();
        ++p) {
-    VolumeRef volume;
-    {
-      Objecter::shared_lock l;
-      const OSDMap* osdmap = mds->objecter->get_osdmap_read(l);
-      osdmap->find_by_uuid(*p, volume);
-      l.unlock();
-    }
+    VolumeRef volume(mds->objecter->vol_by_uuid(*p));
 // XXX error recovery?
     int r = volume->attach(mds->objecter->cct);
     if (r) {

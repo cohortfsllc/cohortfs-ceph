@@ -1014,15 +1014,7 @@ void CInode::store_backtrace(Context *fin)
     if (*p == volume->id || old_volumes.count(*p))
       continue;
 
-    VolumeRef ovol;
-    {
-      // Obviously what we really want is a type that combines a
-      // pointer with a lock.
-      Objecter::shared_lock l;
-      const OSDMap* osdmap = mdcache->mds->objecter->get_osdmap_read(l);
-      osdmap->find_by_uuid(*p, ovol);
-      l.unlock();
-    }
+    VolumeRef ovol(mdcache->mds->objecter->vol_by_uuid(*p));
     int r = ovol->attach(mdcache->mds->objecter->cct);
     if (r) {
       dout(0) << "Unable to attach volume " << ovol << " error=" << r << dendl;
