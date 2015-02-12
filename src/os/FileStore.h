@@ -117,13 +117,8 @@ public:
   class FSObject : public ObjectStore::Object
   {
   public:
-    /* XXXX bogus ctor! needs Casey! */
-    FSObject(FSCollection* _fc, const hoid_t& oid)
-      : ObjectStore::Object(oid), fc(_fc) {
-    }
-
-    FSObject(FSCollection* _fc, const hoid_t& oid,
-	     const FDRef& _fd)
+    /* XXXX maybe bogus ctor... needs Casey! */
+    FSObject(FSCollection* _fc, const hoid_t& oid, const FDRef& _fd)
       : ObjectStore::Object(oid), fc(_fc) {
       fd = _fd;
     }
@@ -137,19 +132,21 @@ public:
     {
       FSCollection* fc;
       const hoid_t oid;
+      const FDRef fd;
 
-      FSObjectFactory(FSCollection* _fc, const hoid_t& _oid)
-	: fc(_fc), oid(_oid) {}
+      FSObjectFactory(FSCollection* _fc, const hoid_t& _oid,
+		      const FDRef& _fd)
+	: fc(_fc), oid(_oid), fd(_fd) {}
 
       void recycle (cohort::lru::Object* o) {
 	  /* re-use an existing object */
 	  o->~Object(); // call lru::Object virtual dtor
 	  // placement new!
-	  new (o) FSObject(fc, oid);
+	  new (o) FSObject(fc, oid, fd);
       }
 
       cohort::lru::Object* alloc() {
-	return new FSObject(fc, oid);
+	return new FSObject(fc, oid, fd);
       }
     };
 

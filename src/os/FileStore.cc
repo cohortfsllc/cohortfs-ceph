@@ -2383,7 +2383,22 @@ FileStore::FSObject* FileStore::get_object(FSCollection* fc,
 					   const SequencerPosition& spos,
 					   bool create)
 {
+  /* XXXX temporary */
+  FDRef fd;
   FSObject* oh = nullptr;
+
+  int r = lfn_open(fc, oid, false, &fd);
+  if ((r < 0) &&
+      create &&
+      _check_global_replay_guard(fc, spos)) {
+      r = lfn_open(fc, oid, true, &fd);
+  }
+  if (r != 0)
+    return oh;
+
+  /* XXX redundant, hoid_t has hk */
+  std::tuple<uint64_t, const hoid_t&> k(oid.hk, oid);
+
   Object::ObjCache::Latch lat;
 retry:
   oh =
@@ -2402,7 +2417,7 @@ retry:
   } else {
     /* allocate and insert "new" Object */
     /* XXX Casey will integrate CollectionIndex */
-    FSObject::FSObjectFactory prototype(fc, oid);
+    FSObject::FSObjectFactory prototype(fc, oid, fd);
     oh = static_cast<FSObject*>(
       obj_lru.insert(&prototype,
 		     cohort::lru::Edge::MRU,
