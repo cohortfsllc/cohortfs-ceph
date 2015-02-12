@@ -51,6 +51,7 @@
 #include "include/str_map.h"
 #include "cohort/CohortVolume.h"
 #include "cohort/ErasureCPlacer.h"
+#include "cohort/StripedPlacer.h"
 
 #define dout_subsys ceph_subsys_mon
 #undef dout_prefix
@@ -2228,7 +2229,7 @@ done:
 	goto reply;
       }
     }
-  } else if (prefix == "osd volume create") {
+  } else if (prefix == "osd placer create erasure") {
     /* Factor this out into its own function sometime. */
     string name;
     int64_t stripe_unit; // This is the /desired/ stripe unit. You
@@ -2240,9 +2241,8 @@ done:
     string symbols;
 
     PlacerRef placer;
-    VolumeRef vol;
 
-    cmd_getval(mon->cct, cmdmap, "volumeName", name);
+    cmd_getval(mon->cct, cmdmap, "placerName", name);
     cmd_getval(mon->cct, cmdmap, "stripeUnit", stripe_unit, 32768L);
     cmd_getval(mon->cct, cmdmap, "erasurePluginName", plugin,
 	       string("jerasure"));
@@ -2251,32 +2251,124 @@ done:
     cmd_getval(mon->cct, cmdmap, "placeCode", place_text, string());
     cmd_getval(mon->cct, cmdmap, "placeSymbols", symbols, string());
 
-    /* Only one volume type for now, when we implement more I'll
-       come back and complexify this. */
-
     if (!Placer::valid_name(name, ss)) {
       err = -EINVAL;
       goto reply;
     }
     placer = ErasureCPlacer::create(mon->cct, name, stripe_unit, plugin, params,
 			       place_text, symbols, ss);
-    if (placer) {
-      ss << "placer: " << placer << " created.";
-      pending_inc.include_addition(placer);
-    } else {
+    if (!placer) {
       err = -EINVAL;
       goto reply;
     }
-    vol = CohortVolume::create(mon->cct, name, placer, ss);
-    if (vol) {
-      ss << "volume: " << vol << " created.";
-      pending_inc.include_addition(vol);
-      wait_for_finished_proposal(new Monitor::C_Command(
-				   mon, m, 0, rs,
-				   get_last_committed() + 1));
+    ss << "ErasureCPlacer: " << placer << " created.";
+    pending_inc.include_addition(placer);
+    wait_for_finished_proposal(new Monitor::C_Command(
+				 mon, m, 0, rs,
+				 get_last_committed() + 1));
+    return true;
+  } else if (prefix == "osd placer create striped") {
+    /* Factor this out into its own function sometime. */
+    string name;
+    int64_t stripe_unit;
+    int64_t stripe_width;
 
-      return true;
-    } else {
+    PlacerRef placer;
+
+    cmd_getval(mon->cct, cmdmap, "placerName", name);
+    cmd_getval(mon->cct, cmdmap, "stripeUnit", stripe_unit, 32768L);
+    cmd_getval(mon->cct, cmdmap, "stripeWidth", stripe_width, 4L);
+
+    if (!Placer::valid_name(name, ss)) {
+      err = -EINVAL;
+      goto reply;
+    }
+    placer = StripedPlacer::create(mon->cct, name, stripe_unit, stripe_width, ss);
+    if (!placer) {
+      err = -EINVAL;
+      goto reply;
+    }
+    ss << "StripedPlacer: " << placer << " created.";
+    pending_inc.include_addition(placer);
+    wait_for_finished_proposal(new Monitor::C_Command(
+				 mon, m, 0, rs,
+				 get_last_committed() + 1));
+    return true;
+  } else if (prefix == "osd placer remove") {
+    string name;
+    PlacerRef placer;
+
+    cmd_getval(mon->cct, cmdmap, "placerName", name);
+    if (!osdmap.find_by_name(name, placer)) {
+      ss << "placer named " << name << " not found";
+      err = -EINVAL;
+      goto reply;
+    }
+    pending_inc.include_removal(placer);
+    wait_for_finished_proposal(new Monitor::C_Command(
+				 mon, m, 0, rs,
+				 get_last_committed() + 1));
+    return true;
+  } else if (prefix == "osd placer list") {
+    string pattern;
+    stringstream ds;
+    bool first = true;
+
+    cmd_getval(mon->cct, cmdmap, "pattern", pattern, string("."));
+    try {
+      const boost::regex e(pattern);
+      if (f)
+	f->open_array_section("placers");
+      for (auto pl = osdmap.placers.by_uuid.begin();
+	   pl != osdmap.placers.by_uuid.end(); ++pl) {
+	if (!regex_search(pl->second->name, e,
+		boost::regex_constants::match_any))
+	  continue;
+	if (f) {
+	  f->open_object_section("placer_info");
+	  pl->second->dump(f.get());
+	  f->close_section();
+	} else {
+	  if (!first) ds << "\n";
+	  ds << *pl->second;
+	  first = false;
+	}
+      }
+      if (f) {
+	f->close_section();
+	f->flush(ds);
+      }
+      rdata.append(ds);
+    } catch (boost::regex_error& e) {
+      ss << e.what();
+      err = -EINVAL;
+      goto reply;
+    }
+  } else if (prefix == "osd volume create") {
+    /* Factor this out into its own function sometime. */
+    string volumeName;
+    string placerName;
+
+    PlacerRef placer;
+    VolumeRef vol;
+
+    cmd_getval(mon->cct, cmdmap, "volumeName", volumeName);
+    cmd_getval(mon->cct, cmdmap, "placerName", placerName);
+
+    /* Only one volume type for now, when we implement more I'll
+       come back and complexify this. */
+
+    if (!Placer::valid_name(placerName, ss)) {
+      err = -EINVAL;
+      goto reply;
+    }
+    if (!osdmap.find_by_name(placerName, placer)) {
+      ss << "placer named " << placerName << " not found";
+      err = -EINVAL;
+      goto reply;
+    }
+    vol = CohortVolume::create(mon->cct, volumeName, placer, ss);
+    if (!vol) {
       err = -EINVAL;
       goto reply;
     }
@@ -2298,16 +2390,6 @@ done:
       goto reply;
     }
     pending_inc.include_removal(vol);
-    cmd_getval(mon->cct, cmdmap, "placerName", name);
-    if (!osdmap.find_by_name(name, placer)) {
-      ss << "placer named " << name << " not found";
-      err = -EINVAL;
-      goto reply;
-    }
-    pending_inc.include_removal(placer);
-    wait_for_finished_proposal(new Monitor::C_Command(
-				 mon, m, 0, rs,
-				 get_last_committed() + 1));
     return true;
   } else if (prefix == "osd volume list") {
     string pattern;

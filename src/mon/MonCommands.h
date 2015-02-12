@@ -322,13 +322,32 @@ COMMAND("osd blacklist " \
 	"name=expire,type=CephFloat,range=0.0,req=false", \
 	"add (optionally until <expire> seconds from now) or remove <addr> from blacklist", \
 	"osd", "rw", "cli,rest")
-COMMAND("osd volume create "					 \
-	"name=volumeName,type=CephString "			 \
+COMMAND("osd placer create striped "			 \
+	"name=placerName,type=CephString "			 \
+	"name=stripeUnit,type=CephInt,req=false "		 \
+	"name=stripeWidth,type=CephInt,req=false ",		 \
+	"Create a new StripedPlacer",				 \
+	"osd", "rw", "cli,rest")
+COMMAND("osd placer create erasure "			 \
+	"name=placerName,type=CephString "			 \
 	"name=stripeUnit,type=CephInt,req=false "		 \
 	"name=erasurePluginName,type=CephString,req=false "	 \
 	"name=erasureParams,type=CephString,req=false "		 \
 	"name=placeCode,type=CephString,req=false "		 \
 	"name=placeSymbols,type=CephString,req=false ",		 \
+	"Create a new ErasureCPlacer",				 \
+	"osd", "rw", "cli,rest")
+COMMAND("osd placer remove "		   \
+	"name=placerName,type=CephString", \
+	"Remove a placer",		   \
+	"osd", "rw", "cli,rest")
+COMMAND("osd placer list "				\
+	"name=pattern,type=CephString,req=false",	\
+	"list placers",					\
+	"osd", "r", "cli,rest")
+COMMAND("osd volume create "					 \
+	"name=volumeName,type=CephString "			 \
+	"name=placerName,type=CephString ",			 \
 	"Create a new volume",					 \
 	"osd", "rw", "cli,rest")
 COMMAND("osd volume remove "		   \
