@@ -35,6 +35,8 @@
 #include "include/rados/rados_types.h"
 #include "include/rados/rados_types.hpp"
 
+#include "common/shunique_lock.h"
+
 #include "ObjectOperation.h"
 
 class Context;
@@ -92,6 +94,7 @@ namespace OSDC {
 
     std::shared_timed_mutex rwlock;
     typedef std::unique_lock<std::shared_timed_mutex> unique_lock;
+    typedef ceph::shunique_lock<std::shared_timed_mutex> shunique_lock;
 
     std::mutex timer_lock;
     typedef std::lock_guard<std::mutex> timer_lock_guard;
@@ -352,24 +355,21 @@ namespace OSDC {
 
     int _calc_targets(op_base& t, Op::unique_lock& ol);
     int _map_session(SubOp& subop, OSDSession **s,
-		     Op::unique_lock& ol, unique_lock& lc);
+		     Op::unique_lock& ol, const shunique_lock& lc);
 
     void _session_subop_assign(OSDSession& to, SubOp& subop);
     void _session_subop_remove(OSDSession& from, SubOp& subop);
     void _session_linger_subop_assign(OSDSession& to, SubOp& subop);
     void _session_linger_subop_remove(OSDSession& from, SubOp& subop);
 
-    int _get_osd_session(int osd,
-			 shared_lock& rl, unique_lock& wl,
+    int _get_osd_session(int osd, shunique_lock& sl,
 			 OSDSession **session);
-    int _assign_subop_target_session(
-      SubOp& op, shared_lock& lc,
-      bool src_session_locked, bool dst_session_locked);
-    int _get_subop_target_session(SubOp& op,
-				  shared_lock& lc, unique_lock& wl,
+    int _assign_subop_target_session(SubOp& op, shared_lock& lc,
+				     bool src_session_locked,
+				     bool dst_session_locked);
+    int _get_subop_target_session(SubOp& op, shunique_lock& sl,
 				  OSDSession** session);
-    int _recalc_linger_op_targets(LingerOp& op, shared_lock& rl,
-				  unique_lock& wl);
+    int _recalc_linger_op_targets(LingerOp& op, shunique_lock& sl);
 
     void _linger_submit(LingerOp& info);
     void _send_linger(LingerOp& info);
@@ -389,7 +389,7 @@ namespace OSDC {
     void _linger_ops_resend(map<uint64_t, LingerOp *>& lresend);
 
     int _get_session(int osd, OSDSession **session,
-		     unique_lock& lc);
+		     const shunique_lock& shl);
     void put_session(OSDSession& s);
     void get_session(OSDSession& s);
     void _reopen_session(OSDSession& session);
@@ -404,12 +404,11 @@ namespace OSDC {
      * If throttle_op needs to throttle it will unlock client_lock.
      */
     int calc_op_budget(Op& op);
-    void _throttle_op(Op& op, shared_lock& rl, unique_lock& wl,
-		      int op_size = 0);
-    int _take_op_budget(Op& op, shared_lock& rl, unique_lock& wl) {
+    void _throttle_op(Op& op, shunique_lock& sl, int op_size = 0);
+    int _take_op_budget(Op& op, shunique_lock& sl) {
       int op_budget = calc_op_budget(op);
       if (keep_balanced_budget) {
-	_throttle_op(op, rl, wl, op_budget);
+	_throttle_op(op, sl, op_budget);
       } else {
 	op_throttle_bytes.take(op_budget);
 	op_throttle_ops.take(1);
@@ -482,7 +481,7 @@ namespace OSDC {
 			bool force_resend_writes,
 			map<ceph_tid_t, SubOp*>& need_resend,
 			list<LingerOp*>& need_resend_linger,
-			unique_lock& lc);
+			shunique_lock& shl);
     // messages
   public:
     bool ms_dispatch(Message *m);
@@ -510,13 +509,12 @@ namespace OSDC {
     void wait_for_osd_map();
 
   private:
-    bool _promote_lock_check_race(shared_lock& rl, unique_lock& wl);
+    bool _promote_lock_check_race(shunique_lock& sl);
 
     // low-level
-    ceph_tid_t _op_submit(Op& op, Op::unique_lock& ol, shared_lock& rl,
-			  unique_lock& wl);
+    ceph_tid_t _op_submit(Op& op, Op::unique_lock& ol, shunique_lock& sl);
     ceph_tid_t _op_submit_with_budget(Op& op, Op::unique_lock& ol,
-				      shared_lock& rl, unique_lock& wl,
+				      shunique_lock& sl,
 				      int *ctx_budget = nullptr);
     // public interface
   public:

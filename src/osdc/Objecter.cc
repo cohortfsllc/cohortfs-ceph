@@ -389,7 +389,7 @@ namespace OSDC {
 				bool force_resend_writes,
 				map<ceph_tid_t, SubOp*>& need_resend,
 				list<LingerOp*>& need_resend_linger,
-				unique_lock& lc)
+				shunique_lock& shl)
   {
     list<uint64_t> unregister_lingers;
 
@@ -463,7 +463,7 @@ namespace OSDC {
 
   void Objecter::handle_osd_map(MOSDMap *m)
   {
-    unique_lock wl(rwlock);
+    shunique_lock shl(rwlock, ceph::acquire_unique);
     if (!initialized)
       return;
 
@@ -526,13 +526,13 @@ namespace OSDC {
 
 	  was_full = was_full || osdmap_full_flag();
 	  _scan_requests(*homeless_session, skipped_map, was_full,
-			 need_resend, need_resend_linger, wl);
+			 need_resend, need_resend_linger, shl);
 
 	  // osd addr changes?
 	  for (auto p = osd_sessions.begin(); p != osd_sessions.end(); ) {
 	    OSDSession& s = *p;
 	    _scan_requests(s, skipped_map, was_full,
-			   need_resend, need_resend_linger, wl);
+			   need_resend, need_resend_linger, shl);
 	    ++p;
 	    if (!osdmap->is_up(s.osd) ||
 		(s.con &&
@@ -548,13 +548,13 @@ namespace OSDC {
 	if (m->maps.count(m->get_last())) {
 	  for (auto& s : osd_sessions) {
 	    _scan_requests(s, false, false, need_resend, need_resend_linger,
-			   wl);
+			   shl);
 	  }
 	  ldout(cct, 3) << "handle_osd_map decoding full epoch "
 			<< m->get_last() << dendl;
 	  osdmap->decode(m->maps[m->get_last()]);
 	  _scan_requests(*homeless_session, false, false,
-			 need_resend, need_resend_linger, wl);
+			 need_resend, need_resend_linger, shl);
 
 	} else {
 	  ldout(cct, 3) << "handle_osd_map hmm, i want a full map, requesting"
@@ -581,7 +581,7 @@ namespace OSDC {
       bool mapped_session = false;
       if (!s) {
 	Op::unique_lock ol(subop->parent.lock);
-	int r = _map_session(*subop, &s, ol, wl);
+	int r = _map_session(*subop, &s, ol, shl);
 	ol.unlock();
 	assert(r == 0);
 	mapped_session = true;
@@ -609,7 +609,7 @@ namespace OSDC {
       if (!op->session) {
 	_calc_target(&op->target);
 	OSDSession *s = NULL;
-	int const r = _get_session(op->target.osd, &s, wl);
+	int const r = _get_session(op->target.osd, &s, shl);
 	assert(r == 0);
 	assert(s != NULL);
 	op->session = s;
@@ -813,11 +813,10 @@ namespace OSDC {
   /**
    * Look up OSDSession by OSD id.
    *
-   * @returns 0 on success, or -EAGAIN if the lock context requires
-   * promotion to write.
+   * @returns 0 on success, or -EAGAIN if we need a unique_lock
    */
   int Objecter::_get_session(int osd, OSDSession **session,
-			     unique_lock& lc)
+			     const shunique_lock& shl)
   {
     if (osd < 0) {
       *session = homeless_session;
@@ -833,7 +832,7 @@ namespace OSDC {
       *session = &s;
       return 0;
     }
-    if (!lc) {
+    if (!shl.owns_lock()) {
       return -EAGAIN;
     }
     OSDSession *s = new OSDSession(cct, osd);
@@ -1215,15 +1214,13 @@ namespace OSDC {
 
   ceph_tid_t Objecter::op_submit(Op *op, int *ctx_budget)
   {
-    shared_lock rl(rwlock); // We actually acquire this
-    // A function we call might take this
-    unique_lock wl(rwlock, std::defer_lock);
+    shunique_lock sl(rwlock, ceph::acquire_shared);
     Op::unique_lock ol(op->lock);
-    return _op_submit_with_budget(*op, ol, rl, wl, ctx_budget);
+    return _op_submit_with_budget(*op, ol, sl, ctx_budget);
   }
 
   ceph_tid_t Objecter::_op_submit_with_budget(Op& op, Op::unique_lock& ol,
-					      shared_lock& rl, unique_lock& wl,
+					      shunique_lock& sl,
 					      int *ctx_budget)
   {
     assert(initialized);
@@ -1231,7 +1228,7 @@ namespace OSDC {
     // throttle.  before we look at any state, because
     // take_op_budget() may drop our lock while it blocks.
     if (!op.ctx_budgeted || (ctx_budget && (*ctx_budget == -1))) {
-      int op_budget = _take_op_budget(op, rl, wl);
+      int op_budget = _take_op_budget(op, sl);
       // take and pass out the budget for the first OP
       // in the context session
       if (ctx_budget && (*ctx_budget == -1)) {
@@ -1239,7 +1236,7 @@ namespace OSDC {
       }
     }
 
-    ceph_tid_t tid = _op_submit(op, ol, rl, wl);
+    ceph_tid_t tid = _op_submit(op, ol, sl);
 
     if (osd_timeout > ceph::timespan(0)) {
       unique_timer_lock l(timer_lock);
@@ -1251,7 +1248,7 @@ namespace OSDC {
   }
 
   ceph_tid_t Objecter::_op_submit(Op& op, Op::unique_lock& ol,
-				  shared_lock& rl, unique_lock& wl)
+				  shunique_lock& shl)
   {
     op.trace.keyval("tid", op.tid);
     op.trace.event("op_submit", &trace_endpoint);
@@ -1267,12 +1264,12 @@ namespace OSDC {
       OSDSession *session = nullptr;
       if (subop.tid == 0)
 	subop.tid = ++last_tid;
-      int r = _get_session(subop.osd, &session, wl);
+      int r = _get_session(subop.osd, &session, shl);
       if (r == -EAGAIN) {
 	assert(!session);
-	rl.unlock();
-	wl.lock();
-	r = _get_session(subop.osd, &session, wl);
+	shl.unlock();
+	shl.lock();
+	r = _get_session(subop.osd, &session, shl);
 	assert(r == 0);
       }
       assert(session);  // may be homeless
@@ -1282,9 +1279,9 @@ namespace OSDC {
     }
 
     // We may need to take wlock if we will need to _set_op_map_check later.
-    if (check_for_latest_map && !wl) {
-      rl.unlock();
-      wl.lock();
+    if (check_for_latest_map && shl.owns_lock_shared()) {
+      shl.unlock();
+      shl.lock();
     }
 
     inflight_ops.insert(op);
@@ -1455,13 +1452,13 @@ namespace OSDC {
 
   int Objecter::_map_session(SubOp& subop, OSDSession **s,
 			     Op::unique_lock& ol,
-			     unique_lock& lc)
+			     const shunique_lock& shl)
   {
     int r = _calc_targets(subop.parent, ol);
     if (r == TARGET_VOLUME_DNE) {
       return -ENXIO;
     }
-    return _get_session(subop.osd, s, lc);
+    return _get_session(subop.osd, s, shl);
   }
 
   void Objecter::_session_subop_assign(OSDSession& to, SubOp& subop)
@@ -1503,17 +1500,14 @@ namespace OSDC {
     subop.session = NULL;
   }
 
-  int Objecter::_get_osd_session(int osd, shared_lock& rl,
-				 unique_lock& wl,
+  int Objecter::_get_osd_session(int osd, shunique_lock& shl,
 				 OSDSession **psession)
   {
     int r;
     do {
-      r = _get_session(osd, psession, wl);
+      r = _get_session(osd, psession, shl);
       if (r == -EAGAIN) {
-	assert(!wl);
-
-	if (!_promote_lock_check_race(rl, wl)) {
+	if (!_promote_lock_check_race(shl)) {
 	  return r;
 	}
       }
@@ -1523,26 +1517,27 @@ namespace OSDC {
     return 0;
   }
 
-  int Objecter::_get_subop_target_session(SubOp& subop, shared_lock& rl,
-					  unique_lock& wl,
+  int Objecter::_get_subop_target_session(SubOp& subop,
+					  shunique_lock& shl,
 					  OSDSession **session)
   {
-    return _get_osd_session(subop.osd, rl, wl, session);
+    return _get_osd_session(subop.osd, shl, session);
   }
 
   // This is called pretty much precisely because it's not a
   // "promote". It's a bad name for it but that's what the ceph people
   // called it.
-  bool Objecter::_promote_lock_check_race(shared_lock& rl, unique_lock& wl)
+  bool Objecter::_promote_lock_check_race(shunique_lock& shl)
   {
+    assert(shl.owns_lock());
     epoch_t epoch = osdmap->get_epoch();
-    rl.unlock();
-    wl.lock();
+    shl.unlock();
+    shl.lock();
     return (epoch == osdmap->get_epoch());
   }
 
   int Objecter::_recalc_linger_op_targets(LingerOp& linger_op,
-					  shared_lock& rl, unique_lock& wl)
+					  shunique_lock& shl)
   {
 #ifdef LINGER
     assert(rwlock.is_wlocked());
@@ -1706,36 +1701,29 @@ namespace OSDC {
     return op.op->get_budget();
   }
 
-  void Objecter::_throttle_op(Op& op, shared_lock& rl, unique_lock& wl,
-			      int op_budget)
+  void Objecter::_throttle_op(Op& op, shunique_lock& shl, int op_budget)
   {
-    assert(rl || wl);
+    assert(shl);
 
-    bool locked_for_write = wl.owns_lock();
+    bool locked_for_write = shl.owns_lock();
 
     if (!op_budget)
       op_budget = calc_op_budget(op);
     if (!op_throttle_bytes.get_or_fail(op_budget)) { //couldn't take right now
-      if (!locked_for_write)
-	rl.unlock();
-      else
-	wl.unlock();
+      shl.unlock();
       op_throttle_bytes.get(op_budget);
       if (locked_for_write)
-	wl.lock();
+	shl.lock();
       else
-	rl.lock();
+	shl.lock_shared();
     }
     if (!op_throttle_ops.get_or_fail(1)) { //couldn't take right now
-      if (!locked_for_write)
-	rl.unlock();
-      else
-	wl.unlock();
+      shl.unlock();
       op_throttle_ops.get(1);
       if (locked_for_write)
-	wl.lock();
+	shl.lock();
       else
-	rl.lock();
+	shl.lock_shared();
     }
   }
 
