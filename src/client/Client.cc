@@ -5917,14 +5917,13 @@ int Client::_write(Fh *f, int64_t offset, uint64_t size, const char *buf,
   if ((uint64_t)(offset+size) > mdsmap->get_max_filesize()) //too large!
     return -EFBIG;
 
-  {
-    Objecter::shared_lock oml;
-    const OSDMap* osdmap = objecter->get_osdmap_read(oml);
-    bool full = osdmap->test_flag(CEPH_OSDMAP_FULL);
-    oml.unlock();
-    if (full) {
-      return -ENOSPC;
-    }
+  bool full = false;
+  objecter->with_osdmap(
+    [&full](auto o){ full = o.test_flag(CEPH_OSDMAP_FULL);
+    });
+
+  if (full) {
+    return -ENOSPC;
   }
 
 
@@ -7563,9 +7562,10 @@ int Client::ll_link(Inode *parent, Inode *newparent, const char *newname,
 
 int Client::ll_num_osds(void)
 {
-  Objecter::shared_lock oml;
-  const OSDMap* osdmap = objecter->get_osdmap_read(oml);
-  int num_osds = osdmap->get_num_osds();
+  int num_osds;
+  objecter->with_osdmap(
+    [&num_osds](auto o){ num_osds = o.get_num_osds();
+    });
   return num_osds;
 }
 
@@ -7574,12 +7574,10 @@ int Client::ll_osdaddr(int osd, uint32_t *addr)
   unique_lock cl(client_lock);
   entity_addr_t g;
   bool exists;
-  {
-    Objecter::shared_lock oml;
-    const OSDMap* osdmap = objecter->get_osdmap_read(oml);
-    g = osdmap->get_addr(osd);
-    exists = osdmap->exists(osd);
-  }
+  objecter->with_osdmap([&](auto o){
+      g = o.get_addr(osd);
+      exists = o.exists(osd);
+    });
   uint32_t nb_addr = (g.in4_addr()).sin_addr.s_addr;
 
   if (!exists) {
@@ -7973,12 +7971,10 @@ int Client::_fallocate(Fh *fh, int mode, int64_t offset, int64_t length,
     return -EOPNOTSUPP;
 
   bool full;
-  {
-    Objecter::shared_lock oml;
-    const OSDMap* osdmap = objecter->get_osdmap_read(oml);
-    full = (osdmap->test_flag(CEPH_OSDMAP_FULL) &&
-	    !(mode & FALLOC_FL_PUNCH_HOLE));
-  }
+  objecter->with_osdmap([&](auto o){
+      full = (o.test_flag(CEPH_OSDMAP_FULL) &&
+	      !(mode & FALLOC_FL_PUNCH_HOLE));
+    });
 
   if (full)
     return -ENOSPC;
@@ -8143,12 +8139,10 @@ int Client::ll_release(Fh *fh)
 int Client::get_osd_addr(int osd, entity_addr_t& addr)
 {
   bool exists;
-  {
-    Objecter::shared_lock oml;
-    const OSDMap* osdmap = objecter->get_osdmap_read(oml);
-    exists = osdmap->exists(osd);
-    addr = osdmap->get_addr(osd);
-  }
+  objecter->with_osdmap([&](auto o){
+      exists = o.exists(osd);
+      addr = o.get_addr(osd);
+    });
 
   if (!exists)
     return -ENOENT;
@@ -8162,12 +8156,12 @@ int Client::get_osd_addr(int osd, entity_addr_t& addr)
  */
 int Client::get_local_osd()
 {
-  Objecter::shared_lock oml;
-  const OSDMap* osdmap = objecter->get_osdmap_read(oml);
-  if (osdmap->get_epoch() != local_osd_epoch) {
-    local_osd = osdmap->find_osd_on_ip(messenger->get_myaddr());
-    local_osd_epoch = osdmap->get_epoch();
-  }
+  objecter->with_osdmap([&](auto o){
+      if (o.get_epoch() != local_osd_epoch) {
+	local_osd = o.find_osd_on_ip(messenger->get_myaddr());
+	local_osd_epoch = o.get_epoch();
+      }
+    });
   return local_osd;
 }
 

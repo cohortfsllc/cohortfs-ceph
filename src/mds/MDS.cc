@@ -370,17 +370,18 @@ int MDS::init(int wanted_state)
   // verify that osds support tmap2omap
   while (true) {
     int num_osds;
+    epoch_t osd_epoch;
     objecter->maybe_request_map();
     objecter->wait_for_osd_map();
-    Objecter::shared_lock l;
-    const OSDMap* osdmap = objecter->get_osdmap_read(l);
-    num_osds = osdmap->get_num_up_osds();
-    l.unlock();
+    objecter->with_osdmap([&](auto o){
+	num_osds = o.get_num_up_osds();
+	osd_epoch = o.get_epoch();
+      });
     if (num_osds > 0) {
-	break;
+      break;
     } else {
-	derr << "*** no OSDs are up as of epoch "
-	     << osdmap->get_epoch() << ", waiting" << dendl;
+      derr << "*** no OSDs are up as of epoch "
+	   << osd_epoch << ", waiting" << dendl;
     }
 
     sleep(10);
@@ -1227,25 +1228,24 @@ void MDS::replay_start(unique_lock& ml)
 
   calc_recovery_set();
 
-  Objecter::shared_lock l;
-  const OSDMap* osdmap = objecter->get_osdmap_read(l);
+  epoch_t osd_epoch;
+  objecter->with_osdmap([&](auto o){
+      osd_epoch = o.get_epoch();
+    });
+
   dout(1) << " need osdmap epoch " << mdsmap->get_last_failure_osd_epoch()
-	  <<", have " << osdmap->get_epoch()
-	  << dendl;
+	  <<", have " << osd_epoch << dendl;
 
   // start?
-  if (osdmap->get_epoch() >= mdsmap->get_last_failure_osd_epoch()) {
+  if (osd_epoch >= mdsmap->get_last_failure_osd_epoch()) {
     boot_start(ml);
-    l.unlock();
-    osdmap = nullptr;
   } else {
     dout(1) << " waiting for osdmap " << mdsmap->get_last_failure_osd_epoch()
 	    << " (which blacklists prior instance)" << dendl;
-    l.unlock();
-    osdmap = nullptr;
     c = new C_OnFinisher(new C_MDS_BootStart(this, 0), &finisher);
     if (objecter->wait_for_map(mdsmap->get_last_failure_osd_epoch(), c)) {
-	dout(18) << "not waiting for osdmap because it just got here?" << dendl;
+	dout(18) << "not waiting for osdmap because it just got here?"
+		 << dendl;
 	c->complete(0);
     }
   }

@@ -339,7 +339,6 @@ int librados::RadosClient::create_ioctx(const boost::uuids::uuid& id, IoCtxImpl 
     return r;
   VolumeRef volume;
 
-  Objecter::shared_lock ol;
   volume = objecter->vol_by_uuid(id);
   if (!volume) {
     return -ENOENT;
@@ -414,47 +413,28 @@ bool librados::RadosClient::_dispatch(Message *m)
 
 int librados::RadosClient::wait_for_osdmap()
 {
-  // Must be called with lock locked
-
   if (objecter == NULL) {
     return -ENOTCONN;
   }
 
-  bool need_map = false;
-  Objecter::shared_lock ol;
-  const OSDMap *osdmap = objecter->get_osdmap_read(ol);
-  if (osdmap->get_epoch() == 0) {
-    need_map = true;
-  }
+  ceph::timespan timeout = 0s;
+  if (cct->_conf->rados_mon_op_timeout > 0)
+    timeout = ceph::span_from_double((cct->_conf->rados_mon_op_timeout));
 
-  if (need_map) {
-    unique_lock l(lock);
+  auto got_it = [&](){
+    bool have_map;
+    objecter->with_osdmap([&](auto o){have_map = (o.get_epoch() != 0);});
+    return have_map;
+  };
 
-    ceph::timespan timeout = 0s;
-    if (cct->_conf->rados_mon_op_timeout > 0)
-      timeout = ceph::span_from_double((cct->_conf->rados_mon_op_timeout));
-
-    if (osdmap->get_epoch() == 0) {
-      ldout(cct, 10) << __func__ << " waiting" << dendl;
-      auto start = ceph::mono_clock::now();
-      while (osdmap->get_epoch() == 0) {
-	ol.unlock();
-	cond.wait_for(l, timeout);
-	ceph::timespan elapsed = ceph::mono_clock::now() - start;
-	if (timeout > 0s && elapsed > timeout) {
-	  lderr(cct) << "timed out waiting for first osdmap from monitors"
-		     << dendl;
-	  return -ETIMEDOUT;
-	}
-	ol.lock();
-      }
-      ldout(cct, 10) << __func__ << " done waiting" << dendl;
-    }
-    ol.unlock();
-    return 0;
+  unique_lock l(lock);
+  if (timeout > 0s) {
+    if (!cond.wait_for(l, timeout, got_it))
+      return -ETIMEDOUT;
   } else {
-    return 0;
+    cond.wait(l, got_it);
   }
+  return 0;
 }
 
 int librados::RadosClient::wait_for_latest_osdmap()
