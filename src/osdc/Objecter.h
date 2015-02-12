@@ -17,6 +17,7 @@
 
 #include <boost/uuid/nil_generator.hpp>
 #include <condition_variable>
+#include <functional>
 #include <list>
 #include <map>
 #include <memory>
@@ -85,7 +86,6 @@ namespace OSDC {
 
   public:
     void maybe_request_map();
-    typedef std::shared_lock<std::shared_timed_mutex> shared_lock;
   private:
 
     void _maybe_request_map();
@@ -93,6 +93,7 @@ namespace OSDC {
     version_t last_seen_osdmap_version;
 
     std::shared_timed_mutex rwlock;
+    typedef std::shared_lock<std::shared_timed_mutex> shared_lock;
     typedef std::unique_lock<std::shared_timed_mutex> unique_lock;
     typedef ceph::shunique_lock<std::shared_timed_mutex> shunique_lock;
 
@@ -456,11 +457,21 @@ namespace OSDC {
     void start();
     void shutdown();
 
-    const OSDMap *get_osdmap_read(
-      shared_lock& l) {
-      l = shared_lock(rwlock);
-      return osdmap;
+    // The old version, returning both a pointer and a lock context
+    // was clumsy and awkward to use. I had thought of making a
+    // lockable pointer, but that has problems of its own, like the
+    // fact that one couldn't reasonably copy it.
+
+    // With this version, you call with a function that does what you
+    // want to do, and it's executed under the lock with access to the
+    // OSD Map. Obviously you oughtn't have a lock already, but since
+    // the lock is private, you can't really get one.
+    void with_osdmap(
+      std::function<void(const OSDMap&)> f) {
+      shared_lock l(rwlock);
+      f(*osdmap);
     }
+
 
     /**
      * Tell the objecter to throttle outgoing ops according to its
