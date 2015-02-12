@@ -137,7 +137,6 @@ public:
   void handle_client_setlayout(MDRequestRef& mdr);
   void handle_client_setdirlayout(MDRequestRef& mdr);
 
-  int parse_layout_vxattr(string name, string value, ceph_file_layout *layout);
   void handle_set_vxattr(MDRequestRef& mdr, CInode *cur,
 			 set<SimpleLock*> rdlocks,
 			 set<SimpleLock*> wrlocks,

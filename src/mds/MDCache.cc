@@ -4656,11 +4656,6 @@ bool MDCache::process_imported_caps()
     if (cap_imports_missing.count(p->first) > 0)
       continue;
 
-    int r = volume->attach(mds->objecter->cct);
-    if (r) {
-      dout(0) << "Unable to attach volume " << volume << " error=" << r << dendl;
-    }
-
     cap_imports_num_opening++;
     dout(10) << "  opening missing ino " << p->first << dendl;
     open_ino(p->first, in->volume, new C_MDC_RejoinOpenInoFinish(this, p->first), false);

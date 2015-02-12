@@ -40,7 +40,7 @@
 /* arbitrary limit on max # of monitors (cluster of 3 is typical) */
 #define CEPH_MAX_MON   31
 
-// #define CEPH_MIN_STRIPE_UNIT 65536
+#define CEPH_MIN_STRIPE_UNIT 65536
 
 /* crypto algorithms */
 #define CEPH_CRYPTO_NONE 0x0

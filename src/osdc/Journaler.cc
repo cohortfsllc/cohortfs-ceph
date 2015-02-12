@@ -36,35 +36,21 @@ void Journaler::set_writeable()
   readonly = false;
 }
 
-void Journaler::create(ceph_file_layout *l)
+void Journaler::create()
 {
   assert(!readonly);
   ldout(cct, 1) << "create blank journal" << dendl;
   state = STATE_ACTIVE;
 
-  set_layout(l);
 
+// XXX need better way (and rational) for setting mdw 20150215
+  fetch_len = 1<<22;	// was:? stripe_count * object_size * periods
+
+#define X_stripecountxobjectsize (1<<22)	// was:? stripe_count * object_size
   prezeroing_pos = prezero_pos = write_pos = flush_pos = safe_pos =
     read_pos = requested_pos = received_pos =
-    expire_pos = trimming_pos = trimmed_pos = layout.fl_stripe_count * layout.fl_object_size;
+    expire_pos = trimming_pos = trimmed_pos = X_stripecountxobjectsize;
 }
-
-void Journaler::set_layout(ceph_file_layout *l)
-{
-  layout = *l;
-
-  assert(layout.fl_uuid == volume->id);
-  last_written.layout = layout;
-  last_committed.layout = layout;
-
-  // prefetch intelligently.
-  // (watch out, this is big if you use big objects or weird striping)
-  uint64_t periods = cct->_conf->journaler_prefetch_periods;
-  if (periods < 2)
-    periods = 2;  // we need at least 2 periods to make progress.
-  fetch_len = layout.fl_stripe_count * layout.fl_object_size * periods;
-}
-
 
 /***************** HEADER *******************/
 
@@ -235,7 +221,6 @@ void Journaler::_finish_read_head(int r, bufferlist& bl)
   trimmed_pos = trimming_pos = h.trimmed_pos;
 
   init_headers(h);
-  set_layout(&h.layout);
 
   ldout(cct, 1) << "_finish_read_head " << h << ".  probing for end of log (from " << write_pos << ")..." << dendl;
   C_ProbeEnd *fin = new C_ProbeEnd(this);
@@ -247,14 +232,9 @@ void Journaler::probe(Context *finish, uint64_t *end)
 {
   ldout(cct, 1) << "probing for end of the log" << dendl;
   assert(state == STATE_PROBING || state == STATE_REPROBING);
-#if 0
-  // probe the log
-  filer.probe(ino, &layout, write_pos, end, 0, true, 0, finish);
-#else
   object_t oid = file_object_t(ino, 0);
   objecter->stat(oid, volume, end, NULL, CEPH_OSD_FLAG_RWORDERED,
 		 finish);
-#endif
 }
 
 void Journaler::reprobe(Context *finish)
@@ -446,7 +426,12 @@ uint64_t Journaler::append_entry(bufferlist& bl)
 
   if (!cct->_conf->journaler_allow_split_entries) {
     // will we span a stripe boundary?
-    int p = layout.fl_stripe_unit;
+#if 0
+    int p = stripe_unit;
+#else
+// XXX need something better mdw 20150215
+    int p = (1<<20);
+#endif
     if (write_pos / p != (write_pos + (int64_t)(bl.length() + sizeof(s))) / p) {
       // yes.
       // move write_pos forward.
@@ -476,7 +461,12 @@ uint64_t Journaler::append_entry(bufferlist& bl)
   write_pos += sizeof(s) + s;
 
   // flush previous object?
+#if 0
   uint64_t su = get_layout_period();
+#else
+// XXX need something better mdw 20150215
+  uint64_t su = (1<<22);	// was layout_period: = stripe_count * object_size
+#endif
   assert(su > 0);
   uint64_t write_off = write_pos % su;
   uint64_t write_obj = write_pos / su;
@@ -505,7 +495,12 @@ void Journaler::_do_flush(unsigned amount)
 
   // zero at least two full periods ahead.  this ensures
   // that the next object will not exist.
+#if 0
   uint64_t period = get_layout_period();
+#else
+// XXX need something better mdw 20150215
+  uint64_t period = (1<<22);	// was layout_period: = stripe_count * object_size
+#endif
   if (flush_pos + len + 2*period > prezero_pos) {
     _issue_prezero();
 
@@ -544,14 +539,9 @@ void Journaler::_do_flush(unsigned amount)
     write_buf.splice(0, len, &write_bl);
   }
 
-#if 0
-  filer.write(ino, volume, &layout, flush_pos, len, write_bl, ceph_clock_now(cct),
-	      0, NULL, onsafe);
-#else
   object_t oid = file_object_t(ino, 0);
   objecter->write(oid, volume, flush_pos, len, write_bl, ceph_clock_now(cct),
 		  0, NULL, onsafe);
-#endif
 
   flush_pos += len;
   assert(write_buf.length() == write_pos - flush_pos);
@@ -647,7 +637,12 @@ void Journaler::_issue_prezero()
    * issue zero requests based on write_pos, even though the invariant
    * is that we zero ahead of flush_pos.
    */
+#if 0
   uint64_t period = get_layout_period();
+#else
+// XXX need something better mdw 20150215
+  uint64_t period = (1<<22);	// was layout_period: = stripe_count * object_size
+#endif
   uint64_t to = write_pos + period * num_periods  + period - 1;
   to -= to % period;
 
@@ -666,13 +661,9 @@ void Journaler::_issue_prezero()
       ldout(cct, 10) << "_issue_prezero zeroing " << prezeroing_pos << "~" << len << " (partial period)" << dendl;
     }
     Context *c = new C_Journaler_Prezero(this, prezeroing_pos, len);
-#if 0
-    filer.zero(ino, volume, &layout, prezeroing_pos, len, ceph_clock_now(cct), 0, NULL, c);
-#else
     object_t oid = file_object_t(ino, 0);
     objecter->zero(oid, volume, prezeroing_pos, len, ceph_clock_now(cct), 0,
 		   NULL, c);
-#endif
     prezeroing_pos += len;
   }
 }
@@ -830,7 +821,12 @@ void Journaler::_issue_read(uint64_t len)
   // here because it will wait for all object reads to complete before
   // giving us back any data.  this way we can process whatever bits
   // come in that are contiguous.
+#if 0
   uint64_t period = get_layout_period();
+#else
+// XXX need something better mdw 20150215
+  uint64_t period = (1<<22);	// was layout_period: = stripe_count * object_size
+#endif
   while (len > 0) {
     uint64_t e = requested_pos + period;
     e -= e % period;
@@ -838,12 +834,8 @@ void Journaler::_issue_read(uint64_t len)
     if (l > len)
       l = len;
     C_Read *c = new C_Read(this, requested_pos);
-#if 0
-    filer.read(ino, volume, &layout, requested_pos, l, &c->bl, 0, c);
-#else
     object_t oid = file_object_t(ino, 0);
     objecter->read(oid, volume, requested_pos, l, &c->bl, 0, c);
-#endif
     requested_pos += l;
     len -= l;
   }
@@ -865,7 +857,12 @@ void Journaler::_prefetch()
   uint64_t raw_target = read_pos + pf;
 
   // read full log segments, so increase if necessary
+#if 0
   uint64_t period = get_layout_period();
+#else
+// XXX need something better mdw 20150215
+  uint64_t period = (1<<22);	// was layout_period: = stripe_count * object_size
+#endif
   uint64_t remainder = raw_target % period;
   uint64_t adjustment = remainder ? period - remainder : 0;
   uint64_t target = raw_target + adjustment;
@@ -1010,7 +1007,12 @@ public:
 void Journaler::trim()
 {
   assert(!readonly);
+#if 0
   uint64_t period = get_layout_period();
+#else
+// XXX need something better mdw 20150215
+  uint64_t period = (1<<22);	// was layout_period: = stripe_count * object_size
+#endif
   uint64_t trim_to = last_committed.expire_pos;
   trim_to -= trim_to % period;
   ldout(cct, 10) << "trim last_commited head was " << last_committed
@@ -1038,17 +1040,10 @@ void Journaler::trim()
 	   << dendl;
 
   // delete range of objects
-#if 0
-  uint64_t first = trimming_pos / period;
-  uint64_t num = (trim_to - trimming_pos) / period;
-  filer.purge_range(ino, &layout, first, num, ceph_clock_now(cct), 0,
-		    new C_Trim(this, trim_to));
-#else
   object_t oid = file_object_t(ino, 0);
   // XXX: does this release storage?  Maybe need volume->purge_range ?
   objecter->zero(oid, volume, trimming_pos, trim_to - trimming_pos,
 		 ceph_clock_now(cct), 0, NULL, new C_Trim(this, trim_to));
-#endif
   trimming_pos = trim_to;
 }
 

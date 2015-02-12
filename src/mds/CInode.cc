@@ -299,13 +299,13 @@ void CInode::pop_and_dirty_projected_inode(LogSegment *ls)
   assert(!projected_nodes.empty());
   dout(15) << "pop_and_dirty_projected_inode " << projected_nodes.front()->inode
 	   << " v" << projected_nodes.front()->inode->version << dendl;
-  boost::uuids::uuid old_vol = inode.volume->uuid;
+  boost::uuids::uuid old_vol = volume->id;
 
   mark_dirty(projected_nodes.front()->inode->version, ls);
   inode = *projected_nodes.front()->inode;
 
   if (inode.is_backtrace_updated())
-    _mark_dirty_parent(ls, old_vol != inode.volume->uuid);
+    _mark_dirty_parent(ls, old_vol != volume->id);
 
   map<string,bufferptr> *px = projected_nodes.front()->xattrs;
   if (px) {
@@ -814,15 +814,9 @@ void CInode::store(Context *fin)
   assert(is_base());
 
   object_t oid = CInode::get_object_name(ino(), frag_t(), ".inode");
-  VolumeRef mvol(mdcache->mds->get_metadata_volume());
-  if (!mvol) {
-    dout(0) << "Unable to find metadata volume " << mdcache->mds->mdsmap->get_metadata_uuid() << dendl;
-    fin->complete(-EDOM);
-    return;
-  }
-  unique_ptr<ObjOp> m(mvol->op());
+  unique_ptr<ObjOp> m(volume->op());
   if (!m) {
-    dout(0) << "Unable to make operation for volume " << mvol << dendl;
+    dout(0) << "Unable to make operation for volume " << volume << dendl;
     fin->complete(-EDOM);
     return;
   }
@@ -837,7 +831,7 @@ void CInode::store(Context *fin)
   m->write_full(bl);
 
 
-  mdcache->mds->objecter->mutate(oid, mvol, m, ceph_clock_now(cct),
+  mdcache->mds->objecter->mutate(oid, volume, m, ceph_clock_now(cct),
 				 0, NULL,
 				 new C_Inode_Stored(this, get_version(), fin));
 }
@@ -869,7 +863,7 @@ void CInode::fetch(Context *fin)
   C_GatherBuilder gather(c);
 
   object_t oid = CInode::get_object_name(ino(), frag_t(), "");
-  VolumeRef volume(mdcache->mds->get_metadata_volume());
+  volume = mdcache->mds->get_metadata_volume();
   if (!volume) {
     dout(0) << "Unable to attach volume " << volume << dendl;
     fin->complete(-EDOM);
@@ -923,9 +917,6 @@ void CInode::_fetched(int r, bufferlist& bl, bufferlist& bl2, Context *fin)
   } else {
     decode_store(p);
     dout(10) << "_fetched " << *this << dendl;
-    const OSDMap* osdmap = mdcache->mds->objecter->get_osdmap_read();
-    osdmap->find_by_uuid(inode.volume->uuid, volume);
-    mdcache->mds->objecter->put_osdmap_read();
     int r = volume->attach(mdcache->mds->objecter->cct);	// XXX here or elsewhere?
     if (r < 0) {
       fin->complete(r);
