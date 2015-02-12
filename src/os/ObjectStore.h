@@ -118,19 +118,26 @@ public:
     const static int n_partitions = 3;
     const static int cache_size = 373; // per-partiion cache size
 
+    typedef std::tuple<uint64_t, const hobject_t&> ObjKeyType;
+
     /* per-volume lookup table */
     struct OidLT
     {
       // for internal ordering
       bool operator()(const Object& lhs,  const Object& rhs) const
-	{  return lhs.oid < rhs.oid; }
+	{
+	  return ((lhs.hk < rhs.hk) && (lhs.oid < rhs.oid));
+	}
 
-      // for external search by hobject_t
-      bool operator()(const hobject_t& oid, const Object& o) const
-	{  return oid < o.oid; }
+      bool operator()(const ObjKeyType k, const Object& o) const
+	{
+	  return ((std::get<0>(k) < o.hk) && (std::get<1>(k) < o.oid));
+	}
 
-      bool operator()(const Object& o, const hobject_t& oid) const
-	{  return o.oid < oid;  }
+      bool operator()(const Object& o, const ObjKeyType k) const
+	{
+	  return ((o.hk < std::get<0>(k)) && (o.oid < std::get<1>(k)));
+	}
     };
 
     struct OidEQ
@@ -138,18 +145,22 @@ public:
       bool operator()(const Object& lhs,  const Object& rhs) const
 	{  return lhs.oid == rhs.oid; }
 
-      bool operator()(const hobject_t& oid, const Object& o) const
-	{  return oid == o.oid; }
+      bool operator()(const ObjKeyType k, const Object& o) const
+	{
+	  return (std::get<1>(k) == o.oid);
+	}
 
-      bool operator()(const Object& o, const hobject_t& oid) const
-	{  return o.oid == oid;  }
+      bool operator()(const Object& o, const ObjKeyType k) const
+	{
+	  return (o.oid == std::get<1>(k));
+	}
     };
 
     typedef bi::member_hook<Object, cohort::lru::set_hook_type,
 			    &Object::oid_hook> OidHook;
 
     typedef cohort::lru::RbtreeX<
-      Object, OidLT, OidEQ, hobject_t, OidHook, n_partitions, cache_size>
+      Object, OidLT, OidEQ, ObjKeyType, OidHook, n_partitions, cache_size>
     ObjCache;
 
   private:

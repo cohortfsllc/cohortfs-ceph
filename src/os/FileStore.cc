@@ -2393,10 +2393,12 @@ FileStore::FSObject* FileStore::get_object(FSCollection* fc,
 #else
   FSObject* oh = nullptr;
   uint64_t hk = XXH64(oid.oid.name.c_str(), oid.oid.name.size(), 667);
+  //std::tuple<uint64_t, hobject_t&> k(std::make_tuple(hk, oid));
+  std::tuple<uint64_t, const hobject_t&> k(hk, oid);
   Object::ObjCache::Latch lat;
 retry:
   oh = static_cast<FSObject*>(
-    fc->obj_cache.find_latch(hk, oid, lat, Object::ObjCache::FLAG_LOCK));
+    fc->obj_cache.find_latch(hk, k, lat, Object::ObjCache::FLAG_LOCK));
   /* LATCHED */
   if (oh) {
     /* need initial ref from LRU (fast path) */
