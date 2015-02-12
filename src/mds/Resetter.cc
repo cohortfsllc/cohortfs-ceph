@@ -69,7 +69,9 @@ void Resetter::reset()
   uint64_t old_len = old_end - old_start;
   cout << "old journal was " << old_start << "~" << old_len << std::endl;
 
-  uint64_t new_start = ROUND_UP_TO(old_end+1, journaler->get_layout_period());
+// XXX need better (real) definition for this.  or something mdw 20150215
+#define X_layout_period	(1<<22)
+  uint64_t new_start = ROUND_UP_TO(old_end+1, X_layout_period);
   cout << "new journal start will be " << new_start
        << " (" << (new_start - old_end) << " bytes past old end)" << std::endl;
 

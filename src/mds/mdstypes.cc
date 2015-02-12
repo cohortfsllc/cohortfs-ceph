@@ -4,19 +4,6 @@
 #include "mdstypes.h"
 #include "common/Formatter.h"
 
-void dump(const ceph_file_layout& l, Formatter *f)
-{
-  f->dump_unsigned("stripe_unit", l.fl_stripe_unit);
-  f->dump_unsigned("stripe_count", l.fl_stripe_count);
-  f->dump_unsigned("object_size", l.fl_object_size);
-}
-
-void dump(const ceph_dir_layout& l, Formatter *f)
-{
-  f->dump_unsigned("dir_hash", l.dl_dir_hash);
-}
-
-
 /*
  * frag_info_t
  */
@@ -201,8 +188,6 @@ void inode_t::encode(bufferlist &bl) const
   ::encode(nlink, bl);
   ::encode(anchored, bl);
 
-  ::encode(dir_layout, bl);
-  ::encode(layout, bl);
   ::encode(size, bl);
   ::encode(truncate_seq, bl);
   ::encode(truncate_size, bl);
@@ -244,11 +229,7 @@ void inode_t::decode(bufferlist::iterator &p)
   ::decode(nlink, p);
   ::decode(anchored, p);
 
-  if (struct_v >= 4)
-    ::decode(dir_layout, p);
-  else
-    memset(&dir_layout, 0, sizeof(dir_layout));
-  ::decode(layout, p);
+  // was decode dir_layout if struct_v >= 4
   ::decode(size, p);
   ::decode(truncate_seq, p);
   ::decode(truncate_size, p);
@@ -305,14 +286,6 @@ void inode_t::dump(Formatter *f) const
   f->dump_unsigned("gid", gid);
   f->dump_unsigned("nlink", nlink);
   f->dump_unsigned("anchored", (int)anchored);
-
-  f->open_object_section("dir_layout");
-  ::dump(dir_layout, f);
-  f->close_section();
-
-  f->open_object_section("layout");
-  ::dump(layout, f);
-  f->close_section();
 
   f->open_array_section("old_volumes");
   auto i = old_volumes.cbegin();

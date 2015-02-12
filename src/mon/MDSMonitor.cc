@@ -62,7 +62,6 @@ void MDSMonitor::print_map(MDSMap &m, int dbl)
 
 void MDSMonitor::create_new_fs(MDSMap &m, const boost::uuids::uuid& metadata_vol)
 {
-  boost::uuids::uuid zero_uuid;
   m.max_mds = mon->cct->_conf->max_mds;
   m.created = ceph_clock_now(mon->cct);
   m.metadata_uuid = metadata_vol;
@@ -1027,17 +1026,11 @@ bool MDSMonitor::prepare_command(MMonCommand *m)
 
   } else if (prefix == "mds newfs") {
     MDSMap newmap;
-    string metadata, data;
-    VolumeRef metadata_vol, data_vol;
+    string metadata;
+    VolumeRef metadata_vol;
     if (!cmd_getval(mon->cct, cmdmap, "metadata", metadata)) {
       ss << "error parsing 'metadata' value '"
 	 << cmd_vartype_stringify(cmdmap["metadata"]) << "'";
-      r = -EINVAL;
-      goto out;
-    }
-    if (!cmd_getval(mon->cct, cmdmap, "data", data)) {
-      ss << "error parsing 'data' value '"
-	 << cmd_vartype_stringify(cmdmap["data"]) << "'";
       r = -EINVAL;
       goto out;
     }
@@ -1056,13 +1049,8 @@ bool MDSMonitor::prepare_command(MMonCommand *m)
       r = -EPERM;
       goto out;
     }
-    if (!mon->osdmon()->osdmap.find_by_name(data, data_vol)) {
-      ss << "Can't find volume named " << data << " for data";
-      r = -EPERM;
-      goto out;
-    }
-    create_new_fs(pending_mdsmap, metadata_vol->id, data_vol->id);
-    ss << "new fs with metadata volume " << metadata << " and data volume " << data;
+    create_new_fs(pending_mdsmap, metadata_vol->id);
+    ss << "new fs with metadata volume " << metadata;
     string rs;
     getline(ss, rs);
     wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs,

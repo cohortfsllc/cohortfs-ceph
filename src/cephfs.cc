@@ -111,6 +111,9 @@ int main (int argc, char **argv) {
     layout.stripe_unit = stripe_unit;
     layout.unused = -1;	  /* used to be preferred_osd */
     err = ioctl(fd, ioctl_num, (unsigned long)&layout);
+#else
+    err = -1;
+#endif
     if (err) {
       cerr << "Error setting layout: " << cpp_strerror(errno) << endl;
       return 1;
@@ -123,6 +126,7 @@ int main (int argc, char **argv) {
       return 1;
     }
 
+#if 0
     struct ceph_ioctl_layout layout;
     memset(&layout, 0, sizeof(layout));
     err = ioctl(fd, CEPH_IOC_GET_LAYOUT, (unsigned long)&layout);
@@ -137,7 +141,9 @@ int main (int argc, char **argv) {
     printf("%15s  %24s	%12s  %12s  %s\n",
 	   "FILE OFFSET", "OBJECT", "OFFSET", "LENGTH", "OSD");
 
-    for (long long off = 0; off < st.st_size; off += layout.stripe_unit) {
+// XXX need better (real) definition.  this used to be layout.stripe_unit. mdw 20150215
+#define X_stripe_unit (1<<22)
+    for (long long off = 0; off < st.st_size; off += X_stripe_unit) {
       struct ceph_ioctl_dataloc location;
       location.file_offset = off;
       err = ioctl(fd, CEPH_IOC_GET_DATALOC, (unsigned long)&location);

@@ -464,12 +464,6 @@ void EMetaBlob::fullbit::dump(Formatter *f) const
   }
   if (inode.is_dir()) {
     f->dump_stream("frag tree") << dirfragtree;
-    if (inode.has_layout()) {
-      f->open_object_section("file layout policy");
-      // FIXME
-      f->dump_string("layout", "the layout exists");
-      f->close_section(); // file layout policy
-    }
   }
   f->dump_string("state", state_string());
 }

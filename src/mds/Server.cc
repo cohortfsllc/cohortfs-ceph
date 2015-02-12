@@ -1838,12 +1838,11 @@ CInode* Server::prepare_new_inode(MDRequestRef& mdr, CDir *dir, inodeno_t useino
 
   in->inode.mode = mode;
 
-  in->inode.volume = volume;
-
   in->inode.truncate_size = -1ull;  // not truncated, yet!
   in->inode.truncate_seq = 1; /* starting with 1, 0 is kept for no-truncation logic */
 
   CInode *diri = dir->get_inode();
+  in->volume = diri->volume;
 
   ldout(mds->cct, 10) << oct << " dir mode 0" << diri->inode.mode << " new mode 0" << mode << dec << dendl;
 

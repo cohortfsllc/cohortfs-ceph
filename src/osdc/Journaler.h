@@ -50,7 +50,7 @@
  * head, and probe the object sequence sizes until we read the end.
  *
  * Head struct is stored in the first object.  Actual journal starts
- * after layout.period() bytes.
+ * after 4Mb bytes (XXX should be derived: opsize or stripe size or something.)
  *
  */
 
@@ -75,12 +75,10 @@ public:
     uint64_t unused_field;
     uint64_t write_pos;
     string magic;
-    ceph_file_layout layout;
 
     Header(const char *m="") :
       trimmed_pos(0), expire_pos(0), unused_field(0), write_pos(0),
       magic(m) {
-      memset(&layout, 0, sizeof(layout));
     }
 
     void encode(bufferlist &bl) const {
@@ -91,7 +89,6 @@ public:
       ::encode(expire_pos, bl);
       ::encode(unused_field, bl);
       ::encode(write_pos, bl);
-      ::encode(layout, bl);
     }
     void decode(bufferlist::iterator &bl) {
       uint8_t struct_v;
@@ -101,7 +98,6 @@ public:
       ::decode(expire_pos, bl);
       ::decode(unused_field, bl);
       ::decode(write_pos, bl);
-      ::decode(layout, bl);
     }
 
     void dump(Formatter *f) const {
@@ -111,16 +107,6 @@ public:
 	f->dump_unsigned("write_pos", write_pos);
 	f->dump_unsigned("expire_pos", expire_pos);
 	f->dump_unsigned("trimmed_pos", trimmed_pos);
-	f->open_object_section("layout");
-	{
-	  f->dump_unsigned("stripe_unit", layout.fl_stripe_unit);
-	  f->dump_unsigned("stripe_count", layout.fl_stripe_unit);
-	  f->dump_unsigned("object_size", layout.fl_stripe_unit);
-	  f->dump_unsigned("cas_hash", layout.fl_stripe_unit);
-	  f->dump_unsigned("object_stripe_unit", layout.fl_stripe_unit);
-	  f->dump_stream("uuid") << layout.fl_uuid;
-	}
-	f->close_section(); // layout
       }
       f->close_section(); // journal_header
     }
@@ -143,7 +129,6 @@ private:
   inodeno_t ino;
   VolumeRef volume;
   bool readonly;
-  ceph_file_layout layout;
 
   const char *magic;
   Objecter *objecter;
@@ -289,7 +274,6 @@ public:
     on_readable(0), on_write_error(NULL),
     expire_pos(0), trimming_pos(0), trimmed_pos(0)
   {
-    memset(&layout, 0, sizeof(layout));
   }
 
   void reset() {
@@ -323,14 +307,12 @@ public:
    * in our sequence do not exist.. e.g. after a MKFS.	this is _not_
    * an "erase" method.
    */
-  void create(ceph_file_layout *layout);
+  void create();
   void recover(Context *onfinish);
   void reread_head(Context *onfinish);
   void reprobe(Context *onfinish);
   void reread_head_and_probe(Context *onfinish);
   void write_head(Context *onsave=0);
-
-  void set_layout(ceph_file_layout *l);
 
   void set_readonly();
   void set_writeable();
@@ -344,9 +326,6 @@ public:
   uint64_t get_read_pos() const { return read_pos; }
   uint64_t get_expire_pos() const { return expire_pos; }
   uint64_t get_trimmed_pos() const { return trimmed_pos; }
-
-  uint64_t get_layout_period() const { return (uint64_t)layout.fl_stripe_count * (uint64_t)layout.fl_object_size; }
-  ceph_file_layout& get_layout() { return layout; }
 
   // write
   uint64_t append_entry(bufferlist& bl);
