@@ -147,7 +147,22 @@ class KeyValueStore : public ObjectStore,
   static const uint32_t target_version = 1;
 
   using ObjectStore::CollectionHandle;
-  using ObjectStore::ObjectHandle;
+
+  class KVObject : public ObjectStore::Object
+  {
+  public:
+
+    explicit KVObject(const hoid_t& _oid)
+      : Object(_oid)
+      {}
+
+    /* XXX fix */
+    bool reclaim() {
+      return false;
+    }
+  };
+
+  //  using ObjectStore::ObjectHandle;
 
   inline CollectionHandle get_slot_collection(Transaction& t, uint16_t c_ix) {
     col_slot_t& c_slot = t.c_slot(c_ix);
