@@ -51,10 +51,6 @@ class MClientCaps : public Message {
   utime_t get_atime() { return utime_t(head.atime); }
   uint32_t get_time_warp_seq() { return head.time_warp_seq; }
 
-#if 0	/* XXX I think this is never used, zap? mdw */
-  ceph_file_layout& get_layout() { return head.layout; }
-#endif
-
   int	    get_migrate_seq() { return head.migrate_seq; }
   int	    get_op() { return head.op; }
 
