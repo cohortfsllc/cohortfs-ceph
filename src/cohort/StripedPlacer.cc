@@ -290,7 +290,11 @@ void StripedPlacer::add_data(const uint64_t off, bufferlist& in,
   if (curoff % stripe_unit) {
     /* Partial first first */
     len = stripe_unit - (off % stripe_unit);
-    strides[stride].bl.substr_of(in, curoff, len);
+    if (len > last_byte + 1 - off) {
+      // Entire write is within this unit
+      len = last_byte + 1 - off;
+    }
+    strides[stride].bl.substr_of(in, curoff - off, len);
     curoff += len;
     stride++;
     stride %= stripe_width;
@@ -299,10 +303,10 @@ void StripedPlacer::add_data(const uint64_t off, bufferlist& in,
     if (last_byte + 1 - curoff < stripe_unit) {
       /* Partial last unit */
       len = last_byte + 1 - curoff;
-      strides[stride].bl.substr_of(in, curoff, len);
+      strides[stride].bl.substr_of(in, curoff - off, len);
       break;
     }
-    strides[stride].bl.substr_of(in, curoff, stripe_unit);
+    strides[stride].bl.substr_of(in, curoff - off, stripe_unit);
     curoff += stripe_unit;
     stride++;
     stride %= stripe_width;
