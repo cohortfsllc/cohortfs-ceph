@@ -2382,15 +2382,6 @@ FileStore::FSObject* FileStore::get_object(FSCollection* fc,
   FDRef fd;
   FSObject* oh = nullptr;
 
-  int r = lfn_open(fc, oid, false, &fd);
-  if ((r < 0) &&
-      create &&
-      _check_global_replay_guard(fc, spos)) {
-      r = lfn_open(fc, oid, true, &fd);
-  }
-  if (r != 0)
-    return oh;
-
   uint64_t hk = XXH64(oid.oid.name.c_str(), oid.oid.name.size(), 667);
   std::tuple<uint64_t, const hobject_t&> k(hk, oid);
   Object::ObjCache::Latch lat;
@@ -2408,7 +2399,17 @@ retry:
     /* LATCHED */
   } else {
     /* allocate and insert "new" Object */
+
     /* XXX Casey will integrate CollectionIndex */
+    int r = lfn_open(fc, oid, false, &fd);
+    if ((r < 0) &&
+	create &&
+	_check_global_replay_guard(fc, spos)) {
+      r = lfn_open(fc, oid, true, &fd);
+    }
+    if (r != 0)
+      goto out; /* !LATCHED */
+
     FSObject::FSObjectFactory prototype(fc, oid, hk, fd);
     oh = static_cast<FSObject*>(
       obj_lru.insert(&prototype,
