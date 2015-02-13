@@ -34,8 +34,8 @@ namespace cohort {
     namespace bi = boost::intrusive;
 
     /* public flag values */
-    const static uint32_t FLAG_NONE = 0x0000;
-    const static uint32_t FLAG_INITIAL = 0x0001;
+    constexpr uint32_t FLAG_NONE = 0x0000;
+    constexpr uint32_t FLAG_INITIAL = 0x0001;
 
     enum class Edge : std::uint8_t
     {
