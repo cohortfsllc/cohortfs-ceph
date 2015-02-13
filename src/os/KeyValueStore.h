@@ -164,7 +164,9 @@ class KeyValueStore : public ObjectStore,
 
   //  using ObjectStore::ObjectHandle;
 
-  inline CollectionHandle get_slot_collection(Transaction& t, uint16_t c_ix) {
+  inline CollectionHandle get_slot_collection(Transaction& t,
+					      uint16_t c_ix) {
+    using std::get;
     col_slot_t& c_slot = t.c_slot(c_ix);
     CollectionHandle ch = get<0>(c_slot);
     if (ch)
@@ -179,8 +181,10 @@ class KeyValueStore : public ObjectStore,
     return ch;
   } /* get_slot_collection */
 
-  inline ObjectHandle get_slot_object(Transaction& t, CollectionHandle ch,
+  inline ObjectHandle get_slot_object(Transaction& t,
+				      CollectionHandle ch,
 				      uint16_t o_ix, bool create) {
+    using std::get;
     obj_slot_t& o_slot = t.o_slot(o_ix);
     ObjectHandle oh = static_cast<ObjectHandle>(get<0>(o_slot));
     if (oh)
@@ -472,9 +476,9 @@ class KeyValueStore : public ObjectStore,
 		     uint64_t offset, size_t len, const bufferlist& bl,
 		     BufferTransaction& t, bool replica = false);
 
-  bool exists(CollectionHandle ch, const hobject_t& oid);
+  bool exists(CollectionHandle ch, const hoid_t& oid);
 
-  ObjectHandle get_object(CollectionHandle ch, const hobject_t& oid);
+  ObjectHandle get_object(CollectionHandle ch, const hoid_t& oid);
   void put_object(ObjectHandle oh);
 
   int stat(CollectionHandle ch, ObjectHandle oh, struct stat *st,
@@ -558,12 +562,12 @@ class KeyValueStore : public ObjectStore,
   int close_collection(CollectionHandle chandle);
   bool collection_exists(const coll_t& c);
   bool collection_empty(CollectionHandle ch);
-  int collection_list(CollectionHandle ch, vector<hobject_t>& oid);
-  int collection_list_partial(CollectionHandle ch, hobject_t start,
+  int collection_list(CollectionHandle ch, vector<hoid_t>& oid);
+  int collection_list_partial(CollectionHandle ch, hoid_t start,
 			      int min, int max,
-			      vector<hobject_t>* ls, hobject_t* next);
-  int collection_list_range(CollectionHandle ch, hobject_t start,
-			    hobject_t end, vector<hobject_t>* ls);
+			      vector<hoid_t>* ls, hoid_t* next);
+  int collection_list_range(CollectionHandle ch, hoid_t start,
+			    hoid_t end, vector<hoid_t>* ls);
   int collection_version_current(CollectionHandle ch,
 				 uint32_t* version);
 
