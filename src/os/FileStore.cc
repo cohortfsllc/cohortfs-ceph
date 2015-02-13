@@ -1507,7 +1507,6 @@ void FileStore::_finish_op(OpSequencer *osr)
   delete o;
 }
 
-
 struct C_JournaledAhead : public Context {
   FileStore *fs;
   FileStore::OpSequencer *osr;

@@ -1507,7 +1507,8 @@ bool KeyValueStore::exists(CollectionHandle ch, const hobject_t& oid)
 
 ObjectHandle KeyValueStore::get_object(
   CollectionHandle ch, const hobject_t& oid) {
-  return new Object(oid);
+  uint64_t hk = XXH64(oid.oid.name.c_str(), oid.oid.name.size(), 667);
+  return new KVObject(oid, hk);
 }
 
 void put_object(ObjectHandle oh) {
