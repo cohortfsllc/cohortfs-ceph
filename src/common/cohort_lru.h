@@ -102,6 +102,8 @@ namespace cohort {
 
       static constexpr uint32_t lru_adj_modulus = 5;
 
+      static constexpr uint32_t SENTINEL_REFCNT = 1;
+
       /* internal flag values */
       static constexpr uint32_t FLAG_INLRU = 0x0001;
       static constexpr uint32_t FLAG_PINNED  = 0x0002; // possible future use
@@ -116,7 +118,7 @@ namespace cohort {
       }
 
       bool can_reclaim(Object* o) {
-	return ((o->lru_refcnt == 1) &&
+	return ((o->lru_refcnt == SENTINEL_REFCNT) &&
 		(!(o->lru_flags & FLAG_EVICTING)));
       }
 
@@ -124,6 +126,7 @@ namespace cohort {
 	uint32_t lane_ix = next_evict_lane();
 	for (int ix = 0; ix < N; ++ix, lane_ix = next_evict_lane()) {
 	  Lane& lane = qlane[lane_ix];
+	  /* hiwat check */
 	  /* XXX try the hiwat check unlocked, then recheck locked */
 	  if (lane.q.size() > lane_hiwat) {
 	    lane.mtx.lock();
@@ -131,8 +134,9 @@ namespace cohort {
 	      lane.mtx.unlock();
 	      continue;
 	    }
-	  } /* hiwat check */
-	    // XXXX if object at LRU has refcnt==1, take it
+	  } else
+	    continue;
+	  // XXXX if object at LRU has refcnt==1, take it
 	  Object* o = &(lane.q.back());
 	  if (can_reclaim(o)) {
 	    ++(o->lru_refcnt);
@@ -142,7 +146,7 @@ namespace cohort {
 	      lane.mtx.lock();
 	      --(o->lru_refcnt);
 	      /* assertions that o state has not changed across relock */
-	      assert(o->lru_refcnt == 1);
+	      assert(o->lru_refcnt == SENTINEL_REFCNT);
 	      assert(o->lru_flags & FLAG_INLRU);
 	      Object::Queue::iterator it = Object::Queue::s_iterator_to(*o);
 	      lane.q.erase(it);
@@ -188,8 +192,9 @@ namespace cohort {
 	  Lane& lane = lane_of(o);
 	  lane.mtx.lock();
 	  refcnt = o->lru_refcnt.load();
-	  if (unlikely(refcnt == 0))
+	  if (unlikely(refcnt == 0)) {
 	    delete o;
+	  }
 	  lane.mtx.unlock();
 	}
       } /* unref */
