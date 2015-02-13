@@ -603,12 +603,14 @@ Inode * Client::add_update_inode(InodeStat *st, VolumeRef volume, utime_t from,
 {
   Inode *in;
   bool was_new = false;
+
+  assert(!!volume);
   if (inode_map.count(st->vino)) {
     in = inode_map[st->vino];
     ldout(cct, 12) << "add_update_inode had " << *in << " caps "
 		   << ccap_string(st->cap.caps) << dendl;
   } else {
-    in = new Inode(cct, st->vino, volume->id);
+    in = new Inode(cct, st->vino, volume);
     inode_map[st->vino] = in;
     if (!root) {
       root = in;
@@ -875,7 +877,7 @@ void Client::insert_readdir_results(MetaRequest *request, MetaSession *session,
       else
 	ldout(cct, 15) << " pd is '" << pd->first << "' dn " << pd->second << dendl;
 
-      Inode *in = add_update_inode(&ist, diri->volume, request->sent_stamp, session);
+      Inode *in = add_update_inode(&ist, dir->parent_inode->volume, request->sent_stamp, session);
       Dentry *dn;
       if (pd != dir->dentry_map.end() &&
 	  pd->first == dname) {
@@ -974,14 +976,22 @@ Inode* Client::insert_trace(MetaRequest *request, MetaSession *session)
   }
 
   Inode *in = 0;
+  VolumeRef volume;
+  in = request->inode();
+  {
+    Dentry *d = request->dentry();
+    if (d && d->dir)
+	volume = d->dir->parent_inode->volume;
+// assert(!!volume);	???
+  }
   if (reply->head.is_target) {
     ist.decode(p, features);
 
-    in = add_update_inode(&ist, request->sent_stamp, session);
+    in = add_update_inode(&ist, volume, request->sent_stamp, session);
   }
 
   if (reply->head.is_dentry) {
-    Inode *diri = add_update_inode(&dirst, dir->inode->volume, request->sent_stamp, session);
+    Inode *diri = add_update_inode(&dirst, volume, request->sent_stamp, session);
     update_dir_dist(diri, &dst);  // dir stat info is attached to ..
 
     if (in) {
@@ -5129,12 +5139,6 @@ int Client::open(const char *relpath, int flags, mode_t mode)
   return r;
 }
 
-int Client::open(const char *relpath, int flags, mode_t mode)
-{
-  /* Use default file striping parameters */
-  return open(relpath, flags, mode, 0, 0, 0, NULL);
-}
-
 int Client::lookup_hash(inodeno_t ino, inodeno_t dirino, const char *name)
 {
   Mutex::Locker lock(client_lock);
@@ -5256,12 +5260,6 @@ Fh *Client::_create_fh(Inode *in, int flags, int cmode)
   assert(in);
   f->inode = in;
   f->inode->get();
-  {
-    const OSDMap* osdmap = objecter->get_osdmap_read();
-    osdmap->find_by_uuid(in->uuid, f->vol);
-    objecter->put_osdmap_read();
-  }
-  if (f->vol) f->vol->attach(cct);
 
   ldout(cct, 10) << "_create_fh " << in->ino << " mode " << cmode << dendl;
 
@@ -5435,30 +5433,14 @@ int Client::uninline_data(Inode *in, Context *onfinish)
   snprintf(oid_buf, sizeof(oid_buf), "%llx.00000000", (long long unsigned)in->ino);
   object_t oid = oid_buf;
 
-  VolumeRef mvol;
-  {
-    const OSDMap* osdmap = objecter->get_osdmap_read();
-    osdmap->find_by_uuid(in->uuid, mvol);
-    objecter->put_osdmap_read();
-  }
-  if (!mvol) {
-    onfinish->complete(-ENXIO);
-    return 0;
-  }
-  int r = mvol->attach(cct);
-  if (r) {
-    onfinish->complete(r);
-    return 0;
-  }
-
-  unique_ptr<ObjOp> create_ops = mvol->op();
+  unique_ptr<ObjOp> create_ops = in->volume->op();
   if (!create_ops) {
     return -EDOM;
   }
   create_ops->create(false);
 
   objecter->mutate(oid,
-		   mvol,
+		   in->volume,
 		   create_ops,
 		   ceph_clock_now(cct),
 		   0,
@@ -5468,7 +5450,7 @@ int Client::uninline_data(Inode *in, Context *onfinish)
   bufferlist inline_version_bl;
   ::encode(in->inline_version, inline_version_bl);
 
-  unique_ptr<ObjOp> uninline_ops = mvol->op();
+  unique_ptr<ObjOp> uninline_ops = in->volume->op();
   if (!uninline_ops)
     return -EDOM;
 
@@ -5481,7 +5463,7 @@ int Client::uninline_data(Inode *in, Context *onfinish)
   uninline_ops->setxattr("inline_version", inline_version_bl);
 
   objecter->mutate(oid,
-		   mvol,
+		   in->volume,
 		   uninline_ops,
 		   ceph_clock_now(cct),
 		   0,
@@ -5770,10 +5752,6 @@ int Client::_read_sync(Fh *f, uint64_t off, uint64_t len, bufferlist *bl,
 
   ldout(cct, 10) << "_read_sync " << *in << " " << off << "~" << len << dendl;
 
-  if (!f->vol) {
-    return -ENXIO;
-  }
-	
   Mutex flock;
   Cond cond;
   while (left > 0) {
@@ -5784,7 +5762,7 @@ int Client::_read_sync(Fh *f, uint64_t off, uint64_t len, bufferlist *bl,
 
     int wanted = left;
     object_t oid = file_object_t(in->ino, 0);
-    objecter->read(oid, f->vol, pos, left, &tbl, 0, onfinish);
+    objecter->read(oid, in->volume, pos, left, &tbl, 0, onfinish);
     client_lock.Unlock();
     flock.Lock();
     while (!done)
@@ -6013,16 +5991,12 @@ int Client::_write(Fh *f, int64_t offset, uint64_t size, const char *buf)
     bool done = false;
     Context *onfinish = new C_SafeCond(&flock, &cond, &done);
     Context *onsafe = new C_Client_SyncCommit(this, in);
-    if (!f->vol) {
-      r = -ENXIO;
-      goto done;
-    }
 
     unsafe_sync_write++;
     get_cap_ref(in, CEPH_CAP_FILE_BUFFER);  // released by onsafe callback
 
     object_t oid = file_object_t(in->ino, 0);
-    r = objecter->write(oid, f->vol, offset, size, bl, ceph_clock_now(cct), 0,
+    r = objecter->write(oid, in->volume, offset, size, bl, ceph_clock_now(cct), 0,
 			onfinish, onsafe);
     if (r < 0)
       goto done;
@@ -7643,7 +7617,7 @@ int Client::ll_create(Inode *parent, const char *name, mode_t mode,
 
    if (r == -ENOENT && (flags & O_CREAT)) {
      r = _create(parent, name, flags, mode, &in, fhp /* may be NULL */,
-		0, 0, 0, NULL, &created, uid, gid);
+		&created, uid, gid);
     if (r < 0)
       goto out;
 
@@ -7732,18 +7706,9 @@ int Client::ll_read_block(Inode *in, uint64_t blockid,
   bool done = false;
   Context *onfinish = new C_SafeCond(&flock, &cond, &done, &r);
   bufferlist bl;
-  VolumeRef mvol;
-  {
-    const OSDMap* osdmap = objecter->get_osdmap_read();
-    osdmap->find_by_uuid(in->uuid, mvol);
-    objecter->put_osdmap_read();
-  }
-  if (!mvol)
-    return -ENXIO;
-  mvol->attach(cct);
 
   objecter->read(oid,
-		 mvol,
+		 in->volume,
 		 offset,
 		 length,
 		 &bl,
@@ -7760,7 +7725,6 @@ int Client::ll_read_block(Inode *in, uint64_t blockid,
 
   return r;
 }
-#endif
 
 /* It appears that the OSD doesn't return success unless the entire
    buffer was written, return the write length on success. */
@@ -7807,19 +7771,9 @@ int Client::ll_write_block(Inode *in, uint64_t blockid,
 
   /* lock just in time */
   client_lock.Lock();
-  VolumeRef mvol;
-  {
-    const OSDMap* osdmap = objecter->get_osdmap_read();
-    osdmap->find_by_uuid(in->uuid, mvol);
-    objecter->put_osdmap_read();
-  }
-
-  if (!mvol)
-    return -ENXIO;
-  mvol->attach(cct);
 
   objecter->write(oid,
-		  mvol,
+		  in->volume,
 		  offset,
 		  length,
 		  bl,
@@ -7842,6 +7796,7 @@ int Client::ll_write_block(Inode *in, uint64_t blockid,
       return length;
   }
 }
+#endif
 
 int Client::ll_commit_blocks(Inode *in,
 			     uint64_t offset,
@@ -7979,24 +7934,13 @@ int Client::_fallocate(Fh *fh, int mode, int64_t offset, int64_t length)
       bool done = false;
       Context *onfinish = new C_SafeCond(&flock, &cond, &done);
       Context *onsafe = new C_Client_SyncCommit(this, in);
-      VolumeRef mvol;
-      {
-	const OSDMap* osdmap = objecter->get_osdmap_read();
-	osdmap->find_by_uuid(in->uuid, mvol);
-	objecter->put_osdmap_read();
-      }
-      if (!mvol) {
-	r = -ENXIO;
-	goto done;
-      }
-      mvol->attach(cct);
 
       unsafe_sync_write++;
       get_cap_ref(in, CEPH_CAP_FILE_BUFFER);
 
       _invalidate_inode_cache(in, offset, length);
       object_t oid = file_object_t(in->ino, 0);
-      r = objecter->zero(oid, mvol, offset, length,
+      r = objecter->zero(oid, in->volume, offset, length,
 			 ceph_clock_now(cct),
 			 0, onfinish, onsafe);
       if (r < 0)
