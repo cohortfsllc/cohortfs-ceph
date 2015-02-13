@@ -218,9 +218,10 @@ namespace cohort {
 	  abort();
 	  break;
 	}
-	if (flags & FLAG_INITIAL) {
-	  ++o->lru_refcnt;
-	}
+	if (flags & FLAG_INITIAL)
+	  o->lru_refcnt += 2; /* sentinel ref + initial */
+	else
+	  ++(o->lru_refcnt); /* sentinel */
 	lane.mtx.unlock();
 	return o;
       } /* insert */
@@ -286,7 +287,7 @@ namespace cohort {
 	}
 	check_result r = lat.p->tr.insert_unique_check(
 	  k, CLT(), lat.commit_data);
-	if (r.second) {
+	if (! r.second /* !insertable (i.e., !found) */) {
 	  v = &(*(r.first));
 	  /* fill cache slot at hk */
 	  lat.p->cache[slot] = v;
