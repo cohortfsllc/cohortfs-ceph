@@ -452,12 +452,12 @@ int FileStore::mkfs()
       fsid = boost::uuids::random_generator()();
       dout(1) << "mkfs generated fsid " << fsid << dendl;
     } else {
+      fsid = old_fsid;
       dout(1) << "mkfs using provided fsid " << fsid << dendl;
     }
 
-    char fsid_str[40];
-    strcpy(fsid_str, to_string(fsid).c_str());
-    strcat(fsid_str, "\n");
+    string fsid_str(to_string(fsid));
+    fsid_str += "\n";
     ret = ::ftruncate(fsid_fd, 0);
     if (ret < 0) {
       ret = -errno;
@@ -465,7 +465,7 @@ int FileStore::mkfs()
 	   << cpp_strerror(ret) << dendl;
       goto close_fsid_fd;
     }
-    ret = safe_write(fsid_fd, fsid_str, strlen(fsid_str));
+    ret = safe_write(fsid_fd, fsid_str.c_str(), fsid_str.size());
     if (ret < 0) {
       derr << "mkfs: failed to write fsid: "
 	   << cpp_strerror(ret) << dendl;
@@ -647,6 +647,7 @@ int FileStore::read_fsid(int fd, boost::uuids::uuid* id)
 {
   boost::uuids::string_generator parse;
   char fsid_str[40];
+  memset(fsid_str, 0, sizeof(fsid_str));
   int ret = safe_read(fd, fsid_str, sizeof(fsid_str));
   if (ret < 0)
     return ret;
