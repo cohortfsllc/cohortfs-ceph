@@ -244,6 +244,7 @@ CInode::CInode(MDCache *c, bool auth) :
     g_num_ino++;
     g_num_inoa++;
     state = 0;
+    volume = c->mds->get_metadata_volume();
     if (auth) state_set(STATE_AUTH);
   };
 
