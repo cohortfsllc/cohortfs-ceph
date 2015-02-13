@@ -100,12 +100,12 @@ namespace cohort {
       std::atomic<uint32_t> evict_lane;
       const uint32_t lane_hiwat;
 
-      const static uint32_t lru_adj_modulus = 5;
+      static constexpr uint32_t lru_adj_modulus = 5;
 
       /* internal flag values */
-      const static uint32_t FLAG_INLRU = 0x0001;
-      const static uint32_t FLAG_PINNED  = 0x0002; // possible future use
-      const static uint32_t FLAG_EVICTING = 0x0004;
+      static constexpr uint32_t FLAG_INLRU = 0x0001;
+      static constexpr uint32_t FLAG_PINNED  = 0x0002; // possible future use
+      static constexpr uint32_t FLAG_EVICTING = 0x0004;
 
       Lane& lane_of(void* addr) {
 	return qlane[(uint64_t)(addr) % N];
@@ -236,10 +236,10 @@ namespace cohort {
     {
     public:
 
-      const static uint32_t FLAG_NONE = 0x0000;
-      const static uint32_t FLAG_LOCK = 0x0001;
-      const static uint32_t FLAG_UNLOCK = 0x0002;
-      const static uint32_t FLAG_UNLOCK_ON_MISS = 0x0004;
+      static constexpr uint32_t FLAG_NONE = 0x0000;
+      static constexpr uint32_t FLAG_LOCK = 0x0001;
+      static constexpr uint32_t FLAG_UNLOCK = 0x0002;
+      static constexpr uint32_t FLAG_UNLOCK_ON_MISS = 0x0004;
 
       typedef T value_type;
       typedef bi::rbtree<T, bi::compare<CLT>, THookType,
