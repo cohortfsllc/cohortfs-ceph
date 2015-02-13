@@ -793,7 +793,6 @@ extern "C" int ceph_get_path_stripe_count(struct ceph_mount_info *cmount, const 
     return r;
   return l.fl_stripe_count;
 }
-#endif
 
 extern "C" int ceph_get_file_object_size(struct ceph_mount_info *cmount, int fh)
 {
@@ -821,7 +820,6 @@ extern "C" int ceph_get_path_object_size(struct ceph_mount_info *cmount, const c
   return l.fl_object_size;
 }
 
-#if 0
 extern "C" int ceph_get_file_layout(struct ceph_mount_info *cmount, int fh, int *stripe_unit, int *stripe_count, int *object_size, int *pg_pool)
 {
   struct ceph_file_layout l;
@@ -847,7 +845,6 @@ extern "C" int ceph_get_file_layout(struct ceph_mount_info *cmount, int fh, int 
 
 extern "C" int ceph_get_path_layout(struct ceph_mount_info *cmount, const char *path, int *stripe_unit, int *stripe_count, int *object_size, int *pg_pool)
 {
-#if 0
   struct ceph_file_layout l;
   int r;
 
@@ -1445,9 +1442,11 @@ extern "C" int ceph_ll_osdaddr(class ceph_mount_info *cmount,
   return (cmount->get_client()->ll_osdaddr(osd, addr));
 }
 
+#if 0
 extern "C" uint64_t ceph_ll_get_internal_offset(class ceph_mount_info *cmount,
 						Inode *in,
 						uint64_t blockno)
 {
   return (cmount->get_client()->ll_get_internal_offset(in, blockno));
 }
+#endif

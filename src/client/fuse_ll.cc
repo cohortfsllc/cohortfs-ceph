@@ -470,6 +470,7 @@ static void fuse_ll_ioctl(fuse_req_t req, fuse_ino_t ino, int cmd,
     // This can't be good, but judging by the 'narrowing' warning,
     // it's happening anyway.
 //  case (int)CEPH_IOC_GET_LAYOUT:	-- placeholder
+// .. use cfuse here ..
 //  break;
   default:
     fuse_reply_err(req, EINVAL);

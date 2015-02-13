@@ -306,7 +306,7 @@ void Inode::dump(Formatter *f) const
   f->dump_stream("atime") << atime;
   f->dump_int("time_warp_seq", time_warp_seq);
 
-  f->dump_stream("uuid") << uuid;
+  f->dump_stream("volume") << volume;
 
   f->dump_unsigned("version", version);
   f->dump_unsigned("xattr_version", xattr_version);

@@ -60,7 +60,7 @@ class Inode {
   int32_t nlink;
 
   // file (data access)
-  boost::uuids::uuid uuid;
+  VolumeRef volume;
   uint64_t size; // on directory, # dentries
   uint32_t truncate_seq;
   uint64_t truncate_size;
@@ -166,9 +166,9 @@ class Inode {
     ll_ref -= n;
   }
 
-  Inode(CephContext *cct_, vinodeno_t vino, boost::uuids::uuid& uuid_)
+  Inode(CephContext *cct_, vinodeno_t vino, VolumeRef vol_)
     : cct(cct_), ino(vino.ino), rdev(0), mode(0), uid(0), gid(0), nlink(0),
-      uuid(uuid_),
+      volume(vol_),
       size(0), truncate_seq(1), truncate_size(-1), time_warp_seq(0),
       max_size(0), version(0), xattr_version(0), inline_version(0),
       flags(0), dir_hashed(false), dir_replicated(false), auth_cap(NULL),

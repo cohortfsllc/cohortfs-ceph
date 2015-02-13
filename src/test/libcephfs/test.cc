@@ -161,6 +161,7 @@ TEST(LibCephFS, Mount) {
   ceph_shutdown(cmount);
 }
 
+#if 0
 TEST(LibCephFS, OpenLayout) {
   struct ceph_mount_info *cmount;
   ASSERT_EQ(ceph_create(&cmount, NULL), 0);
@@ -173,12 +174,10 @@ TEST(LibCephFS, OpenLayout) {
   sprintf(test_layout_file, "test_layout_%d_b", getpid());
   int fd = ceph_open_layout(cmount, test_layout_file, O_CREAT, 0666, (1<<20), 7, (1<<20), NULL);
   ASSERT_GT(fd, 0);
-#if 0
   char poolname[80];
   ASSERT_LT(0, ceph_get_file_pool_name(cmount, fd, poolname, sizeof(poolname)));
   ASSERT_EQ(4, ceph_get_file_pool_name(cmount, fd, poolname, 0));
   ASSERT_EQ(0, strcmp("data", poolname));
-#endif
   ceph_close(cmount, fd);
 
   /* invalid layout */
@@ -208,6 +207,7 @@ TEST(LibCephFS, OpenLayout) {
 
   ceph_shutdown(cmount);
 }
+#endif
 
 TEST(LibCephFS, DirLs) {
 
@@ -850,10 +850,8 @@ TEST(LibCephFS, BadFileDesc) {
 #if 0
   struct sockaddr_storage addr;
   ASSERT_EQ(ceph_get_file_stripe_address(cmount, -1, 0, &addr), -EBADF);
-#endif
 
   ASSERT_EQ(ceph_get_file_stripe_unit(cmount, -1), -EBADF);
-#if 0
   ASSERT_EQ(ceph_get_file_pool(cmount, -1), -EBADF);
   ASSERT_EQ(ceph_get_file_replication(cmount, -1), -EBADF);
 #endif
@@ -992,7 +990,9 @@ TEST(LibCephFS, UseUnmounted) {
   EXPECT_EQ(-ENOTCONN, ceph_truncate(cmount, "/path", 0));
   EXPECT_EQ(-ENOTCONN, ceph_mknod(cmount, "/path", 0, 0));
   EXPECT_EQ(-ENOTCONN, ceph_open(cmount, "/path", 0, 0));
+#if 0
   EXPECT_EQ(-ENOTCONN, ceph_open_layout(cmount, "/path", 0, 0, 0, 0, 0, "pool"));
+#endif
   EXPECT_EQ(-ENOTCONN, ceph_close(cmount, 0));
   EXPECT_EQ(-ENOTCONN, ceph_lseek(cmount, 0, 0, SEEK_SET));
   EXPECT_EQ(-ENOTCONN, ceph_read(cmount, 0, NULL, 0, 0));
@@ -1001,8 +1001,8 @@ TEST(LibCephFS, UseUnmounted) {
   EXPECT_EQ(-ENOTCONN, ceph_fsync(cmount, 0, 0));
   EXPECT_EQ(-ENOTCONN, ceph_fstat(cmount, 0, &st));
   EXPECT_EQ(-ENOTCONN, ceph_sync_fs(cmount));
-  EXPECT_EQ(-ENOTCONN, ceph_get_file_stripe_unit(cmount, 0));
 #if 0
+  EXPECT_EQ(-ENOTCONN, ceph_get_file_stripe_unit(cmount, 0));
   EXPECT_EQ(-ENOTCONN, ceph_get_file_pool(cmount, 0));
   EXPECT_EQ(-ENOTCONN, ceph_get_file_pool_name(cmount, 0, NULL, 0));
   EXPECT_EQ(-ENOTCONN, ceph_get_file_replication(cmount, 0));
@@ -1056,14 +1056,13 @@ TEST(LibCephFS, GetPoolReplication) {
   ceph_shutdown(cmount);
 }
 
+#if 0
 TEST(LibCephFS, GetExtentOsds) {
   struct ceph_mount_info *cmount;
   ASSERT_EQ(ceph_create(&cmount, NULL), 0);
   ASSERT_EQ(0, ceph_conf_parse_env(cmount, NULL));
 
-#if 0
   EXPECT_EQ(-ENOTCONN, ceph_get_file_extent_osds(cmount, 0, 0, NULL, NULL));
-#endif
 
   ASSERT_EQ(ceph_conf_read_file(cmount, NULL), 0);
   ASSERT_EQ(ceph_mount(cmount, NULL), 0);
@@ -1077,7 +1076,6 @@ TEST(LibCephFS, GetExtentOsds) {
       stripe_unit, 2, stripe_unit*2, NULL);
   ASSERT_GT(fd, 0);
 
-#if 0
   /* get back how many osds > 0 */
   int ret = ceph_get_file_extent_osds(cmount, fd, 0, NULL, NULL);
   EXPECT_EQ(ret, 1);
@@ -1103,12 +1101,12 @@ TEST(LibCephFS, GetExtentOsds) {
 
   /* only when more than 1 osd */
   EXPECT_EQ(-ERANGE, ceph_get_file_extent_osds(cmount, fd, 0, NULL, osds));
-#endif
 
   ceph_close(cmount, fd);
 
   ceph_shutdown(cmount);
 }
+#endif
 
 TEST(LibCephFS, GetOsdCrushLocation) {
   struct ceph_mount_info *cmount;

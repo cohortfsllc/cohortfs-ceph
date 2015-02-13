@@ -1215,6 +1215,7 @@ int ceph_ll_symlink(struct ceph_mount_info *cmount, struct Inode *parent,
 		    struct Inode **in, int uid, int gid);
 int ceph_ll_rmdir(struct ceph_mount_info *cmount, struct Inode *in,
 		  const char *name, int uid, int gid);
+#if 0
 uint32_t ceph_ll_stripe_unit(struct ceph_mount_info *cmount,
 			     struct Inode *in);
 uint32_t ceph_ll_file_layout(struct ceph_mount_info *cmount,
@@ -1242,6 +1243,7 @@ int ceph_ll_write_block(struct ceph_mount_info *cmount,
 			char* buf, uint64_t offset,
 			uint64_t length, struct ceph_file_layout* layout,
 			uint32_t sync);
+#endif
 int ceph_ll_commit_blocks(struct ceph_mount_info *cmount,
 			  struct Inode *in, uint64_t offset, uint64_t range);
 
