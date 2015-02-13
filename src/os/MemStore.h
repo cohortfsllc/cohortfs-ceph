@@ -60,6 +60,11 @@ public:
       }
     }
 
+    /* XXXX pending integration w/LRU */
+    virtual bool reclaim() {
+      return false;
+    }
+
     void encode(bufferlist& bl) const {
       ENCODE_START(2, 2, bl);
       ::encode(data_len, bl);
