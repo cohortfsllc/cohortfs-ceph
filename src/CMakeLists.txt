@@ -417,6 +417,7 @@ set(os_filestore_files
   os/GenericFileStoreBackend.cc
   os/BtrfsFileStoreBackend.cc
   os/ZFSFileStoreBackend.cc
+  os/FragTreeIndex.cc
 )
 
 add_library(os_filestore_objs OBJECT ${os_filestore_files})
