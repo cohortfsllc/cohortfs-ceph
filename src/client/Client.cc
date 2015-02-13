@@ -7221,24 +7221,24 @@ int Client::ll_osdaddr(int osd, uint32_t *addr)
   return 0;
 }
 
-#if 0
-uint32_t Client::ll_stripe_unit(Inode *in)
+int Client::ll_file_placer(Inode *in, cohort_placer *placer)
 {
   unique_lock cl(client_lock);
-  return in->layout.fl_stripe_unit;
-}
-
-int Client::ll_file_layout(Inode *in, ceph_file_layout *layout)
-{
-  unique_lock cl(client_lock);
-  *layout = in->layout;
-  return 0;
+  return in->volume->get_cohort_placer(placer);
 }
 
 int Client::ll_file_key(Inode *in, char *buf, uint32_t bufsize)
 {
-  file_object_t fo(in->ino, 0);
-  return (snprintf(buf, bufsize, "%s", file_oid(in->ino, 0).name.c_str()));
+  unique_lock cl(client_lock);
+  oid_t fo = file_oid(in->ino, 0);
+  return (snprintf(buf, bufsize, "%s", fo.name.c_str()));
+}
+
+#if 0
+uint32_t Client::ll_stripe_unit(Inode *in)
+{
+  file_oid fo(in->ino, 0);
+  return in->layout.fl_stripe_unit;
 }
 
 /* Return the offset of the block, internal to the object */

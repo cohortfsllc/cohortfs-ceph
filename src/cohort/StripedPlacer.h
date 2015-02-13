@@ -141,6 +141,13 @@ public:
 			vector<StrideExtent>& out) const;
   virtual int get_data(map<int, bufferlist> &strides,
 			    bufferlist *decoded) const;
+
+  virtual int get_cohort_placer(struct cohort_placer *placer) {
+    placer->type = StripedPlacerType;
+    placer->striped.stripe_unit = stripe_unit;
+    placer->striped.stripe_width = stripe_width;
+    return 0;
+  };
 };
 
 #endif // COHORT_STRIPEDPLACER_H

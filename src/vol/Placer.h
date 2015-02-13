@@ -29,15 +29,9 @@
 #include "include/encoding.h"
 #include "include/ceph_time.h"
 #include "osd/osd_types.h"
+#include "include/cephfs/placement.h"
 
 class OSDMap;
-
-enum placer_type {
-  ErasureCPlacerType,
-  StripedPlacerType,
-  NotAPlacerType
-};
-
 class Placer;
 typedef std::shared_ptr<Placer> PlacerRef;
 
@@ -170,6 +164,12 @@ public:
 			vector<StrideExtent>& out) const = 0;
   virtual int get_data(map<int, bufferlist> &strides,
 		    bufferlist *decoded) const = 0;
+
+  // C API helpers
+  virtual int get_cohort_placer(struct cohort_placer *placer) {
+    placer->type = NotAPlacerType;
+    return -1;
+  };
 };
 
 WRITE_CLASS_ENCODER(Placer)

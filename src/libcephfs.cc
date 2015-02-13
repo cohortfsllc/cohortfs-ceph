@@ -1401,19 +1401,11 @@ extern "C" int ceph_ll_removexattr(class ceph_mount_info *cmount,
   return (cmount->get_client()->ll_removexattr(in, name, uid, gid));
 }
 
-#if 0
-/* XXX how to do? */
-extern "C" uint32_t ceph_ll_stripe_unit(class ceph_mount_info *cmount,
-					Inode *in)
-{
-  return (cmount->get_client()->ll_stripe_unit(in));
-}
-
-extern "C" uint32_t ceph_ll_file_layout(class ceph_mount_info *cmount,
+extern "C" uint32_t ceph_ll_file_placer(class ceph_mount_info *cmount,
 					Inode *in,
-					struct ceph_file_layout *layout)
+					struct cohort_placer *placer)
 {
-  return (cmount->get_client()->ll_file_layout(in, layout));
+  return (cmount->get_client()->ll_file_placer(in, placer));
 }
 
 extern "C" int ceph_ll_file_key(class ceph_mount_info *cmount,
@@ -1422,6 +1414,14 @@ extern "C" int ceph_ll_file_key(class ceph_mount_info *cmount,
 					uint32_t bufsize)
 {
   return (cmount->get_client()->ll_file_key(in, buf, bufsize));
+}
+
+#if 0
+/* XXX how to do? */
+extern "C" uint32_t ceph_ll_stripe_unit(class ceph_mount_info *cmount,
+					Inode *in)
+{
+  return (cmount->get_client()->ll_stripe_unit(in));
 }
 
 extern "C" int ceph_ll_get_stripe_osd(class ceph_mount_info *cmount,

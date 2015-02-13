@@ -143,6 +143,14 @@ public:
     return getPlacer()->place(object, map, f);
   }
 
+  int get_cohort_placer(struct cohort_placer *placer) const {
+    int r = getPlacer()->get_cohort_placer(placer);
+    if (r < 0)
+      return r;
+    memcpy(placer->volume_id, id.data, sizeof(placer->volume_id));
+    return 0;
+  };
+
   virtual std::unique_ptr<ObjOp> op() const = 0;
   // Returns negative POSIX error code on error.
   virtual size_t op_size() const = 0;

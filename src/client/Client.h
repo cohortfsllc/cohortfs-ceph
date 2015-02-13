@@ -850,6 +850,7 @@ public:
 					void *handle);
 
   void ll_register_getgroups_cb(client_getgroups_callback_t cb, void *handle);
+  int ll_file_placer(Inode *in, cohort_placer *placer);
 };
 
 #endif

@@ -64,6 +64,8 @@ struct inodeno_t;
 struct Inode;
 typedef struct Inode Inode;
 
+struct cohort_placer;
+
 struct vinodeno_t;
 typedef struct vinodeno_t vinodeno;
 struct ceph_mount_info;
@@ -1211,16 +1213,17 @@ int ceph_ll_symlink(struct ceph_mount_info *cmount, struct Inode *parent,
 		    struct Inode **in, int uid, int gid);
 int ceph_ll_rmdir(struct ceph_mount_info *cmount, struct Inode *in,
 		  const char *name, int uid, int gid);
-#if 0
-uint32_t ceph_ll_stripe_unit(struct ceph_mount_info *cmount,
-			     struct Inode *in);
-uint32_t ceph_ll_file_layout(struct ceph_mount_info *cmount,
+
+uint32_t ceph_ll_file_placer(struct ceph_mount_info *cmount,
 			     struct Inode *in,
-			     struct ceph_file_layout *layout);
+			     struct cohort_placer *placer);
 int ceph_ll_file_key(struct ceph_mount_info *cmount,
 		     Inode *in,
 		     char *buf,
 		     uint32_t bufsize);
+#if 0
+uint32_t ceph_ll_stripe_unit(struct ceph_mount_info *cmount,
+			     struct Inode *in);
 int ceph_ll_get_stripe_osd(struct ceph_mount_info *cmount,
 			   struct Inode *in,
 			   uint64_t blockno,
