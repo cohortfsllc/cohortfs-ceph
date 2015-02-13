@@ -1771,3 +1771,8 @@ endif(HAVE_LTTNG)
 add_executable(test_filenamer test_filenamer.cc)
 target_link_libraries(test_filenamer os common ${UNITTEST_LIBS})
 set_target_properties(test_filenamer PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
+
+# test_fragtreeindex
+add_executable(test_fragtreeindex test_fragtreeindex.cc)
+target_link_libraries(test_fragtreeindex os_filestore global common ${UNITTEST_LIBS})
+set_target_properties(test_fragtreeindex PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
