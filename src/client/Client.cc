@@ -67,8 +67,6 @@ using namespace std;
 #include "osd/OSDMap.h"
 #include "mon/MonMap.h"
 
-#include "osdc/WritebackHandler.h"
-
 #include "common/admin_socket.h"
 #include "common/errno.h"
 
@@ -85,7 +83,6 @@ using namespace std;
 #include "Fh.h"
 #include "MetaSession.h"
 #include "MetaRequest.h"
-#include "ObjecterWriteback.h"
 
 #include "include/stat.h"
 
@@ -94,15 +91,6 @@ using namespace std;
 
 #define	 tout(cct)	 if (!cct->_conf->client_trace.empty()) traceout
 
-
-
-#if 0
-void client_flush_set_callback(void *p, ObjectCacher::ObjectSet *oset)
-{
-  Client *client = static_cast<Client*>(p);
-  client->flush_set_callback(oset);
-}
-#endif
 
 
 // -------------
@@ -191,29 +179,12 @@ Client::Client(Messenger *m, MonClient *mc)
   mdsmap = new MDSMap(cct);
   objecter = new Objecter(cct, messenger, monclient);
   objecter->set_client_incarnation(0);	// client always 0, for now.
-  writeback_handler = new ObjecterWriteback(objecter);
-#if 0
-  objectcacher = new ObjectCacher(cct, *writeback_handler, client_lock,
-				  client_flush_set_callback, // all commit callback
-				  (void*)this,
-				  cct->_conf->client_oc_size,
-				  cct->_conf->client_oc_max_objects,
-				  cct->_conf->client_oc_max_dirty,
-				  cct->_conf->client_oc_target_dirty,
-				  cct->_conf->client_oc_max_dirty_age,
-				  true);
-#endif
 }
 
 
 Client::~Client()
 {
   tear_down_cache();
-
-#if 0
-  delete objectcacher;
-#endif
-  delete writeback_handler;
 
   delete objecter;
   delete mdsmap;
@@ -341,10 +312,6 @@ int Client::init()
   timer.init();
 
   objecter->init();
-#if 0
-  objectcacher->start();
-#endif
-
   // ok!
   messenger->add_dispatcher_head(objecter);
   messenger->add_dispatcher_head(this);
@@ -354,9 +321,6 @@ int Client::init()
     // need to do cleanup because we're in an intermediate init state
     timer.shutdown(cl);
     cl.unlock();
-#if 0
-    objectcacher->stop();
-#endif
     monclient->shutdown();
     return r;
   }
@@ -426,10 +390,6 @@ void Client::shutdown()
     async_dentry_invalidator.wait_for_empty();
     async_dentry_invalidator.stop();
   }
-
-#if 0
-  objectcacher->stop();	 // outside of client_lock! this does a join.
-#endif
 
   unique_lock cl(client_lock);
   assert(initialized);
@@ -503,10 +463,6 @@ void Client::update_inode_file_bits(Inode *in,
   ldout(cct, 25) << "truncate_seq: mds " << truncate_seq <<  " local "
 	   << in->truncate_seq << " time_warp_seq: mds " << time_warp_seq
 	   << " local " << in->time_warp_seq << dendl;
-#if 0
-  uint64_t prior_size = in->size;
-#endif
-
   if (inline_version > in->inline_version) {
     in->inline_data = inline_data;
     in->inline_version = inline_version;
@@ -521,14 +477,6 @@ void Client::update_inode_file_bits(Inode *in,
       ldout(cct, 10) << "truncate_seq " << in->truncate_seq << " -> "
 	       << truncate_seq << dendl;
       in->truncate_seq = truncate_seq;
-#if 0
-      in->oset.truncate_seq = truncate_seq;
-
-      // truncate cached file data
-      if (prior_size > size) {
-	_invalidate_inode_cache(in, truncate_size, prior_size - truncate_size);
-      }
-#endif
     }
 
     // truncate inline data
@@ -544,9 +492,6 @@ void Client::update_inode_file_bits(Inode *in,
       ldout(cct, 10) << "truncate_size " << in->truncate_size << " -> "
 	       << truncate_size << dendl;
       in->truncate_size = truncate_size;
-#if 0
-      in->oset.truncate_size = truncate_size;
-#endif
     } else {
       ldout(cct, 0) << "Hmmm, truncate_seq && truncate_size changed on non-file inode!" << dendl;
     }
@@ -2071,10 +2016,6 @@ void Client::put_inode(Inode *in, int n)
     remove_all_caps(in);
 
     ldout(cct, 10) << "put_inode deleting " << *in << dendl;
-#if 0
-    bool unclean = objectcacher->release_set(&in->oset);
-    assert(!unclean);
-#endif
     inode_map.erase(in->vino());
     in->cap_item.remove_myself();
     if (in == root)
@@ -2283,11 +2224,6 @@ int Client::get_caps(Inode *in, int need, int want, int *phave, loff_t endoff,
 int Client::get_caps_used(Inode *in)
 {
   unsigned used = in->caps_used();
-#if 0
-  if (!(used & CEPH_CAP_FILE_CACHE) &&
-      !objectcacher->set_is_empty(&in->oset))
-    used |= CEPH_CAP_FILE_CACHE;
-#endif
   return used;
 }
 
@@ -2562,27 +2498,12 @@ void Client::_invalidate_inode_cache(Inode *in)
 {
   ldout(cct, 10) << "_invalidate_inode_cache " << *in << dendl;
 
-#if 0
-  // invalidate our userspace inode cache
-  if (cct->_conf->client_oc)
-    objectcacher->release_set(&in->oset);
-#endif
-
   _schedule_invalidate_callback(in, 0, 0, false);
 }
 
 void Client::_invalidate_inode_cache(Inode *in, int64_t off, int64_t len)
 {
   ldout(cct, 10) << "_invalidate_inode_cache " << *in << " " << off << "~" << len << dendl;
-
-#if 0
-  // invalidate our userspace inode cache
-  if (cct->_conf->client_oc) {
-    vector<ObjectExtent> ls;
-//FIXME!    Striper::file_to_extents(cct, in->ino, &in->layout, off, len, in->truncate_size, ls);
-    objectcacher->discard_set(&in->oset, ls);
-  }
-#endif
 
   _schedule_invalidate_callback(in, off, len, true);
 }
@@ -2612,70 +2533,19 @@ bool Client::_flush(Inode *in, Context *onfinish)
 {
   ldout(cct, 10) << "_flush " << *in << dendl;
 
-#if 0
-  if (!in->oset.dirty_or_tx) {
-#endif
-    ldout(cct, 10) << " nothing to flush" << dendl;
-    if (onfinish)
-      onfinish->complete(0);
-    return true;
-#if 0
-  }
-
-  if (!onfinish) {
-    onfinish = new C_Client_PutInode(this, in);
-  }
-  return objectcacher->flush_set(&in->oset, onfinish);
-#endif
+  ldout(cct, 10) << " nothing to flush" << dendl;
+  if (onfinish)
+    onfinish->complete(0);
+  return true;
 }
 
 void Client::_flush_range(Inode *in, int64_t offset, uint64_t size,
 			  unique_lock& cl)
 {
   assert(locks_client(cl));
-#if 0
-  if (!in->oset.dirty_or_tx) {
-#endif
-    ldout(cct, 10) << " nothing to flush" << dendl;
-    return;
-#if 0
-  }
-
-  std::mutex flock;
-  std::condition_varible cond;
-  bool safe = false;
-  Context *onflush = new C_SafeCond(&flock, &cond, &safe);
-  bool ret = objectcacher->file_flush(&in->oset, &in->layout, offset, size,
-				      onflush);
-  if (!ret) {
-    // wait for flush
-    cl.unlock();
-    unique_lock& fl(flock);
-    while (!safe)
-      cond.wait(fl);
-    fl.unlock();
-    cl.lock();
-  }
-#endif
+  ldout(cct, 10) << " nothing to flush" << dendl;
+  return;
 }
-
-#if 0
-void Client::flush_set_callback(ObjectCacher::ObjectSet *oset)
-{
-  Inode *in = static_cast<Inode *>(oset->parent);
-  assert(in);
-  _flushed(in);
-}
-
-void Client::_flushed(Inode *in)
-{
-  ldout(cct, 10) << "_flushed " << *in << dendl;
-
-  put_cap_ref(in, CEPH_CAP_FILE_CACHE | CEPH_CAP_FILE_BUFFER);
-}
-#endif
-
-
 
 // checks common to add_update_cap, handle_cap_grant
 void Client::check_cap_issue(Inode *in, Cap *cap, unsigned issued)
@@ -3488,30 +3358,6 @@ void Client::unmount()
     ldout(cct, 0) << unsafe_sync_write << " unsafe_sync_writes, waiting"  << dendl;
     mount_cond.wait(cl);
   }
-
-#if 0
-  if (cct->_conf->client_oc) {
-    // flush/release all buffered data
-    std::unordered_map<vinodeno_t, Inode*>::iterator next;
-    for (std::unordered_map<vinodeno_t, Inode*>::iterator p = inode_map.begin();
-	 p != inode_map.end();
-	 p = next) {
-      next = p;
-      ++next;
-      Inode *in = p->second;
-      if (!in) {
-	ldout(cct, 0) << "null inode_map entry ino " << p->first << dendl;
-	assert(in);
-      }
-      if (!in->caps.empty()) {
-	in->get();
-	_release(in);
-	_flush(in);
-	put_inode(in);
-      }
-    }
-  }
-#endif
 
   flush_caps();
   wait_sync_caps(last_flush_seq, cl);
@@ -5327,15 +5173,7 @@ int Client::_release_fh(Fh *f)
 
     if (in->put_open_ref(f->mode)) {
       _flush(in);
-#if 0
-      // release clean pages too, if we dont want RDCACHE
-      if (in->cap_refs[CEPH_CAP_FILE_CACHE] == 0 &&
-	  !(in->caps_wanted() & CEPH_CAP_FILE_CACHE) &&
-	  !objectcacher->set_is_empty(&in->oset))
-	_invalidate_inode_cache(in);
-      else
-#endif
-	check_caps(in, false);
+      check_caps(in, false);
     }
 
   put_inode(in);
@@ -5366,9 +5204,6 @@ int Client::_open(Inode *in, int flags, mode_t mode, Fh **fhp, unique_lock& cl,
     req->set_filepath(path);
     req->head.args.open.flags = flags & ~O_CREAT;
     req->head.args.open.mode = mode;
-#if 0
-    req->head.args.open.pool = -1;
-#endif
     req->head.args.open.old_size = in->size;   // for O_TRUNC
     req->set_inode(in);
     result = make_request(req, uid, gid, cl);
@@ -5551,9 +5386,6 @@ int Client::read(int fd, char *buf, loff_t size, loff_t offset)
 int Client::_read(Fh *f, int64_t offset, uint64_t size, bufferlist *bl,
 		  unique_lock& cl)
 {
-#if 0
-  const md_config_t *conf = cct->_conf;
-#endif
   Inode *in = f->inode;
 
   //bool lazy = f->mode == CEPH_FILE_MODE_LAZY;
@@ -5614,18 +5446,6 @@ retry:
     }
   }
 
-#if 0
-  if (!conf->client_debug_force_sync_read &&
-      (cct->_conf->client_oc && (have & CEPH_CAP_FILE_CACHE))) {
-
-    if (f->flags & O_RSYNC) {
-      _flush_range(in, offset, size);
-    }
-    r = _read_async(f, offset, size, bl);
-    if (r < 0)
-      goto done;
-  } else
-#endif
   {
     bool checkeof = false;
     r = _read_sync(f, offset, size, bl, &checkeof, cl);
@@ -5692,108 +5512,6 @@ done:
     put_cap_ref(in, CEPH_CAP_FILE_RD);
   return r < 0 ? r : bl->length();
 }
-
-#if 0
-int Client::_read_async(Fh *f, uint64_t off, uint64_t len, bufferlist *bl,
-			unique_lock& cl)
-{
-  assert(locks_client(cl));
-  const md_config_t *conf = cct->_conf;
-  Inode *in = f->inode;
-  bool readahead = true;
-
-  ldout(cct, 10) << "_read_async " << *in << " " << off << "~" << len << dendl;
-
-  // trim read based on file size?
-  if (off >= in->size)
-    return 0;
-  if (off + len > in->size) {
-    len = in->size - off;
-    readahead = false;
-  }
-
-  ldout(cct, 10) << "readahead=" << readahead << " nr_consec=" << f->nr_consec_read
-	   << " max_byes=" << conf->client_readahead_max_bytes
-	   << " max_periods=" << conf->client_readahead_max_periods << dendl;
-
-  // readahead?
-  if (readahead &&
-      f->nr_consec_read &&
-      (conf->client_readahead_max_bytes ||
-       conf->client_readahead_max_periods)) {
-    loff_t l = f->consec_read_bytes * 2;
-    if (conf->client_readahead_min)
-      l = MAX(l, conf->client_readahead_min);
-    if (conf->client_readahead_max_bytes)
-      l = MIN(l, conf->client_readahead_max_bytes);
-    loff_t p = 1<<22 ; // stripe_unit * object_size
-    if (conf->client_readahead_max_periods)
-      l = MIN(l, conf->client_readahead_max_periods * p);
-
-    if (l >= 2*p)
-      // align large readahead with period
-      l -= (off+l) % p;
-    else {
-      // align readahead with stripe unit if we cross su boundary
-// XXX how to figure out stripe size?
-      int su = 1<<22;	// stripe_unit
-      if ((off+l)/su != off/su) l -= (off+l) % su;
-    }
-
-    // don't read past end of file
-    if (off+l > in->size)
-      l = in->size - off;
-
-    loff_t min = MIN((loff_t)len, l/2);
-
-    ldout(cct, 20) << "readahead " << f->nr_consec_read << " reads "
-		   << f->consec_read_bytes << " bytes ... readahead "
-		   << off << "~" << l << " min " << min
-		   << " (caller wants " << off << "~" << len << ")" << dendl;
-    if (l > (loff_t)len) {
-      if (objectcacher->file_is_cached(&in->oset, &in->uuid,
-				       off, min))
-	ldout(cct, 20) << "readahead already have min" << dendl;
-      else {
-	Context *onfinish = new C_Readahead(this, in);
-	int r = objectcacher->file_read(&in->oset, &in->uuid,
-					off, l, NULL, 0, onfinish);
-	if (r == 0) {
-	  ldout(cct, 20) << "readahead initiated, c " << onfinish << dendl;
-	  get_cap_ref(in, CEPH_CAP_FILE_RD | CEPH_CAP_FILE_CACHE);
-	} else {
-	  ldout(cct, 20) << "readahead was no-op, already cached" << dendl;
-	  delete onfinish;
-	}
-      }
-    }
-  }
-
-  // read (and possibly block)
-  int r, rvalue = 0;
-  std::mutex flock;
-  std::condition_variable cond;
-  bool done = false;
-  Context *onfinish = new C_SafeCond(&flock, &cond, &done, &rvalue);
-  r = objectcacher->file_read(&in->oset, &in->uuid,
-			      off, len, bl, 0, onfinish);
-  if (r == 0) {
-    get_cap_ref(in, CEPH_CAP_FILE_CACHE);
-    cl.unlock();
-    unique_lock fl(flock);
-    while (!done)
-      cond.wait(fl);
-    fl.unlock();
-    cl.lock();
-    put_cap_ref(in, CEPH_CAP_FILE_CACHE);
-    r = rvalue;
-  } else {
-    // it was cached.
-    delete onfinish;
-  }
-  return r;
-}
-#endif
 
 int Client::_read_sync(Fh *f, uint64_t off, uint64_t len, bufferlist *bl,
 		       bool *checkeof, unique_lock& cl)
@@ -6014,32 +5732,6 @@ int Client::_write(Fh *f, int64_t offset, uint64_t size, const char *buf,
     }
   }
 
-#if 0
-  if (cct->_conf->client_oc && (have & CEPH_CAP_FILE_BUFFER)) {
-    // do buffered write
-    if (!in->oset.dirty_or_tx)
-      get_cap_ref(in, CEPH_CAP_FILE_CACHE | CEPH_CAP_FILE_BUFFER);
-
-    get_cap_ref(in, CEPH_CAP_FILE_BUFFER);
-
-    // async, caching, non-blocking.
-    r = objectcacher->file_write(&in->oset, &in->uuid,
-				 offset, size, bl, ceph::real_clock::now(),
-				 0, client_lock);
-
-    put_cap_ref(in, CEPH_CAP_FILE_BUFFER);
-
-    if (r < 0)
-      goto done;
-
-    // flush cached write if O_SYNC is set on file fh
-    // O_DSYNC == O_SYNC on linux < 2.6.33
-    // O_SYNC = __O_SYNC | O_DSYNC on linux >= 2.6.33
-    if ((f->flags & O_SYNC) || (f->flags & O_DSYNC)) {
-      _flush_range(in, offset, size);
-    }
-  } else
-#endif
   {
     // simple, non-atomic sync write
     std::mutex flock;
@@ -6171,19 +5863,8 @@ int Client::_fsync(Fh *f, bool syncdataonly,
   bool flushed_metadata = false;
   std::mutex lock;
   std::condition_variable cond;
-  bool done = false;
-  C_SafeCond *object_cacher_completion = NULL;
 
   ldout(cct, 3) << "_fsync(" << f << ", " << (syncdataonly ? "dataonly)":"data+metadata)") << dendl;
-
-#if 0
-  if (cct->_conf->client_oc) {
-    object_cacher_completion = new C_SafeCond(&lock, &cond, &done, &r);
-    in->get(); // take a reference; C_SafeCond doesn't and _flush won't either
-    _flush(in, object_cacher_completion);
-    ldout(cct, 15) << "using return-valued form of _fsync" << dendl;
-  }
-#endif
 
   if (!syncdataonly && (in->dirty_caps & ~CEPH_CAP_ANY_FILE_WR)) {
     for (map<int, Cap*>::iterator iter = in->caps.begin(); iter != in->caps.end(); ++iter) {
@@ -6197,23 +5878,11 @@ int Client::_fsync(Fh *f, bool syncdataonly,
     flushed_metadata = true;
   } else ldout(cct, 10) << "no metadata needs to commit" << dendl;
 
-  if (object_cacher_completion) { // wait on a real reply instead of guessing
-    cl.unlock();
-    unique_lock l(lock);
-    ldout(cct, 15) << "waiting on data to flush" << dendl;
-    while (!done)
-      cond.wait(l);
-    l.unlock();
-    cl.lock();
-    put_inode(in);
-    ldout(cct, 15) << "got " << r << " from flush writeback" << dendl;
-  } else {
-    // FIXME: this can starve
-    while (in->cap_refs[CEPH_CAP_FILE_BUFFER] > 0) {
-      ldout(cct, 10) << "ino " << in->ino << " has " << in->cap_refs[CEPH_CAP_FILE_BUFFER]
-		     << " uncommitted, waiting" << dendl;
-      wait_on_list(in->waitfor_commit, cl);
-    }
+  // FIXME: this can starve
+  while (in->cap_refs[CEPH_CAP_FILE_BUFFER] > 0) {
+    ldout(cct, 10) << "ino " << in->ino << " has " << in->cap_refs[CEPH_CAP_FILE_BUFFER]
+		   << " uncommitted, waiting" << dendl;
+    wait_on_list(in->waitfor_commit, cl);
   }
 
   if (!r) {
@@ -6221,7 +5890,8 @@ int Client::_fsync(Fh *f, bool syncdataonly,
     // this could wait longer than strictly necessary,
     // but on a sync the user can put up with it
 
-    ldout(cct, 10) << "ino " << in->ino << " has no uncommitted writes" << dendl;
+    ldout(cct, 10) << "ino " << in->ino << " has no uncommitted writes"
+		   << dendl;
   } else {
     ldout(cct, 1) << "ino " << in->ino << " failed to commit to disk! "
 		  << cpp_strerror(-r) << dendl;
@@ -6418,12 +6088,7 @@ int Client::sync_fs()
 
 int64_t Client::drop_caches()
 {
-#if 0
-  unique_lock cl(client_lock);
-  return objectcacher->release_all();
-#else
   return -1;
-#endif
 }
 
 
@@ -6789,38 +6454,6 @@ int Client::_getxattr(Inode *in, const char *name, void *value, size_t size,
     char buf[256];
 
     r = -ENODATA;
-#if 0
-    if ((in->is_file() && n.find("ceph.file.layout") == 0) ||
-	(in->is_dir() && in->has_dir_layout() && n.find("ceph.dir.layout") == 0)) {
-      string rest = n.substr(n.find("layout"));
-      if (rest == "layout") {
-	r = snprintf(buf, sizeof(buf),
-		     "stripe_unit=%lu stripe_count=%lu object_size=%lu pool=",
-		     (long unsigned)in->layout.fl_stripe_unit,
-		     (long unsigned)in->layout.fl_stripe_count,
-		     (long unsigned)in->layout.fl_object_size);
-	if (osdmap->have_pg_pool(in->layout.fl_pg_pool))
-	  r += snprintf(buf + r, sizeof(buf) - r, "%s",
-			osdmap->get_pool_name(in->layout.fl_pg_pool));
-	else
-	  r += snprintf(buf + r, sizeof(buf) - r, "%lu",
-			(long unsigned)in->layout.fl_pg_pool);
-      } else if (rest == "layout.stripe_unit") {
-	r = snprintf(buf, sizeof(buf), "%lu", (long unsigned)in->layout.fl_stripe_unit);
-      } else if (rest == "layout.stripe_count") {
-	r = snprintf(buf, sizeof(buf), "%lu", (long unsigned)in->layout.fl_stripe_count);
-      } else if (rest == "layout.object_size") {
-	r = snprintf(buf, sizeof(buf), "%lu", (long unsigned)in->layout.fl_object_size);
-      } else if (rest == "layout.pool") {
-	if (osdmap->have_pg_pool(in->layout.fl_pg_pool))
-	  r = snprintf(buf, sizeof(buf), "%s",
-		       osdmap->get_pool_name(in->layout.fl_pg_pool));
-	else
-	  r = snprintf(buf, sizeof(buf), "%lu",
-		       (long unsigned)in->layout.fl_pg_pool);
-      }
-    }
-#endif
     if (size != 0) {
       if (r > (int)size) {
 	r = -ERANGE;
@@ -8149,7 +7782,6 @@ int Client::get_osd_addr(int osd, entity_addr_t& addr)
 
   return 0;
 }
-
 
 /*
  * find an osd with the same ip.  -1 if none.

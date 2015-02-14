@@ -389,13 +389,6 @@ namespace librbd {
       return r;
 
     ImageCtx::unique_md_lock ml(ictx->md_lock);
-#if 0
-    if (size < ictx->size && ictx->object_cacher) {
-      // need to invalidate since we're deleting objects, and
-      // ObjectCacher doesn't track non-existent objects
-      ictx->invalidate_cache();
-    }
-#endif
     resize_helper(ictx, size, prog_ctx);
 
     ldout(cct, 2) << "done." << dendl;
@@ -652,12 +645,7 @@ namespace librbd {
   void close_image(ImageCtx *ictx)
   {
     ldout(ictx->cct, 20) << "close_image " << ictx << dendl;
-#if 0
-    if (ictx->object_cacher)
-      ictx->shutdown_cache(); // implicitly flushes
-    else
-#endif
-      flush(ictx);
+    flush(ictx);
 
     if (ictx->wctx)
       ictx->unregister_watch();
@@ -1037,24 +1025,14 @@ namespace librbd {
     if (r < 0)
       return r;
 
-    ictx->user_flushed();
-
     c->get();
     c->add_request();
     c->init_time(ictx, AIO_TYPE_FLUSH);
     C_AioWrite *req_comp = new C_AioWrite(cct, c);
-#if 0
-    if (ictx->object_cacher) {
-      ictx->flush_cache_aio(req_comp);
-    } else {
-#endif
-      librados::AioCompletion *rados_completion =
-	librados::Rados::aio_create_completion(req_comp, NULL, rados_ctx_cb);
-      ictx->io_ctx.aio_flush_async(rados_completion);
-      rados_completion->release();
-#if 0
-    }
-#endif
+    librados::AioCompletion *rados_completion =
+      librados::Rados::aio_create_completion(req_comp, NULL, rados_ctx_cb);
+    ictx->io_ctx.aio_flush_async(rados_completion);
+    rados_completion->release();
     c->finish_adding_requests(cct);
     c->put();
 
@@ -1070,7 +1048,6 @@ namespace librbd {
     if (r < 0)
       return r;
 
-    ictx->user_flushed();
     r = _flush(ictx);
     return r;
   }
@@ -1080,16 +1057,7 @@ namespace librbd {
     CephContext *cct = ictx->cct;
     int r;
     // flush any outstanding writes
-#if 0
-    if (ictx->object_cacher) {
-      r = ictx->flush_cache();
-    } else {
-#endif
-      r = ictx->io_ctx.aio_flush();
-#if 0
-    }
-#endif
-
+    r = ictx->io_ctx.aio_flush();
     if (r)
       lderr(cct) << "_flush " << ictx << " r = " << r << dendl;
 
@@ -1121,22 +1089,12 @@ namespace librbd {
     bufferlist bl;
     bl.append(buf, len);
     C_AioWrite *req_comp = new C_AioWrite(cct, c);
-#if 0
-    if (ictx->object_cacher) {
-      c->add_request();
-      ictx->write_to_cache(ictx->image_oid, bl,
-			   len, off, req_comp);
-    } else {
-#endif
-      AioWrite *req = new AioWrite(ictx, ictx->image_obj, off,
-				   bl, req_comp);
-      c->add_request();
-      r = req->send();
-      if (r < 0)
-	goto done;
-#if 0
-    }
-#endif
+    AioWrite *req = new AioWrite(ictx, ictx->image_obj, off,
+				 bl, req_comp);
+    c->add_request();
+    r = req->send();
+    if (r < 0)
+      goto done;
 
   done:
     c->finish_adding_requests(ictx->cct);
@@ -1179,15 +1137,6 @@ namespace librbd {
       goto done;
     r = 0;
   done:
-#if 0
-    if (ictx->object_cacher) {
-      ImageCtx::lock_guard l(ictx->cache_lock);
-      ObjectExtent x(ictx->image_oid, off, len, 0);
-      vector<ObjectExtent> xs;
-      xs.push_back(x);
-      ictx->object_cacher->discard_set(ictx->object_set, xs);
-    }
-#endif
 
     c->finish_adding_requests(ictx->cct);
     c->put();
@@ -1232,22 +1181,12 @@ namespace librbd {
     req_comp->set_req(req);
     c->add_request();
 
-#if 0
-    if (ictx->object_cacher) {
-      C_CacheRead *cache_comp = new C_CacheRead(req);
-      ictx->aio_read_from_cache(ictx->image_oid, &req->data(),
-				len, off, cache_comp);
-    } else {
-#endif
-      r = req->send();
-      if (r < 0 && r == -ENOENT)
-	r = 0;
-      if (r < 0) {
-	ret = r;
-	goto done;
-#if 0
-      }
-#endif
+    r = req->send();
+    if (r < 0 && r == -ENOENT)
+      r = 0;
+    if (r < 0) {
+      ret = r;
+      goto done;
     }
 
     ret = len;

@@ -10,9 +10,8 @@
 #include "include/xlist.h"
 #include "include/filepath.h"
 
+#include "vol/Volume.h"
 #include "mds/mdstypes.h" // hrm
-
-#include "osdc/ObjectCacher.h"
 
 struct MetaSession;
 class Dentry;
@@ -114,10 +113,6 @@ class Inode {
 
   map<int,int> open_by_mode;
   map<int,int> cap_refs;
-
-#if 0
-  ObjectCacher::ObjectSet oset;
-#endif
 
   uint64_t     reported_size, wanted_max_size, requested_max_size;
 

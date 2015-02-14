@@ -14,10 +14,8 @@
 #include "include/rbd/librbd.hpp"
 #include "include/rbd_types.h"
 #include "include/types.h"
-#include "osdc/ObjectCacher.h"
 
 #include "cls/lock/cls_lock_client.h"
-#include "librbd/LibrbdWriteback.h"
 
 class CephContext;
 
@@ -45,7 +43,7 @@ namespace librbd {
 
     /**
      * Lock ordering:
-     * md_lock, cache_lock, refresh_lock
+     * md_lock, refresh_lock
      */
     std::shared_timed_mutex md_lock; // protects access to the mutable
 				     // image metadata that isn't
@@ -53,7 +51,6 @@ namespace librbd {
 				     // (size, image locks, etc)
     typedef std::shared_lock<std::shared_timed_mutex> shared_md_lock;
     typedef std::unique_lock<std::shared_timed_mutex> unique_md_lock;
-    std::mutex cache_lock; // used as client_lock for the ObjectCacher
     std::mutex refresh_lock; // protects refresh_seq and last_refresh
     typedef std::lock_guard<std::mutex> lock_guard;
     typedef std::unique_lock<std::mutex> unique_lock;
@@ -63,12 +60,6 @@ namespace librbd {
     std::string header_obj;
     std::string image_obj;
 
-#if 0
-//FIXME!  ObjectCacher *object_cacher;
-#endif
-    LibrbdWriteback *writeback_handler;
-    ObjectCacher::ObjectSet *object_set;
-
     ImageCtx(const std::string &image_name, IoCtx& p, bool read_only);
     ~ImageCtx();
     int init();
@@ -76,22 +67,6 @@ namespace librbd {
     uint64_t get_current_size() const;
     uint64_t get_image_size() const;
 
-#if 0
-//FIXME! needs OSDRead&etc... -- Dan? Adam?  -mdw 20150105
-    void aio_read_from_cache(oid o, bufferlist *bl, size_t len,
-			     uint64_t off, Context *onfinish);
-    void write_to_cache(oid o, bufferlist& bl, size_t len, uint64_t off,
-			Context *onfinish);
-    int read_from_cache(oid o, bufferlist *bl, size_t len, uint64_t off);
-#endif
-    void user_flushed();
-#if 0
-    void flush_cache_aio(Context *onfinish);
-//FIXME!    int flush_cache();
-#endif
-    void shutdown_cache();
-    void invalidate_cache();
-    void clear_nonexistence_cache();
     int register_watch();
     void unregister_watch();
   };

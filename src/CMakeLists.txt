@@ -307,11 +307,7 @@ add_subdirectory(cls)
 set(osdc_files
   osdc/Objecter.cc
   )
-set(osdc_rbd_files
-  osdc/ObjectCacher.cc
-  )
-add_library(osdc_rbd_objs OBJECT ${osdc_rbd_files})
-add_library(osdc STATIC ${osdc_files} $<TARGET_OBJECTS:osdc_rbd_objs>)
+add_library(osdc STATIC ${osdc_files})
 
 set(librados_srcs
   librados/librados.cc
@@ -698,9 +694,8 @@ endif(${WITH_CLIENT})
 if(${WITH_RBD})
   set(librbd_srcs librbd/librbd.cc librbd/AioCompletion.cc
     librbd/AioRequest.cc librbd/ImageCtx.cc
-    librbd/internal.cc librbd/LibrbdWriteback.cc librbd/WatchCtx.cc)
-  add_library(librbd ${CEPH_SHARED} ${librbd_srcs}
-    $<TARGET_OBJECTS:osdc_rbd_objs>)
+    librbd/internal.cc librbd/WatchCtx.cc)
+  add_library(librbd ${CEPH_SHARED} ${librbd_srcs})
   target_link_libraries(librbd PRIVATE cls_lock_client ${CMAKE_DL_LIBS})
   if(${ENABLE_SHARED})
     set_target_properties(librbd PROPERTIES VERSION "1.0.0" SOVERSION "1" OUTPUT_NAME rbd

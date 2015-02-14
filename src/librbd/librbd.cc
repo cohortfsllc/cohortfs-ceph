@@ -17,13 +17,11 @@
 #include "common/errno.h"
 #include "include/Context.h"
 #include "include/rbd/librbd.hpp"
-#include "osdc/ObjectCacher.h"
 
 #include "librbd/AioCompletion.h"
 #include "cls/lock/cls_lock_client.h"
 #include "librbd/ImageCtx.h"
 #include "librbd/internal.h"
-#include "librbd/LibrbdWriteback.h"
 
 #include <algorithm>
 #include <string>
