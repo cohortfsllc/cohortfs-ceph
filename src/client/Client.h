@@ -49,11 +49,7 @@
 #include "common/compiler_extensions.h"
 #include "common/cmdparse.h"
 
-#if 0
-#include "osdc/ObjectCacher.h"
-#else
 #include "osdc/Objecter.h"
-#endif
 
 using std::set;
 using std::map;
@@ -318,14 +314,7 @@ public:
   void sync_write_commit(Inode *in);
 
 protected:
-#if 0
-  /* Adam promises to rewrite objectcacher to make it useful.
-   * Meanwhile, he says don't use it.  -mdw 20150105
-   */
-  ObjectCacher *objectcacher;
-#endif
   Objecter *objecter;     // (non-blocking) osd interface
-  WritebackHandler      *writeback_handler;
 
   // cache
   std::unordered_map<vinodeno_t, Inode*> inode_map;
@@ -512,10 +501,6 @@ protected:
   bool _flush(Inode *in, Context *c=NULL);
   void _flush_range(Inode *in, int64_t off, uint64_t size, unique_lock& cl);
   void _flushed(Inode *in);
-#if 0
-  void flush_set_callback(ObjectCacher::ObjectSet *oset);
-#endif
-
   void close_release(Inode *in);
   void close_safe(Inode *in);
 

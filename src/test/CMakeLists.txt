@@ -1593,18 +1593,6 @@ target_link_libraries(test_stress_watch
   ${CMAKE_DL_LIBS}
   )
 
-add_executable(test_objectcacher_stress
-  osdc/object_cacher_stress.cc
-  osdc/FakeWriteback.cc
-  )
-target_link_libraries(test_objectcacher_stress
-  osdc
-  global
-  ${EXTRALIBS}
-  ${ALLOC_LIBS}
-  ${CMAKE_DL_LIBS}
-  )
-
 add_executable(test_object_map
   ObjectMap/test_object_map.cc
   ObjectMap/KeyValueDBMemory.cc

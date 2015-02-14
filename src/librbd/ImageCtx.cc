@@ -42,65 +42,14 @@ namespace librbd {
       wctx(NULL),
       refresh_seq(0),
       last_refresh(0),
-      size(0),
-#if 0
-//FIXME!      object_cacher(NULL),
-#endif
-	writeback_handler(NULL), object_set(NULL)
+      size(0)
   {
     io_ctx.dup(p);
 
     memset(&header, 0, sizeof(header));
-
-    if (cct->_conf->rbd_cache) {
-#if 0
-      Mutex::Locker l(cache_lock);
-      ldout(cct, 20) << "enabling caching..." << dendl;
-      writeback_handler = new LibrbdWriteback(this, cache_lock);
-
-      uint64_t init_max_dirty = cct->_conf->rbd_cache_max_dirty;
-      if (cct->_conf->rbd_cache_writethrough_until_flush)
-	init_max_dirty = 0;
-      ldout(cct, 20) << "Initial cache settings:"
-		     << " size=" << cct->_conf->rbd_cache_size
-		     << " num_objects=" << 10
-		     << " max_dirty=" << init_max_dirty
-		     << " target_dirty=" << cct->_conf->rbd_cache_target_dirty
-		     << " max_dirty_age="
-		     << cct->_conf->rbd_cache_max_dirty_age << dendl;
-
-//FIXME!      object_cacher = new ObjectCacher(cct, *writeback_handler, cache_lock,
-				       NULL, NULL,
-				       cct->_conf->rbd_cache_size,
-				       10,  /* reset this in init */
-				       init_max_dirty,
-				       cct->_conf->rbd_cache_target_dirty,
-				       cct->_conf->rbd_cache_max_dirty_age,
-				       cct->_conf->rbd_cache_block_writes_upfront);
-      object_set = new ObjectCacher::ObjectSet(NULL, io_ctx.get_volume(), 0);
-      object_set->return_enoent = true;
-//FIXME!      object_cacher->start();
-#else
-      ldout(cct, 20) << "enabling caching...NOT in this version!" << dendl;
-#endif
-    }
   }
 
   ImageCtx::~ImageCtx() {
-#if 0
-//FIXME!    if (object_cacher) {
-      delete object_cacher;
-      object_cacher = NULL;
-    }
-#endif
-    if (writeback_handler) {
-      delete writeback_handler;
-      writeback_handler = NULL;
-    }
-    if (object_set) {
-      delete object_set;
-      object_set = NULL;
-    }
   }
 
   int ImageCtx::init() {
@@ -124,134 +73,6 @@ namespace librbd {
   uint64_t ImageCtx::get_image_size() const
   {
     return size;
-  }
-
-#if 0
-  void ImageCtx::aio_read_from_cache(oid o, bufferlist *bl, size_t len,
-				     uint64_t off, Context *onfinish) {
-    ObjectCacher::OSDRead *rd = object_cacher->prepare_read(bl, 0);
-    ObjectExtent extent(o, off, len, 0);
-    extent.buffer_extents.push_back(make_pair(0, len));
-    rd->extents.push_back(extent);
-    cache_lock.Lock();
-    int r = object_cacher->readx(rd, object_set, onfinish);
-    cache_lock.Unlock();
-    if (r != 0)
-      onfinish->complete(r);
-  }
-
-  void ImageCtx::write_to_cache(oid o, bufferlist& bl, size_t len,
-				uint64_t off, Context *onfinish) {
-    ObjectCacher::OSDWrite *wr
-      = object_cacher->prepare_write(bl, utime_t(), 0);
-    ObjectExtent extent(o, off, len, 0);
-    extent.buffer_extents.push_back(make_pair(0, len));
-    wr->extents.push_back(extent);
-    {
-      Mutex::Locker l(cache_lock);
-      object_cacher->writex(wr, object_set, cache_lock, onfinish);
-    }
-  }
-
-  int ImageCtx::read_from_cache(oid o, bufferlist *bl, size_t len,
-				uint64_t off) {
-    int r;
-    Mutex mylock;
-    Cond cond;
-    bool done;
-    Context *onfinish = new C_SafeCond(&mylock, &cond, &done, &r);
-    aio_read_from_cache(o, bl, len, off, onfinish);
-    mylock.Lock();
-    while (!done)
-      cond.Wait(mylock);
-    mylock.Unlock();
-    return r;
-  }
-#endif
-
-  void ImageCtx::user_flushed() {
-#if 0
-//FIXME!    if (object_cacher && cct->_conf->rbd_cache_writethrough_until_flush) {
-      md_lock.get_read();
-      bool flushed_before = flush_encountered;
-      md_lock.put_read();
-
-      uint64_t max_dirty = cct->_conf->rbd_cache_max_dirty;
-      if (!flushed_before && max_dirty > 0) {
-	md_lock.get_write();
-	flush_encountered = true;
-	md_lock.put_write();
-
-	ldout(cct, 10) << "saw first user flush, enabling writeback" << dendl;
-	Mutex::Locker l(cache_lock);
-	object_cacher->set_max_dirty(max_dirty);
-      }
-    }
-#endif
-  }
-
-#if 0
-//FIXME!  void ImageCtx::flush_cache_aio(Context *onfinish) {
-    cache_lock.Lock();
-    object_cacher->flush_set(object_set, onfinish);
-    cache_lock.Unlock();
-  }
-
-  int ImageCtx::flush_cache() {
-    int r = 0;
-    Mutex mylock;
-    Cond cond;
-    bool done;
-    Context *onfinish = new C_SafeCond(&mylock, &cond, &done, &r);
-    flush_cache_aio(onfinish);
-    mylock.Lock();
-    while (!done) {
-      ldout(cct, 20) << "waiting for cache to be flushed" << dendl;
-      cond.Wait(mylock);
-    }
-    mylock.Unlock();
-    ldout(cct, 20) << "finished flushing cache" << dendl;
-    return r;
-  }
-#endif
-
-  void ImageCtx::shutdown_cache() {
-    unique_md_lock ml(md_lock);
-    invalidate_cache();
-#if 0
-//FIXME!
-    object_cacher->stop();
-#endif
-  }
-
-  void ImageCtx::invalidate_cache() {
-#if 0
-//FIXME!
-    if (!object_cacher)
-      return;
-    unique_lock cl(cache_lock);
-    object_cacher->release_set(object_set);
-    cl.unlock();
-    int r = flush_cache();
-    if (r)
-      lderr(cct) << "flush_cache returned " << r << dendl;
-    cl.lock();
-    bool unclean = object_cacher->release_set(object_set);
-    cl.unlock();
-    if (unclean)
-      lderr(cct) << "could not release all objects from cache" << dendl;
-#endif
-  }
-
-  void ImageCtx::clear_nonexistence_cache() {
-#if 0
-//FIXME!
-    if (!object_cacher)
-      return;
-    unique_lock cl(cache_lock);
-    object_cacher->clear_nonexistence(object_set);
-    cl.unlock();
-#endif
   }
 
   int ImageCtx::register_watch() {

@@ -82,7 +82,6 @@ SUBSYS(objecter, 0, 1)
 SUBSYS(rados, 0, 5)
 SUBSYS(rbd, 0, 5)
 SUBSYS(journaler, 0, 5)
-SUBSYS(objectcacher, 0, 5)
 SUBSYS(client, 0, 5)
 SUBSYS(osd, 0, 5)
 SUBSYS(optracker, 0, 5)
@@ -265,12 +264,6 @@ OPTION(client_mountpoint, OPT_STR, "/")
 OPTION(client_notify_timeout, OPT_INT, 10) // in seconds
 OPTION(osd_client_watch_timeout, OPT_INT, 30) // in seconds
 OPTION(client_caps_release_delay, OPT_INT, 5) // in seconds
-OPTION(client_oc, OPT_BOOL, true)
-OPTION(client_oc_size, OPT_INT, 1024*1024* 200)	   // MB * n
-OPTION(client_oc_max_dirty, OPT_INT, 1024*1024* 100)	// MB * n  (dirty OR tx.. bigish)
-OPTION(client_oc_target_dirty, OPT_INT, 1024*1024* 8) // target dirty (keep this smallish)
-OPTION(client_oc_max_dirty_age, OPT_DOUBLE, 5.0)      // max age in cache before writeback
-OPTION(client_oc_max_objects, OPT_INT, 1000)	  // max objects in cache
 OPTION(client_debug_force_sync_read, OPT_BOOL, false)	  // always read synchronously (go to osds)
 OPTION(client_debug_inject_tick_delay, OPT_INT, 0) // delay the client tick for a number of seconds
 OPTION(client_max_inline_size, OPT_U64, 4096)
@@ -587,16 +580,7 @@ OPTION(journal_ignore_corruption, OPT_BOOL, false) // assume journal is not corr
 OPTION(rados_mon_op_timeout, OPT_DOUBLE, 0) // how many seconds to wait for a response from the monitor before returning an error from a rados operation. 0 means on limit.
 OPTION(rados_osd_op_timeout, OPT_DOUBLE, 0) // how many seconds to wait for a response from osds before returning an error from a rados operation. 0 means no limit.
 
-OPTION(rbd_cache, OPT_BOOL, false) // whether to enable caching (writeback unless rbd_cache_max_dirty is 0)
-OPTION(rbd_cache_writethrough_until_flush, OPT_BOOL, false) // whether to make writeback caching writethrough until flush is called, to be sure the user of librbd will send flushs so that writeback is safe
-OPTION(rbd_cache_size, OPT_LONGLONG, 32<<20)	     // cache size in bytes
-OPTION(rbd_cache_max_dirty, OPT_LONGLONG, 24<<20)    // dirty limit in bytes - set to 0 for write-through caching
-OPTION(rbd_cache_target_dirty, OPT_LONGLONG, 16<<20) // target dirty limit in bytes
-OPTION(rbd_cache_max_dirty_age, OPT_FLOAT, 1.0)	     // seconds in cache before writeback starts
-OPTION(rbd_cache_block_writes_upfront, OPT_BOOL, false) // whether to block writes to the cache before the aio_write call completes (true), or block before the aio completion is called (false)
 OPTION(rbd_concurrent_management_ops, OPT_INT, 10) // how many operations can be in flight for a management operation like deleting or resizing an image
-OPTION(rbd_balance_parent_reads, OPT_BOOL, false)
-OPTION(rbd_localize_parent_reads, OPT_BOOL, true)
 
 /*
  * The following options change the behavior for librbd's image creation methods that
