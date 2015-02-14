@@ -124,6 +124,7 @@ public:
     }
 
     virtual bool reclaim() {
+      std::cout << "FTW RECLAIM FSObject " << (void*) this << std::endl;
       fc->obj_cache.remove(hk, this, cohort::lru::FLAG_NONE);
       return true;
     }
