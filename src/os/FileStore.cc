@@ -2399,6 +2399,7 @@ retry:
 				Object::ObjCache::FLAG_LOCK));
   /* LATCHED */
   if (oh) {
+    std::cout << "FTW address of FOUND FSObject " << (void*) oh << std::endl;
     /* need initial ref from LRU (fast path) */
     if (! obj_lru.ref(oh, cohort::lru::FLAG_INITIAL)) {
       lat.mtx->unlock();
@@ -2415,14 +2416,18 @@ retry:
 	_check_global_replay_guard(fc, spos)) {
       r = lfn_open(fc, oid, true, &fd);
     }
-    if (r != 0)
+    if (r != 0) {
+      std::cout << "FTW open fail for oid " << oid  << " (hk " << hk << ")"
+		<< std::endl;
       goto out; /* !LATCHED */
+    }
 
     FSObject::FSObjectFactory prototype(fc, oid, fd);
     oh = static_cast<FSObject*>(
       obj_lru.insert(&prototype,
 		     cohort::lru::Edge::MRU,
 		     cohort::lru::FLAG_INITIAL));
+    std::cout << "FTW address of NEW FSObject " << (void*) oh << std::endl;
     if (oh) {
       fc->obj_cache.insert_latched(oh, lat,
 				   Object::ObjCache::FLAG_UNLOCK);

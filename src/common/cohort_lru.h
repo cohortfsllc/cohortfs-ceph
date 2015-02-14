@@ -193,6 +193,7 @@ namespace cohort {
 	  lane.mtx.lock();
 	  refcnt = o->lru_refcnt.load();
 	  if (unlikely(refcnt == 0)) {
+	    std::cout << "FTW DELETE FSObject " << (void*) o << std::endl;
 	    delete o;
 	  }
 	  lane.mtx.unlock();
@@ -286,6 +287,7 @@ namespace cohort {
 	  if (CEQ()(*v, k)) {
 	    if (flags & (FLAG_LOCK|FLAG_UNLOCK))
 	      lat.mtx->unlock();
+	    std::cout << "FTW CACHE_HIT FSObject " << (void*) v << std::endl;
 	    return v;
 	  }
 	  v = nullptr;
