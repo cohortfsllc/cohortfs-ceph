@@ -2690,7 +2690,7 @@ int FileStore::_write(FSCollection* fc, FSObject* fo,
       iov[iov_ix].iov_len = pb->length();
       ilen += pb->length();
     }
-    auto nwritten = ::pwritev(fd, iov, iov_ix, offset);
+    auto nwritten = TEMP_FAILURE_RETRY(::pwritev(fd, iov, iov_ix, offset));
     if (nwritten < 0) {
       r = -EIO;
       goto out;
