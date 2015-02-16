@@ -48,7 +48,7 @@ void Volume::dump(Formatter *f) const
   f->dump_stream("uuid") << id;
   f->dump_stream("name") << name;
   f->dump_stream("last_update") << last_update;
-  f->dump_stream("placer") << getPlacer();
+  f->dump_stream("placer") << getPlacer()->id;
 }
 
 void Volume::decode_payload(bufferlist::iterator& bl, uint8_t v)
