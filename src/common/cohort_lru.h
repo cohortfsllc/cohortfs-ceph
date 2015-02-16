@@ -313,7 +313,7 @@ namespace cohort {
 	p->tr.erase(it);
       } /* remove */
 
-      void drain(std::function<void(iterator)> uref,
+      void drain(std::function<void(T*)> uref,
 		 uint32_t flags = FLAG_NONE) {
 	/* clear a table, call supplied function on
 	 * each element found (e.g., retuns sentinel
@@ -324,8 +324,9 @@ namespace cohort {
 	    p.mtx.lock();
 	  while (p.tr.size() > 0) {
 	    iterator it = p.tr.begin();
-	    uref(it);
-	    p.tr.erase(it);
+	    T* v = &(*it);
+	    p.tr.erase(it); /* must precede uref(v), in safe_link mode */
+	    uref(v);
 	  }
 	  if (flags & FLAG_LOCK) /* we locked it, !LOCKED */
 	    p.mtx.unlock();
