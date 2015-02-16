@@ -195,6 +195,8 @@ namespace cohort {
 	  refcnt = o->lru_refcnt.load();
 	  if (unlikely(refcnt == 0)) {
 	    std::cout << "FTW DELETE FSObject " << (void*) o << std::endl;
+	    Object::Queue::iterator it = Object::Queue::s_iterator_to(*o);
+	    lane.q.erase(it);
 	    delete o;
 	  }
 	  lane.mtx.unlock();
