@@ -93,7 +93,14 @@ public:
 
   class Object : public cohort::lru::Object {
   private:
-    cohort::lru::set_hook_type oid_hook;
+    typedef bi::link_mode<bi::safe_link> link_mode;
+#if defined(OBJCACHE_AVL)
+    typedef bi::avl_set_member_hook<link_mode> hook_type;
+#else
+    /* RBT */
+    typedef bi::set_member_hook<link_mode> hook_type;
+#endif
+    hook_type oid_hook;
 
   protected:
     hobject_t oid;
@@ -156,14 +163,15 @@ public:
 	}
     };
 
-    typedef bi::member_hook<Object, cohort::lru::set_hook_type,
-			    &Object::oid_hook> OidHook;
+    typedef bi::member_hook<Object, hook_type, &Object::oid_hook> OidHook;
 
-    typedef cohort::lru::RbtreeX<
-      Object, OidLT, OidEQ, ObjKeyType, OidHook, n_partitions, cache_size>
+    typedef bi::rbtree<Object, bi::compare<OidLT>, OidHook,
+		       bi::constant_time_size<true> > OidTree;
+
+    typedef cohort::lru::TreeX<
+      Object, OidTree, OidLT, OidEQ, ObjKeyType, n_partitions, cache_size>
     ObjCache;
 
-  private:
     friend class Collection;
   };
 
