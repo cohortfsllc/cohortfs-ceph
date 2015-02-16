@@ -133,12 +133,16 @@ public:
 
   class Collection {
   protected:
+    uint32_t flags;
     Object::ObjCache obj_cache;
+
+    static constexpr uint32_t FLAG_NONE = 0x0000;
+    static constexpr uint32_t FLAG_CLOSED = 0x0001;
 
   public:
     const coll_t cid;
 
-    Collection(const coll_t& _cid) : cid(_cid)
+    Collection(const coll_t& _cid) : flags(FLAG_NONE), cid(_cid)
       {}
 
     const coll_t& get_cid() {

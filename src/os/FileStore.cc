@@ -2391,6 +2391,9 @@ FileStore::FSObject* FileStore::get_object(FSCollection* fc,
   std::tuple<uint64_t, const hoid_t&> k(oid.hk, oid);
   Object::ObjCache::Latch lat;
 
+  if (fc->flags & Collection::FLAG_CLOSED) /* atomicity? */
+    return oh;
+
 retry:
   oh =
     static_cast<FSObject*>(fc->obj_cache.find_latch(
@@ -3904,6 +3907,22 @@ ObjectStore::CollectionHandle FileStore::open_collection(const coll_t& cid)
 int FileStore::close_collection(CollectionHandle ch)
 {
   FSCollection* fc = static_cast<FSCollection*>(ch);
+  fc->flags |= Collection::FLAG_CLOSED;
+
+  class ObjUnref
+  {
+    FileStore* fs;
+  public:
+    ObjUnref(FileStore *_fs) : fs(_fs) {};
+
+    void operator()(Object::ObjCache::iterator it) const {
+      FSObject* oh = static_cast<FSObject*>(&(*it));
+      fs->obj_lru.unref(oh, cohort::lru::FLAG_NONE);
+    }
+  };
+
+  fc->obj_cache.drain(ObjUnref(this),
+		      Object::ObjCache::FLAG_LOCK);
   ::close(fc->fd);
   delete fc;
   return 0;

@@ -313,6 +313,25 @@ namespace cohort {
 	p->tr.erase(it);
       } /* remove */
 
+      void drain(std::function<void(iterator)> uref,
+		 uint32_t flags = FLAG_NONE) {
+	/* clear a table, call supplied function on
+	 * each element found (e.g., retuns sentinel
+	 * references) */
+	for (int t_ix = 0; t_ix < N; ++t_ix) {
+	  Partition& p = part[t_ix];
+	  if (flags & FLAG_LOCK) /* LOCKED */
+	    p.mtx.lock();
+	  while (p.tr.size() > 0) {
+	    iterator it = p.tr.begin();
+	    uref(it);
+	    p.tr.erase(it);
+	  }
+	  if (flags & FLAG_LOCK) /* we locked it, !LOCKED */
+	    p.mtx.unlock();
+	} /* each partition */
+      } /* drain */
+
     private:
       Partition part[N];
     };
