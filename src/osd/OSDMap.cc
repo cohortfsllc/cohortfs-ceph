@@ -738,11 +738,19 @@ int OSDMap::apply_incremental(const Incremental &inc)
 
   calc_num_osds();
 
+  for (const auto& removal : inc.placer_removals) {
+    remove_placer(removal.id);
+  }
+
   for (vector<OSDMap::Incremental::placer_inc_add>::const_iterator p =
       inc.placer_additions.begin();
       p != inc.placer_additions.end();
       ++p) {
     add_placer(p->placer);
+  }
+
+  for (const auto& removal : inc.vol_removals) {
+    remove_volume(removal.id);
   }
 
   for (vector<OSDMap::Incremental::vol_inc_add>::const_iterator p =
@@ -751,10 +759,6 @@ int OSDMap::apply_incremental(const Incremental &inc)
       ++p) {
     p->vol->init(this);
     add_volume(p->vol);
-  }
-
-  for (const auto& removal : inc.vol_removals) {
-    remove_volume(removal.id);
   }
 
   return 0;
@@ -877,10 +881,14 @@ void OSDMap::post_decode()
   calc_num_osds();
 
   vols.by_name.clear();
+  placers.by_name.clear();
 
   // build name map from uuid map (only uuid map is encoded)
   for(const auto& v : vols.by_uuid) {
     vols.by_name[v.second->name] = v.second;
+  }
+  for(const auto& v : placers.by_uuid) {
+    placers.by_name[v.second->name] = v.second;
   }
 }
 
@@ -952,6 +960,14 @@ void OSDMap::dump(Formatter *f) const
   f->open_array_section("volumes");
   for(const auto& v : vols.by_uuid) {
     f->open_object_section("volume_info");
+    v.second->dump(f);
+    f->close_section();
+  }
+  f->close_section();
+
+  f->open_array_section("placers");
+  for(const auto& v : placers.by_uuid) {
+    f->open_object_section("placer_info");
     v.second->dump(f);
     f->close_section();
   }
