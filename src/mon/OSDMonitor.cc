@@ -2390,6 +2390,9 @@ done:
       goto reply;
     }
     pending_inc.include_removal(vol);
+    wait_for_finished_proposal(new Monitor::C_Command(
+				 mon, m, 0, rs,
+				 get_last_committed() + 1));
     return true;
   } else if (prefix == "osd volume list") {
     string pattern;
