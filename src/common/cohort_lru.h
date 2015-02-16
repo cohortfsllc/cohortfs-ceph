@@ -16,6 +16,7 @@
 #include <stdint.h>
 #include <atomic>
 #include <boost/intrusive/list.hpp>
+#include <boost/intrusive/rbtree.hpp>
 #include <boost/intrusive/avltree.hpp>
 #include <mutex>
 #include <atomic>
@@ -234,11 +235,9 @@ namespace cohort {
 
     };
 
-    typedef bi::avl_set_member_hook< link_mode > set_hook_type;
-
-    template <typename T, typename CLT, typename CEQ, typename K,
-	      typename THookType, uint8_t N=3, uint16_t CSZ=127>
-    class RbtreeX
+    template <typename T, typename TTree, typename CLT, typename CEQ, typename K,
+	      uint8_t N=3, uint16_t CSZ=127>
+    class TreeX
     {
     public:
 
@@ -248,18 +247,16 @@ namespace cohort {
       static constexpr uint32_t FLAG_UNLOCK_ON_MISS = 0x0004;
 
       typedef T value_type;
-      typedef bi::avltree<T, bi::compare<CLT>, THookType,
-			  bi::constant_time_size<true> > tr_type;
-      typedef typename tr_type::iterator iterator;
+      typedef typename TTree::iterator iterator;
       typedef std::pair<iterator, bool> check_result;
-      typedef typename tr_type::insert_commit_data insert_commit_data;
+      typedef typename TTree::insert_commit_data insert_commit_data;
 
       struct Partition {
 	std::mutex mtx;
-	tr_type tr;
+	TTree tr;
 	T* cache[CSZ];
 	CACHE_PAD(0);
-	Partition() {
+	Partition() : tr() {
 	  memset(cache, 0, CSZ*sizeof(T*));
 	}
       };
@@ -312,7 +309,7 @@ namespace cohort {
 
       void remove(uint64_t hk, T* v, uint32_t flags) {
 	Partition* p = &(partition_of_scalar(hk));
-	iterator it = tr_type::s_iterator_to(*v);
+	iterator it = TTree::s_iterator_to(*v);
 	p->tr.erase(it);
       } /* remove */
 
