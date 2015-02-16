@@ -291,7 +291,7 @@ ssize_t ErasureCPlacer::place(const object_t& object,
 void ErasureCPlacer::dump(Formatter *f) const
 {
   inherited::dump(f);
-  f->dump_stream("place_text") << place_text;
+  f->dump_stream("place_text") << place_text.convert_to_string();
   f->dump_stream("symbols") << symbols;
   f->dump_stream("erasure") << erasure;
 }
