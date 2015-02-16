@@ -641,6 +641,7 @@ public:
     void decode_base64(list& o);
 
     void hexdump(std::ostream &out) const;
+    std::string convert_to_string() const;		// NB: not efficient.
     int read_file(const char *fn, std::string *error);
     ssize_t read_fd(int fd, size_t len);
     int read_fd_zero_copy(int fd, size_t len);

@@ -1637,6 +1637,22 @@ void buffer::list::hexdump(std::ostream &out) const
   out.flags(original_flags);
 }
 
+// yes, this will be horrible.  don't use where performance matters.
+string buffer::list::convert_to_string() const
+{
+  std::string result;
+
+  result.reserve(length());
+  for (std::list<ptr>::const_iterator p = _buffers.begin();
+       p != _buffers.end();
+       ++p) {
+    if (p->length() > 0) {
+      result.append(p->c_str(), p->length());
+    }
+  }
+  return result;
+}
+
 std::ostream& operator<<(std::ostream& out, const buffer::raw &r) {
   return out << "buffer::raw(" << (void*)r.data << " len " << r.len
 	     << " nref " << r.nref << ")";
