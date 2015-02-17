@@ -341,11 +341,13 @@ int Client::init()
 
   timer.init();
 
+  objecter->init();
 #if 0
   objectcacher->start();
 #endif
 
   // ok!
+  messenger->add_dispatcher_head(objecter);
   messenger->add_dispatcher_head(this);
 
   int r = monclient->init();
@@ -360,14 +362,14 @@ int Client::init()
     return r;
   }
 
-  objecter->init();
-
   monclient->set_want_keys(CEPH_ENTITY_TYPE_MDS | CEPH_ENTITY_TYPE_OSD);
   monclient->sub_want("mdsmap", 0, 0);
   monclient->sub_want("osdmap", 0, CEPH_SUBSCRIBE_ONETIME);
   monclient->renew_subs();
 
   client_lock.Unlock();
+
+  objecter->start();
 
   AdminSocket* admin_socket = cct->get_admin_socket();
   int ret = admin_socket->register_command("mds_requests",
@@ -5274,6 +5276,11 @@ Fh *Client::_create_fh(Inode *in, int flags, int cmode)
     const OSDMap* osdmap = objecter->get_osdmap_read();
     osdmap->find_by_uuid(in->layout.fl_uuid, f->vol);
     objecter->put_osdmap_read();
+    if (!f->vol) {
+	ldout(cct,3) << "__create_fh: cannot find volume "
+	    << in->layout.fl_uuid << " while opening ino "
+	    << in->ino << dendl;
+    }
   }
   if (f->vol) f->vol->attach(cct);
 
