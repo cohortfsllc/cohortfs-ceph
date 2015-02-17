@@ -1888,15 +1888,17 @@ void CInode::add_dir_waiter(frag_t fg, Context *c)
   dout(10) << "add_dir_waiter frag " << fg << " " << c << " on " << *this << dendl;
 }
 
-void CInode::take_dir_waiting(frag_t fg, list<Context*>& ls)
+void CInode::take_dir_waiting(frag_t fg, std::vector<Context*>& vs)
 {
   if (waiting_on_dir.empty())
     return;
 
-  map<frag_t, list<Context*> >::iterator p = waiting_on_dir.find(fg);
+  map<frag_t, std::vector<Context*> >::iterator p =
+    waiting_on_dir.find(fg);
   if (p != waiting_on_dir.end()) {
-    dout(10) << "take_dir_waiting frag " << fg << " on " << *this << dendl;
-    ls.splice(ls.end(), p->second);
+    dout(10) << "take_dir_waiting frag " << fg << " on " << *this
+	     << dendl;
+    move_left(vs, p->second);
     waiting_on_dir.erase(p);
 
     if (waiting_on_dir.empty())
@@ -1924,21 +1926,23 @@ void CInode::add_waiter(uint64_t tag, Context *c)
   MDSCacheObject::add_waiter(tag, c);
 }
 
-void CInode::take_waiting(uint64_t mask, list<Context*>& ls)
+void CInode::take_waiting(uint64_t mask, std::vector<Context*>& vs)
 {
   if ((mask & WAIT_DIR) && !waiting_on_dir.empty()) {
     // take all dentry waiters
     while (!waiting_on_dir.empty()) {
-      map<frag_t, list<Context*> >::iterator p = waiting_on_dir.begin();
-      dout(10) << "take_waiting dirfrag " << p->first << " on " << *this << dendl;
-      ls.splice(ls.end(), p->second);
+      map<frag_t, std::vector<Context*> >::iterator p =
+	waiting_on_dir.begin();
+      dout(10) << "take_waiting dirfrag " << p->first << " on "
+	       << *this << dendl;
+      move_left(vs, p->second);
       waiting_on_dir.erase(p);
     }
     put(PIN_DIRWAITER);
   }
 
   // waiting
-  MDSCacheObject::take_waiting(mask, ls);
+  MDSCacheObject::take_waiting(mask, vs);
 }
 
 bool CInode::freeze_inode(int auth_pin_allowance)
@@ -1962,7 +1966,7 @@ bool CInode::freeze_inode(int auth_pin_allowance)
   return true;
 }
 
-void CInode::unfreeze_inode(list<Context*>& finished)
+void CInode::unfreeze_inode(std::vector<Context*>& finished)
 {
   dout(10) << "unfreeze_inode" << dendl;
   if (state_test(STATE_FREEZING)) {
@@ -1978,9 +1982,9 @@ void CInode::unfreeze_inode(list<Context*>& finished)
 
 void CInode::unfreeze_inode()
 {
-    list<Context*> finished;
-    unfreeze_inode(finished);
-    mdcache->mds->queue_waiters(finished);
+  std::vector<Context*> finished;
+  unfreeze_inode(finished);
+  mdcache->mds->queue_waiters(finished);
 }
 
 void CInode::freeze_auth_pin()
@@ -1994,13 +1998,13 @@ void CInode::unfreeze_auth_pin()
   assert(state_test(CInode::STATE_FROZENAUTHPIN));
   state_clear(CInode::STATE_FROZENAUTHPIN);
   if (!state_test(STATE_FREEZING|STATE_FROZEN)) {
-    list<Context*> finished;
+    std::vector<Context*> finished;
     take_waiting(WAIT_UNFREEZE, finished);
     mdcache->mds->queue_waiters(finished);
   }
 }
 
-void CInode::clear_ambiguous_auth(list<Context*>& finished)
+void CInode::clear_ambiguous_auth(std::vector<Context*>& finished)
 {
   assert(state_test(CInode::STATE_AMBIGUOUSAUTH));
   state_clear(CInode::STATE_AMBIGUOUSAUTH);
@@ -2009,14 +2013,15 @@ void CInode::clear_ambiguous_auth(list<Context*>& finished)
 
 void CInode::clear_ambiguous_auth()
 {
-  list<Context*> finished;
+  std::vector<Context*> finished;
   clear_ambiguous_auth(finished);
   mdcache->mds->queue_waiters(finished);
 }
 
 // auth_pins
 bool CInode::can_auth_pin() {
-  if (!is_auth() || is_freezing_inode() || is_frozen_inode() || is_frozen_auth_pin())
+  if (!is_auth() || is_freezing_inode() || is_frozen_inode() ||
+      is_frozen_auth_pin())
     return false;
   if (parent)
     return parent->can_auth_pin();
@@ -2277,13 +2282,15 @@ void CInode::remove_client_cap(client_t client)
   bool fcntl_removed = fcntl_locks.remove_all_from(client);
   bool flock_removed = flock_locks.remove_all_from(client);
   if (fcntl_removed || flock_removed) {
-    list<Context*> waiters;
+    std::vector<Context*> waiters;
     take_waiting(CInode::WAIT_FLOCK, waiters);
     mdcache->mds->queue_waiters(waiters);
   }
 }
 
-Capability *CInode::reconnect_cap(client_t client, ceph_mds_cap_reconnect& icr, Session *session)
+Capability *CInode::reconnect_cap(client_t client,
+				  ceph_mds_cap_reconnect& icr,
+				  Session *session)
 {
   Capability *cap = get_client_cap(client);
   if (cap) {
@@ -2842,7 +2849,8 @@ void CInode::_decode_locks_state(bufferlist::iterator& p, bool is_new)
   flocklock.decode_state(p, is_new);
   policylock.decode_state(p, is_new);
 }
-void CInode::_decode_locks_rejoin(bufferlist::iterator& p, list<Context*>& waiters,
+void CInode::_decode_locks_rejoin(bufferlist::iterator& p,
+				  std::vector<Context*>& waiters,
 				  list<SimpleLock*>& eval_locks)
 {
   authlock.decode_state_rejoin(p, waiters);

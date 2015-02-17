@@ -40,7 +40,8 @@ protected:
     bufferlist mutation;
 
     _pending_prepare() : onfinish(0), ptid(0), pbl(0) {}
-    _pending_prepare(Context *c, version_t *pt, bufferlist *pb, bufferlist& m) :
+    _pending_prepare(Context *c, version_t *pt, bufferlist *pb,
+		     bufferlist& m) :
       onfinish(c), ptid(pt), pbl(pb), mutation(m) {}
   };
 
@@ -50,7 +51,7 @@ protected:
 
   // pending commits
   map<version_t, LogSegment*> pending_commit;
-  map<version_t, list<Context*> > ack_waiters;
+  map<version_t, std::vector<Context*> > ack_waiters;
 
   void handle_reply(class MMDSTableQuery *m);
 
@@ -72,7 +73,8 @@ public:
 
   void handle_request(MMDSTableRequest *m);
 
-  void _prepare(bufferlist& mutation, version_t *ptid, bufferlist *pbl, Context *onfinish);
+  void _prepare(bufferlist& mutation, version_t *ptid,
+		bufferlist *pbl, Context *onfinish);
   void commit(version_t tid, LogSegment *ls);
 
   void resend_commits();

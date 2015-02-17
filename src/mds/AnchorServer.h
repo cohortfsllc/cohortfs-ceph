@@ -30,7 +30,7 @@ class AnchorServer : public MDSTableServer {
   map<version_t, inodeno_t> pending_create;
   map<version_t, inodeno_t> pending_destroy;
   map<version_t, pair<inodeno_t, vector<Anchor> > > pending_update;
-  map<inodeno_t, list<pair<version_t, Context*> > > pending_ops;
+  map<inodeno_t, std::vector<pair<version_t, Context*> > > pending_ops;
 
   void reset_state();
   void encode_server_state(bufferlist& bl) const {
@@ -62,7 +62,8 @@ class AnchorServer : public MDSTableServer {
   bool add(inodeno_t ino, inodeno_t dirino, uint32_t dn_hash, bool replace);
   void inc(inodeno_t ino, int ref=1);
   void dec(inodeno_t ino, int ref=1);
-  bool check_pending(version_t tid, MMDSTableRequest *req, list<Context *>& finished);
+  bool check_pending(version_t tid, MMDSTableRequest *req,
+		     std::vector<Context*>& finished);
 
   void dump();
   void dump(Formatter *f) const;

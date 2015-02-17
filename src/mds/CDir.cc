@@ -663,7 +663,8 @@ void CDir::prepare_new_fragment(bool replay)
   }
 }
 
-void CDir::finish_old_fragment(list<Context*>& waiters, bool replay)
+void CDir::finish_old_fragment(std::vector<Context*>& waiters,
+			       bool replay)
 {
   // take waiters _before_ unfreeze...
   if (!replay) {
@@ -713,7 +714,8 @@ void CDir::init_fragment_pins()
     get(PIN_SUBTREE);
 }
 
-void CDir::split(int bits, list<CDir*>& subs, list<Context*>& waiters, bool replay)
+void CDir::split(int bits, list<CDir*>& subs,
+		 std::vector<Context*>& waiters, bool replay)
 {
   dout(10) << "split by " << bits << " bits on " << *this << dendl;
 
@@ -803,7 +805,8 @@ void CDir::split(int bits, list<CDir*>& subs, list<Context*>& waiters, bool repl
   finish_old_fragment(waiters, replay);
 }
 
-void CDir::merge(list<CDir*>& subs, list<Context*>& waiters, bool replay)
+void CDir::merge(list<CDir*>& subs, std::vector<Context*>& waiters,
+		 bool replay)
 {
   dout(10) << "merge " << subs << dendl;
 
@@ -959,17 +962,19 @@ void CDir::add_dentry_waiter(const string& dname, Context *c)
 	   << " " << c << " on " << *this << dendl;
 }
 
-void CDir::take_dentry_waiting(const string& dname, list<Context*>& ls)
+void CDir::take_dentry_waiting(const string& dname,
+			       std::vector<Context*>& vs)
 {
   if (waiting_on_dentry.empty())
     return;
 
-  map<string, list<Context*> >::iterator p = waiting_on_dentry.find(dname);
+  map<string, std::vector<Context*> >::iterator p =
+    waiting_on_dentry.find(dname);
   if (p != waiting_on_dentry.end()) {
     dout(10) << "take_dentry_waiting dentry " << dname
 	     << " found waiter "
 	     << " on " << *this << dendl;
-    ls.splice(ls.end(), p->second);
+    move_left(vs, p->second);
     waiting_on_dentry.erase(p++);
   }
 
@@ -986,42 +991,41 @@ void CDir::add_ino_waiter(inodeno_t ino, Context *c)
 	   << dendl;
 }
 
-void CDir::take_ino_waiting(inodeno_t ino, list<Context*>& ls)
+void CDir::take_ino_waiting(inodeno_t ino, std::vector<Context*>& vs)
 {
   if (waiting_on_ino.empty()) return;
   if (waiting_on_ino.count(ino) == 0) return;
   dout(10) << "take_ino_waiting ino " << ino
 	   << " x " << waiting_on_ino[ino].size()
 	   << " on " << *this << dendl;
-  ls.splice(ls.end(), waiting_on_ino[ino]);
+  move_left(vs, waiting_on_ino[ino]);
   waiting_on_ino.erase(ino);
   if (waiting_on_ino.empty())
     put(PIN_INOWAITER);
 }
 
-void CDir::take_sub_waiting(list<Context*>& ls)
+void CDir::take_sub_waiting(std::vector<Context*>& vs)
 {
   dout(10) << "take_sub_waiting" << dendl;
   if (!waiting_on_dentry.empty()) {
-    for (map<string, list<Context*> >::iterator p
+    for (map<string, std::vector<Context*> >::iterator p
 	   = waiting_on_dentry.begin();
 	 p != waiting_on_dentry.end();
 	 ++p)
-      ls.splice(ls.end(), p->second);
+      move_left(vs, p->second);
     waiting_on_dentry.clear();
     put(PIN_DNWAITER);
   }
   if (!waiting_on_ino.empty()) {
-    for (map<inodeno_t, list<Context*> >::iterator p = waiting_on_ino.begin();
+    for (map<inodeno_t, std::vector<Context*> >::iterator p =
+	   waiting_on_ino.begin();
 	 p != waiting_on_ino.end();
 	 ++p)
-      ls.splice(ls.end(), p->second);
+      move_left(vs, p->second);
     waiting_on_ino.clear();
     put(PIN_INOWAITER);
   }
 }
-
-
 
 void CDir::add_waiter(uint64_t tag, Context *c)
 {
@@ -1032,7 +1036,8 @@ void CDir::add_waiter(uint64_t tag, Context *c)
     if (!(is_freezing_tree_root() || is_frozen_tree_root() ||
 	  is_freezing_dir() || is_frozen_dir())) {
       // try parent
-      dout(10) << "add_waiter " << std::hex << tag << std::dec << " " << c
+      dout(10) << "add_waiter " << std::hex << tag << std::dec
+	       << " " << c
 	       << " should be ATFREEZEROOT, " << *this
 	       << " is not root, trying parent" << dendl;
       inode->parent->dir->add_waiter(tag, c);
@@ -1055,41 +1060,38 @@ void CDir::add_waiter(uint64_t tag, Context *c)
   MDSCacheObject::add_waiter(tag, c);
 }
 
-
-
 /* NOTE: this checks dentry waiters too */
-void CDir::take_waiting(uint64_t mask, list<Context*>& ls)
+void CDir::take_waiting(uint64_t mask, std::vector<Context*>& vs)
 {
   if ((mask & WAIT_DENTRY) && !waiting_on_dentry.empty()) {
     // take all dentry waiters
     while (!waiting_on_dentry.empty()) {
-      map<string, list<Context*> >::iterator p = waiting_on_dentry.begin();
+      map<string, std::vector<Context*> >::iterator p =
+	waiting_on_dentry.begin();
       dout(10) << "take_waiting dentry " << p->first
 	       << " on " << *this << dendl;
-      ls.splice(ls.end(), p->second);
+      move_left(vs, p->second);
       waiting_on_dentry.erase(p);
     }
     put(PIN_DNWAITER);
   }
 
   // waiting
-  MDSCacheObject::take_waiting(mask, ls);
+  MDSCacheObject::take_waiting(mask, vs);
 }
-
 
 void CDir::finish_waiting(uint64_t mask, int result)
 {
-  dout(11) << "finish_waiting mask " << hex << mask << dec << " result " << result << " on " << *this << dendl;
+  dout(11) << "finish_waiting mask " << hex << mask << dec
+	   << " result " << result << " on " << *this << dendl;
 
-  list<Context*> finished;
+  std::vector<Context*> finished;
   take_waiting(mask, finished);
   if (result < 0)
     finish_contexts(finished, result);
   else
     cache->mds->queue_waiters(finished);
 }
-
-
 
 // dirty/clean
 
@@ -1113,7 +1115,6 @@ void CDir::pop_and_dirty_projected_fnode(LogSegment *ls)
   delete projected_fnode.front();
   projected_fnode.pop_front();
 }
-
 
 version_t CDir::pre_dirty(version_t min)
 {
@@ -1659,9 +1660,10 @@ void CDir::_committed(version_t v)
   // finishers?
   bool were_waiters = !waiting_for_commit.empty();
 
-  map<version_t, list<Context*> >::iterator p = waiting_for_commit.begin();
+  map<version_t, std::vector<Context*> >::iterator p =
+    waiting_for_commit.begin();
   while (p != waiting_for_commit.end()) {
-    map<version_t, list<Context*> >::iterator n = p;
+    map<version_t, std::vector<Context*> >::iterator n = p;
     ++n;
     if (p->first > committed_version) {
       dout(10) << " there are waiters for " << p->first
@@ -1858,9 +1860,9 @@ void CDir::set_dir_auth(pair<int,int> a)
 
   // newly single auth?
   if (was_ambiguous && dir_auth.second == CDIR_AUTH_UNKNOWN) {
-    list<Context*> ls;
-    take_waiting(WAIT_SINGLEAUTH, ls);
-    cache->mds->queue_waiters(ls);
+    std::vector<Context*> vs;
+    take_waiting(WAIT_SINGLEAUTH, vs);
+    cache->mds->queue_waiters(vs);
   }
 }
 

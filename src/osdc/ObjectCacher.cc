@@ -67,11 +67,13 @@ ObjectCacher::BufferHead *ObjectCacher::Object::split(BufferHead *left, loff_t o
 
   // move read waiters
   if (!left->waitfor_read.empty()) {
-    map<loff_t, list<Context*> >::iterator start_remove = left->waitfor_read.begin();
+    map<loff_t, std::vector<Context*> >::iterator start_remove =
+      left->waitfor_read.begin();
     while (start_remove != left->waitfor_read.end() &&
 	   start_remove->first < right->start())
       ++start_remove;
-    for (map<loff_t, list<Context*> >::iterator p = start_remove;
+    for (map<loff_t, std::vector<Context*> >::iterator p
+	   = start_remove;
 	 p != left->waitfor_read.end(); ++p) {
       ldout(oc->cct, 20) << "split  moving waiters at byte " << p->first << " to right bh" << dendl;
       right->waitfor_read[p->first].swap( p->second );
@@ -107,11 +109,11 @@ void ObjectCacher::Object::merge_left(BufferHead *left, BufferHead *right)
   left->last_write = MAX( left->last_write, right->last_write );
 
   // waiters
-  for (map<loff_t, list<Context*> >::iterator p = right->waitfor_read.begin();
+  for (map<loff_t, std::vector<Context*> >::iterator p =
+	 right->waitfor_read.begin();
        p != right->waitfor_read.end();
        ++p)
-    left->waitfor_read[p->first].splice( left->waitfor_read[p->first].begin(),
-					 p->second );
+    move_left(left->waitfor_read[p->first], p->second );
 
   // hose right
   delete right;
@@ -299,7 +301,7 @@ void ObjectCacher::Object::audit_buffers()
       assert(it->first >= offset);
     }
     BufferHead *bh = it->second;
-    map<loff_t, list<Context*> >::const_iterator w_it;
+    map<loff_t, std::vector<Context*> >::const_iterator w_it;
     for (w_it = bh->waitfor_read.begin();
 	 w_it != bh->waitfor_read.end(); ++w_it) {
       if (w_it->first < bh->start() ||
@@ -623,7 +625,7 @@ void ObjectCacher::bh_read_finish(const boost::uuids::uuid& volume, object_t oid
     bl.push_back(bp);
   }
 
-  list<Context*> ls;
+  std::vector<Context*> vs;
   int err = 0;
 
   if (objects[volume].count(oid) == 0) {
@@ -640,10 +642,11 @@ void ObjectCacher::bh_read_finish(const boost::uuids::uuid& volume, object_t oid
       bool allzero = true;
       for (map<loff_t, BufferHead*>::iterator p = ob->data.begin(); p != ob->data.end(); ++p) {
 	BufferHead *bh = p->second;
-	for (map<loff_t, list<Context*> >::iterator p = bh->waitfor_read.begin();
+	for (map<loff_t, std::vector<Context*> >::iterator p =
+	       bh->waitfor_read.begin();
 	     p != bh->waitfor_read.end();
 	     ++p)
-	  ls.splice(ls.end(), p->second);
+	  move_left(vs, p->second);
 	bh->waitfor_read.clear();
 	if (!bh->is_zero() && !bh->is_rx())
 	  allzero = false;
@@ -700,10 +703,11 @@ void ObjectCacher::bh_read_finish(const boost::uuids::uuid& volume, object_t oid
       ldout(cct, 20) << "checking bh " << *bh << dendl;
 
       // finishers?
-      for (map<loff_t, list<Context*> >::iterator it = bh->waitfor_read.begin();
+      for (map<loff_t, std::vector<Context*> >::iterator it =
+	     bh->waitfor_read.begin();
 	   it != bh->waitfor_read.end();
 	   ++it)
-	ls.splice(ls.end(), it->second);
+	move_left(vs, it->second);
       bh->waitfor_read.clear();
 
       if (bh->start() > opos) {
@@ -766,13 +770,12 @@ void ObjectCacher::bh_read_finish(const boost::uuids::uuid& volume, object_t oid
   }
 
   // called with lock held.
-  ldout(cct, 20) << "finishing waiters " << ls << dendl;
+  ldout(cct, 20) << "finishing waiters " << vs << dendl;
 
-  finish_contexts(ls, err);
+  finish_contexts(vs, err);
   --reads_outstanding;
   read_cond.Signal();
 }
-
 
 void ObjectCacher::bh_write(BufferHead *bh)
 {
@@ -876,9 +879,9 @@ void ObjectCacher::bh_write_commit(const boost::uuids::uuid& volume, object_t oi
     ob->last_commit_tid = tid;
 
     // waiters?
-    list<Context*> ls;
+    std::vector<Context*> vs;
     if (ob->waitfor_commit.count(tid)) {
-      ls.splice(ls.begin(), ob->waitfor_commit[tid]);
+      vs.swap(ob->waitfor_commit[tid]);
       ob->waitfor_commit.erase(tid);
     }
 
@@ -892,8 +895,8 @@ void ObjectCacher::bh_write_commit(const boost::uuids::uuid& volume, object_t oi
       flush_set_callback(flush_set_callback_arg, oset);
     }
 
-    if (!ls.empty())
-      finish_contexts(ls, r);
+    if (!vs.empty())
+      finish_contexts(vs, r);
   }
 }
 

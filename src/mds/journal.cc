@@ -2326,10 +2326,11 @@ void ESubtreeMap::replay(MDS *mds)
 
 void EFragment::replay(MDS *mds)
 {
-  dout(10) << "EFragment.replay " << op_name(op) << " " << ino << " " << basefrag << " by " << bits << dendl;
+  dout(10) << "EFragment.replay " << op_name(op) << " " << ino
+	   << " " << basefrag << " by " << bits << dendl;
 
   list<CDir*> resultfrags;
-  list<Context*> waiters;
+  std::vector<Context*> waiters;
   list<frag_t> old_frags;
 
   // in may be NULL if it wasn't in our cache yet.  if it's a prepare
@@ -2339,11 +2340,14 @@ void EFragment::replay(MDS *mds)
 
   switch (op) {
   case OP_PREPARE:
-    mds->mdcache->add_uncommitted_fragment(dirfrag_t(ino, basefrag), bits, orig_frags, _segment, &rollback);
+    mds->mdcache->add_uncommitted_fragment(dirfrag_t(ino, basefrag),
+					   bits, orig_frags, _segment,
+					   &rollback);
     // fall-thru
   case OP_ONESHOT:
     if (in)
-      mds->mdcache->adjust_dir_fragments(in, basefrag, bits, resultfrags, waiters, true);
+      mds->mdcache->adjust_dir_fragments(in, basefrag, bits,
+					 resultfrags, waiters, true);
     break;
 
   case OP_ROLLBACK:
@@ -2351,13 +2355,15 @@ void EFragment::replay(MDS *mds)
       in->dirfragtree.get_leaves_under(basefrag, old_frags);
       if (orig_frags.empty()) {
 	// old format EFragment
-	mds->mdcache->adjust_dir_fragments(in, basefrag, -bits, resultfrags, waiters, true);
+	mds->mdcache->adjust_dir_fragments(in, basefrag, -bits,
+					   resultfrags, waiters, true);
       } else {
-	for (list<frag_t>::iterator p = orig_frags.begin(); p != orig_frags.end(); ++p)
+	for (list<frag_t>::iterator p = orig_frags.begin();
+	     p != orig_frags.end(); ++p)
 	  mds->mdcache->force_dir_fragment(in, *p);
       }
     }
-    mds->mdcache->rollback_uncommitted_fragment(dirfrag_t(ino, basefrag), old_frags);
+    mds->mdcache->rollback_uncommitted_fragment(dirfrag_t(ino,basefrag), old_frags);
     break;
 
   case OP_COMMIT:

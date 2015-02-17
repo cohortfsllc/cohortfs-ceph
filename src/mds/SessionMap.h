@@ -141,7 +141,7 @@ public:
   // -- caps --
 private:
   version_t cap_push_seq;	 // cap push seq #
-  map<version_t, list<Context*> > waitfor_flush; // flush session messages
+  map<version_t, std::vector<Context*> > waitfor_flush; // flush session messages
 public:
   xlist<Capability*> caps;     // inodes with caps; front=most recently used
   xlist<ClientLease*> leases;  // metadata leases to clients
@@ -155,11 +155,11 @@ public:
     waitfor_flush[get_push_seq()].push_back(c);
     return get_push_seq();
   }
-  void finish_flush(version_t seq, list<Context*>& ls) {
+  void finish_flush(version_t seq, std::vector<Context*>& vs) {
     while (!waitfor_flush.empty()) {
       if (waitfor_flush.begin()->first > seq)
 	break;
-      ls.splice(ls.end(), waitfor_flush.begin()->second);
+      move_left(vs, waitfor_flush.begin()->second);
       waitfor_flush.erase(waitfor_flush.begin());
     }
   }
@@ -238,7 +238,7 @@ public:
 
 public:	 // i am lazy
   version_t version, projected, committing, committed;
-  map<version_t, list<Context*> > commit_waiters;
+  map<version_t, std::vector<Context*> > commit_waiters;
 
 public:
   SessionMap(MDS *m) : mds(m),
@@ -380,7 +380,7 @@ public:
 
   // -- loading, saving --
   inodeno_t ino;
-  list<Context*> waiting_for_load;
+  std::vector<Context*> waiting_for_load;
 
   void encode(bufferlist& bl) const;
   void decode(bufferlist::iterator& blp);

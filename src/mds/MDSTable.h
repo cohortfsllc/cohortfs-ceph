@@ -37,9 +37,10 @@ class MDSTable {
   //static const int STATE_COMMITTING = 3;
   int state;
 
-  version_t version, committing_version, committed_version, projected_version;
+  version_t version, committing_version, committed_version,
+    projected_version;
 
-  map<version_t, list<Context*> > waitfor_save;
+  map<version_t, std::vector<Context*> > waitfor_save;
 
 public:
   MDSTable(MDS *m, const char *n, bool is_per_mds) :

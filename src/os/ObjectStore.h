@@ -80,7 +80,8 @@ enum {
 
 class Logger;
 
-static inline void encode(const map<string,bufferptr> *attrset, bufferlist &bl) {
+static inline void encode(const map<string,bufferptr> *attrset,
+			  bufferlist &bl) {
   ::encode(*attrset, bl);
 }
 
@@ -493,9 +494,9 @@ public:
     bool replica;
     bool tolerate_collection_add_enoent;
 
-    list<Context *> on_applied;
-    list<Context *> on_commit;
-    list<Context *> on_applied_sync;
+    std::vector<Context*> on_applied;
+    std::vector<Context*> on_commit;
+    std::vector<Context*> on_applied_sync;
 
     // member hook for intrusive work queue
     bi::list_member_hook<> queue_hook;
@@ -570,29 +571,30 @@ public:
       assert(out_on_applied);
       assert(out_on_commit);
       assert(out_on_applied_sync);
-      list<Context *> on_applied, on_commit, on_applied_sync;
+      vector<Context*> on_applied, on_commit, on_applied_sync;
       for (list<Transaction *>::iterator i = t.begin();
 	   i != t.end();
 	   ++i) {
-	on_applied.splice(on_applied.end(), (*i)->on_applied);
-	on_commit.splice(on_commit.end(), (*i)->on_commit);
-	on_applied_sync.splice(on_applied_sync.end(), (*i)->on_applied_sync);
+	move_left(on_applied, (*i)->on_applied);
+	move_left(on_commit, (*i)->on_commit);
+	move_left(on_applied_sync, (*i)->on_applied_sync);
       }
-      *out_on_applied = C_Contexts::list_to_context(on_applied);
-      *out_on_commit = C_Contexts::list_to_context(on_commit);
-      *out_on_applied_sync = C_Contexts::list_to_context(on_applied_sync);
+      *out_on_applied = C_Contexts::vec_to_context(on_applied);
+      *out_on_commit = C_Contexts::vec_to_context(on_commit);
+      *out_on_applied_sync =
+	C_Contexts::vec_to_context(on_applied_sync);
     }
 
     Context *get_on_applied() {
-      return C_Contexts::list_to_context(on_applied);
+      return C_Contexts::vec_to_context(on_applied);
     }
 
     Context *get_on_commit() {
-      return C_Contexts::list_to_context(on_commit);
+      return C_Contexts::vec_to_context(on_commit);
     }
 
     Context *get_on_applied_sync() {
-      return C_Contexts::list_to_context(on_applied_sync);
+      return C_Contexts::vec_to_context(on_applied_sync);
     }
 
     /// For legacy transactions, provide the pool to override the encoded pool with
@@ -618,6 +620,20 @@ public:
       std::swap(on_applied, other.on_applied);
       std::swap(on_commit, other.on_commit);
       std::swap(on_applied_sync, other.on_applied_sync);
+    }
+
+    /// Append the operations of the parameter to this Transaction. Those operations are removed from the parameter Transaction
+    void append(Transaction& other) {
+      ops.insert(ops.end(), other.ops.begin(), other.ops.end());
+      other.ops.clear();
+
+      if (other.largest_data_len > largest_data_len) {
+	largest_data_len = other.largest_data_len;
+	largest_data_off = other.largest_data_off;
+      }
+      move_left(on_applied, other.on_applied);
+      move_left(on_commit, other.on_commit);
+      move_left(on_applied_sync, other.on_applied_sync);
     }
 
     /** Inquires about the Transaction as a whole. */

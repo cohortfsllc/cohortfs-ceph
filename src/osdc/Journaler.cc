@@ -195,24 +195,26 @@ void Journaler::_finish_read_head(int r, bufferlist& bl)
   if (r < 0) {
     ldout(cct, 0) << "error " << r << " getting journal off disk"
 		  << dendl;
-    list<Context*> ls;
-    ls.swap(waitfor_recover);
-    finish_contexts(ls, r);
+    std::vector<Context*> vs;
+    vs.swap(waitfor_recover);
+    finish_contexts(vs, r);
     return;
   }
 
   /* temp? */
   if (r != 0) {
-    ldout(cct, 0) << "nz \"success\"=" << r << " getting journal off disk"
+    ldout(cct, 0) << "nz \"success\"=" << r
+		  << " getting journal off disk"
 		  << dendl;
   }
 
   if (bl.length() == 0) {
-    ldout(cct, 1) << "_finish_read_head r=" << r << " read 0 bytes, assuming empty log" << dendl;
+    ldout(cct, 1) << "_finish_read_head r=" << r
+		  << " read 0 bytes, assuming empty log" << dendl;
     state = STATE_ACTIVE;
-    list<Context*> ls;
-    ls.swap(waitfor_recover);
-    finish_contexts(ls, 0);
+    std::vector<Context*> vs;
+    vs.swap(waitfor_recover);
+    finish_contexts(vs, 0);
     return;
   }
 
@@ -224,9 +226,9 @@ void Journaler::_finish_read_head(int r, bufferlist& bl)
   if (h.magic != magic) {
     ldout(cct, 0) << "on disk magic '" << h.magic << "' != my magic '"
 	    << magic << "'" << dendl;
-    list<Context*> ls;
-    ls.swap(waitfor_recover);
-    finish_contexts(ls, -EINVAL);
+    std::vector<Context*> vs;
+    vs.swap(waitfor_recover);
+    finish_contexts(vs, -EINVAL);
     return;
   }
 
@@ -303,9 +305,9 @@ void Journaler::_finish_probe_end(int r, uint64_t end)
 
 out:
   // done.
-  list<Context*> ls;
-  ls.swap(waitfor_recover);
-  finish_contexts(ls, r);
+  std::vector<Context*> vs;
+  vs.swap(waitfor_recover);
+  finish_contexts(vs, r);
 }
 
 class Journaler::C_RereadHeadProbe : public Context

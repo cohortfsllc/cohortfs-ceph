@@ -1304,7 +1304,7 @@ void Migrator::finish_export_inode_caps(CInode *in, int peer,
 
 void Migrator::finish_export_inode(CInode *in, utime_t now, int peer,
 				   map<client_t,Capability::Import>& peer_imported,
-				   list<Context*>& finished)
+				   std::vector<Context*>& finished)
 {
   dout(12) << "finish_export_inode " << *in << dendl;
 
@@ -1449,7 +1449,7 @@ int Migrator::encode_export_dir(bufferlist& exportbl,
 
 void Migrator::finish_export_dir(CDir *dir, utime_t now, int peer,
 				 map<inodeno_t,map<client_t,Capability::Import> >& peer_imported,
-				 list<Context*>& finished)
+				 std::vector<Context*>& finished)
 {
   dout(10) << "finish_export_dir " << *dir << dendl;
 
@@ -1951,7 +1951,7 @@ void Migrator::handle_export_prep(MExportDirPrep *m)
 
   CDir *dir;
   CInode *diri;
-  list<Context*> finished;
+  std::vector<Context*> finished;
 
   // assimilate root dir.
   map<dirfrag_t,import_state_t>::iterator it = import_state.find(m->get_dirfrag());
@@ -2444,8 +2444,8 @@ void Migrator::import_reverse_unfreeze(CDir *dir)
   assert(dir);
   dout(7) << "import_reverse_unfreeze " << *dir << dendl;
   dir->unfreeze_tree();
-  list<Context*> ls;
-  mds->queue_waiters(ls);
+  std::vector<Context*> vs;
+  mds->queue_waiters(vs);
   cache->discard_delayed_expire(dir);
   import_reverse_final(dir);
 }
@@ -2806,10 +2806,10 @@ int Migrator::decode_import_dir(bufferlist::iterator& blp,
   // take all waiters on this dir
   // NOTE: a pass of imported data is guaranteed to get all of my waiters because
   // a replica's presense in my cache implies/forces it's presense in authority's.
-  list<Context*> waiters;
+  std::vector<Context*> waiters;
 
   dir->take_waiting(CDir::WAIT_ANY_MASK, waiters);
-  for (list<Context*>::iterator it = waiters.begin();
+  for (std::vector<Context*>::iterator it = waiters.begin();
        it != waiters.end();
        ++it)
     import_root->add_waiter(CDir::WAIT_UNFREEZE, *it);	// UNFREEZE will get kicked both on success or failure
