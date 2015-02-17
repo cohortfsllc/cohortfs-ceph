@@ -127,12 +127,12 @@ class MDS : public Dispatcher {
   int state; // my confirmed state
   int want_state;    // the state i want
 
-  list<Context*> waiting_for_active, waiting_for_replay, waiting_for_reconnect,
-    waiting_for_resolve;
-  list<Context*> replay_queue;
-  map<int, list<Context*> > waiting_for_active_peer;
+  std::vector<Context*> waiting_for_active, waiting_for_replay,
+    waiting_for_reconnect, waiting_for_resolve;
+  std::list<Context*> replay_queue;
+  map<int, std::vector<Context*> > waiting_for_active_peer;
   list<Message*> waiting_for_nolaggy;
-  map<epoch_t, list<Context*> > waiting_for_mdsmap;
+  map<epoch_t, std::vector<Context*> > waiting_for_mdsmap;
 
   map<int,version_t> peer_mdsmap_epoch;
 
@@ -195,13 +195,13 @@ class MDS : public Dispatcher {
   }
 
   // -- waiters --
-  list<Context*> finished_queue;
+  std::vector<Context*> finished_queue;
 
   void queue_waiter(Context *c) {
     finished_queue.push_back(c);
   }
-  void queue_waiters(list<Context*>& ls) {
-    finished_queue.splice( finished_queue.end(), ls );
+  void queue_waiters(std::vector<Context*>& vs) {
+    move_left(finished_queue, vs );
   }
   bool queue_one_replay() {
     if (replay_queue.empty())

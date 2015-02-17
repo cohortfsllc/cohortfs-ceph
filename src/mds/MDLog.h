@@ -67,7 +67,7 @@ protected:
   friend class ReplayThread;
   friend class C_MDL_Replay;
 
-  list<Context*> waitfor_replay;
+  std::vector<Context*> waitfor_replay;
 
   void _replay();	  // old way
   void _replay_thread(VolumeRef &v);  // new way

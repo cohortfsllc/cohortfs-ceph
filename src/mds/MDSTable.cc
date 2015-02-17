@@ -90,13 +90,13 @@ void MDSTable::save_2(int r, version_t v)
   assert(r >= 0);
   committed_version = v;
 
-  list<Context*> ls;
+  std::vector<Context*> vs;
   while (!waitfor_save.empty()) {
     if (waitfor_save.begin()->first > v) break;
-    ls.splice(ls.end(), waitfor_save.begin()->second);
+    move_left(vs, waitfor_save.begin()->second);
     waitfor_save.erase(waitfor_save.begin());
   }
-  finish_contexts(ls,0);
+  finish_contexts(vs,0);
 }
 
 

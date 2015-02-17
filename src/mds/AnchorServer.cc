@@ -189,7 +189,8 @@ void AnchorServer::_prepare(bufferlist &bl, uint64_t reqid, int bymds)
   //dump();
 }
 
-bool AnchorServer::check_pending(version_t tid, MMDSTableRequest *req, list<Context *>& finished)
+bool AnchorServer::check_pending(version_t tid, MMDSTableRequest *req,
+				 std::vector<Context*>& finished)
 {
   inodeno_t ino;
   if (pending_create.count(tid))
@@ -202,8 +203,8 @@ bool AnchorServer::check_pending(version_t tid, MMDSTableRequest *req, list<Cont
     assert(0);
 
   assert(pending_ops.count(ino));
-  list< pair<version_t, Context*> >& pending = pending_ops[ino];
-  list< pair<version_t, Context*> >::iterator p = pending.begin();
+  std::vector<pair<version_t,Context*> >& pending = pending_ops[ino];
+  std::vector<pair<version_t,Context*> >::iterator p = pending.begin();
   if (p->first == tid) {
     assert(p->second == NULL);
   } else {
@@ -235,7 +236,7 @@ bool AnchorServer::check_pending(version_t tid, MMDSTableRequest *req, list<Cont
 
 bool AnchorServer::_commit(version_t tid, MMDSTableRequest *req)
 {
-  list<Context *> finished;
+  std::vector<Context *> finished;
   if (!check_pending(tid, req, finished))
     return false;
 
@@ -287,7 +288,7 @@ bool AnchorServer::_commit(version_t tid, MMDSTableRequest *req)
 
 void AnchorServer::_rollback(version_t tid)
 {
-  list<Context *> finished;
+  std::vector<Context*> finished;
   check_pending(tid, NULL, finished);
 
   if (pending_create.count(tid)) {

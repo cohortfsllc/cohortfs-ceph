@@ -186,6 +186,56 @@ public:
     }
   }
 
+  class C_Proposal : public Context {
+    Context *proposer_context;
+  public:
+    bufferlist bl;
+    // for debug purposes. Will go away. Soon.
+    bool proposed;
+    ceph::mono_time proposal_time;
+
+    bi::list_member_hook<> q;
+
+    typedef bi::list< C_Proposal,
+		      bi::member_hook< C_Proposal,
+				       bi::list_member_hook<>,
+				       &C_Proposal::q > > Queue;
+
+    C_Proposal(Context *c, bufferlist& proposal_bl) :
+	proposer_context(c),
+	bl(proposal_bl),
+	proposed(false),
+	proposal_time(ceph::mono_clock::now())
+      { }
+
+    void finish(int r) {
+      if (proposer_context) {
+	proposer_context->complete(r);
+	proposer_context = NULL;
+      }
+    }
+  };
+
+  /*
+   * finish and destroy a sequence of Contexts
+   */
+  inline void finish_proposals(C_Proposal::Queue& finished,
+			       int result = 0)
+  {
+    if (finished.empty())
+      return;
+
+    C_Proposal::Queue q;
+    q.splice(q.end(), finished);
+
+    while (q.size()) {
+      C_Proposal::Queue::iterator it = q.begin();
+      Context& c = *it;
+      c.complete(result);
+      q.erase(it);
+    }
+  }
+
 private:
   /**
    * The state we are in.
@@ -311,7 +361,7 @@ private:
   /**
    * List of callbacks waiting for our state to change into STATE_ACTIVE.
    */
-  list<Context*> waiting_for_active;
+  std::vector<Context*> waiting_for_active;
   /**
    * List of callbacks waiting for the chance to read a version from us.
    *
@@ -327,7 +377,7 @@ private:
    * with the latest proposal, or if we don't really care about the remaining
    * uncommitted values --, or if we're on a quorum of one.
    */
-  list<Context*> waiting_for_readable;
+  std::vector<Context*> waiting_for_readable;
   /**
    * @}
    */
@@ -476,7 +526,7 @@ private:
    * @remarks It is not possible to write if we are not the Leader, or we are
    *	      not on the active state, or if the lease has expired.
    */
-  list<Context*> waiting_for_writeable;
+  std::vector<Context*> waiting_for_writeable;
   /**
    * List of callbacks waiting for a commit to finish.
    *
@@ -485,11 +535,11 @@ private:
    *	      next commit to be finished so we are sure that our value was
    *	      fully committed.
    */
-  list<Context*> waiting_for_commit;
+  std::vector<Context*> waiting_for_commit;
   /**
    *
    */
-  list<Context*> proposals;
+  C_Proposal::Queue proposals; /* intrusive queue */
   /**
    * @}
    */
@@ -591,32 +641,6 @@ private:
     C_Trimmed(Paxos *p) : paxos(p) { }
     void finish(int r) {
       paxos->trimming = false;
-    }
-  };
-  /**
-   *
-   */
-public:
-  class C_Proposal : public Context {
-    Context *proposer_context;
-  public:
-    bufferlist bl;
-    // for debug purposes. Will go away. Soon.
-    bool proposed;
-    ceph::mono_time proposal_time;
-
-    C_Proposal(Context *c, bufferlist& proposal_bl) :
-	proposer_context(c),
-	bl(proposal_bl),
-	proposed(false),
-	proposal_time(ceph::mono_clock::now())
-      { }
-
-    void finish(int r) {
-      if (proposer_context) {
-	proposer_context->complete(r);
-	proposer_context = NULL;
-      }
     }
   };
   /**
@@ -1250,19 +1274,6 @@ public:
   void wait_for_commit(Context *oncommit) {
     waiting_for_commit.push_back(oncommit);
   }
-  /**
-   * Add oncommit to the front of the list of callbacks waiting for us to
-   * finish committing.
-   *
-   * @param oncommit A callback
-   */
-  void wait_for_commit_front(Context *oncommit) {
-    waiting_for_commit.push_front(oncommit);
-  }
-  /**
-   * @}
-   */
-
   /**
    * @}
    */

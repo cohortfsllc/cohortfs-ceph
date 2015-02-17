@@ -2616,7 +2616,7 @@ void Monitor::resend_routed_requests()
 {
   dout(10) << "resend_routed_requests" << dendl;
   int mon = get_leader();
-  list<Context*> retry;
+  std::vector<Context*> retry;
   for (map<uint64_t, RoutedRequest*>::iterator p = routed_requests.begin();
        p != routed_requests.end();
        ++p) {
