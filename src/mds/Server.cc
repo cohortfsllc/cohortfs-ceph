@@ -269,13 +269,15 @@ void Server::flush_client_sessions(set<client_t>& client_set, C_GatherBuilder& g
 
 void Server::finish_flush_session(Session *session, version_t seq)
 {
-  list<Context*> finished;
+  std::vector<Context*> finished;
   session->finish_flush(seq, finished);
   mds->queue_waiters(finished);
 }
 
-void Server::_session_logged(Session *session, uint64_t state_seq, bool open, version_t pv,
-			     interval_set<inodeno_t>& inos, version_t piv)
+void Server::_session_logged(Session *session, uint64_t state_seq,
+			     bool open, version_t pv,
+			     interval_set<inodeno_t>& inos,
+			     version_t piv)
 {
   ldout(mds->cct, 10) << "_session_logged " << session->info.inst << " state_seq " << state_seq << " " << (open ? "open":"close")
 	   << " " << pv << dendl;
@@ -2872,7 +2874,7 @@ void Server::handle_client_file_setlock(MDRequestRef& mdr)
   ldout(mds->cct, 10) << " state prior to lock change: " << *lock_state << dendl;;
   if (CEPH_LOCK_UNLOCK == set_lock.type) {
     list<ceph_filelock> activated_locks;
-    list<Context*> waiters;
+    std::vector<Context*> waiters;
     if (lock_state->is_waiting(set_lock)) {
       ldout(mds->cct, 10) << " unlock removing waiting lock " << set_lock << dendl;
       lock_state->remove_waiting(set_lock);
@@ -6005,13 +6007,14 @@ void Server::_logged_slave_rename(MDRequestRef& mdr,
 }
 
 void Server::_commit_slave_rename(MDRequestRef& mdr, int r,
-				  CDentry *srcdn, CDentry *destdn, CDentry *straydn)
+				  CDentry *srcdn, CDentry *destdn,
+				  CDentry *straydn)
 {
   ldout(mds->cct, 10) << "_commit_slave_rename " << *mdr << " r=" << r << dendl;
 
   CDentry::linkage_t *destdnl = destdn->get_linkage();
 
-  list<Context*> finished;
+  std::vector<Context*> finished;
   if (r == 0) {
     // write a commit to the journal
     ESlaveUpdate *le = new ESlaveUpdate(mdlog, "slave_rename_commit", mdr->reqid,
@@ -6413,7 +6416,7 @@ void Server::_rename_rollback_finish(MutationRef& mut, MDRequestRef& mdr, CDentr
   }
 
   if (mdr) {
-    list<Context*> finished;
+    std::vector<Context*> finished;
     if (mdr->more()->is_ambiguous_auth) {
       if (srcdn->is_auth())
 	mdr->more()->rename_inode->unfreeze_inode(finished);

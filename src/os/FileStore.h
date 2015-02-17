@@ -148,7 +148,7 @@ private:
   std::mutex sync_entry_timeo_lock;
   SafeTimer<ceph::mono_clock> timer;
 
-  list<Context*> sync_waiters;
+  std::vector<Context*> sync_waiters;
   bool stop;
   void sync_entry();
   struct SyncThread : public Thread {

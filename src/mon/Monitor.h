@@ -374,8 +374,8 @@ private:
    * @} // Synchronization
    */
 
-  list<Context*> waitfor_quorum;
-  list<Context*> maybe_wait_for_quorum;
+  std::vector<Context*> waitfor_quorum;
+  std::vector<Context*> maybe_wait_for_quorum;
 
   /**
    * @defgroup Monitor_h_TimeCheck Monitor Clock Drift Early Warning System

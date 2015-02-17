@@ -995,12 +995,14 @@ void MDS::handle_mds_map(MMDSMap *m, MDS::unique_lock& ml)
     balancer->try_rebalance();
 
   {
-    map<epoch_t,list<Context*> >::iterator p = waiting_for_mdsmap.begin();
-    while (p != waiting_for_mdsmap.end() && p->first <= mdsmap->get_epoch()) {
-      list<Context*> ls;
-      ls.swap(p->second);
+    map<epoch_t,std::vector<Context*> >::iterator p
+      = waiting_for_mdsmap.begin();
+    while (p != waiting_for_mdsmap.end() &&
+	   p->first <= mdsmap->get_epoch()) {
+      std::vector<Context*> vs;
+      vs.swap(p->second);
       waiting_for_mdsmap.erase(p++);
-      finish_contexts(ls);
+      finish_contexts(vs);
     }
   }
 
@@ -1833,15 +1835,15 @@ bool MDS::_dispatch(Message *m, unique_lock& ml)
 
   // finish any triggered contexts
   while (!finished_queue.empty()) {
-    dout(7) << "mds has " << finished_queue.size() << " queued contexts" << dendl;
+    dout(7) << "mds has " << finished_queue.size()
+	    << " queued contexts" << dendl;
     dout(10) << finished_queue << dendl;
-    list<Context*> ls;
-    ls.swap(finished_queue);
-    while (!ls.empty()) {
-      dout(10) << " finish " << ls.front() << dendl;
-      ls.front()->complete(0);
-      ls.pop_front();
+    std::vector<Context*> vs;
+    vs.swap(finished_queue);
 
+    for (auto it : vs) {
+      dout(10) << " finish " << it << dendl;
+      it->complete(0);
       // give other threads (beacon!) a chance
       ml.unlock();
       ml.lock();

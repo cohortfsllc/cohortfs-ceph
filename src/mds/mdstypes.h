@@ -1197,12 +1197,12 @@ protected:
 //			       << dendl;
 
   }
-  virtual void take_waiting(uint64_t mask, list<Context*>& ls) {
+  virtual void take_waiting(uint64_t mask, std::vector<Context*>& vs) {
     if (waiting.empty()) return;
     multimap<uint64_t,Context*>::iterator it = waiting.begin();
     while (it != waiting.end()) {
       if (it->first & mask) {
-	ls.push_back(it->second);
+	vs.push_back(it->second);
 //	pdout(10,g_conf->debug_mds) << (mdsco_db_line_prefix(this))
 //				   << "take_waiting mask " << hex << mask << dec << " took " << it->second
 //				   << " tag " << hex << it->first << dec
@@ -1220,8 +1220,9 @@ protected:
     if (waiting.empty())
       put(PIN_WAITER);
   }
+
   void finish_waiting(uint64_t mask, int result = 0) {
-    list<Context*> finished;
+    std::vector<Context*> finished;
     take_waiting(mask, finished);
     finish_contexts(finished, result);
   }

@@ -2879,7 +2879,7 @@ void FileStore::sync_entry()
       }
     }
 
-    list<Context*> fin;
+    std::vector<Context*> fin;
   again:
     fin.swap(sync_waiters);
     l.unlock();

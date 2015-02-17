@@ -2301,10 +2301,12 @@ void MDCache::handle_mds_recovery(int who)
   dout(7) << "handle_mds_recovery mds." << who << dendl;
 
   // exclude all discover waiters. kick_discovers() will do the job
-  static const uint64_t i_mask = CInode::WAIT_ANY_MASK & ~CInode::WAIT_DIR;
-  static const uint64_t d_mask = CDir::WAIT_ANY_MASK & ~CDir::WAIT_DENTRY;
+  static const uint64_t i_mask =
+    CInode::WAIT_ANY_MASK & ~CInode::WAIT_DIR;
+  static const uint64_t d_mask =
+    CDir::WAIT_ANY_MASK & ~CDir::WAIT_DENTRY;
 
-  list<Context*> waiters;
+  std::vector<Context*> waiters;
 
   // wake up any waiters in their subtrees
   for (map<CDir*,set<CDir*> >::iterator p = subtrees.begin();
@@ -5426,7 +5428,7 @@ void MDCache::truncate_inode_logged(CInode *in, MutationRef& mut)
   in->put(CInode::PIN_TRUNCATING);
   in->auth_unpin(this);
 
-  list<Context*> waiters;
+  std::vector<Context*> waiters;
   in->take_waiting(CInode::WAIT_TRUNC, waiters);
   mds->queue_waiters(waiters);
 }
@@ -5434,14 +5436,16 @@ void MDCache::truncate_inode_logged(CInode *in, MutationRef& mut)
 
 void MDCache::add_recovered_truncate(CInode *in, LogSegment *ls)
 {
-  dout(20) << "add_recovered_truncate " << *in << " in " << ls << " offset " << ls->offset << dendl;
+  dout(20) << "add_recovered_truncate " << *in << " in " << ls
+	   << " offset " << ls->offset << dendl;
   ls->truncating_inodes.insert(in);
   in->get(CInode::PIN_TRUNCATING);
 }
 
 void MDCache::remove_recovered_truncate(CInode *in, LogSegment *ls)
 {
-  dout(20) << "remove_recovered_truncate " << *in << " in " << ls << " offset " << ls->offset << dendl;
+  dout(20) << "remove_recovered_truncate " << *in << " in "
+	   << ls << " offset " << ls->offset << dendl;
   // if we have the logseg the truncate started in, it must be in our list.
   set<CInode*>::iterator p = ls->truncating_inodes.find(in);
   assert(p != ls->truncating_inodes.end());
@@ -7581,17 +7585,19 @@ int MDCache::open_ino_traverse_dir(inodeno_t ino, MMDSOpenIno *m,
   return err;
 }
 
-void MDCache::open_ino_finish(inodeno_t ino, open_ino_info_t& info, int ret)
+void MDCache::open_ino_finish(inodeno_t ino, open_ino_info_t& info,
+			      int ret)
 {
   dout(10) << "open_ino_finish ino " << ino << " ret " << ret << dendl;
 
-  list<Context*> waiters;
+  std::vector<Context*> waiters;
   waiters.swap(info.waiters);
   opening_inodes.erase(ino);
   finish_contexts(waiters, ret);
 }
 
-void MDCache::do_open_ino(inodeno_t ino, open_ino_info_t& info, int err)
+void MDCache::do_open_ino(inodeno_t ino, open_ino_info_t& info,
+			  int err)
 {
   if (err < 0) {
     info.checked.clear();
@@ -7615,7 +7621,8 @@ void MDCache::do_open_ino(inodeno_t ino, open_ino_info_t& info, int err)
     info.checking = mds->get_nodeid();
     info.checked.clear();
     info.checked.insert(mds->get_nodeid());
-    C_MDC_OpenInoBacktraceFetched *fin = new C_MDC_OpenInoBacktraceFetched(this, ino);
+    C_MDC_OpenInoBacktraceFetched *fin =
+      new C_MDC_OpenInoBacktraceFetched(this, ino);
     fetch_backtrace(ino, info.volume, fin->bl, fin);
   } else {
     assert(!info.ancestors.empty());
@@ -7627,7 +7634,8 @@ void MDCache::do_open_ino(inodeno_t ino, open_ino_info_t& info, int err)
       return;
     }
     open_ino(info.ancestors[0].dirino, mvol,
-	     new C_MDC_OpenInoParentOpened(this, ino), info.want_replica);
+	     new C_MDC_OpenInoParentOpened(this, ino),
+	     info.want_replica);
   }
 }
 
@@ -7664,7 +7672,8 @@ void MDCache::do_open_ino_peer(inodeno_t ino, open_ino_info_t& info)
     }
   } else {
     info.checking = peer;
-    mds->send_message_mds(new MMDSOpenIno(info.tid, ino, info.ancestors), peer);
+    mds->send_message_mds(new MMDSOpenIno(info.tid, ino,
+					  info.ancestors), peer);
   }
 }
 
@@ -8904,7 +8913,7 @@ void MDCache::discover_path(CInode *base,
     base->add_waiter(CInode::WAIT_SINGLEAUTH, onfinish);
     return;
   } else if (from == mds->get_nodeid()) {
-    list<Context*> finished;
+    std::vector<Context*> finished;
     base->take_waiting(CInode::WAIT_DIR, finished);
     mds->queue_waiters(finished);
     return;
@@ -8957,7 +8966,7 @@ void MDCache::discover_path(CDir *base,
     base->add_waiter(CDir::WAIT_SINGLEAUTH, onfinish);
     return;
   } else if (from == mds->get_nodeid()) {
-    list<Context*> finished;
+    std::vector<Context*> finished;
     base->take_sub_waiting(finished);
     mds->queue_waiters(finished);
     return;
@@ -9008,7 +9017,7 @@ void MDCache::discover_ino(CDir *base,
     base->add_waiter(CDir::WAIT_SINGLEAUTH, onfinish);
     return;
   } else if (from == mds->get_nodeid()) {
-    list<Context*> finished;
+    std::vector<Context*> finished;
     base->take_sub_waiting(finished);
     mds->queue_waiters(finished);
     return;
@@ -9355,7 +9364,7 @@ void MDCache::handle_discover_reply(MDiscoverReply *m)
   if (m->is_flag_error_ino())
     dout(7) << " flag error, ino = " << m->get_wanted_ino() << dendl;
 
-  list<Context*> finished, error;
+  std::vector<Context*> finished, error;
   int from = m->get_source().num();
 
   // starting point
@@ -9366,12 +9375,14 @@ void MDCache::handle_discover_reply(MDiscoverReply *m)
 
   // decrement discover counters
   if (m->get_tid()) {
-    map<ceph_tid_t,discover_info_t>::iterator p = discovers.find(m->get_tid());
+    map<ceph_tid_t,discover_info_t>::iterator p =
+      discovers.find(m->get_tid());
     if (p != discovers.end()) {
       dout(10) << " found tid " << m->get_tid() << dendl;
       discovers.erase(p);
     } else {
-      dout(10) << " tid " << m->get_tid() << " not found, must be dup reply" << dendl;
+      dout(10) << " tid " << m->get_tid()
+	       << " not found, must be dup reply" << dendl;
     }
   }
 
@@ -9505,8 +9516,9 @@ void MDCache::handle_discover_reply(MDiscoverReply *m)
 // ----------------------------
 // REPLICAS
 
-CDir *MDCache::add_replica_dir(bufferlist::iterator& p, CInode *diri, int from,
-			       list<Context*>& finished)
+CDir *MDCache::add_replica_dir(bufferlist::iterator& p, CInode *diri,
+			       int from,
+			       std::vector<Context*>& finished)
 {
   dirfrag_t df;
   ::decode(df, p);
@@ -9519,11 +9531,13 @@ CDir *MDCache::add_replica_dir(bufferlist::iterator& p, CInode *diri, int from,
   if (dir) {
     // had replica. update w/ new nonce.
     dir->decode_replica(p);
-    dout(7) << "add_replica_dir had " << *dir << " nonce " << dir->replica_nonce << dendl;
+    dout(7) << "add_replica_dir had " << *dir << " nonce "
+	    << dir->replica_nonce << dendl;
   } else {
     // force frag to leaf in the diri tree
     if (!diri->dirfragtree.is_leaf(df.frag)) {
-      dout(7) << "add_replica_dir forcing frag " << df.frag << " to leaf in the fragtree "
+      dout(7) << "add_replica_dir forcing frag " << df.frag
+	      << " to leaf in the fragtree "
 	      << diri->dirfragtree << dendl;
       diri->dirfragtree.force_to_leaf(cct, df.frag);
     }
@@ -9538,7 +9552,8 @@ CDir *MDCache::add_replica_dir(bufferlist::iterator& p, CInode *diri, int from,
 	diri->is_base())
       adjust_subtree_auth(dir, from);
 
-    dout(7) << "add_replica_dir added " << *dir << " nonce " << dir->replica_nonce << dendl;
+    dout(7) << "add_replica_dir added " << *dir << " nonce "
+	    << dir->replica_nonce << dendl;
 
     // get waiters
     diri->take_dir_waiting(df.frag, finished);
@@ -9563,7 +9578,9 @@ CDir *MDCache::forge_replica_dir(CInode *diri, frag_t fg, int from)
   return dir;
 }
 
-CDentry *MDCache::add_replica_dentry(bufferlist::iterator& p, CDir *dir, list<Context*>& finished)
+CDentry *MDCache::add_replica_dentry(bufferlist::iterator& p,
+				     CDir *dir,
+				     std::vector<Context*>& finished)
 {
   string name;
   ::decode(name, p);
@@ -9585,7 +9602,9 @@ CDentry *MDCache::add_replica_dentry(bufferlist::iterator& p, CDir *dir, list<Co
   return dn;
 }
 
-CInode *MDCache::add_replica_inode(bufferlist::iterator& p, CDentry *dn, list<Context*>& finished)
+CInode *MDCache::add_replica_inode(bufferlist::iterator& p,
+				   CDentry *dn,
+				   std::vector<Context*>& finished)
 {
   inodeno_t ino;
   ::decode(ino, p);
@@ -9609,8 +9628,10 @@ CInode *MDCache::add_replica_inode(bufferlist::iterator& p, CDentry *dn, list<Co
   }
 
   if (dn) {
-    if (!dn->get_linkage()->is_primary() || dn->get_linkage()->get_inode() != in)
-      dout(10) << "add_replica_inode different linkage in dentry " << *dn << dendl;
+    if (!dn->get_linkage()->is_primary() ||
+	dn->get_linkage()->get_inode() != in)
+      dout(10) << "add_replica_inode different linkage in dentry "
+	       << *dn << dendl;
 
     dn->get_dir()->take_ino_waiting(in->ino(), finished);
   }
@@ -9619,7 +9640,8 @@ CInode *MDCache::add_replica_inode(bufferlist::iterator& p, CDentry *dn, list<Co
 }
 
 
-void MDCache::replicate_stray(CDentry *straydn, int who, bufferlist& bl)
+void MDCache::replicate_stray(CDentry *straydn, int who,
+			      bufferlist& bl)
 {
   replicate_inode(get_myin(), who, bl);
   replicate_dir(straydn->get_dir()->inode->get_parent_dn()->get_dir(), who, bl);
@@ -9631,7 +9653,7 @@ void MDCache::replicate_stray(CDentry *straydn, int who, bufferlist& bl)
 
 CDentry *MDCache::add_replica_stray(bufferlist &bl, int from)
 {
-  list<Context*> finished;
+  std::vector<Context*> finished;
   bufferlist::iterator p = bl.begin();
 
   CInode *mdsin = add_replica_inode(p, NULL, finished);
@@ -9661,7 +9683,8 @@ int MDCache::send_dir_updates(CDir *dir, bool bcast)
       who.insert(p->first);
   }
 
-  dout(7) << "sending dir_update on " << *dir << " bcast " << bcast << " to " << who << dendl;
+  dout(7) << "sending dir_update on " << *dir << " bcast "
+	  << bcast << " to " << who << dendl;
 
   filepath path;
   dir->inode->make_path(path);
@@ -9783,7 +9806,7 @@ void MDCache::handle_dentry_link(MDentryLink *m)
   }
 
   bufferlist::iterator p = m->bl.begin();
-  list<Context*> finished;
+  std::vector<Context*> finished;
   if (dn) {
     if (m->get_is_primary()) {
       // primary link.
@@ -9810,7 +9833,8 @@ void MDCache::handle_dentry_link(MDentryLink *m)
 
 // UNLINK
 
-void MDCache::send_dentry_unlink(CDentry *dn, CDentry *straydn, MDRequestRef& mdr)
+void MDCache::send_dentry_unlink(CDentry *dn, CDentry *straydn,
+				 MDRequestRef& mdr)
 {
   dout(10) << "send_dentry_unlink " << *dn << dendl;
   // share unlink news with replicas
@@ -9826,7 +9850,8 @@ void MDCache::send_dentry_unlink(CDentry *dn, CDentry *straydn, MDRequestRef& md
 	 rejoin_gather.count(it->first)))
       continue;
 
-    MDentryUnlink *unlink = new MDentryUnlink(dn->get_dir()->dirfrag(), dn->name);
+    MDentryUnlink *unlink =
+      new MDentryUnlink(dn->get_dir()->dirfrag(), dn->name);
     if (straydn)
       replicate_stray(straydn, it->first, unlink->straybl);
     mds->send_message_mds(unlink, it->first);
@@ -9915,9 +9940,10 @@ void MDCache::handle_dentry_unlink(MDentryUnlink *m)
  * @param basefrag base fragment
  * @param bits bit adjustment.	positive for split, negative for merge.
  */
-void MDCache::adjust_dir_fragments(CInode *diri, frag_t basefrag, int bits,
+void MDCache::adjust_dir_fragments(CInode *diri, frag_t basefrag,
+				   int bits,
 				   list<CDir*>& resultfrags,
-				   list<Context*>& waiters,
+				   std::vector<Context*>& waiters,
 				   bool replay)
 {
   dout(10) << "adjust_dir_fragments " << basefrag << " " << bits
@@ -9926,7 +9952,8 @@ void MDCache::adjust_dir_fragments(CInode *diri, frag_t basefrag, int bits,
   list<CDir*> srcfrags;
   diri->get_dirfrags_under(basefrag, srcfrags);
 
-  adjust_dir_fragments(diri, srcfrags, basefrag, bits, resultfrags, waiters, replay);
+  adjust_dir_fragments(diri, srcfrags, basefrag, bits, resultfrags,
+		       waiters, replay);
 }
 
 CDir *MDCache::force_dir_fragment(CInode *diri, frag_t fg, bool replay)
@@ -9938,7 +9965,7 @@ CDir *MDCache::force_dir_fragment(CInode *diri, frag_t fg, bool replay)
   dout(10) << "force_dir_fragment " << fg << " on " << *diri << dendl;
 
   list<CDir*> src, result;
-  list<Context*> waiters;
+  std::vector<Context*> waiters;
 
   // split a parent?
   frag_t parent = diri->dirfragtree.get_branch_or_leaf(fg);
@@ -9946,9 +9973,11 @@ CDir *MDCache::force_dir_fragment(CInode *diri, frag_t fg, bool replay)
     CDir *pdir = diri->get_dirfrag(parent);
     if (pdir) {
       int split = fg.bits() - parent.bits();
-      dout(10) << " splitting parent by " << split << " " << *pdir << dendl;
+      dout(10) << " splitting parent by " << split << " " << *pdir
+	       << dendl;
       src.push_back(pdir);
-      adjust_dir_fragments(diri, src, parent, split, result, waiters, replay);
+      adjust_dir_fragments(diri, src, parent, split, result, waiters,
+			   replay);
       dir = diri->get_dirfrag(fg);
       if (dir)
 	dout(10) << "force_dir_fragment result " << *dir << dendl;
@@ -9967,7 +9996,8 @@ CDir *MDCache::force_dir_fragment(CInode *diri, frag_t fg, bool replay)
     dout(10) << "force_dir_fragment no frags under " << fg << dendl;
     return NULL;
   }
-  dout(10) << " will combine frags under " << fg << ": " << src << dendl;
+  dout(10) << " will combine frags under " << fg << ": " << src
+	   << dendl;
   adjust_dir_fragments(diri, src, fg, 0, result, waiters, replay);
   dir = result.front();
   dout(10) << "force_dir_fragment result " << *dir << dendl;
@@ -9978,7 +10008,7 @@ void MDCache::adjust_dir_fragments(CInode *diri,
 				   list<CDir*>& srcfrags,
 				   frag_t basefrag, int bits,
 				   list<CDir*>& resultfrags,
-				   list<Context*>& waiters,
+				   std::vector<Context*>& waiters,
 				   bool replay)
 {
   dout(10) << "adjust_dir_fragments " << basefrag << " bits " << bits
@@ -10054,10 +10084,12 @@ void MDCache::adjust_dir_fragments(CInode *diri,
     // (it's all or none, actually.)
     bool was_subtree = false;
     set<CDir*> new_bounds;
-    for (list<CDir*>::iterator p = srcfrags.begin(); p != srcfrags.end(); ++p) {
+    for (list<CDir*>::iterator p = srcfrags.begin();
+	 p != srcfrags.end(); ++p) {
       CDir *dir = *p;
       if (dir->is_subtree_root()) {
-	dout(10) << " taking srcfrag subtree bounds from " << *dir << dendl;
+	dout(10) << " taking srcfrag subtree bounds from " << *dir
+		 << dendl;
 	was_subtree = true;
 	map<CDir*, set<CDir*> >::iterator q = subtrees.find(dir);
 	set<CDir*>::iterator r = q->second.begin();
@@ -10089,7 +10121,6 @@ void MDCache::adjust_dir_fragments(CInode *diri,
     resultfrags.push_back(f);
   }
 }
-
 
 class C_MDC_FragmentFrozen : public Context {
   MDCache *mdcache;
@@ -10497,14 +10528,15 @@ void MDCache::dispatch_fragment_dir(MDRequestRef& mdr)
   }
 
   // refragment
-  list<Context*> waiters;
+  std::vector<Context*> waiters;
   adjust_dir_fragments(diri, info.dirs, basedirfrag.frag, info.bits,
 		       info.resultfrags, waiters, false);
   if (cct->_conf->mds_debug_frag)
     diri->verify_dirfrags();
   mds->queue_waiters(waiters);
 
-  for (list<frag_t>::iterator p = le->orig_frags.begin(); p != le->orig_frags.end(); ++p)
+  for (list<frag_t>::iterator p = le->orig_frags.begin();
+       p != le->orig_frags.end(); ++p)
     assert(!diri->dirfragtree.is_leaf(*p));
 
   le->metablob.add_dir_context(*info.resultfrags.begin());
@@ -10731,13 +10763,14 @@ void MDCache::handle_fragment_notify(MMDSFragmentNotify *notify)
 */
 
     // refragment
-    list<Context*> waiters;
+    std::vector<Context*> waiters;
     list<CDir*> resultfrags;
     adjust_dir_fragments(diri, base, bits, resultfrags, waiters, false);
     if (cct->_conf->mds_debug_frag)
       diri->verify_dirfrags();
 
-    for (list<CDir*>::iterator p = resultfrags.begin(); p != resultfrags.end(); ++p)
+    for (list<CDir*>::iterator p = resultfrags.begin();
+	 p != resultfrags.end(); ++p)
       diri->take_dir_waiting((*p)->get_frag(), waiters);
 
     // add new replica dirs values
@@ -10753,10 +10786,14 @@ void MDCache::handle_fragment_notify(MMDSFragmentNotify *notify)
   notify->put();
 }
 
-void MDCache::add_uncommitted_fragment(dirfrag_t basedirfrag, int bits, list<frag_t>& old_frags,
-				       LogSegment *ls, bufferlist *rollback)
+void MDCache::add_uncommitted_fragment(dirfrag_t basedirfrag,
+				       int bits,
+				       list<frag_t>& old_frags,
+				       LogSegment *ls,
+				       bufferlist *rollback)
 {
-  dout(10) << "add_uncommitted_fragment: base dirfrag " << basedirfrag << " bits " << bits << dendl;
+  dout(10) << "add_uncommitted_fragment: base dirfrag "
+	   << basedirfrag << " bits " << bits << dendl;
   assert(!uncommitted_fragments.count(basedirfrag));
   ufragment& uf = uncommitted_fragments[basedirfrag];
   uf.old_frags = old_frags;
@@ -10767,11 +10804,14 @@ void MDCache::add_uncommitted_fragment(dirfrag_t basedirfrag, int bits, list<fra
     uf.rollback.swap(*rollback);
 }
 
-void MDCache::finish_uncommitted_fragment(dirfrag_t basedirfrag, int op)
+void MDCache::finish_uncommitted_fragment(dirfrag_t basedirfrag,
+					  int op)
 {
-  dout(10) << "finish_uncommitted_fragments: base dirfrag " << basedirfrag
+  dout(10) << "finish_uncommitted_fragments: base dirfrag "
+	   << basedirfrag
 	   << " op " << EFragment::op_name(op) << dendl;
-  map<dirfrag_t, ufragment>::iterator it = uncommitted_fragments.find(basedirfrag);
+  map<dirfrag_t, ufragment>::iterator it
+    = uncommitted_fragments.find(basedirfrag);
   if (it != uncommitted_fragments.end()) {
     ufragment& uf = it->second;
     if (op != EFragment::OP_FINISH && !uf.old_frags.empty()) {
@@ -10784,11 +10824,14 @@ void MDCache::finish_uncommitted_fragment(dirfrag_t basedirfrag, int op)
   }
 }
 
-void MDCache::rollback_uncommitted_fragment(dirfrag_t basedirfrag, list<frag_t>& old_frags)
+void MDCache::rollback_uncommitted_fragment(dirfrag_t basedirfrag,
+					    list<frag_t>& old_frags)
 {
-  dout(10) << "rollback_uncommitted_fragment: base dirfrag " << basedirfrag
+  dout(10) << "rollback_uncommitted_fragment: base dirfrag "
+	   << basedirfrag
 	   << " old_frags (" << old_frags << ")" << dendl;
-  map<dirfrag_t, ufragment>::iterator it = uncommitted_fragments.find(basedirfrag);
+  map<dirfrag_t, ufragment>::iterator it
+    = uncommitted_fragments.find(basedirfrag);
   if (it != uncommitted_fragments.end()) {
     ufragment& uf = it->second;
     if (!uf.old_frags.empty()) {
@@ -10836,7 +10879,7 @@ void MDCache::rollback_uncommitted_fragments()
     list<CDir*> resultfrags;
     if (uf.old_frags.empty()) {
       // created by old format EFragment
-      list<Context*> waiters;
+      std::vector<Context*> waiters;
       adjust_dir_fragments(diri, p->first.frag, -uf.bits, resultfrags, waiters, true);
     } else {
       bufferlist::iterator bp = uf.rollback.begin();
