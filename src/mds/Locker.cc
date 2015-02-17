@@ -617,7 +617,9 @@ void Locker::drop_rdlocks(MutationImpl *mut, set<CInode*> *pneed_issue)
 
 // generics
 
-void Locker::eval_gather(SimpleLock *lock, bool first, bool *pneed_issue, list<Context*> *pfinishers)
+void Locker::eval_gather(SimpleLock *lock, bool first,
+			 bool *pneed_issue,
+			 std::vector<Context*> *pfinishers)
 {
   dout(10) << "eval_gather " << *lock << " on " << *lock->get_parent() << dendl;
   assert(!lock->is_stable());
@@ -838,7 +840,7 @@ void Locker::eval_gather(SimpleLock *lock, bool first, bool *pneed_issue, list<C
 bool Locker::eval(CInode *in, int mask, bool caps_imported)
 {
   bool need_issue = caps_imported;
-  list<Context*> finishers;
+  std::vector<Context*> finishers;
 
   dout(10) << "eval " << mask << " " << *in << dendl;
 
@@ -1002,7 +1004,7 @@ void Locker::try_eval(SimpleLock *lock, bool *pneed_issue)
 void Locker::eval_cap_gather(CInode *in, set<CInode*> *issue_set)
 {
   bool need_issue = false;
-  list<Context*> finishers;
+  std::vector<Context*> finishers;
 
   // kick locks now
   if (!in->filelock.is_stable())
@@ -1027,7 +1029,7 @@ void Locker::eval_cap_gather(CInode *in, set<CInode*> *issue_set)
 void Locker::eval_scatter_gathers(CInode *in)
 {
   bool need_issue = false;
-  list<Context*> finishers;
+  std::vector<Context*> finishers;
 
   dout(10) << "eval_scatter_gathers " << *in << dendl;
 
@@ -1090,7 +1092,8 @@ bool Locker::_rdlock_kick(SimpleLock *lock, bool as_anon)
       if (mds->mdsmap->is_clientreplay_or_active_or_stopping(auth)) {
 	dout(10) << "requesting rdlock from auth on "
 		 << *lock << " on " << *lock->get_parent() << dendl;
-	mds->send_message_mds(new MLock(lock, LOCK_AC_REQRDLOCK, mds->get_nodeid()), auth);
+	mds->send_message_mds(new MLock(lock, LOCK_AC_REQRDLOCK,
+					mds->get_nodeid()), auth);
       }
       return false;
     }
@@ -1098,9 +1101,11 @@ bool Locker::_rdlock_kick(SimpleLock *lock, bool as_anon)
   return false;
 }
 
-bool Locker::rdlock_try(SimpleLock *lock, client_t client, Context *con)
+bool Locker::rdlock_try(SimpleLock *lock, client_t client,
+			Context *con)
 {
-  dout(7) << "rdlock_try on " << *lock << " on " << *lock->get_parent() << dendl;
+  dout(7) << "rdlock_try on " << *lock << " on "
+	  << *lock->get_parent() << dendl;
 
   // can read?	grab ref.
   if (lock->can_rdlock(client))
@@ -1120,10 +1125,11 @@ bool Locker::rdlock_try(SimpleLock *lock, client_t client, Context *con)
   return false;
 }
 
-bool Locker::rdlock_start(SimpleLock *lock, MDRequestRef& mut, bool as_anon)
+bool Locker::rdlock_start(SimpleLock *lock, MDRequestRef& mut,
+			  bool as_anon)
 {
-  dout(7) << "rdlock_start  on " << *lock << " on " << *lock->get_parent()
-	  << dendl;
+  dout(7) << "rdlock_start  on " << *lock << " on "
+	  << *lock->get_parent() << dendl;
 
   // client may be allowed to rdlock the same item it has xlocked.
   //  UNLESS someone passes in as_anon
@@ -1165,12 +1171,14 @@ bool Locker::rdlock_start(SimpleLock *lock, MDRequestRef& mut, bool as_anon)
 
 void Locker::nudge_log(SimpleLock *lock)
 {
-  dout(10) << "nudge_log " << *lock << " on " << *lock->get_parent() << dendl;
+  dout(10) << "nudge_log " << *lock << " on "
+	   << *lock->get_parent() << dendl;
   if (lock->get_parent()->is_auth() && !lock->is_stable())    // as with xlockdone, or cap flush
     mds->mdlog->flush();
 }
 
-void Locker::rdlock_finish(SimpleLock *lock, MutationImpl *mut, bool *pneed_issue)
+void Locker::rdlock_finish(SimpleLock *lock, MutationImpl *mut,
+			   bool *pneed_issue)
 {
   // drop ref
   lock->put_rdlock();
@@ -1179,7 +1187,8 @@ void Locker::rdlock_finish(SimpleLock *lock, MutationImpl *mut, bool *pneed_issu
     mut->locks.erase(lock);
   }
 
-  dout(7) << "rdlock_finish on " << *lock << " on " << *lock->get_parent() << dendl;
+  dout(7) << "rdlock_finish on " << *lock << " on "
+	  << *lock->get_parent() << dendl;
 
   // last one?
   if (!lock->is_rdlocked()) {
@@ -1194,9 +1203,11 @@ void Locker::rdlock_finish(SimpleLock *lock, MutationImpl *mut, bool *pneed_issu
 bool Locker::can_rdlock_set(set<SimpleLock*>& locks)
 {
   dout(10) << "can_rdlock_set " << locks << dendl;
-  for (set<SimpleLock*>::iterator p = locks.begin(); p != locks.end(); ++p)
+  for (set<SimpleLock*>::iterator p = locks.begin();
+       p != locks.end(); ++p)
     if (!(*p)->can_rdlock(-1)) {
-      dout(10) << "can_rdlock_set can't rdlock " << *p << " on " << *(*p)->get_parent() << dendl;
+      dout(10) << "can_rdlock_set can't rdlock " << *p << " on "
+	       << *(*p)->get_parent() << dendl;
       return false;
     }
   return true;
@@ -1205,9 +1216,11 @@ bool Locker::can_rdlock_set(set<SimpleLock*>& locks)
 bool Locker::rdlock_try_set(set<SimpleLock*>& locks)
 {
   dout(10) << "rdlock_try_set " << locks << dendl;
-  for (set<SimpleLock*>::iterator p = locks.begin(); p != locks.end(); ++p)
+  for (set<SimpleLock*>::iterator p = locks.begin();
+       p != locks.end(); ++p)
     if (!rdlock_try(*p, -1, NULL)) {
-      dout(10) << "rdlock_try_set can't rdlock " << *p << " on " << *(*p)->get_parent() << dendl;
+      dout(10) << "rdlock_try_set can't rdlock " << *p << " on "
+	       << *(*p)->get_parent() << dendl;
       return false;
     }
   return true;
@@ -1216,7 +1229,8 @@ bool Locker::rdlock_try_set(set<SimpleLock*>& locks)
 void Locker::rdlock_take_set(set<SimpleLock*>& locks, MutationRef& mut)
 {
   dout(10) << "rdlock_take_set " << locks << dendl;
-  for (set<SimpleLock*>::iterator p = locks.begin(); p != locks.end(); ++p) {
+  for (set<SimpleLock*>::iterator p = locks.begin();
+       p != locks.end(); ++p) {
     (*p)->get_rdlock();
     mut->rdlocks.insert(*p);
     mut->locks.insert(*p);

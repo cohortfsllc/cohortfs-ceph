@@ -60,6 +60,7 @@
 #include "Objecter.h"
 
 #include <list>
+#include <vector>
 #include <map>
 
 class CephContext;
@@ -178,7 +179,7 @@ private:
   class C_WriteHead;
   friend class C_WriteHead;
 
-  list<Context*> waitfor_recover;
+  std::vector<Context*> waitfor_recover;
   void read_head(Context *on_finish, bufferlist *bl);
   void _finish_read_head(int r, bufferlist& bl);
   void _finish_reread_head(int r, bufferlist& bl, Context *finish);
@@ -210,7 +211,7 @@ private:
   bool waiting_for_zero;
   interval_set<uint64_t> pending_zero;	// non-contig bits we've zeroed
   std::set<uint64_t> pending_safe;
-  std::map<uint64_t, std::list<Context*> > waitfor_safe; // when safe through given offset
+  std::map<uint64_t, std::vector<Context*> > waitfor_safe; // when safe through given offset
 
   void _do_flush(unsigned amount=0);
   void _finish_flush(int r, uint64_t start, utime_t stamp);
@@ -246,7 +247,7 @@ private:
   uint64_t expire_pos;	  // what we're allowed to trim to
   uint64_t trimming_pos;      // what we've requested to trim through
   uint64_t trimmed_pos;	  // what has been trimmed
-  map<uint64_t, list<Context*> > waitfor_trim;
+  map<uint64_t, std::vector<Context*> > waitfor_trim;
 
   void _trim_finish(int r, uint64_t to);
   class C_Trim;

@@ -145,7 +145,7 @@ private:
   Mutex sync_entry_timeo_lock;
   SafeTimer timer;
 
-  list<Context*> sync_waiters;
+  std::vector<Context*> sync_waiters;
   bool stop;
   void sync_entry();
   struct SyncThread : public Thread {

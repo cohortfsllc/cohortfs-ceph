@@ -299,8 +299,8 @@ public:
   void finish_waiters(uint64_t mask, int r=0) {
     parent->finish_waiting(mask << get_wait_shift(), r);
   }
-  void take_waiting(uint64_t mask, list<Context*>& ls) {
-    parent->take_waiting(mask << get_wait_shift(), ls);
+  void take_waiting(uint64_t mask, std::vector<Context*>& vs) {
+    parent->take_waiting(mask << get_wait_shift(), vs);
   }
   void add_waiter(uint64_t mask, Context *c) {
     parent->add_waiter(mask << get_wait_shift(), c);
@@ -318,7 +318,7 @@ public:
     //assert(!is_stable() || gather_set.size() == 0);  // gather should be empty in stable states.
     return s;
   }
-  void set_state_rejoin(int s, list<Context*>& waiters) {
+  void set_state_rejoin(int s, std::vector<Context*>& waiters) {
     if (!is_stable() && get_parent()->is_auth()) {
       state = s;
       get_parent()->auth_unpin(this);
@@ -566,12 +566,12 @@ public:
     if (is_new)
       state = s;
   }
-  void decode_state_rejoin(bufferlist::iterator& p, list<Context*>& waiters) {
+  void decode_state_rejoin(bufferlist::iterator& p,
+			   std::vector<Context*>& waiters) {
     int16_t s;
     ::decode(s, p);
     set_state_rejoin(s, waiters);
   }
-
 
   // caps
   bool is_loner_mode() {

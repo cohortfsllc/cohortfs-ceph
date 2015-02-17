@@ -914,13 +914,13 @@ void Paxos::commit_proposal()
   assert(!proposals.empty());
   assert(is_updating());
 
-  C_Proposal *proposal = static_cast<C_Proposal*>(proposals.front());
-  assert(proposal->proposed);
+  C_Proposal& proposal = proposals.front();
+  assert(proposal.proposed);
   dout(10) << __func__ << " proposal " << proposal << " took "
-	   << (ceph_clock_now(NULL) - proposal->proposal_time)
+	   << (ceph_clock_now(NULL) - proposal.proposal_time)
 	   << " to finish" << dendl;
   proposals.pop_front();
-  proposal->complete(0);
+  proposal.complete(0);
 }
 
 void Paxos::finish_round()
@@ -1161,7 +1161,7 @@ void Paxos::shutdown() {
   finish_contexts(waiting_for_commit, -ECANCELED);
   finish_contexts(waiting_for_readable, -ECANCELED);
   finish_contexts(waiting_for_active, -ECANCELED);
-  finish_contexts(proposals, -ECANCELED);
+  finish_proposals(proposals, -ECANCELED);
 }
 
 void Paxos::leader_init()
@@ -1169,7 +1169,7 @@ void Paxos::leader_init()
   cancel_events();
   new_value.clear();
 
-  finish_contexts(proposals, -EAGAIN);
+  finish_proposals(proposals, -EAGAIN);
 
   if (mon->get_quorum().size() == 1) {
     state = STATE_ACTIVE;
@@ -1197,7 +1197,7 @@ void Paxos::peon_init()
   // no chance to write now!
   finish_contexts(waiting_for_writeable, -EAGAIN);
   finish_contexts(waiting_for_commit, -EAGAIN);
-  finish_contexts(proposals, -EAGAIN);
+  finish_proposals(proposals, -EAGAIN);
 }
 
 void Paxos::restart()
@@ -1208,11 +1208,10 @@ void Paxos::restart()
 
   state = STATE_RECOVERING;
 
-  finish_contexts(proposals, -EAGAIN);
+  finish_proposals(proposals, -EAGAIN);
   finish_contexts(waiting_for_commit, -EAGAIN);
   finish_contexts(waiting_for_active, -EAGAIN);
 }
-
 
 void Paxos::dispatch(PaxosServiceMessage *m)
 {
@@ -1322,11 +1321,13 @@ bool Paxos::is_writeable()
 void Paxos::list_proposals(ostream& out)
 {
   out << __func__ << " " << proposals.size() << " in queue:\n";
-  list<Context*>::iterator p_it = proposals.begin();
-  for (int i = 0; p_it != proposals.end(); ++p_it, ++i) {
-    C_Proposal *p = (C_Proposal*) *p_it;
+  C_Proposal::Queue::iterator it;
+  int i;
+  for (i = 0, it = proposals.begin(); it != proposals.end();
+       ++it, ++i)  {
+    C_Proposal& p = *it;
     out << "-- entry #" << i << "\n";
-    out << *p << "\n";
+    out << p << "\n";
   }
 }
 
@@ -1335,20 +1336,20 @@ void Paxos::propose_queued()
   assert(is_active());
   assert(!proposals.empty());
 
-  C_Proposal *proposal = static_cast<C_Proposal*>(proposals.front());
-  assert(!proposal->proposed);
+  C_Proposal& proposal = proposals.front();
+  assert(!proposal.proposed);
 
   cancel_events();
   dout(10) << __func__ << " " << (last_committed + 1)
-	  << " " << proposal->bl.length() << " bytes" << dendl;
-  proposal->proposed = true;
+	   << " " << proposal.bl.length() << " bytes" << dendl;
+  proposal.proposed = true;
 
   dout(30) << __func__ << " ";
   list_proposals(*_dout);
   *_dout << dendl;
 
   state = STATE_UPDATING;
-  begin(proposal->bl);
+  begin(proposal.bl);
 }
 
 void Paxos::queue_proposal(bufferlist& bl, Context *onfinished)
@@ -1356,7 +1357,7 @@ void Paxos::queue_proposal(bufferlist& bl, Context *onfinished)
   dout(5) << __func__ << " bl " << bl.length() << " bytes;"
 	  << " ctx = " << onfinished << dendl;
 
-  proposals.push_back(new C_Proposal(onfinished, bl));
+  proposals.push_back(*(new C_Proposal(onfinished, bl)));
 }
 
 bool Paxos::propose_new_value(bufferlist& bl, Context *onfinished)

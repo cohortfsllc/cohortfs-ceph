@@ -86,7 +86,7 @@ class ObjectCacher {
     utime_t last_write;
     int error; // holds return value for failed reads
 
-    map< loff_t, list<Context*> > waitfor_read;
+    map< loff_t, std::vector<Context*> > waitfor_read;
 
     // cons
     BufferHead(Object *o) :
@@ -163,7 +163,7 @@ class ObjectCacher {
 
     int dirty_or_tx;
 
-    map< ceph_tid_t, list<Context*> > waitfor_commit;
+    map< ceph_tid_t, std::vector<Context*> > waitfor_commit;
     xlist<C_ReadFinish*> reads;
 
   public:
@@ -674,10 +674,12 @@ inline ostream& operator<<(ostream& out, ObjectCacher::BufferHead &bh)
   if (bh.error) out << " error=" << bh.error;
   out << "]";
   out << " waiters = {";
-  for (map<loff_t, list<Context*> >::const_iterator it = bh.waitfor_read.begin();
+  for (map<loff_t, std::vector<Context*> >::const_iterator it
+	 = bh.waitfor_read.begin();
        it != bh.waitfor_read.end(); ++it) {
     out << " " << it->first << "->[";
-    for (list<Context*>::const_iterator lit = it->second.begin();
+    for (std::vector<Context*>::const_iterator lit =
+	   it->second.begin();
 	 lit != it->second.end(); ++lit) {
 	 out << *lit << ", ";
     }

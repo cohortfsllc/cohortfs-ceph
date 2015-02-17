@@ -156,12 +156,16 @@ public:
   }
 
   // waiters
-  map<int, map<inodeno_t, list<Context*> > > waiting_for_base_ino;
+  map<int, map<inodeno_t, std::vector<Context*> > >
+  waiting_for_base_ino;
 
-  void discover_base_ino(inodeno_t want_ino, Context *onfinish, int from=-1);
-  void discover_dir_frag(CInode *base, frag_t approx_fg, Context *onfinish,
+  void discover_base_ino(inodeno_t want_ino, Context *onfinish,
 			 int from=-1);
-  void discover_path(CInode *base, filepath want_path, Context *onfinish,
+  void discover_dir_frag(CInode *base, frag_t approx_fg,
+			 Context *onfinish,
+			 int from=-1);
+  void discover_path(CInode *base, filepath want_path,
+		     Context *onfinish,
 		     bool want_xlocked=false, int from=-1);
   void discover_path(CDir *base, filepath want_path, Context *onfinish,
 		     bool want_xlocked=false);
@@ -311,7 +315,7 @@ protected:
   struct umaster {
     set<int> slaves;
     LogSegment *ls;
-    list<Context*> waiters;
+    std::vector<Context*> waiters;
     bool safe;
     bool committing;
     bool recovering;
@@ -417,7 +421,7 @@ protected:
 
   vector<CInode*> rejoin_recover_q, rejoin_check_q;
   list<SimpleLock*> rejoin_eval_locks;
-  list<Context*> rejoin_waiters;
+  std::vector<Context*> rejoin_waiters;
 
   void rejoin_walk(CDir *dir, MMDSCacheRejoin *rejoin);
   void handle_cache_rejoin(MMDSCacheRejoin *m);
@@ -670,7 +674,7 @@ protected:
 
 private:
   bool opening_root, open;
-  list<Context*> waiting_for_open;
+  std::vector<Context*> waiting_for_open;
 
 public:
   void init_layouts();
@@ -776,7 +780,7 @@ protected:
     bool want_xlocked;
     version_t tid;
     VolumeRef volume;
-    list<Context*> waiters;
+    std::vector<Context*> waiters;
     open_ino_info_t() : checking(-1), auth_hint(-1),
       check_peers(true), fetch_backtrace(true), discover(false) {}
   };
@@ -894,10 +898,13 @@ public:
     in->encode_replica(to, bl);
   }
 
-  CDir* add_replica_dir(bufferlist::iterator& p, CInode *diri, int from, list<Context*>& finished);
+  CDir* add_replica_dir(bufferlist::iterator& p, CInode *diri,
+			int from, std::vector<Context*>& finished);
   CDir* forge_replica_dir(CInode *diri, frag_t fg, int from);
-  CDentry *add_replica_dentry(bufferlist::iterator& p, CDir *dir, list<Context*>& finished);
-  CInode *add_replica_inode(bufferlist::iterator& p, CDentry *dn, list<Context*>& finished);
+  CDentry *add_replica_dentry(bufferlist::iterator& p, CDir *dir,
+			      std::vector<Context*>& finished);
+  CInode *add_replica_inode(bufferlist::iterator& p, CDentry *dn,
+			    std::vector<Context*>& finished);
 
   void replicate_stray(CDentry *straydn, int who, bufferlist& bl);
   CDentry *add_replica_stray(bufferlist &bl, int from);
@@ -905,7 +912,8 @@ public:
   // -- namespace --
 public:
   void send_dentry_link(CDentry *dn);
-  void send_dentry_unlink(CDentry *dn, CDentry *straydn, MDRequestRef& mdr);
+  void send_dentry_unlink(CDentry *dn, CDentry *straydn,
+			  MDRequestRef& mdr);
 protected:
   void handle_dentry_link(MDentryLink *m);
   void handle_dentry_unlink(MDentryUnlink *m);
@@ -917,7 +925,7 @@ private:
     int bits;
     bool committed;
     LogSegment *ls;
-    list<Context*> waiters;
+    std::vector<Context*> waiters;
     list<frag_t> old_frags;
     bufferlist rollback;
     ufragment() : bits(0), committed(false), ls(NULL) {}
@@ -939,18 +947,22 @@ private:
   map<dirfrag_t,fragment_info_t> fragments;
 
   void adjust_dir_fragments(CInode *diri, frag_t basefrag, int bits,
-			    list<CDir*>& frags, list<Context*>& waiters, bool replay);
+			    list<CDir*>& frags,
+			    std::vector<Context*>& waiters,
+			    bool replay);
   void adjust_dir_fragments(CInode *diri,
 			    list<CDir*>& srcfrags,
 			    frag_t basefrag, int bits,
 			    list<CDir*>& resultfrags,
-			    list<Context*>& waiters,
+			    std::vector<Context*>& waiters,
 			    bool replay);
   CDir *force_dir_fragment(CInode *diri, frag_t fg, bool replay=true);
-  void get_force_dirfrag_bound_set(vector<dirfrag_t>& dfs, set<CDir*>& bounds);
+  void get_force_dirfrag_bound_set(vector<dirfrag_t>& dfs,
+				   set<CDir*>& bounds);
 
   bool can_fragment(CInode *diri, list<CDir*>& dirs);
-  void fragment_freeze_dirs(list<CDir*>& dirs, C_GatherBuilder &gather);
+  void fragment_freeze_dirs(list<CDir*>& dirs,
+			    C_GatherBuilder &gather);
   void fragment_mark_and_complete(list<CDir*>& dirs);
   void fragment_frozen(dirfrag_t basedirfrag, int r);
   void fragment_unmark_unfreeze_dirs(list<CDir*>& dirs);

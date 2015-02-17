@@ -88,7 +88,7 @@ protected:
     set<int> warning_ack_waiting;
     set<int> notify_ack_waiting;
     map<inodeno_t,map<client_t,Capability::Import> > peer_imported;
-    list<Context*> waiting_for_finish;
+    std::vector<Context*> waiting_for_finish;
     MutationRef mut;
     // for freeze tree deadlock detection
     utime_t last_cum_auth_pins_change;
@@ -246,7 +246,7 @@ public:
 				map<client_t,entity_inst_t>& exported_client_map);
   void finish_export_inode(CInode *in, utime_t now, int target,
 			   map<client_t,Capability::Import>& peer_imported,
-			   list<Context*>& finished);
+			   std::vector<Context*>& finished);
   void finish_export_inode_caps(CInode *in, int target,
 				map<client_t,Capability::Import>& peer_imported);
 
@@ -257,7 +257,7 @@ public:
 			utime_t now);
   void finish_export_dir(CDir *dir, utime_t now, int target,
 			 map<inodeno_t,map<client_t,Capability::Import> >& peer_imported,
-			 list<Context*>& finished);
+			 std::vector<Context*>& finished);
 
   void add_export_finish_waiter(CDir *dir, Context *c) {
     map<CDir*, export_state_t>::iterator it = export_state.find(dir);
