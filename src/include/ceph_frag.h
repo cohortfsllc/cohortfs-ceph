@@ -18,92 +18,99 @@
  * can't sort encoded frags numerically.  However, it does allow you
  * to feed encoded frags as values into frag_contains_value.
  */
-static inline uint32_t ceph_frag_make(uint32_t b, uint32_t v)
+
+typedef uint32_t ceph_frag_t;
+
+#define FRAG_SHIFT 24
+#define FRAG_BIT1 (1u << FRAG_SHIFT)
+#define FRAG_MASK (FRAG_BIT1 - 1)
+
+static inline ceph_frag_t ceph_frag_make(ceph_frag_t b, ceph_frag_t v)
 {
-	return (b << 24) |
-		(v & (0xffffffu << (24-b)) & 0xffffffu);
+	return (b << FRAG_SHIFT) |
+		(v & (FRAG_MASK << (FRAG_SHIFT-b)) & FRAG_MASK);
 }
-static inline uint32_t ceph_frag_bits(uint32_t f)
+static inline ceph_frag_t ceph_frag_bits(ceph_frag_t f)
 {
-	return f >> 24;
+	return f >> FRAG_SHIFT;
 }
-static inline uint32_t ceph_frag_value(uint32_t f)
+static inline ceph_frag_t ceph_frag_value(ceph_frag_t f)
 {
-	return f & 0xffffffu;
+	return f & FRAG_MASK;
 }
-static inline uint32_t ceph_frag_mask(uint32_t f)
+static inline ceph_frag_t ceph_frag_mask(ceph_frag_t f)
 {
-	return (0xffffffu << (24-ceph_frag_bits(f))) & 0xffffffu;
+	return (FRAG_MASK << (FRAG_SHIFT-ceph_frag_bits(f))) & FRAG_MASK;
 }
-static inline uint32_t ceph_frag_mask_shift(uint32_t f)
+static inline ceph_frag_t ceph_frag_mask_shift(ceph_frag_t f)
 {
-	return 24 - ceph_frag_bits(f);
+	return FRAG_SHIFT - ceph_frag_bits(f);
 }
 
-static inline int ceph_frag_contains_value(uint32_t f, uint32_t v)
+static inline int ceph_frag_contains_value(ceph_frag_t f, ceph_frag_t v)
 {
 	return (v & ceph_frag_mask(f)) == ceph_frag_value(f);
 }
-static inline int ceph_frag_contains_frag(uint32_t f, uint32_t sub)
+static inline int ceph_frag_contains_frag(ceph_frag_t f, ceph_frag_t sub)
 {
 	/* is sub as specific as us, and contained by us? */
 	return ceph_frag_bits(sub) >= ceph_frag_bits(f) &&
 	       (ceph_frag_value(sub) & ceph_frag_mask(f)) == ceph_frag_value(f);
 }
 
-static inline uint32_t ceph_frag_parent(uint32_t f)
+static inline ceph_frag_t ceph_frag_parent(ceph_frag_t f)
 {
 	return ceph_frag_make(ceph_frag_bits(f) - 1,
 			 ceph_frag_value(f) & (ceph_frag_mask(f) << 1));
 }
-static inline int ceph_frag_is_left_child(uint32_t f)
+static inline int ceph_frag_is_left_child(ceph_frag_t f)
 {
 	return ceph_frag_bits(f) > 0 &&
-		(ceph_frag_value(f) & (0x1000000 >> ceph_frag_bits(f))) == 0;
+		(ceph_frag_value(f) & (FRAG_BIT1 >> ceph_frag_bits(f))) == 0;
 }
-static inline int ceph_frag_is_right_child(uint32_t f)
+static inline int ceph_frag_is_right_child(ceph_frag_t f)
 {
 	return ceph_frag_bits(f) > 0 &&
-		(ceph_frag_value(f) & (0x1000000 >> ceph_frag_bits(f))) == 1;
+		(ceph_frag_value(f) & (FRAG_BIT1 >> ceph_frag_bits(f))) == 1;
 }
-static inline uint32_t ceph_frag_sibling(uint32_t f)
+static inline ceph_frag_t ceph_frag_sibling(ceph_frag_t f)
 {
 	return ceph_frag_make(ceph_frag_bits(f),
-		      ceph_frag_value(f) ^ (0x1000000 >> ceph_frag_bits(f)));
+		      ceph_frag_value(f) ^ (FRAG_BIT1 >> ceph_frag_bits(f)));
 }
-static inline uint32_t ceph_frag_left_child(uint32_t f)
+static inline ceph_frag_t ceph_frag_left_child(ceph_frag_t f)
 {
 	return ceph_frag_make(ceph_frag_bits(f)+1, ceph_frag_value(f));
 }
-static inline uint32_t ceph_frag_right_child(uint32_t f)
+static inline ceph_frag_t ceph_frag_right_child(ceph_frag_t f)
 {
 	return ceph_frag_make(ceph_frag_bits(f)+1,
-	      ceph_frag_value(f) | (0x1000000 >> (1+ceph_frag_bits(f))));
+	      ceph_frag_value(f) | (FRAG_BIT1 >> (1+ceph_frag_bits(f))));
 }
-static inline uint32_t ceph_frag_make_child(uint32_t f, int by, int i)
+static inline ceph_frag_t ceph_frag_make_child(ceph_frag_t f, ceph_frag_t by, ceph_frag_t i)
 {
-	int newbits = ceph_frag_bits(f) + by;
+	ceph_frag_t newbits = ceph_frag_bits(f) + by;
 	return ceph_frag_make(newbits,
-			 ceph_frag_value(f) | (i << (24 - newbits)));
+			 ceph_frag_value(f) | (i << (FRAG_SHIFT - newbits)));
 }
-static inline int ceph_frag_is_leftmost(uint32_t f)
+static inline int ceph_frag_is_leftmost(ceph_frag_t f)
 {
 	return ceph_frag_value(f) == 0;
 }
-static inline int ceph_frag_is_rightmost(uint32_t f)
+static inline int ceph_frag_is_rightmost(ceph_frag_t f)
 {
 	return ceph_frag_value(f) == ceph_frag_mask(f);
 }
-static inline uint32_t ceph_frag_next(uint32_t f)
+static inline ceph_frag_t ceph_frag_next(ceph_frag_t f)
 {
 	return ceph_frag_make(ceph_frag_bits(f),
-			 ceph_frag_value(f) + (0x1000000 >> ceph_frag_bits(f)));
+			 ceph_frag_value(f) + (FRAG_BIT1 >> ceph_frag_bits(f)));
 }
 
 /*
  * comparator to sort frags logically, as when traversing the
  * number space in ascending order...
  */
-int ceph_frag_compare(uint32_t a, uint32_t b);
+int ceph_frag_compare(ceph_frag_t a, ceph_frag_t b);
 
 #endif
