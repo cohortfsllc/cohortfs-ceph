@@ -72,33 +72,31 @@
  *    matches the network/netmask concept.
  */
 
-typedef uint32_t _frag_t;
-
 class frag_t {
   /*
    * encoding is dictated by frag_* functions in ceph_fs.h.  use those
    * helpers _exclusively_.
    */
  public:
-  _frag_t _enc;
+  ceph_frag_t _enc;
 
   frag_t() : _enc(0) { }
-  frag_t(unsigned v, unsigned b) : _enc(ceph_frag_make(b, v)) { }
-  frag_t(_frag_t e) : _enc(e) { }
+  frag_t(ceph_frag_t v, ceph_frag_t b) : _enc(ceph_frag_make(b, v)) { }
+  frag_t(ceph_frag_t e) : _enc(e) { }
 
   // constructors
-  void from_unsigned(unsigned e) { _enc = e; }
+  void from_ceph_frag_t(ceph_frag_t e) { _enc = e; }
 
   // accessors
-  unsigned value() const { return ceph_frag_value(_enc); }
-  unsigned bits() const { return ceph_frag_bits(_enc); }
-  unsigned mask() const { return ceph_frag_mask(_enc); }
-  unsigned mask_shift() const { return ceph_frag_mask_shift(_enc); }
+  ceph_frag_t value() const { return ceph_frag_value(_enc); }
+  ceph_frag_t bits() const { return ceph_frag_bits(_enc); }
+  ceph_frag_t mask() const { return ceph_frag_mask(_enc); }
+  ceph_frag_t mask_shift() const { return ceph_frag_mask_shift(_enc); }
 
-  operator _frag_t() const { return _enc; }
+  operator ceph_frag_t() const { return _enc; }
 
   // tests
-  bool contains(unsigned v) const { return ceph_frag_contains_value(_enc, v); }
+  bool contains(ceph_frag_t v) const { return ceph_frag_contains_value(_enc, v); }
   bool contains(frag_t sub) const { return ceph_frag_contains_frag(_enc, sub._enc); }
   bool is_root() const { return bits() == 0; }
   frag_t parent() const {
@@ -139,8 +137,8 @@ class frag_t {
 
   // parse
   bool parse(const char *s) {
-    int pvalue, pbits;
-    int r = sscanf(s, "%x/%d", &pvalue, &pbits);
+    ceph_frag_t pvalue, pbits;
+    int r = sscanf(s, "%lx/%ld", &pvalue, &pbits);
     if (r == 2) {
       *this = frag_t(pvalue, pbits);
       return true;
@@ -154,16 +152,16 @@ inline std::ostream& operator<<(std::ostream& out, frag_t hb)
   //out << std::hex << hb.value() << std::dec << "/" << hb.bits() << '=';
   unsigned num = hb.bits();
   if (num) {
-    unsigned val = hb.value();
-    for (unsigned bit = 23; num; num--, bit--)
-      out << ((val & (1<<bit)) ? '1':'0');
+    ceph_frag_t val = hb.value();
+    for (unsigned bit = FRAG_SHIFT-1; num; num--, bit--)
+      out << ((val & (1ull<<bit)) ? '1':'0');
   }
   return out << '*';
 }
 
 inline void encode(frag_t f, bufferlist& bl) { encode_raw(f._enc, bl); }
 inline void decode(frag_t &f, bufferlist::iterator& p) {
-  uint32_t v;
+  uint64_t v;
   decode_raw(v, p);
   f._enc = v;
 }
@@ -327,7 +325,7 @@ public:
   /**
    * operator[] -- map a (hash?) value to a frag
    */
-  frag_t operator[](unsigned v) const {
+  frag_t operator[](ceph_frag_t v) const {
     frag_t t;
     while (1) {
       assert(t.contains(v));
