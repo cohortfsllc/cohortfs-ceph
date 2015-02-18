@@ -1035,23 +1035,24 @@ public:
 void MDS::boot_create()
 {
   dout(3) << "boot_create" << dendl;
+  VolumeRef v = get_metadata_volume();
 
   C_GatherBuilder fin(new C_MDS_CreateFinish(this));
 
   // start with a fresh journal
   dout(10) << "boot_create creating fresh journal" << dendl;
-  mdlog->create(fin.new_sub());
+  mdlog->create(v, fin.new_sub());
 
   // open new journal segment, but do not journal subtree map (yet)
   mdlog->prepare_new_segment();
 
   if (whoami == mdsmap->get_root()) {
     dout(3) << "boot_create creating fresh hierarchy" << dendl;
-    mdcache->create_empty_hierarchy(fin.get());
+    mdcache->create_empty_hierarchy(v, fin.get());
   }
 
   dout(3) << "boot_create creating mydir hierarchy" << dendl;
-  mdcache->create_mydir_hierarchy(fin.get());
+  mdcache->create_mydir_hierarchy(v, fin.get());
 
   // fixme: fake out inotable (reset, pretend loaded)
   dout(10) << "boot_create creating fresh inotable table" << dendl;
@@ -1139,15 +1140,16 @@ void MDS::boot_start(int step, int r)
 	      << dendl;
 
       C_GatherBuilder gather(new C_MDS_BootStart(this, 3));
+      VolumeRef v = get_metadata_volume();
 
-      mdcache->open_mydir_inode(gather.new_sub());
+      mdcache->open_mydir_inode(v, gather.new_sub());
 
       if (is_starting() ||
 	  whoami == mdsmap->get_root()) {  // load root inode off disk if we are auth
-	mdcache->open_root_inode(gather.new_sub());
+	mdcache->open_root_inode(v, gather.new_sub());
       } else {
 	// replay.  make up fake root inode to start with
-	mdcache->create_root_inode();
+	mdcache->create_root_inode(v);
       }
       gather.activate();
     }
@@ -1451,8 +1453,9 @@ void MDS::recovery_done(int oldstate)
 
   mdcache->reissue_all_caps();
 
+  VolumeRef v = get_metadata_volume();
   // tell connected clients
-  mdcache->populate_mydir();
+  mdcache->populate_mydir(v);
 }
 
 void MDS::handle_mds_recovery(int who)

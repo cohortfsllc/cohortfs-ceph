@@ -670,21 +670,21 @@ private:
   list<Context*> waiting_for_open;
 
 public:
-  CInode *create_system_inode(inodeno_t ino, int mode);
-  CInode *create_root_inode();
+  CInode *create_system_inode(VolumeRef &v, inodeno_t ino, int mode);
+  CInode *create_root_inode(VolumeRef &v);
 
-  void create_empty_hierarchy(C_Gather *gather);
-  void create_mydir_hierarchy(C_Gather *gather);
+  void create_empty_hierarchy(VolumeRef &v, C_Gather *gather);
+  void create_mydir_hierarchy(VolumeRef &v, C_Gather *gather);
 
   bool is_open() { return open; }
   void wait_for_open(Context *c) {
     waiting_for_open.push_back(c);
   }
 
-  void open_root_inode(Context *c);
-  void open_root();
-  void open_mydir_inode(Context *c);
-  void populate_mydir();
+  void open_root_inode(VolumeRef &v, Context *c);
+  void open_root(VolumeRef &v);
+  void open_mydir_inode(VolumeRef &v, Context *c);
+  void populate_mydir(VolumeRef &v);
 
   void _create_system_file(CDir *dir, const char *name, CInode *in, Context *fin);
   void _create_system_file_finish(MutationRef& mut, CDentry *dn,

@@ -258,10 +258,11 @@ void MDCache::remove_inode(CInode *o)
 
 
 
-CInode *MDCache::create_system_inode(inodeno_t ino, int mode)
+CInode *MDCache::create_system_inode(VolumeRef &v, inodeno_t ino, int mode)
 {
   dout(0) << "creating system inode with ino:" << ino << dendl;
   CInode *in = new CInode(this);
+  in->volume = v;
   in->inode.ino = ino;
   in->inode.version = 1;
   in->inode.mode = 0500 | mode;
@@ -289,16 +290,16 @@ CInode *MDCache::create_system_inode(inodeno_t ino, int mode)
   return in;
 }
 
-CInode *MDCache::create_root_inode()
+CInode *MDCache::create_root_inode(VolumeRef &v)
 {
-  CInode *i = create_system_inode(MDS_INO_ROOT, S_IFDIR|0755);
+  CInode *i = create_system_inode(v, MDS_INO_ROOT, S_IFDIR|0755);
   return i;
 }
 
-void MDCache::create_empty_hierarchy(C_Gather *gather)
+void MDCache::create_empty_hierarchy(VolumeRef &v, C_Gather *gather)
 {
   // create root dir
-  CInode *root = create_root_inode();
+  CInode *root = create_root_inode(v);
 
   // force empty root dir
   CDir *rootdir = root->get_or_open_dirfrag(this, frag_t());
@@ -319,19 +320,19 @@ void MDCache::create_empty_hierarchy(C_Gather *gather)
   root->store(gather->new_sub());
 }
 
-void MDCache::create_mydir_hierarchy(C_Gather *gather)
+void MDCache::create_mydir_hierarchy(VolumeRef &v, C_Gather *gather)
 {
   // create mds dir
   char myname[10];
   snprintf(myname, sizeof(myname), "mds%d", mds->whoami);
-  CInode *my = create_system_inode(MDS_INO_MDSDIR(mds->whoami), S_IFDIR);
+  CInode *my = create_system_inode(v, MDS_INO_MDSDIR(mds->whoami), S_IFDIR);
 
   CDir *mydir = my->get_or_open_dirfrag(this, frag_t());
   adjust_subtree_auth(mydir, mds->whoami);
 
   // stray dir
   for (int i = 0; i < NUM_STRAY; ++i) {
-    CInode *stray = create_system_inode(MDS_INO_STRAY(mds->whoami, i), S_IFDIR);
+    CInode *stray = create_system_inode(v, MDS_INO_STRAY(mds->whoami, i), S_IFDIR);
     CDir *straydir = stray->get_or_open_dirfrag(this, frag_t());
     stringstream name;
     name << "stray" << i;
@@ -348,7 +349,7 @@ void MDCache::create_mydir_hierarchy(C_Gather *gather)
     straydir->commit(0, gather->new_sub());
   }
 
-  CInode *journal = create_system_inode(MDS_INO_LOG_OFFSET + mds->whoami, S_IFREG);
+  CInode *journal = create_system_inode(v, MDS_INO_LOG_OFFSET + mds->whoami, S_IFREG);
   string name = "journal";
   CDentry *jdn = mydir->add_primary_dentry(name, journal);
   jdn->_mark_dirty(mds->mdlog->get_current_segment());
@@ -471,24 +472,24 @@ struct C_MDS_RetryOpenRoot : public Context {
   }
 };
 
-void MDCache::open_root_inode(Context *c)
+void MDCache::open_root_inode(VolumeRef &v, Context *c)
 {
   if (mds->whoami == mds->mdsmap->get_root()) {
     CInode *in;
-    in = create_system_inode(MDS_INO_ROOT, S_IFDIR|0755);  // initially inaccurate!
+    in = create_system_inode(v, MDS_INO_ROOT, S_IFDIR|0755);  // initially inaccurate!
     in->fetch(c);
   } else {
     discover_base_ino(MDS_INO_ROOT, c, mds->mdsmap->get_root());
   }
 }
 
-void MDCache::open_mydir_inode(Context *c)
+void MDCache::open_mydir_inode(VolumeRef &v, Context *c)
 {
-  CInode *in = create_system_inode(MDS_INO_MDSDIR(mds->whoami), S_IFDIR|0755);	// initially inaccurate!
+  CInode *in = create_system_inode(v, MDS_INO_MDSDIR(mds->whoami), S_IFDIR|0755);	// initially inaccurate!
   in->fetch(c);
 }
 
-void MDCache::open_root()
+void MDCache::open_root(VolumeRef &v)
 {
   dout(10) << "open_root" << dendl;
 
@@ -516,7 +517,7 @@ void MDCache::open_root()
   }
 
   if (!myin) {
-    CInode *in = create_system_inode(MDS_INO_MDSDIR(mds->whoami), S_IFDIR|0755);  // initially inaccurate!
+    CInode *in = create_system_inode(v, MDS_INO_MDSDIR(mds->whoami), S_IFDIR|0755);  // initially inaccurate!
     in->fetch(new C_MDS_RetryOpenRoot(this));
     return;
   }
@@ -527,7 +528,7 @@ void MDCache::open_root()
   populate_mydir();
 }
 
-void MDCache::populate_mydir()
+void MDCache::populate_mydir(VolumeRef &v)
 {
   assert(myin);
   CDir *mydir = myin->get_or_open_dirfrag(this, frag_t());
@@ -551,7 +552,7 @@ void MDCache::populate_mydir()
       straydn = mydir->lookup("stray");
 
     if (!straydn || !straydn->get_linkage()->get_inode()) {
-      _create_system_file(mydir, name.str().c_str(), create_system_inode(MDS_INO_STRAY(mds->whoami, i), S_IFDIR),
+      _create_system_file(mydir, name.str().c_str(), create_system_inode(v, MDS_INO_STRAY(mds->whoami, i), S_IFDIR),
 			  new C_MDS_RetryOpenRoot(this));
       return;
     }
@@ -584,7 +585,7 @@ void MDCache::populate_mydir()
   string jname("journal");
   CDentry *jdn = mydir->lookup(jname);
   if (!jdn || !jdn->get_linkage()->get_inode()) {
-    _create_system_file(mydir, jname.c_str(), create_system_inode(MDS_INO_LOG_OFFSET + mds->whoami, S_IFREG),
+    _create_system_file(mydir, jname.c_str(), create_system_inode(v, MDS_INO_LOG_OFFSET + mds->whoami, S_IFREG),
 			new C_MDS_RetryOpenRoot(this));
     return;
   }
