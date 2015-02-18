@@ -100,7 +100,7 @@ public:
 
 
 private:
-  void init_journaler();
+  void init_journaler(VolumeRef &v);
 
   struct C_MDL_WriteError : public Context {
     MDLog *mdlog;
@@ -208,7 +208,7 @@ private:
   void write_head(Context *onfinish);
 
 public:
-  void create(Context *onfinish);  // fresh, empty log!
+  void create(VolumeRef &v, Context *onfinish);  // fresh, empty log!
   void open(Context *onopen);	   // append() or replay() to follow!
   void append();
   void replay(Context *onfinish);

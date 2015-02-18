@@ -41,14 +41,14 @@ MDLog::~MDLog()
 }
 
 
-void MDLog::init_journaler()
+void MDLog::init_journaler(VolumeRef &v)
 {
   // inode
   ino = MDS_INO_LOG_OFFSET + mds->get_nodeid();
 
   // log streamer
   if (journaler) delete journaler;
-  journaler = new Journaler(ino, mds->get_metadata_volume(), CEPH_FS_ONDISK_MAGIC, mds->objecter,
+  journaler = new Journaler(ino, v, CEPH_FS_ONDISK_MAGIC, mds->objecter,
 			    &mds->timer);
   assert(journaler->is_readonly());
   journaler->set_write_error_handler(new C_MDL_WriteError(this));
@@ -87,10 +87,10 @@ uint64_t MDLog::get_safe_pos()
 
 
 
-void MDLog::create(Context *c)
+void MDLog::create(VolumeRef &v, Context *c)
 {
   ldout(mds->cct, 5) << "create empty log" << dendl;
-  init_journaler();
+  init_journaler(v);
   journaler->set_writeable();
   journaler->create();
   journaler->write_head(c);
