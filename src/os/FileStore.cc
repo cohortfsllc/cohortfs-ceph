@@ -2450,7 +2450,7 @@ retry:
     }
   }
   lat.mtx->unlock(); /* !LATCHED */
-out:
+ out:
   return oh;
 }
 
@@ -3934,10 +3934,13 @@ int FileStore::close_collection(CollectionHandle ch)
     }
   };
 
+  /* force cache drain, forces objects to evict */
   fc->obj_cache.drain(ObjUnref(this),
 		      Object::ObjCache::FLAG_LOCK);
-  ::close(fc->fd);
-  delete fc;
+
+  /* return initial ref */
+  fc->put();
+
   return 0;
 } /* close_collection */
 
