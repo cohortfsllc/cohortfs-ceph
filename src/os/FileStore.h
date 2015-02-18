@@ -129,11 +129,22 @@ public:
       fc->get();
     }
 
+    uint64_t get_hk() const { return hk; }
+
     virtual bool reclaim() {
       std::cout << "FTW RECLAIM FSObject " << (void*) this << std::endl;
       fc->obj_cache.remove(hk, this, cohort::lru::FLAG_NONE);
       return true;
     }
+
+    virtual void otrace(const char *tag = "") {
+      std::cout << "OTRACE FSObject "
+		<< tag
+		<< " " << oid
+		<< " hk " << hk
+		<< " FDRef/fd " << fd << " (" << fd->fd << ")"
+		<< std::endl;
+    };
 
     virtual ~FSObject() {
       fc->put();

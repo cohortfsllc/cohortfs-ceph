@@ -1983,8 +1983,10 @@ unsigned FileStore::_do_transaction(
       if (fc) {
 	fo = get_slot_object(t, fc, i->o1_ix, spos, true /* create */);
 	if (fo) {
-	  if (_check_replay_guard(fc, fo, spos) > 0)
+	  if (_check_replay_guard(fc, fo, spos) > 0) {
+	    fo->otrace("OP_TOUCH");
 	    r = _touch(fc, fo);
+	  }
 	}
       }
       break;
@@ -1995,8 +1997,10 @@ unsigned FileStore::_do_transaction(
       if (fc) {
 	fo = get_slot_object(t, fc, i->o1_ix, spos, true /* create */);
 	if (fo) {
-	  if (_check_replay_guard(fc, fo, spos) > 0)
+	  if (_check_replay_guard(fc, fo, spos) > 0) {
+	    fo->otrace("OP_WRITE");
 	    r = _write(fc, fo, i->off, i->len, i->data, t.get_replica());
+	  }
 	}
       }
       break;
@@ -2022,8 +2026,10 @@ unsigned FileStore::_do_transaction(
       if (fc) {
 	fo = get_slot_object(t, fc, i->o1_ix, spos, true /* create */);
 	if (fo) {
-	  if (_check_replay_guard(fc, fo, spos) > 0)
+	  if (_check_replay_guard(fc, fo, spos) > 0) {
+	    fo->otrace("OP_TRUNCATE");
 	    r = _truncate(fc, fo, i->off);
+	  }
 	}
       }
       break;
@@ -2034,8 +2040,10 @@ unsigned FileStore::_do_transaction(
       if (fc) {
 	fo = get_slot_object(t, fc, i->o1_ix, spos, false /* create */);
 	if (fo) {
-	  if (_check_replay_guard(fc, fo, spos) > 0)
+	  if (_check_replay_guard(fc, fo, spos) > 0) {
+	    fo->otrace("OP_REMOVE");
 	    r = _remove(fc, fo->get_oid(), spos);
+	  }
 	}
       }
       break;
@@ -2246,6 +2254,17 @@ unsigned FileStore::_do_transaction(
 	}
       }
       break;
+
+    case Transaction::OP_OTRACE:
+      r = -ENOENT;
+      fc = get_slot_collection(t, i->c1_ix);
+      if (fc) {
+	fo = get_slot_object(t, fc, i->o1_ix, spos, true /* create */);
+	if (fo) {
+	  fo->otrace("OP_OTRACE");
+	}
+      }
+      break;
 #if 0
     case Transaction::OP_COLL_ADD:
       r = -EINVAL; // removed
@@ -2395,7 +2414,11 @@ retry:
     fc->obj_cache.find_latch(hk, k, lat, Object::ObjCache::FLAG_LOCK));
   /* LATCHED */
   if (oh) {
-    std::cout << "FTW address of FOUND FSObject " << (void*) oh << std::endl;
+    std::cout << "FTW address of FOUND FSObject " << (void*) oh 
+	      << " for oid " << oid
+	      << " hk " << hk
+	      << " actual " << oh->get_hk()
+	      << std::endl;
     /* need initial ref from LRU (fast path) */
     if (! obj_lru.ref(oh, cohort::lru::FLAG_INITIAL)) {
       lat.mtx->unlock();
@@ -2423,7 +2446,11 @@ retry:
       obj_lru.insert(&prototype,
 		     cohort::lru::Edge::MRU,
 		     cohort::lru::FLAG_INITIAL));
-    std::cout << "FTW address of NEW FSObject " << (void*) oh << std::endl;
+    std::cout << "FTW address of NEW FSObject " << (void*) oh
+	      << " for oid " << oid
+	      << " hk " << hk
+	      << " actual " << oh->get_hk()
+	      << std::endl;
     if (oh) {
       fc->obj_cache.insert_latched(oh, lat, Object::ObjCache::FLAG_UNLOCK);
       goto out; /* !LATCHED */

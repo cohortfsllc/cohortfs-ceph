@@ -114,6 +114,10 @@ public:
     explicit Object(const hobject_t& _oid, uint64_t _hk) : oid(_oid), hk(_hk)
       {}
 
+    virtual void otrace() {};
+
+    virtual uint64_t get_hk() const { return 0; }
+
     const hobject_t& get_oid() {
       return oid;
     }
@@ -439,6 +443,8 @@ public:
       OP_COLL_MOVE_RENAME = 38,	  // oldch, oldoid, newch, newoid
 
       OP_SETALLOCHINT = 39,  // ch, oid, object_size, write_size
+
+      OP_OTRACE = 91
     };
 
     static const uint32_t FLAG_NONE = 0x0000;
@@ -1228,6 +1234,23 @@ public:
       assert(obj_ix > 0);
       set_alloc_hint(col_ix - 1, obj_ix - 1, expected_object_size,
 		     expected_write_size);
+    }
+
+    // trigger Object trace output
+    void otrace(
+      int col_ix,
+      int obj_ix
+    ) {
+      ops.push_back(Op(OP_OTRACE));
+      Op &op = ops.back();
+      op.c1_ix = col_ix;
+      op.o1_ix = obj_ix;
+    }
+
+    void otrace() {
+      assert(col_ix > 0);
+      assert(obj_ix > 0);
+      otrace(col_ix - 1, obj_ix - 1);
     }
 
     // etc.

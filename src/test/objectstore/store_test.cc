@@ -386,7 +386,7 @@ public:
 	ObjectStore::Transaction t;
 	t.remove_collection(cid);
 	cerr << "remove collection" << std::endl;
-	int r = store->apply_transaction(t);
+	(void) store->apply_transaction(t);
       }
     }
   }
@@ -422,7 +422,6 @@ public:
   void wait_for_done() {
     Mutex::Locker locker(lock);
     utime_t delay(20, 0);
-    int ctr = 0;
     while (in_flight) {
       cond.WaitInterval(g_ceph_context, lock, delay);
       if (in_flight) {
@@ -456,8 +455,9 @@ public:
     (void) t->push_col(ch);
     (void) t->push_oid(new_obj);
     t->touch();
+    t->otrace();
     ++in_flight;
-    std::cout << "TOUCH oid (" << new_obj << ") in_flight "
+    std::cout << "TOUCH oid " << new_obj << " in_flight "
 	      << in_flight << std::endl;
     in_flight_objects.insert(new_obj);
     if (!contents.count(new_obj))
@@ -501,9 +501,11 @@ public:
     (void) t->push_col(ch);
     (void) t->push_oid(new_obj);
     t->write(offset, len, bl);
+    t->otrace();
     ++in_flight;
-    std::cout << "WRITE oid (" << new_obj << ") in_flight "
-	      << in_flight << std::endl;
+    std::cout << "WRITE oid " << new_obj
+	      << " offset: " << offset << " length: " << len 
+	      << " in_flight " << in_flight << std::endl;
     in_flight_objects.insert(new_obj);
     return store->queue_transaction(
       osr, t, new C_SyntheticOnReadable(this, t, new_obj));
@@ -531,11 +533,27 @@ public:
     ObjectStore::ObjectHandle oh = store->get_object(ch, obj);
     ASSERT_TRUE(oh);
 
-    std::cout << "READ oid (" << obj << ") (doesn't change in_flight) "
-      "in_flight " << in_flight << std::endl;
+    oh->otrace();
+    std::cout << "READ oid " << obj
+	      << " (actual in oh " << oh->get_oid() 
+	      << " hk " << oh->get_hk() << ")"
+	      << " (doesn't change in_flight)"
+	      << " in_flight " << in_flight << std::endl;
 
     r = store->read(ch, oh, offset, len, result);
     if (offset >= contents[obj].length()) {
+      if (r != 0) {
+	std::cout << "READ bad r"
+		  << " cid: " << ch->get_cid()
+		  << " oid: " << oh->get_oid()
+		  << " offset: " << offset
+		  << " length: " << len
+		  << " accted len: " << contents[obj].length()
+		  << " r: " << r << std::endl;
+	r = store->read(ch, oh, offset, len, result);
+	oh->otrace();
+	std::cout << "READ REPEAT r: " << r << std::endl;
+      }
       ASSERT_EQ(r, 0);
     } else {
       size_t max_len = contents[obj].length() - offset;
@@ -568,8 +586,9 @@ public:
     t->truncate(len);
     ++in_flight;
 
-    std::cout << "TRUNC oid (" << obj << ") in_flight "
-	      << in_flight << std::endl;
+    std::cout << "TRUNC oid " << obj
+	      << " len: " << len
+	      << " in_flight " << in_flight << std::endl;
 
     in_flight_objects.insert(obj);
     if (contents[obj].length() <= len)
@@ -631,17 +650,19 @@ public:
       ++in_flight;
     }
 
-    std::cout << "STAT oid (" << hoid << ") in_flight "
+    std::cout << "STAT oid " << hoid << " in_flight "
 	      << in_flight << std::endl;
 
     struct stat buf;
     ObjectStore::ObjectHandle oh = store->get_object(ch, hoid);
     ASSERT_TRUE(oh);
     int r = store->stat(ch, oh, &buf);
-    ASSERT_EQ(0, r);
     std::cout << "STAT oid IFASSERT EQ(" << buf.st_size
 	      << ", " << contents[hoid].length() << " oid "
 	      << hoid << std::endl;
+    oh->otrace();
+
+    ASSERT_EQ(0, r);
     //ASSERT_TRUE(buf.st_size == contents[hoid].length());
     {
       Mutex::Locker locker(lock);
@@ -664,9 +685,10 @@ public:
     (void) t->push_col(ch);
     (void) t->push_oid(to_remove);
     t->remove();
+    t->otrace();
     ++in_flight;
 
-    std::cout << "UNLINK oid (" << to_remove << ") in_flight "
+    std::cout << "UNLINK oid " << to_remove << " in_flight "
 	      << in_flight << std::endl;
 
     available_objects.erase(to_remove);
