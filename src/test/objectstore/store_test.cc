@@ -386,7 +386,14 @@ public:
   ~SyntheticWorkloadState() {
     if (ch) {
       store->sync_and_flush();
+      coll_t cid = ch->get_cid();
       store->close_collection(ch);
+      {
+	ObjectStore::Transaction t;
+	t.remove_collection(cid);
+	cerr << "remove collection" << std::endl;
+	int r = store->apply_transaction(t);
+      }
     }
   }
 
