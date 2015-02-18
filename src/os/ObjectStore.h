@@ -131,7 +131,7 @@ public:
     friend class Collection;
   };
 
-  class Collection {
+  class Collection : public RefCountedObject {
   protected:
     uint32_t flags;
     Object::ObjCache obj_cache;
@@ -144,6 +144,8 @@ public:
 
     Collection(const coll_t& _cid) : flags(FLAG_NONE), cid(_cid)
       {}
+
+    virtual ~Collection() {}
 
     const coll_t& get_cid() {
       return cid;
