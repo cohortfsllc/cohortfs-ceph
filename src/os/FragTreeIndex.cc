@@ -507,15 +507,30 @@ DIR* fdopendir_rewind(int fd)
   return dir;
 }
 
-int parse_frag_value(const char *name)
+bool parse_hex_value(const char *name, uint64_t *value)
 {
-  int value;
-  std::stringstream ss; // TODO: faster with sscanf()
-  ss << name;
-  ss >> std::hex >> value;
-  if (ss.fail() || !ss.eof()) // parse failed or incomplete
-    return -1;
-  return value;
+  char *end;
+  auto result = strtoull(name, &end, 16);
+  if (result == ULLONG_MAX && errno) // overflow
+    return false;
+  if (result == 0 && end == name) // empty
+    return false;
+  if (*end) // garbage after the value
+    return false;
+
+  *value = result;
+  return true;
+}
+
+bool parse_hash_prefix(const char *name, uint64_t *value)
+{
+  // copy into a temporary buffer to make sure strtoull() doesn't
+  // try to parse more than the 16 bytes at the beginning
+  char buf[17];
+  strncpy(buf, name, sizeof(buf));
+  buf[16] = 0;
+
+  return parse_hex_value(buf, value);
 }
 
 } // anonymous namespace
@@ -546,28 +561,40 @@ int FragTreeIndex::count_sizes(int dirfd)
   }
 
   // use a stack to recursively count directory entries
-  struct dir_entry { int fd; DIR *dir; frag_t frag; };
+  struct dir_entry { int fd; DIR *dir; frag_t frag; bool merge; };
   std::vector<dir_entry> stack;
 
   stack.push_back(dir_entry {dirfd, dir, frag_t()});
   while (r == 0 && !stack.empty()) {
     const dir_entry &entry = stack.back();
-    // TODO: handle cases where entry.frag is being migrated!
-    // if it's splitting, increment the subdir corresponding to object hash
-    // if it's merging, increment the parent frag
-    const int bits = tree.get_split(entry.frag);
+
+    // if it's merging, have subdirs increment the current frag
+    bool merging = committed.merges.count(entry.frag);
+
+    uint64_t bits = (merging ? committed.tree : tree).get_split(entry.frag);
+    uint64_t nway = 1 << bits;
+
     int count = 0;
 
+    char buf[offsetof(struct dirent, d_name) + PATH_MAX + 1];
     struct dirent *dn;
-    while ((dn = ::readdir(entry.dir)) != NULL) {
+    while ((r = ::readdir_r(entry.dir, (struct dirent *)&buf, &dn)) == 0) {
+      if (dn == NULL) {
+        ::closedir(entry.dir);
+        stack.pop_back();
+        break;
+      }
+
       // skip hidden files/directories
       if (dn->d_name[0] == '.')
         continue;
 
       if (dn->d_type == DT_DIR) {
         // decode the frag number from the directory name
-        int value = parse_frag_value(dn->d_name);
-        if (value < 0 || value >= (1 >> bits)) // doesn't match fragtree
+        uint64_t value;
+        if (!parse_hex_value(dn->d_name, &value))
+          continue;
+        if (value >= nway) // doesn't match fragtree
           continue;
 
         // since there is no opendirat(), we need to use openat()
@@ -590,18 +617,19 @@ int FragTreeIndex::count_sizes(int dirfd)
         }
 
         frag_t frag = entry.frag.make_child(value, bits);
-        stack.push_back(dir_entry {fd, dir, frag});
+        stack.push_back(dir_entry {fd, dir, frag, merging});
         break;
       }
 
       if (dn->d_type == DT_REG)
-        count++;
+        ++count;
     }
 
-    sizes[entry.frag] += count;
-
-    ::closedir(entry.dir);
-    stack.pop_back();
+    if (count) {
+      // if parent is merging, apply size updates to the parent frag
+      frag_t target = entry.merge ? entry.frag.parent() : entry.frag;
+      sizes[target] += count;
+    }
   }
 
   // closedir any open directories
@@ -650,9 +678,9 @@ int split_mkdirs(CephContext *cct, int rootfd, const fragtree_t &tree,
   // TODO: consider opening directory at frag, and using mkdirat() from there
 
   const int remaining = sizeof(path.path) - path.len;
-  const int nway = 1 << bits;
-  for (int i = 0; i < nway; i++) {
-    r = snprintf(path.path + path.len, remaining, "%x", i);
+  const uint64_t nway = 1 << bits;
+  for (uint64_t i = 0; i < nway; i++) {
+    r = snprintf(path.path + path.len, remaining, "%lx", i);
     if (r < 0)
       return r;
     if (r >= remaining)
@@ -730,20 +758,6 @@ int FragTreeIndex::split(frag_t frag, int bits, bool async)
   return 0;
 }
 
-namespace {
-
-bool parse_hash_value(const char *name, uint64_t *value)
-{
-  std::stringstream ss; // TODO: faster with sscanf()
-  if (strlen(name) < 16)
-    return -1;
-  ss.write(name, 16);
-  ss >> std::hex >> *value;
-  return ss.eof() && !ss.fail();
-}
-
-} // anonymous namespace
-
 void FragTreeIndex::do_split(frag_path path, int bits,
                              frag_size_map &size_updates)
 {
@@ -760,8 +774,8 @@ void FragTreeIndex::do_split(frag_path path, int bits,
   }
 
   // initialize size_updates
-  const int nway = 1 << bits;
-  for (int i = 0; i < nway; i++)
+  const uint64_t nway = 1 << bits;
+  for (uint64_t i = 0; i < nway; i++)
     size_updates.insert(std::make_pair(path.frag.make_child(i, bits), 0));
 
   DIR *dir = fdopendir_rewind(dirfd);
@@ -778,14 +792,14 @@ void FragTreeIndex::do_split(frag_path path, int bits,
 
     // decode the hash value
     uint64_t hash;
-    if (!parse_hash_value(dn->d_name, &hash)) {
+    if (!parse_hash_prefix(dn->d_name, &hash)) {
       derr << "do_split failed to get hash value from " << dn->d_name << dendl;
       continue;
     }
 
     // find the corresponding child frag
     frag_t frag;
-    int i;
+    uint64_t i;
     for (i = 0; i < nway; i++) {
       frag = path.frag.make_child(i, bits);
       if (frag.contains(hash))
@@ -845,7 +859,7 @@ void FragTreeIndex::finish_split(frag_t frag, const frag_size_map &size_updates)
   std::lock_guard<std::mutex> sizes_lock(sizes_mutex);
   for (auto &i : size_updates)
     sizes[i.first] += i.second;
-  sizes.erase(frag); // XXX: does this need to happen in split()?
+  sizes.erase(frag);
 }
 
 int FragTreeIndex::merge(frag_t frag, bool async)
@@ -1007,8 +1021,8 @@ int frag_path::build(const fragtree_t &tree, uint64_t hash)
       break;
 
     // pick appropriate child fragment.
-    const int nway = 1 << bits;
-    int i;
+    const uint64_t nway = 1 << bits;
+    uint64_t i;
     for (i = 0; i < nway; i++)
       if (frag.make_child(i, bits).contains(hash))
         break;

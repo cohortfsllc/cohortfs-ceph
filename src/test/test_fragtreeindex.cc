@@ -146,7 +146,6 @@ void tmpdir_with_cleanup::recursive_rmdir(int fd, DIR *dir)
 
 } // anonymous namespace
 
-#if 1
 TEST(OsFragTreeIndex, FragPathBuild)
 {
   frag_t root;
@@ -160,23 +159,23 @@ TEST(OsFragTreeIndex, FragPathBuild)
 
   frag_path path;
 
-  ASSERT_EQ(path.build(tree, 0), 0);
+  ASSERT_EQ(0, path.build(tree, 0));
   ASSERT_EQ(path.path, std::string("0/0/"));
 
-  ASSERT_EQ(path.build(tree, 0x200000), 0);
-  ASSERT_EQ(path.path, std::string("0/1/"));
+  ASSERT_EQ(0, path.build(tree, 0x20000000000000));
+  ASSERT_EQ(std::string("0/1/"), path.path);
 
-  ASSERT_EQ(path.build(tree, 0x400000), 0);
-  ASSERT_EQ(path.path, std::string("1/"));
+  ASSERT_EQ(0, path.build(tree, 0x40000000000000));
+  ASSERT_EQ(std::string("1/"), path.path);
 
-  ASSERT_EQ(path.build(tree, 0x800000), 0);
-  ASSERT_EQ(path.path, std::string("2/"));
+  ASSERT_EQ(0, path.build(tree, 0x80000000000000));
+  ASSERT_EQ(std::string("2/"), path.path);
 
-  ASSERT_EQ(path.build(tree, 0xC00000), 0);
-  ASSERT_EQ(path.path, std::string("3/0/"));
+  ASSERT_EQ(0, path.build(tree, 0xC0000000000000));
+  ASSERT_EQ(std::string("3/0/"), path.path);
 
-  ASSERT_EQ(path.build(tree, 0xE00000), 0);
-  ASSERT_EQ(path.path, std::string("3/1/"));
+  ASSERT_EQ(0, path.build(tree, 0xE0000000000000));
+  ASSERT_EQ(std::string("3/1/"), path.path);
 
   // TODO: test frag_path::append() error handling
 }
@@ -188,16 +187,16 @@ TEST(OsFragTreeIndex, OpenStatUnlink)
   TestFragTreeIndex index(1024, 2);
   struct stat st;
 
-  ASSERT_EQ(index.init(path), 0);
-  ASSERT_EQ(index.mount(path), 0);
-  ASSERT_EQ(index.stat("stat-noent", 0, &st), -ENOENT);
+  ASSERT_EQ(0, index.init(path));
+  ASSERT_EQ(0, index.mount(path));
+  ASSERT_EQ(-ENOENT, index.stat("stat-noent", 0, &st));
   int fd = -1;
-  ASSERT_EQ(index.open("open-noent", 0, false, &fd), -ENOENT);
-  ASSERT_EQ(index.open("open-create", 0, true, &fd), 0);
-  ASSERT_EQ(index.stat("open-create", 0, &st), 0);
+  ASSERT_EQ(-ENOENT, index.open("open-noent", 0, false, &fd));
+  ASSERT_EQ(0, index.open("open-create", 0, true, &fd));
+  ASSERT_EQ(0, index.stat("open-create", 0, &st));
   ::close(fd);
-  ASSERT_EQ(index.unlink("open-create", 0), 0);
-  ASSERT_EQ(index.unmount(), 0);
+  ASSERT_EQ(0, index.unlink("open-create", 0));
+  ASSERT_EQ(0, index.unmount());
 }
 
 TEST(OsFragTreeIndex, Split)
@@ -205,22 +204,22 @@ TEST(OsFragTreeIndex, Split)
   tmpdir_with_cleanup path("tmp-fragtreeindex-split");
 
   TestFragTreeIndex index(1024, 2);
-  ASSERT_EQ(index.init(path), 0);
-  ASSERT_EQ(index.mount(path), 0);
+  ASSERT_EQ(0, index.init(path));
+  ASSERT_EQ(0, index.mount(path));
 
   const std::string filename("0000000000000000-foo");
   const int64_t hash = 0;
 
   int fd = -1;
-  ASSERT_EQ(index.open(filename, hash, true, &fd), 0);
+  ASSERT_EQ(0, index.open(filename, hash, true, &fd));
   ::close(fd);
 
   // start a split (async=false)
   frag_path p = {};
-  ASSERT_EQ(index.split(p.frag, 1, false), 0);
+  ASSERT_EQ(0, index.split(p.frag, 1, false));
 
   // make sure we can find it before rename
-  ASSERT_EQ(index.lookup(filename, hash), 0);
+  ASSERT_EQ(0, index.lookup(filename, hash));
 
   // make sure we can't start another split or merge
   ASSERT_TRUE(index.split(p.frag, 1, false) != 0);
@@ -231,17 +230,17 @@ TEST(OsFragTreeIndex, Split)
   index.do_split(p, 1, size_updates);
 
   // make sure we can still find it after rename
-  ASSERT_EQ(index.lookup(filename, hash), 0);
+  ASSERT_EQ(0, index.lookup(filename, hash));
 
   // complete the split
   index.finish_split(p.frag, size_updates);
-  ASSERT_EQ(index.lookup(filename, hash), 0);
+  ASSERT_EQ(0, index.lookup(filename, hash));
 
   // verify the size map
   TestFragTreeIndex::frag_size_map sizes;
   sizes[p.frag.make_child(0, 1)] = 1;
   sizes[p.frag.make_child(1, 1)] = 0;
-  ASSERT_EQ(index.get_size_map(), sizes);
+  ASSERT_EQ(sizes, index.get_size_map());
 
   ASSERT_EQ(index.unmount(), 0);
 }
@@ -251,25 +250,25 @@ TEST(OsFragTreeIndex, Merge)
   tmpdir_with_cleanup path("tmp-fragtreeindex-merge");
 
   TestFragTreeIndex index(1024, 2);
-  ASSERT_EQ(index.init(path), 0);
-  ASSERT_EQ(index.mount(path), 0);
+  ASSERT_EQ(0, index.init(path));
+  ASSERT_EQ(0, index.mount(path));
 
   // do an initial split
   const frag_path p = {};
-  ASSERT_EQ(index.split_sync(p.frag, 1), 0);
+  ASSERT_EQ(0, index.split_sync(p.frag, 1));
 
   // create a file in 0/
   const std::string filename("0000000000000000-foo");
   const int64_t hash = 0;
   int fd = -1;
-  ASSERT_EQ(index.open(filename, hash, true, &fd), 0);
+  ASSERT_EQ(0, index.open(filename, hash, true, &fd));
   ::close(fd);
 
   // start a merge (async=false)
-  ASSERT_EQ(index.merge(p.frag, false), 0);
+  ASSERT_EQ(0, index.merge(p.frag, false));
 
   // make sure we can find it before rename
-  ASSERT_EQ(index.lookup(filename, hash), 0);
+  ASSERT_EQ(0, index.lookup(filename, hash));
 
   // make sure we can't start another split or merge
   ASSERT_TRUE(index.split(p.frag, 1, false) != 0);
@@ -279,64 +278,66 @@ TEST(OsFragTreeIndex, Merge)
   index.do_merge(p, 1);
 
   // make sure we can still find it after rename
-  ASSERT_EQ(index.lookup(filename, hash), 0);
+  ASSERT_EQ(0, index.lookup(filename, hash));
 
   // complete the merge
   index.finish_merge(p.frag);
-  ASSERT_EQ(index.lookup(filename, hash), 0);
+  ASSERT_EQ(0, index.lookup(filename, hash));
 
   // verify the size map
   TestFragTreeIndex::frag_size_map sizes;
   sizes[p.frag] = 1;
-  ASSERT_EQ(index.get_size_map(), sizes);
+  ASSERT_EQ(sizes, index.get_size_map());
 
-  ASSERT_EQ(index.unmount(), 0);
+  ASSERT_EQ(0, index.unmount());
 }
-#endif
+
 TEST(OsFragTreeIndex, SplitRecovery)
 {
   tmpdir_with_cleanup path("tmp-fragtreeindex-split-recovery");
 
   TestFragTreeIndex index(1024, 2);
-  ASSERT_EQ(index.init(path), 0);
-  ASSERT_EQ(index.mount(path), 0);
+  ASSERT_EQ(0, index.init(path));
+  ASSERT_EQ(0, index.mount(path));
 
   const std::string filename("0000000000000000-foo");
   const int64_t hash = 0;
 
   int fd = -1;
-  ASSERT_EQ(index.open(filename, hash, true, &fd), 0);
+  ASSERT_EQ(0, index.open(filename, hash, true, &fd));
   ::close(fd);
 
   // start a split (async=false)
   frag_path p = {};
-  ASSERT_EQ(index.split(p.frag, 1, false), 0);
+  ASSERT_EQ(0, index.split(p.frag, 1, false));
 
   // make sure we can find it before rename
-  ASSERT_EQ(index.lookup(filename, hash), 0);
+  ASSERT_EQ(0, index.lookup(filename, hash));
 
   // crash before starting renames
   index.crash();
 
   // remount without starting recovery
-  ASSERT_EQ(index.mount(path, false), 0);
+  ASSERT_EQ(0, index.mount(path, false));
 
   // verify the size map before recovery to test count_sizes()
   TestFragTreeIndex::frag_size_map sizes;
-  sizes[p.frag.make_child(0, 1)] = 1;
-  sizes[p.frag.make_child(1, 1)] = 0;
-  ASSERT_EQ(index.get_size_map(), sizes);
+  sizes[p.frag] = 1;
+  ASSERT_EQ(sizes, index.get_size_map());
 
   // do the synchronous recovery
   index.restart_migrations(false);
 
   // make sure we can still find it after recovery
-  ASSERT_EQ(index.lookup(filename, hash), 0);
+  ASSERT_EQ(0, index.lookup(filename, hash));
 
   // verify the size map after recovery
-  ASSERT_EQ(index.get_size_map(), sizes);
+  sizes.clear();
+  sizes[p.frag.make_child(0, 1)] = 1;
+  sizes[p.frag.make_child(1, 1)] = 0;
+  ASSERT_EQ(sizes, index.get_size_map());
 
-  ASSERT_EQ(index.unmount(), 0);
+  ASSERT_EQ(0, index.unmount());
 }
 
 TEST(OsFragTreeIndex, CountSizes)
@@ -360,55 +361,55 @@ TEST(OsFragTreeIndex, CountSizes)
   const frag_t f3 = root.make_child(3, 2);
   const frag_t f30 = f3.make_child(0, 1);
   const frag_t f31 = f3.make_child(1, 1);
-  ASSERT_EQ(index.split_sync(root, 2), 0);
-  ASSERT_EQ(index.split_sync(f0, 1), 0);
-  ASSERT_EQ(index.split_sync(f00, 1), 0);
-  ASSERT_EQ(index.split_sync(f01, 1), 0);
-  ASSERT_EQ(index.split_sync(f1, 1), 0);
-  ASSERT_EQ(index.split_sync(f10, 1), 0);
-  ASSERT_EQ(index.split_sync(f11, 1), 0);
-  ASSERT_EQ(index.split_sync(f2, 1), 0);
-  ASSERT_EQ(index.split_sync(f20, 1), 0);
-  ASSERT_EQ(index.split_sync(f21, 1), 0);
-  ASSERT_EQ(index.split_sync(f3, 1), 0);
-  ASSERT_EQ(index.split_sync(f30, 1), 0);
-  ASSERT_EQ(index.split_sync(f31, 1), 0);
+  ASSERT_EQ(0, index.split_sync(root, 2));
+  ASSERT_EQ(0, index.split_sync(f0, 1));
+  ASSERT_EQ(0, index.split_sync(f00, 1));
+  ASSERT_EQ(0, index.split_sync(f01, 1));
+  ASSERT_EQ(0, index.split_sync(f1, 1));
+  ASSERT_EQ(0, index.split_sync(f10, 1));
+  ASSERT_EQ(0, index.split_sync(f11, 1));
+  ASSERT_EQ(0, index.split_sync(f2, 1));
+  ASSERT_EQ(0, index.split_sync(f20, 1));
+  ASSERT_EQ(0, index.split_sync(f21, 1));
+  ASSERT_EQ(0, index.split_sync(f3, 1));
+  ASSERT_EQ(0, index.split_sync(f30, 1));
+  ASSERT_EQ(0, index.split_sync(f31, 1));
 
   struct filehash { uint64_t hash; const char *name; };
-  filehash a { 0x0000000000000000LL, "0000000000000000-a" };
-  filehash b { 0x0000000000100000LL, "0000000000100000-b" };
-  filehash c { 0x0000000000200000LL, "0000000000200000-c" };
-  filehash d { 0x0000000000300000LL, "0000000000300000-d" };
-  filehash e { 0x0000000000400000LL, "0000000000400000-e" };
-  filehash f { 0x0000000000500000LL, "0000000000500000-f" };
-  filehash g { 0x0000000000600000LL, "0000000000600000-g" };
-  filehash h { 0x0000000000700000LL, "0000000000700000-h" };
-  filehash i { 0x0000000000800000LL, "0000000000800000-i" };
-  filehash j { 0x0000000000900000LL, "0000000000900000-j" };
-  filehash k { 0x0000000000A00000LL, "0000000000A00000-k" };
-  filehash l { 0x0000000000B00000LL, "0000000000B00000-l" };
-  filehash m { 0x0000000000C00000LL, "0000000000C00000-m" };
-  filehash n { 0x0000000000D00000LL, "0000000000D00000-n" };
-  filehash o { 0x0000000000E00000LL, "0000000000E00000-o" };
-  filehash p { 0x0000000000F00000LL, "0000000000F00000-p" };
+  filehash a { 0x0000000000000000ULL, "0000000000000000-a" };
+  filehash b { 0x0010000000000000ULL, "0010000000000000-b" };
+  filehash c { 0x0020000000000000ULL, "0020000000000000-c" };
+  filehash d { 0x0030000000000000ULL, "0030000000000000-d" };
+  filehash e { 0x0040000000000000ULL, "0040000000000000-e" };
+  filehash f { 0x0050000000000000ULL, "0050000000000000-f" };
+  filehash g { 0x0060000000000000ULL, "0060000000000000-g" };
+  filehash h { 0x0070000000000000ULL, "0070000000000000-h" };
+  filehash i { 0x0080000000000000ULL, "0080000000000000-i" };
+  filehash j { 0x0090000000000000ULL, "0090000000000000-j" };
+  filehash k { 0x00A0000000000000ULL, "00A0000000000000-k" };
+  filehash l { 0x00B0000000000000ULL, "00B0000000000000-l" };
+  filehash m { 0x00C0000000000000ULL, "00C0000000000000-m" };
+  filehash n { 0x00D0000000000000ULL, "00D0000000000000-n" };
+  filehash o { 0x00E0000000000000ULL, "00E0000000000000-o" };
+  filehash p { 0x00F0000000000000ULL, "00F0000000000000-p" };
 
   int fd = -1;
-  ASSERT_EQ(index.open(a.name, a.hash, true, &fd), 0); ::close(fd);
-  ASSERT_EQ(index.open(b.name, b.hash, true, &fd), 0); ::close(fd);
-  ASSERT_EQ(index.open(c.name, c.hash, true, &fd), 0); ::close(fd);
-  ASSERT_EQ(index.open(d.name, d.hash, true, &fd), 0); ::close(fd);
-  ASSERT_EQ(index.open(e.name, e.hash, true, &fd), 0); ::close(fd);
-  ASSERT_EQ(index.open(f.name, f.hash, true, &fd), 0); ::close(fd);
-  ASSERT_EQ(index.open(g.name, g.hash, true, &fd), 0); ::close(fd);
-  ASSERT_EQ(index.open(h.name, h.hash, true, &fd), 0); ::close(fd);
-  ASSERT_EQ(index.open(i.name, i.hash, true, &fd), 0); ::close(fd);
-  ASSERT_EQ(index.open(j.name, j.hash, true, &fd), 0); ::close(fd);
-  ASSERT_EQ(index.open(k.name, k.hash, true, &fd), 0); ::close(fd);
-  ASSERT_EQ(index.open(l.name, l.hash, true, &fd), 0); ::close(fd);
-  ASSERT_EQ(index.open(m.name, m.hash, true, &fd), 0); ::close(fd);
-  ASSERT_EQ(index.open(n.name, n.hash, true, &fd), 0); ::close(fd);
-  ASSERT_EQ(index.open(o.name, o.hash, true, &fd), 0); ::close(fd);
-  ASSERT_EQ(index.open(p.name, p.hash, true, &fd), 0); ::close(fd);
+  ASSERT_EQ(0, index.open(a.name, a.hash, true, &fd)); ::close(fd);
+  ASSERT_EQ(0, index.open(b.name, b.hash, true, &fd)); ::close(fd);
+  ASSERT_EQ(0, index.open(c.name, c.hash, true, &fd)); ::close(fd);
+  ASSERT_EQ(0, index.open(d.name, d.hash, true, &fd)); ::close(fd);
+  ASSERT_EQ(0, index.open(e.name, e.hash, true, &fd)); ::close(fd);
+  ASSERT_EQ(0, index.open(f.name, f.hash, true, &fd)); ::close(fd);
+  ASSERT_EQ(0, index.open(g.name, g.hash, true, &fd)); ::close(fd);
+  ASSERT_EQ(0, index.open(h.name, h.hash, true, &fd)); ::close(fd);
+  ASSERT_EQ(0, index.open(i.name, i.hash, true, &fd)); ::close(fd);
+  ASSERT_EQ(0, index.open(j.name, j.hash, true, &fd)); ::close(fd);
+  ASSERT_EQ(0, index.open(k.name, k.hash, true, &fd)); ::close(fd);
+  ASSERT_EQ(0, index.open(l.name, l.hash, true, &fd)); ::close(fd);
+  ASSERT_EQ(0, index.open(m.name, m.hash, true, &fd)); ::close(fd);
+  ASSERT_EQ(0, index.open(n.name, n.hash, true, &fd)); ::close(fd);
+  ASSERT_EQ(0, index.open(o.name, o.hash, true, &fd)); ::close(fd);
+  ASSERT_EQ(0, index.open(p.name, p.hash, true, &fd)); ::close(fd);
 
   // verify the size map after creates
   TestFragTreeIndex::frag_size_map sizes;
@@ -428,17 +429,17 @@ TEST(OsFragTreeIndex, CountSizes)
   sizes[f30.make_child(1, 1)] = 1;
   sizes[f31.make_child(0, 1)] = 1;
   sizes[f31.make_child(1, 1)] = 1;
-  ASSERT_EQ(index.get_size_map(), sizes);
+  ASSERT_EQ(sizes, index.get_size_map());
 
   index.crash();
 
   // remount without starting recovery
-  ASSERT_EQ(index.mount(path, false), 0);
+  ASSERT_EQ(0, index.mount(path, false));
 
   // verify the size map before recovery to test count_sizes()
-  ASSERT_EQ(index.get_size_map(), sizes);
+  ASSERT_EQ(sizes, index.get_size_map());
 
-  ASSERT_EQ(index.unmount(), 0);
+  ASSERT_EQ(0, index.unmount());
 }
 
 int main(int argc, char *argv[])
@@ -450,11 +451,5 @@ int main(int argc, char *argv[])
                     CODE_ENVIRONMENT_UTILITY, 0);
   common_init_finish(cct);
   ::testing::InitGoogleTest(&argc, argv);
-
-  int r = RUN_ALL_TESTS();
-  if (r >= 0)
-    dout(0) << "There are no failures in the test case" << dendl;
-  else
-    derr << "There are some failures" << dendl;
-  return 0;
+  return RUN_ALL_TESTS();
 }
