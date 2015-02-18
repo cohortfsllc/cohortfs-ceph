@@ -954,7 +954,13 @@ TEST_P(StoreTest, XattrTest) {
 
   store->put_object(oh);
   store->close_collection(ch);
-}
+
+  {
+    ObjectStore::Transaction t;
+    (void)  t.remove_collection(cid);
+    store->apply_transaction(t);
+  }
+} /* TEST_P(StoreTest, OMapTest) */
 
 void colsplittest(
   ObjectStore *store,
