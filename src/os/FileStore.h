@@ -110,6 +110,10 @@ public:
       // TODO:  do something
     }
 
+    virtual ~FSCollection() {
+        ::close(fd);
+    }
+
     friend class FileStore;
   };
 
@@ -121,12 +125,18 @@ public:
 	     const FDRef& _fd)
       : ObjectStore::Object(oid, hk), fc(_fc) {
       fd = _fd;
+      /* each object holds a ref on it's collection */
+      fc->get();
     }
 
     virtual bool reclaim() {
       std::cout << "FTW RECLAIM FSObject " << (void*) this << std::endl;
       fc->obj_cache.remove(hk, this, cohort::lru::FLAG_NONE);
       return true;
+    }
+
+    virtual ~FSObject() {
+      fc->put();
     }
 
     struct FSObjectFactory : public cohort::lru::ObjectFactory
