@@ -172,7 +172,7 @@ namespace cohort {
 	  {}
 
       bool ref(Object* o, uint32_t flags) {
-	o->lru_refcnt++;
+	++(o->lru_refcnt);
 	if (flags & FLAG_INITIAL) {
 	  if ((++(o->lru_adj) % lru_adj_modulus) == 0) {
 	    Lane& lane = lane_of(o);
