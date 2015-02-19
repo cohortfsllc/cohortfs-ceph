@@ -53,7 +53,7 @@ public:
   }
 
   void update_segment();
-  void replay(MDS *mds);
+  void replay(MDS *mds, VolumeRef &v);
 };
 
 #endif

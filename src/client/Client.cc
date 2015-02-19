@@ -403,6 +403,10 @@ int Client::init()
   return r;
 }
 
+void Client::inode_2_volume(Inode *in, VolumeRef &v) {
+  v = in->volume;
+}
+
 void Client::shutdown()
 {
   ldout(cct, 1) << "shutdown" << dendl;
@@ -879,7 +883,7 @@ void Client::insert_readdir_results(MetaRequest *request, MetaSession *session,
       else
 	ldout(cct, 15) << " pd is '" << pd->first << "' dn " << pd->second << dendl;
 
-      Inode *in = add_update_inode(&ist, dir->parent_inode->volume, request->sent_stamp, session);
+      Inode *in = add_update_inode(&ist, request->volume, request->sent_stamp, session);
       Dentry *dn;
       if (pd != dir->dentry_map.end() &&
 	  pd->first == dname) {
@@ -978,22 +982,15 @@ Inode* Client::insert_trace(MetaRequest *request, MetaSession *session)
   }
 
   Inode *in = 0;
-  VolumeRef volume;
   in = request->inode();
-  {
-    Dentry *d = request->dentry();
-    if (d && d->dir)
-	volume = d->dir->parent_inode->volume;
-// assert(!!volume);	???
-  }
   if (reply->head.is_target) {
     ist.decode(p, features);
 
-    in = add_update_inode(&ist, volume, request->sent_stamp, session);
+    in = add_update_inode(&ist, request->volume, request->sent_stamp, session);
   }
 
   if (reply->head.is_dentry) {
-    Inode *diri = add_update_inode(&dirst, volume, request->sent_stamp, session);
+    Inode *diri = add_update_inode(&dirst, request->volume, request->sent_stamp, session);
     update_dir_dist(diri, &dst);  // dir stat info is attached to ..
 
     if (in) {
@@ -3377,11 +3374,27 @@ int Client::mount(const std::string &mount_root)
 
   mounted = true;
 
+  client_lock.Unlock();
+  {
+    Mutex mylock;
+    Cond cond;
+    bool done;
+
+    objecter->wait_for_latest_osdmap(new C_SafeCond(&mylock, &cond, &done));
+
+    mylock.Lock();
+    while (!done)
+      cond.Wait(mylock);
+    mylock.Unlock();
+  }
+  client_lock.Lock();
+
   tick(); // start tick
+  VolumeRef volume(mdsmap->get_metadata_volume(objecter));
 
   // hack: get+pin root inode.
   //  fuse assumes it's always there.
-  MetaRequest *req = new MetaRequest(CEPH_MDS_OP_GETATTR);
+  MetaRequest *req = new MetaRequest(volume, CEPH_MDS_OP_GETATTR);
   filepath fp(CEPH_INO_ROOT);
   if (!mount_root.empty())
     fp = filepath(mount_root.c_str());
@@ -3621,7 +3634,7 @@ void Client::renew_caps(MetaSession *session)
 int Client::_do_lookup(Inode *dir, const string& name, Inode **target)
 {
   int op = CEPH_MDS_OP_LOOKUP;
-  MetaRequest *req = new MetaRequest(op);
+  MetaRequest *req = new MetaRequest(dir->volume, op);
   filepath path;
   dir->make_relative_path(path);
   path.push_dentry(name);
@@ -4054,7 +4067,7 @@ int Client::_getattr(Inode *in, int mask, int uid, int gid, bool force)
   if (yes && !force)
     return 0;
 
-  MetaRequest *req = new MetaRequest(CEPH_MDS_OP_GETATTR);
+  MetaRequest *req = new MetaRequest(in->volume, CEPH_MDS_OP_GETATTR);
   filepath path;
   in->make_relative_path(path);
   req->set_filepath(path);
@@ -4126,7 +4139,7 @@ int Client::_setattr(Inode *in, struct stat *attr, int mask, int uid, int gid,
   if (!mask)
     return 0;
 
-  MetaRequest *req = new MetaRequest(CEPH_MDS_OP_SETATTR);
+  MetaRequest *req = new MetaRequest(in->volume, CEPH_MDS_OP_SETATTR);
 
   filepath path;
   in->make_relative_path(path);
@@ -4619,7 +4632,7 @@ int Client::_readdir_get_frag(dir_result_t *dirp)
 
   Inode *diri = dirp->inode;
 
-  MetaRequest *req = new MetaRequest(op);
+  MetaRequest *req = new MetaRequest(dirp->inode->volume, op);
   filepath path;
   diri->make_relative_path(path);
   req->set_filepath(path);
@@ -5141,12 +5154,12 @@ int Client::open(const char *relpath, int flags, mode_t mode)
   return r;
 }
 
-int Client::lookup_hash(inodeno_t ino, inodeno_t dirino, const char *name)
+int Client::lookup_hash(VolumeRef &v, inodeno_t ino, inodeno_t dirino, const char *name)
 {
   Mutex::Locker lock(client_lock);
   ldout(cct, 3) << "lookup_hash enter(" << ino << ", #" << dirino << "/" << name << ") = " << dendl;
 
-  MetaRequest *req = new MetaRequest(CEPH_MDS_OP_LOOKUPHASH);
+  MetaRequest *req = new MetaRequest(v, CEPH_MDS_OP_LOOKUPHASH);
   filepath path(ino);
   req->set_filepath(path);
 
@@ -5170,12 +5183,12 @@ int Client::lookup_hash(inodeno_t ino, inodeno_t dirino, const char *name)
  * the resulting Inode object in one operation, so that caller
  * can safely assume inode will still be there after return.
  */
-int Client::lookup_ino(inodeno_t ino, Inode **inode)
+int Client::lookup_ino(VolumeRef &v, inodeno_t ino, Inode **inode)
 {
   Mutex::Locker lock(client_lock);
   ldout(cct, 3) << "lookup_ino enter(" << ino << ") = " << dendl;
 
-  MetaRequest *req = new MetaRequest(CEPH_MDS_OP_LOOKUPINO);
+  MetaRequest *req = new MetaRequest(v, CEPH_MDS_OP_LOOKUPINO);
   filepath path(ino);
   req->set_filepath(path);
 
@@ -5208,7 +5221,7 @@ int Client::lookup_parent(Inode *ino, Inode **parent)
     return 0;
   }
 
-  MetaRequest *req = new MetaRequest(CEPH_MDS_OP_LOOKUPPARENT);
+  MetaRequest *req = new MetaRequest(ino->volume, CEPH_MDS_OP_LOOKUPPARENT);
   filepath path(ino->ino);
   req->set_filepath(path);
   req->set_inode(ino);
@@ -5240,7 +5253,7 @@ int Client::lookup_name(Inode *ino, Inode *parent)
   Mutex::Locker lock(client_lock);
   ldout(cct, 3) << "lookup_name enter(" << ino->ino << ") = " << dendl;
 
-  MetaRequest *req = new MetaRequest(CEPH_MDS_OP_LOOKUPNAME);
+  MetaRequest *req = new MetaRequest(ino->volume, CEPH_MDS_OP_LOOKUPNAME);
   req->set_filepath2(filepath(parent->ino));
   req->set_filepath(filepath(ino->ino));
   req->set_inode(ino);
@@ -5309,7 +5322,7 @@ int Client::_open(Inode *in, int flags, mode_t mode, Fh **fhp, int uid, int gid)
     // update wanted?
     check_caps(in, true);
   } else {
-    MetaRequest *req = new MetaRequest(CEPH_MDS_OP_OPEN);
+    MetaRequest *req = new MetaRequest(in->volume, CEPH_MDS_OP_OPEN);
     filepath path;
     in->make_relative_path(path);
     req->set_filepath(path);
@@ -6223,7 +6236,7 @@ void Client::getcwd(string& dir)
     if (!dn) {
       // look it up
       ldout(cct, 10) << "getcwd looking up parent for " << *in << dendl;
-      MetaRequest *req = new MetaRequest(CEPH_MDS_OP_LOOKUPNAME);
+      MetaRequest *req = new MetaRequest(in->volume, CEPH_MDS_OP_LOOKUPNAME);
       filepath path(in->ino);
       req->set_filepath(path);
       req->set_inode(in);
@@ -6844,7 +6857,7 @@ int Client::_setxattr(Inode *in, const char *name, const void *value,
   if (!value)
     flags |= CEPH_XATTR_REMOVE;
 
-  MetaRequest *req = new MetaRequest(CEPH_MDS_OP_SETXATTR);
+  MetaRequest *req = new MetaRequest(in->volume, CEPH_MDS_OP_SETXATTR);
   filepath path;
   in->make_relative_path(path);
   req->set_filepath(path);
@@ -6888,7 +6901,7 @@ int Client::_removexattr(Inode *in, const char *name, int uid, int gid)
       strncmp(name, "ceph.", 5))
     return -EOPNOTSUPP;
 
-  MetaRequest *req = new MetaRequest(CEPH_MDS_OP_RMXATTR);
+  MetaRequest *req = new MetaRequest(in->volume, CEPH_MDS_OP_RMXATTR);
   filepath path;
   in->make_relative_path(path);
   req->set_filepath(path);
@@ -6949,7 +6962,7 @@ int Client::_mknod(Inode *dir, const char *name, mode_t mode, dev_t rdev,
   if (strlen(name) > NAME_MAX)
     return -ENAMETOOLONG;
 
-  MetaRequest *req = new MetaRequest(CEPH_MDS_OP_MKNOD);
+  MetaRequest *req = new MetaRequest(dir->volume, CEPH_MDS_OP_MKNOD);
 
   filepath path;
   dir->make_relative_path(path);
@@ -7021,7 +7034,7 @@ int Client::_create(Inode *dir, const char *name, int flags, mode_t mode,
   if (cmode < 0)
     return -EINVAL;
 
-  MetaRequest *req = new MetaRequest(CEPH_MDS_OP_CREATE);
+  MetaRequest *req = new MetaRequest(dir->volume, CEPH_MDS_OP_CREATE);
 
   filepath path;
   dir->make_relative_path(path);
@@ -7077,7 +7090,7 @@ int Client::_mkdir(Inode *dir, const char *name, mode_t mode, int uid, int gid,
   if (strlen(name) > NAME_MAX)
     return -ENAMETOOLONG;
 
-  MetaRequest *req = new MetaRequest(CEPH_MDS_OP_MKDIR);
+  MetaRequest *req = new MetaRequest(dir->volume, CEPH_MDS_OP_MKDIR);
 
   filepath path;
   dir->make_relative_path(path);
@@ -7143,7 +7156,7 @@ int Client::_symlink(Inode *dir, const char *name, const char *target, int uid,
   if (strlen(name) > NAME_MAX)
     return -ENAMETOOLONG;
 
-  MetaRequest *req = new MetaRequest(CEPH_MDS_OP_SYMLINK);
+  MetaRequest *req = new MetaRequest(dir->volume, CEPH_MDS_OP_SYMLINK);
 
   filepath path;
   dir->make_relative_path(path);
@@ -7204,7 +7217,7 @@ int Client::_unlink(Inode *dir, const char *name, int uid, int gid)
   ldout(cct, 3) << "_unlink(" << dir->ino << " " << name << " uid " << uid
 		<< " gid " << gid << ")" << dendl;
 
-  MetaRequest *req = new MetaRequest(CEPH_MDS_OP_UNLINK);
+  MetaRequest *req = new MetaRequest(dir->volume, CEPH_MDS_OP_UNLINK);
 
   filepath path;
   dir->make_relative_path(path);
@@ -7265,7 +7278,7 @@ int Client::_rmdir(Inode *dir, const char *name, int uid, int gid)
   ldout(cct, 3) << "_rmdir(" << dir->ino << " " << name << " uid " << uid <<
     " gid " << gid << ")" << dendl;
 
-  MetaRequest *req = new MetaRequest(CEPH_MDS_OP_RMDIR);
+  MetaRequest *req = new MetaRequest(dir->volume, CEPH_MDS_OP_RMDIR);
   filepath path;
   dir->make_relative_path(path);
   path.push_dentry(name);
@@ -7327,7 +7340,7 @@ int Client::_rename(Inode *fromdir, const char *fromname, Inode *todir,
 		<< todir->ino << " " << toname
 		<< " uid " << uid << " gid " << gid << ")" << dendl;
 
-  MetaRequest *req = new MetaRequest(CEPH_MDS_OP_RENAME);
+  MetaRequest *req = new MetaRequest(fromdir->volume, CEPH_MDS_OP_RENAME);
 
   filepath from;
   fromdir->make_relative_path(from);
@@ -7414,8 +7427,10 @@ int Client::_link(Inode *in, Inode *dir, const char *newname, int uid, int gid, 
 
   if (strlen(newname) > NAME_MAX)
     return -ENAMETOOLONG;
+  if (in->volume != dir->volume)
+    return -EXDEV;
 
-  MetaRequest *req = new MetaRequest(CEPH_MDS_OP_LINK);
+  MetaRequest *req = new MetaRequest(in->volume, CEPH_MDS_OP_LINK);
 
   filepath path(newname, dir->ino);
   req->set_filepath(path);

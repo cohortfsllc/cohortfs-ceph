@@ -328,7 +328,7 @@ protected:
 			   map<client_t,uint64_t>& sseqmap);
   void handle_export_finish(MExportDirFinish *m);
 public:
-  void import_finish(CDir *dir, bool notify, bool last=true);
+  void import_finish(VolumeRef &v, CDir *dir, bool notify, bool last=true);
 protected:
 
   void handle_export_caps(MExportCaps *m);

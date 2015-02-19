@@ -261,8 +261,8 @@ class SyntheticClient {
 
   void import_find(const char *basedir, const char *find, bool writedata);
 
-  int lookup_hash(inodeno_t ino, inodeno_t dirino, const char *name);
-  int lookup_ino(inodeno_t ino);
+  int lookup_hash(VolumeRef &v, inodeno_t ino, inodeno_t dirino, const char *name);
+  int lookup_ino(VolumeRef &v, inodeno_t ino);
 
   int chunk_file(string &filename);
 };

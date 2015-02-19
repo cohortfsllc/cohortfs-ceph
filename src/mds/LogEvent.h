@@ -105,7 +105,7 @@ protected:
   /*** recovery ***/
   /* replay() - replay given event.  this is idempotent.
    */
-  virtual void replay(MDS *m) { assert(0); }
+  virtual void replay(MDS *m, VolumeRef &v) { assert(0); }
 
 
 };

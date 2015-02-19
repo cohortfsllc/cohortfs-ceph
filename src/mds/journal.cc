@@ -882,7 +882,7 @@ void EMetaBlob::generate_test_instances(list<EMetaBlob*>& ls)
   ls.push_back(new EMetaBlob());
 }
 
-void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
+void EMetaBlob::replay(MDS *mds, VolumeRef &v, LogSegment *logseg, MDSlaveUpdate *slaveup)
 {
   CephContext* cct = mds->cct;
   dout(10) << "EMetaBlob.replay " << lump_map.size() << " dirlumps by " << client_name << dendl;
@@ -942,7 +942,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
       CInode *diri = mds->mdcache->get_inode((*lp).ino);
       if (!diri) {
 	if (MDS_INO_IS_BASE(lp->ino)) {
-	  diri = mds->mdcache->create_system_inode(lp->ino, S_IFDIR|0755);
+	  diri = mds->mdcache->create_system_inode(v, lp->ino, S_IFDIR|0755);
 	  dout(10) << "EMetaBlob.replay created base " << *diri << dendl;
 	} else {
 	  dout(0) << "EMetaBlob.replay missing dir ino	" << (*lp).ino << dendl;
@@ -1358,7 +1358,7 @@ void ESession::update_segment()
     _segment->inotablev = inotablev;
 }
 
-void ESession::replay(MDS *mds)
+void ESession::replay(MDS *mds, VolumeRef &v)
 {
   CephContext* cct = mds->cct;
   if (mds->sessionmap.version >= cmapv) {
@@ -1501,7 +1501,7 @@ void ESessions::update_segment()
   _segment->sessionmapv = cmapv;
 }
 
-void ESessions::replay(MDS *mds)
+void ESessions::replay(MDS *mds, VolumeRef &v)
 {
   CephContext* cct = mds->cct;
   if (mds->sessionmap.version >= cmapv) {
@@ -1571,7 +1571,7 @@ void ETableServer::update_segment()
   _segment->tablev[table] = version;
 }
 
-void ETableServer::replay(MDS *mds)
+void ETableServer::replay(MDS *mds, VolumeRef &v)
 {
   CephContext* cct = mds->cct;
   MDSTableServer *server = mds->get_table_server(table);
@@ -1649,7 +1649,7 @@ void ETableClient::generate_test_instances(list<ETableClient*>& ls)
   ls.push_back(new ETableClient());
 }
 
-void ETableClient::replay(MDS *mds)
+void ETableClient::replay(MDS *mds, VolumeRef &v)
 {
   CephContext *cct = mds->cct;
   dout(10) << " ETableClient.replay " << get_mdstable_name(table)
@@ -1719,10 +1719,10 @@ void EUpdate::update_segment()
     _segment->uncommitted_masters.insert(reqid);
 }
 
-void EUpdate::replay(MDS *mds)
+void EUpdate::replay(MDS *mds, VolumeRef &v)
 {
   CephContext* cct = mds->cct;
-  metablob.replay(mds, _segment);
+  metablob.replay(mds, v, _segment);
 
   if (had_slaves) {
     dout(10) << "EUpdate.replay " << reqid << " had slaves, expecting a matching ECommitted" << dendl;
@@ -1798,11 +1798,11 @@ void EOpen::update_segment()
   // ??
 }
 
-void EOpen::replay(MDS *mds)
+void EOpen::replay(MDS *mds, VolumeRef &v)
 {
   CephContext* cct = mds->cct;
   dout(10) << "EOpen.replay " << dendl;
-  metablob.replay(mds, _segment);
+  metablob.replay(mds, v, _segment);
 
   // note which segments inodes belong to, so we don't have to start rejournaling them
   for (vector<inodeno_t>::iterator p = inos.begin();
@@ -1821,7 +1821,7 @@ void EOpen::replay(MDS *mds)
 // -----------------------
 // ECommitted
 
-void ECommitted::replay(MDS *mds)
+void ECommitted::replay(MDS *mds, VolumeRef &v)
 {
   CephContext* cct = mds->cct;
   if (mds->mdcache->uncommitted_masters.count(reqid)) {
@@ -2093,7 +2093,7 @@ void ESlaveUpdate::generate_test_instances(list<ESlaveUpdate*>& ls)
 }
 
 
-void ESlaveUpdate::replay(MDS *mds)
+void ESlaveUpdate::replay(MDS *mds, VolumeRef &v)
 {
   CephContext* cct = mds->cct;
   MDSlaveUpdate *su;
@@ -2102,7 +2102,7 @@ void ESlaveUpdate::replay(MDS *mds)
     dout(10) << "ESlaveUpdate.replay prepare " << reqid << " for mds." << master
 	     << ": applying commit, saving rollback info" << dendl;
     su = new MDSlaveUpdate(origop, rollback, _segment->slave_updates);
-    commit.replay(mds, _segment, su);
+    commit.replay(mds, v, _segment, su);
     mds->mdcache->add_uncommitted_slave_update(reqid, master, su);
     break;
 
@@ -2120,7 +2120,7 @@ void ESlaveUpdate::replay(MDS *mds)
   case ESlaveUpdate::OP_ROLLBACK:
     dout(10) << "ESlaveUpdate.replay abort " << reqid << " for mds." << master
 	     << ": applying rollback commit blob" << dendl;
-    commit.replay(mds, _segment);
+    commit.replay(mds, v, _segment);
     su = mds->mdcache->get_uncommitted_slave_update(reqid, master);
     if (su)
       mds->mdcache->finish_uncommitted_slave_update(reqid, master);
@@ -2194,7 +2194,7 @@ void ESubtreeMap::generate_test_instances(list<ESubtreeMap*>& ls)
   ls.push_back(new ESubtreeMap());
 }
 
-void ESubtreeMap::replay(MDS *mds)
+void ESubtreeMap::replay(MDS *mds, VolumeRef &v)
 {
   CephContext* cct = mds->cct;
   if (expire_pos && expire_pos > mds->mdlog->journaler->get_expire_pos())
@@ -2298,7 +2298,7 @@ void ESubtreeMap::replay(MDS *mds)
 
   // first, stick the spanning tree in my cache
   //metablob.print(*_dout);
-  metablob.replay(mds, _segment);
+  metablob.replay(mds, v, _segment);
 
   // restore import/export maps
   for (map<dirfrag_t, vector<dirfrag_t> >::iterator p = subtrees.begin();
@@ -2325,7 +2325,7 @@ void ESubtreeMap::replay(MDS *mds)
 // -----------------------
 // EFragment
 
-void EFragment::replay(MDS *mds)
+void EFragment::replay(MDS *mds, VolumeRef &v)
 {
   CephContext* cct = mds->cct;
   dout(10) << "EFragment.replay " << op_name(op) << " " << ino << " " << basefrag << " by " << bits << dendl;
@@ -2371,7 +2371,7 @@ void EFragment::replay(MDS *mds)
     assert(0);
   }
 
-  metablob.replay(mds, _segment);
+  metablob.replay(mds, v, _segment);
   if (in && cct->_conf->mds_debug_frag)
     in->verify_dirfrags();
 }
@@ -2449,11 +2449,11 @@ void dirfrag_rollback::decode(bufferlist::iterator &bl)
 // -----------------------
 // EExport
 
-void EExport::replay(MDS *mds)
+void EExport::replay(MDS *mds, VolumeRef &v)
 {
   CephContext* cct = mds->cct;
   dout(10) << "EExport.replay " << base << dendl;
-  metablob.replay(mds, _segment);
+  metablob.replay(mds, v, _segment);
 
   CDir *dir = mds->mdcache->get_dirfrag(base);
   assert(dir);
@@ -2524,12 +2524,12 @@ void EImportStart::update_segment()
   _segment->sessionmapv = cmapv;
 }
 
-void EImportStart::replay(MDS *mds)
+void EImportStart::replay(MDS *mds, VolumeRef &v)
 {
   CephContext* cct = mds->cct;
   dout(10) << "EImportStart.replay " << base << " bounds " << bounds << dendl;
   //metablob.print(*_dout);
-  metablob.replay(mds, _segment);
+  metablob.replay(mds, v, _segment);
 
   // put in ambiguous import list
   mds->mdcache->add_ambiguous_import(base, bounds);
@@ -2598,7 +2598,7 @@ void EImportStart::generate_test_instances(list<EImportStart*>& ls)
 // -----------------------
 // EImportFinish
 
-void EImportFinish::replay(MDS *mds)
+void EImportFinish::replay(MDS *mds, VolumeRef &v)
 {
   CephContext* cct = mds->cct;
   if (mds->mdcache->have_ambiguous_import(base)) {
@@ -2681,7 +2681,7 @@ void EResetJournal::generate_test_instances(list<EResetJournal*>& ls)
   ls.push_back(new EResetJournal());
 }
 
-void EResetJournal::replay(MDS *mds)
+void EResetJournal::replay(MDS *mds, VolumeRef &v)
 {
   CephContext* cct = mds->cct;
   dout(1) << "EResetJournal" << dendl;

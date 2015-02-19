@@ -351,6 +351,7 @@ void Migrator::export_try_cancel(CDir *dir, bool notify_peer)
 
 void Migrator::handle_mds_failure_or_stop(int who)
 {
+  VolumeRef volume(mds->get_metadata_volume());
   ldout(mds->cct, 5) << "handle_mds_failure_or_stop mds." << who << dendl;
 
   // check my exports
@@ -502,7 +503,7 @@ void Migrator::handle_mds_failure_or_stop(int who)
       case IMPORT_FINISHING:
 	assert(dir);
 	ldout(mds->cct, 10) << "import state=finishing : finishing import on " << *dir << dendl;
-	import_finish(dir, true);
+	import_finish(volume, dir, true);
 	break;
 
       case IMPORT_ABORTING:
@@ -2521,6 +2522,7 @@ void Migrator::import_logged_start(dirfrag_t df, CDir *dir, int from,
 /* This function DOES put the passed message before returning*/
 void Migrator::handle_export_finish(MExportDirFinish *m)
 {
+  VolumeRef v = mds->get_metadata_volume();
   CDir *dir = cache->get_dirfrag(m->get_dirfrag());
   assert(dir);
   ldout(mds->cct, 7) << "handle_export_finish on " << *dir << (m->is_last() ? " last" : "") << dendl;
@@ -2529,12 +2531,12 @@ void Migrator::handle_export_finish(MExportDirFinish *m)
   assert(it != import_state.end());
   assert(it->second.tid == m->get_tid());
 
-  import_finish(dir, false, m->is_last());
+  import_finish(v, dir, false, m->is_last());
 
   m->put();
 }
 
-void Migrator::import_finish(CDir *dir, bool notify, bool last)
+void Migrator::import_finish(VolumeRef &v, CDir *dir, bool notify, bool last)
 {
   ldout(mds->cct, 7) << "import_finish on " << *dir << dendl;
 
@@ -2637,7 +2639,7 @@ void Migrator::import_finish(CDir *dir, bool notify, bool last)
 
   // did i just import mydir?
   if (dir->ino() == MDS_INO_MDSDIR(mds->whoami))
-    cache->populate_mydir();
+    cache->populate_mydir(v);
 
   // is it empty?
   if (dir->get_num_head_items() == 0 &&

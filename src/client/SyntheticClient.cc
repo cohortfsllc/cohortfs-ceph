@@ -863,8 +863,9 @@ int SyntheticClient::run()
 	string diname = get_sarg(0);
 	sscanf(diname.c_str(), "%llx", (long long unsigned*)&dirino.val);
 	string name = get_sarg(0);
+	VolumeRef mvol;	// XXX should look this up...
 	if (run_me()) {
-	  lookup_hash(ino, dirino, name.c_str());
+	  lookup_hash(mvol, ino, dirino, name.c_str());
 	}
       }
       break;
@@ -873,8 +874,9 @@ int SyntheticClient::run()
 	inodeno_t ino;
 	string iname = get_sarg(0);
 	sscanf(iname.c_str(), "%llx", (long long unsigned*)&ino.val);
+	VolumeRef mvol;	// XXX should look this up...
 	if (run_me()) {
-	  lookup_ino(ino);
+	  lookup_ino(mvol, ino);
 	}
       }
       break;
@@ -3445,16 +3447,16 @@ void SyntheticClient::import_find(const char *base, const char *find, bool data)
 }
 
 
-int SyntheticClient::lookup_hash(inodeno_t ino, inodeno_t dirino, const char *name)
+int SyntheticClient::lookup_hash(VolumeRef &v, inodeno_t ino, inodeno_t dirino, const char *name)
 {
-  int r = client->lookup_hash(ino, dirino, name);
+  int r = client->lookup_hash(v, ino, dirino, name);
   ldout(client->cct, 0) << "lookup_hash(" << ino << ", #" << dirino << "/" << name << ") = " << r << dendl;
   return r;
 }
 
-int SyntheticClient::lookup_ino(inodeno_t ino)
+int SyntheticClient::lookup_ino(VolumeRef &v, inodeno_t ino)
 {
-  int r = client->lookup_ino(ino);
+  int r = client->lookup_ino(v, ino);
   ldout(client->cct, 0) << "lookup_ino(" << ino << ") = " << r << dendl;
   return r;
 }

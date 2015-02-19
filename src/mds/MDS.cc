@@ -1096,6 +1096,7 @@ public:
 
 void MDS::boot_start(int step, int r)
 {
+  VolumeRef v = get_metadata_volume();
   if (r < 0) {
     if (is_standby_replay() && (r == -EAGAIN)) {
       dout(0) << "boot_start encountered an error EAGAIN"
@@ -1118,6 +1119,7 @@ void MDS::boot_start(int step, int r)
       C_GatherBuilder gather(new C_MDS_BootStart(this, 2));
       dout(2) << "boot_start " << step << ": opening inotable" << dendl;
       inotable->load(gather.new_sub());
+      VolumeRef v = get_metadata_volume();
 
       dout(2) << "boot_start " << step << ": opening sessionmap" << dendl;
       sessionmap.load(gather.new_sub());
@@ -1129,7 +1131,7 @@ void MDS::boot_start(int step, int r)
       }
 
       dout(2) << "boot_start " << step << ": opening mds log" << dendl;
-      mdlog->open(gather.new_sub());
+      mdlog->open(v, gather.new_sub());
       gather.activate();
     }
     break;
@@ -1158,7 +1160,7 @@ void MDS::boot_start(int step, int r)
   case 3:
     if (is_any_replay()) {
       dout(2) << "boot_start " << step << ": replaying mds log" << dendl;
-      mdlog->replay(new C_MDS_BootStart(this, 4));
+      mdlog->replay(v, new C_MDS_BootStart(this, 4));
       break;
     } else {
       dout(2) << "boot_start " << step << ": positioning at end of old mds log" << dendl;
@@ -1173,18 +1175,18 @@ void MDS::boot_start(int step, int r)
     }
     step++;
 
-    starting_done();
+    starting_done(v);
     break;
   }
 }
 
-void MDS::starting_done()
+void MDS::starting_done(VolumeRef &v)
 {
   dout(3) << "starting_done" << dendl;
   assert(is_starting());
   request_state(MDSMap::STATE_ACTIVE);
 
-  mdcache->open_root();
+  mdcache->open_root(v);
 
   // start new segment
   mdlog->start_new_segment(0);
@@ -1420,10 +1422,11 @@ void MDS::clientreplay_done()
 
 void MDS::active_start()
 {
+  VolumeRef v = get_metadata_volume();
   dout(1) << "active_start" << dendl;
 
   if (last_state == MDSMap::STATE_CREATING)
-    mdcache->open_root();
+    mdcache->open_root(v);
 
   mdcache->clean_open_file_lists();
   mdcache->export_remaining_imported_caps();
