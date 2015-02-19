@@ -1767,6 +1767,11 @@ if (HAVE_LTTNG)
   target_link_libraries(lttng_stream_test common global)
 endif(HAVE_LTTNG)
 
+# test_threadpool
+add_executable(test_threadpool test_threadpool.cc)
+target_link_libraries(test_threadpool PRIVATE global ${UNITTEST_LIBS})
+set_target_properties(test_threadpool PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
+
 # test_filenamer
 add_executable(test_filenamer test_filenamer.cc)
 target_link_libraries(test_filenamer os common ${UNITTEST_LIBS})
