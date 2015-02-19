@@ -65,6 +65,7 @@ public:
   class Object : public cohort::lru::Object {
   private:
     typedef bi::link_mode<bi::safe_link> link_mode;
+
 #if defined(OBJCACHE_AVL)
     typedef bi::avl_set_member_hook<link_mode> hook_type;
 #else
@@ -121,9 +122,13 @@ public:
 
     typedef bi::member_hook<Object, hook_type, &Object::oid_hook> OidHook;
 
+#if defined(OBJCACHE_AVL)
+    typedef bi::avltree<Object, bi::compare<OidLT>, OidHook,
+			bi::constant_time_size<true> > OidTree;
+#else
     typedef bi::rbtree<Object, bi::compare<OidLT>, OidHook,
 		       bi::constant_time_size<true> > OidTree;
-
+#endif
     typedef cohort::lru::TreeX<
       Object, OidTree, OidLT, OidEQ, hoid_t, n_partitions, cache_size>
     ObjCache;
