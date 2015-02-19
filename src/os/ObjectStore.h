@@ -95,6 +95,7 @@ public:
   class Object : public cohort::lru::Object {
   private:
     typedef bi::link_mode<bi::safe_link> link_mode;
+
 #if defined(OBJCACHE_AVL)
     typedef bi::avl_set_member_hook<link_mode> hook_type;
 #else
@@ -138,17 +139,17 @@ public:
       // for internal ordering
       bool operator()(const Object& lhs,  const Object& rhs) const
 	{
-	  return ((lhs.hk < rhs.hk) && (lhs.oid < rhs.oid));
+	  return ((lhs.hk < rhs.hk) || (lhs.oid < rhs.oid));
 	}
 
       bool operator()(const ObjKeyType k, const Object& o) const
 	{
-	  return ((std::get<0>(k) < o.hk) && (std::get<1>(k) < o.oid));
+	  return ((std::get<0>(k) < o.hk) || (std::get<1>(k) < o.oid));
 	}
 
       bool operator()(const Object& o, const ObjKeyType k) const
 	{
-	  return ((o.hk < std::get<0>(k)) && (o.oid < std::get<1>(k)));
+	  return ((o.hk < std::get<0>(k)) || (o.oid < std::get<1>(k)));
 	}
     };
 
@@ -170,9 +171,13 @@ public:
 
     typedef bi::member_hook<Object, hook_type, &Object::oid_hook> OidHook;
 
+#if defined(OBJCACHE_AVL)
+    typedef bi::avltree<Object, bi::compare<OidLT>, OidHook,
+			bi::constant_time_size<true> > OidTree;
+#else
     typedef bi::rbtree<Object, bi::compare<OidLT>, OidHook,
 		       bi::constant_time_size<true> > OidTree;
-
+#endif
     typedef cohort::lru::TreeX<
       Object, OidTree, OidLT, OidEQ, ObjKeyType, n_partitions, cache_size>
     ObjCache;
