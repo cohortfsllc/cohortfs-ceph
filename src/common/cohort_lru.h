@@ -280,23 +280,29 @@ namespace cohort {
 	lat.mtx = &lat.p->mtx;
 	if (flags & FLAG_LOCK)
 	  lat.mtx->lock();
-	slot = hk % CSZ;
-	v = lat.p->cache[slot];
-	if (v) {
-	  if (CEQ()(*v, k)) {
-	    if (flags & (FLAG_LOCK|FLAG_UNLOCK))
-	      lat.mtx->unlock();
-	    std::cout << "FTW CACHE_HIT FSObject " << (void*) v << std::endl;
-	    return v;
+	if (CSZ) { /* template specialize? */
+	  slot = hk % CSZ;
+	  v = lat.p->cache[slot];
+	  if (v) {
+	    if (CEQ()(*v, k)) {
+	      if (flags & (FLAG_LOCK|FLAG_UNLOCK))
+		lat.mtx->unlock();
+	      std::cout << "FTW CACHE_HIT FSObject " << (void*) v << std::endl;
+	      return v;
+	    }
+	    v = nullptr;
 	  }
+	} else {
 	  v = nullptr;
 	}
 	check_result r = lat.p->tr.insert_unique_check(
 	  k, CLT(), lat.commit_data);
 	if (! r.second /* !insertable (i.e., !found) */) {
 	  v = &(*(r.first));
-	  /* fill cache slot at hk */
-	  lat.p->cache[slot] = v;
+	  if (CSZ) {
+	    /* fill cache slot at hk */
+	    lat.p->cache[slot] = v;
+	  }
 	}
 	if (flags & (FLAG_LOCK|FLAG_UNLOCK))
 	  lat.mtx->unlock();
