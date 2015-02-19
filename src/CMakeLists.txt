@@ -247,6 +247,7 @@ set(libcommon_files
   cohort/ErasureCPlacer.cc
   cohort/StripedPlacer.cc
   osdc/Objecter.cc
+  common/ThreadPool.cc
   ${arch_files}
   ${auth_files}
   ${xiomsg_files}
