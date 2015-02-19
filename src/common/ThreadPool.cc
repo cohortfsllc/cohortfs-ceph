@@ -34,27 +34,25 @@ int ThreadPool::spawn(Job job)
 
 int ThreadPool::dispatch(Job job)
 {
-  // dispatch to the first idle thread
-  auto i = idle.begin();
-
-  i->mutex.lock();
-  assert(!i->job);
-  i->job = job;
-  i->cond.notify_one();
-  i->mutex.unlock();
-
-  idle.erase(i);
+  // dispatch to the first idle worker
+  auto worker = idle.begin();
+  {
+    std::lock_guard<std::mutex> lock(worker->mutex);
+    assert(!worker->job);
+    worker->job = job;
+    worker->cond.notify_one();
+  }
+  idle.erase(worker);
   return 0;
 }
 
 ThreadPool::Job ThreadPool::wait(Worker &worker)
 {
   Job job;
-  unique_lock lk(mutex);
 
-  if (flags & FLAG_SHUTDOWN) {
+  std::unique_lock<std::mutex> pool_lock(mutex);
+  if (flags & FLAG_SHUTDOWN)
     return job;
-  }
 
   // take a job from the queue
   if (!jobs.empty()) {
@@ -66,25 +64,21 @@ ThreadPool::Job ThreadPool::wait(Worker &worker)
   // enter the idle state
   idle.push_back(worker);
 
-  unique_lock worker_lk(worker.mutex);
+  std::unique_lock<std::mutex> worker_lock(worker.mutex);
   assert(!worker.job);
-  worker.job = Job();
-  lk.unlock();
+  pool_lock.unlock();
 
   // wait for a signal from dispatch()
   std::cv_status r;
   if (flags & FLAG_SHUTDOWN)
     r = std::cv_status::timeout;
-  else {
-    ceph::mono_time timeout = ceph::mono_clock::now() +
-      ceph::span_from_double(idle_timeout.tv_sec); /* XXX */
-    r = cond.wait_until(worker_lk, timeout);
-  }
+  else
+    r = worker.cond.wait_for(worker_lock, idle_timeout);
 
   if (r == std::cv_status::timeout) {
-    worker_lk.unlock();
-    unique_lock pool_lock(mutex);
-    worker_lk.lock();
+    worker_lock.unlock();
+    pool_lock.lock();
+    worker_lock.lock();
 
     if (worker.job) // signal raced with locks
       job.swap(worker.job);
@@ -95,7 +89,6 @@ ThreadPool::Job ThreadPool::wait(Worker &worker)
 
   // signaled
   job.swap(worker.job);
-  worker.mutex.unlock();
   return job;
 }
 
@@ -110,7 +103,7 @@ void ThreadPool::worker_entry(Worker *worker)
     job = wait(*worker);
   } while (job);
 
-  unique_lock lock(mutex);
+  std::lock_guard<std::mutex> lock(mutex);
   workers.erase(workers.iterator_to(*worker));
   cond.notify_one();
 
@@ -129,12 +122,14 @@ void ThreadPool::dispose(std::thread &&thread)
 
 void ThreadPool::shutdown()
 {
-  unique_lock lk(mutex);
+  std::unique_lock<std::mutex> pool_lock(mutex);
   flags |= FLAG_SHUTDOWN;
 
   // signal idle threads to shut down
-  for (auto i = idle.begin(); i != idle.end(); ++i)
-    i->cond.notify_all(); // nb., we don't hold i->mutex
+  for (auto &worker : idle) {
+    std::lock_guard<std::mutex> worker_lock(worker.mutex);
+    worker.cond.notify_one();
+  }
 
   // finish jobs in queue
   while (!jobs.empty()) {
@@ -143,10 +138,10 @@ void ThreadPool::shutdown()
   }
 
   // join workers
-  ceph::mono_time timeout = ceph::mono_clock::now() + ceph::span_from_double(1);
+  ceph::timespan wait = 1s;
   while (!workers.empty()) {
-    cond.wait_until(lk, timeout);
-    timeout = ceph::mono_clock::now() + ceph::span_from_double(5);
+    cond.wait_for(pool_lock, wait);
+    wait = 5s;
   }
 
   if (graveyard.joinable())

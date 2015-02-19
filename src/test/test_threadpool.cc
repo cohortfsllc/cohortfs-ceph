@@ -21,8 +21,6 @@
 
 CephContext *cct;
 
-using namespace cohort;
-
 // test submit arguments
 namespace {
 int submit_a = 0;
@@ -53,57 +51,85 @@ TEST(ThreadPool, Submit)
 // test that new threads are spawned when none are idle
 TEST(ThreadPool, Spawn)
 {
+  pthread_t a, b, c;
+
   std::mutex mutex;
   std::condition_variable cond;
   bool block = true;
 
-  auto fn = [&]() {
-    ThreadPool::unique_lock lock(mutex);
+  auto fn = [&](pthread_t &tid) {
+    std::unique_lock<std::mutex> lock(mutex);
     while (block)
       cond.wait(lock);
+    tid = pthread_self();
   };
 
   // queue up multiple jobs, spawning a new worker for each
   cohort::ThreadPool pool(cct, 0);
-  ASSERT_EQ(0, pool.submit(fn));
-  ASSERT_EQ(0, pool.submit(fn));
-  ASSERT_EQ(0, pool.submit(fn));
+  ASSERT_EQ(0, pool.submit(fn, std::ref(a)));
+  ASSERT_EQ(0, pool.submit(fn, std::ref(b)));
+  ASSERT_EQ(0, pool.submit(fn, std::ref(c)));
 
   // unblock the jobs
-  ThreadPool::unique_lock lock(mutex); /* LOCKED */
-  block = false;
-  cond.notify_all();
-  lock.unlock();
-
+  {
+    std::lock_guard<std::mutex> lock(mutex);
+    block = false;
+    cond.notify_all();
+  }
   pool.shutdown();
+
+  // make sure each tid is different
+  ASSERT_TRUE(a != b);
+  ASSERT_TRUE(b != c);
+  ASSERT_TRUE(c != a);
+  ASSERT_TRUE(a != pthread_self());
+  ASSERT_TRUE(b != pthread_self());
+  ASSERT_TRUE(c != pthread_self());
 }
 
 // test that a single worker will take more jobs from the queue
 TEST(ThreadPool, Wait)
 {
-  std::mutex mutex;
-  std::condition_variable cond;
-  bool block = true;
+  pthread_t a, b, c;
 
-  auto fn = [&]() {
-    ThreadPool::unique_lock lock(mutex);
+  std::mutex mutex;
+  std::condition_variable cond_block, cond_done;
+  bool block = true;
+  int jobs_done = 0;
+
+  auto fn = [&](pthread_t &tid) {
+    std::unique_lock<std::mutex> lock(mutex);
     while (block)
-      cond.wait(lock);
+      cond_block.wait(lock);
+
+    tid = pthread_self();
+    ++jobs_done;
+    cond_done.notify_all();
   };
 
   // queue up multiple jobs for a single worker
   cohort::ThreadPool pool(cct, 1);
-  ASSERT_EQ(0, pool.submit(fn));
-  ASSERT_EQ(0, pool.submit(fn));
-  ASSERT_EQ(0, pool.submit(fn));
+  ASSERT_EQ(0, pool.submit(fn, std::ref(a)));
+  ASSERT_EQ(0, pool.submit(fn, std::ref(b)));
+  ASSERT_EQ(0, pool.submit(fn, std::ref(c)));
 
   // unblock the jobs
-  ThreadPool::unique_lock lock(mutex); /* LOCKED */
-  block = false;
-  cond.notify_all();
-  lock.unlock();
-
+  {
+    std::lock_guard<std::mutex> lock(mutex);
+    block = false;
+    cond_block.notify_all();
+  }
+  // wait for them to complete (so shutdown() thread doesn't handle any)
+  {
+    std::unique_lock<std::mutex> lock(mutex);
+    while (jobs_done < 3)
+      cond_done.wait(lock);
+  }
   pool.shutdown();
+
+  // make sure all tids are the same
+  ASSERT_EQ(a, b);
+  ASSERT_EQ(b, c);
 }
 
 // test that submit will dispatch jobs to idle workers
@@ -114,7 +140,7 @@ TEST(ThreadPool, Dispatch)
   bool block = true;
 
   auto fn = [&]() {
-    ThreadPool::unique_lock lock(mutex);
+    std::lock_guard<std::mutex> lock(mutex);
     block = false;
     cond.notify_all();
   };
@@ -124,11 +150,11 @@ TEST(ThreadPool, Dispatch)
   ASSERT_EQ(0, pool.submit(fn));
 
   // wait for the job to complete (worker returns to idle state)
-  ThreadPool::unique_lock lock(mutex); /* LOCKED */
-  while (block)
-    cond.wait(lock);
-  lock.unlock();
-
+  {
+    std::unique_lock<std::mutex> lock(mutex);
+    while (block)
+      cond.wait(lock);
+  }
   // submit another job
   ASSERT_EQ(0, pool.submit([](){}));
   pool.shutdown();
@@ -139,19 +165,12 @@ TEST(ThreadPool, IdleTimeout)
 {
   pthread_t a, b;
 
-  std::mutex mutex;
-  std::condition_variable cond;
-
-  const struct timespec timeout{0, 20000000ul}; // 20ms
-  cohort::ThreadPool pool(cct, 1, timeout);
+  cohort::ThreadPool pool(cct, 1, 5ms);
 
   ASSERT_EQ(0, pool.submit([&a]() { a = pthread_self(); }));
 
   // sleep to make sure thread times out
-  ThreadPool::unique_lock lock(mutex);
-  ceph::mono_time wait = ceph::mono_clock::now() +
-    std::chrono::milliseconds(50);
-  cond.wait_until(lock, wait);
+  std::this_thread::sleep_for(50ms);
 
   ASSERT_EQ(0, pool.submit([&b]() { b = pthread_self(); }));
   pool.shutdown();
