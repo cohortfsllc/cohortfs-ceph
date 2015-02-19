@@ -1754,3 +1754,8 @@ if (HAVE_LTTNG)
   add_executable(lttng_stream_test lttng_stream_test.cc)
   target_link_libraries(lttng_stream_test common global)
 endif(HAVE_LTTNG)
+
+# test_threadpool
+add_executable(test_threadpool test_threadpool.cc)
+target_link_libraries(test_threadpool PRIVATE global ${UNITTEST_LIBS})
+set_target_properties(test_threadpool PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
