@@ -420,6 +420,8 @@ protected:
   inodeno_t get_root_ino();
   Inode *get_root();
 
+  void inode_2_volume(Inode *in, VolumeRef &v);
+
   int init()  WARN_UNUSED_RESULT;
   void shutdown();
 
@@ -707,8 +709,8 @@ public:
   // file ops
   int mknod(const char *path, mode_t mode, dev_t rdev=0);
   int open(const char *path, int flags, mode_t mode=0);
-  int lookup_hash(inodeno_t ino, inodeno_t dirino, const char *name);
-  int lookup_ino(inodeno_t ino, Inode **inode=NULL);
+  int lookup_hash(VolumeRef &v, inodeno_t ino, inodeno_t dirino, const char *name);
+  int lookup_ino(VolumeRef &v, inodeno_t ino, Inode **inode=NULL);
   int lookup_parent(Inode *in, Inode **parent=NULL);
   int lookup_name(Inode *in, Inode *parent);
   int close(int fd);

@@ -13,9 +13,9 @@
  */
 
 #include "common/config.h"
-#include "LogEvent.h"
 
 #include "MDS.h"
+#include "LogEvent.h"
 
 // events i know of
 #include "events/ESubtreeMap.h"

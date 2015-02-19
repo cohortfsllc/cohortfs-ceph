@@ -463,12 +463,13 @@ void MDCache::_create_system_file_finish(MutationRef& mut, CDentry *dn, version_
 
 struct C_MDS_RetryOpenRoot : public Context {
   MDCache *cache;
-  C_MDS_RetryOpenRoot(MDCache *c) : cache(c) {}
+  VolumeRef vol;
+  C_MDS_RetryOpenRoot(MDCache *c, VolumeRef &v) : cache(c), vol(v) {}
   void finish(int r) {
     if (r < 0)
       cache->mds->suicide();
     else
-      cache->open_root();
+      cache->open_root(vol);
   }
 };
 
@@ -494,7 +495,7 @@ void MDCache::open_root(VolumeRef &v)
   dout(10) << "open_root" << dendl;
 
   if (!root) {
-    open_root_inode(new C_MDS_RetryOpenRoot(this));
+    open_root_inode(v, new C_MDS_RetryOpenRoot(this, v));
     return;
   }
   if (mds->whoami == mds->mdsmap->get_root()) {
@@ -504,28 +505,28 @@ void MDCache::open_root(VolumeRef &v)
     if (!rootdir->is_subtree_root())
       adjust_subtree_auth(rootdir, mds->whoami);
     if (!rootdir->is_complete()) {
-      rootdir->fetch(new C_MDS_RetryOpenRoot(this));
+      rootdir->fetch(new C_MDS_RetryOpenRoot(this, v));
       return;
     }
   } else {
     assert(!root->is_auth());
     CDir *rootdir = root->get_dirfrag(frag_t());
     if (!rootdir) {
-      discover_dir_frag(root, frag_t(), new C_MDS_RetryOpenRoot(this));
+      discover_dir_frag(root, frag_t(), new C_MDS_RetryOpenRoot(this, v));
       return;
     }
   }
 
   if (!myin) {
     CInode *in = create_system_inode(v, MDS_INO_MDSDIR(mds->whoami), S_IFDIR|0755);  // initially inaccurate!
-    in->fetch(new C_MDS_RetryOpenRoot(this));
+    in->fetch(new C_MDS_RetryOpenRoot(this, v));
     return;
   }
   CDir *mydir = myin->get_or_open_dirfrag(this, frag_t());
   assert(mydir);
   adjust_subtree_auth(mydir, mds->whoami);
 
-  populate_mydir();
+  populate_mydir(v);
 }
 
 void MDCache::populate_mydir(VolumeRef &v)
@@ -537,7 +538,7 @@ void MDCache::populate_mydir(VolumeRef &v)
   dout(10) << "populate_mydir " << *mydir << dendl;
 
   if (!mydir->is_complete()) {
-    mydir->fetch(new C_MDS_RetryOpenRoot(this));
+    mydir->fetch(new C_MDS_RetryOpenRoot(this, v));
     return;
   }
 
@@ -553,7 +554,7 @@ void MDCache::populate_mydir(VolumeRef &v)
 
     if (!straydn || !straydn->get_linkage()->get_inode()) {
       _create_system_file(mydir, name.str().c_str(), create_system_inode(v, MDS_INO_STRAY(mds->whoami, i), S_IFDIR),
-			  new C_MDS_RetryOpenRoot(this));
+			  new C_MDS_RetryOpenRoot(this, v));
       return;
     }
     assert(straydn);
@@ -575,7 +576,7 @@ void MDCache::populate_mydir(VolumeRef &v)
       if (!dir)
 	dir = strays[i]->get_or_open_dirfrag(this, fg);
       if (dir->get_version() == 0) {
-	dir->fetch(new C_MDS_RetryOpenRoot(this));
+	dir->fetch(new C_MDS_RetryOpenRoot(this, v));
 	return;
       }
     }
@@ -586,7 +587,7 @@ void MDCache::populate_mydir(VolumeRef &v)
   CDentry *jdn = mydir->lookup(jname);
   if (!jdn || !jdn->get_linkage()->get_inode()) {
     _create_system_file(mydir, jname.c_str(), create_system_inode(v, MDS_INO_LOG_OFFSET + mds->whoami, S_IFREG),
-			new C_MDS_RetryOpenRoot(this));
+			new C_MDS_RetryOpenRoot(this, v));
     return;
   }
 
@@ -2373,6 +2374,7 @@ void MDCache::set_recovery_set(set<int>& s)
  */
 void MDCache::handle_resolve(MMDSResolve *m)
 {
+  VolumeRef volume(mds->get_metadata_volume());
   dout(7) << "handle_resolve from " << m->get_source() << dendl;
   int from = m->get_source().num();
 
@@ -2407,7 +2409,7 @@ void MDCache::handle_resolve(MMDSResolve *m)
     for (map<metareqid_t, bufferlist>::iterator p = m->slave_requests.begin();
 	 p != m->slave_requests.end();
 	 ++p) {
-      if (uncommitted_masters.count(p->first)) {  //mds->sessionmap.have_completed_request(p->first)) {
+      if (uncommitted_masters.count(p->first)) {  //mds->sessionmap.have_completed_request(p->first)
 	// COMMIT
 	dout(10) << " ambiguous slave request " << *p << " will COMMIT" << dendl;
 	ack->add_commit(p->first);
@@ -2501,7 +2503,7 @@ void MDCache::handle_resolve(MMDSResolve *m)
 	  migrator->import_reverse(dir);
 	} else {
 	  dout(7) << "ambiguous import succeeded on " << *dir << dendl;
-	  migrator->import_finish(dir, true);
+	  migrator->import_finish(volume, dir, true);
 	}
 	my_ambiguous_imports.erase(p);	// no longer ambiguous.
       }

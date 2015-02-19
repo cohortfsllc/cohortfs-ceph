@@ -2,11 +2,13 @@
 // vim: ts=8 sw=2 smarttab
 
 #include "include/types.h"
+#include "vol/Volume.h"
 #include "client/MetaRequest.h"
 #include "client/Dentry.h"
 #include "client/Inode.h"
 #include "messages/MClientReply.h"
 #include "common/Formatter.h"
+
 
 void MetaRequest::dump(Formatter *f) const
 {

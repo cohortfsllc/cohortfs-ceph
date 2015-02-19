@@ -38,6 +38,7 @@
 MDLog::~MDLog()
 {
   if (journaler) { delete journaler; journaler = 0; }
+  if (replay_thread) { delete replay_thread; replay_thread = 0; }
 }
 
 
@@ -96,10 +97,10 @@ void MDLog::create(VolumeRef &v, Context *c)
   journaler->write_head(c);
 }
 
-void MDLog::open(Context *c)
+void MDLog::open(VolumeRef &v, Context *c)
 {
   ldout(mds->cct, 5) << "open discovering log bounds" << dendl;
-  init_journaler();
+  init_journaler(v);
   journaler->recover(c);
 
   // either append() or replay() will follow.
@@ -396,7 +397,7 @@ void MDLog::_expired(LogSegment *ls)
 
 
 
-void MDLog::replay(Context *c)
+void MDLog::replay(VolumeRef &v, Context *c)
 {
   assert(journaler->is_active());
   assert(journaler->is_readonly());
@@ -421,8 +422,12 @@ void MDLog::replay(Context *c)
   assert(num_events == 0 || already_replayed);
   already_replayed = true;
 
-  replay_thread.create();
-  replay_thread.detach();
+  if (!replay_thread)
+    replay_thread = new ReplayThread(this, v);
+  else if (replay_thread->vol != v)
+    replay_thread->vol = v;
+  replay_thread->create();
+  replay_thread->detach();
 }
 
 class C_MDL_Replay : public Context {
@@ -437,7 +442,7 @@ public:
 
 
 // i am a separate thread
-void MDLog::_replay_thread()
+void MDLog::_replay_thread(VolumeRef &v)
 {
   mds->mds_lock.Lock();
   ldout(mds->cct, 10) << "_replay_thread start" << dendl;
@@ -543,7 +548,7 @@ void MDLog::_replay_thread()
       le->_segment->end = journaler->get_read_pos();
       num_events++;
 
-      le->replay(mds);
+      le->replay(mds, v);
     }
     delete le;
 

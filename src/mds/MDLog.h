@@ -55,12 +55,13 @@ protected:
   class ReplayThread : public Thread {
     MDLog *log;
   public:
-    ReplayThread(MDLog *l) : log(l) {}
+    VolumeRef vol;
+    ReplayThread(MDLog *l, VolumeRef &v) : log(l), vol(v) {}
     void* entry() {
-      log->_replay_thread();
+      log->_replay_thread(vol);
       return 0;
     }
-  } replay_thread;
+  } *replay_thread;
   bool already_replayed;
 
   friend class ReplayThread;
@@ -69,7 +70,7 @@ protected:
   list<Context*> waitfor_replay;
 
   void _replay();	  // old way
-  void _replay_thread();  // new way
+  void _replay_thread(VolumeRef &v);  // new way
 
 
   // -- segments --
@@ -123,7 +124,7 @@ public:
 		  unflushed(0),
 		  capped(false),
 		  journaler(0),
-		  replay_thread(this),
+		  replay_thread(0),
 		  already_replayed(false),
 		  expiring_events(0), expired_events(0),
 		  cur_event(NULL) { }
@@ -209,9 +210,9 @@ private:
 
 public:
   void create(VolumeRef &v, Context *onfinish);  // fresh, empty log!
-  void open(Context *onopen);	   // append() or replay() to follow!
+  void open(VolumeRef &v, Context *onopen);   // append() or replay() to follow!
   void append();
-  void replay(Context *onfinish);
+  void replay(VolumeRef &v, Context *onfinish);
 
   void standby_trim_segments();
 };
