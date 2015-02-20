@@ -13,10 +13,9 @@ namespace {
 
 class TestFragTreeIndex : public FragTreeIndex {
  public:
-  TestFragTreeIndex(int split_threshold, int split_bits)
-    : FragTreeIndex(split_threshold, split_bits)
+  TestFragTreeIndex(uint32_t initial_split)
+    : FragTreeIndex(initial_split)
   {}
-
   // expose split/merge functions
   int split(frag_t frag, int bits, bool async=true) {
     return FragTreeIndex::split(frag, bits, async);
@@ -182,7 +181,7 @@ TEST(OsFragTreeIndex, OpenStatUnlink)
 {
   tmpdir_with_cleanup path("tmp-fragtreeindex");
 
-  FragTreeIndex index(1024, 2);
+  FragTreeIndex index(0);
   struct stat st;
 
   ASSERT_EQ(0, index.init(path));
@@ -201,7 +200,7 @@ TEST(OsFragTreeIndex, Split)
 {
   tmpdir_with_cleanup path("tmp-fragtreeindex-split");
 
-  TestFragTreeIndex index(1024, 2);
+  TestFragTreeIndex index(0);
   ASSERT_EQ(0, index.init(path));
   ASSERT_EQ(0, index.mount(path));
 
@@ -247,7 +246,7 @@ TEST(OsFragTreeIndex, Merge)
 {
   tmpdir_with_cleanup path("tmp-fragtreeindex-merge");
 
-  TestFragTreeIndex index(1024, 2);
+  TestFragTreeIndex index(0);
   ASSERT_EQ(0, index.init(path));
   ASSERT_EQ(0, index.mount(path));
 
@@ -294,7 +293,7 @@ TEST(OsFragTreeIndex, SplitRecovery)
 {
   tmpdir_with_cleanup path("tmp-fragtreeindex-split-recovery");
 
-  TestFragTreeIndex index(1024, 2);
+  TestFragTreeIndex index(0);
   ASSERT_EQ(0, index.init(path));
   ASSERT_EQ(0, index.mount(path));
 
@@ -342,7 +341,7 @@ TEST(OsFragTreeIndex, CountSizes)
 {
   tmpdir_with_cleanup path("tmp-fragtreeindex-size-recovery");
 
-  TestFragTreeIndex index(1024, 2);
+  TestFragTreeIndex index(0);
   ASSERT_EQ(index.init(path), 0);
   ASSERT_EQ(index.mount(path), 0);
 

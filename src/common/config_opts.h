@@ -585,6 +585,12 @@ OPTION(journal_replay_from, OPT_INT, 0)
 OPTION(journal_zero_on_create, OPT_BOOL, false)
 OPTION(journal_ignore_corruption, OPT_BOOL, false) // assume journal is not corrupt
 
+// FragTreeIndex
+OPTION(fragtreeindex_initial_split, OPT_INT, 4) // start with 2^N subdirs
+OPTION(fragtreeindex_merge_threshold, OPT_INT, 256) // merge under N entries
+OPTION(fragtreeindex_split_threshold, OPT_INT, 4096) // split over N entries
+OPTION(fragtreeindex_split_bits, OPT_INT, 2) // split each subdir into 2^N
+
 OPTION(rados_mon_op_timeout, OPT_DOUBLE, 0) // how many seconds to wait for a response from the monitor before returning an error from a rados operation. 0 means on limit.
 OPTION(rados_osd_op_timeout, OPT_DOUBLE, 0) // how many seconds to wait for a response from osds before returning an error from a rados operation. 0 means no limit.
 
