@@ -12,7 +12,6 @@
  *
  */
 
-
 #ifndef CEPH_FILESTORE_H
 #define CEPH_FILESTORE_H
 
@@ -59,7 +58,7 @@ static const __SWORD_TYPE XFS_SUPER_MAGIC(0x58465342);
 static const __SWORD_TYPE ZFS_SUPER_MAGIC(0x2fc12fc1);
 #endif
 
-enum fs_types {
+enum class fs_types {
   FS_TYPE_NONE = 0,
   FS_TYPE_XFS,
   FS_TYPE_BTRFS,
@@ -98,29 +97,39 @@ public:
 
   int peek_journal_fsid(boost::uuids::uuid *fsid);
 
-  class FSCollection : public ObjectStore::Collection
-  {
-  public:
-    int fd; // collection's dirfd
-    // and object fdcache
-    std::mutex fdcache_lock;
-    FDCache fdcache;
-
-    FSCollection(CephContext *cct, const coll_t& cid, int fd)
-      : ObjectStore::Collection(cid), fd(fd), fdcache(cct) {
-      // TODO:  do something
-    }
-
-    virtual ~FSCollection() {
-        ::close(fd);
-    }
-
-    friend class FileStore;
-  };
+  class FSCollection;
 
   class FSObject : public ObjectStore::Object
   {
   public:
+    /**
+     * PendingWB tracks the ios pending on an object (sort of).
+     * Ceph doesn't currently track affected ranges, and currently
+     * we don't either.
+     */
+    class PendingWB {
+    public:
+      bool nocache;
+      uint64_t size;
+      uint64_t ios;
+      PendingWB() : nocache(true), size(0), ios(0) {}
+      void add(uint64_t _size, uint64_t _ios, bool _nocache) {
+	if (!_nocache)
+	  nocache = false; // only nocache if all writes are nocache
+	size += _size;
+	ios += _ios;
+      }
+      bool sub(uint64_t& _ios, uint64_t& _size) {
+	_ios -= ios; ios = 0;
+	_size -= size; size = 0;
+	bool c = nocache;
+	nocache = true;
+	return c;
+      }
+    };
+
+    PendingWB pwb;
+
     /* XXXX maybe bogus ctor... needs Casey! */
     FSObject(FSCollection* _fc, const hoid_t& oid, const FDRef& _fd)
       : ObjectStore::Object(oid), fc(_fc) {
@@ -165,6 +174,111 @@ public:
     FSCollection* fc;
     FDRef fd;
   };
+
+  /* FSFlush is the spiritual successor of WBThrottle, whose primary
+   * function was periodically syncing dirty fds to backing store.
+   *
+   * WBThrottle did rate limit syncs, but was not a flush governor,
+   * as the name seems to imply.
+   */
+  class FSFlush : Thread {
+    FSCollection* fc;
+
+    /* *_limits.first is the start_flusher limit and
+     * *_limits.second is the hard limit
+     */
+
+    /// Limits on unflushed bytes
+    pair<uint64_t, uint64_t> size_limits;
+
+    /// Limits on unflushed ios
+    pair<uint64_t, uint64_t> io_limits;
+
+    /// Limits on unflushed objects
+    pair<uint64_t, uint64_t> fd_limits;
+
+    uint64_t cur_ios;  /// Currently unflushed IOs
+    uint64_t cur_size; /// Currently unflushed bytes
+    uint32_t waiters;
+
+    bool stopping;
+    std::mutex lock;
+    std::condition_variable cond;
+
+    /* pending queue */
+    Object::FlushQueue fl_queue;
+
+  public:
+    FSFlush(FSCollection* _fc)
+      : fc(_fc), cur_ios(0), cur_size(0), waiters(0), stopping(false) {}
+
+    void re_init(); /* per-fs settings, late init */
+
+    /* Queue wb on FSObject */
+    void queue_wb(FSObject* o,
+		  uint64_t offset, ///< [in] offset written
+		  uint64_t len,    ///< [in] length written
+		  bool nocache  ///< [in] try to clear out of cache after write
+		     ) {
+      lock_guard lk(lock);
+      if (! o->pwb.ios) {
+	fc->get_os()->ref(o); /* ref+ */
+	fl_queue.push_front(*o); /* enqueue at fl_queue MRU */
+      }
+      o->pwb.add(offset, len, nocache);
+    } /* queue_wb */
+
+    static constexpr uint32_t FLAG_NONE = 0x0000;
+    static constexpr uint32_t FLAG_LOCKED = 0x0001;
+
+    /* For now, preserve legacy behavior (no sync on clear/clear_object) */
+    void clear();
+    void clear_object(FSObject* o);
+    void throttle();
+
+    /* Thread impl */
+    void start() {
+      re_init();
+      {
+	lock_guard lk(lock);
+	stopping = false;
+      }
+      create();
+    }
+
+    void stop() {
+      {
+	lock_guard lk(lock);
+	stopping = true;
+	cond.notify_all();
+      }
+      join();
+    }
+
+    void* entry();
+
+  }; /* FSFlush */
+
+  class FSCollection : public ObjectStore::Collection
+  {
+  public:
+    int fd; // collection's dirfd
+    FSFlush fs_flush;
+
+    // and object fdcache
+    std::mutex fdcache_lock;
+    FDCache fdcache;
+
+    FSCollection(FileStore* fs, const coll_t& cid, int fd)
+      : ObjectStore::Collection(fs, cid), fd(fd), fs_flush(this),
+	fdcache(fs->cct) {}
+
+    virtual ~FSCollection() {
+        ::close(fd);
+    }
+
+    friend class FileStore;
+  }; /* FSCollection */
 
   inline FSCollection* get_slot_collection(Transaction& t, uint16_t c_ix) {
     using std::get;
@@ -268,6 +382,7 @@ private:
     OpRequestRef osd_op;
     ZTracer::Trace trace;
   };
+
   class OpSequencer : public Sequencer_impl {
   public:
     typedef std::lock_guard<std::mutex> lock_guard;
@@ -336,7 +451,7 @@ private:
     const string& get_name() const {
       return parent->get_name();
     }
-  };
+  }; /* OpSequencer */
 
   friend ostream& operator<<(ostream& out, const OpSequencer& s);
 
