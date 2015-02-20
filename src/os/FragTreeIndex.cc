@@ -23,11 +23,9 @@
 
 using namespace cohort;
 
-FragTreeIndex::FragTreeIndex(CephContext *cct, int split_threshold,
-                             int split_bits)
+FragTreeIndex::FragTreeIndex(CephContext *cct, uint32_t initial_split)
   : cct(cct),
-    split_threshold(split_threshold),
-    split_bits(split_bits),
+    initial_split(initial_split),
     rootfd(-1)
 {
 }
@@ -110,7 +108,22 @@ int FragTreeIndex::init(const std::string &path)
   if (r < 0)
     return r;
 
-  r = write_index(dirfd);
+  // create an index with the initial number of subdirectories
+  if (initial_split > 0) {
+    frag_path path = {};
+    frag_size_map size_updates;
+    rootfd = dirfd; // rootfd needed for split/finish_split
+    int r = split(path.frag, initial_split, false);
+    if (r == 0) {
+      do_split(path, initial_split, size_updates);
+      finish_split(path.frag, size_updates);
+    }
+    rootfd = -1;
+  } else {
+    // write an empty index
+    std::shared_lock<std::shared_timed_mutex> index_lock(index_mutex);
+    r = write_index(dirfd);
+  }
   ::close(dirfd);
   return r;
 }
@@ -344,6 +357,7 @@ int FragTreeIndex::unlink(const std::string &name, uint64_t hash)
 {
   int r = -ENOENT;
   struct frag_path path, orig;
+  frag_t parent;
   {
     // build paths under index rdlock
     std::shared_lock<std::shared_timed_mutex> lock(index_mutex);
@@ -351,6 +365,7 @@ int FragTreeIndex::unlink(const std::string &name, uint64_t hash)
     if (r) return r;
     r = orig.build(committed.tree, hash);
     if (r) return r;
+    parent = tree.get_branch_above(path.frag); // for decrement_size()
   }
 
   // if a migration is in progress, check the original location first
@@ -361,7 +376,7 @@ int FragTreeIndex::unlink(const std::string &name, uint64_t hash)
     r = ::unlinkat(rootfd, orig.path, 0);
     if (r == 0) {
       // note that we're decrementing path.frag, not orig.frag!
-      decrement_size(path.frag);
+      decrement_size(path.frag, parent);
       return r;
     }
     r = errno;
@@ -379,7 +394,7 @@ int FragTreeIndex::unlink(const std::string &name, uint64_t hash)
 
   r = ::unlinkat(rootfd, path.path, 0);
   if (r == 0) {
-    decrement_size(path.frag);
+    decrement_size(path.frag, parent);
     return r;
   }
 
@@ -664,8 +679,10 @@ int FragTreeIndex::count_sizes(int dirfd)
 
     if (count) {
       // if parent is merging, apply size updates to the parent frag
-      frag_t target = entry.merge ? entry.frag.parent() : entry.frag;
-      sizes[target] += count;
+      if (entry.merge)
+        sizes[tree.get_branch_above(entry.frag)] += count;
+      else
+        sizes[entry.frag] += count;
     }
   }
 
@@ -678,26 +695,41 @@ int FragTreeIndex::count_sizes(int dirfd)
   return r;
 }
 
-void FragTreeIndex::increment_size(frag_t frag, int n)
+void FragTreeIndex::increment_size(frag_t frag)
 {
   std::unique_lock<std::mutex> sizes_lock(sizes_mutex);
-  const int count = sizes[frag] += n;
+  const int count = ++sizes[frag];
   sizes_lock.unlock();
 
   // split if necessary
-  if (count >= split_threshold)
-    split(frag, split_bits);
+  if (count >= cct->_conf->fragtreeindex_split_threshold)
+    split(frag, cct->_conf->fragtreeindex_split_bits);
 }
 
-void FragTreeIndex::decrement_size(frag_t frag, int n)
+void FragTreeIndex::decrement_size(frag_t frag, frag_t parent)
 {
   std::unique_lock<std::mutex> sizes_lock(sizes_mutex);
   auto i = sizes.find(frag);
   assert(i != sizes.end());
-  i->second -= n;
+  i->second--;
+
+  if (parent.bits() <= initial_split) {
+    // no further merging allowed
+    return;
+  }
+
+  const int bits = parent.bits() - frag.bits();
+  const uint64_t nway = 1 << bits;
+
+  // sum sizes for all siblings and merge into parent if necessary
+  int sum = 0;
+  for (uint64_t i = 0; i < nway; i++)
+    sum += sizes[parent.make_child(i, bits)];
+
   sizes_lock.unlock();
 
-  // TODO: sum sizes for all siblings and merge if necessary
+  if (sum < cct->_conf->fragtreeindex_merge_threshold)
+    merge(parent);
 }
 
 namespace {
@@ -749,7 +781,8 @@ int FragTreeIndex::split(frag_t frag, int bits, bool async)
   if (pending_merge != committed.merges.end())
     return -EINPROGRESS;
   if (!frag.is_root()) {
-    auto pending_split = committed.splits.find(frag.parent());
+    frag_t parent = tree.get_branch_above(frag);
+    auto pending_split = committed.splits.find(parent);
     if (pending_split != committed.splits.end())
       return -EINPROGRESS;
   }

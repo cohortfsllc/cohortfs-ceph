@@ -54,8 +54,8 @@ class FragTreeIndex {
   };
  protected: // allow unit tests to access some internals
   CephContext *cct;
-  const int split_threshold; ///< number of entries in a directory before split
-  const int split_bits; ///< split directories into 2^split_bits subdirectories
+  const uint32_t initial_split; ///< don't allow merging below the initial split
+
   int rootfd; ///< file descriptor for root collection directory
 
   IndexRecord committed; ///< last committed index record
@@ -77,8 +77,8 @@ class FragTreeIndex {
   int write_sizes(int dirfd);
   int count_sizes(int dirfd);
 
-  void increment_size(frag_t frag, int n=1);
-  void decrement_size(frag_t frag, int n=1);
+  void increment_size(frag_t frag);
+  void decrement_size(frag_t frag, frag_t parent);
 
   int split(frag_t frag, int bits, bool async=true);
   int merge(frag_t frag, bool async=true);
@@ -96,7 +96,7 @@ class FragTreeIndex {
   const FragTreeIndex& operator=(const FragTreeIndex& other) = delete;
 
  public:
-  FragTreeIndex(CephContext *cct, int split_threshold, int split_bits);
+  FragTreeIndex(CephContext *cct, uint32_t initial_split);
   ~FragTreeIndex();
 
   /// initialize a fresh collection index at the given path
