@@ -2568,7 +2568,7 @@ int KeyValueStore::list_collections(vector<coll_t>& ls)
 
 ObjectStore::CollectionHandle KeyValueStore::open_collection(const coll_t& c)
 {
-  return new Collection(c);
+  return new Collection(this, c);
 }
 
 int KeyValueStore::close_collection(ObjectStore::CollectionHandle ch)

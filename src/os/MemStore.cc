@@ -178,7 +178,7 @@ int MemStore::_load()
     int r = cbl.read_file(fn.c_str(), &err);
     if (r < 0)
       return r;
-    MemCollection* c(new MemCollection(*q));
+    MemCollection* c(new MemCollection(this, *q));
     bufferlist::iterator p = cbl.begin();
     c->decode(p);
     coll_map[*q] = c;
@@ -1243,7 +1243,7 @@ int MemStore::_create_collection(const coll_t &cid)
   map<coll_t,MemCollection*>::iterator cp = coll_map.find(cid);
   if (cp != coll_map.end())
     return -EEXIST;
-  coll_map[cid] = new MemCollection(cid);
+  coll_map[cid] = new MemCollection(this, cid);
   return 0;
 }
 

@@ -169,8 +169,8 @@ public:
       DECODE_FINISH(p);
     }
 
-    MemCollection(const coll_t &cid) :
-      ObjectStore::Collection(cid)
+    MemCollection(MemStore* ms, const coll_t &cid) :
+      ObjectStore::Collection(ms, cid)
       {}
   };
 

@@ -97,12 +97,22 @@ public:
     typedef bi::link_mode<bi::safe_link> link_mode;
 
 #if defined(OBJCACHE_AVL)
-    typedef bi::avl_set_member_hook<link_mode> hook_type;
+    typedef bi::avl_set_member_hook<link_mode> tree_hook_type;
 #else
     /* RBT */
-    typedef bi::set_member_hook<link_mode> hook_type;
+    typedef bi::set_member_hook<link_mode> tree_hook_type;
 #endif
-    hook_type oid_hook;
+    tree_hook_type oid_hook;
+
+  public:
+    typedef bi::list_member_hook<link_mode> queue_hook_type;
+    queue_hook_type fl_hook;
+
+    typedef bi::list<
+      Object,
+      bi::member_hook<Object, queue_hook_type, &Object::fl_hook>,
+      bi::constant_time_size<true>
+      > FlushQueue;
 
   protected:
     hobject_t oid;
@@ -169,7 +179,8 @@ public:
 	}
     };
 
-    typedef bi::member_hook<Object, hook_type, &Object::oid_hook> OidHook;
+    typedef bi::member_hook<
+      Object, tree_hook_type, &Object::oid_hook> OidHook;
 
 #if defined(OBJCACHE_AVL)
     typedef bi::avltree<Object, bi::compare<OidLT>, OidHook,
@@ -183,10 +194,11 @@ public:
     ObjCache;
 
     friend class Collection;
-  };
+  }; /* Object */
 
   class Collection : public RefCountedObject {
   protected:
+    ObjectStore* os;
     uint32_t flags;
     Object::ObjCache obj_cache;
 
@@ -196,10 +208,15 @@ public:
   public:
     const coll_t cid;
 
-    Collection(const coll_t& _cid) : flags(FLAG_NONE), cid(_cid)
+    Collection(ObjectStore* _os, const coll_t& _cid)
+      : os(_os), flags(FLAG_NONE), cid(_cid)
       {}
 
     virtual ~Collection() {}
+
+    ObjectStore* get_os() {
+      return os;
+    }
 
     const coll_t& get_cid() {
       return cid;
@@ -1412,7 +1429,6 @@ public:
     OpRequestRef op = OpRequestRef(),
     ThreadPool::TPHandle *handle = NULL) = 0;
 
-
   int queue_transactions(
     Sequencer *osr,
     list<Transaction*>& tls,
@@ -1444,6 +1460,14 @@ public:
   // no copying
   ObjectStore(const ObjectStore& o);
   const ObjectStore& operator=(const ObjectStore& o);
+
+  void ref(Object* o) {
+    obj_lru.ref(o, cohort::lru::FLAG_NONE);
+  }
+
+  void unref(Object* o) {
+    obj_lru.unref(o, cohort::lru::FLAG_NONE);
+  }
 
   // mgmt
   virtual int version_stamp_is_valid(uint32_t *version) { return 1; }
