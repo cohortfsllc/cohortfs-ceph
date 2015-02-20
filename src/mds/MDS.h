@@ -28,6 +28,7 @@
 #include "common/Cond.h"
 #include "common/Timer.h"
 #include "common/LogClient.h"
+#include "common/Finisher.h"
 
 #include "MDSMap.h"
 
@@ -112,6 +113,8 @@ class MDS : public Dispatcher {
 
   MDSTableClient *get_table_client(int t);
   MDSTableServer *get_table_server(int t);
+
+  Finisher finisher;
 
   int orig_argc;
   const char **orig_argv;

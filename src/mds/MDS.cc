@@ -99,6 +99,7 @@ MDS::MDS(const std::string &n, Messenger *m, MonClient *mc) :
   messenger(m),
   monc(mc),
   clog(m->cct, messenger, &mc->monmap, LogClient::NO_FLAGS),
+  finisher(cct),
   sessionmap(this) {
 
   orig_argc = 0;
@@ -336,6 +337,8 @@ int MDS::init(int wanted_state)
 
   monc->set_want_keys(CEPH_ENTITY_TYPE_MON | CEPH_ENTITY_TYPE_OSD | CEPH_ENTITY_TYPE_MDS);
   monc->init();
+
+  finisher.start();
 
   // tell monc about log_client so it will know about mon session resets
   monc->set_log_client(&clog);
@@ -1208,6 +1211,7 @@ void MDS::calc_recovery_set()
 void MDS::replay_start()
 {
   dout(1) << "replay_start" << dendl;
+  Context *c;
 
   if (is_standby_replay())
     standby_replaying = true;
@@ -1231,8 +1235,11 @@ void MDS::replay_start()
 	    << " (which blacklists prior instance)" << dendl;
     objecter->put_osdmap_read();
     osdmap = nullptr;
-    objecter->wait_for_map(mdsmap->get_last_failure_osd_epoch(),
-			   new C_MDS_BootStart(this, 0));
+    c = new C_OnFinisher(new C_MDS_BootStart(this, 0), &finisher);
+    if (objecter->wait_for_map(mdsmap->get_last_failure_osd_epoch(), c)) {
+	dout(18) << "not waiting for osdmap because it just got here?" << dendl;
+	c->complete(0);
+    }
   }
 }
 
@@ -1262,13 +1269,17 @@ void MDS::_standby_replay_restart_finish(int r, uint64_t old_read_pos)
 
 inline void MDS::standby_replay_restart()
 {
+  Context *c;
   dout(1) << "standby_replay_restart" << (standby_replaying ? " (as standby)":" (final takeover pass)") << dendl;
 
   if (!standby_replaying) {
     dout(1) << " waiting for osdmap " << mdsmap->get_last_failure_osd_epoch()
 	    << " (which blacklists prior instance)" << dendl;
-    objecter->wait_for_map(mdsmap->get_last_failure_osd_epoch(),
-			   new C_MDS_BootStart(this, 3));
+    c = new C_OnFinisher(new C_MDS_BootStart(this, 3), &finisher);
+    if (objecter->wait_for_map(mdsmap->get_last_failure_osd_epoch(), c)) {
+	dout(18) << "not waiting for osdmap because it just got here?" << dendl;
+	c->complete(0);
+    }
   } else {
     mdlog->get_journaler()->reread_head_and_probe(
       new C_MDS_StandbyReplayRestartFinish(this, mdlog->get_journaler()->get_read_pos()));
@@ -1526,6 +1537,8 @@ void MDS::suicide()
 
   dout(1) << "suicide.	wanted " << ceph_mds_state_name(want_state)
 	  << ", now " << ceph_mds_state_name(state) << dendl;
+
+  finisher.stop(); // no flushing
 
   // stop timers
   if (beacon_sender) {
