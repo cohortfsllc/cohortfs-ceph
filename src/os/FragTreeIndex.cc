@@ -42,6 +42,50 @@ FragTreeIndex::~FragTreeIndex()
 #endif
 }
 
+namespace {
+
+// closedir() does not appear to clear the readdir state associated with
+// a file descriptor.  so if we dup() the fd and do another fdopendir(),
+// we have to follow it with a rewinddir() to clear it manually
+DIR* fdopendir_rewind(int fd)
+{
+  DIR *dir = ::fdopendir(fd);
+  if (dir)
+    ::rewinddir(dir);
+  return dir;
+}
+
+int check_directory_empty(int dirfd)
+{
+  // fdopendir() takes control of the fd and closes it on closedir(). the
+  // caller expects its dirfd to remain open, so we dup() it and use that
+  int dirfd2 = ::dup(dirfd);
+  if (dirfd2 < 0)
+    return -errno;
+
+  DIR *dir = fdopendir_rewind(dirfd2);
+  if (dir == NULL)
+    return -errno;
+
+  struct dirent *dn;
+  while ((dn = ::readdir(dir)) != NULL) {
+    // only accept . and ..
+    if (dn->d_type != DT_DIR)
+      break;
+    if (dn->d_name[0] != '.')
+      break;
+    if (dn->d_name[1] != '.' && dn->d_name[1] != 0)
+      break;
+  }
+  ::closedir(dir);
+
+  if (dn != NULL)
+    return -ENOTEMPTY;
+  return 0;
+}
+
+} // anonymous namespace
+
 int FragTreeIndex::init(const std::string &path)
 {
   // must not be mounted
@@ -53,16 +97,20 @@ int FragTreeIndex::init(const std::string &path)
   if (dirfd == -1)
     return -errno;
 
-  // TODO: verify that we opened a directory
-  // TODO: verify that the directory is empty
+  // verify that we opened a directory
+  struct stat st;
+  int r = ::fstat(dirfd, &st);
+  if (r < 0)
+    return -errno;
+  if (!S_ISDIR(st.st_mode))
+    return -ENOTDIR;
 
-  // write empty index to disk
-  std::lock_guard<std::shared_timed_mutex> lock(index_mutex);
-  committed.tree.clear();
-  committed.splits.clear();
-  committed.merges.clear();
+  // verify that the directory is empty
+  r = check_directory_empty(dirfd);
+  if (r < 0)
+    return r;
 
-  int r = write_index(dirfd);
+  r = write_index(dirfd);
   ::close(dirfd);
   return r;
 }
@@ -495,17 +543,6 @@ int FragTreeIndex::write_sizes(int dirfd)
 }
 
 namespace {
-
-// closedir() does not appear to clear the readdir state associated with
-// a file descriptor.  so if we dup() the fd and do another fdopendir(),
-// we have to follow it with a rewinddir() to clear it manually
-DIR* fdopendir_rewind(int fd)
-{
-  DIR *dir = ::fdopendir(fd);
-  if (dir)
-    ::rewinddir(dir);
-  return dir;
-}
 
 bool parse_hex_value(const char *name, uint64_t *value)
 {
