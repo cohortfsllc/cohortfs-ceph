@@ -333,7 +333,7 @@ FileStore::FileStore(CephContext* _cct, const std::string& base, const std::stri
   m_filestore_sloppy_crc(cct->_conf->filestore_sloppy_crc),
   m_filestore_sloppy_crc_block_size(cct->_conf->filestore_sloppy_crc_block_size),
   m_filestore_max_alloc_hint_size(cct->_conf->filestore_max_alloc_hint_size),
-  m_fs_type(FS_TYPE_NONE),
+  m_fs_type(fs_types::FS_TYPE_NONE),
   m_filestore_max_inline_xattr_size(0),
   m_filestore_max_inline_xattrs(0)
 {
@@ -707,14 +707,12 @@ int FileStore::_detect_fs()
 
   blk_size = st.f_bsize;
 
-  m_fs_type = FS_TYPE_OTHER;
+  m_fs_type = fs_types::FS_TYPE_OTHER;
   if (st.f_type == BTRFS_SUPER_MAGIC) {
 #if defined(__linux__)
     dout(0) << "mount detected btrfs" << dendl;
     backend = new BtrfsFileStoreBackend(cct, this);
-    m_fs_type = FS_TYPE_BTRFS;
-
-    wbthrottle.set_fs(WBThrottle::BTRFS);
+    m_fs_type = fs_types::FS_TYPE_BTRFS;
 #endif
   } else if (st.f_type == XFS_SUPER_MAGIC) {
 #ifdef HAVE_LIBXFS
@@ -723,7 +721,7 @@ int FileStore::_detect_fs()
 #else
     dout(0) << "mount detected xfs" << dendl;
 #endif
-    m_fs_type = FS_TYPE_XFS;
+    m_fs_type = fs_types::FS_TYPE_XFS;
 
     // wbthrottle is constructed with fs(WBThrottle::XFS)
     if (m_filestore_replica_fadvise) {
@@ -3915,7 +3913,7 @@ ObjectStore::CollectionHandle FileStore::open_collection(const coll_t& cid)
 	 << cpp_strerror(-errno) << dendl;
     return NULL;
   }
-  return new FSCollection(cid, dirfd);
+  return new FSCollection(this, cid, dirfd);
 } /* open_collection */
 
 int FileStore::close_collection(CollectionHandle ch)
@@ -4444,19 +4442,19 @@ void FileStore::set_xattr_limits_via_conf()
   uint32_t fs_xattr_size;
   uint32_t fs_xattrs;
 
-  assert(m_fs_type != FS_TYPE_NONE);
+  assert(m_fs_type != fs_types::FS_TYPE_NONE);
 
   switch(m_fs_type) {
-    case FS_TYPE_XFS:
+    case fs_types::FS_TYPE_XFS:
       fs_xattr_size = cct->_conf->filestore_max_inline_xattr_size_xfs;
       fs_xattrs = cct->_conf->filestore_max_inline_xattrs_xfs;
       break;
-    case FS_TYPE_BTRFS:
+    case fs_types::FS_TYPE_BTRFS:
       fs_xattr_size = cct->_conf->filestore_max_inline_xattr_size_btrfs;
       fs_xattrs = cct->_conf->filestore_max_inline_xattrs_btrfs;
       break;
-    case FS_TYPE_ZFS:
-    case FS_TYPE_OTHER:
+    case fs_types::FS_TYPE_ZFS:
+    case fs_types::FS_TYPE_OTHER:
       fs_xattr_size = cct->_conf->filestore_max_inline_xattr_size_other;
       fs_xattrs = cct->_conf->filestore_max_inline_xattrs_other;
       break;
@@ -4511,3 +4509,121 @@ void FSSuperblock::generate_test_instances(list<FSSuperblock*>& o)
 				feature_incompat);
   o.push_back(new FSSuperblock(z));
 }
+
+void FileStore::FSFlush::re_init()
+{
+  const FileStore* fs = static_cast<FileStore*>(fc->get_os());
+  const CephContext* cct = fs->cct;
+
+  lock_guard lk(lock);
+  switch(fs->m_fs_type) {
+  case fs_types::FS_TYPE_BTRFS:
+    size_limits.first =
+      cct->_conf->filestore_wbthrottle_btrfs_bytes_start_flusher;
+    size_limits.second =
+      cct->_conf->filestore_wbthrottle_btrfs_bytes_hard_limit;
+    io_limits.first =
+      cct->_conf->filestore_wbthrottle_btrfs_ios_start_flusher;
+    io_limits.second =
+      cct->_conf->filestore_wbthrottle_btrfs_ios_hard_limit;
+    fd_limits.first =
+      cct->_conf->filestore_wbthrottle_btrfs_inodes_start_flusher;
+    fd_limits.second =
+      cct->_conf->filestore_wbthrottle_btrfs_inodes_hard_limit;
+    break;
+  case fs_types::FS_TYPE_XFS:
+    size_limits.first =
+      cct->_conf->filestore_wbthrottle_xfs_bytes_start_flusher;
+    size_limits.second =
+      cct->_conf->filestore_wbthrottle_xfs_bytes_hard_limit;
+    io_limits.first =
+      cct->_conf->filestore_wbthrottle_xfs_ios_start_flusher;
+    io_limits.second =
+      cct->_conf->filestore_wbthrottle_xfs_ios_hard_limit;
+    fd_limits.first =
+      cct->_conf->filestore_wbthrottle_xfs_inodes_start_flusher;
+    fd_limits.second =
+      cct->_conf->filestore_wbthrottle_xfs_inodes_hard_limit;
+    break;
+  default:
+    assert(0 == "invalid value for fs");
+    break;
+  }
+  cond.notify_all();
+} /* re_init */
+
+void FileStore::FSFlush::clear_object(FSObject* o)
+{
+  lock_guard lk(lock);
+  if (o->pwb.ios) {
+    Object::FlushQueue::iterator it =
+      Object::FlushQueue::s_iterator_to(*o);
+    fl_queue.erase(it);
+    (void) o->pwb.sub(cur_ios, cur_size);
+    fc->get_os()->unref(o);
+    if (waiters)
+      cond.notify_all();
+  }
+}
+
+void FileStore::FSFlush::clear() {
+  lock_guard lk(lock);
+  while (fl_queue.size()) {
+    FSObject& o = static_cast<FSObject&>(fl_queue.back());
+    fl_queue.pop_back();
+    (void) o.pwb.sub(cur_ios, cur_size);
+    fc->get_os()->unref(&o);
+  }
+  if (waiters)
+    cond.notify_all();
+}
+
+void FileStore::FSFlush::throttle()
+{
+  unique_lock l(lock);
+  /* XXXX TODO:  wait entry, marked up w/requirements so
+   * we know on dequeue whether to wake another waiter */
+  while (!stopping && !(
+	   cur_ios < io_limits.second &&
+	   fl_queue.size() < fd_limits.second &&
+	   cur_size < size_limits.second)) {
+    cond.wait(l);
+    --waiters;
+  }
+}
+
+void* FileStore::FSFlush::entry()
+{
+  unique_lock lk(lock);
+  while (!stopping) {
+    while (!stopping &&
+	   cur_ios < io_limits.first &&
+	   fl_queue.size() < fd_limits.first &&
+	   cur_size < size_limits.first)
+      cond.wait(lk);
+    if (stopping)
+      return nullptr;
+    /* do it */
+    assert(!fl_queue.empty());
+    FSObject& o = static_cast<FSObject&>(fl_queue.back());
+    fl_queue.pop_back();
+    bool nocache = o.pwb.sub(cur_ios, cur_size);
+    lock.unlock();
+#ifdef HAVE_FDATASYNC
+    ::fdatasync(o.fd->fd);
+#else
+    ::fsync(o.fd->fd);
+#endif
+#ifdef HAVE_POSIX_FADVISE
+    if (nocache) {
+      int fa_r = posix_fadvise(o.fd->fd, 0, 0, POSIX_FADV_DONTNEED);
+      assert(fa_r == 0);
+    }
+#endif
+    lock.lock();
+    fc->get_os()->unref(&o);
+    cond.notify_all(); /* TODO: make conditional on sync flag */
+  } /* (!stopping) */
+  /* Thread exit */
+  return nullptr;
+} /* entry */
