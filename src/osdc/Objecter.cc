@@ -625,8 +625,8 @@ namespace OSDC {
 
 	// XXX does not appear to be a safe way to demote a write to a read lock.
 	// this may be bad? -mdw 20150209
-    lc.unlock();
-    lc.get_read();
+//    lc.unlock();
+//    lc.get_read();
 
     // finish any Contexts that were waiting on a map update
     map<epoch_t,list< pair< Context*, int > > >::iterator p =
