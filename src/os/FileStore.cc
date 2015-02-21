@@ -4552,45 +4552,68 @@ void FileStore::FSFlush::re_init()
   cond.notify_all();
 } /* re_init */
 
+void FileStore::FSFlush::queue_wb(FSObject* o,
+				  uint64_t off,
+				  uint64_t len,
+				  bool nocache )
+{
+  FSObject::PendingWB pwb(o, off, len, nocache);
+  unique_lock waitq_lk(waitq.we.mtx);
+  if (should_block(off, len)) {
+    cohort::WaitQueue<FSObject::PendingWB>::Entry wqe(pwb);
+    waitq_lk.unlock();
+    waitq.wait_on(wqe);
+  } else
+    queue_finish(pwb);
+} /* queue_wb */
+
+void FileStore::FSFlush::queue_finish(FSObject::PendingWB& pwb) {
+  FSObject* o = pwb.o;
+  if (! o->pwb.ios) {
+    fc->get_os()->ref(o); /* ref+ */
+    fl_queue.push_front(*o); /* enqueue at fl_queue MRU */
+  }
+  o->pwb.add(pwb);
+} /* queue_finish */
+
+void FileStore::FSFlush::cond_signal_waiters(unique_lock& waitq_lk)
+{
+  assert(waitq_lk.owns_lock());
+  while (waitq.waiters) {
+    cohort::WaitQueue<FSObject::PendingWB>::Entry& wqe =
+      waitq.queue.front();
+    FSObject::PendingWB& pwb =
+      const_cast< FSObject::PendingWB&>(wqe.get());
+    if (should_wake(pwb)) {
+      queue_finish(pwb);
+      waitq.dequeue(wqe, WaitQueue::FLAG_SIGNAL);
+    }
+  }
+} /* cond_signal_waiters */
+
 void FileStore::FSFlush::clear_object(FSObject* o)
 {
-  lock_guard lk(lock);
+  unique_lock waitq_lk(waitq.we.mtx);
   if (o->pwb.ios) {
     Object::FlushQueue::iterator it =
       Object::FlushQueue::s_iterator_to(*o);
     fl_queue.erase(it);
     (void) o->pwb.sub(cur_ios, cur_size);
     fc->get_os()->unref(o);
-    if (waiters)
-      cond.notify_all();
   }
-}
+  cond_signal_waiters(waitq_lk);
+} /* clear_object */
 
 void FileStore::FSFlush::clear() {
-  lock_guard lk(lock);
+  unique_lock waitq_lk(waitq.we.mtx);
   while (fl_queue.size()) {
     FSObject& o = static_cast<FSObject&>(fl_queue.back());
     fl_queue.pop_back();
     (void) o.pwb.sub(cur_ios, cur_size);
     fc->get_os()->unref(&o);
   }
-  if (waiters)
-    cond.notify_all();
-}
-
-void FileStore::FSFlush::throttle()
-{
-  unique_lock l(lock);
-  /* XXXX TODO:  wait entry, marked up w/requirements so
-   * we know on dequeue whether to wake another waiter */
-  while (!stopping && !(
-	   cur_ios < io_limits.second &&
-	   fl_queue.size() < fd_limits.second &&
-	   cur_size < size_limits.second)) {
-    cond.wait(l);
-    --waiters;
-  }
-}
+  cond_signal_waiters(waitq_lk);
+} /* clear */
 
 void* FileStore::FSFlush::entry()
 {

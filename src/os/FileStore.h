@@ -33,12 +33,12 @@
 #include "common/Timer.h"
 #include "common/WorkQueue.h"
 #include "common/zipkin_trace.h"
+#include "common/cohort_wqe.h"
 
 #include "ObjectMap.h"
 #include "SequencerPosition.h"
 #include "FDCache.h"
 #include "WBThrottle.h"
-
 
 // from include/linux/falloc.h:
 #ifndef FALLOC_FL_PUNCH_HOLE
@@ -98,6 +98,7 @@ public:
   int peek_journal_fsid(boost::uuids::uuid *fsid);
 
   class FSCollection;
+  class FSObject;
 
   class FSObject : public ObjectStore::Object
   {
@@ -109,16 +110,22 @@ public:
      */
     class PendingWB {
     public:
-      bool nocache;
+      FSObject* o;
       uint64_t size;
       uint64_t ios;
-      PendingWB() : nocache(true), size(0), ios(0) {}
-      void add(uint64_t _size, uint64_t _ios, bool _nocache) {
-	if (!_nocache)
+      bool nocache;
+      PendingWB(FSObject* _o) : o(_o), size(0), ios(0), nocache(true) {}
+
+      PendingWB(FSObject* _o, uint64_t _size, uint64_t _ios, bool _nocache)
+	: size(_size), ios(_ios), nocache(_nocache) {}
+
+      void add(const PendingWB& rhs) {
+	if (!rhs.nocache)
 	  nocache = false; // only nocache if all writes are nocache
-	size += _size;
-	ios += _ios;
+	size += rhs.size;
+	ios += rhs.ios;
       }
+
       bool sub(uint64_t& _ios, uint64_t& _size) {
 	_ios -= ios; ios = 0;
 	_size -= size; size = 0;
@@ -128,12 +135,9 @@ public:
       }
     };
 
-    PendingWB pwb;
-
     /* XXXX maybe bogus ctor... needs Casey! */
     FSObject(FSCollection* _fc, const hoid_t& oid, const FDRef& _fd)
-      : ObjectStore::Object(oid), fc(_fc) {
-      fd = _fd;
+      : ObjectStore::Object(oid), fc(_fc), fd(_fd), pwb(this) {
       /* each object holds a ref on it's collection */
       fc->get();
     }
@@ -173,6 +177,7 @@ public:
 
     FSCollection* fc;
     FDRef fd;
+    PendingWB pwb;
   };
 
   /* FSFlush is the spiritual successor of WBThrottle, whose primary
@@ -201,6 +206,11 @@ public:
     uint64_t cur_size; /// Currently unflushed bytes
     uint32_t waiters;
 
+    typedef std::unique_lock<std::mutex> unique_lock;
+    typedef cohort::WaitQueue<FSObject::PendingWB> WaitQueue;
+
+    WaitQueue waitq;
+
     bool stopping;
     std::mutex lock;
     std::condition_variable cond;
@@ -214,19 +224,28 @@ public:
 
     void re_init(); /* per-fs settings, late init */
 
-    /* Queue wb on FSObject */
+    bool should_block(uint64_t off, uint64_t len) {
+      return (((cur_ios+1) > io_limits.second) ||
+	      ((fl_queue.size()+1) > fd_limits.second) ||
+	      ((cur_size+len-off) > size_limits.second) ||
+	      (!stopping));
+    }
+
+    bool should_wake(const FSObject::PendingWB& pwb) {
+      return (((cur_ios-pwb.ios) < io_limits.second) ||
+	      ((fl_queue.size()-1) < fd_limits.second) ||
+	      ((cur_size-(pwb.size)) < size_limits.second) ||
+	      (stopping));
+    }
+
+    /* Queue wb on FSObject (may block) */
     void queue_wb(FSObject* o,
 		  uint64_t offset, ///< [in] offset written
 		  uint64_t len,    ///< [in] length written
 		  bool nocache  ///< [in] try to clear out of cache after write
-		     ) {
-      lock_guard lk(lock);
-      if (! o->pwb.ios) {
-	fc->get_os()->ref(o); /* ref+ */
-	fl_queue.push_front(*o); /* enqueue at fl_queue MRU */
-      }
-      o->pwb.add(offset, len, nocache);
-    } /* queue_wb */
+		  );
+
+    void queue_finish(FSObject::PendingWB& pwb);
 
     static constexpr uint32_t FLAG_NONE = 0x0000;
     static constexpr uint32_t FLAG_LOCKED = 0x0001;
@@ -234,7 +253,7 @@ public:
     /* For now, preserve legacy behavior (no sync on clear/clear_object) */
     void clear();
     void clear_object(FSObject* o);
-    void throttle();
+    void cond_signal_waiters(unique_lock& waitq_lk);
 
     /* Thread impl */
     void start() {
