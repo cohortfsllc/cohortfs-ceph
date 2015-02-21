@@ -220,7 +220,7 @@ int OSD::mkfs(CephContext *cct, ObjectStore *store, const string &dev,
     OSDSuperblock sb;
     bufferlist sbbl;
     ret = store->read(coll_t::META_COLL, OSD_SUPERBLOCK_POBJECT, 0,
-		      store->read_entire, sbbl);
+		      CEPH_READ_ENTIRE, sbbl);
     if (ret >= 0) {
       dout(0) << " have superblock" << dendl;
       if (whoami != sb.whoami) {
@@ -955,7 +955,7 @@ int OSD::read_superblock()
 {
   bufferlist bl;
   int r = store->read(coll_t::META_COLL, OSD_SUPERBLOCK_POBJECT, 0,
-		      store->read_entire, bl);
+		      CEPH_READ_ENTIRE, bl);
   if (r < 0)
     return r;
 
@@ -2814,7 +2814,7 @@ bool OSDService::_get_map_bl(epoch_t e, bufferlist& bl)
     return true;
   found = store->read(
     coll_t::META_COLL, OSD::get_osdmap_pobject_name(e), 0,
-    store->read_entire, bl) >= 0;
+    CEPH_READ_ENTIRE, bl) >= 0;
   if (found)
     _add_map_bl(e, bl);
   return found;
@@ -2828,7 +2828,7 @@ bool OSDService::get_inc_map_bl(epoch_t e, bufferlist& bl)
     return true;
   found = store->read(
     coll_t::META_COLL, OSD::get_inc_osdmap_pobject_name(e), 0,
-    store->read_entire, bl) >= 0;
+    CEPH_READ_ENTIRE, bl) >= 0;
   if (found)
     _add_map_inc_bl(e, bl);
   return found;

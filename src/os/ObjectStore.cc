@@ -49,8 +49,6 @@ int ObjectStore::read_meta(const std::string& key,
 
 
 
-const size_t ObjectStore::read_entire = SIZE_MAX;
-
 ostream& operator<<(ostream& out, const ObjectStore::Sequencer& s)
 {
   return out << "osr(" << s.get_name() << " " << &s << ")";

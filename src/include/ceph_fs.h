@@ -41,6 +41,7 @@
 #define CEPH_MAX_MON   31
 
 #define CEPH_MIN_STRIPE_UNIT 65536
+#define CEPH_READ_ENTIRE	SIZE_MAX
 
 /* crypto algorithms */
 #define CEPH_CRYPTO_NONE 0x0

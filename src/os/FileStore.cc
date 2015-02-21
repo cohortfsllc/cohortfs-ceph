@@ -2385,7 +2385,7 @@ int FileStore::read(
     return 0;
   }
 
-  if (len == read_entire) {
+  if (len == CEPH_READ_ENTIRE) {
     struct stat st;
     memset(&st, 0, sizeof(struct stat));
     int r = ::fstat(**fd, &st);
