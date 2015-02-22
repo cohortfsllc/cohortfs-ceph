@@ -730,11 +730,7 @@ namespace OSDC {
 			 bufferlist *pbl, int flags, Context *onfinish,
 			 version_t *objver = NULL,
 			 const unique_ptr<ObjOp>& extra_ops = nullptr,
-			 ZTracer::Trace *trace = nullptr) {
-      return read(oid, volume, 0, 0, pbl,
-		  flags | global_op_flags | CEPH_OSD_FLAG_READ, onfinish,
-		  objver, nullptr, trace);
-    }
+			 ZTracer::Trace *trace = nullptr);
 
     // writes
     ceph_tid_t _modify(const object_t& oid,

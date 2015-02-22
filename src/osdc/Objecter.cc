@@ -1216,6 +1216,21 @@ namespace OSDC {
 
 // read | write ---------------------------
 
+  ceph_tid_t Objecter::read_full(const object_t& oid,
+				 const shared_ptr<const Volume>& volume,
+				 bufferlist *pbl, int flags,
+				 Context *onfinish, version_t *objver,
+				 const unique_ptr<ObjOp>& extra_ops,
+				 ZTracer::Trace *trace)
+  {
+    unique_ptr<ObjOp> ops = init_ops(volume, extra_ops);
+    ops->read_full(pbl);
+    Op *o = new Op(oid, volume, ops,
+      flags | global_op_flags | CEPH_OSD_FLAG_READ,
+      onfinish, 0, objver, trace);
+    return op_submit(o);
+  }
+
   class C_CancelOp : public Context
   {
     ceph_tid_t tid;
