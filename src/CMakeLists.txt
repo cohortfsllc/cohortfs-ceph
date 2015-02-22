@@ -6,6 +6,34 @@ add_definitions("-DHAVE_CONFIG_H -D__CEPH__ -D_FILE_OFFSET_BITS=64 -D_REENTRANT 
 
 set(CLIKE_COMMON_FLAGS "-Wall -Wtype-limits -Wignored-qualifiers -Winit-self -Wpointer-arith -Werror=format-security -fno-strict-aliasing -fsigned-char -fno-omit-frame-pointer -fPIC")
 
+# sort out which allocator to use
+if(${ALLOCATOR} STREQUAL "jemalloc")
+  find_package(JeMalloc)
+  if(JEMALLOC_FOUND)
+    set(ALLOC_LIBS ${JEMALLOC_LIBRARIES})
+    set(CMAKE_CLIKE_FLAGS "${CMAKE_CLIKE_FLAGS} -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free")
+    set(TCMALLOC_srcs perfglue/disabled_heap_profiler.cc)
+  else(JEMALLOC_FOUND)
+    message(WARNING "jemalloc not found, falling back to libc")
+    set(ALLOCATOR "libc")
+  endif(JEMALLOC_FOUND)
+elseif(${ALLOCATOR} STREQUAL "tcmalloc")
+  find_package(TcMalloc)
+  if(TCMALLOC_FOUND)
+    set(ALLOC_LIBS ${TCMALLOC_LIBRARIES})
+    set(CMAKE_CLIKE_FLAGS "${CMAKE_CLIKE_FLAGS} -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free")
+    set(TCMALLOC_srcs perfglue/heap_profiler.cc)
+  else(TCMALLOC_FOUND)
+    message(WARNING "tcmalloc not found, falling back to libc")
+    set(TCMALLOC_srcs perfglue/disabled_heap_profiler.cc)
+    set(ALLOCATOR "libc")
+  endif(TCMALLOC_FOUND)
+else()
+  if(NOT ${ALLOCATOR} STREQUAL "libc")
+    message(SEND_ERROR "${ALLOCATOR} is not a valid option. Valid allocators are: jemalloc|tcmalloc|libc")
+  endif()
+endif()
+
 if(${WITH_SQUEAKY_CLEAN_VALGRIND})
   set(CLIKE_COMMON_FLAGS "${CLIKE_COMMON_FLAGS} -DSQUEAKY_CLEAN_VALGRIND=1")
 endif(${WITH_SQUEAKY_CLEAN_VALGRIND})
@@ -76,14 +104,6 @@ if(HAVE_LTTNG)
   include_directories(blkin/blkin-lib)
   include_directories(blkin)
 endif(HAVE_LTTNG)
-
-if(${WITH_TCMALLOC})
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free")
-  set(TCMALLOC_LIBS tcmalloc)
-  set(TCMALLOC_srcs perfglue/heap_profiler.cc)
-else()
-  set(TCMALLOC_srcs perfglue/disabled_heap_profiler.cc)
-endif(${WITH_TCMALLOC})
 
 # tcmalloc heap profiler
 set(heap_profiler_files ${TCMALLOC_srcs})
@@ -311,7 +331,7 @@ add_library(librados ${CEPH_SHARED}
   $<TARGET_OBJECTS:heap_profiler_objs>)
 add_dependencies(librados osdc)
 target_link_libraries(librados PRIVATE osdc osd os global common cls_lock_client
-  ${CRYPTO_LIBS} ${EXTRALIBS} ${TCMALLOC_LIBS})
+  ${CRYPTO_LIBS} ${EXTRALIBS} ${ALLOC_LIBS})
 if(${ENABLE_SHARED})
   set_target_properties(librados PROPERTIES OUTPUT_NAME rados VERSION 2.0.0 SOVERSION 2
     LINK_FLAGS "-Wl,-export-dynamic")
@@ -369,7 +389,7 @@ set(ceph_mon_srcs ceph_mon.cc common/TextTable.cc)
 add_executable(ceph-mon ${ceph_mon_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
 target_link_libraries(ceph-mon mon boost_regex boost_system boost_thread
   common os global leveldb boost_filesystem ${EXTRALIBS} ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS})
+  ${ALLOC_LIBS})
 install(TARGETS ceph-mon DESTINATION bin)
 
 # OSD
@@ -474,7 +494,7 @@ target_link_libraries(osd PRIVATE common os global dl leveldb ${EXTRALIBS})
 set(ceph_osd_srcs ceph_osd.cc objclass/class_api.cc)
 add_executable(ceph-osd ${ceph_osd_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
 target_link_libraries(ceph-osd osd os global
-  boost_system boost_filesystem ${TCMALLOC_LIBS})
+  boost_system boost_filesystem ${ALLOC_LIBS})
 install(TARGETS ceph-osd DESTINATION bin)
 
 # MDS
@@ -513,7 +533,7 @@ if(${WITH_MDS})
   set(ceph_mds_srcs ceph_mds.cc)
   add_executable(ceph-mds ${ceph_mds_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
   target_link_libraries(ceph-mds mds osdc ${CMAKE_DL_LIBS} global
-    ${TCMALLOC_LIBS} boost_system boost_thread)
+    ${ALLOC_LIBS} boost_system boost_thread)
   install(TARGETS ceph-mds DESTINATION bin)
 endif(${WITH_MDS})
 
@@ -700,7 +720,7 @@ if(${WITH_RBD})
     $<TARGET_OBJECTS:heap_profiler_objs>)
   set_target_properties(rbd PROPERTIES OUTPUT_NAME rbd)
   target_link_libraries(rbd global librbd librados common keyutils udev
-    boost_filesystem ${BLKID_LIBRARIES} ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
+    boost_filesystem ${BLKID_LIBRARIES} ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
   install(TARGETS rbd DESTINATION bin)
   install(PROGRAMS ${CMAKE_SOURCE_DIR}/src/ceph-rbdnamer
     DESTINATION bin)
@@ -728,6 +748,6 @@ if(${WITH_RADOSGW})
     cls_rgw_client cls_lock_client cls_refcount_client
     cls_log_client cls_statelog_client cls_version_client
     cls_replica_log_client cls_user_client
-    curl expat global fcgi resolv ${TCMALLOC_LIBS})
+    curl expat global fcgi resolv ${ALLOC_LIBS})
   install(TARGETS radosgw DESTINATION bin)
 endif(${WITH_RADOSGW})
