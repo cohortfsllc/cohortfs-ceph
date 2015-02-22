@@ -10,20 +10,20 @@ endif(NOT ${WITH_CLIENT})
 add_executable(test_timers
   TestTimers.cc
   )
-target_link_libraries(test_timers global ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
+target_link_libraries(test_timers global ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
 
 # test_signal_handlers
 add_executable(test_signal_handlers
   TestSignalHandlers.cc
   )
 target_link_libraries(test_signal_handlers global ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS})
+  ${ALLOC_LIBS})
 
 # test_msgr
 add_executable(test_msgr
   testmsgr.cc
   )
-target_link_libraries(test_msgr global ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
+target_link_libraries(test_msgr global ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
 
 # test_crypt
 add_executable(test_crypt
@@ -35,7 +35,7 @@ target_link_libraries(test_crypt
   m
   ${EXTRALIBS}
   ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   )
 
 # test_rados
@@ -50,9 +50,9 @@ target_link_libraries(test_rados
   global
   ${CMAKE_DL_LIBS}
   ${EXTRALIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   )
 
 # test_mutate
@@ -60,14 +60,14 @@ add_executable(test_mutate
   test_mutate.cc
   )
 target_link_libraries(test_mutate global librados ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS})
+  ${ALLOC_LIBS})
 
 # test_rewrite_latency
 add_executable(test_rewrite_latency
   test_rewrite_latency.cc
   )
 target_link_libraries(test_rewrite_latency common ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CMAKE_THREAD_LIBS_INIT} ${CRYPTO_LIBS} m ${EXTRALIBS})
 
 # streamtest
@@ -76,7 +76,7 @@ add_executable(streamtest
   $<TARGET_OBJECTS:os_filestore_objs>
   )
 target_link_libraries(streamtest os global leveldb aio boost_filesystem
-  boost_system ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
+  boost_system ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
 
 # test_trans
 add_executable(test_trans
@@ -84,13 +84,13 @@ add_executable(test_trans
   $<TARGET_OBJECTS:os_filestore_objs>
   )
 target_link_libraries(test_trans os global leveldb aio boost_filesystem
-  boost_system ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
+  boost_system ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
 
 # test_keys
 add_executable(test_keys
   testkeys.cc
   )
-target_link_libraries(test_keys mon global ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
+target_link_libraries(test_keys mon global ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
 
 ## dencoder
 set(dencoder_srcs
@@ -123,7 +123,7 @@ list(APPEND dencoder_dependencies
   boost_filesystem
   boost_system
   ${EXTRALIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CMAKE_DL_LIBS})
 if(WITH_RADOSGW)
   list(APPEND dencoder_dependencies
@@ -157,7 +157,7 @@ target_link_libraries(get_command_descriptions
   boost_regex
   boost_system
   ${EXTRALIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CMAKE_DL_LIBS}
   )
 
@@ -195,7 +195,7 @@ target_link_libraries(test_build_librgw rgw_a librados
     cls_rgw_client cls_lock_client cls_refcount_client
     cls_log_client cls_statelog_client cls_version_client
     cls_replica_log_client cls_user_client
-    curl expat global fcgi resolv ${TCMALLOC_LIBS} pthread ${CRYPTO_LIBS} ${EXTRALIBS} global)
+    curl expat global fcgi resolv ${ALLOC_LIBS} pthread ${CRYPTO_LIBS} ${EXTRALIBS} global)
 endif(${WITH_RADOSGW})
 endif(${WITH_BUILD_TESTS})
 
@@ -212,7 +212,7 @@ add_executable(smalliobench
   ${smalliobench_srcs}
   )
 target_link_libraries(smalliobench librados boost_program_options global
-  boost_filesystem ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
+  boost_filesystem ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
 
 # smalliobenchfs
 set(smalliobenchfs_srcs
@@ -226,7 +226,7 @@ add_executable(smalliobenchfs
   $<TARGET_OBJECTS:os_filestore_objs>
   )
 target_link_libraries(smalliobenchfs librados boost_program_options os global
-  leveldb aio boost_filesystem boost_system ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
+  leveldb aio boost_filesystem boost_system ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
 
 # smalliobenchdumb
 set(smalliobenchdumb_srcs
@@ -239,7 +239,7 @@ add_executable(smalliobenchdumb
   ${smalliobenchdumb_srcs}
   )
 target_link_libraries(smalliobenchdumb librados boost_program_options os global
-  boost_filesystem ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
+  boost_filesystem ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
 
 # smalliobenchrbd
 set(smalliobenchrbd_srcs
@@ -252,7 +252,7 @@ add_executable(smalliobenchrbd
   ${smalliobenchrbd_srcs}
   )
 target_link_libraries(smalliobenchrbd librbd librados boost_program_options os
-  global boost_filesystem  ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
+  global boost_filesystem  ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
 
 # tpbench
 set(tpbench_srcs
@@ -262,7 +262,7 @@ add_executable(tpbench
   ${tpbench_srcs}
   )
 target_link_libraries(tpbench librados boost_filesystem boost_program_options
-  os global ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
+  os global ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
 
 # omapbench
 set(omapbench_srcs
@@ -278,7 +278,7 @@ target_link_libraries(omapbench
   global
   boost_filesystem
   ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   )
 
 # kvstorebench
@@ -290,7 +290,7 @@ add_executable(kvstorebench
   ${kvstorebench_srcs}
   )
 target_link_libraries(kvstorebench librados global boost_filesystem
-  ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
+  ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
 
 ## System tests
 
@@ -310,7 +310,7 @@ add_executable(test_rados_list_parallel
   system/rados_list_parallel.cc
   )
 target_link_libraries(test_rados_list_parallel librados systest global pthread
-  rt ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
+  rt ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
 
 # test_rados_open_volumess_parallel
 set(test_rados_open_volumes_parallel_srcs system/rados_open_volumes_parallel.cc)
@@ -318,7 +318,7 @@ add_executable(test_rados_open_volumes_parallel
   ${test_rados_open_volumes_parallel_srcs}
   )
 target_link_libraries(test_rados_open_volumes_parallel librados systest global
-  pthread rt ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
+  pthread rt ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
 
 # test_rados_delete_volumes_parallel
 set(test_rados_delete_volumes_parallel_srcs
@@ -332,7 +332,7 @@ add_executable(test_rados_delete_volumes_parallel
   ${test_rados_delete_volumes_parallel_srcs}
   )
 target_link_libraries(test_rados_delete_volumes_parallel librados systest global
-  pthread rt ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
+  pthread rt ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
 
 # test_rados_watch_notify
 set(test_rados_watch_notify_srcs
@@ -347,7 +347,7 @@ add_executable(test_rados_watch_notify
   ${test_rados_watch_notify_srcs}
   )
 target_link_libraries(test_rados_watch_notify librados systest global
-  pthread rt ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
+  pthread rt ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
 
 # bench_log
 set(bench_log_srcs
@@ -356,7 +356,7 @@ set(bench_log_srcs
 add_executable(bench_log
   ${bench_log_srcs}
   )
-target_link_libraries(bench_log global pthread rt ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
+target_link_libraries(bench_log global pthread rt ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
 
 #Make check starts here
 add_custom_target(symlinks  COMMAND
@@ -411,7 +411,7 @@ add_executable(unittest_encoding EXCLUDE_FROM_ALL
 add_test(unittest_encoding unittest_encoding)
 add_dependencies(check unittest_encoding)
 target_link_libraries(unittest_encoding librados global boost_filesystem
-  pthread rt m ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
+  pthread rt m ${CMAKE_DL_LIBS} ${ALLOC_LIBS} ${UNITTEST_LIBS})
 set_target_properties(unittest_encoding
   PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
 
@@ -426,7 +426,7 @@ add_test(unittest_addrs unittest_addrs)
 add_dependencies(check unittest_addrs)
 target_link_libraries(unittest_addrs
   librados global boost_filesystem pthread rt m
-  ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
+  ${CMAKE_DL_LIBS} ${ALLOC_LIBS} ${UNITTEST_LIBS})
 set_target_properties(unittest_addrs
   PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
 
@@ -437,7 +437,7 @@ add_executable(unittest_histogram EXCLUDE_FROM_ALL
 add_test(unittest_histogram unittest_histogram)
 add_dependencies(check unittest_histogram)
 target_link_libraries(unittest_histogram global
-  ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
+  ${CMAKE_DL_LIBS} ${ALLOC_LIBS} ${UNITTEST_LIBS})
 set_target_properties(unittest_histogram
   PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
 
@@ -451,7 +451,7 @@ add_executable(unittest_str_map EXCLUDE_FROM_ALL
 add_test(unittest_str_map unittest_str_map)
 add_dependencies(check unittest_str_map)
 target_link_libraries(unittest_str_map global
-  ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
+  ${CMAKE_DL_LIBS} ${ALLOC_LIBS} ${UNITTEST_LIBS})
 set_target_properties(unittest_str_map
   PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
 
@@ -465,7 +465,7 @@ add_executable(unittest_sharedptr_registry EXCLUDE_FROM_ALL
 add_test(unittest_sharedptr_registry unittest_sharedptr_registry)
 add_dependencies(check unittest_sharedptr_registry)
 target_link_libraries(unittest_sharedptr_registry global
-  ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
+  ${CMAKE_DL_LIBS} ${ALLOC_LIBS} ${UNITTEST_LIBS})
 set_target_properties(unittest_sharedptr_registry
   PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
 
@@ -479,7 +479,7 @@ add_executable(unittest_sloppy_crc_map EXCLUDE_FROM_ALL
 add_test(unittest_sloppy_crc_map unittest_sloppy_crc_map)
 add_dependencies(check unittest_sloppy_crc_map)
 target_link_libraries(unittest_sloppy_crc_map global
-  ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
+  ${CMAKE_DL_LIBS} ${ALLOC_LIBS} ${UNITTEST_LIBS})
 set_target_properties(unittest_sloppy_crc_map
   PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
 
@@ -496,7 +496,7 @@ add_dependencies(check unittest_util)
 target_link_libraries(unittest_util
   global
   ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${UNITTEST_LIBS}
   )
 set_target_properties(unittest_util
@@ -509,7 +509,7 @@ add_executable(unittest_osdmap EXCLUDE_FROM_ALL
   )
 add_test(unittest_osdmap unittest_osdmap)
 add_dependencies(check unittest_osdmap)
-target_link_libraries(unittest_osdmap global ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS}
+target_link_libraries(unittest_osdmap global ${CMAKE_DL_LIBS} ${ALLOC_LIBS}
   ${UNITTEST_LIBS})
 set_target_properties(unittest_osdmap PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
@@ -522,7 +522,7 @@ add_executable(unittest_workqueue EXCLUDE_FROM_ALL
 add_test(unittest_workqueue unittest_workqueue)
 add_dependencies(check unittest_workqueue)
 target_link_libraries(unittest_workqueue global ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
+  ${ALLOC_LIBS} ${UNITTEST_LIBS})
 set_target_properties(unittest_workqueue PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 
@@ -534,7 +534,7 @@ add_executable(unittest_prebufferedstreambuf EXCLUDE_FROM_ALL
 add_test(unittest_prebufferedstreambuf unittest_prebufferedstreambuf)
 add_dependencies(check unittest_prebufferedstreambuf)
 target_link_libraries(unittest_prebufferedstreambuf global ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
+  ${ALLOC_LIBS} ${UNITTEST_LIBS})
 set_target_properties(unittest_prebufferedstreambuf PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 
@@ -546,7 +546,7 @@ add_executable(unittest_str_list EXCLUDE_FROM_ALL
 add_test(unittest_str_list unittest_str_list)
 add_dependencies(check unittest_str_list)
 target_link_libraries(unittest_str_list global ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
+  ${ALLOC_LIBS} ${UNITTEST_LIBS})
 set_target_properties(unittest_str_list PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 
@@ -557,7 +557,7 @@ add_executable(unittest_log EXCLUDE_FROM_ALL
   )
 add_test(unittest_log unittest_log)
 add_dependencies(check unittest_log)
-target_link_libraries(unittest_log global ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS}
+target_link_libraries(unittest_log global ${CMAKE_DL_LIBS} ${ALLOC_LIBS}
   ${UNITTEST_LIBS})
 set_target_properties(unittest_log PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
@@ -570,7 +570,7 @@ add_executable(unittest_throttle EXCLUDE_FROM_ALL
 add_test(unittest_throttle unittest_throttle)
 add_dependencies(check unittest_throttle)
 target_link_libraries(unittest_throttle global ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
+  ${ALLOC_LIBS} ${UNITTEST_LIBS})
 set_target_properties(unittest_throttle PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 
@@ -581,7 +581,7 @@ add_executable(unittest_base64 EXCLUDE_FROM_ALL
   )
 add_test(unittest_base64 unittest_base64)
 add_dependencies(check unittest_base64)
-target_link_libraries(unittest_base64 global ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
+target_link_libraries(unittest_base64 global ${CMAKE_DL_LIBS} ${ALLOC_LIBS} ${UNITTEST_LIBS})
 set_target_properties(unittest_base64 PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
 
 # unittest_ceph_argparse
@@ -592,7 +592,7 @@ add_executable(unittest_ceph_argparse EXCLUDE_FROM_ALL
 add_test(unittest_ceph_argparse unittest_ceph_argparse)
 add_dependencies(check unittest_ceph_argparse)
 target_link_libraries(unittest_ceph_argparse global ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
+  ${ALLOC_LIBS} ${UNITTEST_LIBS})
 set_target_properties(unittest_ceph_argparse PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 
@@ -604,7 +604,7 @@ add_executable(unittest_ceph_compatset EXCLUDE_FROM_ALL
 add_test(unittest_ceph_compatset unittest_ceph_compatset)
 add_dependencies(check unittest_ceph_compatset)
 target_link_libraries(unittest_ceph_compatset global ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
+  ${ALLOC_LIBS} ${UNITTEST_LIBS})
 set_target_properties(unittest_ceph_compatset PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 
@@ -616,7 +616,7 @@ add_executable(unittest_osd_types EXCLUDE_FROM_ALL
 add_test(unittest_osd_types unittest_osd_types)
 add_dependencies(check unittest_osd_types)
 target_link_libraries(unittest_osd_types global ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
+  ${ALLOC_LIBS} ${UNITTEST_LIBS})
 set_target_properties(unittest_osd_types PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 
@@ -627,7 +627,7 @@ add_executable(unittest_gather EXCLUDE_FROM_ALL
   )
 add_test(unittest_gather unittest_gather)
 add_dependencies(check unittest_gather)
-target_link_libraries(unittest_gather global ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS}
+target_link_libraries(unittest_gather global ${CMAKE_DL_LIBS} ${ALLOC_LIBS}
   ${UNITTEST_LIBS})
 set_target_properties(unittest_gather PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
@@ -639,7 +639,7 @@ add_executable(unittest_run_cmd EXCLUDE_FROM_ALL
   )
 add_test(unittest_run_cmd unittest_run_cmd)
 add_dependencies(check unittest_run_cmd)
-target_link_libraries(unittest_run_cmd global ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS}
+target_link_libraries(unittest_run_cmd global ${CMAKE_DL_LIBS} ${ALLOC_LIBS}
   ${UNITTEST_LIBS})
 set_target_properties(unittest_run_cmd PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
@@ -651,7 +651,7 @@ add_executable(unittest_signals EXCLUDE_FROM_ALL
   )
 add_test(unittest_signals unittest_signals)
 add_dependencies(check unittest_signals)
-target_link_libraries(unittest_signals global ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS}
+target_link_libraries(unittest_signals global ${CMAKE_DL_LIBS} ${ALLOC_LIBS}
   ${UNITTEST_LIBS})
 set_target_properties(unittest_signals PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
@@ -664,7 +664,7 @@ add_executable(unittest_simple_spin EXCLUDE_FROM_ALL
 add_test(unittest_simple_spin unittest_simple_spin)
 add_dependencies(check unittest_simple_spin)
 target_link_libraries(unittest_simple_spin global ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
+  ${ALLOC_LIBS} ${UNITTEST_LIBS})
 set_target_properties(unittest_simple_spin PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 
@@ -678,7 +678,7 @@ add_dependencies(check unittest_librados)
 target_link_libraries(unittest_librados
   librados global boost_filesystem
   ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${UNITTEST_LIBS}
   )
 set_target_properties(unittest_librados PROPERTIES COMPILE_FLAGS
@@ -692,7 +692,7 @@ add_executable(unittest_bufferlist EXCLUDE_FROM_ALL
 add_test(unittest_bufferlist unittest_bufferlist)
 add_dependencies(check unittest_bufferlist)
 target_link_libraries(unittest_bufferlist global ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
+  ${ALLOC_LIBS} ${UNITTEST_LIBS})
 set_target_properties(unittest_bufferlist PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 
@@ -703,7 +703,7 @@ add_executable(unittest_crc32 EXCLUDE_FROM_ALL
   )
 add_test(unittest_crc32 unittest_crc32)
 add_dependencies(check unittest_crc32)
-target_link_libraries(unittest_crc32 global ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS}
+target_link_libraries(unittest_crc32 global ${CMAKE_DL_LIBS} ${ALLOC_LIBS}
   ${UNITTEST_LIBS})
 set_target_properties(unittest_crc32 PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
@@ -715,7 +715,7 @@ add_executable(unittest_arch EXCLUDE_FROM_ALL
   )
 add_test(unittest_arch unittest_arch)
 add_dependencies(check unittest_arch)
-target_link_libraries(unittest_arch global ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS}
+target_link_libraries(unittest_arch global ${CMAKE_DL_LIBS} ${ALLOC_LIBS}
   ${UNITTEST_LIBS})
 set_target_properties(unittest_arch PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
@@ -728,7 +728,7 @@ add_executable(unittest_crypto_init EXCLUDE_FROM_ALL
 add_test(unittest_crypto_init unittest_crypto_init)
 add_dependencies(check unittest_crypto_init)
 target_link_libraries(unittest_crypto_init global ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
+  ${ALLOC_LIBS} ${UNITTEST_LIBS})
 set_target_properties(unittest_crypto_init PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 
@@ -740,7 +740,7 @@ add_executable(unittest_admin_socket EXCLUDE_FROM_ALL
 add_test(unittest_admin_socket unittest_admin_socket)
 add_dependencies(check unittest_admin_socket)
 target_link_libraries(unittest_admin_socket global ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
+  ${ALLOC_LIBS} ${UNITTEST_LIBS})
 set_target_properties(unittest_admin_socket PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 
@@ -752,7 +752,7 @@ add_executable(unittest_ceph_crypto EXCLUDE_FROM_ALL
 add_test(unittest_ceph_crypto unittest_ceph_crypto)
 add_dependencies(check unittest_ceph_crypto)
 target_link_libraries(unittest_ceph_crypto global ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
+  ${ALLOC_LIBS} ${UNITTEST_LIBS})
 set_target_properties(unittest_ceph_crypto PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 
@@ -763,7 +763,7 @@ add_executable(unittest_utf8 EXCLUDE_FROM_ALL
   )
 add_test(unittest_utf8 unittest_utf8)
 add_dependencies(check unittest_utf8)
-target_link_libraries(unittest_utf8 global ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS}
+target_link_libraries(unittest_utf8 global ${CMAKE_DL_LIBS} ${ALLOC_LIBS}
   ${UNITTEST_LIBS})
 set_target_properties(unittest_utf8 PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
@@ -775,7 +775,7 @@ add_executable(unittest_mime EXCLUDE_FROM_ALL
   )
 add_test(unittest_mime unittest_mime)
 add_dependencies(check unittest_mime)
-target_link_libraries(unittest_mime global ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS}
+target_link_libraries(unittest_mime global ${CMAKE_DL_LIBS} ${ALLOC_LIBS}
   ${UNITTEST_LIBS})
 set_target_properties(unittest_mime PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
@@ -787,7 +787,7 @@ add_executable(unittest_escape EXCLUDE_FROM_ALL
   )
 add_test(unittest_escape unittest_escape)
 add_dependencies(check unittest_escape)
-target_link_libraries(unittest_escape global ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS}
+target_link_libraries(unittest_escape global ${CMAKE_DL_LIBS} ${ALLOC_LIBS}
   ${UNITTEST_LIBS})
 set_target_properties(unittest_escape PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
@@ -806,7 +806,7 @@ set_target_properties(unittest_chain_xattr PROPERTIES COMPILE_FLAGS
 target_link_libraries(unittest_chain_xattr
   os global boost_filesystem
   ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${UNITTEST_LIBS}
   )
 
@@ -822,7 +822,7 @@ add_dependencies(check unittest_flatindex)
 target_link_libraries(unittest_flatindex
   os global boost_filesystem
   ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${UNITTEST_LIBS}
   )
 set_target_properties(unittest_flatindex PROPERTIES COMPILE_FLAGS
@@ -835,7 +835,7 @@ add_executable(unittest_strtol EXCLUDE_FROM_ALL
   )
 add_test(unittest_strtol unittest_strtol)
 add_dependencies(check unittest_strtol)
-target_link_libraries(unittest_strtol global ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS}
+target_link_libraries(unittest_strtol global ${CMAKE_DL_LIBS} ${ALLOC_LIBS}
   ${UNITTEST_LIBS})
 set_target_properties(unittest_strtol PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
@@ -848,7 +848,7 @@ add_executable(unittest_confutils EXCLUDE_FROM_ALL
 add_test(unittest_confutils unittest_confutils)
 add_dependencies(check unittest_confutils)
 target_link_libraries(unittest_confutils global ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
+  ${ALLOC_LIBS} ${UNITTEST_LIBS})
 set_target_properties(unittest_confutils PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 
@@ -859,7 +859,7 @@ add_executable(unittest_config EXCLUDE_FROM_ALL
   )
 add_test(unittest_config unittest_config)
 add_dependencies(check unittest_config)
-target_link_libraries(unittest_config global ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS}
+target_link_libraries(unittest_config global ${CMAKE_DL_LIBS} ${ALLOC_LIBS}
   ${UNITTEST_LIBS})
 set_target_properties(unittest_config PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
@@ -872,7 +872,7 @@ add_executable(unittest_context EXCLUDE_FROM_ALL
 add_test(unittest_context unittest_context)
 add_dependencies(check unittest_context)
 target_link_libraries(unittest_context global ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
+  ${ALLOC_LIBS} ${UNITTEST_LIBS})
 set_target_properties(unittest_context PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 
@@ -884,7 +884,7 @@ add_executable(unittest_heartbeatmap EXCLUDE_FROM_ALL
 add_test(unittest_heartbeatmap unittest_heartbeatmap)
 add_dependencies(check unittest_heartbeatmap)
 target_link_libraries(unittest_heartbeatmap global ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
+  ${ALLOC_LIBS} ${UNITTEST_LIBS})
 set_target_properties(unittest_heartbeatmap PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 
@@ -898,7 +898,7 @@ if(${WITH_RADOSGW})
 add_test(unittest_formatter unittest_formatter)
 add_dependencies(check unittest_formatter)
   target_link_libraries(unittest_formatter global ${CMAKE_DL_LIBS}
-    ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
+    ${ALLOC_LIBS} ${UNITTEST_LIBS})
   set_target_properties(unittest_formatter PROPERTIES COMPILE_FLAGS
     ${UNITTEST_CXX_FLAGS})
 endif(${WITH_RADOSGW})
@@ -915,7 +915,7 @@ target_link_libraries(unittest_libcephfs_config
   common
   global
   ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
+  ${ALLOC_LIBS} ${UNITTEST_LIBS})
 set_target_properties(unittest_libcephfs_config PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 endif(${WITH_CLIENT})
@@ -931,7 +931,7 @@ target_link_libraries(unittest_librados_config
   librados
   global boost_filesystem
   ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${UNITTEST_LIBS}
   )
 set_target_properties(unittest_librados_config PROPERTIES COMPILE_FLAGS
@@ -952,7 +952,7 @@ target_link_libraries(unittest_daemon_config
   global
   ${UNITTEST_LIBS}
   ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${EXTRALIBS}
   )
 add_test(unittest_daemon_config unittest_daemon_config)
@@ -969,7 +969,7 @@ add_executable(unittest_mon_moncap EXCLUDE_FROM_ALL
 add_test(unittest_mon_moncap unittest_mon_moncap)
 add_dependencies(check unittest_mon_moncap)
 target_link_libraries(unittest_mon_moncap mon global ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
+  ${ALLOC_LIBS} ${UNITTEST_LIBS})
 set_target_properties(unittest_mon_moncap PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 
@@ -978,7 +978,7 @@ add_executable(unittest_ipaddr EXCLUDE_FROM_ALL test_ipaddr.cc)
 add_test(unittest_ipaddr unittest_ipaddr)
 add_dependencies(check unittest_ipaddr)
 target_link_libraries(unittest_ipaddr mon global ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
+  ${ALLOC_LIBS} ${UNITTEST_LIBS})
 set_target_properties(unittest_ipaddr PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 
@@ -993,7 +993,7 @@ add_executable(unittest_texttable EXCLUDE_FROM_ALL
 add_test(unittest_texttable unittest_texttable)
 add_dependencies(check unittest_texttable)
 target_link_libraries(unittest_texttable mon global ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
+  ${ALLOC_LIBS} ${UNITTEST_LIBS})
 set_target_properties(unittest_texttable PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 
@@ -1007,7 +1007,7 @@ add_dependencies(check unittest_on_exit)
 target_link_libraries(unittest_on_exit
   global
   ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${UNITTEST_LIBS})
 set_target_properties(unittest_on_exit PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
@@ -1026,7 +1026,7 @@ if(${WITH_RADOSGW})
     global
     curl
     expat
-    ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
+    ${CMAKE_DL_LIBS} ${ALLOC_LIBS} ${UNITTEST_LIBS})
   set_target_properties(test_cors PROPERTIES COMPILE_FLAGS
     ${UNITTEST_CXX_FLAGS})
 
@@ -1051,7 +1051,7 @@ if(${WITH_RADOSGW})
     curl
     expat
     ${CMAKE_DL_LIBS}
-    ${TCMALLOC_LIBS}
+    ${ALLOC_LIBS}
     ${UNITTEST_LIBS}
     ${CRYPTO_LIBS}
     )
@@ -1077,7 +1077,7 @@ if(${WITH_RADOSGW})
     cls_user_client
     cls_lock_client
     boost_regex
-    ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS} ${UNITTEST_LIBS} ${CRYPTO_LIBS})
+    ${CMAKE_DL_LIBS} ${ALLOC_LIBS} ${UNITTEST_LIBS} ${CRYPTO_LIBS})
   set_target_properties(test_cls_rgw_meta PROPERTIES COMPILE_FLAGS
     ${UNITTEST_CXX_FLAGS})
 
@@ -1103,7 +1103,7 @@ if(${WITH_RADOSGW})
     cls_lock_client
     boost_regex
     ${CMAKE_DL_LIBS}
-    ${TCMALLOC_LIBS}
+    ${ALLOC_LIBS}
     ${UNITTEST_LIBS}
     ${EXTRALIBS}
     ${CRYPTO_LIBS}
@@ -1130,7 +1130,7 @@ if(${WITH_RADOSGW})
     curl
     expat
     ${CMAKE_DL_LIBS}
-    ${TCMALLOC_LIBS}
+    ${ALLOC_LIBS}
     ${UNITTEST_LIBS}
     ${CRYPTO_LIBS}
     ${EXTRALIBS}
@@ -1149,7 +1149,7 @@ add_executable(multi_stress_watch
   multi_stress_watch.cc
   )
 target_link_libraries(multi_stress_watch librados global radostest
-  ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
+  ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
 
 add_executable(test_librbd
   librbd/test_librbd.cc
@@ -1162,7 +1162,7 @@ target_link_libraries(test_librbd
   ${UNITTEST_LIBS}
   global
   ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CRYPTO_LIBS}
   ${EXTRALIBS}
   radostest
@@ -1177,7 +1177,7 @@ target_link_libraries(test_librbd_fsx
   global
   m
   ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CRYPTO_LIBS}
   ${EXTRALIBS}
   )
@@ -1193,7 +1193,7 @@ target_link_libraries(test_cls_refcount
   global
   ${UNITTEST_LIBS}
   ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CRYPTO_LIBS}
   ${EXTRALIBS}
   radostest
@@ -1210,7 +1210,7 @@ target_link_libraries(test_cls_version
   global
   ${UNITTEST_LIBS}
   ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CRYPTO_LIBS}
   ${EXTRALIBS}
   radostest
@@ -1228,7 +1228,7 @@ target_link_libraries(test_cls_log
   radostest
   ${UNITTEST_LIBS}
   ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CRYPTO_LIBS}
   ${EXTRALIBS}
   )
@@ -1244,7 +1244,7 @@ target_link_libraries(test_cls_statelog
   global
   ${UNITTEST_LIBS}
   ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CRYPTO_LIBS}
   ${EXTRALIBS}
   radostest
@@ -1261,7 +1261,7 @@ target_link_libraries(test_cls_replica_log
   global
   ${UNITTEST_LIBS}
   ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CRYPTO_LIBS}
   ${EXTRALIBS}
   radostest
@@ -1278,7 +1278,7 @@ target_link_libraries(test_cls_lock
   global
   ${UNITTEST_LIBS}
   ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CRYPTO_LIBS}
   ${EXTRALIBS}
   radostest
@@ -1293,7 +1293,7 @@ target_link_libraries(test_cls_hello
   librados
   global
   ${EXTRALIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CMAKE_DL_LIBS}
   radostest
   ${UNITTEST_LIBS}
@@ -1311,7 +1311,7 @@ if(${WITH_RADOSGW})
     global
     ${UNITTEST_LIBS}
     ${EXTRALIBS}
-    ${TCMALLOC_LIBS}
+    ${ALLOC_LIBS}
     ${CMAKE_DL_LIBS}
     radostest)
 endif(${WITH_RADOSGW})
@@ -1322,7 +1322,7 @@ add_executable(test_mon_workloadgen
 target_link_libraries(test_mon_workloadgen
   os osdc global boost_filesystem
   ${EXTRALIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CMAKE_DL_LIBS}
   )
 
@@ -1336,7 +1336,7 @@ target_link_libraries(test_rados_api_io
   global
   ${UNITTEST_LIBS}
   ${EXTRALIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CMAKE_DL_LIBS}
   radostest
   )
@@ -1351,7 +1351,7 @@ target_link_libraries(test_rados_api_c_write_operations
   global
   ${UNITTEST_LIBS}
   ${EXTRALIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CMAKE_DL_LIBS}
   radostest)
 
@@ -1365,7 +1365,7 @@ target_link_libraries(test_rados_api_c_read_operations
   global
   ${UNITTEST_LIBS}
   ${EXTRALIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CMAKE_DL_LIBS}
   radostest
   )
@@ -1380,7 +1380,7 @@ target_link_libraries(test_rados_api_aio
   global
   ${UNITTEST_LIBS}
   ${EXTRALIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CMAKE_DL_LIBS}
   radostest
   )
@@ -1395,7 +1395,7 @@ target_link_libraries(test_rados_api_list
   global
   ${UNITTEST_LIBS}
   ${EXTRALIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CMAKE_DL_LIBS}
   radostest)
 
@@ -1410,7 +1410,7 @@ target_link_libraries(test_rados_api_volume
   global
   ${UNITTEST_LIBS}
   ${EXTRALIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CMAKE_DL_LIBS}
   radostest
   )
@@ -1425,7 +1425,7 @@ target_link_libraries(test_rados_api_watch_notify
   global
   ${UNITTEST_LIBS}
   ${EXTRALIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CMAKE_DL_LIBS}
   radostest
   )
@@ -1440,7 +1440,7 @@ target_link_libraries(test_rados_api_cls
   global
   ${UNITTEST_LIBS}
   ${EXTRALIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CMAKE_DL_LIBS}
   radostest
   )
@@ -1455,7 +1455,7 @@ target_link_libraries(test_rados_api_misc
   global
   ${UNITTEST_LIBS}
   ${EXTRALIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CMAKE_DL_LIBS}
   boost_system
   radostest
@@ -1471,7 +1471,7 @@ target_link_libraries(test_rados_api_lock
   global
   ${UNITTEST_LIBS}
   ${EXTRALIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CMAKE_DL_LIBS}
   radostest
   )
@@ -1490,7 +1490,7 @@ if(${WITH_CLIENT})
     cephfs
     ${UNITTEST_LIBS}
     ${EXTRALIBS}
-    ${TCMALLOC_LIBS}
+    ${ALLOC_LIBS}
     ${CMAKE_DL_LIBS}
     )
 endif(${WITH_CLIENT})
@@ -1506,7 +1506,7 @@ target_link_libraries(test_objectstore
   ${UNITTEST_LIBS}
   global
   ${EXTRALIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CMAKE_DL_LIBS}
   )
 
@@ -1517,7 +1517,7 @@ add_executable(test_objectstore_workloadgen
 target_link_libraries(test_objectstore_workloadgen
   os global boost_filesystem
   ${EXTRALIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CMAKE_DL_LIBS}
   )
 
@@ -1530,7 +1530,7 @@ add_executable(test_filestore_idempotent
 target_link_libraries(test_filestore_idempotent
   os global leveldb aio boost_filesystem boost_system
   ${EXTRALIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CMAKE_DL_LIBS}
   )
 
@@ -1544,7 +1544,7 @@ add_executable(test_filestore_idempotent_sequence
 target_link_libraries(test_filestore_idempotent_sequence
   os global leveldb aio boost_filesystem boost_system
   ${EXTRALIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CMAKE_DL_LIBS}
   )
 
@@ -1559,7 +1559,7 @@ target_link_libraries(test_xattr_bench
   ${UNITTEST_LIBS}
   global leveldb aio boost_filesystem boost_system
   ${EXTRALIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CMAKE_DL_LIBS}
   )
 
@@ -1574,7 +1574,7 @@ target_link_libraries(test_filejournal
   ${UNITTEST_LIBS}
   global leveldb aio boost_filesystem boost_system
   ${EXTRALIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CMAKE_DL_LIBS}
   )
 
@@ -1589,7 +1589,7 @@ target_link_libraries(test_stress_watch
   ${UNITTEST_LIBS}
   radostest
   ${EXTRALIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CMAKE_DL_LIBS}
   )
 
@@ -1601,7 +1601,7 @@ target_link_libraries(test_objectcacher_stress
   osdc
   global
   ${EXTRALIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CMAKE_DL_LIBS}
   )
 
@@ -1616,7 +1616,7 @@ target_link_libraries(test_object_map
   ${UNITTEST_LIBS}
   global
   ${EXTRALIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CMAKE_DL_LIBS}
   )
 
@@ -1633,7 +1633,7 @@ target_link_libraries(test_keyvaluedb_atomicity
   boost_system
   leveldb
   ${EXTRALIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CMAKE_DL_LIBS}
   )
 
@@ -1648,7 +1648,7 @@ target_link_libraries(test_keyvaluedb_iterators
   ${UNITTEST_LIBS}
   global
   ${EXTRALIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CMAKE_DL_LIBS}
   )
 
@@ -1661,7 +1661,7 @@ if(${WITH_FUSE})
     os
     boost_filesystem
     ${EXTRALIBS}
-    ${TCMALLOC_LIBS}
+    ${ALLOC_LIBS}
     ${CMAKE_DL_LIBS}
     )
 endif(${WITH_FUSE})
@@ -1675,7 +1675,7 @@ if(${WITH_CLIENT})
     librados
     cephfs
     ${EXTRALIBS}
-    ${TCMALLOC_LIBS}
+    ${ALLOC_LIBS}
     ${CMAKE_DL_LIBS}
     )
 endif(${WITH_CLIENT})
@@ -1686,7 +1686,7 @@ add_executable(test_get_blkdev_size
 target_link_libraries(test_get_blkdev_size
   common
   ${EXTRALIBS}
-  ${TCMALLOC_LIBS}
+  ${ALLOC_LIBS}
   ${CMAKE_DL_LIBS}
   )
 
@@ -1696,14 +1696,14 @@ add_executable(simple_server
   messenger/simple_dispatcher.cc
   )
 target_link_libraries(simple_server os global common boost_regex
-  boost_filesystem ${TCMALLOC_LIBS})
+  boost_filesystem ${ALLOC_LIBS})
 
 add_executable(simple_client
   messenger/simple_client.cc
   messenger/simple_dispatcher.cc
   )
 target_link_libraries(simple_client os global common boost_filesystem
-  boost_regex ${TCMALLOC_LIBS})
+  boost_regex ${ALLOC_LIBS})
 
 if (HAVE_XIO)
   add_executable(xio_server
@@ -1711,14 +1711,14 @@ if (HAVE_XIO)
     messenger/xio_dispatcher.cc
     )
   target_link_libraries(xio_server os global common boost_filesystem
-    boost_regex ${TCMALLOC_LIBS} ${EXTRALIBS})
+    boost_regex ${ALLOC_LIBS} ${EXTRALIBS})
 
   add_executable(xio_client
     messenger/xio_client.cc
     messenger/xio_dispatcher.cc
     )
   target_link_libraries(xio_client os global common boost_filesystem
-    boost_regex ${TCMALLOC_LIBS} ${EXTRALIBS})
+    boost_regex ${ALLOC_LIBS} ${EXTRALIBS})
 endif(HAVE_XIO)
 
 if (WITH_FIO)
@@ -1752,14 +1752,14 @@ add_executable(test_libosd test_libosd.c
 )
 set_target_properties(test_libosd PROPERTIES LINKER_LANGUAGE C)
 target_link_libraries(test_libosd PRIVATE osd os global
-  boost_filesystem boost_system ${TCMALLOC_LIBS})
+  boost_filesystem boost_system ${ALLOC_LIBS})
 
 # test_libosd_remote
 add_executable(test_libosd_remote test_libosd_remote.c
 )
 set_target_properties(test_libosd_remote PROPERTIES LINKER_LANGUAGE C)
 target_link_libraries(test_libosd_remote PRIVATE osd os global
-  boost_filesystem boost_system ${TCMALLOC_LIBS})
+  boost_filesystem boost_system ${ALLOC_LIBS})
 
 # lttng_stream_test
 if (HAVE_LTTNG)

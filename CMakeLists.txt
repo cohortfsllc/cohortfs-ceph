@@ -178,11 +178,17 @@ find_package(snappy REQUIRED)
 set(HAVE_LIBSNAPPY ${SNAPPY_FOUND})
 endif(${WITH_SNAPPY})
 
-option(WITH_TCMALLOC "Use TCMalloc as Allocator" ON)
-if(${WITH_TCMALLOC})
-find_package(tcmalloc REQUIRED)
-set(HAVE_LIBTCMALLOC ${Tcmalloc_FOUND})
-endif(${WITH_TCMALLOC})
+IF(ALLOCATOR)
+  set(ALLOCATOR ${ALLOCATOR} CACHE STRING "memory allocator: jemalloc|tcmalloc|libc")
+ELSE()
+  if( "${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}" VERSION_GREATER "2.6" )
+    set(ALLOCATOR "jemalloc" CACHE STRING
+      "specify the memory allocator to use: jemalloc|tcmalloc|libc")
+  else("${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}" VERSION_GREATER "2.6" )
+    set(ALLOCATOR "libc" CACHE STRING
+      "specify the memory allocator to use: jemalloc|tcmalloc|libc")
+  endif( "${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}" VERSION_GREATER "2.6" )
+ENDIF()
 
 option(USE_CRYPTOPP "Cryptopp is ON" ON)
 find_package(cryptopp)
