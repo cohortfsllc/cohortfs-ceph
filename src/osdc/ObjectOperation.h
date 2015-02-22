@@ -124,6 +124,10 @@ public:
 		    uint64_t truncate_size, uint32_t truncate_seq,
 		    int *rval = NULL, Context* ctx = NULL) = 0;
 
+  // object data
+  virtual void read_full(bufferlist *bl,
+		    int *rval = NULL, Context* ctx = NULL) = 0;
+
   void sparse_read(uint64_t off, uint64_t len, std::map<uint64_t,uint64_t> *m,
 		   bufferlist *bl, int *rval) {
     add_op(CEPH_OSD_OP_SPARSE_READ);

@@ -286,6 +286,23 @@ void CohortVolume::StripulatedOp::read(uint64_t off, uint64_t len,
   gather.activate();
 }
 
+void CohortVolume::StripulatedOp::read_full(bufferlist *bl,
+		      int *rval, Context* ctx)
+{
+  C_MultiRead* mr = new C_MultiRead(pl, 0, bl, rval, ctx);
+  C_GatherBuilder gather;
+
+  add_op(CEPH_OSD_OP_STAT);
+  add_stat_ctx(&mr->total_real_length, nullptr, nullptr, gather.new_sub());
+  add_op(CEPH_OSD_OP_READ);
+  ops[0].back().op.extent.offset = 0;
+  ops[0].back().op.extent.length = CEPH_READ_ENTIRE;
+  ops[0].back().ctx = gather.new_sub();
+  ops[0].back().out_bl = bl;
+  gather.set_finisher(mr);
+  gather.activate();
+}
+
 void CohortVolume::StripulatedOp::add_sparse_read_ctx(
   uint64_t off, uint64_t len, std::map<uint64_t,uint64_t> *m,
   bufferlist *data_bl, int *rval, Context *ctx)

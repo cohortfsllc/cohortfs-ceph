@@ -81,6 +81,8 @@ protected:
     virtual void read(uint64_t off, uint64_t len, bufferlist *bl,
 		      uint64_t truncate_size, uint32_t truncate_seq,
 		      int *rval = NULL, Context* ctx = NULL);
+    virtual void read_full(bufferlist *bl,
+		      int *rval = NULL, Context* ctx = NULL);
     virtual void add_op(const int op);
     virtual void add_version(const uint64_t ver);
     virtual void add_oid(const hobject_t &oid);
