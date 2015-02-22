@@ -1154,7 +1154,8 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  ::encode(oi.size, osd_op.outdata);
 	  ::encode(oi.mtime, osd_op.outdata);
 	  ::encode(oi.total_real_length, osd_op.outdata);
-	  dout(10) << "stat oi has " << oi.size << " " << oi.mtime << dendl;
+	  dout(10) << "stat oi has " << oi.size << " " << oi.mtime <<
+		" " << oi.total_real_length  << dendl;
 	}
 	ctx->delta_stats.num_rd++;
       }
