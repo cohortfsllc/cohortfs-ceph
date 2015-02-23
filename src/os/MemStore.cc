@@ -122,15 +122,16 @@ void MemStore::dump_all()
 void MemStore::dump(Formatter *f)
 {
   f->open_array_section("collections");
-  for (map<coll_t,MemCollection*>::iterator p = coll_map.begin();
-       p != coll_map.end();
-       ++p) {
+  for (map<coll_t,MemCollection*>::iterator ci = coll_map.begin();
+       ci != coll_map.end();
+       ++ci) {
+    MemCollection& c = *(ci->second);
     f->open_object_section("collection");
-    f->dump_string("name", stringify(p->first));
+    f->dump_string("name", stringify(ci->first));
 
     f->open_array_section("xattrs");
-    for (map<string,bufferptr>::iterator q = p->second->xattr.begin();
-	 q != p->second->xattr.end();
+    for (map<string,bufferptr>::iterator q = ci->second->xattr.begin();
+	 q != ci->second->xattr.end();
 	 ++q) {
       f->open_object_section("xattr");
       f->dump_string("name", q->first);
@@ -140,19 +141,23 @@ void MemStore::dump(Formatter *f)
     f->close_section();
 
     f->open_array_section("objects");
-    for (map<hobject_t,ObjectRef>::iterator q = p->second->object_map.begin();
-	 q != p->second->object_map.end();
-	 ++q) {
-      f->open_object_section("object");
-      f->dump_string("name", stringify(q->first));
-      if (q->second)
-	q->second->dump(f);
-      f->close_section();
+    /* NB: not totally ordered */
+    c.obj_cache.lock(); /* lock entire cache */
+    for (int ix = 0; ix < c.obj_cache.n_part; ++ix) {
+      ObjCache::Partition& p = c.obj_cache.get(ix);
+      for (ObjCache::iterator it = p.tr.begin(); it != p.tr.end(); ++ix) {
+	Object& o = static_cast<Object&>(*it);
+	f->open_object_section("object");
+	f->dump_string("name", stringify(o.get_oid()));
+	o.dump(f);
+	f->close_section();
+      }
     }
+    c.obj_cache.unlock(); /* !LOCKED */
     f->close_section();
 
     f->close_section();
-  }
+  } /* collections */
   f->close_section();
 }
 
@@ -478,20 +483,31 @@ bool MemStore::collection_empty(CollectionHandle ch)
   MemCollection* c = static_cast<MemCollection*>(ch);
   RWLock::RLocker l(c->lock);
 
-  return c->object_map.empty();
+  for (int part_ix = 0; part_ix < c->obj_cache.n_part; ++part_ix) {
+    ObjCache::Partition& p = c->obj_cache.get(part_ix);
+    ObjCache::unique_lock lk(p.lock);
+    if (p.tr.size() > 0) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
-int MemStore::collection_list(CollectionHandle ch, vector<hobject_t>& o)
+int MemStore::collection_list(CollectionHandle ch, vector<hobject_t>& vo)
 {
   dout(10) << __func__ << " " << ch->get_cid() << dendl;
 
   MemCollection* c = static_cast<MemCollection*>(ch);
-  RWLock::RLocker l(c->lock);
-
-  for (map<hobject_t,ObjectRef>::iterator p = c->object_map.begin();
-       p != c->object_map.end();
-       ++p)
-    o.push_back(p->first);
+  ObjectStore::Object::ObjCache::iterator it;
+  for (int part_ix = 0; part_ix < c->obj_cache.n_part; ++part_ix) {
+    ObjCache::Partition& p = c->obj_cache.get(part_ix);
+    ObjCache::unique_lock lk(p.lock);
+    for (it = p.tr.begin(); it != p.tr.end(); ++it) {
+      Object& o = static_cast<Object&>(*it);
+      vo.push_back(o.get_oid());
+    }
+  }
   return 0;
 }
 
@@ -501,7 +517,8 @@ int MemStore::collection_list_partial(CollectionHandle ch,
 {
   dout(10) << __func__ << " " << ch->get_cid() << " " << start << " " << min
 	   << "-" << max << " " << dendl;
-
+  abort();
+#if 0 /* TODO: implement */
   MemCollection* c = static_cast<MemCollection*>(ch);
   RWLock::RLocker l(c->lock);
 
@@ -513,7 +530,7 @@ int MemStore::collection_list_partial(CollectionHandle ch,
   }
   if (p != c->object_map.end())
     *next = p->first;
-
+#endif
   return 0;
 }
 
@@ -523,7 +540,7 @@ int MemStore::collection_list_range(CollectionHandle ch,
 {
   dout(10) << __func__ << " " << ch->get_cid() << " " << start << " " << end
 	   << dendl;
-
+#if 0 /* TODO: implement */
   MemCollection* c = static_cast<MemCollection*>(ch);
   RWLock::RLocker l(c->lock);
 
@@ -533,6 +550,7 @@ int MemStore::collection_list_range(CollectionHandle ch,
     ls->push_back(p->first);
     ++p;
   }
+#endif
   return 0;
 }
 
@@ -1107,8 +1125,7 @@ int MemStore::_remove(MemCollection* c, ObjectHandle oh)
 {
   dout(10) << __func__ << " " << c->get_cid() << " " << oh->get_oid() << dendl;
 
-  c->object_map.erase(oh->get_oid());
-  c->object_hash.erase(oh->get_oid());
+  c->obj_cache.remove(oh->get_hk(), oh, ObjCache::FLAG_LOCK);
   return 0;
 }
 
@@ -1256,7 +1273,8 @@ int MemStore::_destroy_collection(MemCollection* c)
     return -ENOENT;
   {
     RWLock::RLocker l2(cp->second->lock);
-    if (!cp->second->object_map.empty())
+    /* POOPY */
+    if (!collection_empty(cp->second))
       return -ENOTEMPTY; // XXXX does this prevent destruction in general?
   }
   coll_map.erase(cp);

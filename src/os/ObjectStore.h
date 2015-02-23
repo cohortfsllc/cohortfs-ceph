@@ -138,7 +138,7 @@ public:
 
     typedef cohort::lru::LRU<cohort::SpinLock, n_lanes> ObjLRU;
 
-    const static int n_partitions = 3;
+    const static int n_partitions = 5;
     const static int cache_size = 373; // per-partiion cache size
 
     typedef std::tuple<uint64_t, const hobject_t&> ObjKeyType;
@@ -198,7 +198,7 @@ public:
   }; /* Object */
 
   class Collection : public RefCountedObject {
-  protected:
+  public:
     ObjectStore* os;
     uint32_t flags;
     Object::ObjCache obj_cache;
@@ -206,7 +206,6 @@ public:
     static constexpr uint32_t FLAG_NONE = 0x0000;
     static constexpr uint32_t FLAG_CLOSED = 0x0001;
 
-  public:
     const coll_t cid;
 
     Collection(ObjectStore* _os, const coll_t& _cid)
