@@ -2413,7 +2413,7 @@ retry:
     std::cout << "FTW address of FOUND FSObject " << (void*) oh << std::endl;
     /* need initial ref from LRU (fast path) */
     if (! obj_lru.ref(oh, cohort::lru::FLAG_INITIAL)) {
-      lat.mtx->unlock();
+      lat.lock->unlock();
       goto retry; /* !LATCHED */
     }
     /* LATCHED */
@@ -2443,11 +2443,11 @@ retry:
 				   Object::ObjCache::FLAG_UNLOCK);
       goto out; /* !LATCHED */
     } else {
-      lat.mtx->unlock();
+      lat.lock->unlock();
       goto retry; /* !LATCHED */
     }
   }
-  lat.mtx->unlock(); /* !LATCHED */
+  lat.lock->unlock(); /* !LATCHED */
  out:
   return oh;
 }
