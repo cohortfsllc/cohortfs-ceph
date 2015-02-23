@@ -217,8 +217,8 @@ public:
     uint64_t cur_size; /// Currently unflushed bytes
     uint32_t waiters;
 
-    typedef std::unique_lock<std::mutex> unique_lock;
-    typedef cohort::WaitQueue<FSObject::PendingWB> WaitQueue;
+    typedef std::unique_lock<cohort::SpinLock> unique_sp;
+    typedef cohort::WaitQueue<FSObject::PendingWB, cohort::SpinLock> WaitQueue;
 
     WaitQueue waitq;
 
@@ -264,13 +264,13 @@ public:
     /* For now, preserve legacy behavior (no sync on clear/clear_object) */
     void clear();
     void clear_object(FSObject* o);
-    void cond_signal_waiters(unique_lock& waitq_lk);
+    void cond_signal_waiters(unique_sp& waitq_sp);
 
     /* Thread impl */
     void start() {
       re_init();
       {
-	Mutex::Locker lk(lock);
+	unique_sp lk(waitq.lock);
 	stopping = false;
       }
       create();
@@ -278,7 +278,7 @@ public:
 
     void stop() {
       {
-	Mutex::Locker lk(lock);
+	unique_sp lk(waitq.lock);
 	stopping = true;
 	cond.Signal();
       }

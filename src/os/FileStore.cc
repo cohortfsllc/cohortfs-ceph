@@ -4545,10 +4545,10 @@ void FileStore::FSFlush::queue_wb(FSObject* o,
 				  bool nocache )
 {
   FSObject::PendingWB pwb(o, off, len, nocache);
-  unique_lock waitq_lk(waitq.we.mtx);
+  unique_sp waitq_sp(waitq.lock);
   if (should_block(off, len)) {
-    cohort::WaitQueue<FSObject::PendingWB>::Entry wqe(pwb);
-    waitq_lk.unlock();
+    cohort::WaitQueue<FSObject::PendingWB, cohort::SpinLock>::Entry wqe(pwb);
+    waitq_sp.unlock();
     waitq.wait_on(wqe);
   } else
     queue_finish(pwb);
@@ -4556,18 +4556,21 @@ void FileStore::FSFlush::queue_wb(FSObject* o,
 
 void FileStore::FSFlush::queue_finish(FSObject::PendingWB& pwb) {
   FSObject* o = pwb.o;
-  if (! o->pwb.ios) {
-    fc->get_os()->ref(o); /* ref+ */
-    fl_queue.push_front(*o); /* enqueue at fl_queue MRU */
+  /* o can be null (thread entry waiting on itself) */
+  if (o) {
+    if (! o->pwb.ios) {
+      fc->get_os()->ref(o); /* ref+ */
+      fl_queue.push_front(*o); /* enqueue at fl_queue MRU */
+    }
+    o->pwb.add(pwb);
   }
-  o->pwb.add(pwb);
 } /* queue_finish */
 
-void FileStore::FSFlush::cond_signal_waiters(unique_lock& waitq_lk)
+void FileStore::FSFlush::cond_signal_waiters(unique_sp& waitq_sp)
 {
-  assert(waitq_lk.owns_lock());
+  assert(waitq_sp.owns_lock());
   while (waitq.waiters) {
-    cohort::WaitQueue<FSObject::PendingWB>::Entry& wqe =
+    cohort::WaitQueue<FSObject::PendingWB, cohort::SpinLock>::Entry& wqe =
       waitq.queue.front();
     FSObject::PendingWB& pwb =
       const_cast< FSObject::PendingWB&>(wqe.get());
@@ -4580,7 +4583,7 @@ void FileStore::FSFlush::cond_signal_waiters(unique_lock& waitq_lk)
 
 void FileStore::FSFlush::clear_object(FSObject* o)
 {
-  unique_lock waitq_lk(waitq.we.mtx);
+  unique_sp waitq_sp(waitq.lock);
   if (o->pwb.ios) {
     Object::FlushQueue::iterator it =
       Object::FlushQueue::s_iterator_to(*o);
@@ -4588,29 +4591,36 @@ void FileStore::FSFlush::clear_object(FSObject* o)
     (void) o->pwb.sub(cur_ios, cur_size);
     fc->get_os()->unref(o);
   }
-  cond_signal_waiters(waitq_lk);
+  cond_signal_waiters(waitq_sp);
 } /* clear_object */
 
 void FileStore::FSFlush::clear() {
-  unique_lock waitq_lk(waitq.we.mtx);
+  unique_sp waitq_sp(waitq.lock);
   while (fl_queue.size()) {
     FSObject& o = static_cast<FSObject&>(fl_queue.back());
     fl_queue.pop_back();
     (void) o.pwb.sub(cur_ios, cur_size);
     fc->get_os()->unref(&o);
   }
-  cond_signal_waiters(waitq_lk);
+  cond_signal_waiters(waitq_sp);
 } /* clear */
 
 void* FileStore::FSFlush::entry()
 {
-  Mutex::Locker lk(lock);
+  unique_sp waitq_sp(waitq.lock);
+  FSObject::PendingWB pwb(nullptr, 0, 0, false); /* thread fake pwb */
+
   while (!stopping) {
     while (!stopping &&
 	   cur_ios < io_limits.first &&
 	   fl_queue.size() < fd_limits.first &&
-	   cur_size < size_limits.first)
-      cond.Wait(lock);
+	   cur_size < size_limits.first) {
+      /* queue ourselves on fake wb */
+      cohort::WaitQueue<FSObject::PendingWB, cohort::SpinLock>::Entry wqe(pwb);
+      waitq_sp.unlock();
+      waitq.wait_on(wqe, 100 /* ms */);
+      waitq_sp.lock();
+    }
     if (stopping)
       return nullptr;
     /* do it */
@@ -4618,7 +4628,7 @@ void* FileStore::FSFlush::entry()
     FSObject& o = static_cast<FSObject&>(fl_queue.back());
     fl_queue.pop_back();
     bool nocache = o.pwb.sub(cur_ios, cur_size);
-    lock.Unlock();
+    waitq_sp.unlock();
 #ifdef HAVE_FDATASYNC
     ::fdatasync(o.fd->fd);
 #else
@@ -4630,9 +4640,9 @@ void* FileStore::FSFlush::entry()
       assert(fa_r == 0);
     }
 #endif
-    lock.Lock();
+    waitq_sp.lock();
     fc->get_os()->unref(&o);
-    cond.Signal(); /* TODO: make conditional on sync flag */
+    cond_signal_waiters(waitq_sp);
   } /* (!stopping) */
   /* Thread exit */
   return nullptr;
