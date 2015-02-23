@@ -131,9 +131,10 @@ void ThreadPool::shutdown()
     worker.cond.notify_one();
   }
 
-  // finish jobs in queue
+  // finish (or drop) jobs in queue
   while (!jobs.empty()) {
-    jobs.front()();
+    if ((flags & FLAG_DROP_JOBS_ON_SHUTDOWN) == 0)
+      jobs.front()();
     jobs.pop();
   }
 
