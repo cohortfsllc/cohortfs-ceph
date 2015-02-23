@@ -13,6 +13,7 @@
  */
 
 #include "common/ThreadPool.h"
+#include <future>
 #include "gtest/gtest.h"
 
 #include "common/ceph_argparse.h"
@@ -178,6 +179,48 @@ TEST(ThreadPool, IdleTimeout)
   pool.shutdown();
 
   ASSERT_TRUE(a != b);
+}
+
+// test the FLAG_DROP_JOBS_ON_SHUTDOWN flag
+TEST(ThreadPool, DropJobsOnShutdown)
+{
+  const uint32_t flags = cohort::ThreadPool::FLAG_DROP_JOBS_ON_SHUTDOWN;
+
+  Mutex mutex;
+  Cond cond;
+  bool block = true;
+  int jobs_done = 0;
+
+  auto fn = [&]() {
+    Mutex::Locker lock(mutex);
+    while (block)
+      cond.Wait(mutex);
+    ++jobs_done;
+  };
+
+  // queue up multiple jobs for a single worker
+  cohort::ThreadPool pool(cct, 1, flags);
+  ASSERT_EQ(0, pool.submit(fn));
+  ASSERT_EQ(0, pool.submit(fn));
+  ASSERT_EQ(0, pool.submit(fn));
+
+  // start shutdown asynchronously
+  auto shutdown = std::async(std::launch::async, [&]() { pool.shutdown(); });
+
+  // give it time to block waiting for the worker to exit
+  const utime_t wait(0, 10000000ul); // 10ms
+  wait.sleep();
+
+  // unblock the jobs
+  mutex.Lock();
+  block = false;
+  cond.Signal();
+  mutex.Unlock();
+
+  // wait for shutdown to complete
+  shutdown.wait();
+
+  ASSERT_EQ(1, jobs_done); // must have dropped jobs 2 and 3
 }
 
 int main(int argc, char *argv[])

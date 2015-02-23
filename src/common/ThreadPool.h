@@ -33,12 +33,16 @@ namespace bi = boost::intrusive;
 
 class ThreadPool {
  public:
+  static const uint32_t FLAG_NONE = 0x0;
+  static const uint32_t FLAG_DROP_JOBS_ON_SHUTDOWN = 0x1;
+
   ThreadPool(CephContext *cct, uint32_t max_threads = 0,
+             uint32_t flags = FLAG_NONE,
              utime_t idle_timeout = utime_t(120, 0))
     : cct(cct),
       max_threads(max_threads),
       idle_timeout(idle_timeout),
-      flags(FLAG_NONE)
+      flags(flags)
   {}
 
   /// submit a job, specified by a function and its arguments
@@ -49,12 +53,10 @@ class ThreadPool {
   void shutdown();
 
  private:
-  typedef std::function<void()> Job;
+  // flags for internal use
+  static const uint32_t FLAG_SHUTDOWN = 0x80000000;
 
-  enum {
-    FLAG_NONE = 0x0,
-    FLAG_SHUTDOWN = 0x1,
-  };
+  typedef std::function<void()> Job;
 
   struct Worker {
     std::thread thread;
