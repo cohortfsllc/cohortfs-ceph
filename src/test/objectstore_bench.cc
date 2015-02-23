@@ -124,6 +124,7 @@ class OBS_Worker : public Thread
 {
   hoid_t oid;
   ObjectStore::CollectionHandle ch;
+  ObjectStore::ObjectHandle oh;
 
  public:
   OBS_Worker() { }
@@ -141,6 +142,17 @@ class OBS_Worker : public Thread
     // use a sequencer for each thread so they don't serialize each other
     ObjectStore::Sequencer seq("osbench worker");
 
+    {
+      ObjectStore::Transaction t;
+      auto cix = t.push_col(ch);
+      auto oix = t.push_oid(oid);
+      t.touch(cix, oix);
+      int r = fs->apply_transaction(t);
+      assert(r == 0);
+    }
+    oh = fs->get_object(ch, oid);
+    assert(oh);
+
     for (int ix = 0; ix < repeats; ++ix) {
       uint64_t offset = 0;
       size_t len = size;
@@ -153,7 +165,7 @@ class OBS_Worker : public Thread
 
 	ObjectStore::Transaction *t = new ObjectStore::Transaction;
 	t->push_col(ch);
-	t->push_oid(oid);
+	t->push_obj(oh);
 
 	// use the internal offsets for col/cid, obj/oid for brevity
 	t->write(offset, count, data);
@@ -183,7 +195,7 @@ class OBS_Worker : public Thread
     }
 
     // return ObjectStore handles
-    fs->close_collection(ch);
+    fs->put_object(oh);
 
     return 0;
   }
