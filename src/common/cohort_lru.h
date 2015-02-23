@@ -69,7 +69,7 @@ namespace cohort {
       virtual ~Object() {}
 
     private:
-      template <uint8_t N>
+      template <typename LK, uint8_t N>
       friend class LRU;
     };
 
@@ -82,13 +82,13 @@ namespace cohort {
       virtual ~ObjectFactory() {};
     };
 
-    template <uint8_t N=3>
+    template <typename LK, uint8_t N=3>
     class LRU
     {
     private:
 
       struct Lane {
-	std::mutex mtx;
+	LK lock;
 	Object::Queue q;
 #if 0
 	Object::Queue pinned;
@@ -130,9 +130,9 @@ namespace cohort {
 	  /* hiwat check */
 	  /* XXX try the hiwat check unlocked, then recheck locked */
 	  if (lane.q.size() > lane_hiwat) {
-	    lane.mtx.lock();
+	    lane.lock.lock();
 	    if (lane.q.size() <= lane_hiwat) {
-	      lane.mtx.unlock();
+	      lane.lock.unlock();
 	      continue;
 	    }
 	  } else
@@ -142,26 +142,26 @@ namespace cohort {
 	  if (can_reclaim(o)) {
 	    ++(o->lru_refcnt);
 	    o->lru_flags |= FLAG_EVICTING;
-	    lane.mtx.unlock();
+	    lane.lock.unlock();
 	    if (o->reclaim()) {
-	      lane.mtx.lock();
+	      lane.lock.lock();
 	      --(o->lru_refcnt);
 	      /* assertions that o state has not changed across relock */
 	      assert(o->lru_refcnt == SENTINEL_REFCNT);
 	      assert(o->lru_flags & FLAG_INLRU);
 	      Object::Queue::iterator it = Object::Queue::s_iterator_to(*o);
 	      lane.q.erase(it);
-	      lane.mtx.unlock();
+	      lane.lock.unlock();
 	      return o;
 	    } else {
 	      // XXX can't make unreachable (means what?)
-	      lane.mtx.lock();
+	      lane.lock.lock();
 	      --(o->lru_refcnt);
 	      o->lru_flags &= ~FLAG_EVICTING;
 	      /* unlock in next block */
 	    }
 	  } /* can_reclaim(o) */
-	  lane.mtx.unlock();
+	  lane.lock.unlock();
 	} /* each lane */
 	return nullptr;
       } /* evict_block */
@@ -176,12 +176,12 @@ namespace cohort {
 	if (flags & FLAG_INITIAL) {
 	  if ((++(o->lru_adj) % lru_adj_modulus) == 0) {
 	    Lane& lane = lane_of(o);
-	    lane.mtx.lock();
+	    lane.lock.lock();
 	    /* move to MRU */
 	    Object::Queue::iterator it = Object::Queue::s_iterator_to(*o);
 	    lane.q.erase(it);
 	    lane.q.push_front(*o);
-	    lane.mtx.unlock();
+	    lane.lock.unlock();
 	  } /* adj */
 	} /* initial ref */
 	return true;
@@ -191,7 +191,7 @@ namespace cohort {
 	uint32_t refcnt = --(o->lru_refcnt);
 	if (unlikely(refcnt == 0)) {
 	  Lane& lane = lane_of(o);
-	  lane.mtx.lock();
+	  lane.lock.lock();
 	  refcnt = o->lru_refcnt.load();
 	  if (unlikely(refcnt == 0)) {
 	    std::cout << "FTW DELETE FSObject " << (void*) o << std::endl;
@@ -199,7 +199,7 @@ namespace cohort {
 	    lane.q.erase(it);
 	    delete o;
 	  }
-	  lane.mtx.unlock();
+	  lane.lock.unlock();
 	}
       } /* unref */
 
@@ -215,7 +215,7 @@ namespace cohort {
 	o->lru_flags = FLAG_INLRU;
 
 	Lane& lane = lane_of(o);
-	lane.mtx.lock();
+	lane.lock.lock();
 	switch (edge) {
 	case Edge::MRU:
 	  lane.q.push_front(*o);
@@ -231,14 +231,14 @@ namespace cohort {
 	  o->lru_refcnt += 2; /* sentinel ref + initial */
 	else
 	  ++(o->lru_refcnt); /* sentinel */
-	lane.mtx.unlock();
+	lane.lock.unlock();
 	return o;
       } /* insert */
 
     };
 
-    template <typename T, typename TTree, typename CLT, typename CEQ, typename K,
-	      uint8_t N=3, uint16_t CSZ=127>
+    template <typename T, typename TTree, typename CLT, typename CEQ,
+	      typename K, typename LK, uint8_t N=3, uint16_t CSZ=127>
     class TreeX
     {
     public:
@@ -254,7 +254,7 @@ namespace cohort {
       typedef typename TTree::insert_commit_data insert_commit_data;
 
       struct Partition {
-	std::mutex mtx;
+	LK lock;
 	TTree tr;
 	T* cache[CSZ];
 	CACHE_PAD(0);
@@ -265,7 +265,7 @@ namespace cohort {
 
       struct Latch {
 	Partition* p;
-	std::mutex* mtx;
+	LK* lock;
 	insert_commit_data commit_data;
       };
 
@@ -277,16 +277,16 @@ namespace cohort {
 	uint32_t slot;
 	T* v;
 	lat.p = &(partition_of_scalar(hk));
-	lat.mtx = &lat.p->mtx;
+	lat.lock = &lat.p->lock;
 	if (flags & FLAG_LOCK)
-	  lat.mtx->lock();
+	  lat.lock->lock();
 	if (CSZ) { /* template specialize? */
 	  slot = hk % CSZ;
 	  v = lat.p->cache[slot];
 	  if (v) {
 	    if (CEQ()(*v, k)) {
 	      if (flags & (FLAG_LOCK|FLAG_UNLOCK))
-		lat.mtx->unlock();
+		lat.lock->unlock();
 	      std::cout << "FTW CACHE_HIT FSObject " << (void*) v << std::endl;
 	      return v;
 	    }
@@ -305,14 +305,14 @@ namespace cohort {
 	  }
 	}
 	if (flags & (FLAG_LOCK|FLAG_UNLOCK))
-	  lat.mtx->unlock();
+	  lat.lock->unlock();
 	return v;
       } /* find_latch */
 
       void insert_latched(T* v, Latch& lat, uint32_t flags) {
 	(void) lat.p->tr.insert_unique_commit(*v, lat.commit_data);
 	if (flags & FLAG_UNLOCK)
-	  lat.mtx->unlock();
+	  lat.lock->unlock();
       } /* insert_latched */
 
       void remove(uint64_t hk, T* v, uint32_t flags) {
@@ -329,7 +329,7 @@ namespace cohort {
 	for (int t_ix = 0; t_ix < N; ++t_ix) {
 	  Partition& p = part[t_ix];
 	  if (flags & FLAG_LOCK) /* LOCKED */
-	    p.mtx.lock();
+	    p.lock.lock();
 	  while (p.tr.size() > 0) {
 	    iterator it = p.tr.begin();
 	    T* v = &(*it);
@@ -337,7 +337,7 @@ namespace cohort {
 	    uref(v);
 	  }
 	  if (flags & FLAG_LOCK) /* we locked it, !LOCKED */
-	    p.mtx.unlock();
+	    p.lock.unlock();
 	} /* each partition */
       } /* drain */
 
