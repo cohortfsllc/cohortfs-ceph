@@ -742,13 +742,13 @@ struct object_info_t {
 
   explicit object_info_t()
     : user_version(0), size(0), flags((flag_t)0),
-      truncate_seq(0), truncate_size(0)
+      truncate_seq(0), truncate_size(0), total_real_length(0)
   {}
 
   object_info_t(const hobject_t& s)
     : soid(s),
       user_version(0), size(0), flags((flag_t)0),
-      truncate_seq(0), truncate_size(0) {}
+      truncate_seq(0), truncate_size(0), total_real_length(0) {}
 
   object_info_t(bufferlist& bl) {
     decode(bl);
