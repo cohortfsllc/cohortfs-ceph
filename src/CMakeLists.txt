@@ -32,6 +32,7 @@ else()
   if(NOT ${ALLOCATOR} STREQUAL "libc")
     message(SEND_ERROR "${ALLOCATOR} is not a valid option. Valid allocators are: jemalloc|tcmalloc|libc")
   endif()
+  set(TCMALLOC_srcs perfglue/disabled_heap_profiler.cc)
 endif()
 
 if(${WITH_SQUEAKY_CLEAN_VALGRIND})
