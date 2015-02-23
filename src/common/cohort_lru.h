@@ -273,6 +273,39 @@ namespace cohort {
 	return part[x % N];
       }
 
+      T* find(uint64_t hk, const K& k, uint32_t flags) {
+	T* v;
+	Latch lat;
+	uint32_t slot;
+	lat.p = &(partition_of_scalar(hk));
+	lat.lock = &lat.p->lock;
+	lat.lock->lock();
+	if (CSZ) { /* template specialize? */
+	  slot = hk % CSZ;
+	  v = lat.p->cache[slot];
+	  if (v) {
+	    if (CEQ()(*v, k)) {
+	      lat.lock->unlock();
+	      std::cout << "FTW CACHE_HIT FSObject " << (void*) v << std::endl;
+	      return v;
+	    }
+	    v = nullptr;
+	  }
+	} else {
+	  v = nullptr;
+	}
+	iterator it = lat.p->tr.find(k, CLT());
+	if (it != lat.p->tr.end()){
+	  v = &(*(it));
+	  if (CSZ) {
+	    /* fill cache slot at hk */
+	    lat.p->cache[slot] = v;
+	  }
+	}
+	lat.lock->unlock();
+	return v;
+      } /* find */
+
       T* find_latch(uint64_t hk, const K& k, Latch& lat, uint32_t flags) {
 	uint32_t slot;
 	T* v;
