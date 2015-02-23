@@ -98,7 +98,7 @@ public:
     /* per ObjectStore LRU */
     const static int n_lanes = 17; // # of lanes in LRU system
 
-    typedef cohort::lru::LRU<n_lanes> ObjLRU;
+    typedef cohort::lru::LRU<cohort::SpinLock, n_lanes> ObjLRU;
 
     const static int n_partitions = 3;
     const static int cache_size = 373; // per-partiion cache size
@@ -141,7 +141,8 @@ public:
 		       bi::constant_time_size<true> > OidTree;
 #endif
     typedef cohort::lru::TreeX<
-      Object, OidTree, OidLT, OidEQ, hoid_t, n_partitions, cache_size>
+      Object, OidTree, OidLT, OidEQ, hoid_t, cohort::SpinLock,
+      n_partitions, cache_size>
     ObjCache;
 
     friend class Collection;
