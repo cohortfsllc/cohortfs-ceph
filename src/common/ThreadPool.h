@@ -20,9 +20,9 @@
 #include <thread>
 
 #include <boost/intrusive/list.hpp>
-
-#include "common/Mutex.h"
-#include "common/Cond.h"
+#include <mutex>
+#include <condition_variable>
+#include "include/ceph_time.h"
 #include "common/likely.h"
 
 class CephContext;
@@ -33,8 +33,11 @@ namespace bi = boost::intrusive;
 
 class ThreadPool {
  public:
-  ThreadPool(CephContext *cct, uint32_t max_threads = 0,
-             utime_t idle_timeout = utime_t(120, 0))
+
+  typedef std::unique_lock<std::mutex> unique_lock;
+
+ThreadPool(CephContext *cct, uint32_t max_threads = 0,
+	     struct timespec idle_timeout = {120, 0})
     : cct(cct),
       max_threads(max_threads),
       idle_timeout(idle_timeout),
@@ -59,8 +62,8 @@ class ThreadPool {
   struct Worker {
     std::thread thread;
     Job job;
-    Mutex mutex;
-    Cond cond;
+    std::mutex mutex;
+    std::condition_variable cond;
 
     bi::list_member_hook<> pool_hook;
     bi::list_member_hook<> idle_hook;
@@ -73,11 +76,11 @@ class ThreadPool {
 
   CephContext *const cct;
   const uint32_t max_threads;
-  const utime_t idle_timeout;
+  const struct timespec idle_timeout;
   uint32_t flags;
 
-  Mutex mutex;
-  Cond cond;
+  std::mutex mutex;
+  std::condition_variable cond;
   std::queue<Job> jobs;
   Worker::PoolQueue workers;
   Worker::IdleQueue idle;
@@ -105,7 +108,7 @@ int ThreadPool::submit(F&& f, Args&&... args)
 {
   auto job = std::bind(f, args...);
 
-  Mutex::Locker lock(mutex);
+  unique_lock lock(mutex);
 
   // queue is draining
   if (unlikely(flags & FLAG_SHUTDOWN))
