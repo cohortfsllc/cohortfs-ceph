@@ -20,7 +20,8 @@
 #include <boost/intrusive/avltree.hpp>
 #include <mutex>
 #include <atomic>
-#include <functional>
+#include <vector>
+#include <algorithm>
 #include "common/likely.h"
 
 #ifndef CACHE_LINE_SIZE
@@ -252,6 +253,9 @@ namespace cohort {
       typedef typename TTree::iterator iterator;
       typedef std::pair<iterator, bool> check_result;
       typedef typename TTree::insert_commit_data insert_commit_data;
+      static constexpr uint8_t n_part = N;
+
+      typedef std::unique_lock<LK> unique_lock;
 
       struct Partition {
 	LK lock;
@@ -271,6 +275,31 @@ namespace cohort {
 
       Partition& partition_of_scalar(uint64_t x) {
 	return part[x % N];
+      }
+
+      Partition& get(uint8_t x) {
+	return part[x];
+      }
+
+      Partition*& get() {
+	return part;
+      }
+
+      void lock() {
+	std::for_each(locks.begin(), locks.end(),
+		      [](LK* lk){ lk->lock(); });
+      }
+
+      void unlock() {
+	std::for_each(locks.begin(), locks.end(),
+		      [](LK* lk){ lk->unlock(); });
+      }
+
+      TreeX() {
+	for (int ix = 0; ix < N; ++ix) {
+	  Partition& p = part[ix];
+	  locks.push_back(&p.lock);
+	}
       }
 
       T* find(uint64_t hk, const K& k, uint32_t flags) {
@@ -348,10 +377,23 @@ namespace cohort {
 	  lat.lock->unlock();
       } /* insert_latched */
 
+      void insert(uint64_t hk, T* v, uint32_t flags) {
+	Partition& p = partition_of_scalar(hk);
+	if (flags & FLAG_LOCK)
+	  p.lock.lock();
+	p.tr.insert_unique(*v);
+	if (flags & FLAG_LOCK)
+	  p.lock.unlock();
+      } /* insert */
+
       void remove(uint64_t hk, T* v, uint32_t flags) {
-	Partition* p = &(partition_of_scalar(hk));
+	Partition& p = partition_of_scalar(hk);
 	iterator it = TTree::s_iterator_to(*v);
-	p->tr.erase(it);
+	if (flags & FLAG_LOCK)
+	  p.lock.lock();
+	p.tr.erase(it);
+	if (flags & FLAG_LOCK)
+	  p.lock.unlock();
       } /* remove */
 
       void drain(std::function<void(T*)> uref,
@@ -376,6 +418,7 @@ namespace cohort {
 
     private:
       Partition part[N];
+      std::vector<LK*> locks;
     };
 
   } /* namespace LRU */
