@@ -104,7 +104,7 @@ void FileStoreTracker::write(const pair<string, string> &obj,
     to_write.append(*iter);
   }
   out->t->write(coll_t(obj.first),
-		hobject_t(obj.second),
+		oid(obj.second),
 		offset,
 		len,
 		to_write);
@@ -120,7 +120,7 @@ void FileStoreTracker::remove(const pair<string, string> &obj,
   if (!old_contents.exists())
     return;
   out->t->remove(coll_t(obj.first),
-		 hobject_t(obj.second));
+		 oid(obj.second));
   ObjectContents contents;
   out->in_flight->push_back(make_pair(obj, set_content(obj, contents)));
 }
@@ -148,8 +148,8 @@ void FileStoreTracker::clone_range(const pair<string, string> &from,
   interval_to_clone.insert(offset, len);
   to_contents.clone_range(from_contents, interval_to_clone);
   out->t->clone_range(coll_t(from.first),
-		      hobject_t(object_t(from.second)),
-		      hobject_t(object_t(to.second)),
+		      oid(from.second),
+		      oid(to.second),
 		      offset,
 		      len,
 		      offset);
@@ -173,10 +173,10 @@ void FileStoreTracker::clone(const pair<string, string> &from,
 
   if (to_contents.exists())
     out->t->remove(coll_t(to.first),
-		   hobject_t(to.second));
+		   oid(to.second));
   out->t->clone(coll_t(from.first),
-		hobject_t(from.second),
-		hobject_t(to.second));
+		oid(from.second),
+		oid(to.second));
   out->in_flight->push_back(make_pair(to, set_content(to, from_contents)));
 }
 
@@ -281,7 +281,7 @@ void FileStoreTracker::verify(const string &coll, const string &obj,
   std::cerr << "valid_reads is " << valid_reads << std::endl;
   bufferlist contents;
   int r = store->read(coll_t(coll),
-		      hobject_t(obj),
+		      oid(obj),
 		      0,
 		      2*SIZE,
 		      contents);

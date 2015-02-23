@@ -88,7 +88,7 @@ public:
     return info;
   }
   ObjectContextRef get_obc(
-    const hobject_t &hoid,
+    const oid &hoid,
     map<string, bufferlist> &attrs) {
     return get_object_context(hoid, true, &attrs);
   }
@@ -140,7 +140,7 @@ public:
 
     interval_set<uint64_t> modified_ranges;
     ObjectContextRef obc;
-    map<hobject_t,ObjectContextRef> src_obc;
+    map<oid,ObjectContextRef> src_obc;
 
     int data_off; // FIXME: may want to kill this msgr hint off at some point!
 
@@ -227,7 +227,7 @@ public:
 
     OpContext *ctx;
     ObjectContextRef obc;
-    map<hobject_t,ObjectContextRef> src_obc;
+    map<oid,ObjectContextRef> src_obc;
 
     ceph_tid_t tid;
 
@@ -388,7 +388,7 @@ protected:
   void simple_mutation_submit(Mutation *mutation);
 
   // projected object info
-  SharedPtrRegistry<hobject_t, ObjectContext> object_contexts;
+  SharedPtrRegistry<oid, ObjectContext> object_contexts;
 
 public:
   bool deleting;  // true while in removing or OSD is shutting down
@@ -429,7 +429,7 @@ public:
 protected:
   ObjectContextRef create_object_context(const object_info_t& oi);
   ObjectContextRef get_object_context(
-    const hobject_t& soid,
+    const oid& soid,
     bool can_create,
     map<string, bufferlist> *attrs = 0
     );
@@ -446,7 +446,7 @@ protected:
     }
   };
 
-  int find_object_context(const hobject_t& oid,
+  int find_object_context(const oid& obj,
 			  ObjectContextRef *pobc,
 			  bool can_create);
 
@@ -517,7 +517,7 @@ protected:
   list<OpRequestRef> waiting_for_active;
   map<eversion_t,list<OpRequestRef> > waiting_for_ack, waiting_for_ondisk;
 
-  void requeue_object_waiters(map<hobject_t, list<OpRequestRef> >& m);
+  void requeue_object_waiters(map<oid, list<OpRequestRef> >& m);
   void requeue_op(OpRequestRef op);
   void requeue_ops(list<OpRequestRef> &l);
 
@@ -525,15 +525,15 @@ protected:
   std::shared_ptr<ObjectStore::Sequencer> osr;
 
 private:
-  int _delete_oid(OpContext *ctx, bool no_whiteout);
+  int _delete_obj(OpContext *ctx, bool no_whiteout);
   static int _write_info(ObjectStore::Transaction& t, epoch_t epoch,
 			 vol_info_t &info, coll_t coll,
-			 hobject_t &infos_oid);
+			 oid &infos_obj);
 
 public:
   void clear_primary_state();
   void remove_object(
-    ObjectStore::Transaction& t, const hobject_t& soid);
+    ObjectStore::Transaction& t, const oid& soid);
 
   void trim_write_ahead();
 
@@ -647,23 +647,23 @@ protected:
 
   /// List objects in collection
   int objects_list_partial(
-    const hobject_t &begin,
+    const oid &begin,
     int min,
     int max,
-    vector<hobject_t> *ls,
-    hobject_t *next);
+    vector<oid> *ls,
+    oid *next);
 
   int objects_list_range(
-    const hobject_t &start,
-    const hobject_t &end,
-    vector<hobject_t> *ls);
+    const oid &start,
+    const oid &end,
+    vector<oid> *ls);
 
   int objects_get_attr(
-    const hobject_t &hoid,
+    const oid &hoid,
     const string &attr,
     bufferlist *out);
 
-  void objects_read_async(const hobject_t &hoid,
+  void objects_read_async(const oid &hoid,
 			  const list<pair<pair<uint64_t, uint64_t>,
 			  pair<bufferlist*, Context*> > > &to_read,
 			  Context *on_complete);

@@ -189,15 +189,15 @@ struct pg_begin {
     if (struct_v > 2) {
       ::decode(pgid.shard, bl);
     } else {
-      pgid.shard = ghobject_t::NO_SHARD;
+      pgid.shard = goid::NO_SHARD;
     }
     DECODE_FINISH(bl);
   }
 };
 
 struct object_begin {
-  ghobject_t hoid;
-  object_begin(const ghobject_t &hoid): hoid(hoid) { }
+  goid hoid;
+  object_begin(const goid &hoid): hoid(hoid) { }
   object_begin() { }
 
   // If superblock doesn't include CEPH_FS_FEATURE_INCOMPAT_SHARDS then
@@ -217,8 +217,8 @@ struct object_begin {
       ::decode(hoid.generation, bl);
       ::decode(hoid.shard_id, bl);
     } else {
-      hoid.generation = ghobject_t::NO_GEN;
-      hoid.shard_id = ghobject_t::NO_SHARD;
+      hoid.generation = goid::NO_GEN;
+      hoid.shard_id = goid::NO_SHARD;
     }
     DECODE_FINISH(bl);
   }
@@ -334,8 +334,8 @@ struct metadata_section {
   }
 };
 
-hobject_t infos_oid = OSD::make_infos_oid();
-hobject_t biginfo_oid, log_oid;
+oid infos_obj = OSD::make_infos_obj();
+oid biginfo_obj, log_obj;
 
 int file_fd = fd_none;
 bool debug = false;
@@ -376,10 +376,10 @@ static void invalid_path(string &path)
 int get_log(ObjectStore *fs, coll_t coll, spg_t pgid, const pg_info_t &info,
    PGLog::IndexedLog &log, pg_missing_t &missing)
 {
-  map<eversion_t, hobject_t> divergent_priors;
+  map<eversion_t, oid> divergent_priors;
   try {
     ostringstream oss;
-    PGLog::read_log(fs, coll, log_oid, info, divergent_priors, log, missing, oss);
+    PGLog::read_log(fs, coll, log_obj, info, divergent_priors, log, missing, oss);
     if (debug && oss.str().size())
       cerr << oss.str() << std::endl;
   }
@@ -398,11 +398,11 @@ void remove_coll(ObjectStore *store, const coll_t &coll)
   OSDriver driver(
     store,
     coll_t(),
-    OSD::make_snapmapper_oid());
+    OSD::make_snapmapper_obj());
   SnapMapper mapper(&driver, 0, 0, 0, pg.shard);
 
-  vector<ghobject_t> objects;
-  ghobject_t next;
+  vector<goid> objects;
+  goid next;
   int r = 0;
   int64_t num = 0;
   ObjectStore::Transaction *t = new ObjectStore::Transaction;
@@ -412,13 +412,13 @@ void remove_coll(ObjectStore *store, const coll_t &coll)
       &objects, &next);
     if (r < 0)
       goto out;
-    for (vector<ghobject_t>::iterator i = objects.begin();
+    for (vector<goid>::iterator i = objects.begin();
 	 i != objects.end();
 	 ++i, ++num) {
 
       OSDriver::OSTransaction _t(driver.get_transaction(t));
       cout << "remove " << *i << std::endl;
-      int r = mapper.remove_oid(i->hobj, &_t);
+      int r = mapper.remove_obj(i->hobj, &_t);
       if (r != 0 && r != -ENOENT) {
 	assert(0);
       }
@@ -496,10 +496,10 @@ int initiate_new_remove_pg(ObjectStore *store, spg_t r_pgid,
     return ENOENT;
   }
 
-  cout << "remove " << coll_t::META_COLL << " " << log_oid.oid << std::endl;
-  rmt->remove(coll_t::META_COLL, log_oid);
-  cout << "remove " << coll_t::META_COLL << " " << biginfo_oid.oid << std::endl;
-  rmt->remove(coll_t::META_COLL, biginfo_oid);
+  cout << "remove " << coll_t::META_COLL << " " << log_obj.obj << std::endl;
+  rmt->remove(coll_t::META_COLL, log_obj);
+  cout << "remove " << coll_t::META_COLL << " " << biginfo_obj.obj << std::endl;
+  rmt->remove(coll_t::META_COLL, biginfo_obj);
 
   store->apply_transaction(*rmt);
 
@@ -557,7 +557,7 @@ int write_info(ObjectStore::Transaction &t, epoch_t epoch, pg_info_t &info,
     info, coll,
     past_intervals,
     snap_collections,
-    infos_oid,
+    infos_obj,
     struct_ver,
     true, true);
   if (ret < 0) ret = -ret;
@@ -567,8 +567,8 @@ int write_info(ObjectStore::Transaction &t, epoch_t epoch, pg_info_t &info,
 
 void write_log(ObjectStore::Transaction &t, pg_log_t &log)
 {
-  map<eversion_t, hobject_t> divergent_priors;
-  PGLog::write_log(t, log, log_oid, divergent_priors);
+  map<eversion_t, oid> divergent_priors;
+  PGLog::write_log(t, log, log_obj, divergent_priors);
 }
 
 int write_pg(ObjectStore::Transaction &t, epoch_t epoch, pg_info_t &info,
@@ -580,7 +580,7 @@ int write_pg(ObjectStore::Transaction &t, epoch_t epoch, pg_info_t &info,
   return 0;
 }
 
-int export_file(ObjectStore *store, coll_t cid, ghobject_t &obj)
+int export_file(ObjectStore *store, coll_t cid, goid &obj)
 {
   struct stat st;
   mysize_t total;
@@ -673,15 +673,15 @@ int export_file(ObjectStore *store, coll_t cid, ghobject_t &obj)
 
 int export_files(ObjectStore *store, coll_t coll)
 {
-  vector<ghobject_t> objects;
-  ghobject_t next;
+  vector<goid> objects;
+  goid next;
 
   while (!next.is_max()) {
     int r = store->collection_list_partial(coll, next, 200, 300, 0,
       &objects, &next);
     if (r < 0)
       return r;
-    for (vector<ghobject_t>::iterator i = objects.begin();
+    for (vector<goid>::iterator i = objects.begin();
 	 i != objects.end();
 	 ++i) {
       r = export_file(store, coll, *i);
@@ -799,7 +799,7 @@ int read_section(int fd, sectiontype_t *type, bufferlist *bl)
   return 0;
 }
 
-int get_data(ObjectStore *store, coll_t coll, ghobject_t hoid,
+int get_data(ObjectStore *store, coll_t coll, goid hoid,
     ObjectStore::Transaction *t, bufferlist &bl)
 {
   bufferlist::iterator ebliter = bl.begin();
@@ -812,7 +812,7 @@ int get_data(ObjectStore *store, coll_t coll, ghobject_t hoid,
   return 0;
 }
 
-int get_attrs(ObjectStore *store, coll_t coll, ghobject_t hoid,
+int get_attrs(ObjectStore *store, coll_t coll, goid hoid,
     ObjectStore::Transaction *t, bufferlist &bl,
     OSDriver &driver, SnapMapper &snap_mapper)
 {
@@ -824,7 +824,7 @@ int get_attrs(ObjectStore *store, coll_t coll, ghobject_t hoid,
     cout << "\tattrs: len " << as.data.size() << std::endl;
   t->setattrs(coll, hoid, as.data);
 
-  if (hoid.hobj.snap < CEPH_MAXSNAP && hoid.generation == ghobject_t::NO_GEN) {
+  if (hoid.hobj.snap < CEPH_MAXSNAP && hoid.generation == goid::NO_GEN) {
     map<string,bufferptr>::iterator mi = as.data.find(OI_ATTR);
     if (mi != as.data.end()) {
       bufferlist attr_bl;
@@ -836,14 +836,14 @@ int get_attrs(ObjectStore *store, coll_t coll, ghobject_t hoid,
 
       OSDriver::OSTransaction _t(driver.get_transaction(t));
       set<snapid_t> oi_snaps(oi.snaps.begin(), oi.snaps.end());
-      snap_mapper.add_oid(hoid.hobj, oi_snaps, &_t);
+      snap_mapper.add_obj(hoid.hobj, oi_snaps, &_t);
     }
   }
 
   return 0;
 }
 
-int get_omap_hdr(ObjectStore *store, coll_t coll, ghobject_t hoid,
+int get_omap_hdr(ObjectStore *store, coll_t coll, goid hoid,
     ObjectStore::Transaction *t, bufferlist &bl)
 {
   bufferlist::iterator ebliter = bl.begin();
@@ -857,7 +857,7 @@ int get_omap_hdr(ObjectStore *store, coll_t coll, ghobject_t hoid,
   return 0;
 }
 
-int get_omap(ObjectStore *store, coll_t coll, ghobject_t hoid,
+int get_omap(ObjectStore *store, coll_t coll, goid hoid,
     ObjectStore::Transaction *t, bufferlist &bl)
 {
   bufferlist::iterator ebliter = bl.begin();
@@ -880,7 +880,7 @@ int get_object(ObjectStore *store, coll_t coll, bufferlist &bl)
   OSDriver driver(
     store,
     coll_t(),
-    OSD::make_snapmapper_oid());
+    OSD::make_snapmapper_obj());
   spg_t pg;
   coll.is_pg_prefix(pg);
   SnapMapper mapper(&driver, 0, 0, 0, pg.shard);
@@ -1013,8 +1013,8 @@ int do_import(ObjectStore *store, OSDSuperblock& sb)
     return 1;
   }
 
-  log_oid = OSD::make_pg_log_oid(pgid);
-  biginfo_oid = OSD::make_pg_biginfo_oid(pgid);
+  log_obj = OSD::make_pg_log_obj(pgid);
+  biginfo_obj = OSD::make_pg_biginfo_obj(pgid);
 
   //Check for PG already present.
   coll_t coll(pgid);
@@ -1290,8 +1290,8 @@ int main(int argc, char **argv)
     goto out;
   }
 
-  log_oid = OSD::make_pg_log_oid(pgid);
-  biginfo_oid = OSD::make_pg_biginfo_oid(pgid);
+  log_obj = OSD::make_pg_log_obj(pgid);
+  biginfo_obj = OSD::make_pg_biginfo_obj(pgid);
 
   if (type == "remove") {
     uint64_t next_removal_seq = 0;	//My local seq
@@ -1340,18 +1340,18 @@ int main(int argc, char **argv)
     coll_t coll = *it;
 
     bufferlist bl;
-    map_epoch = PG::peek_map_epoch(fs, coll, infos_oid, &bl);
+    map_epoch = PG::peek_map_epoch(fs, coll, infos_obj, &bl);
     if (debug)
       cerr << "map_epoch " << map_epoch << std::endl;
 
     pg_info_t info(pgid);
     map<epoch_t,pg_interval_t> past_intervals;
-    hobject_t biginfo_oid = OSD::make_pg_biginfo_oid(pgid);
+    oid biginfo_obj = OSD::make_pg_biginfo_obj(pgid);
     interval_set<snapid_t> snap_collections;
 
     uint8_t struct_ver;
-    r = PG::read_info(fs, coll, bl, info, past_intervals, biginfo_oid,
-      infos_oid, snap_collections, struct_ver);
+    r = PG::read_info(fs, coll, bl, info, past_intervals, biginfo_obj,
+      infos_obj, snap_collections, struct_ver);
     if (r < 0) {
       cout << "read_info error " << cpp_strerror(-r) << std::endl;
       ret = 1;

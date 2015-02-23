@@ -94,7 +94,7 @@ namespace librbd {
 	librados::Rados::aio_create_completion(req_comp, NULL, rados_ctx_cb);
       librados::ObjectWriteOperation op(ictx->io_ctx);
       op.truncate(newsize);
-      ictx->io_ctx.aio_operate(ictx->image_oid, rados_completion,
+      ictx->io_ctx.aio_operate(ictx->image_obj, rados_completion,
 			       &op, 0);
       rados_completion->release();
       int r = throttle.wait_for_ret();
@@ -299,7 +299,7 @@ namespace librbd {
     if (r < 0) {
       ldout(cct, 2) << "error opening image: " << cpp_strerror(-r) << dendl;
     } else {
-      string header_oid = ictx->header_oid;
+      string header_oid = ictx->header_obj;
 
       std::list<obj_watch_t> watchers;
       r = io_ctx.list_watchers(header_oid, &watchers);
@@ -359,7 +359,7 @@ namespace librbd {
     bufferlist bl;
     ictx->header.image_size = size;
     bl.append((const char *)&(ictx->header), sizeof(ictx->header));
-    r = ictx->io_ctx.write(ictx->header_oid, bl, bl.length(), 0);
+    r = ictx->io_ctx.write(ictx->header_obj, bl, bl.length(), 0);
 
     // TODO: remove this useless check
     if (r == -ERANGE)
@@ -369,7 +369,7 @@ namespace librbd {
       lderr(cct) << "error writing header: " << cpp_strerror(-r) << dendl;
       return r;
     } else {
-      notify_change(ictx->io_ctx, ictx->header_oid, ictx);
+      notify_change(ictx->io_ctx, ictx->header_obj, ictx);
     }
 
     return 0;
@@ -437,7 +437,7 @@ namespace librbd {
     {
       int r;
       ictx->lockers.clear();
-      r = read_header(ictx->io_ctx, ictx->header_oid, &ictx->header);
+      r = read_header(ictx->io_ctx, ictx->header_obj, &ictx->header);
       if (r < 0) {
 	lderr(cct) << "Error reading header: " << cpp_strerror(r) << dendl;
 	return r;
@@ -1141,7 +1141,7 @@ namespace librbd {
 			   len, off, req_comp);
     } else {
 #endif
-      AioWrite *req = new AioWrite(ictx, ictx->image_oid, off,
+      AioWrite *req = new AioWrite(ictx, ictx->image_obj, off,
 				   bl, req_comp);
       c->add_request();
       r = req->send();
@@ -1182,9 +1182,9 @@ namespace librbd {
     c->add_request();
 
     if (off + len <= ictx->size) {
-      req = new AioTruncate(ictx, ictx->image_oid, off, req_comp);
+      req = new AioTruncate(ictx, ictx->image_obj, off, req_comp);
     } else {
-      req = new AioZero(ictx, ictx->image_oid, off, len, req_comp);
+      req = new AioZero(ictx, ictx->image_obj, off, len, req_comp);
     }
 
     r = req->send();
@@ -1240,7 +1240,7 @@ namespace librbd {
     c->get();
     c->init_time(ictx, AIO_TYPE_READ);
     C_AioRead *req_comp = new C_AioRead(ictx->cct, c);
-    AioRead *req = new AioRead(ictx, ictx->image_oid,
+    AioRead *req = new AioRead(ictx, ictx->image_obj,
 			       off, len, req_comp);
     req_comp->set_req(req);
     c->add_request();

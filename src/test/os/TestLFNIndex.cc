@@ -45,10 +45,10 @@ public:
 		     std::shared_ptr<CollectionIndex> dest
 		     ) { return 0; }
 
-  void test_generate_and_parse(const ghobject_t &hoid, const std::string &mangled_expected) {
+  void test_generate_and_parse(const goid &hoid, const std::string &mangled_expected) {
     const std::string mangled_name = lfn_generate_object_name(hoid);
     EXPECT_EQ(mangled_expected, mangled_name);
-    ghobject_t hoid_parsed;
+    goid hoid_parsed;
     EXPECT_TRUE(lfn_parse_object_name(mangled_name, &hoid_parsed));
     EXPECT_EQ(hoid, hoid_parsed);
   }
@@ -58,34 +58,34 @@ protected:
 
   virtual int _created(
 		       const vector<string> &path,
-		       const ghobject_t &hoid,
+		       const goid &hoid,
 		       const string &mangled_name
 		       ) { return 0; }
 
   virtual int _remove(
 		      const vector<string> &path,
-		      const ghobject_t &hoid,
+		      const goid &hoid,
 		      const string &mangled_name
 		      ) { return 0; }
 
   virtual int _lookup(
-		      const ghobject_t &hoid,
+		      const goid &hoid,
 		      vector<string> *path,
 		      string *mangled_name,
 		      int *exists
 		      ) { return 0; }
 
   virtual int _collection_list(
-			       vector<ghobject_t> *ls
+			       vector<goid> *ls
 			       ) { return 0; }
 
   virtual int _collection_list_partial(
-				       const ghobject_t &start,
+				       const goid &start,
 				       int min_count,
 				       int max_count,
 				       snapid_t seq,
-				       vector<ghobject_t> *ls,
-				       ghobject_t *next
+				       vector<goid> *ls,
+				       goid *next
 				       ) { return 0; }
 };
 
@@ -101,9 +101,9 @@ TEST_F(TestHASH_INDEX_TAG, generate_and_parse_name) {
   uint64_t hash = 0xABABABAB;
   uint64_t pool = -1;
 
-  test_generate_and_parse(ghobject_t(hobject_t(object_t(".A/B_\\C.D"), key, CEPH_NOSNAP, hash, pool, "")),
+  test_generate_and_parse(goid(oid(".A/B_\\C.D", key, CEPH_NOSNAP, hash, pool, "")),
 			  "\\.A\\sB_\\\\C.D_head_ABABABAB");
-  test_generate_and_parse(ghobject_t(hobject_t(object_t("DIR_A"), key, CEPH_NOSNAP, hash, pool, "")),
+  test_generate_and_parse(goid(oid("DIR_A", key, CEPH_NOSNAP, hash, pool, "")),
 			  "\\dA_head_ABABABAB");
 }
 
@@ -123,11 +123,11 @@ TEST_F(TestHASH_INDEX_TAG_2, generate_and_parse_name) {
   {
     std::string name(".XA/B_\\C.D");
     name[1] = '\0';
-    ghobject_t hoid(hobject_t(object_t(name), key, CEPH_NOSNAP, hash, pool, ""));
+    goid hoid(oid(name, key, CEPH_NOSNAP, hash, pool, ""));
 
     test_generate_and_parse(hoid, "\\.\\nA\\sB\\u\\\\C.D_KEY_head_ABABABAB");
   }
-  test_generate_and_parse(ghobject_t(hobject_t(object_t("DIR_A"), key, CEPH_NOSNAP, hash, pool, "")),
+  test_generate_and_parse(goid(oid("DIR_A", key, CEPH_NOSNAP, hash, pool, "")),
 			  "\\dA_KEY_head_ABABABAB");
 }
 
@@ -149,13 +149,13 @@ TEST_F(TestHOBJECT_WITH_POOL, generate_and_parse_name) {
   {
     std::string name(".XA/B_\\C.D");
     name[1] = '\0';
-    ghobject_t hoid(hobject_t(object_t(name), key, CEPH_NOSNAP, hash, pool, ""));
+    goid hoid(oid(name, key, CEPH_NOSNAP, hash, pool, ""));
     hoid.hobj.nspace = "NSPACE";
 
     test_generate_and_parse(hoid, "\\.\\nA\\sB\\u\\\\C.D_KEY_head_ABABABAB_NSPACE_cdcdcdcd");
   }
   {
-    ghobject_t hoid(hobject_t(object_t("DIR_A"), key, CEPH_NOSNAP, hash, pool, ""));
+    goid hoid(oid("DIR_A", key, CEPH_NOSNAP, hash, pool, ""));
     hoid.hobj.nspace = "NSPACE";
 
     test_generate_and_parse(hoid, "\\dA_KEY_head_ABABABAB_NSPACE_cdcdcdcd");
@@ -163,13 +163,13 @@ TEST_F(TestHOBJECT_WITH_POOL, generate_and_parse_name) {
   {
     std::string name(".XA/B_\\C.D");
     name[1] = '\0';
-    ghobject_t hoid(hobject_t(object_t(name), key, CEPH_NOSNAP, hash, pool, ""), gen, shard_id);
+    goid hoid(oid(name, key, CEPH_NOSNAP, hash, pool, ""), gen, shard_id);
     hoid.hobj.nspace = "NSPACE";
 
     test_generate_and_parse(hoid, "\\.\\nA\\sB\\u\\\\C.D_KEY_head_ABABABAB_NSPACE_cdcdcdcd_efefefefef_b");
   }
   {
-    ghobject_t hoid(hobject_t(object_t("DIR_A"), key, CEPH_NOSNAP, hash, pool, ""), gen, shard_id);
+    goid hoid(oid("DIR_A", key, CEPH_NOSNAP, hash, pool, ""), gen, shard_id);
     hoid.hobj.nspace = "NSPACE";
 
     test_generate_and_parse(hoid, "\\dA_KEY_head_ABABABAB_NSPACE_cdcdcdcd_efefefefef_b");
@@ -201,7 +201,7 @@ TEST_F(TestLFNIndex, remove_object) {
   {
     std::string mangled_name;
     int exists = 666;
-    ghobject_t hoid(hobject_t(object_t("ABC")));
+    goid hoid(oid("ABC"));
 
     EXPECT_EQ(0, ::chmod("PATH", 0000));
     EXPECT_EQ(-EACCES, remove_object(path, hoid));
@@ -221,7 +221,7 @@ TEST_F(TestLFNIndex, remove_object) {
     std::string mangled_name;
     int exists;
     const std::string object_name(1024, 'A');
-    ghobject_t hoid(hobject_t(object_t(object_name)));
+    goid hoid(oid(object_name));
 
     EXPECT_EQ(0, get_mangled_name(path, hoid, &mangled_name, &exists));
     EXPECT_EQ(0, exists);
@@ -242,7 +242,7 @@ TEST_F(TestLFNIndex, remove_object) {
     std::string mangled_name;
     int exists;
     const std::string object_name(1024, 'A');
-    ghobject_t hoid(hobject_t(object_t(object_name)));
+    goid hoid(oid(object_name));
 
     //
     //	 PATH/AAA..._0_long => does not match long object name
@@ -291,7 +291,7 @@ TEST_F(TestLFNIndex, remove_object) {
     std::string mangled_name;
     int exists;
     const std::string object_name(1024, 'A');
-    ghobject_t hoid(hobject_t(object_t(object_name)));
+    goid hoid(oid(object_name));
 
     //
     //	 PATH/AAA..._0_long => matches long object name
@@ -339,7 +339,7 @@ TEST_F(TestLFNIndex, get_mangled_name) {
   {
     std::string mangled_name;
     int exists = 666;
-    ghobject_t hoid(hobject_t(object_t("ABC")));
+    goid hoid(oid("ABC"));
 
     EXPECT_EQ(0, get_mangled_name(path, hoid, &mangled_name, &exists));
     EXPECT_NE(std::string::npos, mangled_name.find("ABC__head"));
@@ -359,7 +359,7 @@ TEST_F(TestLFNIndex, get_mangled_name) {
     std::string mangled_name;
     int exists;
     const std::string object_name(1024, 'A');
-    ghobject_t hoid(hobject_t(object_t(object_name)));
+    goid hoid(oid(object_name));
 
     //
     // long version of the mangled name and no matching

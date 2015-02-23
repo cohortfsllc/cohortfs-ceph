@@ -41,7 +41,7 @@ DeterministicOpSequence::DeterministicOpSequence(ObjectStore *store,
     m_osr("OSR")
 {
   txn_coll = coll_t("meta");
-  txn_object = hobject_t(object_t("txn"));
+  txn_object = oid("txn");
 
   if (!status.empty())
     m_status.open(status.c_str());
@@ -162,9 +162,10 @@ bool DeterministicOpSequence::do_touch(rngen_t& gen)
       return false;
     }
   }
-  hobject_t *obj = entry->touch_obj(obj_id);
+  oid *obj = entry->touch_obj(obj_id);
 
-  dout(0) << "do_touch " << entry->m_coll.to_str() << "/" << obj->oid.name << dendl;
+  dout(0) << "do_touch " << entry->m_coll.to_str() << "/" << obj->name
+	  << dendl;
 
   _do_touch(entry->m_coll, *obj);
   return true;
@@ -182,13 +183,13 @@ bool DeterministicOpSequence::do_remove(rngen_t& gen)
     return false;
   }
   int obj_id = entry->get_random_obj_id(gen);
-  hobject_t *obj = entry->touch_obj(obj_id);
+  oid *obj = entry->touch_obj(obj_id);
   assert(obj);
 
-  dout(0) << "do_remove " << entry->m_coll.to_str() << "/" << obj->oid.name << dendl;
+  dout(0) << "do_remove " << entry->m_coll.to_str() << "/" << obj->name << dendl;
 
   _do_remove(entry->m_coll, *obj);
-  hobject_t *rmobj = entry->remove_obj(obj_id);
+  oid *rmobj = entry->remove_obj(obj_id);
   assert(rmobj);
   delete rmobj;
   return true;
@@ -238,7 +239,7 @@ bool DeterministicOpSequence::do_set_attrs(rngen_t& gen)
     return false;
   }
   int obj_id = entry->get_random_obj_id(gen);
-  hobject_t *obj = entry->touch_obj(obj_id);
+  oid *obj = entry->touch_obj(obj_id);
   assert(obj);
 
   map<string, bufferlist> out;
@@ -261,7 +262,7 @@ bool DeterministicOpSequence::do_write(rngen_t& gen)
     return false;
   }
   int obj_id = entry->get_random_obj_id(gen);
-  hobject_t *obj = entry->touch_obj(obj_id);
+  oid *obj = entry->touch_obj(obj_id);
   assert(obj);
 
   boost::uniform_int<> size_rng(100, (2 << 19));
@@ -269,7 +270,7 @@ bool DeterministicOpSequence::do_write(rngen_t& gen)
   bufferlist bl;
   _gen_random(gen, size, bl);
 
-  dout(0) << "do_write " << entry->m_coll.to_str() << "/" << obj->oid.name
+  dout(0) << "do_write " << entry->m_coll.to_str() << "/" << obj->name
 	  << " 0~" << size << dendl;
 
   _do_write(entry->m_coll, *obj, 0, bl.length(), bl);
@@ -277,7 +278,7 @@ bool DeterministicOpSequence::do_write(rngen_t& gen)
 }
 
 bool DeterministicOpSequence::_prepare_clone(rngen_t& gen,
-					     coll_t& coll_ret, hobject_t& orig_obj_ret, hobject_t& new_obj_ret)
+					     coll_t& coll_ret, oid& orig_obj_ret, oid& new_obj_ret)
 {
   int coll_id = _gen_coll_id(gen);
 
@@ -291,14 +292,14 @@ bool DeterministicOpSequence::_prepare_clone(rngen_t& gen,
   }
 
   int orig_obj_id = entry->get_random_obj_id(gen);
-  hobject_t *orig_obj = entry->touch_obj(orig_obj_id);
+  oid *orig_obj = entry->touch_obj(orig_obj_id);
   assert(orig_obj);
 
   int id;
   do {
     id = entry->get_random_obj_id(gen);
   } while (id == orig_obj_id);
-  hobject_t *new_obj = entry->touch_obj(id);
+  oid *new_obj = entry->touch_obj(id);
   assert(new_obj);
 
   coll_ret = entry->m_coll;
@@ -311,13 +312,13 @@ bool DeterministicOpSequence::_prepare_clone(rngen_t& gen,
 bool DeterministicOpSequence::do_clone(rngen_t& gen)
 {
   coll_t coll;
-  hobject_t orig_obj, new_obj;
+  oid orig_obj, new_obj;
   if (!_prepare_clone(gen, coll, orig_obj, new_obj)) {
     return false;
   }
 
-  dout(0) << "do_clone " << coll.to_str() << "/" << orig_obj.oid.name
-      << " => " << coll.to_str() << "/" << new_obj.oid.name << dendl;
+  dout(0) << "do_clone " << coll.to_str() << "/" << orig_obj.name
+      << " => " << coll.to_str() << "/" << new_obj.name << dendl;
 
   _do_clone(coll, orig_obj, new_obj);
   return true;
@@ -326,7 +327,7 @@ bool DeterministicOpSequence::do_clone(rngen_t& gen)
 bool DeterministicOpSequence::do_clone_range(rngen_t& gen)
 {
   coll_t coll;
-  hobject_t orig_obj, new_obj;
+  oid orig_obj, new_obj;
   if (!_prepare_clone(gen, coll, orig_obj, new_obj)) {
     return false;
   }
@@ -346,9 +347,9 @@ bool DeterministicOpSequence::do_clone_range(rngen_t& gen)
   boost::uniform_int<> clone_len(1, bl.length());
   size = (size_t) clone_len(gen);
 
-  dout(0) << "do_clone_range " << coll.to_str() << "/" << orig_obj.oid.name
+  dout(0) << "do_clone_range " << coll.to_str() << "/" << orig_obj.name
       << " (0~" << size << ")"
-      << " => " << coll.to_str() << "/" << new_obj.oid.name
+      << " => " << coll.to_str() << "/" << new_obj.name
       << " (0)" << dendl;
   _do_write_and_clone_range(coll, orig_obj, new_obj, 0, size, 0, bl);
   return true;
@@ -417,7 +418,7 @@ bool DeterministicOpSequence::do_coll_add(rngen_t& gen)
   boost::uniform_int<> obj_rng(0, orig_coll->m_objects.size()-1);
   int obj_pos = obj_rng(gen);
   int obj_key = -1;
-  hobject_t *obj = orig_coll->get_obj_at(obj_pos, &obj_key);
+  oid *obj = orig_coll->get_obj_at(obj_pos, &obj_key);
   if (!obj) {
     dout(0) << "do_coll_add coll " << orig_coll->m_coll.to_str()
 	<< " has no object as pos #" << obj_pos << " (key " << obj_key << ")"
@@ -430,15 +431,15 @@ bool DeterministicOpSequence::do_coll_add(rngen_t& gen)
 	<< dendl;
     return false;
   }
-  dout(0) << "do_coll_add " << orig_coll->m_coll.to_str() << "/" << obj->oid.name
-	<< " => " << new_coll->m_coll.to_str() << "/" << obj->oid.name << dendl;
+  dout(0) << "do_coll_add " << orig_coll->m_coll.to_str() << "/" << obj->name
+	<< " => " << new_coll->m_coll.to_str() << "/" << obj->name << dendl;
   new_coll->touch_obj(obj_key);
 
   _do_coll_add(orig_coll->m_coll, new_coll->m_coll, *obj);
   return true;
 }
 
-void DeterministicOpSequence::_do_touch(coll_t coll, hobject_t& obj)
+void DeterministicOpSequence::_do_touch(coll_t coll, oid& obj)
 {
   ObjectStore::Transaction t;
   note_txn(&t);
@@ -446,7 +447,7 @@ void DeterministicOpSequence::_do_touch(coll_t coll, hobject_t& obj)
   m_store->apply_transaction(t);
 }
 
-void DeterministicOpSequence::_do_remove(coll_t coll, hobject_t& obj)
+void DeterministicOpSequence::_do_remove(coll_t coll, oid& obj)
 {
   ObjectStore::Transaction t;
   note_txn(&t);
@@ -455,7 +456,7 @@ void DeterministicOpSequence::_do_remove(coll_t coll, hobject_t& obj)
 }
 
 void DeterministicOpSequence::_do_set_attrs(coll_t coll,
-					    hobject_t &obj,
+					    oid &obj,
 					    const map<string, bufferlist> &attrs)
 {
   ObjectStore::Transaction t;
@@ -464,7 +465,7 @@ void DeterministicOpSequence::_do_set_attrs(coll_t coll,
   m_store->apply_transaction(t);
 }
 
-void DeterministicOpSequence::_do_write(coll_t coll, hobject_t& obj,
+void DeterministicOpSequence::_do_write(coll_t coll, oid& obj,
 					uint64_t off, uint64_t len, const bufferlist& data)
 {
   ObjectStore::Transaction t;
@@ -473,8 +474,8 @@ void DeterministicOpSequence::_do_write(coll_t coll, hobject_t& obj,
   m_store->apply_transaction(t);
 }
 
-void DeterministicOpSequence::_do_clone(coll_t coll, hobject_t& orig_obj,
-					hobject_t& new_obj)
+void DeterministicOpSequence::_do_clone(coll_t coll, oid& orig_obj,
+					oid& new_obj)
 {
   ObjectStore::Transaction t;
   note_txn(&t);
@@ -483,7 +484,7 @@ void DeterministicOpSequence::_do_clone(coll_t coll, hobject_t& orig_obj,
 }
 
 void DeterministicOpSequence::_do_clone_range(coll_t coll,
-					      hobject_t& orig_obj, hobject_t& new_obj, uint64_t srcoff,
+					      oid& orig_obj, oid& new_obj, uint64_t srcoff,
 					      uint64_t srclen, uint64_t dstoff)
 {
   ObjectStore::Transaction t;
@@ -493,8 +494,8 @@ void DeterministicOpSequence::_do_clone_range(coll_t coll,
 }
 
 void DeterministicOpSequence::_do_write_and_clone_range(coll_t coll,
-							hobject_t& orig_obj,
-							hobject_t& new_obj,
+							oid& orig_obj,
+							oid& new_obj,
 							uint64_t srcoff,
 							uint64_t srclen,
 							uint64_t dstoff,
@@ -508,7 +509,7 @@ void DeterministicOpSequence::_do_write_and_clone_range(coll_t coll,
 }
 
 void DeterministicOpSequence::_do_coll_add(coll_t orig_coll, coll_t new_coll,
-					   hobject_t& obj)
+					   oid& obj)
 {
   ObjectStore::Transaction t;
   note_txn(&t);

@@ -53,8 +53,8 @@ int main(int argc, char **argv)
     for (int b = 0; b < 4; b++) {   // blocks
       char foo[20];
       snprintf(foo, sizeof(foo), "%d.%d", f, b);
-      object_t oid(foo);
-      ceph_object_layout l = osdmap.make_object_layout(oid, 0, nspace);
+      oid obj(foo);
+      ceph_object_layout l = osdmap.make_object_layout(obj, 0, nspace);
       vector<int> osds;
       pg_t pgid = pg_t(l.ol_pgid);
       //pgid.u.ps = f * 4 + b;
@@ -63,8 +63,8 @@ int main(int argc, char **argv)
       size[osds.size()]++;
 #if 0
       if (0) {
-	hash<object_t> H;
-	int x = H(oid);
+	hash<oid> H;
+	int x = H(obj);
 	x = ceph_stable_mod(x, 1023, 1023);
 	int s = crush_hash32(x) % 15;
 	//cout << "ceph_psim: x = " << x << " s = " << s << std::endl;
@@ -72,7 +72,7 @@ int main(int argc, char **argv)
       }
 #endif
       //osds[0] = crush_hash32(f) % n;
-      //cout << "oid " << oid << " pgid " << pgid << " on " << osds << std::endl;
+      //cout << "obj " << obj << " pgid " << pgid << " on " << osds << std::endl;
       for (unsigned i=0; i<osds.size(); i++) {
 	//cout << " rep " << i << " on " << osds[i] << std::endl;
 	count[osds[i]]++;

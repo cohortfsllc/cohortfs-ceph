@@ -29,7 +29,7 @@
 
 #define dout_subsys ceph_subsys_objectcacher
 #undef dout_prefix
-#define dout_prefix *_dout << "objectcacher.object(" << oid << ") "
+#define dout_prefix *_dout << "objectcacher.object(" << obj << ") "
 
 
 
@@ -194,10 +194,10 @@ int ObjectCacher::Object::map_read(OSDRead *rd,
        ex_it != rd->extents.end();
        ++ex_it) {
 
-    if (ex_it->oid != oid)
+    if (ex_it->obj != obj)
       continue;
 
-    ldout(oc->cct, 10) << "map_read " << ex_it->oid
+    ldout(oc->cct, 10) << "map_read " << ex_it->obj
 		       << " " << ex_it->offset << "~" << ex_it->length
 		       << dendl;
 
@@ -330,9 +330,9 @@ ObjectCacher::BufferHead *ObjectCacher::Object::map_write(OSDWrite *wr)
        ex_it != wr->extents.end();
        ++ex_it) {
 
-    if (ex_it->oid != oid) continue;
+    if (ex_it->obj != obj) continue;
 
-    ldout(oc->cct, 10) << "map_write oex " << ex_it->oid
+    ldout(oc->cct, 10) << "map_write oex " << ex_it->obj
 		       << " " << ex_it->offset << "~" << ex_it->length << dendl;
 
     loff_t cur = ex_it->offset;
@@ -542,7 +542,7 @@ ObjectCacher::~ObjectCacher()
 }
 
 /* private */
-ObjectCacher::Object *ObjectCacher::get_object(object_t oid, ObjectSet *oset,
+ObjectCacher::Object *ObjectCacher::get_object(oid obj, ObjectSet *oset,
 					       const boost::uuids::uuid& v,
 					       uint64_t truncate_size,
 					       uint64_t truncate_seq)
@@ -550,16 +550,16 @@ ObjectCacher::Object *ObjectCacher::get_object(object_t oid, ObjectSet *oset,
   // XXX: Add handling of nspace in object_locator_t in cache
   assert(lock.is_locked());
   // have it?
-  if (objects[v].count(oid)) {
-    Object *o = objects[v][oid];
+  if (objects[v].count(obj)) {
+    Object *o = objects[v][obj];
     o->truncate_size = truncate_size;
     o->truncate_seq = truncate_seq;
     return o;
   }
 
   // create it.
-  Object *o = new Object(this, oid, oset, v, truncate_size, truncate_seq);
-  objects[v][oid] = o;
+  Object *o = new Object(this, obj, oset, v, truncate_size, truncate_seq);
+  objects[v][obj] = o;
   ob_lru.lru_insert_top(o);
   return o;
 }
@@ -572,7 +572,7 @@ void ObjectCacher::close_object(Object *ob)
 
   // ok!
   ob_lru.lru_remove(ob);
-  objects[ob->get_volume()].erase(ob->get_oid());
+  objects[ob->get_volume()].erase(ob->get_obj());
   ob->set_item.remove_myself();
   delete ob;
 }
@@ -593,7 +593,7 @@ void ObjectCacher::bh_read(BufferHead *bh)
   C_ReadFinish *onfinish = new C_ReadFinish(this, bh->ob, bh->last_read_tid,
 					    bh->start(), bh->length());
   // go
-  writeback_handler.read(bh->ob->get_oid(), bh->ob->get_volume(),
+  writeback_handler.read(bh->ob->get_obj(), bh->ob->get_volume(),
 			 bh->start(), bh->length(),
 			 &onfinish->bl, bh->ob->truncate_size, bh->ob->truncate_seq,
 			 onfinish);
@@ -601,13 +601,13 @@ void ObjectCacher::bh_read(BufferHead *bh)
   ++reads_outstanding;
 }
 
-void ObjectCacher::bh_read_finish(const boost::uuids::uuid& volume, object_t oid,
+void ObjectCacher::bh_read_finish(const boost::uuids::uuid& volume, oid obj,
 				  ceph_tid_t tid, loff_t start, uint64_t length,
 				  bufferlist &bl, int r, bool trust_enoent)
 {
   assert(lock.is_locked());
   ldout(cct, 7) << "bh_read_finish "
-		<< oid
+		<< obj
 		<< " tid " << tid
 		<< " " << start << "~" << length
 		<< " (bl is " << bl.length() << ")"
@@ -618,7 +618,7 @@ void ObjectCacher::bh_read_finish(const boost::uuids::uuid& volume, object_t oid
   if (bl.length() < length) {
     bufferptr bp(length - bl.length());
     bp.zero();
-    ldout(cct, 7) << "bh_read_finish " << oid << " padding " << start << "~" << length
+    ldout(cct, 7) << "bh_read_finish " << obj << " padding " << start << "~" << length
 	    << " with " << bp.length() << " bytes of zeroes" << dendl;
     bl.push_back(bp);
   }
@@ -626,10 +626,10 @@ void ObjectCacher::bh_read_finish(const boost::uuids::uuid& volume, object_t oid
   list<Context*> ls;
   int err = 0;
 
-  if (objects[volume].count(oid) == 0) {
+  if (objects[volume].count(obj) == 0) {
     ldout(cct, 7) << "bh_read_finish no object cache" << dendl;
   } else {
-    Object *ob = objects[volume][oid];
+    Object *ob = objects[volume][obj];
 
     if (r == -ENOENT && !ob->complete) {
       // wake up *all* rx waiters, or else we risk reordering identical reads. e.g.
@@ -783,17 +783,17 @@ void ObjectCacher::bh_write(BufferHead *bh)
 
   // finishers
   C_WriteCommit *oncommit = new C_WriteCommit(this, bh->ob->get_volume(),
-					      bh->ob->get_oid(), bh->start(),
+					      bh->ob->get_obj(), bh->start(),
 					      bh->length());
   // go
-  ceph_tid_t tid = writeback_handler.write(bh->ob->get_oid(),
+  ceph_tid_t tid = writeback_handler.write(bh->ob->get_obj(),
 					   bh->ob->get_volume(),
 				      bh->start(), bh->length(),
 				      bh->bl, bh->last_write,
 				      bh->ob->truncate_size,
 					   bh->ob->truncate_seq,
 				      oncommit);
-  ldout(cct, 20) << " tid " << tid << " on " << bh->ob->get_oid() << dendl;
+  ldout(cct, 20) << " tid " << tid << " on " << bh->ob->get_obj() << dendl;
 
   // set bh last_write_tid
   oncommit->tid = tid;
@@ -803,29 +803,29 @@ void ObjectCacher::bh_write(BufferHead *bh)
   mark_tx(bh);
 }
 
-void ObjectCacher::bh_write_commit(const boost::uuids::uuid& volume, object_t oid,
+void ObjectCacher::bh_write_commit(const boost::uuids::uuid& volume, oid obj,
 				   loff_t start, uint64_t length, ceph_tid_t tid,
 				   int r)
 {
   assert(lock.is_locked());
   ldout(cct, 7) << "bh_write_commit "
-		<< oid
+		<< obj
 		<< " tid " << tid
 		<< " " << start << "~" << length
 		<< " returned " << r
 		<< dendl;
 
-  if (objects[volume].count(oid) == 0) {
+  if (objects[volume].count(obj) == 0) {
     ldout(cct, 7) << "bh_write_commit no object cache" << dendl;
   } else {
-    Object *ob = objects[volume][oid];
+    Object *ob = objects[volume][obj];
     int was_dirty_or_tx = ob->oset->dirty_or_tx;
 
     if (!ob->exists) {
       ldout(cct, 10) << "bh_write_commit marking exists on " << *ob << dendl;
       ob->exists = true;
 
-      if (writeback_handler.may_copy_on_write(ob->get_oid(), start, length)) {
+      if (writeback_handler.may_copy_on_write(ob->get_obj(), start, length)) {
 	ldout(cct, 10) << "bh_write_commit may copy on write, clearing complete on " << *ob << dendl;
 	ob->complete = false;
       }
@@ -974,8 +974,8 @@ bool ObjectCacher::is_cached(ObjectSet *oset, vector<ObjectExtent>& extents)
     ldout(cct, 10) << "is_cached " << *ex_it << dendl;
 
     // get Object cache
-    object_t oid(ex_it->oid);
-    Object *o = get_object_maybe(oid, oset->volume);
+    oid obj(ex_it->obj);
+    Object *o = get_object_maybe(obj, oset->volume);
     if (!o)
       return false;
     if (!o->is_cached(ex_it->offset, ex_it->length))
@@ -1014,8 +1014,8 @@ int ObjectCacher::_readx(OSDRead *rd, ObjectSet *oset, Context *onfinish,
     total_bytes_read += ex_it->length;
 
     // get Object cache
-    object_t oid = ex_it->oid;
-    Object *o = get_object(oid, oset, oset->volume, ex_it->truncate_size,
+    oid obj = ex_it->obj;
+    Object *o = get_object(obj, oset, oset->volume, ex_it->truncate_size,
 			   oset->truncate_seq);
     touch_ob(o);
 
@@ -1028,7 +1028,7 @@ int ObjectCacher::_readx(OSDRead *rd, ObjectSet *oset, Context *onfinish,
       ldout(cct, 10) << "readx	object !exists, 1 extent..." << dendl;
 
       // should we worry about COW underneaeth us?
-      if (writeback_handler.may_copy_on_write(oid, ex_it->offset,
+      if (writeback_handler.may_copy_on_write(obj, ex_it->offset,
 					      ex_it->length)) {
 	ldout(cct, 20) << "readx  may copy on write" << dendl;
 	bool wait = false;
@@ -1241,8 +1241,8 @@ int ObjectCacher::writex(OSDWrite *wr, ObjectSet *oset, Mutex& wait_on_lock,
        ex_it != wr->extents.end();
        ++ex_it) {
     // get object cache
-    object_t oid = ex_it->oid;
-    Object *o = get_object(oid, oset, oset->volume, ex_it->truncate_size,
+    oid obj = ex_it->obj;
+    Object *o = get_object(obj, oset, oset->volume, ex_it->truncate_size,
 			   oset->truncate_seq);
 
     // map it all into a single bufferhead.
@@ -1608,12 +1608,12 @@ bool ObjectCacher::flush_set(ObjectSet *oset, vector<ObjectExtent>& exv, Context
        p != exv.end();
        ++p) {
     ObjectExtent &ex = *p;
-    object_t oid = ex.oid;
-    if (objects[oset->volume].count(oid) == 0)
+    oid obj = ex.obj;
+    if (objects[oset->volume].count(obj) == 0)
       continue;
-    Object *ob = objects[oset->volume][oid];
+    Object *ob = objects[oset->volume][obj];
 
-    ldout(cct, 20) << "flush_set " << oset << " ex " << ex << " ob " << oid << " " << ob << dendl;
+    ldout(cct, 20) << "flush_set " << oset << " ex " << ex << " ob " << obj << " " << ob << dendl;
 
     if (!flush(ob, ex.offset, ex.length)) {
       // we'll need to gather...
@@ -1734,9 +1734,9 @@ uint64_t ObjectCacher::release_all()
 
  auto i = objects.begin();
   while (i != objects.end()) {
-    std::map<object_t, Object*>::iterator p = i->second.begin();
+    std::map<oid, Object*>::iterator p = i->second.begin();
     while (p != i->second.end()) {
-      std::map<object_t, Object*>::iterator n = p;
+      std::map<oid, Object*>::iterator n = p;
       ++n;
 
       Object *ob = p->second;
@@ -1802,10 +1802,10 @@ void ObjectCacher::discard_set(ObjectSet *oset, vector<ObjectExtent>& exls)
        ++p) {
     ldout(cct, 10) << "discard_set " << oset << " ex " << *p << dendl;
     ObjectExtent &ex = *p;
-    object_t oid = ex.oid;
-    if (objects[oset->volume].count(oid) == 0)
+    oid obj = ex.obj;
+    if (objects[oset->volume].count(obj) == 0)
       continue;
-    Object *ob = objects[oset->volume][oid];
+    Object *ob = objects[oset->volume][obj];
 
     ob->discard(ex.offset, ex.length);
   }

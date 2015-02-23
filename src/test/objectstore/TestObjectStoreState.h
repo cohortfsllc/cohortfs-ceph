@@ -30,30 +30,30 @@ public:
   struct coll_entry_t {
     int m_id;
     coll_t m_coll;
-    hobject_t m_meta_obj;
+    oid m_meta_obj;
     ObjectStore::Sequencer m_osr;
-    map<int, hobject_t*> m_objects;
+    map<int, oid*> m_objects;
     int m_next_object_id;
 
     coll_entry_t(int i, char *coll_buf, char *meta_obj_buf)
     : m_id(i), m_coll(coll_buf),
-      m_meta_obj(object_t(meta_obj_buf)),
+      m_meta_obj(meta_obj_buf),
       m_osr(coll_buf), m_next_object_id(0) {
     }
     ~coll_entry_t();
 
-    hobject_t *touch_obj(int id);
+    oid *touch_obj(int id);
     bool check_for_obj(int id);
-    hobject_t *get_obj(int id);
-    hobject_t *remove_obj(int id);
-    hobject_t *get_obj_at(int pos, int *key = NULL);
-    hobject_t *remove_obj_at(int pos, int *key = NULL);
-    hobject_t *replace_obj(int id, hobject_t *obj);
+    oid *get_obj(int id);
+    oid *remove_obj(int id);
+    oid *get_obj_at(int pos, int *key = NULL);
+    oid *remove_obj_at(int pos, int *key = NULL);
+    oid *replace_obj(int id, oid *obj);
     int get_random_obj_id(rngen_t& gen);
 
    private:
-    hobject_t *get_obj(int id, bool remove);
-    hobject_t *get_obj_at(int pos, bool remove, int *key = NULL);
+    oid *get_obj(int id, bool remove);
+    oid *get_obj_at(int pos, bool remove, int *key = NULL);
   };
 
   /* kept in upper case for consistency with coll_t's */

@@ -21,26 +21,25 @@
 #include <string.h>
 
 #include "common/map_cacher.hpp"
-#include "common/hobject.h"
+#include "common/oid.h"
 #include "include/buffer.h"
 #include "include/encoding.h"
-#include "include/object.h"
 #include "os/ObjectStore.h"
 
 class OSDriver : public MapCacher::StoreDriver<std::string, bufferlist> {
   ObjectStore *os;
   coll_t cid;
-  hobject_t hoid;
+  oid hoid;
 
 public:
   class OSTransaction : public MapCacher::Transaction<std::string, bufferlist> {
     friend class OSDriver;
     coll_t cid;
-    hobject_t hoid;
+    oid hoid;
     ObjectStore::Transaction *t;
     OSTransaction(
       coll_t cid,
-      const hobject_t &hoid,
+      const oid &hoid,
       ObjectStore::Transaction *t)
       : cid(cid), hoid(hoid), t(t) {}
   public:

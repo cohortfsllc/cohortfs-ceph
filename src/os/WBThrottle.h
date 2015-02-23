@@ -19,7 +19,7 @@
 #include <boost/tuple/tuple.hpp>
 #include "include/buffer.h"
 #include "common/Formatter.h"
-#include "common/hobject.h"
+#include "common/oid.h"
 #include "include/interval_set.h"
 #include "FDCache.h"
 #include "common/Thread.h"
@@ -31,7 +31,7 @@
  * Tracks, throttles, and flushes outstanding IO
  */
 class WBThrottle : Thread, public md_config_obs_t {
-  hobject_t clearing;
+  oid clearing;
 
   /* *_limits.first is the start_flusher limit and
    * *_limits.second is the hard limit
@@ -75,36 +75,36 @@ class WBThrottle : Thread, public md_config_obs_t {
   /**
    * Flush objects in lru order
    */
-  list<hobject_t> lru;
-  map<hobject_t, list<hobject_t>::iterator> rev_lru;
-  void remove_object(const hobject_t &oid) {
+  list<oid> lru;
+  map<oid, list<oid>::iterator> rev_lru;
+  void remove_object(const oid &obj) {
     assert(lock.is_locked());
-    map<hobject_t, list<hobject_t>::iterator>::iterator iter =
-      rev_lru.find(oid);
+    map<oid, list<oid>::iterator>::iterator iter =
+      rev_lru.find(obj);
     if (iter == rev_lru.end())
       return;
 
     lru.erase(iter->second);
     rev_lru.erase(iter);
   }
-  hobject_t pop_object() {
+  oid pop_object() {
     assert(!lru.empty());
-    hobject_t oid(lru.front());
+    oid obj(lru.front());
     lru.pop_front();
-    rev_lru.erase(oid);
-    return oid;
+    rev_lru.erase(obj);
+    return obj;
   }
-  void insert_object(const hobject_t &oid) {
-    assert(rev_lru.find(oid) == rev_lru.end());
-    lru.push_back(oid);
-    rev_lru.insert(make_pair(oid, --lru.end()));
+  void insert_object(const oid &obj) {
+    assert(rev_lru.find(obj) == rev_lru.end());
+    lru.push_back(obj);
+    rev_lru.insert(make_pair(obj, --lru.end()));
   }
 
-  map<hobject_t, pair<PendingWB, FDRef> > pending_wbs;
+  map<oid, pair<PendingWB, FDRef> > pending_wbs;
 
   /// get next flush to perform
   bool get_next_should_flush(
-    boost::tuple<hobject_t, FDRef, PendingWB> *next ///< [out] next to flush
+    boost::tuple<oid, FDRef, PendingWB> *next ///< [out] next to flush
     ); ///< @return false if we are shutting down
 public:
   enum FS {
@@ -129,10 +129,10 @@ public:
     set_from_conf();
   }
 
-  /// Queue wb on oid, fd taking throttle (does not block)
+  /// Queue wb on obj, fd taking throttle (does not block)
   void queue_wb(
-    FDRef fd,		   ///< [in] FDRef to oid
-    const hobject_t &oid, ///< [in] object
+    FDRef fd,		   ///< [in] FDRef to obj
+    const oid &obj, ///< [in] object
     uint64_t offset,	   ///< [in] offset written
     uint64_t len,	   ///< [in] length written
     bool nocache	   ///< [in] try to clear out of cache after write
@@ -142,7 +142,7 @@ public:
   void clear();
 
   /// Clear object
-  void clear_object(const hobject_t &oid);
+  void clear_object(const oid &obj);
 
   /// Block until there is throttle available
   void throttle();

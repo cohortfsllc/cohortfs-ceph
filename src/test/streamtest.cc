@@ -160,11 +160,11 @@ int main(int argc, const char **argv)
   //cout << "stop at " << end << std::endl;
   cout << "# offset\tack\tcommit" << std::endl;
   while (now < end) {
-    object_t poid("streamtest");
+    oid poid("streamtest");
 
     set_start(pos, ceph_clock_now(cct));
     ObjectStore::Transaction *t = new ObjectStore::Transaction;
-    t->write(coll_t(), hobject_t(poid), pos, bytes, bl);
+    t->write(coll_t(), poid, pos, bytes, bl);
     fs->queue_transaction(NULL, t, new C_Ack(pos), new C_Commit(pos));
     pos += bytes;
 

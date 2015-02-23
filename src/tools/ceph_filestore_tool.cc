@@ -191,9 +191,9 @@ int main(int argc, char **argv)
        ++i, ++scanned) {
     cerr << "Scanning " << *i << ", " << scanned << "/"
 	 << colls_to_check.size() << " completed" << std::endl;
-    ghobject_t next;
+    goid next;
     while (!next.is_max()) {
-      vector<ghobject_t> list;
+      vector<goid> list;
       r = fs->collection_list_partial(
 	*i,
 	next,
@@ -207,7 +207,7 @@ int main(int argc, char **argv)
 	     << cpp_strerror(r) << std::endl;
 	goto UMOUNT;
       }
-      for (vector<ghobject_t>::iterator obj = list.begin();
+      for (vector<goid>::iterator obj = list.begin();
 	   obj != list.end();
 	   ++obj) {
 	bufferlist attr;

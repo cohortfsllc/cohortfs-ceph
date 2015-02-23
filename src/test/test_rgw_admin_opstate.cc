@@ -36,7 +36,7 @@ extern "C"{
 #include "rgw/rgw_bucket.h"
 #include "rgw/rgw_rados.h"
 #include "include/utime.h"
-#include "include/object.h"
+#include "common/oid.h"
 #include "cls/statelog/cls_statelog_types.h"
 #define GTEST
 #ifdef GTEST

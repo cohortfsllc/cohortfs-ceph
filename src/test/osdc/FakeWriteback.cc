@@ -58,7 +58,7 @@ FakeWriteback::~FakeWriteback()
   delete m_finisher;
 }
 
-void FakeWriteback::read(const object_t& oid,
+void FakeWriteback::read(const oid& obj,
 			 const boost::uuids::uuid& vol,
 			 uint64_t off, uint64_t len,
 			 bufferlist *pbl, uint64_t trunc_size,
@@ -68,7 +68,7 @@ void FakeWriteback::read(const object_t& oid,
   m_finisher->queue(wrapper, len);
 }
 
-ceph_tid_t FakeWriteback::write(const object_t& oid,
+ceph_tid_t FakeWriteback::write(const oid& obj,
 				const boost::uuids::uuid& vol,
 				uint64_t off, uint64_t len,
 				const bufferlist &bl, utime_t mtime,
@@ -80,7 +80,7 @@ ceph_tid_t FakeWriteback::write(const object_t& oid,
   return ++m_tid;
 }
 
-bool FakeWriteback::may_copy_on_write(const object_t&, uint64_t, uint64_t)
+bool FakeWriteback::may_copy_on_write(const oid&, uint64_t, uint64_t)
 {
   return false;
 }

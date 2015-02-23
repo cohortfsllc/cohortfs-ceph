@@ -30,7 +30,7 @@ class ObjectCacher {
   // read scatter/gather
   struct OSDRead {
 //FIXME!    vector<ObjectExtent> extents;
-    map<object_t, bufferlist*> read_data;  // bits of data as they come back
+    map<oid, bufferlist*> read_data;  // bits of data as they come back
     bufferlist *bl;
     int flags;
     OSDRead(bufferlist *b, int f) : bl(b), flags(f) {}
@@ -143,7 +143,7 @@ class ObjectCacher {
     // ObjectCacher::Object fields
     int ref;
     ObjectCacher *oc;
-    object_t oid;
+    oid obj;
     boost::uuids::uuid volume;
     friend struct ObjectSet;
 
@@ -170,9 +170,9 @@ class ObjectCacher {
     Object(const Object& other);
     const Object& operator=(const Object& other);
 
-    Object(ObjectCacher *_oc, object_t o, ObjectSet *os,
+    Object(ObjectCacher *_oc, oid o, ObjectSet *os,
 	   const boost::uuids::uuid& v, uint64_t ts, uint64_t tq)
-      : ref(0), oc(_oc), oid(o), volume(v), oset(os), set_item(this),
+      : ref(0), oc(_oc), obj(o), volume(v), oset(os), set_item(this),
 	truncate_size(ts), truncate_seq(tq), complete(false), exists(true),
 	last_write_tid(0), last_commit_tid(0), dirty_or_tx(0) {
       // add to set
@@ -186,7 +186,7 @@ class ObjectCacher {
       set_item.remove_myself();
     }
 
-    object_t get_oid() { return oid; }
+    oid get_obj() { return obj; }
     ObjectSet *get_object_set() { return oset; }
 
     const boost::uuids::uuid& get_volume() { return volume; }
@@ -310,7 +310,7 @@ class ObjectCacher {
   flush_set_callback_t flush_set_callback;
   void *flush_set_callback_arg;
 
-  std::map<boost::uuids::uuid, std::map<object_t, Object*> > objects;
+  std::map<boost::uuids::uuid, std::map<oid, Object*> > objects;
 
   ceph_tid_t last_read_tid;
 
@@ -334,14 +334,14 @@ class ObjectCacher {
   Finisher finisher;
 
   // objects
-  Object *get_object_maybe(object_t oid, const boost::uuids::uuid& v) {
+  Object* get_object_maybe(oid obj, const boost::uuids::uuid& v) {
     // have it?
-    if (objects[v].count(oid))
-      return objects[v][oid];
+    if (objects[v].count(obj))
+      return objects[v][obj];
     return NULL;
   }
 
-  Object *get_object(object_t oid, ObjectSet *oset,
+  Object *get_object(oid obj, ObjectSet *oset,
 		     const boost::uuids::uuid& v,
 		     uint64_t truncate_size, uint64_t truncate_seq);
   void close_object(Object *ob);
@@ -432,16 +432,16 @@ class ObjectCacher {
 #endif
 
  public:
-  void bh_read_finish(const boost::uuids::uuid& volume, object_t oid,
+  void bh_read_finish(const boost::uuids::uuid& volume, oid obj,
 		      ceph_tid_t tid, loff_t offset, uint64_t length,
 		      bufferlist &bl, int r, bool trust_enoent);
-  void bh_write_commit(const boost::uuids::uuid& volume, object_t oid, loff_t offset,
+  void bh_write_commit(const boost::uuids::uuid& volume, oid obj, loff_t offset,
 		       uint64_t length, ceph_tid_t t, int r);
 
   class C_ReadFinish : public Context {
     ObjectCacher *oc;
     boost::uuids::uuid volume;
-    object_t oid;
+    oid obj;
     loff_t start;
     uint64_t length;
     xlist<C_ReadFinish*>::item set_item;
@@ -452,13 +452,13 @@ class ObjectCacher {
     bufferlist bl;
     C_ReadFinish(ObjectCacher *c, Object *ob, ceph_tid_t t, loff_t s,
 		 uint64_t l) :
-      oc(c), volume(ob->get_volume()), oid(ob->get_oid()), start(s), length(l),
+      oc(c), volume(ob->get_volume()), obj(ob->get_obj()), start(s), length(l),
       set_item(this), trust_enoent(true), tid(t) {
       ob->reads.push_back(&set_item);
     }
 
     void finish(int r) {
-      oc->bh_read_finish(volume, oid, tid, start, length, bl, r, trust_enoent);
+      oc->bh_read_finish(volume, obj, tid, start, length, bl, r, trust_enoent);
 
       // object destructor clears the list
       if (set_item.is_on_list())
@@ -473,16 +473,16 @@ class ObjectCacher {
   class C_WriteCommit : public Context {
     ObjectCacher *oc;
     boost::uuids::uuid volume;
-    object_t oid;
+    oid obj;
     loff_t start;
     uint64_t length;
   public:
     ceph_tid_t tid;
     C_WriteCommit(ObjectCacher *c, const boost::uuids::uuid& _volume,
-		  object_t o, loff_t s, uint64_t l) :
-      oc(c), volume(_volume), oid(o), start(s), length(l), tid(0) {}
+		  oid o, loff_t s, uint64_t l) :
+      oc(c), volume(_volume), obj(o), start(s), length(l), tid(0) {}
     void finish(int r) {
-      oc->bh_write_commit(volume, oid, start, length, tid, r);
+      oc->bh_write_commit(volume, obj, start, length, tid, r);
     }
   };
 
@@ -699,7 +699,7 @@ inline ostream& operator<<(ostream& out, ObjectCacher::ObjectSet &os)
 inline ostream& operator<<(ostream& out, ObjectCacher::Object &ob)
 {
   out << "object["
-      << ob.get_oid() << " oset " << ob.oset << dec
+      << ob.get_obj() << " oset " << ob.oset << dec
       << " wr " << ob.last_write_tid << "/" << ob.last_commit_tid;
 
   if (ob.complete)

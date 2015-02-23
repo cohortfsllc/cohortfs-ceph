@@ -49,11 +49,11 @@ void SessionMap::dump()
 // LOAD
 
 
-object_t SessionMap::get_object_name()
+oid SessionMap::get_object_name()
 {
   char s[30];
   snprintf(s, sizeof(s), "mds%d_sessionmap", mds->whoami);
-  return object_t(s);
+  return oid(s);
 }
 
 class C_SM_Load : public Context {
@@ -74,9 +74,9 @@ void SessionMap::load(Context *onload)
     waiting_for_load.push_back(onload);
 
   C_SM_Load *c = new C_SM_Load(this);
-  object_t oid = get_object_name();
+  oid obj = get_object_name();
   VolumeRef volume(mds->get_metadata_volume());
-  mds->objecter->read_full(oid, volume, &c->bl, 0, c);
+  mds->objecter->read_full(obj, volume, &c->bl, 0, c);
 }
 
 void SessionMap::_load_finish(int r, bufferlist &bl)
@@ -128,9 +128,9 @@ void SessionMap::save(Context *onsave, version_t needv)
 
   encode(bl);
   committing = version;
-  object_t oid = get_object_name();
+  oid obj = get_object_name();
   VolumeRef volume(mds->get_metadata_volume());
-  mds->objecter->write_full(oid, volume, bl, ceph_clock_now(cct), 0,
+  mds->objecter->write_full(obj, volume, bl, ceph_clock_now(cct), 0,
 			    NULL, new C_SM_Save(this, version));
 }
 

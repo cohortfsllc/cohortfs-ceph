@@ -3,8 +3,8 @@
 #include "include/buffer.h"
 #include <map>
 
-#ifndef COMMON_OBJECT_H
-#define COMMON_OBJECT_H
+#ifndef COMMON_OBJECT_CONTENTS_H
+#define COMMON_OBJECT_CONTENTS_H
 
 enum {
   RANDOMWRITEFULL,

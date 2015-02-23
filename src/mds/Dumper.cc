@@ -91,8 +91,8 @@ void Dumper::dump(const char *dump_file)
   bufferlist bl;
 
   lock.Lock();
-  object_t oid = file_object_t(ino, 0);
-  objecter->read(oid, volume, start, len, &bl, 0,
+  oid obj = file_oid(ino, 0);
+  objecter->read(obj, volume, start, len, &bl, 0,
 		 new C_SafeCond(&localLock, &cond, &done));
   lock.Unlock();
   localLock.Lock();
@@ -170,13 +170,13 @@ void Dumper::undump(const char *dump_file)
   bufferlist hbl;
   ::encode(h, hbl);
 
-  object_t oid = file_object_t(ino, 0);
+  oid obj = file_oid(ino, 0);
 
   bool done = false;
   Cond cond;
 
-  cout << "writing header " << oid << std::endl;
-  objecter->write_full(oid, volume, hbl,
+  cout << "writing header " << obj << std::endl;
+  objecter->write_full(obj, volume, hbl,
 		       ceph_clock_now(cct),
 		       0, NULL, new C_SafeCond(&lock, &cond, &done));
 
@@ -194,7 +194,7 @@ void Dumper::undump(const char *dump_file)
     uint64_t l = MIN(left, 1024*1024);
     j.read_fd(fd, l);
     cout << " writing " << pos << "~" << l << std::endl;
-    objecter->write(oid, volume, pos, l, j,
+    objecter->write(obj, volume, pos, l, j,
 		    ceph_clock_now(cct), 0, NULL,
 		    new C_SafeCond(&lock, &cond, &done));
 

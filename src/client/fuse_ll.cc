@@ -731,9 +731,9 @@ const static struct fuse_lowlevel_ops fuse_ll_oper = {
 #if FUSE_VERSION >= FUSE_MAKE_VERSION(2, 8)
 #ifdef FUSE_IOCTL_COMPAT
   .ioctl = fuse_ll_ioctl,
-#else
+#else // FUSE_IOCTL_COMPAT
   .ioctl = 0,
-#endif
+#endif // FUSE_IOCTL_COMPAT
   .poll = 0,
 #if FUSE_VERSION > FUSE_MAKE_VERSION(2, 9)
   .write_buf = 0,

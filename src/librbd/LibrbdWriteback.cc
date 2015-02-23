@@ -74,7 +74,7 @@ namespace librbd {
 	assert(!m_result->done);
 	m_result->done = true;
 	m_result->ret = r;
-	m_wb_handler->complete_writes(m_result->oid);
+	m_wb_handler->complete_writes(m_result->obj);
       }
       ldout(m_cct, 20) << "C_OrderedWrite finished " << m_result << dendl;
     }
@@ -89,7 +89,7 @@ namespace librbd {
   {
   }
 
-  void LibrbdWriteback::read(const object_t& oid,
+  void LibrbdWriteback::read(const oid& obj,
 			     const boost::uuids::uuid& volume,
 			     uint64_t off, uint64_t len,
 			     bufferlist *pbl, uint64_t trunc_size,
@@ -102,39 +102,39 @@ namespace librbd {
     librados::ObjectReadOperation op(m_ictx->io_ctx);
     op.read(off, len, pbl, NULL);
     // Volume is actually unused since it's in data_ctx
-    int r = m_ictx->io_ctx.aio_operate(oid.name, rados_completion, &op,
+    int r = m_ictx->io_ctx.aio_operate(obj.name, rados_completion, &op,
 				       0, NULL);
     rados_completion->release();
     assert(r >= 0);
   }
 
-  bool LibrbdWriteback::may_copy_on_write(const object_t& oid,
+  bool LibrbdWriteback::may_copy_on_write(const oid& obj,
 					  uint64_t read_off, uint64_t read_len)
   {
     return false;
   }
 
-  ceph_tid_t LibrbdWriteback::write(const object_t& oid,
+  ceph_tid_t LibrbdWriteback::write(const oid& obj,
 				    const boost::uuids::uuid& volume,
 				    uint64_t off, uint64_t len,
 				    const bufferlist &bl, utime_t mtime,
 				    uint64_t trunc_size, uint32_t trunc_seq,
 				    Context *oncommit)
   {
-    write_result_d *result = new write_result_d(oid.name, oncommit);
-    m_writes[oid.name].push(result);
+    write_result_d *result = new write_result_d(obj.name, oncommit);
+    m_writes[obj.name].push(result);
     ldout(m_ictx->cct, 20) << "write will wait for result " << result << dendl;
     C_OrderedWrite *req_comp = new C_OrderedWrite(m_ictx->cct, result, this);
-    AioWrite *req = new AioWrite(m_ictx, oid.name, off, bl, req_comp);
+    AioWrite *req = new AioWrite(m_ictx, obj.name, off, bl, req_comp);
     req->send();
     return ++m_tid;
   }
 
-  void LibrbdWriteback::complete_writes(const std::string& oid)
+  void LibrbdWriteback::complete_writes(const std::string& obj)
   {
     assert(m_lock.is_locked());
-    std::queue<write_result_d*>& results = m_writes[oid];
-    ldout(m_ictx->cct, 20) << "complete_writes() oid " << oid << dendl;
+    std::queue<write_result_d*>& results = m_writes[obj];
+    ldout(m_ictx->cct, 20) << "complete_writes() obj " << obj << dendl;
     std::list<write_result_d*> finished;
 
     while (!results.empty()) {
@@ -146,7 +146,7 @@ namespace librbd {
     }
 
     if (results.empty())
-      m_writes.erase(oid);
+      m_writes.erase(obj);
 
     for (std::list<write_result_d*>::iterator it = finished.begin();
 	 it != finished.end(); ++it) {

@@ -31,6 +31,7 @@
 #include "common/strtol.h"
 #include "common/version.h"
 #include "include/str_list.h"
+#include "include/ceph_hash.h"
 #include "include/types.h"
 #include "include/stringify.h"
 #include "msg/msg_types.h"

@@ -12,7 +12,7 @@ class WritebackHandler {
   WritebackHandler() {}
   virtual ~WritebackHandler() {}
 
-  virtual void read(const object_t& oid, const boost::uuids::uuid& volume,
+  virtual void read(const oid& obj, const boost::uuids::uuid& volume,
 		    uint64_t off, uint64_t len, bufferlist *pbl,
 		    uint64_t trunc_size, uint32_t trunc_seq,
 		    Context *onfinish) = 0;
@@ -22,18 +22,18 @@ class WritebackHandler {
    * Check if the content we see at the given read offset may change
    * due to a write to this object.
    *
-   * @param oid object
+   * @param obj object
    * @param read_off read offset
    * @param read_len read length
    */
-  virtual bool may_copy_on_write(const object_t& oid, uint64_t read_off,
+  virtual bool may_copy_on_write(const oid& obj, uint64_t read_off,
 				 uint64_t read_len) = 0;
-  virtual ceph_tid_t write(const object_t& oid, const boost::uuids::uuid& volume,
+  virtual ceph_tid_t write(const oid& obj, const boost::uuids::uuid& volume,
 			   uint64_t off, uint64_t len,
 			   const bufferlist &bl, utime_t mtime,
 			   uint64_t trunc_size, uint32_t trunc_seq,
 			   Context *oncommit) = 0;
-  virtual ceph_tid_t lock(const object_t& oid, const boost::uuids::uuid& volume,
+  virtual ceph_tid_t lock(const oid& obj, const boost::uuids::uuid& volume,
 			  int op, int flags, Context *onack, Context *oncommit) {
     assert(0 == "this WritebackHandler does not support the lock operation");
   }
