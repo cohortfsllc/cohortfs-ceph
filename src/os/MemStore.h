@@ -35,7 +35,7 @@ private:
 public:
   struct Object : public ObjectStore::Object {
     mutable std::atomic<uint32_t> refcnt;
-    Spinlock alloc_lock;
+    cohort::SpinLock alloc_lock;
     std::shared_timed_mutex omap_lock;
     typedef std::unique_lock<std::shared_timed_mutex> unique_lock;
     typedef std::shared_lock<std::shared_timed_mutex> shared_lock;
@@ -112,66 +112,81 @@ public:
   };
   typedef boost::intrusive_ptr<Object> ObjectRef;
 
+  typedef ObjectStore::Object::ObjCache ObjCache;
+
   struct MemCollection : public ObjectStore::Collection {
-    std::unordered_map<hoid_t, ObjectRef> object_hash;  ///< for lookup
-    map<hoid_t, ObjectRef> object_map;	 ///< for iteration
     map<string,bufferptr> xattr;
     std::shared_timed_mutex lock;
 
     typedef std::unique_lock<std::shared_timed_mutex> unique_lock;
     typedef std::shared_lock<std::shared_timed_mutex> shared_lock;
 
-    // NOTE: The lock only needs to protect the object_map/hash, not the
+    // NOTE: The lock only needs to protect the obj_cache, not the
     // contents of individual objects.	The osd is already sequencing
     // reads and writes, so we will never see them concurrently at this
     // level.
 
     ObjectRef get_object(hoid_t oid) {
-      shared_lock l(lock);
-      auto o = object_hash.find(oid);
-      if (o == object_hash.end())
-	return ObjectRef();
-      return o->second;
+      Object* o =
+	static_cast<Object*>(obj_cache.find(oid.hk, oid,
+					    ObjCache::FLAG_NONE));
+      return (ObjectRef(o));
     }
 
     ObjectRef get_or_create_object(hoid_t oid) {
-      unique_lock l(lock);
-      auto i = object_hash.find(oid);
-      if (i != object_hash.end())
-	return i->second;
-      ObjectRef o(new Object(oid));
-      object_map[oid] = o;
-      object_hash[oid] = o;
+      Object::ObjCache::Latch lat;
+      ObjectRef o =
+	static_cast<Object*>(obj_cache.find_latch(
+				         oid.hk, oid, lat,
+					 ObjCache::FLAG_LOCK));
+      if (!o) {
+	o = new Object(oid);
+	obj_cache.insert_latched(o.get(), lat, ObjCache::FLAG_UNLOCK);
+      } else
+	lat.lock->unlock();
       return o;
     }
 
     void encode(bufferlist& bl) const {
+      ObjCache& obj_cache = const_cast<ObjCache&>(this->obj_cache);
       ENCODE_START(1, 1, bl);
+      obj_cache.lock(); /* lock entire cache */
       ::encode(xattr, bl);
-      uint32_t s = object_map.size();
+      uint32_t s = 0;
+      for (int ix = 0; ix < obj_cache.n_part; ++ix) {
+	ObjCache::Partition& p = obj_cache.get(ix);
+	s += p.tr.size();
+      }
       ::encode(s, bl);
-      for (map<hoid_t, ObjectRef>::const_iterator p = object_map.begin();
-	   p != object_map.end();
-	   ++p) {
-	::encode(p->first, bl);
-	p->second->encode(bl);
+      for (int ix = 0; ix < obj_cache.n_part; ++ix) {
+	ObjCache::Partition& p = obj_cache.get(ix);
+	for (ObjCache::iterator it = p.tr.begin();
+	     it != p.tr.end(); ++ix) {
+	  Object& o = static_cast<Object&>(*it);
+	  ::encode(o.get_oid(), bl);
+	  o.encode(bl);
+	}
       }
       ENCODE_FINISH(bl);
+      obj_cache.unlock(); /* !LOCKED */
     }
+
     void decode(bufferlist::iterator& p) {
+      ObjCache& obj_cache = const_cast<ObjCache&>(this->obj_cache);
+      obj_cache.lock(); /* lock entire cache */
       DECODE_START(1, p);
       ::decode(xattr, p);
       uint32_t s;
       ::decode(s, p);
-      while (s--) {
+      while (--s) {
 	hoid_t k;
 	::decode(k, p);
 	ObjectRef o(new Object(k));
 	o->decode(p);
-	object_map.insert(make_pair(k, o));
-	object_hash.insert(make_pair(k, o));
+	obj_cache.insert(k.hk, o.get(), ObjCache::FLAG_NONE);
       }
       DECODE_FINISH(p);
+      obj_cache.unlock(); /* !LOCKED */
     }
 
     MemCollection(MemStore* ms, const coll_t& cid) :
