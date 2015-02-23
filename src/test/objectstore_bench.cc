@@ -322,9 +322,10 @@ int main(int argc, const char *argv[])
   auto duration = duration_cast<microseconds>(t2 - t1);
   byte_units total = size * repeats * n_threads;
   byte_units rate = (1000000LL * total) / duration.count();
+  size_t iops = (1000000LL * total / block_size) / duration.count();
   dout(0) << "Wrote " << total << " in "
-      << duration.count() << "us, at a rate of " << rate << "/s"
-      << dendl;
+      << duration.count() << "us, at a rate of " << rate << "/s and "
+      << iops << " iops" << dendl;
 
   return 0;
 }
