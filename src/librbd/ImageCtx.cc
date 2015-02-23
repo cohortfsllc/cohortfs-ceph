@@ -111,8 +111,8 @@ namespace librbd {
       lderr(cct) << "error finding header: " << cpp_strerror(r) << dendl;
       return r;
     }
-    header_oid = header_name(name);
-    image_oid = image_name(name);
+    header_obj = header_name(name);
+    image_obj = image_name(name);
     return 0;
   }
 
@@ -127,7 +127,7 @@ namespace librbd {
   }
 
 #if 0
-  void ImageCtx::aio_read_from_cache(object_t o, bufferlist *bl, size_t len,
+  void ImageCtx::aio_read_from_cache(oid o, bufferlist *bl, size_t len,
 				     uint64_t off, Context *onfinish) {
     ObjectCacher::OSDRead *rd = object_cacher->prepare_read(bl, 0);
     ObjectExtent extent(o, off, len, 0);
@@ -140,7 +140,7 @@ namespace librbd {
       onfinish->complete(r);
   }
 
-  void ImageCtx::write_to_cache(object_t o, bufferlist& bl, size_t len,
+  void ImageCtx::write_to_cache(oid o, bufferlist& bl, size_t len,
 				uint64_t off, Context *onfinish) {
     ObjectCacher::OSDWrite *wr
       = object_cacher->prepare_write(bl, utime_t(), 0);
@@ -153,7 +153,7 @@ namespace librbd {
     }
   }
 
-  int ImageCtx::read_from_cache(object_t o, bufferlist *bl, size_t len,
+  int ImageCtx::read_from_cache(oid o, bufferlist *bl, size_t len,
 				uint64_t off) {
     int r;
     Mutex mylock;
@@ -256,7 +256,7 @@ namespace librbd {
 #if 0
     assert(!wctx);
     wctx = new WatchCtx(this);
-    return io_ctx.watch(header_oid, 0, &(wctx->cookie), wctx);
+    return io_ctx.watch(header_obj, 0, &(wctx->cookie), wctx);
 #endif
     return 0;
   }
@@ -265,7 +265,7 @@ namespace librbd {
 #if 0
     assert(wctx);
     wctx->invalidate();
-    io_ctx.unwatch(header_oid, wctx->cookie);
+    io_ctx.unwatch(header_obj, wctx->cookie);
     delete wctx;
     wctx = NULL;
 #endif

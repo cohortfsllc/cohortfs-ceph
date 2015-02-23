@@ -2,7 +2,7 @@
 // vim: ts=8 sw=2 smarttab
 
 #include "include/types.h"
-#include "hobject.h"
+#include "oid.h"
 #include "common/Formatter.h"
 
 static void append_escaped(string& out, const string &in)
@@ -25,25 +25,25 @@ static void append_escaped(string& out, const string &in)
 
 #define stringalong(x) {x, sizeof(x) - 1}
 
-static const string typestrings[] = {
-  [ENTIRETY] = "entirety",
-  [DATA] = "data",
-  [ECC] = "ecc",
-  [TERMINUS] = "terminus"
+static const map<chunktype, string> typestrings = {
+  {chunktype::entirety, "entirety"},
+  {chunktype::data, "data"},
+  {chunktype::ecc, "ecc"},
+  {chunktype::terminus, "terminus"}
 };
 
-static const map<string, stripetype_t> stringtypes = {
-  {"entirety", ENTIRETY},
-  {"data", DATA},
-  {"ecc", ECC},
-  {"terminus", TERMINUS}
+static const map<string, chunktype> stringtypes = {
+  {"entirety", chunktype::entirety},
+  {"data", chunktype::data},
+  {"ecc", chunktype::ecc},
+  {"terminus", chunktype::terminus}
 };
 
 
 // The appender must append a sequence of characters WIHOUT A NUL and
 // return a pointer to the next character after the last appended. Or
 // NULL if the buffer isn't big enough.
-bool hobject_t::append_c_str(
+bool oid::append_c_str(
   char *orig, char sep, size_t len,
   char *(*appender)(char *dest, const char* src, size_t len)) const
 {
@@ -53,75 +53,70 @@ bool hobject_t::append_c_str(
     return false;
 
   if (appender) {
-    cursor = appender(orig, oid.name.c_str(), bound - cursor);
+    cursor = appender(orig, name.c_str(), bound - cursor);
     if (!cursor)
       return false;
-  } else if ((ptrdiff_t)oid.name.size() >= bound - cursor) {
+  } else if ((ptrdiff_t)name.size() >= bound - cursor) {
     return false;
   } else {
-    memcpy(cursor, oid.name.c_str(), oid.name.size());
-    cursor += oid.name.size();
+    memcpy(cursor, name.c_str(), name.size());
+    cursor += name.size();
   }
 
   if (cursor > bound)
     return false;
   *cursor++ = sep;
 
-  assert(stripetype < TERMINUS);
+  assert(type < chunktype::terminus);
   if ((cursor > bound) ||
-      ((bound - cursor) < (ptrdiff_t)typestrings[stripetype].size()))
+      ((bound - cursor) < (ptrdiff_t)typestrings.at(type).size()))
     return false;
-  memcpy(cursor, typestrings[stripetype].c_str(),
-	 typestrings[stripetype].size());
-  cursor += typestrings[stripetype].length();
+  memcpy(cursor, typestrings.at(type).c_str(),
+	 typestrings.at(type).size());
+  cursor += typestrings.at(type).length();
 
   if (cursor > bound)
     return false;
   *cursor++ = sep;
 
-  int writ = snprintf(cursor, bound - cursor, "%" PRIu32, stripeno);
+  int writ = snprintf(cursor, bound - cursor, "%" PRIu32, stride);
   if (writ >= (bound - cursor))
     return false;
 
   return true;
 }
 
-void hobject_t::append_str(
+void oid::append_str(
   string &orig, char sep,
   void (*appender)(string &dest, const string &src)) const
 {
-  orig.reserve(orig.size() + oid.name.size() + 30);
+  orig.reserve(orig.size() + name.size() + 30);
   if (appender) {
-    appender(orig, oid.name);
+    appender(orig, name);
   } else {
-    orig.append(oid.name);
+    orig.append(name);
   }
   orig.push_back(sep);
   // Should never be violated, compiler complains if you try it.
-  assert(stripetype < TERMINUS);
-  orig.append(typestrings[stripetype]);
+  assert(type < chunktype::terminus);
+  orig.append(typestrings.at(type));
   orig.push_back(sep);
-  orig.append(std::to_string(stripeno));
+  orig.append(std::to_string(stride));
   orig.reserve(orig.length());
 }
 
 
-string hobject_t::to_str() const
+string oid::to_str() const
 {
   string result;
   append_str(result, '.', append_escaped);
   return result;
 }
 
-hobject_t hobject_t::parse_c_str(const char *in, char sep,
-				 bool (*appender)(
-				   string &dest,
-				   const char *begin,
-				   const char *bound),
-				 const char *end)
+oid::oid(const char *in, char sep,
+	 bool (*appender)(string &dest, const char *begin,
+			  const char *bound), const char *end)
 {
-  hobject_t underconstruction;
-
   const char* cursor = in;
   const char* bound;
 
@@ -133,11 +128,11 @@ hobject_t hobject_t::parse_c_str(const char *in, char sep,
   if (!bound)
     throw std::invalid_argument(in);
 
-  underconstruction.oid.name.reserve(bound - cursor);
+  name.reserve(bound - cursor);
 
-  if (!appender(underconstruction.oid.name, cursor, bound))
+  if (!appender(name, cursor, bound))
     throw std::invalid_argument(in);
-  underconstruction.oid.name.reserve(underconstruction.oid.name.size());
+  name.reserve(name.size());
 
   cursor = bound + 1;
   if (end && cursor >= end)
@@ -148,7 +143,7 @@ hobject_t hobject_t::parse_c_str(const char *in, char sep,
     throw std::invalid_argument(in);
   string temp(cursor, bound - cursor);
   try {
-    underconstruction.stripetype = stringtypes.at(temp);
+    type = stringtypes.at(temp);
   } catch (std::out_of_range &e) {
     throw std::invalid_argument(in);
   }
@@ -157,46 +152,44 @@ hobject_t hobject_t::parse_c_str(const char *in, char sep,
   if (end && cursor >= end)
     throw std::invalid_argument(in);
 
-  underconstruction.stripeno = strtoul(cursor, (char**) &bound, 10);
+  stride = strtoul(cursor, (char**) &bound, 10);
   if (*cursor == '\0' || (*bound != '\0' && bound != end))
     throw std::invalid_argument(in);
-
-  return underconstruction;
 }
 
-void hobject_t::encode(bufferlist& bl) const
+void oid::encode(bufferlist& bl) const
 {
   ENCODE_START(4, 3, bl);
-  ::encode(oid, bl);
-  ::encode(stripetype, bl);
-  ::encode(stripeno, bl);
+  ::encode(name, bl);
+  ::encode(type, bl);
+  ::encode(stride, bl);
   ENCODE_FINISH(bl);
 }
 
-void hobject_t::decode(bufferlist::iterator& bl)
+void oid::decode(bufferlist::iterator& bl)
 {
   DECODE_START_LEGACY_COMPAT_LEN(4, 3, 3, bl);
-  ::decode(oid, bl);
-  ::decode(stripetype, bl);
-  ::decode(stripeno, bl);
+  ::decode(name, bl);
+  ::decode(type, bl);
+  ::decode(stride, bl);
   DECODE_FINISH(bl);
 }
 
-void hobject_t::dump(Formatter *f) const
+void oid::dump(Formatter *f) const
 {
-  f->dump_string("oid", oid.name);
-  f->dump_string("stripetype", typestrings[stripetype]);
-  f->dump_int("stripeno", stripeno);
+  f->dump_string("name", name);
+  f->dump_string("type", typestrings.at(type));
+  f->dump_int("stride", stride);
 }
 
-void hobject_t::generate_test_instances(list<hobject_t*>& o)
+void oid::generate_test_instances(list<oid*>& o)
 {
-  o.push_back(new hobject_t);
-  o.push_back(new hobject_t(object_t("oname"), DATA, 97));
-  o.push_back(new hobject_t(object_t("oname3"), ECC, 31));
+  o.push_back(new oid);
+  o.push_back(new oid("oname", chunktype::data, 97));
+  o.push_back(new oid("oname3", chunktype::ecc, 31));
 }
 
-std::ostream& operator<<(std::ostream& out, const hobject_t& o)
+std::ostream& operator<<(std::ostream& out, const oid& o)
 {
   out << o.to_str();
   return out;

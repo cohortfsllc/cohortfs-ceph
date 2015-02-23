@@ -25,7 +25,7 @@
 /*
  * OSD op reply
  *
- * oid - object id
+ * obj - object id
  * op  - OSD_OP_DELETE, etc.
  *
  */
@@ -35,7 +35,7 @@ class MOSDOpReply : public Message {
   static const int HEAD_VERSION = 6;
   static const int COMPAT_VERSION = 2;
 
-  hobject_t oid;
+  oid obj;
   boost::uuids::uuid volume;
   vector<OSDOp> ops;
   int64_t flags;
@@ -47,7 +47,7 @@ class MOSDOpReply : public Message {
   int32_t retry_attempt;
 
 public:
-  hobject_t get_oid() const { return oid; }
+  oid get_oid() const { return obj; }
   const boost::uuids::uuid& get_volume() const { return volume; }
   int      get_flags() const { return flags; }
 
@@ -109,7 +109,7 @@ public:
     result = r;
     flags =
       (req->flags & ~(CEPH_OSD_FLAG_ONDISK|CEPH_OSD_FLAG_ONNVRAM|CEPH_OSD_FLAG_ACK)) | acktype;
-    oid = req->oid;
+    obj = req->obj;
     volume = req->volume;
     osdmap_epoch = e;
     user_version = 0;
@@ -130,7 +130,7 @@ public:
 
     OSDOp::merge_osd_op_vector_out_data(ops, data);
 
-    ::encode(oid, payload);
+    ::encode(obj, payload);
     ::encode(volume, payload);
     ::encode(flags, payload);
     ::encode(result, payload);
@@ -156,7 +156,7 @@ public:
   }
   virtual void decode_payload() {
     bufferlist::iterator p = payload.begin();
-    ::decode(oid, p);
+    ::decode(obj, p);
     ::decode(volume, p);
     ::decode(flags, p);
     ::decode(result, p);
@@ -187,7 +187,7 @@ public:
 
   void print(ostream& out) const {
     out << "osd_op_reply(" << get_tid()
-	<< " " << oid << " " << ops
+	<< " " << obj << " " << ops
 	<< " v" << get_replay_version()
 	<< " uv" << get_user_version();
     if (is_ondisk())

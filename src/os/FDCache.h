@@ -18,7 +18,7 @@
 #include <memory>
 #include <errno.h>
 #include <cstdio>
-#include "common/hobject.h"
+#include "common/oid.h"
 #include "common/Mutex.h"
 #include "common/Cond.h"
 #include "common/shared_cache.hpp"
@@ -51,7 +51,7 @@ public:
   };
 
 private:
-  SharedLRU<hobject_t, FD> registry;
+  SharedLRU<oid, FD> registry;
   CephContext *cct;
 
 public:
@@ -65,16 +65,16 @@ public:
   }
   typedef std::shared_ptr<FD> FDRef;
 
-  FDRef lookup(const hobject_t &hoid) {
+  FDRef lookup(const oid &hoid) {
     return registry.lookup(hoid);
   }
 
-  FDRef add(const hobject_t &hoid, int fd) {
+  FDRef add(const oid &hoid, int fd) {
     return registry.add(hoid, new FD(fd));
   }
 
   /// clear cached fd for hoid, subsequent lookups will get an empty FD
-  void clear(const hobject_t &hoid) {
+  void clear(const oid &hoid) {
     registry.clear(hoid);
     assert(!registry.lookup(hoid));
   }

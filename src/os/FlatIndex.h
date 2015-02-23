@@ -51,34 +51,34 @@ public:
 
   /// @see CollectionIndex
   int created(
-    const hobject_t &oid,
+    const oid &obj,
     const char *path
     );
 
   /// @see CollectionIndex
   int unlink(
-    const hobject_t &oid
+    const oid &obj
     );
 
   /// @see CollectionIndex
   int lookup(
-    const hobject_t &oid,
+    const oid &obj,
     IndexedPath *path,
     int *exist
     );
 
   /// @see CollectionIndex
   int collection_list(
-    vector<hobject_t> *ls
+    vector<oid> *ls
     );
 
   /// @see CollectionIndex
   int collection_list_partial(
-    const hobject_t &start,
+    const oid &start,
     int min_count,
     int max_count,
-    vector<hobject_t> *ls,
-    hobject_t *next
+    vector<oid> *ls,
+    oid *next
     );
 };
 

@@ -206,7 +206,7 @@ set(libcommon_files
   msg/SimpleMessenger.cc
   msg/DirectMessenger.cc
   msg/msg_types.cc
-  common/hobject.cc
+  common/oid.cc
   osd/OSDMap.cc
   common/histogram.cc
   osd/osd_types.cc

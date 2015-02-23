@@ -22,17 +22,17 @@ namespace librbd {
     LibrbdWriteback(ImageCtx *ictx, Mutex& lock);
     virtual ~LibrbdWriteback() {}
 
-    virtual void read(const object_t& oid, const boost::uuids::uuid& volume,
+    virtual void read(const oid& obj, const boost::uuids::uuid& volume,
 		      uint64_t off, uint64_t len, bufferlist *pbl,
 		      uint64_t trunc_size,  uint32_t trunc_seq,
 		      Context *onfinish);
 
     // Determine whether a read to this extent could be affected by a
     // write-triggered copy-on-write
-    virtual bool may_copy_on_write(const object_t& oid, uint64_t read_off,
+    virtual bool may_copy_on_write(const oid& obj, uint64_t read_off,
 				   uint64_t read_len);
 
-    virtual ceph_tid_t write(const object_t& oid, const boost::uuids::uuid& volume,
+    virtual ceph_tid_t write(const oid& obj, const boost::uuids::uuid& volume,
 			     uint64_t off, uint64_t len,
 			     const bufferlist &bl, utime_t mtime,
 			     uint64_t trunc_size, uint32_t trunc_seq,
@@ -41,17 +41,17 @@ namespace librbd {
     struct write_result_d {
       bool done;
       int ret;
-      std::string oid;
+      std::string obj;
       Context *oncommit;
-      write_result_d(const std::string& oid, Context *oncommit) :
-	done(false), ret(0), oid(oid), oncommit(oncommit) {}
+      write_result_d(const std::string& obj, Context *oncommit) :
+	done(false), ret(0), obj(obj), oncommit(oncommit) {}
     private:
       write_result_d(const write_result_d& rhs);
       const write_result_d& operator=(const write_result_d& rhs);
     };
 
   private:
-    void complete_writes(const std::string& oid);
+    void complete_writes(const std::string& obj);
 
     ceph_tid_t m_tid;
     Mutex& m_lock;

@@ -87,8 +87,8 @@ public:
   typedef std::shared_ptr<Object> ObjectRef;
 
   struct Collection {
-    std::unordered_map<hobject_t, ObjectRef> object_hash;  ///< for lookup
-    map<hobject_t, ObjectRef> object_map;	 ///< for iteration
+    std::unordered_map<oid, ObjectRef> object_hash;  ///< for lookup
+    map<oid, ObjectRef> object_map;	 ///< for iteration
     map<string,bufferptr> xattr;
     RWLock lock;   ///< for object_{map,hash}
 
@@ -97,22 +97,22 @@ public:
     // reads and writes, so we will never see them concurrently at this
     // level.
 
-    ObjectRef get_object(hobject_t oid) {
+    ObjectRef get_object(oid obj) {
       RWLock::RLocker l(lock);
-      std::unordered_map<hobject_t, ObjectRef>::iterator o = object_hash.find(oid);
+      std::unordered_map<oid, ObjectRef>::iterator o = object_hash.find(obj);
       if (o == object_hash.end())
 	return ObjectRef();
       return o->second;
     }
 
-    ObjectRef get_or_create_object(hobject_t oid) {
+    ObjectRef get_or_create_object(oid obj) {
       RWLock::WLocker l(lock);
-      std::unordered_map<hobject_t, ObjectRef>::iterator i = object_hash.find(oid);
+      std::unordered_map<oid, ObjectRef>::iterator i = object_hash.find(obj);
       if (i != object_hash.end())
 	return i->second;
       ObjectRef o(new Object);
-      object_map[oid] = o;
-      object_hash[oid] = o;
+      object_map[obj] = o;
+      object_hash[obj] = o;
       return o;
     }
 
@@ -121,7 +121,7 @@ public:
       ::encode(xattr, bl);
       uint32_t s = object_map.size();
       ::encode(s, bl);
-      for (map<hobject_t, ObjectRef>::const_iterator p = object_map.begin();
+      for (map<oid, ObjectRef>::const_iterator p = object_map.begin();
 	   p != object_map.end();
 	   ++p) {
 	::encode(p->first, bl);
@@ -135,7 +135,7 @@ public:
       uint32_t s;
       ::decode(s, p);
       while (s--) {
-	hobject_t k;
+	oid k;
 	::decode(k, p);
 	ObjectRef o(new Object);
 	o->decode(p);
@@ -250,38 +250,38 @@ private:
   int _read_pages(page_set &pages, unsigned offset, size_t len, bufferlist &dst);
   void _write_pages(const bufferlist& src, unsigned offset, ObjectRef o);
 
-  int _touch(const coll_t &cid, const hobject_t& oid);
-  int _write(const coll_t &cid, const hobject_t& oid, uint64_t offset,
+  int _touch(const coll_t &cid, const oid& obj);
+  int _write(const coll_t &cid, const oid& obj, uint64_t offset,
 	     size_t len, const bufferlist& bl, bool replica = false);
-  int _zero(const coll_t &cid, const hobject_t& oid,
+  int _zero(const coll_t &cid, const oid& obj,
 	    uint64_t offset, size_t len);
-  int _truncate(const coll_t &cid, const hobject_t& oid, uint64_t size);
-  int _remove(const coll_t &cid, const hobject_t& oid);
-  int _setattrs(const coll_t &cid, const hobject_t& oid,
+  int _truncate(const coll_t &cid, const oid& obj, uint64_t size);
+  int _remove(const coll_t &cid, const oid& obj);
+  int _setattrs(const coll_t &cid, const oid& obj,
 		map<string,bufferptr>& aset);
-  int _rmattr(const coll_t &cid, const hobject_t& oid, const char *name);
-  int _rmattrs(const coll_t &cid, const hobject_t& oid);
-  int _clone(const coll_t &cid, const hobject_t& oldoid,
-	     const hobject_t& newoid);
-  int _clone_range(const coll_t &cid, const hobject_t& oldoid,
-		   const hobject_t& newoid,
+  int _rmattr(const coll_t &cid, const oid& obj, const char *name);
+  int _rmattrs(const coll_t &cid, const oid& obj);
+  int _clone(const coll_t &cid, const oid& oldoid,
+	     const oid& newoid);
+  int _clone_range(const coll_t &cid, const oid& oldoid,
+		   const oid& newoid,
 		   uint64_t srcoff, uint64_t len, uint64_t dstoff);
-  int _omap_clear(const coll_t &cid, const hobject_t &oid);
-  int _omap_setkeys(const coll_t &cid, const hobject_t &oid,
+  int _omap_clear(const coll_t &cid, const oid &obj);
+  int _omap_setkeys(const coll_t &cid, const oid &obj,
 		    const map<string, bufferlist> &aset);
-  int _omap_rmkeys(const coll_t &cid, const hobject_t &oid,
+  int _omap_rmkeys(const coll_t &cid, const oid &obj,
 		   const set<string> &keys);
-  int _omap_rmkeyrange(const coll_t &cid, const hobject_t &oid,
+  int _omap_rmkeyrange(const coll_t &cid, const oid &obj,
 		       const string& first, const string& last);
-  int _omap_setheader(const coll_t &cid, const hobject_t &oid,
+  int _omap_setheader(const coll_t &cid, const oid &obj,
 		      const bufferlist &bl);
 
   int _create_collection(const coll_t &c);
   int _destroy_collection(const coll_t &c);
   int _collection_add(const coll_t &cid, const coll_t &ocid,
-		      const hobject_t& oid);
-  int _collection_move_rename(const coll_t &oldcid, const hobject_t& oldoid,
-			      const coll_t &cid, const hobject_t& o);
+		      const oid& obj);
+  int _collection_move_rename(const coll_t &oldcid, const oid& oldoid,
+			      const coll_t &cid, const oid& o);
   int _collection_setattr(const coll_t &cid, const char *name,
 			  const void *value, size_t size);
   int _collection_setattrs(const coll_t &cid, map<string,bufferptr> &aset);
@@ -331,24 +331,24 @@ public:
 
   int statfs(struct statfs *buf);
 
-  bool exists(const coll_t &cid, const hobject_t& oid);
+  bool exists(const coll_t &cid, const oid& obj);
   int stat(
     const coll_t &cid,
-    const hobject_t& oid,
+    const oid& obj,
     struct stat *st,
     bool allow_eio = false); // struct stat?
   int read(
     const coll_t &cid,
-    const hobject_t& oid,
+    const oid& obj,
     uint64_t offset,
     size_t len,
     bufferlist& bl,
     bool allow_eio = false);
-  int fiemap(const coll_t &cid, const hobject_t& oid,
+  int fiemap(const coll_t &cid, const oid& obj,
 	     uint64_t offset, size_t len, bufferlist& bl);
-  int getattr(const coll_t &cid, const hobject_t& oid,
+  int getattr(const coll_t &cid, const oid& obj,
 	      const char *name, bufferptr& value);
-  int getattrs(const coll_t &cid, const hobject_t& oid,
+  int getattrs(const coll_t &cid, const oid& obj,
 	       map<string,bufferptr>& aset, bool user_only = false);
 
   int list_collections(vector<coll_t>& ls);
@@ -358,53 +358,53 @@ public:
   int collection_getattr(const coll_t &cid, const char *name, bufferlist& bl);
   int collection_getattrs(const coll_t &cid, map<string,bufferptr> &aset);
   bool collection_empty(const coll_t &c);
-  int collection_list(const coll_t &cid, vector<hobject_t>& o);
-  int collection_list_partial(const coll_t &cid, hobject_t start,
-			      int min, int max, vector<hobject_t> *ls, hobject_t *next);
-  int collection_list_range(const coll_t &cid, hobject_t start, hobject_t end,
-			    vector<hobject_t> *ls);
+  int collection_list(const coll_t &cid, vector<oid>& o);
+  int collection_list_partial(const coll_t &cid, oid start,
+			      int min, int max, vector<oid> *ls, oid *next);
+  int collection_list_range(const coll_t &cid, oid start, oid end,
+			    vector<oid> *ls);
 
   int omap_get(
-    const coll_t &cid,	    ///< [in] Collection containing oid
-    const hobject_t &oid,   ///< [in] Object containing omap
+    const coll_t &cid,	    ///< [in] Collection containing obj
+    const oid &obj,   ///< [in] Object containing omap
     bufferlist *header,	    ///< [out] omap header
     map<string, bufferlist> *out /// < [out] Key to value map
     );
 
   /// Get omap header
   int omap_get_header(
-    const coll_t &cid,	    ///< [in] Collection containing oid
-    const hobject_t &oid,   ///< [in] Object containing omap
+    const coll_t &cid,	    ///< [in] Collection containing obj
+    const oid &obj,   ///< [in] Object containing omap
     bufferlist *header,	    ///< [out] omap header
     bool allow_eio = false  ///< [in] don't assert on eio
     );
 
-  /// Get keys defined on oid
+  /// Get keys defined on obj
   int omap_get_keys(
-    const coll_t &cid,	    ///< [in] Collection containing oid
-    const hobject_t &oid,   ///< [in] Object containing omap
-    set<string> *keys	    ///< [out] Keys defined on oid
+    const coll_t &cid,	    ///< [in] Collection containing obj
+    const oid &obj,   ///< [in] Object containing omap
+    set<string> *keys	    ///< [out] Keys defined on obj
     );
 
   /// Get key values
   int omap_get_values(
-    const coll_t &cid,	    ///< [in] Collection containing oid
-    const hobject_t &oid,   ///< [in] Object containing omap
+    const coll_t &cid,	    ///< [in] Collection containing obj
+    const oid &obj,   ///< [in] Object containing omap
     const set<string> &keys, ///< [in] Keys to get
     map<string, bufferlist> *out ///< [out] Returned keys and values
     );
 
-  /// Filters keys into out which are defined on oid
+  /// Filters keys into out which are defined on obj
   int omap_check_keys(
-    const coll_t &cid,	    ///< [in] Collection containing oid
-    const hobject_t &oid,   ///< [in] Object containing omap
+    const coll_t &cid,	    ///< [in] Collection containing obj
+    const oid &obj,   ///< [in] Object containing omap
     const set<string> &keys, ///< [in] Keys to check
-    set<string> *out	    ///< [out] Subset of keys defined on oid
+    set<string> *out	    ///< [out] Subset of keys defined on obj
     );
 
   ObjectMap::ObjectMapIterator get_omap_iterator(
     const coll_t &cid,	    ///< [in] collection
-    const hobject_t &oid    ///< [in] object
+    const oid &obj    ///< [in] object
     );
 
   void set_fsid(const boost::uuids::uuid& u);

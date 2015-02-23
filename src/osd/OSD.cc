@@ -130,7 +130,7 @@ OSDService::OSDService(OSD *osd) :
   osd(osd), lru(20), // More sophisticated later
   cct(osd->cct),
   whoami(osd->whoami), store(osd->store), clog(osd->clog),
-  infos_oid(OSD::make_infos_oid()),
+  infos_obj(OSD::make_infos_obj()),
   cluster_messenger(osd->cluster_messenger),
   client_messenger(osd->client_messenger),
   client_xio_messenger(osd->client_xio_messenger),
@@ -254,10 +254,10 @@ int OSD::mkfs(CephContext *cct, ObjectStore *store, const string &dev,
 	bl.push_back(bp);
 	dout(0) << "testing disk bandwidth..." << dendl;
 	utime_t start = ceph_clock_now(cct);
-	object_t oid("disk_bw_test");
+	oid obj("disk_bw_test");
 	for (int i=0; i<1000; i++) {
 	  ObjectStore::Transaction *t = new ObjectStore::Transaction(1);
-	  t->write(coll_t::META_COLL, hobject_t(oid), i*bl.length(), bl.length(), bl);
+	  t->write(coll_t::META_COLL, obj, i*bl.length(), bl.length(), bl);
 	  store->queue_transaction_and_cleanup(NULL, t);
 	}
 	store->sync();
@@ -265,7 +265,7 @@ int OSD::mkfs(CephContext *cct, ObjectStore *store, const string &dev,
 	end -= start;
 	dout(0) << "measured " << (1000.0 / (double)end) << " mb/sec" << dendl;
 	ObjectStore::Transaction tr;
-	tr.remove(coll_t::META_COLL, hobject_t(oid));
+	tr.remove(coll_t::META_COLL, obj);
 	ret = store->apply_transaction(tr);
 	if (ret) {
 	  derr << "OSD::mkfs: error while benchmarking: apply_transaction returned "
@@ -548,7 +548,7 @@ bool OSD::asok_command(string command, cmdmap_t& cmdmap, string format,
 
       f->open_array_section("watch");
 
-      f->dump_string("object", it->obj.oid.name);
+      f->dump_string("object", it->obj.name);
 
       f->open_object_section("entity_name");
       it->wi.name.dump(f);
@@ -660,10 +660,10 @@ int OSD::init()
   }
 
   // make sure info object exists
-  if (!store->exists(coll_t::META_COLL, service.infos_oid)) {
+  if (!store->exists(coll_t::META_COLL, service.infos_obj)) {
     dout(10) << "init creating/touching snapmapper object" << dendl;
     ObjectStore::Transaction t;
-    t.touch(coll_t::META_COLL, service.infos_oid);
+    t.touch(coll_t::META_COLL, service.infos_obj);
     r = store->apply_transaction(t);
     if (r < 0)
       goto out;
@@ -980,12 +980,12 @@ void OSD::recursive_remove_collection(ObjectStore *store, coll_t tmp)
 
   ObjectStore::Transaction t;
 
-  vector<hobject_t> objects;
+  vector<oid> objects;
   store->collection_list(tmp, objects);
 
   // delete them.
   unsigned removed = 0;
-  for (vector<hobject_t>::iterator p = objects.begin();
+  for (vector<oid>::iterator p = objects.begin();
        p != objects.end();
        ++p, removed++) {
     OSDriver::OSTransaction _t(driver.get_transaction(&t));
@@ -2369,7 +2369,7 @@ void OSD::handle_osd_map(MOSDMap *m)
 	last_marked_full = e;
       pinned_maps.push_back(add_map(o));
 
-      hobject_t fulloid = get_osdmap_pobject_name(e);
+      oid fulloid = get_osdmap_pobject_name(e);
       t.write(coll_t::META_COLL, fulloid, 0, bl.length(), bl);
       pin_map_bl(e, bl);
       continue;
@@ -2379,8 +2379,8 @@ void OSD::handle_osd_map(MOSDMap *m)
     if (p != m->incremental_maps.end()) {
       dout(10) << "handle_osd_map  got inc map for epoch " << e << dendl;
       bufferlist& bl = p->second;
-      hobject_t oid = get_inc_osdmap_pobject_name(e);
-      t.write(coll_t::META_COLL, oid, 0, bl.length(), bl);
+      oid obj = get_inc_osdmap_pobject_name(e);
+      t.write(coll_t::META_COLL, obj, 0, bl.length(), bl);
       pin_map_inc_bl(e, bl);
 
       OSDMap *o = new OSDMap;
@@ -2406,7 +2406,7 @@ void OSD::handle_osd_map(MOSDMap *m)
       bufferlist fbl;
       o->encode(fbl);
 
-      hobject_t fulloid = get_osdmap_pobject_name(e);
+      oid fulloid = get_osdmap_pobject_name(e);
       t.write(coll_t::META_COLL, fulloid, 0, fbl.length(), fbl);
       pin_map_bl(e, fbl);
       continue;
@@ -3003,8 +3003,8 @@ void OSD::handle_op(OpRequestRef op)
 #endif
 
   // object name too long?
-  if (m->get_oid().oid.name.size() > MAX_CEPH_OBJECT_NAME_LEN) {
-    dout(4) << "handle_op '" << m->get_oid().oid.name << "' is longer than "
+  if (m->get_oid().name.size() > MAX_CEPH_OBJECT_NAME_LEN) {
+    dout(4) << "handle_op '" << m->get_oid().name << "' is longer than "
 	    << MAX_CEPH_OBJECT_NAME_LEN << " bytes!" << dendl;
     service.reply_op_error(op, -ENAMETOOLONG);
     return;
@@ -3230,8 +3230,8 @@ int OSD::init_op_flags(OpRequestRef op)
     if (ceph_osd_op_mode_read(iter->op.op))
       op->set_read();
 
-    // set READ flag if there are src_oids
-    if (iter->oid.oid.name.length())
+    // set READ flag if there are src_objs
+    if (iter->obj.name.length())
       op->set_read();
 
     switch (iter->op.op) {

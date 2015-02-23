@@ -120,12 +120,12 @@ ObjectStore *fs;
 
 class OBS_Worker : public Thread
 {
-  object_t poid;
+  oid poid;
 
  public:
   OBS_Worker() { }
 
-  void set_oid(const object_t &oid) { poid = oid; }
+  void set_obj(const oid &obj) { poid = obj; }
 
   void *entry() {
     bufferlist data;
@@ -148,7 +148,7 @@ class OBS_Worker : public Thread
 	size_t count = len < block_size ? len : (size_t)block_size;
 
 	ObjectStore::Transaction *t = new ObjectStore::Transaction;
-	t->write(coll_t(), hobject_t(poid), offset, count, data);
+	t->write(coll_t(), oid(poid), offset, count, data);
 
 	tls.push_back(t);
 
@@ -252,25 +252,25 @@ int main(int argc, const char *argv[])
   ft.create_collection(coll_t());
   fs->apply_transaction(ft);
 
-  std::vector<object_t> oids;
+  std::vector<oid> objs;
   if (multi_object) {
-    oids.resize(n_threads);
+    objs.resize(n_threads);
     for (int i = 0; i < n_threads; i++) {
       stringstream oss;
       oss << "osbench-thread-" << i;
-      oids[i].name = oss.str();
+      objs[i].name = oss.str();
     }
   } else {
-    oids.push_back(object_t("osbench"));
+    objs.push_back(oid("osbench"));
   }
 
   std::vector<OBS_Worker> workers(n_threads);
   auto t1 = std::chrono::high_resolution_clock::now();
   for (int i = 0; i < n_threads; i++) {
     if (multi_object)
-      workers[i].set_oid(oids[i]);
+      workers[i].set_obj(objs[i]);
     else
-      workers[i].set_oid(oids[0]);
+      workers[i].set_obj(objs[0]);
     workers[i].create();
   }
   for (auto &worker : workers)
@@ -280,8 +280,8 @@ int main(int argc, const char *argv[])
 
   // remove the object
   ObjectStore::Transaction t;
-  for (vector<object_t>::iterator i = oids.begin(); i != oids.end(); ++i)
-    t.remove(coll_t(), hobject_t(*i));
+  for (vector<oid>::iterator i = objs.begin(); i != objs.end(); ++i)
+    t.remove(coll_t(), oid(*i));
   fs->apply_transaction(t);
 
   fs->umount();

@@ -205,7 +205,7 @@ TestObjectStoreState::coll_entry_t *WorkloadGenerator::get_rnd_coll_entry(bool e
   return entry;
 }
 
-hobject_t *WorkloadGenerator::get_rnd_obj(coll_entry_t *entry)
+oid *WorkloadGenerator::get_rnd_obj(coll_entry_t *entry)
 {
   assert(entry != NULL);
 
@@ -249,7 +249,7 @@ void WorkloadGenerator::get_filled_byte_array(bufferlist& bl, size_t size)
 }
 
 void WorkloadGenerator::do_write_object(ObjectStore::Transaction *t,
-					coll_t coll, hobject_t obj,
+					coll_t coll, oid obj,
 					C_StatState *stat)
 {
   if (m_suppress_write_data) {
@@ -274,7 +274,7 @@ void WorkloadGenerator::do_write_object(ObjectStore::Transaction *t,
 }
 
 void WorkloadGenerator::do_setattr_object(ObjectStore::Transaction *t,
-					  coll_t coll, hobject_t obj,
+					  coll_t coll, oid obj,
 					  C_StatState *stat)
 {
   if (m_suppress_write_xattr_obj) {
@@ -331,7 +331,7 @@ void WorkloadGenerator::do_append_log(ObjectStore::Transaction *t,
 
   bufferlist bl;
   get_filled_byte_array(bl, size);
-  hobject_t log_obj = entry->m_meta_obj;
+  oid log_obj = entry->m_meta_obj;
 
   dout(2) << __func__ << " coll " << entry->m_coll << " "
       << META_COLL << " /" << log_obj << " (" << bl.length() << ")" << dendl;
@@ -350,12 +350,12 @@ void WorkloadGenerator::do_destroy_collection(ObjectStore::Transaction *t,
 {
   m_nr_runs = 0;
   entry->m_osr.flush();
-  vector<hobject_t> ls;
+  vector<oid> ls;
   m_store->collection_list(entry->m_coll, ls);
   dout(2) << __func__ << " coll " << entry->m_coll
       << " (" << ls.size() << " objects)" << dendl;
 
-  for (vector<hobject_t>::iterator it = ls.begin(); it < ls.end(); ++it) {
+  for (vector<oid>::iterator it = ls.begin(); it < ls.end(); ++it) {
     t->remove(entry->m_coll, *it);
   }
 
@@ -469,7 +469,7 @@ void WorkloadGenerator::run()
       if (!m_num_ops)
 	create_coll = true;
     } else {
-      hobject_t *obj = get_rnd_obj(entry);
+      oid *obj = get_rnd_obj(entry);
 
       do_write_object(t, entry->m_coll, *obj, stat_state);
       do_setattr_object(t, entry->m_coll, *obj, stat_state);

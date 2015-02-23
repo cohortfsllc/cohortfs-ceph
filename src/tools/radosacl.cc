@@ -144,7 +144,7 @@ int main(int argc, const char **argv)
   snprintf(buf, 128, "%s", ctime(&tm));
   bl.append(buf, strlen(buf));
 
-  const char *oid = "bar";
+  const char *obj = "bar";
 
   IoCtx io_ctx;
   int r = rados.ioctx_create("data", io_ctx);
@@ -155,7 +155,7 @@ int main(int argc, const char **argv)
   snprintf(id.id, ID_SIZE + 1, "%.16x", 0x1234);
   cout << "id=" << id.id << std::endl;
 
-  r = io_ctx.exec(oid, "acl", "get", bl, bl2);
+  r = io_ctx.exec(obj, "acl", "get", bl, bl2);
   cout << "exec returned " << r << " len=" << bl2.length() << std::endl;
   ObjectACLs oa;
   if (r >= 0) {
@@ -166,14 +166,14 @@ int main(int argc, const char **argv)
   oa.set_acl(id, ACL_RD);
   bl.clear();
   oa.encode(bl);
-  r = io_ctx.exec(oid, "acl", "set", bl, bl2);
+  r = io_ctx.exec(obj, "acl", "set", bl, bl2);
 
   const unsigned char *md5 = (const unsigned char *)bl2.c_str();
   char md5_str[bl2.length()*2 + 1];
   buf_to_hex(md5, bl2.length(), md5_str);
   cout << "md5 result=" << md5_str << std::endl;
 
-  int size = io_ctx.read(oid, bl2, 128, 0);
+  int size = io_ctx.read(obj, bl2, 128, 0);
   cout << "read result=" << bl2.c_str() << std::endl;
   cout << "size=" << size << std::endl;
 
@@ -181,18 +181,18 @@ int main(int argc, const char **argv)
   Rados::ListCtx ctx;
   int entries;
   do {
-    list<object_t> vec;
+    list<oid> vec;
     r = rados.list(io_ctx, 2, vec, ctx);
     entries = vec.size();
     cout << "list result=" << r << " entries=" << entries << std::endl;
-    list<object_t>::iterator iter;
+    list<oid>::iterator iter;
     for (iter = vec.begin(); iter != vec.end(); ++iter) {
       cout << *iter << std::endl;
     }
   } while (entries);
 #endif
 #if 0
-  r = rados.remove(io_ctx, oid);
+  r = rados.remove(io_ctx, obj);
   cout << "remove result=" << r << std::endl;
   rados.close_io_ctx(io_ctx);
 #endif

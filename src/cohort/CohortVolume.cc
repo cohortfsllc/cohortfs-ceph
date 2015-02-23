@@ -128,10 +128,10 @@ void CohortVolume::StripulatedOp::add_version(const uint64_t ver)
     v.back().op.assert_ver.ver = ver;
 }
 
-void CohortVolume::StripulatedOp::add_oid(const hobject_t &oid)
+void CohortVolume::StripulatedOp::add_obj(const oid &o)
 {
   for (auto &v : ops)
-    v.back().oid = oid;
+    v.back().obj = o;
 }
 
 void CohortVolume::StripulatedOp::add_single_return(bufferlist* bl,
@@ -500,13 +500,12 @@ unique_ptr<ObjOp> CohortVolume::op() const
 }
 
 void CohortVolume::StripulatedOp::realize(
-  const object_t& oid,
-  const std::function<void(hobject_t&&, vector<OSDOp>&&)>& f)
+  const oid& o,
+  const std::function<void(oid&&, vector<OSDOp>&&)>& f)
 {
   for(size_t i = 0; i < ops.size(); ++i) {
-    f(hobject_t(oid,
-		i < pl.get_data_chunk_count() ? DATA : ECC,
-		i),
+    f(oid(o, i < pl.get_data_chunk_count() ? chunktype::data : chunktype::ecc,
+	  i),
       std::move(ops[i]));
   }
 }

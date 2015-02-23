@@ -29,6 +29,8 @@
 #include <fcntl.h>
 #include <string.h>
 #include <inttypes.h>
+#include "include/hash.h"
+#include "include/cmp.h"
 
 using std::set;
 using std::map;
@@ -66,7 +68,6 @@ extern "C" {
 #include <unordered_map>
 #include <boost/optional.hpp>
 
-#include "object.h"
 #include "intarith.h"
 
 #include "acconfig.h"

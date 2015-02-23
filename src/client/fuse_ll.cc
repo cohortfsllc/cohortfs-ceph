@@ -453,31 +453,6 @@ static void fuse_ll_flush(fuse_req_t req, fuse_ino_t ino,
   fuse_reply_err(req, 0);
 }
 
-#ifdef FUSE_IOCTL_COMPAT
-static void fuse_ll_ioctl(fuse_req_t req, fuse_ino_t ino, int cmd,
-			  void *arg, struct fuse_file_info *fi,
-			  unsigned flags, const void *in_buf,
-			  size_t in_bufsz, size_t out_bufsz)
-{
-  CephFuse::Handle *cfuse = (CephFuse::Handle *)fuse_req_userdata(req);
-
-  if (flags & FUSE_IOCTL_COMPAT) {
-    fuse_reply_err(req, ENOSYS);
-    return;
-  }
-
-  switch (cmd) {
-    // This can't be good, but judging by the 'narrowing' warning,
-    // it's happening anyway.
-//  case (int)CEPH_IOC_GET_LAYOUT:	-- placeholder
-// .. use cfuse here ..
-//  break;
-  default:
-    fuse_reply_err(req, EINVAL);
-  }
-}
-#endif
-
 #if FUSE_VERSION > FUSE_MAKE_VERSION(2, 9)
 
 static void fuse_ll_fallocate(fuse_req_t req, fuse_ino_t ino, int mode,
@@ -729,11 +704,7 @@ const static struct fuse_lowlevel_ops fuse_ll_oper = {
   .setlk = 0,
   .bmap = 0,
 #if FUSE_VERSION >= FUSE_MAKE_VERSION(2, 8)
-#ifdef FUSE_IOCTL_COMPAT
-  .ioctl = fuse_ll_ioctl,
-#else
   .ioctl = 0,
-#endif
   .poll = 0,
 #if FUSE_VERSION > FUSE_MAKE_VERSION(2, 9)
   .write_buf = 0,

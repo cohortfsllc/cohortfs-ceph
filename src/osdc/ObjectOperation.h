@@ -20,7 +20,7 @@
 #include "include/Context.h"
 #include "include/rados/rados_types.h"
 #include "osd/osd_types.h"
-#include "common/hobject.h"
+#include "common/oid.h"
 
 
 class ObjOp {
@@ -52,7 +52,7 @@ public:
   virtual size_t width() = 0;
   virtual void add_op(const int op) = 0;
   virtual void add_version(const uint64_t ver) = 0;
-  virtual void add_oid(const hobject_t &oid) = 0;
+  virtual void add_obj(const oid &obj) = 0;
   virtual void add_single_return(bufferlist* bl, int* rval = NULL,
 				 Context* ctx = NULL) = 0;
   /* Add metadata (or commands) to an op */
@@ -427,11 +427,11 @@ public:
     add_version(ver);
   }
 
-  void assert_src_version(const object_t& srcoid, uint64_t ver) {
+  void assert_src_version(const oid& srcoid, uint64_t ver) {
     bufferlist bl;
     add_op(CEPH_OSD_OP_ASSERT_SRC_VERSION);
     add_watch(0, ver, 0, bl);
-    add_oid(srcoid);
+    add_obj(srcoid);
   }
 
   void cmpxattr(const char *name, const bufferlist& val,
@@ -440,12 +440,12 @@ public:
     add_xattr_cmp(name, op, mode, val);
   }
 
-  void src_cmpxattr(const object_t& srcoid,
+  void src_cmpxattr(const oid& srcoid,
 		    const char *name, const bufferlist& val,
 		    int op, int mode) {
     add_op(CEPH_OSD_OP_SRC_CMPXATTR);
     add_xattr_cmp(name, op, mode, val);
-    add_oid(srcoid);
+    add_obj(srcoid);
   }
 
   void set_alloc_hint(uint64_t expected_object_size,
@@ -460,8 +460,8 @@ public:
   }
 
   virtual void realize(
-    const object_t& oid,
-    const std::function<void(hobject_t&&, vector<OSDOp>&&)>& f) = 0;
+    const oid& obj,
+    const std::function<void(oid&&, vector<OSDOp>&&)>& f) = 0;
 };
 
 #endif // !CEPH_OSDC_OBJECTOPERATION_H

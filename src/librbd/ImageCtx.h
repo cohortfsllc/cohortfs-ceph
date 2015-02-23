@@ -54,8 +54,8 @@ namespace librbd {
     Mutex refresh_lock; // protects refresh_seq and last_refresh
 
     uint64_t size;
-    std::string header_oid;
-    std::string image_oid;
+    std::string header_obj;
+    std::string image_obj;
 
 #if 0
 //FIXME!  ObjectCacher *object_cacher;
@@ -72,11 +72,11 @@ namespace librbd {
 
 #if 0
 //FIXME! needs OSDRead&etc... -- Dan? Adam?  -mdw 20150105
-    void aio_read_from_cache(object_t o, bufferlist *bl, size_t len,
+    void aio_read_from_cache(oid o, bufferlist *bl, size_t len,
 			     uint64_t off, Context *onfinish);
-    void write_to_cache(object_t o, bufferlist& bl, size_t len, uint64_t off,
+    void write_to_cache(oid o, bufferlist& bl, size_t len, uint64_t off,
 			Context *onfinish);
-    int read_from_cache(object_t o, bufferlist *bl, size_t len, uint64_t off);
+    int read_from_cache(oid o, bufferlist *bl, size_t len, uint64_t off);
 #endif
     void user_flushed();
 #if 0

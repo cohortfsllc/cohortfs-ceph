@@ -65,9 +65,9 @@ public:
   }
 };
 
-bool sorted(const vector<hobject_t> &in) {
-  hobject_t start;
-  for (vector<hobject_t>::const_iterator i = in.begin();
+bool sorted(const vector<oid> &in) {
+  oid start;
+  for (vector<oid>::const_iterator i = in.begin();
        i != in.end();
        ++i) {
     if (start > *i) return false;
@@ -119,7 +119,7 @@ TEST_P(StoreTest, SimpleObjectTest) {
     r = store->apply_transaction(t);
     ASSERT_EQ(r, 0);
   }
-  hobject_t hoid(object_t("Object 1"));
+  oid hoid("Object 1");
   {
     ObjectStore::Transaction t;
     t.touch(cid, hoid);
@@ -147,7 +147,7 @@ TEST_P(StoreTest, SimpleObjectLongnameTest) {
     r = store->apply_transaction(t);
     ASSERT_EQ(r, 0);
   }
-  hobject_t hoid(object_t("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaObjectaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 1"));
+  oid hoid("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaObjectaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 1");
   {
     ObjectStore::Transaction t;
     t.touch(cid, hoid);
@@ -171,7 +171,7 @@ TEST_P(StoreTest, ManyObjectTest) {
   coll_t cid("blah");
   string base = "";
   for (int i = 0; i < 100; ++i) base.append("aaaaa");
-  set<hobject_t> created;
+  set<oid> created;
   {
     ObjectStore::Transaction t;
     t.create_collection(cid);
@@ -185,27 +185,27 @@ TEST_P(StoreTest, ManyObjectTest) {
     ObjectStore::Transaction t;
     char buf[100];
     snprintf(buf, sizeof(buf), "%d", i);
-    hobject_t hoid(object_t(string(buf) + base));
+    oid hoid(string(buf) + base);
     t.touch(cid, hoid);
     created.insert(hoid);
     r = store->apply_transaction(t);
     ASSERT_EQ(r, 0);
   }
 
-  for (set<hobject_t>::iterator i = created.begin();
+  for (set<oid>::iterator i = created.begin();
        i != created.end();
        ++i) {
     struct stat buf;
     ASSERT_TRUE(!store->stat(cid, *i, &buf));
   }
 
-  set<hobject_t> listed;
-  vector<hobject_t> objects;
+  set<oid> listed;
+  vector<oid> objects;
   r = store->collection_list(cid, objects);
   ASSERT_EQ(r, 0);
 
   cerr << "objects.size() is " << objects.size() << std::endl;
-  for (vector<hobject_t> ::iterator i = objects.begin();
+  for (vector<oid> ::iterator i = objects.begin();
        i != objects.end();
        ++i) {
     listed.insert(*i);
@@ -213,7 +213,7 @@ TEST_P(StoreTest, ManyObjectTest) {
   }
   ASSERT_TRUE(listed.size() == created.size());
 
-  hobject_t start, next;
+  oid start, next;
   objects.clear();
   r = store->collection_list_partial(
     cid,
@@ -242,13 +242,13 @@ TEST_P(StoreTest, ManyObjectTest) {
   }
   cerr << "listed.size() is " << listed.size() << std::endl;
   ASSERT_TRUE(listed.size() == created.size());
-  for (set<hobject_t>::iterator i = listed.begin();
+  for (set<oid>::iterator i = listed.begin();
        i != listed.end();
        ++i) {
     ASSERT_TRUE(created.count(*i));
   }
 
-  for (set<hobject_t>::iterator i = created.begin();
+  for (set<oid>::iterator i = created.begin();
        i != created.end();
        ++i) {
     ObjectStore::Transaction t;
@@ -268,7 +268,7 @@ TEST_P(StoreTest, ManyObjectTest) {
 
 class ObjectGenerator {
 public:
-  virtual hobject_t create_object(gen_type *gen) = 0;
+  virtual oid create_object(gen_type *gen) = 0;
   virtual ~ObjectGenerator() {}
 };
 
@@ -276,7 +276,7 @@ class MixedGenerator : public ObjectGenerator {
 public:
   unsigned seq;
   MixedGenerator() : seq(0) {}
-  hobject_t create_object(gen_type *gen) {
+  oid create_object(gen_type *gen) {
     char buf[100];
     snprintf(buf, sizeof(buf), "%u", seq);
 
@@ -292,7 +292,7 @@ public:
     // hash
     //boost::binomial_distribution<uint32_t> bin(0xFFFFFF, 0.5);
     ++seq;
-    return hobject_t(name, DATA, rand() & 0xFF);
+    return oid(name, chunktype::data, rand() & 0xFF);
   }
 };
 
@@ -303,9 +303,9 @@ public:
   static const unsigned max_object_len = 1024 * 20;
   coll_t cid;
   unsigned in_flight;
-  map<hobject_t, bufferlist> contents;
-  set<hobject_t> available_objects;
-  set<hobject_t> in_flight_objects;
+  map<oid, bufferlist> contents;
+  set<oid> available_objects;
+  set<oid> in_flight_objects;
   ObjectGenerator *object_gen;
   gen_type *rng;
   ObjectStore *store;
@@ -318,9 +318,9 @@ public:
   public:
     SyntheticWorkloadState *state;
     ObjectStore::Transaction *t;
-    hobject_t hoid;
+    oid hoid;
     C_SyntheticOnReadable(SyntheticWorkloadState *state,
-			  ObjectStore::Transaction *t, hobject_t hoid)
+			  ObjectStore::Transaction *t, oid hoid)
       : state(state), t(t), hoid(hoid) {}
 
     void finish(int r) {
@@ -364,14 +364,14 @@ public:
     return store->apply_transaction(t);
   }
 
-  hobject_t get_uniform_random_object() {
+  oid get_uniform_random_object() {
     while (in_flight >= max_in_flight || available_objects.empty())
       cond.Wait(lock);
     boost::uniform_int<> choose(0, available_objects.size() - 1);
     int index = choose(*rng);
-    set<hobject_t>::iterator i = available_objects.begin();
+    set<oid>::iterator i = available_objects.begin();
     for ( ; index > 0; --index, ++i) ;
-    hobject_t ret = *i;
+    oid ret = *i;
     return ret;
   }
 
@@ -399,7 +399,7 @@ public:
     if (!can_create())
       return -ENOSPC;
     wait_for_ready();
-    hobject_t new_obj = object_gen->create_object(rng);
+    oid new_obj = object_gen->create_object(rng);
     available_objects.erase(new_obj);
     ObjectStore::Transaction *t = new ObjectStore::Transaction;
     t->touch(cid, new_obj);
@@ -416,7 +416,7 @@ public:
       return -ENOENT;
     wait_for_ready();
 
-    hobject_t new_obj = get_uniform_random_object();
+    oid new_obj = get_uniform_random_object();
     available_objects.erase(new_obj);
     ObjectStore::Transaction *t = new ObjectStore::Transaction;
 
@@ -456,7 +456,7 @@ public:
     if (offset > len)
       swap(offset, len);
 
-    hobject_t obj;
+    oid obj;
     int r;
     {
       Mutex::Locker locker(lock);
@@ -487,7 +487,7 @@ public:
       return -ENOENT;
     wait_for_ready();
 
-    hobject_t obj = get_uniform_random_object();
+    oid obj = get_uniform_random_object();
     available_objects.erase(obj);
     ObjectStore::Transaction *t = new ObjectStore::Transaction;
 
@@ -512,9 +512,9 @@ public:
     Mutex::Locker locker(lock);
     while (in_flight)
       cond.Wait(lock);
-    vector<hobject_t> objects;
-    set<hobject_t> objects_set, objects_set2;
-    hobject_t next, current;
+    vector<oid> objects;
+    set<oid> objects_set, objects_set2;
+    oid next, current;
     while (1) {
       cerr << "scanning..." << std::endl;
       int r = store->collection_list_partial(cid, current, 50, 100,
@@ -527,7 +527,7 @@ public:
       current = next;
     }
     ASSERT_EQ(objects_set.size(), available_objects.size());
-    for (set<hobject_t>::iterator i = objects_set.begin();
+    for (set<oid>::iterator i = objects_set.begin();
 	 i != objects_set.end();
 	 ++i) {
       ASSERT_GT(available_objects.count(*i), (unsigned)0);
@@ -537,7 +537,7 @@ public:
     ASSERT_EQ(r, 0);
     objects_set2.insert(objects.begin(), objects.end());
     ASSERT_EQ(objects_set2.size(), available_objects.size());
-    for (set<hobject_t>::iterator i = objects_set2.begin();
+    for (set<oid>::iterator i = objects_set2.begin();
 	 i != objects_set2.end();
 	 ++i) {
       ASSERT_GT(available_objects.count(*i), (unsigned)0);
@@ -545,7 +545,7 @@ public:
   }
 
   void stat() {
-    hobject_t hoid;
+    oid hoid;
     {
       Mutex::Locker locker(lock);
       if (!can_unlink())
@@ -572,7 +572,7 @@ public:
     Mutex::Locker locker(lock);
     if (!can_unlink())
       return -ENOENT;
-    hobject_t to_remove = get_uniform_random_object();
+    oid to_remove = get_uniform_random_object();
     ObjectStore::Transaction *t = new ObjectStore::Transaction;
     t->remove(cid, to_remove);
     ++in_flight;
@@ -629,7 +629,7 @@ TEST_P(StoreTest, Synthetic) {
 
 TEST_P(StoreTest, OMapTest) {
   coll_t cid("blah");
-  hobject_t hoid("tesomap", ENTIRETY);
+  oid hoid("tesomap", chunktype::entirety);
   int r;
   {
     ObjectStore::Transaction t;
@@ -747,7 +747,7 @@ TEST_P(StoreTest, OMapTest) {
 
 TEST_P(StoreTest, XattrTest) {
   coll_t cid("blah");
-  hobject_t hoid("tesomap", ENTIRETY);
+  oid hoid("tesomap", chunktype::entirety);
   bufferlist big;
   for (unsigned i = 0; i < 10000; ++i) {
     big.append('\0');
@@ -844,14 +844,15 @@ void colsplittest(
     for (uint32_t i = 0; i < 2*num_objects; ++i) {
       stringstream objname;
       objname << "obj" << i;
-      t.touch(cid, hobject_t(objname.str(), DATA, i<<common_suffix_size));
+      t.touch(cid, oid(objname.str(), chunktype::data,
+		       i << common_suffix_size));
     }
     r = store->apply_transaction(t);
     ASSERT_EQ(r, 0);
   }
 
   ObjectStore::Transaction t;
-  vector<hobject_t> objects;
+  vector<oid> objects;
 
   t.remove_collection(cid);
   t.remove_collection(tid);
@@ -874,18 +875,18 @@ TEST_P(StoreTest, ColSplitTest3) {
 
 TEST_P(StoreTest, MoveRename) {
   coll_t temp_cid("mytemp");
-  hobject_t temp_oid("tmp_oid", ENTIRETY);
+  oid temp_obj("tmp_obj", chunktype::entirety);
   coll_t cid("dest");
-  hobject_t oid("dest_oid", ENTIRETY);
+  oid obj("dest_obj", chunktype::entirety);
   int r;
   {
     ObjectStore::Transaction t;
     t.create_collection(cid);
-    t.touch(cid, oid);
+    t.touch(cid, obj);
     r = store->apply_transaction(t);
     ASSERT_EQ(r, 0);
   }
-  ASSERT_TRUE(store->exists(cid, oid));
+  ASSERT_TRUE(store->exists(cid, obj));
   bufferlist data, attr;
   map<string, bufferlist> omap;
   data.append("data payload");
@@ -894,36 +895,36 @@ TEST_P(StoreTest, MoveRename) {
   {
     ObjectStore::Transaction t;
     t.create_collection(temp_cid);
-    t.touch(temp_cid, temp_oid);
-    t.write(temp_cid, temp_oid, 0, data.length(), data);
-    t.setattr(temp_cid, temp_oid, "attr", attr);
-    t.omap_setkeys(temp_cid, temp_oid, omap);
+    t.touch(temp_cid, temp_obj);
+    t.write(temp_cid, temp_obj, 0, data.length(), data);
+    t.setattr(temp_cid, temp_obj, "attr", attr);
+    t.omap_setkeys(temp_cid, temp_obj, omap);
     r = store->apply_transaction(t);
     ASSERT_EQ(r, 0);
   }
-  ASSERT_TRUE(store->exists(temp_cid, temp_oid));
+  ASSERT_TRUE(store->exists(temp_cid, temp_obj));
   {
     ObjectStore::Transaction t;
-    t.remove(cid, oid);
-    t.collection_move_rename(temp_cid, temp_oid, cid, oid);
+    t.remove(cid, obj);
+    t.collection_move_rename(temp_cid, temp_obj, cid, obj);
     r = store->apply_transaction(t);
     ASSERT_EQ(r, 0);
   }
-  ASSERT_TRUE(store->exists(cid, oid));
-  ASSERT_FALSE(store->exists(temp_cid, temp_oid));
+  ASSERT_TRUE(store->exists(cid, obj));
+  ASSERT_FALSE(store->exists(temp_cid, temp_obj));
   {
     bufferlist newdata;
-    r = store->read(cid, oid, 0, 1000, newdata);
+    r = store->read(cid, obj, 0, 1000, newdata);
     ASSERT_GE(r, 0);
     ASSERT_TRUE(newdata.contents_equal(data));
     bufferlist newattr;
-    r = store->getattr(cid, oid, "attr", newattr);
+    r = store->getattr(cid, obj, "attr", newattr);
     ASSERT_GE(r, 0);
     ASSERT_TRUE(newattr.contents_equal(attr));
     set<string> keys;
     keys.insert("omap_key");
     map<string, bufferlist> newomap;
-    r = store->omap_get_values(cid, oid, keys, &newomap);
+    r = store->omap_get_values(cid, obj, keys, &newomap);
     ASSERT_GE(r, 0);
     ASSERT_EQ(1u, newomap.size());
     ASSERT_TRUE(newomap.count("omap_key"));

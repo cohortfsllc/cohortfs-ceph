@@ -452,8 +452,8 @@ private:
   }
 
   // -- fetch --
-  object_t get_ondisk_object() {
-    return file_object_t(ino(), frag);
+  oid get_ondisk_object() {
+    return file_oid(ino());
   }
   void fetch(Context *c, bool ignore_authpinnability=false);
   void fetch(Context *c, const string& want_dn, bool ignore_authpinnability=false);

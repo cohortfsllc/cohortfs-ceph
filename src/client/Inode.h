@@ -5,6 +5,7 @@
 #define CEPH_CLIENT_INODE_H
 
 #include <cassert>
+#include "include/ceph_hash.h"
 #include "include/types.h"
 #include "include/xlist.h"
 #include "include/filepath.h"

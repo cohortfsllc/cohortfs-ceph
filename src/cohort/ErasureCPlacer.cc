@@ -267,7 +267,7 @@ static bool return_osd(void *data, int osd)
 }
 
 
-ssize_t ErasureCPlacer::place(const object_t& object,
+ssize_t ErasureCPlacer::place(const oid& object,
 			     const OSDMap& map,
 			     const std::function<void(int)>& f) const
 {
@@ -474,7 +474,7 @@ void ErasureCPlacer::stride_extent(const uint64_t off, const uint64_t len,
   stridelen = stride_last_byte + 1 - strideoff;
 }
 
-void ErasureCPlacer::make_strides(const object_t& oid,
+void ErasureCPlacer::make_strides(const oid& obj,
 				  uint64_t offset, uint64_t len,
 				  uint64_t truncate_size, uint32_t truncate_seq,
 				  vector<StrideExtent>& strides)

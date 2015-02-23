@@ -390,7 +390,7 @@ public:
   void dump(Formatter *f) const;
   static void generate_test_instances(list<SessionMap*>& ls);
 
-  object_t get_object_name();
+  oid get_object_name();
 
   void load(Context *onload);
   void _load_finish(int r, bufferlist &bl);

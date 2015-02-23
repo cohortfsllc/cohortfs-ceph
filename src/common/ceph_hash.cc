@@ -1,5 +1,6 @@
 
 #include "include/types.h"
+#include "include/ceph_hash.h"
 
 /*
  * Robert Jenkin's hash function.

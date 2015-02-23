@@ -26,17 +26,17 @@ TestFileStoreBackend::TestFileStoreBackend(
 }
 
 void TestFileStoreBackend::write(
-  const string &oid,
+  const string &obj,
   uint64_t offset,
   const bufferlist &bl,
   Context *on_applied,
   Context *on_commit)
 {
   ObjectStore::Transaction *t = new ObjectStore::Transaction;
-  size_t sep = oid.find("/");
+  size_t sep = obj.find("/");
   assert(sep != string::npos);
-  assert(sep + 1 < oid.size());
-  string coll_str(oid.substr(0, sep));
+  assert(sep + 1 < obj.size());
+  string coll_str(obj.substr(0, sep));
 
   if (!osrs.count(coll_str))
     osrs.insert(make_pair(coll_str, ObjectStore::Sequencer(coll_str)));
@@ -44,14 +44,14 @@ void TestFileStoreBackend::write(
 
 
   coll_t c(coll_str);
-  hobject_t h(object_t(oid.substr(sep+1)));
+  oid h(obj.substr(sep+1));
   t->write(c, h, offset, bl.length(), bl);
 
   if (write_infos) {
     bufferlist bl2;
     for (uint64_t j = 0; j < 128; ++j) bl2.append(0);
     coll_t meta("meta");
-    hobject_t info(object_t(string("info_")+coll_str));
+    oid info(string("info_")+coll_str);
     t->write(meta, info, 0, bl2.length(), bl2);
   }
 
@@ -63,17 +63,17 @@ void TestFileStoreBackend::write(
 }
 
 void TestFileStoreBackend::read(
-  const string &oid,
+  const string &obj,
   uint64_t offset,
   uint64_t length,
   bufferlist *bl,
   Context *on_complete)
 {
-  size_t sep = oid.find("/");
+  size_t sep = obj.find("/");
   assert(sep != string::npos);
-  assert(sep + 1 < oid.size());
-  coll_t c(oid.substr(0, sep));
-  hobject_t h(object_t(oid.substr(sep+1)));
+  assert(sep + 1 < obj.size());
+  coll_t c(obj.substr(0, sep));
+  oid h(obj.substr(sep+1));
   os->read(c, h, offset, length, *bl);
   finisher.queue(on_complete);
 }

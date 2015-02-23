@@ -116,26 +116,26 @@ int main(int argc, char **argv) {
       i->value().hexdump(std::cout);
     }
   } else if (cmd == "dump-objects") {
-    vector<ghobject_t> objects;
+    vector<goid> objects;
     r = omap.list_objects(&objects);
     if (r < 0) {
       std::cerr << "list_objects got: " << cpp_strerror(r) << std::endl;
       goto done;
     }
-    for (vector<ghobject_t>::iterator i = objects.begin();
+    for (vector<goid>::iterator i = objects.begin();
 	 i != objects.end();
 	 ++i) {
       std::cout << *i << std::endl;
     }
     r = 0;
   } else if (cmd == "dump-objects-with-keys") {
-    vector<ghobject_t> objects;
+    vector<goid> objects;
     r = omap.list_objects(&objects);
     if (r < 0) {
       std::cerr << "list_objects got: " << cpp_strerror(r) << std::endl;
       goto done;
     }
-    for (vector<ghobject_t>::iterator i = objects.begin();
+    for (vector<goid>::iterator i = objects.begin();
 	 i != objects.end();
 	 ++i) {
       std::cout << "Object: " << *i << std::endl;
