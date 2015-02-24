@@ -116,12 +116,13 @@ public:
 
   struct MemCollection : public ObjectStore::Collection {
     map<string,bufferptr> xattr;
-    std::shared_timed_mutex lock;
 
     typedef std::unique_lock<std::shared_timed_mutex> unique_lock;
     typedef std::shared_lock<std::shared_timed_mutex> shared_lock;
 
-    // NOTE: The lock only needs to protect the obj_cache, not the
+    std::shared_timed_mutex attr_lock; ///< for collection attrs
+
+    // NOTE: This lock now protects collection attrs, not objects nor
     // contents of individual objects.	The osd is already sequencing
     // reads and writes, so we will never see them concurrently at this
     // level.
