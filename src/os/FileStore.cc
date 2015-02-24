@@ -3990,6 +3990,16 @@ int FileStore::collection_list_partial(CollectionHandle ch,
   return 0;
 }
 
+int FileStore::collection_list_partial2(CollectionHandle ch,
+					int min,
+					int max,
+					vector<hobject_t> *vs,
+					CLPCursor& cursor)
+{
+  // TODO:  implement
+  return 0;
+}
+
 int FileStore::collection_list(CollectionHandle ch, vector<hobject_t>& ls)
 {
   dout(10) << "collection_list: " << ch->get_cid() << dendl;

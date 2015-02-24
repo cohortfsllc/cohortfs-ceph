@@ -1698,6 +1698,14 @@ public:
 
   // collections
 
+  class CLPCursor
+  {
+  public:
+    hobject_t next_oid; /* replace w/OID */
+    uint32_t partition;
+    uint32_t gen;
+  };
+
   /**
    * list_collections -- get all of the collections known to this ObjectStore
    *
@@ -1791,6 +1799,12 @@ public:
 				      hobject_t start, int min, int max,
 				      vector<hobject_t> *ls,
 				      hobject_t *next) = 0;
+
+  virtual int collection_list_partial2(CollectionHandle ch,
+				       int min,
+				       int max,
+				       vector<hobject_t> *vs,
+				       CLPCursor& cursor) = 0;
 
   /**
    * list contents of a collection that fall in the range [start, end)

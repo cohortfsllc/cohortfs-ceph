@@ -544,7 +544,11 @@ class KeyValueStore : public ObjectStore,
   int collection_list_partial(CollectionHandle ch, hobject_t start,
 			      int min, int max,
 			      vector<hobject_t> *ls, hobject_t *next);
-  int collection_list_range(CollectionHandle ch, hobject_t start,\
+  int collection_list_partial2(CollectionHandle ch,
+			       int min, int max,
+			       vector<hobject_t> *vs,
+			       CLPCursor& cursor);
+  int collection_list_range(CollectionHandle ch, hobject_t start,
 			    hobject_t end, vector<hobject_t> *ls);
   int collection_version_current(CollectionHandle ch, uint32_t *version);
 
