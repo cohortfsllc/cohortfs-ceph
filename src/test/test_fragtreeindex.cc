@@ -243,6 +243,46 @@ TEST(OsFragTreeIndex, Split)
   ASSERT_EQ(index.unmount(), 0);
 }
 
+TEST(OsFragTreeIndex, SplitAsync)
+{
+  tmpdir_with_cleanup path("tmp-fragtreeindex-split-async");
+
+  TestFragTreeIndex index(0);
+  ASSERT_EQ(0, index.init(path));
+  ASSERT_EQ(0, index.mount(path));
+
+  const std::string filename("0000000000000000-foo");
+  const int64_t hash = 0;
+
+  int fd = -1;
+  ASSERT_EQ(0, index.open(filename, hash, true, &fd));
+  ::close(fd);
+
+  // start an async split
+  frag_path p = {};
+  ASSERT_EQ(0, index.split(p.frag, 1));
+
+  // wait a bit to make sure the migration started
+  std::this_thread::sleep_for(10ms);
+
+  // unmount to block until it completes
+  ASSERT_EQ(0, index.unmount());
+
+  // remount without starting recovery
+  ASSERT_EQ(0, index.mount(path, false));
+
+  // make sure we can still find it
+  ASSERT_EQ(0, index.lookup(filename, hash));
+
+  // verify the size map
+  TestFragTreeIndex::frag_size_map sizes;
+  sizes[p.frag.make_child(0, 1)] = 1;
+  sizes[p.frag.make_child(1, 1)] = 0;
+  ASSERT_EQ(sizes, index.get_size_map());
+
+  ASSERT_EQ(index.unmount(), 0);
+}
+
 TEST(OsFragTreeIndex, Merge)
 {
   tmpdir_with_cleanup path("tmp-fragtreeindex-merge");
@@ -280,6 +320,48 @@ TEST(OsFragTreeIndex, Merge)
 
   // complete the merge
   index.finish_merge(p.frag);
+  ASSERT_EQ(0, index.lookup(filename, hash));
+
+  // verify the size map
+  TestFragTreeIndex::frag_size_map sizes;
+  sizes[p.frag] = 1;
+  ASSERT_EQ(sizes, index.get_size_map());
+
+  ASSERT_EQ(0, index.unmount());
+}
+
+TEST(OsFragTreeIndex, MergeAsync)
+{
+  tmpdir_with_cleanup path("tmp-fragtreeindex-merge-async");
+
+  TestFragTreeIndex index(0);
+  ASSERT_EQ(0, index.init(path));
+  ASSERT_EQ(0, index.mount(path));
+
+  // do an initial split
+  const frag_path p = {};
+  ASSERT_EQ(0, index.split_sync(p.frag, 1));
+
+  // create a file in 0/
+  const std::string filename("0000000000000000-foo");
+  const int64_t hash = 0;
+  int fd = -1;
+  ASSERT_EQ(0, index.open(filename, hash, true, &fd));
+  ::close(fd);
+
+  // start an async merge
+  ASSERT_EQ(0, index.merge(p.frag));
+
+  // wait a bit to make sure the migration started
+  std::this_thread::sleep_for(10ms);
+
+  // unmount to block until it completes
+  ASSERT_EQ(0, index.unmount());
+
+  // remount without starting recovery
+  ASSERT_EQ(0, index.mount(path, false));
+
+  // make sure we can still find it
   ASSERT_EQ(0, index.lookup(filename, hash));
 
   // verify the size map
