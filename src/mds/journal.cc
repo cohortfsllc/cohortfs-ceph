@@ -1018,6 +1018,7 @@ void EMetaBlob::replay(MDS *mds, VolumeRef &v, LogSegment *logseg, MDSlaveUpdate
       CInode *in = mds->mdcache->get_inode(p->inode.ino);
       if (!in) {
 	in = new CInode(mds->mdcache, true);
+	in->volume = v;
 	p->update_inode(mds, in);
 	mds->mdcache->add_inode(in);
 	if (!dn->get_linkage()->is_null()) {
