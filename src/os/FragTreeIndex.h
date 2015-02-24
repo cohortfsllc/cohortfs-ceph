@@ -19,6 +19,7 @@
 #include <shared_mutex>
 
 #include "include/frag.h"
+#include "common/ThreadPool.h"
 
 namespace cohort {
 
@@ -67,8 +68,7 @@ class FragTreeIndex {
   frag_size_map sizes; ///< cache of all directory sizes
   std::mutex sizes_mutex; ///< controls access to 'sizes'
 
-  /// threads for migration operations in progress
-  std::map<frag_t, std::thread> migration_threads;
+  ThreadPool migration_threads; ///< thread pool for migration operations
 
   int read_index(int dirfd);
   int write_index(int dirfd);

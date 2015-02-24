@@ -79,7 +79,6 @@ class TestFragTreeIndex : public FragTreeIndex {
     committed.merges.clear();
     tree.clear();
     sizes.clear();
-    assert(migration_threads.empty()); // no async migrations
     ::close(rootfd);
     rootfd = -1;
   }
