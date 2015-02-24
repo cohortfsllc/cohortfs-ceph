@@ -435,7 +435,9 @@ class C_MDL_Replay : public Context {
 public:
   C_MDL_Replay(MDLog *l) : mdlog(l) {}
   void finish(int r) {
+    mdlog->mds->mds_lock.Lock();	// avoid the race;
     mdlog->replay_cond.Signal();
+    mdlog->mds->mds_lock.Unlock();	// make sure we're waiting
   }
 };
 
@@ -454,7 +456,8 @@ void MDLog::_replay_thread(VolumeRef &v)
     while (!journaler->is_readable() &&
 	   journaler->get_read_pos() < journaler->get_write_pos() &&
 	   !journaler->get_error()) {
-      journaler->wait_for_readable(new C_MDL_Replay(this));
+      journaler->wait_for_readable(new C_OnFinisher(new C_MDL_Replay(this),
+						    &mds->finisher));
       replay_cond.Wait(mds->mds_lock);
     }
     if (journaler->get_error()) {
