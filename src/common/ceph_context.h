@@ -21,6 +21,7 @@
 
 #include "include/buffer.h"
 #include "common/cmdparse.h"
+#include "common/code_environment.h"
 #include "include/Spinlock.h"
 
 class AdminSocket;
@@ -31,6 +32,7 @@ class CephContextHook;
 class CryptoNone;
 class CryptoAES;
 class CryptoHandler;
+class CephInitParameters;
 
 namespace ceph {
   class HeartbeatMap;
@@ -49,14 +51,13 @@ using ceph::bufferlist;
  * that you might want to pass to libcommon with every function call.
  */
 class CephContext {
-public:
-  CephContext(uint32_t module_type_);
-
   // ref count!
 private:
   ~CephContext();
   std::atomic<uint64_t> nref;
-public:
+protected:
+  CephContext(uint32_t module_type_);
+
   CephContext *get() {
     ++nref;
     return this;
@@ -66,6 +67,7 @@ public:
       delete this;
   }
 
+public:
   md_config_t *_conf;
   ceph::log::Log *_log;
 
@@ -135,6 +137,12 @@ private:
   // crypto
   CryptoNone *_crypto_none;
   CryptoAES *_crypto_aes;
+
+  friend CephContext *test_init(enum code_environment_t code_env);
+  friend void common_cleanup(CephContext *cct);
+  friend CephContext *common_preinit(const CephInitParameters &iparams,
+				     enum code_environment_t code_env,
+				     int flags);
 };
 
 #endif

@@ -126,7 +126,6 @@ MDCache::MDCache(MDS *m) :
 {
   mds = m;
   cct = mds->cct;
-  cct->get();
   migrator = new Migrator(mds, this);
   root = NULL;
   myin = NULL;
@@ -168,7 +167,6 @@ MDCache::MDCache(MDS *m) :
 
 MDCache::~MDCache()
 {
-  cct->put();
   delete migrator;
   //delete renamer;
 }

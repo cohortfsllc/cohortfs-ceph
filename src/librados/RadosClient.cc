@@ -70,7 +70,7 @@ bool librados::RadosClient::ms_get_authorizer(int dest_type,
 
 librados::RadosClient::RadosClient(CephContext *cct_)
   : Dispatcher(cct_),
-    cct(cct_->get()),
+    cct(cct_),
     conf(cct_->_conf),
     state(DISCONNECTED),
     monclient(cct_),
@@ -295,7 +295,7 @@ librados::RadosClient::~RadosClient()
     delete messenger;
   if (objecter)
     delete objecter;
-  cct->put();
+  common_cleanup(cct);
   cct = NULL;
 }
 

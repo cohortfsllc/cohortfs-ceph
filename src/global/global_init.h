@@ -91,4 +91,13 @@ int global_init_shutdown_stderr(CephContext *cct);
  */
 void global_print_banner(void);
 
+/**
+ * Initialize a test environment, returning a context
+ */
+CephContext *test_init(enum code_environment_t code_env);
+/**
+ * Clean up an enviornment, freeing the context
+ */
+void common_cleanup(CephContext *cct);
+
 #endif

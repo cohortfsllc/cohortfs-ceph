@@ -109,7 +109,7 @@ MDS::MDS(const std::string &n, Messenger *m, MonClient *mc) :
 
   monc->set_messenger(messenger);
 
-  mdsmap = new MDSMap;
+  mdsmap = new MDSMap(cct);
 
   objecter = new Objecter(m->cct, messenger, monc, 0, 0);
   objecter->unset_honor_osdmap_full();
@@ -206,7 +206,7 @@ void MDS::send_message_mds(Message *m, int mds)
 
   // send mdsmap first?
   if (mds != whoami && peer_mdsmap_epoch[mds] < mdsmap->get_epoch()) {
-    messenger->send_message(new MMDSMap(monc->get_fsid(), mdsmap),
+    messenger->send_message(new MMDSMap(cct, monc->get_fsid(), mdsmap),
 			    mdsmap->get_inst(mds));
     peer_mdsmap_epoch[mds] = mdsmap->get_epoch();
   }
@@ -253,7 +253,7 @@ void MDS::forward_message_mds(Message *m, int mds)
 
   // send mdsmap first?
   if (peer_mdsmap_epoch[mds] < mdsmap->get_epoch()) {
-    messenger->send_message(new MMDSMap(monc->get_fsid(), mdsmap),
+    messenger->send_message(new MMDSMap(cct, monc->get_fsid(), mdsmap),
 			    mdsmap->get_inst(mds));
     peer_mdsmap_epoch[mds] = mdsmap->get_epoch();
   }
@@ -738,7 +738,7 @@ void MDS::handle_mds_map(MMDSMap *m)
   entity_addr_t addr;
 
   // decode and process
-  mdsmap = new MDSMap;
+  mdsmap = new MDSMap(cct);
   mdsmap->decode(m->get_encoded());
 
   monc->sub_got("mdsmap", mdsmap->get_epoch());
@@ -1014,7 +1014,7 @@ void MDS::bcast_mds_map()
   for (set<Session*>::const_iterator p = clients.begin();
        p != clients.end();
        ++p)
-    messenger->send_message(new MMDSMap(monc->get_fsid(), mdsmap),
+    messenger->send_message(new MMDSMap(cct, monc->get_fsid(), mdsmap),
 			    (*p)->connection);
   last_client_mdsmap_bcast = mdsmap->get_epoch();
 }

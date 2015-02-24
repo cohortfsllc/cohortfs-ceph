@@ -282,7 +282,6 @@ protected:
   ~CDir() {
     g_num_dir--;
     g_num_dirs++;
-    cct->put();
   }
 
 

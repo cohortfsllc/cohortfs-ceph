@@ -379,7 +379,6 @@ private:
     g_num_ino--;
     g_num_inos++;
     close_dirfrags();
-    cct->put();
   }
 
 

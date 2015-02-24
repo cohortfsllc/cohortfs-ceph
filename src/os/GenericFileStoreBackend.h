@@ -28,9 +28,7 @@ private:
   bool m_filestore_fsync_flushes_journal_data;
 public:
   GenericFileStoreBackend(CephContext* cct, FileStore *fs);
-  virtual ~GenericFileStoreBackend() {
-    cct->put();
-  };
+  virtual ~GenericFileStoreBackend() { };
 
   virtual int detect_features();
   virtual int create_current();

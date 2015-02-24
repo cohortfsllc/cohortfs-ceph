@@ -92,7 +92,7 @@ TYPE(inode_backtrace_t)
 TYPE(inode_backpointer_t)
 
 #include "mds/MDSMap.h"
-TYPE_FEATUREFUL(MDSMap)
+TYPE_CONTEXT_FEATUREFUL(MDSMap)
 TYPE_FEATUREFUL(MDSMap::mds_info_t)
 
 #include "mds/Capability.h"
@@ -338,7 +338,7 @@ MESSAGE(MMDSFragmentNotify)
 #include "messages/MMDSLoadTargets.h"
 MESSAGE(MMDSLoadTargets)
 #include "messages/MMDSMap.h"
-MESSAGE(MMDSMap)
+MESSAGE_CONTEXT(MMDSMap)
 #include "messages/MMDSResolve.h"
 MESSAGE(MMDSResolve)
 #include "messages/MMDSResolveAck.h"

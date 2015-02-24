@@ -967,16 +967,15 @@ public:
  public:
   ObjectStore(CephContext* _cct, const std::string& path_)
     : cct(_cct), path(path_) {
-    cct->get();
   }
-  virtual ~ObjectStore() {
-    cct->put();
-  }
+  virtual ~ObjectStore() {};
 
+ private:
   // no copying
   ObjectStore(const ObjectStore& o);
   const ObjectStore& operator=(const ObjectStore& o);
 
+ public:
   // mgmt
   virtual int version_stamp_is_valid(uint32_t *version) { return 1; }
   virtual int update_version_stamp() = 0;

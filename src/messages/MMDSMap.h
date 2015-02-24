@@ -46,6 +46,7 @@ class MMDSMap : public Message {
   }
   */
 
+  CephContext *cct;
   boost::uuids::uuid fsid;
   epoch_t epoch;
   bufferlist encoded;
@@ -53,10 +54,11 @@ class MMDSMap : public Message {
   version_t get_epoch() const { return epoch; }
   bufferlist& get_encoded() { return encoded; }
 
-  MMDSMap() :
-    Message(CEPH_MSG_MDS_MAP) {}
-  MMDSMap(const boost::uuids::uuid& f, MDSMap *mm) :
+  MMDSMap(CephContext *_cct) :
+    Message(CEPH_MSG_MDS_MAP), cct(_cct) {}
+  MMDSMap(CephContext *_cct, const boost::uuids::uuid& f, MDSMap *mm) :
     Message(CEPH_MSG_MDS_MAP),
+    cct(_cct),
     fsid(f) {
     epoch = mm->get_epoch();
     mm->encode(encoded, -1);  // we will reencode with fewer features as necessary
@@ -82,7 +84,7 @@ public:
     ::encode(epoch, payload);
     if ((features & CEPH_FEATURE_MDSENC) == 0) {
       // reencode for old clients.
-      MDSMap m;
+      MDSMap m(cct);
       m.decode(encoded);
       encoded.clear();
       m.encode(encoded, features);

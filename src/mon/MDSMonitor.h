@@ -37,6 +37,8 @@ class MMonCommand;
 class MMDSLoadTargets;
 
 class MDSMonitor : public PaxosService {
+ private:
+  CephContext *cct;
  public:
   // mds maps
   MDSMap mdsmap;	  // current
@@ -108,8 +110,9 @@ class MDSMonitor : public PaxosService {
   bool try_standby_replay(MDSMap::mds_info_t& finfo, MDSMap::mds_info_t& ainfo);
 
 public:
-  MDSMonitor(Monitor *mn, Paxos *p, string service_name)
-    : PaxosService(mn, p, service_name)
+  MDSMonitor(CephContext *_cct, Monitor *mn, Paxos *p, string service_name)
+    : PaxosService(mn, p, service_name), cct(_cct), mdsmap(_cct),
+      pending_mdsmap(_cct)
   {
   }
 

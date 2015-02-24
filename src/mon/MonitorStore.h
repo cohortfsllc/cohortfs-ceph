@@ -34,7 +34,7 @@ class MonitorStore {
 		  bool append);
 public:
   MonitorStore(CephContext* _cct, const std::string &d);
-  ~MonitorStore();
+  ~MonitorStore() { };
 
   int mkfs();  // wipe
   int mount();

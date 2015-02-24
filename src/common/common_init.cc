@@ -33,6 +33,16 @@
 #define _STR(x) #x
 #define STRINGIFY(x) _STR(x)
 
+CephContext *test_init(enum code_environment_t code_env)
+{
+  return new CephContext(code_env);
+}
+
+void common_cleanup(CephContext *cct)
+{
+  cct->put();
+}
+
 CephContext *common_preinit(const CephInitParameters &iparams,
 			  enum code_environment_t code_env, int flags)
 {

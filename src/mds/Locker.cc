@@ -65,10 +65,8 @@ static ostream& _prefix(std::ostream *_dout, MDS *mds) {
 }
 
 Locker::Locker(MDS *m, MDCache *c) : mds(m), cct(mds->cct), mdcache(c) {
-  cct->get();
 }
 Locker::~Locker() {
-  cct->put();
 }
 
 /* This function DOES put the passed message before returning */

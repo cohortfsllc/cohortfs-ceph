@@ -787,7 +787,7 @@ int main(int argc, const char **argv)
   delete simple_msgr;
   delete client_throttler;
   delete daemon_throttler;
-  cct->put();
+  common_cleanup(cct);
 
   // cd on exit, so that gmon.out (if any) goes into a separate directory
   // for each node.

@@ -240,7 +240,7 @@ bool MDSMonitor::preprocess_beacon(MMDSBeacon *m)
   if (pending_mdsmap.is_dne_gid(gid)) {
     if (state != MDSMap::STATE_BOOT) {
       ldout(mon->cct, 7) << "mds_beacon " << *m << " is not in mdsmap" << dendl;
-      mon->send_reply(m, new MMDSMap(mon->monmap->fsid, &mdsmap));
+      mon->send_reply(m, new MMDSMap(cct, mon->monmap->fsid, &mdsmap));
       goto out;
     } else {
       return false;  // not booted yet.
@@ -513,7 +513,7 @@ void MDSMonitor::_updated(MMDSBeacon *m)
 
   if (m->get_state() == MDSMap::STATE_STOPPED) {
     // send the map manually (they're out of the map, so they won't get it automatic)
-    mon->send_reply(m, new MMDSMap(mon->monmap->fsid, &mdsmap));
+    mon->send_reply(m, new MMDSMap(cct, mon->monmap->fsid, &mdsmap));
   }
 
   m->put();
@@ -594,7 +594,7 @@ bool MDSMonitor::preprocess_command(MMonCommand *m)
       } else {
 	assert(err == 0);
 	assert(b.length());
-	p = new MDSMap;
+	p = new MDSMap(cct);
 	p->decode(b);
       }
     }
@@ -629,7 +629,7 @@ bool MDSMonitor::preprocess_command(MMonCommand *m)
       } else {
 	assert(r == 0);
 	assert(b.length());
-	MDSMap mm;
+	MDSMap mm(cct);
 	mm.decode(b);
 	mm.encode(rdata, m->get_connection()->get_features());
 	ss << "got mdsmap epoch " << mm.get_epoch();
@@ -879,7 +879,7 @@ bool MDSMonitor::prepare_command(MMonCommand *m)
     }
     r = 0;
   } else if (prefix == "mds setmap") {
-    MDSMap map;
+    MDSMap map(cct);
     map.decode(m->get_data());
     epoch_t e = 0;
     int64_t epochnum;
@@ -1025,7 +1025,7 @@ bool MDSMonitor::prepare_command(MMonCommand *m)
     }
 
   } else if (prefix == "mds newfs") {
-    MDSMap newmap;
+    MDSMap newmap(cct);
     string metadata;
     VolumeRef metadata_vol;
     if (!cmd_getval(mon->cct, cmdmap, "metadata", metadata)) {
@@ -1092,7 +1092,7 @@ void MDSMonitor::check_subs()
 void MDSMonitor::check_sub(Subscription *sub)
 {
   if (sub->next <= mdsmap.get_epoch()) {
-    mon->messenger->send_message(new MMDSMap(mon->monmap->fsid, &mdsmap),
+    mon->messenger->send_message(new MMDSMap(cct, mon->monmap->fsid, &mdsmap),
 				 sub->session->con);
     if (sub->onetime)
       mon->session_map.remove_sub(sub);

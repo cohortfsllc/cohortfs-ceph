@@ -240,7 +240,6 @@ CInode::CInode(MDCache *c, bool auth) :
   nestlock(this, &nestlock_type), flocklock(this, &flocklock_type),
   policylock(this, &policylock_type), loner_cap(-1), want_loner_cap(-1)
   {
-    cct->get();
     g_num_ino++;
     g_num_inoa++;
     state = 0;

@@ -16,6 +16,8 @@
 #include <boost/uuid/string_generator.hpp>
 #include "MDSMap.h"
 
+#include "global/global_init.h"
+
 #include <sstream>
 using std::stringstream;
 
@@ -144,7 +146,8 @@ void MDSMap::dump(Formatter *f) const
 
 void MDSMap::generate_test_instances(list<MDSMap*>& ls)
 {
-  MDSMap *m = new MDSMap();
+  CephContext *cct = test_init(CODE_ENVIRONMENT_UTILITY);
+  MDSMap *m = new MDSMap(cct);
   m->max_mds = 1;
   boost::uuids::string_generator parse;
 
@@ -159,6 +162,7 @@ void MDSMap::generate_test_instances(list<MDSMap*>& ls)
   m->session_autoclose = 301;
   m->max_file_size = 1<<24;
   ls.push_back(m);
+  common_cleanup(cct);
 }
 
 void MDSMap::print(ostream& out)

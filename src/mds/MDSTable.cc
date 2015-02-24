@@ -43,7 +43,6 @@ MDSTable::MDSTable(MDS *m, const char *n, bool is_per_mds) :
   state(STATE_UNDEF),
   version(0), committing_version(0), committed_version(0),
   projected_version(0) {
-  cct->get();
 }
 
 void MDSTable::save(Context *onfinish, version_t v)

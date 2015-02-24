@@ -355,7 +355,7 @@ int main(int argc, const char **argv)
 
   // done
   delete osd;
-  cct->put();
+  common_cleanup(cct);
 
   // cd on exit, so that gmon.out (if any) goes into a separate directory for each node.
   char s[20];

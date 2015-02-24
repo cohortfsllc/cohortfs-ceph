@@ -50,7 +50,6 @@ class MonitorStoreConverter {
       highest_last_pn(0), highest_accepted_pn(0),
       MONITOR_NAME("monitor")
   {
-    cct->get();
     MonitorStore *store_ptr = new MonitorStore(cct, store_path);
     assert(!store_ptr->mount());
     store.reset(store_ptr);
@@ -60,7 +59,6 @@ class MonitorStoreConverter {
   }
 
   ~MonitorStoreConverter() {
-    cct->put();
   }
 
   int convert() {

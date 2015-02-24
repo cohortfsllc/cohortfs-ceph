@@ -1230,10 +1230,10 @@ int rados_create_common(rados_t *pcluster,
   cct->_conf->apply_changes(NULL);
 
   cct->init();
+  // Special case: ownership of cct is passed to RadosClient
   librados::RadosClient *radosp = new librados::RadosClient(cct);
   *pcluster = (void *)radosp;
 
-  cct->put();
   return 0;
 }
 

@@ -28,7 +28,6 @@
 SessionMap::SessionMap(MDS *m)
   : mds(m), cct(mds->cct), version(0), projected(0), committing(0),
     committed(0), commit_waiters() {
-  cct->get();
 }
 
 void SessionMap::dump()

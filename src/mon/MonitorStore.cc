@@ -46,10 +46,6 @@ static ostream& _prefix(std::ostream *_dout, const string& dir) {
 
 MonitorStore::MonitorStore(CephContext* _cct, const std::string &d)
   : cct(_cct), dir(d), lock_fd(-1) {
-  cct->get();
-}
-MonitorStore::~MonitorStore() {
-  cct->put();
 }
 
 int MonitorStore::mount()

@@ -25,7 +25,7 @@ MDSUtility::MDSUtility() :
 {
   monc = new MonClient(cct);
   messenger = Messenger::create(cct, entity_name_t::CLIENT(), "mds", getpid());
-  mdsmap = new MDSMap();
+  mdsmap = new MDSMap(cct);
   objecter = new Objecter(cct, messenger, monc, 0, 0);
 }
 

@@ -63,7 +63,6 @@ struct MonSession : public RefCountedObject {
     auid(0),
     global_id(0), notified_global_id(0), auth_handler(NULL),
     proxy_con(NULL), proxy_tid(0) {
-    cct->get();
     time_established = ceph_clock_now(cct);
   }
   ~MonSession() {
@@ -72,7 +71,6 @@ struct MonSession : public RefCountedObject {
     assert(!item.is_on_list());
     assert(sub_map.empty());
     delete auth_handler;
-    cct->put();
   }
 
   bool is_capable(string service, int mask) {

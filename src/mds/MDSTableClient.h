@@ -70,7 +70,6 @@ protected:
 public:
   MDSTableClient(MDS *m, int tab);
   virtual ~MDSTableClient() {
-    cct->put();
   }
 
   void handle_request(MMDSTableRequest *m);

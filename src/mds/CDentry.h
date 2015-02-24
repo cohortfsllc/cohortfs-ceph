@@ -174,7 +174,6 @@ public:
     auth_pins(0), nested_auth_pins(0), nested_anchors(0),
     lock(this, &lock_type),
     versionlock(this, &versionlock_type) {
-    cct->get();
     g_num_dn++;
     g_num_dna++;
   }
@@ -185,7 +184,6 @@ public:
     auth_pins(0), nested_auth_pins(0), nested_anchors(0),
     lock(this, &lock_type),
     versionlock(this, &versionlock_type) {
-    cct->get();
     g_num_dn++;
     g_num_dna++;
     linkage.remote_ino = ino;
@@ -194,7 +192,6 @@ public:
   ~CDentry() {
     g_num_dn--;
     g_num_dns++;
-    cct->put();
   }
 
 

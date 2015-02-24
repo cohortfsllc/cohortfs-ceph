@@ -392,7 +392,7 @@ Message *decode_message(CephContext *cct, int crcflags,
     break;
 
   case CEPH_MSG_MDS_MAP:
-    m = new MMDSMap;
+    m = new MMDSMap(cct);
     break;
   case MSG_MDS_BEACON:
     m = new MMDSBeacon;

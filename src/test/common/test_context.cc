@@ -24,10 +24,11 @@
 #include "include/msgr.h"
 #include "common/ceph_context.h"
 #include "common/config.h"
+#include "global/global_init.h"
 
 TEST(CephContext, do_command)
 {
-  CephContext *cct = (new CephContext(CEPH_ENTITY_TYPE_CLIENT))->get();
+  CephContext *cct = test_init(CEPH_ENTITY_TYPE_CLIENT);
 
   string key("key");
   string value("value");
@@ -49,7 +50,7 @@ TEST(CephContext, do_command)
     EXPECT_EQ("{ \"key\": \"value\"}", s);
   }
 
-  cct->put();
+  common_cleanup(cct);
 }
 
 /*

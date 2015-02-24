@@ -36,7 +36,6 @@
 
 MDSTableClient::MDSTableClient(MDS *m, int tab) :
   mds(m), cct(mds->cct), table(tab), last_reqid(~0ULL), server_ready(false) {
-  cct->get();
 }
 
 

@@ -9,19 +9,24 @@
 #include "common/ceph_argparse.h"
 #include "common/Formatter.h"
 #include "common/errno.h"
+#include "global/global_init.h"
 #include "msg/Message.h"
 
 #define TYPE(t)
 #define TYPEWITHSTRAYDATA(t)
 #define TYPE_FEATUREFUL(t)
+#define TYPE_CONTEXT_FEATUREFUL(t)
 #define TYPE_NOCOPY(t)
 #define MESSAGE(t)
+#define MESSAGE_CONTEXT(t)
 #include "types.h"
 #undef TYPE
 #undef TYPEWITHSTRAYDATA
 #undef TYPE_FEATUREFUL
+#undef TYPE_CONTEXT_FEATUREFUL
 #undef TYPE_NOCOPY
 #undef MESSAGE
+#undef MESSAGE_CONTEXT
 
 void usage(ostream &out)
 {
@@ -73,6 +78,7 @@ protected:
 
 public:
   DencoderBase(bool stray_okay) : m_object(new T), stray_okay(stray_okay) {}
+  DencoderBase(T *t, bool stray_okay) : m_object(t), stray_okay(stray_okay) {}
   ~DencoderBase() {
     delete m_object;
   }
@@ -119,6 +125,13 @@ public:
 };
 
 template<class T>
+class DencoderContextBase : public DencoderBase<T> {
+public:
+  DencoderContextBase(CephContext *_cct, bool stray_okay) :
+    DencoderBase<T>(new T(_cct), stray_okay) {}
+};
+
+template<class T>
 class DencoderImplNoFeatureNoCopy : public DencoderBase<T> {
 public:
   DencoderImplNoFeatureNoCopy(bool stray_ok)
@@ -157,6 +170,17 @@ public:
   }
 };
 
+template<class T>
+class DencoderImplContextFeatureful : public DencoderContextBase<T> {
+public:
+  DencoderImplContextFeatureful(CephContext *_cct, bool stray_ok) :
+    DencoderContextBase<T>(_cct, stray_ok) {}
+  virtual void encode(bufferlist& out, uint64_t features) {
+    out.clear();
+    ::encode(*(this->m_object), out, features);
+  }
+};
+
 
 template<class T>
 class MessageDencoderImpl : public Dencoder {
@@ -166,6 +190,9 @@ class MessageDencoderImpl : public Dencoder {
 public:
   MessageDencoderImpl() {
     m_object = new T;
+  }
+  MessageDencoderImpl(T *t) {
+    m_object = t;
   }
   ~MessageDencoderImpl() {
     m_object->put();
@@ -230,20 +257,29 @@ public:
   //}
 };
 
+template<class T>
+class MessageDencoderContextImpl : public MessageDencoderImpl<T> {
+public:
+  MessageDencoderContextImpl(CephContext *_cct) :
+    MessageDencoderImpl<T>(new T(_cct)) {}
+};
 
 
 int main(int argc, const char **argv)
 {
   // dencoders
   map<string,Dencoder*> dencoders;
+  CephContext *cct = test_init(CODE_ENVIRONMENT_UTILITY);
 
 #define T_STR(x) #x
 #define T_STRINGIFY(x) T_STR(x)
 #define TYPE(t) dencoders[T_STRINGIFY(t)] = new DencoderImplNoFeature<t>(false);
 #define TYPEWITHSTRAYDATA(t) dencoders[T_STRINGIFY(t)] = new DencoderImplNoFeature<t>(true);
 #define TYPE_FEATUREFUL(t) dencoders[T_STRINGIFY(t)] = new DencoderImplFeatureful<t>(false);
+#define TYPE_CONTEXT_FEATUREFUL(t) dencoders[T_STRINGIFY(t)] = new DencoderImplContextFeatureful<t>(cct, false);
 #define TYPE_NOCOPY(t) dencoders[T_STRINGIFY(t)] = new DencoderImplNoFeatureNoCopy<t>(false);
 #define MESSAGE(t) dencoders[T_STRINGIFY(t)] = new MessageDencoderImpl<t>;
+#define MESSAGE_CONTEXT(t) dencoders[T_STRINGIFY(t)] = new MessageDencoderContextImpl<t>(cct);
 #include "types.h"
 #undef TYPE
 #undef TYPEWITHSTRAYDATA

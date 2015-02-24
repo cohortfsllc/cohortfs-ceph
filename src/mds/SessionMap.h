@@ -248,11 +248,6 @@ public:
   SessionMap() : mds(NULL), version(0), projected(0),
 		 committing(0), committed(0) {}
 
-  ~SessionMap() {
-    if (cct)
-      cct->put();
-  }
-
   // sessions
   bool empty() { return session_map.empty(); }
 

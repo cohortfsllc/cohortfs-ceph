@@ -46,11 +46,6 @@ public:
   map<client_t, int> client_waiting_lock_counts;
 
   ceph_lock_state_t(CephContext* _cct) : cct(_cct) {
-    cct->get();
-  }
-
-  ~ceph_lock_state_t() {
-    cct->put();
   }
 
   /**

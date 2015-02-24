@@ -370,7 +370,7 @@ int main(int argc, const char **argv)
   if (mds->is_stopped())
     delete mds;
 
-  cct->put();
+  common_cleanup(cct);
 
   // cd on exit, so that gmon.out (if any) goes into a separate directory for each node.
   char s[20];

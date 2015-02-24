@@ -524,7 +524,6 @@ class MonitorDBStore
 
   MonitorDBStore(CephContext* _cct, const string& path) :
     db(0), do_dump(false), dump_fd(-1), cct(_cct) {
-    cct->get();
     string::const_reverse_iterator rit;
     int pos = 0;
     for (rit = path.rbegin(); rit != path.rend(); ++rit, ++pos) {
@@ -553,11 +552,9 @@ class MonitorDBStore
   }
   MonitorDBStore(CephContext* _cct, LevelDBStore *db_ptr) :
     db(0), do_dump(false), dump_fd(-1), cct(_cct) {
-    cct->get();
     db.reset(db_ptr);
   }
   ~MonitorDBStore() {
-    cct->put();
     if (do_dump)
       ::close(dump_fd);
   }

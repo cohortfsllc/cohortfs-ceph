@@ -218,20 +218,10 @@ public:
   CephContext *cct;
 
 public:
-  MDSMap(CephContext* _cct = nullptr)
+  MDSMap(CephContext* _cct)
     : epoch(0), flags(0), last_failure(0), last_failure_osd_epoch(0),
       tableserver(0), root(0), session_timeout(0), session_autoclose(0),
-      max_file_size(0), metadata_volume(0), max_mds(0) {
-    if (_cct) {
-      cct = _cct;
-      cct->get();
-    } else {
-      cct = new CephContext(CODE_ENVIRONMENT_LIBRARY);
-    }
-  }
-
-  ~MDSMap() {
-    cct->put();
+      max_file_size(0), metadata_volume(0), max_mds(0), cct(_cct) {
   }
 
   bool get_inline_data_enabled() { return inline_data_enabled; }

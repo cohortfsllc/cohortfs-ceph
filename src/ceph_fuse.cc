@@ -198,7 +198,7 @@ int main(int argc, const char **argv, const char *envp[]) {
     }
 
     delete messenger;
-    fuse_cct->put();
+    common_cleanup(fuse_cct);
     free(newargv);
 
     //cout << "child done" << std::endl;

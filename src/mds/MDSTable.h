@@ -45,7 +45,6 @@ class MDSTable {
 public:
   MDSTable(MDS *m, const char *n, bool is_per_mds);
   virtual ~MDSTable() {
-    cct->put();
   }
 
   version_t get_version() { return version; }

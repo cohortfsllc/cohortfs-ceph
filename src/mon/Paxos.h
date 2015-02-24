@@ -1006,7 +1006,6 @@ public:
   Paxos(Monitor *m, const string &name);
 
   ~Paxos() {
-    cct->put();
   }
 
   const string get_name() const {

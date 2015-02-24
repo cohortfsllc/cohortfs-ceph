@@ -57,7 +57,7 @@ public:
     try {
       shutdown();
       if (cct) {
-	cct->put();
+	common_cleanup(cct);
 	cct = NULL;
       }
     }

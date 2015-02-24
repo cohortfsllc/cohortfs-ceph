@@ -13,7 +13,7 @@
 #include <fstream>
 
 #include "common/Formatter.h"
-#include "common/code_environment.h"
+#include "global/global_init.h"
 
 #include "bencher.h"
 #include "rbd_backend.h"
@@ -64,7 +64,7 @@ int main(int argc, char **argv)
   po::store(po::parse_command_line(argc, argv, desc), vm);
   po::notify(vm);
 
-  cct = new CephContext(CODE_ENVIRONMENT_UTILITY);
+  cct = test_init(CODE_ENVIRONMENT_UTILITY);
 
   if (vm.count("help")) {
     cout << desc << std::endl;

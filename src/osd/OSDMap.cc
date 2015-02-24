@@ -25,7 +25,7 @@
 #include "include/ceph_features.h"
 #include "include/str_map.h"
 
-#include "common/code_environment.h"
+#include "global/global_init.h"
 
 #define dout_subsys ceph_subsys_osd
 
@@ -978,12 +978,12 @@ void OSDMap::generate_test_instances(list<OSDMap*>& o)
 {
   o.push_back(new OSDMap);
 
-  CephContext *cct = new CephContext(CODE_ENVIRONMENT_UTILITY);
+  CephContext *cct = test_init(CODE_ENVIRONMENT_UTILITY);
   o.push_back(new OSDMap);
   boost::uuids::uuid fsid;
   o.back()->build_simple(cct, 1, fsid, 16);
   o.back()->created = o.back()->modified = utime_t(1, 2);  // fix timestamp
-  cct->put();
+  common_cleanup(cct);
 }
 
 string OSDMap::get_flag_string(unsigned f)

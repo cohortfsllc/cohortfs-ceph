@@ -459,7 +459,7 @@ static void fuse_ll_ioctl(fuse_req_t req, fuse_ino_t ino, int cmd,
 			  unsigned flags, const void *in_buf,
 			  size_t in_bufsz, size_t out_bufsz)
 {
-  CephFuse::Handle *cfuse = (CephFuse::Handle *)fuse_req_userdata(req);
+  //CephFuse::Handle *cfuse = (CephFuse::Handle *)fuse_req_userdata(req);
 
   if (flags & FUSE_IOCTL_COMPAT) {
     fuse_reply_err(req, ENOSYS);

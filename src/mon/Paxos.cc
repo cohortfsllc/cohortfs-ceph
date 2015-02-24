@@ -45,7 +45,6 @@ Paxos::Paxos(Monitor *m, const string &name)
     collect_timeout_event(0), lease_renew_event(0), lease_ack_timeout_event(0),
     lease_timeout_event(0), accept_timeout_event(0), clock_drift_warned(0),
     trimming(false) {
-  cct->get();
 }
 
 MonitorDBStore *Paxos::get_store()

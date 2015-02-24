@@ -59,7 +59,6 @@ GenericFileStoreBackend::GenericFileStoreBackend(CephContext* _cct,
   m_filestore_fiemap(cct->_conf->filestore_fiemap),
   m_filestore_fsync_flushes_journal_data(
     cct->_conf->filestore_fsync_flushes_journal_data) {
-  cct->get();
 }
 
 int GenericFileStoreBackend::detect_features()

@@ -37,9 +37,8 @@ public:
 	  Cond *c=0) : cct(_cct), fsid(f), finisher(fin), do_sync_cond(c),
 		       wait_on_full(false) {
 
-    cct->get();
   }
-  virtual ~Journal() { cct->put(); }
+  virtual ~Journal() { }
 
   virtual int check() = 0;   ///< check if journal appears valid
   virtual int create() = 0;  ///< create a fresh journal

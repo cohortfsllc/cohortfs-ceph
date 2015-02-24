@@ -187,7 +187,7 @@ Client::Client(Messenger *m, MonClient *mc)
   messenger = m;
 
   // osd interfaces
-  mdsmap = new MDSMap;
+  mdsmap = new MDSMap(cct);
   objecter = new Objecter(cct, messenger, monclient, 0, 0);
   objecter->set_client_incarnation(0);	// client always 0, for now.
   writeback_handler = new ObjecterWriteback(objecter);
@@ -1858,7 +1858,7 @@ void Client::handle_mds_map(MMDSMap* m)
   ldout(cct, 1) << "handle_mds_map epoch " << m->get_epoch() << dendl;
 
   MDSMap *oldmap = mdsmap;
-  mdsmap = new MDSMap;
+  mdsmap = new MDSMap(cct);
   mdsmap->decode(m->get_encoded());
 
   // reset session
