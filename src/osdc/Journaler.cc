@@ -763,7 +763,8 @@ void Journaler::_assimilate_prefetch()
       break;
     }
 
-    ldout(cct, 10) << "_assimilate_prefetch " << p->first << "~" << p->second.length() << dendl;
+    ldout(cct, 10) << "_assimilate_prefetch requested " << requested_pos
+	<< " received " << p->first << "~" << p->second.length() << dendl;
     received_pos += p->second.length();
     read_buf.claim_append(p->second);
     assert(received_pos <= requested_pos);
@@ -827,18 +828,22 @@ void Journaler::_issue_read(uint64_t len)
 // XXX need something better mdw 20150215
   uint64_t period = (1<<22);	// was layout_period: = stripe_count * object_size
 #endif
+  uint64_t rp = requested_pos;
+  requested_pos += len;
   while (len > 0) {
-    uint64_t e = requested_pos + period;
+    uint64_t e = rp + period;
     e -= e % period;
-    uint64_t l = e - requested_pos;
+    uint64_t l = e - rp;
     if (l > len)
       l = len;
-    C_Read *c = new C_Read(this, requested_pos);
+    C_Read *c = new C_Read(this, rp);
     oid obj = file_oid(ino, 0);
-    objecter->read(obj, volume, requested_pos, l, &c->bl, 0, c);
-    requested_pos += l;
+    objecter->read(obj, volume, rp, l, &c->bl, 0, c);
+    rp += l;
     len -= l;
   }
+  ldout(cct, 10) << "_issue_read fin,req'd " << rp
+	<< "/" << requested_pos << dendl;
 }
 
 void Journaler::_prefetch()
