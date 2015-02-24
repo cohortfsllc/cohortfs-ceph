@@ -14,7 +14,7 @@ namespace {
 class TestFragTreeIndex : public FragTreeIndex {
  public:
   TestFragTreeIndex(uint32_t initial_split)
-    : FragTreeIndex(initial_split)
+    : FragTreeIndex(g_ceph_context, initial_split)
   {}
   // expose split/merge functions
   int split(frag_t frag, int bits, bool async=true) {
@@ -77,7 +77,6 @@ class TestFragTreeIndex : public FragTreeIndex {
     committed.merges.clear();
     tree.clear();
     sizes.clear();
-    assert(migration_threads.empty()); // no async migrations
     ::close(rootfd);
     rootfd = -1;
   }
@@ -181,7 +180,7 @@ TEST(OsFragTreeIndex, OpenStatUnlink)
 {
   tmpdir_with_cleanup path("tmp-fragtreeindex");
 
-  FragTreeIndex index(0);
+  TestFragTreeIndex index(0);
   struct stat st;
 
   ASSERT_EQ(0, index.init(path));

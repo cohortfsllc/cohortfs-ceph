@@ -18,8 +18,8 @@
 #include <thread>
 
 #include "include/frag.h"
-#include "common/Mutex.h"
 #include "common/RWLock.h"
+#include "common/ThreadPool.h"
 
 namespace cohort {
 
@@ -66,8 +66,7 @@ class FragTreeIndex {
   frag_size_map sizes; ///< cache of all directory sizes
   Mutex sizes_lock; ///< controls access to 'sizes'
 
-  /// threads for migration operations in progress
-  std::map<frag_t, std::thread> migration_threads;
+  ThreadPool migration_threads; ///< thread pool for migration operations
 
   int read_index(int dirfd);
   int write_index(int dirfd);
@@ -95,7 +94,7 @@ class FragTreeIndex {
   const FragTreeIndex& operator=(const FragTreeIndex& other) = delete;
 
  public:
-  FragTreeIndex(uint32_t initial_split);
+  FragTreeIndex(CephContext *cct, uint32_t initial_split);
   ~FragTreeIndex();
 
   /// initialize a fresh collection index at the given path

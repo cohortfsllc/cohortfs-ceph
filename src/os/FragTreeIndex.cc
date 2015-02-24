@@ -23,9 +23,11 @@
 
 using namespace cohort;
 
-FragTreeIndex::FragTreeIndex(uint32_t initial_split)
+FragTreeIndex::FragTreeIndex(CephContext *cct, uint32_t initial_split)
   : initial_split(initial_split),
-    rootfd(-1)
+    rootfd(-1),
+    migration_threads(cct, cct->_conf->fragtreeindex_migration_threads,
+                      ThreadPool::FLAG_DROP_JOBS_ON_SHUTDOWN)
 {
 }
 
@@ -191,12 +193,10 @@ void FragTreeIndex::restart_migrations(bool async)
       do_split(path, bits, size_updates);
       finish_split(frag, size_updates);
     };
-    if (async) {
-      auto t = migration_threads.insert(std::make_pair(frag, std::thread(fn)));
-      assert(t.second); // must not have a thread running for this frag
-    } else {
+    if (async)
+      migration_threads.submit(fn);
+    else
       fn();
-    }
   }
 
   for (auto i = committed.merges.begin(); i != committed.merges.end(); ) {
@@ -214,12 +214,10 @@ void FragTreeIndex::restart_migrations(bool async)
       do_merge(path, bits);
       finish_merge(frag);
     };
-    if (async) {
-      auto t = migration_threads.insert(std::make_pair(frag, std::thread(fn)));
-      assert(t.second); // must not have a thread running for this frag
-    } else {
+    if (async)
+      migration_threads.submit(fn);
+    else
       fn();
-    }
   }
 }
 
@@ -229,7 +227,8 @@ int FragTreeIndex::unmount()
   if (rootfd == -1)
     return -EINVAL;
 
-  // TODO: stop migration threads (and apply any size updates from splits!)
+  // stop migration threads
+  migration_threads.shutdown();
 
   // write sizes to disk
   sizes_lock.Lock();
@@ -808,7 +807,7 @@ int FragTreeIndex::split(frag_t frag, int bits, bool async)
 
   if (async) {
     frag_path path;
-    r = path.build(tree, frag.value());
+    r = path.build(committed.tree, frag.value());
     assert(r == 0);
     assert(path.frag == frag);
 
@@ -818,8 +817,7 @@ int FragTreeIndex::split(frag_t frag, int bits, bool async)
       do_split(path, bits, size_updates);
       finish_split(frag, size_updates);
     };
-    auto t = migration_threads.insert(std::make_pair(frag, std::thread(fn)));
-    assert(t.second); // must not have a thread running for this frag
+    migration_threads.submit(fn);
   }
   // else, caller is expected to do_split() and finish_split()
   return 0;
@@ -906,13 +904,6 @@ void FragTreeIndex::finish_split(frag_t frag, const frag_size_map &size_updates)
     auto i = committed.splits.find(frag);
     assert(i != committed.splits.end());
 
-    auto t = migration_threads.find(frag);
-    if (t != migration_threads.end()) {
-      // we're probably running in this thread, so detach before destroying it
-      t->second.detach();
-      migration_threads.erase(t);
-    }
-
     // remove the split and apply to the committed tree
     committed.tree.split(frag, i->second, false);
     committed.splits.erase(i);
@@ -990,8 +981,7 @@ int FragTreeIndex::merge(frag_t frag, bool async)
       do_merge(path, bits);
       finish_merge(frag);
     };
-    auto t = migration_threads.insert(std::make_pair(frag, std::thread(fn)));
-    assert(t.second); // must not have a thread running for this frag
+    migration_threads.submit(fn);
   }
   // else, caller is expected to do_merge() and finish_merge()
   return 0;
@@ -1057,13 +1047,6 @@ void FragTreeIndex::finish_merge(frag_t frag)
 
   auto i = committed.merges.find(frag);
   assert(i != committed.merges.end());
-
-  auto t = migration_threads.find(frag);
-  if (t != migration_threads.end()) {
-    // we're probably running in this thread, so detach before destroying it
-    t->second.detach();
-    migration_threads.erase(t);
-  }
 
   // remove the merge and apply to the committed tree
   committed.tree.merge(frag, i->second, false);
