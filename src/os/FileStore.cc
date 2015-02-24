@@ -2393,10 +2393,18 @@ int FileStore::read(
     len = st.st_size;
   }
 
-  bufferptr bptr(len);	// prealloc space for entire read
+  bufferptr bptr;
+  try {
+    bptr = bufferptr(len); 	// prealloc space for entire read
+  } catch (std::bad_alloc&e ) {
+    derr << "FileStore::read(" << cid << "/" << oid << ") cannot allocate "
+	<< len << " bytes" << dendl;
+    lfn_close(fd);
+    return -ENOMEM;
+  }
   got = safe_pread(**fd, bptr.c_str(), len, offset);
   if (got < 0) {
-    dout(10) << "FileStore::read(" << cid << "/" << oid << ") pread error: " << cpp_strerror(got) << dendl;
+    derr << "FileStore::read(" << cid << "/" << oid << ") pread error: " << cpp_strerror(got) << dendl;
     lfn_close(fd);
     assert(allow_eio || !m_filestore_fail_eio || got != -EIO);
     return got;
