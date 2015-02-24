@@ -469,7 +469,10 @@ public:
 			      hoid_t* next);
   int collection_list_range(CollectionHandle ch, hoid_t start,
 			    hoid_t end, vector<hoid_t>* ls);
-
+  int collection_list_partial2(CollectionHandle ch,
+			       int min, int max,
+			       vector<hoid_t> *vs,
+			       CLPCursor& cursor);
   int omap_get(
     CollectionHandle ch, ///< [in] Collection containing oid
     ObjectHandle oh,   ///< [in] Object containing omap

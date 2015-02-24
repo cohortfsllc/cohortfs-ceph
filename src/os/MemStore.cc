@@ -524,13 +524,63 @@ int MemStore::collection_list_partial(CollectionHandle ch,
 
   map<hoid_t,ObjectRef>::iterator p = c->object_map.lower_bound(start);
   while (p != c->object_map.end() &&
-	 ls->size() < (unsigned)max) {
+	 ls->size() < (unsigned)max) {_
     ls->push_back(p->first);
     ++p;
   }
   if (p != c->object_map.end())
     *next = p->first;
 #endif
+  return 0;
+}
+
+int MemStore::collection_list_partial2(CollectionHandle ch,
+				       int min,
+				       int max,
+				       vector<hoid_t>* vs,
+				       CLPCursor& cursor)
+{
+  MemCollection* c = static_cast<MemCollection*>(ch);
+  if (cursor.partition >= c->obj_cache.n_part)
+    return -EINVAL;
+
+  ObjectStore::Object::ObjCache::iterator it;
+  Object* o;
+
+  int fst = 1;
+  int cnt = 0;
+  while (cursor.partition < c->obj_cache.n_part && cnt <= max) {
+    ObjCache::Partition& p = c->obj_cache.get(cursor.partition);
+    ObjCache::unique_lock lk(p.lock);
+    if (fst) {
+      const hoid_t& oid = cursor.next_oid;
+      if (oid.oid.name != "") {
+	o = static_cast<Object*>(c->obj_cache.find(
+					     oid.hk, oid,
+					     ObjCache::FLAG_NONE));
+	if (o) {
+	  it = ObjCache::container_type::s_iterator_to(*o);
+	}
+      }
+    } else {
+      /* ! fst */
+      it = p.tr.begin();
+    }
+    for (; it != p.tr.end(); ++it) {
+      Object& o = static_cast<Object&>(*it);
+      vs->push_back(o.get_oid());
+      ++cnt;
+      if (cnt > max) {
+	if (++it != p.tr.end())
+	  cursor.next_oid = it->get_oid();
+	else
+	  cursor.next_oid = hoid_t(oid_t("")); // "we're done here"
+	goto next_part;
+      }
+    }
+  next_part:
+    ++cursor.partition;
+  } /* partitions */
   return 0;
 }
 
