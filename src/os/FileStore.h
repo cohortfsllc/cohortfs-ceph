@@ -774,6 +774,11 @@ public:
   int collection_list_partial(CollectionHandle ch, hoid_t start,
 			      int min, int max, vector<hoid_t>* ls,
 			      hoid_t* next);
+  int collection_list_partial2(CollectionHandle ch,
+			       int min,
+			       int max,
+			       vector<hoid_t>* vs,
+			       CLPCursor& cursor);
   int collection_list_range(CollectionHandle ch, hoid_t start,
 			    hoid_t end, vector<hoid_t>* ls);
 

@@ -2658,6 +2658,15 @@ int KeyValueStore::collection_list_partial(CollectionHandle ch,
   return backend->list_objects(cid, start, max, ls, next);
 }
 
+int KeyValueStore::collection_list_partial2(CollectionHandle ch,
+					    int min, int max,
+					    vector<hobject_t> *vs,
+					    CLPCursor& cursor)
+{
+  /* TODO: implement */
+  return 0;
+}
+
 int KeyValueStore::collection_list(CollectionHandle ch,
 				   vector<hoid_t>& ls)
 {

@@ -566,11 +566,14 @@ class KeyValueStore : public ObjectStore,
   int collection_list_partial(CollectionHandle ch, hoid_t start,
 			      int min, int max,
 			      vector<hoid_t>* ls, hoid_t* next);
+  int collection_list_partial2(CollectionHandle ch,
+			       int min, int max,
+			       vector<hoid_t>* vs,
+			       CLPCursor& cursor);
   int collection_list_range(CollectionHandle ch, hoid_t start,
 			    hoid_t end, vector<hoid_t>* ls);
   int collection_version_current(CollectionHandle ch,
 				 uint32_t* version);
-
   // omap (see ObjectStore.h for documentation)
   int omap_get(CollectionHandle ch, ObjectHandle oh,
 	       bufferlist* header, map<string, bufferlist>* out);
