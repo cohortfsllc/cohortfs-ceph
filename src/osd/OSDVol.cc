@@ -1402,6 +1402,9 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 
 
 	uint32_t seq = oi.truncate_seq;
+	dout(20) << "write: total_real_length oi="
+		<< oi.total_real_length << " op=" << op.extent.total_real_length
+		<< dendl;
 	if (oi.total_real_length < op.extent.total_real_length) {
 	  oi.total_real_length = op.extent.total_real_length;
 	}
@@ -1479,6 +1482,8 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  oi.size = op.extent.length + op.extent.offset;
 	  ctx->delta_stats.num_bytes += oi.size;
 	}
+	dout(20) << "writefull: total_real_length = "
+		<< op.extent.total_real_length << dendl;
 	oi.total_real_length = op.extent.total_real_length;
 	ctx->delta_stats.num_wr++;
 	ctx->delta_stats.num_wr_kb += SHIFT_ROUND_UP(op.extent.length, 10);
@@ -1498,6 +1503,9 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  ch.insert(op.extent.offset, op.extent.length);
 	  ctx->modified_ranges.union_of(ch);
 	  ctx->delta_stats.num_wr++;
+	  dout(20) << "zero: total_real_length oi="
+		<< oi.total_real_length << " op=" << op.extent.total_real_length
+		<< dendl;
 	  if (oi.total_real_length < op.extent.total_real_length) {
 	    oi.total_real_length = op.extent.total_real_length;
 	  }
@@ -1567,6 +1575,8 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  ctx->delta_stats.num_bytes -= oi.size;
 	  ctx->delta_stats.num_bytes += op.extent.offset;
 	  oi.size = op.extent.offset;
+	dout(20) << "truncate: total_real_length = "
+		<< op.extent.total_real_length << dendl;
 	  oi.total_real_length = op.extent.total_real_length;
 	}
 	ctx->delta_stats.num_wr++;
@@ -1680,6 +1690,8 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	newop.op.extent.length = op.extent.length;
 	newop.op.extent.truncate_seq = oi.truncate_seq;
 	newop.op.extent.total_real_length = op.extent.total_real_length;
+	dout(20) << "append total_real_length = "
+		<< newop.op.extent.total_real_length << dendl;
 	newop.indata = osd_op.indata;
 	result = do_osd_ops(ctx, nops);
 	osd_op.outdata.claim(newop.outdata);
