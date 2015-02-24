@@ -982,9 +982,16 @@ bool Journaler::try_read_entry(bufferlist& bl)
 
 void Journaler::wait_for_readable(Context *onreadable)
 {
-  ldout(cct, 10) << "wait_for_readable at " << read_pos << " onreadable " << onreadable << dendl;
-  assert(!_is_readable());
   assert(on_readable == 0);
+	// XXX what about locking with this race ??? mdw 20150224
+  if (_is_readable()) {	// maybe prefetch won the race
+      ldout(cct, 10) << "wait_for_readable at " << read_pos
+	<< " onreadable " << onreadable << " already readable" << dendl;
+      onreadable->complete(0);
+      return;
+  }
+  ldout(cct, 10) << "wait_for_readable at " << read_pos
+	<< " onreadable " << onreadable << " waiting" << dendl;
   on_readable = onreadable;
 }
 
