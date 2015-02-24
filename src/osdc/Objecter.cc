@@ -1916,7 +1916,7 @@ namespace OSDC {
       ++subop.parent.commits; // Don't double count acks
     }
 
-    if (subop.parent.rc != 0)
+    if (subop.parent.rc == 0)
       subop.parent.rc = rc;
 
     subop.done = true;
