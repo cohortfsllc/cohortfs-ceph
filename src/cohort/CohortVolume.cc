@@ -189,8 +189,9 @@ void CohortVolume::StripulatedOp::add_data_range(const uint64_t off,
   uint64_t actual_len = len;
   uint64_t total_real_length = off + len;
   assert(off % stripe_size == 0);
-  if (len % stripe_size)
-    actual_len += stripe_size - ((off + len % stripe_size));
+  uint64_t resid = (off + len) % stripe_size;
+  if (resid)
+    actual_len += (stripe_size - resid);
 
   for (auto &o : ops) {
     o.back().op.extent.offset = off / pl.get_data_chunk_count();
@@ -265,8 +266,9 @@ void CohortVolume::StripulatedOp::read(uint64_t off, uint64_t len,
     pl.get_data_chunk_count();
   uint64_t actual_len = len;
   assert(off % stripe_size == 0);
-  if (len % stripe_size)
-    actual_len += stripe_size - ((off + len % stripe_size));
+  uint64_t resid = (off + len) % stripe_size;
+  if (resid)
+    actual_len += (stripe_size - resid);
   C_MultiRead* mr = new C_MultiRead(pl, off, bl, rval, ctx);
   C_GatherBuilder gather;
 
