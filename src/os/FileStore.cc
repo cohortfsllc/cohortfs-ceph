@@ -2370,7 +2370,8 @@ int FileStore::read(
 {
   int got;
 
-  dout(15) << "read " << cid << "/" << obj << " " << offset << "~" << len << dendl;
+  dout(15) << "read " << cid << "/" << obj << " " << offset << "~" << len
+	   << dendl;
 
   FDRef fd;
   int r = lfn_open(cid, obj, false, &fd);
@@ -2393,10 +2394,19 @@ int FileStore::read(
     len = st.st_size;
   }
 
-  bufferptr bptr(len);	// prealloc space for entire read
+  bufferptr bptr;
+  try {
+    bptr = bufferptr(len);	// prealloc space for entire read
+  } catch (std::bad_alloc&e ) {
+    derr << "FileStore::read(" << cid << "/" << obj << ") cannot allocate "
+	<< len << " bytes" << dendl;
+    lfn_close(fd);
+    return -ENOMEM;
+  }
   got = safe_pread(**fd, bptr.c_str(), len, offset);
   if (got < 0) {
-    dout(10) << "FileStore::read(" << cid << "/" << obj << ") pread error: " << cpp_strerror(got) << dendl;
+    derr << "FileStore::read(" << cid << "/" << obj << ") pread error: "
+	 << cpp_strerror(got) << dendl;
     lfn_close(fd);
     assert(allow_eio || !m_filestore_fail_eio || got != -EIO);
     return got;
