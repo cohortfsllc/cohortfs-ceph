@@ -188,7 +188,6 @@ void CohortVolume::StripulatedOp::add_data_range(const uint64_t off,
     pl.get_data_chunk_count();
   uint64_t actual_len = len;
   uint64_t total_real_length = off + len;
-  assert(off % stripe_size == 0);
   uint64_t resid = (off + len) % stripe_size;
   if (resid)
     actual_len += (stripe_size - resid);
@@ -265,7 +264,6 @@ void CohortVolume::StripulatedOp::read(uint64_t off, uint64_t len,
   const uint32_t stripe_size = pl.get_stripe_unit() *
     pl.get_data_chunk_count();
   uint64_t actual_len = len;
-  assert(off % stripe_size == 0);
   uint64_t resid = (off + len) % stripe_size;
   if (resid)
     actual_len += (stripe_size - resid);
