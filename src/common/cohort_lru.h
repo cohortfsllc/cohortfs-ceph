@@ -250,6 +250,7 @@ namespace cohort {
       static constexpr uint32_t FLAG_UNLOCK_ON_MISS = 0x0004;
 
       typedef T value_type;
+      typedef TTree container_type;
       typedef typename TTree::iterator iterator;
       typedef std::pair<iterator, bool> check_result;
       typedef typename TTree::insert_commit_data insert_commit_data;
