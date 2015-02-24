@@ -112,9 +112,9 @@ public:
 
   struct MemCollection : public ObjectStore::Collection {
     map<string,bufferptr> xattr;
-    RWLock lock;   ///< for object_{map,hash}
+    RWLock attr_lock;   ///< for collection attrs
 
-    // NOTE: The lock only needs to protect the obj_cache, not the
+    // NOTE: This lock now protects collection attrs, not objects nor
     // contents of individual objects.	The osd is already sequencing
     // reads and writes, so we will never see them concurrently at this
     // level.

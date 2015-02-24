@@ -438,7 +438,7 @@ int MemStore::collection_getattr(CollectionHandle ch, const char *name,
   dout(10) << __func__ << " " << ch->get_cid() << " " << name << dendl;
 
   MemCollection* c = static_cast<MemCollection*>(ch);
-  RWLock::RLocker lc(c->lock);
+  RWLock::RLocker lc(c->attr_lock);
 
   if (!c->xattr.count(name))
     return -ENOENT;
@@ -455,8 +455,8 @@ int MemStore::collection_getattr(CollectionHandle ch, const char *name,
   dout(10) << __func__ << " " << ch->get_cid() << " " << name << dendl;
 
   MemCollection* c = static_cast<MemCollection*>(ch);
-  RWLock::RLocker l(c->lock);
-  
+
+  RWLock::RLocker l(c->attr_lock);
   if (!c->xattr.count(name))
     return -ENOENT;
   bl.clear();
@@ -470,8 +470,8 @@ int MemStore::collection_getattrs(CollectionHandle ch,
   dout(10) << __func__ << " " << ch->get_cid() << dendl;
 
   MemCollection* c = static_cast<MemCollection*>(ch);
-  RWLock::RLocker l(c->lock);
 
+  RWLock::RLocker l(c->attr_lock);
   aset = c->xattr;
   return 0;
 }
@@ -481,8 +481,6 @@ bool MemStore::collection_empty(CollectionHandle ch)
   dout(10) << __func__ << " " << ch->get_cid() << dendl;
 
   MemCollection* c = static_cast<MemCollection*>(ch);
-  RWLock::RLocker l(c->lock);
-
   for (int part_ix = 0; part_ix < c->obj_cache.n_part; ++part_ix) {
     ObjCache::Partition& p = c->obj_cache.get(part_ix);
     ObjCache::unique_lock lk(p.lock);
@@ -490,7 +488,6 @@ bool MemStore::collection_empty(CollectionHandle ch)
       return false;
     }
   }
-
   return true;
 }
 
@@ -584,7 +581,6 @@ int MemStore::collection_list_partial2(CollectionHandle ch,
   } /* partitions */
   return 0;
 }
-
 
 int MemStore::collection_list_range(CollectionHandle ch,
 				    hobject_t start, hobject_t end,
@@ -1324,8 +1320,6 @@ int MemStore::_destroy_collection(MemCollection* c)
   if (cp == coll_map.end())
     return -ENOENT;
   {
-    RWLock::RLocker l2(cp->second->lock);
-    /* POOPY */
     if (!collection_empty(cp->second))
       return -ENOTEMPTY; // XXXX does this prevent destruction in general?
   }
@@ -1338,8 +1332,8 @@ int MemStore::_collection_setattr(MemCollection* c, const char *name,
 				  const void *value, size_t size)
 {
   dout(10) << __func__ << " " << c->get_cid() << " " << name << dendl;
-  
-  RWLock::WLocker l(c->lock);
+
+  RWLock::WLocker l(c->attr_lock);
   c->xattr[name] = bufferptr((const char *)value, size);
   return 0;
 }
@@ -1349,7 +1343,7 @@ int MemStore::_collection_setattrs(MemCollection* c,
 {
   dout(10) << __func__ << " " << c->get_cid() << dendl;
 
-  RWLock::WLocker l(c->lock);
+  RWLock::WLocker l(c->attr_lock);
   for (map<string,bufferptr>::const_iterator p = aset.begin();
        p != aset.end();
        ++p) {
@@ -1362,7 +1356,7 @@ int MemStore::_collection_rmattr(MemCollection* c, const char *name)
 {
   dout(10) << __func__ << " " << c->get_cid() << " " << name << dendl;
 
-  RWLock::WLocker l(c->lock);
+  RWLock::WLocker l(c->attr_lock);
   if (c->xattr.count(name) == 0) // XXX can't we just erase?  nothrow?
     return -ENODATA;
   c->xattr.erase(name);
