@@ -309,6 +309,8 @@ namespace cohort {
 	Latch lat;
 	uint32_t slot;
 	lat.p = &(partition_of_scalar(hk));
+ 	std::cout << "FTW partition of scalar " << hk << " " << lat.p
+		  << std::endl;
 	lat.lock = &lat.p->lock;
 	lat.lock->lock();
 	if (CSZ) { /* template specialize? */
@@ -341,6 +343,8 @@ namespace cohort {
 	uint32_t slot;
 	T* v;
 	lat.p = &(partition_of_scalar(hk));
+ 	std::cout << "FTW partition of scalar " << hk << " " << lat.p
+		  << std::endl;
 	lat.lock = &lat.p->lock;
 	if (flags & FLAG_LOCK)
 	  lat.lock->lock();
