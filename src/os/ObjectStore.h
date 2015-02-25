@@ -108,7 +108,7 @@ public:
     {
       // for internal ordering
       bool operator()(const Object& lhs,  const Object& rhs) const
-	{  return lhs.oid < rhs.oid; }
+      {  return lhs.oid < rhs.oid; }
 
       // for external search by hoid_t
       bool operator()(const hoid_t& oid, const Object& o) const
