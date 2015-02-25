@@ -121,51 +121,31 @@ public:
 
     ObjectRef get_object(hobject_t oid) {
       /* TODO:  fix after rebirth of hobject_t */
-      uint64_t hk = XXH64(oid.oid.name.c_str(), oid.oid.name.size(), 667);
+      uint64_t hk = XXH64(oid.oid.name.c_str(), oid.oid.name.size(),
+			  667);
       std::tuple<uint64_t, const hobject_t&> k(hk, oid);
       Object* o =
-	static_cast<Object*>(obj_cache.find(hk, k, ObjCache::FLAG_NONE));
-      if (! o) {
-	std::cout << "FTW cant find object for oid " << oid
-		  << " (" << oid.oid.name << " hk " << hk << ")" << std::endl;
-      }
+	static_cast<Object*>(obj_cache.find(hk, k,
+					    ObjCache::FLAG_NONE));
       return o;
     }
 
     ObjectRef get_or_create_object(hobject_t oid) {
       /* TODO:  fix after rebirth of hobject_t */
-      uint64_t hk = XXH64(oid.oid.name.c_str(), oid.oid.name.size(), 667);
+      uint64_t hk = XXH64(oid.oid.name.c_str(), oid.oid.name.size(),
+			  667);
       std::tuple<uint64_t, const hobject_t&> k(hk, oid);
       Object::ObjCache::Latch lat;
-      std::cout << "FTW try-inserting for oid " << oid
-		<< " (" << oid.oid.name << " hk " << hk << ")" << std::endl;
       Object* o =
 	static_cast<Object*>(obj_cache.find_latch(hk, k, lat,
-						  ObjCache::FLAG_LOCK));
+					      ObjCache::FLAG_LOCK));
       if (!o) {
 	o = new Object(oid, hk);
 	intrusive_ptr_add_ref(o);
 	obj_cache.insert_latched(o, lat, ObjCache::FLAG_UNLOCK);
-
-	{
-	  Object* o2 =
-	    static_cast<Object*>(obj_cache.find(hk, k, ObjCache::FLAG_LOCK));
-	  if (! o2) {
-	    std::cout << "FTW o2 cant find object for oid " << oid
-		      << " (" << oid.oid.name << " hk " << hk << ")"
-		      << std::endl;
-	  }
-	  o2 =
-	    static_cast<Object*>(obj_cache.find_latch(hk, k, lat,
-						      ObjCache::FLAG_LOCK|ObjCache::FLAG_UNLOCK));
-	  if (! o2) {
-	    std::cout << "FTW o2 cant find object for oid " << oid
-		      << " (" << oid.oid.name << " hk " << hk << ")"
-		      << std::endl;
-	  }
-	}
       } else
 	lat.lock->unlock();
+
       return o;
     }
 
