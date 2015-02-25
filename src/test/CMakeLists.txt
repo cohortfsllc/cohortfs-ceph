@@ -1771,3 +1771,8 @@ endif(HAVE_LTTNG)
 add_executable(test_threadpool test_threadpool.cc)
 target_link_libraries(test_threadpool PRIVATE global ${UNITTEST_LIBS})
 set_target_properties(test_threadpool PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
+
+# test_cohort_lru
+add_executable(test_cohort_lru test_cohort_lru.cc)
+target_link_libraries(test_cohort_lru PRIVATE global ${UNITTEST_LIBS})
+set_target_properties(test_cohort_lru PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
