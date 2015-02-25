@@ -508,6 +508,21 @@ int MemStore::collection_list(CollectionHandle ch, vector<hoid_t>& vo)
   return 0;
 }
 
+MemStore::MemCollection::~MemCollection()
+{
+  ObjectStore::Object::ObjCache::iterator it, eit;;
+  for (int part_ix = 0; part_ix < obj_cache.n_part; ++part_ix) {
+    ObjCache::Partition& p = obj_cache.get(part_ix);
+    ObjCache::unique_lock lk(p.lock);
+    while (p.tr.size() > 0) {
+      it = p.tr.begin();
+      Object& o = static_cast<Object&>(*it);
+      p.tr.erase(it);
+      intrusive_ptr_release(&o);
+    }
+  }
+} /* ~MemCollection */
+
 int MemStore::collection_list_partial(CollectionHandle ch,
 				      hoid_t start, int min, int max,
 				      vector<hoid_t>* ls, hoid_t* next)

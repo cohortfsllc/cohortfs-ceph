@@ -56,7 +56,7 @@ public:
     friend void intrusive_ptr_release(const Object* o) {
       if (o->refcnt.fetch_sub(1, std::memory_order_release) == 1) {
 	std::atomic_thread_fence(std::memory_order_acquire);
-	delete o; // XXX Casey?
+	delete o;
       }
     }
 
@@ -131,18 +131,23 @@ public:
       Object* o =
 	static_cast<Object*>(obj_cache.find(oid.hk, oid,
 					    ObjCache::FLAG_NONE));
-      return (ObjectRef(o));
+      if (! o) {
+	std::cout << "FTW cant find object for oid " << oid
+		  << std::endl;
+      }
+      return o;
     }
 
     ObjectRef get_or_create_object(hoid_t oid) {
       Object::ObjCache::Latch lat;
-      ObjectRef o =
+      Object* o =
 	static_cast<Object*>(obj_cache.find_latch(
 				         oid.hk, oid, lat,
 					 ObjCache::FLAG_LOCK));
       if (!o) {
 	o = new Object(oid);
-	obj_cache.insert_latched(o.get(), lat, ObjCache::FLAG_UNLOCK);
+	intrusive_ptr_add_ref(o);
+	obj_cache.insert_latched(o, lat, ObjCache::FLAG_UNLOCK);
       } else
 	lat.lock->unlock();
       return o;
@@ -193,6 +198,8 @@ public:
     MemCollection(MemStore* ms, const coll_t& cid) :
       ObjectStore::Collection(ms, cid)
       {}
+
+    ~MemCollection();
   };
 
   inline MemCollection* get_slot_collection(Transaction& t, uint16_t c_ix) {
