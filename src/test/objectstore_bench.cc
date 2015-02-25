@@ -141,15 +141,6 @@ class OBS_Worker : public Thread
 
     // use a sequencer for each thread so they don't serialize each other
     ObjectStore::Sequencer seq("osbench worker");
-
-    {
-      ObjectStore::Transaction t;
-      auto cix = t.push_col(ch);
-      auto oix = t.push_oid(oid);
-      t.touch(cix, oix);
-      int r = fs->apply_transaction(t);
-      assert(r == 0);
-    }
     oh = fs->get_object(ch, oid);
     assert(oh);
 
@@ -294,9 +285,25 @@ int main(int argc, const char *argv[])
       stringstream oss;
       oss << "osbench-thread-" << i;
       oids[i] = hoid_t(oid_t(oss.str()));
+
+      ObjectStore::Transaction t;
+      auto cix = t.push_col(ch);
+      auto oix = t.push_oid(oids[i]);
+      t.touch(cix, oix);
+      int r = fs->apply_transaction(t);
+      assert(r == 0);
     }
   } else {
-    oids.push_back(hoid_t(oid_t("osbench")));
+    hoid_t oid(oid_t("osbench"));
+
+    ObjectStore::Transaction t;
+    auto cix = t.push_col(ch);
+    auto oix = t.push_oid(oid);
+    t.touch(cix, oix);
+    int r = fs->apply_transaction(t);
+    assert(r == 0);
+
+    oids.push_back(oid);
   }
 
   std::vector<OBS_Worker> workers(n_threads);
@@ -314,7 +321,17 @@ int main(int argc, const char *argv[])
   auto t2 = std::chrono::high_resolution_clock::now();
   workers.clear();
 
-  // remove the object
+  using std::chrono::duration_cast;
+  using std::chrono::microseconds;
+  auto duration = duration_cast<microseconds>(t2 - t1);
+  byte_units total = size * repeats * n_threads;
+  byte_units rate = (1000000LL * total) / duration.count();
+  size_t iops = (1000000LL * total / block_size) / duration.count();
+  dout(0) << "Wrote " << total << " in "
+      << duration.count() << "us, at a rate of " << rate << "/s and "
+      << iops << " iops" << dendl;
+
+  // remove the objects
   ObjectStore::Transaction t;
   uint16_t c_ix, o_ix;
   c_ix = t.push_col(ch);
@@ -328,16 +345,5 @@ int main(int argc, const char *argv[])
   fs->close_collection(ch);
   fs->umount();
   delete fs;
-
-  using std::chrono::duration_cast;
-  using std::chrono::microseconds;
-  auto duration = duration_cast<microseconds>(t2 - t1);
-  byte_units total = size * repeats * n_threads;
-  byte_units rate = (1000000LL * total) / duration.count();
-  size_t iops = (1000000LL * total / block_size) / duration.count();
-  dout(0) << "Wrote " << total << " in "
-      << duration.count() << "us, at a rate of " << rate << "/s and "
-      << iops << " iops" << dendl;
-
   return 0;
 }
