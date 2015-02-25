@@ -22,6 +22,7 @@
 #include <atomic>
 #include <vector>
 #include <algorithm>
+#include <iostream>
 #include "common/likely.h"
 
 #ifndef CACHE_LINE_SIZE
