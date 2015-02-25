@@ -52,7 +52,7 @@ public:
     friend void intrusive_ptr_release(const Object* o) {
       if (o->refcnt.fetch_sub(1, std::memory_order_release) == 1) {
 	std::atomic_thread_fence(std::memory_order_acquire);
-	delete o; // XXX Casey?
+	delete o;
       }
     }
 
@@ -125,7 +125,11 @@ public:
       std::tuple<uint64_t, const hobject_t&> k(hk, oid);
       Object* o =
 	static_cast<Object*>(obj_cache.find(hk, k, ObjCache::FLAG_NONE));
-      return (ObjectRef(o));
+      if (! o) {
+	std::cout << "FTW cant find object for oid " << oid
+		  << " (" << oid.oid.name << " hk " << hk << ")" << std::endl;
+      }
+      return o;
     }
 
     ObjectRef get_or_create_object(hobject_t oid) {
@@ -133,12 +137,33 @@ public:
       uint64_t hk = XXH64(oid.oid.name.c_str(), oid.oid.name.size(), 667);
       std::tuple<uint64_t, const hobject_t&> k(hk, oid);
       Object::ObjCache::Latch lat;
-      ObjectRef o =
+      std::cout << "FTW try-inserting for oid " << oid
+		<< " (" << oid.oid.name << " hk " << hk << ")" << std::endl;
+      Object* o =
 	static_cast<Object*>(obj_cache.find_latch(hk, k, lat,
 						  ObjCache::FLAG_LOCK));
       if (!o) {
 	o = new Object(oid);
-	obj_cache.insert_latched(o.get(), lat, ObjCache::FLAG_UNLOCK);
+	intrusive_ptr_add_ref(o);
+	obj_cache.insert_latched(o, lat, ObjCache::FLAG_UNLOCK);
+
+	{
+	  Object* o2 =
+	    static_cast<Object*>(obj_cache.find(hk, k, ObjCache::FLAG_LOCK));
+	  if (! o2) {
+	    std::cout << "FTW o2 cant find object for oid " << oid
+		      << " (" << oid.oid.name << " hk " << hk << ")"
+		      << std::endl;
+	  }
+	  o2 =
+	    static_cast<Object*>(obj_cache.find_latch(hk, k, lat,
+						      ObjCache::FLAG_LOCK|ObjCache::FLAG_UNLOCK));
+	  if (! o2) {
+	    std::cout << "FTW o2 cant find object for oid " << oid
+		      << " (" << oid.oid.name << " hk " << hk << ")"
+		      << std::endl;
+	  }
+	}
       } else
 	lat.lock->unlock();
       return o;
@@ -190,6 +215,8 @@ public:
     MemCollection(MemStore* ms, const coll_t &cid) :
       ObjectStore::Collection(ms, cid)
       {}
+
+    ~MemCollection();
   };
 
   inline MemCollection* get_slot_collection(Transaction& t, uint16_t c_ix) {
