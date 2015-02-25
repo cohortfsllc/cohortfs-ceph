@@ -227,6 +227,24 @@ TEST(CohortLRU, T5_REMOVE) {
     T5* o5a = T5Cache.find(o5->hk, k, TObject<5>::ObjCache::FLAG_LOCK);
     ASSERT_EQ(o5a, nullptr);
   }
+  /* delete removed */
+  while (del5.size() > 0) {
+    T5* o5 = del5.back();
+    del5.pop_back();
+    delete o5;
+  }
+}
+
+TEST(CohortLRU, ALL_DRAIN) {
+  /* clear vecs */
+  vt3.clear();
+  vt5.clear();
+
+  /* remove and dispose */
+  T3Cache.drain([](T3* o3){ delete o3; },
+    TObject<3>::ObjCache::FLAG_LOCK);
+  T5Cache.drain([](T5* o5){ delete o5; },
+    TObject<5>::ObjCache::FLAG_LOCK);
 }
 
 int main(int argc, char *argv[])
