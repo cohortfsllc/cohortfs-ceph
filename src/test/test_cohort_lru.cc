@@ -175,7 +175,7 @@ TEST(CohortLRU, T3_FIND_ALL) {
  for (unsigned int ix = 0; ix < vt3.size(); ++ix) {
     T3* o3 = vt3[ix];
     std::tuple<uint64_t, const hobject_t&> k(o3->hk, o3->oid);
-    T3* o3a = T3Cache.find(o3->hk, k, TObject<3>::ObjCache::FLAG_NONE);
+    T3* o3a = T3Cache.find(o3->hk, k, TObject<3>::ObjCache::FLAG_LOCK);
     ASSERT_EQ(o3, o3a);
  }
 }
@@ -196,7 +196,7 @@ TEST(CohortLRU, T5_FIND_ALL) {
  for (unsigned int ix = 0; ix < vt5.size(); ++ix) {
     T5* o5 = vt5[ix];
     std::tuple<uint64_t, const hobject_t&> k(o5->hk, o5->oid);
-    T5* o5a = T5Cache.find(o5->hk, k, TObject<5>::ObjCache::FLAG_NONE);
+    T5* o5a = T5Cache.find(o5->hk, k, TObject<5>::ObjCache::FLAG_LOCK);
     ASSERT_EQ(o5, o5a);
  }
 }
@@ -211,6 +211,22 @@ TEST(CohortLRU, T5_FIND_LATCH_ALL) {
 				 TObject<5>::ObjCache::FLAG_UNLOCK);
     ASSERT_EQ(o5, o5a);
  }
+}
+
+TEST(CohortLRU, T5_REMOVE) {
+  vector<T5*> del5;
+  for (unsigned int ix = 0; ix < vt5.size(); ix += 3) {
+    T5* o5 = vt5[ix];
+    T5Cache.remove(o5->hk, o5, TObject<5>::ObjCache::FLAG_LOCK);
+    del5.push_back(o5);
+  }
+  /* find none of del5 */
+  for (unsigned int ix = 0; ix < del5.size(); ++ix) {
+    T5* o5 = del5[ix];
+    std::tuple<uint64_t, const hobject_t&> k(o5->hk, o5->oid);
+    T5* o5a = T5Cache.find(o5->hk, k, TObject<5>::ObjCache::FLAG_LOCK);
+    ASSERT_EQ(o5a, nullptr);
+  }
 }
 
 int main(int argc, char *argv[])
