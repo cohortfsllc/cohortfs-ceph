@@ -96,6 +96,7 @@ target_link_libraries(test_keys mon global ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
 set(dencoder_srcs
   encoding/ceph_dencoder.cc
   ${CMAKE_SOURCE_DIR}/src/common/TextTable.cc
+  $<TARGET_OBJECTS:heap_profiler_objs>
   )
 if(${WITH_RADOSGW})
   list(APPEND dencoder_srcs
