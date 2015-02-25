@@ -35,7 +35,8 @@ const std::string Volume::typestrings[] = {
   "CohortVol", "NotAVolType"
 };
 
-VolumeRef CohortVolFactory(bufferlist::iterator& bl, uint8_t v, vol_type t);
+std::shared_ptr<Volume> CohortVolFactory(bufferlist::iterator& bl,
+					     uint8_t v, vol_type t);
 
 const Volume::factory Volume::factories[] = {
   CohortVolFactory, NULL

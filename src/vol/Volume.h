@@ -40,7 +40,7 @@ enum vol_type {
 };
 
 class Volume;
-typedef std::shared_ptr<Volume> VolumeRef;
+typedef std::shared_ptr<const Volume> VolumeRef;
 
 inline ostream& operator<<(ostream& out, const Volume& vol);
 class Volume
@@ -80,7 +80,7 @@ private:
 
 protected:
   boost::uuids::uuid placer_id;
-  bool inited;
+  mutable bool inited;
 
   virtual void decode_payload(bufferlist::iterator& bl, uint8_t v);
 
@@ -107,7 +107,7 @@ public:
   virtual bool valid(std::stringstream& ss) const;
   static const string& type_string(vol_type type);
   static VolumeRef decode_volume(bufferlist::iterator& bl);
-  virtual void init(OSDMap *map) = 0;;
+  virtual void init(OSDMap *map) const = 0;
   /* Each child class should call its parent's dump method as it's first
      action. */
   virtual void dump(Formatter *f) const;
@@ -126,9 +126,8 @@ public:
 
   // Attach performs post-decode initialization of the volume. If you
   // call attach, you are guaranteed that the following functions will
-  // execute without error. Otherwise, you have to check the return
-  // values. This function returns non-zero on error.
-  virtual int attach(CephContext *cct) {
+  // execute, otherwise they will abort the program.
+  virtual int attach(CephContext *cct) const {
     return getPlacer()->attach(cct);
   };
   // This function exists, at present, for the use of the monitor at
@@ -138,15 +137,15 @@ public:
     return getPlacer()->detach();
   };
   // Returns negative POSIX error code on error.
-  virtual ssize_t place(const oid& object,
-			const OSDMap& map,
-			const std::function<void(int)>& f) const {
+  virtual size_t place(const oid& object,
+		       const OSDMap& map,
+		       const std::function<void(int)>& f) const {
     return getPlacer()->place(object, map, f);
   }
 
   virtual std::unique_ptr<ObjOp> op() const = 0;
   // Returns negative POSIX error code on error.
-  virtual ssize_t op_size() const = 0;
+  virtual size_t op_size() const = 0;
   // Returns minimum number of subops that need to be placed to continue
   virtual uint32_t quorum() const = 0;
 };

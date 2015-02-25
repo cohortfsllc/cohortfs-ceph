@@ -46,7 +46,7 @@ int CohortVolume::update(const shared_ptr<const Volume>& v)
   return 0;
 }
 
-void CohortVolume::init(OSDMap *map)
+void CohortVolume::init(OSDMap *map) const
 {
   inited = map->find_by_uuid(placer_id, placer);
 }

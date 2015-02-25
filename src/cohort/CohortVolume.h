@@ -25,7 +25,7 @@ class CohortVolume : public Volume
   friend struct C_MultiRead;
 
 protected:
-  PlacerRef placer;
+  mutable PlacerRef placer;
   CohortVolume(vol_type t)
     : Volume(t) {}
   virtual PlacerRef getPlacer() const {
@@ -38,7 +38,7 @@ protected:
 
   static const uint64_t one_op;
 
-  virtual ssize_t op_size() const {
+  virtual size_t op_size() const {
 	  return placer->op_size();
   }
 
@@ -48,7 +48,7 @@ protected:
 
   virtual int update(const std::shared_ptr<const Volume>& v);
 
-  virtual void init(OSDMap *map);
+  virtual void init(OSDMap *map) const;
   virtual void dump(Formatter *f) const;
   virtual void decode_payload(bufferlist::iterator& bl, uint8_t v);
   virtual void encode(bufferlist& bl) const;
