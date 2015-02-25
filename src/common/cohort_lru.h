@@ -308,14 +308,17 @@ namespace cohort {
 	Latch lat;
 	uint32_t slot;
 	lat.p = &(partition_of_scalar(hk));
-	lat.lock = &lat.p->lock;
-	lat.lock->lock();
+	if (flags & FLAG_LOCK) {
+	  lat.lock = &lat.p->lock;
+	  lat.lock->lock();
+	}
 	if (CSZ) { /* template specialize? */
 	  slot = hk % CSZ;
 	  v = lat.p->cache[slot];
 	  if (v) {
 	    if (CEQ()(*v, k)) {
-	      lat.lock->unlock();
+	      if (flags & FLAG_LOCK)
+		lat.lock->unlock();
 	      return v;
 	    }
 	    v = nullptr;
@@ -331,7 +334,8 @@ namespace cohort {
 	    lat.p->cache[slot] = v;
 	  }
 	}
-	lat.lock->unlock();
+	if (flags & FLAG_LOCK)
+	  lat.lock->unlock();
 	return v;
       } /* find */
 
