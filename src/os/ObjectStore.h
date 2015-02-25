@@ -148,19 +148,24 @@ public:
     {
       // for internal ordering
       bool operator()(const Object& lhs,  const Object& rhs) const
-	{
-	  return ((lhs.hk < rhs.hk) || (lhs.oid < rhs.oid));
-	}
+      {
+	return ((lhs.hk < rhs.hk) ||
+		((lhs.hk == rhs.hk) && (lhs.oid < rhs.oid)));
+      }
 
       bool operator()(const ObjKeyType k, const Object& o) const
-	{
-	  return ((std::get<0>(k) < o.hk) || (std::get<1>(k) < o.oid));
-	}
+      {
+	return ((std::get<0>(k) < o.hk) ||
+		((std::get<0>(k) == o.hk) &&
+		 (std::get<1>(k) < o.oid)));
+      }
 
       bool operator()(const Object& o, const ObjKeyType k) const
-	{
-	  return ((o.hk < std::get<0>(k)) || (o.oid < std::get<1>(k)));
-	}
+      {
+	return ((o.hk < std::get<0>(k)) ||
+		((o.hk == std::get<0>(k)) &&
+		 (o.oid < std::get<1>(k))));
+      }
     };
 
     struct OidEQ
