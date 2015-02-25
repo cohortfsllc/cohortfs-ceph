@@ -44,22 +44,22 @@ struct oid {
   uint32_t stride;
 
   oid() : type(chunktype::entirety) {}
-  oid(const std::string& s,
-      chunktype type = chunktype::entirety,
-      uint32_t stride = 0) :
-    name(s), type(type), stride(stride) {
+  oid(const std::string& n,
+      chunktype t = chunktype::entirety,
+      uint32_t s = 0) :
+    name(n), type(t), stride(s) {
     assert(!(type == chunktype::entirety) || (stride == 0));
   }
-  oid(std::string&& s,
+  oid(std::string&& n,
       chunktype type = chunktype::entirety,
       uint32_t stride = 0) :
-    name(s), type(type), stride(stride) {
+    name(n), type(type), stride(stride) {
     assert(!(type == chunktype::entirety) || (stride == 0));
   }
-  oid(const char* s,
-      chunktype type = chunktype::entirety,
-      uint32_t stride = 0) :
-    name(s), type(type), stride(stride) {
+  oid(const char* n,
+      chunktype t = chunktype::entirety,
+      uint32_t s = 0) :
+    name(n), type(t), stride(s) {
     assert(!(type == chunktype::entirety) || (stride == 0));
   }
   oid(const oid& o) {
@@ -68,19 +68,16 @@ struct oid {
     stride = o.stride;
   }
   oid(const oid& o,
-      chunktype type,
-      uint32_t stride) : oid(o) {
-    type = o.type;
-    stride = o.stride;
+      chunktype t,
+      uint32_t s) : name(o.name), type(t), stride(s) {
     assert(!(type == chunktype::entirety) || (stride == 0));
   }
   oid(const oid& o,
-      chunktype type) : oid(o) {
-    type = o.type;
+      chunktype t) : name(o.name), type(t), stride(o.stride) {
     assert(!(type == chunktype::entirety) || (stride == 0));
   }
   oid(const oid& o,
-      uint32_t stride) : oid(o) {
+      uint32_t s) : name(o.name), type(o.type), stride(s) {
     stride = o.stride;
     assert(!(type == chunktype::entirety) || (stride == 0));
   }
@@ -89,16 +86,15 @@ struct oid {
     type = o.type;
     stride = o.stride;
   }
-  oid(oid&& o, chunktype type, uint32_t stride) : oid(o) {
-    type = o.type;
-    stride = o.stride;
+  oid(oid&& o, chunktype t, uint32_t s) : type(t), stride(s) {
+    std::swap(name, o.name);
   }
-  oid(oid&& o, chunktype type) : oid(o) {
-    type = o.type;
+  oid(oid&& o, chunktype t) : type(t), stride(o.stride) {
+    std::swap(name, o.name);
     assert(!(type == chunktype::entirety) || (stride == 0));
   }
-  oid(oid&& o, uint32_t stride) : oid(o) {
-    stride = o.stride;
+  oid(oid&& o, uint32_t s) : type(o.type), stride(s) {
+    std::swap(name, o.name);
     assert(!(type == chunktype::entirety) || (stride == 0));
   }
   oid(const char *in, char sep,
