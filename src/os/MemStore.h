@@ -41,8 +41,8 @@ public:
     bufferlist omap_header;
     map<string,bufferlist> omap;
 
-    Object(const hobject_t& oid) :
-      ObjectStore::Object(oid), refcnt(0), data_len(0)
+    Object(const hobject_t& oid, uint64_t _hk) :
+      ObjectStore::Object(oid, _hk), refcnt(0), data_len(0)
       {}
 
     friend void intrusive_ptr_add_ref(const Object* o) {
@@ -143,7 +143,7 @@ public:
 	static_cast<Object*>(obj_cache.find_latch(hk, k, lat,
 						  ObjCache::FLAG_LOCK));
       if (!o) {
-	o = new Object(oid);
+	o = new Object(oid, hk);
 	intrusive_ptr_add_ref(o);
 	obj_cache.insert_latched(o, lat, ObjCache::FLAG_UNLOCK);
 
@@ -204,7 +204,7 @@ public:
 	::decode(k, p);
 	/* XXX move on re-birth of hobject_t w/hk */
 	uint64_t hk = XXH64(k.oid.name.c_str(), k.oid.name.size(), 667);
-	ObjectRef o(new Object(k));
+	ObjectRef o(new Object(k, hk));
 	o->decode(p);
 	obj_cache.insert(hk, o.get(), ObjCache::FLAG_NONE);
       }

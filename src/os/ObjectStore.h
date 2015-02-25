@@ -120,9 +120,13 @@ public:
 
   public:
     explicit Object(const hobject_t& _oid) : oid(_oid), hk(0)
-      {}
+      {
+	/* XXXX do not use!! */
+	abort();
+      }
 
-    explicit Object(const hobject_t& _oid, uint64_t _hk) : oid(_oid), hk(_hk)
+    explicit Object(const hobject_t& _oid, uint64_t _hk)
+      : oid(_oid), hk(_hk)
       {}
 
     virtual void otrace() {};
