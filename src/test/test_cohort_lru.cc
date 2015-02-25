@@ -58,16 +58,19 @@ namespace {
       // for internal ordering
       bool operator()(const TObject& lhs,  const TObject& rhs) const
       {
+	//return ((lhs.oid < rhs.oid));
 	return ((lhs.hk < rhs.hk) || (lhs.oid < rhs.oid));
       }
 
       bool operator()(const ObjKeyType k, const TObject& o) const
       {
+	//return ((std::get<1>(k) < o.oid));
 	return ((std::get<0>(k) < o.hk) || (std::get<1>(k) < o.oid));
       }
 
       bool operator()(const TObject& o, const ObjKeyType k) const
       {
+	//return ((o.oid < std::get<1>(k)));
 	return ((o.hk < std::get<0>(k)) || (o.oid < std::get<1>(k)));
       }
     };
@@ -109,7 +112,7 @@ namespace {
   TObject<3>::ObjCache T3Cache;
   TObject<5>::ObjCache T5Cache;
 
-  static constexpr int32_t n_create = 1024;
+  static constexpr int32_t n_create = 5;
 
   vector<T3*> vt3;
   vector<T5*> vt5;
@@ -119,8 +122,8 @@ namespace {
 TEST(CohortLRU, T3_NEW)
 {
   for (int ix = 0; ix < n_create; ++ix) {
-    string name = string("osbench_");
-    name += ix;
+    string name{"osbench_"};
+    name += std::to_string(ix);
     uint64_t hk = XXH64(name.c_str(), name.size(), 667);
     T3* o3 = new T3(hobject_t(name), hk);
     vt3.push_back(o3);
@@ -131,13 +134,70 @@ TEST(CohortLRU, T3_NEW)
 TEST(CohortLRU, T5_NEW)
 {
   for (int ix = 0; ix < n_create; ++ix) {
-    string name = string("osbench_");
-    name += ix;
+    string name{"osbench_"};
+    name += std::to_string(ix);
     uint64_t hk = XXH64(name.c_str(), name.size(), 667);
     T5* o5 = new T5(hobject_t(name), hk);
     vt5.push_back(o5);
   }
   ASSERT_EQ(vt5.size(), n_create);
+}
+
+TEST(CohortLRU, T3_TREEX_INSERT_CHECK) {
+  for (unsigned int ix = 0; ix < vt3.size(); ++ix) {
+    T3* o3 = vt3[ix];
+    std::tuple<uint64_t, const hobject_t&> k(o3->hk, o3->oid);
+    TObject<3>::ObjCache::Latch lat;
+    T3* o3f = T3Cache.find_latch(o3->hk, k, lat,
+				 TObject<3>::ObjCache::FLAG_LOCK);
+    ASSERT_EQ(o3f, nullptr);
+    T3Cache.insert_latched(o3, lat, TObject<3>::ObjCache::FLAG_UNLOCK);
+  }
+}
+
+TEST(CohortLRU, T5_TREEX_INSERT_CHECK) {
+  for (unsigned int ix = 0; ix < vt5.size(); ++ix) {
+    T5* o5 = vt5[ix];
+    std::tuple<uint64_t, const hobject_t&> k(o5->hk, o5->oid);
+    TObject<5>::ObjCache::Latch lat;
+    T5* o5f = T5Cache.find_latch(o5->hk, k, lat,
+				 TObject<5>::ObjCache::FLAG_LOCK);
+    ASSERT_EQ(o5f, nullptr);
+    T5Cache.insert_latched(o5, lat, TObject<5>::ObjCache::FLAG_UNLOCK);
+  }
+}
+
+TEST(CohortLRU, T3_FIND_ALL) {
+ for (unsigned int ix = 0; ix < vt3.size(); ++ix) {
+    T3* o3 = vt3[ix];
+    std::tuple<uint64_t, const hobject_t&> k(o3->hk, o3->oid);
+    T3* o3a = T3Cache.find(o3->hk, k, TObject<3>::ObjCache::FLAG_NONE);
+    if (o3 != o3a) {
+      std::cout << "BAD find name " << o3->oid << " hk " << o3->hk
+		<< " COMP " << o3a << std::endl;
+    }
+    ASSERT_EQ(o3, o3a);
+ }
+}
+
+TEST(CohortLRU, T3_FIND_LATCH_ALL) {
+ for (unsigned int ix = 0; ix < vt3.size(); ++ix) {
+    T3* o3 = vt3[ix];
+    TObject<3>::ObjCache::Latch lat;
+    std::tuple<uint64_t, const hobject_t&> k(o3->hk, o3->oid);
+    T3* o3a = T3Cache.find_latch(o3->hk, k, lat,
+				 TObject<3>::ObjCache::FLAG_NONE);
+    ASSERT_EQ(o3, o3a);
+ }
+}
+
+TEST(CohortLRU, T5_FIND_ALL) {
+ for (unsigned int ix = 0; ix < vt5.size(); ++ix) {
+    T5* o5 = vt5[ix];
+    std::tuple<uint64_t, const hobject_t&> k(o5->hk, o5->oid);
+    T5* o5a = T5Cache.find(o5->hk, k, TObject<5>::ObjCache::FLAG_NONE);
+    ASSERT_EQ(o5, o5a);
+ }
 }
 
 int main(int argc, char *argv[])
