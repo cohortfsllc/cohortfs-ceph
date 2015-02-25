@@ -170,7 +170,6 @@ TEST(CohortLRU, T5_TREEX_INSERT_CHECK) {
   }
 }
 
-
 TEST(CohortLRU, T3_FIND_ALL) {
  for (unsigned int ix = 0; ix < vt3.size(); ++ix) {
     T3* o3 = vt3[ix];
