@@ -112,7 +112,7 @@ namespace {
   TObject<3>::ObjCache T3Cache;
   TObject<5>::ObjCache T5Cache;
 
-  static constexpr int32_t n_create = 5;
+  static constexpr int32_t n_create = 6;
 
   vector<T3*> vt3;
   vector<T5*> vt5;
@@ -191,6 +191,10 @@ TEST(CohortLRU, T3_FIND_LATCH_ALL) {
     T3* o3a = T3Cache.find_latch(o3->hk, k, lat,
 				 TObject<3>::ObjCache::FLAG_LOCK|
 				 TObject<3>::ObjCache::FLAG_UNLOCK);
+    if (o3 != o3a) {
+      std::cout << "BAD find_latch name " << o3->oid << " hk "
+		<< o3->hk << " COMP " << o3a << std::endl;
+    }
     ASSERT_EQ(o3, o3a);
  }
 }

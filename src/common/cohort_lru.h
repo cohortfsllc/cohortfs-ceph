@@ -317,6 +317,7 @@ namespace cohort {
 	  slot = hk % CSZ;
 	  v = lat.p->cache[slot];
 	  if (v) {
+	    std::cout << "SLOT HIT v " << v << std::endl;
 	    if (CEQ()(*v, k)) {
 	      lat.lock->unlock();
 	      std::cout << "FTW CACHE_HIT FSObject " << (void*) v << std::endl;
@@ -352,6 +353,7 @@ namespace cohort {
 	  slot = hk % CSZ;
 	  v = lat.p->cache[slot];
 	  if (v) {
+	    std::cout << "SLOT HIT v " << v << std::endl;
 	    if (CEQ()(*v, k)) {
 	      if (flags & (FLAG_LOCK|FLAG_UNLOCK))
 		lat.lock->unlock();
