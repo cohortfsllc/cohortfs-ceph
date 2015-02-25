@@ -395,6 +395,13 @@ namespace cohort {
 	if (flags & FLAG_LOCK)
 	  p.lock.lock();
 	p.tr.erase(it);
+	if (CSZ) { /* template specialize? */
+	  uint32_t slot = hk % CSZ;
+	  T* v2 = p.cache[slot];
+	  /* we are intrusive, just compare addresses */
+	  if (v == v2)
+	    p.cache[slot] = nullptr;
+	}
 	if (flags & FLAG_LOCK)
 	  p.lock.unlock();
       } /* remove */
