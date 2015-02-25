@@ -151,10 +151,11 @@ TEST(CohortLRU, T3_TREEX_INSERT_CHECK) {
     T3* o3f = T3Cache.find_latch(o3->hk, k, lat,
 				 TObject<3>::ObjCache::FLAG_LOCK);
     ASSERT_EQ(o3f, nullptr);
+    std::cout << "FTW insert " << o3 << std::endl;
     T3Cache.insert_latched(o3, lat, TObject<3>::ObjCache::FLAG_UNLOCK);
   }
 }
-
+#if 0
 TEST(CohortLRU, T5_TREEX_INSERT_CHECK) {
   for (unsigned int ix = 0; ix < vt5.size(); ++ix) {
     T5* o5 = vt5[ix];
@@ -166,11 +167,12 @@ TEST(CohortLRU, T5_TREEX_INSERT_CHECK) {
     T5Cache.insert_latched(o5, lat, TObject<5>::ObjCache::FLAG_UNLOCK);
   }
 }
-
+#endif
 TEST(CohortLRU, T3_FIND_ALL) {
  for (unsigned int ix = 0; ix < vt3.size(); ++ix) {
     T3* o3 = vt3[ix];
     std::tuple<uint64_t, const hobject_t&> k(o3->hk, o3->oid);
+    std::cout << "FTW find " << o3 << std::endl;
     T3* o3a = T3Cache.find(o3->hk, k, TObject<3>::ObjCache::FLAG_NONE);
     if (o3 != o3a) {
       std::cout << "BAD find name " << o3->oid << " hk " << o3->hk
@@ -185,12 +187,14 @@ TEST(CohortLRU, T3_FIND_LATCH_ALL) {
     T3* o3 = vt3[ix];
     TObject<3>::ObjCache::Latch lat;
     std::tuple<uint64_t, const hobject_t&> k(o3->hk, o3->oid);
+    std::cout << "FTW find_latch " << o3 << std::endl;
     T3* o3a = T3Cache.find_latch(o3->hk, k, lat,
-				 TObject<3>::ObjCache::FLAG_NONE);
+				 TObject<3>::ObjCache::FLAG_LOCK|
+				 TObject<3>::ObjCache::FLAG_UNLOCK);
     ASSERT_EQ(o3, o3a);
  }
 }
-
+#if 0
 TEST(CohortLRU, T5_FIND_ALL) {
  for (unsigned int ix = 0; ix < vt5.size(); ++ix) {
     T5* o5 = vt5[ix];
@@ -199,7 +203,7 @@ TEST(CohortLRU, T5_FIND_ALL) {
     ASSERT_EQ(o5, o5a);
  }
 }
-
+#endif
 int main(int argc, char *argv[])
 {
   vector<const char*> args;
