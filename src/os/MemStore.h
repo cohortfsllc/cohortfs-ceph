@@ -131,10 +131,6 @@ public:
       Object* o =
 	static_cast<Object*>(obj_cache.find(oid.hk, oid,
 					    ObjCache::FLAG_NONE));
-      if (! o) {
-	std::cout << "FTW cant find object for oid " << oid
-		  << std::endl;
-      }
       return o;
     }
 
