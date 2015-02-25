@@ -196,7 +196,6 @@ namespace cohort {
 	  lane.lock.lock();
 	  refcnt = o->lru_refcnt.load();
 	  if (unlikely(refcnt == 0)) {
-	    std::cout << "FTW DELETE FSObject " << (void*) o << std::endl;
 	    Object::Queue::iterator it = Object::Queue::s_iterator_to(*o);
 	    lane.q.erase(it);
 	    delete o;
@@ -309,18 +308,14 @@ namespace cohort {
 	Latch lat;
 	uint32_t slot;
 	lat.p = &(partition_of_scalar(hk));
- 	std::cout << "FTW partition of scalar " << hk << " " << lat.p
-		  << std::endl;
 	lat.lock = &lat.p->lock;
 	lat.lock->lock();
 	if (CSZ) { /* template specialize? */
 	  slot = hk % CSZ;
 	  v = lat.p->cache[slot];
 	  if (v) {
-	    std::cout << "SLOT HIT v " << v << std::endl;
 	    if (CEQ()(*v, k)) {
 	      lat.lock->unlock();
-	      std::cout << "FTW CACHE_HIT FSObject " << (void*) v << std::endl;
 	      return v;
 	    }
 	    v = nullptr;
@@ -344,8 +339,6 @@ namespace cohort {
 	uint32_t slot;
 	T* v;
 	lat.p = &(partition_of_scalar(hk));
- 	std::cout << "FTW partition of scalar " << hk << " " << lat.p
-		  << std::endl;
 	lat.lock = &lat.p->lock;
 	if (flags & FLAG_LOCK)
 	  lat.lock->lock();
@@ -353,11 +346,9 @@ namespace cohort {
 	  slot = hk % CSZ;
 	  v = lat.p->cache[slot];
 	  if (v) {
-	    std::cout << "SLOT HIT v " << v << std::endl;
 	    if (CEQ()(*v, k)) {
 	      if (flags & (FLAG_LOCK|FLAG_UNLOCK))
 		lat.lock->unlock();
-	      std::cout << "FTW CACHE_HIT FSObject " << (void*) v << std::endl;
 	      return v;
 	    }
 	    v = nullptr;
