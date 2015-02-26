@@ -31,7 +31,7 @@
  * Tracks, throttles, and flushes outstanding IO
  */
 class WBThrottle : Thread, public md_config_obs_t {
-  oid_t clearing;
+  hoid_t clearing;
 
   /* *_limits.first is the start_flusher limit and
    * *_limits.second is the hard limit
@@ -77,9 +77,9 @@ class WBThrottle : Thread, public md_config_obs_t {
   /**
    * Flush objects in lru order
    */
-  list<oid_t> lru;
-  map<oid_t, list<oid_t>::iterator> rev_lru;
-  void remove_object(const oid_t &oid) {
+  list<hoid_t> lru;
+  map<hoid_t, list<hoid_t>::iterator> rev_lru;
+  void remove_object(const hoid_t &oid) {
     // We must hold lock here.
     auto iter = rev_lru.find(oid);
     if (iter == rev_lru.end())
@@ -88,24 +88,24 @@ class WBThrottle : Thread, public md_config_obs_t {
     lru.erase(iter->second);
     rev_lru.erase(iter);
   }
-  oid_t pop_object() {
+  hoid_t pop_object() {
     assert(!lru.empty());
-    oid_t oid(lru.front());
+    hoid_t oid(lru.front());
     lru.pop_front();
     rev_lru.erase(oid);
     return oid;
   }
-  void insert_object(const oid_t &oid) {
+  void insert_object(const hoid_t &oid) {
     assert(rev_lru.find(oid) == rev_lru.end());
     lru.push_back(oid);
     rev_lru.insert(make_pair(oid, --lru.end()));
   }
 
-  map<oid_t, pair<PendingWB, FDRef> > pending_wbs;
+  map<hoid_t, pair<PendingWB, FDRef> > pending_wbs;
 
   /// get next flush to perform
   bool get_next_should_flush(unique_lock& l,
-    boost::tuple<oid_t, FDRef, PendingWB> *next ///< [out] next to flush
+    boost::tuple<hoid_t, FDRef, PendingWB> *next ///< [out] next to flush
     ); ///< @return false if we are shutting down
 public:
   enum FS {
@@ -133,7 +133,7 @@ public:
   /// Queue wb on oid, fd taking throttle (does not block)
   void queue_wb(
     FDRef fd,		   ///< [in] FDRef to obj
-    const oid_t &oid, ///< [in] object
+    const hoid_t &oid, ///< [in] object
     uint64_t offset,	   ///< [in] offset written
     uint64_t len,	   ///< [in] length written
     bool nocache	   ///< [in] try to clear out of cache after write
@@ -143,7 +143,7 @@ public:
   void clear();
 
   /// Clear object
-  void clear_object(const oid_t &oid);
+  void clear_object(const hoid_t &oid);
 
   /// Block until there is throttle available
   void throttle();

@@ -129,16 +129,16 @@ bool DBObjectMap::check(std::ostream &out)
   return retval;
 }
 
-string DBObjectMap::hobject_key(coll_t c, const oid_t &oid)
+string DBObjectMap::hobject_key(coll_t c, const hoid_t &oid)
 {
   string out;
   append_escaped(out, c.to_str());
-  oid.append_str(out, '.', append_escaped);
+  oid.oid.append_str(out, '.', append_escaped);
   return out;
 }
 
 bool DBObjectMap::parse_hobject_key(const string &in, coll_t *c,
-				    oid_t *oid)
+				    hoid_t *oid)
 {
   string coll;
 
@@ -153,7 +153,7 @@ bool DBObjectMap::parse_hobject_key(const string &in, coll_t *c,
 
 
   try {
-    *oid = oid_t(current, '.', append_unescaped);
+    *oid = hoid_t(oid_t(current, '.', append_unescaped));
   } catch (std::invalid_argument &e) {
     return false;
   }
@@ -162,7 +162,7 @@ bool DBObjectMap::parse_hobject_key(const string &in, coll_t *c,
   return true;
 }
 
-string DBObjectMap::map_header_key(coll_t coll, const oid_t &oid)
+string DBObjectMap::map_header_key(coll_t coll, const hoid_t &oid)
 {
   return hobject_key(coll, oid);
 }
@@ -225,7 +225,7 @@ int DBObjectMap::DBObjectMapIteratorImpl::init()
 }
 
 ObjectMap::ObjectMapIterator DBObjectMap::get_iterator(
-  const oid_t &oid)
+  const hoid_t &oid)
 {
   Header header = lookup_map_header(oid);
   if (!header)
@@ -410,7 +410,7 @@ int DBObjectMap::DBObjectMapIteratorImpl::status()
   return r;
 }
 
-int DBObjectMap::set_keys(const oid_t &oid,
+int DBObjectMap::set_keys(const hoid_t &oid,
 			  const map<string, bufferlist> &set,
 			  const SequencerPosition *spos)
 {
@@ -426,7 +426,7 @@ int DBObjectMap::set_keys(const oid_t &oid,
   return db->submit_transaction(t);
 }
 
-int DBObjectMap::set_header(const oid_t &oid,
+int DBObjectMap::set_header(const hoid_t &oid,
 			    const bufferlist &bl,
 			    const SequencerPosition *spos)
 {
@@ -448,7 +448,7 @@ void DBObjectMap::_set_header(Header header, const bufferlist &bl,
   t->set(sys_prefix(header), to_set);
 }
 
-int DBObjectMap::get_header(const oid_t &oid,
+int DBObjectMap::get_header(const hoid_t &oid,
 			    bufferlist *bl)
 {
   Header header = lookup_map_header(oid);
@@ -482,7 +482,7 @@ int DBObjectMap::_get_header(Header header,
   return 0;
 }
 
-int DBObjectMap::clear(const oid_t &oid,
+int DBObjectMap::clear(const hoid_t &oid,
 		       const SequencerPosition *spos)
 {
   KeyValueDB::Transaction t = db->get_transaction();
@@ -602,7 +602,7 @@ int DBObjectMap::need_parent(DBObjectMapIterator iter)
   return 1;
 }
 
-int DBObjectMap::rm_keys(const oid_t &oid,
+int DBObjectMap::rm_keys(const hoid_t &oid,
 			 const set<string> &to_clear,
 			 const SequencerPosition *spos)
 {
@@ -676,7 +676,7 @@ int DBObjectMap::rm_keys(const oid_t &oid,
   return db->submit_transaction(t);
 }
 
-int DBObjectMap::clear_keys_header(const oid_t &oid,
+int DBObjectMap::clear_keys_header(const hoid_t &oid,
 				   const SequencerPosition *spos)
 {
   KeyValueDB::Transaction t = db->get_transaction();
@@ -712,7 +712,7 @@ int DBObjectMap::clear_keys_header(const oid_t &oid,
   return db->submit_transaction(t);
 }
 
-int DBObjectMap::get(const oid_t &oid,
+int DBObjectMap::get(const hoid_t &oid,
 		     bufferlist *_header,
 		     map<string, bufferlist> *out)
 {
@@ -729,7 +729,7 @@ int DBObjectMap::get(const oid_t &oid,
   return 0;
 }
 
-int DBObjectMap::get_keys(const oid_t &oid,
+int DBObjectMap::get_keys(const hoid_t &oid,
 			  set<string> *keys)
 {
   Header header = lookup_map_header(oid);
@@ -766,7 +766,7 @@ int DBObjectMap::scan(Header header,
   return 0;
 }
 
-int DBObjectMap::get_values(const oid_t &oid,
+int DBObjectMap::get_values(const hoid_t &oid,
 			    const set<string> &keys,
 			    map<string, bufferlist> *out)
 {
@@ -776,7 +776,7 @@ int DBObjectMap::get_values(const oid_t &oid,
   return scan(header, keys, 0, out);
 }
 
-int DBObjectMap::check_keys(const oid_t &oid,
+int DBObjectMap::check_keys(const hoid_t &oid,
 			    const set<string> &keys,
 			    set<string> *out)
 {
@@ -786,7 +786,7 @@ int DBObjectMap::check_keys(const oid_t &oid,
   return scan(header, keys, out, 0);
 }
 
-int DBObjectMap::get_xattrs(const oid_t &oid,
+int DBObjectMap::get_xattrs(const hoid_t &oid,
 			    const set<string> &to_get,
 			    map<string, bufferlist> *out)
 {
@@ -796,7 +796,7 @@ int DBObjectMap::get_xattrs(const oid_t &oid,
   return db->get(xattr_prefix(header), to_get, out);
 }
 
-int DBObjectMap::get_all_xattrs(const oid_t &oid,
+int DBObjectMap::get_all_xattrs(const hoid_t &oid,
 				set<string> *out)
 {
   Header header = lookup_map_header(oid);
@@ -810,7 +810,7 @@ int DBObjectMap::get_all_xattrs(const oid_t &oid,
   return iter->status();
 }
 
-int DBObjectMap::set_xattrs(const oid_t &oid,
+int DBObjectMap::set_xattrs(const hoid_t &oid,
 			    const map<string, bufferlist> &to_set,
 			    const SequencerPosition *spos)
 {
@@ -824,7 +824,7 @@ int DBObjectMap::set_xattrs(const oid_t &oid,
   return db->submit_transaction(t);
 }
 
-int DBObjectMap::remove_xattrs(const oid_t &oid,
+int DBObjectMap::remove_xattrs(const hoid_t &oid,
 			       const set<string> &to_remove,
 			       const SequencerPosition *spos)
 {
@@ -838,8 +838,8 @@ int DBObjectMap::remove_xattrs(const oid_t &oid,
   return db->submit_transaction(t);
 }
 
-int DBObjectMap::clone(const oid_t &oid,
-		       const oid_t &target,
+int DBObjectMap::clone(const hoid_t &oid,
+		       const hoid_t &target,
 		       const SequencerPosition *spos)
 {
   if (oid == target)
@@ -923,7 +923,7 @@ int DBObjectMap::upgrade()
 		 to_get);
 
       coll_t coll;
-      oid_t oid;
+      hoid_t oid;
       assert(parse_hobject_key(iter->key(), &coll, &oid));
       new_map_headers[hobject_key(coll, oid)] = got.begin()->second;
     }
@@ -988,7 +988,7 @@ int DBObjectMap::init(bool do_upgrade)
   return 0;
 }
 
-int DBObjectMap::sync(const oid_t *oid,
+int DBObjectMap::sync(const hoid_t *oid,
 		      const SequencerPosition *spos) {
   KeyValueDB::Transaction t = db->get_transaction();
   write_state(t);
@@ -1017,7 +1017,7 @@ int DBObjectMap::write_state(KeyValueDB::Transaction _t) {
 }
 
 
-DBObjectMap::Header DBObjectMap::_lookup_map_header(const oid_t &oid,
+DBObjectMap::Header DBObjectMap::_lookup_map_header(const hoid_t &oid,
 						    unique_lock& hl)
 {
   header_cond.wait(hl, [&](){ return map_header_in_use.count(oid) == 0; });
@@ -1037,7 +1037,7 @@ DBObjectMap::Header DBObjectMap::_lookup_map_header(const oid_t &oid,
   return ret;
 }
 
-DBObjectMap::Header DBObjectMap::_generate_new_header(const oid_t &oid,
+DBObjectMap::Header DBObjectMap::_generate_new_header(const hoid_t &oid,
 						      Header parent)
 {
   Header header = Header(new _Header(), RemoveOnDelete(this));
@@ -1087,7 +1087,7 @@ DBObjectMap::Header DBObjectMap::lookup_parent(Header input)
 }
 
 DBObjectMap::Header DBObjectMap::lookup_create_map_header(
-  const oid_t &oid,
+  const hoid_t &oid,
   KeyValueDB::Transaction t)
 {
   unique_lock hl(header_lock);
@@ -1119,7 +1119,7 @@ void DBObjectMap::set_header(Header header, KeyValueDB::Transaction t)
   t->set(sys_prefix(header), to_write);
 }
 
-void DBObjectMap::remove_map_header(const oid_t &oid,
+void DBObjectMap::remove_map_header(const hoid_t &oid,
 				    Header header,
 				    KeyValueDB::Transaction t)
 {
@@ -1130,7 +1130,7 @@ void DBObjectMap::remove_map_header(const oid_t &oid,
   t->rmkeys(OIDO_SEQ, to_remove);
 }
 
-void DBObjectMap::set_map_header(const oid_t &oid, _Header header,
+void DBObjectMap::set_map_header(const hoid_t &oid, _Header header,
 				 KeyValueDB::Transaction t)
 {
   ldout(cct, 20) << "set_map_header: setting " << header.seq
@@ -1141,7 +1141,7 @@ void DBObjectMap::set_map_header(const oid_t &oid, _Header header,
   t->set(OIDO_SEQ, to_set);
 }
 
-bool DBObjectMap::check_spos(const oid_t &oid,
+bool DBObjectMap::check_spos(const hoid_t &oid,
 			     Header header,
 			     const SequencerPosition *spos)
 {
@@ -1162,7 +1162,7 @@ bool DBObjectMap::check_spos(const oid_t &oid,
   }
 }
 
-int DBObjectMap::list_objects(vector<oid_t> *out)
+int DBObjectMap::list_objects(vector<hoid_t> *out)
 {
   KeyValueDB::Iterator iter = db->get_iterator(OIDO_SEQ);
   for (iter->seek_to_first(); iter->valid(); iter->next()) {

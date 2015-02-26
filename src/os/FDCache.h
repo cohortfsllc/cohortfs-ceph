@@ -52,7 +52,7 @@ public:
   };
 
 private:
-  SharedLRU<oid_t, FD> registry;
+  SharedLRU<hoid_t, FD> registry;
   CephContext *cct;
 
 public:
@@ -66,16 +66,16 @@ public:
   }
   typedef std::shared_ptr<FD> FDRef;
 
-  FDRef lookup(const oid_t &hoid) {
+  FDRef lookup(const hoid_t &hoid) {
     return registry.lookup(hoid);
   }
 
-  FDRef add(const oid_t &hoid, int fd) {
+  FDRef add(const hoid_t &hoid, int fd) {
     return registry.add(hoid, new FD(fd));
   }
 
   /// clear cached fd for hoid, subsequent lookups will get an empty FD
-  void clear(const oid_t &hoid) {
+  void clear(const hoid_t &hoid) {
     registry.clear(hoid);
     assert(!registry.lookup(hoid));
   }
