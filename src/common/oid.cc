@@ -39,7 +39,6 @@ static const map<string, chunktype> stringtypes = {
   {"terminus", chunktype::terminus}
 };
 
-
 // The appender must append a sequence of characters WIHOUT A NUL and
 // return a pointer to the next character after the last appended. Or
 // NULL if the buffer isn't big enough.
@@ -192,5 +191,45 @@ void oid_t::generate_test_instances(list<oid_t*>& o)
 std::ostream& operator<<(std::ostream& out, const oid_t& o)
 {
   out << o.to_str();
+  return out;
+}
+
+/* hoid_t */
+string hoid_t::to_str() const
+{
+  return oid.to_str();
+}
+
+void hoid_t::encode(bufferlist& bl) const
+{
+  ENCODE_START(4, 3, bl);
+  ::encode(oid, bl);
+  ::encode(hk, bl);
+  ENCODE_FINISH(bl);
+}
+
+void hoid_t::decode(bufferlist::iterator& bl)
+{
+  DECODE_START_LEGACY_COMPAT_LEN(4, 3, 3, bl);
+  ::decode(oid, bl);
+  ::decode(hk, bl);
+  DECODE_FINISH(bl);
+}
+
+void hoid_t::dump(Formatter *f) const
+{
+  oid.dump(f);
+  f->dump_int("hk", hk);
+}
+
+void hoid_t::generate_test_instances(list<hoid_t*>& o)
+{
+  o.push_back(new hoid_t(oid_t("oname", chunktype::data, 97)));
+  o.push_back(new hoid_t(oid_t("oname3", chunktype::ecc, 31)));
+}
+
+std::ostream& operator<<(std::ostream& out, const hoid_t& o)
+{
+  out << o.oid.to_str();
   return out;
 }

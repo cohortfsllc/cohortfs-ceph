@@ -22,6 +22,7 @@
 #include <unordered_map>
 #include "include/cmp.h"
 #include "include/encoding.h"
+#include "include/ceph_hash.h"
 
 namespace ceph {
   class Formatter;
@@ -159,6 +160,75 @@ namespace std {
   };
 }
 
+/* hoid */
+struct hoid_t {
+  oid_t oid;
+  uint64_t hk;
+
+  hoid_t(const hoid_t& hoid) : oid(hoid.oid) {
+    hash();
+  }
+
+  hoid_t(const oid_t& _oid) : oid(_oid) {
+    hash();
+  }
+
+  hoid_t(hoid_t&& hoid) : oid(hoid.oid), hk(hoid.hk) {}
+
+  void hash() {
+    XXH64_state_t hs;
+    XXH64_reset(&hs, 667);
+    (void) XXH64_update(&hs, oid.name.c_str(), oid.name.size());
+    (void) XXH64_update(&hs, (void*) &(oid.type), 4);
+    (void) XXH64_update(&hs, (void*) &(oid.stride), 4);
+    hk = XXH64_digest(&hs);
+  }
+
+  hoid_t& operator=(const hoid_t& o) {
+    oid = o.oid;
+    hk = o.hk;
+    return *this;
+  }
+
+  hoid_t& operator=(hoid_t&& o) {
+    swap(o);
+    return *this;
+  }
+
+  void swap(hoid_t& o) {
+    std::swap(oid, o.oid);
+    std::swap(hk, o.hk);
+  }
+
+  std::string to_str() const;
+
+  void encode(bufferlist& bl) const;
+  void decode(bufferlist::iterator& bl);
+  void dump(ceph::Formatter *f) const;
+  static void generate_test_instances(std::list<hoid_t*>& o);
+  friend bool operator<(const hoid_t&, const hoid_t&);
+  friend bool operator>(const hoid_t&, const hoid_t&);
+  friend bool operator<=(const hoid_t&, const hoid_t&);
+  friend bool operator>=(const hoid_t&, const hoid_t&);
+  friend bool operator==(const hoid_t&, const hoid_t&);
+  friend bool operator!=(const hoid_t&, const hoid_t&);
+};
+WRITE_CLASS_ENCODER(hoid_t)
+
+std::ostream& operator<<(std::ostream& out, const hoid_t& o);
+
+namespace std {
+  template<> struct hash<hoid_t> {
+    size_t operator()(const hoid_t& o) const {
+      XXH64_state_t hs;
+      XXH64_reset(&hs, 667);
+      (void) XXH64_update(&hs, o.oid.name.c_str(), o.oid.name.size());
+      (void) XXH64_update(&hs, (void*) &(o.oid.type), 4);
+      (void) XXH64_update(&hs, (void*) &(o.oid.stride), 4);
+      return XXH64_digest(&hs);
+    }
+  };
+}
 
 // Should probably be in the MDS definitions. Also we don't have block
 // numbers any more.
