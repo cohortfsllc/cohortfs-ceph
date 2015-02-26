@@ -242,15 +242,15 @@ void Log::_flush(EntryQueue *t, EntryQueue *requeue, bool crash)
 	buflen += snprintf(buf, sizeof(buf), "%6d> ", -t->m_len);
 
       time_t tt = ceph::real_clock::to_time_t(e->m_stamp); // throws MSB bits away
-      auto us = std::chrono::duration_cast<std::chrono::microseconds>(
-		e->m_stamp - std::chrono::system_clock::from_time_t(tt));
+      uint32_t us = std::chrono::duration_cast<std::chrono::microseconds>(
+	e->m_stamp - std::chrono::system_clock::from_time_t(tt)).count();
       std::tm tm;
       ::localtime_r(&tt, &tm);	// no std::localtime_r()?  C'mon, guys...
 #if 0
       put_time(&tm, "%F %T");	// too bleeding edge?
 #else
       buflen += ::strftime(buf + buflen, sizeof(buf)-buflen, "%F %T", &tm);
-      buflen += snprintf(buf + buflen, sizeof(buf)-buflen, ".%06d", us);
+      buflen += snprintf(buf + buflen, sizeof(buf)-buflen, ".%06u", us);
 #endif
       buflen += snprintf(buf + buflen, sizeof(buf)-buflen, " %lx %2d ",
 			(unsigned long)e->m_thread, e->m_prio);
