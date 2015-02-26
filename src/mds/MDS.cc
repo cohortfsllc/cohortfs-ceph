@@ -106,6 +106,8 @@ MDS::MDS(const std::string &n, Messenger *m, MonClient *mc) :
   orig_argc = 0;
   orig_argv = NULL;
 
+  createwaitingforosd = 0;
+
   last_tid = 0;
 
   monc->set_messenger(messenger);
@@ -1035,6 +1037,18 @@ void MDS::request_state(int s)
 }
 
 
+class C_MDS_CreateOSDWait : public Context {
+  MDS *mds;
+  int telomere;
+public:
+  C_MDS_CreateOSDWait(MDS *m, int t) : mds(m), telomere(t) {}
+  void finish(int r) {
+    Context *d = mds->createwaitingforosd;
+    mds->createwaitingforosd = 0;
+    if (mds->is_creating()) mds->boot_create(telomere);
+  }
+};
+
 class C_MDS_CreateFinish : public Context {
   MDS *mds;
 public:
@@ -1042,10 +1056,34 @@ public:
   void finish(int r) { mds->creating_done(); }
 };
 
-void MDS::boot_create()
+void MDS::boot_create(int telomere)
 {
   dout(3) << "boot_create" << dendl;
-  VolumeRef v = get_metadata_volume();
+  epoch_t osd_epoch;
+  objecter->with_osdmap([&](auto o){
+      osd_epoch = o.get_epoch();
+    });
+  VolumeRef v = get_metadata_volume(true);
+  if (!v) {
+    dout(10) << "boot_create volume " << mdsmap->get_metadata_uuid()
+	<< " doesn't exist (yet)" << dendl;
+    if (createwaitingforosd) {
+      dout(10) << "boot_create already waiting for new osdmap" << dendl;
+    } if (telomere <= 0) {
+      dout(10) << "boot_create - giving up" << dendl;
+      request_state(MDSMap::STATE_BOOT);
+    } else {
+      createwaitingforosd = new C_OnFinisher(new C_MDS_CreateOSDWait(this, telomere-1),
+					     &finisher);
+      if (objecter->wait_for_map(osd_epoch + 1, createwaitingforosd)) {
+	  dout(10) << "boot_create new osdmap already there, so will retry" << dendl;
+	  createwaitingforosd->complete(0);
+      } else {
+	  dout(10) << "boot_create waiting for new osdmap " << (osd_epoch + 1) << dendl;
+      }
+    }
+    return;
+  }
 
   C_GatherBuilder fin(new C_MDS_CreateFinish(this));
 
@@ -1540,7 +1578,6 @@ void MDS::handle_signal(int signum)
   derr << "*** got signal " << sys_siglist[signum] << " ***" << dendl;
   unique_lock ml(mds_lock, std::defer_lock);
   suicide(ml);
-  ml.unlock();
 }
 
 void MDS::suicide(unique_lock& ml)

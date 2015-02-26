@@ -127,6 +127,7 @@ class MDS : public Dispatcher {
   int state; // my confirmed state
   int want_state;    // the state i want
 
+  Context *createwaitingforosd;
   std::vector<Context*> waiting_for_active, waiting_for_replay,
     waiting_for_reconnect, waiting_for_resolve;
   std::list<Context*> replay_queue;
@@ -185,8 +186,8 @@ class MDS : public Dispatcher {
 
   ceph_tid_t issue_tid() { return ++last_tid; }
 
-  VolumeRef get_metadata_volume() const {
-    VolumeRef volume(mdsmap->get_metadata_volume(objecter));
+  VolumeRef get_metadata_volume(bool failed_ok = false) const {
+    VolumeRef volume(mdsmap->get_metadata_volume(objecter, failed_ok));
     if (!volume)
       return NULL;
     if (volume->attach(objecter->cct))
@@ -304,7 +305,7 @@ class MDS : public Dispatcher {
 
   void bcast_mds_map();	 // to mounted clients
 
-  void boot_create();		  // i am new mds.
+  void boot_create(int telomere = 5);		  // i am new mds.
   void boot_start(unique_lock& ml, int step=0, int r=0); // starting|replay
 
   void calc_recovery_set();
@@ -363,6 +364,9 @@ class MDS : public Dispatcher {
   // special message types
   void handle_command(class MMonCommand *m, unique_lock& ml);
   void handle_mds_map(class MMDSMap *m, unique_lock& ml);
+
+  // friends
+  friend class C_MDS_CreateOSDWait;
 };
 
 
