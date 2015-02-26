@@ -251,11 +251,11 @@ public:
   int get_tableserver() const { return tableserver; }
   int get_root() const { return root; }
 
-  VolumeRef get_metadata_volume(Objecter *objecter) {
+  VolumeRef get_metadata_volume(Objecter *objecter, bool failed_ok = false) {
     if (!metadata_volume) {
       metadata_volume = objecter->vol_by_uuid(metadata_uuid);
     }
-    assert(!!metadata_volume);
+    if (!failed_ok) assert(!!metadata_volume);
     return metadata_volume;
   }
   boost::uuids::uuid get_metadata_uuid() const {
