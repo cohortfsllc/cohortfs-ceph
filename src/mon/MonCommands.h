@@ -238,7 +238,6 @@ COMMAND("mds compat rm_incompat " \
 	"remove incompatible feature", "mds", "rw", "cli,rest")
 COMMAND("mds newfs " \
 	"name=metadata,type=CephString " \
-	"name=data,type=CephString " \
 	"name=sure,type=CephChoices,strings=--yes-i-really-mean-it,req=false", \
 	"make new filesystom", \
 	"mds", "rw", "cli,rest")
