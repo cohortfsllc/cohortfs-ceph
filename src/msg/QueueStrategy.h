@@ -36,8 +36,8 @@ class QueueStrategy : public DispatchStrategy {
   public:
     bi::list_member_hook<> thread_q;
     QueueStrategy *dq;
-    Cond cond;
-    QSThread(QueueStrategy *dq) : thread_q(), dq(dq), cond() {}
+    std::condition_variable cond;
+    QSThread(QueueStrategy *dq) : thread_q(), dq(dq) {}
     void* entry() {
       dq->entry(this);
       delete(this);

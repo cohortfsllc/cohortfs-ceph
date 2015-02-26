@@ -85,8 +85,8 @@ public:
   virtual int get_dispatch_queue_len()
     { return 0; } /* XXX bogus? */
 
-  virtual double get_dispatch_queue_max_age()
-    { return 0; } /* XXX bogus? */
+  virtual ceph::timespan get_dispatch_queue_max_age()
+  { return ceph::timespan(); } /* XXX bogus? */
 
   virtual void set_cluster_protocol(int p)
     { }

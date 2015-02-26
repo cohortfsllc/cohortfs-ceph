@@ -134,8 +134,6 @@ int XioConnection::passive_setup()
   return (0);
 }
 
-#define uint_to_timeval(tv, s) ((tv).tv_sec = (s), (tv).tv_usec = 0)
-
 int XioConnection::on_msg_req(struct xio_session *session,
 			      struct xio_msg *req,
 			      int more_in_batch,
@@ -178,7 +176,8 @@ int XioConnection::on_msg_req(struct xio_session *session,
   ceph_msg_footer footer;
   buffer::list payload, middle, data;
 
-  struct timeval t1, t2;
+  ceph::real_time t1;
+  ceph::mono_time t2;
 
   list<struct xio_msg *>& msg_seq = in_seq.seq;
   list<struct xio_msg *>::iterator msg_iter = msg_seq.begin();
@@ -191,7 +190,7 @@ int XioConnection::on_msg_req(struct xio_session *session,
 		buffer::create_static(treq->in.header.iov_len,
 				    (char*) treq->in.header.iov_base));
 
-  uint_to_timeval(t1, treq->timestamp);
+  t1 = ceph::real_time(ceph::timespan(treq->timestamp));
 
   if (magic & (MSG_MAGIC_TRACE_XCON)) {
       print_xio_msg_hdr(msgr->cct, "on_msg_req", hdr, NULL);
@@ -338,7 +337,7 @@ int XioConnection::on_msg_req(struct xio_session *session,
 
   in_seq.release(); // release Accelio msgs, clear buffers
 
-  uint_to_timeval(t2, treq->timestamp);
+  t2 = ceph::mono_time(ceph::timespan(treq->timestamp));
 
   /* update connection timestamp */
   recv = treq->timestamp;

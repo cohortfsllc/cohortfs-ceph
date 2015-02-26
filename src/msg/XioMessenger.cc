@@ -282,7 +282,7 @@ XioMessenger::XioMessenger(CephContext *cct, entity_name_t name,
       xio_init();
 
       // claim a reference to the first context we see
-      xio_log::context = cct->get();
+      xio_log::context = cct;
 
       int xopt;
       xopt = xio_log::get_level();
@@ -698,9 +698,9 @@ int XioMessenger::bind(const entity_addr_t& addr)
     struct entity_addr_t _addr = *a;
     a = &_addr;
     std::vector <std::string> my_sections;
-    g_conf->get_my_sections(my_sections);
+    cct->_conf->get_my_sections(my_sections);
     std::string rdma_local_str;
-    if (g_conf->get_val_from_conf_file(my_sections, "rdma local",
+    if (cct->_conf->get_val_from_conf_file(my_sections, "rdma local",
 				      rdma_local_str, true) == 0) {
       struct entity_addr_t local_rdma_addr;
       local_rdma_addr = *a;
