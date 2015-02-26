@@ -622,9 +622,9 @@ void ObjectStore::Transaction::generate_test_instances(list<ObjectStore::Transac
   t = new Transaction;
   coll_t c("foocoll");
   coll_t c2("foocoll2");
-  oid_t o1(oid_t("oid", chunktype::data, 91));
-  oid_t o2(oid_t("obj2", chunktype::ecc, 456));
-  oid_t o3(oid_t("obj3", chunktype::data, 456));
+  hoid_t o1(oid_t("oid", chunktype::data, 91));
+  hoid_t o2(oid_t("obj2", chunktype::ecc, 456));
+  hoid_t o3(oid_t("obj3", chunktype::data, 456));
   t->touch(c, o1);
   bufferlist bl;
   bl.append("some data");
@@ -659,43 +659,43 @@ void ObjectStore::Transaction::generate_test_instances(list<ObjectStore::Transac
   o.push_back(t);
 }
 
-int ObjectStore::collection_list(const coll_t &c, vector<oid_t>& o)
+int ObjectStore::collection_list(const coll_t &c, vector<hoid_t>& o)
 {
-  vector<oid_t> go;
+  vector<hoid_t> go;
   int ret = collection_list(c, go);
   if (ret == 0) {
     o.reserve(go.size());
-    for (vector<oid_t>::iterator i = go.begin(); i != go.end() ; ++i)
+    for (vector<hoid_t>::iterator i = go.begin(); i != go.end() ; ++i)
       o.push_back(*i);
   }
   return ret;
 }
 
-int ObjectStore::collection_list_partial(const coll_t &c, oid_t start,
+int ObjectStore::collection_list_partial(const coll_t &c, hoid_t start,
 					 int min, int max,
-					 vector<oid_t> *ls, oid_t *next)
+					 vector<hoid_t> *ls, hoid_t *next)
 {
-  vector<oid_t> go;
-  oid_t gnext, gstart(start);
+  vector<hoid_t> go;
+  hoid_t gnext, gstart(start);
   int ret = collection_list_partial(c, gstart, min, max, &go, &gnext);
   if (ret == 0) {
     *next = gnext;
     ls->reserve(go.size());
-    for (vector<oid_t>::iterator i = go.begin(); i != go.end() ; ++i)
+    for (vector<hoid_t>::iterator i = go.begin(); i != go.end() ; ++i)
       ls->push_back(*i);
   }
   return ret;
 }
 
-int ObjectStore::collection_list_range(const coll_t &c, oid_t start,
-				       oid_t end, vector<oid_t> *ls)
+int ObjectStore::collection_list_range(const coll_t &c, hoid_t start,
+				       hoid_t end, vector<hoid_t> *ls)
 {
-  vector<oid_t> go;
-  oid_t gstart(start), gend(end);
+  vector<hoid_t> go;
+  hoid_t gstart(start), gend(end);
   int ret = collection_list_range(c, gstart, gend, &go);
   if (ret == 0) {
     ls->reserve(go.size());
-    for (vector<oid_t>::iterator i = go.begin(); i != go.end() ; ++i)
+    for (vector<hoid_t>::iterator i = go.begin(); i != go.end() ; ++i)
       ls->push_back(*i);
   }
   return ret;
