@@ -176,6 +176,8 @@ struct hoid_t {
     hash();
   }
 
+  hoid_t() : hoid_t(oid_t()) {}
+
   hoid_t(hoid_t&& hoid) : oid(hoid.oid), hk(hoid.hk) {}
 
   void hash() {
@@ -217,6 +219,17 @@ struct hoid_t {
   friend bool operator!=(const hoid_t&, const hoid_t&);
 };
 WRITE_CLASS_ENCODER(hoid_t)
+
+inline bool operator<(const hoid_t& lhs, const hoid_t& rhs)
+{
+  return ((lhs.hk < rhs.hk) ||
+	  ((lhs.hk == rhs.hk) && (lhs.oid < rhs.oid)));
+}
+
+inline bool operator==(const hoid_t& lhs, const hoid_t& rhs)
+{
+  return (lhs.oid == rhs.oid);
+}
 
 std::ostream& operator<<(std::ostream& out, const hoid_t& o);
 
