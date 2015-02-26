@@ -85,7 +85,7 @@ protected:
 		      int *rval = NULL, Context* ctx = NULL);
     virtual void add_op(const int op);
     virtual void add_version(const uint64_t ver);
-    virtual void add_obj(const oid& o);
+    virtual void add_obj(const oid_t& o);
     virtual void add_single_return(bufferlist* bl, int* rval = NULL,
 				   Context *ctx = NULL);
 
@@ -121,8 +121,8 @@ protected:
 			      Context *ctx = NULL);
     virtual std::unique_ptr<ObjOp> clone();
     virtual void realize(
-      const oid& o,
-      const std::function<void(oid&&, vector<OSDOp>&&)>& f);
+      const oid_t& o,
+      const std::function<void(oid_t&&, vector<OSDOp>&&)>& f);
   };
 };
 

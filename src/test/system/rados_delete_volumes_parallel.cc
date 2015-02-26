@@ -72,7 +72,7 @@ int main(int argc, const char **argv)
   // first test: create a volume, then delete that volume
   {
     StRadosCreateVolume r1(argc, argv, NULL, volume_setup_sem, NULL,
-			 volume, 50, ".obj");
+			 volume, 50, ".oid");
     StRadosDeleteVolume r2(argc, argv, volume_setup_sem, NULL, volume);
     vector < SysTestRunnable* > vec;
     vec.push_back(&r1);
@@ -90,7 +90,7 @@ int main(int argc, const char **argv)
   RETURN1_IF_NONZERO(delete_volume_sem->reinit(0));
   {
     StRadosCreateVolume r1(argc, argv, NULL, volume_setup_sem, NULL,
-			 volume, g_num_objects, ".obj");
+			 volume, g_num_objects, ".oid");
     StRadosDeleteVolume r2(argc, argv, delete_volume_sem, NULL, volume);
     StRadosListObjects r3(argc, argv, volume, true, g_num_objects / 2,
 			  volume_setup_sem, NULL, delete_volume_sem);

@@ -81,7 +81,7 @@ GTEST_API_ GTEST_DECLARE_STATIC_MUTEX_(g_linked_ptr_mutex);
 
 // This is used internally by all instances of linked_ptr<>.  It needs to be
 // a non-template class because different types of linked_ptr<> can refer to
-// the same object (linked_ptr<Superclass>(obj) vs linked_ptr<Subclass>(obj)).
+// the same object (linked_ptr<Superclass>(oid) vs linked_ptr<Subclass>(oid)).
 // So, it needs to be possible for different types of linked_ptr to participate
 // in the same circular linked list, so we need a single class type here.
 //

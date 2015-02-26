@@ -67,7 +67,7 @@ public:
 		list<pair<string, string> > *_params) : RGWRESTSimpleRequest(_cct, _url, _headers, _params),
 		handle(NULL), cb(NULL) {}
   ~RGWRESTStreamWriteRequest();
-  int put_obj_init(RGWAccessKey& key, rgw_obj& obj, uint64_t obj_size, map<string, bufferlist>& attrs);
+  int put_obj_init(RGWAccessKey& key, rgw_obj& oid, uint64_t obj_size, map<string, bufferlist>& attrs);
   int complete(string& etag, time_t *mtime);
 
   RGWGetDataCB *get_out_cb() { return cb; }
@@ -90,7 +90,7 @@ public:
 		cb(_cb),
 		chunk_ofs(0), ofs(0) {}
   ~RGWRESTStreamReadRequest() {}
-  int get_obj(RGWAccessKey& key, map<string, string>& extra_headers, rgw_obj& obj);
+  int get_obj(RGWAccessKey& key, map<string, string>& extra_headers, rgw_obj& oid);
   int complete(string& etag, time_t *mtime, map<string, string>& attrs);
 
   void set_in_cb(RGWGetDataCB *_cb) { cb = _cb; }

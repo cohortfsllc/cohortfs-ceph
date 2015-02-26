@@ -92,7 +92,7 @@ struct req_context : public RefCountedObject {
   const char *list_start;
   std::list<std::string>* list_objects;
   int list_count;
-  string oid;
+  string oid_t;
   Mutex lock;
   Cond cond;
   S3BucketContext *bucket_ctx;
@@ -323,7 +323,7 @@ void RESTDispatcher::process_context(req_context *ctx)
     cerr << "ERROR: S3_runall_request_context() returned " << S3_get_status_name(status) << std::endl;
     ctx->status = status;
   } else if (ctx->status != S3StatusOK) {
-    cerr << "ERROR: " << ctx->oid << ": " << S3_get_status_name(ctx->status) << std::endl;
+    cerr << "ERROR: " << ctx->oid_t << ": " << S3_get_status_name(ctx->status) << std::endl;
   }
 
   ctx->lock.Lock();
@@ -336,7 +336,7 @@ void RESTDispatcher::process_context(req_context *ctx)
 
 void RESTDispatcher::put_obj(req_context *ctx)
 {
-  S3_put_object(ctx->bucket_ctx, ctx->oid.c_str(),
+  S3_put_object(ctx->bucket_ctx, ctx->oid_t.c_str(),
 		ctx->out_bl.length(),
 		NULL,
 		ctx->ctx,
@@ -345,14 +345,14 @@ void RESTDispatcher::put_obj(req_context *ctx)
 
 void RESTDispatcher::get_obj(req_context *ctx)
 {
-  S3_get_object(ctx->bucket_ctx, ctx->oid.c_str(), NULL, 0, ctx->len, ctx->ctx,
+  S3_get_object(ctx->bucket_ctx, ctx->oid_t.c_str(), NULL, 0, ctx->len, ctx->ctx,
 		&get_obj_handler, ctx);
 }
 
 void RESTDispatcher::delete_obj(req_context *ctx)
 {
 
-  S3_delete_object(ctx->bucket_ctx, ctx->oid.c_str(),
+  S3_delete_object(ctx->bucket_ctx, ctx->oid_t.c_str(),
 		   ctx->ctx, &response_handler, ctx);
 }
 
@@ -439,12 +439,12 @@ protected:
     completions[slot] = 0;
   }
 
-  int aio_read(const std::string& oid, int slot, bufferlist *pbl, size_t len) {
+  int aio_read(const std::string& oid_t, int slot, bufferlist *pbl, size_t len) {
     struct req_context *ctx = completions[slot];
 
     ctx->get();
     ctx->in_bl = pbl;
-    ctx->oid = oid;
+    ctx->oid_t = oid;
     ctx->len = len;
     ctx->bucket_ctx = &bucket_ctx;
     ctx->op = OP_GET_OBJ;
@@ -454,13 +454,13 @@ protected:
     return 0;
   }
 
-  int aio_write(const std::string& oid, int slot, bufferlist& bl, size_t len) {
+  int aio_write(const std::string& oid_t, int slot, bufferlist& bl, size_t len) {
     struct req_context *ctx = completions[slot];
 
     ctx->get();
     ctx->bucket_ctx = &bucket_ctx;
     ctx->out_bl = bl;
-    ctx->oid = oid;
+    ctx->oid_t = oid;
     ctx->len = len;
     ctx->op = OP_PUT_OBJ;
 
@@ -468,19 +468,19 @@ protected:
     return 0;
   }
 
-  int aio_remove(const std::string& oid, int slot) {
+  int aio_remove(const std::string& oid_t, int slot) {
     struct req_context *ctx = completions[slot];
 
     ctx->get();
     ctx->bucket_ctx = &bucket_ctx;
-    ctx->oid = oid;
+    ctx->oid_t = oid;
     ctx->op = OP_DELETE_OBJ;
 
     dispatcher->queue(ctx);
     return 0;
   }
 
-  int sync_read(const std::string& oid, bufferlist& bl, size_t len) {
+  int sync_read(const std::string& oid_t, bufferlist& bl, size_t len) {
     struct req_context *ctx = new req_context;
     int ret = ctx->init_ctx();
     if (ret < 0) {
@@ -489,7 +489,7 @@ protected:
     ctx->in_bl = &bl;
     ctx->get();
     ctx->bucket_ctx = &bucket_ctx;
-    ctx->oid = oid;
+    ctx->oid_t = oid;
     ctx->len = len;
     ctx->op = OP_GET_OBJ;
 
@@ -498,7 +498,7 @@ protected:
     ctx->put();
     return bl.length();
   }
-  int sync_write(const std::string& oid, bufferlist& bl, size_t len) {
+  int sync_write(const std::string& oid_t, bufferlist& bl, size_t len) {
     struct req_context *ctx = new req_context;
     int ret = ctx->init_ctx();
     if (ret < 0) {
@@ -507,7 +507,7 @@ protected:
     ctx->get();
     ctx->out_bl = bl;
     ctx->bucket_ctx = &bucket_ctx;
-    ctx->oid = oid;
+    ctx->oid_t = oid;
     ctx->op = OP_PUT_OBJ;
 
     dispatcher->process_context(ctx);
@@ -515,7 +515,7 @@ protected:
     ctx->put();
     return ret;
   }
-  int sync_remove(const std::string& oid) {
+  int sync_remove(const std::string& oid_t) {
     struct req_context *ctx = new req_context;
     int ret = ctx->init_ctx();
     if (ret < 0) {
@@ -523,7 +523,7 @@ protected:
     }
     ctx->get();
     ctx->bucket_ctx = &bucket_ctx;
-    ctx->oid = oid;
+    ctx->oid_t = oid;
     ctx->op = OP_DELETE_OBJ;
 
     dispatcher->process_context(ctx);

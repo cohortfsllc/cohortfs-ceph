@@ -158,7 +158,7 @@ static char *append_oname(char *dest, const char* src, size_t len)
   return t;
 }
 
-static bool parse_object(char *s, oid& obj)
+static bool parse_object(char *s, oid_t& oid)
 {
   char *bar = s + strlen(s) - 1;
   while (*bar != '_' &&
@@ -183,13 +183,13 @@ static bool parse_object(char *s, oid& obj)
       i++;
     }
     *t = 0;
-    obj.name = string(buf, t-buf);
+    oid.name = string(buf, t-buf);
     return true;
   }
   return false;
 }
 
-static int lfn_get(const char *coll_path, const oid& obj, char *pathname, int len, char *lfn, int lfn_len, int *exist, int *is_lfn)
+static int lfn_get(const char *coll_path, const oid_t& oid, char *pathname, int len, char *lfn, int lfn_len, int *exist, int *is_lfn)
 {
   int i = 0;
   strncpy(pathname, coll_path, len);
@@ -201,7 +201,7 @@ static int lfn_get(const char *coll_path, const oid& obj, char *pathname, int le
 
   *lfn = '\0';
 
-  if (!obj.append_c_str(lfn, '_', lfn_len, append_oname))
+  if (!oid.append_c_str(lfn, '_', lfn_len, append_oname))
     return -ERANGE;
 
   int actual_len = strlen(lfn);
@@ -264,7 +264,7 @@ int FlatIndex::init() {
   return 0;
 }
 
-int FlatIndex::created(const oid &hoid, const char *path) {
+int FlatIndex::created(const oid_t &hoid, const char *path) {
   char long_name[PATH_MAX];
   long_name[0] = '\0';
   if (!hoid.append_c_str(long_name, '_', sizeof(long_name), append_oname))
@@ -283,7 +283,7 @@ int FlatIndex::created(const oid &hoid, const char *path) {
   return 0;
 }
 
-int FlatIndex::unlink(const oid &o) {
+int FlatIndex::unlink(const oid_t &o) {
   char long_fn[PATH_MAX];
   char short_fn[PATH_MAX];
   char short_fn2[PATH_MAX];
@@ -337,7 +337,7 @@ int FlatIndex::unlink(const oid &o) {
   return 0;
 }
 
-int FlatIndex::lookup(const oid &hoid, IndexedPath *path, int *exist) {
+int FlatIndex::lookup(const oid_t &hoid, IndexedPath *path, int *exist) {
   char long_fn[PATH_MAX];
   char short_fn[PATH_MAX];
   int r;
@@ -352,7 +352,7 @@ int FlatIndex::lookup(const oid &hoid, IndexedPath *path, int *exist) {
 }
 
 static int get_hobject_from_oinfo(const char *dir, const char *file,
-				  oid *o) {
+				  oid_t *o) {
   char path[PATH_MAX];
   bufferptr bp(PATH_MAX);
   snprintf(path, sizeof(path), "%s/%s", dir, file);
@@ -367,16 +367,16 @@ static int get_hobject_from_oinfo(const char *dir, const char *file,
   return 0;
 }
 
-int FlatIndex::collection_list_partial(const oid &start,
+int FlatIndex::collection_list_partial(const oid_t &start,
 				       int min_count,
 				       int max_count,
-				       vector<oid> *ls,
-				       oid *next) {
+				       vector<oid_t> *ls,
+				       oid_t *next) {
   assert(0); // Should not be called
   return 0;
 }
 
-int FlatIndex::collection_list(vector<oid> *ls) {
+int FlatIndex::collection_list(vector<oid_t> *ls) {
   char buf[offsetof(struct dirent, d_name) + PATH_MAX + 1];
   char dir_name[PATH_MAX], new_name[PATH_MAX];
   strncpy(dir_name, base_path.c_str(), sizeof(dir_name));
@@ -387,7 +387,7 @@ int FlatIndex::collection_list(vector<oid> *ls) {
     return -errno;
 
   // first, build (ino, object) list
-  vector< pair<ino_t,oid> > inolist;
+  vector< pair<ino_t,oid_t> > inolist;
 
   struct dirent *de;
   while (::readdir_r(dir, (struct dirent *)buf, &de) == 0) {
@@ -397,11 +397,11 @@ int FlatIndex::collection_list(vector<oid> *ls) {
     if (de->d_name[0] == '.')
       continue;
     //cout << "	 got object " << de->d_name << std::endl;
-    oid o;
+    oid_t o;
     lfn_translate(dir_name, de->d_name, new_name, sizeof(new_name));
     if (parse_object(new_name, o)) {
       get_hobject_from_oinfo(dir_name, de->d_name, &o);
-      inolist.push_back(pair<ino_t,oid>(de->d_ino, o));
+      inolist.push_back(pair<ino_t,oid_t>(de->d_ino, o));
       ls->push_back(o);
     }
   }
@@ -412,7 +412,7 @@ int FlatIndex::collection_list(vector<oid> *ls) {
   // build final list
   ls->resize(inolist.size());
   int i = 0;
-  for (vector< pair<ino_t,oid> >::iterator p = inolist.begin(); p != inolist.end(); ++p)
+  for (vector< pair<ino_t,oid_t> >::iterator p = inolist.begin(); p != inolist.end(); ++p)
     (*ls)[i++].swap(p->second);
 
   ::closedir(dir);

@@ -6,9 +6,7 @@
 template<typename T>
 struct C_Holder : public Context {
   T obj;
-  C_Holder(
-    T obj)
-    : obj(obj) {}
+  C_Holder(T obj) : obj(obj) {}
   void finish(int r) {
     return;
   }

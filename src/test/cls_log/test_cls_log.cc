@@ -59,7 +59,7 @@ string get_name(int i)
   return name_prefix + buf;
 }
 
-void generate_log(librados::IoCtx& ioctx, string& oid, int max,
+void generate_log(librados::IoCtx& ioctx, string& oid_t, int max,
 		  ceph::real_time& start_time, bool modify_time)
 {
   string section = "global";
@@ -78,7 +78,7 @@ void generate_log(librados::IoCtx& ioctx, string& oid, int max,
     add_log(op, ts, section, name, i);
   }
 
-  ASSERT_EQ(0, ioctx.operate(oid, op));
+  ASSERT_EQ(0, ioctx.operate(oid_t, op));
 
   delete op;
 }
@@ -111,14 +111,14 @@ TEST(cls_rgw, test_log_add_same_time)
   ASSERT_EQ(0, rados.ioctx_create(volume_name.c_str(), ioctx));
 
   /* add chains */
-  string oid = "obj";
+  string oid_t = "oid";
 
   /* create object */
-  ASSERT_EQ(0, ioctx.create(oid, true));
+  ASSERT_EQ(0, ioctx.create(oid_t, true));
 
   /* generate log */
   ceph::real_time start_time = ceph::real_clock::now();
-  generate_log(ioctx, oid, 10, start_time, false);
+  generate_log(ioctx, oid_t, 10, start_time, false);
 
   librados::ObjectReadOperation *rop = new_rop(ioctx);
 
@@ -134,7 +134,7 @@ TEST(cls_rgw, test_log_add_same_time)
   cls_log_list(*rop, start_time, to_time, marker, 0, entries, &marker, &truncated);
 
   bufferlist obl;
-  ASSERT_EQ(0, ioctx.operate(oid, rop, &obl));
+  ASSERT_EQ(0, ioctx.operate(oid_t, rop, &obl));
 
   ASSERT_EQ(10, (int)entries.size());
   ASSERT_EQ(0, (int)truncated);
@@ -176,7 +176,7 @@ TEST(cls_rgw, test_log_add_same_time)
 
   cls_log_list(*rop, start_time, to_time, marker, 1, entries, &marker, &truncated);
 
-  ASSERT_EQ(0, ioctx.operate(oid, rop, &obl));
+  ASSERT_EQ(0, ioctx.operate(oid_t, rop, &obl));
 
   ASSERT_EQ(1, (int)entries.size());
   ASSERT_EQ(1, (int)truncated);
@@ -195,14 +195,14 @@ TEST(cls_rgw, test_log_add_different_time)
   ASSERT_EQ(0, rados.ioctx_create(volume_name.c_str(), ioctx));
 
   /* add chains */
-  string oid = "obj";
+  string oid_t = "oid";
 
   /* create object */
-  ASSERT_EQ(0, ioctx.create(oid, true));
+  ASSERT_EQ(0, ioctx.create(oid_t, true));
 
   /* generate log */
   ceph::real_time start_time = ceph::real_clock::now();
-  generate_log(ioctx, oid, 10, start_time, true);
+  generate_log(ioctx, oid_t, 10, start_time, true);
 
   librados::ObjectReadOperation *rop = new_rop(ioctx);
 
@@ -218,7 +218,7 @@ TEST(cls_rgw, test_log_add_different_time)
 	       &truncated);
 
   bufferlist obl;
-  ASSERT_EQ(0, ioctx.operate(oid, rop, &obl));
+  ASSERT_EQ(0, ioctx.operate(oid_t, rop, &obl));
 
   ASSERT_EQ(10, (int)entries.size());
   ASSERT_EQ(0, (int)truncated);
@@ -251,7 +251,7 @@ TEST(cls_rgw, test_log_add_different_time)
 
   cls_log_list(*rop, next_time, to_time, marker, 0, entries, &marker, &truncated);
 
-  ASSERT_EQ(0, ioctx.operate(oid, rop, &obl));
+  ASSERT_EQ(0, ioctx.operate(oid_t, rop, &obl));
 
   ASSERT_EQ(9, (int)entries.size());
   ASSERT_EQ(0, (int)truncated);
@@ -266,7 +266,7 @@ TEST(cls_rgw, test_log_add_different_time)
     string old_marker = marker;
     cls_log_list(*rop, start_time, to_time, old_marker, 1, entries, &marker, &truncated);
 
-    ASSERT_EQ(0, ioctx.operate(oid, rop, &obl));
+    ASSERT_EQ(0, ioctx.operate(oid_t, rop, &obl));
     ASSERT_NE(old_marker, marker);
     ASSERT_EQ(1, (int)entries.size());
 
@@ -289,14 +289,14 @@ TEST(cls_rgw, test_log_trim)
   ASSERT_EQ(0, rados.ioctx_create(volume_name.c_str(), ioctx));
 
   /* add chains */
-  string oid = "obj";
+  string oid_t = "oid";
 
   /* create object */
-  ASSERT_EQ(0, ioctx.create(oid, true));
+  ASSERT_EQ(0, ioctx.create(oid_t, true));
 
   /* generate log */
   ceph::real_time start_time = ceph::real_clock::now();
-  generate_log(ioctx, oid, 10, start_time, true);
+  generate_log(ioctx, oid_t, 10, start_time, true);
 
   librados::ObjectReadOperation *rop = new_rop(ioctx);
 
@@ -314,14 +314,14 @@ TEST(cls_rgw, test_log_trim)
     ceph::real_time zero_time;
     string start_marker, end_marker;
 
-    ASSERT_EQ(0, cls_log_trim(ioctx, oid, zero_time, trim_time, start_marker, end_marker));
+    ASSERT_EQ(0, cls_log_trim(ioctx, oid_t, zero_time, trim_time, start_marker, end_marker));
 
     string marker;
 
     cls_log_list(*rop, start_time, to_time, marker, 0, entries, &marker, &truncated);
 
     bufferlist obl;
-    ASSERT_EQ(0, ioctx.operate(oid, rop, &obl));
+    ASSERT_EQ(0, ioctx.operate(oid_t, rop, &obl));
 
     ASSERT_EQ(9 - i, (int)entries.size());
     ASSERT_EQ(0, (int)truncated);

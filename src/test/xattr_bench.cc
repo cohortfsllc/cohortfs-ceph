@@ -130,14 +130,14 @@ uint64_t do_run(ObjectStore *store, int attrsize, int numattrs,
     ObjectStore::Transaction *t = new ObjectStore::Transaction;
     map<string, pair<set<string>, ObjectStore::Sequencer*> >::iterator iter =
       rand_choose(collections);
-    for (set<string>::iterator obj = iter->second.first.begin();
-	 obj != iter->second.first.end();
-	 ++obj) {
+    for (set<string>::iterator oid = iter->second.first.begin();
+	 oid != iter->second.first.end();
+	 ++oid) {
       for (int j = 0; j < numattrs; ++j) {
 	stringstream ss;
-	ss << i << ", " << j << ", " << *obj;
+	ss << i << ", " << j << ", " << *oid;
 	t->setattr(coll_t(iter->first),
-		   *obj,
+		   *oid,
 		   ss.str().c_str(),
 		   bl);
       }

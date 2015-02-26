@@ -49,7 +49,7 @@ struct RGWQuotaInfo {
 
   void dump(Formatter *f) const;
 
-  void decode_json(JSONObj *obj);
+  void decode_json(JSONObj *oid);
 
 };
 WRITE_CLASS_ENCODER(RGWQuotaInfo)

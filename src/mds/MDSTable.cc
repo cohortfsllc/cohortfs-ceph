@@ -68,9 +68,9 @@ void MDSTable::save(Context *onfinish, version_t v)
     waitfor_save[version].push_back(onfinish);
 
   // write (async)
-  oid obj = get_object_name();
+  oid_t oid = get_object_name();
   VolumeRef volume(mds->get_metadata_volume());
-  mds->objecter->write_full(obj, volume, bl, ceph::real_clock::now(), 0,
+  mds->objecter->write_full(oid, volume, bl, ceph::real_clock::now(), 0,
 			    nullptr, new C_MT_Save(this, version));
 }
 
@@ -120,14 +120,14 @@ public:
   }
 };
 
-oid MDSTable::get_object_name()
+oid_t MDSTable::get_object_name()
 {
   char n[50];
   if (per_mds)
     snprintf(n, sizeof(n), "mds%d_%s", mds->whoami, table_name);
   else
     snprintf(n, sizeof(n), "mds_%s", table_name);
-  return oid(n);
+  return oid_t(n);
 }
 
 void MDSTable::load(Context *onfinish)
@@ -138,9 +138,9 @@ void MDSTable::load(Context *onfinish)
   state = STATE_OPENING;
 
   C_MT_Load *c = new C_MT_Load(this, onfinish);
-  oid obj = get_object_name();
+  oid_t oid = get_object_name();
   VolumeRef volume(mds->get_metadata_volume());
-  mds->objecter->read_full(obj, volume, &c->bl, 0, c);
+  mds->objecter->read_full(oid, volume, &c->bl, 0, c);
 }
 
 void MDSTable::load_2(int r, bufferlist& bl, Context *onfinish)

@@ -95,7 +95,7 @@ public:
 
   virtual uint32_t num_rules(void);
 
-  virtual ssize_t place(const oid& object,
+  virtual ssize_t place(const oid_t& object,
 			const OSDMap& map,
 			const std::function<void(int)>& f) const;
 
@@ -125,7 +125,7 @@ public:
     return stripe_unit;
   };
 
-  virtual void make_strides(const oid& obj,
+  virtual void make_strides(const oid_t& oid,
 			    uint64_t offset, uint64_t len,
 			    uint64_t truncate_size, uint32_t truncate_seq,
 			    vector<StrideExtent>& extents);

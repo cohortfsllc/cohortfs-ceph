@@ -21,11 +21,11 @@ namespace librbd {
     m_off(0), m_len(0),
     m_completion(NULL),
     m_hide_enoent(false) {}
-  AioRequest::AioRequest(ImageCtx *ictx, const std::string &oid,
+  AioRequest::AioRequest(ImageCtx *ictx, const std::string &oid_t,
 			 uint64_t off, uint64_t len,
 			 Context *completion,
 			 bool hide_enoent) :
-    m_ictx(ictx), m_ioctx(&ictx->io_ctx), m_oid(oid),
+    m_ictx(ictx), m_ioctx(&ictx->io_ctx), m_oid(oid_t),
     m_off(off), m_len(len), m_completion(completion),
     m_hide_enoent(hide_enoent) {}
 
@@ -49,11 +49,11 @@ namespace librbd {
 
   /** write **/
 
-  AbstractWrite::AbstractWrite(ImageCtx *ictx, const std::string &oid,
+  AbstractWrite::AbstractWrite(ImageCtx *ictx, const std::string &oid_t,
 			       uint64_t object_off, uint64_t len,
 			       Context *completion,
 			       bool hide_enoent)
-    : AioRequest(ictx, oid, object_off, len, completion, hide_enoent),
+    : AioRequest(ictx, oid_t, object_off, len, completion, hide_enoent),
       m_write(*m_ioctx) { }
 
   int AbstractWrite::send() {

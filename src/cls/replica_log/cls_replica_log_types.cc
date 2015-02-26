@@ -22,10 +22,10 @@ void cls_replica_log_item_marker::dump(Formatter *f) const
   f->dump_stream("timestamp") << item_timestamp;
 }
 
-void cls_replica_log_item_marker::decode_json(JSONObj *obj)
+void cls_replica_log_item_marker::decode_json(JSONObj *oid)
 {
-  JSONDecoder::decode_json("name", item_name, obj);
-  JSONDecoder::decode_json("timestamp", item_timestamp, obj);
+  JSONDecoder::decode_json("name", item_name, oid);
+  JSONDecoder::decode_json("timestamp", item_timestamp, oid);
 }
 
 void cls_replica_log_item_marker::
@@ -47,12 +47,12 @@ void cls_replica_log_progress_marker::dump(Formatter *f) const
   encode_json("items_in_progress", items, f);
 }
 
-void cls_replica_log_progress_marker::decode_json(JSONObj *obj)
+void cls_replica_log_progress_marker::decode_json(JSONObj *oid)
 {
-  JSONDecoder::decode_json("entity", entity_id, obj);
-  JSONDecoder::decode_json("position_marker", position_marker, obj);
-  JSONDecoder::decode_json("position_time", position_time, obj);
-  JSONDecoder::decode_json("items_in_progress", items, obj);
+  JSONDecoder::decode_json("entity", entity_id, oid);
+  JSONDecoder::decode_json("position_marker", position_marker, oid);
+  JSONDecoder::decode_json("position_time", position_time, oid);
+  JSONDecoder::decode_json("items_in_progress", items, oid);
 }
 
 void cls_replica_log_progress_marker::
@@ -82,13 +82,13 @@ void cls_replica_log_bound::dump(Formatter *f) const
   }
 }
 
-void cls_replica_log_bound::decode_json(JSONObj *obj)
+void cls_replica_log_bound::decode_json(JSONObj *oid)
 {
-  JSONDecoder::decode_json("position_marker", position_marker, obj);
-  JSONDecoder::decode_json("position_time", position_time, obj);
-  JSONDecoder::decode_json("marker_exists", marker_exists, obj);
+  JSONDecoder::decode_json("position_marker", position_marker, oid);
+  JSONDecoder::decode_json("position_time", position_time, oid);
+  JSONDecoder::decode_json("marker_exists", marker_exists, oid);
   if (marker_exists) {
-    JSONDecoder::decode_json("marker", marker, obj); //progress marker
+    JSONDecoder::decode_json("marker", marker, oid); //progress marker
   }
 }
 

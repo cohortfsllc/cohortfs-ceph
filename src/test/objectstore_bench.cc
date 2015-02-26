@@ -122,12 +122,12 @@ ObjectStore *fs;
 
 class OBS_Worker : public Thread
 {
-  oid poid;
+  oid_t poid;
 
  public:
   OBS_Worker() { }
 
-  void set_obj(const oid &obj) { poid = obj; }
+  void set_obj(const oid_t &oid) { poid = oid; }
 
   void *entry() {
     bufferlist data;
@@ -150,7 +150,7 @@ class OBS_Worker : public Thread
 	size_t count = len < block_size ? len : (size_t)block_size;
 
 	ObjectStore::Transaction *t = new ObjectStore::Transaction;
-	t->write(coll_t(), oid(poid), offset, count, data);
+	t->write(coll_t(), oid_t(poid), offset, count, data);
 
 	tls.push_back(t);
 
@@ -253,7 +253,7 @@ int main(int argc, const char *argv[])
   ft.create_collection(coll_t());
   fs->apply_transaction(ft);
 
-  std::vector<oid> objs;
+  std::vector<oid_t> objs;
   if (multi_object) {
     objs.resize(n_threads);
     for (int i = 0; i < n_threads; i++) {
@@ -262,7 +262,7 @@ int main(int argc, const char *argv[])
       objs[i].name = oss.str();
     }
   } else {
-    objs.push_back(oid("osbench"));
+    objs.push_back(oid_t("osbench"));
   }
 
   std::vector<OBS_Worker> workers(n_threads);
@@ -281,8 +281,8 @@ int main(int argc, const char *argv[])
 
   // remove the object
   ObjectStore::Transaction t;
-  for (vector<oid>::iterator i = objs.begin(); i != objs.end(); ++i)
-    t.remove(coll_t(), oid(*i));
+  for (vector<oid_t>::iterator i = objs.begin(); i != objs.end(); ++i)
+    t.remove(coll_t(), oid_t(*i));
   fs->apply_transaction(t);
 
   fs->umount();

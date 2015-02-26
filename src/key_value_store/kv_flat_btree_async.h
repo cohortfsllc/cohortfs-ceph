@@ -182,7 +182,7 @@ WRITE_CLASS_ENCODER(object_data)
 struct create_data {
   key_data min;
   key_data max;
-  string obj;
+  string oid;
 
   create_data()
   {}
@@ -190,19 +190,19 @@ struct create_data {
   create_data(key_data n, key_data x, string o)
   : min(n),
     max(x),
-    obj(o)
+    oid(o)
   {}
 
   create_data(object_data o)
   : min(o.min_kdata),
     max(o.max_kdata),
-    obj(o.name)
+    oid(o.name)
   {}
 
   create_data & operator=(const create_data &c) {
     min = c.min;
     max = c.max;
-    obj = c.obj;
+    oid = c.oid;
     return *this;
   }
 
@@ -210,14 +210,14 @@ struct create_data {
     ENCODE_START(1,1,bl);
     ::encode(min, bl);
     ::encode(max, bl);
-    ::encode(obj, bl);
+    ::encode(oid, bl);
     ENCODE_FINISH(bl);
   }
   void decode(bufferlist::iterator &p) {
     DECODE_START(1, p);
     ::decode(min, p);
     ::decode(max, p);
-    ::decode(obj, p);
+    ::decode(oid, p);
     DECODE_FINISH(p);
   }
 };
@@ -230,7 +230,7 @@ WRITE_CLASS_ENCODER(create_data)
 struct delete_data {
   key_data min;
   key_data max;
-  string obj;
+  string oid;
 
   delete_data()
   {}
@@ -238,13 +238,13 @@ struct delete_data {
   delete_data(key_data n, key_data x, string o)
   : min(n),
     max(x),
-    obj(o)
+    oid(o)
   {}
 
   delete_data & operator=(const delete_data &d) {
     min = d.min;
     max = d.max;
-    obj = d.obj;
+    oid = d.oid;
     return *this;
   }
 
@@ -253,14 +253,14 @@ struct delete_data {
     ENCODE_START(1,1,bl);
     ::encode(min, bl);
     ::encode(max, bl);
-    ::encode(obj, bl);
+    ::encode(oid, bl);
     ENCODE_FINISH(bl);
   }
   void decode(bufferlist::iterator &p) {
     DECODE_START(1, p);
     ::decode(min, p);
     ::decode(max, p);
-    ::decode(obj, p);
+    ::decode(oid, p);
     DECODE_FINISH(p);
   }
 };
@@ -295,7 +295,7 @@ struct index_data {
   vector<delete_data > to_delete;
 
   //the name of the object where the key range is located.
-  string obj;
+  string oid;
 
   index_data()
   {}
@@ -307,13 +307,13 @@ struct index_data {
   index_data(key_data max, key_data min, string o)
   : kdata(max),
     min_kdata(min),
-    obj(o)
+    oid(o)
   {}
 
   index_data(create_data c)
   : kdata(c.max),
     min_kdata(c.min),
-    obj(c.obj)
+    oid(c.oid)
   {}
 
   bool operator<(const index_data &other) const {
@@ -331,7 +331,7 @@ struct index_data {
     ::encode(ts, bl);
     ::encode(to_create, bl);
     ::encode(to_delete, bl);
-    ::encode(obj, bl);
+    ::encode(oid, bl);
     ENCODE_FINISH(bl);
   }
   void decode(bufferlist::iterator &p) {
@@ -342,7 +342,7 @@ struct index_data {
     ::decode(ts, p);
     ::decode(to_create, p);
     ::decode(to_delete, p);
-    ::decode(obj, p);
+    ::decode(oid, p);
     DECODE_FINISH(p);
   }
 
@@ -352,9 +352,9 @@ struct index_data {
    * kdata,
    * prefix
    * ts
-   * elements of to_create, organized into (high key| obj name)
+   * elements of to_create, organized into (high key| oid name)
    * ;
-   * elements of to_delete, organized into (high key| obj name)
+   * elements of to_delete, organized into (high key| oid name)
    * :
    * val)
    */
@@ -370,18 +370,18 @@ struct index_data {
       for(vector<create_data>::const_iterator it = to_create.begin();
 	  it != to_create.end(); ++it) {
 	  strm << '(' << it->min.encoded() << '/' << it->max.encoded() << '|'
-	      << it->obj << ')';
+	      << it->oid << ')';
       }
       strm << ';';
       for(vector<delete_data >::const_iterator it = to_delete.begin();
 	  it != to_delete.end(); ++it) {
 	  strm << '(' << it->min.encoded() << '/' << it->max.encoded() << '|'
-	       << it->obj << '|'
+	       << it->oid << '|'
 	       << ')';
       }
       strm << ':';
     }
-    strm << obj << ')';
+    strm << oid << ')';
     return strm.str();
   }
 };
@@ -545,13 +545,13 @@ protected:
       index_data * next_idata, bool force_update);
 
   /**
-   * Reads obj and generates information about it. Iff the object has >= 2k
+   * Reads oid and generates information about it. Iff the object has >= 2k
    * entries, reads the whole omap and then splits it.
    *
    * @param idata: index data for the object being split
    * @pre: idata contains a key and an obj
-   * @post: idata.obj has been split and icache has been updated
-   * @return -EBALANCE if obj does not need to be split, 0 if split successful,
+   * @post: idata.oid has been split and icache has been updated
+   * @return -EBALANCE if oid does not need to be split, 0 if split successful,
    * error from read_object or perform_ops if there is one.
    */
   int split(const index_data &idata);
@@ -564,7 +564,7 @@ protected:
    * @param idata: index data for the object being rebalanced
    * @param next_idata: index data for the next object. If blank, will read.
    * @pre: idata contains a key and an obj
-   * @post: idata.obj has been rebalanced and icache has been updated
+   * @post: idata.oid has been rebalanced and icache has been updated
    * @return -EBALANCE if no change needed, -ENOENT if o1 does not exist,
    * -ECANCELED if second object does not exist, otherwise, error from
    * perform_ops
@@ -574,15 +574,15 @@ protected:
   /**
    * performs an ObjectReadOperation to populate odata
    *
-   * @post: odata has all information about obj except for key (which is "")
+   * @post: odata has all information about oid except for key (which is "")
    */
-  int read_object(const string &obj, object_data * odata);
+  int read_object(const string &oid, object_data * odata);
 
   /**
    * performs a maybe_read_for_balance ObjectOperation so the omap is only
    * read if the object is out of bounds.
    */
-  int read_object(const string &obj, rebalance_args * args);
+  int read_object(const string &oid, rebalance_args * args);
 
   /**
    * sets up owo to change the index in preparation for a split/merge.
@@ -697,7 +697,7 @@ protected:
    * does the ObjectWriteOperation and splits, reads the index, and/or retries
    * until success.
    */
-  int handle_set_rm_errors(int &err, string key, string obj,
+  int handle_set_rm_errors(int &err, string key, string oid,
       index_data * idata, index_data * next_idata);
 
   /**

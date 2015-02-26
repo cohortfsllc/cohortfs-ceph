@@ -42,7 +42,7 @@ struct obj_version {
   }
 
   void dump(Formatter *f) const;
-  void decode_json(JSONObj *obj);
+  void decode_json(JSONObj *oid);
 };
 WRITE_CLASS_ENCODER(obj_version)
 

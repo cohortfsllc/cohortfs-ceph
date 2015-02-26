@@ -246,8 +246,8 @@ int RGWPolicy::from_json(bufferlist& bl, string& err_msg)
     return -EINVAL; // change to a "no expiration" error following S3
   }
 
-  JSONObj *obj = *iter;
-  expiration_str = obj->get_data();
+  JSONObj *oid = *iter;
+  expiration_str = oid->get_data();
   int r = set_expires(expiration_str);
   if (r < 0) {
     err_msg = "Failed to parse policy expiration";
@@ -261,9 +261,9 @@ int RGWPolicy::from_json(bufferlist& bl, string& err_msg)
     return -EINVAL; // change to a "no conditions" error following S3
   }
 
-  obj = *iter;
+  oid = *iter;
 
-  iter = obj->find_first();
+  iter = oid->find_first();
   for (; !iter.end(); ++iter) {
     JSONObj *child = *iter;
     dout(20) << "data=" << child->get_data() << dendl;

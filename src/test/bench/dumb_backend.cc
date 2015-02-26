@@ -5,19 +5,19 @@
 #include <unistd.h>
 #include "dumb_backend.h"
 
-string DumbBackend::get_full_path(const string &oid)
+string DumbBackend::get_full_path(const string &oid_t)
 {
-	return path + "/" + oid;
+	return path + "/" + oid_t;
 }
 
 void DumbBackend::_write(
-  const string &oid,
+  const string &oid_t,
   uint64_t offset,
   const bufferlist &bl,
   Context *on_applied,
   Context *on_commit)
 {
-  string full_path(get_full_path(oid));
+  string full_path(get_full_path(oid_t));
   int fd = ::open(
     full_path.c_str(), O_CREAT|O_WRONLY, 0777);
   if (fd < 0) {
@@ -62,13 +62,13 @@ void DumbBackend::_write(
 }
 
 void DumbBackend::read(
-  const string &oid,
+  const string &oid_t,
   uint64_t offset,
   uint64_t length,
   bufferlist *bl,
   Context *on_complete)
 {
-  string full_path(get_full_path(oid));
+  string full_path(get_full_path(oid_t));
   int fd = ::open(
     full_path.c_str(), 0, O_RDONLY);
   if (fd < 0) return;

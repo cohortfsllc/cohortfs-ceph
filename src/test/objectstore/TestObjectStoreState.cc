@@ -57,8 +57,8 @@ void TestObjectStoreState::init(int colls, int objs)
     t->touch(META_COLL, entry->m_meta_obj);
 
     for (int i = 0; i < objs; i++) {
-      oid *obj = entry->touch_obj(i + baseid);
-      t->touch(entry->m_coll, *obj);
+      oid_t *oid = entry->touch_obj(i + baseid);
+      t->touch(entry->m_coll, *oid);
       assert(i + baseid == m_num_objects);
       m_num_objects++;
     }
@@ -150,11 +150,11 @@ TestObjectStoreState::get_coll_at(int pos, bool erase)
 TestObjectStoreState::coll_entry_t::~coll_entry_t()
 {
   if (m_objects.size() > 0) {
-    map<int, oid*>::iterator it = m_objects.begin();
+    map<int, oid_t*>::iterator it = m_objects.begin();
     for (; it != m_objects.end(); ++it) {
-      oid *obj = it->second;
-      if (obj) {
-	delete obj;
+      oid_t *oid = it->second;
+      if (oid) {
+	delete oid;
       }
     }
     m_objects.clear();
@@ -168,9 +168,9 @@ bool TestObjectStoreState::coll_entry_t::check_for_obj(int id)
   return false;
 }
 
-oid *TestObjectStoreState::coll_entry_t::touch_obj(int id)
+oid_t *TestObjectStoreState::coll_entry_t::touch_obj(int id)
 {
-  map<int, oid*>::iterator it = m_objects.find(id);
+  map<int, oid_t*>::iterator it = m_objects.find(id);
   if (it != m_objects.end()) {
     dout(5) << "touch_obj coll id " << m_id
 	<< " name " << it->second->name << dendl;
@@ -179,16 +179,16 @@ oid *TestObjectStoreState::coll_entry_t::touch_obj(int id)
 
   char buf[100];
   memset(buf, 0, 100);
-  snprintf(buf, 100, "obj%d", id);
+  snprintf(buf, 100, "oid%d", id);
 
-  oid *obj = new oid(buf);
-  m_objects.insert(make_pair(id, obj));
+  oid_t *oid = new oid_t(buf);
+  m_objects.insert(make_pair(id, oid));
 
   dout(5) << "touch_obj coll id " << m_id << " name " << buf << dendl;
-  return obj;
+  return oid;
 }
 
-oid *TestObjectStoreState::coll_entry_t::get_obj(int id)
+oid_t *TestObjectStoreState::coll_entry_t::get_obj(int id)
 {
   return get_obj(id, false);
 }
@@ -198,31 +198,31 @@ oid *TestObjectStoreState::coll_entry_t::get_obj(int id)
  * @param id Object's id in the map.
  * @return The object or NULL in case of error.
  */
-oid *TestObjectStoreState::coll_entry_t::remove_obj(int id)
+oid_t *TestObjectStoreState::coll_entry_t::remove_obj(int id)
 {
   return get_obj(id, true);
 }
 
-oid *TestObjectStoreState::coll_entry_t::get_obj(int id, bool remove)
+oid_t *TestObjectStoreState::coll_entry_t::get_obj(int id, bool remove)
 {
-  map<int, oid*>::iterator it = m_objects.find(id);
+  map<int, oid_t*>::iterator it = m_objects.find(id);
   if (it == m_objects.end()) {
     dout(5) << "get_obj coll " << m_coll.to_str()
-	<< " obj #" << id << " non-existent" << dendl;
+	<< " oid #" << id << " non-existent" << dendl;
     return NULL;
   }
 
-  oid *obj = it->second;
+  oid_t *oid = it->second;
   if (remove)
     m_objects.erase(it);
 
   dout(5) << "get_obj coll " << m_coll.to_str() << " id " << id
-      << ": " << obj->name << "(removed: " << remove << ")" << dendl;
+      << ": " << oid->name << "(removed: " << remove << ")" << dendl;
 
-  return obj;
+  return oid;
 }
 
-oid *TestObjectStoreState::coll_entry_t::get_obj_at(int pos, int *key)
+oid_t *TestObjectStoreState::coll_entry_t::get_obj_at(int pos, int *key)
 {
   return get_obj_at(pos, false, key);
 }
@@ -232,12 +232,12 @@ oid *TestObjectStoreState::coll_entry_t::get_obj_at(int pos, int *key)
  * @param pos The map's position in which the object lies.
  * @return The object or NULL in case of error.
  */
-oid *TestObjectStoreState::coll_entry_t::remove_obj_at(int pos, int *key)
+oid_t *TestObjectStoreState::coll_entry_t::remove_obj_at(int pos, int *key)
 {
   return get_obj_at(pos, true, key);
 }
 
-oid *TestObjectStoreState::coll_entry_t::get_obj_at(int pos,
+oid_t *TestObjectStoreState::coll_entry_t::get_obj_at(int pos,
     bool remove, int *key)
 {
   if (m_objects.empty()) {
@@ -246,8 +246,8 @@ oid *TestObjectStoreState::coll_entry_t::get_obj_at(int pos,
     return NULL;
   }
 
-  oid *ret = NULL;
-  map<int, oid*>::iterator it = m_objects.begin();
+  oid_t *ret = NULL;
+  map<int, oid_t*>::iterator it = m_objects.begin();
   for (int i = 0; it != m_objects.end(); ++it, i++) {
     if (i == pos) {
       ret = it->second;
@@ -273,10 +273,10 @@ oid *TestObjectStoreState::coll_entry_t::get_obj_at(int pos,
   return ret;
 }
 
-oid*
-TestObjectStoreState::coll_entry_t::replace_obj(int id, oid *obj) {
-  oid *old_obj = remove_obj(id);
-  m_objects.insert(make_pair(id, obj));
+oid_t*
+TestObjectStoreState::coll_entry_t::replace_obj(int id, oid_t *oid) {
+  oid_t *old_obj = remove_obj(id);
+  m_objects.insert(make_pair(id, oid));
   return old_obj;
 }
 
@@ -286,7 +286,7 @@ int TestObjectStoreState::coll_entry_t::get_random_obj_id(rngen_t& gen)
 
   boost::uniform_int<> orig_obj_rng(0, m_objects.size()-1);
   int pos = orig_obj_rng(gen);
-  map<int, oid*>::iterator it = m_objects.begin();
+  map<int, oid_t*>::iterator it = m_objects.begin();
   for (int i = 0; it != m_objects.end(); ++it, i++) {
     if (i == pos) {
       return it->first;

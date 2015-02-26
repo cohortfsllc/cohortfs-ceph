@@ -23,7 +23,7 @@ namespace librbd {
   {
   public:
     AioRequest();
-    AioRequest(ImageCtx *ictx, const std::string &oid,
+    AioRequest(ImageCtx *ictx, const std::string &oid_t,
 	       uint64_t off, uint64_t len,
 	       Context *completion,
 	       bool hide_enoent);
@@ -51,10 +51,10 @@ namespace librbd {
 
   class AioRead : public AioRequest {
   public:
-    AioRead(ImageCtx *ictx, const std::string &oid,
+    AioRead(ImageCtx *ictx, const std::string &oid_t,
 	    uint64_t offset, uint64_t len,
 	    Context *completion)
-      : AioRequest(ictx, oid, offset, len, completion,
+      : AioRequest(ictx, oid_t, offset, len, completion,
 		   false) {
     }
     virtual ~AioRead() {}
@@ -69,7 +69,7 @@ namespace librbd {
 
   class AbstractWrite : public AioRequest {
   public:
-    AbstractWrite(ImageCtx *ictx, const std::string &oid,
+    AbstractWrite(ImageCtx *ictx, const std::string &oid_t,
 		  uint64_t object_off, uint64_t len,
 		  Context *completion,
 		  bool hide_enoent);
@@ -82,11 +82,11 @@ namespace librbd {
 
   class AioWrite : public AbstractWrite {
   public:
-    AioWrite(ImageCtx *ictx, const std::string &oid,
+    AioWrite(ImageCtx *ictx, const std::string &oid_t,
 	     uint64_t object_off,
 	     const ceph::bufferlist &data,
 	     Context *completion)
-      : AbstractWrite(ictx, oid,
+      : AbstractWrite(ictx, oid_t,
 		      object_off, data.length(),
 		      completion, false),
 	m_write_data(data) {
@@ -102,9 +102,9 @@ namespace librbd {
 
   class AioRemove : public AbstractWrite {
   public:
-    AioRemove(ImageCtx *ictx, const std::string &oid,
+    AioRemove(ImageCtx *ictx, const std::string &oid_t,
 	      Context *completion)
-      : AbstractWrite(ictx, oid,
+      : AbstractWrite(ictx, oid_t,
 		      0, 0,
 		      completion,
 		      true) {
@@ -115,9 +115,9 @@ namespace librbd {
 
   class AioTruncate : public AbstractWrite {
   public:
-    AioTruncate(ImageCtx *ictx, const std::string &oid,
+    AioTruncate(ImageCtx *ictx, const std::string &oid_t,
 		uint64_t off, Context *completion)
-      : AbstractWrite(ictx, oid,
+      : AbstractWrite(ictx, oid_t,
 		      off, 0,
 		      completion,
 		      true) { }
@@ -126,10 +126,10 @@ namespace librbd {
 
   class AioZero : public AbstractWrite {
   public:
-    AioZero(ImageCtx *ictx, const std::string &oid,
+    AioZero(ImageCtx *ictx, const std::string &oid_t,
 	    uint64_t object_off, uint64_t object_len,
 	    Context *completion)
-      : AbstractWrite(ictx, oid,
+      : AbstractWrite(ictx, oid_t,
 		      object_off, object_len,
 		      completion,
 		      true) {

@@ -21,10 +21,10 @@ void encode_json(const char *name, const obj_version& v, Formatter *f)
   f->close_section();
 }
 
-void decode_json_obj(obj_version& v, JSONObj *obj)
+void decode_json_obj(obj_version& v, JSONObj *oid)
 {
-  JSONDecoder::decode_json("tag", v.tag, obj);
-  JSONDecoder::decode_json("ver", v.ver, obj);
+  JSONDecoder::decode_json("tag", v.tag, oid);
+  JSONDecoder::decode_json("ver", v.ver, oid);
 }
 
 void encode_json(const char *name, const RGWUserCaps& val, Formatter *f)
@@ -79,7 +79,7 @@ void rgw_log_entry::dump(Formatter *f) const
   f->dump_stream("time") << time;
   f->dump_string("remote_addr", remote_addr);
   f->dump_string("user", user);
-  f->dump_string("obj", obj);
+  f->dump_string("oid", obj);
   f->dump_string("op", op);
   f->dump_string("uri", uri);
   f->dump_string("http_status", http_status);
@@ -95,8 +95,8 @@ void rgw_log_entry::dump(Formatter *f) const
 
 void rgw_intent_log_entry::dump(Formatter *f) const
 {
-  f->open_object_section("obj");
-  obj.dump(f);
+  f->open_object_section("oid");
+  oid.dump(f);
   f->close_section();
   f->dump_stream("op_time") << op_time;
   f->dump_unsigned("intent", intent);
@@ -197,7 +197,7 @@ void ObjectCacheInfo::dump(Formatter *f) const
 void RGWCacheNotifyInfo::dump(Formatter *f) const
 {
   encode_json("op", op, f);
-  encode_json("obj", obj, f);
+  encode_json("oid", obj, f);
   encode_json("obj_info", obj_info, f);
   encode_json("ofs", ofs, f);
   encode_json("ns", ns, f);
@@ -237,12 +237,12 @@ void RGWAccessKey::dump(Formatter *f, const string& user, bool swift) const
   encode_json("secret_key", key, f);
 }
 
-void RGWAccessKey::decode_json(JSONObj *obj) {
-  JSONDecoder::decode_json("access_key", id, obj, true);
-  JSONDecoder::decode_json("secret_key", key, obj, true);
-  if (!JSONDecoder::decode_json("subuser", subuser, obj)) {
+void RGWAccessKey::decode_json(JSONObj *oid) {
+  JSONDecoder::decode_json("access_key", id, oid, true);
+  JSONDecoder::decode_json("secret_key", key, oid, true);
+  if (!JSONDecoder::decode_json("subuser", subuser, oid)) {
     string user;
-    JSONDecoder::decode_json("user", user, obj);
+    JSONDecoder::decode_json("user", user, oid);
     int pos = user.find(':');
     if (pos >= 0) {
       subuser = user.substr(pos + 1);
@@ -250,20 +250,20 @@ void RGWAccessKey::decode_json(JSONObj *obj) {
   }
 }
 
-void RGWAccessKey::decode_json(JSONObj *obj, bool swift) {
+void RGWAccessKey::decode_json(JSONObj *oid, bool swift) {
   if (!swift) {
-    decode_json(obj);
+    decode_json(oid);
     return;
   }
 
-  if (!JSONDecoder::decode_json("subuser", subuser, obj)) {
-    JSONDecoder::decode_json("user", id, obj, true);
+  if (!JSONDecoder::decode_json("subuser", subuser, oid)) {
+    JSONDecoder::decode_json("user", id, oid, true);
     int pos = id.find(':');
     if (pos >= 0) {
       subuser = id.substr(pos + 1);
     }
   }
-  JSONDecoder::decode_json("secret_key", key, obj, true);
+  JSONDecoder::decode_json("secret_key", key, oid, true);
 }
 
 struct rgw_flags_desc {
@@ -357,15 +357,15 @@ static uint32_t str_to_perm(const string& s)
   return 0;
 }
 
-void RGWSubUser::decode_json(JSONObj *obj)
+void RGWSubUser::decode_json(JSONObj *oid)
 {
   string uid;
-  JSONDecoder::decode_json("id", uid, obj);
+  JSONDecoder::decode_json("id", uid, oid);
   int pos = uid.find(':');
   if (pos >= 0)
     name = uid.substr(pos + 1);
   string perm_str;
-  JSONDecoder::decode_json("permissions", perm_str, obj);
+  JSONDecoder::decode_json("permissions", perm_str, oid);
   perm_mask = str_to_perm(perm_str);
 }
 
@@ -440,35 +440,35 @@ static void decode_subusers(map<string, RGWSubUser>& m, JSONObj *o)
   m[u.name] = u;
 }
 
-void RGWUserInfo::decode_json(JSONObj *obj)
+void RGWUserInfo::decode_json(JSONObj *oid)
 {
-  JSONDecoder::decode_json("user_id", user_id, obj, true);
-  JSONDecoder::decode_json("display_name", display_name, obj);
-  JSONDecoder::decode_json("email", user_email, obj);
+  JSONDecoder::decode_json("user_id", user_id, oid, true);
+  JSONDecoder::decode_json("display_name", display_name, oid);
+  JSONDecoder::decode_json("email", user_email, oid);
   bool susp = false;
-  JSONDecoder::decode_json("suspended", susp, obj);
+  JSONDecoder::decode_json("suspended", susp, oid);
   suspended = (uint8_t)susp;
-  JSONDecoder::decode_json("max_buckets", max_buckets, obj);
-  JSONDecoder::decode_json("auid", auid, obj);
+  JSONDecoder::decode_json("max_buckets", max_buckets, oid);
+  JSONDecoder::decode_json("auid", auid, oid);
 
-  JSONDecoder::decode_json("keys", access_keys, decode_access_keys, obj);
-  JSONDecoder::decode_json("swift_keys", swift_keys, decode_swift_keys, obj);
-  JSONDecoder::decode_json("subusers", subusers, decode_subusers, obj);
+  JSONDecoder::decode_json("keys", access_keys, decode_access_keys, oid);
+  JSONDecoder::decode_json("swift_keys", swift_keys, decode_swift_keys, oid);
+  JSONDecoder::decode_json("subusers", subusers, decode_subusers, oid);
 
-  JSONDecoder::decode_json("caps", caps, obj);
+  JSONDecoder::decode_json("caps", caps, oid);
 
   string mask_str;
-  JSONDecoder::decode_json("op_mask", mask_str, obj);
+  JSONDecoder::decode_json("op_mask", mask_str, oid);
   rgw_parse_op_type_list(mask_str, &op_mask);
 
   bool sys = false;
-  JSONDecoder::decode_json("system", sys, obj);
+  JSONDecoder::decode_json("system", sys, oid);
   system = (uint8_t)sys;
-  JSONDecoder::decode_json("default_placement", default_placement, obj);
-  JSONDecoder::decode_json("placement_tags", placement_tags, obj);
-  JSONDecoder::decode_json("bucket_quota", bucket_quota, obj);
-  JSONDecoder::decode_json("user_quota", user_quota, obj);
-  JSONDecoder::decode_json("temp_url_keys", temp_url_keys, obj);
+  JSONDecoder::decode_json("default_placement", default_placement, oid);
+  JSONDecoder::decode_json("placement_tags", placement_tags, oid);
+  JSONDecoder::decode_json("bucket_quota", bucket_quota, oid);
+  JSONDecoder::decode_json("user_quota", user_quota, oid);
+  JSONDecoder::decode_json("temp_url_keys", temp_url_keys, oid);
 }
 
 void RGWQuotaInfo::dump(Formatter *f) const
@@ -478,11 +478,11 @@ void RGWQuotaInfo::dump(Formatter *f) const
   f->dump_int("max_objects", max_objects);
 }
 
-void RGWQuotaInfo::decode_json(JSONObj *obj)
+void RGWQuotaInfo::decode_json(JSONObj *oid)
 {
-  JSONDecoder::decode_json("max_size_kb", max_size_kb, obj);
-  JSONDecoder::decode_json("max_objects", max_objects, obj);
-  JSONDecoder::decode_json("enabled", enabled, obj);
+  JSONDecoder::decode_json("max_size_kb", max_size_kb, oid);
+  JSONDecoder::decode_json("max_objects", max_objects, oid);
+  JSONDecoder::decode_json("enabled", enabled, oid);
 }
 
 void rgw_bucket::dump(Formatter *f) const
@@ -495,13 +495,13 @@ void rgw_bucket::dump(Formatter *f) const
   encode_json("bucket_id", bucket_id, f);
 }
 
-void rgw_bucket::decode_json(JSONObj *obj) {
-  JSONDecoder::decode_json("name", name, obj);
-  JSONDecoder::decode_json("pool", data_pool, obj);
-  JSONDecoder::decode_json("data_extra_pool", data_extra_pool, obj);
-  JSONDecoder::decode_json("index_pool", index_pool, obj);
-  JSONDecoder::decode_json("marker", marker, obj);
-  JSONDecoder::decode_json("bucket_id", bucket_id, obj);
+void rgw_bucket::decode_json(JSONObj *oid) {
+  JSONDecoder::decode_json("name", name, oid);
+  JSONDecoder::decode_json("pool", data_pool, oid);
+  JSONDecoder::decode_json("data_extra_pool", data_extra_pool, oid);
+  JSONDecoder::decode_json("index_pool", index_pool, oid);
+  JSONDecoder::decode_json("marker", marker, oid);
+  JSONDecoder::decode_json("bucket_id", bucket_id, oid);
 }
 
 void RGWBucketEntryPoint::dump(Formatter *f) const
@@ -516,14 +516,14 @@ void RGWBucketEntryPoint::dump(Formatter *f) const
   }
 }
 
-void RGWBucketEntryPoint::decode_json(JSONObj *obj) {
-  JSONDecoder::decode_json("bucket", bucket, obj);
-  JSONDecoder::decode_json("owner", owner, obj);
-  JSONDecoder::decode_json("creation_time", creation_time, obj);
-  JSONDecoder::decode_json("linked", linked, obj);
-  JSONDecoder::decode_json("has_bucket_info", has_bucket_info, obj);
+void RGWBucketEntryPoint::decode_json(JSONObj *oid) {
+  JSONDecoder::decode_json("bucket", bucket, oid);
+  JSONDecoder::decode_json("owner", owner, oid);
+  JSONDecoder::decode_json("creation_time", creation_time, oid);
+  JSONDecoder::decode_json("linked", linked, oid);
+  JSONDecoder::decode_json("has_bucket_info", has_bucket_info, oid);
   if (has_bucket_info) {
-    JSONDecoder::decode_json("old_bucket_info", old_bucket_info, obj);
+    JSONDecoder::decode_json("old_bucket_info", old_bucket_info, oid);
   }
 }
 
@@ -539,15 +539,15 @@ void RGWBucketInfo::dump(Formatter *f) const
   encode_json("quota", quota, f);
 }
 
-void RGWBucketInfo::decode_json(JSONObj *obj) {
-  JSONDecoder::decode_json("bucket", bucket, obj);
-  JSONDecoder::decode_json("creation_time", creation_time, obj);
-  JSONDecoder::decode_json("owner", owner, obj);
-  JSONDecoder::decode_json("flags", flags, obj);
-  JSONDecoder::decode_json("region", region, obj);
-  JSONDecoder::decode_json("placement_rule", placement_rule, obj);
-  JSONDecoder::decode_json("has_instance_obj", has_instance_obj, obj);
-  JSONDecoder::decode_json("quota", quota, obj);
+void RGWBucketInfo::decode_json(JSONObj *oid) {
+  JSONDecoder::decode_json("bucket", bucket, oid);
+  JSONDecoder::decode_json("creation_time", creation_time, oid);
+  JSONDecoder::decode_json("owner", owner, oid);
+  JSONDecoder::decode_json("flags", flags, oid);
+  JSONDecoder::decode_json("region", region, oid);
+  JSONDecoder::decode_json("placement_rule", placement_rule, oid);
+  JSONDecoder::decode_json("has_instance_obj", has_instance_obj, oid);
+  JSONDecoder::decode_json("quota", quota, oid);
 }
 
 void RGWObjEnt::dump(Formatter *f) const
@@ -604,10 +604,10 @@ void RGWZoneParams::dump(Formatter *f) const
   encode_json("placement_pools", placement_pools, f);
 }
 
-static void decode_json(const char *field, rgw_bucket& bucket, JSONObj *obj)
+static void decode_json(const char *field, rgw_bucket& bucket, JSONObj *oid)
 {
   string pool;
-  JSONDecoder::decode_json(field, pool, obj);
+  JSONDecoder::decode_json(field, pool, oid);
   if (pool[0] != '.') {
     pool = string(".") + pool;
   }
@@ -621,27 +621,27 @@ void RGWZonePlacementInfo::dump(Formatter *f) const
   encode_json("data_extra_pool", data_extra_pool, f);
 }
 
-void RGWZonePlacementInfo::decode_json(JSONObj *obj)
+void RGWZonePlacementInfo::decode_json(JSONObj *oid)
 {
-  JSONDecoder::decode_json("index_pool", index_pool, obj);
-  JSONDecoder::decode_json("data_pool", data_pool, obj);
-  JSONDecoder::decode_json("data_extra_pool", data_extra_pool, obj);
+  JSONDecoder::decode_json("index_pool", index_pool, oid);
+  JSONDecoder::decode_json("data_pool", data_pool, oid);
+  JSONDecoder::decode_json("data_extra_pool", data_extra_pool, oid);
 }
 
-void RGWZoneParams::decode_json(JSONObj *obj)
+void RGWZoneParams::decode_json(JSONObj *oid)
 {
-  ::decode_json("domain_root", domain_root, obj);
-  ::decode_json("control_pool", control_pool, obj);
-  ::decode_json("gc_pool", gc_pool, obj);
-  ::decode_json("log_pool", log_pool, obj);
-  ::decode_json("intent_log_pool", intent_log_pool, obj);
-  ::decode_json("usage_log_pool", usage_log_pool, obj);
-  ::decode_json("user_keys_pool", user_keys_pool, obj);
-  ::decode_json("user_email_pool", user_email_pool, obj);
-  ::decode_json("user_uid_pool", user_uid_pool, obj);
-  ::decode_json("user_swift_pool", user_swift_pool, obj);
-  JSONDecoder::decode_json("system_key", system_key, obj);
-  JSONDecoder::decode_json("placement_pools", placement_pools, obj);
+  ::decode_json("domain_root", domain_root, oid);
+  ::decode_json("control_pool", control_pool, oid);
+  ::decode_json("gc_pool", gc_pool, oid);
+  ::decode_json("log_pool", log_pool, oid);
+  ::decode_json("intent_log_pool", intent_log_pool, oid);
+  ::decode_json("usage_log_pool", usage_log_pool, oid);
+  ::decode_json("user_keys_pool", user_keys_pool, oid);
+  ::decode_json("user_email_pool", user_email_pool, oid);
+  ::decode_json("user_uid_pool", user_uid_pool, oid);
+  ::decode_json("user_swift_pool", user_swift_pool, oid);
+  JSONDecoder::decode_json("system_key", system_key, oid);
+  JSONDecoder::decode_json("placement_pools", placement_pools, oid);
 }
 
 void RGWZone::dump(Formatter *f) const
@@ -652,12 +652,12 @@ void RGWZone::dump(Formatter *f) const
   encode_json("log_data", log_data, f);
 }
 
-void RGWZone::decode_json(JSONObj *obj)
+void RGWZone::decode_json(JSONObj *oid)
 {
-  JSONDecoder::decode_json("name", name, obj);
-  JSONDecoder::decode_json("endpoints", endpoints, obj);
-  JSONDecoder::decode_json("log_meta", log_meta, obj);
-  JSONDecoder::decode_json("log_data", log_data, obj);
+  JSONDecoder::decode_json("name", name, oid);
+  JSONDecoder::decode_json("endpoints", endpoints, oid);
+  JSONDecoder::decode_json("log_meta", log_meta, oid);
+  JSONDecoder::decode_json("log_data", log_data, oid);
 }
 
 void RGWRegionPlacementTarget::dump(Formatter *f) const
@@ -666,10 +666,10 @@ void RGWRegionPlacementTarget::dump(Formatter *f) const
   encode_json("tags", tags, f);
 }
 
-void RGWRegionPlacementTarget::decode_json(JSONObj *obj)
+void RGWRegionPlacementTarget::decode_json(JSONObj *oid)
 {
-  JSONDecoder::decode_json("name", name, obj);
-  JSONDecoder::decode_json("tags", tags, obj);
+  JSONDecoder::decode_json("name", name, oid);
+  JSONDecoder::decode_json("tags", tags, oid);
 }
 
 void RGWRegion::dump(Formatter *f) const
@@ -699,16 +699,16 @@ static void decode_placement_targets(map<string, RGWRegionPlacementTarget>& targ
 }
 
 
-void RGWRegion::decode_json(JSONObj *obj)
+void RGWRegion::decode_json(JSONObj *oid)
 {
-  JSONDecoder::decode_json("name", name, obj);
-  JSONDecoder::decode_json("api_name", api_name, obj);
-  JSONDecoder::decode_json("is_master", is_master, obj);
-  JSONDecoder::decode_json("endpoints", endpoints, obj);
-  JSONDecoder::decode_json("master_zone", master_zone, obj);
-  JSONDecoder::decode_json("zones", zones, decode_zones, obj);
-  JSONDecoder::decode_json("placement_targets", placement_targets, decode_placement_targets, obj);
-  JSONDecoder::decode_json("default_placement", default_placement, obj);
+  JSONDecoder::decode_json("name", name, oid);
+  JSONDecoder::decode_json("api_name", api_name, oid);
+  JSONDecoder::decode_json("is_master", is_master, oid);
+  JSONDecoder::decode_json("endpoints", endpoints, oid);
+  JSONDecoder::decode_json("master_zone", master_zone, oid);
+  JSONDecoder::decode_json("zones", zones, decode_zones, oid);
+  JSONDecoder::decode_json("placement_targets", placement_targets, decode_placement_targets, oid);
+  JSONDecoder::decode_json("default_placement", default_placement, oid);
 }
 
 
@@ -720,11 +720,11 @@ void RGWRegionMap::dump(Formatter *f) const
   encode_json("user_quota", user_quota, f);
 }
 
-void RGWRegionMap::decode_json(JSONObj *obj)
+void RGWRegionMap::decode_json(JSONObj *oid)
 {
-  JSONDecoder::decode_json("regions", regions, obj);
-  JSONDecoder::decode_json("master_region", master_region, obj);
-  JSONDecoder::decode_json("user_quota", user_quota, obj);
+  JSONDecoder::decode_json("regions", regions, oid);
+  JSONDecoder::decode_json("master_region", master_region, oid);
+  JSONDecoder::decode_json("user_quota", user_quota, oid);
 }
 
 void RGWMetadataLogInfo::dump(Formatter *f) const
@@ -733,10 +733,10 @@ void RGWMetadataLogInfo::dump(Formatter *f) const
   encode_json("last_update", last_update, f);
 }
 
-void RGWMetadataLogInfo::decode_json(JSONObj *obj)
+void RGWMetadataLogInfo::decode_json(JSONObj *oid)
 {
-  JSONDecoder::decode_json("marker", marker, obj);
-  JSONDecoder::decode_json("last_update", last_update, obj);
+  JSONDecoder::decode_json("marker", marker, oid);
+  JSONDecoder::decode_json("last_update", last_update, oid);
 }
 
 void RGWDataChangesLogInfo::dump(Formatter *f) const
@@ -745,49 +745,49 @@ void RGWDataChangesLogInfo::dump(Formatter *f) const
   encode_json("last_update", last_update, f);
 }
 
-void RGWDataChangesLogInfo::decode_json(JSONObj *obj)
+void RGWDataChangesLogInfo::decode_json(JSONObj *oid)
 {
-  JSONDecoder::decode_json("marker", marker, obj);
-  JSONDecoder::decode_json("last_update", last_update, obj);
+  JSONDecoder::decode_json("marker", marker, oid);
+  JSONDecoder::decode_json("last_update", last_update, oid);
 }
 
-void KeystoneToken::Metadata::decode_json(JSONObj *obj)
+void KeystoneToken::Metadata::decode_json(JSONObj *oid)
 {
-  JSONDecoder::decode_json("is_admin", is_admin, obj);
+  JSONDecoder::decode_json("is_admin", is_admin, oid);
 }
 
-void KeystoneToken::Service::Endpoint::decode_json(JSONObj *obj)
+void KeystoneToken::Service::Endpoint::decode_json(JSONObj *oid)
 {
-  JSONDecoder::decode_json("id", id, obj);
-  JSONDecoder::decode_json("adminURL", admin_url, obj);
-  JSONDecoder::decode_json("publicURL", public_url, obj);
-  JSONDecoder::decode_json("internalURL", internal_url, obj);
-  JSONDecoder::decode_json("region", region, obj);
+  JSONDecoder::decode_json("id", id, oid);
+  JSONDecoder::decode_json("adminURL", admin_url, oid);
+  JSONDecoder::decode_json("publicURL", public_url, oid);
+  JSONDecoder::decode_json("internalURL", internal_url, oid);
+  JSONDecoder::decode_json("region", region, oid);
 }
 
-void KeystoneToken::Service::decode_json(JSONObj *obj)
+void KeystoneToken::Service::decode_json(JSONObj *oid)
 {
-  JSONDecoder::decode_json("type", type, obj, true);
-  JSONDecoder::decode_json("name", name, obj, true);
-  JSONDecoder::decode_json("endpoints", endpoints, obj);
+  JSONDecoder::decode_json("type", type, oid, true);
+  JSONDecoder::decode_json("name", name, oid, true);
+  JSONDecoder::decode_json("endpoints", endpoints, oid);
 }
 
-void KeystoneToken::Token::Tenant::decode_json(JSONObj *obj)
+void KeystoneToken::Token::Tenant::decode_json(JSONObj *oid)
 {
-  JSONDecoder::decode_json("id", id, obj, true);
-  JSONDecoder::decode_json("name", name, obj, true);
-  JSONDecoder::decode_json("description", description, obj);
-  JSONDecoder::decode_json("enabled", enabled, obj);
+  JSONDecoder::decode_json("id", id, oid, true);
+  JSONDecoder::decode_json("name", name, oid, true);
+  JSONDecoder::decode_json("description", description, oid);
+  JSONDecoder::decode_json("enabled", enabled, oid);
 }
 
-void KeystoneToken::Token::decode_json(JSONObj *obj)
+void KeystoneToken::Token::decode_json(JSONObj *oid)
 {
   string expires_iso8601;
   struct tm t;
 
-  JSONDecoder::decode_json("id", id, obj, true);
-  JSONDecoder::decode_json("tenant", tenant, obj, true);
-  JSONDecoder::decode_json("expires", expires_iso8601, obj, true);
+  JSONDecoder::decode_json("id", id, oid, true);
+  JSONDecoder::decode_json("tenant", tenant, oid, true);
+  JSONDecoder::decode_json("expires", expires_iso8601, oid, true);
 
   if (parse_iso8601(expires_iso8601.c_str(), &t)) {
     expires = timegm(&t);
@@ -797,18 +797,18 @@ void KeystoneToken::Token::decode_json(JSONObj *obj)
   }
 }
 
-void KeystoneToken::User::Role::decode_json(JSONObj *obj)
+void KeystoneToken::User::Role::decode_json(JSONObj *oid)
 {
-  JSONDecoder::decode_json("id", id, obj);
-  JSONDecoder::decode_json("name", name, obj);
+  JSONDecoder::decode_json("id", id, oid);
+  JSONDecoder::decode_json("name", name, oid);
 }
 
-void KeystoneToken::User::decode_json(JSONObj *obj)
+void KeystoneToken::User::decode_json(JSONObj *oid)
 {
-  JSONDecoder::decode_json("id", id, obj, true);
-  JSONDecoder::decode_json("name", name, obj);
-  JSONDecoder::decode_json("username", user_name, obj, true);
-  JSONDecoder::decode_json("roles", roles, obj);
+  JSONDecoder::decode_json("id", id, oid, true);
+  JSONDecoder::decode_json("name", name, oid);
+  JSONDecoder::decode_json("username", user_name, oid, true);
+  JSONDecoder::decode_json("roles", roles, oid);
 }
 
 void KeystoneToken::decode_json(JSONObj *access_obj)

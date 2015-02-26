@@ -15,14 +15,14 @@ public:
   RBDBackend(std::map<std::string, std::shared_ptr<librbd::Image> > *images)
     : m_images(images) {}
   void write(
-    const std::string &oid,
+    const std::string &oid_t,
     uint64_t offset,
     const bufferlist &bl,
     Context *on_applied,
     Context *on_commit);
 
   void read(
-    const std::string &oid,
+    const std::string &oid_t,
     uint64_t offset,
     uint64_t length,
     bufferlist *bl,

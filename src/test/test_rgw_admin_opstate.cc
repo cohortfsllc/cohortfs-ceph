@@ -35,7 +35,6 @@ extern "C"{
 #include "rgw/rgw_common.h"
 #include "rgw/rgw_bucket.h"
 #include "rgw/rgw_rados.h"
-#include "include/utime.h"
 #include "common/oid.h"
 #include "cls/statelog/cls_statelog_types.h"
 #define GTEST
@@ -481,12 +480,12 @@ int parse_json_resp(JSONParser &parser) {
   return 0;
 }
 
-static int decode_json(JSONObj *obj, cls_statelog_entry& ret) {
-  JSONDecoder::decode_json("op_id", ret.op_id, obj);
-  JSONDecoder::decode_json("client_id", ret.client_id, obj);
-  JSONDecoder::decode_json("object", ret.object, obj);
+static int decode_json(JSONObj *oid, cls_statelog_entry& ret) {
+  JSONDecoder::decode_json("op_id", ret.op_id, oid);
+  JSONDecoder::decode_json("client_id", ret.client_id, oid);
+  JSONDecoder::decode_json("object", ret.object, oid);
   string state;
-  JSONDecoder::decode_json("state", state, obj);
+  JSONDecoder::decode_json("state", state, oid);
   RGWOpState oc(store);
   return oc.state_from_str(state, (RGWOpState::OpState *)&ret.state);
 }

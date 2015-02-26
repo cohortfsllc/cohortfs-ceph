@@ -568,7 +568,7 @@ public:
 					       new TestOp::CallbackInfo(0));
     comp = context->rados.aio_create_completion((void*) cb_arg, NULL,
 						&write_callback);
-    context->io_ctx.aio_operate(context->prefix+oid, comp, &op);
+    context->io_ctx.aio_operate(context->prefix + oid, comp, &op);
   }
 
   void _finish(CallbackInfo *info)
@@ -689,7 +689,7 @@ public:
 	op.write(i->first, to_write);
       }
       context->io_ctx.aio_operate(
-	context->prefix+oid, completion,
+	context->prefix + oid, completion,
 	&op);
     }
 
@@ -719,7 +719,7 @@ public:
     waiting_on++;
     read_op.read(0, 1, &rbuffer, 0);
     context->io_ctx.aio_operate(
-      context->prefix+oid, rcompletion,
+      context->prefix + oid, rcompletion,
       &read_op,
       librados::OPERATION_ORDER_READS_WRITES,  // order wrt previous write/update
       0);
@@ -820,9 +820,10 @@ public:
     interval_set<uint64_t> ranges;
     csl.unlock();
 
-    int r = context->io_ctx.remove(context->prefix+oid);
+    int r = context->io_ctx.remove(context->prefix + oid);
     if (r && !(r == -ENOENT && !present)) {
-      cerr << "r is " << r << " while deleting " << oid << " and present is " << present << std::endl;
+      cerr << "r is " << r << " while deleting " << oid << " and present is "
+	   << present << std::endl;
       assert(0);
     }
 
@@ -928,7 +929,8 @@ public:
       op.omap_get_header(&header, 0);
     }
     op.getxattrs(xattrs, 0);
-    assert(!context->io_ctx.aio_operate(context->prefix+oid, completion, &op, 0));
+    assert(!context->io_ctx.aio_operate(context->prefix + oid,
+					completion, &op, 0));
   }
 
   void _finish(CallbackInfo *info)
@@ -1103,12 +1105,12 @@ public:
 	ctx = context->watch(oid);
       }
 
-      r = context->io_ctx.watch(context->prefix+oid,
+      r = context->io_ctx.watch(context->prefix + oid,
 				0,
 				&ctx->get_handle(),
 				ctx);
     } else {
-      r = context->io_ctx.unwatch(context->prefix+oid,
+      r = context->io_ctx.unwatch(context->prefix + oid,
 				  ctx->get_handle());
       {
 	RadosTestContext::lock_guard l(context->state_lock);

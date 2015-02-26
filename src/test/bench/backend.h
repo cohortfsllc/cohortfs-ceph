@@ -11,14 +11,14 @@ public:
   typedef std::lock_guard<std::mutex> lock_guard;
   typedef std::unique_lock<std::mutex> unique_lock;
   virtual void write(
-    const std::string &oid,
+    const std::string &oid_t,
     uint64_t offset,
     const ceph::bufferlist &bl,
     Context *on_applied,
     Context *on_commit) = 0;
 
   virtual void read(
-    const std::string &oid,
+    const std::string &oid_t,
     uint64_t offset,
     uint64_t length,
     ceph::bufferlist *bl,

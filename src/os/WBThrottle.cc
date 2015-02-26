@@ -111,7 +111,7 @@ void WBThrottle::handle_conf_change(const md_config_t *conf,
 }
 
 bool WBThrottle::get_next_should_flush(unique_lock& l,
-  boost::tuple<oid, FDRef, PendingWB> *next)
+  boost::tuple<oid_t, FDRef, PendingWB> *next)
 {
   assert(l.owns_lock());
   assert(next);
@@ -123,11 +123,11 @@ bool WBThrottle::get_next_should_flush(unique_lock& l,
   if (stopping)
     return false;
   assert(!pending_wbs.empty());
-  oid obj(pop_object());
+  oid_t oid(pop_object());
 
-  map<oid, pair<PendingWB, FDRef> >::iterator i =
-    pending_wbs.find(obj);
-  *next = boost::make_tuple(obj, i->second.second, i->second.first);
+  map<oid_t, pair<PendingWB, FDRef> >::iterator i =
+    pending_wbs.find(oid);
+  *next = boost::make_tuple(oid, i->second.second, i->second.first);
   pending_wbs.erase(i);
   return true;
 }
@@ -136,7 +136,7 @@ bool WBThrottle::get_next_should_flush(unique_lock& l,
 void *WBThrottle::entry()
 {
   unique_lock l(lock);
-  boost::tuple<oid, FDRef, PendingWB> wb;
+  boost::tuple<oid_t, FDRef, PendingWB> wb;
   while (get_next_should_flush(l, &wb)) {
     clearing = wb.get<0>();
     l.unlock();
@@ -152,17 +152,17 @@ void *WBThrottle::entry()
     }
 #endif
     l.lock();
-    clearing = oid();
+    clearing = oid_t();
     cur_ios -= wb.get<2>().ios;
     cur_size -= wb.get<2>().size;
     cond.notify_all();
-    wb = boost::tuple<oid, FDRef, PendingWB>();
+    wb = boost::tuple<oid_t, FDRef, PendingWB>();
   }
   return 0;
 }
 
 void WBThrottle::queue_wb(
-  FDRef fd, const oid &hoid, uint64_t offset, uint64_t len,
+  FDRef fd, const oid_t &hoid, uint64_t offset, uint64_t len,
   bool nocache)
 {
   lock_guard l(lock);
@@ -200,7 +200,7 @@ void WBThrottle::clear()
   cond.notify_all();
 }
 
-void WBThrottle::clear_object(const oid &hoid)
+void WBThrottle::clear_object(const oid_t &hoid)
 {
   unique_lock l(lock);
   while (clearing == hoid)

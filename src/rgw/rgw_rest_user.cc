@@ -627,9 +627,9 @@ struct UserQuotas {
     encode_json("bucket_quota", bucket_quota, f);
     encode_json("user_quota", user_quota, f);
   }
-  void decode_json(JSONObj *obj) {
-    JSONDecoder::decode_json("bucket_quota", bucket_quota, obj);
-    JSONDecoder::decode_json("user_quota", user_quota, obj);
+  void decode_json(JSONObj *oid) {
+    JSONDecoder::decode_json("bucket_quota", bucket_quota, oid);
+    JSONDecoder::decode_json("user_quota", user_quota, oid);
   }
 };
 

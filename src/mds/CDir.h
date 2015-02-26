@@ -451,7 +451,7 @@ private:
   }
 
   // -- fetch --
-  oid get_ondisk_object() {
+  oid_t get_ondisk_object() {
     return file_oid(ino());
   }
   void fetch(Context *c, bool ignore_authpinnability=false);

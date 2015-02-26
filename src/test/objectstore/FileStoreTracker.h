@@ -80,19 +80,19 @@ public:
     class Remove: public Op {
     public:
       string coll;
-      string obj;
+      string oid;
       Remove(const string &coll,
-	     const string &obj)
-	: coll(coll), obj(obj) {}
+	     const string &oid)
+	: coll(coll), oid(oid) {}
       void operator()(FileStoreTracker *harness,
 		      OutTransaction *out) {
-	harness->remove(make_pair(coll, obj),
+	harness->remove(make_pair(coll, oid),
 			out);
       }
     };
   public:
-    void write(const string &coll, const string &oid) {
-      ops.push_back(new Write(coll, oid));
+    void write(const string &coll, const string &oid_t) {
+      ops.push_back(new Write(coll, oid_t));
     }
     void clone_range(const string &coll, const string &from,
 		     const string &to) {
@@ -102,8 +102,8 @@ public:
 	       const string &to) {
       ops.push_back(new Clone(coll, from, to));
     }
-    void remove(const string &coll, const string &oid) {
-      ops.push_back(new Remove(coll, oid));
+    void remove(const string &coll, const string &oid_t) {
+      ops.push_back(new Remove(coll, oid_t));
     }
     friend class FileStoreTracker;
   };
@@ -115,17 +115,17 @@ public:
 	      bool on_start = false);
 
 private:
-  ObjectContents get_current_content(const pair<string, string> &obj);
-  pair<uint64_t, uint64_t> get_valid_reads(const pair<string, string> &obj);
-  ObjectContents get_content(const pair<string, string> &obj, uint64_t version);
+  ObjectContents get_current_content(const pair<string, string> &oid);
+  pair<uint64_t, uint64_t> get_valid_reads(const pair<string, string> &oid);
+  ObjectContents get_content(const pair<string, string> &oid, uint64_t version);
 
-  void committed(const pair<string, string> &obj, uint64_t seq);
-  void applied(const pair<string, string> &obj, uint64_t seq);
-  uint64_t set_content(const pair<string, string> &obj, ObjectContents &content);
+  void committed(const pair<string, string> &oid, uint64_t seq);
+  void applied(const pair<string, string> &oid, uint64_t seq);
+  uint64_t set_content(const pair<string, string> &oid, ObjectContents &content);
 
   // ObjectContents Operations
-  void write(const pair<string, string> &obj, OutTransaction *out);
-  void remove(const pair<string, string> &obj, OutTransaction *out);
+  void write(const pair<string, string> &oid, OutTransaction *out);
+  void remove(const pair<string, string> &oid, OutTransaction *out);
   void clone_range(const pair<string, string> &from,
 		   const pair<string, string> &to,
 		   OutTransaction *out);

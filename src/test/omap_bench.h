@@ -51,7 +51,7 @@ typedef int (OmapBench::*test_t)(omap_generator_t omap_gen);
 
 class Writer{
 protected:
-  string oid;
+  string oid_t;
   ceph::mono_time begin_time;
   ceph::mono_time end_time;
   std::map<std::string,bufferlist> omap;
@@ -119,7 +119,7 @@ public:
       comp(NULL), safe(aio_is_safe),
       pool_name("data"),
       rados_id("admin"),
-      prefix(rados_id+".obj."),
+      prefix(rados_id+".oid."),
       threads(3), objects(100), entries_per_omap(10), key_size(10),
       value_size(100), increment(10)
   {}

@@ -169,7 +169,7 @@ void WorkloadGenerator::init_args(vector<const char*> args)
 	"--test-write-data-size", (char*) NULL)) {
       m_write_data_bytes = _parse_size_or_die(val);
     } else if (ceph_argparse_witharg(args, i, &val,
-	"--test-write-xattr-obj-size", (char*) NULL)) {
+	"--test-write-xattr-oid-size", (char*) NULL)) {
       m_write_xattr_obj_bytes = _parse_size_or_die(val);
     } else if (ceph_argparse_witharg(args, i, &val,
 	"--test-write-xattr-coll-size", (char*) NULL)) {
@@ -205,7 +205,7 @@ TestObjectStoreState::coll_entry_t *WorkloadGenerator::get_rnd_coll_entry(bool e
   return entry;
 }
 
-oid *WorkloadGenerator::get_rnd_obj(coll_entry_t *entry)
+oid_t *WorkloadGenerator::get_rnd_obj(coll_entry_t *entry)
 {
   assert(entry != NULL);
 
@@ -249,7 +249,7 @@ void WorkloadGenerator::get_filled_byte_array(bufferlist& bl, size_t size)
 }
 
 void WorkloadGenerator::do_write_object(ObjectStore::Transaction *t,
-					coll_t coll, oid obj,
+					coll_t coll, oid_t oid,
 					C_StatState *stat)
 {
   if (m_suppress_write_data) {
@@ -264,17 +264,17 @@ void WorkloadGenerator::do_write_object(ObjectStore::Transaction *t,
   bufferlist bl;
   get_filled_byte_array(bl, size);
 
-  dout(2) << __func__ << " " << coll << "/" << obj
+  dout(2) << __func__ << " " << coll << "/" << oid
 	  << " size " << bl.length() << dendl;
 
   if (m_do_stats && (stat != NULL))
     stat->written_data += bl.length();
 
-  t->write(coll, obj, 0, bl.length(), bl);
+  t->write(coll, oid, 0, bl.length(), bl);
 }
 
 void WorkloadGenerator::do_setattr_object(ObjectStore::Transaction *t,
-					  coll_t coll, oid obj,
+					  coll_t coll, oid_t oid,
 					  C_StatState *stat)
 {
   if (m_suppress_write_xattr_obj) {
@@ -289,12 +289,12 @@ void WorkloadGenerator::do_setattr_object(ObjectStore::Transaction *t,
   bufferlist bl;
   get_filled_byte_array(bl, size);
 
-  dout(2) << __func__ << " " << coll << "/" << obj << " size " << size << dendl;
+  dout(2) << __func__ << " " << coll << "/" << oid << " size " << size << dendl;
 
   if (m_do_stats && (stat != NULL))
       stat->written_data += bl.length();
 
-  t->setattr(coll, obj, "objxattr", bl);
+  t->setattr(coll, oid, "objxattr", bl);
 }
 
 void WorkloadGenerator::do_setattr_collection(ObjectStore::Transaction *t,
@@ -331,7 +331,7 @@ void WorkloadGenerator::do_append_log(ObjectStore::Transaction *t,
 
   bufferlist bl;
   get_filled_byte_array(bl, size);
-  oid log_obj = entry->m_meta_obj;
+  oid_t log_obj = entry->m_meta_obj;
 
   dout(2) << __func__ << " coll " << entry->m_coll << " "
       << META_COLL << " /" << log_obj << " (" << bl.length() << ")" << dendl;
@@ -350,12 +350,12 @@ void WorkloadGenerator::do_destroy_collection(ObjectStore::Transaction *t,
 {
   m_nr_runs = 0;
   entry->m_osr.flush();
-  vector<oid> ls;
+  vector<oid_t> ls;
   m_store->collection_list(entry->m_coll, ls);
   dout(2) << __func__ << " coll " << entry->m_coll
       << " (" << ls.size() << " objects)" << dendl;
 
-  for (vector<oid>::iterator it = ls.begin(); it < ls.end(); ++it) {
+  for (vector<oid_t>::iterator it = ls.begin(); it < ls.end(); ++it) {
     t->remove(entry->m_coll, *it);
   }
 
@@ -465,10 +465,10 @@ void WorkloadGenerator::run()
       if (!m_num_ops)
 	create_coll = true;
     } else {
-      oid *obj = get_rnd_obj(entry);
+      oid_t *oid = get_rnd_obj(entry);
 
-      do_write_object(t, entry->m_coll, *obj, stat_state);
-      do_setattr_object(t, entry->m_coll, *obj, stat_state);
+      do_write_object(t, entry->m_coll, *oid, stat_state);
+      do_setattr_object(t, entry->m_coll, *oid, stat_state);
       do_setattr_collection(t, entry->m_coll, stat_state);
       do_append_log(t, entry, stat_state);
 
@@ -525,7 +525,7 @@ Test-specific Options:\n\
 				      (default: 50)\n\
    --test-suppress-ops OPS	      Suppress ops specified in OPS\n\
    --test-write-data-size SIZE	      Specify SIZE for all data writes\n\
-   --test-write-xattr-obj-size SIZE   Specify SIZE for all xattrs on objects\n\
+   --test-write-xattr-oid-size SIZE   Specify SIZE for all xattrs on objects\n\
    --test-write-xattr-coll-size SIZE  Specify SIZE for all xattrs on colls\n\
    --test-write-pglog-size SIZE	      Specify SIZE for all pglog writes\n\
    --test-show-stats		      Show stats as we go\n\

@@ -26,7 +26,7 @@ int dupstore(ObjectStore* src, ObjectStore* dst)
   if (dst->mount() < 0) return 1;
 
   // objects
-  map<oid, coll_t> did_object;
+  map<oid_t, coll_t> did_object;
 
   // collections
   vector<coll_t> collections;

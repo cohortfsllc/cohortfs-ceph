@@ -26,18 +26,18 @@ TEST(cls_rgw, test_implicit) /* test refcount using implicit referencing of newl
   ASSERT_EQ(0, rados.ioctx_create(volume_name.c_str(), ioctx));
 
   /* add chains */
-  string oid = "obj";
+  string oid_t = "oid";
 
 
   /* create object */
 
-  ASSERT_EQ(0, ioctx.create(oid, true));
+  ASSERT_EQ(0, ioctx.create(oid_t, true));
 
   /* read reference, should return a single wildcard entry */
 
   list<string> refs;
 
-  ASSERT_EQ(0, cls_refcount_read(ioctx, oid, &refs, true));
+  ASSERT_EQ(0, cls_refcount_read(ioctx, oid_t, &refs, true));
   ASSERT_EQ(1, (int)refs.size());
 
   string wildcard_tag;
@@ -52,9 +52,9 @@ TEST(cls_rgw, test_implicit) /* test refcount using implicit referencing of newl
 
   librados::ObjectWriteOperation *op = new_op(ioctx);
   cls_refcount_get(*op, newtag, true);
-  ASSERT_EQ(0, ioctx.operate(oid, op));
+  ASSERT_EQ(0, ioctx.operate(oid_t, op));
 
-  ASSERT_EQ(0, cls_refcount_read(ioctx, oid, &refs, true));
+  ASSERT_EQ(0, cls_refcount_read(ioctx, oid_t, &refs, true));
   ASSERT_EQ(2, (int)refs.size());
 
   map<string, bool> refs_map;
@@ -71,9 +71,9 @@ TEST(cls_rgw, test_implicit) /* test refcount using implicit referencing of newl
 
   op = new_op(ioctx);
   cls_refcount_put(*op, oldtag, true);
-  ASSERT_EQ(0, ioctx.operate(oid, op));
+  ASSERT_EQ(0, ioctx.operate(oid_t, op));
 
-  ASSERT_EQ(0, cls_refcount_read(ioctx, oid, &refs, true));
+  ASSERT_EQ(0, cls_refcount_read(ioctx, oid_t, &refs, true));
   ASSERT_EQ(1, (int)refs.size());
 
   tag = refs.front();
@@ -85,9 +85,9 @@ TEST(cls_rgw, test_implicit) /* test refcount using implicit referencing of newl
 
   op = new_op(ioctx);
   cls_refcount_put(*op, oldtag, true);
-  ASSERT_EQ(0, ioctx.operate(oid, op));
+  ASSERT_EQ(0, ioctx.operate(oid_t, op));
 
-  ASSERT_EQ(0, cls_refcount_read(ioctx, oid, &refs, true));
+  ASSERT_EQ(0, cls_refcount_read(ioctx, oid_t, &refs, true));
   ASSERT_EQ(1, (int)refs.size());
 
   tag = refs.front();
@@ -98,9 +98,9 @@ TEST(cls_rgw, test_implicit) /* test refcount using implicit referencing of newl
   /* drop newtag reference, make sure object removed */
   op = new_op(ioctx);
   cls_refcount_put(*op, newtag, true);
-  ASSERT_EQ(0, ioctx.operate(oid, op));
+  ASSERT_EQ(0, ioctx.operate(oid_t, op));
 
-  ASSERT_EQ(-ENOENT, ioctx.stat(oid, NULL, NULL));
+  ASSERT_EQ(-ENOENT, ioctx.stat(oid_t, NULL, NULL));
 
   delete op;
 
@@ -120,18 +120,18 @@ TEST(cls_rgw, test_explicit) /* test refcount using implicit referencing of newl
   ASSERT_EQ(0, rados.ioctx_create(volume_name.c_str(), ioctx));
 
   /* add chains */
-  string oid = "obj";
+  string oid_t = "oid";
 
 
   /* create object */
 
-  ASSERT_EQ(0, ioctx.create(oid, true));
+  ASSERT_EQ(0, ioctx.create(oid_t, true));
 
   /* read reference, should return a single wildcard entry */
 
   list<string> refs;
 
-  ASSERT_EQ(0, cls_refcount_read(ioctx, oid, &refs));
+  ASSERT_EQ(0, cls_refcount_read(ioctx, oid_t, &refs));
   ASSERT_EQ(0, (int)refs.size());
 
 
@@ -141,9 +141,9 @@ TEST(cls_rgw, test_explicit) /* test refcount using implicit referencing of newl
 
   librados::ObjectWriteOperation *op = new_op(ioctx);
   cls_refcount_get(*op, newtag);
-  ASSERT_EQ(0, ioctx.operate(oid, op));
+  ASSERT_EQ(0, ioctx.operate(oid_t, op));
 
-  ASSERT_EQ(0, cls_refcount_read(ioctx, oid, &refs));
+  ASSERT_EQ(0, cls_refcount_read(ioctx, oid_t, &refs));
   ASSERT_EQ(1, (int)refs.size());
 
   map<string, bool> refs_map;
@@ -161,9 +161,9 @@ TEST(cls_rgw, test_explicit) /* test refcount using implicit referencing of newl
 
   op = new_op(ioctx);
   cls_refcount_put(*op, nosuchtag);
-  ASSERT_EQ(0, ioctx.operate(oid, op));
+  ASSERT_EQ(0, ioctx.operate(oid_t, op));
 
-  ASSERT_EQ(0, cls_refcount_read(ioctx, oid, &refs));
+  ASSERT_EQ(0, cls_refcount_read(ioctx, oid_t, &refs));
   ASSERT_EQ(1, (int)refs.size());
 
   string tag = refs.front();
@@ -174,9 +174,9 @@ TEST(cls_rgw, test_explicit) /* test refcount using implicit referencing of newl
   /* drop newtag reference, make sure object removed */
   op = new_op(ioctx);
   cls_refcount_put(*op, newtag);
-  ASSERT_EQ(0, ioctx.operate(oid, op));
+  ASSERT_EQ(0, ioctx.operate(oid_t, op));
 
-  ASSERT_EQ(-ENOENT, ioctx.stat(oid, NULL, NULL));
+  ASSERT_EQ(-ENOENT, ioctx.stat(oid_t, NULL, NULL));
 
   delete op;
 
@@ -196,12 +196,12 @@ TEST(cls_rgw, set) /* test refcount using implicit referencing of newly created 
   ASSERT_EQ(0, rados.ioctx_create(volume_name.c_str(), ioctx));
 
   /* add chains */
-  string oid = "obj";
+  string oid_t = "oid";
 
 
   /* create object */
 
-  ASSERT_EQ(0, ioctx.create(oid, true));
+  ASSERT_EQ(0, ioctx.create(oid_t, true));
 
   /* read reference, should return a single wildcard entry */
 
@@ -217,17 +217,17 @@ TEST(cls_rgw, set) /* test refcount using implicit referencing of newly created 
     tag_refs.push_back(tags[i]);
   }
 
-  ASSERT_EQ(0, cls_refcount_read(ioctx, oid, &refs));
+  ASSERT_EQ(0, cls_refcount_read(ioctx, oid_t, &refs));
   ASSERT_EQ(0, (int)refs.size());
 
   /* set reference list, verify */
 
   librados::ObjectWriteOperation *op = new_op(ioctx);
   cls_refcount_set(*op, tag_refs);
-  ASSERT_EQ(0, ioctx.operate(oid, op));
+  ASSERT_EQ(0, ioctx.operate(oid_t, op));
 
   refs.clear();
-  ASSERT_EQ(0, cls_refcount_read(ioctx, oid, &refs));
+  ASSERT_EQ(0, cls_refcount_read(ioctx, oid_t, &refs));
   ASSERT_EQ(TAGS_NUM, (int)refs.size());
 
   map<string, bool> refs_map;
@@ -246,11 +246,11 @@ TEST(cls_rgw, set) /* test refcount using implicit referencing of newly created 
   for (int i = 0; i < TAGS_NUM; i++) {
     op = new_op(ioctx);
     cls_refcount_put(*op, tags[i]);
-    ASSERT_EQ(0, ioctx.operate(oid, op));
+    ASSERT_EQ(0, ioctx.operate(oid_t, op));
     delete op;
   }
 
-  ASSERT_EQ(-ENOENT, ioctx.stat(oid, NULL, NULL));
+  ASSERT_EQ(-ENOENT, ioctx.stat(oid_t, NULL, NULL));
 
   /* remove volume */
   ioctx.close();

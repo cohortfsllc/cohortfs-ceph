@@ -573,26 +573,26 @@ struct cls_log_entry_json {
   RGWMetadataLogData log_data;
 };
 
-static int decode_json(JSONObj *obj, RGWMetadataLogData &data) {
+static int decode_json(JSONObj *oid, RGWMetadataLogData &data) {
   JSONObj *jo;
 
-  jo = obj->find_obj("read_version");
+  jo = oid->find_obj("read_version");
   if (!jo)
     return -1;
-  data.read_version.decode_json(obj);
-  data.write_version.decode_json(obj);
+  data.read_version.decode_json(oid);
+  data.write_version.decode_json(oid);
 
-  jo = obj->find_obj("status");
+  jo = oid->find_obj("status");
   if (!jo)
     return -1;
   JSONDecoder::decode_json("status", data.status, jo);
   return 0;
 }
 
-static int decode_json(JSONObj *obj, cls_log_entry_json& ret) {
-  JSONDecoder::decode_json("section", ret.section, obj);
-  JSONDecoder::decode_json("name", ret.name, obj);
-  JSONObj *jo = obj->find_obj("data");
+static int decode_json(JSONObj *oid, cls_log_entry_json& ret) {
+  JSONDecoder::decode_json("section", ret.section, oid);
+  JSONDecoder::decode_json("name", ret.name, oid);
+  JSONObj *jo = oid->find_obj("data");
   if(!jo)
     return 0;
   return decode_json(jo, ret.log_data);
@@ -632,13 +632,13 @@ struct cls_bilog_entry {
   unsigned index_ver;
 };
 
-static int decode_json(JSONObj *obj, cls_bilog_entry& ret) {
-  JSONDecoder::decode_json("op_id", ret.op_id, obj);
-  JSONDecoder::decode_json("op_tag", ret.op_tag, obj);
-  JSONDecoder::decode_json("op", ret.op, obj);
-  JSONDecoder::decode_json("object", ret.object, obj);
-  JSONDecoder::decode_json("state", ret.status, obj);
-  JSONDecoder::decode_json("index_ver", ret.index_ver, obj);
+static int decode_json(JSONObj *oid, cls_bilog_entry& ret) {
+  JSONDecoder::decode_json("op_id", ret.op_id, oid);
+  JSONDecoder::decode_json("op_tag", ret.op_tag, oid);
+  JSONDecoder::decode_json("op", ret.op, oid);
+  JSONDecoder::decode_json("object", ret.object, oid);
+  JSONDecoder::decode_json("state", ret.status, oid);
+  JSONDecoder::decode_json("index_ver", ret.index_ver, oid);
   return 0;
 }
 
@@ -667,13 +667,13 @@ static int get_bilog_list(list<cls_bilog_entry> &entries) {
   return 0;
 }
 
-static int decode_json(JSONObj *obj, rgw_data_change& ret) {
+static int decode_json(JSONObj *oid, rgw_data_change& ret) {
   string entity;
 
-  JSONDecoder::decode_json("entity_type", entity, obj);
+  JSONDecoder::decode_json("entity_type", entity, oid);
   if (entity.compare("bucket") == 0)
     ret.entity_type = ENTITY_TYPE_BUCKET;
-  JSONDecoder::decode_json("key", ret.key, obj);
+  JSONDecoder::decode_json("key", ret.key, oid);
   return 0;
 }
 

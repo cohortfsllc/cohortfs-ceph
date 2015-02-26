@@ -128,7 +128,7 @@ namespace librbd {
     return 0;
   }
 
-  int notify_change(IoCtx& io_ctx, const string& oid, ImageCtx *ictx)
+  int notify_change(IoCtx& io_ctx, const string& oid_t, ImageCtx *ictx)
   {
     if (ictx) {
       ImageCtx::lock_guard rl(ictx->refresh_lock);
@@ -140,7 +140,7 @@ namespace librbd {
     }
 
     bufferlist bl;
-    io_ctx.notify(oid, bl);
+    io_ctx.notify(oid_t, bl);
     return 0;
   }
 

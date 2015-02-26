@@ -260,11 +260,11 @@ private:
   void handle_write_error(int r);
 
 public:
-  Journaler(inodeno_t ino_, VolumeRef vol_, const char *mag, Objecter *obj,
+  Journaler(inodeno_t ino_, VolumeRef vol_, const char *mag, Objecter *oid,
 	    SafeTimer<ceph::mono_clock> *tim) :
-    cct(obj->cct), last_written(mag), last_committed(mag),
+    cct(oid->cct), last_written(mag), last_committed(mag),
     ino(ino_), volume(vol_), readonly(true), magic(mag),
-    objecter(obj),
+    objecter(oid),
 //filer(objecter),
     timer(tim), delay_flush_event(0),
     state(STATE_UNDEF), error(0),

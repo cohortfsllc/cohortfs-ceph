@@ -44,7 +44,7 @@ struct cls_statelog_entry {
   }
 
   void dump(Formatter *f) const;
-  void decode_json(JSONObj *obj);
+  void decode_json(JSONObj *oid);
 };
 WRITE_CLASS_ENCODER(cls_statelog_entry)
 

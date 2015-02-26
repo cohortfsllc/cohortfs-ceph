@@ -368,98 +368,98 @@ namespace librados
     std::string get_volume_name();
 
     // create an object
-    int create(const std::string& oid, bool exclusive);
+    int create(const std::string& oid_t, bool exclusive);
 
     /**
      * write bytes to an object at a specified offset
      *
      * NOTE: this call steals the contents of @param bl.
      */
-    int write(const std::string& oid, bufferlist& bl, size_t len, uint64_t off);
+    int write(const std::string& oid_t, bufferlist& bl, size_t len, uint64_t off);
     /**
      * append bytes to an object
      *
      * NOTE: this call steals the contents of @param bl.
      */
-    int append(const std::string& oid, bufferlist& bl, size_t len);
+    int append(const std::string& oid_t, bufferlist& bl, size_t len);
     /**
      * replace object contents with provided data
      *
      * NOTE: this call steals the contents of @param bl.
      */
-    int write_full(const std::string& oid, bufferlist& bl);
-    int read(const std::string& oid, bufferlist& bl, size_t len, uint64_t off);
-    int remove(const std::string& oid);
-    int trunc(const std::string& oid, uint64_t size);
+    int write_full(const std::string& oid_t, bufferlist& bl);
+    int read(const std::string& oid_t, bufferlist& bl, size_t len, uint64_t off);
+    int remove(const std::string& oid_t);
+    int trunc(const std::string& oid_t, uint64_t size);
     int sparse_read(const std::string& o, std::map<uint64_t,uint64_t>& m, bufferlist& bl, size_t len, uint64_t off);
-    int getxattr(const std::string& oid, const char *name, bufferlist& bl);
-    int getxattrs(const std::string& oid, std::map<std::string, bufferlist>& attrset);
-    int setxattr(const std::string& oid, const char *name, bufferlist& bl);
-    int rmxattr(const std::string& oid, const char *name);
+    int getxattr(const std::string& oid_t, const char *name, bufferlist& bl);
+    int getxattrs(const std::string& oid_t, std::map<std::string, bufferlist>& attrset);
+    int setxattr(const std::string& oid_t, const char *name, bufferlist& bl);
+    int rmxattr(const std::string& oid_t, const char *name);
     uint64_t op_size(void);
-    int stat(const std::string& oid, uint64_t *psize, time_t *pmtime);
-    int exec(const std::string& oid, const char *cls, const char *method,
+    int stat(const std::string& oid_t, uint64_t *psize, time_t *pmtime);
+    int exec(const std::string& oid_t, const char *cls, const char *method,
 	     bufferlist& inbl, bufferlist& outbl);
-    int omap_get_vals(const std::string& oid,
+    int omap_get_vals(const std::string& oid_t,
 		      const std::string& start_after,
 		      uint64_t max_return,
 		      std::map<std::string, bufferlist> &out_vals);
-    int omap_get_vals(const std::string& oid,
+    int omap_get_vals(const std::string& oid_t,
 		      const std::string& start_after,
 		      const std::string& filter_prefix,
 		      uint64_t max_return,
 		      std::map<std::string, bufferlist> &out_vals);
-    int omap_get_keys(const std::string& oid,
+    int omap_get_keys(const std::string& oid_t,
 		      const std::string& start_after,
 		      uint64_t max_return,
 		      std::set<std::string> *out_keys);
-    int omap_get_header(const std::string& oid,
+    int omap_get_header(const std::string& oid_t,
 			bufferlist *bl);
-    int omap_get_vals_by_keys(const std::string& oid,
+    int omap_get_vals_by_keys(const std::string& oid_t,
 			      const std::set<std::string>& keys,
 			      std::map<std::string, bufferlist> &vals);
-    int omap_set(const std::string& oid,
+    int omap_set(const std::string& oid_t,
 		 const std::map<std::string, bufferlist>& map);
-    int omap_set_header(const std::string& oid,
+    int omap_set_header(const std::string& oid_t,
 			const bufferlist& bl);
-    int omap_clear(const std::string& oid);
-    int omap_rm_keys(const std::string& oid,
+    int omap_clear(const std::string& oid_t);
+    int omap_rm_keys(const std::string& oid_t,
 		     const std::set<std::string>& keys);
 
     // Advisory locking on rados objects.
-    int lock_exclusive(const std::string &oid, const std::string &name,
+    int lock_exclusive(const std::string &oid_t, const std::string &name,
 		       const std::string &cookie,
 		       const std::string &description,
 		       struct timeval * duration, uint8_t flags);
 
-    int lock_shared(const std::string &oid, const std::string &name,
+    int lock_shared(const std::string &oid_t, const std::string &name,
 		    const std::string &cookie, const std::string &tag,
 		    const std::string &description,
 		    struct timeval * duration, uint8_t flags);
 
-    int unlock(const std::string &oid, const std::string &name,
+    int unlock(const std::string &oid_t, const std::string &name,
 	       const std::string &cookie);
 
-    int break_lock(const std::string &oid, const std::string &name,
+    int break_lock(const std::string &oid_t, const std::string &name,
 		   const std::string &client, const std::string &cookie);
 
-    int list_lockers(const std::string &oid, const std::string &name,
+    int list_lockers(const std::string &oid_t, const std::string &name,
 		     int *exclusive,
 		     std::string *tag,
 		     std::list<librados::locker_t> *lockers);
 
     uint64_t get_last_version();
 
-    int aio_read(const std::string& oid, AioCompletion *c,
+    int aio_read(const std::string& oid_t, AioCompletion *c,
 		 bufferlist *pbl, size_t len, uint64_t off);
-    int aio_sparse_read(const std::string& oid, AioCompletion *c,
+    int aio_sparse_read(const std::string& oid_t, AioCompletion *c,
 			std::map<uint64_t,uint64_t> *m, bufferlist *data_bl,
 			size_t len, uint64_t off);
-    int aio_write(const std::string& oid, AioCompletion *c, const bufferlist& bl,
+    int aio_write(const std::string& oid_t, AioCompletion *c, const bufferlist& bl,
 		  size_t len, uint64_t off);
-    int aio_append(const std::string& oid, AioCompletion *c, const bufferlist& bl,
+    int aio_append(const std::string& oid_t, AioCompletion *c, const bufferlist& bl,
 		  size_t len);
-    int aio_write_full(const std::string& oid, AioCompletion *c, const bufferlist& bl);
+    int aio_write_full(const std::string& oid_t, AioCompletion *c, const bufferlist& bl);
 
     /**
      * Asychronously remove an object
@@ -470,11 +470,11 @@ namespace librados
      * error code on failure.
      *
      * @param io the context to operate in
-     * @param oid the name of the object
+     * @param oid_t the name of the object
      * @param completion what to do when the remove is safe and complete
      * @returns 0 on success
      */
-    int aio_remove(const std::string& oid, AioCompletion *c);
+    int aio_remove(const std::string& oid_t, AioCompletion *c);
 
     /**
      * Wait for all currently pending aio writes to be safe.
@@ -493,20 +493,20 @@ namespace librados
      */
     int aio_flush_async(AioCompletion *c);
 
-    int aio_stat(const std::string& oid, AioCompletion *c, uint64_t *psize, time_t *pmtime);
+    int aio_stat(const std::string& oid_t, AioCompletion *c, uint64_t *psize, time_t *pmtime);
 
-    int aio_exec(const std::string& oid, AioCompletion *c, const char *cls, const char *method,
+    int aio_exec(const std::string& oid_t, AioCompletion *c, const char *cls, const char *method,
 		 bufferlist& inbl, bufferlist *outbl);
 
     // compound object operations
-    int operate(const std::string& oid, ObjectWriteOperation *op);
-    int operate(const std::string& oid, ObjectReadOperation *op, bufferlist *pbl);
-    int aio_operate(const std::string& oid, AioCompletion *c, ObjectWriteOperation *op);
-    int aio_operate(const std::string& oid, AioCompletion *c, ObjectWriteOperation *op, int flags);
-    int aio_operate(const std::string& oid, AioCompletion *c,
+    int operate(const std::string& oid_t, ObjectWriteOperation *op);
+    int operate(const std::string& oid_t, ObjectReadOperation *op, bufferlist *pbl);
+    int aio_operate(const std::string& oid_t, AioCompletion *c, ObjectWriteOperation *op);
+    int aio_operate(const std::string& oid_t, AioCompletion *c, ObjectWriteOperation *op, int flags);
+    int aio_operate(const std::string& oid_t, AioCompletion *c,
 		    ObjectReadOperation *op, bufferlist *pbl);
 
-    int aio_operate(const std::string& oid, AioCompletion *c,
+    int aio_operate(const std::string& oid_t, AioCompletion *c,
 		    ObjectReadOperation *op, int flags,
 		    bufferlist *pbl);
 

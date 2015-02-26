@@ -47,7 +47,7 @@ TYPE(ObjectStore::Transaction)
 TYPE(SequencerPosition)
 
 #include "common/oid.h"
-TYPE(oid)
+TYPE(oid_t)
 
 #include "mon/AuthMonitor.h"
 TYPE(AuthMonitor::Incremental)

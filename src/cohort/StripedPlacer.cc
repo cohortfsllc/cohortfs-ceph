@@ -55,7 +55,7 @@ uint32_t StripedPlacer::num_rules(void)
   return 1;
 }
 
-ssize_t StripedPlacer::place(const oid& object,
+ssize_t StripedPlacer::place(const oid_t& object,
 			     const OSDMap& map,
 			     const std::function<void(int)>& f) const
 {
@@ -188,7 +188,7 @@ void StripedPlacer::stride_extent(const uint64_t off, const uint64_t len,
   stridelen = stride_last_byte + 1 - strideoff;
 }
 
-void StripedPlacer::make_strides(const oid& obj,
+void StripedPlacer::make_strides(const oid_t& oid,
 				 uint64_t offset, uint64_t len,
 				 uint64_t truncate_size, uint32_t truncate_seq,
 				 vector<StrideExtent>& strides)

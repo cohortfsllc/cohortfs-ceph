@@ -69,7 +69,7 @@ int main(int argc, const char **argv)
   for (int i=0; i<mb; i++) {
     char f[30];
     snprintf(f, sizeof(f), "foo%d\n", i);
-    oid soid(f);
+    oid_t soid(f);
     t.write(coll_t(), soid, 0, bl.length(), bl);
   }
 

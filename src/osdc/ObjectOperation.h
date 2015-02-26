@@ -51,7 +51,7 @@ public:
   virtual size_t width() = 0;
   virtual void add_op(const int op) = 0;
   virtual void add_version(const uint64_t ver) = 0;
-  virtual void add_obj(const oid &obj) = 0;
+  virtual void add_obj(const oid_t &oid) = 0;
   virtual void add_single_return(bufferlist* bl, int* rval = NULL,
 				 Context* ctx = NULL) = 0;
   /* Add metadata (or commands) to an op */
@@ -426,7 +426,7 @@ public:
     add_version(ver);
   }
 
-  void assert_src_version(const oid& srcoid, uint64_t ver) {
+  void assert_src_version(const oid_t& srcoid, uint64_t ver) {
     bufferlist bl;
     add_op(CEPH_OSD_OP_ASSERT_SRC_VERSION);
     add_watch(0, ver, 0, bl);
@@ -439,7 +439,7 @@ public:
     add_xattr_cmp(name, op, mode, val);
   }
 
-  void src_cmpxattr(const oid& srcoid,
+  void src_cmpxattr(const oid_t& srcoid,
 		    const char *name, const bufferlist& val,
 		    int op, int mode) {
     add_op(CEPH_OSD_OP_SRC_CMPXATTR);
@@ -459,8 +459,8 @@ public:
   }
 
   virtual void realize(
-    const oid& obj,
-    const std::function<void(oid&&, vector<OSDOp>&&)>& f) = 0;
+    const oid_t& oid,
+    const std::function<void(oid_t&&, vector<OSDOp>&&)>& f) = 0;
 };
 
 #endif // !CEPH_OSDC_OBJECTOPERATION_H

@@ -82,12 +82,12 @@ void FileStoreTracker::submit_transaction(Transaction &t)
     new OnCommitted(this, in_flight));
 }
 
-void FileStoreTracker::write(const pair<string, string> &obj,
+void FileStoreTracker::write(const pair<string, string> &oid,
 			     OutTransaction *out)
 {
   lock_guard l(lock);
-  std::cerr << "Writing " << obj << std::endl;
-  ObjectContents contents = get_current_content(obj);
+  std::cerr << "Writing " << oid << std::endl;
+  ObjectContents contents = get_current_content(oid);
 
   uint64_t offset = rand() % (SIZE/2);
   uint64_t len = rand() % (SIZE/2);
@@ -103,26 +103,26 @@ void FileStoreTracker::write(const pair<string, string> &obj,
     assert(iter.valid());
     to_write.append(*iter);
   }
-  out->t->write(coll_t(obj.first),
-		oid(obj.second),
+  out->t->write(coll_t(oid.first),
+		oid_t(oid.second),
 		offset,
 		len,
 		to_write);
-  out->in_flight->push_back(make_pair(obj, set_content(obj, contents)));
+  out->in_flight->push_back(make_pair(oid, set_content(oid, contents)));
 }
 
-void FileStoreTracker::remove(const pair<string, string> &obj,
+void FileStoreTracker::remove(const pair<string, string> &oid,
 			      OutTransaction *out)
 {
-  std::cerr << "Deleting " << obj << std::endl;
+  std::cerr << "Deleting " << oid << std::endl;
   lock_guard l(lock);
-  ObjectContents old_contents = get_current_content(obj);
+  ObjectContents old_contents = get_current_content(oid);
   if (!old_contents.exists())
     return;
-  out->t->remove(coll_t(obj.first),
-		 oid(obj.second));
+  out->t->remove(coll_t(oid.first),
+		 oid_t(oid.second));
   ObjectContents contents;
-  out->in_flight->push_back(make_pair(obj, set_content(obj, contents)));
+  out->in_flight->push_back(make_pair(oid, set_content(oid, contents)));
 }
 
 void FileStoreTracker::clone_range(const pair<string, string> &from,
@@ -148,8 +148,8 @@ void FileStoreTracker::clone_range(const pair<string, string> &from,
   interval_to_clone.insert(offset, len);
   to_contents.clone_range(from_contents, interval_to_clone);
   out->t->clone_range(coll_t(from.first),
-		      oid(from.second),
-		      oid(to.second),
+		      oid_t(from.second),
+		      oid_t(to.second),
 		      offset,
 		      len,
 		      offset);
@@ -173,24 +173,24 @@ void FileStoreTracker::clone(const pair<string, string> &from,
 
   if (to_contents.exists())
     out->t->remove(coll_t(to.first),
-		   oid(to.second));
+		   oid_t(to.second));
   out->t->clone(coll_t(from.first),
-		oid(from.second),
-		oid(to.second));
+		oid_t(from.second),
+		oid_t(to.second));
   out->in_flight->push_back(make_pair(to, set_content(to, from_contents)));
 }
 
 
-string obj_to_prefix(const pair<string, string> &obj) {
+string obj_to_prefix(const pair<string, string> &oid) {
   string sep;
   sep.push_back('^');
-  return obj.first + sep + obj.second + "_CONTENTS_";
+  return oid.first + sep + oid.second + "_CONTENTS_";
 }
 
-string obj_to_meta_prefix(const pair<string, string> &obj) {
+string obj_to_meta_prefix(const pair<string, string> &oid) {
   string sep;
   sep.push_back('^');
-  return obj.first + sep + obj.second;
+  return oid.first + sep + oid.second;
 }
 
 string seq_to_key(uint64_t seq) {
@@ -220,25 +220,25 @@ struct ObjStatus {
       last_applied : last_committed;
   }
 };
-void encode(const ObjStatus &obj, bufferlist &bl) {
-  ::encode(obj.last_applied, bl);
-  ::encode(obj.last_committed, bl);
-  ::encode(obj.restart_seq, bl);
+void encode(const ObjStatus &oid, bufferlist &bl) {
+  ::encode(oid.last_applied, bl);
+  ::encode(oid.last_committed, bl);
+  ::encode(oid.restart_seq, bl);
 }
-void decode(ObjStatus &obj, bufferlist::iterator &bl) {
-  ::decode(obj.last_applied, bl);
-  ::decode(obj.last_committed, bl);
-  ::decode(obj.restart_seq, bl);
+void decode(ObjStatus &oid, bufferlist::iterator &bl) {
+  ::decode(oid.last_applied, bl);
+  ::decode(oid.last_committed, bl);
+  ::decode(oid.restart_seq, bl);
 }
 
 
-ObjStatus get_obj_status(const pair<string, string> &obj,
+ObjStatus get_obj_status(const pair<string, string> &oid,
 			 KeyValueDB *db)
 {
   set<string> to_get;
   to_get.insert("META");
   map<string, bufferlist> got;
-  db->get(obj_to_meta_prefix(obj), to_get, &got);
+  db->get(obj_to_meta_prefix(oid), to_get, &got);
   ObjStatus retval;
   if (!got.empty()) {
     bufferlist::iterator bp = got.begin()->second.begin();
@@ -247,41 +247,41 @@ ObjStatus get_obj_status(const pair<string, string> &obj,
   return retval;
 }
 
-void set_obj_status(const pair<string, string> &obj,
+void set_obj_status(const pair<string, string> &oid,
 		    const ObjStatus &status,
 		    KeyValueDB::Transaction t)
 {
   map<string, bufferlist> to_set;
   ::encode(status, to_set["META"]);
-  t->set(obj_to_meta_prefix(obj), to_set);
+  t->set(obj_to_meta_prefix(oid), to_set);
 }
 
-void _clean_forward(const pair<string, string> &obj,
+void _clean_forward(const pair<string, string> &oid,
 		    uint64_t last_valid,
 		    KeyValueDB *db)
 {
   KeyValueDB::Transaction t = db->get_transaction();
-  KeyValueDB::Iterator i = db->get_iterator(obj_to_prefix(obj));
+  KeyValueDB::Iterator i = db->get_iterator(obj_to_prefix(oid));
   set<string> to_remove;
   i->upper_bound(seq_to_key(last_valid));
   for (; i->valid(); i->next()) {
     to_remove.insert(i->key());
   }
-  t->rmkeys(obj_to_prefix(obj), to_remove);
+  t->rmkeys(obj_to_prefix(oid), to_remove);
   db->submit_transaction(t);
 }
 
 
-void FileStoreTracker::verify(const string &coll, const string &obj,
+void FileStoreTracker::verify(const string &coll, const string &oid,
 			      bool on_start) {
   lock_guard l(lock);
-  std::cerr << "Verifying " << make_pair(coll, obj) << std::endl;
+  std::cerr << "Verifying " << make_pair(coll, oid) << std::endl;
 
-  pair<uint64_t, uint64_t> valid_reads = get_valid_reads(make_pair(coll, obj));
+  pair<uint64_t, uint64_t> valid_reads = get_valid_reads(make_pair(coll, oid));
   std::cerr << "valid_reads is " << valid_reads << std::endl;
   bufferlist contents;
   int r = store->read(coll_t(coll),
-		      oid(obj),
+		      oid_t(oid),
 		      0,
 		      2*SIZE,
 		      contents);
@@ -291,7 +291,7 @@ void FileStoreTracker::verify(const string &coll, const string &obj,
   for (uint64_t i = valid_reads.first;
        i < valid_reads.second;
        ++i) {
-    ObjectContents old_contents = get_content(make_pair(coll, obj), i);
+    ObjectContents old_contents = get_content(make_pair(coll, oid), i);
 
     std::cerr << "old_contents exists " << old_contents.exists() << std::endl;
     if (!old_contents.exists() && (r == -ENOENT))
@@ -324,19 +324,19 @@ void FileStoreTracker::verify(const string &coll, const string &obj,
     }
     if (matches) {
       if (on_start)
-	_clean_forward(make_pair(coll, obj), i, db);
+	_clean_forward(make_pair(coll, oid), i, db);
       return;
     }
   }
-  std::cerr << "Verifying " << make_pair(coll, obj) << " failed " << std::endl;
+  std::cerr << "Verifying " << make_pair(coll, oid) << " failed " << std::endl;
   assert(0);
 }
 
 ObjectContents FileStoreTracker::get_current_content(
-  const pair<string, string> &obj)
+  const pair<string, string> &oid)
 {
   KeyValueDB::Iterator iter = db->get_iterator(
-    obj_to_prefix(obj));
+    obj_to_prefix(oid));
   iter->seek_to_last();
   if (iter->valid()) {
     bufferlist bl = iter->value();
@@ -351,12 +351,12 @@ ObjectContents FileStoreTracker::get_current_content(
 }
 
 ObjectContents FileStoreTracker::get_content(
-  const pair<string, string> &obj, uint64_t version)
+  const pair<string, string> &oid, uint64_t version)
 {
   set<string> to_get;
   map<string, bufferlist> got;
   to_get.insert(seq_to_key(version));
-  db->get(obj_to_prefix(obj), to_get, &got);
+  db->get(obj_to_prefix(oid), to_get, &got);
   if (got.empty())
     return ObjectContents();
   pair<uint64_t, bufferlist> val;
@@ -368,11 +368,11 @@ ObjectContents FileStoreTracker::get_content(
 }
 
 pair<uint64_t, uint64_t> FileStoreTracker::get_valid_reads(
-  const pair<string, string> &obj)
+  const pair<string, string> &oid)
 {
   pair<uint64_t, uint64_t> bounds = make_pair(0,1);
   KeyValueDB::Iterator iter = db->get_iterator(
-    obj_to_prefix(obj));
+    obj_to_prefix(oid));
   iter->seek_to_last();
   if (iter->valid()) {
     pair<uint64_t, bufferlist> val;
@@ -382,56 +382,56 @@ pair<uint64_t, uint64_t> FileStoreTracker::get_valid_reads(
     bounds.second = val.first + 1;
   }
 
-  ObjStatus obj_status = get_obj_status(obj, db);
+  ObjStatus obj_status = get_obj_status(oid, db);
   bounds.first = obj_status.get_last_applied(restart_seq);
   return bounds;
 }
 
-void clear_obsolete(const pair<string, string> &obj,
+void clear_obsolete(const pair<string, string> &oid,
 		    const ObjStatus &status,
 		    KeyValueDB *db,
 		    KeyValueDB::Transaction t)
 {
-  KeyValueDB::Iterator iter = db->get_iterator(obj_to_prefix(obj));
+  KeyValueDB::Iterator iter = db->get_iterator(obj_to_prefix(oid));
   set<string> to_remove;
   iter->seek_to_first();
   for (; iter->valid() && iter->key() < seq_to_key(status.trim_to());
        iter->next())
     to_remove.insert(iter->key());
-  t->rmkeys(obj_to_prefix(obj), to_remove);
+  t->rmkeys(obj_to_prefix(oid), to_remove);
 }
 
-void FileStoreTracker::committed(const pair<string, string> &obj,
+void FileStoreTracker::committed(const pair<string, string> &oid,
 				 uint64_t seq) {
   lock_guard l(lock);
-  ObjStatus status = get_obj_status(obj, db);
+  ObjStatus status = get_obj_status(oid, db);
   assert(status.last_committed < seq);
   status.last_committed = seq;
   KeyValueDB::Transaction t = db->get_transaction();
-  clear_obsolete(obj, status, db, t);
-  set_obj_status(obj, status, t);
+  clear_obsolete(oid, status, db, t);
+  set_obj_status(oid, status, t);
   db->submit_transaction(t);
 }
 
-void FileStoreTracker::applied(const pair<string, string> &obj,
+void FileStoreTracker::applied(const pair<string, string> &oid,
 			       uint64_t seq) {
   lock_guard l(lock);
-  std::cerr << "Applied " << obj << " version " << seq << std::endl;
-  ObjStatus status = get_obj_status(obj, db);
+  std::cerr << "Applied " << oid << " version " << seq << std::endl;
+  ObjStatus status = get_obj_status(oid, db);
   assert(status.last_applied < seq);
   status.set_last_applied(seq, restart_seq);
   KeyValueDB::Transaction t = db->get_transaction();
-  clear_obsolete(obj, status, db, t);
-  set_obj_status(obj, status, t);
+  clear_obsolete(oid, status, db, t);
+  set_obj_status(oid, status, t);
   db->submit_transaction(t);
 }
 
 
-uint64_t FileStoreTracker::set_content(const pair<string, string> &obj,
+uint64_t FileStoreTracker::set_content(const pair<string, string> &oid,
 				       ObjectContents &content) {
   KeyValueDB::Transaction t = db->get_transaction();
   KeyValueDB::Iterator iter = db->get_iterator(
-    obj_to_prefix(obj));
+    obj_to_prefix(oid));
   iter->seek_to_last();
   uint64_t most_recent = 0;
   if (iter->valid()) {
@@ -446,7 +446,7 @@ uint64_t FileStoreTracker::set_content(const pair<string, string> &obj,
   map<string, bufferlist> to_set;
   ::encode(make_pair(most_recent + 1, buf_content),
 	   to_set[seq_to_key(most_recent + 1)]);
-  t->set(obj_to_prefix(obj), to_set);
+  t->set(obj_to_prefix(oid), to_set);
   db->submit_transaction(t);
   return most_recent + 1;
 }

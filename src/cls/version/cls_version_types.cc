@@ -10,9 +10,9 @@ void obj_version::dump(Formatter *f) const
   f->dump_string("tag", tag);
 }
 
-void obj_version::decode_json(JSONObj *obj)
+void obj_version::decode_json(JSONObj *oid)
 {
-  JSONDecoder::decode_json("ver", ver, obj);
-  JSONDecoder::decode_json("tag", tag, obj);
+  JSONDecoder::decode_json("ver", ver, oid);
+  JSONDecoder::decode_json("tag", tag, oid);
 }
 

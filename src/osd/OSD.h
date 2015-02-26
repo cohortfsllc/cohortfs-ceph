@@ -90,7 +90,7 @@ public:
   const int whoami;
   ObjectStore *&store;
   LogClient &clog;
-  oid infos_obj;
+  oid_t infos_obj;
 private:
   Messenger *&cluster_messenger;
   Messenger *&client_messenger;
@@ -340,27 +340,27 @@ public:
   ClassHandler	*class_handler;
   int get_nodeid() { return whoami; }
 
-  static oid get_osdmap_pobject_name(epoch_t epoch) {
+  static oid_t get_osdmap_pobject_name(epoch_t epoch) {
     char foo[20];
     snprintf(foo, sizeof(foo), "osdmap.%d", epoch);
-    return oid(foo);
+    return oid_t(foo);
   }
-  static oid get_inc_osdmap_pobject_name(epoch_t epoch) {
+  static oid_t get_inc_osdmap_pobject_name(epoch_t epoch) {
     char foo[20];
     snprintf(foo, sizeof(foo), "inc_osdmap.%d", epoch);
-    return oid(foo);
+    return oid_t(foo);
   }
 
-  static oid make_vol_biginfo_obj(const boost::uuids::uuid& vol) {
+  static oid_t make_vol_biginfo_obj(const boost::uuids::uuid& vol) {
     stringstream ss;
     ss << "volinfo_" << vol;
     string s;
     getline(ss, s);
-    return oid(s.c_str());
+    return oid_t(s.c_str());
   }
-  static oid make_infos_obj() {
-    oid obj("infos");
-    return obj;
+  static oid_t make_infos_obj() {
+    oid_t oid("infos");
+    return oid;
   }
   static void recursive_remove_collection(ObjectStore *store, coll_t tmp);
 

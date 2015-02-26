@@ -562,28 +562,28 @@ bool RGWAccessControlPolicy_S3::compare_group_name(string& id, ACLGroupTypeEnum 
 
 XMLObj *RGWACLXMLParser_S3::alloc_obj(const char *el)
 {
-  XMLObj * obj = NULL;
+  XMLObj * oid = NULL;
   if (strcmp(el, "AccessControlPolicy") == 0) {
-    obj = new RGWAccessControlPolicy_S3(cct);
+    oid = new RGWAccessControlPolicy_S3(cct);
   } else if (strcmp(el, "Owner") == 0) {
-    obj = new ACLOwner_S3();
+    oid = new ACLOwner_S3();
   } else if (strcmp(el, "AccessControlList") == 0) {
-    obj = new RGWAccessControlList_S3(cct);
+    oid = new RGWAccessControlList_S3(cct);
   } else if (strcmp(el, "ID") == 0) {
-    obj = new ACLID_S3();
+    oid = new ACLID_S3();
   } else if (strcmp(el, "DisplayName") == 0) {
-    obj = new ACLDisplayName_S3();
+    oid = new ACLDisplayName_S3();
   } else if (strcmp(el, "Grant") == 0) {
-    obj = new ACLGrant_S3();
+    oid = new ACLGrant_S3();
   } else if (strcmp(el, "Grantee") == 0) {
-    obj = new ACLGrantee_S3();
+    oid = new ACLGrantee_S3();
   } else if (strcmp(el, "Permission") == 0) {
-    obj = new ACLPermission_S3();
+    oid = new ACLPermission_S3();
   } else if (strcmp(el, "URI") == 0) {
-    obj = new ACLURI_S3();
+    oid = new ACLURI_S3();
   } else if (strcmp(el, "EmailAddress") == 0) {
-    obj = new ACLEmail_S3();
+    oid = new ACLEmail_S3();
   }
 
-  return obj;
+  return oid;
 }

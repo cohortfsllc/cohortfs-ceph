@@ -19,14 +19,14 @@ void on_complete(void *completion, void *_arg) {
 }
 
 void RBDBackend::write(
-  const std::string &oid,
+  const std::string &oid_t,
   uint64_t offset,
   const bufferlist &bl,
   Context *on_write_applied,
   Context *on_commit)
 {
   bufferlist &bl_non_const = const_cast<bufferlist&>(bl);
-  std::shared_ptr<librbd::Image> image = (*m_images)[oid];
+  std::shared_ptr<librbd::Image> image = (*m_images)[oid_t];
   void *arg = static_cast<void *>(new arg_type(on_commit, on_write_applied));
   librbd::RBD::AioCompletion *completion =
     new librbd::RBD::AioCompletion(arg, on_complete);
@@ -36,13 +36,13 @@ void RBDBackend::write(
 }
 
 void RBDBackend::read(
-  const std::string &oid,
+  const std::string &oid_t,
   uint64_t offset,
   uint64_t length,
   bufferlist *bl,
   Context *on_read_complete)
 {
-  std::shared_ptr<librbd::Image> image = (*m_images)[oid];
+  std::shared_ptr<librbd::Image> image = (*m_images)[oid_t];
   void *arg = static_cast<void *>(new arg_type(on_read_complete, NULL));
   librbd::RBD::AioCompletion *completion =
     new librbd::RBD::AioCompletion(arg, on_complete);

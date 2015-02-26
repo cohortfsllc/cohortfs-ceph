@@ -124,7 +124,7 @@ namespace OSDC {
       int incarnation;
       OSDSession *session;
       int osd;
-      oid hoid;
+      oid_t hoid;
       vector<OSDOp> ops;
 
       eversion_t replay_version; // for op replay
@@ -137,10 +137,10 @@ namespace OSDC {
 
       SubOp(Op& p) : tid(0), incarnation(0), session(nullptr), osd(-1),
 		     attempts(0), done(false), parent(p) { }
-      SubOp(const oid& h, const vector<OSDOp>& o, Op& p)
+      SubOp(const oid_t& h, const vector<OSDOp>& o, Op& p)
 	: tid(0), incarnation(0), session(nullptr), osd(-1), hoid(h), ops(o),
 	  attempts(0), done(false), parent(p) { }
-      SubOp(oid&& h, vector<OSDOp>&& o, Op& p)
+      SubOp(oid_t&& h, vector<OSDOp>&& o, Op& p)
 	: tid(0), incarnation(0), session(nullptr), osd(-1), hoid(h), ops(o),
 	  attempts(0), done(false), parent(p) { }
     };
@@ -148,7 +148,7 @@ namespace OSDC {
     struct op_base : public set_base_hook<link_mode<auto_unlink> >,
 		     public RefCountedObject {
       int flags;
-      oid obj;
+      oid_t oid;
       VolumeRef volume;
       unique_ptr<ObjOp> op;
       vector<SubOp> subops;
@@ -169,9 +169,9 @@ namespace OSDC {
 		  tid(0), map_dne_bound(0), paused(false), priority(0),
 		  should_resend(true) { }
 
-      op_base(oid obj, const VolumeRef& volume,
+      op_base(oid_t oid, const VolumeRef& volume,
 	      unique_ptr<ObjOp>& _op, int flags, version_t* ov)
-	: flags(flags), obj(obj), volume(volume),
+	: flags(flags), oid(oid), volume(volume),
 	  op(move(_op)), outbl(nullptr), objver(ov),
 	  tid(0), map_dne_bound(0), paused(false), priority(0),
 	  should_resend(true) {
@@ -194,7 +194,7 @@ namespace OSDC {
       bool finished;
       ZTracer::Trace trace;
 
-      Op(const oid& o, const VolumeRef& volume,
+      Op(const oid_t& o, const VolumeRef& volume,
 	 unique_ptr<ObjOp>& _op,
 	 int f, Context *ac, Context *co, version_t *ov,
 	 ZTracer::Trace *parent) :
@@ -204,8 +204,8 @@ namespace OSDC {
 	budgeted(false), ctx_budgeted(false), finished(false) {
 	subops.reserve(op->width());
 	op->realize(
-	  obj,
-	  [this](oid&& h, vector<OSDOp>&& o) {
+	  oid,
+	  [this](oid_t&& h, vector<OSDOp>&& o) {
 	    this->subops.emplace_back(h, o, *this);
 	  });
 	if (parent && parent->valid())
@@ -572,56 +572,56 @@ namespace OSDC {
 
   public:
     // mid-level helpers
-    Op *prepare_mutate_op(const oid& obj,
+    Op *prepare_mutate_op(const oid_t& oid,
 			  const VolumeRef& volume,
 			  unique_ptr<ObjOp>& op,
 			  ceph::real_time mtime, int flags,
 			  Context *onack, Context *oncommit,
 			  version_t *objver = NULL,
 			  ZTracer::Trace *trace = nullptr) {
-      Op *o = new Op(obj, volume, op,
+      Op *o = new Op(oid, volume, op,
 		     flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		     onack, oncommit, objver, trace);
       o->mtime = mtime;
       return o;
     }
-    ceph_tid_t mutate(const oid& obj,
+    ceph_tid_t mutate(const oid_t& oid,
 		      const VolumeRef& volume,
 		      unique_ptr<ObjOp>& op,
 		      ceph::real_time mtime, int flags,
 		      Context *onack, Context *oncommit,
 		      version_t *objver = NULL,
 		      ZTracer::Trace *trace = nullptr) {
-      Op *o = prepare_mutate_op(obj, volume, op, mtime, flags, onack,
+      Op *o = prepare_mutate_op(oid, volume, op, mtime, flags, onack,
 				oncommit, objver, trace);
       return op_submit(o);
     }
-    Op *prepare_read_op(const oid& obj,
+    Op *prepare_read_op(const oid_t& oid,
 			const VolumeRef& volume,
 			unique_ptr<ObjOp>& op, bufferlist *pbl,
 			int flags, Context *onack, version_t *objver = NULL,
 			ZTracer::Trace *trace = nullptr) {
-      Op *o = new Op(obj, volume, op,
+      Op *o = new Op(oid, volume, op,
 		     flags | global_op_flags | CEPH_OSD_FLAG_READ, onack,
 		     NULL, objver, trace);
       o->outbl = pbl;
       return o;
     }
-    ceph_tid_t read(const oid& obj,
+    ceph_tid_t read(const oid_t& oid,
 		    const VolumeRef& volume,
 		    unique_ptr<ObjOp>& op, bufferlist *pbl,
 		    int flags, Context *onack, version_t *objver = NULL,
 		    ZTracer::Trace *trace = nullptr) {
-      Op *o = prepare_read_op(obj, volume, op, pbl, flags, onack,
+      Op *o = prepare_read_op(oid, volume, op, pbl, flags, onack,
 			      objver, trace);
       return op_submit(o);
     }
-    ceph_tid_t linger_mutate(const oid& obj,
+    ceph_tid_t linger_mutate(const oid_t& oid,
 			     const VolumeRef& volume,
 			     unique_ptr<ObjOp>& op, ceph::real_time mtime,
 			     bufferlist& inbl, int flags, Context *onack,
 			     Context *onfinish, version_t *objver);
-    ceph_tid_t linger_read(const oid& obj,
+    ceph_tid_t linger_read(const oid_t& oid,
 			   const VolumeRef& volume,
 			   unique_ptr<ObjOp>& op, bufferlist& inbl,
 			   bufferlist *outbl, int flags, Context *onack,
@@ -641,7 +641,7 @@ namespace OSDC {
 
 
     // high-level helpers
-    ceph_tid_t stat(const oid& obj,
+    ceph_tid_t stat(const oid_t& oid,
 		    const VolumeRef& volume,
 		    uint64_t *psize, ceph::real_time *pmtime, int flags,
 		    Context *onfinish, version_t *objver = NULL,
@@ -651,13 +651,13 @@ namespace OSDC {
       if (!ops)
 	return -EDOM;
       ops->stat(psize, pmtime);
-      Op *o = new Op(obj, volume, ops,
+      Op *o = new Op(oid, volume, ops,
 		     flags | global_op_flags | CEPH_OSD_FLAG_READ,
 		     onfinish, 0, objver, trace);
       return op_submit(o);
     }
 
-    ceph_tid_t read(const oid& obj,
+    ceph_tid_t read(const oid_t& oid,
 		    const VolumeRef& volume,
 		    uint64_t off, uint64_t len, bufferlist *pbl, int flags,
 		    Context *onfinish,
@@ -668,13 +668,13 @@ namespace OSDC {
       if (!ops)
 	return -EDOM;
       ops->read(off, len, pbl);
-      Op *o = new Op(obj, volume, ops,
+      Op *o = new Op(oid, volume, ops,
 		     flags | global_op_flags | CEPH_OSD_FLAG_READ,
 		     onfinish, 0, objver, trace);
       return op_submit(o);
     }
 
-    ceph_tid_t read_trunc(const oid& obj,
+    ceph_tid_t read_trunc(const oid_t& oid,
 			  const VolumeRef& volume,
 			  uint64_t off, uint64_t len, bufferlist *pbl,
 			  int flags, uint64_t trunc_size, uint32_t trunc_seq,
@@ -685,12 +685,12 @@ namespace OSDC {
       if (!ops)
 	return -EDOM;
       ops->read(off, len, pbl, trunc_size, trunc_seq);
-      Op *o = new Op(obj, volume, ops,
+      Op *o = new Op(oid, volume, ops,
 		     flags | global_op_flags | CEPH_OSD_FLAG_READ,
 		     onfinish, 0, objver, trace);
       return op_submit(o);
     }
-    ceph_tid_t getxattr(const oid& obj,
+    ceph_tid_t getxattr(const oid_t& oid,
 			const VolumeRef& volume,
 			const char *name, bufferlist *bl, int flags,
 			Context *onfinish, version_t *objver = NULL,
@@ -700,13 +700,13 @@ namespace OSDC {
       if (!ops)
 	return -EDOM;
       ops->getxattr(name, bl);
-      Op *o = new Op(obj, volume, ops,
+      Op *o = new Op(oid, volume, ops,
 		     flags | global_op_flags | CEPH_OSD_FLAG_READ,
 		     onfinish, 0, objver, trace);
       return op_submit(o);
     }
 
-    ceph_tid_t getxattrs(const oid& obj,
+    ceph_tid_t getxattrs(const oid_t& oid,
 			 const VolumeRef& volume,
 			 map<string,bufferlist>& attrset, int flags,
 			 Context *onfinish, version_t *objver = NULL,
@@ -716,13 +716,13 @@ namespace OSDC {
       if (!ops)
 	return -EDOM;
       ops->getxattrs(attrset);
-      Op *o = new Op(obj, volume, ops,
+      Op *o = new Op(oid, volume, ops,
 		     flags | global_op_flags | CEPH_OSD_FLAG_READ,
 		     onfinish, 0, objver, trace);
       return op_submit(o);
     }
 
-    ceph_tid_t read_full(const oid& obj,
+    ceph_tid_t read_full(const oid_t& oid,
 			 const VolumeRef& volume,
 			 bufferlist *pbl, int flags, Context *onfinish,
 			 version_t *objver = NULL,
@@ -730,18 +730,18 @@ namespace OSDC {
 			 ZTracer::Trace *trace = nullptr);
 
     // writes
-    ceph_tid_t _modify(const oid& obj,
+    ceph_tid_t _modify(const oid_t& oid,
 		       const VolumeRef& volume,
 		       unique_ptr<ObjOp>& ops, ceph::real_time mtime, int flags,
 		       Context *onack, Context *oncommit,
 		       version_t *objver = NULL,
 		       ZTracer::Trace *trace = nullptr) {
-      Op *o = new Op(obj, volume, ops, flags | global_op_flags |
+      Op *o = new Op(oid, volume, ops, flags | global_op_flags |
 		     CEPH_OSD_FLAG_WRITE, onack, oncommit, objver, trace);
       o->mtime = mtime;
       return op_submit(o);
     }
-    ceph_tid_t write(const oid& obj,
+    ceph_tid_t write(const oid_t& oid,
 		     const VolumeRef& volume,
 		     uint64_t off, uint64_t len, const bufferlist &bl,
 		     ceph::real_time mtime, int flags, Context *onack,
@@ -752,13 +752,13 @@ namespace OSDC {
       if (!ops)
 	return -EDOM;
       ops->write(off, len, bl);
-      Op *o = new Op(obj, volume, ops,
+      Op *o = new Op(oid, volume, ops,
 		     flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		     onack, oncommit, objver, trace);
       o->mtime = mtime;
       return op_submit(o);
     }
-    ceph_tid_t append(const oid& obj,
+    ceph_tid_t append(const oid_t& oid,
 		      const VolumeRef& volume,
 		      uint64_t len, const bufferlist &bl, ceph::real_time mtime,
 		      int flags, Context *onack, Context *oncommit,
@@ -769,13 +769,13 @@ namespace OSDC {
       if (!ops)
 	return -EDOM;
       ops->append(len, bl);
-      Op *o = new Op(obj, volume, ops,
+      Op *o = new Op(oid, volume, ops,
 		     flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		     onack, oncommit, objver, trace);
       o->mtime = mtime;
       return op_submit(o);
     }
-    ceph_tid_t write_trunc(const oid& obj,
+    ceph_tid_t write_trunc(const oid_t& oid,
 			   const VolumeRef& volume,
 			   uint64_t off, uint64_t len, const bufferlist &bl,
 			   ceph::real_time mtime, int flags, uint64_t trunc_size,
@@ -787,13 +787,13 @@ namespace OSDC {
       if (!ops)
 	return -EDOM;
       ops->write(off, len, bl, trunc_size, trunc_seq);
-      Op *o = new Op(obj, volume, ops,
+      Op *o = new Op(oid, volume, ops,
 		     flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		     onack, oncommit, objver, trace);
       o->mtime = mtime;
       return op_submit(o);
     }
-    ceph_tid_t write_full(const oid& obj,
+    ceph_tid_t write_full(const oid_t& oid,
 			  const VolumeRef& volume,
 			  const bufferlist &bl, ceph::real_time mtime, int flags,
 			  Context *onack, Context *oncommit,
@@ -804,14 +804,14 @@ namespace OSDC {
       if (!ops)
 	return -EDOM;
       ops->write_full(bl);
-      Op *o = new Op(obj, volume, ops,
+      Op *o = new Op(oid, volume, ops,
 		     flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		     onack, oncommit, objver, trace);
       o->mtime = mtime;
       return op_submit(o);
     }
 
-    ceph_tid_t trunc(const oid& obj,
+    ceph_tid_t trunc(const oid_t& oid,
 		     const VolumeRef& volume,
 		     ceph::real_time mtime, int flags, uint64_t trunc_size,
 		     uint32_t trunc_seq, Context *onack, Context *oncommit,
@@ -822,14 +822,14 @@ namespace OSDC {
       if (!ops)
 	return -EDOM;
       ops->truncate(trunc_size, trunc_seq);
-      Op *o = new Op(obj, volume, ops,
+      Op *o = new Op(oid, volume, ops,
 		     flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		     onack, oncommit, objver, trace);
       o->mtime = mtime;
       return op_submit(o);
     }
 
-    ceph_tid_t zero(const oid& obj,
+    ceph_tid_t zero(const oid_t& oid,
 		    const VolumeRef& volume,
 		    uint64_t off, uint64_t len, ceph::real_time mtime, int flags,
 		    Context *onack, Context *oncommit,
@@ -840,14 +840,14 @@ namespace OSDC {
       if (!ops)
 	return -EDOM;
       ops->zero(off, len);
-      Op *o = new Op(obj, volume, ops,
+      Op *o = new Op(oid, volume, ops,
 		     flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		     onack, oncommit, objver, trace);
       o->mtime = mtime;
       return op_submit(o);
     }
 
-    ceph_tid_t create(const oid& obj,
+    ceph_tid_t create(const oid_t& oid,
 		      const VolumeRef& volume,
 		      ceph::real_time mtime, int global_flags, int create_flags,
 		      Context *onack, Context *oncommit,
@@ -858,14 +858,14 @@ namespace OSDC {
       if (!ops)
 	return -EDOM;
       ops->create(create_flags);
-      Op *o = new Op(obj, volume, ops,
+      Op *o = new Op(oid, volume, ops,
 		     global_flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		     onack, oncommit, objver, trace);
       o->mtime = mtime;
       return op_submit(o);
     }
 
-    ceph_tid_t remove(const oid& obj,
+    ceph_tid_t remove(const oid_t& oid,
 		      const VolumeRef& volume,
 		      ceph::real_time mtime, int flags, Context *onack,
 		      Context *oncommit, version_t *objver = NULL,
@@ -875,14 +875,14 @@ namespace OSDC {
       if (!ops)
 	return -EDOM;
       ops->remove();
-      Op *o = new Op(obj, volume, ops,
+      Op *o = new Op(oid, volume, ops,
 		     flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		     onack, oncommit, objver, trace);
       o->mtime = mtime;
       return op_submit(o);
     }
 
-    ceph_tid_t lock(const oid& obj,
+    ceph_tid_t lock(const oid_t& oid,
 		    const VolumeRef& volume, int op,
 		    int flags, Context *onack, Context *oncommit,
 		    version_t *objver = NULL,
@@ -892,13 +892,13 @@ namespace OSDC {
       if (!ops)
 	return -EDOM;
       ops->add_op(op);
-      Op *o = new Op(obj, volume, ops,
+      Op *o = new Op(oid, volume, ops,
 		     flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		     onack, oncommit, objver, trace);
       return op_submit(o);
     }
 
-    ceph_tid_t setxattr(const oid& obj,
+    ceph_tid_t setxattr(const oid_t& oid,
 			const VolumeRef& volume,
 			const char *name, const bufferlist &bl,
 			ceph::real_time mtime, int flags,
@@ -910,13 +910,13 @@ namespace OSDC {
       if (!ops)
 	return -EDOM;
       ops->setxattr(name, bl);
-      Op *o = new Op(obj, volume, ops,
+      Op *o = new Op(oid, volume, ops,
 		     flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		     onack, oncommit, objver, trace);
       o->mtime = mtime;
       return op_submit(o);
     }
-    ceph_tid_t removexattr(const oid& obj,
+    ceph_tid_t removexattr(const oid_t& oid,
 			   const VolumeRef& volume,
 			   const char *name, ceph::real_time mtime, int flags,
 			   Context *onack, Context *oncommit,
@@ -927,7 +927,7 @@ namespace OSDC {
       if (!ops)
 	return -EDOM;
       ops->rmxattr(name);
-      Op *o = new Op(obj, volume, ops,
+      Op *o = new Op(oid, volume, ops,
 		     flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		     onack, oncommit, objver, trace);
       o->mtime = mtime;

@@ -68,11 +68,11 @@ int main(int argc, const char **argv)
 
   // create a volume and an object, watch the object, notify.
   {
-    StRadosCreateVolume r1(argc, argv, NULL, setup_sem, NULL, volume, 1, ".obj");
+    StRadosCreateVolume r1(argc, argv, NULL, setup_sem, NULL, volume, 1, ".oid");
     StRadosWatch r2(argc, argv, setup_sem, watch_sem, notify_sem,
-		    1, 0, volume, "0.obj");
+		    1, 0, volume, "0.oid");
     StRadosNotify r3(argc, argv, setup_sem, watch_sem, notify_sem,
-		     0, volume, "0.obj");
+		     0, volume, "0.oid");
     vector<SysTestRunnable*> vec;
     vec.push_back(&r1);
     vec.push_back(&r2);
@@ -92,11 +92,11 @@ int main(int argc, const char **argv)
   // notify non-existent object.watch
   volume += ".";
   {
-    StRadosCreateVolume r1(argc, argv, NULL, setup_sem, NULL, volume, 0, ".obj");
+    StRadosCreateVolume r1(argc, argv, NULL, setup_sem, NULL, volume, 0, ".oid");
     StRadosWatch r2(argc, argv, setup_sem, watch_sem, notify_sem,
-		    0, -ENOENT, volume, "0.obj");
+		    0, -ENOENT, volume, "0.oid");
     StRadosNotify r3(argc, argv, setup_sem, watch_sem, notify_sem,
-		     -ENOENT, volume, "0.obj");
+		     -ENOENT, volume, "0.oid");
     vector<SysTestRunnable*> vec;
     vec.push_back(&r1);
     vec.push_back(&r2);
@@ -125,16 +125,16 @@ int main(int argc, const char **argv)
   // then try notifying on the deleted volume.
   volume += ".";
   {
-    StRadosCreateVolume r1(argc, argv, NULL, setup_sem, NULL, volume, 1, ".obj");
+    StRadosCreateVolume r1(argc, argv, NULL, setup_sem, NULL, volume, 1, ".oid");
     StRadosWatch r2(argc, argv, setup_sem, watch_sem, finished_notifies_sem,
-		    1, 0, volume, "0.obj");
+		    1, 0, volume, "0.oid");
     StRadosNotify r3(argc, argv, setup_sem, watch_sem, notify_sem,
-		     0, volume, "0.obj");
+		     0, volume, "0.oid");
     StRadosDeleteVolume r4(argc, argv, notify_sem, deleted_sem, volume);
     StRadosCreateVolume r5(argc, argv, deleted_sem, second_volume_sem, NULL,
-			 "bar", 1, ".obj");
+			 "bar", 1, ".oid");
     StRadosNotify r6(argc, argv, second_volume_sem, NULL, finished_notifies_sem,
-		     0, "bar", "0.obj");
+		     0, "bar", "0.oid");
     StRadosDeleteVolume r7(argc, argv, finished_notifies_sem, NULL, "bar");
     vector<SysTestRunnable*> vec;
     vec.push_back(&r1);
@@ -163,14 +163,14 @@ int main(int argc, const char **argv)
     // this test is currently broken, pending the resolution of bug #2339
   volume += ".";
   {
-    StRadosCreateVolume r1(argc, argv, NULL, setup_sem, NULL, volume, 1, ".obj");
+    StRadosCreateVolume r1(argc, argv, NULL, setup_sem, NULL, volume, 1, ".oid");
     StRadosWatch r2(argc, argv, setup_sem, watch_sem, finished_notifies_sem,
-		    1, 0, volume, "0.obj");
+		    1, 0, volume, "0.oid");
     StRadosNotify r3(argc, argv, setup_sem, watch_sem, notify_sem,
-		     0, volume, "0.obj");
-    StRadosDeleteObjs r4(argc, argv, notify_sem, deleted_sem, 1, volume, ".obj");
+		     0, volume, "0.oid");
+    StRadosDeleteObjs r4(argc, argv, notify_sem, deleted_sem, 1, volume, ".oid");
     StRadosNotify r5(argc, argv, setup_sem, deleted_sem, finished_notifies_sem,
-		     -ENOENT, volume, "0.obj");
+		     -ENOENT, volume, "0.oid");
 
     vector<SysTestRunnable*> vec;
     vec.push_back(&r1);

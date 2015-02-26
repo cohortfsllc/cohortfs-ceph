@@ -379,9 +379,9 @@ static void add_grants_headers(map<int, string>& grants, map<string, string, lts
   }
 }
 
-int RGWRESTStreamWriteRequest::put_obj_init(RGWAccessKey& key, rgw_obj& obj, uint64_t obj_size, map<string, bufferlist>& attrs)
+int RGWRESTStreamWriteRequest::put_obj_init(RGWAccessKey& key, rgw_obj& oid, uint64_t obj_size, map<string, bufferlist>& attrs)
 {
-  string resource = obj.bucket.name + "/" + obj.object;
+  string resource = oid.bucket.name + "/" + oid.object;
   string new_url = url;
   if (new_url[new_url.size() - 1] != '/')
     new_url.append("/");
@@ -540,11 +540,11 @@ int RGWRESTStreamWriteRequest::complete(string& etag, time_t *mtime)
   return status;
 }
 
-int RGWRESTStreamReadRequest::get_obj(RGWAccessKey& key, map<string, string>& extra_headers, rgw_obj& obj)
+int RGWRESTStreamReadRequest::get_obj(RGWAccessKey& key, map<string, string>& extra_headers, rgw_obj& oid)
 {
   string urlsafe_bucket, urlsafe_object;
-  url_encode(obj.bucket.name, urlsafe_bucket);
-  url_encode(obj.object, urlsafe_object);
+  url_encode(oid.bucket.name, urlsafe_bucket);
+  url_encode(oid.object, urlsafe_object);
   string resource = urlsafe_bucket + "/" + urlsafe_object;
   string new_url = url;
   if (new_url[new_url.size() - 1] != '/')

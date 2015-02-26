@@ -207,13 +207,13 @@ int main(int argc, char **argv)
 	     << cpp_strerror(r) << std::endl;
 	goto UMOUNT;
       }
-      for (vector<goid>::iterator obj = list.begin();
-	   obj != list.end();
-	   ++obj) {
+      for (vector<goid>::iterator oid = list.begin();
+	   oid != list.end();
+	   ++oid) {
 	bufferlist attr;
-	r = fs->getattr(*i, *obj, OI_ATTR, attr);
+	r = fs->getattr(*i, *oid, OI_ATTR, attr);
 	if (r < 0) {
-	  cerr << "Error getting attr on : " << make_pair(*i, *obj) << ", "
+	  cerr << "Error getting attr on : " << make_pair(*i, *oid) << ", "
 	       << cpp_strerror(r) << std::endl;
 	  goto UMOUNT;
 	}
@@ -223,24 +223,24 @@ int main(int argc, char **argv)
 	  ::decode(oi, bp);
 	} catch (...) {
 	  r = -EINVAL;
-	  cerr << "Error getting attr on : " << make_pair(*i, *obj) << ", "
+	  cerr << "Error getting attr on : " << make_pair(*i, *oid) << ", "
 	       << cpp_strerror(r) << std::endl;
 	  goto UMOUNT;
 	}
 	if (oi.is_lost()) {
 	  if (list_lost_objects) {
-	    cout << *i << "/" << *obj << " is lost" << std::endl;
+	    cout << *i << "/" << *oid << " is lost" << std::endl;
 	  }
 	  if (fix_lost_objects) {
-	    cerr << *i << "/" << *obj << " is lost, fixing" << std::endl;
+	    cerr << *i << "/" << *oid << " is lost, fixing" << std::endl;
 	    oi.clear_flag(object_info_t::FLAG_LOST);
 	    bufferlist bl2;
 	    ::encode(oi, bl2);
 	    ObjectStore::Transaction t;
-	    t.setattr(*i, *obj, OI_ATTR, bl2);
+	    t.setattr(*i, *oid, OI_ATTR, bl2);
 	    r = fs->apply_transaction(t);
 	    if (r < 0) {
-	      cerr << "Error getting fixing attr on : " << make_pair(*i, *obj)
+	      cerr << "Error getting fixing attr on : " << make_pair(*i, *oid)
 		   << ", "
 		   << cpp_strerror(r) << std::endl;
 	      goto UMOUNT;

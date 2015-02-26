@@ -55,9 +55,9 @@ int StRadosDeleteObjs::run()
   RETURN1_IF_NONZERO(rados_ioctx_create(cl, m_volume_name.c_str(), &io_ctx));
 
   for (int i = 0; i < m_num_objs; ++i) {
-    char oid[128];
-    snprintf(oid, sizeof(oid), "%d%s", i, m_suffix.c_str());
-    RETURN1_IF_NONZERO(rados_remove(io_ctx, oid));
+    char oid_t[128];
+    snprintf(oid_t, sizeof(oid_t), "%d%s", i, m_suffix.c_str());
+    RETURN1_IF_NONZERO(rados_remove(io_ctx, oid_t));
     if (((i % 25) == 0) || (i == m_num_objs - 1)) {
       printf("%s: deleted object %d...\n", get_id_str(), i);
     }

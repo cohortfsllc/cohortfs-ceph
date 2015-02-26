@@ -52,7 +52,7 @@ namespace rados {
       }
 
       int lock(IoCtx *ioctx,
-	       const string& oid,
+	       const string& oid_t,
 	       const string& name, ClsLockType type,
 	       const string& cookie, const string& tag,
 	       const string& description, const ceph::timespan& duration,
@@ -60,7 +60,7 @@ namespace rados {
       {
 	ObjectWriteOperation op(*ioctx);
 	lock(&op, name, type, cookie, tag, description, duration, flags);
-	return ioctx->operate(oid, &op);
+	return ioctx->operate(oid_t, &op);
       }
 
       void unlock(ObjectWriteOperation *rados_op,
@@ -75,12 +75,12 @@ namespace rados {
 	rados_op->exec("lock", "unlock", in);
       }
 
-      int unlock(IoCtx *ioctx, const string& oid,
+      int unlock(IoCtx *ioctx, const string& oid_t,
 		 const string& name, const string& cookie)
       {
 	ObjectWriteOperation op(*ioctx);
 	unlock(&op, name, cookie);
-	return ioctx->operate(oid, &op);
+	return ioctx->operate(oid_t, &op);
       }
 
       void break_lock(ObjectWriteOperation *rados_op,
@@ -96,19 +96,19 @@ namespace rados {
 	rados_op->exec("lock", "break_lock", in);
       }
 
-      int break_lock(IoCtx *ioctx, const string& oid,
+      int break_lock(IoCtx *ioctx, const string& oid_t,
 		     const string& name, const string& cookie,
 		     const entity_name_t& locker)
       {
 	ObjectWriteOperation op(*ioctx);
 	break_lock(&op, name, cookie, locker);
-	return ioctx->operate(oid, &op);
+	return ioctx->operate(oid_t, &op);
       }
 
-      int list_locks(IoCtx *ioctx, const string& oid, list<string> *locks)
+      int list_locks(IoCtx *ioctx, const string& oid_t, list<string> *locks)
       {
 	bufferlist in, out;
-	int r = ioctx->exec(oid, "lock", "list_locks", in, out);
+	int r = ioctx->exec(oid_t, "lock", "list_locks", in, out);
 	if (r < 0)
 	  return r;
 
@@ -161,14 +161,14 @@ namespace rados {
 	return 0;
       }
 
-      int get_lock_info(IoCtx *ioctx, const string& oid, const string& name,
+      int get_lock_info(IoCtx *ioctx, const string& oid_t, const string& name,
 			map<locker_id_t, locker_info_t> *lockers,
 			ClsLockType *type, string *tag)
       {
 	ObjectReadOperation op(*ioctx);
 	get_lock_info_start(&op, name);
 	bufferlist out;
-	int r = ioctx->operate(oid, &op, &out);
+	int r = ioctx->operate(oid_t, &op, &out);
 	if (r < 0)
 	  return r;
 	bufferlist::iterator it = out.begin();
@@ -181,9 +181,9 @@ namespace rados {
 	     cookie, tag, description, duration, flags);
       }
 
-      int Lock::lock_shared(IoCtx *ioctx, const string& oid)
+      int Lock::lock_shared(IoCtx *ioctx, const string& oid_t)
       {
-	return lock(ioctx, oid, name, LOCK_SHARED,
+	return lock(ioctx, oid_t, name, LOCK_SHARED,
 		    cookie, tag, description, duration, flags);
       }
 
@@ -193,9 +193,9 @@ namespace rados {
 	     cookie, tag, description, duration, flags);
       }
 
-      int Lock::lock_exclusive(IoCtx *ioctx, const string& oid)
+      int Lock::lock_exclusive(IoCtx *ioctx, const string& oid_t)
       {
-	return lock(ioctx, oid, name, LOCK_EXCLUSIVE,
+	return lock(ioctx, oid_t, name, LOCK_EXCLUSIVE,
 		    cookie, tag, description, duration, flags);
       }
 
@@ -204,9 +204,9 @@ namespace rados {
 	rados::cls::lock::unlock(op, name, cookie);
       }
 
-      int Lock::unlock(IoCtx *ioctx, const string& oid)
+      int Lock::unlock(IoCtx *ioctx, const string& oid_t)
       {
-	return rados::cls::lock::unlock(ioctx, oid, name, cookie);
+	return rados::cls::lock::unlock(ioctx, oid_t, name, cookie);
       }
 
       void Lock::break_lock(ObjectWriteOperation *op, const entity_name_t& locker)
@@ -214,9 +214,9 @@ namespace rados {
 	rados::cls::lock::break_lock(op, name, cookie, locker);
       }
 
-      int Lock::break_lock(IoCtx *ioctx, const string& oid, const entity_name_t& locker)
+      int Lock::break_lock(IoCtx *ioctx, const string& oid_t, const entity_name_t& locker)
       {
-	  return rados::cls::lock::break_lock(ioctx, oid, name, cookie, locker);
+	  return rados::cls::lock::break_lock(ioctx, oid_t, name, cookie, locker);
       }
     } // namespace lock
   } // namespace cls

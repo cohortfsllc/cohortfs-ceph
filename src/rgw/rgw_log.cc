@@ -294,9 +294,9 @@ int rgw_log_op(RGWRados *store, struct req_state *s, const string& op_name, OpsL
   }
 
   if (s->object)
-    entry.obj = s->object;
+    entry.oid = s->object;
   else
-    entry.obj = "-";
+    entry.oid = "-";
 
   entry.obj_size = s->obj_size;
 
@@ -345,18 +345,18 @@ int rgw_log_op(RGWRados *store, struct req_state *s, const string& op_name, OpsL
   int ret = 0;
 
   if (s->cct->_conf->rgw_ops_log_rados) {
-    string oid = render_log_object_name(s->cct->_conf->rgw_log_object_name, &bdt,
+    string oid_t = render_log_object_name(s->cct->_conf->rgw_log_object_name, &bdt,
 					s->bucket.bucket_id, entry.bucket);
 
-    rgw_obj obj(store->zone.log_pool, oid);
+    rgw_obj oid(store->zone.log_pool, oid_t);
 
-    ret = store->append_async(obj, bl.length(), bl);
+    ret = store->append_async(oid, bl.length(), bl);
     if (ret == -ENOENT) {
       ret = store->create_pool(store->zone.log_pool);
       if (ret < 0)
 	goto done;
       // retry
-      ret = store->append_async(obj, bl.length(), bl);
+      ret = store->append_async(oid, bl.length(), bl);
     }
   }
 
@@ -370,12 +370,12 @@ done:
   return ret;
 }
 
-int rgw_log_intent(RGWRados *store, rgw_obj& obj, RGWIntentEvent intent, const utime_t& timestamp, bool utc)
+int rgw_log_intent(RGWRados *store, rgw_obj& oid, RGWIntentEvent intent, const utime_t& timestamp, bool utc)
 {
   rgw_bucket intent_log_bucket(store->zone.intent_log_pool);
 
   rgw_intent_log_entry entry;
-  entry.obj = obj;
+  entry.oid = obj;
   entry.intent = (uint32_t)intent;
   entry.op_time = timestamp;
 
@@ -386,13 +386,13 @@ int rgw_log_intent(RGWRados *store, rgw_obj& obj, RGWIntentEvent intent, const u
   else
     localtime_r(&t, &bdt);
 
-  struct rgw_bucket& bucket = obj.bucket;
+  struct rgw_bucket& bucket = oid.bucket;
 
   char buf[bucket.name.size() + bucket.bucket_id.size() + 16];
   sprintf(buf, "%.4d-%.2d-%.2d-%s-%s", (bdt.tm_year+1900), (bdt.tm_mon+1), bdt.tm_mday,
-	  bucket.bucket_id.c_str(), obj.bucket.name.c_str());
-  string oid(buf);
-  rgw_obj log_obj(intent_log_bucket, oid);
+	  bucket.bucket_id.c_str(), oid.bucket.name.c_str());
+  string oid_t(buf);
+  rgw_obj log_obj(intent_log_bucket, oid_t);
 
   bufferlist bl;
   ::encode(entry, bl);
@@ -409,7 +409,7 @@ done:
   return ret;
 }
 
-int rgw_log_intent(RGWRados *store, struct req_state *s, rgw_obj& obj, RGWIntentEvent intent)
+int rgw_log_intent(RGWRados *store, struct req_state *s, rgw_obj& oid, RGWIntentEvent intent)
 {
-  return rgw_log_intent(store, obj, intent, s->time, s->cct->_conf->rgw_intent_log_object_name_utc);
+  return rgw_log_intent(store, oid, intent, s->time, s->cct->_conf->rgw_intent_log_object_name_utc);
 }

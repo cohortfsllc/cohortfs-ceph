@@ -182,29 +182,29 @@ int RGWGC::process(int index, int max_secs)
 
       remove_tag = true;
       for (liter = chain.objs.begin(); liter != chain.objs.end(); ++liter) {
-	cls_rgw_obj& obj = *liter;
+	cls_rgw_obj& oid = *liter;
 
-	if (obj.pool != last_pool) {
+	if (oid.pool != last_pool) {
 	  delete ctx;
 	  ctx = new IoCtx;
-	  ret = store->rados->ioctx_create(obj.pool.c_str(), *ctx);
+	  ret = store->rados->ioctx_create(oid.pool.c_str(), *ctx);
 	  if (ret < 0) {
-	    dout(0) << "ERROR: failed to create ioctx pool=" << obj.pool << dendl;
+	    dout(0) << "ERROR: failed to create ioctx pool=" << oid.pool << dendl;
 	    continue;
 	  }
-	  last_pool = obj.pool;
+	  last_pool = oid.pool;
 	}
 
-	ctx->locator_set_key(obj.key);
-	dout(0) << "gc::process: removing " << obj.pool << ":" << obj.oid << dendl;
+	ctx->locator_set_key(oid.key);
+	dout(0) << "gc::process: removing " << oid.pool << ":" << oid.oid_t << dendl;
 	ObjectWriteOperation op;
 	cls_refcount_put(op, info.tag, true);
-	ret = ctx->operate(obj.oid, &op);
+	ret = ctx->operate(oid.oid_t, &op);
 	if (ret == -ENOENT)
 	  ret = 0;
 	if (ret < 0) {
 	  remove_tag = false;
-	  dout(0) << "failed to remove " << obj.pool << ":" << obj.oid << "@" << obj.key << dendl;
+	  dout(0) << "failed to remove " << oid.pool << ":" << oid.oid_t << "@" << oid.key << dendl;
 	}
 
 	if (going_down()) // leave early, even if tag isn't removed, it's ok

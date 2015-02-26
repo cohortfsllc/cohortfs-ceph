@@ -43,7 +43,7 @@ static const map<string, chunktype> stringtypes = {
 // The appender must append a sequence of characters WIHOUT A NUL and
 // return a pointer to the next character after the last appended. Or
 // NULL if the buffer isn't big enough.
-bool oid::append_c_str(
+bool oid_t::append_c_str(
   char *orig, char sep, size_t len,
   char *(*appender)(char *dest, const char* src, size_t len)) const
 {
@@ -86,7 +86,7 @@ bool oid::append_c_str(
   return true;
 }
 
-void oid::append_str(
+void oid_t::append_str(
   string &orig, char sep,
   void (*appender)(string &dest, const string &src)) const
 {
@@ -106,16 +106,16 @@ void oid::append_str(
 }
 
 
-string oid::to_str() const
+string oid_t::to_str() const
 {
   string result;
   append_str(result, '.', append_escaped);
   return result;
 }
 
-oid::oid(const char *in, char sep,
-	 bool (*appender)(string &dest, const char *begin,
-			  const char *bound), const char *end)
+oid_t::oid_t(const char *in, char sep,
+	     bool (*appender)(string &dest, const char *begin,
+			      const char *bound), const char *end)
 {
   const char* cursor = in;
   const char* bound;
@@ -157,7 +157,7 @@ oid::oid(const char *in, char sep,
     throw std::invalid_argument(in);
 }
 
-void oid::encode(bufferlist& bl) const
+void oid_t::encode(bufferlist& bl) const
 {
   ENCODE_START(4, 3, bl);
   ::encode(name, bl);
@@ -166,7 +166,7 @@ void oid::encode(bufferlist& bl) const
   ENCODE_FINISH(bl);
 }
 
-void oid::decode(bufferlist::iterator& bl)
+void oid_t::decode(bufferlist::iterator& bl)
 {
   DECODE_START_LEGACY_COMPAT_LEN(4, 3, 3, bl);
   ::decode(name, bl);
@@ -175,21 +175,21 @@ void oid::decode(bufferlist::iterator& bl)
   DECODE_FINISH(bl);
 }
 
-void oid::dump(Formatter *f) const
+void oid_t::dump(Formatter *f) const
 {
   f->dump_string("name", name);
   f->dump_string("type", typestrings.at(type));
   f->dump_int("stride", stride);
 }
 
-void oid::generate_test_instances(list<oid*>& o)
+void oid_t::generate_test_instances(list<oid_t*>& o)
 {
-  o.push_back(new oid);
-  o.push_back(new oid("oname", chunktype::data, 97));
-  o.push_back(new oid("oname3", chunktype::ecc, 31));
+  o.push_back(new oid_t);
+  o.push_back(new oid_t("oname", chunktype::data, 97));
+  o.push_back(new oid_t("oname3", chunktype::ecc, 31));
 }
 
-std::ostream& operator<<(std::ostream& out, const oid& o)
+std::ostream& operator<<(std::ostream& out, const oid_t& o)
 {
   out << o.to_str();
   return out;

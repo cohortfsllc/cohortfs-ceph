@@ -435,7 +435,7 @@ private:
   void name_stray_dentry(string& dname);
 
 
-  static oid get_object_name(inodeno_t ino, frag_t fg,
+  static oid_t get_object_name(inodeno_t ino, frag_t fg,
 			     const char *suffix);
 
 

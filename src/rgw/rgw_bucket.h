@@ -26,7 +26,7 @@ extern void rgw_get_buckets_obj(const string& user_id, string& buckets_obj_id);
 extern int rgw_bucket_store_info(RGWRados *store, const string& bucket_name, bufferlist& bl, bool exclusive,
 				 map<string, bufferlist> *pattrs, RGWObjVersionTracker *objv_tracker,
 				 time_t mtime);
-extern int rgw_bucket_instance_store_info(RGWRados *store, string& oid, bufferlist& bl, bool exclusive,
+extern int rgw_bucket_instance_store_info(RGWRados *store, string& oid_t, bufferlist& bl, bool exclusive,
 				 map<string, bufferlist> *pattrs, RGWObjVersionTracker *objv_tracker,
 				 time_t mtime);
 
@@ -275,7 +275,7 @@ struct RGWDataChangesLogInfo {
   utime_t last_update;
 
   void dump(Formatter *f) const;
-  void decode_json(JSONObj *obj);
+  void decode_json(JSONObj *oid);
 };
 
 class RGWDataChangesLog {

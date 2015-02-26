@@ -342,9 +342,9 @@ bool debug = false;
 super_header sh;
 
 template <typename T>
-int write_section(sectiontype_t type, const T& obj, int fd) {
+int write_section(sectiontype_t type, const T& oid, int fd) {
   bufferlist blhdr, bl, blftr;
-  obj.encode(bl);
+  oid.encode(bl);
   header hdr(type, bl.length());
   hdr.encode(blhdr);
   footer ft;
@@ -376,7 +376,7 @@ static void invalid_path(string &path)
 int get_log(ObjectStore *fs, coll_t coll, spg_t pgid, const pg_info_t &info,
    PGLog::IndexedLog &log, pg_missing_t &missing)
 {
-  map<eversion_t, oid> divergent_priors;
+  map<eversion_t, oid_t> divergent_priors;
   try {
     ostringstream oss;
     PGLog::read_log(fs, coll, log_obj, info, divergent_priors, log, missing, oss);
@@ -496,9 +496,9 @@ int initiate_new_remove_pg(ObjectStore *store, spg_t r_pgid,
     return ENOENT;
   }
 
-  cout << "remove " << coll_t::META_COLL << " " << log_obj.obj << std::endl;
+  cout << "remove " << coll_t::META_COLL << " " << log_obj.oid << std::endl;
   rmt->remove(coll_t::META_COLL, log_obj);
-  cout << "remove " << coll_t::META_COLL << " " << biginfo_obj.obj << std::endl;
+  cout << "remove " << coll_t::META_COLL << " " << biginfo_obj.oid << std::endl;
   rmt->remove(coll_t::META_COLL, biginfo_obj);
 
   store->apply_transaction(*rmt);
@@ -567,7 +567,7 @@ int write_info(ObjectStore::Transaction &t, epoch_t epoch, pg_info_t &info,
 
 void write_log(ObjectStore::Transaction &t, pg_log_t &log)
 {
-  map<eversion_t, oid> divergent_priors;
+  map<eversion_t, oid_t> divergent_priors;
   PGLog::write_log(t, log, log_obj, divergent_priors);
 }
 
@@ -580,24 +580,24 @@ int write_pg(ObjectStore::Transaction &t, epoch_t epoch, pg_info_t &info,
   return 0;
 }
 
-int export_file(ObjectStore *store, coll_t cid, goid &obj)
+int export_file(ObjectStore *store, coll_t cid, goid &oid)
 {
   struct stat st;
   mysize_t total;
   footer ft;
 
-  int ret = store->stat(cid, obj, &st);
+  int ret = store->stat(cid, oid, &st);
   if (ret < 0)
     return ret;
 
   if (file_fd != STDOUT_FILENO)
-    cout << "read " << obj << std::endl;
+    cout << "read " << oid << std::endl;
 
   total = st.st_size;
   if (debug && file_fd != STDOUT_FILENO)
     cout << "size=" << total << std::endl;
 
-  object_begin objb(obj);
+  object_begin objb(oid);
   ret = write_section(TYPE_OBJECT_BEGIN, objb, file_fd);
   if (ret < 0)
     return ret;
@@ -611,7 +611,7 @@ int export_file(ObjectStore *store, coll_t cid, goid &obj)
     if (len > total)
       len = total;
 
-    ret = store->read(cid, obj, offset, len, rawdatabl);
+    ret = store->read(cid, oid, offset, len, rawdatabl);
     if (ret < 0)
       return ret;
     if (ret == 0)
@@ -630,7 +630,7 @@ int export_file(ObjectStore *store, coll_t cid, goid &obj)
 
   //Handle attrs for this object
   map<string,bufferptr> aset;
-  ret = store->getattrs(cid, obj, aset, false);
+  ret = store->getattrs(cid, oid, aset, false);
   if (ret) return ret;
   attr_section as(aset);
   ret = write_section(TYPE_ATTRS, as, file_fd);
@@ -645,7 +645,7 @@ int export_file(ObjectStore *store, coll_t cid, goid &obj)
   databl.clear();
   bufferlist hdrbuf;
   map<string, bufferlist> out;
-  ret = store->omap_get(cid, obj, &hdrbuf, &out);
+  ret = store->omap_get(cid, oid, &hdrbuf, &out);
   if (ret < 0)
     return ret;
 
@@ -1346,7 +1346,7 @@ int main(int argc, char **argv)
 
     pg_info_t info(pgid);
     map<epoch_t,pg_interval_t> past_intervals;
-    oid biginfo_obj = OSD::make_pg_biginfo_obj(pgid);
+    oid_t biginfo_obj = OSD::make_pg_biginfo_obj(pgid);
     interval_set<snapid_t> snap_collections;
 
     uint8_t struct_ver;

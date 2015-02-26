@@ -98,10 +98,10 @@ class DumbBackend : public Backend {
   } queue;
   friend class WriteQueue;
 
-  string get_full_path(const string &oid);
+  string get_full_path(const string &oid_t);
 
   void _write(
-    const string &oid,
+    const string &oid_t,
     uint64_t offset,
     const bufferlist &bl,
     Context *on_applied,
@@ -143,7 +143,7 @@ public:
     thread.join();
   }
   void write(
-    const string &oid,
+    const string &oid_t,
     uint64_t offset,
     const bufferlist &bl,
     Context *on_applied,
@@ -151,11 +151,11 @@ public:
     sem.Get();
     queue.queue(
       new write_item(
-	oid, bl, offset, on_applied, on_commit));
+	oid_t, bl, offset, on_applied, on_commit));
   }
 
   void read(
-    const string &oid,
+    const string &oid_t,
     uint64_t offset,
     uint64_t length,
     bufferlist *bl,

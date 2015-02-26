@@ -34,11 +34,11 @@ void list_all_buckets_end(struct req_state *s)
   s->formatter->close_section();
 }
 
-void dump_bucket(struct req_state *s, RGWBucketEnt& obj)
+void dump_bucket(struct req_state *s, RGWBucketEnt& oid)
 {
   s->formatter->open_object_section("Bucket");
-  s->formatter->dump_string("Name", obj.bucket.name);
-  dump_time(s, "CreationDate", &obj.creation_time);
+  s->formatter->dump_string("Name", oid.bucket.name);
+  dump_time(s, "CreationDate", &oid.creation_time);
   s->formatter->close_section();
 }
 
@@ -211,8 +211,8 @@ void RGWListBuckets_ObjStore_S3::send_response_data(RGWUserBuckets& buckets)
   map<string, RGWBucketEnt>::iterator iter;
 
   for (iter = m.begin(); iter != m.end(); ++iter) {
-    RGWBucketEnt obj = iter->second;
-    dump_bucket(s, obj);
+    RGWBucketEnt oid = iter->second;
+    dump_bucket(s, oid);
   }
   rgw_flush_formatter(s, s->formatter);
 }
@@ -1617,7 +1617,7 @@ void RGWListBucketMultiparts_ObjStore_S3::send_response()
       dump_owner(s, s->user.user_id, s->user.display_name, "Initiator");
       dump_owner(s, s->user.user_id, s->user.display_name);
       s->formatter->dump_string("StorageClass", "STANDARD");
-      time_t mtime = iter->obj.mtime.sec();
+      time_t mtime = iter->oid.mtime.sec();
       dump_time(s, "Initiated", &mtime);
       s->formatter->close_section();
     }

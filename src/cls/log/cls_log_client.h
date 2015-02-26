@@ -33,7 +33,7 @@ void cls_log_trim(librados::ObjectWriteOperation& op,
 		  const ceph::real_time& from_time,
 		  const ceph::real_time& to_time,
 		  const string& from_marker, const string& to_marker);
-int cls_log_trim(librados::IoCtx& io_ctx, const string& oid,
+int cls_log_trim(librados::IoCtx& io_ctx, const string& oid_t,
 		 const ceph::real_time& from_time,
 		 const ceph::real_time& to_time,
 		 const string& from_marker, const string& to_marker);

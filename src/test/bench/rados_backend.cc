@@ -18,7 +18,7 @@ void on_complete(void *completion, void *_arg) {
 }
 
 void RadosBackend::write(
-  const std::string &oid,
+  const std::string &oid_t,
   uint64_t offset,
   const bufferlist &bl,
   Context *on_write_applied,
@@ -38,11 +38,11 @@ void RadosBackend::write(
     arg,
     on_applied);
 
-  ioctx->aio_write(oid, completion, bl, bl.length(), offset);
+  ioctx->aio_write(oid_t, completion, bl, bl.length(), offset);
 }
 
 void RadosBackend::read(
-  const std::string &oid,
+  const std::string &oid_t,
   uint64_t offset,
   uint64_t length,
   bufferlist *bl,
@@ -58,5 +58,5 @@ void RadosBackend::read(
     arg,
     on_complete);
 
-  ioctx->aio_read(oid, completion, bl, length, offset);
+  ioctx->aio_read(oid_t, completion, bl, length, offset);
 }

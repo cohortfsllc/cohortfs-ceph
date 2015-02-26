@@ -142,7 +142,7 @@ public:
   virtual void detach(void) {};
   virtual bool is_attached() const = 0;
   // Returns negative POSIX error code on error.
-  virtual ssize_t place(const oid& object,
+  virtual ssize_t place(const oid_t& object,
 		  const OSDMap& map,
 		  const std::function<void(int)>& f) const = 0;
   // Returns negative POSIX error code on error.
@@ -150,7 +150,7 @@ public:
   // Returns minimum number of subops that need to be placed to continue
   virtual uint32_t quorum() const = 0;
 
-  virtual void make_strides(const oid& obj,
+  virtual void make_strides(const oid_t& oid,
 			    uint64_t offset, uint64_t len,
 			    uint64_t truncate_size, uint32_t truncate_seq,
 			    vector<StrideExtent>& strides) = 0;

@@ -280,8 +280,8 @@ extern int rgw_get_user_info_by_access_key(RGWRados *store, string& access_key, 
 
 int rgw_remove_key_index(RGWRados *store, RGWAccessKey& access_key)
 {
-  rgw_obj obj(store->zone.user_keys_pool, access_key.id);
-  int ret = store->delete_system_obj(NULL, obj);
+  rgw_obj oid(store->zone.user_keys_pool, access_key.id);
+  int ret = store->delete_system_obj(NULL, oid);
   return ret;
 }
 
@@ -302,15 +302,15 @@ int rgw_remove_uid_index(RGWRados *store, string& uid)
 
 int rgw_remove_email_index(RGWRados *store, string& email)
 {
-  rgw_obj obj(store->zone.user_email_pool, email);
-  int ret = store->delete_system_obj(NULL, obj);
+  rgw_obj oid(store->zone.user_email_pool, email);
+  int ret = store->delete_system_obj(NULL, oid);
   return ret;
 }
 
 int rgw_remove_swift_name_index(RGWRados *store, string& swift_name)
 {
-  rgw_obj obj(store->zone.user_swift_pool, swift_name);
-  int ret = store->delete_system_obj(NULL, obj);
+  rgw_obj oid(store->zone.user_swift_pool, swift_name);
+  int ret = store->delete_system_obj(NULL, oid);
   return ret;
 }
 
@@ -1999,8 +1999,8 @@ int RGWUser::execute_modify(RGWUserAdminOpState& op_state, std::string *err_msg)
 
       vector<rgw_bucket> bucket_names;
       for (iter = m.begin(); iter != m.end(); ++iter) {
-	RGWBucketEnt obj = iter->second;
-	bucket_names.push_back(obj.bucket);
+	RGWBucketEnt oid = iter->second;
+	bucket_names.push_back(oid.bucket);
 
 	marker = iter->first;
       }
@@ -2366,7 +2366,7 @@ class RGWUserMetadataHandler : public RGWMetadataHandler {
 public:
   string get_type() { return "user"; }
 
-  int get(RGWRados *store, string& entry, RGWMetadataObject **obj) {
+  int get(RGWRados *store, string& entry, RGWMetadataObject **oid) {
     RGWUserInfo info;
 
     RGWObjVersionTracker objv_tracker;
@@ -2378,16 +2378,16 @@ public:
 
     RGWUserMetadataObject *mdo = new RGWUserMetadataObject(info, objv_tracker.read_version, mtime);
 
-    *obj = mdo;
+    *oid = mdo;
 
     return 0;
   }
 
   int put(RGWRados *store, string& entry, RGWObjVersionTracker& objv_tracker,
-	  time_t mtime, JSONObj *obj, sync_type_t sync_mode) {
+	  time_t mtime, JSONObj *oid, sync_type_t sync_mode) {
     RGWUserInfo info;
 
-    decode_json_obj(info, obj);
+    decode_json_obj(info, oid);
 
     RGWUserInfo old_info;
     time_t orig_mtime;
@@ -2423,8 +2423,8 @@ public:
     return rgw_delete_user(store, info, objv_tracker);
   }
 
-  void get_pool_and_oid(RGWRados *store, const string& key, rgw_bucket& bucket, string& oid) {
-    oid = key;
+  void get_pool_and_oid(RGWRados *store, const string& key, rgw_bucket& bucket, string& oid_t) {
+    oid_t = key;
     bucket = store->zone.user_uid_pool;
   }
 

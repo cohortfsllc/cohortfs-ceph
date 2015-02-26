@@ -11,7 +11,7 @@ public:
   public:
     Metadata() : is_admin(false) { };
     bool is_admin;
-    void decode_json(JSONObj *obj);
+    void decode_json(JSONObj *oid);
   };
 
   class Service {
@@ -23,12 +23,12 @@ public:
       string public_url;
       string internal_url;
       string region;
-      void decode_json(JSONObj *obj);
+      void decode_json(JSONObj *oid);
     };
     string type;
     string name;
     list<Endpoint> endpoints;
-    void decode_json(JSONObj *obj);
+    void decode_json(JSONObj *oid);
   };
 
   class Token {
@@ -41,12 +41,12 @@ public:
       string name;
       string description;
       bool enabled;
-      void decode_json(JSONObj *obj);
+      void decode_json(JSONObj *oid);
     };
     string id;
     time_t expires;
     Tenant tenant;
-    void decode_json(JSONObj *obj);
+    void decode_json(JSONObj *oid);
   };
 
   class User {
@@ -55,13 +55,13 @@ public:
     public:
       string id;
       string name;
-      void decode_json(JSONObj *obj);
+      void decode_json(JSONObj *oid);
     };
     string id;
     string name;
     string user_name;
     list<Role> roles;
-    void decode_json(JSONObj *obj);
+    void decode_json(JSONObj *oid);
     bool has_role(const string& r);
   };
 

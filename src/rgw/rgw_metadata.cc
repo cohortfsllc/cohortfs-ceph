@@ -78,14 +78,14 @@ int RGWMetadataLog::add_entry(RGWRados *store, RGWMetadataHandler *handler, cons
   if (!store->need_to_log_metadata())
     return 0;
 
-  string oid;
+  string oid_t;
 
   string hash_key;
   handler->get_hash_key(section, key, hash_key);
 
-  store->shard_name(prefix, cct->_conf->rgw_md_log_max_shards, hash_key, oid);
+  store->shard_name(prefix, cct->_conf->rgw_md_log_max_shards, hash_key, oid_t);
   utime_t now = ceph_clock_now(cct);
-  return store->time_log_add(oid, now, section, key, bl);
+  return store->time_log_add(oid_t, now, section, key, bl);
 }
 
 void RGWMetadataLog::init_list_entries(int shard_id, utime_t& from_time, utime_t& end_time,
@@ -134,12 +134,12 @@ int RGWMetadataLog::list_entries(void *handle,
 
 int RGWMetadataLog::get_info(int shard_id, RGWMetadataLogInfo *info)
 {
-  string oid;
-  get_shard_oid(shard_id, oid);
+  string oid_t;
+  get_shard_oid(shard_id, oid_t);
 
   cls_log_header header;
 
-  int ret = store->time_log_info(oid, &header);
+  int ret = store->time_log_info(oid_t, &header);
   if ((ret < 0) && (ret != -ENOENT))
     return ret;
 
@@ -152,12 +152,12 @@ int RGWMetadataLog::get_info(int shard_id, RGWMetadataLogInfo *info)
 int RGWMetadataLog::trim(int shard_id, const utime_t& from_time, const utime_t& end_time,
 			 const string& start_marker, const string& end_marker)
 {
-  string oid;
-  get_shard_oid(shard_id, oid);
+  string oid_t;
+  get_shard_oid(shard_id, oid_t);
 
   int ret;
 
-  ret = store->time_log_trim(oid, from_time, end_time, start_marker, end_marker);
+  ret = store->time_log_trim(oid_t, from_time, end_time, start_marker, end_marker);
 
   if (ret == -ENOENT)
     ret = 0;
@@ -166,17 +166,17 @@ int RGWMetadataLog::trim(int shard_id, const utime_t& from_time, const utime_t& 
 }
 
 int RGWMetadataLog::lock_exclusive(int shard_id, utime_t& duration, string& zone_id, string& owner_id) {
-  string oid;
-  get_shard_oid(shard_id, oid);
+  string oid_t;
+  get_shard_oid(shard_id, oid_t);
 
-  return store->lock_exclusive(store->zone.log_pool, oid, duration, zone_id, owner_id);
+  return store->lock_exclusive(store->zone.log_pool, oid_t, duration, zone_id, owner_id);
 }
 
 int RGWMetadataLog::unlock(int shard_id, string& zone_id, string& owner_id) {
-  string oid;
-  get_shard_oid(shard_id, oid);
+  string oid_t;
+  get_shard_oid(shard_id, oid_t);
 
-  return store->unlock(store->zone.log_pool, oid, zone_id, owner_id);
+  return store->unlock(store->zone.log_pool, oid_t, zone_id, owner_id);
 }
 
 obj_version& RGWMetadataObject::get_version()
@@ -195,11 +195,11 @@ public:
 
   virtual string get_type() { return string(); }
 
-  virtual int get(RGWRados *store, string& entry, RGWMetadataObject **obj) { return -ENOTSUP; }
+  virtual int get(RGWRados *store, string& entry, RGWMetadataObject **oid) { return -ENOTSUP; }
   virtual int put(RGWRados *store, string& entry, RGWObjVersionTracker& objv_tracker,
-		  time_t mtime, JSONObj *obj, sync_type_t sync_type) { return -ENOTSUP; }
+		  time_t mtime, JSONObj *oid, sync_type_t sync_type) { return -ENOTSUP; }
 
-  virtual void get_pool_and_oid(RGWRados *store, const string& key, rgw_bucket& bucket, string& oid) {}
+  virtual void get_pool_and_oid(RGWRados *store, const string& key, rgw_bucket& bucket, string& oid_t) {}
 
   virtual int remove(RGWRados *store, string& entry, RGWObjVersionTracker& objv_tracker) { return -ENOTSUP; }
 
@@ -310,24 +310,24 @@ int RGWMetadataManager::get(string& metadata_key, Formatter *f)
     return ret;
   }
 
-  RGWMetadataObject *obj;
+  RGWMetadataObject *oid;
 
-  ret = handler->get(store, entry, &obj);
+  ret = handler->get(store, entry, &oid);
   if (ret < 0) {
     return ret;
   }
 
   f->open_object_section("metadata_info");
   encode_json("key", metadata_key, f);
-  encode_json("ver", obj->get_version(), f);
-  time_t mtime = obj->get_mtime();
+  encode_json("ver", oid->get_version(), f);
+  time_t mtime = oid->get_mtime();
   if (mtime > 0) {
     encode_json("mtime", mtime, f);
   }
-  encode_json("data", *obj, f);
+  encode_json("data", *oid, f);
   f->close_section();
 
-  delete obj;
+  delete oid;
 
   return 0;
 }
@@ -379,18 +379,18 @@ int RGWMetadataManager::remove(string& metadata_key)
   if (ret < 0)
     return ret;
 
-  RGWMetadataObject *obj;
+  RGWMetadataObject *oid;
 
-  ret = handler->get(store, entry, &obj);
+  ret = handler->get(store, entry, &oid);
   if (ret < 0) {
     return ret;
   }
 
   RGWObjVersionTracker objv_tracker;
 
-  objv_tracker.read_version = obj->get_version();
+  objv_tracker.read_version = oid->get_version();
 
-  delete obj;
+  delete oid;
 
   return handler->remove(store, entry, objv_tracker);
 }
@@ -405,11 +405,11 @@ int RGWMetadataManager::lock_exclusive(string& metadata_key, utime_t duration, s
     return ret;
 
   rgw_bucket pool;
-  string oid;
+  string oid_t;
 
-  handler->get_pool_and_oid(store, entry, pool, oid);
+  handler->get_pool_and_oid(store, entry, pool, oid_t);
 
-  return store->lock_exclusive(pool, oid, duration, zone_id, owner_id);
+  return store->lock_exclusive(pool, oid_t, duration, zone_id, owner_id);
 }
 
 int RGWMetadataManager::unlock(string& metadata_key, string& owner_id) {
@@ -423,11 +423,11 @@ int RGWMetadataManager::unlock(string& metadata_key, string& owner_id) {
     return ret;
 
   rgw_bucket pool;
-  string oid;
+  string oid_t;
 
-  handler->get_pool_and_oid(store, entry, pool, oid);
+  handler->get_pool_and_oid(store, entry, pool, oid_t);
 
-  return store->unlock(pool, oid, zone_id, owner_id);
+  return store->unlock(pool, oid_t, zone_id, owner_id);
 }
 
 struct list_keys_handle {
@@ -568,12 +568,12 @@ int RGWMetadataManager::put_entry(RGWMetadataHandler *handler, const string& key
   if (ret < 0)
     return ret;
 
-  string oid;
+  string oid_t;
   rgw_bucket bucket;
 
-  handler->get_pool_and_oid(store, key, bucket, oid);
+  handler->get_pool_and_oid(store, key, bucket, oid_t);
 
-  ret = rgw_put_system_obj(store, bucket, oid,
+  ret = rgw_put_system_obj(store, bucket, oid_t,
 			   bl.c_str(), bl.length(), exclusive,
 			   objv_tracker, mtime, pattrs);
   /* cascading ret into post_modify() */
@@ -593,14 +593,14 @@ int RGWMetadataManager::remove_entry(RGWMetadataHandler *handler, string& key, R
   if (ret < 0)
     return ret;
 
-  string oid;
+  string oid_t;
   rgw_bucket bucket;
 
-  handler->get_pool_and_oid(store, key, bucket, oid);
+  handler->get_pool_and_oid(store, key, bucket, oid_t);
 
-  rgw_obj obj(bucket, oid);
+  rgw_obj oid(bucket, oid_t);
 
-  ret = store->delete_system_obj(NULL, obj, objv_tracker);
+  ret = store->delete_system_obj(NULL, oid, objv_tracker);
   /* cascading ret into post_modify() */
 
   ret = post_modify(handler, section, key, log_data, objv_tracker, ret);
@@ -611,7 +611,7 @@ int RGWMetadataManager::remove_entry(RGWMetadataHandler *handler, string& key, R
 }
 
 int RGWMetadataManager::set_attrs(RGWMetadataHandler *handler, string& key,
-				  rgw_obj& obj, map<string, bufferlist>& attrs,
+				  rgw_obj& oid, map<string, bufferlist>& attrs,
 				  map<string, bufferlist>* rmattrs,
 				  RGWObjVersionTracker *objv_tracker)
 {
@@ -621,7 +621,7 @@ int RGWMetadataManager::set_attrs(RGWMetadataHandler *handler, string& key,
   if (ret < 0)
     return ret;
 
-  ret = store->set_attrs(NULL, obj, attrs, rmattrs, objv_tracker);
+  ret = store->set_attrs(NULL, oid, attrs, rmattrs, objv_tracker);
   /* cascading ret into post_modify() */
 
   ret = post_modify(handler, section, key, log_data, objv_tracker, ret);

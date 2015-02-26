@@ -78,9 +78,9 @@ public:
 
     std::map <int, std::string> to_delete;
     for (int i = 0; i < g_num_objects; ++i) {
-      char oid[128];
-      snprintf(oid, sizeof(oid), "%d.obj", i);
-      to_delete[i] = oid;
+      char oid_t[128];
+      snprintf(oid_t, sizeof(oid_t), "%d.oid", i);
+      to_delete[i] = oid_t;
     }
 
     int removed = 0;
@@ -94,12 +94,12 @@ public:
       if (d == to_delete.end()) {
 	return -EDOM;
       }
-      std::string oid(d->second);
+      std::string oid_t(d->second);
       to_delete.erase(d);
-      int ret = rados_remove(io_ctx, oid.c_str());
+      int ret = rados_remove(io_ctx, oid_t.c_str());
       if (ret != 0) {
 	printf("%s: rados_remove(%s) failed with error %d\n",
-	       get_id_str(), oid.c_str(), ret);
+	       get_id_str(), oid_t.c_str(), ret);
 	return ret;
       }
       ++removed;
@@ -159,9 +159,9 @@ public:
 
     std::map <int, std::string> to_add;
     for (int i = 0; i < g_num_objects; ++i) {
-      char oid[128];
-      snprintf(oid, sizeof(oid), "%d%s", i, m_suffix.c_str());
-      to_add[i] = oid;
+      char oid_t[128];
+      snprintf(oid_t, sizeof(oid_t), "%d%s", i, m_suffix.c_str());
+      to_add[i] = oid_t;
     }
 
     int added = 0;
@@ -175,14 +175,14 @@ public:
       if (d == to_add.end()) {
 	return -EDOM;
       }
-      std::string oid(d->second);
+      std::string oid_t(d->second);
       to_add.erase(d);
 
       std::string buf(StRadosCreateVolume::get_random_buf(256));
-      int ret = rados_write(io_ctx, oid.c_str(), buf.c_str(), buf.size(), 0);
+      int ret = rados_write(io_ctx, oid_t.c_str(), buf.c_str(), buf.size(), 0);
       if (ret != 0) {
 	printf("%s: rados_write(%s) failed with error %d\n",
-	       get_id_str(), oid.c_str(), ret);
+	       get_id_str(), oid_t.c_str(), ret);
 	return ret;
       }
       ++added;
@@ -233,7 +233,7 @@ int main(int argc, const char **argv)
   // Test 1... list objects
   {
     StRadosCreateVolume r1(argc, argv, NULL, volume_setup_sem, NULL,
-			 volume, g_num_objects, ".obj");
+			 volume, g_num_objects, ".oid");
     StRadosListObjects r2(argc, argv, volume, false, g_num_objects,
 			  volume_setup_sem, modify_sem, NULL);
     vector < SysTestRunnable* > vec;
@@ -251,7 +251,7 @@ int main(int argc, const char **argv)
   RETURN1_IF_NONZERO(modify_sem->reinit(0));
   {
     StRadosCreateVolume r1(argc, argv, NULL, volume_setup_sem, NULL,
-			 volume, g_num_objects, ".obj");
+			 volume, g_num_objects, ".oid");
     StRadosListObjects r2(argc, argv, volume, false, g_num_objects / 2,
 			  volume_setup_sem, modify_sem, NULL);
     RadosDeleteObjectsR r3(argc, argv, volume);
@@ -271,7 +271,7 @@ int main(int argc, const char **argv)
   RETURN1_IF_NONZERO(modify_sem->reinit(0));
   {
     StRadosCreateVolume r1(argc, argv, NULL, volume_setup_sem, NULL,
-			 volume, g_num_objects, ".obj");
+			 volume, g_num_objects, ".oid");
     StRadosListObjects r2(argc, argv, volume, false, g_num_objects / 2,
 			  volume_setup_sem, modify_sem, NULL);
     RadosAddObjectsR r3(argc, argv, volume, ".obj2");
@@ -291,7 +291,7 @@ int main(int argc, const char **argv)
   RETURN1_IF_NONZERO(modify_sem->reinit(0));
   {
     StRadosCreateVolume r1(argc, argv, NULL, volume_setup_sem, NULL,
-			 volume, g_num_objects, ".obj");
+			 volume, g_num_objects, ".oid");
     StRadosListObjects r2(argc, argv, volume, false, g_num_objects / 2,
 			  volume_setup_sem, modify_sem, NULL);
     RadosAddObjectsR r3(argc, argv, volume, ".obj2");
@@ -315,11 +315,11 @@ int main(int argc, const char **argv)
   RETURN1_IF_NONZERO(modify_sem->reinit(0));
   {
     StRadosCreateVolume r1(argc, argv, NULL, volume_setup_sem, NULL,
-			 volume, g_num_objects, ".obj");
+			 volume, g_num_objects, ".oid");
     StRadosListObjects r2(argc, argv, volume, false, g_num_objects / 2,
 			  volume_setup_sem, modify_sem, NULL);
     // AddObjects with the same 'suffix' as used in StRadosCreateVolume
-    RadosAddObjectsR r3(argc, argv, volume, ".obj");
+    RadosAddObjectsR r3(argc, argv, volume, ".oid");
     vector < SysTestRunnable* > vec;
     vec.push_back(&r1);
     vec.push_back(&r2);

@@ -152,11 +152,11 @@ namespace json_spirit
 	typedef std::vector< Value_type > Array_type;
 	typedef std::vector< Pair_type > Object_type;
 
-	static Value_type& add( Object_type& obj, const String_type& name, const Value_type& value )
+	static Value_type& add( Object_type& oid, const String_type& name, const Value_type& value )
 	{
-	    obj.push_back( Pair_type( name , value ) );
+	    oid.push_back( Pair_type( name , value ) );
 
-	    return obj.back().value_;
+	    return oid.back().value_;
 	}
 
 	static String_type get_name( const Pair_type& pair )
@@ -205,9 +205,9 @@ namespace json_spirit
 	typedef std::map< String_type, Value_type > Object_type;
 	typedef std::pair< String_type, Value_type > Pair_type;
 
-	static Value_type& add( Object_type& obj, const String_type& name, const Value_type& value )
+	static Value_type& add( Object_type& oid, const String_type& name, const Value_type& value )
 	{
-	    return obj[ name ] = value;
+	    return oid[ name ] = value;
 	}
 
 	static String_type get_name( const Pair_type& pair )

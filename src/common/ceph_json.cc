@@ -34,8 +34,8 @@ JSONObj *JSONObjIter::operator*()
 };
 
 // does not work, FIXME
-ostream& operator<<(ostream& out, JSONObj& obj) {
-   out << obj.name << ": " << obj.data_string;
+ostream& operator<<(ostream& out, JSONObj& oid) {
+   out << oid.name << ": " << oid.data_string;
    return out;
 }
 
@@ -43,15 +43,15 @@ JSONObj::~JSONObj()
 {
   multimap<string, JSONObj *>::iterator iter;
   for (iter = children.begin(); iter != children.end(); ++iter) {
-    JSONObj *obj = iter->second;
-    delete obj;
+    JSONObj *oid = iter->second;
+    delete oid;
   }
 }
 
 
-void JSONObj::add_child(string el, JSONObj *obj)
+void JSONObj::add_child(string el, JSONObj *oid)
 {
-  children.insert(pair<string, JSONObj *>(el, obj));
+  children.insert(pair<string, JSONObj *>(el, oid));
 }
 
 bool JSONObj::get_attr(string name, string& attr)
@@ -103,11 +103,11 @@ JSONObj *JSONObj::find_obj(const string& name)
 
 bool JSONObj::get_data(const string& key, string *dest)
 {
-  JSONObj *obj = find_obj(key);
-  if (!obj)
+  JSONObj *oid = find_obj(key);
+  if (!oid)
     return false;
 
-  *dest = obj->get_data();
+  *dest = oid->get_data();
 
   return true;
 }
@@ -265,9 +265,9 @@ bool JSONParser::parse(const char *file_name)
 }
 
 
-void decode_json_obj(long& val, JSONObj *obj)
+void decode_json_obj(long& val, JSONObj *oid)
 {
-  string s = obj->get_data();
+  string s = oid->get_data();
   const char *start = s.c_str();
   char *p;
 
@@ -293,9 +293,9 @@ void decode_json_obj(long& val, JSONObj *obj)
  }
 }
 
-void decode_json_obj(unsigned long& val, JSONObj *obj)
+void decode_json_obj(unsigned long& val, JSONObj *oid)
 {
-  string s = obj->get_data();
+  string s = oid->get_data();
   const char *start = s.c_str();
   char *p;
 
@@ -321,9 +321,9 @@ void decode_json_obj(unsigned long& val, JSONObj *obj)
  }
 }
 
-void decode_json_obj(long long& val, JSONObj *obj)
+void decode_json_obj(long long& val, JSONObj *oid)
 {
-  string s = obj->get_data();
+  string s = oid->get_data();
   const char *start = s.c_str();
   char *p;
 
@@ -349,9 +349,9 @@ void decode_json_obj(long long& val, JSONObj *obj)
  }
 }
 
-void decode_json_obj(unsigned long long& val, JSONObj *obj)
+void decode_json_obj(unsigned long long& val, JSONObj *oid)
 {
-  string s = obj->get_data();
+  string s = oid->get_data();
   const char *start = s.c_str();
   char *p;
 
@@ -377,10 +377,10 @@ void decode_json_obj(unsigned long long& val, JSONObj *obj)
  }
 }
 
-void decode_json_obj(int& val, JSONObj *obj)
+void decode_json_obj(int& val, JSONObj *oid)
 {
   long l;
-  decode_json_obj(l, obj);
+  decode_json_obj(l, oid);
 #if LONG_MAX > INT_MAX
   if (l > INT_MAX || l < INT_MIN) {
     throw JSONDecoder::err("integer out of range");
@@ -390,10 +390,10 @@ void decode_json_obj(int& val, JSONObj *obj)
   val = (int)l;
 }
 
-void decode_json_obj(unsigned& val, JSONObj *obj)
+void decode_json_obj(unsigned& val, JSONObj *oid)
 {
   unsigned long l;
-  decode_json_obj(l, obj);
+  decode_json_obj(l, oid);
 #if ULONG_MAX > UINT_MAX
   if (l > UINT_MAX) {
     throw JSONDecoder::err("unsigned integer out of range");
@@ -403,9 +403,9 @@ void decode_json_obj(unsigned& val, JSONObj *obj)
   val = (unsigned)l;
 }
 
-void decode_json_obj(bool& val, JSONObj *obj)
+void decode_json_obj(bool& val, JSONObj *oid)
 {
-  string s = obj->get_data();
+  string s = oid->get_data();
   if (strcasecmp(s.c_str(), "true") == 0) {
     val = true;
     return;
@@ -415,13 +415,13 @@ void decode_json_obj(bool& val, JSONObj *obj)
     return;
   }
   int i;
-  decode_json_obj(i, obj);
+  decode_json_obj(i, oid);
   val = (bool)i;
 }
 
-void decode_json_obj(bufferlist& val, JSONObj *obj)
+void decode_json_obj(bufferlist& val, JSONObj *oid)
 {
-  string s = obj->get_data();
+  string s = oid->get_data();
 
   bufferlist bl;
   bl.append(s.c_str(), s.size());
@@ -432,9 +432,9 @@ void decode_json_obj(bufferlist& val, JSONObj *obj)
   }
 }
 
-void decode_json_obj(ceph::real_time& val, JSONObj *obj)
+void decode_json_obj(ceph::real_time& val, JSONObj *oid)
 {
-  string s = obj->get_data();
+  string s = oid->get_data();
   struct tm tm;
   memset(&tm, 0, sizeof(tm));
   val = ceph::real_time::min();

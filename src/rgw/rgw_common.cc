@@ -960,20 +960,20 @@ struct RGWUserCap {
   string type;
   uint32_t perm;
 
-  void decode_json(JSONObj *obj) {
-    JSONDecoder::decode_json("type", type, obj);
+  void decode_json(JSONObj *oid) {
+    JSONDecoder::decode_json("type", type, oid);
     string perm_str;
-    JSONDecoder::decode_json("perm", perm_str, obj);
+    JSONDecoder::decode_json("perm", perm_str, oid);
     if (RGWUserCaps::parse_cap_perm(perm_str, &perm) < 0) {
       throw JSONDecoder::err("failed to parse permissions");
     }
   }
 };
 
-void RGWUserCaps::decode_json(JSONObj *obj)
+void RGWUserCaps::decode_json(JSONObj *oid)
 {
   list<RGWUserCap> caps_list;
-  decode_json_obj(caps_list, obj);
+  decode_json_obj(caps_list, oid);
 
   list<RGWUserCap>::iterator iter;
   for (iter = caps_list.begin(); iter != caps_list.end(); ++iter) {

@@ -593,13 +593,13 @@ int rados_ioctx_get_volume_name(rados_ioctx_t io, char *buf, unsigned maxlen);
  *
  * @note This will never return a positive value not equal to len.
  * @param io the io context in which the write will occur
- * @param oid name of the object
+ * @param oid_t name of the object
  * @param buf data to write
  * @param len length of the data, in bytes
  * @param off byte offset in the object to begin writing at
  * @returns 0 on success, negative error code on failure
  */
-int rados_write(rados_ioctx_t io, const char *oid, const char *buf, size_t len, uint64_t off);
+int rados_write(rados_ioctx_t io, const char *oid_t, const char *buf, size_t len, uint64_t off);
 
 /**
  * Write an entire object
@@ -608,46 +608,46 @@ int rados_write(rados_ioctx_t io, const char *oid, const char *buf, size_t len, 
  * it is atomically truncated and then written.
  *
  * @param io the io context in which the write will occur
- * @param oid name of the object
+ * @param oid_t name of the object
  * @param buf data to write
  * @param len length of the data, in bytes
  * @returns 0 on success, negative error code on failure
  */
-int rados_write_full(rados_ioctx_t io, const char *oid, const char *buf, size_t len);
+int rados_write_full(rados_ioctx_t io, const char *oid_t, const char *buf, size_t len);
 
 /**
  * Append data to an object
  *
  * @param io the context to operate in
- * @param oid the name of the object
+ * @param oid_t the name of the object
  * @param buf the data to append
  * @param len length of buf (in bytes)
  * @returns 0 on success, negative error code on failure
  */
-int rados_append(rados_ioctx_t io, const char *oid, const char *buf, size_t len);
+int rados_append(rados_ioctx_t io, const char *oid_t, const char *buf, size_t len);
 
 /**
  * Read data from an object
  *
  * @param io the context in which to perform the read
- * @param oid the name of the object to read from
+ * @param oid_t the name of the object to read from
  * @param buf where to store the results
  * @param len the number of bytes to read
  * @param off the offset to start reading from in the object
  * @returns number of bytes read on success, negative error code on
  * failure
  */
-int rados_read(rados_ioctx_t io, const char *oid, char *buf, size_t len,
+int rados_read(rados_ioctx_t io, const char *oid_t, char *buf, size_t len,
 	       uint64_t off);
 
 /**
  * Delete an object
  *
  * @param io the IO context to delete the object through
- * @param oid the name of the object to delete
+ * @param oid_t the name of the object to delete
  * @returns 0 on success, negative error code on failure
  */
-int rados_remove(rados_ioctx_t io, const char *oid);
+int rados_remove(rados_ioctx_t io, const char *oid_t);
 
 /**
  * Resize an object
@@ -656,11 +656,11 @@ int rados_remove(rados_ioctx_t io, const char *oid);
  * zeroes. If this shrinks the object, the excess data is removed.
  *
  * @param io the context in which to truncate
- * @param oid the name of the object
+ * @param oid_t the name of the object
  * @param size the new size of the object in bytes
  * @returns 0 on success, negative error code on failure
  */
-int rados_trunc(rados_ioctx_t io, const char *oid, uint64_t size);
+int rados_trunc(rados_ioctx_t io, const char *oid_t, uint64_t size);
 
 /**
  * @defgroup librados_h_xattrs Xattrs
@@ -712,11 +712,11 @@ int rados_rmxattr(rados_ioctx_t io, const char *o, const char *name);
  * @post iter is a valid iterator
  *
  * @param io the context in which to list xattrs
- * @param oid name of the object
+ * @param oid_t name of the object
  * @param iter where to store the iterator
  * @returns 0 on success, negative error code on failure
  */
-int rados_getxattrs(rados_ioctx_t io, const char *oid, rados_xattrs_iter_t *iter);
+int rados_getxattrs(rados_ioctx_t io, const char *oid_t, rados_xattrs_iter_t *iter);
 
 /**
  * Get the next xattr on the object
@@ -801,7 +801,7 @@ int rados_stat(rados_ioctx_t io, const char *o, uint64_t *psize, time_t *pmtime)
  * Classes in ceph.git can be found in src/cls subdirectories
  *
  * @param io the context in which to call the method
- * @param oid the object to call the method on
+ * @param oid_t the object to call the method on
  * @param cls the name of the class
  * @param method the name of the method
  * @param in_buf where to find input
@@ -813,7 +813,7 @@ int rados_stat(rados_ioctx_t io, const char *o, uint64_t *psize, time_t *pmtime)
  * methods that don't return data, the return value is
  * method-specific.
  */
-int rados_exec(rados_ioctx_t io, const char *oid, const char *cls, const char *method,
+int rados_exec(rados_ioctx_t io, const char *oid_t, const char *cls, const char *method,
 	       const char *in_buf, size_t in_len, char *buf, size_t out_len);
 
 
@@ -986,14 +986,14 @@ void rados_aio_release(rados_completion_t c);
  * will be 0 on success, negative error code on failure.
  *
  * @param io the context in which the write will occur
- * @param oid name of the object
+ * @param oid_t name of the object
  * @param completion what to do when the write is safe and complete
  * @param buf data to write
  * @param len length of the data, in bytes
  * @param off byte offset in the object to begin writing at
  * @returns 0 on success
  */
-int rados_aio_write(rados_ioctx_t io, const char *oid,
+int rados_aio_write(rados_ioctx_t io, const char *oid_t,
 		    rados_completion_t completion,
 		    const char *buf, size_t len, uint64_t off);
 
@@ -1006,13 +1006,13 @@ int rados_aio_write(rados_ioctx_t io, const char *oid,
  * error code on failure.
  *
  * @param io the context to operate in
- * @param oid the name of the object
+ * @param oid_t the name of the object
  * @param completion what to do when the append is safe and complete
  * @param buf the data to append
  * @param len length of buf (in bytes)
  * @returns 0 on success
  */
-int rados_aio_append(rados_ioctx_t io, const char *oid,
+int rados_aio_append(rados_ioctx_t io, const char *oid_t,
 		     rados_completion_t completion,
 		     const char *buf, size_t len);
 
@@ -1027,13 +1027,13 @@ int rados_aio_append(rados_ioctx_t io, const char *oid,
  * error code on failure.
  *
  * @param io the io context in which the write will occur
- * @param oid name of the object
+ * @param oid_t name of the object
  * @param completion what to do when the write_full is safe and complete
  * @param buf data to write
  * @param len length of the data, in bytes
  * @returns 0 on success
  */
-int rados_aio_write_full(rados_ioctx_t io, const char *oid,
+int rados_aio_write_full(rados_ioctx_t io, const char *oid_t,
 			 rados_completion_t completion,
 			 const char *buf, size_t len);
 
@@ -1046,11 +1046,11 @@ int rados_aio_write_full(rados_ioctx_t io, const char *oid,
  * error code on failure.
  *
  * @param io the context to operate in
- * @param oid the name of the object
+ * @param oid_t the name of the object
  * @param completion what to do when the remove is safe and complete
  * @returns 0 on success
  */
-int rados_aio_remove(rados_ioctx_t io, const char *oid,
+int rados_aio_remove(rados_ioctx_t io, const char *oid_t,
 		     rados_completion_t completion);
 
 /**
@@ -1062,14 +1062,14 @@ int rados_aio_remove(rados_ioctx_t io, const char *oid,
  * @note only the 'complete' callback of the completion will be called.
  *
  * @param io the context in which to perform the read
- * @param oid the name of the object to read from
+ * @param oid_t the name of the object to read from
  * @param completion what to do when the read is complete
  * @param buf where to store the results
  * @param len the number of bytes to read
  * @param off the offset to start reading from in the object
  * @returns 0 on success, negative error code on failure
  */
-int rados_aio_read(rados_ioctx_t io, const char *oid,
+int rados_aio_read(rados_ioctx_t io, const char *oid_t,
 		   rados_completion_t completion,
 		   char *buf, size_t len, uint64_t off);
 
@@ -1459,13 +1459,13 @@ void rados_write_op_set_alloc_hint(rados_write_op_t write_op,
  * Perform a write operation synchronously
  * @param write_op operation to perform
  * @io the ioctx that the object is in
- * @oid the object id
+ * @oid_t the object id
  * @mtime the time to set the mtime to, NULL for the current time
  * @flags flags to apply to the entire operation (LIBRADOS_OPERATION_*)
  */
 int rados_write_op_operate(rados_write_op_t write_op,
 			   rados_ioctx_t io,
-			   const char *oid,
+			   const char *oid_t,
 			   time_t *mtime,
 			   int flags);
 /**
@@ -1473,14 +1473,14 @@ int rados_write_op_operate(rados_write_op_t write_op,
  * @param write_op operation to perform
  * @io the ioctx that the object is in
  * @param completion what to do when operation has been attempted
- * @oid the object id
+ * @oid_t the object id
  * @mtime the time to set the mtime to, NULL for the current time
  * @flags flags to apply to the entire operation (LIBRADOS_OPERATION_*)
  */
 int rados_aio_write_op_operate(rados_write_op_t write_op,
 			       rados_ioctx_t io,
 			       rados_completion_t completion,
-			       const char *oid,
+			       const char *oid_t,
 			       time_t *mtime,
 			       int flags);
 
@@ -1704,12 +1704,12 @@ void rados_read_op_omap_get_vals_by_keys(rados_read_op_t read_op,
  * Perform a read operation synchronously
  * @param read_op operation to perform
  * @io the ioctx that the object is in
- * @oid the object id
+ * @oid_t the object id
  * @flags flags to apply to the entire operation (LIBRADOS_OPERATION_*)
  */
 int rados_read_op_operate(rados_read_op_t read_op,
 			  rados_ioctx_t io,
-			  const char *oid,
+			  const char *oid_t,
 			  int flags);
 
 /**
@@ -1717,13 +1717,13 @@ int rados_read_op_operate(rados_read_op_t read_op,
  * @param read_op operation to perform
  * @io the ioctx that the object is in
  * @param completion what to do when operation has been attempted
- * @oid the object id
+ * @oid_t the object id
  * @flags flags to apply to the entire operation (LIBRADOS_OPERATION_*)
  */
 int rados_aio_read_op_operate(rados_read_op_t read_op,
 			      rados_ioctx_t io,
 			      rados_completion_t completion,
-			      const char *oid,
+			      const char *oid_t,
 			      int flags);
 
 /** @} Object Operations */
@@ -1732,7 +1732,7 @@ int rados_aio_read_op_operate(rados_read_op_t read_op,
  * Take an exclusive lock on an object.
  *
  * @param io the context to operate in
- * @param oid the name of the object
+ * @param oid_t the name of the object
  * @param name the name of the lock
  * @param cookie user-defined identifier for this instance of the lock
  * @param desc user-defined lock description

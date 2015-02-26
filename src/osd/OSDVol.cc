@@ -118,7 +118,7 @@ std::string OSDVol::gen_prefix() const
 }
 
 void OSDVol::remove_object(
-  ObjectStore::Transaction &t, const oid &soid)
+  ObjectStore::Transaction &t, const oid_t &soid)
 {
   t.remove(coll, soid);
 }
@@ -225,7 +225,7 @@ void OSDVol::init(void)
 
 int OSDVol::_write_info(ObjectStore::Transaction& t, epoch_t epoch,
 			vol_info_t &info, coll_t coll,
-			oid &infos_obj)
+			oid_t &infos_obj)
 {
   // info.
   map<string,bufferlist> v;
@@ -275,9 +275,9 @@ void OSDVol::read_info()
   ::decode(info, p);
 }
 
-void OSDVol::requeue_object_waiters(map<oid, list<OpRequestRef> >& m)
+void OSDVol::requeue_object_waiters(map<oid_t, list<OpRequestRef> >& m)
 {
-  for (map<oid, list<OpRequestRef> >::iterator it = m.begin();
+  for (map<oid_t, list<OpRequestRef> >::iterator it = m.begin();
        it != m.end();
        ++it)
     requeue_ops(it->second);
@@ -424,10 +424,10 @@ void OSDVol::do_op(OpRequestRef op)
   ObjectContextRef obc;
   bool can_create = op->may_write() || op->may_cache();
   // XXX For Stripulation
-  oid obj(m->get_oid());
+  oid_t oid(m->get_oid());
 
   int r = find_object_context(
-    obj, &obc, can_create);
+    oid, &obc, can_create);
 
   if (r) {
     osd->reply_op_error(op, r);
@@ -437,18 +437,18 @@ void OSDVol::do_op(OpRequestRef op)
   dout(25) << __func__ << " oi " << obc->obs.oi << dendl;
 
   // src_objs
-  map<oid,ObjectContextRef> src_obc;
+  map<oid_t,ObjectContextRef> src_obc;
   for (vector<OSDOp>::iterator p = m->ops.begin(); p != m->ops.end(); ++p) {
     OSDOp& osd_op = *p;
 
     if (!ceph_osd_op_type_multi(osd_op.op.op))
       continue;
-    if (osd_op.obj.name.length()) {
+    if (osd_op.oid.name.length()) {
       // For Stripulation
-      oid src_obj(osd_op.obj);
+      oid_t src_obj(osd_op.oid);
       if (!src_obc.count(src_obj)) {
 	ObjectContextRef sobc;
-	oid wait_obj;
+	oid_t wait_obj;
 
 	if (sobc->obs.oi.soid != obc->obs.oi.soid) {
 	  dout(1) << " src_obj " << sobc->obs.oi.soid << " != "
@@ -465,7 +465,7 @@ void OSDVol::do_op(OpRequestRef op)
       }
       // Error cleanup below
     } else {
-      dout(10) << "no src obj specified for multi op " << osd_op << dendl;
+      dout(10) << "no src oid specified for multi op " << osd_op << dendl;
       osd->reply_op_error(op, -EINVAL);
     }
     return;
@@ -547,13 +547,13 @@ void OSDVol::get_obc_watchers(ObjectContextRef obc,
 	++j) {
     obj_watch_item_t owi;
 
-    owi.obj = obc->obs.oi.soid;
+    owi.oid = obc->obs.oi.soid;
     owi.wi.addr = j->second->get_peer_addr();
     owi.wi.name = j->second->get_entity();
     owi.wi.cookie = j->second->get_cookie();
     owi.wi.timeout_seconds = j->second->get_timeout();
 
-    dout(30) << "watch: Found obj=" << owi.obj << " addr=" << owi.wi.addr
+    dout(30) << "watch: Found oid=" << owi.oid << " addr=" << owi.wi.addr
       << " name=" << owi.wi.name << " cookie=" << owi.wi.cookie << dendl;
 
     vol_watchers.push_back(owi);
@@ -610,14 +610,14 @@ void OSDVol::check_blacklisted_watchers()
 {
   dout(20) << "OSDVol::check_blacklisted_watchers for vol " << info.volume
 	   << dendl;
-  pair<oid, ObjectContextRef> i;
+  pair<oid_t, ObjectContextRef> i;
   while (object_contexts.get_next(i.first, &i))
     check_blacklisted_obc_watchers(i.second);
 }
 
 void OSDVol::get_watchers(list<obj_watch_item_t> &vol_watchers)
 {
-  pair<oid, ObjectContextRef> i;
+  pair<oid_t, ObjectContextRef> i;
   while (object_contexts.get_next(i.first, &i)) {
     ObjectContextRef obc(i.second);
     get_obc_watchers(obc, vol_watchers);
@@ -680,8 +680,8 @@ void OSDVol::execute_ctx(OpContext *ctx)
   OpRequestRef op = ctx->op;
   MOSDOp *m = static_cast<MOSDOp*>(op->get_req());
   ObjectContextRef obc = ctx->obc;
-  const oid& soid = obc->obs.oi.soid;
-  map<oid, ObjectContextRef>& src_obc = ctx->src_obc;
+  const oid_t& soid = obc->obs.oi.soid;
+  map<oid_t, ObjectContextRef>& src_obc = ctx->src_obc;
 
   // this method must be idempotent since we may call it several times
   // before we finally apply the resulting transaction.
@@ -712,7 +712,7 @@ void OSDVol::execute_ctx(OpContext *ctx)
     dout(10) << " taking ondisk_read_lock" << dendl;
     obc->ondisk_read_lock();
   }
-  for (map<oid,ObjectContextRef>::iterator p = src_obc.begin(); p != src_obc.end(); ++p) {
+  for (map<oid_t,ObjectContextRef>::iterator p = src_obc.begin(); p != src_obc.end(); ++p) {
     dout(10) << " taking ondisk_read_lock for src " << p->first << dendl;
     p->second->ondisk_read_lock();
   }
@@ -723,7 +723,7 @@ void OSDVol::execute_ctx(OpContext *ctx)
     dout(10) << " dropping ondisk_read_lock" << dendl;
     obc->ondisk_read_unlock();
   }
-  for (map<oid,ObjectContextRef>::iterator p = src_obc.begin(); p != src_obc.end(); ++p) {
+  for (map<oid_t,ObjectContextRef>::iterator p = src_obc.begin(); p != src_obc.end(); ++p) {
     dout(10) << " dropping ondisk_read_lock for src " << p->first << dendl;
     p->second->ondisk_read_unlock();
   }
@@ -877,7 +877,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
   int result = 0;
   ObjectState& obs = ctx->new_obs;
   object_info_t& oi = obs.oi;
-  const oid& soid = oi.soid;
+  const oid_t& soid = oi.soid;
 
   bool first_read = true;
 
@@ -906,7 +906,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
     ObjectContextRef src_obc;
     if (ceph_osd_op_type_multi(op.op)) {
       // For stripulation
-      oid src_obj(osd_op.obj);
+      oid_t src_obj(osd_op.oid);
       src_obc = ctx->src_obc[src_obj];
       dout(10) << " src_obj " << src_obj << " obc " << src_obc << dendl;
       assert(src_obc);
@@ -973,7 +973,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	    op.extent.length = 0;
 	  }
 	  dout(10) << " read got " << r << " / " << op.extent.length
-		   << " bytes from obj " << soid << dendl;
+		   << " bytes from oid " << soid << dendl;
 	}
 	if (first_read) {
 	  first_read = false;
@@ -1952,7 +1952,7 @@ inline int OSDVol::_delete_obj(OpContext *ctx, bool no_whiteout)
 {
   ObjectState& obs = ctx->new_obs;
   object_info_t& oi = obs.oi;
-  const oid& soid = oi.soid;
+  const oid_t& soid = oi.soid;
   ObjectStore::Transaction* t = ctx->op_t;
 
   if (!obs.exists)
@@ -1977,7 +1977,7 @@ inline int OSDVol::_delete_obj(OpContext *ctx, bool no_whiteout)
 
 void OSDVol::make_writeable(OpContext *ctx)
 {
-  const oid& soid = ctx->obs->oi.soid;
+  const oid_t& soid = ctx->obs->oi.soid;
   ObjectStore::Transaction *t = new ObjectStore::Transaction();
 
   if ((ctx->new_obs.exists &&
@@ -2133,7 +2133,7 @@ int OSDVol::prepare_transaction(OpContext *ctx)
 
 void OSDVol::finish_ctx(OpContext *ctx)
 {
-  const oid& soid = ctx->obs->oi.soid;
+  const oid_t& soid = ctx->obs->oi.soid;
   dout(20) << __func__ << " " << soid << " " << ctx
 	   << dendl;
 
@@ -2497,7 +2497,7 @@ ObjectContextRef OSDVol::create_object_context(const object_info_t& oi)
 }
 
 ObjectContextRef OSDVol::get_object_context(
-  const oid& soid, bool can_create, map<string, bufferlist> *attrs)
+  const oid_t& soid, bool can_create, map<string, bufferlist> *attrs)
 {
   ObjectContextRef obc = object_contexts.lookup(soid);
   if (obc) {
@@ -2552,7 +2552,7 @@ ObjectContextRef OSDVol::get_object_context(
 
 void OSDVol::context_registry_on_change()
 {
-  pair<oid, ObjectContextRef> i;
+  pair<oid_t, ObjectContextRef> i;
   while (object_contexts.get_next(i.first, &i)) {
     ObjectContextRef obc(i.second);
     if (obc) {
@@ -2577,15 +2577,15 @@ void OSDVol::context_registry_on_change()
  * If we return an error but do not set *pmissing, then we know the
  * object does not exist.
  */
-int OSDVol::find_object_context(const oid& obj,
+int OSDVol::find_object_context(const oid_t& oid,
 				ObjectContextRef *pobc,
 				bool can_create)
 {
-  ObjectContextRef obc = get_object_context(obj, can_create);
+  ObjectContextRef obc = get_object_context(oid, can_create);
   if (!obc) {
     return -ENOENT;
   }
-  dout(10) << "find_object_context " << obj
+  dout(10) << "find_object_context " << oid
 	   << " oi=" << obc->obs.oi
 	   << dendl;
   *pobc = obc;
@@ -2676,17 +2676,17 @@ void intrusive_ptr_release(OSDVol::Mutation *mutation) { mutation->put(); }
 
 // From the Backend
 
-int OSDVol::objects_list_partial(const oid &begin,
+int OSDVol::objects_list_partial(const oid_t &begin,
 			     int min, int max,
-			     vector<oid> *ls,
-			     oid *next)
+			     vector<oid_t> *ls,
+			     oid_t *next)
 {
   assert(ls);
-  oid _next(begin);
+  oid_t _next(begin);
   ls->reserve(max);
   int r = 0;
   while (ls->size() < (unsigned)min) {
-    vector<oid> objects;
+    vector<oid_t> objects;
     int r = osd->store->collection_list_partial(
       coll,
       _next,
@@ -2696,7 +2696,7 @@ int OSDVol::objects_list_partial(const oid &begin,
       &_next);
     if (r != 0)
       break;
-    for (vector<oid>::iterator i = objects.begin();
+    for (vector<oid_t>::iterator i = objects.begin();
 	 i != objects.end();
 	 ++i) {
       ls->push_back(*i);
@@ -2707,18 +2707,18 @@ int OSDVol::objects_list_partial(const oid &begin,
   return r;
 }
 
-int OSDVol::objects_list_range(const oid &start, const oid &end,
-			   vector<oid> *ls)
+int OSDVol::objects_list_range(const oid_t &start, const oid_t &end,
+			   vector<oid_t> *ls)
 {
   assert(ls);
-  vector<oid> objects;
+  vector<oid_t> objects;
   int r = osd->store->collection_list_range(
     coll,
     start,
     end,
     &objects);
   ls->reserve(objects.size());
-  for (vector<oid>::iterator i = objects.begin();
+  for (vector<oid_t>::iterator i = objects.begin();
        i != objects.end();
        ++i) {
       ls->push_back(*i);
@@ -2726,7 +2726,7 @@ int OSDVol::objects_list_range(const oid &start, const oid &end,
   return r;
 }
 
-int OSDVol::objects_get_attr(const oid &hoid, const string &attr,
+int OSDVol::objects_get_attr(const oid_t &hoid, const string &attr,
 			 bufferlist *out)
 {
   bufferptr bp;
@@ -2738,7 +2738,7 @@ int OSDVol::objects_get_attr(const oid &hoid, const string &attr,
   return r;
 }
 
-void OSDVol::objects_read_async(const oid &hoid,
+void OSDVol::objects_read_async(const oid_t &hoid,
 			    const list<pair<pair<uint64_t, uint64_t>,
 			    pair<bufferlist*, Context*> > > &to_read,
 			    Context *on_complete)
@@ -2763,7 +2763,7 @@ void OSDVol::objects_read_async(const oid &hoid,
 void OSDVol::issue_mutation(Mutation *mutation)
 {
   OpContext *ctx = mutation->ctx;
-  const oid& soid = ctx->obs->oi.soid;
+  const oid_t& soid = ctx->obs->oi.soid;
   ObjectStore::Transaction *op_t = ctx->op_t;
 
   dout(7) << "issue_mutation tid " << mutation->tid

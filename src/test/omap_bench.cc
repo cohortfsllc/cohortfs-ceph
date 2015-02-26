@@ -128,7 +128,7 @@ Writer::Writer(OmapBench *omap_bench) : ob(omap_bench) {
   OmapBench::unique_lock obdl(ob->data_lock);
   name << omap_bench->prefix << ++(ob->data.started_ops);
   obdl.unlock();
-  oid = name.str();
+  oid_t = name.str();
 }
 void Writer::start_time() {
   begin_time = ceph::mono_clock::now();
@@ -140,7 +140,7 @@ ceph::timespan Writer::get_time() {
   return end_time - begin_time;
 }
 string Writer::get_oid() {
-  return oid;
+  return oid_t;
 }
 std::map<std::string, bufferlist> & Writer::get_omap() {
   return omap;

@@ -38,86 +38,86 @@ enum struct chunktype : uint32_t {
 };
 WRITE_RAW_ENCODER(chunktype)
 
-struct oid {
+struct oid_t {
   std::string name;
   chunktype type;
   uint32_t stride;
 
-  oid() : type(chunktype::entirety) {}
-  oid(const std::string& n,
+  oid_t() : type(chunktype::entirety) {}
+  oid_t(const std::string& n,
       chunktype t = chunktype::entirety,
       uint32_t s = 0) :
     name(n), type(t), stride(s) {
     assert(!(type == chunktype::entirety) || (stride == 0));
   }
-  oid(std::string&& n,
+  oid_t(std::string&& n,
       chunktype type = chunktype::entirety,
       uint32_t stride = 0) :
     name(n), type(type), stride(stride) {
     assert(!(type == chunktype::entirety) || (stride == 0));
   }
-  oid(const char* n,
+  oid_t(const char* n,
       chunktype t = chunktype::entirety,
       uint32_t s = 0) :
     name(n), type(t), stride(s) {
     assert(!(type == chunktype::entirety) || (stride == 0));
   }
-  oid(const oid& o) {
+  oid_t(const oid_t& o) {
     name = o.name;
     type = o.type;
     stride = o.stride;
   }
-  oid(const oid& o,
+  oid_t(const oid_t& o,
       chunktype t,
       uint32_t s) : name(o.name), type(t), stride(s) {
     assert(!(type == chunktype::entirety) || (stride == 0));
   }
-  oid(const oid& o,
+  oid_t(const oid_t& o,
       chunktype t) : name(o.name), type(t), stride(o.stride) {
     assert(!(type == chunktype::entirety) || (stride == 0));
   }
-  oid(const oid& o,
+  oid_t(const oid_t& o,
       uint32_t s) : name(o.name), type(o.type), stride(s) {
     stride = o.stride;
     assert(!(type == chunktype::entirety) || (stride == 0));
   }
-  oid(oid&& o) : oid() {
+  oid_t(oid_t&& o) : oid_t() {
     std::swap(name, o.name);
     type = o.type;
     stride = o.stride;
   }
-  oid(oid&& o, chunktype t, uint32_t s) : type(t), stride(s) {
+  oid_t(oid_t&& o, chunktype t, uint32_t s) : type(t), stride(s) {
     std::swap(name, o.name);
   }
-  oid(oid&& o, chunktype t) : type(t), stride(o.stride) {
-    std::swap(name, o.name);
-    assert(!(type == chunktype::entirety) || (stride == 0));
-  }
-  oid(oid&& o, uint32_t s) : type(o.type), stride(s) {
+  oid_t(oid_t&& o, chunktype t) : type(t), stride(o.stride) {
     std::swap(name, o.name);
     assert(!(type == chunktype::entirety) || (stride == 0));
   }
-  oid(const char *in, char sep,
+  oid_t(oid_t&& o, uint32_t s) : type(o.type), stride(s) {
+    std::swap(name, o.name);
+    assert(!(type == chunktype::entirety) || (stride == 0));
+  }
+  oid_t(const char *in, char sep,
       bool (*appender)(std::string &dest, const char *begin,
 		       const char *bound), const char *end = NULL);
-  oid(const std::string &in, char sep,
+  oid_t(const std::string &in, char sep,
       bool (*appender)(std::string &dest, const char *begin,
 		       const char *bound))
-    : oid(in.c_str(), sep, appender) { }
-  ~oid() { }
+    : oid_t(in.c_str(), sep, appender) { }
+  ~oid_t() { }
 
-  oid& operator=(const oid& o) {
+  oid_t& operator=(const oid_t& o) {
     name = o.name;
     type = o.type;
     stride = o.stride;
     return *this;
   }
-  oid& operator=(oid&& o) {
+  oid_t& operator=(oid_t&& o) {
     swap(o);
     return *this;
   }
 
-  void swap(oid& o) {
+  void swap(oid_t& o) {
     std::swap(name, o.name);
     std::swap(type, o.type);
     std::swap(stride, o.stride);
@@ -134,24 +134,24 @@ struct oid {
   void encode(bufferlist& bl) const;
   void decode(bufferlist::iterator& bl);
   void dump(ceph::Formatter *f) const;
-  static void generate_test_instances(std::list<oid*>& o);
-  friend bool operator<(const oid&, const oid&);
-  friend bool operator>(const oid&, const oid&);
-  friend bool operator<=(const oid&, const oid&);
-  friend bool operator>=(const oid&, const oid&);
-  friend bool operator==(const oid&, const oid&);
-  friend bool operator!=(const oid&, const oid&);
+  static void generate_test_instances(std::list<oid_t*>& o);
+  friend bool operator<(const oid_t&, const oid_t&);
+  friend bool operator>(const oid_t&, const oid_t&);
+  friend bool operator<=(const oid_t&, const oid_t&);
+  friend bool operator>=(const oid_t&, const oid_t&);
+  friend bool operator==(const oid_t&, const oid_t&);
+  friend bool operator!=(const oid_t&, const oid_t&);
 };
-WRITE_CLASS_ENCODER(oid)
+WRITE_CLASS_ENCODER(oid_t)
 
-std::ostream& operator<<(std::ostream& out, const oid& o);
+std::ostream& operator<<(std::ostream& out, const oid_t& o);
 
-WRITE_EQ_OPERATORS_3(oid, name, type, stride)
-WRITE_CMP_OPERATORS_3(oid, name, type, stride)
+WRITE_EQ_OPERATORS_3(oid_t, name, type, stride)
+WRITE_CMP_OPERATORS_3(oid_t, name, type, stride)
 
 namespace std {
-  template<> struct hash<oid> {
-    size_t operator()(const oid& o) const {
+  template<> struct hash<oid_t> {
+    size_t operator()(const oid_t& o) const {
       return (std::hash<std::string>()(o.name) ^
 	      std::hash<uint32_t>()((uint32_t)o.type) ^
 	      std::hash<uint32_t>()(o.stride));
@@ -162,10 +162,10 @@ namespace std {
 
 // Should probably be in the MDS definitions. Also we don't have block
 // numbers any more.
-static inline oid file_oid(uint64_t i = 0, uint64_t b = 0) {
+static inline oid_t file_oid(uint64_t i = 0, uint64_t b = 0) {
   char buf[33];
   sprintf(buf, "%" PRIx64 ".%08" PRIx64, i, b);
-  return oid(buf);
+  return oid_t(buf);
 };
 
 #endif

@@ -47,18 +47,18 @@ bool RGWMultiCompleteUpload::xml_end(const char *el) {
 
 
 XMLObj *RGWMultiXMLParser::alloc_obj(const char *el) {
-  XMLObj *obj = NULL;
+  XMLObj *oid = NULL;
   if (strcmp(el, "CompleteMultipartUpload") == 0 ||
       strcmp(el, "MultipartUpload") == 0) {
-    obj = new RGWMultiCompleteUpload();
+    oid = new RGWMultiCompleteUpload();
   } else if (strcmp(el, "Part") == 0) {
-    obj = new RGWMultiPart();
+    oid = new RGWMultiPart();
   } else if (strcmp(el, "PartNumber") == 0) {
-    obj = new RGWMultiPartNumber();
+    oid = new RGWMultiPartNumber();
   } else if (strcmp(el, "ETag") == 0) {
-    obj = new RGWMultiETag();
+    oid = new RGWMultiETag();
   }
 
-  return obj;
+  return oid;
 }
 

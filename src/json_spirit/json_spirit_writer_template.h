@@ -197,9 +197,9 @@ namespace json_spirit
 	    }
 	}
 
-	void output( const Object_type& obj )
+	void output( const Object_type& oid )
 	{
-	    output_array_or_obj( obj, '{', '}' );
+	    output_array_or_obj( oid, '{', '}' );
 	}
 
 	void output( const Obj_member_type& member )

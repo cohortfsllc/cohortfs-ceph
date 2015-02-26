@@ -5320,11 +5320,11 @@ int Client::uninline_data(Inode *in, Context *onfinish)
   char obj_buf[32];
   snprintf(obj_buf, sizeof(obj_buf), "%" PRIx64 ".00000000",
 	   (uint64_t) in->ino);
-  oid obj = obj_buf;
+  oid_t oid = obj_buf;
   unique_ptr<ObjOp> create_ops = in->volume->op();
   create_ops->create(false);
 
-  objecter->mutate(obj,
+  objecter->mutate(oid,
 		   in->volume,
 		   create_ops,
 		   ceph::real_clock::now(),
@@ -5347,7 +5347,7 @@ int Client::uninline_data(Inode *in, Context *onfinish)
   uninline_ops->write(0, inline_data, in->truncate_size, in->truncate_seq);
   uninline_ops->setxattr("inline_version", inline_version_bl);
 
-  objecter->mutate(obj,
+  objecter->mutate(oid,
 		   in->volume,
 		   uninline_ops,
 		   ceph::real_clock::now(),
@@ -5533,8 +5533,8 @@ int Client::_read_sync(Fh *f, uint64_t off, uint64_t len, bufferlist *bl,
     bufferlist tbl;
 
     int wanted = left;
-    oid obj = file_oid(in->ino, 0);
-    objecter->read(obj, in->volume, pos, left, &tbl, 0, onfinish);
+    oid_t oid = file_oid(in->ino, 0);
+    objecter->read(oid, in->volume, pos, left, &tbl, 0, onfinish);
     cl.unlock();
     unique_lock fl(flock);
     cond.wait(fl, [&](){ return done; });
@@ -5743,8 +5743,8 @@ int Client::_write(Fh *f, int64_t offset, uint64_t size, const char *buf,
     unsafe_sync_write++;
     get_cap_ref(in, CEPH_CAP_FILE_BUFFER);  // released by onsafe callback
 
-    oid obj = file_oid(in->ino, 0);
-    r = objecter->write(obj, in->volume, offset, size, bl,
+    oid_t oid = file_oid(in->ino, 0);
+    r = objecter->write(oid, in->volume, offset, size, bl,
 			ceph::real_clock::now(), 0, onfinish, onsafe);
     if (r < 0)
       goto done;
@@ -7427,12 +7427,12 @@ int Client::ll_read_block(Inode *in, uint64_t blockid,
   std::mutex flock;
   std::condition_variable cond;
   vinodeno_t vino = ll_get_vino(in);
-  oid obj = file_oid(vino.ino, blockid);
+  oid_t oid = file_oid(vino.ino, blockid);
   int r = 0;
   bool done = false;
   Context *onfinish = new C_SafeCond(&flock, &cond, &done, &r);
   bufferlist bl;
-  objecter->read(obj,
+  objecter->read(oid,
 		 in->volume,
 		 offset,
 		 length,
@@ -7488,7 +7488,7 @@ int Client::ll_write_block(Inode *in, uint64_t blockid,
     */
     done = true;
   }
-  oid obj = file_oid(vino.ino, blockid);
+  oid_t oid = file_oid(vino.ino, blockid);
   bufferptr bp;
   if (length > 0) bp = buffer::copy(buf, length);
   bufferlist bl;
@@ -7500,7 +7500,7 @@ int Client::ll_write_block(Inode *in, uint64_t blockid,
   /* lock just in time */
   unique_lock cl(client_lock);
 
-  objecter->write(obj,
+  objecter->write(oid,
 		  in->volume,
 		  offset,
 		  length,
@@ -7666,8 +7666,8 @@ int Client::_fallocate(Fh *fh, int mode, int64_t offset, int64_t length,
       get_cap_ref(in, CEPH_CAP_FILE_BUFFER);
 
       _invalidate_inode_cache(in, offset, length);
-      oid obj = file_oid(in->ino, 0);
-      r = objecter->zero(obj, in->volume, offset, length,
+      oid_t oid = file_oid(in->ino, 0);
+      r = objecter->zero(oid, in->volume, offset, length,
 			 ceph::real_clock::now(),
 			 0, onfinish, onsafe);
       if (r < 0)

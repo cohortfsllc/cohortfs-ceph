@@ -5253,9 +5253,9 @@ void MDCache::do_file_recover()
       file_recovering.insert(in);
 
       C_MDC_Recover *fin = new C_MDC_Recover(this, in);
-      oid obj = CInode::get_object_name(in->inode.ino, frag_t(), "");
+      oid_t oid = CInode::get_object_name(in->inode.ino, frag_t(), "");
       // 0 or CEPH_OSD_FLAG_RWORDERED?
-      mds->objecter->stat(obj, in->volume, &fin->size, &fin->mtime, 0, fin);
+      mds->objecter->stat(oid, in->volume, &fin->size, &fin->mtime, 0, fin);
     } else {
       dout(10) << "do_file_recover skipping " << in->inode.size
 	       << " " << *in << dendl;
@@ -5306,7 +5306,7 @@ void MDCache::_recovered(CInode *in, int r, uint64_t size,
 
 void MDCache::purge_prealloc_ino(inodeno_t ino, Context *fin)
 {
-  oid obj = CInode::get_object_name(ino, frag_t(), "");
+  oid_t oid = CInode::get_object_name(ino, frag_t(), "");
   VolumeRef volume(mds->get_metadata_volume());
 // XXX error recovery?
   if (!volume) {
@@ -5314,8 +5314,8 @@ void MDCache::purge_prealloc_ino(inodeno_t ino, Context *fin)
     return;
   }
 
-  dout(10) << "purge_prealloc_ino " << ino << " oid " << obj << dendl;
-  mds->objecter->remove(obj, volume, ceph::real_clock::now(), 0, 0, fin);
+  dout(10) << "purge_prealloc_ino " << ino << " oid_t " << oid << dendl;
+  mds->objecter->remove(oid, volume, ceph::real_clock::now(), 0, 0, fin);
 }
 
 
@@ -5357,7 +5357,7 @@ struct C_MDC_TruncateFinish : public Context {
 void MDCache::_truncate_inode(CInode *in, LogSegment *ls)
 {
   inode_t *pi = &in->inode;
-  oid obj = CInode::get_object_name(pi->ino, frag_t(), "");
+  oid_t oid = CInode::get_object_name(pi->ino, frag_t(), "");
   dout(10) << "_truncate_inode "
 	   << pi->truncate_from << " -> " << pi->truncate_size
 	   << " on " << *in << dendl;
@@ -5369,7 +5369,7 @@ void MDCache::_truncate_inode(CInode *in, LogSegment *ls)
 
   in->auth_pin(this);
 
-  mds->objecter->trunc(obj, in->volume, ceph::real_clock::now(), 0,
+  mds->objecter->trunc(oid, in->volume, ceph::real_clock::now(), 0,
 		       pi->truncate_size, pi->truncate_seq,
 		       0, new C_MDC_TruncateFinish(this, in, ls));
 }
@@ -8532,8 +8532,8 @@ void MDCache::eval_remote(CDentry *dn)
 void MDCache::fetch_backtrace(inodeno_t ino, VolumeRef volume, bufferlist& bl,
 			      Context *fin)
 {
-  oid obj = CInode::get_object_name(ino, frag_t(), "");
-  mds->objecter->getxattr(obj, volume, "parent",
+  oid_t oid = CInode::get_object_name(ino, frag_t(), "");
+  mds->objecter->getxattr(oid, volume, "parent",
 			  &bl, 0, fin);
 }
 
@@ -8553,7 +8553,7 @@ void MDCache::purge_stray(CDentry *dn)
 {
   CDentry::linkage_t *dnl = dn->get_projected_linkage();
   CInode *in = dnl->get_inode();
-  oid obj = CInode::get_object_name(in->inode.ino, frag_t(), "");
+  oid_t oid = CInode::get_object_name(in->inode.ino, frag_t(), "");
   dout(10) << "purge_stray " << *dn << " " << *in << dendl;
   assert(!dn->is_replicated());
 
@@ -8593,8 +8593,8 @@ void MDCache::purge_stray(CDentry *dn)
     for (list<frag_t>::iterator p = ls.begin();
 	 p != ls.end();
 	 ++p) {
-      dout(10) << "purge_stray remove dirfrag " << obj << dendl;
-      mds->objecter->remove(obj, volume, ceph::real_clock::now(),
+      dout(10) << "purge_stray remove dirfrag " << oid << dendl;
+      mds->objecter->remove(oid, volume, ceph::real_clock::now(),
 			    0, NULL, gather.new_sub());
     }
     assert(gather.has_subs());
@@ -8617,7 +8617,7 @@ void MDCache::purge_stray(CDentry *dn)
       uint64_t num = (to + period - 1) / period;
       dout(10) << "purge_stray 0~" << to << " objects 0~" << num
 	       << " on " << *in << dendl;
-      mds->objecter->zero(obj, in->volume, 0, 0,
+      mds->objecter->zero(oid, in->volume, 0, 0,
 			  ceph::real_clock::now(), 0,
 			  0, gather.new_sub());
     }
@@ -8625,7 +8625,7 @@ void MDCache::purge_stray(CDentry *dn)
 #endif
 
   inode_t *pi = in->get_projected_inode();
-  oid poid = CInode::get_object_name(pi->ino, frag_t(), "");
+  oid_t poid = CInode::get_object_name(pi->ino, frag_t(), "");
   // remove the backtrace object if it was not purged
   if (!gather.has_subs()) {
     dout(10) << "purge_stray remove backtrace object " << poid
@@ -10695,21 +10695,21 @@ void MDCache::_fragment_committed(dirfrag_t basedirfrag, list<CDir*>& resultfrag
   for (list<frag_t>::iterator p = uf.old_frags.begin();
        p != uf.old_frags.end();
        ++p) {
-    oid obj = CInode::get_object_name(basedirfrag.ino, *p, "");
+    oid_t oid = CInode::get_object_name(basedirfrag.ino, *p, "");
     unique_ptr<ObjOp> op = volume->op();
     if (!op) {
       dout(0) << "Unable to attach volume " << volume << dendl;
     }
     if (*p == frag_t()) {
       // backtrace object
-      dout(10) << " truncate orphan dirfrag " << obj << dendl;
+      dout(10) << " truncate orphan dirfrag " << oid << dendl;
       op->truncate(0);
       op->omap_clear();
     } else {
-      dout(10) << " removing orphan dirfrag " << obj << dendl;
+      dout(10) << " removing orphan dirfrag " << oid << dendl;
       op->remove();
     }
-    mds->objecter->mutate(obj, volume, op, ceph::real_clock::now(),
+    mds->objecter->mutate(oid, volume, op, ceph::real_clock::now(),
 			  0, NULL, gather.new_sub());
   }
 

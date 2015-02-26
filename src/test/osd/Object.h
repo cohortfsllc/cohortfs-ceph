@@ -279,7 +279,7 @@ public:
   class iterator {
   public:
     uint64_t pos;
-    ObjectDesc &obj;
+    ObjectDesc &oid;
     std::list<std::pair<std::list<std::pair<std::shared_ptr<ContentsGenerator>,
 			     ContDesc> >::iterator,
 		   uint64_t> > stack;
@@ -288,10 +288,10 @@ public:
     std::list<std::pair<std::shared_ptr<ContentsGenerator>,
 	      ContDesc> >::iterator cur_cont;
 
-    iterator(ObjectDesc &obj) :
-      pos(0), obj(obj) {
-      limit = obj.layers.begin()->first->get_length(obj.layers.begin()->second);
-      cur_cont = obj.layers.begin();
+    iterator(ObjectDesc &oid) :
+      pos(0), oid(oid) {
+      limit = oid.layers.begin()->first->get_length(oid.layers.begin()->second);
+      cur_cont = oid.layers.begin();
       advance(true);
     }
 
@@ -301,7 +301,7 @@ public:
     }
 
     char operator*() {
-      if (cur_cont == obj.layers.end()) {
+      if (cur_cont == oid.layers.end()) {
 	return '\0';
       } else {
 	auto j = cont_iters.find(cur_cont->second);
@@ -311,8 +311,8 @@ public:
     }
 
     bool end() {
-      return pos >= obj.layers.begin()->first->get_length(
-	obj.layers.begin()->second);
+      return pos >= oid.layers.begin()->first->get_length(
+	oid.layers.begin()->second);
     }
 
     void seek(uint64_t _pos) {

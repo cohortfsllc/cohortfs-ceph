@@ -34,7 +34,7 @@ struct RGWReplicaBounds {
   list<RGWReplicaProgressMarker> markers;
 
   void dump(Formatter *f) const;
-  void decode_json(JSONObj *obj);
+  void decode_json(JSONObj *oid);
 };
 
 class RGWReplicaLogger {
@@ -45,13 +45,13 @@ protected:
 
   RGWReplicaLogger(RGWRados *_store);
 
-  int update_bound(const string& oid, const string& pool,
+  int update_bound(const string& oid_t, const string& pool,
 		   const string& daemon_id, const string& marker,
 		   const utime_t& time,
 		   const list<RGWReplicaItemMarker> *entries);
-  int delete_bound(const string& oid, const string& pool,
+  int delete_bound(const string& oid_t, const string& pool,
 		   const string& daemon_id);
-  int get_bounds(const string& oid, const string& pool,
+  int get_bounds(const string& oid_t, const string& pool,
 		 RGWReplicaBounds& bounds);
 };
 
@@ -59,10 +59,10 @@ class RGWReplicaObjectLogger : private RGWReplicaLogger {
   string pool;
   string prefix;
 
-  void get_shard_oid(int id, string& oid) {
+  void get_shard_oid(int id, string& oid_t) {
     char buf[16];
     snprintf(buf, sizeof(buf), "%d", id);
-    oid = prefix + buf;
+    oid_t = prefix + buf;
   }
 
 public:
@@ -74,21 +74,21 @@ public:
   int update_bound(int shard, const string& daemon_id, const string& marker,
 		   const utime_t& time,
 		   const list<RGWReplicaItemMarker> *entries) {
-    string oid;
-    get_shard_oid(shard, oid);
-    return RGWReplicaLogger::update_bound(oid, pool,
+    string oid_t;
+    get_shard_oid(shard, oid_t);
+    return RGWReplicaLogger::update_bound(oid_t, pool,
 					  daemon_id, marker, time, entries);
   }
   int delete_bound(int shard, const string& daemon_id) {
-    string oid;
-    get_shard_oid(shard, oid);
-    return RGWReplicaLogger::delete_bound(oid, pool,
+    string oid_t;
+    get_shard_oid(shard, oid_t);
+    return RGWReplicaLogger::delete_bound(oid_t, pool,
 					  daemon_id);
   }
   int get_bounds(int shard, RGWReplicaBounds& bounds) {
-    string oid;
-    get_shard_oid(shard, oid);
-    return RGWReplicaLogger::get_bounds(oid, pool, bounds);
+    string oid_t;
+    get_shard_oid(shard, oid_t);
+    return RGWReplicaLogger::get_bounds(oid_t, pool, bounds);
   }
 };
 

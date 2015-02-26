@@ -16,24 +16,24 @@
 namespace json_spirit
 {
     template< class Obj_t, class Map_t >
-    void obj_to_map( const Obj_t& obj, Map_t& mp_obj )
+    void obj_to_map( const Obj_t& oid, Map_t& mp_obj )
     {
 	mp_obj.clear();
 
-	for( typename Obj_t::const_iterator i = obj.begin(); i != obj.end(); ++i )
+	for( typename Obj_t::const_iterator i = oid.begin(); i != oid.end(); ++i )
 	{
 	    mp_obj[ i->name_ ] = i->value_;
 	}
     }
 
     template< class Obj_t, class Map_t >
-    void map_to_obj( const Map_t& mp_obj, Obj_t& obj )
+    void map_to_obj( const Map_t& mp_obj, Obj_t& oid )
     {
-	obj.clear();
+	oid.clear();
 
 	for( typename Map_t::const_iterator i = mp_obj.begin(); i != mp_obj.end(); ++i )
 	{
-	    obj.push_back( typename Obj_t::value_type( i->first, i->second ) );
+	    oid.push_back( typename Obj_t::value_type( i->first, i->second ) );
 	}
     }
 
@@ -46,9 +46,9 @@ namespace json_spirit
 #endif
 
     template< class Object_type, class String_type >
-    const typename Object_type::value_type::Value_type& find_value( const Object_type& obj, const String_type& name )
+    const typename Object_type::value_type::Value_type& find_value( const Object_type& oid, const String_type& name )
     {
-	for( typename Object_type::const_iterator i = obj.begin(); i != obj.end(); ++i )
+	for( typename Object_type::const_iterator i = oid.begin(); i != oid.end(); ++i )
 	{
 	    if( i->name_ == name )
 	    {

@@ -50,7 +50,7 @@ class DeterministicOpSequence : public TestObjectStoreState {
   int32_t txn;
 
   coll_t txn_coll;
-  oid txn_object;
+  oid_t txn_object;
 
   ObjectStore::Sequencer m_osr;
   std::ofstream m_status;
@@ -67,20 +67,20 @@ class DeterministicOpSequence : public TestObjectStoreState {
   bool do_coll_add(rngen_t& gen);
   bool do_set_attrs(rngen_t& gen);
 
-  virtual void _do_touch(coll_t coll, oid& obj);
-  virtual void _do_remove(coll_t coll, oid& obj);
-  virtual void _do_write(coll_t coll, oid& obj, uint64_t off,
+  virtual void _do_touch(coll_t coll, oid_t& oid);
+  virtual void _do_remove(coll_t coll, oid_t& oid);
+  virtual void _do_write(coll_t coll, oid_t& oid, uint64_t off,
       uint64_t len, const bufferlist& data);
   virtual void _do_set_attrs(coll_t coll,
-			     oid &obj,
+			     oid_t &oid,
 			     const map<string, bufferlist> &attrs);
-  virtual void _do_clone(coll_t coll, oid& orig_obj, oid& new_obj);
-  virtual void _do_clone_range(coll_t coll, oid& orig_obj,
-      oid& new_obj, uint64_t srcoff, uint64_t srclen, uint64_t dstoff);
-  virtual void _do_write_and_clone_range(coll_t coll, oid& orig_obj,
-      oid& new_obj, uint64_t srcoff, uint64_t srclen,
+  virtual void _do_clone(coll_t coll, oid_t& orig_obj, oid_t& new_obj);
+  virtual void _do_clone_range(coll_t coll, oid_t& orig_obj,
+      oid_t& new_obj, uint64_t srcoff, uint64_t srclen, uint64_t dstoff);
+  virtual void _do_write_and_clone_range(coll_t coll, oid_t& orig_obj,
+      oid_t& new_obj, uint64_t srcoff, uint64_t srclen,
       uint64_t dstoff, bufferlist& bl);
-  virtual void _do_coll_add(coll_t orig_coll, coll_t new_coll, oid& obj);
+  virtual void _do_coll_add(coll_t orig_coll, coll_t new_coll, oid_t& oid);
   virtual void _do_coll_rename(coll_t orig_coll, coll_t new_coll);
 
   int _gen_coll_id(rngen_t& gen);
@@ -89,7 +89,7 @@ class DeterministicOpSequence : public TestObjectStoreState {
 
  private:
   bool _prepare_clone(rngen_t& gen, coll_t& coll_ret,
-      oid& orig_obj_ret, oid& new_obj_ret);
+      oid_t& orig_obj_ret, oid_t& new_obj_ret);
   bool _prepare_colls(rngen_t& gen,
       coll_entry_t* &orig_coll, coll_entry_t* &new_coll);
 };

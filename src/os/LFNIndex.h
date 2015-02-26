@@ -164,34 +164,34 @@ public:
 
   /// @see CollectionIndex
   int created(
-    const oid &obj,
+    const oid_t &oid,
     const char *path
     );
 
   /// @see CollectionIndex
   int unlink(
-    const oid &obj
+    const oid_t &obj
     );
 
   /// @see CollectionIndex
   int lookup(
-    const oid &obj,
+    const oid_t &oid,
     IndexedPath *path,
     int *exist
     );
 
   /// @see CollectionIndex
   int collection_list(
-    vector<oid> *ls
+    vector<oid_t> *ls
     );
 
   /// @see CollectionIndex
   int collection_list_partial(
-    const oid &start,
+    const oid_t &start,
     int min_count,
     int max_count,
-    vector<oid> *ls,
-    oid *next
+    vector<oid_t> *ls,
+    oid_t *next
     );
 
   virtual int _split(
@@ -219,20 +219,20 @@ protected:
   /// Will be called upon object creation
   virtual int _created(
     const vector<string> &path, ///< [in] Path to subdir.
-    const oid &obj,      ///< [in] Object created.
+    const oid_t &oid,      ///< [in] Object created.
     const string &mangled_name	///< [in] Mangled filename.
     ) = 0;
 
   /// Will be called to remove an object
   virtual int _remove(
     const vector<string> &path,	    ///< [in] Path to subdir.
-    const oid &obj,	   ///< [in] Object to remove.
+    const oid_t &oid,	   ///< [in] Object to remove.
     const string &mangled_name	    ///< [in] Mangled filename.
     ) = 0;
 
-  /// Return the path and mangled_name for obj.
+  /// Return the path and mangled_name for oid.
   virtual int _lookup(
-    const oid &obj,///< [in] Object for lookup.
+    const oid_t &oid,///< [in] Object for lookup.
     vector<string> *path, ///< [out] Path to the object.
     string *mangled_name, ///< [out] Mangled filename.
     int *exists		  ///< [out] True if the object exists.
@@ -250,16 +250,16 @@ protected:
    */
   /// List contents of collection.
   virtual int _collection_list(
-    vector<oid> *ls ///< [out] Listed objects.
+    vector<oid_t> *ls ///< [out] Listed objects.
     ) = 0;
 
   /// @see CollectionIndex
   virtual int _collection_list_partial(
-    const oid &start,
+    const oid_t &start,
     int min_count,
     int max_count,
-    vector<oid> *ls,
-    oid *next
+    vector<oid_t> *ls,
+    oid_t *next
     ) = 0;
 
 protected:
@@ -275,8 +275,8 @@ protected:
   int link_object(
     const vector<string> &from,	  ///< [in] Source subdirectory.
     const vector<string> &to,	  ///< [in] Dest subdirectory.
-    const oid &obj,	 ///< [in] Object to move.
-    const string &from_short_name ///< [in] Mangled filename of obj.
+    const oid_t &oid,	 ///< [in] Object to move.
+    const string &from_short_name ///< [in] Mangled filename of oid.
     ); ///< @return Error Code, 0 on success
 
   /**
@@ -293,8 +293,8 @@ protected:
    */
   int remove_objects(
     const vector<string> &dir,
-    const map<string, oid> &to_remove,
-    map<string, oid> *remaining
+    const map<string, oid_t> &to_remove,
+    map<string, oid_t> *remaining
     );
 
 
@@ -319,11 +319,11 @@ protected:
    */
   int remove_object(
     const vector<string> &from,	 ///< [in] Directory from which to remove.
-    const oid &to_remove	 ///< [in] Object to remove.
+    const oid_t &to_remove	 ///< [in] Object to remove.
     );
 
   /**
-   * Gets the filename corresponding to obj in from.
+   * Gets the filename corresponding to oid in from.
    *
    * The filename may differ between subdirectories.  Furthermore,
    * file creations ore removals in from may invalidate the name.
@@ -331,7 +331,7 @@ protected:
    */
   int get_mangled_name(
     const vector<string> &from, ///< [in] Subdirectory
-    const oid &obj,	///< [in] Object
+    const oid_t &oid,	///< [in] Object
     string *mangled_name,	///< [out] Filename
     int *exists			///< [out] 1 if the file exists, else 0
     );
@@ -349,7 +349,7 @@ protected:
     LFNIndex &from, ///< [in] from index
     LFNIndex &dest, ///< [in] to index
     const vector<string> &path, ///< [in] path to split
-    const pair<string, oid> &obj ///< [in] obj to move
+    const pair<string, oid_t> &oid ///< [in] oid to move
     );
 
   /**
@@ -366,7 +366,7 @@ protected:
     const vector<string> &to_list,
     int max_objects,
     long *handle,
-    map<string, oid> *out
+    map<string, oid_t> *out
     );
 
   /// Lists subdirectories.
@@ -422,43 +422,43 @@ private:
   }
 
   /**
-   * Gets the filename corresponsing to obj in path.
+   * Gets the filename corresponsing to oid in path.
    *
-   * @param [in] path Path in which to get filename for obj.
-   * @param [in] obj Object for which to get filename.
-   * @param [out] mangled_name Filename for obj, pass NULL if not needed.
-   * @param [out] full_path Fullpath for obj, pass NULL if not needed.
+   * @param [in] path Path in which to get filename for oid.
+   * @param [in] oid Object for which to get filename.
+   * @param [out] mangled_name Filename for oid, pass NULL if not needed.
+   * @param [out] full_path Fullpath for oid, pass NULL if not needed.
    * @param [out] exists 1 if the file exists, 0 otherwise, pass NULL if
    * not needed
    * @return Error Code, 0 on success.
    */
   int lfn_get_name(
     const vector<string> &path,
-    const oid &obj,
+    const oid_t &oid,
     string *mangled_name,
     string *full_path,
     int *exists
     );
 
-  /// Adjusts path contents when obj is created at name mangled_name.
+  /// Adjusts path contents when oid is created at name mangled_name.
   int lfn_created(
     const vector<string> &path, ///< [in] Path to adjust.
-    const oid &obj,	///< [in] Object created.
+    const oid_t &oid,	///< [in] Object created.
     const string &mangled_name	///< [in] Filename of created object.
     );
 
-  /// Removes obj from path while adjusting path contents
+  /// Removes oid from path while adjusting path contents
   int lfn_unlink(
-    const vector<string> &path, ///< [in] Path containing obj.
-    const oid &obj,	///< [in] Object to remove.
+    const vector<string> &path, ///< [in] Path containing oid.
+    const oid_t &oid,	///< [in] Object to remove.
     const string &mangled_name	///< [in] Filename of object to remove.
     );
 
-  ///Transate a file into and oid.
+  ///Transate a file into and oid_t.
   int lfn_translate(
     const vector<string> &path, ///< [in] Path containing the file.
     const string &short_name,	///< [in] Filename to translate.
-    oid *out		///< [out] Object found.
+    oid_t *out		///< [out] Object found.
     ); ///< @return Negative error code on error, 0 if not an object, 1 else
 
   /* manglers/demanglers */
@@ -475,13 +475,13 @@ private:
 
   /// Generate object name
   string lfn_generate_object_name(
-    const oid &obj ///< [in] Object for which to generate.
+    const oid_t &oid ///< [in] Object for which to generate.
     ); ///< @return Generated object name.
 
   /// Parse object name
   bool lfn_parse_object_name(
     const string &long_name, ///< [in] Name to parse
-    oid *out	     ///< [out] Resulting Object
+    oid_t *out	     ///< [out] Resulting Object
     ); ///< @return True if successfull, False otherwise.
 
   /// Checks whether short_name is a hashed filename.
@@ -496,7 +496,7 @@ private:
 
   /// Generate hashed name.
   string lfn_get_short_name(
-    const oid &obj, ///< [in] Object for which to generate.
+    const oid_t &oid, ///< [in] Object for which to generate.
     int i		   ///< [in] Index of hashed name to generate.
     ); ///< @return Hashed filename.
 
@@ -529,7 +529,7 @@ private:
   int decompose_full_path(
     const char *in,	 ///< [in] Full path to object.
     vector<string> *out, ///< [out] Path to object at in.
-    oid *obj,	 ///< [out] Object at in.
+    oid_t *oid,	 ///< [out] Object at in.
     string *shortname	 ///< [out] Filename of object at in.
     ); ///< @return Error Code, 0 on success.
 

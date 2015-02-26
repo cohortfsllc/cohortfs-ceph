@@ -96,7 +96,7 @@ protected:
   int ret;
   bool get_data;
   bool partial_content;
-  rgw_obj obj;
+  rgw_obj oid;
   utime_t gc_invalidate_time;
 
   int init_common();
@@ -746,7 +746,7 @@ public:
 #define MP_META_SUFFIX ".meta"
 
 class RGWMPObj {
-  string oid;
+  string oid_t;
   string prefix;
   string meta;
   string upload_id;
@@ -760,9 +760,9 @@ public:
       clear();
       return;
     }
-    oid = _oid;
+    oid_t = _oid;
     upload_id = _upload_id;
-    prefix = oid;
+    prefix = oid_t;
     prefix.append(".");
     prefix.append(upload_id);
     meta = prefix;
@@ -786,7 +786,7 @@ public:
     return upload_id;
   }
   string& get_key() {
-    return oid;
+    return oid_t;
   }
   bool from_meta(string& meta) {
     int end_pos = meta.rfind('.'); // search for ".meta"
@@ -795,13 +795,13 @@ public:
     int mid_pos = meta.rfind('.', end_pos - 1); // <key>.<upload_id>
     if (mid_pos < 0)
       return false;
-    oid = meta.substr(0, mid_pos);
+    oid_t = meta.substr(0, mid_pos);
     upload_id = meta.substr(mid_pos + 1, end_pos - mid_pos - 1);
-    init(oid, upload_id);
+    init(oid_t, upload_id);
     return true;
   }
   void clear() {
-    oid = "";
+    oid_t = "";
     prefix = "";
     meta = "";
     upload_id = "";
@@ -809,7 +809,7 @@ public:
 };
 
 struct RGWMultipartUploadEntry {
-  RGWObjEnt obj;
+  RGWObjEnt oid;
   RGWMPObj mp;
 };
 

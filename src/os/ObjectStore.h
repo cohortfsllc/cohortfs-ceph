@@ -125,7 +125,7 @@ public:
    * Object Contents and semantics
    *
    * All ObjectStore objects are identified as a named object
-   * (oid and oid) in a named collection (coll_t).
+   * (oid_t and oid_t) in a named collection (coll_t).
    * ObjectStore operations support the creation, mutation, deletion
    * and enumeration of objects within a collection.  Enumeration is
    * in sorted key order (where keys are sorted by hash). Object names
@@ -262,18 +262,18 @@ public:
     enum {
       OP_NOP =		0,
       OP_TOUCH =	9,   // cid, obj
-      OP_WRITE =	10,  // cid, obj, offset, len, bl
-      OP_ZERO =		11,  // cid, obj, offset, len
-      OP_TRUNCATE =	12,  // cid, obj, len
+      OP_WRITE =	10,  // cid, oid, offset, len, bl
+      OP_ZERO =		11,  // cid, oid, offset, len
+      OP_TRUNCATE =	12,  // cid, oid, len
       OP_REMOVE =	13,  // cid, obj
-      OP_SETATTR =	14,  // cid, obj, attrname, bl
-      OP_SETATTRS =	15,  // cid, obj, attrset
-      OP_RMATTR =	16,  // cid, obj, attrname
-      OP_CLONE =	17,  // cid, obj, newoid
-      OP_CLONERANGE =	18,  // cid, obj, newoid, offset, len
-      OP_CLONERANGE2 =	30,  // cid, obj, newoid, srcoff, len, dstoff
+      OP_SETATTR =	14,  // cid, oid, attrname, bl
+      OP_SETATTRS =	15,  // cid, oid, attrset
+      OP_RMATTR =	16,  // cid, oid, attrname
+      OP_CLONE =	17,  // cid, oid, newoid
+      OP_CLONERANGE =	18,  // cid, oid, newoid, offset, len
+      OP_CLONERANGE2 =	30,  // cid, oid, newoid, srcoff, len, dstoff
 
-      OP_TRIMCACHE =	19,  // cid, obj, offset, len  **DEPRECATED**
+      OP_TRIMCACHE =	19,  // cid, oid, offset, len  **DEPRECATED**
 
       OP_MKCOLL =	20,  // cid
       OP_RMCOLL =	21,  // cid
@@ -293,16 +293,16 @@ public:
       OP_OMAP_SETKEYS = 32, // cid, attrset
       OP_OMAP_RMKEYS = 33,  // cid, keyset
       OP_OMAP_SETHEADER = 34, // cid, header
-      OP_OMAP_RMKEYRANGE = 37,	// cid, obj, firstkey, lastkey
+      OP_OMAP_RMKEYRANGE = 37,	// cid, oid, firstkey, lastkey
       OP_COLL_MOVE_RENAME = 38,	  // oldcid, oldoid, newcid, newoid
 
-      OP_SETALLOCHINT = 39,  // cid, obj, object_size, write_size
+      OP_SETALLOCHINT = 39,  // cid, oid, object_size, write_size
     };
 
     struct Op {
       uint32_t op;
       coll_t cid, cid2;
-      oid obj, obj2;
+      oid_t oid, obj2;
       uint64_t off, off2;
       uint64_t len;
       bufferlist data;
@@ -485,11 +485,11 @@ public:
      * Ensure the existance of an object in a collection. Create an
      * empty object if necessary
      */
-    void touch(const coll_t &cid, const oid& obj) {
+    void touch(const coll_t &cid, const oid_t& oid) {
       ops.push_back(Op(OP_TOUCH));
       Op &op = ops.back();
       op.cid = cid;
-      op.obj = obj;
+      op.oid = oid;
     }
     /**
      * Write data to an offset within an object. If the object is too
@@ -501,12 +501,12 @@ public:
      * ObjectStore will omit the untouched data and store it as a
      * "hole" in the file.
      */
-    void write(const coll_t &cid, const oid& obj,
+    void write(const coll_t &cid, const oid_t& oid,
 	       uint64_t off, uint64_t len, const bufferlist& data) {
       ops.push_back(Op(OP_WRITE));
       Op &op = ops.back();
       op.cid = cid;
-      op.obj = obj;
+      op.oid = oid;
       op.off = off;
       op.len = len;
       op.data = data;
@@ -521,85 +521,85 @@ public:
      * ObjectStore instances may optimize this to release the
      * underlying storage space.
      */
-    void zero(const coll_t &cid, const oid& obj, uint64_t off, uint64_t len) {
+    void zero(const coll_t &cid, const oid_t& oid, uint64_t off, uint64_t len) {
       ops.push_back(Op(OP_ZERO));
       Op &op = ops.back();
       op.cid = cid;
-      op.obj = obj;
+      op.oid = oid;
       op.off = off;
       op.len = len;
     }
     /// Discard all data in the object beyond the specified size.
-    void truncate(const coll_t &cid, const oid& obj, uint64_t off) {
+    void truncate(const coll_t &cid, const oid_t& oid, uint64_t off) {
       ops.push_back(Op(OP_TRUNCATE));
       Op &op = ops.back();
       op.cid = cid;
-      op.obj = obj;
+      op.oid = oid;
       op.off = off;
     }
     /// Remove an object. All four parts of the object are removed.
-    void remove(const coll_t &cid, const oid& obj) {
+    void remove(const coll_t &cid, const oid_t& oid) {
       ops.push_back(Op(OP_REMOVE));
       Op &op = ops.back();
       op.cid = cid;
-      op.obj = obj;
+      op.oid = oid;
     }
     /// Set an xattr of an object
-    void setattr(const coll_t &cid, const oid& obj,
+    void setattr(const coll_t &cid, const oid_t& oid,
 		 const char* name, bufferlist& val) {
       string n(name);
-      setattr(cid, obj, n, val);
+      setattr(cid, oid, n, val);
     }
     /// Set an xattr of an object
-    void setattr(const coll_t &cid, const oid& obj,
+    void setattr(const coll_t &cid, const oid_t& oid,
 		 const string& s, bufferlist& val) {
       ops.push_back(Op(OP_SETATTR));
       Op &op = ops.back();
       op.cid = cid;
-      op.obj = obj;
+      op.oid = oid;
       op.name = s;
       op.data = val;
     }
     /// Set multiple xattrs of an object
-    void setattrs(const coll_t &cid, const oid& obj,
+    void setattrs(const coll_t &cid, const oid_t& oid,
 		  map<string, bufferlist>& attrset) {
       ops.push_back(Op(OP_SETATTRS));
       Op &op = ops.back();
       op.cid = cid;
-      op.obj = obj;
+      op.oid = oid;
       // encode/decode into bufferptr map
       bufferlist bl;
       ::encode(attrset, bl);
       bufferlist::iterator p = bl.begin();
       ::decode(op.xattrs, p);
     }
-    void setattrs(const coll_t &cid, const oid& obj,
+    void setattrs(const coll_t &cid, const oid_t& oid,
 		  map<string, bufferptr>& attrset) {
       ops.push_back(Op(OP_SETATTRS));
       Op &op = ops.back();
       op.cid = cid;
-      op.obj = obj;
+      op.oid = oid;
       op.xattrs.swap(attrset);
     }
     /// remove an xattr from an object
-    void rmattr(const coll_t &cid, const oid& obj, const char *name) {
+    void rmattr(const coll_t &cid, const oid_t& oid, const char *name) {
       string n(name);
-      rmattr(cid, obj, n);
+      rmattr(cid, oid, n);
     }
     /// remove an xattr from an object
-    void rmattr(const coll_t &cid, const oid& obj, const string& s) {
+    void rmattr(const coll_t &cid, const oid_t& oid, const string& s) {
       ops.push_back(Op(OP_RMATTR));
       Op &op = ops.back();
       op.cid = cid;
-      op.obj = obj;
+      op.oid = oid;
       op.name = s;
     }
     /// remove all xattrs from an object
-    void rmattrs(const coll_t &cid, const oid& obj) {
+    void rmattrs(const coll_t &cid, const oid_t& oid) {
       ops.push_back(Op(OP_RMATTRS));
       Op &op = ops.back();
       op.cid = cid;
-      op.obj = obj;
+      op.oid = oid;
     }
     /**
      * Clone an object into another object.
@@ -612,11 +612,11 @@ public:
      * The destination named object may already exist in
      * which case its previous contents are discarded.
      */
-    void clone(const coll_t &cid, const oid& obj, oid noid) {
+    void clone(const coll_t &cid, const oid_t& oid, oid_t noid) {
       ops.push_back(Op(OP_CLONE));
       Op &op = ops.back();
       op.cid = cid;
-      op.obj = obj;
+      op.oid = oid;
       op.obj2 = noid;
     }
     /**
@@ -626,12 +626,12 @@ public:
      * portion of the data from the source object. None of the other
      * three parts of an object is copied from the source.
      */
-    void clone_range(const coll_t &cid, const oid& obj, oid noid,
+    void clone_range(const coll_t &cid, const oid_t& oid, oid_t noid,
 		     uint64_t srcoff, uint64_t srclen, uint64_t dstoff) {
       ops.push_back(Op(OP_CLONERANGE2));
       Op &op = ops.back();
       op.cid = cid;
-      op.obj = obj;
+      op.oid = oid;
       op.obj2 = noid;
       op.off = srcoff;
       op.len = srclen;
@@ -659,33 +659,33 @@ public:
      * of the conversion infrastructure.
      */
     void collection_add(const coll_t &cid, const coll_t &ocid,
-			const oid& obj) {
+			const oid_t& oid) {
       ops.push_back(Op(OP_COLL_ADD));
       Op &op = ops.back();
       op.cid = cid;
       op.cid2 = ocid;
-      op.obj = obj;
+      op.oid = oid;
     }
-    void collection_remove(const coll_t &cid, const oid& obj) {
+    void collection_remove(const coll_t &cid, const oid_t& oid) {
       ops.push_back(Op(OP_COLL_REMOVE));
       Op &op = ops.back();
       op.cid = cid;
-      op.obj = obj;
+      op.oid = oid;
     }
     void collection_move(const coll_t &cid, const coll_t &oldcid,
-			 const oid& obj) {
-      collection_add(cid, oldcid, obj);
-      collection_remove(oldcid, obj);
+			 const oid_t& oid) {
+      collection_add(cid, oldcid, oid);
+      collection_remove(oldcid, oid);
       return;
     }
-    void collection_move_rename(const coll_t &oldcid, const oid& oldoid,
-				const coll_t &cid, const oid& obj) {
+    void collection_move_rename(const coll_t &oldcid, const oid_t& oldoid,
+				const coll_t &cid, const oid_t& oid) {
       ops.push_back(Op(OP_COLL_MOVE_RENAME));
       Op &op = ops.back();
       op.cid = oldcid;
-      op.obj = oldoid;
+      op.oid = oldoid;
       op.cid2 = cid;
-      op.obj2 = obj;
+      op.obj2 = oid;
     }
 
     /// Set an xattr on a collection
@@ -744,49 +744,49 @@ public:
     /// Remove omap from obj
     void omap_clear(
       const coll_t &cid,	  ///< [in] Collection containing obj
-      const oid &obj  ///< [in] Object from which to remove omap
+      const oid_t &oid  ///< [in] Object from which to remove omap
       ) {
       ops.push_back(Op(OP_OMAP_CLEAR));
       Op &op = ops.back();
       op.cid = cid;
-      op.obj = obj;
+      op.oid = oid;
     }
-    /// Set keys on obj omap.  Replaces duplicate keys.
+    /// Set keys on oid omap.  Replaces duplicate keys.
     void omap_setkeys(
       const coll_t &cid,		///< [in] Collection containing obj
-      const oid &obj,	///< [in] Object to update
+      const oid_t &oid,	///< [in] Object to update
       const map<string, bufferlist> &attrset ///< [in] Replacement keys and values
       ) {
       ops.push_back(Op(OP_OMAP_SETKEYS));
       Op &op = ops.back();
       op.cid = cid;
-      op.obj = obj;
+      op.oid = oid;
       op.attrs = attrset; // TODO: swap instead of copy
     }
-    /// Remove keys from obj omap
+    /// Remove keys from oid omap
     void omap_rmkeys(
       const coll_t &cid,	  ///< [in] Collection containing obj
-      const oid &obj, ///< [in] Object from which to remove the omap
+      const oid_t &oid, ///< [in] Object from which to remove the omap
       const set<string> &keys ///< [in] Keys to clear
       ) {
       ops.push_back(Op(OP_OMAP_RMKEYS));
       Op &op = ops.back();
       op.cid = cid;
-      op.obj = obj;
+      op.oid = oid;
       op.keys = keys; // TODO: swap instead of copy
     }
 
-    /// Remove key range from obj omap
+    /// Remove key range from oid omap
     void omap_rmkeyrange(
       const coll_t &cid,	  ///< [in] Collection containing obj
-      const oid &obj, ///< [in] Object from which to remove the omap keys
+      const oid_t &oid, ///< [in] Object from which to remove the omap keys
       const string& first,  ///< [in] first key in range
       const string& last    ///< [in] first key past range, range is [first,last)
       ) {
       ops.push_back(Op(OP_OMAP_RMKEYRANGE));
       Op &op = ops.back();
       op.cid = cid;
-      op.obj = obj;
+      op.oid = oid;
       op.name = first;
       op.name2 = last;
     }
@@ -794,26 +794,26 @@ public:
     /// Set omap header
     void omap_setheader(
       const coll_t &cid,	  ///< [in] Collection containing obj
-      const oid &obj, ///< [in] Object
+      const oid_t &oid, ///< [in] Object
       const bufferlist &bl  ///< [in] Header value
       ) {
       ops.push_back(Op(OP_OMAP_SETHEADER));
       Op &op = ops.back();
       op.cid = cid;
-      op.obj = obj;
+      op.oid = oid;
       op.data = bl;
     }
 
     void set_alloc_hint(
       const coll_t &cid,
-      const oid &obj,
+      const oid_t &oid,
       uint64_t expected_object_size,
       uint64_t expected_write_size
     ) {
       ops.push_back(Op(OP_SETALLOCHINT));
       Op &op = ops.back();
       op.cid = cid;
-      op.obj = obj;
+      op.oid = oid;
       op.value1 = expected_object_size;
       op.value2 = expected_write_size;
     }
@@ -1054,23 +1054,23 @@ public:
    * exists -- Test for existance of object
    *
    * @param cid collection for object
-   * @param obj obj of object
+   * @param oid obj of object
    * @returns true if object exists, false otherwise
    */
-  virtual bool exists(const coll_t &cid, const oid& obj) = 0;	// useful?
+  virtual bool exists(const coll_t &cid, const oid_t& oid) = 0;	// useful?
 
   /**
    * stat -- get information for an object
    *
    * @param cid collection for object
-   * @param obj obj of object
+   * @param oid obj of object
    * @param st output information for the object
    * @param allow_eio if false, assert on -EIO operation failure
    * @returns 0 on success, negative error code on failure.
    */
   virtual int stat(
     const coll_t &cid,
-    const oid& obj,
+    const oid_t& oid,
     struct stat *st,
     bool allow_eio = false) = 0; // struct stat?
 
@@ -1081,7 +1081,7 @@ public:
    * return 0 (not, say, -EINVAL).
    *
    * @param cid collection for object
-   * @param obj obj of object
+   * @param oid obj of object
    * @param offset location offset of first byte to be read
    * @param len number of bytes to be read
    * @param bl output bufferlist
@@ -1090,7 +1090,7 @@ public:
    */
   virtual int read(
     const coll_t &cid,
-    const oid& obj,
+    const oid_t& oid,
     uint64_t offset,
     size_t len,
     bufferlist& bl,
@@ -1106,48 +1106,48 @@ public:
    * as the sole extent.
    *
    * @param cid collection for object
-   * @param obj obj of object
+   * @param oid obj of object
    * @param offset location offset of first byte to be read
    * @param len number of bytes to be read
    * @param bl output bufferlist for extent map information.
    * @returns 0 on success, negative error code on failure.
    */
-  virtual int fiemap(const coll_t &cid, const oid& obj,
+  virtual int fiemap(const coll_t &cid, const oid_t& oid,
 		     uint64_t offset, size_t len, bufferlist& bl) = 0;
 
   /**
    * getattr -- get an xattr of an object
    *
    * @param cid collection for object
-   * @param obj obj of object
+   * @param oid obj of object
    * @param name name of attr to read
    * @param value place to put output result.
    * @returns 0 on success, negative error code on failure.
    */
-  virtual int getattr(const coll_t &cid, const oid& obj,
+  virtual int getattr(const coll_t &cid, const oid_t& oid,
 		      const char *name, bufferptr& value) = 0;
 
   /**
    * getattr -- get an xattr of an object
    *
    * @param cid collection for object
-   * @param obj obj of object
+   * @param oid obj of object
    * @param name name of attr to read
    * @param value place to put output result.
    * @returns 0 on success, negative error code on failure.
    */
-  int getattr(const coll_t &cid, const oid& obj,
+  int getattr(const coll_t &cid, const oid_t& oid,
 	      const char *name, bufferlist& value) {
     bufferptr bp;
-    int r = getattr(cid, obj, name, bp);
+    int r = getattr(cid, oid, name, bp);
     if (bp.length())
       value.push_back(bp);
     return r;
   }
-  int getattr(const coll_t &cid, const oid& obj,
+  int getattr(const coll_t &cid, const oid_t& oid,
 	      const string name, bufferlist& value) {
     bufferptr bp;
-    int r = getattr(cid, obj, name.c_str(), bp);
+    int r = getattr(cid, oid, name.c_str(), bp);
     value.push_back(bp);
     return r;
   }
@@ -1156,27 +1156,27 @@ public:
    * getattrs -- get all of the xattrs of an object
    *
    * @param cid collection for object
-   * @param obj obj of object
+   * @param oid obj of object
    * @param aset place to put output result.
    * @param user_only true -> only user attributes are return else all attributes are returned
    * @returns 0 on success, negative error code on failure.
    */
-  virtual int getattrs(const coll_t &cid, const oid& obj,
+  virtual int getattrs(const coll_t &cid, const oid_t& oid,
 		       map<string,bufferptr>& aset, bool user_only = false) = 0;
 
   /**
    * getattrs -- get all of the xattrs of an object
    *
    * @param cid collection for object
-   * @param obj obj of object
+   * @param oid obj of object
    * @param aset place to put output result.
    * @param user_only true -> only user attributes are return else all attributes are returned
    * @returns 0 on success, negative error code on failure.
    */
-  int getattrs(const coll_t &cid, const oid& obj,
+  int getattrs(const coll_t &cid, const oid_t& oid,
 	       map<string,bufferlist>& aset, bool user_only = false) {
     map<string,bufferptr> bmap;
-    int r = getattrs(cid, obj, bmap, user_only);
+    int r = getattrs(cid, oid, bmap, user_only);
     for (map<string,bufferptr>::iterator i = bmap.begin();
 	i != bmap.end();
 	++i) {
@@ -1250,7 +1250,7 @@ public:
    * @param o [out] list of objects
    * @returns 0 on success, negative error code on failure
    */
-  virtual int collection_list(const coll_t &c, vector<oid>& o) = 0;
+  virtual int collection_list(const coll_t &c, vector<oid_t>& o) = 0;
 
   /**
    * list partial contents of collection relative to a hash offset/position
@@ -1264,8 +1264,8 @@ public:
    * @param next [out] next item sorts >= this value
    * @return zero on success, or negative error
    */
-  virtual int collection_list_partial(const coll_t &c, oid start,
-				      int min, int max, vector<oid> *ls, oid *next) = 0;
+  virtual int collection_list_partial(const coll_t &c, oid_t start,
+				      int min, int max, vector<oid_t> *ls, oid_t *next) = 0;
 
   /**
    * list contents of a collection that fall in the range [start, end)
@@ -1277,14 +1277,14 @@ public:
    * @param ls [out] result
    * @return zero on success, or negative error
    */
-  virtual int collection_list_range(const coll_t &c, oid start,
-				    oid end, vector<oid> *ls) = 0;
+  virtual int collection_list_range(const coll_t &c, oid_t start,
+				    oid_t end, vector<oid_t> *ls) = 0;
 
   /// OMAP
   /// Get omap contents
   virtual int omap_get(
     const coll_t &c,	     ///< [in] Collection containing obj
-    const oid &obj,    ///< [in] Object containing omap
+    const oid_t &oid,    ///< [in] Object containing omap
     bufferlist *header,	     ///< [out] omap header
     map<string, bufferlist> *out /// < [out] Key to value map
     ) = 0;
@@ -1292,7 +1292,7 @@ public:
   /// Get omap header
   virtual int omap_get_header(
     const coll_t &c,		     ///< [in] Collection containing obj
-    const oid &obj,    ///< [in] Object containing omap
+    const oid_t &oid,    ///< [in] Object containing omap
     bufferlist *header,	     ///< [out] omap header
     bool allow_eio = false   ///< [in] don't assert on eio
     ) = 0;
@@ -1300,14 +1300,14 @@ public:
   /// Get keys defined on obj
   virtual int omap_get_keys(
     const coll_t &c,		     ///< [in] Collection containing obj
-    const oid &obj,    ///< [in] Object containing omap
+    const oid_t &oid,    ///< [in] Object containing omap
     set<string> *keys	       ///< [out] Keys defined on obj
     ) = 0;
 
   /// Get key values
   virtual int omap_get_values(
     const coll_t &c,			   ///< [in] Collection containing obj
-    const oid &obj,	   ///< [in] Object containing omap
+    const oid_t &oid,	   ///< [in] Object containing omap
     const set<string> &keys, ///< [in] Keys to get
     map<string, bufferlist> *out ///< [out] Returned keys and values
     ) = 0;
@@ -1315,7 +1315,7 @@ public:
   /// Filters keys into out which are defined on obj
   virtual int omap_check_keys(
     const coll_t &c,		     ///< [in] Collection containing obj
-    const oid &obj,    ///< [in] Object containing omap
+    const oid_t &oid,    ///< [in] Object containing omap
     const set<string> &keys, ///< [in] Keys to check
     set<string> *out	       ///< [out] Subset of keys defined on obj
     ) = 0;
@@ -1331,7 +1331,7 @@ public:
    */
   virtual ObjectMap::ObjectMapIterator get_omap_iterator(
     const coll_t &c,		     ///< [in] collection
-    const oid &obj     ///< [in] object
+    const oid_t &oid     ///< [in] object
     ) = 0;
 
   virtual void sync(Context *onsync) {}
@@ -1350,8 +1350,8 @@ public:
   virtual boost::uuids::uuid get_fsid() = 0;
 
   // DEBUG
-  virtual void inject_data_error(const oid &obj) {}
-  virtual void inject_mdata_error(const oid &obj) {}
+  virtual void inject_data_error(const oid_t &oid) {}
+  virtual void inject_mdata_error(const oid_t &oid) {}
 };
 WRITE_CLASS_ENCODER(ObjectStore::Transaction::Op)
 WRITE_CLASS_ENCODER(ObjectStore::Transaction)

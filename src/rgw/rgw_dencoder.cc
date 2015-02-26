@@ -46,8 +46,8 @@ void rgw_log_entry::generate_test_instances(list<rgw_log_entry*>& o)
   e->bucket = "bucket";
   e->remote_addr = "1.2.3.4";
   e->user = "user";
-  e->obj = "obj";
-  e->uri = "http://uri/bucket/obj";
+  e->oid = "obj";
+  e->uri = "http://uri/bucket/oid";
   e->http_status = "200";
   e->error_code = "error_code";
   e->bytes_sent = 1024;
@@ -64,7 +64,7 @@ void rgw_intent_log_entry::generate_test_instances(list<rgw_intent_log_entry*>& 
 {
   rgw_intent_log_entry *e = new rgw_intent_log_entry;
   rgw_bucket b("bucket", "pool", ".index_pool", "marker", "10", "region");
-  e->obj = rgw_obj(b, "object");
+  e->oid = rgw_obj(b, "object");
   e->intent = DEL_OBJ;
   o.push_back(e);
   o.push_back(new rgw_intent_log_entry);
@@ -283,8 +283,8 @@ void RGWUploadPartInfo::generate_test_instances(list<RGWUploadPartInfo*>& o)
 void rgw_obj::generate_test_instances(list<rgw_obj*>& o)
 {
   rgw_bucket b = rgw_bucket("bucket", "pool", ".index_pool", "marker", "10", "region");
-  rgw_obj *obj = new rgw_obj(b, "object");
-  o.push_back(obj);
+  rgw_obj *oid = new rgw_obj(b, "object");
+  o.push_back(oid);
   o.push_back(new rgw_obj);
 }
 

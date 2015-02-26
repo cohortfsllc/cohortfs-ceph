@@ -183,10 +183,10 @@ int main(int argc, char **argv)
     set<string> objects;
     for (uint64_t num = 0; num < vm["num-objects"].as<unsigned>(); ++num) {
       unsigned col_num = num % vm["num-colls"].as<unsigned>();
-      stringstream coll, obj;
+      stringstream coll, oid;
       coll << "collection_" << col_num;
-      obj << "obj_" << num << "_bencher_" << (i - benchers.begin());
-      objects.insert(coll.str() + string("/") + obj.str());
+      oid << "obj_" << num << "_bencher_" << (i - benchers.begin());
+      objects.insert(coll.str() + string("/") + oid.str());
     }
     Distribution<
       boost::tuple<string, uint64_t, uint64_t, Bencher::OpType> > *gen = 0;

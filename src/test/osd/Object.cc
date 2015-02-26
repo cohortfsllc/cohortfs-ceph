@@ -94,7 +94,7 @@ ObjectDesc::iterator &ObjectDesc::iterator::advance(bool init) {
     stack.pop_front();
   }
 
-  if (cur_cont == obj.layers.end()) {
+  if (cur_cont == oid.layers.end()) {
     return *this;
   }
 
@@ -106,7 +106,7 @@ ObjectDesc::iterator &ObjectDesc::iterator::advance(bool init) {
     uint64_t next;
     if (pos >= length) {
       next = limit;
-      cur_cont = obj.layers.end();
+      cur_cont = oid.layers.end();
     } else if (ranges.empty() || pos >= ranges.range_end()) {
       next = length;
       ++cur_cont;
@@ -117,7 +117,7 @@ ObjectDesc::iterator &ObjectDesc::iterator::advance(bool init) {
     if (next < limit) {
       limit = next;
     }
-    if (cur_cont == obj.layers.end()) {
+    if (cur_cont == oid.layers.end()) {
       break;
     }
 
@@ -125,7 +125,7 @@ ObjectDesc::iterator &ObjectDesc::iterator::advance(bool init) {
     cur_cont->first->get_ranges(cur_cont->second, ranges);
   }
 
-  if (cur_cont == obj.layers.end()) {
+  if (cur_cont == oid.layers.end()) {
     return *this;
   }
 

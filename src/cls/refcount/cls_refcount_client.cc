@@ -36,13 +36,13 @@ void cls_refcount_set(librados::ObjectWriteOperation& op, list<string>& refs)
   op.exec("refcount", "set", in);
 }
 
-int cls_refcount_read(librados::IoCtx& io_ctx, string& oid, list<string> *refs, bool implicit_ref)
+int cls_refcount_read(librados::IoCtx& io_ctx, string& oid_t, list<string> *refs, bool implicit_ref)
 {
   bufferlist in, out;
   cls_refcount_read_op call;
   call.implicit_ref = implicit_ref;
   ::encode(call, in);
-  int r = io_ctx.exec(oid, "refcount", "read", in, out);
+  int r = io_ctx.exec(oid_t, "refcount", "read", in, out);
   if (r < 0)
     return r;
 

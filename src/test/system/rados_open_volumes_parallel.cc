@@ -101,7 +101,7 @@ int main(int argc, const char **argv)
   CrossProcessSem *volume_setup_sem = NULL;
   RETURN1_IF_NONZERO(CrossProcessSem::create(0, &volume_setup_sem));
   StRadosCreateVolume r1(argc, argv, NULL, volume_setup_sem, NULL,
-					   "foo", 50, ".obj");
+					   "foo", 50, ".oid");
   StRadosOpenVolume r2(argc, argv, volume_setup_sem, NULL);
   vector < SysTestRunnable* > vec;
   vec.push_back(&r1);
@@ -119,7 +119,7 @@ int main(int argc, const char **argv)
   CrossProcessSem *open_volume_sem2 = NULL;
   RETURN1_IF_NONZERO(CrossProcessSem::create(0, &open_volume_sem2));
   StRadosCreateVolume r3(argc, argv, NULL, volume_setup_sem2, open_volume_sem2,
-					   "foo", 50, ".obj");
+					   "foo", 50, ".oid");
   StRadosOpenVolume r4(argc, argv, volume_setup_sem2, open_volume_sem2);
   vector < SysTestRunnable* > vec2;
   vec2.push_back(&r3);

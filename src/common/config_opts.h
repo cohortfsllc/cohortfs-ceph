@@ -648,7 +648,7 @@ OPTION(rgw_zone, OPT_STR, "") // zone name
 OPTION(rgw_zone_root_pool, OPT_STR, ".rgw.root")    // pool where zone specific info is stored
 OPTION(rgw_region, OPT_STR, "") // region name
 OPTION(rgw_region_root_pool, OPT_STR, ".rgw.root")  // pool where all region info is stored
-OPTION(rgw_default_region_info_oid, OPT_STR, "default.region")	// oid where default region info is stored
+OPTION(rgw_default_region_info_oid, OPT_STR, "default.region")	// oid_t where default region info is stored
 OPTION(rgw_log_nonexistent_bucket, OPT_BOOL, false)
 OPTION(rgw_log_object_name, OPT_STR, "%Y-%m-%d-%H-%i-%n")      // man date to see codes (a subset are supported)
 OPTION(rgw_log_object_name_utc, OPT_BOOL, false)
@@ -669,13 +669,13 @@ OPTION(rgw_gc_max_objs, OPT_INT, 32)
 OPTION(rgw_gc_obj_min_wait, OPT_INT, 2 * 3600)	  // wait time before object may be handled by gc
 OPTION(rgw_gc_processor_max_time, OPT_INT, 3600)  // total run time for a single gc processor work
 OPTION(rgw_gc_processor_period, OPT_INT, 3600)	// gc processor cycle time
-OPTION(rgw_s3_success_create_obj_status, OPT_INT, 0) // alternative success status response for create-obj (0 - default)
+OPTION(rgw_s3_success_create_obj_status, OPT_INT, 0) // alternative success status response for create-oid (0 - default)
 OPTION(rgw_resolve_cname, OPT_BOOL, false)  // should rgw try to resolve hostname as a dns cname record
 OPTION(rgw_obj_stripe_size, OPT_INT, 4 << 20)
 OPTION(rgw_extended_http_attrs, OPT_STR, "") // list of extended attrs that can be set on objects (beyond the default)
 OPTION(rgw_exit_timeout_secs, OPT_INT, 120) // how many seconds to wait for process to go down before exiting unconditionally
-OPTION(rgw_get_obj_window_size, OPT_INT, 16 << 20) // window size in bytes for single get obj request
-OPTION(rgw_get_obj_max_req_size, OPT_INT, 4 << 20) // max length of a single get obj rados op
+OPTION(rgw_get_obj_window_size, OPT_INT, 16 << 20) // window size in bytes for single get oid request
+OPTION(rgw_get_obj_max_req_size, OPT_INT, 4 << 20) // max length of a single get oid rados op
 OPTION(rgw_relaxed_s3_bucket_names, OPT_BOOL, false) // enable relaxed bucket name rules for US region buckets
 OPTION(rgw_defer_to_bucket_acls, OPT_STR, "") // if the user has bucket perms, use those before key perms (recurse and full_control)
 OPTION(rgw_list_buckets_max_chunk, OPT_INT, 1000) // max buckets to retrieve in a single op when listing user buckets

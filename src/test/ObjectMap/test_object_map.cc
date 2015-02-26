@@ -55,15 +55,15 @@ public:
   }
 
   void set_key(const string &objname, const string &key, const string &value) {
-    set_key(oid(objname), key, value);
+    set_key(oid_t(objname), key, value);
   }
 
   void set_xattr(const string &objname, const string &key, const string &value) {
-    set_xattr(oid(objname),
+    set_xattr(oid_t(objname),
 	      key, value);
   }
 
-  void set_key(oid hoid,
+  void set_key(oid_t hoid,
 	       string key, string value) {
     map<string, bufferlist> to_write;
     bufferptr bp(value.c_str(), value.size());
@@ -73,7 +73,7 @@ public:
     db->set_keys(hoid, to_write);
   }
 
-  void set_xattr(oid hoid,
+  void set_xattr(oid_t hoid,
 		 string key, string value) {
     map<string, bufferlist> to_write;
     bufferptr bp(value.c_str(), value.size());
@@ -84,10 +84,10 @@ public:
   }
 
   void set_header(const string &objname, const string &value) {
-    set_header(oid(objname), value);
+    set_header(oid_t(objname), value);
   }
 
-  void set_header(oid hoid,
+  void set_header(oid_t hoid,
 		  const string &value) {
     bufferlist header;
     header.append(bufferptr(value.c_str(), value.size() + 1));
@@ -95,10 +95,10 @@ public:
   }
 
   int get_header(const string &objname, string *value) {
-    return get_header(oid(objname), value);
+    return get_header(oid_t(objname), value);
   }
 
-  int get_header(oid hoid,
+  int get_header(oid_t hoid,
 		 string *value) {
     bufferlist header;
     int r = db->get_header(hoid, &header);
@@ -112,10 +112,10 @@ public:
   }
 
   int get_xattr(const string &objname, const string &key, string *value) {
-    return get_xattr(oid(objname), key, value);
+    return get_xattr(oid_t(objname), key, value);
   }
 
-  int get_xattr(oid hoid,
+  int get_xattr(oid_t hoid,
 		string key, string *value) {
     set<string> to_get;
     to_get.insert(key);
@@ -131,10 +131,10 @@ public:
   }
 
   int get_key(const string &objname, const string &key, string *value) {
-    return get_key(oid(objname), key, value);
+    return get_key(oid_t(objname), key, value);
   }
 
-  int get_key(oid hoid,
+  int get_key(oid_t hoid,
 	      string key, string *value) {
     set<string> to_get;
     to_get.insert(key);
@@ -150,10 +150,10 @@ public:
   }
 
   void remove_key(const string &objname, const string &key) {
-    remove_key(oid(objname), key);
+    remove_key(oid_t(objname), key);
   }
 
-  void remove_key(oid hoid,
+  void remove_key(oid_t hoid,
 		  string key) {
     set<string> to_remove;
     to_remove.insert(key);
@@ -161,11 +161,11 @@ public:
   }
 
   void remove_xattr(const string &objname, const string &key) {
-    remove_xattr(oid(objname),
+    remove_xattr(oid_t(objname),
 		 key);
   }
 
-  void remove_xattr(oid hoid,
+  void remove_xattr(oid_t hoid,
 		    string key) {
     set<string> to_remove;
     to_remove.insert(key);
@@ -173,28 +173,28 @@ public:
   }
 
   void clone(const string &objname, const string &target) {
-    clone(oid(objname),
-	  oid(target));
+    clone(oid_t(objname),
+	  oid_t(target));
   }
 
-  void clone(oid hoid,
-	     oid hoid2) {
+  void clone(oid_t hoid,
+	     oid_t hoid2) {
     db->clone(hoid, hoid2);
   }
 
   void clear(const string &objname) {
-    clear(oid(objname));
+    clear(oid_t(objname));
   }
 
-  void clear(oid hoid) {
+  void clear(oid_t hoid) {
     db->clear(hoid);
   }
 
   void clear_omap(const string &objname) {
-    clear_omap(oid(objname));
+    clear_omap(oid_t(objname));
   }
 
-  void clear_omap(const oid &objname) {
+  void clear_omap(const oid_t &objname) {
     db->clear_keys_header(objname);
   }
 
@@ -553,7 +553,7 @@ int main(int argc, char **argv) {
 }
 
 TEST_F(ObjectMapTest, CreateOneObject) {
-  oid hoid("foo", chunktype::entirety, 100);
+  oid_t hoid("foo", chunktype::entirety, 100);
   map<string, bufferlist> to_set;
   string key("test");
   string val("test_val");
@@ -608,8 +608,8 @@ TEST_F(ObjectMapTest, CreateOneObject) {
 }
 
 TEST_F(ObjectMapTest, CloneOneObject) {
-  oid hoid("foo", chunktype::entirety, 200);
-  oid hoid2("foo2", chunktype::data, 201);
+  oid_t hoid("foo", chunktype::entirety, 200);
+  oid_t hoid2("foo2", chunktype::data, 201);
 
   tester.set_key(hoid, "foo", "bar");
   tester.set_key(hoid, "foo2", "bar2");
@@ -669,8 +669,8 @@ TEST_F(ObjectMapTest, CloneOneObject) {
 }
 
 TEST_F(ObjectMapTest, OddEvenClone) {
-  oid hoid("foo");
-  oid hoid2("foo2");
+  oid_t hoid("foo");
+  oid_t hoid2("foo2");
 
   for (unsigned i = 0; i < 1000; ++i) {
     tester.set_key(hoid, "foo" + num_str(i), "bar" + num_str(i));

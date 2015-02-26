@@ -64,7 +64,7 @@ void cls_replica_log_delete_bound(librados::ObjectWriteOperation& o,
   o.exec("replica_log", "delete", in);
 }
 
-int cls_replica_log_get_bounds(librados::IoCtx& io_ctx, const string& oid,
+int cls_replica_log_get_bounds(librados::IoCtx& io_ctx, const string& oid_t,
 			       string& position_marker,
 			       ceph::real_time& oldest_time,
 			       list<cls_replica_log_progress_marker>& markers)
@@ -73,7 +73,7 @@ int cls_replica_log_get_bounds(librados::IoCtx& io_ctx, const string& oid,
   bufferlist out;
   cls_replica_log_get_bounds_op op;
   ::encode(op, in);
-  int r = io_ctx.exec(oid, "replica_log", "get", in, out);
+  int r = io_ctx.exec(oid_t, "replica_log", "get", in, out);
   if (r < 0)
     return r;
 

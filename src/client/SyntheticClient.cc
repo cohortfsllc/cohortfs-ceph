@@ -1400,7 +1400,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
     else if (strcmp(op, "o_stat") == 0) {
       int64_t oh = t.get_int();
       int64_t ol = t.get_int();
-      oid obj = file_oid(oh, ol);
+      oid_t oid = file_oid(oh, ol);
       const char *a = t.get_string(buf, p);
       boost::uuids::uuid id;
       id = parse(a);
@@ -1414,7 +1414,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
 			      << " error=" << r << dendl;
 	continue;
       }
-      client->objecter->stat(obj, mvol, &size, &mtime, 0,
+      client->objecter->stat(oid, mvol, &size, &mtime, 0,
 			     new C_SafeCond(&lock, &cond, &ack));
       while (!ack) cond.wait(l);
       l.unlock();
@@ -1425,7 +1425,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       int64_t off = t.get_int();
       int64_t len = t.get_int();
       const char *a = t.get_string(buf, p);
-      oid obj = file_oid(oh, ol);
+      oid_t oid = file_oid(oh, ol);
       boost::uuids::uuid id;
       id = parse(a);
       VolumeRef mvol = client->objecter->vol_by_uuid(id);
@@ -1436,7 +1436,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       }
       std::unique_lock<std::mutex> l(lock);
       bufferlist bl;
-      client->objecter->read(obj, mvol, off, len, &bl, 0,
+      client->objecter->read(oid, mvol, off, len, &bl, 0,
 			     new C_SafeCond(&lock, &cond, &ack));
       while (!ack) cond.wait(l);
       l.unlock();
@@ -1447,7 +1447,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       int64_t off = t.get_int();
       int64_t len = t.get_int();
       const char *a = t.get_string(buf, p);
-      oid obj = file_oid(oh, ol);
+      oid_t oid = file_oid(oh, ol);
       boost::uuids::uuid id;
       id = parse(a);
       VolumeRef mvol = client->objecter->vol_by_uuid(id);
@@ -1461,7 +1461,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       bufferptr bp(len);
       bufferlist bl;
       bl.push_back(bp);
-      client->objecter->write(obj, mvol, off, len, bl,
+      client->objecter->write(oid, mvol, off, len, bl,
 			      ceph::real_clock::now(), 0,
 			      new C_SafeCond(&lock, &cond, &ack),
 			      safeg.new_sub());
@@ -1475,7 +1475,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       int64_t off = t.get_int();
       int64_t len = t.get_int();
       const char *a = t.get_string(buf, p);
-      oid obj = file_oid(oh, ol);
+      oid_t oid = file_oid(oh, ol);
       boost::uuids::uuid id;
       id = parse(a);
       VolumeRef mvol = client->objecter->vol_by_uuid(id);
@@ -1486,7 +1486,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
 	continue;
       }
       std::unique_lock<std::mutex> l(lock);
-      client->objecter->zero(obj, mvol, off, len,
+      client->objecter->zero(oid, mvol, off, len,
 			     ceph::real_clock::now(), 0,
 			     new C_SafeCond(&lock, &cond, &ack),
 			     safeg.new_sub());
@@ -1719,7 +1719,7 @@ int SyntheticClient::dump_placement(string& fn) {
 
     int osd;
     client->osdmap->pg_to_osd(client->osdmap
-			      ->object_locator_to_pg(i->obj, i->oloc),
+			      ->object_locator_to_pg(i->oid, i->oloc),
 			      osd);
 
     // run through all the buffer extents
@@ -2007,7 +2007,7 @@ int SyntheticClient::check_first_primary(int fh) {
   client->enumerate_layout(fh, extents, 1, 0);
   int osd = -1;
   client->osdmap->pg_to_osd(
-    client->osdmap->object_locator_to_pg(extents.begin()->obj,
+    client->osdmap->object_locator_to_pg(extents.begin()->oid,
 					 extents.begin()->oloc),
     osd);
   return osd;
@@ -2263,7 +2263,6 @@ int SyntheticClient::create_objects(int nobj, int osize, int inflight)
   bl.push_back(bp);
 
   std::mutex lock;
-  typedef std::lock_guard<std::mutex> lock_guard;
   typedef std::unique_lock<std::mutex> unique_lock;
   std::condition_variable cond;
 
@@ -2285,17 +2284,17 @@ int SyntheticClient::create_objects(int nobj, int osize, int inflight)
   for (int i=start; i<end; i += inc) {
     if (time_to_stop()) break;
 
-    oid obj = file_oid(999, i);
+    oid_t oid = file_oid(999, i);
 
     if (i % inflight == 0) {
       ldout(client->cct, 6) << "create_objects " << i << "/"
 			    << (nobj + 1) << dendl;
     }
-    ldout(client->cct, 10) << "writing " << obj << dendl;
+    ldout(client->cct, 10) << "writing " << oid << dendl;
 
     starts.push_back(ceph::mono_clock::now());
     Client::unique_lock cl(client->client_lock);
-    client->objecter->write(obj, mvol, 0, osize, bl,
+    client->objecter->write(oid, mvol, 0, osize, bl,
 			    ceph::real_clock::now(), 0,
 			    new C_Ref(lock, cond, &unack),
 			    new C_Ref(lock, cond, &unsafe));
@@ -2364,7 +2363,6 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
 
   std::mutex lock;
   typedef std::unique_lock<std::mutex> unique_lock;
-  typedef std::lock_guard<std::mutex> lock_guard;
   std::condition_variable cond;
 
   int unack = 0;
@@ -2397,11 +2395,11 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
       // exponentially skew towards 0
       o = (long)trunc(pow(r, rskew) * (double)nobj);
     }
-    oid obj = file_oid(999, o);
+    oid_t oid = file_oid(999, o);
 
     Client::unique_lock cl(client->client_lock);
     if (write) {
-      ldout(client->cct, 10) << "write to " << obj << dendl;
+      ldout(client->cct, 10) << "write to " << oid << dendl;
 
       unique_ptr<ObjOp> m(mvol->op());
       if (!m)
@@ -2410,12 +2408,12 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
       if (do_sync) {
 	m->add_op(CEPH_OSD_OP_STARTSYNC);
       }
-      client->objecter->mutate(obj, mvol, m, ceph::real_clock::now(), 0,
+      client->objecter->mutate(oid, mvol, m, ceph::real_clock::now(), 0,
 			       NULL, new C_Ref(lock, cond, &unack));
     } else {
-      ldout(client->cct, 10) << "read from " << obj << dendl;
+      ldout(client->cct, 10) << "read from " << oid << dendl;
       bufferlist inbl;
-      client->objecter->read(obj, mvol, 0, osize, &inbl, 0,
+      client->objecter->read(oid, mvol, 0, osize, &inbl, 0,
 			     new C_Ref(lock, cond, &unack));
     }
     cl.unlock();

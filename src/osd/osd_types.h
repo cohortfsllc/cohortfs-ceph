@@ -49,7 +49,7 @@
 #define CEPH_OSD_FEATURE_INCOMPAT_LEVELDBLOG CompatSet::Feature(9, "leveldblog")
 
 
-typedef oid collection_list_handle_t;
+typedef oid_t collection_list_handle_t;
 
 /// convert a single CPEH_OSD_FLAG_* to a string
 const char *ceph_osd_flag_name(unsigned flag);
@@ -106,7 +106,7 @@ enum {
 #define CEPH_CAS_NS	       3
 #define CEPH_OSDMETADATA_NS 0xff
 
-#define OSD_SUPERBLOCK_POBJECT oid("osd_superblock")
+#define OSD_SUPERBLOCK_POBJECT oid_t("osd_superblock")
 
 // ----------------------
 
@@ -575,7 +575,7 @@ ostream& operator<<(ostream& out, const osd_peer_stat_t &stat);
 
 class ObjectExtent {
  public:
-  oid obj; // object id
+  oid_t oid; // object id
   uint64_t offset; // in object
   uint64_t length; // in object
   uint64_t truncate_size; // in object
@@ -584,9 +584,9 @@ class ObjectExtent {
   vector<pair<uint64_t,uint64_t> >  buffer_extents;
 
   ObjectExtent() : offset(0), length(0), truncate_size(0) {}
-  ObjectExtent(oid o, uint64_t off,
+  ObjectExtent(oid_t o, uint64_t off,
 	       uint64_t l, uint64_t ts) :
-    obj(o), offset(off), length(l), truncate_size(ts) { }
+    oid(o), offset(off), length(l), truncate_size(ts) { }
 };
 
 inline ostream& operator<<(ostream& out, const ObjectExtent &ex)
@@ -682,7 +682,7 @@ static inline ostream& operator<<(ostream& out, const notify_info_t& n) {
 
 
 struct object_info_t {
-  oid soid;
+  oid_t soid;
 
   eversion_t version, prior_version;
   version_t user_version;
@@ -747,7 +747,7 @@ struct object_info_t {
       truncate_seq(0), truncate_size(0), total_real_length(0)
   {}
 
-  object_info_t(const oid& s)
+  object_info_t(const oid_t& s)
     : soid(s),
       user_version(0), size(0), flags((flag_t)0),
       truncate_seq(0), truncate_size(0), total_real_length(0) {}
@@ -1003,7 +1003,7 @@ ostream& operator<<(ostream& out, const object_info_t& oi);
 
 struct OSDOp {
   ceph_osd_op op;
-  oid obj;
+  oid_t oid;
 
   bufferlist indata, outdata;
   int32_t rval;
@@ -1030,7 +1030,7 @@ struct OSDOp {
    * merge indata nembers of a vector of OSDOp into a single bufferlist
    *
    * Notably this also encodes certain other OSDOp data into the data
-   * buffer, including the object_t obj.
+   * buffer, including the object_t oid.
    *
    * @param ops [in] vector of OSDOps
    * @param in	[out] combined data buffer
@@ -1090,12 +1090,12 @@ struct watch_item_t {
 WRITE_CLASS_ENCODER(watch_item_t)
 
 struct obj_watch_item_t {
-  oid obj;
+  oid_t oid;
   watch_item_t wi;
 };
 
 /**
- * obj list watch response format
+ * oid list watch response format
  *
  */
 struct obj_list_watch_response_t {

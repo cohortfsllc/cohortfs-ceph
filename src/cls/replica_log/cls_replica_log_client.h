@@ -73,14 +73,14 @@ void cls_replica_log_delete_bound(librados::ObjectWriteOperation& op,
  * Read the bounds on a replica log.
  *
  * @param io_ctx The IoCtx to use for the read
- * @param oid The oid to direct the read to
+ * @param oid_t The oid_t to direct the read to
  * @param position_marker [out] The lowest marker key that has been reached
  * @param oldest_time [out] Timestamp corresponding to the position marker or
  * oldest in-progress item.
  * @param markers [out] List of progress markers for individual daemons
  */
 int cls_replica_log_get_bounds(
-  librados::IoCtx& io_ctx, const string& oid, string& position_marker,
+  librados::IoCtx& io_ctx, const string& oid_t, string& position_marker,
   ceph::real_time& oldest_time,
   list<cls_replica_log_progress_marker>& markers);
 

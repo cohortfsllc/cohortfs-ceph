@@ -38,7 +38,7 @@ const string GenericObjectMap::COMPLETE_PREFIX = "_COMPLETE_";
 const string GenericObjectMap::OIDO_SEQ_PREFIX = "_HOBJTOSEQ_";
 const string GenericObjectMap::PARENT_KEY = "_PARENT_HEADER_";
 
-// In order to make right ordering for leveldb matching with oid,
+// In order to make right ordering for leveldb matching with oid_t,
 // so use "!" to separated
 const string GenericObjectMap::HOBJECT_KEY_SEP_S = "!";
 const char GenericObjectMap::HOBJECT_KEY_SEP_C = '!';
@@ -99,21 +99,21 @@ string GenericObjectMap::header_key(const coll_t &cid)
   return full_name;
 }
 
-string GenericObjectMap::header_key(const coll_t &cid, const oid &obj)
+string GenericObjectMap::header_key(const coll_t &cid, const oid_t &oid)
 {
   string full_name;
 
   append_escaped(full_name, cid.to_str());
   full_name.push_back(HOBJECT_KEY_SEP_C);
 
-  obj.append_str(full_name, HOBJECT_KEY_SEP_C, append_escaped);
+  oid.append_str(full_name, HOBJECT_KEY_SEP_C, append_escaped);
   full_name.push_back(HOBJECT_KEY_SEP_C);
 
   return full_name;
 }
 
 bool GenericObjectMap::parse_header_key(const string &long_name,
-					coll_t *coll, oid *out)
+					coll_t *coll, oid_t *out)
 {
   const char *current = long_name.c_str();
   const char *bound = strchr(current, HOBJECT_KEY_SEP_C);
@@ -136,7 +136,7 @@ bool GenericObjectMap::parse_header_key(const string &long_name,
 
   try {
     if (out) {
-      *out = oid(current, HOBJECT_KEY_SEP_C,
+      *out = oid_t(current, HOBJECT_KEY_SEP_C,
 		 append_unescaped, bound);
     }
   } catch (std::invalid_argument &e) {
@@ -195,9 +195,9 @@ int GenericObjectMap::GenericObjectMapIteratorImpl::init()
 }
 
 ObjectMap::ObjectMapIterator GenericObjectMap::get_iterator(
-    const coll_t &cid, const oid &obj, const string &prefix)
+    const coll_t &cid, const oid_t &oid, const string &prefix)
 {
-  Header header = lookup_header(cid, obj);
+  Header header = lookup_header(cid, oid);
   if (!header)
     return ObjectMap::ObjectMapIterator(new EmptyIteratorImpl());
   return _get_iterator(header, prefix);
@@ -393,7 +393,7 @@ void GenericObjectMap::set_keys(const Header header,
 int GenericObjectMap::clear(const Header header,
 			    KeyValueDB::Transaction t)
 {
-  remove_header(header->cid, header->obj, header, t);
+  remove_header(header->cid, header->oid, header, t);
   assert(header->num_children > 0);
   header->num_children--;
   int r = _clear(header, t);
@@ -464,18 +464,18 @@ int GenericObjectMap::rm_keys(const Header header,
     parent->num_children--;
     _clear(parent, t);
     header->parent = 0;
-    set_header(header->cid, header->obj, *header, t);
+    set_header(header->cid, header->oid, *header, t);
     t->rmkeys_by_prefix(complete_prefix(header));
   }
 
   return 0;
 }
 
-int GenericObjectMap::get(const coll_t &cid, const oid &obj,
+int GenericObjectMap::get(const coll_t &cid, const oid_t &oid,
 			  const string &prefix,
 			  map<string, bufferlist> *out)
 {
-  Header header = lookup_header(cid, obj);
+  Header header = lookup_header(cid, oid);
   if (!header)
     return -ENOENT;
 
@@ -489,11 +489,11 @@ int GenericObjectMap::get(const coll_t &cid, const oid &obj,
   return 0;
 }
 
-int GenericObjectMap::get_keys(const coll_t &cid, const oid &obj,
+int GenericObjectMap::get_keys(const coll_t &cid, const oid_t &oid,
 			       const string &prefix,
 			       set<string> *keys)
 {
-  Header header = lookup_header(cid, obj);
+  Header header = lookup_header(cid, oid);
   if (!header)
     return -ENOENT;
 
@@ -506,30 +506,30 @@ int GenericObjectMap::get_keys(const coll_t &cid, const oid &obj,
   return 0;
 }
 
-int GenericObjectMap::get_values(const coll_t &cid, const oid &obj,
+int GenericObjectMap::get_values(const coll_t &cid, const oid_t &oid,
 				 const string &prefix,
 				 const set<string> &keys,
 				 map<string, bufferlist> *out)
 {
-  Header header = lookup_header(cid, obj);
+  Header header = lookup_header(cid, oid);
   if (!header)
     return -ENOENT;
   return scan(header, prefix, keys, 0, out);
 }
 
-int GenericObjectMap::check_keys(const coll_t &cid, const oid &obj,
+int GenericObjectMap::check_keys(const coll_t &cid, const oid_t &oid,
 				 const string &prefix,
 				 const set<string> &keys,
 				 set<string> *out)
 {
-  Header header = lookup_header(cid, obj);
+  Header header = lookup_header(cid, oid);
   if (!header)
     return -ENOENT;
   return scan(header, prefix, keys, out, 0);
 }
 
 void GenericObjectMap::clone(const Header parent, const coll_t &cid,
-			     const oid &target,
+			     const oid_t &target,
 			     KeyValueDB::Transaction t,
 			     Header *old_header, Header *new_header)
 {
@@ -542,7 +542,7 @@ void GenericObjectMap::clone(const Header parent, const coll_t &cid,
     }
   }
 
-  Header source = generate_new_header(parent->cid, parent->obj, parent, t);
+  Header source = generate_new_header(parent->cid, parent->oid, parent, t);
   Header destination = generate_new_header(cid, target, parent, t);
 
   destination->data = parent->data;
@@ -550,7 +550,7 @@ void GenericObjectMap::clone(const Header parent, const coll_t &cid,
 
   parent->num_children = 2;
   set_parent_header(parent, t);
-  set_header(parent->cid, parent->obj, *source, t);
+  set_header(parent->cid, parent->oid, *source, t);
   set_header(cid, target, *destination, t);
 
   if (new_header)
@@ -560,15 +560,15 @@ void GenericObjectMap::clone(const Header parent, const coll_t &cid,
 }
 
 void GenericObjectMap::rename(const Header old_header, const coll_t &cid,
-			      const oid &target,
+			      const oid_t &target,
 			      KeyValueDB::Transaction t)
 {
-  if (old_header->obj == target && old_header->cid == cid)
+  if (old_header->oid == target && old_header->cid == cid)
     return ;
 
-  remove_header(old_header->cid, old_header->obj, old_header, t);
+  remove_header(old_header->cid, old_header->oid, old_header, t);
   old_header->cid = cid;
-  old_header->obj = target;
+  old_header->oid = target;
   set_header(cid, target, *old_header, t);
 
   // "in_use" still hold the "seq"
@@ -610,7 +610,7 @@ int GenericObjectMap::sync(const Header header, KeyValueDB::Transaction t)
 {
   write_state(t);
   if (header) {
-    set_header(header->cid, header->obj, *header, t);
+    set_header(header->cid, header->oid, *header, t);
   }
   return 0;
 }
@@ -801,10 +801,10 @@ int GenericObjectMap::write_state(KeyValueDB::Transaction t)
 // NOTE(haomai): It may occur dead lock if thread A hold header A try to header
 // B and thread hold header B try to get header A
 GenericObjectMap::Header GenericObjectMap::_lookup_header(
-  unique_lock& l, const coll_t &cid, const oid &obj)
+  unique_lock& l, const coll_t &cid, const oid_t &oid)
 {
   set<string> to_get;
-  to_get.insert(header_key(cid, obj));
+  to_get.insert(header_key(cid, oid));
   _Header header;
 
   while (1) {
@@ -840,7 +840,7 @@ GenericObjectMap::Header GenericObjectMap::_lookup_header(
 }
 
 GenericObjectMap::Header GenericObjectMap::_generate_new_header(
-    const coll_t &cid, const oid &obj, Header parent,
+    const coll_t &cid, const oid_t &oid, Header parent,
     KeyValueDB::Transaction t)
 {
   Header header = Header(new _Header(), RemoveOnDelete(this));
@@ -849,7 +849,7 @@ GenericObjectMap::Header GenericObjectMap::_generate_new_header(
     header->parent = parent->seq;
   }
   header->num_children = 1;
-  header->obj = obj;
+  header->oid = oid;
   header->cid = cid;
   assert(!in_use.count(header->seq));
   in_use.insert(header->seq);
@@ -891,13 +891,13 @@ GenericObjectMap::Header GenericObjectMap::lookup_parent(Header input)
 }
 
 GenericObjectMap::Header GenericObjectMap::lookup_create_header(
-    const coll_t &cid, const oid &obj, KeyValueDB::Transaction t)
+    const coll_t &cid, const oid_t &oid, KeyValueDB::Transaction t)
 {
   unique_lock l(header_lock);
-  Header header = _lookup_header(l, cid, obj);
+  Header header = _lookup_header(l, cid, oid);
   if (!header) {
-    header = _generate_new_header(cid, obj, Header(), t);
-    set_header(cid, obj, *header, t);
+    header = _generate_new_header(cid, oid, Header(), t);
+    set_header(cid, oid, *header, t);
   }
   return header;
 }
@@ -922,29 +922,29 @@ void GenericObjectMap::clear_header(Header header, KeyValueDB::Transaction t)
 
 // only remove OIDO_SEQ
 void GenericObjectMap::remove_header(const coll_t &cid,
-				     const oid &obj, Header header,
+				     const oid_t &oid, Header header,
 				     KeyValueDB::Transaction t)
 {
   ldout(cct, 20) << __func__ << " removing " << header->seq
-	   << " cid " << cid << " obj " << obj << dendl;
+	   << " cid " << cid << " oid " << oid << dendl;
   set<string> to_remove;
-  to_remove.insert(header_key(cid, obj));
+  to_remove.insert(header_key(cid, oid));
   t->rmkeys(OIDO_SEQ_PREFIX, to_remove);
 }
 
-void GenericObjectMap::set_header(const coll_t &cid, const oid &obj,
+void GenericObjectMap::set_header(const coll_t &cid, const oid_t &oid,
 				  _Header header, KeyValueDB::Transaction t)
 {
   ldout(cct, 20) << __func__ << " setting " << header.seq
-	   << " cid " << cid << " obj " << obj << " parent seq "
+	   << " cid " << cid << " oid " << oid << " parent seq "
 	   << header.parent << dendl;
   map<string, bufferlist> to_set;
-  header.encode(to_set[header_key(cid, obj)]);
+  header.encode(to_set[header_key(cid, oid)]);
   t->set(OIDO_SEQ_PREFIX, to_set);
 }
 
-int GenericObjectMap::list_objects(const coll_t &cid, oid start, int max,
-				   vector<oid> *out, oid *next)
+int GenericObjectMap::list_objects(const coll_t &cid, oid_t start, int max,
+				   vector<oid_t> *out, oid_t *next)
 {
   // FIXME
   lock_guard l(header_lock);
@@ -963,17 +963,17 @@ int GenericObjectMap::list_objects(const coll_t &cid, oid start, int max,
 
     if (max && size >= max) {
       if (next)
-	*next = header.obj;
+	*next = header.oid;
       break;
     }
 
-    assert(start <= header.obj);
+    assert(start <= header.oid);
 
 
     size++;
     if (out)
-      out->push_back(header.obj);
-    start = header.obj;
+      out->push_back(header.oid);
+    start = header.oid;
   }
 
   if (out->size())

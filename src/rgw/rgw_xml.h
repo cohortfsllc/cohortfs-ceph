@@ -46,12 +46,12 @@ public:
   virtual void xml_handle_data(const char *s, int len);
   string& get_data();
   XMLObj *get_parent();
-  void add_child(string el, XMLObj *obj);
+  void add_child(string el, XMLObj *oid);
   bool get_attr(string name, string& attr);
   XMLObjIter find(string name);
   XMLObj *find_first(string name);
 
-  friend ostream& operator<<(ostream& out, XMLObj& obj);
+  friend ostream& operator<<(ostream& out, XMLObj& oid);
 };
 
 class RGWXMLParser : public XMLObj

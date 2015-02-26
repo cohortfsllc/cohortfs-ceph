@@ -17,14 +17,14 @@ public:
     librados::IoCtx *ioctx)
     : ioctx(ioctx) {}
   void write(
-    const std::string &oid,
+    const std::string &oid_t,
     uint64_t offset,
     const ceph::bufferlist &bl,
     Context *on_applied,
     Context *on_commit);
 
   void read(
-    const std::string &oid,
+    const std::string &oid_t,
     uint64_t offset,
     uint64_t length,
     bufferlist *bl,

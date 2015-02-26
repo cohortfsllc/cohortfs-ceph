@@ -98,7 +98,7 @@ int Objecter::read(const char *object, const uint8_t volume[16],
 {
   const int client = 0;
   const long tid = 0;
-  oid o(object);
+  oid_t o(object);
   boost::uuids::uuid vol;
   epoch_t epoch = 0;
   std::unique_ptr<SyncCompletion> sync;
@@ -175,7 +175,7 @@ int Objecter::write(const char *object, const uint8_t volume[16],
 {
   const int client = 0;
   const long tid = 0;
-  oid obj(object);
+  oid_t oid(object);
   boost::uuids::uuid vol;
   epoch_t epoch = 0;
   std::unique_ptr<SyncCompletion> sync;
@@ -205,7 +205,7 @@ int Objecter::write(const char *object, const uint8_t volume[16],
   bl.append(ceph::buffer::create_static(length, data));
 
   // set up osd write op
-  MOSDOp *m = new MOSDOp(client, tid, obj, vol, epoch, 0);
+  MOSDOp *m = new MOSDOp(client, tid, oid, vol, epoch, 0);
   m->write(offset, length, bl);
 
   if (flags & LIBOSD_WRITE_CB_UNSTABLE)
@@ -230,7 +230,7 @@ int Objecter::truncate(const char *object, const uint8_t volume[16],
 {
   const int client = 0;
   const long tid = 0;
-  oid o(object);
+  oid_t o(object);
   boost::uuids::uuid vol;
   epoch_t epoch = 0;
   std::unique_ptr<SyncCompletion> sync;

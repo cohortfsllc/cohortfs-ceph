@@ -98,7 +98,7 @@ bool RGWAccessControlPolicy::verify_permission(string& uid, int user_perm_mask, 
 
   int policy_perm = get_perm(uid, test_perm);
 
-  /* the swift WRITE_OBJS perm is equivalent to the WRITE obj, just
+  /* the swift WRITE_OBJS perm is equivalent to the WRITE oid, just
      convert those bits. Note that these bits will only be set on
      buckets, so the swift READ permission on bucket will allow listing
      the bucket content */

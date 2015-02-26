@@ -86,16 +86,16 @@ protected:
   virtual int completion_wait(int slot) = 0;
   virtual int completion_ret(int slot) = 0;
 
-  virtual int aio_read(const std::string& oid, int slot, bufferlist *pbl,
+  virtual int aio_read(const std::string& oid_t, int slot, bufferlist *pbl,
 		       size_t len) = 0;
-  virtual int aio_write(const std::string& oid, int slot, bufferlist& bl,
+  virtual int aio_write(const std::string& oid_t, int slot, bufferlist& bl,
 			size_t len) = 0;
-  virtual int aio_remove(const std::string& oid, int slot) = 0;
-  virtual int sync_read(const std::string& oid, bufferlist& bl,
+  virtual int aio_remove(const std::string& oid_t, int slot) = 0;
+  virtual int sync_read(const std::string& oid_t, bufferlist& bl,
 			size_t len) = 0;
-  virtual int sync_write(const std::string& oid, bufferlist& bl,
+  virtual int sync_write(const std::string& oid_t, bufferlist& bl,
 			 size_t len) = 0;
-  virtual int sync_remove(const std::string& oid) = 0;
+  virtual int sync_remove(const std::string& oid_t) = 0;
 
   ostream& out(ostream& os);
   ostream& out(ostream& os, const ceph::real_time& t);

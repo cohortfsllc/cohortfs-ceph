@@ -32,14 +32,14 @@ static void reset_rop(librados::ObjectReadOperation **pop,
 }
 
 void add_log(librados::ObjectWriteOperation *op, const string& client_id,
-	     const string& op_id, string& obj, uint32_t state)
+	     const string& op_id, string& oid, uint32_t state)
 {
   bufferlist bl;
   ::encode(state, bl);
 
   auto ts = ceph::real_clock::now();
 
-  cls_statelog_add(*op, client_id, op_id, obj, ts, state, bl);
+  cls_statelog_add(*op, client_id, op_id, oid, ts, state, bl);
 }
 
 void next_op_id(string& op_id, int *id)
@@ -53,11 +53,11 @@ void next_op_id(string& op_id, int *id)
 static string get_obj_name(int num)
 {
   char buf[16];
-  snprintf(buf, sizeof(buf), "obj-%d", num);
+  snprintf(buf, sizeof(buf), "oid-%d", num);
   return string(buf);
 }
 
-static void get_entries_by_object(librados::IoCtx& ioctx, string& oid,
+static void get_entries_by_object(librados::IoCtx& ioctx, string& oid_t,
 				  list<cls_statelog_entry>& entries, string& object, string& op_id, int expected)
 {
   /* search everything */
@@ -67,12 +67,12 @@ static void get_entries_by_object(librados::IoCtx& ioctx, string& oid,
   bufferlist obl;
   bool truncated;
   cls_statelog_list(*rop, empty_str, op_id, object, marker, 0, entries, &marker, &truncated);
-  ASSERT_EQ(0, ioctx.operate(oid, rop, &obl));
+  ASSERT_EQ(0, ioctx.operate(oid_t, rop, &obl));
   ASSERT_EQ(expected, (int)entries.size());
   delete rop;
 }
 
-static void get_entries_by_client_id(librados::IoCtx& ioctx, string& oid,
+static void get_entries_by_client_id(librados::IoCtx& ioctx, string& oid_t,
 				     list<cls_statelog_entry>& entries, string& client_id, string& op_id, int expected)
 {
   /* search everything */
@@ -82,16 +82,16 @@ static void get_entries_by_client_id(librados::IoCtx& ioctx, string& oid,
   bufferlist obl;
   bool truncated;
   cls_statelog_list(*rop, client_id, op_id, empty_str, marker, 0, entries, &marker, &truncated);
-  ASSERT_EQ(0, ioctx.operate(oid, rop, &obl));
+  ASSERT_EQ(0, ioctx.operate(oid_t, rop, &obl));
   ASSERT_EQ(expected, (int)entries.size());
   delete rop;
 }
 
-static void get_all_entries(librados::IoCtx& ioctx, string& oid, list<cls_statelog_entry>& entries, int expected)
+static void get_all_entries(librados::IoCtx& ioctx, string& oid_t, list<cls_statelog_entry>& entries, int expected)
 {
   /* search everything */
   string object, op_id;
-  get_entries_by_object(ioctx, oid, entries, object, op_id, expected);
+  get_entries_by_object(ioctx, oid_t, entries, object, op_id, expected);
 }
 
 TEST(cls_rgw, test_statelog_basic)
@@ -104,10 +104,10 @@ TEST(cls_rgw, test_statelog_basic)
   ASSERT_EQ("", create_one_volume_pp(volume_name, rados));
   ASSERT_EQ(0, rados.ioctx_create(volume_name.c_str(), ioctx));
 
-  string oid = "obj";
+  string oid_t = "oid";
 
   /* create object */
-  ASSERT_EQ(0, ioctx.create(oid, true));
+  ASSERT_EQ(0, ioctx.create(oid_t, true));
 
   int id = 0;
   string client_id[] = { "client-1", "client-2" };
@@ -119,11 +119,11 @@ TEST(cls_rgw, test_statelog_basic)
 
   for (int i = 0; i < num_ops; i++) {
     next_op_id(op_ids[i], &id);
-    string obj = get_obj_name(i / 2);
+    string oid = get_obj_name(i / 2);
     string cid = client_id[i / (num_ops / 2)];
-    add_log(op, cid, op_ids[i], obj, i /* just for testing */);
+    add_log(op, cid, op_ids[i], oid, i /* just for testing */);
   }
-  ASSERT_EQ(0, ioctx.operate(oid, op));
+  ASSERT_EQ(0, ioctx.operate(oid_t, op));
 
   librados::ObjectReadOperation *rop = new_rop(ioctx);
 
@@ -135,21 +135,21 @@ TEST(cls_rgw, test_statelog_basic)
   int total_count = 0;
   for (int j = 0; j < 2; j++) {
     string marker;
-    string obj;
+    string oid;
     string cid = client_id[j];
     string op_id;
 
     bufferlist obl;
 
-    cls_statelog_list(*rop, cid, op_id, obj, marker, 1, entries, &marker, &truncated);
-    ASSERT_EQ(0, ioctx.operate(oid, rop, &obl));
+    cls_statelog_list(*rop, cid, op_id, oid, marker, 1, entries, &marker, &truncated);
+    ASSERT_EQ(0, ioctx.operate(oid_t, rop, &obl));
     ASSERT_EQ(1, (int)entries.size());
 
     reset_rop(&rop, ioctx);
     marker.clear();
-    cls_statelog_list(*rop, cid, op_id, obj, marker, 0, entries, &marker, &truncated);
+    cls_statelog_list(*rop, cid, op_id, oid, marker, 0, entries, &marker, &truncated);
     obl.clear();
-    ASSERT_EQ(0, ioctx.operate(oid, rop, &obl));
+    ASSERT_EQ(0, ioctx.operate(oid_t, rop, &obl));
 
     ASSERT_EQ(5, (int)entries.size());
     ASSERT_EQ(0, (int)truncated);
@@ -163,8 +163,8 @@ TEST(cls_rgw, test_statelog_basic)
     /* verify correct object */
     for (int i = 0; i < num_ops / 2; i++, total_count++) {
       string ret_obj = emap[op_ids[total_count]];
-      string obj = get_obj_name(total_count / 2);
-      ASSERT_EQ(0, ret_obj.compare(obj));
+      string oid = get_obj_name(total_count / 2);
+      ASSERT_EQ(0, ret_obj.compare(oid));
     }
   }
 
@@ -173,20 +173,20 @@ TEST(cls_rgw, test_statelog_basic)
   total_count = 0;
   for (int i = 0; i < num_ops; i++) {
     string marker;
-    string obj = get_obj_name(i / 2);
+    string oid = get_obj_name(i / 2);
     string cid;
     string op_id;
     bufferlist obl;
 
     reset_rop(&rop, ioctx);
-    cls_statelog_list(*rop, cid, op_id, obj, marker, 0, entries, &marker, &truncated);
-    ASSERT_EQ(0, ioctx.operate(oid, rop, &obl));
+    cls_statelog_list(*rop, cid, op_id, oid, marker, 0, entries, &marker, &truncated);
+    ASSERT_EQ(0, ioctx.operate(oid_t, rop, &obl));
     ASSERT_EQ(2, (int)entries.size());
   }
 
   /* search everything */
 
-  get_all_entries(ioctx, oid, entries, 10);
+  get_all_entries(ioctx, oid_t, entries, 10);
 
   /* now remove an entry */
   cls_statelog_entry e = entries.front();
@@ -194,16 +194,16 @@ TEST(cls_rgw, test_statelog_basic)
 
   reset_op(&op, ioctx);
   cls_statelog_remove_by_client(*op, e.client_id, e.op_id);
-  ASSERT_EQ(0, ioctx.operate(oid, op));
+  ASSERT_EQ(0, ioctx.operate(oid_t, op));
 
-  get_all_entries(ioctx, oid, entries, 9);
+  get_all_entries(ioctx, oid_t, entries, 9);
 
-  get_entries_by_object(ioctx, oid, entries, e.object, e.op_id, 0);
-  get_entries_by_client_id(ioctx, oid, entries, e.client_id, e.op_id, 0);
+  get_entries_by_object(ioctx, oid_t, entries, e.object, e.op_id, 0);
+  get_entries_by_client_id(ioctx, oid_t, entries, e.client_id, e.op_id, 0);
 
   string empty_str;
-  get_entries_by_client_id(ioctx, oid, entries, e.client_id, empty_str, 4);
-  get_entries_by_object(ioctx, oid, entries, e.object, empty_str, 1);
+  get_entries_by_client_id(ioctx, oid_t, entries, e.client_id, empty_str, 4);
+  get_entries_by_object(ioctx, oid_t, entries, e.object, empty_str, 1);
   delete op;
   delete rop;
 }

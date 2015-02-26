@@ -126,9 +126,9 @@ int main(int argc, char **argv)
 
   for (uint64_t num = 0; num < vm["num-objects"].as<unsigned>(); ++num) {
     unsigned col_num = num % vm["num-colls"].as<unsigned>();
-    stringstream coll, obj;
+    stringstream coll, oid;
     coll << "collection_" << col_num;
-    obj << "obj_" << num;
+    oid << "obj_" << num;
     if (num == col_num) {
       std::cout << "collection " << coll.str() << std::endl;
       string coll_str(
@@ -141,7 +141,7 @@ int main(int argc, char **argv)
 	return 1;
       }
     }
-    objects.insert(coll.str() + "/" + obj.str());
+    objects.insert(coll.str() + "/" + oid.str());
   }
   string meta_str(vm["filestore-path"].as<string>() + string("/meta"));
   int r = ::mkdir(

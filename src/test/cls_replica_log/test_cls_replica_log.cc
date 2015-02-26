@@ -21,7 +21,7 @@ public:
   librados::Rados rados;
   librados::IoCtx ioctx;
   string volume_name;
-  string oid;
+  string oid_t;
   string entity;
   string marker;
   ceph::real_time time;
@@ -32,8 +32,8 @@ public:
     volume_name = get_temp_volume_name();
     ASSERT_EQ("", create_one_volume_pp(volume_name, rados));
     ASSERT_EQ(0, rados.ioctx_create(volume_name.c_str(), ioctx));
-    oid = "obj";
-    ASSERT_EQ(0, ioctx.create(oid, true));
+    oid_t = "oid";
+    ASSERT_EQ(0, ioctx.create(oid_t, true));
   }
 
   void add_marker() {
@@ -45,7 +45,7 @@ public:
     cls_replica_log_prepare_marker(progress, entity, marker, time, &entries);
     librados::ObjectWriteOperation opw(ioctx);
     cls_replica_log_update_bound(opw, progress);
-    ASSERT_EQ(0, ioctx.operate(oid, &opw));
+    ASSERT_EQ(0, ioctx.operate(oid_t, &opw));
   }
 };
 
@@ -56,7 +56,7 @@ TEST_F(cls_replica_log_Test, test_set_get_marker)
   string reply_position_marker;
   ceph::real_time reply_time;
   list<cls_replica_log_progress_marker> return_progress_list;
-  ASSERT_EQ(0, cls_replica_log_get_bounds(ioctx, oid, reply_position_marker,
+  ASSERT_EQ(0, cls_replica_log_get_bounds(ioctx, oid_t, reply_position_marker,
 					  reply_time, return_progress_list));
 
   ASSERT_EQ(reply_position_marker, marker);
@@ -85,7 +85,7 @@ TEST_F(cls_replica_log_Test, test_bad_update)
   cls_replica_log_prepare_marker(bad_marker, entity, marker, time, &entries);
   librados::ObjectWriteOperation badw(ioctx);
   cls_replica_log_update_bound(badw, bad_marker);
-  ASSERT_EQ(-EINVAL, ioctx.operate(oid, &badw));
+  ASSERT_EQ(-EINVAL, ioctx.operate(oid_t, &badw));
 }
 
 TEST_F(cls_replica_log_Test, test_bad_delete)
@@ -94,7 +94,7 @@ TEST_F(cls_replica_log_Test, test_bad_delete)
 
   librados::ObjectWriteOperation badd(ioctx);
   cls_replica_log_delete_bound(badd, entity);
-  ASSERT_EQ(-ENOTEMPTY, ioctx.operate(oid, &badd));
+  ASSERT_EQ(-ENOTEMPTY, ioctx.operate(oid_t, &badd));
 }
 
 TEST_F(cls_replica_log_Test, test_good_delete)
@@ -104,15 +104,15 @@ TEST_F(cls_replica_log_Test, test_good_delete)
   librados::ObjectWriteOperation opc(ioctx);
   progress.items.clear();
   cls_replica_log_update_bound(opc, progress);
-  ASSERT_EQ(0, ioctx.operate(oid, &opc));
+  ASSERT_EQ(0, ioctx.operate(oid_t, &opc));
   librados::ObjectWriteOperation opd(ioctx);
   cls_replica_log_delete_bound(opd, entity);
-  ASSERT_EQ(0, ioctx.operate(oid, &opd));
+  ASSERT_EQ(0, ioctx.operate(oid_t, &opd));
 
   string reply_position_marker;
   ceph::real_time reply_time;
   list<cls_replica_log_progress_marker> return_progress_list;
-  ASSERT_EQ(0, cls_replica_log_get_bounds(ioctx, oid, reply_position_marker,
+  ASSERT_EQ(0, cls_replica_log_get_bounds(ioctx, oid_t, reply_position_marker,
 					  reply_time, return_progress_list));
   ASSERT_EQ((unsigned)0, return_progress_list.size());
 }
@@ -123,7 +123,7 @@ TEST_F(cls_replica_log_Test, test_bad_get)
   ceph::real_time reply_time;
   list<cls_replica_log_progress_marker> return_progress_list;
   ASSERT_EQ(-ENOENT,
-	    cls_replica_log_get_bounds(ioctx, oid, reply_position_marker,
+	    cls_replica_log_get_bounds(ioctx, oid_t, reply_position_marker,
 				       reply_time, return_progress_list));
 }
 
@@ -134,19 +134,19 @@ TEST_F(cls_replica_log_Test, test_double_delete)
   librados::ObjectWriteOperation opc(ioctx);
   progress.items.clear();
   cls_replica_log_update_bound(opc, progress);
-  ASSERT_EQ(0, ioctx.operate(oid, &opc));
+  ASSERT_EQ(0, ioctx.operate(oid_t, &opc));
   librados::ObjectWriteOperation opd(ioctx);
   cls_replica_log_delete_bound(opd, entity);
-  ASSERT_EQ(0, ioctx.operate(oid, &opd));
+  ASSERT_EQ(0, ioctx.operate(oid_t, &opd));
 
   librados::ObjectWriteOperation opd2(ioctx);
   cls_replica_log_delete_bound(opd2, entity);
-  ASSERT_EQ(0, ioctx.operate(oid, &opd2));
+  ASSERT_EQ(0, ioctx.operate(oid_t, &opd2));
 
   string reply_position_marker;
   ceph::real_time reply_time;
   list<cls_replica_log_progress_marker> return_progress_list;
-  ASSERT_EQ(0, cls_replica_log_get_bounds(ioctx, oid, reply_position_marker,
+  ASSERT_EQ(0, cls_replica_log_get_bounds(ioctx, oid_t, reply_position_marker,
 					  reply_time, return_progress_list));
   ASSERT_EQ((unsigned)0, return_progress_list.size());
 

@@ -63,7 +63,7 @@ void cls_log_trim(librados::ObjectWriteOperation& op,
   op.exec("log", "trim", in);
 }
 
-int cls_log_trim(librados::IoCtx& io_ctx, const string& oid,
+int cls_log_trim(librados::IoCtx& io_ctx, const string& oid_t,
 		 const ceph::real_time& from_time,
 		 const ceph::real_time& to_time,
 		 const string& from_marker, const string& to_marker)
@@ -75,7 +75,7 @@ int cls_log_trim(librados::IoCtx& io_ctx, const string& oid,
 
     cls_log_trim(op, from_time, to_time, from_marker, to_marker);
 
-    int r = io_ctx.operate(oid, &op);
+    int r = io_ctx.operate(oid_t, &op);
     if (r == -ENODATA)
       done = true;
     else if (r < 0)

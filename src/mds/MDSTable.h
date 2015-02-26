@@ -31,7 +31,7 @@ class MDSTable {
   const char *table_name;
   bool per_mds;
 
-  oid get_object_name();
+  oid_t get_object_name();
 
   static const int STATE_UNDEF	 = 0;
   static const int STATE_OPENING = 1;

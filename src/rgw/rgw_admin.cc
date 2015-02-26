@@ -1601,23 +1601,23 @@ int main(int argc, char **argv)
       return usage();
     }
 
-    string oid;
+    string oid_t;
     if (!object.empty()) {
-      oid = object;
+      oid_t = object;
     } else {
-      oid = date;
-      oid += "-";
-      oid += bucket_id;
-      oid += "-";
-      oid += string(bucket.name);
+      oid_t = date;
+      oid_t += "-";
+      oid_t += bucket_id;
+      oid_t += "-";
+      oid_t += string(bucket.name);
     }
 
     if (opt_cmd == OPT_LOG_SHOW) {
       RGWAccessHandle h;
 
-      int r = store->log_show_init(oid, &h);
+      int r = store->log_show_init(oid_t, &h);
       if (r < 0) {
-	cerr << "error opening log " << oid << ": " << cpp_strerror(-r) << std::endl;
+	cerr << "error opening log " << oid_t << ": " << cpp_strerror(-r) << std::endl;
 	return -r;
       }
 
@@ -1629,7 +1629,7 @@ int main(int argc, char **argv)
       // peek at first entry to get bucket metadata
       r = store->log_show_next(h, &entry);
       if (r < 0) {
-	cerr << "error reading log " << oid << ": " << cpp_strerror(-r) << std::endl;
+	cerr << "error reading log " << oid_t << ": " << cpp_strerror(-r) << std::endl;
 	return -r;
       }
       formatter->dump_string("bucket_id", entry.bucket_id);
@@ -1666,7 +1666,7 @@ next:
       } while (r > 0);
 
       if (r < 0) {
-	cerr << "error reading log " << oid << ": " << cpp_strerror(-r) << std::endl;
+	cerr << "error reading log " << oid_t << ": " << cpp_strerror(-r) << std::endl;
 	return -r;
       }
       if (show_log_entries)
@@ -1685,9 +1685,9 @@ next:
       cout << std::endl;
     }
     if (opt_cmd == OPT_LOG_RM) {
-      int r = store->log_remove(oid);
+      int r = store->log_remove(oid_t);
       if (r < 0) {
-	cerr << "error removing log " << oid << ": " << cpp_strerror(-r) << std::endl;
+	cerr << "error removing log " << oid_t << ": " << cpp_strerror(-r) << std::endl;
 	return -r;
       }
     }
@@ -1838,13 +1838,13 @@ next:
       cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
       return -ret;
     }
-    rgw_obj obj(bucket, object);
+    rgw_obj oid(bucket, object);
 
     void *handle;
     uint64_t obj_size;
     map<string, bufferlist> attrs;
     void *obj_ctx = store->create_context(NULL);
-    ret = store->prepare_get_obj(obj_ctx, obj, NULL, NULL, &attrs, NULL,
+    ret = store->prepare_get_obj(obj_ctx, oid, NULL, NULL, &attrs, NULL,
 				 NULL, NULL, NULL, NULL, NULL, &obj_size, NULL, &handle, NULL);
     store->finish_get_obj(&handle);
     store->destroy_context(obj_ctx);
@@ -1916,8 +1916,8 @@ next:
 	list<cls_rgw_obj>::iterator liter;
 	cls_rgw_obj_chain& chain = info.chain;
 	for (liter = chain.objs.begin(); liter != chain.objs.end(); ++liter) {
-	  cls_rgw_obj& obj = *liter;
-	  encode_json("obj", obj, formatter);
+	  cls_rgw_obj& oid = *liter;
+	  encode_json("oid", obj, formatter);
 	}
 	formatter->close_section(); // objs
 	formatter->close_section(); // obj_chain

@@ -87,10 +87,10 @@ run()
   RETURN1_IF_NONZERO(rados_ioctx_create(cl, m_volume_name.c_str(), &io_ctx));
 
   for (int i = 0; i < m_num_objects; ++i) {
-    char oid[128];
-    snprintf(oid, sizeof(oid), "%d%s", i, m_suffix.c_str());
+    char oid_t[128];
+    snprintf(oid_t, sizeof(oid_t), "%d%s", i, m_suffix.c_str());
     std::string buf(get_random_buf(256));
-    int ret = rados_write(io_ctx, oid, buf.c_str(), buf.size(), 0);
+    int ret = rados_write(io_ctx, oid_t, buf.c_str(), buf.size(), 0);
     if (ret != 0) {
       printf("%s: rados_write error %d\n", get_id_str(), ret);
       return ret;

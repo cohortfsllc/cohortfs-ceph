@@ -112,7 +112,7 @@ int run_get_last_op(std::string& filestore_path, std::string& journal_path)
   }
 
   coll_t txn_coll("meta");
-  oid txn_object("txn");
+  oid_t txn_object("txn");
   bufferlist bl;
   store->read(txn_coll, txn_object, 0, 100, bl);
   int32_t txn = 0;

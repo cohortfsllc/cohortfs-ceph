@@ -24,10 +24,10 @@ void RGWReplicaBounds::dump(Formatter *f) const
   encode_json("markers", markers, f);
 }
 
-void RGWReplicaBounds::decode_json(JSONObj *obj) {
-  JSONDecoder::decode_json("marker", marker, obj);
-  JSONDecoder::decode_json("oldest_time", oldest_time, obj);
-  JSONDecoder::decode_json("markers", markers, obj);
+void RGWReplicaBounds::decode_json(JSONObj *oid) {
+  JSONDecoder::decode_json("marker", marker, oid);
+  JSONDecoder::decode_json("oldest_time", oldest_time, oid);
+  JSONDecoder::decode_json("markers", markers, oid);
 }
 
 RGWReplicaLogger::RGWReplicaLogger(RGWRados *_store) :
@@ -51,7 +51,7 @@ int RGWReplicaLogger::open_ioctx(librados::IoCtx& ctx, const string& pool)
   return r;
 }
 
-int RGWReplicaLogger::update_bound(const string& oid, const string& pool,
+int RGWReplicaLogger::update_bound(const string& oid_t, const string& pool,
 				   const string& daemon_id,
 				   const string& marker, const utime_t& time,
 				   const list<RGWReplicaItemMarker> *entries)
@@ -70,10 +70,10 @@ int RGWReplicaLogger::update_bound(const string& oid, const string& pool,
 
   librados::ObjectWriteOperation opw;
   cls_replica_log_update_bound(opw, progress);
-  return ioctx.operate(oid, &opw);
+  return ioctx.operate(oid_t, &opw);
 }
 
-int RGWReplicaLogger::delete_bound(const string& oid, const string& pool,
+int RGWReplicaLogger::delete_bound(const string& oid_t, const string& pool,
 				   const string& daemon_id)
 {
   librados::IoCtx ioctx;
@@ -84,10 +84,10 @@ int RGWReplicaLogger::delete_bound(const string& oid, const string& pool,
 
   librados::ObjectWriteOperation opw;
   cls_replica_log_delete_bound(opw, daemon_id);
-  return ioctx.operate(oid, &opw);
+  return ioctx.operate(oid_t, &opw);
 }
 
-int RGWReplicaLogger::get_bounds(const string& oid, const string& pool,
+int RGWReplicaLogger::get_bounds(const string& oid_t, const string& pool,
 				 RGWReplicaBounds& bounds)
 {
   librados::IoCtx ioctx;
@@ -96,7 +96,7 @@ int RGWReplicaLogger::get_bounds(const string& oid, const string& pool,
     return r;
   }
 
-  return cls_replica_log_get_bounds(ioctx, oid, bounds.marker, bounds.oldest_time, bounds.markers);
+  return cls_replica_log_get_bounds(ioctx, oid_t, bounds.marker, bounds.oldest_time, bounds.markers);
 }
 
 RGWReplicaObjectLogger::
@@ -116,9 +116,9 @@ int RGWReplicaObjectLogger::create_log_objects(int shards)
     return r;
   }
   for (int i = 0; i < shards; ++i) {
-    string oid;
-    get_shard_oid(i, oid);
-    r = ioctx.create(oid, false);
+    string oid_t;
+    get_shard_oid(i, oid_t);
+    r = ioctx.create(oid_t, false);
     if (r < 0)
       return r;
   }

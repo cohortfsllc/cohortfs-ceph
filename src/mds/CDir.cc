@@ -1265,7 +1265,7 @@ class C_Dir_OMAP_Fetched : public Context {
 void CDir::_omap_fetch(const string& want_dn)
 {
   C_Dir_OMAP_Fetched *fin = new C_Dir_OMAP_Fetched(this, want_dn);
-  oid obj = get_ondisk_object();
+  oid_t oid = get_ondisk_object();
   VolumeRef volume(cache->mds->get_metadata_volume());
   if (!volume) {
     dout(0) << "Unable to attach volume " << volume << dendl;
@@ -1278,7 +1278,7 @@ void CDir::_omap_fetch(const string& want_dn)
   }
   rd->omap_get_header(&fin->hdrbl, &fin->ret1);
   rd->omap_get_vals("", "", (uint64_t)-1, fin->omap, &fin->ret2);
-  cache->mds->objecter->read(obj, volume, rd, NULL, 0,
+  cache->mds->objecter->read(oid, volume, rd, NULL, 0,
 			     fin);
 }
 
@@ -1424,7 +1424,7 @@ void CDir::_omap_commit(int op_prio)
 
   C_GatherBuilder gather(new C_Dir_Committed(this, get_version()));
 
-  oid obj = get_ondisk_object();
+  oid_t oid = get_ondisk_object();
   VolumeRef volume(cache->mds->get_metadata_volume());
   if (!volume) {
     dout(0) << "Unable to attach volume " << volume << dendl;
@@ -1465,7 +1465,7 @@ void CDir::_omap_commit(int op_prio)
       if (!to_remove.empty())
 	op->omap_rm_keys(to_remove);
 
-      cache->mds->objecter->mutate(obj, volume, op,
+      cache->mds->objecter->mutate(oid, volume, op,
 				   ceph::real_clock::now(), 0, NULL,
 				   gather.new_sub());
 
@@ -1500,7 +1500,7 @@ void CDir::_omap_commit(int op_prio)
   if (!to_remove.empty())
     op->omap_rm_keys(to_remove);
 
-  cache->mds->objecter->mutate(obj, volume, op, ceph::real_clock::now(),
+  cache->mds->objecter->mutate(oid, volume, op, ceph::real_clock::now(),
 			       0, NULL, gather.new_sub());
 
   gather.activate();

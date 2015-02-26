@@ -36,7 +36,7 @@ using namespace librados;
 
 static void usage(void)
 {
-  cerr << "--oid	   set object id to 'operate' on" << std::endl;
+  cerr << "--oid_t	   set object id to 'operate' on" << std::endl;
   cerr << "--volume	   set volume to 'operate' on" << std::endl;
 }
 
@@ -50,14 +50,14 @@ int main(int argc, const char **argv)
   common_init_finish(cct);
 
   string val;
-  string oid("ceph_test_object");
+  string oid_t("ceph_test_object");
   string volume_name("test_volume");
   for (std::vector<const char*>::iterator i = args.begin(); i != args.end(); ) {
     if (ceph_argparse_double_dash(args, i)) {
       break;
     }
-    else if (ceph_argparse_witharg(args, i, &val, "--oid", "-o", (char*)NULL)) {
-      oid = val;
+    else if (ceph_argparse_witharg(args, i, &val, "--oid_t", "-o", (char*)NULL)) {
+      oid_t = val;
     }
     else if (ceph_argparse_witharg(args, i, &val, "--volume", "-p", (char*)NULL)) {
       volume_name = val;
@@ -102,7 +102,7 @@ int main(int argc, const char **argv)
   librados::ObjectWriteOperation o(ioctx);
   librados::ObjectWriteOperation op(ioctx);
   op.create(true);
-  ret = ioctx.operate(oid, &op);
+  ret = ioctx.operate(oid_t, &op);
   if (ret) {
      cerr << "ioctx.operate failed: ret = " << ret << std::endl;
      return 1;

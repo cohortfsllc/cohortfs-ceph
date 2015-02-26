@@ -154,7 +154,7 @@ void rgw_bi_log_entry::generate_test_instances(list<rgw_bi_log_entry*>& ls)
   ls.push_back(new rgw_bi_log_entry);
   ls.push_back(new rgw_bi_log_entry);
   ls.back()->id = "midf";
-  ls.back()->object = "obj";
+  ls.back()->object = "oid";
   ls.back()->timestamp = utime_t(2, 3);
   ls.back()->index_ver = 4323;
   ls.back()->tag = "tagasdfds";
@@ -251,7 +251,7 @@ void rgw_bucket_dir::dump(Formatter *f) const
   map<string, struct rgw_bucket_dir_entry>::const_iterator iter = m.begin();
   f->open_array_section("map");
   for (; iter != m.end(); ++iter) {
-    f->dump_string("obj", iter->first);
+    f->dump_string("oid", iter->first);
     f->open_object_section("dir_entry");
     iter->second.dump(f);
     f->close_section();

@@ -46,7 +46,7 @@ struct cls_replica_log_item_marker {
   }
 
   void dump(Formatter *f) const;
-  void decode_json(JSONObj *obj);
+  void decode_json(JSONObj *oid);
   static void generate_test_instances(
     std::list<cls_replica_log_item_marker*>&ls);
 };
@@ -89,7 +89,7 @@ struct cls_replica_log_progress_marker {
   }
 
   void dump(Formatter *f) const;
-  void decode_json(JSONObj *obj);
+  void decode_json(JSONObj *oid);
   static void generate_test_instances(std::list<cls_replica_log_progress_marker*>& ls);
 };
 WRITE_CLASS_ENCODER(cls_replica_log_progress_marker)
@@ -191,7 +191,7 @@ public:
   }
 
   void dump(Formatter *f) const;
-  void decode_json(JSONObj *obj);
+  void decode_json(JSONObj *oid);
   static void generate_test_instances(std::list<cls_replica_log_bound*>& ls);
 };
 WRITE_CLASS_ENCODER(cls_replica_log_bound);

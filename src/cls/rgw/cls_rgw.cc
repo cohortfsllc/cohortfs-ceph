@@ -105,7 +105,7 @@ static void bi_log_index_key(cls_method_context_t hctx, string& key, string& id,
   key.append(id);
 }
 
-static int log_index_operation(cls_method_context_t hctx, string& obj, RGWModifyOp op,
+static int log_index_operation(cls_method_context_t hctx, string& oid, RGWModifyOp op,
 			       string& tag, utime_t& timestamp,
 			       rgw_bucket_entry_ver& ver, RGWPendingState state, uint64_t index_ver,
 			       string& max_marker)
@@ -114,7 +114,7 @@ static int log_index_operation(cls_method_context_t hctx, string& obj, RGWModify
 
   struct rgw_bi_log_entry entry;
 
-  entry.object = obj;
+  entry.object = oid;
   entry.timestamp = timestamp;
   entry.op = op;
   entry.ver = ver;

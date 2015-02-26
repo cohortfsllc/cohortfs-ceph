@@ -107,7 +107,7 @@ namespace librbd {
 
   int read_header_bl(librados::IoCtx& io_ctx, const std::string& md_oid,
 		     ceph::bufferlist& header);
-  int notify_change(librados::IoCtx& io_ctx, const std::string& oid,
+  int notify_change(librados::IoCtx& io_ctx, const std::string& oid_t,
 		    ImageCtx *ictx);
   int read_header(librados::IoCtx& io_ctx, const std::string& md_oid,
 		  struct rbd_obj_header_ondisk *header);

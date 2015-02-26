@@ -17,7 +17,7 @@
 
 class ObjectVersioner {
  public:
-  pobject_t oid;
+  pobject_t oid_t;
 
   void get_versions(list<version_t>& ls);
   version_t head();	 // newest

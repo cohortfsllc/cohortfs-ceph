@@ -32,7 +32,7 @@ struct librados::IoCtxImpl {
   RadosClient *client;
   std::shared_ptr<const Volume> volume;
   uint64_t assert_ver;
-  map<oid, uint64_t> assert_src_version;
+  map<oid_t, uint64_t> assert_src_version;
   version_t last_objver;
   uint32_t notify_timeout;
 
@@ -82,48 +82,48 @@ struct librados::IoCtxImpl {
   std::unique_ptr<ObjOp> prepare_assert_ops();
 
   // io
-  int create(const oid& obj, bool exclusive);
-  int create(const oid& obj, bool exclusive, const std::string& category);
-  int write(const oid& obj, bufferlist& bl, size_t len, uint64_t off);
-  int append(const oid& obj, bufferlist& bl, size_t len);
-  int write_full(const oid& obj, bufferlist& bl);
-  int read(const oid& obj, bufferlist& bl, size_t len, uint64_t off);
-  int sparse_read(const oid& obj, std::map<uint64_t,uint64_t>& m,
+  int create(const oid_t& oid, bool exclusive);
+  int create(const oid_t& oid, bool exclusive, const std::string& category);
+  int write(const oid_t& oid, bufferlist& bl, size_t len, uint64_t off);
+  int append(const oid_t& oid, bufferlist& bl, size_t len);
+  int write_full(const oid_t& oid, bufferlist& bl);
+  int read(const oid_t& oid, bufferlist& bl, size_t len, uint64_t off);
+  int sparse_read(const oid_t& oid, std::map<uint64_t,uint64_t>& m,
 		  bufferlist& bl, size_t len, uint64_t off);
-  int remove(const oid& obj);
-  int stat(const oid& obj, uint64_t *psize, time_t *pmtime);
-  int trunc(const oid& obj, uint64_t size);
+  int remove(const oid_t& oid);
+  int stat(const oid_t& oid, uint64_t *psize, time_t *pmtime);
+  int trunc(const oid_t& oid, uint64_t size);
 
-  int exec(const oid& obj, const char *cls, const char *method, bufferlist& inbl, bufferlist& outbl);
+  int exec(const oid_t& oid, const char *cls, const char *method, bufferlist& inbl, bufferlist& outbl);
 
-  int getxattr(const oid& obj, const char *name, bufferlist& bl);
-  int setxattr(const oid& obj, const char *name, bufferlist& bl);
-  int getxattrs(const oid& obj, map<string, bufferlist>& attrset);
-  int rmxattr(const oid& obj, const char *name);
+  int getxattr(const oid_t& oid, const char *name, bufferlist& bl);
+  int setxattr(const oid_t& oid, const char *name, bufferlist& bl);
+  int getxattrs(const oid_t& oid, map<string, bufferlist>& attrset);
+  int rmxattr(const oid_t& oid, const char *name);
 
-  int operate(const oid& obj, std::unique_ptr<ObjOp>& o, time_t *pmtime,
+  int operate(const oid_t& oid, std::unique_ptr<ObjOp>& o, time_t *pmtime,
 	      int flags=0);
-  int operate(const oid& obj, librados::ObjectOperation *op,
+  int operate(const oid_t& oid, librados::ObjectOperation *op,
 	      time_t *pmtime, int flags=0) {
-    return operate(obj, op->impl, pmtime, flags);
+    return operate(oid, op->impl, pmtime, flags);
   }
-  int operate_read(const oid& obj, std::unique_ptr<ObjOp>& o,
+  int operate_read(const oid_t& oid, std::unique_ptr<ObjOp>& o,
 		   bufferlist *pbl, int flags=0);
-  int operate_read(const oid& obj, librados::ObjectOperation *op,
+  int operate_read(const oid_t& oid, librados::ObjectOperation *op,
 		   bufferlist *pbl, int flags=0) {
-    return operate_read(obj, op->impl, pbl, flags);
+    return operate_read(oid, op->impl, pbl, flags);
   }
-  int aio_operate(const oid& obj, std::unique_ptr<ObjOp>& o,
+  int aio_operate(const oid_t& oid, std::unique_ptr<ObjOp>& o,
 		  AioCompletionImpl *c, int flags);
-  int aio_operate(const oid& obj, librados::ObjectOperation *op,
+  int aio_operate(const oid_t& oid, librados::ObjectOperation *op,
 		  AioCompletionImpl *c, int flags) {
-    return aio_operate(obj, op->impl, c, flags);
+    return aio_operate(oid, op->impl, c, flags);
   }
-  int aio_operate_read(const oid& obj, std::unique_ptr<ObjOp>& o,
+  int aio_operate_read(const oid_t& oid, std::unique_ptr<ObjOp>& o,
 		       AioCompletionImpl *c, int flags, bufferlist *pbl);
-  int aio_operate_read(const oid& obj, librados::ObjectOperation *op,
+  int aio_operate_read(const oid_t& oid, librados::ObjectOperation *op,
 		       AioCompletionImpl *c, int flags, bufferlist *pbl) {
-    return aio_operate_read(obj, op->impl, c, flags, pbl);
+    return aio_operate_read(oid, op->impl, c, flags, pbl);
   }
 
   struct C_aio_Ack : public Context {
@@ -146,39 +146,39 @@ struct librados::IoCtxImpl {
     void finish(int r);
   };
 
-  int aio_read(const oid obj, AioCompletionImpl *c,
+  int aio_read(const oid_t oid, AioCompletionImpl *c,
 	       bufferlist *pbl, size_t len, uint64_t off);
-  int aio_read(oid obj, AioCompletionImpl *c,
+  int aio_read(oid_t oid, AioCompletionImpl *c,
 	       char *buf, size_t len, uint64_t off);
-  int aio_sparse_read(const oid obj, AioCompletionImpl *c,
+  int aio_sparse_read(const oid_t oid, AioCompletionImpl *c,
 		      std::map<uint64_t,uint64_t> *m, bufferlist *data_bl,
 		      size_t len, uint64_t off);
-  int aio_write(const oid &obj, AioCompletionImpl *c,
+  int aio_write(const oid_t &oid, AioCompletionImpl *c,
 		const bufferlist& bl, size_t len, uint64_t off);
-  int aio_append(const oid &obj, AioCompletionImpl *c,
+  int aio_append(const oid_t &oid, AioCompletionImpl *c,
 		 const bufferlist& bl, size_t len);
-  int aio_write_full(const oid &obj, AioCompletionImpl *c,
+  int aio_write_full(const oid_t &oid, AioCompletionImpl *c,
 		     const bufferlist& bl);
-  int aio_remove(const oid &obj, AioCompletionImpl *c);
-  int aio_exec(const oid& obj, AioCompletionImpl *c, const char *cls,
+  int aio_remove(const oid_t &oid, AioCompletionImpl *c);
+  int aio_exec(const oid_t& oid, AioCompletionImpl *c, const char *cls,
 	       const char *method, bufferlist& inbl, bufferlist *outbl);
-  int aio_stat(const oid& obj, AioCompletionImpl *c, uint64_t *psize, time_t *pmtime);
+  int aio_stat(const oid_t& oid, AioCompletionImpl *c, uint64_t *psize, time_t *pmtime);
 
   void set_sync_op_version(version_t ver);
-  int watch(const oid& obj, uint64_t ver, uint64_t *cookie, librados::WatchCtx *ctx);
-  int unwatch(const oid& obj, uint64_t cookie);
-  int notify(const oid& obj, bufferlist& bl);
+  int watch(const oid_t& oid, uint64_t ver, uint64_t *cookie, librados::WatchCtx *ctx);
+  int unwatch(const oid_t& oid, uint64_t cookie);
+  int notify(const oid_t& oid, bufferlist& bl);
   int _notify_ack(
-    const oid& obj, uint64_t notify_id, uint64_t ver,
+    const oid_t& oid, uint64_t notify_id, uint64_t ver,
     uint64_t cookie);
 
-  int set_alloc_hint(const oid& obj,
+  int set_alloc_hint(const oid_t& oid,
 		     uint64_t expected_object_size,
 		     uint64_t expected_write_size);
 
   version_t last_version();
   void set_assert_version(uint64_t ver);
-  void set_assert_src_version(const oid& obj, uint64_t ver);
+  void set_assert_src_version(const oid_t& oid, uint64_t ver);
   void set_notify_timeout(uint32_t timeout);
   uint64_t op_size() const {
     return volume->op_size();
@@ -205,7 +205,7 @@ namespace librados {
    */
 struct WatchNotifyInfo : public RefCountedWaitObject {
   IoCtxImpl *io_ctx_impl; // parent
-  const oid obj; // the object
+  const oid_t oid; // the object
   uint64_t linger_id; // we use this to unlinger when we are done
   uint64_t cookie; // callback cookie
 
@@ -221,9 +221,9 @@ struct WatchNotifyInfo : public RefCountedWaitObject {
   int *notify_rval;
 
   WatchNotifyInfo(IoCtxImpl *io_ctx_impl_,
-		  const oid& _oc)
+		  const oid_t& _oc)
     : io_ctx_impl(io_ctx_impl_),
-      obj(_oc),
+      oid(_oc),
       linger_id(0),
       cookie(0),
       watch_ctx(NULL),

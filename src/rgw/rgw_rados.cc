@@ -82,8 +82,8 @@ void RGWDefaultRegionInfo::dump(Formatter *f) const {
   encode_json("default_region", default_region, f);
 }
 
-void RGWDefaultRegionInfo::decode_json(JSONObj *obj) {
-  JSONDecoder::decode_json("default_region", default_region, obj);
+void RGWDefaultRegionInfo::decode_json(JSONObj *oid) {
+  JSONDecoder::decode_json("default_region", default_region, oid);
 }
 
 int RGWRegion::get_pool_name(CephContext *cct, string *pool_name)
@@ -107,14 +107,14 @@ int RGWRegion::read_default(RGWDefaultRegionInfo& default_info)
     return ret;
   }
 
-  string oid = cct->_conf->rgw_default_region_info_oid;
-  if (oid.empty()) {
-    oid = default_region_info_oid;
+  string oid_t = cct->_conf->rgw_default_region_info_oid;
+  if (oid_t.empty()) {
+    oid_t = default_region_info_oid;
   }
 
   rgw_bucket pool(pool_name.c_str());
   bufferlist bl;
-  ret = rgw_get_system_obj(store, NULL, pool, oid, bl, NULL, NULL);
+  ret = rgw_get_system_obj(store, NULL, pool, oid_t, bl, NULL, NULL);
   if (ret < 0)
     return ret;
 
@@ -122,7 +122,7 @@ int RGWRegion::read_default(RGWDefaultRegionInfo& default_info)
     bufferlist::iterator iter = bl.begin();
     ::decode(default_info, iter);
   } catch (buffer::error& err) {
-    derr << "error decoding data from " << pool << ":" << oid << dendl;
+    derr << "error decoding data from " << pool << ":" << oid_t << dendl;
     return -EIO;
   }
 
@@ -138,9 +138,9 @@ int RGWRegion::set_as_default()
   if (ret < 0)
     return ret;
 
-  string oid = cct->_conf->rgw_default_region_info_oid;
-  if (oid.empty()) {
-    oid = default_region_info_oid;
+  string oid_t = cct->_conf->rgw_default_region_info_oid;
+  if (oid_t.empty()) {
+    oid_t = default_region_info_oid;
   }
 
   rgw_bucket pool(pool_name.c_str());
@@ -151,7 +151,7 @@ int RGWRegion::set_as_default()
 
   ::encode(default_info, bl);
 
-  ret = rgw_put_system_obj(store, pool, oid, bl.c_str(), bl.length(), false, NULL, 0, NULL);
+  ret = rgw_put_system_obj(store, pool, oid_t, bl.c_str(), bl.length(), false, NULL, 0, NULL);
   if (ret < 0)
     return ret;
 
@@ -210,11 +210,11 @@ int RGWRegion::read_info(const string& region_name)
 
   name = region_name;
 
-  string oid = region_info_oid_prefix + name;
+  string oid_t = region_info_oid_prefix + name;
 
-  ret = rgw_get_system_obj(store, NULL, pool, oid, bl, NULL, NULL);
+  ret = rgw_get_system_obj(store, NULL, pool, oid_t, bl, NULL, NULL);
   if (ret < 0) {
-    lderr(cct) << "failed reading region info from " << pool << ":" << oid << ": " << cpp_strerror(-ret) << dendl;
+    lderr(cct) << "failed reading region info from " << pool << ":" << oid_t << ": " << cpp_strerror(-ret) << dendl;
     return ret;
   }
 
@@ -222,7 +222,7 @@ int RGWRegion::read_info(const string& region_name)
     bufferlist::iterator iter = bl.begin();
     ::decode(*this, iter);
   } catch (buffer::error& err) {
-    ldout(cct, 0) << "ERROR: failed to decode region from " << pool << ":" << oid << dendl;
+    ldout(cct, 0) << "ERROR: failed to decode region from " << pool << ":" << oid_t << dendl;
     return -EIO;
   }
 
@@ -272,11 +272,11 @@ int RGWRegion::store_info(bool exclusive)
 
   rgw_bucket pool(pool_name.c_str());
 
-  string oid = region_info_oid_prefix + name;
+  string oid_t = region_info_oid_prefix + name;
 
   bufferlist bl;
   ::encode(*this, bl);
-  ret = rgw_put_system_obj(store, pool, oid, bl.c_str(), bl.length(), exclusive, NULL, 0, NULL);
+  ret = rgw_put_system_obj(store, pool, oid_t, bl.c_str(), bl.length(), exclusive, NULL, 0, NULL);
 
   return ret;
 }
@@ -303,8 +303,8 @@ void RGWZoneParams::init_default(RGWRados *store)
   user_uid_pool = ".users.uid";
 
   /* check for old pools config */
-  rgw_obj obj(domain_root, avail_pools);
-  int r =  store->obj_stat(NULL, obj, NULL, NULL, NULL, NULL, NULL, NULL);
+  rgw_obj oid(domain_root, avail_pools);
+  int r =  store->obj_stat(NULL, oid, NULL, NULL, NULL, NULL, NULL, NULL);
   if (r < 0) {
     ldout(store->ctx(), 0) << "couldn't find old data placement pools config, setting up new ones for the zone" << dendl;
     /* a new system, let's set new placement info */
@@ -353,8 +353,8 @@ int RGWZoneParams::init(CephContext *cct, RGWRados *store, RGWRegion& region)
   rgw_bucket pool(pool_name.c_str());
   bufferlist bl;
 
-  string oid = zone_info_oid_prefix + name;
-  ret = rgw_get_system_obj(store, NULL, pool, oid, bl, NULL, NULL);
+  string oid_t = zone_info_oid_prefix + name;
+  ret = rgw_get_system_obj(store, NULL, pool, oid_t, bl, NULL, NULL);
   if (ret < 0)
     return ret;
 
@@ -362,7 +362,7 @@ int RGWZoneParams::init(CephContext *cct, RGWRados *store, RGWRegion& region)
     bufferlist::iterator iter = bl.begin();
     ::decode(*this, iter);
   } catch (buffer::error& err) {
-    ldout(cct, 0) << "ERROR: failed to decode zone info from " << pool << ":" << oid << dendl;
+    ldout(cct, 0) << "ERROR: failed to decode zone info from " << pool << ":" << oid_t << dendl;
     return -EIO;
   }
 
@@ -383,11 +383,11 @@ int RGWZoneParams::store_info(CephContext *cct, RGWRados *store, RGWRegion& regi
     return ret;
 
   rgw_bucket pool(pool_name.c_str());
-  string oid = zone_info_oid_prefix + name;
+  string oid_t = zone_info_oid_prefix + name;
 
   bufferlist bl;
   ::encode(*this, bl);
-  ret = rgw_put_system_obj(store, pool, oid, bl.c_str(), bl.length(), false, NULL, 0, NULL);
+  ret = rgw_put_system_obj(store, pool, oid_t, bl.c_str(), bl.length(), false, NULL, 0, NULL);
 
   return ret;
 }
@@ -423,25 +423,25 @@ void RGWRegionMap::decode(bufferlist::iterator& bl) {
   }
 }
 
-void RGWRegionMap::get_params(CephContext *cct, string& pool_name, string& oid)
+void RGWRegionMap::get_params(CephContext *cct, string& pool_name, string& oid_t)
 {
   pool_name = cct->_conf->rgw_zone_root_pool;
   if (pool_name.empty()) {
     pool_name = RGW_DEFAULT_ZONE_ROOT_POOL;
   }
-  oid = region_map_oid;
+  oid_t = region_map_oid;
 }
 
 int RGWRegionMap::read(CephContext *cct, RGWRados *store)
 {
-  string pool_name, oid;
+  string pool_name, oid_t;
 
-  get_params(cct, pool_name, oid);
+  get_params(cct, pool_name, oid_t);
 
   rgw_bucket pool(pool_name.c_str());
 
   bufferlist bl;
-  int ret = rgw_get_system_obj(store, NULL, pool, oid, bl, NULL, NULL);
+  int ret = rgw_get_system_obj(store, NULL, pool, oid_t, bl, NULL, NULL);
   if (ret < 0)
     return ret;
 
@@ -451,7 +451,7 @@ int RGWRegionMap::read(CephContext *cct, RGWRados *store)
     bufferlist::iterator iter = bl.begin();
     ::decode(*this, iter);
   } catch (buffer::error& err) {
-    ldout(cct, 0) << "ERROR: failed to decode region map info from " << pool << ":" << oid << dendl;
+    ldout(cct, 0) << "ERROR: failed to decode region map info from " << pool << ":" << oid_t << dendl;
     return -EIO;
   }
 
@@ -460,9 +460,9 @@ int RGWRegionMap::read(CephContext *cct, RGWRados *store)
 
 int RGWRegionMap::store(CephContext *cct, RGWRados *store)
 {
-  string pool_name, oid;
+  string pool_name, oid_t;
 
-  get_params(cct, pool_name, oid);
+  get_params(cct, pool_name, oid_t);
 
   rgw_bucket pool(pool_name.c_str());
 
@@ -470,7 +470,7 @@ int RGWRegionMap::store(CephContext *cct, RGWRados *store)
 
   bufferlist bl;
   ::encode(*this, bl);
-  int ret = rgw_put_system_obj(store, pool, oid, bl.c_str(), bl.length(), false, NULL, 0, NULL);
+  int ret = rgw_put_system_obj(store, pool, oid_t, bl.c_str(), bl.length(), false, NULL, 0, NULL);
 
   return ret;
 }
@@ -802,7 +802,7 @@ const RGWObjManifest::obj_iterator& RGWObjManifest::obj_end()
 
 void RGWObjManifest::get_implicit_location(uint64_t cur_part_id, uint64_t cur_stripe, uint64_t ofs, rgw_obj *location)
 {
-  string oid = prefix;
+  string oid_t = prefix;
   string ns;
 
   if (!cur_part_id) {
@@ -812,18 +812,18 @@ void RGWObjManifest::get_implicit_location(uint64_t cur_part_id, uint64_t cur_st
     } else {
       char buf[16];
       snprintf(buf, sizeof(buf), "%d", (int)cur_stripe);
-      oid += buf;
+      oid_t += buf;
       ns = shadow_ns;
     }
   } else {
     char buf[32];
     if (cur_stripe == 0) {
       snprintf(buf, sizeof(buf), ".%d", (int)cur_part_id);
-      oid += buf;
+      oid_t += buf;
       ns= RGW_OBJ_NS_MULTIPART;
     } else {
       snprintf(buf, sizeof(buf), ".%d_%d", (int)cur_part_id, (int)cur_stripe);
-      oid += buf;
+      oid_t += buf;
       ns = shadow_ns;
     }
   }
@@ -836,7 +836,7 @@ void RGWObjManifest::get_implicit_location(uint64_t cur_part_id, uint64_t cur_st
     bucket = &head_obj.bucket;
   }
 
-  location->init_ns(*bucket, oid, ns);
+  location->init_ns(*bucket, oid_t, ns);
 }
 
 RGWObjManifest::obj_iterator RGWObjManifest::obj_find(uint64_t ofs)
@@ -1001,10 +1001,10 @@ RGWPutObjProcessor::~RGWPutObjProcessor()
 
   list<rgw_obj>::iterator iter;
   for (iter = objs.begin(); iter != objs.end(); ++iter) {
-    rgw_obj& obj = *iter;
-    int r = store->delete_obj(obj_ctx, bucket_owner, obj);
+    rgw_obj& oid = *iter;
+    int r = store->delete_obj(obj_ctx, bucket_owner, oid);
     if (r < 0 && r != -ENOENT) {
-      ldout(store->ctx(), 0) << "WARNING: failed to remove obj (" << obj << "), leaked" << dendl;
+      ldout(store->ctx(), 0) << "WARNING: failed to remove oid (" << obj << "), leaked" << dendl;
     }
   }
 }
@@ -1013,7 +1013,7 @@ int RGWPutObjProcessor_Plain::prepare(RGWRados *store, void *obj_ctx)
 {
   RGWPutObjProcessor::prepare(store, obj_ctx);
 
-  obj.init(bucket, obj_str);
+  oid.init(bucket, obj_str);
 
   return 0;
 };
@@ -1037,21 +1037,21 @@ int RGWPutObjProcessor_Plain::do_complete(string& etag, time_t *mtime, time_t se
   params.data = &data;
   params.owner = bucket_owner;
 
-  int r = store->put_obj_meta(obj_ctx, obj, data.length(), attrs,
+  int r = store->put_obj_meta(obj_ctx, oid, data.length(), attrs,
 			      RGW_OBJ_CATEGORY_MAIN, PUT_OBJ_CREATE,
 			      params);
   return r;
 }
 
 
-int RGWPutObjProcessor_Aio::handle_obj_data(rgw_obj& obj, bufferlist& bl, off_t ofs, off_t abs_ofs, void **phandle)
+int RGWPutObjProcessor_Aio::handle_obj_data(rgw_obj& oid, bufferlist& bl, off_t ofs, off_t abs_ofs, void **phandle)
 {
   if ((uint64_t)abs_ofs + bl.length() > obj_len)
     obj_len = abs_ofs + bl.length();
 
   // For the first call pass -1 as the offset to
   // do a write_full.
-  int r = store->aio_put_obj_data(NULL, obj,
+  int r = store->aio_put_obj_data(NULL, oid,
 				     bl,
 				     ((ofs != 0) ? ofs : -1),
 				     false, phandle);
@@ -1278,29 +1278,29 @@ public:
   }
 };
 
-RGWObjState *RGWRadosCtx::get_state(rgw_obj& obj) {
-  if (obj.object.size()) {
-    return &objs_state[obj];
+RGWObjState *RGWRadosCtx::get_state(rgw_obj& oid) {
+  if (oid.object.size()) {
+    return &objs_state[oid];
   } else {
-    rgw_obj new_obj(store->zone.domain_root, obj.bucket.name);
+    rgw_obj new_obj(store->zone.domain_root, oid.bucket.name);
     return &objs_state[new_obj];
   }
 }
 
-void RGWRadosCtx::set_atomic(rgw_obj& obj) {
-  if (obj.object.size()) {
-    objs_state[obj].is_atomic = true;
+void RGWRadosCtx::set_atomic(rgw_obj& oid) {
+  if (oid.object.size()) {
+    objs_state[oid].is_atomic = true;
   } else {
-    rgw_obj new_obj(store->zone.domain_root, obj.bucket.name);
+    rgw_obj new_obj(store->zone.domain_root, oid.bucket.name);
     objs_state[new_obj].is_atomic = true;
   }
 }
 
-void RGWRadosCtx::set_prefetch_data(rgw_obj& obj) {
-  if (obj.object.size()) {
-    objs_state[obj].prefetch_data = true;
+void RGWRadosCtx::set_prefetch_data(rgw_obj& oid) {
+  if (oid.object.size()) {
+    objs_state[oid].prefetch_data = true;
   } else {
-    rgw_obj new_obj(store->zone.domain_root, obj.bucket.name);
+    rgw_obj new_obj(store->zone.domain_root, oid.bucket.name);
     objs_state[new_obj].prefetch_data = true;
   }
 }
@@ -1688,11 +1688,11 @@ int RGWRados::list_buckets_init(RGWAccessHandle *handle)
 
 /**
  * get the next bucket in the listing.
- * obj is filled in,
+ * oid is filled in,
  * handle is updated.
  * returns 0 on success, -ERR# otherwise.
  */
-int RGWRados::list_buckets_next(RGWObjEnt& obj, RGWAccessHandle *handle)
+int RGWRados::list_buckets_next(RGWObjEnt& oid, RGWAccessHandle *handle)
 {
 //  librados::ObjectIterator *state = (librados::ObjectIterator *)*handle;
 
@@ -1702,9 +1702,9 @@ int RGWRados::list_buckets_next(RGWObjEnt& obj, RGWAccessHandle *handle)
 //	return -ENOENT;
 //    }
 
-//    obj.name = (*state)->first;
+//    oid.name = (*state)->first;
 //    (*state)++;
-//  } while (obj.name[0] == '.'); /* skip all entries starting with '.' */
+//  } while (oid.name[0] == '.'); /* skip all entries starting with '.' */
 
   return 0;
 }
@@ -1992,7 +1992,7 @@ void RGWRados::time_log_prepare_entry(cls_log_entry& entry, const utime_t& ut, s
   cls_log_add_prepare_entry(entry, ut, section, key, bl);
 }
 
-int RGWRados::time_log_add(const string& oid, const utime_t& ut, const string& section, const string& key, bufferlist& bl)
+int RGWRados::time_log_add(const string& oid_t, const utime_t& ut, const string& section, const string& key, bufferlist& bl)
 {
   librados::IoCtx io_ctx;
 
@@ -2013,11 +2013,11 @@ int RGWRados::time_log_add(const string& oid, const utime_t& ut, const string& s
   ObjectWriteOperation op;
   cls_log_add(op, ut, section, key, bl);
 
-  r = io_ctx.operate(oid, &op);
+  r = io_ctx.operate(oid_t, &op);
   return r;
 }
 
-int RGWRados::time_log_add(const string& oid, list<cls_log_entry>& entries)
+int RGWRados::time_log_add(const string& oid_t, list<cls_log_entry>& entries)
 {
   librados::IoCtx io_ctx;
 
@@ -2038,11 +2038,11 @@ int RGWRados::time_log_add(const string& oid, list<cls_log_entry>& entries)
   ObjectWriteOperation op;
   cls_log_add(op, entries);
 
-  r = io_ctx.operate(oid, &op);
+  r = io_ctx.operate(oid_t, &op);
   return r;
 }
 
-int RGWRados::time_log_list(const string& oid, utime_t& start_time, utime_t& end_time,
+int RGWRados::time_log_list(const string& oid_t, utime_t& start_time, utime_t& end_time,
 			    int max_entries, list<cls_log_entry>& entries,
 			    const string& marker,
 			    string *out_marker,
@@ -2061,14 +2061,14 @@ int RGWRados::time_log_list(const string& oid, utime_t& start_time, utime_t& end
 
   bufferlist obl;
 
-  int ret = io_ctx.operate(oid, &op, &obl);
+  int ret = io_ctx.operate(oid_t, &op, &obl);
   if (ret < 0)
     return ret;
 
   return 0;
 }
 
-int RGWRados::time_log_info(const string& oid, cls_log_header *header)
+int RGWRados::time_log_info(const string& oid_t, cls_log_header *header)
 {
   librados::IoCtx io_ctx;
 
@@ -2082,14 +2082,14 @@ int RGWRados::time_log_info(const string& oid, cls_log_header *header)
 
   bufferlist obl;
 
-  int ret = io_ctx.operate(oid, &op, &obl);
+  int ret = io_ctx.operate(oid_t, &op, &obl);
   if (ret < 0)
     return ret;
 
   return 0;
 }
 
-int RGWRados::time_log_trim(const string& oid, const utime_t& start_time, const utime_t& end_time,
+int RGWRados::time_log_trim(const string& oid_t, const utime_t& start_time, const utime_t& end_time,
 			    const string& from_marker, const string& to_marker)
 {
   librados::IoCtx io_ctx;
@@ -2099,11 +2099,11 @@ int RGWRados::time_log_trim(const string& oid, const utime_t& start_time, const 
   if (r < 0)
     return r;
 
-  return cls_log_trim(io_ctx, oid, start_time, end_time, from_marker, to_marker);
+  return cls_log_trim(io_ctx, oid_t, start_time, end_time, from_marker, to_marker);
 }
 
 
-int RGWRados::lock_exclusive(rgw_bucket& pool, const string& oid, utime_t& duration,
+int RGWRados::lock_exclusive(rgw_bucket& pool, const string& oid_t, utime_t& duration,
 			     string& zone_id, string& owner_id) {
   librados::IoCtx io_ctx;
 
@@ -2119,10 +2119,10 @@ int RGWRados::lock_exclusive(rgw_bucket& pool, const string& oid, utime_t& durat
   l.set_tag(zone_id);
   l.set_renew(true);
 
-  return l.lock_exclusive(&io_ctx, oid);
+  return l.lock_exclusive(&io_ctx, oid_t);
 }
 
-int RGWRados::unlock(rgw_bucket& pool, const string& oid, string& zone_id, string& owner_id) {
+int RGWRados::unlock(rgw_bucket& pool, const string& oid_t, string& zone_id, string& owner_id) {
   librados::IoCtx io_ctx;
 
   const char *pool_name = pool.name.c_str();
@@ -2135,7 +2135,7 @@ int RGWRados::unlock(rgw_bucket& pool, const string& oid, string& zone_id, strin
   l.set_tag(zone_id);
   l.set_cookie(owner_id);
 
-  return l.unlock(&io_ctx, oid);
+  return l.unlock(&io_ctx, oid_t);
 }
 
 int RGWRados::decode_policy(bufferlist& bl, ACLOwner *owner)
@@ -2219,10 +2219,10 @@ int RGWRados::list_objects(rgw_bucket& bucket, int max, string& prefix, string& 
 
     std::map<string, RGWObjEnt>::iterator eiter;
     for (eiter = ent_map.begin(); eiter != ent_map.end(); ++eiter) {
-      string obj = eiter->first;
-      string key = obj;
+      string oid = eiter->first;
+      string key = oid;
 
-      bool check_ns = rgw_obj::translate_raw_obj_to_obj_in_ns(obj, ns);
+      bool check_ns = rgw_obj::translate_raw_obj_to_obj_in_ns(oid, ns);
 
       if (enforce_ns && !check_ns) {
 	if (!ns.empty()) {
@@ -2235,23 +2235,23 @@ int RGWRados::list_objects(rgw_bucket& bucket, int max, string& prefix, string& 
 	continue;
       }
 
-      if (filter && !filter->filter(obj, key))
+      if (filter && !filter->filter(oid, key))
 	continue;
 
-      if (prefix.size() &&  ((obj).compare(0, prefix.size(), prefix) != 0))
+      if (prefix.size() &&  ((oid).compare(0, prefix.size(), prefix) != 0))
 	continue;
 
       if (!delim.empty()) {
-	int delim_pos = obj.find(delim, prefix.size());
+	int delim_pos = oid.find(delim, prefix.size());
 
 	if (delim_pos >= 0) {
-	  common_prefixes[obj.substr(0, delim_pos + 1)] = true;
+	  common_prefixes[oid.substr(0, delim_pos + 1)] = true;
 	  continue;
 	}
       }
 
       RGWObjEnt ent = eiter->second;
-      ent.name = obj;
+      ent.name = oid;
       ent.ns = ns;
       result.push_back(ent);
       count++;
@@ -2525,7 +2525,7 @@ int RGWRados::select_legacy_bucket_placement(const string& bucket_name, rgw_buck
   string pool_name;
   bool write_map = false;
 
-  rgw_obj obj(zone.domain_root, avail_pools);
+  rgw_obj oid(zone.domain_root, avail_pools);
 
   int ret = rgw_get_system_obj(this, NULL, zone.domain_root, avail_pools, map_bl, NULL, NULL);
   if (ret < 0) {
@@ -2542,7 +2542,7 @@ int RGWRados::select_legacy_bucket_placement(const string& bucket_name, rgw_buck
 read_omap:
   if (m.empty()) {
     bufferlist header;
-    ret = omap_get_all(obj, header, m);
+    ret = omap_get_all(oid, header, m);
 
     write_map = true;
   }
@@ -2555,7 +2555,7 @@ read_omap:
     ret = create_pools(names, retcodes);
     if (ret < 0)
       return ret;
-    ret = omap_set(obj, default_storage_pool, bl);
+    ret = omap_set(oid, default_storage_pool, bl);
     if (ret < 0)
       return ret;
     m[default_storage_pool] = bl;
@@ -2564,7 +2564,7 @@ read_omap:
   if (write_map) {
     bufferlist new_bl;
     ::encode(m, new_bl);
-    ret = put_obj_data(NULL, obj, new_bl.c_str(), -1, new_bl.length(), false);
+    ret = put_obj_data(NULL, oid, new_bl.c_str(), -1, new_bl.length(), false);
     if (ret < 0) {
       ldout(cct, 0) << "WARNING: could not save avail pools map info ret=" << ret << dendl;
     }
@@ -2600,14 +2600,14 @@ int RGWRados::update_placement_map()
 {
   bufferlist header;
   map<string, bufferlist> m;
-  rgw_obj obj(zone.domain_root, avail_pools);
-  int ret = omap_get_all(obj, header, m);
+  rgw_obj oid(zone.domain_root, avail_pools);
+  int ret = omap_get_all(oid, header, m);
   if (ret < 0)
     return ret;
 
   bufferlist new_bl;
   ::encode(m, new_bl);
-  ret = put_obj_data(NULL, obj, new_bl.c_str(), -1, new_bl.length(), false);
+  ret = put_obj_data(NULL, oid, new_bl.c_str(), -1, new_bl.length(), false);
   if (ret < 0) {
     ldout(cct, 0) << "WARNING: could not save avail pools map info ret=" << ret << dendl;
   }
@@ -2621,9 +2621,9 @@ int RGWRados::add_bucket_placement(std::string& new_pool)
   if (ret < 0) // DNE, or something
     return ret;
 
-  rgw_obj obj(zone.domain_root, avail_pools);
+  rgw_obj oid(zone.domain_root, avail_pools);
   bufferlist empty_bl;
-  ret = omap_set(obj, new_pool, empty_bl);
+  ret = omap_set(oid, new_pool, empty_bl);
 
   // don't care about return value
   update_placement_map();
@@ -2633,8 +2633,8 @@ int RGWRados::add_bucket_placement(std::string& new_pool)
 
 int RGWRados::remove_bucket_placement(std::string& old_pool)
 {
-  rgw_obj obj(zone.domain_root, avail_pools);
-  int ret = omap_del(obj, old_pool);
+  rgw_obj oid(zone.domain_root, avail_pools);
+  int ret = omap_del(oid, old_pool);
 
   // don't care about return value
   update_placement_map();
@@ -2647,8 +2647,8 @@ int RGWRados::list_placement_set(set<string>& names)
   bufferlist header;
   map<string, bufferlist> m;
 
-  rgw_obj obj(zone.domain_root, avail_pools);
-  int ret = omap_get_all(obj, header, m);
+  rgw_obj oid(zone.domain_root, avail_pools);
+  int ret = omap_get_all(oid, header, m);
   if (ret < 0)
     return ret;
 
@@ -2696,15 +2696,15 @@ int RGWRados::create_pools(vector<string>& names, vector<int>& retcodes)
 }
 
 
-int RGWRados::get_obj_ioctx(const rgw_obj& obj, librados::IoCtx *ioctx)
+int RGWRados::get_obj_ioctx(const rgw_obj& oid, librados::IoCtx *ioctx)
 {
   rgw_bucket bucket;
-  string oid, key;
-  get_obj_bucket_and_oid_key(obj, bucket, oid, key);
+  string oid_t, key;
+  get_obj_bucket_and_oid_key(oid, bucket, oid_t, key);
 
   int r;
 
-  if (!obj.is_in_extra_data()) {
+  if (!oid.is_in_extra_data()) {
     r = open_bucket_data_ctx(bucket, *ioctx);
   } else {
     r = open_bucket_data_extra_ctx(bucket, *ioctx);
@@ -2717,18 +2717,18 @@ int RGWRados::get_obj_ioctx(const rgw_obj& obj, librados::IoCtx *ioctx)
   return 0;
 }
 
-int RGWRados::get_obj_ref(const rgw_obj& obj, rgw_rados_ref *ref, rgw_bucket *bucket, bool ref_system_obj)
+int RGWRados::get_obj_ref(const rgw_obj& oid, rgw_rados_ref *ref, rgw_bucket *bucket, bool ref_system_obj)
 {
-  get_obj_bucket_and_oid_key(obj, *bucket, ref->oid, ref->key);
+  get_obj_bucket_and_oid_key(oid, *bucket, ref->oid_t, ref->key);
 
   int r;
 
-  if (ref_system_obj && ref->oid.empty()) {
-    ref->oid = bucket->name;
+  if (ref_system_obj && ref->oid_t.empty()) {
+    ref->oid_t = bucket->name;
     *bucket = zone.domain_root;
 
     r = open_bucket_data_ctx(*bucket, ref->ioctx);
-  } else if (!obj.is_in_extra_data()) {
+  } else if (!oid.is_in_extra_data()) {
     r = open_bucket_data_ctx(*bucket, ref->ioctx);
   } else {
     r = open_bucket_data_extra_ctx(*bucket, ref->ioctx);
@@ -2744,7 +2744,7 @@ int RGWRados::get_obj_ref(const rgw_obj& obj, rgw_rados_ref *ref, rgw_bucket *bu
 /**
  * Write/overwrite an object to the bucket storage.
  * bucket: the bucket to store the object in
- * obj: the object name/key
+ * oid: the object name/key
  * data: the object contents/value
  * size: the amount of data to write (data must be this long)
  * mtime: if non-NULL, writes the given mtime to the bucket storage
@@ -2752,7 +2752,7 @@ int RGWRados::get_obj_ref(const rgw_obj& obj, rgw_rados_ref *ref, rgw_bucket *bu
  * exclusive: create object exclusively
  * Returns: 0 on success, -ERR# otherwise.
  */
-int RGWRados::put_obj_meta_impl(void *ctx, rgw_obj& obj,  uint64_t size,
+int RGWRados::put_obj_meta_impl(void *ctx, rgw_obj& oid,  uint64_t size,
 		  time_t *mtime, map<string, bufferlist>& attrs,
 		  RGWObjCategory category, int flags,
 		  map<string, bufferlist>* rmattrs,
@@ -2767,7 +2767,7 @@ int RGWRados::put_obj_meta_impl(void *ctx, rgw_obj& obj,  uint64_t size,
 {
   rgw_bucket bucket;
   rgw_rados_ref ref;
-  int r = get_obj_ref(obj, &ref, &bucket);
+  int r = get_obj_ref(oid, &ref, &bucket);
   if (r < 0)
     return r;
 
@@ -2783,7 +2783,7 @@ int RGWRados::put_obj_meta_impl(void *ctx, rgw_obj& obj,  uint64_t size,
     op.create(true); // exclusive create
   } else {
     bool reset_obj = (flags & PUT_OBJ_CREATE) != 0;
-    r = prepare_atomic_for_write(rctx, obj, op, &state, reset_obj, ptag);
+    r = prepare_atomic_for_write(rctx, oid, op, &state, reset_obj, ptag);
     if (r < 0)
       return r;
   }
@@ -2860,11 +2860,11 @@ int RGWRados::put_obj_meta_impl(void *ctx, rgw_obj& obj,  uint64_t size,
     index_tag = state->write_tag;
   }
 
-  r = prepare_update_index(NULL, bucket, CLS_RGW_OP_ADD, obj, index_tag);
+  r = prepare_update_index(NULL, bucket, CLS_RGW_OP_ADD, oid, index_tag);
   if (r < 0)
     return r;
 
-  r = ref.ioctx.operate(ref.oid, &op);
+  r = ref.ioctx.operate(ref.oid_t, &op);
   if (r < 0) /* we can expect to get -ECANCELED if object was replaced under,
 		or -ENOENT if was removed, or -EEXIST if it did not exist
 		before and now it does */
@@ -2877,12 +2877,12 @@ int RGWRados::put_obj_meta_impl(void *ctx, rgw_obj& obj,  uint64_t size,
   epoch = ref.ioctx.get_last_version();
   poolid = ref.ioctx.get_id();
 
-  r = complete_atomic_overwrite(rctx, state, obj);
+  r = complete_atomic_overwrite(rctx, state, oid);
   if (r < 0) {
     ldout(cct, 0) << "ERROR: complete_atomic_overwrite returned r=" << r << dendl;
   }
 
-  r = complete_update_index(bucket, obj.object, index_tag, poolid, epoch, size,
+  r = complete_update_index(bucket, oid.object, index_tag, poolid, epoch, size,
 			    ut, etag, content_type, &acl_bl, category, remove_objs);
   if (r < 0)
     goto done_cancel;
@@ -2899,7 +2899,7 @@ int RGWRados::put_obj_meta_impl(void *ctx, rgw_obj& obj,  uint64_t size,
   return 0;
 
 done_cancel:
-  int ret = complete_update_index_cancel(bucket, obj.object, index_tag);
+  int ret = complete_update_index_cancel(bucket, oid.object, index_tag);
   if (ret < 0) {
     ldout(cct, 0) << "ERROR: complete_update_index_cancel() returned ret=" << ret << dendl;
   }
@@ -2920,7 +2920,7 @@ done_cancel:
 /**
  * Write/overwrite an object to the bucket storage.
  * bucket: the bucket to store the object in
- * obj: the object name/key
+ * oid: the object name/key
  * data: the object contents/value
  * offset: the offet to write to in the object
  *	   If this is -1, we will overwrite the whole object.
@@ -2928,25 +2928,25 @@ done_cancel:
  * attrs: all the given attrs are written to bucket storage for the given object
  * Returns: 0 on success, -ERR# otherwise.
  */
-int RGWRados::put_obj_data(void *ctx, rgw_obj& obj,
+int RGWRados::put_obj_data(void *ctx, rgw_obj& oid,
 			   const char *data, off_t ofs, size_t len, bool exclusive)
 {
   void *handle;
   bufferlist bl;
   bl.append(data, len);
-  int r = aio_put_obj_data(ctx, obj, bl, ofs, exclusive, &handle);
+  int r = aio_put_obj_data(ctx, oid, bl, ofs, exclusive, &handle);
   if (r < 0)
     return r;
   return aio_wait(handle);
 }
 
-int RGWRados::aio_put_obj_data(void *ctx, rgw_obj& obj, bufferlist& bl,
+int RGWRados::aio_put_obj_data(void *ctx, rgw_obj& oid, bufferlist& bl,
 			       off_t ofs, bool exclusive,
 			       void **handle)
 {
   rgw_rados_ref ref;
   rgw_bucket bucket;
-  int r = get_obj_ref(obj, &ref, &bucket);
+  int r = get_obj_ref(oid, &ref, &bucket);
   if (r < 0) {
     return r;
   }
@@ -2964,7 +2964,7 @@ int RGWRados::aio_put_obj_data(void *ctx, rgw_obj& obj, bufferlist& bl,
   } else {
     op.write(ofs, bl);
   }
-  r = ref.ioctx.aio_operate(ref.oid, c, &op);
+  r = ref.ioctx.aio_operate(ref.oid_t, c, &op);
   if (r < 0)
     return r;
 
@@ -2988,7 +2988,7 @@ bool RGWRados::aio_completed(void *handle)
 
 class RGWRadosPutObj : public RGWGetDataCB
 {
-  rgw_obj obj;
+  rgw_obj oid;
   RGWPutObjProcessor_Atomic *processor;
   RGWOpStateSingleOp *opstate;
   void (*progress_cb)(off_t, void *);
@@ -3313,15 +3313,15 @@ set_err_state:
     if (tail_bucket.name.empty()) {
       manifest.set_tail_bucket(src_obj.bucket);
     }
-    string oid, key;
+    string oid_t, key;
     for (; miter != astate->manifest.obj_end(); ++miter) {
       ObjectWriteOperation op;
       cls_refcount_get(op, tag, true);
       const rgw_obj& loc = miter.get_location();
-      get_obj_bucket_and_oid_key(loc, bucket, oid, key);
+      get_obj_bucket_and_oid_key(loc, bucket, oid_t, key);
       ref.ioctx.locator_set_key(key);
 
-      ret = ref.ioctx.operate(oid, &op);
+      ret = ref.ioctx.operate(oid_t, &op);
       if (ret < 0)
 	goto done_ret;
 
@@ -3360,19 +3360,19 @@ done_ret:
   if (!copy_itself) {
     vector<rgw_obj>::iterator riter;
 
-    string oid, key;
+    string oid_t, key;
 
     /* rollback reference */
     for (riter = ref_objs.begin(); riter != ref_objs.end(); ++riter) {
       ObjectWriteOperation op;
       cls_refcount_put(op, tag, true);
 
-      get_obj_bucket_and_oid_key(*riter, bucket, oid, key);
+      get_obj_bucket_and_oid_key(*riter, bucket, oid_t, key);
       ref.ioctx.locator_set_key(key);
 
-      int r = ref.ioctx.operate(oid, &op);
+      int r = ref.ioctx.operate(oid_t, &op);
       if (r < 0) {
-	ldout(cct, 0) << "ERROR: cleanup after error failed to drop reference on obj=" << *riter << dendl;
+	ldout(cct, 0) << "ERROR: cleanup after error failed to drop reference on oid=" << *riter << dendl;
       }
     }
   }
@@ -3472,8 +3472,8 @@ done_err:
 int RGWRados::delete_bucket(rgw_bucket& bucket, RGWObjVersionTracker& objv_tracker)
 {
   librados::IoCtx index_ctx;
-  string oid;
-  int r = open_bucket_index(bucket, index_ctx, oid);
+  string oid_t;
+  int r = open_bucket_index(bucket, index_ctx, oid_t);
   if (r < 0)
     return r;
 
@@ -3490,11 +3490,11 @@ int RGWRados::delete_bucket(rgw_bucket& bucket, RGWObjVersionTracker& objv_track
 
     string ns;
     std::map<string, RGWObjEnt>::iterator eiter;
-    string obj;
+    string oid;
     for (eiter = ent_map.begin(); eiter != ent_map.end(); ++eiter) {
-      obj = eiter->first;
+      oid = eiter->first;
 
-      if (rgw_obj::translate_raw_obj_to_obj_in_ns(obj, ns))
+      if (rgw_obj::translate_raw_obj_to_obj_in_ns(oid, ns))
 	return -ENOTEMPTY;
     }
   } while (is_truncated);
@@ -3578,7 +3578,7 @@ int RGWRados::bucket_suspended(rgw_bucket& bucket, bool *suspended)
   return 0;
 }
 
-int RGWRados::complete_atomic_overwrite(RGWRadosCtx *rctx, RGWObjState *state, rgw_obj& obj)
+int RGWRados::complete_atomic_overwrite(RGWRadosCtx *rctx, RGWObjState *state, rgw_obj& oid)
 {
   if (!state || !state->has_manifest || state->keep_tail)
     return 0;
@@ -3587,12 +3587,12 @@ int RGWRados::complete_atomic_overwrite(RGWRadosCtx *rctx, RGWObjState *state, r
   RGWObjManifest::obj_iterator iter;
   for (iter = state->manifest.obj_begin(); iter != state->manifest.obj_end(); ++iter) {
     const rgw_obj& mobj = iter.get_location();
-    if (mobj == obj)
+    if (mobj == oid)
       continue;
-    string oid, key;
+    string oid_t, key;
     rgw_bucket bucket;
-    get_obj_bucket_and_oid_key(mobj, bucket, oid, key);
-    chain.push_obj(bucket.data_pool, oid, key);
+    get_obj_bucket_and_oid_key(mobj, bucket, oid_t, key);
+    chain.push_obj(bucket.data_pool, oid_t, key);
   }
 
   string tag = state->obj_tag.c_str();
@@ -3640,16 +3640,16 @@ int RGWRados::bucket_check_index(rgw_bucket& bucket,
 				 map<RGWObjCategory, RGWStorageStats> *calculated_stats)
 {
   librados::IoCtx index_ctx;
-  string oid;
+  string oid_t;
 
-  int ret = open_bucket_index(bucket, index_ctx, oid);
+  int ret = open_bucket_index(bucket, index_ctx, oid_t);
   if (ret < 0)
     return ret;
 
   rgw_bucket_dir_header existing_header;
   rgw_bucket_dir_header calculated_header;
 
-  ret = cls_rgw_bucket_check_index_op(index_ctx, oid, &existing_header, &calculated_header);
+  ret = cls_rgw_bucket_check_index_op(index_ctx, oid_t, &existing_header, &calculated_header);
   if (ret < 0)
     return ret;
 
@@ -3662,33 +3662,33 @@ int RGWRados::bucket_check_index(rgw_bucket& bucket,
 int RGWRados::bucket_rebuild_index(rgw_bucket& bucket)
 {
   librados::IoCtx index_ctx;
-  string oid;
+  string oid_t;
 
-  int ret = open_bucket_index(bucket, index_ctx, oid);
+  int ret = open_bucket_index(bucket, index_ctx, oid_t);
   if (ret < 0)
     return ret;
 
-  return cls_rgw_bucket_rebuild_index_op(index_ctx, oid);
+  return cls_rgw_bucket_rebuild_index_op(index_ctx, oid_t);
 }
 
 
-int RGWRados::defer_gc(void *ctx, rgw_obj& obj)
+int RGWRados::defer_gc(void *ctx, rgw_obj& oid)
 {
   RGWRadosCtx *rctx = static_cast<RGWRadosCtx *>(ctx);
   rgw_bucket bucket;
-  std::string oid, key;
-  get_obj_bucket_and_oid_key(obj, bucket, oid, key);
+  std::string oid_t, key;
+  get_obj_bucket_and_oid_key(oid, bucket, oid_t, key);
   if (!rctx)
     return 0;
 
   RGWObjState *state = NULL;
 
-  int r = get_obj_state(rctx, obj, &state, NULL);
+  int r = get_obj_state(rctx, oid, &state, NULL);
   if (r < 0)
     return r;
 
   if (!state->is_atomic) {
-    ldout(cct, 20) << "state for obj=" << obj << " is not atomic, not deferring gc operation" << dendl;
+    ldout(cct, 20) << "state for oid=" << obj << " is not atomic, not deferring gc operation" << dendl;
     return -EINVAL;
   }
 
@@ -3708,14 +3708,14 @@ int RGWRados::defer_gc(void *ctx, rgw_obj& obj)
 /**
  * Delete an object.
  * bucket: name of the bucket storing the object
- * obj: name of the object to delete
+ * oid: name of the object to delete
  * Returns: 0 on success, -ERR# otherwise.
  */
-int RGWRados::delete_obj_impl(void *ctx, const string& bucket_owner, rgw_obj& obj, RGWObjVersionTracker *objv_tracker)
+int RGWRados::delete_obj_impl(void *ctx, const string& bucket_owner, rgw_obj& oid, RGWObjVersionTracker *objv_tracker)
 {
   rgw_rados_ref ref;
   rgw_bucket bucket;
-  int r = get_obj_ref(obj, &ref, &bucket);
+  int r = get_obj_ref(oid, &ref, &bucket);
   if (r < 0) {
     return r;
   }
@@ -3724,14 +3724,14 @@ int RGWRados::delete_obj_impl(void *ctx, const string& bucket_owner, rgw_obj& ob
   ObjectWriteOperation op;
 
   RGWObjState *state;
-  r = prepare_atomic_for_write(rctx, obj, op, &state, false, NULL);
+  r = prepare_atomic_for_write(rctx, oid, op, &state, false, NULL);
   if (r < 0)
     return r;
 
   bool ret_not_existed = (state && !state->exists);
 
   string tag;
-  r = prepare_update_index(state, bucket, CLS_RGW_OP_DEL, obj, tag);
+  r = prepare_update_index(state, bucket, CLS_RGW_OP_DEL, oid, tag);
   if (r < 0)
     return r;
 
@@ -3740,21 +3740,21 @@ int RGWRados::delete_obj_impl(void *ctx, const string& bucket_owner, rgw_obj& ob
   }
 
   cls_refcount_put(op, tag, true);
-  r = ref.ioctx.operate(ref.oid, &op);
+  r = ref.ioctx.operate(ref.oid_t, &op);
   bool removed = (r >= 0);
 
   int64_t poolid = ref.ioctx.get_id();
   if (r >= 0 || r == -ENOENT) {
     uint64_t epoch = ref.ioctx.get_last_version();
-    r = complete_update_index_del(bucket, obj.object, tag, poolid, epoch);
+    r = complete_update_index_del(bucket, oid.object, tag, poolid, epoch);
   } else {
-    int ret = complete_update_index_cancel(bucket, obj.object, tag);
+    int ret = complete_update_index_cancel(bucket, oid.object, tag);
     if (ret < 0) {
       ldout(cct, 0) << "ERROR: complete_update_index_cancel returned ret=" << ret << dendl;
     }
   }
   if (removed) {
-    int ret = complete_atomic_overwrite(rctx, state, obj);
+    int ret = complete_atomic_overwrite(rctx, state, oid);
     if (ret < 0) {
       ldout(cct, 0) << "ERROR: complete_atomic_removal returned ret=" << ret << dendl;
     }
@@ -3777,37 +3777,37 @@ int RGWRados::delete_obj_impl(void *ctx, const string& bucket_owner, rgw_obj& ob
   return 0;
 }
 
-int RGWRados::delete_obj(void *ctx, const string& bucket_owner, rgw_obj& obj, RGWObjVersionTracker *objv_tracker)
+int RGWRados::delete_obj(void *ctx, const string& bucket_owner, rgw_obj& oid, RGWObjVersionTracker *objv_tracker)
 {
   int r;
 
-  r = delete_obj_impl(ctx, bucket_owner, obj, objv_tracker);
+  r = delete_obj_impl(ctx, bucket_owner, oid, objv_tracker);
   if (r == -ECANCELED)
     r = 0;
 
   return r;
 }
 
-int RGWRados::delete_system_obj(void *ctx, rgw_obj& obj, RGWObjVersionTracker *objv_tracker)
+int RGWRados::delete_system_obj(void *ctx, rgw_obj& oid, RGWObjVersionTracker *objv_tracker)
 {
   int r;
 
   string no_owner;
-  r = delete_obj_impl(ctx, no_owner, obj, objv_tracker);
+  r = delete_obj_impl(ctx, no_owner, oid, objv_tracker);
   if (r == -ECANCELED)
     r = 0;
 
   return r;
 }
 
-int RGWRados::delete_obj_index(rgw_obj& obj)
+int RGWRados::delete_obj_index(rgw_obj& oid)
 {
   rgw_bucket bucket;
-  std::string oid, key;
-  get_obj_bucket_and_oid_key(obj, bucket, oid, key);
+  std::string oid_t, key;
+  get_obj_bucket_and_oid_key(oid, bucket, oid_t, key);
 
   string tag;
-  int r = complete_update_index_del(bucket, obj.object, tag, -1 /* pool */, 0);
+  int r = complete_update_index_del(bucket, oid.object, tag, -1 /* pool */, 0);
 
   return r;
 }
@@ -3844,15 +3844,15 @@ static void generate_fake_tag(CephContext *cct, map<string, bufferlist>& attrset
   tag_bl.append(tag.c_str(), tag.size() + 1);
 }
 
-int RGWRados::get_obj_state(RGWRadosCtx *rctx, rgw_obj& obj, RGWObjState **state, RGWObjVersionTracker *objv_tracker)
+int RGWRados::get_obj_state(RGWRadosCtx *rctx, rgw_obj& oid, RGWObjState **state, RGWObjVersionTracker *objv_tracker)
 {
-  RGWObjState *s = rctx->get_state(obj);
-  ldout(cct, 20) << "get_obj_state: rctx=" << (void *)rctx << " obj=" << obj << " state=" << (void *)s << " s->prefetch_data=" << s->prefetch_data << dendl;
+  RGWObjState *s = rctx->get_state(oid);
+  ldout(cct, 20) << "get_obj_state: rctx=" << (void *)rctx << " oid=" << obj << " state=" << (void *)s << " s->prefetch_data=" << s->prefetch_data << dendl;
   *state = s;
   if (s->has_attrs)
     return 0;
 
-  int r = obj_stat(rctx, obj, &s->size, &s->mtime, &s->epoch, &s->attrset, (s->prefetch_data ? &s->data : NULL), objv_tracker);
+  int r = obj_stat(rctx, oid, &s->size, &s->mtime, &s->epoch, &s->attrset, (s->prefetch_data ? &s->data : NULL), objv_tracker);
   if (r == -ENOENT) {
     s->exists = false;
     s->has_attrs = true;
@@ -3910,16 +3910,16 @@ int RGWRados::get_obj_state(RGWRadosCtx *rctx, rgw_obj& obj, RGWObjState **state
 /**
  * Get the attributes for an object.
  * bucket: name of the bucket holding the object.
- * obj: name of the object
+ * oid: name of the object
  * name: name of the attr to retrieve
  * dest: bufferlist to store the result in
  * Returns: 0 on success, -ERR# otherwise.
  */
-int RGWRados::get_attr(void *ctx, rgw_obj& obj, const char *name, bufferlist& dest)
+int RGWRados::get_attr(void *ctx, rgw_obj& oid, const char *name, bufferlist& dest)
 {
   rgw_rados_ref ref;
   rgw_bucket bucket;
-  int r = get_obj_ref(obj, &ref, &bucket, true);
+  int r = get_obj_ref(oid, &ref, &bucket, true);
   if (r < 0) {
     return r;
   }
@@ -3927,7 +3927,7 @@ int RGWRados::get_attr(void *ctx, rgw_obj& obj, const char *name, bufferlist& de
 
   if (rctx) {
     RGWObjState *state;
-    r = get_obj_state(rctx, obj, &state, NULL);
+    r = get_obj_state(rctx, oid, &state, NULL);
     if (r < 0)
       return r;
     if (!state->exists)
@@ -3942,27 +3942,27 @@ int RGWRados::get_attr(void *ctx, rgw_obj& obj, const char *name, bufferlist& de
   int rval;
   op.getxattr(name, &dest, &rval);
 
-  r = ref.ioctx.operate(ref.oid, &op, NULL);
+  r = ref.ioctx.operate(ref.oid_t, &op, NULL);
   if (r < 0)
     return r;
 
   return 0;
 }
 
-int RGWRados::append_atomic_test(RGWRadosCtx *rctx, rgw_obj& obj,
+int RGWRados::append_atomic_test(RGWRadosCtx *rctx, rgw_obj& oid,
 			    ObjectOperation& op, RGWObjState **pstate)
 {
   if (!rctx)
     return 0;
 
-  int r = get_obj_state(rctx, obj, pstate, NULL);
+  int r = get_obj_state(rctx, oid, pstate, NULL);
   if (r < 0)
     return r;
 
   RGWObjState *state = *pstate;
 
   if (!state->is_atomic) {
-    ldout(cct, 20) << "state for obj=" << obj << " is not atomic, not appending atomic test" << dendl;
+    ldout(cct, 20) << "state for oid=" << obj << " is not atomic, not appending atomic test" << dendl;
     return 0;
   }
 
@@ -3974,11 +3974,11 @@ int RGWRados::append_atomic_test(RGWRadosCtx *rctx, rgw_obj& obj,
   return 0;
 }
 
-int RGWRados::prepare_atomic_for_write_impl(RGWRadosCtx *rctx, rgw_obj& obj,
+int RGWRados::prepare_atomic_for_write_impl(RGWRadosCtx *rctx, rgw_obj& oid,
 			    ObjectWriteOperation& op, RGWObjState **pstate,
 			    bool reset_obj, const string *ptag)
 {
-  int r = get_obj_state(rctx, obj, pstate, NULL);
+  int r = get_obj_state(rctx, oid, pstate, NULL);
   if (r < 0)
     return r;
 
@@ -4027,7 +4027,7 @@ int RGWRados::prepare_atomic_for_write_impl(RGWRadosCtx *rctx, rgw_obj& obj,
   return 0;
 }
 
-int RGWRados::prepare_atomic_for_write(RGWRadosCtx *rctx, rgw_obj& obj,
+int RGWRados::prepare_atomic_for_write(RGWRadosCtx *rctx, rgw_obj& oid,
 			    ObjectWriteOperation& op, RGWObjState **pstate,
 			    bool reset_obj, const string *ptag)
 {
@@ -4037,7 +4037,7 @@ int RGWRados::prepare_atomic_for_write(RGWRadosCtx *rctx, rgw_obj& obj,
   }
 
   int r;
-  r = prepare_atomic_for_write_impl(rctx, obj, op, pstate, reset_obj, ptag);
+  r = prepare_atomic_for_write_impl(rctx, oid, op, pstate, reset_obj, ptag);
 
   return r;
 }
@@ -4045,26 +4045,26 @@ int RGWRados::prepare_atomic_for_write(RGWRadosCtx *rctx, rgw_obj& obj,
 /**
  * Set an attr on an object.
  * bucket: name of the bucket holding the object
- * obj: name of the object to set the attr on
+ * oid: name of the object to set the attr on
  * name: the attr to set
  * bl: the contents of the attr
  * Returns: 0 on success, -ERR# otherwise.
  */
-int RGWRados::set_attr(void *ctx, rgw_obj& obj, const char *name, bufferlist& bl, RGWObjVersionTracker *objv_tracker)
+int RGWRados::set_attr(void *ctx, rgw_obj& oid, const char *name, bufferlist& bl, RGWObjVersionTracker *objv_tracker)
 {
   map<string, bufferlist> attrs;
   attrs[name] = bl;
-  return set_attrs(ctx, obj, attrs, NULL, objv_tracker);
+  return set_attrs(ctx, oid, attrs, NULL, objv_tracker);
 }
 
-int RGWRados::set_attrs(void *ctx, rgw_obj& obj,
+int RGWRados::set_attrs(void *ctx, rgw_obj& oid,
 			map<string, bufferlist>& attrs,
 			map<string, bufferlist>* rmattrs,
 			RGWObjVersionTracker *objv_tracker)
 {
   rgw_rados_ref ref;
   rgw_bucket bucket;
-  int r = get_obj_ref(obj, &ref, &bucket, true);
+  int r = get_obj_ref(oid, &ref, &bucket, true);
   if (r < 0) {
     return r;
   }
@@ -4073,7 +4073,7 @@ int RGWRados::set_attrs(void *ctx, rgw_obj& obj,
   ObjectWriteOperation op;
   RGWObjState *state = NULL;
 
-  r = append_atomic_test(rctx, obj, op, &state);
+  r = append_atomic_test(rctx, oid, op, &state);
   if (r < 0)
     return r;
 
@@ -4102,7 +4102,7 @@ int RGWRados::set_attrs(void *ctx, rgw_obj& obj,
   if (!op.size())
     return 0;
 
-  r = ref.ioctx.operate(ref.oid, &op);
+  r = ref.ioctx.operate(ref.oid_t, &op);
   if (r < 0)
     return r;
 
@@ -4123,7 +4123,7 @@ int RGWRados::set_attrs(void *ctx, rgw_obj& obj,
 /**
  * Get data about an object out of RADOS and into memory.
  * bucket: name of the bucket the object is in.
- * obj: name/key of the object to read
+ * oid: name/key of the object to read
  * data: if get_data==true, this pointer will be set
  *    to an address containing the object's data/value
  * ofs: the offset of the object to read from
@@ -4143,7 +4143,7 @@ int RGWRados::set_attrs(void *ctx, rgw_obj& obj,
  *	    (if get_data==true) length of read data,
  *	    (if get_data==false) length of the object
  */
-int RGWRados::prepare_get_obj(void *ctx, rgw_obj& obj,
+int RGWRados::prepare_get_obj(void *ctx, rgw_obj& oid,
 	    off_t *pofs, off_t *pend,
 	    map<string, bufferlist> *attrs,
 	    const time_t *mod_ptr,
@@ -4175,7 +4175,7 @@ int RGWRados::prepare_get_obj(void *ctx, rgw_obj& obj,
 
   *handle = state;
 
-  int r = get_obj_ioctx(obj, &state->io_ctx);
+  int r = get_obj_ioctx(oid, &state->io_ctx);
   if (r < 0) {
     delete state;
     return r;
@@ -4186,7 +4186,7 @@ int RGWRados::prepare_get_obj(void *ctx, rgw_obj& obj,
     rctx = new_ctx;
   }
 
-  r = get_obj_state(rctx, obj, &astate, objv_tracker);
+  r = get_obj_state(rctx, oid, &astate, objv_tracker);
   if (r < 0)
     goto done_err;
 
@@ -4227,7 +4227,7 @@ int RGWRados::prepare_get_obj(void *ctx, rgw_obj& obj,
     }
   }
   if (if_match || if_nomatch) {
-    r = get_attr(rctx, obj, RGW_ATTR_ETAG, etag);
+    r = get_attr(rctx, oid, RGW_ATTR_ETAG, etag);
     if (r < 0)
       goto done_err;
 
@@ -4296,12 +4296,12 @@ done_err:
 }
 
 int RGWRados::prepare_update_index(RGWObjState *state, rgw_bucket& bucket,
-				   RGWModifyOp op, rgw_obj& obj, string& tag)
+				   RGWModifyOp op, rgw_obj& oid, string& tag)
 {
   if (bucket_is_system(bucket))
     return 0;
 
-  int ret = data_log->add_entry(obj.bucket);
+  int ret = data_log->add_entry(oid.bucket);
   if (ret < 0) {
     lderr(cct) << "ERROR: failed writing data log" << dendl;
     return ret;
@@ -4319,12 +4319,12 @@ int RGWRados::prepare_update_index(RGWObjState *state, rgw_bucket& bucket,
     }
   }
   ret = cls_obj_prepare_op(bucket, op, tag,
-			       obj.object, obj.key);
+			       oid.object, oid.key);
 
   return ret;
 }
 
-int RGWRados::complete_update_index(rgw_bucket& bucket, string& oid, string& tag, int64_t poolid, uint64_t epoch, uint64_t size,
+int RGWRados::complete_update_index(rgw_bucket& bucket, string& oid_t, string& tag, int64_t poolid, uint64_t epoch, uint64_t size,
 				    utime_t& ut, string& etag, string& content_type, bufferlist *acl_bl, RGWObjCategory category,
 				    list<string> *remove_objs)
 {
@@ -4332,7 +4332,7 @@ int RGWRados::complete_update_index(rgw_bucket& bucket, string& oid, string& tag
     return 0;
 
   RGWObjEnt ent;
-  ent.name = oid;
+  ent.name = oid_t;
   ent.size = size;
   ent.mtime = ut;
   ent.etag = etag;
@@ -4353,12 +4353,12 @@ int RGWRados::complete_update_index(rgw_bucket& bucket, string& oid, string& tag
 }
 
 
-int RGWRados::get_obj(void *ctx, RGWObjVersionTracker *objv_tracker, void **handle, rgw_obj& obj,
+int RGWRados::get_obj(void *ctx, RGWObjVersionTracker *objv_tracker, void **handle, rgw_obj& oid,
 		      bufferlist& bl, off_t ofs, off_t end)
 {
   rgw_bucket bucket;
-  std::string oid, key;
-  rgw_obj read_obj = obj;
+  std::string oid_t, key;
+  rgw_obj read_obj = oid;
   uint64_t read_ofs = ofs;
   uint64_t len, read_len;
   RGWRadosCtx *rctx = static_cast<RGWRadosCtx *>(ctx);
@@ -4373,14 +4373,14 @@ int RGWRados::get_obj(void *ctx, RGWObjVersionTracker *objv_tracker, void **hand
   bufferlist *pbl = &bl;
   bufferlist read_bl;
 
-  get_obj_bucket_and_oid_key(obj, bucket, oid, key);
+  get_obj_bucket_and_oid_key(oid, bucket, oid_t, key);
 
   if (!rctx) {
     new_ctx = new RGWRadosCtx(this);
     rctx = new_ctx;
   }
 
-  int r = get_obj_state(rctx, obj, &astate, NULL);
+  int r = get_obj_state(rctx, oid, &astate, NULL);
   if (r < 0)
     goto done_ret;
 
@@ -4397,10 +4397,10 @@ int RGWRados::get_obj(void *ctx, RGWObjVersionTracker *objv_tracker, void **hand
     read_obj = iter.get_location();
     len = min(len, iter.get_stripe_size() - (ofs - stripe_ofs));
     read_ofs = iter.location_ofs() + (ofs - stripe_ofs);
-    reading_from_head = (read_obj == obj);
+    reading_from_head = (read_obj == oid);
 
     if (!reading_from_head) {
-      get_obj_bucket_and_oid_key(read_obj, bucket, oid, key);
+      get_obj_bucket_and_oid_key(read_obj, bucket, oid_t, key);
     }
   }
 
@@ -4443,10 +4443,10 @@ int RGWRados::get_obj(void *ctx, RGWObjVersionTracker *objv_tracker, void **hand
   }
 
 
-  ldout(cct, 20) << "rados->read obj-ofs=" << ofs << " read_ofs=" << read_ofs << " read_len=" << read_len << dendl;
+  ldout(cct, 20) << "rados->read oid-ofs=" << ofs << " read_ofs=" << read_ofs << " read_len=" << read_len << dendl;
   op.read(read_ofs, read_len, pbl, NULL);
 
-  r = state->io_ctx.operate(oid, &op, NULL);
+  r = state->io_ctx.operate(oid_t, &op, NULL);
   ldout(cct, 20) << "rados->read r=" << r << " bl.length=" << bl.length() << dendl;
 
   if (merge_bl)
@@ -4644,11 +4644,11 @@ struct get_obj_data : public RefCountedObject {
   }
 };
 
-static int _get_obj_iterate_cb(rgw_obj& obj, off_t obj_ofs, off_t read_ofs, off_t len, bool is_head_obj, RGWObjState *astate, void *arg)
+static int _get_obj_iterate_cb(rgw_obj& oid, off_t obj_ofs, off_t read_ofs, off_t len, bool is_head_obj, RGWObjState *astate, void *arg)
 {
   struct get_obj_data *d = (struct get_obj_data *)arg;
 
-  return d->rados->get_obj_iterate_cb(d->ctx, astate, obj, obj_ofs, read_ofs, len, is_head_obj, arg);
+  return d->rados->get_obj_iterate_cb(d->ctx, astate, oid, obj_ofs, read_ofs, len, is_head_obj, arg);
 }
 
 static void _get_obj_aio_completion_cb(completion_t cb, void *arg)
@@ -4725,7 +4725,7 @@ int RGWRados::flush_read_list(struct get_obj_data *d)
 }
 
 int RGWRados::get_obj_iterate_cb(void *ctx, RGWObjState *astate,
-			 rgw_obj& obj,
+			 rgw_obj& oid,
 			 off_t obj_ofs,
 			 off_t read_ofs, off_t len,
 			 bool is_head_obj, void *arg)
@@ -4733,7 +4733,7 @@ int RGWRados::get_obj_iterate_cb(void *ctx, RGWObjState *astate,
   RGWRadosCtx *rctx = static_cast<RGWRadosCtx *>(ctx);
   ObjectReadOperation op;
   struct get_obj_data *d = (struct get_obj_data *)arg;
-  string oid, key;
+  string oid_t, key;
   rgw_bucket bucket;
   bufferlist *pbl;
   AioCompletion *c;
@@ -4742,7 +4742,7 @@ int RGWRados::get_obj_iterate_cb(void *ctx, RGWObjState *astate,
 
   if (is_head_obj) {
     /* only when reading from the head object do we need to do the atomic test */
-    r = append_atomic_test(rctx, obj, op, &astate);
+    r = append_atomic_test(rctx, oid, op, &astate);
     if (r < 0)
       return r;
 
@@ -4772,7 +4772,7 @@ int RGWRados::get_obj_iterate_cb(void *ctx, RGWObjState *astate,
   if (r < 0)
     return r;
 
-  get_obj_bucket_and_oid_key(obj, bucket, oid, key);
+  get_obj_bucket_and_oid_key(oid, bucket, oid_t, key);
 
   d->throttle.get(len);
   if (d->is_cancelled()) {
@@ -4784,13 +4784,13 @@ int RGWRados::get_obj_iterate_cb(void *ctx, RGWObjState *astate,
    */
   d->add_io(obj_ofs, len, &pbl, &c);
 
-  ldout(cct, 20) << "rados->get_obj_iterate_cb oid=" << oid << " obj-ofs=" << obj_ofs << " read_ofs=" << read_ofs << " len=" << len << dendl;
+  ldout(cct, 20) << "rados->get_obj_iterate_cb oid_t=" << oid << " oid-ofs=" << obj_ofs << " read_ofs=" << read_ofs << " len=" << len << dendl;
   op.read(read_ofs, len, pbl, NULL);
 
   librados::IoCtx io_ctx(d->io_ctx);
   io_ctx.locator_set_key(key);
 
-  r = io_ctx.aio_operate(oid, c, &op, NULL);
+  r = io_ctx.aio_operate(oid_t, c, &op, NULL);
   ldout(cct, 20) << "rados->aio_operate r=" << r << " bl.length=" << pbl->length() << dendl;
   if (r < 0)
     goto done_err;
@@ -4805,7 +4805,7 @@ done_err:
   return r;
 }
 
-int RGWRados::get_obj_iterate(void *ctx, void **handle, rgw_obj& obj,
+int RGWRados::get_obj_iterate(void *ctx, void **handle, rgw_obj& oid,
 			      off_t ofs, off_t end,
 			      RGWGetDataCB *cb)
 {
@@ -4819,7 +4819,7 @@ int RGWRados::get_obj_iterate(void *ctx, void **handle, rgw_obj& obj,
   data->io_ctx.dup(state->io_ctx);
   data->client_cb = cb;
 
-  int r = iterate_obj(ctx, obj, ofs, end, cct->_conf->rgw_get_obj_max_req_size, _get_obj_iterate_cb, (void *)data);
+  int r = iterate_obj(ctx, oid, ofs, end, cct->_conf->rgw_get_obj_max_req_size, _get_obj_iterate_cb, (void *)data);
   if (r < 0) {
     data->cancel_all_io();
     goto done;
@@ -4854,14 +4854,14 @@ void RGWRados::finish_get_obj(void **handle)
   }
 }
 
-int RGWRados::iterate_obj(void *ctx, rgw_obj& obj,
+int RGWRados::iterate_obj(void *ctx, rgw_obj& oid,
 			  off_t ofs, off_t end,
 			  uint64_t max_chunk_size,
 			  int (*iterate_obj_cb)(rgw_obj&, off_t, off_t, off_t, bool, RGWObjState *, void *),
 			  void *arg)
 {
   rgw_bucket bucket;
-  rgw_obj read_obj = obj;
+  rgw_obj read_obj = oid;
   uint64_t read_ofs = ofs;
   uint64_t len;
   RGWRadosCtx *rctx = static_cast<RGWRadosCtx *>(ctx);
@@ -4874,7 +4874,7 @@ int RGWRados::iterate_obj(void *ctx, rgw_obj& obj,
     rctx = new_ctx;
   }
 
-  int r = get_obj_state(rctx, obj, &astate, NULL);
+  int r = get_obj_state(rctx, oid, &astate, NULL);
   if (r < 0)
     goto done_err;
 
@@ -4902,7 +4902,7 @@ int RGWRados::iterate_obj(void *ctx, rgw_obj& obj,
 	  read_len = max_chunk_size;
 	}
 
-	reading_from_head = (read_obj == obj);
+	reading_from_head = (read_obj == oid);
 	r = iterate_obj_cb(read_obj, ofs, read_ofs, read_len, reading_from_head, astate, arg);
 	if (r < 0)
 	  goto done_err;
@@ -4915,7 +4915,7 @@ int RGWRados::iterate_obj(void *ctx, rgw_obj& obj,
     while (ofs <= end) {
       uint64_t read_len = min(len, max_chunk_size);
 
-      r = iterate_obj_cb(obj, ofs, ofs, read_len, reading_from_head, astate, arg);
+      r = iterate_obj_cb(oid, ofs, ofs, read_len, reading_from_head, astate, arg);
       if (r < 0)
 	goto done_err;
 
@@ -4932,11 +4932,11 @@ done_err:
 }
 
 /* a simple object read */
-int RGWRados::read(void *ctx, rgw_obj& obj, off_t ofs, size_t size, bufferlist& bl)
+int RGWRados::read(void *ctx, rgw_obj& oid, off_t ofs, size_t size, bufferlist& bl)
 {
   rgw_rados_ref ref;
   rgw_bucket bucket;
-  int r = get_obj_ref(obj, &ref, &bucket);
+  int r = get_obj_ref(oid, &ref, &bucket);
   if (r < 0) {
     return r;
   }
@@ -4945,21 +4945,21 @@ int RGWRados::read(void *ctx, rgw_obj& obj, off_t ofs, size_t size, bufferlist& 
 
   ObjectReadOperation op;
 
-  r = append_atomic_test(rctx, obj, op, &astate);
+  r = append_atomic_test(rctx, oid, op, &astate);
   if (r < 0)
     return r;
 
   op.read(ofs, size, &bl, NULL);
 
-  return ref.ioctx.operate(ref.oid, &op, NULL);
+  return ref.ioctx.operate(ref.oid_t, &op, NULL);
 }
 
-int RGWRados::obj_stat(void *ctx, rgw_obj& obj, uint64_t *psize, time_t *pmtime, uint64_t *epoch, map<string, bufferlist> *attrs, bufferlist *first_chunk,
+int RGWRados::obj_stat(void *ctx, rgw_obj& oid, uint64_t *psize, time_t *pmtime, uint64_t *epoch, map<string, bufferlist> *attrs, bufferlist *first_chunk,
 		       RGWObjVersionTracker *objv_tracker)
 {
   rgw_rados_ref ref;
   rgw_bucket bucket;
-  int r = get_obj_ref(obj, &ref, &bucket);
+  int r = get_obj_ref(oid, &ref, &bucket);
   if (r < 0) {
     return r;
   }
@@ -4978,7 +4978,7 @@ int RGWRados::obj_stat(void *ctx, rgw_obj& obj, uint64_t *psize, time_t *pmtime,
     op.read(0, cct->_conf->rgw_max_chunk_size, first_chunk, NULL);
   }
   bufferlist outbl;
-  r = ref.ioctx.operate(ref.oid, &op, &outbl);
+  r = ref.ioctx.operate(ref.oid_t, &op, &outbl);
 
   if (epoch)
     *epoch = ref.ioctx.get_last_version();
@@ -5116,21 +5116,21 @@ void RGWRados::get_bucket_instance_entry(rgw_bucket& bucket, string& entry)
   entry = bucket.name + ":" + bucket.bucket_id;
 }
 
-void RGWRados::get_bucket_meta_oid(rgw_bucket& bucket, string& oid)
+void RGWRados::get_bucket_meta_oid(rgw_bucket& bucket, string& oid_t)
 {
   string entry;
   get_bucket_instance_entry(bucket, entry);
-  oid = RGW_BUCKET_INSTANCE_MD_PREFIX + entry;
+  oid_t = RGW_BUCKET_INSTANCE_MD_PREFIX + entry;
 }
 
-void RGWRados::get_bucket_instance_obj(rgw_bucket& bucket, rgw_obj& obj)
+void RGWRados::get_bucket_instance_obj(rgw_bucket& bucket, rgw_obj& oid)
 {
-  if (!bucket.oid.empty()) {
-    obj.init(zone.domain_root, bucket.oid);
+  if (!bucket.oid_t.empty()) {
+    oid.init(zone.domain_root, bucket.oid_t);
   } else {
-    string oid;
-    get_bucket_meta_oid(bucket, oid);
-    obj.init(zone.domain_root, oid);
+    string oid_t;
+    get_bucket_meta_oid(bucket, oid_t);
+    oid.init(zone.domain_root, oid_t);
   }
 }
 
@@ -5141,32 +5141,32 @@ int RGWRados::get_bucket_instance_info(void *ctx, const string& meta_key, RGWBuc
   if (pos < 0) {
     return -EINVAL;
   }
-  string oid = RGW_BUCKET_INSTANCE_MD_PREFIX + meta_key;
+  string oid_t = RGW_BUCKET_INSTANCE_MD_PREFIX + meta_key;
 
-  return get_bucket_instance_from_oid(ctx, oid, info, pmtime, pattrs);
+  return get_bucket_instance_from_oid(ctx, oid_t, info, pmtime, pattrs);
 }
 
 int RGWRados::get_bucket_instance_info(void *ctx, rgw_bucket& bucket, RGWBucketInfo& info,
 				       time_t *pmtime, map<string, bufferlist> *pattrs)
 {
-  string oid;
-  if (!bucket.oid.empty()) {
-    get_bucket_meta_oid(bucket, oid);
+  string oid_t;
+  if (!bucket.oid_t.empty()) {
+    get_bucket_meta_oid(bucket, oid_t);
   } else {
-    oid = bucket.oid;
+    oid_t = bucket.oid_t;
   }
 
-  return get_bucket_instance_from_oid(ctx, oid, info, pmtime, pattrs);
+  return get_bucket_instance_from_oid(ctx, oid_t, info, pmtime, pattrs);
 }
 
-int RGWRados::get_bucket_instance_from_oid(void *ctx, string& oid, RGWBucketInfo& info,
+int RGWRados::get_bucket_instance_from_oid(void *ctx, string& oid_t, RGWBucketInfo& info,
 					   time_t *pmtime, map<string, bufferlist> *pattrs)
 {
-  ldout(cct, 20) << "reading from " << zone.domain_root << ":" << oid << dendl;
+  ldout(cct, 20) << "reading from " << zone.domain_root << ":" << oid_t << dendl;
 
   bufferlist epbl;
 
-  int ret = rgw_get_system_obj(this, ctx, zone.domain_root, oid, epbl, &info.objv_tracker, pmtime, pattrs);
+  int ret = rgw_get_system_obj(this, ctx, zone.domain_root, oid_t, epbl, &info.objv_tracker, pmtime, pattrs);
   if (ret < 0) {
     return ret;
   }
@@ -5178,7 +5178,7 @@ int RGWRados::get_bucket_instance_from_oid(void *ctx, string& oid, RGWBucketInfo
     ldout(cct, 0) << "ERROR: could not decode buffer info, caught buffer::error" << dendl;
     return -EIO;
   }
-  info.bucket.oid = oid;
+  info.bucket.oid_t = oid;
   return 0;
 }
 
@@ -5227,7 +5227,7 @@ int RGWRados::convert_old_bucket_info(void *ctx, string& bucket_name)
   }
 
   info = entry_point.old_bucket_info;
-  info.bucket.oid = bucket_name;
+  info.bucket.oid_t = bucket_name;
   info.ep_objv = ot.read_version;
 
   ot.generate_new_write_ver(cct);
@@ -5256,7 +5256,7 @@ int RGWRados::get_bucket_info(void *ctx, const string& bucket_name, RGWBucketInf
 
   if (entry_point.has_bucket_info) {
     info = entry_point.old_bucket_info;
-    info.bucket.oid = bucket_name;
+    info.bucket.oid_t = bucket_name;
     info.ep_objv = ot.read_version;
     ldout(cct, 20) << "rgw_get_bucket_info: old bucket info, bucket=" << info.bucket << " owner " << info.owner << dendl;
     return 0;
@@ -5276,10 +5276,10 @@ int RGWRados::get_bucket_info(void *ctx, const string& bucket_name, RGWBucketInf
 
   /* read bucket instance info */
 
-  string oid;
-  get_bucket_meta_oid(entry_point.bucket, oid);
+  string oid_t;
+  get_bucket_meta_oid(entry_point.bucket, oid_t);
 
-  ret = get_bucket_instance_from_oid(ctx, oid, info, pmtime, pattrs);
+  ret = get_bucket_instance_from_oid(ctx, oid_t, info, pmtime, pattrs);
   info.ep_objv = ot.read_version;
   if (ret < 0) {
     info.bucket.name = bucket_name;
@@ -5306,7 +5306,7 @@ int RGWRados::put_bucket_instance_info(RGWBucketInfo& info, bool exclusive,
   ::encode(info, bl);
 
   string key;
-  get_bucket_instance_entry(info.bucket, key); /* when we go through meta api, we don't use oid directly */
+  get_bucket_instance_entry(info.bucket, key); /* when we go through meta api, we don't use oid_t directly */
   return rgw_bucket_instance_store_info(this, key, bl, exclusive, pattrs, &info.objv_tracker, mtime);
 }
 
@@ -5346,16 +5346,16 @@ int RGWRados::put_linked_bucket_info(RGWBucketInfo& info, bool exclusive, time_t
   return 0;
 }
 
-int RGWRados::omap_get_vals(rgw_obj& obj, bufferlist& header, const string& marker, uint64_t count, std::map<string, bufferlist>& m)
+int RGWRados::omap_get_vals(rgw_obj& oid, bufferlist& header, const string& marker, uint64_t count, std::map<string, bufferlist>& m)
 {
   rgw_rados_ref ref;
   rgw_bucket bucket;
-  int r = get_obj_ref(obj, &ref, &bucket);
+  int r = get_obj_ref(oid, &ref, &bucket);
   if (r < 0) {
     return r;
   }
 
-  r = ref.ioctx.omap_get_vals(ref.oid, marker, count, &m);
+  r = ref.ioctx.omap_get_vals(ref.oid_t, marker, count, &m);
   if (r < 0)
     return r;
 
@@ -5363,50 +5363,50 @@ int RGWRados::omap_get_vals(rgw_obj& obj, bufferlist& header, const string& mark
 
 }
 
-int RGWRados::omap_get_all(rgw_obj& obj, bufferlist& header, std::map<string, bufferlist>& m)
+int RGWRados::omap_get_all(rgw_obj& oid, bufferlist& header, std::map<string, bufferlist>& m)
 {
   string start_after;
 
-  return omap_get_vals(obj, header, start_after, (uint64_t)-1, m);
+  return omap_get_vals(oid, header, start_after, (uint64_t)-1, m);
 }
 
-int RGWRados::omap_set(rgw_obj& obj, std::string& key, bufferlist& bl)
+int RGWRados::omap_set(rgw_obj& oid, std::string& key, bufferlist& bl)
 {
   rgw_rados_ref ref;
   rgw_bucket bucket;
-  int r = get_obj_ref(obj, &ref, &bucket);
+  int r = get_obj_ref(oid, &ref, &bucket);
   if (r < 0) {
     return r;
   }
-  ldout(cct, 15) << "omap_set bucket=" << bucket << " oid=" << ref.oid << " key=" << key << dendl;
+  ldout(cct, 15) << "omap_set bucket=" << bucket << " oid_t=" << ref.oid_t << " key=" << key << dendl;
 
   map<string, bufferlist> m;
   m[key] = bl;
 
-  r = ref.ioctx.omap_set(ref.oid, m);
+  r = ref.ioctx.omap_set(ref.oid_t, m);
 
   return r;
 }
 
-int RGWRados::omap_set(rgw_obj& obj, std::map<std::string, bufferlist>& m)
+int RGWRados::omap_set(rgw_obj& oid, std::map<std::string, bufferlist>& m)
 {
   rgw_rados_ref ref;
   rgw_bucket bucket;
-  int r = get_obj_ref(obj, &ref, &bucket);
+  int r = get_obj_ref(oid, &ref, &bucket);
   if (r < 0) {
     return r;
   }
 
-  r = ref.ioctx.omap_set(ref.oid, m);
+  r = ref.ioctx.omap_set(ref.oid_t, m);
 
   return r;
 }
 
-int RGWRados::omap_del(rgw_obj& obj, const std::string& key)
+int RGWRados::omap_del(rgw_obj& oid, const std::string& key)
 {
   rgw_rados_ref ref;
   rgw_bucket bucket;
-  int r = get_obj_ref(obj, &ref, &bucket);
+  int r = get_obj_ref(oid, &ref, &bucket);
   if (r < 0) {
     return r;
   }
@@ -5414,7 +5414,7 @@ int RGWRados::omap_del(rgw_obj& obj, const std::string& key)
   set<string> k;
   k.insert(key);
 
-  r = ref.ioctx.omap_rm_keys(ref.oid, k);
+  r = ref.ioctx.omap_rm_keys(ref.oid_t, k);
   return r;
 }
 
@@ -5446,17 +5446,17 @@ int RGWRados::update_containers_stats(map<string, RGWBucketEnt>& m)
   return m.size();
 }
 
-int RGWRados::append_async(rgw_obj& obj, size_t size, bufferlist& bl)
+int RGWRados::append_async(rgw_obj& oid, size_t size, bufferlist& bl)
 {
   rgw_rados_ref ref;
   rgw_bucket bucket;
-  int r = get_obj_ref(obj, &ref, &bucket);
+  int r = get_obj_ref(oid, &ref, &bucket);
   if (r < 0) {
     return r;
   }
   librados::AioCompletion *completion = rados->aio_create_completion(NULL, NULL, NULL);
 
-  r = ref.ioctx.aio_append(ref.oid, completion, bl, size);
+  r = ref.ioctx.aio_append(ref.oid_t, completion, bl, size);
   completion->release();
   return r;
 }
@@ -5474,7 +5474,7 @@ int RGWRados::distribute(const string& key, bufferlist& bl)
   string notify_oid;
   pick_control_oid(key, notify_oid);
 
-  ldout(cct, 10) << "distributing notification oid=" << notify_oid << " bl.length()=" << bl.length() << dendl;
+  ldout(cct, 10) << "distributing notification oid_t=" << notify_oid << " bl.length()=" << bl.length() << dendl;
   int r = control_pool_ctx.notify(notify_oid, 0, bl);
   return r;
 }
@@ -5507,14 +5507,14 @@ int RGWRados::pool_iterate(RGWPoolIterCtx& ctx, uint32_t num, vector<RGWObjEnt>&
 //  for (i = 0; i < num && iter != io_ctx.objects_end(); ++i, ++iter) {
 //    RGWObjEnt e;
 
-//    string oid = iter->first;
-//    ldout(cct, 20) << "RGWRados::pool_iterate: got " << oid << dendl;
+//    string oid_t = iter->first;
+//    ldout(cct, 20) << "RGWRados::pool_iterate: got " << oid_t << dendl;
 
     // fill it in with initial values; we may correct later
-//    if (filter && !filter->filter(oid, oid))
+//    if (filter && !filter->filter(oid_t, oid))
 //	continue;
 
-//    e.name = oid;
+//    e.name = oid_t;
 //    objs.push_back(e);
 //  }
 
@@ -5568,13 +5568,13 @@ int RGWRados::list_bi_log_entries(rgw_bucket& bucket, string& marker, uint32_t m
   result.clear();
 
   librados::IoCtx index_ctx;
-  string oid;
-  int r = open_bucket_index(bucket, index_ctx, oid);
+  string oid_t;
+  int r = open_bucket_index(bucket, index_ctx, oid_t);
   if (r < 0)
     return r;
 
   std::list<rgw_bi_log_entry> entries;
-  int ret = cls_rgw_bi_log_list(index_ctx, oid, marker, max - result.size(), entries, truncated);
+  int ret = cls_rgw_bi_log_list(index_ctx, oid_t, marker, max - result.size(), entries, truncated);
   if (ret < 0)
     return ret;
 
@@ -5589,34 +5589,34 @@ int RGWRados::list_bi_log_entries(rgw_bucket& bucket, string& marker, uint32_t m
 int RGWRados::trim_bi_log_entries(rgw_bucket& bucket, string& start_marker, string& end_marker)
 {
   librados::IoCtx index_ctx;
-  string oid;
-  int r = open_bucket_index(bucket, index_ctx, oid);
+  string oid_t;
+  int r = open_bucket_index(bucket, index_ctx, oid_t);
   if (r < 0)
     return r;
 
-  int ret = cls_rgw_bi_log_trim(index_ctx, oid, start_marker, end_marker);
+  int ret = cls_rgw_bi_log_trim(index_ctx, oid_t, start_marker, end_marker);
   if (ret < 0)
     return ret;
 
   return 0;
 }
 
-int RGWRados::gc_operate(string& oid, librados::ObjectWriteOperation *op)
+int RGWRados::gc_operate(string& oid_t, librados::ObjectWriteOperation *op)
 {
-  return gc_pool_ctx.operate(oid, op);
+  return gc_pool_ctx.operate(oid_t, op);
 }
 
-int RGWRados::gc_aio_operate(string& oid, librados::ObjectWriteOperation *op)
+int RGWRados::gc_aio_operate(string& oid_t, librados::ObjectWriteOperation *op)
 {
   AioCompletion *c = librados::Rados::aio_create_completion(NULL, NULL, NULL);
-  int r = gc_pool_ctx.aio_operate(oid, c, op);
+  int r = gc_pool_ctx.aio_operate(oid_t, c, op);
   c->release();
   return r;
 }
 
-int RGWRados::gc_operate(string& oid, librados::ObjectReadOperation *op, bufferlist *pbl)
+int RGWRados::gc_operate(string& oid_t, librados::ObjectReadOperation *op, bufferlist *pbl)
 {
-  return gc_pool_ctx.operate(oid, op, pbl);
+  return gc_pool_ctx.operate(oid_t, op, pbl);
 }
 
 int RGWRados::list_gc_objs(int *index, string& marker, uint32_t max, bool expired_only, std::list<cls_rgw_gc_obj_info>& result, bool *truncated)
@@ -5629,11 +5629,11 @@ int RGWRados::process_gc()
   return gc->process();
 }
 
-int RGWRados::cls_rgw_init_index(librados::IoCtx& index_ctx, librados::ObjectWriteOperation& op, string& oid)
+int RGWRados::cls_rgw_init_index(librados::IoCtx& index_ctx, librados::ObjectWriteOperation& op, string& oid_t)
 {
   bufferlist in;
   cls_rgw_bucket_init(op);
-  int r = index_ctx.operate(oid, &op);
+  int r = index_ctx.operate(oid_t, &op);
   return r;
 }
 
@@ -5641,15 +5641,15 @@ int RGWRados::cls_obj_prepare_op(rgw_bucket& bucket, RGWModifyOp op, string& tag
 				 string& name, string& locator)
 {
   librados::IoCtx index_ctx;
-  string oid;
+  string oid_t;
 
-  int r = open_bucket_index(bucket, index_ctx, oid);
+  int r = open_bucket_index(bucket, index_ctx, oid_t);
   if (r < 0)
     return r;
 
   ObjectWriteOperation o;
   cls_rgw_bucket_prepare_op(o, op, tag, name, locator, zone_public_config.log_data);
-  r = index_ctx.operate(oid, &o);
+  r = index_ctx.operate(oid_t, &o);
   return r;
 }
 
@@ -5659,9 +5659,9 @@ int RGWRados::cls_obj_complete_op(rgw_bucket& bucket, RGWModifyOp op, string& ta
 				  list<string> *remove_objs)
 {
   librados::IoCtx index_ctx;
-  string oid;
+  string oid_t;
 
-  int r = open_bucket_index(bucket, index_ctx, oid);
+  int r = open_bucket_index(bucket, index_ctx, oid_t);
   if (r < 0)
     return r;
 
@@ -5681,7 +5681,7 @@ int RGWRados::cls_obj_complete_op(rgw_bucket& bucket, RGWModifyOp op, string& ta
   cls_rgw_bucket_complete_op(o, op, tag, ver, ent.name, dir_meta, remove_objs, zone_public_config.log_data);
 
   AioCompletion *c = librados::Rados::aio_create_completion(NULL, NULL, NULL);
-  r = index_ctx.aio_operate(oid, c, &o);
+  r = index_ctx.aio_operate(oid_t, c, &o);
   c->release();
   return r;
 }
@@ -5713,16 +5713,16 @@ int RGWRados::cls_obj_complete_cancel(rgw_bucket& bucket, string& tag, string& n
 int RGWRados::cls_obj_set_bucket_tag_timeout(rgw_bucket& bucket, uint64_t timeout)
 {
   librados::IoCtx index_ctx;
-  string oid;
+  string oid_t;
 
-  int r = open_bucket_index(bucket, index_ctx, oid);
+  int r = open_bucket_index(bucket, index_ctx, oid_t);
   if (r < 0)
     return r;
 
   ObjectWriteOperation o;
   cls_rgw_bucket_set_tag_timeout(o, timeout);
 
-  r = index_ctx.operate(oid, &o);
+  r = index_ctx.operate(oid_t, &o);
 
   return r;
 }
@@ -5735,13 +5735,13 @@ int RGWRados::cls_bucket_list(rgw_bucket& bucket, string start, string prefix,
   ldout(cct, 10) << "cls_bucket_list " << bucket << " start " << start << " num " << num << dendl;
 
   librados::IoCtx index_ctx;
-  string oid;
-  int r = open_bucket_index(bucket, index_ctx, oid);
+  string oid_t;
+  int r = open_bucket_index(bucket, index_ctx, oid_t);
   if (r < 0)
     return r;
 
   struct rgw_bucket_dir dir;
-  r = cls_rgw_list_op(index_ctx, oid, start, prefix, num, &dir, is_truncated);
+  r = cls_rgw_list_op(index_ctx, oid_t, start, prefix, num, &dir, is_truncated);
   if (r < 0)
     return r;
 
@@ -5795,13 +5795,13 @@ int RGWRados::cls_bucket_list(rgw_bucket& bucket, string start, string prefix,
     cls_rgw_suggest_changes(o, updates);
     // we don't care if we lose suggested updates, send them off blindly
     AioCompletion *c = librados::Rados::aio_create_completion(NULL, NULL, NULL);
-    r = index_ctx.aio_operate(oid, c, &o);
+    r = index_ctx.aio_operate(oid_t, c, &o);
     c->release();
   }
   return m.size();
 }
 
-int RGWRados::cls_obj_usage_log_add(const string& oid, rgw_usage_log_info& info)
+int RGWRados::cls_obj_usage_log_add(const string& oid_t, rgw_usage_log_info& info)
 {
   librados::IoCtx io_ctx;
 
@@ -5822,11 +5822,11 @@ int RGWRados::cls_obj_usage_log_add(const string& oid, rgw_usage_log_info& info)
   ObjectWriteOperation op;
   cls_rgw_usage_log_add(op, info);
 
-  r = io_ctx.operate(oid, &op);
+  r = io_ctx.operate(oid_t, &op);
   return r;
 }
 
-int RGWRados::cls_obj_usage_log_read(string& oid, string& user, uint64_t start_epoch, uint64_t end_epoch, uint32_t max_entries,
+int RGWRados::cls_obj_usage_log_read(string& oid_t, string& user, uint64_t start_epoch, uint64_t end_epoch, uint32_t max_entries,
 				     string& read_iter, map<rgw_user_bucket, rgw_usage_log_entry>& usage, bool *is_truncated)
 {
   librados::IoCtx io_ctx;
@@ -5838,13 +5838,13 @@ int RGWRados::cls_obj_usage_log_read(string& oid, string& user, uint64_t start_e
   if (r < 0)
     return r;
 
-  r = cls_rgw_usage_log_read(io_ctx, oid, user, start_epoch, end_epoch,
+  r = cls_rgw_usage_log_read(io_ctx, oid_t, user, start_epoch, end_epoch,
 			     max_entries, read_iter, usage, is_truncated);
 
   return r;
 }
 
-int RGWRados::cls_obj_usage_log_trim(string& oid, string& user, uint64_t start_epoch, uint64_t end_epoch)
+int RGWRados::cls_obj_usage_log_trim(string& oid_t, string& user, uint64_t start_epoch, uint64_t end_epoch)
 {
   librados::IoCtx io_ctx;
 
@@ -5856,7 +5856,7 @@ int RGWRados::cls_obj_usage_log_trim(string& oid, string& user, uint64_t start_e
   ObjectWriteOperation op;
   cls_rgw_usage_log_trim(op, user, start_epoch, end_epoch);
 
-  r = io_ctx.operate(oid, &op);
+  r = io_ctx.operate(oid_t, &op);
   return r;
 }
 
@@ -5874,11 +5874,11 @@ int RGWRados::remove_objs_from_index(rgw_bucket& bucket, list<string>& oid_list)
   list<string>::iterator iter;
 
   for (iter = oid_list.begin(); iter != oid_list.end(); ++iter) {
-    string& oid = *iter;
-    dout(2) << "RGWRados::remove_objs_from_index bucket=" << bucket << " oid=" << oid << dendl;
+    string& oid_t = *iter;
+    dout(2) << "RGWRados::remove_objs_from_index bucket=" << bucket << " oid_t=" << oid << dendl;
     rgw_bucket_dir_entry entry;
     entry.ver.epoch = (uint64_t)-1; // ULLONG_MAX, needed to that objclass doesn't skip out request
-    entry.name = oid;
+    entry.name = oid_t;
     updates.append(CEPH_RGW_REMOVE);
     ::encode(entry, updates);
   }
@@ -5896,20 +5896,20 @@ int RGWRados::check_disk_state(librados::IoCtx io_ctx,
 			       RGWObjEnt& object,
 			       bufferlist& suggested_updates)
 {
-  rgw_obj obj;
-  std::string oid, key, ns;
-  oid = list_state.name;
-  if (!rgw_obj::strip_namespace_from_object(oid, ns)) {
+  rgw_obj oid;
+  std::string oid_t, key, ns;
+  oid_t = list_state.name;
+  if (!rgw_obj::strip_namespace_from_object(oid_t, ns)) {
     // well crap
     assert(0 == "got bad object name off disk");
   }
-  obj.init(bucket, oid, list_state.locator, ns);
-  get_obj_bucket_and_oid_key(obj, bucket, oid, key);
+  oid.init(bucket, oid_t, list_state.locator, ns);
+  get_obj_bucket_and_oid_key(oid, bucket, oid_t, key);
   io_ctx.locator_set_key(key);
 
   RGWObjState *astate = NULL;
   RGWRadosCtx rctx(this);
-  int r = get_obj_state(&rctx, obj, &astate, NULL);
+  int r = get_obj_state(&rctx, oid, &astate, NULL);
   if (r < 0)
     return r;
 
@@ -5948,7 +5948,7 @@ int RGWRados::check_disk_state(librados::IoCtx io_ctx,
   if (iter != astate->attrset.end()) {
     r = decode_policy(iter->second, &owner);
     if (r < 0) {
-      dout(0) << "WARNING: could not decode policy for object: " << obj << dendl;
+      dout(0) << "WARNING: could not decode policy for object: " << oid << dendl;
     }
   }
 
@@ -5994,12 +5994,12 @@ int RGWRados::check_disk_state(librados::IoCtx io_ctx,
 int RGWRados::cls_bucket_head(rgw_bucket& bucket, struct rgw_bucket_dir_header& header)
 {
   librados::IoCtx index_ctx;
-  string oid;
-  int r = open_bucket_index(bucket, index_ctx, oid);
+  string oid_t;
+  int r = open_bucket_index(bucket, index_ctx, oid_t);
   if (r < 0)
     return r;
 
-  r = cls_rgw_get_dir_header(index_ctx, oid, &header);
+  r = cls_rgw_get_dir_header(index_ctx, oid_t, &header);
   if (r < 0)
     return r;
 
@@ -6009,12 +6009,12 @@ int RGWRados::cls_bucket_head(rgw_bucket& bucket, struct rgw_bucket_dir_header& 
 int RGWRados::cls_bucket_head_async(rgw_bucket& bucket, RGWGetDirHeader_CB *ctx)
 {
   librados::IoCtx index_ctx;
-  string oid;
-  int r = open_bucket_index(bucket, index_ctx, oid);
+  string oid_t;
+  int r = open_bucket_index(bucket, index_ctx, oid_t);
   if (r < 0)
     return r;
 
-  r = cls_rgw_get_dir_header_async(index_ctx, oid, ctx);
+  r = cls_rgw_get_dir_header_async(index_ctx, oid_t, ctx);
   if (r < 0)
     return r;
 
@@ -6025,11 +6025,11 @@ int RGWRados::cls_user_get_header(const string& user_id, cls_user_header *header
 {
   string buckets_obj_id;
   rgw_get_buckets_obj(user_id, buckets_obj_id);
-  rgw_obj obj(zone.user_uid_pool, buckets_obj_id);
+  rgw_obj oid(zone.user_uid_pool, buckets_obj_id);
 
   rgw_rados_ref ref;
   rgw_bucket bucket;
-  int r = get_obj_ref(obj, &ref, &bucket);
+  int r = get_obj_ref(oid, &ref, &bucket);
   if (r < 0) {
     return r;
   }
@@ -6038,7 +6038,7 @@ int RGWRados::cls_user_get_header(const string& user_id, cls_user_header *header
   int rc;
   ::cls_user_get_header(op, header, &rc);
   bufferlist ibl;
-  r = ref.ioctx.operate(ref.oid, &op, &ibl);
+  r = ref.ioctx.operate(ref.oid_t, &op, &ibl);
   if (r < 0)
     return r;
   if (rc < 0)
@@ -6051,16 +6051,16 @@ int RGWRados::cls_user_get_header_async(const string& user_id, RGWGetUserHeader_
 {
   string buckets_obj_id;
   rgw_get_buckets_obj(user_id, buckets_obj_id);
-  rgw_obj obj(zone.user_uid_pool, buckets_obj_id);
+  rgw_obj oid(zone.user_uid_pool, buckets_obj_id);
 
   rgw_rados_ref ref;
   rgw_bucket bucket;
-  int r = get_obj_ref(obj, &ref, &bucket);
+  int r = get_obj_ref(oid, &ref, &bucket);
   if (r < 0) {
     return r;
   }
 
-  r = ::cls_user_get_header_async(ref.ioctx, ref.oid, ctx);
+  r = ::cls_user_get_header_async(ref.ioctx, ref.oid_t, ctx);
   if (r < 0)
     return r;
 
@@ -6113,9 +6113,9 @@ int RGWRados::update_user_bucket_stats(const string& user_id, rgw_bucket& bucket
 
   string buckets_obj_id;
   rgw_get_buckets_obj(user_id, buckets_obj_id);
-  rgw_obj obj(zone.user_uid_pool, buckets_obj_id);
+  rgw_obj oid(zone.user_uid_pool, buckets_obj_id);
 
-  int r = cls_user_update_buckets(obj, entries, false);
+  int r = cls_user_update_buckets(oid, entries, false);
   if (r < 0) {
     ldout(cct, 20) << "cls_user_update_buckets() returned " << r << dendl;
     return r;
@@ -6124,14 +6124,14 @@ int RGWRados::update_user_bucket_stats(const string& user_id, rgw_bucket& bucket
   return 0;
 }
 
-int RGWRados::cls_user_list_buckets(rgw_obj& obj,
+int RGWRados::cls_user_list_buckets(rgw_obj& oid,
 				    const string& in_marker, int max_entries,
 				    list<cls_user_bucket_entry>& entries,
 				    string *out_marker, bool *truncated)
 {
   rgw_rados_ref ref;
   rgw_bucket bucket;
-  int r = get_obj_ref(obj, &ref, &bucket);
+  int r = get_obj_ref(oid, &ref, &bucket);
   if (r < 0) {
     return r;
   }
@@ -6141,7 +6141,7 @@ int RGWRados::cls_user_list_buckets(rgw_obj& obj,
 
   cls_user_bucket_list(op, in_marker, max_entries, entries, out_marker, truncated, &rc);
   bufferlist ibl;
-  r = ref.ioctx.operate(ref.oid, &op, &ibl);
+  r = ref.ioctx.operate(ref.oid_t, &op, &ibl);
   if (r < 0)
     return r;
   if (rc < 0)
@@ -6150,18 +6150,18 @@ int RGWRados::cls_user_list_buckets(rgw_obj& obj,
   return 0;
 }
 
-int RGWRados::cls_user_update_buckets(rgw_obj& obj, list<cls_user_bucket_entry>& entries, bool add)
+int RGWRados::cls_user_update_buckets(rgw_obj& oid, list<cls_user_bucket_entry>& entries, bool add)
 {
   rgw_rados_ref ref;
   rgw_bucket bucket;
-  int r = get_obj_ref(obj, &ref, &bucket);
+  int r = get_obj_ref(oid, &ref, &bucket);
   if (r < 0) {
     return r;
   }
 
   librados::ObjectWriteOperation op;
   cls_user_set_buckets(op, entries, add);
-  r = ref.ioctx.operate(ref.oid, &op);
+  r = ref.ioctx.operate(ref.oid_t, &op);
   if (r < 0)
     return r;
 
@@ -6172,48 +6172,48 @@ int RGWRados::complete_sync_user_stats(const string& user_id)
 {
   string buckets_obj_id;
   rgw_get_buckets_obj(user_id, buckets_obj_id);
-  rgw_obj obj(zone.user_uid_pool, buckets_obj_id);
-  return cls_user_complete_stats_sync(obj);
+  rgw_obj oid(zone.user_uid_pool, buckets_obj_id);
+  return cls_user_complete_stats_sync(oid);
 }
 
-int RGWRados::cls_user_complete_stats_sync(rgw_obj& obj)
+int RGWRados::cls_user_complete_stats_sync(rgw_obj& oid)
 {
   rgw_rados_ref ref;
   rgw_bucket bucket;
-  int r = get_obj_ref(obj, &ref, &bucket);
+  int r = get_obj_ref(oid, &ref, &bucket);
   if (r < 0) {
     return r;
   }
 
   librados::ObjectWriteOperation op;
   ::cls_user_complete_stats_sync(op);
-  r = ref.ioctx.operate(ref.oid, &op);
+  r = ref.ioctx.operate(ref.oid_t, &op);
   if (r < 0)
     return r;
 
   return 0;
 }
 
-int RGWRados::cls_user_add_bucket(rgw_obj& obj, const cls_user_bucket_entry& entry)
+int RGWRados::cls_user_add_bucket(rgw_obj& oid, const cls_user_bucket_entry& entry)
 {
   list<cls_user_bucket_entry> l;
   l.push_back(entry);
 
-  return cls_user_update_buckets(obj, l, true);
+  return cls_user_update_buckets(oid, l, true);
 }
 
-int RGWRados::cls_user_remove_bucket(rgw_obj& obj, const cls_user_bucket& bucket)
+int RGWRados::cls_user_remove_bucket(rgw_obj& oid, const cls_user_bucket& bucket)
 {
   rgw_bucket b;
   rgw_rados_ref ref;
-  int r = get_obj_ref(obj, &ref, &b);
+  int r = get_obj_ref(oid, &ref, &b);
   if (r < 0) {
     return r;
   }
 
   librados::ObjectWriteOperation op;
   ::cls_user_remove_bucket(op, bucket);
-  r = ref.ioctx.operate(ref.oid, &op);
+  r = ref.ioctx.operate(ref.oid_t, &op);
   if (r < 0)
     return r;
 
@@ -6304,11 +6304,11 @@ int RGWRados::remove_temp_objects(string date, string time)
   return 0;
 }
 
-int RGWRados::process_intent_log(rgw_bucket& bucket, string& oid,
+int RGWRados::process_intent_log(rgw_bucket& bucket, string& oid_t,
 				 time_t epoch, int flags, bool purge)
 {
-  cout << "processing intent log " << oid << std::endl;
-  rgw_obj obj(bucket, oid);
+  cout << "processing intent log " << oid_t << std::endl;
+  rgw_obj oid(bucket, oid_t);
 
   unsigned chunk = 1024 * 1024;
   off_t pos = 0;
@@ -6327,7 +6327,7 @@ int RGWRados::process_intent_log(rgw_bucket& bucket, string& oid,
     off = iter.get_off();
     if (!eof && (bl.length() - off) < chunk / 2) {
       bufferlist more;
-      r = read(NULL, obj, pos, chunk, more);
+      r = read(NULL, oid, pos, chunk, more);
       if (r < 0) {
 	cerr << "error while reading from " <<	bucket << ":" << oid
 	   << " " << cpp_strerror(-r) << std::endl;
@@ -6347,14 +6347,14 @@ int RGWRados::process_intent_log(rgw_bucket& bucket, string& oid,
     try {
       ::decode(entry, iter);
     } catch (buffer::error& err) {
-      cerr << "failed to decode intent log entry in " << bucket << ":" << oid << std::endl;
+      cerr << "failed to decode intent log entry in " << bucket << ":" << oid_t << std::endl;
       cerr << "skipping log" << std::endl; // no use to continue
       ret = -EIO;
       complete = false;
       break;
     }
     if (entry.op_time.sec() > epoch) {
-      cerr << "skipping entry for obj=" << obj << " entry.op_time=" << entry.op_time.sec() << " requested epoch=" << epoch << std::endl;
+      cerr << "skipping entry for oid=" << obj << " entry.op_time=" << entry.op_time.sec() << " requested epoch=" << epoch << std::endl;
       cerr << "skipping log" << std::endl; // no use to continue
       complete = false;
       break;
@@ -6365,9 +6365,9 @@ int RGWRados::process_intent_log(rgw_bucket& bucket, string& oid,
 	complete = false;
 	break;
       }
-      r = delete_obj(NULL, no_owner, entry.obj);
+      r = delete_obj(NULL, no_owner, entry.oid);
       if (r < 0 && r != -ENOENT) {
-	cerr << "failed to remove obj: " << entry.obj << std::endl;
+	cerr << "failed to remove oid: " << entry.oid << std::endl;
 	complete = false;
       }
       break;
@@ -6377,18 +6377,18 @@ int RGWRados::process_intent_log(rgw_bucket& bucket, string& oid,
 	break;
       } else {
 	librados::IoCtx index_ctx;
-	string oid;
-	int r = open_bucket_index(entry.obj.bucket, index_ctx, oid);
+	string oid_t;
+	int r = open_bucket_index(entry.oid.bucket, index_ctx, oid_t);
 	if (r < 0)
 	  return r;
 	ObjectWriteOperation op;
 	op.remove();
-	oid.append(entry.obj.bucket.marker);
+	oid_t.append(entry.oid.bucket.marker);
 	librados::AioCompletion *completion = rados->aio_create_completion(NULL, NULL, NULL);
-	r = index_ctx.aio_operate(oid, completion, &op);
+	r = index_ctx.aio_operate(oid_t, completion, &op);
 	completion->release();
 	if (r < 0 && r != -ENOENT) {
-	  cerr << "failed to remove bucket: " << entry.obj.bucket << std::endl;
+	  cerr << "failed to remove bucket: " << entry.oid.bucket << std::endl;
 	  complete = false;
 	}
       }
@@ -6399,12 +6399,12 @@ int RGWRados::process_intent_log(rgw_bucket& bucket, string& oid,
   }
 
   if (complete) {
-    rgw_obj obj(bucket, oid);
-    cout << "completed intent log: " << obj << (purge ? ", purging it" : "") << std::endl;
+    rgw_obj oid(bucket, oid_t);
+    cout << "completed intent log: " << oid << (purge ? ", purging it" : "") << std::endl;
     if (purge) {
-      r = delete_system_obj(NULL, obj);
+      r = delete_system_obj(NULL, oid);
       if (r < 0)
-	cerr << "failed to remove obj: " << obj << std::endl;
+	cerr << "failed to remove oid: " << obj << std::endl;
     }
   }
 
@@ -6412,11 +6412,11 @@ int RGWRados::process_intent_log(rgw_bucket& bucket, string& oid,
 }
 
 
-void RGWStateLog::oid_str(int shard, string& oid) {
-  oid = RGW_STATELOG_OBJ_PREFIX + module_name + ".";
+void RGWStateLog::oid_str(int shard, string& oid_t) {
+  oid_t = RGW_STATELOG_OBJ_PREFIX + module_name + ".";
   char buf[16];
   snprintf(buf, sizeof(buf), "%d", shard);
-  oid += buf;
+  oid_t += buf;
 }
 
 int RGWStateLog::get_shard_num(const string& object) {
@@ -6426,9 +6426,9 @@ int RGWStateLog::get_shard_num(const string& object) {
 
 string RGWStateLog::get_oid(const string& object) {
   int shard = get_shard_num(object);
-  string oid;
-  oid_str(shard, oid);
-  return oid;
+  string oid_t;
+  oid_str(shard, oid_t);
+  return oid_t;
 }
 
 int RGWStateLog::open_ioctx(librados::IoCtx& ioctx) {
@@ -6456,7 +6456,7 @@ int RGWStateLog::store_entry(const string& client_id, const string& op_id, const
   if (r < 0)
     return r;
 
-  string oid = get_oid(object);
+  string oid_t = get_oid(object);
 
   librados::ObjectWriteOperation op;
   if (check_state) {
@@ -6465,7 +6465,7 @@ int RGWStateLog::store_entry(const string& client_id, const string& op_id, const
   utime_t ts = ceph_clock_now(store->ctx());
   bufferlist nobl;
   cls_statelog_add(op, client_id, op_id, object, ts, state, (bl ? *bl : nobl));
-  r = ioctx.operate(oid, &op);
+  r = ioctx.operate(oid_t, &op);
   if (r < 0) {
     return r;
   }
@@ -6486,11 +6486,11 @@ int RGWStateLog::remove_entry(const string& client_id, const string& op_id, cons
   if (r < 0)
     return r;
 
-  string oid = get_oid(object);
+  string oid_t = get_oid(object);
 
   librados::ObjectWriteOperation op;
   cls_statelog_remove_by_object(op, object, op_id);
-  r = ioctx.operate(oid, &op);
+  r = ioctx.operate(oid_t, &op);
   if (r < 0) {
     return r;
   }
@@ -6528,8 +6528,8 @@ int RGWStateLog::list_entries(void *handle, int max_entries,
   entries.clear();
 
   for (; state->cur_shard <= state->max_shard && max_entries > 0; ++state->cur_shard) {
-    string oid;
-    oid_str(state->cur_shard, oid);
+    string oid_t;
+    oid_str(state->cur_shard, oid_t);
 
     librados::ObjectReadOperation op;
     list<cls_statelog_entry> ents;
@@ -6537,7 +6537,7 @@ int RGWStateLog::list_entries(void *handle, int max_entries,
     cls_statelog_list(op, state->client_id, state->op_id, state->object, state->marker,
 		      max_entries, ents, &state->marker, &truncated);
     bufferlist ibl;
-    r = ioctx.operate(oid, &op, &ibl);
+    r = ioctx.operate(oid_t, &op, &ibl);
     if (r == -ENOENT) {
       truncated = false;
       r = 0;
@@ -6649,8 +6649,8 @@ int RGWOpState::renew_state(const string& client_id, const string& op_id, const 
   return store_entry(client_id, op_id, object, s, NULL, &s);
 }
 
-RGWOpStateSingleOp::RGWOpStateSingleOp(RGWRados *store, const string& cid, const string& oid,
-				       const string& obj) : os(store), client_id(cid), op_id(oid), object(obj)
+RGWOpStateSingleOp::RGWOpStateSingleOp(RGWRados *store, const string& cid, const string& oid_t,
+				       const string& oid) : os(store), client_id(cid), op_id(oid_t), object(oid)
 {
   cct = store->ctx();
   cur_state = RGWOpState::OPSTATE_UNKNOWN;

@@ -137,7 +137,7 @@ public:
     return getPlacer()->detach();
   };
   // Returns negative POSIX error code on error.
-  virtual size_t place(const oid& object,
+  virtual size_t place(const oid_t& object,
 		       const OSDMap& map,
 		       const std::function<void(int)>& f) const {
     return getPlacer()->place(object, map, f);

@@ -32,9 +32,9 @@ public:
   struct coll_entry_t {
     int m_id;
     coll_t m_coll;
-    oid m_meta_obj;
+    oid_t m_meta_obj;
     ObjectStore::Sequencer m_osr;
-    map<int, oid*> m_objects;
+    map<int, oid_t*> m_objects;
     int m_next_object_id;
 
     coll_entry_t(int i, char *coll_buf, char *meta_obj_buf)
@@ -44,18 +44,18 @@ public:
     }
     ~coll_entry_t();
 
-    oid *touch_obj(int id);
+    oid_t *touch_obj(int id);
     bool check_for_obj(int id);
-    oid *get_obj(int id);
-    oid *remove_obj(int id);
-    oid *get_obj_at(int pos, int *key = NULL);
-    oid *remove_obj_at(int pos, int *key = NULL);
-    oid *replace_obj(int id, oid *obj);
+    oid_t *get_obj(int id);
+    oid_t *remove_obj(int id);
+    oid_t *get_obj_at(int pos, int *key = NULL);
+    oid_t *remove_obj_at(int pos, int *key = NULL);
+    oid_t *replace_obj(int id, oid_t *oid);
     int get_random_obj_id(rngen_t& gen);
 
    private:
-    oid *get_obj(int id, bool remove);
-    oid *get_obj_at(int pos, bool remove, int *key = NULL);
+    oid_t *get_obj(int id, bool remove);
+    oid_t *get_obj_at(int pos, bool remove, int *key = NULL);
   };
 
   /* kept in upper case for consistency with coll_t's */

@@ -32,16 +32,16 @@ set(const XMLObjIter::map_iter_t &_cur, const XMLObjIter::map_iter_t &_end)
 XMLObj *XMLObjIter::
 get_next()
 {
-  XMLObj *obj = NULL;
+  XMLObj *oid = NULL;
   if (cur != end) {
-    obj = cur->second;
+    oid = cur->second;
     ++cur;
   }
-  return obj;
+  return oid;
 };
 
-ostream& operator<<(ostream& out, XMLObj& obj) {
-   out << obj.obj_type << ": " << obj.data;
+ostream& operator<<(ostream& out, XMLObj& oid) {
+   out << oid.obj_type << ": " << oid.data;
    return out;
 }
 
@@ -86,9 +86,9 @@ XMLObj::get_parent()
 }
 
 void XMLObj::
-add_child(string el, XMLObj *obj)
+add_child(string el, XMLObj *oid)
 {
-  children.insert(pair<string, XMLObj *>(el, obj));
+  children.insert(pair<string, XMLObj *>(el, oid));
 }
 
 bool XMLObj::
@@ -147,26 +147,26 @@ RGWXMLParser::
   free(buf);
   vector<XMLObj *>::iterator iter;
   for (iter = objs.begin(); iter != objs.end(); ++iter) {
-    XMLObj *obj = *iter;
-    delete obj;
+    XMLObj *oid = *iter;
+    delete oid;
   }
 }
 
 bool RGWXMLParser::xml_start(const char *el, const char **attr) {
-  XMLObj * obj = alloc_obj(el);
-  if (!obj) {
-    obj = new XMLObj();
+  XMLObj * oid = alloc_obj(el);
+  if (!oid) {
+    oid = new XMLObj();
   }
-  if (!obj->xml_start(cur_obj, el, attr))
+  if (!oid->xml_start(cur_obj, el, attr))
     return false;
   if (cur_obj) {
-    cur_obj->add_child(el, obj);
+    cur_obj->add_child(el, oid);
   } else {
-    children.insert(pair<string, XMLObj *>(el, obj));
+    children.insert(pair<string, XMLObj *>(el, oid));
   }
-  cur_obj = obj;
+  cur_obj = oid;
 
-  objs.push_back(obj);
+  objs.push_back(oid);
   return true;
 }
 

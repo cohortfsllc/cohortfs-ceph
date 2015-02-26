@@ -95,7 +95,7 @@ class WorkloadGenerator : public TestObjectStoreState {
 
   int get_uniform_random_value(int min, int max);
   coll_entry_t *get_rnd_coll_entry(bool erase);
-  oid *get_rnd_obj(coll_entry_t *entry);
+  oid_t *get_rnd_obj(coll_entry_t *entry);
   int get_random_collection_nr();
   int get_random_object_nr(int coll_nr);
 
@@ -103,9 +103,9 @@ class WorkloadGenerator : public TestObjectStoreState {
   void get_filled_byte_array(bufferlist& bl, size_t size);
 
   void do_write_object(ObjectStore::Transaction *t,
-      coll_t coll, oid obj, C_StatState *stat);
+      coll_t coll, oid_t oid, C_StatState *stat);
   void do_setattr_object(ObjectStore::Transaction *t,
-      coll_t coll, oid obj, C_StatState *stat);
+      coll_t coll, oid_t oid, C_StatState *stat);
   void do_setattr_collection(ObjectStore::Transaction *t, coll_t coll,
       C_StatState *stat);
   void do_append_log(ObjectStore::Transaction *t, coll_entry_t *entry,

@@ -63,7 +63,7 @@ public:
   JSONObjIter find_first(const string& name);
   JSONObj *find_obj(const string& name);
 
-  friend ostream& operator<<(ostream& out, JSONObj& obj); // does not work, FIXME
+  friend ostream& operator<<(ostream& out, JSONObj& oid); // does not work, FIXME
 
   bool is_array();
   bool is_object();
@@ -108,46 +108,46 @@ public:
   }
 
   template<class T>
-  static bool decode_json(const char *name, T& val, JSONObj *obj,
+  static bool decode_json(const char *name, T& val, JSONObj *oid,
 			  bool mandatory = false);
 
   template<class C>
   static bool decode_json(const char *name, C& container,
-			  void (*cb)(C&, JSONObj *obj), JSONObj *obj,
+			  void (*cb)(C&, JSONObj *oid), JSONObj *oid,
 			  bool mandatory = false);
 
   template<class T>
   static void decode_json(const char *name, T& val, T& default_val,
-			  JSONObj *obj);
+			  JSONObj *oid);
 };
 
 template<class T>
-void decode_json_obj(T& val, JSONObj *obj)
+void decode_json_obj(T& val, JSONObj *oid)
 {
-  val.decode_json(obj);
+  val.decode_json(oid);
 }
 
-static inline void decode_json_obj(string& val, JSONObj *obj)
+static inline void decode_json_obj(string& val, JSONObj *oid)
 {
-  val = obj->get_data();
+  val = oid->get_data();
 }
 
-void decode_json_obj(unsigned long long& val, JSONObj *obj);
-void decode_json_obj(long long& val, JSONObj *obj);
-void decode_json_obj(unsigned long& val, JSONObj *obj);
-void decode_json_obj(long& val, JSONObj *obj);
-void decode_json_obj(unsigned& val, JSONObj *obj);
-void decode_json_obj(int& val, JSONObj *obj);
-void decode_json_obj(bool& val, JSONObj *obj);
-void decode_json_obj(bufferlist& val, JSONObj *obj);
-void decode_json_obj(ceph::real_time& val, JSONObj *obj);
+void decode_json_obj(unsigned long long& val, JSONObj *oid);
+void decode_json_obj(long long& val, JSONObj *oid);
+void decode_json_obj(unsigned long& val, JSONObj *oid);
+void decode_json_obj(long& val, JSONObj *oid);
+void decode_json_obj(unsigned& val, JSONObj *oid);
+void decode_json_obj(int& val, JSONObj *oid);
+void decode_json_obj(bool& val, JSONObj *oid);
+void decode_json_obj(bufferlist& val, JSONObj *oid);
+void decode_json_obj(ceph::real_time& val, JSONObj *oid);
 
 template<class T>
-void decode_json_obj(list<T>& l, JSONObj *obj)
+void decode_json_obj(list<T>& l, JSONObj *oid)
 {
   l.clear();
 
-  JSONObjIter iter = obj->find_first();
+  JSONObjIter iter = oid->find_first();
 
   for (; !iter.end(); ++iter) {
     T val;
@@ -158,11 +158,11 @@ void decode_json_obj(list<T>& l, JSONObj *obj)
 }
 
 template<class K, class V>
-void decode_json_obj(map<K, V>& m, JSONObj *obj)
+void decode_json_obj(map<K, V>& m, JSONObj *oid)
 {
   m.clear();
 
-  JSONObjIter iter = obj->find_first();
+  JSONObjIter iter = oid->find_first();
 
   for (; !iter.end(); ++iter) {
     K key;
@@ -175,11 +175,11 @@ void decode_json_obj(map<K, V>& m, JSONObj *obj)
 }
 
 template<class C>
-void decode_json_obj(C& container, void (*cb)(C&, JSONObj *obj), JSONObj *obj)
+void decode_json_obj(C& container, void (*cb)(C&, JSONObj *oid), JSONObj *oid)
 {
   container.clear();
 
-  JSONObjIter iter = obj->find_first();
+  JSONObjIter iter = oid->find_first();
 
   for (; !iter.end(); ++iter) {
     JSONObj *o = *iter;
@@ -188,9 +188,9 @@ void decode_json_obj(C& container, void (*cb)(C&, JSONObj *obj), JSONObj *obj)
 }
 
 template<class T>
-bool JSONDecoder::decode_json(const char *name, T& val, JSONObj *obj, bool mandatory)
+bool JSONDecoder::decode_json(const char *name, T& val, JSONObj *oid, bool mandatory)
 {
-  JSONObjIter iter = obj->find_first(name);
+  JSONObjIter iter = oid->find_first(name);
   if (iter.end()) {
     if (mandatory) {
       string s = "missing mandatory field " + string(name);
@@ -212,11 +212,11 @@ bool JSONDecoder::decode_json(const char *name, T& val, JSONObj *obj, bool manda
 }
 
 template<class C>
-bool JSONDecoder::decode_json(const char *name, C& container, void (*cb)(C&, JSONObj *), JSONObj *obj, bool mandatory)
+bool JSONDecoder::decode_json(const char *name, C& container, void (*cb)(C&, JSONObj *), JSONObj *oid, bool mandatory)
 {
   container.clear();
 
-  JSONObjIter iter = obj->find_first(name);
+  JSONObjIter iter = oid->find_first(name);
   if (iter.end()) {
     if (mandatory) {
       string s = "missing mandatory field " + string(name);
@@ -237,9 +237,9 @@ bool JSONDecoder::decode_json(const char *name, C& container, void (*cb)(C&, JSO
 }
 
 template<class T>
-void JSONDecoder::decode_json(const char *name, T& val, T& default_val, JSONObj *obj)
+void JSONDecoder::decode_json(const char *name, T& val, T& default_val, JSONObj *oid)
 {
-  JSONObjIter iter = obj->find_first(name);
+  JSONObjIter iter = oid->find_first(name);
   if (iter.end()) {
     val = default_val;
     return;
@@ -295,7 +295,7 @@ static void encode_json(const char *name, const std::list<T>& l, ceph::Formatter
 {
   f->open_array_section(name);
   for (typename std::list<T>::const_iterator iter = l.begin(); iter != l.end(); ++iter) {
-    encode_json("obj", *iter, f);
+    encode_json("oid", *iter, f);
   }
   f->close_section();
 }
@@ -306,7 +306,7 @@ void encode_json_map(const char *name, const map<K, V>& m, ceph::Formatter *f)
   f->open_array_section(name);
   typename map<K,V>::const_iterator iter;
   for (iter = m.begin(); iter != m.end(); ++iter) {
-    encode_json("obj", iter->second, f);
+    encode_json("oid", iter->second, f);
   }
   f->close_section();
 }

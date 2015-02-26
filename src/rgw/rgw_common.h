@@ -315,8 +315,8 @@ struct RGWAccessKey {
   void dump(Formatter *f, const string& user, bool swift) const;
   static void generate_test_instances(list<RGWAccessKey*>& o);
 
-  void decode_json(JSONObj *obj);
-  void decode_json(JSONObj *obj, bool swift);
+  void decode_json(JSONObj *oid);
+  void decode_json(JSONObj *oid, bool swift);
 };
 WRITE_CLASS_ENCODER(RGWAccessKey);
 
@@ -342,7 +342,7 @@ struct RGWSubUser {
   void dump(Formatter *f, const string& user) const;
   static void generate_test_instances(list<RGWSubUser*>& o);
 
-  void decode_json(JSONObj *obj);
+  void decode_json(JSONObj *oid);
 };
 WRITE_CLASS_ENCODER(RGWSubUser);
 
@@ -372,14 +372,14 @@ public:
   void dump(Formatter *f) const;
   void dump(Formatter *f, const char *name) const;
 
-  void decode_json(JSONObj *obj);
+  void decode_json(JSONObj *oid);
 };
 WRITE_CLASS_ENCODER(RGWUserCaps);
 
 void encode_json(const char *name, const obj_version& v, Formatter *f);
 void encode_json(const char *name, const RGWUserCaps& val, Formatter *f);
 
-void decode_json_obj(obj_version& v, JSONObj *obj);
+void decode_json_obj(obj_version& v, JSONObj *oid);
 
 struct RGWUserInfo
 {
@@ -512,7 +512,7 @@ struct RGWUserInfo
   void dump(Formatter *f) const;
   static void generate_test_instances(list<RGWUserInfo*>& o);
 
-  void decode_json(JSONObj *obj);
+  void decode_json(JSONObj *oid);
 
   void clear() {
     user_id.clear();
@@ -533,7 +533,7 @@ struct rgw_bucket {
   std::string marker;
   std::string bucket_id;
 
-  std::string oid; /*
+  std::string oid_t; /*
 		    * runtime in-memory only info. If not empty, points to the bucket instance object
 		    */
 
@@ -608,7 +608,7 @@ struct rgw_bucket {
   }
 
   void dump(Formatter *f) const;
-  void decode_json(JSONObj *obj);
+  void decode_json(JSONObj *oid);
   static void generate_test_instances(list<rgw_bucket*>& o);
 
   bool operator<(const rgw_bucket& b) const {
@@ -732,7 +732,7 @@ struct RGWBucketInfo
   void dump(Formatter *f) const;
   static void generate_test_instances(list<RGWBucketInfo*>& o);
 
-  void decode_json(JSONObj *obj);
+  void decode_json(JSONObj *oid);
 
   RGWBucketInfo() : flags(0), creation_time(0), has_instance_obj(false) {}
 };
@@ -779,7 +779,7 @@ struct RGWBucketEntryPoint
   }
 
   void dump(Formatter *f) const;
-  void decode_json(JSONObj *obj);
+  void decode_json(JSONObj *oid);
 };
 WRITE_CLASS_ENCODER(RGWBucketEntryPoint)
 
@@ -1084,31 +1084,31 @@ public:
    * and cuts down the name to the unmangled version. If it is not
    * part of the given namespace, it returns false.
    */
-  static bool translate_raw_obj_to_obj_in_ns(string& obj, string& ns) {
+  static bool translate_raw_obj_to_obj_in_ns(string& oid, string& ns) {
     if (ns.empty()) {
-      if (obj[0] != '_')
+      if (oid[0] != '_')
 	return true;
 
-      if (obj.size() >= 2 && obj[1] == '_') {
-	obj = obj.substr(1);
+      if (oid.size() >= 2 && oid[1] == '_') {
+	oid = obj.substr(1);
 	return true;
       }
 
       return false;
     }
 
-    if (obj[0] != '_' || obj.size() < 3) // for namespace, min size would be 3: _x_
+    if (oid[0] != '_' || oid.size() < 3) // for namespace, min size would be 3: _x_
       return false;
 
-    int pos = obj.find('_', 1);
+    int pos = oid.find('_', 1);
     if (pos <= 1) // if it starts with __, it's not in our namespace
       return false;
 
-    string obj_ns = obj.substr(1, pos - 1);
+    string obj_ns = oid.substr(1, pos - 1);
     if (obj_ns.compare(ns) != 0)
 	return false;
 
-    obj = obj.substr(pos + 1);
+    oid = obj.substr(pos + 1);
     return true;
   }
 
@@ -1120,24 +1120,24 @@ public:
    * It returns true after successfully doing so, or
    * false if it fails.
    */
-  static bool strip_namespace_from_object(string& obj, string& ns) {
+  static bool strip_namespace_from_object(string& oid, string& ns) {
     ns.clear();
-    if (obj[0] != '_') {
+    if (oid[0] != '_') {
       return true;
     }
 
-    size_t pos = obj.find('_', 1);
+    size_t pos = oid.find('_', 1);
     if (pos == string::npos) {
       return false;
     }
 
-    size_t period_pos = obj.find('.');
+    size_t period_pos = oid.find('.');
     if (period_pos < pos) {
       return false;
     }
 
-    ns = obj.substr(1, pos-1);
-    obj = obj.substr(pos+1, string::npos);
+    ns = oid.substr(1, pos-1);
+    oid = obj.substr(pos+1, string::npos);
     return true;
   }
 

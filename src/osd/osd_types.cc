@@ -756,7 +756,7 @@ void object_info_t::decode(bufferlist::iterator& bl)
 
 void object_info_t::dump(Formatter *f) const
 {
-  f->open_object_section("oid");
+  f->open_object_section("oid_t");
   soid.dump(f);
   f->close_section();
   f->dump_stream("version") << version;
@@ -859,10 +859,10 @@ ostream& operator<<(ostream& out, const OSDOp& op)
     switch (op.op.op) {
     case CEPH_OSD_OP_ASSERT_SRC_VERSION:
       out << " v" << op.op.watch.ver
-	  << " of " << op.obj;
+	  << " of " << op.oid;
       break;
     case CEPH_OSD_OP_SRC_CMPXATTR:
-      out << " " << op.obj;
+      out << " " << op.oid;
       if (op.op.xattr.name_len && op.indata.length()) {
 	out << " ";
 	op.indata.write(0, op.op.xattr.name_len, out);
@@ -883,7 +883,7 @@ void OSDOp::split_osd_op_vector_in_data(vector<OSDOp>& ops, bufferlist& in)
   bufferlist::iterator datap = in.begin();
   for (unsigned i = 0; i < ops.size(); i++) {
     if (ceph_osd_op_type_multi(ops[i].op.op)) {
-      ::decode(ops[i].obj, datap);
+      ::decode(ops[i].oid, datap);
     }
     if (ops[i].op.payload_len) {
       datap.copy(ops[i].op.payload_len, ops[i].indata);
@@ -895,7 +895,7 @@ void OSDOp::merge_osd_op_vector_in_data(vector<OSDOp>& ops, bufferlist& out)
 {
   for (unsigned i = 0; i < ops.size(); i++) {
     if (ceph_osd_op_type_multi(ops[i].op.op)) {
-      ::encode(ops[i].obj, out);
+      ::encode(ops[i].oid, out);
     }
     if (ops[i].indata.length()) {
       ops[i].op.payload_len = ops[i].indata.length();

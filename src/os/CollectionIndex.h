@@ -126,26 +126,26 @@ protected:
    * @return Error Code, 0 for success
    */
   virtual int created(
-    const oid &obj, ///< [in] Created object.
+    const oid_t &oid, ///< [in] Created object.
     const char *path	   ///< [in] Path to created object.
     ) = 0;
 
   /**
-   * Removes obj from the collection
+   * Removes oid from the collection
    *
    * @return Error Code, 0 for success
    */
   virtual int unlink(
-    const oid &obj ///< [in] Object to remove
+    const oid_t &oid ///< [in] Object to remove
     ) = 0;
 
   /**
-   * Gets the IndexedPath for obj.
+   * Gets the IndexedPath for oid.
    *
    * @return Error Code, 0 for success
    */
   virtual int lookup(
-    const oid &obj, ///< [in] Object to lookup
+    const oid_t &oid, ///< [in] Object to lookup
     IndexedPath *path,	   ///< [out] Path to object
     int *exist ///< [out] True if the object exists, else false
     ) = 0;
@@ -166,16 +166,16 @@ protected:
 
   /// List contents of collection by hash
   virtual int collection_list_partial(
-    const oid &start, ///< [in] object at which to start
+    const oid_t &start, ///< [in] object at which to start
     int min_count, ///< [in] get at least min_count objects
     int max_count, ///< [in] return at most max_count objects
-    vector<oid> *ls,  ///< [out] Listed objects
-    oid *next ///< [out] Next object to list
+    vector<oid_t> *ls,  ///< [out] Listed objects
+    oid_t *next ///< [out] Next object to list
     ) = 0;
 
   /// List contents of collection.
   virtual int collection_list(
-    vector<oid> *ls ///< [out] Listed Objects
+    vector<oid_t> *ls ///< [out] Listed Objects
     ) = 0;
 
   /// Call prior to removing directory

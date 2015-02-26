@@ -129,8 +129,8 @@ void Journaler::read_head(Context *on_finish, bufferlist *bl)
 {
   assert(state == STATE_READHEAD || state == STATE_REREADHEAD);
 
-  oid obj = file_oid(ino, 0);
-  objecter->read_full(obj, volume, bl, 0, on_finish);
+  oid_t oid = file_oid(ino, 0);
+  objecter->read_full(oid, volume, bl, 0, on_finish);
 }
 
 /**
@@ -234,8 +234,8 @@ void Journaler::probe(Context *finish, uint64_t *end)
 {
   ldout(cct, 1) << "probing for end of the log" << dendl;
   assert(state == STATE_PROBING || state == STATE_REPROBING);
-  oid obj = file_oid(ino, 0);
-  objecter->stat(obj, volume, end, NULL, CEPH_OSD_FLAG_RWORDERED,
+  oid_t oid = file_oid(ino, 0);
+  objecter->stat(oid, volume, end, NULL, CEPH_OSD_FLAG_RWORDERED,
 		 finish);
 }
 
@@ -343,12 +343,12 @@ void Journaler::write_head(Context *oncommit)
   bufferlist bl;
   ::encode(last_written, bl);
 
-  oid obj = file_oid(ino, 0);
+  oid_t oid = file_oid(ino, 0);
 #if 0
-  objecter->write_full(obj, volume, bl, ceph::real_clock::now(), 0,
+  objecter->write_full(oid, volume, bl, ceph::real_clock::now(), 0,
 		       NULL, new C_WriteHead(this, last_written, oncommit));
 #else
-  objecter->write(obj, volume, 0, bl.length(), bl, ceph::real_clock::now(), 0,
+  objecter->write(oid, volume, 0, bl.length(), bl, ceph::real_clock::now(), 0,
 		  NULL, new C_WriteHead(this, last_written, oncommit));
 #endif
 }

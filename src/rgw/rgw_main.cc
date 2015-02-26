@@ -495,10 +495,10 @@ static void godown_alarm(int signum)
   _exit(0);
 }
 
-static int call_log_intent(RGWRados *store, void *ctx, rgw_obj& obj, RGWIntentEvent intent)
+static int call_log_intent(RGWRados *store, void *ctx, rgw_obj& oid, RGWIntentEvent intent)
 {
   struct req_state *s = (struct req_state *)ctx;
-  return rgw_log_intent(store, s, obj, intent);
+  return rgw_log_intent(store, s, oid, intent);
 }
 
 

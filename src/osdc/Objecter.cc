@@ -274,7 +274,7 @@ namespace OSDC {
 #endif // LINGER
   }
 
-  ceph_tid_t Objecter::linger_mutate(const oid& obj,
+  ceph_tid_t Objecter::linger_mutate(const oid_t& oid,
 				     const shared_ptr<const Volume>& volume,
 				     unique_ptr<ObjOp>& op,
 				     ceph::real_time mtime,
@@ -284,7 +284,7 @@ namespace OSDC {
   {
 #ifdef LINGER
     LingerOp *info = new LingerOp;
-    info->base_obj = obj;
+    info->base_obj = oid;
     info->volume = volume;
     info->mtime = mtime;
     info->target.flags = flags | CEPH_OSD_FLAG_WRITE;
@@ -302,7 +302,7 @@ namespace OSDC {
     return 0;
   }
 
-  ceph_tid_t Objecter::linger_read(const oid& obj,
+  ceph_tid_t Objecter::linger_read(const oid_t& oid,
 				   const shared_ptr<const Volume>& volume,
 				   unique_ptr<ObjOp>& op,
 				   bufferlist& inbl, bufferlist *poutbl,
@@ -312,9 +312,9 @@ namespace OSDC {
   {
 #ifdef LINGER
     LingerOp *info = new LingerOp;
-    info->target.base_obj = obj;
+    info->target.base_obj = oid;
     info->target.base_oloc = oloc;
-    if (info->target.base_oloc.key == obj)
+    if (info->target.base_oloc.key == oid)
       info->target.base_oloc.key.clear();
     info->target.flags = flags | CEPH_OSD_FLAG_READ;
     info->ops = op.ops;
@@ -1196,7 +1196,7 @@ namespace OSDC {
 
 // read | write ---------------------------
 
-  ceph_tid_t Objecter::read_full(const oid& obj,
+  ceph_tid_t Objecter::read_full(const oid_t& oid,
 				 const shared_ptr<const Volume>& volume,
 				 bufferlist *pbl, int flags,
 				 Context *onfinish, version_t *objver,
@@ -1205,7 +1205,7 @@ namespace OSDC {
   {
     unique_ptr<ObjOp> ops = init_ops(volume, extra_ops);
     ops->read_full(pbl);
-    Op *o = new Op(obj, volume, ops,
+    Op *o = new Op(oid, volume, ops,
       flags | global_op_flags | CEPH_OSD_FLAG_READ,
       onfinish, 0, objver, trace);
     return op_submit(o);
@@ -1310,7 +1310,7 @@ namespace OSDC {
     }
 
     // send?
-    ldout(cct, 10) << "_op_submit obj " << op.obj
+    ldout(cct, 10) << "_op_submit oid " << op.oid
 		   << " " << op.volume << " "
 		   << " tid " << op.tid << dendl;
 
@@ -1434,7 +1434,7 @@ namespace OSDC {
     // goof up.
     uint32_t i = 0;
     t.volume->place(
-      t.obj, *osdmap, [&](int osd) {
+      t.oid, *osdmap, [&](int osd) {
 	if (likely((i < t.subops.size()) && !t.subops[i].done &&
 		   (t.subops[i].osd != osd))) {
 	  t.subops[i].osd = osd;

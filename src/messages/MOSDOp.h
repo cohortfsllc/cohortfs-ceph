@@ -24,7 +24,7 @@
 /*
  * OSD op
  *
- * obj - object id
+ * oid - object id
  * op  - OSD_OP_DELETE, etc.
  *
  */
@@ -44,7 +44,7 @@ private:
   eversion_t reassert_version;
   int32_t retry_attempt;   // 0 is first attempt.  -1 if we don't know.
 
-  oid obj;
+  oid_t oid;
   boost::uuids::uuid volume;
 public:
   vector<OSDOp> ops;
@@ -59,7 +59,7 @@ public:
   int get_client_inc() { return client_inc; }
   ceph_tid_t get_client_tid() { return header.tid; }
 
-  oid& get_oid() { return obj; }
+  oid_t& get_oid() { return oid; }
 
   const boost::uuids::uuid& get_volume() const {
     return volume;
@@ -73,13 +73,13 @@ public:
 
   MOSDOp()
     : Message(CEPH_MSG_OSD_OP, HEAD_VERSION, COMPAT_VERSION) { }
-  MOSDOp(int inc, long tid, oid& _obj,
+  MOSDOp(int inc, long tid, oid_t& _obj,
 	 const boost::uuids::uuid& _volume,
 	 epoch_t _osdmap_epoch, int _flags)
     : Message(CEPH_MSG_OSD_OP, HEAD_VERSION, COMPAT_VERSION),
       client_inc(inc),
       osdmap_epoch(_osdmap_epoch), flags(_flags), retry_attempt(-1),
-      obj(_obj), volume(_volume) {
+      oid(_obj), volume(_volume) {
     set_tid(tid);
   }
 private:
@@ -167,7 +167,7 @@ public:
     ::encode(reassert_version, payload);
 
     ::encode(volume, payload);
-    ::encode(obj, payload);
+    ::encode(oid, payload);
 
     uint16_t num_ops = ops.size();
     ::encode(num_ops, payload);
@@ -192,7 +192,7 @@ public:
     ::decode(reassert_version, p);
 
     ::decode(volume, p);
-    ::decode(obj, p);
+    ::decode(oid, p);
 
     uint16_t num_ops;
     ::decode(num_ops, p);
@@ -218,7 +218,7 @@ public:
     out << "osd_op(" << get_reqid();
     out << " ";
     out << volume << ":";
-    out << obj;
+    out << oid;
 
     out << " " << ops;
     if (is_retry_attempt())

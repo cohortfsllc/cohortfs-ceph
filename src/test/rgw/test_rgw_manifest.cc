@@ -48,11 +48,11 @@ void append_stripes(list<rgw_obj> *objs, RGWObjManifest& manifest, uint64_t obj_
   for (uint64_t ofs = manifest.get_max_head_size(); ofs < obj_size; ofs += stripe_size) {
     char buf[16];
     snprintf(buf, sizeof(buf), "%d", ++i);
-    string oid = prefix + buf;
-  cout << "oid=" << oid << std::endl;
-    rgw_obj obj;
-    obj.init_ns(bucket, oid, "shadow");
-    objs->push_back(obj);
+    string oid_t = prefix + buf;
+  cout << "oid_t=" << oid << std::endl;
+    rgw_obj oid;
+    oid.init_ns(bucket, oid_t, "shadow");
+    objs->push_back(oid);
   }
 }
 
@@ -64,7 +64,7 @@ static void gen_obj(uint64_t obj_size, uint64_t head_max_size, uint64_t stripe_s
 
   init_bucket(bucket, "buck");
 
-  *head = rgw_obj(*bucket, "oid");
+  *head = rgw_obj(*bucket, "oid_t");
   gen->create_begin(g_ceph_context, manifest, *bucket, *head);
 
   append_head(test_objs, *head);
@@ -81,22 +81,22 @@ static void gen_obj(uint64_t obj_size, uint64_t head_max_size, uint64_t stripe_s
   list<rgw_obj>::iterator iter = test_objs->begin();
 
   while (ofs < obj_size) {
-    rgw_obj obj = gen->get_cur_obj();
-cout << "obj=" << obj << std::endl;
-    ASSERT_TRUE(obj == *iter);
+    rgw_obj oid = gen->get_cur_obj();
+cout << "oid=" << obj << std::endl;
+    ASSERT_TRUE(oid == *iter);
 
     ofs = MIN(ofs + gen->cur_stripe_max_size(), obj_size);
     gen->create_next(ofs);
 
-  cout << "obj=" << obj << " *iter=" << *iter << std::endl;
+  cout << "oid=" << obj << " *iter=" << *iter << std::endl;
   cout << "test_objs.size()=" << test_objs->size() << std::endl;
     ++iter;
 
   }
 
   if (manifest->has_tail()) {
-    rgw_obj obj = gen->get_cur_obj();
-    ASSERT_TRUE(obj == *iter);
+    rgw_obj oid = gen->get_cur_obj();
+    ASSERT_TRUE(oid == *iter);
     ++iter;
   }
   ASSERT_TRUE(iter == test_objs->end());

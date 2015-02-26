@@ -233,10 +233,10 @@ int OSD::mkfs(CephContext *cct, ObjectStore *store, const string &dev,
 	bl.push_back(bp);
 	dout(0) << "testing disk bandwidth..." << dendl;
 	ceph::mono_time start = ceph::mono_clock::now();
-	oid obj("disk_bw_test");
+	oid_t oid("disk_bw_test");
 	for (int i=0; i<1000; i++) {
 	  ObjectStore::Transaction *t = new ObjectStore::Transaction(1);
-	  t->write(coll_t::META_COLL, obj, i*bl.length(), bl.length(), bl);
+	  t->write(coll_t::META_COLL, oid, i*bl.length(), bl.length(), bl);
 	  store->queue_transaction_and_cleanup(NULL, t);
 	}
 	store->sync();
@@ -244,7 +244,7 @@ int OSD::mkfs(CephContext *cct, ObjectStore *store, const string &dev,
 	dout(0) << "measured " << (1000.0 / ceph::span_to_double(elapsed))
 		<< " mb/sec" << dendl;
 	ObjectStore::Transaction tr;
-	tr.remove(coll_t::META_COLL, obj);
+	tr.remove(coll_t::META_COLL, oid);
 	ret = store->apply_transaction(tr);
 	if (ret) {
 	  derr << "OSD::mkfs: error while benchmarking: apply_transaction returned "
@@ -525,7 +525,7 @@ bool OSD::asok_command(string command, cmdmap_t& cmdmap, string format,
 
       f->open_array_section("watch");
 
-      f->dump_string("object", it->obj.name);
+      f->dump_string("object", it->oid.name);
 
       f->open_object_section("entity_name");
       it->wi.name.dump(f);
@@ -951,12 +951,12 @@ void OSD::recursive_remove_collection(ObjectStore *store, coll_t tmp)
 
   ObjectStore::Transaction t;
 
-  vector<oid> objects;
+  vector<oid_t> objects;
   store->collection_list(tmp, objects);
 
   // delete them.
   unsigned removed = 0;
-  for (vector<oid>::iterator p = objects.begin();
+  for (vector<oid_t>::iterator p = objects.begin();
        p != objects.end();
        ++p, removed++) {
     OSDriver::OSTransaction _t(driver.get_transaction(&t));
@@ -2308,7 +2308,7 @@ void OSD::handle_osd_map(MOSDMap *m)
 	last_marked_full = e;
       pinned_maps.push_back(add_map(o));
 
-      oid fulloid = get_osdmap_pobject_name(e);
+      oid_t fulloid = get_osdmap_pobject_name(e);
       t.write(coll_t::META_COLL, fulloid, 0, bl.length(), bl);
       pin_map_bl(e, bl);
       continue;
@@ -2318,8 +2318,8 @@ void OSD::handle_osd_map(MOSDMap *m)
     if (p != m->incremental_maps.end()) {
       dout(10) << "handle_osd_map  got inc map for epoch " << e << dendl;
       bufferlist& bl = p->second;
-      oid obj = get_inc_osdmap_pobject_name(e);
-      t.write(coll_t::META_COLL, obj, 0, bl.length(), bl);
+      oid_t oid = get_inc_osdmap_pobject_name(e);
+      t.write(coll_t::META_COLL, oid, 0, bl.length(), bl);
       pin_map_inc_bl(e, bl);
 
       OSDMap *o = new OSDMap;
@@ -2346,7 +2346,7 @@ void OSD::handle_osd_map(MOSDMap *m)
       bufferlist fbl;
       o->encode(fbl);
 
-      oid fulloid = get_osdmap_pobject_name(e);
+      oid_t fulloid = get_osdmap_pobject_name(e);
       t.write(coll_t::META_COLL, fulloid, 0, fbl.length(), fbl);
       pin_map_bl(e, fbl);
       continue;
@@ -3194,7 +3194,7 @@ int OSD::init_op_flags(OpRequestRef op)
       op->set_read();
 
     // set READ flag if there are src_objs
-    if (iter->obj.name.length())
+    if (iter->oid.name.length())
       op->set_read();
 
     switch (iter->op.op) {

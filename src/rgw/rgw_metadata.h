@@ -67,9 +67,9 @@ public:
   virtual ~RGWMetadataHandler() {}
   virtual string get_type() = 0;
 
-  virtual int get(RGWRados *store, string& entry, RGWMetadataObject **obj) = 0;
+  virtual int get(RGWRados *store, string& entry, RGWMetadataObject **oid) = 0;
   virtual int put(RGWRados *store, string& entry, RGWObjVersionTracker& objv_tracker,
-		  time_t mtime, JSONObj *obj, sync_type_t type) = 0;
+		  time_t mtime, JSONObj *oid, sync_type_t type) = 0;
   virtual int remove(RGWRados *store, string& entry, RGWObjVersionTracker& objv_tracker) = 0;
 
   virtual int list_keys_init(RGWRados *store, void **phandle) = 0;
@@ -82,7 +82,7 @@ public:
   }
 
 protected:
-  virtual void get_pool_and_oid(RGWRados *store, const string& key, rgw_bucket& bucket, string& oid) = 0;
+  virtual void get_pool_and_oid(RGWRados *store, const string& key, rgw_bucket& bucket, string& oid_t) = 0;
   /**
    * Compare an incoming versus on-disk tag/version+mtime combo against
    * the sync mode to see if the new one should replace the on-disk one.
@@ -116,7 +116,7 @@ struct RGWMetadataLogInfo {
   utime_t last_update;
 
   void dump(Formatter *f) const;
-  void decode_json(JSONObj *obj);
+  void decode_json(JSONObj *oid);
 };
 
 class RGWMetadataLog {
@@ -124,10 +124,10 @@ class RGWMetadataLog {
   RGWRados *store;
   string prefix;
 
-  void get_shard_oid(int id, string& oid) {
+  void get_shard_oid(int id, string& oid_t) {
     char buf[16];
     snprintf(buf, sizeof(buf), "%d", id);
-    oid = prefix + buf;
+    oid_t = prefix + buf;
   }
 
 public:
@@ -190,10 +190,10 @@ public:
   int put_entry(RGWMetadataHandler *handler, const string& key, bufferlist& bl, bool exclusive,
 		RGWObjVersionTracker *objv_tracker, time_t mtime, map<string, bufferlist> *pattrs = NULL);
   int remove_entry(RGWMetadataHandler *handler, string& key, RGWObjVersionTracker *objv_tracker);
-  int set_attr(RGWMetadataHandler *handler, string& key, rgw_obj& obj, string& attr, bufferlist& bl,
+  int set_attr(RGWMetadataHandler *handler, string& key, rgw_obj& oid, string& attr, bufferlist& bl,
 	       RGWObjVersionTracker *objv_tracker);
   int set_attrs(RGWMetadataHandler *handler, string& key,
-		rgw_obj& obj, map<string, bufferlist>& attrs,
+		rgw_obj& oid, map<string, bufferlist>& attrs,
 		map<string, bufferlist>* rmattrs,
 		RGWObjVersionTracker *objv_tracker);
   int get(string& metadata_key, Formatter *f);

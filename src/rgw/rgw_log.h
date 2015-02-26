@@ -17,7 +17,7 @@ struct rgw_log_entry {
   utime_t time;
   string remote_addr;
   string user;
-  string obj;
+  string oid;
   string op;
   string uri;
   string http_status;
@@ -38,7 +38,7 @@ struct rgw_log_entry {
     ::encode(time, bl);
     ::encode(remote_addr, bl);
     ::encode(user, bl);
-    ::encode(obj, bl);
+    ::encode(oid, bl);
     ::encode(op, bl);
     ::encode(uri, bl);
     ::encode(http_status, bl);
@@ -61,7 +61,7 @@ struct rgw_log_entry {
     ::decode(time, p);
     ::decode(remote_addr, p);
     ::decode(user, p);
-    ::decode(obj, p);
+    ::decode(oid, p);
     ::decode(op, p);
     ::decode(uri, p);
     ::decode(http_status, p);
@@ -96,20 +96,20 @@ struct rgw_log_entry {
 WRITE_CLASS_ENCODER(rgw_log_entry)
 
 struct rgw_intent_log_entry {
-  rgw_obj obj;
+  rgw_obj oid;
   utime_t op_time;
   uint32_t intent;
 
   void encode(bufferlist &bl) const {
     ENCODE_START(2, 2, bl);
-    ::encode(obj, bl);
+    ::encode(oid, bl);
     ::encode(op_time, bl);
     ::encode(intent, bl);
     ENCODE_FINISH(bl);
   }
   void decode(bufferlist::iterator &p) {
     DECODE_START_LEGACY_COMPAT_LEN(2, 2, 2, p);
-    ::decode(obj, p);
+    ::decode(oid, p);
     ::decode(op_time, p);
     ::decode(intent, p);
     DECODE_FINISH(p);
@@ -136,8 +136,8 @@ public:
 };
 
 int rgw_log_op(RGWRados *store, struct req_state *s, const string& op_name, OpsLogSocket *olog);
-int rgw_log_intent(RGWRados *store, rgw_obj& obj, RGWIntentEvent intent, const utime_t& timestamp, bool utc);
-int rgw_log_intent(RGWRados *store, struct req_state *s, rgw_obj& obj, RGWIntentEvent intent);
+int rgw_log_intent(RGWRados *store, rgw_obj& oid, RGWIntentEvent intent, const utime_t& timestamp, bool utc);
+int rgw_log_intent(RGWRados *store, struct req_state *s, rgw_obj& oid, RGWIntentEvent intent);
 void rgw_log_usage_init(CephContext *cct, RGWRados *store);
 void rgw_log_usage_finalize();
 void rgw_format_ops_log_entry(struct rgw_log_entry& entry, Formatter *formatter);

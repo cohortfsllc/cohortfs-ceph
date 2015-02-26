@@ -20,14 +20,14 @@ public:
     finisher.stop();
   }
   void write(
-    const string &oid,
+    const string &oid_t,
     uint64_t offset,
     const bufferlist &bl,
     Context *on_applied,
     Context *on_commit);
 
   void read(
-    const string &oid,
+    const string &oid_t,
     uint64_t offset,
     uint64_t length,
     bufferlist *bl,

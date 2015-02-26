@@ -69,7 +69,7 @@ class StripObjectMap: public GenericObjectMap {
     Header header; // FIXME: Hold lock to avoid concurrent operations, it will
 		   // also block read operation which not should be permitted.
     coll_t cid;
-    oid obj;
+    oid_t oid;
     bool deleted;
     map<pair<string, string>, bufferlist> buffers;  // pair(prefix, key)
 
@@ -101,20 +101,20 @@ class StripObjectMap: public GenericObjectMap {
 
   static int file_to_extents(uint64_t offset, size_t len, uint64_t strip_size,
 			     vector<StripExtent> &extents);
-  int lookup_strip_header(const coll_t & cid, const oid &obj,
+  int lookup_strip_header(const coll_t & cid, const oid_t &oid,
 			  StripObjectHeader &header);
   int save_strip_header(StripObjectHeader &header,
 			const SequencerPosition &spos,
 			KeyValueDB::Transaction t);
-  int create_strip_header(const coll_t &cid, const oid &obj,
+  int create_strip_header(const coll_t &cid, const oid_t &oid,
 			  StripObjectHeader &strip_header,
 			  KeyValueDB::Transaction t);
   void clone_wrap(StripObjectHeader &old_header,
-		  const coll_t &cid, const oid &obj,
+		  const coll_t &cid, const oid_t &oid,
 		  KeyValueDB::Transaction t,
 		  StripObjectHeader *origin_header,
 		  StripObjectHeader *target_header);
-  void rename_wrap(const coll_t &cid, const oid &obj,
+  void rename_wrap(const coll_t &cid, const oid_t &oid,
 		   KeyValueDB::Transaction t,
 		   StripObjectHeader *header);
   // Already hold header to avoid lock header seq again
@@ -182,7 +182,7 @@ class KeyValueStore : public ObjectStore,
     return string(n);
   }
 
-  // A special coll used by store collection info, each obj in this coll
+  // A special coll used by store collection info, each oid in this coll
   // represent a coll_t
   static bool is_coll_obj(const coll_t &c) {
     return c.to_str().compare("COLLECTIONS") == 0;
@@ -190,8 +190,8 @@ class KeyValueStore : public ObjectStore,
   static coll_t get_coll_for_coll() {
     return coll_t("COLLECTIONS");
   }
-  static oid make_ghobject_for_coll(const coll_t &col) {
-    return oid(col.to_str());
+  static oid_t make_ghobject_for_coll(const coll_t &col) {
+    return oid_t(col.to_str());
   }
 
   // Each transaction has side effect which may influent the following
@@ -203,7 +203,7 @@ class KeyValueStore : public ObjectStore,
   // 3. Object modify(including omap, xattr)
   // 4. Clone or rename
   struct BufferTransaction {
-    typedef pair<coll_t, oid> uniq_id;
+    typedef pair<coll_t, oid_t> uniq_id;
     typedef map<uniq_id, StripObjectMap::StripObjectHeader> StripHeaderMap;
 
     //Dirty records
@@ -214,7 +214,7 @@ class KeyValueStore : public ObjectStore,
     SequencerPosition spos;
     KeyValueDB::Transaction t;
 
-    int lookup_cached_header(const coll_t &cid, const oid &obj,
+    int lookup_cached_header(const coll_t &cid, const oid_t &oid,
 			     StripObjectMap::StripObjectHeader **strip_header,
 			     bool create_if_missing);
     int get_buffer_keys(StripObjectMap::StripObjectHeader &strip_header,
@@ -228,9 +228,9 @@ class KeyValueStore : public ObjectStore,
 			   const string &prefix);
     int clear_buffer(StripObjectMap::StripObjectHeader &strip_header);
     void clone_buffer(StripObjectMap::StripObjectHeader &old_header,
-		      const coll_t &cid, const oid &obj);
+		      const coll_t &cid, const oid_t &oid);
     void rename_buffer(StripObjectMap::StripObjectHeader &old_header,
-		       const coll_t &cid, const oid &obj);
+		       const coll_t &cid, const oid_t &oid);
     int submit_transaction();
 
     BufferTransaction(KeyValueStore *store,
@@ -422,28 +422,28 @@ class KeyValueStore : public ObjectStore,
 		     uint64_t offset, size_t len, const bufferlist& bl,
 		     BufferTransaction &t, bool replica = false);
 
-  bool exists(const coll_t &cid, const oid& obj);
-  int stat(const coll_t &cid, const oid& obj, struct stat *st,
+  bool exists(const coll_t &cid, const oid_t& oid);
+  int stat(const coll_t &cid, const oid_t& oid, struct stat *st,
 	   bool allow_eio = false);
-  int read(const coll_t &cid, const oid& obj, uint64_t offset, size_t len,
+  int read(const coll_t &cid, const oid_t& oid, uint64_t offset, size_t len,
 	   bufferlist& bl, bool allow_eio = false);
-  int fiemap(const coll_t &cid, const oid& obj, uint64_t offset,
+  int fiemap(const coll_t &cid, const oid_t& oid, uint64_t offset,
 	     size_t len, bufferlist& bl);
 
-  int _touch(const coll_t &cid, const oid& obj, BufferTransaction &t);
-  int _write(const coll_t &cid, const oid& obj, uint64_t offset,
+  int _touch(const coll_t &cid, const oid_t& oid, BufferTransaction &t);
+  int _write(const coll_t &cid, const oid_t& oid, uint64_t offset,
 	     size_t len, const bufferlist& bl, BufferTransaction &t,
 	     bool replica = false);
-  int _zero(const coll_t &cid, const oid& obj, uint64_t offset,
+  int _zero(const coll_t &cid, const oid_t& oid, uint64_t offset,
 	    size_t len, BufferTransaction &t);
-  int _truncate(const coll_t &cid, const oid& obj, uint64_t size,
+  int _truncate(const coll_t &cid, const oid_t& oid, uint64_t size,
 		BufferTransaction &t);
-  int _clone(const coll_t &cid, const oid& oldoid,
-	     const oid& newoid, BufferTransaction &t);
-  int _clone_range(const coll_t &cid, const oid& oldoid,
-		   const oid& newoid, uint64_t srcoff,
+  int _clone(const coll_t &cid, const oid_t& oldoid,
+	     const oid_t& newoid, BufferTransaction &t);
+  int _clone_range(const coll_t &cid, const oid_t& oldoid,
+		   const oid_t& newoid, uint64_t srcoff,
 		   uint64_t len, uint64_t dstoff, BufferTransaction &t);
-  int _remove(const coll_t &cid, const oid& obj, BufferTransaction &t);
+  int _remove(const coll_t &cid, const oid_t& oid, BufferTransaction &t);
 
 
   void start_sync() {}
@@ -455,16 +455,16 @@ class KeyValueStore : public ObjectStore,
   boost::uuids::uuid get_fsid() { return fsid; }
 
   // attrs
-  int getattr(const coll_t &cid, const oid& obj, const char *name,
+  int getattr(const coll_t &cid, const oid_t& oid, const char *name,
 	      bufferptr &bp);
-  int getattrs(const coll_t &cid, const oid& obj,
+  int getattrs(const coll_t &cid, const oid_t& oid,
 	       map<string,bufferptr>& aset, bool user_only = false);
 
-  int _setattrs(const coll_t &cid, const oid& obj,
+  int _setattrs(const coll_t &cid, const oid_t& oid,
 		map<string, bufferptr>& aset, BufferTransaction &t);
-  int _rmattr(const coll_t &cid, const oid& obj, const char *name,
+  int _rmattr(const coll_t &cid, const oid_t& oid, const char *name,
 	      BufferTransaction &t);
-  int _rmattrs(const coll_t &cid, const oid& obj, BufferTransaction &t);
+  int _rmattrs(const coll_t &cid, const oid_t& oid, BufferTransaction &t);
 
   int collection_getattr(const coll_t &c, const char *name, void *value, size_t size);
   int collection_getattr(const coll_t &c, const char *name, bufferlist& bl);
@@ -480,10 +480,10 @@ class KeyValueStore : public ObjectStore,
   // collections
   int _create_collection(const coll_t &c, BufferTransaction &t);
   int _destroy_collection(const coll_t &c, BufferTransaction &t);
-  int _collection_add(const coll_t &c, const coll_t &ocid, const oid& obj,
+  int _collection_add(const coll_t &c, const coll_t &ocid, const oid_t& oid,
 		      BufferTransaction &t);
-  int _collection_move_rename(const coll_t &oldcid, const oid& oldoid,
-			      const coll_t &c, const oid& o,
+  int _collection_move_rename(const coll_t &oldcid, const oid_t& oldoid,
+			      const coll_t &c, const oid_t& o,
 			      BufferTransaction &t);
   int _collection_remove_recursive(const coll_t &cid,
 				   BufferTransaction &t);
@@ -492,29 +492,29 @@ class KeyValueStore : public ObjectStore,
   int list_collections(vector<coll_t>& ls);
   bool collection_exists(const coll_t &c);
   bool collection_empty(const coll_t &c);
-  int collection_list(const coll_t &c, vector<oid>& obj);
-  int collection_list_partial(const coll_t &c, oid start,
+  int collection_list(const coll_t &c, vector<oid_t>& oid);
+  int collection_list_partial(const coll_t &c, oid_t start,
 			      int min, int max,
-			      vector<oid> *ls, oid *next);
-  int collection_list_range(const coll_t &c, oid start, oid end,
-			    vector<oid> *ls);
+			      vector<oid_t> *ls, oid_t *next);
+  int collection_list_range(const coll_t &c, oid_t start, oid_t end,
+			    vector<oid_t> *ls);
   int collection_version_current(const coll_t &c, uint32_t *version);
 
   // omap (see ObjectStore.h for documentation)
-  int omap_get(const coll_t &c, const oid &obj, bufferlist *header,
+  int omap_get(const coll_t &c, const oid_t &oid, bufferlist *header,
 	       map<string, bufferlist> *out);
   int omap_get_header(
     const coll_t &c,
-    const oid &obj,
+    const oid_t &oid,
     bufferlist *out,
     bool allow_eio = false);
-  int omap_get_keys(const coll_t &c, const oid &obj, set<string> *keys);
-  int omap_get_values(const coll_t &c, const oid &obj,
+  int omap_get_keys(const coll_t &c, const oid_t &oid, set<string> *keys);
+  int omap_get_values(const coll_t &c, const oid_t &oid,
 		      const set<string> &keys, map<string, bufferlist> *out);
-  int omap_check_keys(const coll_t &c, const oid &obj,
+  int omap_check_keys(const coll_t &c, const oid_t &oid,
 		      const set<string> &keys, set<string> *out);
   ObjectMap::ObjectMapIterator get_omap_iterator(const coll_t &c,
-						 const oid &obj);
+						 const oid_t &oid);
 
   void dump_transactions(list<ObjectStore::Transaction*>& ls, uint64_t seq,
 			 OpSequencer *osr);
@@ -523,17 +523,17 @@ class KeyValueStore : public ObjectStore,
   void _inject_failure() {}
 
   // omap
-  int _omap_clear(const coll_t &cid, const oid &obj,
+  int _omap_clear(const coll_t &cid, const oid_t &oid,
 		  BufferTransaction &t);
-  int _omap_setkeys(const coll_t &cid, const oid &obj,
+  int _omap_setkeys(const coll_t &cid, const oid_t &oid,
 		    map<string, bufferlist> &aset,
 		    BufferTransaction &t);
-  int _omap_rmkeys(const coll_t &cid, const oid &obj,
+  int _omap_rmkeys(const coll_t &cid, const oid_t &oid,
 		   const set<string> &keys, BufferTransaction &t);
-  int _omap_rmkeyrange(const coll_t &cid, const oid &obj,
+  int _omap_rmkeyrange(const coll_t &cid, const oid_t &oid,
 		       const string& first, const string& last,
 		       BufferTransaction &t);
-  int _omap_setheader(const coll_t &cid, const oid &obj,
+  int _omap_setheader(const coll_t &cid, const oid_t &oid,
 		      const bufferlist &bl, BufferTransaction &t);
 
   virtual const char** get_tracked_conf_keys() const;

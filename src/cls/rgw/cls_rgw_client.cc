@@ -58,7 +58,7 @@ void cls_rgw_bucket_complete_op(ObjectWriteOperation& o, RGWModifyOp op, string&
 }
 
 
-int cls_rgw_list_op(IoCtx& io_ctx, string& oid, string& start_obj,
+int cls_rgw_list_op(IoCtx& io_ctx, string& oid_t, string& start_obj,
 		    string& filter_prefix, uint32_t num_entries,
 		    rgw_bucket_dir *dir, bool *is_truncated)
 {
@@ -68,7 +68,7 @@ int cls_rgw_list_op(IoCtx& io_ctx, string& oid, string& start_obj,
   call.filter_prefix = filter_prefix;
   call.num_entries = num_entries;
   ::encode(call, in);
-  int r = io_ctx.exec(oid, "rgw", "bucket_list", in, out);
+  int r = io_ctx.exec(oid_t, "rgw", "bucket_list", in, out);
   if (r < 0)
     return r;
 
@@ -88,12 +88,12 @@ int cls_rgw_list_op(IoCtx& io_ctx, string& oid, string& start_obj,
  return r;
 }
 
-int cls_rgw_bucket_check_index_op(IoCtx& io_ctx, string& oid,
+int cls_rgw_bucket_check_index_op(IoCtx& io_ctx, string& oid_t,
 				  rgw_bucket_dir_header *existing_header,
 				  rgw_bucket_dir_header *calculated_header)
 {
   bufferlist in, out;
-  int r = io_ctx.exec(oid, "rgw", "bucket_check_index", in, out);
+  int r = io_ctx.exec(oid_t, "rgw", "bucket_check_index", in, out);
   if (r < 0)
     return r;
 
@@ -113,10 +113,10 @@ int cls_rgw_bucket_check_index_op(IoCtx& io_ctx, string& oid,
   return 0;
 }
 
-int cls_rgw_bucket_rebuild_index_op(IoCtx& io_ctx, string& oid)
+int cls_rgw_bucket_rebuild_index_op(IoCtx& io_ctx, string& oid_t)
 {
   bufferlist in, out;
-  int r = io_ctx.exec(oid, "rgw", "bucket_rebuild_index", in, out);
+  int r = io_ctx.exec(oid_t, "rgw", "bucket_rebuild_index", in, out);
   if (r < 0)
     return r;
 
@@ -134,13 +134,13 @@ void cls_rgw_suggest_changes(ObjectWriteOperation& o, bufferlist& updates)
   o.exec("rgw", "dir_suggest_changes", updates);
 }
 
-int cls_rgw_get_dir_header(IoCtx& io_ctx, string& oid, rgw_bucket_dir_header *header)
+int cls_rgw_get_dir_header(IoCtx& io_ctx, string& oid_t, rgw_bucket_dir_header *header)
 {
   bufferlist in, out;
   struct rgw_cls_list_op call;
   call.num_entries = 0;
   ::encode(call, in);
-  int r = io_ctx.exec(oid, "rgw", "bucket_list", in, out);
+  int r = io_ctx.exec(oid_t, "rgw", "bucket_list", in, out);
   if (r < 0)
     return r;
 
@@ -178,7 +178,7 @@ public:
   };
 };
 
-int cls_rgw_get_dir_header_async(IoCtx& io_ctx, string& oid, RGWGetDirHeader_CB *ctx)
+int cls_rgw_get_dir_header_async(IoCtx& io_ctx, string& oid_t, RGWGetDirHeader_CB *ctx)
 {
   bufferlist in, out;
   struct rgw_cls_list_op call;
@@ -188,7 +188,7 @@ int cls_rgw_get_dir_header_async(IoCtx& io_ctx, string& oid, RGWGetDirHeader_CB 
   GetDirHeaderCompletion *cb = new GetDirHeaderCompletion(ctx);
   op.exec("rgw", "bucket_list", in, cb);
   AioCompletion *c = librados::Rados::aio_create_completion(NULL, NULL, NULL);
-  int r = io_ctx.aio_operate(oid, c, &op, NULL);
+  int r = io_ctx.aio_operate(oid_t, c, &op, NULL);
   c->release();
   if (r < 0)
     return r;
@@ -196,7 +196,7 @@ int cls_rgw_get_dir_header_async(IoCtx& io_ctx, string& oid, RGWGetDirHeader_CB 
   return 0;
 }
 
-int cls_rgw_bi_log_list(IoCtx& io_ctx, string& oid, string& marker, uint32_t max,
+int cls_rgw_bi_log_list(IoCtx& io_ctx, string& oid_t, string& marker, uint32_t max,
 		    list<rgw_bi_log_entry>& entries, bool *truncated)
 {
   bufferlist in, out;
@@ -204,7 +204,7 @@ int cls_rgw_bi_log_list(IoCtx& io_ctx, string& oid, string& marker, uint32_t max
   call.marker = marker;
   call.max = max;
   ::encode(call, in);
-  int r = io_ctx.exec(oid, "rgw", "bi_log_list", in, out);
+  int r = io_ctx.exec(oid_t, "rgw", "bi_log_list", in, out);
   if (r < 0)
     return r;
 
@@ -224,7 +224,7 @@ int cls_rgw_bi_log_list(IoCtx& io_ctx, string& oid, string& marker, uint32_t max
  return r;
 }
 
-int cls_rgw_bi_log_trim(IoCtx& io_ctx, string& oid, string& start_marker, string& end_marker)
+int cls_rgw_bi_log_trim(IoCtx& io_ctx, string& oid_t, string& start_marker, string& end_marker)
 {
   do {
     int r;
@@ -233,7 +233,7 @@ int cls_rgw_bi_log_trim(IoCtx& io_ctx, string& oid, string& start_marker, string
     call.start_marker = start_marker;
     call.end_marker = end_marker;
     ::encode(call, in);
-    r = io_ctx.exec(oid, "rgw", "bi_log_trim", in, out);
+    r = io_ctx.exec(oid_t, "rgw", "bi_log_trim", in, out);
 
     if (r == -ENODATA)
       break;
@@ -246,7 +246,7 @@ int cls_rgw_bi_log_trim(IoCtx& io_ctx, string& oid, string& start_marker, string
   return 0;
 }
 
-int cls_rgw_usage_log_read(IoCtx& io_ctx, string& oid, string& user,
+int cls_rgw_usage_log_read(IoCtx& io_ctx, string& oid_t, string& user,
 			   uint64_t start_epoch, uint64_t end_epoch, uint32_t max_entries,
 			   string& read_iter, map<rgw_user_bucket, rgw_usage_log_entry>& usage,
 			   bool *is_truncated)
@@ -261,7 +261,7 @@ int cls_rgw_usage_log_read(IoCtx& io_ctx, string& oid, string& user,
   call.max_entries = max_entries;
   call.iter = read_iter;
   ::encode(call, in);
-  int r = io_ctx.exec(oid, "rgw", "user_usage_log_read", in, out);
+  int r = io_ctx.exec(oid_t, "rgw", "user_usage_log_read", in, out);
   if (r < 0)
     return r;
 
@@ -324,7 +324,7 @@ void cls_rgw_gc_defer_entry(ObjectWriteOperation& op, uint32_t expiration_secs, 
   op.exec("rgw", "gc_defer_entry", in);
 }
 
-int cls_rgw_gc_list(IoCtx& io_ctx, string& oid, string& marker, uint32_t max, bool expired_only,
+int cls_rgw_gc_list(IoCtx& io_ctx, string& oid_t, string& marker, uint32_t max, bool expired_only,
 		    list<cls_rgw_gc_obj_info>& entries, bool *truncated)
 {
   bufferlist in, out;
@@ -333,7 +333,7 @@ int cls_rgw_gc_list(IoCtx& io_ctx, string& oid, string& marker, uint32_t max, bo
   call.max = max;
   call.expired_only = expired_only;
   ::encode(call, in);
-  int r = io_ctx.exec(oid, "rgw", "gc_list", in, out);
+  int r = io_ctx.exec(oid_t, "rgw", "gc_list", in, out);
   if (r < 0)
     return r;
 

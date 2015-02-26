@@ -17,10 +17,10 @@
 
 using namespace std;
 
-void dump_array(JSONObj *obj)
+void dump_array(JSONObj *oid)
 {
 
-  JSONObjIter iter = obj->find_first();
+  JSONObjIter iter = oid->find_first();
 
   for (; !iter.end(); ++iter) {
     JSONObj *o = *iter;
@@ -34,10 +34,10 @@ struct Key {
   string access_key;
   string secret_key;
 
-  void decode_json(JSONObj *obj) {
-    JSONDecoder::decode_json("user", user, obj);
-    JSONDecoder::decode_json("access_key", access_key, obj);
-    JSONDecoder::decode_json("secret_key", secret_key, obj);
+  void decode_json(JSONObj *oid) {
+    JSONDecoder::decode_json("user", user, oid);
+    JSONDecoder::decode_json("access_key", access_key, oid);
+    JSONDecoder::decode_json("secret_key", secret_key, oid);
   }
 };
 
@@ -47,11 +47,11 @@ struct UserInfo {
   int max_buckets;
   list<Key> keys;
 
-  void decode_json(JSONObj *obj) {
-    JSONDecoder::decode_json("user_id", uid, obj);
-    JSONDecoder::decode_json("display_name", display_name, obj);
-    JSONDecoder::decode_json("max_buckets", max_buckets, obj);
-    JSONDecoder::decode_json("keys", keys, obj);
+  void decode_json(JSONObj *oid) {
+    JSONDecoder::decode_json("user_id", uid, oid);
+    JSONDecoder::decode_json("display_name", display_name, oid);
+    JSONDecoder::decode_json("max_buckets", max_buckets, oid);
+    JSONDecoder::decode_json("keys", keys, oid);
   }
 };
 
@@ -86,18 +86,18 @@ int main(int argc, char **argv) {
   JSONObjIter iter = parser.find_first();
 
   for (; !iter.end(); ++iter) {
-    JSONObj *obj = *iter;
-    cout << "is_object=" << obj->is_object() << std::endl;
-    cout << "is_array=" << obj->is_array() << std::endl;
-    cout << "name=" << obj->get_name() << std::endl;
-    cout << "data=" << obj->get_data() << std::endl;
+    JSONObj *oid = *iter;
+    cout << "is_object=" << oid->is_object() << std::endl;
+    cout << "is_array=" << oid->is_array() << std::endl;
+    cout << "name=" << oid->get_name() << std::endl;
+    cout << "data=" << oid->get_data() << std::endl;
   }
 
   iter = parser.find_first("conditions");
   if (!iter.end()) {
-    JSONObj *obj = *iter;
+    JSONObj *oid = *iter;
 
-    JSONObjIter iter2 = obj->find_first();
+    JSONObjIter iter2 = oid->find_first();
     for (; !iter2.end(); ++iter2) {
       JSONObj *child = *iter2;
       cout << "is_object=" << child->is_object() << std::endl;

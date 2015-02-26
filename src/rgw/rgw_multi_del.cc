@@ -46,19 +46,19 @@ bool RGWMultiDelDelete::xml_end(const char *el) {
 }
 
 XMLObj *RGWMultiDelXMLParser::alloc_obj(const char *el) {
-  XMLObj *obj = NULL;
+  XMLObj *oid = NULL;
   if (strcmp(el, "Delete") == 0) {
-    obj = new RGWMultiDelDelete();
+    oid = new RGWMultiDelDelete();
   } else if (strcmp(el, "Quiet") == 0) {
-    obj = new RGWMultiDelQuiet();
+    oid = new RGWMultiDelQuiet();
   } else if (strcmp(el, "Object") == 0) {
-    obj = new RGWMultiDelObject ();
+    oid = new RGWMultiDelObject ();
   } else if (strcmp(el, "Key") == 0) {
-    obj = new RGWMultiDelKey();
+    oid = new RGWMultiDelKey();
   } else if (strcmp(el, "VersionID") == 0) {
     /*do nothing*/
   }
 
-  return obj;
+  return oid;
 }
 
