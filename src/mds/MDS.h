@@ -128,12 +128,12 @@ class MDS : public Dispatcher {
   int want_state;    // the state i want
 
   Context *createwaitingforosd;
-  std::vector<Context*> waiting_for_active, waiting_for_replay,
+  Context::List waiting_for_active, waiting_for_replay,
     waiting_for_reconnect, waiting_for_resolve;
-  std::list<Context*> replay_queue;
-  map<int, std::vector<Context*> > waiting_for_active_peer;
+  Context::List replay_queue;
+  map<int, Context::List> waiting_for_active_peer;
   list<Message*> waiting_for_nolaggy;
-  map<epoch_t, std::vector<Context*> > waiting_for_mdsmap;
+  map<epoch_t, Context::List> waiting_for_mdsmap;
 
   map<int,version_t> peer_mdsmap_epoch;
 
@@ -141,25 +141,25 @@ class MDS : public Dispatcher {
 
  public:
   void wait_for_active(Context *c) {
-    waiting_for_active.push_back(c);
+    waiting_for_active.push_back(*c);
   }
   void wait_for_active_peer(int who, Context *c) {
-    waiting_for_active_peer[who].push_back(c);
+    waiting_for_active_peer[who].push_back(*c);
   }
   void wait_for_replay(Context *c) {
-    waiting_for_replay.push_back(c);
+    waiting_for_replay.push_back(*c);
   }
   void wait_for_reconnect(Context *c) {
-    waiting_for_reconnect.push_back(c);
+    waiting_for_reconnect.push_back(*c);
   }
   void wait_for_resolve(Context *c) {
-    waiting_for_resolve.push_back(c);
+    waiting_for_resolve.push_back(*c);
   }
   void wait_for_mdsmap(epoch_t e, Context *c) {
-    waiting_for_mdsmap[e].push_back(c);
+    waiting_for_mdsmap[e].push_back(*c);
   }
   void enqueue_replay(Context *c) {
-    replay_queue.push_back(c);
+    replay_queue.push_back(*c);
   }
 
   int get_state() { return state; }
@@ -196,18 +196,18 @@ class MDS : public Dispatcher {
   }
 
   // -- waiters --
-  std::vector<Context*> finished_queue;
+  Context::List finished_queue;
 
   void queue_waiter(Context *c) {
-    finished_queue.push_back(c);
+    finished_queue.push_back(*c);
   }
-  void queue_waiters(std::vector<Context*>& vs) {
-    move_left(finished_queue, vs );
+  void queue_waiters(Context::List& vs) {
+    finished_queue.splice(finished_queue.end(), vs);
   }
   bool queue_one_replay() {
     if (replay_queue.empty())
       return false;
-    queue_waiter(replay_queue.front());
+    queue_waiter(&replay_queue.front());
     replay_queue.pop_front();
     return true;
   }

@@ -112,7 +112,7 @@ void Journaler::recover(Context *onread)
   assert(readonly);
 
   if (onread)
-    waitfor_recover.push_back(onread);
+    waitfor_recover.push_back(*onread);
 
   if (state != STATE_UNDEF) {
     ldout(cct, 1) << "recover - already recoverying" << dendl;
@@ -181,7 +181,7 @@ void Journaler::_finish_read_head(int r, bufferlist& bl)
   if (r < 0) {
     ldout(cct, 0) << "error " << r << " getting journal off disk"
 		  << dendl;
-    std::vector<Context*> vs;
+    Context::List vs;
     vs.swap(waitfor_recover);
     finish_contexts(vs, r);
     return;
@@ -198,7 +198,7 @@ void Journaler::_finish_read_head(int r, bufferlist& bl)
     ldout(cct, 1) << "_finish_read_head r=" << r
 		  << " read 0 bytes, assuming empty log" << dendl;
     state = STATE_ACTIVE;
-    std::vector<Context*> vs;
+    Context::List vs;
     vs.swap(waitfor_recover);
     finish_contexts(vs, 0);
     return;
@@ -212,7 +212,7 @@ void Journaler::_finish_read_head(int r, bufferlist& bl)
   if (h.magic != magic) {
     ldout(cct, 0) << "on disk magic '" << h.magic << "' != my magic '"
 	    << magic << "'" << dendl;
-    std::vector<Context*> vs;
+    Context::List vs;
     vs.swap(waitfor_recover);
     finish_contexts(vs, -EINVAL);
     return;
@@ -285,7 +285,7 @@ void Journaler::_finish_probe_end(int r, uint64_t end)
 
 out:
   // done.
-  std::vector<Context*> vs;
+  Context::List vs;
   vs.swap(waitfor_recover);
   finish_contexts(vs, r);
 }
@@ -574,7 +574,7 @@ void Journaler::wait_for_flush(Context *onsafe)
 
   // queue waiter
   if (onsafe)
-    waitfor_safe[write_pos].push_back(onsafe);
+    waitfor_safe[write_pos].push_back(*onsafe);
 }
 
 void Journaler::flush(Context *onsafe)
@@ -808,7 +808,7 @@ void Journaler::_issue_read(uint64_t len)
     if (flush_pos == safe_pos)
       flush();
     assert(flush_pos > safe_pos);
-    waitfor_safe[flush_pos].push_back(new C_RetryRead(this));
+    waitfor_safe[flush_pos].push_back(*new C_RetryRead(this));
     return;
   }
 

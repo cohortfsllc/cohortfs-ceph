@@ -2983,7 +2983,7 @@ void FileStore::sync_entry()
       }
     }
 
-    std::vector<Context*> fin;
+    Context::List fin;
   again:
     fin.swap(sync_waiters);
     l.unlock();
@@ -3139,7 +3139,7 @@ void FileStore::start_sync()
 void FileStore::start_sync(Context* onsafe)
 {
   lock_guard l(lock);
-  sync_waiters.push_back(onsafe);
+  sync_waiters.push_back(*onsafe);
   sync_cond.notify_all();
   dout(10) << "start_sync" << dendl;
 }

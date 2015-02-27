@@ -2310,7 +2310,7 @@ void Monitor::handle_command(MMonCommand *m)
     // make sure our map is readable and up to date
     if (!is_leader() && !is_peon()) {
       dout(10) << " waiting for quorum" << dendl;
-      waitfor_quorum.push_back(new C_RetryMessage(this, m));
+      waitfor_quorum.push_back(*new C_RetryMessage(this, m));
       return;
     }
     _quorum_status(f.get(), ds);
@@ -2616,7 +2616,7 @@ void Monitor::resend_routed_requests()
 {
   dout(10) << "resend_routed_requests" << dendl;
   int mon = get_leader();
-  std::vector<Context*> retry;
+  Context::List retry;
   for (map<uint64_t, RoutedRequest*>::iterator p = routed_requests.begin();
        p != routed_requests.end();
        ++p) {
@@ -2628,7 +2628,7 @@ void Monitor::resend_routed_requests()
     if (mon == rank) {
       dout(10) << " requeue for self tid " << rr->tid << " " << *req << dendl;
       req->set_connection(rr->con);
-      retry.push_back(new C_RetryMessage(this, req));
+      retry.push_back(*new C_RetryMessage(this, req));
       delete rr;
     } else {
       dout(10) << " resend to mon." << mon << " tid " << rr->tid << " " << *req << dendl;
@@ -2701,7 +2701,7 @@ void Monitor::waitlist_or_zap_client(Message *m)
   if (m->get_recv_stamp() > too_old &&
       con->is_connected()) {
     dout(5) << "waitlisting message " << *m << dendl;
-    maybe_wait_for_quorum.push_back(new C_RetryMessage(this, m));
+    maybe_wait_for_quorum.push_back(*new C_RetryMessage(this, m));
   } else {
     dout(5) << "discarding message " << *m << " and sending client elsewhere" << dendl;
     con->get_messenger()->mark_down(con);
@@ -3424,7 +3424,7 @@ void Monitor::handle_get_version(MMonGetVersion *m)
 
   if (!is_leader() && !is_peon()) {
     dout(10) << " waiting for quorum" << dendl;
-    waitfor_quorum.push_back(new C_RetryMessage(this, m));
+    waitfor_quorum.push_back(*new C_RetryMessage(this, m));
     goto out;
   }
 

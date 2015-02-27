@@ -1306,7 +1306,7 @@ void Migrator::finish_export_inode_caps(CInode *in, int peer,
 void Migrator::finish_export_inode(
   CInode *in, ceph::real_time now, int peer,
   map<client_t,Capability::Import>& peer_imported,
-  std::vector<Context*>& finished)
+  Context::List& finished)
 {
   ldout(mds->cct, 12) << "finish_export_inode " << *in << dendl;
 
@@ -1452,7 +1452,7 @@ int Migrator::encode_export_dir(bufferlist& exportbl,
 void Migrator::finish_export_dir(
   CDir *dir, ceph::real_time now, int peer,
   map<inodeno_t,map<client_t,Capability::Import> >& peer_imported,
-  std::vector<Context*>& finished)
+  Context::List& finished)
 {
   ldout(mds->cct, 10) << "finish_export_dir " << *dir << dendl;
 
@@ -1755,10 +1755,10 @@ void Migrator::export_finish(CDir *dir)
   assert(mds->cct->_conf->mds_kill_export_at != 13);
 
   // finish export (adjust local cache state)
-  C_Contexts *fin = new C_Contexts;
+  Context::List contexts;
   finish_export_dir(dir, ceph::real_clock::now(),
-		    it->second.peer, it->second.peer_imported, fin->contexts);
-  dir->add_waiter(CDir::WAIT_UNFREEZE, fin);
+		    it->second.peer, it->second.peer_imported, contexts);
+  dir->add_waiter(CDir::WAIT_UNFREEZE, new C_Contexts(std::move(contexts)));
 
   // unfreeze
   ldout(mds->cct, 7) << "export_finish unfreezing" << dendl;
@@ -1954,7 +1954,7 @@ void Migrator::handle_export_prep(MExportDirPrep *m)
 
   CDir *dir;
   CInode *diri;
-  std::vector<Context*> finished;
+  Context::List finished;
 
   // assimilate root dir.
   map<dirfrag_t,import_state_t>::iterator it = import_state.find(m->get_dirfrag());
@@ -2447,7 +2447,7 @@ void Migrator::import_reverse_unfreeze(CDir *dir)
   assert(dir);
   ldout(mds->cct, 7) << "import_reverse_unfreeze " << *dir << dendl;
   dir->unfreeze_tree();
-  std::vector<Context*> vs;
+  Context::List vs;
   mds->queue_waiters(vs);
   cache->discard_delayed_expire(dir);
   import_reverse_final(dir);
@@ -2808,13 +2808,12 @@ int Migrator::decode_import_dir(
   // take all waiters on this dir
   // NOTE: a pass of imported data is guaranteed to get all of my waiters because
   // a replica's presense in my cache implies/forces it's presense in authority's.
-  std::vector<Context*> waiters;
-
+  Context::List waiters;
   dir->take_waiting(CDir::WAIT_ANY_MASK, waiters);
-  for (std::vector<Context*>::iterator it = waiters.begin();
-       it != waiters.end();
-       ++it)
-    import_root->add_waiter(CDir::WAIT_UNFREEZE, *it);	// UNFREEZE will get kicked both on success or failure
+  for (auto it = waiters.begin(); it != waiters.end(); ) {
+    Context &c = *it++;
+    import_root->add_waiter(CDir::WAIT_UNFREEZE, &c);	// UNFREEZE will get kicked both on success or failure
+  }
 
   ldout(mds->cct, 15) << "doing contents" << dendl;
 

@@ -53,7 +53,7 @@ protected:
 
   // pending commits
   map<version_t, LogSegment*> pending_commit;
-  map<version_t, std::vector<Context*> > ack_waiters;
+  map<version_t, Context::List> ack_waiters;
 
   void handle_reply(class MMDSTableQuery *m);
 
@@ -90,7 +90,7 @@ public:
     return pending_commit.count(tid) == 0;
   }
   void wait_for_ack(version_t tid, Context *c) {
-    ack_waiters[tid].push_back(c);
+    ack_waiters[tid].push_back(*c);
   }
 
   void handle_mds_failure(int mds);

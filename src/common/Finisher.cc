@@ -41,25 +41,15 @@ void *Finisher::finisher_thread_entry()
 
   while (!finisher_stop) {
     while (!finisher_queue.empty()) {
-      vector<Context*> ls;
-      list<pair<Context*,int> > ls_rval;
+      list<pair<Context*,int> > ls;
       ls.swap(finisher_queue);
-      ls_rval.swap(finisher_queue_rval);
       finisher_running = true;
       l.unlock();
       ldout(cct, 10) << "finisher_thread doing " << ls << dendl;
 
-      for (vector<Context*>::iterator p = ls.begin();
-	   p != ls.end();
-	   ++p) {
-	if (*p) {
-	  (*p)->complete(0);
-	} else {
-	  assert(!ls_rval.empty());
-	  Context *c = ls_rval.front().first;
-	  c->complete(ls_rval.front().second);
-	  ls_rval.pop_front();
-	}
+      for (auto i = ls.begin(); i != ls.end(); ++i) {
+        Context *c = i->first;
+        c->complete(i->second);
       }
       ldout(cct, 10) << "finisher_thread done with " << ls << dendl;
       ls.clear();

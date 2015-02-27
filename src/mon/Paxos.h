@@ -364,7 +364,7 @@ private:
   /**
    * List of callbacks waiting for our state to change into STATE_ACTIVE.
    */
-  std::vector<Context*> waiting_for_active;
+  Context::List waiting_for_active;
   /**
    * List of callbacks waiting for the chance to read a version from us.
    *
@@ -380,7 +380,7 @@ private:
    * with the latest proposal, or if we don't really care about the remaining
    * uncommitted values --, or if we're on a quorum of one.
    */
-  std::vector<Context*> waiting_for_readable;
+  Context::List waiting_for_readable;
   /**
    * @}
    */
@@ -529,7 +529,7 @@ private:
    * @remarks It is not possible to write if we are not the Leader, or we are
    *	      not on the active state, or if the lease has expired.
    */
-  std::vector<Context*> waiting_for_writeable;
+  Context::List waiting_for_writeable;
   /**
    * List of callbacks waiting for a commit to finish.
    *
@@ -538,7 +538,7 @@ private:
    *	      next commit to be finished so we are sure that our value was
    *	      fully committed.
    */
-  std::vector<Context*> waiting_for_commit;
+  Context::List waiting_for_commit;
   /**
    *
    */
@@ -1132,7 +1132,7 @@ public:
    * @param c A callback
    */
   void wait_for_active(Context *c) {
-    waiting_for_active.push_back(c);
+    waiting_for_active.push_back(*c);
   }
 
   /**
@@ -1211,7 +1211,7 @@ public:
    */
   void wait_for_readable(Context *onreadable) {
     assert(!is_readable());
-    waiting_for_readable.push_back(onreadable);
+    waiting_for_readable.push_back(*onreadable);
   }
   /**
    * @}
@@ -1247,7 +1247,7 @@ public:
    */
   void wait_for_writeable(Context *c) {
     assert(!is_writeable());
-    waiting_for_writeable.push_back(c);
+    waiting_for_writeable.push_back(*c);
   }
 
   /**
@@ -1274,7 +1274,7 @@ public:
    * @param oncommit A callback
    */
   void wait_for_commit(Context *oncommit) {
-    waiting_for_commit.push_back(oncommit);
+    waiting_for_commit.push_back(*oncommit);
   }
   /**
    * @}

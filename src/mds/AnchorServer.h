@@ -63,7 +63,7 @@ class AnchorServer : public MDSTableServer {
   void inc(inodeno_t ino, int ref=1);
   void dec(inodeno_t ino, int ref=1);
   bool check_pending(version_t tid, MMDSTableRequest *req,
-		     std::vector<Context*>& finished);
+		     Context::List& finished);
 
   void dump();
   void dump(Formatter *f) const;
