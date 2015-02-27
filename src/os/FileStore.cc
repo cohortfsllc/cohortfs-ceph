@@ -2427,8 +2427,7 @@ retry:
       r = lfn_open(fc, oid, true, &fd);
     }
     if (r != 0) {
-      std::cout << "FTW open fail for oid " << oid  << " (hk " << hk << ")"
-		<< std::endl;
+      std::cout << "FTW open fail for oid " << oid << std::endl;
       goto out; /* !LATCHED */
     }
 
