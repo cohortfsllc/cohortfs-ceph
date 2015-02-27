@@ -936,7 +936,6 @@ Inode* Client::insert_trace(MetaRequest *request, MetaSession *session)
   }
 
   Inode *in = 0;
-  in = request->inode();
   if (reply->head.is_target) {
     ist.decode(p, features);
 
