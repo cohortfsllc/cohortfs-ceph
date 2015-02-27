@@ -333,7 +333,6 @@ public:
   ObjectGenerator *object_gen;
   gen_type *rng;
   ObjectStore *store;
-  ObjectStore::Sequencer *osr;
 
   std::mutex lock;
   std::condition_variable cond;
@@ -379,10 +378,8 @@ public:
 
   SyntheticWorkloadState(ObjectStore *store,
 			 ObjectGenerator *gen,
-			 gen_type *rng,
-			 ObjectStore::Sequencer *osr)
-    : ch(NULL), in_flight(0), object_gen(gen), rng(rng), store(store),
-      osr(osr) {}
+			 gen_type *rng)
+    : ch(NULL), in_flight(0), object_gen(gen), rng(rng), store(store) {}
   ~SyntheticWorkloadState() {
     if (ch) {
       store->sync_and_flush();
@@ -457,7 +454,7 @@ public:
     if (!contents.count(new_obj))
       contents[new_obj] = bufferlist();
     return store->queue_transaction(
-      osr, t, new C_SyntheticOnReadable(this, t, new_obj));
+      t, new C_SyntheticOnReadable(this, t, new_obj));
   }
 
   int write() {
@@ -500,7 +497,7 @@ public:
 	      << in_flight << std::endl;
     in_flight_objects.insert(new_obj);
     return store->queue_transaction(
-      osr, t, new C_SyntheticOnReadable(this, t, new_obj));
+      t, new C_SyntheticOnReadable(this, t, new_obj));
   }
 
   void read() {
@@ -572,7 +569,7 @@ public:
     }
 
     return store->queue_transaction(
-      osr, t, new C_SyntheticOnReadable(this, t, oid));
+      t, new C_SyntheticOnReadable(this, t, oid));
   }
 
   void scan() {
@@ -664,7 +661,7 @@ public:
     in_flight_objects.insert(to_remove);
     contents.erase(to_remove);
     return store->queue_transaction(
-      osr, t, new C_SyntheticOnReadable(this, t, to_remove));
+      t, new C_SyntheticOnReadable(this, t, to_remove));
   }
 
   void print_internal_state() {
@@ -678,14 +675,13 @@ public:
 };
 
 TEST_P(StoreTest, Synthetic) {
-  ObjectStore::Sequencer osr("test");
   MixedGenerator gen;
   gen_type rng(time(NULL));
   coll_t cid("synthetic_1");
 
   std::cout << "Synthetic test synthetic_1" << std::endl;
 
-  SyntheticWorkloadState test_obj(store.get(), &gen, &rng, &osr);
+  SyntheticWorkloadState test_obj(store.get(), &gen, &rng);
   ASSERT_EQ(test_obj.init(cid), 0);
   for (int i = 0; i < 100; ++i) {
     if (!(i % 10)) cerr << "seeding object " << i << std::endl;

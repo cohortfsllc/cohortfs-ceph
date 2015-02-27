@@ -45,10 +45,6 @@ void TestFileStoreBackend::write(
   assert(sep + 1 < oid.size());
   string coll_str(oid.substr(0, sep));
 
-  if (!osrs.count(coll_str))
-    osrs.insert(make_pair(coll_str, ObjectStore::Sequencer(coll_str)));
-  ObjectStore::Sequencer *osr = &(osrs.find(coll_str)->second);
-
   // inefficient, but clear
   coll_t c(coll_str);
   hoid_t h(oid_t(oid.substr(sep+1)));
@@ -67,7 +63,6 @@ void TestFileStoreBackend::write(
   }
 
   os->queue_transaction(
-    osr,
     t,
     new C_DeleteTransWrapper(t, std::move(on_applied)),
     new C_DumbWrapper(std::move(on_commit)));

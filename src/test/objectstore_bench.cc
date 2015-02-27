@@ -139,8 +139,6 @@ class OBS_Worker : public Thread
     dout(0) << "Writing " << size << " in blocks of " << block_size
 	<< dendl;
 
-    // use a sequencer for each thread so they don't serialize each other
-    ObjectStore::Sequencer seq("osbench worker");
     oh = fs->get_object(ch, oid);
     assert(oh);
 
@@ -171,8 +169,7 @@ class OBS_Worker : public Thread
       std::condition_variable cond;
       bool done = false;
 
-      fs->queue_transactions(&seq, tls, NULL,
-			     new C_SafeCond(&lock, &cond, &done));
+      fs->queue_transactions(tls, NULL, new C_SafeCond(&lock, &cond, &done));
 
       unique_lock l(lock);
       cond.wait(l, [&](){ return done; });

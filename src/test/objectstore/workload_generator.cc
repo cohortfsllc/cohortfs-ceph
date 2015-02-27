@@ -360,7 +360,6 @@ void WorkloadGenerator::do_destroy_collection(ObjectStore::Transaction *t,
 					      C_StatState *stat)
 {
   m_nr_runs = 0;
-  entry->m_osr.flush();
   vector<hoid_t> ls;
   ObjectStore::CollectionHandle ch =
     m_store->open_collection(entry->m_coll);
@@ -515,7 +514,7 @@ queue_tx:
       c = new C_StatWrapper(stat_state, tmp);
     }
 
-    m_store->queue_transaction(&(entry->m_osr), t, c);
+    m_store->queue_transaction(t, c);
 
     inc_in_flight();
 

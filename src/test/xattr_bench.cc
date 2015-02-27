@@ -98,21 +98,22 @@ uint64_t do_run(ObjectStore *store, int attrsize, int numattrs,
   std::condition_variable cond;
   int in_flight = 0;
   ObjectStore::Transaction t;
-  map<string, pair<set<string>, ObjectStore::Sequencer*> > collections;
+  map<string, set<string>> collections;
   for (int i = 0; i < 3*THREADS; ++i) {
-    stringstream coll_str;
-    coll_str << "coll_" << i << "_" << run;
-    t.create_collection(coll_t(coll_str.str()));
+    stringstream coll_stream;
+    coll_stream << "coll_" << i << "_" << run;
+    const string coll_str = coll_stream.str();
+    t.create_collection(coll_t(coll_str));
     set<string> objects;
     for (int i = 0; i < transsize; ++i) {
-      stringstream obj_str;
-      obj_str << i;
-      t.push_oid(hoid_t(oid_t(obj_str.str())));
+      stringstream obj_stream;
+      obj_stream << i;
+      const string obj_str = obj_stream.str();
+      t.push_oid(hoid_t(oid_t(obj_str)));
       t.touch();
-      objects.insert(obj_str.str());
+      objects.insert(obj_str);
     }
-    collections[coll_str.str()] =
-      make_pair(objects, new ObjectStore::Sequencer(coll_str.str()));
+    collections[coll_str] = objects;
   }
   store->apply_transaction(t);
 
@@ -129,24 +130,17 @@ uint64_t do_run(ObjectStore *store, int attrsize, int numattrs,
 	cond.wait(l);
     }
     ObjectStore::Transaction *t = new ObjectStore::Transaction;
-    map<string, pair<set<string>, ObjectStore::Sequencer*> >::iterator iter =
-      rand_choose(collections);
-    for (set<string>::iterator oid = iter->second.first.begin();
-	 oid != iter->second.first.end();
-	 ++oid) {
-      uint16_t c_ix = t->push_cid(coll_t(iter->first));
-      uint16_t o_ix = t->push_oid(hoid_t(oid_t(*oid)));
+    auto c = rand_choose(collections);
+    for (auto &oid : c->second) {
+      uint16_t c_ix = t->push_cid(coll_t(c->first));
+      uint16_t o_ix = t->push_oid(hoid_t(oid_t(oid)));
       for (int j = 0; j < numattrs; ++j) {
 	stringstream ss;
-	ss << i << ", " << j << ", " << *oid;
-	t->setattr(c_ix, o_ix,
-		   ss.str().c_str(),
-		   bl);
+	ss << i << ", " << j << ", " << oid;
+	t->setattr(c_ix, o_ix, ss.str().c_str(), bl);
       }
     }
-    store->queue_transaction(iter->second.second, t,
-			     new OnApplied(&lock, &cond, &in_flight,
-					   t));
+    store->queue_transaction(t, new OnApplied(&lock, &cond, &in_flight, t));
   }
   {
     unique_lock l(lock);
