@@ -155,7 +155,7 @@ private:
   class WriteHead;
   friend class WriteHead;
 
-  std::vector<Context*> waitfor_recover;
+  Context::List waitfor_recover;
   void read_head(OSDC::read_callback&& on_finish);
   void _finish_read_head(int r, bufferlist& bl);
   void _finish_reread_head(int r, bufferlist& bl, OSDC::op_callback&& finish);
@@ -179,7 +179,7 @@ private:
   bool waiting_for_zero;
   interval_set<uint64_t> pending_zero;	// non-contig bits we've zeroed
   std::set<uint64_t> pending_safe;
-  std::map<uint64_t, std::vector<Context*> > waitfor_safe; // when safe through given offset
+  std::map<uint64_t, Context::List> waitfor_safe; // when safe through given offset
 
   void _do_flush(unsigned amount = 0);
   void _finish_flush(int r, uint64_t start, ceph::mono_time stamp);
@@ -213,7 +213,7 @@ private:
   uint64_t expire_pos;	  // what we're allowed to trim to
   uint64_t trimming_pos;      // what we've requested to trim through
   uint64_t trimmed_pos;	  // what has been trimmed
-  map<uint64_t, std::vector<Context*> > waitfor_trim;
+  map<uint64_t, Context::List> waitfor_trim;
 
   void _trim_finish(int r, uint64_t to);
 

@@ -66,6 +66,7 @@ extern "C" {
 
 #include <unordered_map>
 #include <boost/optional.hpp>
+#include <boost/intrusive/list.hpp>
 
 #include "intarith.h"
 
@@ -92,6 +93,16 @@ template <typename T>
 inline std::ostream &operator << (std::ostream &out, boost::optional<T> const &maybe) {
   if (maybe)
     out << *maybe;
+  return out;
+}
+
+template<typename ...T>
+inline std::ostream& operator<<(std::ostream& out,
+                                const boost::intrusive::list<T...>& ls) {
+  for (auto i = ls.begin(); i != ls.end(); ++i) {
+    if (i != ls.begin()) out << ",";
+    out << *i;
+  }
   return out;
 }
 

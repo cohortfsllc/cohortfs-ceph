@@ -62,7 +62,7 @@ protected:
     uint64_t max_applied_seq;
 
     std::mutex com_lock;
-    map<version_t, vector<Context*> > commit_waiters;
+    map<version_t, Context::List> commit_waiters;
     uint64_t committing_seq, committed_seq;
 
   public:

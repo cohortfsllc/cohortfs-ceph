@@ -404,7 +404,7 @@ private:
   void set_ambiguous_auth() {
     state_set(STATE_AMBIGUOUSAUTH);
   }
-  void clear_ambiguous_auth(std::vector<Context*>& finished);
+  void clear_ambiguous_auth(Context::List& finished);
   void clear_ambiguous_auth();
 
   inodeno_t ino() const { return inode.ino; }
@@ -488,15 +488,15 @@ private:
 
   // -- waiting --
 protected:
-  map<frag_t, std::vector<Context*> > waiting_on_dir;
+  map<frag_t, Context::List> waiting_on_dir;
 public:
   void add_dir_waiter(frag_t fg, Context *c);
-  void take_dir_waiting(frag_t fg, std::vector<Context*>& ls);
+  void take_dir_waiting(frag_t fg, Context::List& ls);
   bool is_waiting_for_dir(frag_t fg) {
     return waiting_on_dir.count(fg);
   }
   void add_waiter(uint64_t tag, Context *c);
-  void take_waiting(uint64_t tag, std::vector<Context*>& ls);
+  void take_waiting(uint64_t tag, Context::List& ls);
 
   // -- encode/decode helpers --
   void _encode_base(bufferlist& bl);
@@ -507,7 +507,7 @@ public:
   void _encode_locks_state_for_rejoin(bufferlist& bl, int rep);
   void _decode_locks_state(bufferlist::iterator& p, bool is_new);
   void _decode_locks_rejoin(bufferlist::iterator& p,
-			    std::vector<Context*>& waiters,
+			    Context::List& waiters,
 			    list<SimpleLock*>& eval_locks);
 
   // -- import/export --
@@ -695,7 +695,7 @@ public:
   /* Freeze the inode. auth_pin_allowance lets the caller account for any
    * auth_pins it is itself holding/responsible for. */
   bool freeze_inode(int auth_pin_allowance=0);
-  void unfreeze_inode(std::vector<Context*>& finished);
+  void unfreeze_inode(Context::List& finished);
   void unfreeze_inode();
 
   void freeze_auth_pin();

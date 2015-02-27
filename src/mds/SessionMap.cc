@@ -71,7 +71,7 @@ void SessionMap::load(Context *onload)
   dout(10) << "load" << dendl;
 
   if (onload)
-    waiting_for_load.push_back(onload);
+    waiting_for_load.push_back(*onload);
 
   OSDC::op_callback c(SM_Load(this));
   oid_t oid = get_object_name();
@@ -120,11 +120,11 @@ void SessionMap::save(Context *onsave, version_t needv)
 
   if (needv && committing >= needv) {
     assert(committing > committed);
-    commit_waiters[committing].push_back(onsave);
+    commit_waiters[committing].push_back(*onsave);
     return;
   }
 
-  commit_waiters[version].push_back(onsave);
+  commit_waiters[version].push_back(*onsave);
 
   bufferlist bl;
 

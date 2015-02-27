@@ -28,8 +28,7 @@ class Finisher {
   std::mutex finisher_lock;
   std::condition_variable finisher_cond, finisher_empty_cond;
   bool finisher_stop, finisher_running;
-  std::vector<Context*> finisher_queue;
-  std::list<std::pair<Context*,int> > finisher_queue_rval;
+  std::list<std::pair<Context*,int> > finisher_queue;
 
   void *finisher_thread_entry();
 
@@ -41,28 +40,15 @@ class Finisher {
 
  public:
   void queue(Context *c, int r = 0) {
-    std::unique_lock<std::mutex> l(finisher_lock);
-    if (r) {
-      finisher_queue_rval.push_back(std::pair<Context*, int>(c, r));
-      finisher_queue.push_back(NULL);
-    } else
-      finisher_queue.push_back(c);
+    std::lock_guard<std::mutex> l(finisher_lock);
+    finisher_queue.push_back(std::make_pair(c, r));
     finisher_cond.notify_all();
-    l.unlock();
   }
-  void queue(std::vector<Context*>& ls) {
-    std::unique_lock<std::mutex> l(finisher_lock);
-    finisher_queue.insert(finisher_queue.end(), ls.begin(), ls.end());
+  void queue(Context::List&& contexts) {
+    std::lock_guard<std::mutex> l(finisher_lock);
+    for (auto &i : contexts)
+      finisher_queue.push_back(std::make_pair(&i, 0));
     finisher_cond.notify_all();
-    l.unlock();
-    ls.clear();
-  }
-  void queue(std::deque<Context*>& ls) {
-    std::unique_lock<std::mutex> l(finisher_lock);
-    finisher_queue.insert(finisher_queue.end(), ls.begin(), ls.end());
-    finisher_cond.notify_all();
-    l.unlock();
-    ls.clear();
   }
 
   void start();

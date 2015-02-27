@@ -617,7 +617,7 @@ void Locker::drop_rdlocks(MutationImpl *mut, set<CInode*> *pneed_issue)
 
 void Locker::eval_gather(SimpleLock *lock, bool first,
 			 bool *pneed_issue,
-			 std::vector<Context*> *pfinishers)
+			 Context::List *pfinishers)
 {
   dout(10) << "eval_gather " << *lock << " on " << *lock->get_parent() << dendl;
   assert(!lock->is_stable());
@@ -838,7 +838,7 @@ void Locker::eval_gather(SimpleLock *lock, bool first,
 bool Locker::eval(CInode *in, int mask, bool caps_imported)
 {
   bool need_issue = caps_imported;
-  std::vector<Context*> finishers;
+  Context::List finishers;
 
   dout(10) << "eval " << mask << " " << *in << dendl;
 
@@ -1002,7 +1002,7 @@ void Locker::try_eval(SimpleLock *lock, bool *pneed_issue)
 void Locker::eval_cap_gather(CInode *in, set<CInode*> *issue_set)
 {
   bool need_issue = false;
-  std::vector<Context*> finishers;
+  Context::List finishers;
 
   // kick locks now
   if (!in->filelock.is_stable())
@@ -1027,7 +1027,7 @@ void Locker::eval_cap_gather(CInode *in, set<CInode*> *issue_set)
 void Locker::eval_scatter_gathers(CInode *in)
 {
   bool need_issue = false;
-  std::vector<Context*> finishers;
+  Context::List finishers;
 
   dout(10) << "eval_scatter_gathers " << *in << dendl;
 

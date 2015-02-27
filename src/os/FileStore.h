@@ -370,7 +370,7 @@ private:
 
   cohort::Timer<ceph::mono_clock> timer;
 
-  std::vector<Context*> sync_waiters;
+  Context::List sync_waiters;
   bool stop;
   void sync_entry();
   struct SyncThread : public Thread {

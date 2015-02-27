@@ -155,7 +155,7 @@ public:
   }
 
   // waiters
-  map<int, map<inodeno_t, std::vector<Context*> > >
+  map<int, map<inodeno_t, Context::List> >
   waiting_for_base_ino;
 
   void discover_base_ino(inodeno_t want_ino, Context *onfinish,
@@ -280,7 +280,7 @@ public:
     uncommitted_masters[reqid].safe = safe;
   }
   void wait_for_uncommitted_master(metareqid_t reqid, Context *c) {
-    uncommitted_masters[reqid].waiters.push_back(c);
+    uncommitted_masters[reqid].waiters.push_back(*c);
   }
   void log_master_commit(metareqid_t reqid);
   void logged_master_update(metareqid_t reqid);
@@ -314,7 +314,7 @@ protected:
   struct umaster {
     set<int> slaves;
     LogSegment *ls;
-    std::vector<Context*> waiters;
+    Context::List waiters;
     bool safe;
     bool committing;
     bool recovering;
@@ -420,7 +420,7 @@ protected:
 
   vector<CInode*> rejoin_recover_q, rejoin_check_q;
   list<SimpleLock*> rejoin_eval_locks;
-  std::vector<Context*> rejoin_waiters;
+  Context::List rejoin_waiters;
 
   void rejoin_walk(CDir *dir, MMDSCacheRejoin *rejoin);
   void handle_cache_rejoin(MMDSCacheRejoin *m);
@@ -673,7 +673,7 @@ protected:
 
 private:
   bool opening_root, open;
-  std::vector<Context*> waiting_for_open;
+  Context::List waiting_for_open;
 
 public:
   CInode *create_system_inode(VolumeRef &v, inodeno_t ino, int mode);
@@ -686,7 +686,7 @@ public:
 
   bool is_open() { return open; }
   void wait_for_open(Context *c) {
-    waiting_for_open.push_back(c);
+    waiting_for_open.push_back(*c);
   }
 
   void open_root_inode(VolumeRef &v, Context *c);
@@ -780,7 +780,7 @@ protected:
     bool want_xlocked;
     version_t tid;
     VolumeRef volume;
-    std::vector<Context*> waiters;
+    Context::List waiters;
     open_ino_info_t() : checking(-1), auth_hint(-1),
       check_peers(true), fetch_backtrace(true), discover(false) {}
   };
@@ -900,12 +900,12 @@ public:
   }
 
   CDir* add_replica_dir(bufferlist::iterator& p, CInode *diri,
-			int from, std::vector<Context*>& finished);
+			int from, Context::List& finished);
   CDir* forge_replica_dir(CInode *diri, frag_t fg, int from);
   CDentry *add_replica_dentry(bufferlist::iterator& p, CDir *dir,
-			      std::vector<Context*>& finished);
+			      Context::List& finished);
   CInode *add_replica_inode(bufferlist::iterator& p, CDentry *dn,
-			    std::vector<Context*>& finished);
+			    Context::List& finished);
 
   void replicate_stray(CDentry *straydn, int who, bufferlist& bl);
   CDentry *add_replica_stray(bufferlist &bl, int from);
@@ -926,7 +926,7 @@ private:
     int bits;
     bool committed;
     LogSegment *ls;
-    std::vector<Context*> waiters;
+    Context::List waiters;
     list<frag_t> old_frags;
     bufferlist rollback;
     ufragment() : bits(0), committed(false), ls(NULL) {}
@@ -949,13 +949,13 @@ private:
 
   void adjust_dir_fragments(CInode *diri, frag_t basefrag, int bits,
 			    list<CDir*>& frags,
-			    std::vector<Context*>& waiters,
+			    Context::List& waiters,
 			    bool replay);
   void adjust_dir_fragments(CInode *diri,
 			    list<CDir*>& srcfrags,
 			    frag_t basefrag, int bits,
 			    list<CDir*>& resultfrags,
-			    std::vector<Context*>& waiters,
+			    Context::List& waiters,
 			    bool replay);
   CDir *force_dir_fragment(CInode *diri, frag_t fg, bool replay=true);
   void get_force_dirfrag_bound_set(vector<dirfrag_t>& dfs,
@@ -990,7 +990,7 @@ private:
 public:
   void wait_for_uncommitted_fragment(dirfrag_t dirfrag, Context *c) {
     assert(uncommitted_fragments.count(dirfrag));
-    uncommitted_fragments[dirfrag].waiters.push_back(c);
+    uncommitted_fragments[dirfrag].waiters.push_back(*c);
   }
   void split_dir(CDir *dir, int byn);
   void merge_dir(CInode *diri, frag_t fg);

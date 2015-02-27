@@ -42,7 +42,7 @@ class MDSTable {
   version_t version, committing_version, committed_version,
     projected_version;
 
-  map<version_t, std::vector<Context*> > waitfor_save;
+  map<version_t, Context::List> waitfor_save;
 
 public:
   MDSTable(MDS *m, const char *n, bool is_per_mds);

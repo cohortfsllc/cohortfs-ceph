@@ -269,7 +269,7 @@ void Server::flush_client_sessions(set<client_t>& client_set, C_GatherBuilder& g
 
 void Server::finish_flush_session(Session *session, version_t seq)
 {
-  std::vector<Context*> finished;
+  Context::List finished;
   session->finish_flush(seq, finished);
   mds->queue_waiters(finished);
 }
@@ -2874,7 +2874,7 @@ void Server::handle_client_file_setlock(MDRequestRef& mdr)
   ldout(mds->cct, 10) << " state prior to lock change: " << *lock_state << dendl;;
   if (CEPH_LOCK_UNLOCK == set_lock.type) {
     list<ceph_filelock> activated_locks;
-    std::vector<Context*> waiters;
+    Context::List waiters;
     if (lock_state->is_waiting(set_lock)) {
       ldout(mds->cct, 10) << " unlock removing waiting lock " << set_lock << dendl;
       lock_state->remove_waiting(set_lock);
@@ -6014,7 +6014,7 @@ void Server::_commit_slave_rename(MDRequestRef& mdr, int r,
 
   CDentry::linkage_t *destdnl = destdn->get_linkage();
 
-  std::vector<Context*> finished;
+  Context::List finished;
   if (r == 0) {
     // write a commit to the journal
     ESlaveUpdate *le = new ESlaveUpdate(mdlog, "slave_rename_commit", mdr->reqid,
@@ -6416,7 +6416,7 @@ void Server::_rename_rollback_finish(MutationRef& mut, MDRequestRef& mdr, CDentr
   }
 
   if (mdr) {
-    std::vector<Context*> finished;
+    Context::List finished;
     if (mdr->more()->is_ambiguous_auth) {
       if (srcdn->is_auth())
 	mdr->more()->rename_inode->unfreeze_inode(finished);

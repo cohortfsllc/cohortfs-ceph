@@ -51,7 +51,7 @@ void MDSTable::save(Context *onfinish, version_t v)
   if (v > 0 && v <= committing_version) {
     dout(10) << "save v " << version << " - already saving "
 	     << committing_version << " >= needed " << v << dendl;
-    waitfor_save[v].push_back(onfinish);
+    waitfor_save[v].push_back(*onfinish);
     return;
   }
 
@@ -65,7 +65,7 @@ void MDSTable::save(Context *onfinish, version_t v)
   committing_version = version;
 
   if (onfinish)
-    waitfor_save[version].push_back(onfinish);
+    waitfor_save[version].push_back(*onfinish);
 
   // write (async)
   oid_t oid = get_object_name();
@@ -89,13 +89,14 @@ void MDSTable::save_2(int r, version_t v)
   assert(r >= 0);
   committed_version = v;
 
-  std::vector<Context*> vs;
+  Context::List finished;
   while (!waitfor_save.empty()) {
-    if (waitfor_save.begin()->first > v) break;
-    move_left(vs, waitfor_save.begin()->second);
-    waitfor_save.erase(waitfor_save.begin());
+    auto i = waitfor_save.begin();
+    if (i->first > v) break;
+    finished.splice(finished.end(), i->second);
+    waitfor_save.erase(i);
   }
-  finish_contexts(vs,0);
+  finish_contexts(finished);
 }
 
 

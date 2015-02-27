@@ -177,7 +177,7 @@ void JournalingObjectStore::ApplyManager::add_waiter(uint64_t op, Context *c)
 {
   unique_lock l(com_lock);
   assert(c);
-  commit_waiters[op].push_back(c);
+  commit_waiters[op].push_back(*c);
 }
 
 bool JournalingObjectStore::ApplyManager::commit_start()
@@ -239,10 +239,10 @@ void JournalingObjectStore::ApplyManager::commit_finish()
 
   committed_seq = committing_seq;
 
-  map<version_t, vector<Context*> >::iterator p = commit_waiters.begin();
+  map<version_t, Context::List>::iterator p = commit_waiters.begin();
   while (p != commit_waiters.end() &&
     p->first <= committing_seq) {
-    finisher.queue(p->second);
+    finisher.queue(std::move(p->second));
     commit_waiters.erase(p++);
   }
 }

@@ -228,7 +228,7 @@ struct MDRequestImpl : public MutationImpl {
     Context *slave_commit;
     bufferlist rollback_bl;
 
-    std::vector<Context*> waiting_for_finish;
+    Context::List waiting_for_finish;
 
     // export & fragment
     CDir* export_dir;

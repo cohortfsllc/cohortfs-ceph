@@ -415,7 +415,7 @@ void MDLog::replay(VolumeRef &v, Context *c)
 
   // add waiter
   if (c)
-    waitfor_replay.push_back(c);
+    waitfor_replay.push_back(*c);
 
   // go!
   ldout(mds->cct, 10) << "replay start, from " << journaler->get_read_pos()
