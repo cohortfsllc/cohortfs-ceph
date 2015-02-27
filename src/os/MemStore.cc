@@ -65,14 +65,12 @@ int MemStore::mount()
   int r = _load();
   if (r < 0)
     return r;
-  tx_tp.start();
   finisher.start();
   return 0;
 }
 
 int MemStore::umount()
 {
-  tx_tp.stop();
   finisher.stop();
   return _save();
 }
@@ -722,31 +720,26 @@ int MemStore::queue_transactions(Sequencer* osr,
 				 OpRequestRef op,
 				 ThreadPool::TPHandle* handle)
 {
-  // fixme: ignore the Sequencer and serialize everything.
-  apply_lock_guard l(apply_lock);
+  for (list<Transaction*>::iterator p = tls.begin(); p != tls.end(); ++p) {
+    // poke the TPHandle heartbeat just to exercise that code path
+    if (handle)
+      handle->reset_tp_timeout();
 
-  for (list<Transaction*>::iterator p = tls.begin(); p != tls.end(); ++p)
-    tx_wq.queue(*p);
+    _do_transaction(**p);
+  }
 
-  return 0;
-}
-
-void MemStore::_finish_transaction(Transaction& t)
-{
-  Context* on_apply_sync = t.get_on_applied_sync();
-  Context* on_apply = t.get_on_applied();
-  Context* on_commit = t.get_on_commit();
-
+  Context *on_apply = NULL, *on_apply_sync = NULL, *on_commit = NULL;
+  Transaction::collect_contexts(tls, &on_apply, &on_commit, &on_apply_sync);
   if (on_apply_sync)
     on_apply_sync->complete(0);
   if (on_apply)
     finisher.queue(on_apply);
   if (on_commit)
     finisher.queue(on_commit);
+  return 0;
 }
 
-void MemStore::_do_transaction(Transaction& t,
-			       ThreadPool::TPHandle& handle)
+void MemStore::_do_transaction(Transaction& t)
 {
   int pos = 0;
 
@@ -1070,8 +1063,6 @@ void MemStore::_do_transaction(Transaction& t,
     }
 
     ++pos;
-
-    handle.reset_tp_timeout();
   }
 }
 
