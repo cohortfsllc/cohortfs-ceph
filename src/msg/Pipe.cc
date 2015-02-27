@@ -903,6 +903,7 @@ int Pipe::connect(std::unique_lock<std::mutex>& pl)
     bufferlist authorizer_reply;
 
     ceph_msg_connect connect;
+    memset(&connect, 0, sizeof connect);
     connect.features = policy.features_supported;
     connect.host_type = msgr->get_myinst().name.type();
     connect.global_seq = gseq;
