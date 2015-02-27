@@ -268,8 +268,6 @@ protected:
 public:
   CephContext* cct;
 protected:
-  OSDriver osdriver;
-
   // Ops waiting for map, should be queued at back
   std::mutex map_lock;
   list<OpRequestRef> waiting_for_map;
@@ -511,7 +509,7 @@ protected:
   std::shared_ptr<ObjectStore::Sequencer> osr;
 
 private:
-  int _delete_oid(OpContext* ctx, bool no_whiteout);
+  int _delete_obj(OpContext* ctx, bool no_whiteout);
 
 public:
   void clear_primary_state();
@@ -545,7 +543,6 @@ public:
   const boost::uuids::uuid& get_volid() const { return info.volume; }
 
   bool  is_empty() const { return info.last_update == eversion_t(0,0); }
-
 
 private:
   void init();
@@ -635,23 +632,23 @@ protected:
 
   /// List objects in collection
   int objects_list_partial(
-    const oid_t& begin,
+    const hoid_t& begin,
     int min,
     int max,
-    vector<oid_t>* ls,
-    oid_t* next);
+    vector<hoid_t>* ls,
+    hoid_t* next);
 
   int objects_list_range(
-    const oid_t& start,
-    const oid_t& end,
-    vector<oid_t>* ls);
+    const hoid_t& start,
+    const hoid_t& end,
+    vector<hoid_t>* ls);
 
   int objects_get_attr(
-    const oid_t& oid,
+    const hoid_t& oid,
     const string& attr,
     bufferlist* out);
 
-  void objects_read_async(const oid_t& oid,
+  void objects_read_async(const hoid_t& oid,
 			  const list<pair<pair<uint64_t, uint64_t>,
 			  pair<bufferlist*, Context*> > >& to_read,
 			  Context* on_complete);
