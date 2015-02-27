@@ -108,7 +108,7 @@ public:
     FDCache fdcache;
 
     FSCollection(const coll_t& cid, int fd)
-      : ObjectStore::Collection(cid), fd(fd), fdcache(g_ceph_context) {
+      : ObjectStore::Collection(cid), fd(fd), fdcache(NULL) {
       // TODO:  do something
     }
     friend class FileStore;

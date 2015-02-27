@@ -1828,14 +1828,15 @@ struct replay_guard_buf
 };
 
 static inline int
-_check_global_replay_guard_inl(FileStore::FSCollection* fc,
+_check_global_replay_guard_inl(CephContext* cct,
+			       FileStore::FSCollection* fc,
 			       const SequencerPosition& spos,
 			       replay_guard_buf& sb,
 			       const string& basedir) {
   int r = chain_fgetxattr(fc->fd, GLOBAL_REPLAY_GUARD_XATTR,
 			  sb.buf, sizeof(sb.buf));
   if (r < 0) {
-    dout(20) << __func__ << " no xattr" << dendl;
+    //dout(20) << __func__ << " no xattr" << dendl;
     assert(!sb.fail_eio || r != -EIO);
     return 1;  // no xattr
   }
@@ -1849,13 +1850,16 @@ _check_global_replay_guard_inl(FileStore::FSCollection* fc,
   return spos >= opos ? 1 : -1;
 } /* _check_global_replay_guard_inl */
 
-static inline int _check_replay_guard_inl(const int fd,
-					  const SequencerPosition& spos,
-					  replay_guard_buf& sb,
-					  const string& basedir) {
-  int r = chain_fgetxattr(fd, REPLAY_GUARD_XATTR, sb.buf, sizeof(sb.buf));
+static inline int
+_check_replay_guard_inl(CephContext* cct,
+			const int fd,
+			const SequencerPosition& spos,
+			replay_guard_buf& sb,
+			const string& basedir) {
+  int r = chain_fgetxattr(fd, REPLAY_GUARD_XATTR, sb.buf,
+			  sizeof(sb.buf));
   if (r < 0) {
-    dout(20) << "_check_replay_guard no xattr" << dendl;
+    //dout(20) << "_check_replay_guard no xattr" << dendl;
     assert(!sb.fail_eio || r != -EIO);
     return 1;  // no xattr
   }
@@ -1901,11 +1905,11 @@ int FileStore::_check_replay_guard(FSCollection* fc,
     return 1;
 
   replay_guard_buf sb(m_filestore_fail_eio);
-  int r = _check_global_replay_guard_inl(fc, spos, sb, basedir);
+  int r = _check_global_replay_guard_inl(cct, fc, spos, sb, basedir);
   if (r < 0)
     return r;
 
-  r = _check_replay_guard_inl(**fo->fd, spos, sb, basedir);
+  r = _check_replay_guard_inl(cct, **fo->fd, spos, sb, basedir);
   return r;
 }
 
