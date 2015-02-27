@@ -5273,7 +5273,7 @@ void MDCache::_recovered(CInode *in, int r, uint64_t size,
 	   << " for " << *in << dendl;
 
   switch (r) {
-  case ENOENT:	/* treat this as "zero" -- success case. */
+  case -ENOENT:	/* treat this as "zero" -- success case. */
   case 0:
     break;
   default:
