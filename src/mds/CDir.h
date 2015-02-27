@@ -335,8 +335,8 @@ public:
 
 public:
   void split(int bits, list<CDir*>& subs,
-	     std::vector<Context*>& waiters, bool replay);
-  void merge(list<CDir*>& subs, std::vector<Context*>& waiters,
+	     Context::List& waiters, bool replay);
+  void merge(list<CDir*>& subs, Context::List& waiters,
 	     bool replay);
 
   bool should_split() {
@@ -350,8 +350,7 @@ private:
   void prepare_new_fragment(bool replay);
   void prepare_old_fragment(bool replay);
   void steal_dentry(CDentry *dn);  // from another dir.	 used by merge/split.
-  void finish_old_fragment(std::vector<Context*>& waiters,
-			   bool replay);
+  void finish_old_fragment(Context::List& waiters, bool replay);
   void init_fragment_pins();
 
 
@@ -462,7 +461,7 @@ protected:
 		     const string& want_dn, int r);
 
   // -- commit --
-  map<version_t, std::vector<Context*> > waiting_for_commit;
+  map<version_t, Context::List> waiting_for_commit;
   void _commit(version_t want, int op_prio);
   void _omap_commit(int op_prio);
   void _encode_dentry(CDentry *dn, bufferlist& bl);
@@ -497,28 +496,27 @@ public:
 
   // -- waiters --
 protected:
-  map< string, vector<Context*> > waiting_on_dentry;
-  map< inodeno_t, vector<Context*> > waiting_on_ino;
+  map<string, Context::List> waiting_on_dentry;
+  map<inodeno_t, Context::List> waiting_on_ino;
 
 public:
   bool is_waiting_for_dentry(const string& dname) {
     return waiting_on_dentry.count(dname);
   }
   void add_dentry_waiter(const string& dentry, Context *c);
-  void take_dentry_waiting(const string& dentry,
-			   std::vector<Context*>& vs);
+  void take_dentry_waiting(const string& dentry, Context::List& vs);
 
   bool is_waiting_for_ino(inodeno_t ino) {
     return waiting_on_ino.count(ino);
   }
   void add_ino_waiter(inodeno_t ino, Context *c);
-  void take_ino_waiting(inodeno_t ino, std::vector<Context*>& vs);
+  void take_ino_waiting(inodeno_t ino, Context::List& vs);
 
-  void take_sub_waiting(std::vector<Context*>& vs);  // dentry or ino
+  void take_sub_waiting(Context::List& vs);  // dentry or ino
 
   void add_waiter(uint64_t mask, Context *c);
   // may include dentry waiters
-  void take_waiting(uint64_t mask, std::vector<Context*>& vs);
+  void take_waiting(uint64_t mask, Context::List& vs);
   void finish_waiting(uint64_t mask, int result = 0); // ditto
 
 

@@ -526,7 +526,7 @@ public:
    * Paxos. These callbacks will be awaken whenever the said proposal
    * finishes.
    */
-  std::vector<Context*> waiting_for_finished_proposal;
+  Context::List waiting_for_finished_proposal;
 
  public:
 
@@ -610,7 +610,7 @@ public:
    * @param c The callback to be awaken once the proposal is finished.
    */
   void wait_for_finished_proposal(Context *c) {
-    waiting_for_finished_proposal.push_back(c);
+    waiting_for_finished_proposal.push_back(*c);
   }
 
   /**

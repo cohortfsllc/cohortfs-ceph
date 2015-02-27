@@ -2306,7 +2306,7 @@ void MDCache::handle_mds_recovery(int who)
   static const uint64_t d_mask =
     CDir::WAIT_ANY_MASK & ~CDir::WAIT_DENTRY;
 
-  std::vector<Context*> waiters;
+  Context::List waiters;
 
   // wake up any waiters in their subtrees
   for (map<CDir*,set<CDir*> >::iterator p = subtrees.begin();
@@ -5428,7 +5428,7 @@ void MDCache::truncate_inode_logged(CInode *in, MutationRef& mut)
   in->put(CInode::PIN_TRUNCATING);
   in->auth_unpin(this);
 
-  std::vector<Context*> waiters;
+  Context::List waiters;
   in->take_waiting(CInode::WAIT_TRUNC, waiters);
   mds->queue_waiters(waiters);
 }
@@ -7590,7 +7590,7 @@ void MDCache::open_ino_finish(inodeno_t ino, open_ino_info_t& info,
 {
   dout(10) << "open_ino_finish ino " << ino << " ret " << ret << dendl;
 
-  std::vector<Context*> waiters;
+  Context::List waiters;
   waiters.swap(info.waiters);
   opening_inodes.erase(ino);
   finish_contexts(waiters, ret);
@@ -7799,7 +7799,7 @@ void MDCache::open_ino(inodeno_t ino, VolumeRef volume, Context* fin,
 	info.want_xlocked = true;
       }
     }
-    info.waiters.push_back(fin);
+    info.waiters.push_back(*fin);
   } else {
     open_ino_info_t& info = opening_inodes[ino];
     assert(!!volume);
@@ -7813,7 +7813,7 @@ void MDCache::open_ino(inodeno_t ino, VolumeRef volume, Context* fin,
     info.want_xlocked = want_xlocked;
     info.tid = ++open_ino_last_tid;
     info.volume = volume;
-    info.waiters.push_back(fin);
+    info.waiters.push_back(*fin);
     do_open_ino(ino, info, 0);
   }
 }
@@ -7979,7 +7979,7 @@ MDRequestRef MDCache::request_start(MClientRequest *req)
     assert(mdr);
     if (mdr->is_slave()) {
       dout(10) << "request_start already had " << *mdr << ", waiting for finish" << dendl;
-      mdr->more()->waiting_for_finish.push_back(new C_MDS_RetryMessage(mds, req));
+      mdr->more()->waiting_for_finish.push_back(*new C_MDS_RetryMessage(mds, req));
     } else {
       dout(10) << "request_start already processing " << *mdr << ", dropping new msg" << dendl;
       req->put();
@@ -8852,7 +8852,7 @@ void MDCache::discover_base_ino(inodeno_t want_ino,
     d.ino = want_ino;
     _send_discover(d);
   }
-  waiting_for_base_ino[from][want_ino].push_back(onfinish);
+  waiting_for_base_ino[from][want_ino].push_back(*onfinish);
 }
 
 
@@ -8913,7 +8913,7 @@ void MDCache::discover_path(CInode *base,
     base->add_waiter(CInode::WAIT_SINGLEAUTH, onfinish);
     return;
   } else if (from == mds->get_nodeid()) {
-    std::vector<Context*> finished;
+    Context::List finished;
     base->take_waiting(CInode::WAIT_DIR, finished);
     mds->queue_waiters(finished);
     return;
@@ -8966,7 +8966,7 @@ void MDCache::discover_path(CDir *base,
     base->add_waiter(CDir::WAIT_SINGLEAUTH, onfinish);
     return;
   } else if (from == mds->get_nodeid()) {
-    std::vector<Context*> finished;
+    Context::List finished;
     base->take_sub_waiting(finished);
     mds->queue_waiters(finished);
     return;
@@ -9017,7 +9017,7 @@ void MDCache::discover_ino(CDir *base,
     base->add_waiter(CDir::WAIT_SINGLEAUTH, onfinish);
     return;
   } else if (from == mds->get_nodeid()) {
-    std::vector<Context*> finished;
+    Context::List finished;
     base->take_sub_waiting(finished);
     mds->queue_waiters(finished);
     return;
@@ -9364,7 +9364,7 @@ void MDCache::handle_discover_reply(MDiscoverReply *m)
   if (m->is_flag_error_ino())
     dout(7) << " flag error, ino = " << m->get_wanted_ino() << dendl;
 
-  std::vector<Context*> finished, error;
+  Context::List finished, error;
   int from = m->get_source().num();
 
   // starting point
@@ -9517,8 +9517,7 @@ void MDCache::handle_discover_reply(MDiscoverReply *m)
 // REPLICAS
 
 CDir *MDCache::add_replica_dir(bufferlist::iterator& p, CInode *diri,
-			       int from,
-			       std::vector<Context*>& finished)
+			       int from, Context::List& finished)
 {
   dirfrag_t df;
   ::decode(df, p);
@@ -9579,8 +9578,7 @@ CDir *MDCache::forge_replica_dir(CInode *diri, frag_t fg, int from)
 }
 
 CDentry *MDCache::add_replica_dentry(bufferlist::iterator& p,
-				     CDir *dir,
-				     std::vector<Context*>& finished)
+				     CDir *dir, Context::List& finished)
 {
   string name;
   ::decode(name, p);
@@ -9603,8 +9601,7 @@ CDentry *MDCache::add_replica_dentry(bufferlist::iterator& p,
 }
 
 CInode *MDCache::add_replica_inode(bufferlist::iterator& p,
-				   CDentry *dn,
-				   std::vector<Context*>& finished)
+				   CDentry *dn, Context::List& finished)
 {
   inodeno_t ino;
   ::decode(ino, p);
@@ -9653,7 +9650,7 @@ void MDCache::replicate_stray(CDentry *straydn, int who,
 
 CDentry *MDCache::add_replica_stray(bufferlist &bl, int from)
 {
-  std::vector<Context*> finished;
+  Context::List finished;
   bufferlist::iterator p = bl.begin();
 
   CInode *mdsin = add_replica_inode(p, NULL, finished);
@@ -9806,7 +9803,7 @@ void MDCache::handle_dentry_link(MDentryLink *m)
   }
 
   bufferlist::iterator p = m->bl.begin();
-  std::vector<Context*> finished;
+  Context::List finished;
   if (dn) {
     if (m->get_is_primary()) {
       // primary link.
@@ -9943,7 +9940,7 @@ void MDCache::handle_dentry_unlink(MDentryUnlink *m)
 void MDCache::adjust_dir_fragments(CInode *diri, frag_t basefrag,
 				   int bits,
 				   list<CDir*>& resultfrags,
-				   std::vector<Context*>& waiters,
+				   Context::List& waiters,
 				   bool replay)
 {
   dout(10) << "adjust_dir_fragments " << basefrag << " " << bits
@@ -9965,7 +9962,7 @@ CDir *MDCache::force_dir_fragment(CInode *diri, frag_t fg, bool replay)
   dout(10) << "force_dir_fragment " << fg << " on " << *diri << dendl;
 
   list<CDir*> src, result;
-  std::vector<Context*> waiters;
+  Context::List waiters;
 
   // split a parent?
   frag_t parent = diri->dirfragtree.get_branch_or_leaf(fg);
@@ -10008,7 +10005,7 @@ void MDCache::adjust_dir_fragments(CInode *diri,
 				   list<CDir*>& srcfrags,
 				   frag_t basefrag, int bits,
 				   list<CDir*>& resultfrags,
-				   std::vector<Context*>& waiters,
+				   Context::List& waiters,
 				   bool replay)
 {
   dout(10) << "adjust_dir_fragments " << basefrag << " bits " << bits
@@ -10528,7 +10525,7 @@ void MDCache::dispatch_fragment_dir(MDRequestRef& mdr)
   }
 
   // refragment
-  std::vector<Context*> waiters;
+  Context::List waiters;
   adjust_dir_fragments(diri, info.dirs, basedirfrag.frag, info.bits,
 		       info.resultfrags, waiters, false);
   if (cct->_conf->mds_debug_frag)
@@ -10763,7 +10760,7 @@ void MDCache::handle_fragment_notify(MMDSFragmentNotify *notify)
 */
 
     // refragment
-    std::vector<Context*> waiters;
+    Context::List waiters;
     list<CDir*> resultfrags;
     adjust_dir_fragments(diri, base, bits, resultfrags, waiters, false);
     if (cct->_conf->mds_debug_frag)
@@ -10879,7 +10876,7 @@ void MDCache::rollback_uncommitted_fragments()
     list<CDir*> resultfrags;
     if (uf.old_frags.empty()) {
       // created by old format EFragment
-      std::vector<Context*> waiters;
+      Context::List waiters;
       adjust_dir_fragments(diri, p->first.frag, -uf.bits, resultfrags, waiters, true);
     } else {
       bufferlist::iterator bp = uf.rollback.begin();

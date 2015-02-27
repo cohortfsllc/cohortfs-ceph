@@ -27,9 +27,7 @@ protected:
   uint64_t budget; // Should wrap calls for budget.
   C_Contexts *handler;
 
-  ObjOp() : budget(0), flags(0), priority(0) {
-    handler = new C_Contexts(&handler);
-  }
+  ObjOp() : budget(0), handler(new C_Contexts), flags(0), priority(0) {}
 
 public:
   int flags;

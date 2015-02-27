@@ -99,13 +99,13 @@ TYPE_FEATUREFUL(MDSMap::mds_info_t)
 TYPE_NOCOPY(Capability)
 
 #include "mds/AnchorServer.h"
-TYPEWITHSTRAYDATA(AnchorServer)
+TYPE_NOCOPY(AnchorServer)
 
 #include "mds/InoTable.h"
-TYPE(InoTable)
+TYPE_NOCOPY(InoTable)
 
 #include "mds/SessionMap.h"
-TYPE(SessionMap)
+TYPE_NOCOPY(SessionMap)
 
 #include "mds/events/ECommitted.h"
 TYPE(ECommitted)

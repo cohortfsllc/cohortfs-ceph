@@ -37,6 +37,10 @@ struct RefCountedObject {
     if (--nref == 0)
       delete this;
   }
+
+  // copy and assignment disabled
+  RefCountedObject(const RefCountedObject&) = delete;
+  const RefCountedObject& operator=(const RefCountedObject&) = delete;
 };
 
 /**

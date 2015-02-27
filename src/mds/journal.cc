@@ -2333,7 +2333,7 @@ void EFragment::replay(MDS *mds, VolumeRef &v)
 	   << basefrag << " by " << bits << dendl;
 
   list<CDir*> resultfrags;
-  std::vector<Context*> waiters;
+  Context::List waiters;
   list<frag_t> old_frags;
 
   // in may be NULL if it wasn't in our cache yet.  if it's a prepare

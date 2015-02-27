@@ -53,10 +53,21 @@ class Context {
   Context(const Context& other);
   const Context& operator=(const Context& other);
 
+  // intrusive list entry
+  typedef boost::intrusive::link_mode<boost::intrusive::auto_unlink> link_mode;
+  typedef boost::intrusive::list_member_hook<link_mode> list_hook_type;
+  list_hook_type q;
+
+  typedef boost::intrusive::member_hook<Context, list_hook_type,
+                                        &Context::q> MemberOption;
+  typedef boost::intrusive::constant_time_size<false> SizeOption;
+
  protected:
   virtual void finish(int r) = 0;
 
- public: 
+ public:
+  typedef boost::intrusive::list<Context, MemberOption, SizeOption> List;
+
   Context() {}
   virtual ~Context() {}	      // we want a virtual destructor!!!
   virtual void complete(int r) {
@@ -64,6 +75,11 @@ class Context {
     delete this;
   }
 };
+
+// output operator to print context pointer
+inline std::ostream& operator<<(std::ostream &out, const Context &c) {
+  return out << &c;
+}
 
 /**
  * Simple context holding a single object
@@ -99,20 +115,16 @@ typedef std::shared_ptr<RunOnDelete> RunOnDeleteRef;
 /*
  * finish and destroy a sequence of Contexts
  */
-inline void finish_contexts(std::vector<Context*>& finished,
-			    int result = 0)
+inline void finish_contexts(Context::List &finished, int result = 0)
 {
-  if (finished.empty())
-    return;
+  Context::List contexts;
+  contexts.swap(finished); // swap out of place to avoid weird loops
 
-  std::vector<Context*> vs;
-  vs.swap(finished); // swap out of place to avoid weird loops
-
-  for (std::vector<Context*>::iterator it = vs.begin();
-       it != vs.end();
-       it++) {
-    Context *c = *it;
-    c->complete(result);
+  while (!contexts.empty()) {
+    auto i = contexts.begin();
+    Context &c = *i;
+    contexts.erase(i);
+    c.complete(result);
   }
 }
 
@@ -121,58 +133,41 @@ public:
   void finish(int r) { }
 };
 
-
 /*
- * C_Contexts - set of Contexts
+ * C_Contexts - list of Contexts
  */
 class C_Contexts : public Context {
-private:
-  C_Contexts **itknows;
-public:
-  std::vector<Context*> contexts;
+ private:
+  Context::List contexts;
+ public:
+  C_Contexts() {}
+  C_Contexts(Context::List &&contexts)
+    : contexts(std::move(contexts)) {}
 
-  C_Contexts(C_Contexts **myname = NULL) : itknows(myname) { }
   void add(Context* c) {
-    contexts.push_back(c);
+    contexts.push_back(*c);
   }
-
-  void take(std::vector<Context*>& vs) {
-    contexts.reserve(contexts.size() + vs.size());
-    std::move(vs.begin(), vs.end(),
-	      std::inserter(contexts, contexts.end()));
-    vs.clear();
+  void take(Context::List &other) {
+    contexts.splice(contexts.end(), other);
   }
-
   void finish(int r) {
     finish_contexts(contexts, r);
-    if (itknows)
-      *itknows = NULL;
   }
+  bool empty() const { return contexts.empty(); }
 
-  bool empty() { return contexts.empty(); }
-
-  static Context *vec_to_context(std::vector<Context*> &vs) {
-    if (vs.size() == 0) {
+  static Context* list_to_context(Context::List &contexts) {
+    if (contexts.size() == 0)
       return 0;
-    } else if (vs.size() == 1) {
-      Context *c = vs.front();
-      vs.clear();
-      return c;
-    } else {
-      C_Contexts *c(new C_Contexts());
-      c->take(vs);
+    if (contexts.size() == 1) {
+      Context *c = &contexts.front();
+      contexts.clear();
       return c;
     }
+    C_Contexts *c = new C_Contexts();
+    c->take(contexts);
+    return c;
   }
 };
-
-/* move elements of v2 to v1 */
-inline void move_left(std::vector<Context*>& v1,
-		      std::vector<Context*>& v2) {
-  v1.reserve(v1.size() + v2.size());
-  std::move(v2.begin(), v2.end(), std::inserter(v1, v1.end()));
-  v2.clear();
-}
 
 /*
  * C_Gather

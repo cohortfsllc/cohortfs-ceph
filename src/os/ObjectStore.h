@@ -525,9 +525,7 @@ public:
     bool replica;
     bool tolerate_collection_add_enoent;
 
-    std::vector<Context*> on_applied;
-    std::vector<Context*> on_commit;
-    std::vector<Context*> on_applied_sync;
+    Context::List on_applied, on_commit, on_applied_sync;
 
     // member hook for intrusive work queue
     bi::list_member_hook<> queue_hook;
@@ -578,15 +576,15 @@ public:
     /* Operations on callback contexts */
     void register_on_applied(Context* c) {
       if (!c) return;
-      on_applied.push_back(c);
+      on_applied.push_back(*c);
     }
     void register_on_commit(Context* c) {
       if (!c) return;
-      on_commit.push_back(c);
+      on_commit.push_back(*c);
     }
     void register_on_applied_sync(Context* c) {
       if (!c) return;
-      on_applied_sync.push_back(c);
+      on_applied_sync.push_back(*c);
     }
     void register_on_complete(Context* c) {
       if (!c) return;
@@ -603,30 +601,27 @@ public:
       assert(out_on_applied);
       assert(out_on_commit);
       assert(out_on_applied_sync);
-      vector<Context*> on_applied, on_commit, on_applied_sync;
-      for (list<Transaction* >::iterator i = t.begin();
-	   i != t.end();
-	   ++i) {
-	move_left(on_applied, (*i)->on_applied);
-	move_left(on_commit, (*i)->on_commit);
-	move_left(on_applied_sync, (*i)->on_applied_sync);
+      Context::List on_applied, on_commit, on_applied_sync;
+      for (auto i = t.begin(); i != t.end(); ++i) {
+        on_applied.splice(on_applied.end(), (*i)->on_applied);
+        on_commit.splice(on_commit.end(), (*i)->on_commit);
+        on_applied_sync.splice(on_applied_sync.end(), (*i)->on_applied_sync);
       }
-      *out_on_applied = C_Contexts::vec_to_context(on_applied);
-      *out_on_commit = C_Contexts::vec_to_context(on_commit);
-      *out_on_applied_sync =
-	C_Contexts::vec_to_context(on_applied_sync);
+      *out_on_applied = C_Contexts::list_to_context(on_applied);
+      *out_on_commit = C_Contexts::list_to_context(on_commit);
+      *out_on_applied_sync = C_Contexts::list_to_context(on_applied_sync);
     }
 
     Context* get_on_applied() {
-      return C_Contexts::vec_to_context(on_applied);
+      return C_Contexts::list_to_context(on_applied);
     }
 
     Context* get_on_commit() {
-      return C_Contexts::vec_to_context(on_commit);
+      return C_Contexts::list_to_context(on_commit);
     }
 
     Context* get_on_applied_sync() {
-      return C_Contexts::vec_to_context(on_applied_sync);
+      return C_Contexts::list_to_context(on_applied_sync);
     }
 
     /// For legacy transactions, provide the pool to override the
