@@ -299,128 +299,64 @@ class KeyValueStore : public ObjectStore,
     Context *ondisk, *onreadable, *onreadable_sync;
     uint64_t ops, bytes;
     OpRequestRef osd_op;
-  };
-  class OpSequencer : public Sequencer_impl {
-    std::mutex qlock; // to protect q, for benefit of flush (peek/dequeue also protected by lock)
-    list<Op*> q;
-    list<uint64_t> jq;
-    std::condition_variable cond;
-   public:
-    Sequencer *parent;
-    std::mutex apply_lock;  // for apply mutual exclusion
-    typedef std::lock_guard<std::mutex> lock_guard;
-    typedef std::unique_lock<std::mutex> unique_lock;
 
-    void queue(Op *o) {
-      lock_guard l(qlock);
-      q.push_back(o);
-    }
-    Op *peek_queue() {
-      // Must be called with apply_lock locked.
-      return q.front();
-    }
-    Op *dequeue() {
-      // Must be called with apply_lock locked.
-      lock_guard l(qlock);
-      Op *o = q.front();
-      q.pop_front();
-      cond.notify_all();
-      return o;
-    }
-    void flush() {
-      unique_lock ql(qlock);
-
-      // get max for journal _or_ op queues
-      uint64_t seq = 0;
-      if (!q.empty())
-	seq = q.back()->op;
-      if (!jq.empty() && jq.back() > seq)
-	seq = jq.back();
-
-      if (seq) {
-	// everything prior to our watermark to drain through either/both
-	// queues
-	while ((!q.empty() && q.front()->op <= seq) ||
-		(!jq.empty() && jq.front() <= seq))
-	  cond.wait(ql);
-      }
-    }
-
-    OpSequencer()
-      : parent(0) {}
-    ~OpSequencer() {
-      assert(q.empty());
-    }
-
-    const string& get_name() const {
-      return parent->get_name();
-    }
+    boost::intrusive::list_member_hook<> q;
+    typedef boost::intrusive::member_hook<Op,
+            boost::intrusive::list_member_hook<>, &Op::q> HookOption;
+    typedef boost::intrusive::list<Op, HookOption> Queue;
   };
 
-  friend ostream& operator<<(ostream& out, const OpSequencer& s);
-
-  Sequencer default_osr;
-  deque<OpSequencer*> op_queue;
+  Op::Queue op_queue;
   uint64_t op_queue_len, op_queue_bytes;
+  std::list<uint64_t> journal_queue;
   std::condition_variable op_throttle_cond;
   std::mutex op_throttle_lock;
   Finisher op_finisher;
 
   ThreadPool op_tp;
-  struct OpWQ : public ThreadPool::WorkQueue<OpSequencer> {
+  struct OpWQ : public ThreadPool::WorkQueue<Op> {
     KeyValueStore *store;
     OpWQ(KeyValueStore *fs, ceph::timespan timeout,
 	 ceph::timespan suicide_timeout, ThreadPool *tp) :
-      ThreadPool::WorkQueue<OpSequencer>("KeyValueStore::OpWQ",
-					 timeout, suicide_timeout, tp),
+      ThreadPool::WorkQueue<Op>("KeyValueStore::OpWQ",
+                                timeout, suicide_timeout, tp),
       store(fs) {}
 
-    bool _enqueue(OpSequencer *osr) {
-      store->op_queue.push_back(osr);
+    bool _enqueue(Op *o) {
+      store->op_queue.push_back(*o);
       return true;
     }
-    void _dequeue(OpSequencer *o) {
+    void _dequeue(Op *o) {
       assert(0);
     }
     bool _empty() {
       return store->op_queue.empty();
     }
-    OpSequencer *_dequeue() {
+    Op* _dequeue() {
       if (store->op_queue.empty())
 	return NULL;
-      OpSequencer *osr = store->op_queue.front();
+      Op *o = &store->op_queue.front();
       store->op_queue.pop_front();
-      return osr;
+      return o;
     }
-    void _process(OpSequencer *osr, ThreadPool::TPHandle &handle) {
-      unique_lock osral;
-      store->_do_op(osr, handle, osral);
-      osral.release();
-      // ThreadPool worker takes a lock then immediately calls...
+    void _process(Op *o, ThreadPool::TPHandle &handle) {
+      store->_do_op(o, handle);
     }
-    void _process_finish(OpSequencer *osr) {
-      // Threadpool worker has taken a lock, calls us...
-      unique_lock osral(osr->apply_lock, std::adopt_lock);
-      store->_finish_op(osr, osral);
+    void _process_finish(Op *o) {
+      store->_finish_op(o);
     }
     void _clear() {
       assert(store->op_queue.empty());
     }
   } op_wq;
 
-  Op *build_op(list<Transaction*>& tls, Context* ondisk,
-	       Context *onreadable, Context* onreadable_sync,
-	       OpRequestRef osd_op);
-  void queue_op(OpSequencer* osr, Op* o);
-  void op_queue_reserve_throttle(Op* o,
-				 ThreadPool::TPHandle* handle = NULL);
-  // Must be given an UNLOCKED unique_lock. Doesn't matter what it's
-  // associated with.
-  void _do_op(OpSequencer* osr, ThreadPool::TPHandle &handle,
-	      unique_lock& osral);
-  void op_queue_release_throttle(Op* o);
-  // Must be given the LOCKED unique_lock from _do_op.
-  void _finish_op(OpSequencer* osr, unique_lock& osral);
+  Op *build_op(list<Transaction*>& tls, Context *ondisk, Context *onreadable,
+	       Context *onreadable_sync, OpRequestRef osd_op);
+  void queue_op(Op *o);
+  void op_queue_reserve_throttle(Op *o, ThreadPool::TPHandle *handle = NULL);
+  void _do_op(Op *o, ThreadPool::TPHandle &handle);
+  void op_queue_release_throttle(Op *o);
+  void _finish_op(Op *o);
 
  public:
 
@@ -461,7 +397,7 @@ class KeyValueStore : public ObjectStore,
 			   SequencerPosition& spos,
 			   ThreadPool::TPHandle* handle);
 
-  int queue_transactions(Sequencer *osr, list<Transaction*>& tls,
+  int queue_transactions(list<Transaction*>& tls,
 			 OpRequestRef op = OpRequestRef(),
 			 ThreadPool::TPHandle* handle = NULL);
 
@@ -592,8 +528,7 @@ class KeyValueStore : public ObjectStore,
   ObjectMap::ObjectMapIterator get_omap_iterator(CollectionHandle ch,
 						 ObjectHandle oh);
 
-  void dump_transactions(list<ObjectStore::Transaction*>& ls, uint64_t seq,
-			 OpSequencer *osr);
+  void dump_transactions(list<ObjectStore::Transaction*>& ls, uint64_t seq);
 
  private:
   void _inject_failure() {}

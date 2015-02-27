@@ -272,7 +272,7 @@ int OSD::mkfs(CephContext *cct, ObjectStore *store, const string &dev,
 	c_ix = t->push_col(meta_col);
 	o_ix = t->push_oid(hoid_t(oid)); // XXXX
 	t->write(c_ix, o_ix, i*bl.length(), bl.length(), bl);
-	store->queue_transaction_and_cleanup(NULL, t);
+	store->queue_transaction_and_cleanup(t);
       }
       store->sync();
       ceph::timespan elapsed = ceph::mono_clock::now() - start;
@@ -855,10 +855,8 @@ int OSD::shutdown()
 
   for (const auto& p : vol_map) {
     dout(20) << " kicking vol " << p.first << dendl;
-    OSDVol::unique_lock vl(p.second->lock);
+    lock_guard vl(p.second->lock);
     p.second->on_shutdown();
-    vl.unlock();
-    p.second->osr->flush();
   }
 
   // finish ops
@@ -2582,7 +2580,6 @@ void OSD::handle_osd_map(MOSDMap *m)
   // superblock and commit
   write_superblock(service.meta_col, t);
   store->queue_transaction(
-    0,
     _t,
     new C_OnMapApply(&service, _t, pinned_maps, osdmap->get_epoch()),
     0, fin);

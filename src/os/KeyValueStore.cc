@@ -473,12 +473,6 @@ out:
 
 // =========== KeyValueStore Intern Helper Implementation ==============
 
-ostream& operator<<(ostream& out, const KeyValueStore::OpSequencer& s)
-{
-  assert(&out);
-  return out << *s.parent;
-}
-
 int KeyValueStore::_create_current()
 {
   struct stat st;
@@ -504,15 +498,14 @@ int KeyValueStore::_create_current()
 
 // =========== KeyValueStore API Implementation ==============
 
-KeyValueStore::KeyValueStore(CephContext *_cct, const std::string& base,
+KeyValueStore::KeyValueStore(CephContext *cct, const std::string& base,
 			     const char *name, bool do_update) :
-  ObjectStore(_cct, base),
+  ObjectStore(cct, base),
   basedir(base),
   fsid_fd(-1), op_fd(-1), current_fd(-1),
   kv_type(KV_TYPE_NONE),
   backend(NULL),
   ondisk_finisher(cct),
-  default_osr("default"),
   op_queue_len(0), op_queue_bytes(0),
   op_finisher(cct),
   op_tp(cct, "KeyValueStore::op_tp",
@@ -928,30 +921,14 @@ int KeyValueStore::get_max_object_name_length()
   return ret;
 }
 
-int KeyValueStore::queue_transactions(Sequencer *posr, list<Transaction*>& tls,
+int KeyValueStore::queue_transactions(list<Transaction*> &tls,
 				      OpRequestRef osd_op,
 				      ThreadPool::TPHandle *handle)
 {
   Context *onreadable;
   Context *ondisk;
   Context *onreadable_sync;
-  ObjectStore::Transaction::collect_contexts(
-    tls, &onreadable, &ondisk, &onreadable_sync);
-
-  // set up the sequencer
-  OpSequencer *osr;
-  if (!posr)
-    posr = &default_osr;
-  if (posr->p) {
-    osr = static_cast<OpSequencer *>(posr->p);
-    dout(5) << "queue_transactions existing " << *osr << "/" << osr->parent
-	    << dendl; //<< " w/ q " << osr->q << dendl;
-  } else {
-    osr = new OpSequencer;
-    osr->parent = posr;
-    posr->p = osr;
-    dout(5) << "queue_transactions new " << *osr << "/" << osr->parent << dendl;
-  }
+  Transaction::collect_contexts(tls, &onreadable, &ondisk, &onreadable_sync);
 
   Op *o = build_op(tls, ondisk, onreadable, onreadable_sync, osd_op);
   op_queue_reserve_throttle(o, handle);
@@ -960,7 +937,7 @@ int KeyValueStore::queue_transactions(Sequencer *posr, list<Transaction*>& tls,
   o->op = op;
   dout(5) << "queue_transactions (trailing journal) " << op << " "
 	  << tls <<dendl;
-  queue_op(osr, o);
+  queue_op(o);
 
   submit_manager.op_submit_finish(sml, op);
 
@@ -994,18 +971,12 @@ KeyValueStore::Op *KeyValueStore::build_op(list<Transaction*>& tls,
   return o;
 }
 
-void KeyValueStore::queue_op(OpSequencer *osr, Op *o)
+void KeyValueStore::queue_op(Op *o)
 {
-  // queue op on sequencer, then queue sequencer for the threadpool,
-  // so that regardless of which order the threads pick up the
-  // sequencer, the op order will be preserved.
-
-  osr->queue(o);
-
-  dout(5) << "queue_op " << o << " seq " << o->op << " " << *osr << " "
+  dout(5) << "queue_op " << o << " seq " << o->op << " "
 	  << o->bytes << " bytes" << "	 (queue has " << op_queue_len
 	  << " ops and " << op_queue_bytes << " bytes)" << dendl;
-  op_wq.queue(osr);
+  op_wq.queue(o);
 }
 
 void KeyValueStore::op_queue_reserve_throttle(Op *o, ThreadPool::TPHandle *handle)
@@ -1043,15 +1014,9 @@ void KeyValueStore::op_queue_release_throttle(Op *o)
   }
 }
 
-void KeyValueStore::_do_op(OpSequencer *osr, ThreadPool::TPHandle& handle,
-			   unique_lock& osral)
+void KeyValueStore::_do_op(Op *o, ThreadPool::TPHandle &handle)
 {
-  // FIXME: Suppose the collection of transaction only affect objects in the
-  // one PG, so this lock will ensure no other concurrent write operation
-  assert(!osral);
-  osral = unique_lock(osr->apply_lock);
-  Op *o = osr->peek_queue();
-  dout(5) << "_do_op " << o << " seq " << o->op << " " << *osr << "/" << osr->parent << " start" << dendl;
+  dout(5) << "_do_op " << o << " seq " << o->op << " start" << dendl;
   int r = _do_transactions(o->tls, o->op, &handle);
   dout(10) << "_do_op " << o << " seq " << o->op << " r = " << r
 	   << ", finisher " << o->onreadable << " " << o->onreadable_sync << dendl;
@@ -1066,19 +1031,13 @@ void KeyValueStore::_do_op(OpSequencer *osr, ThreadPool::TPHandle& handle,
   }
 }
 
-void KeyValueStore::_finish_op(OpSequencer *osr,
-			       unique_lock& osral)
+void KeyValueStore::_finish_op(Op *o)
 {
-  assert(osral && osral.mutex() == &osr->apply_lock);
-  Op *o = osr->dequeue();
-
-  dout(10) << "_finish_op " << o << " seq " << o->op << " " << *osr << "/" << osr->parent << dendl;
-  osral.unlock();  // locked in _do_op
+  dout(10) << "_finish_op " << o << " seq " << o->op << dendl;
   op_queue_release_throttle(o);
 
-  if (o->onreadable_sync) {
+  if (o->onreadable_sync)
     o->onreadable_sync->complete(0);
-  }
   op_finisher.queue(o->onreadable);
   delete o;
 }
@@ -2958,6 +2917,6 @@ void KeyValueStore::handle_conf_change(const struct md_config_t *conf,
 }
 
 void KeyValueStore::dump_transactions(list<ObjectStore::Transaction*>& ls,
-				      uint64_t seq, OpSequencer *osr)
+				      uint64_t seq)
 {
 }

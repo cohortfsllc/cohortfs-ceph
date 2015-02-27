@@ -480,10 +480,9 @@ public:
 
   objectstore_perf_stat_t get_cur_stats();
 
-  int queue_transactions(
-    Sequencer* osr, list<Transaction*>& tls,
-    OpRequestRef op = OpRequestRef(),
-    ThreadPool::TPHandle* handle = NULL);
+  int queue_transactions(list<Transaction*>& tls,
+                         OpRequestRef op = OpRequestRef(),
+                         ThreadPool::TPHandle *handle = NULL);
 };
 
 #endif

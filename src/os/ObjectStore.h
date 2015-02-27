@@ -191,51 +191,6 @@ public:
 			     const string& data,
 			     const string& journal);
 
-  /**
-   * a sequencer orders transactions
-   *
-   * Any transactions queued under a given sequencer will be applied in
-   * sequence.	Transactions queued under different sequencers may run
-   * in parallel.
-   *
-   * Clients of ObjectStore create and maintain their own Sequencer objects.
-   * When a list of transactions is queued the caller specifies a Sequencer to be used.
-   *
-   */
-
-  /**
-   * ABC for Sequencer implementation, private to the ObjectStore derived class.
-   * created in ...::queue_transaction(s)
-   */
-  struct Sequencer_impl {
-    virtual void flush() = 0;
-    virtual ~Sequencer_impl() {}
-  };
-
-  /**
-   * External (opaque) sequencer implementation
-   */
-  struct Sequencer {
-    string name;
-    Sequencer_impl* p;
-
-    Sequencer(string n)
-      : name(n), p(NULL) {}
-    ~Sequencer() {
-      delete p;
-    }
-
-    /// return a unique string identifier for this sequencer
-    const string& get_name() const {
-      return name;
-    }
-    /// wait for any queued transactions on this sequencer to apply
-    void flush() {
-      if (p)
-	p->flush();
-    }
-  };
-
   /*********************************
    *
    * Object Contents and semantics
@@ -1280,39 +1235,31 @@ public:
   unsigned apply_transaction(Transaction& t, Context* ondisk=0) {
     list<Transaction*> tls;
     tls.push_back(&t);
-    return apply_transactions(NULL, tls, ondisk);
+    return apply_transactions(tls, ondisk);
   }
-  unsigned apply_transaction(Sequencer* osr, Transaction& t, Context* ondisk=0) {
-    list<Transaction*> tls;
-    tls.push_back(&t);
-    return apply_transactions(osr, tls, ondisk);
-  }
-  unsigned apply_transactions(list<Transaction*>& tls, Context* ondisk=0) {
-    return apply_transactions(NULL, tls, ondisk);
-  }
-  unsigned apply_transactions(Sequencer* osr, list<Transaction*>& tls, Context* ondisk=0);
+  unsigned apply_transactions(list<Transaction*>& tls, Context *ondisk=0);
 
-  int queue_transaction_and_cleanup(Sequencer* osr, Transaction* t,
-				    ThreadPool::TPHandle* handle = NULL) {
-    list<Transaction*> tls;
+  int queue_transaction_and_cleanup(Transaction* t,
+				    ThreadPool::TPHandle *handle = NULL) {
+    list<Transaction *> tls;
     tls.push_back(t);
-    return queue_transactions(osr, tls, new C_DeleteTransaction(t),
+    return queue_transactions(tls, new C_DeleteTransaction(t),
 			      NULL, NULL, OpRequestRef(), handle);
   }
 
-  int queue_transaction(Sequencer* osr, Transaction* t, Context* onreadable, Context* ondisk=0,
-			Context* onreadable_sync=0,
+  int queue_transaction(Transaction *t, Context *onreadable, Context *ondisk=0,
+			Context *onreadable_sync=0,
 			OpRequestRef op = OpRequestRef(),
 			ThreadPool::TPHandle* handle = NULL) {
     list<Transaction*> tls;
     tls.push_back(t);
-    return queue_transactions(osr, tls, onreadable, ondisk, onreadable_sync,
+    return queue_transactions(tls, onreadable, ondisk, onreadable_sync,
 			      op, handle);
   }
 
-  int queue_transactions(Sequencer* osr, list<Transaction*>& tls,
-			 Context* onreadable, Context* ondisk=0,
-			 Context* onreadable_sync=0,
+  int queue_transactions(list<Transaction*>& tls,
+			 Context *onreadable, Context *ondisk=0,
+			 Context *onreadable_sync=0,
 			 OpRequestRef op = OpRequestRef(),
 			 ThreadPool::TPHandle* handle = NULL) {
     assert(!tls.empty());
@@ -1333,35 +1280,24 @@ public:
       g_ondisk.activate();
     if (onreadable_sync)
       g_onreadable_sync.activate();
-    return queue_transactions(osr, tls, op, handle);
+    return queue_transactions(tls, op, handle);
   }
 
-  virtual int queue_transactions(
-    Sequencer* osr, list<Transaction*>& tls,
-    OpRequestRef op = OpRequestRef(),
-    ThreadPool::TPHandle* handle = NULL) = 0;
+  virtual int queue_transactions(list<Transaction*>& tls,
+                                 OpRequestRef op = OpRequestRef(),
+                                 ThreadPool::TPHandle *handle = NULL) = 0;
 
-  int queue_transactions(
-    Sequencer* osr,
-    list<Transaction*>& tls,
-    Context* onreadable,
-    Context* oncommit,
-    Context* onreadable_sync,
-    Context* oncomplete,
-    OpRequestRef op);
+  int queue_transactions(list<Transaction*>& tls, Context *onreadable,
+                         Context *oncommit, Context *onreadable_sync,
+                         Context *oncomplete, OpRequestRef op);
 
-  int queue_transaction(
-    Sequencer* osr,
-    Transaction* t,
-    Context* onreadable,
-    Context* oncommit,
-    Context* onreadable_sync,
-    Context* oncomplete,
-    OpRequestRef op) {
+  int queue_transaction(Transaction* t, Context *onreadable,
+                        Context *oncommit, Context *onreadable_sync,
+                        Context *oncomplete, OpRequestRef op) {
     list<Transaction*> tls;
     tls.push_back(t);
-    return queue_transactions(
-      osr, tls, onreadable, oncommit, onreadable_sync, oncomplete, op);
+    return queue_transactions(tls, onreadable, oncommit,
+                              onreadable_sync, oncomplete, op);
   }
 
  public:
@@ -1860,7 +1796,5 @@ inline void decode(ObjectStore::obj_slot_t &o_slot, bufferlist::iterator &p)
 
 WRITE_CLASS_ENCODER(ObjectStore::Transaction::Op)
 WRITE_CLASS_ENCODER(ObjectStore::Transaction)
-
-ostream& operator<<(ostream& out, const ObjectStore::Sequencer& s);
 
 #endif /* CEPH_OBJECTSTORE_H */

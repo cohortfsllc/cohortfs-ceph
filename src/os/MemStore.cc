@@ -715,8 +715,7 @@ MemStore::get_omap_iterator(CollectionHandle ch, const ObjectHandle oh)
 // ---------------
 // write operations
 
-int MemStore::queue_transactions(Sequencer* osr,
-				 list<Transaction*>& tls,
+int MemStore::queue_transactions(list<Transaction*>& tls,
 				 OpRequestRef op,
 				 ThreadPool::TPHandle* handle)
 {

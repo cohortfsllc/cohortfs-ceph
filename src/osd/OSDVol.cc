@@ -67,7 +67,6 @@ OSDVol::OSDVol(OSDService* o, OSDMapRef curmap,
     trace_endpoint("0.0.0.0", 0, NULL),
     ref(0), deleting(false), dirty_info(false),
     id(v), info(v),
-    osr(osd->osr_registry.lookup_or_create(v, (stringify(v)))),
     finish_sync_event(NULL), cid(v), coll(NULL),
     last_became_active(ceph::mono_clock::now())
 {
@@ -201,7 +200,7 @@ void OSDVol::_activate_committed(epoch_t e)
   if (dirty_info) {
     ObjectStore::Transaction *t = new ObjectStore::Transaction;
     write_if_dirty(*t);
-    int tr = osd->store->queue_transaction_and_cleanup(osr.get(), t);
+    int tr = osd->store->queue_transaction_and_cleanup(t);
     assert(tr == 0);
   }
 
@@ -2855,6 +2854,6 @@ void OSDVol::issue_mutation(Mutation *mutation)
   op_t->register_on_applied(new ObjectStore::C_DeleteTransaction(op_t));
   op_t->register_on_commit(on_all_commit);
 
-  osd->store->queue_transaction(osr.get(), op_t, 0, 0, 0, mutation->ctx->op);
+  osd->store->queue_transaction(op_t, 0, 0, 0, mutation->ctx->op);
   mutation->ctx->op_t = NULL;
 }

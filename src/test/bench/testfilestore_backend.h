@@ -11,7 +11,6 @@
 class TestFileStoreBackend : public Backend {
   ObjectStore *os;
   Finisher finisher;
-  map<string, ObjectStore::Sequencer> osrs;
   const bool write_infos;
 
 public:
