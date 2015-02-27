@@ -842,64 +842,41 @@ void CInode::_stored(version_t v, Context *fin)
 
 struct C_Inode_Fetched : public Context {
   CInode *in;
-  bufferlist bl, bl2;
+  bufferlist bl;
   Context *fin;
   C_Inode_Fetched(CInode *i, Context *f) : in(i), fin(f) {}
   void finish(int r) {
-    in->_fetched(r, bl, bl2, fin);
+    in->_fetched(r, bl, fin);
   }
 };
 
 void CInode::fetch(Context *fin)
 {
   dout(10) << "fetch" << dendl;
-
   C_Inode_Fetched *c = new C_Inode_Fetched(this, fin);
-  C_GatherBuilder gather(c);
 
-  oid obj = CInode::get_object_name(ino(), frag_t(), "");
-  volume = mdcache->mds->get_metadata_volume();
-  if (!volume) {
-    dout(0) << "Unable to attach volume " << volume << dendl;
-    fin->complete(-EDOM);
-    return;
-  }
-
-  std::unique_ptr<ObjOp> rd = volume->op();
-  if (!rd) {
-    dout(0) << "Unable to make operation for volume " << volume << dendl;
-    fin->complete(-EDOM);
-    return;
-  }
-  rd->getxattr("inode", &c->bl, NULL);
-
-  mdcache->mds->objecter->read(obj, volume, rd, (bufferlist*)NULL, 0,
-			       gather.new_sub());
+//  volume = mdcache->mds->get_metadata_volume();
+//  if (!volume) {
+//    dout(0) << "Unable to attach volume " << volume << dendl;
+//    fin->complete(-EDOM);
+//    return;
+//  }
 
   // read from separate object too
-  oid obj2 = CInode::get_object_name(ino(), frag_t(), ".inode");
-  mdcache->mds->objecter->read_full(obj2, volume, &c->bl2, 0,
-				    gather.new_sub());
-
-  gather.activate();
+  oid obj = CInode::get_object_name(ino(), frag_t(), ".inode");
+  mdcache->mds->objecter->read_full(obj, volume, &c->bl, 0, c);
 }
 
-void CInode::_fetched(int r, bufferlist& bl, bufferlist& bl2, Context *fin)
+void CInode::_fetched(int r, bufferlist& bl, Context *fin)
 {
-  dout(10) << "_fetched got " << r << ", buffer " << bl.length()
-	   << " and " << bl2.length() << dendl;
-  bufferlist::iterator p;
+  dout(10) << "_fetched got " << r << ", buffer " << bl.length() << dendl;
+  bufferlist::iterator p = bl.begin();
 
   if (r < 0) {
-    /* XXX */
-    /* I don't know what to do here; this is a normal event! */
-    /* rd.getxattr("inode") above - always returns -ENODATA here; */
-    /* backwards hack? */
+    dout(0) << "Failed to fetch inode " << r << dendl;
+    fin->complete(-EINVAL);
+    return;
   }
-  if (bl2.length())
-    p = bl2.begin();
-  else
-    p = bl.begin();
   string magic;
   ::decode(magic, p);
   dout(10) << " magic is '" << magic << "' (expecting '"
@@ -909,15 +886,11 @@ void CInode::_fetched(int r, bufferlist& bl, bufferlist& bl2, Context *fin)
 	    << CEPH_FS_ONDISK_MAGIC
 	    << "'" << dendl;
     fin->complete(-EINVAL);
-  } else {
-    decode_store(p);
-    dout(10) << "_fetched " << *this << dendl;
-    int r = volume->attach(mdcache->mds->objecter->cct);	// XXX here or elsewhere?
-    if (r < 0) {
-      fin->complete(r);
-    }
-    fin->complete(0);
+    return;
   }
+  decode_store(p);
+  dout(10) << "_fetched " << *this << dendl;
+  fin->complete(0);
 }
 
 void CInode::build_backtrace(const boost::uuids::uuid& volume,
