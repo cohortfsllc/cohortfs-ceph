@@ -254,7 +254,7 @@ void OSDVol::read_info()
   ObjectHandle oh =
     osd->store->get_object(osd->meta_col, osd->infos_oid);
   if (! oh)
-    throw std::system_error(-r, std::system_category(),
+    throw std::system_error(-EINVAL, std::system_category(),
 			    "reading volume info");
 
   if (oh) {
@@ -874,7 +874,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
   int result = 0;
   ObjectState& obs = ctx->new_obs;
   object_info_t& oi = obs.oi;
-#warn object_info_t should use hoid_t?
+#warning object_info_t should use hoid_t?
   const oid_t& soid = oi.soid; // ctx->new_objs->obs.oi.soid
   const oid_t& obc_soid = ctx->obc->obs.oi.soid;
 
@@ -2715,17 +2715,17 @@ void intrusive_ptr_release(OSDVol::Mutation *mutation) { mutation->put(); }
 
 // From the Backend
 
-int OSDVol::objects_list_partial(const oid_t &begin,
+int OSDVol::objects_list_partial(const hoid_t& begin,
 			     int min, int max,
-			     vector<oid_t> *ls,
-			     oid_t *next)
+			     vector<hoid_t>* ls,
+			     hoid_t* next)
 {
   assert(ls);
-  oid_t _next(begin);
+  hoid_t _next(begin);
   ls->reserve(max);
   int r = 0;
   while (ls->size() < (unsigned)min) {
-    vector<oid_t> objects;
+    vector<hoid_t> objects;
     int r = osd->store->collection_list_partial(
       coll,
       _next,
@@ -2735,7 +2735,7 @@ int OSDVol::objects_list_partial(const oid_t &begin,
       &_next);
     if (r != 0)
       break;
-    for (vector<oid_t>::iterator i = objects.begin();
+    for (vector<hoid_t>::iterator i = objects.begin();
 	 i != objects.end();
 	 ++i) {
       ls->push_back(*i);
@@ -2746,18 +2746,18 @@ int OSDVol::objects_list_partial(const oid_t &begin,
   return r;
 }
 
-int OSDVol::objects_list_range(const oid_t &start, const oid_t &end,
-			   vector<oid_t> *ls)
+int OSDVol::objects_list_range(const hoid_t& start, const hoid_t& end,
+			   vector<hoid_t>* ls)
 {
   assert(ls);
-  vector<oid_t> objects;
+  vector<hoid_t> objects;
   int r = osd->store->collection_list_range(
     coll,
     start,
     end,
     &objects);
   ls->reserve(objects.size());
-  for (vector<oid_t>::iterator i = objects.begin();
+  for (vector<hoid_t>::iterator i = objects.begin();
        i != objects.end();
        ++i) {
       ls->push_back(*i);
@@ -2765,11 +2765,11 @@ int OSDVol::objects_list_range(const oid_t &start, const oid_t &end,
   return r;
 }
 
-int OSDVol::objects_get_attr(const oid_t &hoid, const string &attr,
-			 bufferlist *out)
+int OSDVol::objects_get_attr(const hoid_t& oid, const string &attr,
+			     bufferlist *out)
 {
   bufferptr bp;
-  ObjectHandle oh = osd->store->get_object(coll, hoid);
+  ObjectHandle oh = osd->store->get_object(coll, oid);
   int r = -EINVAL;
 
   if (oh) {
@@ -2783,21 +2783,21 @@ int OSDVol::objects_get_attr(const oid_t &hoid, const string &attr,
   return r;
 }
 
-void OSDVol::objects_read_async(const oid_t &hoid,
+void OSDVol::objects_read_async(const hoid_t& oid,
 			    const list<pair<pair<uint64_t, uint64_t>,
 			    pair<bufferlist*, Context*> > > &to_read,
 			    Context *on_complete)
 {
   int r = 0;
-  ObjectHandle oh = osd->store->get_object(coll, hoid);
+  ObjectHandle oh = osd->store->get_object(coll, oid);
   assert(oh);
   for (list<pair<pair<uint64_t, uint64_t>,
 	 pair<bufferlist*, Context*> > >::const_iterator i =
 	 to_read.begin();
        i != to_read.end() && r >= 0;
        ++i) {
-    int _r = osd->store->read(coll, oh, i->first.first, i->first.second,
-			      *(i->second.first));
+    int _r = osd->store->read(coll, oh, i->first.first,
+			      i->first.second, *(i->second.first));
     if (i->second.second) {
       i->second.second->complete(_r);
     }

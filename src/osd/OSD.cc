@@ -130,7 +130,7 @@ OSDService::OSDService(OSD *osd) :
   osd(osd), lru(20), // More sophisticated later
   cct(osd->cct),
   whoami(osd->whoami), store(osd->store), clog(osd->clog),
-  infos_obj(OSD::make_infos_obj()),
+  infos_oid(OSD::make_infos_oid()),
   cluster_messenger(osd->cluster_messenger),
   client_messenger(osd->client_messenger),
   client_xio_messenger(osd->client_xio_messenger),
@@ -983,7 +983,7 @@ void OSD::recursive_remove_collection(ObjectStore *store, coll_t cid)
   if (! ch)
     return;
 
-  vector<oid_t> objects;
+  vector<hoid_t> objects;
   store->collection_list(ch, objects);
 
   ObjectStore::Transaction t;
@@ -992,7 +992,7 @@ void OSD::recursive_remove_collection(ObjectStore *store, coll_t cid)
 
   // delete them.
   unsigned removed = 0;
-  for (vector<oid_t>::iterator p = objects.begin();
+  for (vector<hoid_t>::iterator p = objects.begin();
        p != objects.end();
        ++p, removed++) {
     o_ix = t.push_oid(*p); // XXX oid? open it?

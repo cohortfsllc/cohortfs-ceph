@@ -91,7 +91,7 @@ public:
   ObjectStore *&store;
   CollectionHandle meta_col;
   LogClient &clog;
-  oid_t infos_obj;
+  oid_t infos_oid;
 private:
   Messenger *&cluster_messenger;
   Messenger *&client_messenger;
@@ -342,7 +342,7 @@ public:
     return oid_t(foo);
   }
 
-  static oid_t make_vol_biginfo_obj(const boost::uuids::uuid& vol) {
+  static oid_t make_vol_biginfo_oid(const boost::uuids::uuid& vol) {
     stringstream ss;
     ss << "volinfo_" << vol;
     string s;
@@ -350,7 +350,7 @@ public:
     return oid_t(s.c_str());
   }
 
-  static oid_t make_infos_obj() {
+  static oid_t make_infos_oid() {
     oid_t oid("infos");
     return oid;
   }
