@@ -166,7 +166,7 @@ int main(int argc, const char **argv)
     (void) t->push_col(ch);
     (void) t->push_oid(oid);
     t->write(pos, bytes, bl);
-    fs->queue_transaction(NULL, t, new C_Ack(pos), new C_Commit(pos));
+    fs->queue_transaction(t, new C_Ack(pos), new C_Commit(pos));
     pos += bytes;
 
     throttle();

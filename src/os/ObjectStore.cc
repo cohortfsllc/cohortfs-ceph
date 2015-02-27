@@ -46,14 +46,8 @@ int ObjectStore::read_meta(const std::string& key,
   return 0;
 }
 
-ostream& operator<<(ostream& out, const ObjectStore::Sequencer& s)
-{
-  return out << "osr(" << s.get_name() << " " << &s << ")";
-}
-
-unsigned ObjectStore::apply_transactions(Sequencer* osr,
-					 list<Transaction*>& tls,
-					 Context* ondisk)
+unsigned ObjectStore::apply_transactions(list<Transaction*> &tls,
+					 Context *ondisk)
 {
   // use op pool
   std::condition_variable my_cond;
@@ -62,7 +56,7 @@ unsigned ObjectStore::apply_transactions(Sequencer* osr,
   bool done;
   C_SafeCond* onreadable = new C_SafeCond(&my_lock, &my_cond, &done, &r);
 
-  queue_transactions(osr, tls, onreadable, ondisk);
+  queue_transactions(tls, onreadable, ondisk);
 
   std::unique_lock<std::mutex> myl(my_lock);
   while (!done)
@@ -71,22 +65,16 @@ unsigned ObjectStore::apply_transactions(Sequencer* osr,
   return r;
 }
 
-int ObjectStore::queue_transactions(
-  Sequencer* osr,
-  list<Transaction*>& tls,
-  Context* onreadable,
-  Context* oncommit,
-  Context* onreadable_sync,
-  Context* oncomplete,
-  OpRequestRef op = OpRequestRef())
+int ObjectStore::queue_transactions(list<Transaction*>& tls,
+                                    Context *onreadable, Context *oncommit,
+                                    Context *onreadable_sync,
+                                    Context *oncomplete,
+                                    OpRequestRef op = OpRequestRef())
 {
   RunOnDeleteRef _complete(new RunOnDelete(oncomplete));
-  Context* _onreadable = new Wrapper<RunOnDeleteRef>(
-    onreadable, _complete);
-  Context* _oncommit = new Wrapper<RunOnDeleteRef>(
-    oncommit, _complete);
-  return queue_transactions(osr, tls, _onreadable, _oncommit,
-			    onreadable_sync, op);
+  Context *_onreadable = new Wrapper<RunOnDeleteRef>(onreadable, _complete);
+  Context *_oncommit = new Wrapper<RunOnDeleteRef>(oncommit, _complete);
+  return queue_transactions(tls, _onreadable, _oncommit, onreadable_sync, op);
 }
 
 void ObjectStore::Transaction::dump(ceph::Formatter* f)

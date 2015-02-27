@@ -71,8 +71,7 @@ void TestObjectStoreState::init(int colls, int objs)
     }
     baseid += objs;
 
-    m_store->queue_transaction(&(entry->m_osr), t,
-	new C_OnFinished(this, t));
+    m_store->queue_transaction(t, new C_OnFinished(this, t));
     inc_in_flight();
 
     m_collections.insert(make_pair(coll_id, entry));

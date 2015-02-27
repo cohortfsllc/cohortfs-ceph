@@ -137,12 +137,6 @@ int FileStore::peek_journal_fsid(boost::uuids::uuid* fsid)
   return j.peek_fsid(*fsid);
 }
 
-ostream& operator<<(ostream& out, const FileStore::OpSequencer& s)
-{
-  assert(&out);
-  return out << *s.parent;
-}
-
 int FileStore::get_cdir(const coll_t& cid, char* s, int len)
 {
   const string& cid_str(cid.to_str());
@@ -302,7 +296,6 @@ FileStore::FileStore(CephContext* _cct, const std::string& base, const std::stri
   stop(false), sync_thread(this),
   trace_endpoint("0.0.0.0", 0, NULL),
   wbthrottle(cct),
-  default_osr("default"),
   op_queue_len(0), op_queue_bytes(0),
   op_finisher(cct),
   op_tp(cct, "FileStore::op_tp", cct->_conf->filestore_op_threads, "filestore_op_threads"),
@@ -1406,21 +1399,15 @@ FileStore::Op* FileStore::build_op(list<Transaction*>& tls,
 
 
 
-void FileStore::queue_op(OpSequencer* osr, Op* o)
+void FileStore::queue_op(Op *o)
 {
-  // queue op on sequencer, then queue sequencer for the threadpool,
-  // so that regardless of which order the threads pick up the
-  // sequencer, the op order will be preserved.
-
-  osr->queue(o);
   o->trace.event("queued");
 
   dout(5) << "queue_op " << o << " seq " << o->op
-	  << " " << *osr
 	  << " " << o->bytes << " bytes"
 	  << "	 (queue has " << op_queue_len << " ops and " << op_queue_bytes << " bytes)"
 	  << dendl;
-  op_wq.queue(osr);
+  op_wq.queue(o);
 }
 
 void FileStore::op_queue_reserve_throttle(Op* o, ThreadPool::TPHandle* handle)
@@ -1463,10 +1450,8 @@ void FileStore::op_queue_release_throttle(Op* o)
   }
 }
 
-void FileStore::_do_op(OpSequencer* osr, ThreadPool::TPHandle& handle,
-		       unique_lock& osral)
+void FileStore::_do_op(Op *o, ThreadPool::TPHandle &handle)
 {
-  assert(!osral);
   wbthrottle.throttle();
   // inject a stall?
   if (cct->_conf->filestore_inject_stall) {
@@ -1478,11 +1463,9 @@ void FileStore::_do_op(OpSequencer* osr, ThreadPool::TPHandle& handle,
     dout(5) << "_do_op done stalling" << dendl;
   }
 
-  osral.lock();
-  Op* o = osr->peek_queue();
   o->trace.event("op_apply_start");
   apply_manager.op_apply_start(o->op);
-  dout(5) << "_do_op " << o << " seq " << o->op << " " << *osr << "/" << osr->parent << " start" << dendl;
+  dout(5) << "_do_op " << o << " seq " << o->op << " start" << dendl;
   o->trace.event("_do_transactions start");
   int r = _do_transactions(o->tls, o->op, &handle);
   o->trace.event("op_apply_finish");
@@ -1491,70 +1474,48 @@ void FileStore::_do_op(OpSequencer* osr, ThreadPool::TPHandle& handle,
 	   << ", finisher " << o->onreadable << " " << o->onreadable_sync << dendl;
 }
 
-void FileStore::_finish_op(OpSequencer* osr, unique_lock& osral)
+void FileStore::_finish_op(Op *o)
 {
-  assert(osral);
-  Op* o = osr->dequeue();
-
-  dout(10) << "_finish_op " << o << " seq " << o->op << " " << *osr << "/" << osr->parent << dendl;
-  osral.unlock();  // locked in _do_op
+  dout(10) << "_finish_op " << o << " seq " << o->op << dendl;
   o->trace.event("_finish_op");
 
   // called with tp lock held
   op_queue_release_throttle(o);
 
-  if (o->onreadable_sync) {
+  if (o->onreadable_sync)
     o->onreadable_sync->complete(0);
-  }
-  if (o->onreadable) {
+  if (o->onreadable)
     op_finisher.queue(o->onreadable);
-  }
+
   delete o;
 }
 
 struct C_JournaledAhead : public Context {
   FileStore* fs;
-  FileStore::OpSequencer* osr;
   FileStore::Op* o;
   Context* ondisk;
 
-  C_JournaledAhead(FileStore* f, FileStore::OpSequencer* os, FileStore::Op* o, Context* ondisk):
-    fs(f), osr(os), o(o), ondisk(ondisk) { }
+  C_JournaledAhead(FileStore* f, FileStore::Op* o, Context* ondisk):
+    fs(f), o(o), ondisk(ondisk) { }
   void finish(int r) {
-    fs->_journaled_ahead(osr, o, ondisk);
+    fs->_journaled_ahead(o, ondisk);
   }
 };
 
-int FileStore::queue_transactions(Sequencer* posr, list<Transaction*>& tls,
+int FileStore::queue_transactions(list<Transaction*> &tls,
 				  OpRequestRef osd_op,
 				  ThreadPool::TPHandle* handle)
 {
   Context* onreadable;
   Context* ondisk;
   Context* onreadable_sync;
-  ObjectStore::Transaction::collect_contexts(
-    tls, &onreadable, &ondisk, &onreadable_sync);
+  Transaction::collect_contexts(tls, &onreadable, &ondisk, &onreadable_sync);
   if (cct->_conf->filestore_blackhole) {
     dout(0) << "queue_transactions filestore_blackhole = TRUE, dropping transaction" << dendl;
     delete ondisk;
     delete onreadable;
     delete onreadable_sync;
     return 0;
-  }
-
-  // set up the sequencer
-  OpSequencer* osr;
-  if (!posr)
-    posr = &default_osr;
-  if (posr->p) {
-    osr = static_cast<OpSequencer*>(posr->p);
-    dout(5) << "queue_transactions existing " << *osr << "/" << osr->parent
-	    << dendl; //<< " w/ q " << osr->q << dendl;
-  } else {
-    osr = new OpSequencer(this);
-    osr->parent = posr;
-    posr->p = osr;
-    dout(5) << "queue_transactions new " << *osr << "/" << osr->parent << dendl;
   }
 
   ZTracer::Trace trace("op", &trace_endpoint, osd_op ? &osd_op->trace : NULL);
@@ -1571,7 +1532,7 @@ int FileStore::queue_transactions(Sequencer* posr, list<Transaction*>& tls,
     o->trace.keyval("opnum", op_num);
 
     if (m_filestore_do_dump)
-      dump_transactions(o->tls, o->op, osr);
+      dump_transactions(o->tls, o->op);
 
     if (m_filestore_journal_parallel) {
       dout(5) << "queue_transactions (parallel) " << o->op << " " << o->tls << dendl;
@@ -1580,16 +1541,16 @@ int FileStore::queue_transactions(Sequencer* posr, list<Transaction*>& tls,
       _op_journal_transactions(o->tls, o->op, ondisk, osd_op, &o->trace);
 
       // queue inside submit_manager op submission lock
-      queue_op(osr, o);
+      queue_op(o);
     } else if (m_filestore_journal_writeahead) {
       dout(5) << "queue_transactions (writeahead) " << o->op << " " << o->tls << dendl;
       o->trace.keyval("journal mode", "writeahead");
 
-      osr->queue_journal(o->op);
+      journal_queue.push_back(o->op);
 
       o->trace.event("writeahead journal started");
       _op_journal_transactions(o->tls, o->op,
-			       new C_JournaledAhead(this, osr, o, ondisk),
+			       new C_JournaledAhead(this, o, ondisk),
 			       osd_op, &o->trace);
     } else {
       assert(0);
@@ -1604,7 +1565,7 @@ int FileStore::queue_transactions(Sequencer* posr, list<Transaction*>& tls,
   trace.keyval("journal mode", "trailing");
 
   if (m_filestore_do_dump)
-    dump_transactions(tls, op, osr);
+    dump_transactions(tls, op);
 
   trace.event("op_apply_start");
   apply_manager.op_apply_start(op);
@@ -1619,9 +1580,9 @@ int FileStore::queue_transactions(Sequencer* posr, list<Transaction*>& tls,
 
   // start on_readable finisher after we queue journal item, as on_readable callback
   // is allowed to delete the Transaction
-  if (onreadable_sync) {
+  if (onreadable_sync)
     onreadable_sync->complete(r);
-  }
+
   op_finisher.queue(onreadable, r);
 
   submit_manager.op_submit_finish(sml, op);
@@ -1631,16 +1592,17 @@ int FileStore::queue_transactions(Sequencer* posr, list<Transaction*>& tls,
   return r;
 }
 
-void FileStore::_journaled_ahead(OpSequencer* osr, Op* o, Context* ondisk)
+void FileStore::_journaled_ahead(Op *o, Context *ondisk)
 {
-  dout(5) << "_journaled_ahead " << o << " seq " << o->op << " " << *osr << " " << o->tls << dendl;
+  dout(5) << "_journaled_ahead " << o << " seq " << o->op << " " << o->tls << dendl;
 
   o->trace.event("writeahead journal finished");
 
   // this should queue in order because the journal does it's completions in order.
-  queue_op(osr, o);
+  queue_op(o);
 
-  osr->dequeue_journal();
+  assert(o->op == journal_queue.front());
+  journal_queue.pop_front(); // TODO: signal flush?
 
   // do ondisk completions async, to prevent any onreadable_sync completions
   // getting blocked behind an ondisk completion.
@@ -1650,10 +1612,8 @@ void FileStore::_journaled_ahead(OpSequencer* osr, Op* o, Context* ondisk)
   }
 }
 
-int FileStore::_do_transactions(
-  list<Transaction*>& tls,
-  uint64_t op_seq,
-  ThreadPool::TPHandle* handle)
+int FileStore::_do_transactions(list<Transaction*> &tls, uint64_t op_seq,
+                                ThreadPool::TPHandle *handle)
 {
   int r = 0;
 
@@ -4439,13 +4399,12 @@ void FileStore::dump_stop()
 }
 
 void FileStore::dump_transactions(list<ObjectStore::Transaction*>& ls,
-				  uint64_t seq, OpSequencer* osr)
+				  uint64_t seq)
 {
   m_filestore_dump_fmt.open_array_section("transactions");
   unsigned trans_num = 0;
   for (list<ObjectStore::Transaction*>::iterator i = ls.begin(); i != ls.end(); ++i, ++trans_num) {
     m_filestore_dump_fmt.open_object_section("transaction");
-    m_filestore_dump_fmt.dump_string("osr", osr->get_name());
     m_filestore_dump_fmt.dump_unsigned("seq", seq);
     m_filestore_dump_fmt.dump_unsigned("trans_num", trans_num);
     (*i)->dump(&m_filestore_dump_fmt);

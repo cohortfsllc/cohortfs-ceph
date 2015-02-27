@@ -53,7 +53,6 @@ class DeterministicOpSequence : public TestObjectStoreState {
   coll_t txn_coll;
   oid_t txn_object;
 
-  ObjectStore::Sequencer m_osr;
   std::ofstream m_status;
 
   bool run_one_op(int op, rngen_t& gen);

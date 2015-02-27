@@ -543,9 +543,6 @@ protected:
   void requeue_op(OpRequestRef op);
   void requeue_ops(OpRequest::Queue& q);
 
-  // for ordering writes
-  std::shared_ptr<ObjectStore::Sequencer> osr;
-
 private:
   int _delete_obj(OpContext* ctx, bool no_whiteout);
 

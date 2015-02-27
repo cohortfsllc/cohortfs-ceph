@@ -36,9 +36,7 @@
 
 DeterministicOpSequence::DeterministicOpSequence(ObjectStore *store,
 						 std::string status)
-  : TestObjectStoreState(store),
-    txn(0),
-    m_osr("OSR")
+  : TestObjectStoreState(store), txn(0)
 {
   txn_coll = coll_t("meta");
   txn_object = oid_t("txn");

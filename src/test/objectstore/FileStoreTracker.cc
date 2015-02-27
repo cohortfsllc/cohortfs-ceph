@@ -79,7 +79,7 @@ void FileStoreTracker::submit_transaction(Transaction &t)
     (**i)(this, &out);
   }
   store->queue_transaction(
-    0, out.t,
+    out.t,
     new OnApplied(this, in_flight, out.t),
     new OnCommitted(this, in_flight));
 }

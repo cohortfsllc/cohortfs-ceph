@@ -68,8 +68,6 @@ class Notification;
 
 class AuthAuthorizeHandlerRegistry;
 
-typedef std::shared_ptr<ObjectStore::Sequencer> SequencerRef;
-
 namespace OSDC {
   class Objecter;
 };
@@ -87,7 +85,6 @@ public:
   LRU lru;
   OSDVol::VolCache vol_cache;
   CephContext *cct;
-  SharedPtrRegistry<boost::uuids::uuid, ObjectStore::Sequencer> osr_registry;
   const int whoami;
   ObjectStore *&store;
   CollectionHandle meta_col;
