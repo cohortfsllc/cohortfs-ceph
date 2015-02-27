@@ -68,6 +68,7 @@ MonClient::MonClient(CephContext *cct_) :
   session_established_context(NULL),
   had_a_connection(false),
   reopen_interval_multiplier(1.0),
+  sub_have(),
   auth(NULL),
   keyring(NULL),
   rotating_secrets(NULL),
