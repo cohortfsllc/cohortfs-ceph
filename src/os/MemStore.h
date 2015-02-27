@@ -281,46 +281,6 @@ private:
     }
   };
 
-  // transaction work queue
-  ThreadPool tx_tp;
-  ObjectStore::Transaction::Queue transactions;
-
-  class TransactionWQ : public ThreadPool::WorkQueue<Transaction> {
-    MemStore* store;
-  public:
-    TransactionWQ(MemStore* store, ceph::timespan timeout,
-		  ceph::timespan suicide_timeout, ThreadPool* tp)
-      : ThreadPool::WorkQueue<Transaction>("MemStore::TransactionWQ",
-					   timeout, suicide_timeout, tp),
-	store(store) {}
-
-    bool _enqueue(Transaction* t) {
-      store->transactions.push_back(*t);
-      return true;
-    }
-    void _dequeue(Transaction* t) {
-      assert(0);
-    }
-    bool _empty() {
-      return store->transactions.empty();
-    }
-    Transaction* _dequeue() {
-      if (store->transactions.empty())
-	return NULL;
-      Transaction* t = &store->transactions.front();
-      store->transactions.pop_front();
-      return t;
-    }
-    void _process(Transaction* t, ThreadPool::TPHandle& handle) {
-      store->_do_transaction(*t, handle);
-    }
-    void _process_finish(Transaction* t) {
-      store->_finish_transaction(*t);
-    }
-    void _clear() {
-      assert(store->transactions.empty());
-    }
-  } tx_wq;
 
   map<coll_t, MemCollection*> coll_map;
   std::shared_timed_mutex coll_lock;
@@ -332,8 +292,7 @@ private:
 
   Finisher finisher;
 
-  void _do_transaction(Transaction& t, ThreadPool::TPHandle& handle);
-  void _finish_transaction(Transaction& t);
+  void _do_transaction(Transaction& t);
 
   int _read_pages(page_set& pages, unsigned offset, size_t len,
 		  bufferlist& dst);
@@ -384,12 +343,8 @@ private:
   void dump_all();
 
 public:
-  MemStore(CephContext* _cct, const string& path)
-    : ObjectStore(_cct, path),
-      tx_tp(cct, "MemStore::tx_tp",
-	    cct->_conf->filestore_op_threads, "memstore_tx_threads"),
-      tx_wq(this, cct->_conf->filestore_op_thread_timeout * 1s,
-	    cct->_conf->filestore_op_thread_suicide_timeout * 1s, &tx_tp),
+  MemStore(CephContext* cct, const string& path)
+    : ObjectStore(cct, path),
       finisher(cct) { }
   ~MemStore() { }
 
