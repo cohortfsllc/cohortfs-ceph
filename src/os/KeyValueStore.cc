@@ -657,7 +657,7 @@ int KeyValueStore::mkfs()
   ret = 0;
 
  close_fsid_fd:
-  VHOID_TEMP_FAILURE_RETRY(::close(fsid_fd));
+  VOID_TEMP_FAILURE_RETRY(::close(fsid_fd));
   fsid_fd = -1;
   return ret;
 }
@@ -713,7 +713,7 @@ bool KeyValueStore::test_mount_in_use()
   if (fsid_fd < 0)
     return 0;	// no fsid, ok.
   bool inuse = lock_fsid() < 0;
-  VHOID_TEMP_FAILURE_RETRY(::close(fsid_fd));
+  VOID_TEMP_FAILURE_RETRY(::close(fsid_fd));
   fsid_fd = -1;
   return inuse;
 }
@@ -877,10 +877,10 @@ int KeyValueStore::mount()
   return 0;
 
 close_current_fd:
-  VHOID_TEMP_FAILURE_RETRY(::close(current_fd));
+  VOID_TEMP_FAILURE_RETRY(::close(current_fd));
   current_fd = -1;
 close_fsid_fd:
-  VHOID_TEMP_FAILURE_RETRY(::close(fsid_fd));
+  VOID_TEMP_FAILURE_RETRY(::close(fsid_fd));
   fsid_fd = -1;
 done:
   return ret;
@@ -895,15 +895,15 @@ int KeyValueStore::umount()
   ondisk_finisher.stop();
 
   if (fsid_fd >= 0) {
-    VHOID_TEMP_FAILURE_RETRY(::close(fsid_fd));
+    VOID_TEMP_FAILURE_RETRY(::close(fsid_fd));
     fsid_fd = -1;
   }
   if (op_fd >= 0) {
-    VHOID_TEMP_FAILURE_RETRY(::close(op_fd));
+    VOID_TEMP_FAILURE_RETRY(::close(op_fd));
     op_fd = -1;
   }
   if (current_fd >= 0) {
-    VHOID_TEMP_FAILURE_RETRY(::close(current_fd));
+    VOID_TEMP_FAILURE_RETRY(::close(current_fd));
     current_fd = -1;
   }
 
@@ -2561,11 +2561,11 @@ int KeyValueStore::list_collections(vector<coll_t>& ls)
 
   vector<hoid_t> objs;
   hoid_t next;
-  backend->list_objects(get_coll_for_coll(), hoid_t(), 0, &objs, &next);
-
+  backend->list_objects(get_coll_for_coll(), hoid_t(), 0, &objs,
+			&next);
   for (vector<hoid_t>::const_iterator iter = objs.begin();
        iter != objs.end(); ++iter) {
-    ls.push_back(coll_t(iter->name));
+    ls.push_back(coll_t(iter->oid.name));
   }
 
   return 0;
@@ -2603,8 +2603,7 @@ bool KeyValueStore::collection_empty(CollectionHandle ch)
 
   vector<hoid_t> oids;
   backend->list_objects(cid, hoid_t(), 1, &oids, 0);
-
-  return objs.empty();
+  return oids.empty();
 }
 
 int KeyValueStore::collection_list_range(CollectionHandle ch,
@@ -2660,7 +2659,7 @@ int KeyValueStore::collection_list_partial(CollectionHandle ch,
 
 int KeyValueStore::collection_list_partial2(CollectionHandle ch,
 					    int min, int max,
-					    vector<hobject_t> *vs,
+					    vector<hoid_t>* vs,
 					    CLPCursor& cursor)
 {
   /* TODO: implement */

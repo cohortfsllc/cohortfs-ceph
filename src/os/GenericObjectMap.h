@@ -67,7 +67,7 @@
 // implement write transaction to use it. @see StripObjectMap
 class GenericObjectMap {
  public:
-  CephContext *cct;
+  CephContext* cct;
   boost::scoped_ptr<KeyValueDB> db;
 
   /**
@@ -83,36 +83,36 @@ class GenericObjectMap {
    */
   set<uint64_t> in_use;
 
-  GenericObjectMap(CephContext *c, KeyValueDB *db) : cct(c), db(db) {}
+  GenericObjectMap(CephContext* c, KeyValueDB* db) : cct(c), db(db) {}
 
   int get(
-    const coll_t &cid,
-    const oid_t &oid,
-    const string &prefix,
-    map<string, bufferlist> *out
+    const coll_t& cid,
+    const hoid_t& oid,
+    const string& prefix,
+    map<string, bufferlist>* out
     );
 
   int get_keys(
-    const coll_t &cid,
-    const oid_t &oid,
-    const string &prefix,
-    set<string> *keys
+    const coll_t& cid,
+    const hoid_t& oid,
+    const string& prefix,
+    set<string>* keys
     );
 
   int get_values(
-    const coll_t &cid,
-    const oid_t &oid,
-    const string &prefix,
-    const set<string> &keys,
-    map<string, bufferlist> *out
+    const coll_t& cid,
+    const hoid_t& oid,
+    const string& prefix,
+    const set<string>& keys,
+    map<string, bufferlist>* out
     );
 
   int check_keys(
-    const coll_t &cid,
-    const oid_t &oid,
-    const string &prefix,
-    const set<string> &keys,
-    set<string> *out
+    const coll_t& cid,
+    const hoid_t&oid,
+    const string& prefix,
+    const set<string>& keys,
+    set<string>* out
     );
 
   /// Read initial state from backing store
@@ -122,16 +122,16 @@ class GenericObjectMap {
   int upgrade() {return 0;}
 
   /// Consistency check, debug, there must be no parallel writes
-  bool check(std::ostream &out);
+  bool check(std::ostream& out);
 
   /// Util, list all objects, there must be no other concurrent access
-  int list_objects(const coll_t &cid, oid_t start, int max,
-		   vector<oid_t> *objs, ///< [out] objects
-		   oid_t *next);
+  int list_objects(const coll_t& cid, hoid_t start, int max,
+		   vector<hoid_t>* objs, ///< [out] objects
+		   hoid_t* next);
 
-  ObjectMap::ObjectMapIterator get_iterator(const coll_t &cid,
-					    const oid_t &oid,
-					    const string &prefix);
+  ObjectMap::ObjectMapIterator get_iterator(const coll_t& cid,
+					    const hoid_t& oid,
+					    const string& prefix);
 
   KeyValueDB::Transaction get_transaction() { return db->get_transaction(); }
   int submit_transaction(KeyValueDB::Transaction t) {
@@ -145,25 +145,25 @@ class GenericObjectMap {
     State() : v(0), seq(1) {}
     State(uint64_t seq) : v(0), seq(seq) {}
 
-    void encode(bufferlist &bl) const {
+    void encode(bufferlist& bl) const {
       ENCODE_START(1, 1, bl);
       ::encode(v, bl);
       ::encode(seq, bl);
       ENCODE_FINISH(bl);
     }
 
-    void decode(bufferlist::iterator &bl) {
+    void decode(bufferlist::iterator& bl) {
       DECODE_START(1, bl);
       ::decode(v, bl);
       ::decode(seq, bl);
       DECODE_FINISH(bl);
     }
 
-    void dump(Formatter *f) const {
+    void dump(Formatter* f) const {
       f->dump_unsigned("seq", seq);
     }
 
-    static void generate_test_instances(list<State*> &o) {
+    static void generate_test_instances(list<State*>& o) {
       o.push_back(new State(0));
       o.push_back(new State(20));
     }
@@ -175,12 +175,12 @@ class GenericObjectMap {
     uint64_t num_children;
 
     coll_t cid;
-    oid_t oid;
+    hoid_t oid;
 
     // Used by successor
     bufferlist data;
 
-    void encode(bufferlist &bl) const {
+    void encode(bufferlist& bl) const {
       ENCODE_START(1, 1, bl);
       ::encode(seq, bl);
       ::encode(parent, bl);
@@ -191,7 +191,7 @@ class GenericObjectMap {
       ENCODE_FINISH(bl);
     }
 
-    void decode(bufferlist::iterator &bl) {
+    void decode(bufferlist::iterator& bl) {
       DECODE_START(1, bl);
       ::decode(seq, bl);
       ::decode(parent, bl);
@@ -202,7 +202,7 @@ class GenericObjectMap {
       DECODE_FINISH(bl);
     }
 
-    void dump(Formatter *f) const {
+    void dump(Formatter* f) const {
       f->dump_unsigned("seq", seq);
       f->dump_unsigned("parent", parent);
       f->dump_unsigned("num_children", num_children);
@@ -215,25 +215,25 @@ class GenericObjectMap {
 
   typedef std::shared_ptr<_Header> Header;
 
-  Header lookup_header(const coll_t &cid, const oid_t &oid) {
+  Header lookup_header(const coll_t& cid, const hoid_t& oid) {
     unique_lock l(header_lock);
     return _lookup_header(l, cid, oid);
   }
 
   /// Lookup or create header for c obj
-  Header lookup_create_header(const coll_t &cid, const oid_t &oid,
+  Header lookup_create_header(const coll_t& cid, const hoid_t& oid,
     KeyValueDB::Transaction t);
 
   /// Set leaf node for c and oid to the value of header
-  void set_header(const coll_t &cid, const oid_t &oid, _Header header,
+  void set_header(const coll_t& cid, const hoid_t& oid, _Header header,
     KeyValueDB::Transaction t);
 
   // Move all modify member function to "protect", in order to indicate these
   // should be made use of by sub-class
   void set_keys(
     const Header header,
-    const string &prefix,
-    const map<string, bufferlist> &set,
+    const string& prefix,
+    const map<string, bufferlist>& set,
     KeyValueDB::Transaction t
     );
 
@@ -244,24 +244,24 @@ class GenericObjectMap {
 
   int rm_keys(
     const Header header,
-    const string &prefix,
-    const set<string> &to_clear,
+    const string& prefix,
+    const set<string>& to_clear,
     KeyValueDB::Transaction t
     );
 
   void clone(
     const Header origin_header,
-    const coll_t &cid,
-    const oid_t &target,
+    const coll_t& cid,
+    const hoid_t& target,
     KeyValueDB::Transaction t,
-    Header *old_header,
-    Header *new_header
+    Header* old_header,
+    Header* new_header
     );
 
   void rename(
     const Header header,
-    const coll_t &cid,
-    const oid_t &target,
+    const coll_t& cid,
+    const hoid_t& target,
     KeyValueDB::Transaction t
     );
 
@@ -283,9 +283,9 @@ class GenericObjectMap {
 private:
   /// Implicit lock on Header->seq
 
-  static string header_key(const coll_t &cid);
-  static string header_key(const coll_t &cid, const oid_t &oid);
-  static bool parse_header_key(const string &in, coll_t *c, oid_t *oid);
+  static string header_key(const coll_t& cid);
+  static string header_key(const coll_t& cid, const hoid_t& oid);
+  static bool parse_header_key(const string& in, coll_t* c, hoid_t* oid);
 
   string seq_key(uint64_t seq) {
     char buf[100];
@@ -293,7 +293,7 @@ private:
     return string(buf);
   }
 
-  string user_prefix(Header header, const string &prefix);
+  string user_prefix(Header header, const string& prefix);
   string complete_prefix(Header header);
   string parent_seq_prefix(uint64_t seq);
 
@@ -301,8 +301,8 @@ private:
   public:
     int seek_to_first() { return 0; }
     int seek_to_last() { return 0; }
-    int upper_bound(const string &after) { return 0; }
-    int lower_bound(const string &to) { return 0; }
+    int upper_bound(const string& after) { return 0; }
+    int lower_bound(const string& to) { return 0; }
     bool valid() { return false; }
     int next() { assert(0); return 0; }
     string key() { assert(0); return ""; }
@@ -314,7 +314,7 @@ private:
   /// Iterator
   class GenericObjectMapIteratorImpl : public ObjectMap::ObjectMapIteratorImpl {
   public:
-    GenericObjectMap *map;
+    GenericObjectMap* map;
 
     /// NOTE: implicit lock on header->seq AND for all ancestors
     Header header;
@@ -335,13 +335,13 @@ private:
 
     string prefix;
 
-    GenericObjectMapIteratorImpl(GenericObjectMap *map, Header header,
-	const string &_prefix) : map(map), header(header), r(0), ready(false),
+    GenericObjectMapIteratorImpl(GenericObjectMap* map, Header header,
+	const string& _prefix) : map(map), header(header), r(0), ready(false),
 				 invalid(true), prefix(_prefix) { }
     int seek_to_first();
     int seek_to_last();
-    int upper_bound(const string &after);
-    int lower_bound(const string &to);
+    int upper_bound(const string& after);
+    int lower_bound(const string& to);
     bool valid();
     int next();
     string key();
@@ -356,9 +356,9 @@ private:
     int next_parent();
 
     /// Tests whether to_test is in complete region
-    int in_complete_region(const string &to_test, ///[in] key to test
-			   string *begin,	  ///[out] beginning of region
-			   string *end		  ///[out] end of region
+    int in_complete_region(const string& to_test, ///[in] key to test
+			   string* begin,	  ///[out] beginning of region
+			   string* end		  ///[out] end of region
       ); ///< @returns true if to_test is in the complete region, else false
 
   private:
@@ -374,8 +374,8 @@ protected:
   }
 
   // Scan keys in header into out_keys and out_values (if nonnull)
-  int scan(Header header, const string &prefix, const set<string> &in_keys,
-	   set<string> *out_keys, map<string, bufferlist> *out_values);
+  int scan(Header header, const string& prefix, const set<string>& in_keys,
+	   set<string>* out_keys, map<string, bufferlist>* out_values);
 
  private:
 
@@ -386,7 +386,7 @@ protected:
   void set_parent_header(Header input, KeyValueDB::Transaction t);
 
     /// Remove leaf node corresponding to oid in c
-  void remove_header(const coll_t &cid, const oid_t &oid, Header header,
+  void remove_header(const coll_t& cid, const hoid_t& oid, Header header,
       KeyValueDB::Transaction t);
 
   /**
@@ -394,16 +394,16 @@ protected:
    *
    * Has the side effect of syncronously saving the new GenericObjectMap state
    */
-  Header _generate_new_header(const coll_t &cid, const oid_t &oid,
+  Header _generate_new_header(const coll_t& cid, const hoid_t& oid,
 			      Header parent, KeyValueDB::Transaction t);
-  Header generate_new_header(const coll_t &cid, const oid_t &oid,
+  Header generate_new_header(const coll_t& cid, const hoid_t& oid,
 			     Header parent, KeyValueDB::Transaction t) {
     lock_guard l(header_lock);
     return _generate_new_header(cid, oid, parent, t);
   }
 
   // Lookup leaf header for c obj
-  Header _lookup_header(unique_lock& l, const coll_t &cid, const oid_t &oid);
+  Header _lookup_header(unique_lock& l, const coll_t& cid, const hoid_t& oid);
 
   // Lookup header node for input
   Header lookup_parent(Header input);
@@ -412,7 +412,7 @@ protected:
   int _clear(Header header, KeyValueDB::Transaction t);
 
   // Adds to t operations necessary to add new_complete to the complete set
-  int merge_new_complete(Header header, const map<string, string> &new_complete,
+  int merge_new_complete(Header header, const map<string, string>& new_complete,
       GenericObjectMapIterator iter, KeyValueDB::Transaction t);
 
   // Writes out State (mainly next_seq)
@@ -425,7 +425,7 @@ protected:
   int copy_up_header(Header header, KeyValueDB::Transaction t);
 
   // Sets header @see set_header
-  void _set_header(Header header, const bufferlist &bl,
+  void _set_header(Header header, const bufferlist& bl,
 		   KeyValueDB::Transaction t);
 
   /**
@@ -436,10 +436,10 @@ protected:
    */
   class RemoveOnDelete {
   public:
-    GenericObjectMap *db;
-    RemoveOnDelete(GenericObjectMap *db) :
+    GenericObjectMap* db;
+    RemoveOnDelete(GenericObjectMap* db) :
       db(db) {}
-    void operator() (_Header *header) {
+    void operator() (_Header* header) {
       unique_lock l(db->header_lock);
       db->in_use.erase(header->seq);
       db->header_cond.notify_all();
