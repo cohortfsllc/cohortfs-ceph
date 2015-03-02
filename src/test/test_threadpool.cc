@@ -21,6 +21,8 @@
 
 CephContext *cct;
 
+using namespace cohort;
+
 // test submit arguments
 namespace {
 int submit_a = 0;
@@ -51,14 +53,14 @@ TEST(ThreadPool, Submit)
 // test that new threads are spawned when none are idle
 TEST(ThreadPool, Spawn)
 {
-  Mutex mutex;
-  Cond cond;
+  std::mutex mutex;
+  std::condition_variable cond;
   bool block = true;
 
   auto fn = [&]() {
-    Mutex::Locker lock(mutex);
+    ThreadPool::unique_lock lock(mutex);
     while (block)
-      cond.Wait(mutex);
+      cond.wait(lock);
   };
 
   // queue up multiple jobs, spawning a new worker for each
@@ -68,10 +70,10 @@ TEST(ThreadPool, Spawn)
   ASSERT_EQ(0, pool.submit(fn));
 
   // unblock the jobs
-  mutex.Lock();
+  ThreadPool::unique_lock lock(mutex); /* LOCKED */
   block = false;
-  cond.Signal();
-  mutex.Unlock();
+  cond.notify_all();
+  lock.unlock();
 
   pool.shutdown();
 }
@@ -79,14 +81,14 @@ TEST(ThreadPool, Spawn)
 // test that a single worker will take more jobs from the queue
 TEST(ThreadPool, Wait)
 {
-  Mutex mutex;
-  Cond cond;
+  std::mutex mutex;
+  std::condition_variable cond;
   bool block = true;
 
   auto fn = [&]() {
-    Mutex::Locker lock(mutex);
+    ThreadPool::unique_lock lock(mutex);
     while (block)
-      cond.Wait(mutex);
+      cond.wait(lock);
   };
 
   // queue up multiple jobs for a single worker
@@ -96,10 +98,10 @@ TEST(ThreadPool, Wait)
   ASSERT_EQ(0, pool.submit(fn));
 
   // unblock the jobs
-  mutex.Lock();
+  ThreadPool::unique_lock lock(mutex); /* LOCKED */
   block = false;
-  cond.Signal();
-  mutex.Unlock();
+  cond.notify_all();
+  lock.unlock();
 
   pool.shutdown();
 }
@@ -107,14 +109,14 @@ TEST(ThreadPool, Wait)
 // test that submit will dispatch jobs to idle workers
 TEST(ThreadPool, Dispatch)
 {
-  Mutex mutex;
-  Cond cond;
+  std::mutex mutex;
+  std::condition_variable cond;
   bool block = true;
 
   auto fn = [&]() {
-    Mutex::Locker lock(mutex);
+    ThreadPool::unique_lock lock(mutex);
     block = false;
-    cond.Signal();
+    cond.notify_all();
   };
 
   // submit a job for a single worker
@@ -122,10 +124,10 @@ TEST(ThreadPool, Dispatch)
   ASSERT_EQ(0, pool.submit(fn));
 
   // wait for the job to complete (worker returns to idle state)
-  mutex.Lock();
+  ThreadPool::unique_lock lock(mutex); /* LOCKED */
   while (block)
-    cond.Wait(mutex);
-  mutex.Unlock();
+    cond.wait(lock);
+  lock.unlock();
 
   // submit another job
   ASSERT_EQ(0, pool.submit([](){}));
@@ -137,14 +139,19 @@ TEST(ThreadPool, IdleTimeout)
 {
   pthread_t a, b;
 
-  const utime_t timeout(0, 20000000ul); // 20ms
+  std::mutex mutex;
+  std::condition_variable cond;
+
+  const struct timespec timeout{0, 20000000ul}; // 20ms
   cohort::ThreadPool pool(cct, 1, timeout);
 
   ASSERT_EQ(0, pool.submit([&a]() { a = pthread_self(); }));
 
   // sleep to make sure thread times out
-  const utime_t wait(0, 50000000ul); // 50ms
-  wait.sleep();
+  ThreadPool::unique_lock lock(mutex);
+  ceph::mono_time wait = ceph::mono_clock::now() +
+    std::chrono::milliseconds(50);
+  cond.wait_until(lock, wait);
 
   ASSERT_EQ(0, pool.submit([&b]() { b = pthread_self(); }));
   pool.shutdown();
