@@ -182,7 +182,10 @@ void WorkloadGenerator::init_args(vector<const char*> args)
       _suppress_ops_or_die(val);
     } else if (ceph_argparse_witharg(args, i, &val,
 	"--test-show-stats-period", (char*) NULL)) {
-      m_stats_show_secs = strtoll(val.c_str(), NULL, 10);
+      m_stats_show_interval =
+	std::chrono::duration_cast<ceph::timespan>(
+	  std::chrono::duration<long long>(
+	    strtoll(val.c_str(), NULL, 10)));
     } else if (ceph_argparse_flag(args, &i, "--test-show-stats",
 				  (char*) NULL)) {
       m_do_stats = true;
@@ -491,13 +494,14 @@ void WorkloadGenerator::run()
       oid_t *oid = get_rnd_obj(entry);
 
       uint16_t c_ix = t->push_cid(entry->m_coll);
-      uint16_t o_ix = t->push_oid(*obj);
+      uint16_t o_ix = t->push_oid(hoid_t(*oid));
 
       uint16_t cm_ix = t->push_cid(META_COLL);
       uint16_t om_ix = t->push_oid(entry->m_meta_obj);
 
-      do_write_object(t, entry->m_coll, *obj, c_ix, o_ix, stat_state);
-      do_setattr_object(t, entry->m_coll, *obj, c_ix, o_ix, stat_state);
+      do_write_object(t, entry->m_coll, *oid, c_ix, o_ix, stat_state);
+      do_setattr_object(t, entry->m_coll, *oid, c_ix, o_ix,
+			stat_state);
       do_setattr_collection(t, entry->m_coll, c_ix, stat_state);
       do_append_log(t, entry, cm_ix, om_ix, stat_state);
 
