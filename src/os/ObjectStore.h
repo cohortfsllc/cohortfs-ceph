@@ -1295,8 +1295,8 @@ public:
   }
 
  public:
-  ObjectStore(CephContext* _cct, const std::string& _path) :
-    path(_path), obj_lru(311 /* XXX move to conf */) {}
+  ObjectStore(CephContext* cct, const std::string& _path)
+    : cct(cct), path(_path), obj_lru(311 /* XXX move to conf */) {}
   virtual ~ObjectStore() {}
 
  private:

@@ -283,8 +283,8 @@ int FileStore::lfn_unlink(FSCollection* fc, const hoid_t& o,
   return r;
 }
 
-FileStore::FileStore(CephContext* _cct, const std::string& base, const std::string& jdev, const char* name, bool do_update) :
-  JournalingObjectStore(_cct, base),
+FileStore::FileStore(CephContext* cct, const std::string& base, const std::string& jdev, const char* name, bool do_update) :
+  JournalingObjectStore(cct, base),
   basedir(base), journalpath(jdev),
   blk_size(0),
   fsid_fd(-1), op_fd(-1),
