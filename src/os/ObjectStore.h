@@ -107,27 +107,27 @@ public:
     struct OidLT
     {
       // for internal ordering
-      bool operator()(const Object& lhs,  const Object& rhs) const
-      {  return lhs.oid < rhs.oid; }
-
+      bool operator()(const Object& lhs, const Object& rhs) const
+      { return lhs.oid < rhs.oid; }
+      
       // for external search by hoid_t
       bool operator()(const hoid_t& oid, const Object& o) const
-	{  return oid < o.oid; }
+      { return oid < o.oid; }
 
       bool operator()(const Object& o, const hoid_t& oid) const
-	{  return o.oid < oid;  }
+      { return o.oid < oid; }
     };
 
     struct OidEQ
     {
-      bool operator()(const Object& lhs,  const Object& rhs) const
-	{  return lhs.oid == rhs.oid; }
+      bool operator()(const Object& lhs, const Object& rhs) const
+      { return lhs.oid == rhs.oid; }
 
       bool operator()(const hoid_t& oid, const Object& o) const
-	{  return oid == o.oid; }
+      { return oid == o.oid; }
 
       bool operator()(const Object& o, const hoid_t& oid) const
-	{  return o.oid == oid;  }
+      { return o.oid == oid; }
     };
 
     typedef bi::member_hook<
