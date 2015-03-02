@@ -112,8 +112,8 @@ public:
   }
 
 public:
-  JournalingObjectStore(CephContext *_cct, const std::string& path)
-    : ObjectStore(_cct, path),
+  JournalingObjectStore(CephContext *cct, const std::string& path)
+    : ObjectStore(cct, path),
       journal(NULL),
       finisher(cct),
       submit_op_seq(0),
