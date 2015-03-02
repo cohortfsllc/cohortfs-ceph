@@ -172,9 +172,11 @@ void Log::submit_entry(Entry *e)
   if (m_subs->get_log_level(e->m_subsys) < e->m_prio ||
       (!m_fd && m_syslog_crash < e->m_prio && m_stderr_crash < e->m_prio)) {
     // go straight to recent queue
+    pthread_mutex_lock(&m_flush_mutex);
     m_recent.enqueue(e);
     if (m_recent.m_len > m_max_recent)
       delete m_recent.dequeue();
+    pthread_mutex_unlock(&m_flush_mutex);
     return;
   }
 
