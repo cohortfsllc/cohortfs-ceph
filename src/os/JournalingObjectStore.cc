@@ -40,6 +40,7 @@ int JournalingObjectStore::journal_replay(uint64_t fs_op_seq)
     fs_op_seq = cct->_conf->journal_replay_from - 1;
   }
 
+  ZTracer::Trace trace; // empty trace for do_transactions()
   uint64_t op_seq = fs_op_seq;
   apply_manager.init_seq(fs_op_seq);
 
@@ -80,9 +81,7 @@ int JournalingObjectStore::journal_replay(uint64_t fs_op_seq)
       tls.push_back(t);
     }
 
-    apply_manager.op_apply_start(seq);
-    int r = do_transactions(tls, seq);
-    apply_manager.op_apply_finish(seq);
+    int r = do_transactions(tls, seq, trace);
 
     op_seq = seq;
 
@@ -96,7 +95,7 @@ int JournalingObjectStore::journal_replay(uint64_t fs_op_seq)
 
   replaying = false;
 
-  submit_manager.set_op_seq(op_seq);
+  submit_op_seq.store(op_seq);
 
   // done reading, make writeable.
   err = journal->make_writeable();
@@ -145,33 +144,6 @@ void JournalingObjectStore::ApplyManager::op_apply_finish(uint64_t op)
   if (op > max_applied_seq)
     max_applied_seq = op;
 }
-
-uint64_t JournalingObjectStore::SubmitManager::op_submit_start(
-  unique_lock& l)
-{
-  assert(!l && l.mutex() == &lock);
-  l.lock();
-  uint64_t op = ++op_seq;
-  ldout(cct, 10) << "op_submit_start " << op << dendl;
-  return op;
-}
-
-void JournalingObjectStore::SubmitManager::op_submit_finish(unique_lock& l,
-							    uint64_t op)
-{
-  assert(l && l.mutex() == &lock);
-  ldout(cct, 10) << "op_submit_finish " << op << dendl;
-  if (op != op_submitted + 1) {
-    ldout(cct, 0) << "op_submit_finish " << op << " expected " << (op_submitted + 1)
-	    << ", OUT OF ORDER" << dendl;
-    assert(0 == "out of order op_submit_finish");
-  }
-  op_submitted = op;
-  l.unlock();
-}
-
-
-// ------------------------------------------
 
 void JournalingObjectStore::ApplyManager::add_waiter(uint64_t op, Context *c)
 {
@@ -248,8 +220,8 @@ void JournalingObjectStore::ApplyManager::commit_finish()
 }
 
 void JournalingObjectStore::_op_journal_transactions(
-  list<ObjectStore::Transaction*>& tls, uint64_t op,
-  Context *onjournal, OpRequestRef osd_op, ZTracer::Trace *trace)
+  list<Transaction*>& tls, uint64_t op,
+  Context *onjournal, OpRequestRef osd_op, ZTracer::Trace &trace)
 {
   ldout(cct, 10) << "op_journal_transactions " << op << " " << tls << dendl;
 
@@ -257,9 +229,9 @@ void JournalingObjectStore::_op_journal_transactions(
     bufferlist tbl;
     unsigned data_len = 0;
     int data_align = -1; // -1 indicates that we don't care about the alignment
-    for (list<ObjectStore::Transaction*>::iterator p = tls.begin();
+    for (list<Transaction*>::iterator p = tls.begin();
 	 p != tls.end(); ++p) {
-      ObjectStore::Transaction *t = *p;
+      Transaction *t = *p;
       if (t->get_data_length() > data_len &&
 	(int)t->get_data_length() >= cct->_conf->journal_align_min_size) {
 	data_len = t->get_data_length();
@@ -267,7 +239,7 @@ void JournalingObjectStore::_op_journal_transactions(
       }
       ::encode(*t, tbl);
     }
-    journal->submit_entry(op, tbl, data_align, onjournal, osd_op, trace);
+    journal->submit_entry(op, tbl, data_align, onjournal, trace, osd_op);
   } else if (onjournal) {
     apply_manager.add_waiter(op, onjournal);
   }

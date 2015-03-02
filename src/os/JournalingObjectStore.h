@@ -15,6 +15,7 @@
 #ifndef CEPH_JOURNALINGOBJECTSTORE_H
 #define CEPH_JOURNALINGOBJECTSTORE_H
 
+#include <atomic>
 #include <condition_variable>
 #include <mutex>
 #include "ObjectStore.h"
@@ -24,30 +25,7 @@ class JournalingObjectStore : public ObjectStore {
 protected:
   Journal *journal;
   Finisher finisher;
-
-
-  class SubmitManager {
-    CephContext *cct;
-  public:
-    std::mutex lock;
-    typedef std::unique_lock<std::mutex> unique_lock;
-  private:
-    uint64_t op_seq;
-    uint64_t op_submitted;
-  public:
-    SubmitManager(CephContext *_cct) :
-      cct(_cct), op_seq(0), op_submitted(0)
-    {}
-    uint64_t op_submit_start(unique_lock& l);
-    void op_submit_finish(unique_lock& l, uint64_t op);
-    void set_op_seq(uint64_t seq) {
-      unique_lock l(lock);
-      op_submitted = op_seq = seq;
-    }
-    uint64_t get_op_seq() {
-      return op_seq;
-    }
-  } submit_manager;
+  std::atomic<uint64_t> submit_op_seq;
 
   class ApplyManager {
     CephContext *cct;
@@ -118,11 +96,12 @@ protected:
   void journal_stop();
   int journal_replay(uint64_t fs_op_seq);
 
-  void _op_journal_transactions(list<ObjectStore::Transaction*>& tls, uint64_t op,
+  void _op_journal_transactions(list<Transaction*>& tls, uint64_t op,
 				Context *onjournal, OpRequestRef osd_op,
-				ZTracer::Trace *trace);
+				ZTracer::Trace &trace);
 
-  virtual int do_transactions(list<ObjectStore::Transaction*>& tls, uint64_t op_seq) = 0;
+  virtual int do_transactions(list<Transaction*>& tls, uint64_t op_seq,
+                              ZTracer::Trace &trace) = 0;
 
 public:
   bool is_committing() {
@@ -137,7 +116,7 @@ public:
     : ObjectStore(_cct, path),
       journal(NULL),
       finisher(cct),
-      submit_manager(cct),
+      submit_op_seq(0),
       apply_manager(cct, journal, finisher),
       replaying(false) {}
 

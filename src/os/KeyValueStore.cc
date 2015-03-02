@@ -280,25 +280,6 @@ int StripObjectMap::get_with_header(const StripObjectHeader& header,
 
   return 0;
 }
-// =========== KeyValueStore::SubmitManager Implementation ==============
-
-uint64_t KeyValueStore::SubmitManager::op_submit_start(unique_lock& sml)
-{
-  assert(!sml); // Whatever mutex sml references, it shouldn't be locked.
-  sml = unique_lock(lock);
-  uint64_t op = ++op_seq;
-  return op;
-}
-
-void KeyValueStore::SubmitManager::op_submit_finish(unique_lock& sml,
-						    uint64_t op)
-{
-  if (op != op_submitted + 1) {
-    assert(0 == "out of order op_submit_finish");
-  }
-  op_submitted = op;
-  sml.unlock();
-}
 
 
 // ========= KeyValueStore::BufferTransaction Implementation ============
@@ -506,15 +487,11 @@ KeyValueStore::KeyValueStore(CephContext *cct, const std::string& base,
   kv_type(KV_TYPE_NONE),
   backend(NULL),
   ondisk_finisher(cct),
-  op_queue_len(0), op_queue_bytes(0),
   op_finisher(cct),
-  op_tp(cct, "KeyValueStore::op_tp",
-	cct->_conf->keyvaluestore_op_threads, "keyvaluestore_op_threads"),
-  op_wq(this, cct->_conf->keyvaluestore_op_thread_timeout * 1s,
-	cct->_conf->keyvaluestore_op_thread_suicide_timeout * 1s, &op_tp),
   m_keyvaluestore_queue_max_ops(cct->_conf->keyvaluestore_queue_max_ops),
   m_keyvaluestore_queue_max_bytes(cct->_conf->keyvaluestore_queue_max_bytes),
-  do_update(do_update)
+  do_update(do_update),
+  submit_op_seq(0)
 {
   ostringstream oss;
   oss << basedir << "/current";
@@ -862,7 +839,6 @@ int KeyValueStore::mount()
     backend.reset(dbomap);
   }
 
-  op_tp.start();
   op_finisher.start();
   ondisk_finisher.start();
 
@@ -883,7 +859,6 @@ int KeyValueStore::umount()
 {
   dout(5) << "umount " << basedir << dendl;
 
-  op_tp.stop();
   op_finisher.stop();
   ondisk_finisher.stop();
 
@@ -922,124 +897,27 @@ int KeyValueStore::get_max_object_name_length()
 }
 
 int KeyValueStore::queue_transactions(list<Transaction*> &tls,
-				      OpRequestRef osd_op,
-				      ThreadPool::TPHandle *handle)
+				      OpRequestRef osd_op)
 {
   Context *onreadable;
   Context *ondisk;
   Context *onreadable_sync;
   Transaction::collect_contexts(tls, &onreadable, &ondisk, &onreadable_sync);
 
-  Op *o = build_op(tls, ondisk, onreadable, onreadable_sync, osd_op);
-  op_queue_reserve_throttle(o, handle);
-  unique_lock sml;
-  uint64_t op = submit_manager.op_submit_start(sml);
-  o->op = op;
-  dout(5) << "queue_transactions (trailing journal) " << op << " "
-	  << tls <<dendl;
-  queue_op(o);
+  const uint64_t op = ++submit_op_seq;
 
-  submit_manager.op_submit_finish(sml, op);
+  dout(5) << "queue_transactions seq " << op << dendl;
+  int r = do_transactions(tls, op);
+  if (r < 0)
+    delete ondisk;
+  else if (ondisk)
+    ondisk_finisher.queue(ondisk, r);
+
+  if (onreadable_sync)
+    onreadable_sync->complete(0);
+  op_finisher.queue(onreadable);
 
   return 0;
-}
-
-
-// ============== KeyValueStore Op Handler =================
-
-KeyValueStore::Op *KeyValueStore::build_op(list<Transaction*>& tls,
-	Context *ondisk, Context *onreadable, Context *onreadable_sync,
-	OpRequestRef osd_op)
-{
-  uint64_t bytes = 0, ops = 0;
-  for (list<Transaction*>::iterator p = tls.begin();
-       p != tls.end();
-       ++p) {
-    bytes += (*p)->get_num_bytes();
-    ops += (*p)->get_num_ops();
-  }
-
-  Op *o = new Op;
-  o->start = ceph::mono_clock::now();
-  o->tls.swap(tls);
-  o->ondisk = ondisk;
-  o->onreadable = onreadable;
-  o->onreadable_sync = onreadable_sync;
-  o->ops = ops;
-  o->bytes = bytes;
-  o->osd_op = osd_op;
-  return o;
-}
-
-void KeyValueStore::queue_op(Op *o)
-{
-  dout(5) << "queue_op " << o << " seq " << o->op << " "
-	  << o->bytes << " bytes" << "	 (queue has " << op_queue_len
-	  << " ops and " << op_queue_bytes << " bytes)" << dendl;
-  op_wq.queue(o);
-}
-
-void KeyValueStore::op_queue_reserve_throttle(Op *o, ThreadPool::TPHandle *handle)
-{
-  uint64_t max_ops = m_keyvaluestore_queue_max_ops;
-  uint64_t max_bytes = m_keyvaluestore_queue_max_bytes;
-
-  {
-    unique_lock otl(op_throttle_lock);
-    while ((max_ops && (op_queue_len + 1) > max_ops) ||
-	   (max_bytes && op_queue_bytes	     // let single large ops through!
-	   && (op_queue_bytes + o->bytes) > max_bytes)) {
-      dout(2) << "waiting " << op_queue_len + 1 << " > " << max_ops
-	      << " ops || " << op_queue_bytes + o->bytes << " > " << max_bytes
-	      << dendl;
-      if (handle)
-	handle->suspend_tp_timeout();
-      op_throttle_cond.wait(otl);
-      if (handle)
-	handle->reset_tp_timeout();
-    }
-
-    op_queue_len++;
-    op_queue_bytes += o->bytes;
-  }
-}
-
-void KeyValueStore::op_queue_release_throttle(Op *o)
-{
-  {
-    lock_guard l(op_throttle_lock);
-    op_queue_len--;
-    op_queue_bytes -= o->bytes;
-    op_throttle_cond.notify_all();
-  }
-}
-
-void KeyValueStore::_do_op(Op *o, ThreadPool::TPHandle &handle)
-{
-  dout(5) << "_do_op " << o << " seq " << o->op << " start" << dendl;
-  int r = _do_transactions(o->tls, o->op, &handle);
-  dout(10) << "_do_op " << o << " seq " << o->op << " r = " << r
-	   << ", finisher " << o->onreadable << " " << o->onreadable_sync << dendl;
-
-  if (o->ondisk) {
-    if (r < 0) {
-      delete o->ondisk;
-      o->ondisk = 0;
-    } else {
-      ondisk_finisher.queue(o->ondisk, r);
-    }
-  }
-}
-
-void KeyValueStore::_finish_op(Op *o)
-{
-  dout(10) << "_finish_op " << o << " seq " << o->op << dendl;
-  op_queue_release_throttle(o);
-
-  if (o->onreadable_sync)
-    o->onreadable_sync->complete(0);
-  op_finisher.queue(o->onreadable);
-  delete o;
 }
 
 // Combine all the ops in the same transaction using "BufferTransaction" and
@@ -1049,18 +927,9 @@ void KeyValueStore::_finish_op(Op *o)
 // operation on the same object. Not sure ReadWrite lock should be applied to
 // improve concurrent performance. In the future, I'd like to remove apply_lock
 // on "osr" and introduce PG RWLock.
-int KeyValueStore::_do_transactions(list<Transaction*>& tls, uint64_t op_seq,
-  ThreadPool::TPHandle *handle)
+int KeyValueStore::do_transactions(list<Transaction*> &tls, uint64_t op_seq)
 {
   int r = 0;
-
-  uint64_t bytes = 0, ops = 0;
-  for (list<Transaction*>::iterator p = tls.begin();
-       p != tls.end();
-       ++p) {
-    bytes += (*p)->get_num_bytes();
-    ops += (*p)->get_num_ops();
-  }
 
   int trans_num = 0;
   SequencerPosition spos(op_seq, trans_num, 0);
@@ -1069,11 +938,9 @@ int KeyValueStore::_do_transactions(list<Transaction*>& tls, uint64_t op_seq,
   for (list<Transaction*>::iterator p = tls.begin();
        p != tls.end();
        ++p, trans_num++) {
-    r = _do_transaction(**p, bt, spos, handle);
+    r = do_transaction(**p, bt, spos);
     if (r < 0)
       break;
-    if (handle)
-      handle->reset_tp_timeout();
   }
 
   r = bt.submit_transaction();
@@ -1084,12 +951,11 @@ int KeyValueStore::_do_transactions(list<Transaction*>& tls, uint64_t op_seq,
   return r;
 }
 
-unsigned KeyValueStore::_do_transaction(Transaction& tr,
-					BufferTransaction& t,
-					SequencerPosition& spos,
-					ThreadPool::TPHandle *handle)
+unsigned KeyValueStore::do_transaction(Transaction& tr,
+                                       BufferTransaction &t,
+                                       SequencerPosition& spos)
 {
-  dout(10) << "_do_transaction on " << &tr << dendl;
+  dout(10) << "do_transaction on " << &tr << dendl;
 
   typedef Transaction::op_iterator op_iterator;
   for (op_iterator i = tr.begin(); i != tr.end(); ++i) {
@@ -1098,9 +964,6 @@ unsigned KeyValueStore::_do_transaction(Transaction& tr,
 
     CollectionHandle ch = nullptr;
     ObjectHandle oh, oh2;
-
-    if (handle)
-      handle->reset_tp_timeout();
 
     switch (i->op) {
   case Transaction::OP_NOP:

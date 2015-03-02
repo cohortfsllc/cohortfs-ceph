@@ -715,17 +715,10 @@ MemStore::get_omap_iterator(CollectionHandle ch, const ObjectHandle oh)
 // ---------------
 // write operations
 
-int MemStore::queue_transactions(list<Transaction*>& tls,
-				 OpRequestRef op,
-				 ThreadPool::TPHandle* handle)
+int MemStore::queue_transactions(list<Transaction*>& tls, OpRequestRef op)
 {
-  for (list<Transaction*>::iterator p = tls.begin(); p != tls.end(); ++p) {
-    // poke the TPHandle heartbeat just to exercise that code path
-    if (handle)
-      handle->reset_tp_timeout();
-
+  for (list<Transaction*>::iterator p = tls.begin(); p != tls.end(); ++p)
     _do_transaction(**p);
-  }
 
   Context *on_apply = NULL, *on_apply_sync = NULL, *on_commit = NULL;
   Transaction::collect_contexts(tls, &on_apply, &on_commit, &on_apply_sync);

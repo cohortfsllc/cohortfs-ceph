@@ -19,7 +19,6 @@
 #include "include/buffer.h"
 #include "include/types.h"
 #include "osd/osd_types.h"
-#include "common/WorkQueue.h"
 #include "common/cohort_lru.h"
 #include "ObjectMap.h"
 
@@ -1295,29 +1294,25 @@ public:
   }
   unsigned apply_transactions(list<Transaction*>& tls, Context* ondisk=0);
 
-  int queue_transaction_and_cleanup(Transaction* t,
-				    ThreadPool::TPHandle *handle = NULL) {
+  int queue_transaction_and_cleanup(Transaction* t) {
     list<Transaction *> tls;
     tls.push_back(t);
     return queue_transactions(tls, new C_DeleteTransaction(t),
-			      NULL, NULL, OpRequestRef(), handle);
+			      NULL, NULL, OpRequestRef());
   }
 
   int queue_transaction(Transaction* t, Context* onreadable, Context* ondisk=0,
 			Context* onreadable_sync=0,
-			OpRequestRef op = OpRequestRef(),
-			ThreadPool::TPHandle* handle = NULL) {
+			OpRequestRef op = OpRequestRef()) {
     list<Transaction*> tls;
     tls.push_back(t);
-    return queue_transactions(tls, onreadable, ondisk, onreadable_sync,
-			      op, handle);
+    return queue_transactions(tls, onreadable, ondisk, onreadable_sync, op);
   }
 
   int queue_transactions(list<Transaction*>& tls,
 			 Context *onreadable, Context *ondisk=0,
 			 Context *onreadable_sync=0,
-			 OpRequestRef op = OpRequestRef(),
-			 ThreadPool::TPHandle* handle = NULL) {
+			 OpRequestRef op = OpRequestRef()) {
     assert(!tls.empty());
     C_GatherBuilder g_onreadable(onreadable);
     C_GatherBuilder g_ondisk(ondisk);
@@ -1336,12 +1331,11 @@ public:
       g_ondisk.activate();
     if (onreadable_sync)
       g_onreadable_sync.activate();
-    return queue_transactions(tls, op, handle);
+    return queue_transactions(tls, op);
   }
 
   virtual int queue_transactions(list<Transaction*>& tls,
-                                 OpRequestRef op = OpRequestRef(),
-                                 ThreadPool::TPHandle *handle = NULL) = 0;
+                                 OpRequestRef op = OpRequestRef()) = 0;
 
   int queue_transactions(list<Transaction*>& tls, Context *onreadable,
                          Context *oncommit, Context *onreadable_sync,

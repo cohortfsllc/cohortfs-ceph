@@ -47,8 +47,8 @@ public:
     OpRequestRef op;
     ZTracer::Trace trace;
     completion_item(uint64_t o, Context *c, ceph::mono_time s,
-		    OpRequestRef opref, ZTracer::Trace *trace)
-      : seq(o), finish(c), start(s), op(opref), trace(*trace) {}
+		    OpRequestRef opref, ZTracer::Trace &trace)
+      : seq(o), finish(c), start(s), op(opref), trace(trace) {}
     completion_item() : seq(0), finish(0),
 			start(ceph::mono_time::min()) {}
   };
@@ -59,8 +59,8 @@ public:
     OpRequestRef op;
     ZTracer::Trace trace;
     write_item(uint64_t s, bufferlist& b, int al, OpRequestRef opref,
-	ZTracer::Trace *trace)
-      : seq(s), alignment(al), op(opref), trace(*trace) {
+	ZTracer::Trace &trace)
+      : seq(s), alignment(al), op(opref), trace(trace) {
       bl.claim(b);
     }
     write_item() : seq(0), alignment(0) {}
@@ -101,9 +101,8 @@ public:
   }
 
   void submit_entry(uint64_t seq, bufferlist& bl, int alignment,
-		    Context *oncommit,
-		    OpRequestRef osd_op = OpRequestRef(),
-		    ZTracer::Trace *parent = NULL);
+		    Context *oncommit, ZTracer::Trace &trace,
+		    OpRequestRef osd_op = OpRequestRef());
   /// End protected by finisher_lock
 
   /*
