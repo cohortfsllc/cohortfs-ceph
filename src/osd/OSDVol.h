@@ -31,6 +31,7 @@
 #include "OSDMap.h"
 #include "Watch.h"
 #include "OpRequest.h"
+#include "OpQueue.h"
 #include "os/ObjectStore.h"
 #include "msg/Messenger.h"
 #include "common/cmdparse.h"

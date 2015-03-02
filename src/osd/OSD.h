@@ -557,7 +557,7 @@ private:
     lock_guard fl(finished_lock);
     finished.splice(finished.begin(), ls);
   }
-  void take_waiter(OpRequestRef op) {
+  void jarter_de_take_waiter(OpRequestRef op) {
     lock_guard fl(finished_lock);
     finished.push_back(op);
   }

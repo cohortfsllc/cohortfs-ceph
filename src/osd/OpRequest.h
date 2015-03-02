@@ -13,13 +13,16 @@
 
 #ifndef OPREQUEST_H_
 #define OPREQUEST_H_
+
 #include <sstream>
 #include <stdint.h>
 #include <vector>
 
+#include <boost/intrusive/list.hpp>
 #include <include/ceph_time.h>
-#include "include/xlist.h"
 #include "msg/Message.h"
+
+namespace bi = boost::intrusive;
 
 /**
  * osd request identifier
@@ -50,6 +53,16 @@ WRITE_CLASS_ENCODER(osd_reqid_t)
 class OpRequest {
 public:
   typedef std::shared_ptr<OpRequest> Ref;
+
+  /* is queuable */
+  typedef bi::link_mode<bi::safe_link> link_mode; // for debugging
+  bi::list_member_hook< link_mode > q_hook;
+
+  typedef bi::list<OpRequest,
+		   bi::member_hook<
+		     OpRequest, bi::list_member_hook<link_mode>,
+		     &OpRequest::q_hook>, bi::constant_time_size<true>
+		   > Queue;
 
   // rmw flags
   int rmw_flags;
