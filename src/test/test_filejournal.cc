@@ -129,7 +129,8 @@ TEST(TestFileJournal, WriteSmall) {
 
   bufferlist bl;
   bl.append("small");
-  j.submit_entry(1, bl, 0, new C_SafeCond(&wait_lock, &cond, &done));
+  ZTracer::Trace trace;
+  j.submit_entry(1, bl, 0, new C_SafeCond(&wait_lock, &cond, &done), trace);
   wait();
 
   j.close();
@@ -147,7 +148,8 @@ TEST(TestFileJournal, WriteBig) {
     memset(foo, 1, sizeof(foo));
     bl.append(foo, sizeof(foo));
   }
-  j.submit_entry(1, bl, 0, new C_SafeCond(&wait_lock, &cond, &done));
+  ZTracer::Trace trace;
+  j.submit_entry(1, bl, 0, new C_SafeCond(&wait_lock, &cond, &done), trace);
   wait();
 
   j.close();
@@ -163,10 +165,11 @@ TEST(TestFileJournal, WriteMany) {
 
   bufferlist bl;
   bl.append("small");
+  ZTracer::Trace trace;
   uint64_t seq = 1;
   for (int i=0; i<100; i++) {
     bl.append("small");
-    j.submit_entry(seq++, bl, 0, gb.new_sub());
+    j.submit_entry(seq++, bl, 0, gb.new_sub(), trace);
   }
 
   gb.activate();
@@ -186,7 +189,8 @@ TEST(TestFileJournal, WriteManyVecs) {
 
   bufferlist first;
   first.append("small");
-  j.submit_entry(1, first, 0, gb.new_sub());
+  ZTracer::Trace trace;
+  j.submit_entry(1, first, 0, gb.new_sub(), trace);
 
   bufferlist bl;
   for (int i=0; i<IOV_MAX * 2; i++) {
@@ -195,7 +199,7 @@ TEST(TestFileJournal, WriteManyVecs) {
     bl.append(bp);
   }
   bufferlist origbl = bl;
-  j.submit_entry(2, bl, 0, gb.new_sub());
+  j.submit_entry(2, bl, 0, gb.new_sub(), trace);
   gb.activate();
   wait();
 
@@ -223,11 +227,12 @@ TEST(TestFileJournal, ReplaySmall) {
 
   bufferlist bl;
   bl.append("small");
-  j.submit_entry(1, bl, 0, gb.new_sub());
+  ZTracer::Trace trace;
+  j.submit_entry(1, bl, 0, gb.new_sub(), trace);
   bl.append("small");
-  j.submit_entry(2, bl, 0, gb.new_sub());
+  j.submit_entry(2, bl, 0, gb.new_sub(), trace);
   bl.append("small");
-  j.submit_entry(3, bl, 0, gb.new_sub());
+  j.submit_entry(3, bl, 0, gb.new_sub(), trace);
   gb.activate();
   wait();
 
@@ -268,15 +273,16 @@ TEST(TestFileJournal, ReplayCorrupt) {
 
   const char *needle =	  "i am a needle";
   const char *newneedle = "in a haystack";
+  ZTracer::Trace trace;
   bufferlist bl;
   bl.append(needle);
-  j.submit_entry(1, bl, 0, gb.new_sub());
+  j.submit_entry(1, bl, 0, gb.new_sub(), trace);
   bl.append(needle);
-  j.submit_entry(2, bl, 0, gb.new_sub());
+  j.submit_entry(2, bl, 0, gb.new_sub(), trace);
   bl.append(needle);
-  j.submit_entry(3, bl, 0, gb.new_sub());
+  j.submit_entry(3, bl, 0, gb.new_sub(), trace);
   bl.append(needle);
-  j.submit_entry(4, bl, 0, gb.new_sub());
+  j.submit_entry(4, bl, 0, gb.new_sub(), trace);
   gb.activate();
   wait();
 
@@ -333,6 +339,7 @@ TEST(TestFileJournal, WriteTrim) {
 
   list<C_Sync*> ls;
 
+  ZTracer::Trace trace;
   bufferlist bl;
   char foo[1024*1024];
   memset(foo, 1, sizeof(foo));
@@ -344,7 +351,7 @@ TEST(TestFileJournal, WriteTrim) {
     bl.push_back(buffer::copy(foo, sizeof(foo)));
     bl.zero();
     ls.push_back(new C_Sync);
-    j.submit_entry(seq++, bl, 0, ls.back()->c);
+    j.submit_entry(seq++, bl, 0, ls.back()->c, trace);
 
     while (ls.size() > size_mb/2) {
       delete ls.front();
@@ -371,6 +378,7 @@ TEST(TestFileJournal, WriteTrimSmall) {
 
   list<C_Sync*> ls;
 
+  ZTracer::Trace trace;
   bufferlist bl;
   char foo[1024*1024];
   memset(foo, 1, sizeof(foo));
@@ -383,7 +391,7 @@ TEST(TestFileJournal, WriteTrimSmall) {
       bl.push_back(buffer::copy(foo, sizeof(foo) / 128));
     bl.zero();
     ls.push_back(new C_Sync);
-    j.submit_entry(seq++, bl, 0, ls.back()->c);
+    j.submit_entry(seq++, bl, 0, ls.back()->c, trace);
 
     while (ls.size() > size_mb/2) {
       delete ls.front();
@@ -413,19 +421,20 @@ TEST(TestFileJournal, ReplayDetectCorruptFooterMagic) {
   j.make_writeable();
 
   C_GatherBuilder gb(new C_SafeCond(&wait_lock, &cond, &done));
+  ZTracer::Trace trace;
 
   const char *needle =	  "i am a needle";
   for (unsigned i = 1; i <= 4; ++i) {
     bufferlist bl;
     bl.append(needle);
-    j.submit_entry(i, bl, 0, gb.new_sub());
+    j.submit_entry(i, bl, 0, gb.new_sub(), trace);
   }
   gb.activate();
   wait();
 
   bufferlist bl;
   bl.append("needle");
-  j.submit_entry(5, bl, 0, new C_SafeCond(&wait_lock, &cond, &done));
+  j.submit_entry(5, bl, 0, new C_SafeCond(&wait_lock, &cond, &done), trace);
   wait();
 
   j.close();
@@ -463,19 +472,20 @@ TEST(TestFileJournal, ReplayDetectCorruptPayload) {
   j.make_writeable();
 
   C_GatherBuilder gb(new C_SafeCond(&wait_lock, &cond, &done));
+  ZTracer::Trace trace;
 
   const char *needle =	  "i am a needle";
   for (unsigned i = 1; i <= 4; ++i) {
     bufferlist bl;
     bl.append(needle);
-    j.submit_entry(i, bl, 0, gb.new_sub());
+    j.submit_entry(i, bl, 0, gb.new_sub(), trace);
   }
   gb.activate();
   wait();
 
   bufferlist bl;
   bl.append("needle");
-  j.submit_entry(5, bl, 0, new C_SafeCond(&wait_lock, &cond, &done));
+  j.submit_entry(5, bl, 0, new C_SafeCond(&wait_lock, &cond, &done), trace);
   wait();
 
   j.close();
@@ -513,19 +523,20 @@ TEST(TestFileJournal, ReplayDetectCorruptHeader) {
   j.make_writeable();
 
   C_GatherBuilder gb(new C_SafeCond(&wait_lock, &cond, &done));
+  ZTracer::Trace trace;
 
   const char *needle =	  "i am a needle";
   for (unsigned i = 1; i <= 4; ++i) {
     bufferlist bl;
     bl.append(needle);
-    j.submit_entry(i, bl, 0, gb.new_sub());
+    j.submit_entry(i, bl, 0, gb.new_sub(), trace);
   }
   gb.activate();
   wait();
 
   bufferlist bl;
   bl.append("needle");
-  j.submit_entry(5, bl, 0, new C_SafeCond(&wait_lock, &cond, &done));
+  j.submit_entry(5, bl, 0, new C_SafeCond(&wait_lock, &cond, &done), trace);
   wait();
 
   j.close();

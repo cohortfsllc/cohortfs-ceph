@@ -29,7 +29,6 @@
 #include "include/types.h"
 #include "ObjectStore.h"
 
-#include "common/WorkQueue.h"
 #include "common/Finisher.h"
 #include "common/fd.h"
 
@@ -291,72 +290,7 @@ class KeyValueStore : public ObjectStore,
     }
   };
 
-  // -- op workqueue --
-  struct Op {
-    ceph::mono_time start;
-    uint64_t op;
-    list<Transaction*> tls;
-    Context *ondisk, *onreadable, *onreadable_sync;
-    uint64_t ops, bytes;
-    OpRequestRef osd_op;
-
-    boost::intrusive::list_member_hook<> q;
-    typedef boost::intrusive::member_hook<Op,
-            boost::intrusive::list_member_hook<>, &Op::q> HookOption;
-    typedef boost::intrusive::list<Op, HookOption> Queue;
-  };
-
-  Op::Queue op_queue;
-  uint64_t op_queue_len, op_queue_bytes;
-  std::list<uint64_t> journal_queue;
-  std::condition_variable op_throttle_cond;
-  std::mutex op_throttle_lock;
   Finisher op_finisher;
-
-  ThreadPool op_tp;
-  struct OpWQ : public ThreadPool::WorkQueue<Op> {
-    KeyValueStore *store;
-    OpWQ(KeyValueStore *fs, ceph::timespan timeout,
-	 ceph::timespan suicide_timeout, ThreadPool *tp) :
-      ThreadPool::WorkQueue<Op>("KeyValueStore::OpWQ",
-                                timeout, suicide_timeout, tp),
-      store(fs) {}
-
-    bool _enqueue(Op *o) {
-      store->op_queue.push_back(*o);
-      return true;
-    }
-    void _dequeue(Op *o) {
-      assert(0);
-    }
-    bool _empty() {
-      return store->op_queue.empty();
-    }
-    Op* _dequeue() {
-      if (store->op_queue.empty())
-	return NULL;
-      Op *o = &store->op_queue.front();
-      store->op_queue.pop_front();
-      return o;
-    }
-    void _process(Op *o, ThreadPool::TPHandle &handle) {
-      store->_do_op(o, handle);
-    }
-    void _process_finish(Op *o) {
-      store->_finish_op(o);
-    }
-    void _clear() {
-      assert(store->op_queue.empty());
-    }
-  } op_wq;
-
-  Op *build_op(list<Transaction*>& tls, Context *ondisk, Context *onreadable,
-	       Context *onreadable_sync, OpRequestRef osd_op);
-  void queue_op(Op *o);
-  void op_queue_reserve_throttle(Op *o, ThreadPool::TPHandle *handle = NULL);
-  void _do_op(Op *o, ThreadPool::TPHandle &handle);
-  void op_queue_release_throttle(Op *o);
-  void _finish_op(Op *o);
 
  public:
 
@@ -386,20 +320,13 @@ class KeyValueStore : public ObjectStore,
 
   int statfs(struct statfs *buf);
 
-  int _do_transactions(
-    list<Transaction*>& tls, uint64_t op_seq,
-    ThreadPool::TPHandle* handle);
-  int do_transactions(list<Transaction*>& tls, uint64_t op_seq) {
-    return _do_transactions(tls, op_seq, 0);
-  }
-  unsigned _do_transaction(Transaction& transaction,
-			   BufferTransaction& bt,
-			   SequencerPosition& spos,
-			   ThreadPool::TPHandle* handle);
+  int do_transactions(list<Transaction*> &tls, uint64_t op_seq);
+  unsigned do_transaction(Transaction& transaction,
+                          BufferTransaction &bt,
+                          SequencerPosition& spos);
 
   int queue_transactions(list<Transaction*>& tls,
-			 OpRequestRef op = OpRequestRef(),
-			 ThreadPool::TPHandle* handle = NULL);
+			 OpRequestRef op = OpRequestRef());
 
 
   // ------------------
@@ -568,26 +495,7 @@ class KeyValueStore : public ObjectStore,
   static const string COLLECTION_ATTR;
   static const uint32_t COLLECTION_VERSION = 1;
 
-  class SubmitManager {
-    std::mutex lock;
-    uint64_t op_seq;
-    uint64_t op_submitted;
-   public:
-    SubmitManager() :
-	op_seq(0), op_submitted(0)
-    {}
-    // Pass in a unique_lock (must not be locked!)
-    uint64_t op_submit_start(unique_lock& sml);
-    // Pass in a unique_lock (must be locked!), it will unlock it.
-    void op_submit_finish(unique_lock&, uint64_t op);
-    void set_op_seq(uint64_t seq) {
-      lock_guard l(lock);
-      op_submitted = op_seq = seq;
-    }
-    uint64_t get_op_seq() {
-      return op_seq;
-    }
-  } submit_manager;
+  std::atomic<uint64_t> submit_op_seq;
 };
 
 WRITE_CLASS_ENCODER(StripObjectMap::StripObjectHeader)

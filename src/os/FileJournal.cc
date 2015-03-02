@@ -1402,8 +1402,8 @@ void FileJournal::check_aio_completion()
 #endif
 
 void FileJournal::submit_entry(uint64_t seq, bufferlist& e, int alignment,
-			       Context *oncommit, OpRequestRef osd_op,
-			       ZTracer::Trace *parent)
+			       Context *oncommit, ZTracer::Trace &parent,
+                               OpRequestRef osd_op)
 {
   // dump on queue
   dout(5) << "submit_entry seq " << seq
@@ -1415,15 +1415,15 @@ void FileJournal::submit_entry(uint64_t seq, bufferlist& e, int alignment,
   throttle_ops.take(1);
   throttle_bytes.take(e.length());
 
-  ZTracer::Trace trace("journal", &trace_endpoint, parent);
+  ZTracer::Trace trace("journal", &trace_endpoint, &parent);
   trace.event("submit_entry");
   trace.keyval("seq", seq);
   {
     lock_guard l1(writeq_lock);  // ** lock **
     lock_guard l2(completions_lock);	 // ** lock **
     auto now = ceph::mono_clock::now();
-    completions.push_back(completion_item(seq, oncommit, now, osd_op, &trace));
-    writeq.push_back(write_item(seq, e, alignment, osd_op, &trace));
+    completions.push_back(completion_item(seq, oncommit, now, osd_op, trace));
+    writeq.push_back(write_item(seq, e, alignment, osd_op, trace));
     trace.keyval("queue depth", writeq.size());
     writeq_cond.notify_all();
   }

@@ -295,11 +295,7 @@ FileStore::FileStore(CephContext* _cct, const std::string& base, const std::stri
   stop(false), sync_thread(this),
   trace_endpoint("0.0.0.0", 0, NULL),
   wbthrottle(cct),
-  op_queue_len(0), op_queue_bytes(0),
   op_finisher(cct),
-  op_tp(cct, "FileStore::op_tp", cct->_conf->filestore_op_threads, "filestore_op_threads"),
-  op_wq(this, cct->_conf->filestore_op_thread_timeout * 1s,
-	cct->_conf->filestore_op_thread_suicide_timeout * 1s, &op_tp),
   m_filestore_commit_timeout(ceph::span_from_double(
 			       cct->_conf->filestore_commit_timeout)),
   m_filestore_journal_parallel(cct->_conf->filestore_journal_parallel),
@@ -1276,7 +1272,6 @@ int FileStore::mount()
 
   journal_start();
 
-  op_tp.start();
   op_finisher.start();
   ondisk_finisher.start();
 
@@ -1310,7 +1305,6 @@ int FileStore::umount()
   l.unlock();
   sync_thread.join();
   wbthrottle.stop();
-  op_tp.stop();
 
   journal_stop();
 
@@ -1362,141 +1356,7 @@ int FileStore::get_max_object_name_length()
 }
 
 
-
-/// -----------------------------
-
-FileStore::Op* FileStore::build_op(list<Transaction*>& tls,
-				   Context* onreadable,
-				   Context* onreadable_sync,
-				   OpRequestRef osd_op)
-{
-  uint64_t bytes = 0, ops = 0;
-  for (list<Transaction*>::iterator p = tls.begin();
-       p != tls.end();
-       ++p) {
-    bytes += (*p)->get_num_bytes();
-    ops += (*p)->get_num_ops();
-  }
-
-  Op* o = new Op;
-  o->start = ceph::mono_clock::now();
-  o->tls.swap(tls);
-  o->onreadable = onreadable;
-  o->onreadable_sync = onreadable_sync;
-  o->ops = ops;
-  o->bytes = bytes;
-  o->osd_op = osd_op;
-  return o;
-}
-
-
-
-void FileStore::queue_op(Op *o)
-{
-  o->trace.event("queued");
-
-  dout(5) << "queue_op " << o << " seq " << o->op
-	  << " " << o->bytes << " bytes"
-	  << "	 (queue has " << op_queue_len << " ops and " << op_queue_bytes << " bytes)"
-	  << dendl;
-  op_wq.queue(o);
-}
-
-void FileStore::op_queue_reserve_throttle(Op* o, ThreadPool::TPHandle* handle)
-{
-  // Do not call while holding the journal lock!
-  uint64_t max_ops = m_filestore_queue_max_ops;
-  uint64_t max_bytes = m_filestore_queue_max_bytes;
-
-  if (backend->can_checkpoint() && is_committing()) {
-    max_ops += m_filestore_queue_committing_max_ops;
-    max_bytes += m_filestore_queue_committing_max_bytes;
-  }
-
-  {
-    unique_lock otl(op_throttle_lock);
-    while ((max_ops && (op_queue_len + 1) > max_ops) ||
-	   (max_bytes && op_queue_bytes	     // let single large ops through!
-	      && (op_queue_bytes + o->bytes) > max_bytes)) {
-      dout(2) << "waiting " << op_queue_len + 1 << " > " << max_ops << " ops || "
-	      << op_queue_bytes + o->bytes << " > " << max_bytes << dendl;
-      if (handle)
-	handle->suspend_tp_timeout();
-      op_throttle_cond.wait(otl);
-      if (handle)
-	handle->reset_tp_timeout();
-    }
-
-    op_queue_len++;
-    op_queue_bytes += o->bytes;
-  }
-}
-
-void FileStore::op_queue_release_throttle(Op* o)
-{
-  {
-    lock_guard l(op_throttle_lock);
-    op_queue_len--;
-    op_queue_bytes -= o->bytes;
-    op_throttle_cond.notify_all();
-  }
-}
-
-void FileStore::_do_op(Op *o, ThreadPool::TPHandle &handle)
-{
-  wbthrottle.throttle();
-  // inject a stall?
-  if (cct->_conf->filestore_inject_stall) {
-    int orig = cct->_conf->filestore_inject_stall;
-    dout(5) << "_do_op filestore_inject_stall " << orig << ", sleeping" << dendl;
-    for (int n = 0; n < cct->_conf->filestore_inject_stall; n++)
-      sleep(1);
-    cct->_conf->set_val("filestore_inject_stall", "0");
-    dout(5) << "_do_op done stalling" << dendl;
-  }
-
-  o->trace.event("op_apply_start");
-  apply_manager.op_apply_start(o->op);
-  dout(5) << "_do_op " << o << " seq " << o->op << " start" << dendl;
-  o->trace.event("_do_transactions start");
-  int r = _do_transactions(o->tls, o->op, &handle);
-  o->trace.event("op_apply_finish");
-  apply_manager.op_apply_finish(o->op);
-  dout(10) << "_do_op " << o << " seq " << o->op << " r = " << r
-	   << ", finisher " << o->onreadable << " " << o->onreadable_sync << dendl;
-}
-
-void FileStore::_finish_op(Op *o)
-{
-  dout(10) << "_finish_op " << o << " seq " << o->op << dendl;
-  o->trace.event("_finish_op");
-
-  // called with tp lock held
-  op_queue_release_throttle(o);
-
-  if (o->onreadable_sync)
-    o->onreadable_sync->complete(0);
-  if (o->onreadable)
-    op_finisher.queue(o->onreadable);
-
-  delete o;
-}
-
-struct C_JournaledAhead : public Context {
-  FileStore* fs;
-  FileStore::Op* o;
-  Context* ondisk;
-
-  C_JournaledAhead(FileStore* f, FileStore::Op* o, Context* ondisk):
-    fs(f), o(o), ondisk(ondisk) { }
-  void finish(int r) {
-    fs->_journaled_ahead(o, ondisk);
-  }
-};
-
-int FileStore::queue_transactions(list<Transaction*> &tls,
-				  OpRequestRef osd_op,
-				  ThreadPool::TPHandle* handle)
+int FileStore::queue_transactions(list<Transaction*> &tls, OpRequestRef osd_op)
 {
   Context* onreadable;
   Context* ondisk;
@@ -1512,121 +1372,97 @@ int FileStore::queue_transactions(list<Transaction*> &tls,
 
   ZTracer::Trace trace("op", &trace_endpoint, osd_op ? &osd_op->trace : NULL);
 
-  JournalingObjectStore::SubmitManager::unique_lock sml(
-    submit_manager.lock, std::defer_lock);
+  int r = 0;
   if (journal && journal->is_writeable() && !m_filestore_journal_trailing) {
-    Op* o = build_op(tls, onreadable, onreadable_sync, osd_op);
-    op_queue_reserve_throttle(o, handle);
     journal->throttle();
-    uint64_t op_num = submit_manager.op_submit_start(sml);
-    o->op = op_num;
-    o->trace = trace;
-    o->trace.keyval("opnum", op_num);
+    const uint64_t op = ++submit_op_seq;
+    trace.keyval("opnum", op);
 
     if (m_filestore_do_dump)
-      dump_transactions(o->tls, o->op);
+      dump_transactions(tls, op);
 
     if (m_filestore_journal_parallel) {
-      dout(5) << "queue_transactions (parallel) " << o->op << " " << o->tls << dendl;
-      o->trace.keyval("journal mode", "parallel");
+      dout(5) << "queue_transactions (parallel) " << op << " " << tls << dendl;
+      trace.keyval("journal mode", "parallel");
 
-      _op_journal_transactions(o->tls, o->op, ondisk, osd_op, &o->trace);
+      // start async journaling, which completes ondisk
+      _op_journal_transactions(tls, op, ondisk, osd_op, trace);
 
-      // queue inside submit_manager op submission lock
-      queue_op(o);
+      // run the transactions
+      r = do_transactions(tls, op, trace);
     } else if (m_filestore_journal_writeahead) {
-      dout(5) << "queue_transactions (writeahead) " << o->op << " " << o->tls << dendl;
-      o->trace.keyval("journal mode", "writeahead");
+      dout(5) << "queue_transactions (writeahead) " << op << " " << tls << dendl;
+      trace.keyval("journal mode", "writeahead");
 
-      journal_queue.push_back(o->op);
+      // start journaling and block until it completes
+      trace.event("writeahead journal started");
+      {
+        std::mutex mutex;
+        std::condition_variable cond;
+        bool done = false;
+        _op_journal_transactions(tls, op, new C_SafeCond(&mutex, &cond, &done),
+                                 osd_op, trace);
+        std::unique_lock<std::mutex> lock(mutex);
+        while (!done)
+          cond.wait(lock);
+      }
+      trace.event("writeahead journal finished");
 
-      o->trace.event("writeahead journal started");
-      _op_journal_transactions(o->tls, o->op,
-			       new C_JournaledAhead(this, o, ondisk),
-			       osd_op, &o->trace);
+      // do the transactions and queue the completion
+      r = do_transactions(tls, op, trace);
+      if (r < 0) {
+        delete ondisk;
+      } else if (ondisk) {
+        dout(10) << " queueing ondisk " << ondisk << dendl;
+        ondisk_finisher.queue(ondisk);
+      }
     } else {
       assert(0);
     }
-    submit_manager.op_submit_finish(sml, op_num);
-    return 0;
-  }
-
-  uint64_t op = submit_manager.op_submit_start(sml);
-  dout(5) << "queue_transactions (trailing journal) " << op << " " << tls
-	  << dendl;
-  trace.keyval("journal mode", "trailing");
-
-  if (m_filestore_do_dump)
-    dump_transactions(tls, op);
-
-  trace.event("op_apply_start");
-  apply_manager.op_apply_start(op);
-  trace.event("do_transactions");
-  int r = do_transactions(tls, op);
-
-  if (r >= 0) {
-    _op_journal_transactions(tls, op, ondisk, osd_op, &trace);
   } else {
-    delete ondisk;
+    const uint64_t op = ++submit_op_seq;
+    dout(5) << "queue_transactions (trailing journal) " << op << " " << tls << dendl;
+    trace.keyval("journal mode", "trailing");
+
+    if (m_filestore_do_dump)
+      dump_transactions(tls, op);
+
+    r = do_transactions(tls, op, trace);
+    if (r >= 0) {
+      _op_journal_transactions(tls, op, ondisk, osd_op, trace);
+    } else {
+      delete ondisk;
+    }
   }
 
-  // start on_readable finisher after we queue journal item, as on_readable callback
-  // is allowed to delete the Transaction
   if (onreadable_sync)
     onreadable_sync->complete(r);
-
-  op_finisher.queue(onreadable, r);
-
-  submit_manager.op_submit_finish(sml, op);
-  trace.event("op_apply_finish");
-  apply_manager.op_apply_finish(op);
+  if (onreadable)
+    op_finisher.queue(onreadable, r);
 
   return r;
 }
 
-void FileStore::_journaled_ahead(Op *o, Context *ondisk)
-{
-  dout(5) << "_journaled_ahead " << o << " seq " << o->op << " " << o->tls << dendl;
-
-  o->trace.event("writeahead journal finished");
-
-  // this should queue in order because the journal does it's completions in order.
-  queue_op(o);
-
-  assert(o->op == journal_queue.front());
-  journal_queue.pop_front(); // TODO: signal flush?
-
-  // do ondisk completions async, to prevent any onreadable_sync completions
-  // getting blocked behind an ondisk completion.
-  if (ondisk) {
-    dout(10) << " queueing ondisk " << ondisk << dendl;
-    ondisk_finisher.queue(ondisk);
-  }
-}
-
-int FileStore::_do_transactions(list<Transaction*> &tls, uint64_t op_seq,
-                                ThreadPool::TPHandle *handle)
+int FileStore::do_transactions(list<Transaction*> &tls, uint64_t op,
+                               ZTracer::Trace &trace)
 {
   int r = 0;
 
-  uint64_t bytes = 0, ops = 0;
-  for (list<Transaction*>::iterator p = tls.begin();
-       p != tls.end();
-       ++p) {
-    bytes += (*p)->get_num_bytes();
-    ops += (*p)->get_num_ops();
-  }
+  trace.event("op_apply_start");
+  apply_manager.op_apply_start(op);
+  trace.event("do_transactions");
 
   int trans_num = 0;
   for (list<Transaction*>::iterator p = tls.begin();
        p != tls.end();
        ++p, trans_num++) {
-    r = _do_transaction(**p, op_seq, trans_num, handle);
+    r = do_transaction(**p, op, trans_num);
     if (r < 0)
       break;
-    if (handle)
-      handle->reset_tp_timeout();
   }
+
+  trace.event("op_apply_finish");
+  apply_manager.op_apply_finish(op);
 
   return r;
 }
@@ -1915,19 +1751,14 @@ int FileStore::_check_replay_guard(int fd, const SequencerPosition& spos)
   }
 }
 
-unsigned FileStore::_do_transaction(
-  Transaction& t, uint64_t op_seq, int trans_num,
-  ThreadPool::TPHandle* handle)
+unsigned FileStore::do_transaction(Transaction& t, uint64_t op_seq,
+                                   int trans_num)
 {
   dout(10) << "_do_transaction on " << &t << dendl;
 
   SequencerPosition spos(op_seq, trans_num, 0);
 
   for (Transaction::op_iterator i = t.begin(); i != t.end(); ++i) {
-
-    if (handle)
-      handle->reset_tp_timeout();
-
     int r = 0;
 
     _inject_failure();
@@ -2947,7 +2778,6 @@ void FileStore::sync_entry()
     fin.swap(sync_waiters);
     l.unlock();
 
-    op_tp.pause();
     if (apply_manager.commit_start()) {
       auto start = ceph::mono_clock::now();
       uint64_t cp = apply_manager.get_committing_seq();
@@ -2987,7 +2817,6 @@ void FileStore::sync_entry()
 
 	snaps.push_back(cp);
 	apply_manager.commit_started();
-	op_tp.unpause();
 
 	if (cid > 0) {
 	  dout(20) << " waiting for checkpoint " << cid << " to complete"
@@ -3003,7 +2832,6 @@ void FileStore::sync_entry()
       } else
       {
 	apply_manager.commit_started();
-	op_tp.unpause();
 
 	int err = backend->syncfs();
 	if (err < 0) {
@@ -3053,8 +2881,6 @@ void FileStore::sync_entry()
       dout(15) << "sync_entry committed to op_seq " << cp << dendl;
 
       timer.cancel_event(sync_entry_timeo);
-    } else {
-      op_tp.unpause();
     }
 
     l.lock();
@@ -3119,8 +2945,6 @@ void FileStore::sync()
 
 void FileStore::_flush_op_queue()
 {
-  dout(10) << "_flush_op_queue draining op tp" << dendl;
-  op_wq.drain();
   dout(10) << "_flush_op_queue waiting for apply finisher" << dendl;
   op_finisher.wait_for_empty();
 }

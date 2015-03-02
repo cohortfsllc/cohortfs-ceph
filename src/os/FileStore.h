@@ -31,7 +31,6 @@
 #include "JournalingObjectStore.h"
 
 #include "common/Timer.h"
-#include "common/WorkQueue.h"
 #include "common/zipkin_trace.h"
 #include "common/cohort_wqe.h"
 
@@ -384,77 +383,9 @@ private:
 
   ZTracer::Endpoint trace_endpoint;
 
-  // -- op workqueue --
-  struct Op {
-    ceph::mono_time start;
-    uint64_t op;
-    list<Transaction*> tls;
-    Context *onreadable, *onreadable_sync;
-    uint64_t ops, bytes;
-    OpRequestRef osd_op;
-    ZTracer::Trace trace;
-
-    boost::intrusive::list_member_hook<> q;
-    typedef boost::intrusive::member_hook<Op,
-            boost::intrusive::list_member_hook<>, &Op::q> HookOption;
-    typedef boost::intrusive::list<Op, HookOption> Queue;
-  };
-
   WBThrottle wbthrottle;
-  Op::Queue op_queue;
-  uint64_t op_queue_len, op_queue_bytes;
-  std::list<uint64_t> journal_queue;
-  std::condition_variable op_throttle_cond;
-  std::mutex op_throttle_lock;
   Finisher op_finisher;
 
-  ThreadPool op_tp;
-  struct OpWQ : public ThreadPool::WorkQueue<Op> {
-    FileStore *store;
-    OpWQ(FileStore *fs, ceph::timespan timeout,
-	 ceph::timespan suicide_timeout, ThreadPool *tp)
-      : ThreadPool::WorkQueue<Op>("FileStore::OpWQ", timeout,
-                                  suicide_timeout, tp),
-        store(fs) {}
-
-    bool _enqueue(Op *o) {
-      store->op_queue.push_back(*o);
-      return true;
-    }
-    void _dequeue(Op *o) {
-      assert(0);
-    }
-    bool _empty() {
-      return store->op_queue.empty();
-    }
-    Op* _dequeue() {
-      if (store->op_queue.empty())
-	return NULL;
-      Op *o = &store->op_queue.front();
-      store->op_queue.pop_front();
-      return o;
-    }
-    void _process(Op *o, ThreadPool::TPHandle &handle) {
-      store->_do_op(o, handle);
-    }
-    void _process_finish(Op *o) {
-      store->_finish_op(o);
-    }
-    void _clear() {
-      assert(store->op_queue.empty());
-    }
-  } op_wq;
-
-  void _do_op(Op *o, ThreadPool::TPHandle &handle);
-  void _finish_op(Op *o);
-  Op *build_op(list<Transaction*>& tls,
-	       Context *onreadable, Context *onreadable_sync,
-	       OpRequestRef osd_op);
-  void queue_op(Op *o);
-  void op_queue_reserve_throttle(Op *o, ThreadPool::TPHandle *handle = NULL);
-  void op_queue_release_throttle(Op *o);
-  void _journaled_ahead(Op *o, Context *ondisk);
-  friend struct C_JournaledAhead;
   int write_version_stamp();
 
   int open_journal();
@@ -495,19 +426,12 @@ public:
 
   int statfs(struct statfs *buf);
 
-  int _do_transactions(
-    list<Transaction*> &tls, uint64_t op_seq,
-    ThreadPool::TPHandle *handle);
-  int do_transactions(list<Transaction*> &tls, uint64_t op_seq) {
-    return _do_transactions(tls, op_seq, 0);
-  }
-  unsigned _do_transaction(
-    Transaction& t, uint64_t op_seq, int trans_num,
-    ThreadPool::TPHandle *handle);
+  int do_transactions(list<Transaction*> &tls, uint64_t op_seq,
+                      ZTracer::Trace &trace);
+  unsigned do_transaction(Transaction& t, uint64_t op_seq, int trans_num);
 
   int queue_transactions(list<Transaction*>& tls,
-			 OpRequestRef op = OpRequestRef(),
-			 ThreadPool::TPHandle *handle = NULL);
+			 OpRequestRef op = OpRequestRef());
 
 private:
   /**
