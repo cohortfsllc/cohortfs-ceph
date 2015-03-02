@@ -1043,7 +1043,6 @@ class C_MDS_CreateOSDWait : public Context {
 public:
   C_MDS_CreateOSDWait(MDS *m, int t) : mds(m), telomere(t) {}
   void finish(int r) {
-    Context *d = mds->createwaitingforosd;
     mds->createwaitingforosd = 0;
     if (mds->is_creating()) mds->boot_create(telomere);
   }
