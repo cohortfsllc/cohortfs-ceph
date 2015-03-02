@@ -115,9 +115,9 @@ void FileStoreTracker::write(const obj_desc_t &obj,
 void FileStoreTracker::remove(const obj_desc_t &obj,
 			      OutTransaction *out)
 {
-  std::cerr << "Deleting " << oid << std::endl;
+  std::cerr << "Deleting " << obj << std::endl;
   lock_guard l(lock);
-  ObjectContents old_contents = get_current_content(oid);
+  ObjectContents old_contents = get_current_content(obj);
   if (!old_contents.exists())
     return;
   (void) out->t->push_col(get<0>(obj));
@@ -275,13 +275,12 @@ void _clean_forward(const FileStoreTracker::obj_desc_t &obj,
   for (; i->valid(); i->next()) {
     to_remove.insert(i->key());
   }
-  t->rmkeys(obj_to_prefix(oid), to_remove);
+  t->rmkeys(obj_to_prefix(obj), to_remove);
   db->submit_transaction(t);
 }
 
-
 void FileStoreTracker::verify(const obj_desc_t &obj, bool on_start) {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   std::cerr << "Verifying " << obj << std::endl;
 
   pair<uint64_t, uint64_t> valid_reads = get_valid_reads(obj);
@@ -389,7 +388,7 @@ pair<uint64_t, uint64_t> FileStoreTracker::get_valid_reads(
     bounds.second = val.first + 1;
   }
 
-  ObjStatus obj_status = get_obj_status(oid, db);
+  ObjStatus obj_status = get_obj_status(obj, db);
   bounds.first = obj_status.get_last_applied(restart_seq);
   return bounds;
 }
@@ -405,7 +404,7 @@ void clear_obsolete(const FileStoreTracker::obj_desc_t &obj,
   for (; iter->valid() && iter->key() < seq_to_key(status.trim_to());
        iter->next())
     to_remove.insert(iter->key());
-  t->rmkeys(obj_to_prefix(oid), to_remove);
+  t->rmkeys(obj_to_prefix(obj), to_remove);
 }
 
 void FileStoreTracker::committed(const obj_desc_t &obj,
@@ -415,8 +414,8 @@ void FileStoreTracker::committed(const obj_desc_t &obj,
   assert(status.last_committed < seq);
   status.last_committed = seq;
   KeyValueDB::Transaction t = db->get_transaction();
-  clear_obsolete(oid, status, db, t);
-  set_obj_status(oid, status, t);
+  clear_obsolete(obj, status, db, t);
+  set_obj_status(obj, status, t);
   db->submit_transaction(t);
 }
 
@@ -428,8 +427,8 @@ void FileStoreTracker::applied(const obj_desc_t &obj,
   assert(status.last_applied < seq);
   status.set_last_applied(seq, restart_seq);
   KeyValueDB::Transaction t = db->get_transaction();
-  clear_obsolete(oid, status, db, t);
-  set_obj_status(oid, status, t);
+  clear_obsolete(obj, status, db, t);
+  set_obj_status(obj, status, t);
   db->submit_transaction(t);
 }
 

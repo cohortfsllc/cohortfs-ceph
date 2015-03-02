@@ -459,7 +459,7 @@ void DeterministicOpSequence::_do_remove(coll_t coll, oid_t& oid)
   ObjectStore::Transaction t;
   note_txn(&t);
   (void) t.push_cid(coll);
-  (void) t.push_oid(obj);
+  (void) t.push_oid(oid);
   t.remove();
   m_store->apply_transaction(t);
 }
@@ -502,7 +502,7 @@ void DeterministicOpSequence::_do_clone(coll_t coll, oid_t& orig_obj,
 }
 
 void DeterministicOpSequence::_do_clone_range(coll_t coll,
-					      oid_t& orig_id,
+					      oid_t& orig_oid,
 					      oid_t& new_oid,
 					      uint64_t srcoff,
 					      uint64_t srclen,
