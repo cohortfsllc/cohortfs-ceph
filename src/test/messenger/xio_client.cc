@@ -74,8 +74,10 @@ int main(int argc, const char **argv)
 	argv_to_vec(argc, argv, args);
 	env_to_vec(args);
 
-	global_init(NULL, args,
-		    CEPH_ENTITY_TYPE_ANY, CODE_ENVIRONMENT_UTILITY, 0);
+	CephContext* cct =
+	  global_init(NULL, args,
+		      CEPH_ENTITY_TYPE_ANY,
+		      CODE_ENVIRONMENT_UTILITY, 0);
 
 	for (arg_iter = args.begin(); arg_iter != args.end();) {
 	  if (ceph_argparse_witharg(args, arg_iter, &val, "--addr",
@@ -113,7 +115,7 @@ int main(int argc, const char **argv)
 	else
 	  dstrategy = new QueueStrategy(2);
 
-	messenger = new XioMessenger(g_ceph_context,
+	messenger = new XioMessenger(cct,
 				     entity_name_t::GENERIC(),
 				     "xio_client",
 				     0 /* nonce */,

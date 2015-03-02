@@ -57,9 +57,10 @@ int main(int argc, const char **argv)
 
 //	global_init(NULL, args, CEPH_ENTITY_TYPE_ANY, CODE_ENVIRONMENT_DAEMON,
 //		    0);
-	global_init(NULL, args,
-		    CEPH_ENTITY_TYPE_ANY, CODE_ENVIRONMENT_UTILITY, 0);
-
+	CephContext* cct =
+	  global_init(NULL, args,
+		      CEPH_ENTITY_TYPE_ANY,
+		      CODE_ENVIRONMENT_UTILITY, 0);
 
 	for (arg_iter = args.begin(); arg_iter != args.end();) {
 	  if (ceph_argparse_witharg(args, arg_iter, &val, "--addr",
@@ -88,7 +89,7 @@ int main(int argc, const char **argv)
 	else
 	  dstrategy = new QueueStrategy(2);
 
-	messenger = new XioMessenger(g_ceph_context,
+	messenger = new XioMessenger(cct,
 				     entity_name_t::GENERIC(),
 				     "xio_server",
 				     0 /* nonce */,
@@ -108,7 +109,7 @@ int main(int argc, const char **argv)
 
 	// Set up crypto, daemonize, etc.
 	//global_init_daemonize(g_ceph_context, 0);
-	common_init_finish(g_ceph_context);
+	common_init_finish(cct);
 
 	dispatcher = new XioDispatcher(messenger);
 
