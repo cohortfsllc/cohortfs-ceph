@@ -3080,6 +3080,9 @@ void OSD::handle_op(OpRequestRef op)
     }
   }
 
+  /* TODO: efficiently lookup volume and enqueue if possible, not holding
+   * osd_lock! */
+
   boost::uuids::uuid volume = m->get_volume();
   OSDVolRef vol = _lookup_vol(volume);
   if (!vol) {
