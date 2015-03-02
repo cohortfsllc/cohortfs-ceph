@@ -46,6 +46,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include "include/lru.h"
+#include "common/cohort_lru.h"
 #include "messages/MOSDOp.h"
 #include "messages/MOSDOpReply.h"
 
@@ -67,7 +68,7 @@ typedef boost::intrusive_ptr<OSDVol> OSDVolRef;
 /** OSDVol - Volume abstraction in the OSD
  */
 
-class OSDVol : public LRUObject {
+class OSDVol : public LRUObject, public cohort::lru::Object {
   friend class OSD;
   friend class Watch;
 
@@ -81,6 +82,10 @@ public:
   struct OpContext;
   epoch_t get_epoch() const {
     return get_osdmap()->get_epoch();
+  }
+
+  bool reclaim() {
+    return false; // TODO: fix
   }
 
   std::string gen_dbg_prefix() const { return gen_prefix(); }
@@ -260,7 +265,7 @@ public:
 	delete this;
       }
     }
-  };
+  }; /* Mutation */
 
 protected:
   OSDService* osd;
@@ -269,7 +274,10 @@ public:
 protected:
   // Ops waiting for map, should be queued at back
   std::mutex map_lock;
+
   list<OpRequestRef> waiting_for_map;
+  OpRequest::Queue waiting_map_queue; // XXX new intrusive version
+
   OSDMapRef osdmap_ref;
   OSDMapRef last_persisted_osdmap_ref;
 
@@ -399,10 +407,45 @@ public:
 
   // vol state
   boost::uuids::uuid id;
+  uint64_t hk;
   vol_info_t info;
+
+  /* volume lookup tables */
+  const static int n_partitions = 11;
+  const static int cache_size = 127; // per-partition cache size
+
+  struct LT
+  {
+    bool operator()(const OSDVol& lhs, const OSDVol& rhs) const
+    { return lhs.id < rhs.id; }
+  };
+
+  struct EQ
+  {
+    bool operator()(const OSDVol& lhs, const OSDVol& rhs) const
+    { return lhs.id == rhs.id; }
+  };
+
+  typedef bi::link_mode<bi::safe_link> link_mode;
+  typedef bi::avl_set_member_hook<link_mode> tree_hook_type;
+
+  tree_hook_type tree_hook;
+
+  typedef bi::member_hook<
+    OSDVol, tree_hook_type, &OSDVol::tree_hook> THook;
+
+  typedef bi::avltree<Object, bi::compare<LT>, THook,
+		      bi::constant_time_size<true> > Voltree;
+
+  typedef cohort::lru::TreeX<
+    OSDVol, Voltree, LT, EQ, boost::uuids::uuid, cohort::SpinLock,
+    n_partitions, cache_size>
+  VolCache;
+
   static string get_info_key(boost::uuids::uuid& vol) {
     return stringify(vol) + "_info";
   }
+
   static string get_epoch_key(boost::uuids::uuid& vol) {
     return stringify(vol) + "_epoch";
   }

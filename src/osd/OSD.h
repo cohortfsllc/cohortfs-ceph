@@ -560,20 +560,22 @@ private:
 
   // -- waiters --
   list<OpRequestRef> finished;
+  OpRequest::Queue finished_queue; // XXX new intrusive version
+
   std::mutex finished_lock;
 
+  // XXX need intrusive update
   void take_waiters(list<OpRequestRef>& ls);
   void take_waiters_front(list<OpRequestRef>& ls) {
     lock_guard fl(finished_lock);
     finished.splice(finished.begin(), ls);
   }
-  void jarter_de_take_waiter(OpRequestRef op) {
-    lock_guard fl(finished_lock);
-    finished.push_back(op);
-  }
+
   void do_waiters();
 
   // -- op queue --
+  const static int n_lanes = 17;
+  cohort::OpQueue<cohort::SpinLock, n_lanes> multi_wq;
 
   struct OpWQ: public ThreadPool::WorkQueueVal<pair<OSDVolRef, OpRequestRef>,
 					       OSDVolRef > {
