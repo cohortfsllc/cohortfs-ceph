@@ -14,7 +14,6 @@ libos_la_SOURCES = \
 	os/MemStore.cc \
 	os/KeyValueStore.cc \
 	os/ObjectStore.cc \
-	os/WBThrottle.cc \
 	common/TrackedOp.cc
 
 if LINUX
@@ -41,7 +40,6 @@ noinst_HEADERS += \
 	os/FileJournal.h \
 	os/FileStore.h \
 	os/FlatIndex.h \
-	os/FDCache.h \
 	os/GenericFileStoreBackend.h \
 	os/HashIndex.h \
 	os/IndexManager.h \
@@ -55,7 +53,6 @@ noinst_HEADERS += \
 	os/ObjectMap.h \
 	os/ObjectStore.h \
 	os/SequencerPosition.h \
-	os/WBThrottle.h \
 	os/XfsFileStoreBackend.h \
 	os/ZFSFileStoreBackend.h
 
