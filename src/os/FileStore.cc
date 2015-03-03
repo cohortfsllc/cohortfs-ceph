@@ -167,20 +167,12 @@ int FileStore::lfn_stat(FSCollection* fc, const hoid_t& oid,
 int FileStore::lfn_open(FSCollection* fc,
 			const hoid_t& oid,
 			bool create,
-			FDRef* outfd)
+			int* outfd)
 {
   assert(outfd);
   int flags = O_RDWR;
   if (create)
     flags |= O_CREAT;
-
-  int fd;
-  if (!replaying) {
-    lock_guard l(fc->fdcache_lock);
-    *outfd = fc->fdcache.lookup(oid);
-    if (*outfd)
-      return 0;
-  }
 
   int r  = ::openat(fc->fd, oid.to_str().c_str(), flags, 0644);
   if (r < 0) {
@@ -190,20 +182,7 @@ int FileStore::lfn_open(FSCollection* fc,
 	     << dendl;
     goto fail;
   }
-  fd = r;
-
-  if (!replaying) {
-    lock_guard l(fc->fdcache_lock);
-    *outfd = fc->fdcache.lookup(oid);
-    if (*outfd) {
-      VOID_TEMP_FAILURE_RETRY(::close(fd));
-      return 0;
-    } else {
-      *outfd = fc->fdcache.add(oid, fd);
-    }
-  } else {
-    *outfd = FDRef(new FDCache::FD(fd));
-  }
+  *outfd = r;
   return 0;
 
  fail:
@@ -211,7 +190,7 @@ int FileStore::lfn_open(FSCollection* fc,
   return r;
 }
 
-void FileStore::lfn_close(FDRef fd)
+void FileStore::lfn_close(int fd)
 {
 }
 
@@ -238,16 +217,16 @@ int FileStore::lfn_link(FSCollection* fc,
   return 0;
 }
 
-int FileStore::lfn_unlink(FSCollection* fc, const hoid_t& o,
+int FileStore::lfn_unlink(FSCollection* fc, FSObject* o,
 			  const SequencerPosition& spos,
 			  bool force_clear_omap)
 {
 
   int r = 0;
-  lock_guard l(fc->fdcache_lock);
+  const hoid_t &oid = o->get_oid();
   {
     struct stat st;
-    r = lfn_stat(fc, o, &st);
+    r = lfn_stat(fc, oid, &st);
     if (r < 0) {
       assert(!m_filestore_fail_eio || r != -EIO);
       return r;
@@ -257,33 +236,34 @@ int FileStore::lfn_unlink(FSCollection* fc, const hoid_t& o,
       force_clear_omap = true;
 
     if (force_clear_omap) {
-      dout(20) << __func__ << ": clearing omap on " << o
+      dout(20) << __func__ << ": clearing omap on " << oid
 	       << " in cid " << fc->get_cid() << dendl;
-      r = object_map->clear(o, &spos);
+      r = object_map->clear(oid, &spos);
       if (r < 0 && r != -ENOENT) {
 	assert(!m_filestore_fail_eio || r != -EIO);
 	return r;
       }
       if (cct->_conf->filestore_debug_inject_read_err) {
-	debug_obj_on_delete(o);
+	debug_obj_on_delete(oid);
       }
-      wbthrottle.clear_object(o); // should be only non-cache ref
-      fc->fdcache.clear(o);
+      flusher.clear_object(o); // should be only non-cache ref
     } else {
       /* Ensure that replay of this op doesn't result in the object_map
        * going away.
        */
       if (!backend->can_checkpoint())
-	object_map->sync(&o, &spos);
+	object_map->sync(&oid, &spos);
     }
   }
-  r = ::unlinkat(fc->fd, o.to_str().c_str(), 0);
+  r = ::unlinkat(fc->fd, oid.to_str().c_str(), 0);
   if (r < 0)
     r = -errno;
   return r;
 }
 
-FileStore::FileStore(CephContext* cct, const std::string& base, const std::string& jdev, const char* name, bool do_update) :
+FileStore::FileStore(CephContext* cct, const std::string& base,
+                     const std::string& jdev, const char* name,
+                     bool do_update) :
   JournalingObjectStore(cct, base),
   basedir(base), journalpath(jdev),
   blk_size(0),
@@ -1691,7 +1671,7 @@ int FileStore::_check_replay_guard(FSCollection* fc,
   if (r < 0)
     return r;
 
-  r = _check_replay_guard_inl(cct, **fo->fd, spos, sb, basedir);
+  r = _check_replay_guard_inl(cct, fo->fd, spos, sb, basedir);
   return r;
 }
 
@@ -1827,7 +1807,7 @@ unsigned FileStore::do_transaction(Transaction& t, uint64_t op_seq,
 	fo = get_slot_object(t, fc, i->o1_ix, spos, false /* create */);
 	if (fo) {
 	  if (_check_replay_guard(fc, fo, spos) > 0)
-	    r = _remove(fc, fo->get_oid(), spos);
+	    r = _remove(fc, fo, spos);
 	}
       }
       break;
@@ -2171,8 +2151,7 @@ FileStore::FSObject* FileStore::get_object(FSCollection* fc,
 					   const SequencerPosition& spos,
 					   bool create)
 {
-  /* XXXX temporary */
-  FDRef fd;
+  int fd;
   FSObject* oh = nullptr;
 
   /* XXX redundant, hoid_t has hk */
@@ -2264,7 +2243,7 @@ int FileStore::stat(
   bool allow_eio)
 {
   FSObject* fo = static_cast<FSObject*>(oh);
-  int r = ::fstat(**(fo->fd), st);
+  int r = ::fstat(fo->fd, st);
   if (r < 0) {
     r = -errno;
     dout(10) << "stat " << ch->get_cid() << "/" << fo->get_oid()
@@ -2303,7 +2282,7 @@ int FileStore::read(
   if (len == CEPH_READ_ENTIRE) {
     struct stat st;
     memset(&st, 0, sizeof(struct stat));
-    int r = ::fstat(**fo->fd, &st);
+    int r = ::fstat(fo->fd, &st);
     assert(r == 0);
     len = st.st_size;
   }
@@ -2317,7 +2296,7 @@ int FileStore::read(
 	 << len << " bytes" << dendl;
     return -ENOMEM;
   }
-  got = safe_pread(**fo->fd, bptr.c_str(), len, offset);
+  got = safe_pread(fo->fd, bptr.c_str(), len, offset);
   if (got < 0) {
     dout(10) << "FileStore::read(" << ch->get_cid() << "/"
 	     << fo->get_oid() << ") pread error: "
@@ -2332,7 +2311,7 @@ int FileStore::read(
   if (m_filestore_sloppy_crc &&
       (!replaying || backend->can_checkpoint())) {
     ostringstream ss;
-    int errors = backend->_crc_verify_read(**fo->fd, offset, got, bl,
+    int errors = backend->_crc_verify_read(fo->fd, offset, got, bl,
 					   &ss);
     if (errors > 0) {
       dout(0) << "FileStore::read " << ch->get_cid() << "/"
@@ -2376,7 +2355,7 @@ int FileStore::fiemap(CollectionHandle ch, ObjectHandle oh,
   uint64_t i;
   struct fiemap_extent* next,* extent;
 
-  int r = backend->do_fiemap(**fo->fd, offset, len, &fiemap);
+  int r = backend->do_fiemap(fo->fd, offset, len, &fiemap);
   if (r < 0)
     goto done;
 
@@ -2432,12 +2411,13 @@ done:
   return r;
 }
 
-int FileStore::_remove(FSCollection* fc, const hoid_t& oid,
+int FileStore::_remove(FSCollection* fc, FSObject *fo,
 		       const SequencerPosition& spos)
 {
-  dout(15) << "remove " << fc->get_cid() << "/" << oid << dendl;
-  int r = lfn_unlink(fc, oid, spos);
-  dout(10) << "remove " << fc->get_cid() << "/" << oid << " = " << r << dendl;
+  dout(15) << "remove " << fc->get_cid() << "/" << fo->get_oid() << dendl;
+  int r = lfn_unlink(fc, fo, spos);
+  dout(10) << "remove " << fc->get_cid() << "/" << fo->get_oid()
+      << " = " << r << dendl;
   return r;
 }
 
@@ -2447,11 +2427,11 @@ int FileStore::_truncate(FSCollection* fc, FSObject* fo,
   dout(15) << "truncate " << fc->get_cid() << "/" << fo->get_oid()
 	   << " size " << size << dendl;
 
-  int r = ::ftruncate(**fo->fd, size);
+  int r = ::ftruncate(fo->fd, size);
   if (r < 0)
     r = -errno;
   if (r >= 0 && m_filestore_sloppy_crc) {
-    int rc = backend->_crc_update_truncate(**fo->fd, size);
+    int rc = backend->_crc_update_truncate(fo->fd, size);
     assert(rc >= 0);
   }
   assert(!m_filestore_fail_eio || r != -EIO);
@@ -2475,7 +2455,7 @@ int FileStore::_write(FSCollection* fc, FSObject* fo,
   dout(15) << "write " << fc->get_cid() << "/" << fo->get_oid() << " "
 	   << offset << "~" << len << dendl;
   int r = 0;
-  int fd = **fo->fd;
+  int fd = fo->fd;
 
   //  pwritev up to 256 segments at a time (allocate w/alloca), until done
   int iov_ix, n_iov = std::min(256UL, bl.buffers().size());
@@ -2503,7 +2483,7 @@ int FileStore::_write(FSCollection* fc, FSObject* fo,
     r = bl.length();
 
   if (r >= 0 && m_filestore_sloppy_crc) {
-    int rc = backend->_crc_update_write(**fo->fd, offset, len, bl);
+    int rc = backend->_crc_update_write(fo->fd, offset, len, bl);
     assert(rc >= 0);
   }
 
@@ -2528,12 +2508,12 @@ int FileStore::_zero(FSCollection* fc, FSObject* fo,
 #ifdef CEPH_HAVE_FALLOCATE
 # if !defined(DARWIN) && !defined(__FreeBSD__)
   // first try to punch a hole.
-  ret = fallocate(**fo->fd, FALLOC_FL_PUNCH_HOLE, offset, len);
+  ret = fallocate(fo->fd, FALLOC_FL_PUNCH_HOLE, offset, len);
   if (ret < 0)
     ret = -errno;
 
   if (ret >= 0 && m_filestore_sloppy_crc) {
-    int rc = backend->_crc_update_zero(**fo->fd, offset, len);
+    int rc = backend->_crc_update_zero(fo->fd, offset, len);
     assert(rc >= 0);
   }
 
@@ -2576,13 +2556,13 @@ int FileStore::_clone(FSCollection* fc,
 
   int r;
   {
-    r = ::ftruncate(**fo2->fd, 0);
+    r = ::ftruncate(fo2->fd, 0);
     if (r < 0) {
       goto out;
     }
     struct stat st;
-    ::fstat(**fo->fd, &st);
-    r = _do_clone_range(**fo->fd, **fo2->fd, 0, st.st_size, 0);
+    ::fstat(fo->fd, &st);
+    r = _do_clone_range(fo->fd, fo2->fd, 0, st.st_size, 0);
     if (r < 0) {
       r = -errno;
       goto out;
@@ -2595,17 +2575,17 @@ int FileStore::_clone(FSCollection* fc,
 
   {
     map<string, bufferptr> aset;
-    r = _fgetattrs(**fo->fd, aset, false);
+    r = _fgetattrs(fo->fd, aset, false);
     if (r < 0)
       goto out;
 
-    r = _fsetattrs(**fo2->fd, aset);
+    r = _fsetattrs(fo2->fd, aset);
     if (r < 0)
       goto out;
   }
 
   // clone is non-idempotent; record our work.
-  _set_replay_guard(**fo2->fd, spos, &fo2->get_oid() /* !out */);
+  _set_replay_guard(fo2->fd, spos, &fo2->get_oid() /* !out */);
 
  out:
   dout(10) << "clone " << fc->get_cid() << "/" << fo->get_oid()
@@ -2709,10 +2689,10 @@ int FileStore::_clone_range(FSCollection* fc,
   if (_check_replay_guard(fc, fo2, spos) < 0)
     return 0;
 
-  int r = _do_clone_range(**fo->fd, **fo2->fd, srcoff, len, dstoff);
+  int r = _do_clone_range(fo->fd, fo2->fd, srcoff, len, dstoff);
 
   // clone is non-idempotent; record our work.
-  _set_replay_guard(**fo2->fd, spos, &fo2->get_oid() /* !out */);
+  _set_replay_guard(fo2->fd, spos, &fo2->get_oid() /* !out */);
 
   dout(10) << "clone_range " << fc->get_cid() << "/" << fo->get_oid()
 	   << " -> " << fc->get_cid() << "/" << fo2->get_oid() << " "
@@ -3166,7 +3146,7 @@ int FileStore::getattr(CollectionHandle ch, ObjectHandle oh,
 
   char n[CHAIN_XATTR_MAX_NAME_LEN];
   get_attrname(name, n, CHAIN_XATTR_MAX_NAME_LEN);
-  int r = _fgetattr(**fo->fd, n, bp);
+  int r = _fgetattr(fo->fd, n, bp);
   if (r == -ENODATA) {
     map<string, bufferlist> got;
     set<string> to_get;
@@ -3210,11 +3190,11 @@ int FileStore::getattrs(CollectionHandle ch, ObjectHandle oh,
   bool spill_out = true;
   char buf[2];
 
-  int r = chain_fgetxattr(**fo->fd, XATTR_SPILL_OUT_NAME, buf, sizeof(buf));
+  int r = chain_fgetxattr(fo->fd, XATTR_SPILL_OUT_NAME, buf, sizeof(buf));
   if (r >= 0 && !strncmp(buf, XATTR_NO_SPILL_OUT, sizeof(XATTR_NO_SPILL_OUT)))
     spill_out = false;
 
-  r = _fgetattrs(**fo->fd, aset, user_only);
+  r = _fgetattrs(fo->fd, aset, user_only);
   if (r < 0) {
     goto out;
   }
@@ -3278,15 +3258,14 @@ int FileStore::_setattrs(FSCollection* fc, FSObject* fo,
   int spill_out = -1;
   char buf[2];
   
-  int r = chain_fgetxattr(
-    **fo->fd, XATTR_SPILL_OUT_NAME, buf, sizeof(buf));
+  int r = chain_fgetxattr(fo->fd, XATTR_SPILL_OUT_NAME, buf, sizeof(buf));
   if ((r >= 0) &&
       !strncmp(buf, XATTR_NO_SPILL_OUT, sizeof(XATTR_NO_SPILL_OUT)))
     spill_out = 0;
   else
     spill_out = 1;
 
-  r = _fgetattrs(**fo->fd, inline_set, false);
+  r = _fgetattrs(fo->fd, inline_set, false);
   assert(!m_filestore_fail_eio || r != -EIO);
   dout(15) << "setattrs " << fc->get_cid() << "/" << fo->get_oid()
 	   << dendl;
@@ -3301,7 +3280,7 @@ int FileStore::_setattrs(FSCollection* fc, FSObject* fo,
     if (p->second.length() > m_filestore_max_inline_xattr_size) {
 	if (inline_set.count(p->first)) {
 	  inline_set.erase(p->first);
-	  r = chain_fremovexattr(**fo->fd, n);
+	  r = chain_fremovexattr(fo->fd, n);
 	  if (r < 0)
 	    goto out;
 	}
@@ -3313,7 +3292,7 @@ int FileStore::_setattrs(FSCollection* fc, FSObject* fo,
 	(inline_set.size() >= m_filestore_max_inline_xattrs)) {
 	if (inline_set.count(p->first)) {
 	  inline_set.erase(p->first);
-	  r = chain_fremovexattr(**fo->fd, n);
+	  r = chain_fremovexattr(fo->fd, n);
 	  if (r < 0)
 	    goto out;
 	}
@@ -3327,11 +3306,11 @@ int FileStore::_setattrs(FSCollection* fc, FSObject* fo,
   }
 
   if ((spill_out != 1) && !omap_set.empty()) {
-    chain_fsetxattr(**fo->fd, XATTR_SPILL_OUT_NAME, XATTR_SPILL_OUT,
+    chain_fsetxattr(fo->fd, XATTR_SPILL_OUT_NAME, XATTR_SPILL_OUT,
 		    sizeof(XATTR_SPILL_OUT));
   }
 
-  r = _fsetattrs(**fo->fd, inline_to_set);
+  r = _fsetattrs(fo->fd, inline_to_set);
   if (r < 0)
     goto out;
 
@@ -3371,8 +3350,7 @@ int FileStore::_rmattr(FSCollection* fc, FSObject* fo,
   bufferptr bp;
   char buf[2];
   
-  int r = chain_fgetxattr(
-    **fo->fd, XATTR_SPILL_OUT_NAME, buf, sizeof(buf));
+  int r = chain_fgetxattr(fo->fd, XATTR_SPILL_OUT_NAME, buf, sizeof(buf));
   if ((r >= 0) &&
       !strncmp(buf, XATTR_NO_SPILL_OUT, sizeof(XATTR_NO_SPILL_OUT))) {
     spill_out = false;
@@ -3380,7 +3358,7 @@ int FileStore::_rmattr(FSCollection* fc, FSObject* fo,
 
   char n[CHAIN_XATTR_MAX_NAME_LEN];
   get_attrname(name, n, CHAIN_XATTR_MAX_NAME_LEN);
-  r = chain_fremovexattr(**fo->fd, n);
+  r = chain_fremovexattr(fo->fd, n);
   if (r == -ENODATA && spill_out) {
     set<string> to_remove;
     to_remove.insert(string(name));
@@ -3410,20 +3388,19 @@ int FileStore::_rmattrs(FSCollection* fc, FSObject* fo,
   bool spill_out = true;
   char buf[2];
 
-  int r = chain_fgetxattr(
-    **fo->fd, XATTR_SPILL_OUT_NAME, buf, sizeof(buf));
+  int r = chain_fgetxattr(fo->fd, XATTR_SPILL_OUT_NAME, buf, sizeof(buf));
   if ((r >= 0) &&
       !strncmp(buf, XATTR_NO_SPILL_OUT, sizeof(XATTR_NO_SPILL_OUT))) {
     spill_out = false;
   }
 
-  r = _fgetattrs(**fo->fd, aset, false);
+  r = _fgetattrs(fo->fd, aset, false);
   if (r >= 0) {
     for (map<string,bufferptr>::iterator p = aset.begin(); p != aset.end();
 	 ++p) {
       char n[CHAIN_XATTR_MAX_NAME_LEN];
       get_attrname(p->first.c_str(), n, CHAIN_XATTR_MAX_NAME_LEN);
-      r = chain_fremovexattr(**fo->fd, n);
+      r = chain_fremovexattr(fo->fd, n);
       if (r < 0)
 	break;
     }
@@ -3448,7 +3425,7 @@ int FileStore::_rmattrs(FSCollection* fc, FSObject* fo,
   if (r == -ENOENT)
     r = 0;
 
-  chain_fsetxattr(**fo->fd, XATTR_SPILL_OUT_NAME, XATTR_NO_SPILL_OUT,
+  chain_fsetxattr(fo->fd, XATTR_SPILL_OUT_NAME, XATTR_NO_SPILL_OUT,
 		  sizeof(XATTR_NO_SPILL_OUT));
 
  out:
@@ -4092,7 +4069,7 @@ int FileStore::_set_alloc_hint(
 
   // TODO: a more elaborate hint calculation
   uint64_t hint = MIN(expected_write_size, m_filestore_max_alloc_hint_size);
-  int r = backend->set_alloc_hint(**fo->fd, hint);
+  int r = backend->set_alloc_hint(fo->fd, hint);
 
   dout(10) << "set_alloc_hint " << fc->get_cid() << "/" << fo->get_oid()
 	   << " object_size " << expected_object_size << " write_size "
@@ -4438,13 +4415,13 @@ void* FileStore::FSFlush::entry()
     bool nocache = o.pwb.sub(cur_ios, cur_size);
     waitq_sp.unlock();
 #ifdef HAVE_FDATASYNC
-    ::fdatasync(o.fd->fd);
+    ::fdatasync(o.fd);
 #else
-    ::fsync(o.fd->fd);
+    ::fsync(o.fd);
 #endif
 #ifdef HAVE_POSIX_FADVISE
     if (nocache) {
-      int fa_r = posix_fadvise(o.fd->fd, 0, 0, POSIX_FADV_DONTNEED);
+      int fa_r = posix_fadvise(o.fd, 0, 0, POSIX_FADV_DONTNEED);
       assert(fa_r == 0);
     }
 #endif
