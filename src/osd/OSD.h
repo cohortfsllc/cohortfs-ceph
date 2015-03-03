@@ -317,7 +317,7 @@ protected:
   int dispatch_running;
 
   void tick();
-  void _dispatch(Message *m);
+  inline void _dispatch(Message *m);
   void dispatch_op(OpRequestRef op);
 
   void check_osdmap_features(ObjectStore *store);
@@ -547,30 +547,15 @@ public:
   } heartbeat_dispatcher;
 
 private:
-
-  // -- waiters --
-  list<OpRequestRef> finished;
-  OpRequest::Queue finished_queue; // XXX new intrusive version
-
-  std::mutex finished_lock;
-
-  // XXX need intrusive update
-  void take_waiters(list<OpRequestRef>& ls);
-  void take_waiters_front(list<OpRequestRef>& ls) {
-    lock_guard fl(finished_lock);
-    finished.splice(finished.begin(), ls);
-  }
-
-  void do_waiters();
-
   // -- op queue --
   const static int n_lanes = 17;
-  cohort::OpQueue<cohort::SpinLock, n_lanes> multi_wq;
+  typedef cohort::OpQueue<cohort::SpinLock, n_lanes> MultiQueue;
+  MultiQueue multi_wq;
 
   struct OpWQ: public ThreadPool::WorkQueueVal<pair<OSDVolRef, OpRequestRef>,
 					       OSDVolRef > {
     std::mutex qlock;
-    map<OSDVol*, list<OpRequestRef> > vol_for_processing;
+    map<OSDVol*, list<OpRequestRef> > vol_for_processing; /* XXXX check */
     OSD *osd;
     PrioritizedQueue<pair<OSDVolRef, OpRequestRef>, entity_inst_t > pqueue;
     OpWQ(OSD *o, ceph::timespan ti, ThreadPool *tp)
@@ -643,7 +628,8 @@ protected:
   std::shared_timed_mutex map_lock;
   typedef std::unique_lock<std::shared_timed_mutex> unique_map_lock;
   typedef std::shared_lock<std::shared_timed_mutex> shared_map_lock;
-  list<OpRequestRef> waiting_for_osdmap;
+
+  OpRequest::Queue waiting_for_osdmap;
 
   std::mutex peer_map_epoch_lock;
   map<int, epoch_t> peer_map_epoch;
