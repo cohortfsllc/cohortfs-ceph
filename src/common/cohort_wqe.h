@@ -103,14 +103,15 @@ namespace cohort {
       if (! (flags & FLAG_LOCKED))
 	lock.lock();
       --waiters;
+      queue.erase(it);
+      if (! (flags & FLAG_LOCKED))
+	lock.unlock();
       if (flags & FLAG_SIGNAL) {
 	unique_we_lock lk(e.lwe.mtx);
 	e.flags &= ~LFLAG_WAIT_SYNC;
 	e.flags |= LFLAG_SYNC_DONE;
 	e.lwe.cv.notify_one();
       }
-      if (! (flags & FLAG_LOCKED))
-	lock.unlock();
     } /* dequeue */
   };
 
