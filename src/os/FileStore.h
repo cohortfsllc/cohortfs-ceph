@@ -219,8 +219,7 @@ public:
     bool should_block(uint64_t off, uint64_t len) {
       return (((cur_ios+1) > io_limits.second) ||
 	      ((fl_queue.size()+1) > fd_limits.second) ||
-	      ((cur_size+len-off) > size_limits.second) ||
-	      (!stopping));
+	      ((cur_size+len) > size_limits.second));
     }
 
     bool should_wake(const FSObject::PendingWB& pwb) {
