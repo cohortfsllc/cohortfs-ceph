@@ -37,7 +37,6 @@
 #include "ObjectMap.h"
 #include "SequencerPosition.h"
 #include "FDCache.h"
-#include "WBThrottle.h"
 
 // from include/linux/falloc.h:
 #ifndef FALLOC_FL_PUNCH_HOLE
@@ -277,15 +276,13 @@ public:
   {
   public:
     int fd; // collection's dirfd
-    FSFlush fs_flush;
 
     // and object fdcache
     std::mutex fdcache_lock;
     FDCache fdcache;
 
     FSCollection(FileStore* fs, const coll_t& cid, int fd)
-      : ObjectStore::Collection(fs, cid), fd(fd), fs_flush(this),
-	fdcache(fs->cct) {}
+      : ObjectStore::Collection(fs, cid), fd(fd), fdcache(fs->cct) {}
 
     virtual ~FSCollection() {
         ::close(fd);
@@ -387,7 +384,7 @@ private:
 
   ZTracer::Endpoint trace_endpoint;
 
-  WBThrottle wbthrottle;
+  FSFlush flusher;
   Finisher op_finisher;
 
   int write_version_stamp();
