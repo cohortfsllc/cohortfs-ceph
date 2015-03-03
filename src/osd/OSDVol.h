@@ -93,10 +93,11 @@ public:
   const vol_info_t& get_info() const {
     return info;
   }
+
   ObjectContextRef get_obc(
     const oid_t& oid,
     map<string, bufferlist>& attrs) {
-    return get_object_context(oid, true,& attrs);
+    return get_object_context(oid, true, &attrs);
   }
 
   entity_name_t get_cluster_msgr_name();
@@ -540,10 +541,6 @@ public:
   void do_osd_op_effects(OpContext* ctx);
 
 protected:
-  list<OpRequestRef> waiting_for_active;
-  map<eversion_t,list<OpRequestRef> > waiting_for_ack, waiting_for_ondisk;
-
-  void requeue_object_waiters(map<oid_t, list<OpRequestRef> >& m);
   void requeue_op(OpRequestRef op);
   void requeue_ops(list<OpRequestRef>& l);
 
