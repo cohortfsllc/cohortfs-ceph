@@ -23,6 +23,7 @@
 #include <mutex>
 #include <condition_variable>
 #include "include/ceph_time.h"
+#include "common/ThreadPool.h"
 #include "common/likely.h"
 #include "osd/OpRequest.h"
 
