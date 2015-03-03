@@ -394,7 +394,6 @@ set(libos_srcs
   os/JournalingObjectStore.cc
   os/LevelDBStore.cc
   os/DBObjectMap.cc
-  os/WBThrottle.cc
   os/GenericObjectMap.cc
   )
 set(os_mon_files
