@@ -259,10 +259,12 @@ int main(int argc, const char *argv[])
 
   dout(10) << "created objectstore " << fs << dendl;
 
-  coll_t cid;
-  ObjectStore::Transaction ft;
-  ret = ft.create_collection(cid);
-  fs->apply_transaction(ft);
+  const coll_t cid("osbench");
+  {
+    ObjectStore::Transaction ft;
+    ret = ft.create_collection(cid);
+    fs->apply_transaction(ft);
+  }
   if (ret) {
       derr << "objectstore_bench: error while creating collection " << cid
 	   << " apply_transaction returned " << ret << dendl;
