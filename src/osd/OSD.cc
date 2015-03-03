@@ -182,7 +182,6 @@ void OSDService::init()
 int OSD::mkfs(CephContext *cct, ObjectStore *store, const string &dev,
 	      const boost::uuids::uuid& fsid, int whoami)
 {
-  ObjectStore::Transaction t;
   CollectionHandle meta_col(NULL);
   ObjectHandle oh;
   bool create_superblock = true;
@@ -203,8 +202,11 @@ int OSD::mkfs(CephContext *cct, ObjectStore *store, const string &dev,
     derr << "OSD::mkfs: couldn't mount ObjectStore: error " << ret << dendl;
     goto free_store;
   }
-  t.create_collection(coll_t::META_COLL);
-  ret = store->apply_transaction(t);
+  {
+    ObjectStore::Transaction t;
+    t.create_collection(coll_t::META_COLL);
+    ret = store->apply_transaction(t);
+  }
   if (ret) {
     derr << "OSD::mkfs: error while creating meta collection: "
       << "apply_transaction returned " << ret << dendl;
@@ -288,11 +290,13 @@ int OSD::mkfs(CephContext *cct, ObjectStore *store, const string &dev,
     bufferlist bl;
     ::encode(sb, bl);
 
-    t.clear();
-    c_ix = t.push_col(meta_col);
-    o_ix = t.push_oid(OSD_SUPERBLOCK_POBJECT);
-    t.write(c_ix, o_ix, 0, bl.length(), bl);
-    ret = store->apply_transaction(t);
+    {
+      ObjectStore::Transaction t;
+      c_ix = t.push_col(meta_col);
+      o_ix = t.push_oid(OSD_SUPERBLOCK_POBJECT);
+      t.write(c_ix, o_ix, 0, bl.length(), bl);
+      ret = store->apply_transaction(t);
+    }
     if (ret) {
       derr << "OSD::mkfs: error while writing OSD_SUPERBLOCK_POBJECT: "
 	<< "apply_transaction returned " << ret << dendl;
