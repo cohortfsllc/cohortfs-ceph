@@ -87,19 +87,6 @@ namespace OSDC {
 
   // messages ------------------------------
 
-  // initialize only internal data structures, don't initiate cluster
-  // interaction
-  void Objecter::init()
-  {
-    assert(!initialized);
-
-    unique_timer_lock tl(timer_lock);
-    timer.init();
-    tl.unlock();
-
-    initialized = true;
-  }
-
   void Objecter::start()
   {
     shared_lock rl(rwlock);
@@ -112,11 +99,7 @@ namespace OSDC {
 
   void Objecter::shutdown()
   {
-    assert(initialized);
-
     unique_lock wl(rwlock);
-
-    initialized = false;
 
     while (!osd_sessions.empty()) {
       auto p = osd_sessions.begin();
@@ -165,14 +148,8 @@ namespace OSDC {
     }
 
     if (tick_event) {
-      unique_timer_lock l(timer_lock);
       if (timer.cancel_event(tick_event))
-	tick_event = NULL;
-    }
-
-    {
-      unique_timer_lock l(timer_lock);
-      timer.shutdown(l);
+	tick_event = 0;
     }
   }
 
@@ -361,8 +338,6 @@ namespace OSDC {
   bool Objecter::ms_dispatch(Message *m)
   {
     ldout(cct, 10) << __func__ << " " << cct << " " << *m << dendl;
-    if (!initialized)
-      return false;
 
     switch (m->get_type()) {
       // these we exlusively handle
@@ -464,8 +439,6 @@ namespace OSDC {
   void Objecter::handle_osd_map(MOSDMap *m)
   {
     shunique_lock shl(rwlock, ceph::acquire_unique);
-    if (!initialized)
-      return;
 
     assert(osdmap);
 
@@ -1092,12 +1065,10 @@ namespace OSDC {
 
   void Objecter::schedule_tick()
   {
-    unique_timer_lock l(timer_lock);
-    assert(tick_event == NULL);
-    tick_event = new C_Tick(this);
-    timer.add_event_after(
-      ceph::span_from_double(cct->_conf->objecter_tick_interval),
-      tick_event);
+    assert(tick_event == 0);
+    tick_event = timer.add_event(
+      cct->_conf->objecter_tick_interval * 1s,
+      &Objecter::tick, this);
   }
 
   void Objecter::tick()
@@ -1108,12 +1079,7 @@ namespace OSDC {
 
     // we are only called by C_Tick
     assert(tick_event);
-    tick_event = NULL;
-
-    if (!initialized) {
-      // we raced with shutdown
-      return;
-    }
+    tick_event = 0;
 
     std::set<OSDSession*> toping;
 
@@ -1121,7 +1087,7 @@ namespace OSDC {
 
     // look for laggy requests
     ceph::mono_time cutoff = ceph::mono_clock::now();
-    cutoff -= ceph::span_from_double(cct->_conf->objecter_timeout);  // timeout
+    cutoff -= cct->_conf->objecter_timeout * 1s;  // timeout
 
     unsigned laggy_ops;
 
@@ -1167,7 +1133,8 @@ namespace OSDC {
     }
 
     // reschedule
-    schedule_tick();
+    tick_event = timer.reschedule_me(
+      cct->_conf->objecter_tick_interval * 1s);
   }
 
   void Objecter::resend_mon_ops()
@@ -1211,18 +1178,6 @@ namespace OSDC {
     return op_submit(o);
   }
 
-  class C_CancelOp : public Context
-  {
-    ceph_tid_t tid;
-    Objecter *objecter;
-  public:
-    C_CancelOp(ceph_tid_t t, Objecter *objecter)
-      : tid(t), objecter(objecter) {}
-    void finish(int r) {
-      objecter->op_cancel(tid, -ETIMEDOUT);
-    }
-  };
-
   ceph_tid_t Objecter::op_submit(Op *op, int *ctx_budget)
   {
     shunique_lock sl(rwlock, ceph::acquire_shared);
@@ -1234,8 +1189,6 @@ namespace OSDC {
 					      shunique_lock& sl,
 					      int *ctx_budget)
   {
-    assert(initialized);
-
     // throttle.  before we look at any state, because
     // take_op_budget() may drop our lock while it blocks.
     if (!op.ctx_budgeted || (ctx_budget && (*ctx_budget == -1))) {
@@ -1250,9 +1203,9 @@ namespace OSDC {
     ceph_tid_t tid = _op_submit(op, ol, sl);
 
     if (osd_timeout > ceph::timespan(0)) {
-      unique_timer_lock l(timer_lock);
-      op.ontimeout = new C_CancelOp(tid, this);
-      timer.add_event_after(osd_timeout, op.ontimeout);
+      op.ontimeout = timer.add_event(
+	osd_timeout,
+	&Objecter::op_cancel, this, tid, -ETIMEDOUT);
     }
 
     return tid;
@@ -1366,8 +1319,6 @@ namespace OSDC {
 
   int Objecter::op_cancel(ceph_tid_t tid, int r)
   {
-    assert(initialized);
-
     Op* op;
     {
       shared_lock l(rwlock);
@@ -1630,7 +1581,6 @@ namespace OSDC {
       put_op_budget(op);
 
     if (op.ontimeout) {
-      unique_timer_lock l(timer_lock);
       timer.cancel_event(op.ontimeout);
     }
 
@@ -1748,10 +1698,6 @@ namespace OSDC {
     int osd_num = (int)m->get_source().num();
 
     shared_lock rl(rwlock);
-    if (!initialized) {
-      m->put();
-      return;
-    }
 
     auto siter = osd_sessions.find(osd_num, oc);
     if (siter == osd_sessions.end()) {
@@ -1972,18 +1918,6 @@ namespace OSDC {
     return false;
   }
 
-  class C_CancelStatfsOp : public Context
-  {
-    ceph_tid_t tid;
-    Objecter *objecter;
-  public:
-    C_CancelStatfsOp(ceph_tid_t tid, Objecter *objecter)
-      : tid(tid), objecter(objecter) {}
-    void finish(int r) {
-      objecter->statfs_op_cancel(tid, -ETIMEDOUT);
-    }
-  };
-
   void Objecter::get_fs_stats(ceph_statfs& result, Context *onfinish)
   {
     ldout(cct, 10) << "get_fs_stats" << dendl;
@@ -1993,11 +1927,12 @@ namespace OSDC {
     op->tid = ++last_tid;
     op->stats = &result;
     op->onfinish = onfinish;
-    op->ontimeout = NULL;
-    if (mon_timeout > ceph::timespan(0)) {
-      unique_timer_lock l(timer_lock);
-      op->ontimeout = new C_CancelStatfsOp(op->tid, this);
-      timer.add_event_after(mon_timeout, op->ontimeout);
+    op->ontimeout = 0;
+    if (mon_timeout > 0ns) {
+      op->ontimeout =
+	timer.add_event(
+	  mon_timeout,
+	  &Objecter::statfs_op_cancel, this, op->tid, -ETIMEDOUT);
     }
     statfs_ops.insert(*op);
 
@@ -2014,10 +1949,6 @@ namespace OSDC {
   void Objecter::handle_fs_stats_reply(MStatfsReply *m)
   {
     unique_lock wl(rwlock);
-    if (!initialized) {
-      m->put();
-      return;
-    }
 
     ldout(cct, 10) << "handle_fs_stats_reply " << *m << dendl;
     ceph_tid_t tid = m->get_tid();
@@ -2038,8 +1969,6 @@ namespace OSDC {
 
   int Objecter::statfs_op_cancel(ceph_tid_t tid, int r)
   {
-    assert(initialized);
-
     unique_lock wl(rwlock);
 
     auto it = statfs_ops.find(tid, oc);
@@ -2062,7 +1991,6 @@ namespace OSDC {
     op.unlink();
 
     if (op.ontimeout) {
-      unique_timer_lock tl(timer_lock);
       timer.cancel_event(op.ontimeout);
     }
 
@@ -2072,8 +2000,6 @@ namespace OSDC {
   void Objecter::ms_handle_connect(Connection *con)
   {
     ldout(cct, 10) << "ms_handle_connect " << con << dendl;
-    if (!initialized)
-      return;
 
     if (con->get_peer_type() == CEPH_ENTITY_TYPE_MON)
       resend_mon_ops();
@@ -2081,18 +2007,13 @@ namespace OSDC {
 
   bool Objecter::ms_handle_reset(Connection *con)
   {
-    if (!initialized)
-      return false;
     if (con->get_peer_type() == CEPH_ENTITY_TYPE_OSD) {
       //
       int osd = osdmap->identify_osd(con->get_peer_addr());
       if (osd >= 0) {
 	ldout(cct, 1) << "ms_handle_reset on osd." << osd << dendl;
 	unique_lock wl(rwlock);
-	if (!initialized) {
-	  wl.unlock();
-	  return false;
-	}
+
 	auto p = osd_sessions.find(osd, oc);
 	if (p != osd_sessions.end()) {
 	  OSDSession& session = *p;
@@ -2128,8 +2049,6 @@ namespace OSDC {
 				   AuthAuthorizer **authorizer,
 				   bool force_new)
   {
-    if (!initialized)
-      return false;
     if (dest_type == CEPH_ENTITY_TYPE_MON)
       return true;
     *authorizer = monc->auth->build_authorizer(dest_type);

@@ -142,7 +142,7 @@ private:
   void update_from_paxos(bool *need_bootstrap);
   void create_pending();  // prepare a new pending
   void encode_pending(MonitorDBStore::Transaction *t);
-  void on_active();
+  void on_active(Monitor::unique_lock& l);
   void on_shutdown();
 
   /**
@@ -173,8 +173,9 @@ private:
   void share_map_with_random_osd();
 
   void handle_query(PaxosServiceMessage *m);
-  bool preprocess_query(PaxosServiceMessage *m);  // true if processed.
-  bool prepare_update(PaxosServiceMessage *m);
+  // true if processed.
+  bool preprocess_query(PaxosServiceMessage *m, unique_lock &l);
+  bool prepare_update(PaxosServiceMessage *m, unique_lock& l);
   bool should_propose(ceph::timespan &delay);
 
   version_t get_trim_to();
@@ -203,9 +204,9 @@ private:
   void process_failures();
   void take_all_failures(list<MOSDFailure*>& ls);
 
-  bool preprocess_boot(class MOSDBoot *m);
+  bool preprocess_boot(class MOSDBoot *m, unique_lock &l);
   bool prepare_boot(class MOSDBoot *m);
-  void _booted(MOSDBoot *m, bool logit);
+  void _booted(MOSDBoot *m, bool logit, unique_lock& l);
 
   bool preprocess_alive(class MOSDAlive *m);
   bool prepare_alive(class MOSDAlive *m);
@@ -214,36 +215,37 @@ private:
   bool prepare_set_flag(MMonCommand *m, int flag);
   bool prepare_unset_flag(MMonCommand *m, int flag);
 
-  struct C_Booted : public Context {
+  struct CB_Booted {
     OSDMonitor *cmon;
     MOSDBoot *m;
     bool logit;
-    C_Booted(OSDMonitor *cm, MOSDBoot *m_, bool l=true) :
+    CB_Booted(OSDMonitor *cm, MOSDBoot *m_, bool l = true) :
       cmon(cm), m(m_), logit(l) {}
-    void finish(int r) {
+    void operator()(int r, std::unique_lock<std::mutex>& l) {
       if (r >= 0)
-	cmon->_booted(m, logit);
+	cmon->_booted(m, logit, l);
       else if (r == -ECANCELED)
 	m->put();
       else if (r == -EAGAIN)
-	cmon->dispatch((PaxosServiceMessage*)m);
+	cmon->dispatch((PaxosServiceMessage*)m, l);
       else
 	assert(0 == "bad C_Booted return value");
     }
   };
 
-  struct C_ReplyMap : public Context {
+  struct CB_ReplyMap {
     OSDMonitor *osdmon;
     PaxosServiceMessage *m;
     epoch_t e;
-    C_ReplyMap(OSDMonitor *o, PaxosServiceMessage *mm, epoch_t ee) : osdmon(o), m(mm), e(ee) {}
-    void finish(int r) {
+    CB_ReplyMap(OSDMonitor *o, PaxosServiceMessage *mm, epoch_t ee)
+      : osdmon(o), m(mm), e(ee) {}
+    void operator()(int r, std::unique_lock<std::mutex>& l) {
       if (r >= 0)
 	osdmon->_reply_map(m, e);
       else if (r == -ECANCELED)
 	m->put();
       else if (r == -EAGAIN)
-	osdmon->dispatch(m);
+	osdmon->dispatch(m, l);
       else
 	assert(0 == "bad C_ReplyMap return value");
     }
@@ -253,19 +255,21 @@ private:
   OSDMonitor(Monitor *mn, Paxos *p, string service_name)
   : PaxosService(mn, p, service_name) { }
 
-  void tick();	// check state, take actions
+  void tick(unique_lock &l); // check state, take actions
 
   int parse_osd_id(const char *s, stringstream *pss);
 
   void get_health(list<pair<health_status_t,string> >& summary,
 		  list<pair<health_status_t,string> > *detail) const;
-  bool preprocess_command(MMonCommand *m);
-  bool prepare_command(MMonCommand *m);
-  bool prepare_command_impl(MMonCommand *m, map<string,cmd_vartype> &cmdmap);
+  bool preprocess_command(MMonCommand *m, unique_lock& l);
+  bool prepare_command(MMonCommand *m, unique_lock& l);
+  bool prepare_command_impl(MMonCommand *m, map<string,cmd_vartype> &cmdmap,
+			    unique_lock& l);
 
   void handle_osd_timeouts(const ceph::real_time &now,
-			   std::map<int,ceph::real_time> &last_osd_report);
-  void mark_all_down();
+			   std::map<int,ceph::real_time> &last_osd_report,
+			   unique_lock& l);
+  void mark_all_down(unique_lock &l);
 
   void send_latest(PaxosServiceMessage *m, epoch_t start=0);
   void send_latest_now_nodelete(PaxosServiceMessage *m, epoch_t start=0) {

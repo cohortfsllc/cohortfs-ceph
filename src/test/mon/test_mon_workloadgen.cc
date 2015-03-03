@@ -83,24 +83,10 @@ class TestStub : public Dispatcher
 
   std::mutex lock;
   std::condition_variable cond;
-  SafeTimer<ceph::mono_clock> timer;
+  cohort::Timer<ceph::mono_clock> timer;
 
   bool do_shutdown;
   ceph::timespan tick_time;
-
-  struct C_Tick : public Context {
-    TestStub *s;
-    C_Tick(TestStub *stub) : s(stub) {}
-    void finish(int r) {
-      lgeneric_dout(::cct, 20) << "C_Tick::" << __func__ << dendl;
-      if (r == -ECANCELED) {
-	lgeneric_dout(::cct, 20) << "C_Tick::" << __func__
-				 << " shutdown" << dendl;
-	return;
-      }
-      s->tick();
-    }
-  };
 
   virtual bool ms_dispatch(Message *m) = 0;
   virtual void ms_handle_connect(Connection *con) = 0;
@@ -118,7 +104,8 @@ class TestStub : public Dispatcher
       return;
     }
     dout(20) << __func__ << " adding tick timer" << dendl;
-    timer.add_event_after(tick_time, new C_Tick(this));
+    timer.add_event(tick_time,
+		    &TestStub::tick, this);
   }
   // If we have a function to start ticking that the stubs can
   // use at their own discretion, then we should also have a
@@ -134,6 +121,7 @@ class TestStub : public Dispatcher
 
  public:
   void tick() {
+    lock_guard l(lock);
     std::cout << __func__ << std::endl;
     if (do_shutdown || (tick_time == 0ns)) {
       std::cout << __func__ << " "
@@ -142,7 +130,7 @@ class TestStub : public Dispatcher
       return;
     }
     _tick();
-    timer.add_event_after(tick_time, new C_Tick(this));
+    timer.reschedule_me(tick_time);
   }
 
   virtual const string get_name() = 0;
@@ -158,7 +146,6 @@ class TestStub : public Dispatcher
       return r;
     }
     monc.shutdown();
-    timer.shutdown(l);
     messenger->shutdown();
     return 0;
   }
@@ -175,7 +162,6 @@ class TestStub : public Dispatcher
   TestStub(CephContext *cct, string who)
     : Dispatcher(cct),
       monc(cct),
-      timer(lock),
       do_shutdown(false),
       tick_time(0s) { }
 };
@@ -277,9 +263,7 @@ class ClientStub : public TestStub
     }
     monc.wait_auth_rotating(30s);
 
-    timer.init();
     objecter->set_client_incarnation(0);
-    objecter->init();
     monc.renew_subs();
 
     objecter->wait_for_osd_map();
@@ -372,7 +356,6 @@ class OSDStub : public TestStub
 	    << " osd_fsid " << cct->_conf->osd_uuid << dendl;
     dout(1) << __func__ << " name " << cct->_conf->name << dendl;
 
-    timer.init();
     messenger->add_dispatcher_head(this);
     monc.set_want_keys(CEPH_ENTITY_TYPE_MON | CEPH_ENTITY_TYPE_OSD);
 
@@ -665,14 +648,13 @@ vector<TestStub*> stubs;
 std::mutex shutdown_lock;
 std::condition_variable shutdown_cond;
 Context *shutdown_cb = NULL;
-SafeTimer<ceph::mono_clock> *shutdown_timer = nullptr;
+cohort::Timer<ceph::mono_clock> *shutdown_timer = nullptr;
 
-struct C_Shutdown : public Context
+void shutdown_notify()
 {
-  void finish(int r) {
-    generic_dout(10) << "main::shutdown time has ran out" << dendl;
-    shutdown_cond.notify_all();
-  }
+  generic_dout(10) << "main::shutdown time has ran out" << dendl;
+  unique_lock sl(shutdown_lock);
+  shutdown_cond.notify_all();
 };
 
 void handle_test_signal(int signum)
@@ -817,16 +799,14 @@ int main(int argc, const char *argv[])
   register_async_signal_handler_oneshot(SIGTERM, handle_test_signal);
 
   unique_lock sl(shutdown_lock);
-  shutdown_timer = new SafeTimer<ceph::mono_clock>(shutdown_lock);
-  shutdown_timer->init();
+  shutdown_timer = new cohort::Timer<ceph::mono_clock>();
   if (duration != 0ns) {
     std::cout << __func__
 	    << " run test for " << duration << " seconds" << std::endl;
-    shutdown_timer->add_event_after(duration, new C_Shutdown);
+    shutdown_timer->add_event(duration, &shutdown_notify);
   }
   shutdown_cond.wait(sl);
 
-  shutdown_timer->shutdown(sl);
   delete shutdown_timer;
   shutdown_timer = NULL;
   sl.unlock();

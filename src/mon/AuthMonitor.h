@@ -110,7 +110,7 @@ private:
   uint64_t max_global_id;
   uint64_t last_allocated_id;
 
-  void upgrade_format();
+  void upgrade_format(unique_lock& l);
 
   void export_keyring(KeyRing& keyring);
   void import_keyring(KeyRing& keyring);
@@ -123,7 +123,7 @@ private:
     pending_auth.push_back(inc);
   }
 
-  void on_active();
+  void on_active(Monitor::unique_lock& l);
   bool should_propose(ceph::timespan& delay);
   void create_initial();
   void update_from_paxos(bool *need_bootstrap);
@@ -136,13 +136,14 @@ private:
   virtual void encode_full(MonitorDBStore::Transaction *t);
   version_t get_trim_to();
 
-  bool preprocess_query(PaxosServiceMessage *m);  // true if processed.
-  bool prepare_update(PaxosServiceMessage *m);
+  // true if processed.
+  bool preprocess_query(PaxosServiceMessage *m, unique_lock& l);
+  bool prepare_update(PaxosServiceMessage *m, unique_lock& l);
 
   bool prep_auth(MAuth *m, bool paxos_writable);
 
-  bool preprocess_command(MMonCommand *m);
-  bool prepare_command(MMonCommand *m);
+  bool preprocess_command(MMonCommand *m, unique_lock& l);
+  bool prepare_command(MMonCommand *m, unique_lock& l);
 
   bool check_rotate();
  public:
@@ -155,7 +156,7 @@ private:
 
   void pre_auth(MAuth *m);
 
-  void tick();	// check state, take actions
+  void tick(unique_lock& l); // check state, take actions
 
   void dump_info(Formatter *f);
 };

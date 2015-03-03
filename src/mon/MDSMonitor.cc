@@ -156,7 +156,7 @@ version_t MDSMonitor::get_trim_to()
   return floor;
 }
 
-bool MDSMonitor::preprocess_query(PaxosServiceMessage *m)
+bool MDSMonitor::preprocess_query(PaxosServiceMessage *m, unique_lock& l)
 {
   ldout(mon->cct, 10) << "preprocess_query " << *m << " from " << m->get_orig_source_inst() << dendl;
 
@@ -166,7 +166,7 @@ bool MDSMonitor::preprocess_query(PaxosServiceMessage *m)
     return preprocess_beacon(static_cast<MMDSBeacon*>(m));
 
   case MSG_MON_COMMAND:
-    return preprocess_command(static_cast<MMonCommand*>(m));
+    return preprocess_command(static_cast<MMonCommand*>(m), l);
 
   case MSG_MDS_OFFLOAD_TARGETS:
     return preprocess_offload_targets(static_cast<MMDSLoadTargets*>(m));
@@ -335,17 +335,17 @@ bool MDSMonitor::preprocess_offload_targets(MMDSLoadTargets* m)
 }
 
 
-bool MDSMonitor::prepare_update(PaxosServiceMessage *m)
+bool MDSMonitor::prepare_update(PaxosServiceMessage *m, unique_lock& l)
 {
   ldout(mon->cct, 7) << "prepare_update " << *m << dendl;
 
   switch (m->get_type()) {
 
   case MSG_MDS_BEACON:
-    return prepare_beacon(static_cast<MMDSBeacon*>(m));
+    return prepare_beacon(static_cast<MMDSBeacon*>(m), l);
 
   case MSG_MON_COMMAND:
-    return prepare_command(static_cast<MMonCommand*>(m));
+    return prepare_command(static_cast<MMonCommand*>(m), l);
 
   case MSG_MDS_OFFLOAD_TARGETS:
     return prepare_offload_targets(static_cast<MMDSLoadTargets*>(m));
@@ -360,7 +360,7 @@ bool MDSMonitor::prepare_update(PaxosServiceMessage *m)
 
 
 
-bool MDSMonitor::prepare_beacon(MMDSBeacon *m)
+bool MDSMonitor::prepare_beacon(MMDSBeacon *m, unique_lock& l)
 {
   // -- this is an update --
   ldout(mon->cct, 12) << "prepare_beacon " << *m << " from " << m->get_orig_source_inst() << dendl;
@@ -376,7 +376,7 @@ bool MDSMonitor::prepare_beacon(MMDSBeacon *m)
       bool failed_mds = false;
       while (uint64_t existing = pending_mdsmap.find_mds_gid_by_name(m->get_name())) {
 	if (!mon->osdmon()->is_writeable()) {
-	  mon->osdmon()->wait_for_writeable(new C_RetryMessage(this, m));
+	  mon->osdmon()->wait_for_writeable(CB_RetryMessage(this, m));
 	  return false;
 	}
 	fail_mds_gid(existing);
@@ -384,7 +384,7 @@ bool MDSMonitor::prepare_beacon(MMDSBeacon *m)
       }
       if (failed_mds) {
 	assert(mon->osdmon()->is_writeable());
-	request_proposal(mon->osdmon());
+	request_proposal(mon->osdmon(), l);
       }
     }
 
@@ -481,7 +481,7 @@ bool MDSMonitor::prepare_beacon(MMDSBeacon *m)
   ldout(mon->cct, 7) << "prepare_beacon pending map now:" << dendl;
   print_map(pending_mdsmap);
 
-  wait_for_finished_proposal(new C_Updated(this, m));
+  wait_for_finished_proposal(CB_Updated(this, m));
 
   return true;
 }
@@ -519,9 +519,9 @@ void MDSMonitor::_updated(MMDSBeacon *m)
   m->put();
 }
 
-void MDSMonitor::on_active()
+void MDSMonitor::on_active(unique_lock& l)
 {
-  tick();
+  tick(l);
 
   if (mon->is_leader())
     mon->clog.info() << "mdsmap " << mdsmap << "\n";
@@ -543,7 +543,7 @@ void MDSMonitor::dump_info(Formatter *f)
   f->dump_unsigned("mdsmap_last_committed", get_last_committed());
 }
 
-bool MDSMonitor::preprocess_command(MMonCommand *m)
+bool MDSMonitor::preprocess_command(MMonCommand *m, unique_lock& l)
 {
   int r = -1;
   bufferlist rdata;
@@ -553,7 +553,7 @@ bool MDSMonitor::preprocess_command(MMonCommand *m)
   if (!cmdmap_from_json(m->cmd, &cmdmap, ss)) {
     // ss has reason for failure
     string rs = ss.str();
-    mon->reply_command(m, -EINVAL, rs, rdata, get_last_committed());
+    mon->reply_command(m, -EINVAL, rs, rdata, get_last_committed(), l);
     return true;
   }
 
@@ -565,7 +565,8 @@ bool MDSMonitor::preprocess_command(MMonCommand *m)
 
   MonSession *session = m->get_session();
   if (!session) {
-    mon->reply_command(m, -EACCES, "access denied", rdata, get_last_committed());
+    mon->reply_command(m, -EACCES, "access denied", rdata,
+		       get_last_committed(), l);
     return true;
   }
 
@@ -691,7 +692,7 @@ bool MDSMonitor::preprocess_command(MMonCommand *m)
     rdata.append(ds);
     string rs;
     getline(ss, rs);
-    mon->reply_command(m, r, rs, rdata, get_last_committed());
+    mon->reply_command(m, r, rs, rdata, get_last_committed(), l);
     return true;
   } else
     return false;
@@ -726,7 +727,8 @@ void MDSMonitor::fail_mds_gid(uint64_t gid)
   pending_mdsmap.mds_info.erase(gid);
 }
 
-int MDSMonitor::fail_mds(std::ostream &ss, const std::string &arg)
+int MDSMonitor::fail_mds(std::ostream &ss, const std::string &arg,
+			 unique_lock& l)
 {
   std::string err;
   int w = strict_strtoll(arg.c_str(), 10, &err);
@@ -760,12 +762,12 @@ int MDSMonitor::fail_mds(std::ostream &ss, const std::string &arg)
 
   if (failed_mds_gid) {
     assert(mon->osdmon()->is_writeable());
-    request_proposal(mon->osdmon());
+    request_proposal(mon->osdmon(), l);
   }
   return 0;
 }
 
-bool MDSMonitor::prepare_command(MMonCommand *m)
+bool MDSMonitor::prepare_command(MMonCommand *m, unique_lock& l)
 {
   int r = -EINVAL;
   stringstream ss;
@@ -774,7 +776,7 @@ bool MDSMonitor::prepare_command(MMonCommand *m)
   map<string, cmd_vartype> cmdmap;
   if (!cmdmap_from_json(m->cmd, &cmdmap, ss)) {
     string rs = ss.str();
-    mon->reply_command(m, -EINVAL, rs, rdata, get_last_committed());
+    mon->reply_command(m, -EINVAL, rs, rdata, get_last_committed(), l);
     return true;
   }
 
@@ -784,7 +786,8 @@ bool MDSMonitor::prepare_command(MMonCommand *m)
 
   MonSession *session = m->get_session();
   if (!session) {
-    mon->reply_command(m, -EACCES, "access denied", rdata, get_last_committed());
+    mon->reply_command(m, -EACCES, "access denied", rdata,
+		       get_last_committed(), l);
     return true;
   }
 
@@ -891,8 +894,8 @@ bool MDSMonitor::prepare_command(MMonCommand *m)
       map.epoch = pending_mdsmap.epoch;	 // make sure epoch is correct
       pending_mdsmap = map;
       string rs = "set mds map";
-      wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs,
-						get_last_committed() + 1));
+      wait_for_finished_proposal(
+	Monitor::CB_Command(mon, m, 0, rs, get_last_committed() + 1));
       return true;
     } else {
       ss << "next mdsmap epoch " << pending_mdsmap.epoch << " != " << e;
@@ -917,20 +920,21 @@ bool MDSMonitor::prepare_command(MMonCommand *m)
       MDSMap::mds_info_t& info = pending_mdsmap.get_info_gid(gid);
       info.state = state;
       stringstream ss;
-      ss << "set mds gid " << gid << " to state " << state << " " << ceph_mds_state_name(state);
+      ss << "set mds gid " << gid << " to state " << state << " "
+	 << ceph_mds_state_name(state);
       string rs;
       getline(ss, rs);
-      wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs,
-						get_last_committed() + 1));
+      wait_for_finished_proposal(Monitor::CB_Command(
+				   mon, m, 0, rs, get_last_committed() + 1));
       return true;
     }
 
   } else if (prefix == "mds fail") {
     string who;
     cmd_getval(mon->cct, cmdmap, "who", who);
-    r = fail_mds(ss, who);
+    r = fail_mds(ss, who, l);
     if (r < 0 && r == -EAGAIN) {
-      mon->osdmon()->wait_for_writeable(new C_RetryMessage(this, m));
+      mon->osdmon()->wait_for_writeable(CB_RetryMessage(this, m));
       return false; // don't propose yet; wait for message to be retried
     }
 
@@ -947,7 +951,8 @@ bool MDSMonitor::prepare_command(MMonCommand *m)
       ss << "mds gid " << gid << " dne";
       r = 0;
     } else if (state > 0) {
-      ss << "cannot remove active mds." << pending_mdsmap.get_info_gid(gid).name
+      ss << "cannot remove active mds."
+	 << pending_mdsmap.get_info_gid(gid).name
 	 << " rank " << pending_mdsmap.get_info_gid(gid).rank;
       r = -EBUSY;
     } else {
@@ -956,8 +961,8 @@ bool MDSMonitor::prepare_command(MMonCommand *m)
       ss << "removed mds gid " << gid;
       string rs;
       getline(ss, rs);
-      wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs,
-						get_last_committed() + 1));
+      wait_for_finished_proposal(Monitor::CB_Command(
+				   mon, m, 0, rs, get_last_committed() + 1));
       return true;
     }
   } else if (prefix == "mds rmfailed") {
@@ -973,8 +978,8 @@ bool MDSMonitor::prepare_command(MMonCommand *m)
     ss << "removed failed mds." << w;
     string rs;
     getline(ss, rs);
-    wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs,
-					      get_last_committed() + 1));
+    wait_for_finished_proposal(Monitor::CB_Command(mon, m, 0, rs,
+						   get_last_committed() + 1));
     return true;
   } else if (prefix == "mds cluster_down") {
     if (pending_mdsmap.test_flag(CEPH_MDSMAP_DOWN)) {
@@ -1038,7 +1043,9 @@ bool MDSMonitor::prepare_command(MMonCommand *m)
     string sure;
     cmd_getval(mon->cct, cmdmap, "sure", sure);
     if (sure != "--yes-i-really-mean-it") {
-      ss << "this is DANGEROUS and will wipe out the mdsmap's fs, and may clobber data in the new volumes you specify.	add --yes-i-really-mean-it if you do.";
+      ss << "this is DANGEROUS and will wipe out the mdsmap's fs, and may "
+	 << "clobber data in the new volumes you specify.	add "
+	 << "--yes-i-really-mean-it if you do.";
       r = -EPERM;
       goto out;
     }
@@ -1054,8 +1061,8 @@ bool MDSMonitor::prepare_command(MMonCommand *m)
     ss << "new fs with metadata volume " << metadata;
     string rs;
     getline(ss, rs);
-    wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs,
-					      get_last_committed() + 1));
+    wait_for_finished_proposal(Monitor::CB_Command(mon, m, 0, rs,
+						   get_last_committed() + 1));
     return true;
   } else {
     ss << "unrecognized command";
@@ -1066,12 +1073,12 @@ bool MDSMonitor::prepare_command(MMonCommand *m)
 
   if (r >= 0) {
     // success.. delay reply
-    wait_for_finished_proposal(new Monitor::C_Command(mon, m, r, rs,
-					      get_last_committed() + 1));
+    wait_for_finished_proposal(Monitor::CB_Command(mon, m, r, rs,
+						   get_last_committed() + 1));
     return true;
   } else {
     // reply immediately
-    mon->reply_command(m, r, rs, rdata, get_last_committed());
+    mon->reply_command(m, r, rs, rdata, get_last_committed(), l);
     return false;
   }
 }
@@ -1102,7 +1109,7 @@ void MDSMonitor::check_sub(Subscription *sub)
   }
 }
 
-void MDSMonitor::tick()
+void MDSMonitor::tick(unique_lock& l)
 {
   // make sure mds's are still alive
   // ...if i am an active leader
@@ -1261,7 +1268,7 @@ void MDSMonitor::tick()
     }
 
     if (propose_osdmap)
-      request_proposal(mon->osdmon());
+      request_proposal(mon->osdmon(), l);
 
   }
 
@@ -1337,7 +1344,7 @@ void MDSMonitor::tick()
   }
 
   if (do_propose)
-    propose_pending();
+    propose_pending(l);
 }
 
 bool MDSMonitor::try_standby_replay(MDSMap::mds_info_t& finfo, MDSMap::mds_info_t& ainfo)

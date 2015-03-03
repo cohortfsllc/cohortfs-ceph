@@ -65,7 +65,7 @@ bool AuthMonitor::check_rotate()
  Tick function to update the map based on performance every N seconds
 */
 
-void AuthMonitor::tick()
+void AuthMonitor::tick(unique_lock& l)
 {
   if (!is_active()) return;
 
@@ -74,10 +74,10 @@ void AuthMonitor::tick()
   if (!mon->is_leader()) return;
 
   if (check_rotate())
-    propose_pending();
+    propose_pending(l);
 }
 
-void AuthMonitor::on_active()
+void AuthMonitor::on_active(unique_lock& l)
 {
   ldout(mon->cct, 10) << "AuthMonitor::on_active()" << dendl;
 
@@ -277,12 +277,12 @@ version_t AuthMonitor::get_trim_to()
   return 0;
 }
 
-bool AuthMonitor::preprocess_query(PaxosServiceMessage *m)
+bool AuthMonitor::preprocess_query(PaxosServiceMessage *m, unique_lock& l)
 {
   ldout(mon->cct, 10) << "preprocess_query " << *m << " from " << m->get_orig_source_inst() << dendl;
   switch (m->get_type()) {
   case MSG_MON_COMMAND:
-    return preprocess_command((MMonCommand*)m);
+    return preprocess_command((MMonCommand*)m, l);
 
   case CEPH_MSG_AUTH:
     return prep_auth((MAuth *)m, false);
@@ -297,12 +297,12 @@ bool AuthMonitor::preprocess_query(PaxosServiceMessage *m)
   }
 }
 
-bool AuthMonitor::prepare_update(PaxosServiceMessage *m)
+bool AuthMonitor::prepare_update(PaxosServiceMessage *m, unique_lock& l)
 {
   ldout(mon->cct, 10) << "prepare_update " << *m << " from " << m->get_orig_source_inst() << dendl;
   switch (m->get_type()) {
   case MSG_MON_COMMAND:
-    return prepare_command((MMonCommand*)m);
+    return prepare_command((MMonCommand*)m, l);
   case MSG_MON_GLOBAL_ID:
     return prepare_global_id((MMonGlobalID*)m);
   case CEPH_MSG_AUTH:
@@ -447,7 +447,7 @@ bool AuthMonitor::prep_auth(MAuth *m, bool paxos_writable)
 
       if (mon->is_leader() && paxos_writable) {
 	ldout(mon->cct, 10) << "increasing global id, waitlisting message" << dendl;
-	wait_for_active(new C_RetryMessage(this, m));
+	wait_for_active(CB_RetryMessage(this, m));
 	goto done;
       }
 
@@ -459,7 +459,7 @@ bool AuthMonitor::prep_auth(MAuth *m, bool paxos_writable)
 	MMonGlobalID *req = new MMonGlobalID();
 	req->old_max_id = max_global_id;
 	mon->messenger->send_message(req, mon->monmap->get_inst(leader));
-	wait_for_finished_proposal(new C_RetryMessage(this, m));
+	wait_for_finished_proposal(CB_RetryMessage(this, m));
 	return true;
       }
 
@@ -486,7 +486,7 @@ bool AuthMonitor::prep_auth(MAuth *m, bool paxos_writable)
       ret = s->auth_handler->handle_request(indata, response_bl, s->global_id, caps_info, &auid);
     }
     if (ret == -EIO) {
-      wait_for_active(new C_RetryMessage(this,m));
+      wait_for_active(CB_RetryMessage(this, m));
       goto done;
     }
     if (caps_info.caps.length()) {
@@ -517,7 +517,7 @@ done:
   return true;
 }
 
-bool AuthMonitor::preprocess_command(MMonCommand *m)
+bool AuthMonitor::preprocess_command(MMonCommand *m, unique_lock& l)
 {
   int r = -1;
   bufferlist rdata;
@@ -527,7 +527,7 @@ bool AuthMonitor::preprocess_command(MMonCommand *m)
   if (!cmdmap_from_json(m->cmd, &cmdmap, ss)) {
     // ss has reason for failure
     string rs = ss.str();
-    mon->reply_command(m, -EINVAL, rs, rdata, get_last_committed());
+    mon->reply_command(m, -EINVAL, rs, rdata, get_last_committed(), l);
     return true;
   }
 
@@ -544,7 +544,8 @@ bool AuthMonitor::preprocess_command(MMonCommand *m)
 
   MonSession *session = m->get_session();
   if (!session) {
-    mon->reply_command(m, -EACCES, "access denied", rdata, get_last_committed());
+    mon->reply_command(m, -EACCES, "access denied", rdata,
+		       get_last_committed(), l);
     return true;
   }
 
@@ -554,7 +555,7 @@ bool AuthMonitor::preprocess_command(MMonCommand *m)
   EntityName entity;
   if (!entity_name.empty() && !entity.from_str(entity_name)) {
     ss << "invalid entity_auth " << entity_name;
-    mon->reply_command(m, -EINVAL, ss.str(), get_last_committed());
+    mon->reply_command(m, -EINVAL, ss.str(), get_last_committed(), l);
     return true;
   }
 
@@ -640,7 +641,7 @@ bool AuthMonitor::preprocess_command(MMonCommand *m)
   rdata.append(ds);
   string rs;
   getline(ss, rs, '\0');
-  mon->reply_command(m, r, rs, rdata, get_last_committed());
+  mon->reply_command(m, r, rs, rdata, get_last_committed(), l);
   return true;
 }
 
@@ -664,7 +665,7 @@ void AuthMonitor::import_keyring(KeyRing& keyring)
   }
 }
 
-bool AuthMonitor::prepare_command(MMonCommand *m)
+bool AuthMonitor::prepare_command(MMonCommand *m, unique_lock& l)
 {
   stringstream ss, ds;
   bufferlist rdata;
@@ -675,7 +676,7 @@ bool AuthMonitor::prepare_command(MMonCommand *m)
   if (!cmdmap_from_json(m->cmd, &cmdmap, ss)) {
     // ss has reason for failure
     string rs = ss.str();
-    mon->reply_command(m, -EINVAL, rs, rdata, get_last_committed());
+    mon->reply_command(m, -EINVAL, rs, rdata, get_last_committed(), l);
     return true;
   }
 
@@ -692,7 +693,8 @@ bool AuthMonitor::prepare_command(MMonCommand *m)
 
   MonSession *session = m->get_session();
   if (!session) {
-    mon->reply_command(m, -EACCES, "access denied", rdata, get_last_committed());
+    mon->reply_command(m, -EACCES, "access denied", rdata,
+		       get_last_committed(), l);
     return true;
   }
 
@@ -715,7 +717,7 @@ bool AuthMonitor::prepare_command(MMonCommand *m)
     if (bl.length() == 0) {
       ss << "auth import: no data supplied";
       getline(ss, rs);
-      mon->reply_command(m, -EINVAL, rs, get_last_committed());
+      mon->reply_command(m, -EINVAL, rs, get_last_committed(), l);
       return true;
     }
     bufferlist::iterator iter = bl.begin();
@@ -731,8 +733,8 @@ bool AuthMonitor::prepare_command(MMonCommand *m)
     ss << "imported keyring";
     getline(ss, rs);
     err = 0;
-    wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs,
-					      get_last_committed() + 1));
+    wait_for_finished_proposal(Monitor::CB_Command(mon, m, 0, rs,
+						   get_last_committed() + 1));
     return true;
   } else if (prefix == "auth add" && !entity_name.empty()) {
     /* expected behavior:
@@ -769,7 +771,7 @@ bool AuthMonitor::prepare_command(MMonCommand *m)
 	if (inc.op == KeyServerData::AUTH_INC_ADD &&
 	    inc.name == entity) {
 	  wait_for_finished_proposal(
-	      new Monitor::C_Command(mon, m, 0, rs, get_last_committed() + 1));
+	    Monitor::CB_Command(mon, m, 0, rs, get_last_committed() + 1));
 	  return true;
 	}
       }
@@ -854,7 +856,7 @@ bool AuthMonitor::prepare_command(MMonCommand *m)
 
     ss << "added key for " << auth_inc.name;
     getline(ss, rs);
-    wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs,
+    wait_for_finished_proposal(Monitor::CB_Command(mon, m, 0, rs,
 						   get_last_committed() + 1));
     return true;
   } else if ((prefix == "auth get-or-create-key" ||
@@ -907,8 +909,8 @@ bool AuthMonitor::prepare_command(MMonCommand *m)
 	::decode(auth_inc, q);
 	if (auth_inc.op == KeyServerData::AUTH_INC_ADD &&
 	    auth_inc.name == entity) {
-	  wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs,
-						get_last_committed() + 1));
+	  wait_for_finished_proposal(
+	    Monitor::CB_Command(mon, m, 0, rs, get_last_committed() + 1));
 	  return true;
 	}
       }
@@ -943,8 +945,8 @@ bool AuthMonitor::prepare_command(MMonCommand *m)
 
     rdata.append(ds);
     getline(ss, rs);
-    wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs, rdata,
-					      get_last_committed() + 1));
+    wait_for_finished_proposal(Monitor::CB_Command(mon, m, 0, rs, rdata,
+						   get_last_committed() + 1));
     return true;
   } else if (prefix == "auth caps" && !entity_name.empty()) {
     KeyServerData::Incremental auth_inc;
@@ -966,8 +968,8 @@ bool AuthMonitor::prepare_command(MMonCommand *m)
 
     ss << "updated caps for " << auth_inc.name;
     getline(ss, rs);
-    wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs,
-					      get_last_committed() + 1));
+    wait_for_finished_proposal(Monitor::CB_Command(mon, m, 0, rs,
+						   get_last_committed() + 1));
     return true;
   } else if (prefix == "auth del" && !entity_name.empty()) {
     KeyServerData::Incremental auth_inc;
@@ -982,15 +984,15 @@ bool AuthMonitor::prepare_command(MMonCommand *m)
 
     ss << "updated";
     getline(ss, rs);
-    wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs,
-					      get_last_committed() + 1));
+    wait_for_finished_proposal(Monitor::CB_Command(mon, m, 0, rs,
+						   get_last_committed() + 1));
     return true;
   }
 
 done:
   rdata.append(ds);
   getline(ss, rs, '\0');
-  mon->reply_command(m, err, rs, rdata, get_last_committed());
+  mon->reply_command(m, err, rs, rdata, get_last_committed(), l);
   return false;
 }
 
@@ -1003,15 +1005,17 @@ bool AuthMonitor::prepare_global_id(MMonGlobalID *m)
   return true;
 }
 
-void AuthMonitor::upgrade_format()
+void AuthMonitor::upgrade_format(unique_lock& l)
 {
   unsigned int current = 1;
   if (format_version >= current) {
-    ldout(mon->cct, 20) << __func__ << " format " << format_version << " is current" << dendl;
+    ldout(mon->cct, 20) << __func__ << " format " << format_version
+			<< " is current" << dendl;
     return;
   }
 
-  ldout(mon->cct, 1) << __func__ << " upgrading from format " << format_version << " to " << current << dendl;
+  ldout(mon->cct, 1) << __func__ << " upgrading from format "
+		     << format_version << " to " << current << dendl;
   bool changed = false;
   map<EntityName, EntityAuth>::iterator p;
   for (p = mon->key_server.secrets_begin();
@@ -1049,7 +1053,8 @@ void AuthMonitor::upgrade_format()
     }
 
     if (new_caps.length() > 0) {
-      ldout(mon->cct, 5) << __func__ << " updating " << p->first << " mon cap from "
+      ldout(mon->cct, 5) << __func__ << " updating " << p->first
+			 << " mon cap from "
 	      << mon_caps << " to " << new_caps << dendl;
 
       bufferlist bl;
@@ -1067,10 +1072,10 @@ void AuthMonitor::upgrade_format()
 
   if (changed) {
     // note new format
-    ldout(mon->cct, 10) << __func__ << " proposing update from format " << format_version
-			<< " -> " << current << dendl;
+    ldout(mon->cct, 10) << __func__ << " proposing update from format "
+			<< format_version << " -> " << current << dendl;
     format_version = current;
-    propose_pending();
+    propose_pending(l);
   }
 }
 

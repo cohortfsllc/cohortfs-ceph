@@ -137,7 +137,6 @@ OSDService::OSDService(OSD *osd) :
   monc(osd->monc),
   op_wq(osd->op_wq),
   class_handler(osd->class_handler),
-  watch_timer(watch_lock),
   next_notif_id(0),
   last_tid(0),
   map_cache(cct->_conf->osd_map_cache_size),
@@ -158,18 +157,8 @@ void OSDService::need_heartbeat_peer_update()
 
 void OSDService::shutdown()
 {
-  {
-    unique_lock wl(watch_lock);
-    watch_timer.shutdown(wl);
-  }
-
   osdmap = OSDMapRef();
   next_osdmap = OSDMapRef();
-}
-
-void OSDService::init()
-{
-  watch_timer.init();
 }
 
 #undef dout_prefix
@@ -382,7 +371,6 @@ OSD::OSD(CephContext *cct_, ObjectStore *store_,
 	 MonClient *mc,
 	 const std::string &dev, const std::string &jdev) :
   Dispatcher(cct_),
-  tick_timer(osd_lock),
   authorize_handler_cluster_registry(
     new AuthAuthorizeHandlerRegistry(
       cct, cct->_conf->auth_supported.length() ? cct->_conf->auth_supported : cct->_conf->auth_cluster_required)),
@@ -574,8 +562,6 @@ int OSD::init()
   if (is_stopping())
     return 0;
 
-  tick_timer.init();
-
   // mount.
   dout(2) << "mounting " << dev_path << " "
 	  << (journal_path.empty() ? "(no journal)" : journal_path) << dendl;
@@ -695,11 +681,10 @@ int OSD::init()
   heartbeat_thread.create();
 
   // tick
-  tick_timer.add_event_after(ceph::span_from_double(
-			       cct->_conf->osd_heartbeat_interval),
-			     new C_Tick(this));
+  tick_timer.add_event(ceph::span_from_double(
+			 cct->_conf->osd_heartbeat_interval),
+		       &OSD::tick, this);
 
-  service.init();
   service.publish_map(osdmap);
   service.publish_superblock(superblock);
 
@@ -857,8 +842,6 @@ int OSD::shutdown()
   dout(10) << "disk tp paused (new)" << dendl;
 
   ol.lock();
-
-  tick_timer.shutdown(ol);
 
   // note unmount epoch
   dout(10) << "noting clean unmount in epoch " << osdmap->get_epoch() << dendl;
@@ -1381,6 +1364,7 @@ bool OSD::heartbeat_reset(Connection *con)
 
 void OSD::tick()
 {
+  unique_lock l(osd_lock);
   // Should be called with a lock on osd_lock
   dout(5) << "tick" << dendl;
 
@@ -1412,7 +1396,7 @@ void OSD::tick()
     dispatch_cond.notify_all();
   }
 
-  tick_timer.add_event_after(1s, new C_Tick(this));
+  tick_timer.reschedule_me(1s);
 }
 
 // =========================================

@@ -52,18 +52,18 @@ class MonmapMonitor : public PaxosService {
   // we always encode the full map; we have no use for full versions
   virtual void encode_full(MonitorDBStore::Transaction *t) { }
 
-  void on_active();
+  void on_active(Monitor::unique_lock& l);
 
   void dump_info(Formatter *f);
 
-  bool preprocess_query(PaxosServiceMessage *m);
-  bool prepare_update(PaxosServiceMessage *m);
+  bool preprocess_query(PaxosServiceMessage *m, unique_lock& l);
+  bool prepare_update(PaxosServiceMessage *m, unique_lock& l);
 
   bool preprocess_join(MMonJoin *m);
   bool prepare_join(MMonJoin *m);
 
-  bool preprocess_command(MMonCommand *m);
-  bool prepare_command(MMonCommand *m);
+  bool preprocess_command(MMonCommand *m, unique_lock& l);
+  bool prepare_command(MMonCommand *m, unique_lock& l);
 
   void get_health(list<pair<health_status_t,string> >& summary,
 		  list<pair<health_status_t,string> > *detail) const;
@@ -77,7 +77,7 @@ class MonmapMonitor : public PaxosService {
    */
   bool should_propose(ceph::timespan& delay);
 
-  void tick();
+  void tick(unique_lock& l);
 
  private:
   bufferlist monmap_bl;

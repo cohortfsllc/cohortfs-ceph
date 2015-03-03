@@ -81,7 +81,7 @@ class MDS : public Dispatcher {
   std::mutex mds_lock;
   typedef std::unique_lock<std::mutex> unique_lock;
   typedef std::lock_guard<std::mutex> lock_guard;
-  SafeTimer<ceph::mono_clock> timer;
+  cohort::Timer<ceph::mono_clock> timer;
 
   AuthAuthorizeHandlerRegistry *authorize_handler_cluster_registry;
   AuthAuthorizeHandlerRegistry *authorize_handler_service_registry;
@@ -93,7 +93,8 @@ class MDS : public Dispatcher {
   int standby_for_rank;
   int standby_type;
   string standby_for_name;
-  bool standby_replaying;  // true if current replay pass is in standby-replay mode
+  bool standby_replaying;  // true if current replay pass is in
+			   // standby-replay mode
 
   Messenger *messenger;
   MonClient *monc;
@@ -223,27 +224,11 @@ class MDS : public Dispatcher {
   bool is_laggy();
   const ceph::mono_time& get_laggy_until() { return laggy_until; }
 
-  class C_MDS_BeaconSender : public Context {
-    MDS *mds;
-  public:
-    C_MDS_BeaconSender(MDS *m) : mds(m) {}
-    void finish(int r) {
-      mds->beacon_sender = 0;
-      mds->beacon_send();
-    }
-  } *beacon_sender;
+  uint64_t beacon_sender;
 
   // tick and other timer fun
-  class C_MDS_Tick : public Context {
-    MDS *mds;
-  public:
-    C_MDS_Tick(MDS *m) : mds(m) {}
-    void finish(int r) {
-      mds->tick_event = 0;
-      mds->tick();
-    }
-  } *tick_event;
-  void	   reset_tick();
+  uint64_t tick_event;
+  void reset_tick();
 
   // -- client map --
   SessionMap   sessionmap;
@@ -317,7 +302,6 @@ class MDS : public Dispatcher {
   void standby_replay_restart();
   void _standby_replay_restart_finish(unique_lock& ml, int r,
 				      uint64_t old_read_pos);
-  class C_MDS_StandbyReplayRestart;
   class C_MDS_StandbyReplayRestartFinish;
 
   void reopen_log();

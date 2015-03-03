@@ -72,8 +72,6 @@ namespace OSDC {
   public:
     CephContext *cct;
 
-    std::atomic<bool> initialized;
-
   private:
     std::atomic<uint64_t> last_tid;
     std::atomic<uint32_t> client_inc;
@@ -99,18 +97,8 @@ namespace OSDC {
     typedef std::unique_lock<std::shared_timed_mutex> unique_lock;
     typedef ceph::shunique_lock<std::shared_timed_mutex> shunique_lock;
 
-    std::mutex timer_lock;
-    typedef std::lock_guard<std::mutex> timer_lock_guard;
-    typedef std::unique_lock<std::mutex> unique_timer_lock;
-    SafeTimer<ceph::mono_clock> timer;
-
-    class C_Tick : public Context {
-      Objecter *ob;
-    public:
-      C_Tick(Objecter *o) : ob(o) {}
-      void finish(int r) { ob->tick(); }
-    } *tick_event;
-
+    cohort::Timer<ceph::mono_clock> timer;
+    uint64_t tick_event;
     void schedule_tick();
     void tick();
 
@@ -181,7 +169,8 @@ namespace OSDC {
     };
 
     struct Op : public op_base {
-      Context *onack, *oncommit, *ontimeout;
+      Context *onack, *oncommit;
+      uint64_t ontimeout;
       uint32_t acks, commits;
       int rc;
       epoch_t *reply_epoch;
@@ -199,7 +188,7 @@ namespace OSDC {
 	 int f, Context *ac, Context *co, version_t *ov,
 	 ZTracer::Trace *parent) :
 	op_base(o, volume, _op, f, ov),
-	onack(ac), oncommit(co), ontimeout(NULL),
+	onack(ac), oncommit(co), ontimeout(0),
 	acks(0), commits(0), rc(0), reply_epoch(NULL),
 	budgeted(false), ctx_budgeted(false), finished(false) {
 	subops.reserve(op->width());
@@ -239,7 +228,8 @@ namespace OSDC {
     struct StatfsOp : public set_base_hook<link_mode<auto_unlink> > {
       ceph_tid_t tid;
       struct ceph_statfs *stats;
-      Context *onfinish, *ontimeout;
+      Context *onfinish;
+      uint64_t ontimeout;
       ceph::mono_time last_submit;
     };
 
@@ -437,15 +427,14 @@ namespace OSDC {
 	     ceph::timespan osd_timeout = std::chrono::seconds(0)) :
       Dispatcher(cct_), messenger(m), monc(mc),
       osdmap(new OSDMap), cct(cct_),
-      initialized(false), last_tid(0),
+      last_tid(0),
       client_inc(-1), max_linger_id(0),
       num_unacked(0), num_uncommitted(0),
       global_op_flags(0),
       keep_balanced_budget(false), honor_osdmap_full(true),
       trace_endpoint("0.0.0.0", 0, "Objecter"),
       last_seen_osdmap_version(0),
-      timer(timer_lock, false),
-      tick_event(NULL),
+      tick_event(0),
       homeless_session(new OSDSession(cct, -1)),
       mon_timeout(mon_timeout),
       osd_timeout(osd_timeout),
@@ -455,7 +444,6 @@ namespace OSDC {
       { }
     ~Objecter();
 
-    void init();
     void start();
     void shutdown();
 
@@ -567,7 +555,6 @@ namespace OSDC {
     /// cancel an in-progress request with the given return code
   private:
     int op_cancel(ceph_tid_t tid, int r);
-    friend class C_CancelOp;
 
 
   public:

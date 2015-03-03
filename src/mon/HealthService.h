@@ -30,11 +30,11 @@ struct HealthService : public QuorumService
   HealthService(Monitor *m) : QuorumService(m) { }
   virtual ~HealthService() { }
 
-  virtual bool service_dispatch(Message *m) {
-    return service_dispatch(static_cast<MMonHealth*>(m));
+  virtual bool service_dispatch(Message *m, unique_lock& l) {
+    return service_dispatch(static_cast<MMonHealth*>(m), l);
   }
 
-  virtual bool service_dispatch(MMonHealth *m) = 0;
+  virtual bool service_dispatch(MMonHealth *m, unique_lock& l) = 0;
 
 public:
   virtual health_status_t get_health(Formatter *f,

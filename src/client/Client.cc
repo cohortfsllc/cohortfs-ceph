@@ -139,7 +139,6 @@ Client::Client(Messenger *m, MonClient *mc)
   : Dispatcher(m->cct),
     cct(m->cct),
     m_command_hook(this),
-    timer(client_lock),
     ino_invalidate_cb(NULL),
     ino_invalidate_cb_handle(NULL),
     dentry_invalidate_cb(NULL),
@@ -148,7 +147,7 @@ Client::Client(Messenger *m, MonClient *mc)
     getgroups_cb_handle(NULL),
     async_ino_invalidator(m->cct),
     async_dentry_invalidator(m->cct),
-    tick_event(NULL),
+    tick_event(0),
     monclient(mc), messenger(m), whoami(m->get_myname().num()),
     initialized(false), mounted(false), unmounting(false),
     local_osd(-1), local_osd_epoch(0),
@@ -309,18 +308,14 @@ int Client::init()
   unique_lock cl(client_lock);
   assert(!initialized);
 
-  timer.init();
-
-  objecter->init();
   // ok!
   messenger->add_dispatcher_head(objecter);
   messenger->add_dispatcher_head(this);
 
   int r = monclient->init();
   if (r < 0) {
-    // need to do cleanup because we're in an intermediate init state
-    timer.shutdown(cl);
     cl.unlock();
+    // need to do cleanup because we're in an intermediate init state
     monclient->shutdown();
     return r;
   }
@@ -394,9 +389,8 @@ void Client::shutdown()
   unique_lock cl(client_lock);
   assert(initialized);
   initialized = false;
-  timer.shutdown(cl);
-  objecter->shutdown();
   cl.unlock();
+  objecter->shutdown();
   monclient->shutdown();
 }
 
@@ -3273,9 +3267,9 @@ int Client::mount(const std::string &mount_root)
     cond.wait(ml, [&](){ return done; });
     ml.unlock();
   }
-  cl.lock();
 
   tick(); // start tick
+  cl.lock();
   VolumeRef volume(mdsmap->get_metadata_volume(objecter));
 
   // hack: get+pin root inode.
@@ -3406,24 +3400,14 @@ void Client::unmount()
   ldout(cct, 2) << "unmounted." << dendl;
 }
 
-
-
-class C_C_Tick : public Context {
-  Client *client;
-public:
-  C_C_Tick(Client *c) : client(c) {}
-  void finish(int r) {
-    client->tick();
-  }
-};
-
 void Client::flush_cap_releases()
 {
   // send any cap releases
   for (map<int,MetaSession*>::iterator p = mds_sessions.begin();
        p != mds_sessions.end();
        ++p) {
-    if (p->second->release && mdsmap->is_clientreplay_or_active_or_stopping(p->first)) {
+    if (p->second->release &&
+	mdsmap->is_clientreplay_or_active_or_stopping(p->first)) {
       messenger->send_message(p->second->release, p->second->con);
       p->second->release = 0;
     }
@@ -3432,6 +3416,7 @@ void Client::flush_cap_releases()
 
 void Client::tick()
 {
+  unique_lock cl(client_lock);
   if (cct->_conf->client_debug_inject_tick_delay > 0) {
     sleep(cct->_conf->client_debug_inject_tick_delay);
     assert(0 == cct->_conf->set_val("client_debug_inject_tick_delay", "0"));
@@ -3439,9 +3424,8 @@ void Client::tick()
   }
 
   ldout(cct, 21) << "tick" << dendl;
-  tick_event = new C_C_Tick(this);
-  timer.add_event_after(ceph::span_from_double(
-			  cct->_conf->client_tick_interval), tick_event);
+  tick_event = timer.reschedule_me(
+    ceph::span_from_double(cct->_conf->client_tick_interval));
 
   ceph::mono_time now = ceph::mono_clock::now();
 
@@ -3465,7 +3449,6 @@ void Client::tick()
     cap_list.push_back(&in->cap_item);
     check_caps(in, true);
   }
-
 }
 
 void Client::renew_caps()
@@ -3548,9 +3531,10 @@ int Client::_lookup(Inode *dir, const string& dname, Inode **target,
       dir->dir->dentries.count(dname)) {
     Dentry *dn = dir->dir->dentries[dname];
 
-    ldout(cct, 20) << "_lookup have dn " << dname << " mds." << dn->lease_mds << " ttl " << dn->lease_ttl
-	     << " seq " << dn->lease_seq
-	     << dendl;
+    ldout(cct, 20) << "_lookup have dn " << dname << " mds." << dn->lease_mds
+		   << " ttl " << dn->lease_ttl
+		   << " seq " << dn->lease_seq
+		   << dendl;
 
     if (!dn->inode || dn->inode->is_any_caps()) {
       // is dn lease valid?
@@ -3562,8 +3546,8 @@ int Client::_lookup(Inode *dir, const string& dname, Inode **target,
 	if (s->cap_ttl > now &&
 	    s->cap_gen == dn->lease_gen) {
 	  *target = dn->inode;
-	  // touch this mds's dir cap too, even though we don't _explicitly_ use it here, to
-	  // make trim_caps() behave.
+	  // touch this mds's dir cap too, even though we don't
+	  // _explicitly_ use it here, to make trim_caps() behave.
 	  dir->try_touch_cap(dn->lease_mds);
 	  touch_dn(dn);
 	  goto done;

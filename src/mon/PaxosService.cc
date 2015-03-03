@@ -31,7 +31,8 @@ static ostream& _prefix(std::ostream *_dout, Monitor *mon, Paxos *paxos, string 
 		<< ").paxosservice(" << service_name << " " << fc << ".." << lc << ") ";
 }
 
-bool PaxosService::dispatch(PaxosServiceMessage *m)
+bool PaxosService::dispatch(PaxosServiceMessage *m,
+			    std::unique_lock<std::mutex> &l)
 {
   ldout(mon->cct, 10) << "dispatch " << *m << " from " << m->get_orig_source_inst() << dendl;
 
@@ -64,12 +65,12 @@ bool PaxosService::dispatch(PaxosServiceMessage *m)
   // make sure our map is readable and up to date
   if (!is_readable(m->version)) {
     ldout(mon->cct, 10) << " waiting for paxos -> readable (v" << m->version << ")" << dendl;
-    wait_for_readable(new C_RetryMessage(this, m), m->version);
+    wait_for_readable(CB_RetryMessage(this, m), m->version);
     return true;
   }
 
   // preprocess
-  if (preprocess_query(m))
+  if (preprocess_query(m, l))
     return true;  // easy!
 
   // leader?
@@ -81,23 +82,24 @@ bool PaxosService::dispatch(PaxosServiceMessage *m)
   // writeable?
   if (!is_writeable()) {
     ldout(mon->cct, 10) << " waiting for paxos -> writeable" << dendl;
-    wait_for_writeable(new C_RetryMessage(this, m));
+    wait_for_writeable(CB_RetryMessage(this, m));
     return true;
   }
 
   // update
-  if (prepare_update(m)) {
+  if (prepare_update(m, l)) {
     ceph::timespan delay = 0ns;
     if (should_propose(delay)) {
       if (delay == 0ns) {
-	propose_pending();
+	propose_pending(l);
       } else {
 	// delay a bit
 	if (!proposal_timer) {
-	  proposal_timer = new C_Propose(this);
+	  proposal_timer = mon->timer.add_event(
+	    delay, &PaxosService::propose_pending_timed, this);
+
 	  ldout(mon->cct, 10) << " setting proposal_timer " << proposal_timer
 			      << " with delay of " << delay << dendl;
-	  mon->timer.add_event_after(delay, proposal_timer);
 	} else {
 	  ldout(mon->cct, 10) << " proposal_timer already set" << dendl;
 	}
@@ -166,8 +168,14 @@ bool PaxosService::should_propose(ceph::timespan& delay)
   return true;
 }
 
+void PaxosService::propose_pending_timed()
+{
+  Monitor::unique_lock l(mon->lock);
+  proposal_timer = 0;
+  propose_pending(l);
+}
 
-void PaxosService::propose_pending()
+void PaxosService::propose_pending(Monitor::unique_lock& l)
 {
   ldout(mon->cct, 10) << "propose_pending" << dendl;
   assert(have_pending);
@@ -176,9 +184,10 @@ void PaxosService::propose_pending()
   assert(is_active());
 
   if (proposal_timer) {
-    ldout(mon->cct, 10) << " canceling proposal_timer " << proposal_timer << dendl;
+    ldout(mon->cct, 10) << " canceling proposal_timer" << proposal_timer
+			<< dendl;
     mon->timer.cancel_event(proposal_timer);
-    proposal_timer = NULL;
+    proposal_timer = 0;
   }
 
   /**
@@ -212,7 +221,7 @@ void PaxosService::propose_pending()
 
   // apply to paxos
   proposing = true;
-  paxos->propose_new_value(bl, new C_Committed(this));
+  paxos->propose_new_value(bl, l, CB_Committed(this));
 }
 
 bool PaxosService::should_stash_full()
@@ -228,7 +237,7 @@ bool PaxosService::should_stash_full()
 	  (get_last_committed() - latest_full > (unsigned)mon->cct->_conf->paxos_stash_full_interval));
 }
 
-void PaxosService::restart()
+void PaxosService::restart(Monitor::unique_lock& l)
 {
   ldout(mon->cct, 10) << "restart" << dendl;
   if (proposal_timer) {
@@ -237,7 +246,7 @@ void PaxosService::restart()
     proposal_timer = 0;
   }
 
-  finish_contexts(waiting_for_finished_proposal, -EAGAIN);
+  waiting_for_finished_proposal(-EAGAIN, l);
 
   if (have_pending) {
     discard_pending();
@@ -248,17 +257,17 @@ void PaxosService::restart()
   on_restart();
 }
 
-void PaxosService::election_finished()
+void PaxosService::election_finished(Monitor::unique_lock& l)
 {
   ldout(mon->cct, 10) << "election_finished" << dendl;
 
-  finish_contexts(waiting_for_finished_proposal, -EAGAIN);
+  waiting_for_finished_proposal(-EAGAIN, l);
 
   // make sure we update our state
-  _active();
+  _active(l);
 }
 
-void PaxosService::_active()
+void PaxosService::_active(Monitor::unique_lock& l)
 {
   if (is_proposing()) {
     ldout(mon->cct, 10) << "_acting - proposing" << dendl;
@@ -266,7 +275,7 @@ void PaxosService::_active()
   }
   if (!is_active()) {
     ldout(mon->cct, 10) << "_active - not active" << dendl;
-    wait_for_active(new C_Active(this));
+    wait_for_active(CB_Active(this));
     return;
   }
   ldout(mon->cct, 10) << "_active" << dendl;
@@ -284,7 +293,7 @@ void PaxosService::_active()
     if (get_last_committed() == 0) {
       // create initial state
       create_initial();
-      propose_pending();
+      propose_pending(l);
       return;
     }
   } else {
@@ -298,19 +307,19 @@ void PaxosService::_active()
   // wake up anyone who came in while we were proposing.  note that
   // anyone waiting for the previous proposal to commit is no longer
   // on this list; it is on Paxos's.
-  finish_contexts(waiting_for_finished_proposal, 0);
+  waiting_for_finished_proposal(0, l);
 
   if (is_active() && mon->is_leader())
-    upgrade_format();
+    upgrade_format(l);
 
   // NOTE: it's possible that this will get called twice if we commit
   // an old paxos value.  Implementations should be mindful of that.
   if (is_active())
-    on_active();
+    on_active(l);
 }
 
 
-void PaxosService::shutdown()
+void PaxosService::shutdown(Monitor::unique_lock& l)
 {
   cancel_events();
 
@@ -320,12 +329,12 @@ void PaxosService::shutdown()
     proposal_timer = 0;
   }
 
-  finish_contexts(waiting_for_finished_proposal, -EAGAIN);
+  waiting_for_finished_proposal(-EAGAIN, l);
 
   on_shutdown();
 }
 
-void PaxosService::maybe_trim()
+void PaxosService::maybe_trim(Monitor::unique_lock& l)
 {
   if (!is_writeable())
     return;
@@ -361,7 +370,7 @@ void PaxosService::maybe_trim()
 
   bufferlist bl;
   t.encode(bl);
-  paxos->propose_new_value(bl, NULL);
+  paxos->propose_new_value(bl, l, NULL);
 }
 
 void PaxosService::trim(MonitorDBStore::Transaction *t,

@@ -12,6 +12,8 @@
  *
  */
 
+#include "common/FunQueue.h"
+
 /**
  * Paxos storage layout and behavior
  *
@@ -117,6 +119,9 @@ class Paxos;
  * See PaxosService.h
  */
 class Paxos {
+  typedef std::unique_lock<std::mutex> unique_lock;
+  typedef std::function<void(int, unique_lock& l)> waiter;
+
   /**
    * @defgroup Paxos_h_class Paxos
    * @{
@@ -186,8 +191,8 @@ public:
     }
   }
 
-  class C_Proposal : public Context {
-    Context *proposer_context;
+  class Proposal {
+    waiter on_complete;
   public:
     bufferlist bl;
     // for debug purposes. Will go away. Soon.
@@ -196,22 +201,22 @@ public:
 
     bi::list_member_hook<> q;
 
-    typedef bi::list< C_Proposal,
-		      bi::member_hook< C_Proposal,
-				       bi::list_member_hook<>,
-				       &C_Proposal::q > > Queue;
+    typedef bi::list<
+      Proposal, bi::member_hook<
+		  Proposal, bi::list_member_hook<>,
+		  &Proposal::q> > Queue;
 
-    C_Proposal(Context *c, bufferlist& proposal_bl) :
-	proposer_context(c),
-	bl(proposal_bl),
+    Proposal(waiter&& c, bufferlist& proposal_bl) :
+      on_complete(std::forward<waiter>(c)),
+      bl(proposal_bl),
 	proposed(false),
 	proposal_time(ceph::mono_clock::now())
       { }
 
-    void finish(int r) {
-      if (proposer_context) {
-	proposer_context->complete(r);
-	proposer_context = NULL;
+    void finish(int r, unique_lock& l) {
+      if (on_complete) {
+	on_complete(r, l);
+	on_complete = nullptr;
       }
     }
   };
@@ -219,23 +224,21 @@ public:
   /*
    * finish and destroy a sequence of Contexts
    */
-  inline void finish_proposals(C_Proposal::Queue& finished,
+  inline void finish_proposals(Proposal::Queue& finished,
+			       unique_lock& l,
 			       int result = 0)
   {
     if (finished.empty())
       return;
 
-    C_Proposal::Queue q;
+    Proposal::Queue q;
     q.splice(q.end(), finished);
 
     while (q.size()) {
-      C_Proposal::Queue::iterator it = q.begin();
-      Context& c = *it;
-      // Erase doesn't deallocate and complete does. Alternatively we
-      // could make the hook auto_unlink and just let the destructor
-      // remove it.
-      q.erase(it);
-      c.complete(result);
+      Proposal& p = q.front();
+      q.pop_front();
+      p.finish(result, l);
+      delete &p;
     }
   }
 
@@ -364,7 +367,7 @@ private:
   /**
    * List of callbacks waiting for our state to change into STATE_ACTIVE.
    */
-  std::vector<Context*> waiting_for_active;
+  cohort::FunQueue<void(int, unique_lock& l)> waiting_for_active;
   /**
    * List of callbacks waiting for the chance to read a version from us.
    *
@@ -380,7 +383,7 @@ private:
    * with the latest proposal, or if we don't really care about the remaining
    * uncommitted values --, or if we're on a quorum of one.
    */
-  std::vector<Context*> waiting_for_readable;
+  cohort::FunQueue<void(int, unique_lock&)> waiting_for_readable;
   /**
    * @}
    */
@@ -439,7 +442,7 @@ private:
   /**
    * Used to specify when an on-going collect phase times out.
    */
-  Context    *collect_timeout_event;
+  uint64_t collect_timeout_event;
   /**
    * @}
    */
@@ -461,11 +464,11 @@ private:
   /**
    * Callback responsible for extending the lease periodically.
    */
-  Context    *lease_renew_event;
+  uint64_t lease_renew_event;
   /**
    * Callback to trigger new elections once the time for acks is out.
    */
-  Context    *lease_ack_timeout_event;
+  uint64_t lease_ack_timeout_event;
   /**
    * @}
    */
@@ -480,7 +483,7 @@ private:
    * we cancel the event and reschedule a new one with starting from the
    * beginning).
    */
-  Context    *lease_timeout_event;
+  uint64_t lease_timeout_event;
   /**
    * @}
    */
@@ -521,7 +524,7 @@ private:
    * from the quorum, then we cannot extend the lease, as some participants
    * may not have the latest committed value.
    */
-  Context    *accept_timeout_event;
+  uint64_t accept_timeout_event;
 
   /**
    * List of callbacks waiting for it to be possible to write again.
@@ -529,7 +532,7 @@ private:
    * @remarks It is not possible to write if we are not the Leader, or we are
    *	      not on the active state, or if the lease has expired.
    */
-  std::vector<Context*> waiting_for_writeable;
+  cohort::FunQueue<void(int, unique_lock&)> waiting_for_writeable;
   /**
    * List of callbacks waiting for a commit to finish.
    *
@@ -538,11 +541,11 @@ private:
    *	      next commit to be finished so we are sure that our value was
    *	      fully committed.
    */
-  std::vector<Context*> waiting_for_commit;
+  cohort::FunQueue<void(int, unique_lock&)> waiting_for_commit;
   /**
    *
    */
-  C_Proposal::Queue proposals; /* intrusive queue */
+  Proposal::Queue proposals; /* intrusive queue */
   /**
    * @}
    */
@@ -564,88 +567,6 @@ private:
    */
   bool trimming;
 
-  /**
-   * @defgroup Paxos_h_callbacks Callback classes.
-   * @{
-   */
-  /**
-   * Callback class responsible for handling a Collect Timeout.
-   */
-  class C_CollectTimeout : public Context {
-    Paxos *paxos;
-  public:
-    C_CollectTimeout(Paxos *p) : paxos(p) {}
-    void finish(int r) {
-      if (r == -ECANCELED)
-	return;
-      paxos->collect_timeout();
-    }
-  };
-
-  /**
-   * Callback class responsible for handling an Accept Timeout.
-   */
-  class C_AcceptTimeout : public Context {
-    Paxos *paxos;
-  public:
-    C_AcceptTimeout(Paxos *p) : paxos(p) {}
-    void finish(int r) {
-      if (r == -ECANCELED)
-	return;
-      paxos->accept_timeout();
-    }
-  };
-
-  /**
-   * Callback class responsible for handling a Lease Ack Timeout.
-   */
-  class C_LeaseAckTimeout : public Context {
-    Paxos *paxos;
-  public:
-    C_LeaseAckTimeout(Paxos *p) : paxos(p) {}
-    void finish(int r) {
-      if (r == -ECANCELED)
-	return;
-      paxos->lease_ack_timeout();
-    }
-  };
-
-  /**
-   * Callback class responsible for handling a Lease Timeout.
-   */
-  class C_LeaseTimeout : public Context {
-    Paxos *paxos;
-  public:
-    C_LeaseTimeout(Paxos *p) : paxos(p) {}
-    void finish(int r) {
-      if (r == -ECANCELED)
-	return;
-      paxos->lease_timeout();
-    }
-  };
-
-  /**
-   * Callback class responsible for handling a Lease Renew Timeout.
-   */
-  class C_LeaseRenew : public Context {
-    Paxos *paxos;
-  public:
-    C_LeaseRenew(Paxos *p) : paxos(p) {}
-    void finish(int r) {
-      if (r == -ECANCELED)
-	return;
-      paxos->lease_renew_timeout();
-    }
-  };
-
-  class C_Trimmed : public Context {
-    Paxos *paxos;
-  public:
-    C_Trimmed(Paxos *p) : paxos(p) { }
-    void finish(int r) {
-      paxos->trimming = false;
-    }
-  };
   /**
    * @}
    */
@@ -695,7 +616,7 @@ private:
    *
    * @param collect The collect message sent by the Leader to the Peon.
    */
-  void handle_collect(MMonPaxos *collect);
+  void handle_collect(MMonPaxos *collect, unique_lock& l);
   /**
    * Handle a response from a Peon to the Leader's collect phase.
    *
@@ -726,7 +647,7 @@ private:
    *
    * @param last The message sent by the Peon to the Leader.
    */
-  void handle_last(MMonPaxos *last);
+  void handle_last(MMonPaxos *last, unique_lock& l);
   /**
    * The Recovery Phase timed out, meaning that a significant part of the
    * quorum does not believe we are the Leader, and we thus should trigger new
@@ -768,7 +689,7 @@ private:
    *
    * @param value The value being proposed to the quorum
    */
-  void begin(bufferlist& value);
+  void begin(bufferlist& value, unique_lock& l);
   /**
    * Accept or decline (by ignoring) a proposal from the Leader.
    *
@@ -812,7 +733,7 @@ private:
    * @param accept The message sent by the Peons to the Leader during the
    *		   Paxos::handle_begin function
    */
-  void handle_accept(MMonPaxos *accept);
+  void handle_accept(MMonPaxos *accept, unique_lock& l);
   /**
    * Trigger a fresh election.
    *
@@ -861,7 +782,7 @@ private:
    * @param commit The message sent by the Leader to the Peon during
    *		   Paxos::commit
    */
-  void handle_commit(MMonPaxos *commit);
+  void handle_commit(MMonPaxos *commit, unique_lock& l);
   /**
    * Extend the system's lease.
    *
@@ -905,7 +826,7 @@ private:
    * @param The message sent by the Leader to the Peon during the
    *	    Paxos::extend_lease function
    */
-  void handle_lease(MMonPaxos *lease);
+  void handle_lease(MMonPaxos *lease, unique_lock& l);
   /**
    * Account for all the Lease Acks the Leader receives from the Peons.
    *
@@ -962,7 +883,7 @@ private:
   /**
    * Shutdown this Paxos machine
    */
-  void shutdown();
+  void shutdown(unique_lock& l);
 
   /**
    * Generate a new Proposal Number based on @p gt
@@ -985,11 +906,11 @@ private:
    * @param bl The bufferlist to be proposed
    * @param onfinished The callback to be called once the proposal finishes
    */
-  void queue_proposal(bufferlist& bl, Context *onfinished);
+  void queue_proposal(bufferlist& bl, waiter&& onfinished);
   /**
    * Begin proposing the Proposal at the front of the proposals queue.
    */
-  void propose_queued();
+  void propose_queued(unique_lock& l);
 
   /**
    * refresh state from store
@@ -999,10 +920,10 @@ private:
    *
    * @returns true on success, false if we are now bootstrapping
    */
-  bool do_refresh();
+  bool do_refresh(unique_lock& l);
 
-  void commit_proposal();
-  void finish_round();
+  void commit_proposal(unique_lock& l);
+  void finish_round(unique_lock& l);
 
 public:
   /**
@@ -1018,9 +939,10 @@ public:
     return paxos_name;
   }
 
-  void dispatch(PaxosServiceMessage *m);
+  void dispatch(PaxosServiceMessage *m, unique_lock& l);
 
-  void read_and_prepare_transactions(MonitorDBStore::Transaction *tx, version_t from, version_t last);
+  void read_and_prepare_transactions(MonitorDBStore::Transaction *tx,
+				     version_t from, version_t last);
 
   void init();
 
@@ -1037,7 +959,7 @@ public:
    */
   bool is_consistent();
 
-  void restart();
+  void restart(unique_lock& l);
   /**
    * Initiate the Leader after it wins an election.
    *
@@ -1050,7 +972,7 @@ public:
    * @post We are either on STATE_ACTIVE if we're the only one in the quorum,
    *	   or on STATE_RECOVERING otherwise.
    */
-  void leader_init();
+  void leader_init(unique_lock& l);
   /**
    * Initiate a Peon after it loses an election.
    *
@@ -1062,7 +984,7 @@ public:
    * @post We are on STATE_RECOVERING and will soon receive collect phase's
    *	   messages.
    */
-  void peon_init();
+  void peon_init(unique_lock& l);
 
   /**
    * Include an incremental state of values, ranging from peer_first_committed
@@ -1131,8 +1053,8 @@ public:
    *
    * @param c A callback
    */
-  void wait_for_active(Context *c) {
-    waiting_for_active.push_back(c);
+  void wait_for_active(waiter&& c) {
+    waiting_for_active.add(std::forward<waiter>(c));
   }
 
   /**
@@ -1209,9 +1131,9 @@ public:
    *
    * @param onreadable A callback
    */
-  void wait_for_readable(Context *onreadable) {
+  void wait_for_readable(waiter&& onreadable) {
     assert(!is_readable());
-    waiting_for_readable.push_back(onreadable);
+    waiting_for_readable.add(std::forward<waiter>(onreadable));
   }
   /**
    * @}
@@ -1245,9 +1167,9 @@ public:
    *
    * @param c A callback
    */
-  void wait_for_writeable(Context *c) {
+  void wait_for_writeable(waiter&& c) {
     assert(!is_writeable());
-    waiting_for_writeable.push_back(c);
+    waiting_for_writeable.add(std::forward<waiter>(c));
   }
 
   /**
@@ -1266,15 +1188,17 @@ public:
    * @param bl A bufferlist holding the value to be proposed
    * @param onfinish A callback to be fired up once we finish the proposal
    */
-  bool propose_new_value(bufferlist& bl, Context *onfinished=0);
+  bool propose_new_value(bufferlist& bl, unique_lock& l,
+			 waiter&& onfinished=0);
+  bool propose_new_value(bufferlist& bl, unique_lock& l);
   /**
    * Add oncommit to the back of the list of callbacks waiting for us to
    * finish committing.
    *
    * @param oncommit A callback
    */
-  void wait_for_commit(Context *oncommit) {
-    waiting_for_commit.push_back(oncommit);
+  void wait_for_commit(waiter&& oncommit) {
+    waiting_for_commit.add(std::forward<waiter>(oncommit));
   }
   /**
    * @}
@@ -1283,7 +1207,7 @@ public:
   MonitorDBStore *get_store();
 };
 
-inline ostream& operator<<(ostream& out, Paxos::C_Proposal& p)
+inline ostream& operator<<(ostream& out, Paxos::Proposal& p)
 {
   string proposed = (p.proposed ? "proposed" : "unproposed");
   out << " " << proposed

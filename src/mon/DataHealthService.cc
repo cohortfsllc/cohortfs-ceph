@@ -247,7 +247,7 @@ void DataHealthService::handle_tell(MMonHealth *m)
   stats[m->get_source_inst()] = m->data_stats;
 }
 
-bool DataHealthService::service_dispatch(MMonHealth *m)
+bool DataHealthService::service_dispatch(MMonHealth *m, unique_lock& l)
 {
   ldout(mon->cct, 10) << __func__ << " " << *m << dendl;
   assert(m->get_service_type() == get_type());

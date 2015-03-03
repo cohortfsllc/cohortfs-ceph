@@ -38,8 +38,9 @@ private:
   void encode_pending(MonitorDBStore::Transaction *t);
   virtual void encode_full(MonitorDBStore::Transaction *t);
   version_t get_trim_to();
-  bool preprocess_query(PaxosServiceMessage *m);  // true if processed.
-  bool prepare_update(PaxosServiceMessage *m);
+  // true if processed.
+  bool preprocess_query(PaxosServiceMessage *m, unique_lock& l);
+  bool prepare_update(PaxosServiceMessage *m, unique_lock& l);
 
   bool preprocess_log(MLog *m);
   bool prepare_log(MLog *m);
@@ -52,11 +53,11 @@ private:
     return true;
   }
 
-  struct C_Log : public Context {
+  struct CB_Log {
     LogMonitor *logmon;
     MLog *ack;
-    C_Log(LogMonitor *p, MLog *a) : logmon(p), ack(a) {}
-    void finish(int r) {
+    CB_Log(LogMonitor *p, MLog *a) : logmon(p), ack(a) {}
+    void operator()(int r, unique_lock& l) {
       if (r == -ECANCELED) {
 	if (ack)
 	  ack->put();
@@ -66,8 +67,8 @@ private:
     }
   };
 
-  bool preprocess_command(MMonCommand *m);
-  bool prepare_command(MMonCommand *m);
+  bool preprocess_command(MMonCommand *m, unique_lock& l);
+  bool prepare_command(MMonCommand *m, unique_lock& l);
 
   bool _create_sub_summary(MLog *mlog, int level);
   void _create_sub_incremental(MLog *mlog, int level, version_t sv);
@@ -79,7 +80,7 @@ private:
   LogMonitor(Monitor *mn, Paxos *p, const string& service_name)
     : PaxosService(mn, p, service_name) { }
 
-  void tick();	// check state, take actions
+  void tick(unique_lock& l); // check state, take actions
 
   void check_subs();
   void check_sub(Subscription *s);

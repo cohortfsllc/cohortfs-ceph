@@ -68,7 +68,7 @@ ostream& operator<<(ostream& out, LogMonitor& pm)
  Tick function to update the map based on performance every N seconds
 */
 
-void LogMonitor::tick()
+void LogMonitor::tick(unique_lock& l)
 {
   if (!is_active()) return;
 
@@ -225,12 +225,12 @@ version_t LogMonitor::get_trim_to()
   return 0;
 }
 
-bool LogMonitor::preprocess_query(PaxosServiceMessage *m)
+bool LogMonitor::preprocess_query(PaxosServiceMessage *m, unique_lock& l)
 {
   ldout(mon->cct, 10) << "preprocess_query " << *m << " from " << m->get_orig_source_inst() << dendl;
   switch (m->get_type()) {
   case MSG_MON_COMMAND:
-    return preprocess_command(static_cast<MMonCommand*>(m));
+    return preprocess_command(static_cast<MMonCommand*>(m), l);
 
   case MSG_LOG:
     return preprocess_log((MLog*)m);
@@ -242,12 +242,12 @@ bool LogMonitor::preprocess_query(PaxosServiceMessage *m)
   }
 }
 
-bool LogMonitor::prepare_update(PaxosServiceMessage *m)
+bool LogMonitor::prepare_update(PaxosServiceMessage *m, unique_lock& l)
 {
   ldout(mon->cct, 10) << "prepare_update " << *m << " from " << m->get_orig_source_inst() << dendl;
   switch (m->get_type()) {
   case MSG_MON_COMMAND:
-    return prepare_command(static_cast<MMonCommand*>(m));
+    return prepare_command(static_cast<MMonCommand*>(m), l);
   case MSG_LOG:
     return prepare_log((MLog*)m);
   default:
@@ -309,7 +309,7 @@ bool LogMonitor::prepare_log(MLog *m)
       pending_log.insert(pair<ceph::real_time,LogEntry>(p->stamp, *p));
     }
   }
-  wait_for_finished_proposal(new C_Log(this, m));
+  wait_for_finished_proposal(CB_Log(this, m));
   return true;
 }
 
@@ -334,7 +334,7 @@ bool LogMonitor::should_propose(ceph::timespan& delay)
 }
 
 
-bool LogMonitor::preprocess_command(MMonCommand *m)
+bool LogMonitor::preprocess_command(MMonCommand *m, unique_lock& l)
 {
   int r = -1;
   bufferlist rdata;
@@ -343,14 +343,14 @@ bool LogMonitor::preprocess_command(MMonCommand *m)
   if (r != -1) {
     string rs;
     getline(ss, rs);
-    mon->reply_command(m, r, rs, rdata, get_last_committed());
+    mon->reply_command(m, r, rs, rdata, get_last_committed(), l);
     return true;
   } else
     return false;
 }
 
 
-bool LogMonitor::prepare_command(MMonCommand *m)
+bool LogMonitor::prepare_command(MMonCommand *m, unique_lock& l)
 {
   stringstream ss;
   string rs;
@@ -360,7 +360,7 @@ bool LogMonitor::prepare_command(MMonCommand *m)
   if (!cmdmap_from_json(m->cmd, &cmdmap, ss)) {
     // ss has reason for failure
     string rs = ss.str();
-    mon->reply_command(m, -EINVAL, rs, get_last_committed());
+    mon->reply_command(m, -EINVAL, rs, get_last_committed(), l);
     return true;
   }
 
@@ -369,7 +369,7 @@ bool LogMonitor::prepare_command(MMonCommand *m)
 
   MonSession *session = m->get_session();
   if (!session) {
-    mon->reply_command(m, -EACCES, "access denied", get_last_committed());
+    mon->reply_command(m, -EACCES, "access denied", get_last_committed(), l);
     return true;
   }
 
@@ -384,14 +384,14 @@ bool LogMonitor::prepare_command(MMonCommand *m)
     le.msg = str_join(logtext, " ");
     pending_summary.add(le);
     pending_log.insert(pair<ceph::real_time,LogEntry>(le.stamp, le));
-    wait_for_finished_proposal(new Monitor::C_Command(
+    wait_for_finished_proposal(Monitor::CB_Command(
 				 mon, m, 0, string(),
 				 get_last_committed() + 1));
     return true;
   }
 
   getline(ss, rs);
-  mon->reply_command(m, err, rs, get_last_committed());
+  mon->reply_command(m, err, rs, get_last_committed(), l);
   return false;
 }
 

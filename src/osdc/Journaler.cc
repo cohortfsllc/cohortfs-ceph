@@ -475,7 +475,8 @@ uint64_t Journaler::append_entry(bufferlist& bl)
   uint64_t write_obj = write_pos / su;
   uint64_t flush_obj = flush_pos / su;
   if (write_obj != flush_obj) {
-    ldout(cct, 10) << " flushing completed object(s) (su " << su << " wro " << write_obj << " flo " << flush_obj << ")" << dendl;
+    ldout(cct, 10) << " flushing completed object(s) (su " << su << " wro "
+		   << write_obj << " flo " << flush_obj << ")" << dendl;
     _do_flush(write_buf.length() - write_off);
   }
 
@@ -485,6 +486,7 @@ uint64_t Journaler::append_entry(bufferlist& bl)
 
 void Journaler::_do_flush(unsigned amount)
 {
+  delay_flush_event = 0;
   if (write_pos == flush_pos)
     return;
   assert(write_pos > flush_pos);
@@ -548,8 +550,10 @@ void Journaler::_do_flush(unsigned amount)
   flush_pos += len;
   assert(write_buf.length() == write_pos - flush_pos);
 
-  ldout(cct, 10) << "_do_flush (prezeroing/prezero)/write/flush/safe pointers now at "
-	   << "(" << prezeroing_pos << "/" << prezero_pos << ")/" << write_pos << "/" << flush_pos << "/" << safe_pos << dendl;
+  ldout(cct, 10) << "_do_flush (prezeroing/prezero)/write/flush/safe pointers "
+		 << "now at " << "(" << prezeroing_pos << "/" << prezero_pos
+		 << ")/" << write_pos << "/" << flush_pos << "/" << safe_pos
+		 << dendl;
 
   _issue_prezero();
 }
@@ -563,8 +567,10 @@ void Journaler::wait_for_flush(Context *onsafe)
   // all flushed and safe?
   if (write_pos == safe_pos) {
     assert(write_buf.length() == 0);
-    ldout(cct, 10) << "flush nothing to flush, (prezeroing/prezero)/write/flush/safe pointers at "
-	     << "(" << prezeroing_pos << "/" << prezero_pos << ")/" << write_pos << "/" << flush_pos << "/" << safe_pos << dendl;
+    ldout(cct, 10) << "flush nothing to flush, (prezeroing/prezero)/write/"
+		   << "flush/safe pointers at " << "(" << prezeroing_pos
+		   << "/" << prezero_pos << ")/" << write_pos << "/"
+		   << flush_pos << "/" << safe_pos << dendl;
     if (onsafe) {
       onsafe->complete(0);
       onsafe = 0;
@@ -583,8 +589,10 @@ void Journaler::flush(Context *onsafe)
 
   if (write_pos == flush_pos) {
     assert(write_buf.length() == 0);
-    ldout(cct, 10) << "flush nothing to flush, (prezeroing/prezero)/write/flush/safe pointers at "
-	     << "(" << prezeroing_pos << "/" << prezero_pos << ")/" << write_pos << "/" << flush_pos << "/" << safe_pos << dendl;
+    ldout(cct, 10)
+      << "flush nothing to flush, (prezeroing/prezero)/write/flush/safe "
+      << "pointers at (" << prezeroing_pos << "/" << prezero_pos << ")/"
+      << write_pos << "/" << flush_pos << "/" << safe_pos << dendl;
     if (onsafe) {
       onsafe->complete(0);
     }
@@ -595,11 +603,11 @@ void Journaler::flush(Context *onsafe)
 	// delay!  schedule an event.
 	ldout(cct, 20) << "flush delaying flush" << dendl;
 	if (delay_flush_event)
-	  timer->cancel_event(delay_flush_event);
-	delay_flush_event = new C_DelayFlush(this);
-	timer->add_event_after(ceph::span_from_double(
-				 cct->_conf->journaler_batch_interval),
-			       delay_flush_event);
+	  timer.cancel_event(delay_flush_event);
+	delay_flush_event =
+	  timer.add_event(
+	    ceph::span_from_double(cct->_conf->journaler_batch_interval),
+	    &Journaler::_do_flush, this, 0);
       } else {
 	ldout(cct, 20) << "flush not delaying flush" << dendl;
 	_do_flush();

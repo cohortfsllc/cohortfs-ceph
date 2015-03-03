@@ -54,7 +54,7 @@ MonClient::MonClient(CephContext *cct_) :
   messenger(NULL),
   cur_con(NULL),
   rng(getpid()),
-  timer(monc_lock), finisher(cct_),
+  finisher(cct_),
   authorize_handler_registry(NULL),
   initialized(false),
   no_keyring_disabled_cephx(false),
@@ -361,7 +361,7 @@ int MonClient::init()
 
   entity_name = cct->_conf->name;
 
-  std::lock_guard<std::mutex> l(monc_lock);
+  std::unique_lock<std::mutex> l(monc_lock);
 
   string method;
     if (cct->_conf->auth_supported.length() != 0)
@@ -399,7 +399,8 @@ int MonClient::init()
 
   initialized = true;
 
-  timer.init();
+  l.unlock();
+
   finisher.start();
   schedule_tick();
 
@@ -429,9 +430,8 @@ void MonClient::shutdown()
   if (initialized) {
     finisher.stop();
   }
-  l.lock();
-  timer.shutdown(l);
 
+  l.lock();
   cur_con->get_messenger()->mark_down(cur_con);
   cur_con.reset(NULL);
 
@@ -694,6 +694,8 @@ void MonClient::tick()
 {
   ldout(cct, 10) << "tick" << dendl;
 
+  std::unique_lock<std::mutex> l(monc_lock);
+
   _check_auth_tickets();
 
   if (hunting) {
@@ -722,18 +724,28 @@ void MonClient::tick()
     }
   }
 
-  schedule_tick();
+  l.unlock();
+
+  if (hunting)
+    timer.reschedule_me(ceph::span_from_double(
+			  cct->_conf->mon_client_hunt_interval
+			  * reopen_interval_multiplier));
+  else
+    timer.reschedule_me(ceph::span_from_double(
+			  cct->_conf->mon_client_ping_interval));
 }
 
 void MonClient::schedule_tick()
 {
   if (hunting)
-    timer.add_event_after(ceph::span_from_double(
-			    cct->_conf->mon_client_hunt_interval
-			    * reopen_interval_multiplier), new C_Tick(this));
+    timer.add_event(ceph::span_from_double(
+		      cct->_conf->mon_client_hunt_interval
+		      * reopen_interval_multiplier),
+		    &MonClient::tick, this);
   else
-    timer.add_event_after(ceph::span_from_double(
-			    cct->_conf->mon_client_ping_interval), new C_Tick(this));
+    timer.add_event(ceph::span_from_double(
+		      cct->_conf->mon_client_ping_interval),
+		    &MonClient::tick, this);
 }
 
 // ---------
@@ -963,9 +975,10 @@ int MonClient::start_mon_command(const vector<string>& cmd,
   r->prs = outs;
   r->onfinish = onfinish;
   if (cct->_conf->rados_mon_op_timeout > 0) {
-    r->ontimeout = new C_CancelMonCommand(r->tid, this);
-    timer.add_event_after(ceph::span_from_double(
-			    cct->_conf->rados_mon_op_timeout), r->ontimeout);
+    r->ontimeout =
+      timer.add_event(
+	ceph::span_from_double(cct->_conf->rados_mon_op_timeout),
+	&MonClient::_cancel_mon_command, this, r->tid, -ETIMEDOUT);
   }
   mon_commands[r->tid] = r;
   _send_command(r);

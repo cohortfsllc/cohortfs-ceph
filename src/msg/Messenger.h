@@ -31,8 +31,6 @@
 #include <sstream>
 
 class MDS;
-class Timer;
-
 
 class Messenger {
 private:

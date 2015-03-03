@@ -81,7 +81,6 @@
 // cons/des
 MDS::MDS(const std::string &n, Messenger *m, MonClient *mc) :
   Dispatcher(m->cct),
-  timer(mds_lock),
   authorize_handler_cluster_registry(new AuthAuthorizeHandlerRegistry(
 				       m->cct,
 				       m->cct->_conf->auth_supported.length() ?
@@ -331,7 +330,6 @@ int MDS::init(int wanted_state)
   dout(10) << sizeof(Capability) << "\tCapability " << dendl;
   dout(10) << sizeof(xlist<void*>::item) << "\t xlist<>::item	*2=" << 2*sizeof(xlist<void*>::item) << dendl;
 
-  objecter->init();
   messenger->add_dispatcher_tail(objecter);
   messenger->add_dispatcher_tail(this);
 
@@ -394,7 +392,6 @@ int MDS::init(int wanted_state)
   }
 
   ml.lock();
-  timer.init();
 
   if (wanted_state==MDSMap::STATE_BOOT && cct->_conf->mds_standby_replay)
     wanted_state = MDSMap::STATE_STANDBY_REPLAY;
@@ -427,7 +424,9 @@ int MDS::init(int wanted_state)
   } else if (!standby_type && !standby_for_name.empty())
     standby_for_rank = MDSMap::MDS_MATCHED_ACTIVE;
 
+  ml.unlock();
   beacon_start();
+  ml.lock();
   whoami = -1;
   messenger->set_myname(entity_name_t::MDS(whoami));
 
@@ -442,20 +441,24 @@ int MDS::init(int wanted_state)
 void MDS::reset_tick()
 {
   // cancel old
-  if (tick_event) timer.cancel_event(tick_event);
+  if (tick_event)
+    timer.cancel_event(tick_event);
 
   // schedule
-  tick_event = new C_MDS_Tick(this);
-  timer.add_event_after(
-    ceph::span_from_double(cct->_conf->mds_tick_interval), tick_event);
+  tick_event =
+    timer.add_event(
+      ceph::span_from_double(cct->_conf->mds_tick_interval),
+      &MDS::tick, this);
 }
 
 void MDS::tick()
 {
+  unique_lock ml(mds_lock);
   tick_event = 0;
 
   // reschedule
-  reset_tick();
+  tick_event = timer.reschedule_me(
+      ceph::span_from_double(cct->_conf->mds_tick_interval));
 
   if (is_laggy()) {
     dout(5) << "tick bailing out since we seem laggy" << dendl;
@@ -501,13 +504,18 @@ void MDS::tick()
 
 void MDS::beacon_start()
 {
-  beacon_send();	 // send first beacon
+  beacon_sender = timer.add_event(
+    ceph::span_from_double(
+      cct->_conf->mds_beacon_interval),
+    &MDS::beacon_send, this);
 }
 
 
 
 void MDS::beacon_send()
 {
+  unique_lock ml(mds_lock);
+  beacon_sender = 0;
   ++beacon_last_seq;
   dout(10) << "beacon_send " << ceph_mds_state_name(want_state)
 	   << " seq " << beacon_last_seq
@@ -530,10 +538,11 @@ void MDS::beacon_send()
   monc->send_mon_message(beacon);
 
   // schedule next sender
-  if (beacon_sender) timer.cancel_event(beacon_sender);
-  beacon_sender = new C_MDS_BeaconSender(this);
-  timer.add_event_after(ceph::span_from_double(
-			  cct->_conf->mds_beacon_interval), beacon_sender);
+  if (beacon_sender)
+    timer.cancel_event(beacon_sender);
+  beacon_sender = timer.reschedule_me(
+    ceph::span_from_double(
+      cct->_conf->mds_beacon_interval));
 }
 
 
@@ -1318,6 +1327,7 @@ void MDS::_standby_replay_restart_finish(unique_lock& ml, int r,
 
 inline void MDS::standby_replay_restart()
 {
+  unique_lock ml(mds_lock);
   Context *c;
   dout(1) << "standby_replay_restart" << (standby_replaying ? " (as standby)":" (final takeover pass)") << dendl;
 
@@ -1335,16 +1345,6 @@ inline void MDS::standby_replay_restart()
   }
 }
 
-class MDS::C_MDS_StandbyReplayRestart : public Context {
-  MDS *mds;
-public:
-  C_MDS_StandbyReplayRestart(MDS *m) : mds(m) {}
-  void finish(int r) {
-    assert(!r);
-    mds->standby_replay_restart();
-  }
-};
-
 void MDS::replay_done(unique_lock& ml)
 {
   dout(1) << "replay_done" << (standby_replaying ? " (as standby)" : "") << dendl;
@@ -1357,14 +1357,15 @@ void MDS::replay_done(unique_lock& ml)
 
   if (is_standby_replay()) {
     dout(10) << "setting replay timer" << dendl;
-    timer.add_event_after(
+    timer.add_event(
       ceph::span_from_double(cct->_conf->mds_replay_interval),
-      new C_MDS_StandbyReplayRestart(this));
+      &MDS::standby_replay_restart, this);
     return;
   }
 
   if (standby_replaying) {
-    dout(10) << " last replay pass was as a standby; making final pass" << dendl;
+    dout(10) << " last replay pass was as a standby; making final pass"
+	     << dendl;
     standby_replaying = false;
     standby_replay_restart();
     return;
@@ -1604,15 +1605,13 @@ void MDS::suicide(unique_lock& ml)
     unlock = true;
     ml.lock();
   }
-  timer.shutdown(ml);
   if (unlock)
     ml.unlock();
 
   // shut down cache
   mdcache->shutdown();
 
-  if (objecter->initialized)
-    objecter->shutdown();
+  objecter->shutdown();
 
   monc->shutdown();
 

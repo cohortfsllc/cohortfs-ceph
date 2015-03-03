@@ -16,12 +16,12 @@
 #define CEPH_PAXOSSERVICE_H
 
 #include "messages/PaxosServiceMessage.h"
-#include "include/Context.h"
 #include "include/stringify.h"
 #include <errno.h>
 #include "Paxos.h"
 #include "Monitor.h"
 #include "MonitorDBStore.h"
+#include "common/FunQueue.h"
 
 class Monitor;
 class Paxos;
@@ -37,6 +37,7 @@ class PaxosService {
    * @{
    */
  public:
+  typedef Monitor::unique_lock unique_lock;
   /**
    * The Monitor to which this class is associated with
    */
@@ -71,7 +72,7 @@ class PaxosService {
    * Event callback responsible for proposing our pending value once a timer
    * runs out and fires.
    */
-  Context *proposal_timer;
+  uint64_t proposal_timer;
   /**
    * If the implementation class has anything pending to be proposed to Paxos,
    * then have_pending should be true; otherwise, false.
@@ -102,14 +103,15 @@ protected:
    * instance of this class onto the Paxos::wait_for_readable function, and
    * we will retry the whole dispatch again once the callback is fired.
    */
-  class C_RetryMessage : public Context {
-    PaxosService *svc;
+  class CB_RetryMessage {
+    PaxosService* svc;
     PaxosServiceMessage *m;
   public:
-    C_RetryMessage(PaxosService *s, PaxosServiceMessage *m_) : svc(s), m(m_) {}
-    void finish(int r) {
+    CB_RetryMessage(PaxosService *s, PaxosServiceMessage *m_)
+      : svc(s), m(m_) {}
+    void operator()(int r, unique_lock& l) {
       if (r == -EAGAIN || r >= 0)
-	svc->dispatch(m);
+	svc->dispatch(m, l);
       else if (r == -ECANCELED)
 	m->put();
       else
@@ -125,32 +127,16 @@ protected:
    * our proposed value, to waiting for the Paxos to become active once an
    * election is finished.
    */
-  class C_Active : public Context {
+  // A lot of these CBs can be replaced by straight up function calls,
+  // we just have to see how many of them respond differently
+  // depending on cancellation.
+  class CB_Active {
     PaxosService *svc;
   public:
-    C_Active(PaxosService *s) : svc(s) {}
-    void finish(int r) {
+    CB_Active(PaxosService *s) : svc(s) {}
+    void operator()(int r, unique_lock& l) {
       if (r >= 0)
-	svc->_active();
-    }
-  };
-
-  /**
-   * Callback class used to propose the pending value once the proposal_timer
-   * fires up.
-   */
-  class C_Propose : public Context {
-    PaxosService *ps;
-  public:
-    C_Propose(PaxosService *p) : ps(p) { }
-    void finish(int r) {
-      ps->proposal_timer = 0;
-      if (r >= 0)
-	ps->propose_pending();
-      else if (r == -ECANCELED || r == -EAGAIN)
-	return;
-      else
-	assert(0 == "bad return value for C_Propose");
+	svc->_active(l);
     }
   };
 
@@ -164,14 +150,14 @@ protected:
    * wrong people at the wrong time, such as waking up a C_RetryMessage
    * before waking up a C_Active, thus ending up without a pending value.
    */
-  class C_Committed : public Context {
+  class CB_Committed {
     PaxosService *ps;
   public:
-    C_Committed(PaxosService *p) : ps(p) { }
-    void finish(int r) {
+    CB_Committed(PaxosService *p) : ps(p) { }
+    void operator()(int r, unique_lock& l) {
       ps->proposing = false;
       if (r >= 0)
-	ps->_active();
+	ps->_active(l);
       else if (r == -ECANCELED || r == -EAGAIN)
 	return;
       else
@@ -181,7 +167,6 @@ protected:
   /**
    * @}
    */
-  friend class C_Propose;
 
 
 public:
@@ -224,7 +209,7 @@ public:
    *
    * This means that we will cancel our proposal_timer event, if any exists.
    */
-  void restart();
+  void restart(unique_lock& l);
   /**
    * Informs this instance that an election has finished.
    *
@@ -236,14 +221,14 @@ public:
    * active; otherwise, we will wait for it to become active by adding a
    * PaxosService::C_Active callback to it.
    */
-  void election_finished();
+  void election_finished(unique_lock& l);
   /**
    * Informs this instance that it is supposed to shutdown.
    *
    * Basically, it will instruct Paxos to cancel all events/callbacks and then
    * will cancel the proposal_timer event if any exists.
    */
-  void shutdown();
+  void shutdown(unique_lock& l);
 
 private:
   /**
@@ -256,7 +241,7 @@ private:
    * @post have_pending is true iif our Monitor is the Leader and Paxos is
    *	   active
    */
-  void _active();
+  void _active(unique_lock& l);
   /**
    * Scrub our versions after we convert the store from the old layout to
    * the new k/v store.
@@ -281,7 +266,8 @@ public:
    * @note This function depends on the implementation of encode_pending on
    *	   the class that is implementing PaxosService
    */
-  void propose_pending();
+  void propose_pending_timed();
+  void propose_pending(unique_lock& l);
 
   /**
    * Let others request us to propose.
@@ -292,10 +278,10 @@ public:
    * future use -- we might want to perform additional checks or put a
    * request on hold, for instance.
    */
-  void request_proposal() {
+  void request_proposal(unique_lock& l) {
     assert(is_writeable());
 
-    propose_pending();
+    propose_pending(l);
   }
   /**
    * Request service @p other to perform a proposal.
@@ -304,11 +290,12 @@ public:
    * but we might eventually want to do something to the request -- say,
    * set a flag stating we're waiting on a cross-proposal to be finished.
    */
-  void request_proposal(PaxosService *other) {
+  void request_proposal(PaxosService *other,
+			unique_lock& l) {
     assert(other != NULL);
     assert(other->is_writeable());
 
-    other->request_proposal();
+    other->request_proposal(l);
   }
 
   /**
@@ -319,7 +306,7 @@ public:
    * @param m A message
    * @returns 'true' on successful dispatch; 'false' otherwise.
    */
-  bool dispatch(PaxosServiceMessage *m);
+  bool dispatch(PaxosServiceMessage *m, unique_lock& l);
 
   void refresh(bool *need_bootstrap);
 
@@ -402,7 +389,7 @@ public:
    *	      answered, was a state change that has no effect); 'false'
    *	      otherwise.
    */
-  virtual bool preprocess_query(PaxosServiceMessage *m) = 0;
+  virtual bool preprocess_query(PaxosServiceMessage *m, unique_lock& l) = 0;
 
   /**
    * Apply the message to the pending state.
@@ -413,7 +400,7 @@ public:
    * @returns 'true' if the update message was handled (e.g., a command that
    *	      went through); 'false' otherwise.
    */
-  virtual bool prepare_update(PaxosServiceMessage *m) = 0;
+  virtual bool prepare_update(PaxosServiceMessage *m, unique_lock& l) = 0;
   /**
    * @}
    */
@@ -444,7 +431,7 @@ public:
    *
    * @note This function may get called twice in certain recovery cases.
    */
-  virtual void on_active() { }
+  virtual void on_active(unique_lock& l) { };
 
   /**
    * This is called when we are shutting down
@@ -456,7 +443,7 @@ public:
    *
    * it should conditionally upgrade the on-disk format by proposing a transaction
    */
-  virtual void upgrade_format() { }
+  virtual void upgrade_format(unique_lock& l) { }
 
   /**
    * this is called when we detect the store has just upgraded underneath us
@@ -477,7 +464,7 @@ public:
   /**
    * Tick.
    */
-  virtual void tick() {}
+  virtual void tick(unique_lock& l) {}
 
   /**
    * Get health information
@@ -526,7 +513,8 @@ public:
    * Paxos. These callbacks will be awaken whenever the said proposal
    * finishes.
    */
-  std::vector<Context*> waiting_for_finished_proposal;
+  typedef std::function<void(int, unique_lock&)> waiter;
+  cohort::FunQueue<void(int, unique_lock&)> waiting_for_finished_proposal;
 
  public:
 
@@ -609,8 +597,8 @@ public:
    *
    * @param c The callback to be awaken once the proposal is finished.
    */
-  void wait_for_finished_proposal(Context *c) {
-    waiting_for_finished_proposal.push_back(c);
+  void wait_for_finished_proposal(waiter&& c) {
+    waiting_for_finished_proposal.add(std::forward<waiter>(c));
   }
 
   /**
@@ -618,12 +606,12 @@ public:
    *
    * @param c The callback to be awaken once we become active.
    */
-  void wait_for_active(Context *c) {
+  void wait_for_active(waiter&& c) {
     if (!is_proposing()) {
-      paxos->wait_for_active(c);
+      paxos->wait_for_active(std::forward<waiter>(c));
       return;
     }
-    wait_for_finished_proposal(c);
+    wait_for_finished_proposal(std::forward<waiter>(c));
   }
 
   /**
@@ -632,7 +620,7 @@ public:
    * @param c The callback to be awaken once we become active.
    * @param ver The version we want to wait on.
    */
-  void wait_for_readable(Context *c, version_t ver = 0) {
+  void wait_for_readable(waiter&& c, version_t ver = 0) {
     /* This is somewhat of a hack. We only do check if a version is readable on
      * PaxosService::dispatch(), but, nonetheless, we must make sure that if that
      * is why we are not readable, then we must wait on PaxosService and not on
@@ -642,9 +630,9 @@ public:
     if (is_proposing() ||
 	ver > get_last_committed() ||
 	get_last_committed() == 0)
-      wait_for_finished_proposal(c);
+      wait_for_finished_proposal(std::forward<waiter>(c));
     else
-      paxos->wait_for_readable(c);
+      paxos->wait_for_readable(std::forward<waiter>(c));
   }
 
   /**
@@ -652,13 +640,13 @@ public:
    *
    * @param c The callback to be awaken once we become writeable.
    */
-  void wait_for_writeable(Context *c) {
+  void wait_for_writeable(waiter&& c) {
     if (is_proposing())
-      wait_for_finished_proposal(c);
+      wait_for_finished_proposal(std::forward<waiter>(c));
     else if (!is_write_ready())
-      wait_for_active(c);
+      wait_for_active(std::forward<waiter>(c));
     else
-      paxos->wait_for_writeable(c);
+      paxos->wait_for_writeable(std::forward<waiter>(c));
   }
 
   /**
@@ -670,7 +658,7 @@ public:
    *
    * Called at same interval as tick()
    */
-  void maybe_trim();
+  void maybe_trim(unique_lock& l);
 
   /**
    * Auxiliary function to trim our state from version @from to version @to,

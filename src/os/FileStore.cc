@@ -422,7 +422,6 @@ FileStore::FileStore(CephContext *_cct, const std::string &base, const std::stri
   index_manager(),
   ondisk_finisher(cct),
   force_sync(false), sync_epoch(0),
-  timer(sync_entry_timeo_lock),
   stop(false), sync_thread(this),
   trace_endpoint("0.0.0.0", 0, NULL),
   fdcache(cct),
@@ -1431,8 +1430,6 @@ int FileStore::mount()
   op_finisher.start();
   ondisk_finisher.start();
 
-  timer.init();
-
   // all okay.
   return 0;
 
@@ -1493,11 +1490,6 @@ int FileStore::umount()
   }
 
   object_map.reset();
-
-  {
-    unique_lock l(sync_entry_timeo_lock);
-    timer.shutdown(l);
-  }
 
   // nothing
   return 0;
@@ -2828,14 +2820,14 @@ int FileStore::_clone_range(const coll_t &cid, const oid_t& oldoid, const oid_t&
   return r;
 }
 
-class SyncEntryTimeout : public Context {
+class SyncEntryTimeout {
 public:
   SyncEntryTimeout(CephContext* cct, ceph::timespan commit_timeo)
     : cct(cct), m_commit_timeo(commit_timeo)
   {
   }
 
-  void finish(int r) {
+  void operator()() {
     BackTrace *bt = new BackTrace(1);
     generic_dout(-1) << "FileStore: sync_entry timed out after "
 		     << m_commit_timeo << " seconds.\n";
@@ -2889,11 +2881,9 @@ void FileStore::sync_entry()
       auto start = ceph::mono_clock::now();
       uint64_t cp = apply_manager.get_committing_seq();
 
-      unique_lock setl(sync_entry_timeo_lock);
-      SyncEntryTimeout *sync_entry_timeo =
-	new SyncEntryTimeout(cct, m_filestore_commit_timeout);
-      timer.add_event_after(m_filestore_commit_timeout, sync_entry_timeo);
-      setl.unlock();
+      uint64_t sync_entry_timeo =
+	timer.add_event(m_filestore_commit_timeout,
+			SyncEntryTimeout(cct, m_filestore_commit_timeout));
 
       // make flusher stop flushing previously queued stuff
       sync_epoch++;
@@ -2985,9 +2975,7 @@ void FileStore::sync_entry()
 
       dout(15) << "sync_entry committed to op_seq " << cp << dendl;
 
-      setl.lock();
       timer.cancel_event(sync_entry_timeo);
-      setl.unlock();
     } else {
       op_tp.unpause();
     }
@@ -4467,7 +4455,6 @@ void FileStore::handle_conf_change(const struct md_config_t *conf,
     m_filestore_max_alloc_hint_size = conf->filestore_max_alloc_hint_size;
   }
   if (changed.count("filestore_commit_timeout")) {
-    lock_guard l(sync_entry_timeo_lock);
     m_filestore_commit_timeout
       = ceph::span_from_double(conf->filestore_commit_timeout);
   }

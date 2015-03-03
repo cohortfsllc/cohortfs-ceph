@@ -223,7 +223,7 @@ class Client : public Dispatcher {
   // cluster descriptors
   MDSMap *mdsmap;
 
-  SafeTimer<ceph::mono_clock> timer;
+  cohort::Timer<ceph::mono_clock> timer;
 
   client_ino_callback_t ino_invalidate_cb;
   void *ino_invalidate_cb_handle;
@@ -237,7 +237,7 @@ class Client : public Dispatcher {
   Finisher async_ino_invalidator;
   Finisher async_dentry_invalidator;
 
-  Context *tick_event;
+  uint64_t tick_event;
   ceph::mono_time last_cap_renew;
   void renew_caps();
   void renew_caps(MetaSession *session);

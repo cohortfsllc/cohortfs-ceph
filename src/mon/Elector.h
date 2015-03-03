@@ -32,6 +32,8 @@ class Monitor;
  * Leader; if we lose, it means we are a Peon.
  */
 class Elector {
+public:
+  typedef std::unique_lock<std::mutex> unique_lock;
   /**
    * @defgroup Elector_h_class Elector
    * @{
@@ -46,7 +48,7 @@ class Elector {
    * Event callback responsible for dealing with an expired election once a
    * timer runs out and fires up.
    */
-  Context *expire_event;
+  uint64_t expire_event;
 
   /**
    * Resets the expire_event timer, by cancelling any existing one and
@@ -143,36 +145,7 @@ class Elector {
    *
    * @param e Epoch to which we will update our epoch
    */
-  void bump_epoch(epoch_t e);
-
-  /**
-   * @defgroup Elector_h_callbacks Callbacks
-   * @{
-   */
-  /**
-   * This class is used as the callback when the expire_event timer fires up.
-   *
-   * If the expire_event is fired, then it means that we had an election going,
-   * either started by us or by some other participant, but it took too long,
-   * thus expiring.
-   *
-   * When the election expires, we will check if we were the ones who won, and
-   * if so we will declare victory. If that is not the case, then we assume
-   * that the one we defered to didn't declare victory quickly enough (in fact,
-   * as far as we know, we may even be dead); so, just propose ourselves as the
-   * Leader.
-   */
-  class C_ElectionExpire : public Context {
-    Elector *elector;
-  public:
-    C_ElectionExpire(Elector *e) : elector(e) { }
-    void finish(int r) {
-      elector->expire();
-    }
-  };
-  /**
-   * @}
-   */
+  void bump_epoch(epoch_t e, unique_lock& l);
 
   /**
    * Start new elections by proposing ourselves as the new Leader.
@@ -187,7 +160,7 @@ class Elector {
    * @post  we sent propose messages to all the monitors in the MonMap
    * @post  we reset the expire_event timer
    */
-  void start();
+  void start(unique_lock& l);
   /**
    * Defer the current election to some other monitor.
    *
@@ -239,7 +212,7 @@ class Elector {
    * @post  We have a quorum, composed of the monitors that acked us
    * @post  We sent a message of type OP_VICTORY to each quorum member.
    */
-  void victory();
+  void victory(unique_lock& l);
 
   /**
    * Handle a message from some other node proposing himself to become him
@@ -267,7 +240,7 @@ class Elector {
    *
    * @param m A message sent by another participant in the quorum.
    */
-  void handle_propose(class MMonElection *m);
+  void handle_propose(class MMonElection *m, unique_lock& l);
   /**
    * Handle a message from some other participant Acking us as the Leader.
    *
@@ -290,7 +263,7 @@ class Elector {
    *
    * @param m A message with an operation type of OP_ACK
    */
-  void handle_ack(class MMonElection *m);
+  void handle_ack(class MMonElection *m, unique_lock& l);
   /**
    * Handle a message from some other participant declaring Victory.
    *
@@ -311,7 +284,7 @@ class Elector {
    *
    * @param m A message with an operation type of OP_VICTORY
    */
-  void handle_victory(class MMonElection *m);
+  void handle_victory(class MMonElection *m, unique_lock& l);
   /**
    * Send a nak to a peer who's out of date, containing information about why.
    *
@@ -381,8 +354,8 @@ class Elector {
    *
    * increase election epoch by 1
    */
-  void advance_epoch() {
-    bump_epoch(epoch + 1);
+  void advance_epoch(unique_lock& l) {
+    bump_epoch(epoch + 1, l);
   }
 
   /**
@@ -395,15 +368,15 @@ class Elector {
    *
    * @param m A received message
    */
-  void dispatch(Message *m);
+  void dispatch(Message *m, unique_lock& l);
 
   /**
    * Call an election.
    *
    * This function simply calls Elector::start.
    */
-  void call_election() {
-    start();
+  void call_election(unique_lock& l) {
+    start(l);
   }
 
   /**
@@ -424,7 +397,7 @@ class Elector {
    *
    * @post  @p participating is true
    */
-  void start_participating();
+  void start_participating(unique_lock& l);
   /**
    * @}
    */

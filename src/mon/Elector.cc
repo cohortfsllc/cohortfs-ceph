@@ -47,7 +47,7 @@ void Elector::shutdown()
     mon->timer.cancel_event(expire_event);
 }
 
-void Elector::bump_epoch(epoch_t e)
+void Elector::bump_epoch(epoch_t e, unique_lock& l)
 {
   ldout(mon->cct, 10) << "bump_epoch " << epoch << " to " << e << dendl;
   assert(epoch <= e);
@@ -56,7 +56,7 @@ void Elector::bump_epoch(epoch_t e)
   t.put(Monitor::MONITOR_NAME, "election_epoch", epoch);
   mon->store->apply_transaction(t);
 
-  mon->join_election();
+  mon->join_election(l);
 
   // clear up some state
   electing_me = false;
@@ -64,7 +64,7 @@ void Elector::bump_epoch(epoch_t e)
 }
 
 
-void Elector::start()
+void Elector::start(unique_lock& l)
 {
   if (!participating) {
     ldout(mon->cct, 0) << "not starting new election -- not participating" << dendl;
@@ -77,7 +77,7 @@ void Elector::start()
 
   // start by trying to elect me
   if (epoch % 2 == 0)
-    bump_epoch(epoch+1);  // odd == election cycle
+    bump_epoch(epoch + 1, l);  // odd == election cycle
   start_stamp = ceph::mono_clock::now();
   electing_me = true;
   acked_me[mon->rank] = CEPH_FEATURES_ALL;
@@ -120,10 +120,10 @@ void Elector::reset_timer(double plus)
 {
   // set the timer
   cancel_timer();
-  expire_event = new C_ElectionExpire(this);
-  mon->timer.add_event_after(
-    ceph::span_from_double(mon->cct->_conf->mon_lease + plus),
-    expire_event);
+  expire_event =
+    mon->timer.add_event(
+      ceph::span_from_double(mon->cct->_conf->mon_lease + plus),
+      &Elector::expire, this);
 }
 
 
@@ -137,24 +137,27 @@ void Elector::cancel_timer()
 
 void Elector::expire()
 {
+  unique_lock l(mon->lock);
   ldout(mon->cct, 5) << "election timer expired" << dendl;
+
+  expire_event = 0;
 
   // did i win?
   if (electing_me &&
       acked_me.size() > (unsigned)(mon->monmap->size() / 2)) {
     // i win
-    victory();
+    victory(l);
   } else {
     // whoever i deferred to didn't declare victory quickly enough.
     if (mon->has_ever_joined)
-      start();
+      start(l);
     else
-      mon->bootstrap();
+      mon->bootstrap(l);
   }
 }
 
 
-void Elector::victory()
+void Elector::victory(unique_lock& l)
 {
   leader_acked = -1;
   electing_me = false;
@@ -170,7 +173,7 @@ void Elector::victory()
   cancel_timer();
 
   assert(epoch % 2 == 1);  // election
-  bump_epoch(epoch+1);	   // is over!
+  bump_epoch(epoch + 1, l);	   // is over!
 
   // decide my supported commands for peons to advertise
   const bufferlist *cmds_bl = NULL;
@@ -193,11 +196,11 @@ void Elector::victory()
   }
 
   // tell monitor
-  mon->win_election(epoch, quorum, features, cmds, cmdsize);
+  mon->win_election(epoch, quorum, features, cmds, cmdsize, l);
 }
 
 
-void Elector::handle_propose(MMonElection *m)
+void Elector::handle_propose(MMonElection *m, unique_lock& l)
 {
   ldout(mon->cct, 5) << "handle_propose from " << m->get_source() << dendl;
   int from = m->get_source().num();
@@ -211,7 +214,7 @@ void Elector::handle_propose(MMonElection *m)
     nak_old_peer(m);
     return;
   } else if (m->epoch > epoch) {
-    bump_epoch(m->epoch);
+    bump_epoch(m->epoch, l);
   } else if (m->epoch < epoch) {
     // got an "old" propose,
     if (epoch % 2 == 0 &&    // in a non-election cycle
@@ -220,7 +223,7 @@ void Elector::handle_propose(MMonElection *m)
       ldout(mon->cct, 5) << " got propose from old epoch, quorum is " << mon->quorum
 	      << ", " << m->get_source() << " must have just started" << dendl;
       // we may be active; make sure we reset things in the monitor appropriately.
-      mon->start_election();
+      mon->start_election(l);
     } else {
       ldout(mon->cct, 5) << " ignoring old propose" << dendl;
       m->put();
@@ -236,7 +239,7 @@ void Elector::handle_propose(MMonElection *m)
     } else {
       // wait, i should win!
       if (!electing_me) {
-	mon->start_election();
+	mon->start_election(l);
       }
     }
   } else {
@@ -254,7 +257,7 @@ void Elector::handle_propose(MMonElection *m)
   m->put();
 }
 
-void Elector::handle_ack(MMonElection *m)
+void Elector::handle_ack(MMonElection *m, unique_lock& l)
 {
   ldout(mon->cct, 5) << "handle_ack from " << m->get_source() << dendl;
   int from = m->get_source().num();
@@ -262,8 +265,8 @@ void Elector::handle_ack(MMonElection *m)
   assert(m->epoch % 2 == 1); // election
   if (m->epoch > epoch) {
     ldout(mon->cct, 5) << "woah, that's a newer epoch, i must have rebooted.  bumping and re-starting!" << dendl;
-    bump_epoch(m->epoch);
-    start();
+    bump_epoch(m->epoch, l);
+    start(l);
     m->put();
     return;
   }
@@ -283,7 +286,7 @@ void Elector::handle_ack(MMonElection *m)
     // is that _everyone_?
     if (acked_me.size() == mon->monmap->size()) {
       // if yes, shortcut to election finish
-      victory();
+      victory(l);
     }
   } else {
     // ignore, i'm deferring already.
@@ -294,7 +297,7 @@ void Elector::handle_ack(MMonElection *m)
 }
 
 
-void Elector::handle_victory(MMonElection *m)
+void Elector::handle_victory(MMonElection *m, unique_lock& l)
 {
   ldout(mon->cct, 5) << "handle_victory from " << m->get_source() << " quorum_features " << m->quorum_features << dendl;
   int from = m->get_source().num();
@@ -307,16 +310,16 @@ void Elector::handle_victory(MMonElection *m)
   // i should have seen this election if i'm getting the victory.
   if (m->epoch != epoch + 1) {
     ldout(mon->cct, 5) << "woah, that's a funny epoch, i must have rebooted.  bumping and re-starting!" << dendl;
-    bump_epoch(m->epoch);
-    start();
+    bump_epoch(m->epoch, l);
+    start(l);
     m->put();
     return;
   }
 
-  bump_epoch(m->epoch);
+  bump_epoch(m->epoch, l);
 
   // they win
-  mon->lose_election(epoch, m->quorum, from, m->quorum_features);
+  mon->lose_election(epoch, m->quorum, from, m->quorum_features, l);
 
   // cancel my timer
   cancel_timer();
@@ -369,7 +372,7 @@ void Elector::handle_nak(MMonElection *m)
   // the end!
 }
 
-void Elector::dispatch(Message *m)
+void Elector::dispatch(Message *m, unique_lock& l)
 {
   switch (m->get_type()) {
 
@@ -417,7 +420,7 @@ void Elector::dispatch(Message *m)
 	mon->store->apply_transaction(t);
 	//mon->monmon()->paxos->stash_latest(mon->monmap->epoch, em->monmap_bl);
 	cancel_timer();
-	mon->bootstrap();
+	mon->bootstrap(l);
 	m->put();
 	delete peermap;
 	return;
@@ -431,7 +434,7 @@ void Elector::dispatch(Message *m)
 
       switch (em->op) {
       case MMonElection::OP_PROPOSE:
-	handle_propose(em);
+	handle_propose(em, l);
 	return;
       }
 
@@ -443,10 +446,10 @@ void Elector::dispatch(Message *m)
 
       switch (em->op) {
       case MMonElection::OP_ACK:
-	handle_ack(em);
+	handle_ack(em, l);
 	return;
       case MMonElection::OP_VICTORY:
-	handle_victory(em);
+	handle_victory(em, l);
 	return;
       case MMonElection::OP_NAK:
 	handle_nak(em);
@@ -462,10 +465,10 @@ void Elector::dispatch(Message *m)
   }
 }
 
-void Elector::start_participating()
+void Elector::start_participating(unique_lock& l)
 {
   if (!participating) {
     participating = true;
-    call_election();
+    call_election(l);
   }
 }

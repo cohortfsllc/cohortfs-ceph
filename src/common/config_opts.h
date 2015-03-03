@@ -276,8 +276,8 @@ OPTION(fuse_atomic_o_trunc, OPT_BOOL, true)
 OPTION(fuse_debug, OPT_BOOL, false)
 OPTION(fuse_multithreaded, OPT_BOOL, false)
 
-OPTION(objecter_tick_interval, OPT_DOUBLE, 5.0)
-OPTION(objecter_timeout, OPT_DOUBLE, 10.0)    // before we ask for a map
+OPTION(objecter_tick_interval, OPT_INT, 5)
+OPTION(objecter_timeout, OPT_INT, 10)    // before we ask for a map
 OPTION(objecter_inflight_op_bytes, OPT_U64, 1024*1024*100) // max in-flight data (both directions)
 OPTION(objecter_inflight_ops, OPT_U64, 1024)		   // max in-flight ios
 OPTION(journaler_allow_split_entries, OPT_BOOL, true)

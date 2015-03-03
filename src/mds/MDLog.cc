@@ -50,7 +50,7 @@ void MDLog::init_journaler(VolumeRef &v)
   // log streamer
   if (journaler) delete journaler;
   journaler = new Journaler(ino, v, CEPH_FS_ONDISK_MAGIC, mds->objecter,
-			    &mds->timer);
+			    mds->timer);
   assert(journaler->is_readonly());
   journaler->set_write_error_handler(new C_MDL_WriteError(this));
 }

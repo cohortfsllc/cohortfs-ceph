@@ -52,7 +52,7 @@ void HealthMonitor::init()
   }
 }
 
-bool HealthMonitor::service_dispatch(Message *m)
+bool HealthMonitor::service_dispatch(Message *m, unique_lock& l)
 {
   assert(m->get_type() == MSG_MON_HEALTH);
   MMonHealth *hm = (MMonHealth*)m;
@@ -63,7 +63,7 @@ bool HealthMonitor::service_dispatch(Message *m)
     m->put();
     return false;
   }
-  return services[service_type]->service_dispatch(hm);
+  return services[service_type]->service_dispatch(hm, l);
 }
 
 void HealthMonitor::service_shutdown()

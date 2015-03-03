@@ -16,190 +16,268 @@
 #define CEPH_TIMER_H
 
 #include <condition_variable>
-#include <map>
+#include <functional>
 #include <mutex>
-#include <sstream>
-#include <signal.h>
-#include <sys/time.h>
-#include <math.h>
-#include <include/Context.h>
+#include <thread>
+
+#include <boost/intrusive/set.hpp>
+#include <boost/pool/object_pool.hpp>
 
 #include "include/ceph_time.h"
-#include "common/Thread.h"
 
-class CephContext;
+namespace cohort {
 
-template <class TC>
-class SafeTimerThread;
+  /// Newly constructed timer should be suspended at point of
+  /// construction.
 
-template <class TC>
-class SafeTimer
-{
-  typedef std::multimap <typename TC::time_point, Context *> scheduled_map_t;
-  typedef std::map < Context*,
-		     typename scheduled_map_t::iterator > event_lookup_map_t;
+  struct construct_suspended_t { };
+  constexpr construct_suspended_t construct_suspended { };
 
-  // This class isn't supposed to be copied
-  SafeTimer(const SafeTimer &rhs);
-  SafeTimer& operator=(const SafeTimer &rhs);
+  template <class TC>
+  class Timer
+  {
+    typedef boost::intrusive::set_member_hook<
+      boost::intrusive::link_mode< boost::intrusive::normal_link> > sh;
 
-  std::mutex& lock;
-  std::condition_variable cond;
-  bool safe_callbacks;
+    struct event {
+      typename TC::time_point t;
+      uint64_t id;
+      std::function<void()> f;
 
-  friend class SafeTimerThread<TC>;
-  SafeTimerThread<TC> *thread;
+      sh schedule_link;
+      sh event_link;
 
-  void timer_thread() {
-    std::unique_lock<std::mutex> l(lock);
-    while (!stopping) {
-      typename TC::time_point now = TC::now();
+      event() : t(TC::time_point::min()), id(0) {}
+      event(uint64_t _id) : t(TC::time_point::min()), id(_id) {}
+      event(typename TC::time_point _t, uint64_t _id,
+	    std::function<void()>&& _f) : t(_t), id(_id), f(_f) {}
+      event(typename TC::time_point _t, uint64_t _id,
+	    const std::function<void()>& _f) : t(_t), id(_id), f(_f) {}
+      bool operator <(const event& e) {
+	return t == e.t ? id < e.id : t < e.t;
+      }
+    };
+    struct SchedCompare {
+      bool operator()(const event& e1, const event& e2) const {
+	return e1.t == e2.t ? e1.id < e2.id : e1.t < e2.t;
+      }
+    };
+    struct EventCompare {
+      bool operator()(const event& e1, const event& e2) const {
+	return e1.id < e2.id;
+      }
+    };
 
-      while (!schedule.empty()) {
-	auto p = schedule.begin();
+    boost::object_pool<event> event_pool;
 
-	// is the future now?
-	if (p->first > now)
-	  break;
+    boost::intrusive::set<
+      event,
+      boost::intrusive::member_hook<event, sh, &event::schedule_link>,
+      boost::intrusive::constant_time_size<false>,
+      boost::intrusive::compare<SchedCompare> > schedule;
 
-	Context *callback = p->second;
-	events.erase(callback);
-	schedule.erase(p);
+    boost::intrusive::set<
+      event,
+      boost::intrusive::member_hook<event, sh, &event::event_link>,
+      boost::intrusive::constant_time_size<false>,
+      boost::intrusive::compare<EventCompare> > events;
 
-	if (!safe_callbacks)
+    std::mutex lock;
+    std::condition_variable cond;
+
+    event* running;
+    uint64_t next_id;
+
+    std::thread thread;
+
+    void timer_thread() {
+      std::unique_lock<std::mutex> l(lock);
+      while (!suspended) {
+	typename TC::time_point now = TC::now();
+
+	while (!schedule.empty()) {
+	  auto p = schedule.begin();
+	  // Should we wait for the future?
+	  if (p->t > now)
+	    break;
+
+	  event& e = *p;
+	  schedule.erase(e);
+	  events.erase(e);
+
+	  // Since we have only one thread it is impossible to have more
+	  // than one running event
+	  running = &e;
+
 	  l.unlock();
-	callback->complete(0);
-	if (!safe_callbacks)
+	  e.f();
 	  l.lock();
+
+	  if (running) {
+	    running = nullptr;
+	    event_pool.destroy(&e);
+	  } // Otherwise the event requeued itself
+	}
+
+	if (schedule.empty())
+	  cond.wait(l);
+	else
+	  cond.wait_until(l, schedule.begin()->t);
+      }
+    }
+
+    bool suspended;
+
+  public:
+    // Create a running timer ready to execute submitted tasks.
+    Timer() : running(nullptr), suspended(false) {
+      thread = std::thread(&Timer::timer_thread, this);
+    }
+
+    // Create a suspended timer, jobs will be executed in order when
+    // it is resumed.
+    Timer(construct_suspended_t) : running(nullptr), suspended(true) { }
+
+    Timer(const Timer &) = delete;
+    Timer& operator=(const Timer &) = delete;
+
+    ~Timer() {
+      if (!suspended) {
+	suspend();
+      }
+      cancel_all_events();
+    }
+
+    // Suspend operation of the timer (and let its thread die). Must
+    // have been previously running.
+    void suspend() {
+      if (suspended)
+	throw std::make_error_condition(std::errc::operation_not_permitted);
+
+      suspended = true;
+      cond.notify_one();
+      thread.join();
+    }
+
+
+    // Resume operation of the timer. (Must have been previously
+    // suspended.)
+    void resume() {
+      if (!suspended)
+	throw std::make_error_condition(std::errc::operation_not_permitted);
+
+      suspended = false;
+      assert(!thread.joinable());
+      thread = std::thread(&Timer::timer_thread, this);
+    }
+
+    // Schedule an event in the relative future
+    template<typename Callable, typename... Args>
+    uint64_t add_event(typename TC::duration duration,
+		       Callable&& f, Args&&... args) {
+      typename TC::time_point when = TC::now();
+      when += duration;
+      return add_event(when,
+		       std::forward<Callable>(f),
+		       std::forward<Args>(args)...);
+    }
+
+    // Schedule an event in the absolute future
+    template<typename Callable, typename... Args>
+    uint64_t add_event(typename TC::time_point when,
+		       Callable&& f, Args&&... args) {
+      std::lock_guard<std::mutex> l(lock);
+      event& e = *(event_pool.construct(
+		     when, ++next_id,
+		     std::forward<std::function<void()> >(
+		       std::bind(std::forward<Callable>(f),
+				 std::forward<Args>(args)...))));
+      auto i = schedule.insert(e);
+      events.insert(e);
+
+      /* If the event we have just inserted comes before everything
+       * else, we need to adjust our timeout. */
+      if (i.first == schedule.begin())
+	cond.notify_one();
+
+      // Previously each event was a context, identified by a pointer,
+      // and each context to be called only once. Since you can queue
+      // the same function pointer, member function, lambda, or functor
+      // up multiple times, identifying things by function fdr the
+      // purposes of cancellation is no longer suitable. Thus:
+      return e.id;
+    }
+
+    // Cancel an event. If the event has already come and gone (or you
+    // never submitted it) you will receive false. Otherwise you will
+    // receive true and it is guaranteed the event will not execute.
+    bool cancel_event(const uint64_t id) {
+      std::lock_guard<std::mutex> l(lock);
+      event dummy(id);
+      auto p = events.find(dummy);
+      if (p == events.end()) {
+	return false;
       }
 
-      if (schedule.empty())
-	cond.wait(l);
-      else
-	cond.wait_until(l, schedule.begin()->first);
-    }
-  }
+      event& e = *p;
+      events.erase(e);
+      schedule.erase(e);
+      event_pool.destroy(&e);
 
-  std::multimap<typename TC::time_point, Context*> schedule;
-  std::map<Context*,
-	   typename std::multimap<typename TC::time_point,
-				  Context*>::iterator> events;
-  bool stopping;
-
-public:
-  /* Safe callbacks determines whether callbacks are called with the lock
-   * held.
-   *
-   * safe_callbacks = true (default option) guarantees that a cancelled
-   * event's callback will never be called.
-   *
-   * Under some circumstances, holding the lock can cause lock cycles.
-   * If you are able to relax requirements on cancelled callbacks, then
-   * setting safe_callbacks = false eliminates the lock cycle issue.
-   * */
-  SafeTimer(std::mutex& l, bool safe_callbacks=true)
-    : lock(l),
-      safe_callbacks(safe_callbacks),
-      thread(NULL),
-      stopping(false) { }
-
-  ~SafeTimer() {
-    assert(thread == NULL);
-  }
-
-
-  /* Call with the event_lock UNLOCKED.
-   *
-   * Cancel all events and stop the timer thread.
-   *
-   * If there are any events that still have to run, they will need to take
-   * the event_lock first. */
-  void init() {
-    thread = new SafeTimerThread<TC>(this);
-    thread->create();
-  }
-
-  void shutdown(std::unique_lock<std::mutex>& l) {
-    if (thread) {
-      cancel_all_events();
-      stopping = true;
-      cond.notify_all();
-      l.unlock();
-      thread->join();
-      l.lock();
-      delete thread;
-      thread = NULL;
-    }
-  }
-
-  /* Schedule an event in the future
-   * Call with the event_lock LOCKED */
-  void add_event_after(typename TC::duration duration, Context *callback) {
-    typename TC::time_point when = TC::now();
-    when += duration;
-    add_event_at(when, callback);
-  }
-
-  void add_event_at(typename TC::time_point when, Context *callback) {
-    typename scheduled_map_t::value_type s_val(when, callback);
-    auto i = schedule.insert(s_val);
-
-    typename event_lookup_map_t::value_type e_val(callback, i);
-    auto rval = events.insert(e_val);
-
-    /* If you hit this, you tried to insert the same Context* twice. */
-    assert(rval.second);
-
-    /* If the event we have just inserted comes before everything
-     * else, we need to adjust our timeout. */
-    if (i == schedule.begin())
-      cond.notify_all();
-  }
-
-  /* Cancel an event.
-   * Call with the event_lock LOCKED
-   *
-   * Returns true if the callback was cancelled.
-   * Returns false if you never addded the callback in the first place.
-   */
-  bool cancel_event(Context *callback) {
-    auto p = events.find(callback);
-    if (p == events.end()) {
-      return false;
+      return true;
     }
 
-    delete p->first;
-
-    schedule.erase(p->second);
-    events.erase(p);
-    return true;
-  }
-
-  /* Cancel all events.
-   * Call with the event_lock LOCKED
-   *
-   * When this function returns, all events have been cancelled, and there are no
-   * more in progress.
-   */
-  void cancel_all_events() {
-    while (!events.empty()) {
-      auto p = events.begin();
-      delete p->first;
-      schedule.erase(p->second);
-      events.erase(p);
+    // Reschedules a currently running event in the relative
+    // future. Must be called only from an event executed by this
+    // timer. if you have a function that can be called either from
+    // this timer or some other way, it is your responsibility to make
+    // sure it can tell the difference only does not call
+    // reschedule_me in the non-timer case.
+    //
+    // Returns an event id. If you had an event_id from the first
+    // scheduling, replace it with this return value.
+    uint64_t reschedule_me(typename TC::duration duration) {
+      return reschedule_me(TC::now() + duration);
     }
-  }
-};
 
-template <typename TC>
-class SafeTimerThread : public Thread {
-  SafeTimer<TC> *parent;
-public:
-  SafeTimerThread(SafeTimer<TC> *s) : parent(s) {}
-  void *entry() {
-    parent->timer_thread();
-    return NULL;
-  }
-};
+    // Reschedules a currently running event in the absolute
+    // future. Must be called only from an event executed by this
+    // timer. if you have a function that can be called either from
+    // this timer or some other way, it is your responsibility to make
+    // sure it can tell the difference only does not call
+    // reschedule_me in the non-timer case.
+    //
+    // Returns an event id. If you had an event_id from the first
+    // scheduling, replace it with this return value.
+    uint64_t reschedule_me(typename TC::time_point when) {
+      if (std::this_thread::get_id() != thread.get_id())
+	throw std::make_error_condition(std::errc::operation_not_permitted);
+      std::lock_guard<std::mutex> l(lock);
+      running->t = when;
+      uint64_t id = ++next_id;
+      running->id = id;
+      schedule.insert(*running);
+      events.insert(*running);
+
+      // Hacky, but keeps us from being deleted
+      running = nullptr;
+
+      // Same function, but you get a new ID.
+      return id;
+    }
+
+    // Remove all events from the queue.
+    void cancel_all_events() {
+      std::lock_guard<std::mutex> l(lock);
+      while (!events.empty()) {
+	auto p = events.begin();
+	event& e = *p;
+	schedule.erase(e);
+	events.erase(e);
+	event_pool.destroy(&e);
+      }
+    }
+  };
+}; // cohort
 
 #endif

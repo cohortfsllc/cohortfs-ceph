@@ -46,11 +46,11 @@ class DataHealthService :
 
 protected:
   virtual void service_tick();
-  virtual bool service_dispatch(Message *m) {
+  virtual bool service_dispatch(Message *m, unique_lock& l) {
     assert(0 == "We should never reach this; only the function below");
     return false;
   }
-  virtual bool service_dispatch(MMonHealth *m);
+  virtual bool service_dispatch(MMonHealth *m, unique_lock& l);
   virtual void service_shutdown() { }
 
   virtual void start_epoch();

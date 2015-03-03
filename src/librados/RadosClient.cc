@@ -78,7 +78,6 @@ librados::RadosClient::RadosClient(CephContext *cct_)
     instance_id(0),
     objecter(NULL),
     lock(),
-    timer(lock),
     refcnt(1),
     log_last_version(0), log_cb(NULL), log_cb_arg(NULL),
     finisher(cct),
@@ -208,7 +207,6 @@ int librados::RadosClient::connect()
 
   monclient.set_messenger(messenger);
 
-  objecter->init();
   messenger->add_dispatcher_tail(objecter);
   messenger->add_dispatcher_tail(this);
 
@@ -244,8 +242,6 @@ int librados::RadosClient::connect()
   objecter->start();
   l.lock();
 
-  timer.init();
-
   monclient.renew_subs();
 
   finisher.start();
@@ -275,12 +271,11 @@ void librados::RadosClient::shutdown()
     finisher.stop();
   }
   bool need_objecter = false;
-  if (objecter && objecter->initialized) {
+  if (objecter) {
     need_objecter = true;
   }
   state = DISCONNECTED;
   instance_id = 0;
-  timer.shutdown(l);   // will drop+retake lock
   l.unlock();
   if (need_objecter)
     objecter->shutdown();

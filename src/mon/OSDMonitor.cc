@@ -264,7 +264,7 @@ void OSDMonitor::update_msgr_features()
   }
 }
 
-void OSDMonitor::on_active()
+void OSDMonitor::on_active(Monitor::unique_lock& l)
 {
   if (mon->is_leader())
     mon->clog.info() << "osdmap " << osdmap << "\n";
@@ -273,7 +273,7 @@ void OSDMonitor::on_active()
     list<MOSDFailure*> ls;
     take_all_failures(ls);
     while (!ls.empty()) {
-      dispatch(ls.front());
+      dispatch(ls.front(), l);
       ls.pop_front();
     }
   }
@@ -434,14 +434,15 @@ void OSDMonitor::encode_trim_extra(MonitorDBStore::Transaction *tx, version_t fi
 
 // -------------
 
-bool OSDMonitor::preprocess_query(PaxosServiceMessage *m)
+bool OSDMonitor::preprocess_query(PaxosServiceMessage *m,
+				  unique_lock& l)
 {
   ldout(mon->cct, 10) << "preprocess_query " << *m << " from " << m->get_orig_source_inst() << dendl;
 
   switch (m->get_type()) {
     // READs
   case MSG_MON_COMMAND:
-    return preprocess_command(static_cast<MMonCommand*>(m));
+    return preprocess_command(static_cast<MMonCommand*>(m), l);
 
     // damp updates
   case MSG_OSD_MARK_ME_DOWN:
@@ -449,7 +450,7 @@ bool OSDMonitor::preprocess_query(PaxosServiceMessage *m)
   case MSG_OSD_FAILURE:
     return preprocess_failure(static_cast<MOSDFailure*>(m));
   case MSG_OSD_BOOT:
-    return preprocess_boot(static_cast<MOSDBoot*>(m));
+    return preprocess_boot(static_cast<MOSDBoot*>(m), l);
   case MSG_OSD_ALIVE:
     return preprocess_alive(static_cast<MOSDAlive*>(m));
 
@@ -460,9 +461,10 @@ bool OSDMonitor::preprocess_query(PaxosServiceMessage *m)
   }
 }
 
-bool OSDMonitor::prepare_update(PaxosServiceMessage *m)
+bool OSDMonitor::prepare_update(PaxosServiceMessage *m, unique_lock& l)
 {
-  ldout(mon->cct, 7) << "prepare_update " << *m << " from " << m->get_orig_source_inst() << dendl;
+  ldout(mon->cct, 7) << "prepare_update " << *m << " from "
+		     << m->get_orig_source_inst() << dendl;
 
   switch (m->get_type()) {
     // damp updates
@@ -476,7 +478,7 @@ bool OSDMonitor::prepare_update(PaxosServiceMessage *m)
     return prepare_alive(static_cast<MOSDAlive*>(m));
 
   case MSG_MON_COMMAND:
-    return prepare_command(static_cast<MMonCommand*>(m));
+    return prepare_command(static_cast<MMonCommand*>(m), l);
 
   default:
     assert(0);
@@ -598,16 +600,16 @@ bool OSDMonitor::preprocess_failure(MOSDFailure *m)
   return true;
 }
 
-class C_AckMarkedDown : public Context {
+class CB_AckMarkedDown {
   OSDMonitor *osdmon;
   MOSDMarkMeDown *m;
 public:
-  C_AckMarkedDown(
+  CB_AckMarkedDown(
     OSDMonitor *osdmon,
     MOSDMarkMeDown *m)
     : osdmon(osdmon), m(m) {}
 
-  void finish(int) {
+  void operator()(int, Monitor::unique_lock&) {
     osdmon->mon->send_reply(
       m,
       new MOSDMarkMeDown(
@@ -616,7 +618,7 @@ public:
 	m->get_epoch(),
 	m->ack));
   }
-  ~C_AckMarkedDown() {
+  ~CB_AckMarkedDown() {
     m->put();
   }
 };
@@ -651,8 +653,13 @@ bool OSDMonitor::preprocess_mark_me_down(MOSDMarkMeDown *m)
   return false;
 
  reply:
-  Context *c(new C_AckMarkedDown(this, m));
-  c->complete(0);
+  mon->send_reply(m, new MOSDMarkMeDown(
+		    m->fsid,
+		    m->get_target(),
+		    m->get_epoch(),
+		    m->ack));
+
+  m->put();
   return true;
 }
 
@@ -665,7 +672,7 @@ bool OSDMonitor::prepare_mark_me_down(MOSDMarkMeDown *m)
 
   mon->clog.info() << "osd." << target_osd << " marked itself down\n";
   pending_inc.new_state[target_osd] = CEPH_OSD_UP;
-  wait_for_finished_proposal(new C_AckMarkedDown(this, m));
+  wait_for_finished_proposal(CB_AckMarkedDown(this, m));
   return true;
 }
 
@@ -908,7 +915,7 @@ void OSDMonitor::take_all_failures(list<MOSDFailure*>& ls)
 
 // boot --
 
-bool OSDMonitor::preprocess_boot(MOSDBoot *m)
+bool OSDMonitor::preprocess_boot(MOSDBoot *m, unique_lock& l)
 {
   int from = m->get_orig_source_inst().name.num();
 
@@ -941,7 +948,7 @@ bool OSDMonitor::preprocess_boot(MOSDBoot *m)
     // yup.
     ldout(mon->cct, 7) << "preprocess_boot dup from " << m->get_orig_source_inst()
 	    << " == " << osdmap.get_inst(from) << dendl;
-    _booted(m, false);
+    _booted(m, false, l);
     return true;
   }
 
@@ -1011,11 +1018,13 @@ bool OSDMonitor::prepare_boot(MOSDBoot *m)
       // mark previous guy down
       pending_inc.new_state[from] = CEPH_OSD_UP;
     }
-    wait_for_finished_proposal(new C_RetryMessage(this, m));
-  } else if (pending_inc.new_up_client.count(from)) { //FIXME: should this be using new_up_client?
+    wait_for_finished_proposal(CB_RetryMessage(this, m));
+  } else if (pending_inc.new_up_client.count(from)) {
+    //FIXME: should this be using new_up_client?
     // already prepared, just wait
-    ldout(mon->cct, 7) << "prepare_boot already prepared, waiting on " << m->get_orig_source_addr() << dendl;
-    wait_for_finished_proposal(new C_RetryMessage(this, m));
+    ldout(mon->cct, 7) << "prepare_boot already prepared, waiting on "
+		       << m->get_orig_source_addr() << dendl;
+    wait_for_finished_proposal(CB_RetryMessage(this, m));
   } else {
     // mark new guy up.
     pending_inc.new_up_client[from] = m->get_orig_source_addr();
@@ -1083,12 +1092,12 @@ bool OSDMonitor::prepare_boot(MOSDBoot *m)
     pending_inc.new_xinfo[from] = xi;
 
     // wait
-    wait_for_finished_proposal(new C_Booted(this, m));
+    wait_for_finished_proposal(CB_Booted(this, m));
   }
   return true;
 }
 
-void OSDMonitor::_booted(MOSDBoot *m, bool logit)
+void OSDMonitor::_booted(MOSDBoot *m, bool logit, unique_lock& l)
 {
   ldout(mon->cct, 7) << "_booted " << m->get_orig_source_inst()
 	  << " w " << m->sb.weight << " from " << m->sb.current_epoch << dendl;
@@ -1148,10 +1157,12 @@ bool OSDMonitor::prepare_alive(MOSDAlive *m)
     mon->clog.debug() << m->get_orig_source_inst() << " alive\n";
   }
 
-  ldout(mon->cct, 7) << "prepare_alive want up_thru " << m->want << " have " << m->version
-	  << " from " << m->get_orig_source_inst() << dendl;
-  pending_inc.new_up_thru[from] = m->version;  // set to the latest map the OSD has
-  wait_for_finished_proposal(new C_ReplyMap(this, m, m->version));
+  ldout(mon->cct, 7) << "prepare_alive want up_thru " << m->want << " have "
+		     << m->version << " from " << m->get_orig_source_inst()
+		     << dendl;
+  // set to the latest map the OSD has
+  pending_inc.new_up_thru[from] = m->version;
+  wait_for_finished_proposal(CB_ReplyMap(this, m, m->version));
   return true;
 }
 
@@ -1392,7 +1403,7 @@ void OSDMonitor::check_sub(Subscription *sub)
 
 // TICK
 
-void OSDMonitor::tick()
+void OSDMonitor::tick(unique_lock& l)
 {
   bool do_propose = false;
   if (!is_active()) return;
@@ -1488,11 +1499,12 @@ void OSDMonitor::tick()
   }
 
   if (do_propose)
-    propose_pending();
+    propose_pending(l);
 }
 
 void OSDMonitor::handle_osd_timeouts(
-  const ceph::real_time &now, std::map<int,ceph::real_time> &last_osd_report)
+  const ceph::real_time &now, std::map<int,ceph::real_time> &last_osd_report,
+  unique_lock &l)
 {
   ceph::timespan timeo = mon->cct->_conf->mon_osd_report_timeout * 1s;
   int max_osd = osdmap.get_max_osd();
@@ -1524,11 +1536,11 @@ void OSDMonitor::handle_osd_timeouts(
     }
   }
   if (new_down) {
-    propose_pending();
+    propose_pending(l);
   }
 }
 
-void OSDMonitor::mark_all_down()
+void OSDMonitor::mark_all_down(unique_lock &l)
 {
   assert(mon->is_leader());
 
@@ -1543,7 +1555,7 @@ void OSDMonitor::mark_all_down()
     pending_inc.new_state[*it] = CEPH_OSD_UP;
   }
 
-  propose_pending();
+  propose_pending(l);
 }
 
 void OSDMonitor::get_health(list<pair<health_status_t,string> >& summary,
@@ -1634,7 +1646,7 @@ void OSDMonitor::dump_info(Formatter *f)
   f->dump_unsigned("osdmap_last_committed", get_last_committed());
 }
 
-bool OSDMonitor::preprocess_command(MMonCommand *m)
+bool OSDMonitor::preprocess_command(MMonCommand *m, unique_lock &l)
 {
   int r = 0;
   bufferlist rdata;
@@ -1643,13 +1655,14 @@ bool OSDMonitor::preprocess_command(MMonCommand *m)
   map<string, cmd_vartype> cmdmap;
   if (!cmdmap_from_json(m->cmd, &cmdmap, ss)) {
     string rs = ss.str();
-    mon->reply_command(m, -EINVAL, rs, get_last_committed());
+    mon->reply_command(m, -EINVAL, rs, get_last_committed(), l);
     return true;
   }
 
   MonSession *session = m->get_session();
   if (!session) {
-    mon->reply_command(m, -EACCES, "access denied", rdata, get_last_committed());
+    mon->reply_command(m, -EACCES, "access denied", rdata,
+		       get_last_committed(), l);
     return true;
   }
 
@@ -1806,7 +1819,7 @@ bool OSDMonitor::preprocess_command(MMonCommand *m)
  reply:
   string rs;
   getline(ss, rs);
-  mon->reply_command(m, r, rs, rdata, get_last_committed());
+  mon->reply_command(m, r, rs, rdata, get_last_committed(), l);
   return true;
 }
 
@@ -1861,8 +1874,8 @@ bool OSDMonitor::prepare_set_flag(MMonCommand *m, int flag)
     pending_inc.new_flags = osdmap.get_flags();
   pending_inc.new_flags |= flag;
   ss << "set " << OSDMap::get_flag_string(flag);
-  wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, ss.str(),
-						    get_last_committed() + 1));
+  wait_for_finished_proposal(Monitor::CB_Command(mon, m, 0, ss.str(),
+						 get_last_committed() + 1));
   return true;
 }
 
@@ -1873,8 +1886,8 @@ bool OSDMonitor::prepare_unset_flag(MMonCommand *m, int flag)
     pending_inc.new_flags = osdmap.get_flags();
   pending_inc.new_flags &= ~flag;
   ss << "unset " << OSDMap::get_flag_string(flag);
-  wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, ss.str(),
-						    get_last_committed() + 1));
+  wait_for_finished_proposal(Monitor::CB_Command(mon, m, 0, ss.str(),
+						 get_last_committed() + 1));
   return true;
 }
 
@@ -1899,27 +1912,28 @@ int OSDMonitor::parse_osd_id(const char *s, stringstream *pss)
   return id;
 }
 
-bool OSDMonitor::prepare_command(MMonCommand *m)
+bool OSDMonitor::prepare_command(MMonCommand *m, unique_lock& l)
 {
   stringstream ss;
   map<string, cmd_vartype> cmdmap;
   if (!cmdmap_from_json(m->cmd, &cmdmap, ss)) {
     string rs = ss.str();
-    mon->reply_command(m, -EINVAL, rs, get_last_committed());
+    mon->reply_command(m, -EINVAL, rs, get_last_committed(), l);
     return true;
   }
 
   MonSession *session = m->get_session();
   if (!session) {
-    mon->reply_command(m, -EACCES, "access denied", get_last_committed());
+    mon->reply_command(m, -EACCES, "access denied", get_last_committed(), l);
     return true;
   }
 
-  return prepare_command_impl(m, cmdmap);
+  return prepare_command_impl(m, cmdmap, l);
 }
 
 bool OSDMonitor::prepare_command_impl(MMonCommand *m,
-				      map<string,cmd_vartype> &cmdmap)
+				      map<string,cmd_vartype> &cmdmap,
+				      unique_lock& l)
 {
   bool ret = false;
   stringstream ss;
@@ -1992,8 +2006,8 @@ bool OSDMonitor::prepare_command_impl(MMonCommand *m,
     pending_inc.new_max_osd = newmax;
     ss << "set new max_osd = " << pending_inc.new_max_osd;
     getline(ss, rs);
-    wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs,
-					      get_last_committed() + 1));
+    wait_for_finished_proposal(Monitor::CB_Command(mon, m, 0, rs,
+						   get_last_committed() + 1));
     return true;
 
   } else if (prefix == "osd pause") {
@@ -2102,8 +2116,9 @@ bool OSDMonitor::prepare_command_impl(MMonCommand *m,
     }
     if (any) {
       getline(ss, rs);
-      wait_for_finished_proposal(new Monitor::C_Command(mon, m, err, rs,
-						get_last_committed() + 1));
+      wait_for_finished_proposal(Monitor::CB_Command(
+				   mon, m, err, rs,
+				   get_last_committed() + 1));
       return true;
     }
   }  else if (prefix == "osd reweight") {
@@ -2132,8 +2147,8 @@ bool OSDMonitor::prepare_command_impl(MMonCommand *m,
       ss << "reweighted osd." << id << " to " << w << " (" << std::ios::hex
 	 << ww << std::ios::dec << ")";
       getline(ss, rs);
-      wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs,
-						get_last_committed() + 1));
+      wait_for_finished_proposal(Monitor::CB_Command(
+				   mon, m, 0, rs, get_last_committed() + 1));
       return true;
     }
 
@@ -2172,7 +2187,8 @@ bool OSDMonitor::prepare_command_impl(MMonCommand *m,
       i = pending_inc.identify_osd(id);
       if (i >= 0) {
 	// osd is about to exist
-	wait_for_finished_proposal(new C_RetryMessage(this, m));
+	wait_for_finished_proposal(
+	  CB_RetryMessage(this, m));
 	return true;
       }
     }
@@ -2207,8 +2223,8 @@ done:
       ss << i;
       rdata.append(ss);
     }
-    wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs, rdata,
-					      get_last_committed() + 1));
+    wait_for_finished_proposal(Monitor::CB_Command(mon, m, 0, rs, rdata,
+						   get_last_committed() + 1));
     return true;
 
   } else if (prefix == "osd blacklist") {
@@ -2228,10 +2244,11 @@ done:
 	expires += d * 1s;
 
 	pending_inc.new_blacklist[addr] = expires;
-	ss << "blacklisting " << addr << " until " << expires << " (" << d << " sec)";
+	ss << "blacklisting " << addr << " until " << expires << " (" << d
+	   << " sec)";
 	getline(ss, rs);
-	wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs,
-						  get_last_committed() + 1));
+	wait_for_finished_proposal(
+	  Monitor::CB_Command(mon, m, 0, rs, get_last_committed() + 1));
 	return true;
       } else if (blacklistop == "rm") {
 	if (osdmap.is_blacklisted(addr) ||
@@ -2242,8 +2259,8 @@ done:
 	    pending_inc.new_blacklist.erase(addr);
 	  ss << "un-blacklisting " << addr;
 	  getline(ss, rs);
-	  wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs,
-						    get_last_committed() + 1));
+	  wait_for_finished_proposal(
+	    Monitor::CB_Command(mon, m, 0, rs, get_last_committed() + 1));
 	  return true;
 	}
 	ss << addr << " isn't blacklisted";
@@ -2285,7 +2302,7 @@ done:
     }
     ss << "ErasureCPlacer: " << placer << " created.";
     pending_inc.include_addition(placer);
-    wait_for_finished_proposal(new Monitor::C_Command(
+    wait_for_finished_proposal(Monitor::CB_Command(
 				 mon, m, 0, rs,
 				 get_last_committed() + 1));
     return true;
@@ -2305,14 +2322,15 @@ done:
       err = -EINVAL;
       goto reply;
     }
-    placer = StripedPlacer::create(mon->cct, name, stripe_unit, stripe_width, ss);
+    placer = StripedPlacer::create(mon->cct, name, stripe_unit, stripe_width,
+				   ss);
     if (!placer) {
       err = -EINVAL;
       goto reply;
     }
     ss << "StripedPlacer: " << placer << " created.";
     pending_inc.include_addition(placer);
-    wait_for_finished_proposal(new Monitor::C_Command(
+    wait_for_finished_proposal(Monitor::CB_Command(
 				 mon, m, 0, rs,
 				 get_last_committed() + 1));
     return true;
@@ -2327,7 +2345,7 @@ done:
       goto reply;
     }
     pending_inc.include_removal(placer);
-    wait_for_finished_proposal(new Monitor::C_Command(
+    wait_for_finished_proposal(Monitor::CB_Command(
 				 mon, m, 0, rs,
 				 get_last_committed() + 1));
     return true;
@@ -2396,7 +2414,7 @@ done:
     }
     ss << "volume: " << vol << " created.";
     pending_inc.include_addition(vol);
-    wait_for_finished_proposal(new Monitor::C_Command(
+    wait_for_finished_proposal(Monitor::CB_Command(
 				 mon, m, 0, rs,
 				 get_last_committed() + 1));
     return true;
@@ -2412,7 +2430,7 @@ done:
       goto reply;
     }
     pending_inc.include_removal(vol);
-    wait_for_finished_proposal(new Monitor::C_Command(
+    wait_for_finished_proposal(Monitor::CB_Command(
 				 mon, m, 0, rs,
 				 get_last_committed() + 1));
     return true;
@@ -2458,6 +2476,6 @@ done:
   getline(ss, rs);
   if (err < 0 && rs.length() == 0)
     rs = cpp_strerror(err);
-  mon->reply_command(m, err, rs, rdata, get_last_committed());
+  mon->reply_command(m, err, rs, rdata, get_last_committed(), l);
   return ret;
 }

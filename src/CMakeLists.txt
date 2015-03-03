@@ -44,7 +44,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${CLIKE_COMMON_FLAGS} -std=c11")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CLIKE_COMMON_FLAGS} -std=c++14 -Wnon-virtual-dtor -Wno-invalid-offsetof -Wno-unused-private-field -Wno-mismatched-tags")
 
 
-set(EXTRALIBS rt dl)
+set(EXTRALIBS rt dl boost_system)
 if(${WITH_PROFILER})
   list(APPEND EXTRALIBS profiler)
 endif(${WITH_PROFILER})

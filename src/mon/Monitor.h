@@ -13,11 +13,12 @@
  */
 
 /*
- * This is the top level monitor. It runs on each machine in the Monitor
- * Cluster. The election of a leader for the paxos algorithm only happens
- * once per machine via the elector. There is a separate paxos instance (state)
- * kept for each of the system components: Object Store Device (OSD) Monitor,
- * Placement Group (PG) Monitor, Metadata Server (MDS) Monitor, and Client Monitor.
+ * This is the top level monitor. It runs on each machine in the
+ * Monitor Cluster. The election of a leader for the paxos algorithm
+ * only happens once per machine via the elector. There is a separate
+ * paxos instance (state) kept for each of the system components:
+ * Object Store Device (OSD) Monitor, Placement Group (PG) Monitor,
+ * Metadata Server (MDS) Monitor, and Client Monitor.
  */
 
 #ifndef CEPH_MONITOR_H
@@ -88,7 +89,7 @@ public:
   std::mutex lock;
   typedef std::lock_guard<std::mutex> lock_guard;
   typedef std::unique_lock<std::mutex> unique_lock;
-  SafeTimer<ceph::real_clock> timer;
+  cohort::Timer<ceph::real_clock> timer;
 
   /// true if we have ever joined a quorum.  if false, we are either a
   /// new cluster, a newly joining monitor, or a just-upgraded
@@ -113,7 +114,6 @@ public:
 
 private:
   void new_tick();
-  friend class C_Mon_Tick;
 
   // -- local storage --
 public:
@@ -229,7 +229,7 @@ private:
   uint64_t sync_cookie;		 ///< 0 if we are starting, non-zero otherwise
   bool sync_full;		 ///< true if we are a full sync, false for recent catch-up
   version_t sync_start_version;	 ///< last_committed at sync start
-  Context *sync_timeout_event;	 ///< timeout event
+  uint64_t sync_timeout_event;	 ///< timeout event
 
   /**
    * floor for sync source
@@ -255,14 +255,6 @@ private:
    * sync and never going backwards.
    */
   version_t sync_last_committed_floor;
-
-  struct C_SyncTimeout : public Context {
-    Monitor *mon;
-    C_SyncTimeout(Monitor *m) : mon(m) {}
-    void finish(int r) {
-      mon->sync_timeout();
-    }
-  };
 
   /**
    * Obtain the synchronization target prefixes in set form.
@@ -345,7 +337,7 @@ private:
    *
    * @param last_committed final last_committed value from provider
    */
-  void sync_finish(version_t last_committed);
+  void sync_finish(version_t last_committed, unique_lock& l);
 
   /**
    * request the next chunk from the provider
@@ -357,7 +349,7 @@ private:
    *
    * @param m Sync message with operation type MMonSync::OP_START_CHUNKS
    */
-  void handle_sync(MMonSync *m);
+  void handle_sync(MMonSync *m, unique_lock& l);
 
   void _sync_reply_no_cookie(MMonSync *m);
 
@@ -367,15 +359,15 @@ private:
 
   void handle_sync_cookie(MMonSync *m);
   void handle_sync_forward(MMonSync *m);
-  void handle_sync_chunk(MMonSync *m);
-  void handle_sync_no_cookie(MMonSync *m);
+  void handle_sync_chunk(MMonSync *m, unique_lock& l);
+  void handle_sync_no_cookie(MMonSync *m, unique_lock& l);
 
   /**
    * @} // Synchronization
    */
 
-  std::vector<Context*> waitfor_quorum;
-  std::vector<Context*> maybe_wait_for_quorum;
+  cohort::FunQueue<void(int, unique_lock&)> waitfor_quorum;
+  cohort::FunQueue<void(int, unique_lock&)> maybe_wait_for_quorum;
 
   /**
    * @defgroup Monitor_h_TimeCheck Monitor Clock Drift Early Warning System
@@ -412,19 +404,11 @@ private:
   /**
    * Time Check event.
    */
-  Context *timecheck_event;
+  uint64_t timecheck_event;
 
-  struct C_TimeCheck : public Context {
-    Monitor *mon;
-    C_TimeCheck(Monitor *m) : mon(m) { }
-    void finish(int r) {
-      mon->timecheck_start_round();
-    }
-  };
-
-  void timecheck_start();
+  void timecheck_start(unique_lock& l);
   void timecheck_finish();
-  void timecheck_start_round();
+  void timecheck_start_round(unique_lock& l);
   void timecheck_finish_round(bool success = true);
   void timecheck_cancel_round();
   void timecheck_cleanup();
@@ -468,19 +452,11 @@ private:
    */
   void handle_ping(MPing *m);
 
-  Context *probe_timeout_event;	 // for probing
-
-  struct C_ProbeTimeout : public Context {
-    Monitor *mon;
-    C_ProbeTimeout(Monitor *m) : mon(m) {}
-    void finish(int r) {
-      mon->probe_timeout(r);
-    }
-  };
+  uint64_t probe_timeout_event; // for probing
 
   void reset_probe_timeout();
   void cancel_probe_timeout();
-  void probe_timeout(int r);
+  void probe_timeout();
 
 public:
   epoch_t get_epoch();
@@ -502,19 +478,21 @@ public:
   void apply_compatset_features_to_quorum_requirements();
 
 private:
-  void _reset();   ///< called from bootstrap, start_, or join_election
+  ///< called from bootstrap, start_, or join_election
+  void _reset(unique_lock& l);
 public:
-  void bootstrap();
-  void join_election();
-  void start_election();
-  void win_standalone_election();
+  void bootstrap(unique_lock& l);
+  void join_election(unique_lock& l);
+  void start_election(unique_lock& l);
+  void win_standalone_election(unique_lock& l);
   // end election (called by Elector)
   void win_election(epoch_t epoch, set<int>& q,
 		    uint64_t features,
-		    const MonCommand *cmdset, int cmdsize);
+		    const MonCommand *cmdset, int cmdsize, unique_lock& l);
+  // end election (called by Elector)
   void lose_election(epoch_t epoch, set<int>& q, int l,
-		     uint64_t features); // end election (called by Elector)
-  void finish_election();
+		     uint64_t features, unique_lock& ml);
+  void finish_election(unique_lock& l);
 
   const bufferlist& get_supported_commands_bl() {
     return supported_commands_bl;
@@ -580,9 +558,10 @@ public:
 			const MonCommand *this_cmd);
   void get_mon_status(Formatter *f, ostream& ss);
   void _quorum_status(Formatter *f, ostream& ss);
-  void _osdmonitor_prepare_command(cmdmap_t& cmdmap, ostream& ss);
+  void _osdmonitor_prepare_command(cmdmap_t& cmdmap, ostream& ss,
+				   unique_lock& l);
   void _add_bootstrap_peer_hint(string cmd, cmdmap_t& cmdmap, ostream& ss);
-  void handle_command(class MMonCommand *m);
+  void handle_command(class MMonCommand *m, unique_lock& l);
   void handle_route(MRoute *m);
 
   /**
@@ -594,11 +573,13 @@ public:
   void get_health(string& status, bufferlist *detailbl, Formatter *f);
   void get_cluster_status(stringstream &ss, Formatter *f);
 
-  void reply_command(MMonCommand *m, int rc, const string &rs, version_t version);
-  void reply_command(MMonCommand *m, int rc, const string &rs, bufferlist& rdata, version_t version);
+  void reply_command(MMonCommand* m, int rc, const string &rs,
+		     version_t version, unique_lock& l);
+  void reply_command(MMonCommand* m, int rc, const string &rs,
+		     bufferlist& rdata, version_t version, unique_lock& l);
 
 
-  void handle_probe(MMonProbe *m);
+  void handle_probe(MMonProbe *m, unique_lock& l);
   /**
    * Handle a Probe Operation, replying with our name, quorum and known versions.
    *
@@ -614,7 +595,7 @@ public:
    * @param m A Probe message, with an operation of type Probe.
    */
   void handle_probe_probe(MMonProbe *m);
-  void handle_probe_reply(MMonProbe *m);
+  void handle_probe_reply(MMonProbe *m, unique_lock& l);
 
   // request routing
   struct RoutedRequest {
@@ -635,11 +616,11 @@ public:
   map<uint64_t, RoutedRequest*> routed_requests;
 
   void forward_request_leader(PaxosServiceMessage *req);
-  void handle_forward(MForward *m);
+  void handle_forward(MForward *m, unique_lock& l);
   void try_send_message(Message *m, const entity_inst_t& to);
   void send_reply(PaxosServiceMessage *req, Message *reply);
   void no_reply(PaxosServiceMessage *req);
-  void resend_routed_requests();
+  void resend_routed_requests(unique_lock& l);
   void remove_session(MonSession *s);
   void remove_all_sessions();
   void waitlist_or_zap_client(Message *m);
@@ -648,56 +629,61 @@ public:
 		    const vector<string>& com);
 
 public:
-  struct C_Command : public Context {
-    Monitor *mon;
-    MMonCommand *m;
+  struct CB_Command {
+    Monitor* mon;
+    MMonCommand* m;
     int rc;
     string rs;
     bufferlist rdata;
     version_t version;
-    C_Command(Monitor *_mm, MMonCommand *_m, int r, string s, version_t v) :
+    CB_Command(Monitor* _mm, MMonCommand* _m, int r, string s, version_t v) :
       mon(_mm), m(_m), rc(r), rs(s), version(v){}
-    C_Command(Monitor *_mm, MMonCommand *_m, int r, string s, bufferlist rd, version_t v) :
+    CB_Command(Monitor* _mm, MMonCommand* _m, int r, string s, bufferlist rd,
+	       version_t v) :
       mon(_mm), m(_m), rc(r), rs(s), rdata(rd), version(v){}
-    void finish(int r) {
+
+    void operator()(int r, Monitor::unique_lock& l) {
+
       if (r >= 0)
-	mon->reply_command(m, rc, rs, rdata, version);
+	mon->reply_command(m, rc, rs, rdata, version, l);
       else if (r == -ECANCELED)
 	m->put();
       else if (r == -EAGAIN)
-	mon->_ms_dispatch(m);
+	mon->_ms_dispatch(m, l);
       else
 	assert(0 == "bad C_Command return value");
     }
   };
 
  private:
-  class C_RetryMessage : public Context {
-    Monitor *mon;
-    Message *msg;
+  class CB_RetryMessage {
+    Monitor* mon;
+    Message* msg;
   public:
-    C_RetryMessage(Monitor *m, Message *ms) : mon(m), msg(ms) {}
-    void finish(int r) {
-      if (r == -EAGAIN || r >= 0)
-	mon->_ms_dispatch(msg);
-      else if (r == -ECANCELED)
+    CB_RetryMessage(Monitor* m, Message *ms) : mon(m), msg(ms) {}
+    void operator()(int r, unique_lock& l) {
+      if (r == -EAGAIN || r >= 0) {
+	mon->_ms_dispatch(msg, l);
+      } else if (r == -ECANCELED) {
 	msg->put();
-      else
+      } else {
 	assert(0 == "bad C_RetryMessage return value");
+      }
     }
   };
 
   //ms_dispatch handles a lot of logic and we want to reuse it
   //on forwarded messages, so we create a non-locking version for this class
-  bool _ms_dispatch(Message *m);
+  bool _ms_dispatch(Message *m, unique_lock& l);
   bool ms_dispatch(Message *m) {
     unique_lock l(lock);
-    bool ret = _ms_dispatch(m);
+    bool ret = _ms_dispatch(m, l);
     l.unlock();
     return ret;
   }
   // dissociate message handling from session and connection logic
-  bool dispatch(MonSession *s, Message *m, const bool src_is_mon);
+  bool dispatch(MonSession *s, Message *m, const bool src_is_mon,
+		unique_lock &l);
   //mon_caps is used for un-connected messages from monitors
   MonCap * mon_caps;
   bool ms_get_authorizer(int dest_type, AuthAuthorizer **authorizer, bool force_new);

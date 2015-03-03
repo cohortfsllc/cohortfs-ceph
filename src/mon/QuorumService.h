@@ -25,20 +25,13 @@
 
 class QuorumService
 {
-  Context *tick_event;
+  uint64_t tick_event;
   ceph::timespan tick_period;
 
-  struct C_Tick : public Context {
-    QuorumService *s;
-    C_Tick(QuorumService *qs) : s(qs) { }
-    void finish(int r) {
-      if (r < 0)
-	return;
-      s->tick();
-    }
-  };
-
 public:
+  typedef std::unique_lock<std::mutex> unique_lock;
+  typedef std::function<void(int, unique_lock& l)> waiter;
+
   enum {
     SERVICE_HEALTH		     = 0x01,
     SERVICE_TIMECHECK		     = 0x02,
@@ -50,7 +43,7 @@ protected:
   epoch_t epoch;
 
   QuorumService(Monitor *m) :
-    tick_event(NULL),
+    tick_event(0),
     tick_period(ceph::span_from_double(m->cct->_conf->mon_tick_interval)),
     mon(m),
     epoch(0)
@@ -60,7 +53,7 @@ protected:
   void cancel_tick() {
     if (tick_event)
       mon->timer.cancel_event(tick_event);
-    tick_event = NULL;
+    tick_event = 0;
   }
 
   void start_tick() {
@@ -70,8 +63,8 @@ protected:
     if (tick_period <= 0ns)
       return;
 
-    tick_event = new C_Tick(this);
-    mon->timer.add_event_after(tick_period, tick_event);
+    tick_event = mon->timer.add_event(tick_period,
+				      &QuorumService::tick, this);
   }
 
   void set_update_period(ceph::timespan t) {
@@ -82,7 +75,7 @@ protected:
     return (mon->is_leader() || mon->is_peon());
   }
 
-  virtual bool service_dispatch(Message *m) = 0;
+  virtual bool service_dispatch(Message *m, unique_lock& l) = 0;
   virtual void service_tick() = 0;
   virtual void service_shutdown() = 0;
 
@@ -107,13 +100,16 @@ public:
     return epoch;
   }
 
-  bool dispatch(Message *m) {
-    return service_dispatch(m);
+  bool dispatch(Message *m, unique_lock& l) {
+    return service_dispatch(m, l);
   }
 
   void tick() {
+    Monitor::unique_lock l(mon->lock);
+    tick_event = 0;
     service_tick();
-    start_tick();
+    if (tick_period > 0ns)
+      tick_event = mon->timer.reschedule_me(tick_period);
   }
 
   void shutdown() {

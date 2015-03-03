@@ -134,18 +134,9 @@ private:
   const char *magic;
   Objecter *objecter;
 
-  SafeTimer<ceph::mono_clock>* timer;
+  cohort::Timer<ceph::mono_clock>& timer;
 
-  class C_DelayFlush : public Context {
-    Journaler *journaler;
-  public:
-    C_DelayFlush(Journaler *j) : journaler(j) {}
-    void finish(int r) {
-      journaler->delay_flush_event = 0;
-      journaler->_do_flush();
-    }
-  } *delay_flush_event;
-
+  uint64_t delay_flush_event;
 
   // my state
   static const int STATE_UNDEF = 0;
@@ -261,7 +252,7 @@ private:
 
 public:
   Journaler(inodeno_t ino_, VolumeRef vol_, const char *mag, Objecter *oid,
-	    SafeTimer<ceph::mono_clock> *tim) :
+	    cohort::Timer<ceph::mono_clock>& tim) :
     cct(oid->cct), last_written(mag), last_committed(mag),
     ino(ino_), volume(vol_), readonly(true), magic(mag),
     objecter(oid),

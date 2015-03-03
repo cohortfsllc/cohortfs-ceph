@@ -47,19 +47,19 @@ class MDSMonitor : public PaxosService {
   // my helpers
   void print_map(MDSMap &m, int dbl=7);
 
-  class C_Updated : public Context {
+  class CB_Updated {
     MDSMonitor *mm;
     MMDSBeacon *m;
   public:
-    C_Updated(MDSMonitor *a, MMDSBeacon *c) :
+    CB_Updated(MDSMonitor *a, MMDSBeacon *c) :
       mm(a), m(c) {}
-    void finish(int r) {
+    void operator()(int r, std::unique_lock<std::mutex>& l) {
       if (r >= 0)
 	mm->_updated(m);   // success
       else if (r == -ECANCELED)
 	m->put();
       else
-	mm->dispatch((PaxosServiceMessage*)m);	      // try again
+	mm->dispatch((PaxosServiceMessage*)m, l); // try again
     }
   };
 
@@ -77,26 +77,27 @@ class MDSMonitor : public PaxosService {
 
   void _updated(MMDSBeacon *m);
 
-  bool preprocess_query(PaxosServiceMessage *m);  // true if processed.
-  bool prepare_update(PaxosServiceMessage *m);
+  // true if processed.
+  bool preprocess_query(PaxosServiceMessage *m, unique_lock& l);
+  bool prepare_update(PaxosServiceMessage *m, unique_lock& l);
   bool should_propose(ceph::timespan& delay);
 
-  void on_active();
+  void on_active(Monitor::unique_lock& l);
 
   void _note_beacon(class MMDSBeacon *m);
   bool preprocess_beacon(class MMDSBeacon *m);
-  bool prepare_beacon(class MMDSBeacon *m);
+  bool prepare_beacon(class MMDSBeacon *m, unique_lock& l);
 
   bool preprocess_offload_targets(MMDSLoadTargets *m);
   bool prepare_offload_targets(MMDSLoadTargets *m);
 
   void get_health(list<pair<health_status_t,string> >& summary,
 		  list<pair<health_status_t,string> > *detail) const;
-  int fail_mds(std::ostream &ss, const std::string &arg);
+  int fail_mds(std::ostream &ss, const std::string &arg, unique_lock& l);
   void fail_mds_gid(uint64_t gid);
 
-  bool preprocess_command(MMonCommand *m);
-  bool prepare_command(MMonCommand *m);
+  bool preprocess_command(MMonCommand *m, unique_lock& l);
+  bool prepare_command(MMonCommand *m, unique_lock& l);
 
   // beacons
   struct beacon_info_t {
@@ -115,7 +116,7 @@ public:
   {
   }
 
-  void tick();	   // check state, take actions
+  void tick(unique_lock& l); // check state, take actions
 
   void dump_info(Formatter *f);
 

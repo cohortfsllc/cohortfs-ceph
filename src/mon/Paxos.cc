@@ -152,15 +152,14 @@ void Paxos::collect(version_t oldpn)
   }
 
   // set timeout event
-  collect_timeout_event = new C_CollectTimeout(this);
-  mon->timer.add_event_after(
+  collect_timeout_event = mon->timer.add_event(
     ceph::span_from_double(cct->_conf->mon_accept_timeout),
-    collect_timeout_event);
+    &Paxos::collect_timeout, this);
 }
 
 
 // peon
-void Paxos::handle_collect(MMonPaxos *collect)
+void Paxos::handle_collect(MMonPaxos *collect, unique_lock& l)
 {
   dout(10) << "handle_collect " << *collect << dendl;
 
@@ -175,7 +174,7 @@ void Paxos::handle_collect(MMonPaxos *collect)
 	    << " (theirs: " << collect->first_committed
 	    << "; ours: " << last_committed << ") -- bootstrap!" << dendl;
     collect->put();
-    mon->bootstrap();
+    mon->bootstrap(l);
     return;
   }
 
@@ -393,7 +392,7 @@ void Paxos::_sanity_check_store()
 
 
 // leader
-void Paxos::handle_last(MMonPaxos *last)
+void Paxos::handle_last(MMonPaxos *last, unique_lock& l)
 {
   bool need_refresh = false;
 
@@ -416,7 +415,7 @@ void Paxos::handle_last(MMonPaxos *last)
 	    << " (theirs: " << last->first_committed
 	    << "; ours: " << last_committed << ") -- bootstrap!" << dendl;
     last->put();
-    mon->bootstrap();
+    mon->bootstrap(l);
     return;
   }
 
@@ -493,19 +492,19 @@ void Paxos::handle_last(MMonPaxos *last)
 	  uncommitted_value.length()) {
 	dout(10) << "that's everyone.  begin on old learned value" << dendl;
 	state = STATE_UPDATING_PREVIOUS;
-	begin(uncommitted_value);
+	begin(uncommitted_value, l);
       } else {
 	// active!
 	dout(10) << "that's everyone.  active!" << dendl;
 	extend_lease();
 
 	need_refresh = false;
-	if (do_refresh()) {
-	  finish_round();
+	if (do_refresh(l)) {
+	  finish_round(l);
 
-	  finish_contexts(waiting_for_active);
-	  finish_contexts(waiting_for_readable);
-	  finish_contexts(waiting_for_writeable);
+	  waiting_for_active.execute(0, l);
+	  waiting_for_readable.execute(0, l);
+	  waiting_for_writeable.execute(0, l);
 	}
       }
     }
@@ -515,22 +514,23 @@ void Paxos::handle_last(MMonPaxos *last)
   }
 
   if (need_refresh)
-    (void)do_refresh();
+    do_refresh(l);
 
   last->put();
 }
 
 void Paxos::collect_timeout()
 {
+  unique_lock l(mon->lock);
   dout(1) << "collect timeout, calling fresh election" << dendl;
   collect_timeout_event = 0;
   assert(mon->is_leader());
-  mon->bootstrap();
+  mon->bootstrap(l);
 }
 
 
 // leader
-void Paxos::begin(bufferlist& v)
+void Paxos::begin(bufferlist& v, unique_lock& l)
 {
   dout(10) << "begin for " << last_committed+1 << " "
 	   << v.length() << " bytes"
@@ -591,14 +591,14 @@ void Paxos::begin(bufferlist& v)
   if (mon->get_quorum().size() == 1) {
     // we're alone, take it easy
     commit();
-    if (do_refresh()) {
+    if (do_refresh(l)) {
       assert(is_updating());  // we can't be updating-previous with quorum of 1
-      commit_proposal();
-      finish_round();
-      finish_contexts(waiting_for_active);
-      finish_contexts(waiting_for_commit);
-      finish_contexts(waiting_for_readable);
-      finish_contexts(waiting_for_writeable);
+      commit_proposal(l);
+      finish_round(l);
+      waiting_for_active.execute(0, l);
+      waiting_for_commit.execute(0, l);
+      waiting_for_readable.execute(0, l);
+      waiting_for_writeable.execute(0, l);
     }
     return;
   }
@@ -620,10 +620,9 @@ void Paxos::begin(bufferlist& v)
   }
 
   // set timeout event
-  accept_timeout_event = new C_AcceptTimeout(this);
-  mon->timer.add_event_after(
+  accept_timeout_event = mon->timer.add_event(
     ceph::span_from_double(cct->_conf->mon_accept_timeout),
-    accept_timeout_event);
+    &Paxos::accept_timeout, this);
 }
 
 // peon
@@ -679,7 +678,7 @@ void Paxos::handle_begin(MMonPaxos *begin)
 }
 
 // leader
-void Paxos::handle_accept(MMonPaxos *accept)
+void Paxos::handle_accept(MMonPaxos *accept, unique_lock& l)
 {
   dout(10) << "handle_accept " << *accept << dendl;
   int from = accept->get_source().num();
@@ -713,11 +712,11 @@ void Paxos::handle_accept(MMonPaxos *accept)
     // yay, commit!
     dout(10) << " got majority, committing, done with update" << dendl;
     commit();
-    if (!do_refresh())
+    if (!do_refresh(l))
       goto out;
     if (is_updating())
-      commit_proposal();
-    finish_contexts(waiting_for_commit);
+      commit_proposal(l);
+    waiting_for_commit.execute(0, l);
 
     // cancel timeout event
     mon->timer.cancel_event(accept_timeout_event);
@@ -728,12 +727,12 @@ void Paxos::handle_accept(MMonPaxos *accept)
 
     assert(cct->_conf->paxos_kill_at != 10);
 
-    finish_round();
+    finish_round(l);
 
     // wake people up
-    finish_contexts(waiting_for_active);
-    finish_contexts(waiting_for_readable);
-    finish_contexts(waiting_for_writeable);
+    waiting_for_active(0, l);
+    waiting_for_readable(0, l);
+    waiting_for_writeable(0, l);
   }
 
  out:
@@ -742,11 +741,12 @@ void Paxos::handle_accept(MMonPaxos *accept)
 
 void Paxos::accept_timeout()
 {
+  unique_lock l(mon->lock);
   dout(1) << "accept timeout, calling fresh election" << dendl;
   accept_timeout_event = 0;
   assert(mon->is_leader());
   assert(is_updating() || is_updating_previous());
-  mon->bootstrap();
+  mon->bootstrap(l);
 }
 
 void Paxos::commit()
@@ -811,7 +811,7 @@ void Paxos::commit()
 }
 
 
-void Paxos::handle_commit(MMonPaxos *commit)
+void Paxos::handle_commit(MMonPaxos *commit, unique_lock& l)
 {
   dout(10) << "handle_commit on " << commit->last_committed << dendl;
 
@@ -824,8 +824,8 @@ void Paxos::handle_commit(MMonPaxos *commit)
 
   store_state(commit);
 
-  if (do_refresh()) {
-    finish_contexts(waiting_for_commit);
+  if (do_refresh(l)) {
+    waiting_for_commit(0, l);
   }
 
   commit->put();
@@ -860,18 +860,19 @@ void Paxos::extend_lease()
   // set timeout event.
   //  if old timeout is still in place, leave it.
   if (!lease_ack_timeout_event) {
-    lease_ack_timeout_event = new C_LeaseAckTimeout(this);
-    mon->timer.add_event_after(ceph::span_from_double(
-				 cct->_conf->mon_lease_ack_timeout),
-			       lease_ack_timeout_event);
+    lease_ack_timeout_event
+      = mon->timer.add_event(
+	ceph::span_from_double(cct->_conf->mon_lease_ack_timeout),
+	&Paxos::lease_ack_timeout, this);
   }
 
   // set renew event
-  lease_renew_event = new C_LeaseRenew(this);
   ceph::real_time at = lease_expire;
   at -= ceph::span_from_double(cct->_conf->mon_lease);
   at += ceph::span_from_double(cct->_conf->mon_lease_renew_interval);
-  mon->timer.add_event_at(at, lease_renew_event);
+  lease_renew_event
+    = mon->timer.add_event(at,
+			   &Paxos::lease_renew_timeout, this);
 }
 
 void Paxos::warn_on_future_time(ceph::real_time t, entity_name_t from)
@@ -894,7 +895,7 @@ void Paxos::warn_on_future_time(ceph::real_time t, entity_name_t from)
 
 }
 
-bool Paxos::do_refresh()
+bool Paxos::do_refresh(unique_lock& l)
 {
   bool need_bootstrap = false;
 
@@ -903,30 +904,31 @@ bool Paxos::do_refresh()
 
   if (need_bootstrap) {
     dout(10) << " doing requested bootstrap" << dendl;
-    mon->bootstrap();
+    mon->bootstrap(l);
     return false;
   }
 
   return true;
 }
 
-void Paxos::commit_proposal()
+void Paxos::commit_proposal(unique_lock& l)
 {
   dout(10) << __func__ << dendl;
   assert(mon->is_leader());
   assert(!proposals.empty());
   assert(is_updating());
 
-  C_Proposal& proposal = proposals.front();
+  Proposal& proposal = proposals.front();
   assert(proposal.proposed);
   dout(10) << __func__ << " proposal " << proposal << " took "
 	   << ceph::mono_clock::now() - proposal.proposal_time
 	   << " to finish" << dendl;
   proposals.pop_front();
-  proposal.complete(0);
+  proposal.finish(0, l);
+  delete &proposal;
 }
 
-void Paxos::finish_round()
+void Paxos::finish_round(unique_lock& l)
 {
   assert(mon->is_leader());
 
@@ -941,12 +943,12 @@ void Paxos::finish_round()
   }
 
   if (is_active() && !proposals.empty()) {
-    propose_queued();
+    propose_queued(l);
   }
 }
 
 // peon
-void Paxos::handle_lease(MMonPaxos *lease)
+void Paxos::handle_lease(MMonPaxos *lease, unique_lock& l)
 {
   // sanity
   if (!mon->is_peon() ||
@@ -989,9 +991,9 @@ void Paxos::handle_lease(MMonPaxos *lease)
   reset_lease_timeout();
 
   // kick waiters
-  finish_contexts(waiting_for_active);
+  waiting_for_active(0, l);
   if (is_readable())
-    finish_contexts(waiting_for_readable);
+    waiting_for_readable(0, l);
 
   lease->put();
 }
@@ -1033,12 +1035,13 @@ void Paxos::handle_lease_ack(MMonPaxos *ack)
 
 void Paxos::lease_ack_timeout()
 {
+  unique_lock l(mon->lock);
   dout(1) << "lease_ack_timeout -- calling new election" << dendl;
   assert(mon->is_leader());
   assert(is_active());
 
   lease_ack_timeout_event = 0;
-  mon->bootstrap();
+  mon->bootstrap(l);
 }
 
 void Paxos::reset_lease_timeout()
@@ -1046,23 +1049,25 @@ void Paxos::reset_lease_timeout()
   dout(20) << "reset_lease_timeout - setting timeout event" << dendl;
   if (lease_timeout_event)
     mon->timer.cancel_event(lease_timeout_event);
-  lease_timeout_event = new C_LeaseTimeout(this);
-  mon->timer.add_event_after(
-    ceph::span_from_double(cct->_conf->mon_lease_ack_timeout),
-			   lease_timeout_event);
+  lease_timeout_event
+    = mon->timer.add_event(
+      ceph::span_from_double(cct->_conf->mon_lease_ack_timeout),
+      &Paxos::lease_timeout, this);
 }
 
 void Paxos::lease_timeout()
 {
+  unique_lock l(mon->lock);
   dout(1) << "lease_timeout -- calling new election" << dendl;
   assert(mon->is_peon());
 
   lease_timeout_event = 0;
-  mon->bootstrap();
+  mon->bootstrap(l);
 }
 
 void Paxos::lease_renew_timeout()
 {
+  unique_lock l(mon->lock);
   lease_renew_event = 0;
   extend_lease();
 }
@@ -1104,7 +1109,8 @@ void Paxos::trim()
   t.encode(bl);
 
   trimming = true;
-  queue_proposal(bl, new C_Trimmed(this));
+  queue_proposal(bl,
+		 [this](int, unique_lock&){ trimming = false; });
 }
 
 /*
@@ -1162,21 +1168,22 @@ void Paxos::cancel_events()
   }
 }
 
-void Paxos::shutdown() {
+void Paxos::shutdown(unique_lock& l) {
   dout(10) << __func__ << " cancel all contexts" << dendl;
-  finish_contexts(waiting_for_writeable, -ECANCELED);
-  finish_contexts(waiting_for_commit, -ECANCELED);
-  finish_contexts(waiting_for_readable, -ECANCELED);
-  finish_contexts(waiting_for_active, -ECANCELED);
-  finish_proposals(proposals, -ECANCELED);
+  waiting_for_writeable(-ECANCELED, l);
+  waiting_for_commit(-ECANCELED, l);
+  waiting_for_readable(-ECANCELED, l);
+  waiting_for_active(-ECANCELED, l);
+
+  finish_proposals(proposals, l, -ECANCELED);
 }
 
-void Paxos::leader_init()
+void Paxos::leader_init(unique_lock& l)
 {
   cancel_events();
   new_value.clear();
 
-  finish_proposals(proposals, -EAGAIN);
+  finish_proposals(proposals, l, -EAGAIN);
 
   if (mon->get_quorum().size() == 1) {
     state = STATE_ACTIVE;
@@ -1189,7 +1196,7 @@ void Paxos::leader_init()
   collect(0);
 }
 
-void Paxos::peon_init()
+void Paxos::peon_init(unique_lock& l)
 {
   cancel_events();
   new_value.clear();
@@ -1202,12 +1209,12 @@ void Paxos::peon_init()
   reset_lease_timeout();
 
   // no chance to write now!
-  finish_contexts(waiting_for_writeable, -EAGAIN);
-  finish_contexts(waiting_for_commit, -EAGAIN);
-  finish_proposals(proposals, -EAGAIN);
+  waiting_for_writeable(-EAGAIN, l);
+  waiting_for_commit(-EAGAIN, l);
+  finish_proposals(proposals, l, -EAGAIN);
 }
 
-void Paxos::restart()
+void Paxos::restart(unique_lock& l)
 {
   dout(10) << "restart -- canceling timeouts" << dendl;
   cancel_events();
@@ -1215,12 +1222,12 @@ void Paxos::restart()
 
   state = STATE_RECOVERING;
 
-  finish_proposals(proposals, -EAGAIN);
-  finish_contexts(waiting_for_commit, -EAGAIN);
-  finish_contexts(waiting_for_active, -EAGAIN);
+  finish_proposals(proposals, l, -EAGAIN);
+  waiting_for_commit(-EAGAIN, l);
+  waiting_for_active(-EAGAIN, l);
 }
 
-void Paxos::dispatch(PaxosServiceMessage *m)
+void Paxos::dispatch(PaxosServiceMessage *m, unique_lock& l)
 {
   // election in progress?
   if (!mon->is_leader() && !mon->is_peon()) {
@@ -1243,22 +1250,22 @@ void Paxos::dispatch(PaxosServiceMessage *m)
       switch (pm->op) {
 	// learner
       case MMonPaxos::OP_COLLECT:
-	handle_collect(pm);
+	handle_collect(pm, l);
 	break;
       case MMonPaxos::OP_LAST:
-	handle_last(pm);
+	handle_last(pm, l);
 	break;
       case MMonPaxos::OP_BEGIN:
 	handle_begin(pm);
 	break;
       case MMonPaxos::OP_ACCEPT:
-	handle_accept(pm);
+	handle_accept(pm, l);
 	break;
       case MMonPaxos::OP_COMMIT:
-	handle_commit(pm);
+	handle_commit(pm, l);
 	break;
       case MMonPaxos::OP_LEASE:
-	handle_lease(pm);
+	handle_lease(pm, l);
 	break;
       case MMonPaxos::OP_LEASE_ACK:
 	handle_lease_ack(pm);
@@ -1329,22 +1336,21 @@ bool Paxos::is_writeable()
 void Paxos::list_proposals(ostream& out)
 {
   out << __func__ << " " << proposals.size() << " in queue:\n";
-  C_Proposal::Queue::iterator it;
-  int i;
-  for (i = 0, it = proposals.begin(); it != proposals.end();
-       ++it, ++i)  {
-    C_Proposal& p = *it;
+  Proposal::Queue::iterator it;
+  int i = 0;
+  for (auto& p : proposals) {
     out << "-- entry #" << i << "\n";
     out << p << "\n";
+    ++i;
   }
 }
 
-void Paxos::propose_queued()
+void Paxos::propose_queued(unique_lock& l)
 {
   assert(is_active());
   assert(!proposals.empty());
 
-  C_Proposal& proposal = proposals.front();
+  Proposal& proposal = proposals.front();
   assert(!proposal.proposed);
 
   cancel_events();
@@ -1357,29 +1363,31 @@ void Paxos::propose_queued()
   *_dout << dendl;
 
   state = STATE_UPDATING;
-  begin(proposal.bl);
+  begin(proposal.bl, l);
 }
 
-void Paxos::queue_proposal(bufferlist& bl, Context *onfinished)
+void Paxos::queue_proposal(bufferlist& bl, waiter&& onfinished)
 {
   dout(5) << __func__ << " bl " << bl.length() << " bytes;"
-	  << " ctx = " << onfinished << dendl;
+	  << dendl;
 
-  proposals.push_back(*(new C_Proposal(onfinished, bl)));
+  proposals.push_back(*(new Proposal(std::forward<waiter>(onfinished),
+				     bl)));
 }
 
-bool Paxos::propose_new_value(bufferlist& bl, Context *onfinished)
+bool Paxos::propose_new_value(bufferlist& bl, unique_lock& l,
+			      waiter&& onfinished)
 {
   assert(mon->is_leader());
 
-  queue_proposal(bl, onfinished);
+  queue_proposal(bl, std::forward<waiter>(onfinished));
 
   if (!is_active()) {
     dout(5) << __func__ << " not active; proposal queued" << dendl;
     return true;
   }
 
-  propose_queued();
+  propose_queued(l);
 
   return true;
 }

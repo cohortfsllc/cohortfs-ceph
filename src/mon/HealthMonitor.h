@@ -44,7 +44,7 @@ public:
   virtual void init();
   virtual health_status_t get_health(
     Formatter *f, list<pair<health_status_t,string> > *detail);
-  virtual bool service_dispatch(Message *m);
+  virtual bool service_dispatch(Message *m, unique_lock& l);
 
   virtual void start_epoch() {
     for (map<int,HealthService*>::iterator it = services.begin();

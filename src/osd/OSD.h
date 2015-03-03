@@ -176,7 +176,7 @@ public:
 
   // -- Watch --
   std::mutex watch_lock;
-  SafeTimer<ceph::mono_clock> watch_timer;
+  cohort::Timer<ceph::mono_clock> watch_timer;
   uint64_t next_notif_id;
   uint64_t get_next_id(epoch_t cur_epoch) {
     lock_guard l(watch_lock);
@@ -232,7 +232,6 @@ public:
 
   void need_heartbeat_peer_update();
 
-  void init();
   void shutdown();
 
   // -- OSD Full Status --
@@ -294,8 +293,8 @@ public:
 				  const std::set <std::string> &changed);
 
 protected:
-  std::mutex osd_lock;			// global lock
-  SafeTimer<ceph::mono_clock> tick_timer;	   // safe timer (osd_lock)
+  std::mutex osd_lock; // global lock
+  cohort::Timer<ceph::mono_clock> tick_timer; // safe timer (osd_lock)
 
   AuthAuthorizeHandlerRegistry *authorize_handler_cluster_registry;
   AuthAuthorizeHandlerRegistry *authorize_handler_service_registry;
@@ -312,15 +311,6 @@ protected:
 
   int whoami;
   std::string dev_path, journal_path;
-
-  class C_Tick : public Context {
-    OSD *osd;
-  public:
-    C_Tick(OSD *o) : osd(o) {}
-    void finish(int r) {
-      osd->tick();
-    }
-  };
 
   std::condition_variable dispatch_cond;
   int dispatch_running;

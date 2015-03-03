@@ -44,8 +44,7 @@ Notify::Notify(
     notify_id(notify_id),
     version(version),
     osd(osd),
-    cb(NULL),
-    lock() {}
+    cb(0) {}
 
 NotifyRef Notify::makeNotifyRef(
   ConnectionRef client,
@@ -66,35 +65,11 @@ NotifyRef Notify::makeNotifyRef(
   return ret;
 }
 
-class NotifyTimeoutCB : public CancelableContext {
-  NotifyRef notif;
-  bool canceled; // protected by notif lock
-public:
-  NotifyTimeoutCB(NotifyRef notif) : notif(notif), canceled(false) {}
-  void finish(int) {
-    // Since safe_callbacks is set in the timer, we know this lock is
-    // held when we are called.
-    OSD::unique_lock wl(notif->osd->watch_lock, std::adopt_lock);
-    wl.unlock();
-    Notify::unique_lock nl(notif->lock);
-    if (!canceled)
-      notif->do_timeout(nl); // drops lock
-    else
-      nl.unlock();
-    wl.lock();
-    wl.release();
-  }
-  void cancel() {
-    // Must be called with notif->lock locked
-    canceled = true;
-  }
-};
-
-void Notify::do_timeout(unique_lock& nl)
+void Notify::do_timeout()
 {
-  assert(nl && nl.mutex() == &lock);
+  unique_lock nl(lock);
   ldout(osd->osd->cct, 10) << "timeout" << dendl;
-  cb = NULL;
+  cb = 0;
   if (is_discarded()) {
     nl.unlock();
     return;
@@ -119,14 +94,10 @@ void Notify::do_timeout(unique_lock& nl)
 
 void Notify::register_cb()
 {
-  // Must be called with lock locked
-  {
-    OSD::lock_guard wl(osd->watch_lock);
-    cb = new NotifyTimeoutCB(self.lock());
-    osd->watch_timer.add_event_after(
-      timeout * 1s,
-      cb);
-  }
+  OSD::lock_guard wl(osd->watch_lock);
+  cb = osd->watch_timer.add_event(
+    timeout * 1s,
+    &Notify::do_timeout, this);
 }
 
 void Notify::unregister_cb()
@@ -134,12 +105,8 @@ void Notify::unregister_cb()
   // Must be called with lock locked
   if (!cb)
     return;
-  cb->cancel();
-  {
-    OSD::lock_guard wl(osd->watch_lock);
-    osd->watch_timer.cancel_event(cb);
-    cb = NULL;
-  }
+  osd->watch_timer.cancel_event(cb);
+  cb = 0;
 }
 
 void Notify::start_watcher(WatchRef watch)
@@ -201,49 +168,6 @@ static ostream& _prefix(
   return *_dout << watch->gen_dbg_prefix();
 }
 
-class HandleWatchTimeout : public CancelableContext {
-  WatchRef watch;
-public:
-  bool canceled; // protected by watch->vol->lock
-  HandleWatchTimeout(WatchRef watch) : watch(watch), canceled(false) {}
-  void cancel() {
-    canceled = true;
-  }
-  void finish(int) { assert(0); /* not used */ }
-  void complete(int) {
-    ldout(watch->osd->osd->cct, 10) << "HandleWatchTimeout" << dendl;
-    boost::intrusive_ptr<OSDVol> vol(watch->vol);
-    OSDService *osd(watch->osd);
-    OSD::unique_lock wl(osd->watch_lock, std::adopt_lock);
-    wl.unlock();
-    OSDVol::unique_lock vl(vol->lock);
-    watch->cb = NULL;
-    if (!watch->is_discarded() && !canceled)
-      watch->vol->handle_watch_timeout(watch);
-    delete this; // ~Watch requires vol lock!
-    // Does it? It doesn't look like it does anything.
-    vl.unlock();
-    wl.lock();
-    wl.release();
-  }
-};
-
-class HandleDelayedWatchTimeout : public CancelableContext {
-  WatchRef watch;
-public:
-  bool canceled;
-  HandleDelayedWatchTimeout(WatchRef watch) : watch(watch), canceled(false) {}
-  void cancel() {
-    canceled = true;
-  }
-  void finish(int) {
-    ldout(watch->osd->osd->cct, 10) << "HandleWatchTimeoutDelayed" << dendl;
-    watch->cb = NULL;
-    if (!watch->is_discarded() && !canceled)
-      watch->vol->handle_watch_timeout(watch);
-  }
-};
-
 #define dout_subsys ceph_subsys_osd
 #undef dout_prefix
 #define dout_prefix _prefix(_dout, this)
@@ -263,7 +187,7 @@ Watch::Watch(
   uint64_t cookie,
   entity_name_t entity,
   const entity_addr_t &addr)
-  : cb(NULL),
+  : cb(0),
     osd(osd),
     vol(vol),
     obc(obc),
@@ -284,22 +208,14 @@ Watch::~Watch() {
 
 bool Watch::connected() { return !!conn; }
 
-Context *Watch::get_delayed_cb()
-{
-  assert(!cb);
-  cb = new HandleDelayedWatchTimeout(self.lock());
-  return cb;
-}
-
 void Watch::register_cb()
 {
   OSD::lock_guard l(osd->watch_lock);
   ldout(osd->osd->cct, 15) << "registering callback, timeout: " << timeout
 			   << dendl;
-  cb = new HandleWatchTimeout(self.lock());
-  osd->watch_timer.add_event_after(
+  cb = osd->watch_timer.add_event(
     timeout * 1s,
-    cb);
+    &Watch::handle_watch_timeout, this);
 }
 
 void Watch::unregister_cb()
@@ -308,12 +224,8 @@ void Watch::unregister_cb()
   if (!cb)
     return;
   ldout(osd->osd->cct, 15) << "actually registered, cancelling" << dendl;
-  cb->cancel();
-  {
-    OSD::lock_guard wl(osd->watch_lock);
-    osd->watch_timer.cancel_event(cb); // harmless if not registered with timer
-  }
-  cb = NULL;
+  osd->watch_timer.cancel_event(cb); // harmless if not registered with timer
+  cb = 0;
 }
 
 void Watch::connect(ConnectionRef con)
@@ -426,6 +338,16 @@ WatchRef Watch::makeWatchRef(
   WatchRef ret(new Watch(vol, osd, obc, timeout, cookie, entity, addr));
   ret->set_self(ret);
   return ret;
+}
+
+void Watch::handle_watch_timeout() {
+  ldout(osd->osd->cct, 10) << "HandleWatchTimeout" << dendl;
+  OSDVol::unique_lock vl(vol->lock);
+  cb = 0;
+  if (!is_discarded()) {
+    vol->handle_watch_timeout(self.lock());
+    vl.unlock();
+  }
 }
 
 void WatchConState::addWatch(WatchRef watch)

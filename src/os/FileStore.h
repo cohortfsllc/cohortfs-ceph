@@ -145,8 +145,7 @@ private:
   std::condition_variable sync_cond;
   uint64_t sync_epoch;
 
-  std::mutex sync_entry_timeo_lock;
-  SafeTimer<ceph::mono_clock> timer;
+  cohort::Timer<ceph::mono_clock> timer;
 
   std::vector<Context*> sync_waiters;
   bool stop;

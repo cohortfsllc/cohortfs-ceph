@@ -20,7 +20,6 @@
 MDSUtility::MDSUtility() :
   Dispatcher(cct),
   objecter(NULL),
-  timer(lock),
   waiting_for_mds_map(NULL)
 {
   monc = new MonClient(cct);
@@ -70,11 +69,8 @@ int MDSUtility::init()
 
   // Initialize Objecter and wait for OSD map
   objecter->set_client_incarnation(0);
-  unique_lock l(lock);
-  objecter->init();
-  l.unlock();
+  unique_lock l(lock, std::defer_lock);
   objecter->wait_for_osd_map();
-  timer.init();
 
   // Prepare to receive MDS map and request it
   std::mutex init_lock;
@@ -101,10 +97,7 @@ int MDSUtility::init()
 
 void MDSUtility::shutdown()
 {
-  unique_lock l(lock);
-  timer.shutdown(l);
   objecter->shutdown();
-  l.unlock();
   monc->shutdown();
   messenger->shutdown();
   messenger->wait();

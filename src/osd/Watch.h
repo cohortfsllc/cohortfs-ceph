@@ -43,16 +43,12 @@ class Notify;
 typedef std::shared_ptr<Notify> NotifyRef;
 typedef std::weak_ptr<Notify> WNotifyRef;
 
-struct CancelableContext;
-
 /**
  * Notify tracks the progress of a particular notify
  *
  * References are held by Watch and the timeout callback.
  */
-class NotifyTimeoutCB;
 class Notify {
-  friend class NotifyTimeoutCB;
   friend class Watch;
   WNotifyRef self;
   ConnectionRef client;
@@ -68,8 +64,8 @@ class Notify {
   uint64_t version;
 
   OSDService *osd;
-  CancelableContext *cb;
   std::mutex lock;
+  uint64_t cb;
   typedef std::unique_lock<std::mutex> unique_lock;
   typedef std::lock_guard<std::mutex> lock_guard;
 
@@ -83,7 +79,7 @@ class Notify {
   void maybe_complete_notify();
 
   /// Called on Notify timeout
-  void do_timeout(unique_lock& nl);
+  void do_timeout();
 
   Notify(
     ConnectionRef client,
@@ -146,11 +142,11 @@ public:
 class HandleWatchTimeout;
 class HandleDelayedWatchTimeout;
 class Watch {
+  uint64_t cb;
   WWatchRef self;
   friend class HandleWatchTimeout;
   friend class HandleDelayedWatchTimeout;
   ConnectionRef conn;
-  CancelableContext *cb;
 
   OSDService *osd;
   boost::intrusive_ptr<OSDVol> vol;
@@ -192,6 +188,9 @@ public:
     OSDVol *vol, OSDService *osd, std::shared_ptr<ObjectContext> obc,
     uint32_t timeout, uint64_t cookie, entity_name_t entity,
     const entity_addr_t &addr);
+
+  void handle_watch_timeout();
+
   void set_self(WatchRef _self) {
     self = _self;
   }
@@ -205,9 +204,6 @@ public:
   entity_name_t get_entity() const { return entity; }
   entity_addr_t get_peer_addr() const { return addr; }
   uint32_t get_timeout() const { return timeout; }
-
-  /// Generates context for use if watch timeout is delayed by scrub or recovery
-  Context *get_delayed_cb();
 
   /// True if currently connected
   bool connected();

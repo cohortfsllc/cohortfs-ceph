@@ -29,8 +29,11 @@ class ConfigKeyService : public QuorumService
   Paxos *paxos;
 
   int store_get(string key, bufferlist &bl);
-  void store_put(string key, bufferlist &bl, Context *cb = NULL);
-  void store_delete(string key, Context *cb = NULL);
+  void store_put(
+    string key, bufferlist &bl, unique_lock& l,
+    waiter&& cb = nullptr);
+  void store_delete(
+    string key, unique_lock& l, waiter&& cb = nullptr);
   void store_list(stringstream &ss);
   bool store_exists(string key);
 
@@ -57,7 +60,7 @@ public:
     list<pair<health_status_t,string> > *detail) {
     return HEALTH_OK;
   }
-  virtual bool service_dispatch(Message *m);
+  virtual bool service_dispatch(Message *m, unique_lock& l);
 
   virtual void start_epoch() { }
   virtual void finish_epoch() { }

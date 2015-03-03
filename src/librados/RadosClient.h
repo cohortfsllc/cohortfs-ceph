@@ -67,7 +67,6 @@ private:
   typedef std::unique_lock<std::mutex> unique_lock;
   typedef std::lock_guard<std::mutex> lock_guard;
   std::condition_variable cond;
-  SafeTimer<ceph::mono_clock> timer;
   int refcnt;
 
   version_t log_last_version;

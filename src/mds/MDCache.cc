@@ -6354,17 +6354,9 @@ void MDCache::check_memory_usage()
 // =========================================================================================
 // shutdown
 
-class C_MDC_ShutdownCheck : public Context {
-  MDCache *mdc;
-public:
-  C_MDC_ShutdownCheck(MDCache *m) : mdc(m) {}
-  void finish(int) {
-    mdc->shutdown_check();
-  }
-};
-
 void MDCache::shutdown_check()
 {
+  MDS::unique_lock ml(mds->mds_lock);
   dout(0) << "shutdown_check at " << ceph::real_clock::now() << dendl;
 
   // cache
@@ -6376,9 +6368,8 @@ void MDCache::shutdown_check()
   show_cache();
   cct->_conf->set_val("debug_mds", old_val);
   cct->_conf->apply_changes(NULL);
-  mds->timer.add_event_after(
-    ceph::span_from_double(cct->_conf->mds_shutdown_check),
-    new C_MDC_ShutdownCheck(this));
+  mds->timer.reschedule_me(
+    ceph::span_from_double(cct->_conf->mds_shutdown_check));
 
   // this
   dout(0) << "lru size now " << lru.lru_get_size() << dendl;
@@ -6391,9 +6382,9 @@ void MDCache::shutdown_start()
   dout(2) << "shutdown_start" << dendl;
 
   if (cct->_conf->mds_shutdown_check)
-    mds->timer.add_event_after(
+    mds->timer.add_event(
       ceph::span_from_double(cct->_conf->mds_shutdown_check),
-			     new C_MDC_ShutdownCheck(this));
+      &MDCache::shutdown_check, this);
 
   //  cct->_conf->debug_mds = 10;
 }

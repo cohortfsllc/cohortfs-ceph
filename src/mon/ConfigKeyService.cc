@@ -45,23 +45,25 @@ int ConfigKeyService::store_get(string key, bufferlist &bl)
   return mon->store->get(STORE_PREFIX, key, bl);
 }
 
-void ConfigKeyService::store_put(string key, bufferlist &bl, Context *cb)
+void ConfigKeyService::store_put(
+  string key, bufferlist &bl, unique_lock& l, waiter&& cb)
 {
   bufferlist proposal_bl;
   MonitorDBStore::Transaction t;
   t.put(STORE_PREFIX, key, bl);
   t.encode(proposal_bl);
 
-  paxos->propose_new_value(proposal_bl, cb);
+  paxos->propose_new_value(proposal_bl, l, std::forward<waiter>(cb));
 }
 
-void ConfigKeyService::store_delete(string key, Context *cb)
+void ConfigKeyService::store_delete(
+  string key, std::unique_lock<std::mutex>& l, waiter&& cb)
 {
   bufferlist proposal_bl;
   MonitorDBStore::Transaction t;
   t.erase(STORE_PREFIX, key);
   t.encode(proposal_bl);
-  paxos->propose_new_value(proposal_bl, cb);
+  paxos->propose_new_value(proposal_bl, l, std::forward<waiter>(cb));
 }
 
 bool ConfigKeyService::store_exists(string key)
@@ -87,7 +89,7 @@ void ConfigKeyService::store_list(stringstream &ss)
 }
 
 
-bool ConfigKeyService::service_dispatch(Message *m)
+bool ConfigKeyService::service_dispatch(Message *m, unique_lock& l)
 {
   ldout(mon->cct, 10) << __func__ << " " << *m << dendl;
   if (!in_quorum()) {
@@ -152,8 +154,8 @@ bool ConfigKeyService::service_dispatch(Message *m)
       goto out;
     }
     // we'll reply to the message once the proposal has been handled
-    store_put(key, data,
-	new Monitor::C_Command(mon, cmd, 0, "value stored", 0));
+    store_put(key, data, l,
+	      Monitor::CB_Command(mon, cmd, 0, "value stored", 0));
     // return for now; we'll put the message once it's done.
     return true;
 
@@ -168,7 +170,7 @@ bool ConfigKeyService::service_dispatch(Message *m)
       ss << "no such key '" << key << "'";
       goto out;
     }
-    store_delete(key, new Monitor::C_Command(mon, cmd, 0, "key deleted", 0));
+    store_delete(key, l, Monitor::CB_Command(mon, cmd, 0, "key deleted", 0));
     // return for now; we'll put the message once it's done
     return true;
 
@@ -193,7 +195,7 @@ bool ConfigKeyService::service_dispatch(Message *m)
 out:
   if (!cmd->get_source().is_mon()) {
     string rs = ss.str();
-    mon->reply_command(cmd, ret, rs, rdata, 0);
+    mon->reply_command(cmd, ret, rs, rdata, 0, l);
   } else {
     cmd->put();
   }
