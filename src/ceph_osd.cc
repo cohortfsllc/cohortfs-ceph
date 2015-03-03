@@ -321,8 +321,6 @@ int main(int argc, const char **argv)
 		ms.client_hb,
 		ms.front_hb,
 		ms.back_hb,
-		ms.objecter,
-		ms.objecter_xio,
 		&mc,
 		cct->_conf->osd_data,
 		cct->_conf->osd_journal);

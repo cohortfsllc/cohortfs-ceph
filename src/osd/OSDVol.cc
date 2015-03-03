@@ -21,7 +21,6 @@
 #include "OSD.h"
 #include "OpRequest.h"
 #include "mon/MonClient.h"
-#include "osdc/Objecter.h"
 
 #include "common/Timer.h"
 
