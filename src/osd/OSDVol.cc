@@ -47,7 +47,6 @@ static ostream& _prefix(std::ostream *_dout, T *vol) {
   return *_dout << vol->gen_prefix();
 }
 
-
 void OSDVol::get()
 {
   ++ref;
@@ -267,15 +266,6 @@ void OSDVol::read_info()
   bufferlist bl = values[k];
   bufferlist::iterator p = bl.begin();
   ::decode(info, p);
-}
-
-void OSDVol::requeue_object_waiters(map<oid_t, list<OpRequestRef> >& m)
-{
-  for (map<oid_t, list<OpRequestRef> >::iterator it = m.begin();
-       it != m.end();
-       ++it)
-    requeue_ops(it->second);
-  m.clear();
 }
 
 void OSDVol::requeue_op(OpRequestRef op)
@@ -2328,32 +2318,14 @@ void OSDVol::eval_mutation(Mutation *mutation)
 
     // ondisk?
     if (mutation->committed) {
-      // send dup commits, in order
-      if (waiting_for_ondisk.count(mutation->v)) {
-	assert(waiting_for_ondisk.begin()->first == mutation->v);
-	for (list<OpRequestRef>::iterator i
-	       = waiting_for_ondisk[mutation->v].begin();
-	     i != waiting_for_ondisk[mutation->v].end();
-	     ++i) {
-	  osd->reply_op_error(*i, 0, mutation->ctx->at_version,
-			      mutation->ctx->user_at_version);
-	}
-	waiting_for_ondisk.erase(mutation->v);
-      }
-
-      // clear out acks, we sent the commits above
-      if (waiting_for_ack.count(mutation->v)) {
-	assert(waiting_for_ack.begin()->first == mutation->v);
-	waiting_for_ack.erase(mutation->v);
-      }
-
       if (m->wants_ondisk() && !mutation->sent_disk) {
 	// send commit.
 	MOSDOpReply *reply = mutation->ctx->reply;
 	if (reply)
 	  mutation->ctx->reply = NULL;
 	else {
-	  reply = new MOSDOpReply(m, 0, get_osdmap()->get_epoch(), 0, true);
+	  reply = new MOSDOpReply(m, 0, get_osdmap()->get_epoch(),
+				  0, true);
 	  reply->set_reply_versions(mutation->ctx->at_version,
 				    mutation->ctx->user_at_version);
 	}
@@ -2362,8 +2334,9 @@ void OSDVol::eval_mutation(Mutation *mutation)
 		 << reply << dendl;
 
         if (mutation->ctx->op->trace) {
-          mutation->ctx->op->trace.event("eval_mutation sending commit",
-                                         &trace_endpoint);
+          mutation->ctx->op->trace.event(
+                                     "eval_mutation sending commit",
+				     &trace_endpoint);
           // send reply with a child span
           Messenger *msgr = m->get_connection()->get_messenger();
           reply->trace.init("MOSDOpReply", msgr->get_trace_endpoint(),
@@ -2377,47 +2350,20 @@ void OSDVol::eval_mutation(Mutation *mutation)
 
     // applied?
     if (mutation->applied) {
-      // send dup acks, in order
-      if (waiting_for_ack.count(mutation->v)) {
-	assert(waiting_for_ack.begin()->first == mutation->v);
-	for (list<OpRequestRef>::iterator i
-	       = waiting_for_ack[mutation->v].begin();
-	     i != waiting_for_ack[mutation->v].end();
-	     ++i) {
-	  MOSDOp *m = (MOSDOp*)(*i)->get_req();
-	  MOSDOpReply *reply = new MOSDOpReply(
-	    m, 0,get_osdmap()->get_epoch(), 0, true);
-	  reply->set_reply_versions(mutation->ctx->at_version,
-				    mutation->ctx->user_at_version);
-	  reply->add_flags(CEPH_OSD_FLAG_ACK);
-
-          if ((*i)->trace) {
-            (*i)->trace.event("eval_mutation sending ack", &trace_endpoint);
-            // send reply with a child span
-            Messenger *msgr = m->get_connection()->get_messenger();
-            reply->trace.init("MOSDOpReply", msgr->get_trace_endpoint(),
-                              &(*i)->trace);
-          }
-
-	  osd->send_message_osd_client(reply, m->get_connection());
-	}
-	waiting_for_ack.erase(mutation->v);
-      }
-
       if (m->wants_ack() && !mutation->sent_disk) {
 	// send ack
 	MOSDOpReply *reply = mutation->ctx->reply;
 	if (reply)
 	  mutation->ctx->reply = NULL;
 	else {
-	  reply = new MOSDOpReply(m, 0, get_osdmap()->get_epoch(), 0, true);
+	  reply = new MOSDOpReply(m, 0, get_osdmap()->get_epoch(),
+				  0, true);
 	  reply->set_reply_versions(mutation->ctx->at_version,
 				    mutation->ctx->user_at_version);
 	}
 	reply->add_flags(CEPH_OSD_FLAG_ACK);
 	dout(10) << " sending ack on " << mutation->tid << " " << reply
 		 << dendl;
-
         if (mutation->ctx->op->trace) {
           mutation->ctx->op->trace.event("eval_mutation sending ack",
                                          &trace_endpoint);
@@ -2427,7 +2373,8 @@ void OSDVol::eval_mutation(Mutation *mutation)
                             &mutation->ctx->op->trace);
         }
 
-	assert(entity_name_t::TYPE_OSD != m->get_connection()->peer_type);
+	assert(entity_name_t::TYPE_OSD !=
+	       m->get_connection()->peer_type);
 	osd->send_message_osd_client(reply, m->get_connection());
       }
 
@@ -2681,44 +2628,18 @@ void OSDVol::apply_mutations(bool requeue)
 
     if (requeue) {
       if (mutation->ctx->op) {
-	dout(10) << " requeuing " << *mutation->ctx->op->get_req() << dendl;
+	dout(10) << " requeuing " << *mutation->ctx->op->get_req()
+		 << dendl;
 	rq.push_back(mutation->ctx->op);
 	mutation->ctx->op = OpRequestRef();
       }
-
-      // also requeue any dups, interleaved into position
-      map<eversion_t, list<OpRequestRef> >::iterator p = waiting_for_ondisk.find(mutation->v);
-      if (p != waiting_for_ondisk.end()) {
-	dout(10) << " also requeuing ondisk waiters " << p->second << dendl;
-	rq.splice(rq.end(), p->second);
-	waiting_for_ondisk.erase(p);
-      }
     }
-
     remove_mutation(mutation);
   }
   ml.unlock();
 
-  if (requeue) {
+  if (requeue)
     requeue_ops(rq);
-    if (!waiting_for_ondisk.empty()) {
-      for (map<eversion_t, list<OpRequestRef> >::iterator i =
-	     waiting_for_ondisk.begin();
-	   i != waiting_for_ondisk.end();
-	   ++i) {
-	for (list<OpRequestRef>::iterator j = i->second.begin();
-	     j != i->second.end();
-	     ++j) {
-	  derr << __func__ << ": op " << *((*j)->get_req()) << " waiting on "
-	       << i->first << dendl;
-	}
-      }
-      assert(waiting_for_ondisk.empty());
-    }
-  }
-
-  waiting_for_ondisk.clear();
-  waiting_for_ack.clear();
 }
 
 entity_name_t OSDVol::get_cluster_msgr_name() {

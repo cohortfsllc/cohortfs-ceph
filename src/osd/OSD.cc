@@ -1409,8 +1409,6 @@ bool OSD::heartbeat_reset(Connection *con)
   return true;
 }
 
-
-
 // =========================================
 
 void OSD::tick()
@@ -2079,7 +2077,6 @@ bool OSD::ms_verify_authorizer(Connection *con, int peer_type,
   return true;
 };
 
-
 void OSD::do_waiters()
 {
   // Must be called with a lock on osd_lock
@@ -2739,7 +2736,6 @@ void OSD::take_waiters(list<OpRequestRef>& ls) {
     vol->take_waiters();
   }
 }
-
 
 MOSDMap *OSD::build_incremental_map_msg(epoch_t since, epoch_t to)
 {
