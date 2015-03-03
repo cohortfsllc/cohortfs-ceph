@@ -23,8 +23,6 @@ OSDMessengers::OSDMessengers()
   : cluster(NULL),
     client(NULL),
     client_xio(NULL),
-    objecter(NULL),
-    objecter_xio(NULL),
     client_hb(NULL),
     front_hb(NULL),
     back_hb(NULL),
@@ -39,9 +37,6 @@ OSDMessengers::~OSDMessengers()
   if (client != client_xio)
     delete client;
   delete client_xio;
-  if (objecter != objecter_xio)
-    delete objecter;
-  delete objecter_xio;
   delete client_hb;
   delete front_hb;
   delete back_hb;
@@ -78,16 +73,13 @@ int OSDMessengers::create(CephContext *cct, md_config_t *conf,
   if (conf->cluster_rdma) {
     cluster = create_messenger_xio(cct, name, "cluster", pid);
     client_xio = create_messenger_xio(cct, name, "xio client", pid);
-    objecter_xio = create_messenger_xio(cct, name, "xio objecter", pid);
     client_hb = create_messenger_xio(cct, name, "hbclient", pid);
     front_hb = create_messenger_xio(cct, name, "hb_front_server", pid);
     back_hb = create_messenger_xio(cct, name, "hb_back_server", pid);
   } else {
     cluster = create_messenger(cct, name, "cluster", pid);
     client = create_messenger(cct, name, "client", pid);
-    objecter = create_messenger(cct, name, "objecter", pid);
     client_xio = create_messenger_xio(cct, name, "xio client", pid);
-    objecter_xio = create_messenger_xio(cct, name, "xio objecter", pid);
     client_hb = create_messenger(cct, name, "hbclient", pid);
     front_hb = create_messenger(cct, name, "hb_front_server", pid);
     back_hb = create_messenger(cct, name, "hb_back_server", pid);
@@ -95,7 +87,6 @@ int OSDMessengers::create(CephContext *cct, md_config_t *conf,
 #else // !HAVE_XIO
   cluster = create_messenger(cct, name, "cluster", pid);
   client = create_messenger(cct, name, "client", pid);
-  objecter = create_messenger(cct, name, "objecter", pid);
   client_hb = create_messenger(cct, name, "hbclient", pid);
   front_hb = create_messenger(cct, name, "hb_front_server", pid);
   back_hb = create_messenger(cct, name, "hb_back_server", pid);
@@ -134,18 +125,6 @@ int OSDMessengers::create(CephContext *cct, md_config_t *conf,
 	  CEPH_FEATURE_UID | CEPH_FEATURE_OSDENC));
     client_xio->set_policy(entity_name_t::TYPE_OSD,
 	Messenger::Policy::stateless_server(0,0));
-  }
-
-  if (objecter) {
-    objecter->set_default_policy(
-	Messenger::Policy::lossy_client(0, CEPH_FEATURE_OSDREPLYMUX));
-  } else {
-    objecter = objecter_xio;
-  }
-
-  if (objecter_xio) {
-    objecter_xio->set_default_policy(
-	Messenger::Policy::lossy_client(0, CEPH_FEATURE_OSDREPLYMUX));
   }
 
   cluster->set_default_policy(
@@ -203,21 +182,6 @@ int OSDMessengers::bind(CephContext *cct, md_config_t *conf)
     dout(10) << "bound client_xio: " << client_xio->get_myaddr() << dendl;
   }
 
-  entity_addr_t objecter_addr(conf->public_addr);
-  if (objecter != objecter_xio) {
-    r = objecter->bind(objecter_addr);
-    if (r < 0)
-      return r;
-    dout(10) << "bound objecter: " << objecter->get_myaddr() << dendl;
-    objecter_addr = objecter->get_myaddr();
-  }
-  if (objecter_xio) {
-    r = objecter_xio->bind(objecter_addr);
-    if (r < 0)
-      return r;
-    dout(10) << "bound objecter_xio: " << objecter_xio->get_myaddr() << dendl;
-  }
-
   // hb front should bind to same ip as public_addr
   entity_addr_t hb_front_addr(conf->public_addr);
   if (hb_front_addr.is_ip())
@@ -249,10 +213,6 @@ void OSDMessengers::start()
     client->start();
   if (client_xio)
     client_xio->start();
-  if (objecter != objecter_xio)
-    objecter->start();
-  if (objecter_xio)
-    objecter_xio->start();
   client_hb->start();
   front_hb->start();
   back_hb->start();
@@ -267,10 +227,6 @@ void OSDMessengers::wait()
     client->wait();
   if (client_xio)
     client_xio->wait();
-  if (objecter != objecter_xio)
-    objecter->wait();
-  if (objecter_xio)
-    objecter_xio->wait();
   client_hb->wait();
   front_hb->wait();
   back_hb->wait();

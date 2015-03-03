@@ -182,7 +182,6 @@ int LibOSD::init(const struct libosd_init_args *args)
   osd = new OSD(cct, store, whoami,
 		ms->cluster, ms->client, ms->client_xio,
 		ms->client_hb, ms->front_hb, ms->back_hb,
-		ms->objecter, ms->objecter_xio,
 		monc, cct->_conf->osd_data, cct->_conf->osd_journal);
 
   // set up the dispatcher
