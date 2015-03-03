@@ -36,7 +36,6 @@
 
 #include "ObjectMap.h"
 #include "SequencerPosition.h"
-#include "FDCache.h"
 
 // from include/linux/falloc.h:
 #ifndef FALLOC_FL_PUNCH_HOLE
@@ -133,8 +132,8 @@ public:
       }
     };
 
-    FSObject(FSCollection* _fc, const hoid_t& oid, const FDRef& _fd)
-      : ObjectStore::Object(_fc, oid), fd(_fd), pwb(this) {}
+    FSObject(FSCollection* fc, const hoid_t& oid, int fd)
+      : ObjectStore::Object(fc, oid), fd(fd), pwb(this) {}
 
     virtual bool reclaim() {
       std::cout << "FTW RECLAIM FSObject " << (void*) this
@@ -149,11 +148,10 @@ public:
     {
       FSCollection* fc;
       const hoid_t oid;
-      const FDRef fd;
+      const int fd;
 
-      FSObjectFactory(FSCollection* _fc, const hoid_t& _oid,
-		      const FDRef& _fd)
-	: fc(_fc), oid(_oid), fd(_fd) {}
+      FSObjectFactory(FSCollection* fc, const hoid_t& oid, int fd)
+	: fc(fc), oid(oid), fd(fd) {}
 
       void recycle (cohort::lru::Object* o) {
 	  /* re-use an existing object */
@@ -167,7 +165,7 @@ public:
       }
     };
 
-    FDRef fd;
+    int fd;
     PendingWB pwb;
   };
 
@@ -277,12 +275,8 @@ public:
   public:
     int fd; // collection's dirfd
 
-    // and object fdcache
-    std::mutex fdcache_lock;
-    FDCache fdcache;
-
     FSCollection(FileStore* fs, const coll_t& cid, int fd)
-      : ObjectStore::Collection(fs, cid), fd(fd), fdcache(fs->cct) {}
+      : ObjectStore::Collection(fs, cid), fd(fd) {}
 
     virtual ~FSCollection() {
         ::close(fd);
@@ -397,12 +391,11 @@ public:
   int lfn_find(FSCollection* fc, const hoid_t& oid);
   int lfn_stat(FSCollection* fc, const hoid_t& oid,
 	       struct stat *st);
-  int lfn_open(FSCollection* fc, const hoid_t& oid, bool create,
-	       FDRef *outfd);
-  void lfn_close(FDRef fd);
+  int lfn_open(FSCollection* fc, const hoid_t& oid, bool create, int* outfd);
+  void lfn_close(int fd);
   int lfn_link(FSCollection* fc, FSCollection* newfc,
 	       const hoid_t& o, const hoid_t& newoid);
-  int lfn_unlink(FSCollection* fc, const hoid_t& o,
+  int lfn_unlink(FSCollection* fc, FSObject* fo,
 		 const SequencerPosition &spos, bool force_clear_omap=false);
 
 public:
@@ -536,8 +529,7 @@ public:
 		      uint64_t dstoff);
   int _do_copy_range(int from, int to, uint64_t srcoff, uint64_t len,
 		     uint64_t dstoff);
-  int _remove(FSCollection* fc, const hoid_t& oid,
-	      const SequencerPosition &spos);
+  int _remove(FSCollection* fc, FSObject* fo, const SequencerPosition &spos);
 
   int _fgetattr(int fd, const char *name, bufferptr& bp);
   int _fgetattrs(int fd, map<string,bufferptr>& aset, bool user_only);
