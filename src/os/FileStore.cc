@@ -294,7 +294,7 @@ FileStore::FileStore(CephContext* cct, const std::string& base, const std::strin
   force_sync(false), sync_epoch(0),
   stop(false), sync_thread(this),
   trace_endpoint("0.0.0.0", 0, NULL),
-  wbthrottle(cct),
+  flusher(this),
   op_finisher(cct),
   m_filestore_commit_timeout(ceph::span_from_double(
 			       cct->_conf->filestore_commit_timeout)),
@@ -1237,7 +1237,7 @@ int FileStore::mount()
 
   // XXX formerly, we enumerated collections (list_collections)
   // and called index->cleanup on each
-  wbthrottle.start();
+  flusher.start();
   sync_thread.create();
 
   ret = journal_replay(initial_op_seq);
@@ -1255,8 +1255,7 @@ int FileStore::mount()
     sync_cond.notify_all();
     l.unlock();
     sync_thread.join();
-
-    wbthrottle.stop();
+    flusher.stop();
 
     goto close_current_fd;
   }
@@ -1304,7 +1303,7 @@ int FileStore::umount()
   sync_cond.notify_all();
   l.unlock();
   sync_thread.join();
-  wbthrottle.stop();
+  flusher.stop();
 
   journal_stop();
 
@@ -2511,7 +2510,7 @@ int FileStore::_write(FSCollection* fc, FSObject* fo,
   // flush?
   if (!replaying &&
       cct->_conf->filestore_wbthrottle_enable)
-    wbthrottle.queue_wb(fo->fd, fo->get_oid(), offset, len, replica);
+    flusher.queue_wb(fo, offset, len, replica);
 
  out:
   dout(10) << "write " << fc->get_cid() << "/" << fo->get_oid() << " "
@@ -2859,7 +2858,7 @@ void FileStore::sync_entry()
 	       << dur << dendl;
 
       apply_manager.commit_finish();
-      wbthrottle.clear();
+      flusher.clear();
 
       // remove old snaps?
       if (backend->can_checkpoint()) {
