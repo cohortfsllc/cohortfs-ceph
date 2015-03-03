@@ -4391,7 +4391,7 @@ void FileStore::FSFlush::cond_signal_waiters(unique_sp& waitq_sp)
       const_cast< FSObject::PendingWB&>(wqe.get());
     if (should_wake(pwb)) {
       queue_finish(pwb);
-      waitq.dequeue(wqe, WaitQueue::FLAG_SIGNAL);
+      waitq.dequeue(wqe, WaitQueue::FLAG_LOCKED | WaitQueue::FLAG_SIGNAL);
     }
   }
 } /* cond_signal_waiters */
@@ -4435,6 +4435,8 @@ void* FileStore::FSFlush::entry()
       waitq_sp.unlock();
       waitq.wait_on(wqe, 100 /* ms */);
       waitq_sp.lock();
+      if (wqe.q_hook.is_linked())
+        waitq.dequeue(wqe, WaitQueue::FLAG_LOCKED);
     }
     if (stopping)
       return nullptr;
