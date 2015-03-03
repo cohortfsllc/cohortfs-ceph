@@ -16,8 +16,6 @@ struct OSDMessengers {
   Messenger *cluster;
   Messenger *client;
   Messenger *client_xio;
-  Messenger *objecter;
-  Messenger *objecter_xio;
   Messenger *client_hb;
   Messenger *front_hb;
   Messenger *back_hb;

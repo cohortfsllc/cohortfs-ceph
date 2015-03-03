@@ -41,7 +41,6 @@
 #include "OSD.h"
 #include "OSDMap.h"
 #include "Watch.h"
-#include "osdc/Objecter.h"
 
 #include "common/ceph_argparse.h"
 #include "common/version.h"
@@ -156,7 +155,6 @@ OSDService::~OSDService()
       store->put_object(infos_oh);
     store->close_collection(meta_col);
   }
-  delete objecter;
 }
 
 void OSDService::need_heartbeat_peer_update()
@@ -393,8 +391,6 @@ OSD::OSD(CephContext *cct_, ObjectStore *store_,
 	 Messenger *hb_clientm,
 	 Messenger *hb_front_serverm,
 	 Messenger *hb_back_serverm,
-	 Messenger *osdc_messenger,
-	 Messenger *xio_osdc_messenger,
 	 MonClient *mc,
 	 const std::string &dev, const std::string &jdev) :
   Dispatcher(cct_),
