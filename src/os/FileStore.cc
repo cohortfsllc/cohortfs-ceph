@@ -4312,47 +4312,54 @@ void FSSuperblock::generate_test_instances(list<FSSuperblock*>& o)
   o.push_back(new FSSuperblock(z));
 }
 
-void FileStore::FSFlush::re_init()
+const char** FileStore::FSFlush::get_tracked_conf_keys() const
 {
-  const FileStore* fs = static_cast<FileStore*>(fc->get_os());
-  const CephContext* cct = fs->cct;
+  static const char* KEYS[] = {
+    "filestore_wbthrottle_btrfs_bytes_start_flusher",
+    "filestore_wbthrottle_btrfs_bytes_hard_limit",
+    "filestore_wbthrottle_btrfs_ios_start_flusher",
+    "filestore_wbthrottle_btrfs_ios_hard_limit",
+    "filestore_wbthrottle_btrfs_inodes_start_flusher",
+    "filestore_wbthrottle_btrfs_inodes_hard_limit",
+    "filestore_wbthrottle_xfs_bytes_start_flusher",
+    "filestore_wbthrottle_xfs_bytes_hard_limit",
+    "filestore_wbthrottle_xfs_ios_start_flusher",
+    "filestore_wbthrottle_xfs_ios_hard_limit",
+    "filestore_wbthrottle_xfs_inodes_start_flusher",
+    "filestore_wbthrottle_xfs_inodes_hard_limit",
+    NULL
+  };
+  return KEYS;
+}
 
+void FileStore::FSFlush::handle_conf_change(const md_config_t *conf,
+                                            const std::set<std::string> &keys)
+
+{
   lock_guard lk(lock);
   switch(fs->m_fs_type) {
   case fs_types::FS_TYPE_BTRFS:
-    size_limits.first =
-      cct->_conf->filestore_wbthrottle_btrfs_bytes_start_flusher;
-    size_limits.second =
-      cct->_conf->filestore_wbthrottle_btrfs_bytes_hard_limit;
-    io_limits.first =
-      cct->_conf->filestore_wbthrottle_btrfs_ios_start_flusher;
-    io_limits.second =
-      cct->_conf->filestore_wbthrottle_btrfs_ios_hard_limit;
-    fd_limits.first =
-      cct->_conf->filestore_wbthrottle_btrfs_inodes_start_flusher;
-    fd_limits.second =
-      cct->_conf->filestore_wbthrottle_btrfs_inodes_hard_limit;
+    size_limits.first = conf->filestore_wbthrottle_btrfs_bytes_start_flusher;
+    size_limits.second = conf->filestore_wbthrottle_btrfs_bytes_hard_limit;
+    io_limits.first = conf->filestore_wbthrottle_btrfs_ios_start_flusher;
+    io_limits.second = conf->filestore_wbthrottle_btrfs_ios_hard_limit;
+    fd_limits.first = conf->filestore_wbthrottle_btrfs_inodes_start_flusher;
+    fd_limits.second = conf->filestore_wbthrottle_btrfs_inodes_hard_limit;
     break;
   case fs_types::FS_TYPE_XFS:
-    size_limits.first =
-      cct->_conf->filestore_wbthrottle_xfs_bytes_start_flusher;
-    size_limits.second =
-      cct->_conf->filestore_wbthrottle_xfs_bytes_hard_limit;
-    io_limits.first =
-      cct->_conf->filestore_wbthrottle_xfs_ios_start_flusher;
-    io_limits.second =
-      cct->_conf->filestore_wbthrottle_xfs_ios_hard_limit;
-    fd_limits.first =
-      cct->_conf->filestore_wbthrottle_xfs_inodes_start_flusher;
-    fd_limits.second =
-      cct->_conf->filestore_wbthrottle_xfs_inodes_hard_limit;
+    size_limits.first = conf->filestore_wbthrottle_xfs_bytes_start_flusher;
+    size_limits.second = conf->filestore_wbthrottle_xfs_bytes_hard_limit;
+    io_limits.first = conf->filestore_wbthrottle_xfs_ios_start_flusher;
+    io_limits.second = conf->filestore_wbthrottle_xfs_ios_hard_limit;
+    fd_limits.first = conf->filestore_wbthrottle_xfs_inodes_start_flusher;
+    fd_limits.second = conf->filestore_wbthrottle_xfs_inodes_hard_limit;
     break;
   default:
     assert(0 == "invalid value for fs");
     break;
   }
   cond.notify_all();
-} /* re_init */
+}
 
 void FileStore::FSFlush::queue_wb(FSObject* o,
 				  uint64_t off,
@@ -4374,7 +4381,7 @@ void FileStore::FSFlush::queue_finish(FSObject::PendingWB& pwb) {
   /* o can be null (thread entry waiting on itself) */
   if (o) {
     if (! o->pwb.ios) {
-      fc->get_os()->ref(o); /* ref+ */
+      fs->ref(o); /* ref+ */
       fl_queue.push_front(*o); /* enqueue at fl_queue MRU */
     }
     o->pwb.add(pwb);
@@ -4404,7 +4411,7 @@ void FileStore::FSFlush::clear_object(FSObject* o)
       Object::FlushQueue::s_iterator_to(*o);
     fl_queue.erase(it);
     (void) o->pwb.sub(cur_ios, cur_size);
-    fc->get_os()->unref(o);
+    fs->unref(o);
   }
   cond_signal_waiters(waitq_sp);
 } /* clear_object */
@@ -4415,7 +4422,7 @@ void FileStore::FSFlush::clear() {
     FSObject& o = static_cast<FSObject&>(fl_queue.back());
     fl_queue.pop_back();
     (void) o.pwb.sub(cur_ios, cur_size);
-    fc->get_os()->unref(&o);
+    fs->unref(&o);
   }
   cond_signal_waiters(waitq_sp);
 } /* clear */
@@ -4458,9 +4465,10 @@ void* FileStore::FSFlush::entry()
     }
 #endif
     waitq_sp.lock();
-    fc->get_os()->unref(&o);
+    fs->unref(&o);
     cond_signal_waiters(waitq_sp);
   } /* (!stopping) */
   /* Thread exit */
   return nullptr;
 } /* entry */
+
