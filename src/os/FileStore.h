@@ -185,8 +185,8 @@ public:
    * WBThrottle did rate limit syncs, but was not a flush governor,
    * as the name seems to imply.
    */
-  class FSFlush : Thread {
-    FSCollection* fc;
+  class FSFlush : Thread, public md_config_obs_t {
+    FileStore* fs;
 
     /* *_limits.first is the start_flusher limit and
      * *_limits.second is the hard limit
@@ -218,10 +218,8 @@ public:
     Object::FlushQueue fl_queue;
 
   public:
-    FSFlush(FSCollection* _fc)
-      : fc(_fc), cur_ios(0), cur_size(0), waiters(0), stopping(false) {}
-
-    void re_init(); /* per-fs settings, late init */
+    FSFlush(FileStore* fs)
+      : fs(fs), cur_ios(0), cur_size(0), waiters(0), stopping(false) {}
 
     bool should_block(uint64_t off, uint64_t len) {
       return (((cur_ios+1) > io_limits.second) ||
@@ -255,7 +253,8 @@ public:
 
     /* Thread impl */
     void start() {
-      re_init();
+      std::set<std::string> empty;
+      handle_conf_change(fs->cct->_conf, empty);
       {
 	unique_sp lk(waitq.lock);
 	stopping = false;
@@ -271,6 +270,11 @@ public:
       }
       join();
     }
+
+    // md_config_obs_t
+    const char** get_tracked_conf_keys() const;
+    void handle_conf_change(const md_config_t *conf,
+                            const std::set<std::string> &changed);
 
     void* entry();
 
