@@ -410,7 +410,7 @@ OSD::OSD(CephContext *cct_, ObjectStore *store_,
 	 MonClient *mc,
 	 const std::string &dev, const std::string &jdev) :
   Dispatcher(cct_),
-  tick_timer(osd_lock),
+  tick_timer(timer_lock),
   authorize_handler_cluster_registry(
     new AuthAuthorizeHandlerRegistry(
       cct, cct->_conf->auth_supported.length() ? cct->_conf->auth_supported : cct->_conf->auth_cluster_required)),
@@ -864,8 +864,7 @@ int OSD::shutdown()
   // finish ops
   op_wq.drain(); // should already be empty except for lagard volumes
   {
-    lock_guard fl(finished_lock);
-    finished.clear(); // zap waiters (bleh, this is messy)
+    /* XXX do nothing (finished is finished) */
   }
 
   // unregister commands
@@ -1451,16 +1450,6 @@ void OSD::tick()
     }
   }
 
-  // only do waiters if dispatch() isn't currently running.  (if it is,
-  // it'll do the waiters, and doing them here may screw up ordering
-  // of op_queue vs handle_osd_map.)
-  if (!dispatch_running) {
-    dispatch_running = true;
-    do_waiters();
-    dispatch_running = false;
-    dispatch_cond.notify_all();
-  }
-
   tick_timer.add_event_after(1s, new C_Tick(this));
 }
 
@@ -1886,7 +1875,8 @@ void OSD::forget_peer_epoch(int peer, epoch_t as_of)
 }
 
 
-bool OSD::_share_map_incoming(entity_name_t name, Connection *con, epoch_t epoch, Session* session)
+bool OSD::_share_map_incoming(entity_name_t name, Connection *con,
+			      epoch_t epoch, Session* session)
 {
   bool shared = false;
   dout(20) << "_share_map_incoming " << name << " " << con->get_peer_addr()
@@ -1989,15 +1979,58 @@ bool OSD::heartbeat_dispatch(Message *m)
   return true;
 }
 
+inline void OSD::_dispatch(Message *m)
+{
+  // Must be called with a lock on osd_lock
+  dout(20) << "_dispatch " << m << " " << *m << dendl;
+
+  Session *session = NULL;
+
+  switch (m->get_type()) {
+
+    // -- don't need lock --
+  case CEPH_MSG_PING:
+    dout(10) << "ping from " << m->get_source() << dendl;
+    m->put();
+    break;
+
+    // -- don't need OSDMap --
+
+    // map and replication
+  case CEPH_MSG_OSD_MAP:
+    handle_osd_map(static_cast<MOSDMap*>(m));
+    break;
+
+    // osd
+  case CEPH_MSG_SHUTDOWN:
+    session = static_cast<Session *>(m->get_connection()->get_priv());
+    if (!session ||
+	session->entity_name.is_mon() ||
+	session->entity_name.is_osd())
+      shutdown();
+    else dout(0) << "shutdown message from connection with insufficient privs!"
+		 << m->get_connection() << dendl;
+    m->put();
+    if (session)
+      session->put();
+    break;
+
+  default:
+    {
+      OpRequestRef op = OpRequest::create_request(m);
+      // need OSDMap
+      handle_op(op);
+    }
+  }
+}
+
 bool OSD::ms_dispatch(Message *m)
 {
   if (m->get_type() == MSG_OSD_MARK_ME_DOWN) {
-    service.got_stop_ack();
+    service.got_stop_ack(); // is_stopping_lock
     m->put();
     return true;
   }
-
-  // lock!
 
   unique_lock ol(osd_lock);
   if (is_stopping()) {
@@ -2006,20 +2039,7 @@ bool OSD::ms_dispatch(Message *m)
     return true;
   }
 
-  while (dispatch_running) {
-    dout(10) << "ms_dispatch waiting for other dispatch thread to complete" << dendl;
-    dispatch_cond.wait(ol);
-  }
-  dispatch_running = true;
-
-  do_waiters();
   _dispatch(m);
-  do_waiters();
-
-  dispatch_running = false;
-  dispatch_cond.notify_all();
-
-  ol.unlock();
 
   return true;
 }
@@ -2093,76 +2113,6 @@ bool OSD::ms_verify_authorizer(Connection *con, int peer_type,
   return true;
 };
 
-void OSD::do_waiters()
-{
-  // Must be called with a lock on osd_lock
-  dout(10) << "do_waiters -- start" << dendl;
-  unique_lock fl(finished_lock);
-  while (!finished.empty()) {
-    OpRequestRef next = finished.front();
-    finished.pop_front();
-    fl.unlock();
-    dispatch_op(next);
-    fl.lock();
-  }
-  fl.unlock();
-  dout(10) << "do_waiters -- finish" << dendl;
-}
-
-void OSD::dispatch_op(OpRequestRef op)
-{
-  if (op->get_req()->get_type() == CEPH_MSG_OSD_OP) {
-    handle_op(op);
-  } else {
-    assert(0 == "This is infelicitous as heck.");
-  }
-}
-
-void OSD::_dispatch(Message *m)
-{
-  // Must be called with a lock on osd_lock
-  dout(20) << "_dispatch " << m << " " << *m << dendl;
-
-  Session *session = NULL;
-
-  switch (m->get_type()) {
-
-    // -- don't need lock --
-  case CEPH_MSG_PING:
-    dout(10) << "ping from " << m->get_source() << dendl;
-    m->put();
-    break;
-
-    // -- don't need OSDMap --
-
-    // map and replication
-  case CEPH_MSG_OSD_MAP:
-    handle_osd_map(static_cast<MOSDMap*>(m));
-    break;
-
-    // osd
-  case CEPH_MSG_SHUTDOWN:
-    session = static_cast<Session *>(m->get_connection()->get_priv());
-    if (!session ||
-	session->entity_name.is_mon() ||
-	session->entity_name.is_osd())
-      shutdown();
-    else dout(0) << "shutdown message from connection with insufficient privs!"
-		 << m->get_connection() << dendl;
-    m->put();
-    if (session)
-      session->put();
-    break;
-
-  default:
-    {
-      OpRequestRef op = OpRequest::create_request(m);
-      // need OSDMap
-      dispatch_op(op);
-    }
-  }
-}
-
 bool OSDService::prepare_to_stop()
 {
   unique_lock isl(is_stopping_lock);
@@ -2210,7 +2160,7 @@ void OSD::wait_for_new_map(OpRequestRef op)
     osdmap_subscribe(osdmap->get_epoch() + 1, true);
   }
 
-  waiting_for_osdmap.push_back(op);
+  waiting_for_osdmap.push_back(*op);
   op->mark_delayed("wait for new map");
 }
 
@@ -2221,7 +2171,7 @@ void OSD::wait_for_new_map(OpRequestRef op)
 
 void OSD::note_down_osd(int peer)
 {
-  // Must be called with a lock on osd_lock
+  // require osd_lock LOCKED
   cluster_messenger->mark_down(osdmap->get_cluster_addr(peer));
 
   unique_lock hl(heartbeat_lock);
@@ -2729,7 +2679,7 @@ void OSD::consume_map()
 
 void OSD::activate_map()
 {
-  // Lock must be held on osd_lock
+  // requires osd_lock
 
   dout(7) << "activate_map version " << osdmap->get_epoch() << dendl;
 
@@ -2739,17 +2689,12 @@ void OSD::activate_map()
     osdmap_subscribe(osdmap->get_epoch() + 1, true);
   }
 
-  // process waiters
-  take_waiters(waiting_for_osdmap);
-}
-
-void OSD::take_waiters(list<OpRequestRef>& ls) {
-  unique_lock fl(finished_lock);
-  finished.splice(finished.end(), ls);
-  fl.unlock();
-  for (auto it = vol_map.begin(); it != vol_map.end(); ++it) {
-    OSDVolRef vol = it->second;
-    vol->take_waiters();
+  //dispatch all waiting
+  OpRequest::Queue::iterator iter;
+  while (waiting_for_osdmap.size()) {
+    iter = waiting_for_osdmap.begin();
+    OpRequestRef op{&(*iter)};
+    handle_op(op);
   }
 }
 
@@ -3043,6 +2988,8 @@ void OSD::handle_op(OpRequestRef op)
 		      m->get_map_epoch(),
 		      static_cast<Session *>(m->get_connection()->get_priv()));
 
+  /* POOPY drop osd_lock (osdmap) */
+
   if (op->rmw_flags == 0) {
     int r = init_op_flags(op);
     if (r) {
@@ -3076,9 +3023,11 @@ void OSD::handle_op(OpRequestRef op)
     }
   }
 
-  /* TODO: efficiently lookup volume and enqueue if possible, not holding
-   * osd_lock! */
+  /* POOPY do it nu! */
+  multi_wq.enqueue(op->get_k(), *op, MultiQueue::Bands::BASE,
+		   MultiQueue::FLAG_LOCK);
 
+#if 0 /* XXXX needs to move to dequeue step */
   boost::uuids::uuid volume = m->get_volume();
   OSDVolRef vol = _lookup_vol(volume);
   if (!vol) {
@@ -3088,6 +3037,7 @@ void OSD::handle_op(OpRequestRef op)
   }
 
   enqueue_op(vol, op);
+#endif
 }
 
 bool OSD::op_is_discardable(MOSDOp *op)

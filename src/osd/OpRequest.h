@@ -85,6 +85,10 @@ public:
 
   Message *get_req() const { return request; }
 
+  uint64_t get_k() const {
+    return request->get_recv_stamp().time_since_epoch().count();
+  }
+
 private:
   Message *request;
   osd_reqid_t reqid;
