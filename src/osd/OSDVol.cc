@@ -2402,11 +2402,13 @@ void OSDVol::eval_mutation(Mutation *mutation)
   }
 }
 
-OSDVol::Mutation *OSDVol::new_mutation(OpContext *ctx, ObjectContextRef obc,
-				ceph_tid_t tid)
+OSDVol::Mutation *OSDVol::new_mutation(OpContext *ctx,
+				       ObjectContextRef obc,
+				       ceph_tid_t tid)
 {
   if (ctx->op)
-    dout(10) << "new_mutation tid " << tid << " on " << *ctx->op->get_req() << dendl;
+    dout(10) << "new_mutation tid " << tid << " on "
+	     << *ctx->op->get_req() << dendl;
   else
     dout(10) << "new_mutation _tid " << tid << " (no op)" << dendl;
 
