@@ -400,10 +400,13 @@ public:
 
 
   int whoami();
-  unique_lock lock_suspend_timeout(ThreadPool::TPHandle& handle);
 
-  void get();
-  void put();
+  void get() { ++ref; }
+
+  void put() {
+    if (--ref == 0)
+      delete this;
+  }
 
   bool dirty_info;
 
