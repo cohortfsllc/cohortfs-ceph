@@ -72,16 +72,6 @@ public:
 #endif
     tree_hook_type oid_hook;
 
-  public:
-    typedef bi::list_member_hook<link_mode> queue_hook_type;
-    queue_hook_type fl_hook;
-
-    typedef bi::list<
-      Object,
-      bi::member_hook<Object, queue_hook_type, &Object::fl_hook>,
-      bi::constant_time_size<true>
-      > FlushQueue;
-
     typedef std::unique_lock<std::mutex> unique_lock;
 
     enum class state
