@@ -142,7 +142,7 @@ namespace cohort {
 	      OpRequest& op = b.producer_q.back();
 	      b.producer_q.pop_back();
 	      if (size > size_max)
-		size_max = size; 
+		size_max = size;
 	      ++n_reqs;
 	      ++n_active;
 	      /* dequeue op */
@@ -161,7 +161,7 @@ namespace cohort {
 	    }
 	    continue;
 	  }
-	  
+
 	  ceph::mono_time timeout =
 	    ceph::mono_clock::now() + std::chrono::seconds(120);
 	  lane_lk.lock();

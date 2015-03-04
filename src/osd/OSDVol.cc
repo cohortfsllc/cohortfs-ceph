@@ -2550,8 +2550,6 @@ void OSDVol::handle_watch_timeout(WatchRef watch)
 ObjectContextRef OSDVol::create_object_context(const object_info_t& oi)
 {
   ObjectContextRef obc(object_contexts.lookup_or_create(oi.soid));
-  assert(obc->destructor_callback == NULL);
-  obc->destructor_callback = new C_Vol_ObjectContext(this, obc.get());
   obc->obs.oi = oi;
   obc->obs.exists = false;
   dout(10) << "create_object_context " << (void*)obc.get() << " " << oi.soid
@@ -2599,7 +2597,6 @@ ObjectContextRef OSDVol::get_object_context(
     object_info_t oi(bv);
 
     obc = object_contexts.lookup_or_create(oi.soid);
-    obc->destructor_callback = new C_Vol_ObjectContext(this, obc.get());
     obc->obs.oi = oi;
     obc->obs.exists = true;
 
@@ -2654,11 +2651,6 @@ int OSDVol::find_object_context(const oid_t& oid,
 	   << dendl;
   *pobc = obc;
   return 0;
-}
-
-void OSDVol::object_context_destructor_callback(ObjectContext *obc)
-{
-  return;
 }
 
 /*
