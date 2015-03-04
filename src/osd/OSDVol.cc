@@ -372,19 +372,25 @@ void OSDVol::do_op(OpRequestRef op)
       continue;
     if (osd_op.oid.name.length()) {
       // For Stripulation
-      oid_t src_obj(osd_op.oid);
-      if (!src_obc.count(src_obj)) {
+      oid_t src_oid(osd_op.oid);
+      if (!src_obc.count(src_oid)) {
 	ObjectContextRef sobc;
-	oid_t wait_obj;
 
+	/* XXX is earlier value for can_create correct? */
+	r = find_object_context(src_oid, &sobc, can_create);
+	if (r) {
+	  osd->reply_op_error(op, r);
+	  return;
+	}
 	if (sobc->obs.oi.soid != obc->obs.oi.soid) {
-	  dout(1) << " src_obj " << sobc->obs.oi.soid << " != "
+	  dout(1) << " src_oid " << sobc->obs.oi.soid << " != "
 		  << obc->obs.oi.soid << dendl;
 	  osd->reply_op_error(op, -EINVAL);
 	} else {
-	  dout(10) << " src_obj " << src_obj << " obc "
+	  dout(10) << " src_oid " << src_oid << " obc "
 		   << src_obc << dendl;
-	  src_obc[src_obj] = sobc;
+	  /* TODO:  get sobc! */
+	  src_obc[src_oid] = sobc;
 	  continue;
 	}
 	// Error cleanup below
