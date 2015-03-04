@@ -40,6 +40,7 @@
 #include "common/oid.h"
 #include "Watch.h"
 #include "OpRequest.h"
+#include "OpQueue.h"
 #include "include/cmp.h"
 
 #define CEPH_OSD_ONDISK_MAGIC "ceph osd volume v026"
@@ -778,6 +779,7 @@ struct ObjectState {
 
 struct ObjectContext;
 
+// XXX need intrusive pointer?
 typedef std::shared_ptr<ObjectContext> ObjectContextRef;
 
 struct ObjectContext {
@@ -814,7 +816,7 @@ public:
 
     State state;		 ///< rw state
     uint64_t count;		 ///< number of readers or writers
-    list<OpRequestRef> waiters;	 ///< ops waiting on state change
+    OpRequest::Queue waiters;	 ///< ops waiting on state change
 
     RWState()
       : state(RWNONE), count(0)
@@ -823,7 +825,8 @@ public:
       if (get_read_lock()) {
 	return true;
       } // else
-      waiters.push_back(op);
+      assert(! op->q_hook.is_linked());
+      waiters.push_back(*op);
       return false;
     }
     /// this function adjusts the counts if necessary
@@ -853,7 +856,7 @@ public:
 	return true;
       } // else
       if (op)
-	waiters.push_back(op);
+	waiters.push_back(*op);
       return false;
     }
     bool get_write_lock() {
@@ -884,22 +887,22 @@ public:
       }
       return get_write_lock();
     }
-    void dec(list<OpRequestRef> *requeue) {
+    void dec(OpRequest::Queue& to_requeue) {
       assert(count > 0);
-      assert(requeue);
       count--;
       if (count == 0) {
+	OpRequest::Queue::iterator i1 = to_requeue.end();
+	to_requeue.splice(i1, waiters);
 	state = RWNONE;
-	requeue->splice(requeue->end(), waiters);
       }
     }
-    void put_read(list<OpRequestRef> *requeue) {
+    void put_read(OpRequest::Queue& to_requeue) {
       assert(state == RWREAD);
-      dec(requeue);
+      dec(to_requeue);
     }
-    void put_write(list<OpRequestRef> *requeue) {
+    void put_write(OpRequest::Queue& to_requeue) {
       assert(state == RWWRITE);
-      dec(requeue);
+      dec(to_requeue);
     }
     bool empty() const { return state == RWNONE; }
   } rwstate;
@@ -910,17 +913,18 @@ public:
   bool get_write(OpRequestRef op) {
     return rwstate.get_write(op);
   }
-  void put_read(list<OpRequestRef> *to_wake) {
+  void put_read(OpRequest::Queue& to_wake) {
     rwstate.put_read(to_wake);
   }
-  void put_write(list<OpRequestRef> *to_wake,
+  void put_write(OpRequest::Queue& to_wake,
 		 bool *requeue_recovery) {
     rwstate.put_write(to_wake);
   }
 
   ObjectContext()
     : destructor_callback(0),
-      unstable_writes(0), readers(0), writers_waiting(0), readers_waiting(0) {}
+      unstable_writes(0), readers(0), writers_waiting(0),
+      readers_waiting(0) {}
 
   ~ObjectContext() {
     assert(rwstate.empty());

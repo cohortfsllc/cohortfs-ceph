@@ -64,6 +64,9 @@ void intrusive_ptr_release(OSDVol* vol);
 
 typedef boost::intrusive_ptr<OSDVol> OSDVolRef;
 
+/* visible in OSD.h */
+const static int n_lanes = 17;
+typedef cohort::OpQueue<cohort::SpinLock, n_lanes> MultiQueue;
 
 /** OSDVol - Volume abstraction in the OSD
  */
@@ -353,16 +356,14 @@ protected:
    * @param ctx [in] ctx to clean up
    */
   void release_op_ctx_locks(OpContext* ctx) {
-    list<OpRequestRef> to_req;
+    OpRequest::Queue to_req;
     bool requeue_recovery = false;
     switch (ctx->lock_to_release) {
     case OpContext::W_LOCK:
-      ctx->obc->put_write(
-	&to_req,
-	&requeue_recovery);
+      ctx->obc->put_write(to_req, &requeue_recovery);
       break;
     case OpContext::R_LOCK:
-      ctx->obc->put_read(&to_req);
+      ctx->obc->put_read(to_req);
       break;
     case OpContext::NONE:
       break;
@@ -534,15 +535,17 @@ public:
 
   int _get_tmap(OpContext* ctx, bufferlist* header, bufferlist* vals);
   int do_tmap2omap(OpContext* ctx, unsigned flags);
-  int do_tmapup(OpContext* ctx, bufferlist::iterator& bp, OSDOp& osd_op);
-  int do_tmapup_slow(OpContext* ctx, bufferlist::iterator& bp, OSDOp& osd_op,
+  int do_tmapup(OpContext* ctx, bufferlist::iterator& bp,
+		OSDOp& osd_op);
+  int do_tmapup_slow(OpContext* ctx, bufferlist::iterator& bp,
+		     OSDOp& osd_op,
 		     bufferlist& bl);
 
   void do_osd_op_effects(OpContext* ctx);
 
 protected:
   void requeue_op(OpRequestRef op);
-  void requeue_ops(list<OpRequestRef>& l);
+  void requeue_ops(OpRequest::Queue& q);
 
   // for ordering writes
   std::shared_ptr<ObjectStore::Sequencer> osr;

@@ -52,7 +52,8 @@ WRITE_CLASS_ENCODER(osd_reqid_t)
  */
 class OpRequest {
 public:
-  typedef std::shared_ptr<OpRequest> Ref;
+  typedef boost::intrusive_ptr<OpRequest> Ref;
+  std::atomic<uint64_t> nref;
 
   /* is queuable */
   typedef bi::link_mode<bi::safe_link> link_mode; // for debugging
@@ -69,6 +70,14 @@ public:
 
   static Ref create_request(Message *ref);
 
+  void get() { ++nref; }
+
+  void put() {
+    if (--nref == 0)
+      delete this;
+  }
+
+  // XXX why not inline?
   bool check_rmw(int flag);
   bool may_read();
   bool may_write();
@@ -173,6 +182,9 @@ public:
   ~OpRequest() { request->put(); }
   
 };
+
+inline void intrusive_ptr_add_ref(OpRequest* op) { op->get(); }
+inline void intrusive_ptr_release(OpRequest* op) { op->put(); }
 
 typedef OpRequest::Ref OpRequestRef;
 
