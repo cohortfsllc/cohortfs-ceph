@@ -463,17 +463,6 @@ protected:
     );
 
   void context_registry_on_change();
-  void object_context_destructor_callback(ObjectContext* obc);
-  struct C_Vol_ObjectContext : public Context {
-    OSDVolRef osdvol;
-    ObjectContext* obc;
-    C_Vol_ObjectContext(OSDVol* v, ObjectContext* o) :
-      osdvol(v), obc(o) {}
-    void finish(int r) {
-      osdvol->object_context_destructor_callback(obc);
-    }
-  };
-
   int find_object_context(const oid_t& oid,
 			  ObjectContextRef* pobc,
 			  bool can_create);

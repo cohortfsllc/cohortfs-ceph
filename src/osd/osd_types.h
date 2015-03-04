@@ -785,8 +785,6 @@ typedef std::shared_ptr<ObjectContext> ObjectContextRef;
 struct ObjectContext {
   ObjectState obs;
 
-  Context *destructor_callback;
-
 private:
   std::mutex lock;
 public:
@@ -922,14 +920,11 @@ public:
   }
 
   ObjectContext()
-    : destructor_callback(0),
-      unstable_writes(0), readers(0), writers_waiting(0),
+    : unstable_writes(0), readers(0), writers_waiting(0),
       readers_waiting(0) {}
 
   ~ObjectContext() {
     assert(rwstate.empty());
-    if (destructor_callback)
-      destructor_callback->complete(0);
   }
 
   // do simple synchronous mutual exclusion, for now.  now waitqueues or anything fancy.
