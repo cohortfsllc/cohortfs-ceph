@@ -140,13 +140,12 @@ namespace cohort {
 	    size = b.producer_q.size();
 	    if (size) {
 	      OpRequest& op = b.producer_q.back();
-	      b.producer_q.pop_back();
+	      b.producer_q.pop_back(); /* dequeued! */
 	      if (size > size_max)
 		size_max = size;
 	      ++n_reqs;
 	      ++n_active;
 	      /* dequeue op */
-	      b.producer_q.erase(b.producer_q.s_iterator_to(op));
 	      dequeue_op_func(osd, &op);
 	      --n_active;
 	    }

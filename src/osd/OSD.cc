@@ -427,9 +427,6 @@ OSD::OSD(CephContext *cct_, ObjectStore *store_,
   heartbeat_thread(this),
   heartbeat_dispatcher(this),
   multi_wq(this, static_dequeue_op),
-#if 0
-  op_wq(this, cct->_conf->osd_op_thread_timeout * 1s, &op_tp),
-#endif
   up_thru_wanted(0), up_thru_pending(0), service(this)
 {
   monc->set_messenger(client_messenger);
@@ -2214,8 +2211,8 @@ void OSD::handle_osd_map(MOSDMap *m)
   // Must be called with a lock on osd_lock
   list<OSDMapRef> pinned_maps;
   if (m->fsid != monc->get_fsid()) {
-    dout(0) << "handle_osd_map fsid " << m->fsid << " != " << monc->get_fsid()
-	    << dendl;
+    dout(0) << "handle_osd_map fsid " << m->fsid << " != "
+	    << monc->get_fsid() << dendl;
     m->put();
     return;
   }
@@ -2225,7 +2222,8 @@ void OSD::handle_osd_map(MOSDMap *m)
     return;
   }
 
-  Session *session = static_cast<Session *>(m->get_connection()->get_priv());
+  Session *session =
+    static_cast<Session *>(m->get_connection()->get_priv());
   if (session && !(session->entity_name.is_mon() ||
 		   session->entity_name.is_osd())) {
     //not enough perms!
@@ -2238,35 +2236,42 @@ void OSD::handle_osd_map(MOSDMap *m)
 
   epoch_t first = m->get_first();
   epoch_t last = m->get_last();
-  dout(3) << "handle_osd_map epochs [" << first << "," << last << "], i have "
+  dout(3) << "handle_osd_map epochs [" << first << ","
+	  << last << "], i have "
 	  << osdmap->get_epoch()
-	  << ", src has [" << m->oldest_map << "," << m->newest_map << "]"
+	  << ", src has [" << m->oldest_map << ","
+	  << m->newest_map << "]"
 	  << dendl;
 
-  // make sure there is something new, here, before we bother flushing the queues and such
+  /* make sure there is something new, here, before we bother
+   * flushing the queues and such */
   if (last <= osdmap->get_epoch()) {
     dout(10) << " no new maps here, dropping" << dendl;
     m->put();
     return;
   }
 
-  // even if this map isn't from a mon, we may have satisfied our subscription
+  /* even if this map isn't from a mon, we may have satisfied our
+   * subscription */
   monc->sub_got("osdmap", last);
 
   // missing some?
   bool skip_maps = false;
   if (first > osdmap->get_epoch() + 1) {
-    dout(10) << "handle_osd_map message skips epochs " << osdmap->get_epoch() + 1
+    dout(10) << "handle_osd_map message skips epochs "
+	     << osdmap->get_epoch() + 1
 	     << ".." << (first-1) << dendl;
     if (m->oldest_map <= osdmap->get_epoch() + 1) {
       osdmap_subscribe(osdmap->get_epoch()+1, true);
       m->put();
       return;
     }
-    // always try to get the full range of maps--as many as we can.  this
-    //	1- is good to have
-    //	2- is at present the only way to ensure that we get a *full* map as
-    //	   the first map!
+    /* always try to get the full range of maps--as many as we can.
+     * this
+     *	1- is good to have
+     *	2- is at present the only way to ensure that we get a *full*
+     *     map as the first map!
+     */
     if (m->oldest_map < first) {
       osdmap_subscribe(m->oldest_map - 1, true);
       m->put();
@@ -2288,7 +2293,8 @@ void OSD::handle_osd_map(MOSDMap *m)
     map<epoch_t,bufferlist>::iterator p;
     p = m->maps.find(e);
     if (p != m->maps.end()) {
-      dout(10) << "handle_osd_map  got full map for epoch " << e << dendl;
+      dout(10) << "handle_osd_map  got full map for epoch "
+	       << e << dendl;
       OSDMap *o = new OSDMap;
       bufferlist& bl = p->second;
 
@@ -2307,7 +2313,8 @@ void OSD::handle_osd_map(MOSDMap *m)
 
     p = m->incremental_maps.find(e);
     if (p != m->incremental_maps.end()) {
-      dout(10) << "handle_osd_map  got inc map for epoch " << e << dendl;
+      dout(10) << "handle_osd_map got inc map for epoch "
+	       << e << dendl;
       bufferlist& bl = p->second;
       oid_t oid = get_inc_osdmap_pobject_name(e);
       o_ix = t.push_oid(oid); // XXXX oid?  open it?
@@ -2509,7 +2516,6 @@ void OSD::handle_osd_map(MOSDMap *m)
     }
   }
 
-
   // note in the superblock that we were clean thru the prior epoch
   if (boot_epoch && boot_epoch >= superblock.mounted) {
     superblock.mounted = boot_epoch;
@@ -2536,7 +2542,8 @@ void OSD::handle_osd_map(MOSDMap *m)
   }
 
   if (m->newest_map && m->newest_map > last) {
-    dout(10) << " msg say newest map is " << m->newest_map << ", requesting more" << dendl;
+    dout(10) << " msg say newest map is " << m->newest_map
+	     << ", requesting more" << dendl;
     osdmap_subscribe(osdmap->get_epoch()+1, true);
   }
   else if (is_booting()) {
@@ -2678,12 +2685,11 @@ void OSD::activate_map()
     osdmap_subscribe(osdmap->get_epoch() + 1, true);
   }
 
-  //dispatch all waiting
-  OpRequest::Queue::iterator iter;
-  while (waiting_for_osdmap.size()) {
-    iter = waiting_for_osdmap.begin();
-    OpRequestRef op{&(*iter)};
-    handle_op(op);
+  // dispatch blocked ops
+  while (! waiting_for_osdmap.empty()) {
+    OpRequest* op = &(waiting_for_osdmap.front());
+    waiting_for_osdmap.pop_front();
+    handle_op(OpRequestRef(op));
   }
 }
 
@@ -2875,7 +2881,8 @@ bool OSD::require_same_or_newer_map(OpRequestRef op, epoch_t epoch)
   }
 
   if (epoch < up_epoch) {
-    dout(7) << "from pre-up epoch " << epoch << " < " << up_epoch << dendl;
+    dout(7) << "from pre-up epoch " << epoch << " < "
+	    << up_epoch << dendl;
     return false;
   }
 
@@ -2946,11 +2953,9 @@ void OSD::handle_op(OpRequestRef op)
   // we don't need encoded payload anymore
   m->clear_payload();
 
-#if 0
-  // require same or newer map
+  // require same or newer map (queues op)
   if (!require_same_or_newer_map(op, m->get_map_epoch()))
     return;
-#endif
 
   // object name too long?
   if (m->get_oid().name.size() > MAX_CEPH_OBJECT_NAME_LEN) {
@@ -3030,136 +3035,12 @@ bool OSD::op_is_discardable(MOSDOp *op)
   return false;
 }
 
-#if 0 /* XXXX */
-/*
- * enqueue called with osd_lock held
- */
-void OSD::enqueue_op(OSDVolRef vol, OpRequestRef op)
-{
-  ceph::timespan latency = ceph::real_clock::now()
-    - op->get_req()->get_recv_stamp();
-  dout(15) << "enqueue_op " << op << " prio " << op->get_req()->get_priority()
-	   << " cost " << op->get_req()->get_cost()
-	   << " latency " << latency
-	   << " " << *(op->get_req()) << dendl;
-  vol->queue_op(op);
-}
-
-void OSD::OpWQ::_enqueue(pair<OSDVolRef, OpRequestRef> item)
-{
-  unsigned priority = item.second->get_req()->get_priority();
-  unsigned cost = item.second->get_req()->get_cost();
-  if (priority >= CEPH_MSG_PRIO_LOW)
-    pqueue.enqueue_strict(
-      item.second->get_req()->get_source_inst(),
-      priority, item);
-  else
-    pqueue.enqueue(item.second->get_req()->get_source_inst(),
-      priority, cost, item);
-}
-
-void OSD::OpWQ::_enqueue_front(pair<OSDVolRef, OpRequestRef> item)
-{
-  lock_guard ql(qlock);
-  if (vol_for_processing.count(&*(item.first))) {
-    vol_for_processing[&*(item.first)].push_front(item.second);
-    item.second = vol_for_processing[&*(item.first)].back();
-    vol_for_processing[&*(item.first)].pop_back();
-  }
-  unsigned priority = item.second->get_req()->get_priority();
-  unsigned cost = item.second->get_req()->get_cost();
-  if (priority >= CEPH_MSG_PRIO_LOW)
-    pqueue.enqueue_strict_front(
-      item.second->get_req()->get_source_inst(),
-      priority, item);
-  else
-    pqueue.enqueue_front(item.second->get_req()->get_source_inst(),
-      priority, cost, item);
-}
-
-OSDVolRef OSD::OpWQ::_dequeue()
-{
-  assert(!pqueue.empty());
-  OSDVolRef vol;
-  {
-    lock_guard ql(qlock);
-    pair<OSDVolRef, OpRequestRef> ret = pqueue.dequeue();
-    vol = ret.first;
-    vol_for_processing[&*vol].push_back(ret.second);
-  }
-  return vol;
-}
-
-void OSD::OpWQ::_process(OSDVolRef vol, ThreadPool::TPHandle &handle)
-{
-  unique_lock vl(vol->lock_suspend_timeout(handle));
-  OpRequestRef op;
-  {
-    lock_guard ql(qlock);
-    if (!vol_for_processing.count(&*vol)) {
-      vl.unlock();
-      return;
-    }
-    assert(vol_for_processing[&*vol].size());
-    op = vol_for_processing[&*vol].front();
-    vol_for_processing[&*vol].pop_front();
-    if (!(vol_for_processing[&*vol].size()))
-      vol_for_processing.erase(&*vol);
-  }
-
-  lgeneric_subdout(osd->cct, osd, 30) << "dequeue status: ";
-  Formatter *f = new_formatter("json");
-  f->open_object_section("q");
-  dump(f);
-  f->close_section();
-  f->flush(*_dout);
-  delete f;
-  *_dout << dendl;
-
-  osd->dequeue_op(vol, op, handle);
-  vl.unlock();
-}
-
-
-void OSDService::dequeue_vol(OSDVol *vol, list<OpRequestRef> *dequeued)
-{
-  osd->op_wq.dequeue(vol, dequeued);
-}
-
-/*
- * NOTE: dequeue called in worker thread, with vol lock
- */
-void OSD::dequeue_op(
-  OSDVolRef vol, OpRequestRef op,
-  ThreadPool::TPHandle &handle)
-{
-  ceph::real_time now = ceph::real_clock::now();
-  op->set_dequeued_time(now);
-  ceph::timespan latency = now - op->get_req()->get_recv_stamp();
-  dout(10) << "dequeue_op " << op << " prio " << op->get_req()->get_priority()
-	   << " cost " << op->get_req()->get_cost()
-	   << " latency " << latency
-	   << " " << *(op->get_req())
-	   << " osdvol " << *vol << dendl;
-  if (vol->deleting)
-    return;
-
-  op->mark_reached_vol();
-
-  vol->do_request(op, handle);
-
-  // finish
-  dout(10) << "dequeue_op " << op << " finish" << dendl;
-}
-
-#endif /* XXXX */
-
 void OSD::static_dequeue_op(OSD* osd, OpRequest* op)
 {
-  osd->dequeue_op_slimshady2(OpRequestRef(op));
+  osd->dequeue_op(OpRequestRef(op));
 }
 
-void OSD::dequeue_op_slimshady2(OpRequestRef op)
+void OSD::dequeue_op(OpRequestRef op)
 {
   ceph::real_time now = ceph::real_clock::now();
   op->set_dequeued_time(now);
@@ -3186,7 +3067,7 @@ void OSD::dequeue_op_slimshady2(OpRequestRef op)
     return;
 
   op->mark_reached_vol();
-  vol->do_request(op);
+  vol->do_op(op);
 
   // finish
   dout(10) << "dequeue_op " << op << " finish" << dendl;

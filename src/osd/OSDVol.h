@@ -612,24 +612,10 @@ public:
 
   bool can_discard_replica_op(OpRequestRef op);
 
-  static bool op_must_wait_for_map(OSDMapRef curmap, OpRequestRef op);
-
-  static bool have_same_or_newer_map(OSDMapRef osdmap, epoch_t e) {
-    return e <= osdmap->get_epoch();
-  }
-  bool have_same_or_newer_map(epoch_t e) {
-    return e <= get_osdmap()->get_epoch();
-  }
-
-  void take_waiters();
   void handle_advance_map(OSDMapRef osdmap);
   void handle_activate_map();
 
   void on_removal(ObjectStore::Transaction* t);
-
-
-  void do_request(OpRequestRef op, ThreadPool::TPHandle& handle);
-  void do_request(OpRequestRef op);
 
   void do_op(OpRequestRef op);
   int do_command(cmdmap_t cmdmap, ostream& ss, bufferlist& idata,

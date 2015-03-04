@@ -164,39 +164,6 @@ void OSDVol::activate(ObjectStore::Transaction& t,
   t.register_on_complete(new C_Vol_ActivateCommitted(this, query_epoch));
 }
 
-#if 0 /* XXXX */
-void OSDVol::take_op_map_waiters()
-{
-  lock_guard ml(map_lock);
-  for (auto i = waiting_for_map.begin();
-       i != waiting_for_map.end();) {
-    if (op_must_wait_for_map(get_osdmap_with_maplock(), *i)) {
-      break;
-    } else {
-      osd->op_wq.queue(make_pair(OSDVolRef(this), *i));
-      waiting_for_map.erase(++i);
-    }
-  }
-}
-
-void OSDVol::queue_op(OpRequestRef op)
-{
-  lock_guard ml(map_lock);
-  if (!waiting_for_map.empty()) {
-    // preserve ordering
-    waiting_for_map.push_back(op);
-    return;
-  }
-  if (op_must_wait_for_map(get_osdmap_with_maplock(), op)) {
-    waiting_for_map.push_back(op);
-    return;
-  }
-  op->trace.event("queue_op", &trace_endpoint);
-  osd->op_wq.queue(make_pair(OSDVolRef(this), op));
-}
-
-#endif
-
 void OSDVol::_activate_committed(epoch_t e)
 {
   unique_lock l(lock);
@@ -284,19 +251,6 @@ void OSDVol::requeue_op(OpRequestRef op)
 			     band, MultiQueue::Pos::FRONT);
 }
 
-#if 0
-void OSDVol::requeue_ops(list<OpRequestRef> &ls)
-{
-  dout(15) << " requeue_ops " << ls << dendl;
-  for (list<OpRequestRef>::reverse_iterator i = ls.rbegin();
-       i != ls.rend();
-       ++i) {
-    osd->op_wq.queue_front(make_pair(OSDVolRef(this), *i));
-  }
-  ls.clear();
-}
-#endif
-
 void OSDVol::requeue_ops(OpRequest::Queue& q)
 {
   OpRequest::Queue rq;
@@ -315,12 +269,9 @@ void OSDVol::requeue_ops(OpRequest::Queue& q)
 ostream& operator<<(ostream& out, const OSDVol& vol)
 {
   out << "vol[" << vol.info;
-
   if (vol.last_update_ondisk != vol.info.last_update)
     out << " luod=" << vol.last_update_ondisk;
   out << "]";
-
-
   return out;
 }
 
@@ -342,22 +293,7 @@ bool OSDVol::can_discard_request(OpRequestRef op)
   return true;
 }
 
-bool OSDVol::op_must_wait_for_map(OSDMapRef curmap, OpRequestRef op)
-{
-  if (op->get_req()->get_type() == CEPH_MSG_OSD_OP)
-    return !have_same_or_newer_map(
-      curmap, static_cast<MOSDOp*>(op->get_req())->get_map_epoch());
-
-  return false;
-}
-
-#if 0
-void OSDVol::take_waiters()
-{
-  dout(10) << "take_waiters" << dendl;
-  take_op_map_waiters();
-}
-#endif
+/* XXXX Adam? */
 
 void OSDVol::handle_advance_map(OSDMapRef osdmap)
 {
@@ -366,7 +302,8 @@ void OSDVol::handle_advance_map(OSDMapRef osdmap)
 
 void OSDVol::handle_activate_map()
 {
-  if (osdmap_ref->check_new_blacklist_entries()) check_blacklisted_watchers();
+  if (osdmap_ref->check_new_blacklist_entries())
+    check_blacklisted_watchers();
 }
 
 void OSDVol::on_removal(ObjectStore::Transaction *t)
@@ -380,52 +317,6 @@ void OSDVol::on_removal(ObjectStore::Transaction *t)
   on_shutdown();
 }
 
-void OSDVol::do_request(OpRequestRef op, ThreadPool::TPHandle &handle)
-{
-  // There should be a permission check here, but it was done in
-  // termse of namespaces and pools and is sort of sloppy and is based
-  // on pool AUIDs and user AUIDs and is something we almost certainly
-  // do not want. However we do WANT a permissions check and once we
-  // have a system of permissions worked out, this is where we should
-  // check it.
-  assert(!op_must_wait_for_map(get_osdmap(), op));
-  if (can_discard_request(op)) {
-    return;
-  }
-
-  switch (op->get_req()->get_type()) {
-  case CEPH_MSG_OSD_OP:
-    do_op(op); // do it now
-    break;
-
-  default:
-    assert(0 == "bad message type in do_request");
-  }
-}
-
-void OSDVol::do_request(OpRequestRef op)
-{
-  // There should be a permission check here, but it was done in
-  // termse of namespaces and pools and is sort of sloppy and is based
-  // on pool AUIDs and user AUIDs and is something we almost certainly
-  // do not want. However we do WANT a permissions check and once we
-  // have a system of permissions worked out, this is where we should
-  // check it.
-  assert(!op_must_wait_for_map(get_osdmap(), op));
-  if (can_discard_request(op)) {
-    return;
-  }
-
-  switch (op->get_req()->get_type()) {
-  case CEPH_MSG_OSD_OP:
-    do_op(op); // do it now
-    break;
-
-  default:
-    assert(0 == "bad message type in do_request");
-  }
-}
-
 /**
  * @brief do_op - do an op
  * vol lock will be held (if multithreaded)
@@ -433,10 +324,21 @@ void OSDVol::do_request(OpRequestRef op)
  */
 void OSDVol::do_op(OpRequestRef op)
 {
+  // There should be a permission check here, but it was done in
+  // terms of namespaces and pools and is sort of sloppy and is based
+  // on pool AUIDs and user AUIDs and is something we almost certainly
+  // do not want. However we DO WANT a permissions check and once we
+  // have a system of permissions worked out, this is where we should
+  // check it.
+
   MOSDOp *m = static_cast<MOSDOp*>(op->get_req());
+
   assert(m->get_header().type == CEPH_MSG_OSD_OP);
 
   op->trace.event("do_op", &trace_endpoint);
+
+  if (can_discard_request(op))
+    return;
 
   if (get_osdmap()->is_blacklisted(m->get_source_addr())) {
     dout(10) << "do_op " << m->get_source_addr() << " is blacklisted" << dendl;
@@ -2626,7 +2528,6 @@ void OSDVol::context_registry_on_change()
     }
   }
 }
-
 
 /*
  * If we return an error, and set *pmissing, then promoting that
