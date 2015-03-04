@@ -51,7 +51,8 @@ namespace cohort {
       : data(_data)
     {}
 
-    const T& get() { return data; }
+    T& get() { return data; }
+    const T& get() const { return data; }
 
   }; /* WaitQueueEntry */
 
@@ -63,7 +64,6 @@ namespace cohort {
     typedef typename Queue::iterator iterator;
 
     uint32_t flags;
-    uint32_t waiters;
 
     LK lock;
     Queue queue;
@@ -87,7 +87,6 @@ namespace cohort {
       e.flags = LFLAG_WAIT_SYNC;
       /* enqueue on shared waitq */
       lock.lock();
-      ++waiters;
       queue.push_back(e);
       lock.unlock(); /* release interlock */
       if (ms) {
@@ -102,7 +101,6 @@ namespace cohort {
       iterator it = Queue::s_iterator_to(e);
       if (! (flags & FLAG_LOCKED))
 	lock.lock();
-      --waiters;
       queue.erase(it);
       if (! (flags & FLAG_LOCKED))
 	lock.unlock();
