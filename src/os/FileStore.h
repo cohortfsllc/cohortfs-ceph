@@ -171,6 +171,16 @@ public:
       }
     };
 
+    typedef bi::link_mode<bi::safe_link> link_mode;
+    typedef bi::list_member_hook<link_mode> queue_hook_type;
+    queue_hook_type fl_hook;
+
+    typedef bi::list<
+      FSObject,
+      bi::member_hook<FSObject, queue_hook_type, &FSObject::fl_hook>,
+      bi::constant_time_size<true>
+      > FlushQueue;
+
     FSCollection* fc;
     int fd;
     PendingWB pwb;
@@ -212,7 +222,7 @@ public:
     std::condition_variable cond;
 
     /* pending queue */
-    Object::FlushQueue fl_queue;
+    FSObject::FlushQueue fl_queue;
 
   public:
     FSFlush(FileStore* fs)
