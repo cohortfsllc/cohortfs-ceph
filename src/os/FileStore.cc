@@ -4368,8 +4368,8 @@ void FileStore::FSFlush::clear_object(FSObject* o)
 {
   unique_sp waitq_sp(waitq.lock);
   if (o->pwb.ios) {
-    Object::FlushQueue::iterator it =
-      Object::FlushQueue::s_iterator_to(*o);
+    FSObject::FlushQueue::iterator it =
+      FSObject::FlushQueue::s_iterator_to(*o);
     fl_queue.erase(it);
     (void) o->pwb.sub(cur_ios, cur_size);
     fs->unref(o);
@@ -4380,7 +4380,7 @@ void FileStore::FSFlush::clear_object(FSObject* o)
 void FileStore::FSFlush::clear() {
   unique_sp waitq_sp(waitq.lock);
   while (fl_queue.size()) {
-    FSObject& o = static_cast<FSObject&>(fl_queue.back());
+    FSObject& o = fl_queue.back();
     fl_queue.pop_back();
     (void) o.pwb.sub(cur_ios, cur_size);
     fs->unref(&o);
@@ -4410,7 +4410,7 @@ void* FileStore::FSFlush::entry()
       return nullptr;
     /* do it */
     assert(!fl_queue.empty());
-    FSObject& o = static_cast<FSObject&>(fl_queue.back());
+    FSObject& o = fl_queue.back();
     fl_queue.pop_back();
     bool nocache = o.pwb.sub(cur_ios, cur_size);
     waitq_sp.unlock();
