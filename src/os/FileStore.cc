@@ -4297,7 +4297,7 @@ void FileStore::FSFlush::handle_conf_change(const md_config_t *conf,
                                             const std::set<std::string> &keys)
 
 {
-  lock_guard lk(lock);
+  unique_sp waitq_sp(waitq.lock);
   switch(fs->m_fs_type) {
   case fs_types::FS_TYPE_BTRFS:
     size_limits.first = conf->filestore_wbthrottle_btrfs_bytes_start_flusher;
@@ -4319,7 +4319,6 @@ void FileStore::FSFlush::handle_conf_change(const md_config_t *conf,
     assert(0 == "invalid value for fs");
     break;
   }
-  cond.notify_all();
 }
 
 void FileStore::FSFlush::queue_wb(FSObject* o,

@@ -114,7 +114,7 @@ public:
       PendingWB(FSObject* _o) : o(_o), size(0), ios(0), nocache(true) {}
 
       PendingWB(FSObject* _o, uint64_t _size, uint64_t _ios, bool _nocache)
-	: size(_size), ios(_ios), nocache(_nocache) {}
+	: o(_o), size(_size), ios(_ios), nocache(_nocache) {}
 
       void add(const PendingWB& rhs) {
 	if (!rhs.nocache)
@@ -201,8 +201,6 @@ public:
     WaitQueue waitq;
 
     bool stopping;
-    std::mutex lock;
-    std::condition_variable cond;
 
     /* pending queue */
     Object::FlushQueue fl_queue;
@@ -256,7 +254,6 @@ public:
       {
 	unique_sp lk(waitq.lock);
 	stopping = true;
-	cond.notify_all();
       }
       join();
     }
