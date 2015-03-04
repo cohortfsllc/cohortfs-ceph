@@ -341,7 +341,8 @@ void OSDVol::do_op(OpRequestRef op)
     return;
 
   if (get_osdmap()->is_blacklisted(m->get_source_addr())) {
-    dout(10) << "do_op " << m->get_source_addr() << " is blacklisted" << dendl;
+    dout(10) << "do_op " << m->get_source_addr()
+	     << " is blacklisted" << dendl;
     osd->reply_op_error(op, -EBLACKLISTED);
     return;
   }
@@ -356,7 +357,8 @@ void OSDVol::do_op(OpRequestRef op)
 	   << (op->may_write() ? " may_write" : "")
 	   << (op->may_read() ? " may_read" : "")
 	   << (op->may_cache() ? " may_cache" : "")
-	   << " -> " << (write_ordered ? "write-ordered" : "read-ordered")
+	   << " -> "
+	   << (write_ordered ? "write-ordered" : "read-ordered")
 	   << " flags " << ceph_osd_flag_string(m->get_flags())
 	   << dendl;
 
@@ -377,7 +379,8 @@ void OSDVol::do_op(OpRequestRef op)
 
   // src_objs
   map<oid_t,ObjectContextRef> src_obc;
-  for (vector<OSDOp>::iterator p = m->ops.begin(); p != m->ops.end(); ++p) {
+  for (vector<OSDOp>::iterator p = m->ops.begin();
+       p != m->ops.end(); ++p) {
     OSDOp& osd_op = *p;
 
     if (!ceph_osd_op_type_multi(osd_op.op.op))
@@ -394,7 +397,8 @@ void OSDVol::do_op(OpRequestRef op)
 		  << obc->obs.oi.soid << dendl;
 	  osd->reply_op_error(op, -EINVAL);
 	} else {
-	  dout(10) << " src_obj " << src_obj << " obc " << src_obc << dendl;
+	  dout(10) << " src_obj " << src_obj << " obc "
+		   << src_obc << dendl;
 	  src_obc[src_obj] = sobc;
 	  continue;
 	}
@@ -404,7 +408,8 @@ void OSDVol::do_op(OpRequestRef op)
       }
       // Error cleanup below
     } else {
-      dout(10) << "no src oid specified for multi op " << osd_op << dendl;
+      dout(10) << "no src oid specified for multi op "
+	       << osd_op << dendl;
       osd->reply_op_error(op, -EINVAL);
     }
     return;
@@ -492,8 +497,10 @@ void OSDVol::get_obc_watchers(ObjectContextRef obc,
     owi.wi.cookie = j->second->get_cookie();
     owi.wi.timeout_seconds = j->second->get_timeout();
 
-    dout(30) << "watch: Found oid=" << owi.oid << " addr=" << owi.wi.addr
-      << " name=" << owi.wi.name << " cookie=" << owi.wi.cookie << dendl;
+    dout(30) << "watch: Found oid=" << owi.oid
+	     << " addr=" << owi.wi.addr
+	     << " name=" << owi.wi.name
+	     << " cookie=" << owi.wi.cookie << dendl;
 
     vol_watchers.push_back(owi);
   }
@@ -536,18 +543,18 @@ void OSDVol::check_blacklisted_obc_watchers(ObjectContextRef obc)
     entity_addr_t ea = j->second->get_peer_addr();
     dout(30) << "watch: Check entity_addr_t " << ea << dendl;
     if (get_osdmap()->is_blacklisted(ea)) {
-      dout(10) << "watch: Found blacklisted watcher for " << ea << dendl;
+      dout(10) << "watch: Found blacklisted watcher for "
+	       << ea << dendl;
       assert(j->second->get_vol() == this);
       handle_watch_timeout(j->second);
     }
   }
 }
 
-
 void OSDVol::check_blacklisted_watchers()
 {
-  dout(20) << "OSDVol::check_blacklisted_watchers for vol " << info.volume
-	   << dendl;
+  dout(20) << "OSDVol::check_blacklisted_watchers for vol "
+	   << info.volume << dendl;
   pair<oid_t, ObjectContextRef> i;
   while (object_contexts.get_next(i.first, &i))
     check_blacklisted_obc_watchers(i.second);
@@ -634,7 +641,8 @@ void OSDVol::execute_ctx(OpContext *ctx)
     ctx->mtime = m->get_mtime();
 
     dout(10) << "do_op " << soid << " " << ctx->ops
-	     << " ov " << obc->obs.oi.version << " av " << ctx->at_version
+	     << " ov " << obc->obs.oi.version
+	     << " av " << ctx->at_version
 	     << dendl;
   } else {
     dout(10) << "do_op " << soid << " " << ctx->ops
@@ -644,14 +652,17 @@ void OSDVol::execute_ctx(OpContext *ctx)
 
   if (!ctx->user_at_version)
     ctx->user_at_version = obc->obs.oi.user_version;
-  dout(30) << __func__ << " user_at_version " << ctx->user_at_version << dendl;
+  dout(30) << __func__ << " user_at_version "
+	   << ctx->user_at_version << dendl;
 
   if (op->may_read()) {
     dout(10) << " taking ondisk_read_lock" << dendl;
     obc->ondisk_read_lock();
   }
-  for (map<oid_t,ObjectContextRef>::iterator p = src_obc.begin(); p != src_obc.end(); ++p) {
-    dout(10) << " taking ondisk_read_lock for src " << p->first << dendl;
+  for (map<oid_t,ObjectContextRef>::iterator p = src_obc.begin();
+       p != src_obc.end(); ++p) {
+    dout(10) << " taking ondisk_read_lock for src "
+	     << p->first << dendl;
     p->second->ondisk_read_lock();
   }
 
@@ -661,8 +672,10 @@ void OSDVol::execute_ctx(OpContext *ctx)
     dout(10) << " dropping ondisk_read_lock" << dendl;
     obc->ondisk_read_unlock();
   }
-  for (map<oid_t,ObjectContextRef>::iterator p = src_obc.begin(); p != src_obc.end(); ++p) {
-    dout(10) << " dropping ondisk_read_lock for src " << p->first << dendl;
+  for (map<oid_t,ObjectContextRef>::iterator p = src_obc.begin();
+       p != src_obc.end(); ++p) {
+    dout(10) << " dropping ondisk_read_lock for src "
+	     << p->first << dendl;
     p->second->ondisk_read_unlock();
   }
 
@@ -677,7 +690,8 @@ void OSDVol::execute_ctx(OpContext *ctx)
     return;
   }
 
-  bool successful_write = !ctx->op_t->empty() && op->may_write() && result >= 0;
+  bool successful_write = !ctx->op_t->empty() &&
+    op->may_write() && result >= 0;
   // prepare the reply
   ctx->reply = new MOSDOpReply(m, 0, get_osdmap()->get_epoch(), 0,
 			       successful_write);
@@ -707,7 +721,8 @@ void OSDVol::execute_ctx(OpContext *ctx)
     return;
   }
 
-  ctx->reply->set_reply_versions(ctx->at_version, ctx->user_at_version);
+  ctx->reply->set_reply_versions(ctx->at_version,
+				 ctx->user_at_version);
 
   assert(op->may_write() || op->may_cache());
   // issue replica writes
@@ -728,14 +743,16 @@ void OSDVol::reply_ctx(OpContext *ctx, int r)
   close_op_ctx(ctx, r);
 }
 
-void OSDVol::reply_ctx(OpContext *ctx, int r, eversion_t v, version_t uv)
+void OSDVol::reply_ctx(OpContext *ctx, int r, eversion_t v,
+		       version_t uv)
 {
   if (ctx->op)
     osd->reply_op_error(ctx->op, r, v, uv);
   close_op_ctx(ctx, r);
 }
 
-int OSDVol::do_xattr_cmp_uint64_t(int op, uint64_t v1, bufferlist& xattr)
+int OSDVol::do_xattr_cmp_uint64_t(int op, uint64_t v1,
+				  bufferlist& xattr)
 {
   uint64_t v2;
   if (xattr.length())
@@ -743,7 +760,8 @@ int OSDVol::do_xattr_cmp_uint64_t(int op, uint64_t v1, bufferlist& xattr)
   else
     v2 = 0;
 
-  dout(20) << "do_xattr_cmp_u64 '" << v1 << "' vs '" << v2 << "' op " << op << dendl;
+  dout(20) << "do_xattr_cmp_u64 '" << v1 << "' vs '"
+	   << v2 << "' op " << op << dendl;
 
   switch (op) {
   case CEPH_OSD_CMPXATTR_OP_EQ:
@@ -767,7 +785,8 @@ int OSDVol::do_xattr_cmp_str(int op, string& v1s, bufferlist& xattr)
 {
   string v2s(xattr.c_str(), xattr.length());
 
-  dout(20) << "do_xattr_cmp_str '" << v1s << "' vs '" << v2s << "' op " << op << dendl;
+  dout(20) << "do_xattr_cmp_str '" << v1s << "' vs '"
+	   << v2s << "' op " << op << dendl;
 
   switch (op) {
   case CEPH_OSD_CMPXATTR_OP_EQ:
@@ -787,10 +806,11 @@ int OSDVol::do_xattr_cmp_str(int op, string& v1s, bufferlist& xattr)
   }
 }
 
-// ========================================================================
+// ====================================================================
 // low level osd ops
 
-static int check_offset_and_length(uint64_t offset, uint64_t length, uint64_t max)
+static int check_offset_and_length(uint64_t offset, uint64_t length,
+				   uint64_t max)
 {
   if (offset >= max ||
       length > max ||
