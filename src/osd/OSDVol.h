@@ -45,6 +45,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include "include/AssocVector.hpp"
 #include "include/lru.h"
 #include "common/cohort_lru.h"
 #include "messages/MOSDOp.h"
