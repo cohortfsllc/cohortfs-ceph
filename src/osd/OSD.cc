@@ -136,7 +136,6 @@ OSDService::OSDService(OSD *osd) :
   client_messenger(osd->client_messenger),
   client_xio_messenger(osd->client_xio_messenger),
   monc(osd->monc),
-  op_wq(osd->op_wq),
   class_handler(osd->class_handler),
   watch_timer(watch_lock),
   next_notif_id(0),
@@ -439,6 +438,7 @@ OSD::OSD(CephContext *cct_, ObjectStore *store_,
   hb_back_server_messenger(hb_back_serverm),
   heartbeat_thread(this),
   heartbeat_dispatcher(this),
+  multi_wq(this, static_dequeue_op),
   op_wq(this, cct->_conf->osd_op_thread_timeout * 1s, &op_tp),
   up_thru_wanted(0), up_thru_pending(0), service(this)
 {
@@ -515,10 +515,6 @@ bool OSD::asok_command(string command, cmdmap_t& cmdmap, string format,
     f->close_section();
   } else if (command == "flush_journal") {
     store->sync_and_flush();
-  } else if (command == "dump_op_pq_state") {
-    f->open_object_section("pq");
-    op_wq.dump(f);
-    f->close_section();
   } else if (command == "dump_blacklist") {
     list<pair<entity_addr_t,ceph::real_time> > bl;
     OSDMapRef curmap = service.get_osdmap();
@@ -861,11 +857,8 @@ int OSD::shutdown()
     p.second->osr->flush();
   }
 
-  // finish ops
-  op_wq.drain(); // should already be empty except for lagard volumes
-  {
-    /* XXX do nothing (finished is finished) */
-  }
+  // XXX drain multi_wq
+  multi_wq.shutdown();
 
   // unregister commands
   cct->get_admin_socket()->unregister_command("status");
@@ -2917,11 +2910,6 @@ bool OSD::require_same_or_newer_map(OpRequestRef op, epoch_t epoch)
   return true;
 }
 
-
-
-
-
-
 // =========================================================
 // OPS
 
@@ -3023,21 +3011,15 @@ void OSD::handle_op(OpRequestRef op)
     }
   }
 
-  /* POOPY do it nu! */
-  multi_wq.enqueue(op->get_k(), *op, MultiQueue::Bands::BASE,
-		   MultiQueue::FLAG_LOCK);
+  /* pick a queue priority band */
+  MultiQueue::Bands band;
+  if (m->get_priority() > CEPH_MSG_PRIO_LOW)
+    band = MultiQueue::Bands::HIGH;
+  else
+    band = MultiQueue::Bands::BASE;
 
-#if 0 /* XXXX needs to move to dequeue step */
-  boost::uuids::uuid volume = m->get_volume();
-  OSDVolRef vol = _lookup_vol(volume);
-  if (!vol) {
-    dout(7) << "hit non-existent volume " << volume << dendl;
-    service.reply_op_error(op, -ENXIO);
-    return;
-  }
-
-  enqueue_op(vol, op);
-#endif
+  /* enqueue on multi_wq, defers vol resolution */
+  multi_wq.enqueue(op->get_k(), *op, band, MultiQueue::FLAG_LOCK);
 }
 
 bool OSD::op_is_discardable(MOSDOp *op)
@@ -3052,6 +3034,7 @@ bool OSD::op_is_discardable(MOSDOp *op)
   return false;
 }
 
+#if 0 /* XXXX */
 /*
  * enqueue called with osd_lock held
  */
@@ -3173,6 +3156,45 @@ void OSD::dequeue_op(
   dout(10) << "dequeue_op " << op << " finish" << dendl;
 }
 
+#endif /* XXXX */
+
+void OSD::static_dequeue_op(OSD* osd, OpRequest* op)
+{
+  osd->dequeue_op_slimshady2(OpRequestRef(op));
+}
+
+void OSD::dequeue_op_slimshady2(OpRequestRef op)
+{
+  ceph::real_time now = ceph::real_clock::now();
+  op->set_dequeued_time(now);
+  ceph::timespan latency = now - op->get_req()->get_recv_stamp();
+  MOSDOp *m = static_cast<MOSDOp*>(op->get_req());
+  const boost::uuids::uuid& volume = m->get_volume();
+
+  unique_lock vlock(vol_lock);
+  OSDVolRef vol = _lookup_vol(volume);
+  if (!vol) {
+    dout(7) << "hit non-existent volume " << volume << dendl;
+    service.reply_op_error(op, -ENXIO);
+    return;
+  }
+  vlock.unlock();
+
+  dout(10) << "dequeue_op " << op << " prio " << op->get_req()->get_priority()
+	   << " cost " << op->get_req()->get_cost()
+	   << " latency " << latency
+	   << " " << *(op->get_req())
+	   << " osdvol " << *vol << dendl;
+
+  if (vol->deleting)
+    return;
+
+  op->mark_reached_vol();
+  vol->do_request(op);
+
+  // finish
+  dout(10) << "dequeue_op " << op << " finish" << dendl;
+}
 
 // --------------------------------
 

@@ -637,6 +637,7 @@ public:
 
 
   void do_request(OpRequestRef op, ThreadPool::TPHandle& handle);
+  void do_request(OpRequestRef op);
 
   void do_op(OpRequestRef op);
   int do_command(cmdmap_t cmdmap, ostream& ss, bufferlist& idata,
