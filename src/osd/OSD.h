@@ -98,9 +98,6 @@ private:
   Messenger *&client_xio_messenger;
 public:
   MonClient   *&monc;
-#if 0
-  ThreadPool::WorkQueueVal<pair<OSDVolRef, OpRequestRef>, OSDVolRef> &op_wq;
-#endif
   ClassHandler	*&class_handler;
 
   // -- superblock --
@@ -561,75 +558,9 @@ private:
   // -- op queue --
   MultiQueue multi_wq;
 
-#if 0 /* XXXX */
-  struct OpWQ: public ThreadPool::WorkQueueVal<pair<OSDVolRef, OpRequestRef>,
-					       OSDVolRef > {
-    std::mutex qlock;
-    map<OSDVol*, list<OpRequestRef> > vol_for_processing; /* XXXX check */
-    OSD *osd;
-    PrioritizedQueue<pair<OSDVolRef, OpRequestRef>, entity_inst_t > pqueue;
-    OpWQ(OSD *o, ceph::timespan ti, ThreadPool *tp)
-      : ThreadPool::WorkQueueVal<pair<OSDVolRef, OpRequestRef>, OSDVolRef> (
-	"OSD::OpWQ", ti, ti * 10, tp),
-	osd(o),
-	pqueue(o->cct->_conf->osd_op_pq_max_tokens_per_priority,
-	       o->cct->_conf->osd_op_pq_min_cost)
-    {}
-
-    void dump(Formatter *f) {
-      lock_guard ql(qlock);
-      pqueue.dump(f);
-    }
-
-    void _enqueue_front(pair<OSDVolRef, OpRequestRef> item);
-    void _enqueue(pair<OSDVolRef, OpRequestRef> item);
-    OSDVolRef _dequeue();
-
-    struct Pred {
-      OSDVol *vol;
-      Pred(OSDVol *vol) : vol(vol) {}
-      bool operator()(const pair<OSDVolRef, OpRequestRef> &op) {
-	return op.first == vol;
-      }
-    };
-    void dequeue(OSDVol *vol, list<OpRequestRef> *dequeued = 0) {
-      lock_guard ql(qlock);
-      if (!dequeued) {
-	pqueue.remove_by_filter(Pred(vol));
-	vol_for_processing.erase(vol);
-      } else {
-	list<pair<OSDVolRef, OpRequestRef> > _dequeued;
-	pqueue.remove_by_filter(Pred(vol), &_dequeued);
-	for (list<pair<OSDVolRef, OpRequestRef> >::iterator i
-	       = _dequeued.begin();
-	     i != _dequeued.end();
-	     ++i) {
-	  dequeued->push_back(i->second);
-	}
-	if (vol_for_processing.count(vol)) {
-	  dequeued->splice(
-	    dequeued->begin(),
-	    vol_for_processing[vol]);
-	  vol_for_processing.erase(vol);
-	}
-      }
-    }
-    bool _empty() {
-      return pqueue.empty();
-    }
-    void _process(OSDVolRef vol, ThreadPool::TPHandle &handle);
-  } op_wq;
-
-  void enqueue_op(OSDVolRef vol, OpRequestRef op);
-  void dequeue_op(
-    OSDVolRef vol, OpRequestRef op,
-    ThreadPool::TPHandle &handle);
-
-#endif /* XXXX */
-
-  /* XXXX the new multi_wq dequeue function */
+  /* multi_wq dequeue function */
   static void static_dequeue_op(OSD* osd, OpRequest* op);
-  void dequeue_op_slimshady2(OpRequestRef op);
+  void dequeue_op(OpRequestRef op);
 
   friend class OSDVol;
 
