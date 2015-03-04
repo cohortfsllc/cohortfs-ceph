@@ -4367,11 +4367,10 @@ void FileStore::FSFlush::queue_finish(FSObject::PendingWB& pwb) {
 void FileStore::FSFlush::cond_signal_waiters(unique_sp& waitq_sp)
 {
   assert(waitq_sp.owns_lock());
-  while (waitq.waiters) {
-    cohort::WaitQueue<FSObject::PendingWB, cohort::SpinLock>::Entry& wqe =
-      waitq.queue.front();
-    FSObject::PendingWB& pwb =
-      const_cast< FSObject::PendingWB&>(wqe.get());
+  auto i = waitq.queue.begin();
+  while (i != waitq.queue.end()) {
+    auto &wqe = *i++;
+    FSObject::PendingWB& pwb = wqe.get();
     if (should_wake(pwb)) {
       queue_finish(pwb);
       waitq.dequeue(wqe, WaitQueue::FLAG_LOCKED | WaitQueue::FLAG_SIGNAL);
