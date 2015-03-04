@@ -103,8 +103,6 @@ public:
 #endif
   ClassHandler	*&class_handler;
 
-  void dequeue_vol(OSDVol *v, list<OpRequestRef> *dequeued);
-
   // -- superblock --
   // pre-publish orders before publish
   std::mutex publish_lock, pre_publish_lock;
@@ -561,8 +559,6 @@ public:
 
 private:
   // -- op queue --
-  const static int n_lanes = 17;
-  typedef cohort::OpQueue<cohort::SpinLock, n_lanes> MultiQueue;
   MultiQueue multi_wq;
 
 #if 0 /* XXXX */

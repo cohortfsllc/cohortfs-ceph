@@ -178,7 +178,6 @@ void OSDVol::take_op_map_waiters()
     }
   }
 }
-#endif
 
 void OSDVol::queue_op(OpRequestRef op)
 {
@@ -195,6 +194,8 @@ void OSDVol::queue_op(OpRequestRef op)
   op->trace.event("queue_op", &trace_endpoint);
   osd->op_wq.queue(make_pair(OSDVolRef(this), op));
 }
+
+#endif
 
 void OSDVol::_activate_committed(epoch_t e)
 {
@@ -272,9 +273,18 @@ void OSDVol::read_info()
 
 void OSDVol::requeue_op(OpRequestRef op)
 {
-  osd->op_wq.queue_front(make_pair(OSDVolRef(this), op));
+  MultiQueue::Bands band;
+  if (op->get_req()->get_priority() > CEPH_MSG_PRIO_LOW)
+    band = MultiQueue::Bands::HIGH;
+  else
+    band = MultiQueue::Bands::BASE;
+
+  /* enqueue on multi_wq, defers vol resolution */
+  osd->osd->multi_wq.enqueue(op->get_k(), *op,
+			     band, MultiQueue::Pos::FRONT);
 }
 
+#if 0
 void OSDVol::requeue_ops(list<OpRequestRef> &ls)
 {
   dout(15) << " requeue_ops " << ls << dendl;
@@ -284,6 +294,22 @@ void OSDVol::requeue_ops(list<OpRequestRef> &ls)
     osd->op_wq.queue_front(make_pair(OSDVolRef(this), *i));
   }
   ls.clear();
+}
+#endif
+
+void OSDVol::requeue_ops(OpRequest::Queue& q)
+{
+  OpRequest::Queue rq;
+
+  dout(15) << " requeue_ops " << q.size() << dendl;
+  
+  OpRequest::Queue::iterator i1 = rq.end();
+  rq.splice(i1, q);
+  while (! rq.empty()) {
+    OpRequest& op = rq.front();
+    rq.erase(rq.begin());
+    requeue_op(OpRequestRef(&op)); // XXXX illegal sharing!
+  }
 }
 
 ostream& operator<<(ostream& out, const OSDVol& vol)
@@ -538,7 +564,7 @@ void OSDVol::on_shutdown()
   dout(10) << "on_shutdown" << dendl;
 
   // remove from queues
-  osd->dequeue_vol(this, 0);
+  //osd->dequeue_vol(this, 0); /* XXXX fix */
 
   // handles queue races
   deleting = true;
@@ -2641,7 +2667,7 @@ void OSDVol::object_context_destructor_callback(ObjectContext *obc)
 
 void OSDVol::apply_mutations(bool requeue)
 {
-  list<OpRequestRef> rq;
+  OpRequest::Queue rq;
 
   // apply all mutations
   unique_lock ml(mutation_lock); // Not exception safe, fix.
@@ -2659,7 +2685,7 @@ void OSDVol::apply_mutations(bool requeue)
       if (mutation->ctx->op) {
 	dout(10) << " requeuing " << *mutation->ctx->op->get_req()
 		 << dendl;
-	rq.push_back(mutation->ctx->op);
+	rq.push_back(*(mutation->ctx->op)); // XXXX shared_ptr
 	mutation->ctx->op = OpRequestRef();
       }
     }

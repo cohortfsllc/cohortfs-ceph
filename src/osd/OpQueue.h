@@ -76,6 +76,12 @@ namespace cohort {
       HIGH
     };
 
+    enum class Pos : std::uint8_t
+    {
+      BACK = 0,
+      FRONT
+    };
+
     struct Band
     {
       LK producer_lk;
@@ -140,6 +146,7 @@ namespace cohort {
 	      ++n_reqs;
 	      ++n_active;
 	      /* dequeue op */
+	      b.producer_q.erase(b.producer_q.s_iterator_to(op));
 	      dequeue_op_func(osd, &op);
 	      --n_active;
 	    }
@@ -195,11 +202,17 @@ namespace cohort {
       return qlane[(k % N)];
     }
 
-    void enqueue(uint64_t k, OpRequest& op, enum Bands b, uint32_t flags) {
+    void enqueue(uint64_t k, OpRequest& op, enum Bands b, enum Pos p) {
       Lane& lane = lane_of_scalar(k);
       Band& band = lane.bands[int(b)];
       unique_lock lk(band.producer_lk, std::defer_lock);
-      band.producer_q.push_back(op);
+      switch (p) {
+      case Pos::BACK:
+	band.producer_q.push_back(op);
+	break;
+      default:
+	band.producer_q.push_front(op);
+      };
       if (! lane.n_active) {
 	/* maybe signal a worker */
 	lk.unlock();

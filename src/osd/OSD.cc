@@ -439,7 +439,9 @@ OSD::OSD(CephContext *cct_, ObjectStore *store_,
   heartbeat_thread(this),
   heartbeat_dispatcher(this),
   multi_wq(this, static_dequeue_op),
+#if 0
   op_wq(this, cct->_conf->osd_op_thread_timeout * 1s, &op_tp),
+#endif
   up_thru_wanted(0), up_thru_pending(0), service(this)
 {
   monc->set_messenger(client_messenger);
@@ -3019,7 +3021,7 @@ void OSD::handle_op(OpRequestRef op)
     band = MultiQueue::Bands::BASE;
 
   /* enqueue on multi_wq, defers vol resolution */
-  multi_wq.enqueue(op->get_k(), *op, band, MultiQueue::FLAG_LOCK);
+  multi_wq.enqueue(op->get_k(), *op, band, MultiQueue::Pos::BACK);
 }
 
 bool OSD::op_is_discardable(MOSDOp *op)
