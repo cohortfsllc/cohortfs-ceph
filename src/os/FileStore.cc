@@ -4332,9 +4332,9 @@ void FileStore::FSFlush::queue_wb(FSObject* o,
 				  uint64_t len,
 				  bool nocache )
 {
-  FSObject::PendingWB pwb(o, off, len, nocache);
+  FSObject::PendingWB pwb(o, len, 1, nocache);
   unique_sp waitq_sp(waitq.lock);
-  if (should_block(off, len)) {
+  if (should_block(len)) {
     cohort::WaitQueue<FSObject::PendingWB, cohort::SpinLock>::Entry wqe(pwb);
     waitq_sp.unlock();
     waitq.wait_on(wqe);
@@ -4350,6 +4350,8 @@ void FileStore::FSFlush::queue_finish(FSObject::PendingWB& pwb) {
       fs->ref(o); /* ref+ */
       fl_queue.push_front(*o); /* enqueue at fl_queue MRU */
     }
+    cur_size += pwb.size;
+    cur_ios += pwb.ios;
     o->pwb.add(pwb);
   }
 } /* queue_finish */

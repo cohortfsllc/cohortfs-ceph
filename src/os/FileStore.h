@@ -124,6 +124,8 @@ public:
       }
 
       bool sub(uint64_t& _ios, uint64_t& _size) {
+        assert(_ios >= ios);
+        assert(_size >= size);
 	_ios -= ios; ios = 0;
 	_size -= size; size = 0;
 	bool c = nocache;
@@ -226,13 +228,13 @@ public:
     FSFlush(FileStore* fs)
       : fs(fs), cur_ios(0), cur_size(0), waiters(0), stopping(false) {}
 
-    bool should_block(uint64_t off, uint64_t len) {
-      return (((cur_ios+1) > io_limits.second) ||
-	      ((fl_queue.size()+1) > fd_limits.second) ||
-	      ((cur_size+len) > size_limits.second));
+    bool should_block(uint64_t len) const {
+      return (((cur_ios+1) >= io_limits.second) ||
+	      ((fl_queue.size()+1) >= fd_limits.second) ||
+	      ((cur_size+len) >= size_limits.second));
     }
 
-    bool should_wake(const FSObject::PendingWB& pwb) {
+    bool should_wake(const FSObject::PendingWB& pwb) const {
       return (((cur_ios-pwb.ios) < io_limits.second) ||
 	      ((fl_queue.size()-1) < fd_limits.second) ||
 	      ((cur_size-(pwb.size)) < size_limits.second) ||
