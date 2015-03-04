@@ -164,6 +164,7 @@ void OSDVol::activate(ObjectStore::Transaction& t,
   t.register_on_complete(new C_Vol_ActivateCommitted(this, query_epoch));
 }
 
+#if 0 /* XXXX */
 void OSDVol::take_op_map_waiters()
 {
   lock_guard ml(map_lock);
@@ -177,6 +178,7 @@ void OSDVol::take_op_map_waiters()
     }
   }
 }
+#endif
 
 void OSDVol::queue_op(OpRequestRef op)
 {
@@ -323,11 +325,13 @@ bool OSDVol::op_must_wait_for_map(OSDMapRef curmap, OpRequestRef op)
   return false;
 }
 
+#if 0
 void OSDVol::take_waiters()
 {
   dout(10) << "take_waiters" << dendl;
   take_op_map_waiters();
 }
+#endif
 
 void OSDVol::handle_advance_map(OSDMapRef osdmap)
 {
@@ -351,6 +355,29 @@ void OSDVol::on_removal(ObjectStore::Transaction *t)
 }
 
 void OSDVol::do_request(OpRequestRef op, ThreadPool::TPHandle &handle)
+{
+  // There should be a permission check here, but it was done in
+  // termse of namespaces and pools and is sort of sloppy and is based
+  // on pool AUIDs and user AUIDs and is something we almost certainly
+  // do not want. However we do WANT a permissions check and once we
+  // have a system of permissions worked out, this is where we should
+  // check it.
+  assert(!op_must_wait_for_map(get_osdmap(), op));
+  if (can_discard_request(op)) {
+    return;
+  }
+
+  switch (op->get_req()->get_type()) {
+  case CEPH_MSG_OSD_OP:
+    do_op(op); // do it now
+    break;
+
+  default:
+    assert(0 == "bad message type in do_request");
+  }
+}
+
+void OSDVol::do_request(OpRequestRef op)
 {
   // There should be a permission check here, but it was done in
   // termse of namespaces and pools and is sort of sloppy and is based

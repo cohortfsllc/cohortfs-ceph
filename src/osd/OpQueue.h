@@ -34,6 +34,7 @@
 #define CACHE_PAD(_n) char __pad ## _n [CACHE_LINE_SIZE]
 
 class CephContext;
+class OSD;
 
 namespace cohort {
 
@@ -44,6 +45,8 @@ namespace cohort {
   public:
 
     typedef std::unique_lock<LK> unique_lock;
+
+    typedef void (*op_func) (OSD*, OpRequest*);
 
     /* public flag values */
     static constexpr uint32_t FLAG_NONE = 0x0000;
@@ -63,7 +66,7 @@ namespace cohort {
       Worker(Lane& _l, int timeout_s)
 	: lane(_l) {
       }
-    };
+    }; /* Worker */
 
     typedef typename Worker::Queue WorkerQueue;
 
@@ -87,18 +90,35 @@ namespace cohort {
       static constexpr uint32_t FLAG_NONE = 0x0000;
       static constexpr uint32_t FLAG_SHUTDOWN = 0x0001;
 
-      Band band[2]; // band 0 is baseline, 1 is urgent
+      Band bands[2]; // band 0 is baseline, 1 is urgent
       std::mutex mtx;
       std::condition_variable cv;
       WorkerQueue workers;
+      op_func dequeue_op_func;
+      OpQueue* op_q;
+      OSD* osd;
+      uint32_t start_thresh;
+      uint32_t n_active;
       uint32_t flags;
       CACHE_PAD(0);
 
-      Lane() {}
+      Lane(OpQueue* _q=NULL, uint32_t _start_thresh = 10)
+	: op_q(_q), start_thresh(_start_thresh)
+      {}
 
-      void run(Worker& wk) {
+      void spawn_worker() {
+	/* ASSERT mtx LOCKED */
+	Worker* worker = new Worker(*this, 120);
+	workers.push_back(*worker);
+	auto fn = [this, worker]() {
+	  this->run(worker);
+	};
+	worker->thread = std::thread(fn);
+      }
 
-	std::unique_lock<std::mutex> lk(mtx, std::defer_lock);
+      void run(Worker* worker) {
+
+	std::unique_lock<std::mutex> lane_lk(mtx, std::defer_lock);
 
 	std::array<enum Bands, 3> cycle = {
 	  Bands::HIGH, Bands::BASE, Bands::HIGH
@@ -107,41 +127,69 @@ namespace cohort {
       restart:
 	for (;;) {
 	  int n_reqs = 0;
-	  for (int ix = 0; ix < cycle.size(); ++ix) {
-	    Band& band = band[int(cycle[ix])];
-	    unique_lock lk(band.producer_lk);
-	    if (! band.producer_q.empty()) {
-	      OpRequest& op = band.producer_q.back();
-	      band.producer_q.pop_back();
+	  uint32_t size, size_max = 0;
+	  for (unsigned int ix = 0; ix < cycle.size(); ++ix) {
+	    Band& b = bands[int(cycle[ix])];
+	    unique_lock lk(b.producer_lk);
+	    size = b.producer_q.size();
+	    if (size) {
+	      OpRequest& op = b.producer_q.back();
+	      b.producer_q.pop_back();
+	      if (size > size_max)
+		size_max = size; 
 	      ++n_reqs;
-	      // XXXX do it	      
+	      ++n_active;
+	      /* dequeue op */
+	      dequeue_op_func(osd, &op);
+	      --n_active;
 	    }
 	  }
 
 	  /* try again if we did any work */
-	  if (n_reqs)
+	  if (n_reqs) {
+	    if (size_max > start_thresh) {
+	      lane_lk.lock();
+	      spawn_worker();
+	      lane_lk.unlock();
+	    }
 	    continue;
+	  }
 	  
 	  ceph::mono_time timeout =
 	    ceph::mono_clock::now() + std::chrono::seconds(120);
-	  lk.lock();
-	  workers.push_back(wk);
-	  std::cv_status r = cv.wait_until(lk, timeout);
-	  workers.erase(workers.s_iterator_to(wk));
-	  lk.unlock();
+	  lane_lk.lock();
+	  workers.push_back(*worker);
+	  std::cv_status r = cv.wait_until(lane_lk, timeout);
+	  workers.erase(workers.s_iterator_to(*worker));
+	  lane_lk.unlock();
 	  if (r != std::cv_status::timeout) {
 	    /* signalled! */
 	    goto restart;
 	  }
 	} /* for (inf) */
 
+	delete worker;
 	/* thread exit */
 
       } /* run */
 
-    };
+    }; /* Lane */
 
     Lane qlane[N];
+
+    uint8_t thread_lowat;
+    uint8_t thread_hiwat;
+
+    OpQueue(OSD* osd, op_func func, uint8_t lowat=1, uint8_t hiwat=2)
+      : thread_lowat(lowat),
+	thread_hiwat(hiwat) {
+      for (int ix = 0; ix < N; ++ix) {
+	Lane& lane = qlane[ix];
+	lane.op_q = this;
+	lane.dequeue_op_func = func;
+      }
+      /* XXXX start stuff */
+    }
 
     Lane& lane_of_scalar(uint64_t k) {
       return qlane[(k % N)];
@@ -149,12 +197,19 @@ namespace cohort {
 
     void enqueue(uint64_t k, OpRequest& op, enum Bands b, uint32_t flags) {
       Lane& lane = lane_of_scalar(k);
-      Band& band = lane.band[int(b)];
+      Band& band = lane.bands[int(b)];
       unique_lock lk(band.producer_lk, std::defer_lock);
-      if (flags & FLAG_LOCK)
-	lk.lock();
       band.producer_q.push_back(op);
-    }
+      if (! lane.n_active) {
+	/* maybe signal a worker */
+	lk.unlock();
+	std::unique_lock<std::mutex> lk(lane.mtx);
+	if (lane.workers.size())
+	  lane.cv.notify_one();
+	else
+	  lane.spawn_worker();
+      }
+    } /* enqueue */
 
     void shutdown() {
       for (int ix = 0; ix < N; ++ix) {
@@ -169,7 +224,7 @@ namespace cohort {
 	}
       }
     } /* shutdown */
- };
+  }; /* OpQueue */
 
 } // namespace cohort
 

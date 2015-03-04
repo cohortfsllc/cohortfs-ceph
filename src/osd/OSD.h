@@ -98,7 +98,9 @@ private:
   Messenger *&client_xio_messenger;
 public:
   MonClient   *&monc;
+#if 0
   ThreadPool::WorkQueueVal<pair<OSDVolRef, OpRequestRef>, OSDVolRef> &op_wq;
+#endif
   ClassHandler	*&class_handler;
 
   void dequeue_vol(OSDVol *v, list<OpRequestRef> *dequeued);
@@ -552,6 +554,7 @@ private:
   typedef cohort::OpQueue<cohort::SpinLock, n_lanes> MultiQueue;
   MultiQueue multi_wq;
 
+#if 0 /* XXXX */
   struct OpWQ: public ThreadPool::WorkQueueVal<pair<OSDVolRef, OpRequestRef>,
 					       OSDVolRef > {
     std::mutex qlock;
@@ -614,6 +617,12 @@ private:
   void dequeue_op(
     OSDVolRef vol, OpRequestRef op,
     ThreadPool::TPHandle &handle);
+
+#endif /* XXXX */
+
+  /* XXXX the new multi_wq dequeue function */
+  static void static_dequeue_op(OSD* osd, OpRequest* op);
+  void dequeue_op_slimshady2(OpRequestRef op);
 
   friend class OSDVol;
 
@@ -685,6 +694,7 @@ protected:
 
 protected:
   // -- placement groups --
+  std::mutex vol_lock; // XXXX TODO: replace w/lanes */
   std::map<boost::uuids::uuid, OSDVolRef> vol_map;
 
   bool _have_vol(const boost::uuids::uuid& volume);
