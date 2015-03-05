@@ -560,9 +560,6 @@ void OSDVol::get_watchers(list<obj_watch_item_t> &vol_watchers)
   }
 }
 
-void intrusive_ptr_add_ref(OSDVol *vol) { vol->get(); }
-void intrusive_ptr_release(OSDVol *vol) { vol->put(); }
-
 int OSDVol::whoami() {
   return osd->whoami;
 }
@@ -2679,11 +2676,6 @@ ceph_tid_t OSDVol::get_tid() {
 LogClientTemp OSDVol::clog_error() {
   return osd->clog.error();
 }
-
-void intrusive_ptr_add_ref(OSDVol::Mutation *mutation)
-{ mutation->get(); }
-void intrusive_ptr_release(OSDVol::Mutation *mutation)
-{ mutation->put(); }
 
 // From the Backend
 
