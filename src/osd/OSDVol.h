@@ -99,7 +99,7 @@ public:
   }
 
   ObjectContextRef get_obc(
-    const oid_t& oid,
+    const hoid_t& oid,
     map<string, bufferlist>& attrs) {
     return get_object_context(oid, true, &attrs);
   }
@@ -152,7 +152,7 @@ public:
 
     interval_set<uint64_t> modified_ranges;
     ObjectContextRef obc;
-    map<oid_t,ObjectContextRef> src_obc;
+    map<hoid_t,ObjectContextRef> src_obc;
 
     int data_off; // FIXME: may want to kill this msgr hint off at some point!
 
@@ -251,7 +251,7 @@ public:
 
     OpContext* ctx;
     ObjectContextRef obc;
-    map<oid_t,ObjectContextRef> src_obc;
+    map<hoid_t,ObjectContextRef> src_obc;
 
     ceph_tid_t tid;
 
@@ -409,7 +409,7 @@ protected:
   void simple_mutation_submit(Mutation* mutation);
 
   // projected object info
-  SharedPtrRegistry<oid_t, ObjectContext> object_contexts;
+  SharedPtrRegistry<hoid_t, ObjectContext> object_contexts;
 
 public:
   bool deleting;  // true while in removing or OSD is shutting down
@@ -476,13 +476,13 @@ public:
 protected:
   ObjectContextRef create_object_context(const object_info_t& oi);
   ObjectContextRef get_object_context(
-    const oid_t& soid,
+    const hoid_t& soid,
     bool can_create,
     map<string, bufferlist>* attrs = 0
     );
 
   void context_registry_on_change();
-  int find_object_context(const oid_t& oid,
+  int find_object_context(const hoid_t& oid,
 			  ObjectContextRef* pobc,
 			  bool can_create);
 
@@ -564,7 +564,7 @@ private:
 public:
   void clear_primary_state();
   void remove_object(
-    ObjectStore::Transaction& t, const oid_t& soid);
+    ObjectStore::Transaction& t, const hoid_t& soid);
 
   void trim_write_ahead();
 

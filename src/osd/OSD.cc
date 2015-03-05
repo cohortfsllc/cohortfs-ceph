@@ -536,7 +536,7 @@ bool OSD::asok_command(string command, cmdmap_t& cmdmap, string format,
 
       f->open_array_section("watch");
 
-      f->dump_string("object", it->oid.name);
+      f->dump_string("object", it->oid.oid.name);
 
       f->open_object_section("entity_name");
       it->wi.name.dump(f);
