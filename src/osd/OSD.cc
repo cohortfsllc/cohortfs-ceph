@@ -150,11 +150,6 @@ OSDService::OSDService(OSD *osd) :
 
 OSDService::~OSDService()
 {
-  if (meta_col) {
-    if (infos_oh)
-      store->put_object(infos_oh);
-    store->close_collection(meta_col);
-  }
 }
 
 void OSDService::need_heartbeat_peer_update()
@@ -876,12 +871,19 @@ int OSD::shutdown()
   // note unmount epoch
   dout(10) << "noting clean unmount in epoch " << osdmap->get_epoch() << dendl;
   superblock.mounted = boot_epoch;
-  ObjectStore::Transaction t;
-  write_superblock(service.meta_col, t);
-  int r = store->apply_transaction(t);
-  if (r) {
-    derr << "OSD::shutdown: error writing superblock: "
-	 << cpp_strerror(r) << dendl;
+  int r;
+  {
+    ObjectStore::Transaction t;
+    write_superblock(service.meta_col, t);
+    r = store->apply_transaction(t);
+    if (r) {
+      derr << "OSD::shutdown: error writing superblock: "
+          << cpp_strerror(r) << dendl;
+    }
+    if (service.infos_oh)
+      store->put_object(service.infos_oh);
+    store->close_collection(service.meta_col);
+    service.meta_col = nullptr;
   }
 
   dout(10) << "syncing store" << dendl;
