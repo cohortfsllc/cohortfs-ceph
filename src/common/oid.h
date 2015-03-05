@@ -236,6 +236,11 @@ inline bool operator==(const hoid_t& lhs, const hoid_t& rhs)
   return (lhs.oid == rhs.oid);
 }
 
+inline bool operator!=(const hoid_t& lhs, const hoid_t& rhs)
+{
+  return !(lhs.oid == rhs.oid);
+}
+
 inline bool operator<=(const hoid_t& lhs, const hoid_t& rhs)
 {
   return (lhs < rhs) || (lhs == rhs);

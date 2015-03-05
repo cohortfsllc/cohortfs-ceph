@@ -681,9 +681,8 @@ static inline ostream& operator<<(ostream& out, const notify_info_t& n) {
   return out << "notify(cookie " << n.cookie << " " << n.timeout << "s)";
 }
 
-
 struct object_info_t {
-  oid_t soid;
+  hoid_t oid;
 
   eversion_t version, prior_version;
   version_t user_version;
@@ -748,8 +747,8 @@ struct object_info_t {
       truncate_seq(0), truncate_size(0), total_real_length(0)
   {}
 
-  object_info_t(const oid_t& s)
-    : soid(s),
+  object_info_t(const hoid_t& _oid)
+    : oid(_oid),
       user_version(0), size(0), flags((flag_t)0),
       truncate_seq(0), truncate_size(0), total_real_length(0) {}
 
@@ -979,7 +978,7 @@ public:
 
 inline ostream& operator<<(ostream& out, const ObjectState& obs)
 {
-  out << obs.oi.soid;
+  out << obs.oi.oid;
   if (!obs.exists)
     out << "(dne)";
   return out;
@@ -1089,7 +1088,7 @@ struct watch_item_t {
 WRITE_CLASS_ENCODER(watch_item_t)
 
 struct obj_watch_item_t {
-  oid_t oid;
+  hoid_t oid;
   watch_item_t wi;
 };
 

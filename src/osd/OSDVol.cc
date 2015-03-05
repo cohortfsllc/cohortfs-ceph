@@ -100,10 +100,10 @@ std::string OSDVol::gen_prefix() const
 }
 
 void OSDVol::remove_object(
-  ObjectStore::Transaction &t, const oid_t &soid)
+  ObjectStore::Transaction &t, const hoid_t &oid)
 {
   uint16_t c_ix = t.push_col(coll);
-  uint16_t o_ix = t.push_oid(soid); // XXXX oid?  open it?
+  uint16_t o_ix = t.push_oid(oid); // XXXX oid?  open it?
   t.remove(c_ix, o_ix);
 }
 
@@ -350,7 +350,7 @@ void OSDVol::do_op(OpRequestRef op)
   ObjectContextRef obc;
   bool can_create = op->may_write() || op->may_cache();
   // XXX For Stripulation
-  const oid_t oid(m->get_oid());
+  const hoid_t oid(m->get_oid());
 
   int r = find_object_context(
     oid, &obc, can_create);
@@ -363,7 +363,7 @@ void OSDVol::do_op(OpRequestRef op)
   dout(25) << __func__ << " oi " << obc->obs.oi << dendl;
 
   // src_objs
-  map<oid_t,ObjectContextRef> src_obc;
+  map<hoid_t,ObjectContextRef> src_obc;
   for (vector<OSDOp>::iterator p = m->ops.begin();
        p != m->ops.end(); ++p) {
     OSDOp& osd_op = *p;
@@ -372,7 +372,7 @@ void OSDVol::do_op(OpRequestRef op)
       continue;
     if (osd_op.oid.name.length()) {
       // For Stripulation
-      oid_t src_oid(osd_op.oid);
+      const hoid_t& src_oid = osd_op.oid;
       if (!src_obc.count(src_oid)) {
 	ObjectContextRef sobc;
 
@@ -382,9 +382,9 @@ void OSDVol::do_op(OpRequestRef op)
 	  osd->reply_op_error(op, r);
 	  return;
 	}
-	if (sobc->obs.oi.soid != obc->obs.oi.soid) {
-	  dout(1) << " src_oid " << sobc->obs.oi.soid << " != "
-		  << obc->obs.oi.soid << dendl;
+	if (sobc->obs.oi.oid != obc->obs.oi.oid) {
+	  dout(1) << " src_oid " << sobc->obs.oi.oid << " != "
+		  << obc->obs.oi.oid << dendl;
 	  osd->reply_op_error(op, -EINVAL);
 	} else {
 	  dout(10) << " src_oid " << src_oid << " obc "
@@ -482,7 +482,7 @@ void OSDVol::get_obc_watchers(ObjectContextRef obc,
 	++j) {
     obj_watch_item_t owi;
 
-    owi.oid = obc->obs.oi.soid;
+    owi.oid = obc->obs.oi.oid;
     owi.wi.addr = j->second->get_peer_addr();
     owi.wi.name = j->second->get_entity();
     owi.wi.cookie = j->second->get_cookie();
@@ -499,7 +499,7 @@ void OSDVol::get_obc_watchers(ObjectContextRef obc,
 
 void OSDVol::populate_obc_watchers(ObjectContextRef obc)
 {
-  dout(10) << "populate_obc_watchers " << obc->obs.oi.soid << dendl;
+  dout(10) << "populate_obc_watchers " << obc->obs.oi.oid << dendl;
   assert(obc->watchers.empty());
   // populate unconnected_watchers
   for (const auto& p : obc->obs.oi.watchers) {
@@ -524,7 +524,7 @@ void OSDVol::populate_obc_watchers(ObjectContextRef obc)
 void OSDVol::check_blacklisted_obc_watchers(ObjectContextRef obc)
 {
   dout(20) << "OSDVol::check_blacklisted_obc_watchers for obc "
-	   << obc->obs.oi.soid << dendl;
+	   << obc->obs.oi.oid << dendl;
   for (auto k = obc->watchers.begin();
        k != obc->watchers.end();) {
     //Advance iterator now so handle_watch_timeout() can erase element
@@ -546,14 +546,14 @@ void OSDVol::check_blacklisted_watchers()
 {
   dout(20) << "OSDVol::check_blacklisted_watchers for vol "
 	   << info.volume << dendl;
-  pair<oid_t, ObjectContextRef> i;
+  pair<hoid_t, ObjectContextRef> i;
   while (object_contexts.get_next(i.first, &i))
     check_blacklisted_obc_watchers(i.second);
 }
 
 void OSDVol::get_watchers(list<obj_watch_item_t> &vol_watchers)
 {
-  pair<oid_t, ObjectContextRef> i;
+  pair<hoid_t, ObjectContextRef> i;
   while (object_contexts.get_next(i.first, &i)) {
     ObjectContextRef obc(i.second);
     get_obc_watchers(obc, vol_watchers);
@@ -588,7 +588,7 @@ void OSDVol::OpContext::start_async_reads(OSDVol *vol)
 {
   inflightreads = 1;
   vol->objects_read_async(
-    obc->obs.oi.soid,
+    obc->obs.oi.oid,
     pending_async_reads,
     new OnReadComplete(vol, this));
   pending_async_reads.clear();
@@ -615,8 +615,8 @@ void OSDVol::execute_ctx(OpContext *ctx)
   OpRequestRef op = ctx->op;
   MOSDOp *m = static_cast<MOSDOp*>(op->get_req());
   ObjectContextRef obc = ctx->obc;
-  const oid_t& soid = obc->obs.oi.soid;
-  map<oid_t, ObjectContextRef>& src_obc = ctx->src_obc;
+  const hoid_t& soid = obc->obs.oi.oid;
+  map<hoid_t, ObjectContextRef>& src_obc = ctx->src_obc;
 
   // this method must be idempotent since we may call it several times
   // before we finally apply the resulting transaction.
@@ -649,7 +649,7 @@ void OSDVol::execute_ctx(OpContext *ctx)
     dout(10) << " taking ondisk_read_lock" << dendl;
     obc->ondisk_read_lock();
   }
-  for (map<oid_t,ObjectContextRef>::iterator p = src_obc.begin();
+  for (map<hoid_t,ObjectContextRef>::iterator p = src_obc.begin();
        p != src_obc.end(); ++p) {
     dout(10) << " taking ondisk_read_lock for src "
 	     << p->first << dendl;
@@ -662,7 +662,7 @@ void OSDVol::execute_ctx(OpContext *ctx)
     dout(10) << " dropping ondisk_read_lock" << dendl;
     obc->ondisk_read_unlock();
   }
-  for (map<oid_t,ObjectContextRef>::iterator p = src_obc.begin();
+  for (map<hoid_t,ObjectContextRef>::iterator p = src_obc.begin();
        p != src_obc.end(); ++p) {
     dout(10) << " dropping ondisk_read_lock for src "
 	     << p->first << dendl;
@@ -825,9 +825,8 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
   int result = 0;
   ObjectState& obs = ctx->new_obs;
   object_info_t& oi = obs.oi;
-#warning object_info_t should use hoid_t?
-  const oid_t& soid = oi.soid; // ctx->new_objs->obs.oi.soid
-  const oid_t& obc_soid = ctx->obc->obs.oi.soid;
+  const hoid_t& soid = oi.oid; // ctx->new_objs->obs.oi.oid
+  const hoid_t& obc_soid = ctx->obc->obs.oi.oid;
 
   ObjectStore::Transaction* t = ctx->op_t;  
   bool first_read = true;
@@ -859,7 +858,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
     ObjectContextRef src_obc;
     if (ceph_osd_op_type_multi(op.op)) {
       // For stripulation
-      oid_t src_obj(osd_op.oid);
+      hoid_t src_obj(osd_op.oid);
       src_obc = ctx->src_obc[src_obj];
       dout(10) << " src_obj " << src_obj << " obc " << src_obc
 	       << dendl;
@@ -1136,7 +1135,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	bp.copy(op.xattr.name_len, aname);
 	string name = "_" + aname;
 	// XXXX
-	int r = objects_get_attr(ctx->obc->obs.oi.soid,
+	int r = objects_get_attr(ctx->obc->obs.oi.oid,
 				 name,
 				 &(osd_op.outdata));
 	if (r >= 0) {
@@ -1181,12 +1180,12 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	bufferlist xattr;
 	if (op.op == CEPH_OSD_OP_CMPXATTR)
 	  result = objects_get_attr(
-	    ctx->obc->obs.oi.soid,
+	    ctx->obc->obs.oi.oid,
 	    name,
 	    &xattr);
 	else
 	  result = objects_get_attr(
-	    src_obc->obs.oi.soid,
+	    src_obc->obs.oi.oid,
 	    name,
 	    &xattr);
 	if (result < 0 && result != -EEXIST && result != -ENODATA)
@@ -2021,7 +2020,7 @@ inline int OSDVol::_delete_obj(OpContext *ctx, bool no_whiteout)
 {
   ObjectState& obs = ctx->new_obs;
   object_info_t& oi = obs.oi;
-  const oid_t& soid = oi.soid;
+  const hoid_t& soid = oi.oid;
   ObjectStore::Transaction* t = ctx->op_t;
 
   uint16_t c_ix = t->push_col(coll);
@@ -2202,7 +2201,7 @@ int OSDVol::prepare_transaction(OpContext *ctx)
 void OSDVol::finish_ctx(OpContext *ctx)
 {
   ObjectStore::Transaction* t = ctx->op_t;
-  const oid_t& soid = ctx->obs->oi.soid;
+  const hoid_t& soid = ctx->obs->oi.oid;
 
   dout(20) << __func__ << " " << soid << " " << ctx
 	   << dendl;
@@ -2241,10 +2240,10 @@ void OSDVol::finish_ctx(OpContext *ctx)
 
     bufferlist bv(sizeof(ctx->new_obs.oi));
     ::encode(ctx->new_obs.oi, bv);
-    uint16_t o_ix = t->push_oid(ctx->obc->obs.oi.soid); // XXXX oid?
+    uint16_t o_ix = t->push_oid(ctx->obc->obs.oi.oid); // XXXX oid?
     t->setattr(c_ix, o_ix, OI_ATTR, bv);
   } else {
-    ctx->new_obs.oi = object_info_t(ctx->obc->obs.oi.soid);
+    ctx->new_obs.oi = object_info_t(ctx->obc->obs.oi.oid);
   }
 
   // apply new object state.
@@ -2462,7 +2461,7 @@ void OSDVol::remove_mutation(Mutation *mutation)
 
 OSDVol::Mutation *OSDVol::simple_mutation_create(ObjectContextRef obc)
 {
-  dout(20) << __func__ << " " << obc->obs.oi.soid << dendl;
+  dout(20) << __func__ << " " << obc->obs.oi.oid << dendl;
   vector<OSDOp> ops;
   ceph_tid_t tid = osd->get_tid();
   osd_reqid_t reqid(osd->get_cluster_msgr_name(), 0, tid);
@@ -2512,7 +2511,7 @@ void OSDVol::handle_watch_timeout(WatchRef watch)
 
   ObjectStore::Transaction *t = ctx->op_t;
   uint16_t c_ix = t->push_col(coll);
-  uint16_t o_ix = t->push_oid(obc->obs.oi.soid); // XXXX oid? open it?
+  uint16_t o_ix = t->push_oid(obc->obs.oi.oid); // XXXX oid? open it?
 
   obc->obs.oi.prior_version = mutation->obc->obs.oi.version;
   obc->obs.oi.version = ctx->at_version;
@@ -2528,20 +2527,21 @@ void OSDVol::handle_watch_timeout(WatchRef watch)
 
 ObjectContextRef OSDVol::create_object_context(const object_info_t& oi)
 {
-  ObjectContextRef obc(object_contexts.lookup_or_create(oi.soid));
+  ObjectContextRef obc(object_contexts.lookup_or_create(oi.oid));
   obc->obs.oi = oi;
   obc->obs.exists = false;
   dout(10) << "create_object_context " << (void*)obc.get()
-	   << " " << oi.soid
+	   << " " << oi.oid
 	   << " " << dendl;
   populate_obc_watchers(obc);
   return obc;
 }
 
-ObjectContextRef OSDVol::get_object_context(
-  const oid_t& soid, bool can_create, map<string, bufferlist> *attrs)
+ObjectContextRef OSDVol::get_object_context(const hoid_t& oid,
+					    bool can_create,
+					    map<string, bufferlist> *attrs)
 {
-  ObjectContextRef obc = object_contexts.lookup(soid);
+  ObjectContextRef obc = object_contexts.lookup(oid);
   if (obc) {
     dout(10) << __func__ << ": found obc in cache: " << obc
 	     << dendl;
@@ -2552,22 +2552,22 @@ ObjectContextRef OSDVol::get_object_context(
       assert(attrs->count(OI_ATTR));
       bv = attrs->find(OI_ATTR)->second;
     } else {
-      int r = objects_get_attr(soid, OI_ATTR, &bv);
+      int r = objects_get_attr(oid, OI_ATTR, &bv);
       if (r < 0) {
 	if (!can_create) {
-	  dout(10) << __func__ << ": no obc for soid "
-		   << soid << " and !can_create"
+	  dout(10) << __func__ << ": no obc for oid "
+		   << oid << " and !can_create"
 		   << dendl;
 	  return ObjectContextRef();   // -ENOENT!
 	}
 
-	dout(10) << __func__ << ": no obc for soid "
-		 << soid << " but can_create"
+	dout(10) << __func__ << ": no obc for oid "
+		 << oid << " but can_create"
 		 << dendl;
 	// new object.
-	object_info_t oi(soid);
+	object_info_t oi(oid); 	/* XXXX optimize? can create take hoid_t? */
 	obc = create_object_context(oi);
-	dout(10) << __func__ << ": " << obc << " " << soid
+	dout(10) << __func__ << ": " << obc << " " << oid
 		 << " " << obc->rwstate
 		 << " oi: " << obc->obs.oi << dendl;
 	return obc;
@@ -2576,7 +2576,7 @@ ObjectContextRef OSDVol::get_object_context(
 
     object_info_t oi(bv);
 
-    obc = object_contexts.lookup_or_create(oi.soid);
+    obc = object_contexts.lookup_or_create(oi.oid);
     obc->obs.oi = oi;
     obc->obs.exists = true;
 
@@ -2585,7 +2585,7 @@ ObjectContextRef OSDVol::get_object_context(
     dout(10) << __func__ << ": creating obc from disk: " << obc
 	     << dendl;
   }
-  dout(10) << __func__ << ": " << obc << " " << soid
+  dout(10) << __func__ << ": " << obc << " " << oid
 	   << " " << obc->rwstate
 	   << " oi: " << obc->obs.oi << dendl;
   return obc;
@@ -2593,7 +2593,7 @@ ObjectContextRef OSDVol::get_object_context(
 
 void OSDVol::context_registry_on_change()
 {
-  pair<oid_t, ObjectContextRef> i;
+  pair<hoid_t, ObjectContextRef> i;
   while (object_contexts.get_next(i.first, &i)) {
     ObjectContextRef obc(i.second);
     if (obc) {
@@ -2617,7 +2617,7 @@ void OSDVol::context_registry_on_change()
  * If we return an error but do not set *pmissing, then we know the
  * object does not exist.
  */
-int OSDVol::find_object_context(const oid_t& oid,
+int OSDVol::find_object_context(const hoid_t& oid,
 				ObjectContextRef *pobc,
 				bool can_create)
 {
@@ -2783,11 +2783,11 @@ void OSDVol::objects_read_async(const hoid_t& oid,
 void OSDVol::issue_mutation(Mutation *mutation)
 {
   OpContext *ctx = mutation->ctx;
-  const oid_t& soid = ctx->obs->oi.soid;
+  const hoid_t& oid = ctx->obs->oi.oid;
   ObjectStore::Transaction *op_t = ctx->op_t;
 
   dout(7) << "issue_mutation tid " << mutation->tid
-	  << " o " << soid
+	  << " o " << oid
 	  << dendl;
 
   mutation->v = ctx->at_version;

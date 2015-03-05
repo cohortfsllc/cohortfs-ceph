@@ -716,7 +716,7 @@ void object_info_t::copy_user_bits(const object_info_t& other)
 void object_info_t::encode(bufferlist& bl) const
 {
   ENCODE_START(13, 8, bl);
-  ::encode(soid, bl);
+  ::encode(oid, bl);
   ::encode(version, bl);
   ::encode(prior_version, bl);
   ::encode(last_reqid, bl);
@@ -736,7 +736,7 @@ void object_info_t::encode(bufferlist& bl) const
 void object_info_t::decode(bufferlist::iterator& bl)
 {
   DECODE_START_LEGACY_COMPAT_LEN(13, 8, 8, bl);
-  ::decode(soid, bl);
+  ::decode(oid, bl);
   ::decode(version, bl);
   ::decode(prior_version, bl);
   ::decode(last_reqid, bl);
@@ -757,7 +757,7 @@ void object_info_t::decode(bufferlist::iterator& bl)
 void object_info_t::dump(Formatter *f) const
 {
   f->open_object_section("oid_t");
-  soid.dump(f);
+  oid.dump(f);
   f->close_section();
   f->dump_stream("version") << version;
   f->dump_stream("prior_version") << prior_version;
@@ -792,7 +792,7 @@ void object_info_t::generate_test_instances(list<object_info_t*>& o)
 
 ostream& operator<<(ostream& out, const object_info_t& oi)
 {
-  out << oi.soid << "(" << oi.version
+  out << oi.oid << "(" << oi.version
       << " " << oi.last_reqid;
   out << " wrlock_by=" << oi.wrlock_by;
   if (oi.flags)
