@@ -125,19 +125,22 @@ public:
 
     bool modify; // (force) modification (even if op_t is empty)
     bool user_modify; // user-visible modification
-
-    // side effects
-    list<watch_info_t> watch_connects;
-    list<watch_info_t> watch_disconnects;
-    list<notify_info_t> notifies;
-    struct NotifyAck {
-      boost::optional<uint64_t> watch_cookie;
-      uint64_t notify_id;
-      NotifyAck(uint64_t notify_id) : notify_id(notify_id) {}
-      NotifyAck(uint64_t notify_id, uint64_t cookie)
-	: watch_cookie(cookie), notify_id(notify_id) {}
+    
+    struct WatchesNotifies {
+      // side effects
+      vector<watch_info_t> watch_connects;
+      vector<watch_info_t> watch_disconnects;
+      vector<notify_info_t> notifies;
+      struct NotifyAck {
+	boost::optional<uint64_t> watch_cookie;
+	uint64_t notify_id;
+	NotifyAck(uint64_t notify_id) : notify_id(notify_id) {}
+	NotifyAck(uint64_t notify_id, uint64_t cookie)
+	  : watch_cookie(cookie), notify_id(notify_id) {}
+      };
+      vector<NotifyAck> notify_acks;
     };
-    list<NotifyAck> notify_acks;
+    WatchesNotifies* watches_notifies;
 
     ceph::real_time mtime;
     eversion_t at_version;       // vol's current version pointer
@@ -167,6 +170,15 @@ public:
     int async_read_result;
     unsigned inflightreads;
     friend struct OnReadComplete;
+
+    bool has_watches() {
+      return (!!watches_notifies);
+    }
+    WatchesNotifies* get_watches() {
+      if (! watches_notifies)
+	watches_notifies = new WatchesNotifies();
+      return watches_notifies;
+    }
     void start_async_reads(OSDVol* vol);
     void finish_read(OSDVol* vol);
     bool async_reads_complete() {
@@ -187,6 +199,7 @@ public:
       op(_op), reqid(_reqid), ops(_ops), obs(_obs),
       new_obs(_obs->oi, _obs->exists),
       modify(false), user_modify(false),
+      watches_notifies(nullptr),
       user_at_version(0),
       current_osd_subop_num(0),
       op_t(NULL),
@@ -213,6 +226,8 @@ public:
 	   pending_async_reads.erase(i++)) {
 	delete i->second.second;
       }
+      if (watches_notifies)
+	delete watches_notifies;
       assert(on_finish == NULL);
     }
     void finish(int r) {
