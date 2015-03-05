@@ -47,6 +47,8 @@ void Journaler::create()
   fetch_len = 1<<22;	// was:? stripe_count * object_size * periods
 
 #define X_stripecountxobjectsize (1<<22)	// was:? stripe_count * object_size
+
+    std::lock_guard<JMutex> l(write_mutex);
   prezeroing_pos = prezero_pos = write_pos = flush_pos = safe_pos =
     read_pos = requested_pos = received_pos =
     expire_pos = trimming_pos = trimmed_pos = X_stripecountxobjectsize;
@@ -166,7 +168,10 @@ void Journaler::_finish_reread_head(int r, bufferlist& bl, Context *finish)
   Header h;
   bufferlist::iterator p = bl.begin();
   ::decode(h, p);
-  prezeroing_pos = prezero_pos = write_pos = flush_pos = safe_pos = h.write_pos;
+  {
+    std::lock_guard<JMutex> l(write_mutex);
+    prezeroing_pos = prezero_pos = write_pos = flush_pos = safe_pos = h.write_pos;
+  }
   expire_pos = h.expire_pos;
   trimmed_pos = trimming_pos = h.trimmed_pos;
   init_headers(h);
@@ -218,7 +223,10 @@ void Journaler::_finish_read_head(int r, bufferlist& bl)
     return;
   }
 
-  prezeroing_pos = prezero_pos = write_pos = flush_pos = safe_pos = h.write_pos;
+  {
+    std::lock_guard<JMutex> l(write_mutex);
+    prezeroing_pos = prezero_pos = write_pos = flush_pos = safe_pos = h.write_pos;
+  }
   read_pos = requested_pos = received_pos = expire_pos = h.expire_pos;
   trimmed_pos = trimming_pos = h.trimmed_pos;
 
@@ -251,11 +259,14 @@ void Journaler::reprobe(Context *finish)
 
 
 void Journaler::_finish_reprobe(int r, uint64_t new_end, Context *onfinish) {
-  assert(new_end >= write_pos || r < 0);
-  ldout(cct, 1) << "_finish_reprobe new_end = " << new_end
-	  << " (header had " << write_pos << ")."
-	  << dendl;
-  prezeroing_pos = prezero_pos = write_pos = flush_pos = safe_pos = new_end;
+  {
+    std::lock_guard<JMutex> l(write_mutex);
+    assert(new_end >= write_pos || r < 0);
+    ldout(cct, 1) << "_finish_reprobe new_end = " << new_end
+	    << " (header had " << write_pos << ")."
+	    << dendl;
+    prezeroing_pos = prezero_pos = write_pos = flush_pos = safe_pos = new_end;
+  }
   state = STATE_ACTIVE;
   onfinish->complete(r);
 }
@@ -266,22 +277,25 @@ void Journaler::_finish_probe_end(int r, uint64_t end)
   if (r < 0) { // error in probing
     goto out;
   }
-  if (((int64_t)end) == -1) {
-    end = write_pos;
-    ldout(cct, 1) << "_finish_probe_end write_pos = " << end
-	    << " (header had " << write_pos << "). log was empty. recovered."
-	    << dendl;
-    assert(0); // hrm.
-  } else {
-    assert(end >= write_pos);
-    ldout(cct, 1) << "_finish_probe_end write_pos = " << end
-	    << " (header had " << write_pos << "). recovered."
-	    << dendl;
+  {
+    std::lock_guard<JMutex> l(write_mutex);
+    if (((int64_t)end) == -1) {
+      end = write_pos;
+      ldout(cct, 1) << "_finish_probe_end write_pos = " << end
+	      << " (header had " << write_pos << "). log was empty. recovered."
+	      << dendl;
+      assert(0); // hrm.
+    } else {
+      assert(end >= write_pos);
+      ldout(cct, 1) << "_finish_probe_end write_pos = " << end
+	      << " (header had " << write_pos << "). recovered."
+	      << dendl;
+    }
+
+    state = STATE_ACTIVE;
+
+    prezeroing_pos = prezero_pos = write_pos = flush_pos = safe_pos = end;
   }
-
-  state = STATE_ACTIVE;
-
-  prezeroing_pos = prezero_pos = write_pos = flush_pos = safe_pos = end;
 
 out:
   // done.
@@ -413,11 +427,21 @@ void Journaler::_finish_flush(int r, uint64_t start, ceph::mono_time stamp)
 		 << dendl;
 
   // kick waiters <= safe_pos
-  while (!waitfor_safe.empty()) {
-    if (waitfor_safe.begin()->first > safe_pos)
-      break;
-    finish_contexts(waitfor_safe.begin()->second);
-    waitfor_safe.erase(waitfor_safe.begin());
+  for (;;) {
+    std::vector<Context *>c;
+    bool found = false;
+    {
+      std::lock_guard<JMutex> l(waitfor_mutex);
+      while (!waitfor_safe.empty()) {
+	auto p = waitfor_safe.begin();
+	if (p->first > safe_pos) break;
+	c.swap(p->second);
+	waitfor_safe.erase(p);
+	found = true;
+      }
+    }
+    if (!found) break;
+    finish_contexts(c);
   }
 }
 
@@ -426,6 +450,7 @@ uint64_t Journaler::append_entry(bufferlist& bl)
 {
   assert(!readonly);
   uint32_t s = bl.length();
+  std::lock_guard<JMutex> l(write_mutex);
 
   if (!cct->_conf->journaler_allow_split_entries) {
     // will we span a stripe boundary?
@@ -448,7 +473,7 @@ uint64_t Journaler::append_entry(bufferlist& bl)
       assert(bp.length() >= 4);
       write_buf.append(bp.c_str(), bp.length());
       // now flush.
-      flush();
+      _flush();
 
       ldout(cct, 12) << "append_entry skipped " << (write_pos-owp) << " bytes to " << write_pos << " to avoid spanning stripe boundary" << dendl;
     }
@@ -485,6 +510,7 @@ uint64_t Journaler::append_entry(bufferlist& bl)
 
 void Journaler::_do_flush(unsigned amount)
 {
+  assert(!!write_mutex);
   if (write_pos == flush_pos)
     return;
   assert(write_pos > flush_pos);
@@ -555,30 +581,57 @@ void Journaler::_do_flush(unsigned amount)
 }
 
 
-
 void Journaler::wait_for_flush(Context *onsafe)
 {
+  Context *c = 0;
+  {
+    std::lock_guard<JMutex> l1(write_mutex);
+    std::lock_guard<JMutex> l2(waitfor_mutex);
+    c = _wait_for_flush(onsafe);
+  }
+  if (c) {
+    c->complete(0);
+  }
+}
+
+Context * Journaler::_wait_for_flush(Context *onsafe)
+{
   assert(!readonly);
+  assert(!!write_mutex);
+  assert(!!waitfor_mutex);
+
+  if (!onsafe) return 0;
 
   // all flushed and safe?
   if (write_pos == safe_pos) {
     assert(write_buf.length() == 0);
     ldout(cct, 10) << "flush nothing to flush, (prezeroing/prezero)/write/flush/safe pointers at "
 	     << "(" << prezeroing_pos << "/" << prezero_pos << ")/" << write_pos << "/" << flush_pos << "/" << safe_pos << dendl;
-    if (onsafe) {
-      onsafe->complete(0);
+  } else {
+    // queue waiter
+      waitfor_safe[write_pos].push_back(onsafe);
       onsafe = 0;
-    }
-    return;
   }
-
-  // queue waiter
-  if (onsafe)
-    waitfor_safe[write_pos].push_back(onsafe);
+  return onsafe;
 }
 
 void Journaler::flush(Context *onsafe)
 {
+  std::lock_guard<JMutex> l(write_mutex);
+  _flush(onsafe);
+}
+
+class C_Journaler_do_wait_for_flush : public Context {
+  Journaler *journaler;
+  Context *onsafe;
+public:
+  C_Journaler_do_wait_for_flush(Journaler *j, Context *o) : journaler(j), onsafe(o) {}
+  void finish(int r) { journaler->wait_for_flush(onsafe); }
+};
+
+void Journaler::_flush(Context *onsafe)
+{
+  assert(!!write_mutex);
   assert(!readonly);
 
   if (write_pos == flush_pos) {
@@ -608,7 +661,9 @@ void Journaler::flush(Context *onsafe)
       // always flush
       _do_flush();
     }
-    wait_for_flush(onsafe);
+    C_OnFinisher *run_real_soon = new C_OnFinisher(new
+		C_Journaler_do_wait_for_flush(this, onsafe), finisher);
+    run_real_soon->finish(0);
   }
 
   // write head?
@@ -697,6 +752,7 @@ void Journaler::_prezeroed(int r, uint64_t start, uint64_t len)
     }
 
     if (waiting_for_zero) {
+      std::lock_guard<JMutex> l(write_mutex);
       _do_flush();
     }
   } else {
@@ -797,7 +853,10 @@ void Journaler::_assimilate_prefetch()
 void Journaler::_issue_read(uint64_t len)
 {
   // make sure we're fully flushed
-  _do_flush();
+  {
+    std::lock_guard<JMutex> l(write_mutex);
+    _do_flush();
+  }
 
   // stuck at safe_pos?
   //  (this is needed if we are reading the tail of a journal we are also writing to)
@@ -808,6 +867,7 @@ void Journaler::_issue_read(uint64_t len)
     if (flush_pos == safe_pos)
       flush();
     assert(flush_pos > safe_pos);
+    std::lock_guard<JMutex> l(waitfor_mutex);
     waitfor_safe[flush_pos].push_back(new C_RetryRead(this));
     return;
   }
@@ -914,6 +974,7 @@ bool Journaler::_is_readable()
 
   // partial fragment at the end?
   if (received_pos == write_pos) {
+    std::lock_guard<JMutex> l(write_mutex);
     ldout(cct, 10) << "is_readable() detected partial entry at tail, adjusting write_pos to " << read_pos << dendl;
 
     // adjust write_pos

@@ -50,7 +50,7 @@ void MDLog::init_journaler(VolumeRef &v)
   // log streamer
   if (journaler) delete journaler;
   journaler = new Journaler(ino, v, CEPH_FS_ONDISK_MAGIC, mds->objecter,
-			    &mds->timer);
+			    &mds->timer, &mds->finisher);
   assert(journaler->is_readonly());
   journaler->set_write_error_handler(new C_MDL_WriteError(this));
 }
@@ -122,13 +122,35 @@ void MDLog::append()
 
 void MDLog::start_entry(LogEvent *e)
 {
+  std::lock_guard<MDLogMutex> l(submit_mutex);
+  _start_entry(e);
+}
+
+void MDLog::submit_entry(LogEvent *le, Context *c)
+{
+  std::lock_guard<MDLogMutex> l(submit_mutex);
+  _submit_entry(le, c);
+}
+
+void MDLog::start_submit_entry(LogEvent *e, Context *c) {
+  std::lock_guard<MDLogMutex> l(submit_mutex);
+  _start_entry(e);
+  _submit_entry(e, c);
+}
+
+void MDLog::_start_entry(LogEvent *e)
+{
+  assert(!!submit_mutex);
+
   assert(cur_event == NULL);
   cur_event = e;
   e->set_start_off(get_write_pos());
 }
 
-void MDLog::submit_entry(LogEvent *le, Context *c)
+void MDLog::_submit_entry(LogEvent *le, Context *c)
 {
+  assert(!!submit_mutex);
+
   assert(!mds->is_any_replay());
   assert(le == cur_event);
   cur_event = NULL;
@@ -189,7 +211,7 @@ void MDLog::submit_entry(LogEvent *le, Context *c)
   } else if (journaler->get_write_pos()/period != last_seg/period) {
     ldout(mds->cct, 10) << "submit_entry also starting new segment: last = " << last_seg
 	     << ", cur pos = " << journaler->get_write_pos() << dendl;
-    start_new_segment();
+    _start_new_segment();
 #endif
   } else if (mds->cct->_conf->mds_debug_subtrees &&
 	     le->get_type() != EVENT_SUBTREEMAP_TEST) {
@@ -232,18 +254,39 @@ void MDLog::cap()
 // -----------------------------
 // segments
 
+void MDLog::prepare_new_segment()
+{
+  std::lock_guard<MDLogMutex> l(submit_mutex);
+  _prepare_new_segment();
+}
+
 void MDLog::start_new_segment(Context *onsync)
 {
-  prepare_new_segment();
-  journal_segment_subtree_map();
+  std::lock_guard<MDLogMutex> l(submit_mutex);
+  _start_new_segment(onsync);
+}
+
+void MDLog::journal_segment_subtree_map()
+{
+  std::lock_guard<MDLogMutex> l(submit_mutex);
+  _journal_segment_subtree_map();
+}
+
+void MDLog::_start_new_segment(Context *onsync)
+{
+  assert(!!submit_mutex);
+
+  _prepare_new_segment();
+  _journal_segment_subtree_map();
   if (onsync) {
     wait_for_safe(onsync);
     flush();
   }
 }
 
-void MDLog::prepare_new_segment()
+void MDLog::_prepare_new_segment()
 {
+  assert(!!submit_mutex);
   ldout(mds->cct, 7) << __func__ << " at " << journaler->get_write_pos() << dendl;
 
   segments[journaler->get_write_pos()] = new LogSegment(journaler->get_write_pos());
@@ -254,10 +297,12 @@ void MDLog::prepare_new_segment()
   mds->mdcache->advance_stray();
 }
 
-void MDLog::journal_segment_subtree_map()
+void MDLog::_journal_segment_subtree_map()
 {
+  assert(!!submit_mutex);
+
   ldout(mds->cct, 7) << __func__ << dendl;
-  submit_entry(mds->mdcache->create_subtree_map());
+  _submit_entry(mds->mdcache->create_subtree_map(), 0);
 }
 
 void MDLog::trim(int m)
@@ -267,6 +312,8 @@ void MDLog::trim(int m)
   if (m >= 0)
     max_events = m;
 
+  submit_mutex.lock();
+
   // trim!
   ldout(mds->cct, 10) << "trim "
 	   << segments.size() << " / " << max_segments << " segments, "
@@ -275,8 +322,10 @@ void MDLog::trim(int m)
 	   << ", " << expired_segments.size() << " (" << expired_events << ") expired"
 	   << dendl;
 
-  if (segments.empty())
+  if (segments.empty()) {
+    submit_mutex.unlock();
     return;
+  }
 
   // hack: only trim for a few seconds at a time
   ceph::mono_time stop = ceph::mono_clock::now();
@@ -325,11 +374,14 @@ void MDLog::trim(int m)
 
   // discard expired segments
   _trim_expired_segments();
+  submit_mutex.unlock();
 }
 
 
 void MDLog::try_expire(LogSegment *ls, int op_prio)
 {
+  assert(!!submit_mutex);
+
   C_GatherBuilder gather_bld;
   ls->try_to_expire(mds, gather_bld, op_prio);
   if (gather_bld.has_subs()) {
@@ -347,15 +399,19 @@ void MDLog::try_expire(LogSegment *ls, int op_prio)
 
 void MDLog::_maybe_expired(LogSegment *ls, int op_prio)
 {
+  submit_mutex.lock();
   ldout(mds->cct, 10) << "_maybe_expired segment " << ls->offset << " " << ls->num_events << " events" << dendl;
   assert(expiring_segments.count(ls));
   expiring_segments.erase(ls);
   expiring_events -= ls->num_events;
   try_expire(ls, op_prio);
+  submit_mutex.unlock();
 }
 
 void MDLog::_trim_expired_segments()
 {
+  assert(!!submit_mutex);
+
   // trim expired segments?
   bool trimmed = false;
   while (!segments.empty()) {
@@ -385,6 +441,8 @@ void MDLog::_trim_expired_segments()
 
 void MDLog::_expired(LogSegment *ls)
 {
+  assert(!!submit_mutex);
+
   ldout(mds->cct, 5) << "_expired segment " << ls->offset << " " << ls->num_events << " events" << dendl;
 
   if (!capped && ls == peek_current_segment()) {

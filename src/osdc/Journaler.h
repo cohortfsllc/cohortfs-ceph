@@ -58,17 +58,47 @@
 #define CEPH_JOURNALER_H
 
 #include "Objecter.h"
+#include "common/Finisher.h"
 
 #include <list>
 #include <vector>
 #include <map>
+#include <mutex>
+#include <pthread.h>
 
 class CephContext;
 class Context;
 
+// should XXX MERGE WITH MDLogMutex
+class JMutex {
+  std::mutex m;
+  pthread_t o;
+public:
+  JMutex() : m(), o(0) { }
+  ~JMutex() { if (o == ::pthread_self()) unlock(); }
+  void lock() { m.lock(); o = ::pthread_self(); }
+  bool try_lock() noexcept {
+    bool r = m.try_lock();
+    if (r) o = ::pthread_self();
+    return r;
+  }
+  void unlock() {
+    if (o != ::pthread_self()) throw (std::logic_error("lock error"));
+    o = 0;
+    m.unlock();
+  }
+  bool owns_lock() const noexcept {
+    return o == ::pthread_self();
+  }
+  explicit operator bool() const noexcept {
+    return owns_lock();
+  }
+};
+
 class Journaler {
 public:
   CephContext *cct;
+  Finisher *finisher;
   // this goes at the head of the log "file".
   struct Header {
     uint64_t trimmed_pos;
@@ -166,6 +196,7 @@ private:
 
   std::vector<Context*> waitfor_recover;
   void read_head(Context *on_finish, bufferlist *bl);
+  Context *_wait_for_flush(Context *onsafe = 0);
   void _finish_read_head(int r, bufferlist& bl);
   void _finish_reread_head(int r, bufferlist& bl, Context *finish);
   void probe(Context *finish, uint64_t *end);
@@ -198,6 +229,10 @@ private:
   std::set<uint64_t> pending_safe;
   std::map<uint64_t, std::vector<Context*> > waitfor_safe; // when safe through given offset
 
+  JMutex write_mutex;		// lock on write_buf / write_pos
+  JMutex waitfor_mutex;		// lock on waitfor_safe
+
+  void _flush(Context *onsafe = 0);
   void _do_flush(unsigned amount = 0);
   void _finish_flush(int r, uint64_t start, ceph::mono_time stamp);
   class C_Flush;
@@ -261,8 +296,9 @@ private:
 
 public:
   Journaler(inodeno_t ino_, VolumeRef vol_, const char *mag, Objecter *obj,
-	    SafeTimer<ceph::mono_clock> *tim) :
-    cct(obj->cct), last_written(mag), last_committed(mag),
+	    SafeTimer<ceph::mono_clock> *tim, Finisher *f) :
+    cct(obj->cct), finisher(f), last_written(mag),
+    last_committed(mag),
     ino(ino_), volume(vol_), readonly(true), magic(mag),
     objecter(obj),
 //filer(objecter),
@@ -276,6 +312,8 @@ public:
     expire_pos(0), trimming_pos(0), trimmed_pos(0)
   {
   }
+
+  void set_finisher(Finisher *f) { finisher = f; }
 
   void reset() {
     assert(state == STATE_ACTIVE);

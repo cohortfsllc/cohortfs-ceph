@@ -21,6 +21,8 @@
 #include "include/Context.h"
 
 #include "common/Thread.h"
+#include <mutex>
+#include <pthread.h>
 
 #include "LogSegment.h"
 
@@ -35,6 +37,30 @@ class ESubtreeMap;
 #include <map>
 using std::map;
 
+class MDLogMutex {
+  std::mutex m;
+  pthread_t o;
+public:
+  MDLogMutex() : m(), o(0) { }
+  ~MDLogMutex() { if (o == ::pthread_self()) unlock(); }
+  void lock() { m.lock(); o = ::pthread_self(); }
+  bool try_lock() noexcept {
+    bool r = m.try_lock();
+    if (r) o = ::pthread_self();
+    return r;
+  }
+  void unlock() {
+    if (o != ::pthread_self()) throw (std::logic_error("lock error"));
+    o = 0;
+    m.unlock();
+  }
+  bool owns_lock() const noexcept {
+    return o == ::pthread_self();
+  }
+  explicit operator bool() const noexcept {
+    return owns_lock();
+  }
+};
 
 class MDLog {
 public:
@@ -79,6 +105,8 @@ protected:
   set<LogSegment*> expired_segments;
   int expiring_events;
   int expired_events;
+
+  MDLogMutex submit_mutex;
 
   // -- subtreemaps --
   friend class ESubtreeMap;
@@ -132,6 +160,11 @@ public:
 
 
   // -- segments --
+private:
+  void _start_new_segment(Context *onsync=0);
+  void _prepare_new_segment();
+  void _journal_segment_subtree_map();
+public:
   void start_new_segment(Context *onsync=0);
   void prepare_new_segment();
   void journal_segment_subtree_map();
@@ -173,10 +206,9 @@ private:
 public:
   void start_entry(LogEvent *e);
   void submit_entry(LogEvent *e, Context *c = 0);
-  void start_submit_entry(LogEvent *e, Context *c = 0) {
-    start_entry(e);
-    submit_entry(e, c);
-  }
+  void _start_entry(LogEvent *e);
+  void _submit_entry(LogEvent *e, Context *c);
+  void start_submit_entry(LogEvent *e, Context *c = 0);
   bool entry_is_open() { return cur_event != NULL; }
 
   void wait_for_safe( Context *c );

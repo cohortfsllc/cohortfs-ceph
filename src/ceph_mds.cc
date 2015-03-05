@@ -85,33 +85,36 @@ static int do_cmds_special_action(const std::string &action,
 				  const std::string &dump_file, int rank)
 {
   common_init_finish(cct, CINIT_FLAG_NO_DAEMON_ACTIONS);
+  Finisher finisher(cct);
 
+  finisher.start();
   if (action == "dump-journal") {
     dout(0) << "dumping journal for mds." << rank << " to " << dump_file << dendl;
-    Dumper journal_dumper;
+    Dumper journal_dumper(&finisher);
     journal_dumper.init(rank);
     journal_dumper.dump(dump_file.c_str());
     journal_dumper.shutdown();
   } else if (action == "dump-journal-entries") {
-    Dumper journal_dumper;
+    Dumper journal_dumper(&finisher);
     journal_dumper.init(rank);
     journal_dumper.dump_entries();
     journal_dumper.shutdown();
   } else if (action == "undump-journal") {
     dout(0) << "undumping journal for mds." << rank << " from " << dump_file << dendl;
-    Dumper journal_dumper;
+    Dumper journal_dumper(&finisher);
     journal_dumper.init(rank);
     journal_dumper.undump(dump_file.c_str());
     journal_dumper.shutdown();
   } else if (action == "reset-journal") {
     dout(0) << "resetting journal" << dendl;
-    Resetter resetter;
+    Resetter resetter(&finisher);
     resetter.init(rank);
     resetter.reset();
     resetter.shutdown();
   } else {
     abort();
   }
+  finisher.stop();
   return 0;
 }
 

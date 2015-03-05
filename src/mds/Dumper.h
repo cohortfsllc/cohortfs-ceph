@@ -30,10 +30,10 @@ class Dumper : public MDSUtility {
 private:
   Journaler *journaler;
   int rank;
+  Finisher *finisher;
 
 public:
-  Dumper() : journaler(NULL), rank(-1)
-  {}
+  Dumper(Finisher *f) : journaler(NULL), rank(-1), finisher(f) { }
 
   void handle_mds_map(MMDSMap* m);
 

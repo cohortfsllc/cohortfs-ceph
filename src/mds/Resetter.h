@@ -27,8 +27,9 @@
 class Resetter : public MDSUtility {
 public:
   Journaler *journaler;
+  Finisher *finisher;
 
-  Resetter() : journaler(NULL) {}
+  Resetter(Finisher *f) : journaler(NULL), finisher(f) { }
 
   int init(int rank);
   void reset();
