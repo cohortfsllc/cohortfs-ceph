@@ -57,11 +57,7 @@
 class OSD;
 class OSDService;
 class MOSDOp;
-
 class OSDVol;
-
-void intrusive_ptr_add_ref(OSDVol* vol);
-void intrusive_ptr_release(OSDVol* vol);
 
 typedef boost::intrusive_ptr<OSDVol> OSDVolRef;
 
@@ -689,10 +685,16 @@ protected:
 			  const list<pair<pair<uint64_t, uint64_t>,
 			  pair<bufferlist*, Context*> > >& to_read,
 			  Context* on_complete);
-};
+}; /* OSDVol */
 
 ostream& operator<<(ostream& out, const OSDVol& vol);
-void intrusive_ptr_add_ref(OSDVol::Mutation* mutation);
-void intrusive_ptr_release(OSDVol::Mutation* mutation);
+
+inline void intrusive_ptr_add_ref(OSDVol *vol) { vol->get(); }
+inline void intrusive_ptr_release(OSDVol *vol) { vol->put(); }
+
+inline void intrusive_ptr_add_ref(OSDVol::Mutation *mutation)
+{ mutation->get(); }
+inline void intrusive_ptr_release(OSDVol::Mutation *mutation)
+{ mutation->put(); }
 
 #endif
