@@ -59,7 +59,7 @@ public:
   int get_client_inc() { return client_inc; }
   ceph_tid_t get_client_tid() { return header.tid; }
 
-  oid_t& get_oid() { return oid; }
+  const oid_t& get_oid() const { return oid; }
 
   const boost::uuids::uuid& get_volume() const {
     return volume;
@@ -73,7 +73,7 @@ public:
 
   MOSDOp()
     : Message(CEPH_MSG_OSD_OP, HEAD_VERSION, COMPAT_VERSION) { }
-  MOSDOp(int inc, long tid, oid_t& _obj,
+  MOSDOp(int inc, long tid, const oid_t& _obj,
 	 const boost::uuids::uuid& _volume,
 	 epoch_t _osdmap_epoch, int _flags)
     : Message(CEPH_MSG_OSD_OP, HEAD_VERSION, COMPAT_VERSION),

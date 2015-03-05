@@ -350,7 +350,7 @@ void OSDVol::do_op(OpRequestRef op)
   ObjectContextRef obc;
   bool can_create = op->may_write() || op->may_cache();
   // XXX For Stripulation
-  oid_t oid(m->get_oid());
+  const oid_t oid(m->get_oid());
 
   int r = find_object_context(
     oid, &obc, can_create);
