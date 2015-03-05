@@ -1327,7 +1327,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	n.timeout = timeout;
 	n.cookie = op.watch.cookie;
 	n.bl = bl;
-	ctx->notifies.push_back(n);
+	(ctx->get_watches())->notifies.push_back(n);
       }
       break;
 
@@ -1339,13 +1339,14 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  uint64_t watch_cookie = 0;
 	  ::decode(notify_id, bp);
 	  ::decode(watch_cookie, bp);
-	  OpContext::NotifyAck ack(notify_id, watch_cookie);
-	  ctx->notify_acks.push_back(ack);
+	  OpContext::WatchesNotifies::NotifyAck
+	    ack(notify_id, watch_cookie);
+	  (ctx->get_watches())->notify_acks.push_back(ack);
 	} catch (const buffer::error &e) {
 	  /* op.watch.cookie is actually the notify_id for historical
 	   * reasons */
-	  OpContext::NotifyAck ack(op.watch.cookie);
-	  ctx->notify_acks.push_back(ack);
+	  OpContext::WatchesNotifies::NotifyAck ack(op.watch.cookie);
+	  (ctx->get_watches())->notify_acks.push_back(ack);
 	}
       }
       break;
@@ -1638,7 +1639,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	    oi.watchers[make_pair(cookie, entity)] = w;
 	    t->nop();  // make sure update the object_info on disk!
 	  }
-	  ctx->watch_connects.push_back(w);
+	  (ctx->get_watches())->watch_connects.push_back(w);
 	} else {
 	  map<pair<uint64_t, entity_name_t>,
 	      watch_info_t>::iterator oi_iter =
@@ -1648,7 +1649,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 		     << " by " << entity << dendl;
 	    oi.watchers.erase(oi_iter);
 	    t->nop();  // update oi on disk
-	    ctx->watch_disconnects.push_back(w);
+	    (ctx->get_watches())->watch_disconnects.push_back(w);
 	  } else {
 	    dout(10) << " can't remove: no watch by "
 		     << entity << dendl;
@@ -2083,11 +2084,15 @@ void OSDVol::write_update_size_and_usage(
 
 void OSDVol::do_osd_op_effects(OpContext *ctx)
 {
+  if (! ctx->has_watches())
+    return;
+
   ConnectionRef conn(ctx->op->get_req()->get_connection());
   entity_name_t entity = ctx->reqid.name;
+  OpContext::WatchesNotifies* wn = ctx->get_watches();
 
-  for (list<watch_info_t>::iterator i = ctx->watch_connects.begin();
-       i != ctx->watch_connects.end();
+  for (vector<watch_info_t>::iterator i = wn->watch_connects.begin();
+       i != wn->watch_connects.end();
        ++i) {
     pair<uint64_t, entity_name_t> watcher(i->cookie, entity);
     WatchRef watch;
@@ -2109,8 +2114,8 @@ void OSDVol::do_osd_op_effects(OpContext *ctx)
     watch->connect(conn);
   }
 
-  for (list<watch_info_t>::iterator i = ctx->watch_disconnects.begin();
-       i != ctx->watch_disconnects.end();
+  for (vector<watch_info_t>::iterator i = wn->watch_disconnects.begin();
+       i != wn->watch_disconnects.end();
        ++i) {
     pair<uint64_t, entity_name_t> watcher(i->cookie, entity);
     if (ctx->obc->watchers.count(watcher)) {
@@ -2126,8 +2131,8 @@ void OSDVol::do_osd_op_effects(OpContext *ctx)
     }
   }
 
-  for (list<notify_info_t>::iterator p = ctx->notifies.begin();
-       p != ctx->notifies.end();
+  for (vector<notify_info_t>::iterator p = wn->notifies.begin();
+       p != wn->notifies.end();
        ++p) {
     dout(10) << "do_osd_op_effects, notify " << *p << dendl;
     NotifyRef notif(
@@ -2150,9 +2155,9 @@ void OSDVol::do_osd_op_effects(OpContext *ctx)
     notif->init();
   }
 
-  for (list<OpContext::NotifyAck>::iterator p =
-	 ctx->notify_acks.begin();
-       p != ctx->notify_acks.end();
+  for (vector<OpContext::WatchesNotifies::NotifyAck>::iterator p =
+	 wn->notify_acks.begin();
+       p != wn->notify_acks.end();
        ++p) {
     dout(10) << "notify_ack "
 	     << make_pair(p->watch_cookie, p->notify_id) << dendl;
