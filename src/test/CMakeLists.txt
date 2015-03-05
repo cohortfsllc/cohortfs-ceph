@@ -1764,3 +1764,8 @@ set_target_properties(test_threadpool PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FL
 add_executable(test_cohort_lru test_cohort_lru.cc)
 target_link_libraries(test_cohort_lru PRIVATE global ${UNITTEST_LIBS})
 set_target_properties(test_cohort_lru PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
+
+# test_assocvec
+add_executable(test_assocvec test_assocvec.cc)
+target_link_libraries(test_assocvec PRIVATE global ${UNITTEST_LIBS})
+set_target_properties(test_assocvec PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
