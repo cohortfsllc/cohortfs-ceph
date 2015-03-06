@@ -349,7 +349,6 @@ void OSDVol::do_op(OpRequestRef op)
 
   ObjectContextRef obc;
   bool can_create = op->may_write() || op->may_cache();
-  // XXX For Stripulation
   const hoid_t oid(m->get_oid());
 
   int r = find_object_context(
@@ -364,47 +363,49 @@ void OSDVol::do_op(OpRequestRef op)
 
   // src_objs
   map<hoid_t,ObjectContextRef> src_obc;
-  for (vector<OSDOp>::iterator p = m->ops.begin();
-       p != m->ops.end(); ++p) {
-    OSDOp& osd_op = *p;
+
+  vector<OSDOp>::const_iterator op_iter; // atm, this can be const
+  for (op_iter = m->ops.begin(); op_iter != m->ops.end(); ++op_iter) {
+    const OSDOp& osd_op = *op_iter;
 
     if (!ceph_osd_op_type_multi(osd_op.op.op))
       continue;
-    if (osd_op.oid.name.length()) {
-      // For Stripulation
-      const hoid_t& src_oid = osd_op.oid;
-      if (!src_obc.count(src_oid)) {
-	ObjectContextRef sobc;
 
-	/* XXX is earlier value for can_create correct? */
-	r = find_object_context(src_oid, &sobc, can_create);
-	if (r) {
-	  osd->reply_op_error(op, r);
-	  return;
-	}
-	if (sobc->obs.oi.oid != obc->obs.oi.oid) {
-	  dout(1) << " src_oid " << sobc->obs.oi.oid << " != "
-		  << obc->obs.oi.oid << dendl;
-	  osd->reply_op_error(op, -EINVAL);
-	} else {
-	  dout(10) << " src_oid " << src_oid << " obc "
-		   << src_obc << dendl;
-	  /* TODO:  get sobc! */
-	  src_obc[src_oid] = sobc;
-	  continue;
-	}
-	// Error cleanup below
+    if (! osd_op.oid.name.length()) {
+      dout(10) << "no src oid specified for multi op " << osd_op << dendl;
+      osd->reply_op_error(op, -EINVAL);
+    }
+
+    /* find contexts for additional objects referenced by the
+     * OpRequest */
+    const hoid_t& src_oid = osd_op.oid;
+    if (src_obc.count(src_oid))
+      continue; /* have this obc already */
+
+    if (!src_obc.count(src_oid)) {
+      ObjectContextRef sobc;
+      /* XXXX re-using value for can_create */
+      r = find_object_context(src_oid, &sobc, can_create);
+      if (r) {
+	osd->reply_op_error(op, r);
+	return;
+      }
+      if (sobc->obs.oi.oid != obc->obs.oi.oid) {
+	dout(1) << " src_oid " << sobc->obs.oi.oid << " != "
+		<< obc->obs.oi.oid << dendl;
+	osd->reply_op_error(op, -EINVAL);
       } else {
+	dout(10) << " src_oid " << src_oid << " obc "
+		 << src_obc << dendl;
+	src_obc[src_oid] = sobc;
 	continue;
       }
       // Error cleanup below
-    } else {
-      dout(10) << "no src oid specified for multi op "
-	       << osd_op << dendl;
-      osd->reply_op_error(op, -EINVAL);
     }
+    // Error cleanup
+
     return;
-  }
+  } /* */
 
   OpContext *ctx = new OpContext(op, m->get_reqid(), m->ops,
 				 &obc->obs,
