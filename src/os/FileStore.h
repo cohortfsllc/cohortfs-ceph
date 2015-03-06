@@ -651,8 +651,8 @@ public:
   bool exists(CollectionHandle ch, const hoid_t& oid);
 
   ObjectHandle get_object(CollectionHandle ch, const hoid_t& oid);
+  ObjectHandle get_object(CollectionHandle ch, const hoid_t& oid, bool create);
   void put_object(ObjectHandle oh);
-
   FSObject* get_object(FSCollection* fc, const hoid_t& oid,
 		       const SequencerPosition& spos, bool create);
   void put_object(FSObject* fo);

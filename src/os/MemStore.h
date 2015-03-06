@@ -433,6 +433,18 @@ public:
     return o.get();
   }
 
+  ObjectHandle get_object(CollectionHandle ch,
+			  const hoid_t& oid, bool create) {
+    MemCollection *coll = static_cast<MemCollection*>(ch);
+    // find Object as intrusive_ptr<T>, explicit ref, return
+    ObjectRef o = (create) ? coll->get_or_create_object(oid)
+      : coll->get_object(oid);
+    if (!o)
+      return NULL;
+    intrusive_ptr_add_ref(o.get());
+    return o.get();
+  }
+
   void put_object(ObjectHandle oh) {
     ObjectRef o = static_cast<MemStore::Object*>(oh);
     intrusive_ptr_release(o.get());

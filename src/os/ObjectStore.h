@@ -86,13 +86,31 @@ public:
       bi::constant_time_size<true>
       > FlushQueue;
 
+    typedef std::unique_lock<std::mutex> unique_lock;
+
+    enum class state
+    {
+      INIT = 0,
+	CREATING,
+        READY
+    };
+
   protected:
     ObjectContext obc;
     Collection* c;
 
+    mutable void* ready; // double-check var
+    enum state obj_st;
+    std::mutex mtx;
+    std::condition_variable cv;
+    uint32_t waiters;
+
+    friend class ObjectStore;
+
   public:
     explicit Object(Collection* _c, const hoid_t& _oid)
-      : obc(_oid), c(_c)
+      : obc(_oid, this), c(_c), ready(nullptr), obj_st(state::INIT),
+	waiters(0)
     {
       /* eaach object holds a ref on it's collection */
       c->get();
@@ -100,6 +118,22 @@ public:
 
     const hoid_t& get_oid() const {
       return obc.obs.oi.oid; // whee!
+    }
+
+    ObjectContext& get_obc() { return obc; }
+
+    bool is_ready() {
+      return ready;
+    }
+
+    void set_ready() {
+      unique_lock lk(mtx, std::adopt_lock);
+      obj_st = state::READY;
+      if (unlikely(waiters)) {
+	ready = (void*) true;
+	waiters = 0;
+	cv.notify_all();
+      }
     }
 
     /* per ObjectStore LRU */
@@ -1490,7 +1524,7 @@ public:
   virtual bool exists(CollectionHandle ch, const hoid_t& oid) = 0;
 
   /**
-   * get_object -- Get an initial reference on an object
+   * get_object -- Get an initial reference on an existing object
    *
    * @param ch collection for object
    * @param oid oid of object
@@ -1498,6 +1532,57 @@ public:
    */
   virtual ObjectHandle get_object(const CollectionHandle ch,
 				  const hoid_t& oid) = 0;
+
+  /**
+   * get_object -- Get an initial reference on a new or existing object
+   *
+   * @param ch collection for object
+   * @param oid oid of object
+   * @returns a handle to Object if successful, else nullptr
+   */
+  virtual ObjectHandle get_object(const CollectionHandle ch,
+				  const hoid_t& oid,
+				  bool create) = 0;
+
+
+  /**
+   * get_object_for_init -- Get initial ref. w/create semantics
+   *
+   * @param ch collection for object
+   * @param oid oid of object
+   * @returns a handle to Object if successful, else nullptr
+   */
+  ObjectHandle get_object_for_init(const CollectionHandle ch,
+				   const hoid_t& oid,
+				   bool create) {
+    ObjectHandle oh = get_object(ch, oid, create);
+    if (oh) {
+      if (! oh->ready) {
+	oh->mtx.lock();
+	switch (oh->obj_st) {
+	case Object::state::INIT:
+	  /* new object */
+	  oh->obj_st = Object::state::CREATING;
+	  /* state terminates in Object::set_ready() */
+	  break;
+	case Object::state::CREATING:
+	  {
+	    /* unlikely */
+	    Object::unique_lock lk(oh->mtx, std::adopt_lock);
+	    ++oh->waiters;
+	    oh->cv.wait(lk);
+	    lk.release();
+	  }
+	  break;
+	default:
+	  /* apparently, READY:  must never get here */
+	  abort();
+	  break;
+	}
+      } /* ! ready */
+    }
+    return oh;
+  }
 
   /**
    * put_object -- Put a reference on an object

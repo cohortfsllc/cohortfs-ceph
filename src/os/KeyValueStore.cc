@@ -1504,8 +1504,15 @@ bool KeyValueStore::exists(CollectionHandle ch, const hoid_t& oid)
   return true;
 }
 
+/* XXXX definitely incorrect */
+
 ObjectHandle KeyValueStore::get_object(
   CollectionHandle ch, const hoid_t& oid) {
+  return new KVObject(ch, oid);
+}
+
+ObjectHandle KeyValueStore::get_object(
+  CollectionHandle ch, const hoid_t& oid, bool create) {
   return new KVObject(ch, oid);
 }
 

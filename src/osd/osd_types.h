@@ -207,10 +207,12 @@ public:
     ::encode(version, bl);
     ::encode(epoch, bl);
   }
+
   void decode(bufferlist::iterator &bl) {
     ::decode(version, bl);
     ::decode(epoch, bl);
   }
+
   void decode(bufferlist& bl) {
     bufferlist::iterator p = bl.begin();
     decode(p);
@@ -221,21 +223,27 @@ WRITE_CLASS_ENCODER(eversion_t)
 inline bool operator==(const eversion_t& l, const eversion_t& r) {
   return (l.epoch == r.epoch) && (l.version == r.version);
 }
+
 inline bool operator!=(const eversion_t& l, const eversion_t& r) {
   return (l.epoch != r.epoch) || (l.version != r.version);
 }
+
 inline bool operator<(const eversion_t& l, const eversion_t& r) {
   return (l.epoch == r.epoch) ? (l.version < r.version):(l.epoch < r.epoch);
 }
+
 inline bool operator<=(const eversion_t& l, const eversion_t& r) {
   return (l.epoch == r.epoch) ? (l.version <= r.version):(l.epoch <= r.epoch);
 }
+
 inline bool operator>(const eversion_t& l, const eversion_t& r) {
   return (l.epoch == r.epoch) ? (l.version > r.version):(l.epoch > r.epoch);
 }
+
 inline bool operator>=(const eversion_t& l, const eversion_t& r) {
   return (l.epoch == r.epoch) ? (l.version >= r.version):(l.epoch >= r.epoch);
 }
+
 inline ostream& operator<<(ostream& out, const eversion_t e) {
   return out << e.epoch << "'" << e.version;
 }
@@ -257,10 +265,12 @@ struct objectstore_perf_stat_t {
     filestore_commit_latency += o.filestore_commit_latency;
     filestore_apply_latency += o.filestore_apply_latency;
   }
+
   void sub(const objectstore_perf_stat_t &o) {
     filestore_commit_latency -= o.filestore_commit_latency;
     filestore_apply_latency -= o.filestore_apply_latency;
   }
+
   void dump(Formatter *f) const;
   void encode(bufferlist &bl) const;
   void decode(bufferlist::iterator &bl);
@@ -288,6 +298,7 @@ struct osd_stat_t {
     op_queue_age_hist.add(o.op_queue_age_hist);
     fs_perf_stat.add(o.fs_perf_stat);
   }
+
   void sub(const osd_stat_t& o) {
     kb -= o.kb;
     kb_used -= o.kb_used;
@@ -310,11 +321,10 @@ inline bool operator==(const osd_stat_t& l, const osd_stat_t& r) {
     l.hb_in == r.hb_in &&
     l.hb_out == r.hb_out;
 }
+
 inline bool operator!=(const osd_stat_t& l, const osd_stat_t& r) {
   return !(l == r);
 }
-
-
 
 inline ostream& operator<<(ostream& out, const osd_stat_t& s) {
   return out << "osd_stat(" << kb_t(s.kb_used) << " used, "
@@ -324,7 +334,6 @@ inline ostream& operator<<(ostream& out, const osd_stat_t& s) {
 	     << " op hist " << s.op_queue_age_hist.h
 	     << ")";
 }
-
 
 /**
  * a summation of object stats
@@ -398,6 +407,7 @@ struct object_stat_collection_t {
 	 ++p)
       cat_sum[p->first].add(p->second);
   }
+
   void sub(const object_stat_collection_t& o) {
     sum.sub(o.sum);
     for (map<string,object_stat_sum_t>::const_iterator p = o.cat_sum.begin();
@@ -427,6 +437,7 @@ struct vol_info_t {
   vol_info_t()
     : last_epoch_started(0), last_user_version(0)
   { }
+
   vol_info_t(const boost::uuids::uuid& volume)
     : volume(volume),
       last_epoch_started(0), last_user_version(0)
@@ -464,6 +475,7 @@ public:
     virtual void create() {}
     virtual ~Visitor() {}
   };
+
   void visit(Visitor *visitor) const;
   mutable bufferlist bl;
   enum ModID {
@@ -472,6 +484,7 @@ public:
     DELETE = 3,
     CREATE = 4
   };
+
   ObjectModDesc() : can_local_rollback(true), stashed(false) {}
   void claim(ObjectModDesc &other) {
     bl.clear();
@@ -479,12 +492,14 @@ public:
     can_local_rollback = other.can_local_rollback;
     stashed = other.stashed;
   }
+
   void claim_append(ObjectModDesc &other) {
     if (!can_local_rollback || stashed)
       return;
     bl.claim_append(other.bl);
     stashed = other.stashed;
   }
+
   void swap(ObjectModDesc &other) {
     bl.swap(other.bl);
 
@@ -496,10 +511,12 @@ public:
     other.stashed = stashed;
     stashed = temp;
   }
+
   void append_id(ModID id) {
     uint8_t _id(id);
     ::encode(_id, bl);
   }
+
   void append(uint64_t old_size) {
     if (!can_local_rollback || stashed)
       return;
@@ -508,6 +525,7 @@ public:
     ::encode(old_size, bl);
     ENCODE_FINISH(bl);
   }
+
   void setattrs(map<string, boost::optional<bufferlist> > &old_attrs) {
     if (!can_local_rollback || stashed)
       return;
@@ -516,6 +534,7 @@ public:
     ::encode(old_attrs, bl);
     ENCODE_FINISH(bl);
   }
+
   bool rmobject(version_t deletion_version) {
     if (!can_local_rollback || stashed)
       return false;
@@ -526,6 +545,7 @@ public:
     stashed = true;
     return true;
   }
+
   void create() {
     if (!can_local_rollback || stashed)
       return;
@@ -792,15 +812,17 @@ struct ObjectState {
 
 struct ObjectContext;
 
-// XXX need intrusive pointer?
+// XXXX need intrusive pointer
 typedef std::shared_ptr<ObjectContext> ObjectContextRef;
 
 struct ObjectContext {
   ObjectState obs;
 
 private:
-  std::mutex lock;
+  std::mutex lock; /* XXX */
+
 public:
+  void* oh; /* ObjectHandle */
   std::condition_variable cond;
   int unstable_writes, readers, writers_waiting, readers_waiting;
 
@@ -945,12 +967,14 @@ public:
 
   /* XXX not well-formed (oid not initialized) */
   ObjectContext()
-    : unstable_writes(0), readers(0), writers_waiting(0),
-      readers_waiting(0) {}
+    : oh(nullptr),
+      unstable_writes(0), readers(0), writers_waiting(0), readers_waiting(0)
+  {}
 
-  ObjectContext(const hoid_t& _oid)
-    : obs(_oid), unstable_writes(0), readers(0),
-      writers_waiting(0), readers_waiting(0) {}
+  ObjectContext(const hoid_t& _oid, void* oh)
+    : obs(_oid, oh),
+      unstable_writes(0), readers(0), writers_waiting(0), readers_waiting(0)
+  {}
 
   ~ObjectContext() {
     assert(rwstate.empty());
