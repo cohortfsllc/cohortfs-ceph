@@ -464,10 +464,9 @@ public:
 
 protected:
   ObjectContextRef create_object_context(const object_info_t& oi);
-  ObjectContextRef get_object_context(
-    const hoid_t& soid,
-    bool can_create,
-    map<string, bufferlist>* attrs = 0
+  ObjectContextRef get_object_context(const hoid_t& oid,
+				      bool can_create,
+				      map<string, bufferlist>* attrs = 0
     );
 
   void context_registry_on_change();
@@ -548,11 +547,8 @@ private:
 
 public:
   void clear_primary_state();
-  void remove_object(
-    ObjectStore::Transaction& t, const hoid_t& soid);
-
+  void remove_object(ObjectStore::Transaction& t, const hoid_t& oid);
   void trim_write_ahead();
-
   void activate(ObjectStore::Transaction& t, epoch_t query_epoch);
   void _activate_committed(epoch_t e);
 
