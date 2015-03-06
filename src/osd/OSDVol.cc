@@ -347,15 +347,12 @@ void OSDVol::do_op(OpRequestRef op)
 	   << " flags " << ceph_osd_flag_string(m->get_flags())
 	   << dendl;
 
-  ObjectContextRef obc;
   bool can_create = op->may_write() || op->may_cache();
   const hoid_t oid(m->get_oid());
 
-  int r = find_object_context(
-    oid, &obc, can_create);
-
-  if (r) {
-    osd->reply_op_error(op, r);
+  ObjectContextRef obc = get_object_context(oid, can_create);
+  if (! obc) {
+    osd->reply_op_error(op, -ENOENT);
     return;
   }
 
@@ -372,7 +369,8 @@ void OSDVol::do_op(OpRequestRef op)
       continue;
 
     if (! osd_op.oid.name.length()) {
-      dout(10) << "no src oid specified for multi op " << osd_op << dendl;
+      dout(10) << "no src oid specified for multi op "
+	       << osd_op << dendl;
       osd->reply_op_error(op, -EINVAL);
     }
 
@@ -383,11 +381,10 @@ void OSDVol::do_op(OpRequestRef op)
       continue; /* have this obc already */
 
     if (!src_obc.count(src_oid)) {
-      ObjectContextRef sobc;
       /* XXXX re-using value for can_create */
-      r = find_object_context(src_oid, &sobc, can_create);
-      if (r) {
-	osd->reply_op_error(op, r);
+      ObjectContextRef sobc = get_object_context(src_oid, can_create);
+      if (! sobc) {
+	osd->reply_op_error(op, -ENOENT);
 	return;
       }
       if (sobc->obs.oi.oid != obc->obs.oi.oid) {
@@ -2535,9 +2532,10 @@ ObjectContextRef OSDVol::create_object_context(const object_info_t& oi)
   return obc;
 }
 
-ObjectContextRef OSDVol::get_object_context(const hoid_t& oid,
-					    bool can_create,
-					    map<string, bufferlist> *attrs)
+ObjectContextRef
+OSDVol::get_object_context(const hoid_t& oid,
+			   bool can_create,
+			   map<string, bufferlist>* attrs)
 {
   ObjectContextRef obc = object_contexts.lookup(oid);
   if (obc) {
@@ -2603,31 +2601,6 @@ void OSDVol::context_registry_on_change()
       }
     }
   }
-}
-
-/*
- * If we return an error, and set *pmissing, then promoting that
- * object may help.
- *
- * If we return -EAGAIN, we will always set *pmissing to the missing
- * object to wait for.
- *
- * If we return an error but do not set *pmissing, then we know the
- * object does not exist.
- */
-int OSDVol::find_object_context(const hoid_t& oid,
-				ObjectContextRef *pobc,
-				bool can_create)
-{
-  ObjectContextRef obc = get_object_context(oid, can_create);
-  if (!obc) {
-    return -ENOENT;
-  }
-  dout(10) << "find_object_context " << oid
-	   << " oi=" << obc->obs.oi
-	   << dendl;
-  *pobc = obc;
-  return 0;
 }
 
 /*

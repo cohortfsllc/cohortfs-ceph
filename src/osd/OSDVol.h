@@ -94,9 +94,8 @@ public:
     return info;
   }
 
-  ObjectContextRef get_obc(
-    const hoid_t& oid,
-    map<string, bufferlist>& attrs) {
+  ObjectContextRef get_obc(const hoid_t& oid,
+			   map<string, bufferlist>& attrs) {
     return get_object_context(oid, true, &attrs);
   }
 
@@ -285,8 +284,10 @@ public:
 
 protected:
   OSDService* osd;
+
 public:
   CephContext* cct;
+
 protected:
   // Ops waiting for map, should be queued at back
   std::mutex map_lock;
@@ -475,12 +476,8 @@ protected:
     );
 
   void context_registry_on_change();
-  int find_object_context(const hoid_t& oid,
-			  ObjectContextRef* pobc,
-			  bool can_create);
 
   // low level ops
-
   void execute_ctx(OpContext* ctx);
   void finish_ctx(OpContext* ctx);
   void reply_ctx(OpContext* ctx, int err);
