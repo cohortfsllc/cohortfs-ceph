@@ -2460,6 +2460,15 @@ ObjectHandle FileStore::get_object(CollectionHandle ch,
 		    false);
 }
 
+ObjectHandle FileStore::get_object(CollectionHandle ch,
+				   const hoid_t& oid,
+				   bool create)
+{
+  static SequencerPosition dummy_spos;
+  return get_object(static_cast<FSCollection*>(ch), oid, dummy_spos,
+		    create);
+}
+
 void FileStore::put_object(FSObject* fo)
 {
   obj_lru.unref(fo, cohort::lru::FLAG_NONE);

@@ -479,6 +479,8 @@ class KeyValueStore : public ObjectStore,
   bool exists(CollectionHandle ch, const hoid_t& oid);
 
   ObjectHandle get_object(CollectionHandle ch, const hoid_t& oid);
+  ObjectHandle get_object(CollectionHandle ch, const hoid_t& oid,
+			  bool create);
   void put_object(ObjectHandle oh);
 
   int stat(CollectionHandle ch, ObjectHandle oh, struct stat *st,

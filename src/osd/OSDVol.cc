@@ -544,18 +544,24 @@ void OSDVol::check_blacklisted_watchers()
 {
   dout(20) << "OSDVol::check_blacklisted_watchers for vol "
 	   << info.volume << dendl;
+#if 0
+#warning TODO: fix check_blacklisted_watchers (cant use registry)
   pair<hoid_t, ObjectContextRef> i;
   while (object_contexts.get_next(i.first, &i))
     check_blacklisted_obc_watchers(i.second);
+#endif
 }
 
 void OSDVol::get_watchers(list<obj_watch_item_t> &vol_watchers)
 {
+#if 0
+#warning TODO: fix get_watchers (cant use registry)
   pair<hoid_t, ObjectContextRef> i;
   while (object_contexts.get_next(i.first, &i)) {
     ObjectContextRef obc(i.second);
     get_obc_watchers(obc, vol_watchers);
   }
+#endif
 }
 
 int OSDVol::whoami() {
@@ -2520,6 +2526,7 @@ void OSDVol::handle_watch_timeout(WatchRef watch)
   mutation->put();
 }
 
+#if 0
 ObjectContextRef OSDVol::create_object_context(const object_info_t& oi)
 {
   ObjectContextRef obc(object_contexts.lookup_or_create(oi.oid));
@@ -2531,64 +2538,71 @@ ObjectContextRef OSDVol::create_object_context(const object_info_t& oi)
   populate_obc_watchers(obc);
   return obc;
 }
+#endif
 
 ObjectContextRef
 OSDVol::get_object_context(const hoid_t& oid,
 			   bool can_create,
 			   map<string, bufferlist>* attrs)
 {
-  ObjectContextRef obc = object_contexts.lookup(oid);
-  if (obc) {
-    dout(10) << __func__ << ": found obc in cache: " << obc
-	     << dendl;
-  } else {
-    // check disk
+  ObjectHandle oh =
+    osd->store->get_object(coll, oid, can_create); /* ObjectRef? */
+
+  if (oh) {
+    ObjectContextRef obc
+      = ObjectContextRef(&(oh->get_obc())); /* XXXX need intrusive_ptr*/
+    if (likely(oh->is_ready())) {
+      return obc;
+    }
+    /* initialize */
     bufferlist bv;
     if (attrs) {
       assert(attrs->count(OI_ATTR));
       bv = attrs->find(OI_ATTR)->second;
     } else {
-      int r = objects_get_attr(oid, OI_ATTR, &bv);
+      int r = objects_get_attr(oh, OI_ATTR, &bv);
       if (r < 0) {
 	if (!can_create) {
 	  dout(10) << __func__ << ": no obc for oid "
 		   << oid << " and !can_create"
 		   << dendl;
-	  return ObjectContextRef();   // -ENOENT!
+	  return ObjectContextRef(); // -ENOENT!
 	}
-
 	dout(10) << __func__ << ": no obc for oid "
 		 << oid << " but can_create"
 		 << dendl;
-	// new object.
-	object_info_t oi(oid); 	/* XXXX optimize? can create take hoid_t? */
-	obc = create_object_context(oi);
+
+	// new object (obc already default initialized)
 	dout(10) << __func__ << ": " << obc << " " << oid
 		 << " " << obc->rwstate
 		 << " oi: " << obc->obs.oi << dendl;
+	populate_obc_watchers(obc);
+	oh->set_ready();
 	return obc;
       }
+      /* read bv */
     }
 
-    object_info_t oi(bv);
-
-    obc = object_contexts.lookup_or_create(oi.oid);
+    object_info_t oi(bv); /* XXX could save a deep copy */
     obc->obs.oi = oi;
     obc->obs.exists = true;
-
     populate_obc_watchers(obc);
+    oh->set_ready();
 
     dout(10) << __func__ << ": creating obc from disk: " << obc
 	     << dendl;
+
+    dout(10) << __func__ << ": " << obc << " " << oid
+	     << " " << obc->rwstate
+	     << " oi: " << obc->obs.oi << dendl;
+    return obc;
   }
-  dout(10) << __func__ << ": " << obc << " " << oid
-	   << " " << obc->rwstate
-	   << " oi: " << obc->obs.oi << dendl;
-  return obc;
-} /* create_object_context */
+  return ObjectContextRef();
+} /* get_object_context */
 
 void OSDVol::context_registry_on_change()
 {
+#if 0 /* XXXX delete me */
   pair<hoid_t, ObjectContextRef> i;
   while (object_contexts.get_next(i.first, &i)) {
     ObjectContextRef obc(i.second);
@@ -2601,6 +2615,7 @@ void OSDVol::context_registry_on_change()
       }
     }
   }
+#endif
 }
 
 /*
@@ -2708,6 +2723,23 @@ int OSDVol::objects_get_attr(const hoid_t& oid, const string &attr,
 {
   bufferptr bp;
   ObjectHandle oh = osd->store->get_object(coll, oid);
+  int r = -EINVAL;
+
+  if (oh) {
+    r = osd->store->getattr(coll, oh, attr.c_str(), bp);
+    if (r >= 0 && out) {
+      out->clear();
+      out->push_back(bp);
+    }
+    osd->store->put_object(oh);
+  }
+  return r;
+}
+
+int OSDVol::objects_get_attr(ObjectHandle oh, const string &attr,
+			     bufferlist *out)
+{
+  bufferptr bp;
   int r = -EINVAL;
 
   if (oh) {

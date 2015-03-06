@@ -397,8 +397,10 @@ protected:
   Mutation* simple_mutation_create(ObjectContextRef obc);
   void simple_mutation_submit(Mutation* mutation);
 
+#if 0
   // projected object info
   SharedPtrRegistry<hoid_t, ObjectContext> object_contexts;
+#endif
 
 public:
   bool deleting;  // true while in removing or OSD is shutting down
@@ -463,11 +465,12 @@ public:
   void handle_watch_timeout(WatchRef watch);
 
 protected:
+#if 0
   ObjectContextRef create_object_context(const object_info_t& oi);
+#endif
   ObjectContextRef get_object_context(const hoid_t& oid,
 				      bool can_create,
-				      map<string, bufferlist>* attrs = 0
-    );
+				      map<string, bufferlist>* attrs = 0);
 
   void context_registry_on_change();
 
@@ -661,10 +664,11 @@ protected:
     const hoid_t& end,
     vector<hoid_t>* ls);
 
-  int objects_get_attr(
-    const hoid_t& oid,
-    const string& attr,
-    bufferlist* out);
+  int objects_get_attr(const hoid_t& oid, const string& attr,
+		       bufferlist* out);
+
+  int objects_get_attr(ObjectHandle oh, const string& attr,
+		       bufferlist* out);
 
   void objects_read_async(const hoid_t& oid,
 			  const list<pair<pair<uint64_t, uint64_t>,
