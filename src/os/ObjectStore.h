@@ -62,6 +62,8 @@ protected:
 
 public:
 
+  class Collection;
+
   class Object : public cohort::lru::Object {
   private:
     typedef bi::link_mode<bi::safe_link> link_mode;
@@ -86,10 +88,15 @@ public:
 
   protected:
     ObjectContext obc;
+    Collection* c;
 
   public:
-    explicit Object(const hoid_t& _oid) : obc(_oid)
-    {}
+    explicit Object(Collection* _c, const hoid_t& _oid)
+      : obc(_oid), c(_c)
+    {
+      /* eaach object holds a ref on it's collection */
+      c->get();
+    }
 
     const hoid_t& get_oid() const {
       return obc.obs.oi.oid; // whee!
@@ -144,6 +151,10 @@ public:
       Object, OidTree, OidLT, OidEQ, hoid_t, cohort::SpinLock,
       n_partitions, cache_size>
     ObjCache;
+
+    virtual ~Object() {
+      c->put();
+    }
 
     friend class Collection;
   }; /* Object */
@@ -480,7 +491,8 @@ public:
     // member hook for intrusive work queue
     bi::list_member_hook<> queue_hook;
 
-    // copy and assignment disabled because of object handle ref counting
+    /* copy and assignment disabled because of object handle ref\
+     * counting / atomicity */
   private:
     Transaction(const Transaction &rhs);
     Transaction& operator=(const Transaction &rhs);

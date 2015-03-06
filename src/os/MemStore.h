@@ -33,6 +33,8 @@ private:
   typedef PageSet<PageSize> page_set;
 
 public:
+  class MemCollection;
+
   struct Object : public ObjectStore::Object {
     mutable std::atomic<uint32_t> refcnt;
     cohort::SpinLock alloc_lock;
@@ -45,8 +47,8 @@ public:
     bufferlist omap_header;
     map<string,bufferlist> omap;
 
-    Object(const hoid_t& oid) :
-      ObjectStore::Object(oid), refcnt(0), data_len(0)
+    Object(MemCollection* c, const hoid_t& oid) :
+      ObjectStore::Object(c, oid), refcnt(0), data_len(0)
       {}
 
     friend void intrusive_ptr_add_ref(const Object* o) {
@@ -141,7 +143,7 @@ public:
 				         oid.hk, oid, lat,
 					 ObjCache::FLAG_LOCK));
       if (!o) {
-	o = new Object(oid);
+	o = new Object(this, oid);
 	intrusive_ptr_add_ref(o);
 	obj_cache.insert_latched(o, lat, ObjCache::FLAG_UNLOCK);
       } else
@@ -183,7 +185,7 @@ public:
       while (--s) {
 	hoid_t k;
 	::decode(k, p);
-	ObjectRef o(new Object(k));
+	ObjectRef o(new Object(this, k));
 	o->decode(p);
 	obj_cache.insert(k.hk, o.get(), ObjCache::FLAG_NONE);
       }

@@ -135,23 +135,17 @@ public:
       }
     };
 
-    /* XXXX maybe bogus ctor... needs Casey! */
     FSObject(FSCollection* _fc, const hoid_t& oid, const FDRef& _fd)
-      : ObjectStore::Object(oid), fc(_fc), fd(_fd), pwb(this) {
-      /* each object holds a ref on it's collection */
-      fc->get();
-    }
+      : ObjectStore::Object(_fc, oid), fd(_fd), pwb(this) {}
 
     virtual bool reclaim() {
       std::cout << "FTW RECLAIM FSObject " << (void*) this
 		<< std::endl;
-      fc->obj_cache.remove(get_oid().hk, this, cohort::lru::FLAG_NONE);
+      c->obj_cache.remove(get_oid().hk, this, cohort::lru::FLAG_NONE);
       return true;
     }
 
-    virtual ~FSObject() {
-      fc->put();
-    }
+    virtual ~FSObject() {}
 
     struct FSObjectFactory : public cohort::lru::ObjectFactory
     {
@@ -175,7 +169,6 @@ public:
       }
     };
 
-    FSCollection* fc;
     FDRef fd;
     PendingWB pwb;
   };

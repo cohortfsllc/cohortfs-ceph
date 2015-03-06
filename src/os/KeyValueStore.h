@@ -152,8 +152,8 @@ class KeyValueStore : public ObjectStore,
   {
   public:
 
-    explicit KVObject(const hoid_t& _oid)
-      : Object(_oid)
+    explicit KVObject(CollectionHandle ch, const hoid_t& oid)
+      : Object(c, oid)
       {}
 
     /* XXX fix */

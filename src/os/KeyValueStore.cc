@@ -1506,7 +1506,7 @@ bool KeyValueStore::exists(CollectionHandle ch, const hoid_t& oid)
 
 ObjectHandle KeyValueStore::get_object(
   CollectionHandle ch, const hoid_t& oid) {
-  return new KVObject(oid);
+  return new KVObject(ch, oid);
 }
 
 void put_object(ObjectHandle oh) {
