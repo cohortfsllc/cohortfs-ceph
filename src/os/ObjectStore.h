@@ -92,7 +92,7 @@ public:
     {
       INIT = 0,
 	CREATING,
-        READY
+	READY
     };
 
   protected:
@@ -222,7 +222,8 @@ public:
   typedef Object* ObjectHandle;
   typedef Collection* CollectionHandle;
 
-  typedef std::tuple<ObjectStore::CollectionHandle, coll_t, uint8_t> col_slot_t;
+  typedef std::tuple<ObjectStore::CollectionHandle, coll_t,
+		     uint8_t>col_slot_t;
   typedef std::tuple<ObjectStore::ObjectHandle, hoid_t, uint8_t> obj_slot_t;
 
   /**
@@ -246,14 +247,15 @@ public:
    * sequence.	Transactions queued under different sequencers may run
    * in parallel.
    *
-   * Clients of ObjectStore create and maintain their own Sequencer objects.
-   * When a list of transactions is queued the caller specifies a Sequencer to be used.
+   * Clients of ObjectStore create and maintain their own Sequencer
+   * objects.  When a list of transactions is queued the caller
+   * specifies a Sequencer to be used.
    *
    */
 
   /**
-   * ABC for Sequencer implementation, private to the ObjectStore derived class.
-   * created in ...::queue_transaction(s)
+   * ABC for Sequencer implementation, private to the ObjectStore
+   * derived class.  created in ...::queue_transaction(s)
    */
   struct Sequencer_impl {
     virtual void flush() = 0;
@@ -622,7 +624,8 @@ public:
       return C_Contexts::vec_to_context(on_applied_sync);
     }
 
-    /// For legacy transactions, provide the pool to override the encoded pool with
+    /// For legacy transactions, provide the pool to override the
+    /// encoded pool with
     void set_pool_override(int64_t pool) {
       pool_override = pool;
     }
@@ -691,8 +694,8 @@ public:
     // is known by its identifier
     int push_cid(const coll_t& cid) {
       for (uint16_t i = 0; i < col_ix; i++)
-        if (std::get<1>(col_slots[i]) == cid)
-          return i;
+	if (std::get<1>(col_slots[i]) == cid)
+	  return i;
       col_slots.push_back(col_slot_t(nullptr, cid, 0));
       return col_ix++;
     }
@@ -702,10 +705,10 @@ public:
     int push_col(const CollectionHandle ch) {
       auto cid = ch->get_cid();
       for (uint16_t i = 0; i < col_ix; i++) {
-        if (std::get<1>(col_slots[i]) == cid) {
-          std::get<0>(col_slots[i]) = ch; // set handle
-          return i;
-        }
+	if (std::get<1>(col_slots[i]) == cid) {
+	  std::get<0>(col_slots[i]) = ch; // set handle
+	  return i;
+	}
       }
       col_slots.push_back(col_slot_t(ch, ch->get_cid(), 0));
       return col_ix++;
@@ -714,8 +717,8 @@ public:
     // Ditto, for objects
     int push_oid(const hoid_t& oid) {
       for (uint16_t i = 0; i < obj_ix; i++)
-        if (std::get<1>(obj_slots[i]) == oid)
-          return i;
+	if (std::get<1>(obj_slots[i]) == oid)
+	  return i;
       obj_slots.push_back(obj_slot_t(nullptr, oid, 0));
       return obj_ix++;
     }
@@ -723,10 +726,10 @@ public:
     int push_obj(ObjectHandle oh) {
       auto oid = oh->get_oid();
       for (uint16_t i = 0; i < obj_ix; i++) {
-        if (std::get<1>(obj_slots[i]) == oid) {
-          std::get<0>(obj_slots[i]) = oh; // set handle
-          return i;
-        }
+	if (std::get<1>(obj_slots[i]) == oid) {
+	  std::get<0>(obj_slots[i]) = oh; // set handle
+	  return i;
+	}
       }
       obj_slots.push_back(obj_slot_t(oh, oh->get_oid(), 0));
       return obj_ix++;
@@ -1147,7 +1150,8 @@ public:
     void omap_setkeys(
       int col_ix, ///< [in] Collection containing oid
       int obj_ix, ///< [in] Object to update
-      const map<string, bufferlist> &attrset ///< [in] Replacement keys and values
+      const map<string, bufferlist> &attrset ///< [in] Replacement
+					     ///keys and values
       ) {
       ops.push_back(Op(OP_OMAP_SETKEYS));
       Op &op = ops.back();
@@ -1157,7 +1161,8 @@ public:
     }
 
     void omap_setkeys(
-      const map<string, bufferlist> &attrset ///< [in] Replacement keys and values
+      const map<string, bufferlist> &attrset ///< [in] Replacement
+					     ///keys and values
       ) {
       assert(col_ix > 0);
       assert(obj_ix > 0);
@@ -1191,7 +1196,8 @@ public:
       int col_ix, ///< [in] Collection containing oid
       int obj_ix, ///< [in] Object from which to remove the omap keys
       const string& first,  ///< [in] first key in range
-      const string& last    ///< [in] first key past range, range is [first,last)
+      const string& last    ///< [in] first key past range, range is
+			    ///[first,last)
       ) {
       ops.push_back(Op(OP_OMAP_RMKEYRANGE));
       Op &op = ops.back();
@@ -1341,7 +1347,8 @@ public:
     tls.push_back(&t);
     return apply_transactions(NULL, tls, ondisk);
   }
-  unsigned apply_transaction(Sequencer* osr, Transaction& t, Context* ondisk=0) {
+  unsigned apply_transaction(Sequencer* osr, Transaction& t,
+			     Context* ondisk=0) {
     list<Transaction*> tls;
     tls.push_back(&t);
     return apply_transactions(osr, tls, ondisk);
@@ -1349,7 +1356,8 @@ public:
   unsigned apply_transactions(list<Transaction*>& tls, Context* ondisk=0) {
     return apply_transactions(NULL, tls, ondisk);
   }
-  unsigned apply_transactions(Sequencer* osr, list<Transaction*>& tls, Context* ondisk=0);
+  unsigned apply_transactions(Sequencer* osr, list<Transaction*>& tls,
+			      Context* ondisk=0);
 
   int queue_transaction_and_cleanup(Sequencer* osr, Transaction* t,
 				    ThreadPool::TPHandle* handle = NULL) {
@@ -1359,7 +1367,8 @@ public:
 			      NULL, NULL, OpRequestRef(), handle);
   }
 
-  int queue_transaction(Sequencer* osr, Transaction* t, Context* onreadable, Context* ondisk=0,
+  int queue_transaction(Sequencer* osr, Transaction* t, Context* onreadable,
+			Context* ondisk=0,
 			Context* onreadable_sync=0,
 			OpRequestRef op = OpRequestRef(),
 			ThreadPool::TPHandle* handle = NULL) {
@@ -1619,7 +1628,8 @@ public:
    * @param len number of bytes to be read
    * @param bl output bufferlist
    * @param allow_eio if false, assert on -EIO operation failure
-   * @returns number of bytes read on success, or negative error code on failure.
+   * @returns number of bytes read on success, or negative error code
+   * on failure.
    */
   virtual int read(
     CollectionHandle ch,
@@ -1691,7 +1701,8 @@ public:
    * @param ch collection for object
    * @param oid oid of object
    * @param aset place to put output result.
-   * @param user_only true -> only user attributes are return else all attributes are returned
+   * @param user_only true -> only user attributes are return else all
+   * attributes are returned
    * @returns 0 on success, negative error code on failure.
    */
   virtual int getattrs(CollectionHandle ch, ObjectHandle oh,
@@ -1704,7 +1715,8 @@ public:
    * @param ch collection for object
    * @param oid oid of object
    * @param aset place to put output result.
-   * @param user_only true -> only user attributes are return else all attributes are returned
+   * @param user_only true -> only user attributes are return else all
+   * attributes are returned
    * @returns 0 on success, negative error code on failure.
    */
   int getattrs(CollectionHandle ch, ObjectHandle oh,
