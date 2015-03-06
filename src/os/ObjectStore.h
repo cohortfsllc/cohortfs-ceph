@@ -85,14 +85,14 @@ public:
       > FlushQueue;
 
   protected:
-    hoid_t oid;
+    ObjectContext obc;
 
   public:
-    explicit Object(const hoid_t& _oid) : oid(_oid)
-      {}
+    explicit Object(const hoid_t& _oid) : obc(_oid)
+    {}
 
-    const hoid_t& get_oid() {
-      return oid;
+    const hoid_t& get_oid() const {
+      return obc.obs.oi.oid; // whee!
     }
 
     /* per ObjectStore LRU */
@@ -108,26 +108,26 @@ public:
     {
       // for internal ordering
       bool operator()(const Object& lhs, const Object& rhs) const
-      { return lhs.oid < rhs.oid; }
+      { return lhs.get_oid() < rhs.get_oid(); }
       
       // for external search by hoid_t
       bool operator()(const hoid_t& oid, const Object& o) const
-      { return oid < o.oid; }
+      { return oid < o.get_oid(); }
 
       bool operator()(const Object& o, const hoid_t& oid) const
-      { return o.oid < oid; }
+      { return o.get_oid() < oid; }
     };
 
     struct OidEQ
     {
       bool operator()(const Object& lhs, const Object& rhs) const
-      { return lhs.oid == rhs.oid; }
+      { return lhs.get_oid() == rhs.get_oid(); }
 
       bool operator()(const hoid_t& oid, const Object& o) const
-      { return oid == o.oid; }
+      { return oid == o.get_oid(); }
 
       bool operator()(const Object& o, const hoid_t& oid) const
-      { return o.oid == oid; }
+      { return o.get_oid() == oid; }
     };
 
     typedef bi::member_hook<
