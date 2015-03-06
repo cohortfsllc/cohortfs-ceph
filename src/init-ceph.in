@@ -331,10 +331,10 @@ for name in $what; do
 
 		if [ "$fs_type" = "btrfs" ]; then
 		    echo Mounting Btrfs on $host:$fs_path
-		    do_root_cmd "modprobe btrfs ; btrfs device scan || btrfsctl -a ; egrep -q '^[^ ]+ $fs_path' /proc/mounts || mount -t btrfs $fs_opt $first_dev $fs_path"
+		    do_cmd "modprobe btrfs ; btrfs device scan || btrfsctl -a ; egrep -q '^[^ ]+ $fs_path' /proc/mounts || mount -t btrfs $fs_opt $first_dev $fs_path"
 		else
 		    echo Mounting $fs_type on $host:$fs_path
-		    do_root_cmd "modprobe $fs_type ; egrep -q '^[^ ]+ $fs_path' /proc/mounts || mount -t $fs_type $fs_opt $first_dev $fs_path"
+		    do_cmd "modprobe $fs_type ; egrep -q '^[^ ]+ $fs_path' /proc/mounts || mount -t $fs_type $fs_opt $first_dev $fs_path"
 		fi
 	    fi
 
@@ -379,7 +379,7 @@ for name in $what; do
 	    [ -n "$lockfile" ] && [ "$?" -eq 0 ] && rm -f $lockfile
 	    if [ $dofsumount -eq 1 ] && [ -n "$fs_devs" ]; then
 		echo Unmounting OSD volume on $host:$fs_path
-		do_root_cmd "umount $fs_path || true"
+		do_cmd "umount $fs_path || true"
 	    fi
 	    ;;
 

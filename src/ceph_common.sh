@@ -73,11 +73,7 @@ check_host() {
 	fi
 
 	# we'll need to ssh into that host
-	if [ -z "$user" ]; then
-	    ssh="ssh $host"
-	else
-	    ssh="ssh $user@$host"
-	fi
+	ssh="ssh $host"
 	rootssh="ssh root@$host"
 	get_conf sshdir "$sshdir" "ssh path"
     fi
@@ -90,16 +86,10 @@ check_host() {
 do_cmd() {
     if [ -z "$ssh" ]; then
 	[ $verbose -eq 1 ] && echo "--- $host# $1"
-	ulimit -c unlimited
-	whoami=`whoami`
-	if [ "$whoami" = "$user" ] || [ -z "$user" ]; then
-	    bash -c "$1" || { [ -z "$3" ] && echo "failed: '$1'" && exit 1; }
-	else
-	    sudo su $user -c "$1" || { [ -z "$3" ] && echo "failed: '$1'" && exit 1; }
-	fi
+	bash -c "$1" || { [ -z "$3" ] && echo "failed: '$1'" && exit 1; }
     else
-	[ $verbose -eq 1 ] && echo "--- $ssh $2 \"if [ ! -d $sshdir ]; then mkdir -p $sshdir; fi; cd $sshdir ; ulimit -c unlimited ; LD_LIBRARY_PATH=${LD_LIBRARY_PATH} PYTHONPATH=${PYTHONPATH} $1\""
-	$ssh $2 "if [ ! -d $sshdir ]; then mkdir -p $sshdir; fi; cd $sshdir ; ulimit -c unlimited ; LD_LIBRARY_PATH=${LD_LIBRARY_PATH} PYTHONPATH=${PYTHONPATH} $1" || { [ -z "$3" ] && echo "failed: '$ssh $1'" && exit 1; }
+	[ $verbose -eq 1 ] && echo "--- $ssh $2 \"if [ ! -d $sshdir ]; then mkdir -p $sshdir; fi; cd $sshdir ; LD_LIBRARY_PATH=${LD_LIBRARY_PATH} PYTHONPATH=${PYTHONPATH} $1\""
+	$ssh $2 "if [ ! -d $sshdir ]; then mkdir -p $sshdir; fi; cd $sshdir ; LD_LIBRARY_PATH=${LD_LIBRARY_PATH} PYTHONPATH=${PYTHONPATH} $1" || { [ -z "$3" ] && echo "failed: '$ssh $1'" && exit 1; }
     fi
 }
 
@@ -107,34 +97,12 @@ do_cmd_okfail() {
     ERR=0
     if [ -z "$ssh" ]; then
 	[ $verbose -eq 1 ] && echo "--- $host# $1"
-	ulimit -c unlimited
-	whoami=`whoami`
-	if [ "$whoami" = "$user" ] || [ -z "$user" ]; then
-	    bash -c "$1" || { [ -z "$3" ] && echo "failed: '$1'" && ERR=1 && return 1; }
-	else
-	    sudo su $user -c "$1" || { [ -z "$3" ] && echo "failed: '$1'" && ERR=1 && return 1; }
-	fi
+	bash -c "$1" || { [ -z "$3" ] && echo "failed: '$1'" && ERR=1 && return 1; }
     else
-	[ $verbose -eq 1 ] && echo "--- $ssh $2 \"if [ ! -d $sshdir ]; then mkdir -p $sshdir; fi; cd $sshdir ; ulimit -c unlimited ; $1\""
-	$ssh $2 "if [ ! -d $sshdir ]; then mkdir -p $sshdir; fi; cd $sshdir ; ulimit -c unlimited ; $1" || { [ -z "$3" ] && echo "failed: '$ssh $1'" && ERR=1 && return 1; }
+	[ $verbose -eq 1 ] && echo "--- $ssh $2 \"if [ ! -d $sshdir ]; then mkdir -p $sshdir; fi; cd $sshdir ; $1\""
+	$ssh $2 "if [ ! -d $sshdir ]; then mkdir -p $sshdir; fi; cd $sshdir ; $1" || { [ -z "$3" ] && echo "failed: '$ssh $1'" && ERR=1 && return 1; };
     fi
     return 0
-}
-
-do_root_cmd() {
-    if [ -z "$ssh" ]; then
-	[ $verbose -eq 1 ] && echo "--- $host# $1"
-	ulimit -c unlimited
-	whoami=`whoami`
-	if [ "$whoami" = "root" ]; then
-	    bash -c "$1" || { echo "failed: '$1'" ; exit 1; }
-	else
-	    sudo bash -c "$1" || { echo "failed: '$1'" ; exit 1; }
-	fi
-    else
-	[ $verbose -eq 1 ] && echo "--- $rootssh $2 \"if [ ! -d $sshdir ]; then mkdir -p $sshdir; fi ; cd $sshdir ; ulimit -c unlimited ; LD_LIBRARY_PATH=${LD_LIBRARY_PATH} PYTHONPATH=${PYTHONPATH} $1\""
-	$rootssh $2 "if [ ! -d $sshdir ]; then mkdir -p $sshdir; fi ; cd $sshdir; ulimit -c unlimited ; LD_LIBRARY_PATH=${LD_LIBRARY_PATH} PYTHONPATH=${PYTHONPATH} $1" || { echo "failed: '$rootssh $1'" ; exit 1; }
-    fi
 }
 
 get_local_daemon_list() {

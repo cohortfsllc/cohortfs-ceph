@@ -72,7 +72,9 @@ usage_exit() {
 . $LIBDIR/ceph_common.sh
 
 
+prepare=0
 allhosts=0
+localhosts=0
 mkfs=0
 preparemonmap=0
 prepareosdfs=""
@@ -86,7 +88,7 @@ usecrushmapsrc=
 usecrushmap=
 verbose=0
 adminkeyring=""
-conf=""
+setconf=""
 dir=""
 moreargs=""
 auto_action=0
@@ -105,7 +107,15 @@ case $1 in
 	    ;;
     --allhosts | -a)
 	    allhosts=1
+	    localhosts=0
             auto_action=1
+	    prepare=1
+	    ;;
+    --localhosts | -l)
+	    localhosts=1
+	    allhosts=0
+            auto_action=1
+	    prepare=1
 	    ;;
     --prepare-monmap)
 	    preparemonmap=1
@@ -142,7 +152,7 @@ case $1 in
     --conf | -c)
 	    [ -z "$2" ] && usage_exit
 	    shift
-	    conf=$1
+	    setconf=$1
 	    ;;
     --numosd)
 	    [ -z "$2" ] && usage_exit
@@ -182,7 +192,11 @@ shift
 done
 
 
-[ -z "$conf" ] && [ -n "$dir" ] && conf="$dir/conf"
+if [ -n "$setconf" ]; then
+	conf="$setconf"
+elif [ -n "$dir" ]; then
+	conf="$dir/conf"
+fi
 
 if [ $manual_action -eq 0 ]; then
     if [ $auto_action -eq 0 ]; then
@@ -455,7 +469,7 @@ fi
 
 ### do everything via ssh ###
 
-if [ $allhosts -eq 1 ]; then
+if [ $prepare -eq 1 ]; then
 
     verify_conf
 
@@ -499,10 +513,10 @@ if [ $allhosts -eq 1 ]; then
 	fi
 
 	if [ $mkfs -eq 1 ] && [ "$type" = "osd" ]; then
-	    do_root_cmd "$0 -d $rdir --prepare-osdfs $name"
+	    do_cmd "$0 -d $rdir --prepare-osdfs $name"
 	fi
 
-	do_root_cmd "$0 -d $rdir --init-daemon $name"
+	do_cmd "$0 -d $rdir --init-daemon $name"
 
 	# collect the key
 	if [ -n "$ssh" ]; then
@@ -545,7 +559,7 @@ if [ $allhosts -eq 1 ]; then
 	    fi
 	fi
 
-	do_root_cmd "$0 -d $rdir --init-daemon $name"
+	do_cmd "$0 -d $rdir --init-daemon $name"
 
 	if [ -n "$ssh" ]; then
 	    #cleanup no longer need rdir
