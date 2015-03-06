@@ -94,11 +94,6 @@ public:
     return info;
   }
 
-  ObjectContextRef get_obc(const hoid_t& oid,
-			   map<string, bufferlist>& attrs) {
-    return get_object_context(oid, true, &attrs);
-  }
-
   entity_name_t get_cluster_msgr_name();
 
   ceph_tid_t get_tid();
