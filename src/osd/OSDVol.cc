@@ -829,7 +829,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
   const hoid_t& soid = oi.oid; // ctx->new_objs->obs.oi.oid
   const hoid_t& obc_soid = ctx->obc->obs.oi.oid;
 
-  ObjectStore::Transaction* t = ctx->op_t;  
+  ObjectStore::Transaction* t = ctx->op_t;
   bool first_read = true;
 
   uint16_t c_ix = t->push_col(coll);
@@ -2361,15 +2361,15 @@ void OSDVol::eval_mutation(Mutation *mutation)
 	dout(10) << " sending commit on " << mutation->tid << " "
 		 << reply << dendl;
 
-        if (mutation->ctx->op->trace) {
-          mutation->ctx->op->trace.event(
-                                     "eval_mutation sending commit",
+	if (mutation->ctx->op->trace) {
+	  mutation->ctx->op->trace.event(
+	    "eval_mutation sending commit",
 				     &trace_endpoint);
-          // send reply with a child span
-          Messenger *msgr = m->get_connection()->get_messenger();
-          reply->trace.init("MOSDOpReply", msgr->get_trace_endpoint(),
-                            &mutation->ctx->op->trace);
-        }
+	  // send reply with a child span
+	  Messenger *msgr = m->get_connection()->get_messenger();
+	  reply->trace.init("MOSDOpReply", msgr->get_trace_endpoint(),
+			    &mutation->ctx->op->trace);
+	}
 	osd->send_message_osd_client(reply, m->get_connection());
 	mutation->sent_disk = true;
 	mutation->ctx->op->mark_commit_sent();
@@ -2392,14 +2392,14 @@ void OSDVol::eval_mutation(Mutation *mutation)
 	reply->add_flags(CEPH_OSD_FLAG_ACK);
 	dout(10) << " sending ack on " << mutation->tid << " " << reply
 		 << dendl;
-        if (mutation->ctx->op->trace) {
-          mutation->ctx->op->trace.event("eval_mutation sending ack",
-                                         &trace_endpoint);
-          // send reply with a child span
-          Messenger *msgr = m->get_connection()->get_messenger();
-          reply->trace.init("MOSDOpReply", msgr->get_trace_endpoint(),
-                            &mutation->ctx->op->trace);
-        }
+	if (mutation->ctx->op->trace) {
+	  mutation->ctx->op->trace.event("eval_mutation sending ack",
+					 &trace_endpoint);
+	  // send reply with a child span
+	  Messenger *msgr = m->get_connection()->get_messenger();
+	  reply->trace.init("MOSDOpReply", msgr->get_trace_endpoint(),
+			    &mutation->ctx->op->trace);
+	}
 
 	assert(entity_name_t::TYPE_OSD !=
 	       m->get_connection()->peer_type);
@@ -2803,7 +2803,7 @@ void OSDVol::issue_mutation(Mutation *mutation)
   op_t->register_on_applied_sync(onapplied_sync);
   op_t->register_on_applied(on_all_applied);
   op_t->register_on_applied(
-          new ObjectStore::C_DeleteTransaction(op_t));
+    new ObjectStore::C_DeleteTransaction(op_t));
   op_t->register_on_commit(on_all_commit);
 
   osd->store->queue_transaction(osr.get(), op_t, 0, 0, 0,

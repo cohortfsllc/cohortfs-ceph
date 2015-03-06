@@ -115,7 +115,7 @@ public:
 
     bool modify; // (force) modification (even if op_t is empty)
     bool user_modify; // user-visible modification
-    
+
     struct WatchesNotifies {
       // side effects
       vector<watch_info_t> watch_connects;
@@ -510,7 +510,8 @@ protected:
     list<ObjectContextRef>* pls;
     C_OSD_OndiskWriteUnlockList(list<ObjectContextRef>* l) : pls(l) {}
     void finish(int r) {
-      for (list<ObjectContextRef>::iterator p = pls->begin(); p != pls->end(); ++p)
+      for (list<ObjectContextRef>::iterator p = pls->begin(); p != pls->end();
+	   ++p)
 	(*p)->ondisk_write_unlock();
     }
   };
@@ -604,7 +605,7 @@ public:
   const coll_t& get_cid(void) {
     return cid;
   }
-  
+
   CollectionHandle get_coll(void) {
     return coll;
   }
