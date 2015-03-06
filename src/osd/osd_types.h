@@ -652,7 +652,8 @@ struct watch_info_t {
   entity_addr_t addr;
 
   watch_info_t() : cookie(0), timeout_seconds(0) { }
-  watch_info_t(uint64_t c, uint32_t t, const entity_addr_t& a) : cookie(c), timeout_seconds(t), addr(a) {}
+  watch_info_t(uint64_t c, uint32_t t, const entity_addr_t& a)
+    : cookie(c), timeout_seconds(t), addr(a) {}
 
   void encode(bufferlist& bl) const;
   void decode(bufferlist::iterator& bl);
@@ -661,14 +662,17 @@ struct watch_info_t {
 };
 WRITE_CLASS_ENCODER(watch_info_t)
 
-static inline bool operator==(const watch_info_t& l, const watch_info_t& r) {
-  return l.cookie == r.cookie && l.timeout_seconds == r.timeout_seconds
-	    && l.addr == r.addr;
+static inline bool operator==(const watch_info_t& l,
+			      const watch_info_t& r) {
+  return l.cookie == r.cookie &&
+    l.timeout_seconds == r.timeout_seconds && l.addr == r.addr;
 }
 
-static inline ostream& operator<<(ostream& out, const watch_info_t& w) {
-  return out << "watch(cookie " << w.cookie << " " << w.timeout_seconds << "s"
-    << " " << w.addr << ")";
+static inline ostream& operator<<(ostream& out,
+				  const watch_info_t& w) {
+  return out << "watch(cookie " << w.cookie << " "
+	     << w.timeout_seconds << "s"
+	     << " " << w.addr << ")";
 }
 
 struct notify_info_t {
@@ -677,8 +681,10 @@ struct notify_info_t {
   bufferlist bl;
 };
 
-static inline ostream& operator<<(ostream& out, const notify_info_t& n) {
-  return out << "notify(cookie " << n.cookie << " " << n.timeout << "s)";
+static inline ostream& operator<<(ostream& out,
+				  const notify_info_t& n) {
+  return out << "notify(cookie " << n.cookie << " "
+	     << n.timeout << "s)";
 }
 
 struct object_info_t {
@@ -707,6 +713,7 @@ struct object_info_t {
       return s.substr(1);
     return s;
   }
+
   string get_flag_string() const {
     return get_flag_string(flags);
   }
@@ -723,12 +730,15 @@ struct object_info_t {
   bool test_flag(flag_t f) const {
     return (flags & f) == f;
   }
+
   void set_flag(flag_t f) {
     flags = (flag_t)(flags | f);
   }
+
   void clear_flag(flag_t f) {
     flags = (flag_t)(flags & ~f);
   }
+
   bool is_omap() const {
     return test_flag(FLAG_OMAP);
   }
@@ -760,14 +770,18 @@ WRITE_CLASS_ENCODER(object_info_t)
 
 struct ObjectState {
   object_info_t oi;
-  bool exists;	       ///< the stored object exists (i.e., we will remember the object_info_t)
+  bool exists; /* < the stored object exists (i.e., we will remember
+		  the object_info_t) */
 
+  /* XXX not well-formed, oid not initialized */
   ObjectState() : exists(false) {}
+
+  ObjectState(const hoid_t& _oid)
+    : oi(_oid), exists(false) {}
 
   ObjectState(const object_info_t &oi_, bool exists_)
     : oi(oi_), exists(exists_) {}
 };
-
 
 /*
   * keep tabs on object modifications that are in flight.
@@ -790,7 +804,8 @@ public:
   std::condition_variable cond;
   int unstable_writes, readers, writers_waiting, readers_waiting;
 
-  // any entity in obs.oi.watchers MUST be in either watchers or unconnected_watchers.
+  /* any entity in obs.oi.watchers MUST be in either watchers or
+   * unconnected_watchers. */
   map<pair<uint64_t, entity_name_t>, WatchRef> watchers;
 
   struct RWState {
@@ -818,6 +833,7 @@ public:
     RWState()
       : state(RWNONE), count(0)
     {}
+
     bool get_read(OpRequestRef op) {
       if (get_read_lock()) {
 	return true;
@@ -826,6 +842,7 @@ public:
       waiters.push_back(*op);
       return false;
     }
+
     /// this function adjusts the counts if necessary
     bool get_read_lock() {
       // don't starve anybody!
@@ -856,6 +873,7 @@ public:
 	waiters.push_back(*op);
       return false;
     }
+
     bool get_write_lock() {
       // don't starve anybody!
       if (!waiters.empty()) {
@@ -876,6 +894,7 @@ public:
 	return false;
       }
     }
+
     /// same as get_write_lock, but ignore starvation
     bool take_write_lock() {
       if (state == RWWRITE) {
@@ -884,6 +903,7 @@ public:
       }
       return get_write_lock();
     }
+
     void dec(OpRequest::Queue& to_requeue) {
       assert(count > 0);
       count--;
@@ -893,10 +913,12 @@ public:
 	state = RWNONE;
       }
     }
+
     void put_read(OpRequest::Queue& to_requeue) {
       assert(state == RWREAD);
       dec(to_requeue);
     }
+
     void put_write(OpRequest::Queue& to_requeue) {
       assert(state == RWWRITE);
       dec(to_requeue);
@@ -907,26 +929,35 @@ public:
   bool get_read(OpRequestRef op) {
     return rwstate.get_read(op);
   }
+
   bool get_write(OpRequestRef op) {
     return rwstate.get_write(op);
   }
+
   void put_read(OpRequest::Queue& to_wake) {
     rwstate.put_read(to_wake);
   }
+
   void put_write(OpRequest::Queue& to_wake,
 		 bool *requeue_recovery) {
     rwstate.put_write(to_wake);
   }
 
+  /* XXX not well-formed (oid not initialized) */
   ObjectContext()
     : unstable_writes(0), readers(0), writers_waiting(0),
       readers_waiting(0) {}
+
+  ObjectContext(const hoid_t& _oid)
+    : obs(_oid), unstable_writes(0), readers(0),
+      writers_waiting(0), readers_waiting(0) {}
 
   ~ObjectContext() {
     assert(rwstate.empty());
   }
 
-  // do simple synchronous mutual exclusion, for now.  now waitqueues or anything fancy.
+  /* do simple synchronous mutual exclusion, for now. no waitqueues
+   * or anything fancy. */
   void ondisk_write_lock() {
     std::unique_lock<std::mutex> l(lock);
     writers_waiting++;
@@ -935,6 +966,7 @@ public:
     unstable_writes++;
     l.unlock();
   }
+
   void ondisk_write_unlock() {
     std::lock_guard<std::mutex> l(lock);
     assert(unstable_writes > 0);
@@ -942,6 +974,7 @@ public:
     if (!unstable_writes && readers_waiting)
       cond.notify_all();
   }
+
   void ondisk_read_lock() {
     std::unique_lock<std::mutex> l(lock);
     readers_waiting++;
@@ -949,6 +982,7 @@ public:
     readers_waiting--;
     readers++;
   }
+
   void ondisk_read_unlock() {
     std::lock_guard<std::mutex> l(lock);
     assert(readers > 0);
@@ -960,7 +994,8 @@ public:
   // attr cache
   map<string, bufferlist> attr_cache;
 
-  void fill_in_setattrs(const set<string> &changing, ObjectModDesc *mod) {
+  void fill_in_setattrs(const set<string> &changing,
+			ObjectModDesc *mod) {
     map<string, boost::optional<bufferlist> > to_set;
     for (set<string>::const_iterator i = changing.begin();
 	 i != changing.end();
@@ -984,7 +1019,8 @@ inline ostream& operator<<(ostream& out, const ObjectState& obs)
   return out;
 }
 
-inline ostream& operator<<(ostream& out, const ObjectContext::RWState& rw)
+inline ostream& operator<<(ostream& out,
+			   const ObjectContext::RWState& rw)
 {
   return out << "rwstate(" << rw.get_state_name()
 	     << " n=" << rw.count
@@ -1017,12 +1053,14 @@ struct OSDOp {
   }
 
   /**
-   * split a bufferlist into constituent indata nembers of a vector of OSDOps
+   * split a bufferlist into constituent indata nembers of a vector
+   * of OSDOps
    *
    * @param ops [out] vector of OSDOps
    * @param in	[in] combined data buffer
    */
-  static void split_osd_op_vector_in_data(vector<OSDOp>& ops, bufferlist& in);
+  static void split_osd_op_vector_in_data(vector<OSDOp>& ops,
+					  bufferlist& in);
 
   /**
    * merge indata nembers of a vector of OSDOp into a single bufferlist
@@ -1033,23 +1071,28 @@ struct OSDOp {
    * @param ops [in] vector of OSDOps
    * @param in	[out] combined data buffer
    */
-  static void merge_osd_op_vector_in_data(vector<OSDOp>& ops, bufferlist& out);
+  static void merge_osd_op_vector_in_data(vector<OSDOp>& ops,
+					  bufferlist& out);
 
   /**
-   * split a bufferlist into constituent outdata members of a vector of OSDOps
+   * split a bufferlist into constituent outdata members of a vector
+   * of OSDOps
    *
    * @param ops [out] vector of OSDOps
    * @param in	[in] combined data buffer
    */
-  static void split_osd_op_vector_out_data(vector<OSDOp>& ops, bufferlist& in);
+  static void split_osd_op_vector_out_data(vector<OSDOp>& ops,
+					   bufferlist& in);
 
   /**
-   * merge outdata members of a vector of OSDOps into a single bufferlist
+   * merge outdata members of a vector of OSDOps into a single
+   * bufferlist
    *
    * @param ops [in] vector of OSDOps
    * @param in	[out] combined data buffer
    */
-  static void merge_osd_op_vector_out_data(vector<OSDOp>& ops, bufferlist& out);
+  static void merge_osd_op_vector_out_data(vector<OSDOp>& ops,
+					   bufferlist& out);
 };
 
 ostream& operator<<(ostream& out, const OSDOp& op);
