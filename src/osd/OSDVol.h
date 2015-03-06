@@ -291,9 +291,6 @@ protected:
   // Ops waiting for map, should be queued at back
   std::mutex map_lock;
 
-  list<OpRequestRef> waiting_for_map;
-  OpRequest::Queue waiting_map_queue; // XXX new intrusive version
-
   OSDMapRef osdmap_ref;
   OSDMapRef last_persisted_osdmap_ref;
 
