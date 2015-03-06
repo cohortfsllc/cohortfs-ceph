@@ -187,7 +187,7 @@ public:
     OpContext(OpRequestRef _op, osd_reqid_t _reqid, vector<OSDOp>& _ops,
 	      ObjectState* _obs, OSDVol* _vol) :
       op(_op), reqid(_reqid), ops(_ops), obs(_obs),
-      new_obs(_obs->oi, _obs->exists),
+      new_obs(_obs->oi, _obs->oh, _obs->exists),
       modify(false), user_modify(false),
       watches_notifies(nullptr),
       user_at_version(0),
@@ -201,9 +201,12 @@ public:
       lock_to_release(NONE),
       on_finish(NULL) {
     }
+
     void reset_obs(ObjectContextRef obc) {
-      new_obs = ObjectState(obc->obs.oi, obc->obs.exists);
+      /* forward object info, existence, and handle */
+      new_obs = ObjectState(obc->obs.oi, obc->obs.oh, obc->obs.exists);
     }
+
     ~OpContext() {
       assert(!op_t);
       assert(lock_to_release == NONE);
@@ -317,6 +320,7 @@ protected:
    */
 public:
   std::mutex lock;
+
 protected:
   std::atomic<uint64_t> ref;
 
@@ -515,7 +519,6 @@ protected:
 	(*p)->ondisk_write_unlock();
     }
   };
-
 
 public:
   // last_update that has committed; ONLY DEFINED WHEN is_active()

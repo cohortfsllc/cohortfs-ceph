@@ -790,17 +790,15 @@ WRITE_CLASS_ENCODER(object_info_t)
 
 struct ObjectState {
   object_info_t oi;
+  void* oh; /* ObjectHandle */
   bool exists; /* < the stored object exists (i.e., we will remember
 		  the object_info_t) */
 
-  /* XXX not well-formed, oid not initialized */
-  ObjectState() : exists(false) {}
+  ObjectState(const hoid_t& _oid, void* _oh)
+    : oi(_oid), oh(_oh), exists(false) {}
 
-  ObjectState(const hoid_t& _oid)
-    : oi(_oid), exists(false) {}
-
-  ObjectState(const object_info_t &oi_, bool exists_)
-    : oi(oi_), exists(exists_) {}
+  ObjectState(const object_info_t &_oi, void* _oh, bool _exists)
+    : oi(_oi), oh(_oh), exists(_exists) {}
 };
 
 /*
@@ -822,7 +820,6 @@ private:
   std::mutex lock; /* XXX */
 
 public:
-  void* oh; /* ObjectHandle */
   std::condition_variable cond;
   int unstable_writes, readers, writers_waiting, readers_waiting;
 
@@ -836,6 +833,7 @@ public:
       RWREAD,
       RWWRITE
     };
+
     static const char *get_state_name(State s) {
       switch (s) {
       case RWNONE: return "none";
@@ -844,6 +842,7 @@ public:
       default: return "???";
       }
     }
+
     const char *get_state_name() const {
       return get_state_name(state);
     }
@@ -945,6 +944,7 @@ public:
       assert(state == RWWRITE);
       dec(to_requeue);
     }
+
     bool empty() const { return state == RWNONE; }
   } rwstate;
 
@@ -964,12 +964,6 @@ public:
 		 bool *requeue_recovery) {
     rwstate.put_write(to_wake);
   }
-
-  /* XXX not well-formed (oid not initialized) */
-  ObjectContext()
-    : oh(nullptr),
-      unstable_writes(0), readers(0), writers_waiting(0), readers_waiting(0)
-  {}
 
   ObjectContext(const hoid_t& _oid, void* oh)
     : obs(_oid, oh),
