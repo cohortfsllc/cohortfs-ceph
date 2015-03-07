@@ -99,14 +99,6 @@ std::string OSDVol::gen_prefix() const
   return out.str();
 }
 
-void OSDVol::remove_object(
-  ObjectStore::Transaction &t, const hoid_t &oid)
-{
-  uint16_t c_ix = t.push_col(coll);
-  uint16_t o_ix = t.push_oid(oid); // XXXX oid?  open it?
-  t.remove(c_ix, o_ix);
-}
-
 void OSDVol::clear_primary_state()
 {
   dout(10) << "clear_primary_state" << dendl;
@@ -171,13 +163,29 @@ void OSDVol::init(void)
   ObjectStore::Transaction t;
   t.create_collection(cid);
   dirty_info = true;
-  write_info(t);
+  {
+    map<string,bufferlist> v;
+    ::encode(get_osdmap()->get_epoch(), v[get_epoch_key(info.volume)]);
+    ::encode(info, v[get_info_key(info.volume)]);
+    uint16_t c_ix = t.push_col(osd->meta_col);
+    uint16_t o_ix = t.push_oid(osd->infos_oid);
+    t.omap_setkeys(c_ix, o_ix, v);
+    last_persisted_osdmap_ref = osdmap_ref;
+    dirty_info = false;
+  }
   int r = osd->store->apply_transaction(t);
   if (r < 0) {
     throw std::system_error(-r, std::system_category(),
 			    "initializing volume");
   }
-}
+  /* cache info ObjectHandle */
+  osd->infos_oh =
+    osd->store->get_object(osd->meta_col, osd->infos_oid);
+  if (! osd->infos_oh) {
+    throw std::system_error(-EINVAL, std::system_category(),
+			    "get_object(osd->meta_col, osd->infos_oid)"); 
+  }
+} /* init */
 
 void OSDVol::write_info(ObjectStore::Transaction& t)
 {
@@ -185,7 +193,7 @@ void OSDVol::write_info(ObjectStore::Transaction& t)
   ::encode(get_osdmap()->get_epoch(), v[get_epoch_key(info.volume)]);
   ::encode(info, v[get_info_key(info.volume)]);
   uint16_t c_ix = t.push_col(osd->meta_col);
-  uint16_t o_ix = t.push_oid(osd->infos_oid); // XXX oid?  open it?
+  uint16_t o_ix = t.push_obj(osd->infos_oh);
   t.omap_setkeys(c_ix, o_ix, v);
   last_persisted_osdmap_ref = osdmap_ref;
   dirty_info = false;
@@ -204,15 +212,15 @@ void OSDVol::read_info()
   set<string> keys;
   keys.insert(k);
   map<string,bufferlist> values;
-  ObjectHandle oh =
+  osd->infos_oh =
     osd->store->get_object(osd->meta_col, osd->infos_oid);
-  if (! oh) {
+  if (! osd->infos_oh) {
     throw std::system_error(-EINVAL, std::system_category(),
 			    "reading volume info"); 
   }
   int r =
-    osd->store->omap_get_values(osd->meta_col, oh, keys, &values);
-  osd->store->put_object(oh);
+    osd->store->omap_get_values(osd->meta_col, osd->infos_oh,
+				keys, &values);
   if (r < 0) {
     throw std::system_error(-r, std::system_category(),
 			    "reading volume info");
@@ -221,7 +229,7 @@ void OSDVol::read_info()
   bufferlist bl = values[k];
   bufferlist::iterator p = bl.begin();
   ::decode(info, p);
-} /* read_info() */
+} /* read_info */
 
 void OSDVol::requeue_op(OpRequestRef op)
 {
@@ -588,10 +596,9 @@ struct OnReadComplete : public Context {
 void OSDVol::OpContext::start_async_reads(OSDVol *vol)
 {
   inflightreads = 1;
-  vol->objects_read_async(
-    obc->obs.oi.oid,
-    pending_async_reads,
-    new OnReadComplete(vol, this));
+  ObjectHandle oh = reinterpret_cast<ObjectHandle>(obc->obs.oh);
+  vol->objects_read_async(oh, pending_async_reads,
+			  new OnReadComplete(vol, this));
   pending_async_reads.clear();
 }
 
@@ -826,6 +833,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
   int result = 0;
   ObjectState& obs = ctx->new_obs;
   object_info_t& oi = obs.oi;
+  ObjectHandle soh = reinterpret_cast<ObjectHandle>(obs.oh);
   const hoid_t& soid = oi.oid; // ctx->new_objs->obs.oi.oid
   const hoid_t& obc_soid = ctx->obc->obs.oi.oid;
 
@@ -833,7 +841,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
   bool first_read = true;
 
   uint16_t c_ix = t->push_col(coll);
-  uint16_t o_ix = t->push_oid(soid);
+  uint16_t o_ix = t->push_obj(soh);
 
   dout(10) << "do_osd_op " << soid << " " << ops << dendl;
 
@@ -857,10 +865,12 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
     }
 
     ObjectContextRef src_obc;
+    ObjectHandle src_oh = nullptr;
     if (ceph_osd_op_type_multi(op.op)) {
       // For stripulation
       hoid_t src_obj(osd_op.oid);
       src_obc = ctx->src_obc[src_obj];
+      src_oh = reinterpret_cast<ObjectHandle>(src_obc->obs.oh);
       dout(10) << " src_obj " << src_obj << " obc " << src_obc
 	       << dendl;
       assert(src_obc);
@@ -924,20 +934,17 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	   * nothing, this is why the trimmed_read boolean is
 	   * needed */
 	} else {
-	  ObjectHandle oh = osd->store->get_object(coll, soid);
-	  if (oh) {
-	    int r = osd->store->read(coll, oh, op.extent.offset,
-		op.extent.length, osd_op.outdata);
-	    osd->store->put_object(oh);
-	    if (r >= 0)
-	      op.extent.length = r;
-	    else {
-	      result = r;
-	      op.extent.length = 0;
-	    }
-	    dout(10) << " read got " << r << " / " << op.extent.length
-		     << " bytes from obj " << soid << dendl;
+	  int r =
+	    osd->store->read(coll, soh, op.extent.offset, op.extent.length,
+			     osd_op.outdata);
+	  if (r >= 0)
+	    op.extent.length = r;
+	  else {
+	    result = r;
+	    op.extent.length = 0;
 	  }
+	  dout(10) << " read got " << r << " / " << op.extent.length
+		   << " bytes from obj " << soid << dendl;
 	}
 	if (first_read) {
 	  first_read = false;
@@ -946,7 +953,6 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	ctx->delta_stats.num_rd_kb +=
 	  SHIFT_ROUND_UP(op.extent.length, 10);
 	ctx->delta_stats.num_rd++;
-
       }
       break;
 
@@ -960,18 +966,13 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  result = -EINVAL;
 	  break;
 	}
-	ObjectHandle oh = osd->store->get_object(coll, soid);
-	if (!oh) {
-	  result = -ENOENT;
-	  break;
-	}
 	// read into a buffer
 	bufferlist bl;
 	int total_read = 0;
-	int r = osd->store->fiemap(coll, oh, op.extent.offset,
-				   op.extent.length, bl);
+	int r =
+	  osd->store->fiemap(coll, soh, op.extent.offset, op.extent.length,
+			     bl);
 	if (r < 0)  {
-	  osd->store->put_object(oh);
 	  result = r;
 	  break;
 	}
@@ -987,7 +988,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	      last < miter->first) {
 	    bufferlist t;
 	    uint64_t len = miter->first - last;
-	    r = osd->store->read(coll, oh, last, len, t);
+	    r = osd->store->read(coll, soh, last, len, t);
 	    if (!t.is_zero()) {
 	      osd->clog.error() << coll << " " << soid
 				<< " sparse-read found data in hole "
@@ -996,7 +997,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  }
 
 	  bufferlist tmpbl;
-	  r = osd->store->read(coll, oh, miter->first, miter->second,
+	  r = osd->store->read(coll, soh, miter->first, miter->second,
 			       tmpbl);
 	  if (r < 0)
 	    break;
@@ -1019,7 +1020,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  if (last < end) {
 	    bufferlist t;
 	    uint64_t len = end - last;
-	    r = osd->store->read(coll, oh, last, len, t);
+	    r = osd->store->read(coll, soh, last, len, t);
 	    if (!t.is_zero()) {
 	      osd->clog.error() << coll << " " << soid
 				<< " sparse-read found data in hole "
@@ -1027,8 +1028,6 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	    }
 	  }
 	}
-	osd->store->put_object(oh);
-
 	if (r < 0) {
 	  result = r;
 	  break;
@@ -1135,10 +1134,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	string aname;
 	bp.copy(op.xattr.name_len, aname);
 	string name = "_" + aname;
-	// XXXX
-	int r = objects_get_attr(ctx->obc->obs.oi.oid,
-				 name,
-				 &(osd_op.outdata));
+	int r = objects_get_attr(soh, name, &(osd_op.outdata));
 	if (r >= 0) {
 	  op.xattr.value_len = r;
 	  result = 0;
@@ -1152,15 +1148,8 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
    case CEPH_OSD_OP_GETXATTRS:
       ++ctx->num_read;
       {
-	ObjectHandle oh = osd->store->get_object(coll, soid);
-	if (!oh) {
-	  result = -ENOENT;
-	  break;
-	}
 	map<string, bufferlist> out;
-	result = osd->store->getattrs(coll, oh, out, true);
-	osd->store->put_object(oh);
-
+	result = osd->store->getattrs(coll, soh, out, true);
 	bufferlist bl;
 	::encode(out, bl);
 	ctx->delta_stats.num_rd_kb += SHIFT_ROUND_UP(bl.length(), 10);
@@ -1180,15 +1169,9 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 
 	bufferlist xattr;
 	if (op.op == CEPH_OSD_OP_CMPXATTR)
-	  result = objects_get_attr(
-	    ctx->obc->obs.oi.oid,
-	    name,
-	    &xattr);
+	  result = objects_get_attr(soh, name, &xattr);
 	else
-	  result = objects_get_attr(
-	    src_obc->obs.oi.oid,
-	    name,
-	    &xattr);
+	  result = objects_get_attr(src_oh, name, &xattr);
 	if (result < 0 && result != -EEXIST && result != -ENODATA)
 	  break;
 
@@ -1522,6 +1505,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	}
       }
       break;
+
     case CEPH_OSD_OP_CREATE:
       ++ctx->num_write;
       {
@@ -1725,11 +1709,6 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
     case CEPH_OSD_OP_OMAPGETKEYS:
       ++ctx->num_read;
       {
-	ObjectHandle oh = osd->store->get_object(coll, soid);
-	if (!oh) {
-	  result = -ENOENT;
-	  break;
-	}
 	string start_after;
 	uint64_t max_return;
 	try {
@@ -1743,7 +1722,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	set<string> out_set;
 
 	ObjectMap::ObjectMapIterator iter =
-	  osd->store->get_omap_iterator(coll, oh);
+	  osd->store->get_omap_iterator(coll, soh);
 	assert(iter);
 	iter->upper_bound(start_after);
 	for (uint64_t i = 0;
@@ -1751,7 +1730,6 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	     ++i, iter->next()) {
 	  out_set.insert(iter->key());
 	}
-	osd->store->put_object(oh);
 	::encode(out_set, osd_op.outdata);
 	ctx->delta_stats.num_rd_kb +=
 	  SHIFT_ROUND_UP(osd_op.outdata.length(), 10);
@@ -1762,11 +1740,6 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
     case CEPH_OSD_OP_OMAPGETVALS:
       ++ctx->num_read;
       {
-	ObjectHandle oh = osd->store->get_object(coll, soid);
-	if (!oh) {
-	  result = -ENOENT;
-	  break;
-	}
 	string start_after;
 	uint64_t max_return;
 	string filter_prefix;
@@ -1776,16 +1749,14 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  ::decode(filter_prefix, bp);
 	}
 	catch (buffer::error& e) {
-	  osd->store->put_object(oh);
 	  result = -EINVAL;
 	  goto fail;
 	}
 	map<string, bufferlist> out_set;
 
 	ObjectMap::ObjectMapIterator iter =
-	  osd->store->get_omap_iterator(coll, oh);
+	  osd->store->get_omap_iterator(coll, soh);
 	if (!iter) {
-	  osd->store->put_object(oh);
 	  result = -ENOENT;
 	  goto fail;
 	}
@@ -1800,7 +1771,6 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  dout(20) << "Found key " << iter->key() << dendl;
 	  out_set.insert(make_pair(iter->key(), iter->value()));
 	}
-	osd->store->put_object(oh);
 	::encode(out_set, osd_op.outdata);
 	ctx->delta_stats.num_rd_kb +=
 	  SHIFT_ROUND_UP(osd_op.outdata.length(), 10);
@@ -1811,13 +1781,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
     case CEPH_OSD_OP_OMAPGETHEADER:
       ++ctx->num_read;
       {
-	ObjectHandle oh = osd->store->get_object(coll, soid);
-	if (!oh) {
-	  result = -ENOENT;
-	  break;
-	}
-	osd->store->omap_get_header(coll, oh, &osd_op.outdata);
-	osd->store->put_object(oh);
+	osd->store->omap_get_header(coll, soh, &osd_op.outdata);
 	ctx->delta_stats.num_rd_kb +=
 	  SHIFT_ROUND_UP(osd_op.outdata.length(), 10);
 	ctx->delta_stats.num_rd++;
@@ -1835,15 +1799,9 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  result = -EINVAL;
 	  goto fail;
 	}
-	ObjectHandle oh = osd->store->get_object(coll, soid);
-	if (!oh) {
-	  result = -ENOENT;
-	  break;
-	}
 	map<string, bufferlist> out;
-	osd->store->omap_get_values(coll, oh, keys_to_get, &out);
+	osd->store->omap_get_values(coll, soh, keys_to_get, &out);
 	::encode(out, osd_op.outdata);
-	osd->store->put_object(oh);
 	ctx->delta_stats.num_rd_kb +=
 	  SHIFT_ROUND_UP(osd_op.outdata.length(), 10);
 	ctx->delta_stats.num_rd++;
@@ -1866,19 +1824,13 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  goto fail;
 	}
 
-	ObjectHandle oh = osd->store->get_object(coll, soid);
-	if (!oh) {
-	  result = -ENOENT;
-	  break;
-	}
 	map<string, bufferlist> out;
-
 	set<string> to_get;
 	map<string, pair<bufferlist, int> >::iterator i;
+
 	for (i = assertions.begin(); i != assertions.end(); ++i)
 	  to_get.insert(i->first);
-	int r = osd->store->omap_get_values(coll, oh, to_get, &out);
-	osd->store->put_object(oh);
+	int r = osd->store->omap_get_values(coll, soh, to_get, &out);
 	if (r < 0) {
 	  result = r;
 	  break;
@@ -2021,11 +1973,11 @@ inline int OSDVol::_delete_obj(OpContext *ctx, bool no_whiteout)
 {
   ObjectState& obs = ctx->new_obs;
   object_info_t& oi = obs.oi;
-  const hoid_t& soid = oi.oid;
+  ObjectHandle oh = reinterpret_cast<ObjectHandle>(obs.oh);
   ObjectStore::Transaction* t = ctx->op_t;
 
   uint16_t c_ix = t->push_col(coll);
-  uint16_t o_ix = t->push_oid(soid); // XXXX oid?  open it?
+  uint16_t o_ix = t->push_obj(oh);
 
   if (!obs.exists)
     return -ENOENT;
@@ -2203,6 +2155,7 @@ void OSDVol::finish_ctx(OpContext *ctx)
 {
   ObjectStore::Transaction* t = ctx->op_t;
   const hoid_t& soid = ctx->obs->oi.oid;
+  ObjectHandle soh = reinterpret_cast<ObjectHandle>(ctx->obs->oh);
 
   dout(20) << __func__ << " " << soid << " " << ctx
 	   << dendl;
@@ -2241,7 +2194,7 @@ void OSDVol::finish_ctx(OpContext *ctx)
 
     bufferlist bv(sizeof(ctx->new_obs.oi));
     ::encode(ctx->new_obs.oi, bv);
-    uint16_t o_ix = t->push_oid(ctx->obc->obs.oi.oid); // XXXX oid?
+    uint16_t o_ix = t->push_obj(soh);
     t->setattr(c_ix, o_ix, OI_ATTR, bv);
   } else {
     ctx->new_obs.oi = object_info_t(ctx->obc->obs.oi.oid);
@@ -2511,8 +2464,9 @@ void OSDVol::handle_watch_timeout(WatchRef watch)
   Mutation *mutation = new_mutation(ctx, obc, tid);
 
   ObjectStore::Transaction *t = ctx->op_t;
+  ObjectHandle oh = reinterpret_cast<ObjectHandle>(obc->obs.oh);
   uint16_t c_ix = t->push_col(coll);
-  uint16_t o_ix = t->push_oid(obc->obs.oi.oid); // XXXX oid? open it?
+  uint16_t o_ix = t->push_obj(oh); // XXXX need ref?
 
   obc->obs.oi.prior_version = mutation->obc->obs.oi.version;
   obc->obs.oi.version = ctx->at_version;
@@ -2526,27 +2480,13 @@ void OSDVol::handle_watch_timeout(WatchRef watch)
   mutation->put();
 }
 
-#if 0
-ObjectContextRef OSDVol::create_object_context(const object_info_t& oi)
-{
-  ObjectContextRef obc(object_contexts.lookup_or_create(oi.oid));
-  obc->obs.oi = oi;
-  obc->obs.exists = false;
-  dout(10) << "create_object_context " << (void*)obc.get()
-	   << " " << oi.oid
-	   << " " << dendl;
-  populate_obc_watchers(obc);
-  return obc;
-}
-#endif
-
 ObjectContextRef
 OSDVol::get_object_context(const hoid_t& oid,
 			   bool can_create,
 			   map<string, bufferlist>* attrs)
 {
   ObjectHandle oh =
-    osd->store->get_object(coll, oid, can_create); /* ObjectRef? */
+    osd->store->get_object_for_init(coll, oid, can_create); /* ObjectRef? */
 
   if (oh) {
     ObjectContextRef obc
@@ -2718,49 +2658,25 @@ int OSDVol::objects_list_range(const hoid_t& start, const hoid_t& end,
   return r;
 }
 
-int OSDVol::objects_get_attr(const hoid_t& oid, const string &attr,
-			     bufferlist *out)
-{
-  bufferptr bp;
-  ObjectHandle oh = osd->store->get_object(coll, oid);
-  int r = -EINVAL;
-
-  if (oh) {
-    r = osd->store->getattr(coll, oh, attr.c_str(), bp);
-    if (r >= 0 && out) {
-      out->clear();
-      out->push_back(bp);
-    }
-    osd->store->put_object(oh);
-  }
-  return r;
-}
-
 int OSDVol::objects_get_attr(ObjectHandle oh, const string &attr,
 			     bufferlist *out)
 {
   bufferptr bp;
-  int r = -EINVAL;
-
-  if (oh) {
-    r = osd->store->getattr(coll, oh, attr.c_str(), bp);
-    if (r >= 0 && out) {
-      out->clear();
-      out->push_back(bp);
-    }
-    osd->store->put_object(oh);
+  int r = osd->store->getattr(coll, oh, attr.c_str(), bp);
+  if (r >= 0 && out) {
+    out->clear();
+    out->push_back(bp);
   }
   return r;
 }
 
-void OSDVol::objects_read_async(const hoid_t& oid,
+void OSDVol::objects_read_async(ObjectHandle oh,
 			    const list<pair<pair<uint64_t, uint64_t>,
 			    pair<bufferlist*, Context*> > > &to_read,
 			    Context *on_complete)
 {
+  /* XXX need ref on oh? */
   int r = 0;
-  ObjectHandle oh = osd->store->get_object(coll, oid);
-  assert(oh);
   for (list<pair<pair<uint64_t, uint64_t>,
 	 pair<bufferlist*, Context*> > >::const_iterator i =
 	 to_read.begin();
@@ -2774,7 +2690,6 @@ void OSDVol::objects_read_async(const hoid_t& oid,
     if (_r < 0)
       r = _r;
   }
-  osd->store->put_object(oh);
   on_complete->complete(r);
 } /* objects_read_async */
 

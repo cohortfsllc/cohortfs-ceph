@@ -554,7 +554,6 @@ private:
 
 public:
   void clear_primary_state();
-  void remove_object(ObjectStore::Transaction& t, const hoid_t& oid);
   void trim_write_ahead();
   void activate(ObjectStore::Transaction& t, epoch_t query_epoch);
   void _activate_committed(epoch_t e);
@@ -580,7 +579,9 @@ private:
 public:
   const boost::uuids::uuid& get_volid() const { return info.volume; }
 
-  bool  is_empty() const { return info.last_update == eversion_t(0,0); }
+  bool  is_empty() const {
+    return info.last_update == eversion_t(0,0);
+  }
 
 private:
   void init();
@@ -668,13 +669,10 @@ protected:
     const hoid_t& end,
     vector<hoid_t>* ls);
 
-  int objects_get_attr(const hoid_t& oid, const string& attr,
-		       bufferlist* out);
-
   int objects_get_attr(ObjectHandle oh, const string& attr,
 		       bufferlist* out);
 
-  void objects_read_async(const hoid_t& oid,
+  void objects_read_async(ObjectHandle oh,
 			  const list<pair<pair<uint64_t, uint64_t>,
 			  pair<bufferlist*, Context*> > >& to_read,
 			  Context* on_complete);
