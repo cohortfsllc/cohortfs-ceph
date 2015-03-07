@@ -139,7 +139,7 @@ public:
     /* per ObjectStore LRU */
     const static int n_lanes = 17; // # of lanes in LRU system
 
-    typedef cohort::lru::LRU<cohort::SpinLock, n_lanes> ObjLRU;
+    typedef cohort::lru::LRU<cohort::SpinLock> ObjLRU;
 
     const static int n_partitions = 5;
     const static int cache_size = 373; // per-partiion cache size
@@ -182,8 +182,7 @@ public:
 		       bi::constant_time_size<true> > OidTree;
 #endif
     typedef cohort::lru::TreeX<
-      Object, OidTree, OidLT, OidEQ, hoid_t, cohort::SpinLock,
-      n_partitions, cache_size>
+      Object, OidTree, OidLT, OidEQ, hoid_t, cohort::SpinLock>
     ObjCache;
 
     virtual ~Object() {
@@ -205,7 +204,9 @@ public:
     const coll_t cid;
 
     Collection(ObjectStore* _os, const coll_t& _cid)
-      : os(_os), flags(FLAG_NONE), cid(_cid)
+      : os(_os), flags(FLAG_NONE),
+	obj_cache(5 /* partitions */, 373 /* cache size */),
+	cid(_cid)
       {}
 
     virtual ~Collection() {}
@@ -1434,7 +1435,7 @@ public:
 
  public:
   ObjectStore(CephContext* _cct, const std::string& _path) :
-    path(_path), obj_lru(311 /* XXX move to conf */) {}
+    path(_path), obj_lru(17 /* lanes*/, 311 /* lane hiwat */) {}
   virtual ~ObjectStore() {}
 
  private:
