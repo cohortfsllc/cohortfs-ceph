@@ -57,7 +57,7 @@ public:
 
   /* is queuable */
   typedef bi::link_mode<bi::safe_link> link_mode; // for debugging
-  bi::list_member_hook< link_mode > q_hook;
+  bi::list_member_hook<link_mode> q_hook;
 
   typedef bi::list<OpRequest,
 		   bi::member_hook<
