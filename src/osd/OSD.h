@@ -85,6 +85,7 @@ public:
   typedef std::unique_lock<std::shared_timed_mutex> unique_map_lock;
   OSD *osd;
   LRU lru;
+  OSDVol::VolCache vol_cache;
   CephContext *cct;
   SharedPtrRegistry<boost::uuids::uuid, ObjectStore::Sequencer> osr_registry;
   const int whoami;

@@ -24,7 +24,6 @@
 namespace {
   namespace bi = boost::intrusive;
 
-  template <uint8_t N=3>
   class TObject : public cohort::lru::Object
     {
     public:
@@ -43,9 +42,8 @@ namespace {
     /* per ObjectStore LRU */
     const static int n_lanes = 17; // # of lanes in LRU system
 
-    typedef cohort::lru::LRU<cohort::SpinLock, n_lanes> ObjLRU;
+    typedef cohort::lru::LRU<cohort::SpinLock> ObjLRU;
 
-    const static int n_partitions = N;
     const static int cache_size = 373; // per-partiion cache size
 
     /* per-volume lookup table */
@@ -82,20 +80,19 @@ namespace {
     bi::constant_time_size<true> > OidTree;
 
     typedef cohort::lru::TreeX<
-    TObject, OidTree, OidLT, OidEQ, hoid_t, cohort::SpinLock,
-    n_partitions, cache_size>
+    TObject, OidTree, OidLT, OidEQ, hoid_t, cohort::SpinLock>
     ObjCache;
 
     bool reclaim() { return true; }
 
     }; /* TObject */
 
-  typedef TObject<3> T3;
-  typedef TObject<5> T5;
+  typedef TObject T3;
+  typedef TObject T5;
 
-  TObject<1>::ObjCache T1Cache;
-  TObject<3>::ObjCache T3Cache;
-  TObject<5>::ObjCache T5Cache;
+  TObject::ObjCache T1Cache(1);
+  TObject::ObjCache T3Cache(3);
+  TObject::ObjCache T5Cache(5);
 
   static constexpr int32_t n_create = 30;
 
@@ -131,29 +128,29 @@ TEST(CohortLRU, T5_NEW)
 TEST(CohortLRU, T3_TREEX_INSERT_CHECK) {
   for (unsigned int ix = 0; ix < vt3.size(); ++ix) {
     T3* o3 = vt3[ix];
-    TObject<3>::ObjCache::Latch lat;
+    TObject::ObjCache::Latch lat;
     T3* o3f = T3Cache.find_latch(o3->hk, o3->oid, lat,
-				 TObject<3>::ObjCache::FLAG_LOCK);
+				 TObject::ObjCache::FLAG_LOCK);
     ASSERT_EQ(o3f, nullptr);
-    T3Cache.insert_latched(o3, lat, TObject<3>::ObjCache::FLAG_UNLOCK);
+    T3Cache.insert_latched(o3, lat, TObject::ObjCache::FLAG_UNLOCK);
   }
 }
 
 TEST(CohortLRU, T5_TREEX_INSERT_CHECK) {
   for (unsigned int ix = 0; ix < vt5.size(); ++ix) {
     T5* o5 = vt5[ix];
-    TObject<5>::ObjCache::Latch lat;
+    TObject::ObjCache::Latch lat;
     T5* o5f = T5Cache.find_latch(o5->hk, o5->oid, lat,
-				 TObject<5>::ObjCache::FLAG_LOCK);
+				 TObject::ObjCache::FLAG_LOCK);
     ASSERT_EQ(o5f, nullptr);
-    T5Cache.insert_latched(o5, lat, TObject<5>::ObjCache::FLAG_UNLOCK);
+    T5Cache.insert_latched(o5, lat, TObject::ObjCache::FLAG_UNLOCK);
   }
 }
 
 TEST(CohortLRU, T3_FIND_ALL) {
  for (unsigned int ix = 0; ix < vt3.size(); ++ix) {
     T3* o3 = vt3[ix];
-    T3* o3a = T3Cache.find(o3->hk, o3->oid, TObject<3>::ObjCache::FLAG_LOCK);
+    T3* o3a = T3Cache.find(o3->hk, o3->oid, TObject::ObjCache::FLAG_LOCK);
     ASSERT_EQ(o3, o3a);
  }
 }
@@ -161,10 +158,10 @@ TEST(CohortLRU, T3_FIND_ALL) {
 TEST(CohortLRU, T3_FIND_LATCH_ALL) {
  for (unsigned int ix = 0; ix < vt3.size(); ++ix) {
     T3* o3 = vt3[ix];
-    TObject<3>::ObjCache::Latch lat;
+    TObject::ObjCache::Latch lat;
     T3* o3a = T3Cache.find_latch(o3->hk, o3->oid, lat,
-				 TObject<3>::ObjCache::FLAG_LOCK|
-				 TObject<3>::ObjCache::FLAG_UNLOCK);
+				 TObject::ObjCache::FLAG_LOCK|
+				 TObject::ObjCache::FLAG_UNLOCK);
     ASSERT_EQ(o3, o3a);
  }
 }
@@ -172,7 +169,7 @@ TEST(CohortLRU, T3_FIND_LATCH_ALL) {
 TEST(CohortLRU, T5_FIND_ALL) {
  for (unsigned int ix = 0; ix < vt5.size(); ++ix) {
     T5* o5 = vt5[ix];
-    T5* o5a = T5Cache.find(o5->hk, o5->oid, TObject<5>::ObjCache::FLAG_LOCK);
+    T5* o5a = T5Cache.find(o5->hk, o5->oid, TObject::ObjCache::FLAG_LOCK);
     ASSERT_EQ(o5, o5a);
  }
 }
@@ -180,10 +177,10 @@ TEST(CohortLRU, T5_FIND_ALL) {
 TEST(CohortLRU, T5_FIND_LATCH_ALL) {
  for (unsigned int ix = 0; ix < vt5.size(); ++ix) {
     T5* o5 = vt5[ix];
-    TObject<5>::ObjCache::Latch lat;
+    TObject::ObjCache::Latch lat;
     T5* o5a = T5Cache.find_latch(o5->hk, o5->oid, lat,
-				 TObject<5>::ObjCache::FLAG_LOCK|
-				 TObject<5>::ObjCache::FLAG_UNLOCK);
+				 TObject::ObjCache::FLAG_LOCK|
+				 TObject::ObjCache::FLAG_UNLOCK);
     ASSERT_EQ(o5, o5a);
  }
 }
@@ -192,13 +189,13 @@ TEST(CohortLRU, T5_REMOVE) {
   vector<T5*> del5;
   for (unsigned int ix = 0; ix < vt5.size(); ix += 3) {
     T5* o5 = vt5[ix];
-    T5Cache.remove(o5->hk, o5, TObject<5>::ObjCache::FLAG_LOCK);
+    T5Cache.remove(o5->hk, o5, TObject::ObjCache::FLAG_LOCK);
     del5.push_back(o5);
   }
   /* find none of del5 */
   for (unsigned int ix = 0; ix < del5.size(); ++ix) {
     T5* o5 = del5[ix];
-    T5* o5a = T5Cache.find(o5->hk, o5->oid, TObject<5>::ObjCache::FLAG_LOCK);
+    T5* o5a = T5Cache.find(o5->hk, o5->oid, TObject::ObjCache::FLAG_LOCK);
     ASSERT_EQ(o5a, nullptr);
   }
   /* delete removed */
@@ -216,9 +213,9 @@ TEST(CohortLRU, ALL_DRAIN) {
 
   /* remove and dispose */
   T3Cache.drain([](T3* o3){ delete o3; },
-    TObject<3>::ObjCache::FLAG_LOCK);
+    TObject::ObjCache::FLAG_LOCK);
   T5Cache.drain([](T5* o5){ delete o5; },
-    TObject<5>::ObjCache::FLAG_LOCK);
+    TObject::ObjCache::FLAG_LOCK);
 }
 
 int main(int argc, char *argv[])

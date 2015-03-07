@@ -450,12 +450,11 @@ public:
   typedef bi::member_hook<
     OSDVol, tree_hook_type, &OSDVol::tree_hook> THook;
 
-  typedef bi::avltree<Object, bi::compare<LT>, THook,
+  typedef bi::avltree<OSDVol, bi::compare<LT>, THook,
 		      bi::constant_time_size<true> > Voltree;
 
   typedef cohort::lru::TreeX<
-    OSDVol, Voltree, LT, EQ, boost::uuids::uuid, cohort::SpinLock,
-    n_partitions, cache_size>
+    OSDVol, Voltree, LT, EQ, boost::uuids::uuid, cohort::SpinLock>
   VolCache;
 
   static string get_info_key(boost::uuids::uuid& vol) {
@@ -469,12 +468,9 @@ public:
   void handle_watch_timeout(WatchRef watch);
 
 protected:
-#if 0
-  ObjectContextRef create_object_context(const object_info_t& oi);
-#endif
-  ObjectContextRef get_object_context(const hoid_t& oid,
-				      bool can_create,
-				      map<string, bufferlist>* attrs = 0);
+  ObjectContextRef
+  get_object_context(const hoid_t& oid, bool can_create,
+		     map<string, bufferlist>* attrs = 0);
 
   void context_registry_on_change();
 
@@ -485,7 +481,8 @@ protected:
   void reply_ctx(OpContext* ctx, int err, eversion_t v, version_t uv);
   void make_writeable(OpContext* ctx);
 
-  void write_update_size_and_usage(object_stat_sum_t& stats, object_info_t& oi,
+  void write_update_size_and_usage(object_stat_sum_t& stats,
+				   object_info_t& oi,
 				   interval_set<uint64_t>& modified,
 				   uint64_t offset, uint64_t length,
 				   bool count_bytes);
