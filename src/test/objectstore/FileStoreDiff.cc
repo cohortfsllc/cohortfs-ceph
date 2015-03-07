@@ -308,7 +308,6 @@ bool FileStoreDiff::diff_coll_attrs(FileStore *a_store, FileStore *b_store,
     ret = true;
   }
 
-done:
   a_store->close_collection(a_ch);
   b_store->close_collection(b_ch);
 
