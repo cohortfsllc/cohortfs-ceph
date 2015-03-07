@@ -17,6 +17,7 @@
 
 #include <thread>
 #include <array>
+#include <vector>
 #include <mutex>
 #include <condition_variable>
 #include <boost/intrusive/list.hpp>
@@ -36,7 +37,7 @@ namespace cohort {
 
   namespace bi = boost::intrusive;
 
-  template <typename LK, uint8_t N=3>
+  template <typename LK>
   class OpQueue {
   public:
     typedef void (*op_func) (OSD*, OpRequest*);
@@ -193,15 +194,19 @@ namespace cohort {
 
     }; /* Lane */
 
-    Lane qlane[N];
+    int n_lanes;
+    Lane* qlane;
 
   public:
-    OpQueue(OSD* osd, op_func func,
-	    uint8_t thrd_lowat=1, uint8_t thrd_hiwat=2,
+    OpQueue(OSD* osd, op_func func, uint16_t lanes,
+	    uint8_t thrd_lowat = 1, uint8_t thrd_hiwat = 2,
 	    uint32_t start_thresh = 10,
 	    std::chrono::milliseconds worker_timeout = 200ms)
+      : n_lanes(lanes)
     {
-      for (int ix = 0; ix < N; ++ix) {
+      assert(n_lanes > 0);
+      qlane = new Lane[n_lanes];
+      for (int ix = 0; ix < n_lanes; ++ix) {
 	Lane& lane = qlane[ix];
 	lane.op_q = this;
 	lane.osd = osd;
@@ -213,8 +218,10 @@ namespace cohort {
       }
     }
 
+    ~OpQueue() { delete[] qlane; }
+
     Lane& lane_of_scalar(uint64_t k) {
-      return qlane[(k % N)];
+      return qlane[(k % n_lanes)];
     }
 
     bool enqueue(uint64_t k, OpRequest& op, enum Bands b, enum Pos p) {
@@ -247,7 +254,7 @@ namespace cohort {
     } /* enqueue */
 
     void shutdown() {
-      for (int ix = 0; ix < N; ++ix) {
+      for (int ix = 0; ix < n_lanes; ++ix) {
 	Lane& lane = qlane[ix];
 	std::unique_lock<std::mutex> lane_lk(lane.mtx);
 	lane.flags |= Lane::FLAG_SHUTDOWN;
