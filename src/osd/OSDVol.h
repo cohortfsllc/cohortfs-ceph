@@ -63,7 +63,7 @@ typedef boost::intrusive_ptr<OSDVol> OSDVolRef;
 
 /* visible in OSD.h */
 const static int n_lanes = 17;
-typedef cohort::OpQueue<cohort::SpinLock, n_lanes> MultiQueue;
+typedef cohort::OpQueue<cohort::SpinLock> MultiQueue;
 
 /** OSDVol - Volume abstraction in the OSD
  */
