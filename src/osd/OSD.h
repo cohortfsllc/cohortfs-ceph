@@ -92,10 +92,13 @@ public:
   CollectionHandle meta_col;
   LogClient &clog;
   oid_t infos_oid;
+  ObjectHandle infos_oh;
+
 private:
   Messenger *&cluster_messenger;
   Messenger *&client_messenger;
   Messenger *&client_xio_messenger;
+
 public:
   MonClient   *&monc;
   ClassHandler	*&class_handler;

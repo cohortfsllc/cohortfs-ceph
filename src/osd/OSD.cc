@@ -132,6 +132,7 @@ OSDService::OSDService(OSD *osd) :
   whoami(osd->whoami), store(osd->store),
   meta_col(nullptr), clog(osd->clog),
   infos_oid(OSD::make_infos_oid()),
+  infos_oh(nullptr),
   cluster_messenger(osd->cluster_messenger),
   client_messenger(osd->client_messenger),
   client_xio_messenger(osd->client_xio_messenger),
@@ -151,7 +152,11 @@ OSDService::OSDService(OSD *osd) :
 
 OSDService::~OSDService()
 {
-  if (meta_col) store->close_collection(meta_col);
+  if (meta_col) {
+    if (infos_oh)
+      store->put_object(infos_oh);
+    store->close_collection(meta_col);
+  }
   delete objecter;
 }
 
