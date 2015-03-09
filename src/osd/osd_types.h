@@ -862,11 +862,12 @@ public:
       : state(RWNONE), count(0)
     {}
 
-    bool get_read(OpRequestRef op) {
+    bool get_read(OpRequest* op) {
       if (get_read_lock()) {
 	return true;
       } // else
       assert(! op->q_hook.is_linked());
+      op->get(); // waiters queue ref
       waiters.push_back(*op);
       return false;
     }
@@ -893,12 +894,13 @@ public:
       }
     }
 
-    bool get_write(OpRequestRef op) {
+    bool get_write(OpRequest* op) {
       if (get_write_lock()) {
 	return true;
       } // else
-      if (op)
-	waiters.push_back(*op);
+      /* XXX code had if (op) check */
+      op->get();
+      waiters.push_back(*op);
       return false;
     }
 
@@ -955,11 +957,11 @@ public:
     bool empty() const { return state == RWNONE; }
   } rwstate;
 
-  bool get_read(OpRequestRef op) {
+  bool get_read(OpRequest* op) {
     return rwstate.get_read(op);
   }
 
-  bool get_write(OpRequestRef op) {
+  bool get_write(OpRequest* op) {
     return rwstate.get_write(op);
   }
 
@@ -967,8 +969,7 @@ public:
     rwstate.put_read(to_wake);
   }
 
-  void put_write(OpRequest::Queue& to_wake,
-		 bool *requeue_recovery) {
+  void put_write(OpRequest::Queue& to_wake) {
     rwstate.put_write(to_wake);
   }
 

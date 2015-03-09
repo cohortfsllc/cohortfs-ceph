@@ -332,13 +332,13 @@ protected:
    */
   bool get_rw_locks(OpContext* ctx) {
     if (ctx->op->may_write() || ctx->op->may_cache()) {
-      if (ctx->obc->get_write(ctx->op)) {
+      if (ctx->obc->get_write(ctx->op.get() /* intrusive ptr */)) {
 	ctx->lock_to_release = OpContext::W_LOCK;
 	return true;
       }
     } else {
       assert(ctx->op->may_read());
-      if (ctx->obc->get_read(ctx->op)) {
+      if (ctx->obc->get_read(ctx->op.get() /* intrusive ptr */)) {
 	ctx->lock_to_release = OpContext::R_LOCK;
 	return true;
       }
@@ -366,13 +366,12 @@ protected:
    */
   void release_op_ctx_locks(OpContext* ctx) {
     OpRequest::Queue to_req;
-    bool requeue_recovery = false;
     switch (ctx->lock_to_release) {
     case OpContext::W_LOCK:
-      ctx->obc->put_write(to_req, &requeue_recovery);
+      ctx->obc->put_write(to_req); // claims queue refs
       break;
     case OpContext::R_LOCK:
-      ctx->obc->put_read(to_req);
+      ctx->obc->put_read(to_req); // claims queue refs
       break;
     case OpContext::NONE:
       break;
