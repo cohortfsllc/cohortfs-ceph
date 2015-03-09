@@ -1976,67 +1976,65 @@ bool OSD::heartbeat_dispatch(Message *m)
   return true;
 }
 
-inline void OSD::_dispatch(Message *m)
+bool OSD::ms_dispatch(Message *m)
 {
-  // Must be called with a lock on osd_lock
-  dout(20) << "_dispatch " << m << " " << *m << dendl;
-
-  Session *session = NULL;
-
+  /* ops which don't take osd_lock */
   switch (m->get_type()) {
-
-    // -- don't need lock --
   case CEPH_MSG_PING:
     dout(10) << "ping from " << m->get_source() << dendl;
     m->put();
+    return true;
     break;
+  case CEPH_MSG_OSD_OP:
+    if (op_is_discardable(static_cast<MOSDOp*>(m))) {
+      dout(10) << " discardable " << *m << dendl;
+      return true;
+    }
+    break;
+  case MSG_OSD_MARK_ME_DOWN:
+    service.got_stop_ack(); // is_stopping_lock
+    m->put();
+    return true;
+  default:
+    break;
+  } /* switch */
 
-    // -- don't need OSDMap --
+  /* osd_lock LOCKED */
+  unique_lock osd_lk(osd_lock);
+  if (is_stopping()) {
+    osd_lk.unlock();
+    m->put();
+    return true;
+  }
 
+  switch (m->get_type()) {
     // map and replication
   case CEPH_MSG_OSD_MAP:
     handle_osd_map(static_cast<MOSDMap*>(m));
     break;
-
-    // osd
+    // special needing osd_lock
   case CEPH_MSG_SHUTDOWN:
-    session = static_cast<Session *>(m->get_connection()->get_priv());
-    if (!session ||
-	session->entity_name.is_mon() ||
-	session->entity_name.is_osd())
-      shutdown();
-    else dout(0) << "shutdown message from connection with insufficient privs!"
-		 << m->get_connection() << dendl;
-    m->put();
-    if (session)
-      session->put();
+    {
+      Session* session = static_cast<Session *>(m->get_connection()->get_priv());
+      if (!session ||
+	  session->entity_name.is_mon() ||
+	  session->entity_name.is_osd())
+	shutdown();
+      else dout(0) << "shutdown message from connection with "
+		   << "insufficient privs!" << m->get_connection()
+		   << dendl;
+      m->put();
+      if (session)
+	session->put();
+    }
     break;
-
   default:
     {
+      /* all other ops, need OSDMap in general */
       OpRequestRef op = OpRequest::create_request(m);
-      // need OSDMap
-      handle_op(op);
+      handle_op(op, osd_lk);
     }
   }
-}
-
-bool OSD::ms_dispatch(Message *m)
-{
-  if (m->get_type() == MSG_OSD_MARK_ME_DOWN) {
-    service.got_stop_ack(); // is_stopping_lock
-    m->put();
-    return true;
-  }
-
-  unique_lock ol(osd_lock);
-  if (is_stopping()) {
-    ol.unlock();
-    m->put();
-    return true;
-  }
-
-  _dispatch(m);
 
   return true;
 }
@@ -2697,10 +2695,11 @@ void OSD::activate_map()
   }
 
   // dispatch blocked ops
+  unique_lock osd_lk(osd_lock, std::adopt_lock);
   while (! waiting_for_osdmap.empty()) {
     OpRequest* op = &(waiting_for_osdmap.front());
     waiting_for_osdmap.pop_front();
-    handle_op(OpRequestRef(op));
+    handle_op(OpRequestRef(op), osd_lk);
   }
 }
 
@@ -2952,14 +2951,9 @@ void OSDService::reply_op_error(OpRequestRef op, int err, eversion_t v,
   msgr->send_message(reply, m->get_connection());
 }
 
-void OSD::handle_op(OpRequestRef op)
+void OSD::handle_op(OpRequestRef op, unique_lock& osd_lk)
 {
   MOSDOp *m = static_cast<MOSDOp*>(op->get_req());
-  assert(m->get_header().type == CEPH_MSG_OSD_OP);
-  if (op_is_discardable(m)) {
-    dout(10) << " discardable " << *m << dendl;
-    return;
-  }
 
   // we don't need encoded payload anymore
   m->clear_payload();
@@ -2968,14 +2962,6 @@ void OSD::handle_op(OpRequestRef op)
   if (!require_same_or_newer_map(op, m->get_map_epoch()))
     return;
 
-  // object name too long?
-  if (m->get_oid().name.size() > MAX_CEPH_OBJECT_NAME_LEN) {
-    dout(4) << "handle_op '" << m->get_oid().name << "' is longer than "
-	    << MAX_CEPH_OBJECT_NAME_LEN << " bytes!" << dendl;
-    service.reply_op_error(op, -ENAMETOOLONG);
-    return;
-  }
-
   // blacklisted?
   if (osdmap->is_blacklisted(m->get_source_addr())) {
     dout(4) << "handle_op " << m->get_source_addr() << " is blacklisted"
@@ -2983,12 +2969,22 @@ void OSD::handle_op(OpRequestRef op)
     service.reply_op_error(op, -EBLACKLISTED);
     return;
   }
+
   // share our map with sender, if they're old
   _share_map_incoming(m->get_source(), m->get_connection().get(),
 		      m->get_map_epoch(),
 		      static_cast<Session *>(m->get_connection()->get_priv()));
 
-  /* POOPY drop osd_lock (osdmap) */
+  /* drop osd_lock (osdmap) */
+  osd_lk.unlock();
+
+  // object name too long?
+  if (m->get_oid().name.size() > MAX_CEPH_OBJECT_NAME_LEN) {
+    dout(4) << "handle_op '" << m->get_oid().name << "' is longer than "
+	    << MAX_CEPH_OBJECT_NAME_LEN << " bytes!" << dendl;
+    service.reply_op_error(op, -ENAMETOOLONG);
+    return;
+  }
 
   if (op->rmw_flags == 0) {
     int r = init_op_flags(op);
@@ -3032,19 +3028,7 @@ void OSD::handle_op(OpRequestRef op)
 
   /* enqueue on multi_wq, defers vol resolution */
   multi_wq.enqueue(op->get_k(), *op, band, MultiQueue::Pos::BACK);
-}
-
-bool OSD::op_is_discardable(MOSDOp *op)
-{
-  // drop client request if they are not connected and can't get the
-  // reply anyway.  unless this is a replayed op, in which case we
-  // want to do what we can to apply it.
-  if (!op->get_connection()->is_connected() &&
-      op->get_version().version == 0) {
-    return true;
-  }
-  return false;
-}
+} /* handle_op */
 
 void OSD::static_dequeue_op(OSD* osd, OpRequest* op)
 {

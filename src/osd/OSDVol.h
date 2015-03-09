@@ -611,9 +611,20 @@ public:
     return coll;
   }
 
-  // OpRequest queueing
-  bool can_discard_op(OpRequestRef op);
-  bool can_discard_request(OpRequestRef op);
+  bool can_discard_op(OpRequestRef op) {
+    MOSDOp *m = static_cast<MOSDOp*>(op->get_req());
+    if (!m->get_connection()->is_connected() &&
+	m->get_version().version == 0) {
+      return true;
+    }
+    return false;
+  }
+
+  bool can_discard_request(OpRequestRef op) {
+    if (op->get_req()->get_type() == CEPH_MSG_OSD_OP)
+      return can_discard_op(op);
+    return true;
+  }
 
   bool can_discard_replica_op(OpRequestRef op);
 

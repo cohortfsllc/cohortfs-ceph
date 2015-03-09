@@ -329,7 +329,6 @@ protected:
   int dispatch_running;
 
   void tick();
-  inline void _dispatch(Message *m);
   void dispatch_op(OpRequestRef op);
 
   void check_osdmap_features(ObjectStore *store);
@@ -744,13 +743,23 @@ public:
   void handle_signal(int signum);
 
   void handle_osd_ping(class MOSDPing *m);
-  void handle_op(OpRequestRef op);
+  void handle_op(OpRequestRef op, unique_lock& osd_lk);
 
   template <typename T, int MSGTYPE>
   void handle_replica_op(OpRequestRef op);
 
   /// check if we can throw out op from a disconnected client
-  static bool op_is_discardable(class MOSDOp *m);
+  static inline bool op_is_discardable(MOSDOp *op) {
+    // drop client request if they are not connected and can't get the
+    // reply anyway.  unless this is a replayed op, in which case we
+    // want to do what we can to apply it.
+    if (!op->get_connection()->is_connected() &&
+	op->get_version().version == 0) {
+      return true;
+    }
+    return false;
+  }
+
   /// check if op should be (re)queued for processing
 public:
   void force_remount();
