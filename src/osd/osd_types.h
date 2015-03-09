@@ -813,6 +813,8 @@ struct ObjectContext {
 private:
   std::mutex lock; /* XXX */
 
+  void on_last_ref(void* oh); // returns Object ref
+
 public:
   std::atomic<uint64_t> nref;
   std::condition_variable cond;
@@ -827,12 +829,9 @@ public:
   void put() {
     if (nref.fetch_sub(1, std::memory_order_release) == 1) {
       std::atomic_thread_fence(std::memory_order_acquire);
-      delete this; /* XXX override */
+      on_last_ref(obs.oh);
     }
   }
-
-  /* XXX returns Object ref */
-  void operator delete(void* ptr);
 
   struct RWState {
     enum State {

@@ -2465,8 +2465,7 @@ OSDVol::get_object_context(const hoid_t& oid,
     osd->store->get_object_for_init(coll, oid, can_create); /* ObjectRef? */
 
   if (oh) {
-    ObjectContextRef obc
-      = ObjectContextRef(&(oh->get_obc())); /* XXXX need intrusive_ptr*/
+    ObjectContextRef obc(&oh->get_obc()); /* XXXX need intrusive_ptr*/
     if (likely(oh->is_ready())) {
       return obc;
     }
@@ -2516,7 +2515,7 @@ OSDVol::get_object_context(const hoid_t& oid,
   return ObjectContextRef();
 } /* get_object_context */
 
-void ObjectContext::operator delete(void* ptr)
+void ObjectContext::on_last_ref(void* ptr)
 {
   ObjectHandle oh = reinterpret_cast<ObjectHandle>(ptr);
   oh->release();
