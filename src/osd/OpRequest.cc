@@ -12,7 +12,6 @@
 #include "osd/osd_types.h"
 
 
-
 OpRequest::OpRequest(Message *req)
   : rmw_flags(0), request(req), hit_flag_points(0), latest_flag_point(0)
 {
@@ -30,26 +29,3 @@ OpRequestRef OpRequest::create_request(Message *ref)
   return retval;
 }
 
-bool OpRequest::check_rmw(int flag) {
-  return rmw_flags & flag;
-}
-bool OpRequest::may_read() { return need_read_cap() || need_class_read_cap(); }
-bool OpRequest::may_write() { return need_write_cap() || need_class_write_cap(); }
-bool OpRequest::may_cache() { return check_rmw(CEPH_OSD_RMW_FLAG_CACHE); }
-bool OpRequest::need_read_cap() {
-  return check_rmw(CEPH_OSD_RMW_FLAG_READ);
-}
-bool OpRequest::need_write_cap() {
-  return check_rmw(CEPH_OSD_RMW_FLAG_WRITE);
-}
-bool OpRequest::need_class_read_cap() {
-  return check_rmw(CEPH_OSD_RMW_FLAG_CLASS_READ);
-}
-bool OpRequest::need_class_write_cap() {
-  return check_rmw(CEPH_OSD_RMW_FLAG_CLASS_WRITE);
-}
-void OpRequest::set_read() { rmw_flags |= CEPH_OSD_RMW_FLAG_READ; }
-void OpRequest::set_write() { rmw_flags |= CEPH_OSD_RMW_FLAG_WRITE; }
-void OpRequest::set_class_read() { rmw_flags |= CEPH_OSD_RMW_FLAG_CLASS_READ; }
-void OpRequest::set_class_write() { rmw_flags |= CEPH_OSD_RMW_FLAG_CLASS_WRITE; }
-void OpRequest::set_cache() { rmw_flags |= CEPH_OSD_RMW_FLAG_CACHE; }

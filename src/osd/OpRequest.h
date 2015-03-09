@@ -36,6 +36,7 @@ struct osd_reqid_t {
 
   osd_reqid_t()
     : tid(0), inc(0) {}
+
   osd_reqid_t(const entity_name_t& a, int i, ceph_tid_t t)
     : name(a), tid(t), inc(i) {}
 
@@ -70,27 +71,53 @@ public:
 
   static Ref create_request(Message *ref);
 
-  void get() { ++nref; }
+  void get() { nref.fetch_add(1, std::memory_order_relaxed); }
 
   void put() {
-    if (--nref == 0)
+    if (nref.fetch_sub(1, std::memory_order_release) == 1) {
+      std::atomic_thread_fence(std::memory_order_acquire);
       delete this;
+    }
   }
 
-  // XXX why not inline?
-  bool check_rmw(int flag);
-  bool may_read();
-  bool may_write();
-  bool may_cache();
-  bool need_read_cap();
-  bool need_write_cap();
-  bool need_class_read_cap();
-  bool need_class_write_cap();
-  void set_read();
-  void set_write();
-  void set_cache();
-  void set_class_read();
-  void set_class_write();
+  // Internal OSD op flags - set by the OSD based on the op types
+  enum {
+    CEPH_OSD_RMW_FLAG_READ	= (1 << 1),
+    CEPH_OSD_RMW_FLAG_WRITE	= (1 << 2),
+    CEPH_OSD_RMW_FLAG_CLASS_READ	= (1 << 3),
+    CEPH_OSD_RMW_FLAG_CLASS_WRITE = (1 << 4),
+    CEPH_OSD_RMW_FLAG_CACHE	= (1 << 6),
+  };
+
+  bool check_rmw(int flag) {
+    return rmw_flags & flag;
+  }
+
+  bool may_read() { return need_read_cap() || need_class_read_cap(); }
+  bool may_write() { return need_write_cap() || need_class_write_cap(); }
+  bool may_cache() { return check_rmw(CEPH_OSD_RMW_FLAG_CACHE); }
+
+  bool need_read_cap() {
+    return check_rmw(CEPH_OSD_RMW_FLAG_READ);
+  }
+
+  bool need_write_cap() {
+    return check_rmw(CEPH_OSD_RMW_FLAG_WRITE);
+  }
+
+  bool need_class_read_cap() {
+    return check_rmw(CEPH_OSD_RMW_FLAG_CLASS_READ);
+  }
+
+  bool need_class_write_cap() { 
+    return check_rmw(CEPH_OSD_RMW_FLAG_CLASS_WRITE);
+  }
+
+  void set_read() { rmw_flags |= CEPH_OSD_RMW_FLAG_READ; }
+  void set_write() { rmw_flags |= CEPH_OSD_RMW_FLAG_WRITE; }
+  void set_class_read() { rmw_flags |= CEPH_OSD_RMW_FLAG_CLASS_READ; }
+  void set_class_write() { rmw_flags |= CEPH_OSD_RMW_FLAG_CLASS_WRITE; }
+  void set_cache() { rmw_flags |= CEPH_OSD_RMW_FLAG_CACHE; }
 
   Message *get_req() const { return request; }
 
@@ -147,22 +174,27 @@ public:
     hit_flag_points |= flag_queued_for_vol;
     latest_flag_point = flag_queued_for_vol;
   }
+
   void mark_reached_vol() {
     hit_flag_points |= flag_reached_vol;
     latest_flag_point = flag_reached_vol;
   }
+
   void mark_delayed(string s) {
     hit_flag_points |= flag_delayed;
     latest_flag_point = flag_delayed;
   }
+
   void mark_started() {
     hit_flag_points |= flag_started;
     latest_flag_point = flag_started;
   }
+
   void mark_sub_op_sent(string s) {
     hit_flag_points |= flag_sub_op_sent;
     latest_flag_point = flag_sub_op_sent;
   }
+
   void mark_commit_sent() {
     hit_flag_points |= flag_commit_sent;
     latest_flag_point = flag_commit_sent;
@@ -171,6 +203,7 @@ public:
   ceph::real_time get_dequeued_time() const {
     return dequeued_time;
   }
+
   void set_dequeued_time(ceph::real_time deq_time) {
     dequeued_time = deq_time;
   }
