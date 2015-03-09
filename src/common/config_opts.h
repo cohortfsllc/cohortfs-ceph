@@ -407,6 +407,10 @@ OPTION(osd_op_pq_max_tokens_per_priority, OPT_U64, 4194304)
 OPTION(osd_op_pq_min_cost, OPT_U64, 65536)
 OPTION(osd_disk_threads, OPT_INT, 1)
 
+OPTION(osd_wq_lanes, OPT_INT, 11)
+OPTION(osd_wq_thrd_lowat, OPT_INT, 1)
+OPTION(osd_wq_thrd_hiwat, OPT_INT, 2)
+
 OPTION(osd_op_thread_timeout, OPT_INT, 15)
 OPTION(osd_remove_thread_timeout, OPT_INT, 60*60)
 OPTION(osd_command_thread_timeout, OPT_INT, 10*60)
