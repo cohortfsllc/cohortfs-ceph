@@ -314,7 +314,7 @@ namespace cohort {
 		      [](LK* lk){ lk->unlock(); });
       }
 
-      TreeX(int n_part=1, int csz=127) {
+      TreeX(int n_part=1, int csz=127) : n_part(n_part), csz(csz) {
 	assert(n_part > 0);
 	part = new Partition[n_part];
 	for (int ix = 0; ix < n_part; ++ix) {
