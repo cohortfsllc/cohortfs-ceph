@@ -126,13 +126,7 @@ public:
       c->os->put_object(this);
     }
 
-    /* per ObjectStore LRU */
-    const static int n_lanes = 17; // # of lanes in LRU system
-
     typedef cohort::lru::LRU<cohort::SpinLock> ObjLRU;
-
-    const static int n_partitions = 5;
-    const static int cache_size = 373; // per-partiion cache size
 
     /* per-volume lookup table */
     struct OidLT
@@ -195,7 +189,8 @@ public:
 
     Collection(ObjectStore* _os, const coll_t& _cid)
       : os(_os), flags(FLAG_NONE),
-	obj_cache(5 /* partitions */, 373 /* cache size */),
+	obj_cache(os->cct->_conf->osd_os_objcache_partitions,
+		  os->cct->_conf->osd_os_objcache_cachesz),
 	cid(_cid)
       {}
 
@@ -1342,7 +1337,10 @@ public:
 
  public:
   ObjectStore(CephContext* cct, const std::string& _path)
-    : cct(cct), path(_path), obj_lru(17 /* lanes*/, 311 /* lane hiwat */) {}
+    : cct(cct), path(_path),
+      obj_lru(cct->_conf->osd_os_lru_lanes,
+	      cct->_conf->osd_os_lru_lane_hiwat) {}
+
   virtual ~ObjectStore() {}
 
  private:

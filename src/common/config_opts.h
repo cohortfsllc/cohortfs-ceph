@@ -411,6 +411,11 @@ OPTION(osd_wq_lanes, OPT_INT, 11)
 OPTION(osd_wq_thrd_lowat, OPT_INT, 1)
 OPTION(osd_wq_thrd_hiwat, OPT_INT, 2)
 
+OPTION(osd_os_lru_lanes, OPT_INT, 17)
+OPTION(osd_os_lru_lane_hiwat, OPT_INT, 311)
+OPTION(osd_os_objcache_partitions, OPT_INT, 5)
+OPTION(osd_os_objcache_cachesz, OPT_INT, 373)
+
 OPTION(osd_op_thread_timeout, OPT_INT, 15)
 OPTION(osd_remove_thread_timeout, OPT_INT, 60*60)
 OPTION(osd_command_thread_timeout, OPT_INT, 10*60)
