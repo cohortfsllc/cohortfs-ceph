@@ -417,7 +417,7 @@ void OSDVol::do_op(OpRequest* op)
   }
 
   op->mark_started();
-  ctx->src_obc = src_obc;
+  ctx->src_obc.swap(src_obc);
 
   execute_ctx(ctx);
 }
