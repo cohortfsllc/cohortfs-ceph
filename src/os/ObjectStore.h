@@ -1473,31 +1473,33 @@ public:
 				   const hoid_t& oid,
 				   bool create) {
     ObjectHandle oh = get_object(ch, oid, create);
-    if (oh) {
-      if (! oh->ready) {
-	oh->mtx.lock();
-	switch (oh->obj_st) {
-	case Object::state::INIT:
-	  /* new object */
-	  oh->obj_st = Object::state::CREATING;
-	  /* state terminates in Object::set_ready() */
-	  break;
-	case Object::state::CREATING:
-	  {
-	    /* unlikely */
-	    Object::unique_lock lk(oh->mtx, std::adopt_lock);
-	    ++oh->waiters;
-	    oh->cv.wait(lk);
-	    lk.release();
-	  }
-	  break;
-	default:
-	  /* apparently, READY:  must never get here */
-	  abort();
-	  break;
-	}
-      } /* ! ready */
+    if (!oh)
+      return nullptr;
+    if (oh->ready)
+      return oh;
+
+    Object::unique_lock lk(oh->mtx);
+    if (oh->ready) // check again under lock
+      return oh;
+
+    switch (oh->obj_st) {
+    case Object::state::INIT:
+      /* new object */
+      oh->obj_st = Object::state::CREATING;
+      /* state terminates in Object::set_ready() */
+      break;
+    case Object::state::CREATING:
+      /* unlikely */
+      ++oh->waiters;
+      oh->cv.wait(lk);
+      break;
+    default:
+      /* apparently, READY:  must never get here */
+      abort();
+      break;
     }
+    // keep the mutex locked until Object::set_ready()
+    lk.release();
     return oh;
   }
 
