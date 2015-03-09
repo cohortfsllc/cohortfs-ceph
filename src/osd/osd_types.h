@@ -807,12 +807,6 @@ struct ObjectState {
   * etc., because we don't send writes down to disk until after
   * replicas ack.
   */
-
-struct ObjectContext;
-
-// XXXX need intrusive pointer
-typedef std::shared_ptr<ObjectContext> ObjectContextRef;
-
 struct ObjectContext {
   ObjectState obs;
 
@@ -820,12 +814,25 @@ private:
   std::mutex lock; /* XXX */
 
 public:
+  std::atomic<uint64_t> nref;
   std::condition_variable cond;
   int unstable_writes, readers, writers_waiting, readers_waiting;
 
   /* any entity in obs.oi.watchers MUST be in either watchers or
    * unconnected_watchers. */
   map<pair<uint64_t, entity_name_t>, WatchRef> watchers;
+
+  void get() { nref.fetch_add(1, std::memory_order_relaxed); }
+
+  void put() {
+    if (nref.fetch_sub(1, std::memory_order_release) == 1) {
+      std::atomic_thread_fence(std::memory_order_acquire);
+      delete this; /* XXX override */
+    }
+  }
+
+  /* XXX returns Object ref */
+  void operator delete(void* ptr);
 
   struct RWState {
     enum State {
@@ -966,7 +973,7 @@ public:
   }
 
   ObjectContext(const hoid_t& _oid, void* oh)
-    : obs(_oid, oh),
+    : obs(_oid, oh), nref(0),
       unstable_writes(0), readers(0), writers_waiting(0), readers_waiting(0)
   {}
 
@@ -1027,7 +1034,13 @@ public:
     }
     mod->setattrs(to_set);
   }
-};
+}; /* ObjectContext */
+
+
+typedef boost::intrusive_ptr<ObjectContext> ObjectContextRef;
+
+inline void intrusive_ptr_add_ref(ObjectContext *obc) { obc->get(); }
+inline void intrusive_ptr_release(ObjectContext *obc) { obc->put(); }
 
 inline ostream& operator<<(ostream& out, const ObjectState& obs)
 {

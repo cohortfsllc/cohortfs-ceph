@@ -136,6 +136,10 @@ public:
       }
     }
 
+    void release() {
+      c->os->put_object(this);
+    }
+
     /* per ObjectStore LRU */
     const static int n_lanes = 17; // # of lanes in LRU system
 

@@ -2540,6 +2540,12 @@ OSDVol::get_object_context(const hoid_t& oid,
   return ObjectContextRef();
 } /* get_object_context */
 
+void ObjectContext::operator delete(void* ptr)
+{
+  ObjectHandle oh = reinterpret_cast<ObjectHandle>(ptr);
+  oh->release();
+}
+
 void OSDVol::context_registry_on_change()
 {
 #if 0 /* XXXX delete me */
@@ -2640,7 +2646,7 @@ int OSDVol::objects_list_partial(const hoid_t& begin,
 }
 
 int OSDVol::objects_list_range(const hoid_t& start, const hoid_t& end,
-			   vector<hoid_t>* ls)
+			       vector<hoid_t>* ls)
 {
   assert(ls);
   vector<hoid_t> objects;
@@ -2675,7 +2681,6 @@ void OSDVol::objects_read_async(ObjectHandle oh,
 			    pair<bufferlist*, Context*> > > &to_read,
 			    Context *on_complete)
 {
-  /* XXX need ref on oh? */
   int r = 0;
   for (list<pair<pair<uint64_t, uint64_t>,
 	 pair<bufferlist*, Context*> > >::const_iterator i =
