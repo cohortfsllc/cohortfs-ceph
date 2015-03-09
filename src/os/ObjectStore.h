@@ -85,7 +85,7 @@ public:
     ObjectContext obc;
     Collection* c;
 
-    mutable void* ready; // double-check var
+    mutable bool ready; // double-check var
     enum state obj_st;
     std::mutex mtx;
     std::condition_variable cv;
@@ -95,7 +95,7 @@ public:
 
   public:
     explicit Object(Collection* _c, const hoid_t& _oid)
-      : obc(_oid, this), c(_c), ready(nullptr), obj_st(state::INIT),
+      : obc(_oid, this), c(_c), ready(false), obj_st(state::INIT),
 	waiters(0)
     {
       /* each object holds a ref on it's collection */
@@ -108,15 +108,15 @@ public:
 
     ObjectContext& get_obc() { return obc; }
 
-    bool is_ready() {
+    bool is_ready() const {
       return ready;
     }
 
     void set_ready() {
       unique_lock lk(mtx, std::adopt_lock);
       obj_st = state::READY;
+      ready = true;
       if (unlikely(waiters)) {
-	ready = (void*) true;
 	waiters = 0;
 	cv.notify_all();
       }
