@@ -237,7 +237,8 @@ void OSDVol::requeue_op(OpRequest* op)
   else
     band = MultiQueue::Bands::BASE;
 
-  op->get(); /* take queue ref on op */
+  /* XXX we take no ref on op because we assert it to have
+   * been taken at the start of the wait cycle */
 
   /* enqueue on multi_wq, defers vol resolution */
   osd->osd->multi_wq.enqueue(op->get_k(), *op,
@@ -435,7 +436,9 @@ void OSDVol::on_change(ObjectStore::Transaction *t)
        i != in_progress_async_reads.end();
        in_progress_async_reads.erase(i++)) {
     close_op_ctx(i->second, -ECANCELED);
-    requeue_op((i->first).get() /* intrusive ptr */);
+    OpRequest* op = (i->first).get(); /* intrusive ptr */ 
+    op->get(); // queue ref!
+    requeue_op(op);
   }
 
   // this will requeue ops we were working on but didn't finish, and
@@ -2569,7 +2572,8 @@ void OSDVol::apply_mutations(bool requeue)
 	dout(10) << " requeuing " << *mutation->ctx->op->get_req()
 		 << dendl;
 	OpRequest* op = mutation->ctx->op.get();
-	/* XXX N.B., taking no extra ref on op */
+	/* XXX N.B., taking no extra ref on op, because a ref was
+	 * taken when it was queued for wait */
 	rq.push_back(*op);
 	mutation->ctx->op = nullptr;
       }
