@@ -98,7 +98,7 @@ public:
       : obc(_oid, this), c(_c), ready(nullptr), obj_st(state::INIT),
 	waiters(0)
     {
-      /* eaach object holds a ref on it's collection */
+      /* each object holds a ref on it's collection */
       c->get();
     }
 
