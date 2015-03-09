@@ -368,32 +368,25 @@ void OSDVol::do_op(OpRequest* op)
     /* find contexts for additional objects referenced by the
      * OpRequest */
     const hoid_t& src_oid = osd_op.oid;
-    if (src_obc.count(src_oid))
+    auto insert = src_obc.insert(std::make_pair(src_oid, ObjectContextRef()));
+    if (!insert.second)
       continue; /* have this obc already */
 
-    if (!src_obc.count(src_oid)) {
-      /* XXXX re-using value for can_create */
-      ObjectContextRef sobc = get_object_context(src_oid, can_create);
-      if (! sobc) {
-	osd->reply_op_error(op, -ENOENT);
-	return;
-      }
-      if (sobc->obs.oi.oid != obc->obs.oi.oid) {
-	dout(1) << " src_oid " << sobc->obs.oi.oid << " != "
-		<< obc->obs.oi.oid << dendl;
-	osd->reply_op_error(op, -EINVAL);
-      } else {
-	dout(10) << " src_oid " << src_oid << " obc "
-		 << src_obc << dendl;
-	src_obc[src_oid] = sobc;
-	continue;
-      }
-      // Error cleanup below
+    /* XXXX re-using value for can_create */
+    ObjectContextRef sobc = get_object_context(src_oid, can_create);
+    if (! sobc) {
+      osd->reply_op_error(op, -ENOENT);
+      return;
     }
-    // Error cleanup
-
-    return;
-  } /* */
+    if (sobc->obs.oi.oid != obc->obs.oi.oid) {
+      dout(1) << " src_oid " << sobc->obs.oi.oid << " != "
+              << obc->obs.oi.oid << dendl;
+      osd->reply_op_error(op, -EINVAL);
+      return;
+    }
+    dout(10) << " src_oid " << src_oid << " obc " << sobc << dendl;
+    insert.first->second = sobc;
+  }
 
   OpContext *ctx = new OpContext(op, m->get_reqid(), m->ops,
 				 &obc->obs,
@@ -2472,8 +2465,7 @@ OSDVol::get_object_context(const hoid_t& oid,
     osd->store->get_object_for_init(coll, oid, can_create); /* ObjectRef? */
 
   if (oh) {
-    ObjectContextRef obc
-      = ObjectContextRef(&(oh->get_obc())); /* XXXX need intrusive_ptr*/
+    ObjectContextRef obc(&oh->get_obc()); /* XXXX need intrusive_ptr*/
     if (likely(oh->is_ready())) {
       return obc;
     }
@@ -2523,7 +2515,7 @@ OSDVol::get_object_context(const hoid_t& oid,
   return ObjectContextRef();
 } /* get_object_context */
 
-void ObjectContext::operator delete(void* ptr)
+void ObjectContext::on_last_ref(void* ptr)
 {
   ObjectHandle oh = reinterpret_cast<ObjectHandle>(ptr);
   oh->release();

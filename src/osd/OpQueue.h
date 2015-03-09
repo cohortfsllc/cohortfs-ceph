@@ -107,6 +107,7 @@ namespace cohort {
       uint32_t thrd_lowat;
       uint32_t thrd_hiwat;
       uint32_t flags;
+      std::thread graveyard; // where exiting workers go to die
       CACHE_PAD(0);
 
       Lane(OpQueue* _q=NULL)
@@ -188,6 +189,9 @@ namespace cohort {
 	  lane_lk.unlock();
 	} /* for (inf) */
 
+        if (graveyard.joinable()) // join previous thread
+          graveyard.join();
+        graveyard.swap(worker->thread);
 	delete worker;
 	/* thread exit */
       } /* run */
@@ -264,6 +268,8 @@ namespace cohort {
 	    std::chrono::seconds(1);
 	  lane.cv.wait_until(lane_lk, timeout);
 	}
+        if (lane.graveyard.joinable())
+          lane.graveyard.join();
       }
     } /* shutdown */
   }; /* OpQueue */

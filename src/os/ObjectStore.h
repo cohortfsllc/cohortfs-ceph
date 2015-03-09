@@ -85,7 +85,7 @@ public:
     ObjectContext obc;
     Collection* c;
 
-    mutable void* ready; // double-check var
+    mutable bool ready; // double-check var
     enum state obj_st;
     std::mutex mtx;
     std::condition_variable cv;
@@ -95,10 +95,10 @@ public:
 
   public:
     explicit Object(Collection* _c, const hoid_t& _oid)
-      : obc(_oid, this), c(_c), ready(nullptr), obj_st(state::INIT),
+      : obc(_oid, this), c(_c), ready(false), obj_st(state::INIT),
 	waiters(0)
     {
-      /* eaach object holds a ref on it's collection */
+      /* each object holds a ref on it's collection */
       c->get();
     }
 
@@ -108,15 +108,15 @@ public:
 
     ObjectContext& get_obc() { return obc; }
 
-    bool is_ready() {
+    bool is_ready() const {
       return ready;
     }
 
     void set_ready() {
       unique_lock lk(mtx, std::adopt_lock);
       obj_st = state::READY;
+      ready = true;
       if (unlikely(waiters)) {
-	ready = (void*) true;
 	waiters = 0;
 	cv.notify_all();
       }
@@ -1473,31 +1473,33 @@ public:
 				   const hoid_t& oid,
 				   bool create) {
     ObjectHandle oh = get_object(ch, oid, create);
-    if (oh) {
-      if (! oh->ready) {
-	oh->mtx.lock();
-	switch (oh->obj_st) {
-	case Object::state::INIT:
-	  /* new object */
-	  oh->obj_st = Object::state::CREATING;
-	  /* state terminates in Object::set_ready() */
-	  break;
-	case Object::state::CREATING:
-	  {
-	    /* unlikely */
-	    Object::unique_lock lk(oh->mtx, std::adopt_lock);
-	    ++oh->waiters;
-	    oh->cv.wait(lk);
-	    lk.release();
-	  }
-	  break;
-	default:
-	  /* apparently, READY:  must never get here */
-	  abort();
-	  break;
-	}
-      } /* ! ready */
+    if (!oh)
+      return nullptr;
+    if (oh->ready)
+      return oh;
+
+    Object::unique_lock lk(oh->mtx);
+    if (oh->ready) // check again under lock
+      return oh;
+
+    switch (oh->obj_st) {
+    case Object::state::INIT:
+      /* new object */
+      oh->obj_st = Object::state::CREATING;
+      /* state terminates in Object::set_ready() */
+      break;
+    case Object::state::CREATING:
+      /* unlikely */
+      ++oh->waiters;
+      oh->cv.wait(lk);
+      break;
+    default:
+      /* apparently, READY:  must never get here */
+      abort();
+      break;
     }
+    // keep the mutex locked until Object::set_ready()
+    lk.release();
     return oh;
   }
 
