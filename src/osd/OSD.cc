@@ -425,7 +425,6 @@ OSD::OSD(CephContext *cct_, ObjectStore *store_,
   asok_hook(NULL),
   osd_compat(get_osd_compat_set()),
   state(STATE_INITIALIZING), boot_epoch(0), up_epoch(0), bind_epoch(0),
-  op_tp(cct, "OSD::op_tp", cct->_conf->osd_op_threads, "osd_op_threads"),
   disk_tp(cct, "OSD::disk_tp", cct->_conf->osd_disk_threads, "osd_disk_threads"),
   command_tp(cct, "OSD::command_tp", 1),
   heartbeat_stop(false), heartbeat_need_update(true), heartbeat_epoch(0),
@@ -434,7 +433,10 @@ OSD::OSD(CephContext *cct_, ObjectStore *store_,
   hb_back_server_messenger(hb_back_serverm),
   heartbeat_thread(this),
   heartbeat_dispatcher(this),
-  multi_wq(this, static_dequeue_op, n_lanes),
+		 multi_wq(this, static_dequeue_op,
+			  cct->_conf->osd_wq_lanes,
+			  cct->_conf->osd_wq_thrd_lowat,
+			  cct->_conf->osd_wq_thrd_hiwat),
   up_thru_wanted(0), up_thru_pending(0), service(this)
 {
   monc->set_messenger(client_messenger);
@@ -719,7 +721,6 @@ int OSD::init()
   // tell monc about log_client so it will know about mon session resets
   monc->set_log_client(&clog);
 
-  op_tp.start();
   disk_tp.start();
   command_tp.start();
 
@@ -805,7 +806,6 @@ void OSD::suicide(int exitcode)
   }
 
   derr << " pausing thread pools" << dendl;
-  op_tp.pause();
   disk_tp.pause();
   command_tp.pause();
 
@@ -870,8 +870,6 @@ int OSD::shutdown()
   hl.unlock();
   heartbeat_thread.join();
 
-  op_tp.drain();
-  op_tp.stop();
   dout(10) << "op tp stopped" << dendl;
 
   command_tp.drain();

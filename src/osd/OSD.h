@@ -418,8 +418,6 @@ public:
   bool is_waiting_for_healthy() { return state == STATE_WAITING_FOR_HEALTHY; }
 
 private:
-
-  ThreadPool op_tp;
   ThreadPool disk_tp;
   ThreadPool command_tp;
 
