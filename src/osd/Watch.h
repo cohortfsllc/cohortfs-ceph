@@ -43,6 +43,10 @@ class Notify;
 typedef std::shared_ptr<Notify> NotifyRef;
 typedef std::weak_ptr<Notify> WNotifyRef;
 
+/* avoid cycle including osd_types.h */
+void intrusive_ptr_add_ref(ObjectContext *obc);
+void intrusive_ptr_release(ObjectContext *obc);
+
 /**
  * Notify tracks the progress of a particular notify
  *
@@ -150,7 +154,7 @@ class Watch {
 
   OSDService *osd;
   boost::intrusive_ptr<OSDVol> vol;
-  std::shared_ptr<ObjectContext> obc;
+  boost::intrusive_ptr<ObjectContext> obc;
 
   std::map<uint64_t, NotifyRef> in_progress_notifies;
 
@@ -164,7 +168,7 @@ class Watch {
 
   Watch(
     OSDVol *vol, OSDService *osd,
-    std::shared_ptr<ObjectContext> obc, uint32_t timeout,
+    boost::intrusive_ptr<ObjectContext> obc, uint32_t timeout,
     uint64_t cookie, entity_name_t entity,
     const entity_addr_t& addr);
 
@@ -184,10 +188,11 @@ public:
   ~Watch();
 
   string gen_dbg_prefix();
-  static WatchRef makeWatchRef(
-    OSDVol *vol, OSDService *osd, std::shared_ptr<ObjectContext> obc,
-    uint32_t timeout, uint64_t cookie, entity_name_t entity,
-    const entity_addr_t &addr);
+  static WatchRef makeWatchRef(OSDVol *vol, OSDService *osd,
+			       boost::intrusive_ptr<ObjectContext> obc,
+			       uint32_t timeout, uint64_t cookie,
+			       entity_name_t entity,
+			       const entity_addr_t &addr);
 
   void handle_watch_timeout();
 
@@ -197,8 +202,7 @@ public:
 
   /// Does not grant a ref count!
   boost::intrusive_ptr<OSDVol> get_vol() { return vol; }
-
-  std::shared_ptr<ObjectContext> get_obc() { return obc; }
+  boost::intrusive_ptr<ObjectContext> get_obc() { return obc; }
 
   uint64_t get_cookie() const { return cookie; }
   entity_name_t get_entity() const { return entity; }

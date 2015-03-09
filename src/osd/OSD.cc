@@ -170,11 +170,6 @@ void OSDService::shutdown()
   next_osdmap = OSDMapRef();
 }
 
-void OSDService::init()
-{
-  assert(meta_col);
-}
-
 #undef dout_prefix
 #define dout_prefix *_dout
 
@@ -1429,16 +1424,6 @@ void OSD::tick()
       start_boot();
       notify_state_observers(state, osdmap->get_epoch());
     }
-  }
-
-  // only do waiters if dispatch() isn't currently running.  (if it is,
-  // it'll do the waiters, and doing them here may screw up ordering
-  // of op_queue vs handle_osd_map.)
-  if (!dispatch_running) {
-    dispatch_running = true;
-    do_waiters();
-    dispatch_running = false;
-    dispatch_cond.notify_all();
   }
 
   tick_timer.reschedule_me(1s);
