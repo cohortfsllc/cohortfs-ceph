@@ -227,7 +227,7 @@ namespace cohort {
     bool enqueue(uint64_t k, OpRequest& op, enum Bands b, enum Pos p) {
       Lane& lane = lane_of_scalar(k);
       Band& band = lane.bands[int(b)];
-      unique_lock lk(band.producer_lk, std::defer_lock);
+      unique_lock producer_lock(band.producer_lk);
       /* don't accept work if shutting down */
       if (lane.flags & Lane::FLAG_SHUTDOWN)
 	return false;
@@ -240,8 +240,8 @@ namespace cohort {
       };
       if (! lane.n_active) {
 	/* maybe signal a worker */
-	lk.unlock();
-	std::unique_lock<std::mutex> lk(lane.mtx);
+	producer_lock.unlock();
+	std::unique_lock<std::mutex> lane_lock(lane.mtx);
 	if (! lane.n_active) {
 	  /* no workers active */
 	  if (lane.workers.size())
