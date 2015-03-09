@@ -268,24 +268,6 @@ ostream& operator<<(ostream& out, const OSDVol& vol)
   return out;
 }
 
-bool OSDVol::can_discard_op(OpRequestRef op)
-{
-  MOSDOp *m = static_cast<MOSDOp*>(op->get_req());
-  if (OSD::op_is_discardable(m)) {
-    dout(20) << " discard " << *m << dendl;
-    return true;
-  }
-
-  return false;
-}
-
-bool OSDVol::can_discard_request(OpRequestRef op)
-{
-  if (op->get_req()->get_type() == CEPH_MSG_OSD_OP)
-    return can_discard_op(op);
-  return true;
-}
-
 /* XXXX Adam? */
 
 void OSDVol::handle_advance_map(OSDMapRef osdmap)
