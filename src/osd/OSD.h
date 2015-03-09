@@ -161,8 +161,8 @@ public:
     return cluster_messenger->get_myname();
   }
 
-  void reply_op_error(OpRequestRef op, int err);
-  void reply_op_error(OpRequestRef op, int err, eversion_t v, version_t uv);
+  void reply_op_error(OpRequest* op, int err);
+  void reply_op_error(OpRequest* op, int err, eversion_t v, version_t uv);
 
   // -- Watch --
   std::mutex watch_lock;
@@ -512,7 +512,7 @@ private:
 
 public:
   bool heartbeat_dispatch(Message *m);
-  bool require_same_or_newer_map(OpRequestRef op, epoch_t epoch);
+  bool require_same_or_newer_map(OpRequest* op, epoch_t epoch);
 
   struct HeartbeatDispatcher : public Dispatcher {
     OSD *osd;
@@ -541,7 +541,7 @@ private:
 
   /* multi_wq dequeue function */
   static void static_dequeue_op(OSD* osd, OpRequest* op);
-  void dequeue_op(OpRequestRef op);
+  void dequeue_op(OpRequest* op);
 
   friend class OSDVol;
 
@@ -571,7 +571,7 @@ protected:
   void _share_map_outgoing(int peer, Connection *con,
 			   OSDMapRef map = OSDMapRef());
 
-  void wait_for_new_map(OpRequestRef op);
+  void wait_for_new_map(OpRequest* op);
   void handle_osd_map(class MOSDMap *m);
   void note_down_osd(int osd);
   void note_up_osd(int osd);
@@ -716,7 +716,7 @@ public:
   void handle_signal(int signum);
 
   void handle_osd_ping(class MOSDPing *m);
-  void handle_op(OpRequestRef op, unique_lock& osd_lk);
+  void handle_op(OpRequest* op, unique_lock& osd_lk);
 
   template <typename T, int MSGTYPE>
   void handle_replica_op(OpRequestRef op);
@@ -737,7 +737,7 @@ public:
 public:
   void force_remount();
 
-  int init_op_flags(OpRequestRef op);
+  int init_op_flags(OpRequest* op);
 
   OSDService service;
   friend class OSDService;

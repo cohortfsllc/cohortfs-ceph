@@ -2011,7 +2011,7 @@ bool OSD::ms_dispatch(Message *m)
     {
       /* all other ops, need OSDMap in general */
       OpRequestRef op = OpRequest::create_request(m);
-      handle_op(op, osd_lk);
+      handle_op(op.get(), osd_lk);
     }
   }
 
@@ -2127,13 +2127,14 @@ void OSDService::got_stop_ack()
 // =====================================================
 // MAP
 
-void OSD::wait_for_new_map(OpRequestRef op)
+void OSD::wait_for_new_map(OpRequest* op)
 {
   // ask?
   if (waiting_for_osdmap.empty()) {
     osdmap_subscribe(osdmap->get_epoch() + 1, true);
   }
 
+  op->get(); // queue ref
   waiting_for_osdmap.push_back(*op);
   op->mark_delayed("wait for new map");
 }
@@ -2677,7 +2678,8 @@ void OSD::activate_map()
   while (! waiting_for_osdmap.empty()) {
     OpRequest* op = &(waiting_for_osdmap.front());
     waiting_for_osdmap.pop_front();
-    handle_op(OpRequestRef(op), osd_lk);
+    handle_op(op, osd_lk);
+    op->put(); // release queue's ref
   }
 }
 
@@ -2852,7 +2854,7 @@ OSDMapRef OSDService::try_get_map(epoch_t epoch)
 /*
  * require that we have same (or newer) map
  */
-bool OSD::require_same_or_newer_map(OpRequestRef op, epoch_t epoch)
+bool OSD::require_same_or_newer_map(OpRequest* op, epoch_t epoch)
 {
   Message *m = op->get_req();
   dout(15) << "require_same_or_newer_map " << epoch << " (i am "
@@ -2904,12 +2906,12 @@ bool OSD::require_same_or_newer_map(OpRequestRef op, epoch_t epoch)
 // =========================================================
 // OPS
 
-void OSDService::reply_op_error(OpRequestRef op, int err)
+void OSDService::reply_op_error(OpRequest* op, int err)
 {
   reply_op_error(op, err, eversion_t(), 0);
 }
 
-void OSDService::reply_op_error(OpRequestRef op, int err, eversion_t v,
+void OSDService::reply_op_error(OpRequest* op, int err, eversion_t v,
 				version_t uv)
 {
   MOSDOp *m = static_cast<MOSDOp*>(op->get_req());
@@ -2929,7 +2931,7 @@ void OSDService::reply_op_error(OpRequestRef op, int err, eversion_t v,
   msgr->send_message(reply, m->get_connection());
 }
 
-void OSD::handle_op(OpRequestRef op, unique_lock& osd_lk)
+void OSD::handle_op(OpRequest* op, unique_lock& osd_lk)
 {
   MOSDOp *m = static_cast<MOSDOp*>(op->get_req());
 
@@ -3005,16 +3007,20 @@ void OSD::handle_op(OpRequestRef op, unique_lock& osd_lk)
     band = MultiQueue::Bands::BASE;
 
   /* enqueue on multi_wq, defers vol resolution */
+  op->get(); // explicit ref for queue
   multi_wq.enqueue(op->get_k(), *op, band, MultiQueue::Pos::BACK);
 } /* handle_op */
 
 void OSD::static_dequeue_op(OSD* osd, OpRequest* op)
 {
-  osd->dequeue_op(OpRequestRef(op));
+  osd->dequeue_op(op);
 }
 
-void OSD::dequeue_op(OpRequestRef op)
+void OSD::dequeue_op(OpRequest* op_p)
 {
+  OpRequestRef op(op_p);
+  op_p->put(); // release queue ref
+
   ceph::real_time now = ceph::real_clock::now();
   op->set_dequeued_time(now);
   ceph::timespan latency = now - op->get_req()->get_recv_stamp();
@@ -3025,7 +3031,7 @@ void OSD::dequeue_op(OpRequestRef op)
   OSDVolRef vol = _lookup_vol(volume);
   if (!vol) {
     dout(7) << "hit non-existent volume " << volume << dendl;
-    service.reply_op_error(op, -ENXIO);
+    service.reply_op_error(op.get(), -ENXIO);
     return;
   }
   vlock.unlock();
@@ -3040,7 +3046,7 @@ void OSD::dequeue_op(OpRequestRef op)
     return;
 
   op->mark_reached_vol();
-  vol->do_op(op);
+  vol->do_op(op.get()); // get intrusive ptr
 
   // finish
   dout(10) << "dequeue_op " << op << " finish" << dendl;
@@ -3066,7 +3072,7 @@ void OSD::handle_conf_change(const struct md_config_t *conf,
 
 // --------------------------------
 
-int OSD::init_op_flags(OpRequestRef op)
+int OSD::init_op_flags(OpRequest* op)
 {
   MOSDOp *m = static_cast<MOSDOp*>(op->get_req());
   vector<OSDOp>::iterator iter;

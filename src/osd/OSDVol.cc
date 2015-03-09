@@ -229,13 +229,15 @@ void OSDVol::read_info()
   ::decode(info, p);
 } /* read_info */
 
-void OSDVol::requeue_op(OpRequestRef op)
+void OSDVol::requeue_op(OpRequest* op)
 {
   MultiQueue::Bands band;
   if (op->get_req()->get_priority() > CEPH_MSG_PRIO_LOW)
     band = MultiQueue::Bands::HIGH;
   else
     band = MultiQueue::Bands::BASE;
+
+  op->get(); /* take queue ref on op */
 
   /* enqueue on multi_wq, defers vol resolution */
   osd->osd->multi_wq.enqueue(op->get_k(), *op,
@@ -253,7 +255,7 @@ void OSDVol::requeue_ops(OpRequest::Queue& q)
   while (! rq.empty()) {
     OpRequest& op = rq.front();
     rq.erase(rq.begin());
-    requeue_op(OpRequestRef(&op));
+    requeue_op(&op);
   }
 }
 
@@ -295,7 +297,7 @@ void OSDVol::on_removal(ObjectStore::Transaction *t)
  * vol lock will be held (if multithreaded)
  * osd_lock NOT held.
  */
-void OSDVol::do_op(OpRequestRef op)
+void OSDVol::do_op(OpRequest* op)
 {
   // There should be a permission check here, but it was done in
   // terms of namespaces and pools and is sort of sloppy and is based
@@ -433,7 +435,7 @@ void OSDVol::on_change(ObjectStore::Transaction *t)
        i != in_progress_async_reads.end();
        in_progress_async_reads.erase(i++)) {
     close_op_ctx(i->second, -ECANCELED);
-    requeue_op(i->first);
+    requeue_op((i->first).get() /* intrusive ptr */);
   }
 
   // this will requeue ops we were working on but didn't finish, and
@@ -600,7 +602,7 @@ void OSDVol::execute_ctx(OpContext *ctx)
 {
   dout(10) << __func__ << " " << ctx << dendl;
   ctx->reset_obs(ctx->obc);
-  OpRequestRef op = ctx->op;
+  OpRequest* op = ctx->op.get();
   MOSDOp *m = static_cast<MOSDOp*>(op->get_req());
   ObjectContextRef obc = ctx->obc;
   const hoid_t& soid = obc->obs.oi.oid;
@@ -717,7 +719,7 @@ void OSDVol::execute_ctx(OpContext *ctx)
 void OSDVol::reply_ctx(OpContext *ctx, int r)
 {
   if (ctx->op)
-    osd->reply_op_error(ctx->op, r);
+    osd->reply_op_error(ctx->op.get(), r);
   close_op_ctx(ctx, r);
 }
 
@@ -725,7 +727,7 @@ void OSDVol::reply_ctx(OpContext *ctx, int r, eversion_t v,
 		       version_t uv)
 {
   if (ctx->op)
-    osd->reply_op_error(ctx->op, r, v, uv);
+    osd->reply_op_error(ctx->op.get(), r, v, uv);
   close_op_ctx(ctx, r);
 }
 
@@ -2399,8 +2401,7 @@ OSDVol::Mutation *OSDVol::simple_mutation_create(ObjectContextRef obc)
   vector<OSDOp> ops;
   ceph_tid_t tid = osd->get_tid();
   osd_reqid_t reqid(osd->get_cluster_msgr_name(), 0, tid);
-  OpContext *ctx = new OpContext(OpRequestRef(), reqid, ops,
-				 &obc->obs, this);
+  OpContext *ctx = new OpContext(nullptr, reqid, ops, &obc->obs, this);
   ctx->op_t = new ObjectStore::Transaction;
   ctx->mtime = ceph::real_clock::now();
   ctx->obc = obc;
@@ -2433,8 +2434,7 @@ void OSDVol::handle_watch_timeout(WatchRef watch)
   vector<OSDOp> ops;
   ceph_tid_t tid = osd->get_tid();
   osd_reqid_t reqid(osd->get_cluster_msgr_name(), 0, tid);
-  OpContext *ctx = new OpContext(OpRequestRef(), reqid, ops,
-				 &obc->obs, this);
+  OpContext *ctx = new OpContext(nullptr, reqid, ops, &obc->obs, this);
   ctx->op_t = new ObjectStore::Transaction();
   ctx->mtime = ceph::real_clock::now();
   ctx->at_version = get_next_version();
@@ -2568,8 +2568,10 @@ void OSDVol::apply_mutations(bool requeue)
       if (mutation->ctx->op) {
 	dout(10) << " requeuing " << *mutation->ctx->op->get_req()
 		 << dendl;
-	rq.push_back(*(mutation->ctx->op)); // XXXX shared_ptr
-	mutation->ctx->op = OpRequestRef();
+	OpRequest* op = mutation->ctx->op.get();
+	/* XXX N.B., taking no extra ref on op */
+	rq.push_back(*op);
+	mutation->ctx->op = nullptr;
       }
     }
     remove_mutation(mutation);
