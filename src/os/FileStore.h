@@ -138,8 +138,6 @@ public:
       : ObjectStore::Object(fc, oid), fd(fd), pwb(this) {}
 
     virtual bool reclaim() {
-      std::cout << "FTW RECLAIM FSObject " << (void*) this
-		<< std::endl;
       c->obj_cache.remove(get_oid().hk, this, cohort::lru::FLAG_NONE);
       return true;
     }
