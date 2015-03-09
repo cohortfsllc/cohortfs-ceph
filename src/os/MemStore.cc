@@ -144,7 +144,7 @@ void MemStore::dump(Formatter* f)
     for (int ix = 0; ix < c.obj_cache.n_part; ++ix) {
       ObjCache::Partition& p = c.obj_cache.get(ix);
       for (ObjCache::iterator it = p.tr.begin();
-	   it != p.tr.end(); ++ix) {
+	   it != p.tr.end(); ++it) {
 	Object& o = static_cast<Object&>(*it);
 	f->open_object_section("object");
 	f->dump_string("name", stringify(o.get_oid()));

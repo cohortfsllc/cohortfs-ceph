@@ -165,7 +165,7 @@ public:
       for (int ix = 0; ix < obj_cache.n_part; ++ix) {
 	ObjCache::Partition& p = obj_cache.get(ix);
 	for (ObjCache::iterator it = p.tr.begin();
-	     it != p.tr.end(); ++ix) {
+	     it != p.tr.end(); ++it) {
 	  Object& o = static_cast<Object&>(*it);
 	  ::encode(o.get_oid(), bl);
 	  o.encode(bl);
