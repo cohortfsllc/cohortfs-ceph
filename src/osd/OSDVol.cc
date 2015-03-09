@@ -316,13 +316,6 @@ void OSDVol::do_op(OpRequest* op)
   if (can_discard_request(op))
     return;
 
-  if (get_osdmap()->is_blacklisted(m->get_source_addr())) {
-    dout(10) << "do_op " << m->get_source_addr()
-	     << " is blacklisted" << dendl;
-    osd->reply_op_error(op, -EBLACKLISTED);
-    return;
-  }
-
   // order this op as a write?
   bool write_ordered =
     op->may_write() ||
@@ -842,16 +835,17 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	ctx->user_modify = true;
     }
 
-    ObjectContextRef src_obc;
+    ObjectContext* src_obc = nullptr;
     ObjectHandle src_oh = nullptr;
     if (ceph_osd_op_type_multi(op.op)) {
       // For stripulation
-      hoid_t src_obj(osd_op.oid);
-      src_obc = ctx->src_obc[src_obj];
+      const hoid_t& src_obj(osd_op.oid);
+      src_obc = (ctx->src_obc[src_obj]).get(); // intrusive_ptr
+      assert(src_obc);
       src_oh = reinterpret_cast<ObjectHandle>(src_obc->obs.oh);
       dout(10) << " src_obj " << src_obj << " obc " << src_obc
 	       << dendl;
-      assert(src_obc);
+      assert(soh);
     }
 
     // munge -1 truncate to 0 truncate
