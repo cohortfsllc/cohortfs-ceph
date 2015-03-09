@@ -184,7 +184,7 @@ public:
     OpContext(const OpContext& other);
     const OpContext& operator=(const OpContext& other);
 
-    OpContext(OpRequestRef _op, osd_reqid_t _reqid, vector<OSDOp>& _ops,
+    OpContext(OpRequest* _op, osd_reqid_t _reqid, vector<OSDOp>& _ops,
 	      ObjectState* _obs, OSDVol* _vol) :
       op(_op), reqid(_reqid), ops(_ops), obs(_obs),
       new_obs(_obs->oi, _obs->oh, _obs->exists),
@@ -540,7 +540,7 @@ public:
   void do_osd_op_effects(OpContext* ctx);
 
 protected:
-  void requeue_op(OpRequestRef op);
+  void requeue_op(OpRequest* op);
   void requeue_ops(OpRequest::Queue& q);
 
 private:
@@ -608,7 +608,7 @@ public:
     return coll;
   }
 
-  bool can_discard_op(OpRequestRef& op) {
+  bool can_discard_op(OpRequest* op) {
     MOSDOp *m = static_cast<MOSDOp*>(op->get_req());
     if (!m->get_connection()->is_connected() &&
 	m->get_version().version == 0) {
@@ -617,7 +617,7 @@ public:
     return false;
   }
 
-  bool can_discard_request(OpRequestRef& op) {
+  bool can_discard_request(OpRequest* op) {
     if (op->get_req()->get_type() == CEPH_MSG_OSD_OP)
       return can_discard_op(op);
     return true;
@@ -628,7 +628,7 @@ public:
 
   void on_removal(ObjectStore::Transaction* t);
 
-  void do_op(OpRequestRef op);
+  void do_op(OpRequest* op);
   int do_command(cmdmap_t cmdmap, ostream& ss, bufferlist& idata,
 		 bufferlist& odata);
 
