@@ -151,9 +151,11 @@ namespace cohort {
 		size_max = size;
 	      ++n_reqs;
 	      ++n_active;
+              lk.unlock();
 	      /* dequeue op */
 	      dequeue_op_func(osd, &op);
-	      --n_active;
+              lk.lock();
+              --n_active;
 	    }
 	  }
 
