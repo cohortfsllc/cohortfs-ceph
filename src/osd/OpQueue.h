@@ -101,7 +101,7 @@ namespace cohort {
       op_func dequeue_op_func;
       OpQueue* op_q;
       OSD* osd;
-      std::chrono::milliseconds worker_timeout;
+      ceph::timespan worker_timeout;
       uint32_t start_thresh;
       uint32_t n_active;
       uint32_t thrd_lowat;
@@ -224,12 +224,16 @@ namespace cohort {
 
     ~OpQueue() { delete[] qlane; }
 
-    Lane& lane_of_scalar(uint64_t k) {
+    Lane& choose_lane() {
+      // use rdtsc to choose the lane
+      unsigned lo, hi;
+      asm volatile("rdtsc" : "=a" (lo), "=d" (hi));
+      uint64_t k = static_cast<uint64_t>(hi) << 32 | lo;
       return qlane[(k % n_lanes)];
     }
 
-    bool enqueue(uint64_t k, OpRequest& op, enum Bands b, enum Pos p) {
-      Lane& lane = lane_of_scalar(k);
+    bool enqueue(OpRequest& op, enum Bands b, enum Pos p) {
+      Lane& lane = choose_lane();
       Band& band = lane.bands[int(b)];
       unique_lock producer_lock(band.producer_lk);
       /* don't accept work if shutting down */
@@ -264,9 +268,7 @@ namespace cohort {
 	lane.flags |= Lane::FLAG_SHUTDOWN;
 	while (! lane.workers.empty()) {
 	  lane.cv.notify_all();
-	  ceph::mono_time timeout = ceph::mono_clock::now() +
-	    std::chrono::seconds(1);
-	  lane.cv.wait_until(lane_lk, timeout);
+	  lane.cv.wait_for(lane_lk, std::chrono::seconds(1));
 	}
         if (lane.graveyard.joinable())
           lane.graveyard.join();
