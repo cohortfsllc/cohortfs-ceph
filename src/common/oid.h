@@ -181,12 +181,7 @@ struct hoid_t {
   hoid_t(hoid_t&& hoid) : oid(hoid.oid), hk(hoid.hk) {}
 
   void hash() {
-    XXH64_state_t hs;
-    XXH64_reset(&hs, 667);
-    (void) XXH64_update(&hs, oid.name.c_str(), oid.name.size());
-    (void) XXH64_update(&hs, (void*) &(oid.type), 4);
-    (void) XXH64_update(&hs, (void*) &(oid.stride), 4);
-    hk = XXH64_digest(&hs);
+    hk = std::hash<oid_t>()(oid);
   }
 
   hoid_t& operator=(const hoid_t& o) {
