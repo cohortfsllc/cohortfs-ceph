@@ -244,6 +244,7 @@ public:
     OpContext* ctx;
     ObjectContextRef obc;
     map<hoid_t,ObjectContextRef> src_obc;
+    cohort::SpinLock lock;
 
     ceph_tid_t tid;
 
@@ -390,7 +391,8 @@ protected:
   friend class C_OSD_MutationCommit;
   void mutations_all_applied(Mutation* mutation);
   void mutations_all_committed(Mutation* mutation);
-  void eval_mutation(Mutation* mutation);
+  void eval_mutation(Mutation* mutation,
+                     std::unique_lock<cohort::SpinLock> &lock);
   void issue_mutation(Mutation* mutation);
   Mutation* new_mutation(OpContext* ctx, ObjectContextRef obc,
 			 ceph_tid_t rep_tid);
