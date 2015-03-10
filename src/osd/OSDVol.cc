@@ -700,7 +700,10 @@ void OSDVol::execute_ctx(OpContext *ctx)
   mutation->src_obc.swap(src_obc); // and src_obc.
 
   issue_mutation(mutation);
-  eval_mutation(mutation);
+  {
+    std::unique_lock<cohort::SpinLock> lock(mutation->lock);
+    eval_mutation(mutation, lock);
+  }
   mutation->put();
 }
 
@@ -2219,9 +2222,10 @@ void OSDVol::mutations_all_applied(Mutation *mutation)
 {
   dout(10) << __func__ << ": mutation tid "
 	   << mutation->tid << " all applied " << dendl;
+  std::unique_lock<cohort::SpinLock> lock(mutation->lock);
   mutation->applied = true;
   if (!mutation->aborted) {
-    eval_mutation(mutation);
+    eval_mutation(mutation, lock);
     if (mutation->on_applied) {
      mutation->on_applied->complete(0);
      mutation->on_applied = NULL;
@@ -2245,18 +2249,21 @@ void OSDVol::mutations_all_committed(Mutation *mutation)
 {
   dout(10) << __func__ << ": mutation tid " << mutation->tid
 	   << " all committed " << dendl;
+  std::unique_lock<cohort::SpinLock> lock(mutation->lock);
   mutation->committed = true;
 
   if (!mutation->aborted) {
     if (mutation->v != eversion_t()) {
       last_update_ondisk = mutation->v;
     }
-    eval_mutation(mutation);
+    eval_mutation(mutation, lock);
   }
 }
 
-void OSDVol::eval_mutation(Mutation *mutation)
+void OSDVol::eval_mutation(Mutation *mutation,
+                           std::unique_lock<cohort::SpinLock>& lock)
 {
+  MOSDOpReply *reply = nullptr;
   MOSDOp *m = NULL;
   if (mutation->ctx->op)
     m = static_cast<MOSDOp *>(mutation->ctx->op->get_req());
@@ -2272,9 +2279,8 @@ void OSDVol::eval_mutation(Mutation *mutation)
     if (mutation->committed) {
       if (m->wants_ondisk() && !mutation->sent_disk) {
 	// send commit.
-	MOSDOpReply *reply = mutation->ctx->reply;
-	if (reply)
-	  mutation->ctx->reply = NULL;
+	if (mutation->ctx->reply)
+	  reply = mutation->ctx->reply;
 	else {
 	  reply = new MOSDOpReply(m, 0, get_osdmap()->get_epoch(),
 				  0, true);
@@ -2282,19 +2288,8 @@ void OSDVol::eval_mutation(Mutation *mutation)
 				    mutation->ctx->user_at_version);
 	}
 	reply->add_flags(CEPH_OSD_FLAG_ACK | CEPH_OSD_FLAG_ONDISK);
-	dout(10) << " sending commit on " << mutation->tid << " "
-		 << reply << dendl;
-
-	if (mutation->ctx->op->trace) {
-	  mutation->ctx->op->trace.event(
-	    "eval_mutation sending commit",
-				     &trace_endpoint);
-	  // send reply with a child span
-	  Messenger *msgr = m->get_connection()->get_messenger();
-	  reply->trace.init("MOSDOpReply", msgr->get_trace_endpoint(),
-			    &mutation->ctx->op->trace);
-	}
-	osd->send_message_osd_client(reply, m->get_connection());
+	dout(10) << " sending commit on " << mutation->tid
+            << " m " << mutation << " reply " << reply << dendl;
 	mutation->sent_disk = true;
 	mutation->ctx->op->mark_commit_sent();
       }
@@ -2304,9 +2299,8 @@ void OSDVol::eval_mutation(Mutation *mutation)
     if (mutation->applied) {
       if (m->wants_ack() && !mutation->sent_disk) {
 	// send ack
-	MOSDOpReply *reply = mutation->ctx->reply;
-	if (reply)
-	  mutation->ctx->reply = NULL;
+	if (mutation->ctx->reply)
+	  reply = mutation->ctx->reply;
 	else {
 	  reply = new MOSDOpReply(m, 0, get_osdmap()->get_epoch(),
 				  0, true);
@@ -2316,18 +2310,6 @@ void OSDVol::eval_mutation(Mutation *mutation)
 	reply->add_flags(CEPH_OSD_FLAG_ACK);
 	dout(10) << " sending ack on " << mutation->tid << " " << reply
 		 << dendl;
-	if (mutation->ctx->op->trace) {
-	  mutation->ctx->op->trace.event("eval_mutation sending ack",
-					 &trace_endpoint);
-	  // send reply with a child span
-	  Messenger *msgr = m->get_connection()->get_messenger();
-	  reply->trace.init("MOSDOpReply", msgr->get_trace_endpoint(),
-			    &mutation->ctx->op->trace);
-	}
-
-	assert(entity_name_t::TYPE_OSD !=
-	       m->get_connection()->peer_type);
-	osd->send_message_osd_client(reply, m->get_connection());
       }
 
       // note the write is now readable (for rlatency calc).  note
@@ -2341,17 +2323,32 @@ void OSDVol::eval_mutation(Mutation *mutation)
   }
 
   // done.
+  bool done = false;
   if (mutation->applied && mutation->committed) {
-    lock_guard ml(mutation_lock);
-    mutation->done = true;
-
+    done = mutation->done = true;
     release_op_ctx_locks(mutation->ctx);
+  }
+  ZTracer::Trace trace(mutation->ctx->op->trace);
+  lock.unlock();
 
+  if (done) {
+    lock_guard ml(mutation_lock);
     dout(10) << " removing " << mutation->tid << dendl;
     assert(!mutation_queue.empty());
     dout(20) << "   q front is " << mutation_queue.front()->tid
 	     << dendl;
     remove_mutation(mutation);
+  }
+
+  if (reply) {
+    if (trace) {
+      trace.event("eval_mutation sending commit", &trace_endpoint);
+      // send reply with a child span
+      Messenger *msgr = m->get_connection()->get_messenger();
+      reply->trace.init("MOSDOpReply", msgr->get_trace_endpoint(), &trace);
+    }
+    assert(entity_name_t::TYPE_OSD != m->get_connection()->peer_type);
+    osd->send_message_osd_client(reply, m->get_connection());
   }
 }
 
@@ -2402,7 +2399,10 @@ void OSDVol::simple_mutation_submit(Mutation *mutation)
 {
   dout(20) << __func__ << " " << mutation->tid << dendl;
   issue_mutation(mutation);
-  eval_mutation(mutation);
+  {
+    std::unique_lock<cohort::SpinLock> lock(mutation->lock);
+    eval_mutation(mutation, lock);
+  }
   mutation->put();
 }
 
@@ -2445,7 +2445,10 @@ void OSDVol::handle_watch_timeout(WatchRef watch)
 
   // obc ref swallowed by mutation!
   issue_mutation(mutation);
-  eval_mutation(mutation);
+  {
+    std::unique_lock<cohort::SpinLock> lock(mutation->lock);
+    eval_mutation(mutation, lock);
+  }
   mutation->put();
 }
 
