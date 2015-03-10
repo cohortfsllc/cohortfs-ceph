@@ -724,10 +724,12 @@ int MemStore::queue_transactions(list<Transaction*>& tls, OpRequestRef op)
   Transaction::collect_contexts(tls, &on_apply, &on_commit, &on_apply_sync);
   if (on_apply_sync)
     on_apply_sync->complete(0);
+  // send apply and commit completions synchronously to avoid the latency from
+  // context switching
   if (on_apply)
-    finisher.queue(on_apply);
+    on_apply->complete(0);
   if (on_commit)
-    finisher.queue(on_commit);
+    on_commit->complete(0);
   return 0;
 }
 
