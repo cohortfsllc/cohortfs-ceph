@@ -469,6 +469,7 @@ set(osd_srcs
   osd/ClassHandler.cc
   osd/OpRequest.cc
   osd/OSDVol.cc
+  osd/VolCache.cc
   ${osdc_osd_srcs}
   ${libosd_srcs}
   )
