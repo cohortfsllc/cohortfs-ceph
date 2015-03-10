@@ -176,18 +176,18 @@ public:
     }
 
     void decode(bufferlist::iterator& p) {
-      ObjCache& obj_cache = const_cast<ObjCache&>(this->obj_cache);
       obj_cache.lock(); /* lock entire cache */
       DECODE_START(1, p);
       ::decode(xattr, p);
       uint32_t s;
       ::decode(s, p);
-      while (--s) {
+      while (s--) {
 	hoid_t k;
 	::decode(k, p);
-	ObjectRef o(new Object(this, k));
+	Object* o = new Object(this, k);
 	o->decode(p);
-	obj_cache.insert(k.hk, o.get(), ObjCache::FLAG_NONE);
+	intrusive_ptr_add_ref(o);
+	obj_cache.insert(k.hk, o, ObjCache::FLAG_NONE);
       }
       DECODE_FINISH(p);
       obj_cache.unlock(); /* !LOCKED */
