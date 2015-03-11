@@ -214,6 +214,7 @@ namespace cohort {
       qlane = new Lane[n_lanes];
       for (int ix = 0; ix < n_lanes; ++ix) {
 	Lane& lane = qlane[ix];
+	lane.flags = Lane::FLAG_NONE;
 	lane.op_q = this;
 	lane.osd = osd;
 	lane.dequeue_op_func = func;
