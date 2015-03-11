@@ -3,15 +3,21 @@
 # FIO_INC_DIR - where to find fio.h
 # FIO_FOUND - True if found.
 
-find_path(FIO_INC_DIR fio.h NO_DEFAULT_PATH PATHS
+message(STATUS "fio prefix is ${FIO_PREFIX}")
+
+find_path(FIO_INC_DIR
+  NAMES
+  fio.h
+  PATHS
   /usr/include
-  /opt/local/include
-  /usr/local/include
+  ${FIO_PREFIX}
+  DOC "Path to fio."
 )
 
 if (FIO_INC_DIR)
   set(FIO_FOUND TRUE)
 else ()
+  set(FIO_INC_DIR "")
   set(FIO_FOUND FALSE)
 endif ()
 
@@ -26,4 +32,4 @@ endif ()
 
 mark_as_advanced(
   FIO_INC_DIR
-)
+  )
