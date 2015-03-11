@@ -2280,7 +2280,7 @@ void OSDVol::eval_mutation(Mutation* mutation,
       if (m->wants_ondisk() && !mutation->sent_disk) {
 	// send commit.
 	if (mutation->ctx->reply)
-	  reply = mutation->ctx->reply;
+	  std::swap(reply, mutation->ctx->reply);
 	else {
 	  reply = new MOSDOpReply(m, 0, get_osdmap()->get_epoch(),
 				  0, true);
@@ -2300,7 +2300,7 @@ void OSDVol::eval_mutation(Mutation* mutation,
       if (m->wants_ack() && !mutation->sent_disk) {
 	// send ack
 	if (mutation->ctx->reply)
-	  reply = mutation->ctx->reply;
+	  std::swap(reply, mutation->ctx->reply);
 	else {
 	  reply = new MOSDOpReply(m, 0, get_osdmap()->get_epoch(),
 				  0, true);
