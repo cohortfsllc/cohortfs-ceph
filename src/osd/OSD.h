@@ -552,6 +552,9 @@ private:
   static void static_dequeue_op(OSD* osd, OpRequest* op);
   void dequeue_op(OpRequest* op);
 
+  /* multi_wq thread exit hook (clear tls, etc) */
+  static void static_wq_thread_exit(OSD* osd);
+
   friend class OSDVol;
 
 protected:

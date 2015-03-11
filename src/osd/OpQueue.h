@@ -41,6 +41,8 @@ namespace cohort {
   class OpQueue {
   public:
     typedef void (*op_func) (OSD*, OpRequest*);
+    typedef void (*thr_exit_func) (OSD*);
+
     typedef std::unique_lock<LK> unique_lock;
     typedef bi::link_mode<bi::safe_link> link_mode; // for debugging
 
@@ -99,6 +101,7 @@ namespace cohort {
       std::condition_variable cv;
       WorkerQueue workers;
       op_func dequeue_op_func;
+      thr_exit_func exit_func;
       OpQueue* op_q;
       OSD* osd;
       ceph::timespan worker_timeout;
@@ -191,6 +194,9 @@ namespace cohort {
 	  lane_lk.unlock();
 	} /* for (inf) */
 
+	/* allow OSDVol to clean up */
+	exit_func(osd);
+
         if (graveyard.joinable()) // join previous thread
           graveyard.join();
         graveyard.swap(worker->thread);
@@ -204,7 +210,7 @@ namespace cohort {
     Lane* qlane;
 
   public:
-    OpQueue(OSD* osd, op_func func, uint16_t lanes,
+    OpQueue(OSD* osd, op_func opf, thr_exit_func ef, uint16_t lanes,
 	    uint8_t thrd_lowat = 1, uint8_t thrd_hiwat = 2,
 	    uint32_t start_thresh = 10,
 	    std::chrono::milliseconds worker_timeout = 200ms)
@@ -218,7 +224,8 @@ namespace cohort {
 	lane.op_q = this;
 	lane.osd = osd;
 	lane.n_active = 0;
-	lane.dequeue_op_func = func;
+	lane.dequeue_op_func = opf;
+	lane.exit_func = ef;
 	lane.thrd_lowat = thrd_lowat;
 	lane.thrd_hiwat = thrd_hiwat;
 	lane.start_thresh = start_thresh;

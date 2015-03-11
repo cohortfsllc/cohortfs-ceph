@@ -106,6 +106,10 @@ public:
       return obc.obs.oi.oid; // whee!
     }
 
+    const coll_t& get_cid() const {
+      return c->get_cid();
+    }
+
     ObjectContext& get_obc() { return obc; }
 
     bool is_ready() const {
