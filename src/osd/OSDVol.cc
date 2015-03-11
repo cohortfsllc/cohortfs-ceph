@@ -46,6 +46,9 @@ static ostream& _prefix(std::ostream *_dout, T *vol) {
   return *_dout << vol->gen_prefix();
 }
 
+/* thread-local Object cache */
+thread_local OSDVol::ObjectContextCache OSDVol::tls_obj_cache;
+
 OSDVol::OSDVol(OSDService* o, OSDMapRef curmap,
 	       const boost::uuids::uuid& v)
   : osd(o),
@@ -2457,12 +2460,20 @@ OSDVol::get_object_context(const hoid_t& oid,
 			   bool can_create,
 			   map<string, bufferlist>* attrs)
 {
+
+  /* try thread-local cache */
+  ObjectContext* obc = tls_obj_cache.get(get_cid(), oid);
+  if (obc)
+    return obc;
+
   ObjectHandle oh =
-    osd->store->get_object_for_init(coll, oid, can_create); /* ObjectRef? */
+    osd->store->get_object_for_init(coll, oid, can_create);
 
   if (oh) {
-    ObjectContextRef obc(&oh->get_obc()); /* XXXX need intrusive_ptr*/
+    ObjectContextRef obc(&oh->get_obc());
     if (likely(oh->is_ready())) {
+      /* save in tls */
+      tls_obj_cache.put(obc.get());
       return obc;
     }
     /* initialize */
@@ -2517,6 +2528,9 @@ void ObjectContext::on_last_ref(void* ptr)
   oh->release();
 }
 
+/*
+ * Volume status change notification
+ */
 void OSDVol::context_registry_on_change()
 {
 #if 0 /* XXXX delete me */
@@ -2535,9 +2549,11 @@ void OSDVol::context_registry_on_change()
 #endif
 }
 
-/*
- * Volume status change notification
- */
+/* OpQueue thread exit hook */
+void OSDVol::wq_thread_exit(OSD* osd)
+{
+  tls_obj_cache.release(); /* clear tls Object cache */
+}
 
 void OSDVol::apply_mutations(bool requeue)
 {
