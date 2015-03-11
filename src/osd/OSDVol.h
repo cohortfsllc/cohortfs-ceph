@@ -468,6 +468,56 @@ public:
   void handle_watch_timeout(WatchRef watch);
 
 protected:
+
+  class ObjectContextCache {
+  private:
+    static constexpr uint16_t cachesz = 31;
+    std::array<ObjectContext*,cachesz> obj_cache;
+
+    static uint16_t slot_of(uint64_t ix) {
+      return ix % cachesz;
+    }
+
+  public:
+    ObjectContext* get(const coll_t cid, const hoid_t& oid) {
+      ObjectContext* obc = obj_cache[slot_of(oid.hk)];
+      if (obc) {
+	ObjectHandle oh = reinterpret_cast<ObjectHandle>(obc->obs.oh);
+	/* we are caching for all volumes */
+	if ((oh->get_cid() == cid) &&
+	    (oh->get_oid() == oid)) {
+	  return obc;
+	}
+      }
+      return nullptr;
+    } /* get */
+
+    void put(ObjectContext* obc) {
+      const uint16_t slot = slot_of(obc->obs.oi.oid.hk);
+      ObjectContext* obc2 = obj_cache[slot];
+      if (likely(obc2 == obc))
+	return;
+      if (obc2) {
+	obc2->put(); /* unref */
+      }
+      obc->get(); /* ref */
+      obj_cache[slot] = obc;
+    } /* put */
+
+    /* threads that saw this must call before exiting! */
+    void release() {
+      for (int ix = 0; ix < cachesz; ++ix) {
+	ObjectContext* obc = obj_cache[ix];
+	if (obc) {
+	  obc->put();
+	  obj_cache[ix] = nullptr;
+	}
+      }
+    } /* release */
+  }; /* ObjectContextCache */
+
+  static thread_local ObjectContextCache tls_obj_cache;
+
   ObjectContextRef
   get_object_context(const hoid_t& oid, bool can_create,
 		     map<string, bufferlist>* attrs = 0);
@@ -522,6 +572,8 @@ public:
   // last_update that has committed; ONLY DEFINED WHEN is_active()
   eversion_t  last_update_ondisk;
   eversion_t  last_update_applied;
+
+  static void wq_thread_exit(OSD* osd);
 
   void apply_mutations(bool requeue);
 
@@ -601,7 +653,7 @@ public:
     return at_version;
   }
 
-  const coll_t& get_cid(void) {
+  const coll_t& get_cid(void) const {
     return cid;
   }
 

@@ -433,7 +433,9 @@ OSD::OSD(CephContext *cct_, ObjectStore *store_,
   hb_back_server_messenger(hb_back_serverm),
   heartbeat_thread(this),
   heartbeat_dispatcher(this),
-		 multi_wq(this, static_dequeue_op,
+		 multi_wq(this,
+			  static_dequeue_op,
+			  static_wq_thread_exit,
 			  cct->_conf->osd_wq_lanes,
 			  cct->_conf->osd_wq_thrd_lowat,
 			  cct->_conf->osd_wq_thrd_hiwat),
@@ -3029,6 +3031,10 @@ void OSD::handle_op(OpRequest* op, unique_lock& osd_lk)
 void OSD::static_dequeue_op(OSD* osd, OpRequest* op)
 {
   osd->dequeue_op(op);
+}
+
+void OSD::static_wq_thread_exit(OSD* osd) {
+  OSDVol::wq_thread_exit(osd);
 }
 
 void OSD::dequeue_op(OpRequest* op_p)
