@@ -201,7 +201,7 @@ public:
       on_finish(NULL) {
     }
 
-    void reset_obs(ObjectContextRef obc) {
+    void reset_obs(ObjectContext* obc) {
       /* forward object info, existence, and handle */
       new_obs = ObjectState(obc->obs.oi, obc->obs.oh, obc->obs.exists);
     }
@@ -257,7 +257,7 @@ public:
 
     Context* on_applied;
 
-    Mutation(OpContext* c, ObjectContextRef pi, ceph_tid_t tid) :
+    Mutation(OpContext* c, ObjectContext* pi, ceph_tid_t tid) :
       queue_item(this),
       nref(1),
       ctx(c), obc(pi),
@@ -394,11 +394,11 @@ protected:
   void eval_mutation(Mutation* mutation,
                      std::unique_lock<cohort::SpinLock> &lock);
   void issue_mutation(Mutation* mutation);
-  Mutation* new_mutation(OpContext* ctx, ObjectContextRef obc,
+  Mutation* new_mutation(OpContext* ctx, ObjectContext* obc,
 			 ceph_tid_t rep_tid);
   void remove_mutation(Mutation* mutation);
 
-  Mutation* simple_mutation_create(ObjectContextRef obc);
+  Mutation* simple_mutation_create(ObjectContext* obc);
   void simple_mutation_submit(Mutation* mutation);
 
 #if 0
@@ -495,10 +495,10 @@ protected:
 
   struct C_OSD_OndiskWriteUnlock : public Context {
     ObjectContextRef obc, obc2, obc3;
-    C_OSD_OndiskWriteUnlock(
-      ObjectContextRef o,
-      ObjectContextRef o2 = ObjectContextRef(),
-      ObjectContextRef o3 = ObjectContextRef()) : obc(o), obc2(o2), obc3(o3) {}
+    C_OSD_OndiskWriteUnlock(ObjectContext* o,
+			    ObjectContext* o2 = nullptr,
+			    ObjectContext* o3 = nullptr)
+      : obc(o), obc2(o2), obc3(o3) {}
     void finish(int r) {
       obc->ondisk_write_unlock();
       if (obc2)
@@ -511,7 +511,8 @@ protected:
     list<ObjectContextRef>* pls;
     C_OSD_OndiskWriteUnlockList(list<ObjectContextRef>* l) : pls(l) {}
     void finish(int r) {
-      for (list<ObjectContextRef>::iterator p = pls->begin(); p != pls->end();
+      for (list<ObjectContextRef>::iterator p = pls->begin();
+	   p != pls->end();
 	   ++p)
 	(*p)->ondisk_write_unlock();
     }
@@ -581,10 +582,10 @@ private:
   void init();
   void read_info();
   void write_info(ObjectStore::Transaction& t);
-  void populate_obc_watchers(ObjectContextRef obc);
-  void get_obc_watchers(ObjectContextRef obc,
+  void populate_obc_watchers(ObjectContext* obc);
+  void get_obc_watchers(ObjectContext* obc,
 			list<obj_watch_item_t>& vol_watchers);
-  void check_blacklisted_obc_watchers(ObjectContextRef obc);
+  void check_blacklisted_obc_watchers(ObjectContext* obc);
 
 public:
   void write_if_dirty(ObjectStore::Transaction& t);
