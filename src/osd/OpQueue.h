@@ -217,6 +217,7 @@ namespace cohort {
 	lane.flags = Lane::FLAG_NONE;
 	lane.op_q = this;
 	lane.osd = osd;
+	lane.n_active = 0;
 	lane.dequeue_op_func = func;
 	lane.thrd_lowat = thrd_lowat;
 	lane.thrd_hiwat = thrd_hiwat;
