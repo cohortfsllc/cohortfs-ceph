@@ -955,20 +955,25 @@ public:
 
     bool empty() const { return state == RWNONE; }
   } rwstate;
+  cohort::SpinLock rwstate_lock;
 
   bool get_read(OpRequest* op) {
+    std::lock_guard<cohort::SpinLock> lock(rwstate_lock);
     return rwstate.get_read(op);
   }
 
   bool get_write(OpRequest* op) {
+    std::lock_guard<cohort::SpinLock> lock(rwstate_lock);
     return rwstate.get_write(op);
   }
 
   void put_read(OpRequest::Queue& to_wake) {
+    std::lock_guard<cohort::SpinLock> lock(rwstate_lock);
     rwstate.put_read(to_wake);
   }
 
   void put_write(OpRequest::Queue& to_wake) {
+    std::lock_guard<cohort::SpinLock> lock(rwstate_lock);
     rwstate.put_write(to_wake);
   }
 
