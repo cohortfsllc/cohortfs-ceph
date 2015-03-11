@@ -281,7 +281,7 @@ void OSDVol::handle_activate_map()
     check_blacklisted_watchers();
 }
 
-void OSDVol::on_removal(ObjectStore::Transaction *t)
+void OSDVol::on_removal(ObjectStore::Transaction* t)
 {
   dout(10) << "on_removal" << dendl;
 
@@ -360,7 +360,8 @@ void OSDVol::do_op(OpRequest* op)
     /* find contexts for additional objects referenced by the
      * OpRequest */
     const hoid_t& src_oid = osd_op.oid;
-    auto insert = src_obc.insert(std::make_pair(src_oid, ObjectContextRef()));
+    auto insert = src_obc.insert(std::make_pair(src_oid,
+						ObjectContextRef()));
     if (!insert.second)
       continue; /* have this obc already */
 
@@ -407,7 +408,7 @@ void OSDVol::do_op(OpRequest* op)
   execute_ctx(ctx);
 }
 
-void OSDVol::on_change(ObjectStore::Transaction *t)
+void OSDVol::on_change(ObjectStore::Transaction* t)
 {
   dout(10) << "on_change" << dendl;
 
@@ -449,8 +450,8 @@ void OSDVol::on_shutdown()
   clear_primary_state();
 }
 
-void OSDVol::get_obc_watchers(ObjectContextRef obc,
-			      list<obj_watch_item_t> &vol_watchers)
+void OSDVol::get_obc_watchers(ObjectContext* obc,
+			      list<obj_watch_item_t>& vol_watchers)
 {
   for (map<pair<uint64_t, entity_name_t>, WatchRef>::iterator j =
 	 obc->watchers.begin();
@@ -473,7 +474,7 @@ void OSDVol::get_obc_watchers(ObjectContextRef obc,
   }
 }
 
-void OSDVol::populate_obc_watchers(ObjectContextRef obc)
+void OSDVol::populate_obc_watchers(ObjectContext* obc)
 {
   dout(10) << "populate_obc_watchers " << obc->obs.oi.oid << dendl;
   assert(obc->watchers.empty());
@@ -497,7 +498,7 @@ void OSDVol::populate_obc_watchers(ObjectContextRef obc)
   check_blacklisted_obc_watchers(obc);
 }
 
-void OSDVol::check_blacklisted_obc_watchers(ObjectContextRef obc)
+void OSDVol::check_blacklisted_obc_watchers(ObjectContext* obc)
 {
   dout(20) << "OSDVol::check_blacklisted_obc_watchers for obc "
 	   << obc->obs.oi.oid << dendl;
@@ -563,7 +564,7 @@ struct OnReadComplete : public Context {
 };
 
 // OpContext
-void OSDVol::OpContext::start_async_reads(OSDVol *vol)
+void OSDVol::OpContext::start_async_reads(OSDVol* vol)
 {
   inflightreads = 1;
   ObjectHandle oh = reinterpret_cast<ObjectHandle>(obc->obs.oh);
@@ -572,7 +573,7 @@ void OSDVol::OpContext::start_async_reads(OSDVol *vol)
   pending_async_reads.clear();
 }
 
-void OSDVol::OpContext::finish_read(OSDVol *vol)
+void OSDVol::OpContext::finish_read(OSDVol* vol)
 {
   assert(inflightreads > 0);
   --inflightreads;
@@ -586,10 +587,10 @@ void OSDVol::OpContext::finish_read(OSDVol *vol)
 
 // ==========================================================
 
-void OSDVol::execute_ctx(OpContext *ctx)
+void OSDVol::execute_ctx(OpContext* ctx)
 {
   dout(10) << __func__ << " " << ctx << dendl;
-  ctx->reset_obs(ctx->obc);
+  ctx->reset_obs(ctx->obc.get());
   OpRequest* op = ctx->op.get();
   MOSDOp *m = static_cast<MOSDOp*>(op->get_req());
   ObjectContextRef obc = ctx->obc;
@@ -695,7 +696,7 @@ void OSDVol::execute_ctx(OpContext *ctx)
   assert(op->may_write() || op->may_cache());
   // issue replica writes
   ceph_tid_t tid = osd->get_tid();
-  Mutation *mutation = new_mutation(ctx, obc, tid);
+  Mutation *mutation = new_mutation(ctx, obc.get(), tid);
 
   mutation->src_obc.swap(src_obc); // and src_obc.
 
@@ -707,14 +708,14 @@ void OSDVol::execute_ctx(OpContext *ctx)
   mutation->put();
 }
 
-void OSDVol::reply_ctx(OpContext *ctx, int r)
+void OSDVol::reply_ctx(OpContext* ctx, int r)
 {
   if (ctx->op)
     osd->reply_op_error(ctx->op.get(), r);
   close_op_ctx(ctx, r);
 }
 
-void OSDVol::reply_ctx(OpContext *ctx, int r, eversion_t v,
+void OSDVol::reply_ctx(OpContext* ctx, int r, eversion_t v,
 		       version_t uv)
 {
   if (ctx->op)
@@ -909,8 +910,8 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	   * needed */
 	} else {
 	  int r =
-	    osd->store->read(coll, soh, op.extent.offset, op.extent.length,
-			     osd_op.outdata);
+	    osd->store->read(coll, soh, op.extent.offset,
+			     op.extent.length, osd_op.outdata);
 	  if (r >= 0)
 	    op.extent.length = r;
 	  else {
@@ -1943,7 +1944,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
   return result;
 }
 
-inline int OSDVol::_delete_obj(OpContext *ctx, bool no_whiteout)
+inline int OSDVol::_delete_obj(OpContext* ctx, bool no_whiteout)
 {
   ObjectState& obs = ctx->new_obs;
   object_info_t& oi = obs.oi;
@@ -2008,7 +2009,7 @@ void OSDVol::write_update_size_and_usage(
     delta_stats.num_wr_kb += SHIFT_ROUND_UP(length, 10);
 }
 
-void OSDVol::do_osd_op_effects(OpContext *ctx)
+void OSDVol::do_osd_op_effects(OpContext* ctx)
 {
   if (! ctx->has_watches())
     return;
@@ -2100,7 +2101,7 @@ void OSDVol::do_osd_op_effects(OpContext *ctx)
   }
 } /* do_osd_op_effects */
 
-int OSDVol::prepare_transaction(OpContext *ctx)
+int OSDVol::prepare_transaction(OpContext* ctx)
 {
   assert(!ctx->ops.empty());
 
@@ -2125,7 +2126,7 @@ int OSDVol::prepare_transaction(OpContext *ctx)
   return result;
 } /* prepare_transaction */
 
-void OSDVol::finish_ctx(OpContext *ctx)
+void OSDVol::finish_ctx(OpContext* ctx)
 {
   ObjectStore::Transaction* t = ctx->op_t;
   const hoid_t& soid = ctx->obs->oi.oid;
@@ -2178,7 +2179,7 @@ void OSDVol::finish_ctx(OpContext *ctx)
   ctx->obc->obs = ctx->new_obs;
 } /* finish_ctx */
 
-void OSDVol::complete_read_ctx(int result, OpContext *ctx)
+void OSDVol::complete_read_ctx(int result, OpContext* ctx)
 {
   MOSDOp *m = static_cast<MOSDOp*>(ctx->op->get_req());
   assert(ctx->async_reads_complete());
@@ -2209,7 +2210,7 @@ class C_OSD_MutationApplied : public Context {
   OSDVolRef vol;
   boost::intrusive_ptr<OSDVol::Mutation> mutation;
 public:
-  C_OSD_MutationApplied(OSDVol *vol, OSDVol::Mutation *mutation)
+  C_OSD_MutationApplied(OSDVol* vol, OSDVol::Mutation* mutation)
   : vol(vol), mutation(mutation) {}
   void finish(int) {
     OSDVol::lock_guard vl(vol->lock);
@@ -2217,8 +2218,7 @@ public:
   }
 };
 
-
-void OSDVol::mutations_all_applied(Mutation *mutation)
+void OSDVol::mutations_all_applied(Mutation* mutation)
 {
   dout(10) << __func__ << ": mutation tid "
 	   << mutation->tid << " all applied " << dendl;
@@ -2237,7 +2237,7 @@ class C_OSD_MutationCommit : public Context {
   OSDVolRef vol;
   boost::intrusive_ptr<OSDVol::Mutation> mutation;
 public:
-  C_OSD_MutationCommit(OSDVol *vol, OSDVol::Mutation *mutation)
+  C_OSD_MutationCommit(OSDVol* vol, OSDVol::Mutation* mutation)
     : vol(vol), mutation(mutation) {}
   void finish(int) {
     OSDVol::lock_guard vl(vol->lock);
@@ -2245,7 +2245,7 @@ public:
   }
 };
 
-void OSDVol::mutations_all_committed(Mutation *mutation)
+void OSDVol::mutations_all_committed(Mutation* mutation)
 {
   dout(10) << __func__ << ": mutation tid " << mutation->tid
 	   << " all committed " << dendl;
@@ -2260,7 +2260,7 @@ void OSDVol::mutations_all_committed(Mutation *mutation)
   }
 }
 
-void OSDVol::eval_mutation(Mutation *mutation,
+void OSDVol::eval_mutation(Mutation* mutation,
                            std::unique_lock<cohort::SpinLock>& lock)
 {
   MOSDOpReply *reply = nullptr;
@@ -2352,8 +2352,8 @@ void OSDVol::eval_mutation(Mutation *mutation,
   }
 }
 
-OSDVol::Mutation *OSDVol::new_mutation(OpContext *ctx,
-				       ObjectContextRef obc,
+OSDVol::Mutation *OSDVol::new_mutation(OpContext* ctx,
+				       ObjectContext* obc,
 				       ceph_tid_t tid)
 {
   if (ctx->op)
@@ -2371,7 +2371,7 @@ OSDVol::Mutation *OSDVol::new_mutation(OpContext *ctx,
   return mutation;
 }
 
-void OSDVol::remove_mutation(Mutation *mutation)
+void OSDVol::remove_mutation(Mutation* mutation)
 {
   // Should be called with mutation_lock locked
   dout(20) << __func__ << " " << mutation->tid << dendl;
@@ -2381,7 +2381,7 @@ void OSDVol::remove_mutation(Mutation *mutation)
   mutation->put();
 }
 
-OSDVol::Mutation *OSDVol::simple_mutation_create(ObjectContextRef obc)
+OSDVol::Mutation *OSDVol::simple_mutation_create(ObjectContext* obc)
 {
   dout(20) << __func__ << " " << obc->obs.oi.oid << dendl;
   vector<OSDOp> ops;
@@ -2430,7 +2430,7 @@ void OSDVol::handle_watch_timeout(WatchRef watch)
 
   entity_inst_t nobody;
 
-  Mutation *mutation = new_mutation(ctx, obc, tid);
+  Mutation *mutation = new_mutation(ctx, obc.get(), tid);
 
   ObjectStore::Transaction *t = ctx->op_t;
   ObjectHandle oh = reinterpret_cast<ObjectHandle>(obc->obs.oh);
@@ -2487,7 +2487,7 @@ OSDVol::get_object_context(const hoid_t& oid,
 	dout(10) << __func__ << ": " << obc << " " << oid
 		 << " " << obc->rwstate
 		 << " oi: " << obc->obs.oi << dendl;
-	populate_obc_watchers(obc);
+	populate_obc_watchers(obc.get());
 	oh->set_ready();
 	return obc;
       }
@@ -2497,7 +2497,7 @@ OSDVol::get_object_context(const hoid_t& oid,
     object_info_t oi(bv); /* XXX could save a deep copy */
     obc->obs.oi = oi;
     obc->obs.exists = true;
-    populate_obc_watchers(obc);
+    populate_obc_watchers(obc.get());
     oh->set_ready();
 
     dout(10) << __func__ << ": creating obc from disk: " << obc
@@ -2690,9 +2690,7 @@ void OSDVol::issue_mutation(Mutation *mutation)
   Context *on_all_applied =
     new C_OSD_MutationApplied(this, mutation);
   Context *onapplied_sync =
-    new C_OSD_OndiskWriteUnlock(mutation->obc,
-				ObjectContextRef(),
-				ObjectContextRef());
+    new C_OSD_OndiskWriteUnlock(mutation->obc.get(), nullptr, nullptr);
 
   op_t->register_on_applied_sync(onapplied_sync);
   op_t->register_on_applied(on_all_applied);
