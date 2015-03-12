@@ -18,6 +18,7 @@
 #include <thread>
 #include <array>
 #include <vector>
+#include <algorithm>
 #include <mutex>
 #include <condition_variable>
 #include <boost/intrusive/list.hpp>
@@ -69,6 +70,10 @@ namespace cohort {
       std::thread thread;
       Lane& lane;
       bi::list_member_hook<link_mode> worker_hook;
+      bi::list_member_hook<link_mode> idle_hook;
+      std::mutex mtx;
+      std::condition_variable cv;
+      OpRequest* mailbox;
 
       typedef bi::list<Worker,
 		       bi::member_hook<Worker,
@@ -76,17 +81,23 @@ namespace cohort {
 				       &Worker::worker_hook>,
 		       bi::constant_time_size<true>> Queue;
 
+      typedef bi::list<Worker,
+		       bi::member_hook<Worker,
+				       bi::list_member_hook<link_mode>,
+				       &Worker::worker_hook>,
+		       bi::constant_time_size<true>> IdleQueue;
+
       Worker(Lane& _l)
-	: lane(_l) {
+	: lane(_l), mailbox(nullptr) {
       }
     }; /* Worker */
 
     typedef typename Worker::Queue WorkerQueue;
+    typedef typename Worker::IdleQueue IdleQueue;
 
     struct Band
     {
-      LK producer_lk;
-      OpRequest::Queue producer_q;
+      OpRequest::Queue q;
       CACHE_PAD(0);
     };
 
@@ -97,9 +108,9 @@ namespace cohort {
       static constexpr uint32_t FLAG_LOCKED = 0x0002;
 
       Band bands[2]; // band 0 is baseline, 1 is urgent
-      std::mutex mtx;
-      std::condition_variable cv;
+      LK mtx;
       WorkerQueue workers;
+      WorkerQueue idle;
       op_func dequeue_op_func;
       thr_exit_func exit_func;
       OpQueue* op_q;
@@ -118,7 +129,7 @@ namespace cohort {
       {}
 
       void spawn_worker(uint32_t flags) {
-	std::unique_lock<std::mutex> lane_lk(mtx, std::defer_lock);
+	unique_lock lane_lk(mtx, std::defer_lock);
 	if (! (flags & Lane::FLAG_LOCKED))
 	  lane_lk.lock();
 	if (workers.size() <= thrd_hiwat) {
@@ -133,7 +144,12 @@ namespace cohort {
 
       void run(Worker* worker) {
 
-	std::unique_lock<std::mutex> lane_lk(mtx, std::defer_lock);
+	/* lane lock */
+	unique_lock lane_lk(mtx, std::defer_lock);
+
+	/* worker sleep lock */
+	std::unique_lock<std::mutex>
+	  wk_lk(worker->mtx, std::defer_lock);
 
 	std::array<enum Bands, 3> cycle = {
 	  Bands::HIGH, Bands::BASE, Bands::HIGH
@@ -142,39 +158,43 @@ namespace cohort {
 	for (;;) {
 	  int n_reqs = 0;
 	  uint32_t size, size_max = 0;
-
+	  lane_lk.lock();
 	  for (unsigned int ix = 0; ix < cycle.size(); ++ix) {
-	    Band& b = bands[int(cycle[ix])];
-	    unique_lock lk(b.producer_lk);
-	    size = b.producer_q.size();
+	    Band& band = bands[int(cycle[ix])];
+	    size = band.q.size();
 	    if (size) {
-	      OpRequest& op = b.producer_q.back();
-	      b.producer_q.pop_back(); /* dequeued */
+	      OpRequest& op = band.q.back();
+	      band.q.pop_back(); /* dequeued */
 	      if (size > size_max)
 		size_max = size;
 	      ++n_reqs;
 	      ++n_active;
-              lk.unlock();
+              lane_lk.unlock();
 	      /* dequeue op */
 	      dequeue_op_func(osd, &op);
-              lk.lock();
+              lane_lk.lock();
               --n_active;
+	      /* try again if we did any work */
+	      if (n_reqs) {
+		if (size_max > start_thresh) {
+		  spawn_worker(Lane::FLAG_LOCKED);
+		}
+		continue;
+	      }
 	    }
-	  }
-
-	  /* try again if we did any work */
-	  if (n_reqs) {
-	    if (size_max > start_thresh) {
-	      spawn_worker(FLAG_NONE);
-	    }
-	    continue;
-	  }
+	  } /* for bands */
 
 	  /* n_reqs == 0 */
+	  idle.push_back(*worker);
+	  lane_lk.unlock();
 	  ceph::mono_time timeout =
 	    ceph::mono_clock::now() + worker_timeout;
+	  wk_lk.lock();
+	  std::cv_status r = worker->cv.wait_until(wk_lk, timeout);
+	  wk_lk.unlock();
 	  lane_lk.lock();
-	  std::cv_status r = cv.wait_until(lane_lk, timeout);
+	  /* remove from idle */
+	  idle.erase(idle.s_iterator_to(*worker));
 	  /* conditionally exit if wait timed out */
 	  if (r == std::cv_status::timeout) {
 	    /* cond trim workers */
@@ -182,15 +202,24 @@ namespace cohort {
 	      workers.erase(workers.s_iterator_to(*worker));
 	      break;
 	    }
+	  } else {
+	    /* signalled */
+	    if (flags & FLAG_SHUTDOWN) {
+	      workers.erase(workers.s_iterator_to(*worker));
+	      break;
+	    }
+	    /* !shutting down */
+	    if (likely(!! worker->mailbox)) {
+	      OpRequest* op = nullptr;
+	      std::swap(worker->mailbox, op);
+	      ++n_active;
+              lane_lk.unlock();
+	      dequeue_op_func(osd, op);
+	      lane_lk.lock();
+	      --n_active;
+	    }
 	  }
-
-	  /* unconditionally exit if shutdown() called */
-	  if (flags & FLAG_SHUTDOWN) {
-	    workers.erase(workers.s_iterator_to(*worker));
-	    break;
-	  }
-
-	  /* at thrd_lowat or signalled */
+	  /* above thrd_lowat */
 	  lane_lk.unlock();
 	} /* for (inf) */
 
@@ -246,40 +275,54 @@ namespace cohort {
     bool enqueue(OpRequest& op, enum Bands b, enum Pos p) {
       Lane& lane = choose_lane();
       Band& band = lane.bands[int(b)];
-      unique_lock producer_lock(band.producer_lk);
+      unique_lock lane_lk(lane.mtx);
       /* don't accept work if shutting down */
       if (lane.flags & Lane::FLAG_SHUTDOWN)
 	return false;
       switch (p) {
       case Pos::BACK:
-	band.producer_q.push_back(op);
+	band.q.push_back(op);
 	break;
       default:
-	band.producer_q.push_front(op);
+	band.q.push_front(op);
       };
-      if (! lane.n_active) {
-	/* maybe signal a worker */
-	producer_lock.unlock();
-	std::unique_lock<std::mutex> lane_lock(lane.mtx);
-	if (! lane.n_active) {
-	  /* no workers active */
-	  if (lane.workers.size())
-	    lane.cv.notify_one();
-	  else
-	    lane.spawn_worker(Lane::FLAG_LOCKED); /* ignore hiwat */
-	}
+      /* if workers idle, hand off */
+      if (lane.idle.size()) {
+	Worker& worker = lane.idle.back();
+	lane.idle.pop_back();
+	lane_lk.unlock();
+	std::unique_lock<std::mutex> wk_lock(worker.mtx);
+	worker.mailbox = &op;
+	worker.cv.notify_one();
+	return true;
+      }
+      /* ensure at least one worker */
+      if (! lane.workers.size()) {
+	lane.spawn_worker(Lane::FLAG_LOCKED); /* ignore hiwat */
       }
       return true;
     } /* enqueue */
 
     void shutdown() {
+      std::mutex mtx;
+      std::condition_variable cv;
+      std::unique_lock<std::mutex> shutdown_lk(mtx);
       for (int ix = 0; ix < n_lanes; ++ix) {
 	Lane& lane = qlane[ix];
-	std::unique_lock<std::mutex> lane_lk(lane.mtx);
+	unique_lock lane_lk(lane.mtx);
 	lane.flags |= Lane::FLAG_SHUTDOWN;
 	while (! lane.workers.empty()) {
-	  lane.cv.notify_all();
-	  lane.cv.wait_for(lane_lk, std::chrono::seconds(1));
+	  typename WorkerQueue::iterator i;
+	  for (i = lane.workers.begin();
+	       i != lane.workers.end(); ++i) {
+	    Worker& worker = *i;
+	    std::unique_lock<std::mutex> worker_lk(worker.mtx);
+	    worker.cv.notify_one();
+	    worker_lk.unlock();
+	  }
+	  lane_lk.unlock();
+	  cv.wait_for(shutdown_lk, 100ms);
+	  lane_lk.lock();
 	}
         if (lane.graveyard.joinable())
           lane.graveyard.join();
