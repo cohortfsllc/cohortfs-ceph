@@ -125,12 +125,14 @@ class OBS_Worker : public Thread
   hoid_t oid;
   ObjectStore::CollectionHandle ch;
   ObjectStore::ObjectHandle oh;
+  uint64_t starting_offset;
 
  public:
   OBS_Worker() { }
 
   void set_oid(const hoid_t& _oid) { oid = _oid; }
   void set_coll(ObjectStore::CollectionHandle _ch) { ch = _ch; }
+  void set_starting_offset(uint64_t off) { starting_offset = off; }
 
   void *entry() {
     bufferlist data;
@@ -141,9 +143,11 @@ class OBS_Worker : public Thread
 
     oh = fs->get_object(ch, oid);
     assert(oh);
+    assert(starting_offset < size);
+    assert(starting_offset % block_size == 0);
 
     for (int ix = 0; ix < repeats; ++ix) {
-      uint64_t offset = 0;
+      uint64_t offset = starting_offset;
       size_t len = size;
 
       list<ObjectStore::Transaction*> tls;
@@ -161,6 +165,8 @@ class OBS_Worker : public Thread
 	tls.push_back(t);
 
 	offset += count;
+  if (offset > size)
+    offset -= size;
 	len -= count;
       }
 
@@ -313,6 +319,7 @@ int main(int argc, const char *argv[])
       workers[i].set_oid(oids[i]);
     else
       workers[i].set_oid(oids[0]);
+    workers[i].set_starting_offset(size / n_threads);
     workers[i].create();
   }
   for (auto &worker : workers)
