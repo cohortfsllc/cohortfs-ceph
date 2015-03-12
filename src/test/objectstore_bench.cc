@@ -141,8 +141,6 @@ class OBS_Worker : public Thread
     dout(0) << "Writing " << size << " in blocks of " << block_size
 	<< dendl;
 
-    oh = fs->get_object(ch, oid);
-    assert(oh);
     assert(starting_offset < size);
     assert(starting_offset % block_size == 0);
 
@@ -158,7 +156,7 @@ class OBS_Worker : public Thread
 
 	ObjectStore::Transaction *t = new ObjectStore::Transaction;
 	t->push_col(ch);
-	t->push_obj(oh);
+	t->push_oid(oid);
 
 	// use the internal offsets for col/cid, obj/oid for brevity
 	t->write(offset, count, data);
@@ -187,9 +185,6 @@ class OBS_Worker : public Thread
 	delete t;
       }
     }
-
-    // return ObjectStore handles
-    fs->put_object(oh);
 
     return 0;
   }
