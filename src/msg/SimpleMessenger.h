@@ -318,7 +318,7 @@ private:
   /// counter for the global seq our connection protocol uses
   uint32_t global_seq;
   /// lock to protect the global_seq
-  ceph_spinlock_t global_seq_lock;
+  Spinlock global_seq_lock;
 
   /**
    * hash map of addresses to Pipes
@@ -399,12 +399,10 @@ public:
    * @return a global sequence ID that nobody else has seen.
    */
   uint32_t get_global_seq(uint32_t old=0) {
-    ceph_spin_lock(&global_seq_lock);
+    std::lock_guard<Spinlock> lock(global_seq_lock);
     if (old > global_seq)
       global_seq = old;
-    uint32_t ret = ++global_seq;
-    ceph_spin_unlock(&global_seq_lock);
-    return ret;
+    return ++global_seq;
   }
   /**
    * Get the protocol version we support for the given peer type: either

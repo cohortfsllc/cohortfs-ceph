@@ -128,7 +128,7 @@ private:
   AdminSocket *_admin_socket;
 
   /* lock which protects service thread creation, destruction, etc. */
-  ceph_spinlock_t _service_thread_lock;
+  Spinlock _service_thread_lock;
 
   CephContextHook *_admin_hook;
 
