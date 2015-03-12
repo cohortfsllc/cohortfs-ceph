@@ -53,7 +53,6 @@ SimpleMessenger::SimpleMessenger(CephContext *cct, entity_name_t name,
     timeout(0),
     local_connection(new PipeConnection(this))
 {
-  ceph_spin_init(&global_seq_lock);
   init_local_connection();
 }
 

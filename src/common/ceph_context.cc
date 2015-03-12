@@ -258,8 +258,6 @@ CephContext::CephContext(uint32_t module_type_)
     _crypto_none(NULL),
     _crypto_aes(NULL)
 {
-  ceph_spin_init(&_service_thread_lock);
-
   _log = new ceph::log::Log(&_conf->subsys, &_conf->name);
 
   _log_obs = new LogObs(_log);
@@ -304,7 +302,6 @@ CephContext::~CephContext()
   _log = NULL;
 
   delete _conf;
-  ceph_spin_destroy(&_service_thread_lock);
 
   delete _crypto_none;
   delete _crypto_aes;
@@ -318,15 +315,13 @@ void CephContext::init()
 
 void CephContext::start_service_thread()
 {
-  ceph_spin_lock(&_service_thread_lock);
-  if (_service_thread) {
-    ceph_spin_unlock(&_service_thread_lock);
-    return;
+  {
+    std::lock_guard<Spinlock> lock(_service_thread_lock);
+    if (_service_thread)
+      return;
+    _service_thread = new CephContextServiceThread(this);
+    _service_thread->create();
   }
-  _service_thread = new CephContextServiceThread(this);
-  _service_thread->create();
-  ceph_spin_unlock(&_service_thread_lock);
-
   // make logs flush on_exit()
   if (_conf->log_flush_on_exit)
     _log->set_flush_on_exit();
@@ -343,23 +338,20 @@ void CephContext::start_service_thread()
 
 void CephContext::reopen_logs()
 {
-  ceph_spin_lock(&_service_thread_lock);
+  std::lock_guard<Spinlock> lock(_service_thread_lock);
   if (_service_thread)
     _service_thread->reopen_logs();
-  ceph_spin_unlock(&_service_thread_lock);
 }
 
 void CephContext::join_service_thread()
 {
-  ceph_spin_lock(&_service_thread_lock);
-  CephContextServiceThread *thread = _service_thread;
-  if (!thread) {
-    ceph_spin_unlock(&_service_thread_lock);
-    return;
+  CephContextServiceThread *thread = nullptr;
+  {
+    std::lock_guard<Spinlock> lock(_service_thread_lock);
+    std::swap(thread, _service_thread);
   }
-  _service_thread = NULL;
-  ceph_spin_unlock(&_service_thread_lock);
-
+  if (!thread)
+    return;
   thread->exit_thread();
   thread->join();
   delete thread;
