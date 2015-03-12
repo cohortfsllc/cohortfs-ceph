@@ -369,6 +369,7 @@ int MemStore::getattr(CollectionHandle ch, const ObjectHandle oh,
 
   Object* o = static_cast<Object*>(oh);
   string k(name);
+  shared_lock l(o->omap_lock); // XXX: separate lock for xattrs?
   if (!o->xattr.count(k)) {
     return -ENODATA;
   }
@@ -382,6 +383,7 @@ int MemStore::getattrs(CollectionHandle ch, const ObjectHandle oh,
   dout(10) << __func__ << " " << ch->get_cid() << " " << oh->get_oid() << dendl;
 
   Object* o = static_cast<Object*>(oh);
+  shared_lock l(o->omap_lock); // XXX: separate lock for xattrs?
   if (user_only) {
     for (map<string,bufferptr>::iterator p = o->xattr.begin();
 	 p != o->xattr.end();
@@ -1184,6 +1186,7 @@ int MemStore::_setattrs(MemCollection* c, ObjectHandle oh,
   dout(10) << __func__ << " " << c->get_cid() << " " << oh->get_oid() << dendl;
 
   Object* o = static_cast<Object*>(oh);
+  unique_lock l(o->omap_lock); // XXX: separate lock for xattrs?
   for (map<string,bufferptr>::const_iterator p = aset.begin(); p != aset.end();
        ++p)
     o->xattr[p->first] = p->second;
@@ -1197,6 +1200,7 @@ int MemStore::_rmattr(MemCollection* c, ObjectHandle oh,
 	   << " " << name << dendl;
 
   Object* o = static_cast<Object*>(oh);
+  unique_lock l(o->omap_lock); // XXX: separate lock for xattrs?
   map<string,bufferptr>::iterator iter = o->xattr.find(name);
   if (iter != o->xattr.end())
     o->xattr.erase(iter);
@@ -1210,6 +1214,7 @@ int MemStore::_rmattrs(MemCollection* c, ObjectHandle oh)
   dout(10) << __func__ << " " << c->get_cid() << " " << oh->get_oid() << dendl;
 
   Object* o = static_cast<Object*>(oh);
+  unique_lock l(o->omap_lock); // XXX: separate lock for xattrs?
   o->xattr.clear();
   return 0;
 }
