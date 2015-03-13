@@ -37,7 +37,6 @@ public:
 
   struct Object : public ObjectStore::Object {
     mutable std::atomic<uint32_t> refcnt;
-    cohort::SpinLock alloc_lock;
     std::shared_timed_mutex omap_lock;
     typedef std::unique_lock<std::shared_timed_mutex> unique_lock;
     typedef std::shared_lock<std::shared_timed_mutex> shared_lock;
