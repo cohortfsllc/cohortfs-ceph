@@ -1221,6 +1221,9 @@ int ceph_ll_file_key(struct ceph_mount_info *cmount,
 		     Inode *in,
 		     char *buf,
 		     uint32_t bufsize);
+int ceph_ll_num_osds(struct ceph_mount_info *cmount);
+int ceph_ll_osdaddr(struct ceph_mount_info *cmount,
+		    int osd, uint32_t *addr);
 #if 0
 uint32_t ceph_ll_stripe_unit(struct ceph_mount_info *cmount,
 			     struct Inode *in);
@@ -1228,9 +1231,6 @@ int ceph_ll_get_stripe_osd(struct ceph_mount_info *cmount,
 			   struct Inode *in,
 			   uint64_t blockno,
 			   struct ceph_file_layout* layout);
-int ceph_ll_num_osds(struct ceph_mount_info *cmount);
-int ceph_ll_osdaddr(struct ceph_mount_info *cmount,
-		    int osd, uint32_t *addr);
 uint64_t ceph_ll_get_internal_offset(struct ceph_mount_info *cmount,
 				     struct Inode *in, uint64_t blockno);
 int ceph_ll_read_block(struct ceph_mount_info *cmount,

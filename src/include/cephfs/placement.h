@@ -13,9 +13,10 @@
 #define C_PLACEMENT
 
 enum placer_type {
+  NotAPlacerType = 0,
   ErasureCPlacerType,
   StripedPlacerType,
-  NotAPlacerType
+  MaxPlacerType
 };
 
 

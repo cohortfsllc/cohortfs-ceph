@@ -31,15 +31,17 @@ WRITE_RAW_ENCODER(placer_type);
 using std::stringstream;
 
 const std::string Placer::typestrings[] = {
+  "NotAPlacerType",
   "ErasureCPlacer",
   "StripedPlacer",
-  "NotAPlacerType"
+  "MaxPlacerType"
 };
 
 PlacerRef ErasureCPlacerFactory(bufferlist::iterator& bl, uint8_t v);
 PlacerRef StripedPlacerFactory(bufferlist::iterator& bl, uint8_t v);
 
 const Placer::factory Placer::factories[] = {
+  NULL,
   ErasureCPlacerFactory,
   StripedPlacerFactory,
   NULL
@@ -124,7 +126,7 @@ bool Placer::valid(std::stringstream& ss) const
 
 const string& Placer::type_string(placer_type type)
 {
-  if ((type < 0) || (type >= NotAPlacerType)) {
+  if ((type <= NotAPlacerType) || (type >= MaxPlacerType)) {
     return typestrings[NotAPlacerType];
   } else {
     return typestrings[type];
@@ -142,7 +144,7 @@ PlacerRef Placer::decode_placer(bufferlist::iterator& bl)
   }
 
   ::decode(t, bl);
-  if (t < 0 || t >= NotAPlacerType || factories[t] == NULL)
+  if (t <= NotAPlacerType || t >= MaxPlacerType || factories[t] == NULL)
     throw buffer::malformed_input("Bad (or unimplemented) placer type.");
 
   return factories[t](bl, v);
