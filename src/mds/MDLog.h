@@ -38,27 +38,74 @@ class ESubtreeMap;
 using std::map;
 
 class MDLogMutex {
-  std::mutex m;
+  pthread_mutex_t m;
   pthread_t o;
 public:
-  MDLogMutex() : m(), o(0) { }
-  ~MDLogMutex() { if (o == ::pthread_self()) unlock(); }
-  void lock() { m.lock(); o = ::pthread_self(); }
+  MDLogMutex() : m(), o(0) {
+    ::pthread_mutex_init(&m, 0);
+  }
+  ~MDLogMutex() {
+    if (o == ::pthread_self()) unlock();
+    ::pthread_mutex_destroy(&m);
+  }
+  void lock() {
+    int i = ::pthread_mutex_lock(&m);
+    if (i) throw (std::logic_error("lock error #1"));
+    o = ::pthread_self();
+  }
   bool try_lock() noexcept {
-    bool r = m.try_lock();
+    int i = ::pthread_mutex_trylock(&m);
+    bool r = i == 0;
     if (r) o = ::pthread_self();
     return r;
   }
   void unlock() {
-    if (o != ::pthread_self()) throw (std::logic_error("lock error"));
+    if (o != ::pthread_self())
+      throw (std::logic_error("unlock error"));
     o = 0;
-    m.unlock();
+    int i = ::pthread_mutex_unlock(&m);
+    if (i)
+      throw (std::logic_error("unlock error #2"));
   }
   bool owns_lock() const noexcept {
     return o == ::pthread_self();
   }
   explicit operator bool() const noexcept {
     return owns_lock();
+  }
+  pthread_mutex_t * native_handle()
+  {
+	return &m;
+  }
+  friend class MDLogCond;
+};
+class MDLogCond {
+  pthread_cond_t cond;
+public:
+  MDLogCond() noexcept {
+    ::pthread_cond_init(&cond, 0);
+  }
+  ~MDLogCond() noexcept {
+    ::pthread_cond_destroy(&cond);
+  }
+  void notify_one() noexcept {
+    ::pthread_cond_signal(&cond);
+  }
+  void notify_all() noexcept {
+    ::pthread_cond_broadcast(&cond);
+  }
+  void wait(MDLogMutex &l)
+  {
+    if (l.o != ::pthread_self())
+	throw (std::logic_error("cond: not owner"));
+    l.o = 0;
+    ::pthread_cond_wait(&cond, l.native_handle());
+    l.o = ::pthread_self();
+  }
+  void wait(MDLogMutex &l, bool (*f)()) {
+    while (!f()) {
+      wait(l);
+    }
   }
 };
 
@@ -107,6 +154,7 @@ protected:
   int expired_events;
 
   MDLogMutex submit_mutex;
+  MDLogCond submit_cond;
 
   // -- subtreemaps --
   friend class ESubtreeMap;

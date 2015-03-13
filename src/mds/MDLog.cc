@@ -142,6 +142,10 @@ void MDLog::_start_entry(LogEvent *e)
 {
   assert(!!submit_mutex);
 
+  while (cur_event) {
+    submit_cond.wait(submit_mutex);
+  }
+
   assert(cur_event == NULL);
   cur_event = e;
   e->set_start_off(get_write_pos());
@@ -154,6 +158,8 @@ void MDLog::_submit_entry(LogEvent *le, Context *c)
   assert(!mds->is_any_replay());
   assert(le == cur_event);
   cur_event = NULL;
+  submit_cond.notify_one();	// will immediately block on submit_mutex.
+
 
   if (!mds->cct->_conf->mds_log) {
     // hack: log is disabled.
