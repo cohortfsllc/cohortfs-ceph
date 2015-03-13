@@ -2549,12 +2549,6 @@ void OSDVol::context_registry_on_change()
 #endif
 }
 
-/* OpQueue thread exit hook */
-void OSDVol::wq_thread_exit(OSD* osd)
-{
-  tls_obj_cache.release(); /* clear tls Object cache */
-}
-
 void OSDVol::apply_mutations(bool requeue)
 {
   OpRequest::Queue rq;
@@ -2717,3 +2711,19 @@ void OSDVol::issue_mutation(Mutation *mutation)
   osd->store->queue_transaction(op_t, 0, 0, 0, mutation->ctx->op);
   mutation->ctx->op_t = NULL;
 } /* issue_mutation */
+
+/* static */
+#undef dout_prefix
+#define dout_prefix *_dout << "OSDVol static"
+
+/* OpQueue thread exit hook */
+void OSDVol::wq_thread_exit(OSD* osd)
+{
+  auto cache_stats = tls_obj_cache.get_stats();
+  ldout(osd->cct,10) <<  "OSD OpQueue thread " << pthread_self()
+		     << " tls object context cache hits: "
+		     << std::get<0>(cache_stats)
+		     << " misses: " << std::get<1>(cache_stats)
+		     << dendl;
+  tls_obj_cache.release(); /* clear tls Object cache */
+}
