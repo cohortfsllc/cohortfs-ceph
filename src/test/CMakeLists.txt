@@ -1728,10 +1728,6 @@ target_link_libraries(osbench os global boost_filesystem ${EXTRA_LIBS})
 add_executable(mmapbench mmap_bench.cc)
 target_link_libraries(mmapbench os global boost_filesystem)
 
-# pagesetbench
-add_executable(pagesetbench pageset_bench.cc)
-target_link_libraries(pagesetbench os global boost_filesystem boost_system)
-
 # test_direct_messenger
 add_executable(test_direct_messenger messenger/test_direct_messenger.cc)
 target_link_libraries(test_direct_messenger global boost_system)

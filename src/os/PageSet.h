@@ -80,6 +80,10 @@ class PageSet {
 public:
   typedef Page<PageSize> page_type;
 
+  // alloc_range() and get_range() return page pointers in a vector
+  typedef std::vector<page_type*> page_vector;
+
+private:
   // store pages in a boost intrusive avl_set
   typedef typename page_type::Less page_cmp;
   typedef boost::intrusive::member_hook<page_type,
@@ -89,11 +93,7 @@ public:
 	  boost::intrusive::compare<page_cmp>, member_option> page_set;
 
   typedef typename page_set::iterator iterator;
-  typedef typename page_set::const_iterator const_iterator;
-  typedef typename page_set::reverse_iterator reverse_iterator;
-  typedef typename page_set::const_reverse_iterator const_reverse_iterator;
 
-private:
   page_set pages;
 
   void free_pages(iterator cur, iterator end) {
@@ -113,25 +113,20 @@ public:
   bool empty() const { return pages.empty(); }
   size_t size() const { return pages.size(); }
 
-  iterator begin() { return pages.begin(); }
-  const_iterator begin() const { return pages.begin(); }
-  iterator end() { return pages.end(); }
-  const_iterator end() const { return pages.end(); }
-
   // allocate all pages that intersect the range [offset,length)
-  iterator alloc_range(uint64_t offset, size_t length) {
-    std::pair<iterator, bool> insert;
-    iterator cur = pages.end();
-
+  void alloc_range(uint64_t offset, size_t length, page_vector &range) {
     // loop in reverse so we can provide hints to avl_set::insert_check()
     //	and get O(1) insertions after the first
     uint64_t position = offset + length - 1;
+    iterator cur = pages.end();
+
+    typename page_vector::reverse_iterator out = range.rbegin();
 
     while (length) {
       const uint64_t page_offset = position & ~(PageSize-1);
 
       typename page_set::insert_commit_data commit;
-      insert = pages.insert_check(cur, page_offset, page_cmp(), commit);
+      auto insert = pages.insert_check(cur, page_offset, page_cmp(), commit);
       if (insert.second) {
 	page_type *page = new page_type(page_offset);
 	cur = pages.insert_commit(*page, commit);
@@ -155,23 +150,29 @@ public:
       } else { // exists
 	cur = insert.first;
       }
+      // add to output vector and take a corresponding ref
+      cur->get();
+      *out = &*cur;
+      ++out;
 
       int c = std::min(length, (position & (PageSize-1)) + 1);
       position -= c;
       length -= c;
     }
-    return cur;
+    assert(out == range.rend()); // make sure we sized the vector correctly
   }
 
-  iterator first_page_containing(uint64_t offset, size_t length) {
-    iterator cur = pages.lower_bound(offset & ~(PageSize-1), page_cmp());
-    if (cur == pages.end() || cur->offset >= offset + length)
-      return pages.end();
-    return cur;
+  // return all allocated pages that intersect the range [offset,length)
+  void get_range(uint64_t offset, size_t length, page_vector &range) {
+    auto cur = pages.lower_bound(offset & ~(PageSize-1), page_cmp());
+    while (cur != pages.end() && cur->offset < offset + length) {
+      cur->get();
+      range.push_back(&*cur++);
+    }
   }
 
   void free_pages_after(uint64_t offset) {
-    iterator cur = pages.lower_bound(offset & ~(PageSize-1), page_cmp());
+    auto cur = pages.lower_bound(offset & ~(PageSize-1), page_cmp());
     if (cur == pages.end())
       return;
     if (cur->offset < offset)
@@ -182,14 +183,14 @@ public:
   void encode(bufferlist &bl) const {
     unsigned count = pages.size();
     ::encode(count, bl);
-    for (const_reverse_iterator p = pages.rbegin(); p != pages.rend(); ++p)
+    for (auto p = pages.rbegin(); p != pages.rend(); ++p)
       p->encode(bl);
   }
   void decode(bufferlist::iterator &p) {
     assert(empty());
     unsigned count;
     ::decode(count, p);
-    iterator cur = pages.end();
+    auto cur = pages.end();
     for (unsigned i = 0; i < count; i++) {
       page_type *page = new page_type;
       page->decode(p);
