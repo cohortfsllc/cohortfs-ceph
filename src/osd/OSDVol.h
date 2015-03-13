@@ -472,13 +472,18 @@ protected:
   class ObjectContextCache {
   private:
     static constexpr uint16_t cachesz = 31;
-    std::array<ObjectContext*,cachesz> obj_cache;
+    typedef std::array<ObjectContext*,cachesz> cache_type;
+    cache_type obj_cache;
+    uint64_t hits;
+    uint64_t misses;
 
     static uint16_t slot_of(uint64_t ix) {
       return ix % cachesz;
     }
 
   public:
+    ObjectContextCache() : obj_cache(), hits(0), misses(0) {}
+
     ObjectContext* get(const coll_t cid, const hoid_t& oid) {
       ObjectContext* obc = obj_cache[slot_of(oid.hk)];
       if (obc) {
@@ -486,9 +491,11 @@ protected:
 	/* we are caching for all volumes */
 	if ((oh->get_cid() == cid) &&
 	    (oh->get_oid() == oid)) {
+	  ++hits;
 	  return obc;
 	}
       }
+      ++misses;
       return nullptr;
     } /* get */
 
@@ -514,6 +521,11 @@ protected:
 	}
       }
     } /* release */
+
+    auto get_stats() {
+      return std::make_tuple(hits, misses);
+    }
+
   }; /* ObjectContextCache */
 
   static thread_local ObjectContextCache tls_obj_cache;
