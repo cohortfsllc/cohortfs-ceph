@@ -96,6 +96,9 @@ private:
 
   page_set pages;
 
+  typedef cohort::SpinLock lock_type;
+  lock_type lock;
+
   void free_pages(iterator cur, iterator end) {
     while (cur != end) {
       page_type *page = &*cur;
@@ -118,10 +121,11 @@ public:
     // loop in reverse so we can provide hints to avl_set::insert_check()
     //	and get O(1) insertions after the first
     uint64_t position = offset + length - 1;
-    iterator cur = pages.end();
 
     typename page_vector::reverse_iterator out = range.rbegin();
 
+    std::lock_guard<lock_type> lk(lock);
+    iterator cur = pages.end();
     while (length) {
       const uint64_t page_offset = position & ~(PageSize-1);
 
@@ -172,6 +176,7 @@ public:
   }
 
   void free_pages_after(uint64_t offset) {
+    std::lock_guard<lock_type> lk(lock);
     auto cur = pages.lower_bound(offset & ~(PageSize-1), page_cmp());
     if (cur == pages.end())
       return;

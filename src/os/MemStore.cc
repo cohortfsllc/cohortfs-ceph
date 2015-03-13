@@ -1116,9 +1116,7 @@ void MemStore::_write_pages(const bufferlist& src, unsigned offset,
   pages.resize(page_count);
 
   // make sure the page range is allocated
-  o->alloc_lock.lock();
   o->data.alloc_range(offset, src.length(), pages);
-  o->alloc_lock.unlock();
 
   bufferlist* ncbl = const_cast<bufferlist*>(&src);
   page_set::page_vector::iterator page = pages.begin();
@@ -1160,11 +1158,8 @@ int MemStore::_truncate(MemCollection* c, ObjectHandle oh,
 	   << " " << size << dendl;
 
   Object* o = static_cast<Object*>(oh);
-  if (o->data_len > size) {
-    o->alloc_lock.lock();
+  if (o->data_len > size)
     o->data.free_pages_after(size);
-    o->alloc_lock.unlock();
-  }
   o->data_len = size;
   return 0;
 }
