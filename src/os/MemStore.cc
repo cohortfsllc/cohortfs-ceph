@@ -306,19 +306,23 @@ int MemStore::read(
   return _read_pages(o->data, offset, l, bl);
 }
 
-int MemStore::_read_pages(page_set& pages, unsigned offset, size_t len,
+int MemStore::_read_pages(page_set& data, unsigned offset, size_t len,
 			  bufferlist& bl)
 {
   const unsigned end = offset + len;
   size_t remaining = len;
 
-  page_set::const_iterator page = pages.first_page_containing(offset, len);
+  page_set::page_vector pages;
+  data.get_range(offset, len, pages);
+
+  auto p = pages.begin();
   while (remaining) {
     // no more pages in range
-    if (page == pages.end() || page->offset >= end) {
+    if (p == pages.end() || (*p)->offset >= end) {
       bl.append_zero(remaining);
       break;
     }
+    page_set::page_type* page = *p;
 
     // fill any holes between pages with zeroes
     if (page->offset > offset) {
@@ -338,7 +342,9 @@ int MemStore::_read_pages(page_set& pages, unsigned offset, size_t len,
 
     remaining -= count;
     offset += count;
-    ++page;
+
+    page->put();
+    ++p;
   }
   return len;
 }
@@ -1106,25 +1112,16 @@ void MemStore::_write_pages(const bufferlist& src, unsigned offset,
 
   // allocate a vector for page pointers
   // TODO: preallocate page vectors for each worker thread
-  typedef vector<page_set::page_type*> page_vec;
-  page_vec pages;
-  pages.reserve(page_count);
-
-  o->alloc_lock.lock();
+  page_set::page_vector pages;
+  pages.resize(page_count);
 
   // make sure the page range is allocated
-  page_set::iterator p = o->data.alloc_range(offset, src.length());
-  // flatten the range into a vector while we hold the lock
-  for (size_t i = 0; i < page_count; i++) {
-    pages.push_back(&*p);
-    p->get();
-    ++p;
-  }
-
+  o->alloc_lock.lock();
+  o->data.alloc_range(offset, src.length(), pages);
   o->alloc_lock.unlock();
 
   bufferlist* ncbl = const_cast<bufferlist*>(&src);
-  page_vec::iterator page = pages.begin();
+  page_set::page_vector::iterator page = pages.begin();
 
   buffer::list::iterator bl_iter = ncbl->begin();
   while (! bl_iter.end()) {
@@ -1140,8 +1137,8 @@ void MemStore::_write_pages(const bufferlist& src, unsigned offset,
   }
 
   // drop page refs
-  for (size_t i = 0; i < page_count; i++)
-    pages[i]->put();
+  for (auto p : pages)
+    p->put();
 }
 
 int MemStore::_zero(MemCollection* c, ObjectHandle oh,
