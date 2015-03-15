@@ -2726,4 +2726,5 @@ void OSDVol::wq_thread_exit(OSD* osd)
 		     << " misses: " << std::get<1>(cache_stats)
 		     << dendl;
   tls_obj_cache.release(); /* clear tls Object cache */
+  osd->tls_vol_cache.release();
 }

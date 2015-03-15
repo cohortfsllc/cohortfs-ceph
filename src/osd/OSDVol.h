@@ -426,37 +426,6 @@ public:
   uint64_t hk;
   vol_info_t info;
 
-  /* volume lookup tables */
-  const static int n_partitions = 11;
-  const static int cache_size = 127; // per-partition cache size
-
-  struct LT
-  {
-    bool operator()(const OSDVol& lhs, const OSDVol& rhs) const
-    { return lhs.id < rhs.id; }
-  };
-
-  struct EQ
-  {
-    bool operator()(const OSDVol& lhs, const OSDVol& rhs) const
-    { return lhs.id == rhs.id; }
-  };
-
-  typedef bi::link_mode<bi::safe_link> link_mode;
-  typedef bi::avl_set_member_hook<link_mode> tree_hook_type;
-
-  tree_hook_type tree_hook;
-
-  typedef bi::member_hook<
-    OSDVol, tree_hook_type, &OSDVol::tree_hook> THook;
-
-  typedef bi::avltree<OSDVol, bi::compare<LT>, THook,
-		      bi::constant_time_size<true> > Voltree;
-
-  typedef cohort::lru::TreeX<
-    OSDVol, Voltree, LT, EQ, boost::uuids::uuid, cohort::SpinLock>
-  VolCache;
-
   static string get_info_key(boost::uuids::uuid& vol) {
     return stringify(vol) + "_info";
   }
@@ -467,8 +436,64 @@ public:
 
   void handle_watch_timeout(WatchRef watch);
 
-protected:
+  class VolCache {
+  private:
+    static constexpr uint16_t cachesz = 31;
+    typedef std::array<OSDVol*,cachesz> cache_type;
+    boost::hash<boost::uuids::uuid> hash;
+    cache_type cache;
+    uint64_t hits;
+    uint64_t misses;
 
+    static uint16_t slot_of(uint64_t ix) {
+      return ix % cachesz;
+    }
+
+  public:
+    VolCache() : cache(), hits(0), misses(0) {}
+
+    OSDVol* get(const boost::uuids::uuid& volid) {
+      OSDVol* v = cache[slot_of(hash(volid))];
+      if (v) {
+	if (v->get_volid() == volid) {
+	  ++hits;
+	  return v;
+	}
+      }
+      ++misses;
+      return nullptr;
+    } /* get */
+
+    void put(OSDVol* v) {
+      const uint16_t slot = slot_of(hash(v->get_volid()));
+      OSDVol* v2 = cache[slot];
+      if (likely(v2 == v))
+	return;
+      if (v2) {
+	v2->put(); /* unref */
+      }
+      v->get(); /* ref */
+      cache[slot] = v;
+    } /* put */
+
+    /* threads that saw this must call before exiting! */
+    void release() {
+      for (int ix = 0; ix < cachesz; ++ix) {
+	OSDVol* v = cache[ix];
+	if (v) {
+	  v->put();
+	  cache[ix] = nullptr;
+	}
+      }
+    } /* release */
+
+    auto get_stats() {
+      return std::make_tuple(hits, misses);
+    }
+
+  }; /* VolCache */
+
+protected:
   class ObjectContextCache {
   private:
     static constexpr uint16_t cachesz = 31;
