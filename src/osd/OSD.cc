@@ -101,6 +101,9 @@
 #undef dout_prefix
 #define dout_prefix _prefix(_dout, whoami, get_osdmap())
 
+/* thread-local Volume cache */
+thread_local OSDVol::VolCache OSD::tls_vol_cache;
+
 static ostream& _prefix(std::ostream* _dout, int whoami, OSDMapRef osdmap) {
   return *_dout << "osd." << whoami << " "
 		<< (osdmap ? osdmap->get_epoch():0)
@@ -1012,10 +1015,14 @@ bool OSD::_have_vol(const boost::uuids::uuid& volume)
 OSDVolRef OSD::_lookup_vol(const boost::uuids::uuid& volid)
 {
   // Caller should hold a lock on osd_lock
+  OSDVol* v = tls_vol_cache.get(volid);
+  if (v)
+    return v;
   auto i = vol_map.find(volid);
   if (i != vol_map.end()) {
     OSDVolRef vol = i->second;
     service.lru.lru_touch(&*vol);
+    tls_vol_cache.put(vol.get() /* intrusive_ptr */);
     return vol;
   } else {
     return _load_vol(volid);
