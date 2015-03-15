@@ -429,19 +429,23 @@ WRITE_CLASS_ENCODER(object_stat_collection_t)
  */
 struct vol_info_t {
   boost::uuids::uuid volume;
+  uint64_t hk;
   eversion_t last_update;    // last object version applied to store.
   epoch_t last_epoch_started;// last epoch at which this volume
 			     // started on this osd
   version_t last_user_version; // last user object version applied to store
 
-  vol_info_t()
-    : last_epoch_started(0), last_user_version(0)
-  { }
-
   vol_info_t(const boost::uuids::uuid& volume)
     : volume(volume),
       last_epoch_started(0), last_user_version(0)
-  { }
+  {
+    boost::hash<boost::uuids::uuid> hash;
+    hk = hash(volume);
+  }
+
+  vol_info_t()
+    : vol_info_t(boost::uuids::uuid{{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}})
+  {}
 
   bool is_empty() const { return last_update.version == 0; }
 
