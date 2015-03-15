@@ -68,6 +68,66 @@ class Notification;
 
 class AuthAuthorizeHandlerRegistry;
 
+  class ObjectContextCache {
+  private:
+    static constexpr uint16_t cachesz = 31;
+    typedef std::array<ObjectContext*,cachesz> cache_type;
+    cache_type obj_cache;
+    uint64_t hits;
+    uint64_t misses;
+
+    static uint16_t slot_of(uint64_t ix) {
+      return ix % cachesz;
+    }
+
+  public:
+    ObjectContextCache() : obj_cache(), hits(0), misses(0) {}
+
+    ObjectContext* get(const coll_t cid, const hoid_t& oid) {
+      ObjectContext* obc = obj_cache[slot_of(oid.hk)];
+      if (obc) {
+	ObjectHandle oh = reinterpret_cast<ObjectHandle>(obc->obs.oh);
+	/* we are caching for all volumes */
+	if ((oh->get_cid() == cid) &&
+	    (oh->get_oid() == oid)) {
+	  ++hits;
+	  return obc;
+	}
+      }
+      ++misses;
+      return nullptr;
+    } /* get */
+
+    void put(ObjectContext* obc) {
+      const uint16_t slot = slot_of(obc->obs.oi.oid.hk);
+      ObjectContext* obc2 = obj_cache[slot];
+      if (likely(obc2 == obc))
+	return;
+      if (obc2) {
+	obc2->put(); /* unref */
+      }
+      obc->get(); /* ref */
+      obj_cache[slot] = obc;
+    } /* put */
+
+    /* threads that saw this must call before exiting! */
+    void release() {
+      for (int ix = 0; ix < cachesz; ++ix) {
+	ObjectContext* obc = obj_cache[ix];
+	if (obc) {
+	  obc->put();
+	  obj_cache[ix] = nullptr;
+	}
+      }
+    } /* release */
+
+    auto get_stats() {
+      return std::make_tuple(hits, misses);
+    }
+
+  }; /* ObjectContextCache */
+
+
 class OSD;
 class OSDService {
 public:
@@ -77,7 +137,6 @@ public:
   typedef std::unique_lock<std::shared_timed_mutex> unique_map_lock;
   OSD *osd;
   LRU lru;
-  OSDVol::VolCache vol_cache;
   CephContext *cct;
   const int whoami;
   ObjectStore *&store;
@@ -296,6 +355,8 @@ protected:
   Messenger*  client_xio_messenger;
   MonClient   *monc; // check the "monc helpers" list before accessing directly
   ObjectStore *store;
+
+  static thread_local OSDVol::VolCache tls_vol_cache;
 
   LogClient clog;
 
