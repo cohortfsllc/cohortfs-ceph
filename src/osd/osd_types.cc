@@ -402,8 +402,8 @@ void vol_info_t::dump(Formatter *f) const
 
 void vol_info_t::generate_test_instances(list<vol_info_t*>& o)
 {
-  o.push_back(new vol_info_t);
-  o.push_back(new vol_info_t);
+  o.push_back(new vol_info_t());
+  o.push_back(new vol_info_t());
   o.back()->last_update = eversion_t(3, 4);
   o.back()->last_user_version = 2;
 }

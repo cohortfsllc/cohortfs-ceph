@@ -465,7 +465,7 @@ public:
     } /* get */
 
     void put(OSDVol* v) {
-      const uint16_t slot = slot_of(hash(v->get_volid()));
+      const uint16_t slot = slot_of(v->get_hk());
       OSDVol* v2 = cache[slot];
       if (likely(v2 == v))
 	return;
@@ -662,6 +662,7 @@ private:
 
 public:
   const boost::uuids::uuid& get_volid() const { return info.volume; }
+  uint64_t get_hk() const { return info.hk; }
 
   bool  is_empty() const {
     return info.last_update == eversion_t(0,0);
