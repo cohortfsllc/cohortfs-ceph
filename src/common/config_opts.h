@@ -573,6 +573,9 @@ OPTION(keyvaluestore_op_threads, OPT_INT, 2)
 OPTION(keyvaluestore_op_thread_timeout, OPT_INT, 60)
 OPTION(keyvaluestore_op_thread_suicide_timeout, OPT_INT, 180)
 
+OPTION(memstore_page_partitions, OPT_INT, 4)
+OPTION(memstore_pages_per_stripe, OPT_INT, 16)
+
 // max bytes to search ahead in journal searching for corruption
 OPTION(journal_max_corrupt_search, OPT_U64, 10<<20)
 OPTION(journal_block_align, OPT_BOOL, true)
