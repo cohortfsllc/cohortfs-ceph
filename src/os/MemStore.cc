@@ -322,7 +322,7 @@ int MemStore::_read_pages(page_set& data, unsigned offset, size_t len,
       bl.append_zero(remaining);
       break;
     }
-    page_set::page_type* page = *p;
+    auto page = *p;
 
     // fill any holes between pages with zeroes
     if (page->offset > offset) {
@@ -1099,27 +1099,14 @@ void MemStore::_write_pages(const bufferlist& src, unsigned offset,
 {
   unsigned len = src.length();
 
-  // count the overlapping pages
-  size_t page_count = 0;
-  if (offset % PageSize) {
-    page_count++;
-    size_t rem = PageSize - offset % PageSize;
-    len = len <= rem ? 0 : len - rem;
-  }
-  page_count += len / PageSize;
-  if (len % PageSize)
-    page_count++;
-
   // allocate a vector for page pointers
   // TODO: preallocate page vectors for each worker thread
   page_set::page_vector pages;
-  pages.resize(page_count);
-
   // make sure the page range is allocated
   o->data.alloc_range(offset, src.length(), pages);
 
   bufferlist* ncbl = const_cast<bufferlist*>(&src);
-  page_set::page_vector::iterator page = pages.begin();
+  auto page = pages.begin();
 
   buffer::list::iterator bl_iter = ncbl->begin();
   while (! bl_iter.end()) {

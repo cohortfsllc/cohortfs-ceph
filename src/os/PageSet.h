@@ -107,8 +107,13 @@ private:
     }
   }
 
+  // disable copy
+  PageSet(const PageSet&) = delete;
+  const PageSet& operator=(const PageSet&) = delete;
+
 public:
   PageSet() {}
+  PageSet(PageSet &&rhs) : pages(std::move(rhs.pages)) {}
   ~PageSet() {
     free_pages(pages.begin(), pages.end());
   }
@@ -117,12 +122,14 @@ public:
   size_t size() const { return pages.size(); }
 
   // allocate all pages that intersect the range [offset,length)
-  void alloc_range(uint64_t offset, size_t length, page_vector &range) {
+  void alloc_range(uint64_t offset, size_t length,
+                   typename page_vector::iterator range_begin,
+                   typename page_vector::iterator range_end) {
     // loop in reverse so we can provide hints to avl_set::insert_check()
     //	and get O(1) insertions after the first
     uint64_t position = offset + length - 1;
 
-    typename page_vector::reverse_iterator out = range.rbegin();
+    typename page_vector::reverse_iterator out(range_end);
 
     std::lock_guard<lock_type> lk(lock);
     iterator cur = pages.end();
@@ -163,7 +170,7 @@ public:
       position -= c;
       length -= c;
     }
-    assert(out == range.rend()); // make sure we sized the vector correctly
+    assert(out == range_end); // make sure we sized the vector correctly
   }
 
   // return all allocated pages that intersect the range [offset,length)

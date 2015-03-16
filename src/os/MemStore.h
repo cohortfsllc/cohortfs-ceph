@@ -21,7 +21,7 @@
 
 #include "common/Finisher.h"
 #include "ObjectStore.h"
-#include "PageSet.h"
+#include "PartitionedPageSet.h"
 
 #include <atomic>
 #include <boost/intrusive_ptr.hpp>
@@ -30,7 +30,7 @@
 class MemStore : public ObjectStore {
 private:
   static const size_t PageSize = 64 << 10;
-  typedef PageSet<PageSize> page_set;
+  typedef PartitionedPageSet<PageSize> page_set;
 
 public:
   class MemCollection;
@@ -46,9 +46,12 @@ public:
     bufferlist omap_header;
     map<string,bufferlist> omap;
 
-    Object(MemCollection* c, const hoid_t& oid) :
-      ObjectStore::Object(c, oid), refcnt(0), data_len(0)
-      {}
+    Object(CephContext *cct, MemCollection* c, const hoid_t& oid)
+      : ObjectStore::Object(c, oid), refcnt(0),
+        data(cct->_conf->memstore_page_partitions,
+             cct->_conf->memstore_pages_per_stripe),
+        data_len(0)
+    {}
 
     friend void intrusive_ptr_add_ref(const Object* o) {
       o->refcnt.fetch_add(1, std::memory_order_relaxed);
@@ -116,6 +119,7 @@ public:
   typedef ObjectStore::Object::ObjCache ObjCache;
 
   struct MemCollection : public ObjectStore::Collection {
+    CephContext *cct;
     map<string,bufferptr> xattr;
 
     typedef std::unique_lock<std::shared_timed_mutex> unique_lock;
@@ -142,7 +146,7 @@ public:
 				         oid.hk, oid, lat,
 					 ObjCache::FLAG_LOCK));
       if (!o) {
-	o = new Object(this, oid);
+	o = new Object(cct, this, oid);
 	intrusive_ptr_add_ref(o);
 	obj_cache.insert_latched(o, lat, ObjCache::FLAG_UNLOCK);
       } else
@@ -183,7 +187,7 @@ public:
       while (s--) {
 	hoid_t k;
 	::decode(k, p);
-	Object* o = new Object(this, k);
+	Object* o = new Object(cct, this, k);
 	o->decode(p);
 	intrusive_ptr_add_ref(o);
 	obj_cache.insert(k.hk, o, ObjCache::FLAG_NONE);
@@ -193,7 +197,7 @@ public:
     }
 
     MemCollection(MemStore* ms, const coll_t& cid) :
-      ObjectStore::Collection(ms, cid)
+      ObjectStore::Collection(ms, cid), cct(ms->cct)
       {}
 
     ~MemCollection();
