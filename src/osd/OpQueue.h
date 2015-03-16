@@ -155,7 +155,6 @@ namespace cohort {
 	};
 
 	for (;;) {
-	  int n_reqs = 0;
 	  uint32_t size, size_max = 0;
 	  lane_lk.lock();
 	  for (unsigned int ix = 0; ix < cycle.size(); ++ix) {
@@ -166,22 +165,20 @@ namespace cohort {
 	      band.q.pop_back(); /* dequeued */
 	      if (size > size_max)
 		size_max = size;
-	      ++n_reqs;
               lane_lk.unlock();
 	      /* dequeue op */
 	      dequeue_op_func(osd, &op);
               lane_lk.lock();
-	      /* try again if we did any work */
-	      if (n_reqs) {
-		if (size_max > start_thresh) {
-		  spawn_worker(Lane::FLAG_LOCKED);
-		}
-		continue;
-	      }
 	    }
 	  } /* for bands */
 
-	  /* n_reqs == 0 */
+          /* try again if we did any work */
+          if (size_max > 0) {
+            if (size_max > start_thresh)
+              spawn_worker(Lane::FLAG_LOCKED);
+            continue;
+          }
+	  /* size_max == 0 */
 	  idle.push_back(*worker);
 	  lane_lk.unlock();
 	  ceph::mono_time timeout =
