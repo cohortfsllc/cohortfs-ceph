@@ -37,6 +37,10 @@
 
 using std::min;
 
+// use a thread-local vector for the pages returned by PageSet, so we
+// can avoid allocations in _read/write_pages()
+thread_local typename MemStore::page_set::page_vector MemStore::tls_pages;
+
 /* Factory method */
 ObjectStore* MemStore_factory(CephContext* cct,
 			      const std::string& data,
@@ -312,13 +316,12 @@ int MemStore::_read_pages(page_set& data, unsigned offset, size_t len,
   const unsigned end = offset + len;
   size_t remaining = len;
 
-  page_set::page_vector pages;
-  data.get_range(offset, len, pages);
+  data.get_range(offset, len, tls_pages);
 
-  auto p = pages.begin();
+  auto p = tls_pages.begin();
   while (remaining) {
     // no more pages in range
-    if (p == pages.end() || (*p)->offset >= end) {
+    if (p == tls_pages.end() || (*p)->offset >= end) {
       bl.append_zero(remaining);
       break;
     }
@@ -346,6 +349,7 @@ int MemStore::_read_pages(page_set& data, unsigned offset, size_t len,
     page->put();
     ++p;
   }
+  tls_pages.clear();
   return len;
 }
 
@@ -1099,14 +1103,11 @@ void MemStore::_write_pages(const bufferlist& src, unsigned offset,
 {
   unsigned len = src.length();
 
-  // allocate a vector for page pointers
-  // TODO: preallocate page vectors for each worker thread
-  page_set::page_vector pages;
   // make sure the page range is allocated
-  o->data.alloc_range(offset, src.length(), pages);
+  o->data.alloc_range(offset, src.length(), tls_pages);
 
   bufferlist* ncbl = const_cast<bufferlist*>(&src);
-  auto page = pages.begin();
+  auto page = tls_pages.begin();
 
   buffer::list::iterator bl_iter = ncbl->begin();
   while (! bl_iter.end()) {
@@ -1122,8 +1123,9 @@ void MemStore::_write_pages(const bufferlist& src, unsigned offset,
   }
 
   // drop page refs
-  for (auto p : pages)
+  for (auto p : tls_pages)
     p->put();
+  tls_pages.clear();
 }
 
 int MemStore::_zero(MemCollection* c, ObjectHandle oh,
