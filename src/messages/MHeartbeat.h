@@ -20,12 +20,12 @@
 #include "msg/Message.h"
 
 class MHeartbeat : public Message {
-  mds_load_t load;
+//  mds_load_t load;
   int32_t	 beat;
   map<int32_t, float> import_map;
 
  public:
-  mds_load_t& get_load() { return load; }
+//   mds_load_t& get_load() { return load; }
   int get_beat() { return beat; }
 
   map<int32_t, float>& get_import_map() {
@@ -33,10 +33,10 @@ class MHeartbeat : public Message {
   }
 
   MHeartbeat()
-    : Message(MSG_MDS_HEARTBEAT), load(ceph::real_time::min()) { }
-  MHeartbeat(mds_load_t& load, int beat)
-    : Message(MSG_MDS_HEARTBEAT),
-      load(load) {
+    : Message(MSG_MDS_HEARTBEAT) /* , load(ceph::real_time::min()) */ { }
+  MHeartbeat(/* mds_load_t& load, */int beat)
+    : Message(MSG_MDS_HEARTBEAT)/* ,
+      load(load) */ {
     this->beat = beat;
   }
 private:
@@ -46,13 +46,13 @@ public:
   const char *get_type_name() const { return "HB"; }
 
   void encode_payload(uint64_t features) {
-    ::encode(load, payload);
+//    ::encode(load, payload);
     ::encode(beat, payload);
     ::encode(import_map, payload);
   }
   void decode_payload() {
     bufferlist::iterator p = payload.begin();
-    ::decode(load, p);
+//    ::decode(load, p);
     ::decode(beat, p);
     ::decode(import_map, p);
   }

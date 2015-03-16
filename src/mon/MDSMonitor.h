@@ -63,10 +63,6 @@ class MDSMonitor : public PaxosService {
     }
   };
 
-  void create_new_fs(MDSMap &m, const boost::uuids::uuid& metadata_volume);
-
-  version_t get_trim_to();
-
   // service methods
   void create_initial();
   void update_from_paxos(bool *need_bootstrap);
@@ -105,9 +101,6 @@ class MDSMonitor : public PaxosService {
     uint64_t seq;
   };
   map<uint64_t, beacon_info_t> last_beacon;
-
-  bool try_standby_replay(MDSMap::mds_info_t& finfo,
-			  MDSMap::mds_info_t& ainfo);
 
 public:
   MDSMonitor(CephContext *_cct, Monitor *mn, Paxos *p, string service_name)

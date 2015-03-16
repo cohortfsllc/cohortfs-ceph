@@ -60,29 +60,11 @@ void MDSMonitor::print_map(MDSMap &m, int dbl)
   *_dout << dendl;
 }
 
-void MDSMonitor::create_new_fs(MDSMap &m, const boost::uuids::uuid& metadata_vol)
-{
-  m.max_mds = mon->cct->_conf->max_mds;
-  m.created = ceph::real_clock::now();
-  m.metadata_uuid = metadata_vol;
-  m.compat = get_mdsmap_compat_set_default();
-
-  m.session_timeout = mon->cct->_conf->mds_session_timeout;
-  m.session_autoclose = mon->cct->_conf->mds_session_autoclose;
-  m.max_file_size = mon->cct->_conf->mds_max_file_size;
-
-  print_map(m);
-}
-
 
 // service methods
 void MDSMonitor::create_initial()
 {
   ldout(mon->cct, 10) << "create_initial" << dendl;
-#if 0
-// XXX who calls this?	what volume do i use?  does this even make sense?
-  create_new_fs(pending_mdsmap, MDS_METADATA_POOL, MDS_DATA_POOL);
-#endif
 }
 
 
@@ -136,24 +118,6 @@ void MDSMonitor::encode_pending(MonitorDBStore::Transaction *t)
   /* put everything in the transaction */
   put_version(t, pending_mdsmap.epoch, mdsmap_bl);
   put_last_committed(t, pending_mdsmap.epoch);
-}
-
-version_t MDSMonitor::get_trim_to()
-{
-  version_t floor = 0;
-  if (mon->cct->_conf->mon_mds_force_trim_to > 0 &&
-      mon->cct->_conf->mon_mds_force_trim_to < (int)get_last_committed()) {
-    floor = mon->cct->_conf->mon_mds_force_trim_to;
-    ldout(mon->cct, 10) << __func__ << " explicit mon_mds_force_trim_to = "
-	     << floor << dendl;
-  }
-
-  unsigned max = mon->cct->_conf->mon_max_mdsmap_epochs;
-  version_t last = get_last_committed();
-
-  if (last - get_first_committed() > max && floor < last - max)
-    return last - max;
-  return floor;
 }
 
 bool MDSMonitor::preprocess_query(PaxosServiceMessage *m, unique_lock& l)
@@ -221,12 +185,6 @@ bool MDSMonitor::preprocess_beacon(MMDSBeacon *m)
     goto out;
   }
 
-  // check compat
-  if (!m->get_compat().writeable(mdsmap.compat)) {
-    ldout(mon->cct, 1) << " mds " << m->get_source_inst() << " can't write to mdsmap " << mdsmap.compat << dendl;
-    goto out;
-  }
-
   // fw to leader?
   if (!mon->is_leader())
     return false;
@@ -270,26 +228,7 @@ bool MDSMonitor::preprocess_beacon(MMDSBeacon *m)
   }
   // is there a state change here?
   if (info.state != state) {
-    // legal state change?
-    if ((info.state == MDSMap::STATE_STANDBY ||
-	 info.state == MDSMap::STATE_STANDBY_REPLAY ||
-	 info.state == MDSMap::STATE_ONESHOT_REPLAY) && state > 0) {
-      ldout(mon->cct, 10) << "mds_beacon mds can't activate itself (" << ceph_mds_state_name(info.state)
-	       << " -> " << ceph_mds_state_name(state) << ")" << dendl;
-      goto ignore;
-    }
 
-    if (info.state == MDSMap::STATE_STANDBY &&
-	(state == MDSMap::STATE_STANDBY_REPLAY ||
-	    state == MDSMap::STATE_ONESHOT_REPLAY) &&
-	(pending_mdsmap.is_degraded() ||
-	 ((m->get_standby_for_rank() >= 0) &&
-	     pending_mdsmap.get_state(m->get_standby_for_rank()) < MDSMap::STATE_ACTIVE))) {
-      ldout(mon->cct, 10) << "mds_beacon can't standby-replay mds." << m->get_standby_for_rank() << " at this time (cluster degraded, or mds not active)" << dendl;
-      ldout(mon->cct, 10) << "pending_mdsmap.is_degraded()==" << pending_mdsmap.is_degraded()
-	  << " rank state: " << ceph_mds_state_name(pending_mdsmap.get_state(m->get_standby_for_rank())) << dendl;
-      goto ignore;
-    }
     _note_beacon(m);
     return false;  // need to update map
   }
@@ -392,35 +331,13 @@ bool MDSMonitor::prepare_beacon(MMDSBeacon *m, unique_lock& l)
     MDSMap::mds_info_t& info = pending_mdsmap.mds_info[gid];
     info.global_id = gid;
     info.name = m->get_name();
-    info.rank = -1;
     info.addr = addr;
-    info.state = MDSMap::STATE_STANDBY;
+    info.state = MDSMap::STATE_BOOT;
     info.state_seq = seq;
-    info.standby_for_rank = m->get_standby_for_rank();
-    info.standby_for_name = m->get_standby_for_name();
-
-    if (!info.standby_for_name.empty()) {
-      const MDSMap::mds_info_t *leaderinfo = mdsmap.find_by_name(info.standby_for_name);
-      if (leaderinfo && (leaderinfo->rank >= 0)) {
-	info.standby_for_rank =
-	    mdsmap.find_by_name(info.standby_for_name)->rank;
-	if (mdsmap.is_followable(info.standby_for_rank)) {
-	  info.state = MDSMap::STATE_STANDBY_REPLAY;
-	}
-      }
-    }
 
     // initialize the beacon timer
     last_beacon[gid].stamp = ceph::mono_clock::now();
     last_beacon[gid].seq = seq;
-
-    // new incompat?
-    if (!pending_mdsmap.compat.writeable(m->get_compat())) {
-      ldout(mon->cct, 10) << " mdsmap " << pending_mdsmap.compat << " can't write to new mds' " << m->get_compat()
-	       << ", updating mdsmap and killing old mds's"
-	       << dendl;
-      pending_mdsmap.compat = m->get_compat();
-    }
 
   } else {
     // state change
@@ -438,40 +355,9 @@ bool MDSMonitor::prepare_beacon(MMDSBeacon *m, unique_lock& l)
 	     << dendl;
     if (state == MDSMap::STATE_STOPPED) {
       pending_mdsmap.up.erase(info.rank);
-      pending_mdsmap.in.erase(info.rank);
       pending_mdsmap.stopped.insert(info.rank);
       pending_mdsmap.mds_info.erase(gid);  // last! info is a ref into this map
       last_beacon.erase(gid);
-    } else if (state == MDSMap::STATE_STANDBY_REPLAY) {
-      if (m->get_standby_for_rank() == MDSMap::MDS_STANDBY_NAME) {
-	/* convert name to rank. If we don't have it, do nothing. The
-	 mds will stay in standby and keep requesting the state change */
-	ldout(mon->cct, 20) << "looking for mds " << m->get_standby_for_name()
-		  << " to STANDBY_REPLAY for" << dendl;
-	const MDSMap::mds_info_t *found_mds = NULL;
-	if ((found_mds = mdsmap.find_by_name(m->get_standby_for_name())) &&
-	    (found_mds->rank >= 0) &&
-	    mdsmap.is_followable(found_mds->rank)) {
-	  info.standby_for_rank = found_mds->rank;
-	  ldout(mon->cct, 10) <<" found mds " << m->get_standby_for_name()
-		       << "; it has rank " << info.standby_for_rank << dendl;
-	  info.state = MDSMap::STATE_STANDBY_REPLAY;
-	  info.state_seq = seq;
-	} else {
-	  m->put();
-	  return false;
-	}
-      } else if (m->get_standby_for_rank() >= 0 &&
-		 mdsmap.is_followable(m->get_standby_for_rank())) {
-	/* switch to standby-replay for this MDS*/
-	info.state = MDSMap::STATE_STANDBY_REPLAY;
-	info.state_seq = seq;
-	info.standby_for_rank = m->get_standby_for_rank();
-      } else { //it's a standby for anybody, and is already in the list
-	assert(pending_mdsmap.get_mds_info().count(info.global_id));
-	m->put();
-	return false;
-      }
     } else {
       info.state = state;
       info.state_seq = seq;
@@ -676,16 +562,6 @@ bool MDSMonitor::preprocess_command(MMonCommand *m, unique_lock& l)
 	}
       } else ss << "specify mds number or *";
     }
-  } else if (prefix == "mds compat show") {
-      if (f) {
-	f->open_object_section("mds_compat");
-	mdsmap.compat.dump(f.get());
-	f->close_section();
-	f->flush(ds);
-      } else {
-	ds << mdsmap.compat;
-      }
-      r = 0;
   }
 
   if (r != -1) {
@@ -710,20 +586,6 @@ void MDSMonitor::fail_mds_gid(uint64_t gid)
 
   pending_mdsmap.last_failure_osd_epoch
     = mon->osdmon()->blacklist(info.addr, until);
-
-  if (info.rank >= 0) {
-    if (info.state == MDSMap::STATE_CREATING) {
-      // If this gid didn't make it past CREATING, then forget
-      // the rank ever existed so that next time it's handed out
-      // to a gid it'll go back into CREATING.
-      pending_mdsmap.in.erase(info.rank);
-    } else {
-      // Put this rank into the failed list so that the next available STANDBY will
-      // pick it up.
-      pending_mdsmap.failed.insert(info.rank);
-    }
-    pending_mdsmap.up.erase(info.rank);
-  }
 
   pending_mdsmap.mds_info.erase(gid);
 }
@@ -803,16 +665,6 @@ bool MDSMonitor::prepare_command(MMonCommand *m, unique_lock& l)
       r = -EEXIST;
       ss << "mds." << who << " not active ("
 	 << ceph_mds_state_name(pending_mdsmap.get_state(who)) << ")";
-    } else if ((pending_mdsmap.get_root() == who ||
-		pending_mdsmap.get_tableserver() == who) &&
-	       pending_mdsmap.get_num_in_mds() > 1) {
-      r = -EBUSY;
-      ss << "can't tell the root (" << pending_mdsmap.get_root()
-	 << ") or tableserver (" << pending_mdsmap.get_tableserver()
-	 << " to deactivate unless it is the last mds in the cluster";
-    } else if (pending_mdsmap.get_num_in_mds() <= pending_mdsmap.get_max_mds()) {
-      r = -EBUSY;
-      ss << "must decrease max_mds or else MDS will immediately reactivate";
     } else {
       r = 0;
       uint64_t gid = pending_mdsmap.up[who];
@@ -820,14 +672,6 @@ bool MDSMonitor::prepare_command(MMonCommand *m, unique_lock& l)
       pending_mdsmap.mds_info[gid].state = MDSMap::STATE_STOPPING;
     }
 
-  } else if (prefix == "mds set_max_mds") {
-    // NOTE: see also "mds set max_mds", which can modify the same field.
-    int64_t maxmds;
-    if (!cmd_getval(mon->cct, cmdmap, "maxmds", maxmds) || maxmds < 0)
-      goto out;
-    pending_mdsmap.max_mds = maxmds;
-    r = 0;
-    ss << "max_mds = " << pending_mdsmap.max_mds;
   } else if (prefix == "mds set") {
     string var;
     if (!cmd_getval(mon->cct, cmdmap, "var", var) || var.empty()) {
@@ -841,43 +685,7 @@ bool MDSMonitor::prepare_command(MMonCommand *m, unique_lock& l)
       goto out;
     // we got a string.	 see if it contains an int.
     n = strict_strtoll(val.c_str(), 10, &interr);
-    if (var == "max_mds") {
-      // NOTE: see also "mds set_max_mds", which can modify the same field.
-      if (interr.length())
-	goto out;
-      pending_mdsmap.max_mds = n;
-    } else if (var == "inline_data") {
-      if (val == "true" || val == "yes" || (!interr.length() && n == 1)) {
-	string confirm;
-	if (!cmd_getval(mon->cct, cmdmap, "confirm", confirm) ||
-	    confirm != "--yes-i-really-mean-it") {
-	  ss << "inline data is new and experimental; you must specify --yes-i-really-mean-it";
-	  r = -EPERM;
-	  goto out;
-	}
-	ss << "inline data enabled";
-	pending_mdsmap.set_inline_data_enabled(true);
-	pending_mdsmap.compat.incompat.insert(MDS_FEATURE_INCOMPAT_INLINE);
-      } else if (val == "false" || val == "no" ||
-		 (!interr.length() && n == 0)) {
-	ss << "inline data disabled";
-	pending_mdsmap.set_inline_data_enabled(false);
-      } else {
-	ss << "value must be false|no|0 or true|yes|1";
-	r = -EINVAL;
-	goto out;
-      }
-    } else if (var == "max_file_size") {
-      if (interr.length()) {
-	ss << var << " requires an integer value";
-	goto out;
-      }
-      if (n < CEPH_MIN_STRIPE_UNIT) {
-	r = -ERANGE;
-	ss << var << " must at least " << CEPH_MIN_STRIPE_UNIT;
-	goto out;
-      }
-      pending_mdsmap.max_file_size = n;
+    if (0 /* var == "max_mds" */) {
     } else {
       ss << "unknown variable " << var;
       goto out;
@@ -982,89 +790,6 @@ bool MDSMonitor::prepare_command(MMonCommand *m, unique_lock& l)
     wait_for_finished_proposal(Monitor::CB_Command(mon, m, 0, rs,
 						   get_last_committed() + 1));
     return true;
-  } else if (prefix == "mds cluster_down") {
-    if (pending_mdsmap.test_flag(CEPH_MDSMAP_DOWN)) {
-      ss << "mdsmap already marked DOWN";
-    } else {
-      pending_mdsmap.set_flag(CEPH_MDSMAP_DOWN);
-      ss << "marked mdsmap DOWN";
-    }
-    r = 0;
-  } else if (prefix == "mds cluster_up") {
-    if (pending_mdsmap.test_flag(CEPH_MDSMAP_DOWN)) {
-      pending_mdsmap.clear_flag(CEPH_MDSMAP_DOWN);
-      ss << "unmarked mdsmap DOWN";
-    } else {
-      ss << "mdsmap not marked DOWN";
-    }
-    r = 0;
-  } else if (prefix == "mds compat rm_compat") {
-    int64_t f;
-    if (!cmd_getval(mon->cct, cmdmap, "feature", f)) {
-      ss << "error parsing feature value '"
-	 << cmd_vartype_stringify(cmdmap["feature"]) << "'";
-      r = -EINVAL;
-      goto out;
-    }
-    if (pending_mdsmap.compat.compat.contains(f)) {
-      ss << "removing compat feature " << f;
-      pending_mdsmap.compat.compat.remove(f);
-      r = 0;
-    } else {
-      ss << "compat feature " << f << " not present in " << pending_mdsmap.compat;
-      r = 0;
-    }
-  } else if (prefix == "mds compat rm_incompat") {
-    int64_t f;
-    if (!cmd_getval(mon->cct, cmdmap, "feature", f)) {
-      ss << "error parsing feature value '"
-	 << cmd_vartype_stringify(cmdmap["feature"]) << "'";
-      r = -EINVAL;
-      goto out;
-    }
-    if (pending_mdsmap.compat.incompat.contains(f)) {
-      ss << "removing incompat feature " << f;
-      pending_mdsmap.compat.incompat.remove(f);
-      r = 0;
-    } else {
-      ss << "incompat feature " << f << " not present in " << pending_mdsmap.compat;
-      r = 0;
-    }
-
-  } else if (prefix == "mds newfs") {
-    MDSMap newmap(cct);
-    string metadata;
-    VolumeRef metadata_vol;
-    if (!cmd_getval(mon->cct, cmdmap, "metadata", metadata)) {
-      ss << "error parsing 'metadata' value '"
-	 << cmd_vartype_stringify(cmdmap["metadata"]) << "'";
-      r = -EINVAL;
-      goto out;
-    }
-    string sure;
-    cmd_getval(mon->cct, cmdmap, "sure", sure);
-    if (sure != "--yes-i-really-mean-it") {
-      ss << "this is DANGEROUS and will wipe out the mdsmap's fs, and may "
-	 << "clobber data in the new volumes you specify.	add "
-	 << "--yes-i-really-mean-it if you do.";
-      r = -EPERM;
-      goto out;
-    }
-    newmap.inc = pending_mdsmap.inc;
-    pending_mdsmap = newmap;
-    pending_mdsmap.epoch = mdsmap.epoch + 1;
-    if (!mon->osdmon()->osdmap.find_by_name(metadata, metadata_vol)) {
-      ss << "Can't find volume named " << metadata << " for metadata";
-      r = -EPERM;
-      goto out;
-    }
-    create_new_fs(pending_mdsmap, metadata_vol->id);
-    ss << "new fs with metadata volume " << metadata;
-    string rs;
-    getline(ss, rs);
-    wait_for_finished_proposal(Monitor::CB_Command(mon, m, 0, rs,
-						   get_last_committed() + 1));
-    return true;
   } else {
     ss << "unrecognized command";
   }
@@ -1122,32 +847,6 @@ void MDSMonitor::tick(unique_lock& l)
 
   if (!mon->is_leader()) return;
 
-  // expand mds cluster (add new nodes to @in)?
-  while (pending_mdsmap.get_num_in_mds() < pending_mdsmap.get_max_mds() &&
-	 !pending_mdsmap.is_degraded()) {
-    int mds = 0;
-    string name;
-    while (pending_mdsmap.is_in(mds))
-      mds++;
-    uint64_t newgid = pending_mdsmap.find_replacement_for(mds, name);
-    if (!newgid)
-      break;
-
-    MDSMap::mds_info_t& info = pending_mdsmap.mds_info[newgid];
-    ldout(mon->cct, 1) << "adding standby " << info.addr << " as mds." << mds << dendl;
-
-    info.rank = mds;
-    if (pending_mdsmap.stopped.count(mds)) {
-      info.state = MDSMap::STATE_STARTING;
-      pending_mdsmap.stopped.erase(mds);
-    } else
-      info.state = MDSMap::STATE_CREATING;
-    info.inc = ++pending_mdsmap.inc[mds];
-    pending_mdsmap.in.insert(mds);
-    pending_mdsmap.up[mds] = newgid;
-    do_propose = true;
-  }
-
   // check beacon timestamps
   ceph::mono_time cutoff = ceph::mono_clock::now() -
     mon->cct->_conf->mds_beacon_grace;
@@ -1157,7 +856,7 @@ void MDSMonitor::tick(unique_lock& l)
     if (last_beacon.count(p.first) == 0) {
       const MDSMap::mds_info_t& info = p.second;
       ldout(mon->cct, 10) << " adding " << p.second.addr << " mds."
-			  << info.rank << "." << info.inc
+			  << info.rank
 			  << " " << ceph_mds_state_name(info.state)
 			  << " to last_beacon" << dendl;
       last_beacon[p.first].stamp = ceph::mono_clock::now();
@@ -1173,7 +872,7 @@ void MDSMonitor::tick(unique_lock& l)
     while (p != last_beacon.end()) {
       uint64_t gid = p->first;
       ceph::mono_time since = p->second.stamp;
-      uint64_t seq = p->second.seq;
+//      uint64_t seq = p->second.seq;
       ++p;
 
       if (pending_mdsmap.mds_info.count(gid) == 0) {
@@ -1187,85 +886,20 @@ void MDSMonitor::tick(unique_lock& l)
 
       MDSMap::mds_info_t& info = pending_mdsmap.mds_info[gid];
 
-      ldout(mon->cct, 10) << "no beacon from " << gid << " " << info.addr << " mds." << info.rank << "." << info.inc
+      ldout(mon->cct, 10) << "no beacon from " << gid << " " << info.addr << " mds." << info.rank
 	       << " " << ceph_mds_state_name(info.state)
 	       << " since " << since << dendl;
 
       // are we in?
-      // and is there a non-laggy standby that can take over for us?
-      uint64_t sgid;
-      if (info.rank >= 0 &&
-	  info.state != MDSMap::STATE_STANDBY &&
-	  info.state != MDSMap::STATE_STANDBY_REPLAY &&
-	  (sgid = pending_mdsmap.find_replacement_for(info.rank, info.name)) != 0) {
-	MDSMap::mds_info_t& si = pending_mdsmap.mds_info[sgid];
-	ldout(mon->cct, 10) << " replacing " << gid << " " << info.addr << " mds." << info.rank << "." << info.inc
-		 << " " << ceph_mds_state_name(info.state)
-		 << " with " << sgid << "/" << si.name << " " << si.addr << dendl;
-	switch (info.state) {
-	case MDSMap::STATE_CREATING:
-	case MDSMap::STATE_STARTING:
-	  si.state = info.state;
-	  break;
-	case MDSMap::STATE_REPLAY:
-	case MDSMap::STATE_RESOLVE:
-	case MDSMap::STATE_RECONNECT:
-	case MDSMap::STATE_REJOIN:
-	case MDSMap::STATE_CLIENTREPLAY:
-	case MDSMap::STATE_ACTIVE:
-	case MDSMap::STATE_STOPPING:
-	  si.state = MDSMap::STATE_REPLAY;
-	  break;
-	default:
-	  assert(0);
-	}
-
-	info.state_seq = seq;
-	si.rank = info.rank;
-	si.inc = ++pending_mdsmap.inc[info.rank];
-	pending_mdsmap.up[info.rank] = sgid;
-	if (si.state > 0)
-	  pending_mdsmap.last_failure = pending_mdsmap.epoch;
-	if (si.state > 0 ||
-	    si.state == MDSMap::STATE_CREATING ||
-	    si.state == MDSMap::STATE_STARTING) {
-	  // blacklist laggy mds
-	  ceph::real_time until = ceph::real_clock::now() +
-	    mon->cct->_conf->mds_blacklist_interval;
-	  pending_mdsmap.last_failure_osd_epoch
-	    = mon->osdmon()->blacklist(info.addr, until);
-	  propose_osdmap = true;
-	}
-	pending_mdsmap.mds_info.erase(gid);
-	last_beacon.erase(gid);
+      if (!info.laggy()) {
+	ldout(mon->cct, 10) << " marking " << gid << " " << info.addr
+			    << " mds." << info.rank
+			    << " " << ceph_mds_state_name(info.state)
+			    << " laggy" << dendl;
+	info.laggy_since = ceph::real_clock::now();
 	do_propose = true;
-      } else if (info.state == MDSMap::STATE_STANDBY_REPLAY) {
-	ldout(mon->cct, 10) << " failing " << gid << " " << info.addr << " mds." << info.rank << "." << info.inc
-		 << " " << ceph_mds_state_name(info.state)
-		 << dendl;
-	pending_mdsmap.mds_info.erase(gid);
-	last_beacon.erase(gid);
-	do_propose = true;
-      } else {
-	if (info.state == MDSMap::STATE_STANDBY ||
-	    info.state == MDSMap::STATE_STANDBY_REPLAY) {
-	  // remove it
-	  ldout(mon->cct, 10) << " removing " << gid << " " << info.addr
-			      << " mds." << info.rank << "." << info.inc
-			      << " " << ceph_mds_state_name(info.state)
-			      << " (laggy)" << dendl;
-	  pending_mdsmap.mds_info.erase(gid);
-	  do_propose = true;
-	} else if (!info.laggy()) {
-	  ldout(mon->cct, 10) << " marking " << gid << " " << info.addr
-			      << " mds." << info.rank << "." << info.inc
-			      << " " << ceph_mds_state_name(info.state)
-			      << " laggy" << dendl;
-	  info.laggy_since = ceph::real_clock::now();
-	  do_propose = true;
-	}
-	last_beacon.erase(gid);
       }
+      last_beacon.erase(gid);
     }
 
     if (propose_osdmap)
@@ -1274,99 +908,6 @@ void MDSMonitor::tick(unique_lock& l)
   }
 
 
-  // have a standby take over?
-  set<int> failed;
-  pending_mdsmap.get_failed_mds_set(failed);
-  if (!failed.empty()) {
-    set<int>::iterator p = failed.begin();
-    while (p != failed.end()) {
-      int f = *p++;
-      uint64_t sgid;
-      string name;  // FIXME
-      sgid = pending_mdsmap.find_replacement_for(f, name);
-      if (sgid) {
-	MDSMap::mds_info_t& si = pending_mdsmap.mds_info[sgid];
-	ldout(mon->cct, 0) << " taking over failed mds." << f << " with "
-			   << sgid << "/" << si.name << " " << si.addr
-			   << dendl;
-	si.state = MDSMap::STATE_REPLAY;
-	si.rank = f;
-	si.inc = ++pending_mdsmap.inc[f];
-	pending_mdsmap.in.insert(f);
-	pending_mdsmap.up[f] = sgid;
-	pending_mdsmap.failed.erase(f);
-	do_propose = true;
-      }
-    }
-  }
-
-  // have a standby follow someone?
-  if (failed.empty()) {
-    for (map<uint64_t,MDSMap::mds_info_t>::iterator j = pending_mdsmap.mds_info.begin();
-	 j != pending_mdsmap.mds_info.end();
-	 ++j) {
-      MDSMap::mds_info_t& info = j->second;
-
-      if (info.state != MDSMap::STATE_STANDBY)
-	continue;
-
-      /*
-       * This mds is standby but has no rank assigned.
-       * See if we can find it somebody to shadow
-       */
-      ldout(mon->cct, 20) << "gid " << j->first << " is standby and following nobody" << dendl;
-
-      // standby for someone specific?
-      if (info.standby_for_rank >= 0) {
-	if (pending_mdsmap.is_followable(info.standby_for_rank) &&
-	    try_standby_replay(info, pending_mdsmap.mds_info[pending_mdsmap.up[info.standby_for_rank]]))
-	  do_propose = true;
-	continue;
-      }
-
-      // check everyone
-      for (map<uint64_t,MDSMap::mds_info_t>::iterator i = pending_mdsmap.mds_info.begin();
-	   i != pending_mdsmap.mds_info.end();
-	   ++i) {
-	if (i->second.rank >= 0 && pending_mdsmap.is_followable(i->second.rank)) {
-	  if ((info.standby_for_name.length() && info.standby_for_name != i->second.name) ||
-	      info.standby_for_rank >= 0)
-	    continue;	// we're supposed to follow someone else
-
-	  if (info.standby_for_rank == MDSMap::MDS_STANDBY_ANY &&
-	      try_standby_replay(info, i->second)) {
-	    do_propose = true;
-	    break;
-	  }
-	  continue;
-	}
-      }
-    }
-  }
-
   if (do_propose)
     propose_pending(l);
-}
-
-bool MDSMonitor::try_standby_replay(MDSMap::mds_info_t& finfo, MDSMap::mds_info_t& ainfo)
-{
-  // someone else already following?
-  uint64_t lgid = pending_mdsmap.find_standby_for(ainfo.rank, ainfo.name);
-  if (lgid) {
-    MDSMap::mds_info_t& sinfo = pending_mdsmap.mds_info[lgid];
-    ldout(mon->cct, 20) << " mds." << ainfo.rank
-	     << " standby gid " << lgid << " with state "
-	     << ceph_mds_state_name(sinfo.state)
-	     << dendl;
-    if (sinfo.state == MDSMap::STATE_STANDBY_REPLAY) {
-      ldout(mon->cct, 20) << "  skipping this MDS since it has a follower!" << dendl;
-      return false; // this MDS already has a standby
-    }
-  }
-
-  // hey, we found an MDS without a standby. Pair them!
-  finfo.standby_for_rank = ainfo.rank;
-  ldout(mon->cct, 10) << "	 setting to shadow mds rank " << finfo.standby_for_rank << dendl;
-  finfo.state = MDSMap::STATE_STANDBY_REPLAY;
-  return true;
 }

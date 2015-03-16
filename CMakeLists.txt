@@ -77,9 +77,6 @@ CHECK_INCLUDE_FILES("unistd.h" HAVE_UNISTD_H)
 CHECK_INCLUDE_FILES("utime.h" HAVE_UTIME_H)
 CHECK_INCLUDE_FILES("${CMAKE_SOURCE_DIR}/src/include/fiemap.h" HAVE_FIEMAP_H)
 CHECK_INCLUDE_FILES("expat.h" HAVE_EXPAT_H)
-CHECK_INCLUDE_FILES("fuse/fuse_lowlevel.h" HAVE_FUSE_LOWLEVEL_H)
-CHECK_INCLUDE_FILES("curl/curl.h" HAVE_FUSE_LOWLEVEL_H)
-CHECK_INCLUDE_FILES("fuse/fuse.h" HAVE_FUSE_H)
 CHECK_INCLUDE_FILES("google/profiler.h" HAVE_PROFILER_H)
 CHECK_INCLUDE_FILES("libedit/vis.h" HAVE_LIBEDIT_VIS_H)
 CHECK_INCLUDE_FILES("fcgi_config.h"  HAVE_FASTCGI_CONFIG_H)
@@ -119,18 +116,10 @@ set(HAVE_LIBAIO ${AIO_FOUND})
 message(STATUS "${AIO_LIBS}")
 endif(${WITH_AIO})
 
-option(WITH_FUSE "Fuse is here" ON)
-if(${WITH_FUSE})
-find_package(fuse REQUIRED)
-set(HAVE_LIBFUSE ${FUSE_FOUND})
-CHECK_FUNCTION_EXISTS(fuse_getgroups HAVE_FUSE_GETGROUPS)
-endif(${WITH_FUSE})
-
-# probably fuse etc need this -- how to check? XXX
-option(WITH_MDS "MDS is here" ON)
+# our new libmds model of the universe
+option(WITH_LIBMDS "LibMDS is here" ON)
 
 # needs mds and? XXX
-option(WITH_CLIENT "Client is here" ON)
 option(WITH_LIBCEPHFS "libcephfs client library" ON)
 
 # key-value store

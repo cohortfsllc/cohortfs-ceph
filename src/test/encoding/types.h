@@ -66,85 +66,85 @@ TYPE(MonCap)
 TYPE(DBObjectMap::_Header)
 TYPE(DBObjectMap::State)
 
-#ifndef NO_CLIENT
-#include "osdc/Journaler.h"
-TYPE(Journaler::Header)
-#endif /* NO_CLIENT */
+// #ifndef NO_CLIENT
+// #include "osdc/Journaler.h"
+// TYPE(Journaler::Header)
+// #endif /* NO_CLIENT */
 
 #ifndef NO_CLIENT
-#include "mds/Anchor.h"
-TYPE(Anchor)
+// #include "mds/Anchor.h"
+// TYPE(Anchor)
 
-#include "mds/mdstypes.h"
-TYPE(frag_info_t)
-TYPE(nest_info_t)
-TYPE(client_writeable_range_t)
-TYPE(inode_t)
-TYPE(fnode_t)
-TYPE(session_info_t)
-TYPE(MDSCacheObjectInfo)
-TYPE(mds_table_pending_t)
-TYPE(inode_load_vec_t)
-TYPE(dirfrag_load_vec_t)
-TYPE(mds_load_t)
-TYPE(cap_reconnect_t)
-TYPE(inode_backtrace_t)
-TYPE(inode_backpointer_t)
+// #include "mds/mdstypes.h"
+// TYPE(frag_info_t)
+// TYPE(nest_info_t)
+// TYPE(client_writeable_range_t)
+// TYPE(inode_t)
+// TYPE(fnode_t)
+// TYPE(session_info_t)
+// TYPE(MDSCacheObjectInfo)
+// TYPE(mds_table_pending_t)
+// TYPE(inode_load_vec_t)
+// TYPE(dirfrag_load_vec_t)
+// TYPE(mds_load_t)
+// TYPE(cap_reconnect_t)
+// TYPE(inode_backtrace_t)
+// TYPE(inode_backpointer_t)
 
 #include "mds/MDSMap.h"
 TYPE_CONTEXT_FEATUREFUL(MDSMap)
 TYPE_FEATUREFUL(MDSMap::mds_info_t)
 
-#include "mds/Capability.h"
-TYPE_NOCOPY(Capability)
+// #include "mds/Capability.h"
+// TYPE_NOCOPY(Capability)
 
-#include "mds/AnchorServer.h"
-TYPE_NOCOPY(AnchorServer)
+// #include "mds/AnchorServer.h"
+// TYPEWITHSTRAYDATA(AnchorServer)
 
-#include "mds/InoTable.h"
-TYPE_NOCOPY(InoTable)
+// #include "mds/InoTable.h"
+// TYPE(InoTable)
 
-#include "mds/SessionMap.h"
-TYPE_NOCOPY(SessionMap)
+// #include "mds/SessionMap.h"
+// TYPE(SessionMap)
 
-#include "mds/events/ECommitted.h"
-TYPE(ECommitted)
-#include "mds/events/EExport.h"
-TYPE(EExport)
-#include "mds/events/EFragment.h"
-TYPE(EFragment)
-#include "mds/events/EImportFinish.h"
-TYPE(EImportFinish)
-#include "mds/events/EImportStart.h"
-TYPE(EImportStart)
-#include "mds/events/EMetaBlob.h"
-TYPE_NOCOPY(EMetaBlob::fullbit)
-TYPE(EMetaBlob::remotebit)
-TYPE(EMetaBlob::nullbit)
-TYPE(EMetaBlob::dirlump)
-TYPE(EMetaBlob)
-#include "mds/events/EOpen.h"
-TYPE(EOpen)
-#include "mds/events/EResetJournal.h"
-TYPE(EResetJournal)
-#include "mds/events/ESession.h"
-TYPE(ESession)
-#include "mds/events/ESessions.h"
-TYPE(ESessions)
-#include "mds/events/ESlaveUpdate.h"
-TYPE(link_rollback)
-TYPE(rmdir_rollback)
-TYPE(rename_rollback::drec)
-TYPE(rename_rollback)
-TYPE(ESlaveUpdate)
-#include "mds/events/ESubtreeMap.h"
-TYPE(ESubtreeMap)
-#include "mds/events/ETableClient.h"
-TYPE(ETableClient)
-#include "mds/events/ETableServer.h"
-TYPE(ETableServer)
-#include "mds/events/EUpdate.h"
-TYPE(EUpdate)
+// #include "mds/events/ECommitted.h"
+// TYPE(ECommitted)
+// #include "mds/events/EExport.h"
+// TYPE(EExport)
+// #include "mds/events/EFragment.h"
+// TYPE(EFragment)
+// #include "mds/events/EImportFinish.h"
+// TYPE(EImportFinish)
+// #include "mds/events/EImportStart.h"
+// TYPE(EImportStart)
+// #include "mds/events/EMetaBlob.h"
+// TYPE_NOCOPY(EMetaBlob::fullbit)
+// TYPE(EMetaBlob::remotebit)
+// TYPE(EMetaBlob::nullbit)
+// TYPE(EMetaBlob::dirlump)
+// TYPE(EMetaBlob)
+// #include "mds/events/EOpen.h"
+// TYPE(EOpen)
+// #include "mds/events/EResetJournal.h"
+// TYPE(EResetJournal)
+// #include "mds/events/ESession.h"
+// TYPE(ESession)
+// #include "mds/events/ESessions.h"
+// TYPE(ESessions)
+// #include "mds/events/ESlaveUpdate.h"
+// TYPE(link_rollback)
+// TYPE(rmdir_rollback)
+// TYPE(rename_rollback::drec)
+// TYPE(rename_rollback)
+// TYPE(ESlaveUpdate)
+// #include "mds/events/ESubtreeMap.h"
+// TYPE(ESubtreeMap)
+// #include "mds/events/ETableClient.h"
+// TYPE(ETableClient)
+// #include "mds/events/ETableServer.h"
+// TYPE(ETableServer)
+// #include "mds/events/EUpdate.h"
+// TYPE(EUpdate)
 #endif /* NO_CLIENT */
 
 #if 0
@@ -264,92 +264,92 @@ TYPE(cls_refcount_set_op)
 MESSAGE(MAuth)
 #include "messages/MAuthReply.h"
 MESSAGE(MAuthReply)
-#include "messages/MCacheExpire.h"
-MESSAGE(MCacheExpire)
-#include "messages/MClientCapRelease.h"
-MESSAGE(MClientCapRelease)
-#include "messages/MClientCaps.h"
-MESSAGE(MClientCaps)
-#include "messages/MClientLease.h"
-MESSAGE(MClientLease)
-#include "messages/MClientReconnect.h"
-MESSAGE(MClientReconnect)
-#include "messages/MClientReply.h"
-MESSAGE(MClientReply)
-#include "messages/MClientRequest.h"
-MESSAGE(MClientRequest)
-#include "messages/MClientRequestForward.h"
-MESSAGE(MClientRequestForward)
-#include "messages/MClientSession.h"
-MESSAGE(MClientSession)
-#include "messages/MDentryLink.h"
-MESSAGE(MDentryLink)
-#include "messages/MDentryUnlink.h"
-MESSAGE(MDentryUnlink)
-#include "messages/MDirUpdate.h"
-MESSAGE(MDirUpdate)
-#include "messages/MDiscover.h"
-MESSAGE(MDiscover)
-#include "messages/MDiscoverReply.h"
-MESSAGE(MDiscoverReply)
-#include "messages/MExportCaps.h"
-MESSAGE(MExportCaps)
-#include "messages/MExportCapsAck.h"
-MESSAGE(MExportCapsAck)
-#include "messages/MExportDir.h"
-MESSAGE(MExportDir)
-#include "messages/MExportDirAck.h"
-MESSAGE(MExportDirAck)
-#include "messages/MExportDirCancel.h"
-MESSAGE(MExportDirCancel)
-#include "messages/MExportDirDiscover.h"
-MESSAGE(MExportDirDiscover)
-#include "messages/MExportDirDiscoverAck.h"
-MESSAGE(MExportDirDiscoverAck)
-#include "messages/MExportDirFinish.h"
-MESSAGE(MExportDirFinish)
-#include "messages/MExportDirNotify.h"
-MESSAGE(MExportDirNotify)
-#include "messages/MExportDirNotifyAck.h"
-MESSAGE(MExportDirNotifyAck)
-#include "messages/MExportDirPrep.h"
-MESSAGE(MExportDirPrep)
-#include "messages/MExportDirPrepAck.h"
-MESSAGE(MExportDirPrepAck)
+// #include "messages/MCacheExpire.h"
+// MESSAGE(MCacheExpire)
+// #include "messages/MClientCapRelease.h"
+// MESSAGE(MClientCapRelease)
+// #include "messages/MClientCaps.h"
+// MESSAGE(MClientCaps)
+// #include "messages/MClientLease.h"
+// MESSAGE(MClientLease)
+// #include "messages/MClientReconnect.h"
+// MESSAGE(MClientReconnect)
+// #include "messages/MClientReply.h"
+// MESSAGE(MClientReply)
+// #include "messages/MClientRequest.h"
+// MESSAGE(MClientRequest)
+// #include "messages/MClientRequestForward.h"
+// MESSAGE(MClientRequestForward)
+// #include "messages/MClientSession.h"
+// MESSAGE(MClientSession)
+// #include "messages/MDentryLink.h"
+// MESSAGE(MDentryLink)
+// #include "messages/MDentryUnlink.h"
+// MESSAGE(MDentryUnlink)
+// #include "messages/MDirUpdate.h"
+// MESSAGE(MDirUpdate)
+// #include "messages/MDiscover.h"
+// MESSAGE(MDiscover)
+// #include "messages/MDiscoverReply.h"
+// MESSAGE(MDiscoverReply)
+// #include "messages/MExportCaps.h"
+// MESSAGE(MExportCaps)
+// #include "messages/MExportCapsAck.h"
+// MESSAGE(MExportCapsAck)
+// #include "messages/MExportDir.h"
+// MESSAGE(MExportDir)
+// #include "messages/MExportDirAck.h"
+// MESSAGE(MExportDirAck)
+// #include "messages/MExportDirCancel.h"
+// MESSAGE(MExportDirCancel)
+// #include "messages/MExportDirDiscover.h"
+// MESSAGE(MExportDirDiscover)
+// #include "messages/MExportDirDiscoverAck.h"
+// MESSAGE(MExportDirDiscoverAck)
+// #include "messages/MExportDirFinish.h"
+// MESSAGE(MExportDirFinish)
+// #include "messages/MExportDirNotify.h"
+// MESSAGE(MExportDirNotify)
+// #include "messages/MExportDirNotifyAck.h"
+// MESSAGE(MExportDirNotifyAck)
+// #include "messages/MExportDirPrep.h"
+// MESSAGE(MExportDirPrep)
+// #include "messages/MExportDirPrepAck.h"
+// MESSAGE(MExportDirPrepAck)
 #include "messages/MForward.h"
 MESSAGE(MForward)
 #include "messages/MHeartbeat.h"
 MESSAGE(MHeartbeat)
-#include "messages/MInodeFileCaps.h"
-MESSAGE(MInodeFileCaps)
-#include "messages/MLock.h"
-MESSAGE(MLock)
+// #include "messages/MInodeFileCaps.h"
+// MESSAGE(MInodeFileCaps)
+// #include "messages/MLock.h"
+// MESSAGE(MLock)
 #include "messages/MLog.h"
 MESSAGE(MLog)
 #include "messages/MLogAck.h"
 MESSAGE(MLogAck)
 #include "messages/MMDSBeacon.h"
 MESSAGE(MMDSBeacon)
-#include "messages/MMDSCacheRejoin.h"
-MESSAGE(MMDSCacheRejoin)
-#include "messages/MMDSFindIno.h"
-MESSAGE(MMDSFindIno)
-#include "messages/MMDSFindInoReply.h"
-MESSAGE(MMDSFindInoReply)
-#include "messages/MMDSFragmentNotify.h"
-MESSAGE(MMDSFragmentNotify)
-#include "messages/MMDSLoadTargets.h"
-MESSAGE(MMDSLoadTargets)
+// #include "messages/MMDSCacheRejoin.h"
+// MESSAGE(MMDSCacheRejoin)
+// #include "messages/MMDSFindIno.h"
+// MESSAGE(MMDSFindIno)
+// #include "messages/MMDSFindInoReply.h"
+// MESSAGE(MMDSFindInoReply)
+// #include "messages/MMDSFragmentNotify.h"
+// MESSAGE(MMDSFragmentNotify)
+// #include "messages/MMDSLoadTargets.h"
+// MESSAGE(MMDSLoadTargets)
 #include "messages/MMDSMap.h"
 MESSAGE_CONTEXT(MMDSMap)
-#include "messages/MMDSResolve.h"
-MESSAGE(MMDSResolve)
-#include "messages/MMDSResolveAck.h"
-MESSAGE(MMDSResolveAck)
-#include "messages/MMDSSlaveRequest.h"
-MESSAGE(MMDSSlaveRequest)
-#include "messages/MMDSTableRequest.h"
-MESSAGE(MMDSTableRequest)
+// #include "messages/MMDSResolve.h"
+// MESSAGE(MMDSResolve)
+// #include "messages/MMDSResolveAck.h"
+// MESSAGE(MMDSResolveAck)
+// #include "messages/MMDSSlaveRequest.h"
+// MESSAGE(MMDSSlaveRequest)
+// #include "messages/MMDSTableRequest.h"
+// MESSAGE(MMDSTableRequest)
 #include "messages/MMonCommand.h"
 MESSAGE(MMonCommand)
 #include "messages/MMonCommandAck.h"

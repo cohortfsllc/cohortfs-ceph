@@ -183,8 +183,6 @@ endif (HAVE_XIO)
 
 set(mds_files
   mds/MDSMap.cc
-  mds/inode_backtrace.cc
-  mds/mdstypes.cc
   )
 
 add_subdirectory(json_spirit)
@@ -510,46 +508,19 @@ target_link_libraries(ceph-osd osd os global
 install(TARGETS ceph-osd DESTINATION bin)
 
 # MDS
-if(${WITH_MDS})
+if(WITH_LIBMDS)
   set(mds_srcs
-    mds/Anchor.cc
-    mds/AnchorClient.cc
-    mds/AnchorServer.cc
-    mds/Capability.cc
-    mds/CDentry.cc
-    mds/CDir.cc
-    mds/CInode.cc
-    mds/Dumper.cc
-    mds/flock.cc
-    mds/InoTable.cc
-    mds/journal.cc
-    mds/Locker.cc
-    mds/locks.c
-    mds/LogEvent.cc
-    mds/MDBalancer.cc
-    mds/MDCache.cc
-    mds/MDLog.cc
-    mds/MDS.cc
-    mds/MDSTable.cc
-    mds/MDSTableClient.cc
-    mds/MDSTableServer.cc
-    mds/MDSUtility.cc
-    mds/MessageFactory.cc
-    mds/Migrator.cc
-    mds/Mutation.cc
-    mds/Resetter.cc
-    mds/Server.cc
-    mds/SessionMap.cc
-    osdc/Journaler.cc
-    $<TARGET_OBJECTS:heap_profiler_objs>
+    libmds/libmds.cc
     )
-  add_library(mds ${mds_srcs})
-  set(ceph_mds_srcs ceph_mds.cc $<TARGET_OBJECTS:osdc_objs>)
-  add_executable(ceph-mds ${ceph_mds_srcs})
-  target_link_libraries(ceph-mds mds ${CMAKE_DL_LIBS} global
-    ${ALLOC_LIBS} boost_system boost_thread)
-  install(TARGETS ceph-mds DESTINATION bin)
-endif(${WITH_MDS})
+    add_library(mds ${CEPH_SHARED} ${mds_srcs})
+    if(${ENABLE_SHARED})
+      set_target_properties(mds PROPERTIES OUTPUT_NAME ceph-mds VERSION "1.0.0"
+	SOVERSION "1" LINK_FLAGS "-Wl,-export-dynamic")
+      install(TARGETS mds DESTINATION lib)
+      install(FILES libmds/ceph_mds.h DESTINATION include)
+    endif(${ENABLE_SHARED})
+    target_link_libraries(mds PRIVATE common os dl ${EXTRALIBS})
+endif(WITH_LIBMDS)
 
 add_subdirectory(erasure-code)
 
@@ -668,50 +639,6 @@ install(PROGRAMS ${CMAKE_SOURCE_DIR}/src/ceph-create-keys
   ${CMAKE_SOURCE_DIR}/src/ceph-disk ${CMAKE_SOURCE_DIR}/src/ceph-disk-activate
   ${CMAKE_SOURCE_DIR}/src/ceph-disk-prepare ${CMAKE_SOURCE_DIR}/src/ceph-disk-udev
   ${CMAKE_BINARY_DIR}/mkcephfs DESTINATION sbin)
-
-# Filesystem client
-if(${WITH_CLIENT})
-  set(libclient_srcs
-    client/Client.cc
-    client/Dentry.cc
-    client/Inode.cc
-    client/MetaRequest.cc
-    client/MetaSession.cc
-    client/Trace.cc
-    client/MessageFactory.cc
-    $<TARGET_OBJECTS:osdc_objs>
-    )
-  add_library(client ${libclient_srcs})
-  target_link_libraries(client PRIVATE ${LIBEDIT_LIBS})
-  set(libcephfs_srcs libcephfs.cc)
-  add_library(cephfs SHARED ${libcephfs_srcs})
-  target_link_libraries(cephfs PRIVATE client global)
-  if(${ENABLE_SHARED})
-    set_target_properties(cephfs PROPERTIES OUTPUT_NAME cephfs VERSION 1.0.0 SOVERSION 1
-      LINK_FLAGS "-Wl,-export-dynamic")
-  endif(${ENABLE_SHARED})
-  install(TARGETS cephfs DESTINATION lib)
-  install(DIRECTORY "${CMAKE_SOURCE_DIR}/src/include/cephfs" DESTINATION include)
-  set(ceph_syn_srcs ceph_syn.cc client/SyntheticClient.cc)
-  add_executable(ceph-syn ${ceph_syn_srcs})
-  target_link_libraries(ceph-syn client global boost_system)
-
-  set(mount_ceph_srcs mount/mount.ceph.c)
-  add_executable(mount.ceph ${mount_ceph_srcs}
-    $<TARGET_OBJECTS:common_mountcephfs_objs>
-    $<TARGET_OBJECTS:rbd_mountcephfs_objs>)
-  target_link_libraries(mount.ceph keyutils)
-
-  install(TARGETS ceph-syn DESTINATION bin)
-  install(TARGETS mount.ceph DESTINATION sbin)
-
-  if(WITH_FUSE)
-    set(ceph_fuse_srcs ceph_fuse.cc client/fuse_ll.cc)
-    add_executable(ceph-fuse ${ceph_fuse_srcs})
-    target_link_libraries(ceph-fuse fuse client global boost_system)
-    install(TARGETS ceph-fuse DESTINATION bin)
-  endif(WITH_FUSE)
-endif(${WITH_CLIENT})
 
 if(${WITH_RBD})
   set(librbd_srcs librbd/Image.cc)
