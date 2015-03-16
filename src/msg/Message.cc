@@ -59,61 +59,11 @@ using namespace std;
 #include "messages/MMonSubscribe.h"
 #include "messages/MMonSubscribeAck.h"
 #include "messages/MMonGlobalID.h"
-#include "messages/MClientSession.h"
-#include "messages/MClientReconnect.h"
-#include "messages/MClientRequest.h"
-#include "messages/MClientRequestForward.h"
-#include "messages/MClientReply.h"
-#include "messages/MClientCaps.h"
-#include "messages/MClientCapRelease.h"
-#include "messages/MClientLease.h"
-
-#include "messages/MMDSSlaveRequest.h"
 
 #include "messages/MMDSMap.h"
 #include "messages/MMDSBeacon.h"
-#include "messages/MMDSLoadTargets.h"
-#include "messages/MMDSResolve.h"
-#include "messages/MMDSResolveAck.h"
-#include "messages/MMDSCacheRejoin.h"
-#include "messages/MMDSFindIno.h"
-#include "messages/MMDSFindInoReply.h"
-#include "messages/MMDSOpenIno.h"
-#include "messages/MMDSOpenInoReply.h"
 
-#include "messages/MDirUpdate.h"
-#include "messages/MDiscover.h"
-#include "messages/MDiscoverReply.h"
-
-#include "messages/MMDSFragmentNotify.h"
-
-#include "messages/MExportDirDiscover.h"
-#include "messages/MExportDirDiscoverAck.h"
-#include "messages/MExportDirCancel.h"
-#include "messages/MExportDirPrep.h"
-#include "messages/MExportDirPrepAck.h"
-#include "messages/MExportDir.h"
-#include "messages/MExportDirAck.h"
-#include "messages/MExportDirNotify.h"
-#include "messages/MExportDirNotifyAck.h"
-#include "messages/MExportDirFinish.h"
-
-#include "messages/MExportCaps.h"
-#include "messages/MExportCapsAck.h"
-
-
-#include "messages/MDentryUnlink.h"
-#include "messages/MDentryLink.h"
-
-#include "messages/MHeartbeat.h"
-
-#include "messages/MMDSTableRequest.h"
-
-//#include "messages/MInodeUpdate.h"
-#include "messages/MCacheExpire.h"
-#include "messages/MInodeFileCaps.h"
-
-#include "messages/MLock.h"
+//#include "messages/MHeartbeat.h"
 
 #include "messages/MWatchNotify.h"
 #include "messages/MTimeCheck.h"
@@ -361,35 +311,6 @@ Message *decode_message(CephContext *cct, int crcflags,
   case CEPH_MSG_MON_SUBSCRIBE_ACK:
     m = new MMonSubscribeAck;
     break;
-  case CEPH_MSG_CLIENT_SESSION:
-    m = new MClientSession;
-    break;
-  case CEPH_MSG_CLIENT_RECONNECT:
-    m = new MClientReconnect;
-    break;
-  case CEPH_MSG_CLIENT_REQUEST:
-    m = new MClientRequest;
-    break;
-  case CEPH_MSG_CLIENT_REQUEST_FORWARD:
-    m = new MClientRequestForward;
-    break;
-  case CEPH_MSG_CLIENT_REPLY:
-    m = new MClientReply;
-    break;
-  case CEPH_MSG_CLIENT_CAPS:
-    m = new MClientCaps;
-    break;
-  case CEPH_MSG_CLIENT_CAPRELEASE:
-    m = new MClientCapRelease;
-    break;
-  case CEPH_MSG_CLIENT_LEASE:
-    m = new MClientLease;
-    break;
-
-    // mds
-  case MSG_MDS_SLAVE_REQUEST:
-    m = new MMDSSlaveRequest;
-    break;
 
   case CEPH_MSG_MDS_MAP:
     m = new MMDSMap(cct);
@@ -397,128 +318,10 @@ Message *decode_message(CephContext *cct, int crcflags,
   case MSG_MDS_BEACON:
     m = new MMDSBeacon;
     break;
-  case MSG_MDS_OFFLOAD_TARGETS:
-    m = new MMDSLoadTargets;
-    break;
-  case MSG_MDS_RESOLVE:
-    m = new MMDSResolve;
-    break;
-  case MSG_MDS_RESOLVEACK:
-    m = new MMDSResolveAck;
-    break;
-  case MSG_MDS_CACHEREJOIN:
-    m = new MMDSCacheRejoin;
-	break;
-	/*
-  case MSG_MDS_CACHEREJOINACK:
-	m = new MMDSCacheRejoinAck;
-	break;
-	*/
 
-  case MSG_MDS_DIRUPDATE:
-    m = new MDirUpdate();
-    break;
-
-  case MSG_MDS_DISCOVER:
-    m = new MDiscover();
-    break;
-  case MSG_MDS_DISCOVERREPLY:
-    m = new MDiscoverReply();
-    break;
-
-  case MSG_MDS_FINDINO:
-    m = new MMDSFindIno;
-    break;
-  case MSG_MDS_FINDINOREPLY:
-    m = new MMDSFindInoReply;
-    break;
-
-  case MSG_MDS_OPENINO:
-    m = new MMDSOpenIno;
-    break;
-  case MSG_MDS_OPENINOREPLY:
-    m = new MMDSOpenInoReply;
-    break;
-
-  case MSG_MDS_FRAGMENTNOTIFY:
-    m = new MMDSFragmentNotify;
-    break;
-
-  case MSG_MDS_EXPORTDIRDISCOVER:
-    m = new MExportDirDiscover();
-    break;
-  case MSG_MDS_EXPORTDIRDISCOVERACK:
-    m = new MExportDirDiscoverAck();
-    break;
-  case MSG_MDS_EXPORTDIRCANCEL:
-    m = new MExportDirCancel();
-    break;
-
-  case MSG_MDS_EXPORTDIR:
-    m = new MExportDir;
-    break;
-  case MSG_MDS_EXPORTDIRACK:
-    m = new MExportDirAck;
-    break;
-  case MSG_MDS_EXPORTDIRFINISH:
-    m = new MExportDirFinish;
-    break;
-
-  case MSG_MDS_EXPORTDIRNOTIFY:
-    m = new MExportDirNotify();
-    break;
-
-  case MSG_MDS_EXPORTDIRNOTIFYACK:
-    m = new MExportDirNotifyAck();
-    break;
-
-  case MSG_MDS_EXPORTDIRPREP:
-    m = new MExportDirPrep();
-    break;
-
-  case MSG_MDS_EXPORTDIRPREPACK:
-    m = new MExportDirPrepAck();
-    break;
-
-  case MSG_MDS_EXPORTCAPS:
-    m = new MExportCaps;
-    break;
-  case MSG_MDS_EXPORTCAPSACK:
-    m = new MExportCapsAck;
-    break;
-
-
-  case MSG_MDS_DENTRYUNLINK:
-    m = new MDentryUnlink;
-    break;
-  case MSG_MDS_DENTRYLINK:
-    m = new MDentryLink;
-    break;
-
-  case MSG_MDS_HEARTBEAT:
-    m = new MHeartbeat();
-    break;
-
-  case MSG_MDS_CACHEEXPIRE:
-    m = new MCacheExpire();
-    break;
-
-  case MSG_MDS_TABLE_REQUEST:
-    m = new MMDSTableRequest;
-    break;
-
-	/*  case MSG_MDS_INODEUPDATE:
-    m = new MInodeUpdate();
-    break;
-	*/
-
-  case MSG_MDS_INODEFILECAPS:
-    m = new MInodeFileCaps();
-    break;
-
-  case MSG_MDS_LOCK:
-    m = new MLock();
-    break;
+//  case MSG_MDS_HEARTBEAT:
+//    m = new MHeartbeat();
+//    break;
 
   case MSG_TIMECHECK:
     m = new MTimeCheck();
