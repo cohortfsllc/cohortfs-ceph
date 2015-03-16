@@ -117,7 +117,6 @@ namespace cohort {
       OSD* osd;
       ceph::timespan worker_timeout;
       uint32_t start_thresh;
-      uint32_t n_active;
       uint32_t thrd_lowat;
       uint32_t thrd_hiwat;
       uint32_t flags;
@@ -168,12 +167,10 @@ namespace cohort {
 	      if (size > size_max)
 		size_max = size;
 	      ++n_reqs;
-	      ++n_active;
               lane_lk.unlock();
 	      /* dequeue op */
 	      dequeue_op_func(osd, &op);
               lane_lk.lock();
-              --n_active;
 	      /* try again if we did any work */
 	      if (n_reqs) {
 		if (size_max > start_thresh) {
@@ -212,11 +209,9 @@ namespace cohort {
 	    if (likely(!! worker->mailbox)) {
 	      OpRequest* op = nullptr;
 	      std::swap(worker->mailbox, op);
-	      ++n_active;
               lane_lk.unlock();
 	      dequeue_op_func(osd, op);
 	      lane_lk.lock();
-	      --n_active;
 	    }
 	  }
 	  /* above thrd_lowat */
@@ -252,7 +247,6 @@ namespace cohort {
 	lane.flags = Lane::FLAG_NONE;
 	lane.op_q = this;
 	lane.osd = osd;
-	lane.n_active = 0;
 	lane.dequeue_op_func = opf;
 	lane.exit_func = ef;
 	lane.thrd_lowat = thrd_lowat;
