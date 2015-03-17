@@ -2,7 +2,6 @@
 // vim: ts=8 sw=2 smarttab
 #include "gtest/gtest.h"
 
-#include "mds/mdstypes.h"
 #include "include/buffer.h"
 #include "include/rados/librados.h"
 #include "include/rados/librados.hpp"

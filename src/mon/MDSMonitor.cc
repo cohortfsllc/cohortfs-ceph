@@ -38,8 +38,6 @@
 #include "common/cmdparse.h"
 #include "include/str_list.h"
 
-#include "mds/mdstypes.h"
-
 #define dout_subsys ceph_subsys_mon
 #undef dout_prefix
 #define dout_prefix _prefix(_dout, mon, mdsmap)
@@ -680,14 +678,13 @@ bool MDSMonitor::prepare_command(MMonCommand *m, unique_lock& l)
     }
     string val;
     string interr;
-    int64_t n = 0;
     if (!cmd_getval(mon->cct, cmdmap, "val", val))
       goto out;
     // we got a string.	 see if it contains an int.
-    n = strict_strtoll(val.c_str(), 10, &interr);
+    int64_t n = strict_strtoll(val.c_str(), 10, &interr);
     if (0 /* var == "max_mds" */) {
     } else {
-      ss << "unknown variable " << var;
+      ss << "unknown variable so ignoring " << n << var;
       goto out;
     }
     r = 0;
