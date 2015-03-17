@@ -1644,8 +1644,8 @@ namespace OSDC {
       m = _prepare_osd_subop(subop);
     }
 
-    ldout(cct, 15) << "_send_subop " << subop.tid << " to osd."
-		   << subop.session->osd << dendl;
+    ldout(cct, 15) << __func__ << " " << subop.tid << " to osd."
+		   << subop.session->osd << " op " << subop.ops[0] << dendl;
 
     ConnectionRef con = subop.session->con;
     assert(con);

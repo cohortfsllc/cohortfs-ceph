@@ -280,6 +280,9 @@ void StripedPlacer::add_data(const uint64_t off, bufferlist& in,
     if ((curoff + 1) % stripe_unit)
       // Point at end of last stride
       curoff += (stripe_unit - ((curoff + 1) % stripe_unit));
+    if (curoff < stripe_unit)
+      // This stride is empty
+      break;
     curoff -= stripe_unit;
     stride += stripe_width - 1;
     stride %= stripe_width;
