@@ -149,9 +149,9 @@ namespace cohort {
 	  Bands::HIGH, Bands::BASE, Bands::HIGH
 	};
 
+        lane_lk.lock();
 	for (;;) {
 	  uint32_t size, size_max = 0;
-	  lane_lk.lock();
 	  for (unsigned int ix = 0; ix < cycle.size(); ++ix) {
 	    Band& band = bands[int(cycle[ix])];
 	    size = band.q.size();
@@ -208,8 +208,8 @@ namespace cohort {
 	    }
 	  }
 	  /* above thrd_lowat */
-	  lane_lk.unlock();
 	} /* for (inf) */
+        lane_lk.unlock();
 
 	/* allow OSDVol to clean up */
 	exit_func(osd);
