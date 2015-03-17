@@ -81,7 +81,7 @@ namespace cohort {
       typedef bi::list<Worker,
 		       bi::member_hook<Worker,
 				       bi::list_member_hook<link_mode>,
-				       &Worker::worker_hook>,
+				       &Worker::idle_hook>,
 		       bi::constant_time_size<true>> IdleQueue;
 
       Worker() : mailbox(nullptr) {}
@@ -105,7 +105,7 @@ namespace cohort {
       Band bands[2]; // band 0 is baseline, 1 is urgent
       LK mtx;
       WorkerQueue workers;
-      WorkerQueue idle;
+      IdleQueue idle;
       op_func dequeue_op_func;
       thr_exit_func exit_func;
       OpQueue* op_q;
@@ -183,7 +183,8 @@ namespace cohort {
 	  wk_lk.unlock();
 	  lane_lk.lock();
 	  /* remove from idle */
-	  idle.erase(idle.s_iterator_to(*worker));
+          if (worker->idle_hook.is_linked())
+            idle.erase(idle.s_iterator_to(*worker));
 	  /* conditionally exit if wait timed out */
 	  if (r == std::cv_status::timeout) {
 	    /* cond trim workers */
