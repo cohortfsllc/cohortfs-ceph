@@ -64,11 +64,8 @@ namespace cohort {
     };
 
   private:
-    struct Lane;
-
     struct Worker {
       std::thread thread;
-      Lane& lane;
       bi::list_member_hook<link_mode> worker_hook;
       bi::list_member_hook<link_mode> idle_hook;
       std::mutex mtx;
@@ -87,9 +84,7 @@ namespace cohort {
 				       &Worker::worker_hook>,
 		       bi::constant_time_size<true>> IdleQueue;
 
-      Worker(Lane& _l)
-	: lane(_l), mailbox(nullptr) {
-      }
+      Worker() : mailbox(nullptr) {}
     }; /* Worker */
 
     typedef typename Worker::Queue WorkerQueue;
@@ -132,7 +127,7 @@ namespace cohort {
 	if (! (flags & Lane::FLAG_LOCKED))
 	  lane_lk.lock();
 	if (workers.size() <= thrd_hiwat) {
-	  Worker* worker = new Worker(*this);
+	  Worker* worker = new Worker();
 	  workers.push_back(*worker);
 	  auto fn = [this, worker]() {
 	    this->run(worker);
