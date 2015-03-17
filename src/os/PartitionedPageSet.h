@@ -119,17 +119,17 @@ class PartitionedPageSet {
   void encode(bufferlist &bl) const {
     uint32_t n = partitions.size();
     ::encode(n, bl);
-    for (const auto &p : partitions)
-      p.encode(bl);
     ::encode(pages_per_stripe, bl);
+    for (const auto &part : partitions)
+      part.encode(bl);
   }
   void decode(bufferlist::iterator &p) {
     uint32_t n;
     ::decode(n, p);
-    partitions.resize(n);
-    for (uint32_t i = 0; i < n; i++)
-      partitions[n].decode(p);
     ::decode(pages_per_stripe, p);
+    partitions.resize(n);
+    for (auto &part : partitions)
+      part.decode(p);
   }
 };
 

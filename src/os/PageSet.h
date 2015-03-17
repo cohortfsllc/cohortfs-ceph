@@ -170,7 +170,8 @@ public:
       position -= c;
       length -= c;
     }
-    assert(out == range_end); // make sure we sized the vector correctly
+    // make sure we sized the vector correctly
+    assert(out == typename page_vector::reverse_iterator(range_begin));
   }
 
   // return all allocated pages that intersect the range [offset,length)
