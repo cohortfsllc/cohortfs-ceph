@@ -266,13 +266,6 @@ namespace cohort {
       /* don't accept work if shutting down */
       if (lane.flags & Lane::FLAG_SHUTDOWN)
 	return false;
-      switch (p) {
-      case Pos::BACK:
-	band.q.push_back(op);
-	break;
-      default:
-	band.q.push_front(op);
-      };
       /* if workers idle, hand off */
       if (lane.idle.size()) {
 	Worker& worker = lane.idle.back();
@@ -283,10 +276,13 @@ namespace cohort {
 	worker.cv.notify_one();
 	return true;
       }
+      if (p == Pos::BACK)
+	band.q.push_back(op);
+      else
+	band.q.push_front(op);
       /* ensure at least one worker */
-      if (! lane.workers.size()) {
+      if (lane.workers.empty())
 	lane.spawn_worker(Lane::FLAG_LOCKED); /* ignore hiwat */
-      }
       return true;
     } /* enqueue */
 
