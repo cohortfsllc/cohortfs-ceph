@@ -119,7 +119,7 @@ monaddr=
 dofsmount=1
 dofsumount=0
 verbose=0
-skiposd=0
+skip=
 
 while echo $1 | grep -q '^-'; do     # FIXME: why not '^-'?
 case $1 in
@@ -132,8 +132,11 @@ case $1 in
     --novalgrind)
 	    dovalgrind=0
 	    ;;
-    --skiposd)
-	    skiposd=1
+    --skip)
+	    [ -z "$2" ] && usage_exit
+	    options="$options $1"
+	    shift
+	    skip=$1
 	    ;;
     --allhosts | -a)
 	    allhosts=1;
@@ -203,11 +206,12 @@ for name in $what; do
     num=$id
     name="$type.$id"
 
-    if [ "$skiposd" = "1" ]; then
-	    if [ "$type" = "osd" ]; then
-		    continue
+    for skiptype in $skip; do
+	    if [ "$type" = "$skiptype" ]; then
+		    echo "Skipping type $skiptype"
+		    continue 2
 	    fi
-    fi
+    done
 
     check_host || continue
 
