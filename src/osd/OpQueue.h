@@ -209,14 +209,14 @@ namespace cohort {
 	  }
 	  /* above thrd_lowat */
 	} /* for (inf) */
+        graveyard.swap(worker->thread);
         lane_lk.unlock();
 
 	/* allow OSDVol to clean up */
 	exit_func(osd);
 
-        if (graveyard.joinable()) // join previous thread
-          graveyard.join();
-        graveyard.swap(worker->thread);
+        if (worker->thread.joinable()) // join previous thread
+          worker->thread.join();
 	delete worker;
 	/* thread exit */
       } /* run */
