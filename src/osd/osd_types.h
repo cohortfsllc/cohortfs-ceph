@@ -40,7 +40,6 @@
 #include "common/oid.h"
 #include "Watch.h"
 #include "OpRequest.h"
-#include "OpQueue.h"
 #include "include/cmp.h"
 
 #define CEPH_OSD_ONDISK_MAGIC "ceph osd volume v026"
