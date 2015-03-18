@@ -3268,7 +3268,7 @@ int Client::mount(const std::string &mount_root)
     ml.unlock();
   }
 
-  tick(); // start tick
+  timer.add_event(0ns, &Client::tick, this); // start tick
   cl.lock();
   VolumeRef volume(mdsmap->get_metadata_volume(objecter));
 
