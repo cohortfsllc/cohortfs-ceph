@@ -2203,6 +2203,7 @@ void OSDVol::complete_read_ctx(int result, OpContext* ctx)
   }
 
   reply->add_flags(CEPH_OSD_FLAG_ACK | CEPH_OSD_FLAG_ONDISK);
+  reply->libosd_context = m->libosd_context;
   osd->send_message_osd_client(reply, m->get_connection());
   close_op_ctx(ctx, 0);
 } /* complete_read_ctx */
@@ -2352,6 +2353,7 @@ void OSDVol::eval_mutation(Mutation* mutation,
       reply->trace.init("MOSDOpReply", msgr->get_trace_endpoint(), &trace);
     }
     assert(entity_name_t::TYPE_OSD != m->get_connection()->peer_type);
+    reply->libosd_context = m->libosd_context;
     osd->send_message_osd_client(reply, m->get_connection());
   }
 }

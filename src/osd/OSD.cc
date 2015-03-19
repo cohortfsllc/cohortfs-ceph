@@ -2953,6 +2953,7 @@ void OSDService::reply_op_error(OpRequest* op, int err, eversion_t v,
   reply->trace.init("MOSDOpReply", msgr->get_trace_endpoint(), &op->trace);
 
   reply->set_reply_versions(v, uv);
+  reply->libosd_context = m->libosd_context;
   msgr->send_message(reply, m->get_connection());
 }
 

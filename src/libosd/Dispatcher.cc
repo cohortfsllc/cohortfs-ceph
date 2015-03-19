@@ -23,26 +23,12 @@ Dispatcher::Dispatcher(CephContext *cct, Messenger *ms, ConnectionRef conn)
 {
 }
 
-void Dispatcher::shutdown()
-{
-  // drop any outstanding requests
-  tid_lock.lock();
-  for (cb_map::iterator i = callbacks.begin(); i != callbacks.end(); ++i) {
-    i->second->on_failure(-ENODEV);
-    delete i->second;
-  }
-  callbacks.clear();
-  tid_lock.unlock();
-}
-
 void Dispatcher::send_request(Message *m, OnReply *c)
 {
-  // register tid/callback
-  tid_lock.lock();
   const ceph_tid_t tid = next_tid++;
   m->set_tid(tid);
-  callbacks.insert(cb_map::value_type(tid, c));
-  tid_lock.unlock();
+
+  m->libosd_context = c;
 
   // send to server messenger
   ms->send_message(m, conn.get());
@@ -50,29 +36,16 @@ void Dispatcher::send_request(Message *m, OnReply *c)
 
 bool Dispatcher::ms_dispatch(Message *m)
 {
-  const ceph_tid_t tid = m->get_tid();
-  tid_lock.lock();
-  cb_map::iterator i = callbacks.find(tid);
-  if (i == callbacks.end()) {
-    tid_lock.unlock();
-    // drop messages that aren't replies
-    ldout(cct, 10) << "ms_dispatch dropping " << *m << dendl;
-    return false;
-  }
-
   ldout(cct, 10) << "ms_dispatch " << *m << dendl;
-  OnReply *c = i->second;
 
-  bool last_reply = c == nullptr || c->is_last_reply(m);
-  if (last_reply)
-    callbacks.erase(i);
-  tid_lock.unlock();
+  assert(m->libosd_context);
+  OnReply *c = reinterpret_cast<OnReply*>(m->libosd_context);
+  if (c == nullptr)
+    return false;
 
-  if (c) {
-    c->on_reply(m);
-    if (last_reply)
-      delete c;
-  }
+  c->on_reply(m);
+  if (c->is_last_reply(m))
+    delete c;
   return true;
 }
 
