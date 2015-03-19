@@ -277,7 +277,6 @@ void LibOSD::on_osd_state(int state, epoch_t epoch)
       // make osd_shutdown calback only if we haven't called libosd_shutdown()
       if (!osdmap.shutdown && callbacks && callbacks->osd_shutdown)
 	finisher->queue(new C_StateCb(callbacks->osd_shutdown, this, user));
-      dispatcher->shutdown();
 
       ms_client->shutdown();
       ms_server->shutdown();
