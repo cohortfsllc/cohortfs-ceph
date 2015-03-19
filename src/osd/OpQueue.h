@@ -114,7 +114,7 @@ namespace cohort {
 	unique_lock lane_lk(mtx, std::defer_lock);
 	if (! (flags & Lane::FLAG_LOCKED))
 	  lane_lk.lock();
-	if (workers.size() <= thrd_hiwat) {
+	if (workers.size() < thrd_hiwat) {
 	  Worker* worker = new Worker();
 	  workers.push_back(*worker);
 	  auto fn = [this, worker]() {
