@@ -90,19 +90,12 @@ namespace cohort {
     typedef typename Worker::Queue WorkerQueue;
     typedef typename Worker::IdleQueue IdleQueue;
 
-    struct Band
-    {
-      OpRequest::Queue q;
-      CACHE_PAD(0);
-    };
-
     struct Lane {
-
       static constexpr uint32_t FLAG_NONE = 0x0000;
       static constexpr uint32_t FLAG_SHUTDOWN = 0x0001;
       static constexpr uint32_t FLAG_LOCKED = 0x0002;
 
-      Band bands[2]; // band 0 is baseline, 1 is urgent
+      OpRequest::Queue bands[2]; // band 0 is baseline, 1 is urgent
       LK mtx;
       WorkerQueue workers;
       IdleQueue idle;
@@ -153,11 +146,11 @@ namespace cohort {
 	for (;;) {
 	  uint32_t size, size_max = 0;
 	  for (unsigned int ix = 0; ix < cycle.size(); ++ix) {
-	    Band& band = bands[int(cycle[ix])];
-	    size = band.q.size();
+	    OpRequest::Queue& band = bands[int(cycle[ix])];
+	    size = band.size();
 	    if (size) {
-	      OpRequest& op = band.q.back();
-	      band.q.pop_back(); /* dequeued */
+	      OpRequest& op = band.front();
+	      band.pop_front(); /* dequeued */
 	      if (size > size_max)
 		size_max = size;
               lane_lk.unlock();
@@ -261,7 +254,6 @@ namespace cohort {
 
     bool enqueue(OpRequest& op, enum Bands b, enum Pos p) {
       Lane& lane = choose_lane();
-      Band& band = lane.bands[int(b)];
       unique_lock lane_lk(lane.mtx);
       /* don't accept work if shutting down */
       if (lane.flags & Lane::FLAG_SHUTDOWN)
@@ -276,10 +268,12 @@ namespace cohort {
 	worker.cv.notify_one();
 	return true;
       }
+
+      OpRequest::Queue& band = lane.bands[int(b)];
       if (p == Pos::BACK)
-	band.q.push_back(op);
+	band.push_back(op);
       else
-	band.q.push_front(op);
+	band.push_front(op);
       /* ensure at least one worker */
       if (lane.workers.empty())
 	lane.spawn_worker(Lane::FLAG_LOCKED); /* ignore hiwat */
