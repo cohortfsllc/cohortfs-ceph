@@ -190,6 +190,8 @@ public:
 				     bi::list_member_hook<>,
 				     &Message::dispatch_q > > Queue;
 
+  void *libosd_context; // for libosd completions in constant time
+
 protected:
   CompletionHook* completion_hook; // owned by Messenger
 
@@ -214,6 +216,7 @@ public:
     : connection(NULL),
       magic(0),
       special_handling(0),
+      libosd_context(NULL),
       completion_hook(NULL),
       byte_throttler(NULL),
       msg_throttler(NULL),
@@ -224,6 +227,7 @@ public:
   Message(int t, int version=1, int compat_version=0)
     : connection(NULL),
       magic(0),
+      libosd_context(NULL),
       completion_hook(NULL),
       byte_throttler(NULL),
       msg_throttler(NULL),

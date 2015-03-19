@@ -4,8 +4,8 @@
 #ifndef CEPH_LIBOSD_DISPATCHER_H
 #define CEPH_LIBOSD_DISPATCHER_H
 
+#include <atomic>
 #include "msg/Dispatcher.h"
-#include "include/Spinlock.h"
 
 class CephContext;
 class OSD;
@@ -28,18 +28,12 @@ public:
 private:
   Messenger *ms;
   ConnectionRef conn;
-
-  Spinlock tid_lock; // protects next_tid and callback map
-  ceph_tid_t next_tid;
-  typedef map<ceph_tid_t, OnReply*> cb_map;
-  cb_map callbacks;
+  std::atomic<ceph_tid_t> next_tid;
 
 public:
   Dispatcher(CephContext *cct, Messenger *ms, ConnectionRef conn);
 
   void send_request(Message *m, OnReply *c);
-
-  void shutdown();
 
   bool ms_dispatch(Message *m);
 
