@@ -113,6 +113,33 @@ namespace {
       }
     }
 
+  namespace sq = cohort::slock_queue;
+  typedef sq::Object<size_t> object_t;
+  typedef typename sq::Queue<size_t> slock_queue_t;
+  std::vector<object_t> ovec2;
+
+  void slock_consumer_func(slock_queue_t* queue)
+  {
+    size_t count = COUNT;
+    object_t* obj;
+
+    while (count > 0) {
+      obj = queue->dequeue();
+      if (obj) {
+	--count;
+      }
+    }
+  }
+
+  void slock_producer_func(slock_queue_t* queue)
+  {
+    size_t count = COUNT;
+    while (count > 0) {
+      if (queue->enqueue(&(ovec2[count]))) {
+	--count;
+      }
+    }
+  }
 
 } /* namespace */
 
@@ -176,6 +203,41 @@ TEST(QUEUES, MPMC_OBJECT_1024)
 	    << ((long double) COUNT / seconds) / 1000000
 	    << " million enqueue/dequeue pairs per second."
 	    << std::endl;
+}
+
+TEST(QUEUES, OVCLEAR)
+{
+  ovec.clear();
+}
+
+TEST(QUEUES, MAKE_SLOCK_OBJECTS)
+{
+  ovec2.reserve(COUNT); /* yikes */
+  for (int ix = 0; ix < COUNT; ++ix) {
+    ovec2.emplace_back(object_t(ix));
+  }
+}
+
+TEST(QUEUES, MPMC_SLOCK_UNBOUNDED)
+{
+  slock_queue_t queue;
+  long double seconds =
+    run_test(std::bind(&slock_producer_func, &queue),
+	     std::bind(&slock_consumer_func, &queue));
+
+  std::cout << "MPMC slock unbounded queue completed "
+	    << COUNT
+	    << " iterations in "
+	    << seconds
+	    << " seconds. "
+	    << ((long double) COUNT / seconds) / 1000000
+	    << " million enqueue/dequeue pairs per second."
+	    << std::endl;
+}
+
+TEST(QUEUES, OV2CLEAR)
+{
+  ovec2.clear();
 }
 
 int main(int argc, char *argv[])
