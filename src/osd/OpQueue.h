@@ -125,19 +125,10 @@ namespace cohort {
       }
 
       void run(Worker* worker) {
-
-	/* lane lock */
-	unique_lock lane_lk(mtx, std::defer_lock);
-
-	/* worker sleep lock */
-	std::unique_lock<std::mutex>
-	  wk_lk(worker->mtx, std::defer_lock);
-
 	std::array<enum Bands, 3> cycle = {
 	  Bands::HIGH, Bands::BASE, Bands::HIGH
 	};
-
-        lane_lk.lock();
+	unique_lock lane_lk(mtx);
 	for (;;) {
 	  uint32_t size, size_max = 0;
 	  for (unsigned int ix = 0; ix < cycle.size(); ++ix) {
@@ -164,11 +155,17 @@ namespace cohort {
 	  /* size_max == 0 */
 	  idle.push_back(*worker);
 	  lane_lk.unlock();
-	  ceph::mono_time timeout =
-	    ceph::mono_clock::now() + worker_timeout;
-	  wk_lk.lock();
-	  std::cv_status r = worker->cv.wait_until(wk_lk, timeout);
-	  wk_lk.unlock();
+
+	  std::cv_status r = std::cv_status::no_timeout;
+          OpRequest* mailbox = nullptr;
+          {
+            std::unique_lock<std::mutex> wk_lk(worker->mtx);
+            // don't sleep if enqueue raced with mutex
+            if (worker->mailbox == nullptr)
+              r = worker->cv.wait_for(wk_lk, worker_timeout);
+            std::swap(mailbox, worker->mailbox);
+          }
+
 	  lane_lk.lock();
 	  /* remove from idle */
           if (worker->idle_hook.is_linked())
@@ -176,27 +173,22 @@ namespace cohort {
 	  /* conditionally exit if wait timed out */
 	  if (r == std::cv_status::timeout) {
 	    /* cond trim workers */
-	    if (workers.size() > thrd_lowat) {
-	      workers.erase(workers.s_iterator_to(*worker));
+	    if (workers.size() > thrd_lowat)
 	      break;
-	    }
 	  } else {
 	    /* signalled */
-	    if (flags & FLAG_SHUTDOWN) {
-	      workers.erase(workers.s_iterator_to(*worker));
+	    if (flags & FLAG_SHUTDOWN)
 	      break;
-	    }
 	    /* !shutting down */
-	    if (likely(!! worker->mailbox)) {
-	      OpRequest* op = nullptr;
-	      std::swap(worker->mailbox, op);
+	    if (likely(!!mailbox)) {
               lane_lk.unlock();
-	      dequeue_op_func(osd, op);
+	      dequeue_op_func(osd, mailbox);
 	      lane_lk.lock();
 	    }
 	  }
 	  /* above thrd_lowat */
 	} /* for (inf) */
+        workers.erase(workers.s_iterator_to(*worker));
         graveyard.swap(worker->thread);
         lane_lk.unlock();
 
