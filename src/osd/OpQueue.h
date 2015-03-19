@@ -101,7 +101,6 @@ namespace cohort {
       IdleQueue idle;
       op_func dequeue_op_func;
       thr_exit_func exit_func;
-      OpQueue* op_q;
       OSD* osd;
       ceph::timespan worker_timeout;
       uint32_t start_thresh;
@@ -110,10 +109,6 @@ namespace cohort {
       uint32_t flags;
       std::thread graveyard; // where exiting workers go to die
       CACHE_PAD(0);
-
-      Lane(OpQueue* _q=NULL)
-	: op_q(_q)
-      {}
 
       void spawn_worker(uint32_t flags) {
 	unique_lock lane_lk(mtx, std::defer_lock);
@@ -231,7 +226,6 @@ namespace cohort {
       for (int ix = 0; ix < n_lanes; ++ix) {
 	Lane& lane = qlane[ix];
 	lane.flags = Lane::FLAG_NONE;
-	lane.op_q = this;
 	lane.osd = osd;
 	lane.dequeue_op_func = opf;
 	lane.exit_func = ef;
