@@ -3015,7 +3015,7 @@ void OSD::handle_op(OpRequest* op, unique_lock& osd_lk)
 
   /* enqueue on multi_wq, defers vol resolution */
   op->get(); // explicit ref for queue
-  multi_wq.enqueue(*op, band, MultiQueue::Pos::BACK);
+  multi_wq.enqueue(*op, band);
 } /* handle_op */
 
 void OSD::static_dequeue_op(OSD* osd, OpRequest* op)
