@@ -244,7 +244,7 @@ void OSDVol::requeue_op(OpRequest* op)
    * been taken at the start of the wait cycle */
 
   /* enqueue on multi_wq, defers vol resolution */
-  osd->osd->multi_wq.enqueue(*op, band, MultiQueue::Pos::FRONT);
+  osd->osd->multi_wq.enqueue(*op, band);
 }
 
 void OSDVol::requeue_ops(OpRequest::Queue& q)
