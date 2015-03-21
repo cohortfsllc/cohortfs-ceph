@@ -511,15 +511,16 @@ install(TARGETS ceph-osd DESTINATION bin)
 if(WITH_LIBMDS)
   set(mds_srcs
     libmds/libmds.cc
+    mds/MDS.cc
     )
-    add_library(mds ${CEPH_SHARED} ${mds_srcs})
-    if(${ENABLE_SHARED})
-      set_target_properties(mds PROPERTIES OUTPUT_NAME ceph-mds VERSION "1.0.0"
-	SOVERSION "1" LINK_FLAGS "-Wl,-export-dynamic")
-      install(TARGETS mds DESTINATION lib)
-      install(FILES libmds/ceph_mds.h DESTINATION include)
-    endif(${ENABLE_SHARED})
-    target_link_libraries(mds PRIVATE common os dl ${EXTRALIBS})
+  add_library(mds ${CEPH_SHARED} ${mds_srcs})
+  if(${ENABLE_SHARED})
+    set_target_properties(mds PROPERTIES OUTPUT_NAME ceph-mds VERSION "1.0.0"
+      SOVERSION "1" LINK_FLAGS "-Wl,-export-dynamic")
+    install(TARGETS mds DESTINATION lib)
+  endif(${ENABLE_SHARED})
+  target_link_libraries(mds PRIVATE common os dl ${EXTRALIBS})
+  install(FILES libmds/ceph_mds.h DESTINATION include/cephfs)
 endif(WITH_LIBMDS)
 
 add_subdirectory(erasure-code)
