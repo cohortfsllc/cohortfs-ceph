@@ -210,7 +210,21 @@ namespace cohort {
 
       /* we don't have a queue front anymore, tough
        * nuggies, requeuers */
-      band.queue.enqueue(&op);
+      int ix = 0;
+      while (! band.queue.enqueue(&op)) {
+	if (++ix < 10)
+	  continue;
+	if (ix < 100) {
+	  sched_yield();
+	  continue;
+	}
+	{
+	  std::mutex mtx;
+	  std::condition_variable cv;
+	  std::unique_lock<std::mutex> lk(mtx);
+	  cv.wait_for(lk, 20ms);
+	}
+      }
       return true;
     } /* enqueue */
 
