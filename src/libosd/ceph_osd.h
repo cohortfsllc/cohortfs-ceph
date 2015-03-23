@@ -27,13 +27,6 @@ typedef void (*libosd_io_completion_fn)(int result, uint64_t length,
 					int flags, void *user);
 
 #ifdef __cplusplus
-class CephContext;
-namespace ceph {
-  namespace osd {
-    int context_create(int id, const char *config, const char *cluster,
-		       CephContext** cct);
-  }
-}
 
 /**
  * The abstract C++ libosd interface, whose member functions take
@@ -43,8 +36,7 @@ namespace ceph {
  */
 struct libosd {
   const int whoami; /**< osd instance id */
-  CephContext* cct;
-  libosd(int name) : whoami(name), cct(nullptr) {}
+  libosd(int name) : whoami(name) {}
 
   /**
    * Blocks until the osd shuts down.
