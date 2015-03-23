@@ -31,7 +31,6 @@
 #include "OSDMap.h"
 #include "Watch.h"
 #include "OpRequest.h"
-#include "OpQueue.h"
 #include "os/ObjectStore.h"
 #include "msg/Messenger.h"
 #include "common/cmdparse.h"
@@ -60,9 +59,6 @@ class MOSDOp;
 class OSDVol;
 
 typedef boost::intrusive_ptr<OSDVol> OSDVolRef;
-
-/* visible in OSD.h */
-typedef cohort::OpQueue MultiQueue;
 
 /** OSDVol - Volume abstraction in the OSD
  */

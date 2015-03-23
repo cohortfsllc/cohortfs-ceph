@@ -19,6 +19,7 @@
 #include "common/config.h"
 #include "common/cmdparse.h"
 #include "OSD.h"
+#include "OpQueue.h"
 #include "OpRequest.h"
 #include "mon/MonClient.h"
 
@@ -234,17 +235,17 @@ void OSDVol::read_info()
 
 void OSDVol::requeue_op(OpRequest* op)
 {
-  MultiQueue::Bands band;
+  cohort::OpQueue::Bands band;
   if (op->get_req()->get_priority() > CEPH_MSG_PRIO_LOW)
-    band = MultiQueue::Bands::HIGH;
+    band = cohort::OpQueue::Bands::HIGH;
   else
-    band = MultiQueue::Bands::BASE;
+    band = cohort::OpQueue::Bands::BASE;
 
   /* XXX we take no ref on op because we assert it to have
    * been taken at the start of the wait cycle */
 
   /* enqueue on multi_wq, defers vol resolution */
-  osd->osd->multi_wq.enqueue(*op, band);
+  osd->osd->multi_wq->enqueue(*op, band);
 }
 
 void OSDVol::requeue_ops(OpRequest::Queue& q)
