@@ -5,6 +5,7 @@
 #include <mutex>
 #include "ceph_osd.h"
 
+#include "Context.h"
 #include "Dispatcher.h"
 #include "Messengers.h"
 #include "Objecter.h"
@@ -39,6 +40,9 @@ namespace osd
 {
 
 class LibOSD : private Objecter, public libosd, private OSDStateObserver {
+ public:
+  CephContext *cct;
+ private:
   libosd_callbacks *callbacks;
   void *user;
   Finisher *finisher; // thread to send callbacks to user
@@ -102,6 +106,7 @@ public:
 
 LibOSD::LibOSD(int whoami)
   : libosd(whoami),
+    cct(nullptr),
     callbacks(nullptr),
     user(nullptr),
     finisher(nullptr),
@@ -380,7 +385,8 @@ void libosd_join(struct libosd *osd)
   try {
     osd->join();
   } catch (std::exception &e) {
-    lderr(osd->cct) << "libosd_join caught exception " << e.what() << dendl;
+    CephContext *cct = static_cast<ceph::osd::LibOSD*>(osd)->cct;
+    lderr(cct) << "libosd_join caught exception " << e.what() << dendl;
   }
 }
 
@@ -389,7 +395,8 @@ void libosd_shutdown(struct libosd *osd)
   try {
     osd->shutdown();
   } catch (std::exception &e) {
-    lderr(osd->cct) << "libosd_shutdown caught exception " << e.what() << dendl;
+    CephContext *cct = static_cast<ceph::osd::LibOSD*>(osd)->cct;
+    lderr(cct) << "libosd_shutdown caught exception " << e.what() << dendl;
   }
 }
 
@@ -415,8 +422,8 @@ void libosd_signal(int signum)
     try {
       osd.second->signal(signum);
     } catch (std::exception &e) {
-      lderr(osd.second->cct)
-	<< "libosd_signal caught exception " << e.what() << dendl;
+      CephContext *cct = static_cast<ceph::osd::LibOSD*>(osd.second)->cct;
+      lderr(cct) << "libosd_signal caught exception " << e.what() << dendl;
     }
   }
 }
@@ -427,7 +434,8 @@ int libosd_get_volume(struct libosd *osd, const char *name,
   try {
     return osd->get_volume(name, id);
   } catch (std::exception &e) {
-    lderr(osd->cct) << "libosd_get_volume caught exception " << e.what() << dendl;
+    CephContext *cct = static_cast<ceph::osd::LibOSD*>(osd)->cct;
+    lderr(cct) << "libosd_get_volume caught exception " << e.what() << dendl;
     return -EFAULT;
   }
 }
@@ -440,7 +448,8 @@ int libosd_read(struct libosd *osd, const char *object,
   try {
     return osd->read(object, volume, offset, length, data, flags, cb, user);
   } catch (std::exception &e) {
-    lderr(osd->cct) << "libosd_read caught exception " << e.what() << dendl;
+    CephContext *cct = static_cast<ceph::osd::LibOSD*>(osd)->cct;
+    lderr(cct) << "libosd_read caught exception " << e.what() << dendl;
     return -EFAULT;
   }
 }
@@ -452,7 +461,8 @@ int libosd_write(struct libosd *osd, const char *object, const uint8_t volume[16
   try {
     return osd->write(object, volume, offset, length, data, flags, cb, user);
   } catch (std::exception &e) {
-    lderr(osd->cct) << "libosd_write caught exception " << e.what() << dendl;
+    CephContext *cct = static_cast<ceph::osd::LibOSD*>(osd)->cct;
+    lderr(cct) << "libosd_write caught exception " << e.what() << dendl;
     return -EFAULT;
   }
 }
@@ -464,7 +474,8 @@ int libosd_truncate(struct libosd *osd, const char *object,
   try {
     return osd->truncate(object, volume, offset, flags, cb, user);
   } catch (std::exception &e) {
-    lderr(osd->cct) << "libosd_truncate caught exception " << e.what()
+    CephContext *cct = static_cast<ceph::osd::LibOSD*>(osd)->cct;
+    lderr(cct) << "libosd_truncate caught exception " << e.what()
 		    << dendl;
     return -EFAULT;
   }
