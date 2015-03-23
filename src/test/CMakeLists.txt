@@ -1733,18 +1733,20 @@ add_executable(test_direct_messenger messenger/test_direct_messenger.cc)
 target_link_libraries(test_direct_messenger global boost_system)
 
 # test_libosd
-add_executable(test_libosd test_libosd.c
-)
+add_executable(test_libosd test_libosd.c)
 set_target_properties(test_libosd PROPERTIES LINKER_LANGUAGE C)
 target_link_libraries(test_libosd PRIVATE osd os global
   boost_filesystem boost_system ${ALLOC_LIBS})
 
 # test_libosd_remote
-add_executable(test_libosd_remote test_libosd_remote.c
-)
+add_executable(test_libosd_remote test_libosd_remote.c)
 set_target_properties(test_libosd_remote PROPERTIES LINKER_LANGUAGE C)
 target_link_libraries(test_libosd_remote PRIVATE osd os global
   boost_filesystem boost_system ${ALLOC_LIBS})
+
+# libosd_bench
+add_executable(libosd_bench libosd_bench.cc)
+target_link_libraries(libosd_bench PRIVATE osd common)
 
 # lttng_stream_test
 if (HAVE_LTTNG)
