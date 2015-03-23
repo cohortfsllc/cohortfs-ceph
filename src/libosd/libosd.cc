@@ -142,7 +142,7 @@ int LibOSD::init(const struct libosd_init_args *args)
 
   // create the CephContext and parse the configuration
   int r = ceph::osd::context_create(args->id, args->config, args->cluster,
-				    &cct);
+				    args->argc, args->argv, &cct);
   if (r != 0)
     return r;
 

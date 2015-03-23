@@ -119,7 +119,7 @@ int LibOSDRemote::init(const struct libosd_remote_args *args)
 {
   // create the CephContext and parse the configuration
   int r = ceph::osd::context_create(args->id, args->config, args->cluster,
-				    &ctx);
+                                    args->argc, args->argv, &cct);
   if (r != 0)
     return r;
 
