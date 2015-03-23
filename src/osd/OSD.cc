@@ -41,6 +41,7 @@
 #include "OSD.h"
 #include "OSDMap.h"
 #include "Watch.h"
+#include "OpQueue.h"
 
 #include "common/ceph_argparse.h"
 #include "common/version.h"
@@ -423,12 +424,12 @@ OSD::OSD(CephContext *cct_, ObjectStore *store_,
   hb_back_server_messenger(hb_back_serverm),
   heartbeat_thread(this),
   heartbeat_dispatcher(this),
-		 multi_wq(this,
-			  static_dequeue_op,
-			  static_wq_thread_exit,
-			  cct->_conf->osd_wq_lanes,
-			  cct->_conf->osd_wq_thrd_lowat,
-			  cct->_conf->osd_wq_thrd_hiwat),
+  multi_wq(new cohort::OpQueue(this,
+                               static_dequeue_op,
+                               static_wq_thread_exit,
+                               cct->_conf->osd_wq_lanes,
+                               cct->_conf->osd_wq_thrd_lowat,
+                               cct->_conf->osd_wq_thrd_hiwat)),
   up_thru_wanted(0), up_thru_pending(0), service(this)
 {
   monc->set_messenger(client_messenger);
@@ -840,7 +841,7 @@ int OSD::shutdown()
   }
 
   // XXX drain multi_wq
-  multi_wq.shutdown();
+  multi_wq->shutdown();
 
   // unregister commands
   cct->get_admin_socket()->unregister_command("status");
@@ -3007,15 +3008,15 @@ void OSD::handle_op(OpRequest* op, unique_lock& osd_lk)
   }
 
   /* pick a queue priority band */
-  MultiQueue::Bands band;
+  cohort::OpQueue::Bands band;
   if (m->get_priority() > CEPH_MSG_PRIO_LOW)
-    band = MultiQueue::Bands::HIGH;
+    band = cohort::OpQueue::Bands::HIGH;
   else
-    band = MultiQueue::Bands::BASE;
+    band = cohort::OpQueue::Bands::BASE;
 
   /* enqueue on multi_wq, defers vol resolution */
   op->get(); // explicit ref for queue
-  multi_wq.enqueue(*op, band);
+  multi_wq->enqueue(*op, band);
 } /* handle_op */
 
 void OSD::static_dequeue_op(OSD* osd, OpRequest* op)

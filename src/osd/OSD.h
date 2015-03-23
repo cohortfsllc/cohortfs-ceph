@@ -68,6 +68,10 @@ class Notification;
 
 class AuthAuthorizeHandlerRegistry;
 
+namespace cohort {
+class OpQueue;
+}
+
 class OSD;
 class OSDService {
 public:
@@ -536,7 +540,7 @@ public:
 
 private:
   // -- op queue --
-  MultiQueue multi_wq;
+  std::unique_ptr<cohort::OpQueue> multi_wq;
 
   /* multi_wq dequeue function */
   static void static_dequeue_op(OSD* osd, OpRequest* op);
