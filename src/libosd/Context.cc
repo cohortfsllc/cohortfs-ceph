@@ -14,7 +14,7 @@ namespace osd
 {
 
 int context_create(int id, const char *config, const char *cluster,
-		   CephContext** cct_out)
+                   int argc, const char **argv, CephContext** cct_out)
 {
   CephInitParameters params(CEPH_ENTITY_TYPE_OSD);
   char name[12];
@@ -33,6 +33,13 @@ int context_create(int id, const char *config, const char *cluster,
   if (r != 0) {
     derr << "failed to parse configuration " << config << dendl;
     return r;
+  }
+  // parse command line arguments
+  if (argc) {
+    assert(argv);
+    vector<const char*> args;
+    argv_to_vec(argc, argv, args);
+    cct->_conf->parse_argv(args);
   }
   cct->_conf->apply_changes(nullptr);
   complain_about_parse_errors(cct, &parse_errors);

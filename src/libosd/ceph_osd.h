@@ -123,6 +123,8 @@ struct libosd_init_args {
   const char *config;	/**< path to ceph configuration file */
   const char *cluster;	/**< ceph cluster name (default "ceph") */
   struct libosd_callbacks *callbacks; /**< optional callbacks */
+  const char **argv;	/**< command-line argument array */
+  int argc;		/**< size of argv array */
   void *user;		/**< user data for osd_active and osd_shutdown */
 };
 
