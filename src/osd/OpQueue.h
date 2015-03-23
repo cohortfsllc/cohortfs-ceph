@@ -237,11 +237,10 @@ namespace cohort {
 	Lane& lane = qlane[ix];
 	for (int bix = 0; bix < 2; ++bix) {
 	  Band& band = lane.band[bix];
+	  while (band.n_workers.load() > 0)
+	    cv.wait_for(lk, worker_timeout);
 	  if (band.graveyard.joinable())
 	    band.graveyard.join();
-	  while (band.n_workers.load() > 0) {
-	    cv.wait_for(lk, worker_timeout);
-	  }
 	}
       }
     } /* shutdown */
