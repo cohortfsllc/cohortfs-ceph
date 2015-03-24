@@ -3008,6 +3008,11 @@ void OSD::handle_op(OpRequest* op, unique_lock& osd_lk)
     }
   }
 
+  if (cct->_conf->osd_early_reply_at == 1) {
+    service.reply_op_error(op, 0);
+    return;
+  }
+
   /* pick a queue priority band */
   cohort::OpQueue::Bands band;
   if (m->get_priority() > CEPH_MSG_PRIO_LOW)

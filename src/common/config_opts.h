@@ -416,6 +416,8 @@ OPTION(osd_os_lru_lane_hiwat, OPT_INT, 311)
 OPTION(osd_os_objcache_partitions, OPT_INT, 5)
 OPTION(osd_os_objcache_cachesz, OPT_INT, 373)
 
+OPTION(osd_early_reply_at, OPT_INT, 0) // for measuring segments of the osd pipe
+
 OPTION(osd_op_thread_timeout, OPT_INT, 15)
 OPTION(osd_remove_thread_timeout, OPT_INT, 60*60)
 OPTION(osd_command_thread_timeout, OPT_INT, 10*60)
