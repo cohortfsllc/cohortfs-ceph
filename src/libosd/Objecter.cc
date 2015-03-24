@@ -25,6 +25,7 @@ private:
   typedef std::lock_guard<std::mutex> lock_guard;
   std::condition_variable cond;
   bool done;
+  bool waiting;
   int result;
   int length;
 
@@ -33,16 +34,20 @@ private:
     done = true;
     result = r;
     length = len;
-    cond.notify_all();
+    if (waiting)
+      cond.notify_one();
   }
 
 public:
-  SyncCompletion() : done(false) {}
+  SyncCompletion() : done(false), waiting(false) {}
 
   int wait() {
-    unique_lock lock(mutex);
-    while (!done)
-      cond.wait(lock);
+    if (!done) {
+      unique_lock lock(mutex);
+      waiting = true;
+      while (!done)
+        cond.wait(lock);
+    }
     return result != 0 ? result : length;
   }
 
