@@ -256,41 +256,39 @@ int StripedPlacer::encode(const set<int> &want_to_encode,
 void StripedPlacer::add_data(const uint64_t off, bufferlist& in,
 			      vector<StrideExtent>& strides) const
 {
-  uint32_t stride, len;
+  uint32_t stride, len, num_strides;
   uint64_t last_byte = off + in.length() - 1;
-  uint32_t first_stride = stride_idx(off);
-  uint32_t last_stride = stride_idx(last_byte);
   uint64_t curoff;
   bufferlist bl;
 
   /* Build the stride extant list */
-  stride = first_stride;
   curoff = off;
+  num_strides = 0;
   do {
+    stride = stride_idx(curoff);
     strides[stride].offset = stride_offset(curoff);
     curoff += (stripe_unit - (curoff % stripe_unit));
-    stride++;
-    stride %= stripe_width;
-  } while (stride != last_stride);
+    num_strides++;
+  } while (num_strides < stripe_width && curoff < last_byte);
 
-  stride = last_stride;
   curoff = last_byte;
+  num_strides = 0;
   do {
+    stride = stride_idx(curoff);
     strides[stride].length = stride_offset(curoff) + 1 - strides[stride].offset;
     if ((curoff + 1) % stripe_unit)
       // Point at end of last stride
       curoff += (stripe_unit - ((curoff + 1) % stripe_unit));
     if (curoff < stripe_unit)
-      // This stride is empty
+      // Next stride is empty
       break;
     curoff -= stripe_unit;
-    stride += stripe_width - 1;
-    stride %= stripe_width;
-  } while (stride != first_stride);
+    num_strides++;
+  } while (num_strides < stripe_width && curoff > off);
 
   /* Build buffer lists for strides */
-  stride = first_stride;
   curoff = off;
+  stride = stride_idx(curoff);
   if (curoff % stripe_unit) {
     /* Partial first first */
     len = stripe_unit - (off % stripe_unit);
@@ -301,10 +299,9 @@ void StripedPlacer::add_data(const uint64_t off, bufferlist& in,
     bl.substr_of(in, curoff - off, len);
     strides[stride].bl.claim_append(bl);
     curoff += len;
-    stride++;
-    stride %= stripe_width;
   }
   while (curoff < last_byte + 1) {
+    stride = stride_idx(curoff);
     if (last_byte + 1 - curoff < stripe_unit) {
       /* Partial last unit */
       len = last_byte + 1 - curoff;
@@ -315,8 +312,6 @@ void StripedPlacer::add_data(const uint64_t off, bufferlist& in,
     bl.substr_of(in, curoff - off, stripe_unit);
     strides[stride].bl.claim_append(bl);
     curoff += stripe_unit;
-    stride++;
-    stride %= stripe_width;
   }
 }
 
