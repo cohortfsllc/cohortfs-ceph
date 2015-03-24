@@ -70,6 +70,15 @@ struct dirptr {
     unsigned char verifier[8];
 };
 
+struct read_delegation {
+	int foo;	// need something here
+	// probably a list of segments and indication which osd to go to.
+};
+
+struct write_delegation {
+	int foo;	// need something here
+};
+
 typedef int accessmask;
 #define MDS_ACCESS_READ	1
 #define MDS_ACCESS_WRITE 2
@@ -81,6 +90,9 @@ typedef boost::function<void(int status, FSObj *result)>createcb;
 typedef boost::function<void(int status, std::string toname)>readlinkcb;
 typedef boost::function<void(int status, accessmask allowed, accessmask denied)>testaccesscb;
 typedef boost::function<void(int status)>getsetattrcb;
+typedef boost::function<void(int status, int readcount, bool eof)>readwritecb;
+typedef boost::function<void(int status, read_delegation *delegation)>delegatedreadcb;
+typedef boost::function<void(int status, write_delegation *delegation)>delegatedwritecb;
 
 class FSObj {
 protected:
@@ -105,4 +117,11 @@ public:
     int rename(std::string oldname, FSObj *newdir, std::string newname,
 	getsetattrcb *linkres);
     int unlink(std::string name, getsetattrcb *linkres);
+    int read(bufferlist bl, int flags, readwritecb *readres);
+    int write(bufferlist bl, int flags, readwritecb *readres);
+    int prepare_delegated_read(int flags, delegatedreadcb *delegatedreadres);
+    int release_delegated_read(read_delegation *delegation, getsetattrcb *releasecb);
+    int prepare_delegated_write(int flags, delegatedwritecb *delegatedwriteres);
+    int release_delegated_write(write_delegation *delegation, getsetattrcb *releasecb);
+    char * get_oid_name();	// not in delegation?
 };
