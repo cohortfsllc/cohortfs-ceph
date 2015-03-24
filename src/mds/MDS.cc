@@ -132,12 +132,3 @@ void MDS::beacon_send()
     monc->send_mon_message(beacon);
     // XXX schedule next sender
 }
-
-namespace ceph {
-namespace mds {
-int context_create(int id, char const *config, char const *cluster, CephContext **cct)
-{
-    return 0;
-}
-} // namespace mds
-} // namespace ceph
