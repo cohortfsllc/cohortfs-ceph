@@ -106,7 +106,8 @@ int Objecter::read(const char *object, const uint8_t volume[16],
   oid_t o(object);
   boost::uuids::uuid vol;
   epoch_t epoch = 0;
-  std::unique_ptr<SyncCompletion> sync;
+  SyncCompletion sync_completion;
+  bool is_sync = false;
   memcpy(&vol, volume, sizeof(vol));
 
   if (!wait_for_active(&epoch))
@@ -115,8 +116,8 @@ int Objecter::read(const char *object, const uint8_t volume[16],
   if (!cb) {
     // set up a synchronous completion
     cb = SyncCompletion::callback;
-    sync.reset(new SyncCompletion());
-    user = sync.get();
+    is_sync = true;
+    user = &sync_completion;
   }
 
   // set up osd read op
@@ -129,7 +130,7 @@ int Objecter::read(const char *object, const uint8_t volume[16],
   // send request over direct messenger
   dispatcher->send_request(m, onreply);
 
-  return sync ? sync->wait() : 0;
+  return is_sync ? sync_completion.wait() : 0;
 }
 
 // Dispatcher callback to fire the write completion
@@ -183,7 +184,8 @@ int Objecter::write(const char *object, const uint8_t volume[16],
   oid_t oid(object);
   boost::uuids::uuid vol;
   epoch_t epoch = 0;
-  std::unique_ptr<SyncCompletion> sync;
+  SyncCompletion sync_completion;
+  bool is_sync = false;
 
   mempcpy(&vol, volume, sizeof(vol));
 
@@ -195,8 +197,8 @@ int Objecter::write(const char *object, const uint8_t volume[16],
 
     // set up a synchronous completion
     cb = SyncCompletion::callback;
-    sync.reset(new SyncCompletion());
-    user = sync.get();
+    is_sync = true;
+    user = &sync_completion;
   } else {
     // when asynchronous, flags must specify one or more of UNSTABLE or STABLE
     if ((flags & WRITE_CB_FLAGS) == 0)
@@ -226,7 +228,7 @@ int Objecter::write(const char *object, const uint8_t volume[16],
   // send request over direct messenger
   dispatcher->send_request(m, onreply);
 
-  return sync ? sync->wait() : 0;
+  return is_sync ? sync_completion.wait() : 0;
 }
 
 int Objecter::truncate(const char *object, const uint8_t volume[16],
