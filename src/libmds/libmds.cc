@@ -4,7 +4,6 @@
 #include <condition_variable>
 #include <mutex>
 #include <boost/function.hpp>
-#include "ceph_mds.h"
 
 #include "msg/Dispatcher.h"
 #include "osdc/Objecter.h"
@@ -17,10 +16,12 @@
 
 #include "common/Finisher.h"
 #include "mds/MDSMap.h"
-#include "mds/MDS.h"
+#include "mds/MDSimpl.h"
 #include "common/common_init.h"
 #include "common/ceph_argparse.h"
 #include "include/color.h"
+
+#include "ceph_mds.h"
 
 #define dout_subsys ceph_subsys_mds
 
@@ -46,7 +47,7 @@ class LibMDS : public libmds {
   Finisher *finisher; // thread to send callbacks to user
 
   MonClient *monc;
-  MDS *mds;
+  MDSimpl *mds;
 #if 0
   DirectMessenger *ms_client, *ms_server; // DirectMessenger pair
 #endif
@@ -67,7 +68,7 @@ class LibMDS : public libmds {
   // Objecter
   bool wait_for_active(epoch_t *epoch);
 
-  void init_dispatcher(MDS *mds);
+  void init_dispatcher(MDSimpl *mds);
 
 public:
   LibMDS(int whoami);
@@ -196,7 +197,7 @@ int LibMDS::init(const struct libmds_init_args *args)
 #endif
     : simple_msgr;
 
-  mds = new MDS(cct->_conf->name.get_id().c_str(), cluster_msgr, monc);
+  mds = new MDSimpl(cct->_conf->name.get_id().c_str(), cluster_msgr, monc);
 
   r = mds->init();	// setup dispatcher?
   return 0;
