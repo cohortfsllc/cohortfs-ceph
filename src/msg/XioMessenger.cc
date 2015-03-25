@@ -255,9 +255,10 @@ static string xio_uri_from_entity(const entity_addr_t& addr, bool want_port)
 
 /* XioMessenger */
 XioMessenger::XioMessenger(CephContext *cct, entity_name_t name,
-			   string mname, uint64_t nonce, int nportals,
-			   DispatchStrategy *ds)
-  : SimplePolicyMessenger(cct, name, mname, nonce),
+			   string mname, uint64_t nonce,
+			   MessageFactory *factory,
+			   int nportals, DispatchStrategy *ds)
+  : SimplePolicyMessenger(cct, name, mname, nonce, factory),
     nsessions(0),
     shutdown_called(false),
     portals(this, nportals),

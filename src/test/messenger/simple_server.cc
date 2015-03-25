@@ -21,6 +21,7 @@ using namespace std;
 
 #include "common/config.h"
 #include "msg/Messenger.h"
+#include "msg/MessageFactory.h"
 #include "common/Timer.h"
 #include "common/ceph_argparse.h"
 #include "global/global_init.h"
@@ -75,10 +76,11 @@ int main(int argc, const char **argv)
 	dest_str += port;
 	entity_addr_from_url(&bind_addr, dest_str.c_str());
 
+        SimpleMessageFactory factory;
 	messenger = Messenger::create(cct,
 				      entity_name_t::GENERIC(),
 				      "simple_server",
-				      0 /* nonce */);
+				      0 /* nonce */, &factory);
 	// enable timing prints
 	messenger->set_magic(MSG_MAGIC_TRACE_CTR);
 	messenger->set_default_policy(

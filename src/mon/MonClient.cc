@@ -116,7 +116,8 @@ int MonClient::get_monmap_privately()
   if (!messenger) {
     messenger = smessenger = new SimpleMessenger(cct,
 						 entity_name_t::CLIENT(-1),
-						 "temp_mon_client", getpid());
+						 "temp_mon_client", getpid(),
+                                                 &factory);
     messenger->add_dispatcher_head(this);
     smessenger->start();
     temp_msgr = true;
@@ -216,7 +217,8 @@ int MonClient::ping_monitor(const string &mon_id, string *result_reply)
 
   Messenger *smsgr = new SimpleMessenger(cct,
 					 entity_name_t::CLIENT(-1),
-					 "temp_ping_client", getpid());
+					 "temp_ping_client", getpid(),
+					 &factory);
   smsgr->add_dispatcher_head(pinger);
   smsgr->start();
 
@@ -241,6 +243,19 @@ int MonClient::ping_monitor(const string &mon_id, string *result_reply)
   delete smsgr;
   delete pinger;
   return ret;
+}
+
+Message* MonClient::Factory::create(int type)
+{
+  switch (type) {
+  case CEPH_MSG_MON_MAP:                return new MMonMap;
+  case CEPH_MSG_AUTH_REPLY:             return new MAuthReply;
+  case CEPH_MSG_MON_SUBSCRIBE_ACK:      return new MMonSubscribeAck;
+  case CEPH_MSG_MON_GET_VERSION_REPLY:  return new MMonGetVersionReply;
+  case MSG_MON_COMMAND_ACK:             return new MMonCommandAck;
+  case MSG_LOGACK:                      return new MLogAck;
+  default:                              return nullptr;
+  }
 }
 
 bool MonClient::ms_dispatch(Message *m)

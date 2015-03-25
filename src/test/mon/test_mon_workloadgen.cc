@@ -41,6 +41,7 @@
 #include "mon/MonClient.h"
 #include "msg/Dispatcher.h"
 #include "msg/Messenger.h"
+#include "msg/MessageFactory.h"
 #include "common/Timer.h"
 #include "common/ceph_argparse.h"
 #include "global/global_init.h"
@@ -75,9 +76,16 @@ typedef boost::mt11213b rngen_t;
 typedef boost::scoped_ptr<Messenger> MessengerRef;
 typedef boost::scoped_ptr<Objecter> ObjecterRef;
 
+class TestFactory : public MessageFactory {
+  Message* create(int type) {
+    return type == CEPH_MSG_OSD_MAP ? new MOSDMap : nullptr;
+  }
+};
+
 class TestStub : public Dispatcher
 {
  protected:
+  TestFactory factory;
   MessengerRef messenger;
   MonClient monc;
 
@@ -244,7 +252,7 @@ class ClientStub : public TestStub
     }
 
     messenger.reset(Messenger::create(cct, entity_name_t::CLIENT(-1),
-				      "stubclient", getpid()));
+				      "stubclient", getpid(), &factory));
     assert(messenger.get() != NULL);
 
     messenger->set_default_policy(
@@ -333,7 +341,7 @@ class OSDStub : public TestStub
     stringstream ss;
     ss << "client-osd" << whoami;
     messenger.reset(Messenger::create(cct, entity_name_t::OSD(whoami),
-				      ss.str().c_str(), getpid()));
+				      ss.str().c_str(), getpid(), &factory));
 
     Throttle throttler(cct, "osd_client_bytes",
 	cct->_conf->osd_client_message_size_cap);

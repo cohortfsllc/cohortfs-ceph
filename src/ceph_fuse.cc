@@ -27,6 +27,7 @@ using namespace std;
 
 #include "client/Client.h"
 #include "client/fuse_ll.h"
+#include "client/MessageFactory.h"
 
 #include "msg/Messenger.h"
 
@@ -108,6 +109,7 @@ int main(int argc, const char **argv, const char *envp[]) {
     CephFuse *cfuse;
 
     MonClient mc(fuse_cct);
+    ClientMessageFactory factory(fuse_cct, &mc.factory);
     int r = mc.build_initial_monmap();
     if (r == -EINVAL)
       usage();
@@ -119,7 +121,7 @@ int main(int argc, const char **argv, const char *envp[]) {
     if (fuse_cct->_conf->client_rdma) {
       XioMessenger *xmsgr
 	= new XioMessenger(fuse_cct, entity_name_t::CLIENT(-1),
-			   "xio client", getpid(), 0 /* portals */,
+			   "xio client", getpid(), &factory, 0 /* portals */,
 			   new QueueStrategy(2) /* dispatch strategy */);
       xmsgr->set_port_shift(111);
       messenger = xmsgr;
@@ -128,12 +130,12 @@ int main(int argc, const char **argv, const char *envp[]) {
     else {
       messenger = Messenger::create(fuse_cct,
 				    entity_name_t::CLIENT(), "client",
-				    getpid());
+				    getpid(), &factory);
     }
 #else
       messenger = Messenger::create(fuse_cct,
 				    entity_name_t::CLIENT(), "client",
-				    getpid());
+				    getpid(), &factory);
 #endif
     messenger->set_default_policy(Messenger::Policy::lossy_client(0, 0));
     messenger->set_policy(entity_name_t::TYPE_MDS,

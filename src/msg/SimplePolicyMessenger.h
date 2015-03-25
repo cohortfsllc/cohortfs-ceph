@@ -31,8 +31,8 @@ private:
 public:
 
   SimplePolicyMessenger(CephContext *cct, entity_name_t name,
-			string mname, uint64_t _nonce)
-    : Messenger(cct, name)
+			string mname, uint64_t _nonce, MessageFactory *factory)
+    : Messenger(cct, name, factory)
     {
     }
 

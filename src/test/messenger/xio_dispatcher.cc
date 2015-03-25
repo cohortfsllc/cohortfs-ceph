@@ -16,6 +16,14 @@
 #include "messages/MPing.h"
 #include "messages/MDataPing.h"
 
+Message* XioMessageFactory::create(int type) {
+  switch (type) {
+  case CEPH_MSG_PING: return new MPing;
+  case MSG_DATA_PING: return new MDataPing;
+  default:            return nullptr;
+  }
+}
+
 XioDispatcher::XioDispatcher(Messenger *msgr) :
   Dispatcher(msgr->cct),
   active(false),

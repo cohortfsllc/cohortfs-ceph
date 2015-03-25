@@ -2227,4 +2227,14 @@ namespace OSDC {
     osdmap->find_by_name(name, v);
     return v;
   }
+
+  Message* MessageFactory::create(int type)
+  {
+    switch (type) {
+    case CEPH_MSG_OSD_MAP:      return new MOSDMap;
+    case CEPH_MSG_OSD_OPREPLY:  return new MOSDOpReply;
+    case CEPH_MSG_STATFS_REPLY: return new MStatfsReply;
+    default: return parent ? parent->create(type) : nullptr;
+    }
+  }
 };

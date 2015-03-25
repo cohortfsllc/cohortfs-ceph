@@ -74,6 +74,7 @@ librados::RadosClient::RadosClient(CephContext *cct_)
     conf(cct_->_conf),
     state(DISCONNECTED),
     monclient(cct_),
+    factory(&monclient.factory),
     messenger(NULL),
     instance_id(0),
     objecter(NULL),
@@ -171,7 +172,7 @@ int librados::RadosClient::connect()
   if (cct->_conf->client_rdma) {
     XioMessenger *xmsgr
       = new XioMessenger(cct, entity_name_t::CLIENT(-1), "radosclient",
-			 nonce, 0 /* portals */,
+			 nonce, &factory, 0 /* portals */,
 			 new QueueStrategy(2) /* dispatch strategy */);
     xmsgr->set_port_shift(111) /* XXX */;
     messenger = xmsgr;
@@ -180,7 +181,7 @@ int librados::RadosClient::connect()
 #endif
   {
     messenger = new SimpleMessenger(cct, entity_name_t::CLIENT(-1),
-				    "radosclient", nonce);
+				    "radosclient", nonce, &factory);
   }
 
   if (!messenger)

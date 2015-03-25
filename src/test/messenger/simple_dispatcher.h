@@ -17,6 +17,11 @@
 
 #include "msg/Dispatcher.h"
 #include "msg/Messenger.h"
+#include "msg/MessageFactory.h"
+
+struct SimpleMessageFactory : public MessageFactory {
+  Message* create(int type);
+};
 
 class SimpleDispatcher: public Dispatcher {
 private:

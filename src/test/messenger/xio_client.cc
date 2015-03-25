@@ -25,6 +25,7 @@ using namespace std;
 #include "msg/FastStrategy.h"
 #include "msg/QueueStrategy.h"
 #include "msg/XioMsg.h"
+#include "msg/MessageFactory.h"
 #include "messages/MPing.h"
 #include "common/Timer.h"
 #include "common/ceph_argparse.h"
@@ -115,10 +116,12 @@ int main(int argc, const char **argv)
 	else
 	  dstrategy = new QueueStrategy(2);
 
+        XioMessageFactory factory;
 	messenger = new XioMessenger(cct,
 				     entity_name_t::GENERIC(),
 				     "xio_client",
 				     0 /* nonce */,
+                                     &factory,
 				     0 /* portals */,
 				     dstrategy);
 

@@ -50,8 +50,8 @@ private:
 
 public:
   XioMessenger(CephContext *cct, entity_name_t name,
-	       string mname, uint64_t nonce, int nportals,
-	       DispatchStrategy* ds);
+	       string mname, uint64_t nonce, MessageFactory *factory,
+	       int nportals, DispatchStrategy* ds);
 
   virtual ~XioMessenger();
 

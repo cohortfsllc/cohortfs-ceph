@@ -16,11 +16,33 @@
 #include "common/debug.h"
 #include "include/color.h"
 
+#include "messages/MPing.h"
+#include "messages/MOSDMarkMeDown.h"
+#include "messages/MOSDPing.h"
+#include "messages/MOSDOp.h"
+#include "messages/MOSDMap.h"
+#include "messages/MGenericMessage.h"
+
 #define dout_subsys ceph_subsys_osd
 
+using namespace ceph::osd;
 
-OSDMessengers::OSDMessengers()
-  : cluster(NULL),
+Message* Messengers::Factory::create(int type)
+{
+  switch (type) {
+  case CEPH_MSG_PING:         return new MPing;
+  case MSG_OSD_PING:          return new MOSDPing;
+  case MSG_OSD_MARK_ME_DOWN:  return new MOSDMarkMeDown;
+  case CEPH_MSG_OSD_OP:       return new MOSDOp;
+  case CEPH_MSG_OSD_MAP:      return new MOSDMap;
+  case CEPH_MSG_SHUTDOWN:     return new MGenericMessage(type);
+  default: return parent ? parent->create(type) : nullptr;
+  }
+}
+
+Messengers::Messengers(MessageFactory *parent)
+  : factory(parent),
+    cluster(NULL),
     client(NULL),
     client_xio(NULL),
     client_hb(NULL),
@@ -31,7 +53,7 @@ OSDMessengers::OSDMessengers()
 {
 }
 
-OSDMessengers::~OSDMessengers()
+Messengers::~Messengers()
 {
   delete cluster;
   if (client != client_xio)
@@ -45,19 +67,21 @@ OSDMessengers::~OSDMessengers()
 }
 
 Messenger* create_messenger(CephContext *cct, const entity_name_t &me,
-			    const char *name, pid_t pid)
+			    const char *name, pid_t pid,
+			    MessageFactory *factory)
 {
-  Messenger *ms = Messenger::create(cct, me, name, pid);
+  Messenger *ms = Messenger::create(cct, me, name, pid, factory);
   ms->set_cluster_protocol(CEPH_OSD_PROTOCOL);
   return ms;
 }
 
 #ifdef HAVE_XIO
 Messenger* create_messenger_xio(CephContext *cct, const entity_name_t &me,
-				const char *name, pid_t pid)
+				const char *name, pid_t pid,
+				MessageFactory *factory)
 {
   const int nportals = 2;
-  XioMessenger *ms = new XioMessenger(cct, me, name, pid, nportals,
+  XioMessenger *ms = new XioMessenger(cct, me, name, pid, factory, nportals,
 				      new QueueStrategy(nportals));
   ms->set_cluster_protocol(CEPH_OSD_PROTOCOL);
   ms->set_port_shift(111);
@@ -65,31 +89,31 @@ Messenger* create_messenger_xio(CephContext *cct, const entity_name_t &me,
 }
 #endif
 
-int OSDMessengers::create(CephContext *cct, md_config_t *conf,
-			  const entity_name_t &name, pid_t pid)
+int Messengers::create(CephContext *cct, md_config_t *conf,
+		       const entity_name_t &name, pid_t pid)
 {
   // create messengers
 #ifdef HAVE_XIO
   if (conf->cluster_rdma) {
-    cluster = create_messenger_xio(cct, name, "cluster", pid);
-    client_xio = create_messenger_xio(cct, name, "xio client", pid);
-    client_hb = create_messenger_xio(cct, name, "hbclient", pid);
-    front_hb = create_messenger_xio(cct, name, "hb_front_server", pid);
-    back_hb = create_messenger_xio(cct, name, "hb_back_server", pid);
+    cluster = create_messenger_xio(cct, name, "cluster", pid, &factory);
+    client_xio = create_messenger_xio(cct, name, "xio client", pid, &factory);
+    client_hb = create_messenger_xio(cct, name, "hbclient", pid, &factory);
+    front_hb = create_messenger_xio(cct, name, "hb_front", pid, &factory);
+    back_hb = create_messenger_xio(cct, name, "hb_back", pid, &factory);
   } else {
-    cluster = create_messenger(cct, name, "cluster", pid);
-    client = create_messenger(cct, name, "client", pid);
-    client_xio = create_messenger_xio(cct, name, "xio client", pid);
-    client_hb = create_messenger(cct, name, "hbclient", pid);
-    front_hb = create_messenger(cct, name, "hb_front_server", pid);
-    back_hb = create_messenger(cct, name, "hb_back_server", pid);
+    cluster = create_messenger(cct, name, "cluster", pid, &factory);
+    client = create_messenger(cct, name, "client", pid, &factory);
+    client_xio = create_messenger_xio(cct, name, "xio client", pid, &factory);
+    client_hb = create_messenger(cct, name, "hbclient", pid, &factory);
+    front_hb = create_messenger(cct, name, "hb_front", pid, &factory);
+    back_hb = create_messenger(cct, name, "hb_back", pid, &factory);
   }
 #else // !HAVE_XIO
-  cluster = create_messenger(cct, name, "cluster", pid);
-  client = create_messenger(cct, name, "client", pid);
-  client_hb = create_messenger(cct, name, "hbclient", pid);
-  front_hb = create_messenger(cct, name, "hb_front_server", pid);
-  back_hb = create_messenger(cct, name, "hb_back_server", pid);
+  cluster = create_messenger(cct, name, "cluster", pid, &factory);
+  client = create_messenger(cct, name, "client", pid, &factory);
+  client_hb = create_messenger(cct, name, "hbclient", pid, &factory);
+  front_hb = create_messenger(cct, name, "hb_front", pid, &factory);
+  back_hb = create_messenger(cct, name, "hb_back", pid, &factory);
 #endif // !HAVE_XIO
 
   // set up policies
@@ -147,7 +171,7 @@ int OSDMessengers::create(CephContext *cct, md_config_t *conf,
   return 0;
 }
 
-int OSDMessengers::bind(CephContext *cct, md_config_t *conf)
+int Messengers::bind(CephContext *cct, md_config_t *conf)
 {
   // bind messengers
   pick_addresses(cct, CEPH_PICK_ADDRESS_PUBLIC|CEPH_PICK_ADDRESS_CLUSTER);
@@ -206,7 +230,7 @@ int OSDMessengers::bind(CephContext *cct, md_config_t *conf)
   return 0;
 }
 
-void OSDMessengers::start()
+void Messengers::start()
 {
   cluster->start();
   if (client != client_xio)
@@ -218,7 +242,7 @@ void OSDMessengers::start()
   back_hb->start();
 }
 
-void OSDMessengers::wait()
+void Messengers::wait()
 {
   // XXX: assert(started);
   // close/wait on messengers
@@ -231,3 +255,4 @@ void OSDMessengers::wait()
   front_hb->wait();
   back_hb->wait();
 }
+

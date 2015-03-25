@@ -29,6 +29,7 @@
 #include "include/buffer.h"
 
 #include "osd/OSDMap.h"
+#include "msg/MessageFactory.h"
 #include "messages/MOSDOp.h"
 
 #include "common/Timer.h"
@@ -61,6 +62,14 @@ namespace OSDC {
   using std::unique_ptr;
   using std::move;
   using std::function;
+
+  class MessageFactory : public ::MessageFactory {
+   private:
+    ::MessageFactory *parent;
+   public:
+    MessageFactory(::MessageFactory *parent) : parent(parent) {}
+    Message* create(int type);
+  };
 
   class Objecter: public Dispatcher {
   public:

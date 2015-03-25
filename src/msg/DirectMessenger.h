@@ -42,7 +42,7 @@ private:
 
 public:
   DirectMessenger(CephContext *cct, entity_name_t name,
-                  string mname, uint64_t nonce,
+                  string mname, uint64_t nonce, MessageFactory *factory,
 		  DispatchStrategy *my_disapatchers);
   ~DirectMessenger();
 

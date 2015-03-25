@@ -16,6 +16,14 @@
 #include "messages/MPing.h"
 #include "messages/MDataPing.h"
 
+Message* SimpleMessageFactory::create(int type) {
+  switch (type) {
+  case CEPH_MSG_PING: return new MPing;
+  case MSG_DATA_PING: return new MDataPing;
+  default:            return nullptr;
+  }
+}
+
 SimpleDispatcher::SimpleDispatcher(Messenger *msgr) :
   Dispatcher(msgr->cct),
   active(false),

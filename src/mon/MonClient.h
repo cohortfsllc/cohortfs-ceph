@@ -17,6 +17,7 @@
 
 #include "msg/Dispatcher.h"
 #include "msg/Messenger.h"
+#include "msg/MessageFactory.h"
 
 #include "MonMap.h"
 
@@ -109,6 +110,11 @@ struct MonClientPinger : public Dispatcher {
 class MonClient : public Dispatcher {
 public:
   MonMap monmap;
+
+  struct Factory : public MessageFactory {
+    Message* create(int type);
+  };
+  Factory factory;
 private:
   MonClientState state;
 

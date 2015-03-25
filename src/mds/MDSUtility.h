@@ -20,6 +20,7 @@
 #include "messages/MMDSMap.h"
 #include "msg/Dispatcher.h"
 #include "msg/Messenger.h"
+#include "msg/MessageFactory.h"
 #include "auth/Auth.h"
 
 /// MDS Utility
@@ -30,6 +31,12 @@
  */
 class MDSUtility : public Dispatcher {
 protected:
+  struct Factory : public MessageFactory {
+    CephContext *cct;
+    MessageFactory *parent;
+    Message* create(int type);
+  };
+  Factory factory;
   Objecter *objecter;
   MDSMap *mdsmap;
   Messenger *messenger;

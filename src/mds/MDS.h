@@ -22,6 +22,7 @@
 #include "mdstypes.h"
 
 #include "msg/Dispatcher.h"
+#include "msg/MessageFactory.h"
 #include "include/CompatSet.h"
 #include "include/types.h"
 #include "include/Context.h"

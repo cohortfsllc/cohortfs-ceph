@@ -27,6 +27,7 @@
 
 #include "auth/Crypto.h"
 #include "client/Client.h"
+#include "client/MessageFactory.h"
 #include "include/cephfs/libcephfs.h"
 #include "common/ceph_argparse.h"
 #include "common/common_init.h"
@@ -85,13 +86,15 @@ public:
     if (monclient->build_initial_monmap() < 0)
       goto fail;
 
+    factory = new ClientMessageFactory(cct, &monclient->factory);
+
     //network connection
 #if defined(HAVE_XIO)
     if (cct->_conf->client_rdma) {
       xio = true;
       XioMessenger *xmsgr
 	= new XioMessenger(cct, entity_name_t::CLIENT(-1), "xio client",
-			   msgr_nonce, 0 /* portals */,
+			   msgr_nonce, factory, 0 /* portals */,
 			   new QueueStrategy(2) /* dispatch strategy */);
       xmsgr->set_port_shift(111);
       messenger = xmsgr;
@@ -99,11 +102,11 @@ public:
     }
     else {
 	messenger = Messenger::create(cct, entity_name_t::CLIENT(), "client",
-				      msgr_nonce);
+				      msgr_nonce, factory);
       }
 #else
       messenger = Messenger::create(cct, entity_name_t::CLIENT(), "client",
-				    msgr_nonce);
+				    msgr_nonce, factory);
 #endif
 
     //at last the client
@@ -157,6 +160,10 @@ public:
       messenger->wait();
       delete messenger;
       messenger = NULL;
+    }
+    if (factory) {
+      delete factory;
+      factory = NULL;
     }
     if (monclient) {
       delete monclient;
@@ -244,6 +251,7 @@ private:
   bool mounted;
   bool inited;
   Client *client;
+  MessageFactory *factory;
   MonClient *monclient;
   Messenger *messenger;
   CephContext *cct;
