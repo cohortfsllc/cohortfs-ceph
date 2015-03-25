@@ -17,13 +17,24 @@
 #define dout_subsys ceph_subsys_mds
 
 
+Message* MDSUtility::Factory::create(int type)
+{
+  switch (type) {
+  case CEPH_MSG_MDS_MAP:  return new MMDSMap(cct);
+  default: return parent ? parent->create(type) : nullptr;
+  }
+}
+
 MDSUtility::MDSUtility(CephContext *cct) :
   Dispatcher(cct),
   objecter(NULL),
   waiting_for_mds_map(NULL)
 {
+  factory.cct = cct;
   monc = new MonClient(cct);
-  messenger = Messenger::create(cct, entity_name_t::CLIENT(), "mds", getpid());
+  factory.parent = &monc->factory;
+  messenger = Messenger::create(cct, entity_name_t::CLIENT(), "mds",
+                                getpid(), &factory);
   mdsmap = new MDSMap(cct);
   objecter = new Objecter(cct, messenger, monc);
 }

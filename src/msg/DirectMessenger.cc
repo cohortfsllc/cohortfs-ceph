@@ -18,8 +18,9 @@
 
 DirectMessenger::DirectMessenger(CephContext *cct, entity_name_t name,
 				 string mname, uint64_t nonce,
+				 MessageFactory *factory,
 				 DispatchStrategy *my_dispatchers)
-  : SimplePolicyMessenger(cct, name, mname, nonce),
+  : SimplePolicyMessenger(cct, name, mname, nonce, factory),
     my_dispatchers(my_dispatchers),
     peer_dispatchers(NULL)
 {

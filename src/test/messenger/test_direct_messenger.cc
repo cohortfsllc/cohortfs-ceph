@@ -8,6 +8,7 @@
 
 #include "msg/DirectMessenger.h"
 #include "msg/FastStrategy.h"
+#include "msg/MessageFactory.h"
 #include "messages/MDataPing.h"
 
 CephContext* cct;
@@ -22,13 +23,20 @@ int main(int argc, const char *argv[]) {
 		    CODE_ENVIRONMENT_UTILITY, 0);
   common_init_finish(cct);
 
+  class Factory : public MessageFactory {
+   public:
+    Message* create(int type) {
+      return type == MSG_DATA_PING ? new MDataPing : nullptr;
+    }
+  } factory;
+
   const entity_name_t entity1 = entity_name_t::GENERIC(1);
   const entity_name_t entity2 = entity_name_t::GENERIC(2);
 
   DirectMessenger *m1 = new DirectMessenger(cct,
-      entity1, "m1", 0, new FastStrategy());
+      entity1, "m1", 0, &factory, new FastStrategy());
   DirectMessenger *m2 = new DirectMessenger(cct,
-      entity2, "m2", 0, new FastStrategy());
+      entity2, "m2", 0, &factory, new FastStrategy());
 
   m1->set_direct_peer(m2);
   m2->set_direct_peer(m1);

@@ -50,7 +50,7 @@ class LibOSD : private Objecter, public libosd, private OSDStateObserver {
   MonClient *monc;
   ObjectStore *store;
   OSD *osd;
-  OSDMessengers *ms;
+  Messengers *ms;
   DirectMessenger *ms_client, *ms_server; // DirectMessenger pair
 
   struct _osdmap {
@@ -146,11 +146,19 @@ int LibOSD::init(const struct libosd_init_args *args)
   if (r != 0)
     return r;
 
+  common_init_finish(cct, 0);
+
+  // monitor client
+  monc = new MonClient(cct);
+  r = monc->build_initial_monmap();
+  if (r < 0)
+    return r;
+
   const entity_name_t me(entity_name_t::OSD(whoami));
   const pid_t pid = getpid();
 
   // create and bind messengers
-  ms = new OSDMessengers();
+  ms = new Messengers(&monc->factory);
   r = ms->create(cct, cct->_conf, me, pid);
   if (r != 0) {
     derr << TEXT_RED << " ** ERROR: messenger creation failed: "
@@ -174,14 +182,6 @@ int LibOSD::init(const struct libosd_init_args *args)
     derr << "unable to create object store" << dendl;
     return -ENODEV;
   }
-
-  common_init_finish(cct, 0);
-
-  // monitor client
-  monc = new MonClient(cct);
-  r = monc->build_initial_monmap();
-  if (r < 0)
-    return r;
 
   // create osd
   osd = new OSD(cct, store, whoami,
@@ -228,9 +228,9 @@ void LibOSD::init_dispatcher(OSD *osd)
 
   // construct and attach the direct messenger pair
   ms_client = new DirectMessenger(cct, name, "direct osd client",
-				  0, new FastStrategy());
+				  0, &ms->factory, new FastStrategy());
   ms_server = new DirectMessenger(cct, name, "direct osd server",
-				  0, new FastStrategy());
+				  0, &ms->factory, new FastStrategy());
 
   ms_client->set_direct_peer(ms_server);
   ms_server->set_direct_peer(ms_client);

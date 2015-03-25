@@ -5,6 +5,7 @@
 #define CEPH_LIBOSD_MESSENGERS_H
 
 #include "include/types.h"
+#include "msg/MessageFactory.h"
 
 class CephContext;
 struct md_config_t;
@@ -12,7 +13,23 @@ class Messenger;
 class Throttle;
 struct entity_name_t;
 
-struct OSDMessengers {
+namespace ceph
+{
+namespace osd
+{
+
+class Messengers {
+ public:
+  class Factory : public MessageFactory {
+   private:
+    MessageFactory *parent;
+   public:
+    Factory(MessageFactory *parent) : parent(parent) {}
+
+    Message* create(int type);
+  };
+  Factory factory;
+
   Messenger *cluster;
   Messenger *client;
   Messenger *client_xio;
@@ -22,8 +39,8 @@ struct OSDMessengers {
   Throttle *byte_throttler;
   Throttle *msg_throttler;
 
-  OSDMessengers();
-  ~OSDMessengers();
+  Messengers(MessageFactory *parent);
+  ~Messengers();
 
   // create the messengers and set up policy
   int create(CephContext *cct, md_config_t *conf,
@@ -35,5 +52,8 @@ struct OSDMessengers {
 
   void wait();
 };
+
+} // namespace osd
+} // namespace ceph
 
 #endif // CEPH_LIBOSD_MESSENGERS_H

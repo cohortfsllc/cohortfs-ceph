@@ -24,6 +24,7 @@ using namespace std;
 #include "mon/MonMap.h"
 #include "mon/MonClient.h"
 #include "msg/Messenger.h"
+#include "msg/MessageFactory.h"
 #include "messages/MPing.h"
 
 #include "common/Timer.h"
@@ -97,9 +98,15 @@ int main(int argc, const char **argv, const char *envp[]) {
   std::string sss(ss.str());
   cct->_conf->set_val("public_addr", sss.c_str());
   cct->_conf->apply_changes(NULL);
+
+  struct Factory : public MessageFactory {
+    Message* create(int type) {
+      return type == CEPH_MSG_PING ? new MPing : nullptr;
+    }
+  } factory;
   Messenger *rank = Messenger::create(cct,
 				      entity_name_t::MON(whoami), "tester",
-				      getpid());
+				      getpid(), &factory);
   int err = rank->bind(cct->_conf->public_addr);
   if (err < 0)
     return 1;

@@ -30,10 +30,9 @@ class CephContext;
 struct Connection;
 struct md_config_t;
 class Message;
+class MessageFactory;
 class MWatchNotify;
 class MLog;
-class SimpleMessenger;
-class XioMessenger;
 
 class librados::RadosClient : public Dispatcher
 {
@@ -47,6 +46,7 @@ private:
   } state;
 
   MonClient monclient;
+  OSDC::MessageFactory factory;
   Messenger *messenger;
 
   uint64_t instance_id;

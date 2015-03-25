@@ -26,6 +26,7 @@ using namespace std;
 
 #include "client/SyntheticClient.h"
 #include "client/Client.h"
+#include "client/MessageFactory.h"
 
 #include "msg/Messenger.h"
 
@@ -60,6 +61,7 @@ int main(int argc, const char **argv, char *envp[])
 
   // get monmap
   MonClient mc(cct);
+  ClientMessageFactory factory(cct, &mc.factory);
   if (mc.build_initial_monmap() < 0)
     return -1;
 
@@ -76,6 +78,7 @@ int main(int argc, const char **argv, char *envp[])
 	= new XioMessenger(cct, entity_name_t::CLIENT(-1),
 			   "xio synclient",
 			   i * 1000000 + getpid(),
+                           &factory,
 			   0 /* portals */,
 			   new QueueStrategy(2) /* dispatch strategy */);
       xmsgr->set_port_shift(111);
@@ -87,14 +90,14 @@ int main(int argc, const char **argv, char *envp[])
 					entity_name_t(
 					  entity_name_t::TYPE_CLIENT,-1),
 					"synclient",
-					i * 1000000 + getpid());
+					i * 1000000 + getpid(), &factory);
     }
 #else
       messengers[i] = Messenger::create(cct,
 					entity_name_t(
 					  entity_name_t::TYPE_CLIENT,-1),
 					"synclient",
-					i * 1000000 + getpid());
+					i * 1000000 + getpid(), &factory);
 #endif
     messengers[i]->bind(cct->_conf->public_addr);
     mclients[i] = new MonClient(cct);

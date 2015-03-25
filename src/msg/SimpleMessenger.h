@@ -77,9 +77,10 @@ public:
    * @param name The name to assign ourselves
    * _nonce A unique ID to use for this SimpleMessenger. It should not
    * be a value that will be repeated if the daemon restarts.
+   * @param factory A message factory object
    */
   SimpleMessenger(CephContext *cct, entity_name_t name,
-		  string mname, uint64_t _nonce);
+		  string mname, uint64_t _nonce, MessageFactory *factory);
 
   /**
    * Destroy the SimpleMessenger. Pretty simple since all the work is done

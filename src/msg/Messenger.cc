@@ -13,9 +13,10 @@
 Messenger *Messenger::create(CephContext *cct,
 			     entity_name_t name,
 			     string lname,
-			     uint64_t nonce)
+			     uint64_t nonce,
+                             MessageFactory *factory)
 {
-  return new SimpleMessenger(cct, name, lname, nonce);
+  return new SimpleMessenger(cct, name, lname, nonce, factory);
 }
 
 void Messenger::set_endpoint_addr(const sockaddr_storage &ss, int port)

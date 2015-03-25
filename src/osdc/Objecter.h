@@ -30,6 +30,7 @@
 #include "include/buffer.h"
 
 #include "osd/OSDMap.h"
+#include "msg/MessageFactory.h"
 #include "messages/MOSDOp.h"
 
 #include "common/Timer.h"
@@ -96,6 +97,14 @@ namespace OSDC {
     void reset() {
       done = false;
     }
+  };
+
+  class MessageFactory : public ::MessageFactory {
+   private:
+    ::MessageFactory *parent;
+   public:
+    MessageFactory(::MessageFactory *parent) : parent(parent) {}
+    Message* create(int type);
   };
 
   class Objecter: public Dispatcher {

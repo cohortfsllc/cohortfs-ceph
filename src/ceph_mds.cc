@@ -36,6 +36,7 @@ using namespace std;
 #include "mds/MDS.h"
 #include "mds/Dumper.h"
 #include "mds/Resetter.h"
+#include "mds/MessageFactory.h"
 
 #include "common/Timer.h"
 #include "common/ceph_argparse.h"
@@ -243,9 +244,12 @@ int main(int argc, const char **argv)
     usage();
   }
 
+  MonClient mc(cct);
+  MDSMessageFactory factory(cct, &mc.factory);
+
   Messenger *simple_msgr = Messenger::create(cct,
 					     entity_name_t::MDS(-1), "mds",
-					     getpid());
+					     getpid(), &factory);
   simple_msgr->set_cluster_protocol(CEPH_MDS_PROTOCOL);
 
 #if defined(HAVE_XIO)
@@ -254,6 +258,7 @@ int main(int argc, const char **argv)
     entity_name_t::MDS(-1),
     "xio mds",
     0 /* nonce */,
+    &factory,
     2 /* portals */,
     new QueueStrategy(2) /* dispatch strategy */);
 
@@ -306,7 +311,6 @@ int main(int argc, const char **argv)
   common_init_finish(cct);
 
   // get monmap
-  MonClient mc(cct);
   if (mc.build_initial_monmap() < 0)
     return -1;
   global_init_chdir(cct);

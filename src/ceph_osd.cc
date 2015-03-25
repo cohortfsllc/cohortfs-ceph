@@ -294,7 +294,8 @@ int main(int argc, const char **argv)
   }
 
   // create and bind messengers
-  OSDMessengers ms;
+  MonClient mc(cct);
+  ceph::osd::Messengers ms(&mc.factory);
   r = ms.create(cct, cct->_conf, entity_name_t::OSD(whoami), getpid());
   if (r != 0)
     return r;
@@ -307,7 +308,6 @@ int main(int argc, const char **argv)
   global_init_daemonize(cct, 0);
   common_init_finish(cct);
 
-  MonClient mc(cct);
   if (mc.build_initial_monmap() < 0)
     return -1;
   global_init_chdir(cct);

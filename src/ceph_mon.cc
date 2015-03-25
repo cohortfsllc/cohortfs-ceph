@@ -28,6 +28,7 @@ using namespace std;
 #include "mon/Monitor.h"
 #include "mon/MonitorDBStore.h"
 #include "mon/MonClient.h"
+#include "mon/MessageFactory.h"
 
 #include "msg/Messenger.h"
 #ifdef HAVE_XIO
@@ -613,6 +614,8 @@ int main(int argc, const char **argv)
     }
   }
 
+  MonMessageFactory factory(cct);
+
   // bind
   int rank = monmap.get_rank(cct->_conf->name.get_id());
 
@@ -621,8 +624,7 @@ int main(int argc, const char **argv)
   /* SimpleMessenger */
   Messenger *simple_msgr = Messenger::create(cct,
 					     entity_name_t::MON(rank),
-					     "mon",
-					     0);
+					     "mon", 0, &factory);
   simple_msgr->set_cluster_protocol(CEPH_MON_PROTOCOL);
   simple_msgr->set_default_send_priority(CEPH_MSG_PRIO_HIGH);
 
@@ -681,6 +683,7 @@ int main(int argc, const char **argv)
 					 entity_name_t::MON(rank),
 					 "xio mon",
 					 0 /* nonce */,
+                                         &factory,
 					 2 /* portals */,
 					 new QueueStrategy(2) /* dispatch strategy */);
 

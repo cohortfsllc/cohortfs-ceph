@@ -11,6 +11,7 @@
 #include "Objecter.h"
 
 #include "mon/MonClient.h"
+#include "messages/MOSDOpReply.h"
 #include "messages/MOSDMap.h"
 
 #ifdef HAVE_XIO
@@ -35,6 +36,11 @@ class LibOSDRemote : public libosd_remote, private Objecter,
  public:
   CephContext*& cct;
  private:
+  struct Factory : public MessageFactory {
+    MessageFactory *parent;
+    Message* create(int type);
+  };
+  Factory factory;
   std::unique_ptr<Messenger> ms;
   std::unique_ptr<MonClient> monc;
 
@@ -90,6 +96,15 @@ class LibOSDRemote : public libosd_remote, private Objecter,
   }
 };
 
+Message* LibOSDRemote::Factory::create(int type)
+{
+  switch (type) {
+  case CEPH_MSG_OSD_OPREPLY:  return new MOSDOpReply;
+  case CEPH_MSG_OSD_MAP:      return new MOSDMap;
+  default: return parent ? parent->create(type) : nullptr;
+  }
+}
+
 LibOSDRemote::LibOSDRemote(int whoami)
   : libosd_remote(whoami),
     ::Dispatcher(nullptr),
@@ -125,23 +140,6 @@ int LibOSDRemote::init(const struct libosd_remote_args *args)
 
   common_init_finish(cct, 0);
 
-  // create messenger for the monitor and osd
-#ifdef HAVE_XIO
-  if (cct->_conf->client_rdma) {
-    XioMessenger *xmsgr = new XioMessenger(cct, entity_name_t::CLIENT(-1),
-					   "libosd remote", getpid(), 1,
-					   new FastStrategy());
-    xmsgr->set_port_shift(111);
-    ms.reset(xmsgr);
-  } else
-    ms.reset(Messenger::create(cct, entity_name_t::CLIENT(-1),
-			       "libosd remote", getpid()));
-#else
-  ms.reset(Messenger::create(cct, entity_name_t::CLIENT(-1),
-			     "libosd remote", getpid()));
-#endif
-  ms->start();
-
   // monitor client
   monc.reset(new MonClient(cct));
   r = monc->build_initial_monmap();
@@ -150,6 +148,24 @@ int LibOSDRemote::init(const struct libosd_remote_args *args)
 		   << cpp_strerror(-r) << dendl;
     return r;
   }
+  factory.parent = &monc->factory;
+
+  // create messenger for the monitor and osd
+#ifdef HAVE_XIO
+  if (cct->_conf->client_rdma) {
+    XioMessenger *xmsgr = new XioMessenger(cct, entity_name_t::CLIENT(-1),
+					   "libosd remote", getpid(),
+					   &factory, 1, new FastStrategy());
+    xmsgr->set_port_shift(111);
+    ms.reset(xmsgr);
+  } else
+    ms.reset(Messenger::create(cct, entity_name_t::CLIENT(-1),
+			       "libosd remote", getpid(), &factory));
+#else
+  ms.reset(Messenger::create(cct, entity_name_t::CLIENT(-1),
+			     "libosd remote", getpid(), &factory));
+#endif
+  ms->start();
 
   monc->set_messenger(ms.get());
   monc->set_want_keys(CEPH_ENTITY_TYPE_MON | CEPH_ENTITY_TYPE_OSD);

@@ -371,6 +371,7 @@ set(lib_mon_srcs
   ${os_mon_files}
   mon/DataHealthService.cc
   mon/ConfigKeyService.cc
+  mon/MessageFactory.cc
   )
 set(monitorstore_src
   mon/MonitorStore.cc
@@ -514,6 +515,7 @@ if(${WITH_MDS})
     mds/MDSTableClient.cc
     mds/MDSTableServer.cc
     mds/MDSUtility.cc
+    mds/MessageFactory.cc
     mds/Migrator.cc
     mds/Mutation.cc
     mds/Resetter.cc
@@ -656,7 +658,7 @@ install(PROGRAMS ${CMAKE_SOURCE_DIR}/src/ceph-create-keys
 if(${WITH_CLIENT})
   set(libclient_srcs client/Client.cc client/Dentry.cc
     client/Inode.cc client/MetaRequest.cc client/MetaSession.cc
-    client/Trace.cc)
+    client/Trace.cc client/MessageFactory.cc)
   add_library(client ${libclient_srcs})
   target_link_libraries(client PRIVATE osdc ${LIBEDIT_LIBS})
   set(libcephfs_srcs libcephfs.cc)

@@ -31,11 +31,13 @@
 #include <sstream>
 
 class MDS;
+class MessageFactory;
 
 class Messenger {
 private:
   list<Dispatcher*> dispatchers;
   ZTracer::Endpoint trace_endpoint;
+  MessageFactory *const factory;
 
   void set_endpoint_addr(const sockaddr_storage &addr, int port);
 
@@ -123,9 +125,9 @@ public:
    * Messenger users should construct full implementations directly,
    * or use the create() function.
    */
-  Messenger(CephContext *cct_, entity_name_t w)
+  Messenger(CephContext *cct_, entity_name_t w, MessageFactory *factory)
     : trace_endpoint("0.0.0.0", 0, "Messenger"),
-      my_inst(),
+      factory(factory),
       default_send_priority(CEPH_MSG_PRIO_DEFAULT), started(false),
       magic(0), cct(cct_),
       crcflags(get_default_crc_flags(cct->_conf))
@@ -144,11 +146,13 @@ public:
    * @param name entity name to register
    * @param lname logical name of the messenger in this process (e.g., "client")
    * @param nonce nonce value to uniquely identify this instance on the current host
+   * @param factory Message factory object
    */
   static Messenger *create(CephContext *cct,
 			   entity_name_t name,
 			   string lname,
-			   uint64_t nonce);
+			   uint64_t nonce,
+                           MessageFactory *factory);
 
   /**
    * @defgroup Accessors
@@ -176,6 +180,9 @@ public:
    * currently believes to be its own.
    */
   const entity_addr_t& get_myaddr() { return my_inst.addr; }
+
+  MessageFactory* get_message_factory() const { return factory; }
+
 protected:
   /**
    * set messenger's address
