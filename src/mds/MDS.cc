@@ -1,5 +1,3 @@
-#include <boost/function.hpp>
-
 #include "msg/Dispatcher.h"
 #include "osdc/Objecter.h"
 
@@ -11,13 +9,13 @@
 
 #include "common/Finisher.h"
 #include "mds/MDSMap.h"
-#include "mds/MDS.h"
+#include "mds/MDSimpl.h"
 #include "messages/MMDSBeacon.h"
 
 #define dout_subsys ceph_subsys_mds
 #undef dout_prefix
 
-MDS::MDS(const std::string &n, Messenger *m, MonClient *mc) :
+MDSimpl::MDSimpl(const std::string &n, Messenger *m, MonClient *mc) :
 	Dispatcher(m->cct),
 	name(n),
 	messenger(m),
@@ -25,7 +23,7 @@ MDS::MDS(const std::string &n, Messenger *m, MonClient *mc) :
 {
 }
 
-MDS::~MDS()
+MDSimpl::~MDSimpl()
 {
     if (objecter) {
 	delete objecter; objecter = 0;
@@ -37,17 +35,17 @@ MDS::~MDS()
     }
 }
 
-bool MDS::shutdown()
+bool MDSimpl::shutdown()
 {
     return false;
 }
 
-void MDS::handle_signal(int signum)
+void MDSimpl::handle_signal(int signum)
 {
 	// XXX suicide
 }
 
-int MDS::init(int wanted_state)
+int MDSimpl::init(int wanted_state)
 {
     return 0;
     whoami = -1;
@@ -56,7 +54,7 @@ int MDS::init(int wanted_state)
 // XXX sched tick
 }
 
-bool MDS::ms_dispatch(Message *m)
+bool MDSimpl::ms_dispatch(Message *m)
 {
     bool ret = true;
     if (ret) {
@@ -65,7 +63,7 @@ bool MDS::ms_dispatch(Message *m)
     return ret;
 }
 
-bool MDS::ms_handle_reset(Connection *con)
+bool MDSimpl::ms_handle_reset(Connection *con)
 {
     // dout(5) << "ms_handle_reset on " << con->get_peer_addr() << dendl;
     switch(con->get_peer_type()) {
@@ -80,7 +78,7 @@ bool MDS::ms_handle_reset(Connection *con)
     return false;
 }
 
-void MDS::ms_handle_remote_reset(Connection *con)
+void MDSimpl::ms_handle_remote_reset(Connection *con)
 {
     // dout(5) << "ms_handle_remote_reset on " << con->get_peer_addr() << dendl;
     switch(con->get_peer_type()) {
@@ -95,31 +93,31 @@ void MDS::ms_handle_remote_reset(Connection *con)
 }
 
 #if 0
-void MDS::ms_handle_connect(Connection *con)
+void MDSimpl::ms_handle_connect(Connection *con)
 {
     // dout(5) << "ms_handle_connect on " << con->get_peer_addr() << dendl;
     objecter->ms_handle_connect(con);
 }
 
-void MDS::ms_handle_accept(Connection *con)
+void MDSimpl::ms_handle_accept(Connection *con)
 {
     // XXX if existing session, send any queued messages
 }
 #endif
 
-void MDS::request_state(int s)
+void MDSimpl::request_state(int s)
 {
     // dout(3) << "request_state " << ceph_mds_state_name(s) << dendl;
     want_state = s;
     beacon_send();
 }
 
-void MDS::beacon_start()
+void MDSimpl::beacon_start()
 {
     beacon_send();
 }
 
-void MDS::beacon_send()
+void MDSimpl::beacon_send()
 {
     ++beacon_last_seq;
 	// dout(10) << "beacon_send " << ceph_mds_state_name(want_state)

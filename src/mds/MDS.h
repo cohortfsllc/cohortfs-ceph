@@ -1,38 +1,18 @@
-class MDS : public Dispatcher {
-public:
-    string name;
-    int whoami;
-    Messenger *messenger;
-    MonClient *monc;
-    MDSMap *mdsmap;
-    Objecter *objecter;
-    Finisher *finisher;
+#ifndef _MDS_H
+#define _MDS_H 1
+#include <boost/function.hpp>
+#ifdef IN_TREE_BUILD
+#include "include/ceph_time.h"
+#include "include/buffer.h"
+#else
+#include "ceph_time.h"
+#include "rados/buffer.h"
+#endif
+class MDS {
 protected:
-    int last_state, state, want_state;
-    Context *createwaitingforosd;
-    ceph_tid_t last_tid;
+    MDS() { }
+    ~MDS() { }
 public:
-    int get_state() { return state; }
-    int get_want_state() { return want_state; }
-    void request_state(int s);
-    ceph_tid_t issue_tid() { return ++last_tid; }
-    version_t beacon_last_seq;
-    bool was_laggy;
-    uint64_t beacon_sender;
-public:
-    MDS(const std::string &n, Messenger *m, MonClient *mc);
-    ~MDS();
-    int get_nodeid() { return whoami; }
-    MDSMap *get_mds_map() { return mdsmap; }
-    int init(int wanted_state = MDSMap::STATE_BOOT);
-    void beacon_start();
-    void beacon_send();
-    // void handle_mds_beacon(MMDSBeacon *m);
-    void handle_signal(int signum);
-    bool ms_dispatch(Message *m);
-    bool ms_handle_reset(Connection *con);
-    void ms_handle_remote_reset(Connection *con);
-    bool shutdown();
 };
 
 class MDSVol {
@@ -79,6 +59,15 @@ struct write_delegation {
 	int foo;	// need something here
 };
 
+#define MDS_MAX_NGROUPS 32
+
+struct identity {
+	int uid;
+	int gid;
+	int ngroups;
+	int groups[MDS_MAX_NGROUPS];
+};
+
 typedef int accessmask;
 #define MDS_ACCESS_READ	1
 #define MDS_ACCESS_WRITE 2
@@ -101,22 +90,22 @@ protected:
     ~FSObj() { }
 public:
     void release();
-    int lookup(const std::string path, lookupcb * lookres);
+    int lookup(identity *who, const std::string path, lookupcb * lookres);
     int readdir(dirptr *where, unsigned char *buf, int bufsize,
 	readdircb * readdirres);
-    int create(const std::string name, ObjAttr *attrs,
+    int create(identity *who, const std::string name, ObjAttr *attrs,
 	createcb * createres);
 	// create is also mkdir, mknod
-    int symlink(const std::string name, const std::string toname, ObjAttr *attrs,
+    int symlink(identity *who, const std::string name, const std::string toname, ObjAttr *attrs,
 	createcb * symlinkres);
-    int readlink(readlinkcb *result);
-    int testaccess(int accesstype, testaccesscb *testaccessres);
-    int setattr(int mask, ObjAttr *attrs, getsetattrcb *setattrres);
-    int getattr(int mask, ObjAttr *attrs, getsetattrcb *getattrres);
-    int link(FSObj *destdir, std::string name, getsetattrcb *linkres);
-    int rename(std::string oldname, FSObj *newdir, std::string newname,
+    int readlink(identity *who, readlinkcb *result);
+    int testaccess(identity *who, int accesstype, testaccesscb *testaccessres);
+    int setattr(identity *who, int mask, ObjAttr *attrs, getsetattrcb *setattrres);
+    int getattr(identity *who, int mask, ObjAttr *attrs, getsetattrcb *getattrres);
+    int link(identity *who, FSObj *destdir, std::string name, getsetattrcb *linkres);
+    int rename(identity *who, std::string oldname, FSObj *newdir, std::string newname,
 	getsetattrcb *linkres);
-    int unlink(std::string name, getsetattrcb *linkres);
+    int unlink(identity *who, std::string name, getsetattrcb *linkres);
     int read(bufferlist bl, int flags, readwritecb *readres);
     int write(bufferlist bl, int flags, readwritecb *readres);
     int prepare_delegated_read(int flags, delegatedreadcb *delegatedreadres);
@@ -125,3 +114,4 @@ public:
     int release_delegated_write(write_delegation *delegation, getsetattrcb *releasecb);
     char * get_oid_name();	// not in delegation?
 };
+#endif /* _MDS_H */

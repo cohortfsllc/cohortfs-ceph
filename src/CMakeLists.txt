@@ -520,7 +520,9 @@ if(WITH_LIBMDS)
     install(TARGETS mds DESTINATION lib)
   endif(${ENABLE_SHARED})
   target_link_libraries(mds PRIVATE common os dl ${EXTRALIBS})
-  install(FILES libmds/ceph_mds.h DESTINATION include/cephfs)
+  install(FILES
+	mds/MDS.h include/ceph_time.h libmds/ceph_mds.h
+	DESTINATION include/cephfs)
 endif(WITH_LIBMDS)
 
 add_subdirectory(erasure-code)
