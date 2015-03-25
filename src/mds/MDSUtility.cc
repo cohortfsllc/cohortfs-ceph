@@ -17,7 +17,7 @@
 #define dout_subsys ceph_subsys_mds
 
 
-MDSUtility::MDSUtility() :
+MDSUtility::MDSUtility(CephContext *cct) :
   Dispatcher(cct),
   objecter(NULL),
   waiting_for_mds_map(NULL)
