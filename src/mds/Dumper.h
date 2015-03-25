@@ -32,7 +32,7 @@ private:
   int rank;
 
 public:
-  Dumper() : journaler(NULL), rank(-1)
+  Dumper(CephContext *cct) : MDSUtility(cct), journaler(NULL), rank(-1)
   {}
 
   void handle_mds_map(MMDSMap* m);

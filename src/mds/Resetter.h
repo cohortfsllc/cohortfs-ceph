@@ -28,7 +28,7 @@ class Resetter : public MDSUtility {
 public:
   Journaler *journaler;
 
-  Resetter() : journaler(NULL) {}
+  Resetter(CephContext *cct) : MDSUtility(cct), journaler(NULL) {}
 
   int init(int rank);
   void reset();

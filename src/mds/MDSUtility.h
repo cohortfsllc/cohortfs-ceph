@@ -43,7 +43,7 @@ protected:
   Context *waiting_for_mds_map;
 
 public:
-  MDSUtility();
+  MDSUtility(CephContext *cct);
   ~MDSUtility();
 
   void handle_mds_map(MMDSMap* m);
