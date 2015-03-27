@@ -27,7 +27,7 @@ public:
 
   struct OutTransaction {
     FileStoreTracker::trans_list *in_flight;
-    ObjectStore::Transaction *t;
+    Transaction *t;
   };
 
   FileStoreTracker(ObjectStore *store, KeyValueDB *db)

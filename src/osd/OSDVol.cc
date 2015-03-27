@@ -235,7 +235,7 @@ void OSDVol::read_info()
 void OSDVol::requeue_op(OpRequest* op)
 {
   cohort::OpQueue::Bands band;
-  if (op->get_req()->get_priority() > CEPH_MSG_PRIO_LOW)
+  if (op->get_priority() > CEPH_MSG_PRIO_LOW)
     band = cohort::OpQueue::Bands::HIGH;
   else
     band = cohort::OpQueue::Bands::BASE;
@@ -309,9 +309,7 @@ void OSDVol::do_op(OpRequest* op)
   // have a system of permissions worked out, this is where we should
   // check it.
 
-  MOSDOp *m = static_cast<MOSDOp*>(op->get_req());
-
-  assert(m->get_header().type == CEPH_MSG_OSD_OP);
+  assert(op->get_header().type == CEPH_MSG_OSD_OP);
 
   op->trace.event("do_op", &trace_endpoint);
 
@@ -322,19 +320,19 @@ void OSDVol::do_op(OpRequest* op)
   bool write_ordered =
     op->may_write() ||
     op->may_cache() ||
-    (m->get_flags() & CEPH_OSD_FLAG_RWORDERED);
+    (op->get_flags() & CEPH_OSD_FLAG_RWORDERED);
 
-  dout(10) << "do_op " << *m
+  dout(10) << "do_op " << *op
 	   << (op->may_write() ? " may_write" : "")
 	   << (op->may_read() ? " may_read" : "")
 	   << (op->may_cache() ? " may_cache" : "")
 	   << " -> "
 	   << (write_ordered ? "write-ordered" : "read-ordered")
-	   << " flags " << ceph_osd_flag_string(m->get_flags())
+	   << " flags " << ceph_osd_flag_string(op->get_flags())
 	   << dendl;
 
   bool can_create = op->may_write() || op->may_cache();
-  const hoid_t oid(m->get_oid());
+  const hoid_t oid(op->get_oid());
 
   ObjectContextRef obc = get_object_context(oid, can_create);
   if (! obc) {
@@ -348,7 +346,7 @@ void OSDVol::do_op(OpRequest* op)
   map<hoid_t,ObjectContextRef> src_obc;
 
   vector<OSDOp>::const_iterator op_iter; // atm, this can be const
-  for (op_iter = m->ops.begin(); op_iter != m->ops.end(); ++op_iter) {
+  for (op_iter = op->ops.begin(); op_iter != op->ops.end(); ++op_iter) {
     const OSDOp& osd_op = *op_iter;
 
     if (!ceph_osd_op_type_multi(osd_op.op.op))
@@ -384,13 +382,13 @@ void OSDVol::do_op(OpRequest* op)
     insert.first->second = sobc;
   }
 
-  OpContext *ctx = new OpContext(op, m->get_reqid(), m->ops,
-				 &obc->obs,
-				 this);
-  ctx->op_t = new Transaction();
+  OpContext *ctx = &op->context;
+  ctx->op = op;
+  ctx->new_obs = obc->obs;
   ctx->obc = obc;
+  ctx->vol = this;
 
-  if (m->get_flags() & CEPH_OSD_FLAG_SKIPRWLOCKS) {
+  if (op->get_flags() & CEPH_OSD_FLAG_SKIPRWLOCKS) {
     dout(20) << __func__ << ": skipping rw locks" << dendl;
   } else if (!get_rw_locks(ctx)) {
     dout(20) << __func__ << " waiting for rw locks " << dendl;
@@ -552,10 +550,8 @@ int OSDVol::whoami() {
 
 struct OnReadComplete : public Context {
   OSDVol *vol;
-  OSDVol::OpContext *opcontext;
-  OnReadComplete(
-    OSDVol *vol,
-    OSDVol::OpContext *ctx) : vol(vol), opcontext(ctx) {}
+  OpContext *opcontext;
+  OnReadComplete(OSDVol *vol, OpContext *ctx) : vol(vol), opcontext(ctx) {}
   void finish(int r) {
     OSDVol::unique_lock vl(vol->lock);
     if (r < 0)
@@ -567,7 +563,7 @@ struct OnReadComplete : public Context {
 };
 
 // OpContext
-void OSDVol::OpContext::start_async_reads(OSDVol* vol)
+void OpContext::start_async_reads(OSDVol* vol)
 {
   inflightreads = 1;
   ObjectHandle oh = reinterpret_cast<ObjectHandle>(obc->obs.oh);
@@ -576,7 +572,7 @@ void OSDVol::OpContext::start_async_reads(OSDVol* vol)
   pending_async_reads.clear();
 }
 
-void OSDVol::OpContext::finish_read(OSDVol* vol)
+void OpContext::finish_read(OSDVol* vol)
 {
   assert(inflightreads > 0);
   --inflightreads;
@@ -593,31 +589,29 @@ void OSDVol::OpContext::finish_read(OSDVol* vol)
 void OSDVol::execute_ctx(OpContext* ctx)
 {
   dout(10) << __func__ << " " << ctx << dendl;
-  ctx->reset_obs(ctx->obc.get());
-  OpRequest* op = ctx->op.get();
-  MOSDOp *m = static_cast<MOSDOp*>(op->get_req());
+  OpRequest* op = ctx->op;
   ObjectContextRef obc = ctx->obc;
   const hoid_t& soid = obc->obs.oi.oid;
   map<hoid_t, ObjectContextRef>& src_obc = ctx->src_obc;
 
   // this method must be idempotent since we may call it several times
   // before we finally apply the resulting transaction.
-  delete ctx->op_t;
-  ctx->op_t = new Transaction();
+  ctx->op_t.clear();
+  ctx->new_obs = obc->obs;
 
   if (op->may_write() || op->may_cache()) {
     op->mark_started();
 
     // version
     ctx->at_version = get_next_version();
-    ctx->mtime = m->get_mtime();
+    ctx->mtime = op->get_mtime();
 
-    dout(10) << "do_op " << soid << " " << ctx->ops
+    dout(10) << "do_op " << soid << " " << op->ops
 	     << " ov " << obc->obs.oi.version
 	     << " av " << ctx->at_version
 	     << dendl;
   } else {
-    dout(10) << "do_op " << soid << " " << ctx->ops
+    dout(10) << "do_op " << soid << " " << op->ops
 	     << " ov " << obc->obs.oi.version
 	     << dendl;
   }
@@ -662,10 +656,10 @@ void OSDVol::execute_ctx(OpContext* ctx)
     return;
   }
 
-  bool successful_write = !ctx->op_t->empty() &&
+  bool successful_write = !ctx->op_t.empty() &&
     op->may_write() && result >= 0;
   // prepare the reply
-  ctx->reply = new MOSDOpReply(m, 0, get_osdmap()->get_epoch(), 0,
+  ctx->reply = new MOSDOpReply(op, 0, get_osdmap()->get_epoch(), 0,
 			       successful_write);
 
   // Write operations aren't allowed to return a data payload because
@@ -683,7 +677,7 @@ void OSDVol::execute_ctx(OpContext* ctx)
   ctx->reply->set_result(result);
 
   // read or error?
-  if (ctx->op_t->empty() || result < 0) {
+  if (ctx->op_t.empty() || result < 0) {
     if (ctx->pending_async_reads.empty()) {
       complete_read_ctx(result, ctx);
     } else {
@@ -714,7 +708,7 @@ void OSDVol::execute_ctx(OpContext* ctx)
 void OSDVol::reply_ctx(OpContext* ctx, int r)
 {
   if (ctx->op)
-    osd->reply_op_error(ctx->op.get(), r);
+    osd->reply_op_error(ctx->op, r);
   close_op_ctx(ctx, r);
 }
 
@@ -722,7 +716,7 @@ void OSDVol::reply_ctx(OpContext* ctx, int r, eversion_t v,
 		       version_t uv)
 {
   if (ctx->op)
-    osd->reply_op_error(ctx->op.get(), r, v, uv);
+    osd->reply_op_error(ctx->op, r, v, uv);
   close_op_ctx(ctx, r);
 }
 
@@ -814,7 +808,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
   const hoid_t& soid = oi.oid; // ctx->new_objs->obs.oi.oid
   const hoid_t& obc_soid = ctx->obc->obs.oi.oid;
 
-  Transaction* t = ctx->op_t;
+  Transaction* t = &ctx->op_t;
   bool first_read = true;
 
   uint16_t c_ix = t->push_col(coll);
@@ -1576,7 +1570,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	}
 	uint64_t cookie = op.watch.cookie;
 	bool do_watch = op.watch.flag & 1;
-	entity_name_t entity = ctx->reqid.name;
+	entity_name_t entity = ctx->op->get_reqid().name;
 	ObjectContextRef obc = ctx->obc;
 
 	dout(10) << "watch: ctx->obc=" << (void *)obc.get()
@@ -1586,11 +1580,11 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	dout(10) << "watch: oi.user_version="
 		 << oi.user_version<< dendl;
 	dout(10) << "watch: peer_addr="
-		 << ctx->op->get_req()->get_connection()->
+		 << ctx->op->get_connection()->
 	  get_peer_addr() << dendl;
 
 	watch_info_t w(cookie, cct->_conf->osd_client_watch_timeout,
-	  ctx->op->get_req()->get_connection()->get_peer_addr());
+	  ctx->op->get_connection()->get_peer_addr());
 	if (do_watch) {
 	  if (oi.watchers.count(make_pair(cookie, entity))) {
 	    dout(10) << " found existing watch " << w << " by "
@@ -1952,7 +1946,7 @@ inline int OSDVol::_delete_obj(OpContext* ctx, bool no_whiteout)
   ObjectState& obs = ctx->new_obs;
   object_info_t& oi = obs.oi;
   ObjectHandle oh = reinterpret_cast<ObjectHandle>(obs.oh);
-  Transaction* t = ctx->op_t;
+  Transaction* t = &ctx->op_t;
 
   uint16_t c_ix = t->push_col(coll);
   uint16_t o_ix = t->push_obj(oh);
@@ -2017,8 +2011,8 @@ void OSDVol::do_osd_op_effects(OpContext* ctx)
   if (! ctx->has_watches())
     return;
 
-  ConnectionRef conn(ctx->op->get_req()->get_connection());
-  entity_name_t entity = ctx->reqid.name;
+  ConnectionRef conn(ctx->op->get_connection());
+  entity_name_t entity = ctx->op->get_reqid().name;
   OpContext::WatchesNotifies* wn = ctx->get_watches();
 
   for (vector<watch_info_t>::iterator i = wn->watch_connects.begin();
@@ -2106,10 +2100,10 @@ void OSDVol::do_osd_op_effects(OpContext* ctx)
 
 int OSDVol::prepare_transaction(OpContext* ctx)
 {
-  assert(!ctx->ops.empty());
+  assert(!ctx->op->ops.empty());
 
   // prepare the actual mutation
-  int result = do_osd_ops(ctx, ctx->ops);
+  int result = do_osd_ops(ctx, ctx->op->ops);
   if (result < 0)
     return result;
 
@@ -2118,7 +2112,7 @@ int OSDVol::prepare_transaction(OpContext* ctx)
     do_osd_op_effects(ctx);
 
   // read-op?  done?
-  if (ctx->op_t->empty() && !ctx->modify) {
+  if (ctx->op_t.empty() && !ctx->modify) {
     return result;
   }
 
@@ -2131,9 +2125,9 @@ int OSDVol::prepare_transaction(OpContext* ctx)
 
 void OSDVol::finish_ctx(OpContext* ctx)
 {
-  Transaction* t = ctx->op_t;
-  const hoid_t& soid = ctx->obs->oi.oid;
-  ObjectHandle soh = reinterpret_cast<ObjectHandle>(ctx->obs->oh);
+  Transaction* t = &ctx->op_t;
+  const hoid_t& soid = ctx->obc->obs.oi.oid;
+  ObjectHandle soh = reinterpret_cast<ObjectHandle>(ctx->obc->obs.oh);
 
   dout(20) << __func__ << " " << soid << " " << ctx
 	   << dendl;
@@ -2159,8 +2153,8 @@ void OSDVol::finish_ctx(OpContext* ctx)
   if (ctx->new_obs.exists) {
     // on the head object
     ctx->new_obs.oi.version = ctx->at_version;
-    ctx->new_obs.oi.prior_version = ctx->obs->oi.version;
-    ctx->new_obs.oi.last_reqid = ctx->reqid;
+    ctx->new_obs.oi.prior_version = ctx->obc->obs.oi.version;
+    ctx->new_obs.oi.last_reqid = ctx->op->get_reqid();
     if (ctx->mtime != ceph::real_time::min()) {
       ctx->new_obs.oi.mtime = ctx->mtime;
       dout(10) << " set mtime to "
@@ -2184,9 +2178,8 @@ void OSDVol::finish_ctx(OpContext* ctx)
 
 void OSDVol::complete_read_ctx(int result, OpContext* ctx)
 {
-  MOSDOp *m = static_cast<MOSDOp*>(ctx->op->get_req());
   assert(ctx->async_reads_complete());
-  ctx->reply->claim_op_out_data(ctx->ops);
+  ctx->reply->claim_op_out_data(ctx->op->ops);
   ctx->reply->get_header().data_off = ctx->data_off;
 
   MOSDOpReply *reply = ctx->reply;
@@ -2194,7 +2187,7 @@ void OSDVol::complete_read_ctx(int result, OpContext* ctx)
 
   if (result >= 0) {
     // on read, return the current object version
-    reply->set_reply_versions(eversion_t(), ctx->obs->oi.user_version);
+    reply->set_reply_versions(eversion_t(), ctx->obc->obs.oi.user_version);
   } else if (result == -ENOENT) {
     // on ENOENT, set a floor for what the next user version will be.
     reply->set_enoent_reply_versions(info.last_update,
@@ -2202,8 +2195,8 @@ void OSDVol::complete_read_ctx(int result, OpContext* ctx)
   }
 
   reply->add_flags(CEPH_OSD_FLAG_ACK | CEPH_OSD_FLAG_ONDISK);
-  reply->libosd_context = m->libosd_context;
-  osd->send_message_osd_client(reply, m->get_connection());
+  reply->libosd_context = ctx->op->libosd_context;
+  osd->send_message_osd_client(reply, ctx->op->get_connection());
   close_op_ctx(ctx, 0);
 } /* complete_read_ctx */
 
@@ -2268,26 +2261,23 @@ void OSDVol::eval_mutation(Mutation* mutation,
                            std::unique_lock<cohort::SpinLock>& lock)
 {
   MOSDOpReply *reply = nullptr;
-  MOSDOp *m = NULL;
-  if (mutation->ctx->op)
-    m = static_cast<MOSDOp *>(mutation->ctx->op->get_req());
+  OpRequest *op = mutation->ctx->op;
 
   if (mutation->done)
     return;
 
-  if (m) {
+  if (op) {
     // an 'ondisk' reply implies 'ack'. so, prefer to send just one
     // ondisk instead of ack followed by ondisk.
 
     // ondisk?
     if (mutation->committed) {
-      if (m->wants_ondisk() && !mutation->sent_disk) {
+      if (op->wants_ondisk() && !mutation->sent_disk) {
 	// send commit.
 	if (mutation->ctx->reply)
 	  std::swap(reply, mutation->ctx->reply);
 	else {
-	  reply = new MOSDOpReply(m, 0, get_osdmap()->get_epoch(),
-				  0, true);
+	  reply = new MOSDOpReply(op, 0, get_osdmap()->get_epoch(), 0, true);
 	  reply->set_reply_versions(mutation->ctx->at_version,
 				    mutation->ctx->user_at_version);
 	}
@@ -2295,18 +2285,18 @@ void OSDVol::eval_mutation(Mutation* mutation,
 	dout(10) << " sending commit on " << mutation->tid
             << " m " << mutation << " reply " << reply << dendl;
 	mutation->sent_disk = true;
-	mutation->ctx->op->mark_commit_sent();
+	op->mark_commit_sent();
       }
     }
 
     // applied?
     if (mutation->applied) {
-      if (m->wants_ack() && !mutation->sent_disk) {
+      if (op->wants_ack() && !mutation->sent_disk) {
 	// send ack
 	if (mutation->ctx->reply)
 	  std::swap(reply, mutation->ctx->reply);
 	else {
-	  reply = new MOSDOpReply(m, 0, get_osdmap()->get_epoch(),
+	  reply = new MOSDOpReply(op, 0, get_osdmap()->get_epoch(),
 				  0, true);
 	  reply->set_reply_versions(mutation->ctx->at_version,
 				    mutation->ctx->user_at_version);
@@ -2348,12 +2338,12 @@ void OSDVol::eval_mutation(Mutation* mutation,
     if (trace) {
       trace.event("eval_mutation sending commit", &trace_endpoint);
       // send reply with a child span
-      Messenger *msgr = m->get_connection()->get_messenger();
+      Messenger *msgr = op->get_connection()->get_messenger();
       reply->trace.init("MOSDOpReply", msgr->get_trace_endpoint(), &trace);
     }
-    assert(entity_name_t::TYPE_OSD != m->get_connection()->peer_type);
-    reply->libosd_context = m->libosd_context;
-    osd->send_message_osd_client(reply, m->get_connection());
+    assert(entity_name_t::TYPE_OSD != op->get_connection()->peer_type);
+    reply->libosd_context = op->libosd_context;
+    osd->send_message_osd_client(reply, op->get_connection());
   }
 }
 
@@ -2362,8 +2352,7 @@ OSDVol::Mutation *OSDVol::new_mutation(OpContext* ctx,
 				       ceph_tid_t tid)
 {
   if (ctx->op)
-    dout(10) << "new_mutation tid " << tid << " on "
-	     << *ctx->op->get_req() << dendl;
+    dout(10) << "new_mutation tid " << tid << " on " << *ctx->op << dendl;
   else
     dout(10) << "new_mutation _tid " << tid << " (no op)" << dendl;
 
@@ -2386,31 +2375,6 @@ void OSDVol::remove_mutation(Mutation* mutation)
   mutation->put();
 }
 
-OSDVol::Mutation *OSDVol::simple_mutation_create(ObjectContext* obc)
-{
-  dout(20) << __func__ << " " << obc->obs.oi.oid << dendl;
-  vector<OSDOp> ops;
-  ceph_tid_t tid = osd->get_tid();
-  osd_reqid_t reqid(osd->get_cluster_msgr_name(), 0, tid);
-  OpContext *ctx = new OpContext(nullptr, reqid, ops, &obc->obs, this);
-  ctx->op_t = new Transaction;
-  ctx->mtime = ceph::real_clock::now();
-  ctx->obc = obc;
-  Mutation *mutation = new_mutation(ctx, obc, tid);
-  return mutation;
-}
-
-void OSDVol::simple_mutation_submit(Mutation *mutation)
-{
-  dout(20) << __func__ << " " << mutation->tid << dendl;
-  issue_mutation(mutation);
-  {
-    std::unique_lock<cohort::SpinLock> lock(mutation->lock);
-    eval_mutation(mutation, lock);
-  }
-  mutation->put();
-}
-
 // -------------------------------------------------------
 
 void OSDVol::handle_watch_timeout(WatchRef watch)
@@ -2425,22 +2389,25 @@ void OSDVol::handle_watch_timeout(WatchRef watch)
 				       watch->get_entity()));
   watch->remove();
 
-  vector<OSDOp> ops;
-  ceph_tid_t tid = osd->get_tid();
-  osd_reqid_t reqid(osd->get_cluster_msgr_name(), 0, tid);
-  OpContext *ctx = new OpContext(nullptr, reqid, ops, &obc->obs, this);
-  ctx->op_t = new Transaction();
+  const ceph_tid_t tid = get_tid();
+
+  OpRequest *op = new OpRequest;
+  op->set_tid(tid);
+  op->set_src(get_cluster_msgr_name());
+
+  OpContext *ctx = &op->context;
+  ctx->op = op;
+  ctx->new_obs = obc->obs;
+  ctx->obc = obc;
+  ctx->vol = this;
   ctx->mtime = ceph::real_clock::now();
   ctx->at_version = get_next_version();
 
-  entity_inst_t nobody;
-
   Mutation *mutation = new_mutation(ctx, obc.get(), tid);
 
-  Transaction *t = ctx->op_t;
-  ObjectHandle oh = reinterpret_cast<ObjectHandle>(obc->obs.oh);
+  Transaction *t = &ctx->op_t;
   uint16_t c_ix = t->push_col(coll);
-  uint16_t o_ix = t->push_obj(oh); // XXXX need ref?
+  uint16_t o_ix = t->push_obj(obc->obs.oh); // XXXX need ref?
 
   obc->obs.oi.prior_version = mutation->obc->obs.oi.version;
   obc->obs.oi.version = ctx->at_version;
@@ -2524,7 +2491,10 @@ OSDVol::get_object_context(const hoid_t& oid,
   return ObjectContextRef();
 } /* get_object_context */
 
-void ObjectContext::on_last_ref(void* ptr)
+void intrusive_ptr_add_ref(ObjectContext *obc) { obc->get(); }
+void intrusive_ptr_release(ObjectContext *obc) { obc->put(); }
+
+void ObjectContext::on_last_ref(ceph::os::Object* ptr)
 {
   ObjectHandle oh = reinterpret_cast<ObjectHandle>(ptr);
   oh->release();
@@ -2569,9 +2539,8 @@ void OSDVol::apply_mutations(bool requeue)
 
     if (requeue) {
       if (mutation->ctx->op) {
-	dout(10) << " requeuing " << *mutation->ctx->op->get_req()
-		 << dendl;
-	OpRequest* op = mutation->ctx->op.get();
+	dout(10) << " requeuing " << *mutation->ctx->op << dendl;
+	OpRequest* op = mutation->ctx->op;
 	/* XXX N.B., taking no extra ref on op, because a ref was
 	 * taken when it was queued for wait */
 	rq.push_back(*op);
@@ -2687,8 +2656,8 @@ void OSDVol::objects_read_async(ObjectHandle oh,
 void OSDVol::issue_mutation(Mutation *mutation)
 {
   OpContext *ctx = mutation->ctx;
-  const hoid_t& oid = ctx->obs->oi.oid;
-  Transaction *op_t = ctx->op_t;
+  const hoid_t& oid = ctx->obc->obs.oi.oid;
+  Transaction *op_t = &ctx->op_t;
 
   dout(7) << "issue_mutation tid " << mutation->tid
 	  << " o " << oid
@@ -2706,12 +2675,9 @@ void OSDVol::issue_mutation(Mutation *mutation)
 
   op_t->register_on_applied_sync(onapplied_sync);
   op_t->register_on_applied(on_all_applied);
-  op_t->register_on_applied(
-    new ObjectStore::C_DeleteTransaction(op_t));
   op_t->register_on_commit(on_all_commit);
 
   osd->store->queue_transaction(op_t, 0, 0, 0, mutation->ctx->op);
-  mutation->ctx->op_t = NULL;
 } /* issue_mutation */
 
 /* static */

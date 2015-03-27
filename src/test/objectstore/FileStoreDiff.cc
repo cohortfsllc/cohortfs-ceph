@@ -137,8 +137,8 @@ bool FileStoreDiff::diff_objects(FileStore *a_store,
   int err;
   std::vector<hoid_t> b_objects, a_objects;
 
-  ObjectStore::CollectionHandle a_ch = a_store->open_collection(coll);
-  ObjectStore::CollectionHandle b_ch = b_store->open_collection(coll);
+  CollectionHandle a_ch = a_store->open_collection(coll);
+  CollectionHandle b_ch = b_store->open_collection(coll);
 
   err = b_store->collection_list(b_ch, b_objects);
   if (err < 0) {
@@ -178,7 +178,7 @@ bool FileStoreDiff::diff_objects(FileStore *a_store,
 
     struct stat b_stat, a_stat;
 
-    ObjectStore::ObjectHandle b_oh = b_store->get_object(b_ch, b_obj);
+    ObjectHandle b_oh = b_store->get_object(b_ch, b_obj);
     err = b_store->stat(b_ch, b_oh, &b_stat);
     if (err < 0) {
       dout(0) << "diff_objects error stating B object "
@@ -187,7 +187,7 @@ bool FileStoreDiff::diff_objects(FileStore *a_store,
       continue;
     }
 
-    ObjectStore::ObjectHandle a_oh = a_store->get_object(a_ch, a_obj);
+    ObjectHandle a_oh = a_store->get_object(a_ch, a_obj);
     err = a_store->stat(a_ch, a_oh, &a_stat);
     if (err < 0) {
       dout(0) << "diff_objects error stating A object "
@@ -285,8 +285,8 @@ bool FileStoreDiff::diff_coll_attrs(FileStore *a_store, FileStore *b_store,
   int err;
   std::map<std::string, bufferptr> b_coll_attrs, a_coll_attrs;
 
-  ObjectStore::CollectionHandle a_ch = a_store->open_collection(coll);
-  ObjectStore::CollectionHandle b_ch = b_store->open_collection(coll);
+  CollectionHandle a_ch = a_store->open_collection(coll);
+  CollectionHandle b_ch = b_store->open_collection(coll);
 
   err = b_store->collection_getattrs(b_ch, b_coll_attrs);
   if (err < 0) {

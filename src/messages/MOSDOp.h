@@ -82,7 +82,7 @@ public:
       oid(_obj), volume(_volume) {
     set_tid(tid);
   }
-private:
+protected:
   ~MOSDOp() {}
 
 public:

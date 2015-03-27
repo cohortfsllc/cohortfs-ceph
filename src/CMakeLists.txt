@@ -469,7 +469,6 @@ set(osd_srcs
   osd/OSD.cc
   osd/Watch.cc
   osd/ClassHandler.cc
-  osd/OpRequest.cc
   osd/OSDVol.cc
   ${osdc_osd_srcs}
   ${libosd_srcs}

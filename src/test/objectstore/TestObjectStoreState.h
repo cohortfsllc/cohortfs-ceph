@@ -135,11 +135,11 @@ public:
   class C_OnFinished: public Context {
    protected:
     TestObjectStoreState *m_state;
-    ObjectStore::Transaction *m_tx;
+    Transaction *m_tx;
 
    public:
-    C_OnFinished(TestObjectStoreState *state,
-	ObjectStore::Transaction *t) : m_state(state), m_tx(t) { }
+    C_OnFinished(TestObjectStoreState *state, Transaction *t)
+      : m_state(state), m_tx(t) { }
 
     void finish(int r) {
       std::lock_guard<std::mutex> locker(m_state->m_finished_lock);

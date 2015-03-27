@@ -16,10 +16,7 @@
 #ifndef CEPH_MOSDOPREPLY_H
 #define CEPH_MOSDOPREPLY_H
 
-#include "msg/Message.h"
-
 #include "MOSDOp.h"
-#include "os/ObjectStore.h"
 #include "common/errno.h"
 
 /*

@@ -58,6 +58,7 @@ class OSD;
 class OSDService;
 class MOSDOp;
 class OSDVol;
+struct OpContext;
 
 typedef boost::intrusive_ptr<OSDVol> OSDVolRef;
 
@@ -75,7 +76,6 @@ public:
   typedef std::unique_lock<std::mutex> unique_lock;
   std::string gen_prefix() const;
 
-  struct OpContext;
   epoch_t get_epoch() const {
     return get_osdmap()->get_epoch();
   }
@@ -96,136 +96,6 @@ public:
 
   LogClientTemp clog_error();
 
-  /*
-   * Capture all object state associated with an in-progress read or write.
-   */
-  struct OpContext {
-    OpRequestRef op;
-    osd_reqid_t reqid;
-    vector<OSDOp>& ops;
-
-    const ObjectState* obs; // Old objectstate
-
-    ObjectState new_obs;  // resulting ObjectState
-    object_stat_sum_t delta_stats;
-
-    bool modify; // (force) modification (even if op_t is empty)
-    bool user_modify; // user-visible modification
-
-    struct WatchesNotifies {
-      // side effects
-      vector<watch_info_t> watch_connects;
-      vector<watch_info_t> watch_disconnects;
-      vector<notify_info_t> notifies;
-      struct NotifyAck {
-	boost::optional<uint64_t> watch_cookie;
-	uint64_t notify_id;
-	NotifyAck(uint64_t notify_id) : notify_id(notify_id) {}
-	NotifyAck(uint64_t notify_id, uint64_t cookie)
-	  : watch_cookie(cookie), notify_id(notify_id) {}
-      };
-      vector<NotifyAck> notify_acks;
-    };
-    WatchesNotifies* watches_notifies;
-
-    ceph::real_time mtime;
-    eversion_t at_version;       // vol's current version pointer
-    version_t user_at_version;   // vol's current user version pointer
-
-    int current_osd_subop_num;
-
-    ObjectStore::Transaction* op_t;
-
-    interval_set<uint64_t> modified_ranges;
-    ObjectContextRef obc;
-    map<hoid_t,ObjectContextRef> src_obc;
-
-    int data_off; // FIXME: may want to kill this msgr hint off at some point!
-
-    MOSDOpReply* reply;
-
-    ceph::mono_time readable_stamp;  // when applied on all replicas
-    OSDVol* vol;
-
-    int num_read;    ///< count read ops
-    int num_write;   ///< count update ops
-
-    // pending async reads <off, len> -> <outbl, outr>
-    list<pair<pair<uint64_t, uint64_t>,
-	      pair<bufferlist*, Context*> > > pending_async_reads;
-    int async_read_result;
-    unsigned inflightreads;
-    friend struct OnReadComplete;
-
-    bool has_watches() {
-      return (!!watches_notifies);
-    }
-    WatchesNotifies* get_watches() {
-      if (! watches_notifies)
-	watches_notifies = new WatchesNotifies();
-      return watches_notifies;
-    }
-    void start_async_reads(OSDVol* vol);
-    void finish_read(OSDVol* vol);
-    bool async_reads_complete() {
-      return inflightreads == 0;
-    }
-
-    ObjectModDesc mod_desc;
-
-    enum { W_LOCK, R_LOCK, NONE } lock_to_release;
-
-    Context* on_finish;
-
-    OpContext(const OpContext& other);
-    const OpContext& operator=(const OpContext& other);
-
-    OpContext(OpRequest* _op, osd_reqid_t _reqid, vector<OSDOp>& _ops,
-	      ObjectState* _obs, OSDVol* _vol) :
-      op(_op), reqid(_reqid), ops(_ops), obs(_obs),
-      new_obs(_obs->oi, _obs->oh, _obs->exists),
-      modify(false), user_modify(false),
-      watches_notifies(nullptr),
-      user_at_version(0),
-      current_osd_subop_num(0),
-      op_t(NULL),
-      data_off(0), reply(NULL), vol(_vol),
-      num_read(0),
-      num_write(0),
-      async_read_result(0),
-      inflightreads(0),
-      lock_to_release(NONE),
-      on_finish(NULL) {
-    }
-
-    void reset_obs(ObjectContext* obc) {
-      /* forward object info, existence, and handle */
-      new_obs = ObjectState(obc->obs.oi, obc->obs.oh, obc->obs.exists);
-    }
-
-    ~OpContext() {
-      assert(!op_t);
-      assert(lock_to_release == NONE);
-      if (reply)
-	reply->put();
-      for (list<pair<pair<uint64_t, uint64_t>,
-	     pair<bufferlist*, Context*> > >::iterator i =
-	     pending_async_reads.begin();
-	   i != pending_async_reads.end();
-	   pending_async_reads.erase(i++)) {
-	delete i->second.second;
-      }
-      if (watches_notifies)
-	delete watches_notifies;
-      assert(on_finish == NULL);
-    }
-    void finish(int r) {
-      if (on_finish) {
-	on_finish->complete(r);
-	on_finish = NULL;
-      }
-    }
-  };
   friend struct OpContext;
 
   /*
@@ -261,7 +131,9 @@ public:
       tid(tid),
       aborted(false), done(false),
       applied(false), committed(false), sent_disk(false),
-      on_applied(NULL) { }
+      on_applied(NULL) {
+      ctx->op->get();
+    }
 
     Mutation* get() {
       ++nref;
@@ -270,7 +142,7 @@ public:
     void put() {
       assert(nref > 0);
       if (--nref == 0) {
-	delete ctx; // must already be unlocked
+        ctx->op->put();
 	assert(on_applied == NULL);
 	delete this;
       }
@@ -329,13 +201,13 @@ protected:
    */
   bool get_rw_locks(OpContext* ctx) {
     if (ctx->op->may_write() || ctx->op->may_cache()) {
-      if (ctx->obc->get_write(ctx->op.get() /* intrusive ptr */)) {
+      if (ctx->obc->get_write(ctx->op)) {
 	ctx->lock_to_release = OpContext::W_LOCK;
 	return true;
       }
     } else {
       assert(ctx->op->may_read());
-      if (ctx->obc->get_read(ctx->op.get() /* intrusive ptr */)) {
+      if (ctx->obc->get_read(ctx->op)) {
 	ctx->lock_to_release = OpContext::R_LOCK;
 	return true;
       }
@@ -350,10 +222,7 @@ protected:
    */
   void close_op_ctx(OpContext* ctx, int r) {
     release_op_ctx_locks(ctx);
-    delete ctx->op_t;
-    ctx->op_t = NULL;
     ctx->finish(r);
-    delete ctx;
   }
 
   /**
@@ -394,14 +263,6 @@ protected:
   Mutation* new_mutation(OpContext* ctx, ObjectContext* obc,
 			 ceph_tid_t rep_tid);
   void remove_mutation(Mutation* mutation);
-
-  Mutation* simple_mutation_create(ObjectContext* obc);
-  void simple_mutation_submit(Mutation* mutation);
-
-#if 0
-  // projected object info
-  SharedPtrRegistry<hoid_t, ObjectContext> object_contexts;
-#endif
 
 public:
   bool deleting;  // true while in removing or OSD is shutting down
@@ -697,16 +558,12 @@ public:
   }
 
   bool can_discard_op(OpRequest* op) {
-    MOSDOp *m = static_cast<MOSDOp*>(op->get_req());
-    if (!m->get_connection()->is_connected() &&
-	m->get_version().version == 0) {
-      return true;
-    }
-    return false;
+    return !op->get_connection()->is_connected()
+        && op->get_version().version == 0;
   }
 
   bool can_discard_request(OpRequest* op) {
-    if (op->get_req()->get_type() == CEPH_MSG_OSD_OP)
+    if (op->get_type() == CEPH_MSG_OSD_OP)
       return can_discard_op(op);
     return true;
   }

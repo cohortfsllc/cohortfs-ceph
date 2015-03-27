@@ -7,7 +7,7 @@
 
 #include "Objecter.h"
 #include "Dispatcher.h"
-#include "messages/MOSDOp.h"
+#include "osd/OpRequest.h"
 #include "messages/MOSDOpReply.h"
 
 #define dout_subsys ceph_subsys_osd
@@ -121,7 +121,7 @@ int Objecter::read(const char *object, const uint8_t volume[16],
   }
 
   // set up osd read op
-  MOSDOp *m = new MOSDOp(client, tid, o, vol, epoch, 0);
+  OpRequest *m = new OpRequest(client, tid, o, vol, epoch, 0);
   m->read(offset, length);
 
   // create reply callback
@@ -212,7 +212,7 @@ int Objecter::write(const char *object, const uint8_t volume[16],
   bl.append(ceph::buffer::create_static(length, data));
 
   // set up osd write op
-  MOSDOp *m = new MOSDOp(client, tid, oid, vol, epoch, 0);
+  OpRequest *m = new OpRequest(client, tid, oid, vol, epoch, 0);
   m->write(offset, length, bl);
 
   if (flags & LIBOSD_WRITE_CB_UNSTABLE)
@@ -263,7 +263,7 @@ int Objecter::truncate(const char *object, const uint8_t volume[16],
     return -ENODEV;
 
   // set up osd truncate op
-  MOSDOp *m = new MOSDOp(client, tid, o, vol, epoch, 0);
+  OpRequest *m = new OpRequest(client, tid, o, vol, epoch, 0);
   m->truncate(offset);
 
   if (flags & LIBOSD_WRITE_CB_UNSTABLE)

@@ -102,18 +102,18 @@ class WorkloadGenerator : public TestObjectStoreState {
   size_t get_random_byte_amount(size_t min, size_t max);
   void get_filled_byte_array(bufferlist& bl, size_t size);
 
-  void do_write_object(ObjectStore::Transaction *t,
+  void do_write_object(Transaction *t,
 		       coll_t coll, hoid_t oid,
 		       uint16_t c_ix, uint16_t o_ix,
 		       C_StatState *stat);
-  void do_setattr_object(ObjectStore::Transaction *t,
+  void do_setattr_object(Transaction *t,
 			 coll_t coll, hoid_t oid,
 			 uint16_t c_ix, uint16_t o_ix,
 			 C_StatState *stat);
-  void do_setattr_collection(ObjectStore::Transaction *t, coll_t coll,
+  void do_setattr_collection(Transaction *t, coll_t coll,
 			     uint16_t c_ix,
 			     C_StatState *stat);
-  void do_append_log(ObjectStore::Transaction *t, coll_entry_t *entry,
+  void do_append_log(Transaction *t, coll_entry_t *entry,
 		     uint16_t c_ix, uint16_t o_ix,
 		     C_StatState *stat);
 
@@ -121,9 +121,9 @@ class WorkloadGenerator : public TestObjectStoreState {
     return ((m_destroy_coll_every_nr_runs > 0) &&
 	(m_nr_runs >= m_destroy_coll_every_nr_runs));
   }
-  void do_destroy_collection(ObjectStore::Transaction *t, coll_entry_t *entry,
+  void do_destroy_collection(Transaction *t, coll_entry_t *entry,
       C_StatState *stat);
-  coll_entry_t *do_create_collection(ObjectStore::Transaction *t,
+  coll_entry_t *do_create_collection(Transaction *t,
       C_StatState *stat);
 
   void do_stats();
@@ -139,7 +139,7 @@ public:
 
   public:
     C_OnReadable(WorkloadGenerator *state,
-				  ObjectStore::Transaction *t)
+				  Transaction *t)
      :TestObjectStoreState::C_OnFinished(state, t), wrkldgen_state(state) { }
 
     void finish(int r)
@@ -154,7 +154,7 @@ public:
 
   public:
     C_OnDestroyed(WorkloadGenerator *state,
-	ObjectStore::Transaction *t, coll_entry_t *entry) :
+	Transaction *t, coll_entry_t *entry) :
 	  C_OnReadable(state, t), m_entry(entry) {}
 
     void finish(int r) {

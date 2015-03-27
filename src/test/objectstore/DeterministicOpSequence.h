@@ -57,7 +57,7 @@ class DeterministicOpSequence : public TestObjectStoreState {
 
   bool run_one_op(int op, rngen_t& gen);
 
-  void note_txn(ObjectStore::Transaction *t);
+  void note_txn(Transaction *t);
   bool do_touch(rngen_t& gen);
   bool do_remove(rngen_t& gen);
   bool do_write(rngen_t& gen);

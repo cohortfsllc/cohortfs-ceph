@@ -11,11 +11,11 @@ using std::get;
 class OnApplied : public Context {
   FileStoreTracker *tracker;
   FileStoreTracker::trans_list in_flight;
-  ObjectStore::Transaction *t;
+  Transaction *t;
 public:
   OnApplied(FileStoreTracker *tracker,
 	    FileStoreTracker::trans_list& in_flight,
-	    ObjectStore::Transaction *t)
+	    Transaction *t)
     : tracker(tracker), in_flight(in_flight), t(t) {}
 
   void finish(int r) {
@@ -71,7 +71,7 @@ void FileStoreTracker::submit_transaction(Transaction &t)
 {
   FileStoreTracker::trans_list in_flight;
   OutTransaction out;
-  out.t = new ObjectStore::Transaction;
+  out.t = new ::Transaction;
   out.in_flight = &in_flight;
   for (list<Transaction::Op*>::iterator i = t.ops.begin();
        i != t.ops.end();

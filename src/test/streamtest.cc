@@ -146,7 +146,7 @@ int main(int argc, const char **argv)
     return -1;
   }
 
-  ObjectStore::Transaction ft;
+  Transaction ft;
   ft.create_collection(coll_t());
   fs->apply_transaction(ft);
 
@@ -162,7 +162,7 @@ int main(int argc, const char **argv)
   while (now < end) {
     hoid_t oid(oid_t("streamtest"));
     set_start(pos, ceph::mono_clock::now());
-    ObjectStore::Transaction *t = new ObjectStore::Transaction;
+    Transaction *t = new Transaction;
     (void) t->push_col(ch);
     (void) t->push_oid(oid);
     t->write(pos, bytes, bl);

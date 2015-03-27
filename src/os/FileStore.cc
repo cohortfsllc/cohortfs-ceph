@@ -3678,7 +3678,7 @@ int FileStore::close_collection(CollectionHandle ch)
   public:
     ObjUnref(FileStore *_fs) : fs(_fs) {};
 
-    void operator()(Object* o) const {
+    void operator()(ceph::os::Object* o) const {
       fs->obj_lru.unref(o, cohort::lru::FLAG_NONE);
     }
   };

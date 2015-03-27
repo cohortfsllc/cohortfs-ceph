@@ -128,7 +128,7 @@ int DeterministicOpSequence::_gen_obj_id(rngen_t& gen)
   return obj_rng(gen);
 }
 
-void DeterministicOpSequence::note_txn(ObjectStore::Transaction *t)
+void DeterministicOpSequence::note_txn(Transaction *t)
 {
   bufferlist bl;
   ::encode(txn, bl);
@@ -444,7 +444,7 @@ bool DeterministicOpSequence::do_coll_add(rngen_t& gen)
 
 void DeterministicOpSequence::_do_touch(coll_t coll, oid_t& oid)
 {
-  ObjectStore::Transaction t;
+  Transaction t;
   note_txn(&t);
   uint16_t c_ix = t.push_cid(coll);
   uint16_t o_ix =  t.push_oid(hoid_t(oid));
@@ -454,7 +454,7 @@ void DeterministicOpSequence::_do_touch(coll_t coll, oid_t& oid)
 
 void DeterministicOpSequence::_do_remove(coll_t coll, oid_t& oid)
 {
-  ObjectStore::Transaction t;
+  Transaction t;
   note_txn(&t);
   (void) t.push_cid(coll);
   (void) t.push_oid(oid);
@@ -467,7 +467,7 @@ void DeterministicOpSequence::_do_set_attrs(
   oid_t& oid,
   const map<string, bufferlist>& attrs)
 {
-  ObjectStore::Transaction t;
+  Transaction t;
   note_txn(&t);
   (void) t.push_cid(coll);
   (void) t.push_oid(hoid_t(oid));
@@ -479,7 +479,7 @@ void DeterministicOpSequence::_do_write(coll_t coll, oid_t& oid,
 					uint64_t off, uint64_t len,
 					const bufferlist& data)
 {
-  ObjectStore::Transaction t;
+  Transaction t;
   note_txn(&t);
   (void) t.push_cid(coll);
   (void) t.push_oid(hoid_t(oid));
@@ -490,7 +490,7 @@ void DeterministicOpSequence::_do_write(coll_t coll, oid_t& oid,
 void DeterministicOpSequence::_do_clone(coll_t coll, oid_t& orig_obj,
 					oid_t& new_obj)
 {
-  ObjectStore::Transaction t;
+  Transaction t;
   note_txn(&t);
   uint16_t c_ix = t.push_cid(coll);
   uint16_t o1_ix = t.push_oid(orig_obj);
@@ -506,7 +506,7 @@ void DeterministicOpSequence::_do_clone_range(coll_t coll,
 					      uint64_t srclen,
 					      uint64_t dstoff)
 {
-  ObjectStore::Transaction t;
+  Transaction t;
   note_txn(&t);
   uint16_t c_ix = t.push_cid(coll);
   uint16_t o1_ix = t.push_oid(hoid_t(orig_oid));
@@ -523,7 +523,7 @@ void DeterministicOpSequence::_do_write_and_clone_range(coll_t coll,
 							uint64_t dstoff,
 							bufferlist& bl)
 {
-  ObjectStore::Transaction t;
+  Transaction t;
   note_txn(&t);
   uint16_t c_ix = t.push_cid(coll);
   uint16_t o1_ix = t.push_oid(hoid_t(orig_oid));
@@ -537,7 +537,7 @@ void DeterministicOpSequence::_do_coll_add(coll_t orig_coll,
 					   coll_t new_coll,
 					   oid_t& oid)
 {
-  ObjectStore::Transaction t;
+  Transaction t;
   note_txn(&t);
   uint16_t c1_ix = t.push_cid(orig_coll);
   uint16_t o1_ix = t.push_oid(hoid_t(oid));
@@ -550,7 +550,7 @@ void DeterministicOpSequence::_do_coll_add(coll_t orig_coll,
 void DeterministicOpSequence::_do_coll_rename(coll_t orig_coll,
 					      coll_t new_coll)
 {
-  ObjectStore::Transaction t;
+  Transaction t;
   note_txn(&t);
   uint16_t c1_ix = t.push_cid(orig_coll);
   uint16_t c2_ix = t.push_cid(new_coll);
