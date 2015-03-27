@@ -33,7 +33,8 @@ Message* Messengers::Factory::create(int type)
   case CEPH_MSG_PING:         return new MPing;
   case MSG_OSD_PING:          return new MOSDPing;
   case MSG_OSD_MARK_ME_DOWN:  return new MOSDMarkMeDown;
-  case CEPH_MSG_OSD_OP:       return new MOSDOp;
+  // create custom MOSDOp for internal use only
+  case CEPH_MSG_OSD_OP:       return new OpRequest;
   case CEPH_MSG_OSD_MAP:      return new MOSDMap;
   case CEPH_MSG_SHUTDOWN:     return new MGenericMessage(type);
   default: return parent ? parent->create(type) : nullptr;

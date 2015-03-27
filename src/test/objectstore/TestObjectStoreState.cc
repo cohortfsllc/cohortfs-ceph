@@ -36,7 +36,7 @@ void TestObjectStoreState::init(int colls, int objs)
 {
   dout(5) << "init " << colls << " colls " << objs << " objs" << dendl;
 
-  ObjectStore::Transaction *t = new ObjectStore::Transaction;
+  Transaction *t = new Transaction;
   uint16_t c_ix, cm_ix, o_ix, om_ix;
 
   (void) t->create_collection(META_COLL);
@@ -52,7 +52,7 @@ void TestObjectStoreState::init(int colls, int objs)
     dout(5) << "init create collection " << entry->m_coll.to_str()
 	<< " meta " << entry->m_meta_obj.name << dendl;
 
-    t = new ObjectStore::Transaction;
+    t = new Transaction;
 
     // update meta
     cm_ix = t->push_cid(META_COLL);

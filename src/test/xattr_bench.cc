@@ -62,11 +62,11 @@ public:
   std::mutex *lock;
   std::condition_variable *cond;
   int *in_progress;
-  ObjectStore::Transaction *t;
+  Transaction *t;
   OnApplied(std::mutex *lock,
 	    std::condition_variable *cond,
 	    int *in_progress,
-	    ObjectStore::Transaction *t)
+	    Transaction *t)
     : lock(lock), cond(cond),
       in_progress(in_progress), t(t) {
     lock_guard l(*lock);
@@ -97,7 +97,7 @@ uint64_t do_run(ObjectStore *store, int attrsize, int numattrs,
   std::mutex lock;
   std::condition_variable cond;
   int in_flight = 0;
-  ObjectStore::Transaction t;
+  Transaction t;
   map<string, set<string>> collections;
   for (int i = 0; i < 3*THREADS; ++i) {
     stringstream coll_stream;
@@ -129,7 +129,7 @@ uint64_t do_run(ObjectStore *store, int attrsize, int numattrs,
       while (in_flight >= THREADS)
 	cond.wait(l);
     }
-    ObjectStore::Transaction *t = new ObjectStore::Transaction;
+    Transaction *t = new Transaction;
     auto c = rand_choose(collections);
     for (auto &oid : c->second) {
       uint16_t c_ix = t->push_cid(coll_t(c->first));

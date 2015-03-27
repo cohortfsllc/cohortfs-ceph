@@ -253,7 +253,7 @@ void WorkloadGenerator::get_filled_byte_array(bufferlist& bl, size_t size)
   bl.append(bp);
 }
 
-void WorkloadGenerator::do_write_object(ObjectStore::Transaction *t,
+void WorkloadGenerator::do_write_object(Transaction *t,
 					coll_t coll, hoid_t oid,
 					uint16_t c_ix, uint16_t o_ix,
 					C_StatState* stat)
@@ -279,7 +279,7 @@ void WorkloadGenerator::do_write_object(ObjectStore::Transaction *t,
   t->write(c_ix, o_ix, 0, bl.length(), bl);
 }
 
-void WorkloadGenerator::do_setattr_object(ObjectStore::Transaction *t,
+void WorkloadGenerator::do_setattr_object(Transaction *t,
 					  coll_t coll, hoid_t oid,
 					  uint16_t c_ix, uint16_t o_ix,
 					  C_StatState *stat)
@@ -304,7 +304,7 @@ void WorkloadGenerator::do_setattr_object(ObjectStore::Transaction *t,
   t->setattr(c_ix, o_ix, "objxattr", bl);
 }
 
-void WorkloadGenerator::do_setattr_collection(ObjectStore::Transaction *t,
+void WorkloadGenerator::do_setattr_collection(Transaction *t,
 					      coll_t coll,
 					      uint16_t c_ix,
 					      C_StatState *stat)
@@ -328,7 +328,7 @@ void WorkloadGenerator::do_setattr_collection(ObjectStore::Transaction *t,
   t->collection_setattr(c_ix, "collxattr", bl);
 }
 
-void WorkloadGenerator::do_append_log(ObjectStore::Transaction *t,
+void WorkloadGenerator::do_append_log(Transaction *t,
 				      coll_entry_t *entry,
 				      uint16_t c_ix, uint16_t o_ix,
 				      C_StatState *stat)
@@ -355,14 +355,13 @@ void WorkloadGenerator::do_append_log(ObjectStore::Transaction *t,
   pg_log_size[entry->m_coll] += bl.length();
 }
 
-void WorkloadGenerator::do_destroy_collection(ObjectStore::Transaction *t,
+void WorkloadGenerator::do_destroy_collection(Transaction *t,
 					      coll_entry_t *entry,
 					      C_StatState *stat)
 {
   m_nr_runs = 0;
   vector<hoid_t> ls;
-  ObjectStore::CollectionHandle ch =
-    m_store->open_collection(entry->m_coll);
+  CollectionHandle ch = m_store->open_collection(entry->m_coll);
   m_store->collection_list(ch, ls);
   dout(2) << __func__ << " coll " << entry->m_coll
       << " (" << ls.size() << " objects)" << dendl;
@@ -381,7 +380,7 @@ void WorkloadGenerator::do_destroy_collection(ObjectStore::Transaction *t,
 }
 
 TestObjectStoreState::coll_entry_t
-*WorkloadGenerator::do_create_collection(ObjectStore::Transaction *t,
+*WorkloadGenerator::do_create_collection(Transaction *t,
 					 C_StatState *stat)
 {
   coll_entry_t *entry = coll_create(m_next_coll_nr++);
@@ -450,7 +449,7 @@ void WorkloadGenerator::run()
 
     wait_for_ready();
 
-    ObjectStore::Transaction *t = new ObjectStore::Transaction;
+    Transaction *t = new Transaction;
     Context *c;
     bool destroy_collection = false;
     TestObjectStoreState::coll_entry_t *entry = NULL;

@@ -922,7 +922,6 @@ int OSD::shutdown()
     if (p.second->ref != 1) {
       derr << "volume " << p.first << " has ref count of "
 	   << p.second->ref << dendl;
-      abort();
     }
   }
   vol_map.clear();
@@ -2035,8 +2034,8 @@ bool OSD::ms_dispatch(Message *m)
   default:
     {
       /* all other ops, need OSDMap in general */
-      OpRequestRef op = OpRequest::create_request(m);
-      handle_op(op.get(), osd_lk);
+      OpRequest *op = static_cast<OpRequest*>(m);
+      handle_op(op, osd_lk);
     }
   }
 
@@ -2880,16 +2879,15 @@ OSDMapRef OSDService::try_get_map(epoch_t epoch)
  */
 bool OSD::require_same_or_newer_map(OpRequest* op, epoch_t epoch)
 {
-  Message *m = op->get_req();
   dout(15) << "require_same_or_newer_map " << epoch << " (i am "
-	   << osdmap->get_epoch() << ") " << m << dendl;
+	   << osdmap->get_epoch() << ") " << op << dendl;
 
   // Must be called with lock on osd_lock
 
   // do they have a newer map?
   if (epoch > osdmap->get_epoch()) {
     dout(7) << "waiting for newer map epoch " << epoch << " > my "
-	    << osdmap->get_epoch() << " with " << m << dendl;
+	    << osdmap->get_epoch() << " with " << op << dendl;
     wait_for_new_map(op);
     return false;
   }
@@ -2901,17 +2899,17 @@ bool OSD::require_same_or_newer_map(OpRequest* op, epoch_t epoch)
   }
 
   // ok, our map is same or newer.. do they still exist?
-  if (m->get_connection()->get_messenger() == cluster_messenger) {
-    int from = m->get_source().num();
+  if (op->get_connection()->get_messenger() == cluster_messenger) {
+    int from = op->get_source().num();
     if (!osdmap->have_inst(from) ||
-	osdmap->get_cluster_addr(from) != m->get_source_inst().addr) {
+	osdmap->get_cluster_addr(from) != op->get_source_inst().addr) {
       dout(5) << "from dead osd." << from << ", marking down, "
-	      << " msg was " << m->get_source_inst().addr
+	      << " msg was " << op->get_source_inst().addr
 	      << " expected " << (osdmap->have_inst(from) ?
 				  osdmap->get_cluster_addr(from) :
 				  entity_addr_t())
 	      << dendl;
-      ConnectionRef con = m->get_connection();
+      ConnectionRef con = op->get_connection();
       con->set_priv(NULL);   // break ref <-> session cycle, if any
       cluster_messenger->mark_down(con.get());
       return false;
@@ -2920,7 +2918,7 @@ bool OSD::require_same_or_newer_map(OpRequest* op, epoch_t epoch)
 
   // ok, we have at least as new a map as they do.  are we (re)booting?
   if (!is_active()) {
-    dout(7) << "still in boot state, dropping message " << *m << dendl;
+    dout(7) << "still in boot state, dropping message " << *op << dendl;
     return false;
   }
 
@@ -2938,54 +2936,51 @@ void OSDService::reply_op_error(OpRequest* op, int err)
 void OSDService::reply_op_error(OpRequest* op, int err, eversion_t v,
 				version_t uv)
 {
-  MOSDOp *m = static_cast<MOSDOp*>(op->get_req());
-  assert(m->get_header().type == CEPH_MSG_OSD_OP);
+  assert(op->get_header().type == CEPH_MSG_OSD_OP);
   int flags;
-  flags = m->get_flags() & (CEPH_OSD_FLAG_ACK|CEPH_OSD_FLAG_ONDISK);
+  flags = op->get_flags() & (CEPH_OSD_FLAG_ACK|CEPH_OSD_FLAG_ONDISK);
 
   op->trace.event("reply_op_error");
   op->trace.keyval("result", err);
 
-  MOSDOpReply *reply = new MOSDOpReply(m, err, osdmap->get_epoch(), flags,
+  MOSDOpReply *reply = new MOSDOpReply(op, err, osdmap->get_epoch(), flags,
 				       true);
-  Messenger *msgr = m->get_connection()->get_messenger();
+  Messenger *msgr = op->get_connection()->get_messenger();
   reply->trace.init("MOSDOpReply", msgr->get_trace_endpoint(), &op->trace);
 
   reply->set_reply_versions(v, uv);
-  reply->libosd_context = m->libosd_context;
-  msgr->send_message(reply, m->get_connection());
+  reply->libosd_context = op->libosd_context;
+  msgr->send_message(reply, op->get_connection());
 }
 
 void OSD::handle_op(OpRequest* op, unique_lock& osd_lk)
 {
-  MOSDOp *m = static_cast<MOSDOp*>(op->get_req());
-
   // we don't need encoded payload anymore
-  m->clear_payload();
+  op->clear_payload();
 
   // require same or newer map (queues op)
-  if (!require_same_or_newer_map(op, m->get_map_epoch()))
+  if (!require_same_or_newer_map(op, op->get_map_epoch()))
     return;
 
   // blacklisted?
-  if (osdmap->is_blacklisted(m->get_source_addr())) {
-    dout(4) << "handle_op " << m->get_source_addr() << " is blacklisted"
+  if (osdmap->is_blacklisted(op->get_source_addr())) {
+    dout(4) << "handle_op " << op->get_source_addr() << " is blacklisted"
 	    << dendl;
     service.reply_op_error(op, -EBLACKLISTED);
     return;
   }
 
   // share our map with sender, if they're old
-  _share_map_incoming(m->get_source(), m->get_connection().get(),
-		      m->get_map_epoch(),
-		      static_cast<Session *>(m->get_connection()->get_priv()));
+  _share_map_incoming(op->get_source(), op->get_connection().get(),
+		      op->get_map_epoch(),
+		      static_cast<Session *>(op->get_connection()->get_priv()));
 
   /* drop osd_lock (osdmap) */
   osd_lk.unlock();
 
   // object name too long?
-  if (m->get_oid().name.size() > MAX_CEPH_OBJECT_NAME_LEN) {
-    dout(4) << "handle_op '" << m->get_oid().name << "' is longer than "
+  if (op->get_oid().name.size() > MAX_CEPH_OBJECT_NAME_LEN) {
+    dout(4) << "handle_op '" << op->get_oid().name << "' is longer than "
 	    << MAX_CEPH_OBJECT_NAME_LEN << " bytes!" << dendl;
     service.reply_op_error(op, -ENAMETOOLONG);
     return;
@@ -3003,8 +2998,8 @@ void OSD::handle_op(OpRequest* op, unique_lock& osd_lk)
     // full?
     if ((service.check_failsafe_full() ||
 	 osdmap->test_flag(CEPH_OSDMAP_FULL) ||
-	 m->get_map_epoch() < superblock.last_map_marked_full) &&
-	!m->get_source().is_mds()) {  // FIXME: we'll exclude mds
+	 op->get_map_epoch() < superblock.last_map_marked_full) &&
+	!op->get_source().is_mds()) {  // FIXME: we'll exclude mds
 				      // writes for now.
       // Drop the request, since the client will retry when the full
       // flag is unset.
@@ -3013,12 +3008,12 @@ void OSD::handle_op(OpRequest* op, unique_lock& osd_lk)
 
     // too big?
     if (cct->_conf->osd_max_write_size &&
-	m->get_data_len() > cct->_conf->osd_max_write_size << 20) {
+	op->get_data_len() > cct->_conf->osd_max_write_size << 20) {
       // journal can't hold commit!
-      derr << "handle_op msg data len " << m->get_data_len()
+      derr << "handle_op msg data len " << op->get_data_len()
 	   << " > osd_max_write_size "
 	   << (cct->_conf->osd_max_write_size << 20)
-	   << " on " << *m << dendl;
+	   << " on " << *op << dendl;
       service.reply_op_error(op, -OSD_WRITETOOBIG);
       return;
     }
@@ -3031,56 +3026,52 @@ void OSD::handle_op(OpRequest* op, unique_lock& osd_lk)
 
   /* pick a queue priority band */
   cohort::OpQueue::Bands band;
-  if (m->get_priority() > CEPH_MSG_PRIO_LOW)
+  if (op->get_priority() > CEPH_MSG_PRIO_LOW)
     band = cohort::OpQueue::Bands::HIGH;
   else
     band = cohort::OpQueue::Bands::BASE;
 
   /* enqueue on multi_wq, defers vol resolution */
-  op->get(); // explicit ref for queue
   multi_wq->enqueue(*op, band);
 } /* handle_op */
 
 void OSD::static_dequeue_op(OSD* osd, OpRequest* op)
 {
   osd->dequeue_op(op);
+  op->put(); // release queue ref
 }
 
 void OSD::static_wq_thread_exit(OSD* osd) {
   OSDVol::wq_thread_exit(osd);
 }
 
-void OSD::dequeue_op(OpRequest* op_p)
+void OSD::dequeue_op(OpRequest* op)
 {
-  OpRequestRef op(op_p);
-  op_p->put(); // release queue ref
-
   ceph::real_time now = ceph::real_clock::now();
   op->set_dequeued_time(now);
-  ceph::timespan latency = now - op->get_req()->get_recv_stamp();
-  MOSDOp *m = static_cast<MOSDOp*>(op->get_req());
-  const boost::uuids::uuid& volume = m->get_volume();
+  ceph::timespan latency = now - op->get_recv_stamp();
+  const boost::uuids::uuid& volume = op->get_volume();
 
   unique_lock vlock(vol_lock);
   OSDVolRef vol = _lookup_vol(volume);
   if (!vol) {
     dout(7) << "hit non-existent volume " << volume << dendl;
-    service.reply_op_error(op.get(), -ENXIO);
+    service.reply_op_error(op, -ENXIO);
     return;
   }
   vlock.unlock();
 
-  dout(10) << "dequeue_op " << op << " prio " << op->get_req()->get_priority()
-	   << " cost " << op->get_req()->get_cost()
+  dout(10) << "dequeue_op " << op << " prio " << op->get_priority()
+	   << " cost " << op->get_cost()
 	   << " latency " << latency
-	   << " " << *(op->get_req())
+	   << " " << *op
 	   << " osdvol " << *vol << dendl;
 
   if (vol->deleting)
     return;
 
   op->mark_reached_vol();
-  vol->do_op(op.get()); // get intrusive ptr
+  vol->do_op(op); // get intrusive ptr
 
   // finish
   dout(10) << "dequeue_op " << op << " finish" << dendl;
@@ -3108,14 +3099,13 @@ void OSD::handle_conf_change(const struct md_config_t *conf,
 
 int OSD::init_op_flags(OpRequest* op)
 {
-  MOSDOp *m = static_cast<MOSDOp*>(op->get_req());
   vector<OSDOp>::iterator iter;
 
   // client flags have no bearing on whether an op is a read, write, etc.
   op->rmw_flags = 0;
 
   // set bits based on op codes, called methods.
-  for (iter = m->ops.begin(); iter != m->ops.end(); ++iter) {
+  for (iter = op->ops.begin(); iter != op->ops.end(); ++iter) {
     if (ceph_osd_op_mode_modify(iter->op.op))
       op->set_write();
     if (ceph_osd_op_mode_read(iter->op.op))

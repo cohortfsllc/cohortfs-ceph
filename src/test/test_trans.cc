@@ -60,7 +60,7 @@ int main(int argc, const char **argv)
     return -1;
   }
 
-  ObjectStore::Transaction t;
+  Transaction t;
   char buf[1 << 20];
   bufferlist bl;
   bl.append(buf, sizeof(buf));

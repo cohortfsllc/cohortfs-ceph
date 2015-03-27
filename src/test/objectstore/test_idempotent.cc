@@ -76,7 +76,7 @@ int main(int argc, char **argv) {
   if (start_new) {
     std::cerr << "mkfs" << std::endl;
     assert(!store->mkfs());
-    ObjectStore::Transaction t;
+    Transaction t;
     assert(!store->mount());
     t.create_collection(cid);
     store->apply_transaction(t);
@@ -84,7 +84,7 @@ int main(int argc, char **argv) {
     assert(!store->mount());
   }
 
-  ObjectStore::CollectionHandle ch = store->open_collection(cid);
+  CollectionHandle ch = store->open_collection(cid);
 
   FileStoreTracker tracker(store.get(), db.get());
 

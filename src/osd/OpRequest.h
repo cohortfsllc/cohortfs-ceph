@@ -14,47 +14,19 @@
 #ifndef OPREQUEST_H_
 #define OPREQUEST_H_
 
-#include <sstream>
 #include <stdint.h>
-#include <vector>
 
 #include <boost/intrusive/list.hpp>
-#include <include/ceph_time.h>
-#include "msg/Message.h"
+#include "include/ceph_time.h"
+#include "messages/MOSDOp.h"
+#include "OpContext.h"
 
 namespace bi = boost::intrusive;
 
-/**
- * osd request identifier
- *
- * caller name + incarnation# + tid to unique identify this request.
- */
-struct osd_reqid_t {
-  entity_name_t name; // who
-  ceph_tid_t tid;
-  int32_t       inc;  // incarnation
 
-  osd_reqid_t()
-    : tid(0), inc(0) {}
-
-  osd_reqid_t(const entity_name_t& a, int i, ceph_tid_t t)
-    : name(a), tid(t), inc(i) {}
-
-  void encode(bufferlist &bl) const;
-  void decode(bufferlist::iterator &bl);
-  void dump(Formatter *f) const;
-  static void generate_test_instances(list<osd_reqid_t*>& o);
-};
-WRITE_CLASS_ENCODER(osd_reqid_t)
-
-/**
- * The OpRequest takes in a Message* and takes over a single reference
- * to it, which it puts() when destroyed.
- */
-class OpRequest {
+class OpRequest : public MOSDOp {
 public:
   typedef boost::intrusive_ptr<OpRequest> Ref;
-  std::atomic<uint64_t> nref;
 
   /* is queuable */
   typedef bi::link_mode<bi::safe_link> link_mode; // for debugging
@@ -66,32 +38,22 @@ public:
 		     &OpRequest::q_hook>, bi::constant_time_size<true>
 		   > Queue;
 
+  OpContext context;
+
   // rmw flags
   int rmw_flags;
-
-  static Ref create_request(Message *ref);
-
-  void get() { nref.fetch_add(1, std::memory_order_relaxed); }
-
-  void put() {
-    if (nref.fetch_sub(1, std::memory_order_release) == 1) {
-      std::atomic_thread_fence(std::memory_order_acquire);
-      delete this;
-    }
-  }
-
-  // Internal OSD op flags - set by the OSD based on the op types
-  enum {
-    CEPH_OSD_RMW_FLAG_READ	= (1 << 1),
-    CEPH_OSD_RMW_FLAG_WRITE	= (1 << 2),
-    CEPH_OSD_RMW_FLAG_CLASS_READ	= (1 << 3),
-    CEPH_OSD_RMW_FLAG_CLASS_WRITE = (1 << 4),
-    CEPH_OSD_RMW_FLAG_CACHE	= (1 << 6),
-  };
 
   bool check_rmw(int flag) {
     return rmw_flags & flag;
   }
+
+  OpRequest() : rmw_flags(0), hit_flag_points(0), latest_flag_point(0) {}
+  OpRequest(int inc, long tid, const oid_t& obj,
+            const boost::uuids::uuid& volume,
+            epoch_t epoch, int flags)
+    : MOSDOp(inc, tid, obj, volume, epoch, flags),
+      rmw_flags(0), hit_flag_points(0), latest_flag_point(0)
+  {}
 
   bool may_read() { return need_read_cap() || need_class_read_cap(); }
   bool may_write() { return need_write_cap() || need_class_write_cap(); }
@@ -119,15 +81,8 @@ public:
   void set_class_write() { rmw_flags |= CEPH_OSD_RMW_FLAG_CLASS_WRITE; }
   void set_cache() { rmw_flags |= CEPH_OSD_RMW_FLAG_CACHE; }
 
-  Message *get_req() const { return request; }
-
-  uint64_t get_k() const {
-    return request->get_recv_stamp().time_since_epoch().count();
-  }
-
 private:
-  Message *request;
-  osd_reqid_t reqid;
+  ~OpRequest() {}
   uint8_t hit_flag_points;
   uint8_t latest_flag_point;
   ceph::real_time dequeued_time;
@@ -137,8 +92,6 @@ private:
   static const uint8_t flag_started = 1 << 3;
   static const uint8_t flag_sub_op_sent = 1 << 4;
   static const uint8_t flag_commit_sent = 1 << 5;
-
-  OpRequest(Message *req);
 
 public:
   ZTracer::Trace trace; // zipkin trace
@@ -207,13 +160,6 @@ public:
   void set_dequeued_time(ceph::real_time deq_time) {
     dequeued_time = deq_time;
   }
-
-  osd_reqid_t get_reqid() const {
-    return reqid;
-  }
-  
-  ~OpRequest() { request->put(); }
-  
 };
 
 inline void intrusive_ptr_add_ref(OpRequest* op) { op->get(); }

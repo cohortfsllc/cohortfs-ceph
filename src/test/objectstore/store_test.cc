@@ -87,28 +87,28 @@ TEST_P(StoreTest, SimpleColTest) {
   coll_t cid = coll_t("initial");
   int r = 0;
   {
-    ObjectStore::Transaction t;
+    Transaction t;
     t.create_collection(cid);
     cerr << "create collection" << std::endl;
     r = store->apply_transaction(t);
     ASSERT_EQ(r, 0);
   }
   {
-    ObjectStore::Transaction t;
+    Transaction t;
     t.remove_collection(cid);
     cerr << "remove collection" << std::endl;
     r = store->apply_transaction(t);
     ASSERT_EQ(r, 0);
   }
   {
-    ObjectStore::Transaction t;
+    Transaction t;
     t.create_collection(cid);
     cerr << "add collection" << std::endl;
     r = store->apply_transaction(t);
     ASSERT_EQ(r, 0);
   }
   {
-    ObjectStore::Transaction t;
+    Transaction t;
     t.remove_collection(cid);
     cerr << "remove collection" << std::endl;
     r = store->apply_transaction(t);
@@ -120,7 +120,7 @@ TEST_P(StoreTest, SimpleObjectTest) {
   int r;
   coll_t cid = coll_t("coll");
   {
-    ObjectStore::Transaction t;
+    Transaction t;
     t.create_collection(cid);
     cerr << "Creating collection " << cid << std::endl;
     r = store->apply_transaction(t);
@@ -128,7 +128,7 @@ TEST_P(StoreTest, SimpleObjectTest) {
   }
   hoid_t hoid("Object 1");
   {
-    ObjectStore::Transaction t;
+    Transaction t;
     (void) t.push_cid(cid);
     (void) t.push_oid(hoid);
     t.touch();
@@ -137,7 +137,7 @@ TEST_P(StoreTest, SimpleObjectTest) {
     ASSERT_EQ(r, 0);
   }
   {
-    ObjectStore::Transaction t;
+    Transaction t;
     (void) t.push_cid(cid);
     (void) t.push_oid(hoid);
     t.remove();
@@ -152,7 +152,7 @@ TEST_P(StoreTest, SimpleObjectLongnameTest) {
   int r;
   coll_t cid = coll_t("coll");
   {
-    ObjectStore::Transaction t;
+    Transaction t;
     t.create_collection(cid);
     cerr << "Creating collection " << cid << std::endl;
     r = store->apply_transaction(t);
@@ -160,7 +160,7 @@ TEST_P(StoreTest, SimpleObjectLongnameTest) {
   }
   hoid_t hoid("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaObjectaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 1");
   {
-    ObjectStore::Transaction t;
+    Transaction t;
     (void) t.push_cid(cid);
     (void) t.push_oid(hoid);
     t.touch();
@@ -169,7 +169,7 @@ TEST_P(StoreTest, SimpleObjectLongnameTest) {
     ASSERT_EQ(r, 0);
   }
   {
-    ObjectStore::Transaction t;
+    Transaction t;
     (void) t.push_cid(cid);
     (void) t.push_oid(hoid);
     t.remove();
@@ -188,7 +188,7 @@ TEST_P(StoreTest, ManyObjectTest) {
   string base(200, 'a'); // XXX: was 500, can't handle name > MAX_PATH
   set<hoid_t> created;
   {
-    ObjectStore::Transaction t;
+    Transaction t;
     t.create_collection(cid);
     r = store->apply_transaction(t);
     ASSERT_EQ(r, 0);
@@ -197,7 +197,7 @@ TEST_P(StoreTest, ManyObjectTest) {
     if (!(i % 5)) {
       cerr << "Object " << i << std::endl;
     }
-    ObjectStore::Transaction t;
+    Transaction t;
     char buf[100];
     snprintf(buf, sizeof(buf), "%d", i);
     hoid_t oid(oid_t(string(buf) + base));
@@ -209,12 +209,12 @@ TEST_P(StoreTest, ManyObjectTest) {
     ASSERT_EQ(r, 0);
   }
 
-  ObjectStore::CollectionHandle ch = store->open_collection(cid);
+  CollectionHandle ch = store->open_collection(cid);
   for (set<hoid_t>::iterator i = created.begin();
        i != created.end();
        ++i) {
     struct stat buf;
-    ObjectStore::ObjectHandle oh = store->get_object(ch, *i);
+    ObjectHandle oh = store->get_object(ch, *i);
     ASSERT_TRUE(!store->stat(ch, oh, &buf));
     store->put_object(oh);
   }
@@ -271,7 +271,7 @@ TEST_P(StoreTest, ManyObjectTest) {
   for (set<hoid_t>::iterator i = created.begin();
        i != created.end();
        ++i) {
-    ObjectStore::Transaction t;
+    Transaction t;
     (void) t.push_col(ch);
     (void) t.push_oid(*i);
     t.remove();
@@ -281,7 +281,7 @@ TEST_P(StoreTest, ManyObjectTest) {
   cerr << "cleaning up" << std::endl;
   store->close_collection(ch);
   {
-    ObjectStore::Transaction t;
+    Transaction t;
     t.remove_collection(cid);
     r = store->apply_transaction(t);
     ASSERT_EQ(r, 0);
@@ -325,7 +325,7 @@ public:
   static const unsigned max_in_flight = 16;
   static const unsigned max_objects = 1000;
   static const unsigned max_object_len = 1024 * 20;
-  ObjectStore::CollectionHandle ch;
+  CollectionHandle ch;
   unsigned in_flight;
   map<hoid_t, bufferlist> contents;
   set<hoid_t> available_objects;
@@ -340,10 +340,10 @@ public:
   class C_SyntheticOnReadable : public Context {
   public:
     SyntheticWorkloadState *state;
-    ObjectStore::Transaction *t;
+    Transaction *t;
     hoid_t hoid;
     C_SyntheticOnReadable(SyntheticWorkloadState *state,
-			  ObjectStore::Transaction *t, hoid_t _oid)
+			  Transaction *t, hoid_t _oid)
       : state(state), t(t), hoid(_oid) {}
 
     void finish(int r) {
@@ -386,7 +386,7 @@ public:
       coll_t cid = ch->get_cid();
       store->close_collection(ch);
       {
-	ObjectStore::Transaction t;
+	Transaction t;
 	t.remove_collection(cid);
 	cerr << "remove collection" << std::endl;
 	int r = store->apply_transaction(t);
@@ -395,7 +395,7 @@ public:
   }
 
   int init(const coll_t &cid) {
-    ObjectStore::Transaction t;
+    Transaction t;
     t.create_collection(cid);
     int r = store->apply_transaction(t);
     if (r == 0) {
@@ -443,7 +443,7 @@ public:
     wait_for_ready(l);
     hoid_t new_obj = object_gen->create_object(rng);
     available_objects.erase(new_obj);
-    ObjectStore::Transaction *t = new ObjectStore::Transaction;
+    Transaction *t = new Transaction;
     (void) t->push_col(ch);
     (void) t->push_oid(new_obj);
     t->touch();
@@ -465,7 +465,7 @@ public:
 
     hoid_t new_obj = get_uniform_random_object(l);
     available_objects.erase(new_obj);
-    ObjectStore::Transaction *t = new ObjectStore::Transaction;
+    Transaction *t = new Transaction;
 
     boost::uniform_int<> u1(0, max_object_len/2);
     boost::uniform_int<> u2(0, max_object_len);
@@ -519,7 +519,7 @@ public:
       oid = hoid_t(get_uniform_random_object(l));
     }
     bufferlist bl, result;
-    ObjectStore::ObjectHandle oh = store->get_object(ch, oid);
+    ObjectHandle oh = store->get_object(ch, oid);
     ASSERT_TRUE(oh);
 
     std::cout << "READ oid (" << oid << ") (doesn't change in_flight) "
@@ -548,7 +548,7 @@ public:
 
     hoid_t oid = get_uniform_random_object(l);
     available_objects.erase(oid);
-    ObjectStore::Transaction *t = new ObjectStore::Transaction;
+    Transaction *t = new Transaction;
 
     boost::uniform_int<> choose(0, max_object_len);
     size_t len = choose(*rng);
@@ -623,7 +623,7 @@ public:
 	      << in_flight << std::endl;
 
     struct stat buf;
-    ObjectStore::ObjectHandle oh = store->get_object(ch, oid);
+    ObjectHandle oh = store->get_object(ch, oid);
     ASSERT_TRUE(oh);
     int r = store->stat(ch, oh, &buf);
     ASSERT_EQ(0, r);
@@ -648,7 +648,7 @@ public:
     if (!can_unlink())
       return -ENOENT;
     hoid_t to_remove = hoid_t(get_uniform_random_object(l));
-    ObjectStore::Transaction *t = new ObjectStore::Transaction;
+    Transaction *t = new Transaction;
     (void) t->push_col(ch);
     (void) t->push_oid(to_remove);
     t->remove();
@@ -719,18 +719,18 @@ TEST_P(StoreTest, OMapTest) {
   oid_t hoid("tesomap", chunktype::entirety);
   int r;
   {
-    ObjectStore::Transaction t;
+    Transaction t;
     t.create_collection(cid);
     r = store->apply_transaction(t);
     ASSERT_EQ(r, 0);
   }
-  ObjectStore::CollectionHandle ch = store->open_collection(cid);
+  CollectionHandle ch = store->open_collection(cid);
   if (ch == NULL)
     return;
 
   map<string, bufferlist> attrs;
   {
-    ObjectStore::Transaction t;
+    Transaction t;
     (void) t.push_col(ch);
     (void) t.push_oid(hoid);
     t.touch();
@@ -740,13 +740,13 @@ TEST_P(StoreTest, OMapTest) {
     store->apply_transaction(t);
   }
 
-  ObjectStore::ObjectHandle oh = store->get_object(ch, hoid);
+  ObjectHandle oh = store->get_object(ch, hoid);
 
   for (int i = 0; i < 100; i++) {
     if (!(i%5)) {
       std::cout << "On iteration " << i << std::endl;
     }
-    ObjectStore::Transaction t;
+    Transaction t;
     bufferlist bl;
     map<string, bufferlist> cur_attrs;
     r = store->omap_get(ch, oh, &bl, &cur_attrs);
@@ -787,7 +787,7 @@ TEST_P(StoreTest, OMapTest) {
     if (!(i%5)) {
       std::cout << "removal: On iteration " << i << std::endl;
     }
-    ObjectStore::Transaction t;
+    Transaction t;
     bufferlist bl;
     map<string, bufferlist> cur_attrs;
     r = store->omap_get(ch, oh, &bl, &cur_attrs);
@@ -824,7 +824,7 @@ TEST_P(StoreTest, OMapTest) {
   {
     bufferlist bl1;
     bl1.append("omap_header");
-    ObjectStore::Transaction t;
+    Transaction t;
     (void) t.push_col(ch);
     (void) t.push_obj(oh);
     t.omap_setheader(bl1);
@@ -833,7 +833,7 @@ TEST_P(StoreTest, OMapTest) {
     {
       bufferlist bl2;
       bl2.append("value");
-      ObjectStore::Transaction t;
+      Transaction t;
       map<string, bufferlist> to_add;
       to_add.insert(pair<string, bufferlist>("key", bl2));
       (void) t.push_col(ch);
@@ -853,7 +853,7 @@ TEST_P(StoreTest, OMapTest) {
   store->put_object(oh);
   store->close_collection(ch);
 
-  ObjectStore::Transaction t;
+  Transaction t;
   (void) t.push_cid(cid);
   (void) t.push_oid(hoid);
   t.remove();
@@ -874,7 +874,7 @@ TEST_P(StoreTest, XattrTest) {
   }
   int r;
   {
-    ObjectStore::Transaction t;
+    Transaction t;
     t.create_collection(cid); // pushes slot
     t.push_oid(hoid);
     t.touch();
@@ -884,7 +884,7 @@ TEST_P(StoreTest, XattrTest) {
 
   map<string, bufferlist> attrs;
   {
-    ObjectStore::Transaction t;
+    Transaction t;
     t.push_cid(cid);
     t.push_oid(hoid);
     t.setattr("attr1", small);
@@ -903,8 +903,8 @@ TEST_P(StoreTest, XattrTest) {
     ASSERT_EQ(r, 0);
   }
 
-  ObjectStore::CollectionHandle ch = store->open_collection(cid);
-  ObjectStore::ObjectHandle oh = store->get_object(ch, hoid);
+  CollectionHandle ch = store->open_collection(cid);
+  ObjectHandle oh = store->get_object(ch, hoid);
 
   map<string, bufferptr> aset;
   store->getattrs(ch, oh, aset);
@@ -918,7 +918,7 @@ TEST_P(StoreTest, XattrTest) {
   }
 
   {
-    ObjectStore::Transaction t;
+    Transaction t;
     t.push_col(ch);
     t.push_obj(oh);
     t.rmattr("attr2");
@@ -952,7 +952,7 @@ TEST_P(StoreTest, XattrTest) {
   store->close_collection(ch);
 
   {
-    ObjectStore::Transaction t;
+    Transaction t;
     (void)  t.remove_collection(cid);
     store->apply_transaction(t);
   }
@@ -967,13 +967,13 @@ void colsplittest(
   coll_t tid("to");
   int r = 0;
   {
-    ObjectStore::Transaction t;
+    Transaction t;
     t.create_collection(cid);
     r = store->apply_transaction(t);
     ASSERT_EQ(r, 0);
   }
   {
-    ObjectStore::Transaction t;
+    Transaction t;
     t.push_cid(cid);
     for (uint32_t i = 0; i < 2*num_objects; ++i) {
       stringstream objname;
@@ -986,7 +986,7 @@ void colsplittest(
     ASSERT_EQ(r, 0);
   }
 
-  ObjectStore::Transaction t;
+  Transaction t;
   vector<hoid_t> objects;
 
   t.remove_collection(cid);
@@ -1014,7 +1014,7 @@ TEST_P(StoreTest, MoveRename) {
   oid_t oid("dest_obj", chunktype::entirety);
   int r;
   {
-    ObjectStore::Transaction t;
+    Transaction t;
     t.create_collection(cid);
     t.push_oid(hoid_t(oid));
     t.touch();
@@ -1022,7 +1022,7 @@ TEST_P(StoreTest, MoveRename) {
     ASSERT_EQ(r, 0);
   }
 
-  ObjectStore::CollectionHandle ch = store->open_collection(cid);
+  CollectionHandle ch = store->open_collection(cid);
 
   ASSERT_TRUE(store->exists(ch, oid));
   bufferlist data, attr;
@@ -1031,7 +1031,7 @@ TEST_P(StoreTest, MoveRename) {
   attr.append("attr value");
   omap["omap_key"].append("omap value");
   {
-    ObjectStore::Transaction t;
+    Transaction t;
     t.create_collection(temp_cid);
     t.push_oid(hoid_t(temp_oid));
     t.touch();
@@ -1042,10 +1042,10 @@ TEST_P(StoreTest, MoveRename) {
     ASSERT_EQ(r, 0);
   }
 
-  ObjectStore::CollectionHandle tch = store->open_collection(temp_cid);
+  CollectionHandle tch = store->open_collection(temp_cid);
   ASSERT_TRUE(store->exists(tch, temp_oid));
   {
-    ObjectStore::Transaction t;
+    Transaction t;
     uint16_t c1_ix, c2_ix, o1_ix, o2_ix;
     c1_ix = t.push_col(ch);
     o1_ix = t.push_oid(hoid_t(oid));
@@ -1059,7 +1059,7 @@ TEST_P(StoreTest, MoveRename) {
   }
   ASSERT_TRUE(store->exists(ch, oid));
   ASSERT_FALSE(store->exists(tch, temp_oid));
-  ObjectStore::ObjectHandle oh = store->get_object(ch, hoid_t(oid));
+  ObjectHandle oh = store->get_object(ch, hoid_t(oid));
   {
     bufferlist newdata;
     r = store->read(ch, oh, 0, 1000, newdata);

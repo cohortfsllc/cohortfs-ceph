@@ -165,12 +165,12 @@ int main(int argc, char **argv)
     stringstream coll;
     coll << "collection_" << num;
     std::cout << "collection " << coll.str() << std::endl;
-    ObjectStore::Transaction t;
+    Transaction t;
     t.create_collection(coll_t(coll.str()));
     fs.apply_transaction(t);
   }
   {
-    ObjectStore::Transaction t;
+    Transaction t;
     t.create_collection(coll_t(string("meta")));
     fs.apply_transaction(t);
   }

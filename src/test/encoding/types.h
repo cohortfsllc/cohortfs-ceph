@@ -41,7 +41,7 @@ TYPE(object_info_t)
 TYPE(vol_info_t)
 
 #include "os/ObjectStore.h"
-TYPE_NOCOPY(ObjectStore::Transaction)
+TYPE_NOCOPY(Transaction)
 
 #include "os/SequencerPosition.h"
 TYPE(SequencerPosition)
