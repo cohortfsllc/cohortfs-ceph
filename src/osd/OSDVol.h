@@ -32,6 +32,7 @@
 #include "Watch.h"
 #include "OpRequest.h"
 #include "os/ObjectStore.h"
+#include "os/Transaction.h"
 #include "msg/Messenger.h"
 #include "common/cmdparse.h"
 #include "common/WorkQueue.h"
@@ -635,7 +636,7 @@ private:
 public:
   void clear_primary_state();
   void trim_write_ahead();
-  void activate(ObjectStore::Transaction& t, epoch_t query_epoch);
+  void activate(Transaction& t, epoch_t query_epoch);
   void _activate_committed(epoch_t e);
 
   Context* finish_sync_event;
@@ -667,14 +668,14 @@ public:
 private:
   void init();
   void read_info();
-  void write_info(ObjectStore::Transaction& t);
+  void write_info(Transaction& t);
   void populate_obc_watchers(ObjectContext* obc);
   void get_obc_watchers(ObjectContext* obc,
 			list<obj_watch_item_t>& vol_watchers);
   void check_blacklisted_obc_watchers(ObjectContext* obc);
 
 public:
-  void write_if_dirty(ObjectStore::Transaction& t);
+  void write_if_dirty(Transaction& t);
 
   eversion_t get_next_version() const {
     // XXX Be careful here, we're not sure if this is thread safe.  It
@@ -713,13 +714,13 @@ public:
   void handle_advance_map(OSDMapRef osdmap);
   void handle_activate_map();
 
-  void on_removal(ObjectStore::Transaction* t);
+  void on_removal(Transaction* t);
 
   void do_op(OpRequest* op);
   int do_command(cmdmap_t cmdmap, ostream& ss, bufferlist& idata,
 		 bufferlist& odata);
 
-  void on_change(ObjectStore::Transaction* t);
+  void on_change(Transaction* t);
   void check_blacklisted_watchers();
   void get_watchers(std::list<obj_watch_item_t>&);
 
@@ -740,7 +741,7 @@ protected:
 
     uint64_t bytes_written;
 
-    ObjectStore::Transaction opt, localt;
+    Transaction opt, localt;
 
     RepModify() : applied(false), committed(false), ackerosd(-1),
 		  epoch_started(0), bytes_written(0) {}

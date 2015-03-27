@@ -47,6 +47,7 @@
 #include "common/version.h"
 
 #include "os/ObjectStore.h"
+#include "os/Transaction.h"
 
 #include "msg/Messenger.h"
 #include "msg/Message.h"
@@ -194,7 +195,7 @@ int OSD::mkfs(CephContext *cct, ObjectStore *store, const string &dev,
     goto free_store;
   }
   {
-    ObjectStore::Transaction t;
+    Transaction t;
     t.create_collection(coll_t::META_COLL);
     ret = store->apply_transaction(t);
   }
@@ -254,8 +255,7 @@ int OSD::mkfs(CephContext *cct, ObjectStore *store, const string &dev,
       ceph::mono_time start = ceph::mono_clock::now();
       oid_t oid("disk_bw_test");
       for (int i=0; i<1000; i++) {
-	ObjectStore::Transaction *t =
-	  new ObjectStore::Transaction(1);
+	Transaction *t = new Transaction(1);
 	c_ix = t->push_col(meta_col);
 	o_ix = t->push_oid(hoid_t(oid)); // XXXX
 	t->write(c_ix, o_ix, i*bl.length(), bl.length(), bl);
@@ -266,7 +266,7 @@ int OSD::mkfs(CephContext *cct, ObjectStore *store, const string &dev,
       dout(0) << "measured "
 	      << (1000.0 / ceph::span_to_double(elapsed))
 	      << " mb/sec" << dendl;
-      ObjectStore::Transaction tr;
+      Transaction tr;
       c_ix = tr.push_col(meta_col);
       o_ix = tr.push_oid(hoid_t(oid)); // XXXX
       tr.remove(c_ix, o_ix);
@@ -282,7 +282,7 @@ int OSD::mkfs(CephContext *cct, ObjectStore *store, const string &dev,
     ::encode(sb, bl);
 
     {
-      ObjectStore::Transaction t;
+      Transaction t;
       c_ix = t.push_col(meta_col);
       o_ix = t.push_oid(OSD_SUPERBLOCK_POBJECT);
       t.write(c_ix, o_ix, 0, bl.length(), bl);
@@ -648,7 +648,7 @@ int OSD::init()
     // We need to persist the new compat_set before we
     // do anything else
     dout(5) << "Upgrading superblock adding: " << diff << dendl;
-    ObjectStore::Transaction t;
+    Transaction t;
     write_superblock(service.meta_col, t);
     r = store->apply_transaction(t);
     if (r < 0)
@@ -661,7 +661,7 @@ int OSD::init()
   
   if (!store->exists(service.meta_col, service.infos_oid)) {
     dout(10) << "init creating/touching snapmapper object" << dendl;
-    ObjectStore::Transaction t;
+    Transaction t;
     c_ix = t.push_col(service.meta_col);
     o_ix = t.push_oid(service.infos_oid);
     t.touch(c_ix, o_ix);
@@ -877,7 +877,7 @@ int OSD::shutdown()
   superblock.mounted = boot_epoch;
   int r;
   {
-    ObjectStore::Transaction t;
+    Transaction t;
     write_superblock(service.meta_col, t);
     r = store->apply_transaction(t);
     if (r) {
@@ -927,7 +927,7 @@ int OSD::shutdown()
   return r;
 }
 
-void OSD::write_superblock(CollectionHandle meta, ObjectStore::Transaction& t)
+void OSD::write_superblock(CollectionHandle meta, Transaction& t)
 {
   dout(10) << "write_superblock " << superblock << dendl;
 
@@ -977,7 +977,7 @@ void OSD::recursive_remove_collection(ObjectStore *store, coll_t cid)
   vector<hoid_t> objects;
   store->collection_list(ch, objects);
 
-  ObjectStore::Transaction t;
+  Transaction t;
   uint16_t c_ix = t.push_col(ch);
   uint16_t o_ix;
 
@@ -2178,11 +2178,11 @@ void OSD::note_up_osd(int peer)
 
 struct C_OnMapApply : public Context {
   OSDService *service;
-  boost::scoped_ptr<ObjectStore::Transaction> t;
+  boost::scoped_ptr<Transaction> t;
   list<OSDMapRef> pinned_maps;
   epoch_t e;
   C_OnMapApply(OSDService *service,
-	       ObjectStore::Transaction *t,
+	       Transaction *t,
 	       const list<OSDMapRef> &pinned_maps,
 	       epoch_t e)
     : service(service), t(t), pinned_maps(pinned_maps), e(e) {}
@@ -2277,9 +2277,8 @@ void OSD::handle_osd_map(MOSDMap *m)
     skip_maps = true;
   }
 
-  ObjectStore::Transaction *_t = new ObjectStore::Transaction(
-      cct->_conf->osd_target_transaction_size);
-  ObjectStore::Transaction &t = *_t;
+  Transaction *_t = new Transaction(cct->_conf->osd_target_transaction_size);
+  Transaction &t = *_t;
   uint16_t c_ix = t.push_col(service.meta_col);
   uint16_t o_ix;
 
@@ -2614,7 +2613,7 @@ void OSD::advance_vol(epoch_t osd_epoch, OSDVolRef& vol)
  * scan placement groups, initiate any replication
  * activities.
  */
-void OSD::advance_map(ObjectStore::Transaction& t, C_Contexts *tfin)
+void OSD::advance_map(Transaction& t, C_Contexts *tfin)
 {
   // Must be called with lock on osd_lock
 

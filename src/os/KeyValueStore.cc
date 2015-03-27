@@ -2400,12 +2400,12 @@ int KeyValueStore::list_collections(vector<coll_t>& ls)
   return 0;
 }
 
-ObjectStore::CollectionHandle KeyValueStore::open_collection(const coll_t& c)
+CollectionHandle KeyValueStore::open_collection(const coll_t& c)
 {
-  return new Collection(this, c);
+  return new ceph::os::Collection(this, c);
 }
 
-int KeyValueStore::close_collection(ObjectStore::CollectionHandle ch)
+int KeyValueStore::close_collection(CollectionHandle ch)
 {
   delete ch;
   return 0;
@@ -2786,7 +2786,7 @@ void KeyValueStore::handle_conf_change(const struct md_config_t *conf,
   }
 }
 
-void KeyValueStore::dump_transactions(list<ObjectStore::Transaction*>& ls,
+void KeyValueStore::dump_transactions(list<Transaction*>& ls,
 				      uint64_t seq)
 {
 }

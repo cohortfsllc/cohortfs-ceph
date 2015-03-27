@@ -420,7 +420,7 @@ int MemStore::list_collections(vector<coll_t>& ls)
   return 0;
 }
 
-ObjectStore::CollectionHandle MemStore::open_collection(const coll_t& cid)
+CollectionHandle MemStore::open_collection(const coll_t& cid)
 {
   shared_lock l(coll_lock);
   map<coll_t,MemCollection*>::iterator cp = coll_map.find(cid);
@@ -506,7 +506,7 @@ int MemStore::collection_list(CollectionHandle ch, vector<hoid_t>& vo)
   dout(10) << __func__ << " " << ch->get_cid() << dendl;
 
   MemCollection* c = static_cast<MemCollection*>(ch);
-  ObjectStore::Object::ObjCache::iterator it;
+  ObjCache::iterator it;
   for (int part_ix = 0; part_ix < c->obj_cache.n_part; ++part_ix) {
     ObjCache::Partition& p = c->obj_cache.get(part_ix);
     ObjCache::unique_lock lk(p.lock);
@@ -520,7 +520,7 @@ int MemStore::collection_list(CollectionHandle ch, vector<hoid_t>& vo)
 
 MemStore::MemCollection::~MemCollection()
 {
-  ObjectStore::Object::ObjCache::iterator it, eit;;
+  ObjCache::iterator it, eit;;
   for (int part_ix = 0; part_ix < obj_cache.n_part; ++part_ix) {
     ObjCache::Partition& p = obj_cache.get(part_ix);
     ObjCache::unique_lock lk(p.lock);
@@ -566,7 +566,7 @@ int MemStore::collection_list_partial2(CollectionHandle ch,
   if (cursor.partition >= c->obj_cache.n_part)
     return -EINVAL;
 
-  ObjectStore::Object::ObjCache::iterator it;
+  ObjCache::iterator it;
   Object* o;
 
   int fst = 1;

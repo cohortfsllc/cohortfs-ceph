@@ -145,9 +145,7 @@ class KeyValueStore : public ObjectStore,
  public:
   static const uint32_t target_version = 1;
 
-  using ObjectStore::CollectionHandle;
-
-  class KVObject : public ObjectStore::Object
+  class KVObject : public ceph::os::Object
   {
   public:
 
@@ -161,8 +159,6 @@ class KeyValueStore : public ObjectStore,
     }
   };
 
-  //  using ObjectStore::ObjectHandle;
-
   inline CollectionHandle get_slot_collection(Transaction& t,
 					      uint16_t c_ix) {
     using std::get;
@@ -175,7 +171,7 @@ class KeyValueStore : public ObjectStore,
       // update slot for queued Ops to find
       get<0>(c_slot) = ch;
       // then mark it for release when t is cleaned up
-      get<2>(c_slot) |= ObjectStore::Transaction::FLAG_REF;
+      get<2>(c_slot) |= Transaction::FLAG_REF;
     }
     return ch;
   } /* get_slot_collection */
@@ -193,7 +189,7 @@ class KeyValueStore : public ObjectStore,
       // update slot for queued Ops to find
       get<0>(o_slot) = oh;
       // then mark it for release when t is cleaned up
-      get<2>(o_slot) |= ObjectStore::Transaction::FLAG_REF;
+      get<2>(o_slot) |= Transaction::FLAG_REF;
     }
     return oh;
   }
@@ -457,7 +453,7 @@ class KeyValueStore : public ObjectStore,
   ObjectMap::ObjectMapIterator get_omap_iterator(CollectionHandle ch,
 						 ObjectHandle oh);
 
-  void dump_transactions(list<ObjectStore::Transaction*>& ls, uint64_t seq);
+  void dump_transactions(list<Transaction*>& ls, uint64_t seq);
 
  private:
   void _inject_failure() {}

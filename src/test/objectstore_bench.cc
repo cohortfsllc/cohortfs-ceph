@@ -123,15 +123,15 @@ ObjectStore *fs;
 class OBS_Worker : public Thread
 {
   hoid_t oid;
-  ObjectStore::CollectionHandle ch;
-  ObjectStore::ObjectHandle oh;
+  CollectionHandle ch;
+  ObjectHandle oh;
   uint64_t starting_offset;
 
  public:
   OBS_Worker() { }
 
   void set_oid(const hoid_t& _oid) { oid = _oid; }
-  void set_coll(ObjectStore::CollectionHandle _ch) { ch = _ch; }
+  void set_coll(CollectionHandle _ch) { ch = _ch; }
   void set_starting_offset(uint64_t off) { starting_offset = off; }
 
   void *entry() {
@@ -148,13 +148,13 @@ class OBS_Worker : public Thread
       uint64_t offset = starting_offset;
       size_t len = size;
 
-      list<ObjectStore::Transaction*> tls;
+      list<Transaction*> tls;
 
       std::cout << "Write cycle " << ix << std::endl;
       while (len) {
 	size_t count = len < block_size ? len : (size_t)block_size;
 
-	ObjectStore::Transaction *t = new ObjectStore::Transaction;
+	Transaction *t = new Transaction;
 	t->push_col(ch);
 	t->push_oid(oid);
 
@@ -180,7 +180,7 @@ class OBS_Worker : public Thread
       l.unlock();
 
       while (!tls.empty()) {
-	ObjectStore::Transaction *t = tls.front();
+	Transaction *t = tls.front();
 	tls.pop_front();
 	delete t;
       }
@@ -262,7 +262,7 @@ int main(int argc, const char *argv[])
 
   const coll_t cid("osbench");
   {
-    ObjectStore::Transaction ft;
+    Transaction ft;
     ret = ft.create_collection(cid);
     fs->apply_transaction(ft);
   }
@@ -286,7 +286,7 @@ int main(int argc, const char *argv[])
       oss << "osbench-thread-" << i;
       oids[i] = hoid_t(oid_t(oss.str()));
 
-      ObjectStore::Transaction t;
+      Transaction t;
       auto cix = t.push_col(ch);
       auto oix = t.push_oid(oids[i]);
       t.touch(cix, oix);
@@ -296,7 +296,7 @@ int main(int argc, const char *argv[])
   } else {
     hoid_t oid(oid_t("osbench"));
 
-    ObjectStore::Transaction t;
+    Transaction t;
     auto cix = t.push_col(ch);
     auto oix = t.push_oid(oid);
     t.touch(cix, oix);
@@ -333,7 +333,7 @@ int main(int argc, const char *argv[])
       << iops << " iops" << dendl;
 
   // remove the objects
-  ObjectStore::Transaction t;
+  Transaction t;
   uint16_t c_ix, o_ix;
   c_ix = t.push_col(ch);
   for (vector<hoid_t>::iterator i = oids.begin();

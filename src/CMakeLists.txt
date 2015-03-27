@@ -391,6 +391,7 @@ install(TARGETS ceph-mon DESTINATION bin)
 set(libos_srcs
   os/chain_xattr.cc
   os/ObjectStore.cc
+  os/Transaction.cc
   os/Factory.cc
   os/JournalingObjectStore.cc
   os/LevelDBStore.cc

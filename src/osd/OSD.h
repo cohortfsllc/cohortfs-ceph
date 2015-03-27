@@ -34,8 +34,6 @@
 #include "common/AsyncReserver.h"
 #include "common/ceph_context.h"
 
-#include "os/ObjectStore.h"
-
 #include "osd/ClassHandler.h"
 
 #include "include/CompatSet.h"
@@ -58,10 +56,11 @@
 class Messenger;
 class Message;
 class MonClient;
-class ObjectStore;
 class OSDMap;
 class MLog;
 class MClass;
+class ObjectStore;
+class Transaction;
 
 class Watch;
 class Notification;
@@ -374,7 +373,7 @@ private:
   OSDSuperblock superblock;
 
   void write_superblock(CollectionHandle meta);
-  void write_superblock(CollectionHandle meta, ObjectStore::Transaction& t);
+  void write_superblock(CollectionHandle meta, Transaction& t);
   int read_superblock(CollectionHandle meta);
 
   CompatSet osd_compat;
@@ -583,7 +582,7 @@ protected:
   void note_up_osd(int osd);
 
   void advance_vol(epoch_t advance_to, OSDVolRef& vol);
-  void advance_map(ObjectStore::Transaction& t, C_Contexts *tfin);
+  void advance_map(Transaction& t, C_Contexts *tfin);
   void consume_map();
   void activate_map();
 

@@ -2156,9 +2156,9 @@ FileStore::FSObject* FileStore::get_object(FSCollection* fc,
 
   /* XXX redundant, hoid_t has hk */
   std::tuple<uint64_t, const hoid_t&> k(oid.hk, oid);
-  Object::ObjCache::Latch lat;
+  ceph::os::Object::ObjCache::Latch lat;
 
-  if (fc->flags & Collection::FLAG_CLOSED) /* atomicity? */
+  if (fc->flags & ceph::os::Collection::FLAG_CLOSED) /* atomicity? */
     return oh;
 
 retry:
@@ -2166,7 +2166,7 @@ retry:
     static_cast<FSObject*>(fc->obj_cache.find_latch(
 				oid.hk, oid,
 				lat,
-				Object::ObjCache::FLAG_LOCK));
+				ceph::os::Object::ObjCache::FLAG_LOCK));
   /* LATCHED */
   if (oh) {
     /* need initial ref from LRU (fast path) */
@@ -2195,7 +2195,7 @@ retry:
 		     cohort::lru::FLAG_INITIAL));
     if (oh) {
       fc->obj_cache.insert_latched(oh, lat,
-				   Object::ObjCache::FLAG_UNLOCK);
+				   ceph::os::Object::ObjCache::FLAG_UNLOCK);
       goto out; /* !LATCHED */
     } else {
       lat.lock->unlock();
@@ -3652,7 +3652,7 @@ int FileStore::list_collections(vector<coll_t>& ls)
   return r;
 }
 
-ObjectStore::CollectionHandle FileStore::open_collection(const coll_t& cid)
+CollectionHandle FileStore::open_collection(const coll_t& cid)
 {
   string cpath = basedir.c_str();
   cpath += "/current/";
@@ -3670,7 +3670,7 @@ ObjectStore::CollectionHandle FileStore::open_collection(const coll_t& cid)
 int FileStore::close_collection(CollectionHandle ch)
 {
   FSCollection* fc = static_cast<FSCollection*>(ch);
-  fc->flags |= Collection::FLAG_CLOSED;
+  fc->flags |= ceph::os::Collection::FLAG_CLOSED;
 
   class ObjUnref
   {
@@ -3685,7 +3685,7 @@ int FileStore::close_collection(CollectionHandle ch)
 
   /* force cache drain, forces objects to evict */
   fc->obj_cache.drain(ObjUnref(this),
-		      Object::ObjCache::FLAG_LOCK);
+		      ceph::os::Object::ObjCache::FLAG_LOCK);
 
   /* return initial ref */
   fc->put();
@@ -4179,12 +4179,12 @@ void FileStore::dump_stop()
   }
 }
 
-void FileStore::dump_transactions(list<ObjectStore::Transaction*>& ls,
+void FileStore::dump_transactions(list<Transaction*>& ls,
 				  uint64_t seq)
 {
   m_filestore_dump_fmt.open_array_section("transactions");
   unsigned trans_num = 0;
-  for (list<ObjectStore::Transaction*>::iterator i = ls.begin(); i != ls.end(); ++i, ++trans_num) {
+  for (list<Transaction*>::iterator i = ls.begin(); i != ls.end(); ++i, ++trans_num) {
     m_filestore_dump_fmt.open_object_section("transaction");
     m_filestore_dump_fmt.dump_unsigned("seq", seq);
     m_filestore_dump_fmt.dump_unsigned("trans_num", trans_num);
