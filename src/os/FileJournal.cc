@@ -579,7 +579,7 @@ int FileJournal::dump(ostream& out)
     bufferlist::iterator p = bl.begin();
     int trans_num = 0;
     while (!p.end()) {
-      ObjectStore::Transaction *t = new ObjectStore::Transaction(p);
+      Transaction *t = new Transaction(p);
       f.open_object_section("transaction");
       f.dump_unsigned("trans_num", trans_num);
       t->dump(&f);

@@ -123,8 +123,7 @@ struct C_Vol_ActivateCommitted : public Context {
   }
 };
 
-void OSDVol::activate(ObjectStore::Transaction& t,
-		      epoch_t query_epoch)
+void OSDVol::activate(Transaction& t, epoch_t query_epoch)
 {
   // twiddle volume state
 
@@ -145,7 +144,7 @@ void OSDVol::_activate_committed(epoch_t e)
 {
   unique_lock l(lock);
   if (dirty_info) {
-    ObjectStore::Transaction *t = new ObjectStore::Transaction;
+    Transaction *t = new Transaction;
     write_if_dirty(*t);
     int tr = osd->store->queue_transaction_and_cleanup(t);
     assert(tr == 0);
@@ -162,7 +161,7 @@ void OSDVol::_activate_committed(epoch_t e)
  */
 void OSDVol::init(void)
 {
-  ObjectStore::Transaction t;
+  Transaction t;
   t.create_collection(cid);
   dirty_info = true;
   {
@@ -189,7 +188,7 @@ void OSDVol::init(void)
   }
 } /* init */
 
-void OSDVol::write_info(ObjectStore::Transaction& t)
+void OSDVol::write_info(Transaction& t)
 {
   map<string,bufferlist> v;
   ::encode(get_osdmap()->get_epoch(), v[get_epoch_key(info.volume)]);
@@ -201,7 +200,7 @@ void OSDVol::write_info(ObjectStore::Transaction& t)
   dirty_info = false;
 }
 
-void OSDVol::write_if_dirty(ObjectStore::Transaction& t)
+void OSDVol::write_if_dirty(Transaction& t)
 {
   if (dirty_info)
     write_info(t);
@@ -285,7 +284,7 @@ void OSDVol::handle_activate_map()
     check_blacklisted_watchers();
 }
 
-void OSDVol::on_removal(ObjectStore::Transaction* t)
+void OSDVol::on_removal(Transaction* t)
 {
   dout(10) << "on_removal" << dendl;
 
@@ -388,7 +387,7 @@ void OSDVol::do_op(OpRequest* op)
   OpContext *ctx = new OpContext(op, m->get_reqid(), m->ops,
 				 &obc->obs,
 				 this);
-  ctx->op_t = new ObjectStore::Transaction();
+  ctx->op_t = new Transaction();
   ctx->obc = obc;
 
   if (m->get_flags() & CEPH_OSD_FLAG_SKIPRWLOCKS) {
@@ -412,7 +411,7 @@ void OSDVol::do_op(OpRequest* op)
   execute_ctx(ctx);
 }
 
-void OSDVol::on_change(ObjectStore::Transaction* t)
+void OSDVol::on_change(Transaction* t)
 {
   dout(10) << "on_change" << dendl;
 
@@ -604,7 +603,7 @@ void OSDVol::execute_ctx(OpContext* ctx)
   // this method must be idempotent since we may call it several times
   // before we finally apply the resulting transaction.
   delete ctx->op_t;
-  ctx->op_t = new ObjectStore::Transaction();
+  ctx->op_t = new Transaction();
 
   if (op->may_write() || op->may_cache()) {
     op->mark_started();
@@ -815,7 +814,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
   const hoid_t& soid = oi.oid; // ctx->new_objs->obs.oi.oid
   const hoid_t& obc_soid = ctx->obc->obs.oi.oid;
 
-  ObjectStore::Transaction* t = ctx->op_t;
+  Transaction* t = ctx->op_t;
   bool first_read = true;
 
   uint16_t c_ix = t->push_col(coll);
@@ -1953,7 +1952,7 @@ inline int OSDVol::_delete_obj(OpContext* ctx, bool no_whiteout)
   ObjectState& obs = ctx->new_obs;
   object_info_t& oi = obs.oi;
   ObjectHandle oh = reinterpret_cast<ObjectHandle>(obs.oh);
-  ObjectStore::Transaction* t = ctx->op_t;
+  Transaction* t = ctx->op_t;
 
   uint16_t c_ix = t->push_col(coll);
   uint16_t o_ix = t->push_obj(oh);
@@ -2132,7 +2131,7 @@ int OSDVol::prepare_transaction(OpContext* ctx)
 
 void OSDVol::finish_ctx(OpContext* ctx)
 {
-  ObjectStore::Transaction* t = ctx->op_t;
+  Transaction* t = ctx->op_t;
   const hoid_t& soid = ctx->obs->oi.oid;
   ObjectHandle soh = reinterpret_cast<ObjectHandle>(ctx->obs->oh);
 
@@ -2394,7 +2393,7 @@ OSDVol::Mutation *OSDVol::simple_mutation_create(ObjectContext* obc)
   ceph_tid_t tid = osd->get_tid();
   osd_reqid_t reqid(osd->get_cluster_msgr_name(), 0, tid);
   OpContext *ctx = new OpContext(nullptr, reqid, ops, &obc->obs, this);
-  ctx->op_t = new ObjectStore::Transaction;
+  ctx->op_t = new Transaction;
   ctx->mtime = ceph::real_clock::now();
   ctx->obc = obc;
   Mutation *mutation = new_mutation(ctx, obc, tid);
@@ -2430,7 +2429,7 @@ void OSDVol::handle_watch_timeout(WatchRef watch)
   ceph_tid_t tid = osd->get_tid();
   osd_reqid_t reqid(osd->get_cluster_msgr_name(), 0, tid);
   OpContext *ctx = new OpContext(nullptr, reqid, ops, &obc->obs, this);
-  ctx->op_t = new ObjectStore::Transaction();
+  ctx->op_t = new Transaction();
   ctx->mtime = ceph::real_clock::now();
   ctx->at_version = get_next_version();
 
@@ -2438,7 +2437,7 @@ void OSDVol::handle_watch_timeout(WatchRef watch)
 
   Mutation *mutation = new_mutation(ctx, obc.get(), tid);
 
-  ObjectStore::Transaction *t = ctx->op_t;
+  Transaction *t = ctx->op_t;
   ObjectHandle oh = reinterpret_cast<ObjectHandle>(obc->obs.oh);
   uint16_t c_ix = t->push_col(coll);
   uint16_t o_ix = t->push_obj(oh); // XXXX need ref?
@@ -2689,7 +2688,7 @@ void OSDVol::issue_mutation(Mutation *mutation)
 {
   OpContext *ctx = mutation->ctx;
   const hoid_t& oid = ctx->obs->oi.oid;
-  ObjectStore::Transaction *op_t = ctx->op_t;
+  Transaction *op_t = ctx->op_t;
 
   dout(7) << "issue_mutation tid " << mutation->tid
 	  << " o " << oid

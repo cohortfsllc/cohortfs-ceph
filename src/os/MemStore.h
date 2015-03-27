@@ -35,7 +35,7 @@ private:
 public:
   class MemCollection;
 
-  struct Object : public ObjectStore::Object {
+  struct Object : public ceph::os::Object {
     mutable std::atomic<uint32_t> refcnt;
     std::shared_timed_mutex omap_lock;
     typedef std::unique_lock<std::shared_timed_mutex> unique_lock;
@@ -47,7 +47,7 @@ public:
     map<string,bufferlist> omap;
 
     Object(CephContext *cct, MemCollection* c, const hoid_t& oid)
-      : ObjectStore::Object(c, oid), refcnt(0),
+      : ceph::os::Object(c, oid), refcnt(0),
         data(cct->_conf->memstore_page_partitions,
              cct->_conf->memstore_pages_per_stripe),
         data_len(0)
@@ -116,9 +116,9 @@ public:
   };
   typedef boost::intrusive_ptr<Object> ObjectRef;
 
-  typedef ObjectStore::Object::ObjCache ObjCache;
+  typedef ceph::os::Object::ObjCache ObjCache;
 
-  struct MemCollection : public ObjectStore::Collection {
+  struct MemCollection : public ceph::os::Collection {
     CephContext *cct;
     map<string,bufferptr> xattr;
 
@@ -140,7 +140,7 @@ public:
     }
 
     ObjectRef get_or_create_object(hoid_t oid) {
-      Object::ObjCache::Latch lat;
+      ObjCache::Latch lat;
       Object* o =
 	static_cast<Object*>(obj_cache.find_latch(
 				         oid.hk, oid, lat,
@@ -197,7 +197,7 @@ public:
     }
 
     MemCollection(MemStore* ms, const coll_t& cid) :
-      ObjectStore::Collection(ms, cid), cct(ms->cct)
+      ceph::os::Collection(ms, cid), cct(ms->cct)
       {}
 
     ~MemCollection();
@@ -214,7 +214,7 @@ public:
       // update slot for queued Ops to find
       get<0>(c_slot) = c;
       // then mark it for release when t is cleaned up
-      get<2>(c_slot) |= ObjectStore::Transaction::FLAG_REF;
+      get<2>(c_slot) |= Transaction::FLAG_REF;
     }
     return c;
   } /* get_slot_collection */
@@ -234,7 +234,7 @@ public:
       // update slot for queued Ops to find
       get<0>(o_slot) = oh;
       // then mark it for release when t is cleaned up
-      get<2>(o_slot) |= ObjectStore::Transaction::FLAG_REF;
+      get<2>(o_slot) |= Transaction::FLAG_REF;
     }
     return oh;
   } /* get_slot_object */

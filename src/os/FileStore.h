@@ -97,7 +97,7 @@ public:
   class FSCollection;
   class FSObject;
 
-  class FSObject : public ObjectStore::Object
+  class FSObject : public ceph::os::Object
   {
   public:
     /**
@@ -135,7 +135,7 @@ public:
     };
 
     FSObject(FSCollection* fc, const hoid_t& oid, int fd)
-      : ObjectStore::Object(fc, oid), fd(fd), pwb(this) {}
+      : ceph::os::Object(fc, oid), fd(fd), pwb(this) {}
 
     virtual bool reclaim() {
       c->obj_cache.remove(get_oid().hk, this, cohort::lru::FLAG_NONE);
@@ -277,13 +277,13 @@ public:
 
   }; /* FSFlush */
 
-  class FSCollection : public ObjectStore::Collection
+  class FSCollection : public ceph::os::Collection
   {
   public:
     int fd; // collection's dirfd
 
     FSCollection(FileStore* fs, const coll_t& cid, int fd)
-      : ObjectStore::Collection(fs, cid), fd(fd) {}
+      : ceph::os::Collection(fs, cid), fd(fd) {}
 
     virtual ~FSCollection() {
         ::close(fd);
@@ -303,7 +303,7 @@ public:
       // update slot for queued Ops to find
       get<0>(c_slot) = fc;
       // then mark it for release when t is cleaned up
-      get<2>(c_slot) |= ObjectStore::Transaction::FLAG_REF;
+      get<2>(c_slot) |= Transaction::FLAG_REF;
       t.os = this;
     }
     return fc;
@@ -323,7 +323,7 @@ public:
 	// update slot for queued Ops to find
 	get<0>(o_slot) = fo;
 	// then mark it for release when t is cleaned up
-	get<2>(o_slot) |= ObjectStore::Transaction::FLAG_REF;
+	get<2>(o_slot) |= Transaction::FLAG_REF;
         t.os = this;
       }
     }
@@ -597,8 +597,6 @@ public:
 			   map<string,bufferptr>& aset);
 
   // collections
-  using ObjectStore::CollectionHandle;
-
   int list_collections(vector<coll_t>& ls);
   CollectionHandle open_collection(const coll_t& c);
   int close_collection(CollectionHandle chandle);
