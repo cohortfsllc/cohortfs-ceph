@@ -33,6 +33,7 @@ using namespace std;
 
 #define dout_subsys ceph_subsys_simple_server
 
+static CephContext* cct;
 
 int main(int argc, const char **argv)
 {
@@ -55,10 +56,10 @@ int main(int argc, const char **argv)
 	argv_to_vec(argc, argv, args);
 	env_to_vec(args);
 
-//	global_init(NULL, args, CEPH_ENTITY_TYPE_ANY, CODE_ENVIRONMENT_DAEMON,
-//		    0);
-	global_init(NULL, args,
-		    CEPH_ENTITY_TYPE_ANY, CODE_ENVIRONMENT_UTILITY, 0);
+//	cct = global_init(NULL, args, CEPH_ENTITY_TYPE_ANY,
+//			  CODE_ENVIRONMENT_DAEMON, 0);
+	cct = global_init(NULL, args, CEPH_ENTITY_TYPE_ANY,
+			  CODE_ENVIRONMENT_UTILITY, 0);
 
 
 	for (arg_iter = args.begin(); arg_iter != args.end();) {
@@ -88,13 +89,14 @@ int main(int argc, const char **argv)
 	else
 	  dstrategy = new QueueStrategy(2);
 
-	messenger = new XioMessenger(g_ceph_context,
+	messenger = new XioMessenger(cct,
 				     entity_name_t::GENERIC(),
 				     "xio_server",
 				     0 /* nonce */,
 				     2 /* portals */,
 				     dstrategy);
-	static_cast<XioMessenger*>(messenger)->set_special_handling(MSG_SPECIAL_HANDLING_REDUPE);
+	static_cast<XioMessenger*>(messenger)->set_special_handling(
+	  MSG_SPECIAL_HANDLING_REDUPE);
 
 	// enable timing prints
 	static_cast<XioMessenger*>(messenger)->set_magic(MSG_MAGIC_TRACE_CTR);
@@ -107,8 +109,8 @@ int main(int argc, const char **argv)
 		goto out;
 
 	// Set up crypto, daemonize, etc.
-	//global_init_daemonize(g_ceph_context, 0);
-	common_init_finish(g_ceph_context);
+	//global_init_daemonize(cct, 0);
+	common_init_finish(cct);
 
 	dispatcher = new XioDispatcher(messenger);
 

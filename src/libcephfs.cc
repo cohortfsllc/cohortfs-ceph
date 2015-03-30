@@ -87,7 +87,7 @@ public:
 
     //network connection
 #if defined(HAVE_XIO)
-    if (g_conf->client_rdma) {
+    if (cct->_conf->client_rdma) {
       xio = true;
       XioMessenger *xmsgr
 	= new XioMessenger(cct, entity_name_t::CLIENT(-1), "xio client",
