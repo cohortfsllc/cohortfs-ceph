@@ -580,30 +580,6 @@ OPTION(journal_ignore_corruption, OPT_BOOL, false) // assume journal is not corr
 OPTION(rados_mon_op_timeout, OPT_DOUBLE, 0) // how many seconds to wait for a response from the monitor before returning an error from a rados operation. 0 means on limit.
 OPTION(rados_osd_op_timeout, OPT_DOUBLE, 0) // how many seconds to wait for a response from osds before returning an error from a rados operation. 0 means no limit.
 
-OPTION(rbd_concurrent_management_ops, OPT_INT, 10) // how many operations can be in flight for a management operation like deleting or resizing an image
-
-/*
- * The following options change the behavior for librbd's image creation methods that
- * don't require all of the parameters. These are provided so that older programs
- * can take advantage of newer features without being rewritten to use new versions
- * of the image creation functions.
- *
- * rbd_create()/RBD::create() are affected by all of these options.
- *
- * rbd_create2()/RBD::create2() and rbd_clone()/RBD::clone() are affected by:
- * - rbd_default_order
- * - rbd_default_stripe_count
- * - rbd_default_stripe_size
- *
- * rbd_create3()/RBD::create3() and rbd_clone2/RBD::clone2() are only
- * affected by rbd_default_order.
- */
-OPTION(rbd_default_format, OPT_INT, 1)
-OPTION(rbd_default_order, OPT_INT, 22)
-OPTION(rbd_default_stripe_count, OPT_U64, 1) // changing requires stripingv2 feature
-OPTION(rbd_default_stripe_unit, OPT_U64, 4194304) // changing to non-object size requires stripingv2 feature
-OPTION(rbd_default_features, OPT_INT, 3) // 1 for layering, 3 for layering+stripingv2. only applies to format 2 images
-
 OPTION(nss_db_path, OPT_STR, "") // path to nss db
 
 
