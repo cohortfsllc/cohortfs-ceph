@@ -34,7 +34,7 @@ void RGWOp_Opstate_List::execute() {
     string err;
     max_entries = (unsigned)strict_strtol(max_entries_str.c_str(), 10, &err);
     if (!err.empty()) {
-      dout(5) << "Error parsing max-entries " << max_entries_str << dendl;
+      ldout(s->cct, 5) << "Error parsing max-entries " << max_entries_str << dendl;
       http_ret = -EINVAL;
       return;
     }
@@ -53,7 +53,7 @@ void RGWOp_Opstate_List::execute() {
     int ret = oc.list_entries(handle, max_entries, entries, &done);
 
     if (ret < 0) {
-      dout(5) << "oc.list_entries failed with error " << ret << dendl;
+      ldout(s->cct, 5) << "oc.list_entries failed with error " << ret << dendl;
       http_ret = ret;
       oc.finish_list_entries(handle);
       return;
@@ -109,7 +109,7 @@ void RGWOp_Opstate_Set::execute() {
       op_id.empty() ||
       object.empty() ||
       state_str.empty()) {
-    dout(5) << "Error - invalid parameter list" << dendl;
+    ldout(s->cct, 5) << "Error - invalid parameter list" << dendl;
     http_ret = -EINVAL;
     return;
   }
@@ -119,13 +119,13 @@ void RGWOp_Opstate_Set::execute() {
 
   http_ret = oc.state_from_str(state_str, &state);
   if (http_ret < 0) {
-    dout(5) << "Error - invalid state" << dendl;
+    ldout(s->cct, 5) << "Error - invalid state" << dendl;
     return;
   }
 
   http_ret = oc.set_state(client_id, op_id, object, state);
   if (http_ret < 0) {
-    dout(5) << "Error - Unable to set state" << dendl;
+    ldout(s->cct, 5) << "Error - Unable to set state" << dendl;
     return;
   }
 }
@@ -140,7 +140,7 @@ void RGWOp_Opstate_Renew::execute() {
       op_id.empty() ||
       object.empty() ||
       state_str.empty()) {
-    dout(5) << "Error - invalid parameter list" << dendl;
+    ldout(s->cct, 5) << "Error - invalid parameter list" << dendl;
     http_ret = -EINVAL;
     return;
   }
@@ -149,13 +149,13 @@ void RGWOp_Opstate_Renew::execute() {
 
   http_ret = oc.state_from_str(state_str, &state);
   if (http_ret < 0) {
-    dout(5) << "Error - invalid state" << dendl;
+    ldout(s->cct, 5) << "Error - invalid state" << dendl;
     return;
   }
 
   http_ret = oc.renew_state(client_id, op_id, object, state);
   if (http_ret < 0) {
-    dout(5) << "Error - Unable to renew state" << dendl;
+    ldout(s->cct, 5) << "Error - Unable to renew state" << dendl;
     return;
   }
 }
@@ -168,7 +168,7 @@ void RGWOp_Opstate_Delete::execute() {
   if (client_id.empty() ||
       op_id.empty() ||
       object.empty()) {
-    dout(5) << "Error - invalid parameter list" << dendl;
+    ldout(s->cct, 5) << "Error - invalid parameter list" << dendl;
     http_ret = -EINVAL;
     return;
   }
@@ -177,7 +177,7 @@ void RGWOp_Opstate_Delete::execute() {
 
   http_ret = oc.remove_entry(client_id, op_id, object);
   if (http_ret < 0) {
-    dout(5) << "Error - Unable to remove entry" << dendl;
+    ldout(s->cct, 5) << "Error - Unable to remove entry" << dendl;
   }
 }
 

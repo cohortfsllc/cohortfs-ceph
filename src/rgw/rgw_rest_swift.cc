@@ -137,7 +137,7 @@ void RGWListBucket_ObjStore_SWIFT::send_response()
 
   dump_start(s);
 
-  s->formatter->open_array_section_with_attrs("container", FormatterAttrs("name", s->bucket.name.c_str(), NULL));
+  s->formatter->open_array_section_with_attrs("container", ceph::FormatterAttrs("name", s->bucket.name.c_str(), NULL));
 
   while (iter != objs.end() || pref_iter != common_prefixes.end()) {
     bool do_pref = false;
@@ -174,7 +174,7 @@ void RGWListBucket_ObjStore_SWIFT::send_response()
 	}
 	s->formatter->dump_string("content_type", single_content_type);
       }
-      time_t mtime = iter->mtime.sec();
+      time_t mtime = iter->mtime.time_since_epoch().count();
       dump_time(s, "last_modified", &mtime);
       s->formatter->close_section();
     }
@@ -184,7 +184,7 @@ void RGWListBucket_ObjStore_SWIFT::send_response()
       if (name.compare(delimiter) == 0)
 	goto next;
 
-	s->formatter->open_object_section_with_attrs("subdir", FormatterAttrs("name", name.c_str(), NULL));
+	s->formatter->open_object_section_with_attrs("subdir", ceph::FormatterAttrs("name", name.c_str(), NULL));
 
 	/* swift is a bit inconsistent here */
 	switch (s->format) {
@@ -322,7 +322,7 @@ static int get_swift_container_settings(req_state *s, RGWRados *store, RGWAccess
     RGWCORSConfiguration_SWIFT *swift_cors = new RGWCORSConfiguration_SWIFT;
     int r = swift_cors->create_update(allow_origins, allow_headers, expose_headers, max_age);
     if (r < 0) {
-      dout(0) << "Error creating/updating the cors configuration" << dendl;
+      ldout(s->cct, 0) << "Error creating/updating the cors configuration" << dendl;
       delete swift_cors;
       return r;
     }
@@ -393,7 +393,7 @@ int RGWPutObj_ObjStore_SWIFT::get_params()
   supplied_etag = s->info.env->get("HTTP_ETAG");
 
   if (!s->generic_attrs.count(RGW_ATTR_CONTENT_TYPE)) {
-    dout(5) << "content type wasn't provided, trying to guess" << dendl;
+    ldout(s->cct, 5) << "content type wasn't provided, trying to guess" << dendl;
     const char *suffix = strrchr(s->object, '.');
     if (suffix) {
       suffix++;
@@ -869,15 +869,15 @@ int RGWHandler_ObjStore_SWIFT::init_from_header(struct req_state *s)
 
   int pos = req.find('/');
   if (pos >= 0) {
-    bool cut_url = g_conf->rgw_swift_url_prefix.length();
+    bool cut_url = s->cct->_conf->rgw_swift_url_prefix.length();
     first = req.substr(0, pos);
-    if (first.compare(g_conf->rgw_swift_url_prefix) == 0) {
+    if (first.compare(s->cct->_conf->rgw_swift_url_prefix) == 0) {
       if (cut_url) {
 	next_tok(req, first, '/');
       }
     }
   } else {
-    if (req.compare(g_conf->rgw_swift_url_prefix) == 0) {
+    if (req.compare(s->cct->_conf->rgw_swift_url_prefix) == 0) {
       s->formatter = new RGWFormatter_Plain;
       return -ERR_BAD_URL;
     }
@@ -885,14 +885,14 @@ int RGWHandler_ObjStore_SWIFT::init_from_header(struct req_state *s)
   }
 
   string tenant_path;
-  if (!g_conf->rgw_swift_tenant_name.empty()) {
+  if (!s->cct->_conf->rgw_swift_tenant_name.empty()) {
     tenant_path = "/AUTH_";
-    tenant_path.append(g_conf->rgw_swift_tenant_name);
+    tenant_path.append(s->cct->_conf->rgw_swift_tenant_name);
   }
 
   /* verify that the request_uri conforms with what's expected */
-  char buf[g_conf->rgw_swift_url_prefix.length() + 16 + tenant_path.length()];
-  int blen = sprintf(buf, "/%s/v1%s", g_conf->rgw_swift_url_prefix.c_str(), tenant_path.c_str());
+  char buf[s->cct->_conf->rgw_swift_url_prefix.length() + 16 + tenant_path.length()];
+  int blen = sprintf(buf, "/%s/v1%s", s->cct->_conf->rgw_swift_url_prefix.c_str(), tenant_path.c_str());
   if (s->decoded_uri[0] != '/' ||
     s->decoded_uri.compare(0, blen, buf) !=  0) {
     return -ENOENT;
@@ -914,7 +914,8 @@ int RGWHandler_ObjStore_SWIFT::init_from_header(struct req_state *s)
   s->os_auth_token = s->info.env->get("HTTP_X_AUTH_TOKEN");
   next_tok(req, first, '/');
 
-  dout(10) << "ver=" << ver << " first=" << first << " req=" << req << dendl;
+  ldout(s->cct, 10) << "ver=" << ver << " first=" << first << " req="
+		    << req << dendl;
   if (first.size() == 0)
     return 0;
 
@@ -933,7 +934,10 @@ int RGWHandler_ObjStore_SWIFT::init_from_header(struct req_state *s)
 
 int RGWHandler_ObjStore_SWIFT::init(RGWRados *store, struct req_state *s, RGWClientIO *cio)
 {
-  dout(10) << "s->object=" << (s->object ? s->object : "<NULL>") << " s->bucket=" << (!s->bucket_name_str.empty() ? s->bucket_name_str : "<NULL>") << dendl;
+  ldout(s->cct, 10) << "s->object=" << (s->object ? s->object : "<NULL>")
+		    << " s->bucket="
+		    << (!s->bucket_name_str.empty() ? s->bucket_name_str
+			: "<NULL>") << dendl;
 
   int ret = validate_bucket_name(s->bucket_name_str.c_str());
   if (ret)

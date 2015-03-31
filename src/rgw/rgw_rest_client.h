@@ -55,7 +55,7 @@ public:
 
 
 class RGWRESTStreamWriteRequest : public RGWRESTSimpleRequest {
-  Mutex lock;
+  std::mutex lock;
   list<bufferlist> pending_send;
   void *handle;
   RGWGetDataCB *cb;
@@ -74,7 +74,7 @@ public:
 };
 
 class RGWRESTStreamReadRequest : public RGWRESTSimpleRequest {
-  Mutex lock;
+  std::mutex lock;
   RGWGetDataCB *cb;
   bufferlist in_data;
   size_t chunk_ofs;

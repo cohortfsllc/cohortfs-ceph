@@ -4,10 +4,8 @@
 #include "rgw_rest.h"
 
 #include "common/ceph_crypto.h"
-#include "common/Clock.h"
-
+#include "include/ceph_time.h"
 #include "auth/Crypto.h"
-
 #include "rgw_client_io.h"
 
 #define dout_subsys ceph_subsys_rgw
@@ -16,7 +14,9 @@
 
 using namespace ceph::crypto;
 
-static int build_token(string& swift_user, string& key, uint64_t nonce, utime_t& expiration, bufferlist& bl)
+static int build_token(CephContext* cct, string& swift_user, string& key,
+		       uint64_t nonce, ceph::real_time& expiration,
+		       bufferlist& bl)
 {
   ::encode(swift_user, bl);
   ::encode(nonce, bl);
@@ -50,10 +50,10 @@ static int encode_token(CephContext *cct, string& swift_user, string& key, buffe
   if (ret < 0)
     return ret;
 
-  utime_t expiration = ceph_clock_now(cct);
-  expiration += cct->_conf->rgw_swift_token_expiration;
+  ceph::real_time expiration = ceph::real_clock::now();
+  expiration += std::chrono::seconds(cct->_conf->rgw_swift_token_expiration);
 
-  ret = build_token(swift_user, key, nonce, expiration, bl);
+  ret = build_token(cct, swift_user, key, nonce, expiration, bl);
 
   return ret;
 }
@@ -82,7 +82,7 @@ int rgw_swift_verify_signed_token(CephContext *cct, RGWRados *store, const char 
   bufferlist::iterator iter = bl.begin();
 
   uint64_t nonce;
-  utime_t expiration;
+  ceph::real_time expiration;
   string swift_user;
 
   try {
@@ -93,7 +93,7 @@ int rgw_swift_verify_signed_token(CephContext *cct, RGWRados *store, const char 
     dout(0) << "NOTICE: failed to decode token: caught exception" << dendl;
     return -EINVAL;
   }
-  utime_t now = ceph_clock_now(cct);
+  ceph::real_time now = ceph::real_clock::now();
   if (expiration < now) {
     dout(0) << "NOTICE: old timed out token was used now=" << now << " token.expiration=" << expiration << dendl;
     return -EPERM;
@@ -110,7 +110,7 @@ int rgw_swift_verify_signed_token(CephContext *cct, RGWRados *store, const char 
   RGWAccessKey& swift_key = siter->second;
 
   bufferlist tok;
-  ret = build_token(swift_user, swift_key.key, nonce, expiration, tok);
+  ret = build_token(cct, swift_user, swift_key.key, nonce, expiration, tok);
   if (ret < 0)
     return ret;
 
@@ -142,8 +142,8 @@ void RGW_SWIFT_Auth_Get::execute()
   RGWAccessKey *swift_key;
   map<string, RGWAccessKey>::iterator siter;
 
-  string swift_url = g_conf->rgw_swift_url;
-  string swift_prefix = g_conf->rgw_swift_url_prefix;
+  string swift_url = s->cct->_conf->rgw_swift_url;
+  string swift_prefix = s->cct->_conf->rgw_swift_url_prefix;
   string tenant_path;
 
   if (swift_prefix.size() == 0) {
@@ -164,7 +164,7 @@ void RGW_SWIFT_Auth_Get::execute()
     }
     const char *host = s->info.env->get("HTTP_HOST");
     if (!host) {
-      dout(0) << "NOTICE: server is misconfigured, missing rgw_swift_url_prefix or rgw_swift_url, HTTP_HOST is not set" << dendl;
+      ldout(s->cct, 0) << "NOTICE: server is misconfigured, missing rgw_swift_url_prefix or rgw_swift_url, HTTP_HOST is not set" << dendl;
       ret = -EINVAL;
       goto done;
     }
@@ -197,14 +197,14 @@ void RGW_SWIFT_Auth_Get::execute()
   swift_key = &siter->second;
 
   if (swift_key->key.compare(key) != 0) {
-    dout(0) << "NOTICE: RGW_SWIFT_Auth_Get::execute(): bad swift key" << dendl;
+    ldout(s->cct, 0) << "NOTICE: RGW_SWIFT_Auth_Get::execute(): bad swift key" << dendl;
     ret = -EPERM;
     goto done;
   }
 
-  if (!g_conf->rgw_swift_tenant_name.empty()) {
+  if (!s->cct->_conf->rgw_swift_tenant_name.empty()) {
     tenant_path = "/AUTH_";
-    tenant_path.append(g_conf->rgw_swift_tenant_name);
+    tenant_path.append(s->cct->_conf->rgw_swift_tenant_name);
   }
 
   s->cio->print("X-Storage-Url: %s/%s/v1%s\n", swift_url.c_str(),

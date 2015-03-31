@@ -5,6 +5,7 @@
 
 #include "common/Formatter.h"
 #include "common/utf8.h"
+#include "common/strtol.h"
 #include "include/str_list.h"
 #include "rgw_common.h"
 #include "rgw_rados.h"
@@ -219,7 +220,8 @@ void set_req_state_err(struct req_state *s, int err_no)
     s->err.s3_code = r->s3_code;
     return;
   }
-  dout(0) << "WARNING: set_req_state_err err_no=" << err_no << " resorting to 500" << dendl;
+  ldout(s->cct, 0) << "WARNING: set_req_state_err err_no=" << err_no
+		   << " resorting to 500" << dendl;
 
   s->err.http_ret = 500;
   s->err.s3_code = "UnknownError";
@@ -271,7 +273,7 @@ void dump_pair(struct req_state *s, const char *key, const char *value)
 
 void dump_bucket_from_state(struct req_state *s)
 {
-  int expose_bucket = g_conf->rgw_expose_bucket;
+  int expose_bucket = s->cct->_conf->rgw_expose_bucket;
   if (expose_bucket) {
     if (!s->bucket_name_str.empty())
       s->cio->print("Bucket: \"%s\"\n", s->bucket_name_str.c_str());
@@ -596,7 +598,9 @@ int RESTArgs::get_int32(struct req_state *s, const string& name, int32_t def_val
   return 0;
 }
 
-int RESTArgs::get_time(struct req_state *s, const string& name, const utime_t& def_val, utime_t *val, bool *existed)
+int RESTArgs::get_time(struct req_state *s, const string& name,
+		       const ceph::real_time& def_val,
+		       ceph::real_time *val, bool *existed)
 {
   bool exists;
   string sval = s->info.args.get(name, &exists);
@@ -609,18 +613,16 @@ int RESTArgs::get_time(struct req_state *s, const string& name, const utime_t& d
     return 0;
   }
 
-  uint64_t epoch, nsec;
-
-  int r = utime_t::parse_date(sval, &epoch, &nsec);
+  int r = ceph::parse_date(sval, *val);
   if (r < 0)
     return r;
-
-  *val = utime_t(epoch, nsec);
 
   return 0;
 }
 
-int RESTArgs::get_epoch(struct req_state *s, const string& name, uint64_t def_val, uint64_t *epoch, bool *existed)
+int RESTArgs::get_epoch(struct req_state *s, const string& name,
+			uint64_t def_val,
+			uint64_t *epoch, bool *existed)
 {
   bool exists;
   string date = s->info.args.get(name, &exists);
@@ -633,14 +635,16 @@ int RESTArgs::get_epoch(struct req_state *s, const string& name, uint64_t def_va
     return 0;
   }
 
-  int r = utime_t::parse_date(date, epoch, NULL);
+  ceph::real_time rt;
+  int r = ceph::parse_date(date, rt);
   if (r < 0)
     return r;
-
+  *epoch = rt.time_since_epoch().count();
   return 0;
 }
 
-int RESTArgs::get_bool(struct req_state *s, const string& name, bool def_val, bool *val, bool *existed)
+int RESTArgs::get_bool(struct req_state *s, const string& name,
+		       bool def_val, bool *val, bool *existed)
 {
   bool exists;
   string sval = s->info.args.get(name, &exists);
@@ -1191,23 +1195,24 @@ int RGWREST::preprocess(struct req_state *s, RGWClientIO *cio)
   req_info& info = s->info;
 
   s->cio = cio;
-  if (g_conf->rgw_dns_name.length() && info.host) {
+  if (s->cct->_conf->rgw_dns_name.length() && info.host) {
     string h(s->info.host);
 
-    ldout(s->cct, 10) << "host=" << s->info.host << " rgw_dns_name=" << g_conf->rgw_dns_name << dendl;
-    int pos = h.find(g_conf->rgw_dns_name);
+    ldout(s->cct, 10) << "host=" << s->info.host << " rgw_dns_name=" << s->cct->_conf->rgw_dns_name << dendl;
+    int pos = h.find(s->cct->_conf->rgw_dns_name);
 
-    if (g_conf->rgw_resolve_cname && pos < 0) {
+    if (s->cct->_conf->rgw_resolve_cname && pos < 0) {
       string cname;
       bool found;
       int r = rgw_resolver->resolve_cname(h, cname, &found);
       if (r < 0) {
-	dout(0) << "WARNING: rgw_resolver->resolve_cname() returned r=" << r << dendl;
+	ldout(s->cct, 0) << "WARNING: rgw_resolver->resolve_cname() returned r=" << r << dendl;
       }
       if (found) {
-	dout(0) << "resolved host cname " << h << " -> " << cname << dendl;
+	ldout(s->cct, 0) << "resolved host cname " << h << " -> "
+			 << cname << dendl;
 	h = cname;
-	pos = h.find(g_conf->rgw_dns_name);
+	pos = h.find(s->cct->_conf->rgw_dns_name);
       }
     }
 
@@ -1240,7 +1245,7 @@ int RGWREST::preprocess(struct req_state *s, RGWClientIO *cio)
 
   s->http_auth = info.env->get("HTTP_AUTHORIZATION");
 
-  if (g_conf->rgw_print_continue) {
+  if (s->cct->_conf->rgw_print_continue) {
     const char *expect = info.env->get("HTTP_EXPECT");
     s->expect_cont = (expect && !strcasecmp(expect, "100-continue"));
   }

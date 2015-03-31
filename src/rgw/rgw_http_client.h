@@ -9,9 +9,9 @@ class RGWHTTPClient
   bufferlist::iterator send_iter;
   size_t send_len;
   bool has_send_len;
-protected:
+public:
   CephContext *cct;
-
+protected:
   list<pair<string, string> > headers;
 public:
   virtual ~RGWHTTPClient() {}

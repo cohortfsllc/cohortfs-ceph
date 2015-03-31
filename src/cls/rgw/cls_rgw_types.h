@@ -6,7 +6,7 @@
 #include <map>
 
 #include "include/types.h"
-#include "include/utime.h"
+#include "include/ceph_time.h"
 #include "common/Formatter.h"
 
 #define CEPH_RGW_REMOVE 'r'
@@ -31,7 +31,7 @@ enum RGWModifyOp {
 
 struct rgw_bucket_pending_info {
   RGWPendingState state;
-  utime_t timestamp;
+  ceph::real_time timestamp;
   uint8_t op;
 
   rgw_bucket_pending_info() : state(CLS_RGW_STATE_PENDING_MODIFY), op(0) {}
@@ -61,14 +61,14 @@ WRITE_CLASS_ENCODER(rgw_bucket_pending_info)
 struct rgw_bucket_dir_entry_meta {
   uint8_t category;
   uint64_t size;
-  utime_t mtime;
+  ceph::real_time mtime;
   string etag;
   string owner;
   string owner_display_name;
   string content_type;
 
   rgw_bucket_dir_entry_meta() :
-  category(0), size(0) { mtime.set_from_double(0); }
+    category(0), size(0), mtime(0s) {}
 
   void encode(bufferlist &bl) const {
     ENCODE_START(3, 3, bl);
@@ -251,7 +251,7 @@ WRITE_CLASS_ENCODER(rgw_bucket_dir_entry)
 struct rgw_bi_log_entry {
   string id;
   string object;
-  utime_t timestamp;
+  ceph::real_time timestamp;
   rgw_bucket_entry_ver ver;
   RGWModifyOp op;
   RGWPendingState state;
@@ -550,16 +550,16 @@ enum cls_rgw_gc_op {
 
 struct cls_rgw_obj {
   string pool;
-  string oid_t;
+  string oid;
   string key;
 
   cls_rgw_obj() {}
-  cls_rgw_obj(string& _p, string& _o) : pool(_p), oid_t(_o) {}
+  cls_rgw_obj(string& _p, string& _o) : pool(_p), oid(_o) {}
 
   void encode(bufferlist& bl) const {
     ENCODE_START(1, 1, bl);
     ::encode(pool, bl);
-    ::encode(oid_t, bl);
+    ::encode(oid, bl);
     ::encode(key, bl);
     ENCODE_FINISH(bl);
   }
@@ -567,21 +567,21 @@ struct cls_rgw_obj {
   void decode(bufferlist::iterator& bl) {
     DECODE_START(1, bl);
     ::decode(pool, bl);
-    ::decode(oid_t, bl);
+    ::decode(oid, bl);
     ::decode(key, bl);
     DECODE_FINISH(bl);
   }
 
   void dump(Formatter *f) const {
     f->dump_string("pool", pool);
-    f->dump_string("oid_t", oid);
+    f->dump_string("oid", oid);
     f->dump_string("key", key);
   }
   static void generate_test_instances(list<cls_rgw_obj*>& ls) {
     ls.push_back(new cls_rgw_obj);
     ls.push_back(new cls_rgw_obj);
     ls.back()->pool = "mypool";
-    ls.back()->oid_t = "myoid";
+    ls.back()->oid = "myoid";
     ls.back()->key = "mykey";
   }
 };
@@ -592,12 +592,12 @@ struct cls_rgw_obj_chain {
 
   cls_rgw_obj_chain() {}
 
-  void push_obj(string& pool, string& oid_t, string& key) {
-    cls_rgw_obj oid;
-    oid.pool = pool;
-    oid.oid_t = oid;
-    oid.key = key;
-    objs.push_back(oid);
+  void push_obj(string& pool, string& oid, string& key) {
+    cls_rgw_obj obj;
+    obj.pool = pool;
+    obj.oid = oid;
+    obj.key = key;
+    objs.push_back(obj);
   }
 
   void encode(bufferlist& bl) const {
@@ -614,7 +614,8 @@ struct cls_rgw_obj_chain {
 
   void dump(Formatter *f) const {
     f->open_array_section("objs");
-    for (list<cls_rgw_obj>::const_iterator p = objs.begin(); p != objs.end(); ++p) {
+    for (list<cls_rgw_obj>::const_iterator p = objs.begin();
+	 p != objs.end(); ++p) {
       f->open_object_section("oid");
       p->dump(f);
       f->close_section();
@@ -631,7 +632,7 @@ struct cls_rgw_gc_obj_info
 {
   string tag;
   cls_rgw_obj_chain chain;
-  utime_t time;
+  ceph::real_time time;
 
   cls_rgw_gc_obj_info() {}
 
@@ -662,7 +663,7 @@ struct cls_rgw_gc_obj_info
     ls.push_back(new cls_rgw_gc_obj_info);
     ls.push_back(new cls_rgw_gc_obj_info);
     ls.back()->tag = "footag";
-    ls.back()->time = utime_t(21, 32);
+    ls.back()->time = ceph::real_time::min() + 21s + 32ns;
   }
 };
 WRITE_CLASS_ENCODER(cls_rgw_gc_obj_info)

@@ -121,6 +121,7 @@ enum RGWUserId {
 };
 
 struct RGWUserAdminOpState {
+  CephContext* cct;
   // user attributes
   RGWUserInfo info;
   std::string user_id;
@@ -382,7 +383,7 @@ struct RGWUserAdminOpState {
     int sub_buf_size = RAND_SUBUSER_LEN + 1;
     char sub_buf[RAND_SUBUSER_LEN + 1];
 
-    if (gen_rand_alphanumeric_upper(g_ceph_context, sub_buf, sub_buf_size) < 0)
+    if (gen_rand_alphanumeric_upper(cct, sub_buf, sub_buf_size) < 0)
       return "";
 
     rand_suffix = sub_buf;
@@ -395,7 +396,9 @@ struct RGWUserAdminOpState {
     return generated_subuser;
   }
 
-  RGWUserAdminOpState() : user_id(RGW_USER_ANON_ID), user_email(""), display_name(""), id(""), key ("")
+  RGWUserAdminOpState(CephContext* _cct) :
+    cct(_cct), user_id(RGW_USER_ANON_ID), user_email(""), display_name(""),
+    id(""), key ("")
   {
     max_buckets = RGW_DEFAULT_MAX_BUCKETS;
     key_type = -1;

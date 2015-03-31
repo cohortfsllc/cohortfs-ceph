@@ -14,9 +14,9 @@
 #include "rgw_log.h"
 #include "rgw_metadata.h"
 #include "rgw_rest_conn.h"
+#include "common/Timer.h"
 
 class RGWWatcher;
-class SafeTimer;
 class ACLOwner;
 class RGWGC;
 
@@ -51,9 +51,9 @@ static inline void get_obj_bucket_and_oid_key(const rgw_obj& oid, rgw_bucket& bu
 int rgw_policy_from_attrset(CephContext *cct, map<string, bufferlist>& attrset, RGWAccessControlPolicy *policy);
 
 struct RGWUsageBatch {
-  map<utime_t, rgw_usage_log_entry> m;
+  map<ceph::real_time, rgw_usage_log_entry> m;
 
-  void insert(utime_t& t, rgw_usage_log_entry& entry, bool *account) {
+  void insert(ceph::real_time& t, rgw_usage_log_entry& entry, bool *account) {
     bool exists = m.find(t) != m.end();
     *account = !exists;
     m[t].aggregate(entry);
@@ -69,10 +69,11 @@ struct RGWUsageIter {
 
 class RGWGetDataCB {
 protected:
+  CephContext* cct;
   uint64_t extra_data_len;
 public:
   virtual int handle_data(bufferlist& bl, off_t bl_ofs, off_t bl_len) = 0;
-  RGWGetDataCB() : extra_data_len(0) {}
+  RGWGetDataCB(CephContext* _cct) : cct(_cct), extra_data_len(0) {}
   virtual ~RGWGetDataCB() {}
   virtual void set_extra_data_len(uint64_t len) {
     extra_data_len = len;
@@ -485,7 +486,7 @@ struct RGWUploadPartInfo {
   uint32_t num;
   uint64_t size;
   string etag;
-  utime_t modified;
+  ceph::real_time modified;
   RGWObjManifest manifest;
 
   RGWUploadPartInfo() : num(0), size(0) {}
@@ -983,7 +984,7 @@ struct RGWRegion {
 WRITE_CLASS_ENCODER(RGWRegion);
 
 struct RGWRegionMap {
-  Mutex lock;
+  std::mutex lock;
   map<string, RGWRegion> regions;
   map<string, RGWRegion> regions_by_api;
 
@@ -1106,7 +1107,7 @@ class RGWOpStateSingleOp
   CephContext *cct;
 
   RGWOpState::OpState cur_state;
-  utime_t last_update;
+  ceph::real_time last_update;
 
 public:
   RGWOpStateSingleOp(RGWRados *store, const string& cid, const string& oid_t, const string& oid);
@@ -1182,8 +1183,8 @@ class RGWRados
     GetObjState() : sent_data(false) {}
   };
 
-  Mutex lock;
-  SafeTimer *timer;
+  std::mutex lock;
+  SafeTimer<ceph::mono_clock> *timer;
 
   class C_Tick : public Context {
     RGWRados *rados;
@@ -1205,7 +1206,7 @@ class RGWRados
   librados::IoCtx control_pool_ctx;   // .rgw.control
   bool watch_initialized;
 
-  Mutex bucket_id_lock;
+  std::mutex bucket_id_lock;
 
   int get_obj_ioctx(const rgw_obj& oid, librados::IoCtx *ioctx);
   int get_obj_ref(const rgw_obj& oid, rgw_rados_ref *ref, rgw_bucket *bucket, bool ref_system_obj = false);
@@ -1234,10 +1235,11 @@ class RGWRados
   int update_placement_map();
   int store_bucket_info(RGWBucketInfo& info, map<string, bufferlist> *pattrs, RGWObjVersionTracker *objv_tracker, bool exclusive);
 
+public:
+  CephContext *cct;
 protected:
   virtual int delete_obj_impl(void *ctx, const string& bucket_owner, rgw_obj& src_obj, RGWObjVersionTracker *objv_tracker);
 
-  CephContext *cct;
   librados::Rados *rados;
   librados::IoCtx gc_pool_ctx;	      // .rgw.gc
 
@@ -1694,7 +1696,7 @@ public:
   int prepare_update_index(RGWObjState *state, rgw_bucket& bucket,
 			   RGWModifyOp op, rgw_obj& oid_t, string& tag);
   int complete_update_index(rgw_bucket& bucket, string& oid_t, string& tag, int64_t poolid, uint64_t epoch, uint64_t size,
-			    utime_t& ut, string& etag, string& content_type, bufferlist *acl_bl, RGWObjCategory category,
+			    ceph::real_time& ut, string& etag, string& content_type, bufferlist *acl_bl, RGWObjCategory category,
 			    list<string> *remove_objs);
   int complete_update_index_del(rgw_bucket& bucket, string& oid_t, string& tag, int64_t pool, uint64_t epoch) {
     if (bucket_is_system(bucket))
@@ -1718,16 +1720,16 @@ public:
 
   void shard_name(const string& prefix, unsigned max_shards, const string& key, string& name);
   void shard_name(const string& prefix, unsigned max_shards, const string& section, const string& key, string& name);
-  void time_log_prepare_entry(cls_log_entry& entry, const utime_t& ut, string& section, string& key, bufferlist& bl);
+  void time_log_prepare_entry(cls_log_entry& entry, const ceph::real_time& ut, string& section, string& key, bufferlist& bl);
   int time_log_add(const string& oid_t, list<cls_log_entry>& entries);
-  int time_log_add(const string& oid_t, const utime_t& ut, const string& section, const string& key, bufferlist& bl);
-  int time_log_list(const string& oid_t, utime_t& start_time, utime_t& end_time,
+  int time_log_add(const string& oid_t, const ceph::real_time& ut, const string& section, const string& key, bufferlist& bl);
+  int time_log_list(const string& oid_t, ceph::real_time& start_time, ceph::real_time& end_time,
 		    int max_entries, list<cls_log_entry>& entries,
 		    const string& marker, string *out_marker, bool *truncated);
   int time_log_info(const string& oid_t, cls_log_header *header);
-  int time_log_trim(const string& oid_t, const utime_t& start_time, const utime_t& end_time,
+  int time_log_trim(const string& oid_t, const ceph::real_time& start_time, const ceph::real_time& end_time,
 		    const string& from_marker, const string& to_marker);
-  int lock_exclusive(rgw_bucket& pool, const string& oid_t, utime_t& duration, string& zone_id, string& owner_id);
+  int lock_exclusive(rgw_bucket& pool, const string& oid_t, ceph::real_time& duration, string& zone_id, string& owner_id);
   int unlock(rgw_bucket& pool, const string& oid_t, string& zone_id, string& owner_id);
 
   /// clean up/process any temporary objects older than given date[/time]

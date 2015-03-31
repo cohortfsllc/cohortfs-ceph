@@ -15,6 +15,9 @@
 #ifndef CEPH_RGW_COMMON_H
 #define CEPH_RGW_COMMON_H
 
+#include <mutex>
+#include <condition_variable>
+
 #include "common/ceph_crypto.h"
 #include "common/debug.h"
 
@@ -25,7 +28,7 @@
 #include <string>
 #include <map>
 #include "include/types.h"
-#include "include/utime.h"
+#include "include/ceph_time.h"
 #include "rgw_acl.h"
 #include "rgw_cors.h"
 #include "rgw_quota.h"
@@ -533,7 +536,7 @@ struct rgw_bucket {
   std::string marker;
   std::string bucket_id;
 
-  std::string oid_t; /*
+  std::string obj; /*
 		    * runtime in-memory only info. If not empty, points to the bucket instance object
 		    */
 
@@ -837,7 +840,7 @@ struct req_state {
    bool enable_usage_log;
    uint8_t defer_to_bucket_acls;
    uint32_t perm_mask;
-   utime_t header_time;
+   ceph::real_time header_time;
 
    const char *object;
 
@@ -875,7 +878,7 @@ struct req_state {
    string swift_user;
    string swift_groups;
 
-   utime_t time;
+   ceph::real_time time;
 
    void *obj_ctx;
 
@@ -896,7 +899,7 @@ struct RGWObjEnt {
   std::string owner;
   std::string owner_display_name;
   uint64_t size;
-  utime_t mtime;
+  ceph::real_time mtime;
   string etag;
   string content_type;
   string tag;
@@ -1084,31 +1087,31 @@ public:
    * and cuts down the name to the unmangled version. If it is not
    * part of the given namespace, it returns false.
    */
-  static bool translate_raw_obj_to_obj_in_ns(string& oid, string& ns) {
+  static bool translate_raw_obj_to_obj_in_ns(string& obj, string& ns) {
     if (ns.empty()) {
-      if (oid[0] != '_')
+      if (obj[0] != '_')
 	return true;
 
-      if (oid.size() >= 2 && oid[1] == '_') {
-	oid = obj.substr(1);
+      if (obj.size() >= 2 && obj[1] == '_') {
+	obj = obj.substr(1);
 	return true;
       }
 
       return false;
     }
 
-    if (oid[0] != '_' || oid.size() < 3) // for namespace, min size would be 3: _x_
+    if (obj[0] != '_' || obj.size() < 3) // for namespace, min size would be 3: _x_
       return false;
 
-    int pos = oid.find('_', 1);
+    int pos = obj.find('_', 1);
     if (pos <= 1) // if it starts with __, it's not in our namespace
       return false;
 
-    string obj_ns = oid.substr(1, pos - 1);
+    string obj_ns = obj.substr(1, pos - 1);
     if (obj_ns.compare(ns) != 0)
 	return false;
 
-    oid = obj.substr(pos + 1);
+    obj = obj.substr(pos + 1);
     return true;
   }
 
@@ -1120,24 +1123,24 @@ public:
    * It returns true after successfully doing so, or
    * false if it fails.
    */
-  static bool strip_namespace_from_object(string& oid, string& ns) {
+  static bool strip_namespace_from_object(string& obj, string& ns) {
     ns.clear();
-    if (oid[0] != '_') {
+    if (obj[0] != '_') {
       return true;
     }
 
-    size_t pos = oid.find('_', 1);
+    size_t pos = obj.find('_', 1);
     if (pos == string::npos) {
       return false;
     }
 
-    size_t period_pos = oid.find('.');
+    size_t period_pos = obj.find('.');
     if (period_pos < pos) {
       return false;
     }
 
-    ns = oid.substr(1, pos-1);
-    oid = obj.substr(pos+1, string::npos);
+    ns = obj.substr(1, pos-1);
+    obj = obj.substr(pos+1, string::npos);
     return true;
   }
 

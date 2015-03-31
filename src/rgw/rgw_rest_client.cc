@@ -70,9 +70,9 @@ int RGWRESTSimpleRequest::receive_header(void *ptr, size_t len)
 
 static void get_new_date_str(CephContext *cct, string& date_str)
 {
-  utime_t tm = ceph_clock_now(cct);
+  ceph::real_time rt = ceph::real_clock::now();
   stringstream s;
-  tm.asctime(s);
+  ceph::asctime(rt, s);
   date_str = s.str();
 }
 
@@ -271,13 +271,16 @@ int RGWRESTSimpleRequest::forward_request(RGWAccessKey& key, req_info& info, siz
 class RGWRESTStreamOutCB : public RGWGetDataCB {
   RGWRESTStreamWriteRequest *req;
 public:
-  RGWRESTStreamOutCB(RGWRESTStreamWriteRequest *_req) : req(_req) {}
+  RGWRESTStreamOutCB(CephContext* _cct, RGWRESTStreamWriteRequest *_req) :
+    RGWGetDataCB(_cct), req(_req) {}
   int handle_data(bufferlist& bl, off_t bl_ofs, off_t bl_len); /* callback for object iteration when sending data */
 };
 
 int RGWRESTStreamOutCB::handle_data(bufferlist& bl, off_t bl_ofs, off_t bl_len)
 {
-  dout(20) << "RGWRESTStreamOutCB::handle_data bl.length()=" << bl.length() << " bl_ofs=" << bl_ofs << " bl_len=" << bl_len << dendl;
+  ldout(cct, 20) << "RGWRESTStreamOutCB::handle_data bl.length()="
+		 << bl.length() << " bl_ofs=" << bl_ofs << " bl_len="
+		 << bl_len << dendl;
   if (!bl_ofs && bl_len == bl.length()) {
     return req->add_output_data(bl);
   }
@@ -296,14 +299,13 @@ RGWRESTStreamWriteRequest::~RGWRESTStreamWriteRequest()
 
 int RGWRESTStreamWriteRequest::add_output_data(bufferlist& bl)
 {
-  lock.Lock();
+  std::unique_lock<std::mutex> lk(lock);
   if (status < 0) {
     int ret = status;
-    lock.Unlock();
     return ret;
   }
   pending_send.push_back(bl);
-  lock.Unlock();
+  lk.unlock();
 
   bool done;
   return process_request(handle, false, &done);
@@ -451,7 +453,7 @@ int RGWRESTStreamWriteRequest::put_obj_init(RGWAccessKey& key, rgw_obj& oid, uin
     headers.push_back(pair<string, string>(iter->first, iter->second));
   }
 
-  cb = new RGWRESTStreamOutCB(this);
+  cb = new RGWRESTStreamOutCB(cct, this);
 
   set_send_length(obj_size);
 
@@ -467,9 +469,8 @@ int RGWRESTStreamWriteRequest::send_data(void *ptr, size_t len)
   uint64_t sent = 0;
 
   dout(20) << "RGWRESTStreamWriteRequest::send_data()" << dendl;
-  lock.Lock();
+  std::unique_lock<std::mutex> lk(lock);
   if (pending_send.empty() || status < 0) {
-    lock.Unlock();
     return status;
   }
 
@@ -479,9 +480,9 @@ int RGWRESTStreamWriteRequest::send_data(void *ptr, size_t len)
 
     list<bufferlist>::iterator next_iter = iter;
     ++next_iter;
-    lock.Unlock();
+    lk.unlock();
 
-    uint64_t send_len = min(len, (size_t)bl.length());
+    uint64_t send_len = std::min(len, (size_t)bl.length());
 
     memcpy(ptr, bl.c_str(), send_len);
 
@@ -489,7 +490,7 @@ int RGWRESTStreamWriteRequest::send_data(void *ptr, size_t len)
     len -= send_len;
     sent += send_len;
 
-    lock.Lock();
+    lk.lock();
 
     bufferlist new_bl;
     if (bl.length() > send_len) {
@@ -502,7 +503,6 @@ int RGWRESTStreamWriteRequest::send_data(void *ptr, size_t len)
     }
     iter = next_iter;
   }
-  lock.Unlock();
 
   return sent;
 }

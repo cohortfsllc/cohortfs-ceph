@@ -15,7 +15,7 @@
 #include <string>
 #include "cls/replica_log/cls_replica_log_types.h"
 #include "include/types.h"
-#include "include/utime.h"
+#include "include/ceph_time.h"
 #include "include/rados/librados.hpp"
 #include "rgw_common.h"
 
@@ -30,7 +30,7 @@ typedef cls_replica_log_progress_marker RGWReplicaProgressMarker;
 
 struct RGWReplicaBounds {
   string marker;
-  utime_t oldest_time;
+  ceph::real_time oldest_time;
   list<RGWReplicaProgressMarker> markers;
 
   void dump(Formatter *f) const;
@@ -47,7 +47,7 @@ protected:
 
   int update_bound(const string& oid_t, const string& pool,
 		   const string& daemon_id, const string& marker,
-		   const utime_t& time,
+		   const ceph::real_time& time,
 		   const list<RGWReplicaItemMarker> *entries);
   int delete_bound(const string& oid_t, const string& pool,
 		   const string& daemon_id);
@@ -72,7 +72,7 @@ public:
 
   int create_log_objects(int shards);
   int update_bound(int shard, const string& daemon_id, const string& marker,
-		   const utime_t& time,
+		   const ceph::real_time& time,
 		   const list<RGWReplicaItemMarker> *entries) {
     string oid_t;
     get_shard_oid(shard, oid_t);
@@ -98,7 +98,7 @@ class RGWReplicaBucketLogger : private RGWReplicaLogger {
 public:
   RGWReplicaBucketLogger(RGWRados *_store);
   int update_bound(const rgw_bucket& bucket, const string& daemon_id,
-		   const string& marker, const utime_t& time,
+		   const string& marker, const ceph::real_time& time,
 		   const list<RGWReplicaItemMarker> *entries) {
     return RGWReplicaLogger::update_bound(prefix+bucket.name, pool,
 					  daemon_id, marker, time, entries);

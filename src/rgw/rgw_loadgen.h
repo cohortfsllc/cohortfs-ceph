@@ -17,7 +17,7 @@ struct RGWLoadGenRequestEnv {
 
   RGWLoadGenRequestEnv() : port(0), content_length(0) {}
 
-  void set_date(utime_t& tm);
+  void set_date(ceph::real_time& tm);
   int sign(RGWAccessKey& access_key);
 };
 

@@ -184,7 +184,7 @@ int cls_rgw_get_dir_header_async(IoCtx& io_ctx, string& oid_t, RGWGetDirHeader_C
   struct rgw_cls_list_op call;
   call.num_entries = 0;
   ::encode(call, in);
-  ObjectReadOperation op;
+  ObjectReadOperation op(io_ctx);
   GetDirHeaderCompletion *cb = new GetDirHeaderCompletion(ctx);
   op.exec("rgw", "bucket_list", in, cb);
   AioCompletion *c = librados::Rados::aio_create_completion(NULL, NULL, NULL);

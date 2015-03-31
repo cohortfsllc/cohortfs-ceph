@@ -97,7 +97,7 @@ protected:
   bool get_data;
   bool partial_content;
   rgw_obj oid;
-  utime_t gc_invalidate_time;
+  ceph::real_time gc_invalidate_time;
 
   int init_common();
 public:

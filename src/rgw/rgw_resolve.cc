@@ -16,7 +16,8 @@
 
 class RGWDNSResolver {
   list<res_state> states;
-  Mutex lock;
+  CephContext* cct;
+  std::mutex lock;
 
   int get_state(res_state *ps);
   void put_state(res_state s);
@@ -24,7 +25,7 @@ class RGWDNSResolver {
 
 public:
   ~RGWDNSResolver();
-  RGWDNSResolver() {}
+  RGWDNSResolver(CephContext* _cct) : cct(_cct) {}
   int resolve_cname(const string& hostname, string& cname, bool *found);
 };
 
@@ -40,15 +41,15 @@ RGWDNSResolver::~RGWDNSResolver()
 
 int RGWDNSResolver::get_state(res_state *ps)
 {
-  lock.Lock();
+  std::unique_lock<std::mutex> lk(lock);
   if (!states.empty()) {
     res_state s = states.front();
     states.pop_front();
-    lock.Unlock();
+    lk.unlock();
     *ps = s;
     return 0;
   }
-  lock.Unlock();
+  lk.unlock();
   struct __res_state *s = new struct __res_state;
   s->options = 0;
   if (res_ninit(s) < 0) {
@@ -62,7 +63,7 @@ int RGWDNSResolver::get_state(res_state *ps)
 
 void RGWDNSResolver::put_state(res_state s)
 {
-  Mutex::Locker l(lock);
+  std::lock_guard<std::mutex> lk(lock);
   states.push_back(s);
 }
 
@@ -161,8 +162,9 @@ done:
 RGWResolver::~RGWResolver() {
   delete resolver;
 }
-RGWResolver::RGWResolver() {
-  resolver = new RGWDNSResolver;
+
+RGWResolver::RGWResolver(CephContext* cct) {
+  resolver = new RGWDNSResolver(cct);
 }
 
 int RGWResolver::resolve_cname(const string& hostname, string& cname, bool *found) {
@@ -171,10 +173,9 @@ int RGWResolver::resolve_cname(const string& hostname, string& cname, bool *foun
 
 RGWResolver *rgw_resolver;
 
-
-void rgw_init_resolver()
+void rgw_init_resolver(CephContext* cct)
 {
-  rgw_resolver = new RGWResolver();
+  rgw_resolver = new RGWResolver(cct);
 }
 
 void rgw_shutdown_resolver()

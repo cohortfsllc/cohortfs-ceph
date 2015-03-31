@@ -26,7 +26,7 @@ public:
 
 void RGWOp_User_Info::execute()
 {
-  RGWUserAdminOpState op_state;
+  RGWUserAdminOpState op_state(s->cct);
 
   std::string uid;
 
@@ -68,7 +68,7 @@ void RGWOp_User_Create::execute()
   uint32_t max_buckets;
   int32_t key_type = KEY_TYPE_UNDEFINED;
 
-  RGWUserAdminOpState op_state;
+  RGWUserAdminOpState op_state(s->cct);
 
   RESTArgs::get_string(s, "uid", uid, &uid);
   RESTArgs::get_string(s, "display-name", display_name, &display_name);
@@ -162,7 +162,7 @@ void RGWOp_User_Modify::execute()
   uint32_t max_buckets;
   int32_t key_type = KEY_TYPE_UNDEFINED;
 
-  RGWUserAdminOpState op_state;
+  RGWUserAdminOpState op_state(s->cct);
 
   RESTArgs::get_string(s, "uid", uid, &uid);
   RESTArgs::get_string(s, "display-name", display_name, &display_name);
@@ -244,7 +244,7 @@ void RGWOp_User_Remove::execute()
   std::string uid;
   bool purge_data;
 
-  RGWUserAdminOpState op_state;
+  RGWUserAdminOpState op_state(s->cct);
 
   RESTArgs::get_string(s, "uid", uid, &uid);
   RESTArgs::get_bool(s, "purge-data", false, &purge_data);
@@ -286,7 +286,7 @@ void RGWOp_Subuser_Create::execute()
   uint32_t perm_mask = 0;
   int32_t key_type = KEY_TYPE_SWIFT;
 
-  RGWUserAdminOpState op_state;
+  RGWUserAdminOpState op_state(s->cct);
 
   RESTArgs::get_string(s, "uid", uid, &uid);
   RESTArgs::get_string(s, "subuser", subuser, &subuser);
@@ -349,7 +349,7 @@ void RGWOp_Subuser_Modify::execute()
   std::string key_type_str;
   std::string perm_str;
 
-  RGWUserAdminOpState op_state;
+  RGWUserAdminOpState op_state(s->cct);
 
   uint32_t perm_mask;
   int32_t key_type = KEY_TYPE_SWIFT;
@@ -412,7 +412,7 @@ void RGWOp_Subuser_Remove::execute()
   std::string subuser;
   bool purge_keys;
 
-  RGWUserAdminOpState op_state;
+  RGWUserAdminOpState op_state(s->cct);
 
   RESTArgs::get_string(s, "uid", uid, &uid);
   RESTArgs::get_string(s, "subuser", subuser, &subuser);
@@ -456,7 +456,7 @@ void RGWOp_Key_Create::execute()
   int32_t key_type = KEY_TYPE_UNDEFINED;
   bool gen_key;
 
-  RGWUserAdminOpState op_state;
+  RGWUserAdminOpState op_state(s->cct);
 
   RESTArgs::get_string(s, "uid", uid, &uid);
   RESTArgs::get_string(s, "subuser", subuser, &subuser);
@@ -516,7 +516,7 @@ void RGWOp_Key_Remove::execute()
 
   int32_t key_type = KEY_TYPE_UNDEFINED;
 
-  RGWUserAdminOpState op_state;
+  RGWUserAdminOpState op_state(s->cct);
 
   RESTArgs::get_string(s, "uid", uid, &uid);
   RESTArgs::get_string(s, "subuser", subuser, &subuser);
@@ -564,7 +564,7 @@ void RGWOp_Caps_Add::execute()
   std::string uid;
   std::string caps;
 
-  RGWUserAdminOpState op_state;
+  RGWUserAdminOpState op_state(s->cct);
 
   RESTArgs::get_string(s, "uid", uid, &uid);
   RESTArgs::get_string(s, "user-caps", caps, &caps);
@@ -598,7 +598,7 @@ void RGWOp_Caps_Remove::execute()
   std::string uid;
   std::string caps;
 
-  RGWUserAdminOpState op_state;
+  RGWUserAdminOpState op_state(s->cct);
 
   RESTArgs::get_string(s, "uid", uid, &uid);
   RESTArgs::get_string(s, "user-caps", caps, &caps);
@@ -650,7 +650,7 @@ public:
 
 void RGWOp_Quota_Info::execute()
 {
-  RGWUserAdminOpState op_state;
+  RGWUserAdminOpState op_state(s->cct);
 
   std::string uid;
   std::string quota_type;
@@ -761,7 +761,7 @@ public:
 
 void RGWOp_Quota_Set::execute()
 {
-  RGWUserAdminOpState op_state;
+  RGWUserAdminOpState op_state(s->cct);
 
   std::string uid;
   std::string quota_type;

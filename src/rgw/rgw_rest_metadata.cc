@@ -54,7 +54,8 @@ void RGWOp_Metadata_Get::execute() {
   /* Get keys */
   http_ret = store->meta_mgr->get(metadata_key, s->formatter);
   if (http_ret < 0) {
-    dout(5) << "ERROR: can't get key: " << cpp_strerror(http_ret) << dendl;
+    ldout(s->cct, 5) << "ERROR: can't get key: " << cpp_strerror(http_ret)
+		     << dendl;
     return;
   }
 
@@ -75,7 +76,7 @@ void RGWOp_Metadata_List::execute() {
 
   http_ret = store->meta_mgr->list_keys_init(metadata_key, &handle);
   if (http_ret < 0) {
-    dout(5) << "ERROR: can't get key: " << cpp_strerror(http_ret) << dendl;
+   ldout(s->cct, 5) << "ERROR: can't get key: " << cpp_strerror(http_ret) << dendl;
     return;
   }
 
@@ -87,7 +88,7 @@ void RGWOp_Metadata_List::execute() {
     list<string> keys;
     http_ret = store->meta_mgr->list_keys_next(handle, max, keys, &truncated);
     if (http_ret < 0) {
-      dout(5) << "ERROR: lists_keys_next(): " << cpp_strerror(http_ret) << dendl;
+     ldout(s->cct, 5) << "ERROR: lists_keys_next(): " << cpp_strerror(http_ret) << dendl;
       return;
     }
 
@@ -118,7 +119,7 @@ int RGWOp_Metadata_Put::get_data(bufferlist& bl) {
     }
     int r = s->cio->read(data, cl, &read_len);
     if (cl != (size_t)read_len) {
-      dout(10) << "cio->read incomplete" << dendl;
+      ldout(s->cct, 10) << "cio->read incomplete" << dendl;
     }
     if (r < 0) {
       free(data);
@@ -175,7 +176,7 @@ void RGWOp_Metadata_Put::execute() {
 
   http_ret = store->meta_mgr->put(metadata_key, bl, sync_type, &ondisk_version);
   if (http_ret < 0) {
-    dout(5) << "ERROR: can't put key: " << cpp_strerror(http_ret) << dendl;
+   ldout(s->cct, 5) << "ERROR: can't put key: " << cpp_strerror(http_ret) << dendl;
     return;
   }
   // translate internal codes into return header
@@ -205,7 +206,7 @@ void RGWOp_Metadata_Delete::execute() {
   frame_metadata_key(s, metadata_key);
   http_ret = store->meta_mgr->remove(metadata_key);
   if (http_ret < 0) {
-    dout(5) << "ERROR: can't remove key: " << cpp_strerror(http_ret) << dendl;
+   ldout(s->cct, 5) << "ERROR: can't remove key: " << cpp_strerror(http_ret) << dendl;
     return;
   }
   http_ret = 0;
@@ -225,7 +226,7 @@ void RGWOp_Metadata_Lock::execute() {
   if ((!s->info.args.exists("key")) ||
       (duration_str.empty()) ||
       lock_id.empty()) {
-    dout(5) << "Error invalid parameter list" << dendl;
+   ldout(s->cct, 5) << "Error invalid parameter list" << dendl;
     http_ret = -EINVAL;
     return;
   }
@@ -235,11 +236,11 @@ void RGWOp_Metadata_Lock::execute() {
 
   dur = strict_strtol(duration_str.c_str(), 10, &err);
   if (!err.empty() || dur <= 0) {
-    dout(5) << "invalid length param " << duration_str << dendl;
+   ldout(s->cct, 5) << "invalid length param " << duration_str << dendl;
     http_ret = -EINVAL;
     return;
   }
-  utime_t time(dur, 0);
+  ceph::real_time time = ceph::spec_to_time(dur);
   http_ret = store->meta_mgr->lock_exclusive(metadata_key, time, lock_id);
   if (http_ret == -EBUSY)
     http_ret = -ERR_LOCKED;
@@ -257,7 +258,7 @@ void RGWOp_Metadata_Unlock::execute() {
 
   if ((!s->info.args.exists("key")) ||
       lock_id.empty()) {
-    dout(5) << "Error invalid parameter list" << dendl;
+   ldout(s->cct, 5) << "Error invalid parameter list" << dendl;
     http_ret = -EINVAL;
     return;
   }

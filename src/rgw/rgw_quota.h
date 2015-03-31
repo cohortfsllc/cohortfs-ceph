@@ -16,7 +16,7 @@
 #define CEPH_RGW_QUOTA_H
 
 
-#include "include/utime.h"
+#include "include/ceph_time.h"
 #include "common/lru_map.h"
 
 class RGWRados;

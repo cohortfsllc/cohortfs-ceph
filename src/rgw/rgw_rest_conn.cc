@@ -49,13 +49,16 @@ int RGWRESTConn::forward(const string& uid, req_info& info, obj_version *objv, s
 }
 
 class StreamObjData : public RGWGetDataCB {
-  rgw_obj oid;
+  rgw_obj obj;
 public:
-    StreamObjData(rgw_obj& _obj) : oid(_obj) {}
+  StreamObjData(CephContext* _cct, rgw_obj& _obj) :
+    RGWGetDataCB(_cct), obj(_obj) {}
 };
 
-int RGWRESTConn::put_obj_init(const string& uid, rgw_obj& oid, uint64_t obj_size,
-				      map<string, bufferlist>& attrs, RGWRESTStreamWriteRequest **req)
+int RGWRESTConn::put_obj_init(const string& uid, rgw_obj& obj,
+			      uint64_t obj_size,
+			      map<string, bufferlist>& attrs,
+			      RGWRESTStreamWriteRequest **req)
 {
   string url;
   int ret = get_url(url);
@@ -66,10 +69,11 @@ int RGWRESTConn::put_obj_init(const string& uid, rgw_obj& oid, uint64_t obj_size
   params.push_back(pair<string, string>(RGW_SYS_PARAM_PREFIX "uid", uid));
   params.push_back(pair<string, string>(RGW_SYS_PARAM_PREFIX "region", region));
   *req = new RGWRESTStreamWriteRequest(cct, url, NULL, &params);
-  return (*req)->put_obj_init(key, oid, obj_size, attrs);
+  return (*req)->put_obj_init(key, obj, obj_size, attrs);
 }
 
-int RGWRESTConn::complete_request(RGWRESTStreamWriteRequest *req, string& etag, time_t *mtime)
+int RGWRESTConn::complete_request(RGWRESTStreamWriteRequest *req, string& etag,
+				  time_t *mtime)
 {
   int ret = req->complete(etag, mtime);
   delete req;
@@ -77,8 +81,9 @@ int RGWRESTConn::complete_request(RGWRESTStreamWriteRequest *req, string& etag, 
   return ret;
 }
 
-int RGWRESTConn::get_obj(const string& uid, req_info *info /* optional */, rgw_obj& oid, bool prepend_metadata,
-				 RGWGetDataCB *cb, RGWRESTStreamReadRequest **req)
+int RGWRESTConn::get_obj(const string& uid, req_info *info /* optional */,
+			 rgw_obj& obj, bool prepend_metadata,
+			 RGWGetDataCB *cb, RGWRESTStreamReadRequest **req)
 {
   string url;
   int ret = get_url(url);
@@ -107,7 +112,7 @@ int RGWRESTConn::get_obj(const string& uid, req_info *info /* optional */, rgw_o
       extra_headers[iter->first] = iter->second;
     }
   }
-  return (*req)->get_obj(key, extra_headers, oid);
+  return (*req)->get_obj(key, extra_headers, obj);
 }
 
 int RGWRESTConn::complete_request(RGWRESTStreamReadRequest *req, string& etag, time_t *mtime, map<string, string>& attrs)

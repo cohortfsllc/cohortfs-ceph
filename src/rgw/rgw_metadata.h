@@ -113,7 +113,7 @@ protected:
 
 struct RGWMetadataLogInfo {
   string marker;
-  utime_t last_update;
+  ceph::real_time last_update;
 
   void dump(Formatter *f) const;
   void decode_json(JSONObj *oid);
@@ -138,8 +138,8 @@ public:
   struct LogListCtx {
     int cur_shard;
     string marker;
-    utime_t from_time;
-    utime_t end_time;
+    ceph::real_time from_time;
+    ceph::real_time end_time;
 
     string cur_oid;
 
@@ -148,7 +148,7 @@ public:
     LogListCtx() : cur_shard(0), done(false) {}
   };
 
-  void init_list_entries(int shard_id, utime_t& from_time, utime_t& end_time, string& marker, void **handle);
+  void init_list_entries(int shard_id, ceph::real_time& from_time, ceph::real_time& end_time, string& marker, void **handle);
   void complete_list_entries(void *handle);
   int list_entries(void *handle,
 		   int max_entries,
@@ -156,9 +156,9 @@ public:
 		   string *out_marker,
 		   bool *truncated);
 
-  int trim(int shard_id, const utime_t& from_time, const utime_t& end_time, const string& start_marker, const string& end_marker);
+  int trim(int shard_id, const ceph::real_time& from_time, const ceph::real_time& end_time, const string& start_marker, const string& end_marker);
   int get_info(int shard_id, RGWMetadataLogInfo *info);
-  int lock_exclusive(int shard_id, utime_t& duration, string&zone_id, string& owner_id);
+  int lock_exclusive(int shard_id, ceph::real_time& duration, string&zone_id, string& owner_id);
   int unlock(int shard_id, string& zone_id, string& owner_id);
 };
 
@@ -209,7 +209,7 @@ public:
   void dump_log_entry(cls_log_entry& entry, Formatter *f);
 
   void get_sections(list<string>& sections);
-  int lock_exclusive(string& metadata_key, utime_t duration, string& owner_id);
+  int lock_exclusive(string& metadata_key, ceph::real_time duration, string& owner_id);
   int unlock(string& metadata_key, string& owner_id);
 
   RGWMetadataLog *get_log() { return md_log; }

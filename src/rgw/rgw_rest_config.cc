@@ -24,9 +24,9 @@
 #define dout_subsys ceph_subsys_rgw
 
 void RGWOp_RegionMap_Get::execute() {
-  http_ret = regionmap.read(g_ceph_context, store);
+  http_ret = regionmap.read(s->cct, store);
   if (http_ret < 0) {
-    dout(5) << "failed to read region map" << dendl;
+    ldout(s->cct, 5) << "failed to read region map" << dendl;
   }
 }
 
