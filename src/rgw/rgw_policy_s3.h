@@ -7,7 +7,7 @@
 #include <list>
 #include <string>
 
-#include "include/utime.h"
+#include "include/ceph_time.h"
 
 #include "rgw_string.h"
 

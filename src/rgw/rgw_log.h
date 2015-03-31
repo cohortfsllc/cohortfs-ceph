@@ -1,10 +1,10 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// -*- modef:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 #ifndef CEPH_RGW_LOG_H
 #define CEPH_RGW_LOG_H
 
 #include "rgw_common.h"
-#include "include/utime.h"
+#include "include/ceph_time.h"
 #include "common/Formatter.h"
 #include "common/OutputDataSocket.h"
 
@@ -14,7 +14,7 @@ struct rgw_log_entry {
   string object_owner;
   string bucket_owner;
   string bucket;
-  utime_t time;
+  ceph::real_time time;
   string remote_addr;
   string user;
   string oid;
@@ -25,7 +25,7 @@ struct rgw_log_entry {
   uint64_t bytes_sent;
   uint64_t bytes_received;
   uint64_t obj_size;
-  utime_t total_time;
+  ceph::real_time total_time;
   string user_agent;
   string referrer;
   string bucket_id;
@@ -97,7 +97,7 @@ WRITE_CLASS_ENCODER(rgw_log_entry)
 
 struct rgw_intent_log_entry {
   rgw_obj oid;
-  utime_t op_time;
+  ceph::real_time op_time;
   uint32_t intent;
 
   void encode(bufferlist &bl) const {
@@ -121,7 +121,7 @@ WRITE_CLASS_ENCODER(rgw_intent_log_entry)
 
 class OpsLogSocket : public OutputDataSocket {
   Formatter *formatter;
-  Mutex lock;
+  std::mutex lock;
 
   void formatter_to_bl(bufferlist& bl);
 
@@ -136,7 +136,7 @@ public:
 };
 
 int rgw_log_op(RGWRados *store, struct req_state *s, const string& op_name, OpsLogSocket *olog);
-int rgw_log_intent(RGWRados *store, rgw_obj& oid, RGWIntentEvent intent, const utime_t& timestamp, bool utc);
+int rgw_log_intent(RGWRados *store, rgw_obj& oid, RGWIntentEvent intent, const ceph::real_time& timestamp, bool utc);
 int rgw_log_intent(RGWRados *store, struct req_state *s, rgw_obj& oid, RGWIntentEvent intent);
 void rgw_log_usage_init(CephContext *cct, RGWRados *store);
 void rgw_log_usage_finalize();

@@ -83,12 +83,13 @@ int RGWValidateSwiftToken::receive_header(void *ptr, size_t len)
   return 0;
 }
 
-int RGWSwift::validate_token(const char *token, struct rgw_swift_auth_info *info)
+int RGWSwift::validate_token(const char *token,
+			     struct rgw_swift_auth_info *info)
 {
-  if (g_conf->rgw_swift_auth_url.empty())
+  if (cct->_conf->rgw_swift_auth_url.empty())
     return -EINVAL;
 
-  string auth_url = g_conf->rgw_swift_auth_url;
+  string auth_url = cct->_conf->rgw_swift_auth_url;
   if (auth_url[auth_url.size() - 1] != '/')
     auth_url.append("/");
   auth_url.append("token");
@@ -120,7 +121,7 @@ public:
   int send_data(void* ptr, size_t len) {
     int length_to_copy = 0;
     if (post_data_index < post_data.length()) {
-      length_to_copy = min(post_data.length() - post_data_index, len);
+      length_to_copy = std::min(post_data.length() - post_data_index, len);
       memcpy(ptr, post_data.data() + post_data_index, length_to_copy);
       post_data_index += length_to_copy;
     }
@@ -390,7 +391,7 @@ int RGWSwift::parse_keystone_token_response(const string& token, bufferlist& bl,
   }
 
   if (!found) {
-    ldout(cct, 0) << "user does not hold a matching role; required roles: " << g_conf->rgw_keystone_accepted_roles << dendl;
+    ldout(cct, 0) << "user does not hold a matching role; required roles: " << cct->_conf->rgw_keystone_accepted_roles << dendl;
     return -EPERM;
   }
 
@@ -489,7 +490,7 @@ int RGWSwift::validate_keystone_token(RGWRados *store, const string& token, stru
 
     RGWValidateKeystoneToken validate(cct, &bl);
 
-    string url = g_conf->rgw_keystone_url;
+    string url = cct->_conf->rgw_keystone_url;
     if (url.empty()) {
       ldout(cct, 0) << "ERROR: keystone url is not configured" << dendl;
       return -EINVAL;
@@ -551,41 +552,48 @@ int authenticate_temp_url(RGWRados *store, req_state *s)
   if (ret < 0)
     return -EPERM;
 
-  dout(20) << "temp url user (bucket owner): " << bucket_info.owner << dendl;
+  ldout(s->cct, 20) << "temp url user (bucket owner): " << bucket_info.owner
+		 << dendl;
   if (rgw_get_user_info_by_uid(store, bucket_info.owner, s->user) < 0) {
     return -EPERM;
   }
 
   if (s->user.temp_url_keys.empty()) {
-    dout(5) << "user does not have temp url key set, aborting" << dendl;
+    ldout(s->cct, 5) << "user does not have temp url key set, aborting" << dendl;
     return -EPERM;
   }
 
   if (!s->info.method)
     return -EPERM;
 
-  utime_t now = ceph_clock_now(g_ceph_context);
+  ceph::real_time now = ceph::real_clock::now();
 
   string err;
-  uint64_t expiration = (uint64_t)strict_strtoll(temp_url_expires.c_str(), 10, &err);
+  uint64_t expire_s= (uint64_t)strict_strtoll(temp_url_expires.c_str(),
+					      10, &err);
+  ceph::real_time expiration = ceph::real_time::min() +
+    std::chrono::seconds(expire_s);
+
   if (!err.empty()) {
-    dout(5) << "failed to parse temp_url_expires: " << err << dendl;
+    ldout(s->cct, 5) << "failed to parse temp_url_expires: " << err << dendl;
     return -EPERM;
   }
-  if (expiration <= (uint64_t)now.sec()) {
-    dout(5) << "temp url expired: " << expiration << " <= " << now.sec() << dendl;
+  if (expiration <= now) {
+    ldout(s->cct, 5) << "temp url expired: " << expiration << " <= "
+		  << now << dendl;
     return -EPERM;
   }
 
   /* strip the swift prefix from the uri */
-  int pos = g_conf->rgw_swift_url_prefix.find_last_not_of('/') + 1;
+  int pos = s->cct->_conf->rgw_swift_url_prefix.find_last_not_of('/') + 1;
   string object_path = s->info.request_uri.substr(pos + 1);
   string str = string(s->info.method) + "\n" + temp_url_expires + "\n" + object_path;
 
-  dout(20) << "temp url signature (plain text): " << str << dendl;
+  ldout(s->cct, 20) << "temp url signature (plain text): " << str << dendl;
 
   map<int, string>::iterator iter;
-  for (iter = s->user.temp_url_keys.begin(); iter != s->user.temp_url_keys.end(); ++iter) {
+  for (iter = s->user.temp_url_keys.begin();
+       iter != s->user.temp_url_keys.end(); ++iter) {
     string& temp_url_key = iter->second;
 
     if (temp_url_key.empty())
@@ -597,10 +605,12 @@ int authenticate_temp_url(RGWRados *store, req_state *s)
 
     char dest_str[CEPH_CRYPTO_HMACSHA1_DIGESTSIZE * 2 + 1];
     buf_to_hex((const unsigned char *)dest, sizeof(dest), dest_str);
-    dout(20) << "temp url signature [" << iter->first << "] (calculated): " << dest_str << dendl;
+    ldout(s->cct, 20) << "temp url signature [" << iter->first
+		   << "] (calculated): " << dest_str << dendl;
 
     if (dest_str != temp_url_sig) {
-      dout(5) << "temp url signature mismatch: " << dest_str << " != " << temp_url_sig << dendl;
+      ldout(s->cct, 5) << "temp url signature mismatch: " << dest_str << " != "
+		    << temp_url_sig << dendl;
     } else {
       return 0;
     }
@@ -640,7 +650,7 @@ bool RGWSwift::verify_swift_token(RGWRados *store, req_state *s)
     return false;
 
   if (info.user.empty()) {
-    ldout(cct, 5) << "swift auth didn't authorize a user" << dendl;
+    ldout(s->cct, 5) << "swift auth didn't authorize a user" << dendl;
     return false;
   }
 
@@ -649,14 +659,14 @@ bool RGWSwift::verify_swift_token(RGWRados *store, req_state *s)
 
   string swift_user = s->swift_user;
 
-  ldout(cct, 10) << "swift user=" << s->swift_user << dendl;
+  ldout(s->cct, 10) << "swift user=" << s->swift_user << dendl;
 
   if (rgw_get_user_info_by_swift(store, swift_user, s->user) < 0) {
-    ldout(cct, 0) << "NOTICE: couldn't map swift user" << dendl;
+    ldout(s->cct, 0) << "NOTICE: couldn't map swift user" << dendl;
     return false;
   }
 
-  ldout(cct, 10) << "user_id=" << s->user.user_id << dendl;
+  ldout(s->cct, 10) << "user_id=" << s->user.user_id << dendl;
 
   return true;
 }
@@ -726,9 +736,8 @@ void *RGWSwift::KeystoneRevokeThread::entry() {
     if (swift->going_down())
       break;
 
-    lock.Lock();
-    cond.WaitInterval(cct, lock, utime_t(cct->_conf->rgw_keystone_revocation_interval, 0));
-    lock.Unlock();
+    std::unique_lock<std::mutex> lk(lock);
+    cond.wait_for(lk, std::chrono::seconds(cct->_conf->rgw_keystone_revocation_interval));
   } while (!swift->going_down());
 
   return NULL;
@@ -736,7 +745,7 @@ void *RGWSwift::KeystoneRevokeThread::entry() {
 
 void RGWSwift::KeystoneRevokeThread::stop()
 {
-  Mutex::Locker l(lock);
-  cond.Signal();
+  std::lock_guard<std::mutex> lk(lock);
+  cond.notify_all();
 }
 

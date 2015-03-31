@@ -5,8 +5,9 @@
 #define CEPH_RGW_SWIFT_H
 
 #include <atomic>
+#include <mutex>
+#include <condition_variable>
 #include "rgw_common.h"
-#include "common/Cond.h"
 
 class RGWRados;
 class KeystoneToken;
@@ -38,8 +39,8 @@ class RGWSwift {
   class KeystoneRevokeThread : public Thread {
     CephContext *cct;
     RGWSwift *swift;
-    Mutex lock;
-    Cond cond;
+    std::mutex lock;
+    std::condition_variable cond;
 
   public:
     KeystoneRevokeThread(CephContext *_cct, RGWSwift *_swift) : cct(_cct),swift(_swift) {}

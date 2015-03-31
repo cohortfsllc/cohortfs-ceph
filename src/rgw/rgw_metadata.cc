@@ -73,7 +73,6 @@ struct RGWMetadataLogData {
 };
 WRITE_CLASS_ENCODER(RGWMetadataLogData);
 
-
 int RGWMetadataLog::add_entry(RGWRados *store, RGWMetadataHandler *handler, const string& section, const string& key, bufferlist& bl) {
   if (!store->need_to_log_metadata())
     return 0;
@@ -84,12 +83,11 @@ int RGWMetadataLog::add_entry(RGWRados *store, RGWMetadataHandler *handler, cons
   handler->get_hash_key(section, key, hash_key);
 
   store->shard_name(prefix, cct->_conf->rgw_md_log_max_shards, hash_key, oid_t);
-  utime_t now = ceph_clock_now(cct);
+  ceph::real_time now = ceph::real_clock::now();
   return store->time_log_add(oid_t, now, section, key, bl);
 }
 
-void RGWMetadataLog::init_list_entries(int shard_id, utime_t& from_time, utime_t& end_time,
-				       string& marker, void **handle)
+void RGWMetadataLog::init_list_entries(int shard_id, ceph::real_time& from_time, ceph::real_time& end_time, string& marker, void **handle)
 {
   LogListCtx *ctx = new LogListCtx();
 
@@ -149,7 +147,7 @@ int RGWMetadataLog::get_info(int shard_id, RGWMetadataLogInfo *info)
   return 0;
 }
 
-int RGWMetadataLog::trim(int shard_id, const utime_t& from_time, const utime_t& end_time,
+int RGWMetadataLog::trim(int shard_id, const ceph::real_time& from_time, const ceph::real_time& end_time,
 			 const string& start_marker, const string& end_marker)
 {
   string oid_t;
@@ -165,7 +163,7 @@ int RGWMetadataLog::trim(int shard_id, const utime_t& from_time, const utime_t& 
   return ret;
 }
 
-int RGWMetadataLog::lock_exclusive(int shard_id, utime_t& duration, string& zone_id, string& owner_id) {
+int RGWMetadataLog::lock_exclusive(int shard_id, ceph::real_time& duration, string& zone_id, string& owner_id) {
   string oid_t;
   get_shard_oid(shard_id, oid_t);
 
@@ -395,7 +393,7 @@ int RGWMetadataManager::remove(string& metadata_key)
   return handler->remove(store, entry, objv_tracker);
 }
 
-int RGWMetadataManager::lock_exclusive(string& metadata_key, utime_t duration, string& owner_id) {
+int RGWMetadataManager::lock_exclusive(string& metadata_key, ceph::real_time duration, string& owner_id) {
   RGWMetadataHandler *handler;
   string entry;
   string zone_id;
@@ -487,7 +485,7 @@ void RGWMetadataManager::dump_log_entry(cls_log_entry& entry, Formatter *f)
   f->dump_string("id", entry.id);
   f->dump_string("section", entry.section);
   f->dump_string("name", entry.name);
-  entry.timestamp.gmtime(f->dump_stream("timestamp"));
+  ceph::gmtime(entry.timestamp, f->dump_stream("timestamp"));
 
   try {
     RGWMetadataLogData log_data;

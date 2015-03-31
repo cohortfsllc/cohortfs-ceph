@@ -64,7 +64,7 @@ public:
   static int get_int64(struct req_state *s, const string& name, int64_t def_val, int64_t *val, bool *existed = NULL);
   static int get_uint32(struct req_state *s, const string& name, uint32_t def_val, uint32_t *val, bool *existed = NULL);
   static int get_int32(struct req_state *s, const string& name, int32_t def_val, int32_t *val, bool *existed = NULL);
-  static int get_time(struct req_state *s, const string& name, const utime_t& def_val, utime_t *val, bool *existed = NULL);
+  static int get_time(struct req_state *s, const string& name, const ceph::real_time& def_val, ceph::real_time *val, bool *existed = NULL);
   static int get_epoch(struct req_state *s, const string& name, uint64_t def_val, uint64_t *epoch, bool *existed = NULL);
   static int get_bool(struct req_state *s, const string& name, bool def_val, bool *val, bool *existed = NULL);
 };

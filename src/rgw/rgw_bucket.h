@@ -245,7 +245,7 @@ enum DataLogEntityType {
 struct rgw_data_change {
   DataLogEntityType entity_type;
   string key;
-  utime_t timestamp;
+  ceph::real_time timestamp;
 
   void encode(bufferlist& bl) const {
     ENCODE_START(1, 1, bl);
@@ -272,7 +272,7 @@ WRITE_CLASS_ENCODER(rgw_data_change)
 
 struct RGWDataChangesLogInfo {
   string marker;
-  utime_t last_update;
+  ceph::real_time last_update;
 
   void dump(Formatter *f) const;
   void decode_json(JSONObj *oid);
@@ -285,19 +285,19 @@ class RGWDataChangesLog {
   int num_shards;
   string *oids;
 
-  Mutex lock;
+  std::mutex lock;
 
   std::atomic<bool> down_flag;
 
   struct ChangeStatus {
-    utime_t cur_expiration;
-    utime_t cur_sent;
+    ceph::real_time cur_expiration;
+    ceph::real_time cur_sent;
     bool pending;
     RefCountedCond *cond;
-    Mutex *lock;
+    std::mutex *lock;
 
     ChangeStatus() : pending(false), cond(NULL) {
-      lock = new Mutex("RGWDataChangesLog::ChangeStatus");
+      lock = new std::mutex();
     }
 
     ~ChangeStatus() {
@@ -313,13 +313,13 @@ class RGWDataChangesLog {
 
   void _get_change(string& bucket_name, ChangeStatusPtr& status);
   void register_renew(rgw_bucket& bucket);
-  void update_renewed(string& bucket_name, utime_t& expiration);
+  void update_renewed(string& bucket_name, ceph::real_time& expiration);
 
   class ChangesRenewThread : public Thread {
     CephContext *cct;
     RGWDataChangesLog *log;
-    Mutex lock;
-    Cond cond;
+    std::mutex lock;
+    std::condition_variable cond;
 
   public:
     ChangesRenewThread(CephContext *_cct, RGWDataChangesLog *_log)
@@ -359,17 +359,17 @@ public:
   int choose_oid(rgw_bucket& bucket);
   int add_entry(rgw_bucket& bucket);
   int renew_entries();
-  int list_entries(int shard, utime_t& start_time, utime_t& end_time, int max_entries,
+  int list_entries(int shard, ceph::real_time& start_time, ceph::real_time& end_time, int max_entries,
 		   list<rgw_data_change>& entries,
 		   const string& marker,
 		   string *out_marker,
 		   bool *truncated);
-  int trim_entries(int shard_id, const utime_t& start_time, const utime_t& end_time,
+  int trim_entries(int shard_id, const ceph::real_time& start_time, const ceph::real_time& end_time,
 		   const string& start_marker, const string& end_marker);
-  int trim_entries(const utime_t& start_time, const utime_t& end_time,
+  int trim_entries(const ceph::real_time& start_time, const ceph::real_time& end_time,
 		   const string& start_marker, const string& end_marker);
   int get_info(int shard_id, RGWDataChangesLogInfo *info);
-  int lock_exclusive(int shard_id, utime_t& duration, string& zone_id, string& owner_id) {
+  int lock_exclusive(int shard_id, ceph::real_time& duration, string& zone_id, string& owner_id) {
     return store->lock_exclusive(store->zone.log_pool, oids[shard_id], duration, zone_id, owner_id);
   }
   int unlock(int shard_id, string& zone_id, string& owner_id) {
@@ -381,7 +381,7 @@ public:
 
     LogMarker() : shard(0) {}
   };
-  int list_entries(utime_t& start_time, utime_t& end_time, int max_entries,
+  int list_entries(ceph::real_time& start_time, ceph::real_time& end_time, int max_entries,
 	       list<rgw_data_change>& entries, LogMarker& marker, bool *ptruncated);
 
   bool going_down();

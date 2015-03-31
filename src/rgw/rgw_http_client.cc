@@ -15,7 +15,7 @@ static size_t receive_http_header(void *ptr, size_t size, size_t nmemb, void *_i
   size_t len = size * nmemb;
   int ret = client->receive_header(ptr, size * nmemb);
   if (ret < 0) {
-    dout(0) << "WARNING: client->receive_header() returned ret=" << ret << dendl;
+    ldout(client->cct, 0) << "WARNING: client->receive_header() returned ret=" << ret << dendl;
   }
 
   return len;
@@ -27,7 +27,7 @@ static size_t receive_http_data(void *ptr, size_t size, size_t nmemb, void *_inf
   size_t len = size * nmemb;
   int ret = client->receive_data(ptr, size * nmemb);
   if (ret < 0) {
-    dout(0) << "WARNING: client->receive_data() returned ret=" << ret << dendl;
+    ldout(client->cct, 0) << "WARNING: client->receive_data() returned ret=" << ret << dendl;
   }
 
   return len;
@@ -38,7 +38,7 @@ static size_t send_http_data(void *ptr, size_t size, size_t nmemb, void *_info)
   RGWHTTPClient *client = static_cast<RGWHTTPClient *>(_info);
   int ret = client->send_data(ptr, size * nmemb);
   if (ret < 0) {
-    dout(0) << "WARNING: client->receive_data() returned ret=" << ret << dendl;
+    ldout(client->cct, 0) << "WARNING: client->receive_data() returned ret=" << ret << dendl;
   }
 
   return ret;
@@ -90,7 +90,7 @@ int RGWHTTPClient::process(const char *method, const char *url)
   }
   CURLcode status = curl_easy_perform(curl_handle);
   if (status) {
-    dout(0) << "curl_easy_performed returned error: " << error_buf << dendl;
+    ldout(cct, 0) << "curl_easy_performed returned error: " << error_buf << dendl;
     ret = -EINVAL;
   }
   curl_easy_cleanup(curl_handle);
@@ -134,7 +134,8 @@ int RGWHTTPClient::init_async(const char *method, const char *url, void **handle
 
   CURLMcode mstatus = curl_multi_add_handle(multi_handle, easy_handle);
   if (mstatus) {
-    dout(0) << "ERROR: failed on curl_multi_add_handle, status=" << mstatus << dendl;
+    ldout(cct, 0) << "ERROR: failed on curl_multi_add_handle, status="
+		  << mstatus << dendl;
     delete req_data;
     return -EIO;
   }
@@ -187,7 +188,7 @@ static int do_curl_wait(CephContext *cct, CURLM *handle)
   int num_fds;
   int ret = curl_multi_wait(handle, NULL, 0, cct->_conf->rgw_curl_wait_timeout_ms, &num_fds);
   if (ret) {
-    dout(0) << "ERROR: curl_multi_wait() returned " << ret << dendl;
+    ldout(cct, 0) << "ERROR: curl_multi_wait() returned " << ret << dendl;
     return -EIO;
   }
   return 0;
@@ -209,7 +210,7 @@ static int do_curl_wait(CephContext *cct, CURLM *handle)
   /* get file descriptors from the transfers */
   int ret = curl_multi_fdset(handle, &fdread, &fdwrite, &fdexcep, &maxfd);
   if (ret) {
-    dout(0) << "ERROR: curl_multi_fdset returned " << ret << dendl;
+    ldout(cct, 0) << "ERROR: curl_multi_fdset returned " << ret << dendl;
     return -EIO;
   }
 
@@ -225,7 +226,7 @@ static int do_curl_wait(CephContext *cct, CURLM *handle)
   ret = select(maxfd+1, &fdread, &fdwrite, &fdexcep, &timeout);
   if (ret < 0) {
     ret = -errno;
-    dout(0) << "ERROR: select returned " << ret << dendl;
+    ldout(cct, 0) << "ERROR: select returned " << ret << dendl;
     return ret;
   }
 

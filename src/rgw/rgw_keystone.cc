@@ -44,10 +44,9 @@ int KeystoneToken::parse(CephContext *cct, bufferlist& bl)
 
 bool RGWKeystoneTokenCache::find(const string& token_id, KeystoneToken& token)
 {
-  lock.Lock();
+  std::lock_guard<std::mutex> lk(lock);
   map<string, token_entry>::iterator iter = tokens.find(token_id);
   if (iter == tokens.end()) {
-    lock.Unlock();
     return false;
   }
 
@@ -56,22 +55,19 @@ bool RGWKeystoneTokenCache::find(const string& token_id, KeystoneToken& token)
 
   if (entry.token.expired()) {
     tokens.erase(iter);
-    lock.Unlock();
     return false;
   }
   token = entry.token;
 
   tokens_lru.push_front(token_id);
+
   entry.lru_iter = tokens_lru.begin();
-
-  lock.Unlock();
-
   return true;
 }
 
 void RGWKeystoneTokenCache::add(const string& token_id, KeystoneToken& token)
 {
-  lock.Lock();
+  std::lock_guard<std::mutex> lk(lock);
   map<string, token_entry>::iterator iter = tokens.find(token_id);
   if (iter != tokens.end()) {
     token_entry& e = iter->second;
@@ -90,13 +86,11 @@ void RGWKeystoneTokenCache::add(const string& token_id, KeystoneToken& token)
     tokens.erase(iter);
     tokens_lru.pop_back();
   }
-
-  lock.Unlock();
 }
 
 void RGWKeystoneTokenCache::invalidate(const string& token_id)
 {
-  Mutex::Locker l(lock);
+  std::lock_guard<std::mutex> lk(lock);
   map<string, token_entry>::iterator iter = tokens.find(token_id);
   if (iter == tokens.end())
     return;

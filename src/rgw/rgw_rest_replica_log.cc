@@ -26,17 +26,6 @@
 #define dout_subsys ceph_subsys_rgw
 #define REPLICA_INPUT_MAX_LEN (512*1024)
 
-static int parse_to_utime(string& in, utime_t& out) {
-  uint64_t sec = 0;
-  uint64_t nsec = 0;
-  int ret = utime_t::parse_date(in.c_str(), &sec, &nsec);
-  if (ret < 0)
-    return ret;
-
-  out = utime_t(sec, nsec);
-  return 0;
-}
-
 
 void RGWOp_OBJLog_SetBounds::execute() {
   string id_str = s->info.args.get("id"),
@@ -48,23 +37,23 @@ void RGWOp_OBJLog_SetBounds::execute() {
       marker.empty() ||
       time.empty() ||
       daemon_id.empty()) {
-    dout(5) << "Error - invalid parameter list" << dendl;
+    ldout(s->cct, 5) << "Error - invalid parameter list" << dendl;
     http_ret = -EINVAL;
     return;
   }
 
   int shard;
   string err;
-  utime_t ut;
+  ceph::real_time ut;
 
   shard = (int)strict_strtol(id_str.c_str(), 10, &err);
   if (!err.empty()) {
-    dout(5) << "Error parsing id parameter - " << id_str << ", err " << err << dendl;
+    ldout(s->cct, 5) << "Error parsing id parameter - " << id_str << ", err " << err << dendl;
     http_ret = -EINVAL;
     return;
   }
 
-  if (parse_to_utime(time, ut) < 0) {
+  if (ceph::parse_date(time, ut) < 0) {
     http_ret = -EINVAL;
     return;
   }
@@ -75,7 +64,7 @@ void RGWOp_OBJLog_SetBounds::execute() {
   list<RGWReplicaItemMarker> markers;
 
   if ((http_ret = rgw_rest_get_json_input(store->ctx(), s, markers, REPLICA_INPUT_MAX_LEN, NULL)) < 0) {
-    dout(5) << "Error - retrieving input data - " << http_ret << dendl;
+    ldout(s->cct, 5) << "Error - retrieving input data - " << http_ret << dendl;
     return;
   }
 
@@ -86,7 +75,7 @@ void RGWOp_OBJLog_GetBounds::execute() {
   string id = s->info.args.get("id");
 
   if (id.empty()) {
-    dout(5) << " Error - invalid parameter list" << dendl;
+    ldout(s->cct, 5) << " Error - invalid parameter list" << dendl;
     http_ret = -EINVAL;
     return;
   }
@@ -96,7 +85,7 @@ void RGWOp_OBJLog_GetBounds::execute() {
 
   shard = (int)strict_strtol(id.c_str(), 10, &err);
   if (!err.empty()) {
-    dout(5) << "Error parsing id parameter - " << id << ", err " << err << dendl;
+    ldout(s->cct, 5) << "Error parsing id parameter - " << id << ", err " << err << dendl;
     http_ret = -EINVAL;
     return;
   }
@@ -124,7 +113,7 @@ void RGWOp_OBJLog_DeleteBounds::execute() {
 
   if (id.empty() ||
       daemon_id.empty()) {
-    dout(5) << "Error - invalid parameter list" << dendl;
+    ldout(s->cct, 5) << "Error - invalid parameter list" << dendl;
     http_ret = -EINVAL;
     return;
   }
@@ -134,7 +123,8 @@ void RGWOp_OBJLog_DeleteBounds::execute() {
 
   shard = (int)strict_strtol(id.c_str(), 10, &err);
   if (!err.empty()) {
-    dout(5) << "Error parsing id parameter - " << id << ", err " << err << dendl;
+    ldout(s->cct, 5) << "Error parsing id parameter - " << id << ", err "
+		     << err << dendl;
     http_ret = -EINVAL;
   }
 
@@ -143,13 +133,14 @@ void RGWOp_OBJLog_DeleteBounds::execute() {
   http_ret = rl.delete_bound(shard, daemon_id);
 }
 
-static int bucket_instance_to_bucket(RGWRados *store, string& bucket_instance, rgw_bucket& bucket) {
+static int bucket_instance_to_bucket(RGWRados *store, string& bucket_instance,
+				     rgw_bucket& bucket) {
   RGWBucketInfo bucket_info;
   time_t mtime;
 
   int r = store->get_bucket_instance_info(NULL, bucket_instance, bucket_info, &mtime, NULL);
   if (r < 0) {
-    dout(5) << "could not get bucket instance info for bucket=" << bucket_instance << ": " << cpp_strerror(r) << dendl;
+    ldout(store->cct, 5) << "could not get bucket instance info for bucket=" << bucket_instance << ": " << cpp_strerror(r) << dendl;
     if (r == -ENOENT)
       return r;
     return -EINVAL;
@@ -169,14 +160,14 @@ void RGWOp_BILog_SetBounds::execute() {
       marker.empty() ||
       time.empty() ||
       daemon_id.empty()) {
-    dout(5) << "Error - invalid parameter list" << dendl;
+    ldout(s->cct, 5) << "Error - invalid parameter list" << dendl;
     http_ret = -EINVAL;
     return;
   }
 
-  utime_t ut;
+  ceph::real_time ut;
 
-  if (parse_to_utime(time, ut) < 0) {
+  if (ceph::parse_date(time, ut) < 0) {
     http_ret = -EINVAL;
     return;
   }
@@ -190,7 +181,7 @@ void RGWOp_BILog_SetBounds::execute() {
   list<RGWReplicaItemMarker> markers;
 
   if ((http_ret = rgw_rest_get_json_input(store->ctx(), s, markers, REPLICA_INPUT_MAX_LEN, NULL)) < 0) {
-    dout(5) << "Error - retrieving input data - " << http_ret << dendl;
+    ldout(s->cct, 5) << "Error - retrieving input data - " << http_ret << dendl;
     return;
   }
 
@@ -201,7 +192,7 @@ void RGWOp_BILog_GetBounds::execute() {
   string bucket_instance = s->info.args.get("bucket-instance");
 
   if (bucket_instance.empty()) {
-    dout(5) << " Error - invalid parameter list" << dendl;
+    ldout(s->cct, 5) << " Error - invalid parameter list" << dendl;
     http_ret = -EINVAL;
     return;
   }
@@ -232,7 +223,7 @@ void RGWOp_BILog_DeleteBounds::execute() {
 
   if (bucket_instance.empty() ||
       daemon_id.empty()) {
-    dout(5) << "Error - invalid parameter list" << dendl;
+    ldout(s->cct, 5) << "Error - invalid parameter list" << dendl;
     http_ret = -EINVAL;
     return;
   }

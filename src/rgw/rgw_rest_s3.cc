@@ -267,7 +267,7 @@ void RGWListBucket_ObjStore_S3::send_response()
     for (iter = objs.begin(); iter != objs.end(); ++iter) {
       s->formatter->open_array_section("Contents");
       s->formatter->dump_string("Key", iter->name);
-      time_t mtime = iter->mtime.sec();
+      time_t mtime = iter->mtime.time_since_epoch().count();
       dump_time(s, "LastModified", &mtime);
       s->formatter->dump_format("ETag", "\"%s\"", iter->etag.c_str());
       s->formatter->dump_int("Size", iter->size);
@@ -1161,7 +1161,7 @@ void RGWPostObj_ObjStore_S3::send_response()
 done:
   if (ret == STATUS_CREATED) {
     s->formatter->open_object_section("PostResponse");
-    if (g_conf->rgw_dns_name.length())
+    if (s->cct->_conf->rgw_dns_name.length())
       s->formatter->dump_format("Location", "%s/%s", s->info.script_uri.c_str(), s->object_str.c_str());
     s->formatter->dump_string("Bucket", s->bucket_name_str);
     s->formatter->dump_string("Key", s->object_str);
@@ -1498,8 +1498,8 @@ void RGWCompleteMultipart_ObjStore_S3::send_response()
     dump_start(s);
     s->formatter->open_object_section_in_ns("CompleteMultipartUploadResult",
 			  "http://s3.amazonaws.com/doc/2006-03-01/");
-    if (g_conf->rgw_dns_name.length())
-      s->formatter->dump_format("Location", "%s.%s", s->bucket_name_str.c_str(), g_conf->rgw_dns_name.c_str());
+    if (s->cct->_conf->rgw_dns_name.length())
+      s->formatter->dump_format("Location", "%s.%s", s->bucket_name_str.c_str(), s->cct->_conf->rgw_dns_name.c_str());
     s->formatter->dump_string("Bucket", s->bucket_name_str);
     s->formatter->dump_string("Key", s->object);
     s->formatter->dump_string("ETag", etag);
@@ -1554,7 +1554,7 @@ void RGWListMultipart_ObjStore_S3::send_response()
     for (; iter != parts.end(); ++iter) {
       RGWUploadPartInfo& info = iter->second;
 
-      time_t sec = info.modified.sec();
+      time_t sec = info.modified.time_since_epoch().count();
       struct tm tmp;
       gmtime_r(&sec, &tmp);
       char buf[TIME_BUF_SIZE];
@@ -1617,7 +1617,7 @@ void RGWListBucketMultiparts_ObjStore_S3::send_response()
       dump_owner(s, s->user.user_id, s->user.display_name, "Initiator");
       dump_owner(s, s->user.user_id, s->user.display_name);
       s->formatter->dump_string("StorageClass", "STANDARD");
-      time_t mtime = iter->oid.mtime.sec();
+      time_t mtime = iter->oid.mtime.time_since_epoch().count();
       dump_time(s, "Initiated", &mtime);
       s->formatter->close_section();
     }
@@ -1951,7 +1951,10 @@ int RGWHandler_ObjStore_S3::validate_bucket_name(const string& bucket, bool rela
 
 int RGWHandler_ObjStore_S3::init(RGWRados *store, struct req_state *s, RGWClientIO *cio)
 {
-  dout(10) << "s->object=" << (s->object ? s->object : "<NULL>") << " s->bucket=" << (!s->bucket_name_str.empty() ? s->bucket_name_str : "<NULL>") << dendl;
+  ldout(s->cct, 10) << "s->object=" << (s->object ? s->object : "<NULL>")
+		    << " s->bucket="
+		    << (!s->bucket_name_str.empty() ? s->bucket_name_str
+			: "<NULL>") << dendl;
 
   bool relaxed_names = s->cct->_conf->rgw_relaxed_s3_bucket_names;
   int ret = validate_bucket_name(s->bucket_name_str, relaxed_names);
@@ -2064,7 +2067,7 @@ int RGW_Auth_S3::authorize(RGWRados *store, struct req_state *s)
   /* neither keystone and rados enabled; warn and exit! */
   if (!store->ctx()->_conf->rgw_s3_auth_use_rados
       && !store->ctx()->_conf->rgw_s3_auth_use_keystone) {
-    dout(0) << "WARNING: no authorization backend enabled! Users will never authenticate." << dendl;
+    ldout(s->cct, 0) << "WARNING: no authorization backend enabled! Users will never authenticate." << dendl;
     return -EPERM;
   }
 
@@ -2101,13 +2104,13 @@ int RGW_Auth_S3::authorize(RGWRados *store, struct req_state *s)
   int keystone_result = -EINVAL;
   if (store->ctx()->_conf->rgw_s3_auth_use_keystone
       && !store->ctx()->_conf->rgw_keystone_url.empty()) {
-    dout(20) << "s3 keystone: trying keystone auth" << dendl;
+    ldout(s->cct, 20) << "s3 keystone: trying keystone auth" << dendl;
 
     RGW_Auth_S3_Keystone_ValidateToken keystone_validator(store->ctx());
     string token;
 
     if (!rgw_create_s3_canonical_header(s->info, &s->header_time, token, qsr)) {
-	dout(10) << "failed to create auth header\n" << token << dendl;
+      ldout(s->cct, 10) << "failed to create auth header\n" << token << dendl;
     } else {
       keystone_result = keystone_validator.validate_s3token(auth_id, token, auth_sign);
       if (keystone_result == 0) {
@@ -2118,7 +2121,7 @@ int RGW_Auth_S3::authorize(RGWRados *store, struct req_state *s)
 	if (rgw_get_user_info_by_uid(store, keystone_validator.response.token.tenant.id, s->user) < 0) {
 	  int ret = rgw_store_user_info(store, s->user, NULL, NULL, 0, true);
 	  if (ret < 0)
-	    dout(10) << "NOTICE: failed to store new user's info: ret=" << ret << dendl;
+	    ldout(s->cct,10) << "NOTICE: failed to store new user's info: ret=" << ret << dendl;
 	}
 
 	s->perm_mask = RGW_PERM_FULL_CONTROL;
@@ -2135,7 +2138,7 @@ int RGW_Auth_S3::authorize(RGWRados *store, struct req_state *s)
   if (keystone_result < 0) {
     /* get the user info */
     if (rgw_get_user_info_by_access_key(store, auth_id, s->user) < 0) {
-      dout(5) << "error reading user info, uid=" << auth_id << " can't authenticate" << dendl;
+      ldout(s->cct,5) << "error reading user info, uid=" << auth_id << " can't authenticate" << dendl;
       return -EPERM;
     }
 
@@ -2143,22 +2146,22 @@ int RGW_Auth_S3::authorize(RGWRados *store, struct req_state *s)
 
     string auth_hdr;
     if (!rgw_create_s3_canonical_header(s->info, &s->header_time, auth_hdr, qsr)) {
-      dout(10) << "failed to create auth header\n" << auth_hdr << dendl;
+      ldout(s->cct,10) << "failed to create auth header\n" << auth_hdr << dendl;
       return -EPERM;
     }
-    dout(10) << "auth_hdr:\n" << auth_hdr << dendl;
+    ldout(s->cct,10) << "auth_hdr:\n" << auth_hdr << dendl;
 
-    time_t req_sec = s->header_time.sec();
+    time_t req_sec = s->header_time.time_since_epoch().count();
     if ((req_sec < now - RGW_AUTH_GRACE_MINS * 60 ||
 	req_sec > now + RGW_AUTH_GRACE_MINS * 60) && !qsr) {
-      dout(10) << "req_sec=" << req_sec << " now=" << now << "; now - RGW_AUTH_GRACE_MINS=" << now - RGW_AUTH_GRACE_MINS * 60 << "; now + RGW_AUTH_GRACE_MINS=" << now + RGW_AUTH_GRACE_MINS * 60 << dendl;
-      dout(0) << "NOTICE: request time skew too big now=" << utime_t(now, 0) << " req_time=" << s->header_time << dendl;
+      ldout(s->cct,10) << "req_sec=" << req_sec << " now=" << now << "; now - RGW_AUTH_GRACE_MINS=" << now - RGW_AUTH_GRACE_MINS * 60 << "; now + RGW_AUTH_GRACE_MINS=" << now + RGW_AUTH_GRACE_MINS * 60 << dendl;
+      ldout(s->cct,0) << "NOTICE: request time skew too big now=" << now << " req_time=" << s->header_time << dendl;
       return -ERR_REQUEST_TIME_SKEWED;
     }
 
     map<string, RGWAccessKey>::iterator iter = s->user.access_keys.find(auth_id);
     if (iter == s->user.access_keys.end()) {
-      dout(0) << "ERROR: access key not encoded in user info" << dendl;
+      ldout(s->cct,0) << "ERROR: access key not encoded in user info" << dendl;
       return -EPERM;
     }
     RGWAccessKey& k = iter->second;
@@ -2166,7 +2169,7 @@ int RGW_Auth_S3::authorize(RGWRados *store, struct req_state *s)
     if (!k.subuser.empty()) {
       map<string, RGWSubUser>::iterator uiter = s->user.subusers.find(k.subuser);
       if (uiter == s->user.subusers.end()) {
-	dout(0) << "NOTICE: could not find subuser: " << k.subuser << dendl;
+	ldout(s->cct,0) << "NOTICE: could not find subuser: " << k.subuser << dendl;
 	return -EPERM;
       }
       RGWSubUser& subuser = uiter->second;
@@ -2180,16 +2183,16 @@ int RGW_Auth_S3::authorize(RGWRados *store, struct req_state *s)
       return -EPERM;
     }
 
-    dout(15) << "calculated digest=" << digest << dendl;
-    dout(15) << "auth_sign=" << auth_sign << dendl;
-    dout(15) << "compare=" << auth_sign.compare(digest) << dendl;
+    ldout(s->cct,15) << "calculated digest=" << digest << dendl;
+    ldout(s->cct,15) << "auth_sign=" << auth_sign << dendl;
+    ldout(s->cct,15) << "compare=" << auth_sign.compare(digest) << dendl;
 
     if (auth_sign != digest)
       return -EPERM;
 
     if (s->user.system) {
       s->system_request = true;
-      dout(20) << "system request" << dendl;
+      ldout(s->cct,20) << "system request" << dendl;
       s->info.args.set_system();
       string effective_uid = s->info.args.get(RGW_SYS_PARAM_PREFIX "uid");
       RGWUserInfo effective_user;

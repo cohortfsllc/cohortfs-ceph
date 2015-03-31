@@ -143,7 +143,7 @@ void rgw_bi_log_entry::dump(Formatter *f) const
   }
 
   f->dump_int("index_ver", index_ver);
-  timestamp.gmtime(f->dump_stream("timestamp"));
+  ceph::gmtime(timestamp, f->dump_stream("timestamp"));
   f->open_object_section("ver");
   ver.dump(f);
   f->close_section();
@@ -155,7 +155,7 @@ void rgw_bi_log_entry::generate_test_instances(list<rgw_bi_log_entry*>& ls)
   ls.push_back(new rgw_bi_log_entry);
   ls.back()->id = "midf";
   ls.back()->object = "oid";
-  ls.back()->timestamp = utime_t(2, 3);
+  ls.back()->timestamp = ceph::real_time::min() + 2s + 3ns;
   ls.back()->index_ver = 4323;
   ls.back()->tag = "tagasdfds";
   ls.back()->op = CLS_RGW_OP_DEL;

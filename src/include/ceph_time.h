@@ -22,6 +22,12 @@
 #include <iostream>
 #include <iomanip>
 
+/* XXX for parse_date */
+#include <time.h>
+#include <stdio.h>
+#include <string.h>
+#include "common/strtol.h"
+
 /* Typedefs for timekeeping, to cut down on the amount of template
    foo. */
 
@@ -52,11 +58,11 @@ namespace ceph {
 
   inline real_time spec_to_time(ceph_timespec ts) {
     return real_time(timespan(ts));
-  };
+  }
 
   inline ceph_timespec time_to_spec(real_time rt) {
     return rt.time_since_epoch().count();
-  };
+  }
 
   inline struct timespec time_to_timespec(real_time rt) {
     struct timespec ts;
@@ -64,6 +70,140 @@ namespace ceph {
     ts.tv_nsec = (rt.time_since_epoch() % 1s).count();
     return ts;
   }
+
+  /* XXX */
+  inline int parse_date(const std::string& s, ceph::real_time& val)
+  {
+    struct tm tm;
+    memset(&tm, 0, sizeof(tm));
+    val = ceph::real_time::min();
+
+    const char *p = strptime(s.c_str(), "%Y-%m-%d", &tm);
+    if (p) {
+      if (*p == ' ') {
+	p++;
+	p = strptime(p, " %H:%M:%S", &tm);
+	if (!p)
+	  return -EINVAL;
+	if (*p == '.') {
+	  ++p;
+	  unsigned i;
+	  char buf[10]; /* 9 digit + null termination */
+	  for (i = 0; (i < sizeof(buf) - 1) && isdigit(*p); ++i, ++p) {
+	    buf[i] = *p;
+	  }
+	  for (; i < sizeof(buf) - 1; ++i) {
+	    buf[i] = '0';
+	  }
+	  buf[i] = '\0';
+	  std::string err;
+	  val += ceph::timespan((ceph_timespec)strict_strtol(buf, 10, &err));
+	  if (!err.empty()) {
+	    return -EINVAL;
+	  }
+	}
+      }
+    } else {
+      int sec, usec;
+      int r = sscanf(s.c_str(), "%d.%d", &sec, &usec);
+      if (r != 2) {
+	return -EINVAL;
+      }
+      time_t tt = sec;
+      gmtime_r(&tt, &tm);
+      val += std::chrono::microseconds(usec);
+      time_t t = timegm(&tm);
+      val += std::chrono::seconds(t);
+    }
+    return 0;
+  } /* parse_date */
+
+  inline std::ostream& asctime(const ceph::real_time rt, std::ostream& out) {
+    struct timespec ts = time_to_timespec(rt);
+    out.setf(std::ios::right);
+    char oldfill = out.fill();
+    out.fill('0');
+    if (ts.tv_sec < ((time_t)(60*60*24*365*10))) {
+      // raw seconds.  this looks like a relative time.
+      uint64_t usec = ts.tv_nsec/1000;
+      out << (long)ts.tv_sec << "." << std::setw(6) << usec;
+    } else {
+      // localtime.  this looks like an absolute time.
+      //  aim for http://en.wikipedia.org/wiki/ISO_8601
+      struct tm bdt;
+      time_t tt = ts.tv_sec;
+      gmtime_r(&tt, &bdt);
+      char buf[128];
+      asctime_r(&bdt, buf);
+      int len = strlen(buf);
+      if (buf[len - 1] == '\n')
+	buf[len - 1] = '\0';
+     out << buf;
+    }
+    out.fill(oldfill);
+    out.unsetf(std::ios::right);
+    return out;
+  } /* asctime */
+
+  inline std::ostream& gmtime(const ceph::real_time rt, std::ostream& out) {
+    struct timespec ts = time_to_timespec(rt);
+    uint64_t usec = ts.tv_nsec/1000;
+    out.setf(std::ios::right);
+    char oldfill = out.fill();
+    out.fill('0');
+    if (ts.tv_sec < ((time_t)(60*60*24*365*10))) {
+      // raw seconds.  this looks like a relative time.
+      out << (long)ts.tv_sec << "." << std::setw(6) << usec;
+    } else {
+      // localtime.  this looks like an absolute time.
+      //  aim for http://en.wikipedia.org/wiki/ISO_8601
+      struct tm bdt;
+      time_t tt = ts.tv_sec;
+      gmtime_r(&tt, &bdt);
+      out << std::setw(4) << (bdt.tm_year+1900)	 // 2007 -> '07'
+	  << '-' << std::setw(2) << (bdt.tm_mon+1)
+	  << '-' << std::setw(2) << bdt.tm_mday
+	  << ' '
+	  << std::setw(2) << bdt.tm_hour
+	  << ':' << std::setw(2) << bdt.tm_min
+	  << ':' << std::setw(2) << bdt.tm_sec;
+      out << "." << std::setw(6) << usec;
+      out << "Z";
+    }
+    out.fill(oldfill);
+    out.unsetf(std::ios::right);
+    return out;
+  } /* gmtime */
+
+  inline std::ostream& localtime(const ceph::real_time rt, std::ostream& out) {
+    struct timespec ts = time_to_timespec(rt);
+    uint64_t usec = ts.tv_nsec/1000;
+    out.setf(std::ios::right);
+    char oldfill = out.fill();
+    out.fill('0');
+    if (ts.tv_sec < ((time_t)(60*60*24*365*10))) {
+      // raw seconds.  this looks like a relative time.
+      out << (long)ts.tv_sec << "." << std::setw(6) << usec;
+    } else {
+      // localtime.  this looks like an absolute time.
+      //  aim for http://en.wikipedia.org/wiki/ISO_8601
+      struct tm bdt;
+      time_t tt = ts.tv_sec;
+      localtime_r(&tt, &bdt);
+      out << std::setw(4) << (bdt.tm_year+1900)	 // 2007 -> '07'
+	  << '-' << std::setw(2) << (bdt.tm_mon+1)
+	  << '-' << std::setw(2) << bdt.tm_mday
+	  << ' '
+	  << std::setw(2) << bdt.tm_hour
+	  << ':' << std::setw(2) << bdt.tm_min
+	  << ':' << std::setw(2) << bdt.tm_sec;
+      out << "." << std::setw(6) << usec;
+      //out << '_' << bdt.tm_zone;
+    }
+    out.fill(oldfill);
+    out.unsetf(std::ios::right);
+    return out;
+  } /* localtime */
 
   inline std::ostream& print_real_time(std::ostream& out,
 				       real_time t)

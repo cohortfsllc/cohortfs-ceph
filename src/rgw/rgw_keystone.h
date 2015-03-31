@@ -33,7 +33,7 @@ public:
 
   class Token {
   public:
-    Token() : expires(0) { };
+    Token() : expires(ceph::real_clock::now()) { };
     class Tenant {
     public:
       Tenant() : enabled(false) { };
@@ -44,7 +44,7 @@ public:
       void decode_json(JSONObj *oid);
     };
     string id;
-    time_t expires;
+    ceph::real_time expires;
     Tenant tenant;
     void decode_json(JSONObj *oid);
   };
@@ -74,8 +74,8 @@ public:
   int parse(CephContext *cct, bufferlist& bl);
 
   bool expired() {
-    uint64_t now = ceph_clock_now(NULL).sec();
-    return (now >= (uint64_t)token.expires);
+    ceph::real_time now = ceph::real_clock::now();
+    return (now >= token.expires);
   }
 
   void decode_json(JSONObj *access_obj);
@@ -88,12 +88,9 @@ struct token_entry {
 
 class RGWKeystoneTokenCache {
   CephContext *cct;
-
   map<string, token_entry> tokens;
   list<string> tokens_lru;
-
-  Mutex lock;
-
+  std::mutex lock;
   size_t max;
 
 public:
