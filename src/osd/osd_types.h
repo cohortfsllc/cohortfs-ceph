@@ -23,6 +23,7 @@
 #include <memory>
 #include <mutex>
 #include <condition_variable>
+#include <boost/functional/hash.hpp>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <boost/scoped_ptr.hpp>
