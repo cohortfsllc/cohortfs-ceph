@@ -93,6 +93,7 @@ librados::RadosClient::RadosClient()
     conf(cct->_conf),
     state(DISCONNECTED),
     monclient(cct),
+    factory(&monclient.factory),
     messenger(NULL),
     instance_id(0),
     refcnt(1),
