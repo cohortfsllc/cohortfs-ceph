@@ -21,8 +21,6 @@ namespace osd
 class SyncCompletion {
 private:
   std::mutex mutex;
-  typedef std::unique_lock<std::mutex> unique_lock;
-  typedef std::lock_guard<std::mutex> lock_guard;
   std::condition_variable cond;
   bool done;
   bool waiting;
@@ -30,11 +28,11 @@ private:
   int length;
 
   void signal(int r, int len) {
-    lock_guard lock(mutex);
+    std::lock_guard<std::mutex> lock(mutex);
     done = true;
     result = r;
     length = len;
-    if (waiting)
+    if (waiting) // only signal if there's a waiter
       cond.notify_one();
   }
 
@@ -42,8 +40,8 @@ public:
   SyncCompletion() : done(false), waiting(false) {}
 
   int wait() {
-    if (!done) {
-      unique_lock lock(mutex);
+    if (!done) { // read dirty to avoid lock
+      std::unique_lock<std::mutex> lock(mutex);
       waiting = true;
       while (!done)
         cond.wait(lock);
@@ -90,32 +88,56 @@ public:
     }
 
     cb(op.rval, length, 0, user);
-    delete this;
+
+    // delete unless we're synchronous (on the stack)
+    if (cb != SyncCompletion::callback)
+      delete this;
   }
 };
 
-int Objecter::read(const char *object, const uint8_t volume[16],
-                   uint64_t offset, uint64_t length, char *data,
-                   int flags, libosd_io_completion_fn cb, void *user)
+int Objecter::read_sync(const char *object, const uint8_t volume[16],
+                        uint64_t offset, uint64_t length, char *data, int flags)
 {
   const int client = 0;
   const long tid = 0;
   oid_t o(object);
   boost::uuids::uuid vol;
   epoch_t epoch = 0;
-  SyncCompletion sync_completion;
-  bool is_sync = false;
+  SyncCompletion completion;
   memcpy(&vol, volume, sizeof(vol));
 
   if (!wait_for_active(&epoch))
     return -ENODEV;
 
-  if (!cb) {
-    // set up a synchronous completion
-    cb = SyncCompletion::callback;
-    is_sync = true;
-    user = &sync_completion;
-  }
+  // set up osd read op
+  OpRequest *m = new OpRequest(client, tid, o, vol, epoch, 0);
+  m->read(offset, length);
+
+  // create reply callback
+  OnReadReply onreply(data, length, SyncCompletion::callback, &completion);
+
+  // send request over direct messenger
+  dispatcher->send_request(m, &onreply);
+
+  return completion.wait();
+}
+
+int Objecter::read(const char *object, const uint8_t volume[16],
+                   uint64_t offset, uint64_t length, char *data,
+                   int flags, libosd_io_completion_fn cb, void *user)
+{
+  if (cb == nullptr)
+    return read_sync(object, volume, offset, length, data, flags);
+
+  const int client = 0;
+  const long tid = 0;
+  oid_t o(object);
+  boost::uuids::uuid vol;
+  epoch_t epoch = 0;
+  memcpy(&vol, volume, sizeof(vol));
+
+  if (!wait_for_active(&epoch))
+    return -ENODEV;
 
   // set up osd read op
   OpRequest *m = new OpRequest(client, tid, o, vol, epoch, 0);
@@ -126,8 +148,7 @@ int Objecter::read(const char *object, const uint8_t volume[16],
 
   // send request over direct messenger
   dispatcher->send_request(m, onreply);
-
-  return is_sync ? sync_completion.wait() : 0;
+  return 0;
 }
 
 // Dispatcher callback to fire the write completion
@@ -161,41 +182,73 @@ public:
     // expecting another message for ondisk
     if ((flags & LIBOSD_WRITE_CB_STABLE) && !m->is_ondisk())
       return;
-    delete this;
+    // delete unless we're synchronous (on the stack)
+    if (cb != SyncCompletion::callback)
+      delete this;
   }
 };
 
 #define WRITE_CB_FLAGS (LIBOSD_WRITE_CB_UNSTABLE | LIBOSD_WRITE_CB_STABLE)
 
-int Objecter::write(const char *object, const uint8_t volume[16],
-		    uint64_t offset, uint64_t length, char *data,
-		    int flags, libosd_io_completion_fn cb, void *user)
+int Objecter::write_sync(const char *object, const uint8_t volume[16],
+                         uint64_t offset, uint64_t length, char *data,
+                         int flags)
 {
   const int client = 0;
   const long tid = 0;
   oid_t oid(object);
   boost::uuids::uuid vol;
   epoch_t epoch = 0;
-  SyncCompletion sync_completion;
-  bool is_sync = false;
-
+  SyncCompletion completion;
   mempcpy(&vol, volume, sizeof(vol));
 
-  if (!cb) {
-    // when synchronous, flags must specify exactly one of UNSTABLE or STABLE
-    if ((flags & WRITE_CB_FLAGS) == 0 ||
-	(flags & WRITE_CB_FLAGS) == WRITE_CB_FLAGS)
-      return -EINVAL;
+  // when synchronous, flags must specify exactly one of UNSTABLE or STABLE
+  if ((flags & WRITE_CB_FLAGS) == 0 ||
+      (flags & WRITE_CB_FLAGS) == WRITE_CB_FLAGS)
+    return -EINVAL;
 
-    // set up a synchronous completion
-    cb = SyncCompletion::callback;
-    is_sync = true;
-    user = &sync_completion;
-  } else {
-    // when asynchronous, flags must specify one or more of UNSTABLE or STABLE
-    if ((flags & WRITE_CB_FLAGS) == 0)
-      return -EINVAL;
-  }
+  if (!wait_for_active(&epoch))
+    return -ENODEV;
+
+  bufferlist bl;
+  bl.append(ceph::buffer::create_static(length, data));
+
+  // set up osd write op
+  OpRequest *m = new OpRequest(client, tid, oid, vol, epoch, 0);
+  m->write(offset, length, bl);
+
+  if (flags & LIBOSD_WRITE_CB_UNSTABLE)
+    m->set_want_ack(true);
+  if (flags & LIBOSD_WRITE_CB_STABLE)
+    m->set_want_ondisk(true);
+
+  // create reply callback on the stack
+  OnWriteReply onreply(SyncCompletion::callback, flags, &completion);
+
+  // send request over direct messenger
+  dispatcher->send_request(m, &onreply);
+
+  return completion.wait();
+
+}
+
+int Objecter::write(const char *object, const uint8_t volume[16],
+		    uint64_t offset, uint64_t length, char *data,
+		    int flags, libosd_io_completion_fn cb, void *user)
+{
+  if (cb == nullptr)
+    return write_sync(object, volume, offset, length, data, flags);
+
+  const int client = 0;
+  const long tid = 0;
+  oid_t oid(object);
+  boost::uuids::uuid vol;
+  epoch_t epoch = 0;
+  mempcpy(&vol, volume, sizeof(vol));
+
+  // when asynchronous, flags must specify one or more of UNSTABLE or STABLE
+  if ((flags & WRITE_CB_FLAGS) == 0)
+    return -EINVAL;
 
   if (!wait_for_active(&epoch))
     return -ENODEV;
@@ -213,40 +266,66 @@ int Objecter::write(const char *object, const uint8_t volume[16],
     m->set_want_ondisk(true);
 
   // create reply callback
-  OnWriteReply *onreply = nullptr;
-  if (m->wants_ack() || m->wants_ondisk())
-    onreply = new OnWriteReply(cb, flags, user);
+  OnWriteReply *onreply = new OnWriteReply(cb, flags, user);
 
   // send request over direct messenger
   dispatcher->send_request(m, onreply);
-
-  return is_sync ? sync_completion.wait() : 0;
+  return 0;
 }
 
-int Objecter::truncate(const char *object, const uint8_t volume[16],
-		       uint64_t offset, int flags,
-		       libosd_io_completion_fn cb, void *user)
+int Objecter::truncate_sync(const char *object, const uint8_t volume[16],
+                            uint64_t offset, int flags)
 {
   const int client = 0;
   const long tid = 0;
   oid_t o(object);
   boost::uuids::uuid vol;
   epoch_t epoch = 0;
-  std::unique_ptr<SyncCompletion> sync;
-
+  SyncCompletion completion;
   memcpy(&vol, volume, sizeof(vol));
 
-  if (!cb) {
-    // when synchronous, flags must specify exactly one of UNSTABLE or STABLE
-    if ((flags & WRITE_CB_FLAGS) == 0 ||
-	(flags & WRITE_CB_FLAGS) == WRITE_CB_FLAGS)
-      return -EINVAL;
+  // when synchronous, flags must specify exactly one of UNSTABLE or STABLE
+  if ((flags & WRITE_CB_FLAGS) == 0 ||
+      (flags & WRITE_CB_FLAGS) == WRITE_CB_FLAGS)
+    return -EINVAL;
 
-    // set up a synchronous completion
-    cb = SyncCompletion::callback;
-    sync.reset(new SyncCompletion());
-    user = sync.get();
-  } else if ((flags & WRITE_CB_FLAGS) == 0) {
+  if (!wait_for_active(&epoch))
+    return -ENODEV;
+
+  // set up osd truncate op
+  OpRequest *m = new OpRequest(client, tid, o, vol, epoch, 0);
+  m->truncate(offset);
+
+  if (flags & LIBOSD_WRITE_CB_UNSTABLE)
+    m->set_want_ack(true);
+  if (flags & LIBOSD_WRITE_CB_STABLE)
+    m->set_want_ondisk(true);
+
+  // create reply callback on the stack
+  OnWriteReply onreply(SyncCompletion::callback, flags, &completion);
+
+  // send request over direct messenger
+  dispatcher->send_request(m, &onreply);
+
+  return completion.wait();
+
+}
+
+int Objecter::truncate(const char *object, const uint8_t volume[16],
+		       uint64_t offset, int flags,
+		       libosd_io_completion_fn cb, void *user)
+{
+  if (cb == nullptr)
+    return truncate_sync(object, volume, offset, flags);
+
+  const int client = 0;
+  const long tid = 0;
+  oid_t o(object);
+  boost::uuids::uuid vol;
+  epoch_t epoch = 0;
+  memcpy(&vol, volume, sizeof(vol));
+
+  if ((flags & WRITE_CB_FLAGS) == 0) {
     // when asynchronous, flags must specify one or more of UNSTABLE or STABLE
     return -EINVAL;
   }
@@ -264,14 +343,11 @@ int Objecter::truncate(const char *object, const uint8_t volume[16],
     m->set_want_ondisk(true);
 
   // create reply callback
-  OnWriteReply *onreply = nullptr;
-  if (m->wants_ack() || m->wants_ondisk())
-    onreply = new OnWriteReply(cb, flags, user);
+  OnWriteReply *onreply = new OnWriteReply(cb, flags, user);
 
   // send request over direct messenger
   dispatcher->send_request(m, onreply);
-
-  return sync ? sync->wait() : 0;
+  return 0;
 }
 
 } // namespace osd

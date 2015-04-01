@@ -16,6 +16,14 @@ namespace osd
 class Dispatcher;
 
 class Objecter {
+ private:
+  int read_sync(const char *object, const uint8_t volume[16],
+                uint64_t offset, uint64_t length, char *data, int flags);
+  int write_sync(const char *object, const uint8_t volume[16],
+                 uint64_t offset, uint64_t length, char *data, int flags);
+  int truncate_sync(const char *object, const uint8_t volume[16],
+                    uint64_t offset, int flags);
+
  public:
   std::unique_ptr<Dispatcher> dispatcher;
 
