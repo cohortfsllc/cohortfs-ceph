@@ -90,10 +90,7 @@ public:
     }
 
     cb(op.rval, length, 0, user);
-  }
-
-  void on_failure(int r) {
-    cb(r, 0, 0, user);
+    delete this;
   }
 };
 
@@ -142,12 +139,6 @@ public:
   OnWriteReply(libosd_io_completion_fn cb, int flags, void *user)
     : cb(cb), flags(flags), user(user) {}
 
-  bool is_last_reply(Message *reply) {
-    assert(reply->get_type() == CEPH_MSG_OSD_OPREPLY);
-    MOSDOpReply *m = static_cast<MOSDOpReply*>(reply);
-    return (flags & LIBOSD_WRITE_CB_STABLE) == 0 || m->is_ondisk();
-  }
-
   void on_reply(Message *reply) {
     assert(reply->get_type() == CEPH_MSG_OSD_OPREPLY);
     MOSDOpReply *m = static_cast<MOSDOpReply*>(reply);
@@ -166,10 +157,11 @@ public:
 
     uint64_t length = op.rval ? 0 : op.op.extent.length;
     cb(op.rval, length, flag, user);
-  }
 
-  void on_failure(int r) {
-    cb(r, 0, 0, user);
+    // expecting another message for ondisk
+    if ((flags & LIBOSD_WRITE_CB_STABLE) && !m->is_ondisk())
+      return;
+    delete this;
   }
 };
 

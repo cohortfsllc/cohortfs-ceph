@@ -20,9 +20,6 @@ public:
   struct OnReply {
     virtual ~OnReply() {}
     virtual void on_reply(Message *m) = 0;
-    virtual void on_failure(int r) = 0;
-    // return false if we expect more replies on this tid
-    virtual bool is_last_reply(Message *m) { return true; }
   };
 
 private:

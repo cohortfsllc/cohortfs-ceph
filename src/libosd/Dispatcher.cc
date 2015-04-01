@@ -44,8 +44,6 @@ bool Dispatcher::ms_dispatch(Message *m)
     return false;
 
   c->on_reply(m);
-  if (c->is_last_reply(m))
-    delete c;
   return true;
 }
 
