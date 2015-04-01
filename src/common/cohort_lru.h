@@ -321,8 +321,7 @@ namespace cohort {
 	  Partition& p = part[ix];
 	  if (csz) {
 	    p.csz = csz;
-	    p.cache = (T**) malloc(csz * sizeof(T*));
-	    memset(p.cache, 0, csz * sizeof(T*));
+	    p.cache = (T**) calloc(csz, sizeof(T*));
 	  }
 	  locks.push_back(&p.lock);
 	}
