@@ -23,7 +23,11 @@ class FreeList {
   mpmc_bounded_queue_t<T*> queue;
 
  public:
-  FreeList(size_t max_size) : queue(max_size) {}
+  FreeList(size_t max_size, bool preallocate = true) : queue(max_size) {
+    if (preallocate)
+      for (size_t i = 0; i < max_size; i++)
+        queue.enqueue(reinterpret_cast<T*>(new char[sizeof(T)]));
+  }
 
   ~FreeList() {
     // free all remaining entries

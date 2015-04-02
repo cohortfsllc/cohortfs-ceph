@@ -18,6 +18,7 @@
 
 #include <boost/intrusive/list.hpp>
 #include "include/ceph_time.h"
+#include "common/freelist.h"
 #include "messages/MOSDOp.h"
 #include "OpContext.h"
 
@@ -25,6 +26,16 @@ namespace bi = boost::intrusive;
 
 
 class OpRequest : public MOSDOp {
+ private:
+  static cohort::FreeList<OpRequest> free_list;
+ public:
+  static void *operator new(size_t num_bytes) {
+    return free_list.alloc();
+  }
+  void operator delete(void *p) {
+    return free_list.free(static_cast<OpRequest*>(p));
+  }
+
 public:
   typedef boost::intrusive_ptr<OpRequest> Ref;
 
