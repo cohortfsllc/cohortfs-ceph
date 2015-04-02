@@ -63,39 +63,33 @@ struct oid_t {
     name(n), type(t), stride(s) {
     assert(!(type == chunktype::entirety) || (stride == 0));
   }
-  oid_t(const oid_t& o) {
-    name = o.name;
-    type = o.type;
-    stride = o.stride;
+  oid_t(const oid_t& o)
+    : name(o.name), type(o.type), stride(o.stride) {
   }
-  oid_t(const oid_t& o,
-      chunktype t,
-      uint32_t s) : name(o.name), type(t), stride(s) {
+  oid_t(const oid_t& o, chunktype t, uint32_t s)
+    : name(o.name), type(t), stride(s) {
     assert(!(type == chunktype::entirety) || (stride == 0));
   }
-  oid_t(const oid_t& o,
-      chunktype t) : name(o.name), type(t), stride(o.stride) {
+  oid_t(const oid_t& o, chunktype t)
+    : name(o.name), type(t), stride(o.stride) {
     assert(!(type == chunktype::entirety) || (stride == 0));
   }
-  oid_t(const oid_t& o,
-      uint32_t s) : name(o.name), type(o.type), stride(s) {
-    stride = o.stride;
+  oid_t(const oid_t& o, uint32_t s)
+    : name(o.name), type(o.type), stride(s) {
     assert(!(type == chunktype::entirety) || (stride == 0));
   }
-  oid_t(oid_t&& o) : oid_t() {
-    std::swap(name, o.name);
-    type = o.type;
-    stride = o.stride;
+  oid_t(oid_t&& o)
+    : name(std::move(o.name)), type(o.type), stride(o.stride)
+  {}
+  oid_t(oid_t&& o, chunktype t, uint32_t s)
+    : name(std::move(o.name)), type(t), stride(s) {
   }
-  oid_t(oid_t&& o, chunktype t, uint32_t s) : type(t), stride(s) {
-    std::swap(name, o.name);
-  }
-  oid_t(oid_t&& o, chunktype t) : type(t), stride(o.stride) {
-    std::swap(name, o.name);
+  oid_t(oid_t&& o, chunktype t)
+    : name(std::move(o.name)), type(t), stride(o.stride) {
     assert(!(type == chunktype::entirety) || (stride == 0));
   }
-  oid_t(oid_t&& o, uint32_t s) : type(o.type), stride(s) {
-    std::swap(name, o.name);
+  oid_t(oid_t&& o, uint32_t s)
+    : name(std::move(o.name)), type(o.type), stride(s) {
     assert(!(type == chunktype::entirety) || (stride == 0));
   }
   oid_t(const char *in, char sep,

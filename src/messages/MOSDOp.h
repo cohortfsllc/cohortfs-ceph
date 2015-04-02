@@ -82,6 +82,15 @@ public:
       oid(_obj), volume(_volume) {
     set_tid(tid);
   }
+  MOSDOp(int inc, long tid, oid_t&& oid,
+         const boost::uuids::uuid& _volume,
+         epoch_t _osdmap_epoch, int _flags)
+    : Message(CEPH_MSG_OSD_OP, HEAD_VERSION, COMPAT_VERSION),
+      client_inc(inc),
+      osdmap_epoch(_osdmap_epoch), flags(_flags), retry_attempt(-1),
+      oid(std::move(oid)), volume(_volume) {
+    set_tid(tid);
+  }
 protected:
   ~MOSDOp() {}
 

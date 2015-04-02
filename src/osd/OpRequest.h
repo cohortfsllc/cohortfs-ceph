@@ -59,10 +59,10 @@ public:
   }
 
   OpRequest() : rmw_flags(0), hit_flag_points(0), latest_flag_point(0) {}
-  OpRequest(int inc, long tid, const oid_t& obj,
+  OpRequest(int inc, long tid, oid_t&& oid,
             const boost::uuids::uuid& volume,
             epoch_t epoch, int flags)
-    : MOSDOp(inc, tid, obj, volume, epoch, flags),
+    : MOSDOp(inc, tid, std::move(oid), volume, epoch, flags),
       rmw_flags(0), hit_flag_points(0), latest_flag_point(0)
   {}
 

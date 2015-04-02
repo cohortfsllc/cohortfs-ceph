@@ -100,7 +100,7 @@ int Objecter::read_sync(const char *object, const uint8_t volume[16],
 {
   const int client = 0;
   const long tid = 0;
-  oid_t o(object);
+  oid_t oid(object);
   boost::uuids::uuid vol;
   epoch_t epoch = 0;
   SyncCompletion completion;
@@ -110,7 +110,7 @@ int Objecter::read_sync(const char *object, const uint8_t volume[16],
     return -ENODEV;
 
   // set up osd read op
-  OpRequest *m = new OpRequest(client, tid, o, vol, epoch, 0);
+  OpRequest *m = new OpRequest(client, tid, std::move(oid), vol, epoch, 0);
   m->read(offset, length);
 
   // create reply callback
@@ -131,7 +131,7 @@ int Objecter::read(const char *object, const uint8_t volume[16],
 
   const int client = 0;
   const long tid = 0;
-  oid_t o(object);
+  oid_t oid(object);
   boost::uuids::uuid vol;
   epoch_t epoch = 0;
   memcpy(&vol, volume, sizeof(vol));
@@ -140,7 +140,7 @@ int Objecter::read(const char *object, const uint8_t volume[16],
     return -ENODEV;
 
   // set up osd read op
-  OpRequest *m = new OpRequest(client, tid, o, vol, epoch, 0);
+  OpRequest *m = new OpRequest(client, tid, std::move(oid), vol, epoch, 0);
   m->read(offset, length);
 
   // create reply callback
@@ -214,7 +214,7 @@ int Objecter::write_sync(const char *object, const uint8_t volume[16],
   bl.append(ceph::buffer::create_static(length, data));
 
   // set up osd write op
-  OpRequest *m = new OpRequest(client, tid, oid, vol, epoch, 0);
+  OpRequest *m = new OpRequest(client, tid, std::move(oid), vol, epoch, 0);
   m->write(offset, length, bl);
 
   if (flags & LIBOSD_WRITE_CB_UNSTABLE)
@@ -257,7 +257,7 @@ int Objecter::write(const char *object, const uint8_t volume[16],
   bl.append(ceph::buffer::create_static(length, data));
 
   // set up osd write op
-  OpRequest *m = new OpRequest(client, tid, oid, vol, epoch, 0);
+  OpRequest *m = new OpRequest(client, tid, std::move(oid), vol, epoch, 0);
   m->write(offset, length, bl);
 
   if (flags & LIBOSD_WRITE_CB_UNSTABLE)
@@ -278,7 +278,7 @@ int Objecter::truncate_sync(const char *object, const uint8_t volume[16],
 {
   const int client = 0;
   const long tid = 0;
-  oid_t o(object);
+  oid_t oid(object);
   boost::uuids::uuid vol;
   epoch_t epoch = 0;
   SyncCompletion completion;
@@ -293,7 +293,7 @@ int Objecter::truncate_sync(const char *object, const uint8_t volume[16],
     return -ENODEV;
 
   // set up osd truncate op
-  OpRequest *m = new OpRequest(client, tid, o, vol, epoch, 0);
+  OpRequest *m = new OpRequest(client, tid, std::move(oid), vol, epoch, 0);
   m->truncate(offset);
 
   if (flags & LIBOSD_WRITE_CB_UNSTABLE)
@@ -320,7 +320,7 @@ int Objecter::truncate(const char *object, const uint8_t volume[16],
 
   const int client = 0;
   const long tid = 0;
-  oid_t o(object);
+  oid_t oid(object);
   boost::uuids::uuid vol;
   epoch_t epoch = 0;
   memcpy(&vol, volume, sizeof(vol));
@@ -334,7 +334,7 @@ int Objecter::truncate(const char *object, const uint8_t volume[16],
     return -ENODEV;
 
   // set up osd truncate op
-  OpRequest *m = new OpRequest(client, tid, o, vol, epoch, 0);
+  OpRequest *m = new OpRequest(client, tid, std::move(oid), vol, epoch, 0);
   m->truncate(offset);
 
   if (flags & LIBOSD_WRITE_CB_UNSTABLE)
