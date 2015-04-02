@@ -2020,8 +2020,9 @@ bool OSD::ms_dispatch(Message *m)
   default:
     {
       /* all other ops, need OSDMap in general */
-      OpRequest *op = static_cast<OpRequest*>(m);
-      handle_op(op, osd_lk);
+      OpRequestRef op(static_cast<OpRequest*>(m));
+      op->put();
+      handle_op(op.get(), osd_lk);
     }
   }
 
