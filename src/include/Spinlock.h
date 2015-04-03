@@ -61,7 +61,7 @@ namespace cohort {
     std::atomic_flag flag;
 
   public:
-    inline SpinLock() : flag(ATOMIC_FLAG_INIT)
+    inline SpinLock() : flag(0 /* ATOMIC_FLAG_INIT */)
     {}
 
     inline void lock()
