@@ -32,6 +32,9 @@
 #endif
 #define CACHE_PAD(_n) char __pad ## _n [CACHE_LINE_SIZE]
 
+//#define OPQUEUE_YIELD
+//#define OPQUEUE_SLEEP
+
 class CephContext;
 class OSD;
 
@@ -77,7 +80,7 @@ namespace cohort {
     thr_exit_func exit_func;
     int n_lanes;
     Lane* qlane;
-    ceph::timespan worker_timeout;
+    ceph::timespan timeout;
     uint32_t thrd_lowat;
     uint32_t thrd_hiwat;
     uint32_t flags;
@@ -94,8 +97,6 @@ namespace cohort {
       enum Bands band;
       OpQueue* op_queue;
       std::mutex* lane_mtx;
-      std::mutex mtx;
-      std::condition_variable cv;
       std::atomic<uint32_t> n_workers;
       std::thread graveyard; // where exiting workers go to die
       mpmc_q queue;
@@ -116,8 +117,7 @@ namespace cohort {
 
       void run(Worker* worker) {
 	uint32_t backoff = 0;
-	while (worker->leader ||
-	       (backoff < 200)) {
+	while (true) {
 	  /* shutting down? */
 	  if (op_queue->flags & FLAG_SHUTDOWN)
 	    goto worker_exit;
@@ -133,14 +133,20 @@ namespace cohort {
 	    backoff = 0;
 	    continue;
 	  }
+#ifndef OPQUEUE_YIELD
+	  if (++backoff < 100)
+	    continue;
+#else
 	  if (++backoff < 10)
 	    continue;
 	  if (backoff < 100) {
 	    sched_yield();
 	    continue;
 	  }
-	  std::unique_lock<std::mutex> lk(mtx);
-	  cv.wait_for(lk, op_queue->worker_timeout);
+#endif
+#ifdef OPQUEUE_SLEEP
+          std::this_thread::sleep_for(op_queue->timeout);
+#endif
 	} /* while (backoff < 1000) */
 
       worker_exit:
@@ -167,12 +173,12 @@ namespace cohort {
   public:
     OpQueue(OSD* osd, op_func opf, thr_exit_func ef, uint16_t lanes,
 	       uint8_t thrd_lowat = 1, uint8_t thrd_hiwat = 2,
-	       std::chrono::milliseconds worker_timeout = 50ms)
+	       std::chrono::milliseconds timeout = 50ms)
       : osd(osd),
 	dequeue_op_func(opf),
 	exit_func(ef),
 	n_lanes(lanes),
-	worker_timeout(worker_timeout),
+	timeout(timeout),
 	thrd_lowat(thrd_lowat),
 	thrd_hiwat(thrd_hiwat),
 	flags(FLAG_NONE)
@@ -210,35 +216,34 @@ namespace cohort {
 
       /* we don't have a queue front anymore, tough
        * nuggies, requeuers */
-      int ix = 0;
+      int backoff = 0;
       while (! band.queue.enqueue(&op)) {
-	if (++ix < 10)
+#ifndef OPQUEUE_YIELD
+	if (++backoff < 100)
 	  continue;
-	if (ix < 100) {
+#else
+	if (++backoff < 10)
+	  continue;
+	if (backoff < 100) {
 	  sched_yield();
 	  continue;
 	}
-	{
-	  std::mutex mtx;
-	  std::condition_variable cv;
-	  std::unique_lock<std::mutex> lk(mtx);
-	  cv.wait_for(lk, 20ms);
-	}
+#endif
+#ifdef OPQUEUE_SLEEP
+        std::this_thread::sleep_for(timeout);
+#endif
       }
       return true;
     } /* enqueue */
 
     void shutdown() {
-      std::mutex mtx;
-      std::condition_variable cv;
-      std::unique_lock<std::mutex> lk(mtx);
       flags |= FLAG_SHUTDOWN;
       for (int ix = 0; ix < n_lanes; ++ix) {
 	Lane& lane = qlane[ix];
 	for (int bix = 0; bix < 2; ++bix) {
 	  Band& band = lane.band[bix];
 	  while (band.n_workers.load() > 0)
-	    cv.wait_for(lk, worker_timeout);
+            std::this_thread::sleep_for(timeout);
 	  if (band.graveyard.joinable())
 	    band.graveyard.join();
 	}
