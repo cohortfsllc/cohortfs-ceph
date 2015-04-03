@@ -3020,6 +3020,7 @@ void OSD::handle_op(OpRequest* op, unique_lock& osd_lk)
     band = cohort::OpQueue::Bands::BASE;
 
   /* enqueue on multi_wq, defers vol resolution */
+  op->get(); // take queue ref
   multi_wq->enqueue(*op, band);
 } /* handle_op */
 
