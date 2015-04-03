@@ -331,6 +331,11 @@ void OSDVol::do_op(OpRequest* op)
 	   << " flags " << ceph_osd_flag_string(op->get_flags())
 	   << dendl;
 
+  if (cct->_conf->osd_early_reply_at == 2) {
+    osd->reply_op_error(op, 0);
+    return;
+  }
+
   bool can_create = op->may_write() || op->may_cache();
   const hoid_t oid(op->get_oid());
 
@@ -356,6 +361,7 @@ void OSDVol::do_op(OpRequest* op)
       dout(10) << "no src oid specified for multi op "
 	       << osd_op << dendl;
       osd->reply_op_error(op, -EINVAL);
+      return;
     }
 
     /* find contexts for additional objects referenced by the
