@@ -1021,6 +1021,7 @@ OSDVolRef OSD::_lookup_vol(const boost::uuids::uuid& volid)
   OSDVol* v = tls_vol_cache.get(volid);
   if (v)
     return v;
+  unique_lock vlock(vol_lock);
   auto i = vol_map.find(volid);
   if (i != vol_map.end()) {
     OSDVolRef vol = i->second;
@@ -3039,14 +3040,12 @@ void OSD::dequeue_op(OpRequest* op)
   ceph::timespan latency = now - op->get_recv_stamp();
   const boost::uuids::uuid& volume = op->get_volume();
 
-  unique_lock vlock(vol_lock);
   OSDVolRef vol = _lookup_vol(volume);
   if (!vol) {
     dout(7) << "hit non-existent volume " << volume << dendl;
     service.reply_op_error(op, -ENXIO);
     return;
   }
-  vlock.unlock();
 
   dout(10) << "dequeue_op " << op << " prio " << op->get_priority()
 	   << " cost " << op->get_cost()
