@@ -102,7 +102,7 @@ namespace cohort {
       mpmc_q queue;
       CACHE_PAD(0);
 
-      Band() : n_workers(0), queue(1024) {};
+      Band() : n_workers(0), queue(16384) {};
 
       void spawn_worker(uint32_t flags) {
 	if (n_workers < op_queue->thrd_hiwat) {
