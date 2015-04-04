@@ -1748,6 +1748,10 @@ target_link_libraries(test_libosd_remote PRIVATE osd os global
 add_executable(libosd_bench libosd_bench.cc)
 target_link_libraries(libosd_bench PRIVATE osd common pthread)
 
+# libosd_bench
+add_executable(libosd_bench_async libosd_bench_async.cc)
+target_link_libraries(libosd_bench_async PRIVATE osd common pthread)
+
 # lttng_stream_test
 if (HAVE_LTTNG)
   add_executable(lttng_stream_test lttng_stream_test.cc)

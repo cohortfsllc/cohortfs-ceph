@@ -50,7 +50,8 @@ public:
   }
 
   // libosd_io_completion_fn to signal the condition variable
-  static void callback(int result, uint64_t length, int flags, void *user) {
+  static void callback(int result, uint64_t length, int flags,
+		       void *user) {
     SyncCompletion *sync = static_cast<SyncCompletion*>(user);
     sync->signal(result, length);
   }
@@ -96,7 +97,8 @@ public:
 };
 
 int Objecter::read_sync(const char *object, const uint8_t volume[16],
-                        uint64_t offset, uint64_t length, char *data, int flags)
+                        uint64_t offset, uint64_t length, char *data,
+			int flags)
 {
   const int client = 0;
   const long tid = 0;
@@ -110,11 +112,13 @@ int Objecter::read_sync(const char *object, const uint8_t volume[16],
     return -ENODEV;
 
   // set up osd read op
-  OpRequest *m = new OpRequest(client, tid, std::move(oid), vol, epoch, 0);
+  OpRequest *m = new OpRequest(client, tid, std::move(oid), vol,
+			       epoch, 0);
   m->read(offset, length);
 
   // create reply callback
-  OnReadReply onreply(data, length, SyncCompletion::callback, &completion);
+  OnReadReply onreply(data, length, SyncCompletion::callback,
+		      &completion);
 
   // send request over direct messenger
   dispatcher->send_request(m, &onreply);
@@ -140,7 +144,9 @@ int Objecter::read(const char *object, const uint8_t volume[16],
     return -ENODEV;
 
   // set up osd read op
-  OpRequest *m = new OpRequest(client, tid, std::move(oid), vol, epoch, 0);
+  OpRequest *m =
+    new OpRequest(client, tid, std::move(oid), vol, epoch, 0);
+
   m->read(offset, length);
 
   // create reply callback
@@ -188,7 +194,9 @@ public:
   }
 };
 
-#define WRITE_CB_FLAGS (LIBOSD_WRITE_CB_UNSTABLE | LIBOSD_WRITE_CB_STABLE)
+#define WRITE_CB_FLAGS \
+  (LIBOSD_WRITE_CB_UNSTABLE | \
+   LIBOSD_WRITE_CB_STABLE)
 
 int Objecter::write_sync(const char *object, const uint8_t volume[16],
                          uint64_t offset, uint64_t length, char *data,
@@ -202,7 +210,8 @@ int Objecter::write_sync(const char *object, const uint8_t volume[16],
   SyncCompletion completion;
   mempcpy(&vol, volume, sizeof(vol));
 
-  // when synchronous, flags must specify exactly one of UNSTABLE or STABLE
+  /* when synchronous, flags must specify exactly one of UNSTABLE
+   * or STABLE */
   if ((flags & WRITE_CB_FLAGS) == 0 ||
       (flags & WRITE_CB_FLAGS) == WRITE_CB_FLAGS)
     return -EINVAL;
@@ -214,7 +223,9 @@ int Objecter::write_sync(const char *object, const uint8_t volume[16],
   bl.append(ceph::buffer::create_static(length, data));
 
   // set up osd write op
-  OpRequest *m = new OpRequest(client, tid, std::move(oid), vol, epoch, 0);
+  OpRequest *m =
+    new OpRequest(client, tid, std::move(oid), vol, epoch, 0);
+
   m->write(offset, length, bl);
 
   if (flags & LIBOSD_WRITE_CB_UNSTABLE)
