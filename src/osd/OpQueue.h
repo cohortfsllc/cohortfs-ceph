@@ -32,8 +32,8 @@
 #endif
 #define CACHE_PAD(_n) char __pad ## _n [CACHE_LINE_SIZE]
 
-//#define OPQUEUE_YIELD
 //#define OPQUEUE_SLEEP
+//#define OPQUEUE_INSTRUMENT
 
 class CephContext;
 class OSD;
@@ -81,6 +81,8 @@ namespace cohort {
     int n_lanes;
     Lane* qlane;
     ceph::timespan timeout;
+    uint32_t enq_spins;
+    uint32_t deq_spins;
     uint32_t thrd_lowat;
     uint32_t thrd_hiwat;
     uint32_t flags;
@@ -97,12 +99,14 @@ namespace cohort {
       enum Bands band;
       OpQueue* op_queue;
       std::mutex* lane_mtx;
+      uint32_t ctr;
+      std::atomic<uint32_t> size;
       std::atomic<uint32_t> n_workers;
       std::thread graveyard; // where exiting workers go to die
       mpmc_q queue;
       CACHE_PAD(0);
 
-      Band() : n_workers(0), queue(16384) {};
+      Band() : ctr(0), size(0), n_workers(0), queue(16384) {};
 
       void spawn_worker(uint32_t flags) {
 	if (n_workers < op_queue->thrd_hiwat) {
@@ -124,6 +128,14 @@ namespace cohort {
 	  OpRequest* op = nullptr;
 	  queue.dequeue(op);
 	  if (op) {
+#ifdef OPQUEUE_INSTRUMENT
+#ifdef INSTRUMENT_BACKOFF
+	    if (unlikely(backoff != 0)) {
+	      std::cout << "dequeue backoff " << backoff << std::endl;
+	    }
+#endif /* BACKOFF */
+	    --size;
+#endif /* INSTRUMENT */
 	    op_queue->dequeue_op_func(op_queue->osd, op);
 	    /* leaders can spawn new workers */
 	    if (worker->leader &&
@@ -133,21 +145,12 @@ namespace cohort {
 	    backoff = 0;
 	    continue;
 	  }
-#ifndef OPQUEUE_YIELD
-	  if (++backoff < 100)
+	  if (++backoff < op_queue->deq_spins)
 	    continue;
-#else
-	  if (++backoff < 10)
-	    continue;
-	  if (backoff < 100) {
-	    sched_yield();
-	    continue;
-	  }
-#endif
 #ifdef OPQUEUE_SLEEP
           std::this_thread::sleep_for(op_queue->timeout);
 #endif
-	} /* while (backoff < 1000) */
+	} /* while (backoff < queue.deq_spins) */
 
       worker_exit:
 	std::unique_lock<std::mutex> lane_lk(*lane_mtx);
@@ -172,13 +175,16 @@ namespace cohort {
 
   public:
     OpQueue(OSD* osd, op_func opf, thr_exit_func ef, uint16_t lanes,
-	       uint8_t thrd_lowat = 1, uint8_t thrd_hiwat = 2,
-	       std::chrono::milliseconds timeout = 50ms)
+	      uint8_t thrd_lowat = 1, uint8_t thrd_hiwat = 2,
+	      uint32_t enq_spins = 50000, uint32_t deq_spins = 2048,
+	      std::chrono::milliseconds timeout = 10ms)
       : osd(osd),
 	dequeue_op_func(opf),
 	exit_func(ef),
 	n_lanes(lanes),
 	timeout(timeout),
+        enq_spins(enq_spins),
+        deq_spins(deq_spins),
 	thrd_lowat(thrd_lowat),
 	thrd_hiwat(thrd_hiwat),
 	flags(FLAG_NONE)
@@ -214,25 +220,32 @@ namespace cohort {
       Lane& lane = choose_lane();
       Band& band = lane.band[int(b)];
 
+#ifdef OPQUEUE_INSTRUMENT
+      if (unlikely((band.ctr % 16384) == 0)) {
+	std::cout << "ctr " << band.ctr
+		  << " size " << band.size << std::endl;
+      }
+#endif
+
       /* we don't have a queue front anymore, tough
        * nuggies, requeuers */
       int backoff = 0;
       while (! band.queue.enqueue(&op)) {
-#ifndef OPQUEUE_YIELD
-	if (++backoff < 100)
+	if (++backoff < enq_spins)
 	  continue;
-#else
-	if (++backoff < 10)
-	  continue;
-	if (backoff < 100) {
-	  sched_yield();
-	  continue;
-	}
-#endif
 #ifdef OPQUEUE_SLEEP
         std::this_thread::sleep_for(timeout);
 #endif
       }
+#ifdef OPQUEUE_INSTRUMENT
+#ifdef INSTRUMENT_BACKOFF
+      if (unlikely(backoff != 0)) {
+	std::cout << "enqueue backoff " << backoff << std::endl;
+      }
+#endif /* BACKOFF */
+      ++band.ctr;
+      ++band.size;
+#endif /* INSTRUMENT */
       return true;
     } /* enqueue */
 
