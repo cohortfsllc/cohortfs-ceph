@@ -35,6 +35,7 @@ struct ReadR
   uint8_t* volume;
   char* obj;
   std::atomic<int>* count;
+  int depth;
   int inst;
   int times_queued;
   char buffer[16];
@@ -51,16 +52,20 @@ extern "C" {
 #ifdef VERBOSE_PRINTS
   std::cout << "io_completion " << rio
 	    << " times_queued " << rio->times_queued
-	    << " count " << *(rio->count)
+	    << " count " << (*(rio->count)).load()
 	    << std::endl;
 #endif
 
   /* done? */
-  if (--(*(rio->count)) <= 0) {
+  int count = --(*(rio->count));
+  if (count == 0) {
     std::unique_lock<std::mutex> lk(*(rio->mtx));
     rio->cv->notify_one();
     return;
   }
+
+  if (count < rio->depth)
+    return;
 
   /* re-queue it */
   ++rio->times_queued;
@@ -99,6 +104,7 @@ extern "C" {
     rio.volume = volume;
     rio.obj = const_cast<char*>(obj);
     rio.count = &cnt;
+    rio.depth = depth;
     rio.inst = i;
     rio.times_queued = 1; /* below */
     rios.emplace_back(rio);
@@ -239,6 +245,9 @@ int main(int argc, const char *argv[])
   // shutdown and cleanup
   osd->shutdown();
   osd->join();
+
+  std::this_thread::sleep_for(10s);
+
   libosd_cleanup(osd);
   std::cout << "libosd_cleanup() finished" << std::endl;
   return EXIT_SUCCESS;
