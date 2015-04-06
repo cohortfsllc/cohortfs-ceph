@@ -4,6 +4,7 @@
 #include <iostream>
 #include <thread>
 #include <mutex>
+#include <atomic>
 #include <condition_variable>
 
 #include "libosd/ceph_osd.h"
@@ -33,7 +34,7 @@ struct ReadR
   struct libosd* osd;
   uint8_t* volume;
   char* obj;
-  int* count;
+  std::atomic<int>* count;
   int inst;
   int times_queued;
   char buffer[16];
@@ -85,7 +86,7 @@ extern "C" {
   std::mutex mtx;
   std::condition_variable cv;
   std::unique_lock<std::mutex> lk(mtx);
-  int cnt = count;
+  std::atomic<int> cnt{count};
 
   const char* obj = "foo";
 
@@ -113,7 +114,7 @@ extern "C" {
   }
 
   /* wait till done */
-  while (cnt > 0) {
+  while (cnt.load() > 0) {
     cv.wait(lk);
   }
 }

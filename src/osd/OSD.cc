@@ -107,7 +107,7 @@
 thread_local OSDVol::VolCache OSD::tls_vol_cache;
 
 // OpRequest free list
-cohort::FreeList<OpRequest> OpRequest::free_list(1024);
+cohort::FreeList<OpRequest> OpRequest::free_list(4096);
 
 static ostream& _prefix(std::ostream* _dout, int whoami, OSDMapRef osdmap) {
   return *_dout << "osd." << whoami << " "
