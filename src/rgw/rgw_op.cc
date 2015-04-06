@@ -5,7 +5,7 @@
 
 #include <sstream>
 
-#include "common/Clock.h"
+#include "include/ceph_time.h"
 #include "common/armor.h"
 #include "common/mime.h"
 #include "common/utf8.h"
@@ -31,10 +31,8 @@
 using namespace std;
 using ceph::crypto::MD5;
 
-static string mp_ns = RGW_OBJ_NS_MULTIPART;
-static string shadow_ns = RGW_OBJ_NS_SHADOW;
-
-#define MULTIPART_UPLOAD_ID_PREFIX "2/" // must contain a unique char that may not come up in gen_rand_alpha()
+// must contain a unique char that may not come up in gen_rand_alpha()
+#define MULTIPART_UPLOAD_ID_PREFIX "2/"
 
 class MultipartMetaFilter : public RGWAccessListFilter {
 public:
@@ -269,23 +267,24 @@ static int read_policy(RGWRados *store, struct req_state *s,
 {
   string upload_id;
   upload_id = s->info.args.get("uploadId");
-  string oid_t = object;
-  rgw_obj oid;
+  string oid = object;
+  rgw_obj obj;
 
   if (!s->system_request && bucket_info.flags & BUCKET_SUSPENDED) {
     ldout(s->cct, 0) << "NOTICE: bucket " << bucket_info.bucket.name << " is suspended" << dendl;
     return -ERR_USER_SUSPENDED;
   }
 
-  if (!oid_t.empty() && !upload_id.empty()) {
-    RGWMPObj mp(oid_t, upload_id);
-    oid_t = mp.get_meta();
-    oid.init_ns(bucket, oid_t, mp_ns);
-    oid.set_in_extra_data(true);
+  if (!oid.empty() && !upload_id.empty()) {
+    RGWMPObj mp(oid, upload_id);
+    oid = mp.get_meta();
+    obj.init(bucket, oid);
+    obj.set_in_extra_data(true);
   } else {
-    oid.init(bucket, oid_t);
+    obj.init(bucket, oid);
   }
-  int ret = get_policy_from_attr(s->cct, store, s->obj_ctx, bucket_info, bucket_attrs, policy, oid);
+  int ret = get_policy_from_attr(s->cct, store, s->obj_ctx, bucket_info,
+				 bucket_attrs, policy, obj);
   if (ret == -ENOENT && object.size()) {
     /* object does not exist checking the bucket's ACL to make sure
        that we send a proper error code */
@@ -490,7 +489,8 @@ int RGWOp::init_quota()
   return 0;
 }
 
-static bool validate_cors_rule_method(RGWCORSRule *rule, const char *req_meth) {
+static bool validate_cors_rule_method(CephContext* cct,
+				      RGWCORSRule *rule, const char *req_meth) {
   uint8_t flags = 0;
   if (strcmp(req_meth, "GET") == 0) flags = RGW_CORS_GET;
   else if (strcmp(req_meth, "POST") == 0) flags = RGW_CORS_POST;
@@ -544,7 +544,9 @@ int RGWOp::read_bucket_cors()
  * any of the values in list of headers do not set any additional headers and
  * terminate this set of steps.
  * */
-static void get_cors_response_headers(RGWCORSRule *rule, const char *req_hdrs, string& hdrs, string& exp_hdrs, unsigned *max_age) {
+static void get_cors_response_headers(CephContext* cct, RGWCORSRule *rule,
+				      const char *req_hdrs, string& hdrs,
+				      string& exp_hdrs, unsigned *max_age) {
   if (req_hdrs) {
     list<string> hl;
     get_str_list(req_hdrs, hl);
@@ -566,7 +568,9 @@ static void get_cors_response_headers(RGWCORSRule *rule, const char *req_hdrs, s
  *
  * This is described in the CORS standard, section 6.2.
  */
-bool RGWOp::generate_cors_headers(string& origin, string& method, string& headers, string& exp_headers, unsigned *max_age)
+bool RGWOp::generate_cors_headers(string& origin,
+				  string& method, string& headers,
+				  string& exp_headers, unsigned *max_age)
 {
   /* CORS 6.2.1. */
   const char *orig = s->info.env->get("HTTP_ORIGIN");
@@ -582,7 +586,8 @@ bool RGWOp::generate_cors_headers(string& origin, string& method, string& header
   }
 
   if (!cors_exist) {
-    dout(2) << "No CORS configuration set yet for this bucket" << dendl;
+    ldout(store->ctx(), 2) << "No CORS configuration set yet for this bucket"
+			   << dendl;
     return false;
   }
 
@@ -592,7 +597,8 @@ bool RGWOp::generate_cors_headers(string& origin, string& method, string& header
     return false;
 
   /* CORS 6.2.3. */
-  const char *req_meth = s->info.env->get("HTTP_ACCESS_CONTROL_REQUEST_METHOD");
+  const char *req_meth = s->info.env->get(
+    "HTTP_ACCESS_CONTROL_REQUEST_METHOD");
   if (!req_meth) {
     req_meth = s->info.method;
   }
@@ -600,27 +606,30 @@ bool RGWOp::generate_cors_headers(string& origin, string& method, string& header
   if (req_meth)
     method = req_meth;
   /* CORS 6.2.5. */
-  if (!validate_cors_rule_method(rule, req_meth)) {
+  if (!validate_cors_rule_method(store->ctx(), rule, req_meth)) {
     return false;
   }
 
   /* CORS 6.2.4. */
-  const char *req_hdrs = s->info.env->get("HTTP_ACCESS_CONTROL_REQUEST_HEADERS");
+  const char *req_hdrs = s->info.env->get(
+    "HTTP_ACCESS_CONTROL_REQUEST_HEADERS");
 
   /* CORS 6.2.6. */
-  get_cors_response_headers(rule, req_hdrs, headers, exp_headers, max_age);
+  get_cors_response_headers(store->ctx(), rule, req_hdrs, headers, exp_headers,
+			    max_age);
 
   return true;
 }
 
-int RGWGetObj::read_user_manifest_part(rgw_bucket& bucket, RGWObjEnt& ent, RGWAccessControlPolicy *bucket_policy, off_t start_ofs, off_t end_ofs)
+int RGWGetObj::read_user_manifest_part(rgw_bucket& bucket, RGWObjEnt& ent,
+				       RGWAccessControlPolicy *bucket_policy,
+				       off_t start_ofs, off_t end_ofs)
 {
   ldout(s->cct, 0) << "user manifest oid=" << ent.name << dendl;
 
   void *handle = NULL;
   off_t cur_ofs = start_ofs;
   off_t cur_end = end_ofs;
-  utime_t start_time = s->time;
 
   rgw_obj part(bucket, ent.name);
 
@@ -665,10 +674,7 @@ int RGWGetObj::read_user_manifest_part(rgw_bucket& bucket, RGWObjEnt& ent, RGWAc
     cur_ofs += len;
     ofs += len;
     ret = 0;
-		      (ceph_clock_now(s->cct) - start_time));
     send_response_data(bl, 0, len);
-
-    start_time = ceph_clock_now(s->cct);
   }
 
   store->destroy_context(obj_ctx);
@@ -684,8 +690,9 @@ done_err:
   return ret;
 }
 
-int RGWGetObj::iterate_user_manifest_parts(rgw_bucket& bucket, string& obj_prefix, RGWAccessControlPolicy *bucket_policy,
-					   uint64_t *ptotal_len, bool read_data)
+int RGWGetObj::iterate_user_manifest_parts(
+  rgw_bucket& bucket, string& obj_prefix,
+  RGWAccessControlPolicy *bucket_policy, uint64_t *ptotal_len, bool read_data)
 {
   uint64_t obj_ofs = 0, len_count = 0;
   bool found_start = false, found_end = false;
@@ -696,13 +703,11 @@ int RGWGetObj::iterate_user_manifest_parts(rgw_bucket& bucket, string& obj_prefi
   map<string, bool> common_prefixes;
   vector<RGWObjEnt> objs;
 
-  utime_t start_time = ceph_clock_now(s->cct);
-
   do {
 #define MAX_LIST_OBJS 100
-    int r = store->list_objects(bucket, MAX_LIST_OBJS, obj_prefix, delim, marker,
-				objs, common_prefixes,
-				true, no_ns, true, &is_truncated, NULL);
+    int r = store->list_objects(bucket, MAX_LIST_OBJS, obj_prefix, delim,
+				marker, objs, common_prefixes,
+				true, &is_truncated, NULL);
     if (r < 0)
       return r;
 
@@ -735,8 +740,6 @@ int RGWGetObj::iterate_user_manifest_parts(rgw_bucket& bucket, string& obj_prefi
 	}
       }
       marker = ent.name;
-
-      start_time = ceph_clock_now(s->cct);
     }
   } while (is_truncated && !found_end);
 
@@ -802,7 +805,8 @@ class RGWGetObj_CB : public RGWGetDataCB
 {
   RGWGetObj *op;
 public:
-  RGWGetObj_CB(RGWGetObj *_op) : op(_op) {}
+  RGWGetObj_CB(CephContext* _cct, RGWGetObj *_op) :
+    RGWGetDataCB(_cct), op(_op) {}
   virtual ~RGWGetObj_CB() {}
 
   int handle_data(bufferlist& bl, off_t bl_ofs, off_t bl_len) {
@@ -813,14 +817,14 @@ public:
 int RGWGetObj::get_data_cb(bufferlist& bl, off_t bl_ofs, off_t bl_len)
 {
   /* garbage collection related handling */
-  utime_t start_time = ceph_clock_now(s->cct);
+  auto start_time = ceph::real_clock::now();
   if (start_time > gc_invalidate_time) {
     int r = store->defer_gc(s->obj_ctx, oid);
     if (r < 0) {
-      dout(0) << "WARNING: could not defer gc entry for oid" << dendl;
+      ldout(s->cct, 0) << "WARNING: could not defer gc entry for oid" << dendl;
     }
     gc_invalidate_time = start_time;
-    gc_invalidate_time += (s->cct->_conf->rgw_gc_obj_min_wait / 2);
+    gc_invalidate_time += (s->cct->_conf->rgw_gc_obj_min_wait * 1s) / 2;
   }
   return send_response_data(bl, bl_ofs, bl_len);
 }
@@ -833,12 +837,11 @@ void RGWGetObj::pre_exec()
 void RGWGetObj::execute()
 {
   void *handle = NULL;
-  utime_t start_time = s->time;
   bufferlist bl;
-  gc_invalidate_time = ceph_clock_now(s->cct);
-  gc_invalidate_time += (s->cct->_conf->rgw_gc_obj_min_wait / 2);
+  gc_invalidate_time = ceph::real_clock::now();
+  gc_invalidate_time += (s->cct->_conf->rgw_gc_obj_min_wait / 2) * 1s;
 
-  RGWGetObj_CB cb(this);
+  RGWGetObj_CB cb(s->cct, this);
 
   map<string, bufferlist>::iterator attr_iter;
 
@@ -1083,8 +1086,10 @@ void RGWListBucket::execute()
   if (ret < 0)
     return;
 
-  ret = store->list_objects(s->bucket, max, prefix, delimiter, marker, objs, common_prefixes,
-			       !!(s->prot_flags & RGW_REST_SWIFT), no_ns, true, &is_truncated, NULL);
+  ret = store->list_objects(s->bucket, max, prefix, delimiter, marker, objs,
+			    common_prefixes,
+			    !!(s->prot_flags & RGW_REST_SWIFT),
+			    &is_truncated, NULL);
 }
 
 int RGWGetBucketLogging::verify_permission()
@@ -1429,7 +1434,7 @@ int RGWPutObjProcessor_Multipart::do_complete(string& etag, time_t *mtime, time_
     string err;
     int part_num_int = strict_strtol(part_num.c_str(), 10, &err);
     if (!err.empty()) {
-      dout(10) << "bad part number specified: " << part_num << dendl;
+      ldout(s->cct, 10) << "bad part number specified: " << part_num << dendl;
       return -EINVAL;
     }
     char buf[32];
@@ -1441,14 +1446,14 @@ int RGWPutObjProcessor_Multipart::do_complete(string& etag, time_t *mtime, time_
   info.num = atoi(part_num.c_str());
   info.etag = etag;
   info.size = s->obj_size;
-  info.modified = ceph_clock_now(store->ctx());
+  info.modified = ceph::real_clock::now();
   info.manifest = manifest;
   ::encode(info, bl);
 
   string multipart_meta_obj = mp.get_meta();
 
   rgw_obj meta_obj;
-  meta_obj.init_ns(bucket, multipart_meta_obj, mp_ns);
+  meta_obj.init(bucket, multipart_meta_obj);
   meta_obj.set_in_extra_data(true);
 
   r = store->omap_set(meta_obj, p, bl);
@@ -1822,7 +1827,7 @@ void RGWSetTempUrl::execute()
   if (ret < 0)
     return;
 
-  RGWUserAdminOpState user_op;
+  RGWUserAdminOpState user_op(s->cct);
   user_op.set_user_id(s->user.user_id);
   map<int, string>::iterator iter;
   for (iter = temp_url_keys.begin(); iter != temp_url_keys.end(); ++iter) {
@@ -2198,7 +2203,8 @@ void RGWGetCORS::execute()
     return ;
 
   if (!cors_exist) {
-    dout(2) << "No CORS configuration set yet for this bucket" << dendl;
+    ldout(s->cct, 2) << "No CORS configuration set yet for this bucket"
+		     << dendl;
     ret = -ENOENT;
     return;
   }
@@ -2244,7 +2250,8 @@ void RGWDeleteCORS::execute()
   bufferlist bl;
   rgw_obj oid;
   if (!cors_exist) {
-    dout(2) << "No CORS configuration set yet for this bucket" << dendl;
+    ldout(s->cct, 2) << "No CORS configuration set yet for this bucket"
+		     << dendl;
     ret = -ENOENT;
     return;
   }
@@ -2263,7 +2270,7 @@ void RGWDeleteCORS::execute()
   /* only remove meta attrs */
   for (iter = orig_attrs.begin(); iter != orig_attrs.end(); ++iter) {
     const string& name = iter->first;
-    dout(10) << "DeleteCORS : attr: " << name << dendl;
+    ldout(s->cct, 10) << "DeleteCORS : attr: " << name << dendl;
     if (name.compare(0, (sizeof(RGW_ATTR_CORS) - 1), RGW_ATTR_CORS) == 0) {
       rmattrs[name] = iter->second;
     } else if (attrs.find(name) == attrs.end()) {
@@ -2273,18 +2280,20 @@ void RGWDeleteCORS::execute()
   ret = store->set_attrs(s->obj_ctx, oid, attrs, &rmattrs, ptracker);
 }
 
-void RGWOptionsCORS::get_response_params(string& hdrs, string& exp_hdrs, unsigned *max_age) {
-  get_cors_response_headers(rule, req_hdrs, hdrs, exp_hdrs, max_age);
+void RGWOptionsCORS::get_response_params(string& hdrs, string& exp_hdrs,
+					 unsigned *max_age) {
+  get_cors_response_headers(s->cct, rule, req_hdrs, hdrs, exp_hdrs, max_age);
 }
 
 int RGWOptionsCORS::validate_cors_request(RGWCORSConfiguration *cc) {
   rule = cc->host_name_rule(origin);
   if (!rule) {
-    dout(10) << "There is no cors rule present for " << origin << dendl;
+    ldout(s->cct, 10) << "There is no cors rule present for " << origin
+		      << dendl;
     return -ENOENT;
   }
 
-  if (!validate_cors_rule_method(rule, req_meth)) {
+  if (!validate_cors_rule_method(s->cct, rule, req_meth)) {
     return -ENOENT;
   }
   return 0;
@@ -2298,22 +2307,22 @@ void RGWOptionsCORS::execute()
 
   origin = s->info.env->get("HTTP_ORIGIN");
   if (!origin) {
-    dout(0) <<
-    "Preflight request without mandatory Origin header"
-    << dendl;
+    ldout(s->cct, 0) << "Preflight request without mandatory Origin header"
+		     << dendl;
     ret = -EINVAL;
     return;
   }
   req_meth = s->info.env->get("HTTP_ACCESS_CONTROL_REQUEST_METHOD");
   if (!req_meth) {
-    dout(0) <<
-    "Preflight request without mandatory Access-control-request-method header"
-    << dendl;
+    ldout(s->cct, 0)
+      << "Preflight request without mandatory "
+      << "Access-control-request-method header" << dendl;
     ret = -EINVAL;
     return;
   }
   if (!cors_exist) {
-    dout(2) << "No CORS configuration set yet for this bucket" << dendl;
+    ldout(s->cct, 2) << "No CORS configuration set yet for this bucket"
+		     << dendl;
     ret = -ENOENT;
     return;
   }
@@ -2374,10 +2383,12 @@ void RGWInitMultipart::execute()
     RGWMPObj mp(s->object_str, upload_id);
     tmp_obj_name = mp.get_meta();
 
-    oid.init_ns(s->bucket, tmp_obj_name, mp_ns);
+    oid.init(s->bucket, tmp_obj_name);
     // the meta object will be indexed with 0 size, we c
     oid.set_in_extra_data(true);
-    ret = store->put_obj_meta(s->obj_ctx, oid, 0, NULL, attrs, RGW_OBJ_CATEGORY_MULTIMETA, PUT_OBJ_CREATE_EXCL, s->owner.get_id());
+    ret = store->put_obj_meta(s->obj_ctx, oid, 0, NULL, attrs,
+			      RGW_OBJ_CATEGORY_MULTIMETA, PUT_OBJ_CREATE_EXCL,
+			      s->owner.get_id());
   } while (ret == -EEXIST);
 }
 
@@ -2389,7 +2400,7 @@ static int get_multipart_info(RGWRados *store, struct req_state *s, string& meta
   bufferlist header;
 
   rgw_obj oid;
-  oid.init_ns(s->bucket, meta_oid, mp_ns);
+  oid.init(s->bucket, meta_oid);
   oid.set_in_extra_data(true);
 
   int ret = get_obj_attrs(store, s, oid, attrs, NULL, NULL);
@@ -2428,7 +2439,7 @@ static int list_multipart_parts(RGWRados *store, struct req_state *s,
   bufferlist header;
 
   rgw_obj oid;
-  oid.init_ns(s->bucket, meta_oid, mp_ns);
+  oid.init(s->bucket, meta_oid);
   oid.set_in_extra_data(true);
 
   bool sorted_omap = is_v2_upload_id(upload_id) && !assume_unsorted;
@@ -2625,9 +2636,9 @@ void RGWCompleteMultipart::execute()
       RGWUploadPartInfo& obj_part = obj_iter->second;
 
       /* update manifest for part */
-      string oid_t = mp.get_part(obj_iter->second.num);
+      string oid = mp.get_part(obj_iter->second.num);
       rgw_obj src_obj;
-      src_obj.init_ns(s->bucket, oid_t, mp_ns);
+      src_obj.init(s->bucket, oid);
 
       if (obj_part.manifest.empty()) {
 	ldout(s->cct, 0) << "ERROR: empty manifest for object part: oid=" << src_obj << dendl;
@@ -2673,7 +2684,7 @@ void RGWCompleteMultipart::execute()
     return;
 
   // remove the upload obj
-  meta_obj.init_ns(s->bucket, meta_oid, mp_ns);
+  meta_obj.init(s->bucket, meta_oid);
   meta_obj.set_in_extra_data(true);
   store->delete_obj(s->obj_ctx, s->bucket_owner.get_id(), meta_obj);
 }
@@ -2729,7 +2740,7 @@ void RGWAbortMultipart::execute()
       if (obj_part.manifest.empty()) {
 	string oid_t = mp.get_part(obj_iter->second.num);
 	rgw_obj oid;
-	oid.init_ns(s->bucket, oid_t, mp_ns);
+	oid.init(s->bucket, oid_t);
 	ret = store->delete_obj(s->obj_ctx, owner, oid);
 	if (ret < 0 && ret != -ENOENT)
 	  return;
@@ -2747,7 +2758,7 @@ void RGWAbortMultipart::execute()
   } while (truncated);
 
   // and also remove the metadata obj
-  meta_obj.init_ns(s->bucket, meta_oid, mp_ns);
+  meta_obj.init(s->bucket, meta_oid);
   meta_obj.set_in_extra_data(true);
   ret = store->delete_obj(s->obj_ctx, owner, meta_obj);
   if (ret == -ENOENT) {
@@ -2823,8 +2834,10 @@ void RGWListBucketMultiparts::execute()
     }
   }
   marker_meta = marker.get_meta();
-  ret = store->list_objects(s->bucket, max_uploads, prefix, delimiter, marker_meta, objs, common_prefixes,
-			       !!(s->prot_flags & RGW_REST_SWIFT), mp_ns, true, &is_truncated, &mp_filter);
+  ret = store->list_objects(s->bucket, max_uploads, prefix, delimiter,
+			    marker_meta, objs, common_prefixes,
+			    !!(s->prot_flags & RGW_REST_SWIFT),
+			    &is_truncated, &mp_filter);
   if (!objs.empty()) {
     vector<RGWObjEnt>::iterator iter;
     RGWMultipartUploadEntry entry;

@@ -21,8 +21,10 @@ int RGWMongoose::write_data(const char *buf, int len)
   return mg_write(conn, buf, len);
 }
 
-RGWMongoose::RGWMongoose(mg_connection *_conn, int _port) : conn(_conn), port(_port), header_done(false), sent_header(false), has_content_length(false),
-						 explicit_keepalive(false)
+RGWMongoose::RGWMongoose(CephContext* _cct, mg_connection *_conn, int _port)
+  : RGWClientIO(_cct), conn(_conn), port(_port), header_done(false),
+    sent_header(false), has_content_length(false),
+    explicit_keepalive(false)
 {
 }
 
@@ -65,9 +67,9 @@ int RGWMongoose::complete_request()
   return 0;
 }
 
-void RGWMongoose::init_env(CephContext *cct)
+void RGWMongoose::init_env()
 {
-  env.init(cct);
+  env.init();
   struct mg_request_info *info = mg_get_request_info(conn);
   if (!info)
     return;

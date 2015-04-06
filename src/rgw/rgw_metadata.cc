@@ -163,11 +163,12 @@ int RGWMetadataLog::trim(int shard_id, const ceph::real_time& from_time, const c
   return ret;
 }
 
-int RGWMetadataLog::lock_exclusive(int shard_id, ceph::real_time& duration, string& zone_id, string& owner_id) {
-  string oid_t;
-  get_shard_oid(shard_id, oid_t);
+int RGWMetadataLog::lock_exclusive(int shard_id, ceph::timespan duration,
+				   string& zone_id, string& owner_id) {
+  string oid;
+  get_shard_oid(shard_id, oid);
 
-  return store->lock_exclusive(store->zone.log_pool, oid_t, duration, zone_id, owner_id);
+  return store->lock_exclusive(store->zone.log_pool, oid, duration, zone_id, owner_id);
 }
 
 int RGWMetadataLog::unlock(int shard_id, string& zone_id, string& owner_id) {
@@ -393,7 +394,10 @@ int RGWMetadataManager::remove(string& metadata_key)
   return handler->remove(store, entry, objv_tracker);
 }
 
-int RGWMetadataManager::lock_exclusive(string& metadata_key, ceph::real_time duration, string& owner_id) {
+int RGWMetadataManager::lock_exclusive(string& metadata_key,
+				       ceph::timespan duration,
+				       string& owner_id)
+{
   RGWMetadataHandler *handler;
   string entry;
   string zone_id;

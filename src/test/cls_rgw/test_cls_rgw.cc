@@ -21,10 +21,10 @@ string pool_name;
 /* must be the first test! */
 TEST(cls_rgw, init)
 {
-  pool_name = get_temp_pool_name();
+  pool_name = get_temp_volume_name();
   /* create pool */
-  ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
-  ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
+  ASSERT_EQ("", create_one_volume_pp(pool_name, rados));
+  ASSERT_EQ(0, rados.ioctx_create(volume_name.c_str(), ioctx));
 }
 
 
@@ -49,12 +49,6 @@ public:
       ObjectOperation *op = *iter;
       delete op;
     }
-  }
-
-  ObjectReadOperation *read_op() {
-    ObjectReadOperation *op = new ObjectReadOperation;
-    ops.push_back(op);
-    return op;
   }
 
   ObjectWriteOperation *write_op() {

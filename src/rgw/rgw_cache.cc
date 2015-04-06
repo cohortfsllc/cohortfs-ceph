@@ -1,6 +1,10 @@
-#include "rgw_cache.h"
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 
 #include <errno.h>
+#include <common/shunique_lock.h>
+
+#include "rgw_cache.h"
 
 #define dout_subsys ceph_subsys_rgw
 
@@ -8,7 +12,7 @@ using namespace std;
 
 int ObjectCache::get(string& name, ObjectCacheInfo& info, uint32_t mask)
 {
-  RWLock::RLocker l(lock);
+  shunique_lock l(lock, ceph::acquire_shared);
 
   map<string, ObjectCacheEntry>::iterator iter = cache_map.find(name);
   if (iter == cache_map.end()) {
@@ -19,9 +23,10 @@ int ObjectCache::get(string& name, ObjectCacheInfo& info, uint32_t mask)
   ObjectCacheEntry& entry = iter->second;
 
   if (lru_counter - entry.lru_promotion_ts > lru_window) {
-    ldout(cct, 20) << "cache get: touching lru, lru_counter=" << lru_counter << " promotion_ts=" << entry.lru_promotion_ts << dendl;
-    lock.unlock();
-    lock.get_write(); /* promote lock to writer */
+    ldout(cct, 20) << "cache get: touching lru, lru_counter=" << lru_counter
+		   << " promotion_ts=" << entry.lru_promotion_ts << dendl;
+    l.unlock();
+    l.lock(); /* promote lock to writer */
 
     /* check again, we might have lost a race here */
     if (lru_counter - entry.lru_promotion_ts > lru_window) {
@@ -31,7 +36,8 @@ int ObjectCache::get(string& name, ObjectCacheInfo& info, uint32_t mask)
 
   ObjectCacheInfo& src = iter->second.info;
   if ((src.flags & mask) != mask) {
-    ldout(cct, 10) << "cache get: name=" << name << " : type miss (requested=" << mask << ", cached=" << src.flags << ")" << dendl;
+    ldout(cct, 10) << "cache get: name=" << name << " : type miss (requested="
+		   << mask << ", cached=" << src.flags << ")" << dendl;
     return -ENOENT;
   }
   ldout(cct, 10) << "cache get: name=" << name << " : hit" << dendl;
@@ -43,7 +49,7 @@ int ObjectCache::get(string& name, ObjectCacheInfo& info, uint32_t mask)
 
 void ObjectCache::put(string& name, ObjectCacheInfo& info)
 {
-  RWLock::WLocker l(lock);
+  unique_lock l(lock);
 
   ldout(cct, 10) << "cache put: name=" << name << dendl;
   map<string, ObjectCacheEntry>::iterator iter = cache_map.find(name);
@@ -95,13 +101,13 @@ void ObjectCache::put(string& name, ObjectCacheInfo& info)
   if (info.flags & CACHE_FLAG_DATA)
     target.data = info.data;
 
-  if (info.flags & CACHE_FLAG_OBJV)
+ if (info.flags & CACHE_FLAG_OBJV)
     target.version = info.version;
 }
 
 void ObjectCache::remove(string& name)
 {
-  RWLock::WLocker l(lock);
+  unique_lock l(lock);
 
   map<string, ObjectCacheEntry>::iterator iter = cache_map.find(name);
   if (iter == cache_map.end())

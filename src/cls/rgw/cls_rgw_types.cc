@@ -1,4 +1,7 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 
+#include <boost/uuid/uuid_io.hpp>
 #include "cls/rgw/cls_rgw_types.h"
 #include "common/Formatter.h"
 
@@ -53,9 +56,8 @@ void rgw_bucket_dir_entry::generate_test_instances(list<rgw_bucket_dir_entry*>& 
     rgw_bucket_dir_entry_meta *m = *iter;
     rgw_bucket_dir_entry *e = new rgw_bucket_dir_entry;
     e->name = "name";
-    e->ver.pool = 1;
+    e->ver.vol = boost::uuids::nil_uuid();
     e->ver.epoch = 1234;
-    e->locator = "locator";
     e->exists = true;
     e->meta = *m;
     e->tag = "tag";
@@ -69,15 +71,15 @@ void rgw_bucket_dir_entry::generate_test_instances(list<rgw_bucket_dir_entry*>& 
 
 void rgw_bucket_entry_ver::dump(Formatter *f) const
 {
-  f->dump_int("pool", pool);
-  f->dump_unsigned("epoch", epoch);
+    f->dump_stream("vol") << vol;
+    f->dump_unsigned("epoch", epoch);
 }
 
 void rgw_bucket_entry_ver::generate_test_instances(list<rgw_bucket_entry_ver*>& ls)
 {
   ls.push_back(new rgw_bucket_entry_ver);
   ls.push_back(new rgw_bucket_entry_ver);
-  ls.back()->pool = 123;
+  ls.back()->vol = boost::uuids::nil_uuid();
   ls.back()->epoch = 12322;
 }
 
@@ -88,7 +90,6 @@ void rgw_bucket_dir_entry::dump(Formatter *f) const
   f->open_object_section("ver");
   ver.dump(f);
   f->close_section();
-  f->dump_string("locator", locator);
   f->dump_int("exists", (int)exists);
   f->open_object_section("meta");
   meta.dump(f);

@@ -327,13 +327,6 @@ void check_bad_user_bucket_mapping(RGWRados *store, const string& user_id, bool 
   } while (!done);
 }
 
-static bool bucket_object_check_filter(const string& name)
-{
-  string ns;
-  string oid = name;
-  return rgw_obj::translate_raw_obj_to_obj_in_ns(oid, ns);
-}
-
 int rgw_remove_object(RGWRados *store, const string& bucket_owner, rgw_bucket& bucket, std::string& object)
 {
   RGWRadosCtx rctx(store);
@@ -372,7 +365,7 @@ int rgw_remove_bucket(RGWRados *store, const string& bucket_owner, rgw_bucket& b
     int max = 1000;
     ret = store->list_objects(bucket, max, prefix, delim, marker,
 	    objs, common_prefixes,
-	    false, ns, true, NULL, NULL);
+	    false, NULL, NULL);
 
     if (ret < 0)
       return ret;
@@ -387,7 +380,7 @@ int rgw_remove_bucket(RGWRados *store, const string& bucket_owner, rgw_bucket& b
       objs.clear();
 
       ret = store->list_objects(bucket, max, prefix, delim, marker, objs, common_prefixes,
-				false, ns, true, NULL, NULL);
+				false, NULL, NULL);
       if (ret < 0)
 	return ret;
     }
@@ -634,7 +627,6 @@ int RGWBucket::check_bad_index_multipart(RGWBucketAdminOpState& op_state,
     vector<RGWObjEnt> result;
     int r = store->list_objects(bucket, max, prefix, delim, marker,
 				result, common_prefixes, false,
-				ns, true,
 				&is_truncated, NULL);
 
     if (r < 0) {
@@ -648,23 +640,22 @@ int RGWBucket::check_bad_index_multipart(RGWBucketAdminOpState& op_state,
     for (iter = result.begin(); iter != result.end(); ++iter) {
       RGWObjEnt& ent = *iter;
 
-      rgw_obj oid(bucket, ent.name);
-      oid.set_ns(ns);
+      rgw_obj obj(bucket, ent.name);
 
-      string& oid_t = oid.object;
-      marker = oid_t;
+      string& oid = obj.object;
+      marker = oid;
 
-      int pos = oid_t.find_last_of('.');
+      int pos = oid.find_last_of('.');
       if (pos < 0)
 	continue;
 
-      string name = oid_t.substr(0, pos);
-      string suffix = oid_t.substr(pos + 1);
+      string name = oid.substr(0, pos);
+      string suffix = oid.substr(pos + 1);
 
       if (suffix.compare("meta") == 0) {
 	meta_objs[name] = true;
       } else {
-	all_objs[oid_t] = name;
+	all_objs[oid] = name;
       }
     }
 
@@ -721,8 +712,7 @@ int RGWBucket::check_object_index(RGWBucketAdminOpState& op_state,
     map<string, RGWObjEnt> result;
 
     int r = store->cls_bucket_list(bucket, marker, prefix, 1000, result,
-	     &is_truncated, &marker,
-	     bucket_object_check_filter);
+	     &is_truncated, &marker, nullptr);
 
     if (r == -ENOENT) {
       break;
@@ -765,12 +755,13 @@ int RGWBucket::check_index(RGWBucketAdminOpState& op_state,
 
 int RGWBucket::policy_bl_to_stream(bufferlist& bl, ostream& o)
 {
-  RGWAccessControlPolicy_S3 policy(g_ceph_context);
+  RGWAccessControlPolicy_S3 policy(store->cct);
   bufferlist::iterator iter = bl.begin();
   try {
     policy.decode(iter);
   } catch (buffer::error& err) {
-    dout(0) << "ERROR: caught buffer::error, could not decode policy" << dendl;
+    ldout(store->cct, 0)
+      << "ERROR: caught buffer::error, could not decode policy" << dendl;
     return -EIO;
   }
   policy.to_xml(o);
@@ -1083,14 +1074,14 @@ int RGWDataChangesLog::renew_entries()
    * it later, so we keep two lists under the map */
   map<int, pair<list<string>, list<cls_log_entry> > > m;
 
-  lock.Lock();
+  unique_lock l(lock);
   map<string, rgw_bucket> entries;
   entries.swap(cur_cycle);
-  lock.Unlock();
+  l.unlock();
 
   map<string, rgw_bucket>::iterator iter;
   string section;
-  utime_t ut = ceph_clock_now(cct);
+  auto ut = ceph::real_clock::now();
   for (iter = entries.begin(); iter != entries.end(); ++iter) {
     rgw_bucket& bucket = iter->second;
     int index = choose_oid(bucket);
@@ -1114,7 +1105,7 @@ int RGWDataChangesLog::renew_entries()
   for (miter = m.begin(); miter != m.end(); ++miter) {
     list<cls_log_entry>& entries = miter->second.second;
 
-    utime_t now = ceph_clock_now(cct);
+    auto now = ceph::real_clock::now();
 
     int ret = store->time_log_add(oids[miter->first], entries);
     if (ret < 0) {
@@ -1124,8 +1115,7 @@ int RGWDataChangesLog::renew_entries()
       return ret;
     }
 
-    utime_t expiration = now;
-    expiration += utime_t(cct->_conf->rgw_data_log_window, 0);
+    ceph::real_time expiration = now + cct->_conf->rgw_data_log_window * 1s;
 
     list<string>& buckets = miter->second.first;
     list<string>::iterator liter;
@@ -1139,7 +1129,6 @@ int RGWDataChangesLog::renew_entries()
 
 void RGWDataChangesLog::_get_change(string& bucket_name, ChangeStatusPtr& status)
 {
-  assert(lock.is_locked());
   if (!changes.find(bucket_name, status)) {
     status = ChangeStatusPtr(new ChangeStatus);
     changes.add(bucket_name, status);
@@ -1148,17 +1137,19 @@ void RGWDataChangesLog::_get_change(string& bucket_name, ChangeStatusPtr& status
 
 void RGWDataChangesLog::register_renew(rgw_bucket& bucket)
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   cur_cycle[bucket.name] = bucket;
 }
 
-void RGWDataChangesLog::update_renewed(string& bucket_name, utime_t& expiration)
+void RGWDataChangesLog::update_renewed(string& bucket_name,
+				       const ceph::real_time& expiration)
 {
-  Mutex::Locker l(lock);
+  lock_guard l(lock);
   ChangeStatusPtr status;
   _get_change(bucket_name, status);
 
-  ldout(cct, 20) << "RGWDataChangesLog::update_renewd() bucket_name=" << bucket_name << " expiration=" << expiration << dendl;
+  ldout(cct, 20) << "RGWDataChangesLog::update_renewd() bucket_name="
+		 << bucket_name << " expiration=" << expiration << dendl;
   status->cur_expiration = expiration;
 }
 
@@ -1166,22 +1157,24 @@ int RGWDataChangesLog::add_entry(rgw_bucket& bucket) {
   if (!store->need_to_log_data())
     return 0;
 
-  lock.Lock();
+  unique_lock l(lock);
 
   ChangeStatusPtr status;
   _get_change(bucket.name, status);
 
-  lock.Unlock();
+  l.unlock();
 
-  utime_t now = ceph_clock_now(cct);
+  auto now = ceph::real_clock::now();
 
-  status->lock->Lock();
+  unique_lock sl(*status->lock);
 
-  ldout(cct, 20) << "RGWDataChangesLog::add_entry() bucket.name=" << bucket.name << " now=" << now << " cur_expiration=" << status->cur_expiration << dendl;
+  ldout(cct, 20) << "RGWDataChangesLog::add_entry() bucket.name="
+		 << bucket.name << " now=" << now << " cur_expiration="
+		 << status->cur_expiration << dendl;
 
   if (now < status->cur_expiration) {
     /* no need to send, recently completed */
-    status->lock->Unlock();
+    sl.unlock();
 
     register_renew(bucket);
     return 0;
@@ -1195,7 +1188,7 @@ int RGWDataChangesLog::add_entry(rgw_bucket& bucket) {
     assert(cond);
 
     status->cond->get();
-    status->lock->Unlock();
+    status->lock->unlock();
 
     int ret = cond->wait();
     cond->put();
@@ -1209,17 +1202,16 @@ int RGWDataChangesLog::add_entry(rgw_bucket& bucket) {
   status->pending = true;
 
   string& oid_t = oids[choose_oid(bucket)];
-  utime_t expiration;
+  ceph::real_time expiration;
 
   int ret;
 
   do {
     status->cur_sent = now;
 
-    expiration = now;
-    expiration += utime_t(cct->_conf->rgw_data_log_window, 0);
+    expiration = now + cct->_conf->rgw_data_log_window * 1s;
 
-    status->lock->Unlock();
+    sl.unlock();
 
     bufferlist bl;
     rgw_data_change change;
@@ -1229,23 +1221,24 @@ int RGWDataChangesLog::add_entry(rgw_bucket& bucket) {
     ::encode(change, bl);
     string section;
 
-    ldout(cct, 20) << "RGWDataChangesLog::add_entry() sending update with now=" << now << " cur_expiration=" << expiration << dendl;
+    ldout(cct, 20) << "RGWDataChangesLog::add_entry() sending update with now="
+		   << now << " cur_expiration=" << expiration << dendl;
 
     ret = store->time_log_add(oid_t, now, section, change.key, bl);
 
-    now = ceph_clock_now(cct);
+    now = ceph::real_clock::now();
 
-    status->lock->Lock();
+    sl.lock();
 
-  } while (!ret && ceph_clock_now(cct) > expiration);
+  } while (!ret && ceph::real_clock::now() > expiration);
 
   cond = status->cond;
 
   status->pending = false;
   status->cur_expiration = status->cur_sent; /* time of when operation started, not completed */
-  status->cur_expiration += utime_t(cct->_conf->rgw_data_log_window, 0);
+  status->cur_expiration += cct->_conf->rgw_data_log_window * 1s;
   status->cond = NULL;
-  status->lock->Unlock();
+  sl.unlock();
 
   cond->done(ret);
   cond->put();
@@ -1253,7 +1246,8 @@ int RGWDataChangesLog::add_entry(rgw_bucket& bucket) {
   return ret;
 }
 
-int RGWDataChangesLog::list_entries(int shard, utime_t& start_time, utime_t& end_time, int max_entries,
+int RGWDataChangesLog::list_entries(int shard, ceph::real_time& start_time,
+				    ceph::real_time& end_time, int max_entries,
 				    list<rgw_data_change>& entries,
 				    const string& marker,
 				    string *out_marker,
@@ -1283,8 +1277,10 @@ int RGWDataChangesLog::list_entries(int shard, utime_t& start_time, utime_t& end
   return 0;
 }
 
-int RGWDataChangesLog::list_entries(utime_t& start_time, utime_t& end_time, int max_entries,
-	     list<rgw_data_change>& entries, LogMarker& marker, bool *ptruncated) {
+int RGWDataChangesLog::list_entries(ceph::real_time& start_time,
+				    ceph::real_time& end_time, int max_entries,
+				    list<rgw_data_change>& entries,
+				    LogMarker& marker, bool *ptruncated) {
   bool truncated;
   entries.clear();
 
@@ -1328,8 +1324,11 @@ int RGWDataChangesLog::get_info(int shard_id, RGWDataChangesLogInfo *info)
   return 0;
 }
 
-int RGWDataChangesLog::trim_entries(int shard_id, const utime_t& start_time, const utime_t& end_time,
-				    const string& start_marker, const string& end_marker)
+int RGWDataChangesLog::trim_entries(int shard_id,
+				    const ceph::real_time& start_time,
+				    const ceph::real_time& end_time,
+				    const string& start_marker,
+				    const string& end_marker)
 {
   int ret;
 
@@ -1344,11 +1343,14 @@ int RGWDataChangesLog::trim_entries(int shard_id, const utime_t& start_time, con
   return ret;
 }
 
-int RGWDataChangesLog::trim_entries(const utime_t& start_time, const utime_t& end_time,
-				    const string& start_marker, const string& end_marker)
+int RGWDataChangesLog::trim_entries(const ceph::real_time& start_time,
+				    const ceph::real_time& end_time,
+				    const string& start_marker,
+				    const string& end_marker)
 {
   for (int shard = 0; shard < num_shards; shard++) {
-    int ret = store->time_log_trim(oids[shard], start_time, end_time, start_marker, end_marker);
+    int ret = store->time_log_trim(oids[shard], start_time, end_time,
+				   start_marker, end_marker);
     if (ret == -ENOENT) {
       continue;
     }
@@ -1383,10 +1385,10 @@ void *RGWDataChangesLog::ChangesRenewThread::entry() {
     if (log->going_down())
       break;
 
-    int interval = cct->_conf->rgw_data_log_window * 3 / 4;
-    lock.Lock();
-    cond.WaitInterval(cct, lock, utime_t(interval, 0));
-    lock.Unlock();
+    ceph::timespan interval = cct->_conf->rgw_data_log_window * 3s / 4;
+    unique_lock l(lock);
+    cond.wait_for(l, interval);
+    l.unlock();
   } while (!log->going_down());
 
   return NULL;
@@ -1394,8 +1396,8 @@ void *RGWDataChangesLog::ChangesRenewThread::entry() {
 
 void RGWDataChangesLog::ChangesRenewThread::stop()
 {
-  Mutex::Locker l(lock);
-  cond.Signal();
+  lock_guard l(lock);
+  cond.notify_all();
 }
 
 struct RGWBucketCompleteInfo {

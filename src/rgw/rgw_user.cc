@@ -817,7 +817,7 @@ int RGWAccessKeyPool::generate_key(RGWUserAdminOpState& op_state, std::string *e
   } else if (gen_secret) {
     char secret_key_buf[SECRET_KEY_LEN + 1];
 
-    ret = gen_rand_base64(g_ceph_context, secret_key_buf, sizeof(secret_key_buf));
+    ret = gen_rand_base64(store->cct, secret_key_buf, sizeof(secret_key_buf));
     if (ret < 0) {
       set_err_msg(err_msg, "unable to generate secret key");
       return ret;
@@ -832,8 +832,8 @@ int RGWAccessKeyPool::generate_key(RGWUserAdminOpState& op_state, std::string *e
 
     do {
       int id_buf_size = sizeof(public_id_buf);
-      ret = gen_rand_alphanumeric_upper(g_ceph_context,
-	       public_id_buf, id_buf_size);
+      ret = gen_rand_alphanumeric_upper(store->cct,
+					public_id_buf, id_buf_size);
 
       if (ret < 0) {
 	set_err_msg(err_msg, "unable to generate access key");
@@ -931,7 +931,7 @@ int RGWAccessKeyPool::modify_key(RGWUserAdminOpState& op_state, std::string *err
 
     int ret;
     int key_buf_size = sizeof(secret_key_buf);
-    ret	 = gen_rand_base64(g_ceph_context, secret_key_buf, key_buf_size);
+    ret	 = gen_rand_base64(store->cct, secret_key_buf, key_buf_size);
     if (ret < 0) {
       set_err_msg(err_msg, "unable to generate secret key");
       return ret;

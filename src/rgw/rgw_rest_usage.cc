@@ -45,7 +45,8 @@ void RGWOp_Usage_Get::execute() {
     }
   }
 
-  http_ret = RGWUsage::show(store, uid, start, end, show_entries, show_summary, &categories, flusher);
+  http_ret = RGWUsage::show(store, uid, start, end, show_entries, show_summary,
+			    &categories, flusher);
 }
 
 class RGWOp_Usage_Delete : public RGWRESTOp {

@@ -98,15 +98,61 @@ set(dencoder_srcs
   ${CMAKE_SOURCE_DIR}/src/common/TextTable.cc
   $<TARGET_OBJECTS:heap_profiler_objs>
   )
-if(${WITH_RADOSGW})
+if(0)
   list(APPEND dencoder_srcs
-    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_dencoder.cc
-    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_acl.cc
-    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_common.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_tools.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_gc.cc
     ${CMAKE_SOURCE_DIR}/src/rgw/rgw_env.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_dencoder.cc
     ${CMAKE_SOURCE_DIR}/src/rgw/rgw_json_enc.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_multi.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_rados.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_bucket.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_acl.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_xml.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_acl_s3.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_quota.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_cors.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_cache.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_cors_s3.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_client_io.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_op.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_user.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_resolve.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_rest.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_rest_swift.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_rest_s3.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_rest_usage.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_rest_user.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_rest_bucket.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_http_client.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_swift.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_swift_auth.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_keystone.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_rest_client.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_metadata.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_rest_config.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_rest_conn.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_rest_log.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_rest_metadata.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_rest_opstate.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_rest_replica_log.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_common.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_multi_del.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_formats.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_acl_swift.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_policy_s3.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_auth_s3.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_usage.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_log.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_loadgen.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_civetweb.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_fcgi.cc
+    ${CMAKE_SOURCE_DIR}/src/rgw/rgw_replica_log.cc
+    ${CMAKE_SOURCE_DIR}/src/civetweb/src/civetweb.c
+    ${CMAKE_SOURCE_DIR}/src/civetweb/src/CivetServer.cpp
   )
-endif(${WITH_RADOSGW})
+endif(0)
 set(dencoder_dependencies
   cls_lock_client
   cls_refcount_client
@@ -126,9 +172,8 @@ list(APPEND dencoder_dependencies
   ${EXTRALIBS}
   ${ALLOC_LIBS}
   ${CMAKE_DL_LIBS})
-if(WITH_RADOSGW)
+if(0)
   list(APPEND dencoder_dependencies
-    cls_rgw_client
     cls_log_client
     cls_statelog_client
     cls_version_client
@@ -138,7 +183,7 @@ if(WITH_RADOSGW)
     expat
     fcgi
     resolv)
-endif(WITH_RADOSGW)
+endif(0)
 
 add_executable(ceph-dencoder ${dencoder_srcs}
 )
@@ -192,7 +237,7 @@ if(${WITH_RADOSGW})
   add_executable(test_build_librgw
   ${build_librgw_srcs}
     )
-target_link_libraries(test_build_librgw rgw_a librados
+target_link_libraries(test_build_librgw librados
     cls_rgw_client cls_lock_client cls_refcount_client
     cls_log_client cls_statelog_client cls_version_client
     cls_replica_log_client cls_user_client
@@ -1015,7 +1060,7 @@ set_target_properties(unittest_on_exit PROPERTIES COMPILE_FLAGS
 
 # make check ends
 
-if(${WITH_RADOSGW})
+if(0)
   # test_cors
   set(test_cors_srcs test_cors.cc)
   add_executable(test_cors
@@ -1138,7 +1183,7 @@ if(${WITH_RADOSGW})
     )
   set_target_properties(test_cls_rgw_opstate PROPERTIES COMPILE_FLAGS
     ${UNITTEST_CXX_FLAGS})
-endif(${WITH_RADOSGW})
+endif(0)
 
 # radostest
 set(libradostest_srcs librados/test.cc librados/TestCase.cc)
@@ -1300,7 +1345,7 @@ target_link_libraries(test_cls_hello
   ${UNITTEST_LIBS}
   )
 
-if(${WITH_RADOSGW})
+if(0)
   add_executable(test_cls_rgw
     cls_rgw/test_cls_rgw.cc
     )
@@ -1315,7 +1360,7 @@ if(${WITH_RADOSGW})
     ${ALLOC_LIBS}
     ${CMAKE_DL_LIBS}
     radostest)
-endif(${WITH_RADOSGW})
+endif(0)
 
 add_executable(test_mon_workloadgen
   mon/test_mon_workloadgen.cc

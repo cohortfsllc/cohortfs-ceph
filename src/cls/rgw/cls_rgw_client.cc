@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #include <errno.h>
 
 #include "include/types.h"
@@ -24,14 +26,14 @@ void cls_rgw_bucket_set_tag_timeout(ObjectWriteOperation& o, uint64_t tag_timeou
   o.exec("rgw", "bucket_set_tag_timeout", in);
 }
 
-void cls_rgw_bucket_prepare_op(ObjectWriteOperation& o, RGWModifyOp op, string& tag,
-			       string& name, string& locator, bool log_op)
+void cls_rgw_bucket_prepare_op(ObjectWriteOperation& o,
+			       RGWModifyOp op, string& tag,
+			       string& name, bool log_op)
 {
   struct rgw_cls_obj_prepare_op call;
   call.op = op;
   call.tag = tag;
   call.name = name;
-  call.locator = locator;
   call.log_op = log_op;
   bufferlist in;
   ::encode(call, in);

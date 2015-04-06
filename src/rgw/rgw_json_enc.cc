@@ -79,7 +79,7 @@ void rgw_log_entry::dump(Formatter *f) const
   f->dump_stream("time") << time;
   f->dump_string("remote_addr", remote_addr);
   f->dump_string("user", user);
-  f->dump_string("oid", obj);
+  f->dump_string("oid", oid);
   f->dump_string("op", op);
   f->dump_string("uri", uri);
   f->dump_string("http_status", http_status);
@@ -197,7 +197,7 @@ void ObjectCacheInfo::dump(Formatter *f) const
 void RGWCacheNotifyInfo::dump(Formatter *f) const
 {
   encode_json("op", op, f);
-  encode_json("oid", obj, f);
+  encode_json("oid", oid, f);
   encode_json("obj_info", obj_info, f);
   encode_json("ofs", ofs, f);
   encode_json("ns", ns, f);
@@ -583,8 +583,6 @@ void RGWUploadPartInfo::dump(Formatter *f) const
 void rgw_obj::dump(Formatter *f) const
 {
   encode_json("bucket", bucket, f);
-  encode_json("key", key, f);
-  encode_json("ns", ns, f);
   encode_json("object", object, f);
 }
 
@@ -790,9 +788,9 @@ void KeystoneToken::Token::decode_json(JSONObj *oid)
   JSONDecoder::decode_json("expires", expires_iso8601, oid, true);
 
   if (parse_iso8601(expires_iso8601.c_str(), &t)) {
-    expires = timegm(&t);
+    expires = ceph::real_clock::from_time_t(timegm(&t));
   } else {
-    expires = 0;
+    expires = ceph::real_time::min();
     throw JSONDecoder::err("Failed to parse ISO8601 expiration date from Keystone response.");
   }
 }

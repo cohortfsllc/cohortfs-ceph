@@ -14,14 +14,13 @@ class CephContext;
 
 class Throttle {
   CephContext *cct;
-  std::string name;
   std::atomic<int64_t> count;
   std::atomic<int64_t> max;
   std::mutex lock;
   std::list<std::condition_variable*> cond;
 
 public:
-  Throttle(CephContext *cct, std::string n, int64_t m = 0);
+  Throttle(CephContext *cct, int64_t m = 0);
   ~Throttle();
 
 private:

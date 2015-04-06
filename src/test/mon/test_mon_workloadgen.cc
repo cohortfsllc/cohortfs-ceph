@@ -327,7 +327,7 @@ class OSDStub : public TestStub
     messenger.reset(Messenger::create(cct, entity_name_t::OSD(whoami),
 				      ss.str().c_str(), getpid(), &factory));
 
-    Throttle throttler(cct, "osd_client_bytes",
+    Throttle throttler(cct,
 	cct->_conf->osd_client_message_size_cap);
     uint64_t supported =
       CEPH_FEATURE_UID |

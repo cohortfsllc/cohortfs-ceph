@@ -483,9 +483,8 @@ namespace OSDC {
       homeless_session(new OSDSession(cct, -1)),
       mon_timeout(mon_timeout),
       osd_timeout(osd_timeout),
-      op_throttle_bytes(cct, "objecter_bytes",
-			cct->_conf->objecter_inflight_op_bytes),
-      op_throttle_ops(cct, "objecter_ops", cct->_conf->objecter_inflight_ops)
+      op_throttle_bytes(cct, cct->_conf->objecter_inflight_op_bytes),
+      op_throttle_ops(cct, cct->_conf->objecter_inflight_ops)
       { }
     ~Objecter();
 

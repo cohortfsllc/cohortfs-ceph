@@ -1,4 +1,4 @@
-// -*- modef:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 #ifndef CEPH_RGW_LOG_H
 #define CEPH_RGW_LOG_H
@@ -25,7 +25,7 @@ struct rgw_log_entry {
   uint64_t bytes_sent;
   uint64_t bytes_received;
   uint64_t obj_size;
-  ceph::real_time total_time;
+  ceph::timespan total_time;
   string user_agent;
   string referrer;
   string bucket_id;
@@ -122,6 +122,8 @@ WRITE_CLASS_ENCODER(rgw_intent_log_entry)
 class OpsLogSocket : public OutputDataSocket {
   Formatter *formatter;
   std::mutex lock;
+  typedef std::unique_lock<std::mutex> unique_lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
 
   void formatter_to_bl(bufferlist& bl);
 

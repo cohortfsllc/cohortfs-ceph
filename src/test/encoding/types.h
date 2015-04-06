@@ -147,6 +147,8 @@ TYPE(ETableServer)
 TYPE(EUpdate)
 #endif /* NO_CLIENT */
 
+#if 0
+
 #ifdef WITH_RADOSGW
 
 #include "rgw/rgw_rados.h"
@@ -225,6 +227,7 @@ TYPE(rgw_obj)
 TYPE(rgw_log_entry)
 TYPE(rgw_intent_log_entry)
 #endif
+#endif // 0
 
 #include "cls/lock/cls_lock_types.h"
 TYPE(rados::cls::lock::locker_id_t)

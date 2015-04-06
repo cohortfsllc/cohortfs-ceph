@@ -10,9 +10,9 @@
 #include "rgw_string.h"
 
 #include "common/ceph_crypto.h"
+#include "include/ceph_time.h"
 #include "common/armor.h"
 #include "common/errno.h"
-#include "common/Clock.h"
 #include "common/Formatter.h"
 #include "common/strtol.h"
 #include "include/str_list.h"
@@ -57,7 +57,7 @@ is_err() const
 }
 
 
-req_info::req_info(CephContext *cct, class RGWEnv *e) : env(e) {
+req_info::req_info(CephContext *_cct, class RGWEnv *e) : cct(_cct), env(e) {
   method = env->get("REQUEST_METHOD");
   script_uri = env->get("SCRIPT_URI", cct->_conf->rgw_script_uri.c_str());
   request_uri = env->get("REQUEST_URI", cct->_conf->rgw_request_uri.c_str());
@@ -111,7 +111,7 @@ req_state::req_state(CephContext *_cct, class RGWEnv *e) : cct(_cct), cio(NULL),
   system_request = false;
 
   os_auth_token = NULL;
-  time = ceph_clock_now(cct);
+  time = ceph::real_clock::now();
   perm_mask = 0;
   content_length = 0;
   object = NULL;
@@ -162,7 +162,7 @@ void req_info::init_meta_info(bool *found_bad_meta)
       int len = meta_prefixes[prefix_num].len;
       const char *p = header_name.c_str();
       if (strncmp(p, prefix, len) == 0) {
-	dout(10) << "meta>> " << p << dendl;
+	ldout(cct, 10) << "meta>> " << p << dendl;
 	const char *name = p+len; /* skip the prefix */
 	int name_len = header_name.size() - len;
 
@@ -299,7 +299,6 @@ bool parse_iso8601(const char *s, struct tm *t)
   memset(t, 0, sizeof(*t));
   const char *p = strptime(s, "%Y-%m-%dT%T", t);
   if (!p) {
-    dout(0) << "parse_iso8601 failed" << dendl;
     return false;
   }
   string str;

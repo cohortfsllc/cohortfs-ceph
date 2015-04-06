@@ -25,9 +25,9 @@ void RGWFCGX::flush()
   FCGX_FFlush(fcgx->out);
 }
 
-void RGWFCGX::init_env(CephContext *cct)
+void RGWFCGX::init_env()
 {
-  env.init(cct, (char **)fcgx->envp);
+  env.init((char **)fcgx->envp);
 }
 
 int RGWFCGX::send_status(const char *status, const char *status_name)

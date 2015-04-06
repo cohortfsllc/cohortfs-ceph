@@ -9,10 +9,10 @@
 
 #define dout_subsys ceph_subsys_rgw
 
-void RGWLoadGenRequestEnv::set_date(utime_t& tm)
+void RGWLoadGenRequestEnv::set_date(const ceph::real_time& tm)
 {
   stringstream s;
-  tm.asctime(s);
+  s << tm;
   date_str = s.str();
 }
 
@@ -65,9 +65,9 @@ int RGWLoadGenIO::complete_request()
   return 0;
 }
 
-void RGWLoadGenIO::init_env(CephContext *cct)
+void RGWLoadGenIO::init_env()
 {
-  env.init(cct);
+  env.init();
 
   left_to_read = req->content_length;
 

@@ -286,6 +286,8 @@ class RGWDataChangesLog {
   string *oids;
 
   std::mutex lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
 
   std::atomic<bool> down_flag;
 
@@ -313,7 +315,8 @@ class RGWDataChangesLog {
 
   void _get_change(string& bucket_name, ChangeStatusPtr& status);
   void register_renew(rgw_bucket& bucket);
-  void update_renewed(string& bucket_name, ceph::real_time& expiration);
+  void update_renewed(string& bucket_name,
+		      const ceph::real_time& expiration);
 
   class ChangesRenewThread : public Thread {
     CephContext *cct;
@@ -369,7 +372,7 @@ public:
   int trim_entries(const ceph::real_time& start_time, const ceph::real_time& end_time,
 		   const string& start_marker, const string& end_marker);
   int get_info(int shard_id, RGWDataChangesLogInfo *info);
-  int lock_exclusive(int shard_id, ceph::real_time& duration, string& zone_id, string& owner_id) {
+  int lock_exclusive(int shard_id, ceph::timespan& duration, string& zone_id, string& owner_id) {
     return store->lock_exclusive(store->zone.log_pool, oids[shard_id], duration, zone_id, owner_id);
   }
   int unlock(int shard_id, string& zone_id, string& owner_id) {

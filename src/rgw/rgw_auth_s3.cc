@@ -3,8 +3,6 @@
 #include "common/armor.h"
 #include "rgw_common.h"
 
-#define dout_subsys ceph_subsys_rgw
-
 static const char *signed_subresources[] = {
   "acl",
   "cors",
@@ -81,8 +79,6 @@ static void get_canon_resource(const char *request_uri, map<string, string>& sub
     s.append(append_str);
   }
   dest = s;
-
-  dout(10) << "get_canon_resource(): dest=" << dest << dendl;
 }
 
 /*
@@ -133,7 +129,6 @@ int rgw_get_s3_header_digest(const string& auth_hdr, const string& key, string& 
   int ret = ceph_armor(b64, b64 + 64, hmac_sha1,
 		       hmac_sha1 + CEPH_CRYPTO_HMACSHA1_DIGESTSIZE);
   if (ret < 0) {
-    dout(10) << "ceph_armor failed" << dendl;
     return ret;
   }
   b64[ret] = '\0';
@@ -151,13 +146,14 @@ static inline bool is_base64_for_content_md5(unsigned char c) {
  * get the header authentication  information required to
  * compute a request's signature
  */
-bool rgw_create_s3_canonical_header(req_info& info, utime_t *header_time, string& dest, bool qsr)
+bool rgw_create_s3_canonical_header(req_info& info,
+				    ceph::real_time *header_time,
+				    string& dest, bool qsr)
 {
   const char *content_md5 = info.env->get("HTTP_CONTENT_MD5");
   if (content_md5) {
     for (const char *p = content_md5; *p; p++) {
       if (!is_base64_for_content_md5(*p)) {
-	dout(0) << "NOTICE: bad content-md5 provided (not base64), aborting request p=" << *p << " " << (int)*p << dendl;
 	return false;
       }
     }
@@ -176,7 +172,6 @@ bool rgw_create_s3_canonical_header(req_info& info, utime_t *header_time, string
     } else {
       req_date = info.env->get("HTTP_X_AMZ_DATE");
       if (!req_date) {
-	dout(0) << "NOTICE: missing date for auth header" << dendl;
 	return false;
       }
     }
@@ -184,14 +179,12 @@ bool rgw_create_s3_canonical_header(req_info& info, utime_t *header_time, string
     if (header_time) {
       struct tm t;
       if (!parse_rfc2616(req_date, &t)) {
-	dout(0) << "NOTICE: failed to parse date for auth header" << dendl;
 	return false;
       }
       if (t.tm_year < 70) {
-	dout(0) << "NOTICE: bad date (predates epoch): " << req_date << dendl;
 	return false;
       }
-      *header_time = utime_t(timegm(&t), 0);
+      *header_time = ceph::real_clock::from_time_t(timegm(&t));
     }
   }
 

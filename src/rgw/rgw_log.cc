@@ -1,6 +1,6 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
-#include "common/Clock.h"
+#include "include/ceph_time.h"
 #include "common/Timer.h"
 #include "common/utf8.h"
 #include "common/OutputDataSocket.h"
@@ -84,71 +84,69 @@ class UsageLogger {
   CephContext *cct;
   RGWRados *store;
   map<rgw_user_bucket, RGWUsageBatch> usage_map;
-  Mutex lock;
+  std::mutex lock;
+  typedef std::lock_guard<std::mutex> lock_guard;
+  typedef std::unique_lock<std::mutex> unique_lock;
   int32_t num_entries;
-  Mutex timer_lock;
-  SafeTimer timer;
-  utime_t round_timestamp;
+  cohort::Timer<ceph::mono_clock> timer;
+  ceph::real_time round_timestamp;
 
-  class C_UsageLogTimeout : public Context {
-    UsageLogger *logger;
+  class UsageLogTimeout {
+    UsageLogger& logger;
   public:
-    C_UsageLogTimeout(UsageLogger *_l) : logger(_l) {}
-    void finish(int r) {
-      logger->flush();
-      logger->set_timer();
+    UsageLogTimeout(UsageLogger& _l) : logger(_l) {}
+    void operator()() {
+      logger.flush();
+      logger.timer.reschedule_me(
+	logger.cct->_conf->rgw_usage_log_tick_interval * 1s);
     }
   };
 
   void set_timer() {
-    timer.add_event_after(cct->_conf->rgw_usage_log_tick_interval, new C_UsageLogTimeout(this));
+    timer.add_event(cct->_conf->rgw_usage_log_tick_interval * 1s,
+		    UsageLogTimeout(*this));
   }
 public:
 
   UsageLogger(CephContext *_cct, RGWRados *_store)
-      : cct(_cct), store(_store), num_entries(0), timer(cct, timer_lock) {
-    timer.init();
-    Mutex::Locker l(timer_lock);
+      : cct(_cct), store(_store), num_entries(0) {
     set_timer();
-    utime_t ts = ceph_clock_now(cct);
+    ceph::real_time ts = ceph::real_clock::now();
     recalc_round_timestamp(ts);
   }
 
   ~UsageLogger() {
-    Mutex::Locker l(timer_lock);
     flush();
     timer.cancel_all_events();
-    timer.shutdown();
   }
 
-  void recalc_round_timestamp(utime_t& ts) {
-    round_timestamp = ts.round_to_hour();
+  void recalc_round_timestamp(ceph::real_time ts) {
+    round_timestamp = std::chrono::time_point_cast<std::chrono::hours>(ts);
   }
 
-  void insert(utime_t& timestamp, rgw_usage_log_entry& entry) {
-    lock.Lock();
-    if (timestamp.sec() > round_timestamp + 3600)
+  void insert(const ceph::real_time& timestamp, rgw_usage_log_entry& entry) {
+    unique_lock l(lock);
+    if (timestamp > (round_timestamp + 1h))
       recalc_round_timestamp(timestamp);
-    entry.epoch = round_timestamp.sec();
+    entry.epoch = ceph::real_clock::to_time_t(round_timestamp);
     bool account;
     rgw_user_bucket ub(entry.owner, entry.bucket);
     usage_map[ub].insert(round_timestamp, entry, &account);
     if (account)
       num_entries++;
     bool need_flush = (num_entries > cct->_conf->rgw_usage_log_flush_threshold);
-    lock.Unlock();
+    l.unlock();
     if (need_flush) {
-      Mutex::Locker l(timer_lock);
       flush();
     }
   }
 
   void flush() {
     map<rgw_user_bucket, RGWUsageBatch> old_map;
-    lock.Lock();
+    unique_lock l(lock);
     old_map.swap(usage_map);
     num_entries = 0;
-    lock.Unlock();
+    l.unlock();
 
     store->log_usage(old_map);
   }
@@ -195,17 +193,17 @@ static void log_usage(struct req_state *s, const string& op_name)
 
   entry.add(op_name, data);
 
-  utime_t ts = ceph_clock_now(s->cct);
+  auto ts = ceph::real_clock::now();
 
   usage_logger->insert(ts, entry);
 }
 
-void rgw_format_ops_log_entry(struct rgw_log_entry& entry, Formatter *formatter)
+void rgw_format_ops_log_entry(struct rgw_log_entry& entry,
+			      Formatter *formatter)
 {
   formatter->open_object_section("log_entry");
   formatter->dump_string("bucket", entry.bucket);
-  entry.time.gmtime(formatter->dump_stream("time"));	  // UTC
-  entry.time.localtime(formatter->dump_stream("time_local"));
+  formatter->dump_stream("time_local") << entry.time;
   formatter->dump_string("remote_addr", entry.remote_addr);
   if (entry.object_owner.length())
     formatter->dump_string("object_owner", entry.object_owner);
@@ -217,9 +215,8 @@ void rgw_format_ops_log_entry(struct rgw_log_entry& entry, Formatter *formatter)
   formatter->dump_int("bytes_sent", entry.bytes_sent);
   formatter->dump_int("bytes_received", entry.bytes_received);
   formatter->dump_int("object_size", entry.obj_size);
-  uint64_t total_time =	 entry.total_time.sec() * 1000000LL * entry.total_time.usec();
 
-  formatter->dump_int("total_time", total_time);
+  formatter->dump_stream("total_time") << entry.total_time;
   formatter->dump_string("user_agent",	entry.user_agent);
   formatter->dump_string("referrer",  entry.referrer);
   formatter->close_section();
@@ -254,10 +251,10 @@ void OpsLogSocket::log(struct rgw_log_entry& entry)
 {
   bufferlist bl;
 
-  lock.Lock();
+  unique_lock l(lock);
   rgw_format_ops_log_entry(entry, formatter);
   formatter_to_bl(bl);
-  lock.Unlock();
+  l.unlock();
 
   append_output(bl);
 }
@@ -319,7 +316,7 @@ int rgw_log_op(RGWRados *store, struct req_state *s, const string& op_name, OpsL
   uint64_t bytes_received = s->cio->get_bytes_received();
 
   entry.time = s->time;
-  entry.total_time = ceph_clock_now(s->cct) - s->time;
+  entry.total_time = ceph::real_clock::now() - s->time;
   entry.bytes_sent = bytes_sent;
   entry.bytes_received = bytes_received;
   if (s->err.http_ret) {
@@ -336,7 +333,7 @@ int rgw_log_op(RGWRados *store, struct req_state *s, const string& op_name, OpsL
   ::encode(entry, bl);
 
   struct tm bdt;
-  time_t t = entry.time.sec();
+  time_t t = ceph::real_clock::to_time_t(entry.time);
   if (s->cct->_conf->rgw_log_object_name_utc)
     gmtime_r(&t, &bdt);
   else
@@ -370,17 +367,18 @@ done:
   return ret;
 }
 
-int rgw_log_intent(RGWRados *store, rgw_obj& oid, RGWIntentEvent intent, const utime_t& timestamp, bool utc)
+int rgw_log_intent(RGWRados *store, rgw_obj& oid, RGWIntentEvent intent,
+		   const ceph::real_time& timestamp, bool utc)
 {
   rgw_bucket intent_log_bucket(store->zone.intent_log_pool);
 
   rgw_intent_log_entry entry;
-  entry.oid = obj;
+  entry.oid = oid;
   entry.intent = (uint32_t)intent;
   entry.op_time = timestamp;
 
   struct tm bdt;
-  time_t t = timestamp.sec();
+  time_t t = ceph::real_clock::to_time_t(timestamp);
   if (utc)
     gmtime_r(&t, &bdt);
   else

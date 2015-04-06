@@ -156,9 +156,12 @@ public:
 		   string *out_marker,
 		   bool *truncated);
 
-  int trim(int shard_id, const ceph::real_time& from_time, const ceph::real_time& end_time, const string& start_marker, const string& end_marker);
+  int trim(int shard_id, const ceph::real_time& from_time,
+	   const ceph::real_time& end_time, const string& start_marker,
+	   const string& end_marker);
   int get_info(int shard_id, RGWMetadataLogInfo *info);
-  int lock_exclusive(int shard_id, ceph::real_time& duration, string&zone_id, string& owner_id);
+  int lock_exclusive(int shard_id, ceph::timespan duration, string& zone_id,
+		     string& owner_id);
   int unlock(int shard_id, string& zone_id, string& owner_id);
 };
 
@@ -209,7 +212,8 @@ public:
   void dump_log_entry(cls_log_entry& entry, Formatter *f);
 
   void get_sections(list<string>& sections);
-  int lock_exclusive(string& metadata_key, ceph::real_time duration, string& owner_id);
+  int lock_exclusive(string& metadata_key, ceph::timespan duration,
+		     string& owner_id);
   int unlock(string& metadata_key, string& owner_id);
 
   RGWMetadataLog *get_log() { return md_log; }

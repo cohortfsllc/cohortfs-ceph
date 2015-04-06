@@ -938,9 +938,14 @@ int librados::IoCtx::set_alloc_hint(const std::string& o,
 				     expected_write_size);
 }
 
-boost::uuids::uuid librados::IoCtx::get_volume()
+const std::string& librados::IoCtx::get_volume_name()
 {
-  return io_ctx_impl->get_volume();
+  return io_ctx_impl->volume->name;
+}
+
+const boost::uuids::uuid& librados::IoCtx::get_volume_id()
+{
+  return io_ctx_impl->volume->id;
 }
 
 librados::config_t librados::IoCtx::cct()

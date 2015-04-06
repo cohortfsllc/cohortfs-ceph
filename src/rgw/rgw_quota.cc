@@ -13,12 +13,13 @@
  */
 
 
-#include "include/utime.h"
+#include <condition_variable>
+#include <mutex>
+#include <shared_mutex>
+#include "include/ceph_time.h"
 #include "common/lru_map.h"
 #include "common/RefCountedObj.h"
 #include "common/Thread.h"
-#include "common/Mutex.h"
-#include "common/RWLock.h"
 
 #include "rgw_common.h"
 #include "rgw_rados.h"
@@ -31,8 +32,8 @@
 
 struct RGWQuotaCacheStats {
   RGWStorageStats stats;
-  utime_t expiration;
-  utime_t async_refresh_time;
+  ceph::real_time expiration;
+  ceph::real_time async_refresh_time;
 };
 
 template<class T>
@@ -49,10 +50,10 @@ protected:
   public:
     StatsAsyncTestSet() {}
     bool update(RGWQuotaCacheStats *entry) {
-      if (entry->async_refresh_time.sec() == 0)
+      if (entry->async_refresh_time == ceph::real_time::min())
 	return false;
 
-      entry->async_refresh_time = utime_t(0, 0);
+      entry->async_refresh_time = ceph::real_time::min();
 
       return true;
     }
@@ -168,23 +169,27 @@ void RGWQuotaCache<T>::async_refresh_response(const string& user, rgw_bucket& bu
 }
 
 template<class T>
-void RGWQuotaCache<T>::set_stats(const string& user, rgw_bucket& bucket, RGWQuotaCacheStats& qs, RGWStorageStats& stats)
+void RGWQuotaCache<T>::set_stats(const string& user, rgw_bucket& bucket,
+				 RGWQuotaCacheStats& qs,
+				 RGWStorageStats& stats)
 {
   qs.stats = stats;
-  qs.expiration = ceph_clock_now(store->ctx());
-  qs.async_refresh_time = qs.expiration;
-  qs.expiration += store->ctx()->_conf->rgw_bucket_quota_ttl;
-  qs.async_refresh_time += store->ctx()->_conf->rgw_bucket_quota_ttl / 2;
+  qs.expiration = ceph::real_clock::now()
+    + store->ctx()->_conf->rgw_bucket_quota_ttl * 1s;
+  qs.async_refresh_time = qs.expiration
+    + store->ctx()->_conf->rgw_bucket_quota_ttl * 1s / 2;
 
   map_add(user, bucket, qs);
 }
 
 template<class T>
-int RGWQuotaCache<T>::get_stats(const string& user, rgw_bucket& bucket, RGWStorageStats& stats, RGWQuotaInfo& quota) {
+int RGWQuotaCache<T>::get_stats(const string& user, rgw_bucket& bucket,
+				RGWStorageStats& stats, RGWQuotaInfo& quota) {
   RGWQuotaCacheStats qs;
-  utime_t now = ceph_clock_now(store->ctx());
+  ceph::real_time now = ceph::real_clock::now();
   if (map_find(user, bucket, qs)) {
-    if (qs.async_refresh_time.sec() > 0 && now >= qs.async_refresh_time) {
+    if (qs.async_refresh_time > ceph::real_time::min() &&
+	now >= qs.async_refresh_time) {
       int r = async_refresh(user, bucket, qs);
       if (r < 0) {
 	ldout(store->ctx(), 0) << "ERROR: quota async refresh returned ret=" << r << dendl;
@@ -193,7 +198,8 @@ int RGWQuotaCache<T>::get_stats(const string& user, rgw_bucket& bucket, RGWStora
       }
     }
 
-    if (can_use_cached_stats(quota, qs.stats) && qs.expiration > ceph_clock_now(store->ctx())) {
+    if (can_use_cached_stats(quota, qs.stats) &&
+	qs.expiration > ceph::real_clock::now()) {
       stats = qs.stats;
       return 0;
     }
@@ -382,7 +388,9 @@ void UserAsyncRefreshHandler::handle_response(int r)
 
 class RGWUserStatsCache : public RGWQuotaCache<string> {
   std::atomic<bool> down_flag;
-  RWLock rwlock;
+  std::shared_timed_mutex rwlock;
+  typedef std::unique_lock<std::shared_timed_mutex> unique_lock;
+  typedef std::shared_lock<std::shared_timed_mutex> shared_lock;
   map<rgw_bucket, string> modified_buckets;
 
   /* thread, sync recent modified buckets info */
@@ -390,8 +398,9 @@ class RGWUserStatsCache : public RGWQuotaCache<string> {
     CephContext *cct;
     RGWUserStatsCache *stats;
 
-    Mutex lock;
-    Cond cond;
+    std::mutex lock;
+    typedef std::unique_lock<std::mutex> unique_lock;
+    std::condition_variable cond;
   public:
 
     BucketsSyncThread(CephContext *_cct, RGWUserStatsCache *_s)
@@ -417,9 +426,9 @@ class RGWUserStatsCache : public RGWQuotaCache<string> {
 	if (stats->going_down())
 	  break;
 
-	lock.Lock();
-	cond.WaitInterval(cct, lock, utime_t(cct->_conf->rgw_user_quota_bucket_sync_interval, 0));
-	lock.Unlock();
+	unique_lock l(lock);
+	cond.wait_for(l, cct->_conf->rgw_user_quota_bucket_sync_interval * 1s);
+	l.unlock();
       } while (!stats->going_down());
       ldout(cct, 20) << "BucketsSyncThread: done" << dendl;
 
@@ -427,8 +436,8 @@ class RGWUserStatsCache : public RGWQuotaCache<string> {
     }
 
     void stop() {
-      Mutex::Locker l(lock);
-      cond.Signal();
+      unique_lock l(lock);
+      cond.notify_all();
     }
   };
 
@@ -443,8 +452,9 @@ class RGWUserStatsCache : public RGWQuotaCache<string> {
     CephContext *cct;
     RGWUserStatsCache *stats;
 
-    Mutex lock;
-    Cond cond;
+    std::mutex lock;
+    typedef std::unique_lock<std::mutex> unique_lock;
+    std::condition_variable cond;
   public:
 
     UserSyncThread(CephContext *_cct, RGWUserStatsCache *_s)
@@ -458,12 +468,14 @@ class RGWUserStatsCache : public RGWQuotaCache<string> {
 
 	int ret = stats->sync_all_users();
 	if (ret < 0) {
-	  ldout(cct, 0) << "ERROR: sync_all_users() returned ret=" << ret << dendl;
+	  ldout(cct, 0) << "ERROR: sync_all_users() returned ret=" << ret
+			<< dendl;
 	}
 
-	lock.Lock();
-	cond.WaitInterval(cct, lock, utime_t(cct->_conf->rgw_user_quota_sync_interval, 0));
-	lock.Unlock();
+	unique_lock l(lock);
+	cond.wait_for(l,
+		      cct->_conf->rgw_user_quota_sync_interval * 1s);
+	l.unlock();
       } while (!stats->going_down());
       ldout(cct, 20) << "UserSyncThread: done" << dendl;
 
@@ -471,8 +483,8 @@ class RGWUserStatsCache : public RGWQuotaCache<string> {
     }
 
     void stop() {
-      Mutex::Locker l(lock);
-      cond.Signal();
+      unique_lock l(lock);
+      cond.notify_all();
     }
   };
 
@@ -499,9 +511,9 @@ protected:
   void data_modified(const string& user, rgw_bucket& bucket);
 
   void swap_modified_buckets(map<rgw_bucket, string>& out) {
-    rwlock.get_write();
+    unique_lock l(rwlock);
     modified_buckets.swap(out);
-    rwlock.unlock();
+    l.unlock();
   }
 
   template<class T> /* easier doing it as a template, Thread doesn't have ->stop() */
@@ -551,9 +563,9 @@ public:
 
   void stop() {
     down_flag = true;
-    rwlock.get_write();
+    unique_lock l(rwlock);
     stop_thread(&buckets_sync_thread);
-    rwlock.unlock();
+    l.unlock();
     stop_thread(&user_sync_thread);
   }
 };
@@ -594,9 +606,6 @@ int RGWUserStatsCache::sync_user(const string& user)
     ldout(store->ctx(), 20) << "user is idle, not doing a full sync (user=" << user << ")" << dendl;
     return 0;
   }
-
-  utime_t when_need_full_sync = header.last_stats_sync;
-  when_need_full_sync += store->ctx()->_conf->rgw_user_quota_sync_wait_time;
 
   // check if enough time passed since last full sync
 
@@ -654,14 +663,14 @@ done:
 void RGWUserStatsCache::data_modified(const string& user, rgw_bucket& bucket)
 {
   /* racy, but it's ok */
-  rwlock.get_read();
+  shared_lock rl(rwlock);
   bool need_update = modified_buckets.find(bucket) == modified_buckets.end();
-  rwlock.unlock();
+  rl.unlock();
 
   if (need_update) {
-    rwlock.get_write();
+    unique_lock wl(rwlock);
     modified_buckets[bucket] = user;
-    rwlock.unlock();
+    wl.unlock();
   }
 }
 

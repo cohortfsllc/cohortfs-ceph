@@ -112,8 +112,7 @@ void rgw_cls_obj_complete_op::generate_test_instances(list<rgw_cls_obj_complete_
   rgw_cls_obj_complete_op *op = new rgw_cls_obj_complete_op;
   op->op = CLS_RGW_OP_DEL;
   op->name = "name";
-  op->locator = "locator";
-  op->ver.pool = 2;
+  op->ver.vol = boost::uuids::nil_uuid();
   op->ver.epoch = 100;
   op->tag = "tag";
 

@@ -85,8 +85,8 @@ int RGWUsage::show(RGWRados *store, string& uid, uint64_t start_epoch,
 	}
 	formatter->open_object_section("bucket");
 	formatter->dump_string("bucket", ub.bucket);
-	utime_t ut(entry.epoch, 0);
-	ut.gmtime(formatter->dump_stream("time"));
+	formatter->dump_stream("time")
+	  << ceph::real_clock::from_time_t(entry.epoch);
 	formatter->dump_int("epoch", entry.epoch);
 	dump_usage_categories_info(formatter, entry, categories);
 	formatter->close_section(); // bucket

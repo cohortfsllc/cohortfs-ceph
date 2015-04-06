@@ -8,8 +8,7 @@
 #include <string>
 #include <map>
 #include "include/types.h"
-#include "include/utime.h"
-#include "common/RWLock.h"
+#include "include/ceph_time.h"
 
 enum {
   UPDATE_OBJ,
@@ -33,16 +32,16 @@ struct ObjectMetaInfo {
   void encode(bufferlist& bl) const {
     ENCODE_START(2, 2, bl);
     ::encode(size, bl);
-    utime_t t(mtime, 0);
+    auto t = ceph::real_clock::from_time_t(mtime);
     ::encode(t, bl);
     ENCODE_FINISH(bl);
   }
   void decode(bufferlist::iterator& bl) {
     DECODE_START_LEGACY_COMPAT_LEN(2, 2, 2, bl);
     ::decode(size, bl);
-    utime_t t;
+    ceph::real_time t;
     ::decode(t, bl);
-    mtime = t.sec();
+    mtime = ceph::real_clock::to_time_t(t);
     DECODE_FINISH(bl);
   }
   void dump(Formatter *f) const;
@@ -140,7 +139,10 @@ class ObjectCache {
   unsigned long lru_size;
   unsigned long lru_counter;
   unsigned long lru_window;
-  RWLock lock;
+  std::shared_timed_mutex lock;
+  typedef ceph::shunique_lock<std::shared_timed_mutex> shunique_lock;
+  typedef std::unique_lock<std::shared_timed_mutex> unique_lock;
+  typedef std::shared_lock<std::shared_timed_mutex> shared_lock;
   CephContext *cct;
 
   void touch_lru(string& name, ObjectCacheEntry& entry, std::list<string>::iterator& lru_iter);
@@ -199,7 +201,7 @@ class RGWCache	: public T
   int distribute_cache(const string& normal_name, rgw_obj& oid, ObjectCacheInfo& obj_info, int op);
   int watch_cb(int opcode, uint64_t ver, bufferlist& bl);
 public:
-  RGWCache() {}
+  RGWCache(CephContext* cct) : RGWRados(cct) {}
 
   int set_attr(void *ctx, rgw_obj& oid, const char *name, bufferlist& bl, RGWObjVersionTracker *objv_tracker);
   int set_attrs(void *ctx, rgw_obj& oid,
@@ -536,7 +538,7 @@ int RGWCache<T>::distribute_cache(const string& normal_name, rgw_obj& oid, Objec
   info.op = op;
 
   info.obj_info = obj_info;
-  info.oid = obj;
+  info.oid = oid;
   bufferlist bl;
   ::encode(info, bl);
   int ret = T::distribute(normal_name, bl);

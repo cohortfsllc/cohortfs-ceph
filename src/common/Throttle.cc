@@ -12,10 +12,10 @@
 #define dout_subsys ceph_subsys_throttle
 
 #undef dout_prefix
-#define dout_prefix *_dout << "throttle(" << name << " " << (void*)this << ") "
+#define dout_prefix *_dout << "throttle(" << (void*)this << ") "
 
-Throttle::Throttle(CephContext *cct, std::string n, int64_t m)
-  : cct(cct), name(n), count(0), max(m)
+Throttle::Throttle(CephContext *cct, int64_t m)
+  : cct(cct), count(0), max(m)
 {
   assert(m >= 0);
 }

@@ -367,7 +367,8 @@ namespace librados
     // deep copy
     void dup(const IoCtx& rhs);
 
-    std::string get_volume_name();
+    const std::string& get_volume_name();
+    const boost::uuids::uuid& get_volume_id();
 
     // create an object
     int create(const std::string& oid_t, bool exclusive);

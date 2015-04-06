@@ -76,9 +76,8 @@ bool RGWCORSRule_S3::xml_end(const char *el) {
   /*Check all the allowedmethods*/
   oid = iter.get_next();
   if (oid) {
-    for( ; oid; obj = iter.get_next()) {
+    for( ; oid; oid = iter.get_next()) {
       const char *s = oid->get_data().c_str();
-      dout(10) << "RGWCORSRule::xml_end, el : " << el << ", data : " << s << dendl;
       if (strcasecmp(s, "GET") == 0) {
 	allowed_methods |= RGW_CORS_GET;
       } else if (strcasecmp(s, "POST") == 0) {
@@ -101,20 +100,20 @@ bool RGWCORSRule_S3::xml_end(const char *el) {
   if (xml_id != NULL) {
     string data = xml_id->get_data();
     if (data.length() > 255) {
-      dout(0) << "RGWCORSRule has id of length greater than 255" << dendl;
+      //dout(0) << "RGWCORSRule has id of length greater than 255" << dendl;
       return false;
     }
-    dout(10) << "RGWCORRule id : " << data << dendl;
+    //dout(10) << "RGWCORRule id : " << data << dendl;
     id = data;
   }
   /*Check if there is atleast one AllowedOrigin*/
   iter = find("AllowedOrigin");
   if (!(oid = iter.get_next())) {
-    dout(0) << "RGWCORSRule does not have even one AllowedOrigin" << dendl;
+    //dout(0) << "RGWCORSRule does not have even one AllowedOrigin" << dendl;
     return false;
   }
-  for( ; oid; obj = iter.get_next()) {
-    dout(10) << "RGWCORSRule - origin : " << oid->get_data() << dendl;
+  for( ; oid; oid = iter.get_next()) {
+    //dout(10) << "RGWCORSRule - origin : " << oid->get_data() << dendl;
     /*Just take the hostname*/
     string host = oid->get_data();
     if (validate_name_string(host) != 0)
@@ -132,21 +131,21 @@ bool RGWCORSRule_S3::xml_end(const char *el) {
     } else  {
       max_age = (uint32_t)ull;
     }
-    dout(10) << "RGWCORSRule : max_age : " << max_age << dendl;
+    //dout(10) << "RGWCORSRule : max_age : " << max_age << dendl;
   }
   /*Check and update ExposeHeader*/
   iter = find("ExposeHeader");
   if ((oid = iter.get_next())) {
-    for(; oid; obj = iter.get_next()) {
-      dout(10) << "RGWCORSRule - exp_hdr : " << oid->get_data() << dendl;
+    for(; oid; oid = iter.get_next()) {
+      //dout(10) << "RGWCORSRule - exp_hdr : " << oid->get_data() << dendl;
       exposable_hdrs.push_back(oid->get_data());
     }
   }
   /*Check and update AllowedHeader*/
   iter = find("AllowedHeader");
   if ((oid = iter.get_next())) {
-    for(; oid; obj = iter.get_next()) {
-      dout(10) << "RGWCORSRule - allowed_hdr : " << oid->get_data() << dendl;
+    for(; oid; oid = iter.get_next()) {
+      //dout(10) << "RGWCORSRule - allowed_hdr : " << oid->get_data() << dendl;
       string s = oid->get_data();
       if (validate_name_string(s) != 0)
 	 return false;
@@ -171,10 +170,10 @@ bool RGWCORSConfiguration_S3::xml_end(const char *el) {
   XMLObjIter iter = find("CORSRule");
   RGWCORSRule_S3 *oid;
   if (!(oid = static_cast<RGWCORSRule_S3 *>(iter.get_next()))) {
-    dout(0) << "CORSConfiguration should have atleast one CORSRule" << dendl;
+    //dout(0) << "CORSConfiguration should have atleast one CORSRule" << dendl;
     return false;
   }
-  for(; oid; obj = static_cast<RGWCORSRule_S3 *>(iter.get_next())) {
+  for(; oid; oid = static_cast<RGWCORSRule_S3 *>(iter.get_next())) {
     rules.push_back(*oid);
   }
   return true;

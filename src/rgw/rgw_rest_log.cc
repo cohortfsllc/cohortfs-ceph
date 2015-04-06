@@ -223,15 +223,13 @@ void RGWOp_MDLog_Lock::execute() {
   }
 
   RGWMetadataLog *meta_log = store->meta_mgr->get_log();
-  unsigned dur;
-  dur = (unsigned)strict_strtol(duration_str.c_str(), 10, &err);
-  if (!err.empty() || dur <= 0) {
+  ceph::timespan dur = strict_strtol(duration_str.c_str(), 10, &err) * 1s;
+  if (!err.empty() || dur == 0s) {
     ldout(s->cct, 5) << "invalid length param " << duration_str << dendl;
     http_ret = -EINVAL;
     return;
   }
-  ceph::real_time time = ceph::spec_to_time(dur);
-  http_ret = meta_log->lock_exclusive(shard_id, time, zone_id, locker_id);
+  http_ret = meta_log->lock_exclusive(shard_id, dur, zone_id, locker_id);
   if (http_ret == -EBUSY)
     http_ret = -ERR_LOCKED;
 }
@@ -582,15 +580,14 @@ void RGWOp_DATALog_Lock::execute() {
     return;
   }
 
-  unsigned dur;
-  dur = (unsigned)strict_strtol(duration_str.c_str(), 10, &err);
-  if (!err.empty() || dur <= 0) {
+  ceph::timespan dur = (unsigned)strict_strtol(duration_str.c_str(), 10, &err) * 1s;
+  if (!err.empty() || dur <= 0s) {
    ldout(s->cct, 5) << "invalid length param " << duration_str << dendl;
     http_ret = -EINVAL;
     return;
   }
-  ceph::real_time time = ceph::spec_to_time(dur);
-  http_ret = store->data_log->lock_exclusive(shard_id, time, zone_id, locker_id);
+  http_ret = store->data_log->lock_exclusive(shard_id, dur, zone_id,
+					     locker_id);
   if (http_ret == -EBUSY)
     http_ret = -ERR_LOCKED;
 }

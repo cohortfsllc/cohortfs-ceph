@@ -143,7 +143,7 @@ int RGWOp_Metadata_Put::get_data(bufferlist& bl) {
 	return r;
       }
       bl.append(data, read_len);
-    } while ((read_len == chunk_size));
+    } while (read_len == chunk_size);
   }
 
   free(data);
@@ -231,17 +231,15 @@ void RGWOp_Metadata_Lock::execute() {
     return;
   }
 
-  int dur;
   string err;
 
-  dur = strict_strtol(duration_str.c_str(), 10, &err);
-  if (!err.empty() || dur <= 0) {
-   ldout(s->cct, 5) << "invalid length param " << duration_str << dendl;
+  ceph::timespan dur = strict_strtol(duration_str.c_str(), 10, &err) * 1s;
+  if (!err.empty() || dur <= 0s) {
+    ldout(s->cct, 5) << "invalid length param " << duration_str << dendl;
     http_ret = -EINVAL;
     return;
   }
-  ceph::real_time time = ceph::spec_to_time(dur);
-  http_ret = store->meta_mgr->lock_exclusive(metadata_key, time, lock_id);
+  http_ret = store->meta_mgr->lock_exclusive(metadata_key, dur, lock_id);
   if (http_ret == -EBUSY)
     http_ret = -ERR_LOCKED;
 }

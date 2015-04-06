@@ -5,6 +5,7 @@
 
 #include <map>
 
+#include <boost/uuid/nil_generator.hpp>
 #include "include/types.h"
 #include "include/ceph_time.h"
 #include "common/Formatter.h"
@@ -173,20 +174,20 @@ void decode_packed_val(T& val, bufferlist::iterator& bl)
 }
 
 struct rgw_bucket_entry_ver {
-  int64_t pool;
+  boost::uuids::uuid vol;
   uint64_t epoch;
 
-  rgw_bucket_entry_ver() : pool(-1), epoch(0) {}
+  rgw_bucket_entry_ver() : vol(boost::uuids::nil_uuid()), epoch(0) {}
 
   void encode(bufferlist &bl) const {
     ENCODE_START(1, 1, bl);
-    ::encode_packed_val(pool, bl);
+    ::encode(vol, bl);
     ::encode_packed_val(epoch, bl);
     ENCODE_FINISH(bl);
   }
   void decode(bufferlist::iterator &bl) {
     DECODE_START(1, bl);
-    ::decode_packed_val(pool, bl);
+    ::decode(vol, bl);
     ::decode_packed_val(epoch, bl);
     DECODE_FINISH(bl);
   }
@@ -199,7 +200,6 @@ WRITE_CLASS_ENCODER(rgw_bucket_entry_ver)
 struct rgw_bucket_dir_entry {
   std::string name;
   rgw_bucket_entry_ver ver;
-  std::string locator;
   bool exists;
   struct rgw_bucket_dir_entry_meta meta;
   map<string, struct rgw_bucket_pending_info> pending_map;
@@ -216,7 +216,6 @@ struct rgw_bucket_dir_entry {
     ::encode(exists, bl);
     ::encode(meta, bl);
     ::encode(pending_map, bl);
-    ::encode(locator, bl);
     ::encode(ver, bl);
     ::encode_packed_val(index_ver, bl);
     ::encode(tag, bl);
@@ -229,13 +228,10 @@ struct rgw_bucket_dir_entry {
     ::decode(exists, bl);
     ::decode(meta, bl);
     ::decode(pending_map, bl);
-    if (struct_v >= 2) {
-      ::decode(locator, bl);
-    }
     if (struct_v >= 4) {
       ::decode(ver, bl);
     } else {
-      ver.pool = -1;
+      ver.vol = boost::uuids::nil_uuid();
     }
     if (struct_v >= 5) {
       ::decode_packed_val(index_ver, bl);
@@ -549,40 +545,35 @@ enum cls_rgw_gc_op {
 };
 
 struct cls_rgw_obj {
-  string pool;
+  string vol;
   string oid;
-  string key;
 
   cls_rgw_obj() {}
-  cls_rgw_obj(string& _p, string& _o) : pool(_p), oid(_o) {}
+  cls_rgw_obj(string& _v, string& _o) : vol(_v), oid(_o) {}
 
   void encode(bufferlist& bl) const {
     ENCODE_START(1, 1, bl);
-    ::encode(pool, bl);
+    ::encode(vol, bl);
     ::encode(oid, bl);
-    ::encode(key, bl);
     ENCODE_FINISH(bl);
   }
 
   void decode(bufferlist::iterator& bl) {
     DECODE_START(1, bl);
-    ::decode(pool, bl);
+    ::decode(vol, bl);
     ::decode(oid, bl);
-    ::decode(key, bl);
     DECODE_FINISH(bl);
   }
 
   void dump(Formatter *f) const {
-    f->dump_string("pool", pool);
+    f->dump_string("vol", vol);
     f->dump_string("oid", oid);
-    f->dump_string("key", key);
   }
   static void generate_test_instances(list<cls_rgw_obj*>& ls) {
     ls.push_back(new cls_rgw_obj);
     ls.push_back(new cls_rgw_obj);
-    ls.back()->pool = "mypool";
+    ls.back()->vol = "myvol";
     ls.back()->oid = "myoid";
-    ls.back()->key = "mykey";
   }
 };
 WRITE_CLASS_ENCODER(cls_rgw_obj)
@@ -592,11 +583,10 @@ struct cls_rgw_obj_chain {
 
   cls_rgw_obj_chain() {}
 
-  void push_obj(string& pool, string& oid, string& key) {
+  void push_obj(string& vol, string& oid) {
     cls_rgw_obj obj;
-    obj.pool = pool;
+    obj.vol = vol;
     obj.oid = oid;
-    obj.key = key;
     objs.push_back(obj);
   }
 

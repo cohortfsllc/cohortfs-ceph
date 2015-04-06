@@ -8,31 +8,23 @@
 
 #define dout_subsys ceph_subsys_rgw
 
-RGWEnv::RGWEnv()
+RGWEnv::RGWEnv(CephContext* cct)
 {
-  conf = new RGWConf;
+  conf = new RGWConf(cct);
 }
+
 
 RGWEnv::~RGWEnv()
 {
   delete conf;
 }
 
-void RGWEnv::init(CephContext *cct)
+void RGWEnv::init()
 {
-  conf->init(cct, this);
+  conf->init(this);
 }
 
-void RGWEnv::set(const char *name, const char *val)
-{
-  if (!val)
-    val = "";
-  env_map[name] = val;
-
-  dout(20) << "RGWEnv::set(): " << name << ": " << val << dendl;
-}
-
-void RGWEnv::init(CephContext *cct, char **envp)
+void RGWEnv::init(char** envp)
 {
   const char *p;
 
@@ -47,8 +39,16 @@ void RGWEnv::init(CephContext *cct, char **envp)
     string val = s.substr(pos + 1);
     env_map[name] = val;
   }
+  conf->init(this);
+}
 
-  init(cct);
+void RGWEnv::set(const char *name, const char *val)
+{
+  if (!val)
+    val = "";
+  env_map[name] = val;
+
+  ldout(conf->cct, 20) << "RGWEnv::set(): " << name << ": " << val << dendl;
 }
 
 const char *RGWEnv::get(const char *name, const char *def_val)
@@ -115,7 +115,7 @@ void RGWEnv::remove(const char *name)
     env_map.erase(iter);
 }
 
-void RGWConf::init(CephContext *cct, RGWEnv *env)
+void RGWConf::init(RGWEnv *env)
 {
   enable_ops_log = cct->_conf->rgw_enable_ops_log;
   enable_usage_log = cct->_conf->rgw_enable_usage_log;

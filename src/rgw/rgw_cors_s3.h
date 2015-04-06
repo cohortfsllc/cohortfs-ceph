@@ -22,6 +22,7 @@
 
 #include <include/types.h>
 #include <common/Formatter.h>
+#include <common/ceph_context.h>
 #include "rgw_xml.h"
 #include "rgw_cors.h"
 

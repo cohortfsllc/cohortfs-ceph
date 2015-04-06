@@ -28,13 +28,17 @@
 #define dout_subsys ceph_subsys_rgw
 using namespace std;
 
+// Many of the DOUTs in the CORS Rules cases should actually be
+// exceptions in the case of the dout(0) that return immediately or a
+// stringstream that can be passed back to the caller.
+
 void RGWCORSRule::dump_origins() {
-  unsigned num_origins = allowed_origins.size();
-  dout(10) << "Allowed origins : " << num_origins << dendl;
+  //unsigned num_origins = allowed_origins.size();
+  //dout(10) << "Allowed origins : " << num_origins << dendl;
   for(set<string>::iterator it = allowed_origins.begin();
       it != allowed_origins.end();
       ++it) {
-    dout(10) << *it << "," << dendl;
+    //dout(10) << *it << "," << dendl;
   }
 }
 
@@ -44,8 +48,8 @@ void RGWCORSRule::erase_origin_if_present(string& origin, bool *rule_empty) {
     return;
   *rule_empty = false;
   if (it != allowed_origins.end()) {
-    dout(10) << "Found origin " << origin << ", set size:" <<
-	allowed_origins.size() << dendl;
+    //dout(10) << "Found origin " << origin << ", set size:" <<
+    //	allowed_origins.size() << dendl;
     allowed_origins.erase(it);
     *rule_empty = (allowed_origins.empty());
   }
@@ -77,7 +81,6 @@ string lowercase_http_attr(const string& orig)
   return string(buf);
 }
 
-
 static bool is_string_in_set(set<string>& s, string h) {
   if ((s.find("*") != s.end()) ||
 	  (s.find(h) != s.end())) {
@@ -95,15 +98,15 @@ static bool is_string_in_set(set<string>& s, string h) {
       if (off != 0) {
 	string sl = ssplit.front();
 	flen = sl.length();
-	dout(10) << "Finding " << sl << ", in " << h << ", at offset 0" << dendl;
+	//dout(10) << "Finding " << sl << ", in " << h << ", at offset 0" << dendl;
 	if (!boost::algorithm::starts_with(h,sl))
 	  continue;
 	ssplit.pop_front();
       }
       if (off != ((*it).length() - 1)) {
 	string sl = ssplit.front();
-	dout(10) << "Finding " << sl << ", in " << h
-	  << ", at offset not less than " << flen << dendl;
+	//dout(10) << "Finding " << sl << ", in " << h
+	//  << ", at offset not less than " << flen << dendl;
 	if (h.compare((h.size() - sl.size()), sl.size(), sl) != 0)
 	  continue;
 	ssplit.pop_front();
@@ -156,13 +159,13 @@ void RGWCORSConfiguration::erase_host_name_rule(string& origin) {
   bool rule_empty;
   unsigned loop = 0;
   /*Erase the host name from that rule*/
-  dout(10) << "Num of rules : " << rules.size() << dendl;
+  //dout(10) << "Num of rules : " << rules.size() << dendl;
   for(list<RGWCORSRule>::iterator it_r = rules.begin();
       it_r != rules.end(); ++it_r, loop++) {
     RGWCORSRule& r = (*it_r);
     r.erase_origin_if_present(origin, &rule_empty);
-    dout(10) << "Origin:" << origin << ", rule num:"
-      << loop << ", emptying now:" << rule_empty << dendl;
+    //dout(10) << "Origin:" << origin << ", rule num:"
+    //  << loop << ", emptying now:" << rule_empty << dendl;
     if (rule_empty) {
       rules.erase(it_r);
       break;
@@ -172,11 +175,11 @@ void RGWCORSConfiguration::erase_host_name_rule(string& origin) {
 
 void RGWCORSConfiguration::dump() {
   unsigned loop = 1;
-  unsigned num_rules = rules.size();
-  dout(10) << "Number of rules: " << num_rules << dendl;
+  //unsigned num_rules = rules.size();
+  //dout(10) << "Number of rules: " << num_rules << dendl;
   for(list<RGWCORSRule>::iterator it = rules.begin();
       it!= rules.end(); ++it, loop++) {
-    dout(10) << " <<<<<<< Rule " << loop << " >>>>>>> " << dendl;
+    //dout(10) << " <<<<<<< Rule " << loop << " >>>>>>> " << dendl;
     (*it).dump_origins();
   }
 }

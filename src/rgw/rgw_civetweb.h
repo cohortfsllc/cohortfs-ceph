@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #ifndef CEPH_RGW_MONGOOSE_H
 #define CEPH_RGW_MONGOOSE_H
 
@@ -22,7 +24,7 @@ class RGWMongoose : public RGWClientIO
   bool explicit_keepalive;
 
 public:
-  void init_env(CephContext *cct);
+  void init_env();
 
   int write_data(const char *buf, int len);
   int read_data(char *buf, int len);
@@ -33,7 +35,7 @@ public:
   int complete_request();
   int send_content_length(uint64_t len);
 
-  RGWMongoose(mg_connection *_conn, int _port);
+  RGWMongoose(CephContext* cct, mg_connection *_conn, int _port);
   void flush();
 };
 

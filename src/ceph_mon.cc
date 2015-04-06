@@ -650,16 +650,14 @@ int main(int argc, const char **argv)
 			  Messenger::Policy::stateless_server(supported, 0));
 
   // throttle client traffic
-  Throttle *client_throttler = new Throttle(cct, "mon_client_bytes",
-					    cct->_conf->mon_client_bytes);
+  Throttle *client_throttler = new Throttle(cct, cct->_conf->mon_client_bytes);
   simple_msgr->set_policy_throttlers(entity_name_t::TYPE_CLIENT,
 				     client_throttler, NULL);
 
   // throttle daemon traffic
   // NOTE: actual usage on the leader may multiply by the number of
   // monitors if they forward large update messages from daemons.
-  Throttle *daemon_throttler = new Throttle(cct, "mon_daemon_bytes",
-					    cct->_conf->mon_daemon_bytes);
+  Throttle *daemon_throttler = new Throttle(cct, cct->_conf->mon_daemon_bytes);
   simple_msgr->set_policy_throttlers(entity_name_t::TYPE_OSD, daemon_throttler,
 				     NULL);
   simple_msgr->set_policy_throttlers(entity_name_t::TYPE_MDS, daemon_throttler,

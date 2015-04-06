@@ -377,8 +377,8 @@ private:
     full_state(FULL_NOTFULL),
     fd(-1),
     writing_seq(0),
-    throttle_ops(cct, "filestore_ops"),
-    throttle_bytes(cct, "filestore_bytes"),
+    throttle_ops(cct),
+    throttle_bytes(cct),
     write_stop(false),
     write_thread(this),
     write_finish_thread(this)

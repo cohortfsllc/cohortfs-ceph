@@ -1,4 +1,4 @@
-// -*- mode:C; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
 #include "include/types.h"
@@ -447,7 +447,6 @@ int rgw_bucket_prepare_op(cls_method_context_t hctx, bufferlist *in, bufferlist 
     entry.name = op.name;
     entry.ver = rgw_bucket_entry_ver();
     entry.exists = false;
-    entry.locator = op.locator;
   }
 
   // fill in proper state
@@ -512,9 +511,6 @@ static int read_index_entry(cls_method_context_t hctx, string& name, struct rgw_
     return -EIO;
   }
 
-  CLS_LOG(1, "read_index_entry(): existing entry: ver=%ld:%llu name=%s locator=%s\n",
-	  (long)entry->ver.pool, (unsigned long long)entry->ver.epoch,
-	  entry->name.c_str(), entry->locator.c_str());
   return 0;
 }
 
@@ -529,11 +525,6 @@ int rgw_bucket_complete_op(cls_method_context_t hctx, bufferlist *in, bufferlist
     CLS_LOG(1, "ERROR: rgw_bucket_complete_op(): failed to decode request\n");
     return -EINVAL;
   }
-  CLS_LOG(1, "rgw_bucket_complete_op(): request: op=%d name=%s ver=%lu:%llu tag=%s\n",
-	  op.op, op.name.c_str(),
-	  (unsigned long)op.ver.pool, (unsigned long long)op.ver.epoch,
-	  op.tag.c_str());
-
   bufferlist header_bl;
   struct rgw_bucket_dir_header header;
   int rc = cls_cxx_map_read_header(hctx, &header_bl);
@@ -555,7 +546,6 @@ int rgw_bucket_complete_op(cls_method_context_t hctx, bufferlist *in, bufferlist
     entry.name = op.name;
     entry.ver = op.ver;
     entry.meta = op.meta;
-    entry.locator = op.locator;
     ondisk = false;
   } else if (rc < 0) {
     return rc;
@@ -578,7 +568,7 @@ int rgw_bucket_complete_op(cls_method_context_t hctx, bufferlist *in, bufferlist
   if (op.tag.size() && op.op == CLS_RGW_OP_CANCEL) {
     CLS_LOG(1, "rgw_bucket_complete_op(): cancel requested\n");
     cancel = true;
-  } else if (op.ver.pool == entry.ver.pool &&
+  } else if (op.ver.vol == entry.ver.vol &&
 	     op.ver.epoch && op.ver.epoch <= entry.ver.epoch) {
     CLS_LOG(1, "rgw_bucket_complete_op(): skipping request, old epoch\n");
     cancel = true;
@@ -1449,7 +1439,7 @@ static int gc_iterate_entries(cls_method_context_t hctx, const string& marker, b
   }
 
   if (expired_only) {
-    ceph::real_time now = ceph::real_time::now();
+    ceph::real_time now = ceph::real_clock::now();
     string now_str;
     get_time_key(now, &now_str);
     prepend_index_prefix(now_str, GC_OBJ_TIME_INDEX, &end_key);

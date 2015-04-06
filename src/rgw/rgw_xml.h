@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #ifndef CEPH_RGW_XML_H
 #define CEPH_RGW_XML_H
 
@@ -51,7 +53,7 @@ public:
   XMLObjIter find(string name);
   XMLObj *find_first(string name);
 
-  friend ostream& operator<<(ostream& out, XMLObj& oid);
+  friend std::ostream& operator<<(std::ostream& out, XMLObj& oid);
 };
 
 class RGWXMLParser : public XMLObj

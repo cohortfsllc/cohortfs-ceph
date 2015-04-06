@@ -118,10 +118,8 @@ int Messengers::create(CephContext *cct, md_config_t *conf,
 #endif // !HAVE_XIO
 
   // set up policies
-  byte_throttler = new Throttle(cct, "osd_client_bytes",
-			        conf->osd_client_message_size_cap);
-  msg_throttler = new Throttle(cct, "osd_client_messages",
-			       conf->osd_client_message_cap);
+  byte_throttler = new Throttle(cct, conf->osd_client_message_size_cap);
+  msg_throttler = new Throttle(cct, conf->osd_client_message_cap);
 
   uint64_t supported =
     CEPH_FEATURE_UID |

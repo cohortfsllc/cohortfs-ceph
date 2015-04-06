@@ -343,6 +343,7 @@ public:
   RGWHandler_ObjStore_S3() : RGWHandler_ObjStore() {}
   virtual ~RGWHandler_ObjStore_S3() {}
 
+  using RGWHandler_ObjStore::validate_bucket_name;
   int validate_bucket_name(const string& bucket, bool relaxed_names);
 
   virtual int init(RGWRados *store, struct req_state *state, RGWClientIO *cio);
@@ -413,6 +414,7 @@ public:
   RGWRESTMgr_S3() {}
   virtual ~RGWRESTMgr_S3() {}
 
+  using RGWRESTMgr::get_resource_mgr;
   virtual RGWRESTMgr *get_resource_mgr(struct req_state *s, const string& uri) {
     return this;
   }

@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #ifndef CEPH_CLS_RGW_OPS_H
 #define CEPH_CLS_RGW_OPS_H
 
@@ -113,7 +115,7 @@ struct rgw_cls_obj_complete_op
     if (struct_v >= 5) {
       ::decode(ver, bl);
     } else {
-      ver.pool = -1;
+      ver.vol = boost::uuids::nil_uuid();
     }
     if (struct_v >= 6) {
       ::decode(log_op, bl);

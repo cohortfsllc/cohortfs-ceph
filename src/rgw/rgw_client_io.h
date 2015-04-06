@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #ifndef CEPH_RGW_CLIENT_IO_H
 #define CEPH_RGW_CLIENT_IO_H
 
@@ -16,16 +18,17 @@ class RGWClientIO {
 protected:
   RGWEnv env;
 
-  virtual void init_env(CephContext *cct) = 0;
+  virtual void init_env() = 0;
 
   virtual int write_data(const char *buf, int len) = 0;
   virtual int read_data(char *buf, int max) = 0;
 
 public:
+  RGWClientIO(CephContext* cct) : account(false), bytes_sent(0),
+				  bytes_received(0), env(cct) {}
   virtual ~RGWClientIO() {}
-  RGWClientIO() : account(false), bytes_sent(0), bytes_received(0) {}
 
-  void init(CephContext *cct);
+  void init();
   int print(const char *format, ...);
   int write(const char *buf, int len);
   virtual void flush() = 0;

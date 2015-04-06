@@ -248,10 +248,10 @@ class RGWEnv {
 public:
   RGWConf *conf;
 
-  RGWEnv();
+  RGWEnv(CephContext* cct);
   ~RGWEnv();
-  void init(CephContext *cct);
-  void init(CephContext *cct, char **envp);
+  void init();
+  void init(char **envp);
   void set(const char *name, const char *val);
   const char *get(const char *name, const char *def_val = NULL);
   int get_int(const char *name, int def_val = 0);
@@ -268,11 +268,12 @@ public:
 class RGWConf {
   friend class RGWEnv;
 protected:
-  void init(CephContext *cct, RGWEnv * env);
+  void init(RGWEnv* env);
 public:
-  RGWConf() :
-    enable_ops_log(1), enable_usage_log(1), defer_to_bucket_acls(0) {}
+  RGWConf(CephContext* _cct) :
+    cct(_cct), enable_ops_log(1), enable_usage_log(1), defer_to_bucket_acls(0) {}
 
+  CephContext* cct;
   int enable_ops_log;
   int enable_usage_log;
   uint8_t defer_to_bucket_acls;
@@ -803,6 +804,7 @@ class RGWEnv;
 class RGWClientIO;
 
 struct req_info {
+  CephContext *cct;
   RGWEnv *env;
   XMLArgs args;
   map<string, string> x_meta_map;
@@ -975,11 +977,8 @@ WRITE_CLASS_ENCODER(RGWBucketEnt)
 
 class rgw_obj {
   std::string orig_obj;
-  std::string orig_key;
 public:
   rgw_bucket bucket;
-  std::string key;
-  std::string ns;
   std::string object;
 
   bool in_extra_data; /* in-memory only member, does not serialize */
@@ -1005,143 +1004,26 @@ public:
   }
   void init(rgw_bucket& b, const std::string& o, const std::string& k, const std::string& n) {
     bucket = b;
-    set_ns(n);
     set_obj(o);
-    set_key(k);
   }
   void init(rgw_bucket& b, const std::string& o, const std::string& k) {
     bucket = b;
     set_obj(o);
-    set_key(k);
   }
   void init(rgw_bucket& b, const std::string& o) {
     bucket = b;
     set_obj(o);
-    orig_key = key = o;
   }
-  void init_ns(rgw_bucket& b, const std::string& o, const std::string& n) {
-    bucket = b;
-    set_ns(n);
-    set_obj(o);
-    reset_key();
-  }
-  int set_ns(const char *n) {
-    if (!n)
-      return -EINVAL;
-    string ns_str(n);
-    return set_ns(ns_str);
-  }
-  int set_ns(const string& n) {
-    if (n[0] == '_')
-      return -EINVAL;
-    ns = n;
-    set_obj(orig_obj);
-    return 0;
-  }
-
-  void set_key(const string& k) {
-    orig_key = k;
-    key = k;
-  }
-
-  void reset_key() {
-    orig_key.clear();
-    key.clear();
-  }
-
   void set_obj(const string& o) {
     orig_obj = o;
-    if (ns.empty()) {
-      if (o.empty())
-	return;
-      if (o.size() < 1 || o[0] != '_') {
-	object = o;
-	return;
-      }
-      object = "_";
-      object.append(o);
-    } else {
-      object = "_";
-      object.append(ns);
-      object.append("_");
-      object.append(o);
+    if (o.empty())
+      return;
+    if (o.size() < 1 || o[0] != '_') {
+      object = o;
+      return;
     }
-    if (orig_key.size())
-      set_key(orig_key);
-    else
-      set_key(orig_obj);
-  }
-
-  string loc() {
-    if (orig_key.empty())
-      return orig_obj;
-    else
-      return orig_key;
-  }
-
-  /**
-   * Translate a namespace-mangled object name to the user-facing name
-   * existing in the given namespace.
-   *
-   * If the object is part of the given namespace, it returns true
-   * and cuts down the name to the unmangled version. If it is not
-   * part of the given namespace, it returns false.
-   */
-  static bool translate_raw_obj_to_obj_in_ns(string& obj, string& ns) {
-    if (ns.empty()) {
-      if (obj[0] != '_')
-	return true;
-
-      if (obj.size() >= 2 && obj[1] == '_') {
-	obj = obj.substr(1);
-	return true;
-      }
-
-      return false;
-    }
-
-    if (obj[0] != '_' || obj.size() < 3) // for namespace, min size would be 3: _x_
-      return false;
-
-    int pos = obj.find('_', 1);
-    if (pos <= 1) // if it starts with __, it's not in our namespace
-      return false;
-
-    string obj_ns = obj.substr(1, pos - 1);
-    if (obj_ns.compare(ns) != 0)
-	return false;
-
-    obj = obj.substr(pos + 1);
-    return true;
-  }
-
-  /**
-   * Given a mangled object name and an empty namespace string, this
-   * function extracts the namespace into the string and sets the object
-   * name to be the unmangled version.
-   *
-   * It returns true after successfully doing so, or
-   * false if it fails.
-   */
-  static bool strip_namespace_from_object(string& obj, string& ns) {
-    ns.clear();
-    if (obj[0] != '_') {
-      return true;
-    }
-
-    size_t pos = obj.find('_', 1);
-    if (pos == string::npos) {
-      return false;
-    }
-
-    size_t period_pos = obj.find('.');
-    if (period_pos < pos) {
-      return false;
-    }
-
-    ns = obj.substr(1, pos-1);
-    obj = obj.substr(pos+1, string::npos);
-    return true;
+    object = "_";
+    object.append(o);
   }
 
   void set_in_extra_data(bool val) {
@@ -1155,8 +1037,6 @@ public:
   void encode(bufferlist& bl) const {
     ENCODE_START(3, 3, bl);
     ::encode(bucket.name, bl);
-    ::encode(key, bl);
-    ::encode(ns, bl);
     ::encode(object, bl);
     ::encode(bucket, bl);
     ENCODE_FINISH(bl);
@@ -1164,8 +1044,6 @@ public:
   void decode(bufferlist::iterator& bl) {
     DECODE_START_LEGACY_COMPAT_LEN(3, 3, 3, bl);
     ::decode(bucket.name, bl);
-    ::decode(key, bl);
-    ::decode(ns, bl);
     ::decode(object, bl);
     if (struct_v >= 2)
       ::decode(bucket, bl);
@@ -1176,16 +1054,12 @@ public:
 
   bool operator==(const rgw_obj& o) const {
     return (object.compare(o.object) == 0) &&
-	   (bucket.name.compare(o.bucket.name) == 0) &&
-	   (ns.compare(o.ns) == 0);
+      (bucket.name.compare(o.bucket.name) == 0);
   }
   bool operator<(const rgw_obj& o) const {
     int r = bucket.name.compare(o.bucket.name);
     if (r == 0) {
      r = object.compare(o.object);
-     if (r == 0) {
-       r = ns.compare(o.ns);
-     }
     }
 
     return (r < 0);

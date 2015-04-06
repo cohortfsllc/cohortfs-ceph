@@ -53,7 +53,8 @@ int RGWReplicaLogger::open_ioctx(librados::IoCtx& ctx, const string& pool)
 
 int RGWReplicaLogger::update_bound(const string& oid_t, const string& pool,
 				   const string& daemon_id,
-				   const string& marker, const utime_t& time,
+				   const string& marker,
+				   const ceph::real_time& time,
 				   const list<RGWReplicaItemMarker> *entries)
 {
   cls_replica_log_progress_marker progress;
@@ -68,7 +69,7 @@ int RGWReplicaLogger::update_bound(const string& oid_t, const string& pool,
     return r;
   }
 
-  librados::ObjectWriteOperation opw;
+  librados::ObjectWriteOperation opw(ioctx);
   cls_replica_log_update_bound(opw, progress);
   return ioctx.operate(oid_t, &opw);
 }
@@ -82,7 +83,7 @@ int RGWReplicaLogger::delete_bound(const string& oid_t, const string& pool,
     return r;
   }
 
-  librados::ObjectWriteOperation opw;
+  librados::ObjectWriteOperation opw(ioctx);
   cls_replica_log_delete_bound(opw, daemon_id);
   return ioctx.operate(oid_t, &opw);
 }

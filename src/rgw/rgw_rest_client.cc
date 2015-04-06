@@ -202,13 +202,15 @@ int RGWRESTSimpleRequest::sign_request(RGWAccessKey& key, RGWEnv& env, req_info&
   return 0;
 }
 
-int RGWRESTSimpleRequest::forward_request(RGWAccessKey& key, req_info& info, size_t max_response, bufferlist *inbl, bufferlist *outbl)
+int RGWRESTSimpleRequest::forward_request(RGWAccessKey& key, req_info& info,
+					  size_t max_response,
+					  bufferlist *inbl, bufferlist *outbl)
 {
 
   string date_str;
   get_new_date_str(cct, date_str);
 
-  RGWEnv new_env;
+  RGWEnv new_env(cct);
   req_info new_info(cct, &new_env);
   new_info.rebuild_from(info);
 
@@ -391,7 +393,7 @@ int RGWRESTStreamWriteRequest::put_obj_init(RGWAccessKey& key, rgw_obj& oid, uin
   string date_str;
   get_new_date_str(cct, date_str);
 
-  RGWEnv new_env;
+  RGWEnv new_env(cct);
   req_info new_info(cct, &new_env);
 
   string params_str;
@@ -553,7 +555,7 @@ int RGWRESTStreamReadRequest::get_obj(RGWAccessKey& key, map<string, string>& ex
   string date_str;
   get_new_date_str(cct, date_str);
 
-  RGWEnv new_env;
+  RGWEnv new_env(cct);
   req_info new_info(cct, &new_env);
 
   string params_str;

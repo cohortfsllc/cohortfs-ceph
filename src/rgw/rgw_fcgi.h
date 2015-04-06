@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #ifndef CEPH_RGW_FCGI_H
 #define CEPH_RGW_FCGI_H
 
@@ -11,7 +13,7 @@ class RGWFCGX : public RGWClientIO
 {
   FCGX_Request *fcgx;
 protected:
-  void init_env(CephContext *cct);
+  void init_env();
   int write_data(const char *buf, int len);
   int read_data(char *buf, int len);
 
@@ -21,7 +23,8 @@ protected:
   int complete_request() { return 0; }
   int send_content_length(uint64_t len);
 public:
-  RGWFCGX(FCGX_Request *_fcgx) : fcgx(_fcgx) {}
+  RGWFCGX(CephContext* _cct, FCGX_Request *_fcgx) : RGWClientIO(_cct),
+						    fcgx(_fcgx) {}
   void flush();
 };
 

@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <signal.h>
+#include <boost/scoped_array.hpp>
 
 #include <curl/curl.h>
 
@@ -124,12 +125,10 @@ struct RGWRequest
       req_str.append(" ");
       req_str.append(s->info.request_uri);
     }
-#warning not sure what this is doing
-    //    ceph::real_time t = ceph::real_clock::now() - ts;
-    ceph::real_time t = ceph::real_clock::now();
+    ceph::timespan t = ceph::real_clock::now() - ts;
     ldout(s->cct, 2) << "req " << id << ":" << t << ":" << s->dialect << ":"
-	    << req_str << ":" << (op ? op->name() : "") << ":" << msg
-	    << dendl;
+		     << req_str << ":" << (op ? op->name() : "") << ":" << msg
+		     << dendl;
   }
 };
 
@@ -233,7 +232,7 @@ public:
   RGWProcess(CephContext *cct, RGWProcessEnv *pe, int num_threads, RGWFrontendConfig *_conf)
     : cct(cct), store(pe->store), olog(pe->olog),
       m_tp(cct, "RGWProcess::m_tp", num_threads),
-      req_throttle(cct, "rgw_ops", num_threads * 2),
+      req_throttle(cct, num_threads * 2),
       rest(pe->rest),
       conf(_conf),
       sock_fd(-1),
@@ -375,7 +374,7 @@ void RGWLoadGenProcess::run()
   int num_buckets;
   conf->get_val("num_buckets", 1, &num_buckets);
 
-  string buckets[num_buckets];
+  boost::scoped_array<string> buckets(new string[num_buckets]);
 
   std::atomic<bool> failed;
 
@@ -389,7 +388,7 @@ void RGWLoadGenProcess::run()
     checkpoint();
   }
 
-  string *objs = new string[num_objs];
+  boost::scoped_array<string> objs(new string[num_objs]);
 
   if (failed) {
     derr << "ERROR: bucket creation failed" << dendl;
@@ -434,8 +433,6 @@ done:
   checkpoint();
 
   m_tp.stop();
-
-  delete[] objs;
 
   signal_shutdown();
 }
@@ -522,7 +519,7 @@ static int process_request(RGWRados *store, RGWREST *rest, RGWRequest *req, RGWC
 {
   int ret = 0;
 
-  client_io->init(cct);
+  client_io->init();
 
   req->log_init();
 
@@ -642,7 +639,7 @@ void RGWFCGXProcess::handle_request(RGWRequest *r)
 {
   RGWFCGXRequest *req = static_cast<RGWFCGXRequest *>(r);
   FCGX_Request *fcgx = &req->fcgx;
-  RGWFCGX client_io(fcgx);
+  RGWFCGX client_io(cct, fcgx);
 
 
   int ret = process_request(store, rest, req, &client_io, olog);
@@ -672,7 +669,7 @@ void RGWLoadGenProcess::handle_request(RGWRequest *r)
   env.set_date(tm);
   env.sign(access_key);
 
-  RGWLoadGenIO client_io(&env);
+  RGWLoadGenIO client_io(cct, &env);
 
   int ret = process_request(store, rest, req, &client_io, olog);
   if (ret < 0) {
@@ -695,9 +692,9 @@ static int civetweb_callback(struct mg_connection *conn) {
   OpsLogSocket *olog = pe->olog;
 
   RGWRequest *req = new RGWRequest;
-  RGWMongoose client_io(conn, pe->port);
+  RGWMongoose client_io(store->cct, conn, pe->port);
 
-  client_io.init(cct);
+  client_io.init();
 
   int ret = process_request(store, rest, req, &client_io, olog);
   if (ret < 0) {
@@ -723,14 +720,10 @@ static void check_curl()
 }
 #endif
 
-class C_InitTimeout : public Context {
-public:
-  C_InitTimeout() {}
-  void finish(int r) {
-    derr << "Initialization timeout, failed to initialize" << dendl;
-    exit(1);
-  }
-};
+static void init_timeout() {
+  derr << "Initialization timeout, failed to initialize" << dendl;
+  exit(1);
+}
 
 int usage()
 {
@@ -1012,14 +1005,10 @@ int main(int argc, const char **argv)
   if (cct->_conf->daemonize) {
     global_init_daemonize(cct, 0);
   }
-  std::mutex mutex;
-  std::unique_lock<std::mutex> lk(mutex, std::defer_lock);
-  SafeTimer<ceph::mono_clock> init_timer(mutex);
-  init_timer.init();
-  lk.lock();
-  init_timer.add_event_after(
-       ceph::span_from_double(cct->_conf->rgw_init_timeout), new C_InitTimeout);
-  lk.unlock();
+  auto init_timer = new cohort::Timer<ceph::mono_clock>;
+  init_timer->add_event(
+    ceph::span_from_double(cct->_conf->rgw_init_timeout),
+    &init_timeout);
 
   common_init_finish(cct);
 
@@ -1039,10 +1028,8 @@ int main(int argc, const char **argv)
   }
 
   /* XXX huh? */
-  lk.lock();
-  init_timer.cancel_all_events();
-  init_timer.shutdown(lk);
-  lk.unlock();
+  init_timer->cancel_all_events();
+  delete init_timer;
 
   if (r)
     return 1;

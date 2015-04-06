@@ -17,7 +17,7 @@
 class RGWOp_RegionMap_Get : public RGWRESTOp {
   RGWRegionMap regionmap;
 public:
-  RGWOp_RegionMap_Get() {}
+  RGWOp_RegionMap_Get(CephContext* cct) : regionmap(cct) {}
   ~RGWOp_RegionMap_Get() {}
 
   int verify_permission() {

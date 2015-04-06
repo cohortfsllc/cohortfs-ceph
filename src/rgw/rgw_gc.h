@@ -5,10 +5,10 @@
 
 
 #include <atomic>
+#include <condition_variable>
+#include <mutex>
 #include "include/types.h"
 #include "include/rados/librados.hpp"
-#include "common/Mutex.h"
-#include "common/Cond.h"
 #include "common/Thread.h"
 #include "rgw_common.h"
 #include "rgw_rados.h"
@@ -26,8 +26,10 @@ class RGWGC {
   class GCWorker : public Thread {
     CephContext *cct;
     RGWGC *gc;
-    Mutex lock;
-    Cond cond;
+    std::mutex lock;
+    std::condition_variable cond;
+    typedef std::lock_guard<std::mutex> lock_guard;
+    typedef std::unique_lock<std::mutex> unique_lock;
 
   public:
     GCWorker(CephContext *_cct, RGWGC *_gc) : cct(_cct), gc(_gc) {}
