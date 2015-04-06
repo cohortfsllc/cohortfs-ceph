@@ -81,7 +81,7 @@ extern "C" {
 } /* extern "C" */
 
   void benchmark_thread(struct libosd *osd, uint8_t *volume, int depth,
-			int count)
+			int count, int ix)
 {
   int r = 0;
 
@@ -93,7 +93,9 @@ extern "C" {
   std::unique_lock<std::mutex> lk(mtx);
   std::atomic<int> cnt{count};
 
-  const char* obj = "foo";
+  std::string obj = "foo_" + std::to_string(ix);
+
+  std::cout << "obj is: " << obj << std::endl;
 
   /* queue reqs up to depth */
   for (int i = 0; i < depth; ++i) {
@@ -102,7 +104,7 @@ extern "C" {
     rio.cv = &cv;
     rio.osd = osd;
     rio.volume = volume;
-    rio.obj = const_cast<char*>(obj);
+    rio.obj = const_cast<char*>(obj.c_str());
     rio.count = &cnt;
     rio.depth = depth;
     rio.inst = i;
@@ -128,17 +130,17 @@ extern "C" {
 void benchmark(struct libosd *osd, uint8_t *uuid, int nthreads,
 	       int depth, int count)
 {
-  auto fn = [osd, uuid, depth, count]() {
-    benchmark_thread(osd, uuid, depth, count);
-  };
-
   auto t1 = std::chrono::high_resolution_clock::now();
   std::cout << "time started " << t1 << std::endl;
 
   // start threads
   std::vector<std::thread> threads;
-  for (int i = 0; i < nthreads; i++)
+  for (int i = 0; i < nthreads; i++) {
+    auto fn = [osd, uuid, depth, count, i]() {
+      benchmark_thread(osd, uuid, depth, count, i);
+    };
     threads.emplace_back(fn);
+  }
 
   // join threads
   for (auto &t : threads)
