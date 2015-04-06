@@ -35,6 +35,7 @@
 //#define OPQUEUE_SLEEP // XXX should be defined
 //#define OPQUEUE_INSTRUMENT
 //#define INSTRUMENT_BACKOFF
+#define OPQUEUE_TLS_LANES
 
 class CephContext;
 class OSD;
@@ -87,6 +88,9 @@ namespace cohort {
     uint32_t thrd_lowat;
     uint32_t thrd_hiwat;
     uint32_t flags;
+
+    std::mutex mtx;
+    uint32_t ctr;
 
     friend class Band;
     friend class Lane;
@@ -188,7 +192,8 @@ namespace cohort {
         deq_spins(deq_spins),
 	thrd_lowat(thrd_lowat),
 	thrd_hiwat(thrd_hiwat),
-	flags(FLAG_NONE)
+	flags(FLAG_NONE),
+	ctr(0)
     {
       assert(n_lanes > 0);
       qlane = new Lane[n_lanes];
@@ -206,11 +211,22 @@ namespace cohort {
     ~OpQueue() { delete[] qlane; }
 
     Lane& choose_lane() {
+#ifdef OPQUEUE_TLS_LANES
+      static thread_local int lane_ix = -1;
+      if (unlikely(lane_ix == -1)) {
+	std::lock_guard<std::mutex> lk(mtx);
+	if (unlikely(lane_ix == -1)) {
+	  lane_ix = ctr++ % n_lanes;
+	}
+      }
+      return qlane[lane_ix];
+#else
       // use rdtsc to choose the lane
       unsigned lo, hi;
       asm volatile("rdtsc" : "=a" (lo), "=d" (hi));
       uint64_t k = static_cast<uint64_t>(hi) << 32 | lo;
       return qlane[(k % n_lanes)];
+#endif
     }
 
     bool enqueue(OpRequest& op, enum Bands b) {
