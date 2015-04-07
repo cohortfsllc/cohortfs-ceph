@@ -442,6 +442,7 @@ void MonClient::shutdown()
 
   l.unlock();
 
+  timer.suspend();
   if (initialized) {
     finisher.stop();
   }
