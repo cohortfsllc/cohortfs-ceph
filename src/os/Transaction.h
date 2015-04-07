@@ -305,16 +305,6 @@ class Transaction {
     std::swap(on_applied_sync, other.on_applied_sync);
   }
 
-  /// How big is the encoded Transaction buffer?
-  uint64_t get_encoded_bytes() {
-#warning get_encoded_bytes() probably wrong // XXXX
-    return 1 + 8 + 8 + 4 + 4 + 4 + 4;
-  }
-
-  uint64_t get_num_bytes() {
-    return get_encoded_bytes();
-  }
-
   /// Size of largest data buffer to the "write" operation encountered so far
   uint32_t get_data_length() {
     return largest_data_len;
