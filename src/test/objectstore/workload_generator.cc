@@ -410,15 +410,14 @@ void WorkloadGenerator::do_stats()
   auto now = ceph::mono_clock::now();
   unique_lock msl(m_stats_lock);
 
-  ceph::timespan duration = (now - m_stats_begin);
+  std::chrono::duration<double> duration = (now - m_stats_begin);
 
-  double throughput = (m_stats_total_written /
-		       ceph::span_to_double(duration));
-  double tx_throughput (m_stats_finished_txs / ceph::span_to_double(duration));
+  double throughput = (m_stats_total_written / duration.count());
+  double tx_throughput (m_stats_finished_txs / duration.count());
 
   dout(0) << __func__
 	  << " written: " << m_stats_total_written
-	  << " duration: " << duration << " sec"
+	  << " duration: " << duration.count() << " sec"
 	  << " bandwidth: " << prettybyte_t(throughput) << "/s"
 	  << " iops: " << tx_throughput << "/s"
 	  << dendl;

@@ -1329,7 +1329,8 @@ static bool key_in_index(const string& key, int index_type)
 }
 
 
-static int gc_update_entry(cls_method_context_t hctx, uint32_t expiration_secs,
+static int gc_update_entry(cls_method_context_t hctx,
+			   ceph::timespan expiration,
 			   cls_rgw_gc_obj_info& info)
 {
   cls_rgw_gc_obj_info old_info;
@@ -1343,8 +1344,7 @@ static int gc_update_entry(cls_method_context_t hctx, uint32_t expiration_secs,
       return ret;
     }
   }
-  info.time = ceph::real_clock::now();
-  info.time += std::chrono::seconds(expiration_secs);
+  info.time = ceph::real_clock::now() + expiration;
   ret = gc_omap_set(hctx, GC_OBJ_NAME_INDEX, info.tag, &info);
   if (ret < 0)
     return ret;
@@ -1363,7 +1363,8 @@ done_err:
   return ret;
 }
 
-static int gc_defer_entry(cls_method_context_t hctx, const string& tag, uint32_t expiration_secs)
+static int gc_defer_entry(cls_method_context_t hctx, const string& tag,
+			  ceph::timespan expiration)
 {
   cls_rgw_gc_obj_info info;
   int ret = gc_omap_get(hctx, GC_OBJ_NAME_INDEX, tag, &info);
@@ -1371,7 +1372,7 @@ static int gc_defer_entry(cls_method_context_t hctx, const string& tag, uint32_t
     return 0;
   if (ret < 0)
     return ret;
-  return gc_update_entry(hctx, expiration_secs, info);
+  return gc_update_entry(hctx, expiration, info);
 }
 
 int gc_record_decode(bufferlist& bl, cls_rgw_gc_obj_info& e)
@@ -1398,7 +1399,7 @@ static int rgw_cls_gc_set_entry(cls_method_context_t hctx, bufferlist *in, buffe
     return -EINVAL;
   }
 
-  return gc_update_entry(hctx, op.expiration_secs, op.info);
+  return gc_update_entry(hctx, op.expiration, op.info);
 }
 
 static int rgw_cls_gc_defer_entry(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
@@ -1413,7 +1414,7 @@ static int rgw_cls_gc_defer_entry(cls_method_context_t hctx, bufferlist *in, buf
     return -EINVAL;
   }
 
-  return gc_defer_entry(hctx, op.tag, op.expiration_secs);
+  return gc_defer_entry(hctx, op.tag, op.expiration);
 }
 
 static int gc_iterate_entries(cls_method_context_t hctx, const string& marker, bool expired_only,

@@ -262,7 +262,7 @@ public:
 	      strncpy(ow.addr, sa.str().c_str(), 256);
 	      ow.watcher_id = i->name.num();
 	      ow.cookie = i->cookie;
-	      ow.timeout_seconds = i->timeout_seconds;
+	      ow.timeout = i->timeout;
 	      watchers->push_back(ow);
 	    }
 	  }

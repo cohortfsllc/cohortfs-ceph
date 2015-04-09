@@ -895,7 +895,7 @@ public:
       ctx->start();
       std::cerr << num << ":  started" << std::endl;
       bufferlist bl;
-      context->io_ctx.set_notify_timeout(600);
+      context->io_ctx.set_notify_timeout(10min);
       int r = context->io_ctx.notify(context->prefix + oid, bl);
       if (r < 0) {
 	std::cerr << "r is " << r << std::endl;

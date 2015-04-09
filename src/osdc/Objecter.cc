@@ -1067,7 +1067,7 @@ namespace OSDC {
   {
     assert(tick_event == 0);
     tick_event = timer.add_event(
-      cct->_conf->objecter_tick_interval * 1s,
+      cct->_conf->objecter_tick_interval,
       &Objecter::tick, this);
   }
 
@@ -1087,7 +1087,7 @@ namespace OSDC {
 
     // look for laggy requests
     ceph::mono_time cutoff = ceph::mono_clock::now();
-    cutoff -= cct->_conf->objecter_timeout * 1s;  // timeout
+    cutoff -= cct->_conf->objecter_timeout;  // timeout
 
     unsigned laggy_ops;
 
@@ -1133,8 +1133,7 @@ namespace OSDC {
     }
 
     // reschedule
-    tick_event = timer.reschedule_me(
-      cct->_conf->objecter_tick_interval * 1s);
+    tick_event = timer.reschedule_me(cct->_conf->objecter_tick_interval);
   }
 
   void Objecter::resend_mon_ops()

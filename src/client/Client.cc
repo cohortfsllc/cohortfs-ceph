@@ -2224,7 +2224,7 @@ void Client::cap_delay_requeue(Inode *in)
 {
   ldout(cct, 10) << "cap_delay_requeue on " << *in << dendl;
   in->hold_caps_until = ceph::mono_clock::now() +
-    (cct->_conf->client_caps_release_delay * 1s);
+    cct->_conf->client_caps_release_delay;
   delayed_caps.push_back(&in->cap_item);
 }
 
@@ -3244,8 +3244,7 @@ int Client::mount(const std::string &mount_root)
   }
 
   cl.unlock();
-  int r = monclient->authenticate(ceph::span_from_double(
-				    cct->_conf->client_mount_timeout));
+  int r = monclient->authenticate(cct->_conf->client_mount_timeout);
   cl.lock();
   if (r < 0)
     return r;
@@ -3417,15 +3416,14 @@ void Client::flush_cap_releases()
 void Client::tick()
 {
   unique_lock cl(client_lock);
-  if (cct->_conf->client_debug_inject_tick_delay > 0) {
-    sleep(cct->_conf->client_debug_inject_tick_delay);
+  if (cct->_conf->client_debug_inject_tick_delay > 0ns) {
+    std::this_thread::sleep_for(cct->_conf->client_debug_inject_tick_delay);
     assert(0 == cct->_conf->set_val("client_debug_inject_tick_delay", "0"));
     cct->_conf->apply_changes(NULL);
   }
 
   ldout(cct, 21) << "tick" << dendl;
-  tick_event = timer.reschedule_me(
-    ceph::span_from_double(cct->_conf->client_tick_interval));
+  tick_event = timer.reschedule_me(cct->_conf->client_tick_interval);
 
   ceph::mono_time now = ceph::mono_clock::now();
 

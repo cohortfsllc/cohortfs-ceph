@@ -227,10 +227,8 @@ int librados::RadosClient::connect()
 
   err = -ENOMEM;
   objecter = new Objecter(cct, messenger, &monclient,
-			  ceph::span_from_double(
-			    cct->_conf->rados_mon_op_timeout),
-			  ceph::span_from_double(
-			    cct->_conf->rados_osd_op_timeout));
+			  cct->_conf->rados_mon_op_timeout,
+			  cct->_conf->rados_osd_op_timeout);
   if (!objecter)
     goto out;
 
@@ -260,8 +258,7 @@ int librados::RadosClient::connect()
     goto out;
   }
 
-  err = monclient.authenticate(ceph::span_from_double(
-				 conf->client_mount_timeout));
+  err = monclient.authenticate(conf->client_mount_timeout);
   if (err) {
     ldout(cct, 0) << conf->name << " authentication error " << cpp_strerror(-err) << dendl;
     shutdown();
@@ -443,8 +440,8 @@ int librados::RadosClient::wait_for_osdmap()
   }
 
   ceph::timespan timeout = 0s;
-  if (cct->_conf->rados_mon_op_timeout > 0)
-    timeout = ceph::span_from_double((cct->_conf->rados_mon_op_timeout));
+  if (cct->_conf->rados_mon_op_timeout > 0ns)
+    timeout = cct->_conf->rados_mon_op_timeout;
 
   auto got_it = [&](){
     bool have_map;

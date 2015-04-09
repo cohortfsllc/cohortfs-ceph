@@ -32,7 +32,7 @@ struct o_bench_data {
   ceph::timespan total_latency;
   int started_ops;
   int completed_ops;
-  std::map<ceph::timespan,int> freq_map;
+  std::map<std::chrono::duration<double>,int> freq_map;
   pair<ceph::timespan,int> mode;
   o_bench_data()
     : avg_latency(0ns), min_latency(ceph::timespan::max()),

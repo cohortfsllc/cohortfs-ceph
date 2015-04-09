@@ -36,7 +36,7 @@ struct librados::IoCtxImpl {
   uint64_t assert_ver;
   map<oid_t, uint64_t> assert_src_version;
   version_t last_objver;
-  uint32_t notify_timeout;
+  ceph::timespan notify_timeout;
 
   std::mutex aio_write_list_lock;
   typedef std::unique_lock<std::mutex> unique_lock;
@@ -178,7 +178,7 @@ struct librados::IoCtxImpl {
   version_t last_version();
   void set_assert_version(uint64_t ver);
   void set_assert_src_version(const oid_t& oid, uint64_t ver);
-  void set_notify_timeout(uint32_t timeout);
+  void set_notify_timeout(ceph::timespan timeout);
   uint64_t op_size() const {
     return volume->op_size();
   }

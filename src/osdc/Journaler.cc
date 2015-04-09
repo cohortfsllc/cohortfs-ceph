@@ -571,7 +571,7 @@ void Journaler::flush(Context* onsafe)
 	  timer.cancel_event(delay_flush_event);
 	delay_flush_event =
 	  timer.add_event(
-	    ceph::span_from_double(cct->_conf->journaler_batch_interval),
+	    cct->_conf->journaler_batch_interval,
 	    &Journaler::_do_flush, this, 0);
       } else {
 	ldout(cct, 20) << "flush not delaying flush" << dendl;
@@ -585,8 +585,7 @@ void Journaler::flush(Context* onsafe)
   }
 
   // write head?
-  if (last_wrote_head + ceph::span_from_double(
-	cct->_conf->journaler_write_head_interval) <
+  if (last_wrote_head + cct->_conf->journaler_write_head_interval <
       ceph::real_clock::now()) {
     write_head();
   }

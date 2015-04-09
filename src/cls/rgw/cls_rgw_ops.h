@@ -297,20 +297,20 @@ struct rgw_cls_usage_log_trim_op {
 WRITE_CLASS_ENCODER(rgw_cls_usage_log_trim_op)
 
 struct cls_rgw_gc_set_entry_op {
-  uint32_t expiration_secs;
+  ceph::timespan expiration;
   cls_rgw_gc_obj_info info;
-  cls_rgw_gc_set_entry_op() : expiration_secs(0) {}
+  cls_rgw_gc_set_entry_op() : expiration(0) {}
 
   void encode(bufferlist& bl) const {
     ENCODE_START(1, 1, bl);
-    ::encode(expiration_secs, bl);
+    ::encode(expiration, bl);
     ::encode(info, bl);
     ENCODE_FINISH(bl);
   }
 
   void decode(bufferlist::iterator& bl) {
     DECODE_START(1, bl);
-    ::decode(expiration_secs, bl);
+    ::decode(expiration, bl);
     ::decode(info, bl);
     DECODE_FINISH(bl);
   }
@@ -321,20 +321,20 @@ struct cls_rgw_gc_set_entry_op {
 WRITE_CLASS_ENCODER(cls_rgw_gc_set_entry_op)
 
 struct cls_rgw_gc_defer_entry_op {
-  uint32_t expiration_secs;
+  ceph::timespan expiration;
   string tag;
-  cls_rgw_gc_defer_entry_op() : expiration_secs(0) {}
+  cls_rgw_gc_defer_entry_op() : expiration(0ns) {}
 
   void encode(bufferlist& bl) const {
     ENCODE_START(1, 1, bl);
-    ::encode(expiration_secs, bl);
+    ::encode(expiration, bl);
     ::encode(tag, bl);
     ENCODE_FINISH(bl);
   }
 
   void decode(bufferlist::iterator& bl) {
     DECODE_START(1, bl);
-    ::decode(expiration_secs, bl);
+    ::decode(expiration, bl);
     ::decode(tag, bl);
     DECODE_FINISH(bl);
   }

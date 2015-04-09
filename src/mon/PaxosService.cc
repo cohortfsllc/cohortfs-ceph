@@ -158,11 +158,10 @@ bool PaxosService::should_propose(ceph::timespan& delay)
   else {
     ceph::real_time now = ceph::real_clock::now();
     if ((now - paxos->last_commit_time) >
-	ceph::span_from_double(mon->cct->_conf->paxos_propose_interval))
-      delay = ceph::span_from_double(
-	mon->cct->_conf->paxos_min_wait);
+	mon->cct->_conf->paxos_propose_interval)
+      delay = mon->cct->_conf->paxos_min_wait;
     else
-      delay = ceph::span_from_double(mon->cct->_conf->paxos_propose_interval) +
+      delay = mon->cct->_conf->paxos_propose_interval +
 	paxos->last_commit_time - now;
   }
   return true;

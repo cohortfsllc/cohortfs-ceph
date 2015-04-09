@@ -98,12 +98,12 @@ class UsageLogger {
     void operator()() {
       logger.flush();
       logger.timer.reschedule_me(
-	logger.cct->_conf->rgw_usage_log_tick_interval * 1s);
+	logger.cct->_conf->rgw_usage_log_tick_interval);
     }
   };
 
   void set_timer() {
-    timer.add_event(cct->_conf->rgw_usage_log_tick_interval * 1s,
+    timer.add_event(cct->_conf->rgw_usage_log_tick_interval,
 		    UsageLogTimeout(*this));
   }
 public:

@@ -50,10 +50,8 @@ public:
     while (1) {
       std::unique_lock<std::mutex> l(_lock);
 
-      if (_cct->_conf->heartbeat_interval) {
-	ceph::timespan interval(ceph::span_from_double(
-				  _cct->_conf->heartbeat_interval));
-	_cond.wait_for(l, interval);
+      if (_cct->_conf->heartbeat_interval > 0ns) {
+	_cond.wait_for(l, _cct->_conf->heartbeat_interval);
       } else {
 	_cond.wait(l);
       }

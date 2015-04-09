@@ -176,12 +176,9 @@ bool CephXTicketHandler::verify_service_ticket_reply(CryptoKey& secret,
 	   << " session_key " << msg_a.session_key
 	   << " validity=" << msg_a.validity << dendl;
   session_key = msg_a.session_key;
-  if (!(msg_a.validity == ceph::timespan(0))) {
-    expires = ceph::mono_clock::now();
-    expires += msg_a.validity;
-    renew_after = expires;
-    renew_after -= ceph::span_from_double(ceph::span_to_double(
-					    msg_a.validity) / 4);
+  if (msg_a.validity != 0ns) {
+    expires = ceph::mono_clock::now() + msg_a.validity;
+    renew_after = expires - msg_a.validity / 4;
     ldout(cct, 10) << "ticket expires=" << expires << " renew_after=" << renew_after << dendl;
   }
 

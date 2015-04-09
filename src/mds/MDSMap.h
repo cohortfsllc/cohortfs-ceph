@@ -173,8 +173,8 @@ protected:
   // which MDS has root directory
   int32_t root;
 
-  uint32_t session_timeout;
-  uint32_t session_autoclose;
+  ceph::timespan session_timeout;
+  ceph::timespan session_autoclose;
   uint64_t max_file_size;
 
   // file data pools available to clients (via an ioctl).  first is
@@ -217,7 +217,7 @@ public:
 public:
   MDSMap(CephContext* _cct)
     : epoch(0), flags(0), last_failure(0), last_failure_osd_epoch(0),
-      tableserver(0), root(0), session_timeout(0), session_autoclose(0),
+      tableserver(0), root(0), session_timeout(0ns), session_autoclose(0ns),
       max_file_size(0), metadata_volume(0), max_mds(0), cct(_cct) {
   }
 
@@ -225,7 +225,7 @@ public:
   void set_inline_data_enabled(bool enabled) { inline_data_enabled = enabled; }
 
   ceph::timespan get_session_timeout() {
-    return session_timeout * 1s;
+    return session_timeout;
   }
   uint64_t get_max_filesize() { return max_file_size; }
 

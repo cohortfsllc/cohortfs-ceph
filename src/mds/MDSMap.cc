@@ -103,8 +103,8 @@ void MDSMap::dump(Formatter *f) const
   f->dump_stream("modified") << modified;
   f->dump_int("tableserver", tableserver);
   f->dump_int("root", root);
-  f->dump_int("session_timeout", session_timeout);
-  f->dump_int("session_autoclose", session_autoclose);
+  f->dump_stream("session_timeout") << session_timeout;
+  f->dump_stream("session_autoclose") << session_autoclose;
   f->dump_int("max_file_size", max_file_size);
   f->dump_int("last_failure", last_failure);
   f->dump_int("last_failure_osd_epoch", last_failure_osd_epoch);
@@ -158,8 +158,8 @@ void MDSMap::generate_test_instances(list<MDSMap*>& ls)
   m->compat = get_mdsmap_compat_set_all();
 
   // these aren't the defaults, just in case anybody gets confused
-  m->session_timeout = 61;
-  m->session_autoclose = 301;
+  m->session_timeout = 61s;
+  m->session_autoclose = 301s;
   m->max_file_size = 1<<24;
   ls.push_back(m);
   common_cleanup(cct);

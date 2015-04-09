@@ -262,9 +262,9 @@ int OSD::mkfs(CephContext *cct, ObjectStore *store, const string &dev,
 	store->queue_transaction_and_cleanup(t);
       }
       store->sync();
-      ceph::timespan elapsed = ceph::mono_clock::now() - start;
+      std::chrono::duration<double> elapsed = ceph::mono_clock::now() - start;
       dout(0) << "measured "
-	      << (1000.0 / ceph::span_to_double(elapsed))
+	      << (1000.0 / elapsed.count())
 	      << " mb/sec" << dendl;
       Transaction tr;
       c_ix = tr.push_col(meta_col);
@@ -546,7 +546,7 @@ bool OSD::asok_command(string command, cmdmap_t& cmdmap, string format,
       f->close_section(); //entity_name_t
 
       f->dump_int("cookie", it->wi.cookie);
-      f->dump_int("timeout", it->wi.timeout_seconds);
+      f->dump_stream("timeout") << it->wi.timeout;
 
       f->open_object_section("entity_addr_t");
       it->wi.addr.dump(f);
@@ -719,8 +719,7 @@ int OSD::init()
   heartbeat_thread.create();
 
   // tick
-  tick_timer.add_event(ceph::span_from_double(
-			 cct->_conf->osd_heartbeat_interval),
+  tick_timer.add_event(cct->_conf->osd_heartbeat_interval,
 		       &OSD::tick, this);
 
   service.publish_map(osdmap);
@@ -1230,7 +1229,7 @@ void OSD::handle_osd_ping(MOSDPing *m)
       }
 
       ceph::real_time cutoff = ceph::real_clock::now()
-	- ceph::span_from_double(cct->_conf->osd_heartbeat_grace);
+	- cct->_conf->osd_heartbeat_grace;
       if (i->second.is_healthy(cutoff)) {
 	// Cancel false reports
 	if (failure_queue.count(from)) {
@@ -1266,7 +1265,7 @@ void OSD::heartbeat_entry()
     heartbeat();
 
     ceph::timespan wait = 500ms + (rand() % 10) *
-      (cct->_conf->osd_heartbeat_interval * 1s) / 10;
+      cct->_conf->osd_heartbeat_interval / 10;
     dout(30) << "heartbeat_entry sleeping for " << wait << dendl;
     heartbeat_cond.wait_for(hl, wait);
     if (is_stopping())
@@ -1279,14 +1278,14 @@ void OSD::heartbeat_check()
 {
   // Should be called with a lock on heartbeat_lock held
   ceph::timespan age = hbclient_messenger->get_dispatch_queue_max_age();
-  if (age > ceph::span_from_double(cct->_conf->osd_heartbeat_grace / 2)) {
+  if (age > cct->_conf->osd_heartbeat_grace / 2) {
     derr << "skipping heartbeat_check, hbqueue max age: " << age << dendl;
     return; // hb dispatch is too backed up for our hb status to be meaningful
   }
 
   // check for incoming heartbeats (move me elsewhere?)
   ceph::real_time cutoff = ceph::real_clock::now()
-    - (cct->_conf->osd_heartbeat_grace * 1s);
+    - cct->_conf->osd_heartbeat_grace;
   for (map<int,HeartbeatInfo>::iterator p = heartbeat_peers.begin();
        p != heartbeat_peers.end();
        ++p) {
@@ -1350,8 +1349,7 @@ void OSD::heartbeat()
   // hmm.. am i all alone?
   dout(30) << "heartbeat lonely?" << dendl;
   if (heartbeat_peers.empty()) {
-    if (now - last_mon_heartbeat > (cct->_conf->osd_mon_heartbeat_interval *
-				    1s)
+    if (now - last_mon_heartbeat > cct->_conf->osd_mon_heartbeat_interval
 	&& is_active()) {
       last_mon_heartbeat = now;
       dout(10) << "i have no heartbeat peers; checking mon for new map" << dendl;
@@ -1539,7 +1537,7 @@ bool OSD::_is_healthy()
   if (is_waiting_for_healthy()) {
     lock_guard hl(heartbeat_lock);
     ceph::real_time cutoff = ceph::real_clock::now() -
-      ceph::span_from_double(cct->_conf->osd_heartbeat_grace);
+      cct->_conf->osd_heartbeat_grace;
     int num = 0, up = 0;
     for (const auto& p : heartbeat_peers) {
       if (p.second.is_healthy(cutoff))
@@ -2112,8 +2110,7 @@ bool OSDService::prepare_to_stop()
 					      false
 					      ));
     ceph::mono_time now = ceph::mono_clock::now();
-    ceph::mono_time timeout = now + ceph::span_from_double(
-      cct->_conf->osd_mon_shutdown_timeout);
+    ceph::mono_time timeout = now + cct->_conf->osd_mon_shutdown_timeout;
     while ((ceph::mono_clock::now() < timeout) &&
 	   (state != STOPPING)) {
       is_stopping_cond.wait_until(isl, timeout);

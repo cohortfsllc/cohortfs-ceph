@@ -120,7 +120,8 @@ void *ObjBencher::status_printer(void *_bencher) {
     }
 
     double avg_bandwidth = (double) (data.trans_size) * (data.finished)
-      / ceph::span_to_double(cur_time - data.start_time) / (1024*1024);
+      / std::chrono::duration_cast< std::chrono::duration<double> >(
+	cur_time - data.start_time).count() / 1024*1024;
     if (previous_writes != data.finished) {
       previous_writes = data.finished;
       cycleSinceChange = 0;
@@ -268,20 +269,20 @@ static double vec_stddev(vector<double>& v)
 
 static double vec_stddev(vector<ceph::timespan>& v)
 {
-  double mean = 0;
+  std::chrono::duration<double> mean(0ns);
 
   if (v.size() < 2)
     return 0;
 
   for (auto iter = v.begin(); iter != v.end(); ++iter) {
-    mean += ceph::span_to_double(*iter);
+    mean += *iter;
   }
 
   mean /= v.size();
 
   double stddev = 0;
   for (auto iter = v.begin(); iter != v.end(); ++iter) {
-    double dev = ceph::span_to_double(*iter) - mean;
+    double dev = (*iter - mean).count();
     dev *= dev;
     stddev += dev;
   }
@@ -442,6 +443,8 @@ int ObjBencher::write_bench(int secondsToRun, int maxObjectsToCreate,
   }
   l.unlock();
 
+  double bandwidth;
+
   while (data.finished < data.started) {
     slot = data.finished % concurrentios;
     completion_wait(slot);
@@ -454,8 +457,10 @@ int ObjBencher::write_bench(int secondsToRun, int maxObjectsToCreate,
     data.cur_latency = ceph::mono_clock::now() - start_times[slot];
     data.history.latency.push_back(data.cur_latency);
     total_latency += data.cur_latency;
-    if (data.cur_latency > data.max_latency) data.max_latency = data.cur_latency;
-    if (data.cur_latency < data.min_latency) data.min_latency = data.cur_latency;
+    if (data.cur_latency > data.max_latency)
+      data.max_latency = data.cur_latency;
+    if (data.cur_latency < data.min_latency)
+      data.min_latency = data.cur_latency;
     ++data.finished;
     data.avg_latency = total_latency / data.finished;
     --data.in_flight;
@@ -471,9 +476,10 @@ int ObjBencher::write_bench(int secondsToRun, int maxObjectsToCreate,
 
   pthread_join(print_thread, NULL);
 
-  double bandwidth;
-  bandwidth = ((double)data.finished)
-    *((double)data.object_size)/ceph::span_to_double(timePassed);
+  bandwidth =
+    (double)data.finished * (double)data.object_size /
+    std::chrono::duration_cast<std::chrono::duration<double> >(
+      timePassed).count();
   bandwidth = bandwidth/(1024*1024); // we want it in MB/sec
   char bw[20];
   snprintf(bw, sizeof(bw), "%.3lf \n", bandwidth);
@@ -670,9 +676,11 @@ int ObjBencher::seq_read_bench(int seconds_to_run, int num_objects, int concurre
   pthread_join(print_thread, NULL);
 
   double bandwidth;
-  bandwidth = ((double)data.finished *
-	       (double)data.object_size /
-	       ceph::span_to_double(runtime));
+  bandwidth
+    = ((double)data.finished *
+       (double)data.object_size /
+       std::chrono::duration_cast<std::chrono::duration<double> >(
+	 runtime).count());
   bandwidth = bandwidth/(1024*1024); // we want it in MB/sec
   char bw[20];
   snprintf(bw, sizeof(bw), "%.3lf \n", bandwidth);
@@ -858,9 +866,11 @@ int ObjBencher::rand_read_bench(int seconds_to_run, int num_objects, int concurr
   pthread_join(print_thread, NULL);
 
   double bandwidth;
-  bandwidth = ((double)data.finished *
-	       (double)data.object_size /
-	       ceph::span_to_double(runtime));
+  bandwidth
+    = ((double)data.finished *
+       (double)data.object_size /
+       std::chrono::duration_cast<std::chrono::duration<double> >(
+	 runtime).count());
   bandwidth = bandwidth/(1024*1024); // we want it in MB/sec
   char bw[20];
   snprintf(bw, sizeof(bw), "%.3lf \n", bandwidth);

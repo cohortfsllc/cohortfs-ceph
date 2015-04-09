@@ -4,6 +4,7 @@
 #define CEPH_RADOS_TYPES_H
 
 #include <stdint.h>
+#include "include/ceph_time.h"
 
 /**
  * @struct obj_watch_t
@@ -13,7 +14,7 @@ struct obj_watch_t {
   char addr[256];
   int64_t watcher_id;
   uint64_t cookie;
-  uint32_t timeout_seconds;
+  ceph::timespan timeout;
 };
 
 #endif

@@ -66,7 +66,7 @@ TEST_P(LibRadosWatchNotifyPP, WatchNotifyTestPP) {
 }
 TEST_P(LibRadosWatchNotifyPP, WatchNotifyTimeoutTestPP) {
   ASSERT_EQ(0, sem_init(&sem, 0, 0));
-  ioctx.set_notify_timeout(1);
+  ioctx.set_notify_timeout(1s);
   uint64_t handle;
   WatchNotifyTestCtx ctx;
 

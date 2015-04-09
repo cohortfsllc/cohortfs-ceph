@@ -68,8 +68,7 @@ struct MonClientPinger : public Dispatcher {
   { }
 
   int wait_for_reply() {
-    return wait_for_reply(ceph::span_from_double(
-			    cct->_conf->client_mount_timeout));
+    return wait_for_reply(cct->_conf->client_mount_timeout);
   }
 
   int wait_for_reply(ceph::timespan t) {
@@ -180,7 +179,7 @@ private:
   list<Message*> waiting_for_session;
   Context *session_established_context;
   bool had_a_connection;
-  double reopen_interval_multiplier;
+  uint64_t reopen_interval_multiplier;
 
   string _pick_random_mon();
   void _finish_hunting();

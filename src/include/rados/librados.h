@@ -15,10 +15,6 @@
 #ifndef CEPH_LIBRADOS_H
 #define CEPH_LIBRADOS_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <netinet/in.h>
 #if defined(__linux__)
 #include <linux/types.h>
@@ -210,6 +206,11 @@ typedef void *rados_write_op_t;
  *   rados_aio_read_op_operate()
  */
 typedef void *rados_read_op_t;
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 /**
  * Get the version of librados.

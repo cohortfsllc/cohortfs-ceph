@@ -62,8 +62,7 @@ public:
     HealthService(m),
     last_warned_percent(0)
   {
-    set_update_period(
-      ceph::span_from_double(mon->cct->_conf->mon_health_data_update_interval));
+    set_update_period(mon->cct->_conf->mon_health_data_update_interval);
   }
   virtual ~DataHealthService() { }
 

@@ -175,9 +175,9 @@ void RGWQuotaCache<T>::set_stats(const string& user, rgw_bucket& bucket,
 {
   qs.stats = stats;
   qs.expiration = ceph::real_clock::now()
-    + store->ctx()->_conf->rgw_bucket_quota_ttl * 1s;
+    + store->ctx()->_conf->rgw_bucket_quota_ttl;
   qs.async_refresh_time = qs.expiration
-    + store->ctx()->_conf->rgw_bucket_quota_ttl * 1s / 2;
+    + store->ctx()->_conf->rgw_bucket_quota_ttl / 2;
 
   map_add(user, bucket, qs);
 }
@@ -427,7 +427,7 @@ class RGWUserStatsCache : public RGWQuotaCache<string> {
 	  break;
 
 	unique_lock l(lock);
-	cond.wait_for(l, cct->_conf->rgw_user_quota_bucket_sync_interval * 1s);
+	cond.wait_for(l, cct->_conf->rgw_user_quota_bucket_sync_interval);
 	l.unlock();
       } while (!stats->going_down());
       ldout(cct, 20) << "BucketsSyncThread: done" << dendl;
@@ -474,7 +474,7 @@ class RGWUserStatsCache : public RGWQuotaCache<string> {
 
 	unique_lock l(lock);
 	cond.wait_for(l,
-		      cct->_conf->rgw_user_quota_sync_interval * 1s);
+		      cct->_conf->rgw_user_quota_sync_interval);
 	l.unlock();
       } while (!stats->going_down());
       ldout(cct, 20) << "UserSyncThread: done" << dendl;

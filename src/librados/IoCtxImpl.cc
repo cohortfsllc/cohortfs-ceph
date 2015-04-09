@@ -599,7 +599,7 @@ int librados::IoCtxImpl::notify(const oid_t& oid, bufferlist& bl)
   uint64_t cookie;
   client->register_watch_notify_callback(wc, &cookie);
   uint32_t prot_ver = 1;
-  uint32_t timeout = notify_timeout;
+  ceph::timespan timeout = notify_timeout;
   ::encode(prot_ver, inbl);
   ::encode(timeout, inbl);
   ::encode(bl, inbl);
@@ -648,7 +648,7 @@ void librados::IoCtxImpl::set_assert_src_version(const oid_t& oid,
   assert_src_version[oid] = ver;
 }
 
-void librados::IoCtxImpl::set_notify_timeout(uint32_t timeout)
+void librados::IoCtxImpl::set_notify_timeout(ceph::timespan timeout)
 {
   notify_timeout = timeout;
 }

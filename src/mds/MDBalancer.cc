@@ -79,8 +79,7 @@ void MDBalancer::tick()
   ceph::timespan elapsed = now - first;
 
   // sample?
-  if (now - last_sample
-      > ceph::span_from_double(mds->cct->_conf->mds_bal_sample_interval)) {
+  if (now - last_sample > mds->cct->_conf->mds_bal_sample_interval) {
     ldout(mds->cct, 15) << "tick last_sample now " << now << dendl;
     last_sample = now;
   }
@@ -89,13 +88,12 @@ void MDBalancer::tick()
   if (last_heartbeat == ceph::mono_time::min())
     last_heartbeat = now;
   if (mds->get_nodeid() == 0 &&
-      mds->cct->_conf->mds_bal_interval > 0 &&
+      mds->cct->_conf->mds_bal_interval > 0ns &&
       (num_bal_times ||
-       (mds->cct->_conf->mds_bal_max_until >= 0 &&
-	elapsed > ceph::span_from_double(mds->cct->_conf->mds_bal_max_until)))
+       (mds->cct->_conf->mds_bal_max_until >= 0ns &&
+	elapsed > mds->cct->_conf->mds_bal_max_until))
       && mds->is_active() &&
-      now - last_heartbeat >= ceph::span_from_double(
-	mds->cct->_conf->mds_bal_interval)) {
+      now - last_heartbeat >= mds->cct->_conf->mds_bal_interval) {
     last_heartbeat = now;
     send_heartbeat();
     num_bal_times--;
@@ -104,9 +102,9 @@ void MDBalancer::tick()
   // hash?
   if ((mds->cct->_conf->mds_bal_frag ||
        mds->cct->_conf->mds_thrash_fragments) &&
-      mds->cct->_conf->mds_bal_fragment_interval > 0 &&
+      mds->cct->_conf->mds_bal_fragment_interval > 0ns &&
       now - last_fragment
-      > ceph::span_from_double(mds->cct->_conf->mds_bal_fragment_interval)) {
+      > mds->cct->_conf->mds_bal_fragment_interval) {
     last_fragment = now;
     do_fragmenting();
   }
@@ -627,9 +625,10 @@ void MDBalancer::try_rebalance()
     CDir *im = *it;
     if (im->get_inode()->is_stray()) continue;
 
-    double pop = im->pop_auth_subtree.meta_load(rebalance_time, mds->mdcache->decayrate);
-    if (mds->cct->_conf->mds_bal_idle_threshold > 0 &&
-	pop < mds->cct->_conf->mds_bal_idle_threshold &&
+    double pop = im->pop_auth_subtree.meta_load(rebalance_time,
+						mds->mdcache->decayrate);
+    if (mds->cct->_conf->mds_bal_idle_threshold > 0ns &&
+	pop * 1s < mds->cct->_conf->mds_bal_idle_threshold &&
 	im->inode != mds->mdcache->get_root() &&
 	im->inode->authority().first != mds->get_nodeid()) {
       ldout(mds->cct, 0) << " exporting idle (" << pop << ") import " << *im
@@ -1003,7 +1002,7 @@ void MDBalancer::hit_dir(ceph::real_time now, CDir *dir, int type, int who,
 
   // split/merge
   if (mds->cct->_conf->mds_bal_frag &&
-      mds->cct->_conf->mds_bal_fragment_interval > 0 &&
+      mds->cct->_conf->mds_bal_fragment_interval > 0ns &&
       !dir->inode->is_base() &&	       // not root/base (for now at least)
       dir->is_auth()) {
 

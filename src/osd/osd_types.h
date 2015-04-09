@@ -699,12 +699,12 @@ WRITE_CLASS_ENCODER(interval_set<uint64_t>)
 
 struct watch_info_t {
   uint64_t cookie;
-  uint32_t timeout_seconds;
+  ceph::timespan timeout;
   entity_addr_t addr;
 
-  watch_info_t() : cookie(0), timeout_seconds(0) { }
-  watch_info_t(uint64_t c, uint32_t t, const entity_addr_t& a)
-    : cookie(c), timeout_seconds(t), addr(a) {}
+  watch_info_t() : cookie(0), timeout(0ns) { }
+  watch_info_t(uint64_t c, ceph::timespan t, const entity_addr_t& a)
+    : cookie(c), timeout(t), addr(a) {}
 
   void encode(bufferlist& bl) const;
   void decode(bufferlist::iterator& bl);
@@ -716,19 +716,19 @@ WRITE_CLASS_ENCODER(watch_info_t)
 static inline bool operator==(const watch_info_t& l,
 			      const watch_info_t& r) {
   return l.cookie == r.cookie &&
-    l.timeout_seconds == r.timeout_seconds && l.addr == r.addr;
+    l.timeout == r.timeout && l.addr == r.addr;
 }
 
 static inline ostream& operator<<(ostream& out,
 				  const watch_info_t& w) {
   return out << "watch(cookie " << w.cookie << " "
-	     << w.timeout_seconds << "s"
+	     << w.timeout 
 	     << " " << w.addr << ")";
 }
 
 struct notify_info_t {
   uint64_t cookie;
-  uint32_t timeout;
+  ceph::timespan timeout;
   bufferlist bl;
 };
 
@@ -909,20 +909,20 @@ ostream& operator<<(ostream& out, const OSDOp& op);
 struct watch_item_t {
   entity_name_t name;
   uint64_t cookie;
-  uint32_t timeout_seconds;
+  ceph::timespan timeout;
   entity_addr_t addr;
 
-  watch_item_t() : cookie(0), timeout_seconds(0) { }
-  watch_item_t(entity_name_t name, uint64_t cookie, uint32_t timeout,
+  watch_item_t() : cookie(0), timeout(0ns) { }
+  watch_item_t(entity_name_t name, uint64_t cookie, ceph::timespan timeout,
      const entity_addr_t& addr)
-    : name(name), cookie(cookie), timeout_seconds(timeout),
+    : name(name), cookie(cookie), timeout(timeout),
     addr(addr) { }
 
   void encode(bufferlist &bl) const {
     ENCODE_START(2, 1, bl);
     ::encode(name, bl);
     ::encode(cookie, bl);
-    ::encode(timeout_seconds, bl);
+    ::encode(timeout, bl);
     ::encode(addr, bl);
     ENCODE_FINISH(bl);
   }
@@ -930,7 +930,7 @@ struct watch_item_t {
     DECODE_START(2, bl);
     ::decode(name, bl);
     ::decode(cookie, bl);
-    ::decode(timeout_seconds, bl);
+    ::decode(timeout, bl);
     if (struct_v >= 2) {
       ::decode(addr, bl);
     }
@@ -967,7 +967,7 @@ struct obj_list_watch_response_t {
       f->open_object_section("watch");
       f->dump_stream("watcher") << p->name;
       f->dump_int("cookie", p->cookie);
-      f->dump_int("timeout", p->timeout_seconds);
+      f->dump_stream("timeout") << p->timeout;
       f->open_object_section("addr");
       p->addr.dump(f);
       f->close_section();
@@ -986,11 +986,13 @@ struct obj_list_watch_response_t {
     ea.set_in4_quad(2, 0);
     ea.set_in4_quad(3, 1);
     ea.set_port(1024);
-    o.back()->entries.push_back(watch_item_t(entity_name_t(entity_name_t::TYPE_CLIENT, 1), 10, 30, ea));
+    o.back()->entries.push_back(
+      watch_item_t(entity_name_t(entity_name_t::TYPE_CLIENT, 1), 10, 30s, ea));
     ea.set_nonce(1001);
     ea.set_in4_quad(3, 2);
     ea.set_port(1025);
-    o.back()->entries.push_back(watch_item_t(entity_name_t(entity_name_t::TYPE_CLIENT, 2), 20, 60, ea));
+    o.back()->entries.push_back(
+      watch_item_t(entity_name_t(entity_name_t::TYPE_CLIENT, 2), 20, 60s, ea));
   }
 };
 

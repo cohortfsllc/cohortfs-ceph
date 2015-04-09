@@ -61,17 +61,17 @@ void DecayCounter::generate_test_instances(std::list<DecayCounter*>& ls)
 
 void DecayCounter::decay(ceph::real_time now, const DecayRate &rate)
 {
-  ceph::timespan el = now - last_decay;
+  std::chrono::duration<double> el = now - last_decay;
 
   if (el >= 1s) {
     // calculate new value
-    double newval = (val+delta) * exp(ceph::span_to_double(el) * rate.k);
+    double newval = (val+delta) * exp(el.count() * rate.k);
     if (newval < .01)
       newval = 0.0;
 
     // calculate velocity approx
-    vel += (newval - val) * ceph::span_to_double(el);
-    vel *= exp(ceph::span_to_double(el) * rate.k);
+    vel += (newval - val) * el.count();
+    vel *= exp(el.count() * rate.k);
 
     val = newval;
     delta = 0;

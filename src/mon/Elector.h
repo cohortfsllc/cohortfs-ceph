@@ -62,7 +62,7 @@ public:
    *
    * @param plus The amount of time to be added to the default firing value.
    */
-  void reset_timer(double plus=0.0);
+  void reset_timer(ceph::timespan plus=0ns);
   /**
    * Cancel the expire_event timer, if it is defined.
    *

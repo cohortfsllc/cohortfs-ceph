@@ -99,13 +99,14 @@ Pipe::Pipe(SimpleMessenger *r, int st, PipeConnection *con)
   }
 
   if (randomize_out_seq()) {
-    lsubdout(msgr->cct,ms,15) << "Pipe(): Could not get random bytes to set seq number for session reset; set seq number to " << out_seq << dendl;
+    lsubdout(msgr->cct,ms,15)<< "Pipe(): Could not get random bytes to set "
+			     << "seq number for session reset; set seq number "
+			     << "to " << out_seq << dendl;
   }
 
 
-  msgr->timeout = msgr->cct->_conf->ms_tcp_read_timeout * 1000; //convert to ms
-  if (msgr->timeout == 0)
-    msgr->timeout = -1;
+  msgr->timeout = std::chrono::duration_cast<std::chrono::milliseconds>(
+    msgr->cct->_conf->ms_tcp_read_timeout).count();
 }
 
 Pipe::~Pipe()
@@ -702,10 +703,11 @@ int Pipe::accept(std::unique_lock<std::mutex>& pl)
  fail_registered:
   ldout(msgr->cct, 10) << "accept fault after register" << dendl;
 
-  if (msgr->cct->_conf->ms_inject_internal_delays) {
-    ldout(msgr->cct, 10) << " sleep for " << msgr->cct->_conf->ms_inject_internal_delays << dendl;
-    std::this_thread::sleep_for(
-      ceph::span_from_double(msgr->cct->_conf->ms_inject_internal_delays));
+  if (msgr->cct->_conf->ms_inject_internal_delays > 0ns) {
+    ldout(msgr->cct, 10) << " sleep for "
+			 << msgr->cct->_conf->ms_inject_internal_delays
+			 << dendl;
+    std::this_thread::sleep_for(msgr->cct->_conf->ms_inject_internal_delays);
   }
 
  fail_unlocked:
@@ -731,10 +733,11 @@ int Pipe::accept(std::unique_lock<std::mutex>& pl)
   ml.unlock();
  shutting_down_msgr_unlocked:
 
-  if (msgr->cct->_conf->ms_inject_internal_delays) {
-    ldout(msgr->cct, 10) << " sleep for " << msgr->cct->_conf->ms_inject_internal_delays << dendl;
-    std::this_thread::sleep_for(
-      ceph::span_from_double(msgr->cct->_conf->ms_inject_internal_delays));
+  if (msgr->cct->_conf->ms_inject_internal_delays > 0ns) {
+    ldout(msgr->cct, 10)
+      << " sleep for "
+      << msgr->cct->_conf->ms_inject_internal_delays << dendl;
+    std::this_thread::sleep_for(msgr->cct->_conf->ms_inject_internal_delays);
   }
 
   state = STATE_CLOSED;
@@ -971,10 +974,11 @@ int Pipe::connect(std::unique_lock<std::mutex>& pl)
       }
     }
 
-    if (conf->ms_inject_internal_delays) {
-      ldout(msgr->cct, 10) << " sleep for " << msgr->cct->_conf->ms_inject_internal_delays << dendl;
-      std::this_thread::sleep_for(
-	ceph::span_from_double(msgr->cct->_conf->ms_inject_internal_delays));
+    if (conf->ms_inject_internal_delays > 0ns) {
+      ldout(msgr->cct, 10) << " sleep for "
+			   << msgr->cct->_conf->ms_inject_internal_delays
+			   << dendl;
+      std::this_thread::sleep_for(msgr->cct->_conf->ms_inject_internal_delays);
     }
 
     pl.lock();
@@ -1113,10 +1117,10 @@ int Pipe::connect(std::unique_lock<std::mutex>& pl)
   }
 
  fail:
-  if (conf->ms_inject_internal_delays) {
-    ldout(msgr->cct, 10) << " sleep for " << msgr->cct->_conf->ms_inject_internal_delays << dendl;
-    std::this_thread::sleep_for(
-      ceph::span_from_double(msgr->cct->_conf->ms_inject_internal_delays));
+  if (conf->ms_inject_internal_delays > 0ns) {
+    ldout(msgr->cct, 10)
+      << " sleep for " << msgr->cct->_conf->ms_inject_internal_delays << dendl;
+    std::this_thread::sleep_for(msgr->cct->_conf->ms_inject_internal_delays);
   }
 
   pl.lock();
@@ -1255,10 +1259,11 @@ void Pipe::fault(std::unique_lock<std::mutex>& pl, bool onread)
     // rank_pipe entry is ignored by others.
     pl.unlock();
 
-    if (conf->ms_inject_internal_delays) {
-      ldout(msgr->cct, 10) << " sleep for " << msgr->cct->_conf->ms_inject_internal_delays << dendl;
-      std::this_thread::sleep_for(
-	ceph::span_from_double(msgr->cct->_conf->ms_inject_internal_delays));
+    if (conf->ms_inject_internal_delays > 0ns) {
+      ldout(msgr->cct, 10) << " sleep for "
+			   << msgr->cct->_conf->ms_inject_internal_delays
+			   << dendl;
+      std::this_thread::sleep_for(msgr->cct->_conf->ms_inject_internal_delays);
     }
 
     std::unique_lock<std::mutex> ml(msgr->lock);
@@ -1304,13 +1309,13 @@ void Pipe::fault(std::unique_lock<std::mutex>& pl, bool onread)
     backoff = ceph::timespan(0);
   } else if (backoff == ceph::timespan(0)) {
     ldout(msgr->cct,0) << "fault" << dendl;
-    backoff = ceph::span_from_double(conf->ms_initial_backoff);
+    backoff = conf->ms_initial_backoff;
   } else {
     ldout(msgr->cct,10) << "fault waiting " << backoff << dendl;
     cond.wait_for(pl, backoff);
     backoff += backoff;
-    if (backoff > ceph::span_from_double(conf->ms_max_backoff))
-      backoff = ceph::span_from_double(conf->ms_max_backoff);
+    if (backoff > conf->ms_max_backoff)
+      backoff = conf->ms_max_backoff;
     ldout(msgr->cct,10) << "fault done waiting or woke up" << dendl;
   }
 }
@@ -1501,13 +1506,14 @@ void Pipe::reader()
 
       if (delay_thread) {
 	ceph::real_time release;
-	if (rand() % 10000 < msgr->cct->_conf->ms_inject_delay_probability * 10000.0) {
+	if (rand() % 10000 < msgr->cct->_conf->ms_inject_delay_probability
+	    * 10000.0) {
 	  release = m->get_recv_stamp();
-	  release += ceph::span_from_double(
-	    msgr->cct->_conf->ms_inject_delay_max *
-	    (double)(rand() % 10000) / 10000.0);
-	  lsubdout(msgr->cct, ms, 1) << "queue_received will delay until "
-				     << release << " on " << m << " " << *m << dendl;
+	  release += msgr->cct->_conf->ms_inject_delay_max *
+	    (rand() % 10000) / 10000;
+	  lsubdout(msgr->cct, ms, 1)
+	    << "queue_received will delay until " << release << " on "
+	    << m << " " << *m << dendl;
 	}
 	delay_thread->queue(release, m);
       } else {

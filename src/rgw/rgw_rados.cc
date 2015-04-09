@@ -6637,7 +6637,7 @@ int RGWOpStateSingleOp::set_state(RGWOpState::OpState state) {
 
 int RGWOpStateSingleOp::renew_state() {
   ceph::real_time now = ceph::real_clock::now();
-  auto rate_limit = cct->_conf->rgw_opstate_ratelimit_sec * 1s;
+  auto rate_limit = cct->_conf->rgw_opstate_ratelimit_time;
 
   if ((rate_limit > 0ms) && now - last_update < rate_limit) {
     return 0;

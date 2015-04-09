@@ -129,20 +129,20 @@ int RGWGC::list(int *index, string& marker, uint32_t max, bool expired_only,
   return 0;
 }
 
-int RGWGC::process(int index, int max_secs)
+int RGWGC::process(int index, ceph::timespan max_time)
 {
   rados::cls::lock::Lock l(gc_index_lock_name);
   std::list<string> remove_tags;
 
-  /* max_secs should be greater than zero. We don't want a zero max_secs
+  /* max_time should be greater than zero. We don't want a zero max_time
    * to be translated as no timeout, since we'd then need to break the
    * lock and that would require a manual intervention. In this case
    * we can just wait it out. */
-  if (max_secs <= 0)
+  if (max_time == 0ns)
     return -EAGAIN;
 
-  auto end = ceph::real_clock::now() + max_secs * 1s;
-  l.set_duration(max_secs * 1s);
+  auto end = ceph::real_clock::now() + max_time;
+  l.set_duration(max_time);
 
   int ret = l.lock_exclusive(&store->gc_pool_ctx, obj_names[index]);
   if (ret == -EBUSY) { /* already locked by another gc processor */
@@ -233,7 +233,7 @@ done:
 int RGWGC::process()
 {
   int max_objs = cct->_conf->rgw_gc_max_objs;
-  int max_secs = cct->_conf->rgw_gc_processor_max_time;
+  ceph::timespan max_time = cct->_conf->rgw_gc_processor_max_time;
 
   unsigned start;
   int ret = get_random_bytes((char *)&start, sizeof(start));
@@ -242,7 +242,7 @@ int RGWGC::process()
 
   for (int i = 0; i < max_objs; i++) {
     int index = (i + start) % max_objs;
-    ret = process(index, max_secs);
+    ret = process(index, max_time);
     if (ret < 0)
       return ret;
   }
@@ -286,7 +286,7 @@ void *RGWGC::GCWorker::entry() {
       break;
 
     auto end = ceph::real_clock::now() - start;
-    ceph::timespan secs = cct->_conf->rgw_gc_processor_period * 1s;
+    ceph::timespan secs = cct->_conf->rgw_gc_processor_period;
 
     if (secs <= end)
       continue; // next round

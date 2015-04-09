@@ -1520,11 +1520,10 @@ void MDCache::predirty_journal_parents(MutationRef mut, EMetaBlob *blob,
 
     // delay propagating until later?
     if (!stop && !first &&
-	cct->_conf->mds_dirstat_min_interval > 0) {
+	cct->_conf->mds_dirstat_min_interval > 0ns) {
       if (pin->last_dirstat_prop > ceph::real_time::min()) {
 	ceph::timespan since_last_prop = mut->now - pin->last_dirstat_prop;
-	if (since_last_prop < ceph::span_from_double(
-	      cct->_conf->mds_dirstat_min_interval)) {
+	if (since_last_prop < cct->_conf->mds_dirstat_min_interval) {
 	  dout(10) << "predirty_journal_parents last prop " << since_last_prop
 		   << " < " << cct->_conf->mds_dirstat_min_interval
 		   << ", stopping" << dendl;
@@ -6363,8 +6362,7 @@ void MDCache::shutdown_check()
   show_cache();
   cct->_conf->set_val("debug_mds", old_val);
   cct->_conf->apply_changes(NULL);
-  mds->timer.reschedule_me(
-    ceph::span_from_double(cct->_conf->mds_shutdown_check));
+  mds->timer.reschedule_me(cct->_conf->mds_shutdown_check);
 
   // this
   dout(0) << "lru size now " << lru.lru_get_size() << dendl;
@@ -6376,9 +6374,9 @@ void MDCache::shutdown_start()
 {
   dout(2) << "shutdown_start" << dendl;
 
-  if (cct->_conf->mds_shutdown_check)
+  if (cct->_conf->mds_shutdown_check != 0ns)
     mds->timer.add_event(
-      ceph::span_from_double(cct->_conf->mds_shutdown_check),
+      cct->_conf->mds_shutdown_check,
       &MDCache::shutdown_check, this);
 
   //  cct->_conf->debug_mds = 10;
@@ -10363,8 +10361,7 @@ void MDCache::find_stale_fragment_freeze()
   dout(10) << "find_stale_fragment_freeze" << dendl;
   // see comment in Migrator::find_stale_export_freeze()
   ceph::mono_time now = ceph::mono_clock::now();
-  ceph::mono_time cutoff = now - ceph::span_from_double(
-    cct->_conf->mds_freeze_tree_timeout);
+  ceph::mono_time cutoff = now - cct->_conf->mds_freeze_tree_timeout;
 
   for (map<dirfrag_t,fragment_info_t>::iterator p = fragments.begin();
        p != fragments.end(); ) {

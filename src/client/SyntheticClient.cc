@@ -1891,7 +1891,7 @@ int SyntheticClient::make_files(int num, int count, int priv, bool more)
   }
   ceph::timespan end = ceph::mono_clock::now() - start;
   ldout(client->cct, 0) << "makefiles time is " << end << " or "
-			<< (ceph::span_to_double(end) / (double)num)
+			<< end / num
 			<<" per file" << dendl;
 
   return 0;
@@ -2077,8 +2077,8 @@ int SyntheticClient::write_file(string& fn, int size, loff_t wrsize)   // size i
 
     auto now = ceph::mono_clock::now();
     if (now - from >= 1s) {
-      double el = ceph::span_to_double(now - from);
-      ldout(client->cct, 0) << "write " << (bytes / el / 1048576.0)
+      std::chrono::duration<double> el = now - from;
+      ldout(client->cct, 0) << "write " << (bytes / el.count() / 1048576.0)
 			    << " MB/sec" << dendl;
       from = now;
       bytes = 0;
@@ -2088,9 +2088,9 @@ int SyntheticClient::write_file(string& fn, int size, loff_t wrsize)   // size i
   client->fsync(fd, true);
 
   auto stop = ceph::mono_clock::now();
-  double el = ceph::span_to_double(stop - start);
-  ldout(client->cct, 0) << "write total " << (total / el / 1048576.0)
-			<< " MB/sec (" << total << " bytes in " << el
+  std::chrono::duration<double> el = stop - start;
+  ldout(client->cct, 0) << "write total " << (total / el.count() / 1048576.0)
+			<< " MB/sec (" << total << " bytes in " << el.count()
 			<< " seconds)" << dendl;
 
   client->close(fd);
@@ -2183,8 +2183,8 @@ int SyntheticClient::read_file(const std::string& fn, int size,
 
     auto now = ceph::mono_clock::now();
     if (now - from >= 1s) {
-      double el = ceph::span_to_double(now - from);
-      ldout(client->cct, 0) << "read " << (bytes / el / 1048576.0)
+      std::chrono::duration<double> el = now - from;
+      ldout(client->cct, 0) << "read " << (bytes / el.count() / 1048576.0)
 			    << " MB/sec" << dendl;
       from = now;
       bytes = 0;
@@ -2217,10 +2217,10 @@ int SyntheticClient::read_file(const std::string& fn, int size,
   }
 
   auto stop = ceph::mono_clock::now();
-  double el = ceph::span_to_double(stop - start);
-  ldout(client->cct, 0) << "read total " << (total / el / 1048576.0)
-			<< " MB/sec ("
-	  << total << " bytes in " << el << " seconds)" << dendl;
+  std::chrono::duration<double> el = stop - start;
+  ldout(client->cct, 0) << "read total " << (total / el.count() / 1048576.0)
+			<< " MB/sec (" << total << " bytes in "
+			<< el.count() << " seconds)" << dendl;
 
   client->close(fd);
   delete[] buf;

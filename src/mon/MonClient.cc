@@ -67,7 +67,7 @@ MonClient::MonClient(CephContext *cct_) :
   authenticate_err(0),
   session_established_context(NULL),
   had_a_connection(false),
-  reopen_interval_multiplier(1.0),
+  reopen_interval_multiplier(1),
   auth(NULL),
   keyring(NULL),
   rotating_secrets(NULL),
@@ -139,9 +139,7 @@ int MonClient::get_monmap_privately()
     if (--attempt == 0)
       break;
 
-    ceph::timespan interval = ceph::span_from_double(
-      cct->_conf->mon_client_hunt_interval);
-    map_cond.wait_for(l, interval);
+    map_cond.wait_for(l, cct->_conf->mon_client_hunt_interval);
 
     if (monmap.fsid.is_nil()) {
       messenger->mark_down(cur_con);  // nope, clean that connection up
@@ -228,8 +226,7 @@ int MonClient::ping_monitor(const string &mon_id, string *result_reply)
   smsgr->send_message(new MPing, con);
 
   std::unique_lock<std::mutex> pl(pinger->lock);
-  int ret = pinger->wait_for_reply(
-    ceph::span_from_double(cct->_conf->client_mount_timeout));
+  int ret = pinger->wait_for_reply(cct->_conf->client_mount_timeout);
   if (ret == 0) {
     ldout(cct,10) << __func__ << " got ping reply" << dendl;
   } else {
@@ -728,12 +725,11 @@ void MonClient::tick()
     if (state == MC_STATE_HAVE_SESSION) {
       send_log();
 
-      if (cct->_conf->mon_client_ping_timeout > 0 &&
+      if (cct->_conf->mon_client_ping_timeout > 0ns &&
 	  cur_con->has_feature(CEPH_FEATURE_MSGR_KEEPALIVE2)) {
 	ceph::real_time lk = cur_con->get_last_keepalive_ack();
 	ceph::timespan interval = ceph::real_clock::now() - lk;
-	if (interval >
-	    ceph::span_from_double(cct->_conf->mon_client_ping_timeout)) {
+	if (interval > cct->_conf->mon_client_ping_timeout) {
 	  _reopen_session();
 	}
       }
@@ -743,24 +739,20 @@ void MonClient::tick()
   l.unlock();
 
   if (hunting)
-    timer.reschedule_me(ceph::span_from_double(
-			  cct->_conf->mon_client_hunt_interval
-			  * reopen_interval_multiplier));
+    timer.reschedule_me(cct->_conf->mon_client_hunt_interval
+			* reopen_interval_multiplier);
   else
-    timer.reschedule_me(ceph::span_from_double(
-			  cct->_conf->mon_client_ping_interval));
+    timer.reschedule_me(cct->_conf->mon_client_ping_interval);
 }
 
 void MonClient::schedule_tick()
 {
   if (hunting)
-    timer.add_event(ceph::span_from_double(
-		      cct->_conf->mon_client_hunt_interval
-		      * reopen_interval_multiplier),
+    timer.add_event(cct->_conf->mon_client_hunt_interval
+		    * reopen_interval_multiplier,
 		    &MonClient::tick, this);
   else
-    timer.add_event(ceph::span_from_double(
-		      cct->_conf->mon_client_ping_interval),
+    timer.add_event(cct->_conf->mon_client_ping_interval,
 		    &MonClient::tick, this);
 }
 
@@ -792,7 +784,7 @@ void MonClient::handle_subscribe_ack(MMonSubscribeAck *m)
 
   if (sub_renew_sent != ceph::mono_time::min()) {
     sub_renew_after = sub_renew_sent;
-    sub_renew_after += m->interval * 500ms;
+    sub_renew_after += m->interval;
     sub_renew_sent = ceph::mono_time::min();
   }
 
@@ -830,8 +822,7 @@ int MonClient::_check_auth_rotating()
   }
 
   ceph::real_time cutoff = ceph::real_clock::now() -
-    ceph::span_from_double(MIN(30.0, cct->_conf->auth_service_ticket_ttl
-				  / 4.0));
+    MIN(30s, cct->_conf->auth_service_ticket_ttl / 4);
   if (!rotating_secrets->need_new_secrets(cutoff)) {
     ldout(cct, 10) << "_check_auth_rotating have uptodate secrets (they expire after " << cutoff << ")" << dendl;
     rotating_secrets->dump_rotating();
@@ -990,11 +981,11 @@ int MonClient::start_mon_command(const vector<string>& cmd,
   r->poutbl = outbl;
   r->prs = outs;
   r->onfinish = onfinish;
-  if (cct->_conf->rados_mon_op_timeout > 0) {
+  if (cct->_conf->rados_mon_op_timeout > 0ns) {
     r->ontimeout =
-      timer.add_event(
-	ceph::span_from_double(cct->_conf->rados_mon_op_timeout),
-	&MonClient::_cancel_mon_command, this, r->tid, -ETIMEDOUT);
+      timer.add_event(cct->_conf->rados_mon_op_timeout,
+		      &MonClient::_cancel_mon_command, this, r->tid,
+		      -ETIMEDOUT);
   }
   mon_commands[r->tid] = r;
   _send_command(r);

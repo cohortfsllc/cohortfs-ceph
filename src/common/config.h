@@ -208,6 +208,7 @@ public:
 #define OPTION_OPT_U32(name) const uint32_t name;
 #define OPTION_OPT_U64(name) const uint64_t name;
 #define OPTION_OPT_UUID(name) const boost::uuids::uuid name;
+#define OPTION_OPT_TIME(name) const ceph::timespan name;
 #define OPTION(name, ty, init) OPTION_##ty(name)
 #define SUBSYS(name, log, gather)
 #define DEFAULT_SUBSYS(log, gather)
@@ -222,6 +223,7 @@ public:
 #undef OPTION_OPT_U32
 #undef OPTION_OPT_U64
 #undef OPTION_OPT_UUID
+#undef OPTION_OPT_TIME
 #undef OPTION
 #undef SUBSYS
 #undef DEFAULT_SUBSYS
@@ -240,7 +242,7 @@ public:
 
 typedef enum {
 	OPT_INT, OPT_LONGLONG, OPT_STR, OPT_DOUBLE, OPT_FLOAT, OPT_BOOL,
-	OPT_ADDR, OPT_U32, OPT_U64, OPT_UUID
+	OPT_ADDR, OPT_U32, OPT_U64, OPT_UUID, OPT_TIME
 } opt_type_t;
 
 bool ceph_resolve_file_search(const std::string& filename_list,

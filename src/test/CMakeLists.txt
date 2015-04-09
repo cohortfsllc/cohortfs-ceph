@@ -1701,20 +1701,6 @@ if(${WITH_FUSE})
     )
 endif(${WITH_FUSE})
 
-if(${WITH_CLIENT})
-  add_executable(test_c_headers
-    test_c_headers.c
-  )
-  target_link_libraries(test_c_headers
-    common
-    librados
-    cephfs
-    ${EXTRALIBS}
-    ${ALLOC_LIBS}
-    ${CMAKE_DL_LIBS}
-    )
-endif(${WITH_CLIENT})
-
 add_executable(test_get_blkdev_size
   test_get_blkdev_size.cc
   )

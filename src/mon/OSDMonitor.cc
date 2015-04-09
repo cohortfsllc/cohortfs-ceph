@@ -750,27 +750,22 @@ void OSDMonitor::check_failures(ceph::real_time now)
 bool OSDMonitor::check_failure(ceph::real_time now, int target_osd,
 			       failure_info_t& fi)
 {
-  ceph::timespan orig_grace(std::chrono::seconds(
-			      mon->cct->_conf->osd_heartbeat_grace));
+  ceph::timespan orig_grace(mon->cct->_conf->osd_heartbeat_grace);
   ceph::real_time max_failed_since = fi.get_failed_since();
-  ceph::timespan failed_for = now - max_failed_since;
+  std::chrono::duration<double> failed_for(now - max_failed_since);
 
   ceph::timespan grace = orig_grace;
   ceph::timespan my_grace = 0ns, peer_grace = 0ns;
   if (mon->cct->_conf->mon_osd_adjust_heartbeat_grace) {
-    double halflife = (double)mon->cct->_conf->mon_osd_laggy_halflife;
-    double decay_k = ::log(.5) / halflife;
+    std::chrono::duration<double> halflife(
+      mon->cct->_conf->mon_osd_laggy_halflife);
 
     // scale grace period based on historical probability of 'lagginess'
     // (false positive failures due to slowness).
     const osd_xinfo_t& xi = osdmap.get_xinfo(target_osd);
-    double decay = exp(ceph::span_to_double(failed_for) * decay_k);
-    ldout(mon->cct, 20) << " halflife " << halflife << " decay_k " << decay_k
-			<< " failed_for " << failed_for << " decay "
-			<< decay << dendl;
-    my_grace = ceph::span_from_double(decay *
-				      ceph::span_to_double(xi.laggy_interval) *
-				      xi.laggy_probability);
+    double decay = pow(.5, failed_for/halflife);
+    my_grace = std::chrono::duration_cast<ceph::timespan>(
+      decay * xi.laggy_interval * xi.laggy_probability);
     grace += my_grace;
 
     // consider the peers reporting a failure a proxy for a potential
@@ -784,19 +779,13 @@ bool OSDMonitor::check_failure(ceph::real_time now, int target_osd,
 	 ++p) {
       const osd_xinfo_t& xi = osdmap.get_xinfo(p->first);
       ceph::timespan elapsed = now - xi.down_stamp;
-      double decay = exp(ceph::span_to_double(elapsed) * decay_k);
-      peer_grace += ceph::span_from_double(
-	decay * ceph::span_to_double(xi.laggy_interval) * xi.laggy_probability);
+      double decay = pow(.5, elapsed / halflife);
+      peer_grace += std::chrono::duration_cast<ceph::timespan>(
+	decay * xi.laggy_interval * xi.laggy_probability);
     }
-    peer_grace /= (double)fi.reporters.size();
+    peer_grace /= fi.reporters.size();
     grace += peer_grace;
   }
-
-  ldout(mon->cct, 10) << " osd." << target_osd << " has "
-	   << fi.reporters.size() << " reporters and "
-	   << fi.num_reports << " reports, "
-	   << grace << " grace (" << orig_grace << " + " << my_grace << " + " << peer_grace << "), max_failed_since " << max_failed_since
-	   << dendl;
 
   // already pending failure?
   if (pending_inc.new_state.count(target_osd) &&
@@ -806,14 +795,18 @@ bool OSDMonitor::check_failure(ceph::real_time now, int target_osd,
   }
 
   if (failed_for >= grace &&
-      ((int)fi.reporters.size() >= mon->cct->_conf->mon_osd_min_down_reporters) &&
+      ((int)fi.reporters.size() >=
+       mon->cct->_conf->mon_osd_min_down_reporters) &&
       (fi.num_reports >= mon->cct->_conf->mon_osd_min_down_reports)) {
-    ldout(mon->cct, 1) << " we have enough reports/reporters to mark osd." << target_osd << " down" << dendl;
+    ldout(mon->cct, 1) << " we have enough reports/reporters to mark osd."
+		       << target_osd << " down" << dendl;
     pending_inc.new_state[target_osd] = CEPH_OSD_UP;
 
     mon->clog.info() << osdmap.get_inst(target_osd) << " failed ("
-		     << fi.num_reports << " reports from " << (int)fi.reporters.size() << " peers after "
-		     << failed_for << " >= grace " << grace << ")\n";
+		     << fi.num_reports << " reports from "
+		     << (int)fi.reporters.size() << " peers after "
+		     << std::chrono::duration_cast<ceph::timespan>(failed_for)
+		     << " >= grace " << grace << ")\n";
     return true;
   }
   return false;
@@ -834,7 +827,7 @@ bool OSDMonitor::prepare_failure(MOSDFailure *m)
   ceph::real_time failed_since
     = m->get_recv_stamp() - (m->failed_for ?
 			     m->failed_for * 1s :
-			     mon->cct->_conf->osd_heartbeat_grace * 1s);
+			     mon->cct->_conf->osd_heartbeat_grace);
 
   if (m->if_osd_failed()) {
     // add a report
@@ -1076,11 +1069,12 @@ bool OSDMonitor::prepare_boot(MOSDBoot *m)
       if (xi.down_stamp > ceph::real_time::min()) {
 	ceph::timespan interval = ceph::real_clock::now() - xi.down_stamp;
 	// Ideally we should make all these parameters stop being doubles
-	xi.laggy_interval = ceph::span_from_double(
-	  ceph::span_to_double(interval) *
-	  mon->cct->_conf->mon_osd_laggy_weight +
-	  ceph::span_to_double(xi.laggy_interval) *
-	  (1.0 - mon->cct->_conf->mon_osd_laggy_weight));
+	xi.laggy_interval
+	  = std::chrono::duration_cast<
+	    ceph::timespan>(interval *
+			    mon->cct->_conf->mon_osd_laggy_weight +
+			    xi.laggy_interval *
+			    (1.0 - mon->cct->_conf->mon_osd_laggy_weight));
       }
       xi.laggy_probability =
 	mon->cct->_conf->mon_osd_laggy_weight +
@@ -1430,37 +1424,35 @@ void OSDMonitor::tick(unique_lock& l)
     auto i = down_pending_out.begin();
     while (i != down_pending_out.end()) {
       int o = i->first;
-      ceph::timespan down = now - i->second;
+      std::chrono::duration<double> down(now - i->second);
       ++i;
 
       if (osdmap.is_down(o) &&
 	  osdmap.is_in(o) &&
 	  can_mark_out(o)) {
 	ceph::timespan orig_grace
-	  = mon->cct->_conf->mon_osd_down_out_interval * 1s;
+	  = mon->cct->_conf->mon_osd_down_out_interval;
 	ceph::timespan grace = orig_grace;
 	ceph::timespan my_grace = 0s;
 
 	if (mon->cct->_conf->mon_osd_adjust_down_out_interval) {
 	  // scale grace period the same way we do the heartbeat grace.
 	  const osd_xinfo_t& xi = osdmap.get_xinfo(o);
-	  double halflife = (double)mon->cct->_conf->mon_osd_laggy_halflife;
-	  double decay_k = ::log(.5) / halflife;
-	  double decay = exp(ceph::span_to_double(down) * decay_k);
-	  ldout(mon->cct, 20) << "osd." << o << " laggy halflife "
-			      << halflife << " decay_k " << decay_k
-			      << " down for " << down << " decay " << decay
-			      << dendl;
-	  my_grace = ceph::span_from_double(decay * ceph::span_to_double(
-					      xi.laggy_interval)
-					    * xi.laggy_probability);
+	  std::chrono::duration<double>halflife(
+	    mon->cct->_conf->mon_osd_laggy_halflife);
+	  double decay = pow(.5, down / halflife);
+	  my_grace = std::chrono::duration_cast<ceph::timespan>(
+	    decay * xi.laggy_interval * xi.laggy_probability);
 	  grace += my_grace;
 	}
 
-	if (mon->cct->_conf->mon_osd_down_out_interval > 0 &&
+	if (mon->cct->_conf->mon_osd_down_out_interval > 0ns &&
 	    down >= grace) {
-	  ldout(mon->cct, 10) << "tick marking osd." << o << " OUT after " << down
-		   << " sec (target " << grace << " = " << orig_grace << " + " << my_grace << ")" << dendl;
+	  ldout(mon->cct, 10)
+	    << "tick marking osd." << o << " OUT after "
+	    << std::chrono::duration_cast<ceph::timespan>(down)
+	    << " sec (target " << grace << " = " << orig_grace << " + "
+	    << my_grace << ")" << dendl;
 	  pending_inc.new_weight[o] = CEPH_OSD_OUT;
 
 	  // set the AUTOOUT bit.
@@ -1470,7 +1462,9 @@ void OSDMonitor::tick(unique_lock& l)
 
 	  do_propose = true;
 
-	  mon->clog.info() << "osd." << o << " out (down for " << down << ")\n";
+	  mon->clog.info() << "osd." << o << " out (down for "
+			   << std::chrono::duration_cast<ceph::timespan>(down)
+			   << ")\n";
 	} else
 	  continue;
       }
@@ -1506,7 +1500,7 @@ void OSDMonitor::handle_osd_timeouts(
   const ceph::real_time &now, std::map<int,ceph::real_time> &last_osd_report,
   unique_lock &l)
 {
-  ceph::timespan timeo = mon->cct->_conf->mon_osd_report_timeout * 1s;
+  ceph::timespan timeo = mon->cct->_conf->mon_osd_report_timeout;
   int max_osd = osdmap.get_max_osd();
   bool new_down = false;
 
@@ -1613,7 +1607,7 @@ void OSDMonitor::get_health(list<pair<health_status_t,string> >& summary,
     // monitor on a 3-monitor cluster, this warning will only be shown every
     // third monitor connection.
     if (mon->cct->_conf->mon_warn_on_osd_down_out_interval_zero &&
-	mon->cct->_conf->mon_osd_down_out_interval == 0) {
+	mon->cct->_conf->mon_osd_down_out_interval == 0ns) {
       ostringstream ss;
       ss << "mon." << mon->name << " has mon_osd_down_out_interval set to 0";
       summary.push_back(make_pair(HEALTH_WARN, ss.str()));

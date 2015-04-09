@@ -127,6 +127,7 @@ md_config_t::md_config_t()
 #define OPTION_OPT_U32(name, def_val) name(def_val),
 #define OPTION_OPT_U64(name, def_val) name(((uint64_t)1) * def_val),
 #define OPTION_OPT_UUID(name, def_val) name(def_val),
+#define OPTION_OPT_TIME(name, def_val) name(def_val),
 #define OPTION(name, type, def_val) OPTION_##type(name, def_val)
 #define SUBSYS(name, log, gather)
 #define DEFAULT_SUBSYS(log, gather)
@@ -141,6 +142,7 @@ md_config_t::md_config_t()
 #undef OPTION_OPT_U32
 #undef OPTION_OPT_U64
 #undef OPTION_OPT_UUID
+#undef OPTION_OPT_TIME
 #undef OPTION
 #undef SUBSYS
 #undef DEFAULT_SUBSYS
@@ -768,6 +770,9 @@ int md_config_t::_get_val(const char *key, char **buf, int len) const
       case OPT_UUID:
 	oss << *(boost::uuids::uuid*)opt->conf_ptr(this);
 	break;
+      case OPT_TIME:
+	oss << *(ceph::timespan*)opt->conf_ptr(this);
+	break;
     }
     string str(oss.str());
     int l = strlen(str.c_str()) + 1;
@@ -867,79 +872,136 @@ int md_config_t::set_val_impl(const char *val, const config_option *opt)
 int md_config_t::set_val_raw(const char *val, const config_option *opt)
 {
   switch (opt->type) {
-    case OPT_INT: {
+  case OPT_INT: {
+    std::string err;
+    int f = strict_strtol(val, 10, &err);
+    if (!err.empty())
+      return -EINVAL;
+    *(int*)opt->conf_ptr(this) = f;
+    return 0;
+  }
+  case OPT_LONGLONG: {
+    std::string err;
+    long long f = strict_strtoll(val, 10, &err);
+    if (!err.empty())
+      return -EINVAL;
+    *(long long*)opt->conf_ptr(this) = f;
+    return 0;
+  }
+  case OPT_STR:
+    *(std::string*)opt->conf_ptr(this) = val ? val : "";
+    return 0;
+  case OPT_FLOAT:
+    *(float*)opt->conf_ptr(this) = atof(val);
+    return 0;
+  case OPT_DOUBLE:
+    *(double*)opt->conf_ptr(this) = atof(val);
+    return 0;
+  case OPT_BOOL:
+    if (strcasecmp(val, "false") == 0)
+      *(bool*)opt->conf_ptr(this) = false;
+    else if (strcasecmp(val, "true") == 0)
+      *(bool*)opt->conf_ptr(this) = true;
+    else {
       std::string err;
-      int f = strict_strtol(val, 10, &err);
+      int b = strict_strtol(val, 10, &err);
       if (!err.empty())
 	return -EINVAL;
-      *(int*)opt->conf_ptr(this) = f;
-      return 0;
+      *(bool*)opt->conf_ptr(this) = !!b;
     }
-    case OPT_LONGLONG: {
-      std::string err;
-      long long f = strict_strtoll(val, 10, &err);
-      if (!err.empty())
-	return -EINVAL;
-      *(long long*)opt->conf_ptr(this) = f;
-      return 0;
+    return 0;
+  case OPT_U32: {
+    std::string err;
+    int f = strict_strtol(val, 10, &err);
+    if (!err.empty())
+      return -EINVAL;
+    *(uint32_t*)opt->conf_ptr(this) = f;
+    return 0;
+  }
+  case OPT_U64: {
+    std::string err;
+    long long f = strict_strtoll(val, 10, &err);
+    if (!err.empty())
+      return -EINVAL;
+    *(uint64_t*)opt->conf_ptr(this) = f;
+    return 0;
+  }
+  case OPT_ADDR: {
+    entity_addr_t *addr = (entity_addr_t*)opt->conf_ptr(this);
+    if (!addr->parse(val)) {
+      return -EINVAL;
     }
-    case OPT_STR:
-      *(std::string*)opt->conf_ptr(this) = val ? val : "";
-      return 0;
-    case OPT_FLOAT:
-      *(float*)opt->conf_ptr(this) = atof(val);
-      return 0;
-    case OPT_DOUBLE:
-      *(double*)opt->conf_ptr(this) = atof(val);
-      return 0;
-    case OPT_BOOL:
-      if (strcasecmp(val, "false") == 0)
-	*(bool*)opt->conf_ptr(this) = false;
-      else if (strcasecmp(val, "true") == 0)
-	*(bool*)opt->conf_ptr(this) = true;
-      else {
-	std::string err;
-	int b = strict_strtol(val, 10, &err);
-	if (!err.empty())
-	  return -EINVAL;
-	*(bool*)opt->conf_ptr(this) = !!b;
-      }
-      return 0;
-    case OPT_U32: {
-      std::string err;
-      int f = strict_strtol(val, 10, &err);
-      if (!err.empty())
-	return -EINVAL;
-      *(uint32_t*)opt->conf_ptr(this) = f;
-      return 0;
-    }
-    case OPT_U64: {
-      std::string err;
-      long long f = strict_strtoll(val, 10, &err);
-      if (!err.empty())
-	return -EINVAL;
-      *(uint64_t*)opt->conf_ptr(this) = f;
-      return 0;
-    }
-    case OPT_ADDR: {
-      entity_addr_t *addr = (entity_addr_t*)opt->conf_ptr(this);
-      if (!addr->parse(val)) {
-	return -EINVAL;
-      }
-      return 0;
-    }
-    case OPT_UUID: {
-      boost::uuids::uuid *u = (boost::uuids::uuid*) opt->conf_ptr(this);
-      boost::uuids::string_generator parse;
+    return 0;
+  }
+  case OPT_UUID: {
+    boost::uuids::uuid *u = (boost::uuids::uuid*) opt->conf_ptr(this);
+    boost::uuids::string_generator parse;
 
-      try {
-	*u = parse(val);
-      } catch (std::runtime_error& e) {
-	return -EINVAL;
-      }
-      
-      return 0;
+    try {
+      *u = parse(val);
+    } catch (std::runtime_error& e) {
+      return -EINVAL;
     }
+
+    return 0;
+  }
+  case OPT_TIME: {
+    char *endptr;
+    errno = 0; /* To distinguish success/failure after call (see man page) */
+    uint64_t n = strtoull(val, &endptr, 10);
+
+    if (endptr == val) {
+      return -EINVAL;
+    }
+    if (errno == ERANGE && (n == ULLONG_MAX)) {
+      return -ERANGE;
+    } else if (errno != 0 && n == 0) {
+      return -errno;
+    }
+
+    if (*endptr == '\0') {
+      return -EINVAL;
+    }
+
+    ceph::timespan t;
+    if (strcmp(endptr, "h") == 0) {
+      t = n * 1h;
+      if (n != 0 && t / 1h != n) {
+	return -ERANGE;
+      }
+    } else if (strcmp(endptr, "min") == 0) {
+      t = n * 1min;
+      if (n != 0 && t / 1min != n) {
+	return -ERANGE;
+      }
+    } else if (strcmp(endptr, "s") == 0) {
+      t = n * 1s;
+      if (n != 0 && t / 1s != n) {
+	return -ERANGE;
+      }
+    } else if (strcmp(endptr, "ms") == 0) {
+      t = n * 1ms;
+      if (n != 0 && t / 1ms != n) {
+	return -ERANGE;
+      }
+    } else if (strcmp(endptr, "us") == 0) {
+      t = n * 1us;
+      if (n != 0 && t / 1us != n) {
+	return -ERANGE;
+      }
+    } else if (strcmp(endptr, "ns") == 0) {
+      t = n * 1ns;
+      if (n != 0 && t / 1ns != n) {
+	return -ERANGE;
+      }
+    } else {
+      return -EINVAL;
+    }
+
+    *(ceph::timespan*)opt->conf_ptr(this) = t;
+
+    return 0;
+  }
   }
   return -ENOSYS;
 }

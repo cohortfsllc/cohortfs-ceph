@@ -702,10 +702,11 @@ void MDSMonitor::fail_mds_gid(uint64_t gid)
 {
   assert(pending_mdsmap.mds_info.count(gid));
   MDSMap::mds_info_t& info = pending_mdsmap.mds_info[gid];
-  ldout(mon->cct, 10) << "fail_mds_gid " << gid << " mds." << info.name << " rank " << info.rank << dendl;
+  ldout(mon->cct, 10) << "fail_mds_gid " << gid << " mds." << info.name
+		      << " rank " << info.rank << dendl;
 
-  ceph::real_time until = ceph::real_clock::now() +
-    ceph::span_from_double(mon->cct->_conf->mds_blacklist_interval);
+  ceph::real_time until = ceph::real_clock::now()
+    + mon->cct->_conf->mds_blacklist_interval;
 
   pending_mdsmap.last_failure_osd_epoch
     = mon->osdmon()->blacklist(info.addr, until);
@@ -1149,7 +1150,7 @@ void MDSMonitor::tick(unique_lock& l)
 
   // check beacon timestamps
   ceph::mono_time cutoff = ceph::mono_clock::now() -
-    ceph::span_from_double(mon->cct->_conf->mds_beacon_grace);
+    mon->cct->_conf->mds_beacon_grace;
 
   // make sure last_beacon is fully populated
   for (auto& p : pending_mdsmap.mds_info) {
@@ -1230,7 +1231,7 @@ void MDSMonitor::tick(unique_lock& l)
 	    si.state == MDSMap::STATE_STARTING) {
 	  // blacklist laggy mds
 	  ceph::real_time until = ceph::real_clock::now() +
-	    ceph::span_from_double(mon->cct->_conf->mds_blacklist_interval);
+	    mon->cct->_conf->mds_blacklist_interval;
 	  pending_mdsmap.last_failure_osd_epoch
 	    = mon->osdmon()->blacklist(info.addr, until);
 	  propose_osdmap = true;

@@ -438,8 +438,7 @@ void Server::find_idle_sessions()
   // timeout/stale
   //  (caps go stale, lease die)
   ceph::mono_time now = ceph::mono_clock::now();
-  ceph::mono_time  cutoff = now -= ceph::span_from_double(
-    mds->cct->_conf->mds_session_timeout);
+  ceph::mono_time  cutoff = now -= mds->cct->_conf->mds_session_timeout;
   while (1) {
     Session *session = mds->sessionmap.get_oldest_session(Session::STATE_OPEN);
     if (!session) break;
@@ -459,7 +458,7 @@ void Server::find_idle_sessions()
   }
 
   // autoclose
-  cutoff = now - ceph::span_from_double(mds->cct->_conf->mds_session_autoclose);
+  cutoff = now - mds->cct->_conf->mds_session_autoclose;
 
   // don't kick clients if we've been laggy
   if (mds->laggy_until > cutoff) {
@@ -661,7 +660,7 @@ void Server::reconnect_gather_finish()
 void Server::reconnect_tick()
 {
   ceph::mono_time reconnect_end = reconnect_start +
-    ceph::span_from_double(mds->cct->_conf->mds_reconnect_timeout);
+    mds->cct->_conf->mds_reconnect_timeout;
   if (ceph::mono_clock::now() >= reconnect_end &&
       !client_reconnect_gather.empty()) {
     ldout(mds->cct, 10) << "reconnect timed out" << dendl;

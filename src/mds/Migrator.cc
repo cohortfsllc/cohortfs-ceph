@@ -183,8 +183,7 @@ void Migrator::export_empty_import(CDir *dir)
 void Migrator::find_stale_export_freeze()
 {
   ceph::mono_time now = ceph::mono_clock::now();
-  ceph::mono_time cutoff = now - ceph::span_from_double(
-    mds->cct->_conf->mds_freeze_tree_timeout);
+  ceph::mono_time cutoff = now - mds->cct->_conf->mds_freeze_tree_timeout;
 
 
   /*

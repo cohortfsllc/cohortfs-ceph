@@ -237,8 +237,8 @@ public:
       conf(_conf),
       sock_fd(-1),
       req_wq(this,
-	     ceph::span_from_double(cct->_conf->rgw_op_thread_timeout),
-	     ceph::span_from_double(cct->_conf->rgw_op_thread_suicide_timeout),
+	     cct->_conf->rgw_op_thread_timeout,
+	     cct->_conf->rgw_op_thread_suicide_timeout,
 	     &m_tp),
       max_req_id(0) {}
   virtual ~RGWProcess() {}
@@ -494,10 +494,10 @@ static void handle_sigterm(int signum)
     signal_shutdown();
 
     // safety net in case we get stuck doing an orderly shutdown.
-    uint64_t secs = cct->_conf->rgw_exit_timeout_secs;
-    if (secs)
-      alarm(secs);
-    ldout(cct, 1) << __func__ << " set alarm for " << secs << dendl;
+    ceph::timespan timeout = cct->_conf->rgw_exit_timeout;
+    if (timeout == 0ns)
+      alarm(std::chrono::duration_cast<std::chrono::seconds>(timeout).count());
+    ldout(cct, 1) << __func__ << " set alarm for " << timeout << dendl;
   }
 
 }
@@ -1006,9 +1006,8 @@ int main(int argc, const char **argv)
     global_init_daemonize(cct, 0);
   }
   auto init_timer = new cohort::Timer<ceph::mono_clock>;
-  init_timer->add_event(
-    ceph::span_from_double(cct->_conf->rgw_init_timeout),
-    &init_timeout);
+  init_timer->add_event(cct->_conf->rgw_init_timeout,
+			&init_timeout);
 
   common_init_finish(cct);
 

@@ -3838,7 +3838,7 @@ void Locker::scatter_tick()
       continue;
     }
     if (now - lock->get_update_stamp() <
-	ceph::span_from_double(cct->_conf->mds_scatter_nudge_interval))
+	cct->_conf->mds_scatter_nudge_interval)
       break;
     updated_scatterlocks.pop_front();
     scatter_nudge(lock, 0);

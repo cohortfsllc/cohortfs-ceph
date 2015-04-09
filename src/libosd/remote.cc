@@ -177,8 +177,7 @@ int LibOSDRemote::init(const struct libosd_remote_args *args)
     return r;
   }
 
-  r = monc->authenticate(ceph::span_from_double(
-			   cct->_conf->client_mount_timeout));
+  r = monc->authenticate(cct->_conf->client_mount_timeout);
   if (r < 0) {
     lderr(cct) << "failed to authenticate monclient: "
 		   << cpp_strerror(-r) << dendl;

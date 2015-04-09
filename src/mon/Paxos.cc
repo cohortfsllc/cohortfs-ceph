@@ -153,7 +153,7 @@ void Paxos::collect(version_t oldpn)
 
   // set timeout event
   collect_timeout_event = mon->timer.add_event(
-    ceph::span_from_double(cct->_conf->mon_accept_timeout),
+    cct->_conf->mon_accept_timeout,
     &Paxos::collect_timeout, this);
 }
 
@@ -621,7 +621,7 @@ void Paxos::begin(bufferlist& v, unique_lock& l)
 
   // set timeout event
   accept_timeout_event = mon->timer.add_event(
-    ceph::span_from_double(cct->_conf->mon_accept_timeout),
+    cct->_conf->mon_accept_timeout,
     &Paxos::accept_timeout, this);
 }
 
@@ -836,8 +836,7 @@ void Paxos::extend_lease()
   assert(mon->is_leader());
   //assert(is_active());
 
-  lease_expire = ceph::real_clock::now() + ceph::span_from_double(
-    cct->_conf->mon_lease);
+  lease_expire = ceph::real_clock::now() + cct->_conf->mon_lease;
   acked_lease.clear();
   acked_lease.insert(mon->rank);
 
@@ -862,14 +861,14 @@ void Paxos::extend_lease()
   if (!lease_ack_timeout_event) {
     lease_ack_timeout_event
       = mon->timer.add_event(
-	ceph::span_from_double(cct->_conf->mon_lease_ack_timeout),
+	cct->_conf->mon_lease_ack_timeout,
 	&Paxos::lease_ack_timeout, this);
   }
 
   // set renew event
   ceph::real_time at = lease_expire;
-  at -= ceph::span_from_double(cct->_conf->mon_lease);
-  at += ceph::span_from_double(cct->_conf->mon_lease_renew_interval);
+  at -= cct->_conf->mon_lease;
+  at += cct->_conf->mon_lease_renew_interval;
   lease_renew_event
     = mon->timer.add_event(at,
 			   &Paxos::lease_renew_timeout, this);
@@ -880,11 +879,10 @@ void Paxos::warn_on_future_time(ceph::real_time t, entity_name_t from)
   ceph::real_time now = ceph::real_clock::now();
   if (t > now) {
     ceph::timespan diff = t - now;
-    if (diff > ceph::span_from_double(cct->_conf->mon_clock_drift_allowed)) {
+    if (diff > cct->_conf->mon_clock_drift_allowed) {
       ceph::timespan warn_diff = now - last_clock_drift_warn;
-      if (warn_diff >
-	  ceph::span_from_double(pow(cct->_conf->mon_clock_drift_warn_backoff,
-				     clock_drift_warned))) {
+      if (warn_diff > pow(cct->_conf->mon_clock_drift_warn_backoff,
+			  clock_drift_warned)) {
 	mon->clog.warn() << "message from " << from << " was stamped " << diff
 			 << "s in the future, clocks not synchronized";
 	last_clock_drift_warn = ceph::real_clock::now();
@@ -1050,9 +1048,8 @@ void Paxos::reset_lease_timeout()
   if (lease_timeout_event)
     mon->timer.cancel_event(lease_timeout_event);
   lease_timeout_event
-    = mon->timer.add_event(
-      ceph::span_from_double(cct->_conf->mon_lease_ack_timeout),
-      &Paxos::lease_timeout, this);
+    = mon->timer.add_event(cct->_conf->mon_lease_ack_timeout,
+			   &Paxos::lease_timeout, this);
 }
 
 void Paxos::lease_timeout()

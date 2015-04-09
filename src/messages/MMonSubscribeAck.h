@@ -18,14 +18,14 @@
 #include "msg/Message.h"
 
 struct MMonSubscribeAck : public Message {
-  uint32_t interval;
+  ceph::timespan interval;
   boost::uuids::uuid fsid;
 
   MMonSubscribeAck() : Message(CEPH_MSG_MON_SUBSCRIBE_ACK),
-		       interval(0) {
+		       interval(0ns) {
     memset(&fsid, 0, sizeof(fsid));
   }
-  MMonSubscribeAck(const boost::uuids::uuid& f, int i)
+  MMonSubscribeAck(const boost::uuids::uuid& f, ceph::timespan i)
     : Message(CEPH_MSG_MON_SUBSCRIBE_ACK), interval(i), fsid(f) { }
 private:
   ~MMonSubscribeAck() {}

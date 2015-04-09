@@ -177,8 +177,9 @@ int main(int argc, const char **argv)
   cout << "total num " << total_num << std::endl;
   cout << "avg ack\t" << (total_ack / total_num) << std::endl;
   cout << "avg commit\t" << (total_commit / total_num) << std::endl;
+  std::chrono::duration<double> elapsed = (end - start);
   cout << "tput\t" << prettybyte_t((double)(total_num * bytes) /
-				   ceph::span_to_double(end-start)) << "/sec"
+				   elapsed.count()) << "/sec"
        << std::endl;
 
   fs->close_collection(ch);

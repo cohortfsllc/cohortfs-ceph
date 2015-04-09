@@ -190,10 +190,9 @@ int KeyServer::_rotate_secret(uint32_t service_id)
   RotatingSecrets& r = data.rotating_secrets[service_id];
   int added = 0;
   ceph::real_time now = ceph::real_clock::now();
-  ceph::timespan ttl = ceph::span_from_double(
-    service_id == CEPH_ENTITY_TYPE_AUTH ?
+  ceph::timespan ttl = service_id == CEPH_ENTITY_TYPE_AUTH ?
     cct->_conf->auth_mon_ticket_ttl :
-    cct->_conf->auth_service_ticket_ttl);
+    cct->_conf->auth_service_ticket_ttl;
 
   while (r.need_new_secrets(now)) {
     ExpiringCryptoKey ek;
@@ -429,8 +428,7 @@ int KeyServer::_build_session_auth_info(uint32_t service_id, CephXServiceTicketI
   info.service_id = service_id;
   info.ticket = auth_ticket_info.ticket;
   info.ticket.init_timestamps(ceph::real_clock::now(),
-			      ceph::span_from_double(
-				cct->_conf->auth_service_ticket_ttl));
+			      cct->_conf->auth_service_ticket_ttl);
 
   generate_secret(info.session_key);
 

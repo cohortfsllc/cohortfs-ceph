@@ -924,7 +924,7 @@ int librados::IoCtx::list_watchers(const std::string& oid,
   return r;
 }
 
-void librados::IoCtx::set_notify_timeout(uint32_t timeout)
+void librados::IoCtx::set_notify_timeout(ceph::timespan timeout)
 {
   io_ctx_impl->set_notify_timeout(timeout);
 }

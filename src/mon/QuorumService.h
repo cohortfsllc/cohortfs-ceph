@@ -44,7 +44,7 @@ protected:
 
   QuorumService(Monitor *m) :
     tick_event(0),
-    tick_period(ceph::span_from_double(m->cct->_conf->mon_tick_interval)),
+    tick_period(m->cct->_conf->mon_tick_interval),
     mon(m),
     epoch(0)
   {

@@ -824,7 +824,7 @@ int RGWGetObj::get_data_cb(bufferlist& bl, off_t bl_ofs, off_t bl_len)
       ldout(s->cct, 0) << "WARNING: could not defer gc entry for oid" << dendl;
     }
     gc_invalidate_time = start_time;
-    gc_invalidate_time += (s->cct->_conf->rgw_gc_obj_min_wait * 1s) / 2;
+    gc_invalidate_time += s->cct->_conf->rgw_gc_obj_min_wait / 2;
   }
   return send_response_data(bl, bl_ofs, bl_len);
 }
@@ -839,7 +839,7 @@ void RGWGetObj::execute()
   void *handle = NULL;
   bufferlist bl;
   gc_invalidate_time = ceph::real_clock::now();
-  gc_invalidate_time += (s->cct->_conf->rgw_gc_obj_min_wait / 2) * 1s;
+  gc_invalidate_time += s->cct->_conf->rgw_gc_obj_min_wait / 2;
 
   RGWGetObj_CB cb(s->cct, this);
 

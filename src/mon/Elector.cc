@@ -112,17 +112,17 @@ void Elector::defer(int who)
   mon->messenger->send_message(m, mon->monmap->get_inst(who));
 
   // set a timer
-  reset_timer(1.0);  // give the leader some extra time to declare victory
+  reset_timer(1s);  // give the leader some extra time to declare victory
 }
 
 
-void Elector::reset_timer(double plus)
+void Elector::reset_timer(ceph::timespan plus)
 {
   // set the timer
   cancel_timer();
   expire_event =
     mon->timer.add_event(
-      ceph::span_from_double(mon->cct->_conf->mon_lease + plus),
+      mon->cct->_conf->mon_lease + plus,
       &Elector::expire, this);
 }
 

@@ -449,8 +449,7 @@ void MDS::reset_tick()
   // schedule
   tick_event =
     timer.add_event(
-      ceph::span_from_double(cct->_conf->mds_tick_interval),
-      &MDS::tick, this);
+      cct->_conf->mds_tick_interval, &MDS::tick, this);
 }
 
 void MDS::tick()
@@ -459,8 +458,7 @@ void MDS::tick()
   tick_event = 0;
 
   // reschedule
-  tick_event = timer.reschedule_me(
-      ceph::span_from_double(cct->_conf->mds_tick_interval));
+  tick_event = timer.reschedule_me(cct->_conf->mds_tick_interval);
 
   if (is_laggy()) {
     dout(5) << "tick bailing out since we seem laggy" << dendl;
@@ -506,10 +504,8 @@ void MDS::tick()
 
 void MDS::beacon_start()
 {
-  beacon_sender = timer.add_event(
-    ceph::span_from_double(
-      cct->_conf->mds_beacon_interval),
-    &MDS::beacon_send, this);
+  beacon_sender = timer.add_event(cct->_conf->mds_beacon_interval,
+				  &MDS::beacon_send, this);
 }
 
 
@@ -542,9 +538,7 @@ void MDS::beacon_send()
   // schedule next sender
   if (beacon_sender)
     timer.cancel_event(beacon_sender);
-  beacon_sender = timer.reschedule_me(
-    ceph::span_from_double(
-      cct->_conf->mds_beacon_interval));
+  beacon_sender = timer.reschedule_me(cct->_conf->mds_beacon_interval);
 }
 
 
@@ -554,11 +548,11 @@ bool MDS::is_laggy()
     return false;
 
   ceph::timespan since = ceph::mono_clock::now() - beacon_last_acked_stamp;
-  if (since > ceph::span_from_double(cct->_conf->mds_beacon_grace)) {
+  if (since > cct->_conf->mds_beacon_grace) {
     dout(5) << "is_laggy " << since << " > " << cct->_conf->mds_beacon_grace
 	    << " since last acked beacon" << dendl;
     was_laggy = true;
-    if (since > (ceph::span_from_double(cct->_conf->mds_beacon_grace*2))) {
+    if (since > (cct->_conf->mds_beacon_grace*2)) {
       // maybe it's not us?
       dout(5) << "initiating monitor reconnect; maybe we're not the slow one"
 	      << dendl;
@@ -586,8 +580,7 @@ void MDS::handle_mds_beacon(MMDSBeacon *m)
 	     << " seq " << m->get_seq()
 	     << " rtt " << rtt << dendl;
 
-    if (was_laggy && rtt < ceph::span_from_double(
-	  cct->_conf->mds_beacon_grace)) {
+    if (was_laggy && rtt < cct->_conf->mds_beacon_grace) {
       dout(0) << "handle_mds_beacon no longer laggy" << dendl;
       was_laggy = false;
       laggy_until = now;
@@ -1364,9 +1357,8 @@ void MDS::replay_done(unique_lock& ml)
 
   if (is_standby_replay()) {
     dout(10) << "setting replay timer" << dendl;
-    timer.add_event(
-      ceph::span_from_double(cct->_conf->mds_replay_interval),
-      &MDS::standby_replay_restart, this);
+    timer.add_event(cct->_conf->mds_replay_interval,
+		    &MDS::standby_replay_restart, this);
     return;
   }
 

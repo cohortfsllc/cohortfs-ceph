@@ -50,8 +50,8 @@ static int encode_token(CephContext *cct, string& swift_user, string& key, buffe
   if (ret < 0)
     return ret;
 
-  ceph::real_time expiration = ceph::real_clock::now();
-  expiration += std::chrono::seconds(cct->_conf->rgw_swift_token_expiration);
+  auto expiration = ceph::real_clock::now() +
+    cct->_conf->rgw_swift_token_expiration;
 
   ret = build_token(cct, swift_user, key, nonce, expiration, bl);
 

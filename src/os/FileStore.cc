@@ -276,16 +276,15 @@ FileStore::FileStore(CephContext* cct, const std::string& base,
   trace_endpoint("0.0.0.0", 0, NULL),
   flusher(this),
   op_finisher(cct),
-  m_filestore_commit_timeout(ceph::span_from_double(
-			       cct->_conf->filestore_commit_timeout)),
+  m_filestore_commit_timeout(cct->_conf->filestore_commit_timeout),
   m_filestore_journal_parallel(cct->_conf->filestore_journal_parallel),
   m_filestore_journal_trailing(cct->_conf->filestore_journal_trailing),
   m_filestore_journal_writeahead(cct->_conf->filestore_journal_writeahead),
   m_filestore_fiemap_threshold(cct->_conf->filestore_fiemap_threshold),
   m_filestore_max_sync_interval(
-    ceph::span_from_double(cct->_conf->filestore_max_sync_interval)),
+    cct->_conf->filestore_max_sync_interval),
   m_filestore_min_sync_interval(
-    ceph::span_from_double(cct->_conf->filestore_min_sync_interval)),
+    cct->_conf->filestore_min_sync_interval),
   m_filestore_fail_eio(cct->_conf->filestore_fail_eio),
   m_filestore_replica_fadvise(cct->_conf->filestore_replica_fadvise),
   do_update(do_update),
@@ -4125,9 +4124,9 @@ void FileStore::handle_conf_change(const struct md_config_t* conf,
       changed.count("filestore_replica_fadvise")) {
     lock_guard l(lock);
     m_filestore_min_sync_interval
-      = ceph::span_from_double(conf->filestore_min_sync_interval);
+      = conf->filestore_min_sync_interval;
     m_filestore_max_sync_interval
-      = ceph::span_from_double(conf->filestore_max_sync_interval);
+      = conf->filestore_max_sync_interval;
     m_filestore_queue_max_ops = conf->filestore_queue_max_ops;
     m_filestore_queue_max_bytes = conf->filestore_queue_max_bytes;
     m_filestore_queue_committing_max_ops
@@ -4142,8 +4141,7 @@ void FileStore::handle_conf_change(const struct md_config_t* conf,
     m_filestore_max_alloc_hint_size = conf->filestore_max_alloc_hint_size;
   }
   if (changed.count("filestore_commit_timeout")) {
-    m_filestore_commit_timeout
-      = ceph::span_from_double(conf->filestore_commit_timeout);
+    m_filestore_commit_timeout = conf->filestore_commit_timeout;
   }
   if (changed.count("filestore_dump_file")) {
     if (conf->filestore_dump_file.length() &&

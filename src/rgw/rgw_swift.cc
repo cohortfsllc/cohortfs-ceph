@@ -737,7 +737,7 @@ void *RGWSwift::KeystoneRevokeThread::entry() {
       break;
 
     std::unique_lock<std::mutex> lk(lock);
-    cond.wait_for(lk, std::chrono::seconds(cct->_conf->rgw_keystone_revocation_interval));
+    cond.wait_for(lk, cct->_conf->rgw_keystone_revocation_interval);
   } while (!swift->going_down());
 
   return NULL;

@@ -221,16 +221,15 @@ static int do_bench_write(Image& image, uint64_t io_size,
     }
 
     ceph::mono_time now = ceph::mono_clock::now();
-    ceph::timespan elapsed = now - start;
+    std::chrono::duration<double> elapsed = now - start;
     if ((elapsed > last ? elapsed - last : last - elapsed) > 1s) {
       printf("%5ld  %8d	%8.2lf	%8.2lf\n",
-	     std::chrono::duration_cast<
-	     std::chrono::seconds>(elapsed).count(),
+	     elapsed.count(),
 	     (int)(ios - io_threads),
-	     (double)(ios - io_threads) / ceph::span_to_double(elapsed),
+	     (double)(ios - io_threads) / elapsed.count(),
 	     (double)(off - io_threads * io_size) /
-	     ceph::span_to_double(elapsed));
-      last = elapsed;
+	     elapsed.count());
+      last = std::chrono::duration_cast<ceph::timespan>(elapsed);
     }
   }
   b.wait_for(0);
@@ -240,12 +239,12 @@ static int do_bench_write(Image& image, uint64_t io_size,
     cerr << "Error flushing data at the end: " << e.message() << std::endl;
   }
 
-  ceph::timespan elapsed = ceph::mono_clock::now() - start;
+  std::chrono::duration<double> elapsed = ceph::mono_clock::now() - start;
 
   printf("elapsed: %5ld	ops: %8d  ops/sec: %8.2lf  bytes/sec: %8.2lf\n",
 	 std::chrono::duration_cast<std::chrono::seconds>(elapsed).count(),
-	 ios, (double)ios / ceph::span_to_double(elapsed),
-	 (double)off / ceph::span_to_double(elapsed));
+	 ios, (double)ios / elapsed.count(),
+	 (double)off / elapsed.count());
 
   return 0;
 }

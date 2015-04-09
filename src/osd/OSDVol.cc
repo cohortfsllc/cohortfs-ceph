@@ -470,7 +470,7 @@ void OSDVol::get_obc_watchers(ObjectContext* obc,
     owi.wi.addr = j->second->get_peer_addr();
     owi.wi.name = j->second->get_entity();
     owi.wi.cookie = j->second->get_cookie();
-    owi.wi.timeout_seconds = j->second->get_timeout();
+    owi.wi.timeout = j->second->get_timeout();
 
     dout(30) << "watch: Found oid=" << owi.oid
 	     << " addr=" << owi.wi.addr
@@ -488,12 +488,12 @@ void OSDVol::populate_obc_watchers(ObjectContext* obc)
   // populate unconnected_watchers
   for (const auto& p : obc->obs.oi.watchers) {
     ceph::mono_time expire = last_became_active +
-      p.second.timeout_seconds * 1s;
+      p.second.timeout;
     dout(10) << "  unconnected watcher " << p.first << " will expire "
 	     << expire << dendl;
     WatchRef watch(
       Watch::makeWatchRef(
-	this, osd, obc, p.second.timeout_seconds, p.first.first,
+	this, osd, obc, p.second.timeout, p.first.first,
 	p.first.second, p.second.addr));
     watch->disconnect();
     obc->watchers.insert(
@@ -812,7 +812,6 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
   object_info_t& oi = obs.oi;
   ObjectHandle soh = reinterpret_cast<ObjectHandle>(obs.oh);
   const hoid_t& soid = oi.oid; // ctx->new_objs->obs.oi.oid
-  const hoid_t& obc_soid = ctx->obc->obs.oi.oid;
 
   Transaction* t = &ctx->op_t;
   bool first_read = true;
@@ -1242,7 +1241,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 
 	  watch_item_t wi(oi_iter->first.second,
 			  oi_iter->second.cookie,
-			  oi_iter->second.timeout_seconds,
+			  oi_iter->second.timeout,
 			  oi_iter->second.addr);
 	  resp.entries.push_back(wi);
 	}
@@ -1271,7 +1270,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
       ++ctx->num_read;
       {
 	uint32_t ver;
-	uint32_t timeout;
+	ceph::timespan timeout;
 	bufferlist bl;
 
 	try {
@@ -1279,9 +1278,9 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  ::decode(timeout, bp);
 	  ::decode(bl, bp);
 	} catch (const buffer::error &e) {
-	  timeout = 0;
+	  timeout = 0ns;
 	}
-	if (!timeout)
+	if (timeout == 0ns)
 	  timeout = cct->_conf->osd_default_notify_timeout;
 
 	notify_info_t n;
@@ -2034,7 +2033,7 @@ void OSDVol::do_osd_op_effects(OpContext* ctx)
       dout(15) << "do_osd_op_effects new watcher " << watcher
 	       << dendl;
       watch = Watch::makeWatchRef(
-	this, osd, ctx->obc, i->timeout_seconds,
+	this, osd, ctx->obc, i->timeout,
 	i->cookie, entity, conn->get_peer_addr());
       ctx->obc->watchers.insert(
 	make_pair(

@@ -273,19 +273,21 @@ void OmapBench::print_results() {
   cout << "ms"<<std::endl;
   cout << std::endl;
   cout << "Histogram:" << std::endl;
-  for(ceph::timespan i = data.min_latency / increment;
+  for(std::chrono::duration<double> i = data.min_latency / increment;
       i < data.max_latency / increment;
       i += 1s) {
-    cout << ">= "<< i * increment;
-    cout << "ms";
+    cout << ">= "<< (i * increment).count();
+    cout << "s";
     int spaces;
     if (i == 0ns) spaces = 4;
-    else spaces = 3 - floor(log10(ceph::span_to_double(i)));
+    else spaces = 3 - floor(log10(i.count()));
     for (int j = 0; j < spaces; j++) {
       cout << " ";
     }
     cout << "[";
-    for(int j = 0; j < ((data.freq_map)[i])*45/(data.mode.second); j++) {
+    for(int j = 0;
+	j < ((data.freq_map)[i])*45/(data.mode.second);
+	++j) {
       cout << "*";
     }
     cout << std::endl;

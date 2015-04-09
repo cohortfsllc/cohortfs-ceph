@@ -29,7 +29,7 @@ Notify::Notify(
   ConnectionRef client,
   unsigned num_watchers,
   bufferlist &payload,
-  uint32_t timeout,
+  ceph::timespan timeout,
   uint64_t cookie,
   uint64_t notify_id,
   uint64_t version,
@@ -50,7 +50,7 @@ NotifyRef Notify::makeNotifyRef(
   ConnectionRef client,
   unsigned num_watchers,
   bufferlist &payload,
-  uint32_t timeout,
+  ceph::timespan timeout,
   uint64_t cookie,
   uint64_t notify_id,
   uint64_t version,
@@ -96,7 +96,7 @@ void Notify::register_cb()
 {
   OSD::lock_guard wl(osd->watch_lock);
   cb = osd->watch_timer.add_event(
-    timeout * 1s,
+    timeout,
     &Notify::do_timeout, this);
 }
 
@@ -183,7 +183,7 @@ Watch::Watch(
   OSDVol *vol,
   OSDService *osd,
   ObjectContextRef obc,
-  uint32_t timeout,
+  ceph::timespan timeout,
   uint64_t cookie,
   entity_name_t entity,
   const entity_addr_t &addr)
@@ -214,7 +214,7 @@ void Watch::register_cb()
   ldout(osd->osd->cct, 15) << "registering callback, timeout: " << timeout
 			   << dendl;
   cb = osd->watch_timer.add_event(
-    timeout * 1s,
+    timeout,
     &Watch::handle_watch_timeout, this);
 }
 
@@ -332,7 +332,7 @@ void Watch::notify_ack(uint64_t notify_id)
 
 WatchRef Watch::makeWatchRef(
   OSDVol *vol, OSDService *osd, ObjectContextRef obc,
-  uint32_t timeout, uint64_t cookie, entity_name_t entity,
+  ceph::timespan timeout, uint64_t cookie, entity_name_t entity,
   const entity_addr_t& addr)
 {
   WatchRef ret(new Watch(vol, osd, obc, timeout, cookie, entity, addr));

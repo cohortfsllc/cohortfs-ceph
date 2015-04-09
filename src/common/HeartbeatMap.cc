@@ -109,12 +109,8 @@ bool HeartbeatMap::is_healthy()
 {
   shared_lock l(m_rwlock);
   ceph::mono_time now = ceph::mono_clock::now();
-  if (m_cct->_conf->heartbeat_inject_failure) {
-    ldout(m_cct, 0) << "is_healthy injecting failure for next "
-		    << m_cct->_conf->heartbeat_inject_failure << " seconds"
-		    << dendl;
-    m_inject_unhealthy_until = now + ceph::span_from_double(
-      m_cct->_conf->heartbeat_inject_failure);
+  if (m_cct->_conf->heartbeat_inject_failure > 0ns) {
+    m_inject_unhealthy_until = now + m_cct->_conf->heartbeat_inject_failure;
     m_cct->_conf->set_val("heartbeat_inject_failure", "0");
   }
 

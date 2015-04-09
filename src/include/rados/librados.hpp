@@ -519,7 +519,7 @@ namespace librados
     int unwatch(const std::string& o, uint64_t handle);
     int notify(const std::string& o, bufferlist& bl);
     int list_watchers(const std::string& o, std::list<obj_watch_t> *out_watchers);
-    void set_notify_timeout(uint32_t timeout);
+    void set_notify_timeout(ceph::timespan timeout);
 
     /**
      * Set allocation hint for an object

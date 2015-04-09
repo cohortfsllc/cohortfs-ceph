@@ -465,8 +465,9 @@ public:
   }
 
   float time_passed() {
-    ceph::timespan elapsed = ceph::mono_clock::now() - start_time;
-    return ceph::span_to_double(elapsed);
+    std::chrono::duration<double> elapsed = ceph::mono_clock::now() -
+      start_time;
+    return elapsed.count();
   }
 
   std::mutex lock;

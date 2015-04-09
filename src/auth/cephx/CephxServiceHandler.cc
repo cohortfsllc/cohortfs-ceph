@@ -110,13 +110,11 @@ int CephxServiceHandler::handle_request(bufferlist::iterator& indata, bufferlist
       }
 
       info.ticket.init_timestamps(ceph::real_clock::now(),
-				  ceph::span_from_double(
-				    cct->_conf->auth_mon_ticket_ttl));
+				  cct->_conf->auth_mon_ticket_ttl);
       info.ticket.name = entity_name;
       info.ticket.global_id = global_id;
       info.ticket.auid = eauth.auid;
-      info.validity += ceph::span_from_double(
-	cct->_conf->auth_mon_ticket_ttl);
+      info.validity += cct->_conf->auth_mon_ticket_ttl;
 
       if (auid) *auid = eauth.auid;
 
@@ -173,8 +171,7 @@ int CephxServiceHandler::handle_request(bufferlist::iterator& indata, bufferlist
 	    ret = r;
 	    break;
 	  }
-	  info.validity += ceph::span_from_double(
-	    cct->_conf->auth_service_ticket_ttl);
+	  info.validity += cct->_conf->auth_service_ticket_ttl;
 	  info_vec.push_back(info);
 	}
       }

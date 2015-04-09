@@ -215,13 +215,15 @@ static int do_curl_wait(CephContext *cct, CURLM *handle)
   }
 
   /* forcing a strict timeout, as the returned fdsets might not reference all fds we wait on */
-  uint64_t to = cct->_conf->rgw_curl_wait_timeout_ms;
-#define RGW_CURL_TIMEOUT 1000
-  if (!to)
+  ceph::timespan to = cct->_conf->rgw_curl_wait_timeout;
+#define RGW_CURL_TIMEOUT 1000s
+  if (to == 0ns)
     to = RGW_CURL_TIMEOUT;
   struct timeval timeout;
-  timeout.tv_sec = to / 1000;
-  timeout.tv_usec = to % 1000;
+  timeout.tv_sec = std::chrono::duration_cast<std::chrono::seconds>(
+    to).count();
+  timeout.tv_usec = std::chrono::duration_cast<std::chrono::microseconds>(
+    to % 1s).count();
 
   ret = select(maxfd+1, &fdread, &fdwrite, &fdexcep, &timeout);
   if (ret < 0) {

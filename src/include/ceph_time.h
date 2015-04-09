@@ -21,11 +21,12 @@
 #include <ctime>
 #include <iostream>
 #include <iomanip>
+#include <cmath>
 
 /* XXX for parse_date */
-#include <time.h>
-#include <stdio.h>
-#include <string.h>
+#include <ctime>
+#include <cstdio>
+#include <cstring>
 #include "common/strtol.h"
 
 /* Typedefs for timekeeping, to cut down on the amount of template
@@ -45,16 +46,6 @@ namespace ceph {
   typedef std::chrono::steady_clock mono_clock;
   typedef std::chrono::time_point<real_clock, timespan> real_time;
   typedef std::chrono::time_point<mono_clock, timespan> mono_time;
-
-  inline ceph::timespan span_from_double(double sec) {
-    return std::chrono::duration_cast<ceph::timespan>(
-      std::chrono::duration<double>(sec));
-  }
-
-  inline double span_to_double(ceph::timespan t) {
-    return std::chrono::duration_cast<std::chrono::duration<double> >(
-      t).count();
-  }
 
   inline real_time spec_to_time(ceph_timespec ts) {
     return real_time(timespan(ts));
@@ -242,7 +233,7 @@ inline std::ostream& operator<<(std::ostream& out,
 inline std::ostream& operator<<(std::ostream& out,
 				const ceph::timespan& t)
 {
-  return out << ceph::span_to_double(t) << " s";
+  return out << std::chrono::duration<double>(t).count() << " s";
 }
 
 // Since it's only for debugging, I don't care that it's junk.
@@ -258,5 +249,13 @@ namespace std {
     return ceph::timespan(abs(x.count()));
   }
 }
+
+inline ceph::timespan pow(ceph::timespan t, double d) {
+  return std::chrono::duration_cast<ceph::timespan>(
+    std::chrono::duration<double>(
+      pow(std::chrono::duration_cast<std::chrono::duration<double> >(
+	  t).count(), d)));
+}
+
 
 #endif // CEPH_TIME__

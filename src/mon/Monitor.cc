@@ -541,9 +541,8 @@ int Monitor::init()
   dout(2) << "init" << dendl;
 
   // start ticker
-  timer.add_event(
-    cct->_conf->mon_tick_interval * 1s,
-    &Monitor::tick, this);
+  timer.add_event(cct->_conf->mon_tick_interval,
+		  &Monitor::tick, this);
 
   unique_lock l(lock);
 
@@ -935,7 +934,7 @@ void Monitor::sync_reset_timeout()
   if (sync_timeout_event)
     timer.cancel_event(sync_timeout_event);
   sync_timeout_event = timer.add_event(
-    ceph::span_from_double(cct->_conf->mon_sync_timeout),
+    cct->_conf->mon_sync_timeout,
     &Monitor::sync_timeout, this);
 }
 
@@ -1053,7 +1052,7 @@ void Monitor::handle_sync_get_cookie(MMonSync *m)
   SyncProvider& sp = sync_providers[cookie];
   sp.cookie = cookie;
   sp.entity = m->get_source_inst();
-  sp.reset_timeout(ceph::span_from_double(cct->_conf->mon_sync_timeout * 2));
+  sp.reset_timeout(cct->_conf->mon_sync_timeout * 2);
 
   set<string> sync_targets;
   if (m->op == MMonSync::OP_GET_COOKIE_FULL) {
@@ -1088,7 +1087,7 @@ void Monitor::handle_sync_get_chunk(MMonSync *m)
   assert(cct->_conf->mon_sync_provider_kill_at != 2);
 
   SyncProvider& sp = sync_providers[m->cookie];
-  sp.reset_timeout(ceph::span_from_double(cct->_conf->mon_sync_timeout * 2));
+  sp.reset_timeout(cct->_conf->mon_sync_timeout * 2);
 
   if (sp.last_committed < paxos->get_first_committed() &&
       paxos->get_first_committed() > 1) {
@@ -1162,10 +1161,12 @@ void Monitor::handle_sync_cookie(MMonSync *m)
 
 void Monitor::sync_get_next_chunk()
 {
-  dout(20) << __func__ << " cookie " << sync_cookie << " provider " << sync_provider << dendl;
-  if (cct->_conf->mon_inject_sync_get_chunk_delay > 0) {
-    dout(20) << __func__ << " injecting delay of " << cct->_conf->mon_inject_sync_get_chunk_delay << dendl;
-    usleep((long long)(cct->_conf->mon_inject_sync_get_chunk_delay * 1000000.0));
+  dout(20) << __func__ << " cookie " << sync_cookie << " provider "
+	   << sync_provider << dendl;
+  if (cct->_conf->mon_inject_sync_get_chunk_delay > 0ns) {
+    dout(20) << __func__ << " injecting delay of "
+	     << cct->_conf->mon_inject_sync_get_chunk_delay << dendl;
+    std::this_thread::sleep_for(cct->_conf->mon_inject_sync_get_chunk_delay);
   }
   MMonSync *r = new MMonSync(MMonSync::OP_GET_CHUNK, sync_cookie);
   messenger->send_message(r, sync_provider);
@@ -1265,11 +1266,11 @@ void Monitor::cancel_probe_timeout()
 void Monitor::reset_probe_timeout()
 {
   cancel_probe_timeout();
-  ceph::timespan t = ceph::span_from_double(cct->_conf->mon_probe_timeout);
   probe_timeout_event
-    = timer.add_event(t, &Monitor::probe_timeout, this);
+    = timer.add_event(cct->_conf->mon_probe_timeout,
+		      &Monitor::probe_timeout, this);
   dout(10) << "reset_probe_timeout " << probe_timeout_event << " after "
-	   << t << " seconds" << dendl;
+	   << cct->_conf->mon_probe_timeout << dendl;
 }
 
 void Monitor::probe_timeout()
@@ -2704,8 +2705,7 @@ void Monitor::waitlist_or_zap_client(Message *m)
    * circumstances.
    */
   ConnectionRef con = m->get_connection();
-  ceph::real_time too_old = ceph::real_clock::now() -=
-    ceph::span_from_double(cct->_conf->mon_lease);
+  ceph::real_time too_old = ceph::real_clock::now() -= cct->_conf->mon_lease;
   if (m->get_recv_stamp() > too_old &&
       con->is_connected()) {
     dout(5) << "waitlisting message " << *m << dendl;
@@ -2777,10 +2777,9 @@ bool Monitor::_ms_dispatch(Message *m, unique_lock& l)
 
     if (!src_is_mon) {
       dout(10) << "setting timeout on session" << dendl;
-      // set an initial timeout here, so we will trim this session even if they don't
-      // do anything.
-      s->until = ceph::mono_clock::now() +
-	+ ceph::span_from_double(cct->_conf->mon_subscribe_interval);
+      // set an initial timeout here, so we will trim this session
+      // even if they don't do anything.
+      s->until = ceph::mono_clock::now() + cct->_conf->mon_subscribe_interval;
     } else {
       //give it monitor caps; the peer type has been authenticated
       reuse_caps = false;
@@ -3027,8 +3026,7 @@ void Monitor::timecheck_start_round(unique_lock& l)
   if (timecheck_round % 2) {
     dout(10) << __func__ << " there's a timecheck going on" << dendl;
     ceph::mono_time curr_time = ceph::mono_clock::now();
-    ceph::timespan max = ceph::span_from_double(
-      cct->_conf->mon_timecheck_interval * 3);
+    ceph::timespan max = cct->_conf->mon_timecheck_interval * 3;
     if (curr_time - timecheck_round_start > max) {
       dout(10) << __func__ << " keep current round going" << dendl;
       goto out;
@@ -3049,12 +3047,11 @@ void Monitor::timecheck_start_round(unique_lock& l)
 out:
   dout(10) << __func__ << " setting up next event" << dendl;
 
-  timecheck_event = timer.add_event(
-    ceph::span_from_double(cct->_conf->mon_timecheck_interval),
-    [this](){
-      unique_lock dl(lock, std::defer_lock);
-      timecheck_start_round(dl);
-    });
+  timecheck_event = timer.add_event(cct->_conf->mon_timecheck_interval,
+				    [this](){
+				      unique_lock dl(lock, std::defer_lock);
+				      timecheck_start_round(dl);
+				    });
 }
 
 void Monitor::timecheck_finish_round(bool success)
@@ -3184,7 +3181,7 @@ health_status_t Monitor::timecheck_status(ostringstream &ss,
 
   ceph::timespan abs_skew = std::abs(skew_bound);
 
-  if (abs_skew > ceph::span_from_double(cct->_conf->mon_clock_drift_allowed)) {
+  if (abs_skew > cct->_conf->mon_clock_drift_allowed) {
     status = HEALTH_WARN;
     ss << "clock skew " << abs_skew << "s"
        << " > max " << cct->_conf->mon_clock_drift_allowed << "s";
@@ -3388,8 +3385,7 @@ void Monitor::handle_subscribe(MMonSubscribe *m)
     return;
   }
 
-  s->until = ceph::mono_clock::now() + ceph::span_from_double(
-    cct->_conf->mon_subscribe_interval);
+  s->until = ceph::mono_clock::now() + cct->_conf->mon_subscribe_interval;
   for (auto p : m->what) {
     // if there are any non-onetime subscriptions, we need to reply to
     // start the resubscribe timer
@@ -3420,7 +3416,7 @@ void Monitor::handle_subscribe(MMonSubscribe *m)
     ConnectionRef con = m->get_connection();
     con->get_messenger()->send_message(
       new MMonSubscribeAck(monmap->get_fsid(),
-			   (int)cct->_conf->mon_subscribe_interval), con);
+			   cct->_conf->mon_subscribe_interval), con);
   }
 
   s->put();
@@ -3704,8 +3700,7 @@ void Monitor::tick()
       s->con->get_messenger()->mark_down(s->con);
       remove_session(s);
     } else if (exited_quorum != ceph::mono_time::min()) {
-      if (now > (exited_quorum + ceph::span_from_double(
-		   2 * cct->_conf->mon_lease))) {
+      if (now > (exited_quorum + 2 * cct->_conf->mon_lease)) {
 	// boot the client Session because we've taken too long getting back in
 	dout(10) << " trimming session " << s->con << " " << s->inst
 		 << " because we've been out of quorum too long" << dendl;
@@ -3722,7 +3717,7 @@ void Monitor::tick()
   }
 
   l.unlock();
-  timer.reschedule_me(cct->_conf->mon_tick_interval * 1s);
+  timer.reschedule_me(cct->_conf->mon_tick_interval);
 }
 
 int Monitor::check_fsid()

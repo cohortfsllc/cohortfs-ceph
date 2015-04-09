@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 
 #include "cls/rgw/cls_rgw_ops.h"
 
@@ -18,7 +20,7 @@ void rgw_cls_tag_timeout_op::generate_test_instances(list<rgw_cls_tag_timeout_op
 
 void cls_rgw_gc_set_entry_op::dump(Formatter *f) const
 {
-  f->dump_unsigned("expiration_secs", expiration_secs);
+  f->dump_stream("expiration") << expiration;
   f->open_object_section("obj_info");
   info.dump(f);
   f->close_section();
@@ -28,20 +30,21 @@ void cls_rgw_gc_set_entry_op::generate_test_instances(list<cls_rgw_gc_set_entry_
 {
   ls.push_back(new cls_rgw_gc_set_entry_op);
   ls.push_back(new cls_rgw_gc_set_entry_op);
-  ls.back()->expiration_secs = 123;
+  ls.back()->expiration = 123s;
 }
 
 void cls_rgw_gc_defer_entry_op::dump(Formatter *f) const
 {
-  f->dump_unsigned("expiration_secs", expiration_secs);
+  f->dump_stream("expiration_secs") << expiration;
   f->dump_string("tag", tag);
 }
 
-void cls_rgw_gc_defer_entry_op::generate_test_instances(list<cls_rgw_gc_defer_entry_op*>& ls)
+void cls_rgw_gc_defer_entry_op::generate_test_instances(
+  list<cls_rgw_gc_defer_entry_op*>& ls)
 {
   ls.push_back(new cls_rgw_gc_defer_entry_op);
   ls.push_back(new cls_rgw_gc_defer_entry_op);
-  ls.back()->expiration_secs = 123;
+  ls.back()->expiration = 123s;
   ls.back()->tag = "footag";
 }
 

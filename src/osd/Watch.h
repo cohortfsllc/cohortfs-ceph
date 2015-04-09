@@ -62,7 +62,7 @@ class Notify {
   set<WatchRef> watchers;
 
   bufferlist payload;
-  uint32_t timeout;
+  ceph::timespan timeout;
   uint64_t cookie;
   uint64_t notify_id;
   uint64_t version;
@@ -89,7 +89,7 @@ class Notify {
     ConnectionRef client,
     unsigned num_watchers,
     bufferlist &payload,
-    uint32_t timeout,
+    ceph::timespan timeout,
     uint64_t cookie,
     uint64_t notify_id,
     uint64_t version,
@@ -115,7 +115,7 @@ public:
     ConnectionRef client,
     unsigned num_watchers,
     bufferlist &payload,
-    uint32_t timeout,
+    ceph::timespan timeout,
     uint64_t cookie,
     uint64_t notify_id,
     uint64_t version,
@@ -159,7 +159,7 @@ class Watch {
   std::map<uint64_t, NotifyRef> in_progress_notifies;
 
   // Could have watch_info_t here, but this file includes osd_types.h
-  uint32_t timeout;
+  ceph::timespan timeout;
   uint64_t cookie;
   entity_addr_t addr;
 
@@ -168,7 +168,7 @@ class Watch {
 
   Watch(
     OSDVol *vol, OSDService *osd,
-    boost::intrusive_ptr<ObjectContext> obc, uint32_t timeout,
+    boost::intrusive_ptr<ObjectContext> obc, ceph::timespan timeout,
     uint64_t cookie, entity_name_t entity,
     const entity_addr_t& addr);
 
@@ -190,7 +190,7 @@ public:
   string gen_dbg_prefix();
   static WatchRef makeWatchRef(OSDVol *vol, OSDService *osd,
 			       boost::intrusive_ptr<ObjectContext> obc,
-			       uint32_t timeout, uint64_t cookie,
+			       ceph::timespan timeout, uint64_t cookie,
 			       entity_name_t entity,
 			       const entity_addr_t &addr);
 
@@ -207,7 +207,7 @@ public:
   uint64_t get_cookie() const { return cookie; }
   entity_name_t get_entity() const { return entity; }
   entity_addr_t get_peer_addr() const { return addr; }
-  uint32_t get_timeout() const { return timeout; }
+  ceph::timespan get_timeout() const { return timeout; }
 
   /// True if currently connected
   bool connected();

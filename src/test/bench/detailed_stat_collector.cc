@@ -48,20 +48,22 @@ void DetailedStatCollector::Aggregator::dump(Formatter *f)
   f->dump_stream("avg_recent_latency") << recent_latency / recent_ops;
   f->dump_stream("avg_total_latency") << total_latency / total_ops;
   f->dump_float("avg_recent_iops", recent_ops /
-		ceph::span_to_double(now - last));
+		std::chrono::duration<double>(now - last).count());
   f->dump_float("avg_total_iops", total_ops /
-		ceph::span_to_double(now - first));
+		std::chrono::duration<double>(now - first).count());
   f->dump_float("avg_recent_throughput", recent_size /
-		ceph::span_to_double(now - last));
+		std::chrono::duration<double>(now - last).count());
   f->dump_float("avg_total_throughput", total_size /
-		ceph::span_to_double(now - first));
+		std::chrono::duration<double>(now - first).count());
   f->dump_float("avg_recent_throughput_mb",
-		(recent_size / ceph::span_to_double(now - last))
+		(recent_size /
+		 std::chrono::duration<double>(now - last).count())
 		/ (1024*1024));
   f->dump_float("avg_total_throughput_mb",
-		(total_size / ceph::span_to_double(now - first))
+		(total_size /
+		 std::chrono::duration<double>(now - first).count())
 		/ (1024*1024));
-  f->dump_stream("duration") << (now - last);
+  f->dump_stream("float") << (now - last).count();
   last = now;
   recent_latency = 0ns;
   recent_size = 0;
