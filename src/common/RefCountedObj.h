@@ -22,7 +22,14 @@
 
 struct RefCountedObject {
   std::atomic<int64_t> nref;
-  RefCountedObject() : nref(1) {}
+
+  struct Deleter {
+    virtual ~Deleter() {}
+    virtual void on_last_put(RefCountedObject* o) = 0;
+  };
+  Deleter *deleter;
+
+  RefCountedObject() : nref(1), deleter(nullptr) {}
   virtual ~RefCountedObject() {}
 
   RefCountedObject *get() {
@@ -34,9 +41,15 @@ struct RefCountedObject {
     return this;
   }
   void put() {
-    if (--nref == 0)
-      delete this;
+    if (--nref == 0) {
+      if (deleter)
+        deleter->on_last_put(this);
+      else
+        delete this;
+    }
   }
+
+  void set_deleter(Deleter *del) { deleter = del; }
 
   // copy and assignment disabled
   RefCountedObject(const RefCountedObject&) = delete;
