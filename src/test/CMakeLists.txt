@@ -97,6 +97,7 @@ set(dencoder_srcs
   encoding/ceph_dencoder.cc
   ${CMAKE_SOURCE_DIR}/src/common/TextTable.cc
   $<TARGET_OBJECTS:heap_profiler_objs>
+  $<TARGET_OBJECTS:osdc_objs>
   )
 if(0)
   list(APPEND dencoder_srcs
@@ -163,7 +164,6 @@ if(WITH_MDS)
   list(APPEND dencoder_dependencies mds)
 endif(WITH_MDS)
 list(APPEND dencoder_dependencies
-  osdc
   mon
   os
   global
@@ -224,11 +224,11 @@ target_link_libraries(test_build_libcommon json_spirit  rt pthread global ${Boos
 set(build_librados_srcs
   buildtest_skeleton.cc
     )
-  add_executable(test_build_librados
+add_executable(test_build_librados
   ${build_librados_srcs}
   $<TARGET_OBJECTS:librados_objs>
-    )
-target_link_libraries(test_build_librados pthread ${CRYPTO_LIBS} ${EXTRALIBS} global osdc osd global common cls_lock_client)
+  $<TARGET_OBJECTS:osdc_objs>)
+target_link_libraries(test_build_librados pthread ${CRYPTO_LIBS} ${EXTRALIBS} global osd global common cls_lock_client)
  
 if(${WITH_RADOSGW})
   set(build_librgw_srcs
@@ -1364,9 +1364,10 @@ endif(0)
 
 add_executable(test_mon_workloadgen
   mon/test_mon_workloadgen.cc
+  $<TARGET_OBJECTS:osdc_objs>
   )
 target_link_libraries(test_mon_workloadgen
-  os osdc global boost_filesystem
+  os global boost_filesystem
   ${EXTRALIBS}
   ${ALLOC_LIBS}
   ${CMAKE_DL_LIBS}

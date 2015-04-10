@@ -247,7 +247,6 @@ set(libcommon_files
   cohort/CohortVolume.cc
   cohort/ErasureCPlacer.cc
   cohort/StripedPlacer.cc
-  osdc/Objecter.cc
   common/ThreadPool.cc
   ${arch_files}
   ${auth_files}
@@ -310,7 +309,7 @@ add_subdirectory(cls)
 set(osdc_files
   osdc/Objecter.cc
   )
-add_library(osdc STATIC ${osdc_files})
+add_library(osdc_objs OBJECT ${osdc_files})
 
 set(librados_srcs
   librados/librados.cc
@@ -322,8 +321,7 @@ add_library(librados ${CEPH_SHARED}
   $<TARGET_OBJECTS:cls_references_objs>
   $<TARGET_OBJECTS:librados_objs>
   $<TARGET_OBJECTS:heap_profiler_objs>)
-add_dependencies(librados osdc)
-target_link_libraries(librados PRIVATE osdc osd os global common cls_lock_client
+target_link_libraries(librados PRIVATE osd os global common cls_lock_client
   ${CRYPTO_LIBS} ${EXTRALIBS} ${ALLOC_LIBS})
 if(${ENABLE_SHARED})
   set_target_properties(librados PROPERTIES OUTPUT_NAME rados VERSION 2.0.0 SOVERSION 2
@@ -455,8 +453,6 @@ install(TARGETS os_memstore DESTINATION lib/os-modules)
 set(cls_references_files objclass/class_api.cc)
 add_library(cls_references_objs OBJECT ${cls_references_files})
 
-set(osdc_osd_srcs osdc/Objecter.cc)
-
 set(libosd_srcs
   libosd/libosd.cc
   libosd/remote.cc
@@ -471,12 +467,13 @@ set(osd_srcs
   osd/OSD.cc
   osd/OSDVol.cc
   osd/Watch.cc
-  ${osdc_osd_srcs}
   ${libosd_srcs}
+  $<TARGET_OBJECTS:cls_references_objs>
+  $<TARGET_OBJECTS:osdc_objs>
   )
 set(osd_mon_files mon/Monitor.cc)
 add_library(osd_mon_objs OBJECT ${osd_mon_files})
-add_library(osd ${CEPH_SHARED} ${osd_srcs} $<TARGET_OBJECTS:cls_references_objs>)
+add_library(osd ${CEPH_SHARED} ${osd_srcs})
 if(${ENABLE_SHARED})
   set_target_properties(osd PROPERTIES OUTPUT_NAME ceph-osd VERSION "1.0.0"
     SOVERSION "1" LINK_FLAGS "-Wl,-export-dynamic")
@@ -523,11 +520,12 @@ if(${WITH_MDS})
     mds/Server.cc
     mds/SessionMap.cc
     osdc/Journaler.cc
+    $<TARGET_OBJECTS:heap_profiler_objs>
     )
-  add_library(mds ${mds_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
-  set(ceph_mds_srcs ceph_mds.cc)
+  add_library(mds ${mds_srcs})
+  set(ceph_mds_srcs ceph_mds.cc $<TARGET_OBJECTS:osdc_objs>)
   add_executable(ceph-mds ${ceph_mds_srcs})
-  target_link_libraries(ceph-mds mds osdc ${CMAKE_DL_LIBS} global
+  target_link_libraries(ceph-mds mds ${CMAKE_DL_LIBS} global
     ${ALLOC_LIBS} boost_system boost_thread)
   install(TARGETS ceph-mds DESTINATION bin)
 endif(${WITH_MDS})
@@ -652,11 +650,18 @@ install(PROGRAMS ${CMAKE_SOURCE_DIR}/src/ceph-create-keys
 
 # Filesystem client
 if(${WITH_CLIENT})
-  set(libclient_srcs client/Client.cc client/Dentry.cc
-    client/Inode.cc client/MetaRequest.cc client/MetaSession.cc
-    client/Trace.cc client/MessageFactory.cc)
+  set(libclient_srcs
+    client/Client.cc
+    client/Dentry.cc
+    client/Inode.cc
+    client/MetaRequest.cc
+    client/MetaSession.cc
+    client/Trace.cc
+    client/MessageFactory.cc
+    $<TARGET_OBJECTS:osdc_objs>
+    )
   add_library(client ${libclient_srcs})
-  target_link_libraries(client PRIVATE osdc ${LIBEDIT_LIBS})
+  target_link_libraries(client PRIVATE ${LIBEDIT_LIBS})
   set(libcephfs_srcs libcephfs.cc)
   add_library(cephfs SHARED ${libcephfs_srcs})
   target_link_libraries(cephfs PRIVATE client global)
