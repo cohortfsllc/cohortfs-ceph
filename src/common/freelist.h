@@ -18,22 +18,38 @@
 namespace cohort {
 
 template <typename T>
+struct DefaultConstruct {
+  T* alloc() const { return new T; }
+  void free(T* entry) { delete entry; }
+};
+
+// uses new char[] to allocate memory, but doesn't call constructors or
+// destructors. for use with overloaded new/delete operators
+template <typename T>
+struct CharArrayAlloc {
+  T* alloc() const { return reinterpret_cast<T*>(new char[sizeof(T)]); }
+  void free(T* entry) { delete[] reinterpret_cast<char*>(entry); }
+};
+
+template <typename T, typename Alloc>
 class FreeList {
  private:
   mpmc_bounded_queue_t<T*> queue;
+  Alloc &allocator;
 
  public:
-  FreeList(size_t max_size, bool preallocate = true) : queue(max_size) {
+  FreeList(size_t max_size, Alloc &allocator, bool preallocate = true)
+    : queue(max_size), allocator(allocator) {
     if (preallocate)
       for (size_t i = 0; i < max_size; i++)
-        queue.enqueue(reinterpret_cast<T*>(new char[sizeof(T)]));
+        queue.enqueue(allocator.alloc());
   }
 
   ~FreeList() {
     // free all remaining entries
     T *entry;
     while (queue.dequeue(entry))
-      delete[] reinterpret_cast<char*>(entry);
+      allocator.free(entry);
   }
 
   T* alloc() {
@@ -41,13 +57,13 @@ class FreeList {
     if (queue.dequeue(entry))
       return entry;
     // queue is empty, allocate it
-    return reinterpret_cast<T*>(new char[sizeof(T)]);
+    return allocator.alloc();
   }
 
   void free(T *entry) {
     if (!queue.enqueue(entry)) {
       // queue is full, delete it
-      delete[] reinterpret_cast<char*>(entry);
+      allocator.free(entry);
     }
   }
 };

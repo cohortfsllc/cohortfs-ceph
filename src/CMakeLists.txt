@@ -466,10 +466,11 @@ set(libosd_srcs
   libosd/Messengers.cc
   )
 set(osd_srcs
-  osd/OSD.cc
-  osd/Watch.cc
   osd/ClassHandler.cc
+  osd/OpRequest.cc
+  osd/OSD.cc
   osd/OSDVol.cc
+  osd/Watch.cc
   ${osdc_osd_srcs}
   ${libosd_srcs}
   )

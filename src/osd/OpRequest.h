@@ -27,13 +27,16 @@ namespace bi = boost::intrusive;
 
 class OpRequest : public MOSDOp {
  private:
-  static cohort::FreeList<OpRequest> free_list;
+  typedef cohort::CharArrayAlloc<OpRequest> Alloc;
+  typedef cohort::FreeList<OpRequest, Alloc> FreeList;
+  static Alloc alloc;
+  static FreeList freelist;
  public:
   static void *operator new(size_t num_bytes) {
-    return free_list.alloc();
+    return freelist.alloc();
   }
   void operator delete(void *p) {
-    return free_list.free(static_cast<OpRequest*>(p));
+    return freelist.free(static_cast<OpRequest*>(p));
   }
 
 public:
