@@ -18,6 +18,7 @@
 
 #include "MOSDOp.h"
 #include "common/errno.h"
+#include "common/freelist.h"
 
 /*
  * OSD op reply
@@ -28,7 +29,20 @@
  */
 
 class MOSDOpReply : public Message {
+ private:
+  typedef cohort::CharArrayAlloc<MOSDOpReply> Alloc;
+  typedef cohort::FreeList<MOSDOpReply, Alloc> FreeList;
+  static Alloc alloc;
+  static FreeList freelist;
+ public:
+  static void *operator new(size_t num_bytes) {
+    return freelist.alloc();
+  }
+  void operator delete(void *p) {
+    return freelist.free(static_cast<MOSDOpReply*>(p));
+  }
 
+ private:
   static const int HEAD_VERSION = 6;
   static const int COMPAT_VERSION = 2;
 

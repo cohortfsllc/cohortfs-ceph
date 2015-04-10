@@ -308,6 +308,7 @@ add_subdirectory(cls)
 # RADOS client/library
 set(osdc_files
   osdc/Objecter.cc
+  messages/MOSDOpReply.cc
   )
 add_library(osdc_objs OBJECT ${osdc_files})
 
