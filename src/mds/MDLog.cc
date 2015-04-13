@@ -34,6 +34,9 @@
 #undef dout_prefix
 #define dout_prefix *_dout << "mds." << mds->get_nodeid() << ".log "
 
+using rados::op_callback;
+using rados::CB_Waiter;
+
 // cons/des
 MDLog::~MDLog()
 {
@@ -67,7 +70,7 @@ void MDLog::handle_journaler_write_error(int r)
   }
 }
 
-void MDLog::write_head(OSDC::op_callback&& c)
+void MDLog::write_head(op_callback&& c)
 {
   journaler->write_head(std::move(c));
 }
@@ -89,7 +92,7 @@ uint64_t MDLog::get_safe_pos()
 
 
 
-void MDLog::create(VolumeRef &v, OSDC::op_callback&& c)
+void MDLog::create(VolumeRef &v, op_callback&& c)
 {
   ldout(mds->cct, 5) << "create empty log" << dendl;
   init_journaler(v);
@@ -483,8 +486,8 @@ void MDLog::_replay_thread(VolumeRef &v)
 	   * the MDS is going to either shut down or restart when
 	   * we return this error, doing it synchronously is fine
 	   * -- as long as we drop the main mds lock--. */
-	  OSDC::CB_Waiter w;
-	  journaler->reread_head(std::ref(w));
+	  CB_Waiter w;
+	  journaler->reread_head(w);
 	  ml.unlock();
 	  int err = w.wait();
 	  if (err) { // well, crap

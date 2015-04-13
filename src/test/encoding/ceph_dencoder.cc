@@ -28,6 +28,9 @@
 #undef MESSAGE
 #undef MESSAGE_CONTEXT
 
+using std::cout;
+using std::cerr;
+
 void usage(ostream &out)
 {
   out << "usage: ceph-dencoder [commands ...]" << std::endl;

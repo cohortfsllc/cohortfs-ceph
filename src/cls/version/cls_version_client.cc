@@ -1,47 +1,31 @@
 #include <errno.h>
 
 #include "include/types.h"
+#include "osdc/RadosClient.h"
 #include "cls/version/cls_version_ops.h"
-#include "include/rados/librados.hpp"
 
 
-using namespace librados;
+using namespace rados;
 
 
-void cls_version_set(librados::ObjectWriteOperation& op, obj_version& objv)
+void cls_version_set(ObjOpUse op, obj_version& objv)
 {
   bufferlist in;
   cls_version_set_op call;
   call.objv = objv;
   ::encode(call, in);
-  op.exec("version", "set", in);
+  op->call("version", "set", in);
 }
 
-void cls_version_inc(librados::ObjectWriteOperation& op)
+void cls_version_inc(ObjOpUse op)
 {
   bufferlist in;
   cls_version_inc_op call;
   ::encode(call, in);
-  op.exec("version", "inc", in);
+  op->call("version", "inc", in);
 }
 
-void cls_version_inc(librados::ObjectWriteOperation& op, obj_version& objv, VersionCond cond)
-{
-  bufferlist in;
-  cls_version_inc_op call;
-  call.objv = objv;
-
-  obj_version_cond c;
-  c.cond = cond;
-  c.ver = objv;
-
-  call.conds.push_back(c);
-
-  ::encode(call, in);
-  op.exec("version", "inc_conds", in);
-}
-
-void cls_version_check(librados::ObjectOperation& op, obj_version& objv, VersionCond cond)
+void cls_version_inc(ObjOpUse op, obj_version& objv, VersionCond cond)
 {
   bufferlist in;
   cls_version_inc_op call;
@@ -54,14 +38,30 @@ void cls_version_check(librados::ObjectOperation& op, obj_version& objv, Version
   call.conds.push_back(c);
 
   ::encode(call, in);
-  op.exec("version", "check_conds", in);
+  op->call("version", "inc_conds", in);
 }
 
-class VersionReadCtx : public ObjectOperationCompletion {
+void cls_version_check(ObjOpUse op, obj_version& objv, VersionCond cond)
+{
+  bufferlist in;
+  cls_version_inc_op call;
+  call.objv = objv;
+
+  obj_version_cond c;
+  c.cond = cond;
+  c.ver = objv;
+
+  call.conds.push_back(c);
+
+  ::encode(call, in);
+  op->call("version", "check_conds", in);
+}
+
+class VersionReadCB {
   obj_version *objv;
 public:
-  VersionReadCtx(obj_version *_objv) : objv(_objv) {}
-  void handle_completion(int r, bufferlist& outbl) {
+  VersionReadCB(obj_version *_objv) : objv(_objv) {}
+    void operator()(int r, bufferlist&& outbl) {
     if (r >= 0) {
       cls_version_read_ret ret;
       try {
@@ -75,16 +75,19 @@ public:
   }
 };
 
-void cls_version_read(librados::ObjectReadOperation& op, obj_version *objv)
+void cls_version_read(ObjOpUse op, obj_version *objv)
 {
   bufferlist inbl;
-  op.exec("version", "read", inbl, new VersionReadCtx(objv));
+  op->call("version", "read", inbl, VersionReadCB(objv));
 }
 
-int cls_version_read(librados::IoCtx& io_ctx, string& oid_t, obj_version *ver)
+int cls_version_read(Objecter* o, const oid_t& oid, VolumeRef vol,
+		     obj_version *ver)
 {
   bufferlist in, out;
-  int r = io_ctx.exec(oid_t, "version", "read", in, out);
+  ObjectOperation op(vol->op());
+  op->call("version", "read", in, &out);
+  int r = o->read(oid, vol, op);
   if (r < 0)
     return r;
 

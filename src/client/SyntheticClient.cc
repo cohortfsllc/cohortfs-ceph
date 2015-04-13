@@ -42,6 +42,10 @@ using namespace std;
 #undef dout_prefix
 #define dout_prefix *_dout << "client." << (whoami >= 0 ? whoami:client->get_nodeid()) << " "
 
+using rados::CB_Waiter;
+using rados::op_callback;
+using rados::ObjectOperation;
+
 // traces
 //void trace_include(SyntheticClient *syn, Client *cl, string& prefix);
 //void trace_openssh(SyntheticClient *syn, Client *cl, string& prefix);
@@ -899,7 +903,7 @@ int SyntheticClient::start_thread()
 {
   assert(!thread_id);
 
-  pthread_create(&thread_id, NULL, synthetic_client_thread_entry, this);
+  pthread_create(&thread_id, nullptr, synthetic_client_thread_entry, this);
   assert(thread_id);
   return 0;
 }
@@ -960,7 +964,7 @@ void SyntheticClient::up()
 
 class MultiWait : public cohort::SimpleMultiCallback<int> {
   friend cohort::MultiCallback;
-  OSDC::CB_Waiter w;
+  CB_Waiter w;
   int r;
   MultiWait() : r(0) {}
   virtual void work(int _r) {
@@ -1024,7 +1028,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
   // for object traces
   std::mutex lock;
   auto& mw = cohort::MultiCallback::create<MultiWait>();
-  auto mwref = mw.add();
+  op_callback mwref = mw;
 
   while (!t.end()) {
 
@@ -1176,7 +1180,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
 	client->write(fd, b, size, off);
 	delete[] b;
       } else {
-	client->write(fd, NULL, 0, size+off);
+	client->write(fd, nullptr, 0, size+off);
       }
     } else if (strcmp(op, "truncate") == 0) {
       const char *a = t.get_string(buf, p);
@@ -1368,7 +1372,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       if (ll_inos.count(i)) {
 	Fh *fhp;
 	i1 = client->ll_get_inode(vinodeno_t(ll_inos[i]));
-	if (client->ll_create(i1, n, m, f, &attr, NULL, &fhp) == 0) {
+	if (client->ll_create(i1, n, m, f, &attr, nullptr, &fhp) == 0) {
 	  ll_inos[ri] = attr.st_ino;
 	  ll_files[r] = fhp;
 	}
@@ -1395,7 +1399,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
 	  bp.zero();
 	  client->ll_write(ll_files[f], off, size, bl.c_str());
 	} else {
-	  client->ll_write(ll_files[f], off+size, 0, NULL);
+	  client->ll_write(ll_files[f], off+size, 0, nullptr);
 	}
       }
     } else if (strcmp(op, "ll_flush") == 0) {
@@ -1436,9 +1440,8 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
 	continue;
       }
       l.unlock();
-      OSDC::CB_Waiter w;
-      client->objecter->stat(oid, mvol, &size, &mtime, 0,
-			     std::ref(w));
+      CB_Waiter w;
+      client->objecter->stat(oid, mvol, &size, &mtime, w);
       r = w.wait();
     }
     else if (strcmp(op, "o_read") == 0) {
@@ -1459,9 +1462,8 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       std::unique_lock<std::mutex> l(lock);
       bufferlist bl;
       l.unlock();
-      OSDC::CB_Waiter w;
-      client->objecter->read(oid, mvol, off, len, &bl, 0,
-			     std::ref(w));
+      CB_Waiter w;
+      client->objecter->read(oid, mvol, off, len, &bl, w);
       r = w.wait();
     }
     else if (strcmp(op, "o_write") == 0) {
@@ -1484,11 +1486,8 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       bufferptr bp(len);
       bufferlist bl;
       bl.push_back(bp);
-      OSDC::CB_Waiter w;
-      client->objecter->write(oid, mvol, off, len, bl,
-			      ceph::real_clock::now(), 0,
-			      std::ref(w),
-			      mw.add());
+      CB_Waiter w;
+      client->objecter->write(oid, mvol, off, len, bl, w, mw);
       mw.activate();
       l.unlock();
       r = w.wait();
@@ -1509,11 +1508,8 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
 			      << " error=" << r << dendl;
 	continue;
       }
-      OSDC::CB_Waiter w;
-      client->objecter->zero(oid, mvol, off, len,
-			     ceph::real_clock::now(), 0,
-			     std::ref(w),
-			     mw.add());
+      CB_Waiter w;
+      client->objecter->zero(oid, mvol, off, len, w, mw);
       r = w.wait();
     }
 
@@ -2312,7 +2308,6 @@ int SyntheticClient::create_objects(int nobj, int osize, int inflight)
     starts.push_back(ceph::mono_clock::now());
     Client::unique_lock cl(client->client_lock);
     client->objecter->write(oid, mvol, 0, osize, bl,
-			    ceph::real_clock::now(), 0,
 			    CB_Ref(lock, cond, unack),
 			    CB_Ref(lock, cond, unsafe));
     cl.unlock();
@@ -2418,19 +2413,17 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
     if (write) {
       ldout(client->cct, 10) << "write to " << oid << dendl;
 
-      unique_ptr<ObjOp> m(mvol->op());
-      if (!m)
-	return -EDOM;
+      ObjectOperation m(mvol->op());
       m->write(0, osize, bl);
       if (do_sync) {
 	m->add_op(CEPH_OSD_OP_STARTSYNC);
       }
-      client->objecter->mutate(oid, mvol, m, ceph::real_clock::now(), 0,
-			       NULL, CB_Ref(lock, cond, unack));
+      client->objecter->mutate(oid, mvol, m, ceph::real_clock::now(),
+			       nullptr, CB_Ref(lock, cond, unack));
     } else {
       ldout(client->cct, 10) << "read from " << oid << dendl;
       bufferlist inbl;
-      client->objecter->read(oid, mvol, 0, osize, &inbl, 0,
+      client->objecter->read(oid, mvol, 0, osize, &inbl,
 			     CB_Ref(lock, cond, unack));
     }
     cl.unlock();
@@ -2471,7 +2464,7 @@ int SyntheticClient::read_random(string& fn, int size, int rdsize)
 
   if (fd < 0) return fd;
   int offset = 0;
-  char * buf = NULL;
+  char * buf = nullptr;
 
   for (unsigned i=0; i<2000; i++) {
     if (time_to_stop()) break;
@@ -2488,9 +2481,9 @@ int SyntheticClient::read_random(string& fn, int size, int rdsize)
     //ldout(client->cct, 0) << "RANDOM NUMBER RETURN |" << x << "|" << dendl;
 
     // cleanup before call 'new'
-    if (buf != NULL) {
+    if (buf != nullptr) {
 	delete[] buf;
-	buf = NULL;
+	buf = nullptr;
     }
     if ( x < 0.5)
     {
@@ -2644,7 +2637,7 @@ int SyntheticClient::read_random_ex(string& fn, int size, int rdsize)	// size is
 
   if (fd < 0) return fd;
   int offset = 0;
-  char * buf = NULL;
+  char * buf = nullptr;
 
   for (unsigned i=0; i<2000; i++) {
     if (time_to_stop()) break;
@@ -2661,9 +2654,9 @@ int SyntheticClient::read_random_ex(string& fn, int size, int rdsize)	// size is
     //ldout(client->cct, 0) << "RANDOM NUMBER RETURN |" << x << "|" << dendl;
 
     // cleanup before call 'new'
-    if (buf != NULL) {
+    if (buf != nullptr) {
 	delete[] buf;
-	buf = NULL;
+	buf = nullptr;
     }
     if ( x < 0.5)
       {

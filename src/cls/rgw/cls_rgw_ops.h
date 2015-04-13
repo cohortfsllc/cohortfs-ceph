@@ -88,7 +88,6 @@ struct rgw_cls_obj_complete_op
     uint8_t c = (uint8_t)op;
     ::encode(c, bl);
     ::encode(name, bl);
-    ::encode(ver.epoch, bl);
     ::encode(meta, bl);
     ::encode(tag, bl);
     ::encode(locator, bl);
@@ -103,7 +102,6 @@ struct rgw_cls_obj_complete_op
     ::decode(c, bl);
     op = (RGWModifyOp)c;
     ::decode(name, bl);
-    ::decode(ver.epoch, bl);
     ::decode(meta, bl);
     ::decode(tag, bl);
     if (struct_v >= 2) {
@@ -221,8 +219,6 @@ struct rgw_cls_usage_log_add_op {
 WRITE_CLASS_ENCODER(rgw_cls_usage_log_add_op)
 
 struct rgw_cls_usage_log_read_op {
-  uint64_t start_epoch;
-  uint64_t end_epoch;
   string owner;
 
   string iter;  // should be empty for the first call, non empty for subsequent calls
@@ -230,8 +226,6 @@ struct rgw_cls_usage_log_read_op {
 
   void encode(bufferlist& bl) const {
     ENCODE_START(1, 1, bl);
-    ::encode(start_epoch, bl);
-    ::encode(end_epoch, bl);
     ::encode(owner, bl);
     ::encode(iter, bl);
     ::encode(max_entries, bl);
@@ -240,8 +234,6 @@ struct rgw_cls_usage_log_read_op {
 
   void decode(bufferlist::iterator& bl) {
     DECODE_START(1, bl);
-    ::decode(start_epoch, bl);
-    ::decode(end_epoch, bl);
     ::decode(owner, bl);
     ::decode(iter, bl);
     ::decode(max_entries, bl);
@@ -274,22 +266,16 @@ struct rgw_cls_usage_log_read_ret {
 WRITE_CLASS_ENCODER(rgw_cls_usage_log_read_ret)
 
 struct rgw_cls_usage_log_trim_op {
-  uint64_t start_epoch;
-  uint64_t end_epoch;
   string user;
 
   void encode(bufferlist& bl) const {
     ENCODE_START(2, 2, bl);
-    ::encode(start_epoch, bl);
-    ::encode(end_epoch, bl);
     ::encode(user, bl);
     ENCODE_FINISH(bl);
   }
 
   void decode(bufferlist::iterator& bl) {
     DECODE_START(2, bl);
-    ::decode(start_epoch, bl);
-    ::decode(end_epoch, bl);
     ::decode(user, bl);
     DECODE_FINISH(bl);
   }

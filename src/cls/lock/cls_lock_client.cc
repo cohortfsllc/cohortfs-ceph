@@ -14,9 +14,6 @@
 
 #include "include/types.h"
 #include "msg/msg_types.h"
-#include "include/rados/librados.hpp"
-
-using namespace librados;
 
 #include <iostream>
 
@@ -32,7 +29,7 @@ namespace rados {
   namespace cls {
     namespace lock {
 
-      void lock(ObjectWriteOperation *rados_op,
+      void lock(ObjOpUse rados_op,
 		const string& name, ClsLockType type,
 		const string& cookie, const string& tag,
 		const string& description,
@@ -48,22 +45,26 @@ namespace rados {
 	op.flags = flags;
 	bufferlist in;
 	::encode(op, in);
-	rados_op->exec("lock", "lock", in);
+	rados_op->call("lock", "lock", in);
       }
 
-      int lock(IoCtx *ioctx,
-	       const string& oid_t,
+      int lock(Objecter* o,
+	       VolumeRef vol,
+	       const oid_t& oid,
 	       const string& name, ClsLockType type,
 	       const string& cookie, const string& tag,
 	       const string& description, const ceph::timespan& duration,
 	       uint8_t flags)
       {
-	ObjectWriteOperation op(*ioctx);
-	lock(&op, name, type, cookie, tag, description, duration, flags);
-	return ioctx->operate(oid_t, &op);
+	ObjectOperation op(vol->op());
+	// WHY the heck is this happening? I'm not using namespace std
+	// in any header.
+	rados::cls::lock::lock(op, name, type, cookie, tag, description,
+			       duration, flags);
+	return o->mutate(oid, vol, op);
       }
 
-      void unlock(ObjectWriteOperation *rados_op,
+      void unlock(ObjOpUse rados_op,
 		  const string& name, const string& cookie)
       {
 	cls_lock_unlock_op op;
@@ -72,18 +73,18 @@ namespace rados {
 	bufferlist in;
 	::encode(op, in);
 
-	rados_op->exec("lock", "unlock", in);
+	rados_op->call("lock", "unlock", in);
       }
 
-      int unlock(IoCtx *ioctx, const string& oid_t,
+      int unlock(Objecter* o, VolumeRef vol, const oid_t& oid,
 		 const string& name, const string& cookie)
       {
-	ObjectWriteOperation op(*ioctx);
-	unlock(&op, name, cookie);
-	return ioctx->operate(oid_t, &op);
+	ObjectOperation op(vol->op());
+	unlock(op, name, cookie);
+	return o->mutate(oid, vol, op);
       }
 
-      void break_lock(ObjectWriteOperation *rados_op,
+      void break_lock(ObjOpUse& rados_op,
 		      const string& name, const string& cookie,
 		      const entity_name_t& locker)
       {
@@ -93,22 +94,25 @@ namespace rados {
 	op.locker = locker;
 	bufferlist in;
 	::encode(op, in);
-	rados_op->exec("lock", "break_lock", in);
+	rados_op->call("lock", "break_lock", in);
       }
 
-      int break_lock(IoCtx *ioctx, const string& oid_t,
+      int break_lock(Objecter* o, VolumeRef vol, const oid_t& oid,
 		     const string& name, const string& cookie,
 		     const entity_name_t& locker)
       {
-	ObjectWriteOperation op(*ioctx);
-	break_lock(&op, name, cookie, locker);
-	return ioctx->operate(oid_t, &op);
+	ObjectOperation op(vol->op());
+	break_lock(op, name, cookie, locker);
+	return o->mutate(oid, vol, op);
       }
 
-      int list_locks(IoCtx *ioctx, const string& oid_t, list<string> *locks)
+      int list_locks(Objecter* o, VolumeRef vol, const oid_t& oid,
+		     list<string>& locks)
       {
 	bufferlist in, out;
-	int r = ioctx->exec(oid_t, "lock", "list_locks", in, out);
+	ObjectOperation op(vol->op());
+	op->call("lock", "list_locks", in, &out);
+	int r = o->read(oid, vol, op);
 	if (r < 0)
 	  return r;
 
@@ -120,28 +124,29 @@ namespace rados {
 	  return -EBADMSG;
 	}
 
-	*locks = ret.locks;
+	locks = ret.locks;
 
 	return 0;
       }
 
-      void get_lock_info_start(ObjectReadOperation *rados_op,
-			       const string& name)
+      void get_lock_info_start(ObjOpUse rados_op,
+			       const string& name,
+			       bufferlist& out)
       {
 	bufferlist in;
 	cls_lock_get_info_op op;
 	op.name = name;
 	::encode(op, in);
-	rados_op->exec("lock", "get_info", in);
+	rados_op->call("lock", "get_info", in, &out);
       }
 
-      int get_lock_info_finish(bufferlist::iterator *iter,
-			       map<locker_id_t, locker_info_t> *lockers,
-			       ClsLockType *type, string *tag)
+      int get_lock_info_finish(bufferlist::iterator& iter,
+			       map<locker_id_t, locker_info_t>* lockers,
+			       ClsLockType* type, string* tag)
       {
 	cls_lock_get_info_reply ret;
 	try {
-	  ::decode(ret, *iter);
+	  ::decode(ret, iter);
 	} catch (buffer::error& err) {
 	  return -EBADMSG;
 	}
@@ -161,62 +166,64 @@ namespace rados {
 	return 0;
       }
 
-      int get_lock_info(IoCtx *ioctx, const string& oid_t, const string& name,
-			map<locker_id_t, locker_info_t> *lockers,
-			ClsLockType *type, string *tag)
+      int get_lock_info(Objecter* o, VolumeRef vol, const oid_t& oid,
+			const string& name,
+			map<locker_id_t, locker_info_t>* lockers,
+			ClsLockType* type, string* tag)
       {
-	ObjectReadOperation op(*ioctx);
-	get_lock_info_start(&op, name);
+	ObjectOperation op(vol->op());
 	bufferlist out;
-	int r = ioctx->operate(oid_t, &op, &out);
+	get_lock_info_start(op, name, out);
+	int r = o->read(oid, vol, op);
 	if (r < 0)
 	  return r;
 	bufferlist::iterator it = out.begin();
-	return get_lock_info_finish(&it, lockers, type, tag);
+	return get_lock_info_finish(it, lockers, type, tag);
       }
 
-      void Lock::lock_shared(ObjectWriteOperation *op)
+      void Lock::lock_shared(ObjOpUse op)
       {
 	lock(op, name, LOCK_SHARED,
 	     cookie, tag, description, duration, flags);
       }
 
-      int Lock::lock_shared(IoCtx *ioctx, const string& oid_t)
+      int Lock::lock_shared(Objecter* o, VolumeRef vol, const oid_t& oid)
       {
-	return lock(ioctx, oid_t, name, LOCK_SHARED,
-		    cookie, tag, description, duration, flags);
+	return lock(o, vol, oid, name, LOCK_SHARED, cookie, tag, description,
+		    duration, flags);
       }
 
-      void Lock::lock_exclusive(ObjectWriteOperation *op)
+      void Lock::lock_exclusive(ObjOpUse op)
       {
-	lock(op, name, LOCK_EXCLUSIVE,
-	     cookie, tag, description, duration, flags);
+	lock(op, name, LOCK_EXCLUSIVE, cookie, tag, description, duration,
+	     flags);
       }
 
-      int Lock::lock_exclusive(IoCtx *ioctx, const string& oid_t)
+      int Lock::lock_exclusive(Objecter* o, VolumeRef vol, const oid_t& oid)
       {
-	return lock(ioctx, oid_t, name, LOCK_EXCLUSIVE,
-		    cookie, tag, description, duration, flags);
+	return lock(o, vol, oid, name, LOCK_EXCLUSIVE, cookie, tag,
+		    description, duration, flags);
       }
 
-      void Lock::unlock(ObjectWriteOperation *op)
+      void Lock::unlock(ObjOpUse op)
       {
 	rados::cls::lock::unlock(op, name, cookie);
       }
 
-      int Lock::unlock(IoCtx *ioctx, const string& oid_t)
+      int Lock::unlock(Objecter* o, VolumeRef vol, const oid_t& oid)
       {
-	return rados::cls::lock::unlock(ioctx, oid_t, name, cookie);
+	return rados::cls::lock::unlock(o, vol, oid, name, cookie);
       }
 
-      void Lock::break_lock(ObjectWriteOperation *op, const entity_name_t& locker)
+      void Lock::break_lock(ObjOpUse op, const entity_name_t& locker)
       {
 	rados::cls::lock::break_lock(op, name, cookie, locker);
       }
 
-      int Lock::break_lock(IoCtx *ioctx, const string& oid_t, const entity_name_t& locker)
+      int Lock::break_lock(Objecter* o, VolumeRef vol, const oid_t& oid,
+			   const entity_name_t& locker)
       {
-	  return rados::cls::lock::break_lock(ioctx, oid_t, name, cookie, locker);
+	return rados::cls::lock::break_lock(o, vol, oid, name, cookie, locker);
       }
     } // namespace lock
   } // namespace cls

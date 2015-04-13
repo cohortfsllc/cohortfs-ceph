@@ -33,25 +33,28 @@ void RGWReplicaBounds::decode_json(JSONObj *oid) {
 RGWReplicaLogger::RGWReplicaLogger(RGWRados *_store) :
     cct(_store->cct), store(_store) {}
 
-int RGWReplicaLogger::open_ioctx(librados::IoCtx& ctx, const string& pool)
+int RGWReplicaLogger::open_volume(VolumeRef& vol, const string& name)
 {
-  int r = store->rados->ioctx_create(pool.c_str(), ctx);
-  if (r == -ENOENT) {
-    rgw_bucket p(pool.c_str());
-    r = store->create_pool(p);
+  int r = 0;
+  vol = store->rc.lookup_volume(name);
+  if (!vol) {
+    rgw_bucket p(name);
+    r = store->create_vol(p);
     if (r < 0)
       return r;
 
     // retry
-    r = store->rados->ioctx_create(pool.c_str(), ctx);
+    vol = store->rc.lookup_volume(name);
+    if (!vol)
+      r = -ENOENT;
   }
   if (r < 0) {
-    lderr(cct) << "ERROR: could not open rados pool " << pool << dendl;
+    lderr(cct) << "ERROR: could not open rados vol " << name << dendl;
   }
   return r;
 }
 
-int RGWReplicaLogger::update_bound(const string& oid_t, const string& pool,
+int RGWReplicaLogger::update_bound(const string& oid, const string& volname,
 				   const string& daemon_id,
 				   const string& marker,
 				   const ceph::real_time& time,
@@ -63,63 +66,66 @@ int RGWReplicaLogger::update_bound(const string& oid_t, const string& pool,
   progress.position_time = time;
   progress.items = *entries;
 
-  librados::IoCtx ioctx;
-  int r = open_ioctx(ioctx, pool);
+  VolumeRef vol;
+  int r = open_volume(vol, volname);
   if (r < 0) {
     return r;
   }
 
-  librados::ObjectWriteOperation opw(ioctx);
+  rados::ObjectOperation opw(vol->op());
   cls_replica_log_update_bound(opw, progress);
-  return ioctx.operate(oid_t, &opw);
+  return store->rc.objecter->mutate(oid, vol, opw);
 }
 
-int RGWReplicaLogger::delete_bound(const string& oid_t, const string& pool,
+int RGWReplicaLogger::delete_bound(const string& oid, const string& volname,
 				   const string& daemon_id)
 {
-  librados::IoCtx ioctx;
-  int r = open_ioctx(ioctx, pool);
+  VolumeRef vol;
+  int r = open_volume(vol, volname);
   if (r < 0) {
     return r;
   }
 
-  librados::ObjectWriteOperation opw(ioctx);
+  rados::ObjectOperation opw(vol->op());
   cls_replica_log_delete_bound(opw, daemon_id);
-  return ioctx.operate(oid_t, &opw);
+  return store->rc.objecter->mutate(oid, vol, opw);
 }
 
-int RGWReplicaLogger::get_bounds(const string& oid_t, const string& pool,
+int RGWReplicaLogger::get_bounds(const string& oid, const string& volname,
 				 RGWReplicaBounds& bounds)
 {
-  librados::IoCtx ioctx;
-  int r = open_ioctx(ioctx, pool);
+  VolumeRef vol;
+  int r = open_volume(vol, volname);
   if (r < 0) {
     return r;
   }
 
-  return cls_replica_log_get_bounds(ioctx, oid_t, bounds.marker, bounds.oldest_time, bounds.markers);
+  return cls_replica_log_get_bounds(store->rc.objecter, vol, oid,
+				    bounds.marker, bounds.oldest_time,
+				    bounds.markers);
 }
 
 RGWReplicaObjectLogger::
 RGWReplicaObjectLogger(RGWRados *_store,
-		       const string& _pool,
+		       const string& _volname,
 		       const string& _prefix) : RGWReplicaLogger(_store),
-		       pool(_pool), prefix(_prefix) {
-  if (pool.empty())
-    store->get_log_pool_name(pool);
+						volname(_volname),
+						prefix(_prefix) {
+  if (volname.empty())
+    store->get_log_vol_name(volname);
 }
 
 int RGWReplicaObjectLogger::create_log_objects(int shards)
 {
-  librados::IoCtx ioctx;
-  int r = open_ioctx(ioctx, pool);
+  VolumeRef vol;
+  int r = open_volume(vol, volname);
   if (r < 0) {
     return r;
   }
   for (int i = 0; i < shards; ++i) {
-    string oid_t;
-    get_shard_oid(i, oid_t);
-    r = ioctx.create(oid_t, false);
+    string oid;
+    get_shard_oid(i, oid);
+    r = store->rc.objecter->create(oid, vol, false);
     if (r < 0)
       return r;
   }
@@ -129,7 +135,7 @@ int RGWReplicaObjectLogger::create_log_objects(int shards)
 RGWReplicaBucketLogger::RGWReplicaBucketLogger(RGWRados *_store) :
   RGWReplicaLogger(_store)
 {
-  store->get_log_pool_name(pool);
+  store->get_log_vol_name(vol);
   prefix = _store->ctx()->_conf->rgw_replica_log_obj_prefix;
   prefix.append(".");
 }

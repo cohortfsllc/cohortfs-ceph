@@ -488,18 +488,18 @@ void RGWQuotaInfo::decode_json(JSONObj *oid)
 void rgw_bucket::dump(Formatter *f) const
 {
   encode_json("name", name, f);
-  encode_json("pool", data_pool, f);
-  encode_json("data_extra_pool", data_extra_pool, f);
-  encode_json("index_pool", index_pool, f);
+  encode_json("vol", data_vol, f);
+  encode_json("data_extra_vol", data_extra_vol, f);
+  encode_json("index_vol", index_vol, f);
   encode_json("marker", marker, f);
   encode_json("bucket_id", bucket_id, f);
 }
 
 void rgw_bucket::decode_json(JSONObj *oid) {
   JSONDecoder::decode_json("name", name, oid);
-  JSONDecoder::decode_json("pool", data_pool, oid);
-  JSONDecoder::decode_json("data_extra_pool", data_extra_pool, oid);
-  JSONDecoder::decode_json("index_pool", index_pool, oid);
+  JSONDecoder::decode_json("vol", data_vol, oid);
+  JSONDecoder::decode_json("data_extra_vol", data_extra_vol, oid);
+  JSONDecoder::decode_json("index_vol", index_vol, oid);
   JSONDecoder::decode_json("marker", marker, oid);
   JSONDecoder::decode_json("bucket_id", bucket_id, oid);
 }
@@ -588,58 +588,58 @@ void rgw_obj::dump(Formatter *f) const
 
 void RGWZoneParams::dump(Formatter *f) const
 {
-  encode_json("domain_root", domain_root.data_pool, f);
-  encode_json("control_pool", control_pool.data_pool, f);
-  encode_json("gc_pool", gc_pool.data_pool, f);
-  encode_json("log_pool", log_pool.data_pool, f);
-  encode_json("intent_log_pool", intent_log_pool.data_pool, f);
-  encode_json("usage_log_pool", usage_log_pool.data_pool, f);
-  encode_json("user_keys_pool", user_keys_pool.data_pool, f);
-  encode_json("user_email_pool", user_email_pool.data_pool, f);
-  encode_json("user_swift_pool", user_swift_pool.data_pool, f);
-  encode_json("user_uid_pool", user_uid_pool.data_pool, f);
+  encode_json("domain_root", domain_root.data_vol, f);
+  encode_json("control_vol", control_vol.data_vol, f);
+  encode_json("gc_vol", gc_vol.data_vol, f);
+  encode_json("log_vol", log_vol.data_vol, f);
+  encode_json("intent_log_vol", intent_log_vol.data_vol, f);
+  encode_json("usage_log_vol", usage_log_vol.data_vol, f);
+  encode_json("user_keys_vol", user_keys_vol.data_vol, f);
+  encode_json("user_email_vol", user_email_vol.data_vol, f);
+  encode_json("user_swift_vol", user_swift_vol.data_vol, f);
+  encode_json("user_uid_vol", user_uid_vol.data_vol, f);
   encode_json_plain("system_key", system_key, f);
-  encode_json("placement_pools", placement_pools, f);
+  encode_json("placement_vols", placement_vols, f);
 }
 
 static void decode_json(const char *field, rgw_bucket& bucket, JSONObj *oid)
 {
-  string pool;
-  JSONDecoder::decode_json(field, pool, oid);
-  if (pool[0] != '.') {
-    pool = string(".") + pool;
+  string vol;
+  JSONDecoder::decode_json(field, vol, oid);
+  if (vol[0] != '.') {
+    vol = string(".") + vol;
   }
-  bucket = rgw_bucket(pool.c_str());
+  bucket = rgw_bucket(vol.c_str());
 }
 
 void RGWZonePlacementInfo::dump(Formatter *f) const
 {
-  encode_json("index_pool", index_pool, f);
-  encode_json("data_pool", data_pool, f);
-  encode_json("data_extra_pool", data_extra_pool, f);
+  encode_json("index_vol", index_vol, f);
+  encode_json("data_vol", data_vol, f);
+  encode_json("data_extra_vol", data_extra_vol, f);
 }
 
 void RGWZonePlacementInfo::decode_json(JSONObj *oid)
 {
-  JSONDecoder::decode_json("index_pool", index_pool, oid);
-  JSONDecoder::decode_json("data_pool", data_pool, oid);
-  JSONDecoder::decode_json("data_extra_pool", data_extra_pool, oid);
+  JSONDecoder::decode_json("index_vol", index_vol, oid);
+  JSONDecoder::decode_json("data_vol", data_vol, oid);
+  JSONDecoder::decode_json("data_extra_vol", data_extra_vol, oid);
 }
 
 void RGWZoneParams::decode_json(JSONObj *oid)
 {
   ::decode_json("domain_root", domain_root, oid);
-  ::decode_json("control_pool", control_pool, oid);
-  ::decode_json("gc_pool", gc_pool, oid);
-  ::decode_json("log_pool", log_pool, oid);
-  ::decode_json("intent_log_pool", intent_log_pool, oid);
-  ::decode_json("usage_log_pool", usage_log_pool, oid);
-  ::decode_json("user_keys_pool", user_keys_pool, oid);
-  ::decode_json("user_email_pool", user_email_pool, oid);
-  ::decode_json("user_uid_pool", user_uid_pool, oid);
-  ::decode_json("user_swift_pool", user_swift_pool, oid);
+  ::decode_json("control_vol", control_vol, oid);
+  ::decode_json("gc_vol", gc_vol, oid);
+  ::decode_json("log_vol", log_vol, oid);
+  ::decode_json("intent_log_vol", intent_log_vol, oid);
+  ::decode_json("usage_log_vol", usage_log_vol, oid);
+  ::decode_json("user_keys_vol", user_keys_vol, oid);
+  ::decode_json("user_email_vol", user_email_vol, oid);
+  ::decode_json("user_uid_vol", user_uid_vol, oid);
+  ::decode_json("user_swift_vol", user_swift_vol, oid);
   JSONDecoder::decode_json("system_key", system_key, oid);
-  JSONDecoder::decode_json("placement_pools", placement_pools, oid);
+  JSONDecoder::decode_json("placement_vols", placement_vols, oid);
 }
 
 void RGWZone::dump(Formatter *f) const

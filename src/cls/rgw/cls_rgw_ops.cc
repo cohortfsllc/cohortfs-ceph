@@ -116,7 +116,6 @@ void rgw_cls_obj_complete_op::generate_test_instances(list<rgw_cls_obj_complete_
   op->op = CLS_RGW_OP_DEL;
   op->name = "name";
   op->ver.vol = boost::uuids::nil_uuid();
-  op->ver.epoch = 100;
   op->tag = "tag";
 
   list<rgw_bucket_dir_entry_meta *> l;

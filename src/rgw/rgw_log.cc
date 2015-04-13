@@ -128,7 +128,6 @@ public:
     unique_lock l(lock);
     if (timestamp > (round_timestamp + 1h))
       recalc_round_timestamp(timestamp);
-    entry.epoch = ceph::real_clock::to_time_t(round_timestamp);
     bool account;
     rgw_user_bucket ub(entry.owner, entry.bucket);
     usage_map[ub].insert(round_timestamp, entry, &account);
@@ -342,18 +341,18 @@ int rgw_log_op(RGWRados *store, struct req_state *s, const string& op_name, OpsL
   int ret = 0;
 
   if (s->cct->_conf->rgw_ops_log_rados) {
-    string oid_t = render_log_object_name(s->cct->_conf->rgw_log_object_name, &bdt,
+    string oid = render_log_object_name(s->cct->_conf->rgw_log_object_name, &bdt,
 					s->bucket.bucket_id, entry.bucket);
 
-    rgw_obj oid(store->zone.log_pool, oid_t);
+    rgw_obj obj(store->zone.log_vol, oid);
 
-    ret = store->append_async(oid, bl.length(), bl);
+    ret = store->append_async(obj, bl.length(), bl);
     if (ret == -ENOENT) {
-      ret = store->create_pool(store->zone.log_pool);
+      ret = store->create_vol(store->zone.log_vol);
       if (ret < 0)
 	goto done;
       // retry
-      ret = store->append_async(oid, bl.length(), bl);
+      ret = store->append_async(obj, bl.length(), bl);
     }
   }
 
@@ -370,7 +369,7 @@ done:
 int rgw_log_intent(RGWRados *store, rgw_obj& oid, RGWIntentEvent intent,
 		   const ceph::real_time& timestamp, bool utc)
 {
-  rgw_bucket intent_log_bucket(store->zone.intent_log_pool);
+  rgw_bucket intent_log_bucket(store->zone.intent_log_vol);
 
   rgw_intent_log_entry entry;
   entry.oid = oid;
@@ -397,7 +396,7 @@ int rgw_log_intent(RGWRados *store, rgw_obj& oid, RGWIntentEvent intent,
 
   int ret = store->append_async(log_obj, bl.length(), bl);
   if (ret == -ENOENT) {
-    ret = store->create_pool(intent_log_bucket);
+    ret = store->create_vol(intent_log_bucket);
     if (ret < 0)
       goto done;
     ret = store->append_async(log_obj, bl.length(), bl);

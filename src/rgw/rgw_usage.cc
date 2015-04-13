@@ -30,8 +30,8 @@ static void dump_usage_categories_info(Formatter *formatter, const rgw_usage_log
   formatter->close_section(); // categories
 }
 
-int RGWUsage::show(RGWRados *store, string& uid, uint64_t start_epoch,
-		   uint64_t end_epoch, bool show_log_entries, bool show_log_sum,
+int RGWUsage::show(RGWRados *store, string& uid,
+		   bool show_log_entries, bool show_log_sum,
 		   map<string, bool> *categories,
 		   RGWFormatterFlusher& flusher)
 {
@@ -54,8 +54,8 @@ int RGWUsage::show(RGWRados *store, string& uid, uint64_t start_epoch,
   bool user_section_open = false;
   map<string, rgw_usage_log_entry> summary_map;
   while (is_truncated) {
-    int ret = store->read_usage(uid, start_epoch, end_epoch, max_entries,
-				&is_truncated, usage_iter, usage);
+    int ret = store->read_usage(uid, max_entries, &is_truncated, usage_iter,
+				usage);
 
     if (ret == -ENOENT) {
       ret = 0;
@@ -85,9 +85,6 @@ int RGWUsage::show(RGWRados *store, string& uid, uint64_t start_epoch,
 	}
 	formatter->open_object_section("bucket");
 	formatter->dump_string("bucket", ub.bucket);
-	formatter->dump_stream("time")
-	  << ceph::real_clock::from_time_t(entry.epoch);
-	formatter->dump_int("epoch", entry.epoch);
 	dump_usage_categories_info(formatter, entry, categories);
 	formatter->close_section(); // bucket
 	flusher.flush();
@@ -135,8 +132,7 @@ int RGWUsage::show(RGWRados *store, string& uid, uint64_t start_epoch,
   return 0;
 }
 
-int RGWUsage::trim(RGWRados *store, string& uid, uint64_t start_epoch,
-		   uint64_t end_epoch)
+int RGWUsage::trim(RGWRados *store, string& uid)
 {
-  return store->trim_usage(uid, start_epoch, end_epoch);
+  return store->trim_usage(uid);
 }

@@ -43,6 +43,8 @@
 #undef dout_prefix
 #define dout_prefix *_dout << "mds." << mdcache->mds->get_nodeid() << ".cache.ino(" << inode.ino << ") "
 
+using rados::ObjectOperation;
+
 
 boost::pool<> CInode::pool(sizeof(CInode));
 boost::pool<> Capability::pool(sizeof(Capability));
@@ -426,7 +428,7 @@ CDir *CInode::get_approx_dirfrag(frag_t fg)
     dir = get_dirfrag(fg);
     if (dir) return dir;
   }
-  return NULL;
+  return nullptr;
 }
 
 void CInode::get_dirfrags(list<CDir*>& ls)
@@ -616,20 +618,20 @@ CDir *CInode::get_parent_dir()
 {
   if (parent)
     return parent->dir;
-  return NULL;
+  return nullptr;
 }
 CDir *CInode::get_projected_parent_dir()
 {
   CDentry *p = get_projected_parent_dn();
   if (p)
     return p->dir;
-  return NULL;
+  return nullptr;
 }
 CInode *CInode::get_parent_inode()
 {
   if (parent)
     return parent->dir->inode;
-  return NULL;
+  return nullptr;
 }
 
 bool CInode::is_projected_ancestor_of(CInode *other)
@@ -827,7 +829,7 @@ void CInode::store(Context *fin)
   assert(is_base());
 
   oid_t oid = CInode::get_object_name(ino(), frag_t(), ".inode");
-  std::unique_ptr<ObjOp> m(volume->op());
+  ObjectOperation m(volume->op());
 
   // encode
   bufferlist bl;
@@ -840,8 +842,8 @@ void CInode::store(Context *fin)
 
 
   mdcache->mds->objecter->mutate(oid, volume, m, ceph::real_clock::now(),
-				 0, NULL,
-				 CB_Inode_Stored(this, get_version(), fin));
+				 nullptr, CB_Inode_Stored(this, get_version(),
+							  fin));
 }
 
 void CInode::_stored(version_t v, Context *fin)
@@ -884,21 +886,14 @@ void CInode::fetch(Context *fin)
     return;
   }
 
-  std::unique_ptr<ObjOp> rd = volume->op();
-  if (!rd) {
-    dout(0) << "Unable to make operation for volume " << volume << dendl;
-    fin->complete(-EDOM);
-    return;
-  }
-  rd->getxattr("inode", &fetched.bl, NULL);
+  ObjectOperation rd = volume->op();
+  rd->getxattr("inode", &fetched.bl, nullptr);
 
-  mdcache->mds->objecter->read(oid, volume, rd, nullptr, 0,
-			       fetched.add());
+  mdcache->mds->objecter->read(oid, volume, rd, fetched);
 
   // read from separate object too
   oid_t obj2 = CInode::get_object_name(ino(), frag_t(), ".inode");
-  mdcache->mds->objecter->read_full(obj2, volume, &fetched.bl2, 0,
-				    fetched.add());
+  mdcache->mds->objecter->read_full(obj2, volume, &fetched.bl2, fetched);
 
   fetched.activate();
 }
@@ -1007,12 +1002,7 @@ void CInode::store_backtrace(Context *fin)
   bufferlist bl;
   ::encode(bt, bl);
 
-  std::unique_ptr<ObjOp> op = mvol->op();
-  if (!op) {
-    dout(0) << "Unable to make operation for volume " << mvol << dendl;
-    fin->complete(-EDOM);
-    return;
-  }
+  ObjectOperation op(mvol->op());
   op->create(false);
   op->setxattr("parent", bl);
 
@@ -1022,11 +1012,11 @@ void CInode::store_backtrace(Context *fin)
 
   if (!state_test(STATE_DIRTYPOOL) || inode.old_volumes.empty()) {
     mdcache->mds->objecter->mutate(oid, mvol, op, ceph::real_clock::now(),
-				   0, NULL, fin2.add());
+				   nullptr, fin2);
 
   } else {
     mdcache->mds->objecter->mutate(oid, mvol, op, ceph::real_clock::now(),
-				   0, NULL, fin2.add());
+				   nullptr, fin2);
 
     set<boost::uuids::uuid> old_volumes;
     for (const auto& p : inode.old_volumes) {
@@ -1042,13 +1032,13 @@ void CInode::store_backtrace(Context *fin)
 	return;
       }
 
-      std::unique_ptr<ObjOp> op = ovol->op();
+      ObjectOperation op = ovol->op();
       op->create(false);
       op->setxattr("parent", bl);
 
       mdcache->mds->objecter->mutate(oid, ovol, op,
 				     ceph::real_clock::now(),
-				     0, NULL, fin2.add());
+				     nullptr, fin2);
       old_volumes.insert(p);
     }
   }

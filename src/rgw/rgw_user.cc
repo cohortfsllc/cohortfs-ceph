@@ -156,7 +156,7 @@ int rgw_store_user_info(RGWRados *store, RGWUserInfo& info, RGWUserInfo *old_inf
   if (!info.user_email.empty()) {
     if (!old_info ||
 	old_info->user_email.compare(info.user_email) != 0) { /* only if new index changed */
-      ret = rgw_put_system_obj(store, store->zone.user_email_pool, info.user_email,
+      ret = rgw_put_system_obj(store, store->zone.user_email_vol, info.user_email,
 			       link_bl.c_str(), link_bl.length(), exclusive, NULL, 0);
       if (ret < 0)
 	return ret;
@@ -170,7 +170,7 @@ int rgw_store_user_info(RGWRados *store, RGWUserInfo& info, RGWUserInfo *old_inf
       if (old_info && old_info->access_keys.count(iter->first) != 0)
 	continue;
 
-      ret = rgw_put_system_obj(store, store->zone.user_keys_pool, k.id,
+      ret = rgw_put_system_obj(store, store->zone.user_keys_vol, k.id,
 			       link_bl.c_str(), link_bl.length(), exclusive,
 			       NULL, 0);
       if (ret < 0)
@@ -184,7 +184,7 @@ int rgw_store_user_info(RGWRados *store, RGWUserInfo& info, RGWUserInfo *old_inf
     if (old_info && old_info->swift_keys.count(siter->first) != 0)
       continue;
 
-    ret = rgw_put_system_obj(store, store->zone.user_swift_pool, k.id,
+    ret = rgw_put_system_obj(store, store->zone.user_swift_vol, k.id,
 			     link_bl.c_str(), link_bl.length(), exclusive,
 			     NULL, 0);
     if (ret < 0)
@@ -226,7 +226,7 @@ int rgw_get_user_info_by_uid(RGWRados *store, string& uid, RGWUserInfo& info,
   bufferlist bl;
   RGWUID user_id;
 
-  int ret = rgw_get_system_obj(store, NULL, store->zone.user_uid_pool, uid, bl, objv_tracker, pmtime);
+  int ret = rgw_get_system_obj(store, NULL, store->zone.user_uid_vol, uid, bl, objv_tracker, pmtime);
   if (ret < 0)
     return ret;
 
@@ -255,7 +255,7 @@ int rgw_get_user_info_by_uid(RGWRados *store, string& uid, RGWUserInfo& info,
 int rgw_get_user_info_by_email(RGWRados *store, string& email, RGWUserInfo& info,
 			       RGWObjVersionTracker *objv_tracker, time_t *pmtime)
 {
-  return rgw_get_user_info_from_index(store, email, store->zone.user_email_pool, info, objv_tracker, pmtime);
+  return rgw_get_user_info_from_index(store, email, store->zone.user_email_vol, info, objv_tracker, pmtime);
 }
 
 /**
@@ -265,7 +265,7 @@ int rgw_get_user_info_by_email(RGWRados *store, string& email, RGWUserInfo& info
 extern int rgw_get_user_info_by_swift(RGWRados *store, string& swift_name, RGWUserInfo& info,
 				      RGWObjVersionTracker *objv_tracker, time_t *pmtime)
 {
-  return rgw_get_user_info_from_index(store, swift_name, store->zone.user_swift_pool, info, objv_tracker, pmtime);
+  return rgw_get_user_info_from_index(store, swift_name, store->zone.user_swift_vol, info, objv_tracker, pmtime);
 }
 
 /**
@@ -275,12 +275,12 @@ extern int rgw_get_user_info_by_swift(RGWRados *store, string& swift_name, RGWUs
 extern int rgw_get_user_info_by_access_key(RGWRados *store, string& access_key, RGWUserInfo& info,
 					   RGWObjVersionTracker *objv_tracker, time_t *pmtime)
 {
-  return rgw_get_user_info_from_index(store, access_key, store->zone.user_keys_pool, info, objv_tracker, pmtime);
+  return rgw_get_user_info_from_index(store, access_key, store->zone.user_keys_vol, info, objv_tracker, pmtime);
 }
 
 int rgw_remove_key_index(RGWRados *store, RGWAccessKey& access_key)
 {
-  rgw_obj oid(store->zone.user_keys_pool, access_key.id);
+  rgw_obj oid(store->zone.user_keys_vol, access_key.id);
   int ret = store->delete_system_obj(NULL, oid);
   return ret;
 }
@@ -302,14 +302,14 @@ int rgw_remove_uid_index(RGWRados *store, string& uid)
 
 int rgw_remove_email_index(RGWRados *store, string& email)
 {
-  rgw_obj oid(store->zone.user_email_pool, email);
+  rgw_obj oid(store->zone.user_email_vol, email);
   int ret = store->delete_system_obj(NULL, oid);
   return ret;
 }
 
 int rgw_remove_swift_name_index(RGWRados *store, string& swift_name)
 {
-  rgw_obj oid(store->zone.user_swift_pool, swift_name);
+  rgw_obj oid(store->zone.user_swift_vol, swift_name);
   int ret = store->delete_system_obj(NULL, oid);
   return ret;
 }
@@ -370,7 +370,7 @@ int rgw_delete_user(RGWRados *store, RGWUserInfo& info, RGWObjVersionTracker& ob
     }
   }
 
-  rgw_obj email_obj(store->zone.user_email_pool, info.user_email);
+  rgw_obj email_obj(store->zone.user_email_vol, info.user_email);
   ldout(store->ctx(), 10) << "removing email index: " << info.user_email << dendl;
   ret = store->delete_system_obj(NULL, email_obj);
   if (ret < 0 && ret != -ENOENT) {
@@ -380,7 +380,7 @@ int rgw_delete_user(RGWRados *store, RGWUserInfo& info, RGWObjVersionTracker& ob
 
   string buckets_obj_id;
   rgw_get_buckets_obj(info.user_id, buckets_obj_id);
-  rgw_obj uid_bucks(store->zone.user_uid_pool, buckets_obj_id);
+  rgw_obj uid_bucks(store->zone.user_uid_vol, buckets_obj_id);
   ldout(store->ctx(), 10) << "removing user buckets index" << dendl;
   ret = store->delete_system_obj(NULL, uid_bucks);
   if (ret < 0 && ret != -ENOENT) {
@@ -388,7 +388,7 @@ int rgw_delete_user(RGWRados *store, RGWUserInfo& info, RGWObjVersionTracker& ob
     return ret;
   }
 
-  rgw_obj uid_obj(store->zone.user_uid_pool, info.user_id);
+  rgw_obj uid_obj(store->zone.user_uid_vol, info.user_id);
   ldout(store->ctx(), 10) << "removing user index: " << info.user_id << dendl;
   ret = store->meta_mgr->remove_entry(user_meta_handler, info.user_id, &objv_tracker);
   if (ret < 0 && ret != -ENOENT) {
@@ -2423,9 +2423,9 @@ public:
     return rgw_delete_user(store, info, objv_tracker);
   }
 
-  void get_pool_and_oid(RGWRados *store, const string& key, rgw_bucket& bucket, string& oid_t) {
+  void get_vol_and_oid(RGWRados *store, const string& key, rgw_bucket& bucket, string& oid_t) {
     oid_t = key;
-    bucket = store->zone.user_uid_pool;
+    bucket = store->zone.user_uid_vol;
   }
 
   int list_keys_init(RGWRados *store, void **phandle)
@@ -2450,7 +2450,7 @@ public:
 
     list<string> unfiltered_keys;
 
-    int ret = store->list_raw_objects(store->zone.user_uid_pool, no_filter,
+    int ret = store->list_raw_objects(store->zone.user_uid_vol, no_filter,
 				      max, info->ctx, unfiltered_keys, truncated);
     if (ret < 0)
       return ret;

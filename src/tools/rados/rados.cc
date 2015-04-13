@@ -12,43 +12,49 @@
  *
  */
 
+#include <cerrno>
+#include <climits>
 #include <condition_variable>
+#include <cstdlib>
+#include <ctime>
+#include <fstream>
+#include <iostream>
+#include <locale>
 #include <mutex>
+#include <sstream>
+#include <stdexcept>
+
+#include <boost/intrusive/slist.hpp>
+
+#include <dirent.h>
 
 #include "include/types.h"
+#include "include/compat.h"
 
-#include "include/rados/librados.hpp"
-#include "include/rados/rados_types.hpp"
-using namespace librados;
-
-#include "common/config.h"
-#include "common/strtol.h"
-#include "common/ceph_argparse.h"
-#include "global/global_init.h"
 #include "common/debug.h"
 #include "common/errno.h"
 #include "common/Formatter.h"
 #include "common/obj_bencher.h"
+#include "common/config.h"
+#include "common/strtol.h"
+#include "common/ceph_argparse.h"
+
 #include "auth/Crypto.h"
-#include <iostream>
-#include <fstream>
+#include "global/global_init.h"
 
-#include <stdlib.h>
-#include <time.h>
-#include <sstream>
-#include <errno.h>
-#include <dirent.h>
-#include <stdexcept>
-#include <climits>
-#include <locale>
-
+#include "osdc/RadosClient.h"
 #include "cls/lock/cls_lock_client.h"
-#include "include/compat.h"
+
 
 using std::cout;
 using std::cerr;
+using std::endl;
 
-static CephContext* cct;
+using namespace rados;
+namespace bi = boost::intrusive;
+
+
+CephContext* cct;
 
 int rados_tool_sync(const std::map < std::string, std::string > &opts,
 		    std::vector<const char*> &args);
@@ -73,7 +79,6 @@ void usage(ostream& out)
 "   setxattr <oid-name> attr val\n"
 "   rmxattr <oid-name> attr\n"
 "   stat objname		     stat the named object\n"
-"   mapext <oid-name>\n"
 "   bench <seconds> write|seq|rand [-t concurrent_operations] [--no-cleanup] [--run-name run_name]\n"
 "				     default is 16 concurrent IOs and 4 MB ops\n"
 "				     default is to clean up after write benchmark\n"
@@ -90,7 +95,6 @@ void usage(ostream& out)
 "   rmomapkey <oid-name> <key>\n"
 "   getomapheader <oid-name> [file]\n"
 "   setomapheader <oid-name> <val>\n"
-"   listwatchers <oid-name>	     list the watchers of this object\n"
 "   set-alloc-hint <oid-name> <expected-object-size> <expected-write-size>\n"
 "				     set allocation hint for an object\n"
 "\n"
@@ -157,7 +161,7 @@ static int dump_data(std::string const &filename, bufferlist const &data)
     fd = TEMP_FAILURE_RETRY(::open(filename.c_str(), O_WRONLY|O_CREAT|O_TRUNC, 0644));
     if (fd < 0) {
       int err = errno;
-      cerr << "failed to open file: " << cpp_strerror(err) << std::endl;
+      cerr << "failed to open file: " << cpp_strerror(err) << endl;
       return -err;
     }
   }
@@ -172,18 +176,18 @@ static int dump_data(std::string const &filename, bufferlist const &data)
 }
 
 
-static int do_get(IoCtx& io_ctx, const char *objname, const char *outfile, unsigned op_size)
+static int do_get(Objecter* o, VolumeRef vol, const oid_t& oid,
+		  const string& outfile, unsigned op_size)
 {
-  string oid_t(objname);
-
   int fd;
-  if (strcmp(outfile, "-") == 0) {
+  if (outfile == "-") {
     fd = 1;
   } else {
-    fd = TEMP_FAILURE_RETRY(::open(outfile, O_WRONLY|O_CREAT|O_TRUNC, 0644));
+    fd = TEMP_FAILURE_RETRY(::open(outfile.c_str(), O_WRONLY|O_CREAT|O_TRUNC,
+				   0644));
     if (fd < 0) {
       int err = errno;
-      cerr << "failed to open file: " << cpp_strerror(err) << std::endl;
+      cerr << "failed to open file: " << cpp_strerror(err) << endl;
       return -err;
     }
   }
@@ -192,13 +196,13 @@ static int do_get(IoCtx& io_ctx, const char *objname, const char *outfile, unsig
   int ret;
   while (true) {
     bufferlist outdata;
-    ret = io_ctx.read(oid_t, outdata, op_size, offset);
+    ret = o->read(oid, vol, offset, op_size, &outdata);
     if (ret <= 0) {
       goto out;
     }
     ret = outdata.write_fd(fd);
     if (ret < 0) {
-      cerr << "error writing to file: " << cpp_strerror(ret) << std::endl;
+      cerr << "error writing to file: " << cpp_strerror(ret) << endl;
       goto out;
     }
     if (outdata.length() < op_size)
@@ -213,51 +217,48 @@ static int do_get(IoCtx& io_ctx, const char *objname, const char *outfile, unsig
   return ret;
 }
 
-static int do_copy(IoCtx& io_ctx, const string& objname,
-		   IoCtx& target_ctx, const string& target_obj)
+static int do_copy(Objecter* o, VolumeRef src_vol, const oid_t& src_oid,
+		   VolumeRef target_vol, const oid_t& target_oid)
 {
-  string oid_t(objname);
   bufferlist outdata;
-  librados::ObjectReadOperation read_op(io_ctx);
+  ObjectOperation read_op(src_vol->op());
   string start_after;
 
 #define COPY_CHUNK_SIZE (4 * 1024 * 1024)
-  read_op.read(0, COPY_CHUNK_SIZE, &outdata, NULL);
+  read_op->read(0, COPY_CHUNK_SIZE, &outdata);
 
   map<std::string, bufferlist> attrset;
-  read_op.getxattrs(attrset, NULL);
+  read_op->getxattrs(attrset);
 
   bufferlist omap_header;
-  read_op.omap_get_header(&omap_header, NULL);
+  read_op->omap_get_header(&omap_header);
 
 #define OMAP_CHUNK 1000
   map<string, bufferlist> omap;
-  read_op.omap_get_vals(start_after, OMAP_CHUNK, omap, NULL);
+  read_op->omap_get_vals(start_after, string(), OMAP_CHUNK, omap);
 
-  bufferlist opbl;
-  int ret = io_ctx.operate(oid_t, &read_op, &opbl);
+  int ret = o->read(src_oid, src_vol, read_op);
   if (ret < 0) {
     return ret;
   }
 
-  librados::ObjectWriteOperation write_op(io_ctx);
-  string target_oid(target_obj);
+  ObjectOperation write_op(target_vol->op());
 
   /* reset dest if exists */
-  write_op.create(false);
-  write_op.remove();
+  write_op->create(false);
+  write_op->remove();
 
-  write_op.write_full(outdata);
-  write_op.omap_set_header(omap_header);
+  write_op->write_full(outdata);
+  write_op->omap_set_header(omap_header);
 
   map<std::string, bufferlist>::iterator iter;
   for (iter = attrset.begin(); iter != attrset.end(); ++iter) {
-    write_op.setxattr(iter->first.c_str(), iter->second);
+    write_op->setxattr(iter->first, iter->second);
   }
   if (!omap.empty()) {
-    write_op.omap_set(omap);
+    write_op->omap_set(omap);
   }
-  ret = target_ctx.operate(target_oid, &write_op);
+  ret = o->mutate(target_oid, target_vol, write_op);
   if (ret < 0) {
     return ret;
   }
@@ -267,11 +268,11 @@ static int do_copy(IoCtx& io_ctx, const string& objname,
   while (outdata.length() == COPY_CHUNK_SIZE) {
     off += outdata.length();
     outdata.clear();
-    ret = io_ctx.read(oid_t, outdata, COPY_CHUNK_SIZE, off);
+    ret = o->read(src_oid, src_vol, off, COPY_CHUNK_SIZE, &outdata);
     if (ret < 0)
       goto err;
 
-    ret = target_ctx.write(target_oid, outdata, outdata.length(), off);
+    ret = o->write(target_oid, target_vol, off, outdata.length(), outdata);
     if (ret < 0)
       goto err;
   }
@@ -284,14 +285,18 @@ static int do_copy(IoCtx& io_ctx, const string& objname,
     start_after = iter->first;
 
     omap.clear();
-    ret = io_ctx.omap_get_vals(oid_t, start_after, OMAP_CHUNK, omap);
+    read_op = src_vol->op();
+    read_op->omap_get_vals(start_after, "", OMAP_CHUNK, omap);
+    ret = o->read(src_oid, src_vol, read_op);
     if (ret < 0)
       goto err;
 
     if (omap.empty())
       break;
 
-    ret = target_ctx.omap_set(target_oid, omap);
+    write_op = target_vol->op();
+    write_op->omap_set(omap);
+    ret = o->mutate(target_oid, target_vol, write_op);
     if (ret < 0)
       goto err;
   }
@@ -299,24 +304,25 @@ static int do_copy(IoCtx& io_ctx, const string& objname,
   return 0;
 
 err:
-  target_ctx.remove(target_oid);
+  o->remove(target_oid, target_vol);
   return ret;
 }
 
-static int do_put(IoCtx& io_ctx, const char *objname, const char *infile, int op_size)
+static int do_put(Objecter* o, VolumeRef vol, const oid_t& oid,
+		  const string& infile, int op_size)
 {
-  string oid_t(objname);
   bufferlist indata;
   bool stdio = false;
-  if (strcmp(infile, "-") == 0)
+  if (infile == "-")
     stdio = true;
 
   int ret;
   int fd = 0;
   if (!stdio)
-    fd = open(infile, O_RDONLY);
+    fd = open(infile.c_str(), O_RDONLY);
   if (fd < 0) {
-    cerr << "error reading input file " << infile << ": " << cpp_strerror(errno) << std::endl;
+    cerr << "error reading input file " << infile << ": "
+	 << cpp_strerror(errno) << endl;
     return 1;
   }
   char *buf = new char[op_size];
@@ -326,14 +332,15 @@ static int do_put(IoCtx& io_ctx, const char *objname, const char *infile, int op
     count = read(fd, buf, op_size);
     if (count < 0) {
       ret = -errno;
-      cerr << "error reading input file " << infile << ": " << cpp_strerror(ret) << std::endl;
+      cerr << "error reading input file " << infile << ": "
+	   << cpp_strerror(ret) << endl;
       goto out;
     }
     if (count == 0) {
       if (!offset) {
-	ret = io_ctx.create(oid_t, true);
+	ret = o->create(oid, vol, true);
 	if (ret < 0) {
-	  cerr << "WARNING: could not create object: " << oid_t << std::endl;
+	  cerr << "WARNING: could not create object: " << oid << endl;
 	  goto out;
 	}
       }
@@ -341,9 +348,9 @@ static int do_put(IoCtx& io_ctx, const char *objname, const char *infile, int op
     }
     indata.append(buf, count);
     if (offset == 0)
-      ret = io_ctx.write_full(oid_t, indata);
+      ret = o->write_full(oid, vol, indata);
     else
-      ret = io_ctx.write(oid_t, indata, count, offset);
+      ret = o->write(oid, vol, offset, count, indata);
     indata.clear();
 
     if (ret < 0) {
@@ -358,30 +365,15 @@ static int do_put(IoCtx& io_ctx, const char *objname, const char *infile, int op
   return ret;
 }
 
-class RadosWatchCtx : public librados::WatchCtx {
-  string name;
-public:
-  RadosWatchCtx(const char *imgname) : name(imgname) {}
-  virtual ~RadosWatchCtx() {}
-  virtual void notify(uint8_t opcode, uint64_t ver, bufferlist& bl) {
-    string s;
-    try {
-      bufferlist::iterator iter = bl.begin();
-      ::decode(s, iter);
-    } catch (buffer::error *err) {
-      cout << "could not decode bufferlist, buffer length=" << bl.length() << std::endl;
-    }
-    cout << name << " got notification opcode=" << (int)opcode << " ver=" << ver << " msg='" << s << "'" << std::endl;
-  }
-};
+static const char alphanum_table[]
+= "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
-static const char alphanum_table[]="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-
-int gen_rand_alphanumeric(char *dest, int size) /* size should be the required string size + 1 */
+/* size should be the required string size + 1 */
+int gen_rand_alphanumeric(char *dest, int size)
 {
   int ret = get_random_bytes(dest, size);
   if (ret < 0) {
-    cerr << "cannot get random bytes: " << cpp_strerror(ret) << std::endl;
+    cerr << "cannot get random bytes: " << cpp_strerror(ret) << endl;
     return -1;
   }
 
@@ -396,7 +388,7 @@ int gen_rand_alphanumeric(char *dest, int size) /* size should be the required s
 }
 
 struct obj_info {
-  string name;
+  oid_t name;
   size_t len;
 };
 
@@ -404,14 +396,12 @@ class LoadGen {
   size_t total_sent;
   size_t total_completed;
 
-  IoCtx io_ctx;
-  Rados *rados;
+  Objecter* o;
+  VolumeRef v;
 
   map<int, obj_info> objs;
 
   ceph::mono_time start_time;
-
-  bool going_down;
 
 public:
   int read_percent;
@@ -430,27 +420,82 @@ public:
     OP_WRITE,
   };
 
-  struct LoadGenOp {
-    int id;
+  struct LoadGenOp : public bi::slist_base_hook<> {
     int type;
-    string oid_t;
+    oid_t oid;
     size_t off;
     size_t len;
     bufferlist bl;
-    LoadGen *lg;
-    librados::AioCompletion *completion;
+    LoadGen& lg;
 
-    LoadGenOp() {}
-    LoadGenOp(LoadGen *_lg) : lg(_lg), completion(NULL) {}
+    LoadGenOp(LoadGen& _lg) : lg(_lg) {
+      int i = get_random(0, lg.objs.size() - 1);
+      obj_info& info = lg.objs[i];
+      oid = info.name;
+
+      len = get_random(lg.min_op_len, lg.max_op_len);
+      if (len > info.len)
+	len = info.len;
+      off = get_random(0, info.len);
+
+      if (off + len > info.len)
+	off = info.len - len;
+
+      i = get_random(1, 100);
+      if (i > lg.read_percent)
+	type = OP_WRITE;
+      else
+	type = OP_READ;
+
+      cout << (type == OP_READ ? "READ" : "WRITE") << " : oid="
+	   << oid << " off=" << off << " len=" << len << endl;
+    }
+
+    LoadGenOp() = delete;
+    LoadGenOp(const LoadGenOp&) = delete;
+    LoadGenOp(LoadGenOp&&) = delete;
+    LoadGenOp& operator =(const LoadGenOp&) = delete;
+    LoadGenOp& operator =(LoadGenOp&&) = delete;
+
+    void run() {
+      switch (type) {
+      case OP_READ:
+	lg.o->read(oid, lg.v, off, len, &bl, std::ref(*this));
+	break;
+      case OP_WRITE:
+	bufferptr p = buffer::create(len);
+	memset(p.c_str(), 0, len);
+	bl.push_back(p);
+
+	lg.o->write(oid, lg.v, off, len, bl, nullptr, std::ref(*this));
+	break;
+      }
+      lg.total_sent += len;
+    }
+
+    void operator()(int r) {
+      lg.total_completed += len;
+
+      LoadGen::unique_lock l(lg.lock);
+
+      double rate = (double)lg.cur_completed_rate() / (1024 * 1024);
+      cout.precision(3);
+      cout << "op completed, throughput=" << rate << "MB/sec" << endl;
+
+      lg.pending_ops.erase(lg.pending_ops.iterator_to(*this));
+      lg.cond.notify_all();
+      l.unlock();
+
+      delete this;
+    }
   };
 
   int max_op;
 
-  map<int, LoadGenOp *> pending_ops;
+  bi::slist<LoadGenOp> pending_ops;
 
   void gen_op(LoadGenOp *op);
   uint64_t gen_next_op();
-  void run_op(LoadGenOp *op);
 
   uint64_t cur_sent_rate() {
     return total_sent / time_passed();
@@ -475,7 +520,7 @@ public:
   typedef std::lock_guard<std::mutex> lock_guard;
   std::condition_variable cond;
 
-  LoadGen(Rados *_rados) : rados(_rados), going_down(false) {
+  LoadGen(Objecter* _o, VolumeRef& _v) : o(_o), v(_v) {
     read_percent = 80;
     min_obj_len = 1024;
     max_obj_len = 5ull * 1024ull * 1024ull * 1024ull;
@@ -490,54 +535,15 @@ public:
     num_objs = 200;
     max_op = 16;
   }
-  int bootstrap(const string &volume);
+  int bootstrap();
   int run();
   void cleanup();
-
-  void io_cb(completion_t c, LoadGenOp *op) {
-    total_completed += op->len;
-
-    unique_lock l(lock);
-
-    double rate = (double)cur_completed_rate() / (1024 * 1024);
-    cout.precision(3);
-    cout << "op " << op->id << " completed, throughput=" << rate  << "MB/sec" << std::endl;
-
-    map<int, LoadGenOp *>::iterator iter = pending_ops.find(op->id);
-    if (iter != pending_ops.end())
-      pending_ops.erase(iter);
-
-    if (!going_down)
-      op->completion->release();
-
-    delete op;
-
-    cond.notify_all();
-  }
 };
 
-static void _load_gen_cb(completion_t c, void *param)
-{
-  LoadGen::LoadGenOp *op = (LoadGen::LoadGenOp *)param;
-  op->lg->io_cb(c, op);
-}
-
-int LoadGen::bootstrap(const string &volume)
+int LoadGen::bootstrap()
 {
   char buf[128];
   int i;
-
-  if (volume.empty()) {
-    cerr << "ERROR: volume name was not specified" << std::endl;
-    return -EINVAL;
-  }
-
-  int ret = rados->ioctx_create(volume, io_ctx);
-  if (ret < 0) {
-    cerr << "error opening volume " << volume << ": "
-	 << cpp_strerror(ret) << std::endl;
-    return ret;
-  }
 
   int buf_len = 1;
   bufferptr p = buffer::create(buf_len);
@@ -545,112 +551,54 @@ int LoadGen::bootstrap(const string &volume)
   memset(p.c_str(), 0, buf_len);
   bl.push_back(p);
 
-  list<librados::AioCompletion *> completions;
+  list<CB_Waiter> completions;
   for (i = 0; i < num_objs; i++) {
     obj_info info;
     gen_rand_alphanumeric(buf, 16);
-    info.name = "oid-";
-    info.name.append(buf);
+    info.name.name = "oid-";
+    info.name.name.append(buf);
     info.len = get_random(min_obj_len, max_obj_len);
 
     // throttle...
     while (completions.size() > max_ops) {
-      AioCompletion *c = completions.front();
-      c->wait_for_complete();
-      ret = c->get_return_value();
-      c->release();
+      CB_Waiter& c = completions.front();
+      int ret = c.wait();
       completions.pop_front();
       if (ret < 0) {
-	cerr << "aio_write failed" << std::endl;
+	cerr << "aio_write failed" << endl;
 	return ret;
       }
     }
 
-    librados::AioCompletion *c = rados->aio_create_completion(NULL, NULL, NULL);
-    completions.push_back(c);
+    completions.emplace_back();
+    CB_Waiter& c = completions.front();
     // generate object
-    ret = io_ctx.aio_write(info.name, c, bl, buf_len, info.len - buf_len);
-    if (ret < 0) {
-      cerr << "couldn't write oid: " << info.name << " ret=" << ret << std::endl;
-      return ret;
-    }
+    o->write(info.name, v, info.len - buf_len, buf_len,
+	     bl, nullptr, c);
     objs[i] = info;
   }
 
-  list<librados::AioCompletion *>::iterator iter;
-  for (iter = completions.begin(); iter != completions.end(); ++iter) {
-    AioCompletion *c = *iter;
-    c->wait_for_complete();
-    ret = c->get_return_value();
-    c->release();
-    if (ret < 0) { // yes, we leak.
-      cerr << "aio_write failed" << std::endl;
+  for (auto& c : completions) {
+    int ret = c.wait();
+    if (ret < 0) {
+      cerr << "aio_write failed" << endl;
       return ret;
     }
   }
   return 0;
 }
 
-void LoadGen::run_op(LoadGenOp *op)
-{
-  op->completion = rados->aio_create_completion(op, _load_gen_cb, NULL);
-
-  switch (op->type) {
-  case OP_READ:
-    io_ctx.aio_read(op->oid_t, op->completion, &op->bl, op->len, op->off);
-    break;
-  case OP_WRITE:
-    bufferptr p = buffer::create(op->len);
-    memset(p.c_str(), 0, op->len);
-    op->bl.push_back(p);
-
-    io_ctx.aio_write(op->oid_t, op->completion, op->bl, op->len, op->off);
-    break;
-  }
-
-  total_sent += op->len;
-}
-
-void LoadGen::gen_op(LoadGenOp *op)
-{
-  int i = get_random(0, objs.size() - 1);
-  obj_info& info = objs[i];
-  op->oid_t = info.name;
-
-  size_t len = get_random(min_op_len, max_op_len);
-  if (len > info.len)
-    len = info.len;
-  size_t off = get_random(0, info.len);
-
-  if (off + len > info.len)
-    off = info.len - len;
-
-  op->off = off;
-  op->len = len;
-
-  i = get_random(1, 100);
-  if (i > read_percent)
-    op->type = OP_WRITE;
-  else
-    op->type = OP_READ;
-
-  cout << (op->type == OP_READ ? "READ" : "WRITE") << " : oid_t=" << op->oid_t << " off=" << op->off << " len=" << op->len << std::endl;
-}
-
 uint64_t LoadGen::gen_next_op()
 {
   unique_lock l(lock);
 
-  LoadGenOp *op = new LoadGenOp(this);
-  gen_op(op);
-  op->id = max_op++;
-  pending_ops[op->id] = op;
-
+  LoadGenOp& op = *(new LoadGenOp(*this));
+  pending_ops.push_front(op);
   l.unlock();
 
-  run_op(op);
+  op.run();
 
-  return op->len;
+  return op.len;
 }
 
 int LoadGen::run()
@@ -682,7 +630,7 @@ int LoadGen::run()
       total_time += 1s;
       cout.precision(3);
       cout << std::setw(5) << total_time << ": throughput=" << rate
-	   << "MB/sec" << " pending data=" << sent - completed << std::endl;
+	   << "MB/sec" << " pending data=" << sent - completed << endl;
       stamp_time = now;
     }
 
@@ -693,118 +641,149 @@ int LoadGen::run()
     }
   }
 
-  // get a reference to all pending requests
-  vector<librados::AioCompletion *> completions;
   l.lock();
-  going_down = true;
-  map<int, LoadGenOp *>::iterator iter;
-  for (iter = pending_ops.begin(); iter != pending_ops.end(); ++iter) {
-    LoadGenOp *op = iter->second;
-    completions.push_back(op->completion);
-  }
-  l.unlock();
-
-  cout << "waiting for all operations to complete" << std::endl;
-
-  // now wait on all the pending requests
-  for (vector<librados::AioCompletion *>::iterator citer = completions.begin(); citer != completions.end(); ++citer) {
-    librados::AioCompletion *c = *citer;
-    c->wait_for_complete();
-    c->release();
-  }
+  cond.wait(l, [this](){ return pending_ops.empty(); });
 
   return 0;
 }
 
 void LoadGen::cleanup()
 {
-  cout << "cleaning up objects" << std::endl;
-  map<int, obj_info>::iterator iter;
-  for (iter = objs.begin(); iter != objs.end(); ++iter) {
-    obj_info& info = iter->second;
-    int ret = io_ctx.remove(info.name);
+  cout << "cleaning up objects" << endl;
+  for (auto& info : objs) {
+    int ret = o->remove(info.second.name, v);
     if (ret < 0)
-      cerr << "couldn't remove oid: " << info.name << " ret=" << ret << std::endl;
+      cerr << "couldn't remove oid: " << info.second.name << " ret=" << ret
+	   << endl;
   }
 }
 
 
 class RadosBencher : public ObjBencher {
-  librados::AioCompletion **completions;
-  librados::Rados& rados;
-  librados::IoCtx& io_ctx;
+  class RB_Completion {
+    std::mutex lock;
+    std::condition_variable cond;
+    int r;
+    bool done;
+
+    typedef void (*cb_t)(void*, void*);
+    cb_t cb;
+    void* arg;
+
+  public:
+
+    RB_Completion() : r(0), done(false), cb(nullptr), arg(nullptr) { }
+    RB_Completion(const RB_Completion&) = delete;
+    RB_Completion(RB_Completion&&) = delete;
+
+    RB_Completion& operator=(const RB_Completion&) = delete;
+    RB_Completion& operator=(RB_Completion&&) = delete;
+
+    int wait() {
+      std::unique_lock<std::mutex> l(lock);
+      cond.wait(l, [this](){ return done; });
+      return r;
+    }
+
+    bool safe() {
+      std::unique_lock<std::mutex> l(lock);
+      return done;
+    }
+
+    void operator()(int _r) {
+      std::unique_lock<std::mutex> l(lock);
+      done = true;
+      r = _r;
+      cond.notify_all();
+      l.unlock();
+      if (cb)
+	cb(static_cast<void*>(this), arg);
+    }
+
+    void reset(cb_t _cb, void* _arg) {
+      std::unique_lock<std::mutex> l(lock);
+      cb = _cb;
+      arg = _arg;
+      done = false;
+      r = 0;
+    }
+
+    operator std::function<void(int)>() {
+      return std::ref(*this);
+    }
+  };
+
+  RB_Completion* completions;
+  Objecter* o;
+  VolumeRef v;
 protected:
   int completions_init(int concurrentios) {
-    completions = new librados::AioCompletion *[concurrentios];
+    completions = new RB_Completion[concurrentios];
     return 0;
   }
   void completions_done() {
     delete[] completions;
-    completions = NULL;
+    completions = nullptr;
   }
   int create_completion(int slot, void (*cb)(void *, void*), void *arg) {
-    completions[slot] = rados.aio_create_completion((void *) arg, 0, cb);
-
-    if (!completions[slot])
-      return -EINVAL;
+    completions[slot].reset(cb, arg);
 
     return 0;
   }
   void release_completion(int slot) {
-    completions[slot]->release();
-    completions[slot] = 0;
+    completions[slot].reset(nullptr, nullptr);
   }
 
-  int aio_read(const std::string& oid_t, int slot, bufferlist *pbl, size_t len) {
-    return io_ctx.aio_read(oid_t, completions[slot], pbl, len, 0);
+  int aio_read(const string& oid, int slot, bufferlist *pbl, size_t len) {
+    return o->read(oid_t(oid), v, 0, len, pbl, completions[slot]);
   }
 
-  int aio_write(const std::string& oid_t, int slot, bufferlist& bl, size_t len) {
-    return io_ctx.aio_write(oid_t, completions[slot], bl, len, 0);
+  int aio_write(const string& oid, int slot, bufferlist& bl, size_t len) {
+    return o->write(oid_t(oid), v, 0, len, bl, nullptr, completions[slot]);
   }
 
-  int aio_remove(const std::string& oid_t, int slot) {
-    return io_ctx.aio_remove(oid_t, completions[slot]);
+  int aio_remove(const string& oid, int slot) {
+    return o->remove(oid_t(oid), v, nullptr, completions[slot]);
   }
 
-  int sync_read(const std::string& oid_t, bufferlist& bl, size_t len) {
-    return io_ctx.read(oid_t, bl, len, 0);
+  int sync_read(const string& oid, bufferlist& bl, size_t len) {
+    return o->read(oid_t(oid), v, 0, len, &bl);
   }
-  int sync_write(const std::string& oid_t, bufferlist& bl, size_t len) {
-    return io_ctx.write_full(oid_t, bl);
+  int sync_write(const string& oid, bufferlist& bl, size_t len) {
+    return o->write_full(oid_t(oid), v, bl);
   }
 
-  int sync_remove(const std::string& oid_t) {
-    return io_ctx.remove(oid_t);
+  int sync_remove(const string& oid) {
+    return o->remove(oid_t(oid), v);
   }
 
   bool completion_is_done(int slot) {
-    return completions[slot]->is_safe();
+    return completions[slot].safe();
   }
 
   int completion_wait(int slot) {
-    return completions[slot]->wait_for_safe_and_cb();
+    return completions[slot].wait();
   }
   int completion_ret(int slot) {
-    return completions[slot]->get_return_value();
+    return completions[slot].wait();
   }
 
 public:
-  RadosBencher(CephContext *cct_, librados::Rados& _r, librados::IoCtx& _i)
-    : ObjBencher(cct_), completions(NULL), rados(_r), io_ctx(_i) {}
+  RadosBencher(CephContext *cct_, Objecter* _o, VolumeRef _v)
+    : ObjBencher(cct_), completions(nullptr), o(_o), v(_v) {}
   ~RadosBencher() { }
 };
 
 static int do_lock_cmd(std::vector<const char*> &nargs,
 		       const std::map < std::string, std::string > &opts,
-		       IoCtx *ioctx,
-		       Formatter *formatter)
+		       Objecter* o, VolumeRef v,
+		       const boost::scoped_ptr<Formatter>& formatter)
 {
   if (nargs.size() < 3)
     usage_exit();
 
   string cmd(nargs[1]);
-  string oid_t(nargs[2]);
+  oid_t oid(nargs[2]);
 
   string lock_tag;
   string lock_cookie;
@@ -827,7 +806,7 @@ static int do_lock_cmd(std::vector<const char*> &nargs,
   }
   i = opts.find("lock-duration");
   if (i != opts.end()) {
-    lock_duration = strtol(i->second.c_str(), NULL, 10);
+    lock_duration = strtol(i->second.c_str(), nullptr, 10);
   }
   i = opts.find("lock-type");
   if (i != opts.end()) {
@@ -837,21 +816,21 @@ static int do_lock_cmd(std::vector<const char*> &nargs,
     } else if (type_str.compare("shared") == 0) {
       lock_type = LOCK_SHARED;
     } else {
-      cerr << "unknown lock type was specified, aborting" << std::endl;
+      cerr << "unknown lock type was specified, aborting" << endl;
       return -EINVAL;
     }
   }
 
   if (cmd.compare("list") == 0) {
     list<string> locks;
-    int ret = rados::cls::lock::list_locks(ioctx, oid_t, &locks);
+    int ret = rados::cls::lock::list_locks(o, v, oid, locks);
     if (ret < 0) {
-      cerr << "ERROR: rados_list_locks(): " << cpp_strerror(ret) << std::endl;
+      cerr << "ERROR: rados_list_locks(): " << cpp_strerror(ret) << endl;
       return ret;
     }
 
     formatter->open_object_section("object");
-    formatter->dump_string("objname", oid_t);
+    formatter->dump_string("objname", oid.name);
     formatter->open_array_section("locks");
     list<string>::iterator iter;
     for (iter = locks.begin(); iter != locks.end(); ++iter) {
@@ -874,9 +853,10 @@ static int do_lock_cmd(std::vector<const char*> &nargs,
     map<rados::cls::lock::locker_id_t, rados::cls::lock::locker_info_t> lockers;
     ClsLockType type = LOCK_NONE;
     string tag;
-    int ret = rados::cls::lock::get_lock_info(ioctx, oid_t, lock_name, &lockers, &type, &tag);
+    int ret = rados::cls::lock::get_lock_info(o, v, oid, lock_name, &lockers,
+					      &type, &tag);
     if (ret < 0) {
-      cerr << "ERROR: rados_lock_get_lock_info(): " << cpp_strerror(ret) << std::endl;
+      cerr << "ERROR: rados_lock_get_lock_info(): " << cpp_strerror(ret) << endl;
       return ret;
     }
 
@@ -911,13 +891,13 @@ static int do_lock_cmd(std::vector<const char*> &nargs,
     int ret;
     switch (lock_type) {
     case LOCK_SHARED:
-      ret = l.lock_shared(ioctx, oid_t);
+      ret = l.lock_shared(o, v, oid);
       break;
     default:
-      ret = l.lock_exclusive(ioctx, oid_t);
+      ret = l.lock_exclusive(o, v, oid);
     }
     if (ret < 0) {
-      cerr << "ERROR: failed locking: " << cpp_strerror(ret) << std::endl;
+      cerr << "ERROR: failed locking: " << cpp_strerror(ret) << endl;
       return ret;
     }
 
@@ -934,12 +914,12 @@ static int do_lock_cmd(std::vector<const char*> &nargs,
     l.set_tag(lock_tag);
     entity_name_t name;
     if (!name.parse(locker)) {
-      cerr << "ERROR: failed to parse locker name (" << locker << ")" << std::endl;
+      cerr << "ERROR: failed to parse locker name (" << locker << ")" << endl;
       return -EINVAL;
     }
-    int ret = l.break_lock(ioctx, oid_t, name);
+    int ret = l.break_lock(o, v, oid, name);
     if (ret < 0) {
-      cerr << "ERROR: failed breaking lock: " << cpp_strerror(ret) << std::endl;
+      cerr << "ERROR: failed breaking lock: " << cpp_strerror(ret) << endl;
       return ret;
     }
   } else {
@@ -976,78 +956,75 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
 
   bool show_time = false;
 
-  const char* run_name = NULL;
-  const char* prefix = NULL;
+  string run_name;
+  string prefix;
 
-  Formatter *formatter = NULL;
+  boost::scoped_ptr<Formatter> formatter;
   bool pretty_format = false;
-
-  Rados rados;
-  IoCtx io_ctx;
 
   i = opts.find("volume");
   if (i != opts.end()) {
-    vol_name = i->second.c_str();
+    vol_name = i->second;
   }
   i = opts.find("target_volume");
   if (i != opts.end()) {
-    target_vol_name = i->second.c_str();
+    target_vol_name = i->second;
   }
   i = opts.find("concurrent-ios");
   if (i != opts.end()) {
-    concurrent_ios = strtol(i->second.c_str(), NULL, 10);
+    concurrent_ios = strtol(i->second.c_str(), nullptr, 10);
   }
   i = opts.find("run-name");
   if (i != opts.end()) {
-    run_name = i->second.c_str();
+    run_name = i->second;
   }
   i = opts.find("prefix");
   if (i != opts.end()) {
-    prefix = i->second.c_str();
+    prefix = i->second;
   }
   i = opts.find("block-size");
   if (i != opts.end()) {
-    op_size = strtol(i->second.c_str(), NULL, 10);
+    op_size = strtol(i->second.c_str(), nullptr, 10);
   }
   i = opts.find("min-object-size");
   if (i != opts.end()) {
-    min_obj_len = strtoll(i->second.c_str(), NULL, 10);
+    min_obj_len = strtoll(i->second.c_str(), nullptr, 10);
   }
   i = opts.find("max-object-size");
   if (i != opts.end()) {
-    max_obj_len = strtoll(i->second.c_str(), NULL, 10);
+    max_obj_len = strtoll(i->second.c_str(), nullptr, 10);
   }
   i = opts.find("min-op-len");
   if (i != opts.end()) {
-    min_op_len = strtoll(i->second.c_str(), NULL, 10);
+    min_op_len = strtoll(i->second.c_str(), nullptr, 10);
   }
   i = opts.find("max-op-len");
   if (i != opts.end()) {
-    max_op_len = strtoll(i->second.c_str(), NULL, 10);
+    max_op_len = strtoll(i->second.c_str(), nullptr, 10);
   }
   i = opts.find("max-ops");
   if (i != opts.end()) {
-    max_ops = strtoll(i->second.c_str(), NULL, 10);
+    max_ops = strtoll(i->second.c_str(), nullptr, 10);
   }
   i = opts.find("max-backlog");
   if (i != opts.end()) {
-    max_backlog = strtoll(i->second.c_str(), NULL, 10);
+    max_backlog = strtoll(i->second.c_str(), nullptr, 10);
   }
   i = opts.find("target-throughput");
   if (i != opts.end()) {
-    target_throughput = strtoll(i->second.c_str(), NULL, 10);
+    target_throughput = strtoll(i->second.c_str(), nullptr, 10);
   }
   i = opts.find("read-percent");
   if (i != opts.end()) {
-    read_percent = strtoll(i->second.c_str(), NULL, 10);
+    read_percent = strtoll(i->second.c_str(), nullptr, 10);
   }
   i = opts.find("num-objects");
   if (i != opts.end()) {
-    num_objs = strtoll(i->second.c_str(), NULL, 10);
+    num_objs = strtoll(i->second.c_str(), nullptr, 10);
   }
   i = opts.find("run-length");
   if (i != opts.end()) {
-    run_length = strtol(i->second.c_str(), NULL, 10) * 1s;
+    run_length = strtol(i->second.c_str(), nullptr, 10) * 1s;
   }
   i = opts.find("show-time");
   if (i != opts.end()) {
@@ -1063,39 +1040,34 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
   }
   i = opts.find("format");
   if (i != opts.end()) {
-    const char *format = i->second.c_str();
-    if (strcmp(format, "xml") == 0)
-      formatter = new XMLFormatter(pretty_format);
-    else if (strcmp(format, "json") == 0)
-      formatter = new JSONFormatter(pretty_format);
+    const string format(i->second);
+    if (format == "xml")
+      formatter.reset(new XMLFormatter(pretty_format));
+    else if (format == "json")
+      formatter.reset(new JSONFormatter(pretty_format));
     else {
-      cerr << "unrecognized format: " << format << std::endl;
+      cerr << "unrecognized format: " << format << endl;
       return -EINVAL;
     }
   }
 
   // open rados
-  ret = rados.init_with_context(cct);
+  RadosClient rc(cct);
+
+  ret = rc.connect();
   if (ret) {
-     cerr << "couldn't initialize rados! error " << ret << std::endl;
-     ret = -1;
-     goto out;
+     cerr << "couldn't connect to cluster! error " << ret << endl;
+     return 1;
   }
 
-  ret = rados.connect();
-  if (ret) {
-     cerr << "couldn't connect to cluster! error " << ret << std::endl;
-     ret = -1;
-     goto out;
-  }
+  Objecter* o = rc.objecter;
+  VolumeRef v;
 
-  // open io context.
   if (!vol_name.empty()) {
-    ret = rados.ioctx_create(vol_name, io_ctx);
-    if (ret < 0) {
-      cerr << "error opening volume " << vol_name << ": "
-	   << cpp_strerror(ret) << std::endl;
-      goto out;
+    v = rc.lookup_volume(vol_name);
+    if (!v) {
+      cerr << "error opening volume " << vol_name << endl;
+      return 1;
     }
   }
 
@@ -1104,175 +1076,167 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
   if (strcmp(nargs[0], "stat") == 0) {
     if (vol_name.empty() || nargs.size() < 2)
       usage_exit();
-    string oid(nargs[1]);
+    oid_t oid(nargs[1]);
     uint64_t size;
-    time_t mtime;
-    ret = io_ctx.stat(oid, &size, &mtime);
+    ceph::real_time mtime;
+    ret = o->stat(oid, v, &size, &mtime);
     if (ret < 0) {
       cerr << " error stat-ing " << vol_name << "/" << oid << ": "
-	   << cpp_strerror(ret) << std::endl;
-      goto out;
+	   << cpp_strerror(ret) << endl;
+      return 1;
     } else {
       cout << vol_name << "/" << oid
-	   << " mtime " << mtime << ", size " << size << std::endl;
+	   << " mtime " << mtime << ", size " << size << endl;
     }
   }
   else if (strcmp(nargs[0], "get") == 0) {
     if (vol_name.empty() || nargs.size() < 3)
       usage_exit();
-    ret = do_get(io_ctx, nargs[1], nargs[2], op_size);
+    ret = do_get(o, v, nargs[1], nargs[2], op_size);
     if (ret < 0) {
-      cerr << "error getting " << vol_name << "/" << nargs[1] << ": " << cpp_strerror(ret) << std::endl;
-      goto out;
+      cerr << "error getting " << vol_name << "/" << nargs[1] << ": "
+	   << cpp_strerror(ret) << endl;
+      return 1;
     }
   }
   else if (strcmp(nargs[0], "put") == 0) {
     if (vol_name.empty() || nargs.size() < 3)
       usage_exit();
-    ret = do_put(io_ctx, nargs[1], nargs[2], op_size);
+    ret = do_put(o, v, nargs[1], nargs[2], op_size);
     if (ret < 0) {
-      cerr << "error putting " << vol_name << "/" << nargs[1] << ": " << cpp_strerror(ret) << std::endl;
-      goto out;
+      cerr << "error putting " << vol_name << "/" << nargs[1] << ": "
+	   << cpp_strerror(ret) << endl;
+      return 1;
     }
   }
   else if (strcmp(nargs[0], "truncate") == 0) {
     if (vol_name.empty() || nargs.size() < 3)
       usage_exit();
 
-    string oid_t(nargs[1]);
+    oid_t oid(nargs[1]);
     long size = atol(nargs[2]);
     if (size < 0) {
-      cerr << "error, cannot truncate to negative value" << std::endl;
+      cerr << "error, cannot truncate to negative value" << endl;
       usage_exit();
     }
-    ret = io_ctx.trunc(oid_t, size);
+    ret = o->trunc(oid, v, size);
     if (ret < 0) {
       cerr << "error truncating oid_t "
-	   << oid_t << " to " << size << ": "
-	   << cpp_strerror(ret) << std::endl;
-    } else {
-      ret = 0;
+	   << oid << " to " << size << ": "
+	   << cpp_strerror(ret) << endl;
     }
   }
   else if (strcmp(nargs[0], "setxattr") == 0) {
     if (vol_name.empty() || nargs.size() < 4)
       usage_exit();
 
-    string oid_t(nargs[1]);
+    oid_t oid(nargs[1]);
     string attr_name(nargs[2]);
     string attr_val(nargs[3]);
 
-    bufferlist bl;
-    bl.append(attr_val.c_str(), attr_val.length());
+    bufferlist bl(attr_val);
 
-    ret = io_ctx.setxattr(oid_t, attr_name.c_str(), bl);
+    ret = o->setxattr(oid, v, attr_name, bl);
     if (ret < 0) {
-      cerr << "error setting xattr " << vol_name << "/" << oid_t << "/"
-	   << attr_name << ": " << cpp_strerror(ret) << std::endl;
-      goto out;
+      cerr << "error setting xattr " << vol_name << "/" << oid << "/"
+	   << attr_name << ": " << cpp_strerror(ret) << endl;
+      return 1;
     }
-    else
-      ret = 0;
   }
   else if (strcmp(nargs[0], "getxattr") == 0) {
     if (vol_name.empty() || nargs.size() < 3)
       usage_exit();
 
-    string oid_t(nargs[1]);
+    oid_t oid(nargs[1]);
     string attr_name(nargs[2]);
 
     bufferlist bl;
-    ret = io_ctx.getxattr(oid_t, attr_name.c_str(), bl);
+    ret = o->getxattr(oid, v, attr_name, &bl);
     if (ret < 0) {
-      cerr << "error getting xattr " << vol_name << "/" << oid_t << "/"
-	   << attr_name << ": " << cpp_strerror(ret) << std::endl;
-      goto out;
+      cerr << "error getting xattr " << vol_name << "/" << oid << "/"
+	   << attr_name << ": " << cpp_strerror(ret) << endl;
+      return 1;
     }
-    else
-      ret = 0;
-    string s(bl.c_str(), bl.length());
-    cout << s << std::endl;
+    string s(bl);
+    cout << s << endl;
   } else if (strcmp(nargs[0], "rmxattr") == 0) {
     if (vol_name.empty() || nargs.size() < 3)
       usage_exit();
 
-    string oid_t(nargs[1]);
+    oid_t oid(nargs[1]);
     string attr_name(nargs[2]);
 
-    ret = io_ctx.rmxattr(oid_t, attr_name.c_str());
+    ret = o->removexattr(oid, v, attr_name);
     if (ret < 0) {
-      cerr << "error removing xattr " << vol_name << "/" << oid_t << "/"
-	   << attr_name << ": " << cpp_strerror(ret) << std::endl;
-      goto out;
+      cerr << "error removing xattr " << vol_name << "/" << oid << "/"
+	   << attr_name << ": " << cpp_strerror(ret) << endl;
+      return 1;
     }
   } else if (strcmp(nargs[0], "listxattr") == 0) {
     if (vol_name.empty() || nargs.size() < 2)
       usage_exit();
 
-    string oid_t(nargs[1]);
+    oid_t oid(nargs[1]);
     map<std::string, bufferlist> attrset;
     bufferlist bl;
-    ret = io_ctx.getxattrs(oid_t, attrset);
+    ret = o->getxattrs(oid, v, attrset);
     if (ret < 0) {
-      cerr << "error getting xattr set " << vol_name << "/" << oid_t << ": "
-	   << cpp_strerror(ret) << std::endl;
-      goto out;
+      cerr << "error getting xattr set " << vol_name << "/" << oid << ": "
+	   << cpp_strerror(ret) << endl;
+      return 1;
     }
 
     for (map<std::string, bufferlist>::iterator iter = attrset.begin();
 	 iter != attrset.end(); ++iter) {
-      cout << iter->first << std::endl;
+      cout << iter->first << endl;
     }
   } else if (strcmp(nargs[0], "getomapheader") == 0) {
     if (vol_name.empty() || nargs.size() < 2)
       usage_exit();
 
-    string oid(nargs[1]);
+    oid_t oid(nargs[1]);
     string outfile;
     if (nargs.size() >= 3) {
       outfile = nargs[2];
     }
 
     bufferlist header;
-    ret = io_ctx.omap_get_header(oid, &header);
+    ret = o->omap_get_header(oid, v, &header);
     if (ret < 0) {
       cerr << "error getting omap header " << vol_name << "/" << oid
-	   << ": " << cpp_strerror(ret) << std::endl;
-      goto out;
+	   << ": " << cpp_strerror(ret) << endl;
+      return 1;
     } else {
       if (!outfile.empty()) {
-	cerr << "Writing to " << outfile << std::endl;
+	cerr << "Writing to " << outfile << endl;
 	dump_data(outfile, header);
       } else {
 	cout << "header (" << header.length() << " bytes) :\n";
 	header.hexdump(cout);
-	cout << std::endl;
+	cout << endl;
       }
-      ret = 0;
     }
   } else if (strcmp(nargs[0], "setomapheader") == 0) {
     if (vol_name.empty() || nargs.size() < 3)
       usage_exit();
 
-    string oid(nargs[1]);
+    oid_t oid(nargs[1]);
     string val(nargs[2]);
 
     bufferlist bl;
     bl.append(val);
 
-    ret = io_ctx.omap_set_header(oid, bl);
+    ret = o->omap_set_header(oid, v, bl);
     if (ret < 0) {
       cerr << "error setting omap value " << vol_name << "/" << oid
-	   << ": " << cpp_strerror(ret) << std::endl;
-      goto out;
-    } else {
-      ret = 0;
+	   << ": " << cpp_strerror(ret) << endl;
+      return 1;
     }
   } else if (strcmp(nargs[0], "setomapval") == 0) {
     if (vol_name.empty() || nargs.size() < 4)
       usage_exit();
 
-    string oid_t(nargs[1]);
+    oid_t oid(nargs[1]);
     string key(nargs[2]);
     string val(nargs[3]);
 
@@ -1281,21 +1245,19 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     bl.append(val);
     values[key] = bl;
 
-    ret = io_ctx.omap_set(oid_t, values);
+    ret = o->omap_set(oid, v, values);
     if (ret < 0) {
-      cerr << "error setting omap value " << vol_name << "/" << oid_t << "/"
-	   << key << ": " << cpp_strerror(ret) << std::endl;
-      goto out;
-    } else {
-      ret = 0;
+      cerr << "error setting omap value " << vol_name << "/" << oid << "/"
+	   << key << ": " << cpp_strerror(ret) << endl;
+      return 1;
     }
   } else if (strcmp(nargs[0], "getomapval") == 0) {
     if (vol_name.empty() || nargs.size() < 3)
       usage_exit();
 
-    string oid_t(nargs[1]);
+    oid_t oid(nargs[1]);
     string key(nargs[2]);
-    set<string> keys;
+    std::set<string> keys;
     keys.insert(key);
 
     std::string outfile;
@@ -1304,61 +1266,55 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     }
 
     map<string, bufferlist> values;
-    ret = io_ctx.omap_get_vals_by_keys(oid_t, keys, values);
+    ret = o->omap_get_vals_by_keys(oid, v, keys, values);
     if (ret < 0) {
-      cerr << "error getting omap value " << vol_name << "/" << oid_t << "/"
-	   << key << ": " << cpp_strerror(ret) << std::endl;
-      goto out;
-    } else {
-      ret = 0;
+      cerr << "error getting omap value " << vol_name << "/" << oid << "/"
+	   << key << ": " << cpp_strerror(ret) << endl;
+      return 1;
     }
 
     if (values.size() && values.begin()->first == key) {
       cout << " (length " << values.begin()->second.length() << ") : ";
       if (!outfile.empty()) {
-	cerr << "Writing to " << outfile << std::endl;
+	cerr << "Writing to " << outfile << endl;
 	dump_data(outfile, values.begin()->second);
       } else {
 	values.begin()->second.hexdump(cout);
-	cout << std::endl;
+	cout << endl;
       }
-      ret = 0;
     } else {
-      cout << "No such key: " << vol_name << "/" << oid_t << "/" << key
-	   << std::endl;
-      ret = -1;
-      goto out;
+      cout << "No such key: " << vol_name << "/" << oid << "/" << key
+	   << endl;
+      return 1;
     }
   } else if (strcmp(nargs[0], "rmomapkey") == 0) {
     if (vol_name.empty() || nargs.size() < 3)
       usage_exit();
 
-    string oid_t(nargs[1]);
+    oid_t oid(nargs[1]);
     string key(nargs[2]);
-    set<string> keys;
+    std::set<string> keys;
     keys.insert(key);
 
-    ret = io_ctx.omap_rm_keys(oid_t, keys);
+    ret = o->omap_rm_keys(oid, v, keys);
     if (ret < 0) {
-      cerr << "error removing omap key " << vol_name << "/" << oid_t << "/"
-	   << key << ": " << cpp_strerror(ret) << std::endl;
-      goto out;
-    } else {
-      ret = 0;
+      cerr << "error removing omap key " << vol_name << "/" << oid << "/"
+	   << key << ": " << cpp_strerror(ret) << endl;
+      return 1;
     }
   } else if (strcmp(nargs[0], "listomapvals") == 0) {
     if (vol_name.empty() || nargs.size() < 2)
       usage_exit();
 
-    string oid_t(nargs[1]);
+    oid_t oid(nargs[1]);
     string last_read = "";
     int MAX_READ = 512;
     do {
       map<string, bufferlist> values;
-      ret = io_ctx.omap_get_vals(oid_t, last_read, MAX_READ, values);
+      ret = o->omap_get_vals(oid, v, last_read, string(), MAX_READ, values);
       if (ret < 0) {
-	cerr << "error getting omap keys " << vol_name << "/" << oid_t << ": "
-	     << cpp_strerror(ret) << std::endl;
+	cerr << "error getting omap keys " << vol_name << "/" << oid << ": "
+	     << cpp_strerror(ret) << endl;
 	return 1;
       }
       ret = values.size();
@@ -1375,13 +1331,12 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
 	} else {
 	  cout << it->first;
 	}
-	cout << std::endl;
+	cout << endl;
 	cout << "value: (" << it->second.length() << " bytes) :\n";
 	it->second.hexdump(cout);
-	cout << std::endl;
+	cout << endl;
       }
     } while (ret == MAX_READ);
-    ret = 0;
   }
   else if (strcmp(nargs[0], "cp") == 0) {
     if (vol_name.empty())
@@ -1394,12 +1349,12 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     if (target.empty())
       target = vol_name;
 
-    string target_obj;
+    oid_t target_obj;
     if (nargs.size() < 3) {
       if (target == vol_name) {
-	cerr << "cannot copy object into itself" << std::endl;
+	cerr << "cannot copy object into itself" << endl;
 	ret = -1;
-	goto out;
+	return 1;
       }
       target_obj = nargs[1];
     } else {
@@ -1407,20 +1362,19 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     }
 
     // open io context.
-    IoCtx target_ctx;
-    ret = rados.ioctx_create(target, target_ctx);
+    VolumeRef target_vol = rc.lookup_volume(target);
     if (ret < 0) {
       cerr << "error opening target volume " << target << ": "
-	   << cpp_strerror(ret) << std::endl;
-      goto out;
+	   << cpp_strerror(ret) << endl;
+      return 1;
     }
 
-    ret = do_copy(io_ctx, nargs[1], target_ctx, target_obj);
+    ret = do_copy(o, v, nargs[1], target_vol, target_obj);
     if (ret < 0) {
       cerr << "error copying " << vol_name << "/" << nargs[1] << " => "
 	   << target << "/" << target_obj << ": " << cpp_strerror(ret)
-	   << std::endl;
-      goto out;
+	   << endl;
+      return 1;
     }
   }
    else if (strcmp(nargs[0], "rm") == 0) {
@@ -1429,22 +1383,24 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     vector<const char *>::iterator iter = nargs.begin();
     ++iter;
     for (; iter != nargs.end(); ++iter) {
-      const string & oid_t = *iter;
-      ret = io_ctx.remove(oid_t);
+      oid_t oid(*iter);
+      ret = o->remove(oid, v);
       if (ret < 0) {
-	cerr << "error removing " << vol_name << "/" << oid_t << ": " << cpp_strerror(ret) << std::endl;
-	goto out;
+	cerr << "error removing " << vol_name << "/" << oid << ": "
+	     << cpp_strerror(ret) << endl;
+	return 1;
       }
     }
   }
   else if (strcmp(nargs[0], "create") == 0) {
     if (vol_name.empty() || nargs.size() < 2)
       usage_exit();
-    string oid_t(nargs[1]);
-    ret = io_ctx.create(oid_t, true);
+    oid_t oid(nargs[1]);
+    ret = o->create(oid, v, true);
     if (ret < 0) {
-      cerr << "error creating " << vol_name << "/" << oid_t << ": " << cpp_strerror(ret) << std::endl;
-      goto out;
+      cerr << "error creating " << vol_name << "/" << oid << ": "
+	   << cpp_strerror(ret) << endl;
+      return 1;
     }
   }
 
@@ -1461,72 +1417,47 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
       operation = OP_RAND_READ;
     else
       usage_exit();
-    RadosBencher bencher(cct, rados, io_ctx);
+    RadosBencher bencher(cct, o, v);
     bencher.set_show_time(show_time);
     ret = bencher.aio_bench(operation, seconds, num_objs,
 			    concurrent_ios, op_size, cleanup, run_name);
     if (ret != 0)
-      cerr << "error during benchmark: " << ret << std::endl;
+      cerr << "error during benchmark: " << ret << endl;
   }
   else if (strcmp(nargs[0], "cleanup") == 0) {
     if (vol_name.empty())
       usage_exit();
-    RadosBencher bencher(cct, rados, io_ctx);
+    RadosBencher bencher(cct, o, v);
     ret = bencher.clean_up(prefix, concurrent_ios, run_name);
     if (ret != 0)
-      cerr << "error during cleanup: " << ret << std::endl;
-  }
-  else if (strcmp(nargs[0], "watch") == 0) {
-    if (vol_name.empty() || nargs.size() < 2)
-      usage_exit();
-    string oid_t(nargs[1]);
-    RadosWatchCtx ctx(oid_t.c_str());
-    uint64_t cookie;
-    ret = io_ctx.watch(oid_t, 0, &cookie, &ctx);
-    if (ret != 0)
-      cerr << "error calling watch: " << ret << std::endl;
-    else {
-      cout << "press enter to exit..." << std::endl;
-      getchar();
-    }
-  }
-  else if (strcmp(nargs[0], "notify") == 0) {
-    if (vol_name.empty() || nargs.size() < 3)
-      usage_exit();
-    string oid_t(nargs[1]);
-    string msg(nargs[2]);
-    bufferlist bl;
-    ::encode(msg, bl);
-    ret = io_ctx.notify(oid_t, bl);
-    if (ret != 0)
-      cerr << "error calling notify: " << ret << std::endl;
+      cerr << "error during cleanup: " << ret << endl;
   } else if (strcmp(nargs[0], "set-alloc-hint") == 0) {
     if (vol_name.empty() || nargs.size() < 4)
       usage_exit();
     string err;
-    string oid_t(nargs[1]);
+    oid_t oid(nargs[1]);
     uint64_t expected_object_size = strict_strtoll(nargs[2], 10, &err);
     if (!err.empty()) {
-      cerr << "couldn't parse expected_object_size: " << err << std::endl;
+      cerr << "couldn't parse expected_object_size: " << err << endl;
       usage_exit();
     }
     uint64_t expected_write_size = strict_strtoll(nargs[3], 10, &err);
     if (!err.empty()) {
-      cerr << "couldn't parse expected_write_size: " << err << std::endl;
+      cerr << "couldn't parse expected_write_size: " << err << endl;
       usage_exit();
     }
-    ret = io_ctx.set_alloc_hint(oid_t, expected_object_size, expected_write_size);
+    ret = o->set_alloc_hint(oid, v, expected_object_size, expected_write_size);
     if (ret < 0) {
-      cerr << "error setting alloc-hint " << vol_name << "/" << oid_t << ": "
-	   << cpp_strerror(ret) << std::endl;
-      goto out;
+      cerr << "error setting alloc-hint " << vol_name << "/" << oid << ": "
+	   << cpp_strerror(ret) << endl;
+      return 1;
     }
   } else if (strcmp(nargs[0], "load-gen") == 0) {
     if (vol_name.empty()) {
-      cerr << "error: must specify volume" << std::endl;
+      cerr << "error: must specify volume" << endl;
       usage_exit();
     }
-    LoadGen lg(&rados);
+    LoadGen lg(o, v);
     if (min_obj_len)
       lg.min_obj_len = min_obj_len;
     if (max_obj_len)
@@ -1548,72 +1479,52 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     if (run_length > 0ns)
       lg.run_length = run_length;
 
-    cout << "run length " << run_length << " seconds" << std::endl;
-    cout << "preparing " << lg.num_objs << " objects" << std::endl;
-    ret = lg.bootstrap(vol_name);
+    cout << "run length " << run_length << " seconds" << endl;
+    cout << "preparing " << lg.num_objs << " objects" << endl;
+    ret = lg.bootstrap();
     if (ret < 0) {
-      cerr << "load-gen bootstrap failed" << std::endl;
+      cerr << "load-gen bootstrap failed" << endl;
       exit(1);
     }
-    cout << "load-gen will run " << lg.run_length << " seconds" << std::endl;
+    cout << "load-gen will run " << lg.run_length << " seconds" << endl;
     lg.run();
     lg.cleanup();
   } else if (strcmp(nargs[0], "listomapkeys") == 0) {
     if (vol_name.empty() || nargs.size() < 2)
       usage_exit();
 
-    librados::ObjectReadOperation read(io_ctx);
-    set<string> out_keys;
-    read.omap_get_keys("", LONG_MAX, &out_keys, &ret);
-    io_ctx.operate(nargs[1], &read, NULL);
+    ObjectOperation read(v->op());
+    std::set<string> out_keys;
+    read->omap_get_keys("", LONG_MAX, &out_keys, &ret);
+    oid_t oid(nargs[1]);
+    ret = o->read(oid, v, read);
     if (ret < 0) {
       cerr << "error getting omap key set " << vol_name << "/"
-	   << nargs[1] << ": "	<< cpp_strerror(ret) << std::endl;
-      goto out;
+	   << nargs[1] << ": "	<< cpp_strerror(ret) << endl;
+      return 1;
     }
 
-    for (set<string>::iterator iter = out_keys.begin();
-	 iter != out_keys.end(); ++iter) {
-      cout << *iter << std::endl;
+    for (auto key : out_keys) {
+      cout << key << endl;
     }
   } else if (strcmp(nargs[0], "lock") == 0) {
     if (vol_name.empty())
       usage_exit();
 
     if (!formatter) {
-      formatter = new JSONFormatter(pretty_format);
+      formatter.reset(new JSONFormatter(pretty_format));
     }
-    ret = do_lock_cmd(nargs, opts, &io_ctx, formatter);
-  } else if (strcmp(nargs[0], "listwatchers") == 0) {
-    if (vol_name.empty() || nargs.size() < 2)
-      usage_exit();
-
-    string oid_t(nargs[1]);
-    std::list<obj_watch_t> lw;
-
-    ret = io_ctx.list_watchers(oid_t, &lw);
-    if (ret < 0) {
-      cerr << "error listing watchers " << vol_name << "/" << oid_t << ": " << cpp_strerror(ret) << std::endl;
-      goto out;
-    }
-    else
-      ret = 0;
-
-    for (std::list<obj_watch_t>::iterator i = lw.begin(); i != lw.end(); ++i) {
-      cout << "watcher=" << i->addr << " client." << i->watcher_id << " cookie=" << i->cookie << std::endl;
-    }
+    ret = do_lock_cmd(nargs, opts, o, v, formatter);
   } else {
-    cerr << "unrecognized command " << nargs[0] << "; -h or --help for usage" << std::endl;
+    cerr << "unrecognized command " << nargs[0] << "; -h or --help for usage" << endl;
     ret = -EINVAL;
-    goto out;
+    return 1;
   }
 
   if (ret < 0)
-    cerr << "error " << (-ret) << ": " << cpp_strerror(ret) << std::endl;
+    cerr << "error " << (-ret) << ": " << cpp_strerror(ret) << endl;
 
-out:
-  delete formatter;
-  return (ret < 0) ? 1 : 0;
+  return 0;
 }
 
 int main(int argc, const char **argv)
@@ -1622,7 +1533,7 @@ int main(int argc, const char **argv)
   argv_to_vec(argc, argv, args);
   env_to_vec(args);
 
-  cct = global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
+  cct = global_init(nullptr, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
   common_init_finish(cct);
 
   std::map < std::string, std::string > opts;
@@ -1631,68 +1542,68 @@ int main(int argc, const char **argv)
   for (i = args.begin(); i != args.end(); ) {
     if (ceph_argparse_double_dash(args, i)) {
       break;
-    } else if (ceph_argparse_flag(args, &i, "-h", "--help", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "-h", "--help", (char*)nullptr)) {
       usage(cout);
       exit(0);
-    } else if (ceph_argparse_flag(args, &i, "-f", "--force", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "-f", "--force", (char*)nullptr)) {
       opts["force"] = "true";
-    } else if (ceph_argparse_flag(args, &i, "-d", "--delete-after", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "-d", "--delete-after", (char*)nullptr)) {
       opts["delete-after"] = "true";
-    } else if (ceph_argparse_flag(args, &i, "--pretty-format", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "--pretty-format", (char*)nullptr)) {
       opts["pretty-format"] = "true";
-    } else if (ceph_argparse_flag(args, &i, "--show-time", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "--show-time", (char*)nullptr)) {
       opts["show-time"] = "true";
-    } else if (ceph_argparse_flag(args, &i, "--no-cleanup", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "--no-cleanup", (char*)nullptr)) {
       opts["no-cleanup"] = "true";
-    } else if (ceph_argparse_witharg(args, i, &val, "--run-name", (char*)NULL)) {
+    } else if (ceph_argparse_witharg(args, i, &val, "--run-name", (char*)nullptr)) {
       opts["run-name"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--prefix", (char*)NULL)) {
+    } else if (ceph_argparse_witharg(args, i, &val, "--prefix", (char*)nullptr)) {
       opts["prefix"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "-v", "--volume", (char*)NULL)) {
+    } else if (ceph_argparse_witharg(args, i, &val, "-v", "--volume", (char*)nullptr)) {
       opts["volume"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--target-volume", (char*)NULL)) {
+    } else if (ceph_argparse_witharg(args, i, &val, "--target-volume", (char*)nullptr)) {
       opts["target_volume"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "-t", "--concurrent-ios", (char*)NULL)) {
+    } else if (ceph_argparse_witharg(args, i, &val, "-t", "--concurrent-ios", (char*)nullptr)) {
       opts["concurrent-ios"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--block-size", (char*)NULL)) {
+    } else if (ceph_argparse_witharg(args, i, &val, "--block-size", (char*)nullptr)) {
       opts["block-size"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "-b", (char*)NULL)) {
+    } else if (ceph_argparse_witharg(args, i, &val, "-b", (char*)nullptr)) {
       opts["block-size"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--min-object-size", (char*)NULL)) {
+    } else if (ceph_argparse_witharg(args, i, &val, "--min-object-size", (char*)nullptr)) {
       opts["min-object-size"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--max-object-size", (char*)NULL)) {
+    } else if (ceph_argparse_witharg(args, i, &val, "--max-object-size", (char*)nullptr)) {
       opts["max-object-size"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--min-op-len", (char*)NULL)) {
+    } else if (ceph_argparse_witharg(args, i, &val, "--min-op-len", (char*)nullptr)) {
       opts["min-op-len"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--max-op-len", (char*)NULL)) {
+    } else if (ceph_argparse_witharg(args, i, &val, "--max-op-len", (char*)nullptr)) {
       opts["max-op-len"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--max-ops", (char*)NULL)) {
+    } else if (ceph_argparse_witharg(args, i, &val, "--max-ops", (char*)nullptr)) {
       opts["max-ops"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--max-backlog", (char*)NULL)) {
+    } else if (ceph_argparse_witharg(args, i, &val, "--max-backlog", (char*)nullptr)) {
       opts["max-backlog"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--target-throughput", (char*)NULL)) {
+    } else if (ceph_argparse_witharg(args, i, &val, "--target-throughput", (char*)nullptr)) {
       opts["target-throughput"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--read-percent", (char*)NULL)) {
+    } else if (ceph_argparse_witharg(args, i, &val, "--read-percent", (char*)nullptr)) {
       opts["read-percent"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--num-objects", (char*)NULL)) {
+    } else if (ceph_argparse_witharg(args, i, &val, "--num-objects", (char*)nullptr)) {
       opts["num-objects"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--run-length", (char*)NULL)) {
+    } else if (ceph_argparse_witharg(args, i, &val, "--run-length", (char*)nullptr)) {
       opts["run-length"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--workers", (char*)NULL)) {
+    } else if (ceph_argparse_witharg(args, i, &val, "--workers", (char*)nullptr)) {
       opts["workers"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--format", (char*)NULL)) {
+    } else if (ceph_argparse_witharg(args, i, &val, "--format", (char*)nullptr)) {
       opts["format"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--lock-tag", (char*)NULL)) {
+    } else if (ceph_argparse_witharg(args, i, &val, "--lock-tag", (char*)nullptr)) {
       opts["lock-tag"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--lock-cookie", (char*)NULL)) {
+    } else if (ceph_argparse_witharg(args, i, &val, "--lock-cookie", (char*)nullptr)) {
       opts["lock-cookie"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--lock-description", (char*)NULL)) {
+    } else if (ceph_argparse_witharg(args, i, &val, "--lock-description", (char*)nullptr)) {
       opts["lock-description"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--lock-duration", (char*)NULL)) {
+    } else if (ceph_argparse_witharg(args, i, &val, "--lock-duration", (char*)nullptr)) {
       opts["lock-duration"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--lock-type", (char*)NULL)) {
+    } else if (ceph_argparse_witharg(args, i, &val, "--lock-type", (char*)nullptr)) {
       opts["lock-type"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "-N", "--namespace", (char*)NULL)) {
+    } else if (ceph_argparse_witharg(args, i, &val, "-N", "--namespace", (char*)nullptr)) {
       opts["namespace"] = val;
     } else {
       if (val[0] == '-')
@@ -1702,7 +1613,7 @@ int main(int argc, const char **argv)
   }
 
   if (args.empty()) {
-    cerr << "rados: you must give an action. Try --help" << std::endl;
+    cerr << "rados: you must give an action. Try --help" << endl;
     return 1;
   }
   return rados_tool_common(opts, args);

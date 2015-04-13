@@ -568,10 +568,6 @@ int rgw_bucket_complete_op(cls_method_context_t hctx, bufferlist *in, bufferlist
   if (op.tag.size() && op.op == CLS_RGW_OP_CANCEL) {
     CLS_LOG(1, "rgw_bucket_complete_op(): cancel requested\n");
     cancel = true;
-  } else if (op.ver.vol == entry.ver.vol &&
-	     op.ver.epoch && op.ver.epoch <= entry.ver.epoch) {
-    CLS_LOG(1, "rgw_bucket_complete_op(): skipping request, old epoch\n");
-    cancel = true;
   }
 
   bufferlist op_bl;
@@ -989,31 +985,18 @@ static int rgw_bi_log_trim(cls_method_context_t hctx, bufferlist *in, bufferlist
   return 0;
 }
 
-static void usage_record_prefix_by_time(uint64_t epoch, string& key)
-{
-  char buf[32];
-  snprintf(buf, sizeof(buf), "%011llu", (long long unsigned)epoch);
-  key = buf;
-}
-
-static void usage_record_prefix_by_user(string& user, uint64_t epoch, string& key)
+static void usage_record_prefix_by_user(string& user, string& key)
 {
   char buf[user.size() + 32];
-  snprintf(buf, sizeof(buf), "%s_%011llu_", user.c_str(), (long long unsigned)epoch);
+  snprintf(buf, sizeof(buf), "%s_", user.c_str());
   key = buf;
 }
 
-static void usage_record_name_by_time(uint64_t epoch, string& user, string& bucket, string& key)
+static void usage_record_name_by_user(string& user, string& bucket,
+				      string& key)
 {
   char buf[32 + user.size() + bucket.size()];
-  snprintf(buf, sizeof(buf), "%011llu_%s_%s", (long long unsigned)epoch, user.c_str(), bucket.c_str());
-  key = buf;
-}
-
-static void usage_record_name_by_user(string& user, uint64_t epoch, string& bucket, string& key)
-{
-  char buf[32 + user.size() + bucket.size()];
-  snprintf(buf, sizeof(buf), "%s_%011llu_%s", user.c_str(), (long long unsigned)epoch, bucket.c_str());
+  snprintf(buf, sizeof(buf), "%s_%s", user.c_str(), bucket.c_str());
   key = buf;
 }
 
@@ -1030,7 +1013,8 @@ static int usage_record_decode(bufferlist& record_bl, rgw_usage_log_entry& e)
   return 0;
 }
 
-int rgw_user_usage_log_add(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
+int rgw_user_usage_log_add(cls_method_context_t hctx, bufferlist *in,
+			   bufferlist *out)
 {
   CLS_LOG(10, "rgw_user_usage_log_add()");
 
@@ -1049,15 +1033,17 @@ int rgw_user_usage_log_add(cls_method_context_t hctx, bufferlist *in, bufferlist
 
   for (iter = info.entries.begin(); iter != info.entries.end(); ++iter) {
     rgw_usage_log_entry& entry = *iter;
-    string key_by_time;
-    usage_record_name_by_time(entry.epoch, entry.owner, entry.bucket, key_by_time);
+    string key_by_user;
+    usage_record_name_by_user(entry.owner, entry.bucket, key_by_user);
 
-    CLS_LOG(10, "rgw_user_usage_log_add user=%s bucket=%s\n", entry.owner.c_str(), entry.bucket.c_str());
+    CLS_LOG(10, "rgw_user_usage_log_add user=%s bucket=%s\n",
+	    entry.owner.c_str(), entry.bucket.c_str());
 
     bufferlist record_bl;
-    int ret = cls_cxx_map_get_val(hctx, key_by_time, &record_bl);
+    int ret = cls_cxx_map_get_val(hctx, key_by_user, &record_bl);
     if (ret < 0 && ret != -ENOENT) {
-      CLS_LOG(1, "ERROR: rgw_user_usage_log_add(): cls_cxx_map_read_key returned %d\n", ret);
+      CLS_LOG(1,"ERROR: rgw_user_usage_log_add(): cls_cxx_map_read_key "
+	      "returned %d\n", ret);
       return -EINVAL;
     }
     if (ret >= 0) {
@@ -1068,27 +1054,17 @@ int rgw_user_usage_log_add(cls_method_context_t hctx, bufferlist *in, bufferlist
       CLS_LOG(10, "rgw_user_usage_log_add aggregating existing bucket\n");
       entry.aggregate(e);
     }
-
-    bufferlist new_record_bl;
-    ::encode(entry, new_record_bl);
-    ret = cls_cxx_map_set_val(hctx, key_by_time, &new_record_bl);
-    if (ret < 0)
-      return ret;
-
-    string key_by_user;
-    usage_record_name_by_user(entry.owner, entry.epoch, entry.bucket, key_by_user);
-    ret = cls_cxx_map_set_val(hctx, key_by_user, &new_record_bl);
-    if (ret < 0)
-      return ret;
   }
 
   return 0;
 }
 
-static int usage_iterate_range(cls_method_context_t hctx, uint64_t start, uint64_t end,
-			    string& user, string& key_iter, uint32_t max_entries, bool *truncated,
-			    int (*cb)(cls_method_context_t, const string&, rgw_usage_log_entry&, void *),
-			    void *param)
+static int usage_iterate_range(cls_method_context_t hctx,
+			       string& user, string& key_iter,
+			       uint32_t max_entries, bool *truncated,
+			       int (*cb)(cls_method_context_t, const string&,
+					 rgw_usage_log_entry&, void *),
+			       void *param)
 {
   CLS_LOG(10, "usage_iterate_range");
 
@@ -1096,33 +1072,25 @@ static int usage_iterate_range(cls_method_context_t hctx, uint64_t start, uint64
 #define NUM_KEYS 32
   string filter_prefix;
   string start_key, end_key;
-  bool by_user = !user.empty();
   uint32_t i = 0;
   string user_key;
 
   if (truncated)
     *truncated = false;
 
-  if (!by_user) {
-    usage_record_prefix_by_time(end, end_key);
-  } else {
-    user_key = user;
-    user_key.append("_");
-  }
+  user_key = user;
+  user_key.append("_");
 
   if (key_iter.empty()) {
-    if (by_user) {
-      usage_record_prefix_by_user(user, start, start_key);
-    } else {
-      usage_record_prefix_by_time(start, start_key);
-    }
+    usage_record_prefix_by_user(user, start_key);
   } else {
     start_key = key_iter;
   }
 
   do {
     CLS_LOG(20, "usage_iterate_range start_key=%s", start_key.c_str());
-    int ret = cls_cxx_map_get_vals(hctx, start_key, filter_prefix, NUM_KEYS, &keys);
+    int ret = cls_cxx_map_get_vals(hctx, start_key, filter_prefix, NUM_KEYS,
+				   &keys);
     if (ret < 0)
       return ret;
 
@@ -1135,12 +1103,7 @@ static int usage_iterate_range(cls_method_context_t hctx, uint64_t start, uint64
       const string& key = iter->first;
       rgw_usage_log_entry e;
 
-      if (!by_user && key.compare(end_key) >= 0) {
-	CLS_LOG(20, "usage_iterate_range reached key=%s, done", key.c_str());
-	return 0;
-      }
-
-      if (by_user && key.compare(0, user_key.size(), user_key) != 0) {
+      if (key.compare(0, user_key.size(), user_key) != 0) {
 	CLS_LOG(20, "usage_iterate_range reached key=%s, done", key.c_str());
 	return 0;
       }
@@ -1149,13 +1112,6 @@ static int usage_iterate_range(cls_method_context_t hctx, uint64_t start, uint64
       if (ret < 0)
 	return ret;
 
-      if (e.epoch < start)
-	continue;
-
-      /* keys are sorted by epoch, so once we're past end we're done */
-      if (e.epoch >= end)
-	return 0;
-
       ret = cb(hctx, key, e, param);
       if (ret < 0)
 	return ret;
@@ -1163,7 +1119,8 @@ static int usage_iterate_range(cls_method_context_t hctx, uint64_t start, uint64
 
       i++;
       if (max_entries && (i > max_entries)) {
-	CLS_LOG(20, "usage_iterate_range reached max_entries (%d), done", max_entries);
+	CLS_LOG(20, "usage_iterate_range reached max_entries (%d), done",
+		max_entries);
 	*truncated = true;
 	key_iter = key;
 	return 0;
@@ -1175,9 +1132,11 @@ static int usage_iterate_range(cls_method_context_t hctx, uint64_t start, uint64
   return 0;
 }
 
-static int usage_log_read_cb(cls_method_context_t hctx, const string& key, rgw_usage_log_entry& entry, void *param)
+static int usage_log_read_cb(cls_method_context_t hctx, const string& key,
+			     rgw_usage_log_entry& entry, void *param)
 {
-  map<rgw_user_bucket, rgw_usage_log_entry> *usage = (map<rgw_user_bucket, rgw_usage_log_entry> *)param;
+  map<rgw_user_bucket, rgw_usage_log_entry> *usage
+    = (map<rgw_user_bucket, rgw_usage_log_entry> *)param;
   rgw_user_bucket ub(entry.owner, entry.bucket);
   rgw_usage_log_entry& le = (*usage)[ub];
   le.aggregate(entry);
@@ -1185,7 +1144,8 @@ static int usage_log_read_cb(cls_method_context_t hctx, const string& key, rgw_u
   return 0;
 }
 
-int rgw_user_usage_log_read(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
+int rgw_user_usage_log_read(cls_method_context_t hctx, bufferlist *in,
+			    bufferlist *out)
 {
   CLS_LOG(10, "rgw_user_usage_log_read()");
 
@@ -1204,7 +1164,9 @@ int rgw_user_usage_log_read(cls_method_context_t hctx, bufferlist *in, bufferlis
   string iter = op.iter;
 #define MAX_ENTRIES 1000
   uint32_t max_entries = (op.max_entries ? op.max_entries : MAX_ENTRIES);
-  int ret = usage_iterate_range(hctx, op.start_epoch, op.end_epoch, op.owner, iter, max_entries, &ret_info.truncated, usage_log_read_cb, (void *)usage);
+  int ret = usage_iterate_range(hctx, op.owner, iter, max_entries,
+				&ret_info.truncated, usage_log_read_cb,
+				(void *)usage);
   if (ret < 0)
     return ret;
 
@@ -1215,22 +1177,18 @@ int rgw_user_usage_log_read(cls_method_context_t hctx, bufferlist *in, bufferlis
   return 0;
 }
 
-static int usage_log_trim_cb(cls_method_context_t hctx, const string& key, rgw_usage_log_entry& entry, void *param)
+static int usage_log_trim_cb(cls_method_context_t hctx, const string& key,
+			     rgw_usage_log_entry& entry, void *param)
 {
-  string key_by_time;
   string key_by_user;
 
-  usage_record_name_by_time(entry.epoch, entry.owner, entry.bucket, key_by_time);
-  usage_record_name_by_user(entry.owner, entry.epoch, entry.bucket, key_by_user);
-
-  int ret = cls_cxx_map_remove_key(hctx, key_by_time);
-  if (ret < 0)
-    return ret;
+  usage_record_name_by_user(entry.owner, entry.bucket, key_by_user);
 
   return cls_cxx_map_remove_key(hctx, key_by_user);
 }
 
-int rgw_user_usage_log_trim(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
+int rgw_user_usage_log_trim(cls_method_context_t hctx, bufferlist *in,
+			    bufferlist *out)
 {
   CLS_LOG(10, "rgw_user_usage_log_trim()");
 
@@ -1245,12 +1203,14 @@ int rgw_user_usage_log_trim(cls_method_context_t hctx, bufferlist *in, bufferlis
   try {
     ::decode(op, in_iter);
   } catch (buffer::error& err) {
-    CLS_LOG(1, "ERROR: rgw_user_log_usage_log_trim(): failed to decode request\n");
+    CLS_LOG(
+      1,"ERROR: rgw_user_log_usage_log_trim(): failed to decode request\n");
     return -EINVAL;
   }
 
   string iter;
-  ret = usage_iterate_range(hctx, op.start_epoch, op.end_epoch, op.user, iter, 0, NULL, usage_log_trim_cb, NULL);
+  ret = usage_iterate_range(hctx, op.user, iter, 0, NULL, usage_log_trim_cb,
+			    NULL);
   if (ret < 0)
     return ret;
 
@@ -1258,9 +1218,10 @@ int rgw_user_usage_log_trim(cls_method_context_t hctx, bufferlist *in, bufferlis
 }
 
 /*
- * We hold the garbage collection chain data under two different indexes: the first 'name' index
- * keeps them under a unique tag that represents the chains, and a second 'time' index keeps
- * them by their expiration timestamp
+ * We hold the garbage collection chain data under two different
+ * indexes: the first 'name' index keeps them under a unique tag that
+ * represents the chains, and a second 'time' index keeps them by
+ * their expiration timestamp
  */
 #define GC_OBJ_NAME_INDEX 0
 #define GC_OBJ_TIME_INDEX 1

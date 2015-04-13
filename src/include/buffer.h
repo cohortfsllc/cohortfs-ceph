@@ -495,8 +495,14 @@ public:
       append_buffer = buffer::create(prealloc);
       append_buffer.set_length(0);   // unused, so far.
     }
+    list(const std::string& s) : _len(0), last_p(this) {
+      append(s);
+    }
     ~list() {}
 
+    operator std::string() {
+      return std::string(c_str(), length());
+    }
     list(const list& other) : _buffers(other._buffers), _len(other._len), last_p(this) { }
     list& operator= (const list& other) {
       if (this != &other) {

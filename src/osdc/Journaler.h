@@ -151,18 +151,18 @@ private:
 
   // header
   ceph::real_time last_wrote_head;
-  void _finish_write_head(int r, Header &wrote, OSDC::op_callback&& oncommit);
+  void _finish_write_head(int r, Header &wrote, rados::op_callback&& oncommit);
   class WriteHead;
   friend class WriteHead;
 
   Context::List waitfor_recover;
-  void read_head(OSDC::read_callback&& on_finish);
+  void read_head(rados::read_callback&& on_finish);
   void _finish_read_head(int r, bufferlist& bl);
-  void _finish_reread_head(int r, bufferlist& bl, OSDC::op_callback&& finish);
-  void probe(OSDC::stat_callback&& finish);
+  void _finish_reread_head(int r, bufferlist& bl, rados::op_callback&& finish);
+  void probe(rados::stat_callback&& finish);
   void _finish_probe_end(int r, uint64_t end);
-  void _finish_reprobe(int r, uint64_t end, OSDC::op_callback&& onfinish);
-  void _finish_reread_head_and_probe(int r, OSDC::op_callback&& onfinish);
+  void _finish_reprobe(int r, uint64_t end, rados::op_callback&& onfinish);
+  void _finish_reread_head_and_probe(int r, rados::op_callback&& onfinish);
   class ReProbe;
   friend class ReProbe;
 
@@ -250,7 +250,7 @@ public:
     waiting_for_zero(false),
     read_pos(0), requested_pos(0), received_pos(0),
     fetch_len(0), temp_fetch_len(0),
-    on_readable(0), on_write_error(NULL),
+    on_readable(0), on_write_error(nullptr),
     expire_pos(0), trimming_pos(0), trimmed_pos(0)
   {
   }
@@ -288,10 +288,10 @@ public:
    */
   void create();
   void recover(Context *onfinish);
-  void reread_head(OSDC::op_callback&& onfinish);
-  void reprobe(OSDC::op_callback&& onfinish);
-  void reread_head_and_probe(OSDC::op_callback&& onfinish);
-  void write_head(OSDC::op_callback&& onsave = nullptr);
+  void reread_head(rados::op_callback&& onfinish);
+  void reprobe(rados::op_callback&& onfinish);
+  void reread_head_and_probe(rados::op_callback&& onfinish);
+  void write_head(rados::op_callback&& onsave = nullptr);
 
   void set_readonly();
   void set_writeable();

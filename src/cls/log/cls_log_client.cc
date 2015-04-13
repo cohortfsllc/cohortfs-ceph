@@ -1,30 +1,32 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #include <errno.h>
 
 #include "include/types.h"
 #include "cls/log/cls_log_ops.h"
-#include "include/rados/librados.hpp"
+#include "osdc/RadosClient.h"
 
 
-using namespace librados;
+using namespace rados;
 
 
 
-void cls_log_add(librados::ObjectWriteOperation& op, list<cls_log_entry>& entries)
+void cls_log_add(ObjOpUse op, list<cls_log_entry>& entries)
 {
   bufferlist in;
   cls_log_add_op call;
   call.entries = entries;
   ::encode(call, in);
-  op.exec("log", "add", in);
+  op->call("log", "add", in);
 }
 
-void cls_log_add(librados::ObjectWriteOperation& op, cls_log_entry& entry)
+void cls_log_add(ObjOpUse op, cls_log_entry& entry)
 {
   bufferlist in;
   cls_log_add_op call;
   call.entries.push_back(entry);
   ::encode(call, in);
-  op.exec("log", "add", in);
+  op->call("log", "add", in);
 }
 
 void cls_log_add_prepare_entry(cls_log_entry& entry,
@@ -38,7 +40,7 @@ void cls_log_add_prepare_entry(cls_log_entry& entry,
   entry.data = bl;
 }
 
-void cls_log_add(librados::ObjectWriteOperation& op,
+void cls_log_add(ObjOpUse op,
 		 const ceph::real_time& timestamp,
 		 const string& section, const string& name, bufferlist& bl)
 {
@@ -48,7 +50,7 @@ void cls_log_add(librados::ObjectWriteOperation& op,
   cls_log_add(op, entry);
 }
 
-void cls_log_trim(librados::ObjectWriteOperation& op,
+void cls_log_trim(ObjOpUse op,
 		  const ceph::real_time& from_time,
 		  const ceph::real_time& to_time,
 		  const string& from_marker, const string& to_marker)
@@ -60,10 +62,10 @@ void cls_log_trim(librados::ObjectWriteOperation& op,
   call.from_marker = from_marker;
   call.to_marker = to_marker;
   ::encode(call, in);
-  op.exec("log", "trim", in);
+  op->call("log", "trim", in);
 }
 
-int cls_log_trim(librados::IoCtx& io_ctx, const string& oid_t,
+int cls_log_trim(Objecter* o, const VolumeRef& vol, const oid_t& oid,
 		 const ceph::real_time& from_time,
 		 const ceph::real_time& to_time,
 		 const string& from_marker, const string& to_marker)
@@ -71,11 +73,11 @@ int cls_log_trim(librados::IoCtx& io_ctx, const string& oid_t,
   bool done = false;
 
   do {
-    ObjectWriteOperation op(io_ctx);
+    ObjectOperation op(vol->op());
 
     cls_log_trim(op, from_time, to_time, from_marker, to_marker);
 
-    int r = io_ctx.operate(oid_t, &op);
+    int r = o->mutate(oid, vol, op);
     if (r == -ENODATA)
       done = true;
     else if (r < 0)
@@ -87,14 +89,14 @@ int cls_log_trim(librados::IoCtx& io_ctx, const string& oid_t,
   return 0;
 }
 
-class LogListCtx : public ObjectOperationCompletion {
+class LogListCB {
   list<cls_log_entry> *entries;
   string *marker;
   bool *truncated;
 public:
-  LogListCtx(list<cls_log_entry> *_entries, string *_marker, bool *_truncated) :
-				      entries(_entries), marker(_marker), truncated(_truncated) {}
-  void handle_completion(int r, bufferlist& outbl) {
+  LogListCB(list<cls_log_entry> *_entries, string *_marker, bool *_truncated) :
+    entries(_entries), marker(_marker), truncated(_truncated) {}
+  void operator()(int r, bufferlist&& outbl) {
     if (r >= 0) {
       cls_log_list_ret ret;
       try {
@@ -113,7 +115,7 @@ public:
   }
 };
 
-void cls_log_list(librados::ObjectReadOperation& op,
+void cls_log_list(ObjOpUse op,
 		  ceph::real_time& from, ceph::real_time& to,
 		  const string& in_marker, int max_entries,
 		  list<cls_log_entry>& entries,
@@ -128,14 +130,14 @@ void cls_log_list(librados::ObjectReadOperation& op,
 
   ::encode(call, inbl);
 
-  op.exec("log", "list", inbl, new LogListCtx(&entries, out_marker, truncated));
+  op->call("log", "list", inbl, LogListCB(&entries, out_marker, truncated));
 }
 
-class LogInfoCtx : public ObjectOperationCompletion {
+class LogInfoCB {
   cls_log_header *header;
 public:
-  LogInfoCtx(cls_log_header *_header) : header(_header) {}
-  void handle_completion(int r, bufferlist& outbl) {
+  LogInfoCB(cls_log_header *_header) : header(_header) {}
+  void operator()(int r, bufferlist&& outbl) {
     if (r >= 0) {
       cls_log_info_ret ret;
       try {
@@ -150,13 +152,13 @@ public:
   }
 };
 
-void cls_log_info(librados::ObjectReadOperation& op, cls_log_header *header)
+void cls_log_info(ObjOpUse op, cls_log_header *header)
 {
   bufferlist inbl;
   cls_log_info_op call;
 
   ::encode(call, inbl);
 
-  op.exec("log", "info", inbl, new LogInfoCtx(header));
+  op->call("log", "info", inbl, LogInfoCB(header));
 }
 

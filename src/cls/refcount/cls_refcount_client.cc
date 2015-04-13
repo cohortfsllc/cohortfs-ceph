@@ -1,48 +1,52 @@
 #include <errno.h>
 
 #include "include/types.h"
+#include "osdc/RadosClient.h"
 #include "cls/refcount/cls_refcount_ops.h"
-#include "include/rados/librados.hpp"
 
-using namespace librados;
+using namespace rados;
 
 
-void cls_refcount_get(librados::ObjectWriteOperation& op, const string& tag, bool implicit_ref)
+void cls_refcount_get(ObjOpUse op, const string& tag, bool implicit_ref)
 {
   bufferlist in;
   cls_refcount_get_op call;
   call.tag = tag;
   call.implicit_ref = implicit_ref;
   ::encode(call, in);
-  op.exec("refcount", "get", in);
+  op->call("refcount", "get", in);
 }
 
-void cls_refcount_put(librados::ObjectWriteOperation& op, const string& tag, bool implicit_ref)
+void cls_refcount_put(ObjOpUse op, const string& tag, bool implicit_ref)
 {
   bufferlist in;
   cls_refcount_put_op call;
   call.tag = tag;
   call.implicit_ref = implicit_ref;
   ::encode(call, in);
-  op.exec("refcount", "put", in);
+  op->call("refcount", "put", in);
 }
 
-void cls_refcount_set(librados::ObjectWriteOperation& op, list<string>& refs)
+void cls_refcount_set(ObjOpUse op, list<string>& refs)
 {
   bufferlist in;
   cls_refcount_set_op call;
   call.refs = refs;
   ::encode(call, in);
-  op.exec("refcount", "set", in);
+  op->call("refcount", "set", in);
 }
 
-int cls_refcount_read(librados::IoCtx& io_ctx, string& oid_t, list<string> *refs, bool implicit_ref)
+int cls_refcount_read(Objecter* o, oid_t& oid, VolumeRef vol,
+		      list<string> *refs, bool implicit_ref)
 {
-  bufferlist in, out;
+  bufferlist in;
+  bufferlist out;
   cls_refcount_read_op call;
   call.implicit_ref = implicit_ref;
   ::encode(call, in);
-  int r = io_ctx.exec(oid_t, "refcount", "read", in, out);
+  ObjectOperation op(vol->op());
+  op->call("refcount", "read", in, &out);
+  int r = o->read(oid, vol, op);
   if (r < 0)
     return r;
 

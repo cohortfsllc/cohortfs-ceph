@@ -8,7 +8,6 @@
 #include <condition_variable>
 #include <mutex>
 #include "include/types.h"
-#include "include/rados/librados.hpp"
 #include "common/Thread.h"
 #include "rgw_common.h"
 #include "rgw_rados.h"
@@ -45,7 +44,7 @@ public:
     finalize();
   }
 
-  void add_chain(librados::ObjectWriteOperation& op, cls_rgw_obj_chain& chain, const string& tag);
+  void add_chain(rados::ObjOpUse op, cls_rgw_obj_chain& chain, const string& tag);
   int send_chain(cls_rgw_obj_chain& chain, const string& tag, bool sync);
   int defer_chain(const string& tag, bool sync);
   int remove(int index, const std::list<string>& tags);

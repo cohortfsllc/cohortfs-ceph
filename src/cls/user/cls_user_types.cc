@@ -11,8 +11,8 @@ void cls_user_gen_test_bucket(cls_user_bucket *bucket, int i)
   snprintf(buf, sizeof(buf), ".%d", i);
 
   bucket->name = string("buck") + buf;
-  bucket->data_pool = string(".data.pool") + buf;
-  bucket->index_pool = string(".index.pool") + buf;
+  bucket->data_vol = string(".data.vol") + buf;
+  bucket->index_vol = string(".index.vol") + buf;
   bucket->marker = string("mark") + buf;
   bucket->bucket_id = string("bucket.id") + buf;
 }
@@ -20,9 +20,9 @@ void cls_user_gen_test_bucket(cls_user_bucket *bucket, int i)
 void cls_user_bucket::dump(Formatter *f) const
 {
   encode_json("name", name, f);
-  encode_json("data_pool", data_pool,f);
-  encode_json("data_extra_pool", data_extra_pool,f);
-  encode_json("index_pool", index_pool,f);
+  encode_json("data_vol", data_vol,f);
+  encode_json("data_extra_vol", data_extra_vol,f);
+  encode_json("index_vol", index_vol,f);
   encode_json("marker", marker,f);
   encode_json("bucket_id", bucket_id,f);
 }

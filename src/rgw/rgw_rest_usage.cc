@@ -23,13 +23,10 @@ void RGWOp_Usage_Get::execute() {
   map<std::string, bool> categories;
 
   string uid;
-  uint64_t start, end;
   bool show_entries;
   bool show_summary;
 
   RESTArgs::get_string(s, "uid", uid, &uid);
-  RESTArgs::get_epoch(s, "start", 0, &start);
-  RESTArgs::get_epoch(s, "end", (uint64_t)-1, &end);
   RESTArgs::get_bool(s, "show-entries", true, &show_entries);
   RESTArgs::get_bool(s, "show-summary", true, &show_summary);
 
@@ -45,7 +42,7 @@ void RGWOp_Usage_Get::execute() {
     }
   }
 
-  http_ret = RGWUsage::show(store, uid, start, end, show_entries, show_summary,
+  http_ret = RGWUsage::show(store, uid, show_entries, show_summary,
 			    &categories, flusher);
 }
 
@@ -64,15 +61,10 @@ public:
 
 void RGWOp_Usage_Delete::execute() {
   string uid;
-  uint64_t start, end;
 
   RESTArgs::get_string(s, "uid", uid, &uid);
-  RESTArgs::get_epoch(s, "start", 0, &start);
-  RESTArgs::get_epoch(s, "end", (uint64_t)-1, &end);
 
-  if (uid.empty() &&
-      !start &&
-      end == (uint64_t)-1) {
+  if (uid.empty()) {
     bool remove_all;
     RESTArgs::get_bool(s, "remove-all", false, &remove_all);
     if (!remove_all) {
@@ -81,7 +73,7 @@ void RGWOp_Usage_Delete::execute() {
     }
   }
 
-  http_ret = RGWUsage::trim(store, uid, start, end);
+  http_ret = RGWUsage::trim(store, uid);
 }
 
 RGWOp *RGWHandler_Usage::op_get()

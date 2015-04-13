@@ -92,6 +92,7 @@
 
 #include "common/Timer.h"
 
+
 using namespace std;
 
 #include "common/config.h"
@@ -103,6 +104,9 @@ using namespace std;
 static ostream& _prefix(std::ostream *_dout, MDS *mds) {
   return *_dout << "mds." << mds->get_nodeid() << ".cache ";
 }
+
+using rados::op_callback;
+using rados::ObjectOperation;
 
 long g_num_ino = 0;
 long g_num_dir = 0;
@@ -315,9 +319,9 @@ void MDCache::create_empty_hierarchy(VolumeRef &v,
 
   rootdir->mark_complete();
   rootdir->mark_dirty(rootdir->pre_dirty(), mds->mdlog->get_current_segment());
-  rootdir->commit(0, multi.add_ctx());
+  rootdir->commit(0, multi);
 
-  root->store(multi.add_ctx());
+  root->store(multi);
 }
 
 void MDCache::create_mydir_hierarchy(VolumeRef &v,
@@ -347,7 +351,7 @@ void MDCache::create_mydir_hierarchy(VolumeRef &v,
     // save them
     straydir->mark_complete();
     straydir->mark_dirty(straydir->pre_dirty(), mds->mdlog->get_current_segment());
-    straydir->commit(0, multi.add_ctx());
+    straydir->commit(0, multi);
   }
 
   CInode *journal = create_system_inode(v, MDS_INO_LOG_OFFSET + mds->whoami, S_IFREG);
@@ -367,9 +371,9 @@ void MDCache::create_mydir_hierarchy(VolumeRef &v,
 
   mydir->mark_complete();
   mydir->mark_dirty(mydir->pre_dirty(), mds->mdlog->get_current_segment());
-  mydir->commit(0, multi.add_ctx());
+  mydir->commit(0, multi);
 
-  myin->store(multi.add_ctx());
+  myin->store(multi);
 }
 
 struct C_MDC_CreateSystemFile : public Context {
@@ -5244,8 +5248,7 @@ void MDCache::do_file_recover()
       file_recovering.insert(in);
 
       oid_t oid = CInode::get_object_name(in->inode.ino, frag_t(), "");
-      // 0 or CEPH_OSD_FLAG_RWORDERED?
-      mds->objecter->stat(oid, in->volume, 0,
+      mds->objecter->stat(oid, in->volume,
 			  [this, in](int r, uint64_t s, ceph::real_time t) {
 			    _recovered(in, r, s, t);
 			  });
@@ -5297,19 +5300,13 @@ void MDCache::_recovered(CInode *in, int r, uint64_t size,
   do_file_recover();
 }
 
-void MDCache::purge_prealloc_ino(inodeno_t ino, OSDC::op_callback&& fin)
+void MDCache::purge_prealloc_ino(inodeno_t ino, op_callback&& fin)
 {
   oid_t oid = CInode::get_object_name(ino, frag_t(), "");
   VolumeRef volume(mds->get_metadata_volume());
-// XXX error recovery?
-  if (!volume) {
-    dout(0) << "Unable to attach volume " << volume << dendl;
-    return;
-  }
 
   dout(10) << "purge_prealloc_ino " << ino << " oid_t " << oid << dendl;
-  mds->objecter->remove(oid, volume, ceph::real_clock::now(), 0, 0,
-			std::move(fin));
+  mds->objecter->remove(oid, volume, 0, std::move(fin));
 }
 
 
@@ -5363,9 +5360,8 @@ void MDCache::_truncate_inode(CInode *in, LogSegment *ls)
 
   in->auth_pin(this);
 
-  mds->objecter->trunc(oid, in->volume, ceph::real_clock::now(), 0,
-		       pi->truncate_size, pi->truncate_seq,
-		       0, CB_MDC_TruncateFinish(this, in, ls));
+  mds->objecter->trunc(oid, in->volume, pi->truncate_size, pi->truncate_seq,
+		       nullptr, CB_MDC_TruncateFinish(this, in, ls));
 }
 
 struct C_MDC_TruncateLogged : public Context {
@@ -7308,10 +7304,9 @@ class CB_MDC_OpenInoBacktraceFetched {
   MDCache *cache;
   inodeno_t ino;
   public:
-  bufferlist bl;
   CB_MDC_OpenInoBacktraceFetched(MDCache *c, inodeno_t i) :
     cache(c), ino(i) {}
-  void operator()(int r) {
+  void operator()(int r, bufferlist&& bl) {
     cache->_open_ino_backtrace_fetched(ino, bl, r);
   }
 };
@@ -7364,10 +7359,8 @@ void MDCache::_open_ino_backtrace_fetched(inodeno_t ino, bufferlist& bl, int err
 	dout(0) << "Unable to attach volume " << info.volume << " error=" << r << dendl;
 	return;
       }
-      OSDC::op_callback fin(CB_MDC_OpenInoBacktraceFetched(this, ino));
       fetch_backtrace(ino, info.volume,
-		      fin.target<CB_MDC_OpenInoBacktraceFetched>()->bl,
-		      std::move(fin));
+		      CB_MDC_OpenInoBacktraceFetched(this, ino));
       return;
     }
   } else if (err == -ENOENT) {
@@ -7381,10 +7374,8 @@ void MDCache::_open_ino_backtrace_fetched(inodeno_t ino, bufferlist& bl, int err
 	dout(0) << "Unable to attach volume " << info.volume << dendl;
 	return;
       }
-      OSDC::op_callback fin = CB_MDC_OpenInoBacktraceFetched(this, ino);
       fetch_backtrace(ino, info.volume,
-		      fin.target<CB_MDC_OpenInoBacktraceFetched>()->bl,
-		      std::move(fin));
+		      CB_MDC_OpenInoBacktraceFetched(this, ino));
       return;
     }
   }
@@ -7609,10 +7600,8 @@ void MDCache::do_open_ino(inodeno_t ino, open_ino_info_t& info,
     info.checking = mds->get_nodeid();
     info.checked.clear();
     info.checked.insert(mds->get_nodeid());
-    OSDC::op_callback fin(CB_MDC_OpenInoBacktraceFetched(this, ino));
     fetch_backtrace(ino, info.volume,
-		    fin.target<CB_MDC_OpenInoBacktraceFetched>()->bl,
-		    std::move(fin));
+		    CB_MDC_OpenInoBacktraceFetched(this, ino));
   } else {
     assert(!info.ancestors.empty());
     info.checking = mds->get_nodeid();
@@ -8518,12 +8507,11 @@ void MDCache::eval_remote(CDentry *dn)
   }
 }
 
-void MDCache::fetch_backtrace(inodeno_t ino, VolumeRef volume, bufferlist& bl,
-			      OSDC::op_callback&& fin)
+void MDCache::fetch_backtrace(inodeno_t ino, VolumeRef volume,
+			      rados::read_callback&& fin)
 {
   oid_t oid = CInode::get_object_name(ino, frag_t(), "");
-  mds->objecter->getxattr(oid, volume, "parent",
-			  &bl, 0, std::move(fin));
+  mds->objecter->getxattr(oid, volume, "parent", std::move(fin));
 }
 
 class MDC_PurgeStrayPurged : public cohort::SimpleMultiCallback<int> {
@@ -8591,8 +8579,7 @@ void MDCache::purge_stray(CDentry *dn)
 	 p != ls.end();
 	 ++p) {
       dout(10) << "purge_stray remove dirfrag " << oid << dendl;
-      mds->objecter->remove(oid, volume, ceph::real_clock::now(),
-			    0, NULL, purged.add());
+      mds->objecter->remove(oid, volume, nullptr, purged);
     }
     purged.activate();
     return;
@@ -8615,7 +8602,7 @@ void MDCache::purge_stray(CDentry *dn)
 	       << " on " << *in << dendl;
       mds->objecter->zero(oid, in->volume, 0, 0,
 			  ceph::real_clock::now(), 0,
-			  0, purged.add());
+			  0, purged);
     }
   }
 #endif
@@ -8626,9 +8613,7 @@ void MDCache::purge_stray(CDentry *dn)
   if (!purged.empty()) {
     dout(10) << "purge_stray remove backtrace object " << poid
 	     << " volume " << in->volume << dendl;
-    mds->objecter->remove(poid, in->volume,
-			  ceph::real_clock::now(), 0, NULL,
-			  purged.add());
+    mds->objecter->remove(poid, in->volume, nullptr, purged);
   }
   // remove old backtrace objects
   for (auto p = pi->old_volumes.begin();
@@ -8638,11 +8623,11 @@ void MDCache::purge_stray(CDentry *dn)
 // XXX error recovery?
     int r = volume->attach(mds->objecter->cct);
     if (r) {
-      dout(0) << "Unable to attach volume " << volume << " error=" << r << dendl;
+      dout(0) << "Unable to attach volume " << volume << " error=" << r
+	      << dendl;
       return;
     }
-    mds->objecter->remove(poid, volume, ceph::real_clock::now(), 0,
-			  NULL, purged.add());
+    mds->objecter->remove(poid, volume, nullptr, purged);
   }
   purged.activate();
 }
@@ -10691,10 +10676,7 @@ void MDCache::_fragment_committed(dirfrag_t basedirfrag, list<CDir*>& resultfrag
        p != uf.old_frags.end();
        ++p) {
     oid_t oid = CInode::get_object_name(basedirfrag.ino, *p, "");
-    unique_ptr<ObjOp> op = volume->op();
-    if (!op) {
-      dout(0) << "Unable to attach volume " << volume << dendl;
-    }
+    ObjectOperation op = volume->op();
     if (*p == frag_t()) {
       // backtrace object
       dout(10) << " truncate orphan dirfrag " << oid << dendl;
@@ -10705,7 +10687,7 @@ void MDCache::_fragment_committed(dirfrag_t basedirfrag, list<CDir*>& resultfrag
       op->remove();
     }
     mds->objecter->mutate(oid, volume, op, ceph::real_clock::now(),
-			  0, NULL, finished.add());
+			  nullptr, finished);
   }
 
   finished.activate();

@@ -168,14 +168,14 @@ int RGWMetadataLog::lock_exclusive(int shard_id, ceph::timespan duration,
   string oid;
   get_shard_oid(shard_id, oid);
 
-  return store->lock_exclusive(store->zone.log_pool, oid, duration, zone_id, owner_id);
+  return store->lock_exclusive(store->zone.log_vol, oid, duration, zone_id, owner_id);
 }
 
 int RGWMetadataLog::unlock(int shard_id, string& zone_id, string& owner_id) {
   string oid_t;
   get_shard_oid(shard_id, oid_t);
 
-  return store->unlock(store->zone.log_pool, oid_t, zone_id, owner_id);
+  return store->unlock(store->zone.log_vol, oid_t, zone_id, owner_id);
 }
 
 obj_version& RGWMetadataObject::get_version()
@@ -198,7 +198,7 @@ public:
   virtual int put(RGWRados *store, string& entry, RGWObjVersionTracker& objv_tracker,
 		  time_t mtime, JSONObj *oid, sync_type_t sync_type) { return -ENOTSUP; }
 
-  virtual void get_pool_and_oid(RGWRados *store, const string& key, rgw_bucket& bucket, string& oid_t) {}
+  virtual void get_vol_and_oid(RGWRados *store, const string& key, rgw_bucket& bucket, string& oid_t) {}
 
   virtual int remove(RGWRados *store, string& entry, RGWObjVersionTracker& objv_tracker) { return -ENOTSUP; }
 
@@ -409,13 +409,12 @@ int RGWMetadataManager::lock_exclusive(string& metadata_key,
   rgw_bucket pool;
   string oid_t;
 
-  handler->get_pool_and_oid(store, entry, pool, oid_t);
+  handler->get_vol_and_oid(store, entry, pool, oid_t);
 
   return store->lock_exclusive(pool, oid_t, duration, zone_id, owner_id);
 }
 
 int RGWMetadataManager::unlock(string& metadata_key, string& owner_id) {
-  librados::IoCtx io_ctx;
   RGWMetadataHandler *handler;
   string entry;
   string zone_id;
@@ -424,12 +423,12 @@ int RGWMetadataManager::unlock(string& metadata_key, string& owner_id) {
   if (ret < 0)
     return ret;
 
-  rgw_bucket pool;
-  string oid_t;
+  rgw_bucket bucket;
+  string oid;
 
-  handler->get_pool_and_oid(store, entry, pool, oid_t);
+  handler->get_vol_and_oid(store, entry, bucket, oid);
 
-  return store->unlock(pool, oid_t, zone_id, owner_id);
+  return store->unlock(bucket, oid, zone_id, owner_id);
 }
 
 struct list_keys_handle {
@@ -573,7 +572,7 @@ int RGWMetadataManager::put_entry(RGWMetadataHandler *handler, const string& key
   string oid_t;
   rgw_bucket bucket;
 
-  handler->get_pool_and_oid(store, key, bucket, oid_t);
+  handler->get_vol_and_oid(store, key, bucket, oid_t);
 
   ret = rgw_put_system_obj(store, bucket, oid_t,
 			   bl.c_str(), bl.length(), exclusive,
@@ -598,7 +597,7 @@ int RGWMetadataManager::remove_entry(RGWMetadataHandler *handler, string& key, R
   string oid_t;
   rgw_bucket bucket;
 
-  handler->get_pool_and_oid(store, key, bucket, oid_t);
+  handler->get_vol_and_oid(store, key, bucket, oid_t);
 
   rgw_obj oid(bucket, oid_t);
 

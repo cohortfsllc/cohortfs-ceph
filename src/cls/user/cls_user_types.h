@@ -13,26 +13,26 @@
  */
 struct cls_user_bucket {
   std::string name;
-  std::string data_pool;
-  std::string index_pool;
+  std::string data_vol;
+  std::string index_vol;
   std::string marker;
   std::string bucket_id;
-  std::string data_extra_pool;
+  std::string data_extra_vol;
 
   void encode(bufferlist& bl) const {
      ENCODE_START(7, 3, bl);
     ::encode(name, bl);
-    ::encode(data_pool, bl);
+    ::encode(data_vol, bl);
     ::encode(marker, bl);
     ::encode(bucket_id, bl);
-    ::encode(index_pool, bl);
-    ::encode(data_extra_pool, bl);
+    ::encode(index_vol, bl);
+    ::encode(data_extra_vol, bl);
     ENCODE_FINISH(bl);
   }
   void decode(bufferlist::iterator& bl) {
     DECODE_START_LEGACY_COMPAT_LEN(7, 3, 3, bl);
     ::decode(name, bl);
-    ::decode(data_pool, bl);
+    ::decode(data_vol, bl);
     if (struct_v >= 2) {
       ::decode(marker, bl);
       if (struct_v <= 3) {
@@ -46,12 +46,12 @@ struct cls_user_bucket {
       }
     }
     if (struct_v >= 5) {
-      ::decode(index_pool, bl);
+      ::decode(index_vol, bl);
     } else {
-      index_pool = data_pool;
+      index_vol = data_vol;
     }
     if (struct_v >= 7) {
-      ::decode(data_extra_pool, bl);
+      ::decode(data_extra_vol, bl);
     }
     DECODE_FINISH(bl);
   }

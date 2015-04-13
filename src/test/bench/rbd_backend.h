@@ -17,15 +17,15 @@ public:
     const std::string &oid_t,
     uint64_t offset,
     const bufferlist &bl,
-    OSDC::op_callback&& on_applied,
-    OSDC::op_callback&& on_commit);
+    rados::op_callback&& on_applied,
+    rados::op_callback&& on_commit);
 
   void read(
     const std::string &oid_t,
     uint64_t offset,
     uint64_t length,
     bufferlist *bl,
-    OSDC::op_callback&& on_complete);
+    rados::op_callback&& on_complete);
 };
 
 #endif

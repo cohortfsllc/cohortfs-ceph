@@ -5291,7 +5291,7 @@ void Client::unlock_fh_pos(Fh *f)
   f->pos_locked = false;
 }
 
-int Client::uninline_data(Inode *in, OSDC::op_callback&& onfinish)
+int Client::uninline_data(Inode *in, rados::op_callback&& onfinish)
 {
   if (!in->inline_data.length()) {
     onfinish(0);
@@ -5302,7 +5302,7 @@ int Client::uninline_data(Inode *in, OSDC::op_callback&& onfinish)
   snprintf(obj_buf, sizeof(obj_buf), "%" PRIx64 ".00000000",
 	   (uint64_t) in->ino);
   oid_t oid = obj_buf;
-  unique_ptr<ObjOp> create_ops = in->volume->op();
+  rados::ObjectOperation create_ops = in->volume->op();
   create_ops->create(false);
 
   objecter->mutate(oid,
@@ -5316,7 +5316,7 @@ int Client::uninline_data(Inode *in, OSDC::op_callback&& onfinish)
   bufferlist inline_version_bl;
   ::encode(in->inline_version, inline_version_bl);
 
-  unique_ptr<ObjOp> uninline_ops = in->volume->op();
+  rados::ObjectOperation uninline_ops = in->volume->op();
   if (!uninline_ops)
     return -EDOM;
 
@@ -5332,8 +5332,7 @@ int Client::uninline_data(Inode *in, OSDC::op_callback&& onfinish)
 		   in->volume,
 		   uninline_ops,
 		   ceph::real_clock::now(),
-		   0,
-		   NULL,
+		   nullptr,
 		   move(onfinish));
 
   return 0;
@@ -5393,12 +5392,12 @@ retry:
     return r;
 
   bool uninline = false;
-  OSDC::CB_Waiter w;
+  rados::CB_Waiter w;
 
   if (in->inline_version < CEPH_INLINE_NONE) {
     if (!(have & CEPH_CAP_FILE_CACHE)) {
       uninline = true;
-      uninline_data(in, std::ref(w));
+      uninline_data(in, w);
     } else {
       uint32_t len = in->inline_data.length();
 
@@ -5496,14 +5495,14 @@ int Client::_read_sync(Fh *f, uint64_t off, uint64_t len, bufferlist *bl,
 
   ldout(cct, 10) << "_read_sync " << *in << " " << off << "~" << len << dendl;
 
-  OSDC::CB_Waiter w;
+  rados::CB_Waiter w;
   while (left > 0) {
     int r = 0;
     bufferlist tbl;
 
     int wanted = left;
     oid_t oid = file_oid(in->ino, 0);
-    objecter->read(oid, in->volume, pos, left, &tbl, 0, std::ref(w));
+    objecter->read(oid, in->volume, pos, left, &tbl, w);
     cl.unlock();
     w.wait();
     cl.lock();
@@ -5664,14 +5663,14 @@ int Client::_write(Fh *f, int64_t offset, uint64_t size, const char *buf,
     return r;
 
   bool uninline = false;
-  OSDC::CB_Waiter w;
+  rados::CB_Waiter w;
 
   if (in->inline_version < CEPH_INLINE_NONE) {
     if (endoff > cct->_conf->client_max_inline_size ||
 	endoff > CEPH_INLINE_MAX_SIZE ||
 	!(have & CEPH_CAP_FILE_BUFFER)) {
       uninline = true;
-      uninline_data(in, std::ref(w));
+      uninline_data(in, w);
     } else {
       get_cap_ref(in, CEPH_CAP_FILE_BUFFER);
 
@@ -5696,15 +5695,14 @@ int Client::_write(Fh *f, int64_t offset, uint64_t size, const char *buf,
 
   {
     // simple, non-atomic sync write
-    OSDC::CB_Waiter w;
+    rados::CB_Waiter w;
 
     unsafe_sync_write++;
     get_cap_ref(in, CEPH_CAP_FILE_BUFFER);  // released by onsafe callback
 
     oid_t oid = file_oid(in->ino, 0);
     r = objecter->write(oid, in->volume, offset, size, bl,
-			ceph::real_clock::now(), 0, std::ref(w),
-			CB_Client_SyncCommit(this, in));
+			w, CB_Client_SyncCommit(this, in));
     if (r < 0)
       goto done;
 
@@ -7588,7 +7586,7 @@ int Client::_fallocate(Fh *fh, int mode, int64_t offset, int64_t length,
     return r;
 
   bool uninline = false;
-  OSDC::CB_Waiter uiw;
+  rados::CB_Waiter uiw;
 
   if (mode & FALLOC_FL_PUNCH_HOLE) {
     if (in->inline_version < CEPH_INLINE_NONE &&
@@ -7613,18 +7611,17 @@ int Client::_fallocate(Fh *fh, int mode, int64_t offset, int64_t length,
     } else {
       if (in->inline_version < CEPH_INLINE_NONE) {
 	uninline = true;
-	uninline_data(in, std::ref(uiw));
+	uninline_data(in, uiw);
       }
 
-      OSDC::CB_Waiter w;
+      rados::CB_Waiter w;
       unsafe_sync_write++;
       get_cap_ref(in, CEPH_CAP_FILE_BUFFER);
 
       _invalidate_inode_cache(in, offset, length);
       oid_t oid = file_oid(in->ino, 0);
       r = objecter->zero(oid, in->volume, offset, length,
-			 ceph::real_clock::now(),
-			 0, std::ref(w), CB_Client_SyncCommit(this, in));
+			 w, CB_Client_SyncCommit(this, in));
       if (r < 0)
 	goto done;
 

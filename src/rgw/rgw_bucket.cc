@@ -49,7 +49,7 @@ int rgw_read_user_buckets(RGWRados *store, string user_id, RGWUserBuckets& bucke
   string buckets_obj_id;
   rgw_get_buckets_obj(user_id, buckets_obj_id);
   bufferlist bl;
-  rgw_obj oid(store->zone.user_uid_pool, buckets_obj_id);
+  rgw_obj oid(store->zone.user_uid_vol, buckets_obj_id);
   bufferlist header;
   list<cls_user_bucket_entry> entries;
 
@@ -88,7 +88,7 @@ int rgw_bucket_sync_user_stats(RGWRados *store, const string& user_id, rgw_bucke
 {
   string buckets_obj_id;
   rgw_get_buckets_obj(user_id, buckets_obj_id);
-  rgw_obj oid(store->zone.user_uid_pool, buckets_obj_id);
+  rgw_obj oid(store->zone.user_uid_vol, buckets_obj_id);
 
   return store->cls_user_sync_bucket_stats(oid, bucket);
 }
@@ -143,7 +143,7 @@ int rgw_link_bucket(RGWRados *store, string user_id, rgw_bucket& bucket, time_t 
   string buckets_obj_id;
   rgw_get_buckets_obj(user_id, buckets_obj_id);
 
-  rgw_obj oid(store->zone.user_uid_pool, buckets_obj_id);
+  rgw_obj oid(store->zone.user_uid_vol, buckets_obj_id);
   ret = store->cls_user_add_bucket(oid, new_bucket);
   if (ret < 0) {
     ldout(store->ctx(), 0) << "ERROR: error adding bucket to directory: "
@@ -180,7 +180,7 @@ int rgw_unlink_bucket(RGWRados *store, string user_id, const string& bucket_name
 
   cls_user_bucket bucket;
   bucket.name = bucket_name;
-  rgw_obj oid(store->zone.user_uid_pool, buckets_obj_id);
+  rgw_obj oid(store->zone.user_uid_vol, buckets_obj_id);
   ret = store->cls_user_remove_bucket(oid, bucket);
   if (ret < 0) {
     ldout(store->ctx(), 0) << "ERROR: error removing bucket from directory: "
@@ -309,8 +309,8 @@ void check_bad_user_bucket_mapping(RGWRados *store, const string& user_id, bool 
       rgw_bucket& actual_bucket = bucket_info.bucket;
 
       if (actual_bucket.name.compare(bucket.name) != 0 ||
-	  actual_bucket.data_pool.compare(bucket.data_pool) != 0 ||
-	  actual_bucket.index_pool.compare(bucket.index_pool) != 0 ||
+	  actual_bucket.data_vol.compare(bucket.data_vol) != 0 ||
+	  actual_bucket.index_vol.compare(bucket.index_vol) != 0 ||
 	  actual_bucket.marker.compare(bucket.marker) != 0 ||
 	  actual_bucket.bucket_id.compare(bucket.bucket_id) != 0) {
 	cout << "bucket info mismatch: expected " << actual_bucket << " got " << bucket << std::endl;
@@ -949,8 +949,8 @@ static int bucket_stats(RGWRados *store, std::string&  bucket_name, Formatter *f
 
   formatter->open_object_section("stats");
   formatter->dump_string("bucket", bucket.name);
-  formatter->dump_string("pool", bucket.data_pool);
-  formatter->dump_string("index_pool", bucket.index_pool);
+  formatter->dump_string("pool", bucket.data_vol);
+  formatter->dump_string("index_vol", bucket.index_vol);
   formatter->dump_string("id", bucket.bucket_id);
   formatter->dump_string("marker", bucket.marker);
   formatter->dump_string("owner", bucket_info.owner);
@@ -1543,7 +1543,7 @@ public:
     return 0;
   }
 
-  void get_pool_and_oid(RGWRados *store, const string& key, rgw_bucket& bucket, string& oid_t) {
+  void get_vol_and_oid(RGWRados *store, const string& key, rgw_bucket& bucket, string& oid_t) {
     oid_t = key;
     bucket = store->zone.domain_root;
   }
@@ -1653,12 +1653,12 @@ public:
 	ldout(store->ctx(), 0) << "ERROR: select_bucket_placement() returned " << ret << dendl;
 	return ret;
       }
-      bci.info.bucket.data_pool = bucket.data_pool;
-      bci.info.bucket.index_pool = bucket.index_pool;
+      bci.info.bucket.data_vol = bucket.data_vol;
+      bci.info.bucket.index_vol = bucket.index_vol;
     } else {
       /* existing bucket, keep its placement pools */
-      bci.info.bucket.data_pool = old_bci.info.bucket.data_pool;
-      bci.info.bucket.index_pool = old_bci.info.bucket.index_pool;
+      bci.info.bucket.data_vol = old_bci.info.bucket.data_vol;
+      bci.info.bucket.index_vol = old_bci.info.bucket.index_vol;
     }
 
     // are we actually going to perform this put, or is it too old?
@@ -1701,7 +1701,7 @@ public:
     return rgw_bucket_instance_remove_entry(store, entry, &info.objv_tracker);
   }
 
-  void get_pool_and_oid(RGWRados *store, const string& key, rgw_bucket& bucket, string& oid_t) {
+  void get_vol_and_oid(RGWRados *store, const string& key, rgw_bucket& bucket, string& oid_t) {
     oid_t = RGW_BUCKET_INSTANCE_MD_PREFIX + key;
     bucket = store->zone.domain_root;
   }

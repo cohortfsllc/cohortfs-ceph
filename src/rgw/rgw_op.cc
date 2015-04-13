@@ -809,7 +809,7 @@ public:
     RGWGetDataCB(_cct), op(_op) {}
   virtual ~RGWGetObj_CB() {}
 
-  int handle_data(bufferlist& bl, off_t bl_ofs, off_t bl_len) {
+  int handle_data(bufferlist& bl, off_t bl_ofs, off_t bl_len, wait_ref& cb) {
     return op->get_data_cb(bl, bl_ofs, bl_len);
   }
 };
@@ -1558,16 +1558,16 @@ void RGWPutObj::execute()
     if (!len)
       break;
 
-    void *handle;
+    wait_ref cb(std::make_unique<rados::CB_Waiter>());
     const unsigned char *data_ptr = (const unsigned char *)data.c_str();
 
-    ret = processor->handle_data(data, ofs, &handle);
+    ret = processor->handle_data(data, ofs, cb);
     if (ret < 0)
       goto done;
 
     hash.Update(data_ptr, len);
 
-    ret = processor->throttle_data(handle);
+    ret = processor->throttle_data(cb);
     if (ret < 0)
       goto done;
 
@@ -1691,16 +1691,16 @@ void RGWPostObj::execute()
      if (!len)
        break;
 
-     void *handle;
+     wait_ref cb(std::make_unique<rados::CB_Waiter>());
      const unsigned char *data_ptr = (const unsigned char *)data.c_str();
 
-     ret = processor->handle_data(data, ofs, &handle);
+     ret = processor->handle_data(data, ofs, cb);
      if (ret < 0)
        goto done;
 
      hash.Update(data_ptr, len);
 
-     ret = processor->throttle_data(handle);
+     ret = processor->throttle_data(cb);
      if (ret < 0)
        goto done;
 

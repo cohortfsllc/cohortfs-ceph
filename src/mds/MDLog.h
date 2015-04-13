@@ -213,10 +213,10 @@ public:
   void trim(int max=-1);
 
 private:
-  void write_head(OSDC::op_callback&& onfinish);
+  void write_head(rados::op_callback&& onfinish);
 
 public:
-  void create(VolumeRef &v, OSDC::op_callback&& onfinish);  // fresh, empty log!
+  void create(VolumeRef &v, rados::op_callback&& onfinish);  // fresh, empty log!
   void open(VolumeRef &v, Context *onopen);   // append() or replay() to follow!
   void append();
   void replay(VolumeRef &v, Context *onfinish);

@@ -56,7 +56,7 @@
 
 #include <blkid/blkid.h>
 
-#include "librados/RadosClient.h"
+#include "osdc/RadosClient.h"
 
 #define MAX_SECRET_LEN 1000
 #define MAX_VOL_NAME_SIZE 128
@@ -320,7 +320,7 @@ static void set_vol_image_name(const string& orig_vol, const string& orig_img,
   new_img = string(t.begin() + sep + 1, t.end());
 }
 
-static void do_import(librados::RadosClient& rc,
+static void do_import(rados::RadosClient& rc,
 		      const shared_ptr<const Volume>& v, const string& imgname,
 		      const string& path)
 {
@@ -462,7 +462,7 @@ int main(int argc, const char **argv)
   cct = global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT,
 		    CODE_ENVIRONMENT_UTILITY, 0);
 
-  librados::RadosClient rados(cct);
+  rados::RadosClient rc(cct);
 
   std::string volname, dest_volname, imgname, destname, path;
   uint64_t size = 0;  // in bytes
@@ -602,7 +602,7 @@ if (!set_conf_param(v, p1, p2)) { \
     return EXIT_FAILURE;
   }
 
-  if (rados.connect() < 0) {
+  if (rc.connect() < 0) {
     cerr << "rbd: couldn't connect to the cluster!" << std::endl;
     return EXIT_FAILURE;
   }
@@ -615,7 +615,7 @@ if (!set_conf_param(v, p1, p2)) { \
 
   shared_ptr<const Volume> vol, destvol;
   if (!volname.empty()) {
-    vol = rados.lookup_volume(volname);
+    vol = rc.lookup_volume(volname);
     if (!vol) {
       cerr << "rbd: volume " << volname << " does not exist." << std::endl;
       exit(EXIT_FAILURE);
@@ -627,7 +627,7 @@ if (!set_conf_param(v, p1, p2)) { \
   }
 
   if (!dest_volname.empty()) {
-    destvol = rados.lookup_volume(dest_volname);
+    destvol = rc.lookup_volume(dest_volname);
     if (!destvol) {
       cerr << "rbd: volume " << volname << " does not exist." << std::endl;
       exit(EXIT_FAILURE);
@@ -680,9 +680,9 @@ if (!set_conf_param(v, p1, p2)) { \
 	 opt_cmd == OPT_EXPORT || opt_cmd == OPT_COPY)) {
       if (opt_cmd == OPT_EXPORT || opt_cmd == OPT_EXPORT ||
 	  opt_cmd == OPT_COPY) {
-	image = Image(&rados, vol, imgname, librbd::read_only);
+	image = Image(&rc, vol, imgname, librbd::read_only);
       } else {
-	image = Image(&rados, vol, imgname);
+	image = Image(&rc, vol, imgname);
       }
     }
   } catch (std::error_condition& e) {
@@ -712,18 +712,18 @@ if (!set_conf_param(v, p1, p2)) { \
     switch (opt_cmd) {
     case OPT_CREATE:
       errstr = "create of image " + vol->name + "/" + imgname;
-      Image::create(&rados, vol, imgname, size);
+      Image::create(&rc, vol, imgname, size);
       break;
 
     case OPT_RENAME:
       errstr = "rename of image " + vol->name + "/" + imgname + " to " +
 	vol->name + "/" + destname;
-      Image::rename(&rados, vol, imgname, destname);
+      Image::rename(&rc, vol, imgname, destname);
       break;
 
     case OPT_RM:
       errstr = "delete of image " + vol->name + "/" + imgname;
-      Image::remove(&rados, vol, imgname);
+      Image::remove(&rc, vol, imgname);
       break;
 
     case OPT_RESIZE:
@@ -740,15 +740,15 @@ if (!set_conf_param(v, p1, p2)) { \
     case OPT_IMPORT:
       errstr = "import of image " + destvol->name + "/" + imgname + " from " +
 	"path";
-      do_import(rados, destvol, destname, path);
+      do_import(rc, destvol, destname, path);
       break;
 
     case OPT_COPY:
     {
       errstr = "copy of image " + vol->name + "/" + imgname + " to " +
 	destvol->name + "/" + destname;
-      Image::create(&rados, destvol, destname, image.get_size());
-      Image dest(&rados, destvol, destname);
+      Image::create(&rc, destvol, destname, image.get_size());
+      Image dest(&rc, destvol, destname);
       image.copy(image, dest);
     }
     break;

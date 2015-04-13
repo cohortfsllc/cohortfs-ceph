@@ -17,7 +17,6 @@
 
 #include "msg/Message.h"
 #include <string>
-using namespace std;
 
 class MMDSFragmentNotify : public Message {
   inodeno_t ino;

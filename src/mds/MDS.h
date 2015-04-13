@@ -39,10 +39,10 @@
 #define CEPH_MDS_PROTOCOL    23 /* cluster internal */
 
 
-namespace OSDC {
+namespace rados {
   class Objecter;
 };
-using OSDC::Objecter;
+using rados::Objecter;
 
 class filepath;
 

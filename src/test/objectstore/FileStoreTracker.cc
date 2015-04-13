@@ -176,7 +176,7 @@ void FileStoreTracker::clone(const obj_desc_t &from,
   }
 
   uint16_t c_fix, o_fix;
-  uint16_t c_tix, o_tix;
+  uint16_t c_tix, o_tix = 0;
   if (to_contents.exists()) {
     c_tix = out->t->push_col(get<0>(to));
     o_tix = out->t->push_oid(hoid_t(get<1>(to)));

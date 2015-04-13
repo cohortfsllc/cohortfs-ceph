@@ -82,7 +82,7 @@ public:
   }
 
 protected:
-  virtual void get_pool_and_oid(RGWRados *store, const string& key, rgw_bucket& bucket, string& oid_t) = 0;
+  virtual void get_vol_and_oid(RGWRados *store, const string& key, rgw_bucket& bucket, string& oid_t) = 0;
   /**
    * Compare an incoming versus on-disk tag/version+mtime combo against
    * the sync mode to see if the new one should replace the on-disk one.

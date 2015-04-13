@@ -16,7 +16,6 @@
 #include "common/Formatter.h"
 
 #include "bencher.h"
-#include "rados_backend.h"
 #include "detailed_stat_collector.h"
 #include "distribution.h"
 #include "global/global_init.h"

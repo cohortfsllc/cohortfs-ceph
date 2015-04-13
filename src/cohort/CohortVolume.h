@@ -59,9 +59,9 @@ protected:
 			  PlacerRef placer,
 			  std::stringstream& ss);
 
-  virtual std::unique_ptr<ObjOp> op() const;
+  virtual std::unique_ptr<rados::ObjOp> op() const;
 
-  class StripulatedOp : public ObjOp {
+  class StripulatedOp : public rados::ObjOp {
     friend CohortVolume;
     const Placer& pl;
     // ops[n][m] is the mth operation in the nth stride
@@ -91,6 +91,7 @@ protected:
     virtual void add_obj(const oid_t& o);
     virtual void add_single_return(bufferlist* bl, int* rval = NULL,
 				   Context *ctx = NULL);
+    virtual void add_single_return(std::function<void(int, bufferlist&&)>&& f);
 
     virtual void add_metadata(const bufferlist& bl);
     virtual void add_metadata_range(const uint64_t off, const uint64_t len);
@@ -105,6 +106,9 @@ protected:
     virtual void add_call(const string &cname, const string &method,
 			  const bufferlist &indata, bufferlist *const outbl,
 			  Context *const ctx, int *const prval);
+    virtual void add_call(const string &cname, const string &method,
+			  const bufferlist &indata,
+			  std::function<void(int, bufferlist&&)>&& cb);
 
     virtual void add_watch(const uint64_t cookie, const uint64_t ver,
 			   const uint8_t flag, const bufferlist& inbl);

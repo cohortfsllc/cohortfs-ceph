@@ -389,7 +389,7 @@ public:
 	Transaction t;
 	t.remove_collection(cid);
 	cerr << "remove collection" << std::endl;
-	int r = store->apply_transaction(t);
+	store->apply_transaction(t);
       }
     }
   }

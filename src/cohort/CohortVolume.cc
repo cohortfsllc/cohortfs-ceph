@@ -142,6 +142,28 @@ void CohortVolume::StripulatedOp::add_single_return(bufferlist* bl,
   ops[0].back().out_rval = rval;
 }
 
+// This will go away in a few days
+struct C_StupidStupid : public Context {
+  std::function<void(int, bufferlist&&)> f;
+  bufferlist bl;
+
+  C_StupidStupid(std::function<void(int, bufferlist&&)>&& _f) {
+    f.swap(_f);
+  }
+  void finish(int r) {
+    f(r, std::move(bl));
+  }
+};
+
+void CohortVolume::StripulatedOp::add_single_return(
+  std::function<void(int, bufferlist&&)>&& f)
+{
+  C_StupidStupid* c  = new C_StupidStupid(std::move(f));
+  ops[0].back().ctx = c;
+  ops[0].back().out_bl = &c->bl;
+  ops[0].back().out_rval = nullptr;
+}
+
 void CohortVolume::StripulatedOp::add_metadata(const bufferlist& bl)
 {
   budget += bl.length() * ops.size();
@@ -452,6 +474,35 @@ void CohortVolume::StripulatedOp::add_call(const string &cname,
     osd_op.out_rval = rval;
   }
 }
+void CohortVolume::StripulatedOp::add_call(const string &cname,
+					   const string &method,
+					   const bufferlist &indata,
+					   std::function<void(
+					     int,bufferlist&&)>&& cb)
+{
+  bool das_macht_nichts = false;
+  // Calls are hard.
+  for (auto &v : ops) {
+    OSDOp &osd_op = v.back();
+    osd_op.op.cls.class_len = cname.length();
+    osd_op.op.cls.method_len = method.length();
+    osd_op.op.cls.indata_len = indata.length();
+    osd_op.indata.append(cname.data(), osd_op.op.cls.class_len);
+    osd_op.indata.append(method.data(), osd_op.op.cls.method_len);
+    osd_op.indata.append(indata);
+    if (das_macht_nichts) {
+      osd_op.ctx = nullptr;
+      osd_op.out_bl = nullptr;
+      osd_op.out_rval = nullptr;
+    } else {
+      C_StupidStupid* c = new C_StupidStupid(std::move(cb));
+      osd_op.ctx = c;
+      osd_op.out_bl = &c->bl;
+      osd_op.out_rval = nullptr;
+      das_macht_nichts = true;
+    }
+  }
+}
 
 void CohortVolume::StripulatedOp::add_watch(const uint64_t cookie,
 						   const uint64_t ver,
@@ -588,16 +639,16 @@ void CohortVolume::StripulatedOp::add_stat_cb(
   gather.activate();
 }
 
-unique_ptr<ObjOp> CohortVolume::StripulatedOp::clone()
+rados::ObjectOperation CohortVolume::StripulatedOp::clone()
 {
-  return unique_ptr<ObjOp>(new StripulatedOp(*this));
+  return rados::ObjectOperation(new StripulatedOp(*this));
 }
 
 
-unique_ptr<ObjOp> CohortVolume::op() const
+rados::ObjectOperation CohortVolume::op() const
 {
   assert(placer->is_attached());
-  return unique_ptr<ObjOp>(new StripulatedOp(*placer));
+  return rados::ObjectOperation(new StripulatedOp(*placer));
 }
 
 void CohortVolume::StripulatedOp::realize(

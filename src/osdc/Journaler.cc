@@ -19,6 +19,10 @@
 #include "osdc/Journaler.h"
 #include "common/errno.h"
 
+using rados::op_callback;
+using rados::read_callback;
+using rados::stat_callback;
+
 #define dout_subsys ceph_subsys_journaler
 #undef dout_prefix
 #define dout_prefix *_dout << objecter->messenger->get_myname() << ".journaler" << (readonly ? "(ro) ":"(rw) ")
@@ -64,9 +68,9 @@ ostream& operator<<(ostream& out, Journaler::Header &h)
 
 class Journaler::ReProbe {
   Journaler *ls;
-  OSDC::op_callback onfinish;
+  op_callback onfinish;
 public:
-  ReProbe(Journaler *l, OSDC::op_callback&& onfinish_) :
+  ReProbe(Journaler *l, op_callback&& onfinish_) :
     ls(l), onfinish(std::move(onfinish_)) {}
   void operator()(int r, uint64_t end, ceph::real_time) {
     ls->_finish_reprobe(r, end, std::move(onfinish));
@@ -94,7 +98,7 @@ void Journaler::recover(Context *onread)
     });
 }
 
-void Journaler::read_head(OSDC::read_callback&& on_finish)
+void Journaler::read_head(read_callback&& on_finish)
 {
   assert(state == STATE_READHEAD || state == STATE_REREADHEAD);
 
@@ -110,7 +114,7 @@ void Journaler::read_head(OSDC::read_callback&& on_finish)
  * Also, don't call this until the Journaler has finished its recovery and has
  * gone STATE_ACTIVE!
  */
-void Journaler::reread_head(OSDC::op_callback&& onfinish)
+void Journaler::reread_head(op_callback&& onfinish)
 {
   ldout(cct, 10) << "reread_head" << dendl;
   assert(state == STATE_ACTIVE);
@@ -123,7 +127,7 @@ void Journaler::reread_head(OSDC::op_callback&& onfinish)
 }
 
 void Journaler::_finish_reread_head(int r, bufferlist& bl,
-				    OSDC::op_callback&& finish)
+				    op_callback&& finish)
 {
   //read on-disk header into
   assert(bl.length() || r < 0 );
@@ -203,16 +207,15 @@ void Journaler::_finish_read_head(int r, bufferlist& bl)
     });
 }
 
-void Journaler::probe(OSDC::stat_callback&& finish)
+void Journaler::probe(stat_callback&& finish)
 {
   ldout(cct, 1) << "probing for end of the log" << dendl;
   assert(state == STATE_PROBING || state == STATE_REPROBING);
   oid_t oid = file_oid(ino, 0);
-  objecter->stat(oid, volume, CEPH_OSD_FLAG_RWORDERED,
-		 std::move(finish));
+  objecter->stat(oid, volume, std::move(finish));
 }
 
-void Journaler::reprobe(OSDC::op_callback&& finish)
+void Journaler::reprobe(op_callback&& finish)
 {
   ldout(cct, 10) << "reprobe" << dendl;
   assert(state == STATE_ACTIVE);
@@ -223,7 +226,7 @@ void Journaler::reprobe(OSDC::op_callback&& finish)
 
 
 void Journaler::_finish_reprobe(int r, uint64_t new_end,
-				OSDC::op_callback&& onfinish)
+				op_callback&& onfinish)
 {
   assert(new_end >= write_pos || r < 0);
   ldout(cct, 1) << "_finish_reprobe new_end = " << new_end
@@ -264,7 +267,7 @@ out:
   finish_contexts(vs, r);
 }
 
-void Journaler::reread_head_and_probe(OSDC::op_callback&& onfinish)
+void Journaler::reread_head_and_probe(op_callback&& onfinish)
 {
   assert(state == STATE_ACTIVE);
   reread_head([this, &onfinish](int r) {
@@ -273,7 +276,7 @@ void Journaler::reread_head_and_probe(OSDC::op_callback&& onfinish)
 };
 
 void Journaler::_finish_reread_head_and_probe(int r,
-					      OSDC::op_callback&& onfinish)
+					      op_callback&& onfinish)
 {
   assert(!r); //if we get an error, we're boned
   reprobe(std::move(onfinish));
@@ -286,15 +289,15 @@ class Journaler::WriteHead {
 public:
   Journaler *ls;
   Header h;
-  OSDC::op_callback oncommit;
-  WriteHead(Journaler *l, Header& h_, OSDC::op_callback&& c)
+  op_callback oncommit;
+  WriteHead(Journaler *l, Header& h_, op_callback&& c)
     : ls(l), h(h_), oncommit(std::move(c)) {}
   void operator()(int r) {
     ls->_finish_write_head(r, h, std::move(oncommit));
   }
 };
 
-void Journaler::write_head(OSDC::op_callback&& oncommit)
+void Journaler::write_head(op_callback&& oncommit)
 {
   assert(!readonly);
   assert(state == STATE_ACTIVE);
@@ -310,12 +313,12 @@ void Journaler::write_head(OSDC::op_callback&& oncommit)
   ::encode(last_written, bl);
 
   oid_t oid = file_oid(ino, 0);
-  objecter->write(oid, volume, 0, bl.length(), bl, ceph::real_clock::now(), 0,
-		  NULL, WriteHead(this, last_written, std::move(oncommit)));
+  objecter->write(oid, volume, 0, bl.length(), bl, nullptr,
+		  WriteHead(this, last_written, std::move(oncommit)));
 }
 
 void Journaler::_finish_write_head(int r, Header &wrote,
-				   OSDC::op_callback&& oncommit)
+				   op_callback&& oncommit)
 {
   if (r < 0) {
     lderr(cct) << "_finish_write_head got " << cpp_strerror(r) << dendl;
@@ -508,8 +511,7 @@ void Journaler::_do_flush(unsigned amount)
   }
 
   objecter->write(file_oid(ino, 0), volume, flush_pos, len, write_bl,
-		  ceph::real_clock::now(), 0, nullptr,
-		  Flush(this, flush_pos, now));
+		  nullptr, Flush(this, flush_pos, now));
 
   flush_pos += len;
   assert(write_buf.length() == write_pos - flush_pos);
@@ -632,7 +634,7 @@ void Journaler::_issue_prezero()
 		     << len << " (partial period)" << dendl;
     }
     objecter->zero(file_oid(ino, 0), volume, prezeroing_pos, len,
-		   ceph::real_clock::now(), 0, NULL,
+		   nullptr,
 		   [=](int r) {
 		     _prezeroed(r, prezeroing_pos, len);
 		   });
@@ -796,7 +798,7 @@ void Journaler::_issue_read(uint64_t len)
     uint64_t l = e - rp;
     if (l > len)
       l = len;
-    objecter->read(file_oid(ino, 0), volume, rp, l, 0,
+    objecter->read(file_oid(ino, 0), volume, rp, l,
 		   [=](int r, bufferlist&& bl){
 		     _finish_read(r, rp, bl);
 		   });
@@ -1000,8 +1002,9 @@ void Journaler::trim()
 
   // delete range of objects
   // XXX: does this release storage?  Maybe need volume->purge_range ?
-  objecter->zero(file_oid(ino, 0), volume, trimming_pos, trim_to - trimming_pos,
-		 ceph::real_clock::now(), 0, NULL,
+  objecter->zero(file_oid(ino, 0), volume, trimming_pos, trim_to
+		 - trimming_pos,
+		 nullptr,
 		 [=](int r){
 		   _trim_finish(r, trim_to);
 		 });
@@ -1040,7 +1043,7 @@ void Journaler::handle_write_error(int r)
   lderr(cct) << "handle_write_error " << cpp_strerror(r) << dendl;
   if (on_write_error) {
     on_write_error->complete(r);
-    on_write_error = NULL;
+    on_write_error = nullptr;
   } else {
     assert(0 == "unhandled write error");
   }

@@ -28,7 +28,6 @@
 #define dout_prefix *_dout << "mds." << (mds ? mds->get_nodeid() : -1) << "." \
   << table_name << ": "
 
-
 class MT_Save {
   MDSTable *ida;
   version_t version;
@@ -70,8 +69,7 @@ void MDSTable::save(Context *onfinish, version_t v)
   // write (async)
   oid_t oid = get_object_name();
   VolumeRef volume(mds->get_metadata_volume());
-  mds->objecter->write_full(oid, volume, bl, ceph::real_clock::now(), 0,
-			    nullptr, MT_Save(this, version));
+  mds->objecter->write_full(oid, volume, bl, nullptr, MT_Save(this, version));
 }
 
 void MDSTable::save_2(int r, version_t v)
@@ -114,9 +112,8 @@ class MT_Load {
 public:
   MDSTable *ida;
   Context *onfinish;
-  bufferlist bl;
   MT_Load(MDSTable *i, Context *o) : ida(i), onfinish(o) {}
-  void operator()(int r) {
+  void operator()(int r, bufferlist&& bl) {
     ida->load_2(r, bl, onfinish);
   }
 };
@@ -138,11 +135,9 @@ void MDSTable::load(Context *onfinish)
   assert(is_undef());
   state = STATE_OPENING;
 
-  OSDC::op_callback c(MT_Load(this, onfinish));
   oid_t oid = get_object_name();
   VolumeRef volume(mds->get_metadata_volume());
-  mds->objecter->read_full(oid, volume, &c.target<MT_Load>()->bl, 0,
-			   std::move(c));
+  mds->objecter->read_full(oid, volume, MT_Load(this, onfinish));
 }
 
 void MDSTable::load_2(int r, bufferlist& bl, Context *onfinish)

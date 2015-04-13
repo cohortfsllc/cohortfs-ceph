@@ -16,7 +16,7 @@
 #include <algorithm>
 #include <sstream>
 
-#include "librados/RadosClient.h"
+#include "osdc/RadosClient.h"
 
 #include "global/global_init.h"
 #include "common/ceph_argparse.h"
@@ -31,61 +31,71 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "test/librados/test.h"
 #include "common/errno.h"
 #include "include/interval_set.h"
 #include "include/stringify.h"
 #include "librbd/Image.h"
 
 using namespace std;
-using namespace librados;
+using namespace rados;
 using namespace librbd;
-static CephContext* cct;
+
+std::string get_temp_volume_name()
+{
+  char hostname[80];
+  char out[80];
+  memset(hostname, 0, sizeof(hostname));
+  memset(out, 0, sizeof(out));
+  gethostname(hostname, sizeof(hostname)-1);
+  static int num = 1;
+  sprintf(out, "%s-%d-%d", hostname, getpid(), num);
+  num++;
+  std::string prefix("test-rados-api-");
+  prefix += out;
+  return prefix;
+}
 
 TEST(LibRBD, CreateAndStat)
 {
-  CephContext *cct = test_init(CODE_ENVIRONMENT_UTILITY);
-  librados::RadosClient rados(cct);
-  rados.connect();
+  RadosClient rc;
+  rc.connect();
   string volume_name = get_temp_volume_name();
-  ASSERT_EQ(0, rados.vol_create(volume_name));
-  VolumeRef v = rados.lookup_volume(volume_name);
+  ASSERT_EQ(0, rc.vol_create(volume_name));
+  VolumeRef v = rc.lookup_volume(volume_name);
   ASSERT_TRUE(!!v);
 
   const string name = "testimg";
   const uint64_t demanded_size = 2 << 20;
   uint64_t actual_size = 0;
 
-  ASSERT_NO_THROW(Image::create(&rados, v, name, demanded_size));
+  ASSERT_NO_THROW(Image::create(&rc, v, name, demanded_size));
   librbd::Image* image;
-  ASSERT_NO_THROW(image = new Image(&rados, v, name));
+  ASSERT_NO_THROW(image = new Image(&rc, v, name));
   ASSERT_NO_THROW(actual_size = image->get_size());
   std::cout << "image has size " << actual_size << "." << std::endl;
   ASSERT_EQ(demanded_size, actual_size);
   delete image;
-  ASSERT_NO_THROW(Image::remove(&rados, v, name));
-  ASSERT_EQ(0, rados.vol_delete(volume_name));
-  rados.shutdown();
-  common_cleanup(cct);
+  ASSERT_NO_THROW(Image::remove(&rc, v, name));
+  ASSERT_EQ(0, rc.vol_delete(volume_name));
+  rc.shutdown();
 }
 
 TEST(LibRBD, ResizeAndStat)
 {
-  CephContext *cct = test_init(CODE_ENVIRONMENT_UTILITY);
-  librados::RadosClient rados(cct);
-  rados.connect();
+  RadosClient rc;
+  rc.connect();
   string volume_name = get_temp_volume_name();
-  ASSERT_EQ(0, rados.vol_create(volume_name));
-  VolumeRef v = rados.lookup_volume(volume_name);
+  ASSERT_EQ(0, rc.vol_create(volume_name));
+  VolumeRef v = rc.lookup_volume(volume_name);
   ASSERT_TRUE(!!v);
 
   const string name = "testimg";
   const uint64_t demanded_size = 2 << 20;
   uint64_t actual_size;
 
-  ASSERT_NO_THROW(Image::create(&rados, v, name, demanded_size));
+  ASSERT_NO_THROW(Image::create(&rc, v, name, demanded_size));
   librbd::Image* image;
-  ASSERT_NO_THROW(image = new Image(&rados, v, name));
+  ASSERT_NO_THROW(image = new Image(&rc, v, name));
   ASSERT_NO_THROW(image->resize(demanded_size * 4));
   ASSERT_NO_THROW(actual_size = image->get_size());
   ASSERT_EQ(actual_size, demanded_size * 4);
@@ -95,10 +105,9 @@ TEST(LibRBD, ResizeAndStat)
   ASSERT_EQ(actual_size, demanded_size / 2);
 
   delete image;
-  ASSERT_NO_THROW(Image::remove(&rados, v, name));
-  ASSERT_EQ(0, rados.vol_delete(volume_name));
-  rados.shutdown();
-  common_cleanup(cct);
+  ASSERT_NO_THROW(Image::remove(&rc, v, name));
+  ASSERT_EQ(0, rc.vol_delete(volume_name));
+  rc.shutdown();
 }
 
 static constexpr size_t TEST_IO_SIZE = 512;
@@ -176,20 +185,19 @@ void read_test_data(const Image& image, const bufferlist& expected,
 
 TEST(LibRBD, TestIO)
 {
-  CephContext *cct = test_init(CODE_ENVIRONMENT_UTILITY);
-  librados::RadosClient rados(cct);
-  rados.connect();
+  RadosClient rc;
+  rc.connect();
   string volume_name = get_temp_volume_name();
-  ASSERT_EQ(0, rados.vol_create(volume_name));
-  VolumeRef v = rados.lookup_volume(volume_name);
+  ASSERT_EQ(0, rc.vol_create(volume_name));
+  VolumeRef v = rc.lookup_volume(volume_name);
   ASSERT_TRUE(!!v);
 
   const string& name = "testimg";
   uint64_t size = 2 << 20;
 
   Image* image;
-  ASSERT_NO_THROW(Image::create(&rados, v, name, size));
-  ASSERT_NO_THROW(image = new Image(&rados, v, name));
+  ASSERT_NO_THROW(Image::create(&rc, v, name, size));
+  ASSERT_NO_THROW(image = new Image(&rc, v, name));
 
   bufferlist test_data(TEST_IO_SIZE);
   bufferlist zero_data(TEST_IO_SIZE);
@@ -235,47 +243,43 @@ TEST(LibRBD, TestIO)
   //ASSERT_EQ(-EINVAL, rbd_aio_read(image, info.size, 1, test_data, comp));
 
   delete image;
-  ASSERT_NO_THROW(Image::remove(&rados, v, name));
-  ASSERT_EQ(0, rados.vol_delete(volume_name));
-  rados.shutdown();
-  common_cleanup(cct);
+  ASSERT_NO_THROW(Image::remove(&rc, v, name));
+  ASSERT_EQ(0, rc.vol_delete(volume_name));
+  rc.shutdown();
 }
 
 TEST(LibRBD, TestEmptyDiscard)
 {
-  CephContext *cct = test_init(CODE_ENVIRONMENT_UTILITY);
-  librados::RadosClient rados(cct);
-  rados.connect();
+  RadosClient rc;
+  rc.connect();
   string volume_name = get_temp_volume_name();
-  ASSERT_EQ(0, rados.vol_create(volume_name));
-  VolumeRef v = rados.lookup_volume(volume_name);
+  ASSERT_EQ(0, rc.vol_create(volume_name));
+  VolumeRef v = rc.lookup_volume(volume_name);
   ASSERT_TRUE(!!v);
 
   Image* image = nullptr;
   const char *name = "testimg";
   uint64_t size = 20 << 20;
 
-  ASSERT_NO_THROW(Image::create(&rados, v, name, size));
-  ASSERT_NO_THROW(image = new Image(&rados, v, name));
+  ASSERT_NO_THROW(Image::create(&rc, v, name, size));
+  ASSERT_NO_THROW(image = new Image(&rc, v, name));
 
   aio_discard_test_data(*image, 0, 1*1024*1024);
   aio_discard_test_data(*image, 0, 4*1024*1024);
 
   delete image;
-  ASSERT_NO_THROW(Image::remove(&rados, v, name));
-  ASSERT_EQ(0, rados.vol_delete(volume_name));
-  rados.shutdown();
-  common_cleanup(cct);
+  ASSERT_NO_THROW(Image::remove(&rc, v, name));
+  ASSERT_EQ(0, rc.vol_delete(volume_name));
+  rc.shutdown();
 }
 
 TEST(LibRBD, FlushAio)
 {
-  CephContext *cct = test_init(CODE_ENVIRONMENT_UTILITY);
-  librados::RadosClient rados(cct);
-  rados.connect();
+  RadosClient rc;
+  rc.connect();
   string volume_name = get_temp_volume_name();
-  ASSERT_EQ(0, rados.vol_create(volume_name));
-  VolumeRef v = rados.lookup_volume(volume_name);
+  ASSERT_EQ(0, rc.vol_create(volume_name));
+  VolumeRef v = rc.lookup_volume(volume_name);
   ASSERT_TRUE(!!v);
 
   bufferlist test_data(TEST_IO_SIZE);
@@ -287,12 +291,12 @@ TEST(LibRBD, FlushAio)
 
   const string& name = "testimg";
   uint64_t size = 20 << 20;
-  ASSERT_NO_THROW(Image::create(&rados, v, name, size));
+  ASSERT_NO_THROW(Image::create(&rc, v, name, size));
   {
     Image image;
     uint64_t size = 2 << 20;
     size_t num_aios = 256;
-    ASSERT_NO_THROW(image = Image(&rados, v, name));
+    ASSERT_NO_THROW(image = Image(&rc, v, name));
 
     for (i = 0; i < num_aios; ++i) {
       uint64_t offset = rand() % (size - TEST_IO_SIZE);
@@ -301,10 +305,9 @@ TEST(LibRBD, FlushAio)
     ASSERT_NO_THROW(image.flush());
   }
 
-  ASSERT_NO_THROW(Image::remove(&rados, v, name));
-  ASSERT_EQ(0, rados.vol_delete(volume_name));
-  rados.shutdown();
-  common_cleanup(cct);
+  ASSERT_NO_THROW(Image::remove(&rc, v, name));
+  ASSERT_EQ(0, rc.vol_delete(volume_name));
+  rc.shutdown();
 }
 
 int main(int argc, char **argv)
@@ -313,9 +316,6 @@ int main(int argc, char **argv)
 
   vector<const char*> args;
   argv_to_vec(argc, (const char **)argv, args);
-
-  cct = global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
-  common_init_finish(cct);
 
   return RUN_ALL_TESTS();
 }

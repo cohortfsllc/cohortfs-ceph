@@ -3,29 +3,29 @@
 #include <errno.h>
 
 #include "include/types.h"
+#include "osdc/RadosClient.h"
 #include "cls/statelog/cls_statelog_ops.h"
-#include "include/rados/librados.hpp"
 
 
-using namespace librados;
+using namespace rados;
 
 
-void cls_statelog_add(librados::ObjectWriteOperation& op, list<cls_statelog_entry>& entries)
+void cls_statelog_add(ObjOpUse op, list<cls_statelog_entry>& entries)
 {
   bufferlist in;
   cls_statelog_add_op call;
   call.entries = entries;
   ::encode(call, in);
-  op.exec("statelog", "add", in);
+  op->call("statelog", "add", in);
 }
 
-void cls_statelog_add(librados::ObjectWriteOperation& op, cls_statelog_entry& entry)
+void cls_statelog_add(ObjOpUse op, cls_statelog_entry& entry)
 {
   bufferlist in;
   cls_statelog_add_op call;
   call.entries.push_back(entry);
   ::encode(call, in);
-  op.exec("statelog", "add", in);
+  op->call("statelog", "add", in);
 }
 
 void cls_statelog_add_prepare_entry(cls_statelog_entry& entry,
@@ -42,7 +42,7 @@ void cls_statelog_add_prepare_entry(cls_statelog_entry& entry,
   entry.data = bl;
 }
 
-void cls_statelog_add(librados::ObjectWriteOperation& op,
+void cls_statelog_add(ObjOpUse op,
 		      const string& client_id, const string& op_id,
 		      const string& object, const ceph::real_time& timestamp,
 		      uint32_t state, bufferlist& bl)
@@ -50,39 +50,42 @@ void cls_statelog_add(librados::ObjectWriteOperation& op,
 {
   cls_statelog_entry entry;
 
-  cls_statelog_add_prepare_entry(entry, client_id, op_id, object, timestamp, state, bl);
+  cls_statelog_add_prepare_entry(entry, client_id, op_id, object, timestamp,
+				 state, bl);
   cls_statelog_add(op, entry);
 }
 
-void cls_statelog_remove_by_client(librados::ObjectWriteOperation& op, const string& client_id, const string& op_id)
+void cls_statelog_remove_by_client(ObjOpUse op, const string& client_id,
+				   const string& op_id)
 {
   bufferlist in;
   cls_statelog_remove_op call;
   call.client_id = client_id;
   call.op_id = op_id;
   ::encode(call, in);
-  op.exec("statelog", "remove", in);
+  op->call("statelog", "remove", in);
 }
 
-void cls_statelog_remove_by_object(librados::ObjectWriteOperation& op, const string& object, const string& op_id)
+void cls_statelog_remove_by_object(ObjOpUse op, const string& object,
+				   const string& op_id)
 {
   bufferlist in;
   cls_statelog_remove_op call;
   call.object = object;
   call.op_id = op_id;
   ::encode(call, in);
-  op.exec("statelog", "remove", in);
+  op->call("statelog", "remove", in);
 }
 
-class StateLogListCtx : public ObjectOperationCompletion {
+class StateLogListCB {
   list<cls_statelog_entry> *entries;
   string *marker;
   bool *truncated;
 public:
-  StateLogListCtx(list<cls_statelog_entry> *_entries, string *_marker,
-		  bool *_truncated) : entries(_entries), marker(_marker),
+  StateLogListCB(list<cls_statelog_entry> *_entries, string *_marker,
+		 bool *_truncated) : entries(_entries), marker(_marker),
 				      truncated(_truncated) {}
-  void handle_completion(int r, bufferlist& outbl) {
+  void operator()(int r, bufferlist&& outbl) {
     if (r >= 0) {
       cls_statelog_list_ret ret;
       try {
@@ -101,9 +104,11 @@ public:
   }
 };
 
-void cls_statelog_list(librados::ObjectReadOperation& op,
-		       const string& client_id, const string& op_id, const string& object, /* op_id may be empty, also one of client_id, object*/
-		       const string& in_marker, int max_entries, list<cls_statelog_entry>& entries,
+void cls_statelog_list(ObjOpUse op, const string& client_id,
+		       /* op_id may be empty, also one of client_id, object*/
+		       const string& op_id, const string& object,
+		       const string& in_marker, int max_entries,
+		       list<cls_statelog_entry>& entries,
 		       string *out_marker, bool *truncated)
 {
   bufferlist inbl;
@@ -116,10 +121,13 @@ void cls_statelog_list(librados::ObjectReadOperation& op,
 
   ::encode(call, inbl);
 
-  op.exec("statelog", "list", inbl, new StateLogListCtx(&entries, out_marker, truncated));
+  op->call("statelog", "list", inbl,
+	   StateLogListCB(&entries, out_marker, truncated));
 }
 
-void cls_statelog_check_state(librados::ObjectOperation& op, const string& client_id, const string& op_id, const string& object, uint32_t state)
+void cls_statelog_check_state(ObjOpUse op, const string& client_id,
+			      const string& op_id, const string& object,
+			      uint32_t state)
 {
   bufferlist inbl;
   bufferlist outbl;
@@ -131,6 +139,6 @@ void cls_statelog_check_state(librados::ObjectOperation& op, const string& clien
 
   ::encode(call, inbl);
 
-  op.exec("statelog", "check_state", inbl, NULL);
+  op->call("statelog", "check_state", inbl, NULL);
 }
 

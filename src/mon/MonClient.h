@@ -372,13 +372,13 @@ private:
     bufferlist *poutbl;
     string *prs;
     int *prval;
-    Context *onfinish;
+    std::function<void(int)> onfinish;
     uint64_t ontimeout;
 
     MonCommand(uint64_t t)
       : target_rank(-1),
 	tid(t),
-	poutbl(NULL), prs(NULL), prval(NULL), onfinish(NULL), ontimeout(0)
+	poutbl(NULL), prs(NULL), prval(NULL), onfinish(nullptr), ontimeout(0)
     {}
   };
   map<uint64_t,MonCommand*> mon_commands;
@@ -392,15 +392,15 @@ private:
 public:
   int start_mon_command(const vector<string>& cmd, const bufferlist& inbl,
 			bufferlist *outbl, string *outs,
-			Context *onfinish);
+			std::function<void(int)>&& onfinish);
   int start_mon_command(int mon_rank,
 			const vector<string>& cmd, const bufferlist& inbl,
 			bufferlist *outbl, string *outs,
-			Context *onfinish);
+			std::function<void(int)>&& onfinish);
   int start_mon_command(const string &mon_name,	 ///< mon name, with mon. prefix
 			const vector<string>& cmd, const bufferlist& inbl,
 			bufferlist *outbl, string *outs,
-			Context *onfinish);
+			std::function<void(int)>&& onfinish);
 
   // version requests
 public:

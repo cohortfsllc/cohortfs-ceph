@@ -87,11 +87,10 @@ void Dumper::dump(const char *dump_file)
 
   bufferlist bl;
 
-  OSDC::CB_Waiter w;
+  rados::CB_Waiter w;
   unique_lock l(lock);
   oid_t oid = file_oid(ino, 0);
-  objecter->read(oid, volume, start, len, &bl, 0,
-		 std::ref(w));
+  objecter->read(oid, volume, start, len, &bl, w);
   l.unlock();
 
   r = w.wait();
@@ -171,10 +170,8 @@ void Dumper::undump(const char *dump_file)
   std::condition_variable cond;
 
   std::cout << "writing header " << oid << std::endl;
-  OSDC::CB_Waiter w;
-  objecter->write_full(oid, volume, hbl,
-		       ceph::real_clock::now(),
-		       0, NULL, std::ref(w));
+  rados::CB_Waiter w;
+  objecter->write_full(oid, volume, hbl, nullptr, w);
 
   r = w.wait();
 
@@ -188,9 +185,7 @@ void Dumper::undump(const char *dump_file)
     j.read_fd(fd, l);
     std::cout << " writing " << pos << "~" << l << std::endl;
     w.reset();
-    objecter->write(oid, volume, pos, l, j,
-		    ceph::real_clock::now(), 0, NULL,
-		    std::ref(w));
+    objecter->write(oid, volume, pos, l, j, nullptr, w);
 
     r = w.wait();
 

@@ -1096,7 +1096,7 @@ void MDS::boot_create(int telomere)
 
   // start with a fresh journal
   dout(10) << "boot_create creating fresh journal" << dendl;
-  mdlog->create(v, fin.add());
+  mdlog->create(v, fin);
 
   // open new journal segment, but do not journal subtree map (yet)
   mdlog->prepare_new_segment();
@@ -1112,23 +1112,23 @@ void MDS::boot_create(int telomere)
   // fixme: fake out inotable (reset, pretend loaded)
   dout(10) << "boot_create creating fresh inotable table" << dendl;
   inotable->reset();
-  inotable->save(fin.add_ctx());
+  inotable->save(fin);
 
   // write empty sessionmap
-  sessionmap.save(fin.add_ctx());
+  sessionmap.save(fin);
 
   // initialize tables
   if (mdsmap->get_tableserver() == whoami) {
     dout(10) << "boot_create creating fresh anchortable" << dendl;
     anchorserver->reset();
-    anchorserver->save(fin.add_ctx());
+    anchorserver->save(fin);
   }
 
   assert(cct->_conf->mds_kill_create_at != 1);
 
   // ok now journal it
   mdlog->journal_segment_subtree_map();
-  mdlog->wait_for_safe(fin.add_ctx());
+  mdlog->wait_for_safe(fin);
   mdlog->flush();
 
   fin.activate();

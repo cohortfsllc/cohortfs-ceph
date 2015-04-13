@@ -39,6 +39,7 @@ target_link_libraries(test_crypt
   )
 
 # test_rados
+if(0)
 add_executable(test_rados
   osd/TestRados.cc
   osd/TestOpStat.cc
@@ -61,6 +62,7 @@ add_executable(test_mutate
   )
 target_link_libraries(test_mutate global librados ${CMAKE_DL_LIBS}
   ${ALLOC_LIBS})
+endif()
 
 # test_rewrite_latency
 add_executable(test_rewrite_latency
@@ -221,15 +223,6 @@ add_executable(test_build_libcommon
   )
 target_link_libraries(test_build_libcommon json_spirit  rt pthread global ${Boost_LIBRARIES} ${CRYPTO_LIBS} ${EXTRALIBS})
 
-set(build_librados_srcs
-  buildtest_skeleton.cc
-    )
-add_executable(test_build_librados
-  ${build_librados_srcs}
-  $<TARGET_OBJECTS:librados_objs>
-  $<TARGET_OBJECTS:osdc_objs>)
-target_link_libraries(test_build_librados pthread ${CRYPTO_LIBS} ${EXTRALIBS} global global common cls_lock_client)
- 
 if(${WITH_RADOSGW})
   set(build_librgw_srcs
   buildtest_skeleton.cc
@@ -237,7 +230,7 @@ if(${WITH_RADOSGW})
   add_executable(test_build_librgw
   ${build_librgw_srcs}
     )
-target_link_libraries(test_build_librgw librados
+target_link_libraries(test_build_librgw
     cls_rgw_client cls_lock_client cls_refcount_client
     cls_log_client cls_statelog_client cls_version_client
     cls_replica_log_client cls_user_client
@@ -247,6 +240,7 @@ endif(${WITH_BUILD_TESTS})
 
 ## Benchmarks
 
+if(0)
 # smalliobench
 set(smalliobench_srcs
   bench/small_io_bench.cc
@@ -259,6 +253,7 @@ add_executable(smalliobench
   )
 target_link_libraries(smalliobench librados boost_program_options global
   boost_filesystem ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
+endif()
 
 # smalliobenchfs
 set(smalliobenchfs_srcs
@@ -274,6 +269,7 @@ add_executable(smalliobenchfs
 target_link_libraries(smalliobenchfs librados boost_program_options os global
   leveldb aio boost_filesystem boost_system ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
 
+if(0)
 # smalliobenchdumb
 set(smalliobenchdumb_srcs
   bench/small_io_bench_dumb.cc
@@ -286,6 +282,7 @@ add_executable(smalliobenchdumb
   )
 target_link_libraries(smalliobenchdumb librados boost_program_options global
   boost_filesystem ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
+endif()
 
 # smalliobenchrbd
 set(smalliobenchrbd_srcs
@@ -310,6 +307,7 @@ add_executable(tpbench
 target_link_libraries(tpbench librados boost_filesystem boost_program_options
   global ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
 
+if(0)
 # omapbench
 set(omapbench_srcs
   omap_bench.cc
@@ -325,7 +323,9 @@ target_link_libraries(omapbench
   ${CMAKE_DL_LIBS}
   ${ALLOC_LIBS}
   )
+endif()
 
+if(0)
 # kvstorebench
 set(kvstorebench_srcs
   kv_store_bench.cc
@@ -336,63 +336,15 @@ add_executable(kvstorebench
   )
 target_link_libraries(kvstorebench librados global boost_filesystem
   ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
+endif()
 
 ## System tests
 
 # systest
 set(libsystest_srcs system/cross_process_sem.cc
   system/systest_runnable.cc
-  system/systest_settings.cc
-  system/st_rados_create_volume.cc
-  system/st_rados_delete_volume.cc
-  system/st_rados_list_objects.cc
-  system/st_rados_watch.cc
-  system/st_rados_notify.cc)
+  system/systest_settings.cc)
 add_library(systest STATIC ${libsystest_srcs})
-
-# test_rados_list_parallel
-add_executable(test_rados_list_parallel
-  system/rados_list_parallel.cc
-  )
-target_link_libraries(test_rados_list_parallel librados systest global pthread
-  rt ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
-
-# test_rados_open_volumess_parallel
-set(test_rados_open_volumes_parallel_srcs system/rados_open_volumes_parallel.cc)
-add_executable(test_rados_open_volumes_parallel
-  ${test_rados_open_volumes_parallel_srcs}
-  )
-target_link_libraries(test_rados_open_volumes_parallel librados systest global
-  pthread rt ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
-
-# test_rados_delete_volumes_parallel
-set(test_rados_delete_volumes_parallel_srcs
-  system/rados_delete_volumes_parallel.cc
-  system/st_rados_create_volume.cc
-  system/st_rados_delete_volume.cc
-  system/st_rados_list_objects.cc
-
-  )
-add_executable(test_rados_delete_volumes_parallel
-  ${test_rados_delete_volumes_parallel_srcs}
-  )
-target_link_libraries(test_rados_delete_volumes_parallel librados systest global
-  pthread rt ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
-
-# test_rados_watch_notify
-set(test_rados_watch_notify_srcs
-  system/rados_watch_notify.cc
-  system/st_rados_create_volume.cc
-  system/st_rados_delete_volume.cc
-  system/st_rados_delete_objs.cc
-  system/st_rados_watch.cc
-  system/st_rados_notify.cc
-  )
-add_executable(test_rados_watch_notify
-  ${test_rados_watch_notify_srcs}
-  )
-target_link_libraries(test_rados_watch_notify librados systest global
-  pthread rt ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
 
 # bench_log
 set(bench_log_srcs
@@ -1184,17 +1136,12 @@ if(0)
     ${UNITTEST_CXX_FLAGS})
 endif(0)
 
+if(0)
 # radostest
 set(libradostest_srcs librados/test.cc librados/TestCase.cc)
 add_library(radostest STATIC ${libradostest_srcs})
 set_target_properties(radostest PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
-
-# multi_stress_watch
-add_executable(multi_stress_watch
-  multi_stress_watch.cc
-  )
-target_link_libraries(multi_stress_watch librados global radostest
-  ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
+endif()
 
 add_executable(test_librbd
   librbd/test_librbd.cc
@@ -1210,7 +1157,6 @@ target_link_libraries(test_librbd
   ${ALLOC_LIBS}
   ${CRYPTO_LIBS}
   ${EXTRALIBS}
-  radostest
   )
 
 #add_executable(test_librbd_fsx
@@ -1227,6 +1173,7 @@ target_link_libraries(test_librbd
 #  ${EXTRALIBS}
 #  )
 
+if(0)
 add_executable(test_cls_refcount
   cls_refcount/test_cls_refcount.cc
   )
@@ -1311,7 +1258,9 @@ target_link_libraries(test_cls_replica_log
   ${EXTRALIBS}
   radostest
   )
+endif()
 
+if(0)
 add_executable(test_cls_lock
   cls_lock/test_cls_lock.cc
   )
@@ -1327,21 +1276,7 @@ target_link_libraries(test_cls_lock
   ${EXTRALIBS}
   radostest
   )
-
-add_executable(test_cls_hello
-  cls_hello/test_cls_hello.cc
-  )
-set_target_properties(test_cls_hello PROPERTIES COMPILE_FLAGS
-  ${UNITTEST_CXX_FLAGS})
-target_link_libraries(test_cls_hello
-  librados
-  global
-  ${EXTRALIBS}
-  ${ALLOC_LIBS}
-  ${CMAKE_DL_LIBS}
-  radostest
-  ${UNITTEST_LIBS}
-  )
+endif()
 
 if(0)
   add_executable(test_cls_rgw
@@ -1371,6 +1306,7 @@ target_link_libraries(test_mon_workloadgen
   ${CMAKE_DL_LIBS}
   )
 
+if(0)
 add_executable(test_rados_api_io
   librados/io.cc
   )
@@ -1460,21 +1396,6 @@ target_link_libraries(test_rados_api_volume
   radostest
   )
 
-add_executable(test_rados_api_watch_notify
-  librados/watch_notify.cc
-  )
-set_target_properties(test_rados_api_watch_notify PROPERTIES COMPILE_FLAGS
-  ${UNITTEST_CXX_FLAGS})
-target_link_libraries(test_rados_api_watch_notify
-  librados
-  global
-  ${UNITTEST_LIBS}
-  ${EXTRALIBS}
-  ${ALLOC_LIBS}
-  ${CMAKE_DL_LIBS}
-  radostest
-  )
-
 add_executable(test_rados_api_cls
   librados/cls.cc
   )
@@ -1520,6 +1441,7 @@ target_link_libraries(test_rados_api_lock
   ${CMAKE_DL_LIBS}
   radostest
   )
+endif()
 
 if(${WITH_CLIENT})
   add_executable(test_libcephfs
@@ -1623,21 +1545,7 @@ target_link_libraries(test_filejournal
   ${CMAKE_DL_LIBS}
   )
 
-add_executable(test_stress_watch
-  test_stress_watch.cc
-  )
-set_target_properties(test_stress_watch PROPERTIES COMPILE_FLAGS
-  ${UNITTEST_CXX_FLAGS})
-target_link_libraries(test_stress_watch
-  librados
-  global
-  ${UNITTEST_LIBS}
-  radostest
-  ${EXTRALIBS}
-  ${ALLOC_LIBS}
-  ${CMAKE_DL_LIBS}
-  )
-
+if(0)
 add_executable(test_object_map
   ObjectMap/test_object_map.cc
   ObjectMap/KeyValueDBMemory.cc
@@ -1688,6 +1596,7 @@ target_link_libraries(test_keyvaluedb_iterators
   ${CMAKE_DL_LIBS}
   ${ALLOC_LIBS}
   )
+endif()
 
 if(${WITH_FUSE})
   add_executable(test_cfuse_cache_invalidate

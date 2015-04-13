@@ -104,8 +104,8 @@ public:
   virtual ~ObjBencher() {}
   int aio_bench(
     int operation, int secondsToRun, int maxObjectsToCreate,
-    int concurrentios, int op_size, bool cleanup, const char* run_name);
-  int clean_up(const char* prefix, int concurrentios, const char* run_name);
+    int concurrentios, int op_size, bool cleanup, const string& run_name);
+  int clean_up(const string& prefix, int concurrentios, const string& run_name);
 
   void set_show_time(bool dt) {
     show_time = dt;

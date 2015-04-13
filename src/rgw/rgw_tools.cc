@@ -16,21 +16,23 @@
 
 static map<string, string> ext_mime_map;
 
-int rgw_put_system_obj(RGWRados *rgwstore, rgw_bucket& bucket, string& oid_t, const char *data, size_t size, bool exclusive,
-		       RGWObjVersionTracker *objv_tracker, time_t set_mtime, map<string, bufferlist> *pattrs)
+int rgw_put_system_obj(RGWRados *rgwstore, rgw_bucket& bucket,
+		       const string& oid, const char *data, size_t size,
+		       bool exclusive, RGWObjVersionTracker *objv_tracker,
+		       time_t set_mtime, map<string, bufferlist> *pattrs)
 {
   map<string,bufferlist> no_attrs;
   if (!pattrs)
     pattrs = &no_attrs;
 
-  rgw_obj oid(bucket, oid_t);
+  rgw_obj obj(bucket, oid);
 
-  int ret = rgwstore->put_system_obj(NULL, oid, data, size, exclusive, NULL, *pattrs, objv_tracker, set_mtime);
+  int ret = rgwstore->put_system_obj(NULL, obj, data, size, exclusive, NULL, *pattrs, objv_tracker, set_mtime);
 
   if (ret == -ENOENT) {
-    ret = rgwstore->create_pool(bucket);
+    ret = rgwstore->create_vol(bucket);
     if (ret >= 0)
-      ret = rgwstore->put_system_obj(NULL, oid, data, size, exclusive, NULL, *pattrs, objv_tracker, set_mtime);
+      ret = rgwstore->put_system_obj(NULL, obj, data, size, exclusive, NULL, *pattrs, objv_tracker, set_mtime);
   }
 
   return ret;

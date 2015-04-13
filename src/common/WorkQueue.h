@@ -26,7 +26,7 @@ class CephContext;
 
 class ThreadPool : public md_config_obs_t {
   CephContext *cct;
-  string name;
+  std::string name;
   std::mutex _lock;
   std::condition_variable _cond;
   bool _stop;
@@ -54,9 +54,9 @@ public:
 private:
 
   struct WorkQueue_ {
-    string name;
+    std::string name;
     ceph::timespan timeout_interval, suicide_interval;
-    WorkQueue_(string n, ceph::timespan ti, ceph::timespan sti)
+    WorkQueue_(std::string n, ceph::timespan ti, ceph::timespan sti)
       : name(n), timeout_interval(ti), suicide_interval(sti)
     { }
     virtual ~WorkQueue_() {}
@@ -69,7 +69,7 @@ private:
 
   // track thread pool size changes
   unsigned _num_threads;
-  string _thread_num_option;
+  std::string _thread_num_option;
   const char **_conf_keys;
 
   const char **get_tracked_conf_keys() const {
@@ -85,15 +85,15 @@ public:
 
     virtual bool _enqueue(T *) = 0;
     virtual void _dequeue(T *) = 0;
-    virtual void _dequeue(list<T*> *) = 0;
-    virtual void _process(const list<T*> &) { assert(0); }
-    virtual void _process(const list<T*> &items, TPHandle &handle) {
+    virtual void _dequeue(std::list<T*> *) = 0;
+    virtual void _process(const std::list<T*> &) { assert(0); }
+    virtual void _process(const std::list<T*> &items, TPHandle &handle) {
       _process(items);
     }
-    virtual void _process_finish(const list<T*> &) {}
+    virtual void _process_finish(const std::list<T*> &) {}
 
     void *_void_dequeue() {
-      list<T*> *out(new list<T*>);
+      std::list<T*> *out(new std::list<T*>);
       _dequeue(out);
       if (!out->empty()) {
 	return (void *)out;
@@ -103,15 +103,15 @@ public:
       }
     }
     void _void_process(void *p, TPHandle &handle) {
-      _process(*((list<T*>*)p), handle);
+      _process(*((std::list<T*>*)p), handle);
     }
     void _void_process_finish(void *p) {
-      _process_finish(*(list<T*>*)p);
-      delete (list<T*> *)p;
+      _process_finish(*(std::list<T*>*)p);
+      delete (std::list<T*> *)p;
     }
 
   public:
-    BatchWorkQueue(string n, ceph::timespan ti,
+    BatchWorkQueue(std::string n, ceph::timespan ti,
 		   ceph::timespan sti, ThreadPool* p)
       : WorkQueue_(n, ti, sti), pool(p) {
       pool->add_work_queue(this);
@@ -151,8 +151,8 @@ public:
   class WorkQueueVal : public WorkQueue_ {
     std::mutex _lock;
     ThreadPool *pool;
-    list<U> to_process;
-    list<U> to_finish;
+    std::list<U> to_process;
+    std::list<U> to_finish;
     virtual void _enqueue(T) = 0;
     virtual void _enqueue_front(T) = 0;
     virtual bool _empty() = 0;
@@ -200,7 +200,7 @@ public:
     void _clear() {}
 
   public:
-    WorkQueueVal(string n, ceph::timespan ti, ceph::timespan sti, ThreadPool *p)
+    WorkQueueVal(std::string n, ceph::timespan ti, ceph::timespan sti, ThreadPool *p)
       : WorkQueue_(n, ti, sti), pool(p) {
       pool->add_work_queue(this);
     }
@@ -245,7 +245,7 @@ public:
     }
 
   public:
-    WorkQueue(string n, ceph::timespan ti, ceph::timespan sti, ThreadPool* p)
+    WorkQueue(std::string n, ceph::timespan ti, ceph::timespan sti, ThreadPool* p)
       : WorkQueue_(n, ti, sti), pool(p) {
       pool->add_work_queue(this);
     }
@@ -284,7 +284,7 @@ public:
   };
 
 private:
-  vector<WorkQueue_*> work_queues;
+  std::vector<WorkQueue_*> work_queues;
   int last_work_queue;
 
   // threads
@@ -297,8 +297,8 @@ private:
     }
   };
 
-  set<WorkThread*> _threads;
-  list<WorkThread*> _old_threads;  ///< need to be joined
+  std::set<WorkThread*> _threads;
+  std::list<WorkThread*> _old_threads;  ///< need to be joined
   int processing;
 
   void start_threads();
@@ -306,7 +306,8 @@ private:
   void worker(WorkThread *wt);
 
 public:
-  ThreadPool(CephContext *cct_, string nm, int n, const char *option = NULL);
+  ThreadPool(CephContext *cct_, std::string nm, int n,
+	     const char *option = NULL);
   ~ThreadPool();
 
   /// return number of threads currently running

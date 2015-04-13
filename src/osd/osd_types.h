@@ -29,8 +29,6 @@
 #include <boost/scoped_ptr.hpp>
 #include <boost/optional.hpp>
 
-#include "include/rados/rados_types.hpp"
-
 #include "msg/msg_types.h"
 #include "include/types.h"
 #include "include/ceph_time.h"

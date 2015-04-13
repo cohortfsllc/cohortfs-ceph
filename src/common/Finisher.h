@@ -20,6 +20,7 @@
 #include "include/Context.h"
 #include "common/Thread.h"
 #include "common/ceph_context.h"
+#include "common/FunQueue.h"
 
 class CephContext;
 
@@ -29,6 +30,7 @@ class Finisher {
   std::condition_variable finisher_cond, finisher_empty_cond;
   bool finisher_stop, finisher_running;
   std::list<std::pair<Context*,int> > finisher_queue;
+  cohort::FunQueue<void()> other_finisher_queue;
 
   void *finisher_thread_entry();
 
@@ -48,6 +50,11 @@ class Finisher {
     std::lock_guard<std::mutex> l(finisher_lock);
     for (auto &i : contexts)
       finisher_queue.push_back(std::make_pair(&i, 0));
+    finisher_cond.notify_all();
+  }
+  void queue(std::function<void(int)>&& f, int r = 0) {
+    std::lock_guard<std::mutex> l(finisher_lock);
+    other_finisher_queue.add(std::bind(std::move(f), r));
     finisher_cond.notify_all();
   }
 

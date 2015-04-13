@@ -59,9 +59,8 @@ oid_t SessionMap::get_object_name()
 class SM_Load {
   SessionMap *sessionmap;
 public:
-  bufferlist bl;
   SM_Load(SessionMap *cm) : sessionmap(cm) {}
-  void operator()(int r) {
+  void operator()(int r, bufferlist&& bl) {
     sessionmap->_load_finish(r, bl);
   }
 };
@@ -73,12 +72,9 @@ void SessionMap::load(Context *onload)
   if (onload)
     waiting_for_load.push_back(*onload);
 
-  OSDC::op_callback c(SM_Load(this));
   oid_t oid = get_object_name();
   VolumeRef volume(mds->get_metadata_volume());
-  mds->objecter->read_full(oid, volume,
-			   &c.target<SM_Load>()->bl, 0,
-			   std::move(c));
+  mds->objecter->read_full(oid, volume, SM_Load(this));
 }
 
 void SessionMap::_load_finish(int r, bufferlist &bl)
@@ -132,8 +128,7 @@ void SessionMap::save(Context *onsave, version_t needv)
   committing = version;
   oid_t oid = get_object_name();
   VolumeRef volume(mds->get_metadata_volume());
-  mds->objecter->write_full(oid, volume, bl, ceph::real_clock::now(), 0,
-			    NULL, SM_Save(this, version));
+  mds->objecter->write_full(oid, volume, bl, nullptr, SM_Save(this, version));
 }
 
 void SessionMap::_save_finish(version_t v)
@@ -241,7 +236,7 @@ void SessionMap::dump(Formatter *f) const
 void SessionMap::generate_test_instances(list<SessionMap*>& ls)
 {
   // pretty boring for now
-  ls.push_back(new SessionMap(NULL));
+  ls.push_back(new SessionMap(nullptr));
 }
 
 void SessionMap::wipe()

@@ -18,7 +18,7 @@
 
 #include "include/types.h"
 #include "msg/msg_types.h"
-#include "include/rados/librados.hpp"
+#include "osdc/RadosClient.h"
 
 #include "test/librados/test.h"
 #include "gtest/gtest.h"
@@ -28,10 +28,11 @@
 #include "cls/lock/cls_lock_ops.h"
 
 using std::cout;
-using namespace librados;
+using namespace rados;
 using namespace rados::cls::lock;
 
-void lock_info(IoCtx *ioctx, string& oid_t, string& name, map<locker_id_t, locker_info_t>& lockers,
+void lock_info(Objecter* o, const VolumeRef& vol, const oid_t& oid,
+	       string& name, map<locker_id_t, locker_info_t>& lockers,
 	       ClsLockType *assert_type, string *assert_tag)
 {
   ClsLockType lock_type = LOCK_NONE;
@@ -57,13 +58,14 @@ void lock_info(IoCtx *ioctx, string& oid_t, string& name, map<locker_id_t, locke
   }
 }
 
-void lock_info(IoCtx *ioctx, string& oid_t, string& name, map<locker_id_t, locker_info_t>& lockers)
+void lock_info(Objecter* o, const VolumeRef& vol, const oid_t oid,
+	       string& name, map<locker_id_t, locker_info_t>& lockers)
 {
-  lock_info(ioctx, oid_t, name, lockers, NULL, NULL);
+  lock_info(o, vol, oid, name, lockers, NULL, NULL);
 }
 
 TEST(ClsLock, TestMultiLocking) {
-  Rados cluster;
+  RadosClient cluster;
   std::string volume_name = get_temp_volume_name();
   ASSERT_EQ("", create_one_volume_pp(volume_name, cluster));
   IoCtx ioctx;

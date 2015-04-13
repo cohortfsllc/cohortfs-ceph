@@ -48,8 +48,8 @@ void *Finisher::finisher_thread_entry()
       ldout(cct, 10) << "finisher_thread doing " << ls << dendl;
 
       for (auto i = ls.begin(); i != ls.end(); ++i) {
-        Context *c = i->first;
-        c->complete(i->second);
+	Context *c = i->first;
+	c->complete(i->second);
       }
       ldout(cct, 10) << "finisher_thread done with " << ls << dendl;
       ls.clear();
@@ -57,6 +57,12 @@ void *Finisher::finisher_thread_entry()
       l.lock();
       finisher_running = false;
     }
+    finisher_running = true;
+    l.unlock();
+    other_finisher_queue.execute();
+    l.lock();
+    finisher_running = false;
+
     ldout(cct, 10) << "finisher_thread empty" << dendl;
     finisher_empty_cond.notify_all();
     if (finisher_stop)

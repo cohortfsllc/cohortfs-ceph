@@ -27,7 +27,8 @@
 #include "include/types.h"
 #include "include/encoding.h"
 #include "common/Formatter.h"
-#include "include/rados/librados.hpp"
+#include "osdc/RadosClient.h"
+#include "vol/Volume.h"
 #include <cfloat>
 #include <queue>
 #include <sstream>
@@ -477,10 +478,10 @@ protected:
   //protected with mutexes!
   int k;
   string index_name;
-  librados::IoCtx io_ctx;
+  VolumeRef vol;
+  rados::RadosClient rados;
   string rados_id;
   string client_name;
-  librados::Rados rados;
   string pool_name;
   injection_t interrupt;
   int wait_ms;
@@ -584,6 +585,7 @@ protected:
    */
   int read_object(const string &oid, rebalance_args * args);
 
+
   /**
    * sets up owo to change the index in preparation for a split/merge.
    *
@@ -597,7 +599,7 @@ protected:
   void set_up_prefix_index(
       const vector<object_data> &to_create,
       const vector<object_data> &to_delete,
-      librados::ObjectWriteOperation * owo,
+      rados::ObjOpUse owo,
       index_data * idata,
       int * err);
 
@@ -620,7 +622,7 @@ protected:
   void set_up_ops(
       const vector<object_data> &create_vector,
       const vector<object_data> &delete_vector,
-      vector<pair<pair<int, string>, librados::ObjectWriteOperation*> > * ops,
+      vector<pair<pair<int, string>, rados::ObjOpUse> > * ops,
       const index_data &idata,
       int * err);
 
@@ -630,20 +632,20 @@ protected:
    */
   void set_up_make_object(
       const map<std::string, bufferlist> &to_set,
-      librados::ObjectWriteOperation *owo);
+      rados::ObjOpUse owo);
 
   /**
    * sets up owo to assert that an object is unwritable and then mark it
    * writable
    */
   void set_up_restore_object(
-      librados::ObjectWriteOperation *owo);
+      rados::ObjOpUse owo);
 
   /**
    * sets up owo to assert that the object is unwritable and then remove it
    */
   void set_up_delete_object(
-      librados::ObjectWriteOperation *owo);
+      rados::ObjOpUse& owo);
 
   /**
    * perform the operations in ops and handles errors.
@@ -660,7 +662,7 @@ protected:
    */
   int perform_ops( const string &debug_prefix,
       const index_data &idata,
-      vector<pair<pair<int, string>, librados::ObjectWriteOperation*> > * ops);
+      vector<pair<pair<int, string>, rados::ObjOpUse> > * ops);
 
   /**
    * Called when a client discovers that another client has died during  a

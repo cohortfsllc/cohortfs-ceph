@@ -18,6 +18,7 @@
 #include "mon/MonClient.h"
 #include "mds/events/EResetJournal.h"
 
+using rados::CB_Waiter;
 using std::cout;
 
 int Resetter::init(int rank)
@@ -83,8 +84,8 @@ void Resetter::reset()
   journaler->set_writeable();
 
   cout << "writing journal head" << std::endl;
-  OSDC::CB_Waiter w;
-  journaler->write_head(std::ref(w));
+  CB_Waiter w;
+  journaler->write_head(w);
   lock.unlock();
 
   r = w.wait();

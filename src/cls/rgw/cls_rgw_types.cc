@@ -57,7 +57,6 @@ void rgw_bucket_dir_entry::generate_test_instances(list<rgw_bucket_dir_entry*>& 
     rgw_bucket_dir_entry *e = new rgw_bucket_dir_entry;
     e->name = "name";
     e->ver.vol = boost::uuids::nil_uuid();
-    e->ver.epoch = 1234;
     e->exists = true;
     e->meta = *m;
     e->tag = "tag";
@@ -72,7 +71,6 @@ void rgw_bucket_dir_entry::generate_test_instances(list<rgw_bucket_dir_entry*>& 
 void rgw_bucket_entry_ver::dump(Formatter *f) const
 {
     f->dump_stream("vol") << vol;
-    f->dump_unsigned("epoch", epoch);
 }
 
 void rgw_bucket_entry_ver::generate_test_instances(list<rgw_bucket_entry_ver*>& ls)
@@ -80,7 +78,6 @@ void rgw_bucket_entry_ver::generate_test_instances(list<rgw_bucket_entry_ver*>& 
   ls.push_back(new rgw_bucket_entry_ver);
   ls.push_back(new rgw_bucket_entry_ver);
   ls.back()->vol = boost::uuids::nil_uuid();
-  ls.back()->epoch = 12322;
 }
 
 

@@ -94,30 +94,14 @@ int main(int argc, char **argv)
   ops.insert(make_pair(vm["write-ratio"].as<double>(), Bencher::WRITE));
   ops.insert(make_pair(1-vm["write-ratio"].as<double>(), Bencher::READ));
 
-  librados::Rados legacy;
+  rados::RadosClient rc;
   shared_ptr<const Volume> volume;
-  int r = legacy.init(vm["ceph-client-id"].as<string>().c_str());
-  if (r < 0) {
-    cerr << "error in init r=" << r << std::endl;
-    return -r;
-  }
-  r = legacy.conf_read_file(NULL);
-  if (r < 0) {
-    cerr << "error in conf_read_file r=" << r << std::endl;
-    return -r;
-  }
-  r = legacy.conf_parse_env(NULL);
-  if (r < 0) {
-    cerr << "error in conf_parse_env r=" << r << std::endl;
-    return -r;
-  }
-  r = legacy.connect();
+  int r = rc.connect();
   if (r < 0) {
     cerr << "error in connect r=" << r << std::endl;
     return -r;
   }
-  librados::RadosClient* rados = legacy.client;
-  volume = rados->lookup_volume(vm["pool-name"].as<string>());
+  volume = rc.lookup_volume(vm["pool-name"].as<string>());
   if (!volume) {
     cerr << "unable to find volume" << r << std::endl;
     return ENOENT;
@@ -139,9 +123,9 @@ int main(int argc, char **argv)
     uint64_t image_size = ((uint64_t)vm["image-size"].as<unsigned>()) << 20;
     for (set<string>::const_iterator i = image_names.begin();
 	 i != image_names.end(); ++i) {
-      librbd::Image::create(rados, volume, *i, image_size);
+      librbd::Image::create(&rc, volume, *i, image_size);
       std::shared_ptr<librbd::Image> image(
-	new librbd::Image(rados, volume, *i));
+	new librbd::Image(&rc, volume, *i));
       images[*i] = image;
     }
 
@@ -183,7 +167,7 @@ int main(int argc, char **argv)
 
     for (set<string>::const_iterator i = image_names.begin();
 	 i != image_names.end(); ++i) {
-      librbd::Image::remove(rados, volume, *i);
+      librbd::Image::remove(&rc, volume, *i);
     }
   } catch (std::error_condition& e) {
     cerr << "failed benching: "
@@ -191,7 +175,7 @@ int main(int argc, char **argv)
     return e.value();
   }
 
-  legacy.shutdown();
+  rc.shutdown();
   if (vm["op-dump-file"].as<string>().size()) {
     myfile.close();
   }

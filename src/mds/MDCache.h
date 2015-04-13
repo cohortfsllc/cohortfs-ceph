@@ -518,7 +518,7 @@ public:
   void do_file_recover();
   void _recovered(CInode *in, int r, uint64_t size, ceph::real_time mtime);
 
-  void purge_prealloc_ino(inodeno_t ino, OSDC::op_callback&& fin);
+  void purge_prealloc_ino(inodeno_t ino, rados::op_callback&& fin);
 
 
 
@@ -859,8 +859,8 @@ public:
   }
 protected:
   void scan_stray_dir(dirfrag_t next=dirfrag_t());
-  void fetch_backtrace(inodeno_t ino, VolumeRef volume, bufferlist& bl,
-		       OSDC::op_callback&& fin);
+  void fetch_backtrace(inodeno_t ino, VolumeRef volume,
+		       rados::read_callback&& fin);
   void purge_stray(CDentry *dn);
   void _purge_stray_purged(CDentry *dn, int r=0);
   void _purge_stray_logged(CDentry *dn, version_t pdv, LogSegment *ls);

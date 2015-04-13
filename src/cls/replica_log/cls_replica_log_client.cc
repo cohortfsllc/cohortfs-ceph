@@ -11,10 +11,10 @@
 
 #include <errno.h>
 
+#include "osdc/RadosClient.h"
 #include "cls/replica_log/cls_replica_log_ops.h"
-#include "include/rados/librados.hpp"
 
-using namespace librados;
+using namespace rados;
 
 void cls_replica_log_prepare_marker(
     cls_replica_log_progress_marker& progress, const string& entity,
@@ -46,26 +46,26 @@ void cls_replica_log_extract_marker(
   }
 }
 
-void cls_replica_log_update_bound(librados::ObjectWriteOperation& o,
+void cls_replica_log_update_bound(ObjOpUse o,
 				  const cls_replica_log_progress_marker& progress)
 {
   cls_replica_log_set_marker_op op(progress);
   bufferlist in;
   ::encode(op, in);
-  o.exec("replica_log", "set", in);
+  o->call("replica_log", "set", in);
 }
 
-void cls_replica_log_delete_bound(librados::ObjectWriteOperation& o,
+void cls_replica_log_delete_bound(ObjOpUse o,
 				  const string& entity)
 {
   cls_replica_log_delete_marker_op op(entity);
   bufferlist in;
   ::encode(op, in);
-  o.exec("replica_log", "delete", in);
+  o->call("replica_log", "delete", in);
 }
 
-int cls_replica_log_get_bounds(librados::IoCtx& io_ctx, const string& oid_t,
-			       string& position_marker,
+int cls_replica_log_get_bounds(Objecter* o, const VolumeRef& vol,
+			       const oid_t& oid, string& position_marker,
 			       ceph::real_time& oldest_time,
 			       list<cls_replica_log_progress_marker>& markers)
 {
@@ -73,7 +73,9 @@ int cls_replica_log_get_bounds(librados::IoCtx& io_ctx, const string& oid_t,
   bufferlist out;
   cls_replica_log_get_bounds_op op;
   ::encode(op, in);
-  int r = io_ctx.exec(oid_t, "replica_log", "get", in, out);
+  ObjectOperation obj_op(vol->op());
+  obj_op->call("replica_log", "get", in, &out);
+  int r = o->read(oid, vol, obj_op);
   if (r < 0)
     return r;
 

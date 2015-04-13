@@ -175,20 +175,17 @@ void decode_packed_val(T& val, bufferlist::iterator& bl)
 
 struct rgw_bucket_entry_ver {
   boost::uuids::uuid vol;
-  uint64_t epoch;
 
-  rgw_bucket_entry_ver() : vol(boost::uuids::nil_uuid()), epoch(0) {}
+  rgw_bucket_entry_ver() : vol(boost::uuids::nil_uuid()) {}
 
   void encode(bufferlist &bl) const {
     ENCODE_START(1, 1, bl);
     ::encode(vol, bl);
-    ::encode_packed_val(epoch, bl);
     ENCODE_FINISH(bl);
   }
   void decode(bufferlist::iterator &bl) {
     DECODE_START(1, bl);
     ::decode(vol, bl);
-    ::decode_packed_val(epoch, bl);
     DECODE_FINISH(bl);
   }
   void dump(Formatter *f) const;
@@ -212,7 +209,6 @@ struct rgw_bucket_dir_entry {
   void encode(bufferlist &bl) const {
     ENCODE_START(5, 3, bl);
     ::encode(name, bl);
-    ::encode(ver.epoch, bl);
     ::encode(exists, bl);
     ::encode(meta, bl);
     ::encode(pending_map, bl);
@@ -224,7 +220,6 @@ struct rgw_bucket_dir_entry {
   void decode(bufferlist::iterator &bl) {
     DECODE_START_LEGACY_COMPAT_LEN(5, 3, 3, bl);
     ::decode(name, bl);
-    ::decode(ver.epoch, bl);
     ::decode(exists, bl);
     ::decode(meta, bl);
     ::decode(pending_map, bl);
@@ -419,18 +414,16 @@ WRITE_CLASS_ENCODER(rgw_usage_data)
 struct rgw_usage_log_entry {
   string owner;
   string bucket;
-  uint64_t epoch;
   rgw_usage_data total_usage; /* this one is kept for backwards compatibility */
   map<string, rgw_usage_data> usage_map;
 
-  rgw_usage_log_entry() : epoch(0) {}
-  rgw_usage_log_entry(string& o, string& b) : owner(o), bucket(b), epoch(0) {}
+  rgw_usage_log_entry()  {}
+  rgw_usage_log_entry(string& o, string& b) : owner(o), bucket(b) {}
 
   void encode(bufferlist& bl) const {
     ENCODE_START(2, 1, bl);
     ::encode(owner, bl);
     ::encode(bucket, bl);
-    ::encode(epoch, bl);
     ::encode(total_usage.bytes_sent, bl);
     ::encode(total_usage.bytes_received, bl);
     ::encode(total_usage.ops, bl);
@@ -444,7 +437,6 @@ struct rgw_usage_log_entry {
     DECODE_START(2, bl);
     ::decode(owner, bl);
     ::decode(bucket, bl);
-    ::decode(epoch, bl);
     ::decode(total_usage.bytes_sent, bl);
     ::decode(total_usage.bytes_received, bl);
     ::decode(total_usage.ops, bl);
@@ -461,7 +453,6 @@ struct rgw_usage_log_entry {
     if (owner.empty()) {
       owner = e.owner;
       bucket = e.bucket;
-      epoch = e.epoch;
     }
     map<string, rgw_usage_data>::const_iterator iter;
     for (iter = e.usage_map.begin(); iter != e.usage_map.end(); ++iter) {

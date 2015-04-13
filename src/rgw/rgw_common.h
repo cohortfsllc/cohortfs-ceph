@@ -35,7 +35,7 @@
 #include "rgw_string.h"
 #include "cls/version/cls_version_types.h"
 #include "cls/user/cls_user_types.h"
-#include "include/rados/librados.hpp"
+#include "osdc/RadosClient.h"
 
 namespace ceph {
   class Formatter;
@@ -531,9 +531,9 @@ WRITE_CLASS_ENCODER(RGWUserInfo)
 
 struct rgw_bucket {
   std::string name;
-  std::string data_pool;
-  std::string data_extra_pool; /* if not set, then we should use data_pool instead */
-  std::string index_pool;
+  std::string data_vol;
+  std::string data_extra_vol; /* if not set, then we should use data_vol instead */
+  std::string index_vol;
   std::string marker;
   std::string bucket_id;
 
@@ -544,25 +544,27 @@ struct rgw_bucket {
   rgw_bucket() { }
   rgw_bucket(const cls_user_bucket& b) {
     name = b.name;
-    data_pool = b.data_pool;
-    data_extra_pool = b.data_extra_pool;
-    index_pool = b.index_pool;
+    data_vol = b.data_vol;
+    data_extra_vol = b.data_extra_vol;
+    index_vol = b.index_vol;
     marker = b.marker;
     bucket_id = b.bucket_id;
   }
-  rgw_bucket(const char *n) : name(n) {
-    assert(*n == '.'); // only rgw private buckets should be initialized without pool
-    data_pool = index_pool = n;
+  rgw_bucket(const string& n) : name(n) {
+    assert(n[0] == '.'); // only rgw private buckets should be
+		       // initialized without vol
+    data_vol = index_vol = n;
     marker = "";
   }
-  rgw_bucket(const char *n, const char *dp, const char *ip, const char *m, const char *id, const char *h) :
-    name(n), data_pool(dp), index_pool(ip), marker(m), bucket_id(id) {}
+  rgw_bucket(const string& n, const string& dp, const string& ip,
+	     const string& m, const string& id, const string& h) :
+    name(n), data_vol(dp), index_vol(ip), marker(m), bucket_id(id) {}
 
   void convert(cls_user_bucket *b) {
     b->name = name;
-    b->data_pool = data_pool;
-    b->data_extra_pool = data_extra_pool;
-    b->index_pool = index_pool;
+    b->data_vol = data_vol;
+    b->data_extra_vol = data_extra_vol;
+    b->index_vol = index_vol;
     b->marker = marker;
     b->bucket_id = bucket_id;
   }
@@ -570,17 +572,17 @@ struct rgw_bucket {
   void encode(bufferlist& bl) const {
      ENCODE_START(7, 3, bl);
     ::encode(name, bl);
-    ::encode(data_pool, bl);
+    ::encode(data_vol, bl);
     ::encode(marker, bl);
     ::encode(bucket_id, bl);
-    ::encode(index_pool, bl);
-    ::encode(data_extra_pool, bl);
+    ::encode(index_vol, bl);
+    ::encode(data_extra_vol, bl);
     ENCODE_FINISH(bl);
   }
   void decode(bufferlist::iterator& bl) {
     DECODE_START_LEGACY_COMPAT_LEN(7, 3, 3, bl);
     ::decode(name, bl);
-    ::decode(data_pool, bl);
+    ::decode(data_vol, bl);
     if (struct_v >= 2) {
       ::decode(marker, bl);
       if (struct_v <= 3) {
@@ -594,21 +596,21 @@ struct rgw_bucket {
       }
     }
     if (struct_v >= 5) {
-      ::decode(index_pool, bl);
+      ::decode(index_vol, bl);
     } else {
-      index_pool = data_pool;
+      index_vol = data_vol;
     }
     if (struct_v >= 7) {
-      ::decode(data_extra_pool, bl);
+      ::decode(data_extra_vol, bl);
     }
     DECODE_FINISH(bl);
   }
 
-  const string& get_data_extra_pool() {
-    if (data_extra_pool.empty()) {
-      return data_pool;
+  const string& get_data_extra_vol() {
+    if (data_extra_vol.empty()) {
+      return data_vol;
     }
-    return data_extra_pool;
+    return data_extra_vol;
   }
 
   void dump(Formatter *f) const;
@@ -623,22 +625,22 @@ WRITE_CLASS_ENCODER(rgw_bucket)
 
 inline ostream& operator<<(ostream& out, const rgw_bucket &b) {
   out << b.name;
-  if (b.name.compare(b.data_pool)) {
+  if (b.name.compare(b.data_vol)) {
     out << "(@";
     string s;
-    if (!b.index_pool.empty() && b.data_pool.compare(b.index_pool))
-      s = "i=" + b.index_pool;
-    if (!b.data_extra_pool.empty() && b.data_pool.compare(b.data_extra_pool)) {
+    if (!b.index_vol.empty() && b.data_vol.compare(b.index_vol))
+      s = "i=" + b.index_vol;
+    if (!b.data_extra_vol.empty() && b.data_vol.compare(b.data_extra_vol)) {
       if (!s.empty()) {
 	s += ",";
       }
-      s += "e=" + b.data_extra_pool;
+      s += "e=" + b.data_extra_vol;
     }
     if (!s.empty()) {
       out << "{"  << s << "}";
     }
 
-    out << b.data_pool << "[" << b.marker << "])";
+    out << b.data_vol << "[" << b.marker << "])";
   }
   return out;
 }
@@ -665,8 +667,8 @@ struct RGWObjVersionTracker {
     return &read_version;
   }
 
-  void prepare_op_for_read(librados::ObjectReadOperation *op);
-  void prepare_op_for_write(librados::ObjectWriteOperation *op);
+  void prepare_op_for_read(rados::ObjOpUse op);
+  void prepare_op_for_write(rados::ObjOpUse op);
 
   void apply_write() {
     read_version = write_version;

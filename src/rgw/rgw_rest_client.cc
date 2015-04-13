@@ -275,10 +275,12 @@ class RGWRESTStreamOutCB : public RGWGetDataCB {
 public:
   RGWRESTStreamOutCB(CephContext* _cct, RGWRESTStreamWriteRequest *_req) :
     RGWGetDataCB(_cct), req(_req) {}
-  int handle_data(bufferlist& bl, off_t bl_ofs, off_t bl_len); /* callback for object iteration when sending data */
+  /* callback for object iteration when sending data */
+  int handle_data(bufferlist& bl, off_t bl_ofs, off_t bl_len, wait_ref& cb);
 };
 
-int RGWRESTStreamOutCB::handle_data(bufferlist& bl, off_t bl_ofs, off_t bl_len)
+int RGWRESTStreamOutCB::handle_data(bufferlist& bl, off_t bl_ofs, off_t bl_len,
+				    wait_ref& w)
 {
   ldout(cct, 20) << "RGWRESTStreamOutCB::handle_data bl.length()="
 		 << bl.length() << " bl_ofs=" << bl_ofs << " bl_len="
@@ -660,7 +662,8 @@ int RGWRESTStreamReadRequest::receive_data(void *ptr, size_t len)
   bufferptr bp((const char *)ptr, len);
   bufferlist bl;
   bl.append(bp);
-  int ret = cb->handle_data(bl, ofs, len);
+  wait_ref w(std::make_unique<rados::CB_Waiter>());
+  int ret = cb->handle_data(bl, ofs, len, w);
   if (ret < 0)
     return ret;
   ofs += len;

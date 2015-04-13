@@ -38,6 +38,7 @@
 #undef dout_prefix
 #define dout_prefix *_dout << "mds." << cache->mds->get_nodeid() << ".cache.dir(" << this->dirfrag() << ") "
 
+using rados::ObjectOperation;
 
 
 // PINS
@@ -484,7 +485,7 @@ void CDir::link_inode_work(CDentry *dn, CInode *in)
 
   // adjust auth pin count
   if (in->auth_pins + in->nested_auth_pins)
-    dn->adjust_nested_auth_pins(in->auth_pins + in->nested_auth_pins, in->auth_pins, NULL);
+    dn->adjust_nested_auth_pins(in->auth_pins + in->nested_auth_pins, in->auth_pins, nullptr);
 
   if (in->inode.anchored + in->nested_anchors)
     dn->adjust_nested_anchors(in->nested_anchors + in->inode.anchored);
@@ -550,7 +551,7 @@ void CDir::unlink_inode_work( CDentry *dn )
 
     // unlink auth_pin count
     if (in->auth_pins + in->nested_auth_pins)
-      dn->adjust_nested_auth_pins(0 - (in->auth_pins + in->nested_auth_pins), 0 - in->auth_pins, NULL);
+      dn->adjust_nested_auth_pins(0 - (in->auth_pins + in->nested_auth_pins), 0 - in->auth_pins, nullptr);
 
     if (in->inode.anchored + in->nested_anchors)
       dn->adjust_nested_anchors(0 - (in->nested_anchors + in->inode.anchored));
@@ -637,8 +638,8 @@ void CDir::steal_dentry(CDentry *dn)
     int ap = dn->get_num_auth_pins() + dn->get_num_nested_auth_pins();
     int dap = dn->get_num_dir_auth_pins();
     assert(dap <= ap);
-    adjust_nested_auth_pins(ap, dap, NULL);
-    dn->dir->adjust_nested_auth_pins(-ap, -dap, NULL);
+    adjust_nested_auth_pins(ap, dap, nullptr);
+    dn->dir->adjust_nested_auth_pins(-ap, -dap, nullptr);
   }
 
   nested_anchors += dn->nested_anchors;
@@ -1243,12 +1244,27 @@ class CB_Dir_OMAP_Fetched {
  protected:
   CDir *dir;
   string want_dn;
+
+  // We actually have lifecycle constraints that require us to stay
+  // around. And due to how individual ops are organized, we can't
+  // both span two ops and be the completion for the entire op
+  // vector. This could be reorganized in two different ways. Since
+  // one involves fiddling the MDS, and we're rewriting that anyway,
+  // and the other involves rewriting the way subops work (which I
+  // plan to do) I'll leave this how it is for now.
+  CB_Dir_OMAP_Fetched(CDir *d, const string& w) : dir(d), want_dn(w) { }
  public:
   bufferlist hdrbl;
   map<string, bufferlist> omap;
   int ret1, ret2;
 
-  CB_Dir_OMAP_Fetched(CDir *d, const string& w) : dir(d), want_dn(w) { }
+  static CB_Dir_OMAP_Fetched create(CDir *d, const string& w) {
+    return *(new CB_Dir_OMAP_Fetched(d, w));
+  }
+  operator std::function<void(int)>() {
+    return std::ref(*this);
+  }
+ public:
   void operator()(int r) {
     if (r >= 0) r = ret1;
     if (r >= 0) r = ret2;
@@ -1260,20 +1276,11 @@ void CDir::_omap_fetch(const string& want_dn)
 {
   oid_t oid = get_ondisk_object();
   VolumeRef volume(cache->mds->get_metadata_volume());
-  CB_Dir_OMAP_Fetched fin(this, want_dn);
-  if (!volume) {
-    dout(0) << "Unable to attach volume " << volume << dendl;
-    return;
-  }
-  std::unique_ptr<ObjOp> rd = volume->op();
-  if (!rd) {
-    dout(0) << "Unable to make operation for volume " << volume << dendl;
-    return;
-  }
+  auto fin = CB_Dir_OMAP_Fetched::create(this, want_dn);
+  ObjectOperation rd = volume->op();
   rd->omap_get_header(&fin.hdrbl, &fin.ret1);
   rd->omap_get_vals("", "", (uint64_t)-1, fin.omap, &fin.ret2);
-  cache->mds->objecter->read(oid, volume, rd, NULL, 0,
-			     std::ref(fin));
+  cache->mds->objecter->read(oid, volume, rd, fin);
 }
 
 void CDir::_omap_fetched(bufferlist& hdrbl, map<string, bufferlist>& omap,
@@ -1451,11 +1458,7 @@ void CDir::_omap_commit(int op_prio)
     }
 
     if (write_size >= max_write_size) {
-      std::unique_ptr<ObjOp> op(volume->op());
-      if (!op) {
-	dout(0) << "Unable to make operation for volume " << volume << dendl;
-	return;
-      }
+      ObjectOperation op(volume->op());
       op->priority = op_prio;
 
       if (!to_set.empty())
@@ -1464,8 +1467,8 @@ void CDir::_omap_commit(int op_prio)
 	op->omap_rm_keys(to_remove);
 
       cache->mds->objecter->mutate(oid, volume, op,
-				   ceph::real_clock::now(), 0, NULL,
-				   committed.add());
+				   ceph::real_clock::now(), nullptr,
+				   committed);
 
       write_size = 0;
       to_set.clear();
@@ -1473,11 +1476,7 @@ void CDir::_omap_commit(int op_prio)
     }
   }
 
-  std::unique_ptr<ObjOp> op(volume->op());
-  if (!op) {
-    dout(0) << "Unable to make operation for volume " << volume << dendl;
-    return;
-  }
+  ObjectOperation op(volume->op());
   op->priority = op_prio;
 
   /*
@@ -1499,7 +1498,7 @@ void CDir::_omap_commit(int op_prio)
     op->omap_rm_keys(to_remove);
 
   cache->mds->objecter->mutate(oid, volume, op, ceph::real_clock::now(),
-			       0, NULL, committed.add());
+			       nullptr, committed);
 
   committed.activate();
 }
@@ -1838,7 +1837,7 @@ void CDir::set_dir_auth(pair<int,int> a)
 
     // adjust nested auth pins
     if (get_cum_auth_pins())
-      inode->adjust_nested_auth_pins(-1, NULL);
+      inode->adjust_nested_auth_pins(-1, nullptr);
 
     // unpin parent of frozen dir/tree?
     if (inode->is_auth() && (is_frozen_tree_root() || is_frozen_dir()))
@@ -1849,7 +1848,7 @@ void CDir::set_dir_auth(pair<int,int> a)
 
     // adjust nested auth pins
     if (get_cum_auth_pins())
-      inode->adjust_nested_auth_pins(1, NULL);
+      inode->adjust_nested_auth_pins(1, nullptr);
 
     // pin parent of frozen dir/tree?
     if (inode->is_auth() && (is_frozen_tree_root() || is_frozen_dir()))

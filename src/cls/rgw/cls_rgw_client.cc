@@ -5,28 +5,27 @@
 #include "include/types.h"
 #include "cls/rgw/cls_rgw_ops.h"
 #include "cls/rgw/cls_rgw_client.h"
-#include "include/rados/librados.hpp"
 
 #include "common/debug.h"
 
-using namespace librados;
+using namespace rados;
 
-void cls_rgw_bucket_init(ObjectWriteOperation& o)
+void cls_rgw_bucket_init(ObjOpUse o)
 {
   bufferlist in;
-  o.exec("rgw", "bucket_init_index", in);
+  o->call("rgw", "bucket_init_index", in);
 }
 
-void cls_rgw_bucket_set_tag_timeout(ObjectWriteOperation& o, uint64_t tag_timeout)
+void cls_rgw_bucket_set_tag_timeout(ObjOpUse o, uint64_t tag_timeout)
 {
   bufferlist in;
   struct rgw_cls_tag_timeout_op call;
   call.tag_timeout = tag_timeout;
   ::encode(call, in);
-  o.exec("rgw", "bucket_set_tag_timeout", in);
+  o->call("rgw", "bucket_set_tag_timeout", in);
 }
 
-void cls_rgw_bucket_prepare_op(ObjectWriteOperation& o,
+void cls_rgw_bucket_prepare_op(ObjOpUse o,
 			       RGWModifyOp op, string& tag,
 			       string& name, bool log_op)
 {
@@ -37,11 +36,12 @@ void cls_rgw_bucket_prepare_op(ObjectWriteOperation& o,
   call.log_op = log_op;
   bufferlist in;
   ::encode(call, in);
-  o.exec("rgw", "bucket_prepare_op", in);
+  o->call("rgw", "bucket_prepare_op", in);
 }
 
-void cls_rgw_bucket_complete_op(ObjectWriteOperation& o, RGWModifyOp op, string& tag,
-				rgw_bucket_entry_ver& ver, string& name, rgw_bucket_dir_entry_meta& dir_meta,
+void cls_rgw_bucket_complete_op(ObjOpUse o, RGWModifyOp op, string& tag,
+				rgw_bucket_entry_ver& ver, string& name,
+				rgw_bucket_dir_entry_meta& dir_meta,
 				list<string> *remove_objs, bool log_op)
 {
 
@@ -56,13 +56,14 @@ void cls_rgw_bucket_complete_op(ObjectWriteOperation& o, RGWModifyOp op, string&
   if (remove_objs)
     call.remove_objs = *remove_objs;
   ::encode(call, in);
-  o.exec("rgw", "bucket_complete_op", in);
+  o->call("rgw", "bucket_complete_op", in);
 }
 
 
-int cls_rgw_list_op(IoCtx& io_ctx, string& oid_t, string& start_obj,
-		    string& filter_prefix, uint32_t num_entries,
-		    rgw_bucket_dir *dir, bool *is_truncated)
+int cls_rgw_list_op(Objecter* o, VolumeRef& vol, const oid_t& oid,
+		    string& start_obj, string& filter_prefix,
+		    uint32_t num_entries, rgw_bucket_dir *dir,
+		    bool *is_truncated)
 {
   bufferlist in, out;
   struct rgw_cls_list_op call;
@@ -70,7 +71,7 @@ int cls_rgw_list_op(IoCtx& io_ctx, string& oid_t, string& start_obj,
   call.filter_prefix = filter_prefix;
   call.num_entries = num_entries;
   ::encode(call, in);
-  int r = io_ctx.exec(oid_t, "rgw", "bucket_list", in, out);
+  int r = o->call(oid, vol, "rgw", "bucket_list", in, &out);
   if (r < 0)
     return r;
 
@@ -90,12 +91,12 @@ int cls_rgw_list_op(IoCtx& io_ctx, string& oid_t, string& start_obj,
  return r;
 }
 
-int cls_rgw_bucket_check_index_op(IoCtx& io_ctx, string& oid_t,
+int cls_rgw_bucket_check_index_op(Objecter* o, VolumeRef& vol, const oid_t& oid,
 				  rgw_bucket_dir_header *existing_header,
 				  rgw_bucket_dir_header *calculated_header)
 {
   bufferlist in, out;
-  int r = io_ctx.exec(oid_t, "rgw", "bucket_check_index", in, out);
+  int r = o->call(oid, vol, "rgw", "bucket_check_index", in, &out);
   if (r < 0)
     return r;
 
@@ -115,34 +116,39 @@ int cls_rgw_bucket_check_index_op(IoCtx& io_ctx, string& oid_t,
   return 0;
 }
 
-int cls_rgw_bucket_rebuild_index_op(IoCtx& io_ctx, string& oid_t)
+int cls_rgw_bucket_rebuild_index_op(Objecter* o, VolumeRef& vol,
+				    const oid_t& oid)
 {
   bufferlist in, out;
-  int r = io_ctx.exec(oid_t, "rgw", "bucket_rebuild_index", in, out);
+  int r = o->call(oid, vol, "rgw", "bucket_rebuild_index", in, &out);
   if (r < 0)
     return r;
 
   return 0;
 }
 
-void cls_rgw_encode_suggestion(char op, rgw_bucket_dir_entry& dirent, bufferlist& updates)
+void cls_rgw_encode_suggestion(char op, rgw_bucket_dir_entry& dirent,
+			       bufferlist& updates)
 {
   updates.append(op);
   ::encode(dirent, updates);
 }
 
-void cls_rgw_suggest_changes(ObjectWriteOperation& o, bufferlist& updates)
+void cls_rgw_suggest_changes(ObjOpUse o, bufferlist& updates)
 {
-  o.exec("rgw", "dir_suggest_changes", updates);
+  o->call("rgw", "dir_suggest_changes", updates);
 }
 
-int cls_rgw_get_dir_header(IoCtx& io_ctx, string& oid_t, rgw_bucket_dir_header *header)
+int cls_rgw_get_dir_header(Objecter* o, VolumeRef& vol, const oid_t& oid,
+			   rgw_bucket_dir_header *header)
 {
   bufferlist in, out;
   struct rgw_cls_list_op call;
   call.num_entries = 0;
+  ObjectOperation op(vol->op());
   ::encode(call, in);
-  int r = io_ctx.exec(oid_t, "rgw", "bucket_list", in, out);
+  op->call("rgw", "bucket_list", in, &out);
+  int r = o->read(oid, vol, op);
   if (r < 0)
     return r;
 
@@ -160,17 +166,17 @@ int cls_rgw_get_dir_header(IoCtx& io_ctx, string& oid_t, rgw_bucket_dir_header *
  return r;
 }
 
-class GetDirHeaderCompletion : public ObjectOperationCompletion {
+class GetDirHeaderCompletion {
   RGWGetDirHeader_CB *ret_ctx;
 public:
   GetDirHeaderCompletion(RGWGetDirHeader_CB *_ctx) : ret_ctx(_ctx) {}
   ~GetDirHeaderCompletion() {
     ret_ctx->put();
   }
-  void handle_completion(int r, bufferlist& outbl) {
+  void operator()(int r, bufferlist&& bl) {
     struct rgw_cls_list_ret ret;
     try {
-      bufferlist::iterator iter = outbl.begin();
+      bufferlist::iterator iter = bl.begin();
       ::decode(ret, iter);
     } catch (buffer::error& err) {
       r = -EIO;
@@ -180,33 +186,32 @@ public:
   };
 };
 
-int cls_rgw_get_dir_header_async(IoCtx& io_ctx, string& oid_t, RGWGetDirHeader_CB *ctx)
+int cls_rgw_get_dir_header_async(Objecter* o, VolumeRef& vol, const oid_t& oid,
+				 RGWGetDirHeader_CB *ctx)
 {
   bufferlist in, out;
   struct rgw_cls_list_op call;
   call.num_entries = 0;
   ::encode(call, in);
-  ObjectReadOperation op(io_ctx);
-  GetDirHeaderCompletion *cb = new GetDirHeaderCompletion(ctx);
-  op.exec("rgw", "bucket_list", in, cb);
-  AioCompletion *c = librados::Rados::aio_create_completion(NULL, NULL, NULL);
-  int r = io_ctx.aio_operate(oid_t, c, &op, NULL);
-  c->release();
+  ObjectOperation op(vol->op());
+  op->call("rgw", "bucket_list", in, GetDirHeaderCompletion(ctx));
+  int r = o->read(oid, vol, op, nullptr, nullptr);
   if (r < 0)
     return r;
 
   return 0;
 }
 
-int cls_rgw_bi_log_list(IoCtx& io_ctx, string& oid_t, string& marker, uint32_t max,
-		    list<rgw_bi_log_entry>& entries, bool *truncated)
+int cls_rgw_bi_log_list(Objecter* o, VolumeRef& vol, const oid_t& oid,
+			string& marker, uint32_t max,
+			list<rgw_bi_log_entry>& entries, bool *truncated)
 {
   bufferlist in, out;
   cls_rgw_bi_log_list_op call;
   call.marker = marker;
   call.max = max;
   ::encode(call, in);
-  int r = io_ctx.exec(oid_t, "rgw", "bi_log_list", in, out);
+  int r = o->call(oid, vol, "rgw", "bi_log_list", in, &out);
   if (r < 0)
     return r;
 
@@ -226,7 +231,8 @@ int cls_rgw_bi_log_list(IoCtx& io_ctx, string& oid_t, string& marker, uint32_t m
  return r;
 }
 
-int cls_rgw_bi_log_trim(IoCtx& io_ctx, string& oid_t, string& start_marker, string& end_marker)
+int cls_rgw_bi_log_trim(Objecter* o, VolumeRef& vol, const oid_t& oid,
+			string& start_marker, string& end_marker)
 {
   do {
     int r;
@@ -235,7 +241,7 @@ int cls_rgw_bi_log_trim(IoCtx& io_ctx, string& oid_t, string& start_marker, stri
     call.start_marker = start_marker;
     call.end_marker = end_marker;
     ::encode(call, in);
-    r = io_ctx.exec(oid_t, "rgw", "bi_log_trim", in, out);
+    r = o->call(oid, vol, "rgw", "bi_log_trim", in, &out);
 
     if (r == -ENODATA)
       break;
@@ -248,22 +254,23 @@ int cls_rgw_bi_log_trim(IoCtx& io_ctx, string& oid_t, string& start_marker, stri
   return 0;
 }
 
-int cls_rgw_usage_log_read(IoCtx& io_ctx, string& oid_t, string& user,
-			   uint64_t start_epoch, uint64_t end_epoch, uint32_t max_entries,
-			   string& read_iter, map<rgw_user_bucket, rgw_usage_log_entry>& usage,
+int cls_rgw_usage_log_read(Objecter* o, VolumeRef& vol, const oid_t& oid,
+			   string& user, uint32_t max_entries,
+			   string& read_iter,
+			   map<rgw_user_bucket, rgw_usage_log_entry>& usage,
 			   bool *is_truncated)
 {
   *is_truncated = false;
 
   bufferlist in, out;
   rgw_cls_usage_log_read_op call;
-  call.start_epoch = start_epoch;
-  call.end_epoch = end_epoch;
   call.owner = user;
   call.max_entries = max_entries;
   call.iter = read_iter;
   ::encode(call, in);
-  int r = io_ctx.exec(oid_t, "rgw", "user_usage_log_read", in, out);
+  ObjectOperation op(vol->op());
+  op->call("rgw", "user_usage_log_read", in, &out);
+  int r = o->read(oid, vol, op);
   if (r < 0)
     return r;
 
@@ -283,30 +290,27 @@ int cls_rgw_usage_log_read(IoCtx& io_ctx, string& oid_t, string& user,
   return 0;
 }
 
-void cls_rgw_usage_log_trim(ObjectWriteOperation& op, string& user,
-			   uint64_t start_epoch, uint64_t end_epoch)
+void cls_rgw_usage_log_trim(ObjOpUse op, string& user)
 {
   bufferlist in;
   rgw_cls_usage_log_trim_op call;
-  call.start_epoch = start_epoch;
-  call.end_epoch = end_epoch;
   call.user = user;
   ::encode(call, in);
-  op.exec("rgw", "user_usage_log_trim", in);
+  op->call("rgw", "user_usage_log_trim", in);
 }
 
-void cls_rgw_usage_log_add(ObjectWriteOperation& op, rgw_usage_log_info& info)
+void cls_rgw_usage_log_add(ObjOpUse op, rgw_usage_log_info& info)
 {
   bufferlist in;
   rgw_cls_usage_log_add_op call;
   call.info = info;
   ::encode(call, in);
-  op.exec("rgw", "user_usage_log_add", in);
+  op->call("rgw", "user_usage_log_add", in);
 }
 
 /* garbage collection */
 
-void cls_rgw_gc_set_entry(ObjectWriteOperation& op,
+void cls_rgw_gc_set_entry(ObjOpUse op,
 			  ceph::timespan expiration, cls_rgw_gc_obj_info& info)
 {
   bufferlist in;
@@ -314,10 +318,10 @@ void cls_rgw_gc_set_entry(ObjectWriteOperation& op,
   call.expiration = expiration;
   call.info = info;
   ::encode(call, in);
-  op.exec("rgw", "gc_set_entry", in);
+  op->call("rgw", "gc_set_entry", in);
 }
 
-void cls_rgw_gc_defer_entry(ObjectWriteOperation& op,
+void cls_rgw_gc_defer_entry(ObjOpUse op,
 			    ceph::timespan expiration,
 			    const string& tag)
 {
@@ -326,10 +330,11 @@ void cls_rgw_gc_defer_entry(ObjectWriteOperation& op,
   call.expiration = expiration;
   call.tag = tag;
   ::encode(call, in);
-  op.exec("rgw", "gc_defer_entry", in);
+  op->call("rgw", "gc_defer_entry", in);
 }
 
-int cls_rgw_gc_list(IoCtx& io_ctx, string& oid_t, string& marker, uint32_t max, bool expired_only,
+int cls_rgw_gc_list(Objecter* o, VolumeRef& vol, const oid_t& oid,
+		    string& marker, uint32_t max, bool expired_only,
 		    list<cls_rgw_gc_obj_info>& entries, bool *truncated)
 {
   bufferlist in, out;
@@ -338,7 +343,7 @@ int cls_rgw_gc_list(IoCtx& io_ctx, string& oid_t, string& marker, uint32_t max, 
   call.max = max;
   call.expired_only = expired_only;
   ::encode(call, in);
-  int r = io_ctx.exec(oid_t, "rgw", "gc_list", in, out);
+  int r = o->call(oid, vol, "rgw", "gc_list", in, &out);
   if (r < 0)
     return r;
 
@@ -358,11 +363,11 @@ int cls_rgw_gc_list(IoCtx& io_ctx, string& oid_t, string& marker, uint32_t max, 
  return r;
 }
 
-void cls_rgw_gc_remove(librados::ObjectWriteOperation& op, const list<string>& tags)
+void cls_rgw_gc_remove(ObjOpUse op, const list<string>& tags)
 {
   bufferlist in;
   cls_rgw_gc_remove_op call;
   call.tags = tags;
   ::encode(call, in);
-  op.exec("rgw", "gc_remove", in);
+  op->call("rgw", "gc_remove", in);
 }

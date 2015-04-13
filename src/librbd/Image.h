@@ -8,7 +8,7 @@
 
 #include <mutex>
 #include <shared_mutex>
-#include "librados/RadosClient.h"
+#include "osdc/RadosClient.h"
 #include "include/buffer.h"
 #include "include/types.h"
 
@@ -18,7 +18,7 @@ namespace librbd {
   using std::string;
   using std::function;
   using ceph::bufferlist;
-  using librados::RadosClient;
+  using rados::RadosClient;
 
   struct read_only_t { };
   constexpr read_only_t read_only { };
@@ -39,7 +39,7 @@ namespace librbd {
     };
 
 
-    librados::RadosClient* rc;
+    rados::RadosClient* rc;
     struct rbd_obj_header_ondisk header;
     // whether the image was opened read-only. cannot be changed after opening
     bool read_only;
@@ -50,15 +50,15 @@ namespace librbd {
     uint64_t size;
     oid_t header_oid;
     oid_t image_oid;
-    OSDC::Flusher* f;
+    rados::Flusher* f;
   public:
 
     Image() noexcept : rc(nullptr), read_only(false),
       empty(true), f(nullptr) {}
-    Image(librados::RadosClient* rados,
+    Image(rados::RadosClient* rados,
 	  const VolumeRef& v,
 	  const string& name);
-    Image(librados::RadosClient* rados,
+    Image(rados::RadosClient* rados,
 	  const VolumeRef& v,
 	  const string &name,
 	  read_only_t);
@@ -78,19 +78,19 @@ namespace librbd {
 		       const VolumeRef& volume,
 		       const string& imgname);
     void flush();
-    void flush(OSDC::op_callback&& cb);
+    void flush(rados::op_callback&& cb);
     void resize(uint64_t newsize);
     static void copy(Image& src, Image& dest);
 
     void write_sync(uint64_t off, size_t len, const bufferlist& bl);
     void write(uint64_t off, size_t len, const bufferlist& bl,
-	       OSDC::op_callback&& ack = nullptr,
-	       OSDC::op_callback&& safe = nullptr);
+	       rados::op_callback&& ack = nullptr,
+	       rados::op_callback&& safe = nullptr);
 
     void read_sync(uint64_t off, size_t len, bufferlist* bl) const;
     void read(uint64_t off, size_t len, bufferlist* bl,
-	      OSDC::op_callback&& cb = nullptr) const;
-    void read(uint64_t off, size_t len, OSDC::read_callback&& cb) const;
+	      rados::op_callback&& cb = nullptr) const;
+    void read(uint64_t off, size_t len, rados::read_callback&& cb) const;
     void read_iterate(uint64_t off, size_t len,
 		      function<void(uint64_t, size_t,
 				    const bufferlist&)> cb) const;
@@ -99,7 +99,7 @@ namespace librbd {
       read_iterate(0, size, cb);
     }
 
-    void discard(uint64_t off, size_t len, OSDC::op_callback&& cb = nullptr);
+    void discard(uint64_t off, size_t len, rados::op_callback&& cb = nullptr);
     void discard_sync(uint64_t off, size_t len);
     static void create(RadosClient* rc,
 		       const VolumeRef& volume,

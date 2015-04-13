@@ -16,7 +16,6 @@
 #ifndef KEY_VALUE_STRUCTURE_HPP_
 #define KEY_VALUE_STRUCTURE_HPP_
 
-#include "include/rados/librados.hpp"
 #include <vector>
 
 using std::string;

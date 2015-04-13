@@ -49,11 +49,11 @@ OPTION(log_flush_on_exit, OPT_BOOL, true) // changed by common_preinit()
 OPTION(log_to_lttng, OPT_BOOL, false) // lttng tracepoints for log output
 OPTION(log_stop_at_utilization, OPT_FLOAT, .97)  // stop logging at (near) full
 
-OPTION(xio_trace_mempool, OPT_BOOL, false) // mempool allocation counters
+OPTION(xio_trace_memvol, OPT_BOOL, false) // memvol allocation counters
 OPTION(xio_trace_msgcnt, OPT_BOOL, false) // incoming/outgoing msg counters
 OPTION(xio_trace_xcon, OPT_BOOL, false) // Xio message encode/decode trace
 OPTION(xio_queue_depth, OPT_INT, 512) // depth of Accelio msg queue
-OPTION(xio_mp_min, OPT_INT, 128) // default min mempool size
+OPTION(xio_mp_min, OPT_INT, 128) // default min memvol size
 OPTION(xio_mp_max_64, OPT_INT, 65536) // max 64-byte chunks (buffer is 40)
 OPTION(xio_mp_max_256, OPT_INT, 8192) // max 256-byte chunks
 OPTION(xio_mp_max_1k, OPT_INT, 8192) // max 1K chunks
@@ -212,7 +212,7 @@ OPTION(mon_clock_drift_warn_backoff, OPT_TIME, 5s)
 OPTION(mon_timecheck_interval, OPT_TIME, 300s)
 // on leader, if paxos update isn't accepted
 OPTION(mon_accept_timeout, OPT_TIME, 10s)
-// position between pool cache_target_full and max where we start warning
+// position between vol cache_target_full and max where we start warning
 OPTION(mon_cache_target_full_warn_ratio, OPT_FLOAT, .66)
 // what % full makes an OSD "full"
 OPTION(mon_osd_full_ratio, OPT_FLOAT, .95)
@@ -345,9 +345,9 @@ OPTION(mon_client_hunt_interval_backoff, OPT_INT, 2)
 OPTION(mon_client_hunt_interval_max_multiple, OPT_U32, 10)
 OPTION(mon_client_max_log_entries_per_message, OPT_INT, 1000)
 // percent of quota at which to issue warnings
-OPTION(mon_pool_quota_warn_threshold, OPT_INT, 0)
+OPTION(mon_vol_quota_warn_threshold, OPT_INT, 0)
 // percent of quota at which to issue errors
-OPTION(mon_pool_quota_crit_threshold, OPT_INT, 0)
+OPTION(mon_vol_quota_crit_threshold, OPT_INT, 0)
 OPTION(client_cache_size, OPT_INT, 16384)
 OPTION(client_cache_mid, OPT_FLOAT, .75)
 OPTION(client_use_random_mds, OPT_BOOL, false)
@@ -566,7 +566,7 @@ OPTION(osd_mon_report_interval_max, OPT_TIME, 2min)
 OPTION(osd_mon_report_interval_min, OPT_TIME, 5s)
 // time out a mon if it doesn't ack stats
 OPTION(osd_mon_ack_timeout, OPT_TIME, 30s)
-OPTION(osd_default_data_pool_replay_window, OPT_TIME, 45s)
+OPTION(osd_default_data_vol_replay_window, OPT_TIME, 45s)
 OPTION(osd_preserve_trimmed_log, OPT_BOOL, false)
 OPTION(osd_scan_list_ping_tp_interval, OPT_U64, 100)
 OPTION(osd_auto_weight, OPT_BOOL, false)
@@ -576,7 +576,7 @@ OPTION(osd_open_classes_on_start, OPT_BOOL, true)
 OPTION(osd_check_for_log_corruption, OPT_BOOL, false)
 // default notify timeout in seconds
 OPTION(osd_default_notify_timeout, OPT_TIME, 30s)
-// default for the erasure-code-directory=XXX property of osd pool create
+// default for the erasure-code-directory=XXX property of osd vol create
 OPTION(osd_erasure_code_directory, OPT_STR, CEPH_PKGLIBDIR"/erasure-code")
 
 OPTION(osd_command_max_records, OPT_INT, 256)
@@ -830,11 +830,11 @@ OPTION(rgw_thread_pool_size, OPT_INT, 100)
 OPTION(rgw_num_control_oids, OPT_INT, 8)
 
 OPTION(rgw_zone, OPT_STR, "") // zone name
-// pool where zone specific info is stored
-OPTION(rgw_zone_root_pool, OPT_STR, ".rgw.root")
+// vol where zone specific info is stored
+OPTION(rgw_zone_root_vol, OPT_STR, ".rgw.root")
 OPTION(rgw_region, OPT_STR, "") // region name
-// pool where all region info is stored
-OPTION(rgw_region_root_pool, OPT_STR, ".rgw.root")
+// vol where all region info is stored
+OPTION(rgw_region_root_vol, OPT_STR, ".rgw.root")
 // oid where default region info is stored
 OPTION(rgw_default_region_info_oid, OPT_STR, "default.region")
 OPTION(rgw_log_nonexistent_bucket, OPT_BOOL, false)

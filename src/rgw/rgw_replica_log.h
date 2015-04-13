@@ -16,7 +16,6 @@
 #include "cls/replica_log/cls_replica_log_types.h"
 #include "include/types.h"
 #include "include/ceph_time.h"
-#include "include/rados/librados.hpp"
 #include "rgw_common.h"
 
 class RGWRados;
@@ -41,22 +40,22 @@ class RGWReplicaLogger {
 protected:
   CephContext *cct;
   RGWRados *store;
-  int open_ioctx(librados::IoCtx& ctx, const string& pool);
+  int open_volume(VolumeRef& vol, const string& name);
 
   RGWReplicaLogger(RGWRados *_store);
 
-  int update_bound(const string& oid_t, const string& pool,
+  int update_bound(const string& oid_t, const string& vol,
 		   const string& daemon_id, const string& marker,
 		   const ceph::real_time& time,
 		   const list<RGWReplicaItemMarker> *entries);
-  int delete_bound(const string& oid_t, const string& pool,
+  int delete_bound(const string& oid_t, const string& vol,
 		   const string& daemon_id);
-  int get_bounds(const string& oid_t, const string& pool,
+  int get_bounds(const string& oid_t, const string& vol,
 		 RGWReplicaBounds& bounds);
 };
 
 class RGWReplicaObjectLogger : private RGWReplicaLogger {
-  string pool;
+  string volname;
   string prefix;
 
   void get_shard_oid(int id, string& oid_t) {
@@ -67,7 +66,7 @@ class RGWReplicaObjectLogger : private RGWReplicaLogger {
 
 public:
   RGWReplicaObjectLogger(RGWRados *_store,
-		const string& _pool,
+		const string& _vol,
 		const string& _prefix);
 
   int create_log_objects(int shards);
@@ -76,39 +75,39 @@ public:
 		   const list<RGWReplicaItemMarker> *entries) {
     string oid_t;
     get_shard_oid(shard, oid_t);
-    return RGWReplicaLogger::update_bound(oid_t, pool,
+    return RGWReplicaLogger::update_bound(oid_t, volname,
 					  daemon_id, marker, time, entries);
   }
   int delete_bound(int shard, const string& daemon_id) {
     string oid_t;
     get_shard_oid(shard, oid_t);
-    return RGWReplicaLogger::delete_bound(oid_t, pool,
+    return RGWReplicaLogger::delete_bound(oid_t, volname,
 					  daemon_id);
   }
   int get_bounds(int shard, RGWReplicaBounds& bounds) {
-    string oid_t;
-    get_shard_oid(shard, oid_t);
-    return RGWReplicaLogger::get_bounds(oid_t, pool, bounds);
+    string oid;
+    get_shard_oid(shard, oid);
+    return RGWReplicaLogger::get_bounds(oid, volname, bounds);
   }
 };
 
 class RGWReplicaBucketLogger : private RGWReplicaLogger {
-  string pool;
+  string vol;
   string prefix;
 public:
   RGWReplicaBucketLogger(RGWRados *_store);
   int update_bound(const rgw_bucket& bucket, const string& daemon_id,
 		   const string& marker, const ceph::real_time& time,
 		   const list<RGWReplicaItemMarker> *entries) {
-    return RGWReplicaLogger::update_bound(prefix+bucket.name, pool,
+    return RGWReplicaLogger::update_bound(prefix+bucket.name, vol,
 					  daemon_id, marker, time, entries);
   }
   int delete_bound(const rgw_bucket& bucket, const string& daemon_id) {
-    return RGWReplicaLogger::delete_bound(prefix+bucket.name, pool,
+    return RGWReplicaLogger::delete_bound(prefix+bucket.name, vol,
 					  daemon_id);
   }
   int get_bounds(const rgw_bucket& bucket, RGWReplicaBounds& bounds) {
-    return RGWReplicaLogger::get_bounds(prefix+bucket.name, pool,
+    return RGWReplicaLogger::get_bounds(prefix+bucket.name, vol,
 					bounds);
   }
 };

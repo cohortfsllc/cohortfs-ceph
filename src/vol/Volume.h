@@ -32,7 +32,9 @@
 #include "Placer.h"
 
 class OSDMap;
-class ObjOp;
+namespace rados {
+  class ObjOp;
+};
 
 enum vol_type {
   CohortVol,
@@ -151,7 +153,7 @@ public:
     return 0;
   };
 
-  virtual std::unique_ptr<ObjOp> op() const = 0;
+  virtual std::unique_ptr<rados::ObjOp> op() const = 0;
   // Returns negative POSIX error code on error.
   virtual size_t op_size() const = 0;
   // Returns minimum number of subops that need to be placed to continue

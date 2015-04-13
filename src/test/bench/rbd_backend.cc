@@ -3,14 +3,14 @@
 #include "rbd_backend.h"
 #include <boost/tuple/tuple.hpp>
 
-typedef boost::tuple<OSDC::op_callback&&, OSDC::op_callback&&> arg_type;
+typedef boost::tuple<rados::op_callback&&, rados::op_callback&&> arg_type;
 
 void RBDBackend::write(
   const std::string &oid,
   uint64_t offset,
   const bufferlist &bl,
-  OSDC::op_callback&& on_write_applied,
-  OSDC::op_callback&& on_commit)
+  rados::op_callback&& on_write_applied,
+  rados::op_callback&& on_commit)
 {
   bufferlist &bl_non_const = const_cast<bufferlist&>(bl);
   std::shared_ptr<librbd::Image> image = (*m_images)[oid];
@@ -29,7 +29,7 @@ void RBDBackend::read(
   uint64_t offset,
   uint64_t length,
   bufferlist *bl,
-  OSDC::op_callback&& on_read_complete)
+  rados::op_callback&& on_read_complete)
 {
   std::shared_ptr<librbd::Image> image = (*m_images)[oid];
   try{

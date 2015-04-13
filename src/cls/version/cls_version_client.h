@@ -2,24 +2,26 @@
 #define CEPH_CLS_VERSION_CLIENT_H
 
 #include "include/types.h"
-#include "include/rados/librados.hpp"
+#include "osdc/RadosClient.h"
 
 /*
  * version objclass
  */
 
-void cls_version_set(librados::ObjectWriteOperation& op, obj_version& ver);
+void cls_version_set(rados::ObjOpUse op, obj_version& ver);
 
 /* increase anyway */
-void cls_version_inc(librados::ObjectWriteOperation& op);
+void cls_version_inc(rados::ObjOpUse op);
 
 /* conditional increase, return -EAGAIN if condition fails */
-void cls_version_inc(librados::ObjectWriteOperation& op, obj_version& ver, VersionCond cond);
+void cls_version_inc(rados::ObjOpUse op, obj_version& ver, VersionCond cond);
 
-void cls_version_read(librados::ObjectReadOperation& op, obj_version *objv);
+void cls_version_read(rados::ObjOpUse op, obj_version *objv);
 
-int cls_version_read(librados::IoCtx& io_ctx, string& oid_t, obj_version *ver);
+int cls_version_read(Objecter* o, VolumeRef vol, const oid_t& oid,
+		     obj_version *ver);
 
-void cls_version_check(librados::ObjectOperation& op, obj_version& ver, VersionCond cond);
+void cls_version_check(rados::ObjOpUse op, obj_version& ver,
+		       VersionCond cond);
 
 #endif

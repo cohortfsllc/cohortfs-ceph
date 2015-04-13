@@ -962,7 +962,7 @@ void MonClient::_finish_command(MonCommand *r, int ret, string rs)
   if (r->prs)
     *(r->prs) = rs;
   if (r->onfinish)
-    finisher.queue(r->onfinish, ret);
+    finisher.queue(std::move(r->onfinish), ret);
   mon_commands.erase(r->tid);
   delete r;
 }
@@ -970,7 +970,7 @@ void MonClient::_finish_command(MonCommand *r, int ret, string rs)
 int MonClient::start_mon_command(const vector<string>& cmd,
 				 const bufferlist& inbl,
 				 bufferlist *outbl, string *outs,
-				 Context *onfinish)
+				 std::function<void(int)>&& onfinish)
 {
   std::lock_guard<std::mutex> l(monc_lock);
   MonCommand *r = new MonCommand(++last_mon_command_tid);
@@ -978,7 +978,7 @@ int MonClient::start_mon_command(const vector<string>& cmd,
   r->inbl = inbl;
   r->poutbl = outbl;
   r->prs = outs;
-  r->onfinish = onfinish;
+  r->onfinish.swap( onfinish);
   if (cct->_conf->rados_mon_op_timeout > 0ns) {
     r->ontimeout =
       timer.add_event(cct->_conf->rados_mon_op_timeout,
@@ -995,7 +995,7 @@ int MonClient::start_mon_command(const string &mon_name,
 				 const vector<string>& cmd,
 				 const bufferlist& inbl,
 				 bufferlist *outbl, string *outs,
-				 Context *onfinish)
+				 std::function<void(int)>&& onfinish)
 {
   std::lock_guard<std::mutex> l(monc_lock);
   MonCommand *r = new MonCommand(++last_mon_command_tid);
@@ -1004,7 +1004,7 @@ int MonClient::start_mon_command(const string &mon_name,
   r->inbl = inbl;
   r->poutbl = outbl;
   r->prs = outs;
-  r->onfinish = onfinish;
+  r->onfinish.swap(onfinish);
   mon_commands[r->tid] = r;
   _send_command(r);
   // can't fail
@@ -1015,7 +1015,7 @@ int MonClient::start_mon_command(int rank,
 				 const vector<string>& cmd,
 				 const bufferlist& inbl,
 				 bufferlist *outbl, string *outs,
-				 Context *onfinish)
+				 std::function<void(int)>&& onfinish)
 {
   std::lock_guard<std::mutex> l(monc_lock);
   MonCommand *r = new MonCommand(++last_mon_command_tid);
@@ -1024,7 +1024,7 @@ int MonClient::start_mon_command(int rank,
   r->inbl = inbl;
   r->poutbl = outbl;
   r->prs = outs;
-  r->onfinish = onfinish;
+  r->onfinish.swap(onfinish);
   mon_commands[r->tid] = r;
   _send_command(r);
   return 0;
@@ -1032,7 +1032,8 @@ int MonClient::start_mon_command(int rank,
 
 // ---------
 
-void MonClient::get_version(string map, version_t *newest, version_t *oldest, Context *onfinish)
+void MonClient::get_version(string map, version_t *newest, version_t *oldest,
+			    Context *onfinish)
 {
   version_req_d *req = new version_req_d(onfinish, newest, oldest);
   ldout(cct, 10) << "get_version " << map << " req " << req << dendl;

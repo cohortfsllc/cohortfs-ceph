@@ -14,7 +14,6 @@
 #ifndef CLS_REPLICA_LOG_CLIENT_H_
 #define CLS_REPLICA_LOG_CLIENT_H_
 
-#include "include/rados/librados.hpp"
 #include "cls_replica_log_types.h"
 
 /**
@@ -55,7 +54,7 @@ void cls_replica_log_extract_marker(
  * @param op The op to add the update to
  * @param progress The progress marker to send
  */
-void cls_replica_log_update_bound(librados::ObjectWriteOperation& op,
+void cls_replica_log_update_bound(rados::ObjOpUse op,
 				  const cls_replica_log_progress_marker& progress);
 
 /**
@@ -66,22 +65,16 @@ void cls_replica_log_update_bound(librados::ObjectWriteOperation& op,
  * @param op The op to add the delete to
  * @param entity The entity whose progress should be removed
  */
-void cls_replica_log_delete_bound(librados::ObjectWriteOperation& op,
+void cls_replica_log_delete_bound(rados::ObjOpUse op,
 				  const string& entity);
 
 /**
  * Read the bounds on a replica log.
  *
- * @param io_ctx The IoCtx to use for the read
- * @param oid_t The oid_t to direct the read to
- * @param position_marker [out] The lowest marker key that has been reached
- * @param oldest_time [out] Timestamp corresponding to the position marker or
- * oldest in-progress item.
- * @param markers [out] List of progress markers for individual daemons
  */
 int cls_replica_log_get_bounds(
-  librados::IoCtx& io_ctx, const string& oid_t, string& position_marker,
-  ceph::real_time& oldest_time,
+  rados::Objecter* objecter, const VolumeRef& vol, const oid_t& oid,
+  string& position_marker, ceph::real_time& oldest_time,
   list<cls_replica_log_progress_marker>& markers);
 
 #endif /* CLS_REPLICA_LOG_CLIENT_H_ */

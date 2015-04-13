@@ -40,7 +40,7 @@ namespace cohort {
 
   public:
     virtual ~SimpleMultiCallback() { }
-    std::reference_wrapper<SimpleMultiCallback<Args...> > add() {
+    operator std::function<void(Args...)>() {
       std::unique_lock<std::mutex> l(lock);
       ++count;
       return std::ref(*this);
@@ -58,7 +58,7 @@ namespace cohort {
     };
     // Obviously this won't work if your Args are anything but a
     // single int.
-    Context* add_ctx() {
+    operator Context*() {
       std::unique_lock<std::mutex> l(lock);
       ++count;
       return new C_MultiHackery(*this);

@@ -13,7 +13,7 @@
 #include "common/ceph_context.h"
 #include "common/dout.h"
 #include "common/errno.h"
-#include "librados/RadosClient.h"
+#include "osdc/RadosClient.h"
 
 #include "librbd/Image.h"
 
@@ -22,6 +22,7 @@
 #define dout_prefix *_dout << "librbd::Image: "
 
 namespace librbd {
+  using namespace rados;
   using std::unique_ptr;
 
   const string Image::rbd_suffix = ".rbd";
@@ -29,7 +30,7 @@ namespace librbd {
   const char Image::header_signature[] = "RBD";
   const char Image::header_version[] = "001.005";
 
-  Image::Image(librados::RadosClient* _rc,
+  Image::Image(RadosClient* _rc,
 	       const VolumeRef& v,
 	       const string& name)
     : rc(_rc),
@@ -44,10 +45,10 @@ namespace librbd {
     v->attach(_rc->cct);
     read_header();
     size = header.image_size;
-    f = new OSDC::Flusher;
+    f = new Flusher;
   }
 
-  Image::Image(librados::RadosClient* rados,
+  Image::Image(RadosClient* rados,
 	       const VolumeRef& v,
 	       const string& name,
 	       read_only_t)
@@ -237,7 +238,7 @@ namespace librbd {
     }
   }
 
-  void Image::flush(OSDC::op_callback&& cb)
+  void Image::flush(op_callback&& cb)
   {
     if (empty)
       throw std::make_error_condition(std::errc::invalid_argument);
@@ -296,7 +297,7 @@ namespace librbd {
   }
 
   void Image::write(uint64_t off, size_t len, const bufferlist& bl,
-		    OSDC::op_callback&& ack, OSDC::op_callback&& safe)
+		    op_callback&& ack, op_callback&& safe)
   {
     if (empty)
       throw std::make_error_condition(std::errc::invalid_argument);
@@ -306,8 +307,7 @@ namespace librbd {
     clip_io(off, &len);
 
     rc->objecter->write(image_oid, volume, off, len, bl,
-			ceph::real_clock::now(), 0, std::move(ack),
-			f->completion(std::move(safe)));
+			std::move(ack), f->completion(std::move(safe)));
   }
 
   void Image::read_sync(uint64_t off, size_t len, bufferlist* bl) const
@@ -327,9 +327,9 @@ namespace librbd {
   struct CB_Padder {
     size_t len;
     bufferlist* bl;
-    OSDC::op_callback cb;
+    op_callback cb;
 
-    CB_Padder(size_t _len, bufferlist* _bl, OSDC::op_callback&& _cb)
+    CB_Padder(size_t _len, bufferlist* _bl, op_callback&& _cb)
       : len(_len), bl(_bl) {
       cb.swap(_cb);
     }
@@ -343,21 +343,21 @@ namespace librbd {
   };
 
   void Image::read(uint64_t off, size_t len, bufferlist* bl,
-		   OSDC::op_callback&& cb) const
+		   op_callback&& cb) const
   {
     if (empty)
       throw std::make_error_condition(std::errc::invalid_argument);
     clip_io(off, &len);
 
     rc->objecter->read(image_oid, volume, off, len, bl,
-		       0, CB_Padder(len, bl, std::move(cb)));
+		       CB_Padder(len, bl, std::move(cb)));
   }
 
   struct RCB_Padder {
-    OSDC::read_callback cb;
+    read_callback cb;
     size_t len;
 
-    RCB_Padder(size_t _len, OSDC::read_callback&& _cb) : len(_len) {
+    RCB_Padder(size_t _len, read_callback&& _cb) : len(_len) {
       cb.swap(_cb);
     }
 
@@ -369,17 +369,17 @@ namespace librbd {
     }
   };
 
-  void Image::read(uint64_t off, size_t len, OSDC::read_callback&& cb) const
+  void Image::read(uint64_t off, size_t len, read_callback&& cb) const
   {
     if (empty)
       throw std::make_error_condition(std::errc::invalid_argument);
     clip_io(off, &len);
 
-    rc->objecter->read(image_oid, volume, off, len, 0,
+    rc->objecter->read(image_oid, volume, off, len,
 		       RCB_Padder(len, std::move(cb)));
   }
 
-  void Image::discard(uint64_t off, size_t len, OSDC::op_callback&& cb)
+  void Image::discard(uint64_t off, size_t len, op_callback&& cb)
   {
     if (empty)
       throw std::make_error_condition(std::errc::invalid_argument);
@@ -392,11 +392,11 @@ namespace librbd {
     clip_io(off, &len);
 
     if (off + len <= size) {
-      rc->objecter->trunc(image_oid, volume, ceph::real_clock::now(), off, 0,
-			  0, nullptr, f->completion(std::move(cb)));
+      rc->objecter->trunc(image_oid, volume, off, 0, nullptr,
+			  f->completion(std::move(cb)));
     } else {
-      rc->objecter->zero(image_oid, volume, off, len, ceph::real_clock::now(),
-			 0, nullptr, f->completion(std::move(cb)));
+      rc->objecter->zero(image_oid, volume, off, len, nullptr,
+			 f->completion(std::move(cb)));
     }
   }
 
@@ -449,7 +449,7 @@ namespace librbd {
     uint64_t src_size = src.get_size();
     uint64_t dest_size = dest.get_size();
 
-    OSDC::Flusher rf;
+    Flusher rf;
 
     if (src.empty || dest.empty)
       throw std::make_error_condition(std::errc::invalid_argument);

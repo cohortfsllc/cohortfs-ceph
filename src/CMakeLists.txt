@@ -339,19 +339,14 @@ add_subdirectory(cls)
 set(osdc_files
   osdc/Objecter.cc
   messages/MOSDOpReply.cc
+  osdc/RadosClient.cc
   )
 add_library(osdc_objs OBJECT ${osdc_files})
 
-set(librados_srcs
-  librados/librados.cc
-  librados/RadosClient.cc
-  librados/IoCtxImpl.cc
-  )
-add_library(librados_objs OBJECT ${librados_srcs})
 add_library(librados ${CEPH_SHARED} 
-  $<TARGET_OBJECTS:librados_objs>
   $<TARGET_OBJECTS:osdc_objs>
-  $<TARGET_OBJECTS:heap_profiler_objs>)
+  $<TARGET_OBJECTS:heap_profiler_objs>
+  )
 target_link_libraries(librados PRIVATE global common cls_lock_client
   ${CRYPTO_LIBS} ${EXTRALIBS} ${ALLOC_LIBS})
 if(${ENABLE_SHARED})
@@ -367,16 +362,12 @@ install(TARGETS librados DESTINATION lib)
 set(rados_srcs
   tools/rados/rados.cc
   common/obj_bencher.cc)
-add_executable(rados ${rados_srcs})
-target_link_libraries(rados librados global boost_filesystem ${CMAKE_DL_LIBS})
+add_executable(rados
+  ${rados_srcs}
+  )
+target_link_libraries(rados librados global cls_lock_client boost_filesystem ${CMAKE_DL_LIBS})
 
-set(librados_config_srcs
-  librados-config.cc)
-add_executable(librados-config ${librados_config_srcs})
-target_link_libraries(librados-config librados global boost_filesystem
-  ${CMAKE_DL_LIBS})
-
-install(TARGETS rados librados-config DESTINATION bin)
+install(TARGETS rados DESTINATION bin)
 
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/src/pybind/
   DESTINATION ${PYTHON_INSTDIR})

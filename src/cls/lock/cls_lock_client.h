@@ -6,53 +6,55 @@
 
 
 #include "include/types.h"
-#include "include/rados/librados.hpp"
-
 #include "cls/lock/cls_lock_types.h"
-
+#include "osdc/Objecter.h"
 
 namespace rados {
   namespace cls {
     namespace lock {
 
-      extern void lock(librados::ObjectWriteOperation *rados_op,
+      extern void lock(ObjOpUse rados_op,
 		       const std::string& name, ClsLockType type,
 		       const std::string& cookie, const std::string& tag,
 		       const std::string& description,
 		       const ceph::timespan& duration,
 		       uint8_t flags);
 
-      extern int lock(librados::IoCtx *ioctx,
-		      const std::string& oid_t,
+      extern int lock(Objecter* o,
+		      VolumeRef v,
+		      const oid_t& oid,
 		      const std::string& name, ClsLockType type,
 		      const std::string& cookie, const std::string& tag,
 		      const std::string& description,
 		      const ceph::timespan& duration,
 		      uint8_t flags);
 
-      extern void unlock(librados::ObjectWriteOperation *rados_op,
+      extern void unlock(ObjOpUse rados_op,
 			 const std::string& name, const std::string& cookie);
 
-      extern int unlock(librados::IoCtx *ioctx, const std::string& oid_t,
+      extern int unlock(Objecter* o, VolumeRef, const oid_t& oid,
 			const std::string& name, const std::string& cookie);
 
-      extern void break_lock(librados::ObjectWriteOperation *op,
-			     const std::string& name, const std::string& cookie,
+      extern void break_lock(ObjOpUse& op,
+			     const std::string& name,
+			     const std::string& cookie,
 			     const entity_name_t& locker);
 
-      extern int break_lock(librados::IoCtx *ioctx, const std::string& oid_t,
+      extern int break_lock(Objecter* o, VolumeRef vol,
+			    const oid_t& oid,
 			    const std::string& name, const std::string& cookie,
 			    const entity_name_t& locker);
 
-      extern int list_locks(librados::IoCtx *ioctx, const std::string& oid_t,
-			    list<std::string> *locks);
-      extern void get_lock_info_start(librados::ObjectReadOperation *rados_op,
+      extern int list_locks(Objecter* o, VolumeRef vol, const oid_t& oid,
+			    list<string>& locks);
+
+      extern void get_lock_info_start(ObjOpUse rados_op,
 				      const std::string& name);
       extern int get_lock_info_finish(ceph::bufferlist::iterator *out,
 				      map<locker_id_t, locker_info_t> *lockers,
 				      ClsLockType *type, std::string *tag);
 
-      extern int get_lock_info(librados::IoCtx *ioctx, const std::string& oid_t,
+      extern int get_lock_info(Objecter* o, VolumeRef vol, const oid_t& oid,
 			       const std::string& name,
 			       map<locker_id_t, locker_info_t> *lockers,
 			       ClsLockType *type, std::string *tag);
@@ -82,16 +84,16 @@ namespace rados {
 	}
 
 	/* ObjectWriteOperation */
-	void lock_exclusive(librados::ObjectWriteOperation *ioctx);
-	void lock_shared(librados::ObjectWriteOperation *ioctx);
-	void unlock(librados::ObjectWriteOperation *ioctx);
-	void break_lock(librados::ObjectWriteOperation *ioctx, const entity_name_t& locker);
+	void lock_exclusive(ObjOpUse op);
+	void lock_shared(ObjOpUse op);
+	void unlock(ObjOpUse op);
+	void break_lock(ObjOpUse op, const entity_name_t& locker);
 
 	/* IoCtx */
-	int lock_exclusive(librados::IoCtx *ioctx, const std::string& oid_t);
-	int lock_shared(librados::IoCtx *ioctx, const std::string& oid_t);
-	int unlock(librados::IoCtx *ioctx, const std::string& oid_t);
-	int break_lock(librados::IoCtx *ioctx, const std::string& oid_t,
+	int lock_exclusive(Objecter* o, VolumeRef v, const oid_t& oid);
+	int lock_shared(Objecter* o, VolumeRef v, const oid_t& oid);
+	int unlock(Objecter* o, VolumeRef v, const oid_t& oid);
+	int break_lock(Objecter* o, VolumeRef v, const oid_t& oid,
 		       const entity_name_t& locker);
       };
 

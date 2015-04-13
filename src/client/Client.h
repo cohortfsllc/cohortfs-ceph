@@ -437,7 +437,7 @@ protected:
   void handle_lease(MClientLease *m);
 
   // inline data
-  int uninline_data(Inode *in, OSDC::op_callback&& onfinish);
+  int uninline_data(Inode *in, rados::op_callback&& onfinish);
 
   // file caps
   void check_cap_issue(Inode *in, Cap *cap, unsigned issued);

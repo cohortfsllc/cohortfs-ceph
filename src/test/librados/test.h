@@ -15,8 +15,6 @@
 #ifndef CEPH_TEST_RADOS_API_TEST_H
 #define CEPH_TEST_RADOS_API_TEST_H
 
-#include "include/rados/librados.h"
-#include "include/rados/librados.hpp"
 
 #include <string>
 #include <unistd.h>
