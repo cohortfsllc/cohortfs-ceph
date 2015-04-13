@@ -35,7 +35,7 @@
 //#define OPQUEUE_SLEEP // XXX should be defined
 //#define OPQUEUE_INSTRUMENT
 //#define INSTRUMENT_BACKOFF
-//#define OPQUEUE_TLS_LANES
+#define OPQUEUE_TLS_LANES
 
 class CephContext;
 class OSD;
