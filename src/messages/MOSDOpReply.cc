@@ -12,5 +12,8 @@
 
 #include "MOSDOpReply.h"
 
+#if OSDOPREPLY_FREELIST
 MOSDOpReply::Alloc MOSDOpReply::alloc;
-MOSDOpReply::FreeList MOSDOpReply::freelist(4, MOSDOpReply::alloc);
+MOSDOpReply::FreeList MOSDOpReply::freelist(OSDOPREPLY_FREELIST,
+                                            MOSDOpReply::alloc);
+#endif

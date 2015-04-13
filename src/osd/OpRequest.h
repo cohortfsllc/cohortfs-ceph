@@ -24,8 +24,10 @@
 
 namespace bi = boost::intrusive;
 
+#define OPREQUEST_FREELIST 1024
 
 class OpRequest : public MOSDOp {
+#if OPREQUEST_FREELIST
  private:
   typedef cohort::CharArrayAlloc<OpRequest> Alloc;
   typedef cohort::FreeList<OpRequest, Alloc> FreeList;
@@ -38,7 +40,7 @@ class OpRequest : public MOSDOp {
   void operator delete(void *p) {
     return freelist.free(static_cast<OpRequest*>(p));
   }
-
+#endif
 public:
   typedef boost::intrusive_ptr<OpRequest> Ref;
 

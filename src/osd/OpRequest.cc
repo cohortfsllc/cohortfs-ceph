@@ -12,5 +12,7 @@
 
 #include "OpRequest.h"
 
+#if OPREQUEST_FREELIST
 OpRequest::Alloc OpRequest::alloc;
-OpRequest::FreeList OpRequest::freelist(2048, OpRequest::alloc);
+OpRequest::FreeList OpRequest::freelist(OPREQUEST_FREELIST, OpRequest::alloc);
+#endif

@@ -20,6 +20,8 @@
 #include "common/errno.h"
 #include "common/freelist.h"
 
+#define OSDOPREPLY_FREELIST 1024
+
 /*
  * OSD op reply
  *
@@ -29,6 +31,7 @@
  */
 
 class MOSDOpReply : public Message {
+#if OSDOPREPLY_FREELIST
  private:
   typedef cohort::CharArrayAlloc<MOSDOpReply> Alloc;
   typedef cohort::FreeList<MOSDOpReply, Alloc> FreeList;
@@ -41,7 +44,7 @@ class MOSDOpReply : public Message {
   void operator delete(void *p) {
     return freelist.free(static_cast<MOSDOpReply*>(p));
   }
-
+#endif
  private:
   static const int HEAD_VERSION = 6;
   static const int COMPAT_VERSION = 2;

@@ -12,6 +12,9 @@
 
 #define dout_subsys ceph_subsys_osd
 
+// tried using FreeList for OnReadReply/OnWriteReply, but saw no benefit
+#define COMPLETION_FREELIST 0
+
 namespace ceph
 {
 namespace osd
@@ -59,11 +62,26 @@ public:
 
 // Dispatcher callback to fire the read completion
 class OnReadReply : public Dispatcher::OnReply {
+#if COMPLETION_FREELIST
+  typedef cohort::CharArrayAlloc<OnReadReply> Alloc;
+  typedef cohort::FreeList<OnReadReply, Alloc> FreeList;
+  static Alloc alloc;
+  static FreeList freelist;
+#endif
   char *data;
   uint64_t length;
   libosd_io_completion_fn cb;
   void *user;
-public:
+
+ public:
+#if COMPLETION_FREELIST
+  static void *operator new(size_t num_bytes) {
+    return freelist.alloc();
+  }
+  void operator delete(void *p) {
+    return freelist.free(static_cast<OnReadReply*>(p));
+  }
+#endif
   OnReadReply(char *data, uint64_t length,
 	      libosd_io_completion_fn cb, void *user)
     : data(data), length(length), cb(cb), user(user) {}
@@ -95,6 +113,11 @@ public:
       delete this;
   }
 };
+#if COMPLETION_FREELIST
+OnReadReply::Alloc OnReadReply::alloc;
+OnReadReply::FreeList OnReadReply::freelist(COMPLETION_FREELIST,
+                                            OnReadReply::alloc);
+#endif
 
 int Objecter::read_sync(const char *object, const uint8_t volume[16],
                         uint64_t offset, uint64_t length, char *data,
@@ -159,10 +182,25 @@ int Objecter::read(const char *object, const uint8_t volume[16],
 
 // Dispatcher callback to fire the write completion
 class OnWriteReply : public Dispatcher::OnReply {
+#if COMPLETION_FREELIST
+  typedef cohort::CharArrayAlloc<OnWriteReply> Alloc;
+  typedef cohort::FreeList<OnWriteReply, Alloc> FreeList;
+  static Alloc alloc;
+  static FreeList freelist;
+#endif
   libosd_io_completion_fn cb;
   int flags;
   void *user;
+
 public:
+#if COMPLETION_FREELIST
+  static void *operator new(size_t num_bytes) {
+    return freelist.alloc();
+  }
+  void operator delete(void *p) {
+    return freelist.free(static_cast<OnWriteReply*>(p));
+  }
+#endif
   OnWriteReply(libosd_io_completion_fn cb, int flags, void *user)
     : cb(cb), flags(flags), user(user) {}
 
@@ -193,6 +231,11 @@ public:
       delete this;
   }
 };
+#if COMPLETION_FREELIST
+OnWriteReply::Alloc OnWriteReply::alloc;
+OnWriteReply::FreeList OnWriteReply::freelist(COMPLETION_FREELIST,
+                                              OnWriteReply::alloc);
+#endif
 
 #define WRITE_CB_FLAGS \
   (LIBOSD_WRITE_CB_UNSTABLE | \
