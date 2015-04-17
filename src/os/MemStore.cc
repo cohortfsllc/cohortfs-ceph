@@ -1207,8 +1207,8 @@ int MemStore::_clone(MemCollection* c, ObjectHandle oh,
 	   << " -> " << noh->get_oid() << dendl;
 
   // XXX: hold lock over both calls
-  Object* o = static_cast<Object*>(oh);
-  Object* n = static_cast<Object*>(noh);
+  // Object* o = static_cast<Object*>(oh);
+  // Object* n = static_cast<Object*>(noh);
   return -ENOTSUP; // TODO: clone
 }
 
@@ -1220,10 +1220,10 @@ int MemStore::_clone_range(MemCollection* c, ObjectHandle oh,
 	   << oh->get_oid() << " " << srcoff << "~" << len << " -> "
 	   << noh->get_oid() << " " << dstoff << "~" << len
 	   << dendl;
-  
+
   // XXX: hold lock over both calls
   Object* o = static_cast<Object*>(oh);
-  Object* n = static_cast<Object*>(noh);
+  //Object* n = static_cast<Object*>(noh);
 
   if (srcoff >= o->data_len)
     return 0;
