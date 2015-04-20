@@ -4288,7 +4288,7 @@ const char** FileStore::FSFlush::get_tracked_conf_keys() const
 }
 
 void FileStore::FSFlush::handle_conf_change(const md_config_t *conf,
-                                            const std::set<std::string> &keys)
+					    const std::set<std::string> &keys)
 
 {
   unique_sp waitq_sp(waitq.lock);
@@ -4310,7 +4310,6 @@ void FileStore::FSFlush::handle_conf_change(const md_config_t *conf,
     fd_limits.second = conf->filestore_wbthrottle_xfs_inodes_hard_limit;
     break;
   default:
-    assert(0 == "invalid value for fs");
     break;
   }
 }
