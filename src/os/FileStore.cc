@@ -143,80 +143,6 @@ int FileStore::get_cdir(const coll_t& cid, char* s, int len)
   return snprintf(s, len, "%s/current/%s", basedir.c_str(), cid_str.c_str());
 }
 
-int FileStore::lfn_find(FSCollection* fc, const hoid_t& oid)
-{
-  struct stat st[1];
-  int r = ::fstatat(fc->fd, oid.to_str().c_str(), st, AT_SYMLINK_NOFOLLOW);
-  if (r < 0) {
-    r = -errno;
-    assert(!m_filestore_fail_eio || r != -EIO);
-    return r;
-  }
-  return 0;
-}
-
-int FileStore::lfn_stat(FSCollection* fc, const hoid_t& oid,
-	     struct stat* st)
-{
-  int r = ::fstatat(fc->fd, oid.to_str().c_str(), st, AT_SYMLINK_NOFOLLOW);
-  if (r < 0)
-    r = -errno;
-  return r;
-}
-
-int FileStore::lfn_open(FSCollection* fc,
-			const hoid_t& oid,
-			bool create,
-			int* outfd)
-{
-  assert(outfd);
-  int flags = O_RDWR;
-  if (create)
-    flags |= O_CREAT;
-
-  int r  = ::openat(fc->fd, oid.to_str().c_str(), flags, 0644);
-  if (r < 0) {
-    r = -errno;
-    dout(10) << "error opening file " << fc->get_cid() << " "
-	     << oid << " with flags=" << flags << ": " << cpp_strerror(-r)
-	     << dendl;
-    goto fail;
-  }
-  *outfd = r;
-  return 0;
-
- fail:
-  assert(!m_filestore_fail_eio || r != -EIO);
-  return r;
-}
-
-void FileStore::lfn_close(int fd)
-{
-}
-
-int FileStore::lfn_link(FSCollection* fc,
-			FSCollection* newfc,
-			const hoid_t& o,
-			const hoid_t& newoid)
-{
-  int r;
-  r = lfn_find(fc, o);
-  if (r < 0)
-    return r;
-
-  r = lfn_find(newfc, newoid);
-  if (r < 0)
-    return r;
-
-  r = ::linkat(fc->fd, o.to_str().c_str(),
-	       newfc->fd, newoid.to_str().c_str(),
-	       AT_SYMLINK_NOFOLLOW);
-  if (r < 0)
-    r = -errno;
-
-  return 0;
-}
-
 int FileStore::lfn_unlink(FSCollection* fc, FSObject* o,
 			  const SequencerPosition& spos,
 			  bool force_clear_omap)
@@ -226,7 +152,7 @@ int FileStore::lfn_unlink(FSCollection* fc, FSObject* o,
   const hoid_t &oid = o->get_oid();
   {
     struct stat st;
-    r = lfn_stat(fc, oid, &st);
+    r = fc->index.stat(oid, &st);
     if (r < 0) {
       assert(!m_filestore_fail_eio || r != -EIO);
       return r;
@@ -255,10 +181,7 @@ int FileStore::lfn_unlink(FSCollection* fc, FSObject* o,
 	object_map->sync(&oid, &spos);
     }
   }
-  r = ::unlinkat(fc->fd, oid.to_str().c_str(), 0);
-  if (r < 0)
-    r = -errno;
-  return r;
+  return fc->index.unlink(oid);
 }
 
 FileStore::FileStore(CephContext* cct, const std::string& base,
@@ -1459,8 +1382,8 @@ void FileStore::_set_global_replay_guard(FSCollection* fc,
   // then record that we did it
   bufferlist v;
   ::encode(spos, v);
-  int r = chain_fsetxattr(fc->fd, GLOBAL_REPLAY_GUARD_XATTR, v.c_str(),
-			  v.length());
+  int fd = fc->index.get_rootfd();
+  int r = chain_fsetxattr(fd, GLOBAL_REPLAY_GUARD_XATTR, v.c_str(), v.length());
   if (r < 0) {
     derr << __func__ << ": fsetxattr " << GLOBAL_REPLAY_GUARD_XATTR
 	 << " got " << cpp_strerror(r) << dendl;
@@ -1468,7 +1391,7 @@ void FileStore::_set_global_replay_guard(FSCollection* fc,
   }
 
   // and make sure our xattr is durable.
-  ::fsync(fc->fd);
+  ::fsync(fd);
 
   _inject_failure();
 
@@ -1482,7 +1405,8 @@ int FileStore::_check_global_replay_guard(FSCollection* fc,
     return 1;
 
   char buf[100];
-  int r = chain_fgetxattr(fc->fd, GLOBAL_REPLAY_GUARD_XATTR, buf, sizeof(buf));
+  int fd = fc->index.get_rootfd();
+  int r = chain_fgetxattr(fd, GLOBAL_REPLAY_GUARD_XATTR, buf, sizeof(buf));
   if (r < 0) {
     dout(20) << __func__ << " no xattr" << dendl;
     assert(!m_filestore_fail_eio || r != -EIO);
@@ -1502,7 +1426,7 @@ void FileStore::_set_replay_guard(FSCollection* fc,
 				  const SequencerPosition& spos,
 				  bool in_progress=false)
 {
-  _set_replay_guard(fc->fd, spos, 0, in_progress);
+  _set_replay_guard(fc->index.get_rootfd(), spos, 0, in_progress);
 }
 
 
@@ -1551,7 +1475,7 @@ void FileStore::_set_replay_guard(int fd,
 void FileStore::_close_replay_guard(FSCollection* fc,
 				    const SequencerPosition& spos)
 {
-  _close_replay_guard(fc->fd, spos);
+  _close_replay_guard(fc->index.get_rootfd(), spos);
 }
 
 void FileStore::_close_replay_guard(int fd, const SequencerPosition& spos)
@@ -1596,7 +1520,7 @@ _check_global_replay_guard_inl(CephContext *cct,
 			       const SequencerPosition& spos,
 			       replay_guard_buf& sb,
 			       const string& basedir) {
-  int r = chain_fgetxattr(fc->fd, GLOBAL_REPLAY_GUARD_XATTR,
+  int r = chain_fgetxattr(fc->index.get_rootfd(), GLOBAL_REPLAY_GUARD_XATTR,
 			  sb.buf, sizeof(sb.buf));
   if (r < 0) {
     dout(20) << __func__ << " no xattr" << dendl;
@@ -1679,7 +1603,7 @@ int FileStore::_check_replay_guard(FSCollection* fc,
 {
   if (!replaying || backend->can_checkpoint())
     return 1;
-  int ret = _check_replay_guard(fc->fd, spos);
+  int ret = _check_replay_guard(fc->index.get_rootfd(), spos);
   return ret;
 }
 
@@ -2137,12 +2061,8 @@ unsigned FileStore::do_transaction(Transaction& t, uint64_t op_seq,
 
 bool FileStore::exists(CollectionHandle ch, const hoid_t& oid)
 {
-  struct stat st;
   FSCollection* fc = static_cast<FSCollection*>(ch);
-  if (lfn_stat(fc, oid, &st) == 0)
-    return true;
-  else
-    return false;
+  return fc->index.lookup(oid) == 0;
 }
 
 FileStore::FSObject* FileStore::get_object(FSCollection* fc,
@@ -2177,12 +2097,11 @@ retry:
   } else {
     /* allocate and insert "new" Object */
 
-    /* XXX Casey will integrate CollectionIndex */
-    int r = lfn_open(fc, oid, false, &fd);
+    int r = fc->index.open(oid, false, &fd);
     if ((r < 0) &&
 	create &&
 	_check_global_replay_guard(fc, spos)) {
-      r = lfn_open(fc, oid, true, &fd);
+      r = fc->index.open(oid, true, &fd);
     }
     if (r != 0)
       goto out; /* !LATCHED */
@@ -3656,14 +3575,16 @@ CollectionHandle FileStore::open_collection(const coll_t& cid)
   string cpath = basedir.c_str();
   cpath += "/current/";
   cpath += cid.to_str();
-  /* we know it exists (but should we be idempotent?) */
-  int dirfd = ::open(cpath.c_str(), O_RDONLY, 0644);
-  if (dirfd < 0) {
-    derr << "FileStore::open_collection(" << cid << ") failed ("
-	 << cpp_strerror(-errno) << dendl;
-    return NULL;
-  }
-  return new FSCollection(this, cid, dirfd);
+
+  FSCollection *fc = new FSCollection(this, cid);
+  int r = fc->index.mount(cpath);
+  if (r == 0)
+    return fc;
+
+  derr << "FileStore::open_collection(" << cid << ") failed to mount "
+       << cpath << ": " << cpp_strerror(-r) << dendl;
+  delete fc;
+  return NULL;
 } /* open_collection */
 
 int FileStore::close_collection(CollectionHandle ch)
@@ -3675,7 +3596,7 @@ int FileStore::close_collection(CollectionHandle ch)
   {
     FileStore* fs;
   public:
-    ObjUnref(FileStore *_fs) : fs(_fs) {};
+    ObjUnref(FileStore *_fs) : fs(_fs) {}
 
     void operator()(ceph::os::Object* o) const {
       fs->obj_lru.unref(o, cohort::lru::FLAG_NONE);
@@ -3717,7 +3638,7 @@ bool FileStore::collection_empty(CollectionHandle ch)
 
   struct stat st;
   FSCollection* fc = static_cast<FSCollection*>(ch);
-  int r = ::fstat(fc->fd, &st);
+  int r = ::fstat(fc->index.get_rootfd(), &st);
   if (r < 0)
     return 0;
   return ((st.st_nlink - 2) > 0);
@@ -3771,14 +3692,14 @@ int FileStore::omap_get(CollectionHandle ch, ObjectHandle oh,
 			bufferlist* header,
 			map<string, bufferlist>* out)
 {
-  dout(15) << __func__ << " " << ch->get_cid() << "/" << oh->get_oid()
-	   << dendl;
+  const hoid_t &oid = oh->get_oid();
+  dout(15) << __func__ << " " << ch->get_cid() << "/" << oid << dendl;
 
   FSCollection* fc = static_cast<FSCollection*>(ch);
-  int r = lfn_find(fc, oh->get_oid());
+  int r = fc->index.lookup(oid);
   if (r < 0)
     return r;
-  r = object_map->get(oh->get_oid(), header, out);
+  r = object_map->get(oid, header, out);
   if (r < 0 && r != -ENOENT) {
     assert(!m_filestore_fail_eio || r != -EIO);
     return r;
@@ -3792,14 +3713,14 @@ int FileStore::omap_get_header(
   bufferlist* bl,
   bool allow_eio)
 {
-  dout(15) << __func__ << " " << ch->get_cid() << "/" << oh->get_oid()
-	   << dendl;
+  const hoid_t &oid = oh->get_oid();
+  dout(15) << __func__ << " " << ch->get_cid() << "/" << oid << dendl;
 
   FSCollection* fc = static_cast<FSCollection*>(ch);
-  int r = lfn_find(fc, oh->get_oid());
+  int r = fc->index.lookup(oid);
   if (r < 0)
     return r;
-  r = object_map->get_header(oh->get_oid(), bl);
+  r = object_map->get_header(oid, bl);
   if (r < 0 && r != -ENOENT) {
     assert(allow_eio || !m_filestore_fail_eio || r != -EIO);
     return r;
@@ -3810,14 +3731,14 @@ int FileStore::omap_get_header(
 int FileStore::omap_get_keys(CollectionHandle ch, ObjectHandle oh,
 			     set<string>* keys)
 {
-  dout(15) << __func__ << " " << ch->get_cid() << "/" << oh->get_oid()
-	   << dendl;
+  const hoid_t &oid = oh->get_oid();
+  dout(15) << __func__ << " " << ch->get_cid() << "/" << oid << dendl;
 
   FSCollection* fc = static_cast<FSCollection*>(ch);
-  int r = lfn_find(fc, oh->get_oid());
+  int r = fc->index.lookup(oid);
   if (r < 0)
     return r;
-  r = object_map->get_keys(oh->get_oid(), keys);
+  r = object_map->get_keys(oid, keys);
   if (r < 0 && r != -ENOENT) {
     assert(!m_filestore_fail_eio || r != -EIO);
     return r;
@@ -3831,14 +3752,14 @@ int FileStore::omap_get_values(
   const set<string>& keys,
   map<string, bufferlist>* out)
 {
-  dout(15) << __func__ << " " << ch->get_cid() << "/" << oh->get_oid()
-	   << dendl;
+  const hoid_t &oid = oh->get_oid();
+  dout(15) << __func__ << " " << ch->get_cid() << "/" << oid << dendl;
 
   FSCollection* fc = static_cast<FSCollection*>(ch);
-  int r = lfn_find(fc, oh->get_oid());
+  int r = fc->index.lookup(oid);
   if (r < 0)
     return r;
-  r = object_map->get_values(oh->get_oid(), keys, out);
+  r = object_map->get_values(oid, keys, out);
   if (r < 0 && r != -ENOENT) {
     assert(!m_filestore_fail_eio || r != -EIO);
     return r;
@@ -3852,14 +3773,14 @@ int FileStore::omap_check_keys(
   const set<string>& keys,
   set<string>* out)
 {
-  dout(15) << __func__ << " " << ch->get_cid() << "/" << oh->get_oid()
-	   << dendl;
+  const hoid_t &oid = oh->get_oid();
+  dout(15) << __func__ << " " << ch->get_cid() << "/" << oid << dendl;
 
   FSCollection* fc = static_cast<FSCollection*>(ch);
-  int r = lfn_find(fc, oh->get_oid());
+  int r = fc->index.lookup(oid);
   if (r < 0)
     return r;
-  r = object_map->check_keys(oh->get_oid(), keys, out);
+  r = object_map->check_keys(oid, keys, out);
   if (r < 0 && r != -ENOENT) {
     assert(!m_filestore_fail_eio || r != -EIO);
     return r;
@@ -3872,14 +3793,14 @@ FileStore::get_omap_iterator(
   CollectionHandle ch,
   ObjectHandle oh)
 {
-  dout(15) << __func__ << " " << ch->get_cid() << "/" <<
-    oh->get_oid() << dendl;
+  const hoid_t &oid = oh->get_oid();
+  dout(15) << __func__ << " " << ch->get_cid() << "/" << oid << dendl;
 
   FSCollection* fc = static_cast<FSCollection*>(ch);
-  int r = lfn_find(fc, oh->get_oid());
+  int r = fc->index.lookup(oid);
   if (r < 0)
     return ObjectMap::ObjectMapIterator();
-  return object_map->get_iterator(oh->get_oid());
+  return object_map->get_iterator(oid);
 }
 
 int FileStore::_create_collection(
@@ -3897,14 +3818,16 @@ int FileStore::_create_collection(
   dout(10) << "create_collection " << fn << " = " << r << dendl;
   if (r < 0)
     return r;
-  int dirfd = ::open(fn, O_RDONLY, 0644);
-  if (dirfd < 0) {
-    derr << "FileStore::_create_collection(" << c << ") failed ("
-	 << cpp_strerror(-errno) << dendl;
-    return dirfd;
+
+  // initialize an index at the given directory
+  cohort::FragTreeIndex index(cct, cct->_conf->fragtreeindex_initial_split);
+  r = index.init(fn); // XXX: mount() instead if replaying=true?
+  if (r < 0) {
+    derr << "FileStore::_create_collection(" << c << ") failed: "
+	 << cpp_strerror(-r) << dendl;
+    return r;
   } 
-  _set_replay_guard(dirfd, spos); // XXX
-  ::close(dirfd);
+  // XXX: _set_replay_guard(dirfd, spos);
   return 0;
 }
 
@@ -3923,29 +3846,9 @@ int FileStore::_create_collection(const coll_t& c)
 
 int FileStore::_destroy_collection(FSCollection* fc)
 {
-  int r;
-  DIR* d = ::fdopendir(fc->fd);
-  char fn[offsetof(struct dirent, d_name) + PATH_MAX + 1];
-  struct dirent* dt;
-  bool ulf = 0;
-
-  do {
-    ulf = false;
-    while ((r = ::readdir_r(d, (struct dirent*) &fn, &dt)) == 0
-	   && dt) {
-      if (::unlinkat(fc->fd, dt->d_name, 0) == 0)
-        ulf = true;
-    }
-    if (ulf)
-      ::rewinddir(d);
-  } while (ulf);
-  ::closedir(d);
-
+  char fn[PATH_MAX];
   get_cdir(fc->get_cid(), fn, sizeof(fn));
-  dout(15) << "_destroy_collection " << fn << dendl;
-  r = ::rmdir(fn);
-  if (r < 0)
-    r = -errno;
+  int r = fc->index.destroy(fn);
   dout(10) << "_destroy_collection " << fn << " = " << r << dendl;
   return r;
 }
@@ -3967,14 +3870,13 @@ int FileStore::_omap_clear(
   FSCollection* fc,
   FSObject* fo,
   const SequencerPosition& spos) {
+  const hoid_t &oid = fo->get_oid();
+  dout(15) << __func__ << " " << fc->get_cid() << "/" << oid << dendl;
 
-  dout(15) << __func__ << " " << fc->get_cid() << "/" << fo->get_oid()
-	   << dendl;
-
-  int r = lfn_find(fc, fo->get_oid());
+  int r = fc->index.lookup(oid);
   if (r < 0)
     return r;
-  r = object_map->clear_keys_header(fo->get_oid(), &spos);
+  r = object_map->clear_keys_header(oid, &spos);
   if (r < 0 && r != -ENOENT)
     return r;
   return 0;
@@ -3985,14 +3887,13 @@ int FileStore::_omap_setkeys(
   FSObject* fo,
   const map<string, bufferlist>& aset,
   const SequencerPosition& spos) {
+  const hoid_t &oid = fo->get_oid();
+  dout(15) << __func__ << " " << fc->get_cid() << "/" << oid << dendl;
 
-  dout(15) << __func__ << " " << fc->get_cid() << "/" << fo->get_oid()
-	   << dendl;
-
-  int r = lfn_find(fc, fo->get_oid());
+  int r = fc->index.lookup(oid);
   if (r < 0)
     return r;
-  return object_map->set_keys(fo->get_oid(), aset, &spos);
+  return object_map->set_keys(oid, aset, &spos);
 }
 
 int FileStore::_omap_rmkeys(
@@ -4000,14 +3901,13 @@ int FileStore::_omap_rmkeys(
   FSObject* fo,
   const set<string>& keys,
   const SequencerPosition& spos) {
+  const hoid_t &oid = fo->get_oid();
+  dout(15) << __func__ << " " << fc->get_cid() << "/" << oid << dendl;
 
-  dout(15) << __func__ << " " << fc->get_cid() << "/" << fo->get_oid()
-	   << dendl;
-
-  int r = lfn_find(fc, fo->get_oid());
+  int r = fc->index.lookup(oid);
   if (r < 0)
     return r;
-  r = object_map->rm_keys(fo->get_oid(), keys, &spos);
+  r = object_map->rm_keys(oid, keys, &spos);
   if (r < 0 && r != -ENOENT)
     return r;
   return 0;
@@ -4042,13 +3942,13 @@ int FileStore::_omap_setheader(FSCollection* fc,
 			       const bufferlist& bl,
 			       const SequencerPosition& spos)
 {
-  dout(15) << __func__ << " " << fc->get_cid() << "/" << fo->get_oid()
-	   << dendl;
+  const hoid_t &oid = fo->get_oid();
+  dout(15) << __func__ << " " << fc->get_cid() << "/" << oid << dendl;
 
-  int r = lfn_find(fc, fo->get_oid());
+  int r = fc->index.lookup(oid);
   if (r < 0)
     return r;
-  return object_map->set_header(fo->get_oid(), bl, &spos);
+  return object_map->set_header(oid, bl, &spos);
 }
 
 int FileStore::_set_alloc_hint(

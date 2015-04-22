@@ -116,6 +116,10 @@ class FragTreeIndex {
   /// unmount a mounted collection index
   int unmount();
 
+  /// return the file descriptor for the root directory of a mounted
+  /// collection index, or -1 if not mounted
+  int get_rootfd() const { return rootfd; }
+
   /// check for the existence of an object
   int lookup(const hoid_t &oid);
 

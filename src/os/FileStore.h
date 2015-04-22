@@ -25,7 +25,7 @@
 #include <unordered_map>
 #include <boost/scoped_ptr.hpp>
 #include "include/types.h"
-#include "CollectionIndex.h"
+#include "FragTreeIndex.h"
 
 #include "ObjectStore.h"
 #include "JournalingObjectStore.h"
@@ -280,13 +280,15 @@ public:
   class FSCollection : public ceph::os::Collection
   {
   public:
-    int fd; // collection's dirfd
+    cohort::FragTreeIndex index;
 
-    FSCollection(FileStore* fs, const coll_t& cid, int fd)
-      : ceph::os::Collection(fs, cid), fd(fd) {}
+    FSCollection(FileStore* fs, const coll_t& cid)
+      : ceph::os::Collection(fs, cid),
+        index(fs->cct, fs->cct->_conf->fragtreeindex_initial_split)
+    {}
 
     virtual ~FSCollection() {
-        ::close(fd);
+      index.unmount();
     }
 
     friend class FileStore;
@@ -394,13 +396,6 @@ private:
 public:
   /* XXX lfn_ methods likely to move, and be renamed (since the LFN
    * concept is gone) */  
-  int lfn_find(FSCollection* fc, const hoid_t& oid);
-  int lfn_stat(FSCollection* fc, const hoid_t& oid,
-	       struct stat *st);
-  int lfn_open(FSCollection* fc, const hoid_t& oid, bool create, int* outfd);
-  void lfn_close(int fd);
-  int lfn_link(FSCollection* fc, FSCollection* newfc,
-	       const hoid_t& o, const hoid_t& newoid);
   int lfn_unlink(FSCollection* fc, FSObject* fo,
 		 const SequencerPosition &spos, bool force_clear_omap=false);
 
