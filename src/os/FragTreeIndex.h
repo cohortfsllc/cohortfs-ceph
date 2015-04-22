@@ -19,6 +19,7 @@
 #include <shared_mutex>
 
 #include "include/frag.h"
+#include "common/oid.h"
 #include "common/ThreadPool.h"
 
 namespace cohort {
@@ -91,6 +92,8 @@ class FragTreeIndex {
 
   void restart_migrations(bool async=true);
 
+  int _stat(const std::string &name, uint64_t hash, struct stat *st);
+
  private: // copy/assignment disabled
   FragTreeIndex(const FragTreeIndex& other) = delete;
   const FragTreeIndex& operator=(const FragTreeIndex& other) = delete;
@@ -114,16 +117,16 @@ class FragTreeIndex {
   int unmount();
 
   /// check for the existence of an object
-  int lookup(const std::string &name, uint64_t hash);
+  int lookup(const hoid_t &oid);
 
   /// fetch an object's file attributes
-  int stat(const std::string &name, uint64_t hash, struct stat *st);
+  int stat(const hoid_t &oid, struct stat *st);
 
   /// open an object, or create if requested
-  int open(const std::string &name, uint64_t hash, bool create, int *fd);
+  int open(const hoid_t &oid, bool create, int *fd);
 
   /// unlink an object from the index
-  int unlink(const std::string &name, uint64_t hash);
+  int unlink(const hoid_t &oid);
 };
 
 } // namespace cohort

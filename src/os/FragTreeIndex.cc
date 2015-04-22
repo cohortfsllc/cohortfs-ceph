@@ -257,13 +257,19 @@ int FragTreeIndex::unmount()
   return r;
 }
 
-int FragTreeIndex::lookup(const std::string &name, uint64_t hash)
+int FragTreeIndex::lookup(const hoid_t &oid)
 {
-  struct stat st;
-  return stat(name, hash, &st);
+  struct stat st; // ignored
+  return _stat(oid.oid.name, oid.hk, &st);
 }
 
-int FragTreeIndex::stat(const std::string &name, uint64_t hash, struct stat *st)
+int FragTreeIndex::stat(const hoid_t &oid, struct stat *st)
+{
+  return _stat(oid.oid.name, oid.hk, st);
+}
+
+int FragTreeIndex::_stat(const std::string &name, uint64_t hash,
+                         struct stat *st)
 {
   int r = -ENOENT;
   struct frag_path path, orig;
@@ -306,19 +312,20 @@ int FragTreeIndex::stat(const std::string &name, uint64_t hash, struct stat *st)
   return r;
 }
 
-int FragTreeIndex::open(const std::string &name, uint64_t hash,
-                        bool create, int *fd)
+int FragTreeIndex::open(const hoid_t &oid, bool create, int *fd)
 {
   int r = -ENOENT;
   struct frag_path path, orig;
   {
     // build paths under index rdlock
     std::shared_lock<std::shared_timed_mutex> lock(index_mutex);
-    r = path.build(tree, hash);
+    r = path.build(tree, oid.hk);
     if (r) return r;
-    r = orig.build(committed.tree, hash);
+    r = orig.build(committed.tree, oid.hk);
     if (r) return r;
   }
+
+  const std::string &name = oid.oid.name;
 
   // if a migration is in progress, check the original location first
   if (orig.frag != path.frag) {
@@ -366,7 +373,7 @@ int FragTreeIndex::open(const std::string &name, uint64_t hash,
   return -r;
 }
 
-int FragTreeIndex::unlink(const std::string &name, uint64_t hash)
+int FragTreeIndex::unlink(const hoid_t &oid)
 {
   int r = -ENOENT;
   struct frag_path path, orig;
@@ -374,12 +381,14 @@ int FragTreeIndex::unlink(const std::string &name, uint64_t hash)
   {
     // build paths under index rdlock
     std::shared_lock<std::shared_timed_mutex> lock(index_mutex);
-    r = path.build(tree, hash);
+    r = path.build(tree, oid.hk);
     if (r) return r;
-    r = orig.build(committed.tree, hash);
+    r = orig.build(committed.tree, oid.hk);
     if (r) return r;
     parent = tree.get_branch_above(path.frag); // for decrement_size()
   }
+
+  const std::string &name = oid.oid.name;
 
   // if a migration is in progress, check the original location first
   if (orig.frag != path.frag) {
