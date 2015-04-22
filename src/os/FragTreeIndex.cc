@@ -130,6 +130,20 @@ int FragTreeIndex::init(const std::string &path)
   return r;
 }
 
+int FragTreeIndex::destroy(const std::string &path)
+{
+  if (rootfd == -1) {
+    // open root fd
+    rootfd = ::open(path.c_str(), O_RDONLY, 0644);
+    if (rootfd == -1)
+      return -errno;
+  }
+
+  DIR* d = fdopendir_rewind(rootfd);
+  ::closedir(d);
+  return -ENOTSUP; // TODO: implement destroy
+}
+
 int FragTreeIndex::mount(const std::string &path, bool async_recovery)
 {
   // must not be mounted
@@ -267,7 +281,7 @@ int FragTreeIndex::stat(const std::string &name, uint64_t hash, struct stat *st)
     r = orig.append(name.c_str(), name.size());
     if (r) return r;
 
-    r = ::fstatat(rootfd, orig.path, st, 0);
+    r = ::fstatat(rootfd, orig.path, st, AT_SYMLINK_NOFOLLOW);
     if (r == 0)
       return r;
     r = errno;
@@ -283,7 +297,7 @@ int FragTreeIndex::stat(const std::string &name, uint64_t hash, struct stat *st)
   r = path.append(name.c_str(), name.size());
   if (r) return r;
 
-  r = ::fstatat(rootfd, path.path, st, 0);
+  r = ::fstatat(rootfd, path.path, st, AT_SYMLINK_NOFOLLOW);
   if (r < 0) {
     r = -errno;
     derr << "fstatat failed for path " << path.path << ": "

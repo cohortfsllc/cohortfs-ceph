@@ -102,6 +102,11 @@ class FragTreeIndex {
   /// initialize a fresh collection index at the given path
   int init(const std::string &path);
 
+  /// destroy a collection index, unlinking all intermediate directories.
+  /// will fail if any other files are present. can be called while mounted
+  /// or unmounted. results in an unmounted collection
+  int destroy(const std::string &path);
+
   /// mount a previously initialized collection index at the given path
   int mount(const std::string &path, bool async_recovery=true);
 
