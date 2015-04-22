@@ -18,6 +18,8 @@
 #include "common/xattr.h"
 
 #define dout_subsys ceph_subsys_filestore
+#undef dout_prefix
+#define dout_prefix *_dout << "index "
 
 #define INDEX_FILENAME ".index"
 #define SIZES_FILENAME ".sizes"
@@ -323,11 +325,8 @@ int FragTreeIndex::_stat(const std::string &name, uint64_t hash,
     if (r == 0)
       return r;
     r = errno;
-    if (r != ENOENT) {
-      derr << "fstatat failed for original path " << orig.path << ": "
-          << cpp_strerror(r) << dendl;
+    if (r != ENOENT)
       return -r;
-    }
     // on ENOENT, fall back to expected location
   }
 
@@ -336,11 +335,8 @@ int FragTreeIndex::_stat(const std::string &name, uint64_t hash,
   if (r) return r;
 
   r = ::fstatat(rootfd, path.path, st, AT_SYMLINK_NOFOLLOW);
-  if (r < 0) {
+  if (r < 0)
     r = -errno;
-    derr << "fstatat failed for path " << path.path << ": "
-        << cpp_strerror(-r) << dendl;
-  }
   return r;
 }
 
@@ -370,10 +366,8 @@ int FragTreeIndex::open(const hoid_t &oid, bool create, int *fd)
       return 0;
     }
     r = errno;
-    if (r != ENOENT) {
-      derr << "open " << orig.path << " failed: " << cpp_strerror(r) << dendl;
+    if (r != ENOENT)
       return -r;
-    }
     // on ENOENT, fall back to expected location
   }
 
@@ -409,7 +403,6 @@ int FragTreeIndex::open(const hoid_t &oid, bool create, int *fd)
     }
   } while (r == EEXIST); // retry if exclusive create failed
 
-  derr << "open " << path.path << " failed: " << cpp_strerror(r) << dendl;
   return -r;
 }
 
@@ -442,11 +435,8 @@ int FragTreeIndex::unlink(const hoid_t &oid)
       return r;
     }
     r = errno;
-    if (r != ENOENT) {
-      derr << "unlink failed for original path " << orig.path << ": "
-          << cpp_strerror(r) << dendl;
+    if (r != ENOENT)
       return -r;
-    }
     // on ENOENT, fall back to expected location
   }
 
@@ -461,8 +451,6 @@ int FragTreeIndex::unlink(const hoid_t &oid)
   }
 
   r = errno;
-  derr << "unlink failed for path " << path.path << ": "
-      << cpp_strerror(r) << dendl;
   return -r;
 }
 
@@ -953,7 +941,7 @@ void FragTreeIndex::do_split(frag_path path, int bits,
       derr << "do_split failed to rename " << dn->d_name
           << " to " << dest.path << ": " << cpp_strerror(errno) << dendl;
     else {
-      dout(0) << "do_split renamed " << dn->d_name
+      dout(20) << "do_split renamed " << dn->d_name
           << " to " << dest.path << dendl;
       size_updates[frag]++;
     }
@@ -1099,7 +1087,7 @@ void FragTreeIndex::do_merge(frag_path path, int bits)
         derr << "do_merge failed to rename " << src.path << dn->d_name
             << " to parent: " << cpp_strerror(errno) << dendl;
       else
-        dout(0) << "do_merge renamed " << src.path << dn->d_name
+        dout(20) << "do_merge renamed " << src.path << dn->d_name
             << " to parent" << dendl;
     }
 
