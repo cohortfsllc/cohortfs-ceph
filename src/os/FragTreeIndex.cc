@@ -15,11 +15,13 @@
 #include "FragTreeIndex.h"
 #include "common/debug.h"
 #include "common/errno.h"
+#include "common/xattr.h"
 
 #define dout_subsys ceph_subsys_filestore
 
 #define INDEX_FILENAME ".index"
 #define SIZES_FILENAME ".sizes"
+#define OBJECT_NAME_XATTR "user.full_object_name"
 
 using namespace cohort;
 
@@ -257,15 +259,45 @@ int FragTreeIndex::unmount()
   return r;
 }
 
+namespace
+{
+
+#define STR(s) #s
+#define XSTR(s) STR(s)
+#define HASH_LEN 16 // hex digits for 64-bit value
+
+std::string format_name(const hoid_t &oid)
+{
+  // allocate a string of the required length
+  const size_t oid_len = std::min(oid.oid.name.size(),
+                                  MAX_CEPH_OBJECT_NAME_LEN - HASH_LEN);
+  std::string name(HASH_LEN + oid_len, 0);
+
+  // fill in the hash prefix
+#define HASH_FMT ("%0" XSTR(HASH_LEN) "lX")
+  int count = snprintf(&name[0], name.size(), HASH_FMT, oid.hk);
+  assert(count == HASH_LEN);
+
+  // append the object name, truncating if necessary
+  std::copy(oid.oid.name.begin(), oid.oid.name.begin() + oid_len,
+            name.begin() + count);
+
+  return name;
+}
+
+} // anonymous namespace
+
 int FragTreeIndex::lookup(const hoid_t &oid)
 {
   struct stat st; // ignored
-  return _stat(oid.oid.name, oid.hk, &st);
+  const std::string name = format_name(oid);
+  return _stat(name, oid.hk, &st);
 }
 
 int FragTreeIndex::stat(const hoid_t &oid, struct stat *st)
 {
-  return _stat(oid.oid.name, oid.hk, st);
+  const std::string name = format_name(oid);
+  return _stat(name, oid.hk, st);
 }
 
 int FragTreeIndex::_stat(const std::string &name, uint64_t hash,
@@ -325,7 +357,7 @@ int FragTreeIndex::open(const hoid_t &oid, bool create, int *fd)
     if (r) return r;
   }
 
-  const std::string &name = oid.oid.name;
+  const std::string name = format_name(oid);
 
   // if a migration is in progress, check the original location first
   if (orig.frag != path.frag) {
@@ -363,6 +395,14 @@ int FragTreeIndex::open(const hoid_t &oid, bool create, int *fd)
         *fd = r;
         // increase the directory size
         increment_size(path.frag);
+
+        // set xattr for full object name if we had to truncate
+        if (oid.oid.name.size() > MAX_CEPH_OBJECT_NAME_LEN - HASH_LEN) {
+          r = ceph_os_fsetxattr(*fd, OBJECT_NAME_XATTR,
+                                oid.oid.name.c_str(),
+                                oid.oid.name.size());
+          // error here means collection_list() will show truncated name
+        }
         return 0;
       }
       r = errno;
@@ -388,7 +428,7 @@ int FragTreeIndex::unlink(const hoid_t &oid)
     parent = tree.get_branch_above(path.frag); // for decrement_size()
   }
 
-  const std::string &name = oid.oid.name;
+  const std::string name = format_name(oid);
 
   // if a migration is in progress, check the original location first
   if (orig.frag != path.frag) {
