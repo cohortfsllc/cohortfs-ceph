@@ -15,7 +15,7 @@ CephContext *cct;
 
 class TestFragTreeIndex : public FragTreeIndex {
  public:
-  TestFragTreeIndex(uint32_t initial_split)
+  TestFragTreeIndex(uint32_t initial_split = 0)
     : FragTreeIndex(::cct, initial_split)
   {}
   // expose split/merge functions
@@ -101,6 +101,7 @@ class tmpdir_with_cleanup {
   tmpdir_with_cleanup(const char *path);
   ~tmpdir_with_cleanup();
   operator const std::string&() const { return path; }
+  const char* c_str() const { return path.c_str(); }
 };
 
 tmpdir_with_cleanup::tmpdir_with_cleanup(const char *path)
@@ -113,7 +114,8 @@ tmpdir_with_cleanup::tmpdir_with_cleanup(const char *path)
 tmpdir_with_cleanup::~tmpdir_with_cleanup()
 {
   int fd = ::open(path.c_str(), O_RDONLY);
-  assert(fd >= 0);
+  if (fd < 0)
+    return;
   DIR *dir = ::fdopendir(fd);
   assert(dir);
   recursive_rmdir(fd, dir);
@@ -190,7 +192,7 @@ TEST(OsFragTreeIndex, OpenStatUnlink)
 {
   tmpdir_with_cleanup path("tmp-fragtreeindex");
 
-  TestFragTreeIndex index(0);
+  TestFragTreeIndex index;
   struct stat st;
 
   ASSERT_EQ(0, index.init(path));
@@ -209,7 +211,7 @@ TEST(OsFragTreeIndex, Split)
 {
   tmpdir_with_cleanup path("tmp-fragtreeindex-split");
 
-  TestFragTreeIndex index(0);
+  TestFragTreeIndex index;
   ASSERT_EQ(0, index.init(path));
   ASSERT_EQ(0, index.mount(path));
 
@@ -247,14 +249,14 @@ TEST(OsFragTreeIndex, Split)
   sizes[p.frag.make_child(1, 1)] = 0;
   ASSERT_EQ(sizes, index.get_size_map());
 
-  ASSERT_EQ(index.unmount(), 0);
+  ASSERT_EQ(0, index.unmount());
 }
 
 TEST(OsFragTreeIndex, SplitAsync)
 {
   tmpdir_with_cleanup path("tmp-fragtreeindex-split-async");
 
-  TestFragTreeIndex index(0);
+  TestFragTreeIndex index;
   ASSERT_EQ(0, index.init(path));
   ASSERT_EQ(0, index.mount(path));
 
@@ -286,14 +288,14 @@ TEST(OsFragTreeIndex, SplitAsync)
   sizes[p.frag.make_child(1, 1)] = 0;
   ASSERT_EQ(sizes, index.get_size_map());
 
-  ASSERT_EQ(index.unmount(), 0);
+  ASSERT_EQ(0, index.unmount());
 }
 
 TEST(OsFragTreeIndex, Merge)
 {
   tmpdir_with_cleanup path("tmp-fragtreeindex-merge");
 
-  TestFragTreeIndex index(0);
+  TestFragTreeIndex index;
   ASSERT_EQ(0, index.init(path));
   ASSERT_EQ(0, index.mount(path));
 
@@ -339,7 +341,7 @@ TEST(OsFragTreeIndex, MergeAsync)
 {
   tmpdir_with_cleanup path("tmp-fragtreeindex-merge-async");
 
-  TestFragTreeIndex index(0);
+  TestFragTreeIndex index;
   ASSERT_EQ(0, index.init(path));
   ASSERT_EQ(0, index.mount(path));
 
@@ -380,7 +382,7 @@ TEST(OsFragTreeIndex, SplitRecovery)
 {
   tmpdir_with_cleanup path("tmp-fragtreeindex-split-recovery");
 
-  TestFragTreeIndex index(0);
+  TestFragTreeIndex index;
   ASSERT_EQ(0, index.init(path));
   ASSERT_EQ(0, index.mount(path));
 
@@ -427,9 +429,9 @@ TEST(OsFragTreeIndex, CountSizes)
 {
   tmpdir_with_cleanup path("tmp-fragtreeindex-size-recovery");
 
-  TestFragTreeIndex index(0);
-  ASSERT_EQ(index.init(path), 0);
-  ASSERT_EQ(index.mount(path), 0);
+  TestFragTreeIndex index;
+  ASSERT_EQ(0, index.init(path));
+  ASSERT_EQ(0, index.mount(path));
 
   const frag_t root;
   const frag_t f0 = root.make_child(0, 2);
@@ -522,6 +524,32 @@ TEST(OsFragTreeIndex, CountSizes)
   ASSERT_EQ(sizes, index.get_size_map());
 
   ASSERT_EQ(0, index.unmount());
+}
+
+TEST(OsFragTreeIndex, Destroy)
+{
+  tmpdir_with_cleanup path("tmp-fragtreeindex-destroy");
+
+  TestFragTreeIndex index(2);
+  ASSERT_EQ(0, index.init(path));
+  ASSERT_EQ(0, index.mount(path));
+
+  int fd = -1;
+  ASSERT_EQ(0, index.open(mkhoid("a", 0x0000000000000000ULL), true, &fd));
+  ::close(fd);
+  ASSERT_EQ(0, index.open(mkhoid("b", 0x0040000000000000ULL), true, &fd));
+  ::close(fd);
+  ASSERT_EQ(0, index.open(mkhoid("c", 0x0080000000000000ULL), true, &fd));
+  ::close(fd);
+  ASSERT_EQ(0, index.open(mkhoid("d", 0x00C0000000000000ULL), true, &fd));
+  ::close(fd);
+
+  ASSERT_EQ(0, index.destroy(path));
+
+  // directory must not exist
+  struct stat st;
+  ASSERT_EQ(-1, ::stat(path.c_str(), &st));
+  ASSERT_EQ(ENOENT, errno);
 }
 
 int main(int argc, char *argv[])

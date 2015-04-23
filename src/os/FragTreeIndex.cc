@@ -136,16 +136,120 @@ int FragTreeIndex::init(const std::string &path)
 
 int FragTreeIndex::destroy(const std::string &path)
 {
+  int r = 0;
+
   if (rootfd == -1) {
     // open root fd
     rootfd = ::open(path.c_str(), O_RDONLY, 0644);
-    if (rootfd == -1)
-      return -errno;
+    if (rootfd == -1) {
+      r = -errno;
+      derr << "destroy failed to open unmounted collection at "
+          << path << ": " << cpp_strerror(-r) << dendl;
+      return r;
+    }
+  } else {
+    // stop migration threads
+    migration_threads.shutdown();
   }
 
-  DIR* d = fdopendir_rewind(rootfd);
-  ::closedir(d);
-  return -ENOTSUP; // TODO: implement destroy
+  // unlink metadata files
+  ::unlinkat(rootfd, INDEX_FILENAME, 0);
+  ::unlinkat(rootfd, SIZES_FILENAME, 0);
+
+  DIR* dir = fdopendir_rewind(rootfd);
+  if (dir == NULL) {
+    r = -errno;
+    derr << "destroy failed to open root dir: " << cpp_strerror(-r) << dendl;
+    return r;
+  }
+
+  // use a stack to recursively unlink directories
+  struct dir_entry { int fd; DIR *dir; std::string name; };
+  std::vector<dir_entry> stack;
+
+  stack.push_back(dir_entry {rootfd, dir, ""});
+  while (r == 0 && !stack.empty()) {
+    dir_entry &entry = stack.back();
+    char buf[offsetof(struct dirent, d_name) + PATH_MAX + 1];
+    struct dirent *dn;
+    while ((r = ::readdir_r(entry.dir, (struct dirent *)&buf, &dn)) == 0) {
+      if (dn == NULL) {
+        ::closedir(entry.dir);
+        std::string name;
+        std::swap(name, entry.name);
+        stack.pop_back();
+        if (!stack.empty()) {
+          // unlink directory from parent
+          const dir_entry &parent = stack.back();
+          r = ::unlinkat(parent.fd, name.c_str(), AT_REMOVEDIR);
+          if (r < 0) {
+            r = -errno;
+            derr << "destroy failed to rmdir " << name << ": "
+                << cpp_strerror(-r) << dendl;
+          } else {
+            dout(0) << "destroy unlinked directory " << name << dendl;
+            ::rewinddir(parent.dir);
+          }
+        }
+        break;
+      }
+
+      if (dn->d_type == DT_REG) {
+        r = ::unlinkat(entry.fd, dn->d_name, 0);
+        if (r < 0) {
+          r = -errno;
+          derr << "destroy failed to unlink " << dn->d_name << ": "
+              << cpp_strerror(-r) << dendl;
+          break;
+        }
+        dout(0) << "destroy unlinked file " << dn->d_name << dendl;
+        ::rewinddir(entry.dir);
+        continue;
+      }
+
+      if (dn->d_type == DT_DIR && dn->d_name[0] != '.') {
+        // since there is no opendirat(), we need to use openat()
+        // and pass the resulting fd to fdopendir(). note that the
+        // corresponding closedir() also closes this fd
+        int fd = ::openat(entry.fd, dn->d_name, O_RDONLY);
+        if (fd < 0) {
+          r = -errno;
+          derr << "destroy failed to open " << dn->d_name << ": "
+              << cpp_strerror(-r) << dendl;
+          break;
+        }
+        dir = fdopendir_rewind(fd);
+        if (dir == NULL) {
+          r = -errno;
+          derr << "destroy failed to opendir " << dn->d_name << ": "
+              << cpp_strerror(-r) << dendl;
+          ::close(fd);
+          break;
+        }
+
+        stack.push_back(dir_entry {fd, dir, dn->d_name});
+        break;
+      }
+    }
+  }
+
+  // closedir any open directories
+  while (!stack.empty()) {
+    struct dir_entry &entry = stack.back();
+    ::closedir(entry.dir);
+    stack.pop_back();
+  }
+
+  if (r == 0) {
+    // unlink the collection's root directory
+    r = ::rmdir(path.c_str());
+    if (r < 0) {
+      r = -errno;
+      derr << "destroy failed to rmdir collection " << path << ": "
+          << cpp_strerror(-r) << dendl;
+    }
+  }
+  return r;
 }
 
 int FragTreeIndex::mount(const std::string &path, bool async_recovery)
