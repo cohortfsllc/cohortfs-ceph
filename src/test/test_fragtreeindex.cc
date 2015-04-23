@@ -3,6 +3,7 @@
 
 #include "common/ceph_argparse.h"
 #include "common/debug.h"
+#include "os/chain_xattr.h"
 #include "global/global_init.h"
 
 #define dout_subsys ceph_subsys_filestore
@@ -550,6 +551,34 @@ TEST(OsFragTreeIndex, Destroy)
   struct stat st;
   ASSERT_EQ(-1, ::stat(path.c_str(), &st));
   ASSERT_EQ(ENOENT, errno);
+}
+
+TEST(OsFragTreeIndex, Names)
+{
+  tmpdir_with_cleanup path("tmp-fragtreeindex-names");
+
+  TestFragTreeIndex index(0);
+  ASSERT_EQ(0, index.init(path));
+  ASSERT_EQ(0, index.mount(path));
+
+  // construct an oid with a name too long for a filename
+  const std::string name(MAX_CEPH_OBJECT_NAME_LEN, 'a');
+  const hoid_t oid = mkhoid(name.c_str(), 0);
+
+  int fd = -1;
+  ASSERT_EQ(0, index.open(oid, true, &fd));
+
+  // query xattr
+  std::string xattr(MAX_CEPH_OBJECT_NAME_LEN, 0);
+  char *buf = const_cast<char*>(xattr.data());
+  ssize_t len = chain_fgetxattr(fd, "user.full_object_name",
+                                buf, xattr.size());
+  ASSERT_TRUE(len > 0);
+  xattr.resize(len);
+  ASSERT_EQ(xattr, name);
+  ::close(fd);
+
+  ASSERT_EQ(0, index.unmount());
 }
 
 int main(int argc, char *argv[])

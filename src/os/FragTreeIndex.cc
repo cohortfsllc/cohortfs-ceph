@@ -15,7 +15,7 @@
 #include "FragTreeIndex.h"
 #include "common/debug.h"
 #include "common/errno.h"
-#include "common/xattr.h"
+#include "os/chain_xattr.h"
 
 #define dout_subsys ceph_subsys_filestore
 #undef dout_prefix
@@ -374,7 +374,7 @@ std::string format_name(const hoid_t &oid)
 {
   // allocate a string of the required length
   const size_t oid_len = std::min(oid.oid.name.size(),
-                                  MAX_CEPH_OBJECT_NAME_LEN - HASH_LEN);
+                                  size_t(NAME_MAX - HASH_LEN));
   std::string name(HASH_LEN + oid_len, 0);
 
   // fill in the hash prefix
@@ -493,10 +493,15 @@ int FragTreeIndex::open(const hoid_t &oid, bool create, int *fd)
         increment_size(path.frag);
 
         // set xattr for full object name if we had to truncate
-        if (oid.oid.name.size() > MAX_CEPH_OBJECT_NAME_LEN - HASH_LEN) {
-          r = ceph_os_fsetxattr(*fd, OBJECT_NAME_XATTR,
-                                oid.oid.name.c_str(),
-                                oid.oid.name.size());
+        if (oid.oid.name.size() > NAME_MAX - HASH_LEN) {
+          r = chain_fsetxattr(*fd, OBJECT_NAME_XATTR,
+                              oid.oid.name.c_str(),
+                              oid.oid.name.size());
+          if (r < 0) {
+            r = -errno;
+            derr << "open failed to write xattr " OBJECT_NAME_XATTR << ": "
+                << cpp_strerror(-r) << dendl;
+          }
           // error here means collection_list() will show truncated name
         }
         return 0;
