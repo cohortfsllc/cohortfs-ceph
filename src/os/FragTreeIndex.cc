@@ -263,18 +263,18 @@ int FragTreeIndex::mount(const std::string &path, bool async_recovery)
   if (rootfd == -1)
     return -errno;
 
-  // sizes lock deferred because a later declaration would cross goto
-  std::unique_lock<std::mutex> sizes_lock(sizes_mutex, std::defer_lock);
-
   // read index from disk
   std::unique_lock<std::shared_timed_mutex> index_wrlock(index_mutex);
   int r = read_index(rootfd);
   index_wrlock.unlock();
-  if (r)
-    goto out_close;
+  if (r) {
+    ::close(rootfd);
+    rootfd = -1;
+    return r;
+  }
 
   // read sizes from disk
-  sizes_lock.lock();
+  std::unique_lock<std::mutex> sizes_lock(sizes_mutex);
   r = read_sizes(rootfd);
   if (r == -ENOENT) {
     // fresh index or not unmounted cleanly
@@ -282,8 +282,11 @@ int FragTreeIndex::mount(const std::string &path, bool async_recovery)
     r = count_sizes(rootfd);
   }
   sizes_lock.unlock();
-  if (r)
-    goto out_close;
+  if (r) {
+    ::close(rootfd);
+    rootfd = -1;
+    return r;
+  }
 
   if (async_recovery) {
     // restart unfinished migrations
@@ -291,11 +294,6 @@ int FragTreeIndex::mount(const std::string &path, bool async_recovery)
   }
   // else, caller is expected to call restart_migrations()
   return 0;
-
-out_close:
-  ::close(rootfd);
-  rootfd = -1;
-  return r;
 }
 
 void FragTreeIndex::restart_migrations(bool async)
