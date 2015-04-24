@@ -34,6 +34,29 @@ typedef std::unique_lock<std::mutex> unique_mds_lock;
 typedef std::lock_guard<std::mutex> mds_lock_guard;
 typedef std::map<int, libmds*> mdsmap;
 mdsmap mdslist;
+
+int context_create(int id, char const *config, char const *cluster,
+                   CephContext **cctp)
+{
+  CephInitParameters iparams(CEPH_ENTITY_TYPE_MDS);
+  if (id >= 0) {
+    char name[12];
+    snprintf(name, sizeof name, "%d", id);
+    iparams.name.set_id(name);
+  }
+  CephContext *cct = common_preinit(iparams, CODE_ENVIRONMENT_DAEMON, 0);
+  std::deque<std::string> parse_errors;
+  int r = cct->_conf->parse_config_files(config, &parse_errors, &cerr, 0);
+  if (r != 0) {
+    derr << "failed to parse configuration " << config << dendl;
+    return r;
+  }
+  cct->_conf->parse_env();
+  cct->_conf->apply_changes(NULL);
+  cct->init();
+  *cctp = cct;
+  return 0;
+}
 }
 
 namespace ceph
@@ -42,6 +65,7 @@ namespace mds
 {
 
 class LibMDS : public libmds {
+  CephContext *cct;
   libmds_callbacks *callbacks;
   void *user;
   Finisher *finisher; // thread to send callbacks to user
@@ -85,6 +109,7 @@ public:
 
 LibMDS::LibMDS(int whoami)
   : libmds(whoami),
+    cct(nullptr),
     callbacks(nullptr),
     user(nullptr),
     finisher(nullptr),
@@ -112,8 +137,7 @@ int LibMDS::init(const struct libmds_init_args *args)
   user = args->user;
 
   // create the CephContext and parse the configuration
-  int r = ceph::mds::context_create(args->id, args->config, args->cluster,
-				    &cct);
+  int r = context_create(args->id, args->config, args->cluster, &cct);
   if (r != 0)
     return r;
 
@@ -364,29 +388,3 @@ void libmds_signal(int signum)
     }
   }
 }
-
-namespace ceph {
-namespace mds {
-int context_create(int id, char const *config, char const *cluster, CephContext **cctp)
-{
-    CephInitParameters iparams(CEPH_ENTITY_TYPE_MDS);
-    if (id >= 0) {
-	char name[12];
-	snprintf(name, sizeof name, "%d", id);
-	iparams.name.set_id(name);
-    }
-    CephContext *cct = common_preinit(iparams, CODE_ENVIRONMENT_DAEMON, 0);
-    std::deque<std::string> parse_errors;
-    int r = cct->_conf->parse_config_files(config, &parse_errors, &cerr, 0);
-    if (r != 0) {
-	derr << "failed to parse configuration " << config << dendl;
-	return r;
-    }
-    cct->_conf->parse_env();
-    cct->_conf->apply_changes(NULL);
-    cct->init();
-    *cctp = cct;
-    return 0;
-}
-} // namespace mds
-} // namespace ceph
