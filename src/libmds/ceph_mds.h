@@ -32,14 +32,6 @@ typedef void (*libmds_io_completion_fn)(int result, uint64_t length,
 					int flags, void *user);
 
 #ifdef __cplusplus
-class CephContext;
-namespace ceph {
-  namespace mds {
-    int context_create(int id, const char *config, const char *cluster,
-		       CephContext** cct);
-  }
-}
-
 /**
  * The abstract C++ libmds interface, whose member functions take
  * the same arguments as the C interface.
@@ -48,7 +40,6 @@ namespace ceph {
  */
 struct libmds {
   const int whoami; /**< mds instance id */
-  CephContext* cct;
   libmds(int name) : whoami(name), cct(nullptr) {}
 
   /**
