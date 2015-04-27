@@ -141,6 +141,8 @@ set(HAVE_LIBLEVELDB ${LEVELDB_FOUND})
 CHECK_INCLUDE_FILES("leveldb/filter_policy.h" HAVE_LEVELDB_FILTER_POLICY)
 endif(${WITH_LEVELDB})
 
+option(ZFS_PREFIX "ZFS_PREFIX is here" /opt/zfs)
+
 option(WITH_EXPAT "EXPAT is here" ON)
 if(${WITH_EXPAT})
 find_package(expat REQUIRED)

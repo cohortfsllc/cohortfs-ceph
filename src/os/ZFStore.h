@@ -20,6 +20,7 @@
 #include <shared_mutex>
 #include <boost/intrusive_ptr.hpp>
 #include "ObjectStore.h"
+#include <libzfswrap.h>
 
 class ZFStore : public ObjectStore
 {
@@ -30,6 +31,8 @@ public:
   struct ZObject : public ceph::os::Object
   {
     mutable std::atomic<uint32_t> refcnt;
+    libzfswrap_vnode_t* vno; /* opaque */
+    inogen_t ino;
 
     std::shared_timed_mutex omap_lock;
     typedef std::unique_lock<std::shared_timed_mutex> unique_lock;
