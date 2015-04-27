@@ -54,7 +54,7 @@ int cls_refcount_read(Objecter* o, oid_t& oid, const AVolRef& vol,
   try {
     bufferlist::iterator iter = out.begin();
     ::decode(ret, iter);
-  } catch (buffer::error& err) {
+  } catch (std::system_error& err) {
     return -EIO;
   }
 

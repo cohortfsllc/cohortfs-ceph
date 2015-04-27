@@ -46,6 +46,7 @@
 #include <list>
 #include <string>
 #include <exception>
+#include <system_error>
 
 #include "acconfig.h"
 #include "page.h"
@@ -61,43 +62,52 @@ extern "C" {
 
 namespace ceph {
 
+  enum class buffer_err {
+    end_of_buffer, malformed_input
+  };
+
+  class buffer_category_t : public std::error_category {
+    virtual const char* name() const noexcept;
+    virtual std::string message(int ev) const;
+    virtual std::error_condition default_error_condition(
+      int ev) const noexcept {
+      switch (static_cast<buffer_err>(ev)) {
+      case buffer_err::malformed_input:
+	return std::errc::illegal_byte_sequence;
+      default:
+	return std::error_condition(ev, *this);
+      }
+    }
+  };
+
+  const std::error_category& buffer_category();
+
+  static inline std::error_condition make_error_condition(buffer_err e) {
+    return std::error_condition(
+      static_cast<int>(e),
+      buffer_category());
+  }
+
+  static inline std::error_code make_error_code(buffer_err e) {
+    return std::error_code(
+      static_cast<int>(e),
+      buffer_category());
+  }
+};
+
+namespace std {
+  template <>
+  struct is_error_code_enum<ceph::buffer_err> : public std::true_type {};
+};
+
+namespace ceph {
+
 class buffer {
   /*
    * exceptions
    */
 
 public:
-  struct error : public std::exception{
-    const char *what() const noexcept {
-      return "buffer::exception";
-    }
-  };
-  struct bad_alloc : public error {
-    const char *what() const noexcept {
-      return "buffer::bad_alloc";
-    }
-  };
-  struct end_of_buffer : public error {
-    const char *what() const noexcept {
-      return "buffer::end_of_buffer";
-    }
-  };
-  struct malformed_input : public error {
-    explicit malformed_input(const char *w) {
-      snprintf(buf, sizeof(buf), "buffer::malformed_input: %s", w);
-    }
-    const char *what() const noexcept {
-      return buf;
-    }
-  private:
-    char buf[256];
-  };
-  struct error_code : public malformed_input {
-    explicit error_code(int error);
-    int code;
-  };
-
-
   /// total bytes allocated
   static int get_total_alloc();
 
@@ -217,7 +227,7 @@ public:
     void copy_out(unsigned o, unsigned l, char *dest) const {
       assert(_raw);
       if (!((o <= _len) && (o+l <= _len)))
-	throw end_of_buffer();
+	throw std::system_error(buffer_err::end_of_buffer);
       memcpy(dest, c_str()+o, l);
     }
 
@@ -309,7 +319,7 @@ public:
 	    p_off += o;
 	    while (p_off > 0) {
 	      if (p == ls->end())
-		throw end_of_buffer();
+		throw std::system_error(buffer_err::end_of_buffer);
 	      if (p_off >= p->length()) {
 		// skip this buffer
 		p_off -= p->length();
@@ -335,7 +345,7 @@ public:
 	      p--;
 	      p_off = p->length();
 	    } else {
-	      throw end_of_buffer();
+	      throw std::system_error(buffer_err::end_of_buffer);
 	    }
 	  }
 	}
@@ -349,20 +359,20 @@ public:
 
       inline char operator*() {
 	  if (p == ls->end())
-	    throw end_of_buffer();
+	    throw std::system_error(buffer_err::end_of_buffer);
 	  return (*p)[p_off];
 	}
 
       inline buffer::list::iterator& operator++() {
 	  if (p == ls->end())
-	    throw end_of_buffer();
+	    throw std::system_error(buffer_err::end_of_buffer);
 	  advance(1);
 	  return *this;
 	}
 
       inline buffer::ptr get_current_ptr() {
 	  if (p == ls->end())
-	    throw end_of_buffer();
+	    throw std::system_error(buffer_err::end_of_buffer);
 	  return ptr(*p, p_off, p->length() - p_off);
 	}
 
@@ -377,7 +387,7 @@ public:
 	  if (p == ls->end()) seek(off);
 	  while (len > 0) {
 	    if (p == ls->end())
-	      throw end_of_buffer();
+	      throw std::system_error(buffer_err::end_of_buffer);
 	    assert(p->length() > 0);
 
 	    unsigned howmuch = p->length() - p_off;
@@ -400,7 +410,7 @@ public:
 	    seek(off);
 	  while (len > 0) {
 	    if (p == ls->end())
-	      throw end_of_buffer();
+	      throw std::system_error(buffer_err::end_of_buffer);
 
 	    unsigned howmuch = p->length() - p_off;
 	    if (len < howmuch)
@@ -417,7 +427,7 @@ public:
 	    seek(off);
 	  while (len > 0) {
 	    if (p == ls->end())
-	      throw end_of_buffer();
+	      throw std::system_error(buffer_err::end_of_buffer);
 
 	    unsigned howmuch = p->length() - p_off;
 	    const char *c_str = p->c_str();
@@ -453,7 +463,7 @@ public:
 	    seek(off);
 	  while (len > 0) {
 	    if (p == ls->end())
-	      throw end_of_buffer();
+	      throw std::system_error(buffer_err::end_of_buffer);
 
 	    unsigned howmuch = p->length() - p_off;
 	    if (len < howmuch)
@@ -650,7 +660,7 @@ public:
     std::string convert_to_string() const;		// NB: not efficient.
     int read_file(const char *fn, std::string *error);
     ssize_t read_fd(int fd, size_t len);
-    int read_fd_zero_copy(int fd, size_t len);
+    std::error_code read_fd_zero_copy(int fd, size_t len);
     int write_file(const char *fn, int mode=0644) const;
     int write_fd(int fd) const;
     int write_fd_zero_copy(int fd) const;
@@ -740,11 +750,6 @@ inline std::ostream& operator<<(std::ostream& out, const buffer::list& bl) {
   }
   out << std::endl << ")";
   return out;
-}
-
-inline std::ostream& operator<<(std::ostream& out, buffer::error& e)
-{
-  return out << e.what();
 }
 
 inline bufferhash& operator<<(bufferhash& l, bufferlist &r) {

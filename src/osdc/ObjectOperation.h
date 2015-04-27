@@ -222,7 +222,7 @@ namespace rados {
 	  try {
 	    ::decode(attrs, p);
 	  }
-	  catch (ceph::buffer::error& e) {
+	  catch (std::system_error& e) {
 	    if (rval)
 	      *rval = -EDOM;
 	  }
@@ -242,7 +242,7 @@ namespace rados {
 	    if (attrs)
 	      ::decode(*attrs, p);
 	  }
-	  catch (ceph::buffer::error& e) {
+	  catch (std::system_error& e) {
 	    if (rval)
 	      *rval = -EDOM;
 	  }

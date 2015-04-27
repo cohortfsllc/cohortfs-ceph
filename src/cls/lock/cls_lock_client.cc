@@ -120,7 +120,7 @@ namespace rados {
 	bufferlist::iterator iter = out.begin();
 	try {
 	  ::decode(ret, iter);
-	} catch (buffer::error& err) {
+	} catch (std::system_error& err) {
 	  return -EBADMSG;
 	}
 
@@ -147,7 +147,7 @@ namespace rados {
 	cls_lock_get_info_reply ret;
 	try {
 	  ::decode(ret, iter);
-	} catch (buffer::error& err) {
+	} catch (std::system_error& err) {
 	  return -EBADMSG;
 	}
 

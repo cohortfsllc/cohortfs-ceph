@@ -68,8 +68,9 @@ public:
 	bufferlist::iterator iter = outbl.begin();
 	::decode(ret, iter);
 	*objv = ret.objv;
-      } catch (buffer::error& err) {
-	// nothing we can do about it atm
+      } catch (std::system_error& err) {
+	  // nothing we can do about it atm This is proabably a good
+	  // candidate to be a future.
       }
     }
   }
@@ -95,7 +96,7 @@ int cls_version_read(Objecter* o, const oid_t& oid, const AVolRef& vol,
   try {
     bufferlist::iterator iter = out.begin();
     ::decode(ret, iter);
-  } catch (buffer::error& err) {
+  } catch (std::system_error& err) {
     return -EIO;
   }
 

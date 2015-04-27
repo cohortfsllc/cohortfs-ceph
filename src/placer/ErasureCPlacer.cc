@@ -308,11 +308,11 @@ public:
     return stripe_unit;
   };
 
-  virtual size_t op_size() const {
+  virtual size_t op_size() const noexcept {
     return one_op * erasure->get_chunk_count();
   }
 
-  virtual uint32_t quorum() const {
+  virtual uint32_t quorum() const noexcept {
     return erasure->get_data_chunk_count();
   }
 

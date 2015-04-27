@@ -1033,7 +1033,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  bp.copy(op.cls.class_len, cname);
 	  bp.copy(op.cls.method_len, mname);
 	  bp.copy(op.cls.indata_len, indata);
-	} catch (buffer::error& e) {
+	} catch (std::system_error& e) {
 	  dout(10) << "call unable to decode class + "
 		   << "method + indata" << dendl;
 	  dout(30) << "in dump: ";
@@ -1176,7 +1176,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	    try {
 	      ::decode(u64val, bp);
 	    }
-	    catch (buffer::error& e) {
+	    catch (std::system_error& e) {
 	      result = -EINVAL;
 	      goto fail;
 	    }
@@ -1277,7 +1277,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  ::decode(ver, bp);
 	  ::decode(timeout, bp);
 	  ::decode(bl, bp);
-	} catch (const buffer::error &e) {
+	} catch (const std::system_error &e) {
 	  timeout = 0ns;
 	}
 	if (timeout == 0ns)
@@ -1302,7 +1302,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  OpContext::WatchesNotifies::NotifyAck
 	    ack(notify_id, watch_cookie);
 	  (ctx->get_watches())->notify_acks.push_back(ack);
-	} catch (const buffer::error &e) {
+	} catch (const std::system_error &e) {
 	  /* op.watch.cookie is actually the notify_id for historical
 	   * reasons */
 	  OpContext::WatchesNotifies::NotifyAck ack(op.watch.cookie);
@@ -1692,7 +1692,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  ::decode(start_after, bp);
 	  ::decode(max_return, bp);
 	}
-	catch (buffer::error& e) {
+	catch (std::system_error& e) {
 	  result = -EINVAL;
 	  goto fail;
 	}
@@ -1725,7 +1725,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  ::decode(max_return, bp);
 	  ::decode(filter_prefix, bp);
 	}
-	catch (buffer::error& e) {
+	catch (std::system_error& e) {
 	  result = -EINVAL;
 	  goto fail;
 	}
@@ -1772,7 +1772,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	try {
 	  ::decode(keys_to_get, bp);
 	}
-	catch (buffer::error& e) {
+	catch (std::system_error& e) {
 	  result = -EINVAL;
 	  goto fail;
 	}
@@ -1796,7 +1796,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	try {
 	  ::decode(assertions, bp);
 	}
-	catch (buffer::error& e) {
+	catch (std::system_error& e) {
 	  result = -EINVAL;
 	  goto fail;
 	}
@@ -1861,7 +1861,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	try {
 	  ::decode(to_set, bp);
 	}
-	catch (buffer::error& e) {
+	catch (std::system_error& e) {
 	  result = -EINVAL;
 	  goto fail;
 	}
@@ -1917,7 +1917,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	try {
 	  ::decode(to_rm, bp);
 	}
-	catch (buffer::error& e) {
+	catch (std::system_error& e) {
 	  result = -EINVAL;
 	  goto fail;
 	}

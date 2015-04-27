@@ -381,7 +381,7 @@ bool AuthMonitor::prep_auth(MAuth *m, bool paxos_writable)
       ::decode(supported, indata);
       ::decode(entity_name, indata);
       ::decode(s->global_id, indata);
-    } catch (const buffer::error &e) {
+    } catch (const std::system_error &e) {
       ldout(mon->cct, 10) << "failed to decode initial auth message" << dendl;
       ret = -EINVAL;
       goto reply;
@@ -494,7 +494,7 @@ bool AuthMonitor::prep_auth(MAuth *m, bool paxos_writable)
       string str;
       try {
 	::decode(str, p);
-      } catch (const buffer::error &err) {
+      } catch (const std::system_error &err) {
 	lderr(mon->cct) << "corrupt cap data for " << entity_name
 			<< " in auth db" << dendl;
 	str.clear();
@@ -502,7 +502,7 @@ bool AuthMonitor::prep_auth(MAuth *m, bool paxos_writable)
       s->caps.parse(str, NULL);
       s->auid = auid;
     }
-  } catch (const buffer::error &err) {
+  } catch (const std::system_error &err) {
     ret = -EINVAL;
     ldout(mon->cct, 0) << "caught error when trying to handle auth request, probably malformed request" << dendl;
   }
@@ -724,7 +724,7 @@ bool AuthMonitor::prepare_command(MMonCommand *m, unique_lock& l)
     KeyRing keyring;
     try {
       ::decode(keyring, iter);
-    } catch (const buffer::error &ex) {
+    } catch (const std::system_error &ex) {
       ss << "error decoding keyring" << " " << ex.what();
       rs = err;
       goto done;
@@ -753,7 +753,7 @@ bool AuthMonitor::prepare_command(MMonCommand *m, unique_lock& l)
       bufferlist::iterator iter = bl.begin();
       try {
 	::decode(new_keyring, iter);
-      } catch (const buffer::error &ex) {
+      } catch (const std::system_error &ex) {
 	ss << "error decoding keyring";
 	err = -EINVAL;
 	goto done;
@@ -1029,7 +1029,7 @@ void AuthMonitor::upgrade_format(unique_lock& l)
       bufferlist::iterator it = p->second.caps["mon"].begin();
       ::decode(mon_caps, it);
     }
-    catch (buffer::error) {
+    catch (std::system_error) {
       ldout(mon->cct, 10) << __func__ << " unable to parse mon cap for "
 	       << p->first << dendl;
       continue;

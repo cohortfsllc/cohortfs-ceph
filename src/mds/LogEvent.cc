@@ -52,7 +52,7 @@ LogEvent *LogEvent::decode(bufferlist& bl)
       event = decode_event(bl, p, type);
       DECODE_FINISH(p);
     }
-    catch (const buffer::error &e) {
+    catch (const std::system_error& e) {
       return NULL;
     }
   } else { // we are using classic encoding
@@ -98,7 +98,7 @@ LogEvent *LogEvent::decode_event(bufferlist& bl, bufferlist::iterator& p, uint32
   try {
     le->decode(p);
   }
-  catch (const buffer::error &e) {
+  catch (const std::system_error& e) {
     delete le;
     return NULL;
   }

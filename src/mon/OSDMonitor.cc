@@ -374,7 +374,7 @@ int OSDMonitor::dump_osd_metadata(int osd, Formatter *f, ostream *err)
     bufferlist::iterator p = bl.begin();
     ::decode(m, p);
   }
-  catch (buffer::error& e) {
+  catch (std::system_error& e) {
     if (err)
       *err << "osd." << osd << " metadata is corrupt";
     return -EIO;

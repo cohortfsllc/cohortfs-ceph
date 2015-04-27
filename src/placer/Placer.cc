@@ -28,6 +28,9 @@
 
 WRITE_RAW_ENCODER(placer_type);
 
+using namespace std::literals;
+using std::system_error;
+using ceph::buffer_err;
 using std::stringstream;
 
 const std::string Placer::typestrings[] = {
@@ -140,12 +143,13 @@ PlacerRef Placer::decode_placer(bufferlist::iterator& bl)
 
   ::decode(v, bl);
   if (v != 0) {
-    throw buffer::malformed_input("Bad version.");
+    throw system_error(buffer_err::malformed_input, "Bad version."s);
   }
 
   ::decode(t, bl);
   if (t <= NotAPlacerType || t >= MaxPlacerType || factories[t] == NULL)
-    throw buffer::malformed_input("Bad (or unimplemented) placer type.");
+    throw system_error(buffer_err::malformed_input,
+		       "Bad (or unimplemented) placer type."s);
 
   return factories[t](bl, v);
 }

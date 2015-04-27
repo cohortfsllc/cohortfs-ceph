@@ -63,9 +63,9 @@ public:
 		       const OSDMap& map,
 		       const std::function<void(int)>& f) const = 0;
   // Returns negative POSIX error code on error.
-  virtual size_t op_size() const = 0;
+  virtual size_t op_size() const noexcept = 0;
   // Returns minimum number of subops that need to be placed to continue
-  virtual uint32_t quorum() const = 0;
+  virtual uint32_t quorum() const noexcept = 0;
 
   virtual void make_strides(const oid_t& oid,
 			    uint64_t offset, uint64_t len,

@@ -285,7 +285,7 @@ int GenericFileStoreBackend::_crc_load_or_init(int fd, SloppyCRCMap *cm)
   try {
     ::decode(*cm, p);
   }
-  catch (buffer::error &e) {
+  catch (std::system_error &e) {
     r = -EIO;
   }
   if (r < 0)

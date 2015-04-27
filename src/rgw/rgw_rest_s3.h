@@ -299,11 +299,7 @@ public:
 
     int l = MIN(tx_buffer_it.get_remaining(), len);
     memcpy(ptr, tx_buffer_it.get_current_ptr().c_str(), l);
-    try {
-      tx_buffer_it.advance(l);
-    } catch (buffer::end_of_buffer &e) {
-      assert(0);
-    }
+    tx_buffer_it.advance(l);
 
     return l;
   }

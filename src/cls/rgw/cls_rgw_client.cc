@@ -79,7 +79,7 @@ int cls_rgw_list_op(Objecter* o, AVolRef& vol, const oid_t& oid,
   try {
     bufferlist::iterator iter = out.begin();
     ::decode(ret, iter);
-  } catch (buffer::error& err) {
+  } catch (std::system_error& err) {
     return -EIO;
   }
 
@@ -104,7 +104,7 @@ int cls_rgw_bucket_check_index_op(Objecter* o, AVolRef& vol, const oid_t& oid,
   try {
     bufferlist::iterator iter = out.begin();
     ::decode(ret, iter);
-  } catch (buffer::error& err) {
+  } catch (std::system_error& err) {
     return -EIO;
   }
 
@@ -156,7 +156,7 @@ int cls_rgw_get_dir_header(Objecter* o, AVolRef& vol, const oid_t& oid,
   try {
     bufferlist::iterator iter = out.begin();
     ::decode(ret, iter);
-  } catch (buffer::error& err) {
+  } catch (std::system_error& err) {
     return -EIO;
   }
 
@@ -178,7 +178,7 @@ public:
     try {
       bufferlist::iterator iter = bl.begin();
       ::decode(ret, iter);
-    } catch (buffer::error& err) {
+    } catch (std::system_error& err) {
       r = -EIO;
     }
 
@@ -219,7 +219,7 @@ int cls_rgw_bi_log_list(Objecter* o, AVolRef& vol, const oid_t& oid,
   try {
     bufferlist::iterator iter = out.begin();
     ::decode(ret, iter);
-  } catch (buffer::error& err) {
+  } catch (std::system_error& err) {
     return -EIO;
   }
 
@@ -283,7 +283,7 @@ int cls_rgw_usage_log_read(Objecter* o, AVolRef& vol, const oid_t& oid,
       *is_truncated = result.truncated;
 
     usage = result.usage;
-  } catch (buffer::error& e) {
+  } catch (std::system_error& e) {
     return -EINVAL;
   }
 
@@ -351,7 +351,7 @@ int cls_rgw_gc_list(Objecter* o, AVolRef& vol, const oid_t& oid,
   try {
     bufferlist::iterator iter = out.begin();
     ::decode(ret, iter);
-  } catch (buffer::error& err) {
+  } catch (std::system_error& err) {
     return -EIO;
   }
 

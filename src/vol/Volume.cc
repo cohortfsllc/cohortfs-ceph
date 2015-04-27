@@ -28,7 +28,10 @@
 #define L_IS_PRINTABLE(c) (isprint(c))
 #endif
 
+using namespace std::literals;
 using std::stringstream;
+using std::system_error;
+using ceph::buffer_err;
 
 void Volume::dump(Formatter *f) const
 {
@@ -104,7 +107,7 @@ VolumeRef Volume::decode_volume(bufferlist::iterator& bl)
 
   ::decode(v, bl);
   if (v != 0) {
-    throw buffer::malformed_input("Bad version.");
+    throw system_error(buffer_err::malformed_input, "Bad version."s);
   }
 
   ::decode(vol->id, bl);
@@ -640,9 +643,9 @@ struct C_MultiStat : public Context {
 	::decode(rtl, p);
 	got_one = true;
 	mtime = std::max(mtime, _mtime);
-      } catch (ceph::buffer::error& e) {
+      } catch (std::system_error& e) {
 	if (r != 0)
-	  r = -EDOM;
+	  r = -EINVAL;
       }
     }
 

@@ -402,7 +402,7 @@ bool cephx_verify_authorizer(CephContext *cct, KeyStore *keys,
     ::decode(global_id, indata);
     ::decode(service_id, indata);
     ::decode(ticket, indata);
-  } catch (buffer::end_of_buffer &e) {
+  } catch (std::system_error &e) {
     // Unable to decode!
     return false;
   }

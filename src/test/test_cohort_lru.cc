@@ -39,12 +39,7 @@ namespace {
 
     TObject(const hoid_t& _oid, uint64_t _hk) : oid(_oid), hk(_hk) {}
 
-    /* per ObjectStore LRU */
-    const static int n_lanes = 17; // # of lanes in LRU system
-
     typedef cohort::lru::LRU<cohort::SpinLock> ObjLRU;
-
-    const static int cache_size = 373; // per-partiion cache size
 
     /* per-volume lookup table */
     struct OidLT

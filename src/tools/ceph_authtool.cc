@@ -25,8 +25,10 @@
 
 using std::cout;
 using std::cerr;
+using std::system_error;
+using ceph::buffer_err;
 
-CephContext *g_ceph_context;
+CephContext* g_ceph_context;
 
 #include <sstream>
 
@@ -172,8 +174,8 @@ int main(int argc, const char **argv)
       try {
 	bufferlist::iterator iter = bl.begin();
 	::decode(keyring, iter);
-      } catch (const buffer::error &err) {
-	cerr << "error reading file " << fn << std::endl;
+      } catch (const system_error &err) {
+	cerr << "error reading file " << fn << ": " << err.what() << std::endl;
 	exit(1);
       }
     } else {
@@ -192,12 +194,14 @@ int main(int argc, const char **argv)
       try {
 	bufferlist::iterator iter = obl.begin();
 	::decode(other, iter);
-      } catch (const buffer::error &err) {
-	cerr << "error reading file " << import_keyring << std::endl;
+      } catch (const system_error &err) {
+	cerr << "error reading file " << import_keyring << ": " << err.what()
+	     << std::endl;
 	exit(1);
       }
 
-      cout << "importing contents of " << import_keyring << " into " << fn << std::endl;
+      cout << "importing contents of " << import_keyring << " into " << fn
+	   << std::endl;
       //other.print(cout);
       keyring.import(g_ceph_context, other);
       modified = true;
@@ -216,8 +220,9 @@ int main(int argc, const char **argv)
     EntityAuth eauth;
     try {
       eauth.key.decode_base64(add_key);
-    } catch (const buffer::error &err) {
-      cerr << "can't decode key '" << add_key << "'" << std::endl;
+    } catch (const system_error& err) {
+      cerr << "can't decode key '" << add_key << "'" << err.what()
+	   << std::endl;
       exit(1);
     }
     keyring.add(ename, eauth);

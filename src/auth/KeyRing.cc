@@ -36,6 +36,7 @@
 
 using std::auto_ptr;
 using namespace std;
+using ceph::buffer_err;
 
 int KeyRing::from_ceph_context(CephContext *cct)
 {
@@ -58,7 +59,7 @@ int KeyRing::from_ceph_context(CephContext *cct)
       add(conf->name, ea);
       return 0;
     }
-    catch (buffer::error& e) {
+    catch (system_error& e) {
       lderr(cct) << "failed to decode key '" << conf->key << "'" << dendl;
       return -EINVAL;
     }
@@ -78,7 +79,7 @@ int KeyRing::from_ceph_context(CephContext *cct)
       ea.key.decode_base64(k);
       add(conf->name, ea);
     }
-    catch (buffer::error& e) {
+    catch (system_error& e) {
       lderr(cct) << "failed to decode key '" << k << "'" << dendl;
       return -EINVAL;
     }
@@ -103,7 +104,7 @@ int KeyRing::set_modifier(const char *type, const char *val, EntityName& name, m
     string l(val);
     try {
       key.decode_base64(l);
-    } catch (const buffer::error& err) {
+    } catch (const system_error& err) {
       return -EINVAL;
     }
     set_key(name, key);
@@ -171,7 +172,8 @@ void KeyRing::decode_plaintext(bufferlist::iterator& bli)
   std::deque<std::string> parse_errors;
 
   if (cf.parse_bufferlist(&bl, &parse_errors, NULL) != 0) {
-    throw buffer::malformed_input("cannot parse buffer");
+    throw system_error(buffer_err::malformed_input,
+		       "cannot parse buffer"s);
   }
 
   for (ConfFile::const_section_iter_t s = cf.sections_begin();
@@ -185,7 +187,7 @@ void KeyRing::decode_plaintext(bufferlist::iterator& bli)
     if (!ename.from_str(name)) {
       ostringstream oss;
       oss << "bad entity name in keyring: " << name;
-      throw buffer::malformed_input(oss.str().c_str());
+      throw system_error(buffer_err::malformed_input, oss.str());
     }
 
     for (ConfSection::const_line_iter_t l = s->second.lines.begin();
@@ -199,7 +201,8 @@ void KeyRing::decode_plaintext(bufferlist::iterator& bli)
 	ostringstream oss;
 	oss << "error setting modifier for [" << name << "] type=" << k
 	    << " val=" << l->val;
-	throw buffer::malformed_input(oss.str().c_str());
+	throw system_error(buffer_err::malformed_input,
+			   oss.str());
       }
     }
   }
@@ -211,7 +214,7 @@ void KeyRing::decode(bufferlist::iterator& bl) {
   try {
     ::decode(struct_v, bl);
     ::decode(keys, bl);
-  } catch (buffer::error& err) {
+  } catch (system_error& err) {
     keys.clear();
     decode_plaintext(start_pos);
   }
@@ -234,7 +237,7 @@ int KeyRing::load(CephContext *cct, const std::string &filename)
     bufferlist::iterator iter = bl.begin();
     decode(iter);
   }
-  catch (const buffer::error& err) {
+  catch (const system_error& err) {
     lderr(cct) << "error parsing file " << filename << dendl;
   }
 

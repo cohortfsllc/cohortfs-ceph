@@ -217,7 +217,7 @@ int cls_cxx_stat(cls_method_context_t hctx, uint64_t *size, time_t *mtime)
   try {
     ::decode(s, iter);
     ::decode(ut, iter);
-  } catch (buffer::error& err) {
+  } catch (std::system_error& err) {
     return -EIO;
   }
   if (size)
@@ -313,7 +313,7 @@ int cls_cxx_getxattrs(cls_method_context_t hctx, map<string, bufferlist> *attrse
   bufferlist::iterator iter = op.outdata.begin();
   try {
     ::decode(*attrset, iter);
-  } catch (buffer::error& err) {
+  } catch (std::system_error& err) {
     return -EIO;
   }
   return 0;
@@ -363,7 +363,7 @@ int cls_cxx_map_get_all_vals(cls_method_context_t hctx, map<string, bufferlist>*
   bufferlist::iterator iter = op.outdata.begin();
   try {
     ::decode(*vals, iter);
-  } catch (buffer::error& err) {
+  } catch (std::system_error& err) {
     return -EIO;
   }
   return vals->size();
@@ -389,7 +389,7 @@ int cls_cxx_map_get_keys(cls_method_context_t hctx, const string &start_obj,
   bufferlist::iterator iter = op.outdata.begin();
   try {
     ::decode(*keys, iter);
-  } catch (buffer::error& err) {
+  } catch (std::system_error& err) {
     return -EIO;
   }
   return keys->size();
@@ -419,7 +419,7 @@ int cls_cxx_map_get_vals(cls_method_context_t hctx, const string &start_obj,
   bufferlist::iterator iter = op.outdata.begin();
   try {
     ::decode(*vals, iter);
-  } catch (buffer::error& err) {
+  } catch (std::system_error& err) {
     return -EIO;
   }
   return vals->size();
@@ -468,7 +468,7 @@ int cls_cxx_map_get_val(cls_method_context_t hctx, const string &key,
       return -ENOENT;
 
     *outbl = iter->second;
-  } catch (buffer::error& e) {
+  } catch (std::system_error& e) {
     return -EIO;
   }
   return 0;

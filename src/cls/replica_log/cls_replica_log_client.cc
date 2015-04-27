@@ -83,7 +83,7 @@ int cls_replica_log_get_bounds(Objecter* o, const AVolRef& vol,
   try {
     bufferlist::iterator i = out.begin();
     ::decode(ret, i);
-  } catch (buffer::error& err) {
+  } catch (std::system_error& err) {
     return -EIO;
   }
 

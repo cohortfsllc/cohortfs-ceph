@@ -164,8 +164,8 @@ static int decode_policy(CephContext *cct, bufferlist& bl, RGWAccessControlPolic
   bufferlist::iterator iter = bl.begin();
   try {
     policy->decode(iter);
-  } catch (buffer::error& err) {
-    ldout(cct, 0) << "ERROR: could not decode policy, caught buffer::error" << dendl;
+  } catch (std::system_error& err) {
+    ldout(cct, 0) << "ERROR: could not decode policy, caught std::system_error" << dendl;
     return -EIO;
   }
   if (cct->_conf->subsys.should_gather(ceph_subsys_rgw, 15)) {
@@ -526,8 +526,8 @@ int RGWOp::read_bucket_cors()
   bufferlist::iterator iter = bl.begin();
   try {
     bucket_cors.decode(iter);
-  } catch (buffer::error& err) {
-    ldout(s->cct, 0) << "ERROR: could not decode policy, caught buffer::error" << dendl;
+  } catch (std::system_error& err) {
+    ldout(s->cct, 0) << "ERROR: could not decode policy, caught std::system_error" << dendl;
     return -EIO;
   }
   if (s->cct->_conf->subsys.should_gather(ceph_subsys_rgw, 15)) {
@@ -2415,8 +2415,8 @@ static int get_multipart_info(RGWRados *store, struct req_state *s, string& meta
 	bufferlist::iterator bli = bl.begin();
 	try {
 	  ::decode(*policy, bli);
-	} catch (buffer::error& err) {
-	  ldout(s->cct, 0) << "ERROR: could not decode policy, caught buffer::error" << dendl;
+	} catch (std::system_error& err) {
+	  ldout(s->cct, 0) << "ERROR: could not decode policy, caught std::system_error" << dendl;
 	  return -EIO;
 	}
 	break;
@@ -2474,8 +2474,8 @@ static int list_multipart_parts(RGWRados *store, struct req_state *s,
     RGWUploadPartInfo info;
     try {
       ::decode(info, bli);
-    } catch (buffer::error& err) {
-      ldout(s->cct, 0) << "ERROR: could not part info, caught buffer::error" << dendl;
+    } catch (std::system_error& err) {
+      ldout(s->cct, 0) << "ERROR: could not part info, caught std::system_error" << dendl;
       return -EIO;
     }
     if (sorted_omap) {

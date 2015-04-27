@@ -496,8 +496,9 @@ void RGWMetadataManager::dump_log_entry(cls_log_entry& entry, Formatter *f)
     ::decode(log_data, iter);
 
     encode_json("data", log_data, f);
-  } catch (buffer::error& err) {
-    lderr(cct) << "failed to decode log entry: " << entry.section << ":" << entry.name<< " ts=" << entry.timestamp << dendl;
+  } catch (std::system_error& err) {
+    lderr(cct) << "failed to decode log entry: " << entry.section << ":"
+	       << entry.name<< " ts=" << entry.timestamp << dendl;
   }
   f->close_section();
 }

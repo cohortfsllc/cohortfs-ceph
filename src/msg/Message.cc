@@ -180,7 +180,7 @@ Message *decode_message(CephContext *cct, int crcflags,
   try {
     m->decode_payload();
   }
-  catch (const buffer::error &e) {
+  catch (std::system_error &e) {
     if (cct) {
       lderr(cct) << "failed to decode message of type " << header.type
 		 << " v" << header.version

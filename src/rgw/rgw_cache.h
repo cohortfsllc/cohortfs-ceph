@@ -194,8 +194,6 @@ class RGWCache	: public T
     return true;
   }
 
-  int distribute_cache(const string& normal_name, rgw_obj& oid, ObjectCacheInfo& obj_info, int op);
-  int watch_cb(int opcode, uint64_t ver, bufferlist& bl);
 public:
   RGWCache(CephContext* cct) : RGWRados(cct) {}
 
@@ -248,7 +246,6 @@ int RGWCache<T>::delete_obj_impl(void *ctx, const string& bucket_owner, rgw_obj&
   cache.remove(name);
 
   ObjectCacheInfo info;
-  distribute_cache(name, oid, info, REMOVE_OBJ);
 
   return T::delete_obj_impl(ctx, bucket_owner, oid, objv_tracker);
 }
@@ -336,9 +333,6 @@ int RGWCache<T>::set_attr(void *ctx, rgw_obj& oid, const char *attr_name, buffer
     string name = normal_name(bucket, oid_t);
     if (ret >= 0) {
       cache.put(name, info);
-      int r = distribute_cache(name, oid, info, UPDATE_OBJ);
-      if (r < 0)
-	mydout(0) << "ERROR: failed to distribute cache for " << oid << dendl;
     } else {
      cache.remove(name);
     }
@@ -375,9 +369,6 @@ int RGWCache<T>::set_attrs(void *ctx, rgw_obj& oid,
     string name = normal_name(bucket, oid_t);
     if (ret >= 0) {
       cache.put(name, info);
-      int r = distribute_cache(name, oid, info, UPDATE_OBJ);
-      if (r < 0)
-	mydout(0) << "ERROR: failed to distribute cache for " << oid << dendl;
     } else {
      cache.remove(name);
     }
@@ -419,9 +410,6 @@ int RGWCache<T>::put_obj_meta_impl(void *ctx, rgw_obj& oid, uint64_t size, time_
     string name = normal_name(bucket, oid_t);
     if (ret >= 0) {
       cache.put(name, info);
-      int r = distribute_cache(name, oid, info, UPDATE_OBJ);
-      if (r < 0)
-	mydout(0) << "ERROR: failed to distribute cache for " << oid << dendl;
     } else {
      cache.remove(name);
     }
@@ -454,9 +442,6 @@ int RGWCache<T>::put_obj_data(void *ctx, rgw_obj& oid, const char *data,
     string name = normal_name(bucket, oid_t);
     if (ret >= 0) {
       cache.put(name, info);
-      int r = distribute_cache(name, oid, info, UPDATE_OBJ);
-      if (r < 0)
-	mydout(0) << "ERROR: failed to distribute cache for " << oid << dendl;
     } else {
      cache.remove(name);
     }
@@ -523,54 +508,6 @@ done:
   return 0;
 }
 
-template <class T>
-int RGWCache<T>::distribute_cache(const string& normal_name, rgw_obj& oid, ObjectCacheInfo& obj_info, int op)
-{
-  RGWCacheNotifyInfo info;
 
-  info.op = op;
-
-  info.obj_info = obj_info;
-  info.oid = oid;
-  bufferlist bl;
-  ::encode(info, bl);
-  return 0;
-}
-
-template <class T>
-int RGWCache<T>::watch_cb(int opcode, uint64_t ver, bufferlist& bl)
-{
-  RGWCacheNotifyInfo info;
-
-  try {
-    bufferlist::iterator iter = bl.begin();
-    ::decode(info, iter);
-  } catch (buffer::end_of_buffer& err) {
-    mydout(0) << "ERROR: got bad notification" << dendl;
-    return -EIO;
-  } catch (buffer::error& err) {
-    mydout(0) << "ERROR: buffer::error" << dendl;
-    return -EIO;
-  }
-
-  rgw_bucket bucket;
-  string oid_t;
-  normalize_bucket_and_obj(info.oid.bucket, info.oid.object, bucket, oid_t);
-  string name = normal_name(bucket, oid_t);
-
-  switch (info.op) {
-  case UPDATE_OBJ:
-    cache.put(name, info.obj_info);
-    break;
-  case REMOVE_OBJ:
-    cache.remove(name);
-    break;
-  default:
-    mydout(0) << "WARNING: got unknown notification op: " << info.op << dendl;
-    return -EINVAL;
-  }
-
-  return 0;
-}
 
 #endif

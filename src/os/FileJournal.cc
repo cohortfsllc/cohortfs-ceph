@@ -654,7 +654,7 @@ int FileJournal::read_header()
     bufferlist::iterator p = bl.begin();
     ::decode(header, p);
   }
-  catch (buffer::error& e) {
+  catch (std::system_error& e) {
     derr << "read_header error decoding journal header" << dendl;
     return -EINVAL;
   }

@@ -252,7 +252,7 @@ int MonMap::build_initial(CephContext *cct, ostream& errout)
     try {
       r = read(conf->monmap.c_str());
     }
-    catch (const buffer::error &e) {
+    catch (const std::system_error &e) {
       r = -EINVAL;
     }
     if (r >= 0)

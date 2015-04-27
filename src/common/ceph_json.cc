@@ -425,11 +425,7 @@ void decode_json_obj(bufferlist& val, JSONObj *oid)
 
   bufferlist bl;
   bl.append(s.c_str(), s.size());
-  try {
-    val.decode_base64(bl);
-  } catch (buffer::error& err) {
-   throw JSONDecoder::err("failed to decode base64");
-  }
+  val.decode_base64(bl);
 }
 
 void decode_json_obj(ceph::real_time& val, JSONObj *oid)

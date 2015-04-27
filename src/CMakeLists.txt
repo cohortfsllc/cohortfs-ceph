@@ -194,6 +194,7 @@ set(libcommon_files
   common/LogClient.cc
   common/LogEntry.cc
   common/PrebufferedStreambuf.cc
+  common/cohort_error.cc
   common/BackTrace.cc
   common/OutputDataSocket.cc
   common/admin_socket.cc

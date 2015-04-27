@@ -79,11 +79,11 @@ public:
     return std::dynamic_pointer_cast<const AttachedPlacer>(shared_from_this());
   }
 
-  virtual size_t op_size() const {
+  virtual size_t op_size() const noexcept {
     return one_op * stripe_width;
   }
 
-  virtual uint32_t quorum() const {
+  virtual uint32_t quorum() const noexcept {
     return stripe_width;
   }
 

@@ -89,7 +89,7 @@ int rgw_swift_verify_signed_token(CephContext *cct, RGWRados *store, const char 
     ::decode(swift_user, iter);
     ::decode(nonce, iter);
     ::decode(expiration, iter);
-  } catch (buffer::error& err) {
+  } catch (std::system_error& err) {
     dout(0) << "NOTICE: failed to decode token: caught exception" << dendl;
     return -EINVAL;
   }

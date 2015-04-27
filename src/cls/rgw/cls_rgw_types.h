@@ -169,7 +169,7 @@ void decode_packed_val(T& val, bufferlist::iterator& bl)
       }
       break;
     default:
-      throw buffer::error();
+      throw std::system_error(ceph::buffer_err::malformed_input);
   }
 }
 
