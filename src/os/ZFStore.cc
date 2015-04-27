@@ -12,3 +12,4 @@
  *
  */
 
+#include "ZFStore.h"
