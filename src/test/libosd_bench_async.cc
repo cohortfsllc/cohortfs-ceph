@@ -33,7 +33,7 @@ struct ReadR
   std::condition_variable* cv;
   struct libosd* osd;
   uint8_t* volume;
-  char* obj;
+  const char* obj;
   std::atomic<int>* count;
   int depth;
   int inst;
@@ -93,8 +93,7 @@ extern "C" {
   std::unique_lock<std::mutex> lk(mtx);
   std::atomic<int> cnt{count};
 
-  std::string obj = "foo_" + std::to_string(ix);
-
+  const std::string obj(1, 'a' + ix);
   std::cout << "obj is: " << obj << std::endl;
 
   /* queue reqs up to depth */
@@ -104,7 +103,7 @@ extern "C" {
     rio.cv = &cv;
     rio.osd = osd;
     rio.volume = volume;
-    rio.obj = const_cast<char*>(obj.c_str());
+    rio.obj = obj.c_str();
     rio.count = &cnt;
     rio.depth = depth;
     rio.inst = i;
@@ -140,6 +139,14 @@ void benchmark(struct libosd *osd, uint8_t *uuid, int nthreads,
       benchmark_thread(osd, uuid, depth, count, i);
     };
     threads.emplace_back(fn);
+
+    // set affinity for core 'i'
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET((i*2), &cpuset);
+    auto t = threads.back().native_handle();
+    int r = pthread_setaffinity_np(t, sizeof(cpu_set_t), &cpuset);
+    assert(r == 0);
   }
 
   // join threads

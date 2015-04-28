@@ -108,9 +108,10 @@ namespace cohort {
       std::atomic<uint32_t> n_workers;
       std::thread graveyard; // where exiting workers go to die
       mpmc_q queue;
+      int n;
       CACHE_PAD(0);
 
-      Band() : ctr(0), size(0), n_workers(0), queue(16384) {};
+      Band() : ctr(0), size(0), n_workers(0), queue(16384) {}
 
       void spawn_worker(uint32_t flags) {
 	if (n_workers < op_queue->thrd_hiwat) {
@@ -120,6 +121,15 @@ namespace cohort {
 	    this->run(worker);
 	  };
 	  worker->thread = std::thread(fn);
+
+          // set affinity for core 'i'
+          int i = n * 2 + 1;
+          cpu_set_t cpuset;
+          CPU_ZERO(&cpuset);
+          CPU_SET(i, &cpuset);
+          auto t = worker->thread.native_handle();
+          int r = pthread_setaffinity_np(t, sizeof(cpu_set_t), &cpuset);
+          assert(r == 0);
 	}
       }
 
@@ -199,6 +209,7 @@ namespace cohort {
       for (int ix = 0; ix < n_lanes; ++ix) {
 	Lane& lane = qlane[ix];
         Band& band = lane.band;
+        band.n = ix;
         band.op_queue = this;
         band.lane_mtx = &lane.mtx;
         band.spawn_worker(Band::FLAG_LEADER);
@@ -207,23 +218,9 @@ namespace cohort {
 
     ~OpQueue() { delete[] qlane; }
 
-    Lane& choose_lane() {
-#ifdef OPQUEUE_TLS_LANES
-      static thread_local int lane_ix = -1;
-      if (unlikely(lane_ix == -1)) {
-	std::lock_guard<std::mutex> lk(mtx);
-	if (unlikely(lane_ix == -1)) {
-	  lane_ix = ctr++ % n_lanes;
-	}
-      }
-      return qlane[lane_ix];
-#else
-      // use rdtsc to choose the lane
-      unsigned lo, hi;
-      asm volatile("rdtsc" : "=a" (lo), "=d" (hi));
-      uint64_t k = static_cast<uint64_t>(hi) << 32 | lo;
+    Lane& choose_lane(const hoid_t &oid) {
+      uint64_t k = oid.oid.name[0] - 'a';
       return qlane[(k % n_lanes)];
-#endif
     }
 
     bool enqueue(OpRequest& op, enum Bands b) {
@@ -231,7 +228,7 @@ namespace cohort {
       if (flags & FLAG_SHUTDOWN)
 	return false;
 
-      Lane& lane = choose_lane();
+      Lane& lane = choose_lane(op.get_oid());
       Band& band = lane.band;
 
 #ifdef OPQUEUE_INSTRUMENT
