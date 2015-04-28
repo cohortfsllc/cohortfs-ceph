@@ -11,7 +11,7 @@
 #include "global/global_init.h"
 #include "common/config.h"
 #include "common/Finisher.h"
-#include "os/FileJournal.h"
+#include "os/file/FileJournal.h"
 #include "include/Context.h"
 #include "common/safe_io.h"
 

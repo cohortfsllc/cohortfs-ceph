@@ -20,7 +20,7 @@
 #include "detailed_stat_collector.h"
 #include "distribution.h"
 #include "global/global_init.h"
-#include "os/FileStore.h"
+#include "os/file/FileStore.h"
 #include "testfilestore_backend.h"
 
 namespace po = boost::program_options;

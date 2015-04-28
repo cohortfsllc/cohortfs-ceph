@@ -21,8 +21,8 @@
 #include <boost/scoped_ptr.hpp>
 #include <sstream>
 #include <cassert>
-#include "os/KeyValueDB.h"
-#include "os/LevelDBStore.h"
+#include "os/kv/KeyValueDB.h"
+#include "os/kv/LevelDBStore.h"
 
 #include "common/Formatter.h"
 #include "common/errno.h"

@@ -28,7 +28,7 @@
 
 #include <gtest/gtest.h>
 
-#include "os/FileStore.h"
+#include "os/file/FileStore.h"
 #include "include/Context.h"
 #include "common/ceph_argparse.h"
 #include "global/global_init.h"

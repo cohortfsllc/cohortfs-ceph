@@ -5,9 +5,9 @@
 
 #include "include/buffer.h"
 #include "test/ObjectMap/KeyValueDBMemory.h"
-#include "os/KeyValueDB.h"
+#include "os/kv/KeyValueDB.h"
 #include "os/DBObjectMap.h"
-#include "os/LevelDBStore.h"
+#include "os/kv/LevelDBStore.h"
 #include <sys/types.h>
 #include "global/global_init.h"
 #include "common/ceph_argparse.h"

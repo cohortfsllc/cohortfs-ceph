@@ -18,7 +18,7 @@
 #include <map>
 #include <boost/scoped_ptr.hpp>
 #include "common/debug.h"
-#include "os/FileStore.h"
+#include "os/file/FileStore.h"
 #include "common/config.h"
 
 extern CephContext* cct;

@@ -12,8 +12,8 @@
  *
  */
 
-#ifndef OS_KEYVALUESTORE_H
-#define OS_KEYVALUESTORE_H
+#ifndef OS_OMAP_H
+#define OS_OMAP_H
 
 #include "common/oid.h"
 #include "SequencerPosition.h"
@@ -155,4 +155,4 @@ public:
   virtual ~ObjectMap() {}
 };
 
-#endif
+#endif /* OS_OMAP_H */

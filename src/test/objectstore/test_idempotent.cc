@@ -15,14 +15,14 @@
 #include <iostream>
 #include <sstream>
 #include <boost/scoped_ptr.hpp>
-#include "os/FileStore.h"
+#include "os/file/FileStore.h"
 #include "global/global_init.h"
 #include "common/ceph_argparse.h"
 #include "common/debug.h"
 #include "test/common/ObjectContents.h"
 #include "FileStoreTracker.h"
-#include "os/LevelDBStore.h"
-#include "os/KeyValueDB.h"
+#include "os/kv/LevelDBStore.h"
+#include "os/kv/KeyValueDB.h"
 #include "os/ObjectStore.h"
 
 CephContext* cct;

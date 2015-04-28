@@ -390,87 +390,14 @@ target_link_libraries(ceph-mon mon boost_regex boost_system boost_thread
   ${ALLOC_LIBS})
 install(TARGETS ceph-mon DESTINATION bin)
 
-# OSD
-
-set(libos_srcs
-  os/chain_xattr.cc
-  os/ObjectStore.cc
-  os/Transaction.cc
-  os/Factory.cc
-  os/JournalingObjectStore.cc
-  os/LevelDBStore.cc
-  os/DBObjectMap.cc
-  os/GenericObjectMap.cc
-  )
-set(os_mon_files
-  os/LevelDBStore.cc
-  )
-add_library(os_mon_objs OBJECT ${os_mon_files})
-add_library(os ${CEPH_SHARED} ${libos_srcs})
-target_link_libraries(os PRIVATE leveldb snappy boost_filesystem)
-if(${ENABLE_SHARED})
-  set_target_properties(os PROPERTIES OUTPUT_NAME ceph-os
-    VERSION "1.0.0" SOVERSION "1" LINK_FLAGS "-Wl,-export-dynamic")
-endif(${ENABLE_SHARED})
-install(TARGETS os DESTINATION lib)
-
-# objectstore modules
-# os filestore
-set(os_filestore_files
-  os/FileJournal.cc
-  os/FileStore.cc
-  os/GenericFileStoreBackend.cc
-  os/BtrfsFileStoreBackend.cc
-  os/ZFSFileStoreBackend.cc
-  os/FragTreeIndex.cc
-)
-
-add_library(os_filestore_objs OBJECT ${os_filestore_files})
-add_library(os_filestore SHARED $<TARGET_OBJECTS:os_filestore_objs>)
-if(${HAVE_LIBAIO})
-  target_link_libraries(os_filestore aio)
-endif(${HAVE_LIBAIO})
-target_link_libraries(os_filestore common os)
-set_target_properties(os_filestore PROPERTIES VERSION "1.0.0" SOVERSION "1")
-install(TARGETS os_filestore DESTINATION lib/os-modules)
-
-#os kvstore
-set(os_kvstore_files
-  os/KeyValueStore.cc
-)
-
-add_library(os_kvstore_objs OBJECT ${os_kvstore_files})
-add_library(os_kvstore SHARED $<TARGET_OBJECTS:os_kvstore_objs>)
-target_link_libraries(os_kvstore common os)
-set_target_properties(os_kvstore PROPERTIES VERSION "1.0.0" SOVERSION "1")
-install(TARGETS os_kvstore DESTINATION lib/os-modules)
-
-#os zfstore
-set(os_zfstore_files
-  os/ZFStore.cc
-)
-
-add_library(os_zfstore_objs OBJECT ${os_zfstore_files})
-add_library(os_zfstore SHARED $<TARGET_OBJECTS:os_zfstore_objs>)
-target_link_libraries(os_zfstore common os)
-set_target_properties(os_zfstore PROPERTIES VERSION "1.0.0" SOVERSION "1")
-install(TARGETS os_zfstore DESTINATION lib/os-modules)
-
-#os memstore
-set(os_memstore_files
-  os/MemStore.cc
-)
-
-add_library(os_memstore_objs OBJECT ${os_memstore_files})
-add_library(os_memstore SHARED $<TARGET_OBJECTS:os_memstore_objs>)
-target_link_libraries(os_memstore common os)
-set_target_properties(os_memstore PROPERTIES VERSION "1.0.0" SOVERSION "1")
-install(TARGETS os_memstore DESTINATION lib/os-modules)
+# OS
+add_subdirectory(os)
 
 # RADOS classes
 set(cls_references_files objclass/class_api.cc)
 add_library(cls_references_objs OBJECT ${cls_references_files})
 
+# OSD
 set(libosd_srcs
   libosd/libosd.cc
   libosd/remote.cc

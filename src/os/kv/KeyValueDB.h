@@ -8,7 +8,7 @@
 #include <map>
 #include <string>
 #include <boost/scoped_ptr.hpp>
-#include "ObjectMap.h"
+#include "os/ObjectMap.h"
 
 using std::string;
 /**

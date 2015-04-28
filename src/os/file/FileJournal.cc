@@ -18,7 +18,7 @@
 #include "common/safe_io.h"
 #include "FileJournal.h"
 #include "include/color.h"
-#include "os/FileStore.h"
+#include "FileStore.h"
 
 #include "include/compat.h"
 

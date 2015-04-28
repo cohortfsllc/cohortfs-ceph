@@ -20,7 +20,7 @@
 #include <unordered_map>
 
 #include "common/Finisher.h"
-#include "ObjectStore.h"
+#include "os/ObjectStore.h"
 #include "PartitionedPageSet.h"
 
 #include <atomic>

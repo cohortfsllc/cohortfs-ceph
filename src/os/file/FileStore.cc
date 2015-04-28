@@ -37,7 +37,7 @@
 #include "include/linux_fiemap.h"
 
 #include "common/xattr.h"
-#include "chain_xattr.h"
+#include "os/chain_xattr.h"
 
 #if defined(DARWIN) || defined(__FreeBSD__)
 #include <sys/param.h>
@@ -49,7 +49,7 @@
 #include <sstream>
 
 #include "FileStore.h"
-#include "Factory.h"
+#include "os/Factory.h"
 #include "GenericFileStoreBackend.h"
 #include "BtrfsFileStoreBackend.h"
 #include "XfsFileStoreBackend.h"
@@ -69,8 +69,8 @@
 #include "common/safe_io.h"
 #include "common/sync_filesystem.h"
 #include "common/fd.h"
-#include "DBObjectMap.h"
-#include "LevelDBStore.h"
+#include "os/DBObjectMap.h"
+#include "os/kv/LevelDBStore.h"
 
 #include "common/ceph_crypto.h"
 using ceph::crypto::SHA1;

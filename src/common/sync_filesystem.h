@@ -21,7 +21,7 @@
 #ifndef __CYGWIN__
 # ifndef DARWIN
 #  include <sys/ioctl.h>
-#  include "../os/btrfs_ioctl.h"
+#  include "../os/file/btrfs_ioctl.h"
 # endif
 #endif
 

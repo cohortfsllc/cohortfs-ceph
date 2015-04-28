@@ -21,7 +21,7 @@
 #include <mutex>
 using std::deque;
 
-#include "Journal.h"
+#include "os/Journal.h"
 #include "common/Thread.h"
 #include "common/Throttle.h"
 #include "common/zipkin_trace.h"

@@ -16,7 +16,7 @@
 #include <cassert>
 #include "common/ceph_argparse.h"
 #include "common/debug.h"
-#include "os/FileStore.h"
+#include "os/file/FileStore.h"
 #include "global/global_init.h"
 
 #define dout_subsys ceph_subsys_filestore

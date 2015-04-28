@@ -25,17 +25,17 @@
 #include <unordered_map>
 #include <boost/scoped_ptr.hpp>
 #include "include/types.h"
-#include "FragTreeIndex.h"
+#include "os/file/FragTreeIndex.h"
 
-#include "ObjectStore.h"
-#include "JournalingObjectStore.h"
+#include "os/ObjectStore.h"
+#include "os/JournalingObjectStore.h"
 
 #include "common/Timer.h"
 #include "common/zipkin_trace.h"
 #include "common/cohort_wqe.h"
 
-#include "ObjectMap.h"
-#include "SequencerPosition.h"
+#include "os/ObjectMap.h"
+#include "os/SequencerPosition.h"
 
 // from include/linux/falloc.h:
 #ifndef FALLOC_FL_PUNCH_HOLE

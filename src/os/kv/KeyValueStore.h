@@ -27,13 +27,13 @@
 #include <boost/scoped_ptr.hpp>
 
 #include "include/types.h"
-#include "ObjectStore.h"
+#include "os/ObjectStore.h"
 
 #include "common/Finisher.h"
 #include "common/fd.h"
 
-#include "GenericObjectMap.h"
-#include "SequencerPosition.h"
+#include "os/GenericObjectMap.h"
+#include "os/SequencerPosition.h"
 #include "KeyValueDB.h"
 
 enum kvstore_types {

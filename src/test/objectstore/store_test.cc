@@ -21,19 +21,19 @@
 #include <time.h>
 #include <sys/mount.h>
 #include "os/ObjectStore.h"
-#include "os/FileStore.h"
-#include "os/KeyValueStore.h"
+#include "os/file/FileStore.h"
+#include "os/kv/KeyValueStore.h"
 #include "include/Context.h"
 #include "common/ceph_argparse.h"
 #include "global/global_init.h"
 #include "common/errno.h"
+#include <unordered_map>
 #include <boost/scoped_ptr.hpp>
 #include <boost/random/mersenne_twister.hpp>
 #include <boost/random/uniform_int.hpp>
 #include <boost/random/binomial_distribution.hpp>
 #include <gtest/gtest.h>
 
-#include <unordered_map>
 typedef boost::mt11213b gen_type;
 static CephContext* cct;
 

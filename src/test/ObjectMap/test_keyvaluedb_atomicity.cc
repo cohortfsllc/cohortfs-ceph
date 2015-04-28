@@ -1,7 +1,7 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 #include <pthread.h>
 #include "include/buffer.h"
-#include "os/LevelDBStore.h"
+#include "os/kv/LevelDBStore.h"
 #include <sys/types.h>
 #include <dirent.h>
 #include <string>

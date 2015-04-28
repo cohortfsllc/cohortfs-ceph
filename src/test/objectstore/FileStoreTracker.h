@@ -4,8 +4,8 @@
 #define FILESTORE_TRACKER_H
 #include <mutex>
 #include "test/common/ObjectContents.h"
-#include "os/FileStore.h"
-#include "os/KeyValueDB.h"
+#include "os/file/FileStore.h"
+#include "os/kv/KeyValueDB.h"
 #include <boost/scoped_ptr.hpp>
 #include <list>
 #include <map>

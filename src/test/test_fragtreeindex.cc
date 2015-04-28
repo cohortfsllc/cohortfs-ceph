@@ -1,4 +1,4 @@
-#include "os/FragTreeIndex.h"
+#include "os/file/FragTreeIndex.h"
 #include "gtest/gtest.h"
 
 #include "common/ceph_argparse.h"

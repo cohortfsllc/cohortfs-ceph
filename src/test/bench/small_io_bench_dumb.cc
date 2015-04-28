@@ -22,7 +22,7 @@
 #include "detailed_stat_collector.h"
 #include "distribution.h"
 #include "global/global_init.h"
-#include "os/FileStore.h"
+#include "os/file/FileStore.h"
 #include "dumb_backend.h"
 
 CephContext* cct;

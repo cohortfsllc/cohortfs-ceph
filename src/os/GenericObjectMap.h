@@ -27,7 +27,7 @@
 
 #include "include/buffer.h"
 #include "ObjectMap.h"
-#include "KeyValueDB.h"
+#include "os/kv/KeyValueDB.h"
 #include "osd/osd_types.h"
 #include "common/simple_cache.hpp"
 

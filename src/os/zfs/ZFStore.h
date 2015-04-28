@@ -19,7 +19,7 @@
 #include <mutex>
 #include <shared_mutex>
 #include <boost/intrusive_ptr.hpp>
-#include "ObjectStore.h"
+#include "os/ObjectStore.h"
 #include <libzfswrap.h>
 
 class ZFStore : public ObjectStore
