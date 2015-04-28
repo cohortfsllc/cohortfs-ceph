@@ -101,7 +101,6 @@ namespace cohort {
       static constexpr uint32_t FLAG_NONE = 0x0000;
       static constexpr uint32_t FLAG_LEADER = 0x0001;
 
-      enum Bands band;
       OpQueue* op_queue;
       std::mutex* lane_mtx;
       uint32_t ctr;
@@ -175,7 +174,7 @@ namespace cohort {
 
     struct Lane {
       std::mutex mtx;
-      Band band[2];
+      Band band;
     }; /* Lane */
 
   public:
@@ -199,12 +198,10 @@ namespace cohort {
       qlane = new Lane[n_lanes];
       for (int ix = 0; ix < n_lanes; ++ix) {
 	Lane& lane = qlane[ix];
-	for (int bix = 0; bix < 2; ++bix) {
-	  Band& band = lane.band[bix];
-	  band.op_queue = this;
-	  band.lane_mtx = &lane.mtx;
-	  band.spawn_worker(Band::FLAG_LEADER);
-	}
+        Band& band = lane.band;
+        band.op_queue = this;
+        band.lane_mtx = &lane.mtx;
+        band.spawn_worker(Band::FLAG_LEADER);
       }
     }
 
@@ -235,7 +232,7 @@ namespace cohort {
 	return false;
 
       Lane& lane = choose_lane();
-      Band& band = lane.band[int(b)];
+      Band& band = lane.band;
 
 #ifdef OPQUEUE_INSTRUMENT
       if (unlikely((band.ctr % 16384) == 0)) {
@@ -270,13 +267,11 @@ namespace cohort {
       flags |= FLAG_SHUTDOWN;
       for (int ix = 0; ix < n_lanes; ++ix) {
 	Lane& lane = qlane[ix];
-	for (int bix = 0; bix < 2; ++bix) {
-	  Band& band = lane.band[bix];
-	  while (band.n_workers.load() > 0)
-            std::this_thread::sleep_for(timeout);
-	  if (band.graveyard.joinable())
-	    band.graveyard.join();
-	}
+        Band& band = lane.band;
+        while (band.n_workers.load() > 0)
+          std::this_thread::sleep_for(timeout);
+        if (band.graveyard.joinable())
+          band.graveyard.join();
       }
     } /* shutdown */
 
