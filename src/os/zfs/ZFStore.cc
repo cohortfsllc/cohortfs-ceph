@@ -23,6 +23,22 @@ lzfw_handle_t* ZFStore::zhd;
 #undef dout_prefix
 #define dout_prefix *_dout << "zfstore(" << path << ") "
 
+/* Factory method */
+ObjectStore* ZFStore_factory(CephContext* cct,
+			     const std::string& data,
+			     const std::string& journal)
+{
+  return new ZFStore(cct, data);
+}
+
+/* DLL machinery */
+extern "C" {
+  void* objectstore_dllinit()
+  {
+    return reinterpret_cast<void*>(ZFStore_factory);
+  }
+} /* extern "C" */
+
 ZFStore::ZFStore(CephContext* cct, const std::string& path)
   : ObjectStore(cct, path)
 {
