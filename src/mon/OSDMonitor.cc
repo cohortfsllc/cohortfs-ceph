@@ -2232,9 +2232,9 @@ done:
       cmd_getval(mon->cct, cmdmap, "blacklistop", blacklistop);
       if (blacklistop == "add") {
 	ceph::real_time expires = ceph::real_clock::now();
-	int d;
+	int64_t d;
 	// default one hour
-	cmd_getval(mon->cct, cmdmap, "expire", d, 60*60);
+	cmd_getval(mon->cct, cmdmap, "expire", d, 3600L);
 	expires += d * 1s;
 
 	pending_inc.new_blacklist[addr] = expires;
