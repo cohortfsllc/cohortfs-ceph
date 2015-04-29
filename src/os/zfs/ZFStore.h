@@ -97,8 +97,8 @@ public:
       return o;
     }
 
-    ZCollection(ZFStore* ms, const coll_t& cid)
-      : ceph::os::Collection(ms, cid), cct(ms->cct)
+    ZCollection(ZFStore* zs, const coll_t& cid)
+      : ceph::os::Collection(zs, cid), cct(zs->cct)
     {}
 
     ~ZCollection();
