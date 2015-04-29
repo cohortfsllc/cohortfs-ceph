@@ -41,7 +41,7 @@ static int write_log_entry(cls_method_context_t hctx, string& index, cls_log_ent
 static void get_index_time_prefix(ceph::real_time& ts, string& index)
 {
   char buf[32];
-  snprintf(buf, sizeof(buf), "%010ld.%06ld_",
+  snprintf(buf, sizeof(buf), "%010ld.%06lld_",
 	   ceph::real_clock::to_time_t(ts),
 	   std::chrono::duration_cast<std::chrono::milliseconds>(
 	     ts.time_since_epoch() % 1s).count());
