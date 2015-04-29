@@ -176,7 +176,8 @@ void Pipe::join_reader(std::unique_lock<std::mutex>& l)
 
 void Pipe::DelayedDelivery::discard()
 {
-  lgeneric_subdout(pipe->msgr->cct, ms, 20) << pipe->_pipe_prefix(_dout) << "DelayedDelivery::discard" << dendl;
+  lgeneric_subdout(pipe->msgr->cct, ms, 20) << "DelayedDelivery::discard"
+					    << dendl;
   std::lock_guard<std::mutex> l(delay_lock);
   while (!delay_queue.empty()) {
     Message *m = delay_queue.front().second;
@@ -188,7 +189,8 @@ void Pipe::DelayedDelivery::discard()
 
 void Pipe::DelayedDelivery::flush()
 {
-  lgeneric_subdout(pipe->msgr->cct, ms, 20) << pipe->_pipe_prefix(_dout) << "DelayedDelivery::flush" << dendl;
+  lgeneric_subdout(pipe->msgr->cct, ms, 20) << "DelayedDelivery::flush"
+					    << dendl;
   std::lock_guard<std::mutex> l(delay_lock);
   while (!delay_queue.empty()) {
     Message *m = delay_queue.front().second;
@@ -201,12 +203,12 @@ void *Pipe::DelayedDelivery::entry()
 {
   std::unique_lock<std::mutex> l(delay_lock);
   lgeneric_subdout(pipe->msgr->cct, ms, 20)
-    << pipe->_pipe_prefix(_dout) << "DelayedDelivery::entry start" << dendl;
+    << "DelayedDelivery::entry start" << dendl;
 
   while (!stop_delayed_delivery) {
     if (delay_queue.empty()) {
       lgeneric_subdout(pipe->msgr->cct, ms, 30)
-	<< pipe->_pipe_prefix(_dout) << "DelayedDelivery::entry sleeping "
+	<< "DelayedDelivery::entry sleeping "
 	<< "on delay_cond because delay queue is empty" << dendl;
       delay_cond.wait(l);
       continue;
@@ -223,7 +225,7 @@ void *Pipe::DelayedDelivery::entry()
     pipe->in_q->enqueue(m, m->get_priority(), pipe->conn_id);
   }
   lgeneric_subdout(pipe->msgr->cct, ms, 20)
-    << pipe->_pipe_prefix(_dout) << "DelayedDelivery::entry stop" << dendl;
+    << "DelayedDelivery::entry stop" << dendl;
   return NULL;
 }
 

@@ -18,6 +18,7 @@
 
 #include <cassert>
 #include <condition_variable>
+#include <iomanip>
 #include <list>
 #include <memory>
 #include <mutex>
@@ -82,7 +83,7 @@ class Context {
 
 // output operator to print context pointer
 inline std::ostream& operator<<(std::ostream &out, const Context &c) {
-  return out << &c;
+  return out << std::hex << reinterpret_cast<uintptr_t>(&c);
 }
 
 /**

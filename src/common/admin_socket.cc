@@ -325,7 +325,7 @@ bool AdminSocket::do_accept()
   std::stringstream errss;
   cmdvec.push_back(cmd);
   if (!cmdmap_from_json(cmdvec, &cmdmap, errss)) {
-    ldout(m_cct, 0) << "AdminSocket: " << errss << dendl;
+    ldout(m_cct, 0) << "AdminSocket: " << errss.str() << dendl;
     return false;
   }
   cmd_getval(m_cct, cmdmap, "format", format);
