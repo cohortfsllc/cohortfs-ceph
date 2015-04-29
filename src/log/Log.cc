@@ -245,7 +245,7 @@ void Log::_flush(EntryQueue *t, EntryQueue *requeue, bool crash)
 
       time_t tt = ceph::real_clock::to_time_t(e->m_stamp); // throws MSB bits away
       uint32_t us = std::chrono::duration_cast<std::chrono::microseconds>(
-	e->m_stamp - std::chrono::system_clock::from_time_t(tt)).count();
+	e->m_stamp - ceph::real_clock::from_time_t(tt)).count();
       std::tm tm;
       ::localtime_r(&tt, &tm);	// no std::localtime_r()?  C'mon, guys...
 #if 0

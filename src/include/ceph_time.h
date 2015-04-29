@@ -41,11 +41,50 @@ namespace ceph {
   typedef std::chrono::duration<ceph_timespec, std::nano> timespan;
   typedef std::chrono::duration<int64_t, std::nano> signedspan;
 
+  class real_clock {
+  public:
+    typedef timespan duration;
+    typedef duration::rep rep;
+    typedef duration::period period;
+    typedef std::chrono::time_point<real_clock> time_point;
+    static constexpr const bool is_steady = false;
+
+    static time_point now() noexcept {
+      return time_point(std::chrono::duration_cast<timespan>(
+			  std::chrono::system_clock::now()
+			  .time_since_epoch()));
+    }
+    static time_t to_time_t(const time_point& t) noexcept {
+      return std::chrono::system_clock::to_time_t(
+	std::chrono::system_clock::time_point(
+	  std::chrono::duration_cast<std::chrono::system_clock::duration>(
+	    t.time_since_epoch())));
+    }
+    static time_point from_time_t(time_t t) noexcept {
+      return time_point(std::chrono::duration_cast<timespan>(
+			  std::chrono::system_clock::from_time_t(t)
+			  .time_since_epoch()));
+    }
+  };
+
+  class mono_clock {
+  public:
+    typedef timespan duration;
+    typedef duration::rep rep;
+    typedef duration::period period;
+    typedef std::chrono::time_point<mono_clock> time_point;
+    static constexpr const bool is_steady = false;
+
+    static time_point now() noexcept {
+      return time_point(std::chrono::duration_cast<timespan>(
+			  std::chrono::steady_clock::now()
+			  .time_since_epoch()));
+    }
+  };
+
   // This is a FRACTIONAL TIME IN SECONDS
-  typedef std::chrono::system_clock real_clock;
-  typedef std::chrono::steady_clock mono_clock;
-  typedef std::chrono::time_point<real_clock, timespan> real_time;
-  typedef std::chrono::time_point<mono_clock, timespan> mono_time;
+  typedef real_clock::time_point real_time;
+  typedef mono_clock::time_point mono_time;
 
   inline real_time spec_to_time(ceph_timespec ts) {
     return real_time(timespan(ts));
@@ -238,8 +277,8 @@ inline std::ostream& operator<<(std::ostream& out,
 
 // Since it's only for debugging, I don't care that it's junk.
 
-inline std::ostream& operator<<(std::ostream& out,
-				const ceph::mono_time& t)
+static inline std::ostream& operator<<(std::ostream& out,
+				       const ceph::mono_time& t)
 {
   return out << t.time_since_epoch();
 }

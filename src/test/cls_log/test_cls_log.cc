@@ -85,7 +85,10 @@ void generate_log(librados::IoCtx& ioctx, string& oid_t, int max,
 
 ceph::real_time get_time(ceph::real_time& start_time, int i, bool modify_time)
 {
-  return modify_time ? start_time + 1s : start_time;
+  if (modify_time)
+    return start_time + 1s;
+  else
+    return start_time;
 }
 
 void check_entry(cls_log_entry& entry, ceph::real_time& start_time, int i, bool modified_time)

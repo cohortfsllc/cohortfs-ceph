@@ -130,7 +130,7 @@ extern "C" {
 void benchmark(struct libosd *osd, uint8_t *uuid, int nthreads,
 	       int depth, int count)
 {
-  auto t1 = std::chrono::high_resolution_clock::now();
+  auto t1 = ceph::mono_clock::now();
   std::cout << "time started " << t1 << std::endl;
 
   // start threads
@@ -146,7 +146,7 @@ void benchmark(struct libosd *osd, uint8_t *uuid, int nthreads,
   for (auto &t : threads)
     t.join();
 
-  auto t2 = std::chrono::high_resolution_clock::now();
+  auto t2 = ceph::mono_clock::now();
   std::cout << "time finished " << t2 << std::endl;
 
   auto duration =
