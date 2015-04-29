@@ -13,3 +13,33 @@
  */
 
 #include "ZFStore.h"
+
+static std::mutex mtx;
+static std::atomic<bool> initialized;
+std::atomic<uint32_t> ZFStore::n_instances;
+lzfw_handle_t* ZFStore::zhd;
+
+#define dout_subsys ceph_subsys_filestore
+#undef dout_prefix
+#define dout_prefix *_dout << "zfstore(" << path << ") "
+
+ZFStore::ZFStore(CephContext* cct, const std::string& path)
+  : ObjectStore(cct, path)
+{
+  if (!initialized) {
+    std::unique_lock<std::mutex> l(mtx);
+    if (!initialized) {
+      zhd = lzfw_init();
+      if (!zhd) {
+	dout(-1) << "lzfw_init() failed" << dendl;
+      }
+      initialized = true;
+    }
+  }
+  ++n_instances;
+}
+
+ZFStore::~ZFStore()
+{
+  --n_instances;
+}

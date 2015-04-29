@@ -25,13 +25,16 @@
 class ZFStore : public ObjectStore
 {
 private:
+  static lzfw_handle_t* zhd;
+  static std::atomic<uint32_t> n_instances;
+
 public:
   class ZCollection;
 
   struct ZObject : public ceph::os::Object
   {
     mutable std::atomic<uint32_t> refcnt;
-    libzfswrap_vnode_t* vno; /* opaque */
+    lzfw_vnode_t* vno; /* opaque */
     inogen_t ino;
 
     std::shared_timed_mutex omap_lock;
@@ -181,12 +184,8 @@ public:
     }
   }; /* ZOmapIterator */
 
-  ZFStore(CephContext* cct, const std::string& path)
-    : ObjectStore(cct, path)
-  { }
-
-  ~ZFStore()
-  { }
+  ZFStore(CephContext* cct, const std::string& path);
+  ~ZFStore();
 
   /* ObjectStore interface */
   int update_version_stamp() {
