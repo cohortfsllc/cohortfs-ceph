@@ -27,6 +27,7 @@ class ZFStore : public ObjectStore
 private:
   static lzfw_handle_t* zhd;
   static std::atomic<uint32_t> n_instances;
+  lzfw_vfs_t* zhfs;
 
 public:
   class ZCollection;

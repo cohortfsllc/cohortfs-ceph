@@ -40,7 +40,7 @@ extern "C" {
 } /* extern "C" */
 
 ZFStore::ZFStore(CephContext* cct, const std::string& path)
-  : ObjectStore(cct, path)
+  : ObjectStore(cct, path), zhfs(nullptr)
 {
   if (!initialized) {
     std::unique_lock<std::mutex> l(mtx);
@@ -53,6 +53,27 @@ ZFStore::ZFStore(CephContext* cct, const std::string& path)
     }
   }
   ++n_instances;
+}
+
+int ZFStore::mount() {
+  assert(zhd);
+
+  /* path -> pool */
+  zhfs = lzfw_mount(path.c_str(), "/tank" /* XXX */, "" /* XXX */);
+  if (!zhfs) {
+    dout(-1) << "lzfw_mount() failed"
+	     << " path=" << path << " dir=" << "/tank"
+	     << " opts=" << "" << dendl;
+    return -EINVAL;
+  }
+  return 0;
+}
+
+int ZFStore::umount() {
+  assert(zhfs);
+  int r = lzfw_umount(zhfs, true /* XXX force */);
+  zhfs = nullptr;
+  return -r;
 }
 
 ZFStore::~ZFStore()
