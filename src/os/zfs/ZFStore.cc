@@ -58,4 +58,12 @@ ZFStore::ZFStore(CephContext* cct, const std::string& path)
 ZFStore::~ZFStore()
 {
   --n_instances;
+  if (n_instances == 0) {
+    std::unique_lock<std::mutex> l(mtx);
+    if (n_instances == 0) {
+      lzfw_exit(zhd);
+      zhd = nullptr;
+      initialized = false;
+    }
+  }
 }
