@@ -203,11 +203,8 @@ else()
         find_package(NSS)
         if(NSS_FOUND)
                 MESSAGE(STATUS "${NSS_LIBRARIES}")
-                #It is known to be false why the test
-		if(NOT CRYPTOPP_FOUND)
-                        set(CRYPTO_LIBS ${NSS_LIBRARIES})
-                        add_definitions(-DUSE_NSS)
-		endif(NOT CRYPTOPP_FOUND)
+                set(CRYPTO_LIBS ${NSS_LIBRARIES})
+		set(USE_NSS 1)
 	endif(NSS_FOUND)
 endif(CRYPTOPP_FOUND)
 
