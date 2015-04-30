@@ -50,8 +50,8 @@ uint64_t received = 0;
 
 class Admin : public Dispatcher {
 public:
-  Admin()
-    : Dispatcher(cct)
+  Admin(CephContext* _cct)
+    : Dispatcher(_cct)
   {
   }
 private:
@@ -71,7 +71,7 @@ private:
   bool ms_handle_reset(Connection *con) { return false; }
   void ms_handle_remote_reset(Connection *con) {}
 
-} dispatcher;
+};
 
 
 int main(int argc, const char **argv, const char *envp[]) {
@@ -82,6 +82,7 @@ int main(int argc, const char **argv, const char *envp[]) {
 
   cct = global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
   common_init_finish(cct);
+  Admin dispatcher(cct);
 
   dout(0) << "i am mon " << args[0] << dendl;
 
