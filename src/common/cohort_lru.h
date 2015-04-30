@@ -114,7 +114,7 @@ namespace cohort {
       static constexpr uint32_t FLAG_EVICTING = 0x0004;
 
       Lane& lane_of(void* addr) {
-	return qlane[(uint64_t)(addr) % n_lanes];
+	return qlane[((uint64_t)(addr))/16 % n_lanes];
       }
 
       uint32_t next_evict_lane() {
