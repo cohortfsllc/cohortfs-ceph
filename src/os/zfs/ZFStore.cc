@@ -76,6 +76,12 @@ int ZFStore::umount() {
   return -r;
 }
 
+bool ZFStore::exists(CollectionHandle ch, const hoid_t& oid)
+{
+  ZCollection* zc = static_cast<ZCollection*>(ch);
+  return zc->index.lookup(oid) == 0;
+}
+
 ZFStore::~ZFStore()
 {
   --n_instances;

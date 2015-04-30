@@ -21,6 +21,7 @@
 #include <boost/intrusive_ptr.hpp>
 #include "os/ObjectStore.h"
 #include <libzfswrap.h>
+#include "os/zfs/FragTreeIndex.h"
 
 class ZFStore : public ObjectStore
 {
@@ -42,7 +43,7 @@ public:
     typedef std::unique_lock<std::shared_timed_mutex> unique_lock;
     typedef std::shared_lock<std::shared_timed_mutex> shared_lock;
 
-    ZObject(CephContext *cct, ZCollection* c, const hoid_t& oid)
+    ZObject(ZCollection* c, const hoid_t& oid)
       : ceph::os::Object(c, oid), refcnt(0)
     {}
 
@@ -57,10 +58,32 @@ public:
       }
     }
 
-    /* XXXX pending integration w/LRU */
-    virtual bool reclaim() {
-      return false;
+    bool reclaim() {
+      c->obj_cache.remove(get_oid().hk, this, cohort::lru::FLAG_NONE);
+      return true;
     }
+
+    ~ZObject() {}
+
+    struct ZObjectFactory : public cohort::lru::ObjectFactory
+    {
+      ZCollection* c;
+      const hoid_t oid;
+
+      ZObjectFactory(ZCollection* c, const hoid_t& oid)
+	: c(c), oid(oid) {}
+
+      void recycle (cohort::lru::Object* o) {
+	  /* re-use an existing object */
+	  o->~Object(); // call lru::Object virtual dtor
+	  // placement new!
+	  new (o) ZObject(c, oid);
+      }
+
+      cohort::lru::Object* alloc() {
+	return new ZObject(c, oid);
+      }
+    }; /* ZObjectFactory */
 
   }; /* ZObject */
 
@@ -69,7 +92,10 @@ public:
 
   struct ZCollection : public ceph::os::Collection
   {
+    friend class ZFStore;
+
     CephContext *cct;
+    cohort_zfs::FragTreeIndex index;
 
     typedef std::unique_lock<std::shared_timed_mutex> unique_lock;
     typedef std::shared_lock<std::shared_timed_mutex> shared_lock;
@@ -90,7 +116,7 @@ public:
 					 ObjCache::FLAG_LOCK));
       if (!o) {
 	/* XXXX need to find in ZFS! */
-	o = new ZObject(cct, this, oid);
+	o = new ZObject(this, oid);
 	intrusive_ptr_add_ref(o);
 	obj_cache.insert_latched(o, lat, ObjCache::FLAG_UNLOCK);
       } else
@@ -99,10 +125,14 @@ public:
     }
 
     ZCollection(ZFStore* zs, const coll_t& cid)
-      : ceph::os::Collection(zs, cid), cct(zs->cct)
+      : ceph::os::Collection(zs, cid), cct(zs->cct),
+	index(zs->cct, zs->cct->_conf->fragtreeindex_initial_split)
     {}
 
-    ~ZCollection();
+    ~ZCollection()
+    {
+      index.unmount();
+    }
   }; /* ZCollection */
 
   inline ZCollection* get_slot_collection(Transaction& t,
