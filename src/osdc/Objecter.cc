@@ -1316,7 +1316,7 @@ namespace OSDC {
     return tid;
   }
 
-  int Objecter::op_cancel(ceph_tid_t tid, int r)
+  void Objecter::op_cancel(ceph_tid_t tid, int r)
   {
     Op* op;
     {
@@ -1325,7 +1325,6 @@ namespace OSDC {
       auto p = inflight_ops.find(tid, oc);
       if (p == inflight_ops.end()) {
 	ldout(cct, 10) << __func__ << " tid " << tid << " dne" << dendl;
-	return -ENOENT;
       }
       op = &(*p);
       _op_cancel_map_check(*op);
@@ -1334,7 +1333,7 @@ namespace OSDC {
     Op::unique_lock ol(op->lock);
     // Give it one last chance
     if (possibly_complete_op(*op, ol, true)) {
-      return 0;
+      return;
     }
     ldout(cct, 10) << __func__ << " tid " << tid << dendl;
     if (op->onack) {
@@ -1346,7 +1345,6 @@ namespace OSDC {
       op->oncommit = nullptr;
     }
     _finish_op(*op, ol);
-    return 0;
   }
 
   bool Objecter::target_should_be_paused(op_base& t)
@@ -1964,14 +1962,13 @@ namespace OSDC {
     ldout(cct, 10) << "done" << dendl;
   }
 
-  int Objecter::statfs_op_cancel(ceph_tid_t tid, int r)
+  void Objecter::statfs_op_cancel(ceph_tid_t tid, int r)
   {
     unique_lock wl(rwlock);
 
     auto it = statfs_ops.find(tid, oc);
     if (it == statfs_ops.end()) {
       ldout(cct, 10) << __func__ << " tid " << tid << " dne" << dendl;
-      return -ENOENT;
     }
 
     ldout(cct, 10) << __func__ << " tid " << tid << dendl;
@@ -1980,7 +1977,6 @@ namespace OSDC {
     if (op.onfinish)
       op.onfinish->complete(r);
     _finish_statfs_op(op);
-    return 0;
   }
 
   void Objecter::_finish_statfs_op(StatfsOp& op)

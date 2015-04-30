@@ -598,7 +598,7 @@ namespace OSDC {
 
     /// cancel an in-progress request with the given return code
   private:
-    int op_cancel(ceph_tid_t tid, int r);
+    void op_cancel(ceph_tid_t tid, int r);
 
 
   public:
@@ -1279,7 +1279,7 @@ namespace OSDC {
   public:
     void handle_fs_stats_reply(MStatfsReply *m);
     void get_fs_stats(struct ceph_statfs& result, Context *onfinish);
-    int statfs_op_cancel(ceph_tid_t tid, int r);
+    void statfs_op_cancel(ceph_tid_t tid, int r);
     void _finish_statfs_op(StatfsOp& op);
 
     void ms_handle_connect(Connection *con);
