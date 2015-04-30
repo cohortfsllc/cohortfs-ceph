@@ -241,7 +241,7 @@ static int do_bench_write(Image& image, uint64_t io_size,
 
   std::chrono::duration<double> elapsed = ceph::mono_clock::now() - start;
 
-  printf("elapsed: %5ld	ops: %8d  ops/sec: %8.2lf  bytes/sec: %8.2lf\n",
+  printf("elapsed: %5lld\tops: %8d  ops/sec: %8.2lf  bytes/sec: %8.2lf\n",
 	 std::chrono::duration_cast<std::chrono::seconds>(elapsed).count(),
 	 ios, (double)ios / elapsed.count(),
 	 (double)off / elapsed.count());
@@ -249,24 +249,20 @@ static int do_bench_write(Image& image, uint64_t io_size,
   return 0;
 }
 
-static int export_read_cb(int fd, uint64_t off, size_t len,
-			  const bufferlist& buf)
+static void export_read_cb(int fd, uint64_t off, size_t len,
+			   const bufferlist& buf)
 {
   ssize_t ret;
   if (buf.is_zero()) {
     /* a hole */
-    return 0;
   }
 
   ret = lseek64(fd, off, SEEK_SET);
   if (ret < 0)
-    return -errno;
+    throw std::system_error(errno, std::system_category());
   ret = buf.write_fd(fd);
-
   if (ret < 0)
-    return -errno;
-
-  return 0;
+    throw std::system_error(errno, std::system_category());
 }
 
 static void do_export(librbd::Image& image, const string& path)

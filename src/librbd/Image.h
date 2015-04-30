@@ -94,8 +94,8 @@ namespace librbd {
     void read_iterate(uint64_t off, size_t len,
 		      function<void(uint64_t, size_t,
 				    const bufferlist&)> cb) const;
-    void read_iterate(function<int(uint64_t, size_t,
-				   const bufferlist&)> cb) const {
+    void read_iterate(function<void(uint64_t, size_t,
+				    const bufferlist&)> cb) const {
       read_iterate(0, size, cb);
     }
 
