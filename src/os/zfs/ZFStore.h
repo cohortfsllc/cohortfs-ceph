@@ -169,6 +169,7 @@ public:
       get<0>(o_slot) = oh;
       // then mark it for release when t is cleaned up
       get<2>(o_slot) |= Transaction::FLAG_REF;
+      t.os = this;
     }
     return oh;
   } /* get_slot_object */
