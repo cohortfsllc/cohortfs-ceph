@@ -460,7 +460,7 @@ namespace cohort_zfs {
     return r;
   }
 
-  int FragTreeIndex::open(const hoid_t& oid, bool create, int* fd)
+  int FragTreeIndex::open(const hoid_t& oid, bool create, lzfw_vnode_t** vno)
   {
     int r = -ENOENT;
     struct frag_path path, orig;
@@ -474,6 +474,8 @@ namespace cohort_zfs {
     }
 
     const std::string name = format_name(oid);
+
+#if 0 /* XXXX fixme! */
 
     // if a migration is in progress, check the original location first
     if (orig.frag != path.frag) {
@@ -531,6 +533,7 @@ namespace cohort_zfs {
       }
     } while (r == EEXIST); // retry if exclusive create failed
 
+#endif /* XXXX fixme! */
     return -r;
   }
 

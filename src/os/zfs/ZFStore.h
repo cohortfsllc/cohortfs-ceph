@@ -101,29 +101,6 @@ public:
     typedef std::shared_lock<std::shared_timed_mutex> shared_lock;
     std::shared_timed_mutex attr_lock;
 
-    ObjectRef get_object(hoid_t oid) {
-      ZObject* o =
-	static_cast<ZObject*>(obj_cache.find(oid.hk, oid,
-					     ObjCache::FLAG_NONE));
-      return o;
-    }
-
-    ObjectRef get_or_create_object(hoid_t oid) {
-      ObjCache::Latch lat;
-      ZObject* o =
-	static_cast<ZObject*>(obj_cache.find_latch(
-					 oid.hk, oid, lat,
-					 ObjCache::FLAG_LOCK));
-      if (!o) {
-	/* XXXX need to find in ZFS! */
-	o = new ZObject(this, oid);
-	intrusive_ptr_add_ref(o);
-	obj_cache.insert_latched(o, lat, ObjCache::FLAG_UNLOCK);
-      } else
-	lat.lock->unlock();
-      return o;
-    }
-
     ZCollection(ZFStore* zs, const coll_t& cid)
       : ceph::os::Collection(zs, cid), cct(zs->cct),
 	index(zs->cct, zs->cct->_conf->fragtreeindex_initial_split)
@@ -153,26 +130,24 @@ public:
     return c;
   } /* get_slot_collection */
 
-  inline ObjectHandle get_slot_object(Transaction& t, ZCollection* c,
-				      uint16_t o_ix, bool create) {
+  inline ZObject* get_slot_object(Transaction& t, ZCollection* c,
+				  uint16_t o_ix, bool create) {
     using std::get;
     obj_slot_t& o_slot = t.o_slot(o_ix);
-    ObjectHandle oh = get<0>(o_slot);
-    if (oh)
-      return oh;
-
-    auto oid = get<1>(o_slot);
-    auto object =
-      create ? c->get_or_create_object(oid) : c->get_object(oid);
-    oh = static_cast<ObjectHandle>(object.get());
-    if (oh) {
-      // update slot for queued Ops to find
-      get<0>(o_slot) = oh;
-      // then mark it for release when t is cleaned up
-      get<2>(o_slot) |= Transaction::FLAG_REF;
-      t.os = this;
+    ZObject* o = static_cast<ZObject*>(get<0>(o_slot));
+    if (o)
+      return o;
+    if (create) {
+      o = static_cast<ZObject*>(get_object(c, get<1>(o_slot), create));
+      if (o) {
+	// update slot for queued Ops to find
+	get<0>(o_slot) = o;
+	// then mark it for release when t is cleaned up
+	get<2>(o_slot) |= Transaction::FLAG_REF;
+        t.os = this;
+      }
     }
-    return oh;
+    return o;
   } /* get_slot_object */
 
   /* XXXX */
@@ -264,30 +239,64 @@ public:
   bool exists(CollectionHandle ch, const hoid_t& oid);
 
   ObjectHandle get_object(CollectionHandle ch, const hoid_t& oid) {
-    ZCollection *coll = static_cast<ZCollection*>(ch);
-    // find Object as intrusive_ptr<T>, explicit ref, return
-    ObjectRef o = coll->get_object(oid);
-    if (!o)
-      return NULL;
-    intrusive_ptr_add_ref(o.get());
-    return o.get();
+    return get_object(ch, oid, false);
   }
 
   ObjectHandle get_object(CollectionHandle ch, const hoid_t& oid,
 			  bool create) {
-    ZCollection *coll = static_cast<ZCollection*>(ch);
-    // find Object as intrusive_ptr<T>, explicit ref, return
-    ObjectRef o = (create) ? coll->get_or_create_object(oid)
-      : coll->get_object(oid);
-    if (!o)
-      return NULL;
-    intrusive_ptr_add_ref(o.get());
-    return o.get();
+    ZCollection *c = static_cast<ZCollection*>(ch);
+    ceph::os::Object::ObjCache::Latch lat;
+    ZObject* o = nullptr;
+    lzfw_vnode_t* vno;
+
+    if (c->flags & ceph::os::Collection::FLAG_CLOSED) /* atomicity? */
+      return o;
+
+    retry:
+      o =
+	static_cast<ZObject*>(c->obj_cache.find_latch(oid.hk, oid, lat,
+			                ceph::os::Object::ObjCache::FLAG_LOCK));
+      /* LATCHED */
+      if (o) {
+	/* need initial ref from LRU (fast path) */
+	if (! obj_lru.ref(o, cohort::lru::FLAG_INITIAL)) {
+	  lat.lock->unlock();
+	  goto retry; /* !LATCHED */
+	}
+	/* LATCHED */
+      } else {
+	/* allocate and insert "new" Object */
+	int r = c->index.open(oid, false, &vno);
+	if ((r < 0) && create) {
+	  r = c->index.open(oid, true, &vno);
+	}
+	if (r != 0)
+	  goto out; /* !LATCHED */
+
+	ZObject::ZObjectFactory prototype(c, oid /* XXX, vno */);
+	o = static_cast<ZObject*>(obj_lru.insert(&prototype,
+						 cohort::lru::Edge::MRU,
+						 cohort::lru::FLAG_INITIAL));
+	if (o) {
+	  c->obj_cache.insert_latched(o, lat,
+				      ceph::os::Object::ObjCache::FLAG_UNLOCK);
+	  goto out; /* !LATCHED */
+	} else {
+	  lat.lock->unlock();
+	  goto retry; /* !LATCHED */
+	}
+      }
+      lat.lock->unlock(); /* !LATCHED */
+    out:
+      return o;
+  } /* get_object(CollectionHandle, const hoid_t&, bool) */
+
+  void put_object(ZObject* o) {
+    obj_lru.unref(o, cohort::lru::FLAG_NONE);
   }
 
   void put_object(ObjectHandle oh) {
-    ObjectRef o = static_cast<ZFStore::ZObject*>(oh);
-    intrusive_ptr_release(o.get());
+    return put_object(static_cast<ZObject*>(oh));
   }
 
   int stat(

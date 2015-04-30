@@ -21,6 +21,7 @@
 #include "include/frag.h"
 #include "common/oid.h"
 #include "common/ThreadPool.h"
+#include <libzfswrap.h>
 
 namespace cohort_zfs { // temporarily isolate ZFS variant
 
@@ -54,7 +55,8 @@ namespace cohort_zfs { // temporarily isolate ZFS variant
 	::decode(splits, p);
 	::decode(merges, p);
       }
-    };
+    }; /* IndexRecord */
+
   protected: // allow unit tests to access some internals
     CephContext* cct;
     /* don't allow merging below the initial split */
@@ -135,7 +137,7 @@ namespace cohort_zfs { // temporarily isolate ZFS variant
     int stat(const hoid_t& oid, struct stat* st);
 
     /* open an object, or create if requested */
-    int open(const hoid_t& oid, bool create, int* fd);
+    int open(const hoid_t& oid, bool create, lzfw_vnode_t** vno);
 
     /* unlink an object from the index */
     int unlink(const hoid_t& oid);
