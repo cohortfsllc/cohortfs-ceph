@@ -89,6 +89,7 @@ public:
 					 oid.hk, oid, lat,
 					 ObjCache::FLAG_LOCK));
       if (!o) {
+	/* XXXX need to find in ZFS! */
 	o = new ZObject(cct, this, oid);
 	intrusive_ptr_add_ref(o);
 	obj_cache.insert_latched(o, lat, ObjCache::FLAG_UNLOCK);

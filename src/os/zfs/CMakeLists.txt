@@ -1,6 +1,7 @@
 #os zfstore
 set(os_zfstore_files
   ZFStore.cc
+  FragTreeIndex.cc
 )
 
 add_library(os_zfstore_objs OBJECT ${os_zfstore_files})
