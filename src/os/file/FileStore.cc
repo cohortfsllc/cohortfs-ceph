@@ -2072,9 +2072,6 @@ FileStore::FSObject* FileStore::get_object(FSCollection* fc,
 {
   int fd;
   FSObject* oh = nullptr;
-
-  /* XXX redundant, hoid_t has hk */
-  std::tuple<uint64_t, const hoid_t&> k(oid.hk, oid);
   ceph::os::Object::ObjCache::Latch lat;
 
   if (fc->flags & ceph::os::Collection::FLAG_CLOSED) /* atomicity? */
