@@ -1818,3 +1818,8 @@ set_target_properties(test_queues PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS}
 add_executable(test_fragtreeindex test_fragtreeindex.cc)
 target_link_libraries(test_fragtreeindex os_filestore global common ${UNITTEST_LIBS})
 set_target_properties(test_fragtreeindex PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
+
+# test_zfsfragtreeindex
+add_executable(test_zfsfragtreeindex test_zfsfragtreeindex.cc)
+target_link_libraries(test_zfsfragtreeindex os_filestore global common ${UNITTEST_LIBS})
+set_target_properties(test_zfsfragtreeindex PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
