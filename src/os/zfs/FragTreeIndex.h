@@ -59,10 +59,19 @@ namespace cohort_zfs { // temporarily isolate ZFS variant
 
   protected: // allow unit tests to access some internals
     CephContext* cct;
+
+    /* open libzfswrap vfs handle */
+    lzfw_vfs_t *zhfs;
+
+    /* root collection directory vnode */
+    inogen_t root_ino;
+    lzfw_vnode_t* root;
+
+    /* fake Unix credential */
+    creden_t cred;
+
     /* don't allow merging below the initial split */
     const uint32_t initial_split;
-
-    int rootfd; /* file descriptor for root collection directory */
 
     IndexRecord committed; /* last committed index record */
     /* current index, including uncommitted splits/merges */
@@ -77,12 +86,12 @@ namespace cohort_zfs { // temporarily isolate ZFS variant
     /* thread pool for migration operations */
     cohort::ThreadPool migration_threads;
 
-    int read_index(int dirfd);
-    int write_index(int dirfd);
+    int read_index(lzfw_vnode_t* vno);
+    int write_index(lzfw_vnode_t* vno);
 
-    int read_sizes(int dirfd);
-    int write_sizes(int dirfd);
-    int count_sizes(int dirfd);
+    int read_sizes(lzfw_vnode_t* vno);
+    int write_sizes(lzfw_vnode_t* vno);
+    int count_sizes(lzfw_vnode_t* vno);
 
     void increment_size(frag_t frag);
     void decrement_size(frag_t frag, frag_t parent);
@@ -107,7 +116,7 @@ namespace cohort_zfs { // temporarily isolate ZFS variant
     = delete;
 
   public:
-    FragTreeIndex(CephContext* cct, uint32_t initial_split);
+    FragTreeIndex(CephContext* cct, lzfw_vfs_t *zhfs, uint32_t initial_split);
     ~FragTreeIndex();
 
     /* initialize a fresh collection index at the given path */
@@ -123,12 +132,18 @@ namespace cohort_zfs { // temporarily isolate ZFS variant
      * given path */
     int mount(const std::string& path, bool async_recovery=true);
 
+    /* open root */
+    int open_root(const std::string& path);
+
+    /* close root */
+    int close_root();
+
     /* unmount a mounted collection index */
     int unmount();
 
-    /* return the file descriptor for the root directory of a
-     * mounted collection index, or -1 if not mounted */
-    int get_rootfd() const { return rootfd; }
+    /* return the vnode for the root directory of a
+     * mounted collection index, or nullptr if not mounted */
+    lzfw_vnode_t* get_root() const { return root; }
 
     /* check for the existence of an object */
     int lookup(const hoid_t& oid);

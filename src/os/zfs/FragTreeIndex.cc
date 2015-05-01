@@ -30,10 +30,13 @@ namespace cohort_zfs {
   using namespace cohort;
 
   FragTreeIndex::FragTreeIndex(CephContext* cct,
+			       lzfw_vfs_t *zhfs,
 			       uint32_t initial_split)
     : cct(cct),
+      zhfs(zhfs),
+      root(nullptr),
+      cred{0,0},
       initial_split(initial_split),
-      rootfd(-1),
       migration_threads(cct,
 			cct->_conf->fragtreeindex_migration_threads,
 			ThreadPool::FLAG_DROP_JOBS_ON_SHUTDOWN)
@@ -43,54 +46,35 @@ namespace cohort_zfs {
   FragTreeIndex::~FragTreeIndex()
   {
 #if 1 // don't blow up on test failures
-    if (rootfd != -1)
-      ::close(rootfd);
+    if (root)
+      lzfw_closedir(zhfs, nullptr /* XXXX cred */, root);
 #else
-    assert(rootfd == -1); // must not be mounted
+    assert(root == nullptr); // must not be mounted
 #endif
   }
 
   namespace {
 
-    /* closedir() does not appear to clear the readdir state
-     * associated with a file descriptor.  so if we dup() the fd
-     * and do another fdopendir(), we have to follow it with a
-     * rewinddir() to clear it manually */
-    DIR* fdopendir_rewind(int fd)
+    int check_directory_empty(lzfw_vfs_t* zhfs, creden_t* cred,
+			      lzfw_vnode_t* vno)
     {
-      DIR* dir = ::fdopendir(fd);
-      if (dir)
-	::rewinddir(dir);
-      return dir;
-    }
+      off_t off = 0;
+      lzfw_entry_t dirents[4];
 
-    int check_directory_empty(int dirfd)
-    {
-      /* fdopendir() takes control of the fd and closes it on
-       * closedir(). the caller expects its dirfd to remain open,
-       * so we dup() it and use that */
-      int dirfd2 = ::dup(dirfd);
-      if (dirfd2 < 0)
-	return -errno;
+      int r = lzfw_readdir(zhfs, cred, vno, dirents, 4, &off);
+      if (!!r)
+	return -r;
 
-      DIR* dir = fdopendir_rewind(dirfd2);
-      if (dir == NULL)
-	return -errno;
-
-      struct dirent* dn;
-      while ((dn = ::readdir(dir)) != NULL) {
-	// only accept . and ..
-	if (dn->d_type != DT_DIR)
-	  break;
-	if (dn->d_name[0] != '.')
-	  break;
-	if (dn->d_name[1] != '.' && dn->d_name[1] != 0)
+      int ix;
+      for (ix = 0; ix < 4; ++ix) {
+	lzfw_entry_t* dn = &dirents[ix];
+	if (dn->psz_filename[0] == '\0')
 	  break;
       }
-      ::closedir(dir);
 
-      if (dn != NULL)
+      if (ix > 3)
 	return -ENOTEMPTY;
+
       return 0;
     }
 
@@ -99,45 +83,36 @@ namespace cohort_zfs {
   int FragTreeIndex::init(const std::string& path)
   {
     // must not be mounted
-    if (rootfd != -1)
+    if (root)
       return -EINVAL;
 
-    // open root fd
-    int dirfd = ::open(path.c_str(), O_RDONLY, 0644);
-    if (dirfd == -1)
-      return -errno;
-
-    // verify that we opened a directory
-    struct stat st;
-    int r = ::fstat(dirfd, &st);
-    if (r < 0)
-      return -errno;
-    if (!S_ISDIR(st.st_mode))
-      return -ENOTDIR;
+    // open the real root
+    int r = open_root(path);
+    if (!!r)
+      return r;
 
     // verify that the directory is empty
-    r = check_directory_empty(dirfd);
-    if (r < 0)
+    r = check_directory_empty(zhfs, &cred, root);
+    if (!!r)
       return r;
 
     // create an index with the initial number of subdirectories
     if (initial_split > 0) {
       frag_path path = {};
       frag_size_map size_updates;
-      rootfd = dirfd; // rootfd needed for split/finish_split
       int r = split(path.frag, initial_split, false);
       if (r == 0) {
 	do_split(path, initial_split, size_updates);
 	finish_split(path.frag, size_updates);
       }
-      rootfd = -1;
     } else {
       // write an empty index
       std::shared_lock<std::shared_timed_mutex>
 	index_lock(index_mutex);
-      r = write_index(dirfd);
+      r = write_index(root);
     }
-    ::close(dirfd);
+    lzfw_closedir(zhfs, &cred, root);
+    root = nullptr;
     return r;
   }
 
@@ -145,19 +120,19 @@ namespace cohort_zfs {
   {
     int r = 0;
 
-    if (rootfd == -1) {
-      // open root fd
-      rootfd = ::open(path.c_str(), O_RDONLY, 0644);
-      if (rootfd == -1) {
-	r = -errno;
+    if (!root) {
+      r = open_root(path);
+      if (!!r) {
 	derr << "destroy failed to open unmounted collection at "
-	     << path << ": " << cpp_strerror(-r) << dendl;
+	     << path << ": " << cpp_strerror(r) << dendl;
 	return r;
       }
     } else {
       // stop migration threads
       migration_threads.shutdown();
     }
+
+    /* XXXX finish! */
 
     // unlink metadata files
     ::unlinkat(rootfd, INDEX_FILENAME, 0);
@@ -262,42 +237,73 @@ namespace cohort_zfs {
     return r;
   }
 
+  int FragTreeIndex::open_root(const std::string& path)
+  {
+    // open real root fd
+    inogen_t fs_root;
+    int r = lzfw_getroot(zhfs, &fs_root);
+
+    if (!!r)
+      return -EINVAL;
+
+    /* XXX assume that path is a name in fs_root */
+    int type;
+    r = lzfw_lookup(zhfs, &cred, fs_root, path.c_str(), &root_ino, &type);
+    if (!!r)
+      return -EINVAL;
+
+    r = lzfw_opendir(zhfs, &cred, root_ino, &root);
+    if (!!r)
+      return -EINVAL;
+
+    /* verify that we opened a directory (XXX do this above) */
+    struct stat st;
+    r = lzfw_stat(zhfs, &cred, root, &st);
+    if ((!!r) || (!S_ISDIR(st.st_mode)))
+      return -ENOTDIR;
+
+    return 0;
+  }
+
+  int close_root() {
+    int r = lzfw_closedir(zfhs, &cred, root);
+    root = nullptr;
+    return r;
+  }
+
   int FragTreeIndex::mount(const std::string& path,
 			   bool async_recovery)
   {
     // must not be mounted
-    if (rootfd != -1)
+    if (root)
       return -EINVAL;
 
-    // open root fd
-    rootfd = ::open(path.c_str(), O_RDONLY, 0644);
-    if (rootfd == -1)
-      return -errno;
+    int r = open_root(path);
+    if (!!r)
+      return r;
 
     // read index from disk
     std::unique_lock<std::shared_timed_mutex>
       index_wrlock(index_mutex);
-    int r = read_index(rootfd);
+    int r = read_index(root);
     index_wrlock.unlock();
-    if (r) {
-      ::close(rootfd);
-      rootfd = -1;
+    if (!!r) {
+      (void) close_root();
       return r;
     }
 
     // read sizes from disk
     std::unique_lock<std::mutex> sizes_lock(sizes_mutex);
-    r = read_sizes(rootfd);
+    r = read_sizes(root);
     if (r == -ENOENT) {
       // fresh index or not unmounted cleanly
       std::shared_lock<std::shared_timed_mutex>
 	index_rdlock(index_mutex);
-      r = count_sizes(rootfd);
+      r = count_sizes(root);
     }
     sizes_lock.unlock();
-    if (r) {
-      ::close(rootfd);
-      rootfd = -1;
+    if (!!r) {
+      (void) close_root();
       return r;
     }
 
@@ -373,11 +379,10 @@ namespace cohort_zfs {
 
     // write sizes to disk
     std::unique_lock<std::mutex> sizes_lock(sizes_mutex);
-    int r = write_sizes(rootfd);
+    int r = write_sizes(root);
     sizes_lock.unlock();
 
-    ::close(rootfd);
-    rootfd = -1;
+    (void) close_root();
     return r;
   }
 
@@ -436,15 +441,21 @@ namespace cohort_zfs {
       if (r) return r;
     }
 
+    lzfw_vnode_t* vnode;
+
     // if a migration is in progress, check the original location first
     if (orig.frag != path.frag) {
       r = orig.append(name.c_str(), name.size());
       if (r) return r;
 
-      r = ::fstatat(rootfd, orig.path, st, AT_SYMLINK_NOFOLLOW);
-      if (r == 0)
-	return r;
-      r = errno;
+      r = lzfw_openat(zhfs, &cred, root, orig.path, O_RDONLY, &vnode);
+      if (r == 0) {
+	r = lzfw_stat(zhfs, &cred, vnode, st);
+	(void) lzfw_close(zhfs, &cred, vnode, O_RDONLY /* XXX ew */);
+	if (!r)
+	  return 0;
+	return -r;
+      }
       if (r != ENOENT)
 	return -r;
       // on ENOENT, fall back to expected location
@@ -454,10 +465,15 @@ namespace cohort_zfs {
     r = path.append(name.c_str(), name.size());
     if (r) return r;
 
-    r = ::fstatat(rootfd, path.path, st, AT_SYMLINK_NOFOLLOW);
-    if (r < 0)
-      r = -errno;
-    return r;
+    r = lzfw_openat(zhfs, &cred, root, path.path, O_RDONLY, &vnode);
+    if (r == 0) {
+      r = lzfw_stat(zhfs, &cred, vnode, st);
+      (void) lzfw_close(zhfs, &cred, vnode, O_RDONLY /* XXX ew */);
+      if (!r)
+	return 0;
+      return -r;
+    }
+    return -r;
   }
 
   int FragTreeIndex::open(const hoid_t& oid, bool create, lzfw_vnode_t** vno)
@@ -633,7 +649,7 @@ namespace cohort_zfs {
     return 0;
   }
 
-  int FragTreeIndex::write_index(int dirfd)
+  int FragTreeIndex::write_index(lzfw_vnode_t* vno)
   {
     //assert(index_lock.is_locked());
 

@@ -103,7 +103,7 @@ public:
 
     ZCollection(ZFStore* zs, const coll_t& cid)
       : ceph::os::Collection(zs, cid), cct(zs->cct),
-	index(zs->cct, zs->cct->_conf->fragtreeindex_initial_split)
+	index(zs->cct, zs->zhfs, zs->cct->_conf->fragtreeindex_initial_split)
     {}
 
     ~ZCollection()
