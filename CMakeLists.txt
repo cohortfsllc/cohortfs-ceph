@@ -10,6 +10,17 @@ endif(NOT (CMAKE_MAJOR_VERSION LESS 3))
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/modules/")
 
+option(USE_LIBCXX "Build against LLVM project's libc++" OFF)
+
+if(${USE_LIBCXX} AND (DEFINED LIBCXX_ROOT))
+  set(CMAKE_PREFIX_PATH $LIBCXX_ROOT)
+  include_directories(SYSTEM "${LIBCXX_ROOT}/include")
+  set(CMAKE_INCLUDE_PATH "${LIBCXX_ROOT}/include")
+  set(CMAKE_LIBRARY_PATH "${LIBCXX_ROOT}/lib")
+  set(BOOST_ROOT $LIBCXX_ROOT)
+  set(CRYPTOPP_ROOT_DIR $LIBCXX_ROOT)
+endif()
+
 include_directories(
   ${PROJECT_BINARY_DIR}/src/include
   ${OFED_PREFIX}/include
@@ -118,8 +129,6 @@ endif(${WITH_FUSE})
 # probably fuse etc need this -- how to check? XXX
 option(WITH_MDS "MDS is here" ON)
 
-option(WITH_SQUEAKY_CLEAN_VALGRIND "Do memory initialization that may hurt performance" OFF)
-
 # needs mds and? XXX
 option(WITH_CLIENT "Client is here" ON)
 option(WITH_LIBCEPHFS "libcephfs client library" ON)
@@ -224,17 +233,6 @@ option(WITH_FIO "Support for fio engines" OFF)
 if(WITH_FIO)
 	find_package(fio REQUIRED)
 endif(WITH_FIO)
-
-option(WITH_CDS "Support for CDS MemStore and fio engines" ON)
-if(WITH_CDS)
-	find_package(cds)
-	if(CDS_FOUND)
-		set(HAVE_CDS 1)
-		include_directories(${CDS_INC_DIR})
-	endif(CDS_FOUND)
-endif(WITH_CDS)
-
-option(USE_CEPH_ASSERT "Use Ceph's assert override" ON)
 
 set(bindir ${CMAKE_INSTALL_PREFIX}/bin)
 set(sbindir ${CMAKE_INSTALL_PREFIX}/sbin)

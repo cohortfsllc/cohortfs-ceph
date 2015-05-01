@@ -1,8 +1,21 @@
 include(GetGitRevisionDescription)
 
+# Build types
+set(CMAKE_C_FLAGS_DEBUG "-O0 -g3 -gdwarf-4")
+set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g3 -gdwarf-4 -DWITH_SQUEAKY_CLEAN_VALGRIND")
+
+set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG -g0 -DUSE_CEPH_ASSERT")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG -g0 -DUSE_CEPH_ASSERT")
+
+set(CMAKE_C_FLAGS_MINSIZEREL "-Os -DNDEBUG -g0 -DUSE_CEPH_ASSERT")
+set(CMAKE_CXX_FLAGS_MINSIZEREL "-Os -DNDEBUG -g0 -DUSE_CEPH_ASSERT")
+
+set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O -g" -DUSE_CEPH_ASSERT)
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O -g" -DUSE_CEPH_ASSERT)
+
 add_definitions("-DCEPH_LIBDIR=${LIBRARY_OUTPUT_PATH}")
 add_definitions("-DCEPH_PKGLIBDIR=\"${CMAKE_INSTALL_PREFIX}/lib\"")
-add_definitions("-DHAVE_CONFIG_H -D__CEPH__ -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_THREAD_SAFE -D__STDC_FORMAT_MACROS -D_GNU_SOURCE")
+add_definitions("-D__CEPH__ -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_THREAD_SAFE -D__STDC_FORMAT_MACROS -D_GNU_SOURCE")
 
 set(CLIKE_COMMON_FLAGS "-Wall -Wtype-limits -Wignored-qualifiers -Winit-self -Wpointer-arith -Werror=format-security -Wno-vla -fno-strict-aliasing -fsigned-char -fno-omit-frame-pointer -fPIC")
 
@@ -41,13 +54,34 @@ endif(${WITH_SQUEAKY_CLEAN_VALGRIND})
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${CLIKE_COMMON_FLAGS} -std=c11")
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CLIKE_COMMON_FLAGS} -std=c++14 -Wnon-virtual-dtor -Wno-invalid-offsetof -Wno-unused-private-field -Wno-mismatched-tags")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CLIKE_COMMON_FLAGS} -std=c++14 -Wnon-virtual-dtor -Wno-invalid-offsetof")
 
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  -Wno-unused-private-field -Wno-mismatched-tags")
+endif()
 
 set(EXTRALIBS rt dl boost_system)
 if(${WITH_PROFILER})
   list(APPEND EXTRALIBS profiler)
 endif(${WITH_PROFILER})
+
+
+if(USE_LIBCXX)
+  if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
+    set(LIBCXX_LINKER_FLAGS "")
+    list(APPEND EXTRALIBS -lsupc++)
+    if(DEFINED LIBCXX_ROOT)
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -isystem ${LIBCXX_ROOT}/include")
+      set(LIBCXX_LINKER_FLAGS "${LIBCXX_LINKER_FLAGS} -L${LIBCXX_ROOT}/lib")
+    endif(DEFINED LIBCXX_ROOT)
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${LIBCXX_LINKER_FLAGS}")
+    set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} ${LIBCXX_LINKER_FLAGS}")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${LIBCXX_LINKER_FLAGS}")
+  else()
+    message(FATAL_ERROR "We don't support using libc++ with g++.")
+  endif()
+endif()
 
 if (HAVE_XIO)
   include_directories(${Xio_INCLUDE_DIR})
@@ -55,10 +89,6 @@ if (HAVE_XIO)
   list(APPEND EXTRALIBS ${Xio_LIBRARY} ibverbs rdmacm pthread rt)
 endif(HAVE_XIO)
 
-
-if(HAVE_CDS)
-  list(APPEND EXTRALIBS ${CDS_LIBS})
-endif(HAVE_CDS)
 
 if (HAVE_LTTNG)
   list(APPEND EXTRALIBS ${LTTNG_UST_LIBRARY})
