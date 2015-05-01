@@ -476,7 +476,8 @@ namespace cohort_zfs {
     return -r;
   }
 
-  int FragTreeIndex::open(const hoid_t& oid, bool create, lzfw_vnode_t** vno)
+  int FragTreeIndex::open(const hoid_t& oid, bool create,
+			  lzfw_vnode_t** vnode)
   {
     int r = -ENOENT;
     struct frag_path path, orig;
@@ -491,19 +492,14 @@ namespace cohort_zfs {
 
     const std::string name = format_name(oid);
 
-#if 0 /* XXXX fixme! */
-
     // if a migration is in progress, check the original location first
     if (orig.frag != path.frag) {
       r = orig.append(name.c_str(), name.size());
       if (r) return r;
 
-      r = ::openat(rootfd, orig.path, O_RDWR);
-      if (r >= 0) {
-	*fd = r;
+      r = lzfw_openat(zhfs, &cred, root, orig.path, O_RDWR, vnode);
+      if (!r)
 	return 0;
-      }
-      r = errno;
       if (r != ENOENT)
 	return -r;
       // on ENOENT, fall back to expected location
@@ -514,18 +510,15 @@ namespace cohort_zfs {
     if (r) return r;
 
     do {
-      r = ::openat(rootfd, path.path, O_RDWR);
-      if (r >= 0) {
-	*fd = r;
+      r = lzfw_openat(zhfs, &cred, root, path.path, O_RDWR, vnode);
+      if (!r)
 	return 0;
-      }
-      r = errno;
       if (r == ENOENT && create) {
 	// do an exclusive create to keep 'sizes' consistent
-	r = ::openat(rootfd, path.path, O_CREAT | O_EXCL | O_RDWR,
-		     0644);
-	if (r >= 0) {
-	  *fd = r;
+	r = lzfw_openat(zhfs, &cred, root, path.path, O_CREAT|O_EXCL|O_RDWR,
+			vnode);
+	/* XXXX mode 644! */
+	if (!r) {
 	  // increase the directory size
 	  increment_size(path.frag);
 
@@ -545,11 +538,9 @@ namespace cohort_zfs {
 	  }
 	  return 0;
 	}
-	r = errno;
       }
     } while (r == EEXIST); // retry if exclusive create failed
 
-#endif /* XXXX fixme! */
     return -r;
   }
 
@@ -602,14 +593,14 @@ namespace cohort_zfs {
   }
 
   // IndexRecord
-  int FragTreeIndex::read_index(int dirfd)
+  int FragTreeIndex::read_index(lzfw_vnode_t* vnode)
   {
+    lzfw_vnode_t* vnode2;
     //assert(index_lock.is_wlocked());
 
     // open file
-    int fd = ::openat(dirfd, INDEX_FILENAME, O_RDONLY);
-    if (fd < 0) {
-      int r = errno;
+    int r = lzfw_openat(zhfs, &cred, vnode, INDEX_FILENAME, O_RDONLY, vnode2);
+    if (!!r) {
       derr << "read_index failed to open " INDEX_FILENAME ": "
 	   << cpp_strerror(r) << dendl;
       return -r;
@@ -617,19 +608,19 @@ namespace cohort_zfs {
 
     // stat for size
     struct stat st;
-    int r = ::fstat(fd, &st);
-    if (r < 0) {
-      r = errno;
+    r = lzfw_stat(zhfs, &cred, vnode2, &st);
+    if (!!r) {
       derr << "read_index failed to stat " INDEX_FILENAME ": "
 	   << cpp_strerror(r) << dendl;
-      ::close(fd);
+      (void) lzfw_close(zhfs, &cred, vnode2, O_RDONLY /* XXX ew */);
       return -r;
     }
 
     // read into a bufferlist
     bufferlist bl;
+    /* XXXX need something to read into a bufferlist */
     ssize_t len = bl.read_fd(fd, st.st_size);
-    ::close(fd);
+    (void) lzfw_close(zhfs, &cred, vnode2, O_RDONLY /* XXX ew */);
     if (len < 0) {
       derr << "read_index failed to read " INDEX_FILENAME ": "
 	   << cpp_strerror(-len) << dendl;
@@ -649,7 +640,7 @@ namespace cohort_zfs {
     return 0;
   }
 
-  int FragTreeIndex::write_index(lzfw_vnode_t* vno)
+  int FragTreeIndex::write_index(lzfw_vnode_t* vnode)
   {
     //assert(index_lock.is_locked());
 
