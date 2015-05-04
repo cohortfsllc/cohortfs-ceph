@@ -28,10 +28,13 @@ static inline int ztrace_init() { return 0; }
 
 class Endpoint {
  public:
+  Endpoint(const char *name) {}
   Endpoint(const char *ip, int port, const char *name) {}
 
   void copy_ip(const string &newip) {}
   void copy_name(const string &newname) {}
+  void copy_address_from(const Endpoint *endpoint) {}
+  void share_address_from(const Endpoint *endpoint) {}
   void set_port(int p) {}
 };
 
@@ -41,7 +44,6 @@ class Trace {
   Trace(const char *name, const Endpoint *ep, const Trace *parent = NULL) {}
   Trace(const char *name, const Endpoint *ep,
         const blkin_trace_info *i, bool child=false) {}
-  Trace(const Trace &rhs) {}
 
   bool valid() const { return false; }
   operator bool() const { return false; }
@@ -59,13 +61,13 @@ class Trace {
   const blkin_trace_info* get_info() const { return NULL; }
   void set_info(const blkin_trace_info *i) {}
 
-  void keyval(const char *key, const char *val) {}
-  void keyval(const char *key, int64_t val) {}
-  void keyval(const char *key, const char *val, const Endpoint *ep) {}
-  void keyval(const char *key, int64_t val, const Endpoint *ep) {}
+  void keyval(const char *key, const char *val) const {}
+  void keyval(const char *key, int64_t val) const {}
+  void keyval(const char *key, const char *val, const Endpoint *ep) const {}
+  void keyval(const char *key, int64_t val, const Endpoint *ep) const {}
 
-  void event(const char *event) {}
-  void event(const char *event, const Endpoint *ep) {}
+  void event(const char *event) const {}
+  void event(const char *event, const Endpoint *ep) const {}
 };
 } // namespace ZTrace
 
