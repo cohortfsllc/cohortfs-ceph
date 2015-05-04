@@ -19,7 +19,7 @@
 #include <condition_variable>
 #include <deque>
 #include <mutex>
-using std::deque;
+#include <set>
 
 #include "Journal.h"
 #include "common/Thread.h"
@@ -49,8 +49,9 @@ public:
     completion_item(uint64_t o, Context *c, ceph::mono_time s,
 		    OpRequestRef opref, ZTracer::Trace &trace)
       : seq(o), finish(c), start(s), op(opref), trace(trace) {}
-    completion_item() : seq(0), finish(0),
-			start(ceph::mono_time::min()) {}
+    completion_item(uint64_t o = 0)
+      : seq(o), finish(0), start(ceph::mono_time::min()) {}
+    bool operator<(const completion_item &rhs) const { return seq < rhs.seq; }
   };
   struct write_item {
     uint64_t seq;
@@ -84,20 +85,10 @@ public:
   void pop_write();
 
   std::mutex completions_lock;
-  deque<completion_item> completions;
+  std::set<completion_item> completions;
   bool completions_empty() {
     lock_guard l(completions_lock);
     return completions.empty();
-  }
-  completion_item completion_peek_front() {
-    lock_guard l(completions_lock);
-    assert(!completions.empty());
-    return completions.front();
-  }
-  void completion_pop_front() {
-    lock_guard l(completions_lock);
-    assert(!completions.empty());
-    completions.pop_front();
   }
 
   void submit_entry(uint64_t seq, bufferlist& bl, int alignment,

@@ -815,23 +815,22 @@ void FileJournal::queue_write_fin(uint64_t seq, Context *fin)
 
 void FileJournal::queue_completions_thru(uint64_t seq)
 {
+  lock_guard lock(completions_lock);
   auto now = ceph::mono_clock::now();
-  while (!completions_empty()) {
-    completion_item next = completion_peek_front();
-    if (next.seq > seq)
-      break;
-    completion_pop_front();
-    auto lat = now - next.start;
+  auto upper = completions.upper_bound(completion_item(seq));
+  for (auto i = completions.begin(); i != upper; ++i) {
+    auto lat = now - i->start;
     dout(10) << "queue_completions_thru seq " << seq
-	     << " queueing seq " << next.seq
-	     << " " << next.finish
+	     << " queueing seq " << i->seq
+	     << " " << i->finish
 	     << " lat " << lat << dendl;
-    if (next.finish)
-      finisher->queue(next.finish);
+    if (i->finish)
+      finisher->queue(i->finish);
 
-    next.trace.event("queued completion");
-    next.trace.keyval("completed through", seq);
+    i->trace.event("queued completion");
+    i->trace.keyval("completed through", seq);
   }
+  completions.erase(completions.begin(), upper);
   finisher_cond.notify_all();
 }
 
@@ -1422,7 +1421,7 @@ void FileJournal::submit_entry(uint64_t seq, bufferlist& e, int alignment,
     lock_guard l1(writeq_lock);  // ** lock **
     lock_guard l2(completions_lock);	 // ** lock **
     auto now = ceph::mono_clock::now();
-    completions.push_back(completion_item(seq, oncommit, now, osd_op, trace));
+    completions.insert(completion_item(seq, oncommit, now, osd_op, trace));
     writeq.push_back(write_item(seq, e, alignment, osd_op, trace));
     trace.keyval("queue depth", writeq.size());
     writeq_cond.notify_all();
