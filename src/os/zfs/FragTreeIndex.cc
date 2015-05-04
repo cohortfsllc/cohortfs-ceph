@@ -617,17 +617,24 @@ namespace cohort_zfs {
 
     // read into a bufferlist
     bufferlist bl;
-    ssize_t len;
-    /* XXXX need something to read into a bufferlist */
-#warning need replacement for bl.read_fd
-#if 0
-    len = bl.read_fd(fd, st.st_size);
-#endif
-    (void) lzfw_close(zhfs, &cred, vnode2, O_RDONLY /* XXX ew */);
-    if (len < 0) {
+    ssize_t size = ROUND_UP_TO(st.st_size, CEPH_PAGE_SIZE);
+    ceph::buffer::ptr bp = ceph::buffer::create_page_aligned(size);
+    bl.append(bp);
+    /* XXX short read?? (remi...) */
+    r = lzfw_read(zhfs, &cred, vnode2, bp.c_str(), size,
+		  false /* XXX "behind"--whuh? */,
+		  0 /* offset */);
+    if (!!r) {
       derr << "read_index failed to read " INDEX_FILENAME ": "
-	   << cpp_strerror(-len) << dendl;
-      return len;
+	   << cpp_strerror(-r) << dendl;
+    }
+    bp.set_length(st.st_size);
+
+    (void) lzfw_close(zhfs, &cred, vnode2, O_RDONLY /* XXX ew */);
+    if (size < 0) {
+      derr << "read_index failed to read " INDEX_FILENAME ": "
+	   << cpp_strerror(-size) << dendl;
+      return size;
     }
 
     // decode the index record
@@ -662,15 +669,20 @@ namespace cohort_zfs {
     }
 
     // write the file
-#warning need replacement for bl.write_fd
-#if 0
-    r = bl.write_fd(fd);
-#endif
+    off_t off = 0;
+    const std::list<buffer::ptr>& buffers = bl.buffers();
+    std::list<buffer::ptr>::const_iterator p = buffers.begin();
+    while (p != buffers.end()) {
+      r = lzfw_write(zhfs, &cred, vnode, (void*) p->c_str(),
+		     p->length(), false /* behind (XXX!) */,
+		     off);
+      off += p->length();
+      ++p;
+    }
     (void) lzfw_close(zhfs, &cred, vnode, O_RDONLY /* XXX ew */);
     if (!!r) {
       derr << "write_index failed to write " INDEX_FILENAME ": "
 	   << cpp_strerror(-r) << dendl;
-      return r;
     }
     return r;
   }
@@ -701,16 +713,25 @@ namespace cohort_zfs {
 
     // read into a bufferlist
     bufferlist bl;
-    ssize_t len;
-#warning need replacement for bl.read_fd
-#if 0
-    len = bl.read_fd(fd, st.st_size);
-#endif
+    ssize_t size;
+    size = ROUND_UP_TO(st.st_size, CEPH_PAGE_SIZE);
+    ceph::buffer::ptr bp = ceph::buffer::create_page_aligned(size);
+    bl.append(bp);
+    /* XXX short read?? (remi...) */
+    r = lzfw_read(zhfs, &cred, vnode, bp.c_str(), size,
+		  false /* XXX "behind"--whuh? */,
+		  0 /* offset */);
+    if (!!r) {
+      derr << "read_index failed to read " INDEX_FILENAME ": "
+	   << cpp_strerror(-r) << dendl;
+    }
+    bp.set_length(st.st_size);
+
     (void) lzfw_close(zhfs, &cred, vnode, O_RDONLY /* XXX ew */);
-    if (len < 0) {
+    if (size < 0) {
       derr << "read_sizes failed to read " SIZES_FILENAME ": "
-	   << cpp_strerror(-len) << dendl;
-      return len;
+	   << cpp_strerror(-size) << dendl;
+      return size;
     }
 
     // decode the size record
@@ -747,11 +768,17 @@ namespace cohort_zfs {
     }
 
     // write the file
-#warning need replacement for bl.write_fd
-#if 0
-    r = bl.write_fd(fd);
-#endif
-    if (r) {
+    off_t off = 0;
+    const std::list<buffer::ptr>& buffers = bl.buffers();
+    std::list<buffer::ptr>::const_iterator p = buffers.begin();
+    while (p != buffers.end()) {
+      r = lzfw_write(zhfs, &cred, vnode, (void*) p->c_str(),
+		     p->length(), false /* behind (XXX!) */,
+		     off);
+      off += p->length();
+      ++p;
+    }
+    if (!!r) {
       derr << "write_sizes failed to write " SIZES_FILENAME ": "
 	   << cpp_strerror(-r) << dendl;
     }
