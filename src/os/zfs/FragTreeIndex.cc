@@ -46,8 +46,10 @@ namespace cohort_zfs {
   FragTreeIndex::~FragTreeIndex()
   {
 #if 1 // don't blow up on test failures
-    if (root)
-      lzfw_closedir(zhfs, nullptr /* XXXX cred */, root);
+    if (root) {
+      lzfw_closedir(zhfs, &cred, root);
+      root = nullptr;
+    }
 #else
     assert(root == nullptr); // must not be mounted
 #endif
@@ -56,12 +58,12 @@ namespace cohort_zfs {
   namespace {
 
     int check_directory_empty(lzfw_vfs_t* zhfs, creden_t* cred,
-			      lzfw_vnode_t* vno)
+			      lzfw_vnode_t* d_vnode)
     {
       off_t off = 0;
       lzfw_entry_t dirents[4];
 
-      int r = lzfw_readdir(zhfs, cred, vno, dirents, 4, &off);
+      int r = lzfw_readdir(zhfs, cred, d_vnode, dirents, 4, &off);
       if (!!r)
 	return -r;
 
@@ -132,110 +134,104 @@ namespace cohort_zfs {
       migration_threads.shutdown();
     }
 
-    /* XXXX finish! */
-
     // unlink metadata files
-    ::unlinkat(rootfd, INDEX_FILENAME, 0);
-    ::unlinkat(rootfd, SIZES_FILENAME, 0);
-
-    DIR* dir = fdopendir_rewind(rootfd);
-    if (dir == NULL) {
-      r = -errno;
-      derr << "destroy failed to open root dir: "
-	   << cpp_strerror(-r) << dendl;
-      return r;
-    }
+    lzfw_unlinkat(zhfs, &cred, root, INDEX_FILENAME, 0);
+    lzfw_unlinkat(zhfs, &cred, root, SIZES_FILENAME, 0);
 
     // use a stack to recursively unlink directories
-    struct dir_entry { int fd; DIR* dir; std::string name; };
+    struct dir_entry {
+      lzfw_vnode_t* d_vnode;
+      std::string name;
+    };
     std::vector<dir_entry> stack;
 
-    stack.push_back(dir_entry {rootfd, dir, ""});
+    /* base step: push root */
+    stack.push_back(dir_entry {root, ""});
+
     while (r == 0 && !stack.empty()) {
       dir_entry& entry = stack.back();
-      char buf[offsetof(struct dirent, d_name) + PATH_MAX + 1];
-      struct dirent* dn;
-      while ((r = ::readdir_r(entry.dir,
-			      (struct dirent*) &buf, &dn)) == 0) {
-	if (dn == NULL) {
-	  ::closedir(entry.dir);
-	  std::string name;
-	  std::swap(name, entry.name);
-	  stack.pop_back();
-	  if (!stack.empty()) {
-	    // unlink directory from parent
-	    const dir_entry& parent = stack.back();
-	    r = ::unlinkat(parent.fd, name.c_str(), AT_REMOVEDIR);
-	    if (r < 0) {
-	      r = -errno;
-	      derr << "destroy failed to rmdir " << name << ": "
-		   << cpp_strerror(-r) << dendl;
-	    } else {
-	      dout(0) << "destroy unlinked directory " << name
-		      << dendl;
-	      ::rewinddir(parent.dir);
+      off_t d_off = 0;
+      lzfw_entry_t dirents[32];
+      bool done = false;
+
+      do {
+	r = lzfw_readdir(zhfs, &cred, entry.d_vnode, dirents, 32,
+			 &d_off);
+	if (!!r)
+	  abort();
+
+	for (int ix = 0; ix < 32; ++ix) {
+	  lzfw_entry_t* dn = &dirents[ix];
+	  if (dn->psz_filename[0] == '\0') {
+	    // indicates no more dirents
+	    if (entry.d_vnode != root)
+	      (void) lzfw_close(zhfs, &cred, entry.d_vnode, O_RDONLY);
+	    std::string name;
+	    std::swap(name, entry.name);
+	    stack.pop_back();
+	    if (!stack.empty()) {
+	      // unlink directory from parent
+	      const dir_entry& parent = stack.back();
+	      r = lzfw_unlinkat(zhfs, &cred, parent.d_vnode,
+				name.c_str(), 0);
+	      if (!!r) {
+		derr << "destroy failed to rmdir " << name << ": "
+		     << cpp_strerror(-r) << dendl;
+	      } else {
+		dout(0) << "destroy unlinked directory " << name
+			<< dendl;
+	      }
 	    }
+	    done = true;
+	    goto next_entry;
 	  }
-	  break;
-	}
-
-	if (dn->d_type == DT_REG) {
-	  r = ::unlinkat(entry.fd, dn->d_name, 0);
-	  if (r < 0) {
-	    r = -errno;
-	    derr << "destroy failed to unlink " << dn->d_name << ": "
-		 << cpp_strerror(-r) << dendl;
+	  if (dn->type == DT_REG) {
+	    r = lzfw_unlinkat(zhfs, &cred, entry.d_vnode,
+			      dn->psz_filename, 0);
+	    if (!!r) {
+	      derr << "destroy failed to unlink " << dn->psz_filename
+		   << ": " << cpp_strerror(-r) << dendl;
+	      break;
+	    }
+	    dout(0) << "destroy unlinked file " << dn->psz_filename
+		    << dendl;
+	    continue;
+	  }
+	  if (dn->type == DT_DIR && dn->psz_filename[0] != '.') {
+	    lzfw_vnode_t* d_vnode;
+	    r = lzfw_openat(zhfs, &cred, entry.d_vnode,
+			    dn->psz_filename, O_RDONLY, 0, &d_vnode);
+	    if (!!r) {
+	      derr << "destroy failed to open " << dn->psz_filename
+	      << ": " << cpp_strerror(-r) << dendl;
+	      break;
+	    }
+	    stack.push_back(dir_entry {d_vnode, dn->psz_filename});
 	    break;
 	  }
-	  dout(0) << "destroy unlinked file " << dn->d_name << dendl;
-	  ::rewinddir(entry.dir);
-	  continue;
-	}
-
-	if (dn->d_type == DT_DIR && dn->d_name[0] != '.') {
-	  /* since there is no opendirat(), we need to use openat()
-	   * and pass the resulting fd to fdopendir(). note that the
-	   * corresponding closedir() also closes this fd */
-	  int fd = ::openat(entry.fd, dn->d_name, O_RDONLY);
-	  if (fd < 0) {
-	    r = -errno;
-	    derr << "destroy failed to open " << dn->d_name << ": "
-		 << cpp_strerror(-r) << dendl;
-	    break;
-	  }
-	  dir = fdopendir_rewind(fd);
-	  if (dir == NULL) {
-	    r = -errno;
-	    derr << "destroy failed to opendir " << dn->d_name << ": "
-		 << cpp_strerror(-r) << dendl;
-	    ::close(fd);
-	    break;
-	  }
-
-	  stack.push_back(dir_entry {fd, dir, dn->d_name});
-	  break;
-	}
-      }
-    }
+	} /* while readdir */
+      } while (!done); /* while readdir segs */
+    next_entry:
+      ;
+    } /* while stack */
 
     // closedir any open directories
     while (!stack.empty()) {
       struct dir_entry& entry = stack.back();
-      ::closedir(entry.dir);
+      r = lzfw_closedir(zhfs, &cred, entry.d_vnode);
       stack.pop_back();
     }
 
-    if (r == 0) {
+    if (r == 0) { // XXX which r?
       // unlink the collection's root directory
-      r = ::rmdir(path.c_str());
-      if (r < 0) {
-	r = -errno;
+      r = lzfw_rmdir(zhfs, &cred, root_ino, path.c_str());
+      if (!!r) {
 	derr << "destroy failed to rmdir collection " << path << ": "
 	     << cpp_strerror(-r) << dendl;
       }
     }
     return r;
-  }
+  } /* destroy */
 
   int FragTreeIndex::open_root(const std::string& path)
   {
@@ -248,7 +244,8 @@ namespace cohort_zfs {
 
     /* XXX assume that path is a name in fs_root */
     int type;
-    r = lzfw_lookup(zhfs, &cred, fs_root, path.c_str(), &root_ino, &type);
+    r = lzfw_lookup(zhfs, &cred, fs_root, path.c_str(), &root_ino,
+	&type);
     if (!!r)
       return -EINVAL;
 
@@ -265,8 +262,8 @@ namespace cohort_zfs {
     return 0;
   }
 
-  int close_root() {
-    int r = lzfw_closedir(zfhs, &cred, root);
+  int FragTreeIndex::close_root() {
+    int r = lzfw_closedir(zhfs, &cred, root);
     root = nullptr;
     return r;
   }
@@ -285,7 +282,7 @@ namespace cohort_zfs {
     // read index from disk
     std::unique_lock<std::shared_timed_mutex>
       index_wrlock(index_mutex);
-    int r = read_index(root);
+    r = read_index(root);
     index_wrlock.unlock();
     if (!!r) {
       (void) close_root();
@@ -371,7 +368,7 @@ namespace cohort_zfs {
   int FragTreeIndex::unmount()
   {
     // must be mounted
-    if (rootfd == -1)
+    if (!root)
       return -EINVAL;
 
     // stop migration threads
@@ -448,7 +445,8 @@ namespace cohort_zfs {
       r = orig.append(name.c_str(), name.size());
       if (r) return r;
 
-      r = lzfw_openat(zhfs, &cred, root, orig.path, O_RDONLY, &vnode);
+      r = lzfw_openat(zhfs, &cred, root, orig.path, O_RDONLY, 0,
+		      &vnode);
       if (r == 0) {
 	r = lzfw_stat(zhfs, &cred, vnode, st);
 	(void) lzfw_close(zhfs, &cred, vnode, O_RDONLY /* XXX ew */);
@@ -465,7 +463,7 @@ namespace cohort_zfs {
     r = path.append(name.c_str(), name.size());
     if (r) return r;
 
-    r = lzfw_openat(zhfs, &cred, root, path.path, O_RDONLY, &vnode);
+    r = lzfw_openat(zhfs, &cred, root, path.path, O_RDONLY, 0, &vnode);
     if (r == 0) {
       r = lzfw_stat(zhfs, &cred, vnode, st);
       (void) lzfw_close(zhfs, &cred, vnode, O_RDONLY /* XXX ew */);
@@ -497,7 +495,7 @@ namespace cohort_zfs {
       r = orig.append(name.c_str(), name.size());
       if (r) return r;
 
-      r = lzfw_openat(zhfs, &cred, root, orig.path, O_RDWR, vnode);
+      r = lzfw_openat(zhfs, &cred, root, orig.path, O_RDWR, 0, vnode);
       if (!r)
 	return 0;
       if (r != ENOENT)
@@ -510,29 +508,31 @@ namespace cohort_zfs {
     if (r) return r;
 
     do {
-      r = lzfw_openat(zhfs, &cred, root, path.path, O_RDWR, vnode);
+      r = lzfw_openat(zhfs, &cred, root, path.path, O_RDWR, 0, vnode);
       if (!r)
 	return 0;
       if (r == ENOENT && create) {
 	// do an exclusive create to keep 'sizes' consistent
-	r = lzfw_openat(zhfs, &cred, root, path.path, O_CREAT|O_EXCL|O_RDWR,
-			vnode);
-	/* XXXX mode 644! */
-	if (!r) {
+	r = lzfw_openat(zhfs, &cred, root, path.path,
+			O_CREAT|O_EXCL|O_RDWR, 0644, vnode);
+	if (!!r) {
 	  // increase the directory size
 	  increment_size(path.frag);
 
 	  // set xattr for full object name if we had to truncate
 	  if (oid.oid.name.size() > NAME_MAX - HASH_LEN) {
+#warning need to replace chain_fsetxattr
+#if 0
 	    r = chain_fsetxattr(*fd, OBJECT_NAME_XATTR,
 				oid.oid.name.c_str(),
 				oid.oid.name.size());
 	    if (r < 0) {
-	      r = -errno;
+	      /* XXX was r = -errno */
 	      derr << "open failed to write xattr "
 		OBJECT_NAME_XATTR << ": "
 		   << cpp_strerror(-r) << dendl;
 	    }
+#endif
 	    /* error here means collection_list() will show truncated
 	     * name */
 	  }
@@ -566,13 +566,12 @@ namespace cohort_zfs {
       r = orig.append(name.c_str(), name.size());
       if (r) return r;
 
-      r = ::unlinkat(rootfd, orig.path, 0);
+      r = lzfw_unlinkat(zhfs, &cred, root, orig.path, 0);
       if (r == 0) {
 	// note that we're decrementing path.frag, not orig.frag!
 	decrement_size(path.frag, parent);
 	return r;
       }
-      r = errno;
       if (r != ENOENT)
 	return -r;
       // on ENOENT, fall back to expected location
@@ -582,13 +581,12 @@ namespace cohort_zfs {
     r = path.append(name.c_str(), name.size());
     if (r) return r;
 
-    r = ::unlinkat(rootfd, path.path, 0);
+    r = lzfw_unlinkat(zhfs, &cred, root, path.path, 0);
     if (r == 0) {
       decrement_size(path.frag, parent);
       return r;
     }
 
-    r = errno;
     return -r;
   }
 
@@ -599,7 +597,8 @@ namespace cohort_zfs {
     //assert(index_lock.is_wlocked());
 
     // open file
-    int r = lzfw_openat(zhfs, &cred, vnode, INDEX_FILENAME, O_RDONLY, vnode2);
+    int r = lzfw_openat(zhfs, &cred, vnode, INDEX_FILENAME, O_RDONLY,
+			0, &vnode2);
     if (!!r) {
       derr << "read_index failed to open " INDEX_FILENAME ": "
 	   << cpp_strerror(r) << dendl;
@@ -618,8 +617,12 @@ namespace cohort_zfs {
 
     // read into a bufferlist
     bufferlist bl;
+    ssize_t len;
     /* XXXX need something to read into a bufferlist */
-    ssize_t len = bl.read_fd(fd, st.st_size);
+#warning need replacement for bl.read_fd
+#if 0
+    len = bl.read_fd(fd, st.st_size);
+#endif
     (void) lzfw_close(zhfs, &cred, vnode2, O_RDONLY /* XXX ew */);
     if (len < 0) {
       derr << "read_index failed to read " INDEX_FILENAME ": "
@@ -640,7 +643,7 @@ namespace cohort_zfs {
     return 0;
   }
 
-  int FragTreeIndex::write_index(lzfw_vnode_t* vnode)
+  int FragTreeIndex::write_index(lzfw_vnode_t* d_vnode)
   {
     //assert(index_lock.is_locked());
 
@@ -649,19 +652,22 @@ namespace cohort_zfs {
     ::encode(committed, bl);
 
     // open file
-    int fd = ::openat(dirfd, ".index", O_CREAT | O_TRUNC | O_WRONLY,
-		      0644);
-    if (fd < 0) {
-      int r = errno;
+    lzfw_vnode_t* vnode;
+    int r = lzfw_openat(zhfs, &cred, d_vnode, ".index",
+			O_CREAT|O_TRUNC|O_WRONLY, 0644, &vnode);
+    if (!!r) {
       derr << "write_index failed to open " INDEX_FILENAME ": "
 	   << cpp_strerror(r) << dendl;
       return -r;
     }
 
     // write the file
-    int r = bl.write_fd(fd);
-    ::close(fd);
-    if (r < 0) {
+#warning need replacement for bl.write_fd
+#if 0
+    r = bl.write_fd(fd);
+#endif
+    (void) lzfw_close(zhfs, &cred, vnode, O_RDONLY /* XXX ew */);
+    if (!!r) {
       derr << "write_index failed to write " INDEX_FILENAME ": "
 	   << cpp_strerror(-r) << dendl;
       return r;
@@ -669,14 +675,15 @@ namespace cohort_zfs {
     return r;
   }
 
-  int FragTreeIndex::read_sizes(int dirfd)
+  int FragTreeIndex::read_sizes(lzfw_vnode_t* d_vnode)
   {
     //assert(sizes_lock.is_locked());
 
     // open file
-    int fd = ::openat(dirfd, SIZES_FILENAME, O_RDONLY);
-    if (fd < 0) {
-      int r = errno;
+    lzfw_vnode_t* vnode;
+    int r = lzfw_openat(zhfs, &cred, d_vnode, SIZES_FILENAME, O_RDONLY,
+			0, &vnode);
+    if (!!r) {
       derr << "read_sizes failed to open " SIZES_FILENAME ": "
 	   << cpp_strerror(r) << dendl;
       return -r;
@@ -684,19 +691,22 @@ namespace cohort_zfs {
 
     // stat for size
     struct stat st;
-    int r = ::fstat(fd, &st);
-    if (r < 0) {
-      r = errno;
+    r = lzfw_stat(zhfs, &cred, vnode, &st);
+    if (!!r) {
       derr << "read_sizes failed to stat " SIZES_FILENAME ": "
 	   << cpp_strerror(r) << dendl;
-      ::close(fd);
+      (void) lzfw_close(zhfs, &cred, vnode, O_RDONLY /* XXX ew */);
       return -r;
     }
 
     // read into a bufferlist
     bufferlist bl;
-    ssize_t len = bl.read_fd(fd, st.st_size);
-    ::close(fd);
+    ssize_t len;
+#warning need replacement for bl.read_fd
+#if 0
+    len = bl.read_fd(fd, st.st_size);
+#endif
+    (void) lzfw_close(zhfs, &cred, vnode, O_RDONLY /* XXX ew */);
     if (len < 0) {
       derr << "read_sizes failed to read " SIZES_FILENAME ": "
 	   << cpp_strerror(-len) << dendl;
@@ -709,9 +719,8 @@ namespace cohort_zfs {
 
     /* unlink the file, because we don't keep it consistent while
      * mounted */
-    r = ::unlinkat(dirfd, SIZES_FILENAME, 0);
-    if (r < 0) {
-      r = errno;
+    r = lzfw_unlinkat(zhfs, &cred, d_vnode, SIZES_FILENAME, 0);
+    if (!!r) {
       derr << "read_sizes failed to unlink " SIZES_FILENAME ": "
 	   << cpp_strerror(r) << dendl;
       return -r;
@@ -719,7 +728,7 @@ namespace cohort_zfs {
     return 0;
   }
 
-  int FragTreeIndex::write_sizes(int dirfd)
+  int FragTreeIndex::write_sizes(lzfw_vnode_t* d_vnode)
   {
     //assert(sizes_lock.is_locked());
 
@@ -728,22 +737,25 @@ namespace cohort_zfs {
     ::encode(sizes, bl);
 
     // create file
-    int fd = ::openat(dirfd, SIZES_FILENAME,
-		      O_CREAT | O_TRUNC | O_WRONLY, 0644);
-    if (fd < 0) {
-      int r = errno;
+    lzfw_vnode_t* vnode;
+    int r = lzfw_openat(zhfs, &cred, d_vnode, SIZES_FILENAME,
+			O_CREAT|O_TRUNC|O_WRONLY, 0644, &vnode);
+    if (!!r) {
       derr << "write_sizes failed to create " SIZES_FILENAME ": "
 	   << cpp_strerror(r) << dendl;
       return -r;
     }
 
     // write the file
-    int r = bl.write_fd(fd);
-    if (r)
+#warning need replacement for bl.write_fd
+#if 0
+    r = bl.write_fd(fd);
+#endif
+    if (r) {
       derr << "write_sizes failed to write " SIZES_FILENAME ": "
 	   << cpp_strerror(-r) << dendl;
-
-    ::close(fd);
+    }
+    (void) lzfw_close(zhfs, &cred, vnode, O_RDONLY /* XXX ew */);
     return r;
   }
 
@@ -777,7 +789,7 @@ namespace cohort_zfs {
 
   } // anonymous namespace
 
-  int FragTreeIndex::count_sizes(int dirfd)
+  int FragTreeIndex::count_sizes(lzfw_vnode_t* d_vnode)
   {
     //assert(sizes_lock.is_locked());
     //assert(index_lock.is_locked());
@@ -785,29 +797,15 @@ namespace cohort_zfs {
     int r = 0;
     sizes.clear();
 
-    /* fdopendir() takes control of the fd and closes it on
-     * closedir(). the caller expects its dirfd to remain open, so
-     * we dup() it and use that */
-    int dirfd2 = ::dup(dirfd);
-    if (dirfd2 == -1) {
-      r = errno;
-      derr << "count_sizes failed to dup root dir fd: "
-	   << cpp_strerror(r) << dendl;
-      return -r;
-    }
-    DIR* dir = fdopendir_rewind(dirfd2);
-    if (dir == NULL) {
-      r = errno;
-      derr << "count_sizes failed to open root dir: "
-	   << cpp_strerror(r) << dendl;
-      return -r;
-    }
-
     // use a stack to recursively count directory entries
-    struct dir_entry { int fd; DIR* dir; frag_t frag; bool merge; };
+    struct dir_entry {
+      lzfw_vnode_t* d_vnode;
+      frag_t frag;
+      bool merge;
+    };
     std::vector<dir_entry> stack;
 
-    stack.push_back(dir_entry {dirfd, dir, frag_t()});
+    stack.push_back(dir_entry {d_vnode, frag_t(), false});
     while (r == 0 && !stack.empty()) {
       const dir_entry& entry = stack.back();
 
@@ -819,74 +817,84 @@ namespace cohort_zfs {
       uint64_t nway = 1 << bits;
 
       int count = 0;
+      off_t d_off = 0;
+      lzfw_entry_t dirents[32];
+      bool done = false;
 
-      char buf[offsetof(struct dirent, d_name) + PATH_MAX + 1];
-      struct dirent* dn;
-      while ((r = ::readdir_r(entry.dir,
-			      (struct dirent*) &buf, &dn)) == 0) {
-	if (dn == NULL) {
-	  ::closedir(entry.dir);
-	  stack.pop_back();
-	  break;
-	}
+      do {
+	r = lzfw_readdir(zhfs, &cred, d_vnode, dirents, 32, &d_off);
+	if (!!r)
+	  abort();
 
-	// skip hidden files/directories
-	if (dn->d_name[0] == '.')
-	  continue;
+	for (int ix = 0; ix < 32; ++ix) {
+	  lzfw_entry_t* dn = &dirents[ix];
 
-	if (dn->d_type == DT_DIR) {
-	  // decode the frag number from the directory name
-	  uint64_t value;
-	  if (!parse_hex_value(dn->d_name, &value))
-	    continue;
-	  if (value >= nway) // doesn't match fragtree
-	    continue;
-
-	  /* since there is no opendirat(), we need to use openat()
-	   * and pass the resulting fd to fdopendir(). note that the
-	   * corresponding closedir() also closes this fd */
-	  int fd = ::openat(entry.fd, dn->d_name, O_RDONLY);
-	  if (fd < 0) {
-	    r = -errno;
-	    derr << "count_sizes failed to open " << dn->d_name << ": "
-		 << cpp_strerror(-r) << dendl;
-	    break;
-	  }
-	  dir = fdopendir_rewind(fd);
-	  if (dir == NULL) {
-	    r = -errno;
-	    derr << "count_sizes failed to opendir " << dn->d_name
-		 << ": " << cpp_strerror(-r) << dendl;
-	    ::close(fd);
-	    break;
+	  // indicates no more dirents
+	  if (dn->psz_filename[0] == '\0') {
+	    if (entry.d_vnode != root)
+	      (void) lzfw_close(zhfs, &cred, entry.d_vnode, O_RDONLY);
+	    stack.pop_back();
+	    done = true;
+	    goto next_entry;
 	  }
 
-	  frag_t frag = entry.frag.make_child(value, bits);
-	  stack.push_back(dir_entry {fd, dir, frag, merging});
-	  break;
-	}
+	  // skip hidden files/directories
+	  if (dn->psz_filename[0] == '.')
+	    continue;
 
-	if (dn->d_type == DT_REG)
-	  ++count;
-      }
+	  if (dn->type == DT_DIR) {
+	    // decode the frag number from the directory name
+	    uint64_t value;
+	    if (!parse_hex_value(dn->psz_filename, &value))
+	      continue;
+	    if (value >= nway) // doesn't match fragtree
+	      continue;
 
-      if (count) {
-	// if parent is merging, apply size updates to the parent frag
-	if (entry.merge)
-	  sizes[tree.get_branch_above(entry.frag)] += count;
-	else
-	  sizes[entry.frag] += count;
-      }
-    }
+	    /* since there is no opendirat(), we need to use openat()
+	     * and pass the resulting fd to fdopendir(). note that the
+	     * corresponding closedir() also closes this fd */
+	    lzfw_vnode_t* d_vnode;
+	    r = lzfw_openat(zhfs, &cred, entry.d_vnode,
+			    dn->psz_filename, O_RDONLY, 0, &d_vnode);
+	    if (!!r) {
+	      derr << "count_sizes failed to open " << dn->psz_filename
+		   << ": " << cpp_strerror(-r) << dendl;
+	      break;
+	    }
+	    frag_t frag = entry.frag.make_child(value, bits);
+	    stack.push_back(dir_entry {d_vnode, frag, merging});
+	    break;
+	  } /* DT_DIR */
 
-    // closedir any open directories
+	  if (dn->type == DT_REG)
+	    ++count;
+
+	  if (count) {
+	    /* if parent is merging, apply size updates to the parent
+	     * frag */
+	    if (entry.merge)
+	      sizes[tree.get_branch_above(entry.frag)] += count;
+	    else
+	      sizes[entry.frag] += count;
+	  }
+	} /* while readdir */
+      } while (!done); /* while readdir segs */
+    next_entry:
+      ;
+    } /* while stack */
+
+    // close any open directories
     while (!stack.empty()) {
       struct dir_entry& entry = stack.back();
-      ::closedir(entry.dir);
+      r = lzfw_closedir(zhfs, &cred, entry.d_vnode);
+      if (!!r) {
+	derr << "error closing directory " << entry.frag
+	     << cpp_strerror(r) << dendl;
+      }
       stack.pop_back();
     }
     return r;
-  }
+  } /* count_sizes */
 
   void FragTreeIndex::increment_size(frag_t frag)
   {
@@ -925,45 +933,43 @@ namespace cohort_zfs {
       merge(parent);
   }
 
-  namespace {
+  // create subdirectories for a splitting fragment
+  int FragTreeIndex::split_mkdirs(CephContext* cct,
+				  lzfw_vnode_t* d_vnode,
+				  const fragtree_t& tree,
+				  frag_t frag, int bits)
+  {
+    struct frag_path path;
+    int r = path.build(tree, frag.value());
+    if (r)
+      return r;
+    assert(path.frag == frag);
 
-    // create subdirectories for a splitting fragment
-    int split_mkdirs(CephContext* cct, int rootfd,
-		     const fragtree_t& tree, frag_t frag, int bits)
-    {
-      struct frag_path path;
-      int r = path.build(tree, frag.value());
-      if (r)
+    /* TODO: consider opening directory at frag, and using
+     * mkdirat() from there */
+    const int remaining = sizeof(path.path) - path.len;
+    const uint64_t nway = 1 << bits;
+    for (uint64_t i = 0; i < nway; i++) {
+      r = snprintf(path.path + path.len, remaining, "%lx", i);
+      if (r < 0)
 	return r;
-      assert(path.frag == frag);
+      if (r >= remaining)
+	return -ENAMETOOLONG;
 
-      /* TODO: consider opening directory at frag, and using
-       * mkdirat() from there */
-      const int remaining = sizeof(path.path) - path.len;
-      const uint64_t nway = 1 << bits;
-      for (uint64_t i = 0; i < nway; i++) {
-	r = snprintf(path.path + path.len, remaining, "%lx", i);
-	if (r < 0)
-	  return r;
-	if (r >= remaining)
-	  return -ENAMETOOLONG;
-
-	r = ::mkdirat(rootfd, path.path, 0755);
-	if (r) {
-	  r = errno;
-	  derr << "split failed to mkdir " << path.path << ": "
-	       << cpp_strerror(r) << dendl;
-	  return -r;
-	}
+      inogen_t ino;
+      r = lzfw_mkdirat(zhfs, &cred, d_vnode, path.path, 0755, &ino);
+      if (!!r) {
+	derr << "split failed to mkdir " << path.path << ": "
+	     << cpp_strerror(r) << dendl;
+	return -r;
       }
-      return 0;
     }
-
-  } // anonymous namespace
+    return 0;
+  } /* split_mkdirs */
 
   int FragTreeIndex::split(frag_t frag, int bits, bool async)
   {
-    if (rootfd == -1) // must be mounted
+    if (!root) // must be mounted
       return -EINVAL;
 
     std::lock_guard<std::shared_timed_mutex> index_lock(index_mutex);
@@ -986,14 +992,14 @@ namespace cohort_zfs {
       return -EINPROGRESS;
 
     // create the subdirectories
-    int r = split_mkdirs(cct, rootfd, tree, frag, bits);
+    int r = split_mkdirs(cct, root, tree, frag, bits);
     if (r) {
       committed.splits.erase(i.first); // erase the split
       return r;
     }
 
     // write the index (still under lock)
-    r = write_index(rootfd);
+    r = write_index(root);
     if (r) {
       committed.splits.erase(i.first); // erase the split
       return r;
@@ -1024,16 +1030,19 @@ namespace cohort_zfs {
   void FragTreeIndex::do_split(frag_path path, int bits,
 			       frag_size_map& size_updates)
   {
-    int dirfd;
-    if (path.len)
-      dirfd = ::openat(rootfd, path.path, O_RDONLY);
-    else
-      dirfd = ::dup(rootfd);
+    lzfw_vnode_t* d_vnode;
+    int r = 0;
 
-    if (dirfd < 0) {
+    if (path.len)
+      r = lzfw_openat(zhfs, &cred, root, path.path, O_RDONLY, 0,
+		      &d_vnode);
+    else
+      d_vnode = root;
+
+    if (!!r || !d_vnode) {
       derr << "do_split failed to open " << path.path << ": "
-	   << cpp_strerror(errno) << dendl;
-      assert(dirfd >= 0);
+	   << cpp_strerror(r) << dendl;
+      assert(false);
     }
 
     // initialize size_updates
@@ -1042,60 +1051,81 @@ namespace cohort_zfs {
       size_updates.insert(
 		   std::make_pair(path.frag.make_child(i, bits), 0));
 
-    DIR* dir = fdopendir_rewind(dirfd);
-    assert(dir);
+    off_t d_off = 0;
+    lzfw_entry_t dirents[32];
+    bool done = false;
 
-    struct dirent* dn;
-    while ((dn = ::readdir(dir)) != NULL) {
-      // skip directories
-      if (dn->d_type != DT_REG)
-	continue;
-      // skip hidden files
-      if (dn->d_name[0] == '.')
-	continue;
+    do {
+      r = lzfw_readdir(zhfs, &cred, d_vnode, dirents, 32, &d_off);
+      if (!!r)
+	abort();
 
-      // decode the hash value
-      uint64_t hash;
-      if (!parse_hash_prefix(dn->d_name, &hash)) {
-	derr << "do_split failed to get hash value from "
-	     << dn->d_name << dendl;
-	continue;
-      }
+      for (int ix = 0; ix < 32; ++ix) {
+	lzfw_entry_t* dn = &dirents[ix];
 
-      // find the corresponding child frag
-      frag_t frag;
-      uint64_t i;
-      for (i = 0; i < nway; i++) {
-	frag = path.frag.make_child(i, bits);
-	if (frag.contains(hash))
-	  break;
-      }
-      if (i == nway) {
-	derr << "do_split found no child frag containing value "
-	     << hash << " for " << dn->d_name << dendl;
-	continue;
-      }
+	// indicates no more dirents
+	if (dn->psz_filename[0] == '\0') {
+	  done = true;
+	  goto last_entry;
+	}
+	// skip directories
+	if (dn->type != DT_REG)
+	  continue;
+	// skip hidden files
+	if (dn->psz_filename[0] == '.')
+	  continue;
 
-      frag_path dest = {};
-      int r = dest.append(i, bits);
-      assert(r == 0);
-      r = dest.append(dn->d_name, strlen(dn->d_name));
-      assert(r == 0);
+	// decode the hash value
+	uint64_t hash;
+	if (!parse_hash_prefix(dn->psz_filename, &hash)) {
+	  derr << "do_split failed to get hash value from "
+	       << dn->psz_filename << dendl;
+	  continue;
+	}
 
-      r = ::renameat(dirfd, dn->d_name, dirfd, dest.path);
-      if (r < 0)
-	derr << "do_split failed to rename " << dn->d_name
-	     << " to " << dest.path << ": " << cpp_strerror(errno)
-	     << dendl;
-      else {
-	dout(20) << "do_split renamed " << dn->d_name
-		 << " to " << dest.path << dendl;
-	size_updates[frag]++;
-      }
+	// find the corresponding child frag
+	frag_t frag;
+	uint64_t i;
+	for (i = 0; i < nway; i++) {
+	  frag = path.frag.make_child(i, bits);
+	  if (frag.contains(hash))
+	    break;
+	}
+	if (i == nway) {
+	  derr << "do_split found no child frag containing value "
+	       << hash << " for " << dn->psz_filename << dendl;
+	  continue;
+	}
+
+	frag_path dest = {};
+	int r = dest.append(i, bits);
+	assert(r == 0);
+	r = dest.append(dn->psz_filename, strlen(dn->psz_filename));
+	assert(r == 0);
+
+	r = lzfw_renameat(zhfs, &cred,
+			  d_vnode, dn->psz_filename,
+			  d_vnode, dest.path);
+	if (!!r)
+	  derr << "do_split failed to rename " << dn->psz_filename
+	       << " to " << dest.path << ": " << cpp_strerror(r)
+	       << dendl;
+	else {
+	  dout(20) << "do_split renamed " << dn->psz_filename
+		   << " to " << dest.path << dendl;
+	  size_updates[frag]++;
+	}
+      } /* while readdir */
+    } while (!done); /* while readdir segs */
+
+  last_entry:
+    // close d_vnode iff we opened it
+    if (d_vnode != root) {
+      r = lzfw_close(zhfs, &cred, d_vnode, O_RDONLY);
+      if (!!r)
+	abort();
     }
-
-    ::closedir(dir);
-  }
+  } /* do_split */
 
   void FragTreeIndex::finish_split(frag_t frag,
 				   const frag_size_map& size_updates)
@@ -1111,7 +1141,7 @@ namespace cohort_zfs {
       committed.splits.erase(i);
 
       // write the index (still under lock)
-      int r = write_index(rootfd);
+      int r = write_index(root);
       assert(r == 0);
     }
 
@@ -1124,7 +1154,7 @@ namespace cohort_zfs {
 
   int FragTreeIndex::merge(frag_t frag, bool async)
   {
-    if (rootfd == -1) // must be mounted
+    if (!root) // must be mounted
       return -EINVAL;
 
     std::lock_guard<std::shared_timed_mutex> index_lock(index_mutex);
@@ -1153,7 +1183,7 @@ namespace cohort_zfs {
       return -EEXIST;
 
     // write the index (still under lock)
-    int r = write_index(rootfd);
+    int r = write_index(root);
     if (r) {
       committed.merges.erase(m.first); // erase the merge
       return r;
@@ -1194,16 +1224,19 @@ namespace cohort_zfs {
 
   void FragTreeIndex::do_merge(frag_path path, int bits)
   {
-    int parentfd;
-    if (path.len)
-      parentfd = ::openat(rootfd, path.path, O_RDONLY);
-    else
-      parentfd = rootfd;
+    lzfw_vnode_t* parent;
+    int r = 0;
 
-    if (parentfd < 0) {
+    if (path.len)
+      r = lzfw_openat(zhfs, &cred, root, path.path, O_RDONLY, 0,
+		      &parent);
+    else
+      parent = root;
+
+    if (!!r || !parent) {
       derr << "do_merge failed to open " << path.path << ": "
-	   << cpp_strerror(errno) << dendl;
-      assert(parentfd >= 0);
+	   << cpp_strerror(r) << dendl;
+      assert(false);
     }
 
     // TODO: merge each subdirectory in a separate thread?
@@ -1213,39 +1246,67 @@ namespace cohort_zfs {
       int r = src.append(i, bits);
       assert(r == 0);
 
-      int dirfd = ::openat(parentfd, src.path, O_RDONLY);
-      if (dirfd < 0) {
+      lzfw_vnode_t* d_vnode;
+      r = lzfw_openat(zhfs, &cred, parent, src.path, O_RDONLY,
+		      0, &d_vnode);
+      if (!!r) {
 	derr << "do_merge failed to open " << src.path << " under "
-	     << path.path << ": " << cpp_strerror(errno) << dendl;
+	     << path.path << ": " << cpp_strerror(r) << dendl;
 	continue;
       }
 
-      DIR* dir = fdopendir_rewind(dirfd);
-      assert(dir);
+      off_t d_off = 0;
+      lzfw_entry_t dirents[32];
+      bool done = false;
 
-      struct dirent* dn;
-      while ((dn = ::readdir(dir)) != NULL) {
-	// skip directories
-	if (dn->d_type != DT_REG)
-	  continue;
-	// skip hidden files
-	if (dn->d_name[0] == '.')
-	  continue;
-	// TODO: require filenames to match naming format?
+      do {
+	r = lzfw_readdir(zhfs, &cred, d_vnode, dirents, 32, &d_off);
+	if (!!r)
+	  abort();
 
-	r = ::renameat(dirfd, dn->d_name, parentfd, dn->d_name);
-	if (r < 0)
-	  derr << "do_merge failed to rename " << src.path
-	       << dn->d_name
-	       << " to parent: " << cpp_strerror(errno) << dendl;
-	else
-	  dout(20) << "do_merge renamed " << src.path << dn->d_name
-		   << " to parent" << dendl;
-      }
+	for (int ix = 0; ix < 32; ++ix) {
+	  lzfw_entry_t* dn = &dirents[ix];
 
-      ::closedir(dir);
+	  // indicates no more dirents
+	  if (dn->psz_filename[0] == '\0') {
+	    done = true;
+	    break;
+	  }
+	  // skip directories
+	  if (dn->type != DT_REG)
+	    continue;
+	  // skip hidden files
+	  if (dn->psz_filename[0] == '.')
+	    continue;
+
+	  // TODO: require filenames to match naming format?
+	  r = lzfw_renameat(zhfs, &cred,
+			    d_vnode, dn->psz_filename,
+			    parent, dn->psz_filename);
+	  if (!!r)
+	    derr << "do_merge failed to rename " << src.path
+		 << dn->psz_filename  << " to parent: "
+		 << cpp_strerror(r) << dendl;
+	  else
+	    dout(20) << "do_merge renamed " << src.path <<
+	      dn->psz_filename << " to parent" << dendl;
+	  
+	} /* while readdir */
+      } while (!done); /* while readdir segs */
+
+      // close d_vnode, which we unconditionally open
+      r = lzfw_close(zhfs, &cred, d_vnode, O_RDONLY);
+      if (!!r)
+	abort();
+    } /* i */
+
+    // close parent iff we opened it
+    if (parent != root) {
+      r = lzfw_close(zhfs, &cred, parent, O_RDONLY);
+      if (!!r)
+	abort();
     }
-  }
+  } /* do_merge */
 
   void FragTreeIndex::finish_merge(frag_t frag)
   {
@@ -1259,7 +1320,7 @@ namespace cohort_zfs {
     committed.merges.erase(i);
 
     // write the index (still under lock)
-    int r = write_index(rootfd);
+    int r = write_index(root);
     assert(r == 0);
   }
 

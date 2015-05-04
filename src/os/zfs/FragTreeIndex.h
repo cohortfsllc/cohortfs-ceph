@@ -96,6 +96,8 @@ namespace cohort_zfs { // temporarily isolate ZFS variant
     void increment_size(frag_t frag);
     void decrement_size(frag_t frag, frag_t parent);
 
+    int split_mkdirs(CephContext* cct, lzfw_vnode_t* d_vnode,
+		     const fragtree_t& tree, frag_t frag, int bits);
     int split(frag_t frag, int bits, bool async=true);
     int merge(frag_t frag, bool async=true);
 
