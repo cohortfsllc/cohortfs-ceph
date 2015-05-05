@@ -199,8 +199,10 @@ namespace cohort_zfs {
 	  }
 	  if (dn->type == DT_DIR && dn->psz_filename[0] != '.') {
 	    lzfw_vnode_t* d_vnode;
+	    unsigned o_flags;
 	    r = lzfw_openat(zhfs, &cred, entry.d_vnode,
-			    dn->psz_filename, O_RDONLY, 0, &d_vnode);
+			    dn->psz_filename, O_RDONLY, 0, &o_flags,
+			    &d_vnode);
 	    if (!!r) {
 	      derr << "destroy failed to open " << dn->psz_filename
 	      << ": " << cpp_strerror(-r) << dendl;
@@ -439,6 +441,7 @@ namespace cohort_zfs {
     }
 
     lzfw_vnode_t* vnode;
+    unsigned o_flags;
 
     // if a migration is in progress, check the original location first
     if (orig.frag != path.frag) {
@@ -446,7 +449,7 @@ namespace cohort_zfs {
       if (r) return r;
 
       r = lzfw_openat(zhfs, &cred, root, orig.path, O_RDONLY, 0,
-		      &vnode);
+		      &o_flags, &vnode);
       if (r == 0) {
 	r = lzfw_stat(zhfs, &cred, vnode, st);
 	(void) lzfw_close(zhfs, &cred, vnode, O_RDONLY /* XXX ew */);
@@ -463,7 +466,8 @@ namespace cohort_zfs {
     r = path.append(name.c_str(), name.size());
     if (r) return r;
 
-    r = lzfw_openat(zhfs, &cred, root, path.path, O_RDONLY, 0, &vnode);
+    r = lzfw_openat(zhfs, &cred, root, path.path, O_RDONLY, 0,
+		    &o_flags, &vnode);
     if (r == 0) {
       r = lzfw_stat(zhfs, &cred, vnode, st);
       (void) lzfw_close(zhfs, &cred, vnode, O_RDONLY /* XXX ew */);
@@ -489,13 +493,14 @@ namespace cohort_zfs {
     }
 
     const std::string name = format_name(oid);
+    unsigned o_flags;
 
     // if a migration is in progress, check the original location first
     if (orig.frag != path.frag) {
       r = orig.append(name.c_str(), name.size());
       if (r) return r;
-
-      r = lzfw_openat(zhfs, &cred, root, orig.path, O_RDWR, 0, vnode);
+      r = lzfw_openat(zhfs, &cred, root, orig.path, O_RDWR, 0,
+		      &o_flags, vnode);
       if (!r)
 	return 0;
       if (r != ENOENT)
@@ -508,13 +513,14 @@ namespace cohort_zfs {
     if (r) return r;
 
     do {
-      r = lzfw_openat(zhfs, &cred, root, path.path, O_RDWR, 0, vnode);
+      r = lzfw_openat(zhfs, &cred, root, path.path, O_RDWR, 0,
+		      &o_flags, vnode);
       if (!r)
 	return 0;
       if (r == ENOENT && create) {
 	// do an exclusive create to keep 'sizes' consistent
 	r = lzfw_openat(zhfs, &cred, root, path.path,
-			O_CREAT|O_EXCL|O_RDWR, 0644, vnode);
+			O_CREAT|O_EXCL|O_RDWR, 0644, &o_flags, vnode);
 	if (!!r) {
 	  // increase the directory size
 	  increment_size(path.frag);
@@ -594,11 +600,13 @@ namespace cohort_zfs {
   int FragTreeIndex::read_index(lzfw_vnode_t* vnode)
   {
     lzfw_vnode_t* vnode2;
+    unsigned o_flags;
+
     //assert(index_lock.is_wlocked());
 
     // open file
     int r = lzfw_openat(zhfs, &cred, vnode, INDEX_FILENAME, O_RDONLY,
-			0, &vnode2);
+			0, &o_flags, &vnode2);
     if (!!r) {
       derr << "read_index failed to open " INDEX_FILENAME ": "
 	   << cpp_strerror(r) << dendl;
@@ -660,8 +668,11 @@ namespace cohort_zfs {
 
     // open file
     lzfw_vnode_t* vnode;
+    unsigned o_flags;
+
     int r = lzfw_openat(zhfs, &cred, d_vnode, ".index",
-			O_CREAT|O_TRUNC|O_WRONLY, 0644, &vnode);
+			O_CREAT|O_TRUNC|O_WRONLY, 0644, &o_flags,
+			&vnode);
     if (!!r) {
       derr << "write_index failed to open " INDEX_FILENAME ": "
 	   << cpp_strerror(r) << dendl;
@@ -693,8 +704,11 @@ namespace cohort_zfs {
 
     // open file
     lzfw_vnode_t* vnode;
-    int r = lzfw_openat(zhfs, &cred, d_vnode, SIZES_FILENAME, O_RDONLY,
-			0, &vnode);
+    unsigned o_flags;
+    int r;
+
+    r = lzfw_openat(zhfs, &cred, d_vnode, SIZES_FILENAME, O_RDONLY,
+		    0, &o_flags, &vnode);
     if (!!r) {
       derr << "read_sizes failed to open " SIZES_FILENAME ": "
 	   << cpp_strerror(r) << dendl;
@@ -759,8 +773,12 @@ namespace cohort_zfs {
 
     // create file
     lzfw_vnode_t* vnode;
-    int r = lzfw_openat(zhfs, &cred, d_vnode, SIZES_FILENAME,
-			O_CREAT|O_TRUNC|O_WRONLY, 0644, &vnode);
+    unsigned o_flags;
+    int r;
+
+    r = lzfw_openat(zhfs, &cred, d_vnode, SIZES_FILENAME,
+		    O_CREAT|O_TRUNC|O_WRONLY, 0644, &o_flags,
+		    &vnode);
     if (!!r) {
       derr << "write_sizes failed to create " SIZES_FILENAME ": "
 	   << cpp_strerror(r) << dendl;
@@ -881,8 +899,11 @@ namespace cohort_zfs {
 	     * and pass the resulting fd to fdopendir(). note that the
 	     * corresponding closedir() also closes this fd */
 	    lzfw_vnode_t* d_vnode;
+	    unsigned o_flags;
+
 	    r = lzfw_openat(zhfs, &cred, entry.d_vnode,
-			    dn->psz_filename, O_RDONLY, 0, &d_vnode);
+			    dn->psz_filename, O_RDONLY, 0, &o_flags,
+			    &d_vnode);
 	    if (!!r) {
 	      derr << "count_sizes failed to open " << dn->psz_filename
 		   << ": " << cpp_strerror(-r) << dendl;
@@ -1058,11 +1079,12 @@ namespace cohort_zfs {
 			       frag_size_map& size_updates)
   {
     lzfw_vnode_t* d_vnode;
+    unsigned o_flags;
     int r = 0;
 
     if (path.len)
       r = lzfw_openat(zhfs, &cred, root, path.path, O_RDONLY, 0,
-		      &d_vnode);
+		      &o_flags, &d_vnode);
     else
       d_vnode = root;
 
@@ -1252,11 +1274,12 @@ namespace cohort_zfs {
   void FragTreeIndex::do_merge(frag_path path, int bits)
   {
     lzfw_vnode_t* parent;
+    unsigned o_flags;
     int r = 0;
 
     if (path.len)
       r = lzfw_openat(zhfs, &cred, root, path.path, O_RDONLY, 0,
-		      &parent);
+		      &o_flags, &parent);
     else
       parent = root;
 
@@ -1274,8 +1297,10 @@ namespace cohort_zfs {
       assert(r == 0);
 
       lzfw_vnode_t* d_vnode;
+      unsigned o_flags;
+
       r = lzfw_openat(zhfs, &cred, parent, src.path, O_RDONLY,
-		      0, &d_vnode);
+		      0, &o_flags, &d_vnode);
       if (!!r) {
 	derr << "do_merge failed to open " << src.path << " under "
 	     << path.path << ": " << cpp_strerror(r) << dendl;
