@@ -59,6 +59,8 @@ if(ZFS_PREFIX)
   set(ZFS_INCLUDE_DIR "${ZFS_PREFIX}/include")
   include_directories(${ZFS_INCLUDE_DIR})
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I${ZFS_INCLUDE_DIR}")
+  find_library(ZFS_WRAP NO_DEFAULT_PATH NAMES zfswrap
+    PATHS "${ZFS_PREFIX}/lib")
 endif(ZFS_PREFIX)
 
 if(HAVE_CDS)

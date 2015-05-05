@@ -21,7 +21,9 @@
 #include "include/frag.h"
 #include "common/oid.h"
 #include "common/ThreadPool.h"
+extern "C" {
 #include <libzfswrap.h>
+}
 
 namespace cohort_zfs { // temporarily isolate ZFS variant
 

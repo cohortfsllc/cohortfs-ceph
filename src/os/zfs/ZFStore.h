@@ -20,7 +20,9 @@
 #include <shared_mutex>
 #include <boost/intrusive_ptr.hpp>
 #include "os/ObjectStore.h"
+extern "C" {
 #include <libzfswrap.h>
+}
 #include "os/zfs/FragTreeIndex.h"
 
 
