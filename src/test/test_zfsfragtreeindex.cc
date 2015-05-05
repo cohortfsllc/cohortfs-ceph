@@ -12,160 +12,159 @@ using namespace cohort_zfs;
 
 namespace {
 
-CephContext* cct;
+  CephContext* cct;
+  lzfw_vfs_t* zhfs;
 
-class TestFragTreeIndex : public FragTreeIndex {
- public:
-  TestFragTreeIndex(lzfw_vfs_t *zhfs, uint32_t initial_split = 0)
-    : FragTreeIndex(::cct, zhfs, initial_split)
-  {}
+  class TestFragTreeIndex : public FragTreeIndex {
+  public:
+    TestFragTreeIndex(lzfw_vfs_t* zhfs, uint32_t initial_split = 0)
+      : FragTreeIndex(::cct, zhfs, initial_split)
+    {}
 
-  // expose split/merge functions
-  int split(frag_t frag, int bits, bool async=true) {
-    return FragTreeIndex::split(frag, bits, async);
+    // expose split/merge functions
+    int split(frag_t frag, int bits, bool async=true) {
+      return FragTreeIndex::split(frag, bits, async);
+    }
+
+    int merge(frag_t frag, bool async=true) {
+      return FragTreeIndex::merge(frag, async);
+    }
+
+    void do_split(frag_path path, int bits,
+		  frag_size_map& size_updates) {
+      return FragTreeIndex::do_split(path, bits, size_updates);
+    }
+
+    void do_merge(frag_path path, int bits) {
+      return FragTreeIndex::do_merge(path, bits);
+    }
+
+    void finish_split(frag_t frag, const frag_size_map& size_updates) {
+      return FragTreeIndex::finish_split(frag, size_updates);
+    }
+
+    void finish_merge(frag_t frag) {
+      return FragTreeIndex::finish_merge(frag);
+    }
+
+    void restart_migrations(bool async=true) {
+      return FragTreeIndex::restart_migrations(async);
+    }
+
+    // helpers for synchronous split/merge
+    int split_sync(frag_t frag, int bits) {
+      frag_path path = {};
+      path.build(tree, frag.value());
+      assert(path.frag == frag);
+
+      int r = FragTreeIndex::split(frag, bits, false);
+      if (r) return r;
+
+      frag_size_map size_updates;
+      FragTreeIndex::do_split(path, bits, size_updates);
+      FragTreeIndex::finish_split(path.frag, size_updates);
+      return 0;
+    }
+
+    int merge_sync(frag_t frag, int bits) {
+      int r = FragTreeIndex::merge(frag, false);
+      if (r) return r;
+
+      frag_path path = {};
+      path.build(tree, frag.value());
+      assert(path.frag == frag);
+
+      FragTreeIndex::do_merge(path, bits);
+      FragTreeIndex::finish_merge(path.frag);
+      return 0;
+    }
+
+    // expose frag size map
+    using FragTreeIndex::frag_size_map;
+    const frag_size_map& get_size_map() const { return sizes; }
+
+    // simulate a crash by clearing state without unmounting
+    void crash() {
+      committed.tree.clear();
+      committed.splits.clear();
+      committed.merges.clear();
+      tree.clear();
+      sizes.clear();
+      (void) lzfw_closedir(zhfs, &cred, root);
+      root = nullptr;
+    }
+  };
+
+  hoid_t mkhoid(const char* name, uint64_t hash)
+  {
+    hoid_t oid;
+    oid.oid.name.assign(name);
+    oid.hk = hash;
+    return oid;
   }
 
-  int merge(frag_t frag, bool async=true) {
-    return FragTreeIndex::merge(frag, async);
+  // helper class to create a temporary directory and clean it up on exit
+  class tmpdir_with_cleanup {
+  private:
+    std::string path;
+    void recursive_rmdir(int fd, DIR* dir);
+  public:
+    tmpdir_with_cleanup(const char* path);
+    ~tmpdir_with_cleanup();
+    operator const std::string&() const { return path; }
+    const char* c_str() const { return path.c_str(); }
+  };
+
+  tmpdir_with_cleanup::tmpdir_with_cleanup(const char* path)
+    : path(path)
+  {
+    int r = ::mkdir(path, 0755);
+    assert(r == 0); // blow up so we don't delete existing files
   }
 
-  void do_split(frag_path path, int bits,
-		frag_size_map& size_updates) {
-    return FragTreeIndex::do_split(path, bits, size_updates);
+  tmpdir_with_cleanup::~tmpdir_with_cleanup()
+  {
+    int fd = ::open(path.c_str(), O_RDONLY);
+    if (fd < 0)
+      return;
+    DIR* dir = ::fdopendir(fd);
+    assert(dir);
+    recursive_rmdir(fd, dir);
+    ::closedir(dir);
+    int r = ::rmdir(path.c_str());
+    assert(r == 0);
   }
 
-  void do_merge(frag_path path, int bits) {
-    return FragTreeIndex::do_merge(path, bits);
-  }
+  void tmpdir_with_cleanup::recursive_rmdir(int fd, DIR* dir)
+  {
+    struct dirent* dn;
+    while ((dn = ::readdir(dir)) != NULL) {
+      if (dn->d_type == DT_DIR) {
+	// skip . and ..
+	if (dn->d_name[0] == '.' && dn->d_name[1] == 0)
+	  continue;
+	if (dn->d_name[0] == '.' && dn->d_name[1] == '.' &&
+	    dn->d_name[2] == 0)
+	  continue;
 
-  void finish_split(frag_t frag, const frag_size_map& size_updates) {
-    return FragTreeIndex::finish_split(frag, size_updates);
-  }
+	int fd2 = ::openat(fd, dn->d_name, O_RDONLY);
+	assert(fd2 >= 0);
+	DIR* dir2 = ::fdopendir(fd2);
+	assert(dir2);
 
-  void finish_merge(frag_t frag) {
-    return FragTreeIndex::finish_merge(frag);
-  }
+	recursive_rmdir(fd2, dir2);
+	::closedir(dir2); // closes fd2 also
 
-  void restart_migrations(bool async=true) {
-    return FragTreeIndex::restart_migrations(async);
-  }
-
-  // helpers for synchronous split/merge
-  int split_sync(frag_t frag, int bits) {
-    frag_path path = {};
-    path.build(tree, frag.value());
-    assert(path.frag == frag);
-
-    int r = FragTreeIndex::split(frag, bits, false);
-    if (r) return r;
-
-    frag_size_map size_updates;
-    FragTreeIndex::do_split(path, bits, size_updates);
-    FragTreeIndex::finish_split(path.frag, size_updates);
-    return 0;
-  }
-
-  int merge_sync(frag_t frag, int bits) {
-    int r = FragTreeIndex::merge(frag, false);
-    if (r) return r;
-
-    frag_path path = {};
-    path.build(tree, frag.value());
-    assert(path.frag == frag);
-
-    FragTreeIndex::do_merge(path, bits);
-    FragTreeIndex::finish_merge(path.frag);
-    return 0;
-  }
-
-  // expose frag size map
-  using FragTreeIndex::frag_size_map;
-  const frag_size_map& get_size_map() const { return sizes; }
-
-  // simulate a crash by clearing state without unmounting
-  void crash() {
-    committed.tree.clear();
-    committed.splits.clear();
-    committed.merges.clear();
-    tree.clear();
-    sizes.clear();
-    (void) lzfw_closedir(zhfs, &cred, root);
-    root = nullptr;
-  }
-};
-
-hoid_t mkhoid(const char* name, uint64_t hash)
-{
-  hoid_t oid;
-  oid.oid.name.assign(name);
-  oid.hk = hash;
-  return oid;
-}
-
-// helper class to create a temporary directory and clean it up on exit
-class tmpdir_with_cleanup {
- private:
-  std::string path;
-  void recursive_rmdir(int fd, DIR* dir);
- public:
-  tmpdir_with_cleanup(const char* path);
-  ~tmpdir_with_cleanup();
-  operator const std::string&() const { return path; }
-  const char* c_str() const { return path.c_str(); }
-};
-
-tmpdir_with_cleanup::tmpdir_with_cleanup(const char* path)
-  : path(path)
-{
-  int r = ::mkdir(path, 0755);
-  assert(r == 0); // blow up so we don't delete existing files
-}
-
-tmpdir_with_cleanup::~tmpdir_with_cleanup()
-{
-  int fd = ::open(path.c_str(), O_RDONLY);
-  if (fd < 0)
-    return;
-  DIR* dir = ::fdopendir(fd);
-  assert(dir);
-  recursive_rmdir(fd, dir);
-  ::closedir(dir);
-  int r = ::rmdir(path.c_str());
-  assert(r == 0);
-}
-
-void tmpdir_with_cleanup::recursive_rmdir(int fd, DIR* dir)
-{
-  struct dirent* dn;
-  while ((dn = ::readdir(dir)) != NULL) {
-    if (dn->d_type == DT_DIR) {
-      // skip . and ..
-      if (dn->d_name[0] == '.' && dn->d_name[1] == 0)
-        continue;
-      if (dn->d_name[0] == '.' && dn->d_name[1] == '.' &&
-	  dn->d_name[2] == 0)
-        continue;
-
-      int fd2 = ::openat(fd, dn->d_name, O_RDONLY);
-      assert(fd2 >= 0);
-      DIR* dir2 = ::fdopendir(fd2);
-      assert(dir2);
-
-      recursive_rmdir(fd2, dir2);
-      ::closedir(dir2); // closes fd2 also
-
-      int r = ::unlinkat(fd, dn->d_name, AT_REMOVEDIR);
-      assert(r == 0);
-    } else {
-      int r = ::unlinkat(fd, dn->d_name, 0);
-      assert(r == 0);
+	int r = ::unlinkat(fd, dn->d_name, AT_REMOVEDIR);
+	assert(r == 0);
+      } else {
+	int r = ::unlinkat(fd, dn->d_name, 0);
+	assert(r == 0);
+      }
     }
   }
-}
 
 } // anonymous namespace
-
-#if 0 /* XXXX till compilation fixed */
 
 TEST(OsFragTreeIndex, FragPathBuild)
 {
@@ -205,20 +204,28 @@ TEST(OsFragTreeIndex, OpenStatUnlink)
 {
   tmpdir_with_cleanup path("tmp-fragtreeindex");
 
-  TestFragTreeIndex index;
+  zhfs = lzfw_mount("test_pool", "/tank", "");
+  ASSERT_NE(zhfs, nullptr);
+
+  TestFragTreeIndex index(zhfs);
+  lzfw_vnode_t* vnode;
   struct stat st;
 
   ASSERT_EQ(0, index.init(path));
   ASSERT_EQ(0, index.mount(path));
   ASSERT_EQ(-ENOENT, index.stat(mkhoid("stat-noent", 0), &st));
-  int fd = -1;
-  ASSERT_EQ(-ENOENT, index.open(mkhoid("open-noent", 0), false, &fd));
-  ASSERT_EQ(0, index.open(mkhoid("open-create", 0), true, &fd));
+  ASSERT_EQ(-ENOENT, index.open(mkhoid("open-noent", 0), false, &vnode));
+  ASSERT_EQ(0, index.open(mkhoid("open-create", 0), true, &vnode));
   ASSERT_EQ(0, index.stat(mkhoid("open-create", 0), &st));
-  ::close(fd);
+  /* XXX should this succeed? (open) */
   ASSERT_EQ(0, index.unlink(mkhoid("open-create", 0)));
   ASSERT_EQ(0, index.unmount());
+
+  int r = lzfw_umount(zhfs, true /* XXX force */);
+  zhfs = nullptr;
 }
+
+#if 0 /* XXXX till compilation fixed */
 
 TEST(OsFragTreeIndex, Split)
 {
@@ -607,6 +614,8 @@ int main(int argc, char* argv[])
   cct = global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT,
                     CODE_ENVIRONMENT_UTILITY, 0);
   common_init_finish(cct);
+  zhfs = nullptr;
+
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
