@@ -449,6 +449,7 @@ namespace cohort_zfs {
       r = orig.append(name.c_str(), name.size());
       if (r) return r;
 
+      // FIXME: openat() uses orig.path
       r = lzfw_openat(zhfs, &cred, root, orig.path, O_RDONLY, 0,
 		      &o_flags, &vnode);
       if (r == 0) {
@@ -467,6 +468,7 @@ namespace cohort_zfs {
     r = path.append(name.c_str(), name.size());
     if (r) return r;
 
+    // FIXME: openat() uses path.path
     r = lzfw_openat(zhfs, &cred, root, path.path, O_RDONLY, 0,
 		    &o_flags, &vnode);
     if (r == 0) {
@@ -500,6 +502,7 @@ namespace cohort_zfs {
     if (orig.frag != path.frag) {
       r = orig.append(name.c_str(), name.size());
       if (r) return r;
+      // FIXME: openat() uses orig.path
       r = lzfw_openat(zhfs, &cred, root, orig.path, O_RDWR, 0,
 		      &o_flags, vnode);
       if (!r)
@@ -514,6 +517,7 @@ namespace cohort_zfs {
     if (r) return r;
 
     do {
+      // FIXME: openat() uses path.path
       r = lzfw_openat(zhfs, &cred, root, path.path, O_RDWR, 0,
 		      &o_flags, vnode);
       if (!r)
@@ -568,6 +572,7 @@ namespace cohort_zfs {
       r = orig.append(name.c_str(), name.size());
       if (r) return r;
 
+      // FIXME: unlinkat() uses orig.path
       r = lzfw_unlinkat(zhfs, &cred, root, orig.path, 0);
       if (r == 0) {
 	// note that we're decrementing path.frag, not orig.frag!
@@ -583,6 +588,7 @@ namespace cohort_zfs {
     r = path.append(name.c_str(), name.size());
     if (r) return r;
 
+    // FIXME: unlinkat() uses path.path
     r = lzfw_unlinkat(zhfs, &cred, root, path.path, 0);
     if (r == 0) {
       decrement_size(path.frag, parent);
@@ -989,8 +995,7 @@ namespace cohort_zfs {
       return r;
     assert(path.frag == frag);
 
-    /* TODO: consider opening directory at frag, and using
-     * mkdirat() from there */
+    // FIXME: d_vnode is root, need to traverse path.path
     const int remaining = sizeof(path.path) - path.len;
     const uint64_t nway = 1 << bits;
     for (uint64_t i = 0; i < nway; i++) {
@@ -1078,7 +1083,7 @@ namespace cohort_zfs {
     unsigned o_flags;
     int r = 0;
 
-    if (path.len)
+    if (path.len) // FIXME: openat() uses path.path
       r = lzfw_openat(zhfs, &cred, root, path.path, O_RDONLY, 0,
 		      &o_flags, &d_vnode);
     else
@@ -1148,6 +1153,7 @@ namespace cohort_zfs {
 	r = dest.append(dn->psz_filename, strlen(dn->psz_filename));
 	assert(r == 0);
 
+        // FIXME: renameat() uses dest.path
 	r = lzfw_renameat(zhfs, &cred,
 			  d_vnode, dn->psz_filename,
 			  d_vnode, dest.path);
@@ -1273,7 +1279,7 @@ namespace cohort_zfs {
     unsigned o_flags;
     int r = 0;
 
-    if (path.len)
+    if (path.len) // FIXME: openat() uses path.path
       r = lzfw_openat(zhfs, &cred, root, path.path, O_RDONLY, 0,
 		      &o_flags, &parent);
     else
