@@ -16,8 +16,8 @@ CephContext* cct;
 
 class TestFragTreeIndex : public FragTreeIndex {
  public:
-  TestFragTreeIndex(uint32_t initial_split = 0)
-    : FragTreeIndex(::cct, initial_split)
+  TestFragTreeIndex(lzfw_vfs_t *zhfs, uint32_t initial_split = 0)
+    : FragTreeIndex(::cct, zhfs, initial_split)
   {}
 
   // expose split/merge functions
@@ -89,8 +89,8 @@ class TestFragTreeIndex : public FragTreeIndex {
     committed.merges.clear();
     tree.clear();
     sizes.clear();
-    ::close(rootfd);
-    rootfd = -1;
+    (void) lzfw_closedir(zhfs, &cred, root);
+    root = nullptr;
   }
 };
 
