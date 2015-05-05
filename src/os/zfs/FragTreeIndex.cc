@@ -95,8 +95,10 @@ namespace cohort_zfs {
 
     // verify that the directory is empty
     r = check_directory_empty(zhfs, &cred, root);
-    if (!!r)
+    if (!!r) {
+      close_root();
       return r;
+    }
 
     // create an index with the initial number of subdirectories
     if (initial_split > 0) {
@@ -113,8 +115,7 @@ namespace cohort_zfs {
 	index_lock(index_mutex);
       r = write_index(root);
     }
-    lzfw_closedir(zhfs, &cred, root);
-    root = nullptr;
+    close_root();
     return r;
   }
 
