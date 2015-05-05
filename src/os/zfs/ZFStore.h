@@ -23,6 +23,7 @@
 #include <libzfswrap.h>
 #include "os/zfs/FragTreeIndex.h"
 
+
 class ZFStore : public ObjectStore
 {
 private:
@@ -299,18 +300,10 @@ public:
     return put_object(static_cast<ZObject*>(oh));
   }
 
-  int stat(
-    CollectionHandle ch,
-    ObjectHandle oh,
-    struct stat* st,
-    bool allow_eio = false); // struct stat?
-  int read(
-    CollectionHandle ch,
-    ObjectHandle oh,
-    uint64_t offset,
-    size_t len,
-    bufferlist& bl,
-    bool allow_eio = false);
+  int stat(CollectionHandle ch, ObjectHandle oh,
+	   struct stat* st, bool allow_eio = false); // struct stat?
+  int read(CollectionHandle ch, ObjectHandle oh,
+	   uint64_t offset, size_t len, bufferlist& bl, bool allow_eio = false);
   int fiemap(CollectionHandle ch, ObjectHandle oh,
 	     uint64_t offset, size_t len, bufferlist& bl);
   int getattr(CollectionHandle ch, ObjectHandle oh,
@@ -340,19 +333,14 @@ public:
 			       vector<hoid_t> *vs,
 			       CLPCursor& cursor);
   int omap_get(CollectionHandle ch, ObjectHandle oh,
-	       bufferlist* header, map<std::string, bufferlist>* out
-    );
-
+	       bufferlist* header, map<std::string, bufferlist>* out);
   int omap_get_header(CollectionHandle ch, ObjectHandle oh,
     bufferlist* header, bool allow_eio = false);
-
   int omap_get_keys(CollectionHandle ch, ObjectHandle oh,
 		    set<std::string>* keys);
-
   int omap_get_values(CollectionHandle ch, ObjectHandle oh,
 		      const set<std::string>& keys,
 		      map<std::string, bufferlist>* out);
-
   int omap_check_keys(CollectionHandle ch, ObjectHandle oh,
 		      const set<std::string>& keys,
 		      set<std::string>* out);
