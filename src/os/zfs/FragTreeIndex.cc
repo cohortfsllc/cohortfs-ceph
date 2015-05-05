@@ -527,18 +527,13 @@ namespace cohort_zfs {
 
 	  // set xattr for full object name if we had to truncate
 	  if (oid.oid.name.size() > NAME_MAX - HASH_LEN) {
-#warning need to replace chain_fsetxattr
-#if 0
-	    r = chain_fsetxattr(*fd, OBJECT_NAME_XATTR,
-				oid.oid.name.c_str(),
-				oid.oid.name.size());
-	    if (r < 0) {
-	      /* XXX was r = -errno */
+	    r = lzfw_setxattrat(zhfs, &cred, *vnode, OBJECT_NAME_XATTR,
+				oid.oid.name.c_str());
+	    if (!!r) {
 	      derr << "open failed to write xattr "
 		OBJECT_NAME_XATTR << ": "
 		   << cpp_strerror(-r) << dendl;
 	    }
-#endif
 	    /* error here means collection_list() will show truncated
 	     * name */
 	  }
