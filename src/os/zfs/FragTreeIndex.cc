@@ -526,7 +526,7 @@ namespace cohort_zfs {
 	// do an exclusive create to keep 'sizes' consistent
 	r = lzfw_openat(zhfs, &cred, root, path.path,
 			O_CREAT|O_EXCL|O_RDWR, 0644, &o_flags, vnode);
-	if (!!r) {
+	if (!r) {
 	  // increase the directory size
 	  increment_size(path.frag);
 
