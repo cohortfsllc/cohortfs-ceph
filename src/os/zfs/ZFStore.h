@@ -219,7 +219,7 @@ public:
     return 0;
   }
 
-  virtual int statfs(struct statfs* buf);
+  int statfs(struct statfs* buf);
 
   uint32_t get_target_version() {
     return 1;

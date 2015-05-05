@@ -82,6 +82,18 @@ int ZFStore::umount() {
   return -r;
 }
 
+int ZFStore::mkfs()
+{
+  abort();
+  return 0;
+}
+
+int ZFStore::statfs(struct statfs* buf)
+{
+  abort();
+  return 0;
+}
+
 bool ZFStore::exists(CollectionHandle ch, const hoid_t& oid)
 {
   ZCollection* zc = static_cast<ZCollection*>(ch);
