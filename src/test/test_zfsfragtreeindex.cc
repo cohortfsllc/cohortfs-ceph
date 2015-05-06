@@ -219,27 +219,28 @@ TEST(OsFragTreeIndex, OpenStatUnlink)
   ASSERT_EQ(0, index.stat(mkhoid("open-create", 0), &st));
   /* XXX should this succeed? (open) */
   ASSERT_EQ(0, index.unlink(mkhoid("open-create", 0)));
-  ASSERT_EQ(0, index.unmount());
 
-  int r = lzfw_umount(zhfs, true /* XXX force */);
+  // cleanup
+  ASSERT_EQ(0, index.unmount());
+  ASSERT_EQ(0, lzfw_umount(zhfs, true /* XXX force */));
   zhfs = nullptr;
 }
-
-#if 0 /* XXXX till compilation fixed */
 
 TEST(OsFragTreeIndex, Split)
 {
   tmpdir_with_cleanup path("tmp-fragtreeindex-split");
 
-  TestFragTreeIndex index;
+  zhfs = lzfw_mount("test_pool", "/tank", "");
+  ASSERT_NE(zhfs, nullptr);
+
+  TestFragTreeIndex index(zhfs);
   ASSERT_EQ(0, index.init(path));
   ASSERT_EQ(0, index.mount(path));
 
   const hoid_t oid = mkhoid("foo", 0);
 
-  int fd = -1;
-  ASSERT_EQ(0, index.open(oid, true, &fd));
-  ::close(fd);
+  lzfw_vnode_t* vnode;
+  ASSERT_EQ(0, index.open(oid, true, &vnode));
 
   // start a split (async=false)
   frag_path p = {};
@@ -269,22 +270,27 @@ TEST(OsFragTreeIndex, Split)
   sizes[p.frag.make_child(1, 1)] = 0;
   ASSERT_EQ(sizes, index.get_size_map());
 
+  // cleanup
   ASSERT_EQ(0, index.unmount());
+  ASSERT_EQ(0, lzfw_umount(zhfs, true /* XXX force */));
+  zhfs = nullptr;
 }
 
 TEST(OsFragTreeIndex, SplitAsync)
 {
   tmpdir_with_cleanup path("tmp-fragtreeindex-split-async");
 
-  TestFragTreeIndex index;
+  zhfs = lzfw_mount("test_pool", "/tank", "");
+  ASSERT_NE(zhfs, nullptr);
+
+  TestFragTreeIndex index(zhfs);
   ASSERT_EQ(0, index.init(path));
   ASSERT_EQ(0, index.mount(path));
 
   const hoid_t oid = mkhoid("foo", 0);
 
-  int fd = -1;
-  ASSERT_EQ(0, index.open(oid, true, &fd));
-  ::close(fd);
+  lzfw_vnode_t* vnode;
+  ASSERT_EQ(0, index.open(oid, true, &vnode));
 
   // start an async split
   frag_path p = {};
@@ -308,14 +314,20 @@ TEST(OsFragTreeIndex, SplitAsync)
   sizes[p.frag.make_child(1, 1)] = 0;
   ASSERT_EQ(sizes, index.get_size_map());
 
+  // cleanup
   ASSERT_EQ(0, index.unmount());
+  ASSERT_EQ(0, lzfw_umount(zhfs, true /* XXX force */));
+  zhfs = nullptr;
 }
 
 TEST(OsFragTreeIndex, Merge)
 {
   tmpdir_with_cleanup path("tmp-fragtreeindex-merge");
 
-  TestFragTreeIndex index;
+  zhfs = lzfw_mount("test_pool", "/tank", "");
+  ASSERT_NE(zhfs, nullptr);
+
+  TestFragTreeIndex index(zhfs);
   ASSERT_EQ(0, index.init(path));
   ASSERT_EQ(0, index.mount(path));
 
@@ -325,9 +337,9 @@ TEST(OsFragTreeIndex, Merge)
 
   // create a file in 0/
   const hoid_t oid = mkhoid("foo", 0);
-  int fd = -1;
-  ASSERT_EQ(0, index.open(oid, true, &fd));
-  ::close(fd);
+
+  lzfw_vnode_t* vnode;
+  ASSERT_EQ(0, index.open(oid, true, &vnode));
 
   // start a merge (async=false)
   ASSERT_EQ(0, index.merge(p.frag, false));
@@ -354,14 +366,20 @@ TEST(OsFragTreeIndex, Merge)
   sizes[p.frag] = 1;
   ASSERT_EQ(sizes, index.get_size_map());
 
+  // cleanup
   ASSERT_EQ(0, index.unmount());
+  ASSERT_EQ(0, lzfw_umount(zhfs, true /* XXX force */));
+  zhfs = nullptr;
 }
 
 TEST(OsFragTreeIndex, MergeAsync)
 {
   tmpdir_with_cleanup path("tmp-fragtreeindex-merge-async");
 
-  TestFragTreeIndex index;
+  zhfs = lzfw_mount("test_pool", "/tank", "");
+  ASSERT_NE(zhfs, nullptr);
+
+  TestFragTreeIndex index(zhfs);
   ASSERT_EQ(0, index.init(path));
   ASSERT_EQ(0, index.mount(path));
 
@@ -371,9 +389,9 @@ TEST(OsFragTreeIndex, MergeAsync)
 
   // create a file in 0/
   const hoid_t oid = mkhoid("foo", 0);
-  int fd = -1;
-  ASSERT_EQ(0, index.open(oid, true, &fd));
-  ::close(fd);
+
+  lzfw_vnode_t* vnode;
+  ASSERT_EQ(0, index.open(oid, true, &vnode));
 
   // start an async merge
   ASSERT_EQ(0, index.merge(p.frag));
@@ -395,22 +413,27 @@ TEST(OsFragTreeIndex, MergeAsync)
   sizes[p.frag] = 1;
   ASSERT_EQ(sizes, index.get_size_map());
 
+  // cleanup
   ASSERT_EQ(0, index.unmount());
+  ASSERT_EQ(0, lzfw_umount(zhfs, true /* XXX force */));
+  zhfs = nullptr;
 }
 
 TEST(OsFragTreeIndex, SplitRecovery)
 {
   tmpdir_with_cleanup path("tmp-fragtreeindex-split-recovery");
 
-  TestFragTreeIndex index;
+  zhfs = lzfw_mount("test_pool", "/tank", "");
+  ASSERT_NE(zhfs, nullptr);
+
+  TestFragTreeIndex index(zhfs);
   ASSERT_EQ(0, index.init(path));
   ASSERT_EQ(0, index.mount(path));
 
   const hoid_t oid = mkhoid("foo", 0);
 
-  int fd = -1;
-  ASSERT_EQ(0, index.open(oid, true, &fd));
-  ::close(fd);
+  lzfw_vnode_t* vnode;
+  ASSERT_EQ(0, index.open(oid, true, &vnode));
 
   // start a split (async=false)
   frag_path p = {};
@@ -442,14 +465,20 @@ TEST(OsFragTreeIndex, SplitRecovery)
   sizes[p.frag.make_child(1, 1)] = 0;
   ASSERT_EQ(sizes, index.get_size_map());
 
+  // cleanup
   ASSERT_EQ(0, index.unmount());
+  ASSERT_EQ(0, lzfw_umount(zhfs, true /* XXX force */));
+  zhfs = nullptr;
 }
 
 TEST(OsFragTreeIndex, CountSizes)
 {
   tmpdir_with_cleanup path("tmp-fragtreeindex-size-recovery");
 
-  TestFragTreeIndex index;
+  zhfs = lzfw_mount("test_pool", "/tank", "");
+  ASSERT_NE(zhfs, nullptr);
+
+  TestFragTreeIndex index(zhfs);
   ASSERT_EQ(0, index.init(path));
   ASSERT_EQ(0, index.mount(path));
 
@@ -497,23 +526,23 @@ TEST(OsFragTreeIndex, CountSizes)
   const hoid_t o = mkhoid("o", 0x00E0000000000000ULL);
   const hoid_t p = mkhoid("p", 0x00F0000000000000ULL);
 
-  int fd = -1;
-  ASSERT_EQ(0, index.open(a, true, &fd)); ::close(fd);
-  ASSERT_EQ(0, index.open(b, true, &fd)); ::close(fd);
-  ASSERT_EQ(0, index.open(c, true, &fd)); ::close(fd);
-  ASSERT_EQ(0, index.open(d, true, &fd)); ::close(fd);
-  ASSERT_EQ(0, index.open(e, true, &fd)); ::close(fd);
-  ASSERT_EQ(0, index.open(f, true, &fd)); ::close(fd);
-  ASSERT_EQ(0, index.open(g, true, &fd)); ::close(fd);
-  ASSERT_EQ(0, index.open(h, true, &fd)); ::close(fd);
-  ASSERT_EQ(0, index.open(i, true, &fd)); ::close(fd);
-  ASSERT_EQ(0, index.open(j, true, &fd)); ::close(fd);
-  ASSERT_EQ(0, index.open(k, true, &fd)); ::close(fd);
-  ASSERT_EQ(0, index.open(l, true, &fd)); ::close(fd);
-  ASSERT_EQ(0, index.open(m, true, &fd)); ::close(fd);
-  ASSERT_EQ(0, index.open(n, true, &fd)); ::close(fd);
-  ASSERT_EQ(0, index.open(o, true, &fd)); ::close(fd);
-  ASSERT_EQ(0, index.open(p, true, &fd)); ::close(fd);
+  lzfw_vnode_t* vnode;
+  ASSERT_EQ(0, index.open(a, true, &vnode));
+  ASSERT_EQ(0, index.open(b, true, &vnode));
+  ASSERT_EQ(0, index.open(c, true, &vnode));
+  ASSERT_EQ(0, index.open(d, true, &vnode));
+  ASSERT_EQ(0, index.open(e, true, &vnode));
+  ASSERT_EQ(0, index.open(f, true, &vnode));
+  ASSERT_EQ(0, index.open(g, true, &vnode));
+  ASSERT_EQ(0, index.open(h, true, &vnode));
+  ASSERT_EQ(0, index.open(i, true, &vnode));
+  ASSERT_EQ(0, index.open(j, true, &vnode));
+  ASSERT_EQ(0, index.open(k, true, &vnode));
+  ASSERT_EQ(0, index.open(l, true, &vnode));
+  ASSERT_EQ(0, index.open(m, true, &vnode));
+  ASSERT_EQ(0, index.open(n, true, &vnode));
+  ASSERT_EQ(0, index.open(o, true, &vnode));
+  ASSERT_EQ(0, index.open(p, true, &vnode));
 
   // verify the size map after creates
   TestFragTreeIndex::frag_size_map sizes;
@@ -543,30 +572,32 @@ TEST(OsFragTreeIndex, CountSizes)
   // verify the size map before recovery to test count_sizes()
   ASSERT_EQ(sizes, index.get_size_map());
 
+  // cleanup
   ASSERT_EQ(0, index.unmount());
+  ASSERT_EQ(0, lzfw_umount(zhfs, true /* XXX force */));
+  zhfs = nullptr;
 }
 
 TEST(OsFragTreeIndex, Destroy)
 {
   tmpdir_with_cleanup path("tmp-fragtreeindex-destroy");
 
-  TestFragTreeIndex index(2);
+  zhfs = lzfw_mount("test_pool", "/tank", "");
+  ASSERT_NE(zhfs, nullptr);
+
+  TestFragTreeIndex index(zhfs, 2);
   ASSERT_EQ(0, index.init(path));
   ASSERT_EQ(0, index.mount(path));
 
-  int fd = -1;
+  lzfw_vnode_t* vnode;
   ASSERT_EQ(0, index.open(mkhoid("a", 0x0000000000000000ULL),
-			  true, &fd));
-  ::close(fd);
+			  true, &vnode));
   ASSERT_EQ(0, index.open(mkhoid("b", 0x0040000000000000ULL),
-			  true, &fd));
-  ::close(fd);
+			  true, &vnode));
   ASSERT_EQ(0, index.open(mkhoid("c", 0x0080000000000000ULL), true,
-			  &fd));
-  ::close(fd);
+			  &vnode));
   ASSERT_EQ(0, index.open(mkhoid("d", 0x00C0000000000000ULL), true,
-			  &fd));
-  ::close(fd);
+			  &vnode));
 
   ASSERT_EQ(0, index.destroy(path));
 
@@ -574,13 +605,21 @@ TEST(OsFragTreeIndex, Destroy)
   struct stat st;
   ASSERT_EQ(-1, ::stat(path.c_str(), &st));
   ASSERT_EQ(ENOENT, errno);
+
+  // cleanup
+  ASSERT_EQ(0, index.unmount());
+  ASSERT_EQ(0, lzfw_umount(zhfs, true /* XXX force */));
+  zhfs = nullptr;
 }
 
 TEST(OsFragTreeIndex, Names)
 {
   tmpdir_with_cleanup path("tmp-fragtreeindex-names");
 
-  TestFragTreeIndex index(0);
+  zhfs = lzfw_mount("test_pool", "/tank", "");
+  ASSERT_NE(zhfs, nullptr);
+
+  TestFragTreeIndex index(zhfs, 0);
   ASSERT_EQ(0, index.init(path));
   ASSERT_EQ(0, index.mount(path));
 
@@ -588,23 +627,26 @@ TEST(OsFragTreeIndex, Names)
   const std::string name(MAX_CEPH_OBJECT_NAME_LEN, 'a');
   const hoid_t oid = mkhoid(name.c_str(), 0);
 
-  int fd = -1;
-  ASSERT_EQ(0, index.open(oid, true, &fd));
+  lzfw_vnode_t* vnode;
+  ASSERT_EQ(0, index.open(oid, true, &vnode));
 
   // query xattr
   std::string xattr(MAX_CEPH_OBJECT_NAME_LEN, 0);
   char* buf = const_cast<char*>(xattr.data());
-  ssize_t len = chain_fgetxattr(fd, "user.full_object_name",
-                                buf, xattr.size());
-  ASSERT_TRUE(len > 0);
+
+  size_t len = xattr.size();
+  int r =
+    lzfw_getxattrat(zhfs, (creden_t*) &index.get_cred(), vnode,
+		    "user.full_object_name", buf, &len);
+  ASSERT_EQ(0, r);
   xattr.resize(len);
   ASSERT_EQ(xattr, name);
-  ::close(fd);
 
+  // cleanup
   ASSERT_EQ(0, index.unmount());
+  ASSERT_EQ(0, lzfw_umount(zhfs, true /* XXX force */));
+  zhfs = nullptr;
 }
-
-#endif /* XXXX */
 
 int main(int argc, char* argv[])
 {

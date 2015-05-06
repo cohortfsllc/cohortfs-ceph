@@ -142,6 +142,9 @@ namespace cohort_zfs { // temporarily isolate ZFS variant
     /* close root */
     int close_root();
 
+    /* access internal cred structure */
+    const creden_t& get_cred() const { return cred; }
+
     /* unmount a mounted collection index */
     int unmount();
 
