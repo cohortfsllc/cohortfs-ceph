@@ -319,10 +319,10 @@ set(librados_srcs
   )
 add_library(librados_objs OBJECT ${librados_srcs})
 add_library(librados ${CEPH_SHARED} 
-  $<TARGET_OBJECTS:cls_references_objs>
   $<TARGET_OBJECTS:librados_objs>
+  $<TARGET_OBJECTS:osdc_objs>
   $<TARGET_OBJECTS:heap_profiler_objs>)
-target_link_libraries(librados PRIVATE osd os global common cls_lock_client
+target_link_libraries(librados PRIVATE global common cls_lock_client
   ${CRYPTO_LIBS} ${EXTRALIBS} ${ALLOC_LIBS})
 if(${ENABLE_SHARED})
   set_target_properties(librados PROPERTIES OUTPUT_NAME rados VERSION 2.0.0 SOVERSION 2
@@ -381,7 +381,7 @@ add_library(mon STATIC ${lib_mon_srcs} $<TARGET_OBJECTS:os_mon_objs>
 set(ceph_mon_srcs ceph_mon.cc common/TextTable.cc)
 add_executable(ceph-mon ${ceph_mon_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
 target_link_libraries(ceph-mon mon boost_regex boost_system boost_thread
-  common os global leveldb boost_filesystem ${EXTRALIBS} ${CMAKE_DL_LIBS}
+  common global leveldb boost_filesystem ${EXTRALIBS} ${CMAKE_DL_LIBS}
   ${ALLOC_LIBS})
 install(TARGETS ceph-mon DESTINATION bin)
 
@@ -402,7 +402,7 @@ set(os_mon_files
   )
 add_library(os_mon_objs OBJECT ${os_mon_files})
 add_library(os ${CEPH_SHARED} ${libos_srcs})
-target_link_libraries(os PRIVATE leveldb snappy boost_filesystem)
+target_link_libraries(os PRIVATE snappy boost_filesystem leveldb)
 if(${ENABLE_SHARED})
   set_target_properties(os PROPERTIES OUTPUT_NAME ceph-os
     VERSION "1.0.0" SOVERSION "1" LINK_FLAGS "-Wl,-export-dynamic")
@@ -487,7 +487,7 @@ target_link_libraries(osd PRIVATE common os global dl leveldb ${EXTRALIBS})
 set(ceph_osd_srcs ceph_osd.cc objclass/class_api.cc)
 add_executable(ceph-osd ${ceph_osd_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
 target_link_libraries(ceph-osd osd os global
-  boost_system boost_filesystem ${ALLOC_LIBS})
+  boost_system boost_filesystem leveldb ${ALLOC_LIBS})
 install(TARGETS ceph-osd DESTINATION bin)
 
 # MDS
@@ -584,8 +584,8 @@ set(ceph_mon_store_converter_srcs
   )
 add_executable(ceph_mon_store_converter ${ceph_mon_store_converter_srcs}
   $<TARGET_OBJECTS:monitorstore_obj>)
-target_link_libraries(ceph_mon_store_converter os global leveldb
-  boost_filesystem boost_system)
+target_link_libraries(ceph_mon_store_converter global os
+  boost_filesystem boost_system leveldb)
 install(TARGETS ceph_mon_store_converter DESTINATION bin)
 
 if(WITH_BABELTRACE_CEPH)
@@ -697,7 +697,7 @@ endif(${WITH_CLIENT})
 if(${WITH_RBD})
   set(librbd_srcs librbd/Image.cc)
   add_library(librbd ${CEPH_SHARED} ${librbd_srcs})
-  target_link_libraries(librbd PRIVATE cls_lock_client ${CMAKE_DL_LIBS})
+  target_link_libraries(librbd PRIVATE ${CMAKE_DL_LIBS})
   if(${ENABLE_SHARED})
     set_target_properties(librbd PROPERTIES VERSION "1.0.0" SOVERSION "1" OUTPUT_NAME rbd
       LINK_FLAGS "-Wl,-export-dynamic")
@@ -710,8 +710,8 @@ if(${WITH_RBD})
     $<TARGET_OBJECTS:rbd_mountcephfs_objs>
     $<TARGET_OBJECTS:heap_profiler_objs>)
   set_target_properties(rbd PROPERTIES OUTPUT_NAME rbd)
-  target_link_libraries(rbd global librbd librados common keyutils udev
-    boost_filesystem ${BLKID_LIBRARIES} ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
+  target_link_libraries(rbd global librbd librados common
+    boost_filesystem keyutils ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
   install(TARGETS rbd DESTINATION bin)
   install(PROGRAMS ${CMAKE_SOURCE_DIR}/src/ceph-rbdnamer
     DESTINATION bin)
@@ -721,6 +721,7 @@ endif(${WITH_RBD})
 if(${WITH_KVS})
   set(kvs_srcs key_value_store/cls_kvs.cc)
   add_library(cls_kvs SHARED ${kvs_srcs})
+  target_link_libraries(cls_kvs osd)
   set_target_properties(cls_kvs PROPERTIES VERSION "1.0.0" SOVERSION "1")
   install(TARGETS cls_kvs DESTINATION lib/rados-classes)
 endif(${WITH_KVS})
@@ -743,14 +744,14 @@ if(${WITH_RADOSGW})
     rgw/rgw_formats.cc rgw/rgw_acl_swift.cc rgw/rgw_policy_s3.cc
     rgw/rgw_auth_s3.cc rgw/rgw_usage.cc rgw/rgw_log.cc
     rgw/rgw_loadgen.cc rgw/rgw_civetweb.cc rgw/rgw_fcgi.cc
-    rgw/rgw_replica_log.cc civetweb/src/civetweb.c civetweb/src/CivetServer.cpp ${kvs_srcs})
+    rgw/rgw_replica_log.cc civetweb/src/civetweb.c civetweb/src/CivetServer.cpp)
   add_library(radosgw_objs OBJECT ${radosgw_srcs})
   add_executable(radosgw $<TARGET_OBJECTS:radosgw_objs> $<TARGET_OBJECTS:heap_profiler_objs>)
   target_link_libraries(radosgw librados
     cls_rgw_client cls_lock_client cls_refcount_client
     cls_log_client cls_statelog_client cls_version_client
-    cls_replica_log_client cls_user_client
-    curl expat global fcgi resolv ${ALLOC_LIBS})
+    cls_replica_log_client cls_user_client curl expat global fcgi resolv
+    ${ALLOC_LIBS})
   install(TARGETS radosgw DESTINATION bin)
 endif(${WITH_RADOSGW})
 

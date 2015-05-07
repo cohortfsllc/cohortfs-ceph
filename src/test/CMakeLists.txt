@@ -187,7 +187,7 @@ endif(0)
 
 add_executable(ceph-dencoder ${dencoder_srcs}
 )
-target_link_libraries(ceph-dencoder ${dencoder_dependencies})
+target_link_libraries(ceph-dencoder ${dencoder_dependencies} leveldb)
 
 # get_command_descriptions
 add_executable(get_command_descriptions
@@ -228,7 +228,7 @@ add_executable(test_build_librados
   ${build_librados_srcs}
   $<TARGET_OBJECTS:librados_objs>
   $<TARGET_OBJECTS:osdc_objs>)
-target_link_libraries(test_build_librados pthread ${CRYPTO_LIBS} ${EXTRALIBS} global osd global common cls_lock_client)
+target_link_libraries(test_build_librados pthread ${CRYPTO_LIBS} ${EXTRALIBS} global global common cls_lock_client)
  
 if(${WITH_RADOSGW})
   set(build_librgw_srcs
@@ -284,7 +284,7 @@ set(smalliobenchdumb_srcs
 add_executable(smalliobenchdumb
   ${smalliobenchdumb_srcs}
   )
-target_link_libraries(smalliobenchdumb librados boost_program_options os global
+target_link_libraries(smalliobenchdumb librados boost_program_options global
   boost_filesystem ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
 
 # smalliobenchrbd
@@ -297,7 +297,7 @@ set(smalliobenchrbd_srcs
 add_executable(smalliobenchrbd
   ${smalliobenchrbd_srcs}
   )
-target_link_libraries(smalliobenchrbd librbd librados boost_program_options os
+target_link_libraries(smalliobenchrbd librbd librados boost_program_options
   global boost_filesystem  ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
 
 # tpbench
@@ -308,7 +308,7 @@ add_executable(tpbench
   ${tpbench_srcs}
   )
 target_link_libraries(tpbench librados boost_filesystem boost_program_options
-  os global ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
+  global ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
 
 # omapbench
 set(omapbench_srcs
@@ -320,7 +320,6 @@ add_executable(omapbench
 target_link_libraries(omapbench
   librados
   boost_program_options
-  os
   global
   boost_filesystem
   ${CMAKE_DL_LIBS}
@@ -1319,7 +1318,6 @@ add_executable(test_cls_lock
 set_target_properties(test_cls_lock PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 target_link_libraries(test_cls_lock
-  cls_lock
   librados
   global
   ${UNITTEST_LIBS}
@@ -1367,7 +1365,7 @@ add_executable(test_mon_workloadgen
   $<TARGET_OBJECTS:osdc_objs>
   )
 target_link_libraries(test_mon_workloadgen
-  os global boost_filesystem
+  os global boost_filesystem leveldb
   ${EXTRALIBS}
   ${ALLOC_LIBS}
   ${CMAKE_DL_LIBS}
@@ -1562,7 +1560,7 @@ add_executable(test_objectstore_workloadgen
   objectstore/TestObjectStoreState.cc
   )
 target_link_libraries(test_objectstore_workloadgen
-  os global boost_filesystem
+  os global boost_filesystem leveldb
   ${EXTRALIBS}
   ${ALLOC_LIBS}
   ${CMAKE_DL_LIBS}
@@ -1647,9 +1645,11 @@ add_executable(test_object_map
 set_target_properties(test_object_map PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 target_link_libraries(test_object_map
-  os boost_filesystem
+  boost_filesystem
   ${UNITTEST_LIBS}
   global
+  os
+  leveldb
   ${EXTRALIBS}
   ${ALLOC_LIBS}
   ${CMAKE_DL_LIBS}
@@ -1679,12 +1679,14 @@ add_executable(test_keyvaluedb_iterators
 set_target_properties(test_keyvaluedb_iterators PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 target_link_libraries(test_keyvaluedb_iterators
-  os boost_filesystem
+  boost_filesystem
   ${UNITTEST_LIBS}
   global
+  os
+  leveldb
   ${EXTRALIBS}
-  ${ALLOC_LIBS}
   ${CMAKE_DL_LIBS}
+  ${ALLOC_LIBS}
   )
 
 if(${WITH_FUSE})
@@ -1693,7 +1695,6 @@ if(${WITH_FUSE})
     )
   target_link_libraries(test_cfuse_cache_invalidate
     global
-    os
     boost_filesystem
     ${EXTRALIBS}
     ${ALLOC_LIBS}
@@ -1716,14 +1717,14 @@ add_executable(simple_server
   messenger/simple_server.cc
   messenger/simple_dispatcher.cc
   )
-target_link_libraries(simple_server os global common boost_regex
+target_link_libraries(simple_server global common boost_regex
   boost_filesystem ${ALLOC_LIBS})
 
 add_executable(simple_client
   messenger/simple_client.cc
   messenger/simple_dispatcher.cc
   )
-target_link_libraries(simple_client os global common boost_filesystem
+target_link_libraries(simple_client global common boost_filesystem
   boost_regex ${ALLOC_LIBS})
 
 if (HAVE_XIO)
@@ -1754,11 +1755,11 @@ endif (WITH_FIO)
 # the ones we added in except for the fio stuff?
 # osbench
 add_executable(osbench objectstore_bench.cc)
-target_link_libraries(osbench os global boost_filesystem ${EXTRA_LIBS})
+target_link_libraries(osbench os global boost_filesystem leveldb ${EXTRA_LIBS})
 
 # mmapbench
 add_executable(mmapbench mmap_bench.cc)
-target_link_libraries(mmapbench os global boost_filesystem)
+target_link_libraries(mmapbench os global boost_filesystem leveldb)
 
 # test_direct_messenger
 add_executable(test_direct_messenger messenger/test_direct_messenger.cc)
@@ -1768,25 +1769,25 @@ target_link_libraries(test_direct_messenger global boost_system)
 add_executable(test_libosd test_libosd.c)
 set_target_properties(test_libosd PROPERTIES LINKER_LANGUAGE C)
 target_link_libraries(test_libosd PRIVATE osd os global
-  boost_filesystem boost_system ${ALLOC_LIBS})
+  boost_filesystem boost_system leveldb ${ALLOC_LIBS})
 
 # test_libosd_remote
 add_executable(test_libosd_remote test_libosd_remote.c)
 set_target_properties(test_libosd_remote PROPERTIES LINKER_LANGUAGE C)
 target_link_libraries(test_libosd_remote PRIVATE osd os global
-  boost_filesystem boost_system ${ALLOC_LIBS})
+  boost_filesystem boost_system leveldb ${ALLOC_LIBS})
 
 # libosd_bench
 add_executable(libosd_bench libosd_bench.cc)
-target_link_libraries(libosd_bench PRIVATE osd common pthread)
+target_link_libraries(libosd_bench PRIVATE osd common pthread leveldb)
 
 # libosd_bench_async
 add_executable(libosd_bench_async libosd_bench_async.cc)
-target_link_libraries(libosd_bench_async PRIVATE osd common pthread)
+target_link_libraries(libosd_bench_async PRIVATE osd common pthread leveldb)
 
 # libosd_bench_async2
 add_executable(libosd_bench_async2 libosd_bench_async2.cc)
-target_link_libraries(libosd_bench_async2 PRIVATE osd common pthread)
+target_link_libraries(libosd_bench_async2 PRIVATE osd common pthread leveldb)
 
 # lttng_stream_test
 if (HAVE_LTTNG)
@@ -1816,5 +1817,5 @@ set_target_properties(test_queues PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS}
 
 # test_fragtreeindex
 add_executable(test_fragtreeindex test_fragtreeindex.cc)
-target_link_libraries(test_fragtreeindex os_filestore global common ${UNITTEST_LIBS})
+target_link_libraries(test_fragtreeindex os_filestore global common leveldb ${UNITTEST_LIBS})
 set_target_properties(test_fragtreeindex PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
