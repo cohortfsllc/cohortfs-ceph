@@ -816,7 +816,7 @@ struct CB_Inode_Stored {
 oid_t CInode::get_object_name(inodeno_t ino, frag_t fg, const char *suffix)
 {
   char n[60];
-  snprintf(n, sizeof(n), "%" PRIx64 ".%08" PRIx32 "%s",
+  snprintf(n, sizeof(n), "%" PRIx64 ".%08" PRIx64 "%s",
 	   ino.val, fg._enc, suffix ? suffix : "");
   return oid_t(n);
 }

@@ -223,7 +223,7 @@ static int do_bench_write(Image& image, uint64_t io_size,
     ceph::mono_time now = ceph::mono_clock::now();
     std::chrono::duration<double> elapsed = now - start;
     if ((elapsed > last ? elapsed - last : last - elapsed) > 1s) {
-      printf("%5ld  %8d	%8.2lf	%8.2lf\n",
+      printf("%5lf  %8d	%8.2lf	%8.2lf\n",
 	     elapsed.count(),
 	     (int)(ios - io_threads),
 	     (double)(ios - io_threads) / elapsed.count(),
