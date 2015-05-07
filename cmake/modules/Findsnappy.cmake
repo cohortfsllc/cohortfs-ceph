@@ -23,16 +23,14 @@
 # SNAPPY_LIBRARIES - List of libraries when using snappy.
 # SNAPPY_FOUND - True if snappy found.
 
-find_path(SNAPPY_INCLUDE_DIR snappy.h NO_DEFAULT_PATH PATHS
-  ${HT_DEPENDENCY_INCLUDE_DIR}
+find_path(SNAPPY_INCLUDE_DIR snappy.h PATHS
   /usr/include
   /opt/local/include
   /usr/local/include
 )
 
 set(SNAPPY_NAMES ${SNAPPY_NAMES} snappy)
-find_library(SNAPPY_LIBRARY NAMES ${SNAPPY_NAMES} NO_DEFAULT_PATH PATHS
-    ${HT_DEPENDENCY_LIB_DIR}
+find_library(SNAPPY_LIBRARY NAMES ${SNAPPY_NAMES} PATHS
     /usr/local/lib
     /opt/local/lib
     /usr/lib
