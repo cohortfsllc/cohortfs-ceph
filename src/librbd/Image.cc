@@ -41,10 +41,10 @@ namespace librbd {
       image_oid(image_name(name))
   {
     memset(&header, 0, sizeof(header));
+    v->attach(_rc->cct);
     read_header();
     size = header.image_size;
     f = new OSDC::Flusher;
-    v->attach(_rc->cct);
   }
 
   Image::Image(librados::RadosClient* rados,
@@ -54,7 +54,6 @@ namespace librbd {
     : Image(rados, v, name)
   {
     read_only = true;
-    v->attach(rados->cct);
   }
 
   bool Image::check_exists(RadosClient* rc,
