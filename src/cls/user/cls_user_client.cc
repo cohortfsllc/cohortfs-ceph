@@ -133,7 +133,7 @@ void cls_user_get_header(ObjOpUse op,
   op->call("user", "get_header", inbl, ClsUserGetHeaderCB(header, NULL, pret));
 }
 
-int cls_user_get_header_async(Objecter* o, const VolumeRef& vol,
+int cls_user_get_header_async(Objecter* o, const AVolRef& vol,
 			      const oid_t& oid, RGWGetUserHeader_CB *ctx)
 {
   bufferlist in, out;

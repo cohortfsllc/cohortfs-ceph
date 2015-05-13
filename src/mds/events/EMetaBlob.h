@@ -557,7 +557,8 @@ private:
   }
 
   void update_segment(LogSegment *ls);
-  void replay(MDS *mds, VolumeRef &v, LogSegment *ls, MDSlaveUpdate *su=NULL);
+  void replay(MDS *mds, const AVolRef &v, LogSegment *ls,
+	      MDSlaveUpdate *su = nullptr);
 };
 WRITE_CLASS_ENCODER(EMetaBlob)
 WRITE_CLASS_ENCODER(EMetaBlob::fullbit)

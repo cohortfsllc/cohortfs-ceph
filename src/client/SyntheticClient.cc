@@ -869,7 +869,7 @@ int SyntheticClient::run()
 	string diname = get_sarg(0);
 	sscanf(diname.c_str(), "%llx", (long long unsigned*)&dirino.val);
 	string name = get_sarg(0);
-	VolumeRef mvol;	// XXX should look this up...
+	AVolRef mvol;	// XXX should look this up...
 	if (run_me()) {
 	  lookup_hash(mvol, ino, dirino, name.c_str());
 	}
@@ -880,7 +880,7 @@ int SyntheticClient::run()
 	inodeno_t ino;
 	string iname = get_sarg(0);
 	sscanf(iname.c_str(), "%llx", (long long unsigned*)&ino.val);
-	VolumeRef mvol;	// XXX should look this up...
+	AVolRef mvol;	// XXX should look this up...
 	if (run_me()) {
 	  lookup_ino(mvol, ino);
 	}
@@ -1430,19 +1430,13 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       boost::uuids::uuid id;
       id = parse(a);
       std::unique_lock<std::mutex> l(lock);
-      VolumeRef mvol = client->objecter->vol_by_uuid(id);
+      AVolRef mvol = client->objecter->attach_by_uuid(id);
       uint64_t size;
       ceph::real_time mtime;
-      int r = mvol->attach(client->cct);
-      if (r) {
-	ldout(client->cct, 0) << "Unable to attach volume " << mvol
-			      << " error=" << r << dendl;
-	continue;
-      }
       l.unlock();
       CB_Waiter w;
       client->objecter->stat(oid, mvol, &size, &mtime, w);
-      r = w.wait();
+      w.wait();
     }
     else if (strcmp(op, "o_read") == 0) {
       int64_t oh = t.get_int();
@@ -1453,18 +1447,13 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       oid_t oid = file_oid(oh, ol);
       boost::uuids::uuid id;
       id = parse(a);
-      VolumeRef mvol = client->objecter->vol_by_uuid(id);
-      int r = mvol->attach(client->cct);
-      if (r) {
-	ldout(client->cct, 0) << "Unable to attach volume " << mvol << " error=" << r << dendl;
-	continue;
-      }
+      AVolRef mvol = client->objecter->attach_by_uuid(id);
       std::unique_lock<std::mutex> l(lock);
       bufferlist bl;
       l.unlock();
       CB_Waiter w;
       client->objecter->read(oid, mvol, off, len, &bl, w);
-      r = w.wait();
+      w.wait();
     }
     else if (strcmp(op, "o_write") == 0) {
       int64_t oh = t.get_int();
@@ -1475,13 +1464,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       oid_t oid = file_oid(oh, ol);
       boost::uuids::uuid id;
       id = parse(a);
-      VolumeRef mvol = client->objecter->vol_by_uuid(id);
-      int r = mvol->attach(client->cct);
-      if (r) {
-	ldout(client->cct, 0) << "Unable to attach volume " << mvol
-			      << " error=" << r << dendl;
-	continue;
-      }
+      AVolRef mvol = client->objecter->attach_by_uuid(id);
       std::unique_lock<std::mutex> l(lock);
       bufferptr bp(len);
       bufferlist bl;
@@ -1490,7 +1473,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       client->objecter->write(oid, mvol, off, len, bl, w, mw);
       mw.activate();
       l.unlock();
-      r = w.wait();
+      w.wait();
     }
     else if (strcmp(op, "o_zero") == 0) {
       int64_t oh = t.get_int();
@@ -1501,16 +1484,10 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       oid_t oid = file_oid(oh, ol);
       boost::uuids::uuid id;
       id = parse(a);
-      VolumeRef mvol = client->objecter->vol_by_uuid(id);
-      int r = mvol->attach(client->cct);
-      if (r) {
-	ldout(client->cct, 0) << "Unable to attach volume " << mvol
-			      << " error=" << r << dendl;
-	continue;
-      }
+      AVolRef mvol = client->objecter->attach_by_uuid(id);
       CB_Waiter w;
       client->objecter->zero(oid, mvol, off, len, w, mw);
-      r = w.wait();
+      w.wait();
     }
 
 
@@ -2284,14 +2261,7 @@ int SyntheticClient::create_objects(int nobj, int osize, int inflight)
   boost::uuids::string_generator parse;
   boost::uuids::uuid id;
   id = parse("deac041b-4100-4c75-93a3-b9329b9cf9cf");
-  VolumeRef mvol = client->objecter->vol_by_uuid(id);
-  int r = mvol->attach(client->cct);
-  if (r) {
-    ldout(client->cct, 0) << "Unable to attach volume " << mvol << " error="
-			  << r << dendl;
-    return 1;
-  }
-
+  AVolRef mvol = client->objecter->attach_by_uuid(id);
   list<ceph::mono_time> starts;
 
   for (int i=start; i<end; i += inc) {
@@ -2382,13 +2352,7 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
   boost::uuids::string_generator parse;
   boost::uuids::uuid id;
   id = parse("deac041b-4100-4c75-93a3-b9329b9cf9cf");
-  VolumeRef mvol = client->objecter->vol_by_uuid(id);
-  int r = mvol->attach(client->cct);
-  if (r) {
-    ldout(client->cct, 0) << "Unable to attach volume " << mvol << " error=" << r << dendl;
-    return 1;
-  }
-
+  AVolRef mvol = client->objecter->attach_by_uuid(id);
   while (1) {
     if (time_to_stop()) break;
 
@@ -3410,79 +3374,17 @@ void SyntheticClient::import_find(const char *base, const char *find, bool data)
 }
 
 
-int SyntheticClient::lookup_hash(VolumeRef &v, inodeno_t ino, inodeno_t dirino, const char *name)
+int SyntheticClient::lookup_hash(const AVolRef& v, inodeno_t ino,
+				 inodeno_t dirino, const char *name)
 {
   int r = client->lookup_hash(v, ino, dirino, name);
   ldout(client->cct, 0) << "lookup_hash(" << ino << ", #" << dirino << "/" << name << ") = " << r << dendl;
   return r;
 }
 
-int SyntheticClient::lookup_ino(VolumeRef &v, inodeno_t ino)
+int SyntheticClient::lookup_ino(const AVolRef& v, inodeno_t ino)
 {
   int r = client->lookup_ino(v, ino);
   ldout(client->cct, 0) << "lookup_ino(" << ino << ") = " << r << dendl;
   return r;
 }
-
-#if 0
-int SyntheticClient::chunk_file(string &filename)
-{
-  int fd = client->open(filename.c_str(), O_RDONLY);
-  int ret;
-
-  struct stat st;
-  client->fstat(fd, &st);
-  uint64_t size = st.st_size;
-  ldout(client->cct, 0) << "file " << filename << " size is " << size << dendl;
-
-  Filer *filer = new Filer(client->objecter);
-
-  inode_t inode;
-  memset(&inode, 0, sizeof(inode));
-  inode.ino = st.st_ino;
-  ret = client->fdescribe_layout(fd, &inode.layout);
-  if (ret < 0)
-    return ret;
-
-  VolumeRef mvol = client->objecter->vol_by_uuid(id, mvol);
-  uint64_t pos = 0;
-  bufferlist from_before;
-  while (pos < size) {
-    int get = MIN(size-pos, 1048576);
-
-    std::mutex flock;
-    std::condition_variable cond;
-    bool done;
-    bufferlist bl;
-
-    unique_lock fl(flock);
-    Context *onfinish = new C_SafeCond(&flock, &cond, &done);
-    filer->read(inode.ino, mvol, &inode.layout, pos, get, &bl, 0, onfinish);
-    while (!done)
-      cond.Wait(fl);
-    fl.unlock();
-
-    ldout(client->cct, 0) << "got " << bl.length() << " bytes at " << pos
-			  << dendl;
-
-    if (from_before.length()) {
-      ldout(client->cct, 0) << " including bit from previous block" << dendl;
-      pos -= from_before.length();
-      from_before.claim_append(bl);
-      bl.swap(from_before);
-    }
-
-    // ....
-
-    // keep last 32 bytes around
-    from_before.clear();
-    from_before.substr_of(bl, bl.length()-32, 32);
-
-    pos += bl.length();
-  }
-
-  client->close(fd);
-  delete filer;
-  return 0;
-}
-#endif

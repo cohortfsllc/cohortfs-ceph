@@ -15,29 +15,89 @@
 #ifndef VOL_PLACER_H
 #define VOL_PLACER_H
 
-#include <errno.h>
+#include <cerrno>
 #include <string>
 #include <map>
 #include <vector>
+
+#include <boost/uuid/nil_generator.hpp>
+#include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_io.hpp>
-#include <boost/uuid/nil_generator.hpp>
-#include "include/types.h"
+
 #include "common/Formatter.h"
-#include <boost/uuid/uuid.hpp>
-#include "include/stringify.h"
-#include "include/encoding.h"
-#include "include/ceph_time.h"
-#include "osd/osd_types.h"
 #include "include/cephfs/placement.h"
+#include "include/ceph_time.h"
+#include "include/encoding.h"
+#include "include/stringify.h"
+#include "include/types.h"
+#include "osd/osd_types.h"
 
 class OSDMap;
 class Placer;
 typedef std::shared_ptr<Placer> PlacerRef;
 
+class AttachedPlacer {
+public:
+  static const uint64_t one_op;
+
+  struct StrideExtent {
+    uint64_t offset;
+    uint64_t length;
+    bufferlist bl;
+    uint64_t truncate_size;
+    uint32_t truncate_seq;
+
+    StrideExtent():
+      offset(),
+      length(),
+      bl(),
+      truncate_size(),
+      truncate_seq()
+      { }
+  };
+
+  virtual ~AttachedPlacer() { }
+  virtual size_t place(const oid_t& object,
+		       const boost::uuids::uuid& id,
+		       const OSDMap& map,
+		       const std::function<void(int)>& f) const = 0;
+  // Returns negative POSIX error code on error.
+  virtual size_t op_size() const = 0;
+  // Returns minimum number of subops that need to be placed to continue
+  virtual uint32_t quorum() const = 0;
+
+  virtual void make_strides(const oid_t& oid,
+			    uint64_t offset, uint64_t len,
+			    uint64_t truncate_size, uint32_t truncate_seq,
+			    vector<StrideExtent>& strides) const = 0;
+
+  virtual void repair(vector<StrideExtent>& extants,
+		      const OSDMap& map) const = 0;
+
+  virtual void serialize_data(bufferlist &bl) const = 0;
+  virtual void serialize_code(bufferlist &bl) const = 0;
+
+  virtual size_t get_chunk_count() const = 0;
+  virtual size_t get_data_chunk_count() const = 0;
+  virtual uint32_t get_stripe_unit() const = 0;
+
+  // Data and metadata operations using the placer
+  virtual void add_data(const uint64_t off, bufferlist& in,
+			vector<StrideExtent>& out) const = 0;
+  virtual int get_data(map<int, bufferlist> &strides,
+		       bufferlist *decoded) const = 0;
+  // C API helpers
+  virtual int get_cohort_placer(struct cohort_placer *placer) const {
+    placer->type = NotAPlacerType;
+    return -1;
+  };
+};
+
+typedef std::shared_ptr<const AttachedPlacer> APlacerRef;
+
 inline ostream& operator<<(ostream& out, const Placer& pl);
-class Placer
-{
+class Placer : public std::enable_shared_from_this<Placer> {
 private:
   static const std::string typestrings[];
 
@@ -89,22 +149,6 @@ public:
 
   virtual ~Placer() { };
 
-  struct StrideExtent {
-    uint64_t offset;
-    uint64_t length;
-    bufferlist bl;
-    uint64_t truncate_size;
-    uint32_t truncate_seq;
-
-    StrideExtent():
-      offset(),
-      length(),
-      bl(),
-      truncate_size(),
-      truncate_seq()
-    { }
-  };
-
   static bool valid_name(const string& name, std::stringstream& ss);
   virtual bool valid(std::stringstream& ss) const;
   static const string& type_string(placer_type type);
@@ -118,58 +162,8 @@ public:
   /* Dummy decode for WRITE_CLASS_ENCODER */
   void decode(bufferlist& bl) { assert(false); };
   void decode(bufferlist::iterator& bl) { assert(false); };
-  static string get_epoch_key(const boost::uuids::uuid& placer) {
-    return stringify(placer) + "_epoch";
-  }
-  static string get_info_key(const boost::uuids::uuid& placer) {
-    return stringify(placer) + "_info";
-  }
 
-  // Attach performs post-decode initialization of the placer. If you
-  // call attach, you are guaranteed that the following functions will
-  // execute without error. Otherwise, you have to check the return
-  // values. This function returns non-zero on error.
-  virtual int attach(CephContext *cct) = 0;
-  // This function exists, at present, for the use of the monitor at
-  // placer creation time, so it can attempt to instantiate a placer
-  // and return a useful error on failure. It is not thread safe.
-  virtual void detach(void) {};
-  virtual bool is_attached() const = 0;
-  // Returns negative POSIX error code on error.
-  virtual ssize_t place(const oid_t& object,
-		  const OSDMap& map,
-		  const std::function<void(int)>& f) const = 0;
-  // Returns negative POSIX error code on error.
-  virtual ssize_t op_size() const = 0;
-  // Returns minimum number of subops that need to be placed to continue
-  virtual uint32_t quorum() const = 0;
-
-  virtual void make_strides(const oid_t& oid,
-			    uint64_t offset, uint64_t len,
-			    uint64_t truncate_size, uint32_t truncate_seq,
-			    vector<StrideExtent>& strides) = 0;
-
-  virtual void repair(vector<StrideExtent>& extants,
-		      const OSDMap& map) = 0;
-
-  virtual void serialize_data(bufferlist &bl) = 0;
-  virtual void serialize_code(bufferlist &bl) = 0;
-
-  virtual size_t get_chunk_count() const = 0;
-  virtual size_t get_data_chunk_count() const = 0;
-  virtual uint32_t get_stripe_unit() const = 0;
-
-  // Data and metadata operations using the placer
-  virtual void add_data(const uint64_t off, bufferlist& in,
-			vector<StrideExtent>& out) const = 0;
-  virtual int get_data(map<int, bufferlist> &strides,
-		    bufferlist *decoded) const = 0;
-
-  // C API helpers
-  virtual int get_cohort_placer(struct cohort_placer *placer) {
-    placer->type = NotAPlacerType;
-    return -1;
-  };
+  virtual APlacerRef attach(CephContext *cct) const = 0;
 };
 
 WRITE_CLASS_ENCODER(Placer)

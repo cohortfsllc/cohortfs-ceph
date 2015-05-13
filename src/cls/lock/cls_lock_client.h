@@ -21,7 +21,7 @@ namespace rados {
 		       uint8_t flags);
 
       extern int lock(Objecter* o,
-		      VolumeRef v,
+		      const AVolRef& v,
 		      const oid_t& oid,
 		      const std::string& name, ClsLockType type,
 		      const std::string& cookie, const std::string& tag,
@@ -32,7 +32,7 @@ namespace rados {
       extern void unlock(ObjOpUse rados_op,
 			 const std::string& name, const std::string& cookie);
 
-      extern int unlock(Objecter* o, VolumeRef, const oid_t& oid,
+      extern int unlock(Objecter* o, const AVolRef&, const oid_t& oid,
 			const std::string& name, const std::string& cookie);
 
       extern void break_lock(ObjOpUse& op,
@@ -40,12 +40,12 @@ namespace rados {
 			     const std::string& cookie,
 			     const entity_name_t& locker);
 
-      extern int break_lock(Objecter* o, VolumeRef vol,
+      extern int break_lock(Objecter* o, const AVolRef& vol,
 			    const oid_t& oid,
 			    const std::string& name, const std::string& cookie,
 			    const entity_name_t& locker);
 
-      extern int list_locks(Objecter* o, VolumeRef vol, const oid_t& oid,
+      extern int list_locks(Objecter* o, const AVolRef& vol, const oid_t& oid,
 			    list<string>& locks);
 
       extern void get_lock_info_start(ObjOpUse rados_op,
@@ -54,7 +54,7 @@ namespace rados {
 				      map<locker_id_t, locker_info_t> *lockers,
 				      ClsLockType *type, std::string *tag);
 
-      extern int get_lock_info(Objecter* o, VolumeRef vol, const oid_t& oid,
+      extern int get_lock_info(Objecter* o, const AVolRef& vol, const oid_t& oid,
 			       const std::string& name,
 			       map<locker_id_t, locker_info_t> *lockers,
 			       ClsLockType *type, std::string *tag);
@@ -90,10 +90,10 @@ namespace rados {
 	void break_lock(ObjOpUse op, const entity_name_t& locker);
 
 	/* IoCtx */
-	int lock_exclusive(Objecter* o, VolumeRef v, const oid_t& oid);
-	int lock_shared(Objecter* o, VolumeRef v, const oid_t& oid);
-	int unlock(Objecter* o, VolumeRef v, const oid_t& oid);
-	int break_lock(Objecter* o, VolumeRef v, const oid_t& oid,
+	int lock_exclusive(Objecter* o, const AVolRef& v, const oid_t& oid);
+	int lock_shared(Objecter* o, const AVolRef& v, const oid_t& oid);
+	int unlock(Objecter* o, const AVolRef& v, const oid_t& oid);
+	int break_lock(Objecter* o, const AVolRef& v, const oid_t& oid,
 		       const entity_name_t& locker);
       };
 

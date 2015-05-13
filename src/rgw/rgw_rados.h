@@ -727,7 +727,7 @@ struct RGWRadosCtx {
 };
 
 struct RGWVolIterCtx {
-  VolumeRef v;
+  AVolRef v;
 };
 
 struct RGWListRawObjsCtx {
@@ -1067,7 +1067,7 @@ public:
   void finish_list_entries(void *handle);
 
   virtual void dump_entry(const cls_statelog_entry& entry, Formatter *f);
-  int open_vol(VolumeRef& vol);
+  int open_vol(AVolRef& vol);
 };
 
 /*
@@ -1170,7 +1170,7 @@ class RGWGetUserHeader_CB;
 
 struct rgw_rados_ref {
   string oid;
-  VolumeRef vol;
+  AVolRef vol;
 };
 
 
@@ -1185,14 +1185,14 @@ class RGWRados
   int open_gc_vol_ctx();
 
   int open_bucket_vol(const string& bucket_name, const string& volname,
-		      VolumeRef& v);
-  int open_bucket_index_vol(rgw_bucket& bucket, VolumeRef& v);
-  int open_bucket_data_vol(rgw_bucket& bucket, VolumeRef& v);
-  int open_bucket_data_extra_vol(rgw_bucket& bucket, VolumeRef& v);
-  int open_bucket_index(rgw_bucket& bucket, VolumeRef& v, string& bucket_oid);
+		      AVolRef& v);
+  int open_bucket_index_vol(rgw_bucket& bucket, AVolRef& v);
+  int open_bucket_data_vol(rgw_bucket& bucket, AVolRef& v);
+  int open_bucket_data_extra_vol(rgw_bucket& bucket, AVolRef& v);
+  int open_bucket_index(rgw_bucket& bucket, AVolRef& v, string& bucket_oid);
 
   struct GetObjState {
-    VolumeRef vol;
+    AVolRef vol;
     bool sent_data;
 
     GetObjState() : sent_data(false) {}
@@ -1207,12 +1207,12 @@ class RGWRados
   bool use_gc_thread;
   bool quota_threads;
 
-  VolumeRef root_vol;      // .rgw
-  VolumeRef control_vol;   // .rgw.control
+  AVolRef root_vol;      // .rgw
+  AVolRef control_vol;   // .rgw.control
 
   std::mutex bucket_id_lock;
 
-  int get_obj_vol(const rgw_obj& oid, VolumeRef& vol);
+  int get_obj_vol(const rgw_obj& oid, AVolRef& vol);
   int get_obj_ref(const rgw_obj& oid, rgw_rados_ref *ref, rgw_bucket *bucket,
 		  bool ref_system_obj = false);
   uint64_t max_bucket_id;
@@ -1249,7 +1249,7 @@ protected:
 			      rgw_obj& src_obj,
 			      RGWObjVersionTracker *objv_tracker);
 
-  VolumeRef gc_vol;	      // .rgw.gc
+  AVolRef gc_vol;	      // .rgw.gc
 
   bool vols_initialized;
 
@@ -1690,7 +1690,7 @@ public:
 				     map<string, bufferlist> *pattrs,
 				     bool create_entry_point);
 
-  int cls_rgw_init_index(rados::RadosClient& rc, VolumeRef vol,
+  int cls_rgw_init_index(rados::RadosClient& rc, AVolRef vol,
 			 rados::ObjOpOwn op, string& oid);
   int cls_obj_prepare_op(rgw_bucket& bucket, RGWModifyOp op, string& tag,
 			 string& name);
@@ -1834,7 +1834,7 @@ public:
    * and -errno on other failures. (-ENOENT is not a failure, and it
    * will encode that info as a suggested update.)
    */
-  int check_disk_state(VolumeRef vol,
+  int check_disk_state(AVolRef vol,
 		       rgw_bucket& bucket,
 		       rgw_bucket_dir_entry& list_state,
 		       RGWObjEnt& object,

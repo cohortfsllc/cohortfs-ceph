@@ -188,13 +188,8 @@ class MDS : public Dispatcher {
 
   ceph_tid_t issue_tid() { return ++last_tid; }
 
-  VolumeRef get_metadata_volume(bool failed_ok = false) const {
-    VolumeRef volume(mdsmap->get_metadata_volume(objecter, failed_ok));
-    if (!volume)
-      return NULL;
-    if (volume->attach(objecter->cct))
-      return NULL;
-    return volume;
+  AVolRef get_metadata_volume(bool failed_ok = false) const {
+    return mdsmap->get_metadata_volume(objecter, failed_ok);
   }
 
   // -- waiters --
@@ -298,7 +293,7 @@ class MDS : public Dispatcher {
 
   void replay_start(unique_lock& ml);
   void creating_done();
-  void starting_done(VolumeRef &v);
+  void starting_done(const AVolRef& v);
   void replay_done(unique_lock& ml);
   void standby_replay_restart();
   void _standby_replay_restart_finish(unique_lock& ml, int r,

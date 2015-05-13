@@ -128,7 +128,7 @@ public:
 private:
   // me
   inodeno_t ino;
-  VolumeRef volume;
+  AVolRef volume;
   bool readonly;
 
   const char *magic;
@@ -238,8 +238,8 @@ private:
   void handle_write_error(int r);
 
 public:
-  Journaler(inodeno_t ino_, VolumeRef vol_, const char *mag, Objecter *oid,
-	    cohort::Timer<ceph::mono_clock>& tim) :
+  Journaler(inodeno_t ino_, const AVolRef& vol_, const char *mag,
+	    Objecter *oid, cohort::Timer<ceph::mono_clock>& tim) :
     cct(oid->cct), last_written(mag), last_committed(mag),
     ino(ino_), volume(vol_), readonly(true), magic(mag),
     objecter(oid),

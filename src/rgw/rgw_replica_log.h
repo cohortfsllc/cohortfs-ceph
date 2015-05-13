@@ -40,7 +40,7 @@ class RGWReplicaLogger {
 protected:
   CephContext *cct;
   RGWRados *store;
-  int open_volume(VolumeRef& vol, const string& name);
+  int open_volume(AVolRef& vol, const string& name);
 
   RGWReplicaLogger(RGWRados *_store);
 

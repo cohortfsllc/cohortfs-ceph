@@ -65,6 +65,8 @@
 
 using namespace std::placeholders;
 using std::cout;
+using std::cerr;
+using std::endl;
 using std::shared_ptr;
 using librbd::Image;
 
@@ -235,8 +237,8 @@ static int do_bench_write(Image& image, uint64_t io_size,
   b.wait_for(0);
   try {
     image.flush();
-  } catch (std::error_condition &e) {
-    cerr << "Error flushing data at the end: " << e.message() << std::endl;
+  } catch (std::system_error &e) {
+    cerr << "Error flushing data at the end: " << e.what() << std::endl;
   }
 
   std::chrono::duration<double> elapsed = ceph::mono_clock::now() - start;
@@ -271,13 +273,13 @@ static void do_export(librbd::Image& image, const string& path)
 
   if ((fd = ::open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL, 0644)) < 0) {
     cerr << "rbd: error opening " << path << std::endl;
-    throw std::error_condition(errno, std::generic_category());
+    throw std::system_error(errno, std::generic_category());
   }
   BOOST_SCOPE_EXIT(fd, &path) {
     int r = ::close(fd);
     if (r < 0) {
       cerr << "rbd: error closing " << path << std::endl;
-      throw std::error_condition(errno, std::generic_category());
+      throw std::system_error(errno, std::generic_category());
     }
   } BOOST_SCOPE_EXIT_END;
 
@@ -285,7 +287,7 @@ static void do_export(librbd::Image& image, const string& path)
 
   if (ftruncate(fd, image.get_size()) < 0) {
     cerr << "rbd: error truncating " << path << std::endl;
-    throw std::error_condition(errno, std::generic_category());
+    throw std::system_error(errno, std::generic_category());
   }
 }
 
@@ -321,13 +323,13 @@ static void set_vol_image_name(const string& orig_vol, const string& orig_img,
 }
 
 static void do_import(rados::RadosClient& rc,
-		      const shared_ptr<const Volume>& v, const string& imgname,
+		      const AVolRef& v, const string& imgname,
 		      const string& path)
 {
   int fd;
   if ((fd = ::open(path.c_str(), O_RDONLY)) < 0) {
     cerr << "rbd: error opening " << path << std::endl;
-    throw std::error_condition(errno, std::generic_category());
+    throw std::system_error(errno, std::generic_category());
   }
   BOOST_SCOPE_EXIT(fd) {
     // This is a read open, so none of the reasons for checking the
@@ -339,12 +341,12 @@ static void do_import(rados::RadosClient& rc,
   struct stat stat_buf;
   if ((fstat(fd, &stat_buf)) < 0) {
     cerr << "rbd: stat error " << path << std::endl;
-    throw std::error_condition(errno, std::generic_category());
+    throw std::system_error(errno, std::generic_category());
   }
 
   if (S_ISDIR(stat_buf.st_mode)) {
     cerr << "rbd: cannot import a directory" << std::endl;
-    throw std::make_error_condition(std::errc::is_a_directory);
+    throw std::system_error(EISDIR, std::generic_category());
   }
 
   if (stat_buf.st_size)
@@ -354,7 +356,7 @@ static void do_import(rados::RadosClient& rc,
     int r = get_block_device_size(fd, &bdev_size);
     if (r < 0) {
       cerr << "rbd: unable to get size of file/block device" << std::endl;
-      throw std::error_condition(-r, std::generic_category());
+      throw std::system_error(-r, std::generic_category());
     }
     assert(bdev_size >= 0);
     size = (uint64_t) bdev_size;
@@ -364,8 +366,8 @@ static void do_import(rados::RadosClient& rc,
   try {
     Image::create(&rc, v, imgname, size);
     image = Image(&rc, v, imgname);
-  } catch (std::error_condition &e) {
-    cerr << "rbd:: image creation failed: " << e.message() << std::endl;
+  } catch (std::system_error &e) {
+    cerr << "rbd:: image creation failed: " << e.what() << std::endl;
   }
 
   ssize_t readlen;
@@ -383,9 +385,9 @@ static void do_import(rados::RadosClient& rc,
       bl.clear();
     }
     image.flush();
-  } catch (std::error_condition& e) {
+  } catch (std::system_error& e) {
     cerr << "rbd: error writing to image position " << image_pos
-	 << ": " << e.message() << std::endl;
+	 << ": " << e.what() << std::endl;
     throw;
   }
 }
@@ -613,28 +615,22 @@ if (!set_conf_param(v, p1, p2)) { \
   set_vol_image_name(volname, imgname, volname, imgname);
   set_vol_image_name(dest_volname, destname, dest_volname, destname);
 
-  shared_ptr<const Volume> vol, destvol;
+  AVolRef vol, destvol;
   if (!volname.empty()) {
-    vol = rc.lookup_volume(volname);
-    if (!vol) {
-      cerr << "rbd: volume " << volname << " does not exist." << std::endl;
-      exit(EXIT_FAILURE);
-    }
-    if (vol->attach(cct) < 0) {
-      cerr << "rbd: unable to attach volume " << volname << "." << std::endl;
+    try {
+      vol = rc.objecter->attach_by_name(volname);
+    } catch (std::exception& e) {
+      cerr << "rbd: cannot attach " << volname << ": " << e.what() << endl;
       exit(EXIT_FAILURE);
     }
   }
 
   if (!dest_volname.empty()) {
-    destvol = rc.lookup_volume(dest_volname);
-    if (!destvol) {
-      cerr << "rbd: volume " << volname << " does not exist." << std::endl;
-      exit(EXIT_FAILURE);
-    }
-    if (destvol->attach(cct) < 0) {
-      cerr << "rbd: unable to attach volume " << dest_volname << "."
-	   << std::endl;
+    try {
+      destvol = rc.objecter->attach_by_name(dest_volname);
+    } catch (std::exception& e) {
+      cerr << "rbd: cannot attach " << dest_volname << ": " << e.what()
+	   << endl;
       exit(EXIT_FAILURE);
     }
   }
@@ -685,9 +681,9 @@ if (!set_conf_param(v, p1, p2)) { \
 	image = Image(&rc, vol, imgname);
       }
     }
-  } catch (std::error_condition& e) {
+  } catch (std::system_error& e) {
 	cerr << "rbd: error opening image " << imgname << ": "
-	     << e.message() << std::endl;
+	     << e.what() << std::endl;
 	exit(EXIT_FAILURE);
   }
 
@@ -711,42 +707,42 @@ if (!set_conf_param(v, p1, p2)) { \
   try {
     switch (opt_cmd) {
     case OPT_CREATE:
-      errstr = "create of image " + vol->name + "/" + imgname;
+      errstr = "create of image " + vol->v->name + "/" + imgname;
       Image::create(&rc, vol, imgname, size);
       break;
 
     case OPT_RENAME:
-      errstr = "rename of image " + vol->name + "/" + imgname + " to " +
-	vol->name + "/" + destname;
+      errstr = "rename of image " + vol->v->name + "/" + imgname + " to " +
+	vol->v->name + "/" + destname;
       Image::rename(&rc, vol, imgname, destname);
       break;
 
     case OPT_RM:
-      errstr = "delete of image " + vol->name + "/" + imgname;
+      errstr = "delete of image " + vol->v->name + "/" + imgname;
       Image::remove(&rc, vol, imgname);
       break;
 
     case OPT_RESIZE:
-      errstr = "resize of image " + vol->name + "/" + imgname;
+      errstr = "resize of image " + vol->v->name + "/" + imgname;
       image.resize(size);
       break;
 
     case OPT_EXPORT:
-      errstr = "export of image " + vol->name + "/" + imgname + " to " +
+      errstr = "export of image " + vol->v->name + "/" + imgname + " to " +
 	"path";
       do_export(image, path);
       break;
 
     case OPT_IMPORT:
-      errstr = "import of image " + destvol->name + "/" + imgname + " from " +
-	"path";
+      errstr = "import of image " + destvol->v->name + "/" + imgname
+	+ " from " + "path";
       do_import(rc, destvol, destname, path);
       break;
 
     case OPT_COPY:
     {
-      errstr = "copy of image " + vol->name + "/" + imgname + " to " +
-	destvol->name + "/" + destname;
+      errstr = "copy of image " + vol->v->name + "/" + imgname + " to " +
+	destvol->v->name + "/" + destname;
       Image::create(&rc, destvol, destname, image.get_size());
       Image dest(&rc, destvol, destname);
       image.copy(image, dest);
@@ -754,14 +750,14 @@ if (!set_conf_param(v, p1, p2)) { \
     break;
 
     case OPT_BENCH_WRITE:
-      errstr = "bench write to " + vol->name + "/" + imgname;
+      errstr = "bench write to " + vol->v->name + "/" + imgname;
       do_bench_write(image, bench_io_size, bench_io_threads, bench_bytes,
 		     bench_pattern);
       break;
     }
-  } catch (std::error_condition& e) {
+  } catch (std::system_error& e) {
     cerr << "rbd: unable to " << errstr << ": "
-	 << e.message() << std::endl;
+	 << e.what() << std::endl;
     exit(EXIT_FAILURE);
   }
 

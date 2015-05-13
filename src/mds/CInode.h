@@ -182,7 +182,7 @@ public:
   // dir frag tree, if any.  always consistent with our dirfrag map.
   fragtree_t dirfragtree;
 
-  VolumeRef volume;
+  AVolRef volume;
 
   uint64_t last_journaled; // log offset for the last time i was journaled
   ceph::real_time last_dirstat_prop;

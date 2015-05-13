@@ -46,7 +46,7 @@ public:
   void decode(bufferlist::iterator &bl);
   void dump(Formatter *f) const;
   static void generate_test_instances(list<EExport*>& ls);
-  void replay(MDS *mds, VolumeRef &v);
+  void replay(MDS *mds, const AVolRef& v);
 
 };
 

@@ -49,9 +49,9 @@
 #include "common/cmdparse.h"
 #include "include/str_list.h"
 #include "include/str_map.h"
-#include "cohort/CohortVolume.h"
-#include "cohort/ErasureCPlacer.h"
-#include "cohort/StripedPlacer.h"
+#include "vol/Volume.h"
+#include "placer/ErasureCPlacer.h"
+#include "placer/StripedPlacer.h"
 
 #define dout_subsys ceph_subsys_mon
 #undef dout_prefix
@@ -2401,7 +2401,7 @@ done:
       err = -EINVAL;
       goto reply;
     }
-    vol = CohortVolume::create(mon->cct, volumeName, placer, ss);
+    vol = Volume::create(mon->cct, volumeName, placer->id, ss);
     if (!vol) {
       err = -EINVAL;
       goto reply;

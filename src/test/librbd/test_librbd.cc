@@ -61,7 +61,7 @@ TEST(LibRBD, CreateAndStat)
   rc.connect();
   string volume_name = get_temp_volume_name();
   ASSERT_EQ(0, rc.vol_create(volume_name));
-  VolumeRef v = rc.lookup_volume(volume_name);
+  AVolRef v = rc.attach_volume(volume_name);
   ASSERT_TRUE(!!v);
 
   const string name = "testimg";
@@ -86,7 +86,7 @@ TEST(LibRBD, ResizeAndStat)
   rc.connect();
   string volume_name = get_temp_volume_name();
   ASSERT_EQ(0, rc.vol_create(volume_name));
-  VolumeRef v = rc.lookup_volume(volume_name);
+  AVolRef v = rc.attach_volume(volume_name);
   ASSERT_TRUE(!!v);
 
   const string name = "testimg";
@@ -189,7 +189,7 @@ TEST(LibRBD, TestIO)
   rc.connect();
   string volume_name = get_temp_volume_name();
   ASSERT_EQ(0, rc.vol_create(volume_name));
-  VolumeRef v = rc.lookup_volume(volume_name);
+  AVolRef v = rc.attach_volume(volume_name);
   ASSERT_TRUE(!!v);
 
   const string& name = "testimg";
@@ -254,7 +254,7 @@ TEST(LibRBD, TestEmptyDiscard)
   rc.connect();
   string volume_name = get_temp_volume_name();
   ASSERT_EQ(0, rc.vol_create(volume_name));
-  VolumeRef v = rc.lookup_volume(volume_name);
+  AVolRef v = rc.attach_volume(volume_name);
   ASSERT_TRUE(!!v);
 
   Image* image = nullptr;
@@ -279,7 +279,7 @@ TEST(LibRBD, FlushAio)
   rc.connect();
   string volume_name = get_temp_volume_name();
   ASSERT_EQ(0, rc.vol_create(volume_name));
-  VolumeRef v = rc.lookup_volume(volume_name);
+  AVolRef v = rc.attach_volume(volume_name);
   ASSERT_TRUE(!!v);
 
   bufferlist test_data(TEST_IO_SIZE);

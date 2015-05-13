@@ -361,7 +361,7 @@ int Client::init()
   return r;
 }
 
-void Client::inode_2_volume(Inode *in, VolumeRef &v) {
+void Client::inode_2_volume(Inode *in, AVolRef &v) {
   v = in->volume;
 }
 
@@ -543,7 +543,7 @@ void Client::_fragmap_remove_non_leaves(Inode *in)
       ++p;
 }
 
-Inode * Client::add_update_inode(InodeStat *st, VolumeRef volume,
+Inode * Client::add_update_inode(InodeStat *st, AVolRef volume,
 				 ceph::mono_time from, MetaSession *session)
 {
   Inode *in;
@@ -3269,7 +3269,7 @@ int Client::mount(const std::string &mount_root)
 
   tick(); // start tick
   cl.lock();
-  VolumeRef volume(mdsmap->get_metadata_volume(objecter));
+  AVolRef volume(mdsmap->get_metadata_volume(objecter));
 
   // hack: get+pin root inode.
   //  fuse assumes it's always there.
@@ -5013,7 +5013,7 @@ int Client::open(const char *relpath, int flags, mode_t mode)
   return r;
 }
 
-int Client::lookup_hash(VolumeRef &v, inodeno_t ino, inodeno_t dirino, const char *name)
+int Client::lookup_hash(const AVolRef& v, inodeno_t ino, inodeno_t dirino, const char *name)
 {
   unique_lock cl(client_lock);
   ldout(cct, 3) << "lookup_hash enter(" << ino << ", #" << dirino << "/" << name << ") = " << dendl;
@@ -5043,7 +5043,7 @@ int Client::lookup_hash(VolumeRef &v, inodeno_t ino, inodeno_t dirino, const cha
  * the resulting Inode object in one operation, so that caller
  * can safely assume inode will still be there after return.
  */
-int Client::lookup_ino(VolumeRef &v, inodeno_t ino, Inode **inode)
+int Client::lookup_ino(const AVolRef& v, inodeno_t ino, Inode **inode)
 {
   unique_lock cl(client_lock);
   ldout(cct, 3) << "lookup_ino enter(" << ino << ") = " << dendl;

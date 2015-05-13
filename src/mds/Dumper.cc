@@ -72,7 +72,7 @@ int Dumper::recover_journal()
 
 void Dumper::dump(const char *dump_file)
 {
-  VolumeRef volume(mdsmap->get_metadata_volume(objecter));
+  AVolRef volume(mdsmap->get_metadata_volume(objecter));
 
   int r = recover_journal();
   if (r) {
@@ -160,7 +160,7 @@ void Dumper::undump(const char *dump_file)
   h.write_pos = start+len;
   h.magic = CEPH_FS_ONDISK_MAGIC;
 
-  VolumeRef volume(mdsmap->get_metadata_volume(objecter));
+  AVolRef volume(mdsmap->get_metadata_volume(objecter));
 
   bufferlist hbl;
   ::encode(h, hbl);

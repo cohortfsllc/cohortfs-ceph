@@ -57,8 +57,8 @@ protected:
   class ReplayThread : public Thread {
     MDLog *log;
   public:
-    VolumeRef vol;
-    ReplayThread(MDLog *l, VolumeRef &v) : log(l), vol(v) {}
+    AVolRef vol;
+    ReplayThread(MDLog *l, const AVolRef &v) : log(l), vol(v) {}
     void* entry() {
       log->_replay_thread(vol);
       return 0;
@@ -71,8 +71,8 @@ protected:
 
   Context::List waitfor_replay;
 
-  void _replay();	  // old way
-  void _replay_thread(VolumeRef &v);  // new way
+  void _replay(); // old way
+  void _replay_thread(const AVolRef& v);  // new way
 
 
   // -- segments --
@@ -103,7 +103,7 @@ public:
 
 
 private:
-  void init_journaler(VolumeRef &v);
+  void init_journaler(const AVolRef &v);
 
   struct C_MDL_WriteError : public Context {
     MDLog *mdlog;
@@ -216,10 +216,10 @@ private:
   void write_head(rados::op_callback&& onfinish);
 
 public:
-  void create(VolumeRef &v, rados::op_callback&& onfinish);  // fresh, empty log!
-  void open(VolumeRef &v, Context *onopen);   // append() or replay() to follow!
+  void create(const AVolRef& v, rados::op_callback&& onfinish);  // fresh, empty log!
+  void open(const AVolRef& v, Context *onopen);   // append() or replay() to follow!
   void append();
-  void replay(VolumeRef &v, Context *onfinish);
+  void replay(const AVolRef& v, Context *onfinish);
 
   void standby_trim_segments();
 };

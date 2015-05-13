@@ -45,7 +45,7 @@ class EImportFinish : public LogEvent {
   void dump(Formatter *f) const;
   static void generate_test_instances(list<EImportFinish*>& ls);
 
-  void replay(MDS *mds, VolumeRef &v);
+  void replay(MDS *mds, const AVolRef& v);
 
 };
 

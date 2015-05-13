@@ -95,13 +95,13 @@ int main(int argc, char **argv)
   ops.insert(make_pair(1-vm["write-ratio"].as<double>(), Bencher::READ));
 
   rados::RadosClient rc;
-  shared_ptr<const Volume> volume;
+  AVolRef volume;
   int r = rc.connect();
   if (r < 0) {
     cerr << "error in connect r=" << r << std::endl;
     return -r;
   }
-  volume = rc.lookup_volume(vm["pool-name"].as<string>());
+  volume = rc.attach_volume(vm["pool-name"].as<string>());
   if (!volume) {
     cerr << "unable to find volume" << r << std::endl;
     return ENOENT;

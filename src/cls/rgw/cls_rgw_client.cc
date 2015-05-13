@@ -60,7 +60,7 @@ void cls_rgw_bucket_complete_op(ObjOpUse o, RGWModifyOp op, string& tag,
 }
 
 
-int cls_rgw_list_op(Objecter* o, VolumeRef& vol, const oid_t& oid,
+int cls_rgw_list_op(Objecter* o, AVolRef& vol, const oid_t& oid,
 		    string& start_obj, string& filter_prefix,
 		    uint32_t num_entries, rgw_bucket_dir *dir,
 		    bool *is_truncated)
@@ -91,7 +91,7 @@ int cls_rgw_list_op(Objecter* o, VolumeRef& vol, const oid_t& oid,
  return r;
 }
 
-int cls_rgw_bucket_check_index_op(Objecter* o, VolumeRef& vol, const oid_t& oid,
+int cls_rgw_bucket_check_index_op(Objecter* o, AVolRef& vol, const oid_t& oid,
 				  rgw_bucket_dir_header *existing_header,
 				  rgw_bucket_dir_header *calculated_header)
 {
@@ -116,7 +116,7 @@ int cls_rgw_bucket_check_index_op(Objecter* o, VolumeRef& vol, const oid_t& oid,
   return 0;
 }
 
-int cls_rgw_bucket_rebuild_index_op(Objecter* o, VolumeRef& vol,
+int cls_rgw_bucket_rebuild_index_op(Objecter* o, AVolRef& vol,
 				    const oid_t& oid)
 {
   bufferlist in, out;
@@ -139,7 +139,7 @@ void cls_rgw_suggest_changes(ObjOpUse o, bufferlist& updates)
   o->call("rgw", "dir_suggest_changes", updates);
 }
 
-int cls_rgw_get_dir_header(Objecter* o, VolumeRef& vol, const oid_t& oid,
+int cls_rgw_get_dir_header(Objecter* o, AVolRef& vol, const oid_t& oid,
 			   rgw_bucket_dir_header *header)
 {
   bufferlist in, out;
@@ -186,7 +186,7 @@ public:
   };
 };
 
-int cls_rgw_get_dir_header_async(Objecter* o, VolumeRef& vol, const oid_t& oid,
+int cls_rgw_get_dir_header_async(Objecter* o, AVolRef& vol, const oid_t& oid,
 				 RGWGetDirHeader_CB *ctx)
 {
   bufferlist in, out;
@@ -202,7 +202,7 @@ int cls_rgw_get_dir_header_async(Objecter* o, VolumeRef& vol, const oid_t& oid,
   return 0;
 }
 
-int cls_rgw_bi_log_list(Objecter* o, VolumeRef& vol, const oid_t& oid,
+int cls_rgw_bi_log_list(Objecter* o, AVolRef& vol, const oid_t& oid,
 			string& marker, uint32_t max,
 			list<rgw_bi_log_entry>& entries, bool *truncated)
 {
@@ -231,7 +231,7 @@ int cls_rgw_bi_log_list(Objecter* o, VolumeRef& vol, const oid_t& oid,
  return r;
 }
 
-int cls_rgw_bi_log_trim(Objecter* o, VolumeRef& vol, const oid_t& oid,
+int cls_rgw_bi_log_trim(Objecter* o, AVolRef& vol, const oid_t& oid,
 			string& start_marker, string& end_marker)
 {
   do {
@@ -254,7 +254,7 @@ int cls_rgw_bi_log_trim(Objecter* o, VolumeRef& vol, const oid_t& oid,
   return 0;
 }
 
-int cls_rgw_usage_log_read(Objecter* o, VolumeRef& vol, const oid_t& oid,
+int cls_rgw_usage_log_read(Objecter* o, AVolRef& vol, const oid_t& oid,
 			   string& user, uint32_t max_entries,
 			   string& read_iter,
 			   map<rgw_user_bucket, rgw_usage_log_entry>& usage,
@@ -333,7 +333,7 @@ void cls_rgw_gc_defer_entry(ObjOpUse op,
   op->call("rgw", "gc_defer_entry", in);
 }
 
-int cls_rgw_gc_list(Objecter* o, VolumeRef& vol, const oid_t& oid,
+int cls_rgw_gc_list(Objecter* o, AVolRef& vol, const oid_t& oid,
 		    string& marker, uint32_t max, bool expired_only,
 		    list<cls_rgw_gc_obj_info>& entries, bool *truncated)
 {

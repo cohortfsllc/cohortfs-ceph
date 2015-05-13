@@ -49,7 +49,7 @@ namespace rados {
       }
 
       int lock(Objecter* o,
-	       VolumeRef vol,
+	       const AVolRef& vol,
 	       const oid_t& oid,
 	       const string& name, ClsLockType type,
 	       const string& cookie, const string& tag,
@@ -76,7 +76,7 @@ namespace rados {
 	rados_op->call("lock", "unlock", in);
       }
 
-      int unlock(Objecter* o, VolumeRef vol, const oid_t& oid,
+      int unlock(Objecter* o, const AVolRef& vol, const oid_t& oid,
 		 const string& name, const string& cookie)
       {
 	ObjectOperation op(vol->op());
@@ -97,7 +97,7 @@ namespace rados {
 	rados_op->call("lock", "break_lock", in);
       }
 
-      int break_lock(Objecter* o, VolumeRef vol, const oid_t& oid,
+      int break_lock(Objecter* o, const AVolRef& vol, const oid_t& oid,
 		     const string& name, const string& cookie,
 		     const entity_name_t& locker)
       {
@@ -106,7 +106,7 @@ namespace rados {
 	return o->mutate(oid, vol, op);
       }
 
-      int list_locks(Objecter* o, VolumeRef vol, const oid_t& oid,
+      int list_locks(Objecter* o, const AVolRef& vol, const oid_t& oid,
 		     list<string>& locks)
       {
 	bufferlist in, out;
@@ -166,7 +166,7 @@ namespace rados {
 	return 0;
       }
 
-      int get_lock_info(Objecter* o, VolumeRef vol, const oid_t& oid,
+      int get_lock_info(Objecter* o, const AVolRef& vol, const oid_t& oid,
 			const string& name,
 			map<locker_id_t, locker_info_t>* lockers,
 			ClsLockType* type, string* tag)
@@ -187,7 +187,7 @@ namespace rados {
 	     cookie, tag, description, duration, flags);
       }
 
-      int Lock::lock_shared(Objecter* o, VolumeRef vol, const oid_t& oid)
+      int Lock::lock_shared(Objecter* o, const AVolRef& vol, const oid_t& oid)
       {
 	return lock(o, vol, oid, name, LOCK_SHARED, cookie, tag, description,
 		    duration, flags);
@@ -199,7 +199,7 @@ namespace rados {
 	     flags);
       }
 
-      int Lock::lock_exclusive(Objecter* o, VolumeRef vol, const oid_t& oid)
+      int Lock::lock_exclusive(Objecter* o, const AVolRef& vol, const oid_t& oid)
       {
 	return lock(o, vol, oid, name, LOCK_EXCLUSIVE, cookie, tag,
 		    description, duration, flags);
@@ -210,7 +210,7 @@ namespace rados {
 	rados::cls::lock::unlock(op, name, cookie);
       }
 
-      int Lock::unlock(Objecter* o, VolumeRef vol, const oid_t& oid)
+      int Lock::unlock(Objecter* o, const AVolRef& vol, const oid_t& oid)
       {
 	return rados::cls::lock::unlock(o, vol, oid, name, cookie);
       }
@@ -220,7 +220,7 @@ namespace rados {
 	rados::cls::lock::break_lock(op, name, cookie, locker);
       }
 
-      int Lock::break_lock(Objecter* o, VolumeRef vol, const oid_t& oid,
+      int Lock::break_lock(Objecter* o, const AVolRef& vol, const oid_t& oid,
 			   const entity_name_t& locker)
       {
 	return rados::cls::lock::break_lock(o, vol, oid, name, cookie, locker);

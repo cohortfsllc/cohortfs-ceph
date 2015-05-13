@@ -27,7 +27,7 @@ private:
   Dentry *_dentry; //associated with path
   Dentry *_old_dentry; //associated with path2
 public:
-  VolumeRef volume;
+  AVolRef volume;
   uint64_t tid;
   ceph_mds_request_head head;
   filepath path, path2;
@@ -79,7 +79,7 @@ public:
 
   Inode *target;
 
-  MetaRequest(VolumeRef &v, int op) :
+  MetaRequest(const AVolRef& v, int op) :
     _inode(NULL), _old_inode(NULL), _other_inode(NULL),
     _dentry(NULL), _old_dentry(NULL),
     volume(v), tid(0),

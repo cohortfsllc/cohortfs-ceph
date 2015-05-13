@@ -36,7 +36,7 @@ void cls_refcount_set(ObjOpUse op, list<string>& refs)
   op->call("refcount", "set", in);
 }
 
-int cls_refcount_read(Objecter* o, oid_t& oid, VolumeRef vol,
+int cls_refcount_read(Objecter* o, oid_t& oid, const AVolRef& vol,
 		      list<string> *refs, bool implicit_ref)
 {
   bufferlist in;

@@ -32,7 +32,7 @@ class EResetJournal : public LogEvent {
     out << "EResetJournal";
   }
 
-  void replay(MDS *mds, VolumeRef &v);
+  void replay(MDS *mds, const AVolRef& v);
 };
 
 #endif

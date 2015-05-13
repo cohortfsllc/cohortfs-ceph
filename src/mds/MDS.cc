@@ -1070,7 +1070,7 @@ void MDS::boot_create(int telomere)
   objecter->with_osdmap([&](auto o){
       osd_epoch = o.get_epoch();
     });
-  VolumeRef v = get_metadata_volume(true);
+  AVolRef v = get_metadata_volume(true);
   if (!v) {
     dout(10) << "boot_create volume " << mdsmap->get_metadata_uuid()
 	<< " doesn't exist (yet)" << dendl;
@@ -1154,7 +1154,7 @@ public:
 
 void MDS::boot_start(unique_lock& ml, int step, int r)
 {
-  VolumeRef v = get_metadata_volume();
+  AVolRef v = get_metadata_volume();
   if (r < 0) {
     if (is_standby_replay() && (r == -EAGAIN)) {
       dout(0) << "boot_start encountered an error EAGAIN"
@@ -1177,7 +1177,7 @@ void MDS::boot_start(unique_lock& ml, int step, int r)
       C_GatherBuilder gather(new C_MDS_BootStart(this, 2));
       dout(2) << "boot_start " << step << ": opening inotable" << dendl;
       inotable->load(gather.new_sub());
-      VolumeRef v = get_metadata_volume();
+      AVolRef v = get_metadata_volume();
 
       dout(2) << "boot_start " << step << ": opening sessionmap" << dendl;
       sessionmap.load(gather.new_sub());
@@ -1200,7 +1200,7 @@ void MDS::boot_start(unique_lock& ml, int step, int r)
 	      << dendl;
 
       C_GatherBuilder gather(new C_MDS_BootStart(this, 3));
-      VolumeRef v = get_metadata_volume();
+      AVolRef v = get_metadata_volume();
 
       mdcache->open_mydir_inode(v, gather.new_sub());
 
@@ -1238,7 +1238,7 @@ void MDS::boot_start(unique_lock& ml, int step, int r)
   }
 }
 
-void MDS::starting_done(VolumeRef &v)
+void MDS::starting_done(const AVolRef& v)
 {
   dout(3) << "starting_done" << dendl;
   assert(is_starting());
@@ -1483,7 +1483,7 @@ void MDS::clientreplay_done()
 
 void MDS::active_start()
 {
-  VolumeRef v = get_metadata_volume();
+  AVolRef v = get_metadata_volume();
   dout(1) << "active_start" << dendl;
 
   if (last_state == MDSMap::STATE_CREATING)
@@ -1517,7 +1517,7 @@ void MDS::recovery_done(int oldstate)
 
   mdcache->reissue_all_caps();
 
-  VolumeRef v = get_metadata_volume();
+  AVolRef v = get_metadata_volume();
   // tell connected clients
   mdcache->populate_mydir(v);
 }

@@ -73,7 +73,7 @@ void SessionMap::load(Context *onload)
     waiting_for_load.push_back(*onload);
 
   oid_t oid = get_object_name();
-  VolumeRef volume(mds->get_metadata_volume());
+  AVolRef volume(mds->get_metadata_volume());
   mds->objecter->read_full(oid, volume, SM_Load(this));
 }
 
@@ -127,7 +127,7 @@ void SessionMap::save(Context *onsave, version_t needv)
   encode(bl);
   committing = version;
   oid_t oid = get_object_name();
-  VolumeRef volume(mds->get_metadata_volume());
+  AVolRef volume(mds->get_metadata_volume());
   mds->objecter->write_full(oid, volume, bl, nullptr, SM_Save(this, version));
 }
 

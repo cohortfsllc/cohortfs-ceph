@@ -10,13 +10,13 @@
 #ifndef COHORT_STRIPEDPLACER_H
 #define COHORT_STRIPEDPLACER_H
 
-#include "vol/Placer.h"
+#include "placer/Placer.h"
 #include "osdc/ObjectOperation.h"
 
 class StripedPlacer;
 typedef std::shared_ptr<StripedPlacer> StripedPlacerRef;
 
-class StripedPlacer : public Placer
+class StripedPlacer : public Placer, public AttachedPlacer
 {
   typedef Placer inherited;
 
@@ -75,17 +75,11 @@ public:
 
   static const uint64_t one_op;
 
-  virtual bool is_attached() const {
-    return true;
-  };
-
-  virtual int attach(CephContext* cct) {
-    return 0;
+  virtual APlacerRef attach(CephContext* cct) const {
+    return std::dynamic_pointer_cast<const AttachedPlacer>(shared_from_this());
   }
 
-  virtual void detach() {};
-
-  virtual ssize_t op_size() const {
+  virtual size_t op_size() const {
     return one_op * stripe_width;
   }
 
@@ -95,9 +89,10 @@ public:
 
   virtual uint32_t num_rules(void);
 
-  virtual ssize_t place(const oid_t& object,
-			const OSDMap& map,
-			const std::function<void(int)>& f) const;
+  virtual size_t place(const oid_t& object,
+		       const boost::uuids::uuid& id,
+		       const OSDMap& map,
+		       const std::function<void(int)>& f) const;
 
   virtual int update(const std::shared_ptr<const Placer>& pl);
 
@@ -128,13 +123,13 @@ public:
   virtual void make_strides(const oid_t& oid,
 			    uint64_t offset, uint64_t len,
 			    uint64_t truncate_size, uint32_t truncate_seq,
-			    vector<StrideExtent>& extents);
+			    vector<StrideExtent>& extents) const;
 
   virtual void repair(vector<StrideExtent>& extents,
-		      const OSDMap& map);
+		      const OSDMap& map) const;
 
-  virtual void serialize_data(bufferlist &bl);
-  virtual void serialize_code(bufferlist &bl);
+  virtual void serialize_data(bufferlist &bl) const;
+  virtual void serialize_code(bufferlist &bl) const;
 
   // Data and metadata operations using the placer
   virtual void add_data(const uint64_t off, bufferlist& in,
@@ -142,7 +137,7 @@ public:
   virtual int get_data(map<int, bufferlist> &strides,
 			    bufferlist *decoded) const;
 
-  virtual int get_cohort_placer(struct cohort_placer *placer) {
+  virtual int get_cohort_placer(struct cohort_placer *placer) const {
     placer->type = StripedPlacerType;
     placer->striped.stripe_unit = stripe_unit;
     placer->striped.stripe_width = stripe_width;

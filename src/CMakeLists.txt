@@ -273,10 +273,9 @@ set(libcommon_files
   common/linux_version.c
   xxHash-r39/xxhash.c
   vol/Volume.cc
-  vol/Placer.cc
-  cohort/CohortVolume.cc
-  cohort/ErasureCPlacer.cc
-  cohort/StripedPlacer.cc
+  placer/Placer.cc
+  placer/ErasureCPlacer.cc
+  placer/StripedPlacer.cc
   common/ThreadPool.cc
   ${arch_files}
   ${auth_files}

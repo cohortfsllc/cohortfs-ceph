@@ -46,7 +46,7 @@ namespace librbd {
     bool empty;
 
     string name;
-    VolumeRef volume;
+    AVolRef volume;
     uint64_t size;
     oid_t header_oid;
     oid_t image_oid;
@@ -56,10 +56,10 @@ namespace librbd {
     Image() noexcept : rc(nullptr), read_only(false),
       empty(true), f(nullptr) {}
     Image(rados::RadosClient* rados,
-	  const VolumeRef& v,
+	  const AVolRef& v,
 	  const string& name);
     Image(rados::RadosClient* rados,
-	  const VolumeRef& v,
+	  const AVolRef& v,
 	  const string &name,
 	  read_only_t);
     Image(Image&& i) noexcept : Image() {
@@ -75,7 +75,7 @@ namespace librbd {
 
     uint64_t get_size() const;
     static void remove(RadosClient* rc,
-		       const VolumeRef& volume,
+		       const AVolRef& volume,
 		       const string& imgname);
     void flush();
     void flush(rados::op_callback&& cb);
@@ -102,11 +102,11 @@ namespace librbd {
     void discard(uint64_t off, size_t len, rados::op_callback&& cb = nullptr);
     void discard_sync(uint64_t off, size_t len);
     static void create(RadosClient* rc,
-		       const VolumeRef& volume,
+		       const AVolRef& volume,
 		       const string& imgname,
 		       uint64_t size);
     static void rename(RadosClient* rc,
-		       const VolumeRef& volume,
+		       const AVolRef& volume,
 		       const string& srcname,
 		       const string& dstname);
 
@@ -125,7 +125,7 @@ namespace librbd {
 
   private:
     static bool check_exists(RadosClient* rc,
-			     const VolumeRef& volume,
+			     const AVolRef& volume,
 			     const string& name, uint64_t *size = nullptr);
     void trim_image(uint64_t newsize);
     static const string header_name(const string &name) {

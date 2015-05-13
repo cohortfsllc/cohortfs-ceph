@@ -30,21 +30,21 @@ void cls_rgw_bucket_complete_op(rados::ObjOpUse o,
 				rgw_bucket_dir_entry_meta& dir_meta,
 				list<string> *remove_objs, bool log_op);
 
-int cls_rgw_list_op(Objecter* o, VolumeRef& vol, const oid_t& oid,
+int cls_rgw_list_op(Objecter* o, AVolRef& vol, const oid_t& oid,
 		    string& start_obj, string& filter_prefix,
 		    uint32_t num_entries, rgw_bucket_dir *dir,
 		    bool *is_truncated);
 
-int cls_rgw_bucket_check_index_op(Objecter* o, VolumeRef& vol,
+int cls_rgw_bucket_check_index_op(Objecter* o, AVolRef& vol,
 				  const oid_t& oid,
 				  rgw_bucket_dir_header *existing_header,
 				  rgw_bucket_dir_header *calculated_header);
-int cls_rgw_bucket_rebuild_index_op(Objecter* o, VolumeRef& vol,
+int cls_rgw_bucket_rebuild_index_op(Objecter* o, AVolRef& vol,
 				    const oid_t& oid);
 
-int cls_rgw_get_dir_header(Objecter* o, VolumeRef& vol,
+int cls_rgw_get_dir_header(Objecter* o, AVolRef& vol,
 			   const oid_t& oid, rgw_bucket_dir_header *header);
-int cls_rgw_get_dir_header_async(Objecter* o, VolumeRef& vol,
+int cls_rgw_get_dir_header_async(Objecter* o, AVolRef& vol,
 				 const oid_t& oid, RGWGetDirHeader_CB *ctx);
 
 void cls_rgw_encode_suggestion(char op, rgw_bucket_dir_entry& dirent,
@@ -54,15 +54,15 @@ void cls_rgw_suggest_changes(rados::ObjOpUse o, bufferlist& updates);
 
 /* bucket index log */
 
-int cls_rgw_bi_log_list(Objecter* o, VolumeRef& vol,
+int cls_rgw_bi_log_list(Objecter* o, AVolRef& vol,
 			 const oid_t& oid, string& marker, uint32_t max,
 		    list<rgw_bi_log_entry>& entries, bool *truncated);
-int cls_rgw_bi_log_trim(Objecter* o, VolumeRef& vol,
+int cls_rgw_bi_log_trim(Objecter* o, AVolRef& vol,
 			const oid_t& oid, string& start_marker,
 			string& end_marker);
 
 /* usage logging */
-int cls_rgw_usage_log_read(Objecter* o, VolumeRef& vol,
+int cls_rgw_usage_log_read(Objecter* o, AVolRef& vol,
 			   const oid_t& oid, string& user,
 			   uint32_t max_entries, string& read_iter,
 			   map<rgw_user_bucket, rgw_usage_log_entry>& usage,
@@ -80,7 +80,7 @@ void cls_rgw_gc_defer_entry(rados::ObjOpUse op,
 			    ceph::timespan expiration,
 			    const string& tag);
 
-int cls_rgw_gc_list(Objecter* o, VolumeRef& vol, const oid_t& oid,
+int cls_rgw_gc_list(Objecter* o, AVolRef& vol, const oid_t& oid,
 		    string& marker, uint32_t max, bool expired_only,
 		    list<cls_rgw_gc_obj_info>& entries, bool *truncated);
 

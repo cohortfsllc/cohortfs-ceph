@@ -201,7 +201,7 @@ namespace rados {
 		     public RefCountedObject {
       int flags;
       oid_t oid;
-      VolumeRef volume;
+      AVolRef volume;
       unique_ptr<ObjOp> op;
       vector<SubOp> subops;
       ceph::real_time mtime;
@@ -219,7 +219,7 @@ namespace rados {
 		  tid(0), map_dne_bound(0), paused(false), priority(0),
 		  should_resend(true) { }
 
-      op_base(oid_t oid, const VolumeRef& volume,
+      op_base(oid_t oid, const AVolRef& volume,
 	      unique_ptr<ObjOp>& _op, int flags)
 	: flags(flags), oid(oid), volume(volume), op(move(_op)),
 	  mtime(ceph::real_clock::now()), tid(0), map_dne_bound(0),
@@ -241,7 +241,7 @@ namespace rados {
       bool finished;
       ZTracer::Trace trace;
 
-      Op(const oid_t& o, const VolumeRef& volume,
+      Op(const oid_t& o, const AVolRef& volume,
 	 unique_ptr<ObjOp>& _op, int f,
 	 op_callback&& ac, op_callback&& co,
 	 ZTracer::Trace *parent) :
@@ -438,10 +438,11 @@ namespace rados {
     // want to do, and it's executed under the lock with access to the
     // OSD Map. Obviously you oughtn't have a lock already, but since
     // the lock is private, you can't really get one.
+    template<typename C>
     void with_osdmap(
-      std::function<void(const OSDMap&)> f) {
+      const C& f) {
       shared_lock l(rwlock);
-      f(*osdmap);
+      f(const_cast<const OSDMap&>(*osdmap));
     }
 
 
@@ -540,7 +541,7 @@ namespace rados {
   public:
     // mid-level helpers
     Op *prepare_mutate_op(const oid_t& oid,
-			  const VolumeRef& volume,
+			  const AVolRef& volume,
 			  unique_ptr<ObjOp>& op,
 			  ceph::real_time mtime,
 			  op_callback&& onack, op_callback&& oncommit,
@@ -554,7 +555,7 @@ namespace rados {
     }
 
     ceph_tid_t mutate(const oid_t& oid,
-		      const VolumeRef& volume,
+		      const AVolRef& volume,
 		      unique_ptr<ObjOp>& op,
 		      ceph::real_time mtime,
 		      op_callback&& onack, op_callback&& oncommit,
@@ -565,7 +566,7 @@ namespace rados {
     }
 
     ceph_tid_t mutate(const oid_t& oid,
-		      const shared_ptr<const Volume>& volume,
+		      const AVolRef& volume,
 		      unique_ptr<ObjOp>& op,
 		      ZTracer::Trace *trace = nullptr) {
       auto mtime = ceph::real_clock::now();
@@ -576,7 +577,7 @@ namespace rados {
     }
 
     Op *prepare_read_op(const oid_t& oid,
-			const VolumeRef& volume,
+			const AVolRef& volume,
 			unique_ptr<ObjOp>& op,
 			op_callback&& onack,
 			ZTracer::Trace *trace = nullptr) {
@@ -586,7 +587,7 @@ namespace rados {
 		     nullptr, trace);
       return o;
     }
-    ceph_tid_t read(const oid_t& oid, const VolumeRef& volume,
+    ceph_tid_t read(const oid_t& oid, const AVolRef& volume,
 		    unique_ptr<ObjOp>& op, op_callback&& onack,
 		    ZTracer::Trace *trace = nullptr) {
       Op *o = prepare_read_op(oid, volume, op, move(onack), trace);
@@ -594,7 +595,7 @@ namespace rados {
     }
 
     ceph_tid_t read(const oid_t& oid,
-		    const VolumeRef& volume,
+		    const AVolRef& volume,
 		    unique_ptr<ObjOp>& op,
 		    ZTracer::Trace *trace = nullptr) {
       CB_Waiter w;
@@ -606,7 +607,7 @@ namespace rados {
 
     // high-level helpers
     ceph_tid_t stat(const oid_t& oid,
-		    const VolumeRef& volume,
+		    const AVolRef& volume,
 		    uint64_t *psize, ceph::real_time *pmtime,
 		    op_callback&& onfinish,
 		    ZTracer::Trace *trace = nullptr) {
@@ -619,7 +620,7 @@ namespace rados {
     }
 
     ceph_tid_t stat(const oid_t& oid,
-		    const VolumeRef& volume,
+		    const AVolRef& volume,
 		    function<void(int, uint64_t, ceph::real_time)>&& cb,
 		    ZTracer::Trace *trace = nullptr) {
       ObjectOperation ops = volume->op();
@@ -630,7 +631,7 @@ namespace rados {
       return op_submit(o);
     }
 
-    int stat(const oid_t& oid, const VolumeRef& volume,
+    int stat(const oid_t& oid, const AVolRef& volume,
 	     uint64_t *psize, ceph::real_time *pmtime,
 	     ZTracer::Trace *trace = nullptr) {
       CB_Waiter w;
@@ -640,7 +641,7 @@ namespace rados {
     }
 
     ceph_tid_t read(const oid_t& oid,
-		    const VolumeRef& volume,
+		    const AVolRef& volume,
 		    uint64_t off, uint64_t len, bufferlist *pbl,
 		    op_callback&& onfinish,
 		    ZTracer::Trace *trace = nullptr) {
@@ -653,7 +654,7 @@ namespace rados {
     }
 
     ceph_tid_t read(const oid_t& oid,
-		    const VolumeRef& volume,
+		    const AVolRef& volume,
 		    uint64_t off, uint64_t len,
 		    read_callback&& onfinish,
 		    ZTracer::Trace *trace = nullptr) {
@@ -666,7 +667,7 @@ namespace rados {
     }
 
     int read(const oid_t& oid,
-	     const VolumeRef& volume,
+	     const AVolRef& volume,
 	     uint64_t off, uint64_t len, bufferlist *pbl,
 	     ZTracer::Trace *trace = nullptr) {
       CB_Waiter w;
@@ -676,7 +677,7 @@ namespace rados {
     }
 
     ceph_tid_t read_trunc(const oid_t& oid,
-			  const VolumeRef& volume,
+			  const AVolRef& volume,
 			  uint64_t off, uint64_t len, bufferlist *pbl,
 			  uint64_t trunc_size, uint32_t trunc_seq,
 			  op_callback&& onfinish,
@@ -690,7 +691,7 @@ namespace rados {
     }
 
     ceph_tid_t read_trunc(const oid_t& oid,
-			  const VolumeRef& volume,
+			  const AVolRef& volume,
 			  uint64_t off, uint64_t len,
 			  uint64_t trunc_size, uint32_t trunc_seq,
 			  read_callback&& onfinish,
@@ -704,7 +705,7 @@ namespace rados {
     }
 
     ceph_tid_t read_trunc(const oid_t& oid,
-			  const VolumeRef& volume,
+			  const AVolRef& volume,
 			  uint64_t off, uint64_t len, bufferlist *pbl,
 			  uint64_t trunc_size, uint32_t trunc_seq,
 			  ZTracer::Trace *trace = nullptr) {
@@ -716,7 +717,7 @@ namespace rados {
     }
 
     ceph_tid_t getxattr(const oid_t& oid,
-			const VolumeRef& volume,
+			const AVolRef& volume,
 			const string& name, bufferlist *bl,
 			op_callback&& onfinish,
 			ZTracer::Trace *trace = nullptr) {
@@ -729,7 +730,7 @@ namespace rados {
     }
 
     ceph_tid_t getxattr(const oid_t& oid,
-			const VolumeRef& volume,
+			const AVolRef& volume,
 			const string& name,
 			read_callback&& onfinish,
 			ZTracer::Trace *trace = nullptr) {
@@ -742,7 +743,7 @@ namespace rados {
     }
 
     ceph_tid_t getxattr(const oid_t& oid,
-			const VolumeRef& volume,
+			const AVolRef& volume,
 			const string& name, bufferlist *bl,
 			ZTracer::Trace *trace = nullptr) {
       CB_Waiter w;
@@ -752,7 +753,7 @@ namespace rados {
     }
 
     ceph_tid_t getxattrs(const oid_t& oid,
-			 const VolumeRef& volume,
+			 const AVolRef& volume,
 			 map<string,bufferlist>& attrset,
 			 op_callback&& onfinish,
 			 ZTracer::Trace *trace = nullptr) {
@@ -765,7 +766,7 @@ namespace rados {
     }
 
     ceph_tid_t getxattrs(const oid_t& oid,
-			 const VolumeRef& volume,
+			 const AVolRef& volume,
 			 map<string,bufferlist>& attrset,
 			 ZTracer::Trace *trace = nullptr) {
       CB_Waiter w;
@@ -775,17 +776,17 @@ namespace rados {
     }
 
     ceph_tid_t read_full(const oid_t& oid,
-			 const VolumeRef& volume,
+			 const AVolRef& volume,
 			 bufferlist *pbl, op_callback&& onfinish,
 			 ZTracer::Trace *trace = nullptr);
 
-    int read_full(const oid_t& oid, const VolumeRef& volume,
+    int read_full(const oid_t& oid, const AVolRef& volume,
 		  bufferlist *pbl, ZTracer::Trace *trace = nullptr) {
       return read(oid, volume, 0, 0, pbl, trace);
     }
 
     ceph_tid_t read_full(const oid_t& oid,
-			 const VolumeRef& volume,
+			 const AVolRef& volume,
 			 read_callback&& onfinish,
 			 ZTracer::Trace *trace = nullptr) {
       ObjectOperation ops = volume->op();
@@ -798,7 +799,7 @@ namespace rados {
 
     // writes
     ceph_tid_t _modify(const oid_t& oid,
-		       const VolumeRef& volume,
+		       const AVolRef& volume,
 		       unique_ptr<ObjOp>& ops,
 		       op_callback&& onack, op_callback&& oncommit,
 		       ZTracer::Trace *trace = nullptr) {
@@ -809,7 +810,7 @@ namespace rados {
     }
 
     int _modify(const oid_t& oid,
-		const VolumeRef& volume,
+		const AVolRef& volume,
 		unique_ptr<ObjOp>& ops,
 		ZTracer::Trace *trace = nullptr) {
       CB_Waiter w;
@@ -819,7 +820,7 @@ namespace rados {
     }
 
     ceph_tid_t write(const oid_t& oid,
-		     const VolumeRef& volume,
+		     const AVolRef& volume,
 		     uint64_t off, uint64_t len, const bufferlist &bl,
 		     op_callback&& onack,
 		     op_callback&& oncommit,
@@ -833,7 +834,7 @@ namespace rados {
     }
 
     int write(const oid_t& oid,
-	      const VolumeRef& volume,
+	      const AVolRef& volume,
 	      uint64_t off, uint64_t len, const bufferlist& bl,
 	      ZTracer::Trace *trace = nullptr) {
       CB_Waiter w;
@@ -843,7 +844,7 @@ namespace rados {
     }
 
     ceph_tid_t append(const oid_t& oid,
-		      const VolumeRef& volume,
+		      const AVolRef& volume,
 		      uint64_t len, const bufferlist &bl,
 		      op_callback&& onack,
 		      op_callback&& oncommit,
@@ -857,7 +858,7 @@ namespace rados {
     }
 
     int append(const oid_t& oid,
-	       const VolumeRef& volume,
+	       const AVolRef& volume,
 	       uint64_t len, const bufferlist &bl,
 	       ZTracer::Trace *trace = nullptr) {
       CB_Waiter w;
@@ -868,7 +869,7 @@ namespace rados {
     }
 
     ceph_tid_t write_trunc(const oid_t& oid,
-			   const VolumeRef& volume,
+			   const AVolRef& volume,
 			   uint64_t off, uint64_t len, const bufferlist &bl,
 			   uint64_t trunc_size, uint32_t trunc_seq,
 			   op_callback&& onack, op_callback&& oncommit,
@@ -882,7 +883,7 @@ namespace rados {
     }
 
     int write_trunc(const oid_t& oid,
-		    const VolumeRef& volume,
+		    const AVolRef& volume,
 		    uint64_t off, uint64_t len, const bufferlist &bl,
 		    uint64_t trunc_size,
 		    uint32_t trunc_seq,
@@ -895,7 +896,7 @@ namespace rados {
     }
 
     ceph_tid_t write_full(const oid_t& oid,
-			  const VolumeRef& volume,
+			  const AVolRef& volume,
 			  const bufferlist &bl,
 			  op_callback&& onack,
 			  op_callback&& oncommit,
@@ -909,7 +910,7 @@ namespace rados {
     }
 
     int write_full(const oid_t& oid,
-		   const VolumeRef& volume,
+		   const AVolRef& volume,
 		   const bufferlist &bl,
 		   ZTracer::Trace *trace = nullptr) {
       CB_Waiter w;
@@ -919,7 +920,7 @@ namespace rados {
     }
 
     ceph_tid_t trunc(const oid_t& oid,
-		     const VolumeRef& volume,
+		     const AVolRef& volume,
 		     uint64_t trunc_size,
 		     uint32_t trunc_seq, op_callback&& onack,
 		     op_callback&& oncommit,
@@ -933,7 +934,7 @@ namespace rados {
     }
 
     int trunc(const oid_t& oid,
-	      const VolumeRef& volume,
+	      const AVolRef& volume,
 	      uint64_t trunc_size,
 	      uint32_t trunc_seq = 0,
 	      ZTracer::Trace *trace = nullptr) {
@@ -944,7 +945,7 @@ namespace rados {
     }
 
     ceph_tid_t zero(const oid_t& oid,
-		    const VolumeRef& volume,
+		    const AVolRef& volume,
 		    uint64_t off, uint64_t len,
 		    op_callback&& onack, op_callback&& oncommit,
 		    ZTracer::Trace *trace = nullptr) {
@@ -956,7 +957,7 @@ namespace rados {
       return op_submit(o);
     }
 
-    int zero(const oid_t& oid, const VolumeRef& volume,
+    int zero(const oid_t& oid, const AVolRef& volume,
 	     uint64_t off, uint64_t len, ZTracer::Trace *trace = nullptr) {
       CB_Waiter w;
       zero(oid, volume, off, len, nullptr, w, trace);
@@ -965,7 +966,7 @@ namespace rados {
     }
 
     ceph_tid_t create(const oid_t& oid,
-		      const VolumeRef& volume,
+		      const AVolRef& volume,
 		      int create_flags,
 		      op_callback&& onack, op_callback&& oncommit,
 		      ZTracer::Trace *trace = nullptr) {
@@ -978,7 +979,7 @@ namespace rados {
     }
 
     int create(const oid_t& oid,
-	       const VolumeRef& volume,
+	       const AVolRef& volume,
 	       int create_flags,
 	       ZTracer::Trace *trace = nullptr) {
       CB_Waiter w;
@@ -988,7 +989,7 @@ namespace rados {
     }
 
     ceph_tid_t remove(const oid_t& oid,
-		      const VolumeRef& volume,
+		      const AVolRef& volume,
 		      op_callback&& onack,
 		      op_callback&& oncommit,
 		      ZTracer::Trace *trace = nullptr) {
@@ -1001,7 +1002,7 @@ namespace rados {
     }
 
     ceph_tid_t remove(const oid_t& oid,
-		      const VolumeRef& volume,
+		      const AVolRef& volume,
 		      ZTracer::Trace *trace = nullptr) {
       CB_Waiter w;
       remove(oid, volume, nullptr, w, trace);
@@ -1010,7 +1011,7 @@ namespace rados {
     }
 
     ceph_tid_t lock(const oid_t& oid,
-		    const VolumeRef& volume, int op,
+		    const AVolRef& volume, int op,
 		    op_callback&& onack,
 		    op_callback&& oncommit,
 		    ZTracer::Trace *trace = nullptr) {
@@ -1024,7 +1025,7 @@ namespace rados {
 
 
     ceph_tid_t setxattr(const oid_t& oid,
-			const VolumeRef& volume,
+			const AVolRef& volume,
 			const string& name, const bufferlist &bl,
 			op_callback&& onack, op_callback&& oncommit,
 			ZTracer::Trace *trace = nullptr) {
@@ -1036,7 +1037,7 @@ namespace rados {
       return op_submit(o);
     }
 
-    int setxattr(const oid_t& oid, const VolumeRef& volume,
+    int setxattr(const oid_t& oid, const AVolRef& volume,
 		 const string& name, const bufferlist &bl,
 		 ZTracer::Trace *trace = nullptr) {
       CB_Waiter w;
@@ -1045,7 +1046,7 @@ namespace rados {
       return w.wait();
     }
 
-    ceph_tid_t removexattr(const oid_t& oid, const VolumeRef& volume,
+    ceph_tid_t removexattr(const oid_t& oid, const AVolRef& volume,
 			   const string& name, op_callback&& onack,
 			   op_callback&& oncommit,
 			   ZTracer::Trace *trace = nullptr) {
@@ -1058,7 +1059,7 @@ namespace rados {
     }
 
     int removexattr(const oid_t& oid,
-		    const VolumeRef& volume,
+		    const AVolRef& volume,
 		    const string& name, ZTracer::Trace *trace = nullptr) {
       CB_Waiter w;
       removexattr(oid, volume, name, nullptr, w, trace);
@@ -1067,7 +1068,7 @@ namespace rados {
     }
 
     ceph_tid_t omap_get_header(const oid_t& oid,
-			       const VolumeRef& volume,
+			       const AVolRef& volume,
 			       bufferlist* bl,
 			       op_callback&& onack,
 			       ZTracer::Trace *trace = nullptr) {
@@ -1080,7 +1081,7 @@ namespace rados {
     }
 
     int omap_get_header(const oid_t& oid,
-			const VolumeRef& volume,
+			const AVolRef& volume,
 			bufferlist* bl,
 			ZTracer::Trace *trace = nullptr) {
       CB_Waiter w;
@@ -1088,7 +1089,7 @@ namespace rados {
       return w.wait();
     }
 
-    ceph_tid_t omap_set_header(const oid_t& oid, const VolumeRef& volume,
+    ceph_tid_t omap_set_header(const oid_t& oid, const AVolRef& volume,
 			       bufferlist& bl, op_callback&& onack,
 			       op_callback&& oncommit,
 			       ZTracer::Trace *trace = nullptr) {
@@ -1101,7 +1102,7 @@ namespace rados {
     }
 
     int omap_set_header(const oid_t& oid,
-			const VolumeRef& volume,
+			const AVolRef& volume,
 			bufferlist& bl,
 			ZTracer::Trace *trace = nullptr) {
       CB_Waiter w;
@@ -1109,7 +1110,7 @@ namespace rados {
       return w.wait();
     }
 
-    ceph_tid_t omap_get_vals(const oid_t& oid, const VolumeRef& volume,
+    ceph_tid_t omap_get_vals(const oid_t& oid, const AVolRef& volume,
 			     const string& start_after,
 			     const string& filter_prefix,
 			     uint64_t max_to_get,
@@ -1123,7 +1124,7 @@ namespace rados {
       return op_submit(o);
     }
 
-    ceph_tid_t omap_get_vals(const oid_t& oid, const VolumeRef& volume,
+    ceph_tid_t omap_get_vals(const oid_t& oid, const AVolRef& volume,
 			     const string& start_after,
 			     const string& filter_prefix,
 			     uint64_t max_to_get,
@@ -1136,7 +1137,7 @@ namespace rados {
     }
 
     ceph_tid_t omap_get_vals_by_keys(
-      const oid_t& oid, const VolumeRef& volume,
+      const oid_t& oid, const AVolRef& volume,
       const std::set<std::string> &to_get,
       std::map<std::string,bufferlist> &out_set,
       op_callback&& onfinish, ZTracer::Trace *trace = nullptr) {
@@ -1149,7 +1150,7 @@ namespace rados {
     }
 
     ceph_tid_t omap_get_vals_by_keys(
-      const oid_t& oid, const VolumeRef& volume,
+      const oid_t& oid, const AVolRef& volume,
       const std::set<std::string> &to_get,
       std::map<std::string,bufferlist> &out_set,
       ZTracer::Trace *trace = nullptr) {
@@ -1158,7 +1159,7 @@ namespace rados {
       return w.wait();
     }
 
-    ceph_tid_t omap_set(const oid_t& oid, const VolumeRef& volume,
+    ceph_tid_t omap_set(const oid_t& oid, const AVolRef& volume,
 			const map<string, bufferlist>& map,
 			op_callback&& onack,
 			op_callback&& oncommit,
@@ -1171,7 +1172,7 @@ namespace rados {
       return op_submit(o);
     }
 
-    int omap_set(const oid_t& oid, const VolumeRef& volume,
+    int omap_set(const oid_t& oid, const AVolRef& volume,
 		 const map<string, bufferlist>& map,
 		 ZTracer::Trace *trace = nullptr) {
       CB_Waiter w;
@@ -1179,7 +1180,7 @@ namespace rados {
       return w.wait();
     }
 
-    ceph_tid_t omap_rm_keys(const oid_t& oid, const VolumeRef& volume,
+    ceph_tid_t omap_rm_keys(const oid_t& oid, const AVolRef& volume,
 			    const std::set<string>& keys,
 			    op_callback&& onack,
 			    op_callback&& oncommit,
@@ -1192,7 +1193,7 @@ namespace rados {
       return op_submit(o);
     }
 
-    int omap_rm_keys(const oid_t& oid, const VolumeRef& volume,
+    int omap_rm_keys(const oid_t& oid, const AVolRef& volume,
 		     const std::set<string>& keys,
 		     ZTracer::Trace *trace = nullptr) {
       CB_Waiter w;
@@ -1200,7 +1201,7 @@ namespace rados {
       return w.wait();
     }
 
-    ceph_tid_t set_alloc_hint(const oid_t& oid, const VolumeRef& volume,
+    ceph_tid_t set_alloc_hint(const oid_t& oid, const AVolRef& volume,
 			      uint64_t expected_object_size,
 			      uint64_t expected_write_size,
 			      op_callback&& onack,
@@ -1214,7 +1215,7 @@ namespace rados {
       return op_submit(o);
     }
 
-    int set_alloc_hint(const oid_t& oid, const VolumeRef& volume,
+    int set_alloc_hint(const oid_t& oid, const AVolRef& volume,
 		       uint64_t expected_object_size,
 		       uint64_t expected_write_size,
 		       ZTracer::Trace *trace = nullptr) {
@@ -1224,7 +1225,7 @@ namespace rados {
       return w.wait();
     }
 
-    ceph_tid_t call(const oid_t& oid, const VolumeRef& vol,
+    ceph_tid_t call(const oid_t& oid, const AVolRef& vol,
 		    const string& cname, const string& method,
 		    bufferlist &indata, bufferlist* outdata,
 		    op_callback&& onack, op_callback&& oncommit,
@@ -1237,7 +1238,7 @@ namespace rados {
       return op_submit(o);
     }
 
-    int call(const oid_t& oid, const VolumeRef& vol,
+    int call(const oid_t& oid, const AVolRef& vol,
 	     const string& cname, const string& method, bufferlist &indata,
 	     bufferlist* outdata = nullptr,
 	     ZTracer::Trace *trace = nullptr) {
@@ -1280,7 +1281,9 @@ namespace rados {
 
     void blacklist_self(bool set);
     VolumeRef vol_by_uuid(const boost::uuids::uuid& id);
+    AVolRef attach_by_uuid(const boost::uuids::uuid& id);
     VolumeRef vol_by_name(const string& name);
+    AVolRef attach_by_name(const string& name);
   };
 
   inline bool operator==(const Objecter::OSDSession &l,

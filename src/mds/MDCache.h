@@ -676,12 +676,12 @@ private:
   Context::List waiting_for_open;
 
 public:
-  CInode *create_system_inode(VolumeRef &v, inodeno_t ino, int mode);
-  CInode *create_root_inode(VolumeRef &v);
+  CInode *create_system_inode(const AVolRef& v, inodeno_t ino, int mode);
+  CInode *create_root_inode(const AVolRef& v);
 
-  void create_empty_hierarchy(VolumeRef &v,
+  void create_empty_hierarchy(const AVolRef& v,
 			      cohort::SimpleMultiCallback<int>& multi);
-  void create_mydir_hierarchy(VolumeRef &v,
+  void create_mydir_hierarchy(const AVolRef& v,
 			      cohort::SimpleMultiCallback<int>& gather);
 
   bool is_open() { return open; }
@@ -689,10 +689,10 @@ public:
     waiting_for_open.push_back(*c);
   }
 
-  void open_root_inode(VolumeRef &v, Context *c);
-  void open_root(VolumeRef &v);
-  void open_mydir_inode(VolumeRef &v, Context *c);
-  void populate_mydir(VolumeRef &v);
+  void open_root_inode(const AVolRef& v, Context *c);
+  void open_root(const AVolRef& v);
+  void open_mydir_inode(const AVolRef& v, Context *c);
+  void populate_mydir(const AVolRef& v);
 
   void _create_system_file(CDir *dir, const char *name, CInode *in, Context *fin);
   void _create_system_file_finish(MutationRef& mut, CDentry *dn,
@@ -779,7 +779,7 @@ protected:
     bool want_replica;
     bool want_xlocked;
     version_t tid;
-    VolumeRef volume;
+    AVolRef volume;
     Context::List waiters;
     open_ino_info_t() : checking(-1), auth_hint(-1),
       check_peers(true), fetch_backtrace(true), discover(false) {}
@@ -806,7 +806,7 @@ protected:
 
 public:
   void kick_open_ino_peers(int who);
-  void open_ino(inodeno_t ino, VolumeRef volume, Context *fin,
+  void open_ino(inodeno_t ino, const AVolRef& volume, Context *fin,
 		bool want_replica=true, bool want_xlocked=false);
 
   // -- find_ino_peer --
@@ -859,7 +859,7 @@ public:
   }
 protected:
   void scan_stray_dir(dirfrag_t next=dirfrag_t());
-  void fetch_backtrace(inodeno_t ino, VolumeRef volume,
+  void fetch_backtrace(inodeno_t ino, const AVolRef& volume,
 		       rados::read_callback&& fin);
   void purge_stray(CDentry *dn);
   void _purge_stray_purged(CDentry *dn, int r=0);

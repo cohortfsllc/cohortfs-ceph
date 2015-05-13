@@ -184,7 +184,7 @@ protected:
   boost::uuids::uuid cas_uuid;
   // where fs metadata objects go
   boost::uuids::uuid metadata_uuid;
-  VolumeRef metadata_volume;
+  AVolRef metadata_volume;
 
   /*
    * in: the set of logical mds #'s that define the cluster.  this is the set
@@ -251,9 +251,15 @@ public:
   int get_tableserver() const { return tableserver; }
   int get_root() const { return root; }
 
-  VolumeRef get_metadata_volume(Objecter *objecter, bool failed_ok = false) {
+  AVolRef get_metadata_volume(Objecter *objecter, bool failed_ok = false) {
     if (!metadata_volume) {
-      metadata_volume = objecter->vol_by_uuid(metadata_uuid);
+      objecter->with_osdmap([&](const OSDMap& o) {
+	  VolumeRef v;
+	  o.find_by_uuid(metadata_uuid, v);
+	  if (v) {
+	    metadata_volume = v->attach(objecter->cct, o);
+	  }
+	});
     }
     if (!failed_ok) assert(!!metadata_volume);
     return metadata_volume;

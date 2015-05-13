@@ -105,8 +105,8 @@ struct DirEntry {
   string d_name;
   struct stat st;
   int stmask;
-  DirEntry(const string &s) : d_name(s), stmask(0) {}
-  DirEntry(const string &n, struct stat& s, int stm) : d_name(n), st(s),
+  DirEntry(const string& s) : d_name(s), stmask(0) {}
+  DirEntry(const string& n, struct stat& s, int stm) : d_name(n), st(s),
 						       stmask(stm) {}
 };
 
@@ -141,10 +141,10 @@ struct dir_result_t {
     return ((uint64_t)frag << SHIFT) | (uint64_t)off;
   }
   static unsigned fpos_frag(uint64_t p) {
-    return (p & ~END) >> SHIFT;
+    return (p&  ~END) >> SHIFT;
   }
   static unsigned fpos_off(uint64_t p) {
-    return p & MASK;
+    return p&  MASK;
   }
 
 
@@ -167,7 +167,7 @@ struct dir_result_t {
   dir_result_t(Inode *in);
 
   frag_t frag() { return frag_t(offset >> SHIFT); }
-  unsigned fragpos() { return offset & MASK; }
+  unsigned fragpos() { return offset&  MASK; }
 
   void next_frag() {
     frag_t fg = offset >> SHIFT;
@@ -181,7 +181,7 @@ struct dir_result_t {
     assert(sizeof(offset) == 8);
   }
   void set_end() { offset |= END; }
-  bool at_end() { return (offset & END); }
+  bool at_end() { return (offset&  END); }
 
   void reset() {
     last_name.clear();
@@ -215,7 +215,7 @@ class Client : public Dispatcher {
     Client *m_client;
   public:
     CommandHook(Client *client);
-    bool call(std::string command, cmdmap_t &cmdmap, std::string format,
+    bool call(std::string command, cmdmap_t& cmdmap, std::string format,
 	      bufferlist& out);
   };
   CommandHook m_command_hook;
@@ -426,7 +426,7 @@ protected:
   inodeno_t get_root_ino();
   Inode *get_root();
 
-  void inode_2_volume(Inode *in, VolumeRef &v);
+  void inode_2_volume(Inode* in, AVolRef& v);
 
   int init()  WARN_UNUSED_RESULT;
   void shutdown();
@@ -473,7 +473,7 @@ protected:
   void check_caps(Inode *in, bool is_delayed);
   void get_cap_ref(Inode *in, int cap);
   void put_cap_ref(Inode *in, int cap);
-  void wait_sync_caps(uint64_t want, unique_lock &cl);
+  void wait_sync_caps(uint64_t want, unique_lock& cl);
 
   void _schedule_invalidate_dentry_callback(Dentry *dn, bool del);
   void _async_dentry_invalidate(vinodeno_t dirino, vinodeno_t ino,
@@ -519,7 +519,7 @@ protected:
 			      ceph::real_time mtime, ceph::real_time atime,
 			      version_t inline_version,
 			      bufferlist& inline_data, int issued);
-  Inode *add_update_inode(InodeStat *st, VolumeRef volume, ceph::mono_time ttl,
+  Inode *add_update_inode(InodeStat *st, AVolRef volume, ceph::mono_time ttl,
 			  MetaSession *session);
   Dentry *insert_dentry_inode(Dir *dir, const string& dname, LeaseStat *dlease,
 			      Inode *in, ceph::mono_time from,
@@ -574,7 +574,7 @@ private:
   };
 
   int _read_sync(Fh *f, uint64_t off, uint64_t len, bufferlist *bl,
-		 bool *checkeof, unique_lock &cl);
+		 bool *checkeof, unique_lock& cl);
   int _read_async(Fh *f, uint64_t off, uint64_t len, bufferlist *bl);
 
   // internal interface
@@ -583,7 +583,7 @@ private:
   int _lookup(Inode *dir, const string& dname, Inode **target,
 	      unique_lock& cl);
 
-  int _link(Inode *in, Inode *dir, const char *name, unique_lock &cl,
+  int _link(Inode *in, Inode *dir, const char *name, unique_lock& cl,
 	    int uid = -1, int gid= -1, Inode **inp = 0);
   int _unlink(Inode *dir, const char *name, unique_lock& cl, int uid=-1,
 	      int gid = -1);
@@ -635,7 +635,7 @@ private:
   inodeno_t _get_inodeno(Inode *in);
 
 public:
-  int mount(const std::string &mount_root);
+  int mount(const std::string& mount_root);
   void unmount();
 
   // these shoud (more or less) mirror the actual system calls.
@@ -721,8 +721,8 @@ public:
   // file ops
   int mknod(const char *path, mode_t mode, dev_t rdev=0);
   int open(const char *path, int flags, mode_t mode=0);
-  int lookup_hash(VolumeRef &v, inodeno_t ino, inodeno_t dirino, const char *name);
-  int lookup_ino(VolumeRef &v, inodeno_t ino, Inode **inode=NULL);
+  int lookup_hash(const AVolRef& v, inodeno_t ino, inodeno_t dirino, const char *name);
+  int lookup_ino(const AVolRef& v, inodeno_t ino, Inode **inode=NULL);
   int lookup_parent(Inode *in, Inode **parent=NULL);
   int lookup_name(Inode *in, Inode *parent);
   int close(int fd);

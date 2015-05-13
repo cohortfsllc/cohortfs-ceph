@@ -176,7 +176,7 @@ static int dump_data(std::string const &filename, bufferlist const &data)
 }
 
 
-static int do_get(Objecter* o, VolumeRef vol, const oid_t& oid,
+static int do_get(Objecter* o, const AVolRef& vol, const oid_t& oid,
 		  const string& outfile, unsigned op_size)
 {
   int fd;
@@ -217,8 +217,8 @@ static int do_get(Objecter* o, VolumeRef vol, const oid_t& oid,
   return ret;
 }
 
-static int do_copy(Objecter* o, VolumeRef src_vol, const oid_t& src_oid,
-		   VolumeRef target_vol, const oid_t& target_oid)
+static int do_copy(Objecter* o, AVolRef src_vol, const oid_t& src_oid,
+		   AVolRef target_vol, const oid_t& target_oid)
 {
   bufferlist outdata;
   ObjectOperation read_op(src_vol->op());
@@ -308,7 +308,7 @@ err:
   return ret;
 }
 
-static int do_put(Objecter* o, VolumeRef vol, const oid_t& oid,
+static int do_put(Objecter* o, AVolRef vol, const oid_t& oid,
 		  const string& infile, int op_size)
 {
   bufferlist indata;
@@ -397,7 +397,7 @@ class LoadGen {
   size_t total_completed;
 
   Objecter* o;
-  VolumeRef v;
+  AVolRef v;
 
   map<int, obj_info> objs;
 
@@ -520,7 +520,7 @@ public:
   typedef std::lock_guard<std::mutex> lock_guard;
   std::condition_variable cond;
 
-  LoadGen(Objecter* _o, VolumeRef& _v) : o(_o), v(_v) {
+  LoadGen(Objecter* _o, AVolRef& _v) : o(_o), v(_v) {
     read_percent = 80;
     min_obj_len = 1024;
     max_obj_len = 5ull * 1024ull * 1024ull * 1024ull;
@@ -715,7 +715,7 @@ class RadosBencher : public ObjBencher {
 
   RB_Completion* completions;
   Objecter* o;
-  VolumeRef v;
+  AVolRef v;
 protected:
   int completions_init(int concurrentios) {
     completions = new RB_Completion[concurrentios];
@@ -769,14 +769,14 @@ protected:
   }
 
 public:
-  RadosBencher(CephContext *cct_, Objecter* _o, VolumeRef _v)
+  RadosBencher(CephContext *cct_, Objecter* _o, AVolRef _v)
     : ObjBencher(cct_), completions(nullptr), o(_o), v(_v) {}
   ~RadosBencher() { }
 };
 
 static int do_lock_cmd(std::vector<const char*> &nargs,
 		       const std::map < std::string, std::string > &opts,
-		       Objecter* o, VolumeRef v,
+		       Objecter* o, AVolRef v,
 		       const boost::scoped_ptr<Formatter>& formatter)
 {
   if (nargs.size() < 3)
@@ -1061,12 +1061,13 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
   }
 
   Objecter* o = rc.objecter;
-  VolumeRef v;
+  AVolRef v;
 
   if (!vol_name.empty()) {
-    v = rc.lookup_volume(vol_name);
-    if (!v) {
-      cerr << "error opening volume " << vol_name << endl;
+    try {
+    v = rc.objecter->attach_by_name(vol_name);
+    } catch (std::system_error& e) {
+      cerr << "error opening volume " << vol_name << ":" << e.what() << endl;
       return 1;
     }
   }
@@ -1362,10 +1363,12 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     }
 
     // open io context.
-    VolumeRef target_vol = rc.lookup_volume(target);
-    if (ret < 0) {
+    AVolRef target_vol;
+    try {
+      target_vol = rc.objecter->attach_by_name(target);
+    } catch (std::system_error& e) {
       cerr << "error opening target volume " << target << ": "
-	   << cpp_strerror(ret) << endl;
+	   << e.what() << endl;
       return 1;
     }
 

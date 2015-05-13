@@ -27,10 +27,6 @@ using std::unique_ptr;
 
 const uint64_t StripedPlacer::one_op = 4194304;
 
-typedef void (*place_func)(void*, const uint8_t[16], size_t, const char*,
-			   bool(*)(void*, int),
-			   bool(*)(void*, int));
-
 PlacerRef StripedPlacerFactory(bufferlist::iterator& bl, uint8_t v)
 {
   StripedPlacer *placer = new StripedPlacer();
@@ -55,9 +51,10 @@ uint32_t StripedPlacer::num_rules(void)
   return 1;
 }
 
-ssize_t StripedPlacer::place(const oid_t& object,
-			     const OSDMap& map,
-			     const std::function<void(int)>& f) const
+size_t StripedPlacer::place(const oid_t& object,
+			    const boost::uuids::uuid& id,
+			    const OSDMap& map,
+			    const std::function<void(int)>& f) const
 {
   ssize_t count = 0;
   for (uint32_t i = 0; i < stripe_width; i++) {
@@ -191,7 +188,7 @@ void StripedPlacer::stride_extent(const uint64_t off, const uint64_t len,
 void StripedPlacer::make_strides(const oid_t& oid,
 				 uint64_t offset, uint64_t len,
 				 uint64_t truncate_size, uint32_t truncate_seq,
-				 vector<StrideExtent>& strides)
+				 vector<StrideExtent>& strides) const
 {
 #if 0
   buffer::list::iterator i(&blin);
@@ -224,24 +221,24 @@ void StripedPlacer::make_strides(const oid_t& oid,
 }
 
 void StripedPlacer::repair(vector<StrideExtent>& extents,
-			   const OSDMap& map)
+			   const OSDMap& map) const
 {
   return;
 }
 
-void StripedPlacer::serialize_data(bufferlist &bl)
+void StripedPlacer::serialize_data(bufferlist &bl) const
 {
   return;
 }
 
-void StripedPlacer::serialize_code(bufferlist &bl)
+void StripedPlacer::serialize_code(bufferlist &bl) const
 {
   return;
 }
 
 int StripedPlacer::encode(const set<int> &want_to_encode,
-	   const bufferlist &in,
-	   map<int, bufferlist> *encoded) const
+			  const bufferlist &in,
+			  map<int, bufferlist> *encoded) const
 {
   bufferlist out = in;
   size_t stridesize = stride_size(in.length());

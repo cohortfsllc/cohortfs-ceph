@@ -143,6 +143,24 @@ namespace rados {
     return v;
   }
 
+  AVolRef RadosClient::attach_volume(const string& name)
+  {
+    int r = wait_for_osdmap();
+    if (r < 0)
+      return nullptr;
+
+    return objecter->attach_by_name(name);
+  }
+
+  AVolRef RadosClient::attach_volume(const boost::uuids::uuid& id)
+  {
+    int r = wait_for_osdmap();
+    if (r < 0)
+      return nullptr;
+
+    return objecter->attach_by_uuid(id);
+  }
+
   int RadosClient::get_fsid(std::string *s)
   {
     if (!s)

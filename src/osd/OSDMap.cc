@@ -761,7 +761,6 @@ int OSDMap::apply_incremental(const Incremental &inc)
       inc.vol_additions.begin();
       p != inc.vol_additions.end();
       ++p) {
-    p->vol->init(this);
     add_volume(p->vol);
   }
 
@@ -857,7 +856,6 @@ void OSDMap::decode(bufferlist::iterator& bl)
     ::decode(count, bl);
     for (uint32_t i = 0; i < count; ++i) {
       VolumeRef v = Volume::decode_volume(bl);
-      v->init(this);
       vols.by_uuid[v->id] = v;
     }
     DECODE_FINISH(bl); // client-usable data

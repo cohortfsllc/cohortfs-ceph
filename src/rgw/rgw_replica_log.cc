@@ -33,10 +33,10 @@ void RGWReplicaBounds::decode_json(JSONObj *oid) {
 RGWReplicaLogger::RGWReplicaLogger(RGWRados *_store) :
     cct(_store->cct), store(_store) {}
 
-int RGWReplicaLogger::open_volume(VolumeRef& vol, const string& name)
+int RGWReplicaLogger::open_volume(AVolRef& vol, const string& name)
 {
   int r = 0;
-  vol = store->rc.lookup_volume(name);
+  vol = store->rc.attach_volume(name);
   if (!vol) {
     rgw_bucket p(name);
     r = store->create_vol(p);
@@ -44,7 +44,7 @@ int RGWReplicaLogger::open_volume(VolumeRef& vol, const string& name)
       return r;
 
     // retry
-    vol = store->rc.lookup_volume(name);
+    vol = store->rc.attach_volume(name);
     if (!vol)
       r = -ENOENT;
   }
@@ -66,7 +66,7 @@ int RGWReplicaLogger::update_bound(const string& oid, const string& volname,
   progress.position_time = time;
   progress.items = *entries;
 
-  VolumeRef vol;
+  AVolRef vol;
   int r = open_volume(vol, volname);
   if (r < 0) {
     return r;
@@ -80,7 +80,7 @@ int RGWReplicaLogger::update_bound(const string& oid, const string& volname,
 int RGWReplicaLogger::delete_bound(const string& oid, const string& volname,
 				   const string& daemon_id)
 {
-  VolumeRef vol;
+  AVolRef vol;
   int r = open_volume(vol, volname);
   if (r < 0) {
     return r;
@@ -94,7 +94,7 @@ int RGWReplicaLogger::delete_bound(const string& oid, const string& volname,
 int RGWReplicaLogger::get_bounds(const string& oid, const string& volname,
 				 RGWReplicaBounds& bounds)
 {
-  VolumeRef vol;
+  AVolRef vol;
   int r = open_volume(vol, volname);
   if (r < 0) {
     return r;
@@ -117,7 +117,7 @@ RGWReplicaObjectLogger(RGWRados *_store,
 
 int RGWReplicaObjectLogger::create_log_objects(int shards)
 {
-  VolumeRef vol;
+  AVolRef vol;
   int r = open_volume(vol, volname);
   if (r < 0) {
     return r;

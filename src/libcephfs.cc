@@ -1108,7 +1108,7 @@ extern "C" int ceph_ll_lookup_inode(
     struct inodeno_t ino,
     Inode **inode)
 {
-  VolumeRef volume;
+  AVolRef volume;
   cmount->get_client()->inode_2_volume(cmount->get_client()->get_root(), volume);
   int r = (cmount->get_client())->lookup_ino(volume, ino, inode);
   if (r) {

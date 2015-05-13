@@ -52,7 +52,7 @@ struct ETableServer : public LogEvent {
   }
 
   void update_segment();
-  void replay(MDS *mds, VolumeRef &v);
+  void replay(MDS *mds, const AVolRef& v);
 };
 
 #endif

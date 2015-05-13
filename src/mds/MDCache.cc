@@ -261,7 +261,7 @@ void MDCache::remove_inode(CInode *o)
 
 
 
-CInode *MDCache::create_system_inode(VolumeRef &v, inodeno_t ino, int mode)
+CInode *MDCache::create_system_inode(const AVolRef &v, inodeno_t ino, int mode)
 {
   dout(0) << "creating system inode with ino:" << ino << dendl;
   CInode *in = new CInode(this);
@@ -293,13 +293,13 @@ CInode *MDCache::create_system_inode(VolumeRef &v, inodeno_t ino, int mode)
   return in;
 }
 
-CInode *MDCache::create_root_inode(VolumeRef &v)
+CInode *MDCache::create_root_inode(const AVolRef& v)
 {
   CInode *i = create_system_inode(v, MDS_INO_ROOT, S_IFDIR|0755);
   return i;
 }
 
-void MDCache::create_empty_hierarchy(VolumeRef &v,
+void MDCache::create_empty_hierarchy(const AVolRef& v,
 				     cohort::SimpleMultiCallback<int>& multi)
 {
   // create root dir
@@ -324,7 +324,7 @@ void MDCache::create_empty_hierarchy(VolumeRef &v,
   root->store(multi);
 }
 
-void MDCache::create_mydir_hierarchy(VolumeRef &v,
+void MDCache::create_mydir_hierarchy(const AVolRef& v,
 				     cohort::SimpleMultiCallback<int>& multi)
 {
   // create mds dir
@@ -468,8 +468,8 @@ void MDCache::_create_system_file_finish(MutationRef& mut, CDentry *dn, version_
 
 struct C_MDS_RetryOpenRoot : public Context {
   MDCache *cache;
-  VolumeRef vol;
-  C_MDS_RetryOpenRoot(MDCache *c, VolumeRef &v) : cache(c), vol(v) {}
+  AVolRef vol;
+  C_MDS_RetryOpenRoot(MDCache *c, const AVolRef& v) : cache(c), vol(v) {}
   void finish(int r) {
     if (r < 0) {
       MDS::unique_lock ml(cache->mds->mds_lock, std::defer_lock);
@@ -480,7 +480,7 @@ struct C_MDS_RetryOpenRoot : public Context {
   }
 };
 
-void MDCache::open_root_inode(VolumeRef &v, Context *c)
+void MDCache::open_root_inode(const AVolRef& v, Context *c)
 {
   if (mds->whoami == mds->mdsmap->get_root()) {
     CInode *in;
@@ -491,13 +491,13 @@ void MDCache::open_root_inode(VolumeRef &v, Context *c)
   }
 }
 
-void MDCache::open_mydir_inode(VolumeRef &v, Context *c)
+void MDCache::open_mydir_inode(const AVolRef& v, Context *c)
 {
   CInode *in = create_system_inode(v, MDS_INO_MDSDIR(mds->whoami), S_IFDIR|0755);	// initially inaccurate!
   in->fetch(c);
 }
 
-void MDCache::open_root(VolumeRef &v)
+void MDCache::open_root(const AVolRef& v)
 {
   dout(10) << "open_root" << dendl;
 
@@ -536,7 +536,7 @@ void MDCache::open_root(VolumeRef &v)
   populate_mydir(v);
 }
 
-void MDCache::populate_mydir(VolumeRef &v)
+void MDCache::populate_mydir(const AVolRef& v)
 {
   assert(myin);
   CDir *mydir = myin->get_or_open_dirfrag(this, frag_t());
@@ -2383,7 +2383,7 @@ void MDCache::set_recovery_set(set<int>& s)
  */
 void MDCache::handle_resolve(MMDSResolve *m)
 {
-  VolumeRef volume(mds->get_metadata_volume());
+  AVolRef volume(mds->get_metadata_volume());
   dout(7) << "handle_resolve from " << m->get_source() << dendl;
   int from = m->get_source().num();
 
@@ -5303,7 +5303,7 @@ void MDCache::_recovered(CInode *in, int r, uint64_t size,
 void MDCache::purge_prealloc_ino(inodeno_t ino, op_callback&& fin)
 {
   oid_t oid = CInode::get_object_name(ino, frag_t(), "");
-  VolumeRef volume(mds->get_metadata_volume());
+  AVolRef volume(mds->get_metadata_volume());
 
   dout(10) << "purge_prealloc_ino " << ino << " oid_t " << oid << dendl;
   mds->objecter->remove(oid, volume, 0, std::move(fin));
@@ -7349,22 +7349,19 @@ void MDCache::_open_ino_backtrace_fetched(inodeno_t ino, bufferlist& bl, int err
   inode_backtrace_t backtrace;
   if (err == 0) {
     ::decode(backtrace, bl);
-    if (backtrace.volume != info.volume->id && !backtrace.volume.is_nil()) {
+    if (backtrace.volume != info.volume->v->id && !backtrace.volume.is_nil()) {
       dout(10) << " old object in volume " << info.volume
 	       << ", retrying volume " << backtrace.volume << dendl;
-    info.volume = mds->objecter->vol_by_uuid(backtrace.volume);
-// XXX error recovery?
-      int r = info.volume->attach(mds->objecter->cct);
-      if (r) {
-	dout(0) << "Unable to attach volume " << info.volume << " error=" << r << dendl;
-	return;
-      }
+      mds->objecter->with_osdmap([&](const OSDMap& o) {
+	  info.volume = mds->objecter->vol_by_uuid(backtrace.volume)
+	    ->attach(cct, o);
+	});
       fetch_backtrace(ino, info.volume,
 		      CB_MDC_OpenInoBacktraceFetched(this, ino));
       return;
     }
   } else if (err == -ENOENT) {
-    VolumeRef meta_volume = mds->get_metadata_volume();
+    AVolRef meta_volume = mds->get_metadata_volume();
     if (info.volume != meta_volume) {
       dout(10) << " no object in volume " << info.volume
 	       << ", retrying volume " << meta_volume << dendl;
@@ -7605,7 +7602,7 @@ void MDCache::do_open_ino(inodeno_t ino, open_ino_info_t& info,
   } else {
     assert(!info.ancestors.empty());
     info.checking = mds->get_nodeid();
-    VolumeRef mvol(mds->get_metadata_volume());
+    AVolRef mvol(mds->get_metadata_volume());
 // XXX error recovery?
     if (!mvol) {
       dout(0) << "Unable to attach volume " << mvol << dendl;
@@ -7752,7 +7749,7 @@ void MDCache::kick_open_ino_peers(int who)
   }
 }
 
-void MDCache::open_ino(inodeno_t ino, VolumeRef volume, Context* fin,
+void MDCache::open_ino(inodeno_t ino, const AVolRef& volume, Context* fin,
 		       bool want_replica, bool want_xlocked)
 {
   dout(10) << "open_ino " << ino << " volume " << volume << " want_replica "
@@ -7781,11 +7778,6 @@ void MDCache::open_ino(inodeno_t ino, VolumeRef volume, Context* fin,
   } else {
     open_ino_info_t& info = opening_inodes[ino];
     assert(!!volume);
-// used to be find_by_uuid if !volume - must fix upstream of here.
-    int r = volume->attach(mds->objecter->cct);
-    if (r) {
-      dout(0) << "Unable to attach volume " << volume << " error=" << r << dendl;
-    }
     info.checked.insert(mds->get_nodeid());
     info.want_replica = want_replica;
     info.want_xlocked = want_xlocked;
@@ -8507,7 +8499,7 @@ void MDCache::eval_remote(CDentry *dn)
   }
 }
 
-void MDCache::fetch_backtrace(inodeno_t ino, VolumeRef volume,
+void MDCache::fetch_backtrace(inodeno_t ino, const AVolRef& volume,
 			      rados::read_callback&& fin)
 {
   oid_t oid = CInode::get_object_name(ino, frag_t(), "");
@@ -8565,7 +8557,7 @@ void MDCache::purge_stray(CDentry *dn)
   auto& purged = cohort::MultiCallback::create<MDC_PurgeStrayPurged>(this, dn);
 
   if (in->is_dir()) {
-    VolumeRef volume(mds->get_metadata_volume());
+    AVolRef volume(mds->get_metadata_volume());
 // XXX error recovery?
     if (!volume) {
       dout(0) << "Unable to attach volume " << volume << dendl;
@@ -8619,14 +8611,10 @@ void MDCache::purge_stray(CDentry *dn)
   for (auto p = pi->old_volumes.begin();
        p != pi->old_volumes.end();
        ++p) {
-    VolumeRef volume(mds->objecter->vol_by_uuid(*p));
-// XXX error recovery?
-    int r = volume->attach(mds->objecter->cct);
-    if (r) {
-      dout(0) << "Unable to attach volume " << volume << " error=" << r
-	      << dendl;
-      return;
-    }
+    AVolRef volume;
+    mds->objecter->with_osdmap([&](const OSDMap& o) {
+	volume = mds->objecter->vol_by_uuid(*p)->attach(mds->objecter->cct, o);
+      });
     mds->objecter->remove(poid, volume, nullptr, purged);
   }
   purged.activate();
@@ -10667,11 +10655,7 @@ void MDCache::_fragment_committed(dirfrag_t basedirfrag, list<CDir*>& resultfrag
   auto& finished = cohort::MultiCallback::create<MDC_FragmentFinish>(
     this, basedirfrag, resultfrags);
 
-  VolumeRef volume(mds->get_metadata_volume());
-  if (!volume) {
-    dout(0) << "Unable to attach volume " << volume << dendl;
-    return;
-  }
+  AVolRef volume(mds->get_metadata_volume());
   for (list<frag_t>::iterator p = uf.old_frags.begin();
        p != uf.old_frags.end();
        ++p) {

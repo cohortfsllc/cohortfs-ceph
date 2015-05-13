@@ -60,7 +60,7 @@ class Inode {
   int32_t nlink;
 
   // file (data access)
-  VolumeRef volume;
+  AVolRef volume;
   uint64_t size; // on directory, # dentries
   uint32_t truncate_seq;
   uint64_t truncate_size;
@@ -162,7 +162,7 @@ class Inode {
     ll_ref -= n;
   }
 
-  Inode(CephContext *cct_, vinodeno_t vino, VolumeRef vol_)
+  Inode(CephContext *cct_, vinodeno_t vino, AVolRef vol_)
     : cct(cct_), ino(vino.ino), rdev(0), mode(0), uid(0), gid(0), nlink(0),
       volume(vol_),
       size(0), truncate_seq(1), truncate_size(-1), time_warp_seq(0),

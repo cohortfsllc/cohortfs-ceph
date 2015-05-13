@@ -45,7 +45,7 @@ MDLog::~MDLog()
 }
 
 
-void MDLog::init_journaler(VolumeRef &v)
+void MDLog::init_journaler(const AVolRef& v)
 {
   // inode
   ino = MDS_INO_LOG_OFFSET + mds->get_nodeid();
@@ -92,7 +92,7 @@ uint64_t MDLog::get_safe_pos()
 
 
 
-void MDLog::create(VolumeRef &v, op_callback&& c)
+void MDLog::create(const AVolRef &v, op_callback&& c)
 {
   ldout(mds->cct, 5) << "create empty log" << dendl;
   init_journaler(v);
@@ -101,7 +101,7 @@ void MDLog::create(VolumeRef &v, op_callback&& c)
   journaler->write_head(std::move(c));
 }
 
-void MDLog::open(VolumeRef &v, Context *c)
+void MDLog::open(const AVolRef& v, Context *c)
 {
   ldout(mds->cct, 5) << "open discovering log bounds" << dendl;
   init_journaler(v);
@@ -402,7 +402,7 @@ void MDLog::_expired(LogSegment *ls)
 
 
 
-void MDLog::replay(VolumeRef &v, Context *c)
+void MDLog::replay(const AVolRef& v, Context *c)
 {
   assert(journaler->is_active());
   assert(journaler->is_readonly());
@@ -449,7 +449,7 @@ public:
 
 
 // i am a separate thread
-void MDLog::_replay_thread(VolumeRef &v)
+void MDLog::_replay_thread(const AVolRef& v)
 {
   MDS::unique_lock ml(mds->mds_lock);
   ldout(mds->cct, 10) << "_replay_thread start" << dendl;

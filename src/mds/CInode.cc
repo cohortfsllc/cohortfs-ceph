@@ -302,13 +302,13 @@ void CInode::pop_and_dirty_projected_inode(LogSegment *ls)
   assert(!projected_nodes.empty());
   dout(15) << "pop_and_dirty_projected_inode " << projected_nodes.front()->inode
 	   << " v" << projected_nodes.front()->inode->version << dendl;
-  boost::uuids::uuid old_vol = volume->id;
+  boost::uuids::uuid old_vol = volume->v->id;
 
   mark_dirty(projected_nodes.front()->inode->version, ls);
   inode = *projected_nodes.front()->inode;
 
   if (inode.is_backtrace_updated())
-    _mark_dirty_parent(ls, old_vol != volume->id);
+    _mark_dirty_parent(ls, old_vol != volume->v->id);
 
   map<string,bufferptr> *px = projected_nodes.front()->xattrs;
   if (px) {
@@ -926,10 +926,6 @@ void CInode::_fetched(int r, bufferlist& bl, bufferlist& bl2, Context *fin)
   } else {
     decode_store(p);
     dout(10) << "_fetched " << *this << dendl;
-    int r = volume->attach(mdcache->mds->objecter->cct);	// XXX here or elsewhere?
-    if (r < 0) {
-      fin->complete(r);
-    }
     fin->complete(0);
   }
 }
@@ -985,20 +981,14 @@ void CInode::store_backtrace(Context *fin)
 
   auth_pin(this);
 
-  VolumeRef mvol;
+  AVolRef mvol;
   if (is_dir())
     mvol = mdcache->mds->get_metadata_volume();
   else
     mvol = volume;
 
-  if (!mvol) {
-    dout(0) << "Unable to attach volume " << mvol << dendl;
-    fin->complete(-EDOM);
-    return;
-  }
-
   inode_backtrace_t bt;
-  build_backtrace(volume->id, bt);
+  build_backtrace(volume->v->id, bt);
   bufferlist bl;
   ::encode(bt, bl);
 
@@ -1020,15 +1010,18 @@ void CInode::store_backtrace(Context *fin)
 
     set<boost::uuids::uuid> old_volumes;
     for (const auto& p : inode.old_volumes) {
-      if (p == volume->id || old_volumes.count(p))
+      if (p == volume->v->id || old_volumes.count(p))
 	continue;
 
-      VolumeRef ovol(mdcache->mds->objecter->vol_by_uuid(p));
-      int r = ovol->attach(mdcache->mds->objecter->cct);
-      if (r) {
-	dout(0) << "Unable to attach volume " << ovol << " error=" << r
-		<< dendl;
-	fin->complete(r);
+      AVolRef ovol;
+      try {
+	mdcache->mds->objecter->with_osdmap([&](const OSDMap& o) {
+	    ovol = mdcache->mds->objecter->vol_by_uuid(p)->attach(cct, o);
+	      });
+      } catch (std::system_error& e) {
+	derr << "Unable to attach volume " << ovol << e.what()
+	     << dendl;
+	fin->complete(e.code().value());
 	return;
       }
 

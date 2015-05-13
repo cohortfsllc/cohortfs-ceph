@@ -1475,7 +1475,7 @@ int RGWRados::list_zones(list<string>& zones)
 int RGWRados::open_root_vol_ctx()
 {
   const string& vol_name = zone.domain_root.name;
-  root_vol = rc.lookup_volume(vol_name);
+  root_vol = rc.attach_volume(vol_name);
   if (!root_vol) {
     int r = rc.objecter->create_volume(vol_name);
     if (r == -EEXIST)
@@ -1483,7 +1483,7 @@ int RGWRados::open_root_vol_ctx()
     if (r < 0)
       return r;
 
-    root_vol = rc.lookup_volume(vol_name);
+    root_vol = rc.attach_volume(vol_name);
   }
 
   return 0;
@@ -1491,7 +1491,7 @@ int RGWRados::open_root_vol_ctx()
 
 int RGWRados::open_gc_vol_ctx()
 {
-  gc_vol = rc.lookup_volume(zone.gc_vol.name);
+  gc_vol = rc.attach_volume(zone.gc_vol.name);
   if (!gc_vol) {
     int r = rc.objecter->create_volume(zone.gc_vol.name);
     if (r == -EEXIST)
@@ -1499,16 +1499,16 @@ int RGWRados::open_gc_vol_ctx()
     if (r < 0)
       return r;
 
-    gc_vol = rc.lookup_volume(zone.gc_vol.name);
+    gc_vol = rc.attach_volume(zone.gc_vol.name);
   }
 
   return 0;
 }
 
 int RGWRados::open_bucket_vol(const string& bucket_name,
-			      const string& vol_name, VolumeRef& vol)
+			      const string& vol_name, AVolRef& vol)
 {
-  vol = rc.lookup_volume(vol_name);
+  vol = rc.attach_volume(vol_name);
 
   if (!vol && !vols_initialized)
     return -ENOENT;
@@ -1517,14 +1517,14 @@ int RGWRados::open_bucket_vol(const string& bucket_name,
   if (r < 0 && r != -EEXIST)
     return r;
 
-  vol = rc.lookup_volume(vol_name);
+  vol = rc.attach_volume(vol_name);
   if (!vol)
     return -ENOENT;
 
   return 0;
 }
 
-int RGWRados::open_bucket_data_vol(rgw_bucket& bucket, VolumeRef& data)
+int RGWRados::open_bucket_data_vol(rgw_bucket& bucket, AVolRef& data)
 {
   int r = open_bucket_vol(bucket.name, bucket.data_vol, data);
   if (r < 0)
@@ -1534,7 +1534,7 @@ int RGWRados::open_bucket_data_vol(rgw_bucket& bucket, VolumeRef& data)
 }
 
 int RGWRados::open_bucket_data_extra_vol(rgw_bucket& bucket,
-					 VolumeRef& data_ctx)
+					 AVolRef& data_ctx)
 {
   int r = open_bucket_vol(bucket.name, bucket.data_extra_vol, data_ctx);
   if (r < 0)
@@ -1544,7 +1544,7 @@ int RGWRados::open_bucket_data_extra_vol(rgw_bucket& bucket,
 }
 
 int RGWRados::open_bucket_index_vol(rgw_bucket& bucket,
-				    VolumeRef& index_ctx)
+				    AVolRef& index_ctx)
 {
   int r = open_bucket_vol(bucket.name, bucket.index_vol, index_ctx);
   if (r < 0)
@@ -1593,14 +1593,14 @@ int RGWRados::list_buckets_next(RGWObjEnt& oid, RGWAccessHandle *handle)
 
 struct log_list_state {
   string prefix;
-  VolumeRef vol;
+  AVolRef vol;
 };
 
 int RGWRados::log_list_init(const string& prefix, RGWAccessHandle *handle)
 {
   log_list_state *state = new log_list_state;
   string& log_vol = zone.log_vol.name;
-  state->vol = rc.lookup_volume(log_vol);
+  state->vol = rc.attach_volume(log_vol);
   if (!state->vol) {
     delete state;
     return -ENOENT;
@@ -1622,14 +1622,14 @@ int RGWRados::log_list_next(RGWAccessHandle handle, string *name)
 
 int RGWRados::log_remove(const string& name)
 {
-  VolumeRef vol = rc.lookup_volume(zone.log_vol.name);
+  AVolRef vol = rc.attach_volume(zone.log_vol.name);
   if (!vol)
     return -ENOENT;
   return rc.objecter->remove(name, vol);
 }
 
 struct log_show_state {
-  VolumeRef vol;
+  AVolRef vol;
   bufferlist bl;
   bufferlist::iterator p;
   string name;
@@ -1641,7 +1641,7 @@ struct log_show_state {
 int RGWRados::log_show_init(const string& name, RGWAccessHandle *handle)
 {
   log_show_state *state = new log_show_state;
-  VolumeRef vol = rc.lookup_volume(zone.log_vol.name);
+  AVolRef vol = rc.attach_volume(zone.log_vol.name);
   if (!vol) {
     delete state;
     return -ENOENT;
@@ -1869,9 +1869,9 @@ int RGWRados::time_log_add(const string& oid, const ceph::real_time& ut,
 			   const string& section, const string& key,
 			   bufferlist& bl)
 {
-  VolumeRef vol;
+  AVolRef vol;
 
-  vol = rc.lookup_volume(zone.log_vol.name);
+  vol = rc.attach_volume(zone.log_vol.name);
   if (!vol) {
     rgw_bucket volb(zone.log_vol.name);
     int r = create_vol(volb);
@@ -1879,7 +1879,7 @@ int RGWRados::time_log_add(const string& oid, const ceph::real_time& ut,
       return r;
 
     // retry
-    vol = rc.lookup_volume(zone.log_vol.name);
+    vol = rc.attach_volume(zone.log_vol.name);
   }
   if (!vol)
     return -EIO;
@@ -1893,7 +1893,7 @@ int RGWRados::time_log_add(const string& oid, const ceph::real_time& ut,
 int RGWRados::time_log_add(const string& oid, list<cls_log_entry>& entries)
 {
   string& log_vol = zone.log_vol.name;
-  VolumeRef vol = rc.lookup_volume(log_vol);
+  AVolRef vol = rc.attach_volume(log_vol);
   if (!vol) {
     rgw_bucket volb(log_vol);
     int r = create_vol(volb);
@@ -1901,7 +1901,7 @@ int RGWRados::time_log_add(const string& oid, list<cls_log_entry>& entries)
       return r;
 
     // retry
-    vol = rc.lookup_volume(log_vol);
+    vol = rc.attach_volume(log_vol);
   }
   if (!vol)
     return -EIO;
@@ -1920,7 +1920,7 @@ int RGWRados::time_log_list(const string& oid, ceph::real_time& start_time,
 			    bool *truncated)
 {
   const string& log_vol = zone.log_vol.name;
-  VolumeRef vol(rc.lookup_volume(log_vol));
+  AVolRef vol(rc.attach_volume(log_vol));
   if (!vol)
     return -ENOENT;
 
@@ -1936,7 +1936,7 @@ int RGWRados::time_log_info(const string& oid, cls_log_header *header)
 {
 
   const string& log_vol = zone.log_vol.name;
-  VolumeRef vol(rc.lookup_volume(log_vol));
+  AVolRef vol(rc.attach_volume(log_vol));
   if (!vol)
     return -ENOENT;
 
@@ -1953,7 +1953,7 @@ int RGWRados::time_log_trim(const string& oid,
 			    const string& from_marker, const string& to_marker)
 {
   const string& log_vol = zone.log_vol.name;
-  VolumeRef vol(rc.lookup_volume(log_vol));
+  AVolRef vol(rc.attach_volume(log_vol));
   if (!vol)
     return -ENOENT;
 
@@ -1967,7 +1967,7 @@ int RGWRados::lock_exclusive(rgw_bucket& bucket, const string& oid,
 			     string& zone_id, string& owner_id)
 {
   const string& log_vol = zone.log_vol.name;
-  VolumeRef vol(rc.lookup_volume(log_vol));
+  AVolRef vol(rc.attach_volume(log_vol));
   if (!vol)
     return -ENOENT;
 
@@ -1984,7 +1984,7 @@ int RGWRados::unlock(rgw_bucket& bucket, const string& oid, string& zone_id,
 		     string& owner_id)
 {
   const string& log_vol = zone.log_vol.name;
-  VolumeRef vol(rc.lookup_volume(log_vol));
+  AVolRef vol(rc.attach_volume(log_vol));
   if (!vol)
     return -ENOENT;
 
@@ -2135,7 +2135,7 @@ int RGWRados::create_vol(rgw_bucket& bucket)
 
 int RGWRados::init_bucket_index(rgw_bucket& bucket)
 {
-  VolumeRef index_vol;
+  AVolRef index_vol;
   int r = open_bucket_index_vol(bucket, index_vol);
   if (r < 0)
     return r;
@@ -2238,7 +2238,7 @@ int RGWRados::create_bucket(RGWUserInfo& owner, rgw_bucket& bucket,
 	  return r;
 
 	/* remove bucket index */
-	VolumeRef index_vol; // context for new bucket
+	AVolRef index_vol; // context for new bucket
 	int r = open_bucket_index_vol(bucket, index_vol);
 	if (r < 0)
 	  return r;
@@ -2452,7 +2452,7 @@ int RGWRados::update_placement_map()
 
 int RGWRados::add_bucket_placement(std::string& new_vol)
 {
-  auto v = rc.lookup_volume(new_vol);
+  auto v = rc.attach_volume(new_vol);
   if (!v) // DNE, or something
     return -ENOENT;
 
@@ -2512,7 +2512,7 @@ int RGWRados::create_vols(vector<string>& names, vector<int>& retcodes)
 }
 
 
-int RGWRados::get_obj_vol(const rgw_obj& obj, VolumeRef& vol)
+int RGWRados::get_obj_vol(const rgw_obj& obj, AVolRef& vol)
 {
   rgw_bucket bucket;
   string oid, key;
@@ -2664,7 +2664,7 @@ int RGWRados::put_obj_meta_impl(void *ctx, rgw_obj& oid,  uint64_t size,
   if (r < 0)
     return r;
 
-  const auto& volid = ref.vol->id;
+  const auto& volid = ref.vol->v->id;
 
   r = rc.objecter->mutate(ref.oid, ref.vol, op);
   if (r < 0) /* we can expect to get -ECANCELED if object was replaced under,
@@ -3253,7 +3253,7 @@ done_err:
 int RGWRados::delete_bucket(rgw_bucket& bucket,
 			    RGWObjVersionTracker& objv_tracker)
 {
-  VolumeRef index_vol;
+  AVolRef index_vol;
   string oid;
   int r = open_bucket_index(bucket, index_vol, oid);
   if (r < 0)
@@ -3379,7 +3379,7 @@ int RGWRados::complete_atomic_overwrite(RGWRadosCtx *rctx, RGWObjState *state, r
   return ret;
 }
 
-int RGWRados::open_bucket_index(rgw_bucket& bucket, VolumeRef& index_vol,
+int RGWRados::open_bucket_index(rgw_bucket& bucket, AVolRef& index_vol,
 				string& bucket_oid)
 {
   if (bucket_is_system(bucket))
@@ -3421,7 +3421,7 @@ int RGWRados::bucket_check_index(
   map<RGWObjCategory, RGWStorageStats> *existing_stats,
   map<RGWObjCategory, RGWStorageStats> *calculated_stats)
 {
-  VolumeRef index_vol;
+  AVolRef index_vol;
   string oid;
 
   int ret = open_bucket_index(bucket, index_vol, oid);
@@ -3444,7 +3444,7 @@ int RGWRados::bucket_check_index(
 
 int RGWRados::bucket_rebuild_index(rgw_bucket& bucket)
 {
-  VolumeRef index_vol;
+  AVolRef index_vol;
   string oid;
 
   int ret = open_bucket_index(bucket, index_vol, oid);
@@ -3528,7 +3528,7 @@ int RGWRados::delete_obj_impl(void *ctx, const string& bucket_owner,
   r = rc.objecter->mutate(ref.oid, ref.vol, op);
   bool removed = (r >= 0);
 
-  const auto& volid = ref.vol->id;
+  const auto& volid = ref.vol->v->id;
   if (r >= 0 || r == -ENOENT) {
     r = complete_update_index_del(bucket, oid.object, tag, volid);
   } else {
@@ -4321,7 +4321,7 @@ struct get_obj_data : public RefCountedObject {
   CephContext *cct;
   RGWRados *rados;
   void *ctx;
-  VolumeRef io_vol;
+  AVolRef io_vol;
   map<off_t, get_obj_io> io_map;
   uint64_t total_read;
   std::mutex lock;
@@ -4519,7 +4519,7 @@ int RGWRados::get_obj_iterate_cb(void *ctx, RGWObjState *astate,
 {
   RGWRadosCtx *rctx = static_cast<RGWRadosCtx *>(ctx);
   struct get_obj_data *d = (struct get_obj_data *)arg;
-  VolumeRef io_vol(d->io_vol);
+  AVolRef io_vol(d->io_vol);
   ObjectOperation op(io_vol->op());
   string oid;
   rgw_bucket bucket;
@@ -5253,7 +5253,7 @@ int RGWRados::append_async(rgw_obj& oid, size_t size, bufferlist& bl)
 
 int RGWRados::vol_iterate_begin(rgw_bucket& bucket, RGWVolIterCtx& ctx)
 {
-  VolumeRef io_vol = ctx.v;
+  AVolRef io_vol = ctx.v;
 
   int r = open_bucket_data_vol(bucket, io_vol);
   if (r < 0)
@@ -5316,7 +5316,7 @@ int RGWRados::list_bi_log_entries(rgw_bucket& bucket, string& marker,
 {
   result.clear();
 
-  VolumeRef index_vol;
+  AVolRef index_vol;
   string oid;
   int r = open_bucket_index(bucket, index_vol, oid);
   if (r < 0)
@@ -5339,7 +5339,7 @@ int RGWRados::list_bi_log_entries(rgw_bucket& bucket, string& marker,
 int RGWRados::trim_bi_log_entries(rgw_bucket& bucket, string& start_marker,
 				  string& end_marker)
 {
-  VolumeRef index_vol;
+  AVolRef index_vol;
   string oid;
   int r = open_bucket_index(bucket, index_vol, oid);
   if (r < 0)
@@ -5377,7 +5377,7 @@ int RGWRados::process_gc()
   return gc->process();
 }
 
-int RGWRados::cls_rgw_init_index(RadosClient& rc, VolumeRef index_vol,
+int RGWRados::cls_rgw_init_index(RadosClient& rc, AVolRef index_vol,
 				 ObjOpOwn op, string& oid)
 {
   bufferlist in;
@@ -5389,7 +5389,7 @@ int RGWRados::cls_rgw_init_index(RadosClient& rc, VolumeRef index_vol,
 int RGWRados::cls_obj_prepare_op(rgw_bucket& bucket, RGWModifyOp op,
 				 string& tag, string& name)
 {
-  VolumeRef index_vol;
+  AVolRef index_vol;
   string oid;
 
   int r = open_bucket_index(bucket, index_vol, oid);
@@ -5409,7 +5409,7 @@ int RGWRados::cls_obj_complete_op(rgw_bucket& bucket, RGWModifyOp op,
 				  RGWObjEnt& ent, RGWObjCategory category,
 				  list<string> *remove_objs)
 {
-  VolumeRef index_vol;
+  AVolRef index_vol;
   string oid;
 
   int r = open_bucket_index(bucket, index_vol, oid);
@@ -5468,7 +5468,7 @@ int RGWRados::cls_obj_complete_cancel(rgw_bucket& bucket, string& tag,
 int RGWRados::cls_obj_set_bucket_tag_timeout(rgw_bucket& bucket,
 					     uint64_t timeout)
 {
-  VolumeRef index_vol;
+  AVolRef index_vol;
   string oid;
 
   int r = open_bucket_index(bucket, index_vol, oid);
@@ -5490,7 +5490,7 @@ int RGWRados::cls_bucket_list(rgw_bucket& bucket, string start, string prefix,
 {
   ldout(cct, 10) << "cls_bucket_list " << bucket << " start " << start << " num " << num << dendl;
 
-  VolumeRef index_vol;
+  AVolRef index_vol;
   string oid;
   int r = open_bucket_index(bucket, index_vol, oid);
   if (r < 0)
@@ -5556,11 +5556,11 @@ int RGWRados::cls_bucket_list(rgw_bucket& bucket, string start, string prefix,
 
 int RGWRados::cls_obj_usage_log_add(const string& oid, rgw_usage_log_info& info)
 {
-  VolumeRef io_vol;
+  AVolRef io_vol;
 
   int r = 0;
   const char *usage_log_vol = zone.usage_log_vol.name.c_str();
-  io_vol = rc.lookup_volume(usage_log_vol);
+  io_vol = rc.attach_volume(usage_log_vol);
   if (!io_vol) {
     rgw_bucket vol(usage_log_vol);
     r = create_vol(vol);
@@ -5568,7 +5568,7 @@ int RGWRados::cls_obj_usage_log_add(const string& oid, rgw_usage_log_info& info)
       return r;
 
     // retry
-    io_vol = rc.lookup_volume(usage_log_vol);
+    io_vol = rc.attach_volume(usage_log_vol);
     if (!io_vol)
       r = -ENOENT;
   }
@@ -5588,7 +5588,7 @@ int RGWRados::cls_obj_usage_log_read(string& oid, string& user,
 				     rgw_usage_log_entry>& usage,
 				     bool *is_truncated)
 {
-  VolumeRef io_vol;
+  AVolRef io_vol;
 
   *is_truncated = false;
 
@@ -5604,7 +5604,7 @@ int RGWRados::cls_obj_usage_log_read(string& oid, string& user,
 
 int RGWRados::cls_obj_usage_log_trim(string& oid, string& user)
 {
-  VolumeRef io_vol;
+  AVolRef io_vol;
 
   int r = open_bucket_index_vol(zone.usage_log_vol, io_vol);
   if (r < 0)
@@ -5620,7 +5620,7 @@ int RGWRados::cls_obj_usage_log_trim(string& oid, string& user)
 int RGWRados::remove_objs_from_index(rgw_bucket& bucket,
 				     list<string>& oid_list)
 {
-  VolumeRef index_vol;
+  AVolRef index_vol;
   string dir_oid;
 
   int r = open_bucket_index(bucket, index_vol, dir_oid);
@@ -5651,7 +5651,7 @@ int RGWRados::remove_objs_from_index(rgw_bucket& bucket,
   return r;
 }
 
-int RGWRados::check_disk_state(VolumeRef io_vol,
+int RGWRados::check_disk_state(AVolRef io_vol,
 			       rgw_bucket& bucket,
 			       rgw_bucket_dir_entry& list_state,
 			       RGWObjEnt& object,
@@ -5679,7 +5679,7 @@ int RGWRados::check_disk_state(VolumeRef io_vol,
        * to handle!) */
     }
     // encode a suggested removal of that key
-    list_state.ver.vol = io_vol->id;
+    list_state.ver.vol = io_vol->v->id;
     cls_rgw_encode_suggestion(CEPH_RGW_REMOVE, list_state, suggested_updates);
     return -ENOENT;
   }
@@ -5721,7 +5721,7 @@ int RGWRados::check_disk_state(VolumeRef io_vol,
   object.owner_display_name = owner.get_display_name();
 
   // encode suggested updates
-  list_state.ver.vol = io_vol->id;
+  list_state.ver.vol = io_vol->v->id;
   list_state.meta.size = object.size;
   list_state.meta.mtime = object.mtime;
   list_state.meta.category = main_category;
@@ -5740,7 +5740,7 @@ int RGWRados::check_disk_state(VolumeRef io_vol,
 int RGWRados::cls_bucket_head(rgw_bucket& bucket,
 			      struct rgw_bucket_dir_header& header)
 {
-  VolumeRef index_vol;
+  AVolRef index_vol;
   string oid;
   int r = open_bucket_index(bucket, index_vol, oid);
   if (r < 0)
@@ -5756,7 +5756,7 @@ int RGWRados::cls_bucket_head(rgw_bucket& bucket,
 int RGWRados::cls_bucket_head_async(rgw_bucket& bucket,
 				    RGWGetDirHeader_CB *ctx)
 {
-  VolumeRef index_vol;
+  AVolRef index_vol;
   string oid;
   int r = open_bucket_index(bucket, index_vol, oid);
   if (r < 0)
@@ -6126,7 +6126,7 @@ int RGWRados::process_intent_log(rgw_bucket& bucket, string& oid,
 	complete = false;
 	break;
       } else {
-	VolumeRef index_vol;
+	AVolRef index_vol;
 	string oid;
 	int r = open_bucket_index(entry.oid.bucket, index_vol, oid);
 	if (r < 0)
@@ -6180,10 +6180,10 @@ string RGWStateLog::get_oid(const string& object) {
   return oid;
 }
 
-int RGWStateLog::open_vol(VolumeRef& vol) {
+int RGWStateLog::open_vol(AVolRef& vol) {
   string vol_name;
   store->get_log_vol_name(vol_name);
-  vol = store->rc.lookup_volume(vol_name);
+  vol = store->rc.attach_volume(vol_name);
   if (!vol) {
     lderr(store->ctx()) << "ERROR: could not open rados vol" << dendl;
     return -ENOENT;
@@ -6200,7 +6200,7 @@ int RGWStateLog::store_entry(const string& client_id, const string& op_id, const
     ldout(store->ctx(), 0) << "client_id / op_id / object is empty" << dendl;
   }
 
-  VolumeRef vol;
+  AVolRef vol;
   int r = open_vol(vol);
   if (r < 0)
     return r;
@@ -6230,7 +6230,7 @@ int RGWStateLog::remove_entry(const string& client_id, const string& op_id, cons
     ldout(store->ctx(), 0) << "client_id / op_id / object is empty" << dendl;
   }
 
-  VolumeRef vol;
+  AVolRef vol;
   int r = open_vol(vol);
   if (r < 0)
     return r;
@@ -6269,14 +6269,15 @@ int RGWStateLog::list_entries(void *handle, int max_entries,
 {
   list_state *state = static_cast<list_state *>(handle);
 
-  VolumeRef vol;
+  AVolRef vol;
   int r = open_vol(vol);
   if (r < 0)
     return r;
 
   entries.clear();
 
-  for (; state->cur_shard <= state->max_shard && max_entries > 0; ++state->cur_shard) {
+  for (; state->cur_shard <= state->max_shard && max_entries > 0;
+       ++state->cur_shard) {
     string oid;
     oid_str(state->cur_shard, oid);
 

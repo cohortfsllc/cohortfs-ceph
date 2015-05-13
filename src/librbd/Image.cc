@@ -31,7 +31,7 @@ namespace librbd {
   const char Image::header_version[] = "001.005";
 
   Image::Image(RadosClient* _rc,
-	       const VolumeRef& v,
+	       const AVolRef& v,
 	       const string& name)
     : rc(_rc),
       read_only(false),
@@ -42,14 +42,13 @@ namespace librbd {
       image_oid(image_name(name))
   {
     memset(&header, 0, sizeof(header));
-    v->attach(_rc->cct);
     read_header();
     size = header.image_size;
     f = new Flusher;
   }
 
   Image::Image(RadosClient* rados,
-	       const VolumeRef& v,
+	       const AVolRef& v,
 	       const string& name,
 	       read_only_t)
     : Image(rados, v, name)
@@ -58,10 +57,9 @@ namespace librbd {
   }
 
   bool Image::check_exists(RadosClient* rc,
-			   const VolumeRef& volume,
+			   const AVolRef& volume,
 			   const string &name, uint64_t *size)
   {
-    volume->attach(rc->cct);
     int r = rc->objecter->stat(header_name(name), volume, size, NULL);
     if (r == 0) {
       return true;
@@ -98,11 +96,10 @@ namespace librbd {
   }
 
   void Image::create(RadosClient* rc,
-		     const VolumeRef& volume,
+		     const AVolRef& volume,
 		     const string& imgname,
 		     uint64_t size)
   {
-    volume->attach(rc->cct);
     ldout(rc->cct, 2) << "creating rbd image..." << dendl;
     struct rbd_obj_header_ondisk header;
     init_rbd_header(header, size);
@@ -122,11 +119,10 @@ namespace librbd {
   }
 
   void Image::rename(RadosClient* rc,
-		     const VolumeRef& volume,
+		     const AVolRef& volume,
 		     const string& srcname,
 		     const string& dstname)
   {
-    volume->attach(rc->cct);
     ldout(rc->cct, 20) << "rename " << volume << " " << srcname << " -> "
 		       << dstname << dendl;
 
@@ -205,10 +201,9 @@ namespace librbd {
   }
 
   void Image::remove(RadosClient* rc,
-		     const VolumeRef& volume,
+		     const AVolRef& volume,
 		     const string& imgname)
   {
-    volume->attach(rc->cct);
     ldout(rc->cct, 20) << "remove " << imgname << dendl;
 
     ldout(rc->cct, 2) << "removing header..." << dendl;

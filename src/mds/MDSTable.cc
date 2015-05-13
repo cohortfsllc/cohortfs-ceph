@@ -68,7 +68,7 @@ void MDSTable::save(Context *onfinish, version_t v)
 
   // write (async)
   oid_t oid = get_object_name();
-  VolumeRef volume(mds->get_metadata_volume());
+  AVolRef volume(mds->get_metadata_volume());
   mds->objecter->write_full(oid, volume, bl, nullptr, MT_Save(this, version));
 }
 
@@ -136,7 +136,7 @@ void MDSTable::load(Context *onfinish)
   state = STATE_OPENING;
 
   oid_t oid = get_object_name();
-  VolumeRef volume(mds->get_metadata_volume());
+  AVolRef volume(mds->get_metadata_volume());
   mds->objecter->read_full(oid, volume, MT_Load(this, onfinish));
 }
 

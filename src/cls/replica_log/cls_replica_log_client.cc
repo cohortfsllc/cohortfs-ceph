@@ -64,7 +64,7 @@ void cls_replica_log_delete_bound(ObjOpUse o,
   o->call("replica_log", "delete", in);
 }
 
-int cls_replica_log_get_bounds(Objecter* o, const VolumeRef& vol,
+int cls_replica_log_get_bounds(Objecter* o, const AVolRef& vol,
 			       const oid_t& oid, string& position_marker,
 			       ceph::real_time& oldest_time,
 			       list<cls_replica_log_progress_marker>& markers)

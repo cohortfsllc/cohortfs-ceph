@@ -157,7 +157,7 @@ int RGWGC::process(int index, ceph::timespan max_time)
 
   string marker;
   bool truncated;
-  VolumeRef vol;
+  AVolRef vol;
   do {
     int max = 100;
     std::list<cls_rgw_gc_obj_info> entries;
@@ -188,7 +188,7 @@ int RGWGC::process(int index, ceph::timespan max_time)
 	cls_rgw_obj& obj = *liter;
 
 	if (obj.vol != last_vol) {
-	  vol = (store->rc.lookup_volume(obj.vol));
+	  vol = (store->rc.attach_volume(obj.vol));
 	  if (!vol) {
 	    dout(0) << "ERROR: failed to create ioctx vol=" << obj.vol
 		    << dendl;

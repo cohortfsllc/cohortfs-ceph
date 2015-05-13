@@ -44,7 +44,7 @@ public:
   static void generate_test_instances(list<EUpdate*>& ls);
 
   void update_segment();
-  void replay(MDS *mds, VolumeRef &v);
+  void replay(MDS *mds, const AVolRef& v);
 };
 
 #endif

@@ -1275,7 +1275,7 @@ class CB_Dir_OMAP_Fetched {
 void CDir::_omap_fetch(const string& want_dn)
 {
   oid_t oid = get_ondisk_object();
-  VolumeRef volume(cache->mds->get_metadata_volume());
+  AVolRef volume(cache->mds->get_metadata_volume());
   auto fin = CB_Dir_OMAP_Fetched::create(this, want_dn);
   ObjectOperation rd = volume->op();
   rd->omap_get_header(&fin.hdrbl, &fin.ret1);
@@ -1430,7 +1430,7 @@ void CDir::_omap_commit(int op_prio)
     this, get_version());
 
   oid_t oid = get_ondisk_object();
-  VolumeRef volume(cache->mds->get_metadata_volume());
+  AVolRef volume(cache->mds->get_metadata_volume());
   if (!volume) {
     dout(0) << "Unable to attach volume " << volume << dendl;
     return;

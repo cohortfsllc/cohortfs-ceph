@@ -117,8 +117,11 @@ namespace rados {
     int monitor_log(const string& level, log_cb_t cb);
 
     void blacklist_self(bool set);
-    std::shared_ptr<const Volume> lookup_volume(const string& name);
-    std::shared_ptr<const Volume> lookup_volume(const boost::uuids::uuid& name);
+    VolumeRef lookup_volume(const string& name);
+    VolumeRef lookup_volume(const boost::uuids::uuid& name);
+
+    AVolRef attach_volume(const std::string& name);
+    AVolRef attach_volume(const boost::uuids::uuid& name);
   };
 };
 

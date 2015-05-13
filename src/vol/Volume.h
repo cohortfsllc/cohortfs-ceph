@@ -15,107 +15,179 @@
 #ifndef VOL_VOLUME_H
 #define VOL_VOLUME_H
 
+#include <functional>
 #include <string>
-#include <map>
-#include <vector>
+
+#include <boost/smart_ptr/intrusive_ref_counter.hpp>
+#include <boost/smart_ptr/intrusive_ptr.hpp>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <boost/uuid/nil_generator.hpp>
-#include <functional>
-#include <cerrno>
+
 #include "include/types.h"
-#include "common/Formatter.h"
-#include <boost/uuid/uuid.hpp>
 #include "include/stringify.h"
 #include "include/encoding.h"
 #include "osd/osd_types.h"
-#include "Placer.h"
+#include "osdc/ObjectOperation.h"
+#include "placer/Placer.h"
 
 class OSDMap;
-namespace rados {
-  class ObjOp;
-};
 
-enum vol_type {
-  CohortVol,
-  NotAVolType
+namespace ceph {
+  class Formatter;
 };
 
 class Volume;
 typedef std::shared_ptr<const Volume> VolumeRef;
 
-inline ostream& operator<<(ostream& out, const Volume& vol);
-class Volume
-{
+class AttachedVol : public boost::intrusive_ref_counter<AttachedVol> {
+  friend Volume;
+  friend struct C_MultiStat;
+  friend struct C_MultiRead;
+
 private:
-  static const std::string typestrings[];
+  APlacerRef placer;
 
-  typedef std::shared_ptr<Volume>(*factory)(bufferlist::iterator& bl,
-					    uint8_t v, vol_type t);
+  AttachedVol(CephContext* cct, const OSDMap& o, VolumeRef v);
+public:
+  VolumeRef v;
+  static const uint64_t one_op;
+  const VolumeRef vol;
+  static string get_epoch_key(const boost::uuids::uuid& vol) {
+    return stringify(vol) + "_epoch";
+  }
+  static string get_info_key(const boost::uuids::uuid& vol) {
+    return stringify(vol) + "_info";
+  }
+  size_t place(const oid_t& object,
+	       const OSDMap& map,
+	       const std::function<void(int)>& f) const;
 
-  /* Factory Protocol
+  int get_cohort_placer(struct cohort_placer *p) const;
 
-     Know then that a factory is called with a bufferlist from which
-     it is to decode itself.  It is also called with the version and
-     volume type. (The volume type should be obvious since it's what
-     the factory is dispatched on, but just in case someone decides
-     to use the same function for two streams that are almost
-     identical.)
+  std::unique_ptr<rados::ObjOp> op() const;
+  class StripulatedOp : public rados::ObjOp {
+    friend class AttachedVol;
+    const AttachedPlacer& pl;
+    // ops[n][m] is the mth operation in the nth stride
+    vector<vector<OSDOp> > ops;
+    size_t logical_operations;
 
-     The very first thing the factory must do is allocate (with new)
-     an volume of the required type with the type constructor.
+    virtual ~StripulatedOp() { }
 
-     It must then call the decode_payload() on the new volume.  (This
-     is virtual, so that volume classes that share functionality can
-     share a parent and have common structure decoded by it.  Any
-     decode_payload in a child of Volume must call its parent's
-     decode_payload before doing anything, as well.)  The resulting
-     volume is invalid until init() is called on it.
+    StripulatedOp(const AttachedPlacer& pl);
+    virtual size_t size() {
+      return logical_operations;
+    }
+    virtual size_t width() {
+      return pl.get_chunk_count();
+    }
+    virtual void read(uint64_t off, uint64_t len, bufferlist *bl,
+		      uint64_t truncate_size, uint32_t truncate_seq,
+		      int *rval = NULL, Context* ctx = NULL);
+    virtual void read_full(bufferlist *bl,
+		      int *rval = NULL, Context* ctx = NULL);
+    virtual void read(uint64_t off, uint64_t len, uint64_t truncate_size,
+		      uint32_t truncate_seq,
+		      std::function<void(int, bufferlist&&)>&& f);
+    virtual void read_full(std::function<void(int, bufferlist&&)>&& f);
+    virtual void add_op(const int op);
+    virtual void add_version(const uint64_t ver);
+    virtual void add_obj(const oid_t& o);
+    virtual void add_single_return(bufferlist* bl, int* rval = NULL,
+				   Context *ctx = NULL);
+    virtual void add_single_return(std::function<void(int, bufferlist&&)>&& f);
 
-     The factory method must then do its own specific implementation
-     and return a shared pointer to the volume.
+    virtual void add_metadata(const bufferlist& bl);
+    virtual void add_metadata_range(const uint64_t off, const uint64_t len);
+    virtual void add_data(const uint64_t off, const bufferlist& bl);
+    virtual void add_data_range(const uint64_t off, const uint64_t len);
+    virtual void add_xattr(const string &name, const bufferlist& data);
+    virtual void add_xattr(const string &name, bufferlist* data);
+    virtual void add_xattr_cmp(const string &name, uint8_t cmp_op,
+			       const uint8_t cmp_mode,
+			       const bufferlist& data);
 
-     Factories may inspect common variables AFTER they have been set,
-     but MUST NOT duplicate generic validity checks that are the
-     domain of the common decode method. */
-  static const factory factories[];
+    virtual void add_call(const string &cname, const string &method,
+			  const bufferlist &indata, bufferlist *const outbl,
+			  Context *const ctx, int *const prval);
+    virtual void add_call(const string &cname, const string &method,
+			  const bufferlist &indata,
+			  std::function<void(int, bufferlist&&)>&& cb);
 
-protected:
+    virtual void add_watch(const uint64_t cookie, const uint64_t ver,
+			   const uint8_t flag, const bufferlist& inbl);
+
+    virtual void add_alloc_hint(const uint64_t expected_object_size,
+				const uint64_t expected_write_size);
+    virtual void add_truncate(const uint64_t truncate_size,
+			      const uint32_t truncate_seq);
+
+    virtual void add_sparse_read_ctx(uint64_t off, uint64_t len,
+				     std::map<uint64_t,uint64_t> *m,
+				     bufferlist *data_bl, int *rval,
+				     Context *ctx);
+    virtual void set_op_flags(const uint32_t flags);
+    virtual void clear_op_flags(const uint32_t flags);
+    virtual void add_stat_ctx(uint64_t *s, ceph::real_time *m, int *rval,
+			      Context *ctx = NULL);
+    virtual void add_stat_cb(std::function<void(
+			       int, uint64_t, ceph::real_time)>&& cb);
+    virtual std::unique_ptr<ObjOp> clone();
+    virtual void realize(
+      const oid_t& o,
+      const std::function<void(oid_t&&, vector<OSDOp>&&)>& f);
+  };
+
+  uint32_t quorum() const {
+    return placer->quorum();
+  }
+  // Returns minimum number of subops that need to be placed to continue
+  size_t op_size() const {
+    return placer->op_size();
+  }
+};
+typedef boost::intrusive_ptr<const AttachedVol> AVolRef;
+
+inline ostream& operator<<(ostream& out, const Volume& vol);
+class Volume : public std::enable_shared_from_this<Volume> {
+  friend AttachedVol;
+private:
   boost::uuids::uuid placer_id;
-  mutable bool inited;
 
-  virtual void decode_payload(bufferlist::iterator& bl, uint8_t v);
+  Volume() :
+    placer_id(boost::uuids::nil_uuid()), id(boost::uuids::nil_uuid()),
+    name() { }
 
-  Volume(const vol_type t) :
-    placer_id(boost::uuids::nil_uuid()), inited(false), type(t), id(boost::uuids::nil_uuid()), name() { }
-
-  Volume(const vol_type t, const string n) :
-    placer_id(boost::uuids::nil_uuid()), inited(false), type(t), id(boost::uuids::nil_uuid()), name(n) { }
-
-  virtual PlacerRef getPlacer() const = 0;
+  Volume(const string& _name, boost::uuids::uuid _id,
+	 boost::uuids::uuid _placer_id) :
+    placer_id(_placer_id), id(_id), name(_name) { }
 
 public:
 
   /* It seems a bit icky to have a type field like this when we
      already have type information encoded in the class. */
-  vol_type type;
   boost::uuids::uuid id;
   string name;
-  epoch_t last_update;
 
   virtual ~Volume() { };
 
   static bool valid_name(const string& name, std::stringstream& ss);
   virtual bool valid(std::stringstream& ss) const;
-  static const string& type_string(vol_type type);
   static VolumeRef decode_volume(bufferlist::iterator& bl);
-  virtual void init(OSDMap *map) const = 0;
+  /* Attach a volume. Remains attached until the last reference is
+     dropped. */
+  AVolRef attach(CephContext *cct, const OSDMap& o) const;
+  static VolumeRef create(CephContext *cct,
+			  const string& name,
+			  boost::uuids::uuid placer_id,
+			  std::stringstream& ss);
   /* Each child class should call its parent's dump method as it's first
      action. */
-  virtual void dump(Formatter *f) const;
+  void dump(Formatter *f) const;
   /* Each child class should call its parent's encode method as it's first
      action. */
-  virtual void encode(bufferlist& bl) const;
+  void encode(bufferlist& bl) const;
   /* Dummy decode for WRITE_CLASS_ENCODER */
   void decode(bufferlist& bl) { assert(false); };
   void decode(bufferlist::iterator& bl) { assert(false); };
@@ -125,46 +197,12 @@ public:
   static string get_info_key(const boost::uuids::uuid& vol) {
     return stringify(vol) + "_info";
   }
-
-  // Attach performs post-decode initialization of the volume. If you
-  // call attach, you are guaranteed that the following functions will
-  // execute, otherwise they will abort the program.
-  virtual int attach(CephContext *cct) const {
-    return getPlacer()->attach(cct);
-  };
-  // This function exists, at present, for the use of the monitor at
-  // volume creation time, so it can attempt to instantiate a volume
-  // and return a useful error on failure. It is not thread safe.
-  virtual void detach(void) {
-    return getPlacer()->detach();
-  };
-  // Returns negative POSIX error code on error.
-  virtual size_t place(const oid_t& object,
-		       const OSDMap& map,
-		       const std::function<void(int)>& f) const {
-    return getPlacer()->place(object, map, f);
-  }
-
-  int get_cohort_placer(struct cohort_placer *placer) const {
-    int r = getPlacer()->get_cohort_placer(placer);
-    if (r < 0)
-      return r;
-    memcpy(placer->volume_id, id.data, sizeof(placer->volume_id));
-    return 0;
-  };
-
-  virtual std::unique_ptr<rados::ObjOp> op() const = 0;
-  // Returns negative POSIX error code on error.
-  virtual size_t op_size() const = 0;
-  // Returns minimum number of subops that need to be placed to continue
-  virtual uint32_t quorum() const = 0;
 };
 
 WRITE_CLASS_ENCODER(Volume)
 
 inline ostream& operator<<(ostream& out, const Volume& vol) {
-  return out << vol.name << "(" << vol.id << ","
-	     << Volume::type_string(vol.type) << ")";
+  return out << vol.name << "(" << vol.id << ")";
 }
 
 #endif // VOL_VOLUME_H

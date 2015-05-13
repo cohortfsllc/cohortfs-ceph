@@ -765,7 +765,7 @@ namespace rados {
 // read | write ---------------------------
 
   ceph_tid_t Objecter::read_full(const oid_t& oid,
-				 const shared_ptr<const Volume>& volume,
+				 const AVolRef& volume,
 				 bufferlist *pbl,
 				 op_callback&& onfinish,
 				 ZTracer::Trace *trace)
@@ -974,7 +974,7 @@ namespace rados {
   {
     bool need_resend = false;
 
-    if (!osdmap->vol_exists(t.volume->id)) {
+    if (!osdmap->vol_exists(t.volume->v->id)) {
       return TARGET_VOLUME_DNE;
     }
 
@@ -1154,7 +1154,7 @@ namespace rados {
     subop.stamp = ceph::mono_clock::now();
 
     MOSDOp *m = new MOSDOp(client_inc, subop.tid,
-			   subop.hoid, subop.parent.volume->id,
+			   subop.hoid, subop.parent.volume->v->id,
 			   osdmap->get_epoch(),
 			   flags);
 
@@ -1666,11 +1666,25 @@ namespace rados {
     return v;
   }
 
+  AVolRef Objecter::attach_by_uuid(const boost::uuids::uuid& id) {
+    shared_lock rl(rwlock);
+    VolumeRef v;
+    osdmap->find_by_uuid(id, v);
+    return v->attach(cct, *osdmap);
+  }
+
   VolumeRef Objecter::vol_by_name(const string& name) {
     shared_lock rl(rwlock);
     VolumeRef v;
     osdmap->find_by_name(name, v);
     return v;
+  }
+
+  AVolRef Objecter::attach_by_name(const string& name) {
+    shared_lock rl(rwlock);
+    VolumeRef v;
+    osdmap->find_by_name(name, v);
+    return v->attach(cct, *osdmap);
   }
 
   Message* MessageFactory::create(int type)

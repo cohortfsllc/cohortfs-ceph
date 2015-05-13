@@ -29,7 +29,7 @@
 #include "osd_types.h"
 #include "msg/Message.h"
 #include "vol/Volume.h"
-#include "vol/Placer.h"
+#include "placer/Placer.h"
 
 #include "include/ceph_features.h"
 

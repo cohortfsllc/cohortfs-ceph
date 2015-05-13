@@ -350,7 +350,7 @@ void Migrator::export_try_cancel(CDir *dir, bool notify_peer)
 
 void Migrator::handle_mds_failure_or_stop(int who)
 {
-  VolumeRef volume(mds->get_metadata_volume());
+  AVolRef volume(mds->get_metadata_volume());
   ldout(mds->cct, 5) << "handle_mds_failure_or_stop mds." << who << dendl;
 
   // check my exports
@@ -2523,7 +2523,7 @@ void Migrator::import_logged_start(dirfrag_t df, CDir *dir, int from,
 /* This function DOES put the passed message before returning*/
 void Migrator::handle_export_finish(MExportDirFinish *m)
 {
-  VolumeRef v = mds->get_metadata_volume();
+  AVolRef v = mds->get_metadata_volume();
   CDir *dir = cache->get_dirfrag(m->get_dirfrag());
   assert(dir);
   ldout(mds->cct, 7) << "handle_export_finish on " << *dir << (m->is_last() ? " last" : "") << dendl;
@@ -2537,7 +2537,7 @@ void Migrator::handle_export_finish(MExportDirFinish *m)
   m->put();
 }
 
-void Migrator::import_finish(VolumeRef &v, CDir *dir, bool notify, bool last)
+void Migrator::import_finish(const AVolRef& v, CDir *dir, bool notify, bool last)
 {
   ldout(mds->cct, 7) << "import_finish on " << *dir << dendl;
 

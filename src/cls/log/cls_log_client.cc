@@ -65,7 +65,7 @@ void cls_log_trim(ObjOpUse op,
   op->call("log", "trim", in);
 }
 
-int cls_log_trim(Objecter* o, const VolumeRef& vol, const oid_t& oid,
+int cls_log_trim(Objecter* o, const AVolRef& vol, const oid_t& oid,
 		 const ceph::real_time& from_time,
 		 const ceph::real_time& to_time,
 		 const string& from_marker, const string& to_marker)

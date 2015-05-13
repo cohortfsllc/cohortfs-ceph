@@ -81,7 +81,7 @@ void cls_version_read(ObjOpUse op, obj_version *objv)
   op->call("version", "read", inbl, VersionReadCB(objv));
 }
 
-int cls_version_read(Objecter* o, const oid_t& oid, VolumeRef vol,
+int cls_version_read(Objecter* o, const oid_t& oid, const AVolRef& vol,
 		     obj_version *ver)
 {
   bufferlist in, out;
