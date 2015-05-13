@@ -44,6 +44,7 @@ namespace librbd {
     read_header();
     size = header.image_size;
     f = new OSDC::Flusher;
+    v->attach(_rc->cct);
   }
 
   Image::Image(librados::RadosClient* rados,
@@ -51,14 +52,16 @@ namespace librbd {
 	       const string& name,
 	       read_only_t)
     : Image(rados, v, name)
-      {
-	read_only = true;
-      }
+  {
+    read_only = true;
+    v->attach(rados->cct);
+  }
 
   bool Image::check_exists(RadosClient* rc,
 			   const VolumeRef& volume,
 			   const string &name, uint64_t *size)
   {
+    volume->attach(rc->cct);
     int r = rc->objecter->stat(header_name(name), volume, size, NULL);
     if (r == 0) {
       return true;
@@ -95,10 +98,11 @@ namespace librbd {
   }
 
   void Image::create(RadosClient* rc,
-			const VolumeRef& volume,
-			const string& imgname,
-			uint64_t size)
+		     const VolumeRef& volume,
+		     const string& imgname,
+		     uint64_t size)
   {
+    volume->attach(rc->cct);
     ldout(rc->cct, 2) << "creating rbd image..." << dendl;
     struct rbd_obj_header_ondisk header;
     init_rbd_header(header, size);
@@ -118,10 +122,11 @@ namespace librbd {
   }
 
   void Image::rename(RadosClient* rc,
-			const VolumeRef& volume,
-			const string& srcname,
-			const string& dstname)
+		     const VolumeRef& volume,
+		     const string& srcname,
+		     const string& dstname)
   {
+    volume->attach(rc->cct);
     ldout(rc->cct, 20) << "rename " << volume << " " << srcname << " -> "
 		       << dstname << dendl;
 
@@ -203,6 +208,7 @@ namespace librbd {
 		     const VolumeRef& volume,
 		     const string& imgname)
   {
+    volume->attach(rc->cct);
     ldout(rc->cct, 20) << "remove " << imgname << dendl;
 
     ldout(rc->cct, 2) << "removing header..." << dendl;
