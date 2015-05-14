@@ -1825,3 +1825,11 @@ target_link_libraries(test_zfsfragtreeindex os_zfstore global common
   ${ZFS_WRAP} ${UNITTEST_LIBS})
 set_target_properties(test_zfsfragtreeindex PROPERTIES COMPILE_FLAGS
   "${UNITTEST_CXX_FLAGS}")
+
+# test_zfswrap
+add_executable(test_zfswrap test_zfswrap.cc)
+target_link_libraries(test_zfswrap global common
+  boost_filesystem ${ZFS_WRAP} ${UNITTEST_LIBS})
+set_target_properties(test_zfswrap PROPERTIES COMPILE_FLAGS
+  "${UNITTEST_CXX_FLAGS}")
+

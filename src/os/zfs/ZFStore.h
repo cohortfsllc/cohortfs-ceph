@@ -31,7 +31,7 @@ class ZFStore : public ObjectStore
 private:
   static lzfw_handle_t* zhd;
   static std::atomic<uint32_t> n_instances;
-  lzfw_vfs_t* zhfs;
+  lzfw_vfs_t* zhfs; /* root dataset handle */
 
 public:
   class ZCollection;
@@ -99,6 +99,7 @@ public:
 
     CephContext *cct;
     cohort_zfs::FragTreeIndex index;
+    std::string ds_name;
 
     typedef std::unique_lock<std::shared_timed_mutex> unique_lock;
     typedef std::shared_lock<std::shared_timed_mutex> shared_lock;
