@@ -1728,3 +1728,8 @@ set_target_properties(test_queues PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS}
 add_executable(test_fragtreeindex test_fragtreeindex.cc)
 target_link_libraries(test_fragtreeindex os_filestore global common leveldb ${UNITTEST_LIBS})
 set_target_properties(test_fragtreeindex PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
+
+# test_function
+add_executable(test_function test_function.cc)
+target_link_libraries(test_function ${UNITTEST_LIBS})
+set_target_properties(test_function PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
