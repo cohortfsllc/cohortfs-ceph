@@ -270,11 +270,54 @@ TEST(ZFSWRAP, CLOSEROOT)
   ASSERT_EQ(err, 0);
 }
 
-/* TODO: finish */
-
 TEST(ZFSWRAP, UNMOUNT1)
 {
   int err;
+  err = lzfw_umount(zhfs, true /* force */);
+  zhfs = nullptr;
+  ASSERT_EQ(err, 0);
+}
+
+TEST(ZFSWRAP, REINIT)
+{
+  int err, ix;
+
+  zhfs = lzfw_mount("zp1", "/zf1", "" /* XXX "mount options" */);
+  ASSERT_NE(zhfs, nullptr);
+
+  err = lzfw_getroot(zhfs, &root_ino);
+  ASSERT_EQ(err, 0);
+
+  err = lzfw_opendir(zhfs, &cred, root_ino, &root_vnode);
+  ASSERT_EQ(err, 0);
+  ASSERT_NE(root_vnode, nullptr);
+
+  // re-read
+  for (ix = 70; ix < 80; ++ix) {
+    ZFSObject& o = zfs1_objs[ix];
+    unsigned o_flags;
+    err = lzfw_openat(zhfs, &cred, root_vnode, o.leaf_name.c_str(),
+		      O_RDONLY, 0 /* mode, if flags & O_CREAT */,
+		      &o_flags, &o.vnode);
+    ASSERT_EQ(err, 0);
+
+    // read from o
+    char buf[100];
+    err = lzfw_read(zhfs, &cred, o.vnode, (void*) buf,
+		    100, false /* behind (XXX!) */, 0 /* off */);
+    ASSERT_NE(err, 0);
+
+    std::cout << "read: " << buf << std::endl;
+
+    err = lzfw_close(zhfs, &cred, o.vnode, O_RDONLY);
+    o.vnode = nullptr;
+    ASSERT_EQ(err, 0);
+  }
+
+  err = lzfw_closedir(zhfs, &cred, root_vnode);
+  root_vnode = nullptr;
+  ASSERT_EQ(err, 0);
+
   err = lzfw_umount(zhfs, true /* force */);
   zhfs = nullptr;
   ASSERT_EQ(err, 0);
