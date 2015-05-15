@@ -34,7 +34,8 @@ namespace {
 
   bf::path vdevs("/opt/zpools");
   bf::path vdev1(vdevs);
-  lzfw_handle_t* zhd;
+  lzfw_handle_t* zhd; /* zfswrap handle */
+  lzfw_vfs_t* zhfs; /* dataset handle */
   
 
 } /* namespace */
@@ -98,6 +99,44 @@ TEST(ZFSWRAP, ZFS1)
 			    &lzw_err);
   ASSERT_EQ(err, 0);
   free(fs);
+}
+
+/* XXX missing stuff:
+ * 1. properties
+ * ...
+ */
+
+/* ZPL */
+
+/* lzfw_mount syntax isn't super ZFS-like: first arg is a pool,
+ * the second, best I can tell, the leaf name of a dataset.
+ *
+ * MOUNT1 and MOUNT2 prove that the notation works at least for
+ * a 2-level structure of pool and leaf dataset.
+ */
+
+TEST(ZFSWRAP, MOUNT1)
+{
+  zhfs = lzfw_mount("zp1", "/zf1", "" /* XXX "mount options" */);
+  ASSERT_NE(zhfs, nullptr);
+}
+
+TEST(ZFSWRAP, MOUNT2)
+{
+  // attempt to mount a non-existent dataset (must fail)
+  lzfw_vfs_t* zhfs2;
+  zhfs2 = lzfw_mount("zp1", "/zfnone1", "" /* XXX "mount options" */);
+  ASSERT_EQ(zhfs2, nullptr);
+}
+
+/* TODO: finish */
+
+TEST(ZFSWRAP, UNMOUNT1)
+{
+  int err;
+  err = lzfw_umount(zhfs, true /* force */);
+  zhfs = nullptr;
+  ASSERT_EQ(err, 0);
 }
 
 TEST(ZFSWRAP, ZFSDESTROY1)
