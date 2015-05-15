@@ -13,6 +13,7 @@
  */
 
 #include <iostream>
+#include <vector>
 #include "gtest/gtest.h"
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/exception.hpp>
@@ -34,9 +35,23 @@ namespace {
 
   bf::path vdevs("/opt/zpools");
   bf::path vdev1(vdevs);
+
   lzfw_handle_t* zhd; /* zfswrap handle */
   lzfw_vfs_t* zhfs; /* dataset handle */
-  
+  creden_t cred = {0, 0};
+
+  struct ZFSObject
+  {
+    std::string leaf_name;
+    inogen_t ino;
+    lzfw_vnode_t* vnode;
+
+  ZFSObject(std::string n) : leaf_name(std::move(n)), ino{0, 0},
+      vnode(nullptr)
+    {}
+  };
+
+  std::vector<ZFSObject> zfs1_objs;
 
 } /* namespace */
 
@@ -127,6 +142,44 @@ TEST(ZFSWRAP, MOUNT2)
   lzfw_vfs_t* zhfs2;
   zhfs2 = lzfw_mount("zp1", "/zfnone1", "" /* XXX "mount options" */);
   ASSERT_EQ(zhfs2, nullptr);
+}
+
+TEST(ZFSWRAP, FSOPS1)
+{
+  int err;
+  inogen_t root_ino;
+  lzfw_vnode_t* root_vnode = nullptr;
+
+  err = lzfw_getroot(zhfs, &root_ino);
+  ASSERT_EQ(err, 0);
+
+  err = lzfw_opendir(zhfs, &cred, root_ino, &root_vnode);
+  ASSERT_EQ(err, 0);
+  ASSERT_NE(root_vnode, nullptr);
+
+  int ix;
+  zfs1_objs.reserve(200);
+  for (ix = 0; ix < 100; ++ix) {
+    std::string n{"d" + std::to_string(ix)};
+    zfs1_objs.emplace_back(ZFSObject(n));
+    ZFSObject& o = zfs1_objs[ix];
+    err = lzfw_mkdirat(zhfs, &cred, root_vnode, o.leaf_name.c_str(),
+		       777 /* mode */, &o.ino);
+    ASSERT_EQ(err, 0);
+  }
+
+  for (ix = 100; ix < 200; ++ix) {
+    std::string n{"f" + std::to_string(ix)};
+    zfs1_objs.emplace_back(ZFSObject(n));
+    ZFSObject& o = zfs1_objs[ix];
+    err = lzfw_create(zhfs, &cred, root_ino, o.leaf_name.c_str(),
+		      644 /* mode */, &o.ino);
+    ASSERT_EQ(err, 0);
+  }
+
+  err = lzfw_closedir(zhfs, &cred, root_vnode);
+  root_vnode = nullptr;
+  ASSERT_EQ(err, 0);
 }
 
 /* TODO: finish */
