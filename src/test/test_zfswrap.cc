@@ -93,7 +93,7 @@ TEST(ZFSWRAP, ZFS1)
   const int ZFS_TYPE_FILESYSTEM = 0x1;
 
   // XXX spa code edits strings in-place--can't pass const!
-  char* fs = strdup("zpl/zf1");
+  char* fs = strdup("zp1/zf1");
   err = lzfw_dataset_create(zhd, fs, ZFS_TYPE_FILESYSTEM,
 			    &lzw_err);
   ASSERT_EQ(err, 0);
@@ -105,7 +105,7 @@ TEST(ZFSWRAP, ZFSDESTROY1)
   int err;
   const char* lzw_err;
 
-  char* fs = strdup("zpl/zf1");
+  char* fs = strdup("zp1/zf1");
   err = lzfw_dataset_destroy(zhd, fs, &lzw_err);
   ASSERT_EQ(err, 0);
   free(fs);
