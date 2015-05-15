@@ -85,6 +85,27 @@ TEST(ZFSWRAP, ZPLIST)
   ASSERT_EQ(err, 0);
 }
 
+TEST(ZFSWRAP, ZFS1)
+{
+  // create a filesystem on zp1
+  int err;
+  const char* lzw_err;
+  const int ZFS_TYPE_FILESYSTEM = 0x1;
+
+  err = lzfw_dataset_create(zhd, "zp1/zfs1", ZFS_TYPE_FILESYSTEM,
+			    &lzw_err);
+  ASSERT_EQ(err, 0);
+}
+
+TEST(ZFSWRAP, ZFSDESTROY1)
+{
+  int err;
+  const char* lzw_err;
+
+  err = lzfw_dataset_destroy(zhd, "zp1/zfs1", &lzw_err);
+  ASSERT_EQ(err, 0);
+}
+
 /* TODO: finish */
 
 TEST(ZFSWRAP, ZPDESTROY1)
