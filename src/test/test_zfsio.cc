@@ -71,9 +71,11 @@ namespace {
   struct ZPageSet
   {
     std::vector<ZPage*> pages;
+    struct iovec* iovs;
 
     ZPageSet(int n) {
       pages.reserve(n);
+      iovs = (struct iovec*) calloc(n, sizeof(struct iovec));
       for (int page_ix = 0; page_ix < n; ++page_ix) {
 	ZPage* p = new ZPage();
 	for (int data_ix = 0; data_ix < 65536; ++data_ix) {
@@ -81,16 +83,17 @@ namespace {
 	} // data_ix
 	p->cksum = XXH64(p->data, 65536, 8675309);
 	pages[page_ix] = p;
-#if 0
-	std::cout << "add page " << page_ix << " cksum " << p->cksum
-		  << std::endl;
-#endif
+	// and iovs
+	struct iovec* iov = &iovs[page_ix];
+	iov->iov_base = p->data;
+	iov->iov_len = 65536;
       } // page_ix
     }
 
     ~ZPageSet() {
       for (int ix = 0; ix < pages.size(); ++ix)
 	delete pages[ix];
+      free(iovs);
     }
   }; /* ZPageSet */
 
