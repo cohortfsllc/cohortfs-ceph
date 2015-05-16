@@ -69,6 +69,10 @@ TEST(ZFSIO, INIT)
   vdev1 /= "zd2";
 
   if (create || !is_regular_file(vdev1)) {
+    { // "pre-destroy" accounting info
+      (void) lzfw_zpool_destroy(zhd, "zp2", true /* force */, &lzw_err);
+      remove(vdev1);
+    }
     { // create backing
       std::string cmd = "dd if=/dev/zero of=";
       cmd += vdev1.c_str();
