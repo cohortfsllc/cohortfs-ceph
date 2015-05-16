@@ -1833,3 +1833,9 @@ target_link_libraries(test_zfswrap global common
 set_target_properties(test_zfswrap PROPERTIES COMPILE_FLAGS
   "${UNITTEST_CXX_FLAGS}")
 
+# test_zfsio
+add_executable(test_zfsio test_zfsio.cc)
+target_link_libraries(test_zfsio global common
+  boost_filesystem ${ZFS_WRAP} ${UNITTEST_LIBS})
+set_target_properties(test_zfsio PROPERTIES COMPILE_FLAGS
+  "${UNITTEST_CXX_FLAGS}")
