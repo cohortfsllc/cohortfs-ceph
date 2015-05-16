@@ -13,8 +13,11 @@
  */
 
 #include <sys/types.h>
+#include <sys/uio.h>
 #include <iostream>
 #include <vector>
+#include <random>
+#include "xxHash-r39/xxhash.h"
 #include "gtest/gtest.h"
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/exception.hpp>
@@ -56,6 +59,41 @@ namespace {
 
   std::vector<ZFSObject> zfs1_objs;
 
+  std::uniform_int_distribution<uint8_t> uint_dist;
+  std::mt19937 rng;
+
+  struct ZPage
+  {
+    char data[65536];
+    uint64_t cksum;
+  }; /* ZPage */
+  
+  struct ZPageSet
+  {
+    std::vector<ZPage*> pages;
+
+    ZPageSet(int n) {
+      pages.reserve(n);
+      for (int page_ix = 0; page_ix < n; ++page_ix) {
+	ZPage* p = new ZPage();
+	for (int data_ix = 0; data_ix < 65536; ++data_ix) {
+	  p->data[data_ix] = uint_dist(rng);
+	} // data_ix
+	p->cksum = XXH64(p->data, 65536, 8675309);
+	pages[page_ix] = p;
+#if 0
+	std::cout << "add page " << page_ix << " cksum " << p->cksum
+		  << std::endl;
+#endif
+      } // page_ix
+    }
+
+    ~ZPageSet() {
+      for (int ix = 0; ix < pages.size(); ++ix)
+	delete pages[ix];
+    }
+  }; /* ZPageSet */
+
 } /* namespace */
 
 TEST(ZFSIO, INIT)
@@ -96,6 +134,9 @@ TEST(ZFSIO, INIT)
       ASSERT_EQ(err, 0);
       free(fs);
     }
+
+    // seed rng
+    rng.seed(1337);
   } /* create */
 
   // mount fs
@@ -113,6 +154,10 @@ TEST(ZFSIO, INIT)
 }
 
 /* TODO: finish */
+TEST(ZFSIO, IOV1)
+{
+  ZPageSet zp_set(16); // 1M random data in 16 64K pages
+}
 
 TEST(ZFSIO, SHUTDOWN)
 {
