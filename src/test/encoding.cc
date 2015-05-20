@@ -178,13 +178,13 @@ TEST(EncodingRoundTrip, MultimapConstructorCounter) {
   my_val_t::init();
   test_encode_and_decode < multimap2_t >(multimap2);
 
-  EXPECT_EQ(my_key_t::get_default_ctor(), 5);
-  EXPECT_EQ(my_key_t::get_one_arg_ctor(), 0);
-  EXPECT_EQ(my_key_t::get_copy_ctor(), 5);
-  EXPECT_EQ(my_key_t::get_assigns(), 0);
+  EXPECT_EQ(5, my_key_t::get_default_ctor());
+  EXPECT_EQ(0, my_key_t::get_one_arg_ctor());
+  EXPECT_EQ(5, my_key_t::get_copy_ctor());
+  EXPECT_EQ(0, my_key_t::get_assigns());
 
-  EXPECT_EQ(my_val_t::get_default_ctor(), 5);
-  EXPECT_EQ(my_val_t::get_one_arg_ctor(), 0);
-  EXPECT_EQ(my_val_t::get_copy_ctor(), 5);
-  EXPECT_EQ(my_val_t::get_assigns(), 0);
+  EXPECT_EQ(5, my_val_t::get_default_ctor());
+  EXPECT_EQ(0, my_val_t::get_one_arg_ctor());
+  EXPECT_EQ(5, my_val_t::get_copy_ctor());
+  EXPECT_EQ(0, my_val_t::get_assigns());
 }
