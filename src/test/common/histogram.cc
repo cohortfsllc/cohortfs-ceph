@@ -93,6 +93,7 @@ TEST(Histogram, Position) {
     ASSERT_EQ(500000u, lb);
     ASSERT_EQ(500000u, ub);
   }
+#if 0
   {
     pow2_hist_t h;
     h.h.resize(10, 0);
@@ -102,6 +103,7 @@ TEST(Histogram, Position) {
     ASSERT_EQ(500000u, lb);
     ASSERT_EQ(500000u, ub);
   }
+#endif
 }
 
 TEST(Histogram, Decay) {
