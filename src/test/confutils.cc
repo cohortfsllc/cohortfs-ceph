@@ -271,25 +271,25 @@ TEST(ConfUtils, Whitespace) {
   ConfFile::trim_whitespace(test0a, true);
   ASSERT_EQ(test0a, "");
 
-  std::string test0b("		");
+  std::string test0b("          ");
   ConfFile::trim_whitespace(test0b, false);
   ASSERT_EQ(test0b, "");
 
-  std::string test0c("		");
+  std::string test0c("          ");
   ConfFile::trim_whitespace(test0c, true);
   ASSERT_EQ(test0c, "");
 
-  std::string test1(" abc	      ");
+  std::string test1(" abc             ");
   ConfFile::trim_whitespace(test1, false);
   ASSERT_EQ(test1, "abc");
 
-  std::string test2(" abc	 d     ");
+  std::string test2(" abc        d     ");
   ConfFile::trim_whitespace(test2, true);
   ASSERT_EQ(test2, "abc d");
 
-  std::string test3(" abc	 d     ");
+  std::string test3(" abc        d     ");
   ConfFile::trim_whitespace(test3, false);
-  ASSERT_EQ(test3, "abc	       d");
+  ASSERT_EQ(test3, "abc        d");
 
   std::string test4("abcd");
   ConfFile::trim_whitespace(test4, false);

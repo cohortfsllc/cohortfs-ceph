@@ -60,7 +60,7 @@ TEST(TextTable, Indent) {
   t << "s";
   std::ostringstream oss;
   oss << t;
-  ASSERT_STREQ("	  1 \n		s \n", oss.str().c_str());
+  ASSERT_STREQ("          1 \n          s \n", oss.str().c_str());
 }
 
 
