@@ -353,9 +353,7 @@ if(${ENABLE_SHARED})
   set_target_properties(librados PROPERTIES OUTPUT_NAME rados VERSION 2.0.0 SOVERSION 2
     LINK_FLAGS "-Wl,-export-dynamic")
 endif(${ENABLE_SHARED})
-install(FILES include/rados/librados.h include/rados/rados_types.h
-  include/rados/rados_types.hpp include/rados/librados.hpp
-  include/buffer.h include/page.h include/crc32c.h
+install(FILES include/buffer.h include/page.h include/crc32c.h
   DESTINATION include/rados)
 install(TARGETS librados DESTINATION lib)
 

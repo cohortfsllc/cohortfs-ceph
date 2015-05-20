@@ -16,7 +16,6 @@ install(FILES
 	radosgw-admin.8
 	ceph-authtool.8
 	rados.8
-	librados-config.8
 	rbd.8
 	ceph-clsinfo.8
 	ceph-debugpack.8
