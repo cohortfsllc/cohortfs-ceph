@@ -41,13 +41,8 @@ function run_mon() {
 
     ./ceph-mon \
         --id $id \
-        --paxos-propose-interval=0.1 \
-        --osd-pool-default-erasure-code-directory=.libs \
         --debug-mon 20 \
         --debug-ms 20 \
-        --debug-paxos 20 \
-        --mon-advanced-debug-mode \
-        --chdir= \
         --mon-data=$dir \
         --log-file=$dir/log \
         --mon-cluster-log-file=$dir/log \

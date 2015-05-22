@@ -360,6 +360,10 @@ add_custom_target(symlinks  COMMAND
   ln -sf ${CMAKE_SOURCE_DIR}/src/test/ ${CMAKE_BINARY_DIR}/src/test/ &&
   ln -sf ${CMAKE_BINARY_DIR}/src/ceph-mon ${CMAKE_BINARY_DIR}/src/test/ &&
   ln -sf ${CMAKE_BINARY_DIR}/ceph ${CMAKE_BINARY_DIR}/src/test/ &&
+  ln -sf ${CMAKE_BINARY_DIR}/src/ceph-authtool ${CMAKE_BINARY_DIR}/src/test/ &&
+  ln -sf ${CMAKE_BINARY_DIR}/src/ceph-conf ${CMAKE_BINARY_DIR}/src/test/ &&
+  ln -sf ${CMAKE_BINARY_DIR}/src/ceph-osd ${CMAKE_BINARY_DIR}/src/test/ &&
+  ln -sf ${CMAKE_SOURCE_DIR}/src/ceph-disk ${CMAKE_BINARY_DIR}/src/test/ &&
   ln -sf ${CMAKE_SOURCE_DIR}/qa/ ${CMAKE_BINARY_DIR}/src/
   COMMENT "Symlinks have been created")
 add_dependencies(check symlinks)
@@ -422,7 +426,7 @@ add_executable(unittest_addrs EXCLUDE_FROM_ALL
 add_test(unittest_addrs unittest_addrs)
 add_dependencies(check unittest_addrs)
 target_link_libraries(unittest_addrs
-  librados global boost_filesystem pthread rt m
+  global boost_filesystem pthread rt m
   ${CMAKE_DL_LIBS} ${ALLOC_LIBS} ${UNITTEST_LIBS})
 set_target_properties(unittest_addrs
   PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
