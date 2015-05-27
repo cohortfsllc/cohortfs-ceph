@@ -29,8 +29,6 @@ namespace
 // Maintain a map to prevent multiple MDSs with the same name
 // TODO: allow same name with different cluster name
 std::mutex mds_lock;
-typedef std::unique_lock<std::mutex> unique_mds_lock;
-typedef std::lock_guard<std::mutex> mds_lock_guard;
 typedef std::map<int, libmds*> mdsmap;
 mdsmap mdslist;
 
@@ -75,11 +73,9 @@ class LibMDS : public libmds {
   MessageFactory *factory;
   MDSimpl *mds;
 
-  struct _mdsmap {
+  struct {
     std::mutex mtx;
     std::condition_variable cond;
-    typedef std::unique_lock<std::mutex> unique_lock;
-    typedef std::lock_guard<std::mutex> lock_guard;
     int state;
     epoch_t epoch;
     bool shutdown;
@@ -247,7 +243,7 @@ void LibMDS::on_mds_state(int state, epoch_t epoch)
 {
   ldout(cct, 1) << "on_mds_state " << state << " epoch " << epoch << dendl;
 
-  _mdsmap::lock_guard lock(mdsmap.mtx);
+  std::lock_guard<std::mutex> lock(mdsmap.mtx);
   if (mdsmap.state != state) {
     mdsmap.state = state;
     mdsmap.cond.notify_all();
@@ -272,7 +268,7 @@ void LibMDS::on_mds_state(int state, epoch_t epoch)
 
 bool LibMDS::wait_for_active(epoch_t *epoch)
 {
-  _mdsmap::unique_lock l(mdsmap.mtx);
+  std::unique_lock<std::mutex> l(mdsmap.mtx);
   while (mdsmap.state != MDSMap::STATE_ACTIVE
       && mdsmap.state != MDSMap::STATE_STOPPING)
     mdsmap.cond.wait(l);
@@ -292,7 +288,7 @@ void LibMDS::join()
 
 void LibMDS::shutdown()
 {
-  _mdsmap::unique_lock l(mdsmap.mtx);
+  std::unique_lock<std::mutex> l(mdsmap.mtx);
   mdsmap.shutdown = true;
   l.unlock();
 
@@ -320,7 +316,7 @@ struct libmds* libmds_init(const struct libmds_init_args *args)
   ceph::mds::LibMDS *mds;
   {
     // protect access to the map of mdslist
-    mds_lock_guard lock(mds_lock);
+    std::lock_guard<std::mutex> lock(mds_lock);
 
     // existing mds with this name?
     std::pair<mdsmap::iterator, bool> result =
@@ -339,7 +335,7 @@ struct libmds* libmds_init(const struct libmds_init_args *args)
   }
 
   // remove from the map of mdslist
-  unique_mds_lock ol(mds_lock);
+  std::unique_lock<std::mutex> ol(mds_lock);
   mdslist.erase(args->id);
   ol.unlock();
 
@@ -375,16 +371,14 @@ void libmds_cleanup(struct libmds *mds)
   delete static_cast<ceph::mds::LibMDS*>(mds);
 
   // remove from the map of mdslist
-  unique_mds_lock ol(mds_lock);
+  std::lock_guard<std::mutex> lock(mds_lock);
   mdslist.erase(id);
-  ol.unlock();
 }
 
 void libmds_signal(int signum)
 {
   // signal all mdslist under list lock
-  mds_lock_guard lock(mds_lock);
-
+  std::lock_guard<std::mutex> lock(mds_lock);
   for (auto mds : mdslist) {
     try {
       mds.second->signal(signum);
