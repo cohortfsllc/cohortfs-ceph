@@ -69,25 +69,8 @@ class LibMDS : public libmds {
   void *user;
   Finisher *finisher; // thread to send callbacks to user
 
-  MonClient *monc;
   MessageFactory *factory;
   MDSimpl *mds;
-
-  struct {
-    std::mutex mtx;
-    std::condition_variable cond;
-    int state;
-    epoch_t epoch;
-    bool shutdown;
-  } mdsmap;
-
-  // MDSStateObserver
-  void on_mds_state(int state, epoch_t epoch);
-
-  // Objecter
-  bool wait_for_active(epoch_t *epoch);
-
-  void init_dispatcher(MDSimpl *mds);
 
 public:
   LibMDS(int whoami);
@@ -108,20 +91,15 @@ LibMDS::LibMDS(int whoami)
     callbacks(nullptr),
     user(nullptr),
     finisher(nullptr),
-    monc(nullptr),
     factory(nullptr),
     mds(nullptr)
 {
-  mdsmap.state = 0;
-  mdsmap.epoch = 0;
-  mdsmap.shutdown = false;
 }
 
 LibMDS::~LibMDS()
 {
   delete mds;
   delete factory;
-  delete monc;
   if (finisher) {
     finisher->stop();
     delete finisher;
@@ -138,67 +116,29 @@ int LibMDS::init(const struct libmds_init_args *args)
   if (r != 0)
     return r;
 
-  monc = new MonClient(cct);
+  MonClient *monc = new MonClient(cct);
   factory = new MDSMessageFactory(cct, &monc->factory);
 
   const entity_name_t me(entity_name_t::MDS(whoami));
   const pid_t pid = getpid();
 
-  // create and bind messengers
-  Messenger *simple_msgr = Messenger::create(cct,
-					     entity_name_t::MDS(-1), "mds",
-					     pid, factory);
-  simple_msgr->set_cluster_protocol(CEPH_MDS_PROTOCOL);
+  // create messengers
+  Messenger *msgr;
 #if defined(HAVE_XIO)
-  XioMessenger *xmsgr = new XioMessenger(
-    cct,
-    entity_name_t::MDS(-1),
-    "xio mds",
-    0 /* nonce */,
-    factory,
-    2 /* portals */,
-    new FastStrategy() /* dispatch strategy */);
-
-  xmsgr->set_cluster_protocol(CEPH_MDS_PROTOCOL);
-  xmsgr->set_port_shift(111);;
+  if (cct->_conf->cluster_rdma) {
+    XioMessenger *xmsgr = new XioMessenger(cct, me, "xio mds", pid, factory,
+                                           2, new FastStrategy());
+    xmsgr->set_port_shift(111);
+    msgr = xmsgr;
+  }
+  else
 #endif
-  uint64_t supported =
-    CEPH_FEATURE_UID |
-    CEPH_FEATURE_NOSRCADDR |
-    CEPH_FEATURE_DIRLAYOUTHASH |
-    CEPH_FEATURE_MDS_INLINE_DATA |
-    CEPH_FEATURE_MSG_AUTH;
-  uint64_t required =
-    CEPH_FEATURE_OSDREPLYMUX;
-
-  simple_msgr->set_default_policy(Messenger::Policy::lossy_client(supported, required));
-  simple_msgr->set_policy(entity_name_t::TYPE_MON,
-			Messenger::Policy::lossy_client(supported,
-							CEPH_FEATURE_UID));
-  simple_msgr->set_policy(entity_name_t::TYPE_MDS,
-			  Messenger::Policy::lossless_peer(supported,
-							 CEPH_FEATURE_UID));
-  simple_msgr->set_policy(entity_name_t::TYPE_CLIENT,
-			  Messenger::Policy::stateful_server(supported, 0));
-  r = simple_msgr->bind(cct->_conf->public_addr);
-  if (r < 0)
-    exit(1);
-
-#if defined(HAVE_XIO)
-  xmsgr->set_default_policy(Messenger::Policy::lossy_client(supported, required));
-  xmsgr->set_policy(entity_name_t::TYPE_MON,
-		    Messenger::Policy::lossy_client(supported,
-						    CEPH_FEATURE_UID));
-  xmsgr->set_policy(entity_name_t::TYPE_MDS,
-		    Messenger::Policy::lossless_peer(supported,
-						     CEPH_FEATURE_UID));
-  xmsgr->set_policy(entity_name_t::TYPE_CLIENT,
-		    Messenger::Policy::stateful_server(supported, 0));
-
-  r = xmsgr->bind(simple_msgr->get_myaddr());
-  if (r < 0)
-    exit(1);
-#endif
+  {
+    msgr = Messenger::create(cct, me, "mds", pid, factory);
+  }
+  int features = CEPH_FEATURE_OSDREPLYMUX;
+  msgr->set_default_policy(Messenger::Policy::lossy_client(0, features));
+  msgr->set_cluster_protocol(CEPH_MDS_PROTOCOL);
 
   common_init_finish(cct, 0);
 
@@ -207,24 +147,9 @@ int LibMDS::init(const struct libmds_init_args *args)
   if (r < 0)
     return r;
 
-  simple_msgr->start();
-#if defined(HAVE_XIO)
-  xmsgr->start();
-#endif
-
   // create mds
-  Messenger *cluster_msgr = (cct->_conf->cluster_rdma) ?
-#if defined(HAVE_XIO)
-    xmsgr
-#else
-    simple_msgr
-#endif
-    : simple_msgr;
-
-  mds = new MDSimpl(cct->_conf->name.get_id().c_str(), cluster_msgr, monc);
-
-  r = mds->init();	// setup dispatcher?
-  return 0;
+  mds = new MDSimpl(cct->_conf->name.get_id().c_str(), msgr, monc);
+  return mds->init();
 }
 
 struct C_StateCb : public ::Context {
@@ -239,62 +164,13 @@ struct C_StateCb : public ::Context {
   }
 };
 
-void LibMDS::on_mds_state(int state, epoch_t epoch)
-{
-  ldout(cct, 1) << "on_mds_state " << state << " epoch " << epoch << dendl;
-
-  std::lock_guard<std::mutex> lock(mdsmap.mtx);
-  if (mdsmap.state != state) {
-    mdsmap.state = state;
-    mdsmap.cond.notify_all();
-
-    if (state == MDSMap::STATE_ACTIVE) {
-      if (callbacks && callbacks->mds_active)
-	finisher->queue(new C_StateCb(callbacks->mds_active, this, user));
-    } else if (state == MDSMap::STATE_STOPPING) {
-      // make mds_shutdown calback only if we haven't called libmds_shutdown()
-      if (!mdsmap.shutdown && callbacks && callbacks->mds_shutdown)
-	finisher->queue(new C_StateCb(callbacks->mds_shutdown, this, user));
-      mds->shutdown();
-
-#if 0
-      ms_client->shutdown();
-      ms_server->shutdown();
-#endif
-    }
-  }
-  mdsmap.epoch = epoch;
-}
-
-bool LibMDS::wait_for_active(epoch_t *epoch)
-{
-  std::unique_lock<std::mutex> l(mdsmap.mtx);
-  while (mdsmap.state != MDSMap::STATE_ACTIVE
-      && mdsmap.state != MDSMap::STATE_STOPPING)
-    mdsmap.cond.wait(l);
-
-  *epoch = mdsmap.epoch;
-  return mdsmap.state != MDSMap::STATE_STOPPING;
-}
-
 void LibMDS::join()
 {
-  // wait on messengers
-#if 0
-  ms_client->wait();
-  ms_server->wait();
-#endif
 }
 
 void LibMDS::shutdown()
 {
-  std::unique_lock<std::mutex> l(mdsmap.mtx);
-  mdsmap.shutdown = true;
-  l.unlock();
-
-#if 0
   mds->shutdown();
-#endif
 }
 
 void LibMDS::signal(int signum)

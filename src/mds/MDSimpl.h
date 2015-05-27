@@ -29,7 +29,7 @@ public:
     ~MDSimpl();
     int get_nodeid() { return whoami; }
     MDSMap *get_mds_map() { return mdsmap; }
-    int init(int wanted_state = MDSMap::STATE_BOOT);
+    int init();
     void beacon_start();
     void beacon_send();
     // void handle_mds_beacon(MMDSBeacon *m);
@@ -37,6 +37,6 @@ public:
     bool ms_dispatch(Message *m);
     bool ms_handle_reset(Connection *con);
     void ms_handle_remote_reset(Connection *con);
-    bool shutdown();
+    void shutdown();
 };
 #endif /* _MDSINT_H */

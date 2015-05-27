@@ -13,31 +13,31 @@
 #include "messages/MMDSBeacon.h"
 
 #define dout_subsys ceph_subsys_mds
-#undef dout_prefix
 
 MDSimpl::MDSimpl(const std::string &n, Messenger *m, MonClient *mc) :
 	Dispatcher(m->cct),
 	name(n),
 	messenger(m),
-	monc(mc)
+	monc(mc),
+  objecter(new Objecter(cct, messenger, monc,
+                        cct->_conf->rados_mon_op_timeout,
+                        cct->_conf->rados_osd_op_timeout))
 {
 }
 
 MDSimpl::~MDSimpl()
 {
-    if (objecter) {
-	delete objecter; objecter = 0;
-    }
-    if (finisher) {
-	finisher->stop();
-	delete finisher;
-	finisher = 0;
-    }
+	delete objecter;
+  delete monc;
+  delete messenger;
 }
 
-bool MDSimpl::shutdown()
+void MDSimpl::shutdown()
 {
-    return false;
+  objecter->shutdown();
+  monc->shutdown();
+  messenger->shutdown();
+  messenger->wait();
 }
 
 void MDSimpl::handle_signal(int signum)
@@ -45,13 +45,25 @@ void MDSimpl::handle_signal(int signum)
 	// XXX suicide
 }
 
-int MDSimpl::init(int wanted_state)
+int MDSimpl::init()
 {
-    return 0;
-    whoami = -1;
-    messenger->set_myname(entity_name_t::MDS(whoami));
-    beacon_start();
-// XXX sched tick
+  messenger->add_dispatcher_tail(objecter);
+  messenger->start();
+
+  monc->set_messenger(messenger);
+  monc->set_want_keys(CEPH_ENTITY_TYPE_MON | CEPH_ENTITY_TYPE_OSD);
+  int r = monc->init();
+  if (r) {
+    lderr(cct) << "MonClient::init failed with " << r << dendl;
+    shutdown();
+    return r;
+  }
+
+  objecter->start();
+  monc->renew_subs();
+
+  beacon_start();
+  return 0;
 }
 
 bool MDSimpl::ms_dispatch(Message *m)

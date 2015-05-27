@@ -14,11 +14,6 @@
 #define LIBCEPH_MDS_H
 
 #include <stdint.h>
-#ifdef IN_TREE_BUILD
-#include <mds/MDS.h>
-#else
-#include <cephfs/MDS.h>
-#endif
 
 /**
  * Completion callback for asynchronous io
