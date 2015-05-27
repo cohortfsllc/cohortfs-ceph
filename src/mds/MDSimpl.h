@@ -2,6 +2,7 @@
 #define _MDSINT_H 1
 #define IN_TREE_BUILD 1
 #include "msg/Dispatcher.h"
+#include "common/Timer.h"
 #include <mds/MDS.h>
 class MDSimpl : public MDS, Dispatcher {
 public:
@@ -11,7 +12,7 @@ public:
     MonClient *monc;
     MDSMap *mdsmap;
     Objecter *objecter;
-    Finisher *finisher;
+    cohort::Timer<ceph::mono_clock> beacon_timer;
 protected:
     int last_state, state, want_state;
     Context *createwaitingforosd;

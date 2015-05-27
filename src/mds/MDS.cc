@@ -114,7 +114,8 @@ void MDSimpl::request_state(int s)
 
 void MDSimpl::beacon_start()
 {
-    beacon_send();
+  beacon_timer.add_event(cct->_conf->mds_beacon_interval,
+                         &MDSimpl::beacon_send, this);
 }
 
 void MDSimpl::beacon_send()
@@ -128,5 +129,6 @@ void MDSimpl::beacon_send()
 	name, mdsmap->get_epoch(),
 	want_state, beacon_last_seq);
     monc->send_mon_message(beacon);
-    // XXX schedule next sender
+
+  beacon_timer.reschedule_me(cct->_conf->mds_beacon_interval);
 }
