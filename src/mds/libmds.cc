@@ -3,14 +3,10 @@
 
 #include <condition_variable>
 #include <mutex>
-#include <boost/function.hpp>
 
-#include "msg/Dispatcher.h"
-#include "osdc/Objecter.h"
-
-// #include "os/ObjectStore.h"
 #include "mon/MonClient.h"
 
+#include "msg/Dispatcher.h"
 #if defined(HAVE_XIO)
 #include "msg/XioMessenger.h"
 #include "msg/FastStrategy.h"
