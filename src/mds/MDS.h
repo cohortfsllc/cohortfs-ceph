@@ -8,6 +8,9 @@
 #include "ceph_time.h"
 #include "rados/buffer.h"
 #endif
+
+#define CEPH_MDS_PROTOCOL    23 /* cluster internal */
+
 class MDS {
 protected:
     MDS() { }

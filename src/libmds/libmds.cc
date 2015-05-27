@@ -11,12 +11,15 @@
 // #include "os/ObjectStore.h"
 #include "mon/MonClient.h"
 
-#include "msg/DirectMessenger.h"
+#if defined(HAVE_XIO)
+#include "msg/XioMessenger.h"
 #include "msg/FastStrategy.h"
+#endif
 
 #include "common/Finisher.h"
 #include "mds/MDSMap.h"
 #include "mds/MDSimpl.h"
+#include "mds/MessageFactory.h"
 #include "common/common_init.h"
 #include "common/ceph_argparse.h"
 #include "include/color.h"
@@ -71,10 +74,8 @@ class LibMDS : public libmds {
   Finisher *finisher; // thread to send callbacks to user
 
   MonClient *monc;
+  MessageFactory *factory;
   MDSimpl *mds;
-#if 0
-  DirectMessenger *ms_client, *ms_server; // DirectMessenger pair
-#endif
 
   struct _mdsmap {
     std::mutex mtx;
@@ -114,6 +115,7 @@ LibMDS::LibMDS(int whoami)
     user(nullptr),
     finisher(nullptr),
     monc(nullptr),
+    factory(nullptr),
     mds(nullptr)
 {
   mdsmap.state = 0;
@@ -124,6 +126,7 @@ LibMDS::LibMDS(int whoami)
 LibMDS::~LibMDS()
 {
   delete mds;
+  delete factory;
   delete monc;
   if (finisher) {
     finisher->stop();
@@ -141,22 +144,26 @@ int LibMDS::init(const struct libmds_init_args *args)
   if (r != 0)
     return r;
 
+  monc = new MonClient(cct);
+  factory = new MDSMessageFactory(cct, &monc->factory);
+
   const entity_name_t me(entity_name_t::MDS(whoami));
   const pid_t pid = getpid();
 
   // create and bind messengers
   Messenger *simple_msgr = Messenger::create(cct,
 					     entity_name_t::MDS(-1), "mds",
-					     pid);
-//  simple_msgr->set_cluster_protocol(CEPH_MDS_PROTOCOL);
+					     pid, factory);
+  simple_msgr->set_cluster_protocol(CEPH_MDS_PROTOCOL);
 #if defined(HAVE_XIO)
   XioMessenger *xmsgr = new XioMessenger(
     cct,
     entity_name_t::MDS(-1),
     "xio mds",
     0 /* nonce */,
+    factory,
     2 /* portals */,
-    new QueueStrategy(2) /* dispatch strategy */);
+    new FastStrategy() /* dispatch strategy */);
 
   xmsgr->set_cluster_protocol(CEPH_MDS_PROTOCOL);
   xmsgr->set_port_shift(111);;
@@ -202,7 +209,6 @@ int LibMDS::init(const struct libmds_init_args *args)
   common_init_finish(cct, 0);
 
   // monitor client
-  monc = new MonClient(cct);
   r = monc->build_initial_monmap();
   if (r < 0)
     return r;
