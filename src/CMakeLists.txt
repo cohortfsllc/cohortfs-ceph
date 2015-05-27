@@ -510,7 +510,7 @@ install(TARGETS ceph-osd DESTINATION bin)
 # MDS
 if(WITH_LIBMDS)
   set(mds_srcs
-    libmds/libmds.cc
+    mds/libmds.cc
     mds/MDS.cc
     )
   add_library(mds ${CEPH_SHARED} ${mds_srcs})
@@ -521,7 +521,7 @@ if(WITH_LIBMDS)
   endif(${ENABLE_SHARED})
   target_link_libraries(mds PRIVATE common os dl ${EXTRALIBS})
   install(FILES
-	mds/MDS.h include/ceph_time.h libmds/ceph_mds.h
+	mds/MDS.h include/ceph_time.h mds/ceph_mds.h
 	DESTINATION include/cephfs)
 endif(WITH_LIBMDS)
 
