@@ -40,7 +40,7 @@ typedef void (*libmds_io_completion_fn)(int result, uint64_t length,
  */
 struct libmds {
   const int whoami; /**< mds instance id */
-  libmds(int name) : whoami(name), cct(nullptr) {}
+  libmds(int name) : whoami(name) {}
 
   /**
    * Blocks until the mds shuts down.

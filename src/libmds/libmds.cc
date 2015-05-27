@@ -68,7 +68,9 @@ namespace mds
 {
 
 class LibMDS : public libmds {
+ public:
   CephContext *cct;
+ private:
   libmds_callbacks *callbacks;
   void *user;
   Finisher *finisher; // thread to send callbacks to user
@@ -354,7 +356,8 @@ void libmds_join(struct libmds *mds)
   try {
     mds->join();
   } catch (std::exception &e) {
-    lderr(mds->cct) << "libmds_join caught exception " << e.what() << dendl;
+    CephContext *cct = static_cast<ceph::mds::LibMDS*>(mds)->cct;
+    lderr(cct) << "libmds_join caught exception " << e.what() << dendl;
   }
 }
 
@@ -363,7 +366,8 @@ void libmds_shutdown(struct libmds *mds)
   try {
     mds->shutdown();
   } catch (std::exception &e) {
-    lderr(mds->cct) << "libmds_shutdown caught exception " << e.what() << dendl;
+    CephContext *cct = static_cast<ceph::mds::LibMDS*>(mds)->cct;
+    lderr(cct) << "libmds_shutdown caught exception " << e.what() << dendl;
   }
 }
 
@@ -389,8 +393,8 @@ void libmds_signal(int signum)
     try {
       mds.second->signal(signum);
     } catch (std::exception &e) {
-      lderr(mds.second->cct)
-	<< "libmds_signal caught exception " << e.what() << dendl;
+      CephContext *cct = static_cast<ceph::mds::LibMDS*>(mds.second)->cct;
+      lderr(cct) << "libmds_signal caught exception " << e.what() << dendl;
     }
   }
 }
