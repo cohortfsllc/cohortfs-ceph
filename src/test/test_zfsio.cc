@@ -82,7 +82,7 @@ namespace {
 	  p->data[data_ix] = uint_dist(rng);
 	} // data_ix
 	p->cksum = XXH64(p->data, 65536, 8675309);
-	pages[page_ix] = p;
+	pages.emplace_back(p);
 	// and iovs
 	struct iovec* iov = &iovs[page_ix];
 	iov->iov_base = p->data;
@@ -110,6 +110,16 @@ namespace {
       for (int page_ix = 0; page_ix < n; ++page_ix) {
 	ZPage* p = pages[page_ix];
 	p->cksum = XXH64(p->data, 65536, 8675309);
+      }
+    }
+
+    void reset_iovs() { // VOP_READ and VOP_WRITE update
+      int n = size();
+      for (int page_ix = 0; page_ix < n; ++page_ix) {
+	ZPage* p = pages[page_ix];
+	struct iovec* iov = &iovs[page_ix];
+	iov->iov_base = p->data;
+	iov->iov_len = 65536;
       }
     }
 
@@ -184,11 +194,13 @@ TEST(ZFSIO, CREATEF1)
   int err, ix;
   zfs1_objs.reserve(100);
   for (ix = 0; ix < 100; ++ix) {
+    unsigned o_flags;
     std::string n{"f" + std::to_string(ix)};
     zfs1_objs.emplace_back(ZFSObject(n));
     ZFSObject& o = zfs1_objs[ix];
-    err = lzfw_create(zhfs, &cred, root_ino, o.leaf_name.c_str(),
-		      644 /* mode */, &o.ino);
+    /* create and open */
+    err = lzfw_openat(zhfs, &cred, root_vnode, o.leaf_name.c_str(),
+		      O_RDWR|O_CREAT, 644, &o_flags, &o.vnode);
     ASSERT_EQ(err, 0);
   }
 }
@@ -200,22 +212,36 @@ TEST(ZFSIO, WRITEV1)
   ZPageSet zp_set1{iovcnt}; // 1M random data in 16 64K pages
   ZPageSet zp_set2{iovcnt}; // 1M random data in 16 64K pages
   struct iovec *iov1 = zp_set1.get_iovs();
-  struct iovec iov2[iovcnt];
+  struct iovec *iov2 = zp_set2.get_iovs();
 
   for (ix = 0; ix < 10; ++ix) {
     ZFSObject& o = zfs1_objs[ix];
     err = lzfw_pwritev(zhfs, &cred, o.vnode, iov1, iovcnt,
 		       0 /* offset */);
+    /* VOP_WRITE updates iov_len for all iovs touched */
+    zp_set1.reset_iovs();
     ASSERT_EQ(err, iovcnt*65536);
   }
 
   for (ix = 0; ix < 10; ++ix) {
     ZFSObject& o = zfs1_objs[ix];
+    /* VOP_NEEDS requires (and updates) iov_len for all iovs */
     err = lzfw_preadv(zhfs, &cred, o.vnode, iov2, iovcnt,
 		      0 /* offset */);
     ASSERT_EQ(err, iovcnt*65536);
     zp_set2.cksum();
+    zp_set2.reset_iovs();
     ASSERT_TRUE(zp_set1 == zp_set2);
+  }
+}
+
+TEST(ZFSIO, CLOSE1)
+{
+  int err, ix;
+  for (ix = 0; ix < 100; ++ix) {
+    ZFSObject& o = zfs1_objs[ix];
+    err = lzfw_close(zhfs, &cred, o.vnode, O_RDWR|O_CREAT);
+    ASSERT_EQ(err, 0);
   }
 }
 
