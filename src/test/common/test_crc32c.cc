@@ -6,8 +6,7 @@
 
 #include "include/types.h"
 #include "include/crc32c.h"
-#include "include/utime.h"
-#include "common/Clock.h"
+#include "include/ceph_time.h"
 
 #include "gtest/gtest.h"
 
@@ -49,34 +48,38 @@ TEST(Crc32c, Performance) {
   std::cout << "calculating crc" << std::endl;
 
   {
-    utime_t start = ceph_clock_now(NULL);
-    unsigned val = ceph_crc32c(0, (unsigned char *)a, len);
-    utime_t end = ceph_clock_now(NULL);
-    float rate = (float)len / (float)(1024*1024) / (float)(end - start);
+    ceph::real_time start = ceph::real_clock::now();
+    unsigned val = ceph_crc32c(0xffffffff, (unsigned char *)a, len);
+    ceph::real_time end = ceph::real_clock::now();
+    std::chrono::duration<float> secs = end - start;
+    float rate = (float)len / (float)(1024*1024) / secs.count();
     std::cout << "best choice = " << rate << " MB/sec" << std::endl;
     ASSERT_EQ(261108528u, val);
   }
   {
-    utime_t start = ceph_clock_now(NULL);
+    ceph::real_time start = ceph::real_clock::now();
     unsigned val = ceph_crc32c(0xffffffff, (unsigned char *)a, len);
-    utime_t end = ceph_clock_now(NULL);
-    float rate = (float)len / (float)(1024*1024) / (float)(end - start);
+    ceph::real_time end = ceph::real_clock::now();
+    std::chrono::duration<float> secs = end - start;
+    float rate = (float)len / (float)(1024*1024) / secs.count();
     std::cout << "best choice 0xffffffff = " << rate << " MB/sec" << std::endl;
     ASSERT_EQ(3895876243u, val);
   }
   {
-    utime_t start = ceph_clock_now(NULL);
-    unsigned val = ceph_crc32c_sctp(0, (unsigned char *)a, len);
-    utime_t end = ceph_clock_now(NULL);
-    float rate = (float)len / (float)(1024*1024) / (float)(end - start);
+    ceph::real_time start = ceph::real_clock::now();
+    unsigned val = ceph_crc32c(0xffffffff, (unsigned char *)a, len);
+    ceph::real_time end = ceph::real_clock::now();
+    std::chrono::duration<float> secs = end - start;
+    float rate = (float)len / (float)(1024*1024) / secs.count();
     std::cout << "sctp = " << rate << " MB/sec" << std::endl;
     ASSERT_EQ(261108528u, val);
   }
   {
-    utime_t start = ceph_clock_now(NULL);
-    unsigned val = ceph_crc32c_intel_baseline(0, (unsigned char *)a, len);
-    utime_t end = ceph_clock_now(NULL);
-    float rate = (float)len / (float)(1024*1024) / (float)(end - start);
+    ceph::real_time start = ceph::real_clock::now();
+    unsigned val = ceph_crc32c(0xffffffff, (unsigned char *)a, len);
+    ceph::real_time end = ceph::real_clock::now();
+    std::chrono::duration<float> secs = end - start;
+    float rate = (float)len / (float)(1024*1024) / secs.count();
     std::cout << "intel baseline = " << rate << " MB/sec" << std::endl;
     ASSERT_EQ(261108528u, val);
   }

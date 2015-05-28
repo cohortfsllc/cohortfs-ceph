@@ -670,20 +670,20 @@ set_target_properties(unittest_simple_spin PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 
 # unittest_librados
-set(unittest_librados_srcs librados/librados.cc)
-add_executable(unittest_librados EXCLUDE_FROM_ALL
-  ${unittest_librados_srcs}
-  )
-add_test(unittest_librados unittest_librados)
-add_dependencies(check unittest_librados)
-target_link_libraries(unittest_librados
-  librados global boost_filesystem
-  ${CMAKE_DL_LIBS}
-  ${ALLOC_LIBS}
-  ${UNITTEST_LIBS}
-  )
-set_target_properties(unittest_librados PROPERTIES COMPILE_FLAGS
-  ${UNITTEST_CXX_FLAGS})
+#set(unittest_librados_srcs librados/librados.cc)
+#add_executable(unittest_librados EXCLUDE_FROM_ALL
+#  ${unittest_librados_srcs}
+#  )
+#add_test(unittest_librados unittest_librados)
+#add_dependencies(check unittest_librados)
+#target_link_libraries(unittest_librados
+#  librados global boost_filesystem
+#  ${CMAKE_DL_LIBS}
+#  ${ALLOC_LIBS}
+#  ${UNITTEST_LIBS}
+#  )
+#set_target_properties(unittest_librados PROPERTIES COMPILE_FLAGS
+#  ${UNITTEST_CXX_FLAGS})
 
 # unittest_bufferlist
 set(unittest_bufferlist_srcs bufferlist.cc)
@@ -812,22 +812,22 @@ target_link_libraries(unittest_chain_xattr
   )
 
 # unittest_flatindex
-set(unittest_flatindex_srcs
-  os/TestFlatIndex.cc
-  )
-add_executable(unittest_flatindex EXCLUDE_FROM_ALL
-  ${unittest_flatindex_srcs}
-  )
-add_test(unittest_flatindex unittest_flatindex)
-add_dependencies(check unittest_flatindex)
-target_link_libraries(unittest_flatindex
-  os global boost_filesystem
-  ${CMAKE_DL_LIBS}
-  ${ALLOC_LIBS}
-  ${UNITTEST_LIBS}
-  )
-set_target_properties(unittest_flatindex PROPERTIES COMPILE_FLAGS
-  ${UNITTEST_CXX_FLAGS})
+#set(unittest_flatindex_srcs
+#  os/TestFlatIndex.cc
+#  )
+#add_executable(unittest_flatindex EXCLUDE_FROM_ALL
+#  ${unittest_flatindex_srcs}
+#  )
+#add_test(unittest_flatindex unittest_flatindex)
+#add_dependencies(check unittest_flatindex)
+#target_link_libraries(unittest_flatindex
+#  os global boost_filesystem
+#  ${CMAKE_DL_LIBS}
+#  ${ALLOC_LIBS}
+#  ${UNITTEST_LIBS}
+#  )
+#set_target_properties(unittest_flatindex PROPERTIES COMPILE_FLAGS
+#  ${UNITTEST_CXX_FLAGS})
 
 # unittest_strtol
 set(unittest_strtol_srcs strtol.cc)
@@ -922,21 +922,21 @@ set_target_properties(unittest_libcephfs_config PROPERTIES COMPILE_FLAGS
 endif(${WITH_CLIENT})
 
 # unittest_librados_config
-set(unittest_librados_config_srcs librados/librados_config.cc)
-add_executable(unittest_librados_config EXCLUDE_FROM_ALL
-  ${unittest_librados_config_srcs}
-  )
-add_test(unittest_librados_config unittest_librados_config)
-add_dependencies(check unittest_librados_config)
-target_link_libraries(unittest_librados_config
-  librados
-  global boost_filesystem
-  ${CMAKE_DL_LIBS}
-  ${ALLOC_LIBS}
-  ${UNITTEST_LIBS}
-  )
-set_target_properties(unittest_librados_config PROPERTIES COMPILE_FLAGS
-  ${UNITTEST_CXX_FLAGS})
+#set(unittest_librados_config_srcs librados/librados_config.cc)
+#add_executable(unittest_librados_config EXCLUDE_FROM_ALL
+#  ${unittest_librados_config_srcs}
+#  )
+#add_test(unittest_librados_config unittest_librados_config)
+#add_dependencies(check unittest_librados_config)
+#target_link_libraries(unittest_librados_config
+#  librados
+#  global boost_filesystem
+#  ${CMAKE_DL_LIBS}
+#  ${ALLOC_LIBS}
+#  ${UNITTEST_LIBS}
+#  )
+#set_target_properties(unittest_librados_config PROPERTIES COMPILE_FLAGS
+#  ${UNITTEST_CXX_FLAGS})
 
 if(0)
 ### XXX THIS DOES NOT WORK:

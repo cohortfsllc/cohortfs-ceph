@@ -17,6 +17,7 @@
 
 #include "include/types.h"
 #include "osd/osd_types.h"
+#include "osd/ObjectContext.h"
 #include "osd/OSDMap.h"
 #include "gtest/gtest.h"
 #include "common/Thread.h"
@@ -65,7 +66,8 @@ protected:
 TEST_F(ObjectContextTest, read_write_lock)
 {
   {
-    ObjectContext obc;
+    hoid_t oid;
+    ObjectContext obc(oid, NULL);
 
     //
     // write_lock
@@ -100,7 +102,8 @@ TEST_F(ObjectContextTest, read_write_lock)
   useconds_t delay = 0;
 
   {
-    ObjectContext obc;
+    hoid_t oid;
+    ObjectContext obc(oid, NULL);
 
     //
     // write_lock
@@ -157,7 +160,8 @@ TEST_F(ObjectContextTest, read_write_lock)
   }
 
   {
-    ObjectContext obc;
+    hoid_t oid;
+    ObjectContext obc(oid, NULL);
 
     //
     // read_lock

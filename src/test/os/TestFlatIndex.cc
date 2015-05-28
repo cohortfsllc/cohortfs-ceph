@@ -21,7 +21,6 @@
 
 #include <stdio.h>
 #include <signal.h>
-#include "os/FlatIndex.h"
 #include "os/CollectionIndex.h"
 #include "os/chain_xattr.h"
 #include "common/ceph_argparse.h"

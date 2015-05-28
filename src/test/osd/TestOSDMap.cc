@@ -1,25 +1,26 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 #include "gtest/gtest.h"
 #include "osd/OSDMap.h"
-
-#include "global/global_context.h"
 #include "global/global_init.h"
+
 #include "common/common_init.h"
 
 #include <iostream>
 
 using namespace std;
 
+CephContext *cct;
+
 int main(int argc, char **argv) {
   std::vector<const char *> preargs;
   std::vector<const char*> args(argv, argv+argc);
-  global_init(&preargs, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY,
+  cct = global_init(&preargs, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY,
 	      CINIT_FLAG_NO_DEFAULT_CONFIG_FILE);
-  common_init_finish(g_ceph_context);
+  common_init_finish(cct);
   // make sure we have 3 copies, or some tests won't work
-  g_ceph_context->_conf->set_val("osd_pool_default_size", "3", false);
+  cct->_conf->set_val("osd_pool_default_size", "3", false);
   // our map is flat, so just try and split across OSDs, not hosts or whatever
-  g_ceph_context->_conf->set_val("osd_crush_chooseleaf_type", "0", false);
+  cct->_conf->set_val("osd_crush_chooseleaf_type", "0", false);
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
@@ -32,7 +33,7 @@ public:
 
   void set_up_map() {
     boost::uuids::uuid fsid;
-    osdmap.build_simple(g_ceph_context, 0, fsid, num_osds);
+    osdmap.build_simple(cct, 0, fsid, num_osds);
     OSDMap::Incremental pending_inc(osdmap.get_epoch() + 1);
     pending_inc.fsid = osdmap.get_fsid();
     entity_addr_t sample_addr;

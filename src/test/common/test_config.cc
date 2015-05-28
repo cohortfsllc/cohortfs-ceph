@@ -42,7 +42,8 @@ static const int NUM_CONFIG_OPTIONS = sizeof(config_optionsp) / sizeof(config_op
 class test_md_config_t : public md_config_t, public ::testing::Test {
 public:
   void test_expand_meta() {
-    Mutex::Locker l(lock);
+    std::mutex lock;
+    std::lock_guard<std::mutex> l(lock);
     // successfull meta expansion $run_dir and ${run_dir}
     {
       ostringstream oss;
@@ -107,7 +108,8 @@ public:
   }
 
   void test_expand_all_meta() {
-    Mutex::Locker l(lock);
+    std::mutex lock;
+    std::lock_guard<std::mutex> l(lock);
     int before_count = 0;
     for (int i = 0; i < NUM_CONFIG_OPTIONS; i++) {
       config_option *opt = config_optionsp + i;

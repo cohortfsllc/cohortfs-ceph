@@ -81,7 +81,7 @@ public:
       if (i == contents.end())
 	return false;
       if (next)
-	r = make_pair(i->first, next_val);
+	r = std::make_pair(i->first, next_val);
     }
     if (next)
       *next = r;
@@ -100,7 +100,7 @@ public:
     if (i == contents.end())
       return false;
     if (next)
-      *next = make_pair(i->first, *next_val);
+      *next = std::make_pair(i->first, *next_val);
     return true;
   }
 
@@ -144,7 +144,7 @@ public:
     }
     V *ptr = new V();
     VPtr retval(ptr, OnRemoval(this, key));
-    contents.insert(make_pair(key, make_pair(retval, ptr)));
+    contents.insert(std::make_pair(key, std::make_pair(retval, ptr)));
     waiting--;
     return retval;
   }
@@ -180,7 +180,7 @@ public:
     }
     V *ptr = new V(arg);
     VPtr retval(ptr, OnRemoval(this, key));
-    contents.insert(make_pair(key, make_pair(retval, ptr)));
+    contents.insert(std::make_pair(key, std::make_pair(retval, ptr)));
     waiting--;
     return retval;
   }

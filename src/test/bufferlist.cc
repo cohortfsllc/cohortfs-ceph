@@ -24,10 +24,9 @@
 #include <sys/uio.h>
 
 #include "include/buffer.h"
-#include "include/utime.h"
+#include "include/ceph_time.h"
 #include "include/encoding.h"
 #include "common/environment.h"
-#include "common/Clock.h"
 #include "common/safe_io.h"
 
 #include "gtest/gtest.h"
@@ -598,8 +597,8 @@ TEST(BufferPtr, copy_out) {
   {
     char in[] = "ABC";
     const bufferptr ptr(buffer::create_static(strlen(in), in));
-    EXPECT_THROW(ptr.copy_out((unsigned)0, strlen(in) + 1, NULL), buffer::end_of_buffer);
-    EXPECT_THROW(ptr.copy_out(strlen(in) + 1, (unsigned)0, NULL), buffer::end_of_buffer);
+    EXPECT_THROW(ptr.copy_out((unsigned)0, strlen(in) + 1, NULL), std::system_error);
+    EXPECT_THROW(ptr.copy_out(strlen(in) + 1, (unsigned)0, NULL), std::system_error);
     char out[1] = { 'X' };
     ptr.copy_out((unsigned)1, (unsigned)1, out);
     EXPECT_EQ('B', out[0]);
@@ -779,11 +778,11 @@ TEST(BufferListIterator, advance) {
 
   {
     bufferlist::iterator i(&bl);
-    EXPECT_THROW(i.advance(200), buffer::end_of_buffer);
+    EXPECT_THROW(i.advance(200), std::system_error);
   }
   {
     bufferlist::iterator i(&bl);
-    EXPECT_THROW(i.advance(-1), buffer::end_of_buffer);
+    EXPECT_THROW(i.advance(-1), std::system_error);
   }
   {
     bufferlist::iterator i(&bl);
@@ -812,14 +811,14 @@ TEST(BufferListIterator, operator_star) {
   bufferlist bl;
   {
     bufferlist::iterator i(&bl);
-    EXPECT_THROW(*i, buffer::end_of_buffer);
+    EXPECT_THROW(*i, std::system_error);
   }
   bl.append("ABC", 3);
   {
     bufferlist::iterator i(&bl);
     EXPECT_EQ('A', *i);
-    EXPECT_THROW(i.advance(200), buffer::end_of_buffer);
-    EXPECT_THROW(*i, buffer::end_of_buffer);
+    EXPECT_THROW(i.advance(200), std::system_error);
+    EXPECT_THROW(*i, std::system_error);
   }
 }
 
@@ -827,7 +826,7 @@ TEST(BufferListIterator, operator_plus_plus) {
   bufferlist bl;
   {
     bufferlist::iterator i(&bl);
-    EXPECT_THROW(++i, buffer::end_of_buffer);
+    EXPECT_THROW(++i, std::system_error);
   }
   bl.append("ABC", 3);
   {
@@ -841,7 +840,7 @@ TEST(BufferListIterator, get_current_ptr) {
   bufferlist bl;
   {
     bufferlist::iterator i(&bl);
-    EXPECT_THROW(++i, buffer::end_of_buffer);
+    EXPECT_THROW(++i, std::system_error);
   }
   bl.append("ABC", 3);
   {
@@ -867,7 +866,7 @@ TEST(BufferListIterator, copy) {
     //
     // demonstrates that it seeks back to offset if p == ls->end()
     //
-    EXPECT_THROW(i.advance(200), buffer::end_of_buffer);
+    EXPECT_THROW(i.advance(200), std::system_error);
     i.copy(2, copy);
     EXPECT_EQ(0, ::memcmp(copy, expected, 2));
     EXPECT_EQ('X', copy[2]);
@@ -895,7 +894,7 @@ TEST(BufferListIterator, copy) {
     //
     // demonstrates that it seeks back to offset if p == ls->end()
     //
-    EXPECT_THROW(i.advance(200), buffer::end_of_buffer);
+    EXPECT_THROW(i.advance(200), std::system_error);
     i.copy(2, copy);
     EXPECT_EQ(0, ::memcmp(copy.c_str(), expected, 2));
     i.seek(0);
@@ -916,7 +915,7 @@ TEST(BufferListIterator, copy) {
     //
     // demonstrates that it seeks back to offset if p == ls->end()
     //
-    EXPECT_THROW(i.advance(200), buffer::end_of_buffer);
+    EXPECT_THROW(i.advance(200), std::system_error);
     i.copy_all(copy);
     EXPECT_EQ('A', copy[0]);
     EXPECT_EQ('B', copy[1]);
@@ -932,7 +931,7 @@ TEST(BufferListIterator, copy) {
     //
     // demonstrates that it seeks back to offset if p == ls->end()
     //
-    EXPECT_THROW(i.advance(200), buffer::end_of_buffer);
+    EXPECT_THROW(i.advance(200), std::system_error);
     i.copy(2, copy);
     EXPECT_EQ(0, ::memcmp(copy.c_str(), expected, 2));
     i.seek(0);
@@ -958,7 +957,7 @@ TEST(BufferListIterator, copy_in) {
     //
     // demonstrates that it seeks back to offset if p == ls->end()
     //
-    EXPECT_THROW(i.advance(200), buffer::end_of_buffer);
+    EXPECT_THROW(i.advance(200), std::system_error);
     const char *expected = "ABC";
     i.copy_in(3, expected);
     EXPECT_EQ(0, ::memcmp(bl.c_str(), expected, 3));
@@ -975,7 +974,7 @@ TEST(BufferListIterator, copy_in) {
     //
     // demonstrates that it seeks back to offset if p == ls->end()
     //
-    EXPECT_THROW(i.advance(200), buffer::end_of_buffer);
+    EXPECT_THROW(i.advance(200), std::system_error);
     bufferlist expected;
     expected.append("ABC", 3);
     i.copy_in(3, expected);
@@ -1422,7 +1421,7 @@ TEST(BufferList, copy) {
   //
   {
     bufferlist bl;
-    EXPECT_THROW(bl.copy((unsigned)100, (unsigned)100, (char*)0), buffer::end_of_buffer);
+    EXPECT_THROW(bl.copy((unsigned)100, (unsigned)100, (char*)0), std::system_error);
     const char *expected = "ABC";
     bl.append(expected);
     char *dest = new char[2];
@@ -1436,7 +1435,7 @@ TEST(BufferList, copy) {
   {
     bufferlist bl;
     bufferlist dest;
-    EXPECT_THROW(bl.copy((unsigned)100, (unsigned)100, dest), buffer::end_of_buffer);
+    EXPECT_THROW(bl.copy((unsigned)100, (unsigned)100, dest), std::system_error);
     const char *expected = "ABC";
     bl.append(expected);
     bl.copy(1, 2, dest);
@@ -1448,7 +1447,7 @@ TEST(BufferList, copy) {
   {
     bufferlist bl;
     std::string dest;
-    EXPECT_THROW(bl.copy((unsigned)100, (unsigned)100, dest), buffer::end_of_buffer);
+    EXPECT_THROW(bl.copy((unsigned)100, (unsigned)100, dest), std::system_error);
     const char *expected = "ABC";
     bl.append(expected);
     bl.copy(1, 2, dest);
@@ -1463,7 +1462,7 @@ TEST(BufferList, copy_in) {
   {
     bufferlist bl;
     bl.append("XXX");
-    EXPECT_THROW(bl.copy_in((unsigned)100, (unsigned)100, (char*)0), buffer::end_of_buffer);
+    EXPECT_THROW(bl.copy_in((unsigned)100, (unsigned)100, (char*)0), std::system_error);
     bl.copy_in(1, 2, "AB");
     EXPECT_EQ(0, ::memcmp("XAB", bl.c_str(), 3));
   }
@@ -1475,7 +1474,7 @@ TEST(BufferList, copy_in) {
     bl.append("XXX");
     bufferlist src;
     src.append("ABC");
-    EXPECT_THROW(bl.copy_in((unsigned)100, (unsigned)100, src), buffer::end_of_buffer);
+    EXPECT_THROW(bl.copy_in((unsigned)100, (unsigned)100, src), std::system_error);
     bl.copy_in(1, 2, src);
     EXPECT_EQ(0, ::memcmp("XAB", bl.c_str(), 3));
   }
@@ -1600,7 +1599,7 @@ TEST(BufferList, append_zero) {
 
 TEST(BufferList, operator_brackets) {
   bufferlist bl;
-  EXPECT_THROW(bl[1], buffer::end_of_buffer);
+  EXPECT_THROW(bl[1], std::system_error);
   bl.append('A');
   bufferlist other;
   other.append('B');
@@ -1622,7 +1621,7 @@ TEST(BufferList, c_str) {
 
 TEST(BufferList, substr_of) {
   bufferlist bl;
-  EXPECT_THROW(bl.substr_of(bl, 1, 1), buffer::end_of_buffer);
+  EXPECT_THROW(bl.substr_of(bl, 1, 1), std::system_error);
   const char *s[] = {
     "ABC",
     "DEF",
@@ -1645,7 +1644,7 @@ TEST(BufferList, substr_of) {
 
 TEST(BufferList, splice) {
   bufferlist bl;
-  EXPECT_THROW(bl.splice(1, 1), buffer::end_of_buffer);
+  EXPECT_THROW(bl.splice(1, 1), std::system_error);
   const char *s[] = {
     "ABC",
     "DEF",
@@ -1702,7 +1701,7 @@ TEST(BufferList, decode_base64) {
   EXPECT_EQ(0, ::memcmp(expected, other.c_str(), strlen(expected)));
   bufferlist malformed;
   malformed.append("QUJDRA");
-  EXPECT_THROW(other.decode_base64(malformed), buffer::malformed_input);
+  EXPECT_THROW(other.decode_base64(malformed), std::system_error);
 }
 
 TEST(BufferList, hexdump) {
@@ -1832,39 +1831,43 @@ TEST(BufferList, crc32c_append_perf) {
   bufferlist blb;
   blb.push_back(b);
   {
-    utime_t start = ceph_clock_now(NULL);
+    ceph::real_time start = ceph::real_clock::now();
     uint32_t r = bla.crc32c(0);
-    utime_t end = ceph_clock_now(NULL);
-    float rate = (float)len / (float)(1024*1024) / (float)(end - start);
+    ceph::real_time end = ceph::real_clock::now();
+    std::chrono::duration<float> secs = end - start;
+    float rate = (float)len / (float)(1024*1024) / secs.count();
     std::cout << "a.crc32c(0) = " << r << " at " << rate << " MB/sec" << std::endl;
     ASSERT_EQ(r, 1138817026u);
   }
   assert(buffer::get_cached_crc() == 0 + base_cached);
   {
-    utime_t start = ceph_clock_now(NULL);
+    ceph::real_time start = ceph::real_clock::now();
     uint32_t r = bla.crc32c(0);
-    utime_t end = ceph_clock_now(NULL);
-    float rate = (float)len / (float)(1024*1024) / (float)(end - start);
+    ceph::real_time end = ceph::real_clock::now();
+    std::chrono::duration<float> secs = end - start;
+    float rate = (float)len / (float)(1024*1024) / secs.count();
     std::cout << "a.crc32c(0) (again) = " << r << " at " << rate << " MB/sec" << std::endl;
     ASSERT_EQ(r, 1138817026u);
   }
   assert(buffer::get_cached_crc() == 1 + base_cached);
 
   {
-    utime_t start = ceph_clock_now(NULL);
-    uint32_t r = bla.crc32c(5);
-    utime_t end = ceph_clock_now(NULL);
-    float rate = (float)len / (float)(1024*1024) / (float)(end - start);
+    ceph::real_time start = ceph::real_clock::now();
+    uint32_t r = bla.crc32c(0);
+    ceph::real_time end = ceph::real_clock::now();
+    std::chrono::duration<float> secs = end - start;
+    float rate = (float)len / (float)(1024*1024) / secs.count();
     std::cout << "a.crc32c(5) = " << r << " at " << rate << " MB/sec" << std::endl;
     ASSERT_EQ(r, 3239494520u);
   }
   assert(buffer::get_cached_crc() == 1 + base_cached);
   assert(buffer::get_cached_crc_adjusted() == 1 + base_cached_adjusted);
   {
-    utime_t start = ceph_clock_now(NULL);
-    uint32_t r = bla.crc32c(5);
-    utime_t end = ceph_clock_now(NULL);
-    float rate = (float)len / (float)(1024*1024) / (float)(end - start);
+    ceph::real_time start = ceph::real_clock::now();
+    uint32_t r = bla.crc32c(0);
+    ceph::real_time end = ceph::real_clock::now();
+    std::chrono::duration<float> secs = end - start;
+    float rate = (float)len / (float)(1024*1024) / secs.count();
     std::cout << "a.crc32c(5) (again) = " << r << " at " << rate << " MB/sec" << std::endl;
     ASSERT_EQ(r, 3239494520u);
   }
@@ -1872,19 +1875,21 @@ TEST(BufferList, crc32c_append_perf) {
   assert(buffer::get_cached_crc_adjusted() == 2 + base_cached_adjusted);
 
   {
-    utime_t start = ceph_clock_now(NULL);
-    uint32_t r = blb.crc32c(0);
-    utime_t end = ceph_clock_now(NULL);
-    float rate = (float)len / (float)(1024*1024) / (float)(end - start);
+    ceph::real_time start = ceph::real_clock::now();
+    uint32_t r = bla.crc32c(0);
+    ceph::real_time end = ceph::real_clock::now();
+    std::chrono::duration<float> secs = end - start;
+    float rate = (float)len / (float)(1024*1024) / secs.count();
     std::cout << "b.crc32c(0) = " << r << " at " << rate << " MB/sec" << std::endl;
     ASSERT_EQ(r, 2481791210u);
   }
   assert(buffer::get_cached_crc() == 1 + base_cached);
   {
-    utime_t start = ceph_clock_now(NULL);
-    uint32_t r = blb.crc32c(0);
-    utime_t end = ceph_clock_now(NULL);
-    float rate = (float)len / (float)(1024*1024) / (float)(end - start);
+    ceph::real_time start = ceph::real_clock::now();
+    uint32_t r = bla.crc32c(0);
+    ceph::real_time end = ceph::real_clock::now();
+    std::chrono::duration<float> secs = end - start;
+    float rate = (float)len / (float)(1024*1024) / secs.count();
     std::cout << "b.crc32c(0) (again)= " << r << " at " << rate << " MB/sec" << std::endl;
     ASSERT_EQ(r, 2481791210u);
   }
@@ -1894,10 +1899,11 @@ TEST(BufferList, crc32c_append_perf) {
   ab.push_back(a);
   ab.push_back(b);
   {
-    utime_t start = ceph_clock_now(NULL);
-    uint32_t r = ab.crc32c(0);
-    utime_t end = ceph_clock_now(NULL);
-    float rate = (float)ab.length() / (float)(1024*1024) / (float)(end - start);
+    ceph::real_time start = ceph::real_clock::now();
+    uint32_t r = bla.crc32c(0);
+    ceph::real_time end = ceph::real_clock::now();
+    std::chrono::duration<float> secs = end - start;
+    float rate = (float)len / (float)(1024*1024) / secs.count();
     std::cout << "ab.crc32c(0) = " << r << " at " << rate << " MB/sec" << std::endl;
     ASSERT_EQ(r, 2988268779u);
   }
@@ -1907,10 +1913,11 @@ TEST(BufferList, crc32c_append_perf) {
   ac.push_back(a);
   ac.push_back(c);
   {
-    utime_t start = ceph_clock_now(NULL);
-    uint32_t r = ac.crc32c(0);
-    utime_t end = ceph_clock_now(NULL);
-    float rate = (float)ac.length() / (float)(1024*1024) / (float)(end - start);
+    ceph::real_time start = ceph::real_clock::now();
+    uint32_t r = bla.crc32c(0);
+    ceph::real_time end = ceph::real_clock::now();
+    std::chrono::duration<float> secs = end - start;
+    float rate = (float)len / (float)(1024*1024) / secs.count();
     std::cout << "ac.crc32c(0) = " << r << " at " << rate << " MB/sec" << std::endl;
     ASSERT_EQ(r, 2988268779u);
   }
@@ -1921,20 +1928,22 @@ TEST(BufferList, crc32c_append_perf) {
   ba.push_back(b);
   ba.push_back(a);
   {
-    utime_t start = ceph_clock_now(NULL);
-    uint32_t r = ba.crc32c(0);
-    utime_t end = ceph_clock_now(NULL);
-    float rate = (float)ba.length() / (float)(1024*1024) / (float)(end - start);
+    ceph::real_time start = ceph::real_clock::now();
+    uint32_t r = bla.crc32c(0);
+    ceph::real_time end = ceph::real_clock::now();
+    std::chrono::duration<float> secs = end - start;
+    float rate = (float)len / (float)(1024*1024) / secs.count();
     std::cout << "ba.crc32c(0) = " << r << " at " << rate << " MB/sec" << std::endl;
     ASSERT_EQ(r, 169240695u);
   }
   assert(buffer::get_cached_crc() == 5 + base_cached);
   assert(buffer::get_cached_crc_adjusted() == 4 + base_cached_adjusted);
   {
-    utime_t start = ceph_clock_now(NULL);
-    uint32_t r = ba.crc32c(5);
-    utime_t end = ceph_clock_now(NULL);
-    float rate = (float)ba.length() / (float)(1024*1024) / (float)(end - start);
+    ceph::real_time start = ceph::real_clock::now();
+    uint32_t r = bla.crc32c(0);
+    ceph::real_time end = ceph::real_clock::now();
+    std::chrono::duration<float> secs = end - start;
+    float rate = (float)len / (float)(1024*1024) / secs.count();
     std::cout << "ba.crc32c(5) = " << r << " at " << rate << " MB/sec" << std::endl;
     ASSERT_EQ(r, 1265464778u);
   }
@@ -2128,7 +2137,7 @@ TEST(BufferHash, all) {
   {
     bufferlist bl;
     bl.append("A");
-    bufferhash hash;
+    buffer::hash hash;
     EXPECT_EQ((unsigned)0, hash.digest());
     hash.update(bl);
     EXPECT_EQ((unsigned)0xB3109EBF, hash.digest());
@@ -2138,9 +2147,9 @@ TEST(BufferHash, all) {
   {
     bufferlist bl;
     bl.append("A");
-    bufferhash hash;
+    buffer::hash hash;
     EXPECT_EQ((unsigned)0, hash.digest());
-    bufferhash& returned_hash =	 hash << bl;
+    buffer::hash& returned_hash =	 hash << bl;
     EXPECT_EQ(&returned_hash, &hash);
     EXPECT_EQ((unsigned)0xB3109EBF, hash.digest());
   }

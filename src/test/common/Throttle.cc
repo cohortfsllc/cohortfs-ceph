@@ -21,15 +21,15 @@
 
 #include <stdio.h>
 #include <signal.h>
-#include "common/Mutex.h"
 #include "common/Thread.h"
 #include "common/Throttle.h"
 #include "common/ceph_argparse.h"
 #include "global/global_init.h"
-#include "global/global_context.h"
 #include <gtest/gtest.h>
 
 using std::cout;
+
+CephContext *cct;
 
 class ThrottleTest : public ::testing::Test {
 protected:
@@ -58,21 +58,21 @@ protected:
 
 TEST_F(ThrottleTest, Throttle) {
   int64_t throttle_max = 10;
-  Throttle throttle(g_ceph_context, "throttle", throttle_max);
+  Throttle throttle(cct, throttle_max);
   ASSERT_EQ(throttle.get_max(), throttle_max);
   ASSERT_EQ(throttle.get_current(), 0);
 }
 
 TEST_F(ThrottleTest, take) {
   int64_t throttle_max = 10;
-  Throttle throttle(g_ceph_context, "throttle", throttle_max);
+  Throttle throttle(cct, throttle_max);
   ASSERT_EQ(throttle.take(throttle_max), throttle_max);
   ASSERT_EQ(throttle.take(throttle_max), throttle_max * 2);
 }
 
 TEST_F(ThrottleTest, get) {
   int64_t throttle_max = 10;
-  Throttle throttle(g_ceph_context, "throttle", throttle_max);
+  Throttle throttle(cct, throttle_max);
   ASSERT_FALSE(throttle.get(5));
   ASSERT_EQ(throttle.put(5), 0);
 
@@ -132,7 +132,7 @@ TEST_F(ThrottleTest, get) {
 
 TEST_F(ThrottleTest, get_or_fail) {
   {
-    Throttle throttle(g_ceph_context, "throttle");
+    Throttle throttle(cct);
 
     ASSERT_TRUE(throttle.get_or_fail(5));
     ASSERT_TRUE(throttle.get_or_fail(5));
@@ -140,7 +140,7 @@ TEST_F(ThrottleTest, get_or_fail) {
 
   {
     int64_t throttle_max = 10;
-    Throttle throttle(g_ceph_context, "throttle", throttle_max);
+    Throttle throttle(cct, throttle_max);
 
     ASSERT_TRUE(throttle.get_or_fail(throttle_max));
     ASSERT_EQ(throttle.put(throttle_max), 0);
@@ -158,7 +158,7 @@ TEST_F(ThrottleTest, get_or_fail) {
 
 TEST_F(ThrottleTest, wait) {
   int64_t throttle_max = 10;
-  Throttle throttle(g_ceph_context, "throttle", throttle_max);
+  Throttle throttle(cct, throttle_max);
 
   useconds_t delay = 1;
 
@@ -201,7 +201,7 @@ TEST_F(ThrottleTest, destructor) {
   Thread_get *t;
   {
     int64_t throttle_max = 10;
-    Throttle *throttle = new Throttle(g_ceph_context, "throttle", throttle_max);
+    Throttle *throttle = new Throttle(cct, throttle_max);
 
     ASSERT_FALSE(throttle->get(5));
 
@@ -239,8 +239,8 @@ int main(int argc, char **argv) {
   vector<const char*> args;
   argv_to_vec(argc, (const char **)argv, args);
 
-  global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
-  common_init_finish(g_ceph_context);
+  cct = global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
+  common_init_finish(cct);
 
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

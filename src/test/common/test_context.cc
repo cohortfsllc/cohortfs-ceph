@@ -28,7 +28,7 @@
 
 TEST(CephContext, do_command)
 {
-  CephContext *cct = test_init(CEPH_ENTITY_TYPE_CLIENT);
+  CephContext *cct = test_init(CODE_ENVIRONMENT_UTILITY);
 
   string key("key");
   string value("value");

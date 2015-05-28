@@ -25,7 +25,6 @@
 #include "common/sharedptr_registry.hpp"
 #include "common/ceph_argparse.h"
 #include "global/global_init.h"
-#include "global/global_context.h"
 #include <gtest/gtest.h>
 
 using std::shared_ptr;
@@ -33,7 +32,7 @@ using std::weak_ptr;
 
 class SharedPtrRegistryTest : public SharedPtrRegistry<unsigned int, int> {
 public:
-  Mutex &get_lock() { return lock; }
+  std::mutex &get_lock() { return lock; }
   map<unsigned int, pair<weak_ptr<int>, int*> > &get_contents() {
     return contents;
   }
@@ -90,7 +89,7 @@ public:
       if (delay > 0)
 	usleep(delay);
       {
-	Mutex::Locker l(registry.get_lock());
+	std::lock_guard<std::mutex> l(registry.get_lock());
 	if (registry.waiting == waiting)
 	  break;
       }
@@ -332,8 +331,8 @@ int main(int argc, char **argv) {
   vector<const char*> args;
   argv_to_vec(argc, (const char **)argv, args);
 
-  global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
-  common_init_finish(g_ceph_context);
+  CephContext *cct = global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
+  common_init_finish(cct);
 
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

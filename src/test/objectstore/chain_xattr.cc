@@ -26,8 +26,8 @@
 #include "common/errno.h"
 #include "common/ceph_argparse.h"
 #include "common/config.h"
+#include "common/ceph_context.h"
 #include "global/global_init.h"
-#include "global/global_context.h"
 #include <gtest/gtest.h>
 
 #define LARGE_BLOCK_LEN CHAIN_XATTR_MAX_BLOCK_LEN + 1024
@@ -184,11 +184,11 @@ int main(int argc, char **argv) {
   vector<const char*> args;
   argv_to_vec(argc, (const char **)argv, args);
 
-  global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
-  common_init_finish(g_ceph_context);
-  g_ceph_context->_conf->set_val("err_to_stderr", "false");
-  g_ceph_context->_conf->set_val("log_to_stderr", "false");
-  g_ceph_context->_conf->apply_changes(NULL);
+  CephContext *cct = global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
+  common_init_finish(cct);
+  cct->_conf->set_val("err_to_stderr", "false");
+  cct->_conf->set_val("log_to_stderr", "false");
+  cct->_conf->apply_changes(NULL);
 
   const char* file = "testfile";
   int x = 1234;

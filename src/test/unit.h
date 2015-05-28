@@ -19,7 +19,6 @@
 			   // now, this include has to come before the others.
 
 #include "common/code_environment.h"
-#include "global/global_context.h"
 #include "global/global_init.h"
 #include "include/msgr.h" // for CEPH_ENTITY_TYPE_CLIENT
 #include "gtest/gtest.h"
@@ -33,9 +32,9 @@
  */
 int main(int argc, char **argv) {
   std::vector<const char*> args;
-  global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY,
+  CephContext *cct = global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY,
 	      CINIT_FLAG_NO_DEFAULT_CONFIG_FILE);
-  common_init_finish(g_ceph_context);
+  common_init_finish(cct);
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

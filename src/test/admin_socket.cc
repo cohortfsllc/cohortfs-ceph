@@ -14,18 +14,18 @@
 
 #include <gtest/gtest.h>
 
-#include "common/Mutex.h"
-#include "common/Cond.h"
 #include "common/admin_socket.h"
 #include "common/admin_socket_client.h"
 #include "common/ceph_argparse.h"
 #include "global/global_init.h"
-#include "global/global_context.h"
 
 #include <stdint.h>
 #include <string.h>
 #include <string>
 #include <sys/un.h>
+#include <condition_variable>
+
+CephContext *cct; 
 
 class AdminSocketTest
 {
@@ -49,14 +49,14 @@ public:
 
 TEST(AdminSocket, Teardown) {
   std::unique_ptr<AdminSocket>
-      asokc(new AdminSocket(g_ceph_context));
+      asokc(new AdminSocket(cct));
   AdminSocketTest asoct(asokc.get());
   ASSERT_EQ(true, asoct.shutdown());
 }
 
 TEST(AdminSocket, TeardownSetup) {
   std::unique_ptr<AdminSocket>
-      asokc(new AdminSocket(g_ceph_context));
+      asokc(new AdminSocket(cct));
   AdminSocketTest asoct(asokc.get());
   ASSERT_EQ(true, asoct.shutdown());
   ASSERT_EQ(true, asoct.init(get_rand_socket_path()));
@@ -65,7 +65,7 @@ TEST(AdminSocket, TeardownSetup) {
 
 TEST(AdminSocket, SendHelp) {
   std::unique_ptr<AdminSocket>
-      asokc(new AdminSocket(g_ceph_context));
+      asokc(new AdminSocket(cct));
   AdminSocketTest asoct(asokc.get());
   ASSERT_EQ(true, asoct.shutdown());
   ASSERT_EQ(true, asoct.init(get_rand_socket_path()));
@@ -97,7 +97,7 @@ TEST(AdminSocket, SendHelp) {
 
 TEST(AdminSocket, SendNoOp) {
   std::unique_ptr<AdminSocket>
-      asokc(new AdminSocket(g_ceph_context));
+      asokc(new AdminSocket(cct));
   AdminSocketTest asoct(asokc.get());
   ASSERT_EQ(true, asoct.shutdown());
   ASSERT_EQ(true, asoct.init(get_rand_socket_path()));
@@ -111,7 +111,7 @@ TEST(AdminSocket, SendNoOp) {
 class MyTest : public AdminSocketHook {
   bool call(std::string command, cmdmap_t& cmdmap, std::string format, bufferlist& result) {
     std::vector<std::string> args;
-    cmd_getval(g_ceph_context, cmdmap, "args", args);
+    cmd_getval(cct, cmdmap, "args", args);
     result.append(command);
     result.append("|");
     string resultstr;
@@ -128,7 +128,7 @@ class MyTest : public AdminSocketHook {
 
 TEST(AdminSocket, RegisterCommand) {
   std::unique_ptr<AdminSocket>
-      asokc(new AdminSocket(g_ceph_context));
+      asokc(new AdminSocket(cct));
   AdminSocketTest asoct(asokc.get());
   ASSERT_EQ(true, asoct.shutdown());
   ASSERT_EQ(true, asoct.init(get_rand_socket_path()));
@@ -143,7 +143,7 @@ TEST(AdminSocket, RegisterCommand) {
 class MyTest2 : public AdminSocketHook {
   bool call(std::string command, cmdmap_t& cmdmap, std::string format, bufferlist& result) {
     std::vector<std::string> args;
-    cmd_getval(g_ceph_context, cmdmap, "args", args);
+    cmd_getval(cct, cmdmap, "args", args);
     result.append(command);
     result.append("|");
     string resultstr;
@@ -160,7 +160,7 @@ class MyTest2 : public AdminSocketHook {
 
 TEST(AdminSocket, RegisterCommandPrefixes) {
   std::unique_ptr<AdminSocket>
-      asokc(new AdminSocket(g_ceph_context));
+      asokc(new AdminSocket(cct));
   AdminSocketTest asoct(asokc.get());
   ASSERT_EQ(true, asoct.shutdown());
   ASSERT_EQ(true, asoct.init(get_rand_socket_path()));
@@ -188,14 +188,14 @@ TEST(AdminSocket, RegisterCommandPrefixes) {
 
 class BlockingHook : public AdminSocketHook {
 public:
-  Mutex _lock;
-  Cond _cond;
+  std::mutex _lock;
+  std::condition_variable _cond;
 
   BlockingHook() {}
 
   bool call(std::string command, cmdmap_t& cmdmap, std::string format, bufferlist& result) {
-    Mutex::Locker l(_lock);
-    _cond.Wait(_lock);
+    std::unique_lock<std::mutex> l(_lock);
+    _cond.wait(l);
     return true;
   }
 };
@@ -203,7 +203,7 @@ public:
 TEST(AdminSocketClient, Ping) {
   string path = get_rand_socket_path();
   std::unique_ptr<AdminSocket>
-      asokc(new AdminSocket(g_ceph_context));
+      asokc(new AdminSocket(cct));
   AdminSocketClient client(path);
   // no socket
   {
@@ -241,8 +241,8 @@ TEST(AdminSocketClient, Ping) {
     EXPECT_NE(std::string::npos, result.find("Resource temporarily unavailable"));
     ASSERT_FALSE(ok);
     {
-      Mutex::Locker l(blocking->_lock);
-      blocking->_cond.Signal();
+      std::lock_guard<std::mutex> l(blocking->_lock);
+      blocking->_cond.notify_one();
     }
     ASSERT_TRUE(asoct.shutdown());
     delete blocking;
@@ -252,7 +252,7 @@ TEST(AdminSocketClient, Ping) {
 TEST(AdminSocket, bind_and_listen) {
   string path = get_rand_socket_path();
   std::unique_ptr<AdminSocket>
-      asokc(new AdminSocket(g_ceph_context));
+      asokc(new AdminSocket(cct));
 
   AdminSocketTest asoct(asokc.get());
   // successfull bind
@@ -294,7 +294,7 @@ int main(int argc, char **argv) {
 
   vector<const char*> def_args;
   global_init(&def_args, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
-  common_init_finish(g_ceph_context);
+  common_init_finish(cct);
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

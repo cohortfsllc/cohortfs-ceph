@@ -3,7 +3,7 @@
 #include <gtest/gtest.h>
 
 #include "log/Log.h"
-#include "common/Clock.h"
+#include "include/ceph_time.h"
 #include "common/PrebufferedStreambuf.h"
 
 using namespace ceph::log;
@@ -31,7 +31,7 @@ TEST(Log, Simple)
     int sys = i % 4;
     int l = 5 + (i%4);
     if (subs.should_gather(sys, l)) {
-      Entry *e = new Entry(ceph_clock_now(NULL),
+      Entry *e = new Entry(ceph::real_clock::now(),
 			   pthread_self(),
 			   l,
 			   sys);
@@ -63,7 +63,8 @@ TEST(Log, ManyNoGather)
   for (int i=0; i<many; i++) {
     int l = 10;
     if (subs.should_gather(1, l))
-      log.submit_entry(new Entry(ceph_clock_now(NULL), pthread_self(), l, 1));
+      log.submit_entry(new Entry(ceph::real_clock::now(),
+                                 pthread_self(), l, 1));
   }
   log.flush();
   log.stop();
@@ -82,7 +83,8 @@ TEST(Log, ManyGatherLog)
   for (int i=0; i<many; i++) {
     int l = 10;
     if (subs.should_gather(1, l)) {
-      Entry *e = new Entry(ceph_clock_now(NULL), pthread_self(), l, 1);
+      Entry *e = new Entry(ceph::real_clock::now(),
+                           pthread_self(), l, 1);
         ostream os(&e->m_streambuf);
         os << "this is a long string asdf asdf asdf asdf asdf asdf asd fasd fasdf";
 
@@ -105,7 +107,8 @@ TEST(Log, ManyGatherLogStringAssign)
   for (int i=0; i<many; i++) {
     int l = 10;
     if (subs.should_gather(1, l)) {
-      Entry *e = new Entry(ceph_clock_now(NULL), pthread_self(), l, 1);
+      Entry *e = new Entry(ceph::real_clock::now(),
+                           pthread_self(), l, 1);
       ostringstream oss;
       oss << "this i a long stream asdf asdf asdf asdf asdf asdf asdf asdf asdf as fd";
       e->set_str(oss.str());
@@ -127,7 +130,8 @@ TEST(Log, ManyGatherLogStringAssignWithReserve)
   for (int i=0; i<many; i++) {
     int l = 10;
     if (subs.should_gather(1, l)) {
-      Entry *e = new Entry(ceph_clock_now(NULL), pthread_self(), l, 1);
+      Entry *e = new Entry(ceph::real_clock::now(),
+                           pthread_self(), l, 1);
       ostringstream oss;
       oss.str().reserve(80);
       oss << "this i a long stream asdf asdf asdf asdf asdf asdf asdf asdf asdf as fd";
@@ -151,7 +155,8 @@ TEST(Log, ManyGatherLogPrebuf)
   for (int i=0; i<many; i++) {
     int l = 10;
     if (subs.should_gather(1, l)) {
-      Entry *e = new Entry(ceph_clock_now(NULL), pthread_self(), l, 1);
+      Entry *e = new Entry(ceph::real_clock::now(),
+                           pthread_self(), l, 1);
       ostream oss(&e->m_streambuf);
       oss << "this i a long stream asdf asdf asdf asdf asdf asdf asdf asdf asdf as fd";
       //e->m_str = oss.str();
@@ -174,7 +179,8 @@ TEST(Log, ManyGatherLogPrebufOverflow)
   for (int i=0; i<many; i++) {
     int l = 10;
     if (subs.should_gather(1, l)) {
-      Entry *e = new Entry(ceph_clock_now(NULL), pthread_self(), l, 1);
+      Entry *e = new Entry(ceph::real_clock::now(),
+                           pthread_self(), l, 1);
       std::string foo(20,0);
       PrebufferedStreambuf psb(foo);
       ostream oss(&psb);
@@ -199,7 +205,8 @@ TEST(Log, ManyGather)
   for (int i=0; i<many; i++) {
     int l = 10;
     if (subs.should_gather(1, l))
-      log.submit_entry(new Entry(ceph_clock_now(NULL), pthread_self(), l, 1));
+      log.submit_entry(new Entry(ceph::real_clock::now(),
+                           pthread_self(), l, 1));
   }
   log.flush();
   log.stop();

@@ -12,7 +12,6 @@
  *
  */
 
-#include "common/Mutex.h"
 #include "common/HeartbeatMap.h"
 #include "common/ceph_context.h"
 #include "test/unit.h"
@@ -20,11 +19,13 @@
 
 using namespace ceph;
 
+CephContext *cct;
+
 TEST(HeartbeatMap, Healthy) {
-  HeartbeatMap hm(g_ceph_context);
+  HeartbeatMap hm(cct);
   heartbeat_handle_d *h = hm.add_worker("one");
 
-  hm.reset_timeout(h, 9, 18);
+  hm.reset_timeout(h, 9s, 18s);
   bool healthy = hm.is_healthy();
   ASSERT_EQ(healthy, true);
 
@@ -32,10 +33,10 @@ TEST(HeartbeatMap, Healthy) {
 }
 
 TEST(HeartbeatMap, Unhealth) {
-  HeartbeatMap hm(g_ceph_context);
+  HeartbeatMap hm(cct);
   heartbeat_handle_d *h = hm.add_worker("one");
 
-  hm.reset_timeout(h, 1, 3);
+  hm.reset_timeout(h, 1s, 3s);
   sleep(2);
   bool healthy = hm.is_healthy();
   ASSERT_EQ(healthy, false);

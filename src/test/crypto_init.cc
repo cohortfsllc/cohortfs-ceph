@@ -6,7 +6,6 @@
 
 #include "include/types.h"
 #include "common/code_environment.h"
-#include "global/global_context.h"
 #include "global/global_init.h"
 #include "include/msgr.h"
 #include "gtest/gtest.h"
@@ -14,8 +13,11 @@
 #include "common/ceph_crypto.h"
 
 #ifdef USE_NSS
+
+CephContext *cct
+
 void *init_crypto(void *p) {
-  ceph::crypto::init(g_ceph_context);
+  ceph::crypto::init(cct);
   return NULL;
 }
 
