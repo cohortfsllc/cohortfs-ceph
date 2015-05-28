@@ -521,7 +521,7 @@ if(WITH_LIBMDS)
       SOVERSION "1" LINK_FLAGS "-Wl,-export-dynamic")
     install(TARGETS mds DESTINATION lib)
   endif(${ENABLE_SHARED})
-  target_link_libraries(mds PRIVATE common os dl ${EXTRALIBS})
+  target_link_libraries(mds PRIVATE common os dl ${MCAS_LIBRARIES} ${EXTRALIBS})
   install(FILES
 	mds/MDS.h include/ceph_time.h mds/ceph_mds.h
 	DESTINATION include/cephfs)

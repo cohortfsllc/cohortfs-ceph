@@ -118,6 +118,9 @@ endif(${WITH_AIO})
 
 # our new libmds model of the universe
 option(WITH_LIBMDS "LibMDS is here" ON)
+if(WITH_LIBMDS)
+  find_package(mcas REQUIRED)
+endif(WITH_LIBMDS)
 
 # needs mds and? XXX
 option(WITH_LIBCEPHFS "libcephfs client library" ON)
