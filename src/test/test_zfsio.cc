@@ -210,9 +210,7 @@ TEST(ZFSIO, WRITEV1)
   ssize_t err, ix;
   const int iovcnt = 16;
   ZPageSet zp_set1{iovcnt}; // 1M random data in 16 64K pages
-  ZPageSet zp_set2{iovcnt}; // 1M random data in 16 64K pages
   struct iovec *iov1 = zp_set1.get_iovs();
-  struct iovec *iov2 = zp_set2.get_iovs();
 
   for (ix = 0; ix < 10; ++ix) {
     ZFSObject& o = zfs1_objs[ix];
@@ -225,12 +223,14 @@ TEST(ZFSIO, WRITEV1)
 
   for (ix = 0; ix < 10; ++ix) {
     ZFSObject& o = zfs1_objs[ix];
+    ZPageSet zp_set2{iovcnt}; // 1M random data in 16 64K pages
+    struct iovec *iov2 = zp_set2.get_iovs();
+
     /* VOP_NEEDS requires (and updates) iov_len for all iovs */
     err = lzfw_preadv(zhfs, &cred, o.vnode, iov2, iovcnt,
 		      0 /* offset */);
     ASSERT_EQ(err, iovcnt*65536);
     zp_set2.cksum();
-    zp_set2.reset_iovs();
     ASSERT_TRUE(zp_set1 == zp_set2);
   }
 }
