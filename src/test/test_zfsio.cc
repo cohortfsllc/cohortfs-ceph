@@ -90,6 +90,29 @@ namespace {
       } // page_ix
     }
 
+    int size() { return pages.size(); }
+
+    struct iovec* get_iovs() { return iovs; }
+
+    bool operator==(const ZPageSet& rhs) {
+      int n = size();
+      for (int page_ix = 0; page_ix < n; ++page_ix) {
+	ZPage* p1 = pages[page_ix];
+	ZPage* p2 = rhs.pages[page_ix];
+	if (p1->cksum != p2->cksum)
+	  return false;
+      }
+      return true;
+    }
+
+    void cksum() {
+      int n = size();
+      for (int page_ix = 0; page_ix < n; ++page_ix) {
+	ZPage* p = pages[page_ix];
+	p->cksum = XXH64(p->data, 65536, 8675309);
+      }
+    }
+
     ~ZPageSet() {
       for (int ix = 0; ix < pages.size(); ++ix)
 	delete pages[ix];
@@ -156,10 +179,44 @@ TEST(ZFSIO, INIT)
   ASSERT_NE(root_vnode, nullptr);
 }
 
-/* TODO: finish */
-TEST(ZFSIO, IOV1)
+TEST(ZFSIO, CREATEF1)
 {
-  ZPageSet zp_set(16); // 1M random data in 16 64K pages
+  int err, ix;
+  zfs1_objs.reserve(100);
+  for (ix = 0; ix < 100; ++ix) {
+    std::string n{"f" + std::to_string(ix)};
+    zfs1_objs.emplace_back(ZFSObject(n));
+    ZFSObject& o = zfs1_objs[ix];
+    err = lzfw_create(zhfs, &cred, root_ino, o.leaf_name.c_str(),
+		      644 /* mode */, &o.ino);
+    ASSERT_EQ(err, 0);
+  }
+}
+
+TEST(ZFSIO, WRITEV1)
+{
+  ssize_t err, ix;
+  const int iovcnt = 16;
+  ZPageSet zp_set1{iovcnt}; // 1M random data in 16 64K pages
+  ZPageSet zp_set2{iovcnt}; // 1M random data in 16 64K pages
+  struct iovec *iov1 = zp_set1.get_iovs();
+  struct iovec iov2[iovcnt];
+
+  for (ix = 0; ix < 10; ++ix) {
+    ZFSObject& o = zfs1_objs[ix];
+    err = lzfw_pwritev(zhfs, &cred, o.vnode, iov1, iovcnt,
+		       0 /* offset */);
+    ASSERT_EQ(err, iovcnt*65536);
+  }
+
+  for (ix = 0; ix < 10; ++ix) {
+    ZFSObject& o = zfs1_objs[ix];
+    err = lzfw_preadv(zhfs, &cred, o.vnode, iov2, iovcnt,
+		      0 /* offset */);
+    ASSERT_EQ(err, iovcnt*65536);
+    zp_set2.cksum();
+    ASSERT_TRUE(zp_set1 == zp_set2);
+  }
 }
 
 TEST(ZFSIO, SHUTDOWN)
