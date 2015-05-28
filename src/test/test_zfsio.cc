@@ -226,7 +226,7 @@ TEST(ZFSIO, WRITEV1)
     ZPageSet zp_set2{iovcnt}; // 1M random data in 16 64K pages
     struct iovec *iov2 = zp_set2.get_iovs();
 
-    /* VOP_NEEDS requires (and updates) iov_len for all iovs */
+    /* VOP_READ requires (and updates) iov_len for all iovs */
     err = lzfw_preadv(zhfs, &cred, o.vnode, iov2, iovcnt,
 		      0 /* offset */);
     ASSERT_EQ(err, iovcnt*65536);
