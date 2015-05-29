@@ -8,10 +8,47 @@
 
 #include "mds/ceph_mds.h"
 
-static int run_tests(struct libmds *mds)
+static int test_unlink_notempty(struct libmds *mds, inodenum_t root)
 {
+  int r = libmds_mkdir(mds, root, "dir");
+  if (r) {
+    fprintf(stderr, "libmds_mkdir(\"dir\") failed with %d\n", r);
+    return r;
+  }
+  inodenum_t dir;
+  r = libmds_lookup(mds, root, "dir", &dir);
+  if (r) {
+    fprintf(stderr, "libmds_lookup(\"dir\") failed with %d\n", r);
+    return r;
+  }
+  r = libmds_create(mds, dir, "file");
+  if (r) {
+    fprintf(stderr, "libmds_create(\"file\") failed with %d\n", r);
+    return r;
+  }
+  r = libmds_unlink(mds, root, "dir");
+  if (r != -ENOTEMPTY) {
+    fprintf(stderr, "libmds_unlink(\"dir\") returned %d, expected -ENOTEMPTY\n", r);
+    return r;
+  }
+  r = libmds_unlink(mds, dir, "file");
+  if (r) {
+    fprintf(stderr, "libmds_unlink(\"file\") failed with %d\n", r);
+    return r;
+  }
+  r = libmds_unlink(mds, root, "dir");
+  if (r) {
+    fprintf(stderr, "libmds_unlink(\"dir\") failed with %d\n", r);
+    return r;
+  }
   puts("libmds tests passed");
   return 0;
+}
+
+static int run_tests(struct libmds *mds)
+{
+  const inodenum_t root = 0;
+  return test_unlink_notempty(mds, root);
 }
 
 int main(int argc, const char *argv[])

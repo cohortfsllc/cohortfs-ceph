@@ -3,13 +3,37 @@
 
 #include "osdc/Objecter.h"
 #include "mon/MonClient.h"
-#include "mds/MDSMap.h"
-#include "mds/MDS.h"
+#include "MDSMap.h"
+#include "MDS.h"
+#include "FSObj.h"
 #include "messages/MMDSBeacon.h"
 
 #define dout_subsys ceph_subsys_mds
 
 using namespace cohort::mds;
+
+class MDS::Cache {
+ private:
+  std::atomic<_inodeno_t> next;
+  std::unordered_map<_inodeno_t, std::unique_ptr<FSObj>> inodes;
+ public:
+  Cache() : next(0) {}
+
+  _inodeno_t get_next() { return next++; }
+
+  FSObj* find(_inodeno_t ino) const {
+    auto i = inodes.find(ino);
+    return i == inodes.end() ? nullptr : i->second.get();
+  }
+  bool insert(_inodeno_t ino, std::unique_ptr<FSObj> &&obj) {
+    return inodes.insert(std::make_pair(ino, std::move(obj))).second;
+  }
+  void destroy(_inodeno_t ino) {
+    auto i = inodes.find(ino);
+    if (i != inodes.end())
+      inodes.erase(i);
+  }
+};
 
 MDS::MDS(int whoami, Messenger *m, MonClient *mc)
   : Dispatcher(m->cct),
@@ -19,7 +43,12 @@ MDS::MDS(int whoami, Messenger *m, MonClient *mc)
     objecter(new Objecter(cct, messenger, monc,
                           cct->_conf->rados_mon_op_timeout,
                           cct->_conf->rados_osd_op_timeout)),
-    mdsmap(cct)
+    mdsmap(cct),
+    beacon_last_seq(0),
+    last_state(0),
+    state(0),
+    want_state(0),
+    last_tid(0)
 {
 }
 
@@ -28,19 +57,6 @@ MDS::~MDS()
   delete objecter;
   delete monc;
   delete messenger;
-}
-
-void MDS::shutdown()
-{
-  objecter->shutdown();
-  monc->shutdown();
-  messenger->shutdown();
-  messenger->wait();
-}
-
-void MDS::handle_signal(int signum)
-{
-  // XXX suicide
 }
 
 int MDS::init()
@@ -60,30 +76,113 @@ int MDS::init()
   objecter->start();
   monc->renew_subs();
 
+  r = mkfs();
+  if (r) {
+    lderr(cct) << "mkfs failed with " << r << dendl;
+    shutdown();
+    return r;
+  }
+
   // start beacon timer
   beacon_timer.add_event(cct->_conf->mds_beacon_interval,
                          &MDS::beacon_send, this);
   return 0;
 }
 
-int MDS::create(_inodeno_t parent, const char *name)
+int MDS::mkfs()
 {
-  return -ENOTSUP;
+  if (cache)
+    return -EINVAL;
+
+  // create the cache
+  cache.reset(new Cache);
+
+  // create the root directory inode
+  const _inodeno_t ino = cache->get_next(); // 0
+  const identity who = {0, 0, 0};
+  cache->insert(ino, std::unique_ptr<FSObj>(new FSObj(ino, who, S_IFDIR)));
+  return 0;
 }
 
-int MDS::mkdir(_inodeno_t parent, const char *name)
+void MDS::shutdown()
 {
-  return -ENOTSUP;
+  cache.reset();
+  objecter->shutdown();
+  monc->shutdown();
+  messenger->shutdown();
+  messenger->wait();
+}
+
+void MDS::handle_signal(int signum)
+{
+  // XXX suicide
+}
+
+int MDS::create(_inodeno_t parent, const char *name,
+                const identity &who, int type)
+{
+  if (!cache)
+    return -ENODEV;
+
+  // find the parent object
+  FSObj *p = cache->find(parent);
+  if (p == nullptr)
+    return -ENOENT;
+
+  if (!p->is_dir())
+    return -ENOTDIR;
+
+  // create the child object
+  _inodeno_t ino = cache->get_next();
+  std::unique_ptr<FSObj> obj(new FSObj(ino, who, type));
+
+  // link the parent to the child
+  int r = p->link(name, obj.get());
+  if (r == 0)
+    cache->insert(ino, std::move(obj));
+  return r;
 }
 
 int MDS::unlink(_inodeno_t parent, const char *name)
 {
-  return -ENOTSUP;
+  if (!cache)
+    return -ENODEV;
+
+  // find the parent object
+  FSObj *p = cache->find(parent);
+  if (p == nullptr)
+    return -ENOENT;
+
+  // unlink the child from its parent
+  FSObj *obj;
+  int r = p->unlink(name, &obj);
+  if (r)
+    return r;
+
+  // last link?
+  if (obj->adjust_nlinks(-1) == 0)
+    cache->destroy(obj->ino);
+  return 0;
 }
 
 int MDS::lookup(_inodeno_t parent, const char *name, _inodeno_t *ino)
 {
-  return -ENOTSUP;
+  if (!cache)
+    return -ENODEV;
+
+  // find the parent object
+  FSObj *p = cache->find(parent);
+  if (p == nullptr)
+    return -ENOENT;
+
+  // find the child object
+  FSObj *obj;
+  int r = p->lookup(name, &obj);
+  if (r)
+    return r;
+
+  *ino = obj->ino;
+  return 0;
 }
 
 bool MDS::ms_dispatch(Message *m)

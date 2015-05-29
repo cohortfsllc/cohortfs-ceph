@@ -5,11 +5,13 @@
 #define COHORT_MDS_FSOBJ_H
 
 #include "common/cohort_function.h"
+#include "include/types.h" // inodeno_t
 #include "mds_types.h"
 
 namespace cohort {
 namespace mds {
 
+#if 0
 class FSObj;
 typedef cohort::function<void(int status, FSObj *result)> lookupcb;
 typedef cohort::function<int(int status, int count, bool eof)> readdircb;
@@ -20,10 +22,31 @@ typedef cohort::function<void(int status)> getsetattrcb;
 typedef cohort::function<void(int status, int readcount, bool eof)> readwritecb;
 typedef cohort::function<void(int status, read_delegation *delegation)> delegatedreadcb;
 typedef cohort::function<void(int status, write_delegation *delegation)> delegatedwritecb;
+#endif
 
 class FSObj {
  public:
-  void release();
+  const _inodeno_t ino;
+ private:
+  ObjAttr attr;
+  std::map<std::string, FSObj*> entries;
+
+ public:
+  FSObj(_inodeno_t ino, const identity &who, int type);
+
+  int adjust_nlinks(int n) { return attr.nlinks += n; }
+
+  int getattr(int mask, ObjAttr &attrs) const;
+  int setattr(int mask, const ObjAttr &attrs);
+
+  bool is_reg() const { return S_ISREG(attr.type); }
+  bool is_dir() const { return S_ISDIR(attr.type); }
+  bool is_empty() const { return entries.empty(); }
+
+  int lookup(const std::string &name, FSObj **obj) const;
+  int link(const std::string &name, FSObj *obj);
+  int unlink(const std::string &name, FSObj **obj);
+#if 0
   int lookup(identity *who, const std::string path, lookupcb * lookres);
   int readdir(dirptr *where, unsigned char *buf, int bufsize,
               readdircb * readdirres);
@@ -47,6 +70,7 @@ class FSObj {
   int prepare_delegated_write(int flags, delegatedwritecb *delegatedwriteres);
   int release_delegated_write(write_delegation *delegation, getsetattrcb *releasecb);
   char * get_oid_name();	// not in delegation?
+#endif
 };
 
 } // namespace mds
