@@ -514,6 +514,7 @@ install(TARGETS ceph-osd DESTINATION bin)
 # MDS
 if(WITH_LIBMDS)
   set(mds_srcs
+    mds/FSObj.cc
     mds/libmds.cc
     mds/MDS.cc
     mds/MessageFactory.cc

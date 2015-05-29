@@ -26,9 +26,9 @@ struct ObjAttr {
   uint64_t filesize;
   int mode;
   int user, group;
-  ceph::real_clock atime, mtime, ctime;
+  ceph::real_time atime, mtime, ctime;
   int nlinks;
-  int type;
+  int type; // TODO: encode type in mode?
   int rawdev;
 };
 

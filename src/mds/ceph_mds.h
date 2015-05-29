@@ -97,7 +97,7 @@ extern "C" {
    * complete; refer to mds_active callback to determine when the
    * mds becomes active.
    *
-   * @param args	  Initialization arguments
+   * @param args  Initialization arguments
    *
    * @return A pointer to the new libmds instance, or NULL on failure.
    */
@@ -135,7 +135,7 @@ extern "C" {
   /**
    * Create a regular file in the parent directory.
    *
-   * @param mds	  The libmds object returned by libmds_init()
+   * @param mds     The libmds object returned by libmds_init()
    * @param parent  Inode number of the parent directory
    * @param name    Filename of the new directory entry
    *
@@ -149,7 +149,7 @@ extern "C" {
   /**
    * Create a subdirectory in the parent directory.
    *
-   * @param mds	  The libmds object returned by libmds_init()
+   * @param mds     The libmds object returned by libmds_init()
    * @param parent  Inode number of the parent directory
    * @param name    Filename of the new directory entry
    *
@@ -163,20 +163,21 @@ extern "C" {
   /**
    * Unlink the given file from the parent directory.
    *
-   * @param mds	  The libmds object returned by libmds_init()
+   * @param mds     The libmds object returned by libmds_init()
    * @param parent  Inode number of the parent directory
    * @param name    Filename of the directory entry to remove
    *
    * @return Returns 0 on success, or a negative error code.
    * @retval -ENOENT if the parent does not have an entry with \a name.
    * @retval -ENOTDIR if the parent is not a directory.
+   * @retval -ENOTEMPTY if the entry is a non-empty directory.
    */
   int libmds_unlink(struct libmds *mds, inodenum_t parent, const char *name);
 
   /**
    * Find an entry in the parent directory.
    *
-   * @param mds	   The libmds object returned by libmds_init()
+   * @param mds      The libmds object returned by libmds_init()
    * @param parent   Inode number of the parent directory
    * @param name     Filename of the directory entry to find
    * @param[out] ino Inode number of the directory entry found

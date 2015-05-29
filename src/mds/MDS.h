@@ -36,6 +36,9 @@ class MDS : public Dispatcher {
   int last_state, state, want_state;
   ceph_tid_t last_tid;
 
+  class Cache;
+  std::unique_ptr<Cache> cache;
+
   void beacon_send();
 
   int get_state() const { return state; }
@@ -52,12 +55,13 @@ class MDS : public Dispatcher {
   const MDSMap& get_mds_map() const { return mdsmap; }
 
   int init();
+  int mkfs();
   void shutdown();
   void handle_signal(int signum);
 
   // for libmds
-  int create(_inodeno_t parent, const char *name);
-  int mkdir(_inodeno_t parent, const char *name);
+  int create(_inodeno_t parent, const char *name,
+             const identity &who, int type);
   int unlink(_inodeno_t parent, const char *name);
   int lookup(_inodeno_t parent, const char *name, _inodeno_t *ino);
 

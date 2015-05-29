@@ -156,12 +156,14 @@ void LibMDS::signal(int signum)
 
 int LibMDS::create(inodenum_t parent, const char *name)
 {
-  return mds->create(parent, name);
+  const identity who = {0, 0, 0}; // XXX
+  return mds->create(parent, name, who, S_IFREG);
 }
 
 int LibMDS::mkdir(inodenum_t parent, const char *name)
 {
-  return mds->mkdir(parent, name);
+  const identity who = {0, 0, 0}; // XXX
+  return mds->create(parent, name, who, S_IFDIR);
 }
 
 int LibMDS::unlink(inodenum_t parent, const char *name)
