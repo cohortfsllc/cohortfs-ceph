@@ -1,0 +1,36 @@
+Overview
+The ObjectStore implementation contained here implements a
+CohortFS Ceph object file system on ZFS primitives, using a CohortFS
+descendant of libzfswrap, the user-space library implementation of
+ZFS adapted from earlier Linux-FUSE ZFS by developers at the French
+atomic energy agency (CEA).
+
+Model and Assumptions
+Some key assumptions of the implementation are:
+
+1. each ZFStore OSD instance uniquely manages the storage in a
+  single pool, whose name is given by ObjectStore::path
+
+2. each ZFStore instance contains a root object file system,
+   <pool-name>/osdfs, of which all is collections are child file
+   systems--hence, the collection "bar" in the ZFStore instance
+   with path "foo" has the fully-qualified name "foo/osdfs/bar"
+
+3. the ZFStore::statfs() operation stats the root (osdfs) file
+   system for the associated path; the operation does not attempt
+   to verify that the base pool exists, or that it is healthy,
+   see next
+
+4. to simplify management, the ZFStore::mkfs() operation checks
+   for the existence of a pool matching the instance path, and will
+   conditionally create it based on the values of ZFStore-specific
+   configuration parameters, as follows:
+
+   [osd]
+   zfstore_zpool_create = true
+   zfstore_zpool_devices = <type>;<pathseg...;pathseg
+
+   At present, the pool type should be "", and a single Unix
+   path provided as device path segment.  Other combinations of
+   pool types and multiple device paths probably work, but YMMV.
+
