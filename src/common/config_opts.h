@@ -733,6 +733,9 @@ OPTION(keyvaluestore_op_thread_suicide_timeout, OPT_TIME, 3min)
 OPTION(memstore_page_partitions, OPT_INT, 4)
 OPTION(memstore_pages_per_stripe, OPT_INT, 16)
 
+OPTION(zfstore_zpool_create, OPT_BOOL, false)
+OPTION(zfstore_zpool_devices, OPT_STR, ",zp_default,/opt/zpools/zp_default")
+
 // max bytes to search ahead in journal searching for corruption
 OPTION(journal_max_corrupt_search, OPT_U64, 10<<20)
 OPTION(journal_block_align, OPT_BOOL, true)
