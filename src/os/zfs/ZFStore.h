@@ -107,7 +107,8 @@ public:
 
     ZCollection(ZFStore* zs, const coll_t& cid)
       : ceph::os::Collection(zs, cid), cct(zs->cct),
-	index(zs->cct, zs->zhfs, zs->cct->_conf->fragtreeindex_initial_split)
+	index(zs->cct, zs->zhfs,
+	      zs->cct->_conf->fragtreeindex_initial_split)
     {}
 
     ~ZCollection()
@@ -278,12 +279,14 @@ public:
 	  goto out; /* !LATCHED */
 
 	ZObject::ZObjectFactory prototype(c, oid /* XXX, vno */);
-	o = static_cast<ZObject*>(obj_lru.insert(&prototype,
-						 cohort::lru::Edge::MRU,
-						 cohort::lru::FLAG_INITIAL));
+	o = static_cast<ZObject*>(
+			obj_lru.insert(&prototype,
+				       cohort::lru::Edge::MRU,
+				       cohort::lru::FLAG_INITIAL));
 	if (o) {
-	  c->obj_cache.insert_latched(o, lat,
-				      ceph::os::Object::ObjCache::FLAG_UNLOCK);
+	  c->obj_cache.insert_latched(
+			o, lat,
+			ceph::os::Object::ObjCache::FLAG_UNLOCK);
 	  goto out; /* !LATCHED */
 	} else {
 	  lat.lock->unlock();
