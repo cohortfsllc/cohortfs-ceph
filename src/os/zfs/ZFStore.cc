@@ -61,6 +61,37 @@ ZFStore::ZFStore(CephContext* cct, const std::string& path)
   ++n_instances;
 }
 
+/* make a root "osdfs" filesystem on the device */
+int ZFStore::mkfs()
+{
+  std::string osdfs = path + "/osdfs";
+
+  abort();
+  return 0;
+}
+
+int ZFStore::statfs(struct statfs* st)
+{
+  int err;
+  struct statvfs stv;
+
+  assert(zhfs);
+
+  err = lzfw_statfs(zhfs, &stv);
+  if (!err) {
+    memset(st, 0, sizeof(struct statfs));
+    st->f_bsize = stv.f_bsize;
+    st->f_blocks = stv.f_blocks;
+    st->f_bfree = stv.f_bfree;
+    st->f_bavail = stv.f_bavail;
+    st->f_files = stv.f_files;
+    st->f_ffree = stv.f_ffree;
+    st->f_namelen = stv.f_namemax;
+  }
+
+  return err;
+} /* statfs */
+
 int ZFStore::mount() {
   assert(zhd);
 
@@ -80,18 +111,6 @@ int ZFStore::umount() {
   int r = lzfw_umount(zhfs, true /* XXX force */);
   zhfs = nullptr;
   return -r;
-}
-
-int ZFStore::mkfs()
-{
-  abort();
-  return 0;
-}
-
-int ZFStore::statfs(struct statfs* buf)
-{
-  abort();
-  return 0;
 }
 
 bool ZFStore::exists(CollectionHandle ch, const hoid_t& oid)
