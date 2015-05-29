@@ -15,6 +15,7 @@
 #ifndef COHORT_ZFSHELPER_H
 #define COHORT_ZFSHELPER_H
 
+#include <alloca.h>
 #include <iostream>
 #include <vector>
 #include <map>
@@ -22,7 +23,16 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/split.hpp>
 
+#define zfsh_adup(std_string, dst)					\
+  do {									\
+    (dst) = (char*)alloca((1 + (std_string).size()) * sizeof(char*));	\
+    if ((dst))								\
+      strcpy((dst), (std_string).c_str());				\
+  } while (0)
+
 namespace cohort_zfs {
+
+  const int ZFS_TYPE_FILESYSTEM = 0x1;
 
   // name, type (""), list of device paths
   typedef std::tuple<std::string, std::string,
@@ -75,7 +85,7 @@ namespace cohort_zfs {
     }
 
     return zpm.size();;
-  }
+  } /* parse_zp_desc */
 
 } /* cohort_zfs */
 

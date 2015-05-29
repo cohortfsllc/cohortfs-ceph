@@ -18,6 +18,8 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <boost/uuid/string_generator.hpp>
 #include <boost/uuid/uuid_generators.hpp>
+#include <boost/algorithm/string/split.hpp>
+#include "ZFSHelper.h"
 
 static std::mutex mtx;
 static std::atomic<bool> initialized;
@@ -44,6 +46,7 @@ extern "C" {
   }
 } /* extern "C" */
 
+using namespace cohort_zfs;
 
 ZFStore::ZFStore(CephContext* cct, const std::string& path)
   : ObjectStore(cct, path), zhfs(nullptr)
@@ -61,14 +64,57 @@ ZFStore::ZFStore(CephContext* cct, const std::string& path)
   ++n_instances;
 }
 
-/* make a root "osdfs" filesystem on the device */
+/* make a root osd filesystem on the device */
 int ZFStore::mkfs()
 {
   std::string osdfs = path + "/osdfs";
+  const char* lzw_err;
+  zp_desc_map zpm;
+  int sz, err = 0;
 
-  abort();
-  return 0;
-}
+  using std::get;
+
+  assert(zhd);
+  assert(!zhfs);
+
+  // XXXX implement
+  //err = lzfw_zpool_stat(zhd, path.c_str(), struct lzfs_pstat);
+  if (err && (err == ENOENT)) {
+    if (cct->_conf->zfstore_zpool_create) {
+      // look for a matching pool in zfstore_zpool_devices
+      std::string zp_devs = cct->_conf->zfstore_zpool_devices;
+      sz = parse_zp_desc(zp_devs, zpm);
+      zp_desc_map::iterator zpi = zpm.find(path);
+      if (zpi != zpm.end()) {
+	// we have the parameters to create zpool
+	zp_desc_type& zpd = zpi->second;
+	std::vector<std::string>& zp_devs = get<2>(zpd);
+	// API is a pain in the a**
+	char** zp_devs_arr = static_cast<char**>(
+			         alloca(zp_devs.size()*sizeof(char*)));
+	for (int dev_ix = 0; dev_ix < zp_devs.size(); ++dev_ix) {
+	  zp_devs_arr[dev_ix] = const_cast<char*>(zp_devs[dev_ix].c_str());
+	}
+	err = lzfw_zpool_create(zhd, path.c_str(), get<1>(zpd).c_str(),
+				(const char**) zp_devs_arr, zp_devs.size(),
+				&lzw_err);
+	if (!!err) {
+	  dout(-1) << "lzfw_zpool_create failed " << " path=" << path << dendl;
+	  goto out;
+	}
+      }
+    }
+  }
+  // err = lzfw_dataset_stat(zhd, osdfs.c_str(), struct lzfw_dstat);
+  if (err && (err == ENOENT)) {
+    // create dataset
+    char* ds;
+    zfsh_adup(osdfs, ds); // spa routines chan change ds
+    err = lzfw_dataset_create(zhd, ds, ZFS_TYPE_FILESYSTEM, &lzw_err);
+  }
+ out:
+  return err;
+} /* mkfs */
 
 int ZFStore::statfs(struct statfs* st)
 {
@@ -91,6 +137,19 @@ int ZFStore::statfs(struct statfs* st)
 
   return err;
 } /* statfs */
+
+  // read and write key->value pairs to UNMOUNTED instance
+int ZFStore::read_meta(const std::string& key, std::string* value)
+{
+  abort();
+  return 0;
+} /* read_meta */
+
+int ZFStore::write_meta(const std::string& key, const std::string& value)
+{
+  abort();
+  return 0;
+} /* write meta */
 
 int ZFStore::mount() {
   assert(zhd);

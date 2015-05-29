@@ -234,9 +234,11 @@ public:
     return 0;
   }
 
-#if 0 /* XXX */
-  int write_meta(const std::string& key, const std::string& value);
+  // read and write key->value pairs to UNMOUNTED instance
   int read_meta(const std::string& key, std::string* value);
+  int write_meta(const std::string& key, const std::string& value);
+
+#if 0 /* XXX */
   int get_ideal_list_min();
   int get_ideal_list_max();
 #endif
