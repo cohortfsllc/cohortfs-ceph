@@ -3,9 +3,10 @@
 #ifndef BACKENDH
 #define BACKENDH
 
-#include <functional>
 #include <mutex>
 #include "include/buffer.h"
+
+#include "common/cohort_function.h"
 
 class Backend {
 public:
@@ -15,15 +16,15 @@ public:
     const std::string &oid_t,
     uint64_t offset,
     const ceph::bufferlist &bl,
-    std::function<void(int)>&& on_applied,
-    std::function<void(int)>&& on_commit) = 0;
+    cohort::function<void(int)>&& on_applied,
+    cohort::function<void(int)>&& on_commit) = 0;
 
   virtual void read(
     const std::string &oid_t,
     uint64_t offset,
     uint64_t length,
     ceph::bufferlist *bl,
-    std::function<void(int)>&& on_complete) = 0;
+    cohort::function<void(int)>&& on_complete) = 0;
   virtual ~Backend() {}
 };
 

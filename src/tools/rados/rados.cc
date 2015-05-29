@@ -708,7 +708,7 @@ class RadosBencher : public ObjBencher {
       r = 0;
     }
 
-    operator std::function<void(int)>() {
+    operator rados::op_callback() {
       return std::ref(*this);
     }
   };

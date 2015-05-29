@@ -234,8 +234,6 @@ namespace rados {
     if (!objecter)
       goto out;
 
-    objecter->set_balanced_budget();
-
     monclient.set_messenger(messenger);
 
     messenger->add_dispatcher_tail(objecter);

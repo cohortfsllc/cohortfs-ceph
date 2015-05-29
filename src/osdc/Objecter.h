@@ -29,6 +29,7 @@
 #include "include/types.h"
 #include "include/buffer.h"
 
+#include "common/cohort_function.h"
 #include "osd/OSDMap.h"
 #include "msg/MessageFactory.h"
 #include "messages/MOSDOp.h"
@@ -62,11 +63,12 @@ namespace rados {
   using std::shared_ptr;
   using std::unique_ptr;
   using std::move;
-  using std::function;
+  using cohort::function;
   using std::ref;
   using std::move;
   typedef function<void(int)> op_callback;
-  typedef function<void(int, uint64_t, ceph::real_time)> stat_callback;
+  typedef function<void(int, uint64_t,
+			ceph::real_time)> stat_callback;
   typedef function<void(int, bufferlist&&)> read_callback;
 
   class CB_Waiter {
@@ -86,9 +88,14 @@ namespace rados {
     CB_Waiter& operator=(CB_Waiter&&) = delete;
     virtual ~CB_Waiter() {}
 
+    operator cohort::function<void(int)>() {
+      return std::ref(*this);
+    }
+
     operator std::function<void(int)>() {
       return std::ref(*this);
     }
+
 
     int wait() {
       std::unique_lock<std::mutex> l(lock);
@@ -142,7 +149,6 @@ namespace rados {
     std::atomic<uint32_t> num_uncommitted;
     // flags which are applied to each IO op
     std::atomic<uint32_t> global_op_flags;
-    bool keep_balanced_budget;
     bool honor_osdmap_full;
     ZTracer::Endpoint trace_endpoint;
 
@@ -230,12 +236,6 @@ namespace rados {
       uint32_t acks, commits;
       int rc;
       epoch_t *reply_epoch;
-      bool budgeted;
-      // true if the throttle budget is get/put on a series of OPs,
-      // instead of per OP basis, when this flag is set, the budget is
-      // acquired before sending the very first OP of the series and
-      // released upon receiving the last OP reply.
-      bool ctx_budgeted;
       bool finished;
       ZTracer::Trace trace;
 
@@ -246,7 +246,7 @@ namespace rados {
 	op_base(o, volume, _op, f),
 	ontimeout(0),
 	acks(0), commits(0), rc(0), reply_epoch(nullptr),
-	budgeted(false), ctx_budgeted(false), finished(false) {
+	finished(false) {
 	onack.swap(ac);
 	oncommit.swap(co);
 	subops.reserve(op->width());
@@ -371,37 +371,6 @@ namespace rados {
 
     void resend_mon_ops();
 
-    /**
-     * handle a budget for in-flight ops
-     * budget is taken whenever an op goes into the ops map
-     * and returned whenever an op is removed from the map
-     * If throttle_op needs to throttle it will unlock client_lock.
-     */
-    int calc_op_budget(Op& op);
-    void _throttle_op(Op& op, shunique_lock& sl, int op_size = 0);
-    int _take_op_budget(Op& op, shunique_lock& sl) {
-      int op_budget = calc_op_budget(op);
-      if (keep_balanced_budget) {
-	_throttle_op(op, sl, op_budget);
-      } else {
-	op_throttle_bytes.take(op_budget);
-	op_throttle_ops.take(1);
-      }
-      op.budgeted = true;
-      return op_budget;
-    }
-    void put_op_budget_bytes(int op_budget) {
-      assert(op_budget >= 0);
-      op_throttle_bytes.put(op_budget);
-      op_throttle_ops.put(1);
-    }
-    void put_op_budget(Op& op) {
-      assert(op.budgeted);
-      int op_budget = calc_op_budget(op);
-      put_op_budget_bytes(op_budget);
-    }
-    Throttle op_throttle_bytes, op_throttle_ops;
-
   public:
     Objecter(CephContext *cct_, Messenger *m, MonClient *mc,
 	     ceph::timespan mon_timeout = std::chrono::seconds(0),
@@ -412,15 +381,13 @@ namespace rados {
       client_inc(-1),
       num_unacked(0), num_uncommitted(0),
       global_op_flags(0),
-      keep_balanced_budget(false), honor_osdmap_full(true),
+      honor_osdmap_full(true),
       trace_endpoint("0.0.0.0", 0, "Objecter"),
       last_seen_osdmap_version(0),
       tick_event(0),
       homeless_session(new OSDSession(cct, -1)),
       mon_timeout(mon_timeout),
-      osd_timeout(osd_timeout),
-      op_throttle_bytes(cct, cct->_conf->objecter_inflight_op_bytes),
-      op_throttle_ops(cct, cct->_conf->objecter_inflight_ops)
+      osd_timeout(osd_timeout)
       { }
     ~Objecter();
 
@@ -443,17 +410,6 @@ namespace rados {
       f(const_cast<const OSDMap&>(*osdmap));
     }
 
-
-    /**
-     * Tell the objecter to throttle outgoing ops according to its
-     * budget (in _conf). If you do this, ops can block, in
-     * which case it will unlock client_lock and sleep until
-     * incoming messages reduce the used budget low enough for
-     * the ops to continue going; then it will lock client_lock again.
-     */
-
-    void set_balanced_budget() { keep_balanced_budget = true; }
-    void unset_balanced_budget() { keep_balanced_budget = false; }
 
     void set_honor_osdmap_full() { honor_osdmap_full = true; }
     void unset_honor_osdmap_full() { honor_osdmap_full = false; }
@@ -499,12 +455,9 @@ namespace rados {
 
     // low-level
     ceph_tid_t _op_submit(Op& op, Op::unique_lock& ol, shunique_lock& sl);
-    ceph_tid_t _op_submit_with_budget(Op& op, Op::unique_lock& ol,
-				      shunique_lock& sl,
-				      int *ctx_budget = nullptr);
     // public interface
   public:
-    ceph_tid_t op_submit(Op *op, int* ctx_budget = nullptr);
+    ceph_tid_t op_submit(Op *op);
     bool is_active() {
       return !(inflight_ops.empty() && statfs_ops.empty());
     }

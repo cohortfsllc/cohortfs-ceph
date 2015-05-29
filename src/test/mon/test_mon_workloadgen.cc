@@ -248,7 +248,6 @@ class ClientStub : public TestStub
 
     objecter.reset(new Objecter(cct, messenger.get(), &monc));
     assert(objecter.get() != NULL);
-    objecter->set_balanced_budget();
 
     monc.set_messenger(messenger.get());
     messenger->add_dispatcher_head(this);

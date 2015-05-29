@@ -778,37 +778,11 @@ namespace rados {
     return op_submit(o);
   }
 
-  ceph_tid_t Objecter::op_submit(Op *op, int *ctx_budget)
+  ceph_tid_t Objecter::op_submit(Op *op)
   {
     shunique_lock sl(rwlock, ceph::acquire_shared);
     Op::unique_lock ol(op->lock);
-    return _op_submit_with_budget(*op, ol, sl, ctx_budget);
-  }
-
-  ceph_tid_t Objecter::_op_submit_with_budget(Op& op, Op::unique_lock& ol,
-					      shunique_lock& sl,
-					      int *ctx_budget)
-  {
-    // throttle.  before we look at any state, because
-    // take_op_budget() may drop our lock while it blocks.
-    if (!op.ctx_budgeted || (ctx_budget && (*ctx_budget == -1))) {
-      int op_budget = _take_op_budget(op, sl);
-      // take and pass out the budget for the first OP
-      // in the context session
-      if (ctx_budget && (*ctx_budget == -1)) {
-	*ctx_budget = op_budget;
-      }
-    }
-
-    ceph_tid_t tid = _op_submit(op, ol, sl);
-
-    if (osd_timeout > ceph::timespan(0)) {
-      op.ontimeout = timer.add_event(
-	osd_timeout,
-	&Objecter::op_cancel, this, tid, -ETIMEDOUT);
-    }
-
-    return tid;
+    return _op_submit(*op, ol, sl);
   }
 
   ceph_tid_t Objecter::_op_submit(Op& op, Op::unique_lock& ol,
@@ -1115,9 +1089,6 @@ namespace rados {
 
     op.finished = true;
 
-    if (!op.ctx_budgeted && op.budgeted)
-      put_op_budget(op);
-
     if (op.ontimeout) {
       timer.cancel_event(op.ontimeout);
     }
@@ -1193,37 +1164,6 @@ namespace rados {
     m->set_tid(subop.tid);
 
     messenger->send_message(m, subop.session->con);
-  }
-
-  int Objecter::calc_op_budget(Op& op)
-  {
-    return op.op->get_budget();
-  }
-
-  void Objecter::_throttle_op(Op& op, shunique_lock& shl, int op_budget)
-  {
-    assert(shl);
-
-    bool locked_for_write = shl.owns_lock();
-
-    if (!op_budget)
-      op_budget = calc_op_budget(op);
-    if (!op_throttle_bytes.get_or_fail(op_budget)) { //couldn't take right now
-      shl.unlock();
-      op_throttle_bytes.get(op_budget);
-      if (locked_for_write)
-	shl.lock();
-      else
-	shl.lock_shared();
-    }
-    if (!op_throttle_ops.get_or_fail(1)) { //couldn't take right now
-      shl.unlock();
-      op_throttle_ops.get(1);
-      if (locked_for_write)
-	shl.lock();
-      else
-	shl.lock_shared();
-    }
   }
 
   void Objecter::handle_osd_subop_reply(MOSDOpReply *m)

@@ -866,4 +866,4 @@ public:
   }
 };
 
-#endif // COMMON_COHORT_FUNCTION_H
+#endif // !COMMON_COHORT_FUNCTION_H
