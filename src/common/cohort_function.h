@@ -1,6 +1,9 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
+#ifndef COMMON_COHORT_FUNCTION_H
+#define COMMON_COHORT_FUNCTION_H
+
 #include <cassert>
 #include <exception>
 #include <functional>
@@ -10,6 +13,7 @@
 #include <type_traits>
 
 #include <boost/compressed_pair.hpp>
+#include <boost/intrusive/slist.hpp>
 
 namespace cohort {
 
@@ -352,10 +356,22 @@ namespace cohort {
 	return typeid(Fun);
       }
     };
+
+
+    template<bool>
+    struct maybe_slist_hook {
+    };
+
+    template<>
+    struct maybe_slist_hook<true> :
+      boost::intrusive::slist_base_hook<
+      boost::intrusive::link_mode<
+      boost::intrusive::normal_link>> {
+    };
   };
 
   template<typename F, size_t Reserved = 3 * sizeof(void*),
-	   bool NoHeap = false>
+	   bool NoHeap = false, bool Link = false>
   class function; // undefined
 
   // The cohort::function class is template is, by default, equivalent
@@ -384,10 +400,17 @@ namespace cohort {
   // but they can't be determined until runtime, and two out of the
   // two CohortFS developers surveyed said they preferred this result.)
 
-  template<typename Res, typename ...ArgTypes, size_t Reserved, bool NoHeap>
-  class function<Res(ArgTypes...), Reserved, NoHeap>
+  // If true, Link will add an normal_link slist_base_hook. It cannot
+  // be a member hook, sorry, we're not StandardLayout enough for that
+  // to work. I picked normal_link since auto_unlink is incompatible
+  // with cache_last.
+
+  template<typename Res, typename ...ArgTypes, size_t Reserved, bool NoHeap,
+	   bool Link>
+  class function<Res(ArgTypes...), Reserved, NoHeap, Link>
     : public detail::maybe_derive_from_unary_function<Res(ArgTypes...)>,
-      public detail::maybe_derive_from_binary_function<Res(ArgTypes...)> {
+      public detail::maybe_derive_from_binary_function<Res(ArgTypes...)>,
+      public detail::maybe_slist_hook<Link> {
     typedef detail::base<Res(ArgTypes...)> base;
     static constexpr size_t reserved =
       sizeof(detail::func<std::aligned_storage_t<Reserved, sizeof(void*)>,
@@ -463,10 +486,10 @@ public:
       stored = f.stored;
     }
 
-    template<size_t _RS, bool _NH>
+    template<size_t _RS, bool _NH, bool _L>
     function(const std::enable_if_t<!no_heap ||
 	     (_NH && _RS >= reserved),
-	     function<Res(ArgTypes...), _RS, _NH>>& f)
+	     function<Res(ArgTypes...), _RS, _NH, _L>>& f)
       : stored(0), b(0) {
       if (f.b == 0) {
 	b = 0;
@@ -498,10 +521,10 @@ public:
       f.stored = 0;
     }
 
-    template<size_t _RS, bool _NH>
+    template<size_t _RS, bool _NH, bool _L>
     function(std::enable_if_t<!no_heap ||
 	     (_NH && _RS <= reserved),
-	     function<Res(ArgTypes...), _RS, _NH>>&& f) noexcept
+	     function<Res(ArgTypes...), _RS, _NH, _L>>&& f) noexcept
 	: stored(0), b(0) {
       if (f.b == 0) {
 	b = 0;
@@ -613,10 +636,10 @@ public:
       return *this;
     }
 
-    template<size_t _RS, bool _NH>
+    template<size_t _RS, bool _NH, bool _L>
     function& operator=(const std::enable_if_t<!no_heap ||
 			(_NH && _RS <= reserved),
-			function<Res(ArgTypes...), _RS, _NH>>& f) {
+			function<Res(ArgTypes...), _RS, _NH, _L>>& f) {
       function(f).swap(*this);
       return *this;
     }
@@ -649,10 +672,11 @@ public:
       return *this;
     }
 
-    template<size_t _RS, bool _NH>
+    template<size_t _RS, bool _NH, bool _L>
     function& operator=(std::enable_if_t<!no_heap ||
 			(_NH && _RS <= reserved),
-			function<Res(ArgTypes...), _RS, _NH>>&& f) noexcept {
+			function<Res(ArgTypes...), _RS, _NH,
+			_L>>&& f) noexcept {
       if (b == (base*) &buf) {
 	b->destroy();
       } else if (b) {
@@ -712,8 +736,8 @@ public:
     }
 
     // function modifiers:
-    template<size_t _RS, bool _NH>
-    auto swap(function<Res(ArgTypes...), _RS, _NH>& f) noexcept ->
+    template<size_t _RS, bool _NH, bool _L>
+    auto swap(function<Res(ArgTypes...), _RS, _NH, _L>& f) noexcept ->
       std::enable_if_t<!no_heap || (_NH && _RS <= reserved), void> {
       if (!f && b) {
 	f = std::move(*this);
@@ -804,35 +828,41 @@ public:
     }
   };
 
-  template<typename Res, typename ...ArgTypes, size_t Reserved, bool NoHeap>
-  bool operator==(const function<Res(ArgTypes...), Reserved, NoHeap>& f,
+  template<typename Res, typename ...ArgTypes, size_t Reserved, bool NoHeap,
+	   bool Link>
+  bool operator==(const function<Res(ArgTypes...), Reserved, NoHeap, Link>& f,
 		  std::nullptr_t) noexcept {
     return !f;
   }
 
-  template<typename Res, typename ...ArgTypes, size_t Reserved, bool NoHeap>
+  template<typename Res, typename ...ArgTypes, size_t Reserved, bool NoHeap,
+	   bool Link>
   bool operator==(
     std::nullptr_t,
-    const function<Res(ArgTypes...), Reserved, NoHeap>& f) noexcept {
+    const function<Res(ArgTypes...), Reserved, NoHeap, Link>& f) noexcept {
     return !f;
   }
 
-  template<typename Res, typename ...ArgTypes, size_t Reserved, bool NoHeap>
-  bool operator!=(const function<Res(ArgTypes...), Reserved, NoHeap>& f,
+  template<typename Res, typename ...ArgTypes, size_t Reserved, bool NoHeap,
+	   bool Link>
+  bool operator!=(const function<Res(ArgTypes...), Reserved, NoHeap, Link>& f,
 		  std::nullptr_t) noexcept {
     return f;
   }
 
-  template<typename Res, typename ...ArgTypes, size_t Reserved, bool NoHeap>
+  template<typename Res, typename ...ArgTypes, size_t Reserved, bool NoHeap,
+	   bool Link>
   bool operator!=(std::nullptr_t,
 		  const function<Res(ArgTypes...), Reserved,
-		  NoHeap>& f) noexcept {
+		  NoHeap, Link>& f) noexcept {
     return f;
   }
 
-  template<typename Res, typename ...ArgTypes, size_t R, bool N>
-  void swap(function<Res(ArgTypes...), R, N>& x,
-	    function<Res(ArgTypes...), R, N>& y) noexcept {
+  template<typename Res, typename ...ArgTypes, size_t R, bool N, bool L>
+  void swap(function<Res(ArgTypes...), R, N, L>& x,
+	    function<Res(ArgTypes...), R, N, L>& y) noexcept {
     return x.swap(y);
   }
 };
+
+#endif // COMMON_COHORT_FUNCTION_H

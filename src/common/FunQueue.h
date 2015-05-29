@@ -4,10 +4,9 @@
 #ifndef COHORT_FUNQUEUE_H
 #define COHORT_FUNQUEUE_H
 
-#include <functional>
-
 #include <boost/intrusive/slist.hpp>
-#include <boost/pool/object_pool.hpp>
+
+#include "common/cohort_function.h"
 
 namespace cohort {
 
@@ -20,44 +19,33 @@ namespace cohort {
     class _FunQueue_base<Res(Args...)>
     {
     protected:
-      typedef typename std::function<Res(Args...)> F;
+      typedef typename cohort::function<Res(Args...),
+					3 * sizeof(void*), false, true> F;
 
-      typedef boost::intrusive::slist_member_hook<
-	boost::intrusive::link_mode< boost::intrusive::normal_link> > slh;
-
-      struct fun {
-	F f;
-	slh hook;
-
-	fun(F&& _f) : f(_f) {}
-      };
-      boost::intrusive::slist<
-	fun,
-	boost::intrusive::member_hook<fun, slh, &fun::hook>,
+      boost::intrusive::slist<F,
 	boost::intrusive::linear<true>,
 	boost::intrusive::cache_last<true>,
-	boost::intrusive::constant_time_size<false> > queue;
+	boost::intrusive::constant_time_size<false>> queue;
 
       const size_t keep_free;
 
       boost::intrusive::slist<
-	fun,
-	boost::intrusive::member_hook<fun, slh, &fun::hook>,
+	F,
 	boost::intrusive::linear<true>,
-	boost::intrusive::constant_time_size<true> > free_list;
+	boost::intrusive::constant_time_size<true>> free_list;
 
       struct fun_disposer {
-	void operator()(fun *f){
+	void operator()(F *f){
 	  delete f;
 	}
       } fd;
 
-      void free(fun& el) {
+      void free(F& el) {
 	// This must only be called AFTER el is unlinked
 	if (free_list.size() >= keep_free) {
 	  delete &el;
 	} else {
-	  el.f = nullptr;
+	  el = nullptr;
 	  free_list.push_front(el);
 	}
       }
@@ -66,7 +54,7 @@ namespace cohort {
 	_FunQueue_base& fq;
 
 	fun_freer(_FunQueue_base& _fq) : fq(_fq) {}
-	void operator()(fun& f) {
+	void operator()(F& f) {
 	  fq.free(f);
 	}
       } ff;
@@ -77,7 +65,8 @@ namespace cohort {
       // good match.
       _FunQueue_base(const size_t kf = 13) : keep_free(kf), ff(*this) {}
       _FunQueue_base(const _FunQueue_base&) = delete;
-      _FunQueue_base(_FunQueue_base&& fq) : keep_free(fq.keep_free), ff(*this) {
+      _FunQueue_base(_FunQueue_base&& fq) : keep_free(fq.keep_free),
+					    ff(*this) {
 	queue.clear_and_dispose(fd);
 	queue.swap(fq.queue);
       }
@@ -99,17 +88,33 @@ namespace cohort {
 	fq1.swap(fqa);
       }
 
-      void add(F&& f) {
+      template<typename Callable>
+      void add(Callable&& f) {
 	if (!free_list.empty()) {
-	  fun& el = free_list.front();
+	  F& el = free_list.front();
 	  free_list.pop_front();
-	  el.f = std::forward<F>(f);
+	  el.assign(std::forward<Callable>(f));
+	  queue.insert(queue.end(), el);
+	  assert(el);
+	} else {
+	  F el = *(new F(std::forward<Callable>(f)));
+	  queue.insert(queue.end(), el);
+	  assert(el);
+	}
+      }
+
+      typedef cohort::function<Res(Args...)> LLF;
+      void add(LLF&& f) {
+	if (!free_list.empty()) {
+	  F& el = free_list.front();
+	  free_list.pop_front();
+	  el.f = std::forward<LLF>(f);
 	  queue.insert(queue.end(), el);
 	  assert(el.f);
 	} else {
-	  fun* el = new fun(std::forward<F>(f));
-	  queue.insert(queue.end(), *el);
-	  assert(el->f);
+	  F& el = *(new F(std::forward<LLF>(f)));
+	  queue.insert(queue.end(), el);
+	  assert(el);
 	}
       }
 
@@ -128,9 +133,9 @@ namespace cohort {
 
       void execute(Args&&... args) {
 	while (!queue.empty()) {
-	  fun& el = queue.front();
+	  F& el = queue.front();
 	  queue.pop_front();
-	  el.f(std::forward<Args>(args)...);
+	  el(std::forward<Args>(args)...);
 	  free(el);
 	}
       }
@@ -149,7 +154,7 @@ namespace cohort {
   {
     using detail::_FunQueue_base<void(Args...)>::queue;
     using detail::_FunQueue_base<void(Args...)>::free;
-    typedef typename detail::_FunQueue_base<void(Args...)>::fun fun;
+    typedef typename detail::_FunQueue_base<void(Args...)>::F F;
 
   public:
 
@@ -160,9 +165,9 @@ namespace cohort {
 
     void execute_one(Args&&... args) {
       if (!queue.empty()) {
-	fun& el = queue.front();
+	F& el = queue.front();
 	queue.pop_front();
-	el.f(std::forward<Args>(args)...);
+	el(std::forward<Args>(args)...);
 	free(el);
       } else {
 	throw std::bad_function_call();
@@ -175,7 +180,7 @@ namespace cohort {
   {
     using detail::_FunQueue_base<Res(Args...)>::queue;
     using detail::_FunQueue_base<Res(Args...)>::free;
-    typedef typename detail::_FunQueue_base<Res(Args...)>::fun fun;
+    typedef typename detail::_FunQueue_base<Res(Args...)>::F F;
 
   public:
 
@@ -186,7 +191,7 @@ namespace cohort {
 
     Res execute_one(Args&&... args) {
       if (!queue.empty()) {
-	fun& el = queue.front();
+	F& el = queue.front();
 	queue.pop_front();
 	Res r = el.f(std::forward<Args>(args)...);
 	free(el);
@@ -202,7 +207,7 @@ namespace cohort {
 		 Args&&... args) {
       FRes a = seed;
       while (!queue.empty()) {
-	fun& el = queue.front();
+	F& el = queue.front();
 	queue.pop_front();
 	a = f(el.f(std::forward<Args>(args)...), a);
 	free(el);
