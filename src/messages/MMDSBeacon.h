@@ -38,7 +38,8 @@ class MMDSBeacon : public PaxosServiceMessage {
 
  public:
   MMDSBeacon() : PaxosServiceMessage(MSG_MDS_BEACON, 0, HEAD_VERSION) { }
-  MMDSBeacon(const boost::uuids::uuid &f, uint64_t g, string& n, epoch_t les, int st, version_t se) :
+  MMDSBeacon(const boost::uuids::uuid &f, uint64_t g, const string& n,
+             epoch_t les, int st, version_t se) :
     PaxosServiceMessage(MSG_MDS_BEACON, les, HEAD_VERSION),
     fsid(f), global_id(g), name(n), state(st), seq(se),
     standby_for_rank(-1) {

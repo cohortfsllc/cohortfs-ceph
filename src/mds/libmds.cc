@@ -6,20 +6,18 @@
 
 #include "mon/MonClient.h"
 
-#include "msg/Dispatcher.h"
 #if defined(HAVE_XIO)
 #include "msg/XioMessenger.h"
 #include "msg/FastStrategy.h"
 #endif
 
-#include "common/Finisher.h"
-#include "mds/MDSMap.h"
-#include "mds/MDSimpl.h"
-#include "mds/MessageFactory.h"
 #include "common/common_init.h"
 #include "common/ceph_argparse.h"
 #include "include/color.h"
 
+#include "MDSMap.h"
+#include "MDS.h"
+#include "MessageFactory.h"
 #include "ceph_mds.h"
 
 #define dout_subsys ceph_subsys_mds
@@ -56,21 +54,16 @@ int context_create(int id, char const *config, char const *cluster,
 }
 }
 
-namespace ceph
-{
-namespace mds
-{
+namespace cohort {
+namespace mds {
 
 class LibMDS : public libmds {
  public:
   CephContext *cct;
  private:
-  libmds_callbacks *callbacks;
-  void *user;
-  Finisher *finisher; // thread to send callbacks to user
 
   MessageFactory *factory;
-  MDSimpl *mds;
+  MDS *mds;
 
 public:
   LibMDS(int whoami);
@@ -82,15 +75,17 @@ public:
   void join();
   void shutdown();
   void signal(int signum);
+
+  int create(inodenum_t parent, const char *name);
+  int mkdir(inodenum_t parent, const char *name);
+  int unlink(inodenum_t parent, const char *name);
+  int lookup(inodenum_t parent, const char *name, inodenum_t *ino);
 };
 
 
 LibMDS::LibMDS(int whoami)
   : libmds(whoami),
     cct(nullptr),
-    callbacks(nullptr),
-    user(nullptr),
-    finisher(nullptr),
     factory(nullptr),
     mds(nullptr)
 {
@@ -100,17 +95,10 @@ LibMDS::~LibMDS()
 {
   delete mds;
   delete factory;
-  if (finisher) {
-    finisher->stop();
-    delete finisher;
-  }
 }
 
 int LibMDS::init(const struct libmds_init_args *args)
 {
-  callbacks = args->callbacks;
-  user = args->user;
-
   // create the CephContext and parse the configuration
   int r = context_create(args->id, args->config, args->cluster, &cct);
   if (r != 0)
@@ -148,21 +136,9 @@ int LibMDS::init(const struct libmds_init_args *args)
     return r;
 
   // create mds
-  mds = new MDSimpl(cct->_conf->name.get_id().c_str(), msgr, monc);
+  mds = new MDS(args->id, msgr, monc);
   return mds->init();
 }
-
-struct C_StateCb : public ::Context {
-  typedef void (*callback_fn)(struct libmds *mds, void *user);
-  callback_fn cb;
-  libmds *mds;
-  void *user;
-  C_StateCb(callback_fn cb, libmds *mds, void *user)
-    : cb(cb), mds(mds), user(user) {}
-  void finish(int r) {
-    cb(mds, user);
-  }
-};
 
 void LibMDS::join()
 {
@@ -178,8 +154,28 @@ void LibMDS::signal(int signum)
   mds->handle_signal(signum);
 }
 
+int LibMDS::create(inodenum_t parent, const char *name)
+{
+  return mds->create(parent, name);
+}
+
+int LibMDS::mkdir(inodenum_t parent, const char *name)
+{
+  return mds->mkdir(parent, name);
+}
+
+int LibMDS::unlink(inodenum_t parent, const char *name)
+{
+  return mds->unlink(parent, name);
+}
+
+int LibMDS::lookup(inodenum_t parent, const char *name, inodenum_t *ino)
+{
+  return mds->lookup(parent, name, ino);
+}
+
 } // namespace mds
-} // namespace ceph
+} // namespace cohort
 
 
 // C interface
@@ -189,7 +185,7 @@ struct libmds* libmds_init(const struct libmds_init_args *args)
   if (args == nullptr)
     return nullptr;
 
-  ceph::mds::LibMDS *mds;
+  cohort::mds::LibMDS *mds;
   {
     // protect access to the map of mdslist
     std::lock_guard<std::mutex> lock(mds_lock);
@@ -201,7 +197,7 @@ struct libmds* libmds_init(const struct libmds_init_args *args)
       return nullptr;
     }
 
-    result.first->second = mds = new ceph::mds::LibMDS(args->id);
+    result.first->second = mds = new cohort::mds::LibMDS(args->id);
   }
 
   try {
@@ -224,7 +220,7 @@ void libmds_join(struct libmds *mds)
   try {
     mds->join();
   } catch (std::exception &e) {
-    CephContext *cct = static_cast<ceph::mds::LibMDS*>(mds)->cct;
+    CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
     lderr(cct) << "libmds_join caught exception " << e.what() << dendl;
   }
 }
@@ -234,7 +230,7 @@ void libmds_shutdown(struct libmds *mds)
   try {
     mds->shutdown();
   } catch (std::exception &e) {
-    CephContext *cct = static_cast<ceph::mds::LibMDS*>(mds)->cct;
+    CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
     lderr(cct) << "libmds_shutdown caught exception " << e.what() << dendl;
   }
 }
@@ -244,7 +240,7 @@ void libmds_cleanup(struct libmds *mds)
   // assert(!running)
   const int id = mds->whoami;
   // delete LibMDS because base destructor is protected
-  delete static_cast<ceph::mds::LibMDS*>(mds);
+  delete static_cast<cohort::mds::LibMDS*>(mds);
 
   // remove from the map of mdslist
   std::lock_guard<std::mutex> lock(mds_lock);
@@ -259,8 +255,53 @@ void libmds_signal(int signum)
     try {
       mds.second->signal(signum);
     } catch (std::exception &e) {
-      CephContext *cct = static_cast<ceph::mds::LibMDS*>(mds.second)->cct;
+      CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds.second)->cct;
       lderr(cct) << "libmds_signal caught exception " << e.what() << dendl;
     }
+  }
+}
+
+int libmds_create(struct libmds *mds, inodenum_t parent, const char *name)
+{
+  try {
+    return mds->create(parent, name);
+  } catch (std::exception &e) {
+    CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
+    lderr(cct) << "libmds_create caught exception " << e.what() << dendl;
+    return -EFAULT;
+  }
+}
+
+int libmds_mkdir(struct libmds *mds, inodenum_t parent, const char *name)
+{
+  try {
+    return mds->mkdir(parent, name);
+  } catch (std::exception &e) {
+    CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
+    lderr(cct) << "libmds_mkdir caught exception " << e.what() << dendl;
+    return -EFAULT;
+  }
+}
+
+int libmds_unlink(struct libmds *mds, inodenum_t parent, const char *name)
+{
+  try {
+    return mds->unlink(parent, name);
+  } catch (std::exception &e) {
+    CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
+    lderr(cct) << "libmds_unlink caught exception " << e.what() << dendl;
+    return -EFAULT;
+  }
+}
+
+int libmds_lookup(struct libmds *mds, inodenum_t parent, const char *name,
+                  inodenum_t *ino)
+{
+  try {
+    return mds->lookup(parent, name, ino);
+  } catch (std::exception &e) {
+    CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
+    lderr(cct) << "libmds_lookup caught exception " << e.what() << dendl;
+    return -EFAULT;
   }
 }
