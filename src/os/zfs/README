@@ -28,7 +28,7 @@ Some key assumptions of the implementation are:
 
    [osd]
    zfstore_zpool_create = true
-   zfstore_zpool_devices = <type>;<pathseg...;pathseg
+   zfstore_zpool_devices = <type>,<name1>,<pathseg>...,<pathseg>...[;]
 
    At present, the pool type should be "", and a single Unix
    path provided as device path segment.  Other combinations of
