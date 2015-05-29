@@ -52,12 +52,16 @@ class MOSDMap;
 namespace rados {
   using boost::intrusive::slist;
   using boost::intrusive::set;
+  using boost::intrusive::slist_member_hook;
   using boost::intrusive::slist_base_hook;
   using boost::intrusive::set_base_hook;
   using boost::intrusive::link_mode;
+  using boost::intrusive::normal_link;
   using boost::intrusive::auto_unlink;
   using boost::intrusive::constant_time_size;
   using boost::intrusive::linear;
+  using boost::intrusive::cache_last;
+  using boost::intrusive::member_hook;
   using std::vector;
   using std::string;
   using std::shared_ptr;
@@ -175,7 +179,7 @@ namespace rados {
     struct OSDSession;
     struct Op;
 
-    struct SubOp : public set_base_hook<link_mode<auto_unlink> > {
+    struct SubOp : public set_base_hook<link_mode<auto_unlink>>  {
       ceph_tid_t tid;
       int incarnation;
       OSDSession *session;
@@ -188,6 +192,7 @@ namespace rados {
       int attempts;
       bool done;
       Op& parent;
+      slist_member_hook<link_mode<normal_link>> qlink;
 
       // Never call this. Stupid STL.
 
@@ -298,7 +303,20 @@ namespace rados {
       typedef std::unique_lock<std::shared_timed_mutex> unique_lock;
       typedef std::shared_lock<std::shared_timed_mutex> shared_lock;
 
-      set<SubOp, constant_time_size<false> > subops;
+      static constexpr const uint32_t max_ops_inflight = 5;
+      static constexpr const uint64_t max_data_inflight = 16 << 20;
+      set<SubOp, constant_time_size<false> > subops_inflight;
+      uint32_t ops_inflight; // We can't use both constant_time_size
+			     // and auto_unlink
+      uint64_t data_inflight;
+
+
+      static constexpr const uint64_t max_ops_queued = 100;
+      slist<SubOp, member_hook<SubOp, slist_member_hook<
+					link_mode<normal_link>>,
+			       &SubOp::qlink>,
+	    boost::intrusive::constant_time_size<true> > subops_queued;
+
       int osd;
       int incarnation;
       int num_locks;

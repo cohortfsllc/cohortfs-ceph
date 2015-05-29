@@ -118,8 +118,8 @@ namespace rados {
       delete &(*i);
     }
 
-    while(!homeless_session->subops.empty()) {
-      auto i = homeless_session->subops.begin();
+    while(!homeless_session->subops_inflight.empty()) {
+      auto i = homeless_session->subops_inflight.begin();
       ldout(cct, 10) << " op " << i->tid << dendl;
       {
 	unique_lock wl(homeless_session->lock);
@@ -166,8 +166,8 @@ namespace rados {
     OSDSession::unique_lock sl(s.lock);
 
     // Check for changed request mappings
-    auto p = s.subops.begin();
-    while (p != s.subops.end()) {
+    auto p = s.subops_inflight.begin();
+    while (p != s.subops_inflight.end()) {
       SubOp& subop = *p;
       // check_op_volume_dne() may touch ops; prevent iterator invalidation
       ++p;
@@ -523,8 +523,8 @@ namespace rados {
 
     std::list<SubOp*> homeless_ops;
 
-    while (!s.subops.empty()) {
-      auto& so = *(s.subops.begin());
+    while (!s.subops_inflight.empty()) {
+      auto& so = *(s.subops_inflight.begin());
       ldout(cct, 10) << " op " << so.tid << dendl;
       _session_subop_remove(s, so);
       homeless_ops.push_back(&so);
@@ -670,7 +670,7 @@ namespace rados {
     // resend ops
     map<ceph_tid_t,SubOp*> resend;  // resend in tid order
 
-    for (auto &subop : session.subops) {
+    for (auto &subop : session.subops_inflight) {
       if (subop.parent.should_resend) {
 	if (!subop.parent.paused)
 	  resend[subop.tid] = &subop;
@@ -715,7 +715,7 @@ namespace rados {
     do {
       laggy_ops = 0;
       for (auto& s : osd_sessions) {
-	for (auto& subop : s.subops) {
+	for (auto& subop : s.subops_inflight) {
 	  assert(subop.session);
 	  if (subop.session && subop.stamp < cutoff) {
 	    ldout(cct, 2) << " tid " << subop.tid << " on osd."
@@ -726,7 +726,7 @@ namespace rados {
 	}
       }
 
-      if (!homeless_session->subops.empty() || !toping.empty()) {
+      if (!homeless_session->subops_inflight.empty() || !toping.empty()) {
 	_maybe_request_map();
       }
     } while (r == -EAGAIN);
@@ -1002,7 +1002,7 @@ namespace rados {
 
     get_session(to);
     subop.session = &to;
-    to.subops.insert(subop);
+    to.subops_inflight.insert(subop);
   }
 
   void Objecter::_session_subop_remove(OSDSession& from, SubOp& subop)
@@ -1194,8 +1194,8 @@ namespace rados {
 
     OSDSession::unique_lock sl(s.lock);
 
-    auto iter = s.subops.find(tid, oc);
-    if (iter == s.subops.end()) {
+    auto iter = s.subops_inflight.find(tid, oc);
+    if (iter == s.subops_inflight.end()) {
       ldout(cct, 7) << "handle_osd_subop_reply " << tid
 		    << (m->is_ondisk() ? " ondisk" :
 			(m->is_onnvram() ? " onnvram" : " ack"))
@@ -1580,7 +1580,7 @@ namespace rados {
   {
     // Caller is responsible for re-assigning or
     // destroying any ops that were assigned to us
-    assert(subops.empty());
+    assert(subops_inflight.empty());
   }
 
   Objecter::~Objecter()
@@ -1588,7 +1588,7 @@ namespace rados {
     delete osdmap;
 
     assert(homeless_session->nref== 1);
-    assert(homeless_session->subops.empty());
+    assert(homeless_session->subops_inflight.empty());
     homeless_session->put();
 
     assert(osd_sessions.empty());
