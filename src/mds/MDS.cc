@@ -1,38 +1,36 @@
-#include "msg/Dispatcher.h"
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
+
 #include "osdc/Objecter.h"
-
-// #include "os/ObjectStore.h"
 #include "mon/MonClient.h"
-
-#include "msg/DirectMessenger.h"
-#include "msg/FastStrategy.h"
-
-#include "common/Finisher.h"
 #include "mds/MDSMap.h"
-#include "mds/MDSimpl.h"
+#include "mds/MDS.h"
 #include "messages/MMDSBeacon.h"
 
 #define dout_subsys ceph_subsys_mds
 
-MDSimpl::MDSimpl(const std::string &n, Messenger *m, MonClient *mc) :
-	Dispatcher(m->cct),
-	name(n),
-	messenger(m),
-	monc(mc),
-  objecter(new Objecter(cct, messenger, monc,
-                        cct->_conf->rados_mon_op_timeout,
-                        cct->_conf->rados_osd_op_timeout))
+using namespace cohort::mds;
+
+MDS::MDS(int whoami, Messenger *m, MonClient *mc)
+  : Dispatcher(m->cct),
+    whoami(whoami),
+    messenger(m),
+    monc(mc),
+    objecter(new Objecter(cct, messenger, monc,
+                          cct->_conf->rados_mon_op_timeout,
+                          cct->_conf->rados_osd_op_timeout)),
+    mdsmap(cct)
 {
 }
 
-MDSimpl::~MDSimpl()
+MDS::~MDS()
 {
-	delete objecter;
+  delete objecter;
   delete monc;
   delete messenger;
 }
 
-void MDSimpl::shutdown()
+void MDS::shutdown()
 {
   objecter->shutdown();
   monc->shutdown();
@@ -40,12 +38,12 @@ void MDSimpl::shutdown()
   messenger->wait();
 }
 
-void MDSimpl::handle_signal(int signum)
+void MDS::handle_signal(int signum)
 {
-	// XXX suicide
+  // XXX suicide
 }
 
-int MDSimpl::init()
+int MDS::init()
 {
   messenger->add_dispatcher_tail(objecter);
   messenger->start();
@@ -62,85 +60,102 @@ int MDSimpl::init()
   objecter->start();
   monc->renew_subs();
 
-  beacon_start();
+  // start beacon timer
+  beacon_timer.add_event(cct->_conf->mds_beacon_interval,
+                         &MDS::beacon_send, this);
   return 0;
 }
 
-bool MDSimpl::ms_dispatch(Message *m)
+int MDS::create(_inodeno_t parent, const char *name)
 {
-    bool ret = true;
-    if (ret) {
-	m->put();
-    }
-    return ret;
+  return -ENOTSUP;
 }
 
-bool MDSimpl::ms_handle_reset(Connection *con)
+int MDS::mkdir(_inodeno_t parent, const char *name)
 {
-    // dout(5) << "ms_handle_reset on " << con->get_peer_addr() << dendl;
-    switch(con->get_peer_type()) {
-    case CEPH_ENTITY_TYPE_OSD:
-	objecter->ms_handle_reset(con);
-	break;
-    case CEPH_ENTITY_TYPE_CLIENT:
-	// XXX handle session here
-	messenger->mark_down(con);
-	break;
-    }
-    return false;
+  return -ENOTSUP;
 }
 
-void MDSimpl::ms_handle_remote_reset(Connection *con)
+int MDS::unlink(_inodeno_t parent, const char *name)
 {
-    // dout(5) << "ms_handle_remote_reset on " << con->get_peer_addr() << dendl;
-    switch(con->get_peer_type()) {
+  return -ENOTSUP;
+}
+
+int MDS::lookup(_inodeno_t parent, const char *name, _inodeno_t *ino)
+{
+  return -ENOTSUP;
+}
+
+bool MDS::ms_dispatch(Message *m)
+{
+  bool ret = true;
+  if (ret) {
+    m->put();
+  }
+  return ret;
+}
+
+bool MDS::ms_handle_reset(Connection *con)
+{
+  // dout(5) << "ms_handle_reset on " << con->get_peer_addr() << dendl;
+  switch(con->get_peer_type()) {
     case CEPH_ENTITY_TYPE_OSD:
-	objecter->ms_handle_reset(con);
-	break;
+      objecter->ms_handle_reset(con);
+      break;
     case CEPH_ENTITY_TYPE_CLIENT:
-	// XXX handle session here
-	messenger->mark_down(con);
-	break;
-    }
+      // XXX handle session here
+      messenger->mark_down(con);
+      break;
+  }
+  return false;
+}
+
+void MDS::ms_handle_remote_reset(Connection *con)
+{
+  // dout(5) << "ms_handle_remote_reset on " << con->get_peer_addr() << dendl;
+  switch(con->get_peer_type()) {
+    case CEPH_ENTITY_TYPE_OSD:
+      objecter->ms_handle_reset(con);
+      break;
+    case CEPH_ENTITY_TYPE_CLIENT:
+      // XXX handle session here
+      messenger->mark_down(con);
+      break;
+  }
 }
 
 #if 0
-void MDSimpl::ms_handle_connect(Connection *con)
+void MDS::ms_handle_connect(Connection *con)
 {
-    // dout(5) << "ms_handle_connect on " << con->get_peer_addr() << dendl;
-    objecter->ms_handle_connect(con);
+  // dout(5) << "ms_handle_connect on " << con->get_peer_addr() << dendl;
+  objecter->ms_handle_connect(con);
 }
 
-void MDSimpl::ms_handle_accept(Connection *con)
+void MDS::ms_handle_accept(Connection *con)
 {
-    // XXX if existing session, send any queued messages
+  // XXX if existing session, send any queued messages
 }
 #endif
 
-void MDSimpl::request_state(int s)
+void MDS::request_state(int s)
 {
-    // dout(3) << "request_state " << ceph_mds_state_name(s) << dendl;
-    want_state = s;
-    beacon_send();
+  dout(3) << "request_state " << ceph_mds_state_name(s) << dendl;
+  want_state = s;
+  beacon_send();
 }
 
-void MDSimpl::beacon_start()
+void MDS::beacon_send()
 {
-  beacon_timer.add_event(cct->_conf->mds_beacon_interval,
-                         &MDSimpl::beacon_send, this);
-}
+  ++beacon_last_seq;
+  dout(10) << "beacon_send " << ceph_mds_state_name(want_state)
+           << " seq " << beacon_last_seq
+           << " (currently " << ceph_mds_state_name(state) << ")" << dendl;
 
-void MDSimpl::beacon_send()
-{
-    ++beacon_last_seq;
-	// dout(10) << "beacon_send " << ceph_mds_state_name(want_state)
-	//	<< " seq " << beacon_last_seq
-	//	<< " (currently " << ceph_mds_state_name(state) << ")"
-	//	<< dendl;
-    MMDSBeacon *beacon = new MMDSBeacon(monc->get_fsid(), monc->get_global_id(),
-	name, mdsmap->get_epoch(),
-	want_state, beacon_last_seq);
-    monc->send_mon_message(beacon);
+  const std::string &name = messenger->cct->_conf->name.get_id();
+  MMDSBeacon *beacon = new MMDSBeacon(monc->get_fsid(), monc->get_global_id(),
+                                      name, mdsmap.get_epoch(),
+                                      want_state, beacon_last_seq);
+  monc->send_mon_message(beacon);
 
   beacon_timer.reschedule_me(cct->_conf->mds_beacon_interval);
 }

@@ -30,7 +30,6 @@
 #include <errno.h>
 #include <sstream>
 
-class MDS;
 class MessageFactory;
 
 class Messenger {

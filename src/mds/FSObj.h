@@ -1,0 +1,55 @@
+/* -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- */
+// vim: ts=8 sw=2 smarttab
+
+#ifndef COHORT_MDS_FSOBJ_H
+#define COHORT_MDS_FSOBJ_H
+
+#include "common/cohort_function.h"
+#include "mds_types.h"
+
+namespace cohort {
+namespace mds {
+
+class FSObj;
+typedef cohort::function<void(int status, FSObj *result)> lookupcb;
+typedef cohort::function<int(int status, int count, bool eof)> readdircb;
+typedef cohort::function<void(int status, FSObj *result)> createcb;
+typedef cohort::function<void(int status, std::string toname)> readlinkcb;
+typedef cohort::function<void(int status, accessmask allowed, accessmask denied)> testaccesscb;
+typedef cohort::function<void(int status)> getsetattrcb;
+typedef cohort::function<void(int status, int readcount, bool eof)> readwritecb;
+typedef cohort::function<void(int status, read_delegation *delegation)> delegatedreadcb;
+typedef cohort::function<void(int status, write_delegation *delegation)> delegatedwritecb;
+
+class FSObj {
+ public:
+  void release();
+  int lookup(identity *who, const std::string path, lookupcb * lookres);
+  int readdir(dirptr *where, unsigned char *buf, int bufsize,
+              readdircb * readdirres);
+  int create(identity *who, const std::string name, ObjAttr *attrs,
+             createcb * createres);
+  // create is also mkdir, mknod
+  int symlink(identity *who, const std::string name, const std::string toname, ObjAttr *attrs,
+              createcb * symlinkres);
+  int readlink(identity *who, readlinkcb *result);
+  int testaccess(identity *who, int accesstype, testaccesscb *testaccessres);
+  int setattr(identity *who, int mask, ObjAttr *attrs, getsetattrcb *setattrres);
+  int getattr(identity *who, int mask, ObjAttr *attrs, getsetattrcb *getattrres);
+  int link(identity *who, FSObj *destdir, std::string name, getsetattrcb *linkres);
+  int rename(identity *who, std::string oldname, FSObj *newdir, std::string newname,
+             getsetattrcb *linkres);
+  int unlink(identity *who, std::string name, getsetattrcb *linkres);
+  int read(bufferlist bl, int flags, readwritecb *readres);
+  int write(bufferlist bl, int flags, readwritecb *readres);
+  int prepare_delegated_read(int flags, delegatedreadcb *delegatedreadres);
+  int release_delegated_read(read_delegation *delegation, getsetattrcb *releasecb);
+  int prepare_delegated_write(int flags, delegatedwritecb *delegatedwriteres);
+  int release_delegated_write(write_delegation *delegation, getsetattrcb *releasecb);
+  char * get_oid_name();	// not in delegation?
+};
+
+} // namespace mds
+} // namespace cohort
+
+#endif /* COHORT_MDS_FSOBJ_H */

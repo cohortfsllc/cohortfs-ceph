@@ -15,16 +15,8 @@
 
 #include <stdint.h>
 
-/**
- * Completion callback for asynchronous io
- *
- * @param result  The operation result
- * @param length  Number of bytes read/written
- * @param flags	  LIBMDS_READ_/WRITE_ flags
- * @param user	  Private user data back...
- */
-typedef void (*libmds_io_completion_fn)(int result, uint64_t length,
-					int flags, void *user);
+
+typedef uint64_t inodenum_t;
 
 #ifdef __cplusplus
 /**
@@ -55,9 +47,31 @@ struct libmds {
    */
   virtual void signal(int signum) = 0;
 
-/// more instance methods to go here
+  /**
+   * Create a regular file in the parent directory.
+   * @see libmds_create()
+   */
+  virtual int create(inodenum_t parent, const char *name) = 0;
 
-protected:
+  /**
+   * Create a subdirectory in the parent directory.
+   * @see libmds_mkdir()
+   */
+  virtual int mkdir(inodenum_t parent, const char *name) = 0;
+
+  /**
+   * Unlink the given file from the parent directory.
+   * @see libmds_unlink()
+   */
+  virtual int unlink(inodenum_t parent, const char *name) = 0;
+
+  /**
+   * Find an entry in the parent directory.
+   * @see libmds_lookup()
+   */
+  virtual int lookup(inodenum_t parent, const char *name, inodenum_t *ino) = 0;
+
+ protected:
   /** Destructor protected: must be deleted by libmds_cleanup() */
   virtual ~libmds() {}
 };
@@ -66,81 +80,113 @@ protected:
 /* C interface */
 extern "C" {
 #else
-struct libmds;
+  struct libmds;
 #endif /* __cplusplus */
 
-/** mds callback function table */
-struct libmds_callbacks {
-  /**
-   * Called when the MDS's MDSMap state switches to up:active.
-   *
-   * @param mds	  The libmds object returned by libmds_init()
-   * @param user  Private user data provided in libmds_init_args
-   */
-  void (*mds_active)(struct libmds *mds, void *user);
+  /** Initialization arguments for libmds_init() */
+  struct libmds_init_args {
+    int id;               /**< mds instance id */
+    const char *config;   /**< path to ceph configuration file */
+    const char *cluster;  /**< ceph cluster name (default "ceph") */
+  };
 
   /**
-   * Called if the MDS decides to shut down on its own, not as
-   * a result of libmds_shutdown().
+   * Create and initialize an mds from the given arguments. Reads
+   * the ceph.conf, binds messengers, creates an objectstore,
+   * and starts running the mds. Returns before initialization is
+   * complete; refer to mds_active callback to determine when the
+   * mds becomes active.
+   *
+   * @param args	  Initialization arguments
+   *
+   * @return A pointer to the new libmds instance, or NULL on failure.
+   */
+  struct libmds* libmds_init(const struct libmds_init_args *args);
+
+  /**
+   * Blocks until the mds shuts down, either because of a call to
+   * libmds_shutdown(), or an mds_shutdown() callback initiated by the mds.
    *
    * @param mds	  The libmds object returned by libmds_init()
-   * @param user  Private user data provided in libmds_init_args
    */
-  void (*mds_shutdown)(struct libmds *mds, void *user);
-};
+  void libmds_join(struct libmds *mds);
 
-/** Initialization arguments for libmds_init() */
-struct libmds_init_args {
-  int id;		/**< mds instance id */
-  const char *config;	/**< path to ceph configuration file */
-  const char *cluster;	/**< ceph cluster name (default "ceph") */
-  struct libmds_callbacks *callbacks; /**< optional callbacks */
-  void *user;		/**< user data for mds_active and mds_shutdown */
-};
+  /**
+   * Starts shutting down a running mds.
+   *
+   * @param mds	  The libmds object returned by libmds_init()
+   */
+  void libmds_shutdown(struct libmds *mds);
 
-/**
- * Create and initialize an mds from the given arguments. Reads
- * the ceph.conf, binds messengers, creates an objectstore,
- * and starts running the mds. Returns before initialization is
- * complete; refer to mds_active callback to determine when the
- * mds becomes active.
- *
- * @param args	  Initialization arguments
- *
- * @return A pointer to the new libmds instance, or NULL on failure.
- */
-struct libmds* libmds_init(const struct libmds_init_args *args);
+  /**
+   * Release resources associated with an mds that is not running.
+   *
+   * @param mds	  The libmds object returned by libmds_init()
+   */
+  void libmds_cleanup(struct libmds *mds);
 
-/**
- * Blocks until the mds shuts down, either because of a call to
- * libmds_shutdown(), or an mds_shutdown() callback initiated by the mds.
- *
- * @param mds	  The libmds object returned by libmds_init()
- */
-void libmds_join(struct libmds *mds);
+  /**
+   * Send the given signal to all mdss.
+   *
+   * @param signum  The signal from a signal handler
+   */
+  void libmds_signal(int signum);
 
-/**
- * Starts shutting down a running mds.
- *
- * @param mds	  The libmds object returned by libmds_init()
- */
-void libmds_shutdown(struct libmds *mds);
+  /**
+   * Create a regular file in the parent directory.
+   *
+   * @param mds	  The libmds object returned by libmds_init()
+   * @param parent  Inode number of the parent directory
+   * @param name    Filename of the new directory entry
+   *
+   * @return Returns 0 on success, or a negative error code.
+   * @retval -ENOENT if the parent does not exist.
+   * @retval -ENOTDIR if the parent is not a directory.
+   * @retval -EEXIST if the parent directory already has an entry with \a name.
+   */
+  int libmds_create(struct libmds *mds, inodenum_t parent, const char *name);
 
-/**
- * Release resources associated with an mds that is not running.
- *
- * @param mds	  The libmds object returned by libmds_init()
- */
-void libmds_cleanup(struct libmds *mds);
+  /**
+   * Create a subdirectory in the parent directory.
+   *
+   * @param mds	  The libmds object returned by libmds_init()
+   * @param parent  Inode number of the parent directory
+   * @param name    Filename of the new directory entry
+   *
+   * @return Returns 0 on success, or a negative error code.
+   * @retval -ENOENT if the parent does not exist.
+   * @retval -ENOTDIR if the parent is not a directory.
+   * @retval -EEXIST if the parent directory already has an entry with \a name.
+   */
+  int libmds_mkdir(struct libmds *mds, inodenum_t parent, const char *name);
 
-/**
- * Send the given signal to all mdss.
- *
- * @param signum  The signal from a signal handler
- */
-void libmds_signal(int signum);
+  /**
+   * Unlink the given file from the parent directory.
+   *
+   * @param mds	  The libmds object returned by libmds_init()
+   * @param parent  Inode number of the parent directory
+   * @param name    Filename of the directory entry to remove
+   *
+   * @return Returns 0 on success, or a negative error code.
+   * @retval -ENOENT if the parent does not have an entry with \a name.
+   * @retval -ENOTDIR if the parent is not a directory.
+   */
+  int libmds_unlink(struct libmds *mds, inodenum_t parent, const char *name);
 
-//// C versions of instance methods
+  /**
+   * Find an entry in the parent directory.
+   *
+   * @param mds	   The libmds object returned by libmds_init()
+   * @param parent   Inode number of the parent directory
+   * @param name     Filename of the directory entry to find
+   * @param[out] ino Inode number of the directory entry found
+   *
+   * @return Returns 0 on success and sets \a ino or a negative error code.
+   * @retval -ENOENT if the parent does not have an entry with \a name.
+   * @retval -ENOTDIR if the parent is not a directory.
+   */
+  int libmds_lookup(struct libmds *mds, inodenum_t parent, const char *name,
+                    inodenum_t *ino);
 
 #ifdef __cplusplus
 } /* extern "C" */
