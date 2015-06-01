@@ -153,20 +153,20 @@ namespace cohort {
 	  if (++backoff < op_queue->deq_spins)
 	    continue;
 #ifdef OPQUEUE_SLEEP
-          std::this_thread::sleep_for(op_queue->timeout);
+	  std::this_thread::sleep_for(op_queue->timeout);
 #endif
 	} /* while (backoff < queue.deq_spins) */
 
       worker_exit:
 	std::unique_lock<std::mutex> lane_lk(*lane_mtx);
-        graveyard.swap(worker->thread);
-        lane_lk.unlock();
+	graveyard.swap(worker->thread);
+	lane_lk.unlock();
 
 	/* allow OSDVol to clean up */
 	op_queue->exit_func(op_queue->osd);
 
-        if (worker->thread.joinable()) // join previous thread
-          worker->thread.join();
+	if (worker->thread.joinable()) // join previous thread
+	  worker->thread.join();
 	--n_workers;
 	delete worker;
 	/* thread exit */
@@ -188,8 +188,8 @@ namespace cohort {
 	exit_func(ef),
 	n_lanes(lanes),
 	timeout(timeout),
-        enq_spins(enq_spins),
-        deq_spins(deq_spins),
+	enq_spins(enq_spins),
+	deq_spins(deq_spins),
 	thrd_lowat(thrd_lowat),
 	thrd_hiwat(thrd_hiwat),
 	flags(FLAG_NONE),
@@ -246,12 +246,12 @@ namespace cohort {
 
       /* we don't have a queue front anymore, tough
        * nuggies, requeuers */
-      int backoff = 0;
+      uint32_t backoff = 0;
       while (! band.queue.enqueue(&op)) {
 	if (++backoff < enq_spins)
 	  continue;
 #ifdef OPQUEUE_SLEEP
-        std::this_thread::sleep_for(timeout);
+	std::this_thread::sleep_for(timeout);
 #endif
       }
 #ifdef OPQUEUE_INSTRUMENT

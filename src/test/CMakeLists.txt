@@ -1705,7 +1705,7 @@ target_link_libraries(libosd_bench_async2 PRIVATE osd common pthread leveldb)
 # test_libmds
 add_executable(test_libmds test_libmds.c)
 set_target_properties(test_libmds PROPERTIES LINKER_LANGUAGE C)
-target_link_libraries(test_libmds PRIVATE mds global ${ALLOC_LIBS})
+target_link_libraries(test_libmds PRIVATE mds global leveldb ${ALLOC_LIBS})
 
 # lttng_stream_test
 if (HAVE_LTTNG)
