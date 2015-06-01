@@ -14,6 +14,8 @@
 
 #include "ZFStore.h"
 
+#include <algorithm>
+#include <sys/uio.h>
 #include "include/stringify.h"
 #include <boost/uuid/uuid_io.hpp>
 #include <boost/uuid/string_generator.hpp>
@@ -49,8 +51,10 @@ extern "C" {
 using namespace cohort_zfs;
 
 ZFStore::ZFStore(CephContext* cct, const std::string& path)
-  : ObjectStore(cct, path), zhfs(nullptr)
+  : ObjectStore(cct, path), root_ds(path + "/osdfs"), zhfs(nullptr),
+    meta_ino{0, 0}, meta_vno(nullptr)
 {
+  /* global init */
   if (!initialized) {
     std::unique_lock<std::mutex> l(mtx);
     if (!initialized) {
@@ -62,12 +66,12 @@ ZFStore::ZFStore(CephContext* cct, const std::string& path)
     }
   }
   ++n_instances;
+  /* instance init */
 }
 
 /* make a root osd filesystem on the device */
 int ZFStore::mkfs()
 {
-  std::string osdfs = path + "/osdfs";
   const char* lzw_err;
   zp_desc_map zpm;
   int sz, err = 0;
@@ -109,7 +113,7 @@ int ZFStore::mkfs()
   if (err && (err == ENOENT)) {
     // create dataset
     char* ds;
-    zfsh_adup(osdfs, ds); // spa routines chan change ds
+    zfsh_adup(root_ds, ds); // spa routines chan change ds
     err = lzfw_dataset_create(zhd, ds, ZFS_TYPE_FILESYSTEM, &lzw_err);
   }
  out:
@@ -138,17 +142,100 @@ int ZFStore::statfs(struct statfs* st)
   return err;
 } /* statfs */
 
+int ZFStore::attach_meta() {
+  int err = 0;
+  if (! zhfs) {
+    std::unique_lock<std::mutex> lck(mtx);
+    if (! zhfs) {
+      zhfs = lzfw_mount(path.c_str(), "/osdfs", "" /* mount options */);
+      if (! zhfs)
+	return -EIO;
+      /* mount it */
+      err = lzfw_getroot(zhfs, &meta_ino);
+      if (!!err)
+	return err;
+      /* open root */
+      err = lzfw_opendir(zhfs, &cred, meta_ino, &meta_vno);
+    }
+  }
+  return err;
+} /* attach_meta() */
+
   // read and write key->value pairs to UNMOUNTED instance
 int ZFStore::read_meta(const std::string& key, std::string* value)
 {
-  abort();
-  return 0;
+  attach_meta();
+
+  int err;
+  unsigned flags = 0;
+  lzfw_vnode_t* vno = nullptr;
+
+  assert(key.length() <= 254); /* ZFS internal limit */
+
+  err = lzfw_openat(zhfs, &cred, meta_vno, key.c_str(), O_RDWR|O_CREAT, 644,
+		    &flags, &vno);
+  if (!!err)
+    return -err;
+
+  const int BUFSZ = 1024;
+
+  char buf[BUFSZ];
+  struct iovec iov;
+  struct stat st;
+  size_t size;
+  off_t off;
+
+  err = lzfw_stat(zhfs, &cred, vno, &st);
+  if (err)
+    goto out;
+
+  off = 0;
+  size = st.st_size;
+  value->clear();
+
+  while (size > 0) {
+    iov.iov_base = buf;
+    iov.iov_len = MIN(BUFSZ, size); // lexical min
+    err = lzfw_preadv(zhfs, &cred, vno, &iov, 1, off);
+    if (!err) {
+      err = EIO;
+      break;
+    }
+    value->append(static_cast<char*>(iov.iov_base), err);
+    off += err;
+    size -= err;
+  }
+
+ out:
+  (void) lzfw_close(zhfs, &cred, vno, O_RDWR|O_CREAT);
+  return -err;
 } /* read_meta */
 
 int ZFStore::write_meta(const std::string& key, const std::string& value)
 {
-  abort();
-  return 0;
+  attach_meta();
+
+  int err;
+  unsigned flags = 0;
+  lzfw_vnode_t* vno = nullptr;
+
+  assert(key.length() <= 254); /* ZFS internal limit */
+
+  err = lzfw_openat(zhfs, &cred, meta_vno, key.c_str(), O_RDWR|O_CREAT, 644,
+		    &flags, &vno);
+  if (!!err)
+    return -err;
+
+  struct iovec iov;
+  iov.iov_base = const_cast<char*>(value.c_str());
+  iov.iov_len = value.length()+1;
+
+  assert(meta_vno);
+  err = lzfw_pwritev(zhfs, &cred, meta_vno, &iov, 1, 0 /* offset */);
+
+  /* close it */
+  (void) lzfw_close(zhfs, &cred, vno, O_RDWR|O_CREAT);
+  return -err;
 } /* write meta */
 
 int ZFStore::mount() {
@@ -369,6 +456,15 @@ int ZFStore::queue_transactions(list<Transaction*>& tls,
 
 ZFStore::~ZFStore()
 {
+  int err;
+
+  if (zhfs) {
+    std::unique_lock<std::mutex> lck(mtx);
+    // close root vnode
+    err = lzfw_closedir(zhfs, &cred, meta_vno);
+    meta_vno = nullptr;
+  }
+
   --n_instances;
   if (n_instances == 0) {
     std::unique_lock<std::mutex> l(mtx);

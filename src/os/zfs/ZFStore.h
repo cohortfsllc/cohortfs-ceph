@@ -25,13 +25,19 @@ extern "C" {
 }
 #include "os/zfs/FragTreeIndex.h"
 
+static creden_t cred = {0, 0};
 
 class ZFStore : public ObjectStore
 {
 private:
   static lzfw_handle_t* zhd;
   static std::atomic<uint32_t> n_instances;
+  std::string root_ds;
   lzfw_vfs_t* zhfs; /* root dataset handle */
+  inogen_t meta_ino;
+  lzfw_vnode_t* meta_vno; /* root dataset root vno */
+
+  int attach_meta();
 
 public:
   class ZCollection;
@@ -42,6 +48,7 @@ public:
     lzfw_vnode_t* vno; /* opaque */
     inogen_t ino;
 
+    std::mutex mtx;
     std::shared_timed_mutex omap_lock;
     typedef std::unique_lock<std::shared_timed_mutex> unique_lock;
     typedef std::shared_lock<std::shared_timed_mutex> shared_lock;
