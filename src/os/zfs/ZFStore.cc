@@ -240,12 +240,10 @@ int ZFStore::write_meta(const std::string& key, const std::string& value)
 
 int ZFStore::mount() {
   assert(zhd);
-
-  /* path -> pool */
-  zhfs = lzfw_mount(path.c_str(), "/tank" /* XXX */, "" /* XXX */);
+  attach_meta(); /* attach osdfs, if not already */
   if (!zhfs) {
     dout(-1) << "lzfw_mount() failed"
-	     << " path=" << path << " dir=" << "/tank"
+	     << " path=" << path << " ds=" << root_ds
 	     << " opts=" << "" << dendl;
     return -EINVAL;
   }
