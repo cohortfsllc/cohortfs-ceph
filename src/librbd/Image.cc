@@ -178,14 +178,16 @@ namespace librbd {
   {
     int r;
     uint64_t off = 0;
+    size_t lenread;
     do {
       bufferlist bl;
       r = rc->objecter->read(header_oid, volume, off, volume->op_size(), &bl);
       if (r < 0)
 	throw std::error_condition(-r, std::generic_category());
+      lenread = bl.length();
       header_bl.claim_append(bl);
       off += r;
-    } while ((uint32_t)r == volume->op_size());
+    } while (lenread == volume->op_size());
 
     if (memcmp(header_text, header_bl.c_str(), sizeof(header_text))) {
       lderr(rc->cct) << "unrecognized header format" << dendl;

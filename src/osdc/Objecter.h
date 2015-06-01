@@ -57,7 +57,6 @@ namespace rados {
   using boost::intrusive::set_base_hook;
   using boost::intrusive::link_mode;
   using boost::intrusive::normal_link;
-  using boost::intrusive::auto_unlink;
   using boost::intrusive::constant_time_size;
   using boost::intrusive::linear;
   using boost::intrusive::cache_last;
@@ -179,7 +178,7 @@ namespace rados {
     struct OSDSession;
     struct Op;
 
-    struct SubOp : public set_base_hook<link_mode<auto_unlink>>  {
+    struct SubOp : public set_base_hook<link_mode<normal_link>>  {
       ceph_tid_t tid;
       int incarnation;
       OSDSession *session;
@@ -206,7 +205,7 @@ namespace rados {
 	  attempts(0), done(false), parent(p) { }
     };
 
-    struct op_base : public set_base_hook<link_mode<auto_unlink> >,
+    struct op_base : public set_base_hook<link_mode<normal_link>>,
 		     public RefCountedObject {
       int flags;
       oid_t oid;
@@ -288,7 +287,7 @@ namespace rados {
       void finish(int r);
     };
 
-    struct StatfsOp : public set_base_hook<link_mode<auto_unlink> > {
+    struct StatfsOp : public set_base_hook<link_mode<normal_link>> {
       ceph_tid_t tid;
       struct ceph_statfs *stats;
       Context *onfinish;
@@ -297,7 +296,7 @@ namespace rados {
     };
 
     // -- osd sessions --
-    struct OSDSession : public set_base_hook<link_mode<auto_unlink> >,
+    struct OSDSession : public set_base_hook<link_mode<normal_link>>,
 			public RefCountedObject {
       std::shared_timed_mutex lock;
       typedef std::unique_lock<std::shared_timed_mutex> unique_lock;
@@ -305,10 +304,7 @@ namespace rados {
 
       static constexpr const uint32_t max_ops_inflight = 5;
       static constexpr const uint64_t max_data_inflight = 16 << 20;
-      set<SubOp, constant_time_size<false> > subops_inflight;
-      uint32_t ops_inflight; // We can't use both constant_time_size
-			     // and auto_unlink
-      uint64_t data_inflight;
+      set<SubOp, constant_time_size<false>> subops_inflight;
 
 
       static constexpr const uint64_t max_ops_queued = 100;
@@ -1370,7 +1366,8 @@ namespace rados {
     typedef std::unique_lock<std::mutex> unique_lock;
     std::condition_variable cond;
     struct flush_queue;
-    class BatchComplete : public slist_base_hook<link_mode<auto_unlink> >
+    class BatchComplete : public slist_base_hook<
+      link_mode<boost::intrusive::auto_unlink>>
     {
       friend Flusher;
       Flusher& f;

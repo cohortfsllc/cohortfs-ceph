@@ -38,8 +38,8 @@ class ThreadPool {
   static const uint32_t FLAG_DROP_JOBS_ON_SHUTDOWN = 0x1;
 
   ThreadPool(CephContext *cct, uint32_t max_threads = 0,
-             uint32_t flags = FLAG_NONE,
-             ceph::timespan idle_timeout = 120s)
+	     uint32_t flags = FLAG_NONE,
+	     ceph::timespan idle_timeout = 120s)
     : cct(cct),
       max_threads(max_threads),
       idle_timeout(idle_timeout),
@@ -67,7 +67,7 @@ class ThreadPool {
 
     bi::list_member_hook<> pool_hook;
     typedef bi::list<Worker, bi::member_hook<Worker, bi::list_member_hook<>,
-                                            &Worker::pool_hook>> PoolQueue;
+					     &Worker::pool_hook>> PoolQueue;
 
     // use an auto-unlink hook for the idle list, because we won't necessarily
     // clean it up on shutdown.  we also don't require constant time size
@@ -75,8 +75,8 @@ class ThreadPool {
     typedef bi::list_member_hook<auto_unlink_mode> auto_unlink_member_hook;
     auto_unlink_member_hook idle_hook;
     typedef bi::list<Worker, bi::member_hook<Worker, auto_unlink_member_hook,
-                                             &Worker::idle_hook>,
-                     bi::constant_time_size<false>> IdleQueue;
+					     &Worker::idle_hook>,
+		     bi::constant_time_size<false>> IdleQueue;
   };
 
   CephContext *const cct;

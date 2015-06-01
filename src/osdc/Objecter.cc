@@ -112,10 +112,11 @@ namespace rados {
       check_latest_map_ops.erase(i->first);
     }
 
-    while(!statfs_ops.empty()) {
+    while (!statfs_ops.empty()) {
       auto i = statfs_ops.begin();
-      i->unlink();
-      delete &(*i);
+      auto r = &(*i);
+      statfs_ops.erase(i);
+      delete r;
     }
 
     while(!homeless_session->subops_inflight.empty()) {
@@ -1009,7 +1010,7 @@ namespace rados {
   {
     assert(subop.session == &from);
 
-    subop.unlink();
+    from.subops_inflight.erase(subop);
     put_session(from);
     subop.session = nullptr;
 
@@ -1460,7 +1461,7 @@ namespace rados {
 
   void Objecter::_finish_statfs_op(StatfsOp& op)
   {
-    op.unlink();
+    statfs_ops.erase(op);
 
     if (op.ontimeout) {
       timer.cancel_event(op.ontimeout);
