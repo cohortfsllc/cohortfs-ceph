@@ -1361,107 +1361,90 @@ namespace rados {
   // more involved for RBD.
 
   class Flusher {
+    struct flush_queue;
+    friend flush_queue;
+    flush_queue* fq;
     std::mutex lock;
     typedef std::lock_guard<std::mutex> lock_guard;
     typedef std::unique_lock<std::mutex> unique_lock;
-    std::condition_variable cond;
-    struct flush_queue;
-    class BatchComplete : public slist_base_hook<
-      link_mode<boost::intrusive::auto_unlink>>
-    {
-      friend Flusher;
-      Flusher& f;
-      int* r;
-      flush_queue* fq;
+
+    struct BatchComplete : public slist_base_hook<link_mode<normal_link>> {
+      flush_queue& fq;
       op_callback cb;
 
-      BatchComplete(Flusher& _f,
-		    int *r,
-		    op_callback _cb) : f(_f), fq(nullptr), cb(_cb) {}
+      BatchComplete(flush_queue& _fq,
+		    op_callback _cb) : fq(_fq), cb(_cb) {}
 
-    public:
-      void operator()(int s) {
-	{
-	  {
-	    unique_lock l(f.lock);
-	    unlink();
-	    if (r && ((s < 0) && (*r == 0)))
-	      *r = s;
-	    if (fq)
-	      (*fq)(s, l);
-	  }
-	}
+      void operator()(int r) {
+	(fq)(r, *this);
 	if (cb)
-	  cb(s);
+	  cb(r);
       }
     };
-    slist<BatchComplete, constant_time_size<false> > completions;
-    int r;
 
     struct flush_queue {
+      friend Flusher;
+      Flusher& f;
+      bool flushed;
       int r;
+      slist<BatchComplete> completions;
       op_callback cb;
-      slist<BatchComplete, constant_time_size<false> > completions;
-      uint32_t ref;
       std::condition_variable c;
-      flush_queue(
-	int _r,
-	slist<BatchComplete, constant_time_size<false> >& _completions,
-	op_callback&& _cb) : r(_r), cb(_cb), ref(0) {
-	while (!_completions.empty()) {
-	  // Since I have to iterate over it anyway and I lose element
-	  // unlink if I turn auto_unlink off, I may as well do it
-	  // inline rather than loop twice
-	  auto& c = _completions.front();
-	  c.unlink();
-	  c.r = nullptr;
-	  c.fq = this;
-	  completions.push_front(c);
+      flush_queue(Flusher& _f) : f(_f), flushed(false), r(0) { }
+      ~flush_queue() {
+	lock_guard l(f.lock);
+	for (auto& c : completions) {
+	  c(-EINTR);
 	}
-	assert(!completions.empty());
       }
-      int wait(unique_lock& l) {
+
+      int flush(unique_lock& l) {
 	assert(l.owns_lock());
-	++ref;
 	assert(!completions.empty());
+	flushed = true;
 	c.wait(l, [this](){ return completions.empty(); });
 	int _r = r;
-	if (--ref == 0)
-	  delete this;
+	delete this;
 	return _r;
       }
-      void operator()(int _r, unique_lock& l) {
-	assert(l.owns_lock());
+
+      void flush(op_callback&& _cb) {
+	assert(!completions.empty());
+	flushed = true;
+	cb.swap(_cb);
+      }
+
+      void operator()(int _r, BatchComplete& b) {
+	unique_lock l(f.lock);
 	// Our caller holds the lock.
 	if (r == 0) {
 	  r = _r;
 	}
-	if (completions.empty()) {
-	  c.notify_all();
+	completions.erase(completions.iterator_to(b));
+	delete &b;
+	if (completions.empty() && flushed) {
 	  if (cb) {
 	    l.unlock();
 	    cb(r);
-	  }
-	  if (!ref)
+	    // We have no thread waiting on us, so delete after
+	    // calling calback.
 	    delete this;
+	  } else {
+	    // We do have a thread waiting, so wake it up and let it
+	    // delete us.
+	    c.notify_one();
+	  }
 	}
       }
     };
 
   public:
-    Flusher() : r(0) {}
-    ~Flusher() {
-      lock_guard l(lock);
-      for (auto& c : completions) {
-	c(-EINTR);
-      }
-    }
-
+    Flusher() : fq(new flush_queue(*this)) { }
     op_callback completion(op_callback&& c = nullptr) {
-      BatchComplete* cb = new BatchComplete(*this, &r, c);
+      BatchComplete* cb = new BatchComplete(*fq, c);
       {
 	lock_guard l(lock);
-	completions.push_front(*cb);
+	fq->completions.push_front(*cb);
       }
       return ref(*cb);
     }
@@ -1470,27 +1453,31 @@ namespace rados {
       // Returns 0 if no writes have failed since the last flush.
       unique_lock l(lock);
 
-      if (completions.empty()) {
-	int my_r = r;
-	r = 0;
-	return my_r;
+      if (fq->completions.empty()) {
+	int r = fq->r;
+	fq->r = 0;
+	return r;
       }
-      auto nf = new flush_queue(r, completions, nullptr);
-      return nf->wait(l);
+
+      flush_queue* oq = fq;
+      fq = new flush_queue(*this);
+      return oq->flush(l);
     }
 
 
     void flush(op_callback&& cb) {
       unique_lock l(lock);
 
-      if (!completions.empty())
-	new flush_queue(r, completions, std::move(cb));
-
-      if (cb) {
+      if (fq->completions.empty()) {
+	int r = fq->r;
+	fq->r = 0;
+	l.unlock();
 	cb(r);
-	r = 0;
-	return;
       }
+
+      flush_queue* oq = fq;
+      fq = new flush_queue(*this);
+      oq->flush(move(cb));
     }
   };
 };
