@@ -39,6 +39,8 @@ using namespace std;
 #define HTTP_RESPONSE_STR "RespCode"
 #define CEPH_CRYPTO_HMACSHA1_DIGESTSIZE 20
 
+CephContext *cct;
+
 extern "C" int ceph_armor(char *dst, const char *dst_end,
 			  const char *src, const char *end);
 enum key_type {
@@ -321,7 +323,7 @@ static int delete_bucket(void){
 
 RGWCORSRule *xml_to_cors_rule(string s){
   RGWCORSConfiguration_S3 *cors_config;
-  RGWCORSXMLParser_S3 parser(g_ceph_context);
+  RGWCORSXMLParser_S3 parser(cct);
   const string *data = g_test->get_response_data();
   if (!parser.init()) {
     return NULL;
@@ -886,9 +888,9 @@ int main(int argc, char *argv[]){
   argv_to_vec(argc, (const char **)argv, args);
 
   global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
-  common_init_finish(g_ceph_context);
+  common_init_finish(cct);
   g_test = new test_cors_helper();
-  finisher = new Finisher(g_ceph_context);
+  finisher = new Finisher(cct);
 #ifdef GTEST
   ::testing::InitGoogleTest(&argc, argv);
 #endif
