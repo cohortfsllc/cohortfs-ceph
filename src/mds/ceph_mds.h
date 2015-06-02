@@ -71,6 +71,18 @@ struct libmds {
    */
   virtual int lookup(inodenum_t parent, const char *name, inodenum_t *ino) = 0;
 
+  /**
+   * Query the attributes of a file.
+   * @see libmds_getattr()
+   */
+  virtual int getattr(inodenum_t ino, struct stat *st) = 0;
+
+  /**
+   * Set the attributes of a file.
+   * @see libmds_setattr()
+   */
+  virtual int setattr(inodenum_t ino, const struct stat *st) = 0;
+
  protected:
   /** Destructor protected: must be deleted by libmds_cleanup() */
   virtual ~libmds() {}
@@ -188,6 +200,30 @@ extern "C" {
    */
   int libmds_lookup(struct libmds *mds, inodenum_t parent, const char *name,
                     inodenum_t *ino);
+
+  /**
+   * Query the attributes of a file.
+   *
+   * @param mds     The libmds object returned by libmds_init()
+   * @param inode   Inode number of the file
+   * @param[out] st Pointer to the attributes to write
+   *
+   * @return Returns 0 on success or a negative error code.
+   * @retval -ENOENT if a file with inode number \a ino does not exist.
+   */
+  int libmds_getattr(struct libmds *mds, inodenum_t ino, struct stat *st);
+
+  /**
+   * Set the attributes of a file.
+   *
+   * @param mds   The libmds object returned by libmds_init()
+   * @param inode Inode number of the file
+   * @param st    Pointer to the attributes to write
+   *
+   * @return Returns 0 on success or a negative error code.
+   * @retval -ENOENT if a file with inode number \a ino does not exist.
+   */
+  int libmds_setattr(struct libmds *mds, inodenum_t ino, const struct stat *st);
 
 #ifdef __cplusplus
 } /* extern "C" */

@@ -4,6 +4,8 @@
 #ifndef COHORT_MDS_FSOBJ_H
 #define COHORT_MDS_FSOBJ_H
 
+#include <mutex>
+
 #include "common/cohort_function.h"
 #include "include/types.h" // inodeno_t
 #include "mds_types.h"
@@ -28,20 +30,26 @@ class FSObj {
  public:
   const _inodeno_t ino;
  private:
+  mutable std::mutex mtx;
   ObjAttr attr;
-  std::map<std::string, FSObj*> entries;
 
+  struct Dir {
+    Dir() : gen(0) {}
+    mutable std::mutex mtx;
+    std::map<std::string, FSObj*> entries;
+    uint64_t gen; // for readdir verf
+  } dir;
  public:
   FSObj(_inodeno_t ino, const identity &who, int type);
+
+  // attr.type is immutable, so we don't need to lock these
+  bool is_reg() const { return S_ISREG(attr.type); }
+  bool is_dir() const { return S_ISDIR(attr.type); }
 
   int adjust_nlinks(int n) { return attr.nlinks += n; }
 
   int getattr(int mask, ObjAttr &attrs) const;
   int setattr(int mask, const ObjAttr &attrs);
-
-  bool is_reg() const { return S_ISREG(attr.type); }
-  bool is_dir() const { return S_ISDIR(attr.type); }
-  bool is_empty() const { return entries.empty(); }
 
   int lookup(const std::string &name, FSObj **obj) const;
   int link(const std::string &name, FSObj *obj);

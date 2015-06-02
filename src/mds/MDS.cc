@@ -185,6 +185,32 @@ int MDS::lookup(_inodeno_t parent, const char *name, _inodeno_t *ino)
   return 0;
 }
 
+int MDS::getattr(_inodeno_t ino, int mask, ObjAttr &attr)
+{
+  if (!cache)
+    return -ENODEV;
+
+  // find the object
+  FSObj *obj = cache->find(ino);
+  if (obj == nullptr)
+    return -ENOENT;
+
+  return obj->getattr(mask, attr);
+}
+
+int MDS::setattr(_inodeno_t ino, int mask, const ObjAttr &attr)
+{
+  if (!cache)
+    return -ENODEV;
+
+  // find the object
+  FSObj *obj = cache->find(ino);
+  if (obj == nullptr)
+    return -ENOENT;
+
+  return obj->setattr(mask, attr);
+}
+
 bool MDS::ms_dispatch(Message *m)
 {
   bool ret = true;
