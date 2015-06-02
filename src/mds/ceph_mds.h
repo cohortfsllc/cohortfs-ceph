@@ -18,6 +18,20 @@
 
 typedef uint64_t inodenum_t;
 
+/**
+ * Callback for libmds_readdir, containing a single directory entry.
+ *
+ * @param name  Filename of the directory entry
+ * @param ino   Inode number of the directory entry
+ * @param pos   Index of the next directory entry
+ * @param gen   Generation number of the directory
+ * @param user  User data passed to libmds_readdir()
+ *
+ * @return 0 if the caller is prepared to accept more entries
+ */
+typedef int (*libmds_readdir_fn)(const char *name, inodenum_t ino,
+                                 uint64_t pos, uint64_t gen, void *user);
+
 #ifdef __cplusplus
 /**
  * The abstract C++ libmds interface, whose member functions take
@@ -70,6 +84,13 @@ struct libmds {
    * @see libmds_lookup()
    */
   virtual int lookup(inodenum_t parent, const char *name, inodenum_t *ino) = 0;
+
+  /**
+   * List the entries of a directory.
+   * @see libmds_readdir()
+   */
+  virtual int readdir(inodenum_t dir, uint64_t pos, uint64_t gen,
+                      libmds_readdir_fn callback, void *user) = 0;
 
   /**
    * Query the attributes of a file.
@@ -200,6 +221,25 @@ extern "C" {
    */
   int libmds_lookup(struct libmds *mds, inodenum_t parent, const char *name,
                     inodenum_t *ino);
+
+  /**
+   * List the entries of a directory.
+   *
+   * @param mds   The libmds object returned by libmds_init()
+   * @param dir   Inode number of the directory
+   * @param pos   Index of the first directory entry to list
+   * @param gen   Generation number to detect changes during listing
+   * @param cb    Callback function to receive each directory entry
+   * @param user  User data passed as last argument to \a cb
+   *
+   * @return Returns 0 on success or a negative error code.
+   * @retval -ENOENT if a file with inode number \a dir does not exist.
+   * @retval -ENOTDIR if the parent is not a directory.
+   * @retval -EOF if \a pos is past the end of the directory.
+   * @retval -ESTALE if \a gen doesn't match current directory.
+   */
+  int libmds_readdir(struct libmds *mds, inodenum_t dir, uint64_t pos,
+                     uint64_t gen, libmds_readdir_fn cb, void *user);
 
   /**
    * Query the attributes of a file.

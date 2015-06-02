@@ -185,6 +185,20 @@ int MDS::lookup(_inodeno_t parent, const char *name, _inodeno_t *ino)
   return 0;
 }
 
+int MDS::readdir(_inodeno_t ino, uint64_t pos, uint64_t gen,
+                 libmds_readdir_fn cb, void *user)
+{
+  if (!cache)
+    return -ENODEV;
+
+  // find the object
+  FSObj *obj = cache->find(ino);
+  if (obj == nullptr)
+    return -ENOENT;
+
+  return obj->readdir(pos, gen, cb, user);
+}
+
 int MDS::getattr(_inodeno_t ino, int mask, ObjAttr &attr)
 {
   if (!cache)

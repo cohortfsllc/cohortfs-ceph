@@ -62,6 +62,33 @@ int FSObj::lookup(const std::string &name, FSObj **obj) const
   return 0;
 }
 
+int FSObj::readdir(uint64_t pos, uint64_t gen,
+                   libmds_readdir_fn cb, void *user) const
+{
+  if (!is_dir())
+    return -ENOTDIR;
+
+  std::lock_guard<std::mutex> lock(dir.mtx);
+  if (pos > 0 && gen != dir.gen)
+    return -ESTALE;
+
+  if (pos >= dir.entries.size())
+    return -EOF;
+
+  // advance to the requested position
+  auto i = dir.entries.begin();
+  for (uint64_t j = 0; j < pos; j++)
+    ++i;
+
+  // pass entries to the callback function until it returns an error
+  for (; i != dir.entries.end(); ++i) {
+    int r = cb(i->first.c_str(), i->second->ino, ++pos, dir.gen, user);
+    if (r)
+      break;
+  }
+  return 0;
+}
+
 int FSObj::link(const std::string &name, FSObj *obj)
 {
   if (!is_dir())

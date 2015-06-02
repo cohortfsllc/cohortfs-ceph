@@ -5,6 +5,7 @@
 #define COHORT_MDS_TYPES_H
 
 #include "include/ceph_time.h"
+#include "ceph_mds.h"
 
 namespace cohort {
 namespace mds {

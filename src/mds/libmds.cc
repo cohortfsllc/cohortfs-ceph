@@ -61,7 +61,6 @@ class LibMDS : public libmds {
  public:
   CephContext *cct;
  private:
-
   MessageFactory *factory;
   MDS *mds;
 
@@ -80,6 +79,8 @@ public:
   int mkdir(inodenum_t parent, const char *name);
   int unlink(inodenum_t parent, const char *name);
   int lookup(inodenum_t parent, const char *name, inodenum_t *ino);
+  int readdir(inodenum_t dir, uint64_t pos, uint64_t gen,
+              libmds_readdir_fn cb, void *user);
 
   int getattr(inodenum_t ino, struct stat *st);
   int setattr(inodenum_t ino, const struct stat *st);
@@ -179,6 +180,12 @@ int LibMDS::lookup(inodenum_t parent, const char *name, inodenum_t *ino)
   return mds->lookup(parent, name, ino);
 }
 
+int LibMDS::readdir(inodenum_t dir, uint64_t pos, uint64_t gen,
+                    libmds_readdir_fn cb, void *user)
+{
+  return mds->readdir(dir, pos, gen, cb, user);
+}
+
 int LibMDS::getattr(inodenum_t ino, struct stat *st)
 {
   const int mask = ATTR_SIZE | ATTR_MODE |
@@ -242,9 +249,8 @@ struct libmds* libmds_init(const struct libmds_init_args *args)
     // existing mds with this name?
     std::pair<mdsmap::iterator, bool> result =
       mdslist.insert(mdsmap::value_type(args->id, nullptr));
-    if (!result.second) {
+    if (!result.second)
       return nullptr;
-    }
 
     result.first->second = mds = new cohort::mds::LibMDS(args->id);
   }
@@ -351,6 +357,18 @@ int libmds_lookup(struct libmds *mds, inodenum_t parent, const char *name,
   } catch (std::exception &e) {
     CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
     lderr(cct) << "libmds_lookup caught exception " << e.what() << dendl;
+    return -EFAULT;
+  }
+}
+
+int libmds_readdir(struct libmds *mds, inodenum_t dir, uint64_t pos,
+                   uint64_t gen, libmds_readdir_fn cb, void *user)
+{
+  try {
+    return mds->readdir(dir, pos, gen, cb, user);
+  } catch (std::exception &e) {
+    CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
+    lderr(cct) << "libmds_readdir caught exception " << e.what() << dendl;
     return -EFAULT;
   }
 }
