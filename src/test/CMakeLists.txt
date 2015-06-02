@@ -1839,3 +1839,10 @@ target_link_libraries(test_zfsio global common
   boost_filesystem ${ZFS_WRAP} ${UNITTEST_LIBS})
 set_target_properties(test_zfsio PROPERTIES COMPILE_FLAGS
   "${UNITTEST_CXX_FLAGS}")
+
+# test_huge
+add_executable(test_huge test_huge.cc)
+target_link_libraries(test_huge global common
+  ${UNITTEST_LIBS})
+set_target_properties(test_huge PROPERTIES COMPILE_FLAGS
+  "${UNITTEST_CXX_FLAGS}")
