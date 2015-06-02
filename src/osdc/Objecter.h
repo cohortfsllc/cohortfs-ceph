@@ -134,8 +134,6 @@ namespace rados {
   private:
     OSDMap *osdmap;
     vector<function<void()> > osdmap_notifiers;
-  public:
-    CephContext *cct;
 
   private:
     std::atomic<uint64_t> last_tid;
@@ -409,7 +407,7 @@ namespace rados {
 	     ceph::timespan mon_timeout = std::chrono::seconds(0),
 	     ceph::timespan osd_timeout = std::chrono::seconds(0)) :
       Dispatcher(cct_), messenger(m), monc(mc),
-      osdmap(new OSDMap), cct(cct_),
+      osdmap(new OSDMap),
       last_tid(0),
       client_inc(-1),
       num_unacked(0), num_uncommitted(0),

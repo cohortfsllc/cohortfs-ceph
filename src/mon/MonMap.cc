@@ -302,6 +302,7 @@ int MonMap::build_initial(CephContext *cct, ostream& errout)
     std::string m_name("mon");
     m_name += ".";
     m_name += *m;
+    errout << "Trying " << m_name << std::endl;
     sections.push_back(m_name);
     sections.push_back("mon");
     sections.push_back("global");

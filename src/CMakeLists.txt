@@ -325,7 +325,7 @@ if (MCAS_FOUND)
   target_link_libraries(common PRIVATE ${MCAS_LIBRARIES})
 endif (MCAS_FOUND)
 
-target_link_libraries(common PRIVATE erasure_code json_spirit ${CRYPTO_LIBS} rt ${Boost_LIBRARIES} ${EXTRALIBS})
+target_link_libraries(common PRIVATE erasure_code json_spirit ${CRYPTO_LIBS} rt ${Boost_LIBRARIES} ${PYTHON_LIBRARIES} ${EXTRALIBS})
 
 set(libglobal_srcs
   global/global_init.cc
@@ -375,8 +375,12 @@ target_link_libraries(rados librados global cls_lock_client boost_filesystem ${C
 
 install(TARGETS rados DESTINATION bin)
 
+# Python bindings
+add_subdirectory(pybind)
+
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/src/pybind/
-  DESTINATION ${PYTHON_INSTDIR})
+  DESTINATION ${PYTHON_INSTDIR}
+  FILES_MATCHING PATTERN "*.py")
 
 # Monitor
 set(lib_mon_srcs

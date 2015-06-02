@@ -51,7 +51,7 @@ if MYDIR.endswith('src') and \
 import argparse
 import errno
 import json
-import rados
+import pyrados
 import signal
 import socket
 import string
@@ -582,18 +582,11 @@ def main():
     if parsed_args.cluster:
         clustername = parsed_args.cluster
 
-    try:
-        cluster_handle = rados.Rados(name=name, clustername=clustername,
-                                     conf_defaults=conf_defaults,
-                                     conffile=conffile)
-        retargs = cluster_handle.conf_parse_argv(childargs)
-    except rados.Error as e:
-        print >> sys.stderr, 'Error initializing cluster client: {0}'.\
-            format(e.__class__.__name__)
-        return 1
+    cluster_handle = pyrados.factory(conffile)
+    #retargs = cluster_handle.conf_parse_argv(childargs)
 
-    #tmp = childargs
-    childargs = retargs
+    ##tmp = childargs
+    #childargs = retargs
     if not childargs:
         childargs = []
 
@@ -622,17 +615,9 @@ def main():
             print >> sys.stderr, '"ping" requires a monitor name as argument: "ping mon.<id>"'
             return 1
 
-    try:
-        if childargs and childargs[0] == 'ping':
-            return ping_monitor(cluster_handle, childargs[1])
-        cluster_handle.connect(timeout=timeout)
-    except KeyboardInterrupt:
-        print >> sys.stderr, 'Cluster connection aborted'
-        return 1
-    except Exception as e:
-        print >> sys.stderr, 'Error connecting to cluster: {0}'.\
-            format(e.__class__.__name__)
-        return 1
+    if childargs and childargs[0] == 'ping':
+        return ping_monitor(cluster_handle, childargs[1])
+    cluster_handle.connect()
 
     if parsed_args.help:
         return do_extended_help(parser, childargs)

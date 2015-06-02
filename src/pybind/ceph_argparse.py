@@ -1057,10 +1057,8 @@ def send_command(cluster, target=('mon', ''), cmd=None, inbuf='', timeout=0,
             if verbose:
                 print >> sys.stderr, '{0} to {1}'.\
                     format(cmd, target[0])
-            if target[1] == '':
-                ret, outbuf, outs = cluster.mon_command(cmd, inbuf, timeout)
-            else:
-                ret, outbuf, outs = cluster.mon_command(cmd, inbuf, timeout, target[1])
+            ret, outbuf, outs = \
+                    cluster.mon_command(cmd, inbuf)
         else:
             raise ArgumentValid("Bad target type '{0}'".format(target[0]))
 
@@ -1109,7 +1107,7 @@ def json_command(cluster, target=('mon', ''), prefix=None, argdict=None,
 
     except Exception as e:
         if not isinstance(e, ArgumentError):
-            raise RuntimeError('"{0}": exception {1}'.format(cmd, e))
+            raise RuntimeError('"{0}": exception {1}'.format(cmddict, e))
         else:
             raise
 

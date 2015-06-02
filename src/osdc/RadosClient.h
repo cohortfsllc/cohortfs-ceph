@@ -38,16 +38,17 @@ namespace rados {
   class RadosClient : public Dispatcher
   {
   public:
+    enum State {
+      DISCONNECTED,
+      CONNECTING,
+      CONNECTED,
+    };
     md_config_t *conf;
     typedef std::function<void(
       const string& who, ceph::real_time when,
       uint64_t seq, int level, const string& what)> log_cb_t;
   private:
-    enum {
-      DISCONNECTED,
-      CONNECTING,
-      CONNECTED,
-    } state;
+    State state;
 
     MonClient monclient;
     MessageFactory factory;
@@ -89,6 +90,7 @@ namespace rados {
     int ping_monitor(string mon_id, string *result);
     int connect();
     void shutdown();
+    State get_state() { return state; }
 
     uint64_t get_instance_id();
 
