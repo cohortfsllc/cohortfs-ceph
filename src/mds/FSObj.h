@@ -52,6 +52,8 @@ class FSObj {
   int setattr(int mask, const ObjAttr &attrs);
 
   int lookup(const std::string &name, FSObj **obj) const;
+  int readdir(uint64_t pos, uint64_t gen,
+              libmds_readdir_fn cb, void *user) const;
   int link(const std::string &name, FSObj *obj);
   int unlink(const std::string &name, FSObj **obj);
 #if 0
