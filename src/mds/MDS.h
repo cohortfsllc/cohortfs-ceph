@@ -64,6 +64,8 @@ class MDS : public Dispatcher {
              const identity &who, int type);
   int unlink(_inodeno_t parent, const char *name);
   int lookup(_inodeno_t parent, const char *name, _inodeno_t *ino);
+  int getattr(_inodeno_t ino, int mask, ObjAttr &attr);
+  int setattr(_inodeno_t ino, int mask, const ObjAttr &attr);
 
   // void handle_mds_beacon(MMDSBeacon *m);
   bool ms_dispatch(Message *m);

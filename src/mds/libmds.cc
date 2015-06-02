@@ -80,6 +80,9 @@ public:
   int mkdir(inodenum_t parent, const char *name);
   int unlink(inodenum_t parent, const char *name);
   int lookup(inodenum_t parent, const char *name, inodenum_t *ino);
+
+  int getattr(inodenum_t ino, struct stat *st);
+  int setattr(inodenum_t ino, const struct stat *st);
 };
 
 
@@ -174,6 +177,50 @@ int LibMDS::unlink(inodenum_t parent, const char *name)
 int LibMDS::lookup(inodenum_t parent, const char *name, inodenum_t *ino)
 {
   return mds->lookup(parent, name, ino);
+}
+
+int LibMDS::getattr(inodenum_t ino, struct stat *st)
+{
+  const int mask = ATTR_SIZE | ATTR_MODE |
+      ATTR_GROUP | ATTR_OWNER |
+      ATTR_ATIME | ATTR_MTIME | ATTR_CTIME |
+      ATTR_NLINKS | ATTR_TYPE | ATTR_RAWDEV;
+
+  ObjAttr attr;
+  int r = mds->getattr(ino, mask, attr);
+  if (r == 0) {
+    st->st_mode = attr.mode | attr.type;
+    st->st_nlink = attr.nlinks;
+    st->st_uid = attr.user;
+    st->st_gid = attr.group;
+    st->st_rdev = attr.rawdev;
+    st->st_size = attr.filesize;
+    st->st_atime = ceph::real_clock::to_time_t(attr.atime);
+    st->st_mtime = ceph::real_clock::to_time_t(attr.mtime);
+    st->st_ctime = ceph::real_clock::to_time_t(attr.ctime);
+  }
+  return r;
+}
+
+int LibMDS::setattr(inodenum_t ino, const struct stat *st)
+{
+  const int mask = ATTR_MODE | ATTR_GROUP | ATTR_OWNER |
+      ATTR_ATIME | ATTR_MTIME | ATTR_CTIME |
+      ATTR_NLINKS | ATTR_TYPE | ATTR_RAWDEV;
+
+  ObjAttr attr;
+  attr.mode = st->st_mode & ~S_IFMT;
+  attr.type = st->st_mode & S_IFMT;
+  attr.nlinks = st->st_nlink;
+  attr.user = st->st_uid;
+  attr.group = st->st_gid;
+  attr.rawdev = st->st_rdev;
+  attr.filesize = st->st_size;
+  attr.atime = ceph::real_clock::from_time_t(st->st_atime);
+  attr.mtime = ceph::real_clock::from_time_t(st->st_mtime);
+  attr.ctime = ceph::real_clock::from_time_t(st->st_ctime);
+
+  return mds->setattr(ino, mask, attr);
 }
 
 } // namespace mds
@@ -304,6 +351,28 @@ int libmds_lookup(struct libmds *mds, inodenum_t parent, const char *name,
   } catch (std::exception &e) {
     CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
     lderr(cct) << "libmds_lookup caught exception " << e.what() << dendl;
+    return -EFAULT;
+  }
+}
+
+int libmds_getattr(struct libmds *mds, inodenum_t ino, struct stat *st)
+{
+  try {
+    return mds->getattr(ino, st);
+  } catch (std::exception &e) {
+    CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
+    lderr(cct) << "libmds_getattr caught exception " << e.what() << dendl;
+    return -EFAULT;
+  }
+}
+
+int libmds_setattr(struct libmds *mds, inodenum_t ino, const struct stat *st)
+{
+  try {
+    return mds->setattr(ino, st);
+  } catch (std::exception &e) {
+    CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
+    lderr(cct) << "libmds_setattr caught exception " << e.what() << dendl;
     return -EFAULT;
   }
 }

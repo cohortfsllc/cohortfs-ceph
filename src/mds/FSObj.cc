@@ -34,12 +34,17 @@ static void copy_attrs(int mask, ObjAttr &to, const ObjAttr &from)
 
 int FSObj::getattr(int mask, ObjAttr &attrs) const
 {
+  std::lock_guard<std::mutex> lock(mtx);
   copy_attrs(mask, attrs, attr);
   return 0;
 }
 
 int FSObj::setattr(int mask, const ObjAttr &attrs)
 {
+  if (mask & ATTR_TYPE) // can't change type with setattr
+    return -EINVAL;
+
+  std::lock_guard<std::mutex> lock(mtx);
   copy_attrs(mask, attr, attrs);
   return 0;
 }
@@ -48,8 +53,10 @@ int FSObj::lookup(const std::string &name, FSObj **obj) const
 {
   if (!is_dir())
     return -ENOTDIR;
-  auto i = entries.find(name);
-  if (i == entries.end())
+
+  std::lock_guard<std::mutex> lock(dir.mtx);
+  auto i = dir.entries.find(name);
+  if (i == dir.entries.end())
     return -ENOENT;
   *obj = i->second;
   return 0;
@@ -59,20 +66,30 @@ int FSObj::link(const std::string &name, FSObj *obj)
 {
   if (!is_dir())
     return -ENOTDIR;
-  auto i = entries.insert(std::make_pair(name, obj));
-  return i.second ? 0 : -EEXIST;
+
+  std::lock_guard<std::mutex> lock(dir.mtx);
+  auto i = dir.entries.insert(std::make_pair(name, obj));
+  if (!i.second)
+    return -EEXIST;
+  dir.gen++;
+  return 0;
 }
 
 int FSObj::unlink(const std::string &name, FSObj **obj)
 {
   if (!is_dir())
     return -ENOTDIR;
-  auto i = entries.find(name);
-  if (i == entries.end())
+
+  std::lock_guard<std::mutex> lock(dir.mtx);
+  auto i = dir.entries.find(name);
+  if (i == dir.entries.end())
     return -ENOENT;
-  if (!i->second->is_empty())
+
+  std::lock_guard<std::mutex> child_lock(i->second->dir.mtx);
+  if (!i->second->dir.entries.empty())
     return -ENOTEMPTY;
   *obj = i->second;
-  entries.erase(i);
+  dir.entries.erase(i);
+  dir.gen++;
   return 0;
 }

@@ -1,6 +1,7 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
+#include <sys/stat.h>
 #include <signal.h>
 #include <stdio.h>
 #include <pthread.h>
@@ -39,6 +40,12 @@ static int test_unlink_notempty(struct libmds *mds, inodenum_t root)
   r = libmds_unlink(mds, root, "dir");
   if (r) {
     fprintf(stderr, "libmds_unlink(\"dir\") failed with %d\n", r);
+    return r;
+  }
+  struct stat st;
+  r = libmds_getattr(mds, dir, &st);
+  if (r != -ENOENT) {
+    fprintf(stderr, "libmds_getattr(\"dir\") returned %d, expected -ENOENT\n", r);
     return r;
   }
   puts("libmds tests passed");
