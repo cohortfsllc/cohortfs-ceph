@@ -532,6 +532,21 @@ static uint32_t simple_spinlock_t buffer_debug_lock = SIMPLE_SPINLOCK_INITIALIZE
     }
   };
 
+  class buffer::raw_hpq : public buffer::raw {
+  public:
+    cohort::HugePageQ *hpq;
+    raw_hpq(cohort::HugePageQ& _hpq) : raw(HUGE_PAGE_SIZE), hpq(&_hpq) {
+      data = static_cast<char*>(_hpq.alloc());
+    }
+    ~raw_hpq() {
+      hpq->free(data);
+    }
+  };
+
+  buffer::raw* buffer::create_hpq(cohort::HugePageQ& hpq) {
+    abort();
+  }
+
 #if defined(HAVE_XIO)
   class buffer::xio_mempool : public buffer::raw {
   public:

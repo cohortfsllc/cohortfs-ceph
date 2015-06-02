@@ -56,6 +56,7 @@ extern "C" {
 #include "libxio.h"
 }
 #endif /* HAVE_XIO */
+#include "common/freelist.h"
 
 # include <assert.h>
 
@@ -138,6 +139,7 @@ private:
 public:
   class xio_mempool;
   class xio_msg_buffer;
+  class raw_hpq;
 
   friend std::ostream& operator<<(std::ostream& out, const raw &r);
 
@@ -154,6 +156,7 @@ public:
   static raw* create_static(unsigned len, char *buf);
   static raw* create_page_aligned(unsigned len);
   static raw* create_zero_copy(unsigned len, int fd, int64_t *offset);
+  static raw* create_hpq(cohort::HugePageQ& hpq);
 
 #if defined(HAVE_XIO)
   static raw* create_reg(struct xio_iovec_ex *iov);
