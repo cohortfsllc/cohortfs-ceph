@@ -12,8 +12,6 @@
  *
  */
 
-#include <boost/uuid/random_generator.hpp>
-#include <boost/uuid/string_generator.hpp>
 #include "Volume.h"
 #include "osd/OSDMap.h"
 #include <sstream>
@@ -33,6 +31,28 @@ using std::stringstream;
 using std::system_error;
 using ceph::buffer_err;
 
+const char* vol_category_t::name() const noexcept {
+  return "volume";
+}
+
+std::string vol_category_t::message(int ev) const {
+  switch (static_cast<vol_err>(ev)) {
+  case vol_err::no_such_volume:
+    return "no such volume"s;
+  case vol_err::invalid_name:
+    return "invalid volume name"s;
+  case vol_err::exists:
+    return "volume with name or UUID already exists"s;
+  default:
+    return "unknown error"s;
+  }
+}
+
+const std::error_category& vol_category() {
+  static vol_category_t instance;
+  return instance;
+}
+
 void Volume::dump(Formatter *f) const
 {
   f->dump_stream("uuid") << id;
@@ -49,107 +69,73 @@ void Volume::encode(bufferlist& bl) const
   ::encode(placer_id, bl);
 }
 
-bool Volume::valid_name(const string &name, std::stringstream &ss)
+void Volume::validate_name(const string &name)
 {
-  if (name.empty()) {
-    ss << "volume name may not be empty";
-    return false;
-  }
+  if (name.empty())
+    throw std::system_error(vol_err::invalid_name,
+			   "volume name may not be empty"s);
 
-  if (L_IS_WHITESPACE(*name.begin())) {
-    ss << "volume name may not begin with space characters";
-    return false;
-  }
+  if (L_IS_WHITESPACE(*name.begin()))
+    throw std::system_error(
+      vol_err::invalid_name,
+      "volume name may not begin with space characters"s);
 
-  if (L_IS_WHITESPACE(*name.rbegin())) {
-    ss << "volume name may not end with space characters";
-    return false;
-  }
+  if (L_IS_WHITESPACE(*name.rbegin()))
+    throw std::system_error(vol_err::invalid_name,
+			    "volume name may not end with space characters"s);
 
-  for (string::const_iterator c = name.begin(); c != name.end(); ++c) {
-    if (!L_IS_PRINTABLE(*c)) {
-      ss << "volume name can only contain printable characters";
-      return false;
-    }
-  }
+  if (std::any_of(name.cbegin(), name.cend(),
+		  [](char c) { return !L_IS_PRINTABLE(c); }))
+    throw std::system_error(
+      vol_err::invalid_name,
+      "volume name can only contain printable characters"s);
 
 
   try {
     boost::uuids::string_generator parse;
     parse(name);
-    ss << "volume name cannot match the form of UUIDs";
-    return false;
+    throw std::system_error(vol_err::invalid_name,
+			    "volume name cannot match the form of UUIDs"s);
   } catch (std::runtime_error& e) {
-    return true;
   }
-
-  return true;
 }
 
-bool Volume::valid(std::stringstream& ss) const
+void Volume::valid() const
 {
-  if (!valid_name(name, ss)) {
-    return false;
-  }
+  validate_name(name);
 
-  if (id.is_nil()) {
-    ss << "UUID cannot be zero.";
-    return false;
-  }
-
-  return true;
+  if (id.is_nil())
+    throw std::system_error(
+      std::make_error_code(std::errc::invalid_argument),
+      "UUID cannot be zero."s);
 }
 
-VolumeRef Volume::decode_volume(bufferlist::iterator& bl)
+void Volume::decode(bufferlist::iterator& bl)
 {
   int v;
-  std::shared_ptr<Volume> vol(new Volume);
-
   ::decode(v, bl);
   if (v != 0) {
     throw system_error(buffer_err::malformed_input, "Bad version."s);
   }
 
-  ::decode(vol->id, bl);
-  ::decode(vol->name, bl);
-  ::decode(vol->placer_id, bl);
-
-  return std::const_pointer_cast<const Volume>(vol);
+  ::decode(id, bl);
+  ::decode(name, bl);
+  ::decode(placer_id, bl);
 }
 
 AVolRef Volume::attach(CephContext *cct, const OSDMap& o) const {
-  return AVolRef(new AttachedVol(cct, o, shared_from_this()));
-}
-
-VolumeRef Volume::create(CephContext *cct,
-			 const string& name,
-			 boost::uuids::uuid placer_id,
-			 std::stringstream& ss)
-{
-  if (!valid_name(name, ss)) {
-    return VolumeRef();
-  }
-
-  // The caller should ensure that the placer_id is a valid
-  // placer_id. Either that or pass us the OSDMap.
-
-  std::shared_ptr<Volume> vol(new Volume(name,
-					 boost::uuids::random_generator()(),
-					 placer_id));
-  return vol;
+  return AVolRef(new AttachedVol(cct, o, *this));
 }
 
 /* AttachedVol */
 
 const uint64_t AttachedVol::one_op = 4194304;
 
-AttachedVol::AttachedVol(CephContext *cct, const OSDMap& o, VolumeRef _vol)
-  : vol(_vol)
+AttachedVol::AttachedVol(CephContext *cct, const OSDMap& o, const Volume& _vol)
+  : v(_vol)
 {
   PlacerRef p;
-  // Come back later and add a check and exception, when we get some
-  // Cohort-specific exception codes.
-  o.find_by_uuid(vol->placer_id, p);
+  p = o.lookup_placer(v.placer_id);
   placer = p->attach(cct);
 }
 
@@ -725,13 +711,13 @@ void AttachedVol::StripulatedOp::realize(
 size_t AttachedVol::place(const oid_t& object,
 			  const OSDMap& map,
 			  const std::function<void(int)>& f) const {
-  return placer->place(object, vol->id, map, f);
+  return placer->place(object, v.id, map, f);
 }
 
 int AttachedVol::get_cohort_placer(struct cohort_placer *p) const {
   int r = placer->get_cohort_placer(p);
   if (r < 0)
     return r;
-  memcpy(p->volume_id, vol->id.data, sizeof(p->volume_id));
+  memcpy(p->volume_id, v.id.data, sizeof(p->volume_id));
   return 0;
 }

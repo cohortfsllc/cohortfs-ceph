@@ -28,6 +28,8 @@
 
 #include "global/global_init.h"
 
+using namespace std::literals;
+
 #define dout_subsys ceph_subsys_osd
 
 // ----------------------------------
@@ -368,16 +370,17 @@ void OSDMap::Incremental::generate_test_instances(list<Incremental*>& o)
   o.push_back(new Incremental);
 }
 
-void OSDMap::Incremental::vol_inc_add::encode(bufferlist& bl, uint64_t features) const
+void OSDMap::Incremental::vol_inc_add::encode(bufferlist& bl,
+					      uint64_t features) const
 {
   ::encode(sequence, bl);
-  ::encode(*vol, bl);
+  ::encode(vol, bl);
 }
 
 void OSDMap::Incremental::vol_inc_add::decode(bufferlist::iterator &p)
 {
   ::decode(sequence, p);
-  vol = Volume::decode_volume(p);
+  ::decode(vol, p);
 }
 
 void OSDMap::Incremental::vol_inc_remove::encode(bufferlist& bl, uint64_t features) const
@@ -640,13 +643,17 @@ void OSDMap::dedup(const OSDMap *o, OSDMap *n)
     n->osd_uuid = o->osd_uuid;
 }
 
-int OSDMap::apply_incremental(const Incremental &inc)
+void OSDMap::apply_incremental(const Incremental &inc)
 {
   new_blacklist_entries = false;
   if (inc.epoch == 1)
     fsid = inc.fsid;
   else if (inc.fsid != fsid)
-    return -EINVAL;
+    throw std::system_error(std::make_error_code(std::errc::invalid_argument),
+			    "Incremental FSID "s +
+			    boost::uuids::to_string(inc.fsid) +
+			    " does not match map FSID "s +
+			    boost::uuids::to_string(fsid));
 
   assert(inc.epoch == epoch+1);
   epoch++;
@@ -656,7 +663,7 @@ int OSDMap::apply_incremental(const Incremental &inc)
   if (inc.fullmap.length()) {
     bufferlist bl(inc.fullmap);
     decode(bl);
-    return 0;
+    return;
   }
 
   // nope, incremental.
@@ -750,7 +757,9 @@ int OSDMap::apply_incremental(const Incremental &inc)
       inc.placer_additions.begin();
       p != inc.placer_additions.end();
       ++p) {
-    add_placer(p->placer);
+    // Is this necessary? The monitor at least needs the incremental
+    // after applying it.
+    add_placer(p->placer->clone());
   }
 
   for (const auto& removal : inc.vol_removals) {
@@ -763,8 +772,6 @@ int OSDMap::apply_incremental(const Incremental &inc)
       ++p) {
     add_volume(p->vol);
   }
-
-  return 0;
 }
 
 // serialize, unserialize
@@ -798,7 +805,7 @@ void OSDMap::encode(bufferlist& bl, uint64_t features) const
     count = vols.by_uuid.size();
     ::encode(count, bl);
     for (const auto& v : vols.by_uuid) {
-      v.second->encode(bl);
+      v.second.encode(bl);
     }
     ENCODE_FINISH(bl); // client-usable data
   }
@@ -845,18 +852,23 @@ void OSDMap::decode(bufferlist::iterator& bl)
     // Placers
     uint32_t count;
     placers.by_uuid.clear();
+    placers.by_name.clear();
     ::decode(count, bl);
     for (uint32_t i = 0; i < count; ++i) {
       PlacerRef v = Placer::decode_placer(bl);
-      placers.by_uuid[v->id] = v;
+      auto r = placers.by_uuid.emplace(v->id, std::move(v));
+      placers.by_name.emplace(r.first->second->name, r.first->second.get());
     }
 
     // Volumes
     vols.by_uuid.clear();
+    vols.by_name.clear();
     ::decode(count, bl);
     for (uint32_t i = 0; i < count; ++i) {
-      VolumeRef v = Volume::decode_volume(bl);
-      vols.by_uuid[v->id] = v;
+      Volume v;
+      ::decode(v, bl);
+      auto r = vols.by_uuid.emplace(v.id, v);
+      vols.by_name.emplace(r.first->second.name, &r.first->second);
     }
     DECODE_FINISH(bl); // client-usable data
   }
@@ -881,17 +893,6 @@ void OSDMap::decode(bufferlist::iterator& bl)
 void OSDMap::post_decode()
 {
   calc_num_osds();
-
-  vols.by_name.clear();
-  placers.by_name.clear();
-
-  // build name map from uuid map (only uuid map is encoded)
-  for(const auto& v : vols.by_uuid) {
-    vols.by_name[v.second->name] = v.second;
-  }
-  for(const auto& v : placers.by_uuid) {
-    placers.by_name[v.second->name] = v.second;
-  }
 }
 
 void OSDMap::dump_json(ostream& out) const
@@ -962,7 +963,7 @@ void OSDMap::dump(Formatter *f) const
   f->open_array_section("volumes");
   for(const auto& v : vols.by_uuid) {
     f->open_object_section("volume_info");
-    v.second->dump(f);
+    v.second.dump(f);
     f->close_section();
   }
   f->close_section();
@@ -1184,77 +1185,74 @@ int OSDMap::build_simple(CephContext *cct, epoch_t e,
   return 0;
 }
 
-/*
- * Generates a UUID for the new volume and tries to add it to the
- * DB. Returns the uuid generated in the uuid_out parameter.
- */
+void OSDMap::add_volume(const Volume& vol) {
+  vol.valid();
 
-int OSDMap::add_volume(VolumeRef vol) {
-  std::stringstream ss;
-  if (!vol->valid(ss)) {
-    return -EINVAL;
+  if (vols.by_uuid.count(vol.id) > 0) {
+    throw std::system_error(vol_err::exists, "UUID "s +
+			    boost::uuids::to_string(vol.id) +
+			    " already used"s);
   }
 
-  if (vols.by_uuid.count(vol->id) > 0) {
-    return -EEXIST;
+  if (vols.by_name.count(vol.name) > 0) {
+    throw std::system_error(vol_err::exists, "Name "s + vol.name +
+			    " already used"s);
   }
 
-  if (vols.by_name.count(vol->name) > 0) {
-    return -EEXIST;
+  if (placers.by_uuid.count(vol.placer_id) == 0) {
+    throw std::system_error(placer_err::no_such_placer,
+			    "Referenced placer "s +
+			    boost::uuids::to_string(vol.placer_id) +
+			    " does not exist"s);
   }
 
-  vols.by_uuid[vol->id] = vol;
-  vols.by_name[vol->name] = vol;
-  return 0;
+  auto r = vols.by_uuid.emplace(vol.id, vol);
+  vols.by_name.emplace(vol.name, &r.first->second);
 }
 
-int OSDMap::remove_volume(const boost::uuids::uuid& id)
+void OSDMap::remove_volume(const boost::uuids::uuid& id)
 {
   auto i = vols.by_uuid.find(id);
-
   if (i == vols.by_uuid.end()) {
-    return -ENOENT;
+    throw std::system_error(vol_err::no_such_volume,
+			    boost::uuids::to_string(id));
   }
 
-  VolumeRef v = i->second;
-
-  vols.by_name.erase(v->name);
-  vols.by_uuid.erase(v->id);
-
-  return 0;
+  vols.by_name.erase(i->second.name);
+  vols.by_uuid.erase(i);
 }
 
-int OSDMap::add_placer(PlacerRef placer) {
+void OSDMap::add_placer(PlacerRef&& placer) {
   std::stringstream ss;
   if (!placer->valid(ss)) {
-    return -EINVAL;
+    throw std::system_error(std::make_error_code(std::errc::invalid_argument),
+			    ss.str());
   }
 
   if (placers.by_uuid.count(placer->id) > 0) {
-    return -EEXIST;
+    throw std::system_error(placer_err::exists, "UUID "s +
+			    boost::uuids::to_string(placer->id) +
+			    " already used"s);
   }
 
   if (placers.by_name.count(placer->name) > 0) {
-    return -EEXIST;
+    throw std::system_error(placer_err::exists, "Name "s + placer->name +
+			    " already used"s);
   }
 
-  placers.by_uuid[placer->id] = placer;
-  placers.by_name[placer->name] = placer;
-  return 0;
+  auto r = placers.by_uuid.emplace(placer->id, std::move(placer));
+  placers.by_name.emplace(r.first->second->name, r.first->second.get());
 }
 
-int OSDMap::remove_placer(const boost::uuids::uuid& id)
+void OSDMap::remove_placer(const boost::uuids::uuid& id)
 {
   auto i = placers.by_uuid.find(id);
 
   if (i == placers.by_uuid.end()) {
-    return -ENOENT;
+    throw std::system_error(placer_err::no_such_placer,
+			    boost::uuids::to_string(id));
   }
 
-  PlacerRef v = i->second;
-
-  placers.by_name.erase(v->name);
-  placers.by_uuid.erase(v->id);
-
-  return 0;
+  placers.by_name.erase(i->second->name);
+  placers.by_uuid.erase(i);
 }

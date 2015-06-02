@@ -3,6 +3,8 @@
 
 #include "include/cohort_error.h"
 #include "include/buffer.h"
+#include "vol/Volume.h"
+#include "placer/Placer.h"
 
 using namespace std::literals;
 
@@ -24,6 +26,10 @@ namespace cohort {
     switch (static_cast<err>(ev)) {
     case err::parse_error:
       return "parse error"s;
+    case err::no_such_object:
+      return "no such object"s;
+    case err::object_already_exists:
+      return "object already exists"s;
     default:
       return "unknown error"s;
     }
@@ -35,6 +41,13 @@ namespace cohort {
     case err::parse_error:
       return in(code, ceph::buffer_err::end_of_buffer,
 		ceph::buffer_err::malformed_input);
+
+    case err::no_such_object:
+      return in(code, vol_err::no_such_volume, placer_err::no_such_placer);
+
+    case err::object_already_exists:
+      return in(code, vol_err::exists, placer_err::exists,
+		std::errc::file_exists);
 
     default:
       return false;

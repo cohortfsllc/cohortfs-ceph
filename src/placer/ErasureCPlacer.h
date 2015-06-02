@@ -37,8 +37,6 @@ public:
 
   virtual APlacerRef attach(CephContext* cct) const;
 
-  virtual int update(const std::shared_ptr<const Placer>& pl);
-
   virtual void dump(Formatter *f) const;
   virtual void decode_payload(bufferlist::iterator& bl, uint8_t v);
   virtual void encode(bufferlist& bl) const;
@@ -53,6 +51,9 @@ public:
 			  const string& place_text, const string& symbols,
 			  std::stringstream& ss);
 
+  virtual PlacerRef clone() const {
+    return std::make_unique<ErasureCPlacer>(*this);
+  }
 };
 
 #endif // COHORT_ERASURECPLACER_H

@@ -478,7 +478,7 @@ protected:
   //protected with mutexes!
   int k;
   string index_name;
-  VolumeRef vol;
+  Volume vol;
   rados::RadosClient rados;
   string rados_id;
   string client_name;

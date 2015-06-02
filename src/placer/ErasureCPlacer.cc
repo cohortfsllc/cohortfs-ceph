@@ -21,7 +21,6 @@
 #include "erasure-code/ErasureCodePlugin.h"
 #include "include/str_map.h"
 
-using std::shared_ptr;
 using std::to_string;
 using std::min;
 using std::unique_ptr;
@@ -30,7 +29,7 @@ typedef void (*place_func)(void*, const uint8_t[16], size_t, const char*,
 			  bool(*)(void*, int),
 			  bool(*)(void*, int));
 
-typedef std::shared_ptr<const ErasureCPlacer> ErasureCPlacerRef;
+typedef std::unique_ptr<const ErasureCPlacer> ErasureCPlacerRef;
 
 class AttachedErasureCPlacer : public AttachedPlacer {
   struct placement_context {
@@ -73,7 +72,8 @@ private:
   ceph::ErasureCodeInterfaceRef erasure;
   uint32_t stripe_unit; // Actually used after consulting with erasure plugin
 
-  AttachedErasureCPlacer(CephContext* cct, ErasureCPlacerRef p) : placer(p) {
+  AttachedErasureCPlacer(CephContext* cct, PlacerRef&& p)
+    : placer(static_cast<const ErasureCPlacer*>(p.release())) {
     lock_guard l(lock);
     int r;
     stringstream rs;
@@ -85,11 +85,11 @@ private:
 
     // This is sort of a brokenness in how the erasure code interface
     // handles things.
-    map<string, string> copy_params(p->erasure_params);
+    map<string, string> copy_params(placer->erasure_params);
     copy_params["directory"] = cct->_conf->osd_erasure_code_directory;
     ceph::ErasureCodePluginRegistry::instance().factory(
       cct,
-      p->erasure_plugin,
+      placer->erasure_plugin,
       copy_params,
       &erasure,
       rs);
@@ -105,7 +105,7 @@ private:
       abort();
     }
 
-    stripe_unit = erasure->get_chunk_size(p->suggested_unit *
+    stripe_unit = erasure->get_chunk_size(placer->suggested_unit *
 					  erasure->get_data_chunk_count());
   }
 
@@ -454,15 +454,8 @@ PlacerRef ErasureCPlacerFactory(bufferlist::iterator& bl, uint8_t v)
 
 APlacerRef ErasureCPlacer::attach(CephContext* cct) const
 {
-  return APlacerRef(
-    new AttachedErasureCPlacer(
-      cct, std::static_pointer_cast<const ErasureCPlacer>(
-	shared_from_this())));
-}
-
-int ErasureCPlacer::update(const shared_ptr<const Placer>& pl)
-{
-  return 0;
+  return APlacerRef(new AttachedErasureCPlacer(
+		      cct, clone()));
 }
 
 void ErasureCPlacer::dump(Formatter *f) const

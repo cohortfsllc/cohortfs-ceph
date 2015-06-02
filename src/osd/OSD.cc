@@ -2326,11 +2326,13 @@ void OSD::handle_osd_map(MOSDMap *m)
       OSDMap::Incremental inc;
       bufferlist::iterator p = bl.begin();
       inc.decode(p);
-      if (o->apply_incremental(inc) < 0) {
-	derr << "ERROR: bad fsid?  i have " << osdmap->get_fsid()
-	     << " and inc has " << inc.fsid << dendl;
-	assert(0 == "bad fsid");
-      }
+      // In the original this just asserts. Do we want to do that?
+      o->apply_incremental(inc);
+      // if (o->apply_incremental(inc) < 0) {
+      //	derr << "ERROR: bad fsid?  i have " << osdmap->get_fsid()
+      //	     << " and inc has " << inc.fsid << dendl;
+      //	assert(0 == "bad fsid");
+      // }
 
       if (o->test_flag(CEPH_OSDMAP_FULL))
 	last_marked_full = e;

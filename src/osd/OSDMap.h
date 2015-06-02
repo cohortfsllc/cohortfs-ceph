@@ -142,7 +142,7 @@ public:
 
     struct vol_inc_add {
       uint16_t sequence;
-      VolumeRef vol;
+      Volume vol;
 
       void encode(bufferlist& bl, uint64_t features = -1) const;
       void decode(bufferlist::iterator& bl);
@@ -163,23 +163,36 @@ public:
     vector<vol_inc_add> vol_additions;
     vector<vol_inc_remove> vol_removals;
 
-    void include_addition(VolumeRef vol) {
+    void include_addition(const Volume& vol) {
       vol_inc_add increment;
       increment.sequence = vol_next_sequence++;
       increment.vol = vol;
       vol_additions.push_back(increment);
     }
 
-    void include_removal(const VolumeRef vol) {
+    void include_removal(const Volume& vol) {
       vol_inc_remove increment;
       increment.sequence = vol_next_sequence++;
-      increment.id = vol->id;
+      increment.id = vol.id;
       vol_removals.push_back(increment);
     }
 
     struct placer_inc_add {
       uint16_t sequence;
       PlacerRef placer;
+
+      placer_inc_add() : sequence(0) {};
+      placer_inc_add(PlacerRef& _placer, uint16_t _sequence)
+	: sequence(_sequence), placer(std::move(_placer)) { }
+
+      placer_inc_add(const placer_inc_add& o)
+	: sequence(o.sequence), placer(o.placer->clone()) { }
+
+      placer_inc_add& operator=(const placer_inc_add& o) {
+	sequence = o.sequence;
+	placer = o.placer->clone();
+	return *this;
+      }
 
       void encode(bufferlist& bl, uint64_t features = -1) const;
       void decode(bufferlist::iterator& bl);
@@ -200,14 +213,13 @@ public:
     vector<placer_inc_add> placer_additions;
     vector<placer_inc_remove> placer_removals;
 
-    void include_addition(PlacerRef placer) {
-      placer_inc_add increment;
-      increment.sequence = placer_next_sequence++;
-      increment.placer = placer;
-      placer_additions.push_back(increment);
+    void include_addition(PlacerRef& placer) {
+      placer_additions.emplace_back(placer,
+				    placer_next_sequence++);
+
     }
 
-    void include_removal(const PlacerRef placer) {
+    void include_removal(const PlacerRef& placer) {
       placer_inc_remove increment;
       increment.sequence = placer_next_sequence++;
       increment.id = placer->id;
@@ -226,14 +238,47 @@ private:
   int32_t max_osd;
   vector<uint8_t> osd_state;
 
-  struct {
-    map<boost::uuids::uuid,PlacerRef> by_uuid;
-    map<string,PlacerRef> by_name;
+  struct placermap {
+    placermap() {}
+    placermap(const placermap& m) {
+      for (auto& p : m.by_uuid) {
+	auto r = by_uuid.emplace(p.second->id, p.second->clone());
+	by_name.emplace(p.second->name, r.first->second.get());
+      }
+    }
+    placermap& operator=(const placermap& m) {
+      by_name.clear();
+      by_uuid.clear();
+      for (auto& p : m.by_uuid) {
+	auto r = by_uuid.emplace(p.second->id, p.second->clone());
+	by_name.emplace(p.second->name, r.first->second.get());
+      }
+      return *this;
+    }
+
+    map<boost::uuids::uuid, PlacerRef> by_uuid;
+    map<string, const Placer*> by_name;
   } placers;
 
-  struct {
-    map<boost::uuids::uuid,VolumeRef> by_uuid;
-    map<string,VolumeRef> by_name;
+  struct volmap {
+    volmap() {}
+    volmap(const volmap& m) {
+      for (auto& v : m.by_uuid) {
+	auto r = by_uuid.emplace(v.second.id, v.second);
+	by_name.emplace(v.second.name, &r.first->second);
+      }
+    }
+    volmap& operator=(const volmap& m) {
+      by_name.clear();
+      by_uuid.clear();
+      for (auto& v : m.by_uuid) {
+	auto r = by_uuid.emplace(v.second.id, v.second);
+	by_name.emplace(v.second.name, &r.first->second);
+      }
+      return *this;
+    }
+    map<boost::uuids::uuid, const Volume> by_uuid;
+    map<string, const Volume*> by_name;
   } vols;
 
   struct addrs_s {
@@ -494,7 +539,7 @@ public:
    */
   uint64_t get_up_osd_features() const;
 
-  int apply_incremental(const Incremental &inc);
+  void apply_incremental(const Incremental &inc);
 
   /// try to re-use/reference addrs in oldmap from newmap
   static void dedup(const OSDMap *oldmap, OSDMap *newmap);
@@ -542,9 +587,8 @@ public:
   bool check_new_blacklist_entries() const { return new_blacklist_entries; }
 
   // Placers
-  /*int create_placer(PlacerRef placer, boost::uuids::uuid& out);*/
-  int add_placer(PlacerRef placer);
-  int remove_placer(const boost::uuids::uuid& id);
+  void add_placer(PlacerRef&& placer);
+  void remove_placer(const boost::uuids::uuid& id);
 
   bool placer_exists(const boost::uuids::uuid& id) const {
     auto v = placers.by_uuid.find(id);
@@ -555,22 +599,21 @@ public:
     }
   }
 
-  bool find_by_uuid(const boost::uuids::uuid& id, PlacerRef& placer) const {
+  PlacerRef lookup_placer(const boost::uuids::uuid& id) const {
     auto v = placers.by_uuid.find(id);
     if (v == placers.by_uuid.end()) {
-      return false;
+      throw std::system_error(placer_err::no_such_placer);
     } else {
-      placer = v->second;
-      return true;
+      return v->second->clone();
     }
   }
-  bool find_by_name(const string& name, PlacerRef& placer) const {
-    map<string,PlacerRef>::const_iterator v = placers.by_name.find(name);
+
+  PlacerRef lookup_placer(const string& name) {
+    auto v = placers.by_name.find(name);
     if (v == placers.by_name.end()) {
-      return false;
+      throw std::system_error(placer_err::no_such_placer);
     } else {
-      placer = v->second;
-      return true;
+      return v->second->clone();
     }
   }
 
@@ -579,9 +622,8 @@ public:
   }
 
   // Volumes
-  /*int create_volume(VolumeRef volume, boost::uuids::uuid& out);*/
-  int add_volume(VolumeRef volume);
-  int remove_volume(const boost::uuids::uuid& id);
+  void add_volume(const Volume& volume);
+  void remove_volume(const boost::uuids::uuid& id);
 
   bool vol_exists(const boost::uuids::uuid& id) const {
     auto v = vols.by_uuid.find(id);
@@ -601,22 +643,20 @@ public:
     }
   }
 
-  bool find_by_uuid(const boost::uuids::uuid& id, VolumeRef& vol) const {
+  Volume lookup_volume(const boost::uuids::uuid& id) const {
     auto v = vols.by_uuid.find(id);
     if (v == vols.by_uuid.end()) {
-      return false;
+      throw std::system_error(vol_err::no_such_volume);
     } else {
-      vol = v->second;
-      return true;
+      return v->second;
     }
   }
-  bool find_by_name(const string& name, VolumeRef& vol) const {
-    map<string,VolumeRef>::const_iterator v = vols.by_name.find(name);
+  Volume lookup_volume(const string& name) const {
+    auto v = vols.by_name.find(name);
     if (v == vols.by_name.end()) {
-      return false;
+      throw std::system_error(vol_err::no_such_volume);
     } else {
-      vol = v->second;
-      return true;
+      return *v->second;
     }
   }
 

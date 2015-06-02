@@ -20,15 +20,18 @@
 
 #include <boost/smart_ptr/intrusive_ref_counter.hpp>
 #include <boost/smart_ptr/intrusive_ptr.hpp>
+#include <boost/uuid/nil_generator.hpp>
+#include <boost/uuid/random_generator.hpp>
+#include <boost/uuid/string_generator.hpp>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_io.hpp>
-#include <boost/uuid/nil_generator.hpp>
 
-#include "include/types.h"
-#include "include/stringify.h"
+#include "include/cohort_error.h"
 #include "include/encoding.h"
-#include "osd/osd_types.h"
+#include "include/stringify.h"
+#include "include/types.h"
 #include "osdc/ObjectOperation.h"
+#include "osd/osd_types.h"
 #include "placer/Placer.h"
 
 class OSDMap;
@@ -37,8 +40,106 @@ namespace ceph {
   class Formatter;
 };
 
-class Volume;
-typedef std::shared_ptr<const Volume> VolumeRef;
+enum class vol_err { no_such_volume, invalid_name, exists };
+
+class vol_category_t : public std::error_category {
+  virtual const char* name() const noexcept;
+  virtual std::string message(int ev) const;
+  virtual std::error_condition default_error_condition(int ev) const noexcept {
+    switch (static_cast<vol_err>(ev)) {
+    case vol_err::no_such_volume:
+      return std::errc::no_such_device;
+    case vol_err::invalid_name:
+      return std::errc::invalid_argument;
+    case vol_err::exists:
+      return cohort::err::object_already_exists;
+    default:
+      return std::error_condition(ev, *this);
+    }
+  }
+};
+
+const std::error_category& vol_category();
+
+static inline std::error_condition make_error_condition(vol_err e) {
+  return std::error_condition(
+    static_cast<int>(e), vol_category());
+}
+
+static inline std::error_code make_error_code(vol_err e) {
+  return std::error_code(
+    static_cast<int>(e),
+    vol_category());
+}
+
+namespace std {
+  template <>
+  struct is_error_code_enum<vol_err> : public std::true_type {};
+};
+
+class AttachedVol;
+typedef boost::intrusive_ptr<const AttachedVol> AVolRef;
+
+class Volume {
+  friend AttachedVol;
+public:
+  boost::uuids::uuid placer_id;
+
+
+  Volume() :
+    placer_id(boost::uuids::nil_uuid()), id(boost::uuids::nil_uuid()),
+    name() { }
+
+  Volume(const string& _name, boost::uuids::uuid _id,
+	 boost::uuids::uuid _placer_id) :
+    placer_id(_placer_id), id(_id), name(_name) {
+    valid();
+  }
+
+  Volume(const string& _name, boost::uuids::uuid _placer_id) :
+    placer_id(_placer_id), id(boost::uuids::random_generator()()),
+    name(_name) {
+    valid();
+  }
+
+  /* It seems a bit icky to have a type field like this when we
+     already have type information encoded in the class. */
+  boost::uuids::uuid id;
+  string name;
+
+  ~Volume() { };
+
+  static void validate_name(const string& name);
+  void valid() const;
+  /* Attach a volume. Remains attached until the last reference is
+     dropped. */
+  AVolRef attach(CephContext *cct, const OSDMap& o) const;
+  static Volume create(CephContext *cct,
+		       const string& name,
+		       boost::uuids::uuid placer_id,
+		       std::stringstream& ss);
+  void dump(Formatter *f) const;
+  void encode(bufferlist& bl) const;
+  /* Dummy decode for WRITE_CLASS_ENCODER */
+  void decode(bufferlist& bl) {
+    bufferlist::iterator bi = bl.begin();
+    decode(bi);
+  }
+  void decode(bufferlist::iterator& bl);
+  static string get_epoch_key(const boost::uuids::uuid& vol) {
+    return stringify(vol) + "_epoch";
+  }
+  static string get_info_key(const boost::uuids::uuid& vol) {
+    return stringify(vol) + "_info";
+  }
+};
+
+WRITE_CLASS_ENCODER(Volume)
+
+inline ostream& operator<<(ostream& out, const Volume& vol) {
+  return out << vol.name << "(" << vol.id << ")";
+}
+
 
 class AttachedVol : public boost::intrusive_ref_counter<AttachedVol> {
   friend Volume;
@@ -48,11 +149,10 @@ class AttachedVol : public boost::intrusive_ref_counter<AttachedVol> {
 private:
   APlacerRef placer;
 
-  AttachedVol(CephContext* cct, const OSDMap& o, VolumeRef v);
+  AttachedVol(CephContext* cct, const OSDMap& o, const Volume& v);
 public:
-  VolumeRef v;
+  Volume v;
   static const uint64_t one_op;
-  const VolumeRef vol;
   static string get_epoch_key(const boost::uuids::uuid& vol) {
     return stringify(vol) + "_epoch";
   }
@@ -147,62 +247,5 @@ public:
     return placer->op_size();
   }
 };
-typedef boost::intrusive_ptr<const AttachedVol> AVolRef;
-
 inline ostream& operator<<(ostream& out, const Volume& vol);
-class Volume : public std::enable_shared_from_this<Volume> {
-  friend AttachedVol;
-private:
-  boost::uuids::uuid placer_id;
-
-  Volume() :
-    placer_id(boost::uuids::nil_uuid()), id(boost::uuids::nil_uuid()),
-    name() { }
-
-  Volume(const string& _name, boost::uuids::uuid _id,
-	 boost::uuids::uuid _placer_id) :
-    placer_id(_placer_id), id(_id), name(_name) { }
-
-public:
-
-  /* It seems a bit icky to have a type field like this when we
-     already have type information encoded in the class. */
-  boost::uuids::uuid id;
-  string name;
-
-  virtual ~Volume() { };
-
-  static bool valid_name(const string& name, std::stringstream& ss);
-  virtual bool valid(std::stringstream& ss) const;
-  static VolumeRef decode_volume(bufferlist::iterator& bl);
-  /* Attach a volume. Remains attached until the last reference is
-     dropped. */
-  AVolRef attach(CephContext *cct, const OSDMap& o) const;
-  static VolumeRef create(CephContext *cct,
-			  const string& name,
-			  boost::uuids::uuid placer_id,
-			  std::stringstream& ss);
-  /* Each child class should call its parent's dump method as it's first
-     action. */
-  void dump(Formatter *f) const;
-  /* Each child class should call its parent's encode method as it's first
-     action. */
-  void encode(bufferlist& bl) const;
-  /* Dummy decode for WRITE_CLASS_ENCODER */
-  void decode(bufferlist& bl) { assert(false); };
-  void decode(bufferlist::iterator& bl) { assert(false); };
-  static string get_epoch_key(const boost::uuids::uuid& vol) {
-    return stringify(vol) + "_epoch";
-  }
-  static string get_info_key(const boost::uuids::uuid& vol) {
-    return stringify(vol) + "_info";
-  }
-};
-
-WRITE_CLASS_ENCODER(Volume)
-
-inline ostream& operator<<(ostream& out, const Volume& vol) {
-  return out << vol.name << "(" << vol.id << ")";
-}
-
 #endif // VOL_VOLUME_H

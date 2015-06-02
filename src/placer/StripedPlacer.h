@@ -24,12 +24,6 @@ protected:
   uint32_t stripe_unit;
   uint32_t stripe_width;
 
-private:
-  /* These are internal and are not serialized */
-  mutable std::mutex lock;
-  typedef std::lock_guard<std::mutex> lock_guard;
-  typedef std::unique_lock<std::mutex> unique_lock;
-
 protected:
 
   StripedPlacer()
@@ -76,7 +70,7 @@ public:
   static const uint64_t one_op;
 
   virtual APlacerRef attach(CephContext* cct) const {
-    return std::dynamic_pointer_cast<const AttachedPlacer>(shared_from_this());
+    return APlacerRef(dynamic_cast<const AttachedPlacer*>(this));
   }
 
   virtual size_t op_size() const noexcept {
@@ -143,6 +137,10 @@ public:
     placer->striped.stripe_width = stripe_width;
     return 0;
   };
+
+  virtual PlacerRef clone() const {
+    return PlacerRef(new StripedPlacer(*this));
+  }
 };
 
 #endif // COHORT_STRIPEDPLACER_H

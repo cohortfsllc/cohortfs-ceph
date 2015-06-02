@@ -335,12 +335,13 @@ int LibOSDRemote::get_volume(const char *name, uint8_t id[16])
   if (shutdown)
     return -ENODEV;
 
-  VolumeRef volume;
-  if (!map.find_by_name(name, volume))
+  try {
+    Volume volume(map.lookup_volume(name));
+    memcpy(id, &volume.id, sizeof(volume.id));
+    return 0;
+  } catch (std::system_error& e) {
     return -ENOENT;
-
-  memcpy(id, &volume->id, sizeof(volume->id));
-  return 0;
+  }
 }
 
 } // namespace osd

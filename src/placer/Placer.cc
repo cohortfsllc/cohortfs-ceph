@@ -26,7 +26,30 @@
 #define L_IS_PRINTABLE(c) (isprint(c))
 #endif
 
+using namespace std::literals;
+
 WRITE_RAW_ENCODER(placer_type);
+
+const char* placer_category_t::name() const noexcept {
+  return "placer";
+}
+
+std::string placer_category_t::message(int ev) const {
+  switch (static_cast<placer_err>(ev)) {
+  case placer_err::no_such_placer:
+    return "no such placer"s;
+  case placer_err::exists:
+    return "placer exists"s;
+  default:
+    return "unknown error"s;
+  }
+}
+
+const std::error_category& placer_category() {
+  static placer_category_t instance;
+  return instance;
+}
+
 
 using namespace std::literals;
 using std::system_error;

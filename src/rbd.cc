@@ -243,8 +243,10 @@ static int do_bench_write(Image& image, uint64_t io_size,
 
   std::chrono::duration<double> elapsed = ceph::mono_clock::now() - start;
 
-  printf("elapsed: %5lld\tops: %8d  ops/sec: %8.2lf  bytes/sec: %8.2lf\n",
-	 std::chrono::duration_cast<std::chrono::seconds>(elapsed).count(),
+  printf("elapsed: %5" PRIu32 "\tops: %8d  ops/sec: %8.2lf  "
+	 "bytes/sec: %8.2lf\n",
+	 (uint32_t) std::chrono::duration_cast<
+	 std::chrono::seconds>(elapsed).count(),
 	 ios, (double)ios / elapsed.count(),
 	 (double)off / elapsed.count());
 
@@ -707,42 +709,42 @@ if (!set_conf_param(v, p1, p2)) { \
   try {
     switch (opt_cmd) {
     case OPT_CREATE:
-      errstr = "create of image " + vol->v->name + "/" + imgname;
+      errstr = "create of image " + vol->v.name + "/" + imgname;
       Image::create(&rc, vol, imgname, size);
       break;
 
     case OPT_RENAME:
-      errstr = "rename of image " + vol->v->name + "/" + imgname + " to " +
-	vol->v->name + "/" + destname;
+      errstr = "rename of image " + vol->v.name + "/" + imgname + " to " +
+	vol->v.name + "/" + destname;
       Image::rename(&rc, vol, imgname, destname);
       break;
 
     case OPT_RM:
-      errstr = "delete of image " + vol->v->name + "/" + imgname;
+      errstr = "delete of image " + vol->v.name + "/" + imgname;
       Image::remove(&rc, vol, imgname);
       break;
 
     case OPT_RESIZE:
-      errstr = "resize of image " + vol->v->name + "/" + imgname;
+      errstr = "resize of image " + vol->v.name + "/" + imgname;
       image.resize(size);
       break;
 
     case OPT_EXPORT:
-      errstr = "export of image " + vol->v->name + "/" + imgname + " to " +
+      errstr = "export of image " + vol->v.name + "/" + imgname + " to " +
 	"path";
       do_export(image, path);
       break;
 
     case OPT_IMPORT:
-      errstr = "import of image " + destvol->v->name + "/" + imgname
+      errstr = "import of image " + destvol->v.name + "/" + imgname
 	+ " from " + "path";
       do_import(rc, destvol, destname, path);
       break;
 
     case OPT_COPY:
     {
-      errstr = "copy of image " + vol->v->name + "/" + imgname + " to " +
-	destvol->v->name + "/" + destname;
+      errstr = "copy of image " + vol->v.name + "/" + imgname + " to " +
+	destvol->v.name + "/" + destname;
       Image::create(&rc, destvol, destname, image.get_size());
       Image dest(&rc, destvol, destname);
       image.copy(image, dest);
@@ -750,7 +752,7 @@ if (!set_conf_param(v, p1, p2)) { \
     break;
 
     case OPT_BENCH_WRITE:
-      errstr = "bench write to " + vol->v->name + "/" + imgname;
+      errstr = "bench write to " + vol->v.name + "/" + imgname;
       do_bench_write(image, bench_io_size, bench_io_threads, bench_bytes,
 		     bench_pattern);
       break;

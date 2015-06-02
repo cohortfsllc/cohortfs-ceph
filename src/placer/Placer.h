@@ -20,12 +20,15 @@
 #include <map>
 #include <vector>
 
+#include <boost/smart_ptr/intrusive_ref_counter.hpp>
+#include <boost/smart_ptr/intrusive_ptr.hpp>
 #include <boost/uuid/nil_generator.hpp>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_io.hpp>
 
 #include "common/Formatter.h"
+#include "include/cohort_error.h"
 #include "include/cephfs/placement.h"
 #include "include/ceph_time.h"
 #include "include/encoding.h"
@@ -35,9 +38,41 @@
 
 class OSDMap;
 class Placer;
-typedef std::shared_ptr<Placer> PlacerRef;
+typedef std::unique_ptr<const Placer> PlacerRef;
 
-class AttachedPlacer {
+enum class placer_err { no_such_placer, exists };
+
+class placer_category_t : public std::error_category {
+  virtual const char* name() const noexcept;
+  virtual std::string message(int ev) const;
+  virtual std::error_condition default_error_condition(int ev) const noexcept {
+    switch (static_cast<placer_err>(ev)) {
+    case placer_err::no_such_placer:
+      return std::errc::no_such_device;
+    case placer_err::exists:
+      return cohort::err::object_already_exists;
+    default:
+      return std::error_condition(ev, *this);
+    }
+  }
+};
+
+const std::error_category& placer_category();
+
+static inline std::error_condition make_error_condition(placer_err e) {
+  return std::error_condition(static_cast<int>(e), placer_category());
+}
+
+static inline std::error_code make_error_code(placer_err e) {
+  return std::error_code(static_cast<int>(e), placer_category());
+}
+
+namespace std {
+  template <>
+  struct is_error_code_enum<placer_err> : public std::true_type {};
+};
+
+class AttachedPlacer : public boost::intrusive_ref_counter<AttachedPlacer> {
 public:
   static const uint64_t one_op;
 
@@ -94,10 +129,10 @@ public:
   };
 };
 
-typedef std::shared_ptr<const AttachedPlacer> APlacerRef;
+typedef boost::intrusive_ptr<const AttachedPlacer> APlacerRef;
 
 inline ostream& operator<<(ostream& out, const Placer& pl);
-class Placer : public std::enable_shared_from_this<Placer> {
+class Placer  {
 private:
   static const std::string typestrings[];
 
@@ -162,6 +197,8 @@ public:
   /* Dummy decode for WRITE_CLASS_ENCODER */
   void decode(bufferlist& bl) { assert(false); };
   void decode(bufferlist::iterator& bl) { assert(false); };
+
+  virtual PlacerRef clone() const = 0;
 
   virtual APlacerRef attach(CephContext *cct) const = 0;
 };

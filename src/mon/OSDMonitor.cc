@@ -84,6 +84,8 @@ void OSDMonitor::create_initial()
   newmap.encode(pending_inc.fullmap, mon->quorum_features);
 }
 
+// Find useful things to do in event of failure
+
 void OSDMonitor::update_from_paxos(bool *need_bootstrap)
 {
   version_t version = get_last_committed();
@@ -173,8 +175,7 @@ void OSDMonitor::update_from_paxos(bool *need_bootstrap)
 
     ldout(mon->cct, 7) << "update_from_paxos  applying incremental " << osdmap.epoch+1 << dendl;
     OSDMap::Incremental inc(inc_bl);
-    err = osdmap.apply_incremental(inc);
-    assert(err == 0);
+    osdmap.apply_incremental(inc);
 
     if (t == NULL)
       t = new MonitorDBStore::Transaction;
@@ -2288,13 +2289,13 @@ done:
       err = -EINVAL;
       goto reply;
     }
-    placer = ErasureCPlacer::create(mon->cct, name, stripe_unit, plugin, params,
-			       place_text, symbols, ss);
+    placer = ErasureCPlacer::create(mon->cct, name, stripe_unit, plugin,
+				    params, place_text, symbols, ss);
     if (!placer) {
       err = -EINVAL;
       goto reply;
     }
-    ss << "ErasureCPlacer: " << placer << " created.";
+    ss << "ErasureCPlacer: " << *placer << " created.";
     pending_inc.include_addition(placer);
     wait_for_finished_proposal(Monitor::CB_Command(
 				 mon, m, 0, rs,
@@ -2322,7 +2323,7 @@ done:
       err = -EINVAL;
       goto reply;
     }
-    ss << "StripedPlacer: " << placer << " created.";
+    ss << "StripedPlacer: " << *placer << " created.";
     pending_inc.include_addition(placer);
     wait_for_finished_proposal(Monitor::CB_Command(
 				 mon, m, 0, rs,
@@ -2333,8 +2334,10 @@ done:
     PlacerRef placer;
 
     cmd_getval(mon->cct, cmdmap, "placerName", name);
-    if (!osdmap.find_by_name(name, placer)) {
-      ss << "placer named " << name << " not found";
+    try {
+      placer = osdmap.lookup_placer(name);
+    } catch (std::system_error& e) {
+      ss << "placer named " << name << " not found. " << e.what();
       err = -EINVAL;
       goto reply;
     }
@@ -2384,7 +2387,6 @@ done:
     string placerName;
 
     PlacerRef placer;
-    VolumeRef vol;
 
     cmd_getval(mon->cct, cmdmap, "volumeName", volumeName);
     cmd_getval(mon->cct, cmdmap, "placerName", placerName);
@@ -2396,34 +2398,40 @@ done:
       err = -EINVAL;
       goto reply;
     }
-    if (!osdmap.find_by_name(placerName, placer)) {
-      ss << "placer named " << placerName << " not found";
+    try {
+      placer = osdmap.lookup_placer(placerName);
+    } catch (std::system_error& e) {
+      ss << "placer named " << placerName << " not found. " << e.what();
       err = -EINVAL;
       goto reply;
     }
-    vol = Volume::create(mon->cct, volumeName, placer->id, ss);
-    if (!vol) {
+    try {
+      Volume vol(volumeName, placer->id);
+      ss << "volume: " << vol << " created.";
+      pending_inc.include_addition(vol);
+      wait_for_finished_proposal(Monitor::CB_Command(
+				   mon, m, 0, rs,
+				   get_last_committed() + 1));
+      return true;
+    } catch (std::system_error& e) {
       err = -EINVAL;
+      ss << e.what();
       goto reply;
     }
-    ss << "volume: " << vol << " created.";
-    pending_inc.include_addition(vol);
-    wait_for_finished_proposal(Monitor::CB_Command(
-				 mon, m, 0, rs,
-				 get_last_committed() + 1));
-    return true;
   } else if (prefix == "osd volume remove") {
     string name;
-    VolumeRef vol;
+    Volume vol;
     PlacerRef placer;
 
     cmd_getval(mon->cct, cmdmap, "volumeName", name);
-    if (!osdmap.find_by_name(name, vol)) {
+    try {
+      vol = osdmap.lookup_volume(name);
+      pending_inc.include_removal(vol);
+    } catch (std::system_error& e) {
       ss << "volume named " << name << " not found";
       err = -EINVAL;
       goto reply;
     }
-    pending_inc.include_removal(vol);
     wait_for_finished_proposal(Monitor::CB_Command(
 				 mon, m, 0, rs,
 				 get_last_committed() + 1));
@@ -2438,17 +2446,17 @@ done:
       const boost::regex e(pattern);
       if (f)
 	f->open_array_section("volumes");
-      for (auto v = osdmap.vols.by_uuid.begin(); v != osdmap.vols.by_uuid.end(); ++v) {
-	if (!regex_search(v->second->name, e,
+      for (const auto& v : osdmap.vols.by_uuid) {
+	if (!regex_search(v.second.name, e,
 		boost::regex_constants::match_any))
 	  continue;
 	if (f) {
 	  f->open_object_section("volume_info");
-	  v->second->dump(f.get());
+	  v.second.dump(f.get());
 	  f->close_section();
 	} else {
 	  if (!first) ds << "\n";
-	  ds << *v->second;
+	  ds << v.second;
 	  first = false;
 	}
       }

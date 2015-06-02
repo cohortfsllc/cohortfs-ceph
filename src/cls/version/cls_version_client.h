@@ -18,7 +18,7 @@ void cls_version_inc(rados::ObjOpUse op, obj_version& ver, VersionCond cond);
 
 void cls_version_read(rados::ObjOpUse op, obj_version *objv);
 
-int cls_version_read(Objecter* o, VolumeRef vol, const oid_t& oid,
+int cls_version_read(Objecter* o, const Volume& vol, const oid_t& oid,
 		     obj_version *ver);
 
 void cls_version_check(rados::ObjOpUse op, obj_version& ver,

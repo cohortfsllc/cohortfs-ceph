@@ -121,43 +121,28 @@ namespace rados {
   {
   }
 
-  std::shared_ptr<const Volume> RadosClient::lookup_volume(
-    const string& name)
+  Volume RadosClient::lookup_volume(const string& name)
   {
-    int r = wait_for_osdmap();
-    if (r < 0)
-      return nullptr;
-
-    VolumeRef v = objecter->vol_by_name(name);
-    return v;
+    wait_for_osdmap();
+    return objecter->vol_by_name(name);
   }
 
-  std::shared_ptr<const Volume> RadosClient::lookup_volume(
-    const boost::uuids::uuid& id)
+  Volume RadosClient::lookup_volume(const boost::uuids::uuid& id)
   {
-    int r = wait_for_osdmap();
-    if (r < 0)
-      return nullptr;
+    wait_for_osdmap();
 
-    VolumeRef v = objecter->vol_by_uuid(id);
-    return v;
+    return objecter->vol_by_uuid(id);
   }
 
   AVolRef RadosClient::attach_volume(const string& name)
   {
-    int r = wait_for_osdmap();
-    if (r < 0)
-      return nullptr;
-
+    wait_for_osdmap();
     return objecter->attach_by_name(name);
   }
 
   AVolRef RadosClient::attach_volume(const boost::uuids::uuid& id)
   {
-    int r = wait_for_osdmap();
-    if (r < 0)
-      return nullptr;
-
+    wait_for_osdmap();
     return objecter->attach_by_uuid(id);
   }
 

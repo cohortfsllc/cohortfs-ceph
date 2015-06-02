@@ -576,13 +576,7 @@ class OSDStub : public TestStub
       bufferlist::iterator p = bl.begin();
       inc.decode(p);
 
-      int err = osdmap.apply_incremental(inc);
-      if (err < 0) {
-	derr << "osd." << whoami << "::" << __func__
-	     << "** ERROR: applying incremental: "
-	     << cpp_strerror(err) << dendl;
-	assert(0 == "error applying incremental");
-      }
+      osdmap.apply_incremental(inc);
     }
     dout(30) << __func__ << "\nosdmap:\n";
     JSONFormatter f(true);

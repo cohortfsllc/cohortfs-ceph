@@ -64,12 +64,7 @@ OSDVol::OSDVol(OSDService* o, OSDMapRef curmap,
   // construct name for trace_endpoint
   {
     ostringstream name;
-    name << "OSDVol";
-
-    VolumeRef vol;
-    if (osdmap_ref->find_by_uuid(v, vol))
-      name << ": " << vol->name;
-
+    name << "OSDVol: " << osdmap_ref->lookup_volume(v).name;
     trace_endpoint.copy_name(name.str());
   }
 

@@ -974,7 +974,7 @@ namespace rados {
   {
     bool need_resend = false;
 
-    if (!osdmap->vol_exists(t.volume->v->id)) {
+    if (!osdmap->vol_exists(t.volume->v.id)) {
       return TARGET_VOLUME_DNE;
     }
 
@@ -1154,7 +1154,7 @@ namespace rados {
     subop.stamp = ceph::mono_clock::now();
 
     MOSDOp *m = new MOSDOp(client_inc, subop.tid,
-			   subop.hoid, subop.parent.volume->v->id,
+			   subop.hoid, subop.parent.volume->v.id,
 			   osdmap->get_epoch(),
 			   flags);
 
@@ -1659,32 +1659,24 @@ namespace rados {
     assert(!tick_event);
   }
 
-  VolumeRef Objecter::vol_by_uuid(const boost::uuids::uuid& id) {
+  Volume Objecter::vol_by_uuid(const boost::uuids::uuid& id) {
     shared_lock rl(rwlock);
-    VolumeRef v;
-    osdmap->find_by_uuid(id, v);
-    return v;
+    return osdmap->lookup_volume(id);
   }
 
   AVolRef Objecter::attach_by_uuid(const boost::uuids::uuid& id) {
     shared_lock rl(rwlock);
-    VolumeRef v;
-    osdmap->find_by_uuid(id, v);
-    return v->attach(cct, *osdmap);
+    return osdmap->lookup_volume(id).attach(cct, *osdmap);
   }
 
-  VolumeRef Objecter::vol_by_name(const string& name) {
+  Volume Objecter::vol_by_name(const string& name) {
     shared_lock rl(rwlock);
-    VolumeRef v;
-    osdmap->find_by_name(name, v);
-    return v;
+    return osdmap->lookup_volume(name);
   }
 
   AVolRef Objecter::attach_by_name(const string& name) {
     shared_lock rl(rwlock);
-    VolumeRef v;
-    osdmap->find_by_name(name, v);
-    return v->attach(cct, *osdmap);
+    return osdmap->lookup_volume(name).attach(cct, *osdmap);
   }
 
   Message* MessageFactory::create(int type)

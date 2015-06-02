@@ -1278,9 +1278,9 @@ namespace rados {
 			   bool force_new);
 
     void blacklist_self(bool set);
-    VolumeRef vol_by_uuid(const boost::uuids::uuid& id);
+    Volume vol_by_uuid(const boost::uuids::uuid& id);
     AVolRef attach_by_uuid(const boost::uuids::uuid& id);
-    VolumeRef vol_by_name(const string& name);
+    Volume vol_by_name(const string& name);
     AVolRef attach_by_name(const string& name);
   };
 

@@ -2669,7 +2669,7 @@ int RGWRados::put_obj_meta_impl(void *ctx, rgw_obj& oid,  uint64_t size,
   if (r < 0)
     return r;
 
-  const auto& volid = ref.vol->v->id;
+  const auto& volid = ref.vol->v.id;
 
   r = rc.objecter->mutate(ref.oid, ref.vol, op);
   if (r < 0) /* we can expect to get -ECANCELED if object was replaced under,
@@ -3533,7 +3533,7 @@ int RGWRados::delete_obj_impl(void *ctx, const string& bucket_owner,
   r = rc.objecter->mutate(ref.oid, ref.vol, op);
   bool removed = (r >= 0);
 
-  const auto& volid = ref.vol->v->id;
+  const auto& volid = ref.vol->v.id;
   if (r >= 0 || r == -ENOENT) {
     r = complete_update_index_del(bucket, oid.object, tag, volid);
   } else {
@@ -5684,7 +5684,7 @@ int RGWRados::check_disk_state(AVolRef io_vol,
        * to handle!) */
     }
     // encode a suggested removal of that key
-    list_state.ver.vol = io_vol->v->id;
+    list_state.ver.vol = io_vol->v.id;
     cls_rgw_encode_suggestion(CEPH_RGW_REMOVE, list_state, suggested_updates);
     return -ENOENT;
   }
@@ -5726,7 +5726,7 @@ int RGWRados::check_disk_state(AVolRef io_vol,
   object.owner_display_name = owner.get_display_name();
 
   // encode suggested updates
-  list_state.ver.vol = io_vol->v->id;
+  list_state.ver.vol = io_vol->v.id;
   list_state.meta.size = object.size;
   list_state.meta.mtime = object.mtime;
   list_state.meta.category = main_category;
