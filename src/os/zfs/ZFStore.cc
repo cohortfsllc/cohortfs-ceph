@@ -275,8 +275,10 @@ int ZFStore::read(CollectionHandle ch, ObjectHandle oh,
 		  bool allow_eio)
 {
   static constexpr uint16_t n_iovs = 16;
-  thread_local iovec iovs1[n_iovs];
-  thread_local iovec iovs2[n_iovs];
+  thread_local std::pair<iovec[n_iovs],
+			 iovec[n_iovs]> iovs;
+  iovec* iovs1 = iovs.first;
+  iovec* iovs2 = iovs.second;
   uint16_t iovcnt;
   int err;
 
