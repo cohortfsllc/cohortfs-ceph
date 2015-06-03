@@ -24,8 +24,8 @@
 #include <mutex>
 #include <sstream>
 #include <shared_mutex>
-#include <boost/intrusive/slist.hpp>
 #include <boost/intrusive/set.hpp>
+#include <boost/intrusive/slist.hpp>
 #include "include/types.h"
 #include "include/buffer.h"
 
@@ -50,8 +50,8 @@ class MOSDOpReply;
 class MOSDMap;
 
 namespace rados {
-  using boost::intrusive::slist;
   using boost::intrusive::set;
+  using boost::intrusive::slist;
   using boost::intrusive::slist_member_hook;
   using boost::intrusive::slist_base_hook;
   using boost::intrusive::set_base_hook;
@@ -303,15 +303,11 @@ namespace rados {
       typedef std::shared_lock<std::shared_timed_mutex> shared_lock;
 
       static constexpr const uint32_t max_ops_inflight = 5;
-      static constexpr const uint64_t max_data_inflight = 16 << 20;
-      set<SubOp, constant_time_size<false>> subops_inflight;
+      set<SubOp> subops_inflight;
 
 
       static constexpr const uint64_t max_ops_queued = 100;
-      slist<SubOp, member_hook<SubOp, slist_member_hook<
-					link_mode<normal_link>>,
-			       &SubOp::qlink>,
-	    boost::intrusive::constant_time_size<true> > subops_queued;
+      set<SubOp> subops_queued;
 
       int osd;
       int incarnation;
