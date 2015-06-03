@@ -275,7 +275,8 @@ int ZFStore::read(CollectionHandle ch, ObjectHandle oh,
 		  bool allow_eio)
 {
   static constexpr uint16_t n_iovs = 16;
-  thread_local iovec iovs[n_iovs];
+  thread_local iovec iovs1[n_iovs];
+  thread_local iovec iovs2[n_iovs];
   uint16_t iovcnt;
   int err;
 
@@ -295,32 +296,36 @@ int ZFStore::read(CollectionHandle ch, ObjectHandle oh,
   /* read chunkwise */
   int ix;
   ssize_t resid = len;
-  iovec* iov;
+  iovec* iov1;
+  iovec* iov2;
 
   while (resid) {
     ssize_t bytes_read;
     for (ix = 0; ix < n_iovs; ++ix) {
-      iov = &iovs[ix];
+      iov1 = &iovs1[ix];
+      iov2 = &iovs2[ix];
       // XXX get page
-      iov->iov_base = malloc(65536*sizeof(char));
-      iov->iov_len = MIN(resid, 65536);
+      iov1->iov_base = malloc(65536*sizeof(char));
+      iov2->iov_base = iov1->iov_base;
+      iov1->iov_len = MIN(resid, 65536);
     } /* ix */
     iovcnt = ix+1;
-    bytes_read = lzfw_preadv(zhfs, &cred, o->vno, iovs, iovcnt, off);
+    bytes_read = lzfw_preadv(zhfs, &cred, o->vno, iovs1, iovcnt, off);
     if (bytes_read <= 0)
       return bytes_read;
     /* transfer filled buffers -- ZFS/Solaris burns down iov->iov_cnt */
     for (ix = 0; ix < iovcnt; ++ix) {
-      iov = &iovs[ix];
-      int iov_len = 65536 - iov->iov_len;
+      iov1 = &iovs1[ix];
+      iov2 = &iovs2[ix];
+      int iov_len = 65536 - iov1->iov_len;
       if (unlikely(iov_len == 0))
 	goto out;
       else {
 	bufferptr bp =
-	  buffer::create_static(iov_len, static_cast<char*>(iov->iov_base));
+	  buffer::create_static(iov_len, static_cast<char*>(iov2->iov_base));
 	bl.push_back(bp);
 	/* short read? */
-	if (iov->iov_len != 0)
+	if (iov1->iov_len != 0)
 	  goto out;
       }
     }
