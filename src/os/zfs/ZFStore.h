@@ -20,6 +20,7 @@
 #include <shared_mutex>
 #include <boost/intrusive_ptr.hpp>
 #include "os/ObjectStore.h"
+#include "common/freelist.h"
 extern "C" {
 #include <libzfswrap.h>
 }
@@ -318,7 +319,7 @@ public:
   int stat(CollectionHandle ch, ObjectHandle oh,
 	   struct stat* st, bool allow_eio = false); // struct stat?
   int read(CollectionHandle ch, ObjectHandle oh,
-	   uint64_t offset, size_t len, bufferlist& bl, bool allow_eio = false);
+	   uint64_t off, size_t len, bufferlist& bl, bool allow_eio = false);
   int fiemap(CollectionHandle ch, ObjectHandle oh,
 	     uint64_t offset, size_t len, bufferlist& bl);
   int getattr(CollectionHandle ch, ObjectHandle oh,
