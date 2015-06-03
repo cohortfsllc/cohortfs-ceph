@@ -29,7 +29,7 @@ void cls_user_bucket_list(rados::ObjOpUse op,
 		       int *pret);
 void cls_user_get_header(rados::ObjOpUse op, cls_user_header *header,
 			 int *pret);
-int cls_user_get_header_async(Objecter* o, const AVolRef& v,
+int cls_user_get_header_async(rados::Objecter* o, const AVolRef& v,
 			      const oid_t& oid, RGWGetUserHeader_CB *ctx);
 
 #endif

@@ -74,7 +74,7 @@ static ostream& _prefix(std::ostream *_dout, string n) {
 
 typedef boost::mt11213b rngen_t;
 typedef boost::scoped_ptr<Messenger> MessengerRef;
-typedef boost::scoped_ptr<Objecter> ObjecterRef;
+typedef boost::scoped_ptr<rados::Objecter> ObjecterRef;
 
 class TestFactory : public MessageFactory {
   Message* create(int type) {
@@ -246,7 +246,7 @@ class ClientStub : public TestStub
     dout(10) << "ClientStub::" << __func__ << " starting messenger at "
 	    << messenger->get_myaddr() << dendl;
 
-    objecter.reset(new Objecter(cct, messenger.get(), &monc));
+    objecter.reset(new rados::Objecter(cct, messenger.get(), &monc));
     assert(objecter.get() != NULL);
 
     monc.set_messenger(messenger.get());

@@ -563,7 +563,7 @@ namespace rados {
     l.unlock();
   }
 
-  void Objecter::add_osdmap_notifier(const function<void()>& f) {
+  void Objecter::add_osdmap_notifier(const cohort::function<void()>& f) {
     osdmap_notifiers.push_back(f);
   }
 

@@ -51,8 +51,6 @@ using std::cerr;
 using std::endl;
 
 using namespace rados;
-namespace bi = boost::intrusive;
-
 
 CephContext* cct;
 

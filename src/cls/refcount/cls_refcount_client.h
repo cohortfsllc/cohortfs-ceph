@@ -39,7 +39,7 @@ void cls_refcount_get(rados::ObjOpUse op,
 void cls_refcount_put(rados::ObjOpUse op, const string& tag,
 		      bool implicit_ref = false);
 void cls_refcount_set(rados::ObjOpUse op, list<string>& refs);
-int cls_refcount_read(Objecter* o, const Volume& v, const oid_t oid,
+int cls_refcount_read(rados::Objecter* o, const Volume& v, const oid_t oid,
 		      list<string> *refs, bool implicit_ref = false);
 
 #endif

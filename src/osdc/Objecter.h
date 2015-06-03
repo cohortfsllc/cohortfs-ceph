@@ -17,7 +17,6 @@
 
 #include <boost/uuid/nil_generator.hpp>
 #include <condition_variable>
-#include <functional>
 #include <list>
 #include <map>
 #include <memory>
@@ -50,29 +49,10 @@ class MOSDOpReply;
 class MOSDMap;
 
 namespace rados {
-  using boost::intrusive::set;
-  using boost::intrusive::slist;
-  using boost::intrusive::slist_member_hook;
-  using boost::intrusive::slist_base_hook;
-  using boost::intrusive::set_base_hook;
-  using boost::intrusive::link_mode;
-  using boost::intrusive::normal_link;
-  using boost::intrusive::constant_time_size;
-  using boost::intrusive::linear;
-  using boost::intrusive::cache_last;
-  using boost::intrusive::member_hook;
-  using std::vector;
-  using std::string;
-  using std::shared_ptr;
-  using std::unique_ptr;
-  using std::move;
-  using cohort::function;
-  using std::ref;
-  using std::move;
-  typedef function<void(int)> op_callback;
-  typedef function<void(int, uint64_t,
-			ceph::real_time)> stat_callback;
-  typedef function<void(int, bufferlist&&)> read_callback;
+  typedef cohort::function<void(int)> op_callback;
+  typedef cohort::function<void(int, uint64_t,
+				ceph::real_time)> stat_callback;
+  typedef cohort::function<void(int, bufferlist&&)> read_callback;
 
   class CB_Waiter {
   protected:
@@ -143,7 +123,9 @@ namespace rados {
     MonClient *monc;
   private:
     OSDMap *osdmap;
-    vector<function<void()> > osdmap_notifiers;
+    vector<cohort::function<void()> > osdmap_notifiers;
+  public:
+    CephContext *cct;
 
   private:
     std::atomic<uint64_t> last_tid;
@@ -178,7 +160,8 @@ namespace rados {
     struct OSDSession;
     struct Op;
 
-    struct SubOp : public set_base_hook<link_mode<normal_link>>  {
+    struct SubOp : public boost::intrusive::set_base_hook<
+      boost::intrusive::link_mode<boost::intrusive::normal_link>> {
       ceph_tid_t tid;
       int incarnation;
       OSDSession *session;
@@ -191,7 +174,8 @@ namespace rados {
       int attempts;
       bool done;
       Op& parent;
-      slist_member_hook<link_mode<normal_link>> qlink;
+      boost::intrusive::slist_member_hook<
+	boost::intrusive::link_mode<boost::intrusive::normal_link>> qlink;
 
       // Never call this. Stupid STL.
 
@@ -205,13 +189,14 @@ namespace rados {
 	  attempts(0), done(false), parent(p) { }
     };
 
-    struct op_base : public set_base_hook<link_mode<normal_link>>,
+    struct op_base : public boost::intrusive::set_base_hook<
+      boost::intrusive::link_mode<boost::intrusive::normal_link>>,
 		     public RefCountedObject {
       int flags;
       oid_t oid;
       AVolRef volume;
-      unique_ptr<ObjOp> op;
-      vector<SubOp> subops;
+      std::unique_ptr<ObjOp> op;
+      std::vector<SubOp> subops;
       ceph::real_time mtime;
       ceph_tid_t tid;
       epoch_t map_dne_bound;
@@ -228,7 +213,7 @@ namespace rados {
 		  should_resend(true) { }
 
       op_base(oid_t oid, const AVolRef& volume,
-	      unique_ptr<ObjOp>& _op, int flags)
+	      std::unique_ptr<ObjOp>& _op, int flags)
 	: flags(flags), oid(oid), volume(volume), op(move(_op)),
 	  mtime(ceph::real_clock::now()), tid(0), map_dne_bound(0),
 	  paused(false), priority(0), should_resend(true) { }
@@ -244,7 +229,7 @@ namespace rados {
       ZTracer::Trace trace;
 
       Op(const oid_t& o, const AVolRef& volume,
-	 unique_ptr<ObjOp>& _op, int f,
+	 std::unique_ptr<ObjOp>& _op, int f,
 	 op_callback&& ac, op_callback&& co,
 	 ZTracer::Trace *parent) :
 	op_base(o, volume, _op, f),
@@ -287,7 +272,9 @@ namespace rados {
       void finish(int r);
     };
 
-    struct StatfsOp : public set_base_hook<link_mode<normal_link>> {
+    struct StatfsOp : public boost::intrusive::set_base_hook<
+      boost::intrusive::link_mode<
+      boost::intrusive::normal_link>> {
       ceph_tid_t tid;
       struct ceph_statfs *stats;
       Context *onfinish;
@@ -296,18 +283,18 @@ namespace rados {
     };
 
     // -- osd sessions --
-    struct OSDSession : public set_base_hook<link_mode<normal_link>>,
-			public RefCountedObject {
+    struct OSDSession : public boost::intrusive::set_base_hook<
+      boost::intrusive::link_mode< boost::intrusive::normal_link>>,
+				     public RefCountedObject {
       std::shared_timed_mutex lock;
       typedef std::unique_lock<std::shared_timed_mutex> unique_lock;
       typedef std::shared_lock<std::shared_timed_mutex> shared_lock;
 
       static constexpr const uint32_t max_ops_inflight = 5;
-      set<SubOp> subops_inflight;
-
+      boost::intrusive::set<SubOp> subops_inflight;
 
       static constexpr const uint64_t max_ops_queued = 100;
-      set<SubOp> subops_queued;
+      boost::intrusive::set<SubOp> subops_queued;
 
       int osd;
       int incarnation;
@@ -320,11 +307,11 @@ namespace rados {
 
       bool is_homeless() { return (osd == -1); }
     };
-    set<OSDSession, constant_time_size<false> > osd_sessions;
+    boost::intrusive::set<OSDSession> osd_sessions;
 
   private:
-    set<Op, constant_time_size<false> > inflight_ops;
-    set<StatfsOp, constant_time_size<false> > statfs_ops;
+    boost::intrusive::set<Op> inflight_ops;
+    boost::intrusive::set<StatfsOp> statfs_ops;
 
     OSDSession *homeless_session;
 
@@ -395,7 +382,7 @@ namespace rados {
       trace_endpoint("0.0.0.0", 0, "Objecter"),
       last_seen_osdmap_version(0),
       tick_event(0),
-      homeless_session(new OSDSession(cct, -1)),
+      homeless_session(new OSDSession(cct_, -1)),
       mon_timeout(mon_timeout),
       osd_timeout(osd_timeout)
       { }
@@ -458,7 +445,7 @@ namespace rados {
     // The function supplied is called with no lock. If it wants to do
     // something with the OSDMap, it can call with_osdmap on a
     // captured objecter.
-    void add_osdmap_notifier(const function<void()>& f);
+    void add_osdmap_notifier(const cohort::function<void()>& f);
 
   private:
     bool _promote_lock_check_race(shunique_lock& sl);
@@ -503,7 +490,7 @@ namespace rados {
     // mid-level helpers
     Op *prepare_mutate_op(const oid_t& oid,
 			  const AVolRef& volume,
-			  unique_ptr<ObjOp>& op,
+			  std::unique_ptr<ObjOp>& op,
 			  ceph::real_time mtime,
 			  op_callback&& onack, op_callback&& oncommit,
 			  ZTracer::Trace *trace = nullptr) {
@@ -517,7 +504,7 @@ namespace rados {
 
     ceph_tid_t mutate(const oid_t& oid,
 		      const AVolRef& volume,
-		      unique_ptr<ObjOp>& op,
+		      std::unique_ptr<ObjOp>& op,
 		      ceph::real_time mtime,
 		      op_callback&& onack, op_callback&& oncommit,
 		      ZTracer::Trace *trace = nullptr) {
@@ -528,7 +515,7 @@ namespace rados {
 
     ceph_tid_t mutate(const oid_t& oid,
 		      const AVolRef& volume,
-		      unique_ptr<ObjOp>& op,
+		      std::unique_ptr<ObjOp>& op,
 		      ZTracer::Trace *trace = nullptr) {
       auto mtime = ceph::real_clock::now();
       CB_Waiter w;
@@ -539,7 +526,7 @@ namespace rados {
 
     Op *prepare_read_op(const oid_t& oid,
 			const AVolRef& volume,
-			unique_ptr<ObjOp>& op,
+			std::unique_ptr<ObjOp>& op,
 			op_callback&& onack,
 			ZTracer::Trace *trace = nullptr) {
       Op *o = new Op(oid, volume, op,
@@ -549,7 +536,7 @@ namespace rados {
       return o;
     }
     ceph_tid_t read(const oid_t& oid, const AVolRef& volume,
-		    unique_ptr<ObjOp>& op, op_callback&& onack,
+		    std::unique_ptr<ObjOp>& op, op_callback&& onack,
 		    ZTracer::Trace *trace = nullptr) {
       Op *o = prepare_read_op(oid, volume, op, move(onack), trace);
       return op_submit(o);
@@ -557,7 +544,7 @@ namespace rados {
 
     ceph_tid_t read(const oid_t& oid,
 		    const AVolRef& volume,
-		    unique_ptr<ObjOp>& op,
+		    std::unique_ptr<ObjOp>& op,
 		    ZTracer::Trace *trace = nullptr) {
       CB_Waiter w;
 
@@ -582,7 +569,7 @@ namespace rados {
 
     ceph_tid_t stat(const oid_t& oid,
 		    const AVolRef& volume,
-		    function<void(int, uint64_t, ceph::real_time)>&& cb,
+		    cohort::function<void(int, uint64_t, ceph::real_time)>&& cb,
 		    ZTracer::Trace *trace = nullptr) {
       ObjectOperation ops = volume->op();
       ops->stat(move(cb));
@@ -761,7 +748,7 @@ namespace rados {
     // writes
     ceph_tid_t _modify(const oid_t& oid,
 		       const AVolRef& volume,
-		       unique_ptr<ObjOp>& ops,
+		       std::unique_ptr<ObjOp>& ops,
 		       op_callback&& onack, op_callback&& oncommit,
 		       ZTracer::Trace *trace = nullptr) {
       Op *o = new Op(oid, volume, ops, global_op_flags |
@@ -772,7 +759,7 @@ namespace rados {
 
     int _modify(const oid_t& oid,
 		const AVolRef& volume,
-		unique_ptr<ObjOp>& ops,
+		std::unique_ptr<ObjOp>& ops,
 		ZTracer::Trace *trace = nullptr) {
       CB_Waiter w;
       _modify(oid, volume, ops, nullptr, w, trace);
@@ -1364,7 +1351,9 @@ namespace rados {
     typedef std::lock_guard<std::mutex> lock_guard;
     typedef std::unique_lock<std::mutex> unique_lock;
 
-    struct BatchComplete : public slist_base_hook<link_mode<normal_link>> {
+    struct BatchComplete : public boost::intrusive::slist_base_hook<
+      boost::intrusive::link_mode<
+      boost::intrusive::normal_link>> {
       flush_queue& fq;
       op_callback cb;
 
@@ -1383,7 +1372,7 @@ namespace rados {
       Flusher& f;
       bool flushed;
       int r;
-      slist<BatchComplete> completions;
+      boost::intrusive::slist<BatchComplete> completions;
       op_callback cb;
       std::condition_variable c;
       flush_queue(Flusher& _f) : f(_f), flushed(false), r(0) { }
@@ -1442,7 +1431,7 @@ namespace rados {
 	lock_guard l(lock);
 	fq->completions.push_front(*cb);
       }
-      return ref(*cb);
+      return std::ref(*cb);
     }
 
     int flush() {
@@ -1460,7 +1449,6 @@ namespace rados {
       return oq->flush(l);
     }
 
-
     void flush(op_callback&& cb) {
       unique_lock l(lock);
 
@@ -1477,7 +1465,5 @@ namespace rados {
     }
   };
 };
-
-using rados::Objecter;
 
 #endif
