@@ -670,16 +670,6 @@ target_link_libraries(unittest_trans os global leveldb aio boost_filesystem
 set_target_properties(unittest_trans
   PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
 
-# unittest_keys not working commented out for now
-#add_executable(unittest_keys
-#  testkeys.cc
-#  )
-#add_test(unittest_keys unittest_keys)
-#add_dependencies(check unittest_keys)
-#target_link_libraries(unittest_keys mon global ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
-#set_target_properties(unittest_keys
-#  PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
-
 ## dencoder
 set(dencoder_srcs
   encoding/ceph_dencoder.cc
@@ -1069,8 +1059,8 @@ set_target_properties(unittest_queues PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FL
 
 # unittest_fragtreeindex
 add_executable(unittest_fragtreeindex EXCLUDE_FROM_ALL test_fragtreeindex.cc)
-add_test(unittest_fragreeindex unittest_fragreeindex)
-add_dependencies(check unittest_fragreeindex)
+add_test(unittest_fragtreeindex unittest_fragtreeindex)
+add_dependencies(check unittest_fragtreeindex)
 target_link_libraries(unittest_fragtreeindex os_filestore global common leveldb ${UNITTEST_LIBS})
 set_target_properties(unittest_fragtreeindex PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
 
@@ -1080,56 +1070,6 @@ add_test(unittest_cohort_function unittest_cohort_function)
 add_dependencies(check unittest_cohort_function)
 target_link_libraries(unittest_cohort_function ${UNITTEST_LIBS})
 set_target_properties(unittest_cohort_function PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
-
-# simple_server
-#add_executable(simple_server EXCLUDE_FROM_ALL
-#  messenger/simple_server.cc
-#  messenger/simple_dispatcher.cc
-#  )
-#add_test(simple_server simple_server)
-#add_dependencies(check simple_server)
-#target_link_libraries(simple_server global common boost_regex
-#  boost_filesystem ${ALLOC_LIBS})
-#set_target_properties(simple_server
-#  PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
-
-#simple_client
-#add_executable(simple_client
-#  messenger/simple_client.cc
-#  messenger/simple_dispatcher.cc
-#  )
-#add_test(simple_client simple_client)
-#add_dependencies(check simple_client)
-#target_link_libraries(simple_client global common boost_filesystem
-#  boost_regex ${ALLOC_LIBS})
-#set_target_properties(simple_client
-#  PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
-
-if (HAVE_XIO)
-  # xio_server
-  add_executable(xio_server
-    messenger/xio_server.cc
-    messenger/xio_dispatcher.cc
-    )
-  add_test(xio_server xio_server)
-  add_dependencies(check xio_server)
-  target_link_libraries(xio_server os global common boost_filesystem
-    boost_regex ${ALLOC_LIBS} ${EXTRALIBS})
-  set_target_properties(xio_server
-    PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
-
-  # xio_client
-  add_executable(xio_client
-    messenger/xio_client.cc
-    messenger/xio_dispatcher.cc
-    )
-  add_test(xio_client xio_client)
-  add_dependencies(check xio_client)
-  target_link_libraries(xio_client os global common boost_filesystem
-    boost_regex ${ALLOC_LIBS} ${EXTRALIBS})
-  set_target_properties(xio_client
-    PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
-endif(HAVE_XIO)
 
 # smalliobenchrbd
 set(smalliobenchrbd_srcs
@@ -1251,6 +1191,68 @@ target_link_libraries(unittest_keyvaluedb_iterators
   ${CMAKE_DL_LIBS}
   ${ALLOC_LIBS}
   )
+
+if (HAVE_XIO)
+  # xio_server
+  add_executable(xio_server
+    messenger/xio_server.cc
+    messenger/xio_dispatcher.cc
+    )
+  add_test(xio_server xio_server)
+  add_dependencies(check xio_server)
+  target_link_libraries(xio_server os global common boost_filesystem
+    boost_regex ${ALLOC_LIBS} ${EXTRALIBS})
+  set_target_properties(xio_server
+    PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
+
+  # xio_client
+  add_executable(xio_client
+    messenger/xio_client.cc
+    messenger/xio_dispatcher.cc
+    )
+  add_test(xio_client xio_client)
+  add_dependencies(check xio_client)
+  target_link_libraries(xio_client os global common boost_filesystem
+    boost_regex ${ALLOC_LIBS} ${EXTRALIBS})
+  set_target_properties(xio_client
+    PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
+endif(HAVE_XIO)
+
+# Tests that hang so are marked out for now
+# simple_server
+#add_executable(simple_server EXCLUDE_FROM_ALL
+#  messenger/simple_server.cc
+#  messenger/simple_dispatcher.cc
+#  )
+#add_test(simple_server simple_server)
+#add_dependencies(check simple_server)
+#target_link_libraries(simple_server global common boost_regex
+#  boost_filesystem ${ALLOC_LIBS})
+#set_target_properties(simple_server
+#  PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
+
+#simple_client
+#add_executable(simple_client
+#  messenger/simple_client.cc
+#  messenger/simple_dispatcher.cc
+#  )
+#add_test(simple_client simple_client)
+#add_dependencies(check simple_client)
+#target_link_libraries(simple_client global common boost_filesystem
+#  boost_regex ${ALLOC_LIBS})
+#set_target_properties(simple_client
+#  PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
+
+# unittest_keys not working commented out for now
+#add_executable(unittest_keys
+#  testkeys.cc
+#  )
+#add_test(unittest_keys unittest_keys)
+#add_dependencies(check unittest_keys)
+#target_link_libraries(unittest_keys mon global ${CMAKE_DL_LIBS} ${ALLOC_LIBS})
+#set_target_properties(unittest_keys
+#  PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
+
 
 # Don't know if following tests are necessary
 

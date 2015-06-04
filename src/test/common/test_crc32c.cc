@@ -49,7 +49,7 @@ TEST(Crc32c, Performance) {
 
   {
     ceph::real_time start = ceph::real_clock::now();
-    unsigned val = ceph_crc32c(0xffffffff, (unsigned char *)a, len);
+    unsigned val = ceph_crc32c(0, (unsigned char *)a, len); 
     ceph::real_time end = ceph::real_clock::now();
     std::chrono::duration<float> secs = end - start;
     float rate = (float)len / (float)(1024*1024) / secs.count();
@@ -67,7 +67,7 @@ TEST(Crc32c, Performance) {
   }
   {
     ceph::real_time start = ceph::real_clock::now();
-    unsigned val = ceph_crc32c(0xffffffff, (unsigned char *)a, len);
+    unsigned val = ceph_crc32c_sctp(0, (unsigned char *)a, len);
     ceph::real_time end = ceph::real_clock::now();
     std::chrono::duration<float> secs = end - start;
     float rate = (float)len / (float)(1024*1024) / secs.count();
@@ -76,7 +76,7 @@ TEST(Crc32c, Performance) {
   }
   {
     ceph::real_time start = ceph::real_clock::now();
-    unsigned val = ceph_crc32c(0xffffffff, (unsigned char *)a, len);
+    unsigned val = ceph_crc32c_intel_baseline(0, (unsigned char *)a, len);
     ceph::real_time end = ceph::real_clock::now();
     std::chrono::duration<float> secs = end - start;
     float rate = (float)len / (float)(1024*1024) / secs.count();

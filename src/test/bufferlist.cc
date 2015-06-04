@@ -1853,7 +1853,7 @@ TEST(BufferList, crc32c_append_perf) {
 
   {
     ceph::real_time start = ceph::real_clock::now();
-    uint32_t r = bla.crc32c(0);
+    uint32_t r = bla.crc32c(5);
     ceph::real_time end = ceph::real_clock::now();
     std::chrono::duration<float> secs = end - start;
     float rate = (float)len / (float)(1024*1024) / secs.count();
@@ -1864,7 +1864,7 @@ TEST(BufferList, crc32c_append_perf) {
   assert(buffer::get_cached_crc_adjusted() == 1 + base_cached_adjusted);
   {
     ceph::real_time start = ceph::real_clock::now();
-    uint32_t r = bla.crc32c(0);
+    uint32_t r = bla.crc32c(5);
     ceph::real_time end = ceph::real_clock::now();
     std::chrono::duration<float> secs = end - start;
     float rate = (float)len / (float)(1024*1024) / secs.count();
@@ -1876,7 +1876,7 @@ TEST(BufferList, crc32c_append_perf) {
 
   {
     ceph::real_time start = ceph::real_clock::now();
-    uint32_t r = bla.crc32c(0);
+    uint32_t r = blb.crc32c(0);
     ceph::real_time end = ceph::real_clock::now();
     std::chrono::duration<float> secs = end - start;
     float rate = (float)len / (float)(1024*1024) / secs.count();
@@ -1886,7 +1886,7 @@ TEST(BufferList, crc32c_append_perf) {
   assert(buffer::get_cached_crc() == 1 + base_cached);
   {
     ceph::real_time start = ceph::real_clock::now();
-    uint32_t r = bla.crc32c(0);
+    uint32_t r = blb.crc32c(0);
     ceph::real_time end = ceph::real_clock::now();
     std::chrono::duration<float> secs = end - start;
     float rate = (float)len / (float)(1024*1024) / secs.count();
@@ -1900,7 +1900,7 @@ TEST(BufferList, crc32c_append_perf) {
   ab.push_back(b);
   {
     ceph::real_time start = ceph::real_clock::now();
-    uint32_t r = bla.crc32c(0);
+    uint32_t r = ab.crc32c(0);
     ceph::real_time end = ceph::real_clock::now();
     std::chrono::duration<float> secs = end - start;
     float rate = (float)len / (float)(1024*1024) / secs.count();
@@ -1914,7 +1914,7 @@ TEST(BufferList, crc32c_append_perf) {
   ac.push_back(c);
   {
     ceph::real_time start = ceph::real_clock::now();
-    uint32_t r = bla.crc32c(0);
+    uint32_t r = ac.crc32c(0);
     ceph::real_time end = ceph::real_clock::now();
     std::chrono::duration<float> secs = end - start;
     float rate = (float)len / (float)(1024*1024) / secs.count();
@@ -1929,7 +1929,7 @@ TEST(BufferList, crc32c_append_perf) {
   ba.push_back(a);
   {
     ceph::real_time start = ceph::real_clock::now();
-    uint32_t r = bla.crc32c(0);
+    uint32_t r = ba.crc32c(0);
     ceph::real_time end = ceph::real_clock::now();
     std::chrono::duration<float> secs = end - start;
     float rate = (float)len / (float)(1024*1024) / secs.count();
@@ -1940,7 +1940,7 @@ TEST(BufferList, crc32c_append_perf) {
   assert(buffer::get_cached_crc_adjusted() == 4 + base_cached_adjusted);
   {
     ceph::real_time start = ceph::real_clock::now();
-    uint32_t r = bla.crc32c(0);
+    uint32_t r = ba.crc32c(5);
     ceph::real_time end = ceph::real_clock::now();
     std::chrono::duration<float> secs = end - start;
     float rate = (float)len / (float)(1024*1024) / secs.count();
