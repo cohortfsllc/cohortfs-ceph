@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 2.8.11)
 
+# must set this real early *before* project() command.
+set(CMAKE_FIND_NO_INSTALL_PREFIX "ON" CACHE STRING "really" FORCE)
+
 project(Ceph)
 set(VERSION "0.80")
 
@@ -13,10 +16,8 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/modules/")
 option(USE_LIBCXX "Build against LLVM project's libc++" OFF)
 
 if(${USE_LIBCXX} AND (DEFINED LIBCXX_ROOT))
-  set(CMAKE_PREFIX_PATH $LIBCXX_ROOT)
+  set(CMAKE_PREFIX_PATH "${LIBCXX_ROOT}")
   include_directories(SYSTEM "${LIBCXX_ROOT}/include")
-  set(CMAKE_INCLUDE_PATH "${LIBCXX_ROOT}/include")
-  set(CMAKE_LIBRARY_PATH "${LIBCXX_ROOT}/lib")
   set(BOOST_ROOT $LIBCXX_ROOT)
   set(CRYPTOPP_ROOT_DIR $LIBCXX_ROOT)
 endif()
