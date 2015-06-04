@@ -7,12 +7,22 @@
 get_filename_component(module_file_path ${CMAKE_CURRENT_LIST_FILE} PATH)
 
 # Look for the header file.
-find_path(LEVELDB_INCLUDE NAMES leveldb/db.h PATHS $ENV{LEVELDB_ROOT}/include /opt/local/include /usr/local/include /usr/include DOC "Path in which the file leveldb/db.h is located." )
+#	2 find_paths: search order w/o NO_DEFAULT_PATH not good.
+#	NO_SYSTEM_ENVIRONMENT_PATH -- don't look in $PATH or $LIB .
+#	( set elsewhere: CMAKE_FIND_NO_INSTALL_PREFIX -- don't look where we install. )
+if(DEFINED "ENV{LEVELDB_ROOT}")
+find_path(LEVELDB_INCLUDE NAMES leveldb/db.h PATHS $ENV{LEVELDB_ROOT}/include DOC "Path in which the file leveldb/db.h is located." NO_DEFAULT_PATH )
+endif()
+find_path(LEVELDB_INCLUDE NAMES leveldb/db.h PATHS /opt/local/include DOC "Path in which the file leveldb/db.h is located." NO_DEFAULT_PATH )
+find_path(LEVELDB_INCLUDE NAMES leveldb/db.h NO_SYSTEM_ENVIRONMENT_PATH )
 mark_as_advanced(LEVELDB_INCLUDE)
 
 # Look for the library.
 # Does this work on UNIX systems? (LINUX)
-find_library(LEVELDB_LIBS NAMES leveldb PATHS /usr/lib $ENV{LEVELDB_ROOT}/lib DOC "Path to leveldb library." )
+if(DEFINED "ENV{LEVELDB_ROOT}")
+find_library(LEVELDB_LIBS NAMES leveldb PATHS $ENV{LEVELDB_ROOT}/lib DOC "Path to leveldb library." NO_DEFAULT_PATH )
+endif()
+find_library(LEVELDB_LIBS NAMES leveldb DOC "Path to leveldb library." )
 mark_as_advanced(LEVELDB_LIBS)
 
 # Copy the results to the output variables.
