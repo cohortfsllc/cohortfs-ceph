@@ -18,6 +18,8 @@ struct test_object : public skiplist<test_object>::object {
     return -1;
   }
 };
+void intrusive_ptr_add_ref(test_object *p) { p->get(); }
+void intrusive_ptr_release(test_object *p) { p->put(); }
 
 TEST(Skiplist, Get)
 {
@@ -26,7 +28,7 @@ TEST(Skiplist, Get)
   skiplist<test_object> skip(gc, test_object::cmp, name);
   skip_stats stats;
 
-  test_object* obj = skip.get(test_object(5));
+  auto obj = skip.get(test_object(5));
   ASSERT_TRUE(obj != nullptr);
   skip.get_stats(&stats);
   ASSERT_EQ(1, stats.gets);
@@ -34,16 +36,18 @@ TEST(Skiplist, Get)
   ASSERT_EQ(0, stats.gets_existing);
   ASSERT_EQ(0, stats.puts);
 
-  obj->put();
+  obj.reset();
   skip.get_stats(&stats);
   ASSERT_EQ(1, stats.puts);
+  ASSERT_EQ(1, stats.puts_last);
 
   obj = skip.get(test_object(5));
   skip.get_stats(&stats);
   ASSERT_EQ(2, stats.gets);
   ASSERT_EQ(1, stats.gets_existing);
 
-  obj->put();
+  obj.reset();
   skip.get_stats(&stats);
   ASSERT_EQ(2, stats.puts);
+  ASSERT_EQ(2, stats.puts_last);
 }

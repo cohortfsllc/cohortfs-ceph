@@ -8,6 +8,8 @@
 #include <mutex>
 #include <type_traits>
 
+#include <boost/intrusive_ptr.hpp>
+
 #include <mcas/mcas.h>
 #include <mcas/osi_mcas_obj_cache.h>
 #include <mcas/set_queue_adt.h>
@@ -176,7 +178,7 @@ class skiplist : private detail::skiplist_base {
     skiplist<T> *parent;
     friend class skiplist<T>;
    public:
-    object() : ref_count(1), parent(nullptr) {}
+    object() : ref_count(0), parent(nullptr) {}
     int get() { return ++ref_count; }
     int put() {
       skip_stats *s = parent->get_mythread_stats();
@@ -214,7 +216,7 @@ class skiplist : private detail::skiplist_base {
 
   using skiplist_base::get_stats; // void get_stats(skip_stats *s)
 
-  T* get(T&& search_template)
+  boost::intrusive_ptr<T> get(T&& search_template)
   {
     skip_stats *s = get_mythread_stats();
     ++s->gets;
@@ -243,7 +245,7 @@ class skiplist : private detail::skiplist_base {
     if (node->get() == 1)
       --unused;
     ++s->gets_existing;
-    return node;
+    return boost::intrusive_ptr<T>(node, false); // don't add another ref
   }
 };
 
