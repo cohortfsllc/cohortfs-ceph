@@ -24,6 +24,26 @@ TEST(Skiplist, Get)
   char name[] = "test";
   gc_global gc;
   skiplist<test_object> skip(gc, test_object::cmp, name);
+  skip_stats stats;
+
   test_object* obj = skip.get(test_object(5));
   ASSERT_TRUE(obj != nullptr);
+  skip.get_stats(&stats);
+  ASSERT_EQ(1, stats.gets);
+  ASSERT_EQ(1, stats.gets_created);
+  ASSERT_EQ(0, stats.gets_existing);
+  ASSERT_EQ(0, stats.puts);
+
+  obj->put();
+  skip.get_stats(&stats);
+  ASSERT_EQ(1, stats.puts);
+
+  obj = skip.get(test_object(5));
+  skip.get_stats(&stats);
+  ASSERT_EQ(2, stats.gets);
+  ASSERT_EQ(1, stats.gets_existing);
+
+  obj->put();
+  skip.get_stats(&stats);
+  ASSERT_EQ(2, stats.puts);
 }
