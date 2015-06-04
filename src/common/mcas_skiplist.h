@@ -6,6 +6,7 @@
 
 #include <atomic>
 #include <mutex>
+#include <ostream>
 #include <type_traits>
 
 #include <boost/intrusive_ptr.hpp>
@@ -15,6 +16,7 @@
 #include <mcas/set_queue_adt.h>
 
 #include "include/ceph_assert.h"
+
 
 namespace cohort {
 namespace mcas {
@@ -160,7 +162,14 @@ class skiplist_base {
   }
 };
 
+template <typename T>
+void dump_foreach(osi_set_t *skip, setval_t k, setval_t v, void *a)
+{
+  *static_cast<std::ostream*>(a) << ' ' << *static_cast<const T*>(v);
+}
+
 } // namespace detail
+
 
 // T must implement a move constructor and inherit from skiplist::object
 template <typename T>
@@ -246,6 +255,12 @@ class skiplist : private detail::skiplist_base {
       --unused;
     ++s->gets_existing;
     return boost::intrusive_ptr<T>(node, false); // don't add another ref
+  }
+
+  void dump(std::ostream &stream) const
+  {
+    osi_cas_skip_for_each(gc, skip, detail::dump_foreach<T>, &stream);
+    stream << std::endl;
   }
 };
 
