@@ -38,6 +38,8 @@ private:
   inogen_t meta_ino;
   lzfw_vnode_t* meta_vno; /* root dataset root vno */
 
+  ZTracer::Endpoint trace_endpoint;
+
   int attach_meta();
 
 public:
@@ -371,7 +373,18 @@ public:
   objectstore_perf_stat_t get_cur_stats();
 
   int queue_transactions(list<Transaction*>& tls,
-                         OpRequestRef op = OpRequestRef());
+			 OpRequestRef op = OpRequestRef());
+
+  /* ZFStore */
+  int do_transactions(list<Transaction*> &tls, uint64_t op_seq,
+                      ZTracer::Trace &trace);
+  int do_transaction(Transaction& t, uint64_t op_seq, int trans_num);
+  int touch(ZCollection* c, ZObject* o);
+  int write(ZCollection* c, ZObject* o, off_t offset, size_t len,
+	    const bufferlist& bl, bool replica);
+  int zero(ZCollection* c, ZObject* o, off_t offset, size_t len);
+  int truncate(ZCollection* c, ZObject* o, uint64_t size);
+  int remove(ZCollection* c, ZObject *o);
 
 }; /* ZFStore */
 

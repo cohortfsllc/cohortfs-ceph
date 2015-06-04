@@ -21,6 +21,7 @@
 #include <boost/uuid/string_generator.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/algorithm/string/split.hpp>
+#include "common/zipkin_trace.h"
 #include "ZFSHelper.h"
 
 static std::mutex mtx;
@@ -51,8 +52,11 @@ extern "C" {
 using namespace cohort_zfs;
 
 ZFStore::ZFStore(CephContext* cct, const std::string& path)
-  : ObjectStore(cct, path), root_ds(path + "/osdfs"), zhfs(nullptr),
-    meta_ino{0, 0}, meta_vno(nullptr)
+  : ObjectStore(cct, path),
+    root_ds(path + "/osdfs"),
+    zhfs(nullptr),
+    meta_ino{0, 0}, meta_vno(nullptr),
+    trace_endpoint("0.0.0.0", 0, NULL)
 {
   /* global init */
   if (!initialized) {
@@ -510,7 +514,7 @@ int ZFStore::queue_transactions(list<Transaction*>& tls,
 {
   abort();
   return 0;
-}
+} /* queue_transactions */
 
 ZFStore::~ZFStore()
 {
@@ -532,4 +536,415 @@ ZFStore::~ZFStore()
       initialized = false;
     }
   }
-}
+} /* ~ZFStore */
+
+/* ZFStore */
+
+int ZFStore::do_transactions(list<Transaction*> &tls, uint64_t op_seq,
+			     ZTracer::Trace &trace)
+{
+  int r = 0;
+
+  trace.event("op_apply_start");
+  trace.event("do_transactions");
+
+  int ix = 0;
+  for (list<Transaction*>::iterator p = tls.begin();
+       p != tls.end(); ++p, ix++) {
+    r = do_transaction(**p, op_seq, ix);
+    if (r < 0)
+      break;
+  }
+
+  trace.event("op_apply_finish");
+
+  return r;
+} /* do_transactions */
+
+int ZFStore::do_transaction(Transaction& t, uint64_t op_seq,
+			    int trans_num)
+{
+  for (Transaction::op_iterator i = t.begin(); i != t.end(); ++i) {
+    int r = 0;
+
+    ZCollection* c = nullptr;
+    ZObject* o, *o2;
+
+    switch (i->op) {
+    case Transaction::OP_NOP:
+      break;
+
+    case Transaction::OP_TOUCH:
+      r = -ENOENT;
+      c = get_slot_collection(t, i->c1_ix);
+      if (c) {
+	o = get_slot_object(t, c, i->o1_ix, true /* create */);
+	if (o)
+	  r = touch(c, o);
+      }
+      break;
+
+    case Transaction::OP_WRITE:
+      r = -ENOENT;
+      c = get_slot_collection(t, i->c1_ix);
+      if (c) {
+	o = get_slot_object(t, c, i->o1_ix, true /* create */);
+	if (o)
+	  r = write(c, o, i->off, i->len, i->data, t.get_replica());
+      }
+      break;
+
+    case Transaction::OP_ZERO:
+      r = -ENOENT;
+      c = get_slot_collection(t, i->c1_ix);
+      if (c) {
+	o = get_slot_object(t, c, i->o1_ix, true /* create */);
+	if (o)
+	  r = zero(c, o, i->off, i->len);
+      }
+      break;
+
+    case Transaction::OP_TRIMCACHE:
+      // deprecated, no-op
+      break;
+
+    case Transaction::OP_TRUNCATE:
+      r = -ENOENT;
+      c = get_slot_collection(t, i->c1_ix);
+      if (c) {
+	o = get_slot_object(t, c, i->o1_ix, true /* create */);
+	if (o)
+	  r = truncate(c, o, i->off);
+      }
+      break;
+
+    case Transaction::OP_REMOVE:
+      r = -ENOENT;
+      c = get_slot_collection(t, i->c1_ix);
+      if (c) {
+	o = get_slot_object(t, c, i->o1_ix, false /* create */);
+	if (o)
+	  r = remove(c, o);
+      }
+      break;
+
+    case Transaction::OP_SETATTR:
+      r = -ENOENT;
+      c = get_slot_collection(t, i->c1_ix);
+      if (c) {
+	o = get_slot_object(t, c, i->o1_ix, true /* create */);
+	if (o) {
+	  bufferlist &bl = i->data;
+	  thread_local map<string, bufferptr> to_set;
+	  to_set.clear();
+	  to_set[i->name] = buffer::ptr(bl.c_str(), bl.length());
+	  r = setattrs(c, o, to_set);
+	}
+      }
+      break;
+
+    case Transaction::OP_SETATTRS:
+      r = -ENOENT;
+      c = get_slot_collection(t, i->c1_ix);
+      if (c) {
+	o = get_slot_object(t, c, i->o1_ix, true /* create */);
+	if (o)
+	  r = setattrs(c, o, i->xattrs);
+      }
+      break;
+
+    case Transaction::OP_RMATTR:
+      r = -ENOENT;
+      c = get_slot_collection(t, i->c1_ix);
+      if (c) {
+	o = get_slot_object(t, c, i->o1_ix, false /* create */);
+	if (o)
+	    r = rmattr(c, o, i->name);
+      }
+      break;
+
+    case Transaction::OP_RMATTRS:
+      r = -ENOENT;
+      c = get_slot_collection(t, i->c1_ix);
+      if (c) {
+	o = get_slot_object(t, c, i->o1_ix, false /* create */);
+	if (o)
+	    r = rmattrs(c, o);
+      }
+      break;
+
+    case Transaction::OP_CLONE: // I hate you
+      r = -ENOENT;
+      c = get_slot_collection(t, i->c1_ix);
+      if (c) {
+	o = get_slot_object(t, c, i->o1_ix, true /* create */);
+	if (o) {
+	  o2 = get_slot_object(t, c, i->o2_ix, true /* create */);
+	  if (o2)
+	    r = clone(c, o, o2);
+	}
+      }
+      break;
+
+    case Transaction::OP_CLONERANGE:
+      r = -ENOENT;
+      c = get_slot_collection(t, i->c1_ix);
+      if (c) {
+	o = get_slot_object(t, c, i->o1_ix, true /* create */);
+	if (o) {
+	  o2 = get_slot_object(t, c, i->o2_ix, true /* create */);
+	  if (o2)
+	    r = clone_range(c, o, o2, i->off, i->len, i->off);
+	}
+      }
+      break;
+
+    case Transaction::OP_CLONERANGE2:
+      r = -ENOENT;
+      c = get_slot_collection(t, i->c1_ix);
+      if (c) {
+	o = get_slot_object(t, c, i->o1_ix, true /* create */);
+	if (o) {
+	  o2 = get_slot_object(t, c, i->o2_ix, true /* create */);
+	  if (o2)
+	    r = clone_range(c, o, o2, i->off, i->len, i->off2);
+	}
+      }
+      break;
+
+    case Transaction::OP_MKCOLL:
+      r = create_collection(std::get<1>(t.c_slot(i->c1_ix)));
+      if (!r) {
+	(void) get_slot_collection(t, i->c1_ix);
+      }
+      break;
+
+    case Transaction::OP_RMCOLL:
+      r = -ENOENT;
+      c = get_slot_collection(t, i->c1_ix);
+      if (c)
+	r = destroy_collection(c);
+      break;
+
+    case Transaction::OP_COLL_SETATTR:
+      r = -ENOENT;
+      c = get_slot_collection(t, i->c1_ix);
+      if (c)
+	r = collection_setattr(i->name, i->data);
+      break;
+
+    case Transaction::OP_COLL_RMATTR:
+      r = -ENOENT;
+      c = get_slot_collection(t, i->c1_ix);
+      if (c)
+	r = collection_rmattr(c, i->name);
+      break;
+
+    case Transaction::OP_OMAP_CLEAR:
+      r = -ENOENT;
+      c = get_slot_collection(t, i->c1_ix);
+      if (c) {
+	o = get_slot_object(t, c, i->o1_ix, false /* !create */);
+	if (o)
+	  r = omap_clear(c, o);
+      }
+      break;
+
+    case Transaction::OP_OMAP_SETKEYS:
+      r = -ENOENT;
+      c = get_slot_collection(t, i->c1_ix);
+      if (c) {
+	o = get_slot_object(t, c, i->o1_ix, true /* create */);
+	if (o)
+	  r = omap_setkeys(c, o, i->attrs);
+      }
+      break;
+
+    case Transaction::OP_OMAP_RMKEYS:
+      r = -ENOENT;
+      c = get_slot_collection(t, i->c1_ix);
+      if (c) {
+	o = get_slot_object(t, c, i->o1_ix, false /* !create */);
+	if (o)
+	  r = omap_rmkeys(c, o, i->keys);
+      }
+      break;
+
+    case Transaction::OP_OMAP_RMKEYRANGE:
+      r = -ENOENT;
+      c = get_slot_collection(t, i->c1_ix);
+      if (c) {
+	o = get_slot_object(t, c, i->o1_ix, false /* !create */);
+	if (o)
+	  r = omap_rmkeyrange(c, o, i->name, i->name2);
+      }
+      break;
+
+    case Transaction::OP_OMAP_SETHEADER:
+      r = -ENOENT;
+      c = get_slot_collection(t, i->c1_ix);
+      if (c) {
+	o = get_slot_object(t, c, i->o1_ix, true /* !create */);
+	if (o)
+	  r = omap_setheader(c, o, i->data);
+      }
+      break;
+
+    case Transaction::OP_SETALLOCHINT:
+      r = -ENOENT;
+      c = get_slot_collection(t, i->c1_ix);
+      if (c) {
+	o = get_slot_object(t, c, i->o1_ix, false /* !create */);
+	if (o)
+	  r = set_alloc_hint(c, o, i->value1, i->value2);
+      }
+      break;
+
+    case Transaction::OP_STARTSYNC:
+      // no-op
+      break;
+
+#if 0
+    case Transaction::OP_COLL_ADD:
+      r = -EINVAL; // removed
+      break;
+
+    case Transaction::OP_COLL_REMOVE:
+      r = -EINVAL; // removed
+      break;
+
+    case Transaction::OP_COLL_MOVE:
+      r = -EINVAL; // removed
+      break;
+
+    case Transaction::OP_COLL_MOVE_RENAME:
+      r = -EINVAL; // removed
+      break;
+
+    case Transaction::OP_COLL_RENAME:
+      r = -EINVAL; // removed
+      break;
+#endif
+    default:
+      derr << "bad op " << i->op << dendl;
+      assert(0);
+    }
+
+    if (r < 0) {
+      bool ok = false;
+
+      if (r == -ENOENT && !(i->op == Transaction::OP_CLONERANGE ||
+			    i->op == Transaction::OP_CLONE ||
+			    i->op == Transaction::OP_CLONERANGE2))
+	// -ENOENT is normally okay
+	// ...including on a replayed OP_RMCOLL with checkpoint mode
+	ok = true;
+
+      if (r == -ENODATA)
+	ok = true;
+
+      if (i->op == Transaction::OP_SETALLOCHINT)
+	// Either EOPNOTSUPP or EINVAL most probably.  EINVAL in most
+	// cases means invalid hint size (e.g. too big, not a multiple
+	// of block size, etc) or, at least on xfs, an attempt to set
+	// or change it when the file is not empty.  However,
+	// OP_SETALLOCHINT is advisory, so ignore all errors.
+	ok = true;
+
+      if (!ok) {
+	const char* msg = "unexpected error code";
+
+	if (r == -ENOENT && (i->op == Transaction::OP_CLONERANGE ||
+			     i->op == Transaction::OP_CLONE ||
+			     i->op == Transaction::OP_CLONERANGE2))
+	  msg = "ENOENT on clone suggests osd bug";
+
+	dout(0) << " error " << cpp_strerror(r) << " not handled on operation "
+		<< i->op << " (" << spos << ", or op " << spos.op
+		<< ", counting from 0)" << dendl;
+	dout(0) << msg << dendl;
+	dout(0) << " transaction dump:\n";
+	JSONFormatter f(true);
+	f.open_object_section("transaction");
+	t.dump(&f);
+	f.close_section();
+	f.flush(*_dout);
+	*_dout << dendl;
+	assert(0 == "unexpected error");
+
+      }
+    }
+
+  } /* foreach op */
+
+  return 0;  // FIXME count errors
+} /* do_transaction */
+
+int ZFStore::touch(ZCollection* c, ZObject* o)
+{
+  // no-op on object now instantiated
+  dout(15) << "touch " << c->get_cid() << "/" << o->get_oid() << dendl;
+  return 0;
+} /* touch */
+
+int ZFStore::write(ZCollection* c, ZObject* o, off_t offset, size_t len,
+		   const bufferlist& bl, bool replica)
+{
+
+  dout(15) << "write " << c->get_cid() << "/" << o->get_oid() << " "
+	   << offset << "~" << len << dendl;
+  int r = 0;
+  int bytes_written = 0;
+  static constexpr uint16_t n_iovs = 16;
+  thread_local iovec[n_iovs] iovs;
+  uint16_t iov_ix;
+
+  auto pb = bl.buffers().begin();
+  while (pb != bl.buffers().end()) {
+    int iov_len = 0;
+    for (iov_ix = 0; (iov_ix < n_iov) && (pb != bl.buffers().end());
+	 ++iov_ix, ++pb) {
+      iovs[iov_ix].iov_base = static_cast<void*>(pb->c_str());
+      iovs[iov_ix].iov_len = pb->length();
+      iov_len += iovs[iov_ix].iov_len;
+    }
+    r = lzfw_writev(zhfs, &cred, o->vno, &iovs, iov_ix, offset);
+    if (r < 0) {
+      r = -EIO;
+      goto out;
+    }
+    offset += iov_len; // XXX do short pwritevs happen?
+  }
+
+ out:
+  return r;
+} /* write */
+
+int ZFStore::zero(ZCollection* c, ZObject* o, off_t offset, size_t len)
+{
+  dout(15) << "zero " << c->get_cid() << "/" << o->get_oid() << " "
+	   << offset << "~" << len << dendl;
+
+  /* call the method exposing VOP_SPACE */
+  int r = lzfw_zero(zhfs, &cred, o->vno, offset, length);
+
+  return r;
+} /* zero */
+
+int ZFStore::truncate(ZCollection* c, ZObject* o, uint64_t size)
+{
+  dout(15) << "truncate " << c->get_cid() << "/" << o->get_oid()
+	   << " size " << size << dendl;
+
+  int r = lzfw_truncate(zhfs, &cred, o->ino, size);
+
+  return r;
+} /* truncate */
+
+int ZFStore::remove(ZCollection* c, ZObject *o)
+{
+  const hoid_t &oid = o->get_oid();
+  dout(15) << "remove " << c->get_cid() << "/" << oid << dendl;
+  return c->index.unlink(oid);
+
+} /* remove */
