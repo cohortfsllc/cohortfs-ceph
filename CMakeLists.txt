@@ -122,6 +122,9 @@ endif(${WITH_AIO})
 option(WITH_LIBMDS "LibMDS is here" ON)
 if(WITH_LIBMDS)
   find_package(mcas REQUIRED)
+  if(MCAS_FOUND)
+    include_directories(${MCAS_INCLUDE_DIR})
+  endif(MCAS_FOUND)
 endif(WITH_LIBMDS)
 
 # needs mds and? XXX

@@ -318,6 +318,9 @@ endif(${WITH_PROFILER})
 if(HAVE_LTTNG)
   target_link_libraries(common PRIVATE blkin)
 endif(HAVE_LTTNG)
+if (MCAS_FOUND)
+  target_link_libraries(common PRIVATE ${MCAS_LIBRARIES})
+endif (MCAS_FOUND)
 
 target_link_libraries(common PRIVATE erasure_code json_spirit ${CRYPTO_LIBS} rt ${Boost_LIBRARIES} ${EXTRALIBS})
 
@@ -526,7 +529,7 @@ if(WITH_LIBMDS)
       SOVERSION "1" LINK_FLAGS "-Wl,-export-dynamic")
     install(TARGETS mds DESTINATION lib)
   endif(${ENABLE_SHARED})
-  target_link_libraries(mds PRIVATE common os dl ${MCAS_LIBRARIES} ${EXTRALIBS})
+  target_link_libraries(mds PRIVATE common os dl ${EXTRALIBS})
   install(FILES
 	mds/MDS.h include/ceph_time.h mds/ceph_mds.h
 	DESTINATION include/cephfs)
