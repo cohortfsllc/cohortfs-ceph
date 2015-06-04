@@ -7,35 +7,31 @@
 #include <system_error>
 
 namespace cohort {
-  enum class err {
-    parse_error, no_such_object, object_already_exists
+  enum class errc {
+    parse_error, no_such_object, object_already_exists, insufficient_resources
   };
 
-  class err_category_t : public std::error_category {
+  class cohort_category_t : public std::error_category {
     virtual const char* name() const noexcept;
     virtual std::string message(int ev) const;
     virtual bool equivalent(const std::error_code& code,
 			    int condition) const noexcept;
   };
 
-  const std::error_category& err_category();
+  const std::error_category& cohort_category();
 
-  static inline std::error_condition make_error_condition(err e) {
-    return std::error_condition(
-      static_cast<int>(e),
-      err_category());
+  static inline std::error_condition make_error_condition(errc e) {
+    return std::error_condition(static_cast<int>(e), cohort_category());
   }
 
-  static inline std::error_code make_error_code(err e) {
-    return std::error_code(
-      static_cast<int>(e),
-      err_category());
+  static inline std::error_code make_error_code(errc e) {
+    return std::error_code(static_cast<int>(e), cohort_category());
   }
 };
 
 namespace std {
   template <>
-  struct is_error_condition_enum<cohort::err> : public std::true_type {};
+  struct is_error_condition_enum<cohort::errc> : public std::true_type {};
 };
 
 #endif // !COHORT_ERROR_H

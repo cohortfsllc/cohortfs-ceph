@@ -48,6 +48,10 @@ namespace rados {
   using ceph::new_formatter;
   using std::all_of;
   using std::count_if;
+  using boost::intrusive::set;
+  using std::shared_timed_mutex;
+  using std::mem_fun_ref;
+  using std::not1;
 
   struct ObjComp {
     bool operator()(const int osd, const Objecter::OSDSession& c) const {
@@ -119,12 +123,13 @@ namespace rados {
       delete r;
     }
 
-    while(!homeless_session->subops_inflight.empty()) {
-      auto i = homeless_session->subops_inflight.begin();
+    while(!homeless_subops.empty()) {
+      auto i = homeless_subops.begin();
       ldout(cct, 10) << " op " << i->tid << dendl;
       {
-	unique_lock wl(homeless_session->lock);
-	_session_subop_remove(*homeless_session, *i);
+	unique_lock wl(rwlock);
+	i->session = nullptr;
+	homeless_subops.erase(i);
       }
     }
 
@@ -158,23 +163,22 @@ namespace rados {
     return false;
   }
 
-  void Objecter::_scan_requests(OSDSession& s,
+  void Objecter::_scan_requests(set<SubOp>& subops,
+				shunique_lock& sl,
 				bool force_resend,
 				bool force_resend_writes,
-				map<ceph_tid_t, SubOp*>& need_resend,
-				shunique_lock& shl)
+				map<ceph_tid_t, SubOp*>& need_resend)
   {
-    OSDSession::unique_lock sl(s.lock);
-
+    assert(sl.owns_lock());
     // Check for changed request mappings
-    auto p = s.subops_inflight.begin();
-    while (p != s.subops_inflight.end()) {
+    auto p = subops.begin();
+    while (p != subops.end()) {
       SubOp& subop = *p;
       // check_op_volume_dne() may touch ops; prevent iterator invalidation
       ++p;
       ldout(cct, 10) << " checking op " << subop.tid << dendl;
       Op::unique_lock ol(subop.parent.lock);
-	int r = _calc_targets(subop.parent, ol);
+      int r = _calc_targets(subop.parent, ol);
       switch (r) {
       case TARGET_NO_ACTION:
 	if (!force_resend &&
@@ -194,8 +198,6 @@ namespace rados {
       }
       ol.unlock();
     }
-
-    sl.unlock();
   }
 
   void Objecter::handle_osd_map(MOSDMap *m)
@@ -259,14 +261,16 @@ namespace rados {
 	  }
 
 	  was_full = was_full || osdmap_full_flag();
-	  _scan_requests(*homeless_session, skipped_map, was_full,
-			 need_resend, shl);
+	  _scan_requests(homeless_subops, shl, skipped_map, was_full,
+			 need_resend);
 
 	  // osd addr changes?
 	  for (auto p = osd_sessions.begin(); p != osd_sessions.end(); ) {
 	    OSDSession& s = *p;
-	    _scan_requests(s, skipped_map, was_full,
-			   need_resend, shl);
+	    shunique_lock sl(s.lock, ceph::acquire_unique);
+	    _scan_requests(s.subops_inflight, sl, skipped_map, was_full,
+			   need_resend);
+	    sl.unlock();
 	    ++p;
 	    if (!osdmap->is_up(s.osd) ||
 		(s.con &&
@@ -281,12 +285,14 @@ namespace rados {
 	// first map.  we want the full thing.
 	if (m->maps.count(m->get_last())) {
 	  for (auto& s : osd_sessions) {
-	    _scan_requests(s, false, false, need_resend, shl);
+	    shunique_lock sl(s.lock, ceph::acquire_unique);
+	    _scan_requests(s.subops_inflight, sl, false, false, need_resend);
+	    sl.unlock();
 	  }
 	  ldout(cct, 3) << "handle_osd_map decoding full epoch "
 			<< m->get_last() << dendl;
 	  osdmap->decode(m->maps[m->get_last()]);
-	  _scan_requests(*homeless_session, false, false, need_resend, shl);
+	  _scan_requests(homeless_subops, shl, false, false, need_resend);
 
 	} else {
 	  ldout(cct, 3) << "handle_osd_map hmm, i want a full map, requesting"
@@ -313,9 +319,8 @@ namespace rados {
       bool mapped_session = false;
       if (!s) {
 	Op::unique_lock ol(subop->parent.lock);
-	int r = _map_session(*subop, &s, ol, shl);
+	s = _map_session(*subop, ol, shl);
 	ol.unlock();
-	assert(r == 0);
 	mapped_session = true;
       } else {
 	get_session(*s);
@@ -325,7 +330,7 @@ namespace rados {
 	_session_subop_assign(*s, *subop);
       }
       if (subop->parent.should_resend) {
-	if (!subop->session->is_homeless() && !subop->parent.paused) {
+	if (!subop->is_homeless() && !subop->parent.paused) {
 	  _send_subop(*subop);
 	}
       } else {
@@ -458,48 +463,41 @@ namespace rados {
    *
    * @returns 0 on success, or -EAGAIN if we need a unique_lock
    */
-  int Objecter::_get_session(int osd, OSDSession **session,
-			     const shunique_lock& shl)
+  Objecter::OSDSession* Objecter::_get_session(int osd,
+					       const shunique_lock& shl)
   {
     if (osd < 0) {
-      *session = homeless_session;
-      ldout(cct, 20) << __func__ << " osd=" << osd << " returning homeless"
-		     << dendl;
-      return 0;
+      ldout(cct, 20) << __func__ << " osd=" << osd << ". Refusign to "
+		     << "put up with this." << dendl;
+      throw std::system_error(errc::invalid_osd);
     }
 
     auto p = osd_sessions.find(osd, oc);
     if (p != osd_sessions.end()) {
       OSDSession& s = *p;
       s.get();
-      *session = &s;
-      return 0;
+      return &s;
     }
     if (!shl.owns_lock()) {
-      return -EAGAIN;
+      throw std::system_error(errc::need_unique_lock);
     }
     OSDSession *s = new OSDSession(cct, osd);
     osd_sessions.insert(*s);
     s->con = messenger->get_connection(osdmap->get_inst(osd));
     s->get();
-    *session = s;
     ldout(cct, 20) << __func__ << " s=" << s << " osd=" << osd << " "
 		   << s->nref << dendl;
-    return 0;
+    return s;
   }
 
   void Objecter::put_session(OSDSession& s)
   {
-    if (!s.is_homeless()) {
-      s.put();
-    }
+    s.put();
   }
 
   void Objecter::get_session(OSDSession& s)
   {
-    if (!s.is_homeless()) {
-      s.get();
-    }
+    s.get();
   }
 
   void Objecter::_reopen_session(OSDSession& s)
@@ -537,9 +535,9 @@ namespace rados {
 
     // Assign any leftover ops to the homeless session
     {
-      OSDSession::unique_lock wl(homeless_session->lock);
+      OSDSession::unique_lock wl(rwlock);
       for (auto i : homeless_ops) {
-	_session_subop_assign(*homeless_session, *i);
+	homeless_subops.insert(*i);
       }
     }
   }
@@ -727,7 +725,7 @@ namespace rados {
 	}
       }
 
-      if (!homeless_session->subops_inflight.empty() || !toping.empty()) {
+      if (!homeless_subops.empty() || !toping.empty()) {
 	_maybe_request_map();
       }
     } while (r == -EAGAIN);
@@ -803,13 +801,21 @@ namespace rados {
       OSDSession *session = nullptr;
       if (subop.tid == 0)
 	subop.tid = ++last_tid;
-      int r = _get_session(subop.osd, &session, shl);
-      if (r == -EAGAIN) {
-	assert(!session);
-	shl.unlock();
-	shl.lock();
-	r = _get_session(subop.osd, &session, shl);
-	assert(r == 0);
+      if (subop.osd == -1) {
+	subop.session = nullptr;
+	homeless_subops.insert(subop);
+	continue;
+      }
+      try {
+      session = _get_session(subop.osd, shl);
+      } catch (std::system_error& e) {
+	if (e.code() == errc::need_unique_lock) {
+	  shl.unlock();
+	  shl.lock();
+	  session = _get_session(subop.osd, shl);
+	} else {
+	  throw;
+	}
       }
       assert(session);  // may be homeless
       OSDSession::unique_lock sl(session->lock);
@@ -860,8 +866,7 @@ namespace rados {
       _maybe_request_map();
     } else if (count_if(op.subops.cbegin(),
 			op.subops.cend(),
-			[](const SubOp& subop){
-			  return !subop.session->is_homeless();})
+			not1(mem_fun_ref(&SubOp::is_homeless)))
 	       >= op.volume->quorum()) {
       need_send = true;
     } else {
@@ -870,7 +875,7 @@ namespace rados {
 
     MOSDOp *m = NULL;
     for (auto& subop : op.subops) {
-      if (need_send && !subop.session->is_homeless()) {
+      if (need_send && !subop.is_homeless()) {
 	OSDSession::shared_lock sl(subop.session->lock);
 	m = _prepare_osd_subop(subop);
 	_send_subop(subop, m);
@@ -985,15 +990,15 @@ namespace rados {
     return TARGET_NO_ACTION;
   }
 
-  int Objecter::_map_session(SubOp& subop, OSDSession **s,
-			     Op::unique_lock& ol,
-			     const shunique_lock& shl)
+  Objecter::OSDSession* Objecter::_map_session(SubOp& subop,
+					       Op::unique_lock& ol,
+					       const shunique_lock& shl)
   {
     int r = _calc_targets(subop.parent, ol);
     if (r == TARGET_VOLUME_DNE) {
-      return -ENXIO;
+      throw std::system_error(vol_err::no_such_volume);
     }
-    return _get_session(subop.osd, s, shl);
+    return  _get_session(subop.osd, shl);
   }
 
   void Objecter::_session_subop_assign(OSDSession& to, SubOp& subop)
@@ -1015,42 +1020,6 @@ namespace rados {
     subop.session = nullptr;
 
     ldout(cct, 15) << __func__ << " " << from.osd << " " << subop.tid << dendl;
-  }
-
-  int Objecter::_get_osd_session(int osd, shunique_lock& shl,
-				 OSDSession **psession)
-  {
-    int r;
-    do {
-      r = _get_session(osd, psession, shl);
-      if (r == -EAGAIN) {
-	if (!_promote_lock_check_race(shl)) {
-	  return r;
-	}
-      }
-    } while (r == -EAGAIN);
-    assert(r == 0);
-
-    return 0;
-  }
-
-  int Objecter::_get_subop_target_session(SubOp& subop,
-					  shunique_lock& shl,
-					  OSDSession **session)
-  {
-    return _get_osd_session(subop.osd, shl, session);
-  }
-
-  // This is called pretty much precisely because it's not a
-  // "promote". It's a bad name for it but that's what the ceph people
-  // called it.
-  bool Objecter::_promote_lock_check_race(shunique_lock& shl)
-  {
-    assert(shl.owns_lock());
-    epoch_t epoch = osdmap->get_epoch();
-    shl.unlock();
-    shl.lock();
-    return (epoch == osdmap->get_epoch());
   }
 
   void Objecter::_cancel_op(Op& op)
@@ -1340,7 +1309,7 @@ namespace rados {
     for (auto& subop : op.subops) {
       if (subop.done)
 	done++;
-      else if (subop.session->is_homeless())
+      else if (subop.is_homeless())
 	homeless++;
       else
 	still_coming++;
@@ -1588,9 +1557,7 @@ namespace rados {
   {
     delete osdmap;
 
-    assert(homeless_session->nref== 1);
-    assert(homeless_session->subops_inflight.empty());
-    homeless_session->put();
+    assert(homeless_subops.empty());
 
     assert(osd_sessions.empty());
     assert(statfs_ops.empty());

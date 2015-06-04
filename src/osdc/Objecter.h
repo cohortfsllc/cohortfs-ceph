@@ -15,30 +15,31 @@
 #ifndef CEPH_OBJECTER_H
 #define CEPH_OBJECTER_H
 
-#include <boost/uuid/nil_generator.hpp>
 #include <condition_variable>
 #include <list>
 #include <map>
 #include <memory>
 #include <mutex>
-#include <sstream>
 #include <shared_mutex>
+#include <sstream>
+
 #include <boost/intrusive/set.hpp>
 #include <boost/intrusive/slist.hpp>
-#include "include/types.h"
+#include <boost/uuid/nil_generator.hpp>
+
 #include "include/buffer.h"
+#include "include/types.h"
 
 #include "common/cohort_function.h"
-#include "osd/OSDMap.h"
-#include "msg/MessageFactory.h"
-#include "messages/MOSDOp.h"
-
+#include "common/shunique_lock.h"
 #include "common/Timer.h"
 #include "common/zipkin_trace.h"
 
-#include "common/shunique_lock.h"
-
+#include "messages/MOSDOp.h"
+#include "msg/MessageFactory.h"
 #include "ObjectOperation.h"
+#include "rados_err.h"
+#include "osd/OSDMap.h"
 
 class Messenger;
 class OSDMap;
@@ -48,7 +49,7 @@ class MStatfsReply;
 class MOSDOpReply;
 class MOSDMap;
 
-namespace rados {
+namespace rados{
   typedef cohort::function<void(int)> op_callback;
   typedef cohort::function<void(int, uint64_t,
 				ceph::real_time)> stat_callback;
@@ -187,6 +188,9 @@ namespace rados {
       SubOp(oid_t&& h, vector<OSDOp>&& o, Op& p)
 	: tid(0), incarnation(0), session(nullptr), osd(-1), hoid(h), ops(o),
 	  attempts(0), done(false), parent(p) { }
+      bool is_homeless() const {
+	return (osd == -1);
+      }
     };
 
     struct op_base : public boost::intrusive::set_base_hook<
@@ -304,8 +308,6 @@ namespace rados {
       OSDSession(CephContext *cct, int o) :
 	osd(o), incarnation(0), con(nullptr) { }
       ~OSDSession();
-
-      bool is_homeless() { return (osd == -1); }
     };
     boost::intrusive::set<OSDSession> osd_sessions;
 
@@ -313,7 +315,8 @@ namespace rados {
     boost::intrusive::set<Op> inflight_ops;
     boost::intrusive::set<StatfsOp> statfs_ops;
 
-    OSDSession *homeless_session;
+    static constexpr const uint32_t max_homeless_subops = 500;
+    boost::intrusive::set<SubOp> homeless_subops;
 
     // ops waiting for an osdmap with a new volume or confirmation
     // that the volume does not exist (may be expanded to other uses
@@ -339,19 +342,15 @@ namespace rados {
     bool target_should_be_paused(op_base& op);
 
     int _calc_targets(op_base& t, Op::unique_lock& ol);
-    int _map_session(SubOp& subop, OSDSession **s,
-		     Op::unique_lock& ol, const shunique_lock& lc);
+    OSDSession* _map_session(SubOp& subop, Op::unique_lock& ol,
+			     const shunique_lock& lc);
 
     void _session_subop_assign(OSDSession& to, SubOp& subop);
     void _session_subop_remove(OSDSession& from, SubOp& subop);
 
-    int _get_osd_session(int osd, shunique_lock& sl,
-			 OSDSession **session);
     int _assign_subop_target_session(SubOp& op, shared_lock& lc,
 				     bool src_session_locked,
 				     bool dst_session_locked);
-    int _get_subop_target_session(SubOp& op, shunique_lock& sl,
-				  OSDSession** session);
 
     void _check_op_volume_dne(Op& op, Op::unique_lock& ol);
     void _send_op_map_check(Op& op);
@@ -359,8 +358,7 @@ namespace rados {
 
     void kick_requests(OSDSession& session);
     void _kick_requests(OSDSession& session);
-    int _get_session(int osd, OSDSession **session,
-		     const shunique_lock& shl);
+    OSDSession* _get_session(int osd, const shunique_lock& shl);
     void put_session(OSDSession& s);
     void get_session(OSDSession& s);
     void _reopen_session(OSDSession& session);
@@ -382,7 +380,6 @@ namespace rados {
       trace_endpoint("0.0.0.0", 0, "Objecter"),
       last_seen_osdmap_version(0),
       tick_event(0),
-      homeless_session(new OSDSession(cct_, -1)),
       mon_timeout(mon_timeout),
       osd_timeout(osd_timeout)
       { }
@@ -411,11 +408,11 @@ namespace rados {
     void set_honor_osdmap_full() { honor_osdmap_full = true; }
     void unset_honor_osdmap_full() { honor_osdmap_full = false; }
 
-    void _scan_requests(OSDSession& session,
+    void _scan_requests(boost::intrusive::set<SubOp>& subops,
+			shunique_lock& sl,
 			bool force_resend,
 			bool force_resend_writes,
-			map<ceph_tid_t, SubOp*>& need_resend,
-			shunique_lock& shl);
+			map<ceph_tid_t, SubOp*>& need_resend);
     // messages
   public:
     bool ms_dispatch(Message *m);
@@ -448,7 +445,6 @@ namespace rados {
     void add_osdmap_notifier(const cohort::function<void()>& f);
 
   private:
-    bool _promote_lock_check_race(shunique_lock& sl);
 
     // low-level
     ceph_tid_t _op_submit(Op& op, Op::unique_lock& ol, shunique_lock& sl);

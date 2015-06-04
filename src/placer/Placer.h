@@ -50,7 +50,7 @@ class placer_category_t : public std::error_category {
     case placer_err::no_such_placer:
       return std::errc::no_such_device;
     case placer_err::exists:
-      return cohort::err::object_already_exists;
+      return cohort::errc::object_already_exists;
     default:
       return std::error_condition(ev, *this);
     }

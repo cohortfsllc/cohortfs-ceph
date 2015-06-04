@@ -274,6 +274,7 @@ set(libcommon_files
   common/pick_address.cc
   common/address_helper.cc
   common/linux_version.c
+  osdc/rados_err.cc
   xxHash-r39/xxhash.c
   vol/Volume.cc
   placer/Placer.cc

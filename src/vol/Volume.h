@@ -52,7 +52,7 @@ class vol_category_t : public std::error_category {
     case vol_err::invalid_name:
       return std::errc::invalid_argument;
     case vol_err::exists:
-      return cohort::err::object_already_exists;
+      return cohort::errc::object_already_exists;
     default:
       return std::error_condition(ev, *this);
     }

@@ -243,7 +243,7 @@ namespace ceph {
       return false;
     }
 
-    // Onloy have a single unlock method, otherwise we're just
+    // Only have a single unlock method, otherwise we're just
     // building schmuck bait.
 
     void unlock() {
