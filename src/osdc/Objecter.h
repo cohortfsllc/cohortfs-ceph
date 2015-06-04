@@ -193,37 +193,23 @@ namespace rados{
       }
     };
 
-    struct op_base : public boost::intrusive::set_base_hook<
+    struct Op : public boost::intrusive::set_base_hook<
       boost::intrusive::link_mode<boost::intrusive::normal_link>>,
-		     public RefCountedObject {
-      int flags;
+		public RefCountedObject {
       oid_t oid;
       AVolRef volume;
-      std::unique_ptr<ObjOp> op;
       std::vector<SubOp> subops;
+      std::unique_ptr<ObjOp> op;
+      int flags;
       ceph::real_time mtime;
       ceph_tid_t tid;
       epoch_t map_dne_bound;
       bool paused;
       uint16_t priority;
       bool should_resend;
-
       std::mutex lock;
       typedef std::unique_lock<std::mutex> unique_lock;
       typedef std::lock_guard<std::mutex> lock_guard;
-
-      op_base() : volume(nullptr), op(nullptr), mtime(ceph::real_clock::now()),
-		  tid(0), map_dne_bound(0), paused(false), priority(0),
-		  should_resend(true) { }
-
-      op_base(oid_t oid, const AVolRef& volume,
-	      std::unique_ptr<ObjOp>& _op, int flags)
-	: flags(flags), oid(oid), volume(volume), op(move(_op)),
-	  mtime(ceph::real_clock::now()), tid(0), map_dne_bound(0),
-	  paused(false), priority(0), should_resend(true) { }
-    };
-
-    struct Op : public op_base {
       op_callback onack, oncommit;
       uint64_t ontimeout;
       uint32_t acks, commits;
@@ -232,14 +218,13 @@ namespace rados{
       bool finished;
       ZTracer::Trace trace;
 
-      Op(const oid_t& o, const AVolRef& volume,
+      Op(const oid_t& o, const AVolRef& _volume,
 	 std::unique_ptr<ObjOp>& _op, int f,
 	 op_callback&& ac, op_callback&& co,
 	 ZTracer::Trace *parent) :
-	op_base(o, volume, _op, f),
-	ontimeout(0),
-	acks(0), commits(0), rc(0), reply_epoch(nullptr),
-	finished(false) {
+	oid(o), volume(_volume), op(std::move(_op)), flags(f),
+	ontimeout(0), acks(0), commits(0), rc(0),
+	reply_epoch(nullptr), finished(false) {
 	onack.swap(ac);
 	oncommit.swap(co);
 	subops.reserve(op->width());
@@ -250,11 +235,6 @@ namespace rados{
 	  });
 	if (parent && parent->valid())
 	  trace.init("op", nullptr, parent);
-      }
-      ~Op() { }
-
-      bool operator<(const Op& other) const {
-	return tid < other.tid;
       }
     };
 
@@ -339,9 +319,9 @@ namespace rados{
       TARGET_VOLUME_DNE
     };
     bool osdmap_full_flag() const;
-    bool target_should_be_paused(op_base& op);
+    bool target_should_be_paused(Op& op);
 
-    int _calc_targets(op_base& t, Op::unique_lock& ol);
+    int _calc_targets(Op& t, Op::unique_lock& ol);
     OSDSession* _map_session(SubOp& subop, Op::unique_lock& ol,
 			     const shunique_lock& lc);
 
@@ -1283,29 +1263,29 @@ namespace rados{
     return l.tid <= r.tid;
   }
 
-  inline bool operator==(const Objecter::op_base &l,
-			 const Objecter::op_base &r) {
+  inline bool operator==(const Objecter::Op& l,
+			 const Objecter::Op& r) {
     return l.tid == r.tid;
   }
-  inline bool operator!=(const Objecter::op_base &l,
-			 const Objecter::op_base &r) {
+  inline bool operator!=(const Objecter::Op& l,
+			 const Objecter::Op& r) {
     return l.tid != r.tid;
   }
 
-  inline bool operator>(const Objecter::op_base &l,
-			const Objecter::op_base &r) {
+  inline bool operator>(const Objecter::Op& l,
+			const Objecter::Op& r) {
     return l.tid > r.tid;
   }
-  inline bool operator<(const Objecter::op_base &l,
-			const Objecter::op_base &r) {
+  inline bool operator<(const Objecter::Op& l,
+			const Objecter::Op& r) {
     return l.tid < r.tid;
   }
-  inline bool operator>=(const Objecter::op_base &l,
-			 const Objecter::op_base &r) {
+  inline bool operator>=(const Objecter::Op& l,
+			 const Objecter::Op& r) {
     return l.tid >= r.tid;
   }
-  inline bool operator<=(const Objecter::op_base &l,
-			 const Objecter::op_base &r) {
+  inline bool operator<=(const Objecter::Op& l,
+			 const Objecter::Op& r) {
     return l.tid <= r.tid;
   }
 

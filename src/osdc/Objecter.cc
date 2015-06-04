@@ -62,11 +62,11 @@ namespace rados {
       return c.osd < osd;
     }
 
-    bool operator()(const ceph_tid_t tid, const Objecter::op_base& b) const {
+    bool operator()(const ceph_tid_t tid, const Objecter::Op& b) const {
       return tid < b.tid;
     }
 
-    bool operator()(const Objecter::op_base& b, const ceph_tid_t tid) const {
+    bool operator()(const Objecter::Op& b, const ceph_tid_t tid) const {
       return b.tid < tid;
     }
 
@@ -928,7 +928,7 @@ namespace rados {
     _finish_op(*op, ol);
   }
 
-  bool Objecter::target_should_be_paused(op_base& t)
+  bool Objecter::target_should_be_paused(Op& t)
   {
     bool pauserd = osdmap->test_flag(CEPH_OSDMAP_PAUSERD);
     bool pausewr = osdmap->test_flag(CEPH_OSDMAP_PAUSEWR) ||
@@ -950,7 +950,7 @@ namespace rados {
       (messenger->get_myname().type() != entity_name_t::TYPE_MDS);
   }
 
-  int Objecter::_calc_targets(op_base& t, Op::unique_lock& ol)
+  int Objecter::_calc_targets(Op& t, Op::unique_lock& ol)
   {
     bool need_resend = false;
 
