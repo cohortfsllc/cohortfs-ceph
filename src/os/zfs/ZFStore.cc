@@ -512,7 +512,7 @@ void ZFStore::set_fsid(const boost::uuids::uuid& u)
 
 boost::uuids::uuid ZFStore::get_fsid()
 {
-  string fsid_str;
+  std::string fsid_str;
   int r = read_meta("fs_fsid", &fsid_str);
   assert(r >= 0);
   boost::uuids::string_generator parse;
@@ -650,7 +650,7 @@ int ZFStore::do_transaction(Transaction& t, uint64_t op_seq,
 	o = get_slot_object(t, c, i->o1_ix, true /* create */);
 	if (o) {
 	  bufferlist &bl = i->data;
-	  thread_local map<string, bufferptr> to_set;
+	  thread_local map<std::string, bufferptr> to_set;
 	  to_set.clear();
 	  to_set[i->name] = buffer::ptr(bl.c_str(), bl.length());
 	  r = setattrs(c, o, to_set);
@@ -956,10 +956,30 @@ int ZFStore::truncate(ZCollection* c, ZObject* o, uint64_t size)
   return r;
 } /* truncate */
 
-int ZFStore::remove(ZCollection* c, ZObject *o)
+int ZFStore::remove(ZCollection* c, ZObject* o)
 {
   const hoid_t &oid = o->get_oid();
   dout(15) << "remove " << c->get_cid() << "/" << oid << dendl;
   return c->index.unlink(oid);
 
 } /* remove */
+
+int setattr(ZCollection* c, ZObject* o, const std::string& k,
+	    const buffer::ptr& v)
+{
+  int r = lzfw_setxattrat(zhfs, &cred, o->vno, k.c_str(), v.c_str());
+  return r;
+} /* setattr */
+
+int ZFStore::setattrs(ZCollection* c, ZObject* o,
+		      const map<std::string,buffer::ptr>& aset)
+{
+  int r = 0;
+  for (auto& aset_iter : aset) {
+    r = setattr(c, o, aset_iter.first, aset_iter.second);
+    if (!!r)
+      goto out;
+  }
+ out:
+  return r;
+} /* setattrs */
