@@ -12,26 +12,22 @@
 
 using namespace cohort::mds;
 
-class MDS::Cache {
- private:
-  std::atomic<_inodeno_t> next;
-  std::unordered_map<_inodeno_t, std::unique_ptr<Inode>> inodes;
- public:
-  Cache() : next(0) {}
+struct MDS::Cache {
+  const mcas::gc_global gc;
+  mcas::skiplist<Inode> inodes;
+  std::atomic<_inodeno_t> next_ino;
+  InodeRef root;
 
-  _inodeno_t get_next() { return next++; }
+  Cache() : inodes(gc, inode_cmp, "inodes"), next_ino(0) {}
 
-  Inode* find(_inodeno_t ino) const {
-    auto i = inodes.find(ino);
-    return i == inodes.end() ? nullptr : i->second.get();
-  }
-  bool insert(_inodeno_t ino, std::unique_ptr<Inode> &&obj) {
-    return inodes.insert(std::make_pair(ino, std::move(obj))).second;
-  }
-  void destroy(_inodeno_t ino) {
-    auto i = inodes.find(ino);
-    if (i != inodes.end())
-      inodes.erase(i);
+  static int inode_cmp(const void *lhs, const void *rhs) {
+    const Inode *l = static_cast<const Inode*>(lhs);
+    const Inode *r = static_cast<const Inode*>(rhs);
+    if (l->ino() == r->ino())
+      return 0;
+    if (l->ino() > r->ino())
+      return 1;
+    return -1;
   }
 };
 
@@ -95,12 +91,14 @@ int MDS::mkfs()
     return -EINVAL;
 
   // create the cache
-  cache.reset(new Cache);
+  std::unique_ptr<Cache> c(new Cache);
 
   // create the root directory inode
-  const _inodeno_t ino = cache->get_next(); // 0
+  const _inodeno_t ino = c->next_ino++; // 0
   const identity who = {0, 0, 0};
-  cache->insert(ino, std::unique_ptr<Inode>(new Inode(ino, who, S_IFDIR)));
+  c->root = c->inodes.get(Inode(ino, who, S_IFDIR));
+
+  std::swap(c, cache);
   return 0;
 }
 
@@ -125,21 +123,20 @@ int MDS::create(_inodeno_t parent, const char *name,
     return -ENODEV;
 
   // find the parent object
-  Inode *p = cache->find(parent);
-  if (p == nullptr)
+  auto p = cache->inodes.get(Inode(parent));
+  if (p->is_nonexistent() || p->is_destroyed())
     return -ENOENT;
 
   if (!p->is_dir())
     return -ENOTDIR;
 
   // create the child object
-  _inodeno_t ino = cache->get_next();
-  std::unique_ptr<Inode> obj(new Inode(ino, who, type));
+  auto inode = cache->inodes.get(Inode(cache->next_ino++, who, type));
 
   // link the parent to the child
-  int r = p->link(name, obj.get());
-  if (r == 0)
-    cache->insert(ino, std::move(obj));
+  int r = p->link(name, inode);
+  if (r)
+    inode->set_destroyed();
   return r;
 }
 
@@ -149,20 +146,17 @@ int MDS::unlink(_inodeno_t parent, const char *name)
     return -ENODEV;
 
   // find the parent object
-  Inode *p = cache->find(parent);
-  if (p == nullptr)
+  auto p = cache->inodes.get(Inode(parent));
+  if (p->is_nonexistent() || p->is_destroyed())
     return -ENOENT;
 
   // unlink the child from its parent
-  Inode *obj;
-  int r = p->unlink(name, &obj);
-  if (r)
-    return r;
+  InodeRef inode;
+  int r = p->unlink(name, &inode);
+  if (r == 0 && inode->adjust_nlinks(-1) == 0)
+    inode->set_destroyed();
 
-  // last link?
-  if (obj->adjust_nlinks(-1) == 0)
-    cache->destroy(obj->ino);
-  return 0;
+  return r;
 }
 
 int MDS::lookup(_inodeno_t parent, const char *name, _inodeno_t *ino)
@@ -171,17 +165,17 @@ int MDS::lookup(_inodeno_t parent, const char *name, _inodeno_t *ino)
     return -ENODEV;
 
   // find the parent object
-  Inode *p = cache->find(parent);
-  if (p == nullptr)
+  auto p = cache->inodes.get(Inode(parent));
+  if (p->is_nonexistent() || p->is_destroyed())
     return -ENOENT;
 
   // find the child object
-  Inode *obj;
-  int r = p->lookup(name, &obj);
+  InodeRef inode;
+  int r = p->lookup(name, &inode);
   if (r)
     return r;
 
-  *ino = obj->ino;
+  *ino = inode->ino();
   return 0;
 }
 
@@ -192,11 +186,11 @@ int MDS::readdir(_inodeno_t ino, uint64_t pos, uint64_t gen,
     return -ENODEV;
 
   // find the object
-  Inode *obj = cache->find(ino);
-  if (obj == nullptr)
+  auto inode = cache->inodes.get(Inode(ino));
+  if (inode->is_nonexistent() || inode->is_destroyed())
     return -ENOENT;
 
-  return obj->readdir(pos, gen, cb, user);
+  return inode->readdir(pos, gen, cb, user);
 }
 
 int MDS::getattr(_inodeno_t ino, int mask, ObjAttr &attr)
@@ -205,11 +199,11 @@ int MDS::getattr(_inodeno_t ino, int mask, ObjAttr &attr)
     return -ENODEV;
 
   // find the object
-  Inode *obj = cache->find(ino);
-  if (obj == nullptr)
+  auto inode = cache->inodes.get(Inode(ino));
+  if (inode->is_nonexistent() || inode->is_destroyed())
     return -ENOENT;
 
-  return obj->getattr(mask, attr);
+  return inode->getattr(mask, attr);
 }
 
 int MDS::setattr(_inodeno_t ino, int mask, const ObjAttr &attr)
@@ -218,11 +212,11 @@ int MDS::setattr(_inodeno_t ino, int mask, const ObjAttr &attr)
     return -ENODEV;
 
   // find the object
-  Inode *obj = cache->find(ino);
-  if (obj == nullptr)
+  auto inode = cache->inodes.get(Inode(ino));
+  if (inode->is_nonexistent() || inode->is_destroyed())
     return -ENOENT;
 
-  return obj->setattr(mask, attr);
+  return inode->setattr(mask, attr);
 }
 
 bool MDS::ms_dispatch(Message *m)
