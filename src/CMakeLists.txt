@@ -280,6 +280,9 @@ set(libcommon_files
   ${auth_files}
   ${xiomsg_files}
   ${mds_files})
+if (MCAS_FOUND)
+  list(APPEND libcommon_files common/mcas_skiplist.cc)
+endif (MCAS_FOUND)
 set(common_mountcephfs_files
   common/armor.c
   common/safe_io.c
