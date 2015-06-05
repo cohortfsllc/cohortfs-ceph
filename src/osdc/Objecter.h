@@ -149,7 +149,7 @@ namespace rados{
     std::shared_timed_mutex rwlock;
     typedef std::shared_lock<std::shared_timed_mutex> shared_lock;
     typedef std::unique_lock<std::shared_timed_mutex> unique_lock;
-    typedef ceph::shunique_lock<std::shared_timed_mutex> shunique_lock;
+    typedef cohort::shunique_lock<std::shared_timed_mutex> shunique_lock;
 
     cohort::Timer<ceph::mono_clock> timer;
     uint64_t tick_event;

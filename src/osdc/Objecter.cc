@@ -202,7 +202,7 @@ namespace rados {
 
   void Objecter::handle_osd_map(MOSDMap *m)
   {
-    shunique_lock shl(rwlock, ceph::acquire_unique);
+    shunique_lock shl(rwlock, cohort::acquire_unique);
 
     assert(osdmap);
 
@@ -267,7 +267,7 @@ namespace rados {
 	  // osd addr changes?
 	  for (auto p = osd_sessions.begin(); p != osd_sessions.end(); ) {
 	    OSDSession& s = *p;
-	    shunique_lock sl(s.lock, ceph::acquire_unique);
+	    shunique_lock sl(s.lock, cohort::acquire_unique);
 	    _scan_requests(s.subops_inflight, sl, skipped_map, was_full,
 			   need_resend);
 	    sl.unlock();
@@ -285,7 +285,7 @@ namespace rados {
 	// first map.  we want the full thing.
 	if (m->maps.count(m->get_last())) {
 	  for (auto& s : osd_sessions) {
-	    shunique_lock sl(s.lock, ceph::acquire_unique);
+	    shunique_lock sl(s.lock, cohort::acquire_unique);
 	    _scan_requests(s.subops_inflight, sl, false, false, need_resend);
 	    sl.unlock();
 	  }
@@ -779,7 +779,7 @@ namespace rados {
 
   ceph_tid_t Objecter::op_submit(Op *op)
   {
-    shunique_lock sl(rwlock, ceph::acquire_shared);
+    shunique_lock sl(rwlock, cohort::acquire_shared);
     Op::unique_lock ol(op->lock);
     return _op_submit(*op, ol, sl);
   }

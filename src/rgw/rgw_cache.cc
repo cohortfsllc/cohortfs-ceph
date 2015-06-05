@@ -12,7 +12,7 @@ using namespace std;
 
 int ObjectCache::get(string& name, ObjectCacheInfo& info, uint32_t mask)
 {
-  shunique_lock l(lock, ceph::acquire_shared);
+  shunique_lock l(lock, cohort::acquire_shared);
 
   map<string, ObjectCacheEntry>::iterator iter = cache_map.find(name);
   if (iter == cache_map.end()) {

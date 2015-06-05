@@ -136,7 +136,7 @@ class ObjectCache {
   unsigned long lru_counter;
   unsigned long lru_window;
   std::shared_timed_mutex lock;
-  typedef ceph::shunique_lock<std::shared_timed_mutex> shunique_lock;
+  typedef cohort::shunique_lock<std::shared_timed_mutex> shunique_lock;
   typedef std::unique_lock<std::shared_timed_mutex> unique_lock;
   typedef std::shared_lock<std::shared_timed_mutex> shared_lock;
   CephContext *cct;

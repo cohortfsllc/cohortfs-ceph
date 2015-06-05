@@ -8,7 +8,7 @@
 #include <shared_mutex>
 #include <system_error>
 
-namespace ceph {
+namespace cohort {
 
   // This is a 'lock' class in the style of shared_lock and
   // unique_lock. Like shared_timed_mutex it implements both Lockable
