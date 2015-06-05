@@ -5,7 +5,7 @@
 #include "mon/MonClient.h"
 #include "MDSMap.h"
 #include "MDS.h"
-#include "FSObj.h"
+#include "Inode.h"
 #include "messages/MMDSBeacon.h"
 
 #define dout_subsys ceph_subsys_mds
@@ -15,17 +15,17 @@ using namespace cohort::mds;
 class MDS::Cache {
  private:
   std::atomic<_inodeno_t> next;
-  std::unordered_map<_inodeno_t, std::unique_ptr<FSObj>> inodes;
+  std::unordered_map<_inodeno_t, std::unique_ptr<Inode>> inodes;
  public:
   Cache() : next(0) {}
 
   _inodeno_t get_next() { return next++; }
 
-  FSObj* find(_inodeno_t ino) const {
+  Inode* find(_inodeno_t ino) const {
     auto i = inodes.find(ino);
     return i == inodes.end() ? nullptr : i->second.get();
   }
-  bool insert(_inodeno_t ino, std::unique_ptr<FSObj> &&obj) {
+  bool insert(_inodeno_t ino, std::unique_ptr<Inode> &&obj) {
     return inodes.insert(std::make_pair(ino, std::move(obj))).second;
   }
   void destroy(_inodeno_t ino) {
@@ -100,7 +100,7 @@ int MDS::mkfs()
   // create the root directory inode
   const _inodeno_t ino = cache->get_next(); // 0
   const identity who = {0, 0, 0};
-  cache->insert(ino, std::unique_ptr<FSObj>(new FSObj(ino, who, S_IFDIR)));
+  cache->insert(ino, std::unique_ptr<Inode>(new Inode(ino, who, S_IFDIR)));
   return 0;
 }
 
@@ -125,7 +125,7 @@ int MDS::create(_inodeno_t parent, const char *name,
     return -ENODEV;
 
   // find the parent object
-  FSObj *p = cache->find(parent);
+  Inode *p = cache->find(parent);
   if (p == nullptr)
     return -ENOENT;
 
@@ -134,7 +134,7 @@ int MDS::create(_inodeno_t parent, const char *name,
 
   // create the child object
   _inodeno_t ino = cache->get_next();
-  std::unique_ptr<FSObj> obj(new FSObj(ino, who, type));
+  std::unique_ptr<Inode> obj(new Inode(ino, who, type));
 
   // link the parent to the child
   int r = p->link(name, obj.get());
@@ -149,12 +149,12 @@ int MDS::unlink(_inodeno_t parent, const char *name)
     return -ENODEV;
 
   // find the parent object
-  FSObj *p = cache->find(parent);
+  Inode *p = cache->find(parent);
   if (p == nullptr)
     return -ENOENT;
 
   // unlink the child from its parent
-  FSObj *obj;
+  Inode *obj;
   int r = p->unlink(name, &obj);
   if (r)
     return r;
@@ -171,12 +171,12 @@ int MDS::lookup(_inodeno_t parent, const char *name, _inodeno_t *ino)
     return -ENODEV;
 
   // find the parent object
-  FSObj *p = cache->find(parent);
+  Inode *p = cache->find(parent);
   if (p == nullptr)
     return -ENOENT;
 
   // find the child object
-  FSObj *obj;
+  Inode *obj;
   int r = p->lookup(name, &obj);
   if (r)
     return r;
@@ -192,7 +192,7 @@ int MDS::readdir(_inodeno_t ino, uint64_t pos, uint64_t gen,
     return -ENODEV;
 
   // find the object
-  FSObj *obj = cache->find(ino);
+  Inode *obj = cache->find(ino);
   if (obj == nullptr)
     return -ENOENT;
 
@@ -205,7 +205,7 @@ int MDS::getattr(_inodeno_t ino, int mask, ObjAttr &attr)
     return -ENODEV;
 
   // find the object
-  FSObj *obj = cache->find(ino);
+  Inode *obj = cache->find(ino);
   if (obj == nullptr)
     return -ENOENT;
 
@@ -218,7 +218,7 @@ int MDS::setattr(_inodeno_t ino, int mask, const ObjAttr &attr)
     return -ENODEV;
 
   // find the object
-  FSObj *obj = cache->find(ino);
+  Inode *obj = cache->find(ino);
   if (obj == nullptr)
     return -ENOENT;
 

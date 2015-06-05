@@ -1,11 +1,11 @@
 /* -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- */
 // vim: ts=8 sw=2 smarttab
 
-#include "FSObj.h"
+#include "Inode.h"
 
 using namespace cohort::mds;
 
-FSObj::FSObj(_inodeno_t ino, const identity &who, int type)
+Inode::Inode(_inodeno_t ino, const identity &who, int type)
   : ino(ino)
 {
   attr.filesize = 0;
@@ -32,14 +32,14 @@ static void copy_attrs(int mask, ObjAttr &to, const ObjAttr &from)
   if (mask & ATTR_RAWDEV) to.rawdev = from.rawdev;
 }
 
-int FSObj::getattr(int mask, ObjAttr &attrs) const
+int Inode::getattr(int mask, ObjAttr &attrs) const
 {
   std::lock_guard<std::mutex> lock(mtx);
   copy_attrs(mask, attrs, attr);
   return 0;
 }
 
-int FSObj::setattr(int mask, const ObjAttr &attrs)
+int Inode::setattr(int mask, const ObjAttr &attrs)
 {
   if (mask & ATTR_TYPE) // can't change type with setattr
     return -EINVAL;
@@ -49,7 +49,7 @@ int FSObj::setattr(int mask, const ObjAttr &attrs)
   return 0;
 }
 
-int FSObj::lookup(const std::string &name, FSObj **obj) const
+int Inode::lookup(const std::string &name, Inode **obj) const
 {
   if (!is_dir())
     return -ENOTDIR;
@@ -62,7 +62,7 @@ int FSObj::lookup(const std::string &name, FSObj **obj) const
   return 0;
 }
 
-int FSObj::readdir(uint64_t pos, uint64_t gen,
+int Inode::readdir(uint64_t pos, uint64_t gen,
                    libmds_readdir_fn cb, void *user) const
 {
   if (!is_dir())
@@ -89,7 +89,7 @@ int FSObj::readdir(uint64_t pos, uint64_t gen,
   return 0;
 }
 
-int FSObj::link(const std::string &name, FSObj *obj)
+int Inode::link(const std::string &name, Inode *obj)
 {
   if (!is_dir())
     return -ENOTDIR;
@@ -102,7 +102,7 @@ int FSObj::link(const std::string &name, FSObj *obj)
   return 0;
 }
 
-int FSObj::unlink(const std::string &name, FSObj **obj)
+int Inode::unlink(const std::string &name, Inode **obj)
 {
   if (!is_dir())
     return -ENOTDIR;
