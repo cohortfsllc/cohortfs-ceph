@@ -964,9 +964,12 @@ int ZFStore::remove(ZCollection* c, ZObject* o)
 
 } /* remove */
 
-int setattr(ZCollection* c, ZObject* o, const std::string& k,
-	    const buffer::ptr& v)
+int ZFStore::setattr(ZCollection* c, ZObject* o, const std::string& k,
+		     const buffer::ptr& v)
 {
+  dout(15) << "setattr " << c->get_cid() << "/" << o->get_oid()
+	   << " " << k << dendl;
+
   int r = lzfw_setxattrat(zhfs, &cred, o->vno, k.c_str(), v.c_str());
   return r;
 } /* setattr */
