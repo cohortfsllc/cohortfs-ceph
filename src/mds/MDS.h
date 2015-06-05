@@ -5,6 +5,7 @@
 #define COHORT_MDS_H
 
 #include "msg/Dispatcher.h"
+#include "common/mcas_skiplist.h"
 #include "common/Timer.h"
 
 #include "MDSMap.h"
@@ -36,7 +37,7 @@ class MDS : public Dispatcher {
   int last_state, state, want_state;
   ceph_tid_t last_tid;
 
-  class Cache;
+  struct Cache;
   std::unique_ptr<Cache> cache;
 
   void beacon_send();

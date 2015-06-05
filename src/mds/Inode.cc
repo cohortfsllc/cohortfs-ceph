@@ -6,7 +6,7 @@
 using namespace cohort::mds;
 
 Inode::Inode(_inodeno_t ino, const identity &who, int type)
-  : ino(ino)
+  : inodeno(ino), state(STATE_NEW)
 {
   attr.filesize = 0;
   attr.mode = 0777;
@@ -49,7 +49,7 @@ int Inode::setattr(int mask, const ObjAttr &attrs)
   return 0;
 }
 
-int Inode::lookup(const std::string &name, Inode **obj) const
+int Inode::lookup(const std::string &name, Ref *inode) const
 {
   if (!is_dir())
     return -ENOTDIR;
@@ -58,7 +58,7 @@ int Inode::lookup(const std::string &name, Inode **obj) const
   auto i = dir.entries.find(name);
   if (i == dir.entries.end())
     return -ENOENT;
-  *obj = i->second;
+  *inode = i->second;
   return 0;
 }
 
@@ -82,27 +82,27 @@ int Inode::readdir(uint64_t pos, uint64_t gen,
 
   // pass entries to the callback function until it returns an error
   for (; i != dir.entries.end(); ++i) {
-    int r = cb(i->first.c_str(), i->second->ino, ++pos, dir.gen, user);
+    int r = cb(i->first.c_str(), i->second->ino(), ++pos, dir.gen, user);
     if (r)
       break;
   }
   return 0;
 }
 
-int Inode::link(const std::string &name, Inode *obj)
+int Inode::link(const std::string &name, const Ref& inode)
 {
   if (!is_dir())
     return -ENOTDIR;
 
   std::lock_guard<std::mutex> lock(dir.mtx);
-  auto i = dir.entries.insert(std::make_pair(name, obj));
+  auto i = dir.entries.insert(std::make_pair(name, inode));
   if (!i.second)
     return -EEXIST;
   dir.gen++;
   return 0;
 }
 
-int Inode::unlink(const std::string &name, Inode **obj)
+int Inode::unlink(const std::string &name, Ref *inode)
 {
   if (!is_dir())
     return -ENOTDIR;
@@ -115,7 +115,7 @@ int Inode::unlink(const std::string &name, Inode **obj)
   std::lock_guard<std::mutex> child_lock(i->second->dir.mtx);
   if (!i->second->dir.entries.empty())
     return -ENOTEMPTY;
-  *obj = i->second;
+  *inode = i->second;
   dir.entries.erase(i);
   dir.gen++;
   return 0;
