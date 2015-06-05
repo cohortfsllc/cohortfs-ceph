@@ -1127,3 +1127,13 @@ int ZFStore::create_collection(const coll_t& c)
 
   return 0;
 } /* create_collection */
+
+int ZFStore::destroy_collection(ZCollection* c)
+{
+  dout(15) << "destroy_collection " << c.get_cid() << " = " << dendl;
+  std::string ds_short_name = "/" + c.c_str();
+  int r = c->index.destroy(ds_short_name);
+
+  // XXX how do we destroy an attached ZCollection?  Casey?
+  return r;
+}
