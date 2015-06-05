@@ -971,7 +971,7 @@ int ZFStore::setattr(ZCollection* c, ZObject* o, const std::string& k,
 	   << " " << k << dendl;
 
   int r = lzfw_setxattrat(zhfs, &cred, o->vno, k.c_str(), v.c_str());
-  return r;
+  return -r;
 } /* setattr */
 
 int ZFStore::setattrs(ZCollection* c, ZObject* o,
@@ -986,3 +986,25 @@ int ZFStore::setattrs(ZCollection* c, ZObject* o,
  out:
   return r;
 } /* setattrs */
+
+int ZStore::rmattr(ZCollection* c, ZObject* o, const std::string& name)
+{
+  dout(15) << "rmattr " << fc->get_cid() << "/" << fo->get_oid()
+	   << " '" << name << "'" << dendl;
+
+  int r = lzfw_removexattr(zhfs, &cred, o->ino, name.c_str());
+  return -r;
+} /* rmattr */
+
+/* lzfw_listxattrs2 iterator callback (removes each xattr) */
+static int rmxattr_cb(lzfw_vnode_t *vnode, creden_t *cred, const char *name,
+		      void *arg)
+{
+  return lzfw_removexattr((lzfw_vfs_t *) arg, cred, vnode, name);
+}
+
+int ZFStore::rmattrs(ZCollection* c, ZObject* o)
+{
+  int r = lzfw_listxattrs2(zhfs, &cred, o->ino, rmxattr_cb, zhfs);
+  return -r;
+} /* rmattrs */

@@ -389,6 +389,8 @@ public:
 	      const buffer::ptr& v);
   int setattrs(ZCollection* c, ZObject* o,
 	       const map<std::string,buffer::ptr>& aset);
+  int rmattr(ZCollection* c, ZObject* o, const std::string& name);
+  int rmattrs(ZCollection* c, ZObject* o);
 
 }; /* ZFStore */
 
