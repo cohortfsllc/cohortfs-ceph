@@ -876,8 +876,7 @@ int ZFStore::do_transaction(Transaction& t, uint64_t op_seq,
 	  msg = "ENOENT on clone suggests osd bug";
 
 	dout(0) << " error " << cpp_strerror(r) << " not handled on operation "
-		<< i->op << " (" << spos << ", or op " << spos.op
-		<< ", counting from 0)" << dendl;
+		<< i->op << dendl;
 	dout(0) << msg << dendl;
 	dout(0) << " transaction dump:\n";
 	JSONFormatter f(true);
