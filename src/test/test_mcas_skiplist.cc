@@ -23,9 +23,8 @@ void intrusive_ptr_release(test_object *p) { p->put(); }
 
 TEST(Skiplist, Get)
 {
-  char name[] = "test";
   gc_global gc;
-  skiplist<test_object> skip(gc, test_object::cmp, name);
+  skiplist<test_object> skip(gc, test_object::cmp, "test");
   skip_stats stats;
 
   auto obj = skip.get(test_object(5));

@@ -203,7 +203,7 @@ class skiplist : private detail::skiplist_base {
     }
   };
 
-  skiplist(const gc_global &gc, osi_set_cmp_func cmp, char *name)
+  skiplist(const gc_global &gc, osi_set_cmp_func cmp, const char *name)
     : gc(gc),
       skip(osi_cas_skip_alloc(cmp))
   {
