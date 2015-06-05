@@ -394,6 +394,7 @@ public:
   int clone(ZCollection* c, ZObject* o, ZObject* o2);
   int clone_range(ZCollection* c, ZObject* o  /* old */, ZObject* o2 /* new */,
 		  off_t srcoff, size_t len, off_t dstoff);
+  int create_collection(const coll_t& c);
 
 }; /* ZFStore */
 

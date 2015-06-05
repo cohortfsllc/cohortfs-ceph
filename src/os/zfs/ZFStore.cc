@@ -922,7 +922,7 @@ int ZFStore::write(ZCollection* c, ZObject* o, off_t offset, size_t len,
       iovs[iov_ix].iov_len = pb->length();
       iov_len += iovs[iov_ix].iov_len;
     }
-    r = lzfw_writev(zhfs, &cred, o->vno, &iovs, iov_ix, offset);
+    r = lzfw_pwritev(zhfs, &cred, o->vno, &iovs, iov_ix, offset);
     if (r < 0) {
       r = -EIO;
       goto out;
@@ -1085,3 +1085,45 @@ int ZFStore::clone_range(ZCollection* c,
  out:
   return 0;
 } /* clone_range */
+
+int ZFStore::create_collection(const coll_t& c)
+{
+
+  dout(15) << "create_collection " << c << dendl;
+
+  /* minimally, we need to create a dataset */
+  char* ds;
+  std::string ds_name = root_ds + c.c_str();
+  zfsh_adup(ds_name, ds); // spa routines chan change ds
+
+  int r = lzfw_dataset_create(zhd, ds, ZFS_TYPE_FILESYSTEM, &lzw_err);
+  if (!!r)
+    return -r;
+
+  /* CohortFS FileStore initializes a FragTreeIndex on the
+   * stack at the given path.  XXX Casey? */
+  lzfw_vfs_t* t_zhfs;
+  std::string ds_short_name = "/" + c.c_str();
+  t_zhfs = lzfw_mount(path.c_str(), ds_short_name.c_str(),
+		      "" /* mount options */);
+
+  if (!t_zhfs) {
+    derr << "ZFStore::create_collection(" << c << "): "
+	 << "lzfw_mount failed" << dendl;
+    return -ENODEV;
+  }
+
+  cohort_zfs::FragTreeIndex index(cct, t_zhfs,
+				  cct->_conf->fragtreeindex_initial_split);
+  r = index.init(std::string("/")); // XXX: mount() instead if replaying=true?
+  if (r < 0) {
+    derr << "ZFStore::create_collection(" << c << ") failed: "
+	 << cpp_strerror(-r) << dendl;
+    (void) lzfw_umount(zhfs, true);
+    return -r;
+  }
+
+  (void) lzfw_umount(zhfs, true);
+
+  return 0;
+} /* create_collection */
