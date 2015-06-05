@@ -350,10 +350,25 @@ int ZFStore::fiemap(CollectionHandle ch, ObjectHandle oh,
 }
 
 int ZFStore::getattr(CollectionHandle ch, ObjectHandle oh,
-		     const char* name, bufferptr& value)
+		     const char* name, bufferptr& val)
 {
-  abort();
-  return 0;
+  dout(15) << "getattr " << ch->get_cid() << "/" << oh->get_oid()
+	   << " '" << name << "'" << dendl;
+
+  ZObject* o = static_cast<ZObject*>(oh);
+  size_t size;
+  int r;
+
+  /* XXX this interface is sub-optimal, needs atomicity */
+  r = lzfw_getxattrat(zhfs, &cred, o->vno, name, nullptr, &size);
+  if (!!r || size == 0)
+    goto out;
+
+  val = buffer::create(size);
+  r = lzfw_getxattrat(zhfs, &cred, o->vno, name, val.c_str(), &size);
+
+ out:
+  return -r;
 } /* getattr */
 
 int ZFStore::getattrs(CollectionHandle ch, ObjectHandle oh,

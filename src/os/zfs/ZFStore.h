@@ -384,7 +384,7 @@ public:
 	    const bufferlist& bl, bool replica);
   int zero(ZCollection* c, ZObject* o, off_t offset, size_t len);
   int truncate(ZCollection* c, ZObject* o, uint64_t size);
-  int remove(ZCollection* c, ZObject *o);
+  int remove(ZCollection* c, ZObject *o); // XXX should this be by-id?
 
 }; /* ZFStore */
 
