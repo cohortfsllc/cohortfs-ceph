@@ -274,15 +274,15 @@ int ZFStore::stat(CollectionHandle ch, ObjectHandle oh,
   return 0;
 } /* stat */
 
+static constexpr uint16_t n_iovs = 16;
+thread_local std::pair<iovec[n_iovs], iovec[n_iovs]> tls_iovs;
+
 int ZFStore::read(CollectionHandle ch, ObjectHandle oh,
-		  uint64_t off, size_t len, bufferlist& bl,
+		  uint64_t offset, size_t len, bufferlist& bl,
 		  bool allow_eio)
 {
-  static constexpr uint16_t n_iovs = 16;
-  thread_local std::pair<iovec[n_iovs],
-			 iovec[n_iovs]> iovs;
-  iovec* iovs1 = iovs.first;
-  iovec* iovs2 = iovs.second;
+  iovec* iovs1 = tls_iovs.first;
+  iovec* iovs2 = tls_iovs.second;
   uint16_t iovcnt;
   int err;
 
@@ -316,7 +316,7 @@ int ZFStore::read(CollectionHandle ch, ObjectHandle oh,
       iov1->iov_len = MIN(resid, 65536);
     } /* ix */
     iovcnt = ix+1;
-    bytes_read = lzfw_preadv(zhfs, &cred, o->vno, iovs1, iovcnt, off);
+    bytes_read = lzfw_preadv(zhfs, &cred, o->vno, iovs1, iovcnt, offset);
     if (bytes_read <= 0)
       return bytes_read;
     /* transfer filled buffers -- ZFS/Solaris burns down iov->iov_cnt */
@@ -336,6 +336,7 @@ int ZFStore::read(CollectionHandle ch, ObjectHandle oh,
       }
     }
     resid -= bytes_read;
+    offset += bytes_read;
   } /* len  */
 
  out:
@@ -910,8 +911,7 @@ int ZFStore::write(ZCollection* c, ZObject* o, off_t offset, size_t len,
 	   << offset << "~" << len << dendl;
   int r = 0;
   int bytes_written = 0;
-  static constexpr uint16_t n_iovs = 16;
-  thread_local iovec[n_iovs] iovs;
+  iovec *iovs = tls_iovs.first;
   uint16_t iov_ix;
 
   auto pb = bl.buffers().begin();
@@ -1008,3 +1008,81 @@ int ZFStore::rmattrs(ZCollection* c, ZObject* o)
   int r = lzfw_listxattrs2(zhfs, &cred, o->ino, rmxattr_cb, zhfs);
   return -r;
 } /* rmattrs */
+
+int ZFStore::clone(ZCollection* c, ZObject* o  /* old */, ZObject* o2 /* new */)
+{
+  dout(15) << "clone " << c->get_cid() << "/" << o->get_oid()
+	   << " -> " << c->get_cid() << "/" << o2->get_oid()
+	   << dendl;
+
+  return clone_range(c, o, o2, 0, CEPH_READ_ENTIRE, 0);
+} /* clone */
+
+int ZFStore::clone_range(ZCollection* c,
+			 ZObject* o  /* old */,
+			 ZObject* o2 /* new */,
+			 off_t srcoff, size_t len, off_t dstoff)
+{
+  uint16_t iovcnt;
+  int err;
+
+  if (len == 0)
+    return 0;
+
+  if (len == CEPH_READ_ENTIRE) {
+    struct stat st;
+    err = lzfw_stat(zhfs, &cred, o->vno, &st);
+    if (!!err)
+      return -err;
+    len = st.st_size;
+  }
+
+  /* read chunkwise */
+  int ix;
+  ssize_t resid = len;
+  iovec* iov1;
+  iovec* iov2;
+
+  while (resid) {
+    ssize_t bytes_read;
+    for (ix = 0; ix < n_iovs; ++ix) {
+      iov1 = &iovs1[ix];
+      iov2 = &iovs2[ix];
+      // XXX get page
+      iov1->iov_base = malloc(65536*sizeof(char));
+      iov2->iov_base = iov1->iov_base;
+      iov1->iov_len = MIN(resid, 65536);
+    } /* ix */
+    iovcnt = ix+1;
+    bytes_read = lzfw_preadv(zhfs, &cred, o->vno, iovs1, iovcnt, srcoff);
+    if (bytes_read <= 0)
+      return bytes_read;
+    /* transfer filled buffers -- ZFS/Solaris burns down iov->iov_cnt */
+    for (ix = 0; ix < iovcnt; ++ix) {
+      iov1 = &iovs1[ix];
+      iov2 = &iovs2[ix];
+      int iov_len = 65536 - iov1->iov_len;
+      if (unlikely(iov_len == 0))
+	goto out;
+      else {
+	/* XXX free iov2->iov_base on exit from this block (TODO: recycle) */
+	bufferptr bp =
+	  buffer::create_static(iov_len, static_cast<char*>(iov2->iov_base));
+	/* write it to o2 at dstoff */
+	iovec wr_iov;
+	wr_iov.iov_base = iov2->iov_base;
+	wr_iov.iov_len = iov_len;
+	r = lzfw_pwritev(zhfs, &cred, o2->vno, &wr_iov, 1, dstoff);
+	/* short read? */
+	if (iov1->iov_len != 0)
+	  goto out;
+      }
+    }
+    resid -= bytes_read;
+    srcoff += bytes_read;
+    dstoff += bytes_read;
+  } /* len  */
+
+ out:
+  return 0;
+} /* clone_range */

@@ -391,6 +391,9 @@ public:
 	       const map<std::string,buffer::ptr>& aset);
   int rmattr(ZCollection* c, ZObject* o, const std::string& name);
   int rmattrs(ZCollection* c, ZObject* o);
+  int clone(ZCollection* c, ZObject* o, ZObject* o2);
+  int clone_range(ZCollection* c, ZObject* o  /* old */, ZObject* o2 /* new */,
+		  off_t srcoff, size_t len, off_t dstoff);
 
 }; /* ZFStore */
 
