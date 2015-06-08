@@ -107,16 +107,24 @@ public:
   {
     friend class ZFStore;
 
+    const char* META_FILE = "meta_file";
+
     CephContext *cct;
     cohort_zfs::FragTreeIndex index;
     std::string ds_name;
     lzfw_vfs_t* zhfs;
+
+    inogen_t root_ino;
+    inogen_t meta_ino;
+    lzfw_vnode_t* meta_vno;
 
     typedef std::unique_lock<std::shared_timed_mutex> unique_lock;
     typedef std::shared_lock<std::shared_timed_mutex> shared_lock;
     std::shared_timed_mutex attr_lock;
 
     ZCollection(ZFStore* zs, const coll_t& cid, int& r, bool create=false);
+
+    int setattr(const std::string& k, const buffer::ptr& v);
 
     ~ZCollection()
     {

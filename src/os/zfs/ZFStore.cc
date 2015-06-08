@@ -55,7 +55,7 @@ ZFStore::ZFStore(CephContext* cct, const std::string& path)
   : ObjectStore(cct, path),
     root_ds(path + "/osdfs"),
     zhfs(nullptr),
-    meta_ino{0, 0}, meta_vno(nullptr),
+    meta_ino{0,0}, meta_vno(nullptr),
     trace_endpoint("0.0.0.0", 0, NULL)
 {
   /* global init */
@@ -745,8 +745,10 @@ int ZFStore::do_transaction(Transaction& t, uint64_t op_seq,
     case Transaction::OP_COLL_SETATTR:
       r = -ENOENT;
       c = get_slot_collection(t, i->c1_ix);
-      if (c)
-	r = collection_setattr(c, i->name, i->data);
+      if (c) {
+	bufferlist &bl = i->data;
+	r = c->setattr(i->name, buffer::ptr(bl.c_str(), bl.length()));
+      }
       break;
 
     case Transaction::OP_COLL_RMATTR:
@@ -1112,11 +1114,15 @@ int ZFStore::destroy_collection(ZCollection* c)
   return r;
 }
 
+/* ZCollection */
+
 ZCollection::ZCollection(ZFStore* zs, const coll_t& cid, int& r, bool create)
   : ceph::os::Collection(zs, cid), cct(zs->cct),
-    index(zs->cct, zs->cct->_conf->fragtreeindex_initial_split)
+    index(zs->cct, zs->cct->_conf->fragtreeindex_initial_split),
+    ds_name(zs->root_ds + cid.c_str()),
+    root_ino{0,0}, meta_ino{0,0}, meta_vno(nullptr)
 {
-  ds_name = zs->root_ds + cid.c_str();
+  int r;
 
   if (create) {
     /* create a dataset */
@@ -1138,9 +1144,30 @@ ZCollection::ZCollection(ZFStore* zs, const coll_t& cid, int& r, bool create)
     return;
   }
 
+  index.set_zhfs(zhfs);
+
   /* if we created it, do initial setup */
-  if (create)
-    index.init(std::string("/"));
-  else /* otherwise, mount it */
-    index.mount(std::string("/"));
+  if (create) {
+    r = index.init(std::string("/frag_tree"));
+    r = index.mount(std::string("/frag_tree"));
+
+    /* create collection attributes meta file */
+    r = lzfw_getroot(zhfs, &root_ino);
+    r = lzfw_create(zhfs, &cred, root_ino, META_FILE, 644, &meta_ino);
+    
+  } else /* otherwise, mount it */ {
+    r = index.mount(std::string("/frag_tree"));
+    r = lzfw_open(zhfs, &zs->cred, meta_vno, O_RDWR, &meta_vno);
+    assert(r == 0);
+  }
 } /* ZCollection */
+
+int ZCollection::setattr(const std::string& k, const buffer::ptr& v)
+{
+  dout(15) << "ZCollection::setattr " << name << dendl;
+
+  assert(meta_vno);
+
+  int r = lzfw_setxattrat(zhfs, &zs->cred, meta_vno, k.c_str(), v.c_str());
+  return r;
+} /* setattr */

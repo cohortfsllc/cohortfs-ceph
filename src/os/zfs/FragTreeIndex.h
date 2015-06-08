@@ -119,9 +119,15 @@ namespace cohort_zfs { // temporarily isolate ZFS variant
     const FragTreeIndex& operator=(const FragTreeIndex& other)
     = delete;
 
+    friend class ZCollection;
+
   public:
     FragTreeIndex(CephContext* cct, uint32_t initial_split);
     ~FragTreeIndex();
+
+    void set_zhfs(lzfw_vfs_t *fs) {
+      zhfs = fs;
+    }
 
     /* initialize a fresh collection index at the given path */
     int init(const std::string& path);
