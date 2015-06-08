@@ -46,6 +46,8 @@ struct skip_stats {
   int gets;
   int gets_created;
   int gets_stillborn;
+  int gets_miss;
+  int gets_deleted;
   int gets_existing;
   int puts;
   int puts_last;
@@ -161,7 +163,9 @@ class skiplist : private detail::skiplist_base {
 
   using skiplist_base::get_stats; // void get_stats(skip_stats *s)
 
-  boost::intrusive_ptr<T> get(T&& search_template)
+  // find an entry matching the search template, or move contruct an
+  // entry from the template and insert it. never returns null
+  boost::intrusive_ptr<T> get_or_create(T&& search_template)
   {
     skip_stats *s = get_mythread_stats();
     ++s->gets;
@@ -187,9 +191,31 @@ class skiplist : private detail::skiplist_base {
       node = a;
     }
     // using existing node
+    ++s->gets_existing;
     if (node->get() == 1)
       --unused;
+    return boost::intrusive_ptr<T>(node, false); // don't add another ref
+  }
+
+  // find an entry matching the search template, or return null
+  boost::intrusive_ptr<T> get(T&& search_template)
+  {
+    skip_stats *s = get_mythread_stats();
+    ++s->gets;
+    gc_guard guard(gc);
+    T *node = static_cast<T*>(osi_cas_skip_lookup(gc, skip, &search_template));
+    if (!node) {
+      ++s->gets_miss;
+      return nullptr;
+    }
+    if (node->deleted) {
+      ++s->gets_deleted;
+      return nullptr;
+    }
+    // using existing node
     ++s->gets_existing;
+    if (node->get() == 1)
+      --unused;
     return boost::intrusive_ptr<T>(node, false); // don't add another ref
   }
 
