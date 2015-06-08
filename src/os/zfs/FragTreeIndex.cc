@@ -44,14 +44,7 @@ namespace cohort_zfs {
 
   FragTreeIndex::~FragTreeIndex()
   {
-#if 1 // don't blow up on test failures
-    if (root) {
-      lzfw_closedir(zhfs, &cred, root);
-      root = nullptr;
-    }
-#else
     assert(root == nullptr); // must not be mounted
-#endif
   }
 
   namespace {

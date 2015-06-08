@@ -435,7 +435,8 @@ CollectionHandle ZFStore::open_collection(const coll_t& cid)
 
 int ZFStore::close_collection(CollectionHandle ch)
 {
-  abort();
+  ZCollection* c = static_cast<ZCollection*>(ch);
+  delete c; /* XXX check */
   return 0;
 }
 
@@ -1231,6 +1232,13 @@ ZFStore::ZCollection::ZCollection(ZFStore* zs, const coll_t& cid, int& r,
     assert(r == 0);
   }
 } /* ZCollection */
+
+ZFStore::ZCollection::~ZCollection()
+{
+  index.unmount();
+  (void) lzfw_close(zhfs, &cred, meta_vno, O_RDWR);
+  (void) lzfw_umount(zhfs, true /* force */);
+}
 
 int ZFStore::ZCollection::getattr(const char* name, buffer::ptr& v)
 {

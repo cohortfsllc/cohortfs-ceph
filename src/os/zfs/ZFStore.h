@@ -129,10 +129,7 @@ public:
     int setattr(const std::string& k, const buffer::ptr& v);
     int rmattr(const std::string& k);
 
-    ~ZCollection()
-    {
-      index.unmount();
-    }
+    ~ZCollection();
   }; /* ZCollection */
 
   inline ZCollection* get_slot_collection(Transaction& t,
