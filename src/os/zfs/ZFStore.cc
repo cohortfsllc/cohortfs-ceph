@@ -1139,7 +1139,8 @@ ZCollection::ZCollection(ZFStore* zs, const coll_t& cid, int& r, bool create)
   }
 
   /* if we created it, do initial setup */
-  if (create) {
+  if (create)
     index.init(std::string("/"));
-  }
+  else /* otherwise, mount it */
+    index.mount(std::string("/"));
 } /* ZCollection */
