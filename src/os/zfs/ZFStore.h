@@ -125,6 +125,7 @@ public:
 
     ZCollection(ZFStore* zs, const coll_t& cid, int& r, bool create=false);
 
+    int getattr(const char* name, buffer::ptr& v);
     int setattr(const std::string& k, const buffer::ptr& v);
     int rmattr(const std::string& k);
 
@@ -332,9 +333,9 @@ public:
   int fiemap(CollectionHandle ch, ObjectHandle oh,
 	     uint64_t offset, size_t len, bufferlist& bl);
   int getattr(CollectionHandle ch, ObjectHandle oh,
-	      const char* name, bufferptr& value);
+	      const char* name, buffer::ptr& value);
   int getattrs(CollectionHandle ch, ObjectHandle oh,
-	       map<std::string,bufferptr>& aset,
+	       map<std::string,buffer::ptr>& aset,
 	       bool user_only = false);
   int list_collections(vector<coll_t>& ls);
   CollectionHandle open_collection(const coll_t& c);
@@ -345,7 +346,7 @@ public:
   int collection_getattr(CollectionHandle ch, const char* name,
 			 bufferlist& bl);
   int collection_getattrs(CollectionHandle ch,
-			  map<std::string,bufferptr>& aset);
+			  map<std::string,buffer::ptr>& aset);
   bool collection_empty(CollectionHandle ch);
   int collection_list(CollectionHandle ch, vector<hoid_t>& o);
   int collection_list_partial(CollectionHandle ch, hoid_t start,

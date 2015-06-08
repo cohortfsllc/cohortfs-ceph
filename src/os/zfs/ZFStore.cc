@@ -278,7 +278,7 @@ static constexpr uint16_t n_iovs = 16;
 thread_local std::pair<iovec[n_iovs], iovec[n_iovs]> tls_iovs;
 
 int ZFStore::read(CollectionHandle ch, ObjectHandle oh,
-		  uint64_t offset, size_t len, bufferlist& bl,
+		  uint64_t offset, size_t len, buffer::list& bl,
 		  bool allow_eio)
 {
   iovec* iovs1 = tls_iovs.first;
@@ -327,7 +327,7 @@ int ZFStore::read(CollectionHandle ch, ObjectHandle oh,
       if (unlikely(iov_len == 0))
 	goto out;
       else {
-	bufferptr bp =
+	buffer::ptr bp =
 	  buffer::create_static(iov_len, static_cast<char*>(iov2->iov_base));
 	bl.push_back(bp);
 	/* short read? */
@@ -344,14 +344,14 @@ int ZFStore::read(CollectionHandle ch, ObjectHandle oh,
 } /* read */
 
 int ZFStore::fiemap(CollectionHandle ch, ObjectHandle oh,
-		    uint64_t offset, size_t len, bufferlist& bl)
+		    uint64_t offset, size_t len, buffer::list& bl)
 {
   abort();
   return 0;
 }
 
 int ZFStore::getattr(CollectionHandle ch, ObjectHandle oh,
-		     const char* name, bufferptr& val)
+		     const char* name, buffer::ptr& val)
 {
   dout(15) << "getattr " << ch->get_cid() << "/" << oh->get_oid()
 	   << " '" << name << "'" << dendl;
@@ -387,7 +387,7 @@ static int lsxattr_cb(lzfw_vnode_t *vnode, inogen_t object, creden_t *cred,
 }
 
 int ZFStore::getattrs(CollectionHandle ch, ObjectHandle oh,
-		      map<std::string,bufferptr>& aset,
+		      map<std::string,buffer::ptr>& aset,
 		      bool user_only)
 {
   int r;
@@ -403,7 +403,7 @@ int ZFStore::getattrs(CollectionHandle ch, ObjectHandle oh,
     r = getattr(ch, oh, iter.c_str(), bp);
     if (!!r)
       return -r;
-    aset.insert(map<std::string,bufferptr>::value_type(iter, bp));
+    aset.insert(map<std::string,buffer::ptr>::value_type(iter, bp));
   }
   return 0;
 }
@@ -435,19 +435,31 @@ bool ZFStore::collection_exists(const coll_t& c)
 int ZFStore::collection_getattr(CollectionHandle ch, const char* name,
 				void* value, size_t size)
 {
-  abort();
-  return 0;
-}
+  buffer::list bl;
+  int r = collection_getattr(ch, name, bl);
+  if (r < 0)
+    return -r;
+  r = MIN(bl.length(), size);
+  bl.copy(0, r, static_cast<char*>(value));
+  /* return length */
+  return r;
+} /* collection_getattr to buffer */
 
 int ZFStore::collection_getattr(CollectionHandle ch, const char* name,
-				bufferlist& bl)
+				buffer::list& bl)
 {
-  abort();
-  return 0;
-}
+  ZCollection* c = static_cast<ZCollection*>(ch);
+  buffer::ptr bp;
+  int r = c->getattr(name, bp);
+  if (!r) {
+    bl.push_back(bp);
+    return bl.length();
+  }
+  return -r;
+} /* collection_getattr to buffer::list */
 
 int ZFStore::collection_getattrs(CollectionHandle ch,
-				 map<std::string,bufferptr>& aset)
+				 map<std::string,buffer::ptr>& aset)
 {
   abort();
   return 0;
@@ -490,14 +502,14 @@ int ZFStore::collection_list_partial2(CollectionHandle ch,
 }
 
 int ZFStore::omap_get(CollectionHandle ch, ObjectHandle oh,
-		      bufferlist* header, map<std::string, bufferlist>* out)
+		      buffer::list* header, map<std::string, buffer::list>* out)
 {
   abort();
   return 0;
 }
 
 int ZFStore::omap_get_header(CollectionHandle ch, ObjectHandle oh,
-			     bufferlist* header, bool allow_eio)
+			     buffer::list* header, bool allow_eio)
 {
   abort();
   return 0;
@@ -512,7 +524,7 @@ int ZFStore::omap_get_keys(CollectionHandle ch, ObjectHandle oh,
 
 int ZFStore::omap_get_values(CollectionHandle ch, ObjectHandle oh,
 			     const set<std::string>& keys,
-			     map<std::string, bufferlist>* out)
+			     map<std::string, buffer::list>* out)
 {
   abort();
   return 0;
@@ -678,8 +690,8 @@ int ZFStore::do_transaction(Transaction& t, uint64_t op_seq,
       if (c) {
 	o = get_slot_object(t, c, i->o1_ix, true /* create */);
 	if (o) {
-	  bufferlist &bl = i->data;
-	  thread_local map<std::string, bufferptr> to_set;
+	  buffer::list &bl = i->data;
+	  thread_local map<std::string, buffer::ptr> to_set;
 	  to_set.clear();
 	  to_set[i->name] = buffer::ptr(bl.c_str(), bl.length());
 	  r = setattrs(c, o, to_set);
@@ -774,7 +786,7 @@ int ZFStore::do_transaction(Transaction& t, uint64_t op_seq,
       r = -ENOENT;
       c = get_slot_collection(t, i->c1_ix);
       if (c) {
-	bufferlist &bl = i->data;
+	buffer::list &bl = i->data;
 	r = c->setattr(i->name, buffer::ptr(bl.c_str(), bl.length()));
       }
       break;
@@ -933,7 +945,7 @@ int ZFStore::touch(ZCollection* c, ZObject* o)
 } /* touch */
 
 int ZFStore::write(ZCollection* c, ZObject* o, off_t offset, size_t len,
-		   const bufferlist& bl, bool replica)
+		   const buffer::list& bl, bool replica)
 {
 
   dout(15) << "write " << c->get_cid() << "/" << o->get_oid() << " "
@@ -1099,7 +1111,7 @@ int ZFStore::clone_range(ZCollection* c,
 	goto out;
       else {
 	/* XXX free iov2->iov_base on exit from this block (TODO: recycle) */
-	bufferptr bp =
+	buffer::ptr bp =
 	  buffer::create_static(iov_len, static_cast<char*>(iov2->iov_base));
 	/* write it to o2 at dstoff */
 	iovec wr_iov;
@@ -1193,6 +1205,25 @@ ZFStore::ZCollection::ZCollection(ZFStore* zs, const coll_t& cid, int& r,
     assert(r == 0);
   }
 } /* ZCollection */
+
+int ZFStore::ZCollection::getattr(const char* name, buffer::ptr& v)
+{
+  dout(15) << "getattr " << get_cid() << " " << name << dendl;
+
+  size_t size;
+  int r;
+
+  /* XXX this interface is sub-optimal, needs atomicity */
+  r = lzfw_getxattrat(zhfs, &cred, meta_vno, name, nullptr, &size);
+  if (!!r || size == 0)
+    goto out;
+
+  v = buffer::create(size);
+  r = lzfw_getxattrat(zhfs, &cred, meta_vno, name, v.c_str(), &size);
+
+ out:
+  return -r;
+} /* getattr */
 
 int ZFStore::ZCollection::setattr(const std::string& k, const buffer::ptr& v)
 {
