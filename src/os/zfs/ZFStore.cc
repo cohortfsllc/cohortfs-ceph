@@ -406,7 +406,7 @@ int ZFStore::getattrs(CollectionHandle ch, ObjectHandle oh,
     aset.insert(map<std::string,buffer::ptr>::value_type(iter, bp));
   }
   return 0;
-}
+} /* getattrs */
 
 int ZFStore::list_collections(vector<coll_t>& ls)
 {
@@ -461,9 +461,22 @@ int ZFStore::collection_getattr(CollectionHandle ch, const char* name,
 int ZFStore::collection_getattrs(CollectionHandle ch,
 				 map<std::string,buffer::ptr>& aset)
 {
-  abort();
+  int r;
+  ZCollection* c = static_cast<ZCollection*>(ch);
+
+  std::list<std::string> xattr_names;
+  lsxattr_cb_arg xattr_cbargs{&xattr_names, false /* user_only filter */};
+  r = lzfw_listxattr2(c->zhfs, &cred, meta_ino, lsxattr_cb, &xattr_cbargs);
+
+  for (auto& iter : xattr_names) {
+    buffer::ptr bp;
+    r = c->getattr(iter.c_str(), bp);
+    if (!!r)
+      return -r;
+    aset.insert(map<std::string,buffer::ptr>::value_type(iter, bp));
+  }
   return 0;
-}
+} /* collection_getattrs */
 
 bool ZFStore::collection_empty(CollectionHandle ch)
 {
