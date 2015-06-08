@@ -72,26 +72,72 @@ class skiplist_base {
   };
 
   CACHE_PAD(0);
-  std::atomic<int> size;
+  const gc_global &gc;
+  osi_set_t *const skip;
+  osi_mcas_obj_cache_t cache;
   CACHE_PAD(1);
-  std::atomic<int> unused;
+  std::atomic<int> size;
   CACHE_PAD(2);
+  std::atomic<int> unused;
+  CACHE_PAD(3);
   std::mutex mutex;
   thread_stats* thread_list;
   skip_stats stats; // accumulated thread stats protected by mutex
 
-  skiplist_base()
-    : size(0), unused(0), thread_list(nullptr)
+  skiplist_base(const gc_global &gc, osi_set_cmp_func cmp,
+                size_t object_size, const char *name)
+    : gc(gc),
+      skip(osi_cas_skip_alloc(cmp)),
+      size(0),
+      unused(0),
+      thread_list(nullptr)
   {
+    assert(skip);
     memset(&stats, 0, sizeof(stats));
+    osi_mcas_obj_cache_create(gc, &cache, object_size, name);
+
     int r = pthread_key_create(&tls_key, sumup_and_free);
     assert(r == 0);
   }
   ~skiplist_base()
   {
+    {
+      std::lock_guard<std::mutex> lock(mutex);
+      for (thread_stats *p = thread_list; p; p = p->next)
+        p->deleted = 1;
+    }
+    osi_cas_skip_free(gc, skip);
+    osi_mcas_obj_cache_destroy(cache);
+
     int r = pthread_key_delete(tls_key);
     assert(r == 0);
   }
+
+  class object {
+    std::atomic<int> ref_count;
+    skiplist_base *parent;
+    int deleted; // XXX: does this need to be atomic?
+    friend class skiplist_base;
+   public:
+    object() : ref_count(0), parent(nullptr), next(nullptr) {}
+    int get() { return ++ref_count; }
+    int put() {
+      skip_stats *s = parent->get_mythread_stats();
+      gc_guard guard(parent->gc);
+
+      ++s->puts;
+      int i = --ref_count;
+      if (i == 0) {
+        ++s->puts_last;
+        ++parent->unused;
+      }
+      return i;
+    }
+  };
+
+  // object accessors for skiplist<T>
+  void node_init(object *node) { node->parent = this; }
+  bool node_deleted(const object *node) const { return node->deleted; }
 
   skip_stats* get_mythread_stats();
   void get_stats(skip_stats *s);
@@ -112,55 +158,15 @@ void dump_foreach(osi_set_t *skip, setval_t k, setval_t v, void *a)
 // T must implement a move constructor and inherit from skiplist::object
 template <typename T>
 class skiplist : private detail::skiplist_base {
- private:
-  CACHE_PAD(0);
-  const gc_global &gc;
-  osi_set_t *const skip;
-  osi_mcas_obj_cache_t cache;
-  CACHE_PAD(1);
-
  public:
-  class object {
-    std::atomic<int> ref_count;
-    skiplist<T> *parent;
-    friend class skiplist<T>;
-   public:
-    object() : ref_count(0), parent(nullptr) {}
-    int get() { return ++ref_count; }
-    int put() {
-      skip_stats *s = parent->get_mythread_stats();
-      gc_guard guard(parent->gc);
-
-      ++s->puts;
-      int i = --ref_count;
-      if (i == 0) {
-        ++s->puts_last;
-        ++parent->unused;
-      }
-      return i;
-    }
-  };
-
   skiplist(const gc_global &gc, osi_set_cmp_func cmp, const char *name)
-    : gc(gc),
-      skip(osi_cas_skip_alloc(cmp))
+    : skiplist_base(gc, cmp, sizeof(T), name)
   {
     static_assert(std::is_base_of<skiplist::object, T>::value,
                   "template type T must inherit from skiplist::object");
-    osi_mcas_obj_cache_create(gc, &cache, sizeof(T), name);
   }
 
-  ~skiplist()
-  {
-    {
-      std::lock_guard<std::mutex> lock(mutex);
-      for (thread_stats *p = thread_list; p; p = p->next)
-        p->deleted = 1;
-    }
-    osi_cas_skip_free(gc, skip);
-    osi_mcas_obj_cache_destroy(cache);
-  }
-
+  using skiplist_base::object;
   using skiplist_base::get_stats; // void get_stats(skip_stats *s)
 
   // find an entry matching the search template, or move contruct an
@@ -175,7 +181,7 @@ class skiplist : private detail::skiplist_base {
       // create new node
       void *x = gc_alloc(guard, cache);
       node = new (x) T(std::move(search_template));
-      node->parent = this;
+      init_node(node);
       T *a = static_cast<T*>(osi_cas_skip_update(gc, skip, node, node, 0));
       if (a == nullptr || a == node) {
         // new node inserted successfully
@@ -208,7 +214,7 @@ class skiplist : private detail::skiplist_base {
       ++s->gets_miss;
       return nullptr;
     }
-    if (node->deleted) {
+    if (node_deleted(node)) {
       ++s->gets_deleted;
       return nullptr;
     }
