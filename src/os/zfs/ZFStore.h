@@ -125,6 +125,7 @@ public:
     ZCollection(ZFStore* zs, const coll_t& cid, int& r, bool create=false);
 
     int setattr(const std::string& k, const buffer::ptr& v);
+    int rmattr(const std::string& k);
 
     ~ZCollection()
     {

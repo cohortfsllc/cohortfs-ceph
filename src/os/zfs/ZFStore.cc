@@ -755,7 +755,7 @@ int ZFStore::do_transaction(Transaction& t, uint64_t op_seq,
       r = -ENOENT;
       c = get_slot_collection(t, i->c1_ix);
       if (c)
-	r = collection_rmattr(c, i->name);
+	r = c->rmattr(i->name);
       break;
 
     case Transaction::OP_OMAP_CLEAR:
@@ -1164,10 +1164,18 @@ ZCollection::ZCollection(ZFStore* zs, const coll_t& cid, int& r, bool create)
 
 int ZCollection::setattr(const std::string& k, const buffer::ptr& v)
 {
-  dout(15) << "ZCollection::setattr " << name << dendl;
+  dout(15) << "ZCollection::setattr " << cid << " " << name << dendl;
 
   assert(meta_vno);
 
   int r = lzfw_setxattrat(zhfs, &zs->cred, meta_vno, k.c_str(), v.c_str());
   return r;
 } /* setattr */
+
+int ZCollection::rmattr(const std::string& k)
+{
+  dout(15) << "ZCollection::rmattr " << cid << " " << k << dendl;
+
+  int r = lzfw_removexattr(zhfs, &cred, meta_ino, k.c_str());
+  return -r;
+} /* rmattr */
