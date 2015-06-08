@@ -124,14 +124,6 @@ enum {
 };
 
 
-// pg stuff
-
-// object namespaces
-#define CEPH_METADATA_NS       1
-#define CEPH_DATA_NS	       2
-#define CEPH_CAS_NS	       3
-#define CEPH_OSDMETADATA_NS 0xff
-
 #define OSD_SUPERBLOCK_POBJECT oid_t("osd_superblock")
 
 // ----------------------
@@ -604,22 +596,6 @@ public:
 WRITE_CLASS_ENCODER(ObjectModDesc)
 
 
-// -----------------------------------------
-
-struct osd_peer_stat_t {
-  ceph::real_time stamp;
-
-  osd_peer_stat_t() { }
-
-  void encode(bufferlist &bl) const;
-  void decode(bufferlist::iterator &bl);
-  void dump(Formatter *f) const;
-  static void generate_test_instances(list<osd_peer_stat_t*>& o);
-};
-WRITE_CLASS_ENCODER(osd_peer_stat_t)
-
-ostream& operator<<(ostream& out, const osd_peer_stat_t &stat);
-
 
 // -----------------------------------------
 
@@ -720,7 +696,7 @@ static inline bool operator==(const watch_info_t& l,
 static inline ostream& operator<<(ostream& out,
 				  const watch_info_t& w) {
   return out << "watch(cookie " << w.cookie << " "
-	     << w.timeout 
+	     << w.timeout
 	     << " " << w.addr << ")";
 }
 

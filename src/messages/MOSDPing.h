@@ -48,7 +48,6 @@ class MOSDPing : public Message {
   boost::uuids::uuid fsid;
   epoch_t map_epoch, peer_as_of_epoch;
   uint8_t op;
-  osd_peer_stat_t peer_stat;
   ceph::real_time stamp;
 
   MOSDPing(const boost::uuids::uuid& f, epoch_t e, uint8_t o,
@@ -69,7 +68,6 @@ public:
     ::decode(map_epoch, p);
     ::decode(peer_as_of_epoch, p);
     ::decode(op, p);
-    ::decode(peer_stat, p);
     if (header.version >= 2)
       ::decode(stamp, p);
   }
@@ -78,7 +76,6 @@ public:
     ::encode(map_epoch, payload);
     ::encode(peer_as_of_epoch, payload);
     ::encode(op, payload);
-    ::encode(peer_stat, payload);
     ::encode(stamp, payload);
   }
 
