@@ -270,7 +270,12 @@ bool ZFStore::exists(CollectionHandle ch, const hoid_t& oid)
 int ZFStore::stat(CollectionHandle ch, ObjectHandle oh,
 		  struct stat* st, bool allow_eio)
 {
-  abort();
+  ZCollection* c = static_cast<ZCollection*>(ch);
+  ZObject* o = static_cast<ZObject*>(oh);
+
+  int r = lzfw_stat(c->zhfs, &cred, o->vno, st);
+  if (!!r)
+    return -r;
   return 0;
 } /* stat */
 
