@@ -110,6 +110,7 @@ public:
     const char* META_FILE = "meta_file";
 
     CephContext *cct;
+    const std::string& path;
     cohort_zfs::FragTreeIndex index;
     std::string ds_name;
     lzfw_vfs_t* zhfs;
