@@ -30,10 +30,9 @@ namespace cohort_zfs {
   using namespace cohort;
 
   FragTreeIndex::FragTreeIndex(CephContext* cct,
-			       lzfw_vfs_t *zhfs,
 			       uint32_t initial_split)
     : cct(cct),
-      zhfs(zhfs),
+      zhfs(nullptr),
       root(nullptr),
       cred{0,0},
       initial_split(initial_split),

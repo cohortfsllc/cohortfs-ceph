@@ -746,7 +746,7 @@ int ZFStore::do_transaction(Transaction& t, uint64_t op_seq,
       r = -ENOENT;
       c = get_slot_collection(t, i->c1_ix);
       if (c)
-	r = collection_setattr(i->name, i->data);
+	r = collection_setattr(c, i->name, i->data);
       break;
 
     case Transaction::OP_COLL_RMATTR:
@@ -1086,44 +1086,18 @@ int ZFStore::clone_range(ZCollection* c,
   return 0;
 } /* clone_range */
 
-int ZFStore::create_collection(const coll_t& c)
+int ZFStore::create_collection(const coll_t& cid)
 {
+  int r;
 
-  dout(15) << "create_collection " << c << dendl;
-
-  /* minimally, we need to create a dataset */
-  char* ds;
-  std::string ds_name = root_ds + c.c_str();
-  zfsh_adup(ds_name, ds); // spa routines chan change ds
-
-  int r = lzfw_dataset_create(zhd, ds, ZFS_TYPE_FILESYSTEM, &lzw_err);
-  if (!!r)
-    return -r;
+  dout(15) << "create_collection " << cid << dendl;
 
   /* CohortFS FileStore initializes a FragTreeIndex on the
-   * stack at the given path.  XXX Casey? */
-  lzfw_vfs_t* t_zhfs;
-  std::string ds_short_name = "/" + c.c_str();
-  t_zhfs = lzfw_mount(path.c_str(), ds_short_name.c_str(),
-		      "" /* mount options */);
+   * stack at the given path. */
+  ZCollection zc(this, cid, r, true /* create */);
 
-  if (!t_zhfs) {
-    derr << "ZFStore::create_collection(" << c << "): "
-	 << "lzfw_mount failed" << dendl;
-    return -ENODEV;
-  }
-
-  cohort_zfs::FragTreeIndex index(cct, t_zhfs,
-				  cct->_conf->fragtreeindex_initial_split);
-  r = index.init(std::string("/")); // XXX: mount() instead if replaying=true?
-  if (r < 0) {
-    derr << "ZFStore::create_collection(" << c << ") failed: "
-	 << cpp_strerror(-r) << dendl;
-    (void) lzfw_umount(zhfs, true);
+  if (!!r)
     return -r;
-  }
-
-  (void) lzfw_umount(zhfs, true);
 
   return 0;
 } /* create_collection */
@@ -1137,3 +1111,35 @@ int ZFStore::destroy_collection(ZCollection* c)
   // XXX how do we destroy an attached ZCollection?  Casey?
   return r;
 }
+
+ZCollection::ZCollection(ZFStore* zs, const coll_t& cid, int& r, bool create)
+  : ceph::os::Collection(zs, cid), cct(zs->cct),
+    index(zs->cct, zs->cct->_conf->fragtreeindex_initial_split)
+{
+  ds_name = zs->root_ds + cid.c_str();
+
+  if (create) {
+    /* create a dataset */
+    char* ds;
+    zfsh_adup(ds_name, ds); // spa routines chan change ds
+    r = lzfw_dataset_create(zhd, ds, ZFS_TYPE_FILESYSTEM, &lzw_err);
+    if (!!r)
+      return;
+  }
+
+  /* mount our dataset */
+  std::string ds_short_name = "/" + c.c_str();
+  zhfs = lzfw_mount(zs->path.c_str(), ds_short_name.c_str(),
+		    "" /* mount options */);
+  if (!zhfs) {
+    derr << "ZFStore::create_collection(" << c << "): "
+	 << "lzfw_mount failed" << dendl;
+    r = ENODEV
+    return;
+  }
+
+  /* if we created it, do initial setup */
+  if (create) {
+    index.init(std::string("/"));
+  }
+} /* ZCollection */

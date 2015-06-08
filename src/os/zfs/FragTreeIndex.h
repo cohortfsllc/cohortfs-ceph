@@ -120,7 +120,7 @@ namespace cohort_zfs { // temporarily isolate ZFS variant
     = delete;
 
   public:
-    FragTreeIndex(CephContext* cct, lzfw_vfs_t *zhfs, uint32_t initial_split);
+    FragTreeIndex(CephContext* cct, uint32_t initial_split);
     ~FragTreeIndex();
 
     /* initialize a fresh collection index at the given path */

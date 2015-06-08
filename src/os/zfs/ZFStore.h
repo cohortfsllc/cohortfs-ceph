@@ -110,16 +110,13 @@ public:
     CephContext *cct;
     cohort_zfs::FragTreeIndex index;
     std::string ds_name;
+    lzfw_vfs_t* zhfs;
 
     typedef std::unique_lock<std::shared_timed_mutex> unique_lock;
     typedef std::shared_lock<std::shared_timed_mutex> shared_lock;
     std::shared_timed_mutex attr_lock;
 
-    ZCollection(ZFStore* zs, const coll_t& cid)
-      : ceph::os::Collection(zs, cid), cct(zs->cct),
-	index(zs->cct, zs->zhfs,
-	      zs->cct->_conf->fragtreeindex_initial_split)
-    {}
+    ZCollection(ZFStore* zs, const coll_t& cid, int& r, bool create=false);
 
     ~ZCollection()
     {
