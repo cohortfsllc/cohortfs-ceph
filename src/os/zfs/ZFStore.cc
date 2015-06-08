@@ -373,13 +373,16 @@ int ZFStore::getattr(CollectionHandle ch, ObjectHandle oh,
   return -r;
 } /* getattr */
 
+typedef std::pair<std::list<std::string>*, bool> lsxattr_cb_arg;
+
 /* lzfw_listxattrs2 iterator callback (accumulates) */
 static int lsxattr_cb(lzfw_vnode_t *vnode, inogen_t object, creden_t *cred,
 		      const char *name, void *arg)
 {
-  std::list<std::string>* xattr_names =
-    static_cast<std::list<std::string>*>(arg);
-  xattr_names->push_back(name);
+  lsxattr_cb_arg& arg_pair = *static_cast<lsxattr_cb_arg*>(arg);
+  if (arg_pair.second /* user_only */ && (name[0] == '_'))
+    return 0;
+  arg_pair.first->push_back(name);
   return 0;
 }
 
@@ -392,7 +395,8 @@ int ZFStore::getattrs(CollectionHandle ch, ObjectHandle oh,
   ZObject* o = static_cast<ZObject*>(oh);
 
   std::list<std::string> xattr_names;
-  r = lzfw_listxattr2(c->zhfs, &cred, o->ino, lsxattr_cb, &xattr_names);
+  lsxattr_cb_arg xattr_cbargs{&xattr_names, user_only};
+  r = lzfw_listxattr2(c->zhfs, &cred, o->ino, lsxattr_cb, &xattr_cbargs);
 
   for (auto& iter : xattr_names) {
     buffer::ptr bp;
