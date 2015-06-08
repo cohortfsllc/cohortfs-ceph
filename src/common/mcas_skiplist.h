@@ -7,6 +7,7 @@
 #include <atomic>
 #include <mutex>
 #include <ostream>
+#include <thread>
 #include <type_traits>
 
 #include <boost/intrusive_ptr.hpp>
@@ -41,7 +42,6 @@ class gc_guard {
   operator ptst_t*() const { return handle; }
 };
 
-
 struct skip_stats {
   int gets;
   int gets_created;
@@ -53,6 +53,10 @@ struct skip_stats {
   int puts_last;
   int maxsize;
   int size;
+  int reaped;
+  int reaper_passes;
+  int reaper_activity_only;
+  int reaper_shape;
 };
 
 namespace detail {
@@ -61,62 +65,32 @@ namespace detail {
 class skiplist_base {
  private:
   pthread_key_t tls_key;
+  std::thread reaper;
 
  public:
-  // per-thread stats stored in tls
-  struct thread_stats {
-    skiplist_base *skiplist;
-    skip_stats stats, stats_last;
-    int deleted;
-    thread_stats* next;
-  };
+  struct thread_stats; // per-thread stats stored in tls
 
   CACHE_PAD(0);
   const gc_global &gc;
   osi_set_t *const skip;
   osi_mcas_obj_cache_t cache;
   CACHE_PAD(1);
-  std::atomic<int> size;
+  std::atomic<int> size; // number of entries in the table
   CACHE_PAD(2);
-  std::atomic<int> unused;
+  std::atomic<int> unused; // number of entries at ref_count 0
   CACHE_PAD(3);
+  std::atomic<bool> shutdown; // true to shutdown reaper thread
+  CACHE_PAD(4);
   std::mutex mutex;
   thread_stats* thread_list;
   skip_stats stats; // accumulated thread stats protected by mutex
-
-  skiplist_base(const gc_global &gc, osi_set_cmp_func cmp,
-                size_t object_size, const char *name)
-    : gc(gc),
-      skip(osi_cas_skip_alloc(cmp)),
-      size(0),
-      unused(0),
-      thread_list(nullptr)
-  {
-    assert(skip);
-    memset(&stats, 0, sizeof(stats));
-    osi_mcas_obj_cache_create(gc, &cache, object_size, name);
-
-    int r = pthread_key_create(&tls_key, sumup_and_free);
-    assert(r == 0);
-  }
-  ~skiplist_base()
-  {
-    {
-      std::lock_guard<std::mutex> lock(mutex);
-      for (thread_stats *p = thread_list; p; p = p->next)
-        p->deleted = 1;
-    }
-    osi_cas_skip_free(gc, skip);
-    osi_mcas_obj_cache_destroy(cache);
-
-    int r = pthread_key_delete(tls_key);
-    assert(r == 0);
-  }
 
   class object {
     std::atomic<int> ref_count;
     skiplist_base *parent;
     int deleted; // XXX: does this need to be atomic?
+    std::atomic<int> activity;
+    object *next; // for reaper free list
     friend class skiplist_base;
    public:
     object() : ref_count(0), parent(nullptr), next(nullptr) {}
@@ -134,9 +108,16 @@ class skiplist_base {
       return i;
     }
   };
+  typedef void (*destructor_fn)(object *o);
+
+  skiplist_base(const gc_global &gc, osi_set_cmp_func cmp,
+                size_t object_size, const char *name,
+                destructor_fn destructor, int highwater, int lowwater);
+  ~skiplist_base();
 
   // object accessors for skiplist<T>
   void node_init(object *node) { node->parent = this; }
+  void node_active(object *node) const { node->activity += 50; }
   bool node_deleted(const object *node) const { return node->deleted; }
 
   skip_stats* get_mythread_stats();
@@ -144,13 +125,11 @@ class skiplist_base {
 
   static void sumup_and_free(void *arg); // destructor for tls
   static void sumup(thread_stats *p);
-};
 
-template <typename T>
-void dump_foreach(osi_set_t *skip, setval_t k, setval_t v, void *a)
-{
-  *static_cast<std::ostream*>(a) << ' ' << *static_cast<const T*>(v);
-}
+ private:
+  static void reap_entry(osi_set_t *skip, setval_t k, setval_t v, void *a);
+  void reaper_thread(destructor_fn destructor, int highwater, int lowwater);
+};
 
 } // namespace detail
 
@@ -158,9 +137,14 @@ void dump_foreach(osi_set_t *skip, setval_t k, setval_t v, void *a)
 // T must implement a move constructor and inherit from skiplist::object
 template <typename T>
 class skiplist : private detail::skiplist_base {
+ private:
+  // for the reaper thread, so it doesn't depend on the template parameter
+  static void destruct_t(object *o) { static_cast<T*>(o)->~T(); }
+
  public:
-  skiplist(const gc_global &gc, osi_set_cmp_func cmp, const char *name)
-    : skiplist_base(gc, cmp, sizeof(T), name)
+  skiplist(const gc_global &gc, osi_set_cmp_func cmp, const char *name,
+           uint32_t highwater = 0, uint32_t lowwater = 0)
+    : skiplist_base(gc, cmp, sizeof(T), name, destruct_t, highwater, lowwater)
   {
     static_assert(std::is_base_of<skiplist::object, T>::value,
                   "template type T must inherit from skiplist::object");
@@ -181,7 +165,8 @@ class skiplist : private detail::skiplist_base {
       // create new node
       void *x = gc_alloc(guard, cache);
       node = new (x) T(std::move(search_template));
-      init_node(node);
+      node_init(node);
+      node_active(node);
       T *a = static_cast<T*>(osi_cas_skip_update(gc, skip, node, node, 0));
       if (a == nullptr || a == node) {
         // new node inserted successfully
@@ -198,6 +183,7 @@ class skiplist : private detail::skiplist_base {
     }
     // using existing node
     ++s->gets_existing;
+    node_active(node);
     if (node->get() == 1)
       --unused;
     return boost::intrusive_ptr<T>(node, false); // don't add another ref
@@ -220,6 +206,7 @@ class skiplist : private detail::skiplist_base {
     }
     // using existing node
     ++s->gets_existing;
+    node_active(node);
     if (node->get() == 1)
       --unused;
     return boost::intrusive_ptr<T>(node, false); // don't add another ref
@@ -227,8 +214,14 @@ class skiplist : private detail::skiplist_base {
 
   void dump(std::ostream &stream) const
   {
-    osi_cas_skip_for_each(gc, skip, detail::dump_foreach<T>, &stream);
+    osi_cas_skip_for_each(gc, skip, dump_foreach, &stream);
     stream << std::endl;
+  }
+
+ private:
+  static void dump_foreach(osi_set_t *skip, setval_t k, setval_t v, void *a)
+  {
+    *static_cast<std::ostream*>(a) << ' ' << *static_cast<const T*>(v);
   }
 };
 
