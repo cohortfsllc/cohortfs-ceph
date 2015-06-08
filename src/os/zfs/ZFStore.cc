@@ -419,11 +419,19 @@ int ZFStore::list_collections(vector<coll_t>& ls)
   return 0;
 }
 
-CollectionHandle ZFStore::open_collection(const coll_t& c)
+CollectionHandle ZFStore::open_collection(const coll_t& cid)
 {
-  abort();
-  return nullptr;
-}
+  dout(15) << "open_collection " << cid << dendl;
+
+  int r;
+  ZCollection* c = new ZCollection(this, cid, r, false /* create */);
+  if (!!r) {
+    delete c;
+    c = nullptr;
+  }
+  /* XXX should we be tracking here (volume LRU is one layer up)? */
+  return c;
+} /* open_collection */
 
 int ZFStore::close_collection(CollectionHandle ch)
 {
