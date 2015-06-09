@@ -351,9 +351,9 @@ int ZFStore::read(CollectionHandle ch, ObjectHandle oh,
 int ZFStore::fiemap(CollectionHandle ch, ObjectHandle oh,
 		    uint64_t offset, size_t len, buffer::list& bl)
 {
-  abort();
+  /* XXX we could likely support this, with effort */
   return 0;
-}
+} /* fiemap */
 
 int ZFStore::getattr(CollectionHandle ch, ObjectHandle oh,
 		     const char* name, buffer::ptr& val)
@@ -595,7 +595,23 @@ objectstore_perf_stat_t ZFStore::get_cur_stats()
 int ZFStore::queue_transactions(list<Transaction*>& tls,
 				OpRequestRef op)
 {
-  abort();
+  ZTracer::Trace trace("op", &trace_endpoint, op ? &op->trace : nullptr);
+
+  do_transactions(tls, op, trace);
+
+  Context* on_apply = nullptr;
+  Context* on_apply_sync = nullptr;
+  Context* on_commit = nullptr;
+
+  Transaction::collect_contexts(tls, &on_apply, &on_commit, &on_apply_sync);
+  if (on_apply_sync)
+    on_apply_sync->complete(0);
+  // send apply and commit completions synchronously to avoid the latency from
+  // context switching
+  if (on_apply)
+    on_apply->complete(0);
+  if (on_commit)
+    on_commit->complete(0);
   return 0;
 } /* queue_transactions */
 
@@ -623,7 +639,7 @@ ZFStore::~ZFStore()
 
 /* ZFStore */
 
-int ZFStore::do_transactions(list<Transaction*> &tls, uint64_t op_seq,
+int ZFStore::do_transactions(list<Transaction*> &tls, OpRequestRef& op,
 			     ZTracer::Trace &trace)
 {
   int r = 0;
@@ -631,10 +647,10 @@ int ZFStore::do_transactions(list<Transaction*> &tls, uint64_t op_seq,
   trace.event("op_apply_start");
   trace.event("do_transactions");
 
-  int ix = 0;
+  int trans_num = 0;
   for (list<Transaction*>::iterator p = tls.begin();
-       p != tls.end(); ++p, ix++) {
-    r = do_transaction(**p, op_seq, ix);
+       p != tls.end(); ++p, ++trans_num) {
+    r = do_transaction(**p, op, trans_num);
     if (r < 0)
       break;
   }
@@ -644,7 +660,7 @@ int ZFStore::do_transactions(list<Transaction*> &tls, uint64_t op_seq,
   return r;
 } /* do_transactions */
 
-int ZFStore::do_transaction(Transaction& t, uint64_t op_seq,
+int ZFStore::do_transaction(Transaction& t, OpRequestRef& op,
 			    int trans_num)
 {
   for (Transaction::op_iterator i = t.begin(); i != t.end(); ++i) {

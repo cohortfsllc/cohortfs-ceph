@@ -381,9 +381,9 @@ public:
 			 OpRequestRef op = OpRequestRef());
 
   /* ZFStore */
-  int do_transactions(list<Transaction*> &tls, uint64_t op_seq,
+  int do_transactions(list<Transaction*> &tls, OpRequestRef& op,
                       ZTracer::Trace &trace);
-  int do_transaction(Transaction& t, uint64_t op_seq, int trans_num);
+  int do_transaction(Transaction& t, OpRequestRef& op, int trans_num);
   int touch(ZCollection* c, ZObject* o);
   int write(ZCollection* c, ZObject* o, off_t offset, size_t len,
 	    const bufferlist& bl, bool replica);
