@@ -32,8 +32,6 @@
 
 namespace cohort_zfs {
 
-  const int ZFS_TYPE_FILESYSTEM = 0x1;
-
   // name, type (""), list of device paths
   typedef std::tuple<std::string, std::string,
 		     std::vector<std::string>> zp_desc_type;
