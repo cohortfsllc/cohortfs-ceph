@@ -1562,5 +1562,5 @@ endif (WITH_FIO)
 
 # test_mcas_skiplist
 add_executable(test_mcas_skiplist test_mcas_skiplist.cc)
-target_link_libraries(test_mcas_skiplist ${UNITTEST_LIBS} ${MCAS_LIBRARIES})
+target_link_libraries(test_mcas_skiplist common ${UNITTEST_LIBS} ${MCAS_LIBRARIES})
 set_target_properties(test_mcas_skiplist PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})

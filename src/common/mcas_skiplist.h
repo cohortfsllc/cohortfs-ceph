@@ -5,6 +5,7 @@
 #define COHORT_MCAS_CACHE_H
 
 #include <atomic>
+#include <condition_variable>
 #include <mutex>
 #include <ostream>
 #include <thread>
@@ -63,6 +64,10 @@ namespace detail {
 
 // base skiplist code that doesn't depend on the template parameter
 class skiplist_base {
+ public:
+  class object;
+  typedef void (*destructor_fn)(object *o);
+
  private:
   pthread_key_t tls_key;
   std::thread reaper;
@@ -82,8 +87,10 @@ class skiplist_base {
   std::atomic<bool> shutdown; // true to shutdown reaper thread
   CACHE_PAD(4);
   std::mutex mutex;
+  std::condition_variable cond; // for signaling the reaper thread
   thread_stats* thread_list;
   skip_stats stats; // accumulated thread stats protected by mutex
+  destructor_fn destructor;
 
   class object {
     std::atomic<int> ref_count;
@@ -108,7 +115,6 @@ class skiplist_base {
       return i;
     }
   };
-  typedef void (*destructor_fn)(object *o);
 
   skiplist_base(const gc_global &gc, osi_set_cmp_func cmp,
                 size_t object_size, const char *name,

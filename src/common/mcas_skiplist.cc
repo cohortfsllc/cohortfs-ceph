@@ -22,7 +22,8 @@ skiplist_base::skiplist_base(const gc_global &gc, osi_set_cmp_func cmp,
     size(0),
     unused(0),
     shutdown(false),
-    thread_list(nullptr)
+    thread_list(nullptr),
+    destructor(destructor)
 {
   assert(skip);
   memset(&stats, 0, sizeof(stats));
@@ -39,8 +40,15 @@ skiplist_base::skiplist_base(const gc_global &gc, osi_set_cmp_func cmp,
 skiplist_base::~skiplist_base()
 {
   if (reaper.joinable()) {
+    std::unique_lock<std::mutex> lock(mutex);
     shutdown = true;
+    cond.notify_one();
+    lock.unlock();
     reaper.join();
+  } else {
+    // run the reaper synchronously to clean up all entries
+    shutdown = true;
+    reaper_thread(destructor, 0, 0);
   }
   osi_cas_skip_free(gc, skip);
   osi_mcas_obj_cache_destroy(cache);
@@ -162,7 +170,7 @@ void skiplist_base::reap_entry(osi_set_t *skip, setval_t k, setval_t v, void *a)
   }
 
   // ok, we're deleting this one
-  // XXX: does gc_guard guarantee that we can't get() another ref after the check?
+  // XXX: race between this and a get() raising the ref_count
   node->deleted = 1;
   object *n = static_cast<object*>(osi_cas_skip_remove(base->gc, skip, node));
   assert(n == node);
@@ -180,8 +188,11 @@ void skiplist_base::reaper_thread(destructor_fn destructor,
   s->reaper_shape = 3;
 
   for (;;) {
-    if (size < highwater && !shutdown)
-      std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    if (size < highwater && !shutdown) {
+      std::unique_lock<std::mutex> lock(mutex);
+      if (size < highwater && !shutdown)
+        cond.wait_for(lock, std::chrono::milliseconds(5));
+    }
 
     reaper_arg arg = {this, s->reaper_shape, shutdown};
     {
