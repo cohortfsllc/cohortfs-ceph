@@ -742,6 +742,22 @@ inline void decode(std::deque<T>& ls, bufferlist::iterator& p)
   }
 }
 
+static inline void encode(const std::error_code& v, bufferlist& bl) {
+  // TODO: Come back later and do other categories
+  int cat = 0;
+  ::encode(cat, bl);
+  ::encode(v.value(), bl);
+}
+
+static inline void decode(std::error_code& v, bufferlist::iterator& bl) {
+  // TODO: Come back later and do other categories
+  int cat;
+  int val;
+  ::decode(cat, bl);
+  ::decode(val, bl);
+  v = std::error_code(val, std::generic_category());
+}
+
 
 /*
  * guards
@@ -802,7 +818,7 @@ inline void decode(std::deque<T>& ls, bufferlist::iterator& p)
  */
 #define DECODE_OLDEST(oldestv)						\
   if (struct_v < oldestv)						\
-    throw std::system_err(ceph::buffer_err::malformed_input,		\
+    throw std::system_err(ceph::buffer_errc::malformed_input,		\
 			  DECODE_ERR_OLDVERSION(__PRETTY_FUNCTION__, v));
 
 /**
@@ -816,12 +832,12 @@ inline void decode(std::deque<T>& ls, bufferlist::iterator& p)
   ::decode(struct_v, bl);						\
   ::decode(struct_compat, bl);						\
   if (v < struct_compat)						\
-    throw std::system_error(ceph::buffer_err::malformed_input,		\
+    throw std::system_error(ceph::buffer_errc::malformed_input,		\
 			    DECODE_ERR_VERSION(__PRETTY_FUNCTION__, v)); \
   uint32_t struct_len;							\
   ::decode(struct_len, bl);						\
   if (struct_len > bl.get_remaining())					\
-    throw std::system_error(ceph::buffer_err::malformed_input,		\
+    throw std::system_error(ceph::buffer_errc::malformed_input,		\
 			    DECODE_ERR_PAST(__PRETTY_FUNCTION__));	\
   unsigned struct_end = bl.get_off() + struct_len;			\
   do {
@@ -833,11 +849,11 @@ inline void decode(std::deque<T>& ls, bufferlist::iterator& p)
     uint8_t struct_compat;						\
     ::decode(struct_compat, bl);					\
     if (v < struct_compat)						\
-      throw std::system_error(ceph::buffer_err::malformed_input,	\
+      throw std::system_error(ceph::buffer_errc::malformed_input,	\
 			      DECODE_ERR_VERSION(__PRETTY_FUNCTION__, v)); \
   } else if (skip_v) {							\
     if ((int)bl.get_remaining() < skip_v)				\
-      throw std::system_error(ceph::buffer_err::malformed_input,	\
+      throw std::system_error(ceph::buffer_errc::malformed_input,	\
 			      DECODE_ERR_PAST(__PRETTY_FUNCTION__));	\
     bl.advance(skip_v);							\
   }									\
@@ -846,7 +862,7 @@ inline void decode(std::deque<T>& ls, bufferlist::iterator& p)
     uint32_t struct_len;							\
     ::decode(struct_len, bl);						\
     if (struct_len > bl.get_remaining())				\
-      throw std::system_error(ceph::buffer_err::malformed_input,	\
+      throw std::system_error(ceph::buffer_errc::malformed_input,	\
 			      DECODE_ERR_PAST(__PRETTY_FUNCTION__));	\
     struct_end = bl.get_off() + struct_len;				\
   }									\
@@ -901,7 +917,7 @@ inline void decode(std::deque<T>& ls, bufferlist::iterator& p)
   } while (false);							\
   if (struct_end) {							\
     if (bl.get_off() > struct_end)					\
-      throw std::system_error(ceph::buffer_err::malformed_input,	\
+      throw std::system_error(ceph::buffer_errc::malformed_input,	\
 			      DECODE_ERR_PAST(__PRETTY_FUNCTION__));	\
     if (bl.get_off() < struct_end)					\
       bl.advance(struct_end - bl.get_off());				\

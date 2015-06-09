@@ -44,10 +44,10 @@ namespace ceph {
   }
 
   std::string buffer_category_t::message(int ev) const {
-    switch (static_cast<buffer_err>(ev)) {
-    case buffer_err::end_of_buffer:
+    switch (static_cast<buffer_errc>(ev)) {
+    case buffer_errc::end_of_buffer:
       return "end of buffer"s;
-    case buffer_err::malformed_input:
+    case buffer_errc::malformed_input:
       return "malformed input"s;
     default:
       return "unknown error"s;
@@ -355,7 +355,7 @@ namespace ceph {
       if (len > max) {
 	bdout << "raw_pipe: requested length " << len
 	      << " > max length " << max << bendl;
-	throw std::system_error(buffer_err::malformed_input,
+	throw std::system_error(buffer_errc::malformed_input,
 				"length larger than max pipe size"s);
       }
       pipefds[0] = -1;
@@ -452,7 +452,7 @@ namespace ceph {
 	  // pipe limit must have changed - EPERM means we requested
 	  // more than the maximum size as an unprivileged user
 	  update_max_pipe_size();
-	  throw std::system_error(buffer_err::malformed_input,
+	  throw std::system_error(buffer_errc::malformed_input,
 				  "length larger than new max pipe size");
 	}
 	return r;
@@ -1121,7 +1121,7 @@ namespace ceph {
   void buffer::list::copy(unsigned off, unsigned len, char *dest) const
   {
     if (off + len > length())
-      throw std::system_error(buffer_err::end_of_buffer);
+      throw std::system_error(buffer_errc::end_of_buffer);
     if (last_p.get_off() != off)
       last_p.seek(off);
     last_p.copy(len, dest);
@@ -1130,7 +1130,7 @@ namespace ceph {
   void buffer::list::copy(unsigned off, unsigned len, list &dest) const
   {
     if (off + len > length())
-      throw std::system_error(buffer_err::end_of_buffer);
+      throw std::system_error(buffer_errc::end_of_buffer);
     if (last_p.get_off() != off)
       last_p.seek(off);
     last_p.copy(len, dest);
@@ -1146,7 +1146,7 @@ namespace ceph {
   void buffer::list::copy_in(unsigned off, unsigned len, const char *src)
   {
     if (off + len > length())
-      throw std::system_error(buffer_err::end_of_buffer);
+      throw std::system_error(buffer_errc::end_of_buffer);
 
     if (last_p.get_off() != off)
       last_p.seek(off);
@@ -1255,7 +1255,7 @@ namespace ceph {
   const char& buffer::list::operator[](unsigned n) const
   {
     if (n >= _len)
-      throw std::system_error(buffer_err::end_of_buffer);
+      throw std::system_error(buffer_errc::end_of_buffer);
 
     for (auto p = _buffers.cbegin();
 	 p != _buffers.end();
@@ -1289,7 +1289,7 @@ namespace ceph {
   void buffer::list::substr_of(const list& other, unsigned off, unsigned len)
   {
     if (off + len > other.length())
-      throw std::system_error(buffer_err::end_of_buffer);
+      throw std::system_error(buffer_errc::end_of_buffer);
 
     clear();
 
@@ -1331,7 +1331,7 @@ namespace ceph {
       return;
 
     if (off >= length())
-      throw std::system_error(buffer_err::end_of_buffer);
+      throw std::system_error(buffer_errc::end_of_buffer);
 
     assert(len > 0);
     //cout << "splice off " << off << " len " << len << " ... mylen = " << length() << std::endl;
@@ -1419,12 +1419,13 @@ namespace ceph {
   void buffer::list::decode_base64(buffer::list& e)
   {
     bufferptr bp(4 + ((e.length() * 3) / 4));
-    int l = ceph_unarmor(bp.c_str(), bp.c_str() + bp.length(), e.c_str(), e.c_str() + e.length());
+    int l = ceph_unarmor(bp.c_str(), bp.c_str() + bp.length(), e.c_str(),
+			 e.c_str() + e.length());
     if (l < 0) {
       std::ostringstream oss;
       oss << "decode_base64: decoding failed:\n";
       hexdump(oss);
-      throw std::system_error(buffer_err::malformed_input, oss.str());
+      throw std::system_error(buffer_errc::malformed_input, oss.str());
     }
     assert(l <= (int)bp.length());
     bp.set_length(l);

@@ -98,16 +98,18 @@ int RGWGC::list(int *index, string& marker, uint32_t max, bool expired_only,
   for (; *index < cct->_conf->rgw_gc_max_objs && result.size() < max;
        (*index)++, marker.clear()) {
     std::list<cls_rgw_gc_obj_info> entries;
-    int ret = cls_rgw_gc_list(store->rc.objecter, store->gc_vol,
-			      obj_names[*index], marker, max - result.size(),
-			      expired_only, entries, truncated);
-    if (ret == -ENOENT)
-      continue;
-    if (ret < 0)
-      return ret;
+    try {
+      entries = cls_rgw_gc_list(store->rc.objecter, store->gc_vol,
+				obj_names[*index], marker, max - result.size(),
+				expired_only, truncated);
+    } catch (const std::system_error& e) {
+      if (e.code() == std::errc::no_such_file_or_directory)
+	continue;
+      else
+	return -e.code().value();
+    }
 
-    std::list<cls_rgw_gc_obj_info>::iterator iter;
-    for (iter = entries.begin(); iter != entries.end(); ++iter) {
+    for (auto iter = entries.begin(); iter != entries.end(); ++iter) {
       result.push_back(*iter);
     }
 
@@ -133,6 +135,7 @@ int RGWGC::list(int *index, string& marker, uint32_t max, bool expired_only,
 
 int RGWGC::process(int index, ceph::timespan max_time)
 {
+  int ret = 0;
   cls::lock::Lock l(gc_index_lock_name);
   std::list<string> remove_tags;
 
@@ -146,14 +149,18 @@ int RGWGC::process(int index, ceph::timespan max_time)
   auto end = ceph::real_clock::now() + max_time;
   l.set_duration(max_time);
 
-  int ret = l.lock_exclusive(store->rc.objecter, store->gc_vol,
-			     obj_names[index]);
-  if (ret == -EBUSY) { /* already locked by another gc processor */
-    dout(0) << "RGWGC::process() failed to acquire lock on " << obj_names[index] << dendl;
-    return 0;
+  try {
+    l.lock_exclusive(store->rc.objecter, store->gc_vol, obj_names[index]);
+  } catch (const std::system_error& e) {
+    if (e.code() == std::errc::device_or_resource_busy) {
+      /* already locked by another gc processor */
+      dout(0) << "RGWGC::process() failed to acquire lock on "
+	      << obj_names[index] << dendl;
+      return 0;
+    } else {
+      return -e.code().value();
+    }
   }
-  if (ret < 0)
-    return ret;
 
   string marker;
   bool truncated;
@@ -161,15 +168,19 @@ int RGWGC::process(int index, ceph::timespan max_time)
   do {
     int max = 100;
     std::list<cls_rgw_gc_obj_info> entries;
-    ret = cls_rgw_gc_list(store->rc.objecter, store->gc_vol,
-			  obj_names[index], marker, max, true, entries,
-			  &truncated);
-    if (ret == -ENOENT) {
-      ret = 0;
-      goto done;
+    try {
+      entries = cls_rgw_gc_list(store->rc.objecter, store->gc_vol,
+				obj_names[index], marker, max, true,
+				&truncated);
+    } catch (const std::system_error& e) {
+      if (e.code() == std::errc::no_such_file_or_directory) {
+	ret = 0;
+	goto done;
+      } else {
+	ret = -e.code().value();
+	goto done;
+      }
     }
-    if (ret < 0)
-      goto done;
 
     string last_vol;
     std::list<cls_rgw_gc_obj_info>::iterator iter;
@@ -201,13 +212,15 @@ int RGWGC::process(int index, ceph::timespan max_time)
 		<< dendl;
 	ObjectOperation op(vol->op());
 	cls_refcount_put(op, info.tag, true);
-	ret = store->rc.objecter->mutate(obj.oid, vol, op);
-	if (ret == -ENOENT)
-	  ret = 0;
-	if (ret < 0) {
-	  remove_tag = false;
-	  dout(0) << "failed to remove " << obj.vol << ":" << obj.oid
-		  << dendl;
+	try {
+	  store->rc.objecter->mutate(obj.oid, vol, op);
+	} catch (const std::system_error& e) {
+	  if (e.code() != std::errc::no_such_file_or_directory) {
+	    ret = -e.code().value();
+	    remove_tag = false;
+	    dout(0) << "failed to remove " << obj.vol << ":" << obj.oid
+		    << dendl;
+	  }
 	}
 
 	if (going_down()) // leave early, even if tag isn't removed, it's ok
@@ -228,7 +241,7 @@ done:
   if (!remove_tags.empty())
     remove(index, remove_tags);
   l.unlock(store->rc.objecter, store->gc_vol, obj_names[index]);
-  return 0;
+  return ret;
 }
 
 int RGWGC::process()

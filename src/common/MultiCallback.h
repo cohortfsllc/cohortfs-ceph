@@ -24,7 +24,7 @@ namespace cohort {
   // as far as I know.
 
   // This gets allocated on the heap similarly to a Context (we store
-  // std:refs in the ack/commit so they can't have ownership). It's
+  // std::refs in the ack/commit so they can't have ownership). It's
   // still better than Gather since only ONE THING gets allocated on
   // the heap.
 
@@ -47,23 +47,6 @@ namespace cohort {
       return std::ref(*this);
     }
 
-    // Stupid stupid stupid stupid stupid
-    // But I'll have time to rewrite the world later
-    class C_MultiHackery : public Context {
-      SimpleMultiCallback<int>& c;
-    public:
-      C_MultiHackery(SimpleMultiCallback<int>& _c) : c(_c) {}
-      void finish(int r) {
-	c(r);
-      }
-    };
-    // Obviously this won't work if your Args are anything but a
-    // single int.
-    operator Context*() {
-      std::unique_lock<std::mutex> l(lock);
-      ++count;
-      return new C_MultiHackery(*this);
-    }
     void activate() {
       std::unique_lock<std::mutex> l(lock);
       active = true;

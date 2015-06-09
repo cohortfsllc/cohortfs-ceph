@@ -98,7 +98,7 @@ class OnReadReply : public Dispatcher::OnReply {
     OSDOp &op = *ops.begin();
     assert(op.op.op == CEPH_OSD_OP_READ);
 
-    if (op.rval != 0) {
+    if (op.rval) {
       length = 0;
     } else {
       assert(length >= op.outdata.length());
@@ -106,7 +106,7 @@ class OnReadReply : public Dispatcher::OnReply {
       op.outdata.copy(0, length, data);
     }
 
-    cb(op.rval, length, 0, user);
+    cb(-op.rval.value(), length, 0, user);
 
     // delete unless we're synchronous (on the stack)
     if (cb != SyncCompletion::callback)
@@ -218,10 +218,10 @@ public:
     assert(ops.size() == 1);
     OSDOp &op = *ops.begin();
     assert(op.op.op == CEPH_OSD_OP_WRITE ||
-           op.op.op == CEPH_OSD_OP_TRUNCATE);
+	   op.op.op == CEPH_OSD_OP_TRUNCATE);
 
     uint64_t length = op.rval ? 0 : op.op.extent.length;
-    cb(op.rval, length, flag, user);
+    cb(-op.rval.value(), length, flag, user);
 
     // expecting another message for ondisk
     if ((flags & LIBOSD_WRITE_CB_STABLE) && !m->is_ondisk())

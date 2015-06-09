@@ -41,14 +41,14 @@ namespace cohort {
 				     int condition) const noexcept {
     switch (static_cast<errc>(condition)) {
     case errc::parse_error:
-      return in(code, ceph::buffer_err::end_of_buffer,
-		ceph::buffer_err::malformed_input);
+      return in(code, ceph::buffer_errc::end_of_buffer,
+		ceph::buffer_errc::malformed_input);
 
     case errc::no_such_object:
-      return in(code, vol_err::no_such_volume, placer_err::no_such_placer);
+      return in(code, vol_errc::no_such_volume, placer_errc::no_such_placer);
 
     case errc::object_already_exists:
-      return in(code, vol_err::exists, placer_err::exists,
+      return in(code, vol_errc::exists, placer_errc::exists,
 		std::errc::file_exists);
 
     case errc::insufficient_resources:

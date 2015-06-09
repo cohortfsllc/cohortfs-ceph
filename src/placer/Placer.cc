@@ -37,10 +37,10 @@ const char* placer_category_t::name() const noexcept {
 }
 
 std::string placer_category_t::message(int ev) const {
-  switch (static_cast<placer_err>(ev)) {
-  case placer_err::no_such_placer:
+  switch (static_cast<placer_errc>(ev)) {
+  case placer_errc::no_such_placer:
     return "no such placer"s;
-  case placer_err::exists:
+  case placer_errc::exists:
     return "placer exists"s;
   default:
     return "unknown error"s;
@@ -55,7 +55,7 @@ const std::error_category& placer_category() {
 
 using namespace std::literals;
 using std::system_error;
-using ceph::buffer_err;
+using ceph::buffer_errc;
 using std::stringstream;
 
 const std::string Placer::typestrings[] = {
@@ -168,12 +168,12 @@ PlacerRef Placer::decode_placer(bufferlist::iterator& bl)
 
   ::decode(v, bl);
   if (v != 0) {
-    throw system_error(buffer_err::malformed_input, "Bad version."s);
+    throw system_error(buffer_errc::malformed_input, "Bad version."s);
   }
 
   ::decode(t, bl);
   if (t <= NotAPlacerType || t >= MaxPlacerType || factories[t] == NULL)
-    throw system_error(buffer_err::malformed_input,
+    throw system_error(buffer_errc::malformed_input,
 		       "Bad (or unimplemented) placer type."s);
 
   return factories[t](bl, v);

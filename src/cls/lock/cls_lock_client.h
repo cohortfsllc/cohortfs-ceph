@@ -20,44 +20,47 @@ namespace rados {
 		       const ceph::timespan& duration,
 		       uint8_t flags);
 
-      extern int lock(Objecter* o,
-		      const AVolRef& v,
-		      const oid_t& oid,
-		      const std::string& name, ClsLockType type,
-		      const std::string& cookie, const std::string& tag,
-		      const std::string& description,
-		      const ceph::timespan& duration,
-		      uint8_t flags);
+      extern void lock(Objecter* o,
+		       const AVolRef& v,
+		       const oid_t& oid,
+		       const std::string& name, ClsLockType type,
+		       const std::string& cookie, const std::string& tag,
+		       const std::string& description,
+		       const ceph::timespan& duration,
+		       uint8_t flags);
 
       extern void unlock(ObjOpUse rados_op,
 			 const std::string& name, const std::string& cookie);
 
-      extern int unlock(Objecter* o, const AVolRef&, const oid_t& oid,
-			const std::string& name, const std::string& cookie);
+      extern void unlock(Objecter* o, const AVolRef&, const oid_t& oid,
+			 const std::string& name, const std::string& cookie);
 
       extern void break_lock(ObjOpUse& op,
 			     const std::string& name,
 			     const std::string& cookie,
 			     const entity_name_t& locker);
 
-      extern int break_lock(Objecter* o, const AVolRef& vol,
-			    const oid_t& oid,
-			    const std::string& name, const std::string& cookie,
-			    const entity_name_t& locker);
+      extern void break_lock(Objecter* o, const AVolRef& vol,
+			     const oid_t& oid,
+			     const std::string& name,
+			     const std::string& cookie,
+			     const entity_name_t& locker);
 
-      extern int list_locks(Objecter* o, const AVolRef& vol, const oid_t& oid,
-			    list<string>& locks);
+      extern std::list<std::string> list_locks(Objecter* o, const AVolRef& vol,
+					       const oid_t& oid);
 
       extern void get_lock_info_start(ObjOpUse rados_op,
 				      const std::string& name);
-      extern int get_lock_info_finish(ceph::bufferlist::iterator *out,
-				      map<locker_id_t, locker_info_t> *lockers,
-				      ClsLockType *type, std::string *tag);
+      extern void get_lock_info_finish(
+	ceph::bufferlist::iterator *out,
+	map<locker_id_t,locker_info_t> *lockers,
+	ClsLockType *type, std::string *tag);
 
-      extern int get_lock_info(Objecter* o, const AVolRef& vol, const oid_t& oid,
-			       const std::string& name,
-			       map<locker_id_t, locker_info_t> *lockers,
-			       ClsLockType *type, std::string *tag);
+      extern void get_lock_info(Objecter* o, const AVolRef& vol,
+				const oid_t& oid,
+				const std::string& name,
+				map<locker_id_t, locker_info_t> *lockers,
+				ClsLockType *type, std::string *tag);
 
       class Lock {
 	std::string name;
@@ -89,12 +92,11 @@ namespace rados {
 	void unlock(ObjOpUse op);
 	void break_lock(ObjOpUse op, const entity_name_t& locker);
 
-	/* IoCtx */
-	int lock_exclusive(Objecter* o, const AVolRef& v, const oid_t& oid);
-	int lock_shared(Objecter* o, const AVolRef& v, const oid_t& oid);
-	int unlock(Objecter* o, const AVolRef& v, const oid_t& oid);
-	int break_lock(Objecter* o, const AVolRef& v, const oid_t& oid,
-		       const entity_name_t& locker);
+	void lock_exclusive(Objecter* o, const AVolRef& v, const oid_t& oid);
+	void lock_shared(Objecter* o, const AVolRef& v, const oid_t& oid);
+	void unlock(Objecter* o, const AVolRef& v, const oid_t& oid);
+	void break_lock(Objecter* o, const AVolRef& v, const oid_t& oid,
+			const entity_name_t& locker);
       };
 
     } // namespace lock

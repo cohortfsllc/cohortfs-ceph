@@ -40,16 +40,16 @@ class OSDMap;
 class Placer;
 typedef std::unique_ptr<const Placer> PlacerRef;
 
-enum class placer_err { no_such_placer, exists };
+enum class placer_errc { no_such_placer, exists };
 
 class placer_category_t : public std::error_category {
   virtual const char* name() const noexcept;
   virtual std::string message(int ev) const;
   virtual std::error_condition default_error_condition(int ev) const noexcept {
-    switch (static_cast<placer_err>(ev)) {
-    case placer_err::no_such_placer:
+    switch (static_cast<placer_errc>(ev)) {
+    case placer_errc::no_such_placer:
       return std::errc::no_such_device;
-    case placer_err::exists:
+    case placer_errc::exists:
       return cohort::errc::object_already_exists;
     default:
       return std::error_condition(ev, *this);
@@ -59,17 +59,17 @@ class placer_category_t : public std::error_category {
 
 const std::error_category& placer_category();
 
-static inline std::error_condition make_error_condition(placer_err e) {
+static inline std::error_condition make_error_condition(placer_errc e) {
   return std::error_condition(static_cast<int>(e), placer_category());
 }
 
-static inline std::error_code make_error_code(placer_err e) {
+static inline std::error_code make_error_code(placer_errc e) {
   return std::error_code(static_cast<int>(e), placer_category());
 }
 
 namespace std {
   template <>
-  struct is_error_code_enum<placer_err> : public std::true_type {};
+  struct is_error_code_enum<placer_errc> : public std::true_type {};
 };
 
 class AttachedPlacer : public boost::intrusive_ref_counter<AttachedPlacer> {

@@ -36,7 +36,7 @@
 
 using std::auto_ptr;
 using namespace std;
-using ceph::buffer_err;
+using ceph::buffer_errc;
 
 int KeyRing::from_ceph_context(CephContext *cct)
 {
@@ -172,7 +172,7 @@ void KeyRing::decode_plaintext(bufferlist::iterator& bli)
   std::deque<std::string> parse_errors;
 
   if (cf.parse_bufferlist(&bl, &parse_errors, NULL) != 0) {
-    throw system_error(buffer_err::malformed_input,
+    throw system_error(buffer_errc::malformed_input,
 		       "cannot parse buffer"s);
   }
 
@@ -187,7 +187,7 @@ void KeyRing::decode_plaintext(bufferlist::iterator& bli)
     if (!ename.from_str(name)) {
       ostringstream oss;
       oss << "bad entity name in keyring: " << name;
-      throw system_error(buffer_err::malformed_input, oss.str());
+      throw system_error(buffer_errc::malformed_input, oss.str());
     }
 
     for (ConfSection::const_line_iter_t l = s->second.lines.begin();
@@ -201,7 +201,7 @@ void KeyRing::decode_plaintext(bufferlist::iterator& bli)
 	ostringstream oss;
 	oss << "error setting modifier for [" << name << "] type=" << k
 	    << " val=" << l->val;
-	throw system_error(buffer_err::malformed_input,
+	throw system_error(buffer_errc::malformed_input,
 			   oss.str());
       }
     }

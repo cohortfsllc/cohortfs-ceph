@@ -660,7 +660,8 @@ void OSDVol::execute_ctx(OpContext* ctx)
   bool successful_write = !ctx->op_t.empty() &&
     op->may_write() && result >= 0;
   // prepare the reply
-  ctx->reply = new MOSDOpReply(op, 0, get_osdmap()->get_epoch(), 0,
+  ctx->reply = new MOSDOpReply(op, std::error_code(),
+			       get_osdmap()->get_epoch(), 0,
 			       successful_write);
 
   // Write operations aren't allowed to return a data payload because
@@ -675,7 +676,7 @@ void OSDVol::execute_ctx(OpContext* ctx)
     dout(20) << " zeroing write result code " << result << dendl;
     result = 0;
   }
-  ctx->reply->set_result(result);
+  ctx->reply->set_result(std::error_code(-result, std::generic_category()));
 
   // read or error?
   if (ctx->op_t.empty() || result < 0) {
@@ -1930,7 +1931,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
     }
 
     fail:
-    osd_op.rval = result;
+    osd_op.rval = std::error_code(-result, std::generic_category());
     if (result < 0 && (op.flags & CEPH_OSD_OP_FLAG_FAILOK))
       result = 0;
 
@@ -2277,7 +2278,8 @@ void OSDVol::eval_mutation(Mutation* mutation,
 	if (mutation->ctx->reply)
 	  std::swap(reply, mutation->ctx->reply);
 	else {
-	  reply = new MOSDOpReply(op, 0, get_osdmap()->get_epoch(), 0, true);
+	  reply = new MOSDOpReply(op, std::error_code(),
+				  get_osdmap()->get_epoch(), 0, true);
 	  reply->set_reply_versions(mutation->ctx->at_version,
 				    mutation->ctx->user_at_version);
 	}
@@ -2296,8 +2298,8 @@ void OSDVol::eval_mutation(Mutation* mutation,
 	if (mutation->ctx->reply)
 	  std::swap(reply, mutation->ctx->reply);
 	else {
-	  reply = new MOSDOpReply(op, 0, get_osdmap()->get_epoch(),
-				  0, true);
+	  reply = new MOSDOpReply(op, std::error_code(),
+				  get_osdmap()->get_epoch(), 0, true);
 	  reply->set_reply_versions(mutation->ctx->at_version,
 				    mutation->ctx->user_at_version);
 	}

@@ -605,7 +605,7 @@ public:
   const PlacerRef& lookup_placer(const boost::uuids::uuid& id) const {
     auto v = placers.by_uuid.find(id);
     if (v == placers.by_uuid.end()) {
-      throw std::system_error(placer_err::no_such_placer);
+      throw std::system_error(placer_errc::no_such_placer);
     } else {
       return v->second;
     }
@@ -614,7 +614,7 @@ public:
   PlacerRef lookup_placer(const string& name) {
     auto v = placers.by_name.find(name);
     if (v == placers.by_name.end()) {
-      throw std::system_error(placer_err::no_such_placer);
+      throw std::system_error(placer_errc::no_such_placer);
     } else {
       return v->second->clone();
     }
@@ -649,7 +649,7 @@ public:
   Volume lookup_volume(const boost::uuids::uuid& id) const {
     auto v = vols.by_uuid.find(id);
     if (v == vols.by_uuid.end()) {
-      throw std::system_error(vol_err::no_such_volume);
+      throw std::system_error(vol_errc::no_such_volume);
     } else {
       return v->second;
     }
@@ -657,7 +657,7 @@ public:
   Volume lookup_volume(const string& name) const {
     auto v = vols.by_name.find(name);
     if (v == vols.by_name.end()) {
-      throw std::system_error(vol_err::no_such_volume);
+      throw std::system_error(vol_errc::no_such_volume);
     } else {
       return *v->second;
     }

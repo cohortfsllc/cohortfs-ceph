@@ -14,7 +14,53 @@
 
 class CephContext;
 
-namespace librbd {
+namespace rbd {
+  enum class errc { no_such_image, unassociated, exists, invalid_header,
+      read_only, illegal_offset };
+
+  class rbd_category_t : public std::error_category {
+    virtual const char* name() const noexcept;
+    virtual std::string message(int ev) const;
+    virtual std::error_condition default_error_condition(
+      int ev)const noexcept {
+      switch (static_cast<errc>(ev)) {
+      case errc::no_such_image:
+	return std::errc::no_such_file_or_directory;
+      case errc::unassociated:
+	return std::errc::bad_file_descriptor;
+      case errc::exists:
+	return cohort::errc::object_already_exists;
+      case errc::invalid_header:
+	return cohort::errc::parse_error;
+      case errc::read_only:
+	return std::errc::read_only_file_system;
+      case errc::illegal_offset:
+	return std::errc::invalid_argument;
+      default:
+	return std::error_condition(ev, *this);
+      }
+    }
+  };
+
+  const std::error_category& rbd_category();
+
+  static inline std::error_condition make_error_condition(errc e) {
+    return std::error_condition(
+      static_cast<int>(e), rbd_category());
+  }
+
+  static inline std::error_code make_error_code(errc e) {
+    return std::error_code(
+      static_cast<int>(e), rbd_category());
+  }
+};
+
+namespace std {
+  template <>
+  struct is_error_code_enum<rbd::errc> : public std::true_type {};
+};
+
+namespace rbd {
   using std::string;
   using std::function;
   using ceph::bufferlist;
@@ -87,9 +133,7 @@ namespace librbd {
 	       rados::op_callback&& ack = nullptr,
 	       rados::op_callback&& safe = nullptr);
 
-    void read_sync(uint64_t off, size_t len, bufferlist* bl) const;
-    void read(uint64_t off, size_t len, bufferlist* bl,
-	      rados::op_callback&& cb = nullptr) const;
+    bufferlist read_sync(uint64_t off, size_t len) const;
     void read(uint64_t off, size_t len, rados::read_callback&& cb) const;
     void read_iterate(uint64_t off, size_t len,
 		      function<void(uint64_t, size_t,

@@ -46,29 +46,21 @@ class ClsUserListCB {
   list<cls_user_bucket_entry> *entries;
   string *marker;
   bool *truncated;
-  int *pret;
 public:
   ClsUserListCB(list<cls_user_bucket_entry> *_entries, string *_marker,
-		bool *_truncated, int *_pret) :
-    entries(_entries), marker(_marker), truncated(_truncated), pret(_pret) {}
-  void operator()(int r, bufferlist&& outbl) {
-    if (r >= 0) {
-      cls_user_list_buckets_ret ret;
-      try {
-	bufferlist::iterator iter = outbl.begin();
-	::decode(ret, iter);
-	if (entries)
-	  *entries = ret.entries;
-	if (truncated)
-	  *truncated = ret.truncated;
-	if (marker)
-	  *marker = ret.marker;
-      } catch (std::system_error& err) {
-	r = -EIO;
-      }
-    }
-    if (pret) {
-      *pret = r;
+		bool *_truncated) :
+    entries(_entries), marker(_marker), truncated(_truncated) {}
+  void operator()(std::error_code r, bufferlist& outbl) {
+    cls_user_list_buckets_ret ret;
+    if (!r) {
+      bufferlist::iterator iter = outbl.begin();
+      ::decode(ret, iter);
+      if (entries)
+	*entries = ret.entries;
+      if (truncated)
+	*truncated = ret.truncated;
+      if (marker)
+	*marker = ret.marker;
     }
   }
 };
@@ -76,7 +68,7 @@ public:
 void cls_user_bucket_list(ObjOpUse op,
 			  const string& in_marker, int max_entries,
 			  list<cls_user_bucket_entry>& entries,
-			  string *out_marker, bool *truncated, int *pret)
+			  string *out_marker, bool *truncated)
 {
   bufferlist inbl;
   cls_user_list_buckets_op call;
@@ -86,55 +78,46 @@ void cls_user_bucket_list(ObjOpUse op,
   ::encode(call, inbl);
 
   op->call("user", "list_buckets", inbl,
-	   ClsUserListCB(&entries, out_marker, truncated, pret));
+	   ClsUserListCB(&entries, out_marker, truncated));
 }
 
 class ClsUserGetHeaderCB {
   cls_user_header *header;
   RGWGetUserHeader_CB *ret_ctx;
-  int *pret;
 public:
-  ClsUserGetHeaderCB(cls_user_header *_h, RGWGetUserHeader_CB *_ctx,
-		     int *_pret) : header(_h), ret_ctx(_ctx), pret(_pret) {}
+  ClsUserGetHeaderCB(cls_user_header *_h, RGWGetUserHeader_CB *_ctx)
+    : header(_h), ret_ctx(_ctx) {}
   ~ClsUserGetHeaderCB() {
     if (ret_ctx) {
       ret_ctx->put();
     }
   }
-  void operator()(int r, bufferlist&& outbl) {
-    if (r >= 0) {
+  void operator()(std::error_code r, bufferlist& outbl) {
+    if (!r) {
       cls_user_get_header_ret ret;
-      try {
-	bufferlist::iterator iter = outbl.begin();
-	::decode(ret, iter);
-	if (header)
-	  *header = ret.header;
-      } catch (std::system_error& err) {
-	r = -EIO;
-      }
+      bufferlist::iterator iter = outbl.begin();
+      ::decode(ret, iter);
+      if (header)
+	*header = ret.header;
       if (ret_ctx) {
-	ret_ctx->handle_response(r, ret.header);
+	ret_ctx->handle_response(-r.value(), ret.header);
       }
-    }
-    if (pret) {
-      *pret = r;
     }
   }
 };
 
-void cls_user_get_header(ObjOpUse op,
-			 cls_user_header *header, int *pret)
+void cls_user_get_header(ObjOpUse op, cls_user_header *header)
 {
   bufferlist inbl;
   cls_user_get_header_op call;
 
   ::encode(call, inbl);
 
-  op->call("user", "get_header", inbl, ClsUserGetHeaderCB(header, NULL, pret));
+  op->call("user", "get_header", inbl, ClsUserGetHeaderCB(header, NULL));
 }
 
-int cls_user_get_header_async(Objecter* o, const AVolRef& vol,
-			      const oid_t& oid, RGWGetUserHeader_CB *ctx)
+void cls_user_get_header_async(Objecter* o, const AVolRef& vol,
+			       const oid_t& oid, RGWGetUserHeader_CB *ctx)
 {
   bufferlist in, out;
   cls_user_get_header_op call;
@@ -143,10 +126,6 @@ int cls_user_get_header_async(Objecter* o, const AVolRef& vol,
   op->call("user", "get_header", in,
 	   /* no need to pass pret, as we'll call
 	      ctx->handle_response() with correct error */
-	   ClsUserGetHeaderCB(NULL, ctx, NULL));
-  int r = o->mutate(oid, vol, op, nullptr);
-  if (r < 0)
-    return r;
-
-  return 0;
+	   ClsUserGetHeaderCB(NULL, ctx));
+  o->mutate(oid, vol, op);
 }

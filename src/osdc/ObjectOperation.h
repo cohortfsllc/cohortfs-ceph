@@ -16,11 +16,93 @@
 #define CEPH_OSDC_OBJECTOPERATION_H
 
 #include <memory>
-#include "include/Context.h"
 #include "osd/osd_types.h"
 #include "common/oid.h"
 
 namespace rados {
+
+  typedef cohort::function<void(std::error_code, bufferlist&)> read_callback;
+  typedef cohort::function<void(std::error_code, uint64_t s,
+				ceph::real_time m)> stat_callback;
+  typedef cohort::function<void(std::error_code, std::string&)> key_callback;
+  typedef cohort::function<void(std::error_code, std::string&,
+				bufferlist&)> keyval_callback;
+
+  namespace detail {
+    struct CB_DecodeKeys {
+      key_callback f;
+      CB_DecodeKeys(key_callback&& _f) : f(_f) { }
+      void operator()(std::error_code err, bufferlist& bl) {
+	if (!err) {
+	  bufferlist::iterator p = bl.begin();
+	  try {
+	    uint32_t n;
+	    ::decode(n, p);
+	    for (; n > 0; --n) {
+	      string s;
+	      ::decode(s, p);
+	      f(err, s);
+	    }
+	  }
+	  catch (std::system_error& e) {
+	    string s;
+	    f(e.code(), s);
+	  }
+	} else {
+	  string s;
+	  f(err, s);
+	}
+      }
+    };
+
+    struct CB_DecodePairs {
+      keyval_callback f;
+      CB_DecodePairs(keyval_callback&& _f) : f(_f) { }
+      void operator()(std::error_code err, bufferlist& bl) {
+	if (!err) {
+	  bufferlist::iterator p = bl.begin();
+	  try {
+	    uint32_t n;
+	    ::decode(n, p);
+	    for (; n > 0; --n) {
+	      string s;
+	      bufferlist bl;
+	      ::decode(s, p);
+	      ::decode(bl, p);
+	      f(std::error_code(), s, bl);
+	    }
+	  } catch (std::system_error& e) {
+	    string s;
+	    bufferlist bl;
+	    f(e.code(), s, bl);
+	  }
+	} else {
+	  string s;
+	  bufferlist bl;
+	  f(err, s, bl);
+	}
+      }
+    };
+
+    struct CB_FillMap {
+      map<string, bufferlist>& out;
+      CB_FillMap(map<string, bufferlist>& _out) : out(_out) { }
+      void operator()(std::error_code err, bufferlist& bl) {
+	if (!err) {
+	  bufferlist::iterator p = bl.begin();
+	  uint32_t n;
+	  ::decode(n, p);
+	  for (; n > 0; --n) {
+	    string s;
+	    bufferlist bl;
+	    ::decode(s, p);
+	    ::decode(bl, p);
+	    out.insert(std::make_pair(s, bl));
+	  }
+	}
+      }
+    };
+  };
 
   class ObjOp {
   protected:
@@ -45,10 +127,7 @@ namespace rados {
     virtual void add_op(const int op) = 0;
     virtual void add_version(const uint64_t ver) = 0;
     virtual void add_obj(const oid_t &oid) = 0;
-    virtual void add_single_return(bufferlist* bl, int* rval = NULL,
-				   Context* ctx = NULL) = 0;
-    virtual void add_single_return(std::function<void(
-				     int, bufferlist&&)>&& f) = 0;
+    virtual void add_single_return(OSDOp::opfun_t&& f) = 0;
     /* Add metadata (or commands) to an op */
     virtual void add_metadata(const bufferlist& bl) = 0;
     /* Add a metadata offset/length */
@@ -59,17 +138,14 @@ namespace rados {
     /* Add a data offset/length */
     virtual void add_data_range(const uint64_t off, const uint64_t len) = 0;
 
-    virtual void add_xattr(const string &name, bufferlist* data = NULL) = 0;
+    virtual void add_xattr(const string &name) = 0;
     virtual void add_xattr(const string &name, const bufferlist &data) = 0;
     virtual void add_xattr_cmp(const string &name, uint8_t cmp_op,
 			       const uint8_t cmp_mode,
 			       const bufferlist& data) = 0;
     virtual void add_call(const string &cname, const string &method,
-			  const bufferlist &indata, bufferlist *const outbl,
-			  Context *const ctx, int *const rval) = 0;
-    virtual void add_call(const string &cname, const string &method,
 			  const bufferlist &indata,
-			  std::function<void(int, bufferlist&&)>&& cb) = 0;
+			  read_callback&& cb) = 0;
     virtual void add_watch(const uint64_t cookie, const uint64_t ver,
 			   const uint8_t flag, const bufferlist& inbl) = 0;
     virtual void add_alloc_hint(const uint64_t expected_object_size,
@@ -78,14 +154,7 @@ namespace rados {
 			      const uint32_t truncate_seq) = 0;
     virtual void set_op_flags(const uint32_t flags) = 0;
     virtual void clear_op_flags(const uint32_t flags) = 0;
-    virtual void add_stat_ctx(uint64_t *s, ceph::real_time *m, int *rval,
-			      Context *ctx = NULL) = 0;
-    virtual void add_stat_cb(std::function<void(int r, uint64_t s,
-						ceph::real_time m)>&& f) = 0;
-    virtual void add_sparse_read_ctx(uint64_t off, uint64_t len,
-				     std::map<uint64_t,uint64_t> *m,
-				     bufferlist *data_bl, int *rval,
-				     Context *ctx) = 0;
+    virtual void add_stat_cb(stat_callback&& f) = 0;
 
     // ------
 
@@ -108,46 +177,35 @@ namespace rados {
       add_metadata(bl);
     }
 
-    void stat(uint64_t *size, ceph::real_time *mtime, int *rval = NULL) {
-      add_op(CEPH_OSD_OP_STAT);
-      add_stat_ctx(size, mtime, rval);
-    }
-
-    void stat(std::function<void(int r, uint64_t size,
-				 ceph::real_time mtime)>&& f) {
+    void stat(stat_callback&& f) {
       add_op(CEPH_OSD_OP_STAT);
       add_stat_cb(std::move(f));
     }
 
     // object data
-    void read(uint64_t off, uint64_t len, bufferlist *bl,
-	      int *rval = NULL, Context* ctx = NULL) {
-      read(off, len, bl, 0, 0, rval, ctx);
-    }
-
-    // object data
-    virtual void read(uint64_t off, uint64_t len, bufferlist *bl,
-		      uint64_t truncate_size, uint32_t truncate_seq,
-		      int *rval = NULL, Context* ctx = NULL) = 0;
-
-    // object data
-    virtual void read_full(bufferlist *bl,
-			   int *rval = NULL, Context* ctx = NULL) = 0;
-
     void read(uint64_t off, uint64_t len,
-	      std::function<void(int, bufferlist&&)>&& f) {
-      read(off,  len, 0, 0, std::move(f));
+	      read_callback&& f) {
+      read(off, len, 0, 0, std::move(f));
     };
 
-    virtual void read(uint64_t off, uint64_t len, uint64_t truncate_size,
-		      uint32_t truncate_seq,
-		      std::function<void(int, bufferlist&&)>&& f) = 0;
-    virtual void read_full(std::function<void(int, bufferlist&&)>&& f) = 0;
+    void read(uint64_t off, uint64_t len,
+	      bufferlist& bl) {
+      read(off, len,
+	   [&bl](std::error_code err, bufferlist& _bl) {
+	     if (!err)
+	       bl.claim_append(bl);
+	   });
+    }
 
-    void sparse_read(uint64_t off, uint64_t len, std::map<uint64_t,uint64_t> *m,
+    virtual void read(uint64_t off, uint64_t len, uint64_t truncate_size,
+		      uint32_t truncate_seq, read_callback&& f) = 0;
+    virtual void read_full(read_callback&& f) = 0;
+
+    void sparse_read(uint64_t off, uint64_t len,
+		     std::map<uint64_t,uint64_t> *m,
 		     bufferlist *bl, int *rval) {
       add_op(CEPH_OSD_OP_SPARSE_READ);
-      add_sparse_read_ctx(off, len, m, bl, rval, NULL);
+      //add_sparse_read_ctx(off, len, m, bl, rval, NULL);
     }
 
     void write(uint64_t off, const bufferlist& bl,
@@ -198,63 +256,20 @@ namespace rados {
     }
 
     // object attrs
-    void getxattr(const string& name, bufferlist *bl, int *rval = NULL) {
-      add_op(CEPH_OSD_OP_GETXATTR);
-      add_xattr(name);
-      add_single_return(bl, rval);
-    }
     void getxattr(const string& name,
-		  std::function<void(int, bufferlist&&)> f) {
+		  OSDOp::opfun_t&& f) {
       add_op(CEPH_OSD_OP_GETXATTR);
       add_xattr(name);
       add_single_return(std::move(f));
     }
 
-    struct C_ObjectOperation_decodevals : public Context {
-      bufferlist bl;
-      std::map<std::string,bufferlist> &attrs;
-      int *rval;
-      C_ObjectOperation_decodevals(std::map<std::string,bufferlist> &a, int *r)
-	: attrs(a), rval(r) {}
-      void finish(int r) {
-	if (r >= 0) {
-	  bufferlist::iterator p = bl.begin();
-	  try {
-	    ::decode(attrs, p);
-	  }
-	  catch (std::system_error& e) {
-	    if (rval)
-	      *rval = -EDOM;
-	  }
-	}
-      }
-    };
-    struct C_ObjectOperation_decodekeys : public Context {
-      bufferlist bl;
-      std::set<std::string> *attrs;
-      int *rval;
-      C_ObjectOperation_decodekeys(std::set<std::string> *a, int *r)
-	: attrs(a), rval(r) {}
-      void finish(int r) {
-	if (r >= 0) {
-	  bufferlist::iterator p = bl.begin();
-	  try {
-	    if (attrs)
-	      ::decode(*attrs, p);
-	  }
-	  catch (std::system_error& e) {
-	    if (rval)
-	      *rval = -EDOM;
-	  }
-	}
-      }
-    };
-    void getxattrs(std::map<std::string, bufferlist>& attrs,
-		   int *rval = NULL) {
+    void getxattrs(keyval_callback&& f) {
       add_op(CEPH_OSD_OP_GETXATTRS);
-      C_ObjectOperation_decodevals *h
-	= new C_ObjectOperation_decodevals(attrs, rval);
-      add_single_return(&h->bl, rval, h);
+      add_single_return(detail::CB_DecodePairs(std::move(f)));
+    }
+    void getxattrs(map<string, bufferlist>& out) {
+      add_op(CEPH_OSD_OP_GETXATTRS);
+      add_single_return(detail::CB_FillMap(out));
     }
     void setxattr(const string& name, const bufferlist& bl) {
       add_op(CEPH_OSD_OP_SETXATTR);
@@ -274,9 +289,18 @@ namespace rados {
       add_op(CEPH_OSD_OP_RMXATTR);
       add_xattr(name);
     }
-    void setxattrs(map<string, bufferlist>& attrs) {
+
+    template<typename InputIterator>
+    void setxattrs(InputIterator begin, InputIterator end) {
       bufferlist bl;
-      ::encode(attrs, bl);
+      static_assert(
+	std::is_same<
+	typename std::iterator_traits<InputIterator>::value_type,
+	typename std::pair<std::string, bufferlist>>(),
+	"Input must be (string, bufferlist) pairs.");
+      ::encode(std::distance(begin, end));
+      for (;begin != end; ++begin)
+	::encode(*begin, bl);
       add_op(CEPH_OSD_OP_RESETXATTRS);
       add_xattr(NULL, bl);
     }
@@ -291,73 +315,113 @@ namespace rados {
     // objectmap
     void omap_get_keys(const string &start_after,
 		       uint64_t max_to_get,
-		       std::set<std::string> *out_set,
-		       int *rval) {
+		       key_callback&& f) {
       add_op(CEPH_OSD_OP_OMAPGETKEYS);
       bufferlist bl;
       ::encode(start_after, bl);
       ::encode(max_to_get, bl);
       add_metadata(bl);
-      if (rval || out_set) {
-	C_ObjectOperation_decodekeys *h =
-	  new C_ObjectOperation_decodekeys(out_set, rval);
-	add_single_return(&h->bl, rval, h);
-      }
+      add_single_return(detail::CB_DecodeKeys(std::move(f)));
     }
 
     void omap_get_vals(const string &start_after,
 		       const string &filter_prefix,
 		       uint64_t max_to_get,
-		       std::map<std::string, bufferlist> &out_set,
-		       int *rval = nullptr) {
+		       map<string, bufferlist>& out) {
       add_op(CEPH_OSD_OP_OMAPGETVALS);
       bufferlist bl;
       ::encode(start_after, bl);
       ::encode(max_to_get, bl);
       ::encode(filter_prefix, bl);
       add_metadata(bl);
-      C_ObjectOperation_decodevals *h =
-	new C_ObjectOperation_decodevals(out_set, rval);
-      add_single_return(&h->bl, rval, h);
+      add_single_return(detail::CB_FillMap(out));
     }
 
-    void omap_get_vals_by_keys(const std::set<std::string> &to_get,
-			       std::map<std::string, bufferlist> &out_set,
-			       int *rval = nullptr) {
+    void omap_get_vals(const string &start_after,
+		       const string &filter_prefix,
+		       uint64_t max_to_get, keyval_callback&& f) {
+      add_op(CEPH_OSD_OP_OMAPGETVALS);
+      bufferlist bl;
+      ::encode(start_after, bl);
+      ::encode(max_to_get, bl);
+      ::encode(filter_prefix, bl);
+      add_metadata(bl);
+      add_single_return(detail::CB_DecodePairs(std::move(f)));
+    }
+
+    template<typename InputIterator>
+    void omap_get_vals_by_keys(InputIterator begin, InputIterator end,
+			       keyval_callback&& f) {
+      static_assert(std::is_same<typename std::iterator_traits<
+		    InputIterator>::value_type,
+		    typename std::string>(),
+		    "Keys must be strings.");
       add_op(CEPH_OSD_OP_OMAPGETVALSBYKEYS);
       bufferlist bl;
-      ::encode(to_get, bl);
+      ::encode(std::distance(begin, end), bl);
+      for (;begin != end; ++begin)
+	::encode(*begin, bl);
       add_metadata(bl);
-      C_ObjectOperation_decodevals *h =
-	new C_ObjectOperation_decodevals(out_set, rval);
-      add_single_return(&h->bl, rval, h);
+      add_single_return(detail::CB_DecodePairs(std::move(f)));
     }
 
-    void omap_cmp(const std::map<std::string, pair<bufferlist, int> > &assertions,
+    void omap_cmp(const std::map<std::string,
+		  pair<bufferlist, int>> &assertions,
 		  int *rval) {
       add_op(CEPH_OSD_OP_OMAP_CMP);
       bufferlist bl;
       ::encode(assertions, bl);
       add_metadata(bl);
       if (rval) {
-	add_single_return(NULL, rval, NULL);
+	// add_single_return(NULL, rval, NULL);
       }
     }
 
-    void omap_get_header(bufferlist *bl, int *rval = nullptr) {
+    void omap_get_header(read_callback&& cb) {
       add_op(CEPH_OSD_OP_OMAPGETHEADER);
-      add_single_return(bl, rval, NULL);
+      add_single_return(std::move(cb));
     }
 
-    void omap_set(const map<string, bufferlist> &map) {
+    void omap_get_header(bufferlist& out) {
+      add_op(CEPH_OSD_OP_OMAPGETHEADER);
+      add_single_return(
+	[&out](std::error_code err, bufferlist& bl) {
+	  if (!err)
+	    out.claim_append(bl);
+	});
+    }
+
+    template<typename InputIterator>
+    void omap_get_vals_by_keys(InputIterator begin, InputIterator end) {
       bufferlist bl;
-      ::encode(map, bl);
+      static_assert(std::is_same<typename std::iterator_traits<
+		    InputIterator>::value_type,
+		    typename std::string>(),
+		    "Input must be strings pairs.");
+      ::encode(std::distance(begin, end));
+      for (;begin != end; ++begin)
+	::encode(*begin, bl);
       add_op(CEPH_OSD_OP_OMAPSETVALS);
       add_metadata(bl);
     }
 
-    void omap_set_header(bufferlist &bl) {
+    void omap_set_header(const bufferlist &bl) {
       add_op(CEPH_OSD_OP_OMAPSETHEADER);
+      add_metadata(bl);
+    }
+
+    template<typename InputIterator>
+    void omap_set(InputIterator begin, InputIterator end) {
+      static_assert(
+	std::is_convertible<
+	typename std::iterator_traits<InputIterator>::value_type,
+	typename std::pair<std::string, bufferlist>>(),
+	"Input must be (string, bufferlist) pairs.");
+      bufferlist bl;
+      ::encode(std::distance(begin, end), bl);
+      for (;begin != end; ++begin)
+	::encode(*begin, bl);
+      add_op(CEPH_OSD_OP_OMAPSETVALS);
       add_metadata(bl);
     }
 
@@ -365,28 +429,23 @@ namespace rados {
       add_op(CEPH_OSD_OP_OMAPCLEAR);
     }
 
-    void omap_rm_keys(const std::set<std::string> &to_remove) {
+    template<typename InputIterator>
+    void omap_rm_keys(InputIterator begin, InputIterator end) {
+      static_assert(
+	std::is_convertible<
+	typename std::iterator_traits<InputIterator>::value_type,
+	typename std::string>(),
+	"Input must be strings.");
       bufferlist bl;
-      ::encode(to_remove, bl);
+      ::encode(std::distance(begin, end), bl);
+      for (;begin != end; ++begin)
+	::encode(*begin, bl);
       add_op(CEPH_OSD_OP_OMAPRMKEYS);
       add_metadata(bl);
     }
 
-    // object classes
-    void call(const string& cname, const string& method, bufferlist &indata) {
-      add_op(CEPH_OSD_OP_CALL);
-      add_call(cname, method, indata, NULL, NULL, NULL);
-    }
-
     void call(const string& cname, const string& method, bufferlist &indata,
-	      bufferlist *outdata, Context *ctx = nullptr,
-	      int *rval = nullptr) {
-      add_op(CEPH_OSD_OP_CALL);
-      add_call(cname, method, indata, outdata, ctx, rval);
-    }
-
-    void call(const string& cname, const string& method, bufferlist &indata,
-	      std::function<void(int, bufferlist&&)>&& cb) {
+	      read_callback&& cb = nullptr) {
       add_op(CEPH_OSD_OP_CALL);
       add_call(cname, method, indata, std::move(cb));
     }
@@ -431,7 +490,7 @@ namespace rados {
 
     virtual void realize(
       const oid_t& oid,
-      const std::function<void(oid_t&&, vector<OSDOp>&&)>& f) = 0;
+      const cohort::function<void(oid_t&&, vector<OSDOp>&&)>& f) = 0;
   };
 
   typedef std::unique_ptr<ObjOp> ObjectOperation;

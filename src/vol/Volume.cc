@@ -26,22 +26,24 @@
 #define L_IS_PRINTABLE(c) (isprint(c))
 #endif
 
+#include "common/MultiCallback.h"
+
 using namespace std::literals;
 using std::stringstream;
 using std::system_error;
-using ceph::buffer_err;
+using ceph::buffer_errc;
 
 const char* vol_category_t::name() const noexcept {
   return "volume";
 }
 
 std::string vol_category_t::message(int ev) const {
-  switch (static_cast<vol_err>(ev)) {
-  case vol_err::no_such_volume:
+  switch (static_cast<vol_errc>(ev)) {
+  case vol_errc::no_such_volume:
     return "no such volume"s;
-  case vol_err::invalid_name:
+  case vol_errc::invalid_name:
     return "invalid volume name"s;
-  case vol_err::exists:
+  case vol_errc::exists:
     return "volume with name or UUID already exists"s;
   default:
     return "unknown error"s;
@@ -72,29 +74,29 @@ void Volume::encode(bufferlist& bl) const
 void Volume::validate_name(const string &name)
 {
   if (name.empty())
-    throw std::system_error(vol_err::invalid_name,
+    throw std::system_error(vol_errc::invalid_name,
 			   "volume name may not be empty"s);
 
   if (L_IS_WHITESPACE(*name.begin()))
     throw std::system_error(
-      vol_err::invalid_name,
+      vol_errc::invalid_name,
       "volume name may not begin with space characters"s);
 
   if (L_IS_WHITESPACE(*name.rbegin()))
-    throw std::system_error(vol_err::invalid_name,
+    throw std::system_error(vol_errc::invalid_name,
 			    "volume name may not end with space characters"s);
 
   if (std::any_of(name.cbegin(), name.cend(),
 		  [](char c) { return !L_IS_PRINTABLE(c); }))
     throw std::system_error(
-      vol_err::invalid_name,
+      vol_errc::invalid_name,
       "volume name can only contain printable characters"s);
 
 
   try {
     boost::uuids::string_generator parse;
     parse(name);
-    throw std::system_error(vol_err::invalid_name,
+    throw std::system_error(vol_errc::invalid_name,
 			    "volume name cannot match the form of UUIDs"s);
   } catch (std::runtime_error& e) {
   }
@@ -115,7 +117,7 @@ void Volume::decode(bufferlist::iterator& bl)
   int v;
   ::decode(v, bl);
   if (v != 0) {
-    throw system_error(buffer_err::malformed_input, "Bad version."s);
+    throw system_error(buffer_errc::malformed_input, "Bad version."s);
   }
 
   ::decode(id, bl);
@@ -178,35 +180,9 @@ void AttachedVol::StripulatedOp::add_obj(const oid_t &o)
     v.back().oid = o;
 }
 
-void AttachedVol::StripulatedOp::add_single_return(bufferlist* bl,
-						    int* rval,
-						    Context *ctx)
+void AttachedVol::StripulatedOp::add_single_return(OSDOp::opfun_t&& f)
 {
-  ops[0].back().ctx = ctx;
-  ops[0].back().out_bl = bl;
-  ops[0].back().out_rval = rval;
-}
-
-// This will go away in a few days
-struct C_StupidStupid : public Context {
-  std::function<void(int, bufferlist&&)> f;
-  bufferlist bl;
-
-  C_StupidStupid(std::function<void(int, bufferlist&&)>&& _f) {
-    f.swap(_f);
-  }
-  void finish(int r) {
-    f(r, std::move(bl));
-  }
-};
-
-void AttachedVol::StripulatedOp::add_single_return(
-  std::function<void(int, bufferlist&&)>&& f)
-{
-  C_StupidStupid* c  = new C_StupidStupid(std::move(f));
-  ops[0].back().ctx = c;
-  ops[0].back().out_bl = &c->bl;
-  ops[0].back().out_rval = nullptr;
+  ops[0].back().f = f;
 }
 
 void AttachedVol::StripulatedOp::add_metadata(const bufferlist& bl)
@@ -230,7 +206,7 @@ void AttachedVol::StripulatedOp::add_metadata_range(const uint64_t off,
 }
 
 void AttachedVol::StripulatedOp::add_data(const uint64_t off,
-						   const bufferlist& in)
+					  const bufferlist& in)
 {
   bufferlist bl(in);
   vector<AttachedPlacer::StrideExtent> out(ops.size());
@@ -267,7 +243,7 @@ void AttachedVol::StripulatedOp::add_data_range(const uint64_t off,
 }
 
 void AttachedVol::StripulatedOp::add_truncate(const uint64_t truncate_size,
-					       const uint32_t truncate_seq)
+					      const uint32_t truncate_seq)
 {
   // The truncate_size is the truncate_size of the entire OBJECT, not
   // of any individual stride. This seems the only sane way to go
@@ -278,106 +254,53 @@ void AttachedVol::StripulatedOp::add_truncate(const uint64_t truncate_size,
   }
 }
 
-struct C_MultiRead : public Context {
+class MultiRead
+  : public cohort::ComplicatedMultiCallback<void(std::error_code,
+						 bufferlist&), uint32_t> {
+  friend cohort::MultiCallback;
   const AttachedPlacer& pl;
   uint64_t off;
   map<int, bufferlist> resultbl;
-  bufferlist *outbl;
-  int* rval;
-  Context *onfinish;
+  rados::read_callback f;
+  int r;
+
+  MultiRead(const AttachedPlacer& pl, uint64_t _off,
+	    rados::read_callback&& _f)
+    : pl(pl), off(_off), f(_f), r(0), total_real_length(UINT64_MAX) { }
+
+public:
   uint64_t total_real_length;
-  std::function<void(int, bufferlist&&)> f;
 
-  C_MultiRead(const AttachedPlacer& pl, uint64_t _off, bufferlist *_outbl,
-	      int* rval, Context *onfinish)
-    : pl(pl), off(_off), outbl(_outbl), rval(rval), onfinish(onfinish),
-      total_real_length(UINT64_MAX) { }
+  virtual void work(uint32_t stride, std::error_code r, bufferlist& bl) {
+    if (stride < UINT32_MAX)
+      resultbl[stride].claim_append(bl);
+  };
 
-  C_MultiRead(const AttachedPlacer& pl, uint64_t _off,
-	      std::function<void(int, bufferlist&&)>&& _f)
-    : pl(pl), off(_off), outbl(nullptr), rval(nullptr), onfinish(nullptr),
-      total_real_length(UINT64_MAX), f(_f) { }
-
-  void finish(int r) {
+  void finish() {
     bufferlist bl;
     int s = pl.get_data(resultbl, &bl);
     if (s != 0) {
       r = s;
-      goto done;
     }
 
-    if (outbl) {
+    if (r < 0) {
+      f(std::error_code(-r, std::generic_category()), bl);
+    } else {
       if ((total_real_length < UINT64_MAX) &&
 	  (off + bl.length()) > total_real_length) {
-	outbl->substr_of(bl, 0, total_real_length - off);
-      } else {
-	outbl->claim_append(bl);
-      }
-      r = outbl->length();
-    }
-
-
-  done:
-
-    if (rval) {
-      *rval = outbl->length();
-    }
-
-    if (onfinish) {
-      onfinish->complete(outbl->length());
-    }
-
-    if (f) {
-      if (r < 0) {
-	f(r, bufferlist());
-      } else {
 	bufferlist tbl;
-	if ((total_real_length < UINT64_MAX) &&
-	    (off + bl.length()) > total_real_length) {
-	  tbl.substr_of(bl, 0, total_real_length - off);
-	} else {
-	  tbl.claim_append(bl);
-	}
-	f(tbl.length(), std::move(tbl));
+	tbl.substr_of(bl, 0, total_real_length - off);
+	f(std::error_code(), tbl);
+      } else {
+	f(std::error_code(), bl);
       }
     }
   }
 };
 
-void AttachedVol::StripulatedOp::read(uint64_t off, uint64_t len,
-				       bufferlist *bl, uint64_t truncate_size,
-				       uint32_t truncate_seq, int *rval,
-				       Context* ctx)
-{
-  budget += len;
-  const uint32_t stripe_size = pl.get_stripe_unit() *
-    pl.get_data_chunk_count();
-  uint64_t actual_len = len;
-  uint64_t resid = (off + len) % stripe_size;
-  if (resid)
-    actual_len += (stripe_size - resid);
-  C_MultiRead* mr = new C_MultiRead(pl, off, bl, rval, ctx);
-  C_GatherBuilder gather;
-
-  add_op(CEPH_OSD_OP_STAT);
-  add_stat_ctx(&mr->total_real_length, nullptr, nullptr, gather.new_sub());
-  add_op(CEPH_OSD_OP_READ);
-  for (uint32_t stride = 0; stride < pl.get_chunk_count(); ++stride) {
-    ops[stride].back().op.extent.offset = off
-      / pl.get_data_chunk_count();
-    ops[stride].back().op.extent.length = actual_len
-      / pl.get_data_chunk_count();
-    ops[stride].back().ctx = gather.new_sub();
-    auto p = mr->resultbl.emplace(stride, len / stripe_size);
-    ops[stride].back().out_bl = &(p.first->second);
-  }
-  gather.set_finisher(mr);
-  gather.activate();
-}
-
 void AttachedVol::StripulatedOp::read(
   uint64_t off, uint64_t len, uint64_t truncate_size,
-  uint32_t truncate_seq, std::function<void(int, bufferlist&&)>&& f)
+  uint32_t truncate_seq, rados::read_callback&& f)
 {
   budget += len;
   const uint32_t stripe_size = pl.get_stripe_unit() *
@@ -386,70 +309,32 @@ void AttachedVol::StripulatedOp::read(
   uint64_t resid = (off + len) % stripe_size;
   if (resid)
     actual_len += (stripe_size - resid);
-  C_MultiRead* mr = new C_MultiRead(pl, off, std::move(f));
-  C_GatherBuilder gather;
+  auto& mr = cohort::MultiCallback::create<MultiRead>(pl, off, std::move(f));
 
   add_op(CEPH_OSD_OP_STAT);
-  add_stat_ctx(&mr->total_real_length, nullptr, nullptr, gather.new_sub());
+  add_stat_cb([ &rtl = mr.total_real_length,
+		sub = mr.subsidiary(UINT32_MAX) ]
+	      (std::error_code e, uint64_t s, ceph::real_time m) mutable {
+		rtl = s;
+		bufferlist bl;
+		sub(e, bl); });
+
   add_op(CEPH_OSD_OP_READ);
   for (uint32_t stride = 0; stride < pl.get_chunk_count(); ++stride) {
     ops[stride].back().op.extent.offset = off
       / pl.get_data_chunk_count();
     ops[stride].back().op.extent.length = actual_len
       / pl.get_data_chunk_count();
-    ops[stride].back().ctx = gather.new_sub();
-    auto p = mr->resultbl.emplace(stride, len / stripe_size);
-    ops[stride].back().out_bl = &(p.first->second);
+    ops[stride].back().f = std::move(mr.subsidiary(stride));
   }
-  gather.set_finisher(mr);
-  gather.activate();
-}
-
-void AttachedVol::StripulatedOp::read_full(bufferlist *bl,
-		      int *rval, Context* ctx)
-{
-  C_MultiRead* mr = new C_MultiRead(pl, 0, bl, rval, ctx);
-  C_GatherBuilder gather;
-
-  add_op(CEPH_OSD_OP_STAT);
-  add_stat_ctx(&mr->total_real_length, nullptr, nullptr, gather.new_sub());
-  add_op(CEPH_OSD_OP_READ);
-  ops[0].back().op.extent.offset = 0;
-  ops[0].back().op.extent.length = CEPH_READ_ENTIRE;
-  ops[0].back().ctx = gather.new_sub();
-  ops[0].back().out_bl = bl;
-  gather.set_finisher(mr);
-  gather.activate();
+  mr.activate();
 }
 
 void AttachedVol::StripulatedOp::read_full(
-  std::function<void(int, bufferlist&&)>&& f)
+  rados::read_callback&& f)
 {
-  C_MultiRead* mr = new C_MultiRead(pl, 0, std::move(f));
-  C_GatherBuilder gather;
-
-  add_op(CEPH_OSD_OP_STAT);
-  add_stat_ctx(&mr->total_real_length, nullptr, nullptr, gather.new_sub());
-  add_op(CEPH_OSD_OP_READ);
-  for (uint32_t stride = 0; stride < pl.get_chunk_count(); ++stride) {
-    ops[stride].back().op.extent.offset = 0;
-    ops[stride].back().op.extent.length = CEPH_READ_ENTIRE;
-    ops[stride].back().ctx = gather.new_sub();
-    auto p = mr->resultbl.emplace(stride, 0);
-    ops[stride].back().out_bl = &(p.first->second);
-  }
-  gather.set_finisher(mr);
-  gather.activate();
+  read(0, CEPH_READ_ENTIRE, 0, 0, std::move(f));
 }
-
-void AttachedVol::StripulatedOp::add_sparse_read_ctx(
-  uint64_t off, uint64_t len, std::map<uint64_t,uint64_t> *m,
-  bufferlist *data_bl, int *rval, Context *ctx)
-{
-  puts("Sparse read is currently not supported.");
-  abort();
-}
-
 
 void AttachedVol::StripulatedOp::add_xattr(const string &name,
 					    const bufferlist& data)
@@ -465,15 +350,13 @@ void AttachedVol::StripulatedOp::add_xattr(const string &name,
   }
 }
 
-void AttachedVol::StripulatedOp::add_xattr(const string &name,
-					    bufferlist* data)
+void AttachedVol::StripulatedOp::add_xattr(const string &name)
 {
   // At least for the moment, just read the same attribute on every stride
   budget += name.length();
   OSDOp &op = ops[0].back();
   op.op.xattr.name_len = name.length();
   op.indata.append(name);
-  op.out_bl = data;
 }
 
 void AttachedVol::StripulatedOp::add_xattr_cmp(const string &name,
@@ -499,31 +382,9 @@ void AttachedVol::StripulatedOp::add_xattr_cmp(const string &name,
 }
 
 void AttachedVol::StripulatedOp::add_call(const string &cname,
-					   const string &method,
-					   const bufferlist &indata,
-					   bufferlist *const outbl,
-					   Context *const ctx,
-					   int *const rval)
-{
-  // Calls are hard.
-  for (auto &v : ops) {
-    OSDOp &osd_op = v.back();
-    osd_op.op.cls.class_len = cname.length();
-    osd_op.op.cls.method_len = method.length();
-    osd_op.op.cls.indata_len = indata.length();
-    osd_op.indata.append(cname.data(), osd_op.op.cls.class_len);
-    osd_op.indata.append(method.data(), osd_op.op.cls.method_len);
-    osd_op.indata.append(indata);
-    osd_op.ctx = ctx;
-    osd_op.out_bl = outbl;
-    osd_op.out_rval = rval;
-  }
-}
-void AttachedVol::StripulatedOp::add_call(const string &cname,
-					   const string &method,
-					   const bufferlist &indata,
-					   std::function<void(
-					     int,bufferlist&&)>&& cb)
+					  const string &method,
+					  const bufferlist &indata,
+					  rados::read_callback&& cb)
 {
   bool das_macht_nichts = false;
   // Calls are hard.
@@ -536,23 +397,18 @@ void AttachedVol::StripulatedOp::add_call(const string &cname,
     osd_op.indata.append(method.data(), osd_op.op.cls.method_len);
     osd_op.indata.append(indata);
     if (das_macht_nichts) {
-      osd_op.ctx = nullptr;
-      osd_op.out_bl = nullptr;
-      osd_op.out_rval = nullptr;
+      osd_op.f = nullptr;
     } else {
-      C_StupidStupid* c = new C_StupidStupid(std::move(cb));
-      osd_op.ctx = c;
-      osd_op.out_bl = &c->bl;
-      osd_op.out_rval = nullptr;
+      osd_op.f = std::move(cb);
       das_macht_nichts = true;
     }
   }
 }
 
 void AttachedVol::StripulatedOp::add_watch(const uint64_t cookie,
-						   const uint64_t ver,
-						   const uint8_t flag,
-						   const bufferlist& inbl)
+					   const uint64_t ver,
+					   const uint8_t flag,
+					   const bufferlist& inbl)
 {
   // Watches might be hard
   for (auto &v : ops) {
@@ -594,94 +450,59 @@ void AttachedVol::StripulatedOp::clear_op_flags(const uint32_t flags)
   }
 }
 
-struct C_MultiStat : public Context {
-  vector<bufferlist> bls;
-  uint64_t *s;
-  ceph::real_time *m;
-  int *rval;
-  Context *ctx;
-  // Hack
-  std::function<void(int, uint64_t, ceph::real_time)> f;
+class MultiStat : public cohort::SimpleMultiCallback<
+  std::error_code, bufferlist&> {
+  friend cohort::MultiCallback;
 
-  C_MultiStat(const AttachedPlacer &pl, uint64_t *_s, ceph::real_time *_m,
-	      int *_rval, Context *_ctx)
-    : bls(pl.get_chunk_count()), s(_s), m(_m),
-      rval(_rval), ctx(_ctx) { }
-  C_MultiStat(const AttachedPlacer &pl, uint64_t *_s, ceph::real_time *_m,
-	      int *_rval, std::function<void(
-		int, uint64_t, ceph::real_time)>&& _f)
-    : bls(pl.get_chunk_count()), s(_s), m(_m),
-      rval(_rval), ctx(0), f(std::move(_f)) { }
+  bool got_one;
+  uint64_t size;
+  std::error_code e;
+  ceph::real_time mtime;
+  rados::stat_callback f;
 
-  void finish(int r) {
-    bool got_one = false;
-    uint64_t rtl = 0;
-    ceph::real_time mtime;
-    for (auto &b : bls) {
-      bufferlist::iterator p = b.begin();
-      try {
-	uint64_t _size;
-	ceph::real_time _mtime;
-	::decode(_size, p);
-	::decode(_mtime, p);
-	::decode(rtl, p);
-	got_one = true;
-	mtime = std::max(mtime, _mtime);
-      } catch (std::system_error& e) {
-	if (r != 0)
-	  r = -EINVAL;
-      }
+  MultiStat(const AttachedPlacer &pl, rados::stat_callback&& _f)
+    : got_one(false), size(0), f(std::move(_f)) { }
+
+public:
+
+  void work(std::error_code err, bufferlist& bl) {
+    if (err && !e) {
+      e = err;
+      return;
     }
 
+    bufferlist::iterator p = bl.begin();
+    try {
+      uint64_t _size;
+      ceph::real_time _mtime;
+      ::decode(_size, p);
+      ::decode(_mtime, p);
+      ::decode(size, p);
+      got_one = true;
+      mtime = std::max(mtime, _mtime);
+    } catch (std::system_error& se) {
+      if (!e)
+	e = se.code();
+    }
+  }
+
+  void finish() {
     if (got_one) {
-      if (s) {
-	*s = rtl;
-      }
-      if (m)
-	*m = mtime;
-      r = 0;
+      e.clear();
     }
 
-    if (ctx)
-      ctx->complete(r);
-
-    if (f)
-      f(r, rtl, mtime);
-
-    if (rval)
-      *rval = r;
+    f(e, size, mtime);
   }
 };
 
-void AttachedVol::StripulatedOp::add_stat_ctx(uint64_t *s,
-					       ceph::real_time *m,
-					       int *rval,
-					       Context *ctx)
+void AttachedVol::StripulatedOp::add_stat_cb(rados::stat_callback&& cb)
 {
-  C_GatherBuilder gather;
-  C_MultiStat *f = new C_MultiStat(pl, s, m, rval, ctx);
+  auto& ms =  cohort::MultiCallback::create<MultiStat>(pl, std::move(cb));
   for (uint32_t stride = 0; stride < pl.get_chunk_count(); ++stride) {
     OSDOp &osd_op = ops[stride].back();
-    osd_op.out_bl = &(f->bls[stride]);
-    osd_op.ctx = gather.new_sub();
+    osd_op.f = ms.subsidiary();
   }
-  gather.set_finisher(f);
-  gather.activate();
-}
-
-void AttachedVol::StripulatedOp::add_stat_cb(
-  std::function<void(int, uint64_t, ceph::real_time)>&& cb)
-{
-  C_GatherBuilder gather;
-  C_MultiStat *f = new C_MultiStat(pl, nullptr, nullptr, nullptr,
-				   std::move(cb));
-  for (uint32_t stride = 0; stride < pl.get_chunk_count(); ++stride) {
-    OSDOp &osd_op = ops[stride].back();
-    osd_op.out_bl = &(f->bls[stride]);
-    osd_op.ctx = gather.new_sub();
-  }
-  gather.set_finisher(f);
-  gather.activate();
+  ms.activate();
 }
 
 rados::ObjectOperation AttachedVol::StripulatedOp::clone()
@@ -697,7 +518,7 @@ rados::ObjectOperation AttachedVol::op() const
 
 void AttachedVol::StripulatedOp::realize(
   const oid_t& o,
-  const std::function<void(oid_t&&, vector<OSDOp>&&)>& f)
+  const cohort::function<void(oid_t&&, vector<OSDOp>&&)>& f)
 {
   for(size_t i = 0; i < ops.size(); ++i) {
     f(oid_t(o, i < pl.get_data_chunk_count() ? chunktype::data : chunktype::ecc,
@@ -708,7 +529,7 @@ void AttachedVol::StripulatedOp::realize(
 
 size_t AttachedVol::place(const oid_t& object,
 			  const OSDMap& map,
-			  const std::function<void(int)>& f) const {
+			  const cohort::function<void(int)>& f) const {
   return placer->place(object, v.id, map, f);
 }
 

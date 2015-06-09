@@ -85,21 +85,17 @@ public:
   StateLogListCB(list<cls_statelog_entry> *_entries, string *_marker,
 		 bool *_truncated) : entries(_entries), marker(_marker),
 				      truncated(_truncated) {}
-  void operator()(int r, bufferlist&& outbl) {
-    if (r >= 0) {
+  void operator()(std::error_code r, bufferlist& outbl) {
+    if (!r) {
       cls_statelog_list_ret ret;
-      try {
-	bufferlist::iterator iter = outbl.begin();
-	::decode(ret, iter);
-	if (entries)
-	  *entries = ret.entries;
-	if (truncated)
-	  *truncated = ret.truncated;
-	if (marker)
-	  *marker = ret.marker;
-      } catch (std::system_error& err) {
-	// nothing we can do about it atm
-      }
+      bufferlist::iterator iter = outbl.begin();
+      ::decode(ret, iter);
+      if (entries)
+	*entries = ret.entries;
+      if (truncated)
+	*truncated = ret.truncated;
+      if (marker)
+	*marker = ret.marker;
     }
   }
 };

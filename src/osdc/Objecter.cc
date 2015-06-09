@@ -344,16 +344,11 @@ namespace rados {
     // and condition variable to block future updates. Probably not
     // worth it.
 
-    // finish any Contexts that were waiting on a map update
-    map<epoch_t,list< pair< Context*, int > > >::iterator p =
-      waiting_for_map.begin();
+    // finish any functions that were waiting on a map update
+    auto p = waiting_for_map.begin();
     while (p != waiting_for_map.end() &&
 	   p->first <= osdmap->get_epoch()) {
-      //go through the list and call the onfinish methods
-      for (list<pair<Context*, int> >::iterator i = p->second.begin();
-	   i != p->second.end(); ++i) {
-	i->first->complete(i->second);
-      }
+      p->second.execute();
       waiting_for_map.erase(p++);
     }
 
@@ -366,9 +361,8 @@ namespace rados {
     // Unlock before calling notifiers
     shl.unlock();
 
-    for (const auto& f : osdmap_notifiers) {
+    for(const auto& f : osdmap_notifiers)
       f();
-    }
   }
 
   // op volume check
@@ -427,11 +421,11 @@ namespace rados {
 		       << " concluding volume " << op.volume << " dne"
 		       << dendl;
 	if (op.onack) {
-	  op.onack(-ENXIO);
+	  op.onack(vol_errc::no_such_volume);
 	  op.onack = nullptr;
 	}
 	if (op.oncommit) {
-	  op.oncommit(-ENXIO);
+	  op.oncommit(vol_errc::no_such_volume);
 	  op.oncommit = nullptr;
 	}
 
@@ -486,7 +480,7 @@ namespace rados {
     if (!shl.owns_lock()) {
       throw std::system_error(errc::need_unique_lock);
     }
-    OSDSession *s = new OSDSession(cct, osd);
+    OSDSession *s = new OSDSession(osd);
     osd_sessions.insert(*s);
     s->con = messenger->get_connection(osdmap->get_inst(osd));
     s->get();
@@ -555,32 +549,26 @@ namespace rados {
       return;
     }
 
-    std::mutex lock;
-    std::condition_variable cond;
-    bool done;
-    std::unique_lock<std::mutex> l(lock);
-    C_SafeCond *context = new C_SafeCond(&lock, &cond, &done, NULL);
-    waiting_for_map[0].push_back(pair<Context*, int>(context, 0));
-    wl.unlock();
-    cond.wait(l, [&](){ return done; });
-    l.unlock();
+    CB_Waiter w;
+    waiting_for_map[0].add(std::ref(w));
+    w.wait();
   }
 
-  void Objecter::add_osdmap_notifier(const cohort::function<void()>& f) {
-    osdmap_notifiers.push_back(f);
+  void Objecter::add_osdmap_notifier(thunk&& f) {
+    osdmap_notifiers.emplace_back(std::move(f));
   }
 
   struct Objecter_GetVersion {
     Objecter& objecter;
-    Context *fin;
-    Objecter_GetVersion(Objecter& o, Context *c)
-      : objecter(o), fin(c) {}
+    thunk fin;
+    Objecter_GetVersion(Objecter& o, thunk&& f)
+      : objecter(o), fin(f) {}
     void operator()(std::error_code r, version_t newest, version_t oldest) {
       if (!r) {
-	objecter.get_latest_version(oldest, newest, fin);
+	objecter.get_latest_version(oldest, newest, std::move(fin));
       } else if (r == std::errc::resource_unavailable_try_again) {
 	// try again as instructed
-	objecter.wait_for_latest_osdmap(fin);
+	objecter.wait_for_latest_osdmap(std::move(fin));
       } else {
 	// it doesn't return any other error codes!
 	abort();
@@ -588,33 +576,33 @@ namespace rados {
     }
   };
 
-  void Objecter::wait_for_latest_osdmap(Context *fin)
+  void Objecter::wait_for_latest_osdmap(thunk&& fin)
   {
     ldout(cct, 10) << __func__ << dendl;
-    monc->get_version("osdmap", Objecter_GetVersion(*this, fin));
+    monc->get_version("osdmap", Objecter_GetVersion(*this, std::move(fin)));
   }
 
 
   void Objecter::get_latest_version(epoch_t oldest, epoch_t newest,
-				    Context *fin)
+				    thunk&& fin)
   {
     unique_lock wl(rwlock);
-    _get_latest_version(oldest, newest, fin);
+    _get_latest_version(oldest, newest, std::move(fin));
   }
 
   void Objecter::_get_latest_version(epoch_t oldest, epoch_t newest,
-				     Context *fin)
+				     thunk&& fin)
   {
     if (osdmap->get_epoch() >= newest) {
       ldout(cct, 10) << __func__ << " latest " << newest << ", have it"
 		     << dendl;
       if (fin)
-	fin->complete(0);
+	fin();
       return;
     }
 
     ldout(cct, 10) << __func__ << " latest " << newest << ", waiting" << dendl;
-    _wait_for_new_map(fin, newest, 0);
+    _wait_for_new_map(std::move(fin), newest);
   }
 
   void Objecter::maybe_request_map()
@@ -641,19 +629,19 @@ namespace rados {
   }
 
 
-  void Objecter::_wait_for_new_map(Context *c, epoch_t epoch, int err)
+  void Objecter::_wait_for_new_map(thunk&& c, epoch_t epoch)
   {
-    waiting_for_map[epoch].push_back(pair<Context *, int>(c, err));
+    waiting_for_map[epoch].add(std::move(c));
     _maybe_request_map();
   }
 
-  bool Objecter::wait_for_map(epoch_t epoch, Context *c, int err)
+  bool Objecter::wait_for_map(epoch_t epoch, thunk&& c)
   {
     unique_lock wl(rwlock);
     if (osdmap->get_epoch() >= epoch) {
       return true;
     }
-    _wait_for_new_map(c, epoch, err);
+    _wait_for_new_map(std::move(c), epoch);
     return false;
   }
 
@@ -764,21 +752,6 @@ namespace rados {
   }
 
 
-// read | write ---------------------------
-
-  ceph_tid_t Objecter::read_full(const oid_t& oid,
-				 const AVolRef& volume,
-				 bufferlist *pbl,
-				 op_callback&& onfinish,
-				 ZTracer::Trace *trace)
-  {
-    ObjectOperation ops = volume->op();
-    ops->read_full(pbl);
-    Op *o = new Op(oid, volume, ops,
-		   global_op_flags | CEPH_OSD_FLAG_READ,
-		   move(onfinish), 0, trace);
-    return op_submit(o);
-  }
 
   ceph_tid_t Objecter::op_submit(Op *op)
   {
@@ -900,7 +873,7 @@ namespace rados {
     return tid;
   }
 
-  void Objecter::op_cancel(ceph_tid_t tid, int r)
+  void Objecter::op_cancel(ceph_tid_t tid, std::error_code r)
   {
     Op* op;
     {
@@ -999,7 +972,7 @@ namespace rados {
   {
     int r = _calc_targets(subop.parent, ol);
     if (r == TARGET_VOLUME_DNE) {
-      throw std::system_error(vol_err::no_such_volume);
+      throw std::system_error(vol_errc::no_such_volume);
     }
     return  _get_session(subop.osd, shl);
   }
@@ -1039,14 +1012,9 @@ namespace rados {
   {
     for (auto& op : subop.ops) {
       bufferlist bl;
-      if (op.out_bl)
-	// So contexts depending ont his don't crash.
-	*op.out_bl = bl;
-      if (op.out_rval)
-	*op.out_rval = -ETIMEDOUT;
-      if (op.ctx) {
-	op.ctx->complete(op.rval);
-	op.ctx = nullptr;
+      if (op.f) {
+	op.f(std::make_error_code(std::errc::timed_out), bl);
+	op.f = nullptr;
       }
     }
     if (subop.session) {
@@ -1209,9 +1177,9 @@ namespace rados {
       // of order.
     }
 
-    int rc = m->get_result();
-    if (rc == -EAGAIN) {
-      ldout(cct, 7) << " got -EAGAIN, resubmitting" << dendl;
+    std::error_code rc = m->get_result();
+    if (rc == std::errc::resource_unavailable_try_again) {
+      ldout(cct, 7) << " got " << rc << ", resubmitting" << dendl;
 
       // new tid
       _session_subop_remove(s, subop);
@@ -1247,22 +1215,17 @@ namespace rados {
     for (uint32_t i = 0; i < out_ops.size(); ++i) {
       ldout(cct, 10) << " op " << i << " rval " << out_ops[i].rval
 		     << " len " << out_ops[i].outdata.length() << dendl;
-      if (subop.ops[i].out_bl)
-	*subop.ops[i].out_bl = out_ops[i].outdata;
-
-      // set rval before running handlers so that handlers
-      // can change it if e.g. decoding fails
-      if (subop.ops[i].out_rval)
-	*subop.ops[i].out_rval = out_ops[i].rval;
-
-      if (subop.ops[i].ctx) {
-	ldout(cct, 10) << " op " << i << " handler " << subop.ops[i].ctx
-		       << dendl;
-	subop.ops[i].ctx->complete(out_ops[i].rval);
+      if (subop.ops[i].f) {
+	try {
+	  subop.ops[i].f(out_ops[i].rval, out_ops[i].outdata);
+	} catch (const std::system_error& e) {
+	  if (!out_ops[i].rval)
+	    out_ops[i].rval = e.code();
+	  if (!rc)
+	    rc = e.code();
+	}
       }
-      subop.ops[i].out_bl = nullptr;
-      subop.ops[i].out_rval = nullptr;
-      subop.ops[i].ctx = nullptr;
+      subop.ops[i].f = nullptr;
     }
 
     if (subop.parent.reply_epoch &&
@@ -1282,7 +1245,7 @@ namespace rados {
       ++subop.parent.commits; // Don't double count acks
     }
 
-    if (subop.parent.rc == 0)
+    if (!subop.parent.rc)
       subop.parent.rc = rc;
 
     subop.done = true;
@@ -1365,21 +1328,21 @@ namespace rados {
     return false;
   }
 
-  void Objecter::get_fs_stats(ceph_statfs& result, Context *onfinish)
+  void Objecter::get_fs_stats(statfs_callback&& onfinish)
   {
     ldout(cct, 10) << "get_fs_stats" << dendl;
     unique_lock l(rwlock);
 
     StatfsOp* op = new StatfsOp;
     op->tid = ++last_tid;
-    op->stats = &result;
-    op->onfinish = onfinish;
+    op->onfinish.swap(onfinish);
     op->ontimeout = 0;
     if (mon_timeout > 0ns) {
       op->ontimeout =
 	timer.add_event(
 	  mon_timeout,
-	  &Objecter::statfs_op_cancel, this, op->tid, -ETIMEDOUT);
+	  &Objecter::statfs_op_cancel, this, op->tid,
+	  std::make_error_code(std::errc::timed_out));
     }
     statfs_ops.insert(*op);
 
@@ -1404,8 +1367,7 @@ namespace rados {
     if (stiter != statfs_ops.end()) {
       StatfsOp& op = *stiter;
       ldout(cct, 10) << "have request " << tid << dendl;
-      *(op.stats) = m->h.st;
-      op.onfinish->complete(0);
+      op.onfinish(std::error_code(), m->h.st);
       _finish_statfs_op(op);
     } else {
       ldout(cct, 10) << "unknown request " << tid << dendl;
@@ -1414,7 +1376,7 @@ namespace rados {
     ldout(cct, 10) << "done" << dendl;
   }
 
-  void Objecter::statfs_op_cancel(ceph_tid_t tid, int r)
+  void Objecter::statfs_op_cancel(ceph_tid_t tid, std::error_code r)
   {
     unique_lock wl(rwlock);
 
@@ -1426,8 +1388,9 @@ namespace rados {
     ldout(cct, 10) << __func__ << " tid " << tid << dendl;
 
     StatfsOp& op = *it;
+    ceph_statfs s;
     if (op.onfinish)
-      op.onfinish->complete(r);
+      op.onfinish(r, s);
     _finish_statfs_op(op);
   }
 
@@ -1518,12 +1481,12 @@ namespace rados {
     monc->send_mon_message(m);
   }
 
-  int Objecter::create_volume(const string& name, op_callback&& onfinish)
+  void Objecter::create_volume(const string& name, op_callback&& onfinish)
   {
     ldout(cct, 10) << "create_volume name=" << name << dendl;
 
     if (osdmap->vol_exists(name) > 0)
-      return -EEXIST;
+      onfinish(vol_errc::exists);
 
     vector<string> cmd;
     cmd.push_back("{\"prefix\":\"osd volume create\", ");
@@ -1534,12 +1497,10 @@ namespace rados {
       cmd, bl,
       [onfinish = std::move(onfinish)](std::error_code err, const string& s,
 				       bufferlist& bl) mutable {
-	// To be fixed later
-	onfinish(-err.value()); });
-    return 0;
+	onfinish(err); });
   }
 
-  int Objecter::delete_volume(const string& name, op_callback&& onfinish)
+  void Objecter::delete_volume(const string& name, op_callback&& onfinish)
   {
     ldout(cct, 10) << "delete_volume name=" << name << dendl;
 
@@ -1552,9 +1513,7 @@ namespace rados {
       cmd, bl,
       [onfinish = std::move(onfinish)](std::error_code err, const string& s,
 				       bufferlist& bl) mutable {
-	// To be fixed later
-	onfinish(-err.value()); });
-    return 0;
+	onfinish(err); });
   }
 
   Objecter::OSDSession::~OSDSession()

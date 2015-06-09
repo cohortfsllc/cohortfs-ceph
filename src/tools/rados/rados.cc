@@ -24,9 +24,11 @@
 #include <sstream>
 #include <stdexcept>
 
+#include <dirent.h>
+
+#include <boost/scope_exit.hpp>
 #include <boost/intrusive/slist.hpp>
 
-#include <dirent.h>
 
 #include "include/types.h"
 #include "include/compat.h"
@@ -49,6 +51,8 @@
 using std::cout;
 using std::cerr;
 using std::endl;
+
+using namespace std::literals;
 
 using namespace rados;
 
@@ -174,8 +178,8 @@ static int dump_data(std::string const &filename, bufferlist const &data)
 }
 
 
-static int do_get(Objecter* o, const AVolRef& vol, const oid_t& oid,
-		  const string& outfile, unsigned op_size)
+static void do_get(Objecter* o, const AVolRef& vol, const oid_t& oid,
+		   const string& outfile, unsigned op_size)
 {
   int fd;
   if (outfile == "-") {
@@ -184,61 +188,43 @@ static int do_get(Objecter* o, const AVolRef& vol, const oid_t& oid,
     fd = TEMP_FAILURE_RETRY(::open(outfile.c_str(), O_WRONLY|O_CREAT|O_TRUNC,
 				   0644));
     if (fd < 0) {
-      int err = errno;
-      cerr << "failed to open file: " << cpp_strerror(err) << endl;
-      return -err;
+      throw std::system_error(
+	errno, std::generic_category(),
+	"failed to open file: "s + outfile);
     }
   }
+  BOOST_SCOPE_EXIT(fd) {
+    if (fd != 1)
+      VOID_TEMP_FAILURE_RETRY(::close(fd));
+  } BOOST_SCOPE_EXIT_END;
 
   uint64_t offset = 0;
-  int ret;
   while (true) {
-    bufferlist outdata;
-    ret = o->read(oid, vol, offset, op_size, &outdata);
-    if (ret < 0) {
-      goto out;
-    }
-    ret = outdata.write_fd(fd);
-    if (ret < 0) {
-      cerr << "error writing to file: " << cpp_strerror(ret) << endl;
-      goto out;
+    bufferlist outdata = o->read(oid, vol, offset, op_size);
+    int r = outdata.write_fd(fd);
+    if (r < 0) {
+      throw std::system_error(
+	-r, std::generic_category(),
+	"failed to write file: "s + outfile);
     }
     if (outdata.length() < op_size)
       break;
     offset += outdata.length();
   }
-  ret = 0;
-
- out:
-  if (fd != 1)
-    VOID_TEMP_FAILURE_RETRY(::close(fd));
-  return ret;
+  if (fsync(fd) < 0)
+    throw std::system_error(
+      errno, std::generic_category(),
+      "failed to sync file: "s + outfile);
 }
 
-static int do_copy(Objecter* o, AVolRef src_vol, const oid_t& src_oid,
-		   AVolRef target_vol, const oid_t& target_oid)
+static void do_copy(Objecter* o, AVolRef src_vol, const oid_t& src_oid,
+		    AVolRef target_vol, const oid_t& target_oid)
 {
-  bufferlist outdata;
   ObjectOperation read_op(src_vol->op());
   string start_after;
+  uint64_t off, readlen;
 
 #define COPY_CHUNK_SIZE (4 * 1024 * 1024)
-  read_op->read(0, COPY_CHUNK_SIZE, &outdata);
-
-  map<std::string, bufferlist> attrset;
-  read_op->getxattrs(attrset);
-
-  bufferlist omap_header;
-  read_op->omap_get_header(&omap_header);
-
-#define OMAP_CHUNK 1000
-  map<string, bufferlist> omap;
-  read_op->omap_get_vals(start_after, string(), OMAP_CHUNK, omap);
-
-  int ret = o->read(src_oid, src_vol, read_op);
-  if (ret < 0) {
-    return ret;
-  }
 
   ObjectOperation write_op(target_vol->op());
 
@@ -246,121 +232,118 @@ static int do_copy(Objecter* o, AVolRef src_vol, const oid_t& src_oid,
   write_op->create(false);
   write_op->remove();
 
-  write_op->write_full(outdata);
-  write_op->omap_set_header(omap_header);
+  read_op->read(0, COPY_CHUNK_SIZE,
+		[&write_op, &off, &readlen](std::error_code err,
+					    bufferlist& bl) {
+		  if (!err) {
+		    off = readlen = bl.length();
+		    write_op->write_full(bl);
+		  }
+		});
 
-  map<std::string, bufferlist>::iterator iter;
-  for (iter = attrset.begin(); iter != attrset.end(); ++iter) {
-    write_op->setxattr(iter->first, iter->second);
-  }
+  read_op->omap_get_header([&write_op](std::error_code err, bufferlist& bl) {
+      if (!err)
+	write_op->omap_set_header(bl);
+    });
+
+  read_op->getxattrs(
+    [&write_op](std::error_code err, string& s, bufferlist& bl) {
+      if (!err)
+	write_op->setxattr(s, bl);
+    });
+
+
+#define OMAP_CHUNK 1000
+  // We actually need a count for this, oh well. We can change this
+  // later in ObjectOperation
+  map<string, bufferlist> omap;
+  read_op->omap_get_vals(start_after, string(), OMAP_CHUNK, omap);
+
+  o->read(src_oid, src_vol, read_op);
+
   if (!omap.empty()) {
-    write_op->omap_set(omap);
+    write_op->omap_set(omap.begin(), omap.end());
   }
-  ret = o->mutate(target_oid, target_vol, write_op);
-  if (ret < 0) {
-    return ret;
+  o->mutate(target_oid, target_vol, write_op);
+
+  try {
+
+
+    bufferlist outdata;
+    while (readlen == COPY_CHUNK_SIZE) {
+      outdata = std::move(o->read(src_oid, src_vol, off, COPY_CHUNK_SIZE));
+      readlen = outdata.length();
+      o->write(target_oid, target_vol, off, outdata.length(), outdata);
+      off += readlen;
+      outdata.clear();
+    }
+
+    /* iterate through source omap and update target. This is not atomic */
+    while (omap.size() == OMAP_CHUNK) {
+      /* now start_after should point at the last entry */
+      map<string, bufferlist>::iterator iter = omap.end();
+      --iter;
+      start_after = iter->first;
+
+      omap.clear();
+      read_op = src_vol->op();
+      read_op->omap_get_vals(start_after, "", OMAP_CHUNK, omap);
+      o->read(src_oid, src_vol, read_op);
+      if (omap.empty())
+	break;
+
+      write_op = target_vol->op();
+      write_op->omap_set(omap.begin(), omap.end());
+      o->mutate(target_oid, target_vol, write_op);
+    }
+  } catch (std::exception& e) {
+    o->remove(target_oid, target_vol);
+    throw;
   }
-
-  uint64_t off = 0;
-
-  while (outdata.length() == COPY_CHUNK_SIZE) {
-    off += outdata.length();
-    outdata.clear();
-    ret = o->read(src_oid, src_vol, off, COPY_CHUNK_SIZE, &outdata);
-    if (ret < 0)
-      goto err;
-
-    ret = o->write(target_oid, target_vol, off, outdata.length(), outdata);
-    if (ret < 0)
-      goto err;
-  }
-
-  /* iterate through source omap and update target. This is not atomic */
-  while (omap.size() == OMAP_CHUNK) {
-    /* now start_after should point at the last entry */
-    map<string, bufferlist>::iterator iter = omap.end();
-    --iter;
-    start_after = iter->first;
-
-    omap.clear();
-    read_op = src_vol->op();
-    read_op->omap_get_vals(start_after, "", OMAP_CHUNK, omap);
-    ret = o->read(src_oid, src_vol, read_op);
-    if (ret < 0)
-      goto err;
-
-    if (omap.empty())
-      break;
-
-    write_op = target_vol->op();
-    write_op->omap_set(omap);
-    ret = o->mutate(target_oid, target_vol, write_op);
-    if (ret < 0)
-      goto err;
-  }
-
-  return 0;
-
-err:
-  o->remove(target_oid, target_vol);
-  return ret;
 }
 
-static int do_put(Objecter* o, AVolRef vol, const oid_t& oid,
-		  const string& infile, int op_size)
+static void do_put(Objecter* o, AVolRef vol, const oid_t& oid,
+		   const string& infile, int op_size)
 {
   bufferlist indata;
   bool stdio = false;
   if (infile == "-")
     stdio = true;
 
-  int ret;
   int fd = 0;
   if (!stdio)
     fd = open(infile.c_str(), O_RDONLY);
+  BOOST_SCOPE_EXIT(fd) {
+    if (fd != 0)
+      VOID_TEMP_FAILURE_RETRY(::close(fd));
+  } BOOST_SCOPE_EXIT_END;
   if (fd < 0) {
-    cerr << "error reading input file " << infile << ": "
-	 << cpp_strerror(errno) << endl;
-    return 1;
+    throw std::system_error(errno, std::generic_category(),
+			    "unable to read input file "s + infile);
   }
-  char *buf = new char[op_size];
+  auto buf = std::make_unique<char[]>(op_size);
   int count = op_size;
   uint64_t offset = 0;
   while (count != 0) {
-    count = read(fd, buf, op_size);
-    if (count < 0) {
-      ret = -errno;
-      cerr << "error reading input file " << infile << ": "
-	   << cpp_strerror(ret) << endl;
-      goto out;
-    }
+    count = ::read(fd, buf.get(), op_size);
+    if (count < 0)
+      throw std::system_error(errno, std::generic_category(),
+			      "unable to read input file "s + infile);
     if (count == 0) {
       if (!offset) {
-	ret = o->create(oid, vol, true);
-	if (ret < 0) {
-	  cerr << "WARNING: could not create object: " << oid << endl;
-	  goto out;
-	}
+	o->create(oid, vol, true);
       }
       continue;
     }
-    indata.append(buf, count);
+    indata.append(buf.get(), count);
     if (offset == 0)
-      ret = o->write_full(oid, vol, indata);
+      o->write_full(oid, vol, indata);
     else
-      ret = o->write(oid, vol, offset, count, indata);
+      o->write(oid, vol, offset, count, indata);
     indata.clear();
 
-    if (ret < 0) {
-      goto out;
-    }
     offset += count;
   }
-  ret = 0;
- out:
-  VOID_TEMP_FAILURE_RETRY(close(fd));
-  delete[] buf;
-  return ret;
 }
 
 static const char alphanum_table[]
@@ -423,7 +406,6 @@ public:
     oid_t oid;
     size_t off;
     size_t len;
-    bufferlist bl;
     LoadGen& lg;
 
     LoadGenOp(LoadGen& _lg) : lg(_lg) {
@@ -458,9 +440,10 @@ public:
     void run() {
       switch (type) {
       case OP_READ:
-	lg.o->read(oid, lg.v, off, len, &bl, std::ref(*this));
+	lg.o->read(oid, lg.v, off, len, std::ref(*this));
 	break;
       case OP_WRITE:
+	bufferlist bl;
 	bufferptr p = buffer::create(len);
 	memset(p.c_str(), 0, len);
 	bl.push_back(p);
@@ -471,7 +454,7 @@ public:
       lg.total_sent += len;
     }
 
-    void operator()(int r) {
+    void dostuff(std::error_code r) {
       lg.total_completed += len;
 
       LoadGen::unique_lock l(lg.lock);
@@ -485,6 +468,12 @@ public:
       l.unlock();
 
       delete this;
+    }
+    void operator()(std::error_code r) {
+      dostuff(r);
+    }
+    void operator()(std::error_code r, bufferlist&) {
+      dostuff(r);
     }
   };
 
@@ -533,12 +522,12 @@ public:
     num_objs = 200;
     max_op = 16;
   }
-  int bootstrap();
-  int run();
+  void bootstrap();
+  void run();
   void cleanup();
 };
 
-int LoadGen::bootstrap()
+void LoadGen::bootstrap()
 {
   char buf[128];
   int i;
@@ -560,12 +549,8 @@ int LoadGen::bootstrap()
     // throttle...
     while (completions.size() > max_ops) {
       CB_Waiter& c = completions.front();
-      int ret = c.wait();
+      c.wait();
       completions.pop_front();
-      if (ret < 0) {
-	cerr << "aio_write failed" << endl;
-	return ret;
-      }
     }
 
     completions.emplace_back();
@@ -576,14 +561,8 @@ int LoadGen::bootstrap()
     objs[i] = info;
   }
 
-  for (auto& c : completions) {
-    int ret = c.wait();
-    if (ret < 0) {
-      cerr << "aio_write failed" << endl;
-      return ret;
-    }
-  }
-  return 0;
+  for (auto& c : completions)
+    c.wait();
 }
 
 uint64_t LoadGen::gen_next_op()
@@ -599,7 +578,7 @@ uint64_t LoadGen::gen_next_op()
   return op.len;
 }
 
-int LoadGen::run()
+void LoadGen::run()
 {
   start_time = ceph::mono_clock::now();
   auto end_time = start_time;
@@ -641,18 +620,17 @@ int LoadGen::run()
 
   l.lock();
   cond.wait(l, [this](){ return pending_ops.empty(); });
-
-  return 0;
 }
 
 void LoadGen::cleanup()
 {
   cout << "cleaning up objects" << endl;
   for (auto& info : objs) {
-    int ret = o->remove(info.second.name, v);
-    if (ret < 0)
-      cerr << "couldn't remove oid: " << info.second.name << " ret=" << ret
-	   << endl;
+    try {
+      o->remove(info.second.name, v);
+    } catch (std::system_error& e) {
+      cerr << "couldn't remove oid: " << info.second.name << e.what() << endl;
+    }
   }
 }
 
@@ -661,7 +639,7 @@ class RadosBencher : public ObjBencher {
   class RB_Completion {
     std::mutex lock;
     std::condition_variable cond;
-    int r;
+    std::error_code r;
     bool done;
 
     typedef void (*cb_t)(void*, void*);
@@ -670,17 +648,21 @@ class RadosBencher : public ObjBencher {
 
   public:
 
-    RB_Completion() : r(0), done(false), cb(nullptr), arg(nullptr) { }
+    RB_Completion() : done(false), cb(nullptr), arg(nullptr) { }
     RB_Completion(const RB_Completion&) = delete;
     RB_Completion(RB_Completion&&) = delete;
 
     RB_Completion& operator=(const RB_Completion&) = delete;
     RB_Completion& operator=(RB_Completion&&) = delete;
 
+    bufferlist* pbl;
+
     int wait() {
       std::unique_lock<std::mutex> l(lock);
       cond.wait(l, [this](){ return done; });
-      return r;
+      if (r)
+	return -r.value();
+      return 0;
     }
 
     bool safe() {
@@ -688,7 +670,7 @@ class RadosBencher : public ObjBencher {
       return done;
     }
 
-    void operator()(int _r) {
+    void operator()(std::error_code _r) {
       std::unique_lock<std::mutex> l(lock);
       done = true;
       r = _r;
@@ -698,15 +680,23 @@ class RadosBencher : public ObjBencher {
 	cb(static_cast<void*>(this), arg);
     }
 
+    void operator()(std::error_code _r, bufferlist& bl) {
+      *pbl = std::move(bl);
+      (*this)(_r);
+    }
+
     void reset(cb_t _cb, void* _arg) {
       std::unique_lock<std::mutex> l(lock);
       cb = _cb;
       arg = _arg;
       done = false;
-      r = 0;
+      r.clear();
     }
 
     operator rados::op_callback() {
+      return std::ref(*this);
+    }
+    operator rados::read_callback() {
       return std::ref(*this);
     }
   };
@@ -733,7 +723,8 @@ protected:
   }
 
   int aio_read(const string& oid, int slot, bufferlist *pbl, size_t len) {
-    return o->read(oid_t(oid), v, 0, len, pbl, completions[slot]);
+    completions[slot].pbl = pbl;
+    return o->read(oid_t(oid), v, 0, len, completions[slot]);
   }
 
   int aio_write(const string& oid, int slot, bufferlist& bl, size_t len) {
@@ -745,14 +736,29 @@ protected:
   }
 
   int sync_read(const string& oid, bufferlist& bl, size_t len) {
-    return o->read(oid_t(oid), v, 0, len, &bl);
+    try {
+      bl = o->read(oid_t(oid), v, 0, len);
+    } catch (std::system_error& e) {
+      return -e.code().value();
+    }
+    return 0;
   }
   int sync_write(const string& oid, bufferlist& bl, size_t len) {
-    return o->write_full(oid_t(oid), v, bl);
+    try {
+      o->write_full(oid_t(oid), v, bl);
+    } catch (std::system_error& e) {
+      return -e.code().value();
+    }
+    return 0;
   }
 
   int sync_remove(const string& oid) {
-    return o->remove(oid_t(oid), v);
+    try {
+      o->remove(oid_t(oid), v);
+    } catch (std::system_error& e) {
+      return -e.code().value();
+    }
+    return 0;
   }
 
   bool completion_is_done(int slot) {
@@ -772,10 +778,10 @@ public:
   ~RadosBencher() { }
 };
 
-static int do_lock_cmd(std::vector<const char*> &nargs,
-		       const std::map < std::string, std::string > &opts,
-		       Objecter* o, AVolRef v,
-		       const boost::scoped_ptr<Formatter>& formatter)
+static void do_lock_cmd(std::vector<const char*> &nargs,
+			const std::map < std::string, std::string > &opts,
+			Objecter* o, AVolRef v,
+			const boost::scoped_ptr<Formatter>& formatter)
 {
   if (nargs.size() < 3)
     usage_exit();
@@ -814,18 +820,14 @@ static int do_lock_cmd(std::vector<const char*> &nargs,
     } else if (type_str.compare("shared") == 0) {
       lock_type = LOCK_SHARED;
     } else {
-      cerr << "unknown lock type was specified, aborting" << endl;
-      return -EINVAL;
+      throw std::system_error((int) std::errc::invalid_argument,
+			      std::generic_category(),
+			      "unknown lock type was specified"s);
     }
   }
 
   if (cmd.compare("list") == 0) {
-    list<string> locks;
-    int ret = rados::cls::lock::list_locks(o, v, oid, locks);
-    if (ret < 0) {
-      cerr << "ERROR: rados_list_locks(): " << cpp_strerror(ret) << endl;
-      return ret;
-    }
+    std::list<std::string> locks(rados::cls::lock::list_locks(o, v, oid));
 
     formatter->open_object_section("object");
     formatter->dump_string("objname", oid.name);
@@ -839,7 +841,7 @@ static int do_lock_cmd(std::vector<const char*> &nargs,
     formatter->close_section();
     formatter->close_section();
     formatter->flush(cout);
-    return 0;
+    return;
   }
 
   if (nargs.size() < 4)
@@ -848,15 +850,12 @@ static int do_lock_cmd(std::vector<const char*> &nargs,
   string lock_name(nargs[3]);
 
   if (cmd.compare("info") == 0) {
-    map<rados::cls::lock::locker_id_t, rados::cls::lock::locker_info_t> lockers;
+    map<rados::cls::lock::locker_id_t,
+	rados::cls::lock::locker_info_t> lockers;
     ClsLockType type = LOCK_NONE;
     string tag;
-    int ret = rados::cls::lock::get_lock_info(o, v, oid, lock_name, &lockers,
-					      &type, &tag);
-    if (ret < 0) {
-      cerr << "ERROR: rados_lock_get_lock_info(): " << cpp_strerror(ret) << endl;
-      return ret;
-    }
+    rados::cls::lock::get_lock_info(o, v, oid, lock_name, &lockers,
+				    &type, &tag);
 
     formatter->open_object_section("lock");
     formatter->dump_string("name", lock_name);
@@ -879,27 +878,21 @@ static int do_lock_cmd(std::vector<const char*> &nargs,
     formatter->close_section();
     formatter->flush(cout);
 
-    return ret;
   } else if (cmd.compare("get") == 0) {
     rados::cls::lock::Lock l(lock_name);
     l.set_cookie(lock_cookie);
     l.set_tag(lock_tag);
     l.set_duration(lock_duration * 1s);
     l.set_description(lock_description);
-    int ret;
     switch (lock_type) {
     case LOCK_SHARED:
-      ret = l.lock_shared(o, v, oid);
+      l.lock_shared(o, v, oid);
       break;
     default:
-      ret = l.lock_exclusive(o, v, oid);
-    }
-    if (ret < 0) {
-      cerr << "ERROR: failed locking: " << cpp_strerror(ret) << endl;
-      return ret;
+      l.lock_exclusive(o, v, oid);
     }
 
-    return ret;
+    return;
   }
 
   if (nargs.size() < 5)
@@ -912,26 +905,21 @@ static int do_lock_cmd(std::vector<const char*> &nargs,
     l.set_tag(lock_tag);
     entity_name_t name;
     if (!name.parse(locker)) {
-      cerr << "ERROR: failed to parse locker name (" << locker << ")" << endl;
-      return -EINVAL;
+      throw std::system_error((int) std::errc::invalid_argument,
+			      std::generic_category(),
+			      "failed to parse locker name ("s + locker + ")");
     }
-    int ret = l.break_lock(o, v, oid, name);
-    if (ret < 0) {
-      cerr << "ERROR: failed breaking lock: " << cpp_strerror(ret) << endl;
-      return ret;
-    }
+    l.break_lock(o, v, oid, name);
   } else {
     usage_exit();
   }
-
-  return 0;
 }
 
 /**********************************************
 
 **********************************************/
-static int rados_tool_common(const std::map < std::string, std::string > &opts,
-			     std::vector<const char*> &nargs)
+static void rados_tool_common(const std::map < std::string, std::string > &opts,
+			      std::vector<const char*> &nargs)
 {
   int ret;
   string vol_name;
@@ -1044,8 +1032,9 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     else if (format == "json")
       formatter.reset(new JSONFormatter(pretty_format));
     else {
-      cerr << "unrecognized format: " << format << endl;
-      return -EINVAL;
+      throw std::system_error((int) std::errc::invalid_argument,
+			      std::generic_category(),
+			      "unrecognized format: "s + format);
     }
   }
 
@@ -1055,19 +1044,14 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
   ret = rc.connect();
   if (ret) {
      cerr << "couldn't connect to cluster! error " << ret << endl;
-     return 1;
+     exit(1);
   }
 
   Objecter* o = rc.objecter;
   AVolRef v;
 
   if (!vol_name.empty()) {
-    try {
     v = rc.attach_volume(vol_name);
-    } catch (std::system_error& e) {
-      cerr << "error opening volume " << vol_name << ":" << e.what() << endl;
-      return 1;
-    }
   }
 
   assert(!nargs.empty());
@@ -1078,37 +1062,18 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     oid_t oid(nargs[1]);
     uint64_t size;
     ceph::real_time mtime;
-    ret = o->stat(oid, v, &size, &mtime);
-    if (ret < 0) {
-      cerr << " error stat-ing " << vol_name << "/" << oid << ": "
-	   << cpp_strerror(ret) << endl;
-      return 1;
-    } else {
-      cout << vol_name << "/" << oid
-	   << " mtime " << mtime << ", size " << size << endl;
-    }
-  }
-  else if (strcmp(nargs[0], "get") == 0) {
+    tie(size, mtime) = o->stat(oid, v);
+    cout << vol_name << "/" << oid
+	 << " mtime " << mtime << ", size " << size << endl;
+  } else if (strcmp(nargs[0], "get") == 0) {
     if (vol_name.empty() || nargs.size() < 3)
       usage_exit();
-    ret = do_get(o, v, nargs[1], nargs[2], op_size);
-    if (ret < 0) {
-      cerr << "error getting " << vol_name << "/" << nargs[1] << ": "
-	   << cpp_strerror(ret) << endl;
-      return 1;
-    }
-  }
-  else if (strcmp(nargs[0], "put") == 0) {
+    do_get(o, v, nargs[1], nargs[2], op_size);
+  } else if (strcmp(nargs[0], "put") == 0) {
     if (vol_name.empty() || nargs.size() < 3)
       usage_exit();
-    ret = do_put(o, v, nargs[1], nargs[2], op_size);
-    if (ret < 0) {
-      cerr << "error putting " << vol_name << "/" << nargs[1] << ": "
-	   << cpp_strerror(ret) << endl;
-      return 1;
-    }
-  }
-  else if (strcmp(nargs[0], "truncate") == 0) {
+    do_put(o, v, nargs[1], nargs[2], op_size);
+  } else if (strcmp(nargs[0], "truncate") == 0) {
     if (vol_name.empty() || nargs.size() < 3)
       usage_exit();
 
@@ -1118,14 +1083,8 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
       cerr << "error, cannot truncate to negative value" << endl;
       usage_exit();
     }
-    ret = o->trunc(oid, v, size);
-    if (ret < 0) {
-      cerr << "error truncating oid_t "
-	   << oid << " to " << size << ": "
-	   << cpp_strerror(ret) << endl;
-    }
-  }
-  else if (strcmp(nargs[0], "setxattr") == 0) {
+    o->trunc(oid, v, size);
+  } else if (strcmp(nargs[0], "setxattr") == 0) {
     if (vol_name.empty() || nargs.size() < 4)
       usage_exit();
 
@@ -1135,27 +1094,15 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
 
     bufferlist bl(attr_val);
 
-    ret = o->setxattr(oid, v, attr_name, bl);
-    if (ret < 0) {
-      cerr << "error setting xattr " << vol_name << "/" << oid << "/"
-	   << attr_name << ": " << cpp_strerror(ret) << endl;
-      return 1;
-    }
-  }
-  else if (strcmp(nargs[0], "getxattr") == 0) {
+    o->setxattr(oid, v, attr_name, bl);
+  } else if (strcmp(nargs[0], "getxattr") == 0) {
     if (vol_name.empty() || nargs.size() < 3)
       usage_exit();
 
     oid_t oid(nargs[1]);
     string attr_name(nargs[2]);
 
-    bufferlist bl;
-    ret = o->getxattr(oid, v, attr_name, &bl);
-    if (ret < 0) {
-      cerr << "error getting xattr " << vol_name << "/" << oid << "/"
-	   << attr_name << ": " << cpp_strerror(ret) << endl;
-      return 1;
-    }
+    bufferlist bl(o->getxattr(oid, v, attr_name));
     string s(bl);
     cout << s << endl;
   } else if (strcmp(nargs[0], "rmxattr") == 0) {
@@ -1165,12 +1112,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     oid_t oid(nargs[1]);
     string attr_name(nargs[2]);
 
-    ret = o->removexattr(oid, v, attr_name);
-    if (ret < 0) {
-      cerr << "error removing xattr " << vol_name << "/" << oid << "/"
-	   << attr_name << ": " << cpp_strerror(ret) << endl;
-      return 1;
-    }
+    o->removexattr(oid, v, attr_name);
   } else if (strcmp(nargs[0], "listxattr") == 0) {
     if (vol_name.empty() || nargs.size() < 2)
       usage_exit();
@@ -1178,16 +1120,10 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     oid_t oid(nargs[1]);
     map<std::string, bufferlist> attrset;
     bufferlist bl;
-    ret = o->getxattrs(oid, v, attrset);
-    if (ret < 0) {
-      cerr << "error getting xattr set " << vol_name << "/" << oid << ": "
-	   << cpp_strerror(ret) << endl;
-      return 1;
-    }
+    attrset = std::move(o->getxattrs(oid, v));
 
-    for (map<std::string, bufferlist>::iterator iter = attrset.begin();
-	 iter != attrset.end(); ++iter) {
-      cout << iter->first << endl;
+    for (auto& kv : attrset) {
+      cout << kv.first << endl;
     }
   } else if (strcmp(nargs[0], "getomapheader") == 0) {
     if (vol_name.empty() || nargs.size() < 2)
@@ -1199,21 +1135,14 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
       outfile = nargs[2];
     }
 
-    bufferlist header;
-    ret = o->omap_get_header(oid, v, &header);
-    if (ret < 0) {
-      cerr << "error getting omap header " << vol_name << "/" << oid
-	   << ": " << cpp_strerror(ret) << endl;
-      return 1;
+    bufferlist header(o->omap_get_header(oid, v));
+    if (!outfile.empty()) {
+      cerr << "Writing to " << outfile << endl;
+      dump_data(outfile, header);
     } else {
-      if (!outfile.empty()) {
-	cerr << "Writing to " << outfile << endl;
-	dump_data(outfile, header);
-      } else {
-	cout << "header (" << header.length() << " bytes) :\n";
-	header.hexdump(cout);
-	cout << endl;
-      }
+      cout << "header (" << header.length() << " bytes) :\n";
+      header.hexdump(cout);
+      cout << endl;
     }
   } else if (strcmp(nargs[0], "setomapheader") == 0) {
     if (vol_name.empty() || nargs.size() < 3)
@@ -1225,12 +1154,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     bufferlist bl;
     bl.append(val);
 
-    ret = o->omap_set_header(oid, v, bl);
-    if (ret < 0) {
-      cerr << "error setting omap value " << vol_name << "/" << oid
-	   << ": " << cpp_strerror(ret) << endl;
-      return 1;
-    }
+    o->omap_set_header(oid, v, bl);
   } else if (strcmp(nargs[0], "setomapval") == 0) {
     if (vol_name.empty() || nargs.size() < 4)
       usage_exit();
@@ -1244,12 +1168,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     bl.append(val);
     values[key] = bl;
 
-    ret = o->omap_set(oid, v, values);
-    if (ret < 0) {
-      cerr << "error setting omap value " << vol_name << "/" << oid << "/"
-	   << key << ": " << cpp_strerror(ret) << endl;
-      return 1;
-    }
+    o->omap_set(oid, v, values);
   } else if (strcmp(nargs[0], "getomapval") == 0) {
     if (vol_name.empty() || nargs.size() < 3)
       usage_exit();
@@ -1264,13 +1183,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
       outfile = nargs[3];
     }
 
-    map<string, bufferlist> values;
-    ret = o->omap_get_vals_by_keys(oid, v, keys, values);
-    if (ret < 0) {
-      cerr << "error getting omap value " << vol_name << "/" << oid << "/"
-	   << key << ": " << cpp_strerror(ret) << endl;
-      return 1;
-    }
+    auto values(o->omap_get_vals_by_keys(oid, v, keys));
 
     if (values.size() && values.begin()->first == key) {
       cout << " (length " << values.begin()->second.length() << ") : ";
@@ -1282,9 +1195,9 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
 	cout << endl;
       }
     } else {
-      cout << "No such key: " << vol_name << "/" << oid << "/" << key
-	   << endl;
-      return 1;
+      throw std::system_error((int) std::errc::no_such_file_or_directory,
+			      std::generic_category(),
+			      "No such key: "s);
     }
   } else if (strcmp(nargs[0], "rmomapkey") == 0) {
     if (vol_name.empty() || nargs.size() < 3)
@@ -1292,31 +1205,20 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
 
     oid_t oid(nargs[1]);
     string key(nargs[2]);
-    std::set<string> keys;
-    keys.insert(key);
+    std::array<string, 1> keys{ {key} };
 
-    ret = o->omap_rm_keys(oid, v, keys);
-    if (ret < 0) {
-      cerr << "error removing omap key " << vol_name << "/" << oid << "/"
-	   << key << ": " << cpp_strerror(ret) << endl;
-      return 1;
-    }
+    o->omap_rm_keys(oid, v, keys.begin(), keys.end());
   } else if (strcmp(nargs[0], "listomapvals") == 0) {
     if (vol_name.empty() || nargs.size() < 2)
       usage_exit();
 
     oid_t oid(nargs[1]);
     string last_read = "";
-    int MAX_READ = 512;
+    size_t MAX_READ = 512;
+    size_t s;
     do {
-      map<string, bufferlist> values;
-      ret = o->omap_get_vals(oid, v, last_read, string(), MAX_READ, values);
-      if (ret < 0) {
-	cerr << "error getting omap keys " << vol_name << "/" << oid << ": "
-	     << cpp_strerror(ret) << endl;
-	return 1;
-      }
-      ret = values.size();
+      auto values(o->omap_get_vals(oid, v, last_read, string(), MAX_READ));
+      s = values.size();
       for (map<string, bufferlist>::const_iterator it = values.begin();
 	   it != values.end(); ++it) {
 	last_read = it->first;
@@ -1335,9 +1237,8 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
 	it->second.hexdump(cout);
 	cout << endl;
       }
-    } while (ret == MAX_READ);
-  }
-  else if (strcmp(nargs[0], "cp") == 0) {
+    } while (s == MAX_READ);
+  } else if (strcmp(nargs[0], "cp") == 0) {
     if (vol_name.empty())
       usage_exit();
 
@@ -1351,9 +1252,9 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     oid_t target_obj;
     if (nargs.size() < 3) {
       if (target == vol_name) {
-	cerr << "cannot copy object into itself" << endl;
-	ret = -1;
-	return 1;
+	throw std::system_error((int) std::errc::invalid_argument,
+				std::generic_category(),
+				"cannot copy object into itself"s);
       }
       target_obj = nargs[1];
     } else {
@@ -1362,50 +1263,23 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
 
     // open io context.
     AVolRef target_vol;
-    try {
-      target_vol = rc.attach_volume(target);
-    } catch (std::system_error& e) {
-      cerr << "error opening target volume " << target << ": "
-	   << e.what() << endl;
-      return 1;
-    }
-
-    ret = do_copy(o, v, nargs[1], target_vol, target_obj);
-    if (ret < 0) {
-      cerr << "error copying " << vol_name << "/" << nargs[1] << " => "
-	   << target << "/" << target_obj << ": " << cpp_strerror(ret)
-	   << endl;
-      return 1;
-    }
-  }
-   else if (strcmp(nargs[0], "rm") == 0) {
+    target_vol = rc.attach_volume(target);
+    do_copy(o, v, nargs[1], target_vol, target_obj);
+  } else if (strcmp(nargs[0], "rm") == 0) {
      if (vol_name.empty() || nargs.size() < 2)
       usage_exit();
     vector<const char *>::iterator iter = nargs.begin();
     ++iter;
     for (; iter != nargs.end(); ++iter) {
       oid_t oid(*iter);
-      ret = o->remove(oid, v);
-      if (ret < 0) {
-	cerr << "error removing " << vol_name << "/" << oid << ": "
-	     << cpp_strerror(ret) << endl;
-	return 1;
-      }
+      o->remove(oid, v);
     }
-  }
-  else if (strcmp(nargs[0], "create") == 0) {
+  } else if (strcmp(nargs[0], "create") == 0) {
     if (vol_name.empty() || nargs.size() < 2)
       usage_exit();
     oid_t oid(nargs[1]);
-    ret = o->create(oid, v, true);
-    if (ret < 0) {
-      cerr << "error creating " << vol_name << "/" << oid << ": "
-	   << cpp_strerror(ret) << endl;
-      return 1;
-    }
-  }
-
-  else if (strcmp(nargs[0], "bench") == 0) {
+    o->create(oid, v, true);
+  } else if (strcmp(nargs[0], "bench") == 0) {
     if (vol_name.empty() || nargs.size() < 3)
       usage_exit();
     int seconds = atoi(nargs[1]);
@@ -1447,12 +1321,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
       cerr << "couldn't parse expected_write_size: " << err << endl;
       usage_exit();
     }
-    ret = o->set_alloc_hint(oid, v, expected_object_size, expected_write_size);
-    if (ret < 0) {
-      cerr << "error setting alloc-hint " << vol_name << "/" << oid << ": "
-	   << cpp_strerror(ret) << endl;
-      return 1;
-    }
+    o->set_alloc_hint(oid, v, expected_object_size, expected_write_size);
   } else if (strcmp(nargs[0], "load-gen") == 0) {
     if (vol_name.empty()) {
       cerr << "error: must specify volume" << endl;
@@ -1482,11 +1351,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
 
     cout << "run length " << run_length << " seconds" << endl;
     cout << "preparing " << lg.num_objs << " objects" << endl;
-    ret = lg.bootstrap();
-    if (ret < 0) {
-      cerr << "load-gen bootstrap failed" << endl;
-      exit(1);
-    }
+    lg.bootstrap();
     cout << "load-gen will run " << lg.run_length << " seconds" << endl;
     lg.run();
     lg.cleanup();
@@ -1495,19 +1360,12 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
       usage_exit();
 
     ObjectOperation read(v->op());
-    std::set<string> out_keys;
-    read->omap_get_keys("", LONG_MAX, &out_keys, &ret);
+    read->omap_get_keys("", LONG_MAX,
+			[](std::error_code err, const string& s){
+			  if (!err)
+			    cout << s << endl;
+			});
     oid_t oid(nargs[1]);
-    ret = o->read(oid, v, read);
-    if (ret < 0) {
-      cerr << "error getting omap key set " << vol_name << "/"
-	   << nargs[1] << ": "	<< cpp_strerror(ret) << endl;
-      return 1;
-    }
-
-    for (auto key : out_keys) {
-      cout << key << endl;
-    }
   } else if (strcmp(nargs[0], "lock") == 0) {
     if (vol_name.empty())
       usage_exit();
@@ -1515,17 +1373,13 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     if (!formatter) {
       formatter.reset(new JSONFormatter(pretty_format));
     }
-    ret = do_lock_cmd(nargs, opts, o, v, formatter);
+    do_lock_cmd(nargs, opts, o, v, formatter);
   } else {
-    cerr << "unrecognized command " << nargs[0] << "; -h or --help for usage" << endl;
-    ret = -EINVAL;
-    return 1;
+    throw std::system_error((int) std::errc::invalid_argument,
+			    std::generic_category(),
+			    "unrecognized command "s + nargs[0] +
+			    "; -h or --help for usage"s);
   }
-
-  if (ret < 0)
-    cerr << "error " << (-ret) << ": " << cpp_strerror(ret) << endl;
-
-  return 0;
 }
 
 int main(int argc, const char **argv)
@@ -1617,5 +1471,11 @@ int main(int argc, const char **argv)
     cerr << "rados: you must give an action. Try --help" << endl;
     return 1;
   }
-  return rados_tool_common(opts, args);
+  try {
+    rados_tool_common(opts, args);
+  } catch (std::system_error& e) {
+    cout << e.what();
+    return EXIT_FAILURE;
+  }
+  return EXIT_SUCCESS;
 }

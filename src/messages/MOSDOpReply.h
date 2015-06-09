@@ -19,6 +19,7 @@
 #include "MOSDOp.h"
 #include "common/errno.h"
 #include "common/freelist.h"
+#include "include/cohort_error.h"
 
 #define OSDOPREPLY_FREELIST 1024
 
@@ -53,7 +54,7 @@ class MOSDOpReply : public Message {
   boost::uuids::uuid volume;
   vector<OSDOp> ops;
   int64_t flags;
-  int32_t result;
+  std::error_code result;
   eversion_t bad_replay_version;
   eversion_t replay_version;
   version_t user_version;
@@ -68,11 +69,11 @@ public:
   bool     is_ondisk() const { return get_flags() & CEPH_OSD_FLAG_ONDISK; }
   bool     is_onnvram() const { return get_flags() & CEPH_OSD_FLAG_ONNVRAM; }
 
-  int get_result() const { return result; }
+  std::error_code get_result() const { return result; }
   eversion_t get_replay_version() const { return replay_version; }
   version_t get_user_version() const { return user_version; }
 
-  void set_result(int r) { result = r; }
+  void set_result(std::error_code r) { result = r; }
 
   void set_reply_versions(eversion_t v, version_t uv) {
     replay_version = v;
@@ -116,7 +117,8 @@ public:
 public:
   MOSDOpReply()
     : Message(CEPH_MSG_OSD_OPREPLY, HEAD_VERSION, COMPAT_VERSION) { }
-  MOSDOpReply(MOSDOp *req, int r, epoch_t e, int acktype, bool ignore_out_data)
+  MOSDOpReply(MOSDOp *req, std::error_code r, epoch_t e, int acktype,
+	      bool ignore_out_data)
     : Message(CEPH_MSG_OSD_OPREPLY, HEAD_VERSION, COMPAT_VERSION) {
     set_tid(req->get_tid());
     ops = req->ops;
@@ -166,7 +168,7 @@ public:
     encode_trace(payload);
 
     trace.keyval("Id", get_tid());
-    trace.keyval("Result", result);
+    trace.keyval("Result", result.value());
   }
   virtual void decode_payload() {
     bufferlist::iterator p = payload.begin();
@@ -194,7 +196,7 @@ public:
     decode_trace(p, "MOSDOpReply", true);
 
     trace.keyval("Id", get_tid());
-    trace.keyval("Result", result);
+    trace.keyval("Result", result.value());
   }
 
   const char *get_type_name() const { return "osd_op_reply"; }
@@ -211,8 +213,8 @@ public:
     else
       out << " ack";
     out << " = " << get_result();
-    if (get_result() < 0) {
-      out << " (" << cpp_strerror(get_result()) << ")";
+    if (get_result()) {
+      out << " (" << get_result() << ")";
     }
     out << ")";
   }

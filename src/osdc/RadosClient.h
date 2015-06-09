@@ -94,13 +94,13 @@ namespace rados {
 
     uint64_t get_instance_id();
 
-    int wait_for_latest_osdmap();
+    void wait_for_latest_osdmap();
 
     int get_fsid(std::string *s);
-    int get_fs_stats(ceph_statfs& result);
+    ceph_statfs get_fs_stats();
 
-    int vol_delete(string& name);
-    int vol_create(string& name);
+    void vol_delete(string& name);
+    void vol_create(string& name);
 
 
     // watch/notify

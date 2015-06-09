@@ -1,3 +1,6 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
+
 #include <errno.h>
 
 #include "include/types.h"
@@ -61,17 +64,12 @@ class VersionReadCB {
   obj_version *objv;
 public:
   VersionReadCB(obj_version *_objv) : objv(_objv) {}
-    void operator()(int r, bufferlist&& outbl) {
-    if (r >= 0) {
+  void operator()(std::error_code r, bufferlist& outbl) {
+    if (!r) {
       cls_version_read_ret ret;
-      try {
-	bufferlist::iterator iter = outbl.begin();
-	::decode(ret, iter);
-	*objv = ret.objv;
-      } catch (std::system_error& err) {
-	  // nothing we can do about it atm This is proabably a good
-	  // candidate to be a future.
-      }
+      bufferlist::iterator iter = outbl.begin();
+      ::decode(ret, iter);
+      *objv = ret.objv;
     }
   }
 };
@@ -82,25 +80,16 @@ void cls_version_read(ObjOpUse op, obj_version *objv)
   op->call("version", "read", inbl, VersionReadCB(objv));
 }
 
-int cls_version_read(Objecter* o, const oid_t& oid, const AVolRef& vol,
-		     obj_version *ver)
+obj_version cls_version_read(Objecter* o, const oid_t& oid, const AVolRef& vol)
 {
-  bufferlist in, out;
+  bufferlist in;
   ObjectOperation op(vol->op());
-  op->call("version", "read", in, &out);
-  int r = o->read(oid, vol, op);
-  if (r < 0)
-    return r;
-
   cls_version_read_ret ret;
-  try {
-    bufferlist::iterator iter = out.begin();
-    ::decode(ret, iter);
-  } catch (std::system_error& err) {
-    return -EIO;
-  }
-
-  *ver = ret.objv;
-
-  return r;
+  op->call("version", "read", in,
+	   [&ret](std::error_code e, bufferlist& bl) {
+	     bufferlist::iterator iter = bl.begin();
+	     ::decode(ret, iter);
+	   });
+  o->read(oid, vol, op);
+  return std::move(ret.objv);
 }

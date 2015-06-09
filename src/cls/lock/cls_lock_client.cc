@@ -48,20 +48,20 @@ namespace rados {
 	rados_op->call("lock", "lock", in);
       }
 
-      int lock(Objecter* o,
-	       const AVolRef& vol,
-	       const oid_t& oid,
-	       const string& name, ClsLockType type,
-	       const string& cookie, const string& tag,
-	       const string& description, const ceph::timespan& duration,
-	       uint8_t flags)
+      void lock(Objecter* o,
+		const AVolRef& vol,
+		const oid_t& oid,
+		const string& name, ClsLockType type,
+		const string& cookie, const string& tag,
+		const string& description, const ceph::timespan& duration,
+		uint8_t flags)
       {
 	ObjectOperation op(vol->op());
 	// WHY the heck is this happening? I'm not using namespace std
 	// in any header.
 	rados::cls::lock::lock(op, name, type, cookie, tag, description,
 			       duration, flags);
-	return o->mutate(oid, vol, op);
+	o->mutate(oid, vol, op);
       }
 
       void unlock(ObjOpUse rados_op,
@@ -76,12 +76,12 @@ namespace rados {
 	rados_op->call("lock", "unlock", in);
       }
 
-      int unlock(Objecter* o, const AVolRef& vol, const oid_t& oid,
-		 const string& name, const string& cookie)
+      void unlock(Objecter* o, const AVolRef& vol, const oid_t& oid,
+		  const string& name, const string& cookie)
       {
 	ObjectOperation op(vol->op());
 	unlock(op, name, cookie);
-	return o->mutate(oid, vol, op);
+	o->mutate(oid, vol, op);
       }
 
       void break_lock(ObjOpUse& rados_op,
@@ -97,36 +97,26 @@ namespace rados {
 	rados_op->call("lock", "break_lock", in);
       }
 
-      int break_lock(Objecter* o, const AVolRef& vol, const oid_t& oid,
-		     const string& name, const string& cookie,
-		     const entity_name_t& locker)
+      void break_lock(Objecter* o, const AVolRef& vol, const oid_t& oid,
+		      const string& name, const string& cookie,
+		      const entity_name_t& locker)
       {
 	ObjectOperation op(vol->op());
 	break_lock(op, name, cookie, locker);
-	return o->mutate(oid, vol, op);
+	o->mutate(oid, vol, op);
       }
 
-      int list_locks(Objecter* o, const AVolRef& vol, const oid_t& oid,
-		     list<string>& locks)
+      std::list<std::string> list_locks(Objecter* o, const AVolRef& vol,
+					const oid_t& oid)
       {
 	bufferlist in, out;
-	ObjectOperation op(vol->op());
-	op->call("lock", "list_locks", in, &out);
-	int r = o->read(oid, vol, op);
-	if (r < 0)
-	  return r;
+	out = o->call(oid, vol, "lock", "list_locks", in);
 
 	cls_lock_list_locks_reply ret;
 	bufferlist::iterator iter = out.begin();
-	try {
-	  ::decode(ret, iter);
-	} catch (std::system_error& err) {
-	  return -EBADMSG;
-	}
+	::decode(ret, iter);
 
-	locks = ret.locks;
-
-	return 0;
+	return ret.locks;
       }
 
       void get_lock_info_start(ObjOpUse rados_op,
@@ -137,19 +127,19 @@ namespace rados {
 	cls_lock_get_info_op op;
 	op.name = name;
 	::encode(op, in);
-	rados_op->call("lock", "get_info", in, &out);
+	rados_op->call(
+	  "lock", "get_info", in,
+	  [&out](std::error_code, bufferlist& bl) {
+	    out.claim_append(bl);
+	  });
       }
 
-      int get_lock_info_finish(bufferlist::iterator& iter,
-			       map<locker_id_t, locker_info_t>* lockers,
-			       ClsLockType* type, string* tag)
+      void get_lock_info_finish(bufferlist::iterator& iter,
+				map<locker_id_t, locker_info_t>* lockers,
+				ClsLockType* type, string* tag)
       {
 	cls_lock_get_info_reply ret;
-	try {
-	  ::decode(ret, iter);
-	} catch (std::system_error& err) {
-	  return -EBADMSG;
-	}
+	::decode(ret, iter);
 
 	if (lockers) {
 	  *lockers = ret.lockers;
@@ -162,23 +152,19 @@ namespace rados {
 	if (tag) {
 	  *tag = ret.tag;
 	}
-
-	return 0;
       }
 
-      int get_lock_info(Objecter* o, const AVolRef& vol, const oid_t& oid,
-			const string& name,
-			map<locker_id_t, locker_info_t>* lockers,
-			ClsLockType* type, string* tag)
+      void get_lock_info(Objecter* o, const AVolRef& vol, const oid_t& oid,
+			 const string& name,
+			 map<locker_id_t, locker_info_t>* lockers,
+			 ClsLockType* type, string* tag)
       {
 	ObjectOperation op(vol->op());
 	bufferlist out;
 	get_lock_info_start(op, name, out);
-	int r = o->read(oid, vol, op);
-	if (r < 0)
-	  return r;
+	o->read(oid, vol, op);
 	bufferlist::iterator it = out.begin();
-	return get_lock_info_finish(it, lockers, type, tag);
+	get_lock_info_finish(it, lockers, type, tag);
       }
 
       void Lock::lock_shared(ObjOpUse op)
@@ -187,10 +173,10 @@ namespace rados {
 	     cookie, tag, description, duration, flags);
       }
 
-      int Lock::lock_shared(Objecter* o, const AVolRef& vol, const oid_t& oid)
+      void Lock::lock_shared(Objecter* o, const AVolRef& vol, const oid_t& oid)
       {
-	return lock(o, vol, oid, name, LOCK_SHARED, cookie, tag, description,
-		    duration, flags);
+	lock(o, vol, oid, name, LOCK_SHARED, cookie, tag, description,
+	     duration, flags);
       }
 
       void Lock::lock_exclusive(ObjOpUse op)
@@ -199,10 +185,11 @@ namespace rados {
 	     flags);
       }
 
-      int Lock::lock_exclusive(Objecter* o, const AVolRef& vol, const oid_t& oid)
+      void Lock::lock_exclusive(Objecter* o, const AVolRef& vol,
+				const oid_t& oid)
       {
-	return lock(o, vol, oid, name, LOCK_EXCLUSIVE, cookie, tag,
-		    description, duration, flags);
+	lock(o, vol, oid, name, LOCK_EXCLUSIVE, cookie, tag,
+	     description, duration, flags);
       }
 
       void Lock::unlock(ObjOpUse op)
@@ -210,7 +197,7 @@ namespace rados {
 	rados::cls::lock::unlock(op, name, cookie);
       }
 
-      int Lock::unlock(Objecter* o, const AVolRef& vol, const oid_t& oid)
+      void Lock::unlock(Objecter* o, const AVolRef& vol, const oid_t& oid)
       {
 	return rados::cls::lock::unlock(o, vol, oid, name, cookie);
       }
@@ -220,8 +207,8 @@ namespace rados {
 	rados::cls::lock::break_lock(op, name, cookie, locker);
       }
 
-      int Lock::break_lock(Objecter* o, const AVolRef& vol, const oid_t& oid,
-			   const entity_name_t& locker)
+      void Lock::break_lock(Objecter* o, const AVolRef& vol, const oid_t& oid,
+			    const entity_name_t& locker)
       {
 	return rados::cls::lock::break_lock(o, vol, oid, name, cookie, locker);
       }

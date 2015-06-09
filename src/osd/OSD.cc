@@ -2926,8 +2926,9 @@ void OSDService::reply_op_error(OpRequest* op, int err, eversion_t v,
   op->trace.event("reply_op_error");
   op->trace.keyval("result", err);
 
-  MOSDOpReply *reply = new MOSDOpReply(op, err, osdmap->get_epoch(), flags,
-				       true);
+  MOSDOpReply *reply = new MOSDOpReply(op, std::error_code(
+					 -err, std::generic_category()),
+				       osdmap->get_epoch(), flags, true);
   Messenger *msgr = op->get_connection()->get_messenger();
   reply->trace.init("MOSDOpReply", msgr->get_trace_endpoint(), &op->trace);
 

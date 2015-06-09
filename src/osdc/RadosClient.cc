@@ -403,62 +403,40 @@ namespace rados {
     return 0;
   }
 
-  int RadosClient::wait_for_latest_osdmap()
+  void RadosClient::wait_for_latest_osdmap()
   {
-    std::mutex mylock;
-    std::condition_variable cond;
-    bool done;
-
-    objecter->wait_for_latest_osdmap(new C_SafeCond(&mylock, &cond, &done));
-
-    unique_lock l(mylock);
-    cond.wait(l, [&](){ return done; });
-    l.unlock();
-
-    return 0;
-  }
-
-  int RadosClient::get_fs_stats(ceph_statfs& stats)
-  {
-    std::mutex mylock;
-    std::condition_variable cond;
-    bool done;
-    int ret = 0;
-
-    objecter->get_fs_stats(stats, new C_SafeCond(&mylock, &cond, &done, &ret));
-
-    unique_lock l(mylock);
-    cond.wait(l, [&](){ return done; });
-    l.unlock();
-
-    return ret;
-  }
-
-
-  int RadosClient::vol_create(string& name)
-  {
-    int reply;
     CB_Waiter w;
 
-    reply = objecter->create_volume(name, w);
+    objecter->wait_for_latest_osdmap(std::ref(w));
 
-    if (reply != 0)
-      reply = w.wait();
-
-    return reply;
+    w.wait();
   }
 
-  int RadosClient::vol_delete(string& name)
+  ceph_statfs RadosClient::get_fs_stats()
   {
-    int reply;
+    Statfs_Waiter w;
+    objecter->get_fs_stats(w);
+
+    return w.wait();
+  }
+
+
+  void RadosClient::vol_create(string& name)
+  {
     CB_Waiter w;
 
-    reply = objecter->delete_volume(name, w);
+    objecter->create_volume(name, w);
 
-    if (reply != 0)
-      reply = w.wait();
+    return w.wait();
+  }
 
-    return reply;
+  void RadosClient::vol_delete(string& name)
+  {
+    CB_Waiter w;
+
+    objecter->delete_volume(name, w);
+
+    return w.wait();
   }
 
   void RadosClient::blacklist_self(bool set) {

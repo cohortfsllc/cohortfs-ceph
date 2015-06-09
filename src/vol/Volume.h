@@ -40,18 +40,18 @@ namespace ceph {
   class Formatter;
 };
 
-enum class vol_err { no_such_volume, invalid_name, exists };
+enum class vol_errc { no_such_volume, invalid_name, exists };
 
 class vol_category_t : public std::error_category {
   virtual const char* name() const noexcept;
   virtual std::string message(int ev) const;
   virtual std::error_condition default_error_condition(int ev) const noexcept {
-    switch (static_cast<vol_err>(ev)) {
-    case vol_err::no_such_volume:
+    switch (static_cast<vol_errc>(ev)) {
+    case vol_errc::no_such_volume:
       return std::errc::no_such_device;
-    case vol_err::invalid_name:
+    case vol_errc::invalid_name:
       return std::errc::invalid_argument;
-    case vol_err::exists:
+    case vol_errc::exists:
       return cohort::errc::object_already_exists;
     default:
       return std::error_condition(ev, *this);
@@ -61,12 +61,12 @@ class vol_category_t : public std::error_category {
 
 const std::error_category& vol_category();
 
-static inline std::error_condition make_error_condition(vol_err e) {
+static inline std::error_condition make_error_condition(vol_errc e) {
   return std::error_condition(
     static_cast<int>(e), vol_category());
 }
 
-static inline std::error_code make_error_code(vol_err e) {
+static inline std::error_code make_error_code(vol_errc e) {
   return std::error_code(
     static_cast<int>(e),
     vol_category());
@@ -74,7 +74,7 @@ static inline std::error_code make_error_code(vol_err e) {
 
 namespace std {
   template <>
-  struct is_error_code_enum<vol_err> : public std::true_type {};
+  struct is_error_code_enum<vol_errc> : public std::true_type {};
 };
 
 class AttachedVol;
@@ -114,10 +114,6 @@ public:
   /* Attach a volume. Remains attached until the last reference is
      dropped. */
   AVolRef attach(CephContext *cct, const OSDMap& o) const;
-  static Volume create(CephContext *cct,
-		       const string& name,
-		       boost::uuids::uuid placer_id,
-		       std::stringstream& ss);
   void dump(Formatter *f) const;
   void encode(bufferlist& bl) const;
   /* Dummy decode for WRITE_CLASS_ENCODER */
@@ -161,7 +157,7 @@ public:
   }
   size_t place(const oid_t& object,
 	       const OSDMap& map,
-	       const std::function<void(int)>& f) const;
+	       const cohort::function<void(int)>& f) const;
 
   int get_cohort_placer(struct cohort_placer *p) const;
 
@@ -182,38 +178,27 @@ public:
     virtual size_t width() {
       return pl.get_chunk_count();
     }
-    virtual void read(uint64_t off, uint64_t len, bufferlist *bl,
-		      uint64_t truncate_size, uint32_t truncate_seq,
-		      int *rval = NULL, Context* ctx = NULL);
-    virtual void read_full(bufferlist *bl,
-		      int *rval = NULL, Context* ctx = NULL);
     virtual void read(uint64_t off, uint64_t len, uint64_t truncate_size,
-		      uint32_t truncate_seq,
-		      std::function<void(int, bufferlist&&)>&& f);
-    virtual void read_full(std::function<void(int, bufferlist&&)>&& f);
+		      uint32_t truncate_seq, rados::read_callback&& f);
+    virtual void read_full(rados::read_callback&& f);
     virtual void add_op(const int op);
     virtual void add_version(const uint64_t ver);
     virtual void add_obj(const oid_t& o);
-    virtual void add_single_return(bufferlist* bl, int* rval = NULL,
-				   Context *ctx = NULL);
-    virtual void add_single_return(std::function<void(int, bufferlist&&)>&& f);
+    virtual void add_single_return(OSDOp::opfun_t&& f);
 
     virtual void add_metadata(const bufferlist& bl);
     virtual void add_metadata_range(const uint64_t off, const uint64_t len);
     virtual void add_data(const uint64_t off, const bufferlist& bl);
     virtual void add_data_range(const uint64_t off, const uint64_t len);
     virtual void add_xattr(const string &name, const bufferlist& data);
-    virtual void add_xattr(const string &name, bufferlist* data);
+    virtual void add_xattr(const string &name);
     virtual void add_xattr_cmp(const string &name, uint8_t cmp_op,
 			       const uint8_t cmp_mode,
 			       const bufferlist& data);
 
     virtual void add_call(const string &cname, const string &method,
-			  const bufferlist &indata, bufferlist *const outbl,
-			  Context *const ctx, int *const prval);
-    virtual void add_call(const string &cname, const string &method,
 			  const bufferlist &indata,
-			  std::function<void(int, bufferlist&&)>&& cb);
+			  rados::read_callback&& cb);
 
     virtual void add_watch(const uint64_t cookie, const uint64_t ver,
 			   const uint8_t flag, const bufferlist& inbl);
@@ -223,20 +208,13 @@ public:
     virtual void add_truncate(const uint64_t truncate_size,
 			      const uint32_t truncate_seq);
 
-    virtual void add_sparse_read_ctx(uint64_t off, uint64_t len,
-				     std::map<uint64_t,uint64_t> *m,
-				     bufferlist *data_bl, int *rval,
-				     Context *ctx);
     virtual void set_op_flags(const uint32_t flags);
     virtual void clear_op_flags(const uint32_t flags);
-    virtual void add_stat_ctx(uint64_t *s, ceph::real_time *m, int *rval,
-			      Context *ctx = NULL);
-    virtual void add_stat_cb(std::function<void(
-			       int, uint64_t, ceph::real_time)>&& cb);
+    virtual void add_stat_cb(rados::stat_callback&& cb);
     virtual std::unique_ptr<ObjOp> clone();
     virtual void realize(
       const oid_t& o,
-      const std::function<void(oid_t&&, vector<OSDOp>&&)>& f);
+      const cohort::function<void(oid_t&&, vector<OSDOp>&&)>& f);
   };
 
   uint32_t quorum() const {

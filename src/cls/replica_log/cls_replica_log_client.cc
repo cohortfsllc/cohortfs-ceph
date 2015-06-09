@@ -64,32 +64,26 @@ void cls_replica_log_delete_bound(ObjOpUse o,
   o->call("replica_log", "delete", in);
 }
 
-int cls_replica_log_get_bounds(Objecter* o, const AVolRef& vol,
-			       const oid_t& oid, string& position_marker,
-			       ceph::real_time& oldest_time,
-			       list<cls_replica_log_progress_marker>& markers)
+void cls_replica_log_get_bounds(Objecter* o, const AVolRef& vol,
+				const oid_t& oid, string& position_marker,
+				ceph::real_time& oldest_time,
+				list<cls_replica_log_progress_marker>& markers)
 {
   bufferlist in;
-  bufferlist out;
   cls_replica_log_get_bounds_op op;
   ::encode(op, in);
   ObjectOperation obj_op(vol->op());
-  obj_op->call("replica_log", "get", in, &out);
-  int r = o->read(oid, vol, obj_op);
-  if (r < 0)
-    return r;
 
   cls_replica_log_get_bounds_ret ret;
-  try {
-    bufferlist::iterator i = out.begin();
-    ::decode(ret, i);
-  } catch (std::system_error& err) {
-    return -EIO;
-  }
+  obj_op->call("replica_log", "get", in,
+	       [&ret](std::error_code e, bufferlist& bl) {
+		 bufferlist::iterator i = bl.begin();
+		 ::decode(ret, i);
+	       });
+
+  o->read(oid, vol, obj_op);
 
   position_marker = ret.position_marker;
   oldest_time = ret.oldest_time;
   markers = ret.markers;
-
-  return 0;
 }

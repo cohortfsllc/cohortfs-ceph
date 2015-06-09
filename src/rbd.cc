@@ -8,55 +8,38 @@
  * LGPL2.  See file COPYING.
  *
  */
-#include <boost/uuid/string_generator.hpp>
-#include <boost/scope_exit.hpp>
-#include "mon/MonClient.h"
-#include "mon/MonMap.h"
-#include "common/config.h"
 
-#include "auth/KeyRing.h"
-#include "common/errno.h"
-#include "common/ceph_argparse.h"
-#include "common/strtol.h"
-#include "global/global_init.h"
-#include "common/safe_io.h"
-#include "common/secret.h"
-#include "include/stringify.h"
-#include "include/byteorder.h"
-
-#include "include/intarith.h"
-
-#include "include/compat.h"
-#include "common/blkdev.h"
-#include "librbd/Image.h"
-
-#include <boost/scoped_ptr.hpp>
-#include <dirent.h>
-#include <errno.h>
+#include <cerrno>
+#include <cstdlib>
+#include <ctime>
 #include <iostream>
 #include <memory>
 #include <sstream>
-#include <stdlib.h>
-#include <sys/types.h>
-#include <time.h>
-#include <sys/ioctl.h>
 
-#include "common/TextTable.h"
+#include <sys/ioctl.h>
+#include <sys/types.h>
+
+#include <dirent.h>
+
+#include <boost/scope_exit.hpp>
+
 #include "include/util.h"
 
-#include "common/Formatter.h"
+#include "common/blkdev.h"
+#include "common/ceph_argparse.h"
+#include "common/config.h"
+#include "common/errno.h"
+#include "common/strtol.h"
 
-#if defined(__linux__)
-#include <linux/fs.h>
-#endif
-
-#if defined(__FreeBSD__)
-#include <sys/param.h>
-#endif
-
-#include <blkid/blkid.h>
+#include "global/global_init.h"
 
 #include "osdc/RadosClient.h"
+
+#include "librbd/Image.h"
+
+
+
+
 
 #define MAX_SECRET_LEN 1000
 #define MAX_VOL_NAME_SIZE 128
@@ -67,13 +50,10 @@ using namespace std::placeholders;
 using std::cout;
 using std::cerr;
 using std::endl;
-using std::shared_ptr;
-using librbd::Image;
+using rbd::Image;
 
 bool udevadm_settle = true;
 bool progress = true;
-
-map<string, string> map_options; // -o / --options map
 
 #define dout_subsys ceph_subsys_rbd
 
@@ -126,9 +106,9 @@ struct rbd_bencher {
   std::condition_variable cond;
   int in_flight;
 
-  void callback(int r) {
-    if (r != 0) {
-      cout << "write error: " << cpp_strerror(r) << std::endl;
+  void callback(std::error_code r) {
+    if (r) {
+      cout << "write error: " << r << std::endl;
       abort();
     }
     unique_lock bl(lock);
@@ -269,7 +249,7 @@ static void export_read_cb(int fd, uint64_t off, size_t len,
     throw std::system_error(errno, std::system_category());
 }
 
-static void do_export(librbd::Image& image, const string& path)
+static void do_export(Image& image, const string& path)
 {
   int fd;
 
@@ -455,7 +435,7 @@ bool size_set;
 
 int main(int argc, const char **argv)
 {
-  librbd::Image image;
+  Image image;
 
   vector<const char*> args;
 
@@ -678,7 +658,7 @@ if (!set_conf_param(v, p1, p2)) { \
 	 opt_cmd == OPT_EXPORT || opt_cmd == OPT_COPY)) {
       if (opt_cmd == OPT_EXPORT || opt_cmd == OPT_EXPORT ||
 	  opt_cmd == OPT_COPY) {
-	image = Image(&rc, vol, imgname, librbd::read_only);
+	image = Image(&rc, vol, imgname, rbd::read_only);
       } else {
 	image = Image(&rc, vol, imgname);
       }

@@ -29,6 +29,8 @@
 #include <boost/scoped_ptr.hpp>
 #include <boost/optional.hpp>
 
+#include "common/cohort_function.h"
+
 #include "msg/msg_types.h"
 #include "include/types.h"
 #include "include/ceph_time.h"
@@ -819,18 +821,16 @@ inline ostream& operator<<(ostream& out, const ObjectState& obs)
 ostream& operator<<(ostream& out, const object_info_t& oi);
 
 struct OSDOp {
+  typedef cohort::function<void(std::error_code, bufferlist&)> opfun_t;
   ceph_osd_op op;
   oid_t oid;
 
   bufferlist indata, outdata;
-  int32_t rval;
 
-  Context* ctx;
-  bufferlist* out_bl;
-  int* out_rval;
+  std::error_code rval;
+  opfun_t f;
 
-  OSDOp(int the_op = 0) : rval(0), ctx(nullptr), out_bl(nullptr),
-			  out_rval(nullptr) {
+  OSDOp(int the_op = 0) {
     memset(&op, 0, sizeof(ceph_osd_op));
     op.op = the_op;
   }

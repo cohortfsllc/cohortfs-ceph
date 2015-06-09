@@ -65,10 +65,10 @@ void cls_log_trim(ObjOpUse op,
   op->call("log", "trim", in);
 }
 
-int cls_log_trim(Objecter* o, const AVolRef& vol, const oid_t& oid,
-		 const ceph::real_time& from_time,
-		 const ceph::real_time& to_time,
-		 const string& from_marker, const string& to_marker)
+void cls_log_trim(Objecter* o, const AVolRef& vol, const oid_t& oid,
+		  const ceph::real_time& from_time,
+		  const ceph::real_time& to_time,
+		  const string& from_marker, const string& to_marker)
 {
   bool done = false;
 
@@ -77,16 +77,15 @@ int cls_log_trim(Objecter* o, const AVolRef& vol, const oid_t& oid,
 
     cls_log_trim(op, from_time, to_time, from_marker, to_marker);
 
-    int r = o->mutate(oid, vol, op);
-    if (r == -ENODATA)
-      done = true;
-    else if (r < 0)
-      return r;
-
+    try {
+      o->mutate(oid, vol, op);
+    } catch (const std::system_error& e) {
+      if (e.code() == std::errc::no_message_available)
+	done = true;
+      else
+	throw;
+    }
   } while (!done);
-
-
-  return 0;
 }
 
 class LogListCB {
@@ -96,21 +95,17 @@ class LogListCB {
 public:
   LogListCB(list<cls_log_entry> *_entries, string *_marker, bool *_truncated) :
     entries(_entries), marker(_marker), truncated(_truncated) {}
-  void operator()(int r, bufferlist&& outbl) {
-    if (r >= 0) {
+  void operator()(std::error_code r, bufferlist& outbl) {
+    if (!r) {
       cls_log_list_ret ret;
-      try {
-	bufferlist::iterator iter = outbl.begin();
-	::decode(ret, iter);
-	if (entries)
-	  *entries = ret.entries;
-	if (truncated)
-	  *truncated = ret.truncated;
-	if (marker)
-	  *marker = ret.marker;
-      } catch (std::system_error& err) {
-	// nothing we can do about it atm
-      }
+      bufferlist::iterator iter = outbl.begin();
+      ::decode(ret, iter);
+      if (entries)
+	*entries = ret.entries;
+      if (truncated)
+	*truncated = ret.truncated;
+      if (marker)
+	*marker = ret.marker;
     }
   }
 };
@@ -137,17 +132,13 @@ class LogInfoCB {
   cls_log_header *header;
 public:
   LogInfoCB(cls_log_header *_header) : header(_header) {}
-  void operator()(int r, bufferlist&& outbl) {
-    if (r >= 0) {
+  void operator()(std::error_code r, bufferlist& outbl) {
+    if (!r) {
       cls_log_info_ret ret;
-      try {
-	bufferlist::iterator iter = outbl.begin();
-	::decode(ret, iter);
-	if (header)
-	  *header = ret.header;
-      } catch (std::system_error& err) {
-	// nothing we can do about it atm
-      }
+      bufferlist::iterator iter = outbl.begin();
+      ::decode(ret, iter);
+      if (header)
+	*header = ret.header;
     }
   }
 };

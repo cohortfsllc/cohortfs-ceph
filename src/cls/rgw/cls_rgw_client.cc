@@ -60,10 +60,9 @@ void cls_rgw_bucket_complete_op(ObjOpUse o, RGWModifyOp op, string& tag,
 }
 
 
-int cls_rgw_list_op(Objecter* o, AVolRef& vol, const oid_t& oid,
-		    string& start_obj, string& filter_prefix,
-		    uint32_t num_entries, rgw_bucket_dir *dir,
-		    bool *is_truncated)
+rgw_bucket_dir cls_rgw_list_op(Objecter* o, AVolRef& vol, const oid_t& oid,
+			       string& start_obj, string& filter_prefix,
+			       uint32_t num_entries, bool *is_truncated)
 {
   bufferlist in, out;
   struct rgw_cls_list_op call;
@@ -71,60 +70,36 @@ int cls_rgw_list_op(Objecter* o, AVolRef& vol, const oid_t& oid,
   call.filter_prefix = filter_prefix;
   call.num_entries = num_entries;
   ::encode(call, in);
-  int r = o->call(oid, vol, "rgw", "bucket_list", in, &out);
-  if (r < 0)
-    return r;
+  o->call(oid, vol, "rgw", "bucket_list", in);
 
   struct rgw_cls_list_ret ret;
-  try {
-    bufferlist::iterator iter = out.begin();
-    ::decode(ret, iter);
-  } catch (std::system_error& err) {
-    return -EIO;
-  }
+  bufferlist::iterator iter = out.begin();
+  ::decode(ret, iter);
 
-  if (dir)
-    *dir = ret.dir;
   if (is_truncated)
     *is_truncated = ret.is_truncated;
 
- return r;
+  return std::move(ret.dir);
 }
 
-int cls_rgw_bucket_check_index_op(Objecter* o, AVolRef& vol, const oid_t& oid,
-				  rgw_bucket_dir_header *existing_header,
-				  rgw_bucket_dir_header *calculated_header)
+std::tuple<rgw_bucket_dir_header, rgw_bucket_dir_header>
+cls_rgw_bucket_check_index_op(Objecter* o, AVolRef& vol, const oid_t& oid)
 {
-  bufferlist in, out;
-  int r = o->call(oid, vol, "rgw", "bucket_check_index", in, &out);
-  if (r < 0)
-    return r;
-
+  bufferlist in;
+  bufferlist out(o->call(oid, vol, "rgw", "bucket_check_index", in));
   struct rgw_cls_check_index_ret ret;
-  try {
-    bufferlist::iterator iter = out.begin();
-    ::decode(ret, iter);
-  } catch (std::system_error& err) {
-    return -EIO;
-  }
+  bufferlist::iterator iter = out.begin();
+  ::decode(ret, iter);
 
-  if (existing_header)
-    *existing_header = ret.existing_header;
-  if (calculated_header)
-    *calculated_header = ret.calculated_header;
-
-  return 0;
+  return std::make_tuple(std::move(ret.existing_header),
+			 std::move(ret.calculated_header));
 }
 
-int cls_rgw_bucket_rebuild_index_op(Objecter* o, AVolRef& vol,
-				    const oid_t& oid)
+void cls_rgw_bucket_rebuild_index_op(Objecter* o, AVolRef& vol,
+				     const oid_t& oid)
 {
-  bufferlist in, out;
-  int r = o->call(oid, vol, "rgw", "bucket_rebuild_index", in, &out);
-  if (r < 0)
-    return r;
-
-  return 0;
+  bufferlist in;
+  o->call(oid, vol, "rgw", "bucket_rebuild_index", in);
 }
 
 void cls_rgw_encode_suggestion(char op, rgw_bucket_dir_entry& dirent,
@@ -139,31 +114,22 @@ void cls_rgw_suggest_changes(ObjOpUse o, bufferlist& updates)
   o->call("rgw", "dir_suggest_changes", updates);
 }
 
-int cls_rgw_get_dir_header(Objecter* o, AVolRef& vol, const oid_t& oid,
-			   rgw_bucket_dir_header *header)
+rgw_bucket_dir_header cls_rgw_get_dir_header(Objecter* o, AVolRef& vol,
+					     const oid_t& oid)
 {
-  bufferlist in, out;
+  bufferlist in;
   struct rgw_cls_list_op call;
   call.num_entries = 0;
   ObjectOperation op(vol->op());
   ::encode(call, in);
-  op->call("rgw", "bucket_list", in, &out);
-  int r = o->read(oid, vol, op);
-  if (r < 0)
-    return r;
-
   struct rgw_cls_list_ret ret;
-  try {
-    bufferlist::iterator iter = out.begin();
-    ::decode(ret, iter);
-  } catch (std::system_error& err) {
-    return -EIO;
-  }
-
-  if (header)
-    *header = ret.dir.header;
-
- return r;
+  op->call("rgw", "bucket_list", in,
+	   [&ret](std::error_code e, bufferlist& bl) {
+	     bufferlist::iterator iter = bl.begin();
+	     ::decode(ret, iter);
+	   });
+  o->read(oid, vol, op);
+  return std::move(ret.dir.header);
 }
 
 class GetDirHeaderCompletion {
@@ -173,21 +139,25 @@ public:
   ~GetDirHeaderCompletion() {
     ret_ctx->put();
   }
-  void operator()(int r, bufferlist&& bl) {
+  void operator()(std::error_code e, bufferlist& bl) {
     struct rgw_cls_list_ret ret;
-    try {
-      bufferlist::iterator iter = bl.begin();
-      ::decode(ret, iter);
-    } catch (std::system_error& err) {
-      r = -EIO;
-    }
+    int r = 0;
+    if (!e)
+      try {
+	bufferlist::iterator iter = bl.begin();
+	::decode(ret, iter);
+      } catch (std::system_error& err) {
+	r = -EIO;
+      }
+    else
+      r = -e.value();
 
     ret_ctx->handle_response(r, ret.dir.header);
   };
 };
 
-int cls_rgw_get_dir_header_async(Objecter* o, AVolRef& vol, const oid_t& oid,
-				 RGWGetDirHeader_CB *ctx)
+void cls_rgw_get_dir_header_async(Objecter* o, AVolRef& vol, const oid_t& oid,
+				  RGWGetDirHeader_CB *ctx)
 {
   bufferlist in, out;
   struct rgw_cls_list_op call;
@@ -195,70 +165,53 @@ int cls_rgw_get_dir_header_async(Objecter* o, AVolRef& vol, const oid_t& oid,
   ::encode(call, in);
   ObjectOperation op(vol->op());
   op->call("rgw", "bucket_list", in, GetDirHeaderCompletion(ctx));
-  int r = o->read(oid, vol, op, nullptr, nullptr);
-  if (r < 0)
-    return r;
-
-  return 0;
+  o->read(oid, vol, op, nullptr, nullptr);
 }
 
-int cls_rgw_bi_log_list(Objecter* o, AVolRef& vol, const oid_t& oid,
-			string& marker, uint32_t max,
-			list<rgw_bi_log_entry>& entries, bool *truncated)
+list<rgw_bi_log_entry> cls_rgw_bi_log_list(Objecter* o, AVolRef& vol,
+					   const oid_t& oid,
+					   string& marker, uint32_t max,
+					   bool *truncated)
 {
   bufferlist in, out;
   cls_rgw_bi_log_list_op call;
   call.marker = marker;
   call.max = max;
   ::encode(call, in);
-  int r = o->call(oid, vol, "rgw", "bi_log_list", in, &out);
-  if (r < 0)
-    return r;
+  out = o->call(oid, vol, "rgw", "bi_log_list", in);
 
   cls_rgw_bi_log_list_ret ret;
-  try {
-    bufferlist::iterator iter = out.begin();
-    ::decode(ret, iter);
-  } catch (std::system_error& err) {
-    return -EIO;
-  }
+  bufferlist::iterator iter = out.begin();
+  ::decode(ret, iter);
 
-  entries = ret.entries;
-
-  if (truncated)
-    *truncated = ret.truncated;
-
- return r;
+  return std::move(ret.entries);
 }
 
-int cls_rgw_bi_log_trim(Objecter* o, AVolRef& vol, const oid_t& oid,
-			string& start_marker, string& end_marker)
+void cls_rgw_bi_log_trim(Objecter* o, AVolRef& vol, const oid_t& oid,
+			 string& start_marker, string& end_marker)
 {
   do {
-    int r;
-    bufferlist in, out;
+    bufferlist in;
     cls_rgw_bi_log_trim_op call;
     call.start_marker = start_marker;
     call.end_marker = end_marker;
     ::encode(call, in);
-    r = o->call(oid, vol, "rgw", "bi_log_trim", in, &out);
-
-    if (r == -ENODATA)
-      break;
-
-    if (r < 0)
-      return r;
-
+    try {
+      o->call(oid, vol, "rgw", "bi_log_trim", in);
+    } catch (const std::system_error& e) {
+      if (e.code() == std::errc::no_message_available)
+	break;
+      else
+	throw;
+    }
   } while (1);
-
-  return 0;
 }
 
-int cls_rgw_usage_log_read(Objecter* o, AVolRef& vol, const oid_t& oid,
-			   string& user, uint32_t max_entries,
-			   string& read_iter,
-			   map<rgw_user_bucket, rgw_usage_log_entry>& usage,
-			   bool *is_truncated)
+
+map<rgw_user_bucket, rgw_usage_log_entry>
+cls_rgw_usage_log_read(Objecter* o, AVolRef& vol, const oid_t& oid,
+		       string& user, uint32_t max_entries,
+		       string& read_iter, bool *is_truncated)
 {
   *is_truncated = false;
 
@@ -268,26 +221,16 @@ int cls_rgw_usage_log_read(Objecter* o, AVolRef& vol, const oid_t& oid,
   call.max_entries = max_entries;
   call.iter = read_iter;
   ::encode(call, in);
-  ObjectOperation op(vol->op());
-  op->call("rgw", "user_usage_log_read", in, &out);
-  int r = o->read(oid, vol, op);
-  if (r < 0)
-    return r;
+  out = o->call(oid, vol, "rgw", "user_usage_log_read", in);
 
-  try {
-    rgw_cls_usage_log_read_ret result;
-    bufferlist::iterator iter = out.begin();
-    ::decode(result, iter);
-    read_iter = result.next_iter;
-    if (is_truncated)
-      *is_truncated = result.truncated;
+  rgw_cls_usage_log_read_ret result;
+  bufferlist::iterator iter = out.begin();
+  ::decode(result, iter);
+  read_iter = result.next_iter;
+  if (is_truncated)
+    *is_truncated = result.truncated;
 
-    usage = result.usage;
-  } catch (std::system_error& e) {
-    return -EINVAL;
-  }
-
-  return 0;
+  return std::move(result.usage);
 }
 
 void cls_rgw_usage_log_trim(ObjOpUse op, string& user)
@@ -333,9 +276,11 @@ void cls_rgw_gc_defer_entry(ObjOpUse op,
   op->call("rgw", "gc_defer_entry", in);
 }
 
-int cls_rgw_gc_list(Objecter* o, AVolRef& vol, const oid_t& oid,
-		    string& marker, uint32_t max, bool expired_only,
-		    list<cls_rgw_gc_obj_info>& entries, bool *truncated)
+list<cls_rgw_gc_obj_info> cls_rgw_gc_list(Objecter* o, AVolRef& vol,
+					  const oid_t& oid,
+					  string& marker, uint32_t max,
+					  bool expired_only,
+					  bool *truncated)
 {
   bufferlist in, out;
   cls_rgw_gc_list_op call;
@@ -343,24 +288,16 @@ int cls_rgw_gc_list(Objecter* o, AVolRef& vol, const oid_t& oid,
   call.max = max;
   call.expired_only = expired_only;
   ::encode(call, in);
-  int r = o->call(oid, vol, "rgw", "gc_list", in, &out);
-  if (r < 0)
-    return r;
+  out = o->call(oid, vol, "rgw", "gc_list", in);
 
   cls_rgw_gc_list_ret ret;
-  try {
-    bufferlist::iterator iter = out.begin();
-    ::decode(ret, iter);
-  } catch (std::system_error& err) {
-    return -EIO;
-  }
-
-  entries = ret.entries;
+  bufferlist::iterator iter = out.begin();
+  ::decode(ret, iter);
 
   if (truncated)
     *truncated = ret.truncated;
 
- return r;
+  return std::move(ret.entries);
 }
 
 void cls_rgw_gc_remove(ObjOpUse op, const list<string>& tags)

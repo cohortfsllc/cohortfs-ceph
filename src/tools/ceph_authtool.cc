@@ -26,7 +26,6 @@
 using std::cout;
 using std::cerr;
 using std::system_error;
-using ceph::buffer_err;
 
 CephContext* g_ceph_context;
 

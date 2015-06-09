@@ -55,7 +55,12 @@ struct RadosClientWrap : RadosClient, wrapper<RadosClient>
       cmdvec.push_back(boost::python::extract<std::string>(cmdlist[i]));
     }
 
-    int ret = RadosClient::mon_command(cmdvec, inbl, &outbl, &outstring);
+    int ret = 0;
+    try {
+      std::tie(outstring, outbl) = RadosClient::mon_command(cmdvec, inbl);
+    } catch (const std::system_error& e) {
+      ret = -e.code().value();
+    }
 
     outbl.copy(0, outbl.length(), outbuf);
     return boost::python::make_tuple(ret, outbuf, outstring);

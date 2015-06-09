@@ -1189,18 +1189,18 @@ void OSDMap::add_volume(const Volume& vol) {
   vol.valid();
 
   if (vols.by_uuid.count(vol.id) > 0) {
-    throw std::system_error(vol_err::exists, "UUID "s +
+    throw std::system_error(vol_errc::exists, "UUID "s +
 			    boost::uuids::to_string(vol.id) +
 			    " already used"s);
   }
 
   if (vols.by_name.count(vol.name) > 0) {
-    throw std::system_error(vol_err::exists, "Name "s + vol.name +
+    throw std::system_error(vol_errc::exists, "Name "s + vol.name +
 			    " already used"s);
   }
 
   if (placers.by_uuid.count(vol.placer_id) == 0) {
-    throw std::system_error(placer_err::no_such_placer,
+    throw std::system_error(placer_errc::no_such_placer,
 			    "Referenced placer "s +
 			    boost::uuids::to_string(vol.placer_id) +
 			    " does not exist"s);
@@ -1214,7 +1214,7 @@ void OSDMap::remove_volume(const boost::uuids::uuid& id)
 {
   auto i = vols.by_uuid.find(id);
   if (i == vols.by_uuid.end()) {
-    throw std::system_error(vol_err::no_such_volume,
+    throw std::system_error(vol_errc::no_such_volume,
 			    boost::uuids::to_string(id));
   }
 
@@ -1230,13 +1230,13 @@ void OSDMap::add_placer(PlacerRef&& placer) {
   }
 
   if (placers.by_uuid.count(placer->id) > 0) {
-    throw std::system_error(placer_err::exists, "UUID "s +
+    throw std::system_error(placer_errc::exists, "UUID "s +
 			    boost::uuids::to_string(placer->id) +
 			    " already used"s);
   }
 
   if (placers.by_name.count(placer->name) > 0) {
-    throw std::system_error(placer_err::exists, "Name "s + placer->name +
+    throw std::system_error(placer_errc::exists, "Name "s + placer->name +
 			    " already used"s);
   }
 
@@ -1249,7 +1249,7 @@ void OSDMap::remove_placer(const boost::uuids::uuid& id)
   auto i = placers.by_uuid.find(id);
 
   if (i == placers.by_uuid.end()) {
-    throw std::system_error(placer_err::no_such_placer,
+    throw std::system_error(placer_errc::no_such_placer,
 			    boost::uuids::to_string(id));
   }
 

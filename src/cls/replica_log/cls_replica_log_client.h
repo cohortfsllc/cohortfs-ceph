@@ -72,7 +72,7 @@ void cls_replica_log_delete_bound(rados::ObjOpUse op,
  * Read the bounds on a replica log.
  *
  */
-int cls_replica_log_get_bounds(
+void cls_replica_log_get_bounds(
   rados::Objecter* objecter, const AVolRef& vol, const oid_t& oid,
   string& position_marker, ceph::real_time& oldest_time,
   list<cls_replica_log_progress_marker>& markers);

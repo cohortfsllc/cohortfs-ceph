@@ -1,3 +1,6 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
+
 #include <errno.h>
 
 #include "include/types.h"
@@ -36,29 +39,23 @@ void cls_refcount_set(ObjOpUse op, list<string>& refs)
   op->call("refcount", "set", in);
 }
 
-int cls_refcount_read(Objecter* o, oid_t& oid, const AVolRef& vol,
-		      list<string> *refs, bool implicit_ref)
+list<string> cls_refcount_read(Objecter* o, oid_t& oid, const AVolRef& vol,
+			       bool implicit_ref)
 {
   bufferlist in;
-  bufferlist out;
   cls_refcount_read_op call;
   call.implicit_ref = implicit_ref;
   ::encode(call, in);
   ObjectOperation op(vol->op());
-  op->call("refcount", "read", in, &out);
-  int r = o->read(oid, vol, op);
-  if (r < 0)
-    return r;
-
   cls_refcount_read_ret ret;
-  try {
-    bufferlist::iterator iter = out.begin();
-    ::decode(ret, iter);
-  } catch (std::system_error& err) {
-    return -EIO;
-  }
+  op->call("refcount", "read", in,
+	   [&ret](std::error_code e, bufferlist& bl){
+	       if (!e) {
+		   bufferlist::iterator iter = bl.begin();
+		   ::decode(ret, iter);
+	       }
+	   });
+  o->read(oid, vol, op);
 
-  *refs = ret.refs;
-
-  return r;
+  return std::move(ret.refs);
 }

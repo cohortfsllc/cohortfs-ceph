@@ -1,3 +1,6 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
+
 #ifndef CEPH_CLS_REFCOUNT_CLIENT_H
 #define CEPH_CLS_REFCOUNT_CLIENT_H
 
@@ -39,7 +42,8 @@ void cls_refcount_get(rados::ObjOpUse op,
 void cls_refcount_put(rados::ObjOpUse op, const string& tag,
 		      bool implicit_ref = false);
 void cls_refcount_set(rados::ObjOpUse op, list<string>& refs);
-int cls_refcount_read(rados::Objecter* o, const Volume& v, const oid_t oid,
-		      list<string> *refs, bool implicit_ref = false);
+std::list<std::string> cls_refcount_read(rados::Objecter* o, oid_t& oid,
+					 const AVolRef& vol,
+					 bool implicit_ref);
 
 #endif

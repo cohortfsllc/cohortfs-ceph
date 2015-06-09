@@ -1058,7 +1058,12 @@ wait_ref RGWPutObjProcessor_Aio::pop_pending()
 int RGWPutObjProcessor_Aio::wait_pending_front()
 {
   wait_ref cb(pop_pending());
-  return cb.get()->wait();
+  try {
+    cb.get()->wait();
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
+  return 0;
 }
 
 bool RGWPutObjProcessor_Aio::pending_has_completed()
@@ -1473,11 +1478,12 @@ int RGWRados::open_root_vol_ctx()
   const string& vol_name = zone.domain_root.name;
   root_vol = rc.attach_volume(vol_name);
   if (!root_vol) {
-    int r = rc.objecter->create_volume(vol_name);
-    if (r == -EEXIST)
-      r = 0;
-    if (r < 0)
-      return r;
+    try {
+      rc.objecter->create_volume(vol_name);
+    } catch (const std::system_error& e) {
+      if (e.code() != vol_errc::exists)
+	return -e.code().value();
+    }
 
     root_vol = rc.attach_volume(vol_name);
   }
@@ -1489,11 +1495,12 @@ int RGWRados::open_gc_vol_ctx()
 {
   gc_vol = rc.attach_volume(zone.gc_vol.name);
   if (!gc_vol) {
-    int r = rc.objecter->create_volume(zone.gc_vol.name);
-    if (r == -EEXIST)
-      r = 0;
-    if (r < 0)
-      return r;
+    try {
+      rc.objecter->create_volume(zone.gc_vol.name);
+    } catch (const std::system_error& e) {
+      if (e.code() != std::errc::file_exists)
+	return -e.code().value();
+    }
 
     gc_vol = rc.attach_volume(zone.gc_vol.name);
   }
@@ -1509,13 +1516,18 @@ int RGWRados::open_bucket_vol(const string& bucket_name,
   if (!vol && !vols_initialized)
     return -ENOENT;
 
-  int r = rc.objecter->create_volume(vol_name);
-  if (r < 0 && r != -EEXIST)
-    return r;
+  try {
+    rc.objecter->create_volume(vol_name);
+  } catch (const std::system_error& e) {
+    if (e.code() != vol_errc::exists)
+      return -e.code().value();
+  }
 
-  vol = rc.attach_volume(vol_name);
-  if (!vol)
-    return -ENOENT;
+  try {
+    vol = rc.attach_volume(vol_name);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
 
   return 0;
 }
@@ -1618,10 +1630,13 @@ int RGWRados::log_list_next(RGWAccessHandle handle, string *name)
 
 int RGWRados::log_remove(const string& name)
 {
-  AVolRef vol = rc.attach_volume(zone.log_vol.name);
-  if (!vol)
-    return -ENOENT;
-  return rc.objecter->remove(name, vol);
+  try {
+    AVolRef vol = rc.attach_volume(zone.log_vol.name);
+    rc.objecter->remove(name, vol);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
+  return 0;
 }
 
 struct log_show_state {
@@ -1656,37 +1671,30 @@ int RGWRados::log_show_next(RGWAccessHandle handle, rgw_log_entry *entry)
 	   << " off " << off
 	   << " eof " << (int)state->eof
 	   << dendl;
-  // read some?
-  unsigned chunk = 1024*1024;
-  if ((state->bl.length() - off) < chunk/2 && !state->eof) {
-    bufferlist more;
-    int r = rc.objecter->read(state->name, state->vol, state->pos, chunk,
-			      &more);
-    if (r < 0)
-      return r;
-    state->pos += r;
-    bufferlist old;
-    try {
-      old.substr_of(state->bl, off, state->bl.length() - off);
-    } catch (std::system_error& err) {
-      return -EINVAL;
-    }
-    state->bl.clear();
-    state->bl.claim(old);
-    state->bl.claim_append(more);
-    state->p = state->bl.begin();
-    if ((unsigned)r < chunk)
-      state->eof = true;
-    ldout(cct, 10) << " read " << r << dendl;
-  }
-
-  if (state->p.end())
-    return 0;  // end of file
   try {
+    // read some?
+    unsigned chunk = 1024*1024;
+    if ((state->bl.length() - off) < chunk/2 && !state->eof) {
+      bufferlist old;
+      bufferlist more;
+      more = rc.objecter->read(state->name, state->vol, state->pos, chunk);
+      size_t r = more.length();
+      state->pos += r;
+      old.substr_of(state->bl, off, state->bl.length() - off);
+      state->bl.clear();
+      state->bl.claim(old);
+      state->bl.claim_append(more);
+      state->p = state->bl.begin();
+      if ((unsigned)r < chunk)
+	state->eof = true;
+      ldout(cct, 10) << " read " << r << dendl;
+    }
+
+    if (state->p.end())
+      return 0;  // end of file
     ::decode(*entry, state->p);
-  }
-  catch (const std::system_error &e) {
-    return -EINVAL;
+  } catch (const std::system_error& e) {
+    return -e.code().value();
   }
   return 1;
 }
@@ -1867,45 +1875,53 @@ int RGWRados::time_log_add(const string& oid, const ceph::real_time& ut,
 {
   AVolRef vol;
 
-  vol = rc.attach_volume(zone.log_vol.name);
-  if (!vol) {
-    rgw_bucket volb(zone.log_vol.name);
-    int r = create_vol(volb);
-    if (r < 0)
-      return r;
-
-    // retry
+  try {
     vol = rc.attach_volume(zone.log_vol.name);
+  } catch (const std::system_error& e) {
+    try {
+      rgw_bucket volb(zone.log_vol.name);
+      create_vol(volb);
+      vol = rc.attach_volume(zone.log_vol.name);
+    } catch (const std::system_error& r) {
+      return -e.code().value();
+    }
   }
-  if (!vol)
-    return -EIO;
 
-  ObjectOperation op(vol->op());
-  cls_log_add(op, ut, section, key, bl);
-
-  return rc.objecter->mutate(oid, vol, op);
+  try {
+    ObjectOperation op(vol->op());
+    cls_log_add(op, ut, section, key, bl);
+    rc.objecter->mutate(oid, vol, op);
+  } catch (const std::system_error& r) {
+    return -r.code().value();
+  }
+  return 0;
 }
 
 int RGWRados::time_log_add(const string& oid, list<cls_log_entry>& entries)
 {
   string& log_vol = zone.log_vol.name;
   AVolRef vol = rc.attach_volume(log_vol);
-  if (!vol) {
-    rgw_bucket volb(log_vol);
-    int r = create_vol(volb);
-    if (r < 0)
-      return r;
 
-    // retry
+  try {
     vol = rc.attach_volume(log_vol);
+  } catch (const std::system_error& e) {
+    try {
+      rgw_bucket volb(log_vol);
+      create_vol(volb);
+      vol = rc.attach_volume(zone.log_vol.name);
+    } catch (const std::system_error& r) {
+      return -e.code().value();
+    }
   }
-  if (!vol)
-    return -EIO;
 
-  ObjectOperation op(vol->op());
-  cls_log_add(op, entries);
-
-  return rc.objecter->mutate(oid, vol, op);
+  try {
+    ObjectOperation op(vol->op());
+    cls_log_add(op, entries);
+    rc.objecter->mutate(oid, vol, op);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
+  return 0;
 }
 
 int RGWRados::time_log_list(const string& oid, ceph::real_time& start_time,
@@ -1916,31 +1932,31 @@ int RGWRados::time_log_list(const string& oid, ceph::real_time& start_time,
 			    bool *truncated)
 {
   const string& log_vol = zone.log_vol.name;
-  AVolRef vol(rc.attach_volume(log_vol));
-  if (!vol)
-    return -ENOENT;
-
-  ObjectOperation op(vol->op());
-
-  cls_log_list(op, start_time, end_time, marker, max_entries, entries,
-	       out_marker, truncated);
-
-  return rc.objecter->read(oid, vol, op);
+  try {
+    AVolRef vol(rc.attach_volume(log_vol));
+    ObjectOperation op(vol->op());
+    cls_log_list(op, start_time, end_time, marker, max_entries, entries,
+		 out_marker, truncated);
+    rc.objecter->read(oid, vol, op);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
+  return 0;
 }
 
 int RGWRados::time_log_info(const string& oid, cls_log_header *header)
 {
 
   const string& log_vol = zone.log_vol.name;
-  AVolRef vol(rc.attach_volume(log_vol));
-  if (!vol)
-    return -ENOENT;
-
-  ObjectOperation op(vol->op());
-
-  cls_log_info(op, header);
-
-  return rc.objecter->read(oid, vol, op);
+  try {
+    AVolRef vol(rc.attach_volume(log_vol));
+    ObjectOperation op(vol->op());
+    cls_log_info(op, header);
+    rc.objecter->read(oid, vol, op);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
+  return 0;
 }
 
 int RGWRados::time_log_trim(const string& oid,
@@ -1962,33 +1978,35 @@ int RGWRados::lock_exclusive(rgw_bucket& bucket, const string& oid,
 			     ceph::timespan& duration,
 			     string& zone_id, string& owner_id)
 {
-  const string& log_vol = zone.log_vol.name;
-  AVolRef vol(rc.attach_volume(log_vol));
-  if (!vol)
-    return -ENOENT;
-
-  rados::cls::lock::Lock l(log_lock_name);
-  l.set_duration(duration);
-  l.set_cookie(owner_id);
-  l.set_tag(zone_id);
-  l.set_renew(true);
-
-  return l.lock_exclusive(rc.objecter, vol, oid);
+  try {
+    const string& log_vol = zone.log_vol.name;
+    AVolRef vol(rc.attach_volume(log_vol));
+    rados::cls::lock::Lock l(log_lock_name);
+    l.set_duration(duration);
+    l.set_cookie(owner_id);
+    l.set_tag(zone_id);
+    l.set_renew(true);
+    l.lock_exclusive(rc.objecter, vol, oid);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
+  return 0;
 }
 
 int RGWRados::unlock(rgw_bucket& bucket, const string& oid, string& zone_id,
 		     string& owner_id)
 {
-  const string& log_vol = zone.log_vol.name;
-  AVolRef vol(rc.attach_volume(log_vol));
-  if (!vol)
-    return -ENOENT;
-
-  rados::cls::lock::Lock l(log_lock_name);
-  l.set_tag(zone_id);
-  l.set_cookie(owner_id);
-
-  return l.unlock(rc.objecter, vol, oid);
+  try {
+    const string& log_vol = zone.log_vol.name;
+    AVolRef vol(rc.attach_volume(log_vol));
+    rados::cls::lock::Lock l(log_lock_name);
+    l.set_tag(zone_id);
+    l.set_cookie(owner_id);
+    l.unlock(rc.objecter, vol, oid);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
+  return 0;
 }
 
 int RGWRados::decode_policy(bufferlist& bl, ACLOwner *owner)
@@ -2109,22 +2127,21 @@ int RGWRados::list_objects(rgw_bucket& bucket, int max, string& prefix, string& 
  */
 int RGWRados::create_vol(rgw_bucket& bucket)
 {
-  int ret = 0;
-
   string vol = bucket.index_vol;
 
-  ret = rc.vol_create(vol);
-  if (ret == -EEXIST)
-    ret = 0;
-  if (ret < 0)
-    return ret;
-
-  if (bucket.data_vol != vol) {
-    ret = rc.vol_create(bucket.data_vol);
-    if (ret == -EEXIST)
-      ret = 0;
-    if (ret < 0)
-      return ret;
+  try {
+    rc.vol_create(vol);
+  } catch (const std::system_error& e) {
+    if (e.code() != vol_errc::exists)
+      return -e.code().value();
+  }
+  try {
+    if (bucket.data_vol != vol) {
+      rc.vol_create(bucket.data_vol);
+    }
+  } catch (const std::system_error& e) {
+    if (e.code() != vol_errc::exists)
+      return -e.code().value();
   }
 
   return 0;
@@ -2499,9 +2516,10 @@ int RGWRados::create_vols(vector<string>& names, vector<int>& retcodes)
 
   for (iter = names.begin(); iter != names.end(); ++iter) {
     string& name = *iter;
-    int r = rc.vol_create(name);
-    if (r < 0) {
-      ldout(cct, 0) << "WARNING: volume_create returned " << r << dendl;
+    try {
+      rc.vol_create(name);
+    } catch (const std::system_error& e) {
+      ldout(cct, 0) << "WARNING: volume_create: " << e.what() << dendl;
     }
   }
 
@@ -2663,55 +2681,56 @@ int RGWRados::put_obj_meta_impl(void *ctx, rgw_obj& oid,  uint64_t size,
 
   const auto& volid = ref.vol->v.id;
 
-  r = rc.objecter->mutate(ref.oid, ref.vol, op);
-  if (r < 0) /* we can expect to get -ECANCELED if object was replaced under,
-		or -ENOENT if was removed, or -EEXIST if it did not exist
-		before and now it does */
-    goto done_cancel;
+  try {
+    rc.objecter->mutate(ref.oid, ref.vol, op);
+    if (objv_tracker) {
+      objv_tracker->apply_write();
+    }
+    r = complete_atomic_overwrite(rctx, state, oid);
+    if (r < 0) {
+      ldout(cct, 0) << "ERROR: complete_atomic_overwrite returned r=" << r
+		    << dendl;
+    }
+    int r = complete_update_index(bucket, oid.object, index_tag, volid, size,
+				  ceph::real_clock::now(), etag, content_type,
+				  &acl_bl, category, remove_objs);
+    if (r < 0)
+      throw std::system_error(-r, std::generic_category());
 
-  if (objv_tracker) {
-    objv_tracker->apply_write();
+    if (mtime) {
+      *mtime = set_mtime;
+    }
+
+    if (state) {
+      /* update quota cache */
+      quota_handler->update_stats(bucket_owner, bucket,
+				  (state->exists ? 0 : 1), size, state->size);
+    }
+  } catch (const std::system_error& e) {
+    /* we can expect to get -ECANCELED if object was replaced under,
+       or -ENOENT if was removed, or -EEXIST if it did not exist
+       before and now it does */
+
+    int ret = complete_update_index_cancel(bucket, oid.object, index_tag);
+    if (ret < 0) {
+      ldout(cct, 0) << "ERROR: complete_update_index_cancel() returned ret=" << ret << dendl;
+    }
+    /* we lost in a race. There are a few options:
+     * - existing object was rewritten (ECANCELED)
+     * - non existing object was created (EEXIST)
+     * - object was removed (ENOENT)
+     * should treat it as a success
+     */
+    if (e.code() == std::errc::operation_canceled ||
+	 e.code() == std::errc::no_such_file_or_directory ||
+	 (!(flags & PUT_OBJ_EXCL) &&
+	  e.code() == std::errc::file_exists)) {
+      return 0;
+    }
+
+    return -e.code().value();
   }
-
-  r = complete_atomic_overwrite(rctx, state, oid);
-  if (r < 0) {
-    ldout(cct, 0) << "ERROR: complete_atomic_overwrite returned r=" << r << dendl;
-  }
-
-  r = complete_update_index(bucket, oid.object, index_tag, volid, size,
-			    ceph::real_clock::now(), etag, content_type,
-			    &acl_bl, category, remove_objs);
-  if (r < 0)
-    goto done_cancel;
-
-  if (mtime) {
-    *mtime = set_mtime;
-  }
-
-  if (state) {
-    /* update quota cache */
-    quota_handler->update_stats(bucket_owner, bucket, (state->exists ? 0 : 1), size, state->size);
-  }
-
   return 0;
-
-done_cancel:
-  int ret = complete_update_index_cancel(bucket, oid.object, index_tag);
-  if (ret < 0) {
-    ldout(cct, 0) << "ERROR: complete_update_index_cancel() returned ret=" << ret << dendl;
-  }
-  /* we lost in a race. There are a few options:
-   * - existing object was rewritten (ECANCELED)
-   * - non existing object was created (EEXIST)
-   * - object was removed (ENOENT)
-   * should treat it as a success
-   */
-  if ((r == -ECANCELED || r == -ENOENT) ||
-      (!(flags & PUT_OBJ_EXCL) && r == -EEXIST)) {
-    r = 0;
-  }
-
-  return r;
 }
 
 /**
@@ -2731,10 +2750,13 @@ int RGWRados::put_obj_data(void *ctx, rgw_obj& oid, const char *data,
   bufferlist bl;
   wait_ref w(std::make_unique<rados::CB_Waiter>());
   bl.append(data, len);
-  int r = aio_put_obj_data(ctx, oid, bl, ofs, exclusive, w);
-  if (r < 0)
-    return r;
-  return w->wait();
+  aio_put_obj_data(ctx, oid, bl, ofs, exclusive, w);
+  try {
+    w->wait();
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
+  return 0;
 }
 
 int RGWRados::aio_put_obj_data(void *ctx, rgw_obj& oid, bufferlist& bl,
@@ -3101,9 +3123,12 @@ set_err_state:
       const rgw_obj& loc = miter.get_location();
       get_obj_bucket_and_oid(loc, bucket, oid);
 
-      ret = rc.objecter->mutate(oid, ref.vol, op);
-      if (ret < 0)
+      try {
+	rc.objecter->mutate(oid, ref.vol, op);
+      } catch (const std::system_error& e) {
+	ret = -e.code().value();
 	goto done_ret;
+      }
 
       ref_objs.push_back(loc);
     }
@@ -3149,9 +3174,11 @@ done_ret:
 
       get_obj_bucket_and_oid(*riter, bucket, oid);
 
-      int r = rc.objecter->mutate(oid, ref.vol, op);
-      if (r < 0) {
-	ldout(cct, 0) << "ERROR: cleanup after error failed to drop reference on oid=" << *riter << dendl;
+      try {
+	rc.objecter->mutate(oid, ref.vol, op);
+      } catch (const std::system_error& e) {
+	ldout(cct, 0) << "ERROR: cleanup after error failed to drop reference "
+	  "on oid=" << *riter << ", " << e.what() << dendl;
       }
     }
   }
@@ -3428,10 +3455,12 @@ int RGWRados::bucket_check_index(
   rgw_bucket_dir_header existing_header;
   rgw_bucket_dir_header calculated_header;
 
-  ret = cls_rgw_bucket_check_index_op(rc.objecter, index_vol, oid,
-				      &existing_header, &calculated_header);
-  if (ret < 0)
-    return ret;
+  try {
+    std::tie(existing_header, calculated_header)
+      = cls_rgw_bucket_check_index_op(rc.objecter, index_vol, oid);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
 
   translate_raw_stats(existing_header, *existing_stats);
   translate_raw_stats(calculated_header, *calculated_stats);
@@ -3444,11 +3473,15 @@ int RGWRados::bucket_rebuild_index(rgw_bucket& bucket)
   AVolRef index_vol;
   string oid;
 
-  int ret = open_bucket_index(bucket, index_vol, oid);
-  if (ret < 0)
-    return ret;
-
-  return cls_rgw_bucket_rebuild_index_op(rc.objecter, index_vol, oid);
+  int r = open_bucket_index(bucket, index_vol, oid);
+  if (r < 0)
+    return r;
+  try {
+    cls_rgw_bucket_rebuild_index_op(rc.objecter, index_vol, oid);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
+  return 0;
 }
 
 
@@ -3522,8 +3555,12 @@ int RGWRados::delete_obj_impl(void *ctx, const string& bucket_owner,
   }
 
   cls_refcount_put(op, tag, true);
-  r = rc.objecter->mutate(ref.oid, ref.vol, op);
-  bool removed = (r >= 0);
+  bool removed = true;
+  try {
+    rc.objecter->mutate(ref.oid, ref.vol, op);
+  } catch (const std::system_error& e) {
+    removed = false;
+  }
 
   const auto& volid = ref.vol->v.id;
   if (r >= 0 || r == -ENOENT) {
@@ -3726,14 +3763,11 @@ int RGWRados::get_attr(void *ctx, rgw_obj& oid, const char *name, bufferlist& de
     return -ENODATA;
   }
 
-  ObjectOperation op(ref.vol->op());
-
-  int rval;
-  op->getxattr(name, &dest, &rval);
-
-  r = rc.objecter->read(ref.oid, ref.vol, op);
-  if (r < 0)
-    return r;
+  try {
+    dest = rc.objecter->getxattr(ref.oid, ref.vol, name);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
 
   return 0;
 }
@@ -3896,9 +3930,11 @@ int RGWRados::set_attrs(void *ctx, rgw_obj& oid,
   if (!op->size())
     return 0;
 
-  r = rc.objecter->mutate(ref.oid, ref.vol, op);
-  if (r < 0)
-    return r;
+  try {
+    rc.objecter->mutate(ref.oid, ref.vol, op);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
 
   if (state) {
     if (rmattrs) {
@@ -4244,11 +4280,18 @@ int RGWRados::get_obj(void *ctx, RGWObjVersionTracker *objv_tracker,
 
   ldout(cct, 20) << "rados->read oid-ofs=" << ofs << " read_ofs="
 		 << read_ofs << " read_len=" << read_len << dendl;
-  op->read(read_ofs, read_len, pbl, NULL);
+  op->read(read_ofs, read_len,
+	   [pbl](std::error_code e, bufferlist& bl) {
+	     if (!e)
+	       pbl->claim_append(bl);
+	   });
 
-  r = rc.objecter->mutate(oid, state->vol, op);
-  ldout(cct, 20) << "rados->read r=" << r << " bl.length=" << bl.length()
-		 << dendl;
+  try {
+    rc.objecter->mutate(oid, state->vol, op);
+  } catch (const std::system_error& e) {
+    ldout(cct, 20) << "rados->read: " << e.what() << " bl.length="
+		   << bl.length() << dendl;
+  }
 
   if (merge_bl)
     bl.append(read_bl);
@@ -4300,10 +4343,10 @@ struct get_obj_data : public RefCountedObject {
 
       dl.lock();
 
-      r = op_data->get_complete_ios(ofs, bl_list);
-      if (r < 0) {
+      r = std::error_code(op_data->get_complete_ios(ofs, bl_list),
+			  std::generic_category());
+      if (r)
 	goto done_unlock;
-      }
 
       op_data->read_list.splice(op_data->read_list.end(), bl_list);
 
@@ -4363,7 +4406,12 @@ struct get_obj_data : public RefCountedObject {
     auto& c = iter->second;
     l.unlock();
 
-    int r = c.wait();
+    int r = 0;
+    try {
+      c.wait();
+    } catch (const std::system_error& e) {
+      r = -e.code().value();
+    }
 
     l.lock();
     aio_data.erase(cur_ofs);
@@ -4436,9 +4484,11 @@ struct get_obj_data : public RefCountedObject {
     }
 
     get_obj_aio_data& completion = aiter->second;
-    int r = completion.wait();
-    if (r < 0)
-      return r;
+    try {
+      completion.wait();
+    } catch (const std::system_error& e) {
+      return -e.code().value();
+    }
 
     for (; aiter != aio_data.end(); ++aiter) {
       auto& c = aiter->second;
@@ -4447,15 +4497,19 @@ struct get_obj_data : public RefCountedObject {
 	break;
       }
 
-      r = c.wait();
-      if (r < 0) {
-	set_cancelled(r); /* mark it as cancelled, so that we don't continue processing next operations */
-	return r;
+      try {
+	c.wait();
+      } catch (const std::system_error& e) {
+	int arrrr = -e.code().value();
+	/* mark it as cancelled, so that we don't continue processing
+	   next operations */
+	set_cancelled(arrrr);
+	return arrrr;
       }
 
-      total_read += r;
 
       auto old_liter = liter++;
+      total_read += liter->second.bl.length();
       bl_list.push_back(old_liter->second.bl);
       io_map.erase(old_liter);
     }
@@ -4575,22 +4629,23 @@ int RGWRados::get_obj_iterate_cb(void *ctx, RGWObjState *astate,
   ldout(cct, 20) << "rados->get_obj_iterate_cb oid=" << oid << " oid-ofs="
 		 << obj_ofs << " read_ofs=" << read_ofs << " len=" << len
 		 << dendl;
-  op->read(read_ofs, len, pbl, NULL);
+  op->read(read_ofs, len,
+	   [pbl](std::error_code e, bufferlist& bl) {
+	     if (!e)
+	       pbl->claim_append(bl);
+	   });
 
-  r = rc.objecter->read(oid, io_vol, op, std::move(c));
-  ldout(cct, 20) << "rados->aio_operate r=" << r << " bl.length="
-		 << pbl->length() << dendl;
-  if (r < 0)
-    goto done_err;
+  try {
+    rc.objecter->read(oid, io_vol, op, std::move(c));
+  } catch (const std::system_error& e) {
+    ldout(cct, 20) << "cancelling io: " << e.what() << " obj_ofs="
+		   << obj_ofs << dendl;
+    d->set_cancelled(r);
+    d->cancel_io(obj_ofs);
+    return -e.code().value();
+  }
 
   return 0;
-
-done_err:
-  ldout(cct, 20) << "cancelling io r=" << r << " obj_ofs=" << obj_ofs << dendl;
-  d->set_cancelled(r);
-  d->cancel_io(obj_ofs);
-
-  return r;
 }
 
 int RGWRados::get_obj_iterate(void *ctx, void **handle, rgw_obj& oid,
@@ -4739,9 +4794,17 @@ int RGWRados::read(void *ctx, rgw_obj& oid, off_t ofs, size_t size, bufferlist& 
   if (r < 0)
     return r;
 
-  op->read(ofs, size, &bl, NULL);
-
-  return rc.objecter->read(ref.oid, ref.vol, op);
+  op->read(ofs, size,
+	   [&bl](std::error_code e, bufferlist& _bl) {
+	     if (!e)
+	       bl.claim_append(_bl);
+	   });
+  try {
+    rc.objecter->read(ref.oid, ref.vol, op);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
+  return 0;
 }
 
 int RGWRados::obj_stat(void *ctx, rgw_obj& oid, uint64_t *psize,
@@ -4764,15 +4827,25 @@ int RGWRados::obj_stat(void *ctx, rgw_obj& oid, uint64_t *psize,
   if (objv_tracker) {
     objv_tracker->prepare_op_for_read(op);
   }
-  op->getxattrs(unfiltered_attrset, NULL);
-  op->stat(&size, &mtime, NULL);
+  op->getxattrs(unfiltered_attrset);
+  op->stat([&size, &mtime](std::error_code e, uint64_t s, ceph::real_time m) {
+      if (!e) {
+	size = s;
+	mtime = m;
+      }
+    });
   if (first_chunk) {
-    op->read(0, cct->_conf->rgw_max_chunk_size, first_chunk, NULL);
+    op->read(0, cct->_conf->rgw_max_chunk_size,
+	     [first_chunk](std::error_code e, bufferlist& bl) {
+	       if (!e)
+		 first_chunk->claim_append(bl);
+	     });
   }
-  r = rc.objecter->read(ref.oid, ref.vol, op);
-
-  if (r < 0)
-    return r;
+  try {
+    rc.objecter->read(ref.oid, ref.vol, op);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
 
   map<string, bufferlist> attrset;
   map<string, bufferlist>::iterator iter;
@@ -5145,9 +5218,11 @@ int RGWRados::omap_get_vals(rgw_obj& oid, bufferlist& header, const string& mark
     return r;
   }
 
-  r = rc.objecter->omap_get_vals(ref.oid, ref.vol, string(), marker, count, m);
-  if (r < 0)
-    return r;
+  try {
+  m = rc.objecter->omap_get_vals(ref.oid, ref.vol, string(), marker, count);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
 
   return 0;
 
@@ -5173,9 +5248,13 @@ int RGWRados::omap_set(rgw_obj& oid, std::string& key, bufferlist& bl)
   map<string, bufferlist> m;
   m[key] = bl;
 
-  r = rc.objecter->omap_set(ref.oid, ref.vol, m);
+  try {
+    rc.objecter->omap_set(ref.oid, ref.vol, m);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
 
-  return r;
+  return 0;
 }
 
 int RGWRados::omap_set(rgw_obj& oid, std::map<std::string, bufferlist>& m)
@@ -5187,9 +5266,13 @@ int RGWRados::omap_set(rgw_obj& oid, std::map<std::string, bufferlist>& m)
     return r;
   }
 
-  r = rc.objecter->omap_set(ref.oid, ref.vol, m);
+  try {
+    rc.objecter->omap_set(ref.oid, ref.vol, m);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
 
-  return r;
+  return 0;
 }
 
 int RGWRados::omap_del(rgw_obj& oid, const std::string& key)
@@ -5204,8 +5287,12 @@ int RGWRados::omap_del(rgw_obj& oid, const std::string& key)
   std::set<string> k;
   k.insert(key);
 
-  r = rc.objecter->omap_rm_keys(ref.oid, ref.vol, k);
-  return r;
+  try {
+    rc.objecter->omap_rm_keys(ref.oid, ref.vol, k);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
+  return 0;
 }
 
 int RGWRados::update_containers_stats(map<string, RGWBucketEnt>& m)
@@ -5319,18 +5406,20 @@ int RGWRados::list_bi_log_entries(rgw_bucket& bucket, string& marker,
   if (r < 0)
     return r;
 
-  std::list<rgw_bi_log_entry> entries;
-  int ret = cls_rgw_bi_log_list(rc.objecter, index_vol, oid, marker,
-				max - result.size(), entries, truncated);
-  if (ret < 0)
-    return ret;
+  try {
+    std::list<rgw_bi_log_entry> entries(
+      cls_rgw_bi_log_list(rc.objecter, index_vol, oid, marker,
+			  max - result.size(), truncated));
 
-  std::list<rgw_bi_log_entry>::iterator iter;
-  for (iter = entries.begin(); iter != entries.end(); ++iter) {
-    result.push_back(*iter);
+    std::list<rgw_bi_log_entry>::iterator iter;
+    for (iter = entries.begin(); iter != entries.end(); ++iter) {
+      result.push_back(*iter);
+    }
+
+    return 0;
+  } catch (const std::system_error& e) {
+    return -e.code().value();
   }
-
-  return 0;
 }
 
 int RGWRados::trim_bi_log_entries(rgw_bucket& bucket, string& start_marker,
@@ -5342,17 +5431,23 @@ int RGWRados::trim_bi_log_entries(rgw_bucket& bucket, string& start_marker,
   if (r < 0)
     return r;
 
-  int ret = cls_rgw_bi_log_trim(rc.objecter, index_vol, oid, start_marker,
-				end_marker);
-  if (ret < 0)
-    return ret;
-
+  try {
+      cls_rgw_bi_log_trim(rc.objecter, index_vol, oid, start_marker,
+			  end_marker);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
   return 0;
 }
 
 int RGWRados::gc_operate(string& oid, ObjOpOwn op)
 {
-  return rc.objecter->mutate(oid, gc_vol, op);
+  try {
+    rc.objecter->mutate(oid, gc_vol, op);
+  } catch (std::system_error& e) {
+    return -e.code().value();
+  }
+  return 0;
 }
 
 int RGWRados::gc_aio_operate(string& oid, ObjOpOwn op)
@@ -5379,8 +5474,12 @@ int RGWRados::cls_rgw_init_index(RadosClient& rc, AVolRef index_vol,
 {
   bufferlist in;
   cls_rgw_bucket_init(op);
-  int r = rc.objecter->mutate(oid, index_vol, op);
-  return r;
+  try {
+    rc.objecter->mutate(oid, index_vol, op);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
+  return 0;
 }
 
 int RGWRados::cls_obj_prepare_op(rgw_bucket& bucket, RGWModifyOp op,
@@ -5396,8 +5495,13 @@ int RGWRados::cls_obj_prepare_op(rgw_bucket& bucket, RGWModifyOp op,
   ObjectOperation o(index_vol->op());
   cls_rgw_bucket_prepare_op(o, op, tag, name,
 			    zone_public_config.log_data);
-  r = rc.objecter->mutate(oid, index_vol, o);
-  return r;
+  try {
+    rc.objecter->mutate(oid, index_vol, o);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
+
+  return 0;
 }
 
 int RGWRados::cls_obj_complete_op(rgw_bucket& bucket, RGWModifyOp op,
@@ -5475,9 +5579,13 @@ int RGWRados::cls_obj_set_bucket_tag_timeout(rgw_bucket& bucket,
   ObjectOperation o(index_vol->op());
   cls_rgw_bucket_set_tag_timeout(o, timeout);
 
-  r = rc.objecter->mutate(oid, index_vol, o);
+  try {
+    rc.objecter->mutate(oid, index_vol, o);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
 
-  return r;
+  return 0;
 }
 
 int RGWRados::cls_bucket_list(rgw_bucket& bucket, string start, string prefix,
@@ -5485,7 +5593,8 @@ int RGWRados::cls_bucket_list(rgw_bucket& bucket, string start, string prefix,
 			      bool *is_truncated, string *last_entry,
 			      bool (*force_check_filter)(const string&	name))
 {
-  ldout(cct, 10) << "cls_bucket_list " << bucket << " start " << start << " num " << num << dendl;
+  ldout(cct, 10) << "cls_bucket_list " << bucket << " start " << start
+		 << " num " << num << dendl;
 
   AVolRef index_vol;
   string oid;
@@ -5493,65 +5602,68 @@ int RGWRados::cls_bucket_list(rgw_bucket& bucket, string start, string prefix,
   if (r < 0)
     return r;
 
-  struct rgw_bucket_dir dir;
-  r = cls_rgw_list_op(rc.objecter, index_vol, oid, start, prefix, num, &dir,
-		      is_truncated);
-  if (r < 0)
-    return r;
+  try {
+    struct rgw_bucket_dir dir
+      = cls_rgw_list_op(rc.objecter, index_vol, oid, start, prefix, num,
+			is_truncated);
 
-  map<string, struct rgw_bucket_dir_entry>::iterator miter;
-  bufferlist updates;
-  for (miter = dir.m.begin(); miter != dir.m.end(); ++miter) {
-    RGWObjEnt e;
-    rgw_bucket_dir_entry& dirent = miter->second;
+    map<string, struct rgw_bucket_dir_entry>::iterator miter;
+    bufferlist updates;
+    for (miter = dir.m.begin(); miter != dir.m.end(); ++miter) {
+      RGWObjEnt e;
+      rgw_bucket_dir_entry& dirent = miter->second;
 
-    // fill it in with initial values; we may correct later
-    e.name = dirent.name;
-    e.size = dirent.meta.size;
-    e.mtime = dirent.meta.mtime;
-    e.etag = dirent.meta.etag;
-    e.owner = dirent.meta.owner;
-    e.owner_display_name = dirent.meta.owner_display_name;
-    e.content_type = dirent.meta.content_type;
-    e.tag = dirent.tag;
+      // fill it in with initial values; we may correct later
+      e.name = dirent.name;
+      e.size = dirent.meta.size;
+      e.mtime = dirent.meta.mtime;
+      e.etag = dirent.meta.etag;
+      e.owner = dirent.meta.owner;
+      e.owner_display_name = dirent.meta.owner_display_name;
+      e.content_type = dirent.meta.content_type;
+      e.tag = dirent.tag;
 
-    /* oh, that shouldn't happen! */
-    if (e.name.empty()) {
-      ldout(cct, 0) << "WARNING: got empty dirent name, skipping" << dendl;
-      continue;
-    }
-
-    bool force_check = force_check_filter && force_check_filter(dirent.name);
-
-    if (!dirent.exists || !dirent.pending_map.empty() || force_check) {
-      /* there are uncommitted ops. We need to check the current state,
-       * and if the tags are old we need to do cleanup as well. */
-      r = check_disk_state(index_vol, bucket, dirent, e, updates);
-      if (r < 0) {
-	if (r == -ENOENT)
-	  continue;
-	else
-	  return r;
+      /* oh, that shouldn't happen! */
+      if (e.name.empty()) {
+	ldout(cct, 0) << "WARNING: got empty dirent name, skipping" << dendl;
+	continue;
       }
+
+      bool force_check = force_check_filter && force_check_filter(dirent.name);
+
+      if (!dirent.exists || !dirent.pending_map.empty() || force_check) {
+	/* there are uncommitted ops. We need to check the current state,
+	 * and if the tags are old we need to do cleanup as well. */
+	r = check_disk_state(index_vol, bucket, dirent, e, updates);
+	if (r < 0) {
+	  if (r == -ENOENT)
+	    continue;
+	  else
+	    throw std::system_error(-r, std::generic_category());
+	}
+      }
+      m[e.name] = e;
+      ldout(cct, 10) << "RGWRados::cls_bucket_list: got " << e.name << dendl;
     }
-    m[e.name] = e;
-    ldout(cct, 10) << "RGWRados::cls_bucket_list: got " << e.name << dendl;
-  }
 
-  if (dir.m.size()) {
-    *last_entry = dir.m.rbegin()->first;
-  }
+    if (dir.m.size()) {
+      *last_entry = dir.m.rbegin()->first;
+    }
 
-  if (updates.length()) {
-    ObjectOperation o(index_vol->op());
-    cls_rgw_suggest_changes(o, updates);
-    r = rc.objecter->mutate(oid, index_vol, o, ceph::real_clock::now(),
-			    nullptr, nullptr);
+    if (updates.length()) {
+      ObjectOperation o(index_vol->op());
+      cls_rgw_suggest_changes(o, updates);
+      rc.objecter->mutate(oid, index_vol, o, ceph::real_clock::now(),
+			  nullptr, nullptr);
+    }
+  } catch (const std::system_error& e) {
+    return -e.code().value();
   }
   return m.size();
 }
 
-int RGWRados::cls_obj_usage_log_add(const string& oid, rgw_usage_log_info& info)
+int RGWRados::cls_obj_usage_log_add(const string& oid,
+				    rgw_usage_log_info& info)
 {
   AVolRef io_vol;
 
@@ -5575,8 +5687,12 @@ int RGWRados::cls_obj_usage_log_add(const string& oid, rgw_usage_log_info& info)
   ObjectOperation op(io_vol->op());
   cls_rgw_usage_log_add(op, info);
 
-  r = rc.objecter->mutate(oid, io_vol, op);
-  return r;
+  try {
+    rc.objecter->mutate(oid, io_vol, op);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
+  return 0;
 }
 
 int RGWRados::cls_obj_usage_log_read(string& oid, string& user,
@@ -5593,10 +5709,14 @@ int RGWRados::cls_obj_usage_log_read(string& oid, string& user,
   if (r < 0)
     return r;
 
-  r = cls_rgw_usage_log_read(rc.objecter, io_vol, oid, user, max_entries,
-			     read_iter, usage, is_truncated);
+  try {
+    usage = cls_rgw_usage_log_read(rc.objecter, io_vol, oid, user, max_entries,
+				   read_iter, is_truncated);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
 
-  return r;
+  return 0;
 }
 
 int RGWRados::cls_obj_usage_log_trim(string& oid, string& user)
@@ -5610,8 +5730,13 @@ int RGWRados::cls_obj_usage_log_trim(string& oid, string& user)
   ObjectOperation op(io_vol->op());
   cls_rgw_usage_log_trim(op, user);
 
-  r = rc.objecter->mutate(oid, io_vol, op);
-  return r;
+  try {
+    rc.objecter->mutate(oid, io_vol, op);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
+
+  return 0;
 }
 
 int RGWRados::remove_objs_from_index(rgw_bucket& bucket,
@@ -5639,13 +5764,15 @@ int RGWRados::remove_objs_from_index(rgw_bucket& bucket,
     ::encode(entry, updates);
   }
 
-  bufferlist out;
-
   ObjectOperation op(index_vol->op());
-  op->call("rgw", "dir_suggest_changes", updates, &out);
-  r = rc.objecter->mutate(dir_oid, index_vol, op);
+  op->call("rgw", "dir_suggest_changes", updates);
+  try {
+    rc.objecter->mutate(dir_oid, index_vol, op);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
 
-  return r;
+  return 0;
 }
 
 int RGWRados::check_disk_state(AVolRef io_vol,
@@ -5743,9 +5870,11 @@ int RGWRados::cls_bucket_head(rgw_bucket& bucket,
   if (r < 0)
     return r;
 
-  r = cls_rgw_get_dir_header(rc.objecter, index_vol, oid, &header);
-  if (r < 0)
-    return r;
+  try {
+    header = cls_rgw_get_dir_header(rc.objecter, index_vol, oid);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
 
   return 0;
 }
@@ -5759,9 +5888,11 @@ int RGWRados::cls_bucket_head_async(rgw_bucket& bucket,
   if (r < 0)
     return r;
 
-  r = cls_rgw_get_dir_header_async(rc.objecter, index_vol, oid, ctx);
-  if (r < 0)
-    return r;
+  try {
+    cls_rgw_get_dir_header_async(rc.objecter, index_vol, oid, ctx);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
 
   return 0;
 }
@@ -5781,18 +5912,18 @@ int RGWRados::cls_user_get_header(const string& user_id,
   }
 
   ObjectOperation op(ref.vol->op());
-  int retcode;
-  ::cls_user_get_header(op, header, &retcode);
-  r = rc.objecter->read(ref.oid, ref.vol, op);
-  if (r < 0)
-    return r;
-  if (retcode < 0)
-    return retcode;
+  ::cls_user_get_header(op, header);
+  try {
+    rc.objecter->read(ref.oid, ref.vol, op);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
 
   return 0;
 }
 
-int RGWRados::cls_user_get_header_async(const string& user_id, RGWGetUserHeader_CB *ctx)
+int RGWRados::cls_user_get_header_async(const string& user_id,
+					RGWGetUserHeader_CB *ctx)
 {
   string buckets_obj_id;
   rgw_get_buckets_obj(user_id, buckets_obj_id);
@@ -5805,9 +5936,11 @@ int RGWRados::cls_user_get_header_async(const string& user_id, RGWGetUserHeader_
     return r;
   }
 
-  r = ::cls_user_get_header_async(rc.objecter, ref.vol, ref.oid, ctx);
-  if (r < 0)
-    return r;
+  try {
+    ::cls_user_get_header_async(rc.objecter, ref.vol, ref.oid, ctx);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
 
   return 0;
 }
@@ -5882,15 +6015,14 @@ int RGWRados::cls_user_list_buckets(rgw_obj& oid,
   }
 
   ObjectOperation op(ref.vol->op());
-  int retcode;
 
   cls_user_bucket_list(op, in_marker, max_entries, entries, out_marker,
-		       truncated, &retcode);
-  r = rc.objecter->read(ref.oid, ref.vol, op);
-  if (r < 0)
-    return r;
-  if (retcode < 0)
-    return retcode;
+		       truncated);
+  try {
+    rc.objecter->read(ref.oid, ref.vol, op);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
 
   return 0;
 }
@@ -5906,9 +6038,11 @@ int RGWRados::cls_user_update_buckets(rgw_obj& oid, list<cls_user_bucket_entry>&
 
   ObjectOperation op(ref.vol->op());
   cls_user_set_buckets(op, entries, add);
-  r = rc.objecter->mutate(ref.oid, ref.vol, op);
-  if (r < 0)
-    return r;
+  try {
+    rc.objecter->mutate(ref.oid, ref.vol, op);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
 
   return 0;
 }
@@ -5932,9 +6066,11 @@ int RGWRados::cls_user_complete_stats_sync(rgw_obj& oid)
 
   ObjectOperation op(ref.vol->op());
   ::cls_user_complete_stats_sync(op);
-  r = rc.objecter->read(ref.oid, ref.vol, op);
-  if (r < 0)
-    return r;
+  try {
+    rc.objecter->read(ref.oid, ref.vol, op);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
 
   return 0;
 }
@@ -5958,9 +6094,11 @@ int RGWRados::cls_user_remove_bucket(rgw_obj& oid, const cls_user_bucket& bucket
 
   ObjectOperation op(ref.vol->op());
   ::cls_user_remove_bucket(op, bucket);
-  r = rc.objecter->mutate(ref.oid, ref.vol, op);
-  if (r < 0)
-    return r;
+  try {
+    rc.objecter->mutate(ref.oid, ref.vol, op);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
 
   return 0;
 }
@@ -6211,9 +6349,10 @@ int RGWStateLog::store_entry(const string& client_id, const string& op_id, const
   ceph::real_time ts = ceph::real_clock::now();
   bufferlist nobl;
   cls_statelog_add(op, client_id, op_id, object, ts, state, (bl ? *bl : nobl));
-  r = store->rc.objecter->mutate(oid, vol, op);
-  if (r < 0) {
-    return r;
+  try {
+    store->rc.objecter->mutate(oid, vol, op);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
   }
 
   return 0;
@@ -6236,9 +6375,10 @@ int RGWStateLog::remove_entry(const string& client_id, const string& op_id, cons
 
   ObjectOperation op(vol->op());
   cls_statelog_remove_by_object(op, object, op_id);
-  r = store->rc.objecter->mutate(oid, vol, op);
-  if (r < 0) {
-    return r;
+  try {
+    store->rc.objecter->mutate(oid, vol, op);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
   }
 
   return 0;
@@ -6284,14 +6424,16 @@ int RGWStateLog::list_entries(void *handle, int max_entries,
     cls_statelog_list(op, state->client_id, state->op_id, state->object,
 		      state->marker, max_entries, ents, &state->marker,
 		      &truncated);
-    r = store->rc.objecter->mutate(oid, vol, op);
-    if (r == -ENOENT) {
-      truncated = false;
-      r = 0;
-    }
-    if (r < 0) {
-      ldout(store->ctx(), 0) << "cls_statelog_list returned " << r << dendl;
-      return r;
+    try {
+      store->rc.objecter->mutate(oid, vol, op);
+    } catch (const std::system_error& e) {
+      if (e.code() == std::errc::no_such_file_or_directory)
+	truncated = false;
+      else {
+	ldout(store->ctx(), 0) << "cls_statelog_list: " << e.what() << dendl;
+	return r;
+	return -e.code().value();
+      }
     }
 
     if (!truncated) {

@@ -62,7 +62,7 @@ extern "C" {
 
 namespace ceph {
 
-  enum class buffer_err {
+  enum class buffer_errc {
     end_of_buffer, malformed_input
   };
 
@@ -71,8 +71,8 @@ namespace ceph {
     virtual std::string message(int ev) const;
     virtual std::error_condition default_error_condition(
       int ev) const noexcept {
-      switch (static_cast<buffer_err>(ev)) {
-      case buffer_err::malformed_input:
+      switch (static_cast<buffer_errc>(ev)) {
+      case buffer_errc::malformed_input:
 	return std::errc::illegal_byte_sequence;
       default:
 	return std::error_condition(ev, *this);
@@ -82,13 +82,13 @@ namespace ceph {
 
   const std::error_category& buffer_category();
 
-  static inline std::error_condition make_error_condition(buffer_err e) {
+  static inline std::error_condition make_error_condition(buffer_errc e) {
     return std::error_condition(
       static_cast<int>(e),
       buffer_category());
   }
 
-  static inline std::error_code make_error_code(buffer_err e) {
+  static inline std::error_code make_error_code(buffer_errc e) {
     return std::error_code(
       static_cast<int>(e),
       buffer_category());
@@ -97,7 +97,7 @@ namespace ceph {
 
 namespace std {
   template <>
-  struct is_error_code_enum<ceph::buffer_err> : public std::true_type {};
+  struct is_error_code_enum<ceph::buffer_errc> : public std::true_type {};
 };
 
 namespace ceph {
@@ -227,7 +227,7 @@ public:
     void copy_out(unsigned o, unsigned l, char *dest) const {
       assert(_raw);
       if (!((o <= _len) && (o+l <= _len)))
-	throw std::system_error(buffer_err::end_of_buffer);
+	throw std::system_error(buffer_errc::end_of_buffer);
       memcpy(dest, c_str()+o, l);
     }
 
@@ -319,7 +319,7 @@ public:
 	    p_off += o;
 	    while (p_off > 0) {
 	      if (p == ls->end())
-		throw std::system_error(buffer_err::end_of_buffer);
+		throw std::system_error(buffer_errc::end_of_buffer);
 	      if (p_off >= p->length()) {
 		// skip this buffer
 		p_off -= p->length();
@@ -345,7 +345,7 @@ public:
 	      p--;
 	      p_off = p->length();
 	    } else {
-	      throw std::system_error(buffer_err::end_of_buffer);
+	      throw std::system_error(buffer_errc::end_of_buffer);
 	    }
 	  }
 	}
@@ -359,20 +359,20 @@ public:
 
       inline char operator*() {
 	  if (p == ls->end())
-	    throw std::system_error(buffer_err::end_of_buffer);
+	    throw std::system_error(buffer_errc::end_of_buffer);
 	  return (*p)[p_off];
 	}
 
       inline buffer::list::iterator& operator++() {
 	  if (p == ls->end())
-	    throw std::system_error(buffer_err::end_of_buffer);
+	    throw std::system_error(buffer_errc::end_of_buffer);
 	  advance(1);
 	  return *this;
 	}
 
       inline buffer::ptr get_current_ptr() {
 	  if (p == ls->end())
-	    throw std::system_error(buffer_err::end_of_buffer);
+	    throw std::system_error(buffer_errc::end_of_buffer);
 	  return ptr(*p, p_off, p->length() - p_off);
 	}
 
@@ -387,7 +387,7 @@ public:
 	  if (p == ls->end()) seek(off);
 	  while (len > 0) {
 	    if (p == ls->end())
-	      throw std::system_error(buffer_err::end_of_buffer);
+	      throw std::system_error(buffer_errc::end_of_buffer);
 	    assert(p->length() > 0);
 
 	    unsigned howmuch = p->length() - p_off;
@@ -410,7 +410,7 @@ public:
 	    seek(off);
 	  while (len > 0) {
 	    if (p == ls->end())
-	      throw std::system_error(buffer_err::end_of_buffer);
+	      throw std::system_error(buffer_errc::end_of_buffer);
 
 	    unsigned howmuch = p->length() - p_off;
 	    if (len < howmuch)
@@ -427,7 +427,7 @@ public:
 	    seek(off);
 	  while (len > 0) {
 	    if (p == ls->end())
-	      throw std::system_error(buffer_err::end_of_buffer);
+	      throw std::system_error(buffer_errc::end_of_buffer);
 
 	    unsigned howmuch = p->length() - p_off;
 	    const char *c_str = p->c_str();
@@ -463,7 +463,7 @@ public:
 	    seek(off);
 	  while (len > 0) {
 	    if (p == ls->end())
-	      throw std::system_error(buffer_err::end_of_buffer);
+	      throw std::system_error(buffer_errc::end_of_buffer);
 
 	    unsigned howmuch = p->length() - p_off;
 	    if (len < howmuch)

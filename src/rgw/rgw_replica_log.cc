@@ -74,7 +74,12 @@ int RGWReplicaLogger::update_bound(const string& oid, const string& volname,
 
   rados::ObjectOperation opw(vol->op());
   cls_replica_log_update_bound(opw, progress);
-  return store->rc.objecter->mutate(oid, vol, opw);
+  try {
+    store->rc.objecter->mutate(oid, vol, opw);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
+  return 0;
 }
 
 int RGWReplicaLogger::delete_bound(const string& oid, const string& volname,
@@ -88,7 +93,12 @@ int RGWReplicaLogger::delete_bound(const string& oid, const string& volname,
 
   rados::ObjectOperation opw(vol->op());
   cls_replica_log_delete_bound(opw, daemon_id);
-  return store->rc.objecter->mutate(oid, vol, opw);
+  try {
+    store->rc.objecter->mutate(oid, vol, opw);
+  } catch (std::system_error& e) {
+    return -e.code().value();
+  }
+  return 0;
 }
 
 int RGWReplicaLogger::get_bounds(const string& oid, const string& volname,
@@ -100,9 +110,14 @@ int RGWReplicaLogger::get_bounds(const string& oid, const string& volname,
     return r;
   }
 
-  return cls_replica_log_get_bounds(store->rc.objecter, vol, oid,
-				    bounds.marker, bounds.oldest_time,
-				    bounds.markers);
+  try {
+    cls_replica_log_get_bounds(store->rc.objecter, vol, oid,
+			       bounds.marker, bounds.oldest_time,
+			       bounds.markers);
+  } catch (const std::system_error& e) {
+    return -e.code().value();
+  }
+  return 0;
 }
 
 RGWReplicaObjectLogger::
@@ -125,9 +140,11 @@ int RGWReplicaObjectLogger::create_log_objects(int shards)
   for (int i = 0; i < shards; ++i) {
     string oid;
     get_shard_oid(i, oid);
-    r = store->rc.objecter->create(oid, vol, false);
-    if (r < 0)
-      return r;
+    try {
+      store->rc.objecter->create(oid, vol, false);
+    } catch (const std::system_error& e) {
+      return -e.code().value();
+    }
   }
   return r;
 }

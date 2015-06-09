@@ -25,11 +25,9 @@ void cls_user_remove_bucket(rados::ObjOpUse op, const cls_user_bucket& bucket);
 void cls_user_bucket_list(rados::ObjOpUse op,
 		       const string& in_marker, int max_entries,
 		       list<cls_user_bucket_entry>& entries,
-		       string *out_marker, bool *truncated,
-		       int *pret);
-void cls_user_get_header(rados::ObjOpUse op, cls_user_header *header,
-			 int *pret);
-int cls_user_get_header_async(rados::Objecter* o, const AVolRef& v,
-			      const oid_t& oid, RGWGetUserHeader_CB *ctx);
+		       string *out_marker, bool *truncated);
+void cls_user_get_header(rados::ObjOpUse op, cls_user_header *header);
+void cls_user_get_header_async(rados::Objecter* o, const AVolRef& v,
+			       const oid_t& oid, RGWGetUserHeader_CB *ctx);
 
 #endif
