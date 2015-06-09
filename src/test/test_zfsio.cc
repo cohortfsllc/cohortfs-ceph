@@ -27,6 +27,7 @@
 #include "common/ceph_argparse.h"
 #include "common/debug.h"
 #include "global/global_init.h"
+#include "osd/osd_types.h"
 
 extern "C" {
 #include <libzfswrap.h>
@@ -132,6 +133,44 @@ namespace {
     }
   }; /* ZPageSet */
 
+  /* from ZFStore list_collections */
+  static int lc_cb_f(zfs_handle_t* hdl, void* arg)
+  {
+    std::pair<zprop_list_t*, vector<coll_t>&>& lc_args =
+      *(static_cast<std::pair<zprop_list_t*, vector<coll_t>&>*>(arg));
+
+    char property[ZFS_MAXPROPLEN];
+    nvlist_t *userprops = zfs_get_user_props(hdl);
+    nvlist_t *propval;
+    char *propstr;
+
+    zprop_list_t* zprop_list = lc_args.first;
+    vector<coll_t>& vc = lc_args.second;
+
+    for (; zprop_list != nullptr; zprop_list = zprop_list->pl_next) {
+      if (zprop_list->pl_prop == ZFS_PROP_NAME) {
+	if(zfs_prop_get(hdl,
+			static_cast<zfs_prop_t>(zprop_list->pl_prop),
+			property, sizeof (property), NULL, NULL, 0,
+			B_FALSE) != 0)
+	  propstr = const_cast<char*>("-");
+	else
+	  propstr = property;
+	vc.push_back(coll_t(propstr)); /* XXXX */
+      } else {
+	if(nvlist_lookup_nvlist(userprops,
+				zprop_list->pl_user_prop,
+				&propval) != 0)
+	  propstr = const_cast<char*>("-");
+	else
+	  assert(nvlist_lookup_string(propval,
+				      ZPROP_VALUE, &propstr) == 0);
+	vc.push_back(coll_t(propstr)); /* XXXX */
+      }
+    }
+    return 0;
+  } /* lc_cb_f */
+
 } /* namespace */
 
 TEST(ZFSIO, INIT)
@@ -164,7 +203,6 @@ TEST(ZFSIO, INIT)
       ASSERT_EQ(err, 0);
     }
     { // create dataset
-      const int ZFS_TYPE_FILESYSTEM = 0x1;
       // XXX spa code edits strings in-place--can't pass const!
       char* fs = strdup("zp2/zf2");
       err = lzfw_dataset_create(zhd, fs, ZFS_TYPE_FILESYSTEM,
@@ -270,6 +308,32 @@ TEST(ZFSIO, POOLDEV_SYNTAX)
     "default,zp_one,/opt/zpools/zp_one;default,zp_two,/opt/zpools/zp_two";
   sz = parse_zp_desc(zfstore_zpool_devices, zpm);
   print_zp_desc_map(zpm);
+}
+
+TEST(ZFSIO, LS_DATASETS)
+{
+  std::vector<coll_t> vc;
+    int r;
+  const char* lzw_err;
+  zprop_list_t* zprop_list = nullptr;
+  static char zprops[] = "name";
+  r = zprop_get_list(static_cast<libzfs_handle_t*>(zhd),
+		     zprops, &zprop_list,
+		     static_cast<zfs_type_t>(ZFS_TYPE_DATASET));
+  ASSERT_EQ(r, 0);
+
+  std::pair<zprop_list_t*, std::vector<coll_t>&>
+    lc_args{zprop_list, vc};
+  r = libzfs_zfs_iter((libzfs_handle_t*) zhd, lc_cb_f, &lc_args,
+		      &lzw_err);
+  if (!!r)
+    std::cout << "libzfs_zfs_iter failed: " << lzw_err << std::endl;
+  else {
+    /* enumerate */
+    for (auto& it : vc) {
+      std::cout << "ds: " << it << std::endl;
+    }
+  }
 }
 
 TEST(ZFSIO, SHUTDOWN)
