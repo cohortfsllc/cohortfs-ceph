@@ -395,8 +395,8 @@ OPTION(journaler_batch_interval, OPT_TIME, 1ms)
 OPTION(journaler_batch_max, OPT_U64, 0)
 OPTION(mds_data, OPT_STR, "/var/lib/ceph/mds/$cluster-$id")
 OPTION(mds_max_file_size, OPT_U64, 1ULL << 40)
-OPTION(mds_cache_size, OPT_INT, 100000)
-OPTION(mds_cache_mid, OPT_FLOAT, .7)
+OPTION(mds_cache_highwater, OPT_INT, 100000)
+OPTION(mds_cache_lowwater, OPT_FLOAT, 70000)
 OPTION(mds_mem_max, OPT_INT, 1048576)	     // KB
 OPTION(mds_dir_max_commit_size, OPT_INT, 10) // MB
 OPTION(mds_decay_halflife, OPT_FLOAT, 5)

@@ -5,8 +5,8 @@
 #define COHORT_MDS_H
 
 #include "msg/Dispatcher.h"
-#include "common/mcas_skiplist.h"
 #include "common/Timer.h"
+#include "common/mcas_skiplist.h"
 
 #include "MDSMap.h"
 #include "mds_types.h"
@@ -19,6 +19,9 @@ class Objecter;
 namespace cohort {
 namespace mds {
 
+class Cache;
+class Storage;
+
 class MDSVol {
  public:
   void release() {}
@@ -28,6 +31,7 @@ class MDS : public Dispatcher {
  public:
   const int whoami;
  private:
+  const mcas::gc_global gc;
   Messenger *messenger;
   MonClient *monc;
   Objecter *objecter;
@@ -37,8 +41,8 @@ class MDS : public Dispatcher {
   int last_state, state, want_state;
   ceph_tid_t last_tid;
 
-  struct Cache;
   std::unique_ptr<Cache> cache;
+  std::unique_ptr<Storage> storage;
 
   void beacon_send();
 
@@ -79,4 +83,4 @@ class MDS : public Dispatcher {
 } // namespace mds
 } // namespace cohort
 
-#endif /* COHORT_MDS_H */
+#endif // COHORT_MDS_H

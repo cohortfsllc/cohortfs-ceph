@@ -6,30 +6,13 @@
 #include "MDSMap.h"
 #include "MDS.h"
 #include "Inode.h"
+#include "Cache.h"
+#include "Storage.h"
 #include "messages/MMDSBeacon.h"
 
 #define dout_subsys ceph_subsys_mds
 
 using namespace cohort::mds;
-
-struct MDS::Cache {
-  const mcas::gc_global gc;
-  mcas::skiplist<Inode> inodes;
-  std::atomic<_inodeno_t> next_ino;
-  InodeRef root;
-
-  Cache() : inodes(gc, inode_cmp, "inodes"), next_ino(0) {}
-
-  static int inode_cmp(const void *lhs, const void *rhs) {
-    const Inode *l = static_cast<const Inode*>(lhs);
-    const Inode *r = static_cast<const Inode*>(rhs);
-    if (l->ino() == r->ino())
-      return 0;
-    if (l->ino() > r->ino())
-      return 1;
-    return -1;
-  }
-};
 
 MDS::MDS(int whoami, Messenger *m, MonClient *mc)
   : Dispatcher(m->cct),
@@ -87,17 +70,21 @@ int MDS::init()
 
 int MDS::mkfs()
 {
-  if (cache)
+  if (cache || storage)
     return -EINVAL;
 
-  // create the cache
-  std::unique_ptr<Cache> c(new Cache);
+  // create the storage and cache
+  std::unique_ptr<Storage> s(new Storage(gc));
+  std::unique_ptr<Cache> c(new Cache(gc, s.get(),
+                                     cct->_conf->mds_cache_highwater,
+                                     cct->_conf->mds_cache_lowwater));
 
   // create the root directory inode
-  const _inodeno_t ino = c->next_ino++; // 0
   const identity who = {0, 0, 0};
-  c->root = c->inodes.get(Inode(ino, who, S_IFDIR));
+  auto root = c->create(who, S_IFDIR);
+  assert(root);
 
+  std::swap(s, storage);
   std::swap(c, cache);
   return 0;
 }
@@ -105,6 +92,7 @@ int MDS::mkfs()
 void MDS::shutdown()
 {
   cache.reset();
+  storage.reset();
   objecter->shutdown();
   monc->shutdown();
   messenger->shutdown();
@@ -123,20 +111,20 @@ int MDS::create(_inodeno_t parent, const char *name,
     return -ENODEV;
 
   // find the parent object
-  auto p = cache->inodes.get(Inode(parent));
-  if (p->is_nonexistent() || p->is_destroyed())
+  auto p = cache->get(parent);
+  if (!p)
     return -ENOENT;
 
   if (!p->is_dir())
     return -ENOTDIR;
 
   // create the child object
-  auto inode = cache->inodes.get(Inode(cache->next_ino++, who, type));
+  auto inode = cache->create(who, type);
 
   // link the parent to the child
-  int r = p->link(name, inode);
+  int r = p->link(name, inode->ino());
   if (r)
-    inode->set_destroyed();
+    inode->destroy(storage.get());
   return r;
 }
 
@@ -146,17 +134,21 @@ int MDS::unlink(_inodeno_t parent, const char *name)
     return -ENODEV;
 
   // find the parent object
-  auto p = cache->inodes.get(Inode(parent));
-  if (p->is_nonexistent() || p->is_destroyed())
+  auto p = cache->get(parent);
+  if (!p)
     return -ENOENT;
 
   // unlink the child from its parent
   InodeRef inode;
-  int r = p->unlink(name, &inode);
-  if (r == 0 && inode->adjust_nlinks(-1) == 0)
-    inode->set_destroyed();
+  int r = p->unlink(name, cache.get(), &inode);
+  if (r)
+    return r;
 
-  return r;
+  // update inode nlinks
+  if (inode->adjust_nlinks(-1) == 0)
+    inode->destroy(storage.get());
+
+  return 0;
 }
 
 int MDS::lookup(_inodeno_t parent, const char *name, _inodeno_t *ino)
@@ -165,18 +157,12 @@ int MDS::lookup(_inodeno_t parent, const char *name, _inodeno_t *ino)
     return -ENODEV;
 
   // find the parent object
-  auto p = cache->inodes.get(Inode(parent));
-  if (p->is_nonexistent() || p->is_destroyed())
+  auto p = cache->get(parent);
+  if (!p)
     return -ENOENT;
 
   // find the child object
-  InodeRef inode;
-  int r = p->lookup(name, &inode);
-  if (r)
-    return r;
-
-  *ino = inode->ino();
-  return 0;
+  return p->lookup(name, ino);
 }
 
 int MDS::readdir(_inodeno_t ino, uint64_t pos, uint64_t gen,
@@ -186,8 +172,8 @@ int MDS::readdir(_inodeno_t ino, uint64_t pos, uint64_t gen,
     return -ENODEV;
 
   // find the object
-  auto inode = cache->inodes.get(Inode(ino));
-  if (inode->is_nonexistent() || inode->is_destroyed())
+  auto inode = cache->get(ino);
+  if (!inode)
     return -ENOENT;
 
   return inode->readdir(pos, gen, cb, user);
@@ -199,8 +185,8 @@ int MDS::getattr(_inodeno_t ino, int mask, ObjAttr &attr)
     return -ENODEV;
 
   // find the object
-  auto inode = cache->inodes.get(Inode(ino));
-  if (inode->is_nonexistent() || inode->is_destroyed())
+  auto inode = cache->get(ino);
+  if (!inode)
     return -ENOENT;
 
   return inode->getattr(mask, attr);
@@ -212,8 +198,8 @@ int MDS::setattr(_inodeno_t ino, int mask, const ObjAttr &attr)
     return -ENODEV;
 
   // find the object
-  auto inode = cache->inodes.get(Inode(ino));
-  if (inode->is_nonexistent() || inode->is_destroyed())
+  auto inode = cache->get(ino);
+  if (!inode)
     return -ENOENT;
 
   return inode->setattr(mask, attr);
