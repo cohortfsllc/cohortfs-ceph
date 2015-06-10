@@ -52,6 +52,7 @@ struct skip_stats {
   int gets_existing;
   int puts;
   int puts_last;
+  int destroys;
   int maxsize;
   int size;
   int reaped;
@@ -216,6 +217,33 @@ class skiplist : private detail::skiplist_base {
     if (node->get() == 1)
       --unused;
     return boost::intrusive_ptr<T>(node, false); // don't add another ref
+  }
+
+  void destroy(boost::intrusive_ptr<T> &&ref)
+  {
+    // assert that this is the last reference
+#if BOOST_VERSION >= 105600 // for intrusive_ptr::detach()
+    T *node = ref.detach();
+    const int count = node->put();
+    assert(count == 0);
+#else
+    T *node = ref.get();
+    const int count = node->put();
+    assert(count == 0);
+    ref.reset(); // count goes to -1
+#endif
+
+    skip_stats *s = get_mythread_stats();
+    ++s->destroys;
+
+    gc_guard guard(gc);
+    T *a = static_cast<T*>(osi_cas_skip_remove(gc, skip, node));
+    assert(a == node);
+
+    --size;
+    --unused;
+    node->~T();
+    gc_free(guard, node, cache);
   }
 
   void dump(std::ostream &stream) const
