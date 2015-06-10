@@ -134,13 +134,13 @@ namespace {
   }; /* ZPageSet */
 
   /* from ZFStore list_collections */
-  static int lc_cb_f(zfs_handle_t* hdl, void* arg)
+  static int lc_cb_f(zfs_handle_t* zhp, void* arg)
   {
     std::pair<zprop_list_t*, vector<coll_t>&>& lc_args =
       *(static_cast<std::pair<zprop_list_t*, vector<coll_t>&>*>(arg));
 
     char property[ZFS_MAXPROPLEN];
-    nvlist_t *userprops = zfs_get_user_props(hdl);
+    nvlist_t *userprops = zfs_get_user_props(zhp);
     nvlist_t *propval;
     char *propstr;
 
@@ -148,8 +148,8 @@ namespace {
     vector<coll_t>& vc = lc_args.second;
 
     for (; zprop_list != nullptr; zprop_list = zprop_list->pl_next) {
-      if (zprop_list->pl_prop == ZFS_PROP_NAME) {
-	if(zfs_prop_get(hdl,
+      if (zprop_list->pl_prop != ZPROP_INVAL) {
+	if(zfs_prop_get(zhp,
 			static_cast<zfs_prop_t>(zprop_list->pl_prop),
 			property, sizeof (property), NULL, NULL, 0,
 			B_FALSE) != 0)
@@ -324,8 +324,9 @@ TEST(ZFSIO, LS_DATASETS)
 
   std::pair<zprop_list_t*, std::vector<coll_t>&>
     lc_args{zprop_list, vc};
-  r = libzfs_zfs_iter((libzfs_handle_t*) zhd, lc_cb_f, &lc_args,
-		      &lzw_err);
+
+  r = lzfw_datasets_iter((libzfs_handle_t*) zhd, "zp2",
+			 lc_cb_f, &lc_args, &lzw_err);
   if (!!r)
     std::cout << "libzfs_zfs_iter failed: " << lzw_err << std::endl;
   else {
