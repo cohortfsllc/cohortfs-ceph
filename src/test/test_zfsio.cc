@@ -134,7 +134,7 @@ namespace {
   }; /* ZPageSet */
 
   /* from ZFStore list_collections */
-  static int lc_cb_f(zfs_handle_t* zhp, void* arg)
+  static int cb_props_f(zfs_handle_t* zhp, void* arg)
   {
     std::pair<zprop_list_t*, vector<coll_t>&>& lc_args =
       *(static_cast<std::pair<zprop_list_t*, vector<coll_t>&>*>(arg));
@@ -169,7 +169,19 @@ namespace {
       }
     }
     return 0;
-  } /* lc_cb_f */
+  } /* cb_props_f */
+
+  static int cb_dslist_f(zfs_handle_t* zhp, void* arg)
+  {
+    std::vector<coll_t>& vc = *(static_cast<vector<coll_t>*>(arg));
+
+#if 0 /* XXX fix libzfswrap.h */
+    /* ZFS handle structure is now visible! */
+    vc.push_back(coll_t(zhp->zfs_name));
+#endif
+
+    return 0;
+  } /* cb_dslist_f */
 
 } /* namespace */
 
@@ -313,6 +325,23 @@ TEST(ZFSIO, POOLDEV_SYNTAX)
 TEST(ZFSIO, LS_DATASETS)
 {
   std::vector<coll_t> vc;
+  const char* lzw_err;
+
+  int r = lzfw_datasets_iter((libzfs_handle_t*) zhd, "zp2",
+			     cb_dslist_f, &vc, &lzw_err);
+  if (!!r)
+    std::cout << "libzfs_zfs_iter failed: " << lzw_err << std::endl;
+  else {
+    /* enumerate */
+    for (auto& it : vc) {
+      std::cout << "ds: " << it << std::endl;
+    }
+  }
+}
+
+TEST(ZFSIO, DATASET_PROPS)
+{
+  std::vector<coll_t> vc;
     int r;
   const char* lzw_err;
   zprop_list_t* zprop_list = nullptr;
@@ -326,7 +355,7 @@ TEST(ZFSIO, LS_DATASETS)
     lc_args{zprop_list, vc};
 
   r = lzfw_datasets_iter((libzfs_handle_t*) zhd, "zp2",
-			 lc_cb_f, &lc_args, &lzw_err);
+			 cb_props_f, &lc_args, &lzw_err);
   if (!!r)
     std::cout << "libzfs_zfs_iter failed: " << lzw_err << std::endl;
   else {
