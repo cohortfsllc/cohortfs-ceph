@@ -98,6 +98,7 @@ void skiplist_base::sumup(thread_stats *p)
   stats.gets_deleted += s.gets_deleted - l.gets_deleted;
   stats.puts += s.puts - l.puts;
   stats.puts_last += s.puts_last - l.puts_last;
+  stats.destroys += s.destroys - l.destroys;
   stats.reaped += s.reaped - l.reaped;
   stats.reaper_passes += s.reaper_passes - l.reaper_passes;
   stats.reaper_activity_only += s.reaper_activity_only - l.reaper_activity_only;
