@@ -47,7 +47,7 @@ namespace {
   lzfw_vfs_t* zhfs; /* dataset handle */
   lzfw_vnode_t* root_vnode = nullptr;
   inogen_t root_ino = {0, 0};
-  creden_t cred = {0, 0};
+  creden_t acred = {0, 0};
 
   struct ZFSObject
   {
@@ -171,15 +171,12 @@ namespace {
     return 0;
   } /* cb_props_f */
 
+  /* do the same thing, but use the ZFS dataset handle */
   static int cb_dslist_f(zfs_handle_t* zhp, void* arg)
   {
     std::vector<coll_t>& vc = *(static_cast<vector<coll_t>*>(arg));
-
-#if 0 /* XXX fix libzfswrap.h */
     /* ZFS handle structure is now visible! */
     vc.push_back(coll_t(zhp->zfs_name));
-#endif
-
     return 0;
   } /* cb_dslist_f */
 
@@ -242,7 +239,7 @@ TEST(ZFSIO, INIT)
   ASSERT_EQ(err, 0);
 
   // open root vnode
-  err = lzfw_opendir(zhfs, &cred, root_ino, &root_vnode);
+  err = lzfw_opendir(zhfs, &acred, root_ino, &root_vnode);
   ASSERT_EQ(err, 0);
   ASSERT_NE(root_vnode, nullptr);
 }
@@ -257,7 +254,7 @@ TEST(ZFSIO, CREATEF1)
     zfs1_objs.emplace_back(ZFSObject(n));
     ZFSObject& o = zfs1_objs[ix];
     /* create and open */
-    err = lzfw_openat(zhfs, &cred, root_vnode, o.leaf_name.c_str(),
+    err = lzfw_openat(zhfs, &acred, root_vnode, o.leaf_name.c_str(),
 		      O_RDWR|O_CREAT, 644, &o_flags, &o.vnode);
     ASSERT_EQ(err, 0);
   }
@@ -272,7 +269,7 @@ TEST(ZFSIO, WRITEV1)
 
   for (ix = 0; ix < 10; ++ix) {
     ZFSObject& o = zfs1_objs[ix];
-    err = lzfw_pwritev(zhfs, &cred, o.vnode, iov1, iovcnt,
+    err = lzfw_pwritev(zhfs, &acred, o.vnode, iov1, iovcnt,
 		       0 /* offset */);
     /* VOP_WRITE updates iov_len for all iovs touched */
     zp_set1.reset_iovs();
@@ -285,7 +282,7 @@ TEST(ZFSIO, WRITEV1)
     struct iovec *iov2 = zp_set2.get_iovs();
 
     /* VOP_READ requires (and updates) iov_len for all iovs */
-    err = lzfw_preadv(zhfs, &cred, o.vnode, iov2, iovcnt,
+    err = lzfw_preadv(zhfs, &acred, o.vnode, iov2, iovcnt,
 		      0 /* offset */);
     ASSERT_EQ(err, iovcnt*65536);
     zp_set2.cksum();
@@ -298,7 +295,7 @@ TEST(ZFSIO, CLOSE1)
   int err, ix;
   for (ix = 0; ix < 100; ++ix) {
     ZFSObject& o = zfs1_objs[ix];
-    err = lzfw_close(zhfs, &cred, o.vnode, O_RDWR|O_CREAT);
+    err = lzfw_close(zhfs, &acred, o.vnode, O_RDWR|O_CREAT);
     ASSERT_EQ(err, 0);
   }
 }
@@ -333,9 +330,12 @@ TEST(ZFSIO, LS_DATASETS)
     std::cout << "libzfs_zfs_iter failed: " << lzw_err << std::endl;
   else {
     /* enumerate */
+    bool have_zp2 = false;
     for (auto& it : vc) {
-      std::cout << "ds: " << it << std::endl;
+      if (it == coll_t("zp2/zf2"))
+	have_zp2 = true;
     }
+    ASSERT_TRUE(have_zp2);
   }
 }
 
@@ -360,9 +360,12 @@ TEST(ZFSIO, DATASET_PROPS)
     std::cout << "libzfs_zfs_iter failed: " << lzw_err << std::endl;
   else {
     /* enumerate */
+    bool have_zp2 = false;
     for (auto& it : vc) {
-      std::cout << "ds: " << it << std::endl;
+      if (it == coll_t("zp2/zf2"))
+	have_zp2 = true;
     }
+    ASSERT_TRUE(have_zp2);
   }
 }
 
@@ -372,7 +375,7 @@ TEST(ZFSIO, SHUTDOWN)
   const char* lzw_err;
 
   // close root vnode
-  err = lzfw_closedir(zhfs, &cred, root_vnode);
+  err = lzfw_closedir(zhfs, &acred, root_vnode);
   root_vnode = nullptr;
   ASSERT_EQ(err, 0);
 
