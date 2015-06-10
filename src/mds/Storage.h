@@ -10,7 +10,7 @@
 namespace cohort {
 namespace mds {
 
-struct InodeStorage : public mcas::skiplist<InodeStorage>::object {
+struct InodeStorage : public mcas::skiplist_object {
   _inodeno_t inodeno;
   ObjAttr attr;
 

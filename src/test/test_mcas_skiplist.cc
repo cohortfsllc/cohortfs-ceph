@@ -5,7 +5,7 @@ using namespace cohort::mcas;
 
 gc_global gc;
 
-struct test_object : public skiplist<test_object>::object {
+struct test_object : public skiplist_object {
   int key;
   test_object(int key) : key(key) {}
   test_object(test_object &&rhs) : key(0) { std::swap(key, rhs.key); }

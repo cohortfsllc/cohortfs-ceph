@@ -16,7 +16,7 @@ class Storage;
 struct InodeStorage;
 typedef boost::intrusive_ptr<InodeStorage> InodeStorageRef;
 
-class Inode : public mcas::skiplist<Inode>::object {
+class Inode : public mcas::skiplist_object {
  public:
   enum State {
     /// inode hasn't been fetched from storage
