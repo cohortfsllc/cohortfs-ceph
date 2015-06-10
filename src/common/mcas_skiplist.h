@@ -140,6 +140,7 @@ class skiplist_base {
 
 } // namespace detail
 
+typedef detail::skiplist_base::object skiplist_object;
 
 // T must implement a move constructor and inherit from skiplist::object
 template <typename T>
@@ -153,8 +154,8 @@ class skiplist : private detail::skiplist_base {
            uint32_t highwater = 0, uint32_t lowwater = 0)
     : skiplist_base(gc, cmp, sizeof(T), name, destruct_t, highwater, lowwater)
   {
-    static_assert(std::is_base_of<skiplist::object, T>::value,
-                  "template type T must inherit from skiplist::object");
+    static_assert(std::is_base_of<skiplist_object, T>::value,
+                  "template type T must inherit from skiplist_object");
   }
 
   using skiplist_base::object;
