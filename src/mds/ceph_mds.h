@@ -65,44 +65,51 @@ struct libmds {
    * Create a regular file in the parent directory.
    * @see libmds_create()
    */
-  virtual int create(inodenum_t parent, const char *name) = 0;
+  virtual int create(const uint8_t volume[16], inodenum_t parent,
+                     const char *name) = 0;
 
   /**
    * Create a subdirectory in the parent directory.
    * @see libmds_mkdir()
    */
-  virtual int mkdir(inodenum_t parent, const char *name) = 0;
+  virtual int mkdir(const uint8_t volume[16], inodenum_t parent,
+                    const char *name) = 0;
 
   /**
    * Unlink the given file from the parent directory.
    * @see libmds_unlink()
    */
-  virtual int unlink(inodenum_t parent, const char *name) = 0;
+  virtual int unlink(const uint8_t volume[16], inodenum_t parent,
+                     const char *name) = 0;
 
   /**
    * Find an entry in the parent directory.
    * @see libmds_lookup()
    */
-  virtual int lookup(inodenum_t parent, const char *name, inodenum_t *ino) = 0;
+  virtual int lookup(const uint8_t volume[16], inodenum_t parent,
+                     const char *name, inodenum_t *ino) = 0;
 
   /**
    * List the entries of a directory.
    * @see libmds_readdir()
    */
-  virtual int readdir(inodenum_t dir, uint64_t pos, uint64_t gen,
+  virtual int readdir(const uint8_t volume[16], inodenum_t dir,
+                      uint64_t pos, uint64_t gen,
                       libmds_readdir_fn callback, void *user) = 0;
 
   /**
    * Query the attributes of a file.
    * @see libmds_getattr()
    */
-  virtual int getattr(inodenum_t ino, struct stat *st) = 0;
+  virtual int getattr(const uint8_t volume[16], inodenum_t ino,
+                      struct stat *st) = 0;
 
   /**
    * Set the attributes of a file.
    * @see libmds_setattr()
    */
-  virtual int setattr(inodenum_t ino, const struct stat *st) = 0;
+  virtual int setattr(const uint8_t volume[16], inodenum_t ino,
+                      const struct stat *st) = 0;
 
  protected:
   /** Destructor protected: must be deleted by libmds_cleanup() */
@@ -169,6 +176,7 @@ extern "C" {
    * Create a regular file in the parent directory.
    *
    * @param mds     The libmds object returned by libmds_init()
+   * @param volume  The volume uuid
    * @param parent  Inode number of the parent directory
    * @param name    Filename of the new directory entry
    *
@@ -177,12 +185,14 @@ extern "C" {
    * @retval -ENOTDIR if the parent is not a directory.
    * @retval -EEXIST if the parent directory already has an entry with \a name.
    */
-  int libmds_create(struct libmds *mds, inodenum_t parent, const char *name);
+  int libmds_create(struct libmds *mds, const uint8_t volume[16],
+                    inodenum_t parent, const char *name);
 
   /**
    * Create a subdirectory in the parent directory.
    *
    * @param mds     The libmds object returned by libmds_init()
+   * @param volume  The volume uuid
    * @param parent  Inode number of the parent directory
    * @param name    Filename of the new directory entry
    *
@@ -191,12 +201,14 @@ extern "C" {
    * @retval -ENOTDIR if the parent is not a directory.
    * @retval -EEXIST if the parent directory already has an entry with \a name.
    */
-  int libmds_mkdir(struct libmds *mds, inodenum_t parent, const char *name);
+  int libmds_mkdir(struct libmds *mds, const uint8_t volume[16],
+                   inodenum_t parent, const char *name);
 
   /**
    * Unlink the given file from the parent directory.
    *
    * @param mds     The libmds object returned by libmds_init()
+   * @param volume  The volume uuid
    * @param parent  Inode number of the parent directory
    * @param name    Filename of the directory entry to remove
    *
@@ -205,12 +217,14 @@ extern "C" {
    * @retval -ENOTDIR if the parent is not a directory.
    * @retval -ENOTEMPTY if the entry is a non-empty directory.
    */
-  int libmds_unlink(struct libmds *mds, inodenum_t parent, const char *name);
+  int libmds_unlink(struct libmds *mds, const uint8_t volume[16],
+                    inodenum_t parent, const char *name);
 
   /**
    * Find an entry in the parent directory.
    *
    * @param mds      The libmds object returned by libmds_init()
+   * @param volume   The volume uuid
    * @param parent   Inode number of the parent directory
    * @param name     Filename of the directory entry to find
    * @param[out] ino Inode number of the directory entry found
@@ -219,18 +233,19 @@ extern "C" {
    * @retval -ENOENT if the parent does not have an entry with \a name.
    * @retval -ENOTDIR if the parent is not a directory.
    */
-  int libmds_lookup(struct libmds *mds, inodenum_t parent, const char *name,
-                    inodenum_t *ino);
+  int libmds_lookup(struct libmds *mds, const uint8_t volume[16],
+                    inodenum_t parent, const char *name, inodenum_t *ino);
 
   /**
    * List the entries of a directory.
    *
-   * @param mds   The libmds object returned by libmds_init()
-   * @param dir   Inode number of the directory
-   * @param pos   Index of the first directory entry to list
-   * @param gen   Generation number to detect changes during listing
-   * @param cb    Callback function to receive each directory entry
-   * @param user  User data passed as last argument to \a cb
+   * @param mds    The libmds object returned by libmds_init()
+   * @param volume The volume uuid
+   * @param dir    Inode number of the directory
+   * @param pos    Index of the first directory entry to list
+   * @param gen    Generation number to detect changes during listing
+   * @param cb     Callback function to receive each directory entry
+   * @param user   User data passed as last argument to \a cb
    *
    * @return Returns 0 on success or a negative error code.
    * @retval -ENOENT if a file with inode number \a dir does not exist.
@@ -238,32 +253,37 @@ extern "C" {
    * @retval -EOF if \a pos is past the end of the directory.
    * @retval -ESTALE if \a gen doesn't match current directory.
    */
-  int libmds_readdir(struct libmds *mds, inodenum_t dir, uint64_t pos,
-                     uint64_t gen, libmds_readdir_fn cb, void *user);
+  int libmds_readdir(struct libmds *mds, const uint8_t volume[16],
+                     inodenum_t dir, uint64_t pos, uint64_t gen,
+                     libmds_readdir_fn cb, void *user);
 
   /**
    * Query the attributes of a file.
    *
    * @param mds     The libmds object returned by libmds_init()
+   * @param volume  The volume uuid
    * @param inode   Inode number of the file
    * @param[out] st Pointer to the attributes to write
    *
    * @return Returns 0 on success or a negative error code.
    * @retval -ENOENT if a file with inode number \a ino does not exist.
    */
-  int libmds_getattr(struct libmds *mds, inodenum_t ino, struct stat *st);
+  int libmds_getattr(struct libmds *mds, const uint8_t volume[16],
+                     inodenum_t ino, struct stat *st);
 
   /**
    * Set the attributes of a file.
    *
-   * @param mds   The libmds object returned by libmds_init()
-   * @param inode Inode number of the file
-   * @param st    Pointer to the attributes to write
+   * @param mds    The libmds object returned by libmds_init()
+   * @param volume The volume uuid
+   * @param inode  Inode number of the file
+   * @param st     Pointer to the attributes to write
    *
    * @return Returns 0 on success or a negative error code.
    * @retval -ENOENT if a file with inode number \a ino does not exist.
    */
-  int libmds_setattr(struct libmds *mds, inodenum_t ino, const struct stat *st);
+  int libmds_setattr(struct libmds *mds, const uint8_t volume[16],
+                     inodenum_t ino, const struct stat *st);
 
 #ifdef __cplusplus
 } /* extern "C" */

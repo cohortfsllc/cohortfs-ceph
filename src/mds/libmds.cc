@@ -75,15 +75,16 @@ public:
   void shutdown();
   void signal(int signum);
 
-  int create(inodenum_t parent, const char *name);
-  int mkdir(inodenum_t parent, const char *name);
-  int unlink(inodenum_t parent, const char *name);
-  int lookup(inodenum_t parent, const char *name, inodenum_t *ino);
-  int readdir(inodenum_t dir, uint64_t pos, uint64_t gen,
-              libmds_readdir_fn cb, void *user);
+  int create(const uint8_t volume[16], inodenum_t parent, const char *name);
+  int mkdir(const uint8_t volume[16], inodenum_t parent, const char *name);
+  int unlink(const uint8_t volume[16], inodenum_t parent, const char *name);
+  int lookup(const uint8_t volume[16], inodenum_t parent, const char *name,
+             inodenum_t *ino);
+  int readdir(const uint8_t volume[16], inodenum_t dir, uint64_t pos,
+              uint64_t gen, libmds_readdir_fn cb, void *user);
 
-  int getattr(inodenum_t ino, struct stat *st);
-  int setattr(inodenum_t ino, const struct stat *st);
+  int getattr(const uint8_t volume[16], inodenum_t ino, struct stat *st);
+  int setattr(const uint8_t volume[16], inodenum_t ino, const struct stat *st);
 };
 
 
@@ -158,43 +159,61 @@ void LibMDS::signal(int signum)
   mds->handle_signal(signum);
 }
 
-int LibMDS::create(inodenum_t parent, const char *name)
+int LibMDS::create(const uint8_t volume[16], inodenum_t parent,
+                   const char *name)
 {
+  boost::uuids::uuid vol;
+  memcpy(&vol, volume, sizeof(vol));
   const identity who = {0, 0, 0}; // XXX
-  return mds->create(parent, name, who, S_IFREG);
+  return mds->create(vol, parent, name, who, S_IFREG);
 }
 
-int LibMDS::mkdir(inodenum_t parent, const char *name)
+int LibMDS::mkdir(const uint8_t volume[16], inodenum_t parent,
+                  const char *name)
 {
+  boost::uuids::uuid vol;
+  memcpy(&vol, volume, sizeof(vol));
   const identity who = {0, 0, 0}; // XXX
-  return mds->create(parent, name, who, S_IFDIR);
+  return mds->create(vol, parent, name, who, S_IFDIR);
 }
 
-int LibMDS::unlink(inodenum_t parent, const char *name)
+int LibMDS::unlink(const uint8_t volume[16], inodenum_t parent,
+                   const char *name)
 {
-  return mds->unlink(parent, name);
+  boost::uuids::uuid vol;
+  memcpy(&vol, volume, sizeof(vol));
+  return mds->unlink(vol, parent, name);
 }
 
-int LibMDS::lookup(inodenum_t parent, const char *name, inodenum_t *ino)
+int LibMDS::lookup(const uint8_t volume[16], inodenum_t parent,
+                   const char *name, inodenum_t *ino)
 {
-  return mds->lookup(parent, name, ino);
+  boost::uuids::uuid vol;
+  memcpy(&vol, volume, sizeof(vol));
+  return mds->lookup(vol, parent, name, ino);
 }
 
-int LibMDS::readdir(inodenum_t dir, uint64_t pos, uint64_t gen,
+int LibMDS::readdir(const uint8_t volume[16], inodenum_t dir,
+                    uint64_t pos, uint64_t gen,
                     libmds_readdir_fn cb, void *user)
 {
-  return mds->readdir(dir, pos, gen, cb, user);
+  boost::uuids::uuid vol;
+  memcpy(&vol, volume, sizeof(vol));
+  return mds->readdir(vol, dir, pos, gen, cb, user);
 }
 
-int LibMDS::getattr(inodenum_t ino, struct stat *st)
+int LibMDS::getattr(const uint8_t volume[16], inodenum_t ino, struct stat *st)
 {
+  boost::uuids::uuid vol;
+  memcpy(&vol, volume, sizeof(vol));
+
   const int mask = ATTR_SIZE | ATTR_MODE |
       ATTR_GROUP | ATTR_OWNER |
       ATTR_ATIME | ATTR_MTIME | ATTR_CTIME |
       ATTR_NLINKS | ATTR_TYPE | ATTR_RAWDEV;
 
   ObjAttr attr;
-  int r = mds->getattr(ino, mask, attr);
+  int r = mds->getattr(vol, ino, mask, attr);
   if (r == 0) {
     st->st_mode = attr.mode | attr.type;
     st->st_nlink = attr.nlinks;
@@ -209,8 +228,12 @@ int LibMDS::getattr(inodenum_t ino, struct stat *st)
   return r;
 }
 
-int LibMDS::setattr(inodenum_t ino, const struct stat *st)
+int LibMDS::setattr(const uint8_t volume[16], inodenum_t ino,
+                    const struct stat *st)
 {
+  boost::uuids::uuid vol;
+  memcpy(&vol, volume, sizeof(vol));
+
   const int mask = ATTR_MODE | ATTR_GROUP | ATTR_OWNER |
       ATTR_ATIME | ATTR_MTIME | ATTR_CTIME |
       ATTR_NLINKS | ATTR_TYPE | ATTR_RAWDEV;
@@ -227,7 +250,7 @@ int LibMDS::setattr(inodenum_t ino, const struct stat *st)
   attr.mtime = ceph::real_clock::from_time_t(st->st_mtime);
   attr.ctime = ceph::real_clock::from_time_t(st->st_ctime);
 
-  return mds->setattr(ino, mask, attr);
+  return mds->setattr(vol, ino, mask, attr);
 }
 
 } // namespace mds
@@ -316,10 +339,11 @@ void libmds_signal(int signum)
   }
 }
 
-int libmds_create(struct libmds *mds, inodenum_t parent, const char *name)
+int libmds_create(struct libmds *mds, const uint8_t volume[16],
+                  inodenum_t parent, const char *name)
 {
   try {
-    return mds->create(parent, name);
+    return mds->create(volume, parent, name);
   } catch (std::exception &e) {
     CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
     lderr(cct) << "libmds_create caught exception " << e.what() << dendl;
@@ -327,10 +351,11 @@ int libmds_create(struct libmds *mds, inodenum_t parent, const char *name)
   }
 }
 
-int libmds_mkdir(struct libmds *mds, inodenum_t parent, const char *name)
+int libmds_mkdir(struct libmds *mds, const uint8_t volume[16],
+                 inodenum_t parent, const char *name)
 {
   try {
-    return mds->mkdir(parent, name);
+    return mds->mkdir(volume, parent, name);
   } catch (std::exception &e) {
     CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
     lderr(cct) << "libmds_mkdir caught exception " << e.what() << dendl;
@@ -338,10 +363,11 @@ int libmds_mkdir(struct libmds *mds, inodenum_t parent, const char *name)
   }
 }
 
-int libmds_unlink(struct libmds *mds, inodenum_t parent, const char *name)
+int libmds_unlink(struct libmds *mds, const uint8_t volume[16],
+                  inodenum_t parent, const char *name)
 {
   try {
-    return mds->unlink(parent, name);
+    return mds->unlink(volume, parent, name);
   } catch (std::exception &e) {
     CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
     lderr(cct) << "libmds_unlink caught exception " << e.what() << dendl;
@@ -349,11 +375,11 @@ int libmds_unlink(struct libmds *mds, inodenum_t parent, const char *name)
   }
 }
 
-int libmds_lookup(struct libmds *mds, inodenum_t parent, const char *name,
-                  inodenum_t *ino)
+int libmds_lookup(struct libmds *mds, const uint8_t volume[16],
+                  inodenum_t parent, const char *name, inodenum_t *ino)
 {
   try {
-    return mds->lookup(parent, name, ino);
+    return mds->lookup(volume, parent, name, ino);
   } catch (std::exception &e) {
     CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
     lderr(cct) << "libmds_lookup caught exception " << e.what() << dendl;
@@ -361,11 +387,12 @@ int libmds_lookup(struct libmds *mds, inodenum_t parent, const char *name,
   }
 }
 
-int libmds_readdir(struct libmds *mds, inodenum_t dir, uint64_t pos,
-                   uint64_t gen, libmds_readdir_fn cb, void *user)
+int libmds_readdir(struct libmds *mds, const uint8_t volume[16],
+                   inodenum_t dir, uint64_t pos, uint64_t gen,
+                   libmds_readdir_fn cb, void *user)
 {
   try {
-    return mds->readdir(dir, pos, gen, cb, user);
+    return mds->readdir(volume, dir, pos, gen, cb, user);
   } catch (std::exception &e) {
     CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
     lderr(cct) << "libmds_readdir caught exception " << e.what() << dendl;
@@ -373,10 +400,11 @@ int libmds_readdir(struct libmds *mds, inodenum_t dir, uint64_t pos,
   }
 }
 
-int libmds_getattr(struct libmds *mds, inodenum_t ino, struct stat *st)
+int libmds_getattr(struct libmds *mds, const uint8_t volume[16],
+                   inodenum_t ino, struct stat *st)
 {
   try {
-    return mds->getattr(ino, st);
+    return mds->getattr(volume, ino, st);
   } catch (std::exception &e) {
     CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
     lderr(cct) << "libmds_getattr caught exception " << e.what() << dendl;
@@ -384,10 +412,11 @@ int libmds_getattr(struct libmds *mds, inodenum_t ino, struct stat *st)
   }
 }
 
-int libmds_setattr(struct libmds *mds, inodenum_t ino, const struct stat *st)
+int libmds_setattr(struct libmds *mds, const uint8_t volume[16],
+                   inodenum_t ino, const struct stat *st)
 {
   try {
-    return mds->setattr(ino, st);
+    return mds->setattr(volume, ino, st);
   } catch (std::exception &e) {
     CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
     lderr(cct) << "libmds_setattr caught exception " << e.what() << dendl;

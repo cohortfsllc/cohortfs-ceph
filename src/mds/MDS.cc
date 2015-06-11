@@ -104,8 +104,8 @@ void MDS::handle_signal(int signum)
   // XXX suicide
 }
 
-int MDS::create(_inodeno_t parent, const char *name,
-                const identity &who, int type)
+int MDS::create(const boost::uuids::uuid &volume, _inodeno_t parent,
+                const char *name, const identity &who, int type)
 {
   if (!cache)
     return -ENODEV;
@@ -128,7 +128,8 @@ int MDS::create(_inodeno_t parent, const char *name,
   return r;
 }
 
-int MDS::unlink(_inodeno_t parent, const char *name)
+int MDS::unlink(const boost::uuids::uuid &volume,
+                _inodeno_t parent, const char *name)
 {
   if (!cache)
     return -ENODEV;
@@ -151,7 +152,8 @@ int MDS::unlink(_inodeno_t parent, const char *name)
   return 0;
 }
 
-int MDS::lookup(_inodeno_t parent, const char *name, _inodeno_t *ino)
+int MDS::lookup(const boost::uuids::uuid &volume, _inodeno_t parent,
+                const char *name, _inodeno_t *ino)
 {
   if (!cache)
     return -ENODEV;
@@ -165,8 +167,8 @@ int MDS::lookup(_inodeno_t parent, const char *name, _inodeno_t *ino)
   return p->lookup(name, ino);
 }
 
-int MDS::readdir(_inodeno_t ino, uint64_t pos, uint64_t gen,
-                 libmds_readdir_fn cb, void *user)
+int MDS::readdir(const boost::uuids::uuid &volume, _inodeno_t ino,
+                 uint64_t pos, uint64_t gen, libmds_readdir_fn cb, void *user)
 {
   if (!cache)
     return -ENODEV;
@@ -179,7 +181,8 @@ int MDS::readdir(_inodeno_t ino, uint64_t pos, uint64_t gen,
   return inode->readdir(pos, gen, cb, user);
 }
 
-int MDS::getattr(_inodeno_t ino, int mask, ObjAttr &attr)
+int MDS::getattr(const boost::uuids::uuid &volume, _inodeno_t ino,
+                 int mask, ObjAttr &attr)
 {
   if (!cache)
     return -ENODEV;
@@ -192,7 +195,8 @@ int MDS::getattr(_inodeno_t ino, int mask, ObjAttr &attr)
   return inode->getattr(mask, attr);
 }
 
-int MDS::setattr(_inodeno_t ino, int mask, const ObjAttr &attr)
+int MDS::setattr(const boost::uuids::uuid &volume, _inodeno_t ino,
+                 int mask, const ObjAttr &attr)
 {
   if (!cache)
     return -ENODEV;
