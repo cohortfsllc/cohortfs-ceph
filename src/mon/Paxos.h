@@ -120,7 +120,7 @@ class Paxos;
  */
 class Paxos {
   typedef std::unique_lock<std::mutex> unique_lock;
-  typedef std::function<void(int, unique_lock& l)> waiter;
+  typedef cohort::function<void(int, unique_lock& l)> waiter;
 
   /**
    * @defgroup Paxos_h_class Paxos

@@ -513,7 +513,7 @@ public:
    * Paxos. These callbacks will be awaken whenever the said proposal
    * finishes.
    */
-  typedef std::function<void(int, unique_lock&)> waiter;
+  typedef cohort::function<void(int, unique_lock&)> waiter;
   cohort::FunQueue<void(int, unique_lock&)> waiting_for_finished_proposal;
 
  public:

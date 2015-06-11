@@ -30,7 +30,7 @@ class QuorumService
 
 public:
   typedef std::unique_lock<std::mutex> unique_lock;
-  typedef std::function<void(int, unique_lock& l)> waiter;
+  typedef cohort::function<void(int, unique_lock& l)> waiter;
 
   enum {
     SERVICE_HEALTH		     = 0x01,
