@@ -108,9 +108,9 @@ namespace cohort {
 	if (!free_list.empty()) {
 	  F& el = free_list.front();
 	  free_list.pop_front();
-	  el.f = std::forward<LLF>(f);
+	  el = std::forward<LLF>(f);
 	  queue.insert(queue.end(), el);
-	  assert(el.f);
+	  assert(el);
 	} else {
 	  F& el = *(new F(std::forward<LLF>(f)));
 	  queue.insert(queue.end(), el);
@@ -193,7 +193,7 @@ namespace cohort {
       if (!queue.empty()) {
 	F& el = queue.front();
 	queue.pop_front();
-	Res r = el.f(std::forward<Args>(args)...);
+	Res r = el(std::forward<Args>(args)...);
 	free(el);
 	return r;
       } else {
@@ -209,7 +209,7 @@ namespace cohort {
       while (!queue.empty()) {
 	F& el = queue.front();
 	queue.pop_front();
-	a = f(el.f(std::forward<Args>(args)...), a);
+	a = f(el(std::forward<Args>(args)...), a);
 	free(el);
       }
       return a;
