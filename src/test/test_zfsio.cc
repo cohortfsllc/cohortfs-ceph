@@ -191,8 +191,6 @@ namespace {
 
 } /* namespace */
 
-
-
 TEST(ZFSIO, INIT)
 {
   int err;
