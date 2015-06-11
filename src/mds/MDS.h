@@ -65,14 +65,18 @@ class MDS : public Dispatcher {
   void handle_signal(int signum);
 
   // for libmds
-  int create(_inodeno_t parent, const char *name,
-             const identity &who, int type);
-  int unlink(_inodeno_t parent, const char *name);
-  int lookup(_inodeno_t parent, const char *name, _inodeno_t *ino);
-  int readdir(_inodeno_t dir, uint64_t pos, uint64_t gen,
-              libmds_readdir_fn cb, void *user);
-  int getattr(_inodeno_t ino, int mask, ObjAttr &attr);
-  int setattr(_inodeno_t ino, int mask, const ObjAttr &attr);
+  int create(const boost::uuids::uuid &volume, _inodeno_t parent,
+             const char *name, const identity &who, int type);
+  int unlink(const boost::uuids::uuid &volume,
+             _inodeno_t parent, const char *name);
+  int lookup(const boost::uuids::uuid &volume, _inodeno_t parent,
+             const char *name, _inodeno_t *ino);
+  int readdir(const boost::uuids::uuid &volume, _inodeno_t dir,
+              uint64_t pos, uint64_t gen, libmds_readdir_fn cb, void *user);
+  int getattr(const boost::uuids::uuid &volume, _inodeno_t ino,
+              int mask, ObjAttr &attr);
+  int setattr(const boost::uuids::uuid &volume, _inodeno_t ino,
+              int mask, const ObjAttr &attr);
 
   // void handle_mds_beacon(MMDSBeacon *m);
   bool ms_dispatch(Message *m);

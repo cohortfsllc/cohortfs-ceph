@@ -12,39 +12,41 @@
 
 static int test_unlink_notempty(struct libmds *mds, inodenum_t root)
 {
-  int r = libmds_mkdir(mds, root, "dir");
+  const uint8_t vol[16] = "0123456789012345";
+
+  int r = libmds_mkdir(mds, vol, root, "dir");
   if (r) {
     fprintf(stderr, "libmds_mkdir(\"dir\") failed with %d\n", r);
     return r;
   }
   inodenum_t dir;
-  r = libmds_lookup(mds, root, "dir", &dir);
+  r = libmds_lookup(mds, vol, root, "dir", &dir);
   if (r) {
     fprintf(stderr, "libmds_lookup(\"dir\") failed with %d\n", r);
     return r;
   }
-  r = libmds_create(mds, dir, "file");
+  r = libmds_create(mds, vol, dir, "file");
   if (r) {
     fprintf(stderr, "libmds_create(\"file\") failed with %d\n", r);
     return r;
   }
-  r = libmds_unlink(mds, root, "dir");
+  r = libmds_unlink(mds, vol, root, "dir");
   if (r != -ENOTEMPTY) {
     fprintf(stderr, "libmds_unlink(\"dir\") returned %d, expected -ENOTEMPTY\n", r);
     return r;
   }
-  r = libmds_unlink(mds, dir, "file");
+  r = libmds_unlink(mds, vol, dir, "file");
   if (r) {
     fprintf(stderr, "libmds_unlink(\"file\") failed with %d\n", r);
     return r;
   }
-  r = libmds_unlink(mds, root, "dir");
+  r = libmds_unlink(mds, vol, root, "dir");
   if (r) {
     fprintf(stderr, "libmds_unlink(\"dir\") failed with %d\n", r);
     return r;
   }
   struct stat st;
-  r = libmds_getattr(mds, dir, &st);
+  r = libmds_getattr(mds, vol, dir, &st);
   if (r != -ENOENT) {
     fprintf(stderr, "libmds_getattr(\"dir\") returned %d, expected -ENOENT\n", r);
     return r;
@@ -98,10 +100,12 @@ static int test_readdir_verify(const struct test_readdir_data *data)
   return 0;
 }
 
-static int test_readdir_full(struct libmds *mds, inodenum_t dir)
+static int test_readdir_full(struct libmds *mds, const uint8_t vol[16],
+    inodenum_t dir)
 {
   struct test_readdir_data data = {0};
-  int r = libmds_readdir(mds, dir, data.pos, data.gen, test_readdir_cb, &data);
+  int r = libmds_readdir(mds, vol, dir, data.pos, data.gen,
+      test_readdir_cb, &data);
   if (r) {
     fprintf(stderr, "libmds_readdir() failed with %d\n", r);
     return r;
@@ -111,7 +115,7 @@ static int test_readdir_full(struct libmds *mds, inodenum_t dir)
   if (r)
     return r;
   // verify that readdir returns EOF when pos > size
-  r = libmds_readdir(mds, dir, data.pos, data.gen, test_readdir_cb, &data);
+  r = libmds_readdir(mds, vol, dir, data.pos, data.gen, test_readdir_cb, &data);
   if (r != -EOF) {
     fprintf(stderr, "libmds_readdir() returned %d, expected -EOF\n", r);
     return r;
@@ -119,7 +123,8 @@ static int test_readdir_full(struct libmds *mds, inodenum_t dir)
   return 0;
 }
 
-static int test_readdir_single(struct libmds *mds, inodenum_t dir)
+static int test_readdir_single(struct libmds *mds, const uint8_t vol[16],
+    inodenum_t dir)
 {
   struct test_readdir_data data = {0};
   // test_readdir_cb() will return nonzero for each call
@@ -127,7 +132,8 @@ static int test_readdir_single(struct libmds *mds, inodenum_t dir)
   int r;
   for (;;) {
     // call libmds_readdir() until it returns -EOF
-    r = libmds_readdir(mds, dir, data.pos, data.gen, test_readdir_cb, &data);
+    r = libmds_readdir(mds, vol, dir, data.pos, data.gen,
+	test_readdir_cb, &data);
     if (r == -EOF)
       break;
     if (r) {
@@ -141,13 +147,15 @@ static int test_readdir_single(struct libmds *mds, inodenum_t dir)
 
 static int test_readdir(struct libmds *mds, inodenum_t root)
 {
+  const uint8_t vol[16] = "abcdefghijklmnop";
+
   inodenum_t dir;
-  int r = libmds_mkdir(mds, root, "readdir");
+  int r = libmds_mkdir(mds, vol, root, "readdir");
   if (r) {
     fprintf(stderr, "libmds_mkdir(\"readdir\") failed with %d\n", r);
     return r;
   }
-  r = libmds_lookup(mds, root, "readdir", &dir);
+  r = libmds_lookup(mds, vol, root, "readdir", &dir);
   if (r) {
     fprintf(stderr, "libmds_lookup(\"readdir\") failed with %d\n", r);
     return r;
@@ -156,20 +164,42 @@ static int test_readdir(struct libmds *mds, inodenum_t root)
   for (int i = 0; i < NUM_ENTRIES; i++) {
     if (*entries[i] == '.')
       continue;
-    r = libmds_create(mds, dir, entries[i]);
+    r = libmds_create(mds, vol, dir, entries[i]);
     if (r) {
       fprintf(stderr, "libmds_create(\"%s\") failed with %d\n", entries[i], r);
       return r;
     }
   }
-  r = test_readdir_full(mds, dir);
+  r = test_readdir_full(mds, vol, dir);
   if (r) {
     fprintf(stderr, "test_readdir_full() failed with %d\n", r);
     return r;
   }
-  r = test_readdir_single(mds, dir);
+  r = test_readdir_single(mds, vol, dir);
   if (r) {
     fprintf(stderr, "test_readdir_single() failed with %d\n", r);
+    return r;
+  }
+  return 0;
+}
+
+static int test_volumes(struct libmds *mds, inodenum_t root)
+{
+  const uint8_t vola[16] = "abcdefghijklmnop";
+  const uint8_t volb[16] = "klmnopqrstuvwxyz";
+  inodenum_t ino;
+
+  // create a directory in volume a
+  int r = libmds_mkdir(mds, vola, root, "vola");
+  if (r) {
+    fprintf(stderr, "libmds_mkdir(\"vola\") failed with %d\n", r);
+    return r;
+  }
+  // make sure that we can't see it in volume b
+  r = libmds_lookup(mds, volb, root, "vola", &ino);
+  if (r != -ENOENT) {
+    fprintf(stderr, "libmds_lookup(\"vola\") returned %d, expected -ENOENT\n",
+	r);
     return r;
   }
   return 0;
@@ -186,6 +216,11 @@ static int run_tests(struct libmds *mds)
   r = test_readdir(mds, root);
   if (r) {
     fprintf(stderr, "test_readdir() failed with %d\n", r);
+    return r;
+  }
+  r = test_volumes(mds, root);
+  if (r) {
+    fprintf(stderr, "test_volumes() failed with %d\n", r);
     return r;
   }
   puts("libmds tests passed");
