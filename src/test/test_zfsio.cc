@@ -23,11 +23,11 @@
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/exception.hpp>
 #include <boost/format.hpp>
-#include "os/zfs/ZFSHelper.h"
 #include "common/ceph_argparse.h"
 #include "common/debug.h"
 #include "global/global_init.h"
 #include "osd/osd_types.h"
+#include "os/zfs/ZFSHelper.h"
 
 extern "C" {
 #include <libzfswrap.h>
@@ -61,6 +61,9 @@ namespace {
   };
 
   std::vector<ZFSObject> zfs1_objs;
+  std::vector<ZFSObject> zfs2_objs;
+
+  static constexpr int n_objs_c2 = 10000;
 
   std::uniform_int_distribution<uint8_t> uint_dist;
   std::mt19937 rng;
@@ -374,6 +377,45 @@ TEST(ZFSIO, DATASET_PROPS)
 	have_zp2 = true;
     }
     ASSERT_TRUE(have_zp2);
+  }
+}
+
+TEST(ZFSIO, CREATE2)
+{
+  int err, ix;
+  int cnt = n_objs_c2;
+
+  ZFSObject co(std::string("creates2"));
+
+  /* first, create a new container as a child of the root */
+  err = lzfw_mkdirat(zhfs, &acred, root_vnode, co.leaf_name.c_str(),
+		     777 /* mode */, &co.ino);
+  ASSERT_EQ(err, 0);
+
+  /* open it */
+  err = lzfw_opendir(zhfs, &acred, co.ino, &co.vnode);
+  ASSERT_EQ(err, 0);
+
+  zfs2_objs.reserve(2*cnt);
+  /* files */
+  for (ix = 0; ix < cnt; ++ix) {
+    std::string n{"f" + std::to_string(ix)};
+    zfs1_objs.emplace_back(ZFSObject(n));
+    ZFSObject& o = zfs1_objs[ix];
+    /* create */
+    err = lzfw_createat(zhfs, &acred, co.vnode, o.leaf_name.c_str(), 644,
+			&o.ino);
+    ASSERT_EQ(err, 0);
+  }
+  /* directories */
+  int dirmax = 2*cnt;
+  for (ix = cnt; ix < dirmax; ++ix) {
+    std::string n{"d" + std::to_string(ix)};
+    zfs1_objs.emplace_back(ZFSObject(n));
+    ZFSObject& o = zfs1_objs[ix];
+    err = lzfw_mkdirat(zhfs, &acred, co.vnode, o.leaf_name.c_str(),
+		       777 /* mode */, &o.ino);
+    ASSERT_EQ(err, 0);
   }
 }
 
