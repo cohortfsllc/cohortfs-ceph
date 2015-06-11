@@ -133,6 +133,15 @@ namespace {
     }
   }; /* ZPageSet */
 
+  static int cb_zpool_f(zpool_handle_t* zhp, void* arg)
+  {
+    std::vector<std::string>& pools =
+      *(static_cast<vector<std::string>*>(arg));
+    /* ZFS handle structure is now visible! */
+    pools.push_back(std::string(zhp->zpool_name));
+    return 0;
+  } /* cb_zpool_f */
+
   /* from ZFStore list_collections */
   static int cb_props_f(zfs_handle_t* zhp, void* arg)
   {
@@ -182,6 +191,8 @@ namespace {
 
 } /* namespace */
 
+
+
 TEST(ZFSIO, INIT)
 {
   int err;
@@ -224,11 +235,10 @@ TEST(ZFSIO, INIT)
     rng.seed(1337);
   } /* create */
 
-  // validate zpool /* XXX in progress, currently, lists all */
-  err = lzfw_zpool_list(zhd, NULL /* props */, &lzw_err);
-  if (err) {
-    ASSERT_EQ(nullptr, lzw_err);
-  }
+  // validate zpool
+  std::vector<std::string> pools;
+  err = libzfs_zpool_iter(zhd, cb_zpool_f, &pools, &lzw_err);
+  ASSERT_TRUE(pools[0] == std::string("zp2"));
 
   // mount fs
   zhfs = lzfw_mount("zp2", "/zf2", "" /* XXX "mount options" */);
