@@ -192,6 +192,8 @@ namespace {
     return 0;
   } /* cb_dslist_f */
 
+  ZFSObject c2_o(std::string("creates2"));
+
 } /* namespace */
 
 TEST(ZFSIO, INIT)
@@ -385,15 +387,16 @@ TEST(ZFSIO, CREATE2)
   int err, ix;
   int cnt = n_objs_c2;
 
-  ZFSObject co(std::string("creates2"));
+  if (!create)
+    return;
 
   /* first, create a new container as a child of the root */
-  err = lzfw_mkdirat(zhfs, &acred, root_vnode, co.leaf_name.c_str(),
-		     777 /* mode */, &co.ino);
+  err = lzfw_mkdirat(zhfs, &acred, root_vnode, c2_o.leaf_name.c_str(),
+		     777 /* mode */, &c2_o.ino);
   ASSERT_EQ(err, 0);
 
   /* open it */
-  err = lzfw_opendir(zhfs, &acred, co.ino, &co.vnode);
+  err = lzfw_opendir(zhfs, &acred, c2_o.ino, &c2_o.vnode);
   ASSERT_EQ(err, 0);
 
   zfs2_objs.reserve(2*cnt);
@@ -403,7 +406,7 @@ TEST(ZFSIO, CREATE2)
     zfs1_objs.emplace_back(ZFSObject(n));
     ZFSObject& o = zfs1_objs[ix];
     /* create */
-    err = lzfw_createat(zhfs, &acred, co.vnode, o.leaf_name.c_str(), 644,
+    err = lzfw_createat(zhfs, &acred, c2_o.vnode, o.leaf_name.c_str(), 644,
 			&o.ino);
     ASSERT_EQ(err, 0);
   }
@@ -413,10 +416,44 @@ TEST(ZFSIO, CREATE2)
     std::string n{"d" + std::to_string(ix)};
     zfs1_objs.emplace_back(ZFSObject(n));
     ZFSObject& o = zfs1_objs[ix];
-    err = lzfw_mkdirat(zhfs, &acred, co.vnode, o.leaf_name.c_str(),
+    err = lzfw_mkdirat(zhfs, &acred, c2_o.vnode, o.leaf_name.c_str(),
 		       777 /* mode */, &o.ino);
     ASSERT_EQ(err, 0);
   }
+}
+
+int c2_dir_iter(vnode_t *vno, dir_iter_cb_context_t *cb_ctx,
+		void *arg)
+{
+  std::vector<string>& names = *(static_cast<std::vector<string>*>(arg));
+  /* XXX do something */
+  if (cb_ctx->dirent) {
+    names.push_back(std::string(cb_ctx->dirent->d_name));
+  }
+  return 0;
+}
+
+TEST(ZFSIO, DIRITER1)
+{
+  std::vector<string> names;
+  int r;
+
+  if (!create) {
+    /* open c2 container */
+    unsigned int o_flags;
+    /* XXX works for directories, but... */
+    r = lzfw_openat(zhfs, &acred, root_vnode, c2_o.leaf_name.c_str(),
+		    O_RDWR, 644, &o_flags, &c2_o.vnode);
+
+    ASSERT_EQ(r, 0);
+  }
+
+  off_t cookie = 0;
+  r = lzfw_dir_iter(zhfs, &acred, c2_o.vnode, c2_dir_iter, &names,
+		    &cookie, LZFW_DI_FLAG_GETATTR);
+  /* validate names */
+  std::cout << "names size: " << names.size() << std::endl;
+  ASSERT_EQ(r, 0);
 }
 
 TEST(ZFSIO, SHUTDOWN)
