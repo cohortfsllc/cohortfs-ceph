@@ -122,7 +122,6 @@ bool Inode::fetch(Storage *storage)
   std::lock_guard<std::mutex> lock(mutex);
   switch (state) {
     case STATE_EMPTY:
-      assert(is_empty());
       inode = storage->get(inodeno);
       if (inode) {
         state = STATE_VALID;

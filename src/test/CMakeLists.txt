@@ -1016,7 +1016,7 @@ set_target_properties(libosd_bench_async2
 add_executable(unittest_libmds test_libmds.c)
 add_test(unittest_libmds unittest_libmds)
 add_dependencies(check unittest_libmds)
-target_link_libraries(unittest_libmds PRIVATE mds global leveldb ${ALLOC_LIBS})
+target_link_libraries(unittest_libmds PRIVATE mds ${UNITTEST_LIBS})
 set_target_properties(unittest_libmds PROPERTIES LINKER_LANGUAGE C)
 
 # lttng_stream_test

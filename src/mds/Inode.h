@@ -56,9 +56,9 @@ class Inode : public mcas::skiplist_object {
   _inodeno_t ino() const { return inodeno; }
 
   uint32_t get_state() const  { return state; }
-  bool is_empty() const       { return state & STATE_EMPTY; }
-  bool is_valid() const       { return state & STATE_VALID; }
-  bool is_nonexistent() const { return state & STATE_NONEXISTENT; }
+  bool is_empty() const       { return state == STATE_EMPTY; }
+  bool is_valid() const       { return state == STATE_VALID; }
+  bool is_nonexistent() const { return state == STATE_NONEXISTENT; }
 
   // attr.type is immutable, so we don't need to lock these
   bool is_reg() const { return S_ISREG(inode->attr.type); }

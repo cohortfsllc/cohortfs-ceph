@@ -33,7 +33,7 @@ static int test_unlink_notempty(struct libmds *mds, inodenum_t root)
   r = libmds_unlink(mds, vol, root, "dir");
   if (r != -ENOTEMPTY) {
     fprintf(stderr, "libmds_unlink(\"dir\") returned %d, expected -ENOTEMPTY\n", r);
-    return r;
+    return -ENOTEMPTY;
   }
   r = libmds_unlink(mds, vol, dir, "file");
   if (r) {
@@ -49,7 +49,7 @@ static int test_unlink_notempty(struct libmds *mds, inodenum_t root)
   r = libmds_getattr(mds, vol, dir, &st);
   if (r != -ENOENT) {
     fprintf(stderr, "libmds_getattr(\"dir\") returned %d, expected -ENOENT\n", r);
-    return r;
+    return -ENOENT;
   }
   return 0;
 }
@@ -118,7 +118,7 @@ static int test_readdir_full(struct libmds *mds, const uint8_t vol[16],
   r = libmds_readdir(mds, vol, dir, data.pos, data.gen, test_readdir_cb, &data);
   if (r != -EOF) {
     fprintf(stderr, "libmds_readdir() returned %d, expected -EOF\n", r);
-    return r;
+    return -EOF;
   }
   return 0;
 }
@@ -200,14 +200,14 @@ static int test_volumes(struct libmds *mds, inodenum_t root)
   if (r != -ENOENT) {
     fprintf(stderr, "libmds_lookup(\"vola\") returned %d, expected -ENOENT\n",
 	r);
-    return r;
+    return -ENOENT;
   }
   return 0;
 }
 
 static int run_tests(struct libmds *mds)
 {
-  const inodenum_t root = 0;
+  const inodenum_t root = 1;
   int r = test_unlink_notempty(mds, root);
   if (r) {
     fprintf(stderr, "test_unlink_notempty() failed with %d\n", r);
