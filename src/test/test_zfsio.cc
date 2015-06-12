@@ -480,7 +480,7 @@ TEST(ZFSIO, SHUTDOWN)
       free(fs);
     }
     { // destroy pool
-      err = lzfw_zpool_destroy(zhd, "zp1", true /* force */, &lzw_err);
+      err = lzfw_zpool_destroy(zhd, "zp2", true /* force */, &lzw_err);
       ASSERT_EQ(err, 0);
       remove(vdev1);
     }
