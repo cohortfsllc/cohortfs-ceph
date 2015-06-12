@@ -16,6 +16,10 @@ include_directories(
   ${LEVELDB_PREFIX}/include
 )
 
+foreach(dir_var IN LISTS CMAKE_PREFIX_PATH)
+  link_directories(${dir_var}/lib)
+endforeach(dir_var)
+
 link_directories(
   ${OFED_PREFIX}/lib
   ${LEVELDB_PREFIX}/lib
@@ -266,6 +270,7 @@ endif(${ENABLE_SHARED})
 set(Boost_USE_MULTITHREADED ON)
 find_package(Boost COMPONENTS thread system regex filesystem REQUIRED)
 include_directories(${Boost_INCLUDE_DIRS})
+link_directories(${Boost_LIBRARY_DIR})
 
 find_package(Threads REQUIRED)
 
