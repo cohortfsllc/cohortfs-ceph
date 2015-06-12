@@ -25,12 +25,7 @@ class Cache {
 
  public:
   Cache(const mcas::gc_global &gc, Storage *storage,
-        int highwater, int lowwater)
-    : gc(gc),
-      inodes(gc, inode_cmp, "inodes", highwater, lowwater),
-      storage(storage),
-      next_ino(0)
-  {}
+        int highwater, int lowwater);
 
   InodeRef create(const identity &who, int type);
   InodeRef get(_inodeno_t ino);

@@ -525,6 +525,7 @@ if(WITH_LIBMDS)
     mds/libmds.cc
     mds/MDS.cc
     mds/MessageFactory.cc
+    mds/Volume.cc
     $<TARGET_OBJECTS:osdc_objs>
     )
   add_library(mds ${CEPH_SHARED} ${mds_srcs})

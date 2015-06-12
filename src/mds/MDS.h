@@ -6,10 +6,10 @@
 
 #include "msg/Dispatcher.h"
 #include "common/Timer.h"
-#include "common/mcas_skiplist.h"
 
 #include "MDSMap.h"
 #include "mds_types.h"
+#include "Volume.h"
 
 #define CEPH_MDS_PROTOCOL 23 /* cluster internal */
 
@@ -18,14 +18,6 @@ class Objecter;
 
 namespace cohort {
 namespace mds {
-
-class Cache;
-class Storage;
-
-class MDSVol {
- public:
-  void release() {}
-};
 
 class MDS : public Dispatcher {
  public:
@@ -41,8 +33,7 @@ class MDS : public Dispatcher {
   int last_state, state, want_state;
   ceph_tid_t last_tid;
 
-  std::unique_ptr<Cache> cache;
-  std::unique_ptr<Storage> storage;
+  VolumeTable volumes;
 
   void beacon_send();
 
@@ -52,6 +43,8 @@ class MDS : public Dispatcher {
 
   ceph_tid_t issue_tid() { return ++last_tid; }
 
+  VolumeRef get_volume(const boost::uuids::uuid &volume);
+
  public:
   MDS(int whoami, Messenger *m, MonClient *mc);
   ~MDS();
@@ -60,7 +53,6 @@ class MDS : public Dispatcher {
   const MDSMap& get_mds_map() const { return mdsmap; }
 
   int init();
-  int mkfs();
   void shutdown();
   void handle_signal(int signum);
 

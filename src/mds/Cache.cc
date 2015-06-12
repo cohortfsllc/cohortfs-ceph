@@ -7,6 +7,15 @@
 
 using namespace cohort::mds;
 
+Cache::Cache(const mcas::gc_global &gc, Storage *storage,
+             int highwater, int lowwater)
+  : gc(gc),
+    inodes(gc, inode_cmp, "inodes", highwater, lowwater),
+    storage(storage),
+    next_ino(1)
+{
+}
+
 InodeRef Cache::create(const identity &who, int type)
 {
   const auto ino = next_ino++;
