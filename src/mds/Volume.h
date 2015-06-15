@@ -16,8 +16,8 @@ struct md_config_t;
 namespace cohort {
 namespace mds {
 
-class Storage;
 class Cache;
+class Storage;
 
 class Volume : public mcas::skiplist_object {
  private:
@@ -25,7 +25,6 @@ class Volume : public mcas::skiplist_object {
   std::mutex mutex;
 
  public:
-  std::unique_ptr<Storage> storage;
   std::unique_ptr<Cache> cache;
 
   // search template
@@ -38,7 +37,8 @@ class Volume : public mcas::skiplist_object {
 
   const boost::uuids::uuid& get_uuid() const { return uuid; }
 
-  int mkfs(const mcas::gc_global &gc, const md_config_t *conf);
+  int mkfs(const mcas::gc_global &gc, Storage *storage,
+           const md_config_t *conf);
 
   static int cmp(const void *lhs, const void *rhs)
   {

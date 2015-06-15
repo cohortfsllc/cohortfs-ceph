@@ -25,16 +25,16 @@ Volume::~Volume()
 {
 }
 
-int Volume::mkfs(const mcas::gc_global &gc, const md_config_t *conf)
+int Volume::mkfs(const mcas::gc_global &gc, Storage *storage,
+                 const md_config_t *conf)
 {
   std::lock_guard<std::mutex> lock(mutex);
 
-  if (cache || storage)
+  if (cache)
     return -EINVAL;
 
   // create the storage and cache
-  std::unique_ptr<Storage> s(new Storage(gc));
-  std::unique_ptr<Cache> c(new Cache(gc, s.get(),
+  std::unique_ptr<Cache> c(new Cache(this, gc, storage,
                                      conf->mds_cache_highwater,
                                      conf->mds_cache_lowwater));
 
@@ -43,7 +43,6 @@ int Volume::mkfs(const mcas::gc_global &gc, const md_config_t *conf)
   auto root = c->create(who, S_IFDIR);
   assert(root);
 
-  std::swap(s, storage);
   std::swap(c, cache);
   return 0;
 }

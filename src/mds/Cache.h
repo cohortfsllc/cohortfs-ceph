@@ -10,13 +10,15 @@
 namespace cohort {
 namespace mds {
 
-class Storage;
-
 class Inode;
 typedef boost::intrusive_ptr<Inode> InodeRef;
 
+class Storage;
+class Volume;
+
 class Cache {
  private:
+  const Volume *volume;
   const mcas::gc_global &gc;
   mcas::skiplist<Inode> inodes;
   Storage *storage;
@@ -24,8 +26,10 @@ class Cache {
   InodeRef root;
 
  public:
-  Cache(const mcas::gc_global &gc, Storage *storage,
-        int highwater, int lowwater);
+  Cache(const Volume *volume, const mcas::gc_global &gc,
+        Storage *storage, int highwater, int lowwater);
+
+  const Volume* get_volume() const { return volume; }
 
   InodeRef create(const identity &who, int type);
   InodeRef get(_inodeno_t ino);

@@ -4,12 +4,14 @@
 #include "Cache.h"
 #include "Inode.h"
 #include "Storage.h"
+#include "Volume.h"
 
 using namespace cohort::mds;
 
-Cache::Cache(const mcas::gc_global &gc, Storage *storage,
-             int highwater, int lowwater)
-  : gc(gc),
+Cache::Cache(const Volume *volume, const mcas::gc_global &gc,
+             Storage *storage, int highwater, int lowwater)
+  : volume(volume),
+    gc(gc),
     inodes(gc, inode_cmp, "inodes", highwater, lowwater),
     storage(storage),
     next_ino(1)
@@ -19,13 +21,13 @@ Cache::Cache(const mcas::gc_global &gc, Storage *storage,
 InodeRef Cache::create(const identity &who, int type)
 {
   const auto ino = next_ino++;
-  auto data = storage->get_or_create(ino, who, type);
-  return inodes.get_or_create(Inode(ino, data));
+  auto data = storage->get_or_create(volume->get_uuid(), ino, who, type);
+  return inodes.get_or_create(Inode(this, ino, data));
 }
 
 InodeRef Cache::get(_inodeno_t ino)
 {
-  auto inode = inodes.get_or_create(Inode(ino));
+  auto inode = inodes.get_or_create(Inode(this, ino));
   if (!inode->fetch(storage))
     return nullptr;
   return inode;

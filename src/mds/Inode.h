@@ -31,22 +31,23 @@ class Inode : public mcas::skiplist_object {
  private:
   mutable std::mutex mutex;
   mutable std::mutex dir_mutex;
+  Cache *cache;
   _inodeno_t inodeno;
   State state;
   InodeStorageRef inode;
 
  public:
   // search template for lookup
-  Inode(_inodeno_t ino)
-    : inodeno(ino), state(STATE_EMPTY) {}
+  Inode(Cache *cache, _inodeno_t ino)
+    : cache(cache), inodeno(ino), state(STATE_EMPTY) {}
 
   // search template for create
-  Inode(_inodeno_t ino, InodeStorageRef& inode)
-    : inodeno(ino), state(STATE_VALID), inode(inode) {}
+  Inode(Cache *cache, _inodeno_t ino, InodeStorageRef& inode)
+    : cache(cache), inodeno(ino), state(STATE_VALID), inode(inode) {}
 
   // move constructor for cache inserts
   Inode(Inode &&o)
-    : inodeno(0)
+    : cache(nullptr), inodeno(0)
   {
     std::swap(inodeno, o.inodeno);
     std::swap(state, o.state);

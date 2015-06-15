@@ -56,6 +56,8 @@ int MDS::init()
   objecter->start();
   monc->renew_subs();
 
+  storage.reset(new Storage(gc));
+
   // start beacon timer
   beacon_timer.add_event(cct->_conf->mds_beacon_interval,
                          &MDS::beacon_send, this);
@@ -81,7 +83,7 @@ cohort::mds::VolumeRef MDS::get_volume(libmds_volume_t volume)
   auto vol = volumes.get_or_create(*p);
   // TODO: look up the volume in the osd map and attach it
   if (vol)
-    vol->mkfs(gc, cct->_conf);
+    vol->mkfs(gc, storage.get(), cct->_conf);
   return vol;
 }
 
@@ -106,7 +108,7 @@ int MDS::create(const libmds_fileid_t *parent, const char *name,
   // link the parent to the child
   int r = p->link(name, inode->ino());
   if (r)
-    inode->destroy(vol->storage.get());
+    inode->destroy(storage.get());
   return r;
 }
 
@@ -129,7 +131,7 @@ int MDS::unlink(const libmds_fileid_t *parent, const char *name)
 
   // update inode nlinks
   if (inode->adjust_nlinks(-1) == 0)
-    inode->destroy(vol->storage.get());
+    inode->destroy(storage.get());
 
   return 0;
 }

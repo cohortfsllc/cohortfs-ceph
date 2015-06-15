@@ -11,6 +11,7 @@ namespace cohort {
 namespace mds {
 
 struct InodeStorage : public mcas::skiplist_object {
+  boost::uuids::uuid volume;
   _inodeno_t inodeno;
   ObjAttr attr;
 
@@ -21,12 +22,13 @@ struct InodeStorage : public mcas::skiplist_object {
   } dir;
 
   // search template for lookup
-  InodeStorage(_inodeno_t ino)
-    : inodeno(ino) {}
+  InodeStorage(const boost::uuids::uuid &volume, _inodeno_t ino)
+    : volume(volume), inodeno(ino) {}
 
   // search template for create
-  InodeStorage(_inodeno_t ino, const identity &who, int type)
-    : inodeno(ino)
+  InodeStorage(const boost::uuids::uuid &volume, _inodeno_t ino,
+               const identity &who, int type)
+    : volume(volume), inodeno(ino)
   {
     attr.filesize = 0;
     attr.mode = 0777;
@@ -42,6 +44,7 @@ struct InodeStorage : public mcas::skiplist_object {
   InodeStorage(InodeStorage &&o)
     : inodeno(0)
   {
+    std::swap(volume, o.volume);
     std::swap(inodeno, o.inodeno);
     std::swap(attr, o.attr);
     std::swap(dir.entries, o.dir.entries);
@@ -52,11 +55,15 @@ struct InodeStorage : public mcas::skiplist_object {
   {
     const InodeStorage *l = static_cast<const InodeStorage*>(lhs);
     const InodeStorage *r = static_cast<const InodeStorage*>(rhs);
-    if (l->inodeno == r->inodeno)
-      return 0;
     if (l->inodeno > r->inodeno)
       return 1;
-    return -1;
+    if (l->inodeno < r->inodeno)
+      return -1;
+    if (l->volume > r->volume)
+      return 1;
+    if (l->volume < r->volume)
+      return -1;
+    return 0;
   }
 };
 typedef boost::intrusive_ptr<InodeStorage> InodeStorageRef;
@@ -73,14 +80,15 @@ class Storage {
       skiplist(gc, InodeStorage::cmp, "inode_store")
   {}
 
-  InodeStorageRef get(_inodeno_t ino)
+  InodeStorageRef get(const boost::uuids::uuid &volume, libmds_ino_t ino)
   {
-    return skiplist.get(InodeStorage(ino));
+    return skiplist.get(InodeStorage(volume, ino));
   }
 
-  InodeStorageRef get_or_create(_inodeno_t ino, const identity &who, int type)
+  InodeStorageRef get_or_create(const boost::uuids::uuid &volume,
+                                libmds_ino_t ino, const identity &who, int type)
   {
-    return skiplist.get_or_create(InodeStorage(ino, who, type));
+    return skiplist.get_or_create(InodeStorage(volume, ino, who, type));
   }
 
   void destroy(InodeStorageRef &&inode)
