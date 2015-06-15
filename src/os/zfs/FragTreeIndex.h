@@ -63,14 +63,14 @@ namespace cohort_zfs { // temporarily isolate ZFS variant
     CephContext* cct;
 
     /* open libzfswrap vfs handle */
-    lzfw_vfs_t *zhfs;
+    vfs_t *zhfs;
 
     /* root collection directory vnode */
     inogen_t root_ino;
-    lzfw_vnode_t* root;
+    vnode_t* root;
 
     /* fake Unix credential */
-    creden_t cred;
+    creden_t acred;
 
     /* don't allow merging below the initial split */
     const uint32_t initial_split;
@@ -88,17 +88,17 @@ namespace cohort_zfs { // temporarily isolate ZFS variant
     /* thread pool for migration operations */
     cohort::ThreadPool migration_threads;
 
-    int read_index(lzfw_vnode_t* vno);
-    int write_index(lzfw_vnode_t* vno);
+    int read_index(vnode_t* vno);
+    int write_index(vnode_t* vno);
 
-    int read_sizes(lzfw_vnode_t* vno);
-    int write_sizes(lzfw_vnode_t* vno);
-    int count_sizes(lzfw_vnode_t* vno);
+    int read_sizes(vnode_t* vno);
+    int write_sizes(vnode_t* vno);
+    int count_sizes(vnode_t* vno);
 
     void increment_size(frag_t frag);
     void decrement_size(frag_t frag, frag_t parent);
 
-    int split_mkdirs(CephContext* cct, lzfw_vnode_t* d_vnode,
+    int split_mkdirs(CephContext* cct, vnode_t* d_vnode,
 		     const fragtree_t& tree, frag_t frag, int bits);
     int split(frag_t frag, int bits, bool async=true);
     int merge(frag_t frag, bool async=true);
@@ -125,7 +125,7 @@ namespace cohort_zfs { // temporarily isolate ZFS variant
     FragTreeIndex(CephContext* cct, uint32_t initial_split);
     ~FragTreeIndex();
 
-    void set_zhfs(lzfw_vfs_t *fs) {
+    void set_zhfs(vfs_t *fs) {
       zhfs = fs;
     }
 
@@ -149,14 +149,14 @@ namespace cohort_zfs { // temporarily isolate ZFS variant
     int close_root();
 
     /* access internal cred structure */
-    const creden_t& get_cred() const { return cred; }
+    const creden_t& get_cred() const { return acred; }
 
     /* unmount a mounted collection index */
     int unmount();
 
     /* return the vnode for the root directory of a
      * mounted collection index, or nullptr if not mounted */
-    lzfw_vnode_t* get_root() const { return root; }
+    vnode_t* get_root() const { return root; }
 
     /* check for the existence of an object */
     int lookup(const hoid_t& oid);
@@ -165,7 +165,7 @@ namespace cohort_zfs { // temporarily isolate ZFS variant
     int stat(const hoid_t& oid, struct stat* st);
 
     /* open an object, or create if requested */
-    int open(const hoid_t& oid, bool create, lzfw_vnode_t** vno);
+    int open(const hoid_t& oid, bool create, vnode_t** vno);
 
     /* unlink an object from the index */
     int unlink(const hoid_t& oid);

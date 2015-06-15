@@ -26,7 +26,7 @@ extern "C" {
 }
 #include "os/zfs/FragTreeIndex.h"
 
-static creden_t cred = {0, 0};
+static creden_t acred = {0, 0};
 
 class ZFStore : public ObjectStore
 {

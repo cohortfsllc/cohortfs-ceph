@@ -159,7 +159,7 @@ int ZFStore::attach_meta() {
       if (!!err)
 	return err;
       /* open root */
-      err = lzfw_opendir(zhfs, &cred, meta_ino, &meta_vno);
+      err = lzfw_opendir(zhfs, &acred, meta_ino, &meta_vno);
     }
   }
   return err;
@@ -172,11 +172,11 @@ int ZFStore::read_meta(const std::string& key, std::string* value)
 
   int err;
   unsigned flags = 0;
-  lzfw_vnode_t* vno = nullptr;
+  vnode_t* vno = nullptr;
 
   assert(key.length() <= 254); /* ZFS internal limit */
 
-  err = lzfw_openat(zhfs, &cred, meta_vno, key.c_str(), O_RDWR|O_CREAT, 644,
+  err = lzfw_openat(zhfs, &acred, meta_vno, key.c_str(), O_RDWR|O_CREAT, 644,
 		    &flags, &vno);
   if (!!err)
     return -err;
@@ -189,7 +189,7 @@ int ZFStore::read_meta(const std::string& key, std::string* value)
   size_t size;
   off_t off;
 
-  err = lzfw_stat(zhfs, &cred, vno, &st);
+  err = lzfw_stat(zhfs, &acred, vno, &st);
   if (err)
     goto out;
 
@@ -200,7 +200,7 @@ int ZFStore::read_meta(const std::string& key, std::string* value)
   while (size > 0) {
     iov.iov_base = buf;
     iov.iov_len = MIN(BUFSZ, size); // lexical min
-    err = lzfw_preadv(zhfs, &cred, vno, &iov, 1, off);
+    err = lzfw_preadv(zhfs, &acred, vno, &iov, 1, off);
     if (!err) {
       err = EIO;
       break;
@@ -211,7 +211,7 @@ int ZFStore::read_meta(const std::string& key, std::string* value)
   }
 
  out:
-  (void) lzfw_close(zhfs, &cred, vno, O_RDWR|O_CREAT);
+  (void) lzfw_close(zhfs, &acred, vno, O_RDWR|O_CREAT);
   return -err;
 } /* read_meta */
 
@@ -221,12 +221,12 @@ int ZFStore::write_meta(const std::string& key, const std::string& value)
 
   int err;
   unsigned flags = 0;
-  lzfw_vnode_t* vno = nullptr;
+  vnode_t* vno = nullptr;
 
   assert(key.length() <= 254); /* ZFS internal limit */
 
-  err = lzfw_openat(zhfs, &cred, meta_vno, key.c_str(), O_RDWR|O_CREAT, 644,
-		    &flags, &vno);
+  err = lzfw_openat(zhfs, &acred, meta_vno, key.c_str(),
+		    O_RDWR|O_CREAT, 644, &flags, &vno);
   if (!!err)
     return -err;
 
@@ -235,10 +235,10 @@ int ZFStore::write_meta(const std::string& key, const std::string& value)
   iov.iov_len = value.length()+1;
 
   assert(meta_vno);
-  err = lzfw_pwritev(zhfs, &cred, meta_vno, &iov, 1, 0 /* offset */);
+  err = lzfw_pwritev(zhfs, &acred, meta_vno, &iov, 1, 0 /* offset */);
 
   /* close it */
-  (void) lzfw_close(zhfs, &cred, vno, O_RDWR|O_CREAT);
+  (void) lzfw_close(zhfs, &acred, vno, O_RDWR|O_CREAT);
   return -err;
 } /* write meta */
 
@@ -273,7 +273,7 @@ int ZFStore::stat(CollectionHandle ch, ObjectHandle oh,
   ZCollection* c = static_cast<ZCollection*>(ch);
   ZObject* o = static_cast<ZObject*>(oh);
 
-  int r = lzfw_stat(c->zhfs, &cred, o->vno, st);
+  int r = lzfw_stat(c->zhfs, &acred, o->vno, st);
   if (!!r)
     return -r;
   return 0;
@@ -298,7 +298,7 @@ int ZFStore::read(CollectionHandle ch, ObjectHandle oh,
 
   if (len == CEPH_READ_ENTIRE) {
     struct stat st;
-    err = lzfw_stat(zhfs, &cred, o->vno, &st);
+    err = lzfw_stat(zhfs, &acred, o->vno, &st);
     if (!!err)
       return -err;
     len = st.st_size;
@@ -321,10 +321,11 @@ int ZFStore::read(CollectionHandle ch, ObjectHandle oh,
       iov1->iov_len = MIN(resid, 65536);
     } /* ix */
     iovcnt = ix+1;
-    bytes_read = lzfw_preadv(zhfs, &cred, o->vno, iovs1, iovcnt, offset);
+    bytes_read = lzfw_preadv(zhfs, &acred, o->vno, iovs1, iovcnt,
+			     offset);
     if (bytes_read <= 0)
       return bytes_read;
-    /* transfer filled buffers -- ZFS/Solaris burns down iov->iov_cnt */
+    /* transfer filled buffers--ZFS/Solaris burns down iov->iov_cnt */
     for (ix = 0; ix < iovcnt; ++ix) {
       iov1 = &iovs1[ix];
       iov2 = &iovs2[ix];
@@ -367,12 +368,13 @@ int ZFStore::getattr(CollectionHandle ch, ObjectHandle oh,
   int r;
 
   /* XXX this interface is sub-optimal, needs atomicity */
-  r = lzfw_getxattrat(c->zhfs, &cred, o->vno, name, nullptr, &size);
+  r = lzfw_getxattrat(c->zhfs, &acred, o->vno, name, nullptr, &size);
   if (!!r || size == 0)
     goto out;
 
   val = buffer::create(size);
-  r = lzfw_getxattrat(c->zhfs, &cred, o->vno, name, val.c_str(), &size);
+  r = lzfw_getxattrat(c->zhfs, &acred, o->vno, name, val.c_str(),
+		      &size);
 
  out:
   return -r;
@@ -381,7 +383,7 @@ int ZFStore::getattr(CollectionHandle ch, ObjectHandle oh,
 typedef std::pair<std::list<std::string>*, bool> lsxattr_cb_arg;
 
 /* lzfw_listxattrs2 iterator callback (accumulates) */
-static int lsxattr_cb(lzfw_vnode_t *vnode, inogen_t object, creden_t *cred,
+static int lsxattr_cb(vnode_t *vnode, inogen_t object, creden_t *acred,
 		      const char *name, void *arg)
 {
   lsxattr_cb_arg& arg_pair = *static_cast<lsxattr_cb_arg*>(arg);
@@ -401,7 +403,8 @@ int ZFStore::getattrs(CollectionHandle ch, ObjectHandle oh,
 
   std::list<std::string> xattr_names;
   lsxattr_cb_arg xattr_cbargs{&xattr_names, user_only};
-  r = lzfw_listxattr2(c->zhfs, &cred, o->ino, lsxattr_cb, &xattr_cbargs);
+  r = lzfw_listxattr2(c->zhfs, &acred, o->ino, lsxattr_cb,
+		      &xattr_cbargs);
 
   for (auto& iter : xattr_names) {
     buffer::ptr bp;
@@ -518,7 +521,8 @@ int ZFStore::collection_getattrs(CollectionHandle ch,
 
   std::list<std::string> xattr_names;
   lsxattr_cb_arg xattr_cbargs{&xattr_names, false /* user_only filter */};
-  r = lzfw_listxattr2(c->zhfs, &cred, meta_ino, lsxattr_cb, &xattr_cbargs);
+  r = lzfw_listxattr2(c->zhfs, &acred, meta_ino, lsxattr_cb,
+		      &xattr_cbargs);
 
   for (auto& iter : xattr_names) {
     buffer::ptr bp;
@@ -660,7 +664,7 @@ ZFStore::~ZFStore()
   if (zhfs) {
     std::unique_lock<std::mutex> lck(mtx);
     // close root vnode
-    err = lzfw_closedir(zhfs, &cred, meta_vno);
+    err = lzfw_closedir(zhfs, &acred, meta_vno);
     meta_vno = nullptr;
   }
 
@@ -1045,7 +1049,7 @@ int ZFStore::write(ZCollection* c, ZObject* o, off_t offset, size_t len,
       iovs[iov_ix].iov_len = pb->length();
       iov_len += iovs[iov_ix].iov_len;
     }
-    r = lzfw_pwritev(zhfs, &cred, o->vno, iovs, iov_ix, offset);
+    r = lzfw_pwritev(zhfs, &acred, o->vno, iovs, iov_ix, offset);
     if (r < 0) {
       r = -EIO;
       goto out;
@@ -1063,7 +1067,7 @@ int ZFStore::zero(ZCollection* c, ZObject* o, off_t offset, size_t len)
 	   << offset << "~" << len << dendl;
 
   /* call the method exposing VOP_SPACE */
-  int r = lzfw_zero(zhfs, &cred, o->vno, offset, len);
+  int r = lzfw_zero(zhfs, &acred, o->vno, offset, len);
 
   return r;
 } /* zero */
@@ -1073,7 +1077,7 @@ int ZFStore::truncate(ZCollection* c, ZObject* o, uint64_t size)
   dout(15) << "truncate " << c->get_cid() << "/" << o->get_oid()
 	   << " size " << size << dendl;
 
-  int r = lzfw_truncate(zhfs, &cred, o->ino, size);
+  int r = lzfw_truncate(zhfs, &acred, o->ino, size);
 
   return r;
 } /* truncate */
@@ -1092,7 +1096,7 @@ int ZFStore::setattr(ZCollection* c, ZObject* o, const std::string& k,
   dout(15) << "setattr " << c->get_cid() << "/" << o->get_oid()
 	   << " " << k << dendl;
 
-  int r = lzfw_setxattrat(zhfs, &cred, o->vno, k.c_str(), v.c_str());
+  int r = lzfw_setxattrat(zhfs, &acred, o->vno, k.c_str(), v.c_str());
   return -r;
 } /* setattr */
 
@@ -1114,20 +1118,20 @@ int ZFStore::rmattr(ZCollection* c, ZObject* o, const std::string& name)
   dout(15) << "rmattr " << c->get_cid() << "/" << o->get_oid()
 	   << " '" << name << "'" << dendl;
 
-  int r = lzfw_removexattr(zhfs, &cred, o->ino, name.c_str());
+  int r = lzfw_removexattr(zhfs, &acred, o->ino, name.c_str());
   return -r;
 } /* rmattr */
 
 /* lzfw_listxattrs2 iterator callback (removes each xattr) */
-static int rmxattr_cb(lzfw_vnode_t *vnode, inogen_t object, creden_t *cred,
-		      const char *name, void *arg)
+static int rmxattr_cb(vnode_t *vnode, inogen_t object,
+		      creden_t *acred, const char *name, void *arg)
 {
-  return lzfw_removexattr((lzfw_vfs_t *) arg, cred, object, name);
+  return lzfw_removexattr((vfs_t *) arg, acred, object, name);
 }
 
 int ZFStore::rmattrs(ZCollection* c, ZObject* o)
 {
-  int r = lzfw_listxattr2(zhfs, &cred, o->ino, rmxattr_cb, zhfs);
+  int r = lzfw_listxattr2(zhfs, &acred, o->ino, rmxattr_cb, zhfs);
   return -r;
 } /* rmattrs */
 
@@ -1153,7 +1157,7 @@ int ZFStore::clone_range(ZCollection* c,
 
   if (len == CEPH_READ_ENTIRE) {
     struct stat st;
-    r = lzfw_stat(zhfs, &cred, o->vno, &st);
+    r = lzfw_stat(zhfs, &acred, o->vno, &st);
     if (!!r)
       return -r;
     len = st.st_size;
@@ -1180,10 +1184,11 @@ int ZFStore::clone_range(ZCollection* c,
       iov1->iov_len = MIN(resid, 65536);
     } /* ix */
     iovcnt = ix+1;
-    bytes_read = lzfw_preadv(zhfs, &cred, o->vno, iovs1, iovcnt, srcoff);
+    bytes_read = lzfw_preadv(zhfs, &acred, o->vno, iovs1, iovcnt,
+			     srcoff);
     if (bytes_read <= 0)
       return bytes_read;
-    /* transfer filled buffers -- ZFS/Solaris burns down iov->iov_cnt */
+    /* transfer filled buffers--ZFS/Solaris burns down iov->iov_cnt */
     for (ix = 0; ix < iovcnt; ++ix) {
       iov1 = &iovs1[ix];
       iov2 = &iovs2[ix];
@@ -1191,14 +1196,16 @@ int ZFStore::clone_range(ZCollection* c,
       if (unlikely(iov_len == 0))
 	goto out;
       else {
-	/* XXX free iov2->iov_base on exit from this block (TODO: recycle) */
+	/* XXX free iov2->iov_base on exit from this block
+	 * (TODO: recycle) */
 	buffer::ptr bp =
-	  buffer::create_static(iov_len, static_cast<char*>(iov2->iov_base));
+	  buffer::create_static(iov_len,
+				static_cast<char*>(iov2->iov_base));
 	/* write it to o2 at dstoff */
 	iovec wr_iov;
 	wr_iov.iov_base = iov2->iov_base;
 	wr_iov.iov_len = iov_len;
-	r = lzfw_pwritev(zhfs, &cred, o2->vno, &wr_iov, 1, dstoff);
+	r = lzfw_pwritev(zhfs, &acred, o2->vno, &wr_iov, 1, dstoff);
 	/* short read? */
 	if (iov1->iov_len != 0)
 	  goto out;
@@ -1278,11 +1285,11 @@ ZFStore::ZCollection::ZCollection(ZFStore* zs, const coll_t& cid, int& r,
 
     /* create collection attributes meta file */
     r = lzfw_getroot(zhfs, &root_ino);
-    r = lzfw_create(zhfs, &cred, root_ino, META_FILE, 644, &meta_ino);
+    r = lzfw_create(zhfs, &acred, root_ino, META_FILE, 644, &meta_ino);
     
   } else /* otherwise, mount it */ {
     r = index.mount(std::string("/frag_tree"));
-    r = lzfw_open(zhfs, &cred, meta_ino, O_RDWR, &meta_vno);
+    r = lzfw_open(zhfs, &acred, meta_ino, O_RDWR, &meta_vno);
     assert(r == 0);
   }
 } /* ZCollection */
@@ -1290,7 +1297,7 @@ ZFStore::ZCollection::ZCollection(ZFStore* zs, const coll_t& cid, int& r,
 ZFStore::ZCollection::~ZCollection()
 {
   index.unmount();
-  (void) lzfw_close(zhfs, &cred, meta_vno, O_RDWR);
+  (void) lzfw_close(zhfs, &acred, meta_vno, O_RDWR);
   (void) lzfw_umount(zhfs, true /* force */);
 }
 
@@ -1302,12 +1309,12 @@ int ZFStore::ZCollection::getattr(const char* name, buffer::ptr& v)
   int r;
 
   /* XXX this interface is sub-optimal, needs atomicity */
-  r = lzfw_getxattrat(zhfs, &cred, meta_vno, name, nullptr, &size);
+  r = lzfw_getxattrat(zhfs, &acred, meta_vno, name, nullptr, &size);
   if (!!r || size == 0)
     goto out;
 
   v = buffer::create(size);
-  r = lzfw_getxattrat(zhfs, &cred, meta_vno, name, v.c_str(), &size);
+  r = lzfw_getxattrat(zhfs, &acred, meta_vno, name, v.c_str(), &size);
 
  out:
   return -r;
@@ -1319,7 +1326,7 @@ int ZFStore::ZCollection::setattr(const std::string& k, const buffer::ptr& v)
 
   assert(meta_vno);
 
-  int r = lzfw_setxattrat(zhfs, &cred, meta_vno, k.c_str(), v.c_str());
+  int r = lzfw_setxattrat(zhfs, &acred, meta_vno, k.c_str(), v.c_str());
   return r;
 } /* setattr */
 
@@ -1327,6 +1334,6 @@ int ZFStore::ZCollection::rmattr(const std::string& k)
 {
   dout(15) << "ZCollection::rmattr " << cid << " " << k << dendl;
 
-  int r = lzfw_removexattr(zhfs, &cred, meta_ino, k.c_str());
+  int r = lzfw_removexattr(zhfs, &acred, meta_ino, k.c_str());
   return -r;
 } /* rmattr */
