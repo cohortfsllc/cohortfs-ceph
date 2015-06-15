@@ -101,13 +101,15 @@ int ZFStore::mkfs()
 	char** zp_devs_arr = static_cast<char**>(
 			         alloca(zp_devs.size()*sizeof(char*)));
 	for (int dev_ix = 0; dev_ix < zp_devs.size(); ++dev_ix) {
-	  zp_devs_arr[dev_ix] = const_cast<char*>(zp_devs[dev_ix].c_str());
+	  zp_devs_arr[dev_ix] =
+	    const_cast<char*>(zp_devs[dev_ix].c_str());
 	}
 	err = lzfw_zpool_create(zhd, path.c_str(), get<1>(zpd).c_str(),
-				(const char**) zp_devs_arr, zp_devs.size(),
-				&lzw_err);
+				(const char**) zp_devs_arr,
+				zp_devs.size(), &lzw_err);
 	if (!!err) {
-	  dout(-1) << "lzfw_zpool_create failed " << " path=" << path << dendl;
+	  dout(-1) << "lzfw_zpool_create failed " << " path="
+		   << path << dendl;
 	  goto out;
 	}
       }
@@ -151,7 +153,8 @@ int ZFStore::attach_meta() {
   if (! zhfs) {
     std::unique_lock<std::mutex> lck(mtx);
     if (! zhfs) {
-      zhfs = lzfw_mount(path.c_str(), "/osdfs", "" /* mount options */);
+      zhfs = lzfw_mount(path.c_str(), "/osdfs",
+			"" /* mount options */);
       if (! zhfs)
 	return -EIO;
       /* mount it */
@@ -176,8 +179,8 @@ int ZFStore::read_meta(const std::string& key, std::string* value)
 
   assert(key.length() <= 254); /* ZFS internal limit */
 
-  err = lzfw_openat(zhfs, &acred, meta_vno, key.c_str(), O_RDWR|O_CREAT, 644,
-		    &flags, &vno);
+  err = lzfw_openat(zhfs, &acred, meta_vno, key.c_str(),
+		    O_RDWR|O_CREAT, 644, &flags, &vno);
   if (!!err)
     return -err;
 
@@ -215,7 +218,8 @@ int ZFStore::read_meta(const std::string& key, std::string* value)
   return -err;
 } /* read_meta */
 
-int ZFStore::write_meta(const std::string& key, const std::string& value)
+int ZFStore::write_meta(const std::string& key,
+			const std::string& value)
 {
   attach_meta();
 
@@ -334,7 +338,8 @@ int ZFStore::read(CollectionHandle ch, ObjectHandle oh,
 	goto out;
       else {
 	buffer::ptr bp =
-	  buffer::create_static(iov_len, static_cast<char*>(iov2->iov_base));
+	  buffer::create_static(iov_len,
+				static_cast<char*>(iov2->iov_base));
 	bl.push_back(bp);
 	/* short read? */
 	if (iov1->iov_len != 0)
@@ -520,7 +525,8 @@ int ZFStore::collection_getattrs(CollectionHandle ch,
   ZCollection* c = static_cast<ZCollection*>(ch);
 
   std::list<std::string> xattr_names;
-  lsxattr_cb_arg xattr_cbargs{&xattr_names, false /* user_only filter */};
+  lsxattr_cb_arg xattr_cbargs{&xattr_names,
+      false /* user_only filter */};
   r = lzfw_listxattr2(c->zhfs, &acred, meta_ino, lsxattr_cb,
 		      &xattr_cbargs);
 
@@ -547,7 +553,8 @@ int ZFStore::collection_list(CollectionHandle ch, vector<hoid_t>& o)
 }
 
 int ZFStore::collection_list_partial(CollectionHandle ch, hoid_t start,
-				     int min, int max, vector<hoid_t>* ls,
+				     int min, int max,
+				     vector<hoid_t>* ls,
 				     hoid_t* next)
 {
   abort();
@@ -571,7 +578,8 @@ int ZFStore::collection_list_partial2(CollectionHandle ch,
 }
 
 int ZFStore::omap_get(CollectionHandle ch, ObjectHandle oh,
-		      buffer::list* header, map<std::string, buffer::list>* out)
+		      buffer::list* header,
+		      map<std::string, buffer::list>* out)
 {
   abort();
   return 0;
@@ -607,8 +615,8 @@ int ZFStore::omap_check_keys(CollectionHandle ch, ObjectHandle oh,
   return 0;
 }
 
-ObjectMap::ObjectMapIterator ZFStore::get_omap_iterator(CollectionHandle ch,
-							ObjectHandle oh)
+ObjectMap::ObjectMapIterator
+ZFStore::get_omap_iterator(CollectionHandle ch, ObjectHandle oh)
 {
   ZObject* o = static_cast<ZObject*>(oh);
   return ObjectMap::ObjectMapIterator(new ZOmapIterator(o));
@@ -637,7 +645,8 @@ objectstore_perf_stat_t ZFStore::get_cur_stats()
 int ZFStore::queue_transactions(list<Transaction*>& tls,
 				OpRequestRef op)
 {
-  ZTracer::Trace trace("op", &trace_endpoint, op ? &op->trace : nullptr);
+  ZTracer::Trace trace("op", &trace_endpoint,
+		       op ? &op->trace : nullptr);
 
   do_transactions(tls, op, trace);
 
@@ -645,11 +654,12 @@ int ZFStore::queue_transactions(list<Transaction*>& tls,
   Context* on_apply_sync = nullptr;
   Context* on_commit = nullptr;
 
-  Transaction::collect_contexts(tls, &on_apply, &on_commit, &on_apply_sync);
+  Transaction::collect_contexts(tls, &on_apply, &on_commit,
+				&on_apply_sync);
   if (on_apply_sync)
     on_apply_sync->complete(0);
-  // send apply and commit completions synchronously to avoid the latency from
-  // context switching
+  /* send apply and commit completions synchronously to avoid the
+   * latency from context switching */
   if (on_apply)
     on_apply->complete(0);
   if (on_commit)
@@ -1002,7 +1012,8 @@ int ZFStore::do_transaction(Transaction& t, OpRequestRef& op,
 			     i->op == Transaction::OP_CLONERANGE2))
 	  msg = "ENOENT on clone suggests osd bug";
 
-	dout(0) << " error " << cpp_strerror(r) << " not handled on operation "
+	dout(0) << " error " << cpp_strerror(r)
+		<< " not handled on operation "
 		<< i->op << dendl;
 	dout(0) << msg << dendl;
 	dout(0) << " transaction dump:\n";
@@ -1029,8 +1040,8 @@ int ZFStore::touch(ZCollection* c, ZObject* o)
   return 0;
 } /* touch */
 
-int ZFStore::write(ZCollection* c, ZObject* o, off_t offset, size_t len,
-		   const buffer::list& bl, bool replica)
+int ZFStore::write(ZCollection* c, ZObject* o, off_t offset,
+		   size_t len, const buffer::list& bl, bool replica)
 {
 
   dout(15) << "write " << c->get_cid() << "/" << o->get_oid() << " "
@@ -1113,7 +1124,8 @@ int ZFStore::setattrs(ZCollection* c, ZObject* o,
   return r;
 } /* setattrs */
 
-int ZFStore::rmattr(ZCollection* c, ZObject* o, const std::string& name)
+int ZFStore::rmattr(ZCollection* c, ZObject* o,
+		    const std::string& name)
 {
   dout(15) << "rmattr " << c->get_cid() << "/" << o->get_oid()
 	   << " '" << name << "'" << dendl;
@@ -1248,8 +1260,8 @@ int ZFStore::destroy_collection(ZCollection* c)
 
 /* ZCollection */
 
-ZFStore::ZCollection::ZCollection(ZFStore* zs, const coll_t& cid, int& r,
-				  bool create)
+ZFStore::ZCollection::ZCollection(ZFStore* zs, const coll_t& cid,
+				  int& r, bool create)
   : ceph::os::Collection(zs, cid), cct(zs->cct), path(zs->path),
     index(zs->cct, zs->cct->_conf->fragtreeindex_initial_split),
     ds_name(zs->root_ds + cid.c_str()),
@@ -1320,13 +1332,15 @@ int ZFStore::ZCollection::getattr(const char* name, buffer::ptr& v)
   return -r;
 } /* getattr */
 
-int ZFStore::ZCollection::setattr(const std::string& k, const buffer::ptr& v)
+int ZFStore::ZCollection::setattr(const std::string& k,
+				  const buffer::ptr& v)
 {
   dout(15) << "ZCollection::setattr " << cid << " " << v << dendl;
 
   assert(meta_vno);
 
-  int r = lzfw_setxattrat(zhfs, &acred, meta_vno, k.c_str(), v.c_str());
+  int r = lzfw_setxattrat(zhfs, &acred, meta_vno, k.c_str(),
+			  v.c_str());
   return r;
 } /* setattr */
 
