@@ -14,7 +14,7 @@
 #define CEPH_MDS_PROTOCOL 23 /* cluster internal */
 
 class MonClient;
-class Objecter;
+namespace rados { class Objecter; }
 
 namespace cohort {
 namespace mds {
@@ -28,7 +28,7 @@ class MDS : public Dispatcher {
   const mcas::gc_global gc;
   Messenger *messenger;
   MonClient *monc;
-  Objecter *objecter;
+  rados::Objecter *objecter;
   MDSMap mdsmap;
   cohort::Timer<ceph::mono_clock> beacon_timer;
   version_t beacon_last_seq;
