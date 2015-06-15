@@ -16,7 +16,13 @@
 #include <stdint.h>
 
 
-typedef uint64_t inodenum_t;
+typedef uint64_t libmds_ino_t;
+typedef const uint8_t* libmds_volume_t;
+
+typedef struct libmds_fileid {
+  libmds_volume_t volume;
+  libmds_ino_t ino;
+} libmds_fileid_t;
 
 /**
  * Callback for libmds_readdir, containing a single directory entry.
@@ -29,7 +35,7 @@ typedef uint64_t inodenum_t;
  *
  * @return 0 if the caller is prepared to accept more entries
  */
-typedef int (*libmds_readdir_fn)(const char *name, inodenum_t ino,
+typedef int (*libmds_readdir_fn)(const char *name, libmds_ino_t ino,
                                  uint64_t pos, uint64_t gen, void *user);
 
 #ifdef __cplusplus
@@ -65,51 +71,45 @@ struct libmds {
    * Create a regular file in the parent directory.
    * @see libmds_create()
    */
-  virtual int create(const uint8_t volume[16], inodenum_t parent,
-                     const char *name) = 0;
+  virtual int create(const libmds_fileid_t *parent, const char *name) = 0;
 
   /**
    * Create a subdirectory in the parent directory.
    * @see libmds_mkdir()
    */
-  virtual int mkdir(const uint8_t volume[16], inodenum_t parent,
-                    const char *name) = 0;
+  virtual int mkdir(const libmds_fileid_t *parent, const char *name) = 0;
 
   /**
    * Unlink the given file from the parent directory.
    * @see libmds_unlink()
    */
-  virtual int unlink(const uint8_t volume[16], inodenum_t parent,
-                     const char *name) = 0;
+  virtual int unlink(const libmds_fileid_t *parent, const char *name) = 0;
 
   /**
    * Find an entry in the parent directory.
    * @see libmds_lookup()
    */
-  virtual int lookup(const uint8_t volume[16], inodenum_t parent,
-                     const char *name, inodenum_t *ino) = 0;
+  virtual int lookup(const libmds_fileid_t *parent, const char *name,
+                     libmds_ino_t *ino) = 0;
 
   /**
    * List the entries of a directory.
    * @see libmds_readdir()
    */
-  virtual int readdir(const uint8_t volume[16], inodenum_t dir,
-                      uint64_t pos, uint64_t gen,
+  virtual int readdir(const libmds_fileid_t *dir, uint64_t pos, uint64_t gen,
                       libmds_readdir_fn callback, void *user) = 0;
 
   /**
    * Query the attributes of a file.
    * @see libmds_getattr()
    */
-  virtual int getattr(const uint8_t volume[16], inodenum_t ino,
-                      struct stat *st) = 0;
+  virtual int getattr(const libmds_fileid_t *ino, struct stat *st) = 0;
 
   /**
    * Set the attributes of a file.
    * @see libmds_setattr()
    */
-  virtual int setattr(const uint8_t volume[16], inodenum_t ino,
-                      const struct stat *st) = 0;
+  virtual int setattr(const libmds_fileid_t *ino, const struct stat *st) = 0;
 
  protected:
   /** Destructor protected: must be deleted by libmds_cleanup() */
@@ -185,8 +185,8 @@ extern "C" {
    * @retval -ENOTDIR if the parent is not a directory.
    * @retval -EEXIST if the parent directory already has an entry with \a name.
    */
-  int libmds_create(struct libmds *mds, const uint8_t volume[16],
-                    inodenum_t parent, const char *name);
+  int libmds_create(struct libmds *mds, const libmds_fileid_t *parent,
+                    const char *name);
 
   /**
    * Create a subdirectory in the parent directory.
@@ -201,8 +201,8 @@ extern "C" {
    * @retval -ENOTDIR if the parent is not a directory.
    * @retval -EEXIST if the parent directory already has an entry with \a name.
    */
-  int libmds_mkdir(struct libmds *mds, const uint8_t volume[16],
-                   inodenum_t parent, const char *name);
+  int libmds_mkdir(struct libmds *mds, const libmds_fileid_t *parent,
+                   const char *name);
 
   /**
    * Unlink the given file from the parent directory.
@@ -217,8 +217,8 @@ extern "C" {
    * @retval -ENOTDIR if the parent is not a directory.
    * @retval -ENOTEMPTY if the entry is a non-empty directory.
    */
-  int libmds_unlink(struct libmds *mds, const uint8_t volume[16],
-                    inodenum_t parent, const char *name);
+  int libmds_unlink(struct libmds *mds, const libmds_fileid_t *parent,
+                    const char *name);
 
   /**
    * Find an entry in the parent directory.
@@ -233,8 +233,8 @@ extern "C" {
    * @retval -ENOENT if the parent does not have an entry with \a name.
    * @retval -ENOTDIR if the parent is not a directory.
    */
-  int libmds_lookup(struct libmds *mds, const uint8_t volume[16],
-                    inodenum_t parent, const char *name, inodenum_t *ino);
+  int libmds_lookup(struct libmds *mds, const libmds_fileid_t *parent,
+                    const char *name, libmds_ino_t *ino);
 
   /**
    * List the entries of a directory.
@@ -253,8 +253,8 @@ extern "C" {
    * @retval -EOF if \a pos is past the end of the directory.
    * @retval -ESTALE if \a gen doesn't match current directory.
    */
-  int libmds_readdir(struct libmds *mds, const uint8_t volume[16],
-                     inodenum_t dir, uint64_t pos, uint64_t gen,
+  int libmds_readdir(struct libmds *mds, const libmds_fileid_t *dir,
+                     uint64_t pos, uint64_t gen,
                      libmds_readdir_fn cb, void *user);
 
   /**
@@ -268,8 +268,8 @@ extern "C" {
    * @return Returns 0 on success or a negative error code.
    * @retval -ENOENT if a file with inode number \a ino does not exist.
    */
-  int libmds_getattr(struct libmds *mds, const uint8_t volume[16],
-                     inodenum_t ino, struct stat *st);
+  int libmds_getattr(struct libmds *mds, const libmds_fileid_t *file,
+                     struct stat *st);
 
   /**
    * Set the attributes of a file.
@@ -282,8 +282,8 @@ extern "C" {
    * @return Returns 0 on success or a negative error code.
    * @retval -ENOENT if a file with inode number \a ino does not exist.
    */
-  int libmds_setattr(struct libmds *mds, const uint8_t volume[16],
-                     inodenum_t ino, const struct stat *st);
+  int libmds_setattr(struct libmds *mds, const libmds_fileid_t *file,
+                     const struct stat *st);
 
 #ifdef __cplusplus
 } /* extern "C" */
