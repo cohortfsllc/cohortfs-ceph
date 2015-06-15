@@ -13,12 +13,12 @@ using namespace cohort_zfs;
 namespace {
 
   CephContext* cct;
-  lzfw_vfs_t* zhfs;
+  vfs_t* zhfs;
 
   class TestFragTreeIndex : public FragTreeIndex {
   public:
-    TestFragTreeIndex(lzfw_vfs_t* zhfs, uint32_t initial_split = 0)
-      : FragTreeIndex(::cct, zhfs, initial_split)
+    TestFragTreeIndex(uint32_t initial_split = 0)
+      : FragTreeIndex(::cct, initial_split)
     {}
 
     // expose split/merge functions
@@ -90,7 +90,7 @@ namespace {
       committed.merges.clear();
       tree.clear();
       sizes.clear();
-      (void) lzfw_closedir(zhfs, &cred, root);
+      (void) lzfw_closedir(zhfs, &acred, root);
       root = nullptr;
     }
   };
@@ -207,8 +207,8 @@ TEST(OsFragTreeIndex, OpenStatUnlink)
   zhfs = lzfw_mount("test_pool", "/tank", "");
   ASSERT_NE(zhfs, nullptr);
 
-  TestFragTreeIndex index(zhfs);
-  lzfw_vnode_t* vnode;
+  TestFragTreeIndex index;
+  vnode_t* vnode;
   struct stat st;
 
   ASSERT_EQ(0, index.init(path));
@@ -233,13 +233,13 @@ TEST(OsFragTreeIndex, Split)
   zhfs = lzfw_mount("test_pool", "/tank", "");
   ASSERT_NE(zhfs, nullptr);
 
-  TestFragTreeIndex index(zhfs);
+  TestFragTreeIndex index;
   ASSERT_EQ(0, index.init(path));
   ASSERT_EQ(0, index.mount(path));
 
   const hoid_t oid = mkhoid("foo", 0);
 
-  lzfw_vnode_t* vnode;
+  vnode_t* vnode;
   ASSERT_EQ(0, index.open(oid, true, &vnode));
 
   // start a split (async=false)
@@ -283,13 +283,13 @@ TEST(OsFragTreeIndex, SplitAsync)
   zhfs = lzfw_mount("test_pool", "/tank", "");
   ASSERT_NE(zhfs, nullptr);
 
-  TestFragTreeIndex index(zhfs);
+  TestFragTreeIndex index;
   ASSERT_EQ(0, index.init(path));
   ASSERT_EQ(0, index.mount(path));
 
   const hoid_t oid = mkhoid("foo", 0);
 
-  lzfw_vnode_t* vnode;
+  vnode_t* vnode;
   ASSERT_EQ(0, index.open(oid, true, &vnode));
 
   // start an async split
@@ -327,7 +327,7 @@ TEST(OsFragTreeIndex, Merge)
   zhfs = lzfw_mount("test_pool", "/tank", "");
   ASSERT_NE(zhfs, nullptr);
 
-  TestFragTreeIndex index(zhfs);
+  TestFragTreeIndex index;
   ASSERT_EQ(0, index.init(path));
   ASSERT_EQ(0, index.mount(path));
 
@@ -338,7 +338,7 @@ TEST(OsFragTreeIndex, Merge)
   // create a file in 0/
   const hoid_t oid = mkhoid("foo", 0);
 
-  lzfw_vnode_t* vnode;
+  vnode_t* vnode;
   ASSERT_EQ(0, index.open(oid, true, &vnode));
 
   // start a merge (async=false)
@@ -379,7 +379,7 @@ TEST(OsFragTreeIndex, MergeAsync)
   zhfs = lzfw_mount("test_pool", "/tank", "");
   ASSERT_NE(zhfs, nullptr);
 
-  TestFragTreeIndex index(zhfs);
+  TestFragTreeIndex index;
   ASSERT_EQ(0, index.init(path));
   ASSERT_EQ(0, index.mount(path));
 
@@ -390,7 +390,7 @@ TEST(OsFragTreeIndex, MergeAsync)
   // create a file in 0/
   const hoid_t oid = mkhoid("foo", 0);
 
-  lzfw_vnode_t* vnode;
+  vnode_t* vnode;
   ASSERT_EQ(0, index.open(oid, true, &vnode));
 
   // start an async merge
@@ -426,13 +426,13 @@ TEST(OsFragTreeIndex, SplitRecovery)
   zhfs = lzfw_mount("test_pool", "/tank", "");
   ASSERT_NE(zhfs, nullptr);
 
-  TestFragTreeIndex index(zhfs);
+  TestFragTreeIndex index;
   ASSERT_EQ(0, index.init(path));
   ASSERT_EQ(0, index.mount(path));
 
   const hoid_t oid = mkhoid("foo", 0);
 
-  lzfw_vnode_t* vnode;
+  vnode_t* vnode;
   ASSERT_EQ(0, index.open(oid, true, &vnode));
 
   // start a split (async=false)
@@ -478,7 +478,7 @@ TEST(OsFragTreeIndex, CountSizes)
   zhfs = lzfw_mount("test_pool", "/tank", "");
   ASSERT_NE(zhfs, nullptr);
 
-  TestFragTreeIndex index(zhfs);
+  TestFragTreeIndex index;
   ASSERT_EQ(0, index.init(path));
   ASSERT_EQ(0, index.mount(path));
 
@@ -526,7 +526,7 @@ TEST(OsFragTreeIndex, CountSizes)
   const hoid_t o = mkhoid("o", 0x00E0000000000000ULL);
   const hoid_t p = mkhoid("p", 0x00F0000000000000ULL);
 
-  lzfw_vnode_t* vnode;
+  vnode_t* vnode;
   ASSERT_EQ(0, index.open(a, true, &vnode));
   ASSERT_EQ(0, index.open(b, true, &vnode));
   ASSERT_EQ(0, index.open(c, true, &vnode));
@@ -585,11 +585,11 @@ TEST(OsFragTreeIndex, Destroy)
   zhfs = lzfw_mount("test_pool", "/tank", "");
   ASSERT_NE(zhfs, nullptr);
 
-  TestFragTreeIndex index(zhfs, 2);
+  TestFragTreeIndex index(2);
   ASSERT_EQ(0, index.init(path));
   ASSERT_EQ(0, index.mount(path));
 
-  lzfw_vnode_t* vnode;
+  vnode_t* vnode;
   ASSERT_EQ(0, index.open(mkhoid("a", 0x0000000000000000ULL),
 			  true, &vnode));
   ASSERT_EQ(0, index.open(mkhoid("b", 0x0040000000000000ULL),
@@ -619,7 +619,7 @@ TEST(OsFragTreeIndex, Names)
   zhfs = lzfw_mount("test_pool", "/tank", "");
   ASSERT_NE(zhfs, nullptr);
 
-  TestFragTreeIndex index(zhfs, 0);
+  TestFragTreeIndex index(0);
   ASSERT_EQ(0, index.init(path));
   ASSERT_EQ(0, index.mount(path));
 
@@ -627,7 +627,7 @@ TEST(OsFragTreeIndex, Names)
   const std::string name(MAX_CEPH_OBJECT_NAME_LEN, 'a');
   const hoid_t oid = mkhoid(name.c_str(), 0);
 
-  lzfw_vnode_t* vnode;
+  vnode_t* vnode;
   ASSERT_EQ(0, index.open(oid, true, &vnode));
 
   // query xattr

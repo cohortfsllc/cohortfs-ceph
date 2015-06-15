@@ -1356,3 +1356,47 @@ int ZFStore::ZObject::omap_setheader(const bufferlist& bl)
   abort();
   return 0;
 } /* omap_setheader */
+
+int ZFStore::ZObject::omap_get(bufferlist* header,
+			       map<std::string, bufferlist>* out)
+{
+  ldout(cct(), 15) << "omap_get " << get_cid() << "/" << get_oid()
+		   << dendl;
+  abort();
+  return 0;
+} /* omap_get */
+
+int ZFStore::ZObject::omap_get_header(bufferlist* header, bool allow_eio)
+{
+  ldout(cct(), 15) << "omap_get_header " << get_cid() << "/" << get_oid()
+		   << dendl;
+  abort();
+  return 0;
+} /* omap_get_header */
+
+int ZFStore::ZObject::omap_get_keys(set<std::string>* keys)
+{
+  ldout(cct(), 15) << "omap_get_keys " << get_cid() << "/" << get_oid()
+		   << dendl;
+  abort();
+  return 0;
+} /* omap_get_keys */
+
+int ZFStore::ZObject::omap_get_values(const set<std::string>& keys,
+				      map<std::string, bufferlist>* out)
+{
+  ldout(cct(), 15) << "omap_get_values " << get_cid() << "/" << get_oid()
+		   << dendl;
+  abort();
+  return 0;
+} /* omap_get_values */
+
+
+int ZFStore::ZObject::omap_check_keys(const set<std::string>& keys,
+				      set<std::string>* out)
+{
+  ldout(cct(), 15) << "omap_check_keys " << get_cid() << "/" << get_oid()
+		   << dendl;
+  abort();
+  return 0;
+} /* omap_check_keys */
