@@ -45,7 +45,7 @@ namespace {
 
   lzfw_handle_t* zhd; /* zfswrap handle */
   lzfw_vfs_t* zhfs; /* dataset handle */
-  lzfw_vnode_t* root_vnode = nullptr;
+  vnode_t* root_vnode = nullptr;
   inogen_t root_ino = {0, 0};
   creden_t acred = {0, 0};
 
@@ -53,7 +53,7 @@ namespace {
   {
     std::string leaf_name;
     inogen_t ino;
-    lzfw_vnode_t* vnode;
+    vnode_t* vnode;
 
   ZFSObject(std::string n) : leaf_name(std::move(n)), ino{0, 0},
       vnode(nullptr)
@@ -428,7 +428,10 @@ int c2_dir_iter(vnode_t *vno, dir_iter_cb_context_t *cb_ctx,
   std::vector<string>& names = *(static_cast<std::vector<string>*>(arg));
   /* XXX do something */
   if (cb_ctx->dirent) {
-    names.push_back(std::string(cb_ctx->dirent->d_name));
+    std::string name = cb_ctx->dirent->d_name;
+    if (!(name == ".") ||
+	(name == ".."))
+      names.push_back(std::move(name));
   }
   return 0;
 }
