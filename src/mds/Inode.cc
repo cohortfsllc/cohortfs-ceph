@@ -4,6 +4,7 @@
 #include "Inode.h"
 #include "Cache.h"
 #include "Storage.h"
+#include "Volume.h"
 
 using namespace cohort::mds;
 
@@ -122,7 +123,7 @@ bool Inode::fetch(Storage *storage)
   std::lock_guard<std::mutex> lock(mutex);
   switch (state) {
     case STATE_EMPTY:
-      inode = storage->get(inodeno);
+      inode = storage->get(cache->get_volume()->get_uuid(), inodeno);
       if (inode) {
         state = STATE_VALID;
         return true;

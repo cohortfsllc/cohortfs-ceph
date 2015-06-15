@@ -19,6 +19,8 @@ class Objecter;
 namespace cohort {
 namespace mds {
 
+class Storage;
+
 class MDS : public Dispatcher {
  public:
   const int whoami;
@@ -33,6 +35,7 @@ class MDS : public Dispatcher {
   int last_state, state, want_state;
   ceph_tid_t last_tid;
 
+  std::unique_ptr<Storage> storage; // inode storage
   VolumeTable volumes;
 
   void beacon_send();
