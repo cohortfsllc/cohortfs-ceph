@@ -161,55 +161,42 @@ void LibMDS::signal(int signum)
 
 int LibMDS::create(const libmds_fileid_t *parent, const char *name)
 {
-  boost::uuids::uuid vol;
-  memcpy(&vol, parent->volume, sizeof(vol));
   const identity who = {0, 0, 0}; // XXX
-  return mds->create(vol, parent->ino, name, who, S_IFREG);
+  return mds->create(parent, name, who, S_IFREG);
 }
 
 int LibMDS::mkdir(const libmds_fileid_t *parent, const char *name)
 {
-  boost::uuids::uuid vol;
-  memcpy(&vol, parent->volume, sizeof(vol));
   const identity who = {0, 0, 0}; // XXX
-  return mds->create(vol, parent->ino, name, who, S_IFDIR);
+  return mds->create(parent, name, who, S_IFDIR);
 }
 
 int LibMDS::unlink(const libmds_fileid_t *parent, const char *name)
 {
-  boost::uuids::uuid vol;
-  memcpy(&vol, parent->volume, sizeof(vol));
-  return mds->unlink(vol, parent->ino, name);
+  return mds->unlink(parent, name);
 }
 
 int LibMDS::lookup(const libmds_fileid_t *parent, const char *name,
                    libmds_ino_t *ino)
 {
-  boost::uuids::uuid vol;
-  memcpy(&vol, parent->volume, sizeof(vol));
-  return mds->lookup(vol, parent->ino, name, ino);
+  return mds->lookup(parent, name, ino);
 }
 
 int LibMDS::readdir(const libmds_fileid_t *dir, uint64_t pos, uint64_t gen,
                     libmds_readdir_fn cb, void *user)
 {
-  boost::uuids::uuid vol;
-  memcpy(&vol, dir->volume, sizeof(vol));
-  return mds->readdir(vol, dir->ino, pos, gen, cb, user);
+  return mds->readdir(dir, pos, gen, cb, user);
 }
 
 int LibMDS::getattr(const libmds_fileid_t *file, struct stat *st)
 {
-  boost::uuids::uuid vol;
-  memcpy(&vol, file->volume, sizeof(vol));
-
   const int mask = ATTR_SIZE | ATTR_MODE |
       ATTR_GROUP | ATTR_OWNER |
       ATTR_ATIME | ATTR_MTIME | ATTR_CTIME |
       ATTR_NLINKS | ATTR_TYPE | ATTR_RAWDEV;
 
   ObjAttr attr;
-  int r = mds->getattr(vol, file->ino, mask, attr);
+  int r = mds->getattr(file, mask, attr);
   if (r == 0) {
     st->st_mode = attr.mode | attr.type;
     st->st_nlink = attr.nlinks;
@@ -226,9 +213,6 @@ int LibMDS::getattr(const libmds_fileid_t *file, struct stat *st)
 
 int LibMDS::setattr(const libmds_fileid_t *file, const struct stat *st)
 {
-  boost::uuids::uuid vol;
-  memcpy(&vol, file->volume, sizeof(vol));
-
   const int mask = ATTR_MODE | ATTR_GROUP | ATTR_OWNER |
       ATTR_ATIME | ATTR_MTIME | ATTR_CTIME |
       ATTR_NLINKS | ATTR_TYPE | ATTR_RAWDEV;
@@ -245,7 +229,7 @@ int LibMDS::setattr(const libmds_fileid_t *file, const struct stat *st)
   attr.mtime = ceph::real_clock::from_time_t(st->st_mtime);
   attr.ctime = ceph::real_clock::from_time_t(st->st_ctime);
 
-  return mds->setattr(vol, file->ino, mask, attr);
+  return mds->setattr(file, mask, attr);
 }
 
 } // namespace mds
