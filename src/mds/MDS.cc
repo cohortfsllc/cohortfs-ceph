@@ -75,24 +75,25 @@ void MDS::handle_signal(int signum)
   // XXX suicide
 }
 
-cohort::mds::VolumeRef MDS::get_volume(const boost::uuids::uuid &volume)
+cohort::mds::VolumeRef MDS::get_volume(libmds_volume_t volume)
 {
-  auto vol = volumes.get_or_create(volume);
+  auto p = reinterpret_cast<const boost::uuids::uuid*>(volume);
+  auto vol = volumes.get_or_create(*p);
   // TODO: look up the volume in the osd map and attach it
   if (vol)
     vol->mkfs(gc, cct->_conf);
   return vol;
 }
 
-int MDS::create(const boost::uuids::uuid &volume, _inodeno_t parent,
-                const char *name, const identity &who, int type)
+int MDS::create(const libmds_fileid_t *parent, const char *name,
+                const identity &who, int type)
 {
-  auto vol = get_volume(volume);
+  auto vol = get_volume(parent->volume);
   if (!vol)
     return -ENODEV;
 
   // find the parent object
-  auto p = vol->cache->get(parent);
+  auto p = vol->cache->get(parent->ino);
   if (!p)
     return -ENOENT;
 
@@ -109,15 +110,14 @@ int MDS::create(const boost::uuids::uuid &volume, _inodeno_t parent,
   return r;
 }
 
-int MDS::unlink(const boost::uuids::uuid &volume,
-                _inodeno_t parent, const char *name)
+int MDS::unlink(const libmds_fileid_t *parent, const char *name)
 {
-  auto vol = get_volume(volume);
+  auto vol = get_volume(parent->volume);
   if (!vol)
     return -ENODEV;
 
   // find the parent object
-  auto p = vol->cache->get(parent);
+  auto p = vol->cache->get(parent->ino);
   if (!p)
     return -ENOENT;
 
@@ -134,15 +134,15 @@ int MDS::unlink(const boost::uuids::uuid &volume,
   return 0;
 }
 
-int MDS::lookup(const boost::uuids::uuid &volume, _inodeno_t parent,
-                const char *name, _inodeno_t *ino)
+int MDS::lookup(const libmds_fileid_t *parent, const char *name,
+                libmds_ino_t *ino)
 {
-  auto vol = get_volume(volume);
+  auto vol = get_volume(parent->volume);
   if (!vol)
     return -ENODEV;
 
   // find the parent object
-  auto p = vol->cache->get(parent);
+  auto p = vol->cache->get(parent->ino);
   if (!p)
     return -ENOENT;
 
@@ -150,45 +150,43 @@ int MDS::lookup(const boost::uuids::uuid &volume, _inodeno_t parent,
   return p->lookup(name, ino);
 }
 
-int MDS::readdir(const boost::uuids::uuid &volume, _inodeno_t ino,
-                 uint64_t pos, uint64_t gen, libmds_readdir_fn cb, void *user)
+int MDS::readdir(const libmds_fileid_t *dir, uint64_t pos, uint64_t gen,
+                 libmds_readdir_fn cb, void *user)
 {
-  auto vol = get_volume(volume);
+  auto vol = get_volume(dir->volume);
   if (!vol)
     return -ENODEV;
 
   // find the object
-  auto inode = vol->cache->get(ino);
+  auto inode = vol->cache->get(dir->ino);
   if (!inode)
     return -ENOENT;
 
   return inode->readdir(pos, gen, cb, user);
 }
 
-int MDS::getattr(const boost::uuids::uuid &volume, _inodeno_t ino,
-                 int mask, ObjAttr &attr)
+int MDS::getattr(const libmds_fileid_t *file, int mask, ObjAttr &attr)
 {
-  auto vol = get_volume(volume);
+  auto vol = get_volume(file->volume);
   if (!vol)
     return -ENODEV;
 
   // find the object
-  auto inode = vol->cache->get(ino);
+  auto inode = vol->cache->get(file->ino);
   if (!inode)
     return -ENOENT;
 
   return inode->getattr(mask, attr);
 }
 
-int MDS::setattr(const boost::uuids::uuid &volume, _inodeno_t ino,
-                 int mask, const ObjAttr &attr)
+int MDS::setattr(const libmds_fileid_t *file, int mask, const ObjAttr &attr)
 {
-  auto vol = get_volume(volume);
+  auto vol = get_volume(file->volume);
   if (!vol)
     return -ENODEV;
 
   // find the object
-  auto inode = vol->cache->get(ino);
+  auto inode = vol->cache->get(file->ino);
   if (!inode)
     return -ENOENT;
 

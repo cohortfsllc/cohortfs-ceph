@@ -43,7 +43,7 @@ class MDS : public Dispatcher {
 
   ceph_tid_t issue_tid() { return ++last_tid; }
 
-  VolumeRef get_volume(const boost::uuids::uuid &volume);
+  VolumeRef get_volume(libmds_volume_t volume);
 
  public:
   MDS(int whoami, Messenger *m, MonClient *mc);
@@ -57,18 +57,15 @@ class MDS : public Dispatcher {
   void handle_signal(int signum);
 
   // for libmds
-  int create(const boost::uuids::uuid &volume, _inodeno_t parent,
-             const char *name, const identity &who, int type);
-  int unlink(const boost::uuids::uuid &volume,
-             _inodeno_t parent, const char *name);
-  int lookup(const boost::uuids::uuid &volume, _inodeno_t parent,
-             const char *name, _inodeno_t *ino);
-  int readdir(const boost::uuids::uuid &volume, _inodeno_t dir,
-              uint64_t pos, uint64_t gen, libmds_readdir_fn cb, void *user);
-  int getattr(const boost::uuids::uuid &volume, _inodeno_t ino,
-              int mask, ObjAttr &attr);
-  int setattr(const boost::uuids::uuid &volume, _inodeno_t ino,
-              int mask, const ObjAttr &attr);
+  int create(const libmds_fileid_t *parent, const char *name,
+             const identity &who, int type);
+  int unlink(const libmds_fileid_t *parent, const char *name);
+  int lookup(const libmds_fileid_t *parent, const char *name,
+             libmds_ino_t *ino);
+  int readdir(const libmds_fileid_t *dir, uint64_t pos, uint64_t gen,
+              libmds_readdir_fn cb, void *user);
+  int getattr(const libmds_fileid_t *file, int mask, ObjAttr &attr);
+  int setattr(const libmds_fileid_t *file, int mask, const ObjAttr &attr);
 
   // void handle_mds_beacon(MMDSBeacon *m);
   bool ms_dispatch(Message *m);
