@@ -34,9 +34,9 @@ private:
   static lzfw_handle_t* zhd;
   static std::atomic<uint32_t> n_instances;
   std::string root_ds;
-  lzfw_vfs_t* zhfs; /* root dataset handle */
+  vfs_t* zhfs; /* root dataset handle */
   inogen_t meta_ino;
-  lzfw_vnode_t* meta_vno; /* root dataset root vno */
+  vnode_t* meta_vno; /* root dataset root vno */
 
   ZTracer::Endpoint trace_endpoint;
 
@@ -48,7 +48,7 @@ public:
   struct ZObject : public ceph::os::Object
   {
     mutable std::atomic<uint32_t> refcnt;
-    lzfw_vnode_t* vno; /* opaque */
+    vnode_t* vno; /* opaque */
     inogen_t ino;
 
     std::mutex mtx;
@@ -113,11 +113,11 @@ public:
     const std::string& path;
     cohort_zfs::FragTreeIndex index;
     std::string ds_name;
-    lzfw_vfs_t* zhfs;
+    vfs_t* zhfs;
 
     inogen_t root_ino;
     inogen_t meta_ino;
-    lzfw_vnode_t* meta_vno;
+    vnode_t* meta_vno;
 
     typedef std::unique_lock<std::shared_timed_mutex> unique_lock;
     typedef std::shared_lock<std::shared_timed_mutex> shared_lock;
@@ -269,7 +269,7 @@ public:
     ZCollection *c = static_cast<ZCollection*>(ch);
     ceph::os::Object::ObjCache::Latch lat;
     ZObject* o = nullptr;
-    lzfw_vnode_t* vno;
+    vnode_t* vno;
 
     if (c->flags & ceph::os::Collection::FLAG_CLOSED) /* atomicity? */
       return o;
