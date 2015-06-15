@@ -38,16 +38,16 @@ namespace {
   bf::path vdev1(vdevs);
 
   lzfw_handle_t* zhd; /* zfswrap handle */
-  lzfw_vfs_t* zhfs; /* dataset handle */
-  lzfw_vnode_t* root_vnode = nullptr;
+  vfs_t* zhfs; /* dataset handle */
+  vnode_t* root_vnode = nullptr;
   inogen_t root_ino = {0, 0};
-  creden_t cred = {0, 0};
+  creden_t acred = {0, 0};
 
   struct ZFSObject
   {
     std::string leaf_name;
     inogen_t ino;
-    lzfw_vnode_t* vnode;
+    vnode_t* vnode;
 
   ZFSObject(std::string n) : leaf_name(std::move(n)), ino{0, 0},
       vnode(nullptr)
@@ -142,7 +142,7 @@ TEST(ZFSWRAP, MOUNT1)
 TEST(ZFSWRAP, MOUNT2)
 {
   // attempt to mount a non-existent dataset (must fail)
-  lzfw_vfs_t* zhfs2;
+  vfs_t* zhfs2;
   zhfs2 = lzfw_mount("zp1", "/zfnone1", "" /* XXX "mount options" */);
   ASSERT_EQ(zhfs2, nullptr);
 }
@@ -154,7 +154,7 @@ TEST(ZFSWRAP, OPENROOT)
   err = lzfw_getroot(zhfs, &root_ino);
   ASSERT_EQ(err, 0);
 
-  err = lzfw_opendir(zhfs, &cred, root_ino, &root_vnode);
+  err = lzfw_opendir(zhfs, &acred, root_ino, &root_vnode);
   ASSERT_EQ(err, 0);
   ASSERT_NE(root_vnode, nullptr);
 }
@@ -168,7 +168,7 @@ TEST(ZFSWRAP, FSOPS1)
     std::string n{"d" + std::to_string(ix)};
     zfs1_objs.emplace_back(ZFSObject(n));
     ZFSObject& o = zfs1_objs[ix];
-    err = lzfw_mkdirat(zhfs, &cred, root_vnode, o.leaf_name.c_str(),
+    err = lzfw_mkdirat(zhfs, &acred, root_vnode, o.leaf_name.c_str(),
 		       777 /* mode */, &o.ino);
     ASSERT_EQ(err, 0);
   }
@@ -177,7 +177,7 @@ TEST(ZFSWRAP, FSOPS1)
     std::string n{"f" + std::to_string(ix)};
     zfs1_objs.emplace_back(ZFSObject(n));
     ZFSObject& o = zfs1_objs[ix];
-    err = lzfw_create(zhfs, &cred, root_ino, o.leaf_name.c_str(),
+    err = lzfw_create(zhfs, &acred, root_ino, o.leaf_name.c_str(),
 		      644 /* mode */, &o.ino);
     ASSERT_EQ(err, 0);
   }
@@ -192,7 +192,7 @@ TEST(ZFSWRAP, READDIR1)
   bool done = false;
 
   do {
-    err = lzfw_readdir(zhfs, &cred, root_vnode, dirents, 32,
+    err = lzfw_readdir(zhfs, &acred, root_vnode, dirents, 32,
 		       &d_off);
     for (int ix = 0; ix < 32; ++ix) {
       lzfw_entry_t* dn = &dirents[ix];
@@ -217,19 +217,19 @@ TEST(ZFSWRAP, FSOPS2)
   for (ix = 50; ix < 100; ++ix) {
     ZFSObject& o = zfs1_objs[ix];
     unsigned o_flags;
-    err = lzfw_openat(zhfs, &cred, root_vnode, o.leaf_name.c_str(),
+    err = lzfw_openat(zhfs, &acred, root_vnode, o.leaf_name.c_str(),
 		      O_RDWR, 0 /* mode, if flags & O_CREAT */,
 		      &o_flags, &o.vnode);
     ASSERT_EQ(err, 0);
 
     // write into o
     string s = o.leaf_name + " data";
-    err = lzfw_write(zhfs, &cred, o.vnode, (void*) s.c_str(),
+    err = lzfw_write(zhfs, &acred, o.vnode, (void*) s.c_str(),
 		     s.length()+1, false /* behind (XXX!) */,
 		     0 /* off */);
     ASSERT_EQ(err, 0);
 
-    err = lzfw_close(zhfs, &cred, o.vnode, O_RDWR);
+    err = lzfw_close(zhfs, &acred, o.vnode, O_RDWR);
     o.vnode = nullptr;
     ASSERT_EQ(err, 0);
   }
@@ -242,20 +242,20 @@ TEST(ZFSWRAP, FSOPS3)
   for (ix = 50; ix < 100; ++ix) {
     ZFSObject& o = zfs1_objs[ix];
     unsigned o_flags;
-    err = lzfw_openat(zhfs, &cred, root_vnode, o.leaf_name.c_str(),
+    err = lzfw_openat(zhfs, &acred, root_vnode, o.leaf_name.c_str(),
 		      O_RDWR, 0 /* mode, if flags & O_CREAT */,
 		      &o_flags, &o.vnode);
     ASSERT_EQ(err, 0);
 
     // read from o
     char buf[100];
-    err = lzfw_read(zhfs, &cred, o.vnode, (void*) buf,
+    err = lzfw_read(zhfs, &acred, o.vnode, (void*) buf,
 		    100, false /* behind (XXX!) */, 0 /* off */);
     ASSERT_NE(err, 0);
 
     std::cout << "read: " << buf << std::endl;
 
-    err = lzfw_close(zhfs, &cred, o.vnode, O_RDWR);
+    err = lzfw_close(zhfs, &acred, o.vnode, O_RDWR);
     o.vnode = nullptr;
     ASSERT_EQ(err, 0);
   }
@@ -265,7 +265,7 @@ TEST(ZFSWRAP, CLOSEROOT)
 {
   int err;
 
-  err = lzfw_closedir(zhfs, &cred, root_vnode);
+  err = lzfw_closedir(zhfs, &acred, root_vnode);
   root_vnode = nullptr;
   ASSERT_EQ(err, 0);
 }
@@ -288,7 +288,7 @@ TEST(ZFSWRAP, REINIT)
   err = lzfw_getroot(zhfs, &root_ino);
   ASSERT_EQ(err, 0);
 
-  err = lzfw_opendir(zhfs, &cred, root_ino, &root_vnode);
+  err = lzfw_opendir(zhfs, &acred, root_ino, &root_vnode);
   ASSERT_EQ(err, 0);
   ASSERT_NE(root_vnode, nullptr);
 
@@ -296,25 +296,25 @@ TEST(ZFSWRAP, REINIT)
   for (ix = 70; ix < 80; ++ix) {
     ZFSObject& o = zfs1_objs[ix];
     unsigned o_flags;
-    err = lzfw_openat(zhfs, &cred, root_vnode, o.leaf_name.c_str(),
+    err = lzfw_openat(zhfs, &acred, root_vnode, o.leaf_name.c_str(),
 		      O_RDONLY, 0 /* mode, if flags & O_CREAT */,
 		      &o_flags, &o.vnode);
     ASSERT_EQ(err, 0);
 
     // read from o
     char buf[100];
-    err = lzfw_read(zhfs, &cred, o.vnode, (void*) buf,
+    err = lzfw_read(zhfs, &acred, o.vnode, (void*) buf,
 		    100, false /* behind (XXX!) */, 0 /* off */);
     ASSERT_NE(err, 0);
 
     std::cout << "read: " << buf << std::endl;
 
-    err = lzfw_close(zhfs, &cred, o.vnode, O_RDONLY);
+    err = lzfw_close(zhfs, &acred, o.vnode, O_RDONLY);
     o.vnode = nullptr;
     ASSERT_EQ(err, 0);
   }
 
-  err = lzfw_closedir(zhfs, &cred, root_vnode);
+  err = lzfw_closedir(zhfs, &acred, root_vnode);
   root_vnode = nullptr;
   ASSERT_EQ(err, 0);
 
