@@ -76,6 +76,30 @@ public:
       return true;
     }
 
+    /* magic */
+    CephContext* cct() { return c->os->cct; }
+
+    /* operations */
+    int omap_clear();
+    int omap_setkeys(const map<string, bufferlist>& aset);
+    int omap_rmkeys(const set<string>& keys);
+    int omap_get(bufferlist* header,
+		 map<std::string, bufferlist>* out);
+    int omap_get_header(bufferlist* header, bool allow_eio = false);
+    int omap_get_keys(set<std::string>* keys);
+    int omap_get_values(const set<std::string>& keys,
+			map<std::string, bufferlist>* out);
+    int omap_check_keys(const set<std::string>& keys,
+			set<std::string>* out);
+    int omap_rmkeyrange(const string& first, const string& last);
+    int omap_setheader(const bufferlist& bl);
+
+    int set_alloc_hint(uint64_t expected_object_size,
+		       uint64_t expected_write_size) {
+      /* XXX does nothing */
+      return 0;
+    }
+
     ~ZObject() {}
 
     struct ZObjectFactory : public cohort::lru::ObjectFactory
@@ -356,17 +380,36 @@ public:
 			       vector<hoid_t> *vs,
 			       CLPCursor& cursor);
   int omap_get(CollectionHandle ch, ObjectHandle oh,
-	       bufferlist* header, map<std::string, bufferlist>* out);
+	       bufferlist* header, map<std::string, bufferlist>* out) {
+    ZObject* o = static_cast<ZObject*>(oh);
+    return o->omap_get(header, out);
+  } /* omap_get */
+
   int omap_get_header(CollectionHandle ch, ObjectHandle oh,
-    bufferlist* header, bool allow_eio = false);
+		      bufferlist* header, bool allow_eio = false) {
+    ZObject* o = static_cast<ZObject*>(oh);
+    return o->omap_get_header(header, allow_eio);
+  } /* omap_get_header */
+
   int omap_get_keys(CollectionHandle ch, ObjectHandle oh,
-		    set<std::string>* keys);
+		    set<std::string>* keys) {
+    ZObject* o = static_cast<ZObject*>(oh);
+    return o->omap_get_keys(keys);
+  } /* omap_get_keys */
+
   int omap_get_values(CollectionHandle ch, ObjectHandle oh,
 		      const set<std::string>& keys,
-		      map<std::string, bufferlist>* out);
+		      map<std::string, bufferlist>* out) {
+    ZObject* o = static_cast<ZObject*>(oh);
+    return o->omap_get_values(keys, out);
+  } /* omap_get_values */
+
   int omap_check_keys(CollectionHandle ch, ObjectHandle oh,
 		      const set<std::string>& keys,
-		      set<std::string>* out);
+		      set<std::string>* out) {
+    ZObject* o = static_cast<ZObject*>(oh);
+    return o->omap_check_keys(keys, out);
+  } /* omap_check_keys */
 
   /* XXX */
   ObjectMap::ObjectMapIterator get_omap_iterator(CollectionHandle ch,
@@ -401,7 +444,6 @@ public:
 		  off_t srcoff, size_t len, off_t dstoff);
   int create_collection(const coll_t& c);
   int destroy_collection(ZCollection* c); // XXX should this be by-id?
-
 }; /* ZFStore */
 
 #endif /* COHORT_ZFSTORE_H */

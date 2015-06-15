@@ -31,7 +31,7 @@ lzfw_handle_t* ZFStore::zhd;
 
 #define dout_subsys ceph_subsys_filestore
 #undef dout_prefix
-#define dout_prefix *_dout << "zfstore(" << path << ") "
+#define dout_prefix *_dout << ""
 
 /* Factory method */
 ObjectStore* ZFStore_factory(CephContext* cct,
@@ -577,44 +577,6 @@ int ZFStore::collection_list_partial2(CollectionHandle ch,
   return 0;
 }
 
-int ZFStore::omap_get(CollectionHandle ch, ObjectHandle oh,
-		      buffer::list* header,
-		      map<std::string, buffer::list>* out)
-{
-  abort();
-  return 0;
-}
-
-int ZFStore::omap_get_header(CollectionHandle ch, ObjectHandle oh,
-			     buffer::list* header, bool allow_eio)
-{
-  abort();
-  return 0;
-}
-
-int ZFStore::omap_get_keys(CollectionHandle ch, ObjectHandle oh,
-			   set<std::string>* keys)
-{
-  abort();
-  return 0;
-}
-
-int ZFStore::omap_get_values(CollectionHandle ch, ObjectHandle oh,
-			     const set<std::string>& keys,
-			     map<std::string, buffer::list>* out)
-{
-  abort();
-  return 0;
-}
-
-int ZFStore::omap_check_keys(CollectionHandle ch, ObjectHandle oh,
-			     const set<std::string>& keys,
-			     set<std::string>* out)
-{
-  abort();
-  return 0;
-}
-
 ObjectMap::ObjectMapIterator
 ZFStore::get_omap_iterator(CollectionHandle ch, ObjectHandle oh)
 {
@@ -899,7 +861,7 @@ int ZFStore::do_transaction(Transaction& t, OpRequestRef& op,
       if (c) {
 	o = get_slot_object(t, c, i->o1_ix, false /* !create */);
 	if (o)
-	  r = omap_clear(c, o);
+	  r = o->omap_clear();
       }
       break;
 
@@ -909,7 +871,7 @@ int ZFStore::do_transaction(Transaction& t, OpRequestRef& op,
       if (c) {
 	o = get_slot_object(t, c, i->o1_ix, true /* create */);
 	if (o)
-	  r = omap_setkeys(c, o, i->attrs);
+	  r = o->omap_setkeys(i->attrs);
       }
       break;
 
@@ -919,7 +881,7 @@ int ZFStore::do_transaction(Transaction& t, OpRequestRef& op,
       if (c) {
 	o = get_slot_object(t, c, i->o1_ix, false /* !create */);
 	if (o)
-	  r = omap_rmkeys(c, o, i->keys);
+	  r = o->omap_rmkeys(i->keys);
       }
       break;
 
@@ -929,7 +891,7 @@ int ZFStore::do_transaction(Transaction& t, OpRequestRef& op,
       if (c) {
 	o = get_slot_object(t, c, i->o1_ix, false /* !create */);
 	if (o)
-	  r = omap_rmkeyrange(c, o, i->name, i->name2);
+	  r = o->omap_rmkeyrange(i->name, i->name2);
       }
       break;
 
@@ -939,7 +901,7 @@ int ZFStore::do_transaction(Transaction& t, OpRequestRef& op,
       if (c) {
 	o = get_slot_object(t, c, i->o1_ix, true /* !create */);
 	if (o)
-	  r = omap_setheader(c, o, i->data);
+	  r = o->omap_setheader(i->data);
       }
       break;
 
@@ -949,7 +911,7 @@ int ZFStore::do_transaction(Transaction& t, OpRequestRef& op,
       if (c) {
 	o = get_slot_object(t, c, i->o1_ix, false /* !create */);
 	if (o)
-	  r = set_alloc_hint(c, o, i->value1, i->value2);
+	  r = o->set_alloc_hint(i->value1, i->value2);
       }
       break;
 
@@ -1047,7 +1009,6 @@ int ZFStore::write(ZCollection* c, ZObject* o, off_t offset,
   dout(15) << "write " << c->get_cid() << "/" << o->get_oid() << " "
 	   << offset << "~" << len << dendl;
   int r = 0;
-  int bytes_written = 0;
   iovec *iovs = tls_iovs.first;
   uint16_t iov_ix;
 
@@ -1351,3 +1312,47 @@ int ZFStore::ZCollection::rmattr(const std::string& k)
   int r = lzfw_removexattr(zhfs, &acred, meta_ino, k.c_str());
   return -r;
 } /* rmattr */
+
+/* ZObject */
+int ZFStore::ZObject::omap_clear(void)
+{
+  ldout(cct(), 15) << "omap_clear " << " " << get_cid() << "/"
+		   << get_oid() << dendl;
+  /* XXX must filter just OMAP attrs */
+  abort(); /* XXXX -- waiting to test iteratior invalidation */
+  return 0;
+} /* omap_clear */
+
+int ZFStore::ZObject::omap_setkeys(const map<string,bufferlist>& aset)
+{
+  ldout(cct(), 15) << "omap_setkeys " << get_cid() << "/" << get_oid()
+		   << dendl;
+  abort();
+  return 0;
+} /* omap_setkeys */
+
+int ZFStore::ZObject::omap_rmkeys(const set<string>& keys)
+{
+  ldout(cct(), 15) << "omap_rmkeys" << get_cid() << "/" << get_oid() << dendl;
+  abort();
+  return 0;
+} /* omap_rmkeys */
+
+int ZFStore::ZObject::omap_rmkeyrange(const string& first,
+				      const string& last)
+{
+  ldout(cct(), 15) << "omap_rmkeyrange " << get_cid() << "/" << get_oid()
+		   << " [" << first << "," << last << "]" << dendl;
+
+  set<string> keys;
+  abort();
+  return omap_rmkeys(keys);
+} /* omap_rmkeyrange */
+
+int ZFStore::ZObject::omap_setheader(const bufferlist& bl)
+{
+  ldout(cct(), 15) << "omap_setheader " << get_cid() << "/" << get_oid()
+		   << dendl;
+  abort();
+  return 0;
+} /* omap_setheader */
