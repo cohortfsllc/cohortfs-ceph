@@ -44,7 +44,7 @@ namespace {
   bf::path vdev1(vdevs);
 
   lzfw_handle_t* zhd; /* zfswrap handle */
-  lzfw_vfs_t* zhfs; /* dataset handle */
+  vfs_t* zhfs; /* dataset handle */
   vnode_t* root_vnode = nullptr;
   inogen_t root_ino = {0, 0};
   creden_t acred = {0, 0};
