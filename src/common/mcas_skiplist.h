@@ -43,6 +43,17 @@ class gc_guard {
   operator ptst_t*() const { return handle; }
 };
 
+class obj_cache {
+  osi_mcas_obj_cache_t cache;
+ public:
+  obj_cache(const gc_global &gc, size_t obj_size, const char *name) {
+    osi_mcas_obj_cache_create(gc, &cache, obj_size, name);
+  }
+  ~obj_cache() { osi_mcas_obj_cache_destroy(cache); }
+
+  operator osi_mcas_obj_cache_t() const { return cache; }
+};
+
 struct skip_stats {
   int gets;
   int gets_created;
@@ -78,8 +89,8 @@ class skiplist_base {
 
   CACHE_PAD(0);
   const gc_global &gc;
+  const obj_cache &cache;
   osi_set_t *const skip;
-  osi_mcas_obj_cache_t cache;
   CACHE_PAD(1);
   std::atomic<int> size; // number of entries in the table
   CACHE_PAD(2);
@@ -118,8 +129,8 @@ class skiplist_base {
   };
 
   skiplist_base(const gc_global &gc, osi_set_cmp_func cmp,
-                size_t object_size, const char *name,
-                destructor_fn destructor, int highwater, int lowwater);
+                const obj_cache &cache, destructor_fn destructor,
+                int highwater, int lowwater);
   ~skiplist_base();
 
   // object accessors for skiplist<T>
@@ -150,9 +161,9 @@ class skiplist : private detail::skiplist_base {
   static void destruct_t(object *o) { static_cast<T*>(o)->~T(); }
 
  public:
-  skiplist(const gc_global &gc, osi_set_cmp_func cmp, const char *name,
+  skiplist(const gc_global &gc, const obj_cache &cache, osi_set_cmp_func cmp,
            uint32_t highwater = 0, uint32_t lowwater = 0)
-    : skiplist_base(gc, cmp, sizeof(T), name, destruct_t, highwater, lowwater)
+    : skiplist_base(gc, cmp, cache, destruct_t, highwater, lowwater)
   {
     static_assert(std::is_base_of<skiplist_object, T>::value,
                   "template type T must inherit from skiplist_object");
