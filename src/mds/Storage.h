@@ -4,6 +4,8 @@
 #ifndef COHORT_MDS_STORAGE_H
 #define COHORT_MDS_STORAGE_H
 
+#include <unordered_map>
+#include <boost/uuid/uuid.hpp>
 #include "common/mcas_skiplist.h"
 #include "mds_types.h"
 
@@ -12,21 +14,21 @@ namespace mds {
 
 struct InodeStorage : public mcas::skiplist_object {
   boost::uuids::uuid volume;
-  _inodeno_t inodeno;
+  libmds_ino_t inodeno;
   ObjAttr attr;
 
   struct Dir {
     Dir() : gen(0) {}
-    std::map<std::string, _inodeno_t> entries;
+    std::unordered_map<std::string, libmds_ino_t> entries;
     uint64_t gen; // for readdir verf
   } dir;
 
   // search template for lookup
-  InodeStorage(const boost::uuids::uuid &volume, _inodeno_t ino)
+  InodeStorage(const boost::uuids::uuid &volume, libmds_ino_t ino)
     : volume(volume), inodeno(ino) {}
 
   // search template for create
-  InodeStorage(const boost::uuids::uuid &volume, _inodeno_t ino,
+  InodeStorage(const boost::uuids::uuid &volume, libmds_ino_t ino,
                const identity &who, int type)
     : volume(volume), inodeno(ino)
   {

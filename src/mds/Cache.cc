@@ -25,7 +25,7 @@ InodeRef Cache::create(const identity &who, int type)
   return inodes.get_or_create(Inode(this, ino, data));
 }
 
-InodeRef Cache::get(_inodeno_t ino)
+InodeRef Cache::get(libmds_ino_t ino)
 {
   auto inode = inodes.get_or_create(Inode(this, ino));
   if (!inode->fetch(storage))
