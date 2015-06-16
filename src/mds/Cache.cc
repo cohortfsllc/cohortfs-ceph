@@ -9,10 +9,11 @@
 using namespace cohort::mds;
 
 Cache::Cache(const Volume *volume, const mcas::gc_global &gc,
-             Storage *storage, int highwater, int lowwater)
+             const mcas::obj_cache &cache, Storage *storage,
+             int highwater, int lowwater)
   : volume(volume),
     gc(gc),
-    inodes(gc, inode_cmp, "inodes", highwater, lowwater),
+    inodes(gc, cache, inode_cmp, highwater, lowwater),
     storage(storage),
     next_ino(1)
 {

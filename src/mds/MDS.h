@@ -26,6 +26,10 @@ class MDS : public Dispatcher {
   const int whoami;
  private:
   const mcas::gc_global gc;
+  const mcas::obj_cache volume_cache;
+  const mcas::obj_cache storage_cache;
+  const mcas::obj_cache inode_cache;
+
   Messenger *messenger;
   MonClient *monc;
   rados::Objecter *objecter;
@@ -35,8 +39,8 @@ class MDS : public Dispatcher {
   int last_state, state, want_state;
   ceph_tid_t last_tid;
 
-  std::unique_ptr<Storage> storage; // inode storage
   VolumeTable volumes;
+  std::unique_ptr<Storage> storage; // inode storage
 
   void beacon_send();
 

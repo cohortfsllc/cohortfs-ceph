@@ -27,7 +27,8 @@ class Cache {
 
  public:
   Cache(const Volume *volume, const mcas::gc_global &gc,
-        Storage *storage, int highwater, int lowwater);
+        const mcas::obj_cache &cache, Storage *storage,
+        int highwater, int lowwater);
 
   const Volume* get_volume() const { return volume; }
 
