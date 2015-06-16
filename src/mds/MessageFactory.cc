@@ -9,6 +9,7 @@
 #include "messages/MMDSMap.h"
 #include "messages/MMonCommand.h"
 #include "messages/MMonMap.h"
+#include "messages/MOSDMap.h"
 
 
 Message* MDSMessageFactory::create(int type)
@@ -20,6 +21,7 @@ Message* MDSMessageFactory::create(int type)
   case CEPH_MSG_MDS_MAP:              return new MMDSMap(cct);
   case MSG_MON_COMMAND:               return new MMonCommand;
   case CEPH_MSG_MON_MAP:              return new MMonMap;
+  case CEPH_MSG_OSD_MAP:              return new MOSDMap;
   default: return parent ? parent->create(type) : nullptr;
   }
 }
