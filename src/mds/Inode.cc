@@ -39,7 +39,7 @@ int Inode::setattr(int mask, const ObjAttr &attrs)
   return 0;
 }
 
-int Inode::lookup(const std::string &name, _inodeno_t *ino) const
+int Inode::lookup(const std::string &name, libmds_ino_t *ino) const
 {
   if (!is_dir())
     return -ENOTDIR;
@@ -79,7 +79,7 @@ int Inode::readdir(uint64_t pos, uint64_t gen,
   return 0;
 }
 
-int Inode::link(const std::string &name, _inodeno_t ino)
+int Inode::link(const std::string &name, libmds_ino_t ino)
 {
   if (!is_dir())
     return -ENOTDIR;

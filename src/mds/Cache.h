@@ -22,7 +22,7 @@ class Cache {
   const mcas::gc_global &gc;
   mcas::skiplist<Inode> inodes;
   Storage *storage;
-  std::atomic<_inodeno_t> next_ino;
+  std::atomic<libmds_ino_t> next_ino;
   InodeRef root;
 
  public:
@@ -32,7 +32,7 @@ class Cache {
   const Volume* get_volume() const { return volume; }
 
   InodeRef create(const identity &who, int type);
-  InodeRef get(_inodeno_t ino);
+  InodeRef get(libmds_ino_t ino);
 
  private:
   // skiplist sort function

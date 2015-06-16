@@ -4,8 +4,8 @@
 #ifndef COHORT_MDS_TYPES_H
 #define COHORT_MDS_TYPES_H
 
+#include <sys/stat.h>
 #include "include/ceph_time.h"
-#include "include/types.h" // inodeno_t
 #include "ceph_mds.h"
 
 namespace cohort {
