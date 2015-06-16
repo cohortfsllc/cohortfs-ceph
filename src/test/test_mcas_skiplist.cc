@@ -3,8 +3,6 @@
 
 using namespace cohort::mcas;
 
-gc_global gc;
-
 struct test_object : public skiplist_object {
   int key;
   test_object(int key) : key(key) {}
@@ -23,9 +21,12 @@ struct test_object : public skiplist_object {
 void intrusive_ptr_add_ref(test_object *p) { p->get(); }
 void intrusive_ptr_release(test_object *p) { p->put(); }
 
+gc_global gc;
+
 TEST(Skiplist, Get)
 {
-  skiplist<test_object> skip(gc, test_object::cmp, "test");
+  obj_cache cache(gc, sizeof(test_object), "test");
+  skiplist<test_object> skip(gc, cache, test_object::cmp);
   skip_stats stats;
 
   auto obj = skip.get(test_object(5));
@@ -60,7 +61,8 @@ TEST(Skiplist, Get)
 
 TEST(Skiplist, Reap)
 {
-  skiplist<test_object> skip(gc, test_object::cmp, "test", 0, 1);
+  obj_cache cache(gc, sizeof(test_object), "test");
+  skiplist<test_object> skip(gc, cache, test_object::cmp, 0, 1);
 
   // hold a reference to the first object
   auto obj = skip.get_or_create(test_object(1));

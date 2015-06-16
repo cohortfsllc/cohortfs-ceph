@@ -14,10 +14,10 @@ struct skiplist_base::thread_stats {
 };
 
 skiplist_base::skiplist_base(const gc_global &gc, osi_set_cmp_func cmp,
-                             size_t object_size, const char *name,
-                             destructor_fn destructor,
+                             const obj_cache &cache, destructor_fn destructor,
                              int lowwater, int highwater)
   : gc(gc),
+    cache(cache),
     skip(osi_cas_skip_alloc(cmp)),
     size(0),
     unused(0),
@@ -27,7 +27,6 @@ skiplist_base::skiplist_base(const gc_global &gc, osi_set_cmp_func cmp,
 {
   assert(skip);
   memset(&stats, 0, sizeof(stats));
-  osi_mcas_obj_cache_create(gc, &cache, object_size, name);
 
   int r = pthread_key_create(&tls_key, sumup_and_free);
   assert(r == 0);
@@ -51,7 +50,6 @@ skiplist_base::~skiplist_base()
     reaper_thread(destructor, 0, 0);
   }
   osi_cas_skip_free(gc, skip);
-  osi_mcas_obj_cache_destroy(cache);
   {
     std::lock_guard<std::mutex> lock(mutex);
     for (thread_stats *p = thread_list; p; p = p->next)
