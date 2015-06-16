@@ -77,9 +77,9 @@ class Storage {
   const mcas::gc_global &gc;
   mcas::skiplist<InodeStorage> skiplist;
  public:
-  Storage(const mcas::gc_global &gc)
+  Storage(const mcas::gc_global &gc, const mcas::obj_cache &cache)
     : gc(gc),
-      skiplist(gc, InodeStorage::cmp, "inode_store")
+      skiplist(gc, cache, InodeStorage::cmp)
   {}
 
   InodeStorageRef get(const boost::uuids::uuid &volume, libmds_ino_t ino)

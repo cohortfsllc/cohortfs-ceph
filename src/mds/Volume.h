@@ -37,8 +37,8 @@ class Volume : public mcas::skiplist_object {
 
   const boost::uuids::uuid& get_uuid() const { return uuid; }
 
-  int mkfs(const mcas::gc_global &gc, Storage *storage,
-           const md_config_t *conf);
+  int mkfs(const mcas::gc_global &gc, const mcas::obj_cache &inode_cache,
+           Storage *storage, const md_config_t *conf);
 
   static int cmp(const void *lhs, const void *rhs)
   {
@@ -60,9 +60,9 @@ class VolumeTable {
   const mcas::gc_global &gc;
   mcas::skiplist<Volume> skiplist;
  public:
-  VolumeTable(const mcas::gc_global &gc)
+  VolumeTable(const mcas::gc_global &gc, const mcas::obj_cache &cache)
     : gc(gc),
-      skiplist(gc, Volume::cmp, "volumes")
+      skiplist(gc, cache, Volume::cmp)
   {}
 
   VolumeRef get(const boost::uuids::uuid &uuid)

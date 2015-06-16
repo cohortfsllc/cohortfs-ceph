@@ -17,6 +17,9 @@ using namespace cohort::mds;
 MDS::MDS(int whoami, Messenger *m, MonClient *mc)
   : Dispatcher(m->cct),
     whoami(whoami),
+    volume_cache(gc, sizeof(Volume), "volumes"),
+    storage_cache(gc, sizeof(InodeStorage), "inode_store"),
+    inode_cache(gc, sizeof(Inode), "inodes"),
     messenger(m),
     monc(mc),
     objecter(new Objecter(cct, messenger, monc,
@@ -28,7 +31,7 @@ MDS::MDS(int whoami, Messenger *m, MonClient *mc)
     state(0),
     want_state(0),
     last_tid(0),
-    volumes(gc)
+    volumes(gc, volume_cache)
 {
 }
 
@@ -56,7 +59,7 @@ int MDS::init()
   objecter->start();
   monc->renew_subs();
 
-  storage.reset(new Storage(gc));
+  storage.reset(new Storage(gc, storage_cache));
 
   // start beacon timer
   beacon_timer.add_event(cct->_conf->mds_beacon_interval,
@@ -83,7 +86,7 @@ cohort::mds::VolumeRef MDS::get_volume(libmds_volume_t volume)
   auto vol = volumes.get_or_create(*p);
   // TODO: look up the volume in the osd map and attach it
   if (vol)
-    vol->mkfs(gc, storage.get(), cct->_conf);
+    vol->mkfs(gc, inode_cache, storage.get(), cct->_conf);
   return vol;
 }
 
