@@ -466,6 +466,8 @@ struct C_MDS_RetryOpenRoot : public Context {
   void finish(int r) {
     if (r < 0) {
       MDS::unique_lock ml(cache->mds->mds_lock, std::defer_lock);
+      MDS *mds = cache->mds;
+      ldout(cache->mds->cct, 10) << __func__ << " mds_lock" << dendl;
       cache->mds->suicide(ml);
     } else {
       cache->open_root(vol);
@@ -5280,6 +5282,7 @@ void MDCache::_recovered(CInode *in, int r, uint64_t size,
     dout(0) << "recovery error! " << r << dendl;
     if (r == -EBLACKLISTED) {
       MDS::unique_lock l(mds->mds_lock);
+      ldout(mds->cct, 10) << __func__ << " mds_lock" << dendl;
       mds->suicide(l);
       l.unlock();
       return;
@@ -6357,6 +6360,7 @@ void MDCache::check_memory_usage()
 void MDCache::shutdown_check()
 {
   MDS::unique_lock ml(mds->mds_lock);
+  ldout(mds->cct, 10) << __func__ << " mds_lock" << dendl;
   dout(0) << "shutdown_check at " << ceph::real_clock::now() << dendl;
 
   // cache

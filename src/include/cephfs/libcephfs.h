@@ -1221,6 +1221,7 @@ int ceph_ll_file_key(struct ceph_mount_info *cmount,
 		     Inode *in,
 		     char *buf,
 		     uint32_t bufsize);
+void ceph_ll_request_osdmap(struct ceph_mount_info *cmount);
 int ceph_ll_num_osds(struct ceph_mount_info *cmount);
 int ceph_ll_osdaddr(struct ceph_mount_info *cmount,
 		    int osd, uint32_t *addr);

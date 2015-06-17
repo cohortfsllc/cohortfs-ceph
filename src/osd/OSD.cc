@@ -3027,7 +3027,7 @@ void OSD::enqueue_op(OSDVolRef vol, OpRequestRef op)
 {
   ceph::timespan latency = ceph::real_clock::now()
     - op->get_req()->get_recv_stamp();
-  dout(15) << "enqueue_op " << op << " prio " << op->get_req()->get_priority()
+  dout(10) << "enqueue_op " << op << " prio " << op->get_req()->get_priority()
 	   << " cost " << op->get_req()->get_cost()
 	   << " latency " << latency
 	   << " " << *(op->get_req()) << dendl;

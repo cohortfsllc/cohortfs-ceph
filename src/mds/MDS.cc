@@ -147,6 +147,7 @@ MDS::MDS(const std::string &n, Messenger *m, MonClient *mc) :
 
 MDS::~MDS() {
   lock_guard lock(mds_lock);
+  dout(10) << __func__ << " mds_lock" << dendl;
 
   delete authorize_handler_service_registry;
   delete authorize_handler_cluster_registry;
@@ -345,6 +346,7 @@ int MDS::init(int wanted_state)
   monc->set_log_client(&clog);
 
   unique_lock ml(mds_lock, std::defer_lock);
+  dout(10) << __func__ << " mds_lock" << dendl;
   int r = monc->authenticate();
   if (r < 0) {
     derr << "ERROR: failed to authenticate: " << cpp_strerror(-r) << dendl;
@@ -454,6 +456,7 @@ void MDS::reset_tick()
 void MDS::tick()
 {
   unique_lock ml(mds_lock);
+  dout(10) << __func__ << " mds_lock" << dendl;
   tick_event = 0;
 
   // reschedule
@@ -504,6 +507,7 @@ void MDS::tick()
 
 void MDS::beacon_start()
 {
+  dout(10) << __func__ << " starting beacon" << dendl;
   beacon_sender = timer.add_event(
     ceph::span_from_double(
       cct->_conf->mds_beacon_interval),
@@ -515,6 +519,7 @@ void MDS::beacon_start()
 void MDS::beacon_send()
 {
   unique_lock ml(mds_lock);
+  dout(10) << __func__ << " mds_lock" << dendl;
   beacon_sender = 0;
   ++beacon_last_seq;
   dout(10) << "beacon_send " << ceph_mds_state_name(want_state)
@@ -540,9 +545,7 @@ void MDS::beacon_send()
   // schedule next sender
   if (beacon_sender)
     timer.cancel_event(beacon_sender);
-  beacon_sender = timer.reschedule_me(
-    ceph::span_from_double(
-      cct->_conf->mds_beacon_interval));
+  beacon_start();
 }
 
 
@@ -1149,6 +1152,9 @@ public:
   C_MDS_BootStart(MDS *m, int n) : mds(m), nextstep(n) {}
   void finish(int r) {
     MDS::unique_lock ml(mds->mds_lock, std::defer_lock);
+    int whoami = 0;
+    int incarnation = 0;
+    ldout(mds->cct, 10) << "C_MDS_BootStart::finish mds_lock" << dendl;
     mds->boot_start(ml, nextstep, r);
   }
 };
@@ -1308,6 +1314,9 @@ public:
     mds(mds_), old_read_pos(old_read_pos_) {}
   void finish(int r) {
     MDS::unique_lock ml(mds->mds_lock);
+    int whoami = 0;
+    int incarnation = 0;
+    ldout(mds->cct, 10) << "C_MDS_StandbyReplayRestartFinish::finish mds_lock" << dendl;
     mds->_standby_replay_restart_finish(ml, r, old_read_pos);
   }
 };
@@ -1328,6 +1337,7 @@ void MDS::_standby_replay_restart_finish(unique_lock& ml, int r,
 inline void MDS::standby_replay_restart()
 {
   unique_lock ml(mds_lock);
+  dout(10) << __func__ << " mds_lock" << dendl;
   Context *c;
   dout(1) << "standby_replay_restart" << (standby_replaying ? " (as standby)":" (final takeover pass)") << dendl;
 
@@ -1577,6 +1587,7 @@ void MDS::handle_signal(int signum)
   assert(signum == SIGINT || signum == SIGTERM);
   derr << "*** got signal " << sys_siglist[signum] << " ***" << dendl;
   unique_lock ml(mds_lock, std::defer_lock);
+  dout(10) << __func__ << " mds_lock" << dendl;
   suicide(ml);
 }
 
@@ -1666,6 +1677,7 @@ bool MDS::ms_dispatch(Message *m)
 {
   bool ret;
   unique_lock ml(mds_lock);
+  dout(10) << __func__ << " mds_lock lock" << dendl;
   if (want_state == CEPH_MDS_STATE_DNE) {
     dout(10) << " stopping, discarding " << *m << dendl;
     m->put();
@@ -1676,6 +1688,7 @@ bool MDS::ms_dispatch(Message *m)
     assert(ml);
     dec_dispatch_depth();
   }
+  dout(10) << __func__ << " mds_lock unlock" << dendl;
   ml.unlock();
   return ret;
 }
@@ -1878,10 +1891,11 @@ bool MDS::_dispatch(Message *m, unique_lock& ml)
 
     for (auto it : vs) {
       dout(10) << " finish " << it << dendl;
-      it->complete(0);
-      // give other threads (beacon!) a chance
       ml.unlock();
+      dout(10) << __func__ << " mds_lock unlocked 1" << dendl;
+      it->complete(0);
       ml.lock();
+      dout(10) << __func__ << " mds_lock relocked 1" << dendl;
     }
   }
 
@@ -1903,7 +1917,9 @@ bool MDS::_dispatch(Message *m, unique_lock& ml)
 
     // give other threads (beacon!) a chance
     ml.unlock();
+    dout(10) << __func__ << " mds_lock unlocked 2" << dendl;
     ml.lock();
+    dout(10) << __func__ << " mds_lock relocked 2" << dendl;
   }
 
   // done with all client replayed requests?
@@ -2009,6 +2025,7 @@ bool MDS::_dispatch(Message *m, unique_lock& ml)
 void MDS::ms_handle_connect(Connection *con)
 {
   lock_guard l(mds_lock);
+  dout(10) << __func__ << " mds_lock" << dendl;
   dout(5) << "ms_handle_connect on " << con->get_peer_addr() << dendl;
   if (want_state == CEPH_MDS_STATE_DNE)
     return;
@@ -2018,6 +2035,7 @@ void MDS::ms_handle_connect(Connection *con)
 bool MDS::ms_handle_reset(Connection *con)
 {
   lock_guard l(mds_lock);
+  dout(10) << __func__ << " mds_lock" << dendl;
   dout(5) << "ms_handle_reset on " << con->get_peer_addr() << dendl;
   if (want_state == CEPH_MDS_STATE_DNE)
     return false;
@@ -2045,6 +2063,7 @@ bool MDS::ms_handle_reset(Connection *con)
 void MDS::ms_handle_remote_reset(Connection *con)
 {
   lock_guard l(mds_lock);
+  dout(10) << __func__ << " mds_lock" << dendl;
   dout(5) << "ms_handle_remote_reset on " << con->get_peer_addr() << dendl;
   if (want_state == CEPH_MDS_STATE_DNE)
     return;
@@ -2073,6 +2092,7 @@ bool MDS::ms_verify_authorizer(Connection *con, int peer_type,
 			       bool& is_valid, CryptoKey& session_key)
 {
   lock_guard l(mds_lock);
+  dout(10) << __func__ << " mds_lock" << dendl;
   if (want_state == CEPH_MDS_STATE_DNE)
     return false;
 
@@ -2145,6 +2165,7 @@ bool MDS::ms_verify_authorizer(Connection *con, int peer_type,
 void MDS::ms_handle_accept(Connection *con)
 {
   lock_guard l(mds_lock);
+  dout(10) << __func__ << " mds_lock" << dendl;
   Session *s = static_cast<Session *>(con->get_priv());
   dout(10) << "ms_handle_accept " << con->get_peer_addr() << " con " << con << " session " << s << dendl;
   if (s) {

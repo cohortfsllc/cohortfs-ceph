@@ -3256,17 +3256,7 @@ int Client::mount(const std::string &mount_root)
   mounted = true;
 
   cl.unlock();
-  {
-    std::mutex mylock;
-    std::condition_variable cond;
-    bool done;
-
-    objecter->wait_for_latest_osdmap(new C_SafeCond(&mylock, &cond, &done));
-
-    unique_lock ml(mylock);
-    cond.wait(ml, [&](){ return done; });
-    ml.unlock();
-  }
+  _wait_for_latest_osdmap();
 
   timer.add_event(0ns, &Client::tick, this); // start tick
   cl.lock();
@@ -4412,6 +4402,21 @@ void Client::seekdir(dir_result_t *dirp, loff_t offset)
 
 
 
+/**
+ * @brief Wait for the latest OSDMap
+ */
+void Client::_wait_for_latest_osdmap(void)
+{
+  std::mutex mylock;
+  std::condition_variable cond;
+  bool done;
+
+  objecter->wait_for_latest_osdmap(new C_SafeCond(&mylock, &cond, &done));
+
+  unique_lock ml(mylock);
+  cond.wait(ml, [&](){ return done; });
+  ml.unlock();
+}
 
 
 //struct dirent {
@@ -7188,6 +7193,11 @@ int Client::ll_link(Inode *parent, Inode *newparent, const char *newname,
     _ll_get(parent);
   }
   return r;
+}
+
+void Client::ll_request_osdmap(void)
+{
+  _wait_for_latest_osdmap();
 }
 
 int Client::ll_num_osds(void)

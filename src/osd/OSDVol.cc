@@ -883,13 +883,13 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 
   ObjectStore::Transaction* t = ctx->op_t;
 
-  dout(10) << "do_osd_op " << soid << " " << ops << dendl;
+  dout(10) << __func__ << " " << soid << " " << ops << dendl;
 
   for (vector<OSDOp>::iterator p = ops.begin(); p != ops.end(); ++p, ctx->current_osd_subop_num++) {
     OSDOp& osd_op = *p;
     ceph_osd_op& op = osd_op.op;
 
-    dout(10) << "do_osd_op  " << osd_op << dendl;
+    dout(10) << __func__ << "  " << osd_op << dendl;
 
     bufferlist::iterator bp = osd_op.indata.begin();
 
@@ -1371,6 +1371,9 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
       ++ctx->num_write;
       { // write
 	if (op.extent.length != osd_op.indata.length()) {
+	  dout(10) << __func__ << " write length bad: extent.length " <<
+	    op.extent.length << " indata length " << osd_op.indata.length() <<
+	    dendl;
 	  result = -EINVAL;
 	  break;
 	}

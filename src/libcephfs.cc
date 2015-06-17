@@ -1432,6 +1432,11 @@ extern "C" int ceph_ll_get_stripe_osd(class ceph_mount_info *cmount,
 }
 #endif
 
+extern "C" void ceph_ll_request_osdmap(class ceph_mount_info *cmount)
+{
+  cmount->get_client()->ll_request_osdmap();
+}
+
 extern "C" int ceph_ll_num_osds(class ceph_mount_info *cmount)
 {
   return (cmount->get_client()->ll_num_osds());

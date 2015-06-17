@@ -79,6 +79,7 @@ void MDSTable::save_2(int r, version_t v)
   dout(10) << "save_2 v " << v << dendl;
   if (r == -EBLACKLISTED) {
     MDS::unique_lock l(mds->mds_lock, std::defer_lock);
+    dout(10) << __func__ << " mds_lock" << dendl;
     mds->suicide(l);
     return;
   }
@@ -149,6 +150,7 @@ void MDSTable::load_2(int r, bufferlist& bl, Context *onfinish)
   state = STATE_ACTIVE;
   if (r == -EBLACKLISTED) {
     MDS::unique_lock l(mds->mds_lock, std::defer_lock);
+    dout(10) << __func__ << " mds_lock" << dendl;
     mds->suicide(l);
     return;
   }

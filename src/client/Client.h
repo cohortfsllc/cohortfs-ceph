@@ -536,6 +536,8 @@ private:
   void fill_dirent(struct dirent *de, const char *name, int type, uint64_t ino,
 		   loff_t next_off);
 
+  void _wait_for_latest_osdmap(void);
+
   // some readdir helpers
   typedef int (*add_dirent_cb_t)(void *p, struct dirent *de, struct stat *st,
 				 int stmask, off_t off);
@@ -841,6 +843,7 @@ public:
   int ll_release(Fh *fh);
   uint64_t ll_get_internal_offset(struct Inode *in, uint64_t blockno);
 
+  void ll_request_osdmap(void);
   int ll_num_osds(void);
   int ll_osdaddr(int osd, uint32_t *addr);
   int ll_osdaddr(int osd, char* buf, size_t size);
