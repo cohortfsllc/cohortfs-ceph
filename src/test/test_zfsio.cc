@@ -200,13 +200,17 @@ e */
 
 TEST(ZFSIO, INIT)
 {
-  int err;
-  const char* lzw_err;
-
   zhd = lzfw_init();
   ASSERT_NE(zhd, nullptr);
 
+  ASSERT_EQ(is_directory(vdevs), true);  
   vdev1 /= "zd2";
+}
+
+TEST(ZFSIO, INIT2)
+{
+  int err;
+  const char* lzw_err;
 
   if (create || !is_regular_file(vdev1)) {
     { // "pre-destroy" accounting info
@@ -500,6 +504,7 @@ int main(int argc, char *argv[])
 {
   vector<const char*> args;
   argv_to_vec(argc, (const char **)argv, args);
+  const char **av;
 
   CephContext *cct =
     global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT,
@@ -518,8 +523,17 @@ int main(int argc, char *argv[])
       destroy = true;
       continue;
     }
+    ++i;
   } /* while(args) */
   common_init_finish(cct);
-  ::testing::InitGoogleTest(&argc, argv);
+  vec_to_argv(*argv, args, &argc, &av);
+  ::testing::InitGoogleTest(&argc, (char **) av);
+  if (argc > 1) {
+	cerr << "ignoring: ";
+	for (int i = 1; i < argc; ++i) {
+		cerr << ' ' << av[i];
+	}
+	cerr << std::endl;
+  }
   return RUN_ALL_TESTS();
 }
