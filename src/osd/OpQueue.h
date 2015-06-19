@@ -32,7 +32,7 @@
 #endif
 #define CACHE_PAD(_n) char __pad ## _n [CACHE_LINE_SIZE]
 
-//#define OPQUEUE_SLEEP // XXX should be defined
+#define OPQUEUE_SLEEP // XXX should be defined
 //#define OPQUEUE_INSTRUMENT
 //#define INSTRUMENT_BACKOFF
 #define OPQUEUE_TLS_LANES
