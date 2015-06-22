@@ -1,8 +1,5 @@
 cmake_minimum_required(VERSION 2.8.11)
 
-# must set this real early *before* project() command.
-set(CMAKE_FIND_NO_INSTALL_PREFIX "ON" CACHE STRING "really" FORCE)
-
 project(Ceph)
 set(VERSION "0.80")
 
