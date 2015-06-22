@@ -1466,13 +1466,13 @@ bool OSD::ms_handle_reset(Connection *con)
   return true;
 }
 
-struct C_OSD_GetVersion : public Context {
-  OSD *osd;
+struct OSD_GetVersion {
+  OSD& osd;
   uint64_t oldest, newest;
-  C_OSD_GetVersion(OSD *o) : osd(o), oldest(0), newest(0) {}
-  void finish(int r) {
-    if (r >= 0)
-      osd->_maybe_boot(oldest, newest);
+  OSD_GetVersion(OSD& o) : osd(o) {}
+  void operator()(std::error_code r, version_t newest, version_t oldest) {
+    if (!r)
+      osd._maybe_boot(oldest, newest);
   }
 };
 
@@ -1480,8 +1480,7 @@ void OSD::start_boot()
 {
   dout(10) << "start_boot - have maps " << superblock.oldest_map
 	   << ".." << superblock.newest_map << dendl;
-  C_OSD_GetVersion *c = new C_OSD_GetVersion(this);
-  monc->get_version("osdmap", &c->newest, &c->oldest, c);
+  monc->get_version("osdmap", OSD_GetVersion(*this));
 }
 
 void OSD::_maybe_boot(epoch_t oldest, epoch_t newest)

@@ -373,36 +373,42 @@ namespace rados {
 
   // op volume check
 
-  void Objecter::C_Op_Map_Latest::finish(int r)
+  void Objecter::Op_Map_Latest::operator()(std::error_code r,
+					   version_t newest,
+					   version_t oldest)
   {
-    if (r == -EAGAIN || r == -ECANCELED)
+    if (r == std::errc::resource_unavailable_try_again ||
+	r == std::errc::operation_canceled)
       return;
+    else if (r)
+      // Nothing else should be possible
+      abort();
 
-    lgeneric_subdout(objecter->cct, objecter, 10)
+    lgeneric_subdout(objecter.cct, objecter, 10)
       << "op_map_latest r=" << r << " tid=" << tid
-      << " latest " << latest << dendl;
+      << " latest " << newest << dendl;
 
-    Objecter::unique_lock wl(objecter->rwlock);
+    Objecter::unique_lock wl(objecter.rwlock);
 
     map<ceph_tid_t, Op*>::iterator iter =
-      objecter->check_latest_map_ops.find(tid);
-    if (iter == objecter->check_latest_map_ops.end()) {
-      lgeneric_subdout(objecter->cct, objecter, 10)
+      objecter.check_latest_map_ops.find(tid);
+    if (iter == objecter.check_latest_map_ops.end()) {
+      lgeneric_subdout(objecter.cct, objecter, 10)
 	<< "op_map_latest op " << tid << " not found" << dendl;
       return;
     }
 
     Op *op = iter->second;
-    objecter->check_latest_map_ops.erase(iter);
+    objecter.check_latest_map_ops.erase(iter);
 
-    lgeneric_subdout(objecter->cct, objecter, 20)
+    lgeneric_subdout(objecter.cct, objecter, 20)
       << "op_map_latest op " << op << dendl;
 
     if (op->map_dne_bound == 0)
       op->map_dne_bound = latest;
 
     Op::unique_lock ol(op->lock);
-    objecter->_check_op_volume_dne(*op, ol);
+    objecter._check_op_volume_dne(*op, ol);
     ol.unlock();
 
     op->put();
@@ -442,8 +448,7 @@ namespace rados {
     if (check_latest_map_ops.count(op.tid) == 0) {
       op.get();
       check_latest_map_ops[op.tid] = &op;
-      C_Op_Map_Latest *c = new C_Op_Map_Latest(this, op.tid);
-      monc->get_version("osdmap", &c->latest, NULL, c);
+      monc->get_version("osdmap", Op_Map_Latest(*this, op.tid));
     }
   }
 
@@ -565,20 +570,20 @@ namespace rados {
     osdmap_notifiers.push_back(f);
   }
 
-  struct C_Objecter_GetVersion : public Context {
-    Objecter *objecter;
-    uint64_t oldest, newest;
+  struct Objecter_GetVersion {
+    Objecter& objecter;
     Context *fin;
-    C_Objecter_GetVersion(Objecter *o, Context *c)
-      : objecter(o), oldest(0), newest(0), fin(c) {}
-    void finish(int r) {
-      if (r >= 0) {
-	objecter->get_latest_version(oldest, newest, fin);
-      } else if (r == -EAGAIN) { // try again as instructed
-	objecter->wait_for_latest_osdmap(fin);
+    Objecter_GetVersion(Objecter& o, Context *c)
+      : objecter(o), fin(c) {}
+    void operator()(std::error_code r, version_t newest, version_t oldest) {
+      if (!r) {
+	objecter.get_latest_version(oldest, newest, fin);
+      } else if (r == std::errc::resource_unavailable_try_again) {
+	// try again as instructed
+	objecter.wait_for_latest_osdmap(fin);
       } else {
 	// it doesn't return any other error codes!
-	assert(0);
+	abort();
       }
     }
   };
@@ -586,8 +591,7 @@ namespace rados {
   void Objecter::wait_for_latest_osdmap(Context *fin)
   {
     ldout(cct, 10) << __func__ << dendl;
-    C_Objecter_GetVersion *c = new C_Objecter_GetVersion(this, fin);
-    monc->get_version("osdmap", &c->newest, &c->oldest, c);
+    monc->get_version("osdmap", Objecter_GetVersion(*this, fin));
   }
 
 
@@ -755,8 +759,7 @@ namespace rados {
     }
 
     for (auto kv : check_latest_map_ops) {
-      C_Op_Map_Latest *c = new C_Op_Map_Latest(this, kv.second->tid);
-      monc->get_version("osdmap", &c->latest, NULL, c);
+      monc->get_version("osdmap", Op_Map_Latest(*this, kv.second->tid));
     }
   }
 

@@ -238,13 +238,15 @@ namespace rados{
       }
     };
 
-    struct C_Op_Map_Latest : public Context {
-      Objecter *objecter;
+    struct Op_Map_Latest {
+      Objecter& objecter;
       ceph_tid_t tid;
       version_t latest;
-      C_Op_Map_Latest(Objecter *o, ceph_tid_t t) : objecter(o), tid(t),
-						   latest(0) {}
-      void finish(int r);
+      Op_Map_Latest(Objecter& o, ceph_tid_t t) : objecter(o), tid(t),
+						 latest(0) {}
+      void operator()(std::error_code r,
+		      version_t newest,
+		      version_t oldest);
     };
 
     struct C_Command_Map_Latest : public Context {

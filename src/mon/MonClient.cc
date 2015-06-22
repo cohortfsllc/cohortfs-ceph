@@ -422,7 +422,8 @@ void MonClient::shutdown()
   ldout(cct, 10) << __func__ << "shutdown" << dendl;
   std::unique_lock<std::mutex> l(monc_lock);
   while (!version_requests.empty()) {
-    version_requests.begin()->second->context->complete(-ECANCELED);
+    version_requests.begin()->second->cb(
+      std::make_error_code(std::errc::operation_canceled), 0, 0);
     ldout(cct, 20) << __func__ << " canceling and discarding version request "
 		   << version_requests.begin()->second << dendl;
     delete version_requests.begin()->second;
@@ -598,6 +599,8 @@ string MonClient::_pick_random_mon()
   }
 }
 
+using namespace std::placeholders;
+
 void MonClient::_reopen_session(int rank, string name)
 {
   ldout(cct, 10) << "_reopen_session rank " << rank << " name " << name << dendl;
@@ -627,7 +630,11 @@ void MonClient::_reopen_session(int rank, string name)
 
   // throw out version check requests
   while (!version_requests.empty()) {
-    finisher.queue(version_requests.begin()->second->context, -EAGAIN);
+    finisher.queue(
+      std::bind(
+	version_requests.begin()->second->cb,
+	std::make_error_code(std::errc::resource_unavailable_try_again),
+	0, 0));
     delete version_requests.begin()->second;
     version_requests.erase(version_requests.begin());
   }
@@ -961,7 +968,7 @@ void MonClient::_finish_command(MonCommand *r, int ret, string rs)
   if (r->prs)
     *(r->prs) = rs;
   if (r->onfinish)
-    finisher.queue(std::move(r->onfinish), ret);
+    finisher.queue(std::bind(r->onfinish, ret));
   mon_commands.erase(r->tid);
   delete r;
 }
@@ -1031,10 +1038,9 @@ int MonClient::start_mon_command(int rank,
 
 // ---------
 
-void MonClient::get_version(string map, version_t *newest, version_t *oldest,
-			    Context *onfinish)
+void MonClient::get_version(string map, version_cb&& onfinish)
 {
-  version_req_d *req = new version_req_d(onfinish, newest, oldest);
+  version_req_d *req = new version_req_d(std::move(onfinish));
   ldout(cct, 10) << "get_version " << map << " req " << req << dendl;
   std::lock_guard<std::mutex> l(monc_lock);
   MMonGetVersion *m = new MMonGetVersion();
@@ -1054,11 +1060,8 @@ void MonClient::handle_get_version_reply(MMonGetVersionReply* m)
     version_req_d *req = iter->second;
     ldout(cct, 10) << __func__ << " finishing " << req << " version " << m->version << dendl;
     version_requests.erase(iter);
-    if (req->newest)
-      *req->newest = m->version;
-    if (req->oldest)
-      *req->oldest = m->oldest_version;
-    finisher.queue(req->context, 0);
+    finisher.queue(std::bind(req->cb, std::error_code(),
+			     m->version, m->oldest_version));
     delete req;
   }
   m->put();

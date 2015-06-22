@@ -637,7 +637,7 @@ protected:
   void start_waiting_for_healthy();
   bool _is_healthy();
 
-  friend struct C_OSD_GetVersion;
+  friend struct OSD_GetVersion;
 
   // -- alive --
   epoch_t up_thru_wanted;

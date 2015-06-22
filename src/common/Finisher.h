@@ -52,9 +52,15 @@ class Finisher {
       finisher_queue.push_back(std::make_pair(&i, 0));
     finisher_cond.notify_all();
   }
-  void queue(std::function<void(int)>&& f, int r = 0) {
+  void queue(std::function<void(std::error_code)>&& f, std::error_code r) {
     std::lock_guard<std::mutex> l(finisher_lock);
     other_finisher_queue.add(std::bind(std::move(f), r));
+    finisher_cond.notify_all();
+  }
+
+  void queue(std::function<void(void)>&& f) {
+    std::lock_guard<std::mutex> l(finisher_lock);
+    other_finisher_queue.add(std::move(f));
     finisher_cond.notify_all();
   }
 

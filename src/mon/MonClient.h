@@ -108,6 +108,8 @@ struct MonClientPinger : public Dispatcher {
 
 class MonClient : public Dispatcher {
 public:
+  typedef cohort::function<void(std::error_code, version_t newest,
+				version_t oldest)> version_cb;
   MonMap monmap;
 
   struct Factory : public MessageFactory {
@@ -380,7 +382,7 @@ public:
 			const vector<string>& cmd, const bufferlist& inbl,
 			bufferlist *outbl, string *outs,
 			std::function<void(int)>&& onfinish);
-  int start_mon_command(const string &mon_name,	 ///< mon name, with mon. prefix
+  int start_mon_command(const string &mon_name, ///< mon name, with mon. prefix
 			const vector<string>& cmd, const bufferlist& inbl,
 			bufferlist *outbl, string *outs,
 			std::function<void(int)>&& onfinish);
@@ -391,18 +393,16 @@ public:
    * get latest known version(s) of cluster map
    *
    * @param map string name of map (e.g., 'osdmap')
-   * @param newest pointer where newest map version will be stored
-   * @param oldest pointer where oldest map version will be stored
-   * @param onfinish context that will be triggered on completion
-   * @return (via context) 0 on success, -EAGAIN if we need to resubmit our request
+   * @param onfinish callback that will be triggered on completion
+   * @return (via callback) std::errc::resource_unavaiable_try_again
+   *         if we need to resubmit our request
    */
-  void get_version(string map, version_t *newest, version_t *oldest, Context *onfinish);
+  void get_version(string map, version_cb&& onfinish);
 
 private:
   struct version_req_d {
-    Context *context;
-    version_t *newest, *oldest;
-    version_req_d(Context *con, version_t *n, version_t *o) : context(con),newest(n), oldest(o) {}
+    version_cb cb;
+    version_req_d(version_cb&& _cb) : cb(_cb) {}
   };
 
   map<ceph_tid_t, version_req_d*> version_requests;
