@@ -15,22 +15,25 @@
 #ifndef CEPH_MONCLIENT_H
 #define CEPH_MONCLIENT_H
 
-#include "msg/Dispatcher.h"
-#include "msg/Messenger.h"
-#include "msg/MessageFactory.h"
+#include <memory>
 
-#include "MonMap.h"
+#include <boost/intrusive/set.hpp>
 
-#include "common/Timer.h"
 #include "common/Finisher.h"
+#include "common/SimpleRNG.h"
+#include "common/Timer.h"
 
 #include "auth/AuthClientHandler.h"
 #include "auth/RotatingKeyRing.h"
 
-#include "common/SimpleRNG.h"
+#include "msg/Dispatcher.h"
+#include "msg/MessageFactory.h"
+#include "msg/Messenger.h"
+
 #include "osd/osd_types.h"
 
-#include <memory>
+#include "MonMap.h"
+
 
 class MonMap;
 class MMonMap;
@@ -405,24 +408,35 @@ public:
   // admin commands
 private:
   uint64_t last_mon_command_tid;
-  struct MonCommand {
+  struct MonCommand
+    : public boost::intrusive::set_base_hook<
+    boost::intrusive::link_mode<boost::intrusive::normal_link>> {
+    uint64_t tid;
     string target_name;
     int target_rank;
-    uint64_t tid;
     vector<string> cmd;
     bufferlist inbl;
     monc_cb onfinish;
     uint64_t ontimeout;
 
     MonCommand(uint64_t t)
-      : target_rank(-1), tid(t), ontimeout(0) {}
+      : tid(t), target_rank(-1), ontimeout(0) {}
   };
-  map<uint64_t,MonCommand*> mon_commands;
+  struct MoncCompare {
+    bool operator()(const MonCommand& mc1, const MonCommand& mc2) const {
+      return mc1.tid < mc2.tid;
+    }
+  };
+  boost::intrusive::set<MonCommand,
+			boost::intrusive::constant_time_size<false>,
+			boost::intrusive::compare<MoncCompare>> mon_commands;
 
-  void _send_command(MonCommand *r);
+  void _send_command(MonCommand& r);
   void _resend_mon_commands();
-  void _cancel_mon_command(uint64_t tid, int r);
-  void _finish_command(MonCommand *r, std::error_code ret,
+  void _cancel_mon_command(uint64_t tid,
+			   std::error_code r = std::make_error_code(
+			     std::errc::operation_canceled));
+  void _finish_command(MonCommand& r, std::error_code ret,
 		       const string& rs, bufferlist& bl);
   void handle_mon_command_ack(MMonCommandAck *ack);
 

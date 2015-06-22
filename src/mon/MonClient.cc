@@ -860,16 +860,17 @@ int MonClient::wait_auth_rotating(ceph::timespan timeout)
 
 // ---------
 
-void MonClient::_send_command(MonCommand *r)
+void MonClient::_send_command(MonCommand& r)
 {
-  if (r->target_rank >= 0 &&
-      r->target_rank != monmap.get_rank(cur_mon)) {
-    ldout(cct, 10) << "_send_command " << r->tid << " " << r->cmd
-		   << " wants rank " << r->target_rank
+  if (r.target_rank >= 0 &&
+      r.target_rank != monmap.get_rank(cur_mon)) {
+    ldout(cct, 10) << "_send_command " << r.tid << " " << r.cmd
+		   << " wants rank " << r.target_rank
 		   << ", reopening session"
 		   << dendl;
-    if (r->target_rank >= (int)monmap.size()) {
-      ldout(cct, 10) << " target " << r->target_rank << " >= max mon " << monmap.size() << dendl;
+    if (r.target_rank >= (int)monmap.size()) {
+      ldout(cct, 10) << " target " << r.target_rank << " >= max mon "
+		     << monmap.size() << dendl;
       bufferlist bl;
       // Replace with proper monitor error codes
       _finish_command(r, std::make_error_code(
@@ -877,32 +878,33 @@ void MonClient::_send_command(MonCommand *r)
 		      "mon rank dne", bl);
       return;
     }
-    _reopen_session(r->target_rank, string());
+    _reopen_session(r.target_rank, string());
     return;
   }
 
-  if (r->target_name.length() &&
-      r->target_name != cur_mon) {
-    ldout(cct, 10) << "_send_command " << r->tid << " " << r->cmd
-		   << " wants mon " << r->target_name
+  if (r.target_name.length() &&
+      r.target_name != cur_mon) {
+    ldout(cct, 10) << "_send_command " << r.tid << " " << r.cmd
+		   << " wants mon " << r.target_name
 		   << ", reopening session"
 		   << dendl;
-    if (!monmap.contains(r->target_name)) {
-      ldout(cct, 10) << " target " << r->target_name << " not present in monmap" << dendl;
+    if (!monmap.contains(r.target_name)) {
+      ldout(cct, 10) << " target " << r.target_name << " not present in monmap"
+		     << dendl;
       bufferlist bl;
       _finish_command(r, std::make_error_code(
 			std::errc::no_such_file_or_directory), "mon dne", bl);
       return;
     }
-    _reopen_session(-1, r->target_name);
+    _reopen_session(-1, r.target_name);
     return;
   }
 
-  ldout(cct, 10) << "_send_command " << r->tid << " " << r->cmd << dendl;
+  ldout(cct, 10) << "_send_command " << r.tid << " " << r.cmd << dendl;
   MMonCommand *m = new MMonCommand(monmap.fsid);
-  m->set_tid(r->tid);
-  m->cmd = r->cmd;
-  m->set_data(r->inbl);
+  m->set_tid(r.tid);
+  m->cmd = r.cmd;
+  m->set_data(r.inbl);
   _send_mon_message(m);
   return;
 }
@@ -910,71 +912,72 @@ void MonClient::_send_command(MonCommand *r)
 void MonClient::_resend_mon_commands()
 {
   // resend any requests
-  for (map<uint64_t,MonCommand*>::iterator p = mon_commands.begin();
-       p != mon_commands.end();
-       ++p) {
-    _send_command(p->second);
+  for (auto& mc : mon_commands) {
+    _send_command(mc);
   }
 }
 
 void MonClient::handle_mon_command_ack(MMonCommandAck *ack)
 {
-  MonCommand *r = NULL;
+  if (mon_commands.empty()) {
+    ack->put();
+    return;
+  }
   uint64_t tid = ack->get_tid();
+  auto p = tid ? mon_commands.find(tid) : mon_commands.begin();
 
-  if (tid == 0 && !mon_commands.empty()) {
-    r = mon_commands.begin()->second;
+  if (tid == 0) {
     ldout(cct, 10) << "handle_mon_command_ack has tid 0, assuming it is "
-		   << r->tid << dendl;
+		   << p->tid << dendl;
   } else {
-    map<uint64_t,MonCommand*>::iterator p = mon_commands.find(tid);
     if (p == mon_commands.end()) {
       ldout(cct, 10) << "handle_mon_command_ack " << ack->get_tid()
 		     << " not found" << dendl;
       ack->put();
       return;
     }
-    r = p->second;
   }
 
-  if (r->ontimeout) {
-    timer.cancel_event(r->ontimeout);
-    r->ontimeout = 0;
+  MonCommand& r = *p;
+  if (r.ontimeout) {
+    timer.cancel_event(r.ontimeout);
+    r.ontimeout = 0;
   }
-  ldout(cct, 10) << "handle_mon_command_ack " << r->tid << " " << r->cmd
+
+  ldout(cct, 10) << "handle_mon_command_ack " << r.tid << " " << r.cmd
 		 << dendl;
   _finish_command(r, std::error_code(-ack->r, std::generic_category()),
 		  ack->rs, ack->get_data());
   ack->put();
 }
 
-void MonClient::_cancel_mon_command(uint64_t tid, int r)
+void MonClient::_cancel_mon_command(uint64_t tid, std::error_code r)
 {
   std::unique_lock<std::mutex> l(monc_lock);
-  map<ceph_tid_t, MonCommand*>::iterator it = mon_commands.find(tid);
+  auto it = mon_commands.find(tid);
   if (it == mon_commands.end()) {
     ldout(cct, 10) << __func__ << " tid " << tid << " dne" << dendl;
   }
 
   ldout(cct, 10) << __func__ << " tid " << tid << dendl;
 
-  MonCommand *cmd = it->second;
+  MonCommand& cmd = *it;
   bufferlist bl;
-  _finish_command(cmd, std::make_error_code(std::errc::timed_out), "", bl);
+  _finish_command(cmd, r, "", bl);
 }
 
-void MonClient::_finish_command(MonCommand *r, std::error_code err,
+void MonClient::_finish_command(MonCommand& r, std::error_code err,
 				const string& rs, bufferlist& bl)
 {
-  ldout(cct, 10) << "_finish_command " << r->tid << " = " << err << " " << rs
+  ldout(cct, 10) << "_finish_command " << r.tid << " = " << err << " " << rs
 		 << dendl;
-  if (r->onfinish)
+  if (r.onfinish)
     finisher.queue(
-      [r, err, &rs, &bl]() {
-	r->onfinish(err, rs, bl);
+      [&r, err, &rs, &bl]() {
+	r.onfinish(err, rs, bl);
       });
-  mon_commands.erase(r->tid);
-  delete r;
+  mon_commands.erase(r.tid);
+  delete &r;
 }
 
 void MonClient::start_mon_command(const vector<string>& cmd,
@@ -982,17 +985,17 @@ void MonClient::start_mon_command(const vector<string>& cmd,
 				  monc_cb&& onfinish)
 {
   std::lock_guard<std::mutex> l(monc_lock);
-  MonCommand *r = new MonCommand(++last_mon_command_tid);
-  r->cmd = cmd;
-  r->inbl = inbl;
-  r->onfinish.swap(onfinish);
+  MonCommand& r = *new MonCommand(++last_mon_command_tid);
+  r.cmd = cmd;
+  r.inbl = inbl;
+  r.onfinish.swap(onfinish);
   if (cct->_conf->rados_mon_op_timeout > 0ns) {
-    r->ontimeout =
+    r.ontimeout =
       timer.add_event(cct->_conf->rados_mon_op_timeout,
-		      &MonClient::_cancel_mon_command, this, r->tid,
-		      -ETIMEDOUT);
+		      &MonClient::_cancel_mon_command, this, r.tid,
+		      std::make_error_code(std::errc::operation_canceled));
   }
-  mon_commands[r->tid] = r;
+  mon_commands.insert(r);
   _send_command(r);
 }
 
@@ -1002,12 +1005,12 @@ void MonClient::start_mon_command(const string &mon_name,
 				  monc_cb&& onfinish)
 {
   std::lock_guard<std::mutex> l(monc_lock);
-  MonCommand *r = new MonCommand(++last_mon_command_tid);
-  r->target_name = mon_name;
-  r->cmd = cmd;
-  r->inbl = inbl;
-  r->onfinish.swap(onfinish);
-  mon_commands[r->tid] = r;
+  MonCommand& r = *new MonCommand(++last_mon_command_tid);
+  r.target_name = mon_name;
+  r.cmd = cmd;
+  r.inbl = inbl;
+  r.onfinish.swap(onfinish);
+  mon_commands.insert(r);
   _send_command(r);
 }
 
@@ -1017,12 +1020,12 @@ void MonClient::start_mon_command(int rank,
 				  monc_cb&& onfinish)
 {
   std::lock_guard<std::mutex> l(monc_lock);
-  MonCommand *r = new MonCommand(++last_mon_command_tid);
-  r->target_rank = rank;
-  r->cmd = cmd;
-  r->inbl = inbl;
-  r->onfinish.swap(onfinish);
-  mon_commands[r->tid] = r;
+  MonCommand& r = *new MonCommand(++last_mon_command_tid);
+  r.target_rank = rank;
+  r.cmd = cmd;
+  r.inbl = inbl;
+  r.onfinish.swap(onfinish);
+  mon_commands.insert(r);
   _send_command(r);
 }
 
