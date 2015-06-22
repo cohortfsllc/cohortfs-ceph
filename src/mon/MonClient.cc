@@ -65,7 +65,6 @@ MonClient::MonClient(CephContext *cct_) :
   want_monmap(true),
   want_keys(0), global_id(0),
   authenticate_err(0),
-  session_established_context(NULL),
   had_a_connection(false),
   reopen_interval_multiplier(1),
   auth(NULL),
@@ -79,7 +78,6 @@ MonClient::MonClient(CephContext *cct_) :
 MonClient::~MonClient()
 {
   delete auth_supported;
-  delete session_established_context;
   delete auth;
   delete keyring;
   delete rotating_secrets;
@@ -550,10 +548,6 @@ void MonClient::handle_auth(MAuthReply *m,
       if (log_client) {
 	log_client->reset_session();
 	send_log();
-      }
-      if (session_established_context) {
-	cb = session_established_context;
-	session_established_context = NULL;
       }
     }
 

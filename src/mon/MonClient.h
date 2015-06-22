@@ -177,7 +177,6 @@ private:
   int authenticate_err;
 
   list<Message*> waiting_for_session;
-  Context *session_established_context;
   bool had_a_connection;
   uint64_t reopen_interval_multiplier;
 
@@ -297,22 +296,6 @@ public:
     std::lock_guard<std::mutex> l(monc_lock);
     _send_mon_message(m);
   }
-  /**
-   * If you specify a callback, you should not call
-   * reopen_session() again until it has been triggered. The MonClient
-   * will behave, but the first callback could be triggered after
-   * the session has been killed and the MonClient has started trying
-   * to reconnect to another monitor.
-   */
-  void reopen_session(Context *cb=NULL) {
-    std::lock_guard<std::mutex> l(monc_lock);
-    if (cb) {
-      delete session_established_context;
-      session_established_context = cb;
-    }
-    _reopen_session();
-  }
-
   entity_addr_t get_my_addr() const {
     return my_addr;
   }
