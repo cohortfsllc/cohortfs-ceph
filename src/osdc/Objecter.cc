@@ -1530,8 +1530,12 @@ namespace rados {
     cmd.push_back("\"volumeName\":\"" + name + "\"");
 
     bufferlist bl;
-    monc->start_mon_command(cmd, bl, nullptr, nullptr,
-			    std::move(onfinish));
+    monc->start_mon_command(
+      cmd, bl,
+      [onfinish = std::move(onfinish)](std::error_code err, const string& s,
+				       bufferlist& bl) mutable {
+	// To be fixed later
+	onfinish(-err.value()); });
     return 0;
   }
 
@@ -1544,8 +1548,12 @@ namespace rados {
     cmd.push_back("\"volumeName\":\"" + name + "\"");
 
     bufferlist bl;
-    monc->start_mon_command(cmd, bl, nullptr, nullptr,
-			    std::move(onfinish));
+    monc->start_mon_command(
+      cmd, bl,
+      [onfinish = std::move(onfinish)](std::error_code err, const string& s,
+				       bufferlist& bl) mutable {
+	// To be fixed later
+	onfinish(-err.value()); });
     return 0;
   }
 

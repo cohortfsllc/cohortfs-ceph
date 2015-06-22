@@ -110,6 +110,63 @@ class MonClient : public Dispatcher {
 public:
   typedef cohort::function<void(std::error_code, version_t newest,
 				version_t oldest)> version_cb;
+  typedef cohort::function<void(std::error_code, const string&,
+				bufferlist&)> monc_cb;
+
+  class waiter {
+  protected:
+    std::mutex lock;
+    std::condition_variable cond;
+    bool done;
+    std::error_code err;
+    std::string s;
+    bufferlist bl;
+
+  public:
+
+    waiter() : done(false) { }
+    waiter(const waiter&) = delete;
+    waiter(waiter&&) = delete;
+
+    waiter& operator=(const waiter&) = delete;
+    waiter& operator=(waiter&&) = delete;
+
+    operator monc_cb() {
+      return std::ref(*this);
+    }
+
+    std::tuple<std::string, bufferlist> wait() {
+      std::unique_lock<std::mutex> l(lock);
+      cond.wait(l, [this](){ return done; });
+      if (err)
+	throw std::system_error(err, std::move(s));
+      return std::make_tuple(std::move(s), std::move(bl));
+    }
+
+    bool complete() {
+      std::unique_lock<std::mutex> l(lock);
+      return done;
+    }
+
+    void operator()(std::error_code _err, const std::string& _s,
+		    bufferlist& _bl) {
+      std::unique_lock<std::mutex> l(lock);
+      if (done)
+	return;
+
+      done = true;
+      err = _err;
+      s = _s;
+      bl.claim_append(_bl);
+      cond.notify_one();
+    }
+
+    void reset() {
+      done = false;
+      bl.clear();
+    }
+  };
+
   MonMap monmap;
 
   struct Factory : public MessageFactory {
@@ -354,38 +411,30 @@ private:
     uint64_t tid;
     vector<string> cmd;
     bufferlist inbl;
-    bufferlist *poutbl;
-    string *prs;
-    int *prval;
-    std::function<void(int)> onfinish;
+    monc_cb onfinish;
     uint64_t ontimeout;
 
     MonCommand(uint64_t t)
-      : target_rank(-1),
-	tid(t),
-	poutbl(NULL), prs(NULL), prval(NULL), onfinish(nullptr), ontimeout(0)
-    {}
+      : target_rank(-1), tid(t), ontimeout(0) {}
   };
   map<uint64_t,MonCommand*> mon_commands;
 
   void _send_command(MonCommand *r);
   void _resend_mon_commands();
   void _cancel_mon_command(uint64_t tid, int r);
-  void _finish_command(MonCommand *r, int ret, string rs);
+  void _finish_command(MonCommand *r, std::error_code ret,
+		       const string& rs, bufferlist& bl);
   void handle_mon_command_ack(MMonCommandAck *ack);
 
 public:
-  int start_mon_command(const vector<string>& cmd, const bufferlist& inbl,
-			bufferlist *outbl, string *outs,
-			std::function<void(int)>&& onfinish);
-  int start_mon_command(int mon_rank,
-			const vector<string>& cmd, const bufferlist& inbl,
-			bufferlist *outbl, string *outs,
-			std::function<void(int)>&& onfinish);
-  int start_mon_command(const string &mon_name, ///< mon name, with mon. prefix
-			const vector<string>& cmd, const bufferlist& inbl,
-			bufferlist *outbl, string *outs,
-			std::function<void(int)>&& onfinish);
+  void start_mon_command(const vector<string>& cmd, const bufferlist& inbl,
+			 monc_cb&& onfinish);
+  void start_mon_command(int mon_rank,
+			 const vector<string>& cmd, const bufferlist& inbl,
+			 monc_cb&& onfinish);
+  void start_mon_command(const string &mon_name, ///< mon name, with mon. prefix
+			 const vector<string>& cmd, const bufferlist& inbl,
+			 monc_cb&& onfinish);
 
   // version requests
 public:

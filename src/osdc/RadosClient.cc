@@ -465,36 +465,30 @@ namespace rados {
     objecter->blacklist_self(set);
   }
 
-  int RadosClient::mon_command(const vector<string>& cmd,
-			       const bufferlist &inbl,
-			       bufferlist *outbl, string *outs)
+  std::tuple<string, bufferlist> RadosClient::mon_command(
+    const vector<string>& cmd, const bufferlist &inbl)
   {
-    CB_Waiter w;
+    MonClient::waiter w;
 
-    monclient.start_mon_command(cmd, inbl, outbl, outs, w);
-
+    monclient.start_mon_command(cmd, inbl, w);
 
     return w.wait();
   }
 
-  int RadosClient::mon_command(int rank, const vector<string>& cmd,
-			       const bufferlist &inbl,
-			       bufferlist *outbl, string *outs)
-  {
-    CB_Waiter w;
+  std::tuple<string, bufferlist> RadosClient::mon_command(
+    int rank, const vector<string>& cmd, const bufferlist &inbl) {
+    MonClient::waiter w;
 
-    monclient.start_mon_command(rank, cmd, inbl, outbl, outs, w);
+    monclient.start_mon_command(rank, cmd, inbl, w);
 
     return w.wait();
   }
 
-  int RadosClient::mon_command(string name, const vector<string>& cmd,
-			       const bufferlist &inbl,
-			       bufferlist *outbl, string *outs)
-  {
-    CB_Waiter w;
+  std::tuple<string, bufferlist> RadosClient::mon_command(
+    const string& name, const vector<string>& cmd, const bufferlist &inbl) {
+    MonClient::waiter w;
 
-    monclient.start_mon_command(name, cmd, inbl, outbl, outs, w);
+    monclient.start_mon_command(name, cmd, inbl, w);
 
     return w.wait();
   }

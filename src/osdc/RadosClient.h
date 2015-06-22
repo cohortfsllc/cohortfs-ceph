@@ -106,14 +106,13 @@ namespace rados {
     // watch/notify
     uint64_t max_watch_notify_cookie;
     bool own_cct;
-    int mon_command(const vector<string>& cmd, const bufferlist &inbl,
-		    bufferlist *outbl, string *outs);
-    int mon_command(int rank,
-		    const vector<string>& cmd, const bufferlist &inbl,
-		    bufferlist *outbl, string *outs);
-    int mon_command(string name,
-		    const vector<string>& cmd, const bufferlist &inbl,
-		    bufferlist *outbl, string *outs);
+
+    std::tuple<string, bufferlist> mon_command(
+      const vector<string>& cmd, const bufferlist &inbl);
+    std::tuple<string, bufferlist> mon_command(
+      int rank, const vector<string>& cmd, const bufferlist &inbl);
+    std::tuple<string, bufferlist> mon_command(
+      const string& name, const vector<string>& cmd, const bufferlist &inbl);
 
     void handle_log(MLog *m);
     int monitor_log(const string& level, log_cb_t cb);
