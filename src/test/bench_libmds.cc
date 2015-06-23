@@ -12,20 +12,16 @@
 
 #include "common/strtol.h"
 #include "common/ceph_argparse.h"
-#include "common/debug.h"
-
-#define dout_subsys ceph_subsys_mds
-static CephContext* cct;
 
 static void usage()
 {
-  derr << "usage: bench_libmds [flags]\n"
+  std::cerr << "usage: bench_libmds [flags]\n"
       "	 --files\n"
       "	       total number of files in the directory\n"
       "	 --lookups\n"
       "	       total number of lookups in the directory\n"
       "	 --threads\n"
-      "	       number of threads to carry out this workload\n" << dendl;
+      "	       number of threads to carry out this workload\n" << std::endl;
   generic_server_usage();
 }
 
@@ -39,7 +35,8 @@ int create_thread(libmds *mds, const libmds_fileid_t *dir, int start, int end)
 
     int r = libmds_create(mds, dir, name);
     if (r) {
-      derr << "libmds_create(\"" << name << "\") failed with " << r << dendl;
+      std::cerr << "libmds_create(\"" << name << "\") failed with "
+          << r << std::endl;
       return r;
     }
   }
@@ -50,14 +47,14 @@ int bench_create(libmds *mds, const libmds_fileid_t *dir,
                  int n_files, int n_threads)
 {
   if (n_files % n_threads) {
-    derr << "files=" << n_files << " must be divisible by threads= "
-        << n_threads << dendl;
+    std::cerr << "files=" << n_files << " must be divisible by threads= "
+        << n_threads << std::endl;
     return -EINVAL;
   }
   const int per_thread = n_files / n_threads;
 
-  dout(0) << "Starting " << n_files << " creates in "
-      << n_threads << " threads..." << dendl;
+  std::cout << "Starting " << n_files << " creates in "
+      << n_threads << " threads..." << std::endl;
 
   std::vector<int> results(n_threads);
   std::vector<std::thread> threads;
@@ -87,8 +84,8 @@ int bench_create(libmds *mds, const libmds_fileid_t *dir,
       return r;
 
   auto rate = (1000000LL * n_files) / duration.count();
-  dout(0) << "Created " << n_files << " files in " << duration.count()
-      << "us, at a rate of " << rate << "/s" << dendl;
+  std::cout << "Created " << n_files << " files in " << duration.count()
+      << "us, at a rate of " << rate << "/s" << std::endl;
 
   return 0;
 }
@@ -105,7 +102,8 @@ int lookup_thread(libmds *mds, const libmds_fileid_t *dir,
     libmds_ino_t ino;
     int r = libmds_lookup(mds, dir, name, &ino);
     if (r) {
-      derr << "libmds_lookup(\"" << name << "\") failed with " << r << dendl;
+      std::cerr << "libmds_lookup(\"" << name << "\") failed with "
+          << r << std::endl;
       return r;
     }
   }
@@ -115,8 +113,8 @@ int lookup_thread(libmds *mds, const libmds_fileid_t *dir,
 int bench_lookup(libmds *mds, const libmds_fileid_t *dir,
                  int n_files, int n_lookups, int n_threads, rng_t &rng)
 {
-  dout(0) << "Starting " << n_lookups << " lookups in "
-      << n_threads << " threads..." << dendl;
+  std::cout << "Starting " << n_lookups << " lookups in "
+      << n_threads << " threads..." << std::endl;
 
   std::vector<int> results(n_threads);
   std::vector<std::thread> threads;
@@ -145,8 +143,8 @@ int bench_lookup(libmds *mds, const libmds_fileid_t *dir,
       return r;
 
   auto rate = (1000000LL * n_lookups) / duration.count();
-  dout(0) << n_lookups << " lookups in " << duration.count()
-      << "us, at a rate of " << rate << "/s" << dendl;
+  std::cout << n_lookups << " lookups in " << duration.count()
+      << "us, at a rate of " << rate << "/s" << std::endl;
 
   return 0;
 }
@@ -159,7 +157,8 @@ int unlink_thread(libmds *mds, const libmds_fileid_t *dir, int start, int end)
 
     int r = libmds_unlink(mds, dir, name);
     if (r) {
-      derr << "libmds_unlink(\"" << name << "\") failed with " << r << dendl;
+      std::cerr << "libmds_unlink(\"" << name << "\") failed with "
+          << r << std::endl;
       return r;
     }
   }
@@ -170,14 +169,14 @@ int bench_unlink(libmds *mds, const libmds_fileid_t *dir,
                  int n_files, int n_threads)
 {
   if (n_files % n_threads) {
-    derr << "files=" << n_files << " must be divisible by threads= "
-        << n_threads << dendl;
+    std::cerr << "files=" << n_files << " must be divisible by threads= "
+        << n_threads << std::endl;
     return -EINVAL;
   }
   const int per_thread = n_files / n_threads;
 
-  dout(0) << "Starting " << n_files << " unlinks in "
-      << n_threads << " threads..." << dendl;
+  std::cout << "Starting " << n_files << " unlinks in "
+      << n_threads << " threads..." << std::endl;
 
   std::vector<int> results(n_threads);
   std::vector<std::thread> threads;
@@ -207,8 +206,8 @@ int bench_unlink(libmds *mds, const libmds_fileid_t *dir,
       return r;
 
   auto rate = (1000000LL * n_files) / duration.count();
-  dout(0) << "Unlinked " << n_files << " files in " << duration.count()
-      << "us, at a rate of " << rate << "/s" << dendl;
+  std::cout << "Unlinked " << n_files << " files in " << duration.count()
+      << "us, at a rate of " << rate << "/s" << std::endl;
 
   return 0;
 }
@@ -221,19 +220,19 @@ int run_benchmarks(libmds *mds, int n_files, int n_lookups, int n_threads,
 
   int r = bench_create(mds, &root, n_files, n_threads);
   if (r) {
-    derr << "bench_create() failed with " << r << dendl;
+    std::cerr << "bench_create() failed with " << r << std::endl;
     return r;
   }
 
   r = bench_lookup(mds, &root, n_files, n_lookups, n_threads, rng);
   if (r) {
-    derr << "bench_lookup() failed with " << r << dendl;
+    std::cerr << "bench_lookup() failed with " << r << std::endl;
     return r;
   }
 
   r = bench_unlink(mds, &root, n_files, n_threads);
   if (r) {
-    derr << "bench_unlink() failed with " << r << dendl;
+    std::cerr << "bench_unlink() failed with " << r << std::endl;
     return r;
   }
   return 0;
@@ -245,9 +244,6 @@ int main(int argc, const char *argv[])
   vector<const char*> args;
   argv_to_vec(argc, argv, args);
   env_to_vec(args);
-
-  cct = global_init(NULL, args, CEPH_ENTITY_TYPE_OSD,
-		    CODE_ENVIRONMENT_UTILITY, 0);
 
   int n_files = 100;
   int n_lookups = 100;
@@ -266,22 +262,17 @@ int main(int argc, const char *argv[])
     } else if (ceph_argparse_witharg(args, i, &val, "--threads", (char*)NULL)) {
       n_threads = atoi(val.c_str());
     } else {
-      derr << "Error: can't understand argument: " << *i << dendl;
-      usage();
+      ++i;
     }
   }
-
-  common_init_finish(cct);
 
   std::random_device rd;
   std::mt19937 rng(rd());
 
   // create object store
-  dout(0) << "files " << n_files << dendl;
-  dout(0) << "lookups " << n_lookups << dendl;
-  dout(0) << "threads " << n_threads << dendl;
-  dout(0) << "mds_cache_highwater " << cct->_conf->mds_cache_highwater << dendl;
-  dout(0) << "mds_cache_lowwater " << cct->_conf->mds_cache_lowwater << dendl;
+  std::cout << "files " << n_files << std::endl;
+  std::cout << "lookups " << n_lookups << std::endl;
+  std::cout << "threads " << n_threads << std::endl;
 
   struct libmds_init_args initargs = {0};
   libmds *mds = libmds_init(&initargs);
