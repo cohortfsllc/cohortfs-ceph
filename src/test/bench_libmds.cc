@@ -274,7 +274,9 @@ int main(int argc, const char *argv[])
   std::cout << "lookups " << n_lookups << std::endl;
   std::cout << "threads " << n_threads << std::endl;
 
-  struct libmds_init_args initargs = {0};
+  libmds_init_args initargs = {0};
+  initargs.argc = argc;
+  initargs.argv = argv;
   libmds *mds = libmds_init(&initargs);
   if (mds == nullptr)
     return 1;

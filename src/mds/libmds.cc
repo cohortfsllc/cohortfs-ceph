@@ -31,7 +31,7 @@ typedef std::map<int, libmds*> mdsmap;
 mdsmap mdslist;
 
 int context_create(int id, char const *config, char const *cluster,
-                   CephContext **cctp)
+                   int argc, const char **argv, CephContext **cctp)
 {
   CephInitParameters iparams(CEPH_ENTITY_TYPE_MDS);
   if (id >= 0) {
@@ -45,6 +45,13 @@ int context_create(int id, char const *config, char const *cluster,
   if (r != 0) {
     derr << "failed to parse configuration " << config << dendl;
     return r;
+  }
+  // parse command line arguments
+  if (argc) {
+    assert(argv);
+    vector<const char*> args;
+    argv_to_vec(argc, argv, args);
+    cct->_conf->parse_argv(args);
   }
   cct->_conf->parse_env();
   cct->_conf->apply_changes(NULL);
@@ -105,7 +112,8 @@ LibMDS::~LibMDS()
 int LibMDS::init(const struct libmds_init_args *args)
 {
   // create the CephContext and parse the configuration
-  int r = context_create(args->id, args->config, args->cluster, &cct);
+  int r = context_create(args->id, args->config, args->cluster,
+                         args->argc, args->argv, &cct);
   if (r != 0)
     return r;
 

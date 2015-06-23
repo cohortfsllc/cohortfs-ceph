@@ -128,6 +128,8 @@ extern "C" {
     int id;               /**< mds instance id */
     const char *config;   /**< path to ceph configuration file */
     const char *cluster;  /**< ceph cluster name (default "ceph") */
+    const char **argv;    /**< command-line argument array */
+    int argc;             /**< size of argv array */
   };
 
   /**
