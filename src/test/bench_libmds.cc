@@ -90,6 +90,72 @@ int bench_create(libmds *mds, const libmds_fileid_t *dir,
   return 0;
 }
 
+int getattr_thread(libmds *mds, const libmds_fileid_t *dir,
+                  int n_files, int n_getattrs, rng_t &rng)
+{
+  std::uniform_int_distribution<> dist(2, n_files + 1);
+  libmds_fileid_t file = { dir->volume };
+
+  for (int i = 0; i < n_getattrs; i++) {
+    file.ino = dist(rng);
+
+    struct stat ignored;
+    int r = libmds_getattr(mds, &file, &ignored);
+    if (r) {
+      std::cerr << "libmds_getattr(" << file.ino << ") failed with "
+          << r << std::endl;
+      return r;
+    }
+  }
+  return 0;
+}
+
+int bench_getattr(libmds *mds, const libmds_fileid_t *dir,
+                 int n_files, int n_getattrs, int n_threads, rng_t &rng)
+{
+  if (n_getattrs % n_threads) {
+    std::cerr << "lookups=" << n_getattrs << " must be divisible by threads= "
+        << n_threads << std::endl;
+    return -EINVAL;
+  }
+  const int per_thread = n_getattrs / n_threads;
+
+  std::cout << "Starting " << n_getattrs << " getattrs in "
+      << n_threads << " threads..." << std::endl;
+
+  std::vector<int> results(n_threads);
+  std::vector<std::thread> threads;
+  threads.reserve(n_threads);
+
+  using namespace std::chrono;
+  auto t1 = high_resolution_clock::now();
+
+  // start threads
+  for (int i = 0; i < n_threads; i++) {
+    auto fn = [=, &results, &rng]() {
+      results[i] = getattr_thread(mds, dir, n_files, per_thread, rng);
+    };
+    threads.emplace_back(fn);
+  }
+  // join threads
+  for (auto &t : threads)
+    t.join();
+
+  auto t2 = high_resolution_clock::now();
+  auto duration = duration_cast<microseconds>(t2 - t1);
+
+  // check for failures
+  for (auto &r : results)
+    if (r)
+      return r;
+
+  auto rate = (1000000LL * n_getattrs) / duration.count();
+  std::cout << n_getattrs << " getattrs in " << duration.count()
+      << "us, at a rate of " << rate << "/s" << std::endl;
+
+  return 0;
+}
+
 int lookup_thread(libmds *mds, const libmds_fileid_t *dir,
                   int n_files, int n_lookups, rng_t &rng)
 {
@@ -228,6 +294,12 @@ int run_benchmarks(libmds *mds, int n_files, int n_lookups, int n_threads,
   int r = bench_create(mds, &root, n_files, n_threads);
   if (r) {
     std::cerr << "bench_create() failed with " << r << std::endl;
+    return r;
+  }
+
+  r = bench_getattr(mds, &root, n_files, n_lookups, n_threads, rng);
+  if (r) {
+    std::cerr << "bench_getattr() failed with " << r << std::endl;
     return r;
   }
 
