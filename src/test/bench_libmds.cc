@@ -113,6 +113,13 @@ int lookup_thread(libmds *mds, const libmds_fileid_t *dir,
 int bench_lookup(libmds *mds, const libmds_fileid_t *dir,
                  int n_files, int n_lookups, int n_threads, rng_t &rng)
 {
+  if (n_lookups % n_threads) {
+    std::cerr << "lookups=" << n_lookups << " must be divisible by threads= "
+        << n_threads << std::endl;
+    return -EINVAL;
+  }
+  const int per_thread = n_lookups / n_threads;
+
   std::cout << "Starting " << n_lookups << " lookups in "
       << n_threads << " threads..." << std::endl;
 
@@ -126,7 +133,7 @@ int bench_lookup(libmds *mds, const libmds_fileid_t *dir,
   // start threads
   for (int i = 0; i < n_threads; i++) {
     auto fn = [=, &results, &rng]() {
-      results[i] = lookup_thread(mds, dir, n_files, n_lookups, rng);
+      results[i] = lookup_thread(mds, dir, n_files, per_thread, rng);
     };
     threads.emplace_back(fn);
   }
