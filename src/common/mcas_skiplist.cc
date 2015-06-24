@@ -140,10 +140,10 @@ namespace {
 
 struct reaper_arg {
   skiplist_base *skip;
+  skiplist_base::object **freelist;
   int shape;
   bool shutdown;
   bool activity_only;
-  skiplist_base::object *freelist;
   ptst_t *ptst;
   int removed;
 };
@@ -176,8 +176,8 @@ void skiplist_base::reap_entry(osi_set_t *skip, setval_t k, setval_t v, void *a)
   assert(removed == node);
   --base->size;
 
-  node->next = arg->freelist;
-  arg->freelist = node;
+  node->next = *arg->freelist;
+  *arg->freelist = node;
   ++arg->removed;
 }
 
@@ -187,6 +187,8 @@ void skiplist_base::reaper_thread(destructor_fn destructor,
   skip_stats *const s = get_mythread_stats();
   s->reaper_shape = 3;
 
+  skiplist_base::object *freelist = nullptr;
+
   for (;;) {
     if (size < highwater && !shutdown) {
       std::unique_lock<std::mutex> lock(mutex);
@@ -194,7 +196,7 @@ void skiplist_base::reaper_thread(destructor_fn destructor,
         cond.wait_for(lock, std::chrono::milliseconds(5));
     }
 
-    reaper_arg arg = {this, s->reaper_shape, shutdown};
+    reaper_arg arg = {this, &freelist, s->reaper_shape, shutdown};
     {
       gc_guard guard(gc);
       arg.ptst = guard;
@@ -221,12 +223,26 @@ void skiplist_base::reaper_thread(destructor_fn destructor,
       gc_guard guard(gc);
 
       // free items in the free list
-      for (object *next, *node = arg.freelist; node; node = next) {
+      object **prev = nullptr;
+      for (object *next, *node = freelist; node; node = next) {
         next = node->next;
-        ++s->reaped;
-        destructor(node); // call destructor
-        gc_free(guard, node, cache);
+        if (node->ref_count == 0) {
+          ++s->reaped;
+          destructor(node); // call destructor
+          gc_free(guard, node, cache);
+        } else {
+          // we can't free this yet, so keep it linked
+          if (prev)
+            *prev = node;
+          else
+            freelist = node;
+          prev = &node->next;
+        }
       }
+      if (prev)
+        *prev = nullptr;
+      else
+        freelist = nullptr;
     }
     if (arg.shutdown)
       break;
