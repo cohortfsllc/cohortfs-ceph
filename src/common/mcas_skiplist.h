@@ -137,6 +137,7 @@ class skiplist_base {
   void node_init(object *node) { node->parent = this; }
   void node_active(object *node) const { node->activity += 50; }
   bool node_deleted(const object *node) const { return node->deleted; }
+  void node_set_deleted(object *node) { node->deleted = 1; }
 
   skip_stats* get_mythread_stats();
   void get_stats(skip_stats *s);
@@ -249,6 +250,7 @@ class skiplist : private detail::skiplist_base {
     ++s->destroys;
 
     gc_guard guard(gc);
+    node_set_deleted(node);
     T *a = static_cast<T*>(osi_cas_skip_remove(gc, skip, node));
     assert(a == node);
 
