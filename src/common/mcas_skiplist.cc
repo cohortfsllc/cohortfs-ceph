@@ -144,6 +144,7 @@ struct reaper_arg {
   bool shutdown;
   bool activity_only;
   skiplist_base::object *freelist;
+  ptst_t *ptst;
   int removed;
 };
 
@@ -171,8 +172,8 @@ void skiplist_base::reap_entry(osi_set_t *skip, setval_t k, setval_t v, void *a)
   // ok, we're deleting this one
   // XXX: race between this and a get() raising the ref_count
   node->deleted = 1;
-  object *n = static_cast<object*>(osi_cas_skip_remove(base->gc, skip, node));
-  assert(n == node);
+  auto removed = osi_cas_skip_remove_critical(arg->ptst, skip, node);
+  assert(removed == node);
   --base->size;
 
   node->next = arg->freelist;
@@ -196,6 +197,7 @@ void skiplist_base::reaper_thread(destructor_fn destructor,
     reaper_arg arg = {this, s->reaper_shape, shutdown};
     {
       gc_guard guard(gc);
+      arg.ptst = guard;
 
       const int total = size;
       const int target = total - lowwater; // target number to remove
@@ -206,7 +208,7 @@ void skiplist_base::reaper_thread(destructor_fn destructor,
       else
         ++s->reaper_passes;
 
-      osi_cas_skip_for_each(gc, skip, reap_entry, &arg);
+      osi_cas_skip_for_each_critical(arg.ptst, skip, reap_entry, &arg);
       if (arg.removed > (5*target)/4) {
         ++s->reaper_shape;
       } else if (arg.removed < (4*target)/5) {

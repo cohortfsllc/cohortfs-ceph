@@ -180,15 +180,16 @@ class skiplist : private detail::skiplist_base {
     skip_stats *s = get_mythread_stats();
     ++s->gets;
     gc_guard guard(gc);
-    T *node = static_cast<T*>(osi_cas_skip_lookup(gc, skip, &search_template));
+    T *node = static_cast<T*>(osi_cas_skip_lookup_critical(guard, skip,
+                                                           &search_template));
     if (!node) {
       // create new node
       void *x = gc_alloc(guard, cache);
       node = new (x) T(std::move(search_template));
       node_init(node);
       node_active(node);
-      T *a = static_cast<T*>(osi_cas_skip_update(gc, skip, node, node, 0));
-      if (a == nullptr || a == node) {
+      auto existing = osi_cas_skip_update_critical(guard, skip, node, node, 0);
+      if (existing == nullptr) {
         // new node inserted successfully
         ++s->gets_created;
         int i = ++size;
@@ -199,7 +200,7 @@ class skiplist : private detail::skiplist_base {
       ++s->gets_stillborn;
       node->~T();
       gc_free(guard, node, cache);
-      node = a;
+      node = static_cast<T*>(existing);
     }
     // using existing node
     ++s->gets_existing;
@@ -215,7 +216,8 @@ class skiplist : private detail::skiplist_base {
     skip_stats *s = get_mythread_stats();
     ++s->gets;
     gc_guard guard(gc);
-    T *node = static_cast<T*>(osi_cas_skip_lookup(gc, skip, &search_template));
+    T *node = static_cast<T*>(osi_cas_skip_lookup_critical(guard, skip,
+                                                           &search_template));
     if (!node) {
       ++s->gets_miss;
       return nullptr;
@@ -251,8 +253,8 @@ class skiplist : private detail::skiplist_base {
 
     gc_guard guard(gc);
     node_set_deleted(node);
-    T *a = static_cast<T*>(osi_cas_skip_remove(gc, skip, node));
-    assert(a == node);
+    auto *removed = osi_cas_skip_remove_critical(guard, skip, node);
+    assert(removed == node);
 
     --size;
     --unused;
@@ -262,7 +264,8 @@ class skiplist : private detail::skiplist_base {
 
   void dump(std::ostream &stream) const
   {
-    osi_cas_skip_for_each(gc, skip, dump_foreach, &stream);
+    gc_guard guard(gc);
+    osi_cas_skip_for_each_critical(guard, skip, dump_foreach, &stream);
     stream << std::endl;
   }
 
