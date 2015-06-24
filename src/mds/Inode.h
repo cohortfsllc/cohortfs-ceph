@@ -75,11 +75,12 @@ class Inode : public mcas::skiplist_object {
   int readdir(uint64_t pos, uint64_t gen,
               libmds_readdir_fn cb, void *user) const;
   int link(const std::string &name, libmds_ino_t ino);
-  int unlink(const std::string &name, Cache *cache, Ref *unlinked);
+  int unlink(const std::string &name, const mcas::gc_guard &guard,
+             Cache *cache, Ref *unlinked);
 
   // storage
-  bool fetch(Storage *storage);
-  bool destroy(Storage *storage);
+  bool fetch(const mcas::gc_guard &guard, Storage *storage);
+  bool destroy(const mcas::gc_guard &guard, Storage *storage);
 };
 
 typedef Inode::Ref InodeRef;

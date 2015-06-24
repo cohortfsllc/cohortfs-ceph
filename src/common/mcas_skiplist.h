@@ -175,11 +175,11 @@ class skiplist : private detail::skiplist_base {
 
   // find an entry matching the search template, or move contruct an
   // entry from the template and insert it. never returns null
-  boost::intrusive_ptr<T> get_or_create(T&& search_template)
+  boost::intrusive_ptr<T> get_or_create(const gc_guard &guard,
+                                        T&& search_template)
   {
     skip_stats *s = get_mythread_stats();
     ++s->gets;
-    gc_guard guard(gc);
     T *node = static_cast<T*>(osi_cas_skip_lookup_critical(guard, skip,
                                                            &search_template));
     if (!node) {
@@ -211,11 +211,10 @@ class skiplist : private detail::skiplist_base {
   }
 
   // find an entry matching the search template, or return null
-  boost::intrusive_ptr<T> get(T&& search_template)
+  boost::intrusive_ptr<T> get(const gc_guard &guard, T&& search_template)
   {
     skip_stats *s = get_mythread_stats();
     ++s->gets;
-    gc_guard guard(gc);
     T *node = static_cast<T*>(osi_cas_skip_lookup_critical(guard, skip,
                                                            &search_template));
     if (!node) {
@@ -234,7 +233,7 @@ class skiplist : private detail::skiplist_base {
     return boost::intrusive_ptr<T>(node, false); // don't add another ref
   }
 
-  void destroy(boost::intrusive_ptr<T> &&ref)
+  void destroy(const gc_guard &guard, boost::intrusive_ptr<T> &&ref)
   {
     // assert that this is the last reference
 #if BOOST_VERSION >= 105600 // for intrusive_ptr::detach()
@@ -251,7 +250,6 @@ class skiplist : private detail::skiplist_base {
     skip_stats *s = get_mythread_stats();
     ++s->destroys;
 
-    gc_guard guard(gc);
     node_set_deleted(node);
     auto *removed = osi_cas_skip_remove_critical(guard, skip, node);
     assert(removed == node);

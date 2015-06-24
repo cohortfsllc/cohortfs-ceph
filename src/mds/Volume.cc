@@ -25,7 +25,8 @@ Volume::~Volume()
 {
 }
 
-int Volume::mkfs(const mcas::gc_global &gc, const mcas::obj_cache &inode_cache,
+int Volume::mkfs(const mcas::gc_global &gc, const mcas::gc_guard &guard,
+                 const mcas::obj_cache &inode_cache,
                  Storage *storage, const md_config_t *conf)
 {
   std::lock_guard<std::mutex> lock(mutex);
@@ -40,7 +41,7 @@ int Volume::mkfs(const mcas::gc_global &gc, const mcas::obj_cache &inode_cache,
 
   // create the root directory inode
   const identity who = {0, 0, 0};
-  auto root = c->create(who, S_IFDIR);
+  auto root = c->create(guard, who, S_IFDIR);
   assert(root);
 
   std::swap(c, cache);

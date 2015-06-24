@@ -82,20 +82,22 @@ class Storage {
       skiplist(gc, cache, InodeStorage::cmp)
   {}
 
-  InodeStorageRef get(const boost::uuids::uuid &volume, libmds_ino_t ino)
+  InodeStorageRef get(const mcas::gc_guard &guard,
+                      const boost::uuids::uuid &volume, libmds_ino_t ino)
   {
-    return skiplist.get(InodeStorage(volume, ino));
+    return skiplist.get(guard, InodeStorage(volume, ino));
   }
 
-  InodeStorageRef get_or_create(const boost::uuids::uuid &volume,
+  InodeStorageRef get_or_create(const mcas::gc_guard &guard,
+                                const boost::uuids::uuid &volume,
                                 libmds_ino_t ino, const identity &who, int type)
   {
-    return skiplist.get_or_create(InodeStorage(volume, ino, who, type));
+    return skiplist.get_or_create(guard, InodeStorage(volume, ino, who, type));
   }
 
-  void destroy(InodeStorageRef &&inode)
+  void destroy(const mcas::gc_guard &guard, InodeStorageRef &&inode)
   {
-    skiplist.destroy(std::move(inode));
+    skiplist.destroy(guard, std::move(inode));
   }
 };
 

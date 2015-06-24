@@ -19,17 +19,18 @@ Cache::Cache(const Volume *volume, const mcas::gc_global &gc,
 {
 }
 
-InodeRef Cache::create(const identity &who, int type)
+InodeRef Cache::create(const mcas::gc_guard &guard,
+                       const identity &who, int type)
 {
   const auto ino = next_ino++;
-  auto data = storage->get_or_create(volume->get_uuid(), ino, who, type);
-  return inodes.get_or_create(Inode(this, ino, data));
+  auto data = storage->get_or_create(guard, volume->get_uuid(), ino, who, type);
+  return inodes.get_or_create(guard, Inode(this, ino, data));
 }
 
-InodeRef Cache::get(libmds_ino_t ino)
+InodeRef Cache::get(const mcas::gc_guard &guard, libmds_ino_t ino)
 {
-  auto inode = inodes.get_or_create(Inode(this, ino));
-  if (!inode->fetch(storage))
+  auto inode = inodes.get_or_create(guard, Inode(this, ino));
+  if (!inode->fetch(guard, storage))
     return nullptr;
   return inode;
 }

@@ -92,7 +92,8 @@ int Inode::link(const std::string &name, libmds_ino_t ino)
   return 0;
 }
 
-int Inode::unlink(const std::string &name, Cache *cache, Ref *unlinked)
+int Inode::unlink(const std::string &name, const mcas::gc_guard &guard,
+                  Cache *cache, Ref *unlinked)
 {
   if (!is_dir())
     return -ENOTDIR;
@@ -104,7 +105,7 @@ int Inode::unlink(const std::string &name, Cache *cache, Ref *unlinked)
     return -ENOENT;
 
   // fetch the child inode
-  auto child = cache->get(i->second); // XXX: fetch under dir mutex
+  auto child = cache->get(guard, i->second); // XXX: fetch under dir mutex
   assert(child);
 
   // child must be empty
@@ -118,12 +119,12 @@ int Inode::unlink(const std::string &name, Cache *cache, Ref *unlinked)
   return 0;
 }
 
-bool Inode::fetch(Storage *storage)
+bool Inode::fetch(const mcas::gc_guard &guard, Storage *storage)
 {
   std::lock_guard<std::mutex> lock(mutex);
   switch (state) {
     case STATE_EMPTY:
-      inode = storage->get(cache->get_volume()->get_uuid(), inodeno);
+      inode = storage->get(guard, cache->get_volume()->get_uuid(), inodeno);
       if (inode) {
         state = STATE_VALID;
         return true;
@@ -137,12 +138,12 @@ bool Inode::fetch(Storage *storage)
   }
 }
 
-bool Inode::destroy(Storage *storage)
+bool Inode::destroy(const mcas::gc_guard &guard, Storage *storage)
 {
   std::lock_guard<std::mutex> lock(mutex);
   if (!is_valid())
     return false;
-  storage->destroy(std::move(inode));
+  storage->destroy(guard, std::move(inode));
   state = STATE_NONEXISTENT;
   return true;
 }

@@ -50,7 +50,7 @@ class MDS : public Dispatcher {
 
   ceph_tid_t issue_tid() { return ++last_tid; }
 
-  VolumeRef get_volume(libmds_volume_t volume);
+  VolumeRef get_volume(const mcas::gc_guard &guard, libmds_volume_t volume);
 
  public:
   MDS(int whoami, Messenger *m, MonClient *mc);

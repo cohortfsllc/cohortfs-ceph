@@ -32,8 +32,8 @@ class Cache {
 
   const Volume* get_volume() const { return volume; }
 
-  InodeRef create(const identity &who, int type);
-  InodeRef get(libmds_ino_t ino);
+  InodeRef create(const mcas::gc_guard &guard, const identity &who, int type);
+  InodeRef get(const mcas::gc_guard &guard, libmds_ino_t ino);
 
  private:
   // skiplist sort function

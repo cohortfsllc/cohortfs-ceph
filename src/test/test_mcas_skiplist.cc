@@ -29,13 +29,14 @@ TEST(Skiplist, Get)
   skiplist<test_object> skip(gc, cache, test_object::cmp);
   skip_stats stats;
 
-  auto obj = skip.get(test_object(5));
+  gc_guard guard(gc);
+  auto obj = skip.get(guard, test_object(5));
   ASSERT_EQ(nullptr, obj);
   skip.get_stats(&stats);
   ASSERT_EQ(1, stats.gets);
   ASSERT_EQ(1, stats.gets_miss);
 
-  obj = skip.get_or_create(test_object(5));
+  obj = skip.get_or_create(guard, test_object(5));
   ASSERT_TRUE(obj != nullptr);
   skip.get_stats(&stats);
   ASSERT_EQ(2, stats.gets);
@@ -48,7 +49,7 @@ TEST(Skiplist, Get)
   ASSERT_EQ(1, stats.puts);
   ASSERT_EQ(1, stats.puts_last);
 
-  obj = skip.get(test_object(5));
+  obj = skip.get(guard, test_object(5));
   skip.get_stats(&stats);
   ASSERT_EQ(3, stats.gets);
   ASSERT_EQ(1, stats.gets_existing);
@@ -64,12 +65,13 @@ TEST(Skiplist, Reap)
   obj_cache cache(gc, sizeof(test_object), "test");
   skiplist<test_object> skip(gc, cache, test_object::cmp, 0, 1);
 
+  gc_guard guard(gc);
   // hold a reference to the first object
-  auto obj = skip.get_or_create(test_object(1));
+  auto obj = skip.get_or_create(guard, test_object(1));
   // drop the reference on the rest
-  skip.get_or_create(test_object(2));
-  skip.get_or_create(test_object(3));
-  skip.get_or_create(test_object(4));
+  skip.get_or_create(guard, test_object(2));
+  skip.get_or_create(guard, test_object(3));
+  skip.get_or_create(guard, test_object(4));
 
   // let the reaper thread run; it shouldn't sleep
   std::this_thread::sleep_for(std::chrono::milliseconds(5));

@@ -80,25 +80,28 @@ void MDS::handle_signal(int signum)
   // XXX suicide
 }
 
-cohort::mds::VolumeRef MDS::get_volume(libmds_volume_t volume)
+cohort::mds::VolumeRef MDS::get_volume(const mcas::gc_guard &guard,
+                                       libmds_volume_t volume)
 {
   auto p = reinterpret_cast<const boost::uuids::uuid*>(volume);
-  auto vol = volumes.get_or_create(*p);
+  auto vol = volumes.get_or_create(guard, *p);
   // TODO: look up the volume in the osd map and attach it
   if (vol)
-    vol->mkfs(gc, inode_cache, storage.get(), cct->_conf);
+    vol->mkfs(gc, guard, inode_cache, storage.get(), cct->_conf);
   return vol;
 }
 
 int MDS::create(const libmds_fileid_t *parent, const char *name,
                 const identity &who, int type)
 {
-  auto vol = get_volume(parent->volume);
+  mcas::gc_guard guard(gc);
+
+  auto vol = get_volume(guard, parent->volume);
   if (!vol)
     return -ENODEV;
 
   // find the parent object
-  auto p = vol->cache->get(parent->ino);
+  auto p = vol->cache->get(guard, parent->ino);
   if (!p)
     return -ENOENT;
 
@@ -106,35 +109,37 @@ int MDS::create(const libmds_fileid_t *parent, const char *name,
     return -ENOTDIR;
 
   // create the child object
-  auto inode = vol->cache->create(who, type);
+  auto inode = vol->cache->create(guard, who, type);
 
   // link the parent to the child
   int r = p->link(name, inode->ino());
   if (r)
-    inode->destroy(storage.get());
+    inode->destroy(guard, storage.get());
   return r;
 }
 
 int MDS::unlink(const libmds_fileid_t *parent, const char *name)
 {
-  auto vol = get_volume(parent->volume);
+  mcas::gc_guard guard(gc);
+
+  auto vol = get_volume(guard, parent->volume);
   if (!vol)
     return -ENODEV;
 
   // find the parent object
-  auto p = vol->cache->get(parent->ino);
+  auto p = vol->cache->get(guard, parent->ino);
   if (!p)
     return -ENOENT;
 
   // unlink the child from its parent
   InodeRef inode;
-  int r = p->unlink(name, vol->cache.get(), &inode);
+  int r = p->unlink(name, guard, vol->cache.get(), &inode);
   if (r)
     return r;
 
   // update inode nlinks
   if (inode->adjust_nlinks(-1) == 0)
-    inode->destroy(storage.get());
+    inode->destroy(guard, storage.get());
 
   return 0;
 }
@@ -142,12 +147,14 @@ int MDS::unlink(const libmds_fileid_t *parent, const char *name)
 int MDS::lookup(const libmds_fileid_t *parent, const char *name,
                 libmds_ino_t *ino)
 {
-  auto vol = get_volume(parent->volume);
+  mcas::gc_guard guard(gc);
+
+  auto vol = get_volume(guard, parent->volume);
   if (!vol)
     return -ENODEV;
 
   // find the parent object
-  auto p = vol->cache->get(parent->ino);
+  auto p = vol->cache->get(guard, parent->ino);
   if (!p)
     return -ENOENT;
 
@@ -158,12 +165,14 @@ int MDS::lookup(const libmds_fileid_t *parent, const char *name,
 int MDS::readdir(const libmds_fileid_t *dir, uint64_t pos, uint64_t gen,
                  libmds_readdir_fn cb, void *user)
 {
-  auto vol = get_volume(dir->volume);
+  mcas::gc_guard guard(gc);
+
+  auto vol = get_volume(guard, dir->volume);
   if (!vol)
     return -ENODEV;
 
   // find the object
-  auto inode = vol->cache->get(dir->ino);
+  auto inode = vol->cache->get(guard, dir->ino);
   if (!inode)
     return -ENOENT;
 
@@ -172,12 +181,14 @@ int MDS::readdir(const libmds_fileid_t *dir, uint64_t pos, uint64_t gen,
 
 int MDS::getattr(const libmds_fileid_t *file, int mask, ObjAttr &attr)
 {
-  auto vol = get_volume(file->volume);
+  mcas::gc_guard guard(gc);
+
+  auto vol = get_volume(guard, file->volume);
   if (!vol)
     return -ENODEV;
 
   // find the object
-  auto inode = vol->cache->get(file->ino);
+  auto inode = vol->cache->get(guard, file->ino);
   if (!inode)
     return -ENOENT;
 
@@ -186,12 +197,14 @@ int MDS::getattr(const libmds_fileid_t *file, int mask, ObjAttr &attr)
 
 int MDS::setattr(const libmds_fileid_t *file, int mask, const ObjAttr &attr)
 {
-  auto vol = get_volume(file->volume);
+  mcas::gc_guard guard(gc);
+
+  auto vol = get_volume(guard, file->volume);
   if (!vol)
     return -ENODEV;
 
   // find the object
-  auto inode = vol->cache->get(file->ino);
+  auto inode = vol->cache->get(guard, file->ino);
   if (!inode)
     return -ENOENT;
 
