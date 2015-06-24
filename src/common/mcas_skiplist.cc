@@ -170,8 +170,9 @@ void skiplist_base::reap_entry(osi_set_t *skip, setval_t k, setval_t v, void *a)
   }
 
   // ok, we're deleting this one
-  // XXX: race between this and a get() raising the ref_count
-  node->deleted = 1;
+  if (!base->node_set_deleted(node))
+    return; // skiplist::destroy() won the race to free
+
   auto removed = osi_cas_skip_remove_critical(arg->ptst, skip, node);
   assert(removed == node);
   --base->size;

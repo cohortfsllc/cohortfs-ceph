@@ -106,13 +106,13 @@ class skiplist_base {
 
   class object {
     std::atomic<int> ref_count;
-    skiplist_base *parent;
-    int deleted; // XXX: does this need to be atomic?
     std::atomic<int> activity;
+    std::atomic<bool> deleted;
+    skiplist_base *parent;
     object *next; // for reaper free list
     friend class skiplist_base;
    public:
-    object() : ref_count(0), parent(nullptr), next(nullptr) {}
+    object() : ref_count(0), activity(0), deleted(false) {}
     int get() { return ++ref_count; }
     int put() {
       skip_stats *s = parent->get_mythread_stats();
@@ -137,7 +137,10 @@ class skiplist_base {
   void node_init(object *node) { node->parent = this; }
   void node_active(object *node) const { node->activity += 50; }
   bool node_deleted(const object *node) const { return node->deleted; }
-  void node_set_deleted(object *node) { node->deleted = 1; }
+  bool node_set_deleted(object *node) {
+    bool deleted = node->deleted;
+    return node->deleted.compare_exchange_strong(deleted, true);
+  }
 
   skip_stats* get_mythread_stats();
   void get_stats(skip_stats *s);
@@ -182,25 +185,33 @@ class skiplist : private detail::skiplist_base {
     ++s->gets;
     T *node = static_cast<T*>(osi_cas_skip_lookup_critical(guard, skip,
                                                            &search_template));
+    if (node && node_deleted(node)) {
+      ++s->gets_deleted;
+      node = nullptr;
+    }
     if (!node) {
       // create new node
       void *x = gc_alloc(guard, cache);
       node = new (x) T(std::move(search_template));
       node_init(node);
       node_active(node);
-      auto existing = osi_cas_skip_update_critical(guard, skip, node, node, 0);
-      if (existing == nullptr) {
-        // new node inserted successfully
-        ++s->gets_created;
-        int i = ++size;
-        if (s->maxsize < i) s->maxsize = i;
-        return node;
-      }
+      T *existing = nullptr;
+      do {
+        existing = static_cast<T*>(osi_cas_skip_update_critical(guard, skip,
+                                                                node, node, 0));
+        if (existing == nullptr) {
+          // new node inserted successfully
+          ++s->gets_created;
+          int i = ++size;
+          if (s->maxsize < i) s->maxsize = i;
+          return node;
+        }
+      } while (node_deleted(existing));
       // lost the race to insert
       ++s->gets_stillborn;
       node->~T();
       gc_free(guard, node, cache);
-      node = static_cast<T*>(existing);
+      node = existing;
     }
     // using existing node
     ++s->gets_existing;
@@ -250,8 +261,10 @@ class skiplist : private detail::skiplist_base {
     skip_stats *s = get_mythread_stats();
     ++s->destroys;
 
-    node_set_deleted(node);
-    auto *removed = osi_cas_skip_remove_critical(guard, skip, node);
+    if (!node_set_deleted(node))
+      return; // reaper thread won the race to free
+
+    auto removed = osi_cas_skip_remove_critical(guard, skip, node);
     assert(removed == node);
 
     --size;
