@@ -85,14 +85,27 @@ class Storage {
   InodeStorageRef get(const mcas::gc_guard &guard,
                       const boost::uuids::uuid &volume, libmds_ino_t ino)
   {
-    return skiplist.get(guard, InodeStorage(volume, ino));
+    auto inode = skiplist.get(guard, InodeStorage(volume, ino));
+    if (inode->attr.nlinks == 0) {
+      // if our get() raced with destroy(), drop our ref immediately because
+      // the node will be freed at the end of our gc_guard
+      inode.reset();
+    }
+    return inode;
   }
 
   InodeStorageRef get_or_create(const mcas::gc_guard &guard,
                                 const boost::uuids::uuid &volume,
                                 libmds_ino_t ino, const identity &who, int type)
   {
-    return skiplist.get_or_create(guard, InodeStorage(volume, ino, who, type));
+    auto inode = skiplist.get_or_create(guard, InodeStorage(volume, ino,
+                                                            who, type));
+    if (inode->attr.nlinks == 0) {
+      // if our get() raced with destroy(), drop our ref immediately because
+      // the node will be freed at the end of our gc_guard
+      inode.reset();
+    }
+    return inode;
   }
 
   void destroy(const mcas::gc_guard &guard, InodeStorageRef &&inode)
