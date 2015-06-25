@@ -39,8 +39,8 @@ class MDS : public Dispatcher {
   int last_state, state, want_state;
   ceph_tid_t last_tid;
 
-  VolumeTable volumes;
   std::unique_ptr<Storage> storage; // inode storage
+  VolumeTable volumes;
 
   void beacon_send();
 
