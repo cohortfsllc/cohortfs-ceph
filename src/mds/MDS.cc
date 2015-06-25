@@ -62,13 +62,15 @@ int MDS::init()
   storage.reset(new Storage(gc, storage_cache));
 
   // start beacon timer
-  beacon_timer.add_event(cct->_conf->mds_beacon_interval,
-                         &MDS::beacon_send, this);
+  beacon_timer.reset(new cohort::Timer<ceph::mono_clock>);
+  beacon_timer->add_event(cct->_conf->mds_beacon_interval,
+                          &MDS::beacon_send, this);
   return 0;
 }
 
 void MDS::shutdown()
 {
+  beacon_timer.reset();
   objecter->shutdown();
   monc->shutdown();
   messenger->shutdown();
@@ -282,5 +284,5 @@ void MDS::beacon_send()
                                       want_state, beacon_last_seq);
   monc->send_mon_message(beacon);
 
-  beacon_timer.reschedule_me(cct->_conf->mds_beacon_interval);
+  beacon_timer->reschedule_me(cct->_conf->mds_beacon_interval);
 }

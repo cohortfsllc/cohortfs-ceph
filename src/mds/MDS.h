@@ -34,7 +34,7 @@ class MDS : public Dispatcher {
   MonClient *monc;
   rados::Objecter *objecter;
   MDSMap mdsmap;
-  cohort::Timer<ceph::mono_clock> beacon_timer;
+  std::unique_ptr<cohort::Timer<ceph::mono_clock>> beacon_timer;
   version_t beacon_last_seq;
   int last_state, state, want_state;
   ceph_tid_t last_tid;
