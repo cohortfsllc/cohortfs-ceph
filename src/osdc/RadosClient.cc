@@ -339,6 +339,7 @@ namespace rados {
 
   RadosClient::~RadosClient()
   {
+    shutdown();
     if (messenger)
       delete messenger;
     if (objecter)
