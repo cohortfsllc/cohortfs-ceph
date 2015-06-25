@@ -97,7 +97,7 @@ namespace cohort {
 	  queue.insert(queue.end(), el);
 	  assert(el);
 	} else {
-	  F el = *(new F(std::forward<Callable>(f)));
+	  F& el = *(new F(std::forward<Callable>(f)));
 	  queue.insert(queue.end(), el);
 	  assert(el);
 	}
