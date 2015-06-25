@@ -245,7 +245,7 @@ void skiplist_base::reaper_thread(destructor_fn destructor,
       else
         freelist = nullptr;
     }
-    if (arg.shutdown)
+    if (arg.shutdown && !freelist)
       break;
   }
   assert(size == 0);
