@@ -15,7 +15,7 @@ struct skiplist_base::thread_stats {
 
 skiplist_base::skiplist_base(const gc_global &gc, osi_set_cmp_func cmp,
                              const obj_cache &cache, destructor_fn destructor,
-                             int lowwater, int highwater)
+                             int highwater, int lowwater)
   : gc(gc),
     cache(cache),
     skip(osi_cas_skip_alloc(cmp)),
