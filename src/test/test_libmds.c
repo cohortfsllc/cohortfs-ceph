@@ -204,6 +204,104 @@ static int test_volumes(struct libmds *mds)
 	r);
     return -ENOENT;
   }
+  // make sure rename won't work across volumes
+  r = libmds_rename(mds, &roota, "vola", &rootb, "volb");
+  if (r != -EXDEV) {
+    fprintf(stderr, "libmds_rename(\"vola\", \"volb\") returned %d, "
+	"expected -EXDEV\n", r);
+    return -EXDEV;
+  }
+  return 0;
+}
+
+static int test_link_rename(struct libmds *mds, const libmds_fileid_t *root)
+{
+  libmds_fileid_t file = { root->volume };
+  libmds_fileid_t dir = { root->volume };
+  struct stat st;
+  // create the initial file
+  int r = libmds_create(mds, root, "file.a");
+  if (r) {
+    fprintf(stderr, "libmds_create(\"file.a\") failed with %d\n", r);
+    return r;
+  }
+  // create a subdirectory
+  r = libmds_mkdir(mds, root, "dir");
+  if (r) {
+    fprintf(stderr, "libmds_mkdir(\"dir\") failed with %d\n", r);
+    return r;
+  }
+  // look up the inode numbers
+  r = libmds_lookup(mds, root, "file.a", &file.ino);
+  if (r) {
+    fprintf(stderr, "libmds_lookup(\"file.a\") failed with %d\n", r);
+    return r;
+  }
+  r = libmds_lookup(mds, root, "dir", &dir.ino);
+  if (r) {
+    fprintf(stderr, "libmds_lookup(\"dir\") failed with %d\n", r);
+    return r;
+  }
+  // add a link
+  r = libmds_link(mds, root, "file.b", file.ino);
+  if (r) {
+    fprintf(stderr, "libmds_link(\"file.b\") failed with %d\n", r);
+    return r;
+  }
+  // confirm nlink is 2
+  r = libmds_getattr(mds, &file, &st);
+  if (r) {
+    fprintf(stderr, "libmds_getattr() failed with %d\n", r);
+    return r;
+  }
+  if (st.st_nlink != 2) {
+    fprintf(stderr, "nlink = %d after libmds_link(), expected 2\n",
+	st.st_nlink);
+    return -EINVAL;
+  }
+  // try adding a link on an existing entry
+  r = libmds_link(mds, root, "file.b", file.ino);
+  if (r != -EEXIST) {
+    fprintf(stderr, "libmds_link(\"file.b\") returned %d, "
+	"expected -EEXIST\n", r);
+    return -EEXIST;
+  }
+  // rename an entry within the directory
+  r = libmds_rename(mds, root, "file.a", root, "newfile.a");
+  if (r) {
+    fprintf(stderr, "libmds_rename(\"file.a\", \"newfile.a\") failed "
+	"with %d\n", r);
+    return r;
+  }
+  // confirm nlink is still 2
+  r = libmds_getattr(mds, &file, &st);
+  if (r) {
+    fprintf(stderr, "libmds_getattr() failed with %d\n", r);
+    return r;
+  }
+  if (st.st_nlink != 2) {
+    fprintf(stderr, "nlink = %d after libmds_link(), expected 2\n",
+	st.st_nlink);
+    return -EINVAL;
+  }
+  // rename an entry into the other directory
+  r = libmds_rename(mds, root, "file.b", &dir, "newfile.b");
+  if (r) {
+    fprintf(stderr, "libmds_rename(\"file.b\", \"newfile.b\") failed "
+	"with %d\n", r);
+    return r;
+  }
+  // confirm nlink is still 2
+  r = libmds_getattr(mds, &file, &st);
+  if (r) {
+    fprintf(stderr, "libmds_getattr() failed with %d\n", r);
+    return r;
+  }
+  if (st.st_nlink != 2) {
+    fprintf(stderr, "nlink = %d after libmds_link(), expected 2\n",
+	st.st_nlink);
+    return -EINVAL;
+  }
   return 0;
 }
 
@@ -223,6 +321,11 @@ static int run_tests(struct libmds *mds)
   r = test_volumes(mds);
   if (r) {
     fprintf(stderr, "test_volumes() failed with %d\n", r);
+    return r;
+  }
+  r = test_link_rename(mds, &root);
+  if (r) {
+    fprintf(stderr, "test_link_rename() failed with %d\n", r);
     return r;
   }
   puts("libmds tests passed");

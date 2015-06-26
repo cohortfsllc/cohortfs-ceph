@@ -82,6 +82,20 @@ struct libmds {
   virtual int mkdir(const libmds_fileid_t *parent, const char *name) = 0;
 
   /**
+   * Create a link in the parent directory.
+   * @see libmds_link()
+   */
+  virtual int link(const libmds_fileid_t *parent, const char *name,
+                   libmds_ino_t ino) = 0;
+
+  /**
+   * Rename a directory entry.
+   * @see libmds_rename()
+   */
+  virtual int rename(const libmds_fileid_t *srcp, const char *src_name,
+                     const libmds_fileid_t *dstp, const char *dst_name) = 0;
+
+  /**
    * Unlink the given file from the parent directory.
    * @see libmds_unlink()
    */
@@ -207,6 +221,41 @@ extern "C" {
    */
   int libmds_mkdir(struct libmds *mds, const libmds_fileid_t *parent,
                    const char *name);
+
+  /**
+   * Create a link in the parent directory.
+   *
+   * @param mds     The libmds object returned by libmds_init()
+   * @param parent  Fileid of the parent directory
+   * @param name    Filename of the new directory entry
+   * @param ino     Inode number of the file to link
+   *
+   * @return Returns 0 on success, or a negative error code.
+   * @retval -ENODEV if the parent volume does not exist.
+   * @retval -ENOENT if the parent does not exist.
+   * @retval -EEXIST if the parent directory already has an entry with \a name.
+   */
+  int libmds_link(struct libmds *mds, const libmds_fileid_t *parent,
+                  const char *name, libmds_ino_t ino);
+
+  /**
+   * Rename a directory entry.
+   *
+   * @param mds         The libmds object returned by libmds_init()
+   * @param src_parent  Fileid of the initial parent directory
+   * @param src_name    Filename of the initial directory entry
+   * @param dst_parent  Fileid of the destination parent directory
+   * @param dst_name    Filename of the destination directory entry
+   *
+   * @return Returns 0 on success, or a negative error code.
+   * @retval -ENODEV if either parent volume does not exist.
+   * @retval -ENOENT if either parent directory does not exist.
+   * @retval -EEXIST if dst_parent already has an entry with \a dst_name.
+   * @retval -EXDEV if the directories are located on different filesystems.
+   */
+  int libmds_rename(struct libmds *mds,
+                    const libmds_fileid_t *src_parent, const char *src_name,
+                    const libmds_fileid_t *dst_parent, const char *dst_name);
 
   /**
    * Unlink the given file from the parent directory.

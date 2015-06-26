@@ -84,6 +84,9 @@ public:
 
   int create(const libmds_fileid_t *parent, const char *name);
   int mkdir(const libmds_fileid_t *parent, const char *name);
+  int link(const libmds_fileid_t *parent, const char *name, libmds_ino_t ino);
+  int rename(const libmds_fileid_t *parent1, const char *name1,
+             const libmds_fileid_t *parent2, const char *name2);
   int unlink(const libmds_fileid_t *parent, const char *name);
   int lookup(const libmds_fileid_t *parent, const char *name,
              libmds_ino_t *ino);
@@ -177,6 +180,18 @@ int LibMDS::mkdir(const libmds_fileid_t *parent, const char *name)
 {
   const identity who = {0, 0, 0}; // XXX
   return mds->create(parent, name, who, S_IFDIR);
+}
+
+int LibMDS::link(const libmds_fileid_t *parent, const char *name,
+                 libmds_ino_t ino)
+{
+  return mds->link(parent, name, ino);
+}
+
+int LibMDS::rename(const libmds_fileid_t *src_parent, const char *src_name,
+                   const libmds_fileid_t *dst_parent, const char *dst_name)
+{
+  return mds->rename(src_parent, src_name, dst_parent, dst_name);
 }
 
 int LibMDS::unlink(const libmds_fileid_t *parent, const char *name)
@@ -346,6 +361,31 @@ int libmds_mkdir(struct libmds *mds, const libmds_fileid_t *parent,
   } catch (std::exception &e) {
     CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
     lderr(cct) << "libmds_mkdir caught exception " << e.what() << dendl;
+    return -EFAULT;
+  }
+}
+
+int libmds_link(struct libmds *mds, const libmds_fileid_t *parent,
+                const char *name, libmds_ino_t ino)
+{
+  try {
+    return mds->link(parent, name, ino);
+  } catch (std::exception &e) {
+    CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
+    lderr(cct) << "libmds_link caught exception " << e.what() << dendl;
+    return -EFAULT;
+  }
+}
+
+int libmds_rename(struct libmds *mds,
+                  const libmds_fileid_t *src_parent, const char *src_name,
+                  const libmds_fileid_t *dst_parent, const char *dst_name)
+{
+  try {
+    return mds->rename(src_parent, src_name, dst_parent, dst_name);
+  } catch (std::exception &e) {
+    CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
+    lderr(cct) << "libmds_rename caught exception " << e.what() << dendl;
     return -EFAULT;
   }
 }

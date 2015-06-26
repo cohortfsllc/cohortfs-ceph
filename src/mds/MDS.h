@@ -66,6 +66,9 @@ class MDS : public Dispatcher {
   // for libmds
   int create(const libmds_fileid_t *parent, const char *name,
              const identity &who, int type);
+  int link(const libmds_fileid_t *parent, const char *name, libmds_ino_t ino);
+  int rename(const libmds_fileid_t *src_parent, const char *src_name,
+             const libmds_fileid_t *dst_parent, const char *dst_name);
   int unlink(const libmds_fileid_t *parent, const char *name);
   int lookup(const libmds_fileid_t *parent, const char *name,
              libmds_ino_t *ino);

@@ -120,6 +120,73 @@ int MDS::create(const libmds_fileid_t *parent, const char *name,
   return r;
 }
 
+int MDS::link(const libmds_fileid_t *parent, const char *name, libmds_ino_t ino)
+{
+  mcas::gc_guard guard(gc);
+
+  auto vol = get_volume(guard, parent->volume);
+  if (!vol)
+    return -ENODEV;
+
+  // find the parent object
+  auto p = vol->cache->get(guard, parent->ino);
+  if (!p)
+    return -ENOENT;
+
+  // find the target inode
+  auto inode = vol->cache->get(guard, ino);
+  if (!inode)
+    return -ENOENT;
+
+  // link the parent to the inode
+  int r = p->link(name, ino);
+  if (r == 0)
+    inode->adjust_nlinks(1);
+  return r;
+}
+
+int MDS::rename(const libmds_fileid_t *src_parent, const char *src_name,
+                const libmds_fileid_t *dst_parent, const char *dst_name)
+{
+  if (!std::equal(src_parent->volume, src_parent->volume + LIBMDS_VOLUME_LEN,
+                  dst_parent->volume))
+    return -EXDEV;
+
+  mcas::gc_guard guard(gc);
+
+  auto vol = get_volume(guard, src_parent->volume);
+  if (!vol)
+    return -ENODEV;
+
+  // find the initial parent object
+  auto srcp = vol->cache->get(guard, src_parent->ino);
+  if (!srcp)
+    return -ENOENT;
+
+  // look up the initial directory entry
+  libmds_ino_t ino;
+  int r = srcp->lookup(src_name, &ino);
+  if (r)
+    return r;
+
+  // find the destination parent object
+  auto dstp = vol->cache->get(guard, dst_parent->ino);
+  if (!dstp)
+    return -ENOENT;
+
+  // add a link to the destination
+  r = dstp->link(dst_name, ino);
+  if (r)
+    return r;
+
+  // unlink the initial directory entry
+  InodeRef inode;
+  r = srcp->unlink(src_name, guard, vol->cache.get(), &inode);
+  if (r)
+    dstp->unlink(dst_name, guard, vol->cache.get(), &inode);
+  return r;
+}
+
 int MDS::unlink(const libmds_fileid_t *parent, const char *name)
 {
   mcas::gc_guard guard(gc);
