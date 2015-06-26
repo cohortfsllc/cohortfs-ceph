@@ -16,6 +16,8 @@
 #include <stdint.h>
 
 
+#define LIBMDS_VOLUME_LEN 16
+
 typedef uint64_t libmds_ino_t;
 typedef const uint8_t* libmds_volume_t;
 
@@ -178,11 +180,11 @@ extern "C" {
    * Create a regular file in the parent directory.
    *
    * @param mds     The libmds object returned by libmds_init()
-   * @param volume  The volume uuid
-   * @param parent  Inode number of the parent directory
+   * @param parent  Fileid of the parent directory
    * @param name    Filename of the new directory entry
    *
    * @return Returns 0 on success, or a negative error code.
+   * @retval -ENODEV if the parent volume does not exist.
    * @retval -ENOENT if the parent does not exist.
    * @retval -ENOTDIR if the parent is not a directory.
    * @retval -EEXIST if the parent directory already has an entry with \a name.
@@ -194,11 +196,11 @@ extern "C" {
    * Create a subdirectory in the parent directory.
    *
    * @param mds     The libmds object returned by libmds_init()
-   * @param volume  The volume uuid
-   * @param parent  Inode number of the parent directory
+   * @param parent  Fileid of the parent directory
    * @param name    Filename of the new directory entry
    *
    * @return Returns 0 on success, or a negative error code.
+   * @retval -ENODEV if the parent volume does not exist.
    * @retval -ENOENT if the parent does not exist.
    * @retval -ENOTDIR if the parent is not a directory.
    * @retval -EEXIST if the parent directory already has an entry with \a name.
@@ -210,11 +212,11 @@ extern "C" {
    * Unlink the given file from the parent directory.
    *
    * @param mds     The libmds object returned by libmds_init()
-   * @param volume  The volume uuid
-   * @param parent  Inode number of the parent directory
+   * @param parent  Fileid of the parent directory
    * @param name    Filename of the directory entry to remove
    *
    * @return Returns 0 on success, or a negative error code.
+   * @retval -ENODEV if the parent volume does not exist.
    * @retval -ENOENT if the parent does not have an entry with \a name.
    * @retval -ENOTDIR if the parent is not a directory.
    * @retval -ENOTEMPTY if the entry is a non-empty directory.
@@ -226,12 +228,12 @@ extern "C" {
    * Find an entry in the parent directory.
    *
    * @param mds      The libmds object returned by libmds_init()
-   * @param volume   The volume uuid
-   * @param parent   Inode number of the parent directory
+   * @param parent   Fileid of the parent directory
    * @param name     Filename of the directory entry to find
    * @param[out] ino Inode number of the directory entry found
    *
    * @return Returns 0 on success and sets \a ino or a negative error code.
+   * @retval -ENODEV if the parent volume does not exist.
    * @retval -ENOENT if the parent does not have an entry with \a name.
    * @retval -ENOTDIR if the parent is not a directory.
    */
@@ -242,14 +244,14 @@ extern "C" {
    * List the entries of a directory.
    *
    * @param mds    The libmds object returned by libmds_init()
-   * @param volume The volume uuid
-   * @param dir    Inode number of the directory
+   * @param dir    Fileid of the directory
    * @param pos    Index of the first directory entry to list
    * @param gen    Generation number to detect changes during listing
    * @param cb     Callback function to receive each directory entry
    * @param user   User data passed as last argument to \a cb
    *
    * @return Returns 0 on success or a negative error code.
+   * @retval -ENODEV if the parent volume does not exist.
    * @retval -ENOENT if a file with inode number \a dir does not exist.
    * @retval -ENOTDIR if the parent is not a directory.
    * @retval -EOF if \a pos is past the end of the directory.
@@ -263,11 +265,11 @@ extern "C" {
    * Query the attributes of a file.
    *
    * @param mds     The libmds object returned by libmds_init()
-   * @param volume  The volume uuid
-   * @param inode   Inode number of the file
+   * @param file    Fileid of the file
    * @param[out] st Pointer to the attributes to write
    *
    * @return Returns 0 on success or a negative error code.
+   * @retval -ENODEV if the volume does not exist.
    * @retval -ENOENT if a file with inode number \a ino does not exist.
    */
   int libmds_getattr(struct libmds *mds, const libmds_fileid_t *file,
@@ -276,12 +278,12 @@ extern "C" {
   /**
    * Set the attributes of a file.
    *
-   * @param mds    The libmds object returned by libmds_init()
-   * @param volume The volume uuid
-   * @param inode  Inode number of the file
-   * @param st     Pointer to the attributes to write
+   * @param mds   The libmds object returned by libmds_init()
+   * @param file  Fileid of the file
+   * @param st    Pointer to the attributes to write
    *
    * @return Returns 0 on success or a negative error code.
+   * @retval -ENODEV if the volume does not exist.
    * @retval -ENOENT if a file with inode number \a ino does not exist.
    */
   int libmds_setattr(struct libmds *mds, const libmds_fileid_t *file,
