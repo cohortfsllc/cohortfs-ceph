@@ -934,6 +934,10 @@ void MonClient::handle_mon_command_ack(MMonCommandAck *ack)
     r = p->second;
   }
 
+  if (r->ontimeout) {
+    timer.cancel_event(r->ontimeout);
+    r->ontimeout = 0;
+  }
   ldout(cct, 10) << "handle_mon_command_ack " << r->tid << " " << r->cmd << dendl;
   if (r->poutbl)
     r->poutbl->claim(ack->get_data());
@@ -943,6 +947,7 @@ void MonClient::handle_mon_command_ack(MMonCommandAck *ack)
 
 void MonClient::_cancel_mon_command(uint64_t tid, int r)
 {
+  std::unique_lock<std::mutex> l(monc_lock);
   map<ceph_tid_t, MonCommand*>::iterator it = mon_commands.find(tid);
   if (it == mon_commands.end()) {
     ldout(cct, 10) << __func__ << " tid " << tid << " dne" << dendl;
