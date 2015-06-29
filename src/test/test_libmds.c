@@ -255,7 +255,7 @@ static int test_link_rename(struct libmds *mds, const libmds_fileid_t *root)
     return r;
   }
   if (st.st_nlink != 2) {
-    fprintf(stderr, "nlink = %d after libmds_link(), expected 2\n",
+    fprintf(stderr, "nlink = %lu after libmds_link(), expected 2\n",
 	st.st_nlink);
     return -EINVAL;
   }
@@ -280,7 +280,7 @@ static int test_link_rename(struct libmds *mds, const libmds_fileid_t *root)
     return r;
   }
   if (st.st_nlink != 2) {
-    fprintf(stderr, "nlink = %d after libmds_link(), expected 2\n",
+    fprintf(stderr, "nlink = %lu after libmds_link(), expected 2\n",
 	st.st_nlink);
     return -EINVAL;
   }
@@ -298,7 +298,7 @@ static int test_link_rename(struct libmds *mds, const libmds_fileid_t *root)
     return r;
   }
   if (st.st_nlink != 2) {
-    fprintf(stderr, "nlink = %d after libmds_link(), expected 2\n",
+    fprintf(stderr, "nlink = %lu after libmds_link(), expected 2\n",
 	st.st_nlink);
     return -EINVAL;
   }
