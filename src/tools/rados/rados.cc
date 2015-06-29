@@ -1065,7 +1065,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
 
   if (!vol_name.empty()) {
     try {
-    v = rc.objecter->attach_by_name(vol_name);
+    v = rc.attach_volume(vol_name);
     } catch (std::system_error& e) {
       cerr << "error opening volume " << vol_name << ":" << e.what() << endl;
       return 1;
@@ -1365,7 +1365,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     // open io context.
     AVolRef target_vol;
     try {
-      target_vol = rc.objecter->attach_by_name(target);
+      target_vol = rc.attach_volume(target);
     } catch (std::system_error& e) {
       cerr << "error opening target volume " << target << ": "
 	   << e.what() << endl;

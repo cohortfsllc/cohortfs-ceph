@@ -620,7 +620,7 @@ if (!set_conf_param(v, p1, p2)) { \
   AVolRef vol, destvol;
   if (!volname.empty()) {
     try {
-      vol = rc.objecter->attach_by_name(volname);
+      vol = rc.attach_volume(volname);
     } catch (std::exception& e) {
       cerr << "rbd: cannot attach " << volname << ": " << e.what() << endl;
       exit(EXIT_FAILURE);
@@ -629,7 +629,7 @@ if (!set_conf_param(v, p1, p2)) { \
 
   if (!dest_volname.empty()) {
     try {
-      destvol = rc.objecter->attach_by_name(dest_volname);
+      destvol = rc.attach_volume(dest_volname);
     } catch (std::exception& e) {
       cerr << "rbd: cannot attach " << dest_volname << ": " << e.what()
 	   << endl;
