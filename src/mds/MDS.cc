@@ -116,7 +116,11 @@ int MDS::create(const fileid_t *parent, const std::string &name,
   // look up the directory entry
   auto dn = cache->lookup(guard, p.get(), name, true);
 
-  // TODO: lock cache objects
+  // lock cache objects
+  std::lock(p->dir_mutex, dn->mutex);
+  std::lock_guard<std::mutex>
+      plock(p->dir_mutex, std::adopt_lock),
+      dnlock(dn->mutex, std::adopt_lock);
 
   if (dn->is_valid())
     return -EEXIST;
@@ -131,6 +135,7 @@ int MDS::create(const fileid_t *parent, const std::string &name,
     dn->link(inode->ino());
   } else {
     // on failure, destroy the inode we created
+    std::lock_guard<std::mutex> ilock(inode->mutex);
     inode->destroy(guard, storage.get());
   }
   return r;
@@ -149,7 +154,6 @@ int MDS::link(const fileid_t *parent, const std::string &name, ino_t ino)
   auto p = cache->get(guard, parent->ino);
   if (!p)
     return -ENOENT;
-
   if (!p->is_dir())
     return -ENOTDIR;
 
@@ -158,12 +162,15 @@ int MDS::link(const fileid_t *parent, const std::string &name, ino_t ino)
   if (!inode)
     return -ENOENT;
 
+  // look up the directory entry
   auto dn = cache->lookup(guard, p.get(), name, true);
 
-  // TODO: lock cache objects
-
-  if (dn->is_valid())
-    return -EEXIST;
+  // lock cache objects
+  std::lock(p->dir_mutex, dn->mutex, inode->mutex);
+  std::lock_guard<std::mutex>
+      plock(p->dir_mutex, std::adopt_lock),
+      dnlock(dn->mutex, std::adopt_lock),
+      ilock(inode->mutex, std::adopt_lock);
 
   // link the parent to the inode
   int r = p->link(name, ino);
@@ -180,6 +187,8 @@ int MDS::rename(const fileid_t *src_parent, const std::string &src_name,
   if (!std::equal(src_parent->volume, src_parent->volume + LIBMDS_VOLUME_LEN,
                   dst_parent->volume))
     return -EXDEV;
+
+  const bool same_parent = src_parent->ino == dst_parent->ino;
 
   mcas::gc_guard guard(gc);
 
@@ -199,19 +208,23 @@ int MDS::rename(const fileid_t *src_parent, const std::string &src_name,
     return -ENOENT;
 
   // find the destination parent object
-  auto dstp = cache->get(guard, dst_parent->ino);
+  auto dstp = same_parent ? srcp : cache->get(guard, dst_parent->ino);
   if (!dstp)
     return -ENOENT;
 
   // look up the destination entry
   auto dstdn = cache->lookup(guard, dstp.get(), dst_name, true);
 
-  // find the target inode
-  auto inode = cache->get(guard, srcdn->ino());
-  if (!inode)
-    return -ENOENT;
-
-  // TODO: lock cache objects
+  // lock cache objects
+  std::unique_lock<std::mutex>
+      srcplock(srcp->dir_mutex, std::defer_lock),
+      srcdnlock(srcdn->mutex, std::defer_lock),
+      dstplock(dstp->dir_mutex, std::defer_lock),
+      dstdnlock(dstdn->mutex, std::defer_lock);
+  if (same_parent)
+    std::lock(srcplock, srcdnlock, dstdnlock);
+  else
+    std::lock(srcplock, srcdnlock, dstplock, dstdnlock);
 
   // add a link to the destination
   int r = dstp->link(dst_name, srcdn->ino());
@@ -254,7 +267,12 @@ int MDS::unlink(const fileid_t *parent, const std::string &name)
   if (!inode)
     return -ENOENT;
 
-  // TODO: lock cache objects
+  // lock cache objects
+  std::lock(p->dir_mutex, dn->mutex, inode->mutex);
+  std::lock_guard<std::mutex>
+      plock(p->dir_mutex, std::adopt_lock),
+      dnlock(dn->mutex, std::adopt_lock),
+      ilock(inode->mutex, std::adopt_lock);
 
   if (inode->is_dir_notempty())
     return -ENOTEMPTY;

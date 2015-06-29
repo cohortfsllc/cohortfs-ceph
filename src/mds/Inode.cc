@@ -24,7 +24,6 @@ static void copy_attrs(int mask, ObjAttr &to, const ObjAttr &from)
 
 int Inode::getattr(int mask, ObjAttr &attrs) const
 {
-  std::lock_guard<std::mutex> lock(mutex);
   copy_attrs(mask, attrs, inode->attr);
   return 0;
 }
@@ -34,7 +33,6 @@ int Inode::setattr(int mask, const ObjAttr &attrs)
   if (mask & ATTR_TYPE) // can't change type with setattr
     return -EINVAL;
 
-  std::lock_guard<std::mutex> lock(mutex);
   copy_attrs(mask, inode->attr, attrs);
   return 0;
 }
@@ -43,7 +41,6 @@ bool Inode::is_dir_notempty() const
 {
   if (!is_dir())
     return false;
-  std::lock_guard<std::mutex> lock(dir_mutex);
   return !inode->dir.entries.empty();
 }
 
@@ -51,8 +48,6 @@ int Inode::lookup(const std::string &name, ino_t *ino) const
 {
   if (!is_dir())
     return -ENOTDIR;
-
-  std::lock_guard<std::mutex> lock(dir_mutex);
   auto i = inode->dir.entries.find(name);
   if (i == inode->dir.entries.end())
     return -ENOENT;
@@ -66,7 +61,6 @@ int Inode::readdir(uint64_t pos, uint64_t gen,
   if (!is_dir())
     return -ENOTDIR;
 
-  std::lock_guard<std::mutex> lock(dir_mutex);
   if (pos > 0 && gen != inode->dir.gen)
     return -ESTALE;
 
@@ -92,10 +86,10 @@ int Inode::link(const std::string &name, ino_t ino)
   if (!is_dir())
     return -ENOTDIR;
 
-  std::lock_guard<std::mutex> lock(dir_mutex);
   auto i = inode->dir.entries.insert(std::make_pair(name, ino));
   if (!i.second)
     return -EEXIST;
+
   inode->dir.gen++;
   return 0;
 }
@@ -105,7 +99,6 @@ int Inode::unlink(const std::string &name)
   if (!is_dir())
     return -ENOTDIR;
 
-  std::lock_guard<std::mutex> lock(dir_mutex);
   auto i = inode->dir.entries.find(name);
   if (i == inode->dir.entries.end())
     return -ENOENT;
@@ -136,7 +129,6 @@ bool Inode::fetch(const mcas::gc_guard &guard, Storage *storage)
 
 bool Inode::destroy(const mcas::gc_guard &guard, Storage *storage)
 {
-  std::lock_guard<std::mutex> lock(mutex);
   if (!is_valid())
     return false;
   storage->destroy(guard, std::move(inode));

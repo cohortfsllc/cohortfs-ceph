@@ -27,10 +27,12 @@ class Inode : public mcas::skiplist_object {
     STATE_NONEXISTENT,
   };
 
-  typedef boost::intrusive_ptr<Inode> Ref;
- private:
   mutable std::mutex mutex;
   mutable std::mutex dir_mutex;
+
+  typedef boost::intrusive_ptr<Inode> Ref;
+
+ private:
   Cache *cache;
   ino_t inodeno;
   State state;

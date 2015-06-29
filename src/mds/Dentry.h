@@ -18,6 +18,8 @@ class Cache;
 class Dentry : public mcas::skiplist_object {
  public:
   typedef boost::intrusive_ptr<Dentry> Ref;
+  mutable std::mutex mutex;
+
  private:
   enum State {
     /// dentry hasn't been fetched from storage
@@ -28,7 +30,6 @@ class Dentry : public mcas::skiplist_object {
     STATE_NONEXISTENT,
   };
 
-  mutable std::mutex mutex;
   ino_t parent;
   std::string name;
   ino_t inodeno;
@@ -58,12 +59,10 @@ class Dentry : public mcas::skiplist_object {
   bool is_nonexistent() const { return state == STATE_NONEXISTENT; }
 
   void link(ino_t ino) {
-    std::lock_guard<std::mutex> lock(mutex);
     inodeno = ino;
     state = STATE_VALID;
   }
   void unlink() {
-    std::lock_guard<std::mutex> lock(mutex);
     state = STATE_NONEXISTENT;
   }
 };
