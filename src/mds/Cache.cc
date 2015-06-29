@@ -30,7 +30,7 @@ InodeRef Cache::create(const mcas::gc_guard &guard,
   return inodes.get_or_create(guard, Inode(this, ino, data));
 }
 
-InodeRef Cache::get(const mcas::gc_guard &guard, libmds_ino_t ino)
+InodeRef Cache::get(const mcas::gc_guard &guard, ino_t ino)
 {
   auto inode = inodes.get_or_create(guard, Inode(this, ino));
   if (!inode->fetch(guard, storage))
@@ -38,19 +38,44 @@ InodeRef Cache::get(const mcas::gc_guard &guard, libmds_ino_t ino)
   return inode;
 }
 
-DentryRef Cache::lookup(const mcas::gc_guard &guard, libmds_ino_t parent,
-                        const std::string &name)
+DentryRef Cache::lookup(const mcas::gc_guard &guard, const Inode *parent,
+                        const std::string &name, bool return_nonexistent)
 {
-  auto dn = dentries.get_or_create(guard, Dentry(parent, name));
-  if (!dn->fetch(guard, this, storage))
+  auto dn = dentries.get_or_create(guard, Dentry(parent->ino(), name));
+  // TODO: lock dentry
+  if (dn->is_empty()) {
+    // TODO: lock parent inode
+    ino_t ino;
+    int r = parent->lookup(name, &ino);
+    if (r == 0)
+      dn->link(ino);
+    else
+      dn->unlink();
+  }
+  if (dn->is_nonexistent() && !return_nonexistent)
     return nullptr;
   return dn;
 }
 
-DentryRef Cache::unlink(const mcas::gc_guard &guard, libmds_ino_t parent,
-                        const std::string &name)
+DentryRef Cache::lookup(const mcas::gc_guard &guard, ino_t parent,
+                        const std::string &name, bool return_nonexistent)
 {
-  return dentries.get_or_create(guard, Dentry(parent, name, true));
+  auto dn = dentries.get_or_create(guard, Dentry(parent, name));
+  // TODO: lock dentry
+  if (dn->is_empty()) {
+    // TODO: drop lock over inode fetch
+    auto p = get(guard, parent);
+    // TODO: lock parent inode
+    ino_t ino;
+    int r = p->lookup(name, &ino);
+    if (r == 0)
+      dn->link(ino);
+    else
+      dn->unlink();
+  }
+  if (dn->is_nonexistent() && !return_nonexistent)
+    return nullptr;
+  return dn;
 }
 
 int Cache::inode_cmp(const void *lhs, const void *rhs)

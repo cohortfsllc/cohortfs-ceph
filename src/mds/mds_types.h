@@ -11,6 +11,10 @@
 namespace cohort {
 namespace mds {
 
+typedef libmds_ino_t ino_t;
+typedef libmds_volume_t volume_t;
+typedef libmds_fileid_t fileid_t;
+
 // attribute mask
 constexpr unsigned ATTR_SIZE    = 0x001;
 constexpr unsigned ATTR_MODE    = 0x002;

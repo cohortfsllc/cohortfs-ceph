@@ -39,7 +39,15 @@ int Inode::setattr(int mask, const ObjAttr &attrs)
   return 0;
 }
 
-int Inode::lookup(const std::string &name, libmds_ino_t *ino) const
+bool Inode::is_dir_notempty() const
+{
+  if (!is_dir())
+    return false;
+  std::lock_guard<std::mutex> lock(dir_mutex);
+  return !inode->dir.entries.empty();
+}
+
+int Inode::lookup(const std::string &name, ino_t *ino) const
 {
   if (!is_dir())
     return -ENOTDIR;
@@ -79,7 +87,7 @@ int Inode::readdir(uint64_t pos, uint64_t gen,
   return 0;
 }
 
-int Inode::link(const std::string &name, libmds_ino_t ino)
+int Inode::link(const std::string &name, ino_t ino)
 {
   if (!is_dir())
     return -ENOTDIR;
@@ -92,28 +100,16 @@ int Inode::link(const std::string &name, libmds_ino_t ino)
   return 0;
 }
 
-int Inode::unlink(const std::string &name, const mcas::gc_guard &guard,
-                  Cache *cache, Ref *unlinked)
+int Inode::unlink(const std::string &name)
 {
   if (!is_dir())
     return -ENOTDIR;
 
   std::lock_guard<std::mutex> lock(dir_mutex);
-  // find the directory entry
   auto i = inode->dir.entries.find(name);
   if (i == inode->dir.entries.end())
     return -ENOENT;
 
-  // fetch the child inode
-  auto child = cache->get(guard, i->second); // XXX: fetch under dir mutex
-  assert(child);
-
-  // child must be empty
-  std::lock_guard<std::mutex> child_lock(child->dir_mutex);
-  if (child->is_valid() && !child->inode->dir.entries.empty())
-    return -ENOTEMPTY;
-
-  *unlinked = child;
   inode->dir.entries.erase(i);
   inode->dir.gen++;
   return 0;

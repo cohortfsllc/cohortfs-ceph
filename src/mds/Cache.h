@@ -25,23 +25,24 @@ class Cache {
   mcas::skiplist<Inode> inodes;
   mcas::skiplist<Dentry> dentries;
   Storage *storage;
-  std::atomic<libmds_ino_t> next_ino;
+  std::atomic<ino_t> next_ino;
   InodeRef root;
 
  public:
   Cache(const Volume *volume, const mcas::gc_global &gc,
-        const mcas::obj_cache &inode_cache, const mcas::obj_cache &dentry_cache,
+        const mcas::obj_cache &inode_cache,
+        const mcas::obj_cache &dentry_cache,
         Storage *storage, int highwater, int lowwater);
 
   const Volume* get_volume() const { return volume; }
 
   InodeRef create(const mcas::gc_guard &guard, const identity &who, int type);
-  InodeRef get(const mcas::gc_guard &guard, libmds_ino_t ino);
+  InodeRef get(const mcas::gc_guard &guard, ino_t ino);
 
-  DentryRef lookup(const mcas::gc_guard &guard, libmds_ino_t parent,
-                   const std::string &name);
-  DentryRef unlink(const mcas::gc_guard &guard, libmds_ino_t parent,
-                   const std::string &name);
+  DentryRef lookup(const mcas::gc_guard &guard, const Inode *parent,
+                   const std::string &name, bool return_nonexistent = false);
+  DentryRef lookup(const mcas::gc_guard &guard, ino_t parent,
+                   const std::string &name, bool return_nonexistent = false);
 
  private:
   // skiplist sort functions

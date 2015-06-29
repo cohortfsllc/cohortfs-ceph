@@ -51,7 +51,7 @@ class MDS : public Dispatcher {
 
   ceph_tid_t issue_tid() { return ++last_tid; }
 
-  VolumeRef get_volume(const mcas::gc_guard &guard, libmds_volume_t volume);
+  VolumeRef get_volume(const mcas::gc_guard &guard, volume_t volume);
 
  public:
   MDS(int whoami, Messenger *m, MonClient *mc);
@@ -65,18 +65,17 @@ class MDS : public Dispatcher {
   void handle_signal(int signum);
 
   // for libmds
-  int create(const libmds_fileid_t *parent, const char *name,
+  int create(const fileid_t *parent, const std::string &name,
              const identity &who, int type);
-  int link(const libmds_fileid_t *parent, const char *name, libmds_ino_t ino);
-  int rename(const libmds_fileid_t *src_parent, const char *src_name,
-             const libmds_fileid_t *dst_parent, const char *dst_name);
-  int unlink(const libmds_fileid_t *parent, const char *name);
-  int lookup(const libmds_fileid_t *parent, const char *name,
-             libmds_ino_t *ino);
-  int readdir(const libmds_fileid_t *dir, uint64_t pos, uint64_t gen,
+  int link(const fileid_t *parent, const std::string &name, ino_t ino);
+  int rename(const fileid_t *src_parent, const std::string &src_name,
+             const fileid_t *dst_parent, const std::string &dst_name);
+  int unlink(const fileid_t *parent, const std::string &name);
+  int lookup(const fileid_t *parent, const std::string &name, ino_t *ino);
+  int readdir(const fileid_t *dir, uint64_t pos, uint64_t gen,
               libmds_readdir_fn cb, void *user);
-  int getattr(const libmds_fileid_t *file, int mask, ObjAttr &attr);
-  int setattr(const libmds_fileid_t *file, int mask, const ObjAttr &attr);
+  int getattr(const fileid_t *file, int mask, ObjAttr &attr);
+  int setattr(const fileid_t *file, int mask, const ObjAttr &attr);
 
   // void handle_mds_beacon(MMDSBeacon *m);
   bool ms_dispatch(Message *m);

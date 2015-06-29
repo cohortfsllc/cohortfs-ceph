@@ -32,17 +32,17 @@ class Inode : public mcas::skiplist_object {
   mutable std::mutex mutex;
   mutable std::mutex dir_mutex;
   Cache *cache;
-  libmds_ino_t inodeno;
+  ino_t inodeno;
   State state;
   InodeStorageRef inode;
 
  public:
   // search template for lookup
-  Inode(Cache *cache, libmds_ino_t ino)
+  Inode(Cache *cache, ino_t ino)
     : cache(cache), inodeno(ino), state(STATE_EMPTY) {}
 
   // search template for create
-  Inode(Cache *cache, libmds_ino_t ino, InodeStorageRef& inode)
+  Inode(Cache *cache, ino_t ino, InodeStorageRef& inode)
     : cache(cache), inodeno(ino), state(STATE_VALID), inode(inode) {}
 
   // move constructor for cache inserts
@@ -55,7 +55,7 @@ class Inode : public mcas::skiplist_object {
     std::swap(inode, o.inode);
   }
 
-  libmds_ino_t ino() const { return inodeno; }
+  ino_t ino() const { return inodeno; }
 
   uint32_t get_state() const  { return state; }
   bool is_empty() const       { return state == STATE_EMPTY; }
@@ -66,17 +66,18 @@ class Inode : public mcas::skiplist_object {
   bool is_reg() const { return S_ISREG(inode->attr.type); }
   bool is_dir() const { return S_ISDIR(inode->attr.type); }
 
+  bool is_dir_notempty() const;
+
   int adjust_nlinks(int n) { return inode->attr.nlinks += n; }
 
   int getattr(int mask, ObjAttr &attrs) const;
   int setattr(int mask, const ObjAttr &attrs);
 
-  int lookup(const std::string &name, libmds_ino_t *ino) const;
+  int lookup(const std::string &name, ino_t *ino) const;
   int readdir(uint64_t pos, uint64_t gen,
               libmds_readdir_fn cb, void *user) const;
-  int link(const std::string &name, libmds_ino_t ino);
-  int unlink(const std::string &name, const mcas::gc_guard &guard,
-             Cache *cache, Ref *unlinked);
+  int link(const std::string &name, ino_t ino);
+  int unlink(const std::string &name);
 
   // storage
   bool fetch(const mcas::gc_guard &guard, Storage *storage);
