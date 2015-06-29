@@ -1411,7 +1411,7 @@ void Pipe::reader()
     }
     if (tag == CEPH_MSGR_TAG_KEEPALIVE2) {
       ldout(msgr->cct,30) << "reader got KEEPALIVE2 tag ..." << dendl;
-      ceph_timespec t;
+      ceph_timerep t;
       int rc = tcp_read((char*)&t, sizeof(t));
       pl.lock();
       if (rc < 0) {
@@ -1420,7 +1420,7 @@ void Pipe::reader()
 	fault(pl, true);
       } else {
 	send_keepalive_ack = true;
-	keepalive_ack_stamp = ceph::spec_to_time(t);
+	keepalive_ack_stamp = ceph::rep_to_time(t);
 	ldout(msgr->cct,20) << "reader got KEEPALIVE2 " << keepalive_ack_stamp
 			    << dendl;
 	cond.notify_all();
@@ -1429,7 +1429,7 @@ void Pipe::reader()
     }
     if (tag == CEPH_MSGR_TAG_KEEPALIVE2_ACK) {
       ldout(msgr->cct,20) << "reader got KEEPALIVE_ACK" << dendl;
-      ceph_timespec t;
+      ceph_timerep t;
       int rc = tcp_read((char*)&t, sizeof(t));
       pl.lock();
       if (rc < 0) {
@@ -1438,7 +1438,7 @@ void Pipe::reader()
 	  << dendl;
 	fault(pl, true);
       } else {
-	connection_state->last_keepalive_ack = ceph::spec_to_time(t);
+	connection_state->last_keepalive_ack = ceph::rep_to_time(t);
       }
       continue;
     }
@@ -2100,18 +2100,18 @@ int Pipe::write_keepalive()
 int Pipe::write_keepalive2(char tag, const ceph::real_time& t)
 {
   ldout(msgr->cct,10) << "write_keepalive2 " << (int)tag << " " << t << dendl;
-  ceph_timespec ts = ceph::time_to_spec(t);
+  ceph_timerep tr = ceph::time_to_rep(t);
   struct msghdr msg;
   memset(&msg, 0, sizeof(msg));
   struct iovec msgvec[2];
   msgvec[0].iov_base = &tag;
   msgvec[0].iov_len = 1;
-  msgvec[1].iov_base = &ts;
-  msgvec[1].iov_len = sizeof(ts);
+  msgvec[1].iov_base = &tr;
+  msgvec[1].iov_len = sizeof(tr);
   msg.msg_iov = msgvec;
   msg.msg_iovlen = 2;
 
-  if (do_sendmsg(&msg, 1 + sizeof(ts)) < 0)
+  if (do_sendmsg(&msg, 1 + sizeof(tr)) < 0)
     return -1;
   return 0;
 }

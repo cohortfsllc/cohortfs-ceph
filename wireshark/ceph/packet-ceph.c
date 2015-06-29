@@ -956,7 +956,7 @@ static guint32 dissect_ceph_mdsmap_node(tvbuff_t *tvb, proto_tree *tree, guint32
 	proto_item *ceph_item = proto_tree_get_parent(tree);
 	proto_tree *ceph_mdsnode_tree;
 	proto_item *ceph_sub_item = NULL;
-	struct ceph_timespec *cephtime = NULL;
+	struct ceph_timerep *cephtime = NULL;
 	time_t time;
 	ceph_mdsnode_tree = proto_item_add_subtree(ceph_item, ett_ceph);
 	ceph_sub_item = proto_tree_add_item(tree, hf_ceph_mdsnode, tvb, offset, -1, TRUE );
@@ -975,10 +975,10 @@ static guint32 dissect_ceph_mdsmap_node(tvbuff_t *tvb, proto_tree *tree, guint32
 	PROTO_ADD_SIMPLE_TEXT(ceph_mdsnode_tree,tvb_get_letohl,"state: %d",field);
 	PROTO_ADD_SIMPLE_TEXT(ceph_mdsnode_tree,tvb_get_letoh64,"state seq: %" G_GUINT64_FORMAT, field64);
 	offset = dissect_ceph_entity_addr(tvb, ceph_mdsnode_tree, offset);
-	cephtime = (struct ceph_timespec *) tvb_get_ptr(tvb, offset, sizeof(struct ceph_timespec));
+	cephtime = (struct ceph_timerep *) tvb_get_ptr(tvb, offset, sizeof(struct ceph_timerep));
 	time = cephtime->tv_sec;
 	proto_tree_add_text(ceph_mdsnode_tree, tvb, offset, sizeof(time), "Time: %s (%d ns)", ctime(&time), cephtime->tv_nsec);
-	offset += sizeof(struct ceph_timespec);
+	offset += sizeof(struct ceph_timerep);
 	offset += sizeof(guint32);
 	offset += tvb_get_letohl(tvb,offset);
 	offset += sizeof(guint32);

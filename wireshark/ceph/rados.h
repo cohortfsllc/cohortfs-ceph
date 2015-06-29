@@ -37,7 +37,7 @@ typedef uint64_t ceph_snapid_t;
 #define CEPH_NOSNAP  ((uint64_t)(-2))  /* "head", "live" revision */
 #define CEPH_MAXSNAP ((uint64_t)(-3))  /* largest valid snapid */
 
-struct ceph_timespec {
+struct ceph_timerep {
 	uint32_t tv_sec;
 	uint32_t tv_nsec;
 };
@@ -321,7 +321,7 @@ struct ceph_osd_request_head {
 
 	uint32_t flags;
 
-	struct ceph_timespec mtime;	   /* for mutations only */
+	struct ceph_timerep mtime;	   /* for mutations only */
 	struct ceph_eversion reassert_version; /* if we are replaying op */
 
 	uint32_t object_len;     /* length of object name */

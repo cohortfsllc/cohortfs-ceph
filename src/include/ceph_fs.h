@@ -252,7 +252,7 @@ extern const char *ceph_session_op_name(int op);
 struct ceph_mds_session_head {
 	uint32_t op;
 	uint64_t seq;
-	ceph_timespec stamp;
+	ceph_timerep stamp;
 	uint32_t max_caps, max_leases;
 };
 
@@ -323,8 +323,8 @@ union ceph_mds_request_args {
 		uint32_t mode;
 		uint32_t uid;
 		uint32_t gid;
-		ceph_timespec mtime;
-		ceph_timespec atime;
+		ceph_timerep mtime;
+		ceph_timerep atime;
 		uint64_t size, old_size;	     /* old_size needed by truncate */
 		uint32_t mask;		     /* CEPH_SETATTR_* */
 	} setattr;
@@ -427,14 +427,14 @@ struct ceph_mds_reply_inode {
 	uint64_t version;		       /* inode version */
 	uint64_t xattr_version;	       /* version for xattr blob */
 	struct ceph_mds_reply_cap cap; /* caps issued for this inode */
-	ceph_timespec ctime, mtime, atime;
+	ceph_timerep ctime, mtime, atime;
 	uint32_t time_warp_seq;
 	uint64_t size, max_size, truncate_size;
 	uint32_t truncate_seq;
 	uint32_t mode, uid, gid;
 	uint32_t nlink;
 	uint64_t files, subdirs, rbytes, rfiles, rsubdirs;  /* dir stats */
-	ceph_timespec rctime;
+	ceph_timerep rctime;
 	struct ceph_frag_tree_head fragtree;  /* (must be at end of struct) */
 };
 /* followed by frag array, symlink string, xattr blob */
@@ -625,7 +625,7 @@ struct ceph_mds_caps {
 			/* filelock */
 			uint64_t size, max_size, truncate_size;
 			uint32_t truncate_seq;
-			ceph_timespec mtime, atime, ctime;
+			ceph_timerep mtime, atime, ctime;
 			uint32_t time_warp_seq;
 		};
 		/* export message */
@@ -676,7 +676,7 @@ struct ceph_mds_cap_reconnect_v1 {
 	uint32_t wanted;
 	uint32_t issued;
 	uint64_t size;
-	ceph_timespec mtime, atime;
+	ceph_timerep mtime, atime;
 	uint64_t pathbase; /* base ino for our path to this ino */
 };
 

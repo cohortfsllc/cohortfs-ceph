@@ -45,8 +45,8 @@ namespace ceph {
 struct heartbeat_handle_d {
   std::string name;
   // We really want atomic timepoints, look into that later
-  std::atomic<ceph_timespec> timeout;
-  std::atomic<ceph_timespec> suicide_timeout;
+  std::atomic<ceph_timerep> timeout;
+  std::atomic<ceph_timerep> suicide_timeout;
   timespan grace, suicide_grace;
   std::list<heartbeat_handle_d*>::iterator list_item;
 

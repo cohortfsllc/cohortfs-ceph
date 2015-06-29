@@ -16,37 +16,62 @@
 #ifndef CEPH_TIME__
 #define CEPH_TIME__
 
+#include <cassert>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <ctime>
-#include <iostream>
 #include <iomanip>
-#include <cmath>
+#include <iostream>
 
 /* XXX for parse_date */
-#include <ctime>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 #include "common/strtol.h"
 
 /* Typedefs for timekeeping, to cut down on the amount of template
    foo. */
 
-typedef uint64_t ceph_timespec;
+typedef uint64_t ceph_timerep;
 
 using namespace std::literals::chrono_literals;
 
 namespace ceph {
   // We can change the time precisiou/representation later if we want.
-  typedef std::chrono::duration<ceph_timespec, std::nano> timespan;
+  typedef std::chrono::duration<ceph_timerep, std::nano> timespan;
   typedef std::chrono::duration<int64_t, std::nano> signedspan;
 
+#if (defined(_POSIX_TIMERS) && _POSIX_TIMERS > 0)
   class real_clock {
   public:
     typedef timespan duration;
     typedef duration::rep rep;
     typedef duration::period period;
-    typedef std::chrono::time_point<real_clock> time_point;
+    typedef std::chrono::time_point<real_clock, duration> time_point;
+    static constexpr const bool is_steady = false;
+
+    static time_point now() noexcept {
+      struct timespec ts;
+      int __attribute__((unused)) r = clock_gettime(CLOCK_REALTIME, &ts);
+      assert(r == 0); // No errors should be possible
+      return time_point(ts.tv_sec * 1s + ts.tv_nsec * 1ns);
+    }
+    static time_t to_time_t(const time_point& t) noexcept {
+      return std::chrono::duration_cast<std::chrono::seconds>(
+	t.time_since_epoch()).count();
+    }
+    static time_point from_time_t(time_t t) noexcept {
+      return time_point(t * 1s);
+    }
+  };
+#else // !(_POSIX_TIMERS > 0)
+  class real_clock {
+  public:
+    typedef timespan duration;
+    typedef duration::rep rep;
+    typedef duration::period period;
+    typedef std::chrono::time_point<real_clock, duration> time_point;
     static constexpr const bool is_steady = false;
 
     static time_point now() noexcept {
@@ -66,14 +91,32 @@ namespace ceph {
 			  .time_since_epoch()));
     }
   };
+#endif // !(_POSIX_TIMERS > 0)
 
+#ifdef _POSIX_MONOTONOIC_CLOCK
   class mono_clock {
   public:
     typedef timespan duration;
     typedef duration::rep rep;
     typedef duration::period period;
-    typedef std::chrono::time_point<mono_clock> time_point;
-    static constexpr const bool is_steady = false;
+    typedef std::chrono::time_point<mono_clock, duration> time_point;
+    static constexpr const bool is_steady = true;
+
+    static time_point now() noexcept {
+      struct timespec ts;
+      int __attribute__((unused)) r = clock_gettime(CLOCK_MONOTONIC, &ts);
+      assert(r == 0); // No errors should be possible
+      return time_point(ts.tv_sec * 1s + ts.tv_nsec * 1ns);
+    }
+  };
+#else // !_POSIX_MONOTONOIC_CLOCK
+  class mono_clock {
+  public:
+    typedef timespan duration;
+    typedef duration::rep rep;
+    typedef duration::period period;
+    typedef std::chrono::time_point<mono_clock, duration> time_point;
+    static constexpr const bool is_steady = true;
 
     static time_point now() noexcept {
       return time_point(std::chrono::duration_cast<timespan>(
@@ -81,24 +124,32 @@ namespace ceph {
 			  .time_since_epoch()));
     }
   };
+#endif // !_POSIX_MONOTONOIC_CLOCK
 
   // This is a FRACTIONAL TIME IN SECONDS
   typedef real_clock::time_point real_time;
   typedef mono_clock::time_point mono_time;
 
-  inline real_time spec_to_time(ceph_timespec ts) {
+  inline real_time rep_to_time(ceph_timerep ts) {
     return real_time(timespan(ts));
   }
 
-  inline ceph_timespec time_to_spec(real_time rt) {
+  inline ceph_timerep time_to_rep(real_time rt) {
     return rt.time_since_epoch().count();
   }
 
   inline struct timespec time_to_timespec(real_time rt) {
     struct timespec ts;
     ts.tv_sec = real_clock::to_time_t(rt);
-    ts.tv_nsec = (rt.time_since_epoch() % 1s).count();
+    // ceph::real_time is represented as a count of nanoseconds, but
+    // just in case we ever change it
+    ts.tv_nsec = std::chrono::duration_cast<std::chrono::nanoseconds>(
+      rt.time_since_epoch() % 1s).count();
     return ts;
+  }
+
+  inline real_time time_from_timespec(struct timespec ts) {
+    return real_clock::from_time_t(ts.tv_sec) + ts.tv_nsec * 1ns;
   }
 
   /* XXX */
@@ -127,7 +178,7 @@ namespace ceph {
 	  }
 	  buf[i] = '\0';
 	  std::string err;
-	  val += ceph::timespan((ceph_timespec)strict_strtol(buf, 10, &err));
+	  val += ceph::timespan((ceph_timerep)strict_strtol(buf, 10, &err));
 	  if (!err.empty()) {
 	    return -EINVAL;
 	  }

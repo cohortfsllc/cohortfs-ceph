@@ -454,7 +454,7 @@ void decode_json_obj(ceph::real_time& val, JSONObj *oid)
 	}
 	buf[i] = '\0';
 	string err;
-	val += ceph::timespan((ceph_timespec)strict_strtol(buf, 10, &err));
+	val += ceph::timespan((ceph_timerep)strict_strtol(buf, 10, &err));
 	if (!err.empty()) {
 	  throw JSONDecoder::err("failed to decode ceph::real_time");
 	}
