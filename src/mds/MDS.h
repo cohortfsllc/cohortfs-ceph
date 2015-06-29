@@ -29,6 +29,7 @@ class MDS : public Dispatcher {
   const mcas::obj_cache volume_cache;
   const mcas::obj_cache storage_cache;
   const mcas::obj_cache inode_cache;
+  const mcas::obj_cache dentry_cache;
 
   Messenger *messenger;
   MonClient *monc;

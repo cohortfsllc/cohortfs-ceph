@@ -10,6 +10,8 @@
 namespace cohort {
 namespace mds {
 
+class Dentry;
+typedef boost::intrusive_ptr<Dentry> DentryRef;
 class Inode;
 typedef boost::intrusive_ptr<Inode> InodeRef;
 
@@ -21,23 +23,30 @@ class Cache {
   const Volume *volume;
   const mcas::gc_global &gc;
   mcas::skiplist<Inode> inodes;
+  mcas::skiplist<Dentry> dentries;
   Storage *storage;
   std::atomic<libmds_ino_t> next_ino;
   InodeRef root;
 
  public:
   Cache(const Volume *volume, const mcas::gc_global &gc,
-        const mcas::obj_cache &cache, Storage *storage,
-        int highwater, int lowwater);
+        const mcas::obj_cache &inode_cache, const mcas::obj_cache &dentry_cache,
+        Storage *storage, int highwater, int lowwater);
 
   const Volume* get_volume() const { return volume; }
 
   InodeRef create(const mcas::gc_guard &guard, const identity &who, int type);
   InodeRef get(const mcas::gc_guard &guard, libmds_ino_t ino);
 
+  DentryRef lookup(const mcas::gc_guard &guard, libmds_ino_t parent,
+                   const std::string &name);
+  DentryRef unlink(const mcas::gc_guard &guard, libmds_ino_t parent,
+                   const std::string &name);
+
  private:
-  // skiplist sort function
+  // skiplist sort functions
   static int inode_cmp(const void *lhs, const void *rhs);
+  static int dentry_cmp(const void *lhs, const void *rhs);
 };
 
 } // namespace mds

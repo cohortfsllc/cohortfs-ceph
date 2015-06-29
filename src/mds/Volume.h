@@ -39,6 +39,7 @@ class Volume : public mcas::skiplist_object {
 
   int mkfs(const mcas::gc_global &gc, const mcas::gc_guard &guard,
            const mcas::obj_cache &inode_cache,
+           const mcas::obj_cache &dn_cache,
            Storage *storage, const md_config_t *conf);
 
   static int cmp(const void *lhs, const void *rhs)

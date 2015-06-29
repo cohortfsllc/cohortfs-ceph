@@ -2,6 +2,7 @@
 // vim: ts=8 sw=2 smarttab
 
 #include "Cache.h"
+#include "Dentry.h"
 #include "Inode.h"
 #include "Storage.h"
 #include "Volume.h"
@@ -9,11 +10,13 @@
 using namespace cohort::mds;
 
 Cache::Cache(const Volume *volume, const mcas::gc_global &gc,
-             const mcas::obj_cache &cache, Storage *storage,
-             int highwater, int lowwater)
+             const mcas::obj_cache &inode_cache,
+             const mcas::obj_cache &dentry_cache,
+             Storage *storage, int highwater, int lowwater)
   : volume(volume),
     gc(gc),
-    inodes(gc, cache, inode_cmp, highwater, lowwater),
+    inodes(gc, inode_cache, inode_cmp, highwater, lowwater),
+    dentries(gc, dentry_cache, dentry_cmp, highwater, lowwater),
     storage(storage),
     next_ino(1)
 {
@@ -35,6 +38,21 @@ InodeRef Cache::get(const mcas::gc_guard &guard, libmds_ino_t ino)
   return inode;
 }
 
+DentryRef Cache::lookup(const mcas::gc_guard &guard, libmds_ino_t parent,
+                        const std::string &name)
+{
+  auto dn = dentries.get_or_create(guard, Dentry(parent, name));
+  if (!dn->fetch(guard, this, storage))
+    return nullptr;
+  return dn;
+}
+
+DentryRef Cache::unlink(const mcas::gc_guard &guard, libmds_ino_t parent,
+                        const std::string &name)
+{
+  return dentries.get_or_create(guard, Dentry(parent, name, true));
+}
+
 int Cache::inode_cmp(const void *lhs, const void *rhs)
 {
   const Inode *l = static_cast<const Inode*>(lhs);
@@ -44,4 +62,15 @@ int Cache::inode_cmp(const void *lhs, const void *rhs)
   if (l->ino() > r->ino())
     return 1;
   return -1;
+}
+
+int Cache::dentry_cmp(const void *lhs, const void *rhs)
+{
+  const Dentry *l = static_cast<const Dentry*>(lhs);
+  const Dentry *r = static_cast<const Dentry*>(rhs);
+  if (l->get_parent() < r->get_parent())
+    return -1;
+  if (l->get_parent() > r->get_parent())
+    return 1;
+  return l->get_name().compare(r->get_name());
 }

@@ -47,7 +47,7 @@ class Inode : public mcas::skiplist_object {
 
   // move constructor for cache inserts
   Inode(Inode &&o)
-    : cache(nullptr), inodeno(0)
+    : cache(nullptr), inodeno(0), state(STATE_EMPTY)
   {
     std::swap(cache, o.cache);
     std::swap(inodeno, o.inodeno);

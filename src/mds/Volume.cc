@@ -27,6 +27,7 @@ Volume::~Volume()
 
 int Volume::mkfs(const mcas::gc_global &gc, const mcas::gc_guard &guard,
                  const mcas::obj_cache &inode_cache,
+                 const mcas::obj_cache &dn_cache,
                  Storage *storage, const md_config_t *conf)
 {
   std::lock_guard<std::mutex> lock(mutex);
@@ -35,7 +36,7 @@ int Volume::mkfs(const mcas::gc_global &gc, const mcas::gc_guard &guard,
     return -EINVAL;
 
   // create the storage and cache
-  std::unique_ptr<Cache> c(new Cache(this, gc, inode_cache, storage,
+  std::unique_ptr<Cache> c(new Cache(this, gc, inode_cache, dn_cache, storage,
                                      conf->mds_cache_highwater,
                                      conf->mds_cache_lowwater));
 

@@ -5,8 +5,9 @@
 #include "mon/MonClient.h"
 #include "MDSMap.h"
 #include "MDS.h"
-#include "Inode.h"
 #include "Cache.h"
+#include "Dentry.h"
+#include "Inode.h"
 #include "Storage.h"
 #include "messages/MMDSBeacon.h"
 
@@ -20,6 +21,7 @@ MDS::MDS(int whoami, Messenger *m, MonClient *mc)
     volume_cache(gc, sizeof(Volume), "volumes"),
     storage_cache(gc, sizeof(InodeStorage), "inode_store"),
     inode_cache(gc, sizeof(Inode), "inodes"),
+    dentry_cache(gc, sizeof(Dentry), "dentries"),
     messenger(m),
     monc(mc),
     objecter(new Objecter(cct, messenger, monc,
@@ -89,7 +91,7 @@ cohort::mds::VolumeRef MDS::get_volume(const mcas::gc_guard &guard,
   auto vol = volumes.get_or_create(guard, *p);
   // TODO: look up the volume in the osd map and attach it
   if (vol)
-    vol->mkfs(gc, guard, inode_cache, storage.get(), cct->_conf);
+    vol->mkfs(gc, guard, inode_cache, dentry_cache, storage.get(), cct->_conf);
   return vol;
 }
 
@@ -182,8 +184,14 @@ int MDS::rename(const libmds_fileid_t *src_parent, const char *src_name,
   // unlink the initial directory entry
   InodeRef inode;
   r = srcp->unlink(src_name, guard, vol->cache.get(), &inode);
-  if (r)
+  if (r) {
+    // on failure, unlink the new entry and remove from the cache
     dstp->unlink(dst_name, guard, vol->cache.get(), &inode);
+    vol->cache->unlink(guard, dst_parent->ino, dst_name);
+  } else {
+    // on success, remove the initial entry from the cache
+    vol->cache->unlink(guard, src_parent->ino, src_name);
+  }
   return r;
 }
 
@@ -206,6 +214,9 @@ int MDS::unlink(const libmds_fileid_t *parent, const char *name)
   if (r)
     return r;
 
+  // remove the directory entry from the cache
+  vol->cache->unlink(guard, parent->ino, name);
+
   // update inode nlinks
   if (inode->adjust_nlinks(-1) == 0)
     inode->destroy(guard, storage.get());
@@ -223,12 +234,12 @@ int MDS::lookup(const libmds_fileid_t *parent, const char *name,
     return -ENODEV;
 
   // find the parent object
-  auto p = vol->cache->get(guard, parent->ino);
-  if (!p)
+  auto dn = vol->cache->lookup(guard, parent->ino, name);
+  if (!dn)
     return -ENOENT;
 
-  // find the child object
-  return p->lookup(name, ino);
+  *ino = dn->ino();
+  return 0;
 }
 
 int MDS::readdir(const libmds_fileid_t *dir, uint64_t pos, uint64_t gen,
