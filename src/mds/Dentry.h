@@ -65,6 +65,15 @@ class Dentry : public mcas::skiplist_object {
   void unlink() {
     state = STATE_NONEXISTENT;
   }
+
+  static int cmp(const void *lhs, const void *rhs)
+  {
+    const Dentry *l = static_cast<const Dentry*>(lhs);
+    const Dentry *r = static_cast<const Dentry*>(rhs);
+    if (l->parent < r->parent) return -1;
+    if (l->parent > r->parent) return 1;
+    return l->name.compare(r->name);
+  }
 };
 
 typedef Dentry::Ref DentryRef;

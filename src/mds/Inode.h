@@ -5,16 +5,14 @@
 #define COHORT_MDS_INODE_H
 
 #include "common/mcas_skiplist.h"
+#include "InodeStorage.h"
 #include "mds_types.h"
-#include "Storage.h"
 
 namespace cohort {
 namespace mds {
 
 class Cache;
 class Storage;
-struct InodeStorage;
-typedef boost::intrusive_ptr<InodeStorage> InodeStorageRef;
 
 class Inode : public mcas::skiplist_object {
  public:
@@ -67,23 +65,25 @@ class Inode : public mcas::skiplist_object {
   // attr.type is immutable, so we don't need to lock these
   bool is_reg() const { return S_ISREG(inode->attr.type); }
   bool is_dir() const { return S_ISDIR(inode->attr.type); }
-
-  bool is_dir_notempty() const;
+  uint32_t get_stripes() const { return inode->stripes; }
 
   int adjust_nlinks(int n) { return inode->attr.nlinks += n; }
 
   int getattr(int mask, ObjAttr &attrs) const;
   int setattr(int mask, const ObjAttr &attrs);
 
-  int lookup(const std::string &name, ino_t *ino) const;
-  int readdir(uint64_t pos, uint64_t gen,
-              libmds_readdir_fn cb, void *user) const;
-  int link(const std::string &name, ino_t ino);
-  int unlink(const std::string &name);
-
   // storage
   bool fetch(const mcas::gc_guard &guard, Storage *storage);
   bool destroy(const mcas::gc_guard &guard, Storage *storage);
+
+  static int cmp(const void *lhs, const void *rhs)
+  {
+    const Inode *l = static_cast<const Inode*>(lhs);
+    const Inode *r = static_cast<const Inode*>(rhs);
+    if (l->inodeno > r->inodeno) return 1;
+    if (l->inodeno < r->inodeno) return -1;
+    return 0;
+  }
 };
 
 typedef Inode::Ref InodeRef;

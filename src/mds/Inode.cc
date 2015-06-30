@@ -37,83 +37,13 @@ int Inode::setattr(int mask, const ObjAttr &attrs)
   return 0;
 }
 
-bool Inode::is_dir_notempty() const
-{
-  if (!is_dir())
-    return false;
-  return !inode->dir.entries.empty();
-}
-
-int Inode::lookup(const std::string &name, ino_t *ino) const
-{
-  if (!is_dir())
-    return -ENOTDIR;
-  auto i = inode->dir.entries.find(name);
-  if (i == inode->dir.entries.end())
-    return -ENOENT;
-  *ino = i->second;
-  return 0;
-}
-
-int Inode::readdir(uint64_t pos, uint64_t gen,
-                   libmds_readdir_fn cb, void *user) const
-{
-  if (!is_dir())
-    return -ENOTDIR;
-
-  if (pos > 0 && gen != inode->dir.gen)
-    return -ESTALE;
-
-  if (pos >= inode->dir.entries.size())
-    return -EOF;
-
-  // advance to the requested position
-  auto i = inode->dir.entries.begin();
-  for (uint64_t j = 0; j < pos; j++)
-    ++i;
-
-  // pass entries to the callback function until it returns an error
-  for (; i != inode->dir.entries.end(); ++i) {
-    int r = cb(i->first.c_str(), i->second, ++pos, inode->dir.gen, user);
-    if (r)
-      break;
-  }
-  return 0;
-}
-
-int Inode::link(const std::string &name, ino_t ino)
-{
-  if (!is_dir())
-    return -ENOTDIR;
-
-  auto i = inode->dir.entries.insert(std::make_pair(name, ino));
-  if (!i.second)
-    return -EEXIST;
-
-  inode->dir.gen++;
-  return 0;
-}
-
-int Inode::unlink(const std::string &name)
-{
-  if (!is_dir())
-    return -ENOTDIR;
-
-  auto i = inode->dir.entries.find(name);
-  if (i == inode->dir.entries.end())
-    return -ENOENT;
-
-  inode->dir.entries.erase(i);
-  inode->dir.gen++;
-  return 0;
-}
-
 bool Inode::fetch(const mcas::gc_guard &guard, Storage *storage)
 {
   std::lock_guard<std::mutex> lock(mutex);
   switch (state) {
     case STATE_EMPTY:
-      inode = storage->get(guard, cache->get_volume()->get_uuid(), inodeno);
+      inode = storage->get_inode(guard, cache->get_volume()->get_uuid(),
+                                 inodeno);
       if (inode) {
         state = STATE_VALID;
         return true;

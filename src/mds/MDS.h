@@ -27,8 +27,10 @@ class MDS : public Dispatcher {
  private:
   const mcas::gc_global gc;
   const mcas::obj_cache volume_cache;
-  const mcas::obj_cache storage_cache;
   const mcas::obj_cache inode_cache;
+  const mcas::obj_cache inode_storage_cache;
+  const mcas::obj_cache dir_cache;
+  const mcas::obj_cache dir_storage_cache;
   const mcas::obj_cache dentry_cache;
 
   Messenger *messenger;
@@ -52,6 +54,8 @@ class MDS : public Dispatcher {
   ceph_tid_t issue_tid() { return ++last_tid; }
 
   VolumeRef get_volume(const mcas::gc_guard &guard, volume_t volume);
+
+  uint32_t pick_dir_stripe(const std::string &name) const;
 
  public:
   MDS(int whoami, Messenger *m, MonClient *mc);

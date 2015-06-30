@@ -27,6 +27,7 @@ Volume::~Volume()
 
 int Volume::mkfs(const mcas::gc_global &gc, const mcas::gc_guard &guard,
                  const mcas::obj_cache &inode_cache,
+                 const mcas::obj_cache &dir_cache,
                  const mcas::obj_cache &dn_cache,
                  Storage *storage, const md_config_t *conf)
 {
@@ -36,14 +37,19 @@ int Volume::mkfs(const mcas::gc_global &gc, const mcas::gc_guard &guard,
     return -EINVAL;
 
   // create the storage and cache
-  std::unique_ptr<Cache> c(new Cache(this, gc, inode_cache, dn_cache, storage,
+  std::unique_ptr<Cache> c(new Cache(this, gc, inode_cache, dir_cache,
+                                     dn_cache, storage,
                                      conf->mds_cache_highwater,
                                      conf->mds_cache_lowwater));
 
   // create the root directory inode
   const identity who = {0, 0, 0};
-  auto root = c->create(guard, who, S_IFDIR);
+  auto root = c->create_inode(guard, who, S_IFDIR, conf->mds_dir_stripes);
   assert(root);
+
+  // create the directory stripes
+  for (int i = 0; i < conf->mds_dir_stripes; i++)
+    storage->get_or_create_dir(guard, uuid, root->ino(), i);
 
   std::swap(c, cache);
   return 0;

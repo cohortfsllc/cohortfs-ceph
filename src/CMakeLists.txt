@@ -525,6 +525,7 @@ install(TARGETS ceph-osd DESTINATION bin)
 if(WITH_LIBMDS)
   set(mds_srcs
     mds/Cache.cc
+    mds/Dir.cc
     mds/Inode.cc
     mds/libmds.cc
     mds/MDS.cc

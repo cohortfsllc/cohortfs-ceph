@@ -3,6 +3,7 @@
 
 #include "Cache.h"
 #include "Dentry.h"
+#include "Dir.h"
 #include "Inode.h"
 #include "Storage.h"
 #include "Volume.h"
@@ -11,26 +12,29 @@ using namespace cohort::mds;
 
 Cache::Cache(const Volume *volume, const mcas::gc_global &gc,
              const mcas::obj_cache &inode_cache,
+             const mcas::obj_cache &dir_cache,
              const mcas::obj_cache &dentry_cache,
              Storage *storage, int highwater, int lowwater)
   : volume(volume),
     gc(gc),
-    inodes(gc, inode_cache, inode_cmp, highwater, lowwater),
-    dentries(gc, dentry_cache, dentry_cmp, highwater, lowwater),
+    inodes(gc, inode_cache, Inode::cmp, highwater, lowwater),
+    dirs(gc, dir_cache, Dir::cmp, highwater, lowwater),
+    dentries(gc, dentry_cache, Dentry::cmp, highwater, lowwater),
     storage(storage),
     next_ino(1)
 {
 }
 
-InodeRef Cache::create(const mcas::gc_guard &guard,
-                       const identity &who, int type)
+InodeRef Cache::create_inode(const mcas::gc_guard &guard,
+                             const identity &who, int type, uint32_t stripes)
 {
   const auto ino = next_ino++;
-  auto data = storage->get_or_create(guard, volume->get_uuid(), ino, who, type);
+  auto data = storage->get_or_create_inode(guard, volume->get_uuid(),
+                                           ino, who, type, stripes);
   return inodes.get_or_create(guard, Inode(this, ino, data));
 }
 
-InodeRef Cache::get(const mcas::gc_guard &guard, ino_t ino)
+InodeRef Cache::get_inode(const mcas::gc_guard &guard, ino_t ino)
 {
   auto inode = inodes.get_or_create(guard, Inode(this, ino));
   if (!inode->fetch(guard, storage))
@@ -38,7 +42,15 @@ InodeRef Cache::get(const mcas::gc_guard &guard, ino_t ino)
   return inode;
 }
 
-DentryRef Cache::lookup(const mcas::gc_guard &guard, const Inode *parent,
+DirRef Cache::get_dir(const mcas::gc_guard &guard, ino_t ino, uint32_t stripe)
+{
+  auto dir = dirs.get_or_create(guard, Dir(this, ino, stripe));
+  if (!dir->fetch(guard, storage))
+    return nullptr;
+  return dir;
+}
+
+DentryRef Cache::lookup(const mcas::gc_guard &guard, const Dir *parent,
                         const std::string &name, bool return_nonexistent)
 {
   auto dn = dentries.get_or_create(guard, Dentry(parent->ino(), name));
@@ -58,16 +70,17 @@ DentryRef Cache::lookup(const mcas::gc_guard &guard, const Inode *parent,
 }
 
 DentryRef Cache::lookup(const mcas::gc_guard &guard, ino_t parent,
-                        const std::string &name, bool return_nonexistent)
+                        uint32_t stripe, const std::string &name,
+                        bool return_nonexistent)
 {
   auto dn = dentries.get_or_create(guard, Dentry(parent, name));
   // TODO: lock dentry
   if (dn->is_empty()) {
-    // TODO: drop lock over inode fetch
-    auto p = get(guard, parent);
-    // TODO: lock parent inode
+    // TODO: drop lock over directory fetch
+    auto dir = get_dir(guard, parent, stripe);
+    // TODO: lock parent directory
     ino_t ino;
-    int r = p->lookup(name, &ino);
+    int r = dir->lookup(name, &ino);
     if (r == 0)
       dn->link(ino);
     else
@@ -76,26 +89,4 @@ DentryRef Cache::lookup(const mcas::gc_guard &guard, ino_t parent,
   if (dn->is_nonexistent() && !return_nonexistent)
     return nullptr;
   return dn;
-}
-
-int Cache::inode_cmp(const void *lhs, const void *rhs)
-{
-  const Inode *l = static_cast<const Inode*>(lhs);
-  const Inode *r = static_cast<const Inode*>(rhs);
-  if (l->ino() == r->ino())
-    return 0;
-  if (l->ino() > r->ino())
-    return 1;
-  return -1;
-}
-
-int Cache::dentry_cmp(const void *lhs, const void *rhs)
-{
-  const Dentry *l = static_cast<const Dentry*>(lhs);
-  const Dentry *r = static_cast<const Dentry*>(rhs);
-  if (l->get_parent() < r->get_parent())
-    return -1;
-  if (l->get_parent() > r->get_parent())
-    return 1;
-  return l->get_name().compare(r->get_name());
 }
