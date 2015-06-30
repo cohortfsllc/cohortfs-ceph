@@ -13,11 +13,11 @@
 #include "placer/Placer.h"
 #include "osdc/ObjectOperation.h"
 
-class StripedPlacer;
-typedef std::shared_ptr<StripedPlacer> StripedPlacerRef;
+class AttachedStripedPlacer;
 
-class StripedPlacer : public Placer, public AttachedPlacer
+class StripedPlacer : public Placer
 {
+  friend class AttachedStripedPlacer;
   typedef Placer inherited;
 
 protected:
@@ -29,6 +29,10 @@ protected:
   StripedPlacer()
     : Placer(StripedPlacerType),
     stripe_unit(0), stripe_width(0) { }
+
+  int encode(const set<int> &want_to_encode,
+	     const bufferlist &in,
+	     map<int, bufferlist> *encoded) const;
 
   /* Size of a stride for a given write */
   size_t stride_size(const uint64_t len) const {
@@ -45,7 +49,8 @@ protected:
   /* Offset into stride of object offset */
   uint64_t stride_offset(const uint64_t off) const {
     uint64_t stripe_size = stripe_width * stripe_unit;
-    return (off / stripe_size) * stripe_unit + off % stripe_unit;
+    return (off / stripe_size) * stripe_unit + off %
+      stripe_unit;
   }
   /* Number of stripe units contained in the extent */
   size_t extent_units(const uint64_t off, const uint64_t len) const {
@@ -61,34 +66,14 @@ protected:
 		     const size_t stride, uint64_t &strideoff,
 		     uint64_t &stridelen);
 
-  int encode(const set<int> &want_to_encode,
-	     const bufferlist &in,
-	     map<int, bufferlist> *encoded) const;
 public:
   ~StripedPlacer();
 
   static const uint64_t one_op;
 
-  virtual APlacerRef attach(CephContext* cct) const {
-    return APlacerRef(dynamic_cast<const AttachedPlacer*>(this));
-  }
+  virtual APlacerRef attach(CephContext* cct) const;
 
-  virtual size_t op_size() const noexcept {
-    return one_op * stripe_width;
-  }
-
-  virtual uint32_t quorum() const noexcept {
-    return stripe_width;
-  }
-
-  virtual uint32_t num_rules(void);
-
-  virtual size_t place(const oid_t& object,
-		       const boost::uuids::uuid& id,
-		       const OSDMap& map,
-		       const std::function<void(int)>& f) const;
-
-  virtual int update(const std::shared_ptr<const Placer>& pl);
+  virtual int update(PlacerRef pl);
 
   virtual void dump(Formatter *f) const;
   virtual void decode_payload(bufferlist::iterator& bl, uint8_t v);
@@ -101,42 +86,6 @@ public:
 			  const int64_t _stripe_unit,
 			  const int64_t _stripe_width,
 			  std::stringstream& ss);
-
-  size_t get_chunk_count() const {
-    return stripe_width;
-  }
-
-  size_t get_data_chunk_count() const {
-    return stripe_width;
-  }
-
-  virtual uint32_t get_stripe_unit() const {
-    return stripe_unit;
-  };
-
-  virtual void make_strides(const oid_t& oid,
-			    uint64_t offset, uint64_t len,
-			    uint64_t truncate_size, uint32_t truncate_seq,
-			    vector<StrideExtent>& extents) const;
-
-  virtual void repair(vector<StrideExtent>& extents,
-		      const OSDMap& map) const;
-
-  virtual void serialize_data(bufferlist &bl) const;
-  virtual void serialize_code(bufferlist &bl) const;
-
-  // Data and metadata operations using the placer
-  virtual void add_data(const uint64_t off, bufferlist& in,
-			vector<StrideExtent>& out) const;
-  virtual int get_data(map<int, bufferlist> &strides,
-			    bufferlist *decoded) const;
-
-  virtual int get_cohort_placer(struct cohort_placer *placer) const {
-    placer->type = StripedPlacerType;
-    placer->striped.stripe_unit = stripe_unit;
-    placer->striped.stripe_width = stripe_width;
-    return 0;
-  };
 
   virtual PlacerRef clone() const {
     return PlacerRef(new StripedPlacer(*this));

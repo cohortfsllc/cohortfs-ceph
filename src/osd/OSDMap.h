@@ -599,12 +599,15 @@ public:
     }
   }
 
-  PlacerRef lookup_placer(const boost::uuids::uuid& id) const {
+  // This returns a reference. It is only valid until you release the
+  // lock on the OSDMap. If you want it after that, attach it or clone
+  // it.
+  const PlacerRef& lookup_placer(const boost::uuids::uuid& id) const {
     auto v = placers.by_uuid.find(id);
     if (v == placers.by_uuid.end()) {
       throw std::system_error(placer_err::no_such_placer);
     } else {
-      return v->second->clone();
+      return v->second;
     }
   }
 

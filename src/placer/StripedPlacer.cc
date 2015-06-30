@@ -27,6 +27,7 @@ using std::unique_ptr;
 
 const uint64_t StripedPlacer::one_op = 4194304;
 
+
 PlacerRef StripedPlacerFactory(bufferlist::iterator& bl, uint8_t v)
 {
   StripedPlacer *placer = new StripedPlacer();
@@ -41,31 +42,9 @@ StripedPlacer::~StripedPlacer(void)
 {
 }
 
-int StripedPlacer::update(const shared_ptr<const Placer>& pl)
+int StripedPlacer::update(PlacerRef pl)
 {
   return 0;
-}
-
-uint32_t StripedPlacer::num_rules(void)
-{
-  return 1;
-}
-
-size_t StripedPlacer::place(const oid_t& object,
-			    const boost::uuids::uuid& id,
-			    const OSDMap& map,
-			    const std::function<void(int)>& f) const
-{
-  ssize_t count = 0;
-  for (uint32_t i = 0; i < stripe_width; i++) {
-    if (map.is_in(i)) {
-      f(i);
-      count++;
-    } else
-      f(-1);
-  }
-
-  return count;
 }
 
 void StripedPlacer::dump(Formatter *f) const
@@ -137,10 +116,25 @@ struct C_GetAttrs : public Context {
   }
 };
 
+int StripedPlacer::encode(const set<int> &want_to_encode,
+			  const bufferlist &in,
+			  map<int, bufferlist> *encoded) const
+{
+  bufferlist out = in;
+  size_t stridesize = stride_size(in.length());
+
+  for (unsigned int i = 0; i < stripe_width; i++) {
+    bufferlist &stride = (*encoded)[i];
+    stride.substr_of(out, i * stridesize, stridesize);
+  }
+  return 0;
+};
+
 /* This seems to work, but involves a *lot* of math and storage */
 void StripedPlacer::stride_extent(const uint64_t off, const uint64_t len,
 				  const size_t stride, uint64_t &strideoff,
-				  uint64_t &stridelen) {
+				  uint64_t &stridelen)
+{
   size_t first = stride_idx(off);
   size_t span = extent_units(off, len);
   if ((len == 0) ||
@@ -178,146 +172,192 @@ void StripedPlacer::stride_extent(const uint64_t off, const uint64_t len,
   } else {
     uint32_t stride_num = (stride < last) ? last - stride :
       stripe_width + last - stride;
-    uint32_t last_stride_end = last_byte - (last_byte % stripe_unit) + stripe_unit - 1;
-    uint64_t offset_into_object_of_end_of_stride = last_stride_end - stride_num * stripe_unit;
+    uint32_t last_stride_end = last_byte - (last_byte % stripe_unit)
+      + stripe_unit - 1;
+    uint64_t offset_into_object_of_end_of_stride = last_stride_end
+      - stride_num * stripe_unit;
     stride_last_byte = stride_offset(offset_into_object_of_end_of_stride);
   }
   stridelen = stride_last_byte + 1 - strideoff;
 }
 
-void StripedPlacer::make_strides(const oid_t& oid,
-				 uint64_t offset, uint64_t len,
-				 uint64_t truncate_size, uint32_t truncate_seq,
-				 vector<StrideExtent>& strides) const
+
+typedef std::unique_ptr<const StripedPlacer> StripedPlacerRef;
+
+class AttachedStripedPlacer : public AttachedPlacer
 {
+  friend class StripedPlacer;
+  StripedPlacerRef placer;
+
+  AttachedStripedPlacer(PlacerRef&& p)
+    : placer(static_cast<const StripedPlacer*>(p.release()))
+    { }
+
+public:
+
+  virtual uint32_t num_rules(void) {
+    return 1;
+  }
+
+  virtual size_t op_size() const noexcept {
+    return one_op * placer->stripe_width;
+  }
+
+  virtual uint32_t quorum() const noexcept {
+    return placer->stripe_width;
+  }
+
+  virtual size_t place(const oid_t& object,
+		       const boost::uuids::uuid& id,
+		       const OSDMap& map,
+		       const std::function<void(int)>& f) const {
+    ssize_t count = 0;
+    for (uint32_t i = 0; i < placer->stripe_width; i++) {
+      if (map.is_in(i)) {
+	f(i);
+	count++;
+      } else
+	f(-1);
+    }
+
+    return count;
+  }
+
+  size_t get_chunk_count() const {
+    return placer->stripe_width;
+  }
+
+  size_t get_data_chunk_count() const {
+    return placer->stripe_width;
+  }
+
+  virtual uint32_t get_stripe_unit() const {
+    return placer->stripe_unit;
+  };
+
+  virtual void make_strides(const oid_t& oid,
+			    uint64_t offset, uint64_t len,
+			    uint64_t truncate_size, uint32_t truncate_seq,
+			    vector<StrideExtent>& strides) const {
 #if 0
-  buffer::list::iterator i(&blin);
-  size_t stride;
-  uint64_t thislen;
-  len = min(len, (uint64_t)blin.length());
+    buffer::list::iterator i(&blin);
+    size_t stride;
+    uint64_t thislen;
+    len = min(len, (uint64_t)blin.length());
 
-  for (stride = 0; stride < stripe_width; ++stride) {
-    stride_extent(offset, len, stride, strides[stride].offset,
-		  strides[stride].length);
-    assert(strides[stride].length <= one_op);
-  }
+    for (stride = 0; stride < stripe_width; ++stride) {
+      stride_extent(offset, len, stride, strides[stride].offset,
+		    strides[stride].length);
+      assert(strides[stride].length <= one_op);
+    }
 
-  stride = stride_idx(offset);
-  /* Special case on incomplete first block */
-  if (offset % stripe_unit != 0) {
-    thislen = min(len, (uint64_t) (stripe_unit - offset % stripe_unit));
-  } else {
-    thislen = min(len, (uint64_t)stripe_unit);
-  }
-  i.copy(thislen, strides[stride].bl);
-  stride = (stride + 1) % stripe_width;
-
-  while (i.get_off() < len) {
-    uint64_t thislen = min(i.get_remaining(), stripe_unit);
+    stride = stride_idx(offset);
+    /* Special case on incomplete first block */
+    if (offset % stripe_unit != 0) {
+      thislen = min(len, (uint64_t) (stripe_unit - offset % stripe_unit));
+    } else {
+      thislen = min(len, (uint64_t)stripe_unit);
+    }
     i.copy(thislen, strides[stride].bl);
     stride = (stride + 1) % stripe_width;
-  }
-#endif
-}
 
-void StripedPlacer::repair(vector<StrideExtent>& extents,
-			   const OSDMap& map) const
-{
-  return;
-}
-
-void StripedPlacer::serialize_data(bufferlist &bl) const
-{
-  return;
-}
-
-void StripedPlacer::serialize_code(bufferlist &bl) const
-{
-  return;
-}
-
-int StripedPlacer::encode(const set<int> &want_to_encode,
-			  const bufferlist &in,
-			  map<int, bufferlist> *encoded) const
-{
-  bufferlist out = in;
-  size_t stridesize = stride_size(in.length());
-
-  for (unsigned int i = 0; i < stripe_width; i++) {
-    bufferlist &stride = (*encoded)[i];
-    stride.substr_of(out, i * stridesize, stridesize);
-  }
-  return 0;
-};
-
-void StripedPlacer::add_data(const uint64_t off, bufferlist& in,
-			      vector<StrideExtent>& strides) const
-{
-  uint32_t stride, len, num_strides;
-  uint64_t last_byte = off + in.length() - 1;
-  uint64_t curoff;
-  bufferlist bl;
-
-  /* Build the stride extant list */
-  curoff = off;
-  num_strides = 0;
-  do {
-    stride = stride_idx(curoff);
-    strides[stride].offset = stride_offset(curoff);
-    curoff += (stripe_unit - (curoff % stripe_unit));
-    num_strides++;
-  } while (num_strides < stripe_width && curoff < last_byte);
-
-  curoff = last_byte;
-  num_strides = 0;
-  do {
-    stride = stride_idx(curoff);
-    strides[stride].length = stride_offset(curoff) + 1 - strides[stride].offset;
-    if ((curoff + 1) % stripe_unit)
-      // Point at end of last stride
-      curoff += (stripe_unit - ((curoff + 1) % stripe_unit));
-    if (curoff < stripe_unit)
-      // Next stride is empty
-      break;
-    curoff -= stripe_unit;
-    num_strides++;
-  } while (num_strides < stripe_width && curoff > off);
-
-  /* Build buffer lists for strides */
-  curoff = off;
-  stride = stride_idx(curoff);
-  if (curoff % stripe_unit) {
-    /* Partial first first */
-    len = stripe_unit - (off % stripe_unit);
-    if (len > last_byte + 1 - off) {
-      // Entire write is within this unit
-      len = last_byte + 1 - off;
+    while (i.get_off() < len) {
+      uint64_t thislen = min(i.get_remaining(), stripe_unit);
+      i.copy(thislen, strides[stride].bl);
+      stride = (stride + 1) % stripe_width;
     }
-    bl.substr_of(in, curoff - off, len);
-    strides[stride].bl.claim_append(bl);
-    curoff += len;
+#endif
   }
-  while (curoff < last_byte + 1) {
-    stride = stride_idx(curoff);
-    if (last_byte + 1 - curoff < stripe_unit) {
-      /* Partial last unit */
-      len = last_byte + 1 - curoff;
+
+  virtual void repair(vector<StrideExtent>& extents,
+		      const OSDMap& map) const {
+  }
+
+  virtual void serialize_data(bufferlist &bl) const {
+  }
+  virtual void serialize_code(bufferlist &bl) const {
+  }
+
+  // Data and metadata operations using the placer
+  virtual void add_data(const uint64_t off, bufferlist& in,
+			vector<StrideExtent>& strides) const {
+    uint32_t stride, len, num_strides;
+    uint64_t last_byte = off + in.length() - 1;
+    uint64_t curoff;
+    bufferlist bl;
+
+    /* Build the stride extant list */
+    curoff = off;
+    num_strides = 0;
+    do {
+      stride = placer->stride_idx(curoff);
+      strides[stride].offset = placer->stride_offset(curoff);
+      curoff += (placer->stripe_unit - (curoff % placer->stripe_unit));
+      num_strides++;
+    } while (num_strides < placer->stripe_width && curoff < last_byte);
+
+    curoff = last_byte;
+    num_strides = 0;
+    do {
+      stride = placer->stride_idx(curoff);
+      strides[stride].length = placer->stride_offset(curoff) + 1
+	- strides[stride].offset;
+      if ((curoff + 1) % placer->stripe_unit)
+	// Point at end of last stride
+	curoff += (placer->stripe_unit - ((curoff + 1) % placer->stripe_unit));
+      if (curoff < placer->stripe_unit)
+	// Next stride is empty
+	break;
+      curoff -= placer->stripe_unit;
+      num_strides++;
+    } while (num_strides < placer->stripe_width && curoff > off);
+
+    /* Build buffer lists for strides */
+    curoff = off;
+    stride = placer->stride_idx(curoff);
+    if (curoff % placer->stripe_unit) {
+      /* Partial first first */
+      len = placer->stripe_unit - (off % placer->stripe_unit);
+      if (len > last_byte + 1 - off) {
+	// Entire write is within this unit
+	len = last_byte + 1 - off;
+      }
       bl.substr_of(in, curoff - off, len);
       strides[stride].bl.claim_append(bl);
-      break;
+      curoff += len;
     }
-    bl.substr_of(in, curoff - off, stripe_unit);
-    strides[stride].bl.claim_append(bl);
-    curoff += stripe_unit;
+    while (curoff < last_byte + 1) {
+      stride = placer->stride_idx(curoff);
+      if (last_byte + 1 - curoff < placer->stripe_unit) {
+	/* Partial last unit */
+	len = last_byte + 1 - curoff;
+	bl.substr_of(in, curoff - off, len);
+	strides[stride].bl.claim_append(bl);
+	break;
+      }
+      bl.substr_of(in, curoff - off, placer->stripe_unit);
+      strides[stride].bl.claim_append(bl);
+      curoff += placer->stripe_unit;
+    }
   }
-}
 
-int StripedPlacer::get_data(map<int, bufferlist> &strides,
-			    bufferlist *decoded) const
-{
-  for (unsigned int i = 0; i < stripe_width; i++) {
-    decoded->claim_append(strides[i]);
+  virtual int get_data(map<int, bufferlist> &strides,
+		       bufferlist *decoded) const {
+    for (unsigned int i = 0; i < placer->stripe_width; i++) {
+      decoded->claim_append(strides[i]);
+    }
+    return 0;
   }
-  return 0;
+
+  virtual int get_cohort_placer(struct cohort_placer *outplacer) const {
+    outplacer->type = StripedPlacerType;
+    outplacer->striped.stripe_unit = placer->stripe_unit;
+    outplacer->striped.stripe_width = placer->stripe_width;
+    return 0;
+  }
 };
 
+APlacerRef StripedPlacer::attach(CephContext* cct) const
+{
+  return APlacerRef(new AttachedStripedPlacer(clone()));
+}

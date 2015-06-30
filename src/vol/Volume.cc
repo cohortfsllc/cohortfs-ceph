@@ -134,9 +134,7 @@ const uint64_t AttachedVol::one_op = 4194304;
 AttachedVol::AttachedVol(CephContext *cct, const OSDMap& o, const Volume& _vol)
   : v(_vol)
 {
-  PlacerRef p;
-  p = o.lookup_placer(v.placer_id);
-  placer = p->attach(cct);
+  placer = o.lookup_placer(v.placer_id)->attach(cct);
 }
 
 struct C_GetAttrs : public Context {

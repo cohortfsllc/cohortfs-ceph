@@ -26,6 +26,8 @@
 #define L_IS_PRINTABLE(c) (isprint(c))
 #endif
 
+const uint64_t AttachedPlacer::one_op = 4194304;
+
 using namespace std::literals;
 
 WRITE_RAW_ENCODER(placer_type);

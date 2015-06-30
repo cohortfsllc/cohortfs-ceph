@@ -584,4 +584,3 @@ error:
   delete v;
   return PlacerRef();
 }
-
