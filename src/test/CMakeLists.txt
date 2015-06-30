@@ -275,6 +275,17 @@ add_executable(kvstorebench
 target_link_libraries(kvstorebench librados global ${BLKID_LIBRARIES} ${CMAKE_DL_LIBS}
   ${TCMALLOC_LIBS})
 
+# fio_ceph_filestore
+if (WITH_FIO)
+  include_directories(${FIO_INCLUDE_DIR})
+  add_library(fio_ceph_filestore SHARED fio_ceph_filestore.cc)
+  set_target_properties(fio_ceph_filestore PROPERTIES COMPILE_FLAGS
+    "-fpermissive -Wno-pointer-arith")
+  target_link_libraries(fio_ceph_filestore os global ${CRYPTO_LIBS}
+    ${EXTRA_LIBS})
+  install(TARGETS fio_ceph_filestore DESTINATION lib)
+endif (WITH_FIO)
+
 ## System tests
 
 # systest
