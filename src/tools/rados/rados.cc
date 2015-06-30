@@ -197,7 +197,7 @@ static int do_get(Objecter* o, const AVolRef& vol, const oid_t& oid,
   while (true) {
     bufferlist outdata;
     ret = o->read(oid, vol, offset, op_size, &outdata);
-    if (ret <= 0) {
+    if (ret < 0) {
       goto out;
     }
     ret = outdata.write_fd(fd);
