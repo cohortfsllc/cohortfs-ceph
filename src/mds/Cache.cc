@@ -27,7 +27,7 @@ Cache::Cache(const Volume *volume, const mcas::gc_global &gc,
 
 InodeRef Cache::create_root(const mcas::gc_guard &guard, uint32_t stripes)
 {
-  const identity who = {0, 0, 0};
+  const identity_t who = {0, 0};
   root = create_inode(guard, who, S_IFDIR, stripes);
   assert(root);
 
@@ -38,11 +38,11 @@ InodeRef Cache::create_root(const mcas::gc_guard &guard, uint32_t stripes)
 }
 
 InodeRef Cache::create_inode(const mcas::gc_guard &guard,
-                             const identity &who, int type, uint32_t stripes)
+                             const identity_t &who, int mode, uint32_t stripes)
 {
   const auto ino = next_ino++;
   auto data = storage->get_or_create_inode(guard, volume->get_uuid(),
-                                           ino, who, type, stripes);
+                                           ino, who, mode, stripes);
   return inodes.get_or_create(guard, Inode(this, ino, data));
 }
 

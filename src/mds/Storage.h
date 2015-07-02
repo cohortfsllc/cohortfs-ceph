@@ -40,11 +40,11 @@ class Storage {
 
   InodeStorageRef get_or_create_inode(const mcas::gc_guard &guard,
                                       const boost::uuids::uuid &volume,
-                                      ino_t ino, const identity &who,
-                                      int type, uint32_t stripes = 0)
+                                      ino_t ino, const identity_t &who,
+                                      int mode, uint32_t stripes = 0)
   {
     auto inode = inodes.get_or_create(guard, InodeStorage(volume, ino,
-                                                          who, type, stripes));
+                                                          who, mode, stripes));
     if (inode->attr.nlinks == 0) {
       // if our get() raced with destroy(), drop our ref immediately because
       // the node will be freed at the end of our gc_guard

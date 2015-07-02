@@ -23,17 +23,15 @@ const uint8_t VOLUMEB[16] = {
 static int test_unlink_notempty(struct libmds *mds, const libmds_fileid_t *root)
 {
   libmds_fileid_t dir = { root->volume, 0 };
-  int r = libmds_mkdir(mds, root, "dir");
+  libmds_fileid_t file = { root->volume, 0 };
+  libmds_identity_t who = {};
+  struct stat st;
+  int r = libmds_mkdir(mds, root, "dir", S_IFDIR | 0755, &who, &dir.ino, &st);
   if (r) {
     fprintf(stderr, "libmds_mkdir(\"dir\") failed with %d\n", r);
     return r;
   }
-  r = libmds_lookup(mds, root, "dir", &dir.ino);
-  if (r) {
-    fprintf(stderr, "libmds_lookup(\"dir\") failed with %d\n", r);
-    return r;
-  }
-  r = libmds_create(mds, &dir, "file");
+  r = libmds_create(mds, &dir, "file", S_IFREG | 0644, &who, &file.ino, &st);
   if (r) {
     fprintf(stderr, "libmds_create(\"file\") failed with %d\n", r);
     return r;
@@ -53,7 +51,6 @@ static int test_unlink_notempty(struct libmds *mds, const libmds_fileid_t *root)
     fprintf(stderr, "libmds_unlink(\"dir\") failed with %d\n", r);
     return r;
   }
-  struct stat st;
   r = libmds_getattr(mds, &dir, &st);
   if (r != -ENOENT) {
     fprintf(stderr, "libmds_getattr(\"dir\") returned %d, expected -ENOENT\n", r);
@@ -151,22 +148,22 @@ static int test_readdir_single(struct libmds *mds, const libmds_fileid_t *dir)
 
 static int test_readdir(struct libmds *mds, const libmds_fileid_t *root)
 {
-  libmds_fileid_t dir = { root->volume, 0 };
-  int r = libmds_mkdir(mds, root, "readdir");
+  libmds_fileid_t dir = { root->volume };
+  libmds_fileid_t file = { root->volume };
+  libmds_identity_t who = {};
+  struct stat st;
+  int r = libmds_mkdir(mds, root, "readdir",
+      S_IFDIR | 0755, &who, &dir.ino, &st);
   if (r) {
     fprintf(stderr, "libmds_mkdir(\"readdir\") failed with %d\n", r);
-    return r;
-  }
-  r = libmds_lookup(mds, root, "readdir", &dir.ino);
-  if (r) {
-    fprintf(stderr, "libmds_lookup(\"readdir\") failed with %d\n", r);
     return r;
   }
   // create all entries (except . and ..)
   for (int i = 0; i < NUM_ENTRIES; i++) {
     if (*entries[i] == '.')
       continue;
-    r = libmds_create(mds, &dir, entries[i]);
+    r = libmds_create(mds, &dir, entries[i],
+	S_IFREG | 0644, &who, &file.ino, &st);
     if (r) {
       fprintf(stderr, "libmds_create(\"%s\") failed with %d\n", entries[i], r);
       return r;
@@ -189,10 +186,14 @@ static int test_volumes(struct libmds *mds)
 {
   const libmds_fileid_t roota = { VOLUMEA, 1 };
   const libmds_fileid_t rootb = { VOLUMEB, 1 };
+  libmds_identity_t who = {};
+  libmds_fileid_t dir = { VOLUMEA };
+  struct stat st;
   libmds_ino_t ino;
 
   // create a directory in volume a
-  int r = libmds_mkdir(mds, &roota, "vola");
+  int r = libmds_mkdir(mds, &roota, "vola",
+      S_IFDIR | 0755, &who, &dir.ino, &st);
   if (r) {
     fprintf(stderr, "libmds_mkdir(\"vola\") failed with %d\n", r);
     return r;
@@ -218,28 +219,20 @@ static int test_link_rename(struct libmds *mds, const libmds_fileid_t *root)
 {
   libmds_fileid_t file = { root->volume };
   libmds_fileid_t dir = { root->volume };
+  libmds_identity_t who = {};
   struct stat st;
   // create the initial file
-  int r = libmds_create(mds, root, "file.a");
+  int r = libmds_create(mds, root, "file.a",
+      S_IFREG | 0644, &who, &file.ino, &st);
   if (r) {
     fprintf(stderr, "libmds_create(\"file.a\") failed with %d\n", r);
     return r;
   }
   // create a subdirectory
-  r = libmds_mkdir(mds, root, "dir");
+  r = libmds_mkdir(mds, root, "dir",
+      S_IFDIR | 0755, &who, &dir.ino, &st);
   if (r) {
     fprintf(stderr, "libmds_mkdir(\"dir\") failed with %d\n", r);
-    return r;
-  }
-  // look up the inode numbers
-  r = libmds_lookup(mds, root, "file.a", &file.ino);
-  if (r) {
-    fprintf(stderr, "libmds_lookup(\"file.a\") failed with %d\n", r);
-    return r;
-  }
-  r = libmds_lookup(mds, root, "dir", &dir.ino);
-  if (r) {
-    fprintf(stderr, "libmds_lookup(\"dir\") failed with %d\n", r);
     return r;
   }
   // add a link

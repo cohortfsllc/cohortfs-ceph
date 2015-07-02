@@ -14,6 +14,7 @@ namespace mds {
 typedef libmds_ino_t ino_t;
 typedef libmds_volume_t volume_t;
 typedef libmds_fileid_t fileid_t;
+typedef libmds_identity_t identity_t;
 
 // attribute mask
 constexpr unsigned ATTR_SIZE    = 0x001;
@@ -50,15 +51,6 @@ struct read_delegation {
 
 struct write_delegation {
   int foo;	// need something here
-};
-
-constexpr unsigned MAX_NGROUPS = 32;
-
-struct identity {
-  int uid;
-  int gid;
-  int ngroups;
-  int groups[MAX_NGROUPS];
 };
 
 // access mask

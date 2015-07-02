@@ -23,16 +23,16 @@ struct InodeStorage : public mcas::skiplist_object {
 
   // search template for create
   InodeStorage(const boost::uuids::uuid &volume, ino_t ino,
-               const identity &who, int type, uint32_t stripes = 0)
+               const identity_t &who, int mode, uint32_t stripes = 0)
     : volume(volume), ino(ino), stripes(stripes)
   {
     attr.filesize = 0;
-    attr.mode = 0777;
+    attr.mode = mode & ~S_IFMT;
     attr.user = who.uid;
     attr.group = who.gid;
     attr.atime = attr.mtime = attr.ctime = ceph::real_clock::now();
     attr.nlinks = 1;
-    attr.type = type;
+    attr.type = mode & S_IFMT;
     attr.rawdev = 0;
   }
 

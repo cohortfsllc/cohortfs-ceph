@@ -44,8 +44,8 @@ class Cache {
   InodeRef create_root(const mcas::gc_guard &guard, uint32_t stripes);
   const InodeRef& get_root() const { return root; }
 
-  InodeRef create_inode(const mcas::gc_guard &guard, const identity &who,
-                        int type, uint32_t stripes = 0);
+  InodeRef create_inode(const mcas::gc_guard &guard, const identity_t &who,
+                        int mode, uint32_t stripes = 0);
   InodeRef get_inode(const mcas::gc_guard &guard, ino_t ino);
 
   DirRef get_dir(const mcas::gc_guard &guard, ino_t ino, uint32_t stripe);

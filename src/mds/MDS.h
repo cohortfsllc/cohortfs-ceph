@@ -70,17 +70,17 @@ class MDS : public Dispatcher {
 
   // for libmds
   int get_root(volume_t volume, ino_t *ino);
-  int create(const fileid_t *parent, const std::string &name,
-             const identity &who, int type);
-  int link(const fileid_t *parent, const std::string &name, ino_t ino);
-  int rename(const fileid_t *src_parent, const std::string &src_name,
-             const fileid_t *dst_parent, const std::string &dst_name);
-  int unlink(const fileid_t *parent, const std::string &name);
-  int lookup(const fileid_t *parent, const std::string &name, ino_t *ino);
-  int readdir(const fileid_t *dir, uint64_t pos, uint64_t gen,
+  int create(const fileid_t &parent, const std::string &name,
+             int mode, const identity_t &who, ino_t *ino, struct stat *st);
+  int link(const fileid_t &parent, const std::string &name, ino_t ino);
+  int rename(const fileid_t &src_parent, const std::string &src_name,
+             const fileid_t &dst_parent, const std::string &dst_name);
+  int unlink(const fileid_t &parent, const std::string &name);
+  int lookup(const fileid_t &parent, const std::string &name, ino_t *ino);
+  int readdir(const fileid_t &dir, uint64_t pos, uint64_t gen,
               libmds_readdir_fn cb, void *user);
-  int getattr(const fileid_t *file, int mask, ObjAttr &attr);
-  int setattr(const fileid_t *file, int mask, const ObjAttr &attr);
+  int getattr(const fileid_t &file, int mask, ObjAttr &attr);
+  int setattr(const fileid_t &file, int mask, const ObjAttr &attr);
 
   // void handle_mds_beacon(MMDSBeacon *m);
   bool ms_dispatch(Message *m);

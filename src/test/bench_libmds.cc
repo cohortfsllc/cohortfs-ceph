@@ -29,11 +29,14 @@ typedef std::mt19937 rng_t;
 
 int create_thread(libmds *mds, const libmds_fileid_t *dir, int start, int end)
 {
+  libmds_fileid_t file = { dir->volume };
+  libmds_identity_t who = {};
+  struct stat st;
   for (int i = start; i < end; i++) {
     char name[16];
     snprintf(name, sizeof(name), "file.%d", i);
 
-    int r = libmds_create(mds, dir, name);
+    int r = libmds_create(mds, dir, name, S_IFREG | 0644, &who, &file.ino, &st);
     if (r) {
       std::cerr << "libmds_create(\"" << name << "\") failed with "
           << r << std::endl;

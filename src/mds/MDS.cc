@@ -121,18 +121,18 @@ int MDS::get_root(volume_t volume, ino_t *ino)
   return 0;
 }
 
-int MDS::create(const fileid_t *parent, const std::string &name,
-                const identity &who, int type)
+int MDS::create(const fileid_t &parent, const std::string &name,
+                int mode, const identity_t &who, ino_t *ino, struct stat *st)
 {
   mcas::gc_guard guard(gc);
 
-  auto vol = get_volume(guard, parent->volume);
+  auto vol = get_volume(guard, parent.volume);
   if (!vol)
     return -ENODEV;
   auto cache = vol->cache.get();
 
   // find the parent directory
-  auto dir = cache->get_dir(guard, parent->ino, pick_dir_stripe(name));
+  auto dir = cache->get_dir(guard, parent.ino, pick_dir_stripe(name));
   if (!dir)
     return -ENOENT;
 
@@ -149,8 +149,8 @@ int MDS::create(const fileid_t *parent, const std::string &name,
     return -EEXIST;
 
   // create the child object
-  uint32_t stripes = S_ISDIR(type) ? cct->_conf->mds_dir_stripes : 0;
-  auto inode = cache->create_inode(guard, who, type, stripes);
+  uint32_t stripes = S_ISDIR(mode) ? cct->_conf->mds_dir_stripes : 0;
+  auto inode = cache->create_inode(guard, who, mode, stripes);
 
   // create storage for directory stripes
   std::vector<DirStorageRef> dirs(stripes);
@@ -173,17 +173,17 @@ int MDS::create(const fileid_t *parent, const std::string &name,
   return r;
 }
 
-int MDS::link(const fileid_t *parent, const std::string &name, ino_t ino)
+int MDS::link(const fileid_t &parent, const std::string &name, ino_t ino)
 {
   mcas::gc_guard guard(gc);
 
-  auto vol = get_volume(guard, parent->volume);
+  auto vol = get_volume(guard, parent.volume);
   if (!vol)
     return -ENODEV;
   auto cache = vol->cache.get();
 
   // find the parent directory
-  auto dir = cache->get_dir(guard, parent->ino, pick_dir_stripe(name));
+  auto dir = cache->get_dir(guard, parent.ino, pick_dir_stripe(name));
   if (!dir)
     return -ENOENT;
 
@@ -211,25 +211,25 @@ int MDS::link(const fileid_t *parent, const std::string &name, ino_t ino)
   return r;
 }
 
-int MDS::rename(const fileid_t *src_parent, const std::string &src_name,
-                const fileid_t *dst_parent, const std::string &dst_name)
+int MDS::rename(const fileid_t &src_parent, const std::string &src_name,
+                const fileid_t &dst_parent, const std::string &dst_name)
 {
-  if (!std::equal(src_parent->volume, src_parent->volume + LIBMDS_VOLUME_LEN,
-                  dst_parent->volume))
+  if (!std::equal(src_parent.volume, src_parent.volume + LIBMDS_VOLUME_LEN,
+                  dst_parent.volume))
     return -EXDEV;
 
-  const bool same_parent = src_parent->ino == dst_parent->ino;
+  const bool same_parent = src_parent.ino == dst_parent.ino;
   const bool same_name = src_name == dst_name;
 
   mcas::gc_guard guard(gc);
 
-  auto vol = get_volume(guard, src_parent->volume);
+  auto vol = get_volume(guard, src_parent.volume);
   if (!vol)
     return -ENODEV;
   auto cache = vol->cache.get();
 
   // find the initial parent object
-  auto srcdir = cache->get_dir(guard, src_parent->ino,
+  auto srcdir = cache->get_dir(guard, src_parent.ino,
                                pick_dir_stripe(src_name));
   if (!srcdir)
     return -ENOENT;
@@ -241,7 +241,7 @@ int MDS::rename(const fileid_t *src_parent, const std::string &src_name,
 
   // find the destination parent object
   auto dstdir = same_parent ? srcdir :
-      cache->get_dir(guard, dst_parent->ino, pick_dir_stripe(dst_name));
+      cache->get_dir(guard, dst_parent.ino, pick_dir_stripe(dst_name));
   if (!dstdir)
     return -ENOENT;
 
@@ -280,11 +280,11 @@ int MDS::rename(const fileid_t *src_parent, const std::string &src_name,
   return r;
 }
 
-int MDS::unlink(const fileid_t *parent, const std::string &name)
+int MDS::unlink(const fileid_t &parent, const std::string &name)
 {
   mcas::gc_guard guard(gc);
 
-  auto vol = get_volume(guard, parent->volume);
+  auto vol = get_volume(guard, parent.volume);
   if (!vol)
     return -ENODEV;
   auto cache = vol->cache.get();
@@ -292,7 +292,7 @@ int MDS::unlink(const fileid_t *parent, const std::string &name)
   std::vector<std::unique_lock<std::mutex>> locks;
 
   // find the parent directory
-  auto dir = cache->get_dir(guard, parent->ino, pick_dir_stripe(name));
+  auto dir = cache->get_dir(guard, parent.ino, pick_dir_stripe(name));
   if (!dir)
     return -ENOENT;
   locks.emplace_back(dir->mutex, std::defer_lock);
@@ -337,17 +337,16 @@ int MDS::unlink(const fileid_t *parent, const std::string &name)
   return 0;
 }
 
-int MDS::lookup(const fileid_t *parent, const std::string &name,
-                ino_t *ino)
+int MDS::lookup(const fileid_t &parent, const std::string &name, ino_t *ino)
 {
   mcas::gc_guard guard(gc);
 
-  auto vol = get_volume(guard, parent->volume);
+  auto vol = get_volume(guard, parent.volume);
   if (!vol)
     return -ENODEV;
 
   // find the parent object
-  auto dn = vol->cache->lookup(guard, parent->ino, pick_dir_stripe(name), name);
+  auto dn = vol->cache->lookup(guard, parent.ino, pick_dir_stripe(name), name);
   if (!dn)
     return -ENOENT;
 
@@ -355,12 +354,12 @@ int MDS::lookup(const fileid_t *parent, const std::string &name,
   return 0;
 }
 
-int MDS::readdir(const fileid_t *dir, uint64_t pos, uint64_t gen,
+int MDS::readdir(const fileid_t &dir, uint64_t pos, uint64_t gen,
                  libmds_readdir_fn cb, void *user)
 {
   mcas::gc_guard guard(gc);
 
-  auto vol = get_volume(guard, dir->volume);
+  auto vol = get_volume(guard, dir.volume);
   if (!vol)
     return -ENODEV;
 
@@ -369,7 +368,7 @@ int MDS::readdir(const fileid_t *dir, uint64_t pos, uint64_t gen,
   int successes = 0;
   while (stripe < cct->_conf->mds_dir_stripes) {
     // find the directory
-    auto d = vol->cache->get_dir(guard, dir->ino, stripe);
+    auto d = vol->cache->get_dir(guard, dir.ino, stripe);
     if (!d)
       return -ENOENT;
 
@@ -385,32 +384,32 @@ int MDS::readdir(const fileid_t *dir, uint64_t pos, uint64_t gen,
   return successes ? 0 : r;
 }
 
-int MDS::getattr(const fileid_t *file, int mask, ObjAttr &attr)
+int MDS::getattr(const fileid_t &file, int mask, ObjAttr &attr)
 {
   mcas::gc_guard guard(gc);
 
-  auto vol = get_volume(guard, file->volume);
+  auto vol = get_volume(guard, file.volume);
   if (!vol)
     return -ENODEV;
 
   // find the object
-  auto inode = vol->cache->get_inode(guard, file->ino);
+  auto inode = vol->cache->get_inode(guard, file.ino);
   if (!inode)
     return -ENOENT;
 
   return inode->getattr(mask, attr);
 }
 
-int MDS::setattr(const fileid_t *file, int mask, const ObjAttr &attr)
+int MDS::setattr(const fileid_t &file, int mask, const ObjAttr &attr)
 {
   mcas::gc_guard guard(gc);
 
-  auto vol = get_volume(guard, file->volume);
+  auto vol = get_volume(guard, file.volume);
   if (!vol)
     return -ENODEV;
 
   // find the object
-  auto inode = vol->cache->get_inode(guard, file->ino);
+  auto inode = vol->cache->get_inode(guard, file.ino);
   if (!inode)
     return -ENOENT;
 

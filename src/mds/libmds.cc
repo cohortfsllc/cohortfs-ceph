@@ -83,8 +83,12 @@ public:
   void signal(int signum);
 
   int get_root(libmds_volume_t volume, libmds_ino_t *ino);
-  int create(const libmds_fileid_t *parent, const char *name);
-  int mkdir(const libmds_fileid_t *parent, const char *name);
+  int create(const libmds_fileid_t *parent, const char *name,
+             int mode, const libmds_identity_t *who,
+             libmds_ino_t *ino, struct stat *st);
+  int mkdir(const libmds_fileid_t *parent, const char *name,
+            int mode, const libmds_identity_t *who,
+            libmds_ino_t *ino, struct stat *st);
   int link(const libmds_fileid_t *parent, const char *name, libmds_ino_t ino);
   int rename(const libmds_fileid_t *parent1, const char *name1,
              const libmds_fileid_t *parent2, const char *name2);
@@ -176,45 +180,49 @@ int LibMDS::get_root(libmds_volume_t volume, libmds_ino_t *ino)
   return mds->get_root(volume, ino);
 }
 
-int LibMDS::create(const libmds_fileid_t *parent, const char *name)
+int LibMDS::create(const libmds_fileid_t *parent, const char *name,
+                   int mode, const libmds_identity_t *who,
+                   libmds_ino_t *ino, struct stat *st)
 {
-  const identity who = {0, 0, 0}; // XXX
-  return mds->create(parent, name, who, S_IFREG);
+  assert(!S_ISDIR(mode));
+  return mds->create(*parent, name, mode, *who, ino, st);
 }
 
-int LibMDS::mkdir(const libmds_fileid_t *parent, const char *name)
+int LibMDS::mkdir(const libmds_fileid_t *parent, const char *name,
+                  int mode, const libmds_identity_t *who,
+                  libmds_ino_t *ino, struct stat *st)
 {
-  const identity who = {0, 0, 0}; // XXX
-  return mds->create(parent, name, who, S_IFDIR);
+  assert(S_ISDIR(mode));
+  return mds->create(*parent, name, mode, *who, ino, st);
 }
 
 int LibMDS::link(const libmds_fileid_t *parent, const char *name,
                  libmds_ino_t ino)
 {
-  return mds->link(parent, name, ino);
+  return mds->link(*parent, name, ino);
 }
 
 int LibMDS::rename(const libmds_fileid_t *src_parent, const char *src_name,
                    const libmds_fileid_t *dst_parent, const char *dst_name)
 {
-  return mds->rename(src_parent, src_name, dst_parent, dst_name);
+  return mds->rename(*src_parent, src_name, *dst_parent, dst_name);
 }
 
 int LibMDS::unlink(const libmds_fileid_t *parent, const char *name)
 {
-  return mds->unlink(parent, name);
+  return mds->unlink(*parent, name);
 }
 
 int LibMDS::lookup(const libmds_fileid_t *parent, const char *name,
                    libmds_ino_t *ino)
 {
-  return mds->lookup(parent, name, ino);
+  return mds->lookup(*parent, name, ino);
 }
 
 int LibMDS::readdir(const libmds_fileid_t *dir, uint64_t pos, uint64_t gen,
                     libmds_readdir_fn cb, void *user)
 {
-  return mds->readdir(dir, pos, gen, cb, user);
+  return mds->readdir(*dir, pos, gen, cb, user);
 }
 
 int LibMDS::getattr(const libmds_fileid_t *file, struct stat *st)
@@ -225,7 +233,7 @@ int LibMDS::getattr(const libmds_fileid_t *file, struct stat *st)
       ATTR_NLINKS | ATTR_TYPE | ATTR_RAWDEV;
 
   ObjAttr attr;
-  int r = mds->getattr(file, mask, attr);
+  int r = mds->getattr(*file, mask, attr);
   if (r == 0) {
     st->st_mode = attr.mode | attr.type;
     st->st_nlink = attr.nlinks;
@@ -258,7 +266,7 @@ int LibMDS::setattr(const libmds_fileid_t *file, const struct stat *st)
   attr.mtime = ceph::real_clock::from_time_t(st->st_mtime);
   attr.ctime = ceph::real_clock::from_time_t(st->st_ctime);
 
-  return mds->setattr(file, mask, attr);
+  return mds->setattr(*file, mask, attr);
 }
 
 } // namespace mds
@@ -360,10 +368,11 @@ int libmds_get_root(struct libmds *mds, libmds_volume_t volume,
 }
 
 int libmds_create(struct libmds *mds, const libmds_fileid_t *parent,
-                  const char *name)
+                  const char *name, int mode, const libmds_identity_t *who,
+                  libmds_ino_t *ino, struct stat *st)
 {
   try {
-    return mds->create(parent, name);
+    return mds->create(parent, name, mode, who, ino, st);
   } catch (std::exception &e) {
     CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
     lderr(cct) << "libmds_create caught exception " << e.what() << dendl;
@@ -372,10 +381,11 @@ int libmds_create(struct libmds *mds, const libmds_fileid_t *parent,
 }
 
 int libmds_mkdir(struct libmds *mds, const libmds_fileid_t *parent,
-                 const char *name)
+                 const char *name, int mode, const libmds_identity_t *who,
+                 libmds_ino_t *ino, struct stat *st)
 {
   try {
-    return mds->mkdir(parent, name);
+    return mds->mkdir(parent, name, mode, who, ino, st);
   } catch (std::exception &e) {
     CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
     lderr(cct) << "libmds_mkdir caught exception " << e.what() << dendl;

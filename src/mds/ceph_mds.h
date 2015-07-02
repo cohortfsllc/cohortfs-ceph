@@ -26,6 +26,11 @@ typedef struct libmds_fileid {
   libmds_ino_t ino;
 } libmds_fileid_t;
 
+typedef struct libmds_identity {
+  int uid;
+  int gid;
+} libmds_identity_t;
+
 /**
  * Callback for libmds_readdir, containing a single directory entry.
  *
@@ -79,13 +84,17 @@ struct libmds {
    * Create a regular file in the parent directory.
    * @see libmds_create()
    */
-  virtual int create(const libmds_fileid_t *parent, const char *name) = 0;
+  virtual int create(const libmds_fileid_t *parent, const char *name,
+                     int mode, const libmds_identity_t *who,
+                     libmds_ino_t *ino, struct stat *st) = 0;
 
   /**
    * Create a subdirectory in the parent directory.
    * @see libmds_mkdir()
    */
-  virtual int mkdir(const libmds_fileid_t *parent, const char *name) = 0;
+  virtual int mkdir(const libmds_fileid_t *parent, const char *name,
+                    int mode, const libmds_identity_t *who,
+                    libmds_ino_t *ino, struct stat *st) = 0;
 
   /**
    * Create a link in the parent directory.
@@ -206,15 +215,19 @@ extern "C" {
    * @return Returns 0 on success, or a negative error code.
    * @retval -ENODEV if the given volume does not exist.
    */
-  int get_root(struct libmds *mds, libmds_volume_t volume,
-               libmds_ino_t *ino);
+  int libmds_get_root(struct libmds *mds, libmds_volume_t volume,
+                      libmds_ino_t *ino);
 
   /**
    * Create a regular file in the parent directory.
    *
-   * @param mds     The libmds object returned by libmds_init()
-   * @param parent  Fileid of the parent directory
-   * @param name    Filename of the new directory entry
+   * @param mds       The libmds object returned by libmds_init()
+   * @param parent    Fileid of the parent directory
+   * @param name      Filename of the new directory entry
+   * @param mode      Mode bits to set on the created file
+   * @param who       User identity
+   * @param[out] ino  Inode number of the created file
+   * @param[out] st   Attributes of the created file
    *
    * @return Returns 0 on success, or a negative error code.
    * @retval -ENODEV if the parent volume does not exist.
@@ -223,14 +236,19 @@ extern "C" {
    * @retval -EEXIST if the parent directory already has an entry with \a name.
    */
   int libmds_create(struct libmds *mds, const libmds_fileid_t *parent,
-                    const char *name);
+                    const char *name, int mode, const libmds_identity_t *who,
+                    libmds_ino_t *ino, struct stat *st);
 
   /**
    * Create a subdirectory in the parent directory.
    *
-   * @param mds     The libmds object returned by libmds_init()
-   * @param parent  Fileid of the parent directory
-   * @param name    Filename of the new directory entry
+   * @param mds       The libmds object returned by libmds_init()
+   * @param parent    Fileid of the parent directory
+   * @param name      Filename of the new directory entry
+   * @param mode      Mode bits to set on the created file
+   * @param who       User identity
+   * @param[out] ino  Inode number of the created file
+   * @param[out] st   Attributes of the created file
    *
    * @return Returns 0 on success, or a negative error code.
    * @retval -ENODEV if the parent volume does not exist.
@@ -239,7 +257,8 @@ extern "C" {
    * @retval -EEXIST if the parent directory already has an entry with \a name.
    */
   int libmds_mkdir(struct libmds *mds, const libmds_fileid_t *parent,
-                   const char *name);
+                   const char *name, int mode, const libmds_identity_t *who,
+                   libmds_ino_t *ino, struct stat *st);
 
   /**
    * Create a link in the parent directory.
@@ -334,7 +353,7 @@ extern "C" {
    *
    * @param mds     The libmds object returned by libmds_init()
    * @param file    Fileid of the file
-   * @param[out] st Pointer to the attributes to write
+   * @param[out] st Pointer to the attributes to get
    *
    * @return Returns 0 on success or a negative error code.
    * @retval -ENODEV if the volume does not exist.
@@ -348,7 +367,7 @@ extern "C" {
    *
    * @param mds   The libmds object returned by libmds_init()
    * @param file  Fileid of the file
-   * @param st    Pointer to the attributes to write
+   * @param st    Pointer to the attributes to set
    *
    * @return Returns 0 on success or a negative error code.
    * @retval -ENODEV if the volume does not exist.
