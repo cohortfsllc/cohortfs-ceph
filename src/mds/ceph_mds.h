@@ -71,6 +71,12 @@ struct libmds {
 
   /**
    * Create a regular file in the parent directory.
+   * @see libmds_get_root()
+   */
+  virtual int get_root(libmds_volume_t volume, libmds_ino_t *ino) = 0;
+
+  /**
+   * Create a regular file in the parent directory.
    * @see libmds_create()
    */
   virtual int create(const libmds_fileid_t *parent, const char *name) = 0;
@@ -189,6 +195,19 @@ extern "C" {
    * @param signum  The signal from a signal handler
    */
   void libmds_signal(int signum);
+
+  /**
+   * Get the inode number of the root directory in the given volume.
+   *
+   * @param mds       The libmds object returned by libmds_init()
+   * @param volume    The volume uuid
+   * @param[out] ino  Inode number of the root directory
+   *
+   * @return Returns 0 on success, or a negative error code.
+   * @retval -ENODEV if the given volume does not exist.
+   */
+  int get_root(struct libmds *mds, libmds_volume_t volume,
+               libmds_ino_t *ino);
 
   /**
    * Create a regular file in the parent directory.

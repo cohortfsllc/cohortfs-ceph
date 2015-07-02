@@ -25,6 +25,18 @@ Cache::Cache(const Volume *volume, const mcas::gc_global &gc,
 {
 }
 
+InodeRef Cache::create_root(const mcas::gc_guard &guard, uint32_t stripes)
+{
+  const identity who = {0, 0, 0};
+  root = create_inode(guard, who, S_IFDIR, stripes);
+  assert(root);
+
+  // create the directory stripes
+  for (uint32_t i = 0; i < stripes; i++)
+    storage->get_or_create_dir(guard, volume->get_uuid(), root->ino(), i);
+  return root;
+}
+
 InodeRef Cache::create_inode(const mcas::gc_guard &guard,
                              const identity &who, int type, uint32_t stripes)
 {

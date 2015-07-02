@@ -43,13 +43,7 @@ int Volume::mkfs(const mcas::gc_global &gc, const mcas::gc_guard &guard,
                                      conf->mds_cache_lowwater));
 
   // create the root directory inode
-  const identity who = {0, 0, 0};
-  auto root = c->create_inode(guard, who, S_IFDIR, conf->mds_dir_stripes);
-  assert(root);
-
-  // create the directory stripes
-  for (int i = 0; i < conf->mds_dir_stripes; i++)
-    storage->get_or_create_dir(guard, uuid, root->ino(), i);
+  c->create_root(guard, conf->mds_dir_stripes);
 
   std::swap(c, cache);
   return 0;

@@ -69,6 +69,7 @@ class MDS : public Dispatcher {
   void handle_signal(int signum);
 
   // for libmds
+  int get_root(volume_t volume, ino_t *ino);
   int create(const fileid_t *parent, const std::string &name,
              const identity &who, int type);
   int link(const fileid_t *parent, const std::string &name, ino_t ino);

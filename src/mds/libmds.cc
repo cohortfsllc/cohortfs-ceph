@@ -82,6 +82,7 @@ public:
   void shutdown();
   void signal(int signum);
 
+  int get_root(libmds_volume_t volume, libmds_ino_t *ino);
   int create(const libmds_fileid_t *parent, const char *name);
   int mkdir(const libmds_fileid_t *parent, const char *name);
   int link(const libmds_fileid_t *parent, const char *name, libmds_ino_t ino);
@@ -168,6 +169,11 @@ void LibMDS::shutdown()
 void LibMDS::signal(int signum)
 {
   mds->handle_signal(signum);
+}
+
+int LibMDS::get_root(libmds_volume_t volume, libmds_ino_t *ino)
+{
+  return mds->get_root(volume, ino);
 }
 
 int LibMDS::create(const libmds_fileid_t *parent, const char *name)
@@ -338,6 +344,18 @@ void libmds_signal(int signum)
       CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds.second)->cct;
       lderr(cct) << "libmds_signal caught exception " << e.what() << dendl;
     }
+  }
+}
+
+int libmds_get_root(struct libmds *mds, libmds_volume_t volume,
+                    libmds_ino_t *ino)
+{
+  try {
+    return mds->get_root(volume, ino);
+  } catch (std::exception &e) {
+    CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
+    lderr(cct) << "libmds_get_root caught exception " << e.what() << dendl;
+    return -EFAULT;
   }
 }
 

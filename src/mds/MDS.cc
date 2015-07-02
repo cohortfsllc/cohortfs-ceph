@@ -109,6 +109,18 @@ uint32_t MDS::pick_dir_stripe(const std::string &name) const
   return hash % cct->_conf->mds_dir_stripes;
 }
 
+int MDS::get_root(volume_t volume, ino_t *ino)
+{
+  mcas::gc_guard guard(gc);
+
+  auto vol = get_volume(guard, volume);
+  if (!vol)
+    return -ENODEV;
+
+  *ino = vol->cache->get_root()->ino();
+  return 0;
+}
+
 int MDS::create(const fileid_t *parent, const std::string &name,
                 const identity &who, int type)
 {

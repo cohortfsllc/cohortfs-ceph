@@ -41,6 +41,9 @@ class Cache {
 
   const Volume* get_volume() const { return volume; }
 
+  InodeRef create_root(const mcas::gc_guard &guard, uint32_t stripes);
+  const InodeRef& get_root() const { return root; }
+
   InodeRef create_inode(const mcas::gc_guard &guard, const identity &who,
                         int type, uint32_t stripes = 0);
   InodeRef get_inode(const mcas::gc_guard &guard, ino_t ino);
