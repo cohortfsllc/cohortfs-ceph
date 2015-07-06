@@ -5,7 +5,7 @@
 #define COHORT_MDS_DENTRY_H
 
 #include "common/mcas_skiplist.h"
-#include "mds/ceph_mds.h"
+#include "mds_types.h"
 
 namespace cohort {
 namespace mds {

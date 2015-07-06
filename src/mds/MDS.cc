@@ -384,7 +384,7 @@ int MDS::readdir(const fileid_t &dir, uint64_t pos, uint64_t gen,
   return successes ? 0 : r;
 }
 
-int MDS::getattr(const fileid_t &file, int mask, ObjAttr &attr)
+int MDS::getattr(const fileid_t &file, ObjAttr &attr)
 {
   mcas::gc_guard guard(gc);
 
@@ -397,7 +397,7 @@ int MDS::getattr(const fileid_t &file, int mask, ObjAttr &attr)
   if (!inode)
     return -ENOENT;
 
-  return inode->getattr(mask, attr);
+  return inode->getattr(attr);
 }
 
 int MDS::setattr(const fileid_t &file, int mask, const ObjAttr &attr)

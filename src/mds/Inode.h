@@ -62,14 +62,14 @@ class Inode : public mcas::skiplist_object {
   bool is_valid() const       { return state == STATE_VALID; }
   bool is_nonexistent() const { return state == STATE_NONEXISTENT; }
 
-  // attr.type is immutable, so we don't need to lock these
-  bool is_reg() const { return S_ISREG(inode->attr.type); }
-  bool is_dir() const { return S_ISDIR(inode->attr.type); }
+  // type is immutable, so we don't need to lock these
+  bool is_reg() const { return S_ISREG(inode->attr.mode); }
+  bool is_dir() const { return S_ISDIR(inode->attr.mode); }
   uint32_t get_stripes() const { return inode->stripes; }
 
   int adjust_nlinks(int n) { return inode->attr.nlinks += n; }
 
-  int getattr(int mask, ObjAttr &attrs) const;
+  int getattr(ObjAttr &attrs) const;
   int setattr(int mask, const ObjAttr &attrs);
 
   // storage

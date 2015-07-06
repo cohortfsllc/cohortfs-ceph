@@ -27,12 +27,11 @@ struct InodeStorage : public mcas::skiplist_object {
     : volume(volume), ino(ino), stripes(stripes)
   {
     attr.filesize = 0;
-    attr.mode = mode & ~S_IFMT;
+    attr.mode = mode;
     attr.user = who.uid;
     attr.group = who.gid;
     attr.atime = attr.mtime = attr.ctime = ceph::real_clock::now();
     attr.nlinks = 1;
-    attr.type = mode & S_IFMT;
     attr.rawdev = 0;
   }
 

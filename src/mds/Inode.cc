@@ -8,32 +8,36 @@
 
 using namespace cohort::mds;
 
-static void copy_attrs(int mask, ObjAttr &to, const ObjAttr &from)
+int Inode::getattr(ObjAttr &attrs) const
 {
-  if (mask & ATTR_SIZE) to.filesize = from.filesize;
-  if (mask & ATTR_MODE) to.mode = from.mode;
-  if (mask & ATTR_GROUP) to.group = from.group;
-  if (mask & ATTR_OWNER) to.user = from.user;
-  if (mask & ATTR_ATIME) to.atime = from.atime;
-  if (mask & ATTR_MTIME) to.mtime = from.mtime;
-  if (mask & ATTR_CTIME) to.ctime = from.ctime;
-  if (mask & ATTR_NLINKS) to.nlinks = from.nlinks;
-  if (mask & ATTR_TYPE) to.type = from.type;
-  if (mask & ATTR_RAWDEV) to.rawdev = from.rawdev;
-}
-
-int Inode::getattr(int mask, ObjAttr &attrs) const
-{
-  copy_attrs(mask, attrs, inode->attr);
+  attrs.filesize = inode->attr.filesize;
+  attrs.mode = inode->attr.mode;
+  attrs.group = inode->attr.group;
+  attrs.user = inode->attr.user;
+  attrs.atime = inode->attr.atime;
+  attrs.mtime = inode->attr.mtime;
+  attrs.ctime = inode->attr.ctime;
+  attrs.nlinks = inode->attr.nlinks;
+  attrs.rawdev = inode->attr.rawdev;
   return 0;
 }
 
 int Inode::setattr(int mask, const ObjAttr &attrs)
 {
-  if (mask & ATTR_TYPE) // can't change type with setattr
-    return -EINVAL;
-
-  copy_attrs(mask, inode->attr, attrs);
+  if (mask & LIBMDS_ATTR_SIZE)
+    inode->attr.filesize = attrs.filesize;
+  if (mask & LIBMDS_ATTR_MODE) // preserve file type
+    inode->attr.mode = (inode->attr.mode & S_IFMT) | (attrs.mode & ~S_IFMT);
+  if (mask & LIBMDS_ATTR_GROUP)
+    inode->attr.group = attrs.group;
+  if (mask & LIBMDS_ATTR_OWNER)
+    inode->attr.user = attrs.user;
+  if (mask & LIBMDS_ATTR_ATIME)
+    inode->attr.atime = attrs.atime;
+  if (mask & LIBMDS_ATTR_MTIME)
+    inode->attr.mtime = attrs.mtime;
+  if (mask & LIBMDS_ATTR_CTIME)
+    inode->attr.ctime = attrs.ctime;
   return 0;
 }
 

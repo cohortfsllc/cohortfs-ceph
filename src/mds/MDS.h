@@ -79,7 +79,7 @@ class MDS : public Dispatcher {
   int lookup(const fileid_t &parent, const std::string &name, ino_t *ino);
   int readdir(const fileid_t &dir, uint64_t pos, uint64_t gen,
               libmds_readdir_fn cb, void *user);
-  int getattr(const fileid_t &file, int mask, ObjAttr &attr);
+  int getattr(const fileid_t &file, ObjAttr &attr);
   int setattr(const fileid_t &file, int mask, const ObjAttr &attr);
 
   // void handle_mds_beacon(MMDSBeacon *m);

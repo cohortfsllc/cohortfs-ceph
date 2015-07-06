@@ -31,6 +31,15 @@ typedef struct libmds_identity {
   int gid;
 } libmds_identity_t;
 
+/* attribute mask for libmds_setattr() */
+#define LIBMDS_ATTR_SIZE  0x01
+#define LIBMDS_ATTR_MODE  0x02
+#define LIBMDS_ATTR_OWNER 0x04
+#define LIBMDS_ATTR_GROUP 0x08
+#define LIBMDS_ATTR_MTIME 0x10
+#define LIBMDS_ATTR_ATIME 0x20
+#define LIBMDS_ATTR_CTIME 0x40
+
 /**
  * Callback for libmds_readdir, containing a single directory entry.
  *
@@ -149,13 +158,14 @@ struct libmds {
    * Query the attributes of a file.
    * @see libmds_getattr()
    */
-  virtual int getattr(const libmds_fileid_t *ino, struct stat *st) = 0;
+  virtual int getattr(const libmds_fileid_t *file, struct stat *st) = 0;
 
   /**
    * Set the attributes of a file.
    * @see libmds_setattr()
    */
-  virtual int setattr(const libmds_fileid_t *ino, const struct stat *st) = 0;
+  virtual int setattr(const libmds_fileid_t *file, int mask,
+                      const struct stat *st) = 0;
 
  protected:
   /** Destructor protected: must be deleted by libmds_cleanup() */
@@ -418,6 +428,7 @@ extern "C" {
    *
    * @param mds   The libmds object returned by libmds_init()
    * @param file  Fileid of the file
+   * @param mask  Bitmask of LIBMDS_ATTR_ values to set
    * @param st    Pointer to the attributes to set
    *
    * @return Returns 0 on success or a negative error code.
@@ -425,7 +436,7 @@ extern "C" {
    * @retval -ENOENT if the given file does not exist.
    */
   int libmds_setattr(struct libmds *mds, const libmds_fileid_t *file,
-                     const struct stat *st);
+                     int mask, const struct stat *st);
 
 #ifdef __cplusplus
 } /* extern "C" */

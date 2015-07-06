@@ -103,7 +103,7 @@ public:
               libmds_readdir_fn cb, void *user);
 
   int getattr(const libmds_fileid_t *file, struct stat *st);
-  int setattr(const libmds_fileid_t *file, const struct stat *st);
+  int setattr(const libmds_fileid_t *file, int mask, const struct stat *st);
 };
 
 
@@ -243,40 +243,29 @@ int LibMDS::readdir(const libmds_fileid_t *dir, uint64_t pos, uint64_t gen,
 
 int LibMDS::getattr(const libmds_fileid_t *file, struct stat *st)
 {
-  const int mask = ATTR_SIZE | ATTR_MODE |
-      ATTR_GROUP | ATTR_OWNER |
-      ATTR_ATIME | ATTR_MTIME | ATTR_CTIME |
-      ATTR_NLINKS | ATTR_TYPE | ATTR_RAWDEV;
-
   ObjAttr attr;
-  int r = mds->getattr(*file, mask, attr);
+  int r = mds->getattr(*file, attr);
   if (r == 0) {
-    st->st_mode = attr.mode | attr.type;
-    st->st_nlink = attr.nlinks;
+    st->st_mode = attr.mode;
     st->st_uid = attr.user;
     st->st_gid = attr.group;
-    st->st_rdev = attr.rawdev;
     st->st_size = attr.filesize;
     st->st_atime = ceph::real_clock::to_time_t(attr.atime);
     st->st_mtime = ceph::real_clock::to_time_t(attr.mtime);
     st->st_ctime = ceph::real_clock::to_time_t(attr.ctime);
+    st->st_nlink = attr.nlinks;
+    st->st_rdev = attr.rawdev;
   }
   return r;
 }
 
-int LibMDS::setattr(const libmds_fileid_t *file, const struct stat *st)
+int LibMDS::setattr(const libmds_fileid_t *file, int mask,
+                    const struct stat *st)
 {
-  const int mask = ATTR_MODE | ATTR_GROUP | ATTR_OWNER |
-      ATTR_ATIME | ATTR_MTIME | ATTR_CTIME |
-      ATTR_NLINKS | ATTR_TYPE | ATTR_RAWDEV;
-
   ObjAttr attr;
-  attr.mode = st->st_mode & ~S_IFMT;
-  attr.type = st->st_mode & S_IFMT;
-  attr.nlinks = st->st_nlink;
+  attr.mode = st->st_mode;
   attr.user = st->st_uid;
   attr.group = st->st_gid;
-  attr.rawdev = st->st_rdev;
   attr.filesize = st->st_size;
   attr.atime = ceph::real_clock::from_time_t(st->st_atime);
   attr.mtime = ceph::real_clock::from_time_t(st->st_mtime);
@@ -510,10 +499,10 @@ int libmds_getattr(struct libmds *mds, const libmds_fileid_t *file,
 }
 
 int libmds_setattr(struct libmds *mds, const libmds_fileid_t *file,
-                   const struct stat *st)
+                   int mask, const struct stat *st)
 {
   try {
-    return mds->setattr(file, st);
+    return mds->setattr(file, mask, st);
   } catch (std::exception &e) {
     CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
     lderr(cct) << "libmds_setattr caught exception " << e.what() << dendl;
