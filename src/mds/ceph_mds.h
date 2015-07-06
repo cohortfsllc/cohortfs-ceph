@@ -139,7 +139,8 @@ struct libmds {
    * Unlink the given file from the parent directory.
    * @see libmds_unlink()
    */
-  virtual int unlink(const libmds_fileid_t *parent, const char *name) = 0;
+  virtual int unlink(const libmds_fileid_t *parent, const char *name,
+                     const libmds_identity_t *who) = 0;
 
   /**
    * Find an entry in the parent directory.
@@ -366,6 +367,7 @@ extern "C" {
    * @param mds     The libmds object returned by libmds_init()
    * @param parent  Fileid of the parent directory
    * @param name    Filename of the directory entry to remove
+   * @param who     User identity
    *
    * @return Returns 0 on success, or a negative error code.
    * @retval -ENODEV if the parent volume does not exist.
@@ -374,7 +376,7 @@ extern "C" {
    * @retval -ENOTEMPTY if the entry is a non-empty directory.
    */
   int libmds_unlink(struct libmds *mds, const libmds_fileid_t *parent,
-                    const char *name);
+                    const char *name, const libmds_identity_t *who);
 
   /**
    * Find an entry in the parent directory.

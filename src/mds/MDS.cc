@@ -283,7 +283,8 @@ int MDS::rename(const fileid_t &src_parent, const std::string &src_name,
   return r;
 }
 
-int MDS::unlink(const fileid_t &parent, const std::string &name)
+int MDS::unlink(const fileid_t &parent, const std::string &name,
+                const identity_t &who)
 {
   mcas::gc_guard guard(gc);
 

@@ -36,17 +36,17 @@ static int test_unlink_notempty(struct libmds *mds, const libmds_fileid_t *root)
     fprintf(stderr, "libmds_create(\"file\") failed with %d\n", r);
     return r;
   }
-  r = libmds_unlink(mds, root, "dir");
+  r = libmds_unlink(mds, root, "dir", &who);
   if (r != -ENOTEMPTY) {
     fprintf(stderr, "libmds_unlink(\"dir\") returned %d, expected -ENOTEMPTY\n", r);
     return -ENOTEMPTY;
   }
-  r = libmds_unlink(mds, &dir, "file");
+  r = libmds_unlink(mds, &dir, "file", &who);
   if (r) {
     fprintf(stderr, "libmds_unlink(\"file\") failed with %d\n", r);
     return r;
   }
-  r = libmds_unlink(mds, root, "dir");
+  r = libmds_unlink(mds, root, "dir", &who);
   if (r) {
     fprintf(stderr, "libmds_unlink(\"dir\") failed with %d\n", r);
     return r;

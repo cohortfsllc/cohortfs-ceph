@@ -98,7 +98,8 @@ public:
   int rename(const libmds_fileid_t *parent1, const char *name1,
              const libmds_fileid_t *parent2, const char *name2,
              const libmds_identity_t *who);
-  int unlink(const libmds_fileid_t *parent, const char *name);
+  int unlink(const libmds_fileid_t *parent, const char *name,
+             const libmds_identity_t *who);
   int lookup(const libmds_fileid_t *parent, const char *name,
              libmds_ino_t *ino);
   int readdir(const libmds_fileid_t *dir, uint64_t pos, uint64_t gen,
@@ -240,9 +241,10 @@ int LibMDS::rename(const libmds_fileid_t *src_parent, const char *src_name,
   return mds->rename(*src_parent, src_name, *dst_parent, dst_name, *who);
 }
 
-int LibMDS::unlink(const libmds_fileid_t *parent, const char *name)
+int LibMDS::unlink(const libmds_fileid_t *parent, const char *name,
+                   const libmds_identity_t *who)
 {
-  return mds->unlink(*parent, name);
+  return mds->unlink(*parent, name, *who);
 }
 
 int LibMDS::lookup(const libmds_fileid_t *parent, const char *name,
@@ -467,10 +469,10 @@ int libmds_rename(struct libmds *mds,
 }
 
 int libmds_unlink(struct libmds *mds, const libmds_fileid_t *parent,
-                  const char *name)
+                  const char *name, const libmds_identity_t *who)
 {
   try {
-    return mds->unlink(parent, name);
+    return mds->unlink(parent, name, who);
   } catch (std::exception &e) {
     CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
     lderr(cct) << "libmds_unlink caught exception " << e.what() << dendl;

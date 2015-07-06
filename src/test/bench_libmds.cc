@@ -227,11 +227,12 @@ int bench_lookup(libmds *mds, const libmds_fileid_t *dir,
 
 int unlink_thread(libmds *mds, const libmds_fileid_t *dir, int start, int end)
 {
+  libmds_identity_t who = {};
   for (int i = start; i < end; i++) {
     char name[16];
     snprintf(name, sizeof(name), "file.%d", i);
 
-    int r = libmds_unlink(mds, dir, name);
+    int r = libmds_unlink(mds, dir, name, &who);
     if (r) {
       std::cerr << "libmds_unlink(\"" << name << "\") failed with "
           << r << std::endl;
