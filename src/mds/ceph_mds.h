@@ -104,6 +104,21 @@ struct libmds {
                    libmds_ino_t ino) = 0;
 
   /**
+   * Create a symbolic link in the parent directory.
+   * @see libmds_symlink()
+   */
+  virtual int symlink(const libmds_fileid_t *parent, const char *name,
+                      const char *target, const libmds_identity_t *who,
+                      libmds_ino_t *ino, struct stat *st) = 0;
+
+  /**
+   * Read the contents of a symbolic link.
+   * @see libmds_readlink()
+   */
+  virtual int readlink(const libmds_fileid_t *parent,
+                       char *buf, int buf_len) = 0;
+
+  /**
    * Rename a directory entry.
    * @see libmds_rename()
    */
@@ -277,6 +292,42 @@ extern "C" {
                   const char *name, libmds_ino_t ino);
 
   /**
+   * Create a symbolic link in the parent directory.
+   *
+   * @param mds       The libmds object returned by libmds_init()
+   * @param parent    Fileid of the parent directory
+   * @param name      Filename of the new directory entry
+   * @param target    Path of the target to link
+   * @param who       User identity
+   * @param[out] ino  Inode number of the created file
+   * @param[out] st   Attributes of the created file
+   *
+   * @return Returns 0 on success, or a negative error code.
+   * @retval -ENODEV if the parent volume does not exist.
+   * @retval -ENOENT if the parent does not exist.
+   * @retval -EEXIST if the parent directory already has an entry with \a name.
+   */
+  int libmds_symlink(struct libmds *mds, const libmds_fileid_t *parent,
+                     const char *name, const char *target,
+                     const libmds_identity_t *who, libmds_ino_t *ino,
+                     struct stat *st);
+
+  /**
+   * Read the contents of a symbolic link.
+   *
+   * @param mds       The libmds object returned by libmds_init()
+   * @param file      Fileid of the symbolic link
+   * @param[out] buf  Buffer to receive the link contents
+   * @param buf_len   Length of the provided buffer
+   *
+   * @return Returns number of bytes copied on success, or a negative error code.
+   * @retval -ENODEV if the volume does not exist.
+   * @retval -ENOENT if the given file does not exist.
+   */
+  int libmds_readlink(struct libmds *mds, const libmds_fileid_t *parent,
+                      char *buf, int buf_len);
+
+  /**
    * Rename a directory entry.
    *
    * @param mds         The libmds object returned by libmds_init()
@@ -357,7 +408,7 @@ extern "C" {
    *
    * @return Returns 0 on success or a negative error code.
    * @retval -ENODEV if the volume does not exist.
-   * @retval -ENOENT if a file with inode number \a ino does not exist.
+   * @retval -ENOENT if the given file does not exist.
    */
   int libmds_getattr(struct libmds *mds, const libmds_fileid_t *file,
                      struct stat *st);
@@ -371,7 +422,7 @@ extern "C" {
    *
    * @return Returns 0 on success or a negative error code.
    * @retval -ENODEV if the volume does not exist.
-   * @retval -ENOENT if a file with inode number \a ino does not exist.
+   * @retval -ENOENT if the given file does not exist.
    */
   int libmds_setattr(struct libmds *mds, const libmds_fileid_t *file,
                      const struct stat *st);

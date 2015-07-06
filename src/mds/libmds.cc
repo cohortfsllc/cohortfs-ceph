@@ -90,6 +90,10 @@ public:
             int mode, const libmds_identity_t *who,
             libmds_ino_t *ino, struct stat *st);
   int link(const libmds_fileid_t *parent, const char *name, libmds_ino_t ino);
+  int symlink(const libmds_fileid_t *parent, const char *name,
+              const char *target, const libmds_identity_t *who,
+              libmds_ino_t *ino, struct stat *st);
+  int readlink(const libmds_fileid_t *parent, char *buf, int buf_len);
   int rename(const libmds_fileid_t *parent1, const char *name1,
              const libmds_fileid_t *parent2, const char *name2);
   int unlink(const libmds_fileid_t *parent, const char *name);
@@ -200,6 +204,18 @@ int LibMDS::link(const libmds_fileid_t *parent, const char *name,
                  libmds_ino_t ino)
 {
   return mds->link(*parent, name, ino);
+}
+
+int LibMDS::symlink(const libmds_fileid_t *parent, const char *name,
+                    const char *target, const libmds_identity_t *who,
+                    libmds_ino_t *ino, struct stat *st)
+{
+  return -ENOTSUP;
+}
+
+int LibMDS::readlink(const libmds_fileid_t *parent, char *buf, int buf_len)
+{
+  return -ENOTSUP;
 }
 
 int LibMDS::rename(const libmds_fileid_t *src_parent, const char *src_name,
@@ -401,6 +417,32 @@ int libmds_link(struct libmds *mds, const libmds_fileid_t *parent,
   } catch (std::exception &e) {
     CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
     lderr(cct) << "libmds_link caught exception " << e.what() << dendl;
+    return -EFAULT;
+  }
+}
+
+int libmds_symlink(struct libmds *mds, const libmds_fileid_t *parent,
+                   const char *name, const char *target,
+                   const libmds_identity_t *who, libmds_ino_t *ino,
+                   struct stat *st)
+{
+  try {
+    return mds->symlink(parent, name, target, who, ino, st);
+  } catch (std::exception &e) {
+    CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
+    lderr(cct) << "libmds_symlink caught exception " << e.what() << dendl;
+    return -EFAULT;
+  }
+}
+
+int libmds_readlink(struct libmds *mds, const libmds_fileid_t *parent,
+                    char *buf, int buf_len)
+{
+  try {
+    return mds->readlink(parent, buf, buf_len);
+  } catch (std::exception &e) {
+    CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
+    lderr(cct) << "libmds_readlink caught exception " << e.what() << dendl;
     return -EFAULT;
   }
 }
