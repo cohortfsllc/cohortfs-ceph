@@ -31,6 +31,8 @@ typedef struct libmds_identity {
   int gid;
 } libmds_identity_t;
 
+struct libmds_open_state;
+
 /* attribute mask for libmds_setattr() */
 #define LIBMDS_ATTR_SIZE  0x01
 #define LIBMDS_ATTR_MODE  0x02
@@ -168,6 +170,40 @@ struct libmds {
    */
   virtual int setattr(const libmds_fileid_t *file, int mask,
                       const struct stat *st) = 0;
+
+  /**
+   * Open a file.
+   * @see libmds_open()
+   */
+  virtual int open(const libmds_fileid_t *file, int flags,
+                   struct libmds_open_state **state) = 0;
+
+  /**
+   * Close a file.
+   * @see libmds_close()
+   */
+  virtual int close(struct libmds_open_state *state) = 0;
+
+  /**
+   * Read from an open file.
+   * @see libmds_read()
+   */
+  virtual ssize_t read(struct libmds_open_state *state, size_t offset,
+                       char *buf, size_t buf_len) = 0;
+
+  /**
+   * Write to an open file.
+   * @see libmds_write()
+   */
+  virtual ssize_t write(struct libmds_open_state *state, size_t offset,
+                        const char *buf, size_t buf_len) = 0;
+
+  /**
+   * Commit written data to stable storage.
+   * @see libmds_commit()
+   */
+  virtual int commit(struct libmds_open_state *state,
+                     uint64_t offset, size_t len) = 0;
 
  protected:
   /** Destructor protected: must be deleted by libmds_cleanup() */
@@ -333,12 +369,12 @@ extern "C" {
    * @param[out] buf  Buffer to receive the link contents
    * @param buf_len   Length of the provided buffer
    *
-   * @return Returns number of bytes copied on success, or a negative error code.
+   * @return Returns bytes copied on success, or a negative error code.
    * @retval -ENODEV if the volume does not exist.
    * @retval -ENOENT if the given file does not exist.
    */
   int libmds_readlink(struct libmds *mds, const libmds_fileid_t *parent,
-                      char *buf, int buf_len);
+                      char *buf, size_t buf_len);
 
   /**
    * Rename a directory entry.
@@ -443,6 +479,86 @@ extern "C" {
    */
   int libmds_setattr(struct libmds *mds, const libmds_fileid_t *file,
                      int mask, const struct stat *st);
+
+  /**
+   * Open a file.
+   *
+   * Generates an open state handle which can be provided to \a libmds_read(),
+   * \a libmds_write(), and \a libmds_commit(). The handle is destroyed by
+   * \a libmds_close().
+   *
+   * @param mds         The libmds object returned by libmds_init()
+   * @param file        Fileid of the file
+   * @param flags       Access flag (O_RDWR, O_RDONLY, or O_WRONLY)
+   * @param who         User identity
+   * @param[out] state  Resulting handle to the open state
+   *
+   * @return Returns 0 on success or a negative error code.
+   * @retval -ENODEV if the volume does not exist.
+   * @retval -ENOENT if the given file does not exist.
+   * @retval -EISDIR if the given file is a directory.
+   */
+  int libmds_open(struct libmds *mds, const libmds_fileid_t *file,
+                  int flags, const libmds_identity_t *who,
+                  struct libmds_open_state **state);
+
+  /**
+   * Close a file.
+   *
+   * Destroys the provided open state handle, making it invalid to use in
+   * further calls to \a libmds_read(), \a libmds_write(), \a libmds_commit(),
+   * and \a libmds_close().
+   *
+   * @param mds    The libmds object returned by libmds_init()
+   * @param state  Handle to the open state from libmds_open()
+   *
+   * @return Returns 0 on success or a negative error code.
+   */
+  int libmds_close(struct libmds *mds, struct libmds_open_state *state);
+
+  /**
+   * Read from an open file.
+   *
+   * @param mds       The libmds object returned by libmds_init()
+   * @param state     Handle to the open state from libmds_open()
+   * @param offset    File offset to begin reading
+   * @param[out] buf  Buffer to receive the file contents
+   * @param buf_len   Length of the provided buffer
+   *
+   * @return Returns bytes read on success or a negative error code.
+   * @retval -EBADF if the given open was for O_WRONLY.
+   */
+  ssize_t libmds_read(struct libmds *mds, struct libmds_open_state *state,
+                      uint64_t offset, char *buf, size_t buf_len);
+
+  /**
+   * Write to an open file.
+   *
+   * @param mds     The libmds object returned by libmds_init()
+   * @param state   Handle to the open state from libmds_open()
+   * @param offset  File offset to begin writing
+   * @param buf     Buffer to write
+   * @param buf_len Length of the provided buffer
+   *
+   * @return Returns bytes written on success or a negative error code.
+   * @retval -EBADF if the given open was for O_RDONLY.
+   */
+  ssize_t libmds_write(struct libmds *mds, struct libmds_open_state *state,
+                       uint64_t offset, const char *buf, size_t buf_len);
+
+  /**
+   * Commit written data to stable storage.
+   *
+   * @param mds     The libmds object returned by libmds_init()
+   * @param state   Handle to the open state from libmds_open()
+   * @param offset  File offset to begin committing
+   * @param len     Number of bytes in the range to be committed
+   *
+   * @return Returns 0 on success or a negative error code.
+   * @retval -EBADF if the given open was for O_RDONLY.
+   */
+  int libmds_commit(struct libmds *mds, struct libmds_open_state *state,
+                    uint64_t offset, size_t len);
 
 #ifdef __cplusplus
 } /* extern "C" */

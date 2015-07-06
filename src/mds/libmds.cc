@@ -107,6 +107,15 @@ public:
 
   int getattr(const libmds_fileid_t *file, struct stat *st);
   int setattr(const libmds_fileid_t *file, int mask, const struct stat *st);
+
+  int open(const libmds_fileid_t *file, int flags,
+           struct libmds_open_state **state);
+  int close(struct libmds_open_state *state);
+  ssize_t read(struct libmds_open_state *state, size_t offset,
+               char *buf, size_t buf_len);
+  ssize_t write(struct libmds_open_state *state, size_t offset,
+                const char *buf, size_t buf_len);
+  int commit(struct libmds_open_state *state, uint64_t offset, size_t len);
 };
 
 
@@ -290,6 +299,34 @@ int LibMDS::setattr(const libmds_fileid_t *file, int mask,
   attr.ctime = ceph::real_clock::from_time_t(st->st_ctime);
 
   return mds->setattr(*file, mask, attr);
+}
+
+int LibMDS::open(const libmds_fileid_t *file, int flags,
+                 struct libmds_open_state **state)
+{
+  return -ENOTSUP;
+}
+
+int LibMDS::close(struct libmds_open_state *state)
+{
+  return -ENOTSUP;
+}
+
+ssize_t LibMDS::read(struct libmds_open_state *state, size_t offset,
+                     char *buf, size_t buf_len)
+{
+  return -ENOTSUP;
+}
+
+ssize_t LibMDS::write(struct libmds_open_state *state, size_t offset,
+                      const char *buf, size_t buf_len)
+{
+  return -ENOTSUP;
+}
+
+int LibMDS::commit(struct libmds_open_state *state, uint64_t offset, size_t len)
+{
+  return -ENOTSUP;
 }
 
 } // namespace mds
@@ -525,6 +562,65 @@ int libmds_setattr(struct libmds *mds, const libmds_fileid_t *file,
   } catch (std::exception &e) {
     CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
     lderr(cct) << "libmds_setattr caught exception " << e.what() << dendl;
+    return -EFAULT;
+  }
+}
+
+int libmds_open(struct libmds *mds, const libmds_fileid_t *file,
+                int flags, struct libmds_open_state **state)
+{
+  try {
+    return mds->open(file, flags, state);
+  } catch (std::exception &e) {
+    CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
+    lderr(cct) << "libmds_open caught exception " << e.what() << dendl;
+    return -EFAULT;
+  }
+}
+
+int libmds_close(struct libmds *mds, struct libmds_open_state *state)
+{
+  try {
+    return mds->close(state);
+  } catch (std::exception &e) {
+    CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
+    lderr(cct) << "libmds_close caught exception " << e.what() << dendl;
+    return -EFAULT;
+  }
+}
+
+ssize_t libmds_read(struct libmds *mds, struct libmds_open_state *state,
+                    size_t offset, char *buf, size_t buf_len)
+{
+  try {
+    return mds->read(state, offset, buf, buf_len);
+  } catch (std::exception &e) {
+    CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
+    lderr(cct) << "libmds_read caught exception " << e.what() << dendl;
+    return -EFAULT;
+  }
+}
+
+ssize_t libmds_write(struct libmds *mds, struct libmds_open_state *state,
+                     size_t offset, const char *buf, size_t buf_len)
+{
+  try {
+    return mds->write(state, offset, buf, buf_len);
+  } catch (std::exception &e) {
+    CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
+    lderr(cct) << "libmds_write caught exception " << e.what() << dendl;
+    return -EFAULT;
+  }
+}
+
+int libmds_commit(struct libmds *mds, struct libmds_open_state *state,
+                  uint64_t offset, size_t len)
+{
+  try {
+    return mds->commit(state, offset, len);
+  } catch (std::exception &e) {
+    CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
+    lderr(cct) << "libmds_commit caught exception " << e.what() << dendl;
     return -EFAULT;
   }
 }
