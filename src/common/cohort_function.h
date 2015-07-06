@@ -744,6 +744,7 @@ public:
 	return;
       } else if (!b && f) {
 	*this = std::move(f);
+	return;
       } else if (!b && !f) {
 	return;
       }
