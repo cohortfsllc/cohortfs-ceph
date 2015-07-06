@@ -185,7 +185,7 @@ namespace librbd {
 	throw std::error_condition(-r, std::generic_category());
       header_bl.claim_append(bl);
       off += r;
-    } while (r == volume->op_size());
+    } while ((uint32_t)r == volume->op_size());
 
     if (memcmp(header_text, header_bl.c_str(), sizeof(header_text))) {
       lderr(rc->cct) << "unrecognized header format" << dendl;

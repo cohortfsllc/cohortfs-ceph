@@ -563,7 +563,7 @@ int MemStore::collection_list_partial2(CollectionHandle ch,
 				       CLPCursor& cursor)
 {
   MemCollection* c = static_cast<MemCollection*>(ch);
-  if (cursor.partition >= c->obj_cache.n_part)
+  if (cursor.partition >= (uint32_t) c->obj_cache.n_part)
     return -EINVAL;
 
   ObjCache::iterator it;
@@ -571,7 +571,7 @@ int MemStore::collection_list_partial2(CollectionHandle ch,
 
   int fst = 1;
   int cnt = 0;
-  while (cursor.partition < c->obj_cache.n_part && cnt <= max) {
+  while (cursor.partition < (uint32_t) c->obj_cache.n_part && cnt <= max) {
     ObjCache::Partition& p = c->obj_cache.get(cursor.partition);
     ObjCache::unique_lock lk(p.lock);
     if (fst) {

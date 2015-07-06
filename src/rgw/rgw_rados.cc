@@ -821,14 +821,6 @@ void RGWObjManifest::get_implicit_location(uint64_t cur_part_id,
       oid += buf;
     }
   }
-
-  rgw_bucket *bucket;
-
-  if (!tail_bucket.name.empty()) {
-    bucket = &tail_bucket;
-  } else {
-    bucket = &head_obj.bucket;
-  }
 }
 
 RGWObjManifest::obj_iterator RGWObjManifest::obj_find(uint64_t ofs)
