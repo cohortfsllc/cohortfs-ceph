@@ -89,7 +89,8 @@ public:
   int mkdir(const libmds_fileid_t *parent, const char *name,
             int mode, const libmds_identity_t *who,
             libmds_ino_t *ino, struct stat *st);
-  int link(const libmds_fileid_t *parent, const char *name, libmds_ino_t ino);
+  int link(const libmds_fileid_t *parent, const char *name,
+           libmds_ino_t ino, struct stat *st);
   int symlink(const libmds_fileid_t *parent, const char *name,
               const char *target, const libmds_identity_t *who,
               libmds_ino_t *ino, struct stat *st);
@@ -201,9 +202,22 @@ int LibMDS::mkdir(const libmds_fileid_t *parent, const char *name,
 }
 
 int LibMDS::link(const libmds_fileid_t *parent, const char *name,
-                 libmds_ino_t ino)
+                 libmds_ino_t ino, struct stat *st)
 {
-  return mds->link(*parent, name, ino);
+  ObjAttr attr;
+  int r = mds->link(*parent, name, ino, attr);
+  if (r == 0) {
+    st->st_mode = attr.mode;
+    st->st_uid = attr.user;
+    st->st_gid = attr.group;
+    st->st_size = attr.filesize;
+    st->st_atime = ceph::real_clock::to_time_t(attr.atime);
+    st->st_mtime = ceph::real_clock::to_time_t(attr.mtime);
+    st->st_ctime = ceph::real_clock::to_time_t(attr.ctime);
+    st->st_nlink = attr.nlinks;
+    st->st_rdev = attr.rawdev;
+  }
+  return r;
 }
 
 int LibMDS::symlink(const libmds_fileid_t *parent, const char *name,
@@ -399,10 +413,10 @@ int libmds_mkdir(struct libmds *mds, const libmds_fileid_t *parent,
 }
 
 int libmds_link(struct libmds *mds, const libmds_fileid_t *parent,
-                const char *name, libmds_ino_t ino)
+                const char *name, libmds_ino_t ino, struct stat *st)
 {
   try {
-    return mds->link(parent, name, ino);
+    return mds->link(parent, name, ino, st);
   } catch (std::exception &e) {
     CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
     lderr(cct) << "libmds_link caught exception " << e.what() << dendl;

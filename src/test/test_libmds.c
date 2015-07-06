@@ -236,24 +236,19 @@ static int test_link_rename(struct libmds *mds, const libmds_fileid_t *root)
     return r;
   }
   // add a link
-  r = libmds_link(mds, root, "file.b", file.ino);
+  r = libmds_link(mds, root, "file.b", file.ino, &st);
   if (r) {
     fprintf(stderr, "libmds_link(\"file.b\") failed with %d\n", r);
     return r;
   }
   // confirm nlink is 2
-  r = libmds_getattr(mds, &file, &st);
-  if (r) {
-    fprintf(stderr, "libmds_getattr() failed with %d\n", r);
-    return r;
-  }
   if (st.st_nlink != 2) {
     fprintf(stderr, "nlink = %lu after libmds_link(), expected 2\n",
 	st.st_nlink);
     return -EINVAL;
   }
   // try adding a link on an existing entry
-  r = libmds_link(mds, root, "file.b", file.ino);
+  r = libmds_link(mds, root, "file.b", file.ino, &st);
   if (r != -EEXIST) {
     fprintf(stderr, "libmds_link(\"file.b\") returned %d, "
 	"expected -EEXIST\n", r);
@@ -267,11 +262,6 @@ static int test_link_rename(struct libmds *mds, const libmds_fileid_t *root)
     return r;
   }
   // confirm nlink is still 2
-  r = libmds_getattr(mds, &file, &st);
-  if (r) {
-    fprintf(stderr, "libmds_getattr() failed with %d\n", r);
-    return r;
-  }
   if (st.st_nlink != 2) {
     fprintf(stderr, "nlink = %lu after libmds_link(), expected 2\n",
 	st.st_nlink);

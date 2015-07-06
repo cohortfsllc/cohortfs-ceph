@@ -173,7 +173,8 @@ int MDS::create(const fileid_t &parent, const std::string &name,
   return r;
 }
 
-int MDS::link(const fileid_t &parent, const std::string &name, ino_t ino)
+int MDS::link(const fileid_t &parent, const std::string &name,
+              ino_t ino, ObjAttr &attr)
 {
   mcas::gc_guard guard(gc);
 
@@ -206,6 +207,7 @@ int MDS::link(const fileid_t &parent, const std::string &name, ino_t ino)
   int r = dir->link(name, ino);
   if (r == 0) {
     inode->adjust_nlinks(1);
+    inode->getattr(attr);
     dn->link(ino);
   }
   return r;

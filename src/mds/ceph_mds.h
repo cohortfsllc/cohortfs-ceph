@@ -110,7 +110,7 @@ struct libmds {
    * @see libmds_link()
    */
   virtual int link(const libmds_fileid_t *parent, const char *name,
-                   libmds_ino_t ino) = 0;
+                   libmds_ino_t ino, struct stat *st) = 0;
 
   /**
    * Create a symbolic link in the parent directory.
@@ -292,6 +292,7 @@ extern "C" {
    * @param parent  Fileid of the parent directory
    * @param name    Filename of the new directory entry
    * @param ino     Inode number of the file to link
+   * @param[out] st New attributes of the file
    *
    * @return Returns 0 on success, or a negative error code.
    * @retval -ENODEV if the parent volume does not exist.
@@ -299,7 +300,7 @@ extern "C" {
    * @retval -EEXIST if the parent directory already has an entry with \a name.
    */
   int libmds_link(struct libmds *mds, const libmds_fileid_t *parent,
-                  const char *name, libmds_ino_t ino);
+                  const char *name, libmds_ino_t ino, struct stat *st);
 
   /**
    * Create a symbolic link in the parent directory.
