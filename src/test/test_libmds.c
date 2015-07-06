@@ -206,7 +206,7 @@ static int test_volumes(struct libmds *mds)
     return -ENOENT;
   }
   // make sure rename won't work across volumes
-  r = libmds_rename(mds, &roota, "vola", &rootb, "volb");
+  r = libmds_rename(mds, &roota, "vola", &rootb, "volb", &who);
   if (r != -EXDEV) {
     fprintf(stderr, "libmds_rename(\"vola\", \"volb\") returned %d, "
 	"expected -EXDEV\n", r);
@@ -255,7 +255,7 @@ static int test_link_rename(struct libmds *mds, const libmds_fileid_t *root)
     return -EEXIST;
   }
   // rename an entry within the directory
-  r = libmds_rename(mds, root, "file.a", root, "newfile.a");
+  r = libmds_rename(mds, root, "file.a", root, "newfile.a", &who);
   if (r) {
     fprintf(stderr, "libmds_rename(\"file.a\", \"newfile.a\") failed "
 	"with %d\n", r);
@@ -268,7 +268,7 @@ static int test_link_rename(struct libmds *mds, const libmds_fileid_t *root)
     return -EINVAL;
   }
   // rename an entry into the other directory
-  r = libmds_rename(mds, root, "file.b", &dir, "newfile.b");
+  r = libmds_rename(mds, root, "file.b", &dir, "newfile.b", &who);
   if (r) {
     fprintf(stderr, "libmds_rename(\"file.b\", \"newfile.b\") failed "
 	"with %d\n", r);

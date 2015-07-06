@@ -132,7 +132,8 @@ struct libmds {
    * @see libmds_rename()
    */
   virtual int rename(const libmds_fileid_t *srcp, const char *src_name,
-                     const libmds_fileid_t *dstp, const char *dst_name) = 0;
+                     const libmds_fileid_t *dstp, const char *dst_name,
+                     const libmds_identity_t *who) = 0;
 
   /**
    * Unlink the given file from the parent directory.
@@ -346,6 +347,7 @@ extern "C" {
    * @param src_name    Filename of the initial directory entry
    * @param dst_parent  Fileid of the destination parent directory
    * @param dst_name    Filename of the destination directory entry
+   * @param who         User identity
    *
    * @return Returns 0 on success, or a negative error code.
    * @retval -ENODEV if either parent volume does not exist.
@@ -355,7 +357,8 @@ extern "C" {
    */
   int libmds_rename(struct libmds *mds,
                     const libmds_fileid_t *src_parent, const char *src_name,
-                    const libmds_fileid_t *dst_parent, const char *dst_name);
+                    const libmds_fileid_t *dst_parent, const char *dst_name,
+                    const libmds_identity_t *who);
 
   /**
    * Unlink the given file from the parent directory.

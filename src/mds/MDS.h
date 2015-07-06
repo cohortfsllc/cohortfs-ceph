@@ -75,7 +75,8 @@ class MDS : public Dispatcher {
   int link(const fileid_t &parent, const std::string &name,
            ino_t ino, ObjAttr &attr);
   int rename(const fileid_t &src_parent, const std::string &src_name,
-             const fileid_t &dst_parent, const std::string &dst_name);
+             const fileid_t &dst_parent, const std::string &dst_name,
+             const identity_t &who);
   int unlink(const fileid_t &parent, const std::string &name);
   int lookup(const fileid_t &parent, const std::string &name, ino_t *ino);
   int readdir(const fileid_t &dir, uint64_t pos, uint64_t gen,

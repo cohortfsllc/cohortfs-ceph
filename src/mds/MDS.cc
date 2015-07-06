@@ -214,7 +214,8 @@ int MDS::link(const fileid_t &parent, const std::string &name,
 }
 
 int MDS::rename(const fileid_t &src_parent, const std::string &src_name,
-                const fileid_t &dst_parent, const std::string &dst_name)
+                const fileid_t &dst_parent, const std::string &dst_name,
+                const identity_t &who)
 {
   if (!std::equal(src_parent.volume, src_parent.volume + LIBMDS_VOLUME_LEN,
                   dst_parent.volume))

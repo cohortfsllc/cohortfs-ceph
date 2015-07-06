@@ -96,7 +96,8 @@ public:
               libmds_ino_t *ino, struct stat *st);
   int readlink(const libmds_fileid_t *parent, char *buf, int buf_len);
   int rename(const libmds_fileid_t *parent1, const char *name1,
-             const libmds_fileid_t *parent2, const char *name2);
+             const libmds_fileid_t *parent2, const char *name2,
+             const libmds_identity_t *who);
   int unlink(const libmds_fileid_t *parent, const char *name);
   int lookup(const libmds_fileid_t *parent, const char *name,
              libmds_ino_t *ino);
@@ -233,9 +234,10 @@ int LibMDS::readlink(const libmds_fileid_t *parent, char *buf, int buf_len)
 }
 
 int LibMDS::rename(const libmds_fileid_t *src_parent, const char *src_name,
-                   const libmds_fileid_t *dst_parent, const char *dst_name)
+                   const libmds_fileid_t *dst_parent, const char *dst_name,
+                   const libmds_identity_t *who)
 {
-  return mds->rename(*src_parent, src_name, *dst_parent, dst_name);
+  return mds->rename(*src_parent, src_name, *dst_parent, dst_name, *who);
 }
 
 int LibMDS::unlink(const libmds_fileid_t *parent, const char *name)
@@ -452,10 +454,11 @@ int libmds_readlink(struct libmds *mds, const libmds_fileid_t *parent,
 
 int libmds_rename(struct libmds *mds,
                   const libmds_fileid_t *src_parent, const char *src_name,
-                  const libmds_fileid_t *dst_parent, const char *dst_name)
+                  const libmds_fileid_t *dst_parent, const char *dst_name,
+                  const libmds_identity_t *who)
 {
   try {
-    return mds->rename(src_parent, src_name, dst_parent, dst_name);
+    return mds->rename(src_parent, src_name, dst_parent, dst_name, who);
   } catch (std::exception &e) {
     CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
     lderr(cct) << "libmds_rename caught exception " << e.what() << dendl;
