@@ -109,13 +109,13 @@ public:
   int setattr(const libmds_fileid_t *file, int mask, const struct stat *st);
 
   int open(const libmds_fileid_t *file, int flags,
-           struct libmds_open_state **state);
-  int close(struct libmds_open_state *state);
-  ssize_t read(struct libmds_open_state *state, size_t offset,
+           const libmds_identity *who, libmds_open_state **state);
+  int close(libmds_open_state *state);
+  ssize_t read(libmds_open_state *state, size_t offset,
                char *buf, size_t buf_len);
-  ssize_t write(struct libmds_open_state *state, size_t offset,
+  ssize_t write(libmds_open_state *state, size_t offset,
                 const char *buf, size_t buf_len);
-  int commit(struct libmds_open_state *state, uint64_t offset, size_t len);
+  int commit(libmds_open_state *state, uint64_t offset, size_t len);
 };
 
 
@@ -302,29 +302,30 @@ int LibMDS::setattr(const libmds_fileid_t *file, int mask,
 }
 
 int LibMDS::open(const libmds_fileid_t *file, int flags,
-                 struct libmds_open_state **state)
+                 const libmds_identity *who,
+                 libmds_open_state **state)
 {
   return -ENOTSUP;
 }
 
-int LibMDS::close(struct libmds_open_state *state)
+int LibMDS::close(libmds_open_state *state)
 {
   return -ENOTSUP;
 }
 
-ssize_t LibMDS::read(struct libmds_open_state *state, size_t offset,
+ssize_t LibMDS::read(libmds_open_state *state, size_t offset,
                      char *buf, size_t buf_len)
 {
   return -ENOTSUP;
 }
 
-ssize_t LibMDS::write(struct libmds_open_state *state, size_t offset,
+ssize_t LibMDS::write(libmds_open_state *state, size_t offset,
                       const char *buf, size_t buf_len)
 {
   return -ENOTSUP;
 }
 
-int LibMDS::commit(struct libmds_open_state *state, uint64_t offset, size_t len)
+int LibMDS::commit(libmds_open_state *state, uint64_t offset, size_t len)
 {
   return -ENOTSUP;
 }
@@ -567,10 +568,11 @@ int libmds_setattr(struct libmds *mds, const libmds_fileid_t *file,
 }
 
 int libmds_open(struct libmds *mds, const libmds_fileid_t *file,
-                int flags, struct libmds_open_state **state)
+                int flags, const libmds_identity *who,
+                libmds_open_state **state)
 {
   try {
-    return mds->open(file, flags, state);
+    return mds->open(file, flags, who, state);
   } catch (std::exception &e) {
     CephContext *cct = static_cast<cohort::mds::LibMDS*>(mds)->cct;
     lderr(cct) << "libmds_open caught exception " << e.what() << dendl;
@@ -578,7 +580,7 @@ int libmds_open(struct libmds *mds, const libmds_fileid_t *file,
   }
 }
 
-int libmds_close(struct libmds *mds, struct libmds_open_state *state)
+int libmds_close(struct libmds *mds, libmds_open_state *state)
 {
   try {
     return mds->close(state);
@@ -589,7 +591,7 @@ int libmds_close(struct libmds *mds, struct libmds_open_state *state)
   }
 }
 
-ssize_t libmds_read(struct libmds *mds, struct libmds_open_state *state,
+ssize_t libmds_read(struct libmds *mds, libmds_open_state *state,
                     size_t offset, char *buf, size_t buf_len)
 {
   try {
@@ -601,7 +603,7 @@ ssize_t libmds_read(struct libmds *mds, struct libmds_open_state *state,
   }
 }
 
-ssize_t libmds_write(struct libmds *mds, struct libmds_open_state *state,
+ssize_t libmds_write(struct libmds *mds, libmds_open_state *state,
                      size_t offset, const char *buf, size_t buf_len)
 {
   try {
@@ -613,7 +615,7 @@ ssize_t libmds_write(struct libmds *mds, struct libmds_open_state *state,
   }
 }
 
-int libmds_commit(struct libmds *mds, struct libmds_open_state *state,
+int libmds_commit(struct libmds *mds, libmds_open_state *state,
                   uint64_t offset, size_t len)
 {
   try {

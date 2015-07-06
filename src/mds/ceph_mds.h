@@ -176,33 +176,34 @@ struct libmds {
    * @see libmds_open()
    */
   virtual int open(const libmds_fileid_t *file, int flags,
-                   struct libmds_open_state **state) = 0;
+                   const libmds_identity_t *who,
+                   libmds_open_state **state) = 0;
 
   /**
    * Close a file.
    * @see libmds_close()
    */
-  virtual int close(struct libmds_open_state *state) = 0;
+  virtual int close(libmds_open_state *state) = 0;
 
   /**
    * Read from an open file.
    * @see libmds_read()
    */
-  virtual ssize_t read(struct libmds_open_state *state, size_t offset,
+  virtual ssize_t read(libmds_open_state *state, size_t offset,
                        char *buf, size_t buf_len) = 0;
 
   /**
    * Write to an open file.
    * @see libmds_write()
    */
-  virtual ssize_t write(struct libmds_open_state *state, size_t offset,
+  virtual ssize_t write(libmds_open_state *state, size_t offset,
                         const char *buf, size_t buf_len) = 0;
 
   /**
    * Commit written data to stable storage.
    * @see libmds_commit()
    */
-  virtual int commit(struct libmds_open_state *state,
+  virtual int commit(libmds_open_state *state,
                      uint64_t offset, size_t len) = 0;
 
  protected:
