@@ -46,10 +46,6 @@ add_dependencies(check mon_handle_forward)
 set(UNITTEST_LIBS gtest_main ${PTHREAD_LIBS})
 set(UNITTEST_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I${CMAKE_SOURCE_DIR}/src/gtest/include -I${CMAKE_BINARY_DIR}/src/gtest/include -fno-strict-aliasing")
 
-if (WITH_CLIENT)
-  list(APPEND UNITTEST_LIBS cephfs boost_system)
-endif(WITH_CLIENT)
-
 # unittest_encoding
 set(unittest_encoding_srcs
   encoding.cc
@@ -505,23 +501,6 @@ add_dependencies(check unittest_formatter)
   set_target_properties(unittest_formatter PROPERTIES COMPILE_FLAGS
     ${UNITTEST_CXX_FLAGS})
 endif(${WITH_RADOSGW})
-
-# unittest_libcephfs_config
-if(${WITH_CLIENT})
-set(unittest_libcephfs_config_srcs libcephfs_config.cc)
-add_executable(unittest_libcephfs_config EXCLUDE_FROM_ALL
-  ${unittest_libcephfs_config_srcs}
-  )
-add_test(unittest_libcephfs_config unittest_libcephfs_config)
-add_dependencies(check unittest_libcephfs_config)
-target_link_libraries(unittest_libcephfs_config
-  common
-  global
-  ${CMAKE_DL_LIBS}
-  ${ALLOC_LIBS} ${UNITTEST_LIBS})
-set_target_properties(unittest_libcephfs_config PROPERTIES COMPILE_FLAGS
-  ${UNITTEST_CXX_FLAGS})
-endif(${WITH_CLIENT})
 
 if(0)
 ### XXX THIS DOES NOT WORK:
