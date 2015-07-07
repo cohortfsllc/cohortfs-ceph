@@ -92,7 +92,6 @@ namespace rados {
   RadosClient::RadosClient()
     : Dispatcher(construct_cct()),
       conf(cct->_conf),
-      state(DISCONNECTED),
       monclient(cct),
       factory(&monclient.factory),
       messenger(NULL),
@@ -103,12 +102,12 @@ namespace rados {
       max_watch_notify_cookie(0),
       own_cct(true)
   {
+    connect();
   }
 
   RadosClient::RadosClient(CephContext *cct_)
     : Dispatcher(cct_),
       conf(cct->_conf),
-      state(DISCONNECTED),
       monclient(cct),
       factory(&monclient.factory),
       messenger(NULL),
@@ -119,6 +118,7 @@ namespace rados {
       max_watch_notify_cookie(0),
       own_cct(false)
   {
+    connect();
   }
 
   Volume RadosClient::lookup_volume(const string& name)
@@ -160,157 +160,122 @@ namespace rados {
   int RadosClient::ping_monitor(const string mon_id, string *result)
   {
     int err = 0;
-    /* If we haven't yet connected, we have no way of telling whether we
-     * already built monc's initial monmap.  IF we are in CONNECTED state,
-     * then it is safe to assume that we went through connect(), which does
-     * build a monmap.
-     */
-    if (state != CONNECTED) {
-      ldout(cct, 10) << __func__ << " build monmap" << dendl;
-      err = monclient.build_initial_monmap();
-    }
-    if (err < 0) {
-      return err;
-    }
-
     err = monclient.ping_monitor(mon_id, result);
     return err;
   }
 
-  int RadosClient::connect()
+  void RadosClient::connect()
   {
     unique_lock l(lock, std::defer_lock);
     common_init_finish(cct);
 
-    int err;
     uint64_t nonce;
 
-    // already connected?
-    if (state == CONNECTING)
-      return -EINPROGRESS;
-    if (state == CONNECTED)
-      return -EISCONN;
-    state = CONNECTING;
-
     // get monmap
-    err = monclient.build_initial_monmap();
+    int err = monclient.build_initial_monmap();
     if (err < 0)
-      goto out;
+      throw std::system_error(-err, std::generic_category());
 
-    err = -ENOMEM;
     nonce = getpid() + (1000000 * (uint64_t)++rados_instance);
+
+    std::unique_ptr<Messenger> _messenger;
+    std::unique_ptr<Objecter> _objecter;
+
+    try {
 #ifdef HAVE_XIO
-    if (cct->_conf->client_rdma) {
-      XioMessenger *xmsgr
-	= new XioMessenger(cct, entity_name_t::CLIENT(-1), "radosclient",
+      if (cct->_conf->client_rdma) {
+	_messenger.reset(
+	  new XioMessenger(cct, entity_name_t::CLIENT(-1), "radosclient",
 			   nonce, &factory, 0 /* portals */,
-			   new QueueStrategy(2) /* dispatch strategy */);
-      xmsgr->set_port_shift(111) /* XXX */;
-      messenger = xmsgr;
-    }
-    else
+			   new QueueStrategy(2) /* dispatch strategy */));
+	_messenger->set_port_shift(111) /* XXX */;
+      }
+      else
 #endif
-    {
-      messenger = new SimpleMessenger(cct, entity_name_t::CLIENT(-1),
-				      "radosclient", nonce, &factory);
-    }
+      {
+	_messenger.reset(new SimpleMessenger(cct, entity_name_t::CLIENT(-1),
+					     "radosclient", nonce, &factory));
+      }
+    // require OSDREPLYMUX feature.  this means we will fail to talk
+    // to old servers.  this is necessary because otherwise we won't
+    // know how to decompose the reply data into its consituent
+    // pieces.
+    _messenger->set_default_policy(
+      Messenger::Policy::lossy_client(0,CEPH_FEATURE_OSDREPLYMUX));
 
-    if (!messenger)
-      goto out;
-
-    // require OSDREPLYMUX feature.  this means we will fail to talk to
-    // old servers.  this is necessary because otherwise we won't know
-    // how to decompose the reply data into its consituent pieces.
-    messenger->set_default_policy(Messenger::Policy::lossy_client(0, CEPH_FEATURE_OSDREPLYMUX));
-
-    ldout(cct, 1) << "starting msgr at " << messenger->get_myaddr() << dendl;
+    ldout(cct, 1) << "starting msgr at " << _messenger->get_myaddr() << dendl;
 
     ldout(cct, 1) << "starting objecter" << dendl;
 
-    err = -ENOMEM;
-    objecter = new Objecter(cct, messenger, &monclient,
-			    cct->_conf->rados_mon_op_timeout,
-			    cct->_conf->rados_osd_op_timeout);
-    if (!objecter)
-      goto out;
+    _objecter.reset(new Objecter(cct, _messenger.get(), &monclient,
+				 cct->_conf->rados_mon_op_timeout,
+				 cct->_conf->rados_osd_op_timeout));
 
-    monclient.set_messenger(messenger);
+    } catch (const std::bad_alloc& e) {
+      throw std::system_error(std::make_error_code(
+				std::errc::not_enough_memory), e.what());
+    }
 
-    messenger->add_dispatcher_tail(objecter);
-    messenger->add_dispatcher_tail(this);
+    monclient.set_messenger(_messenger.get());
+
+    _messenger->add_dispatcher_tail(_objecter.get());
+    _messenger->add_dispatcher_tail(this);
 
     // To wake up any waiters whenever a new OSDMap comes in.
-    objecter->add_osdmap_notifier([&](){
+    _objecter->add_osdmap_notifier([&](){
 	unique_lock rcl(lock);
 	cond.notify_all();
 	rcl.unlock();
       });
 
-    messenger->start();
+    _messenger->start();
 
     ldout(cct, 1) << "setting wanted keys" << dendl;
     monclient.set_want_keys(CEPH_ENTITY_TYPE_MON | CEPH_ENTITY_TYPE_OSD);
     ldout(cct, 1) << "calling monclient init" << dendl;
     err = monclient.init();
-    if (err) {
-      ldout(cct, 0) << conf->name << " initialization error " << cpp_strerror(-err) << dendl;
-      shutdown();
-      goto out;
-    }
+    if (err)
+      throw std::system_error(-err, std::generic_category());
 
     err = monclient.authenticate(conf->client_mount_timeout);
-    if (err) {
-      ldout(cct, 0) << conf->name << " authentication error " << cpp_strerror(-err) << dendl;
-      shutdown();
-      goto out;
-    }
-    messenger->set_myname(entity_name_t::CLIENT(monclient.get_global_id()));
+    if (err)
+      throw std::system_error(-err, std::generic_category());
+    _messenger->set_myname(entity_name_t::CLIENT(monclient.get_global_id()));
 
-    objecter->set_client_incarnation(0);
-    objecter->start();
+    _objecter->set_client_incarnation(0);
+    _objecter->start();
     l.lock();
 
     monclient.renew_subs();
 
     finisher.start();
 
-    state = CONNECTED;
     instance_id = monclient.get_global_id();
 
     l.unlock();
 
     ldout(cct, 1) << "init done" << dendl;
-    err = 0;
 
-  out:
-    if (err)
-      state = DISCONNECTED;
-    return err;
+    objecter = _objecter.release();
+    messenger = _messenger.release();
   }
 
   void RadosClient::shutdown()
   {
     unique_lock l(lock);
-    if (state == DISCONNECTED) {
-      l.unlock();
-      return;
-    }
-    if (state == CONNECTED) {
-      finisher.stop();
-    }
-    bool need_objecter = false;
-    if (objecter) {
-      need_objecter = true;
-    }
-    state = DISCONNECTED;
     instance_id = 0;
     l.unlock();
-    if (need_objecter)
+    if (objecter) {
       objecter->shutdown();
+      delete objecter;
+      objecter = nullptr;
+    }
     monclient.shutdown();
     if (messenger) {
       messenger->shutdown();
       messenger->wait();
+      delete messenger;
+      messenger = 0;
     }
     ldout(cct, 1) << "shutdown" << dendl;
   }
@@ -335,7 +300,7 @@ namespace rados {
   {
     bool ret;
 
-    if (state == DISCONNECTED) {
+    if (!messenger) {
       ldout(cct, 10) << "disconnected, discarding " << *m << dendl;
       m->put();
       ret = true;

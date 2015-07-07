@@ -617,7 +617,6 @@ def main():
 
     if childargs and childargs[0] == 'ping':
         return ping_monitor(cluster_handle, childargs[1])
-    cluster_handle.connect()
 
     if parsed_args.help:
         return do_extended_help(parser, childargs)

@@ -1039,19 +1039,21 @@ static void rados_tool_common(const std::map < std::string, std::string > &opts,
   }
 
   // open rados
-  RadosClient rc(cct);
+  std::unique_ptr<RadosClient> rc;
 
-  ret = rc.connect();
-  if (ret) {
-     cerr << "couldn't connect to cluster! error " << ret << endl;
-     exit(1);
+
+  try {
+    rc.reset(new RadosClient(cct));
+  } catch (const std::system_error& e) {
+    cerr << "couldn't connect to cluster: " << e.what() << endl;
+    exit(1);
   }
 
-  Objecter* o = rc.objecter;
+  Objecter* o = rc->objecter;
   AVolRef v;
 
   if (!vol_name.empty()) {
-    v = rc.attach_volume(vol_name);
+    v = rc->attach_volume(vol_name);
   }
 
   assert(!nargs.empty());
@@ -1263,7 +1265,7 @@ static void rados_tool_common(const std::map < std::string, std::string > &opts,
 
     // open io context.
     AVolRef target_vol;
-    target_vol = rc.attach_volume(target);
+    target_vol = rc->attach_volume(target);
     do_copy(o, v, nargs[1], target_vol, target_obj);
   } else if (strcmp(nargs[0], "rm") == 0) {
      if (vol_name.empty() || nargs.size() < 2)

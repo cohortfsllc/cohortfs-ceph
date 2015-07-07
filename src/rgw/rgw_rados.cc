@@ -1319,10 +1319,6 @@ int RGWRados::init_rados()
 
   max_chunk_size = cct->_conf->rgw_max_chunk_size;
 
-  ret = rc.connect();
-  if (ret < 0)
-   return ret;
-
   meta_mgr = new RGWMetadataManager(cct, this);
   data_log = new RGWDataChangesLog(cct, this);
 
@@ -6578,12 +6574,17 @@ uint64_t RGWRados::next_bucket_id()
   return ++max_bucket_id;
 }
 
-RGWRados *RGWStoreManager::init_storage_provider(CephContext *cct, bool use_gc_thread, bool quota_threads)
+RGWRados *RGWStoreManager::init_storage_provider(CephContext *cct,
+						 bool use_gc_thread, bool quota_threads)
 {
   int use_cache = cct->_conf->rgw_cache_enabled;
   RGWRados *store = NULL;
   if (!use_cache) {
-    store = new RGWRados(cct);
+    try {
+      store = new RGWRados(cct);
+    } catch (const std::exception&) {
+      store = nullptr;
+    }
   } else {
     store = new RGWCache<RGWRados>(cct);
   }
@@ -6599,7 +6600,11 @@ RGWRados *RGWStoreManager::init_storage_provider(CephContext *cct, bool use_gc_t
 RGWRados *RGWStoreManager::init_raw_storage_provider(CephContext *cct)
 {
   RGWRados *store = NULL;
-  store = new RGWRados(cct);
+  try {
+    store = new RGWRados(cct);
+  } catch (const std::exception&) {
+    store = nullptr;
+  }
 
   if (store->init_rados() < 0) {
     delete store;

@@ -85,18 +85,6 @@ struct RadosClientWrap : RadosClient, wrapper<RadosClient>
     RadosClient::ping_monitor(mon_id, &result);
     return result;
     }
-  const char *get_state_string()
-    {
-    switch (this->get_state()) {
-      case DISCONNECTED:
-	return "disconnected";
-      case CONNECTING:
-	return "connecting";
-      case CONNECTED:
-	return "connected";
-    }
-    return "unknown";
-    }
 };
 
 RadosClient *factory(const char *conffile = "/etc/ceph/ceph.conf")
@@ -111,7 +99,11 @@ RadosClient *factory(const char *conffile = "/etc/ceph/ceph.conf")
 
   cct->_conf->parse_env(); // environment variables override
   cct->_conf->apply_changes(NULL);
-  return new RadosClientWrap(cct);
+  try {
+    return new RadosClientWrap(cct);
+  } catch (const std::exception&) {
+    return nullptr;
+  }
 }
 
 RadosClient *factory0(void) { return factory(); }
@@ -127,14 +119,11 @@ BOOST_PYTHON_MODULE(pyrados)
 
   class_<RadosClientWrap, bases<Dispatcher>, boost::noncopyable>("RadosClient", init<CephContext*>())
     .def("ping_monitor", &RadosClientWrap::ping_monitor)
-    .def("connect", &RadosClientWrap::connect)
-    .def("shutdown", &RadosClientWrap::shutdown)
     .def("get_instance_id", &RadosClientWrap::get_instance_id)
     .def("wait_for_latest_osdmap", &RadosClientWrap::wait_for_latest_osdmap)
     .def("get_fsid", &RadosClientWrap::get_fsid)
     .def("mon_command", &RadosClientWrap::mon_command)
     .def("parse_args", &RadosClientWrap::parse_args)
-    .add_property("state", &RadosClientWrap::get_state_string)
     ;
 
   def("factory", factory, return_value_policy<manage_new_object>()); // 1 arg

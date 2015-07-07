@@ -1239,7 +1239,8 @@ class RGWRados
   int complete_atomic_overwrite(RGWRadosCtx *rctx, RGWObjState *state, rgw_obj& oid);
 
   int update_placement_map();
-  int store_bucket_info(RGWBucketInfo& info, map<string, bufferlist> *pattrs, RGWObjVersionTracker *objv_tracker, bool exclusive);
+  int store_bucket_info(RGWBucketInfo& info, map<string, bufferlist> *pattrs,
+			RGWObjVersionTracker *objv_tracker, bool exclusive);
 
 public:
   CephContext *cct;

@@ -304,7 +304,7 @@ static void set_vol_image_name(const string& orig_vol, const string& orig_img,
   new_img = string(t.begin() + sep + 1, t.end());
 }
 
-static void do_import(rados::RadosClient& rc,
+static void do_import(const std::unique_ptr<rados::RadosClient>& rc,
 		      const AVolRef& v, const string& imgname,
 		      const string& path)
 {
@@ -346,8 +346,8 @@ static void do_import(rados::RadosClient& rc,
 
   Image image;
   try {
-    Image::create(&rc, v, imgname, size);
-    image = Image(&rc, v, imgname);
+    Image::create(rc.get(), v, imgname, size);
+    image = Image(rc.get(), v, imgname);
   } catch (std::system_error &e) {
     cerr << "rbd:: image creation failed: " << e.what() << std::endl;
   }
@@ -446,7 +446,7 @@ int main(int argc, const char **argv)
   cct = global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT,
 		    CODE_ENVIRONMENT_UTILITY, 0);
 
-  rados::RadosClient rc(cct);
+  std::unique_ptr<rados::RadosClient> rc;
 
   std::string volname, dest_volname, imgname, destname, path;
   uint64_t size = 0;  // in bytes
@@ -586,8 +586,10 @@ if (!set_conf_param(v, p1, p2)) { \
     return EXIT_FAILURE;
   }
 
-  if (rc.connect() < 0) {
-    cerr << "rbd: couldn't connect to the cluster!" << std::endl;
+  try {
+    rc.reset(new rados::RadosClient(cct));
+  } catch (const std::system_error& e) {
+    cerr << "rbd: couldn't connect to the cluster: " << e.what() << std::endl;
     return EXIT_FAILURE;
   }
 
@@ -600,7 +602,7 @@ if (!set_conf_param(v, p1, p2)) { \
   AVolRef vol, destvol;
   if (!volname.empty()) {
     try {
-      vol = rc.attach_volume(volname);
+      vol = rc->attach_volume(volname);
     } catch (std::exception& e) {
       cerr << "rbd: cannot attach " << volname << ": " << e.what() << endl;
       exit(EXIT_FAILURE);
@@ -609,7 +611,7 @@ if (!set_conf_param(v, p1, p2)) { \
 
   if (!dest_volname.empty()) {
     try {
-      destvol = rc.attach_volume(dest_volname);
+      destvol = rc->attach_volume(dest_volname);
     } catch (std::exception& e) {
       cerr << "rbd: cannot attach " << dest_volname << ": " << e.what()
 	   << endl;
@@ -658,9 +660,9 @@ if (!set_conf_param(v, p1, p2)) { \
 	 opt_cmd == OPT_EXPORT || opt_cmd == OPT_COPY)) {
       if (opt_cmd == OPT_EXPORT || opt_cmd == OPT_EXPORT ||
 	  opt_cmd == OPT_COPY) {
-	image = Image(&rc, vol, imgname, rbd::read_only);
+	image = Image(rc.get(), vol, imgname, rbd::read_only);
       } else {
-	image = Image(&rc, vol, imgname);
+	image = Image(rc.get(), vol, imgname);
       }
     }
   } catch (std::system_error& e) {
@@ -690,18 +692,18 @@ if (!set_conf_param(v, p1, p2)) { \
     switch (opt_cmd) {
     case OPT_CREATE:
       errstr = "create of image " + vol->v.name + "/" + imgname;
-      Image::create(&rc, vol, imgname, size);
+      Image::create(rc.get(), vol, imgname, size);
       break;
 
     case OPT_RENAME:
       errstr = "rename of image " + vol->v.name + "/" + imgname + " to " +
 	vol->v.name + "/" + destname;
-      Image::rename(&rc, vol, imgname, destname);
+      Image::rename(rc.get(), vol, imgname, destname);
       break;
 
     case OPT_RM:
       errstr = "delete of image " + vol->v.name + "/" + imgname;
-      Image::remove(&rc, vol, imgname);
+      Image::remove(rc.get(), vol, imgname);
       break;
 
     case OPT_RESIZE:
@@ -725,8 +727,8 @@ if (!set_conf_param(v, p1, p2)) { \
     {
       errstr = "copy of image " + vol->v.name + "/" + imgname + " to " +
 	destvol->v.name + "/" + destname;
-      Image::create(&rc, destvol, destname, image.get_size());
-      Image dest(&rc, destvol, destname);
+      Image::create(rc.get(), destvol, destname, image.get_size());
+      Image dest(rc.get(), destvol, destname);
       image.copy(image, dest);
     }
     break;

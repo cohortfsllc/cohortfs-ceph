@@ -166,17 +166,6 @@ def run_in_thread(target, args, timeout=0):
 
 class Rados(object):
     """librados python wrapper"""
-    def require_state(self, *args):
-        """
-        Checks if the Rados object is in a special state
-
-        :raises: RadosStateError
-        """
-        for a in args:
-            if self.state == a:
-                return
-        raise RadosStateError("You cannot perform that operation on a \
-Rados object in state %s." % (self.state))
 
     def __init__(self, rados_id=None, name=None, clustername=None,
                  conf_defaults=None, conffile=None, conf=None, flags=0):
@@ -229,20 +218,10 @@ Rados object in state %s." % (self.state))
             for key, value in conf.iteritems():
                 self.conf_set(key, value)
 
-    def shutdown(self):
-        """
-        Disconnects from the cluster.
-        """
-        if (self.__dict__.has_key("state") and self.state != "shutdown"):
-            run_in_thread(self.librados.rados_shutdown, (self.cluster,))
-            self.state = "shutdown"
-
     def __enter__(self):
-        self.connect()
         return self
 
     def __exit__(self, type_, value, traceback):
-        self.shutdown()
         return False
 
     def __del__(self):
@@ -269,7 +248,6 @@ Rados object in state %s." % (self.state))
         :param path: path to the config file
         :type path: str
         """
-        self.require_state("configuring", "connected")
         if path is not None and not isinstance(path, str):
             raise TypeError('path must be a string')
         ret = run_in_thread(self.librados.rados_conf_read_file,
@@ -282,7 +260,6 @@ Rados object in state %s." % (self.state))
         Parse known arguments from args, and remove; returned
         args contain only those unknown to ceph
         """
-        self.require_state("configuring", "connected")
         if not args:
             return
         # create instances of arrays of c_char_p's, both len(args) long
@@ -303,7 +280,6 @@ Rados object in state %s." % (self.state))
         Parse known arguments from an environment variable, normally
         CEPH_ARGS.
         """
-        self.require_state("configuring", "connected")
         if not var:
             return
         ret = run_in_thread(self.librados.rados_conf_parse_env,
@@ -321,7 +297,6 @@ Rados object in state %s." % (self.state))
         :returns: str - value of the option or None
         :raises: :class:`TypeError`
         """
-        self.require_state("configuring", "connected")
         if not isinstance(option, str):
             raise TypeError('option must be a string')
         length = 20
@@ -350,7 +325,6 @@ Rados object in state %s." % (self.state))
 
         :raises: :class:`TypeError`, :class:`ObjectNotFound`
         """
-        self.require_state("configuring", "connected")
         if not isinstance(option, str):
             raise TypeError('option must be a string')
         if not isinstance(val, str):
@@ -374,8 +348,6 @@ Rados object in state %s." % (self.state))
       :returns: the string reply from the monitor
       """
 
-      self.require_state("configuring", "connected")
-
       outstrp = pointer(pointer(c_char()))
       outstrlen = c_long()
 
@@ -390,18 +362,6 @@ Rados object in state %s." % (self.state))
       if ret != 0:
         raise make_ex(ret, "error calling ping_monitor")
       return my_outstr
-
-    def connect(self, timeout=0):
-        """
-        Connect to the cluster.
-        """
-        self.require_state("configuring")
-        ret = run_in_thread(self.librados.rados_connect,
-                            (self.cluster,),
-                            timeout)
-        if (ret != 0):
-            raise make_ex(ret, "error calling connect")
-        self.state = "connected"
 
     def get_cluster_stats(self):
         """
@@ -440,7 +400,6 @@ Rados object in state %s." % (self.state))
         :raises: :class:`Error`
         :returns: str - cluster fsid
         """
-        self.require_state("connected")
         buf_len = 37
         fsid = create_string_buffer(buf_len)
         ret = run_in_thread(self.librados.rados_cluster_fsid,
@@ -462,7 +421,6 @@ Rados object in state %s." % (self.state))
         :raises: :class:`TypeError`, :class:`Error`
         :returns: Ioctx - Rados Ioctx object
         """
-        self.require_state("connected")
         if not isinstance(ioctx_name, str):
             raise TypeError('ioctx_name must be a string')
         ioctx = c_void_p()
@@ -478,7 +436,6 @@ Rados object in state %s." % (self.state))
         returns (int ret, string outbuf, string outs)
         """
         import sys
-        self.require_state("connected")
         outbufp = pointer(pointer(c_char()))
         outbuflen = c_long()
         outsp = pointer(pointer(c_char()))
