@@ -10,7 +10,6 @@
 #include <thread>
 
 #include <boost/intrusive/set.hpp>
-#include <boost/pool/object_pool.hpp>
 
 #include "include/ceph_time.h"
 
@@ -57,8 +56,6 @@ namespace cohort {
       }
     };
 
-    boost::object_pool<event> event_pool;
-
     boost::intrusive::set<
       event,
       boost::intrusive::member_hook<event, sh, &event::schedule_link>,
@@ -104,7 +101,7 @@ namespace cohort {
 
 	  if (running) {
 	    running = nullptr;
-	    event_pool.destroy(&e);
+	    delete &e;
 	  } // Otherwise the event requeued itself
 	}
 
@@ -176,11 +173,10 @@ namespace cohort {
     uint64_t add_event(typename TC::time_point when,
 		       Callable&& f, Args&&... args) {
       std::lock_guard<std::mutex> l(lock);
-      event& e = *(event_pool.construct(
-		     when, ++next_id,
-		     std::forward<std::function<void()> >(
-		       std::bind(std::forward<Callable>(f),
-				 std::forward<Args>(args)...))));
+      event& e = *(new event(when, ++next_id,
+			     std::forward<std::function<void()> >(
+			       std::bind(std::forward<Callable>(f),
+					 std::forward<Args>(args)...))));
       auto i = schedule.insert(e);
       events.insert(e);
 
@@ -211,7 +207,7 @@ namespace cohort {
       event& e = *p;
       events.erase(e);
       schedule.erase(e);
-      event_pool.destroy(&e);
+      delete &e;
 
       return true;
     }
@@ -263,7 +259,7 @@ namespace cohort {
 	event& e = *p;
 	schedule.erase(e);
 	events.erase(e);
-	event_pool.destroy(&e);
+	delete &e;
       }
     }
   };

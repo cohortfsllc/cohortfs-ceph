@@ -115,7 +115,7 @@ int MonClient::get_monmap_privately()
     messenger = smessenger = new SimpleMessenger(cct,
 						 entity_name_t::CLIENT(-1),
 						 "temp_mon_client", getpid(),
-                                                 &factory);
+						 &factory);
     messenger->add_dispatcher_head(this);
     smessenger->start();
     temp_msgr = true;
