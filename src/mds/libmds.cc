@@ -200,7 +200,9 @@ int LibMDS::create(const libmds_fileid_t *parent, const char *name,
                    int mode, const libmds_identity_t *who,
                    libmds_ino_t *ino, struct stat *st)
 {
-  assert(!S_ISDIR(mode));
+  if ((mode & S_IFMT) == 0)
+    mode |= S_IFREG;
+  assert((mode & S_IFMT) != S_IFDIR);
   return mds->create(*parent, name, mode, *who, ino, st);
 }
 
@@ -208,7 +210,9 @@ int LibMDS::mkdir(const libmds_fileid_t *parent, const char *name,
                   int mode, const libmds_identity_t *who,
                   libmds_ino_t *ino, struct stat *st)
 {
-  assert(S_ISDIR(mode));
+  if ((mode & S_IFMT) == 0)
+    mode |= S_IFDIR;
+  assert((mode & S_IFMT) == S_IFDIR);
   return mds->create(*parent, name, mode, *who, ino, st);
 }
 
