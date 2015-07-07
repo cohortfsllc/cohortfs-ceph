@@ -196,6 +196,21 @@ int LibMDS::get_root(libmds_volume_t volume, libmds_ino_t *ino)
   return mds->get_root(volume, ino);
 }
 
+namespace {
+void attr_to_stat(struct stat *st, const ObjAttr &attr)
+{
+  st->st_mode = attr.mode;
+  st->st_uid = attr.user;
+  st->st_gid = attr.group;
+  st->st_size = attr.filesize;
+  st->st_atime = ceph::real_clock::to_time_t(attr.atime);
+  st->st_mtime = ceph::real_clock::to_time_t(attr.mtime);
+  st->st_ctime = ceph::real_clock::to_time_t(attr.ctime);
+  st->st_nlink = attr.nlinks;
+  st->st_rdev = attr.rawdev;
+}
+}
+
 int LibMDS::create(const libmds_fileid_t *parent, const char *name,
                    int mode, const libmds_identity_t *who,
                    libmds_ino_t *ino, struct stat *st)
@@ -203,7 +218,11 @@ int LibMDS::create(const libmds_fileid_t *parent, const char *name,
   if ((mode & S_IFMT) == 0)
     mode |= S_IFREG;
   assert((mode & S_IFMT) != S_IFDIR);
-  return mds->create(*parent, name, mode, *who, ino, st);
+  ObjAttr attr;
+  int r = mds->create(*parent, name, mode, *who, ino, attr);
+  if (r == 0)
+    attr_to_stat(st, attr);
+  return r;
 }
 
 int LibMDS::mkdir(const libmds_fileid_t *parent, const char *name,
@@ -213,7 +232,11 @@ int LibMDS::mkdir(const libmds_fileid_t *parent, const char *name,
   if ((mode & S_IFMT) == 0)
     mode |= S_IFDIR;
   assert((mode & S_IFMT) == S_IFDIR);
-  return mds->create(*parent, name, mode, *who, ino, st);
+  ObjAttr attr;
+  int r = mds->create(*parent, name, mode, *who, ino, attr);
+  if (r == 0)
+    attr_to_stat(st, attr);
+  return r;
 }
 
 int LibMDS::link(const libmds_fileid_t *parent, const char *name,
@@ -221,17 +244,8 @@ int LibMDS::link(const libmds_fileid_t *parent, const char *name,
 {
   ObjAttr attr;
   int r = mds->link(*parent, name, ino, attr);
-  if (r == 0) {
-    st->st_mode = attr.mode;
-    st->st_uid = attr.user;
-    st->st_gid = attr.group;
-    st->st_size = attr.filesize;
-    st->st_atime = ceph::real_clock::to_time_t(attr.atime);
-    st->st_mtime = ceph::real_clock::to_time_t(attr.mtime);
-    st->st_ctime = ceph::real_clock::to_time_t(attr.ctime);
-    st->st_nlink = attr.nlinks;
-    st->st_rdev = attr.rawdev;
-  }
+  if (r == 0)
+    attr_to_stat(st, attr);
   return r;
 }
 
@@ -276,17 +290,8 @@ int LibMDS::getattr(const libmds_fileid_t *file, struct stat *st)
 {
   ObjAttr attr;
   int r = mds->getattr(*file, attr);
-  if (r == 0) {
-    st->st_mode = attr.mode;
-    st->st_uid = attr.user;
-    st->st_gid = attr.group;
-    st->st_size = attr.filesize;
-    st->st_atime = ceph::real_clock::to_time_t(attr.atime);
-    st->st_mtime = ceph::real_clock::to_time_t(attr.mtime);
-    st->st_ctime = ceph::real_clock::to_time_t(attr.ctime);
-    st->st_nlink = attr.nlinks;
-    st->st_rdev = attr.rawdev;
-  }
+  if (r == 0)
+    attr_to_stat(st, attr);
   return r;
 }
 

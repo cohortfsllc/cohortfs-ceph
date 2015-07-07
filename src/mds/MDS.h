@@ -71,7 +71,7 @@ class MDS : public Dispatcher {
   // for libmds
   int get_root(volume_t volume, ino_t *ino);
   int create(const fileid_t &parent, const std::string &name,
-             int mode, const identity_t &who, ino_t *ino, struct stat *st);
+             int mode, const identity_t &who, ino_t *ino, ObjAttr &attr);
   int link(const fileid_t &parent, const std::string &name,
            ino_t ino, ObjAttr &attr);
   int rename(const fileid_t &src_parent, const std::string &src_name,

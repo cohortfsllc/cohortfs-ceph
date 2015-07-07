@@ -122,7 +122,7 @@ int MDS::get_root(volume_t volume, ino_t *ino)
 }
 
 int MDS::create(const fileid_t &parent, const std::string &name,
-                int mode, const identity_t &who, ino_t *ino, struct stat *st)
+                int mode, const identity_t &who, ino_t *ino, ObjAttr &attr)
 {
   mcas::gc_guard guard(gc);
 
@@ -163,6 +163,9 @@ int MDS::create(const fileid_t &parent, const std::string &name,
   if (r == 0) {
     // on success, update the directory entry
     dn->link(inode->ino());
+
+    *ino = inode->ino();
+    inode->getattr(attr);
   } else {
     // on failure, destroy the inode we created
     std::lock_guard<std::mutex> ilock(inode->mutex);
