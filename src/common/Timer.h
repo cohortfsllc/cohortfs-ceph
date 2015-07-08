@@ -130,7 +130,7 @@ namespace cohort {
 
   public:
     // Create a running timer ready to execute submitted tasks.
-    Timer() : running(nullptr), suspended(false) {
+    Timer() : running(nullptr), next_id(0), suspended(false) {
       thread = std::thread(&Timer::timer_thread, this);
     }
 
