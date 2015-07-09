@@ -75,7 +75,7 @@ struct MonClientPinger : public Dispatcher {
   }
 
   int wait_for_reply(ceph::timespan t) {
-    std::unique_lock<std::mutex> l(lock, std::adopt_lock);
+    std::unique_lock<std::mutex> l(lock);
     ceph::mono_time until = ceph::mono_clock::now() + t;
     done = false;
 

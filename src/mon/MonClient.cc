@@ -223,14 +223,12 @@ int MonClient::ping_monitor(const string &mon_id, string *result_reply)
 		 << " " << con->get_peer_addr() << dendl;
   smsgr->send_message(new MPing, con);
 
-  std::unique_lock<std::mutex> pl(pinger->lock);
   int ret = pinger->wait_for_reply(cct->_conf->client_mount_timeout);
   if (ret == 0) {
     ldout(cct,10) << __func__ << " got ping reply" << dendl;
   } else {
     ret = -ret;
   }
-  pl.unlock();
 
   smsgr->mark_down(con);
   smsgr->shutdown();
