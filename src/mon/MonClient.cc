@@ -973,8 +973,8 @@ void MonClient::_finish_command(MonCommand& r, std::error_code err,
 		 << dendl;
   if (r.onfinish)
     finisher.queue(
-      [&r, err, &rs, &bl]() {
-	r.onfinish(err, rs, bl);
+      [f = std::move(r.onfinish), err, &rs, bl = std::move(bl)]() mutable {
+	f(err, rs, bl);
       });
   mon_commands.erase(r.tid);
   delete &r;
