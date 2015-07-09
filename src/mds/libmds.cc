@@ -197,8 +197,9 @@ int LibMDS::get_root(libmds_volume_t volume, libmds_ino_t *ino)
 }
 
 namespace {
-void attr_to_stat(struct stat *st, const ObjAttr &attr)
+void attr_to_stat(struct stat *st, const ObjAttr &attr, libmds_ino_t ino)
 {
+  st->st_ino = ino;
   st->st_mode = attr.mode;
   st->st_uid = attr.user;
   st->st_gid = attr.group;
@@ -221,7 +222,7 @@ int LibMDS::create(const libmds_fileid_t *parent, const char *name,
   ObjAttr attr;
   int r = mds->create(*parent, name, mode, *who, ino, attr);
   if (r == 0)
-    attr_to_stat(st, attr);
+    attr_to_stat(st, attr, *ino);
   return r;
 }
 
@@ -235,7 +236,7 @@ int LibMDS::mkdir(const libmds_fileid_t *parent, const char *name,
   ObjAttr attr;
   int r = mds->create(*parent, name, mode, *who, ino, attr);
   if (r == 0)
-    attr_to_stat(st, attr);
+    attr_to_stat(st, attr, *ino);
   return r;
 }
 
@@ -245,7 +246,7 @@ int LibMDS::link(const libmds_fileid_t *parent, const char *name,
   ObjAttr attr;
   int r = mds->link(*parent, name, ino, attr);
   if (r == 0)
-    attr_to_stat(st, attr);
+    attr_to_stat(st, attr, ino);
   return r;
 }
 
@@ -291,7 +292,7 @@ int LibMDS::getattr(const libmds_fileid_t *file, struct stat *st)
   ObjAttr attr;
   int r = mds->getattr(*file, attr);
   if (r == 0)
-    attr_to_stat(st, attr);
+    attr_to_stat(st, attr, file->ino);
   return r;
 }
 
