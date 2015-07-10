@@ -192,7 +192,6 @@ private:
 
   std::mutex monc_lock;
   cohort::Timer<ceph::mono_clock> timer;
-  Finisher finisher;
 
   // Added to support session signatures.  PLR
 
@@ -212,7 +211,7 @@ private:
   bool ms_handle_reset(Connection *con);
   void ms_handle_remote_reset(Connection *con) {}
 
-  void handle_monmap(MMonMap *m);
+  void handle_monmap(MMonMap *m, std::unique_lock<std::mutex>& l);
 
   void handle_auth(MAuthReply *m,
 		   std::unique_lock<std::mutex>& l);
@@ -244,9 +243,9 @@ private:
 
   string _pick_random_mon();
   void _finish_hunting();
-  void _reopen_session(int rank, string name);
-  void _reopen_session() {
-    _reopen_session(-1, string());
+  void _reopen_session(int rank, string name, std::unique_lock<std::mutex>& l);
+  void _reopen_session(std::unique_lock<std::mutex>& l) {
+    _reopen_session(-1, string(), l);
   }
   void _send_mon_message(Message *m, bool force=false);
 
@@ -264,7 +263,7 @@ private:
   map<string,ceph_mon_subscribe_item> sub_have;	 // my subs, and current versions
   ceph::mono_time sub_renew_sent, sub_renew_after;
 
-  void _renew_subs();
+  void _renew_subs(std::unique_lock<std::mutex>& l);
   void handle_subscribe_ack(MMonSubscribeAck* m);
 
   bool _sub_want(string what, version_t start, unsigned flags) {
@@ -293,8 +292,8 @@ public:
   AuthClientHandler *auth;
 public:
   void renew_subs() {
-    std::lock_guard<std::mutex> l(monc_lock);
-    _renew_subs();
+    std::unique_lock<std::mutex> l(monc_lock);
+    _renew_subs(l);
   }
   bool sub_want(string what, version_t start, unsigned flags) {
     std::lock_guard<std::mutex> l(monc_lock);
@@ -431,14 +430,16 @@ private:
 			boost::intrusive::constant_time_size<false>,
 			boost::intrusive::compare<MoncCompare>> mon_commands;
 
-  void _send_command(MonCommand& r);
-  void _resend_mon_commands();
+  void _send_command(MonCommand& r, std::unique_lock<std::mutex>& l);
+  void _resend_mon_commands(std::unique_lock<std::mutex>& l);
   void _cancel_mon_command(uint64_t tid,
 			   std::error_code r = std::make_error_code(
 			     std::errc::operation_canceled));
   void _finish_command(MonCommand& r, std::error_code ret,
-		       const string& rs, bufferlist& bl);
-  void handle_mon_command_ack(MMonCommandAck *ack);
+		       const string& rs, bufferlist& bl,
+		       std::unique_lock<std::mutex>& l);
+  void handle_mon_command_ack(MMonCommandAck *ack,
+			      std::unique_lock<std::mutex>& l);
 
 public:
   void start_mon_command(const vector<string>& cmd, const bufferlist& inbl,
@@ -470,7 +471,8 @@ private:
 
   map<ceph_tid_t, version_req_d*> version_requests;
   ceph_tid_t version_req_id;
-  void handle_get_version_reply(MMonGetVersionReply* m);
+  void handle_get_version_reply(MMonGetVersionReply* m,
+				std::unique_lock<std::mutex>& l);
 
 
   MonClient(const MonClient &rhs);

@@ -54,7 +54,6 @@ MonClient::MonClient(CephContext *cct_) :
   messenger(NULL),
   cur_con(NULL),
   rng(getpid()),
-  finisher(cct_),
   authorize_handler_registry(NULL),
   initialized(false),
   no_keyring_disabled_cephx(false),
@@ -96,7 +95,7 @@ int MonClient::get_monmap()
 
   _sub_want("monmap", 0, 0);
   if (cur_mon.empty())
-    _reopen_session();
+    _reopen_session(l);
 
   map_cond.wait(l, [&](){ return !want_monmap; });
 
@@ -280,7 +279,7 @@ bool MonClient::ms_dispatch(Message *m)
 
   switch (m->get_type()) {
   case CEPH_MSG_MON_MAP:
-    handle_monmap(static_cast<MMonMap*>(m));
+    handle_monmap(static_cast<MMonMap*>(m), l);
     break;
   case CEPH_MSG_AUTH_REPLY:
     handle_auth(static_cast<MAuthReply*>(m), l);
@@ -289,10 +288,10 @@ bool MonClient::ms_dispatch(Message *m)
     handle_subscribe_ack(static_cast<MMonSubscribeAck*>(m));
     break;
   case CEPH_MSG_MON_GET_VERSION_REPLY:
-    handle_get_version_reply(static_cast<MMonGetVersionReply*>(m));
+    handle_get_version_reply(static_cast<MMonGetVersionReply*>(m), l);
     break;
   case MSG_MON_COMMAND_ACK:
-    handle_mon_command_ack(static_cast<MMonCommandAck*>(m));
+    handle_mon_command_ack(static_cast<MMonCommandAck*>(m), l);
     break;
   case MSG_LOGACK:
     if (log_client) {
@@ -318,7 +317,8 @@ void MonClient::send_log()
   }
 }
 
-void MonClient::handle_monmap(MMonMap *m)
+void MonClient::handle_monmap(MMonMap *m,
+			      std::unique_lock<std::mutex>& l)
 {
   ldout(cct, 10) << "handle_monmap " << *m << dendl;
   bufferlist::iterator p = m->monmapbl.begin();
@@ -348,7 +348,7 @@ void MonClient::handle_monmap(MMonMap *m)
 
   if (false /* !monmap.get_addr_name(cur_con->get_peer_addr(), cur_mon) */) {
     ldout(cct, 10) << "mon." << cur_mon << " went away" << dendl;
-    _reopen_session();	// can't find the mon we were talking to (above)
+    _reopen_session(l);	// can't find the mon we were talking to (above)
   } else {
     _finish_hunting();
   }
@@ -409,7 +409,6 @@ int MonClient::init()
 
   l.unlock();
 
-  finisher.start();
   schedule_tick();
 
   return 0;
@@ -429,7 +428,8 @@ void MonClient::shutdown()
   }
 
   while (!waiting_for_session.empty()) {
-    ldout(cct, 20) << __func__ << " discarding pending message " << *waiting_for_session.front() << dendl;
+    ldout(cct, 20) << __func__ << " discarding pending message "
+		   << *waiting_for_session.front() << dendl;
     waiting_for_session.front()->put();
     waiting_for_session.pop_front();
   }
@@ -437,10 +437,6 @@ void MonClient::shutdown()
   l.unlock();
 
   timer.suspend();
-  if (initialized) {
-    finisher.stop();
-  }
-
   l.lock();
   cur_con->get_messenger()->mark_down(cur_con);
   cur_con.reset(NULL);
@@ -459,7 +455,7 @@ int MonClient::authenticate(ceph::timespan timeout)
 
   _sub_want("monmap", monmap.get_epoch() ? monmap.get_epoch() + 1 : 0, 0);
   if (cur_mon.empty())
-    _reopen_session();
+    _reopen_session(l);
 
   ceph::mono_time until = ceph::mono_clock::now() + timeout;
   while (state != MC_STATE_HAVE_SESSION && !authenticate_err) {
@@ -541,7 +537,7 @@ void MonClient::handle_auth(MAuthReply *m,
 	waiting_for_session.pop_front();
       }
 
-      _resend_mon_commands();
+      _resend_mon_commands(l);
 
       if (log_client) {
 	log_client->reset_session();
@@ -593,7 +589,8 @@ string MonClient::_pick_random_mon()
 
 using namespace std::placeholders;
 
-void MonClient::_reopen_session(int rank, string name)
+void MonClient::_reopen_session(int rank, string name,
+				std::unique_lock<std::mutex>& l)
 {
   ldout(cct, 10) << "_reopen_session rank " << rank << " name " << name << dendl;
 
@@ -618,17 +615,6 @@ void MonClient::_reopen_session(int rank, string name)
   while (!waiting_for_session.empty()) {
     waiting_for_session.front()->put();
     waiting_for_session.pop_front();
-  }
-
-  // throw out version check requests
-  while (!version_requests.empty()) {
-    finisher.queue(
-      std::bind(
-	version_requests.begin()->second->cb,
-	std::make_error_code(std::errc::resource_unavailable_try_again),
-	0, 0));
-    delete version_requests.begin()->second;
-    version_requests.erase(version_requests.begin());
   }
 
   // adjust timeouts if necessary
@@ -660,13 +646,26 @@ void MonClient::_reopen_session(int rank, string name)
   _send_mon_message(m, true);
 
   if (!sub_have.empty())
-    _renew_subs();
+    _renew_subs(l);
+
+  // throw out version check requests. Move the map contents here so
+  // we don't throw out requests added whiel we're unlocked.
+  l.unlock();
+  decltype(version_requests) tmpreqs;
+  tmpreqs.swap(version_requests);
+  for (auto& kv : tmpreqs) {
+    kv.second->cb(std::make_error_code(
+		    std::errc::resource_unavailable_try_again), 0, 0);
+    delete kv.second;
+  }
+  tmpreqs.clear();
+  l.lock();
 }
 
 
 bool MonClient::ms_handle_reset(Connection *con)
 {
-  std::lock_guard<std::mutex> l(monc_lock);
+  std::unique_lock<std::mutex> l(monc_lock);
 
   if (con->get_peer_type() == CEPH_ENTITY_TYPE_MON) {
     if (cur_mon.empty() || con != cur_con) {
@@ -678,7 +677,7 @@ bool MonClient::ms_handle_reset(Connection *con)
 	return true;
 
       ldout(cct, 0) << "hunting for new mon" << dendl;
-      _reopen_session();
+      _reopen_session(l);
     }
   }
   return false;
@@ -706,12 +705,12 @@ void MonClient::tick()
 
   if (hunting) {
     ldout(cct, 1) << "continuing hunt" << dendl;
-    _reopen_session();
+    _reopen_session(l);
   } else if (!cur_mon.empty()) {
     // just renew as needed
     ceph::mono_time now = ceph::mono_clock::now();
     if (now > sub_renew_after)
-      _renew_subs();
+      _renew_subs(l);
 
     messenger->send_keepalive(cur_con.get());
 
@@ -723,7 +722,7 @@ void MonClient::tick()
 	ceph::real_time lk = cur_con->get_last_keepalive_ack();
 	ceph::timespan interval = ceph::real_clock::now() - lk;
 	if (interval > cct->_conf->mon_client_ping_timeout) {
-	  _reopen_session();
+	  _reopen_session(l);
 	}
       }
     }
@@ -751,7 +750,7 @@ void MonClient::schedule_tick()
 
 // ---------
 
-void MonClient::_renew_subs()
+void MonClient::_renew_subs(std::unique_lock<std::mutex>& l)
 {
   if (sub_have.empty()) {
     ldout(cct, 10) << "renew_subs - empty" << dendl;
@@ -760,7 +759,7 @@ void MonClient::_renew_subs()
 
   ldout(cct, 10) << "renew_subs" << dendl;
   if (cur_mon.empty())
-    _reopen_session();
+    _reopen_session(l);
   else {
     if (sub_renew_sent == ceph::mono_time::min())
       sub_renew_sent = ceph::mono_clock::now();
@@ -858,7 +857,7 @@ int MonClient::wait_auth_rotating(ceph::timespan timeout)
 
 // ---------
 
-void MonClient::_send_command(MonCommand& r)
+void MonClient::_send_command(MonCommand& r, std::unique_lock<std::mutex>& l)
 {
   if (r.target_rank >= 0 &&
       r.target_rank != monmap.get_rank(cur_mon)) {
@@ -873,10 +872,10 @@ void MonClient::_send_command(MonCommand& r)
       // Replace with proper monitor error codes
       _finish_command(r, std::make_error_code(
 			std::errc::no_such_file_or_directory),
-		      "mon rank dne", bl);
+		      "mon rank dne", bl, l);
       return;
     }
-    _reopen_session(r.target_rank, string());
+    _reopen_session(r.target_rank, string(), l);
     return;
   }
 
@@ -891,10 +890,11 @@ void MonClient::_send_command(MonCommand& r)
 		     << dendl;
       bufferlist bl;
       _finish_command(r, std::make_error_code(
-			std::errc::no_such_file_or_directory), "mon dne", bl);
+			std::errc::no_such_file_or_directory), "mon dne",
+		      bl, l);
       return;
     }
-    _reopen_session(-1, r.target_name);
+    _reopen_session(-1, r.target_name, l);
     return;
   }
 
@@ -907,15 +907,16 @@ void MonClient::_send_command(MonCommand& r)
   return;
 }
 
-void MonClient::_resend_mon_commands()
+void MonClient::_resend_mon_commands(std::unique_lock<std::mutex>& l)
 {
   // resend any requests
   for (auto& mc : mon_commands) {
-    _send_command(mc);
+    _send_command(mc, l);
   }
 }
 
-void MonClient::handle_mon_command_ack(MMonCommandAck *ack)
+void MonClient::handle_mon_command_ack(MMonCommandAck *ack,
+				       std::unique_lock<std::mutex>& l)
 {
   if (mon_commands.empty()) {
     ack->put();
@@ -945,7 +946,7 @@ void MonClient::handle_mon_command_ack(MMonCommandAck *ack)
   ldout(cct, 10) << "handle_mon_command_ack " << r.tid << " " << r.cmd
 		 << dendl;
   _finish_command(r, std::error_code(-ack->r, std::generic_category()),
-		  ack->rs, ack->get_data());
+		  ack->rs, ack->get_data(), l);
   ack->put();
 }
 
@@ -961,20 +962,22 @@ void MonClient::_cancel_mon_command(uint64_t tid, std::error_code r)
 
   MonCommand& cmd = *it;
   bufferlist bl;
-  _finish_command(cmd, r, "", bl);
+  _finish_command(cmd, r, "", bl, l);
 }
 
 void MonClient::_finish_command(MonCommand& r, std::error_code err,
-				const string& rs, bufferlist& bl)
+				const string& rs, bufferlist& bl,
+				std::unique_lock<std::mutex>& l)
 {
+  // Should be called with the lock UNLOCKED.
   ldout(cct, 10) << "_finish_command " << r.tid << " = " << err << " " << rs
 		 << dendl;
-  if (r.onfinish)
-    finisher.queue(
-      [f = std::move(r.onfinish), err, &rs, bl = std::move(bl)]() mutable {
-	f(err, rs, bl);
-      });
   mon_commands.erase(r.tid);
+  l.unlock();
+
+  if (r.onfinish)
+    r.onfinish(err, rs, bl);
+
   delete &r;
 }
 
@@ -982,7 +985,7 @@ void MonClient::start_mon_command(const vector<string>& cmd,
 				  const bufferlist& inbl,
 				  monc_cb&& onfinish)
 {
-  std::lock_guard<std::mutex> l(monc_lock);
+  std::unique_lock<std::mutex> l(monc_lock);
   MonCommand& r = *new MonCommand(++last_mon_command_tid);
   r.cmd = cmd;
   r.inbl = inbl;
@@ -994,7 +997,7 @@ void MonClient::start_mon_command(const vector<string>& cmd,
 		      std::make_error_code(std::errc::operation_canceled));
   }
   mon_commands.insert(r);
-  _send_command(r);
+  _send_command(r, l);
 }
 
 void MonClient::start_mon_command(const string &mon_name,
@@ -1002,14 +1005,14 @@ void MonClient::start_mon_command(const string &mon_name,
 				  const bufferlist& inbl,
 				  monc_cb&& onfinish)
 {
-  std::lock_guard<std::mutex> l(monc_lock);
+  std::unique_lock<std::mutex> l(monc_lock);
   MonCommand& r = *new MonCommand(++last_mon_command_tid);
   r.target_name = mon_name;
   r.cmd = cmd;
   r.inbl = inbl;
   r.onfinish.swap(onfinish);
   mon_commands.insert(r);
-  _send_command(r);
+  _send_command(r, l);
 }
 
 void MonClient::start_mon_command(int rank,
@@ -1017,14 +1020,14 @@ void MonClient::start_mon_command(int rank,
 				  const bufferlist& inbl,
 				  monc_cb&& onfinish)
 {
-  std::lock_guard<std::mutex> l(monc_lock);
+  std::unique_lock<std::mutex> l(monc_lock);
   MonCommand& r = *new MonCommand(++last_mon_command_tid);
   r.target_rank = rank;
   r.cmd = cmd;
   r.inbl = inbl;
   r.onfinish.swap(onfinish);
   mon_commands.insert(r);
-  _send_command(r);
+  _send_command(r, l);
 }
 
 // ---------
@@ -1041,7 +1044,8 @@ void MonClient::get_version(string map, version_cb&& onfinish)
   _send_mon_message(m);
 }
 
-void MonClient::handle_get_version_reply(MMonGetVersionReply* m)
+void MonClient::handle_get_version_reply(MMonGetVersionReply* m,
+					 std::unique_lock<std::mutex>& l)
 {
   map<ceph_tid_t, version_req_d*>::iterator iter = version_requests.find(m->handle);
   if (iter == version_requests.end()) {
@@ -1051,8 +1055,8 @@ void MonClient::handle_get_version_reply(MMonGetVersionReply* m)
     version_req_d *req = iter->second;
     ldout(cct, 10) << __func__ << " finishing " << req << " version " << m->version << dendl;
     version_requests.erase(iter);
-    finisher.queue(std::bind(req->cb, std::error_code(),
-			     m->version, m->oldest_version));
+    l.unlock();
+    req->cb(std::error_code(), m->version, m->oldest_version);
     delete req;
   }
   m->put();
