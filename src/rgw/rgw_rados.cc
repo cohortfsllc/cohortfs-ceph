@@ -1315,14 +1315,12 @@ void RGWRados::finalize()
  */
 int RGWRados::init_rados()
 {
-  int ret;
-
   max_chunk_size = cct->_conf->rgw_max_chunk_size;
 
   meta_mgr = new RGWMetadataManager(cct, this);
   data_log = new RGWDataChangesLog(cct, this);
 
-  return ret;
+  return 0;
 }
 
 /**

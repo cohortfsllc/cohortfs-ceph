@@ -753,10 +753,11 @@ namespace rados {
 
 
 
-  ceph_tid_t Objecter::op_submit(Op *op)
+  ceph_tid_t Objecter::op_submit(Op* op)
   {
     shunique_lock sl(rwlock, cohort::acquire_shared);
     Op::unique_lock ol(op->lock);
+    op->tid = ++last_tid;
     return _op_submit(*op, ol, sl);
   }
 

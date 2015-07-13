@@ -290,7 +290,7 @@ namespace rados{
 	 op_callback&& ac, op_callback&& co,
 	 ZTracer::Trace *parent) :
 	oid(o), volume(_volume), op(std::move(_op)), flags(f),
-	ontimeout(0), acks(0), commits(0),
+	paused(false), priority(0), ontimeout(0), acks(0), commits(0),
 	reply_epoch(nullptr), finished(false) {
 	onack.swap(ac);
 	oncommit.swap(co);
