@@ -126,7 +126,7 @@ static struct io_u *fio_ceph_filestore_event(struct thread_data *td, int event)
 }
 
 static int fio_ceph_filestore_getevents(struct thread_data *td, unsigned int min,
-			     unsigned int max, struct timespec *t)
+			     unsigned int max, const struct timespec *t)
 {
 	struct ceph_filestore_data *ceph_filestore_data = (struct ceph_filestore_data *) td->io_ops->data;
 	unsigned int events = 0;
