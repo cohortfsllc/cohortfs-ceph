@@ -103,8 +103,6 @@ namespace rados {
 
   void Objecter::shutdown()
   {
-    unique_lock wl(rwlock);
-
     while (!osd_sessions.empty()) {
       auto p = osd_sessions.begin();
       close_session(*p);
