@@ -14,6 +14,7 @@
 #define LIBCEPH_MDS_H
 
 #include <stdint.h>
+#include <sys/stat.h>
 
 
 #define LIBMDS_VOLUME_LEN 16
