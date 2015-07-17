@@ -95,7 +95,7 @@ public:
   int symlink(const libmds_fileid_t *parent, const char *name,
               const char *target, const libmds_identity_t *who,
               libmds_ino_t *ino, struct stat *st);
-  int readlink(const libmds_fileid_t *parent, char *buf, int buf_len);
+  int readlink(const libmds_fileid_t *parent, char *buf, size_t buf_len);
   int rename(const libmds_fileid_t *parent1, const char *name1,
              const libmds_fileid_t *parent2, const char *name2,
              const libmds_identity_t *who);
@@ -258,7 +258,7 @@ int LibMDS::symlink(const libmds_fileid_t *parent, const char *name,
   return -ENOTSUP;
 }
 
-int LibMDS::readlink(const libmds_fileid_t *parent, char *buf, int buf_len)
+int LibMDS::readlink(const libmds_fileid_t *parent, char *buf, size_t buf_len)
 {
   return -ENOTSUP;
 }
@@ -499,7 +499,7 @@ int libmds_symlink(struct libmds *mds, const libmds_fileid_t *parent,
 }
 
 int libmds_readlink(struct libmds *mds, const libmds_fileid_t *parent,
-                    char *buf, int buf_len)
+                    char *buf, size_t buf_len)
 {
   try {
     return mds->readlink(parent, buf, buf_len);

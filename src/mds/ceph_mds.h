@@ -128,7 +128,7 @@ struct libmds {
    * @see libmds_readlink()
    */
   virtual int readlink(const libmds_fileid_t *parent,
-                       char *buf, int buf_len) = 0;
+                       char *buf, size_t buf_len) = 0;
 
   /**
    * Rename a directory entry.
