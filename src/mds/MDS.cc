@@ -423,6 +423,49 @@ int MDS::setattr(const fileid_t &file, int mask, const ObjAttr &attr)
   return inode->setattr(mask, attr);
 }
 
+int MDS::open(const fileid_t &file, int flags,
+              const identity_t *who, InodeRef &inode)
+{
+  mcas::gc_guard guard(gc);
+
+  auto vol = get_volume(guard, file.volume);
+  if (!vol)
+    return -ENODEV;
+
+  // find the object
+  inode = vol->cache->get_inode(guard, file.ino);
+  if (!inode)
+    return -ENOENT;
+
+  inode->get();
+  return 0;
+}
+
+int MDS::close(InodeRef &inode)
+{
+  inode->put();
+  inode.reset();
+  return 0;
+}
+
+ssize_t MDS::read(const InodeRef &inode, size_t offset,
+                  char *buf, size_t buf_len)
+{
+  return -ENOTSUP;
+}
+
+ssize_t MDS::write(const InodeRef &inode, size_t offset,
+                   const char *buf, size_t buf_len)
+{
+  return -ENOTSUP;
+}
+
+int MDS::commit(const InodeRef &inode, uint64_t offset, size_t len)
+{
+  return -ENOTSUP;
+}
+
+
 bool MDS::ms_dispatch(Message *m)
 {
   bool ret = true;

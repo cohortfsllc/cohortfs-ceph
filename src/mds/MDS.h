@@ -19,6 +19,9 @@ namespace rados { class Objecter; }
 namespace cohort {
 namespace mds {
 
+class Inode;
+typedef boost::intrusive_ptr<Inode> InodeRef;
+
 class Storage;
 
 class MDS : public Dispatcher {
@@ -84,6 +87,15 @@ class MDS : public Dispatcher {
               libmds_readdir_fn cb, void *user);
   int getattr(const fileid_t &file, ObjAttr &attr);
   int setattr(const fileid_t &file, int mask, const ObjAttr &attr);
+
+  int open(const fileid_t &file, int flags,
+           const identity_t *who, InodeRef &inode);
+  int close(InodeRef &inode);
+  ssize_t read(const InodeRef &inode, size_t offset,
+               char *buf, size_t buf_len);
+  ssize_t write(const InodeRef &inode, size_t offset,
+                const char *buf, size_t buf_len);
+  int commit(const InodeRef &inode, uint64_t offset, size_t len);
 
   // void handle_mds_beacon(MMDSBeacon *m);
   bool ms_dispatch(Message *m);

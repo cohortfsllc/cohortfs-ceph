@@ -18,6 +18,7 @@
 #include "MDSMap.h"
 #include "MDS.h"
 #include "MessageFactory.h"
+#include "Inode.h"
 #include "ceph_mds.h"
 
 #define dout_subsys ceph_subsys_mds
@@ -312,32 +313,39 @@ int LibMDS::setattr(const libmds_fileid_t *file, int mask,
 }
 
 int LibMDS::open(const libmds_fileid_t *file, int flags,
-                 const libmds_identity *who,
-                 libmds_open_state **state)
+                 const libmds_identity *who, libmds_open_state **state)
 {
-  return -ENOTSUP;
+  InodeRef inode;
+  int r = mds->open(*file, flags, who, inode);
+  if (r == 0)
+    *state = reinterpret_cast<libmds_open_state*>(inode.get());
+  return r;
 }
 
 int LibMDS::close(libmds_open_state *state)
 {
-  return -ENOTSUP;
+  InodeRef inode(reinterpret_cast<Inode*>(state));
+  return mds->close(inode);
 }
 
 ssize_t LibMDS::read(libmds_open_state *state, size_t offset,
                      char *buf, size_t buf_len)
 {
-  return -ENOTSUP;
+  InodeRef inode(reinterpret_cast<Inode*>(state));
+  return mds->read(inode, offset, buf, buf_len);
 }
 
 ssize_t LibMDS::write(libmds_open_state *state, size_t offset,
                       const char *buf, size_t buf_len)
 {
-  return -ENOTSUP;
+  InodeRef inode(reinterpret_cast<Inode*>(state));
+  return mds->write(inode, offset, buf, buf_len);
 }
 
 int LibMDS::commit(libmds_open_state *state, uint64_t offset, size_t len)
 {
-  return -ENOTSUP;
+  InodeRef inode(reinterpret_cast<Inode*>(state));
+  return mds->commit(inode, offset, len);
 }
 
 } // namespace mds
