@@ -13,7 +13,7 @@
  */
 
 namespace rados {
-  namespace detail {
+  namespace rados_detail {
     class MessagingObjecter : public Dispatcher,
 			      public Objecter<MessagingObjecter> {
     public:
@@ -84,10 +84,6 @@ namespace rados {
 
       void _kick_requests(OSDSession& session);
       OSDSession* _get_session(int osd, const shunique_lock& shl);
-      void put_session(OSDSession& s);
-      void get_session(OSDSession& s);
-      void _reopen_session(OSDSession& session);
-      void close_session(OSDSession& session);
 
       void resend_mon_ops();
 
@@ -95,7 +91,7 @@ namespace rados {
       MessagingObjecter(CephContext *_cct, Messenger *m, MonClient *mc,
 			ceph::timespan mon_timeout = 0s,
 			ceph::timespan osd_timeout = 0s) :
-	Dispatcher(_cct), Objecter(mon_timeout, osd_timeout),
+	Dispatcher(_cct), Objecter(_cct, mon_timeout, osd_timeout),
 	messenger(m), monc(mc) { }
 
       ~MessagingObjecter() {
@@ -284,7 +280,7 @@ namespace rados {
 	}
       }
 
-      ceph_tid_t MessagingObjecter::_op_submit(Op& op, Op::unique_lock& ol,
+      ceph_tid_t op_submit(Op& op, Op::unique_lock& ol,
 					       shunique_lock& shl) {
 	op.trace.keyval("tid", op.tid);
 	op.trace.event("op_submit", &trace_endpoint);
@@ -586,14 +582,14 @@ namespace rados {
 	op.last_submit = ceph::mono_clock::now();
       }
 
-      void Messaging::ms_handle_connect(Connection *con) {
+      void ms_handle_connect(Connection *con) {
 	ldout(cct, 10) << "ms_handle_connect " << con << dendl;
 
 	if (con->get_peer_type() == CEPH_ENTITY_TYPE_MON)
 	  resend_mon_ops();
       }
 
-      bool MessagingObjecter::ms_handle_reset(Connection *con) {
+      bool ms_handle_reset(Connection *con) {
 	if (con->get_peer_type() == CEPH_ENTITY_TYPE_OSD) {
 	  int osd = osdmap->identify_osd(con->get_peer_addr());
 	  if (osd >= 0) {
@@ -621,23 +617,22 @@ namespace rados {
 	return false;
       }
 
-      void MessagingObjecter::ms_handle_remote_reset(Connection *con) {
+      void ms_handle_remote_reset(Connection *con) {
 	/*
 	 * treat these the same.
 	 */
 	ms_handle_reset(con);
       }
 
-      bool MessagingObjecter::ms_get_authorizer(
-	int dest_type, AuthAuthorizer **authorizer,
-	bool force_new) {
+      bool ms_get_authorizer(int dest_type, AuthAuthorizer **authorizer,
+			     bool force_new) {
 	if (dest_type == CEPH_ENTITY_TYPE_MON)
 	  return true;
 	*authorizer = monc->auth->build_authorizer(dest_type);
 	return *authorizer != NULL;
       }
 
-      void MessagingObjecter::blacklist_self(bool set) {
+      void blacklist_self(bool set) {
 	ldout(cct, 10) << "blacklist_self " << (set ? "add" : "rm") << dendl;
 
 	vector<string> cmd;
@@ -656,8 +651,8 @@ namespace rados {
 	monc->send_mon_message(m);
       }
 
-      void MessagingObjecter::create_volume(const string& name,
-					    op_callback&& onfinish) {
+      void create_volume(const string& name,
+			 op_callback&& onfinish) {
 	ldout(cct, 10) << "create_volume name=" << name << dendl;
 
 	if (osdmap->vol_exists(name) > 0)
@@ -676,8 +671,7 @@ namespace rados {
 	    onfinish(err); });
       }
 
-      void MessagingObjecter::delete_volume(const string& name,
-					    op_callback&& onfinish) {
+      void delete_volume(const string& name, op_callback&& onfinish) {
 	ldout(cct, 10) << "delete_volume name=" << name << dendl;
 
 	vector<string> cmd;
@@ -692,8 +686,6 @@ namespace rados {
 					   bufferlist& bl) mutable {
 	    onfinish(err); });
       }
-
-      
     };
   };
 };
