@@ -987,6 +987,12 @@ target_link_libraries(unittest_pageset common ${UNITTEST_LIBS})
 set_target_properties(unittest_pageset PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 
+# unittest_partitionedpageset
+add_executable(unittest_partitionedpageset test_partitionedpageset.cc)
+target_link_libraries(unittest_partitionedpageset common ${UNITTEST_LIBS})
+set_target_properties(unittest_partitionedpageset PROPERTIES COMPILE_FLAGS
+  ${UNITTEST_CXX_FLAGS})
+
 if(${WITH_RADOSGW})
   # test_cors
   set(test_cors_srcs test_cors.cc)
