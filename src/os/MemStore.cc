@@ -32,6 +32,10 @@
 #undef dout_prefix
 #define dout_prefix *_dout << "memstore(" << path << ") "
 
+// use a thread-local vector for the pages returned by PageSet, so we
+// can avoid allocations in _read/write_pages()
+thread_local typename MemStore::page_set::page_vector MemStore::tls_pages;
+
 // for comparing collections for lock ordering
 bool operator>(const MemStore::CollectionRef& l,
 	       const MemStore::CollectionRef& r)
@@ -336,13 +340,12 @@ int MemStore::_read_pages(page_set& data, unsigned offset, size_t len,
   const size_t end = offset + len;
   size_t remaining = len;
 
-  page_set::page_vector pages;
-  data.get_range(offset, len, pages);
+  data.get_range(offset, len, tls_pages);
 
-  auto p = pages.begin();
+  auto p = tls_pages.begin();
   while (remaining) {
     // no more pages in range
-    if (p == pages.end() || (*p)->offset >= end) {
+    if (p == tls_pages.end() || (*p)->offset >= end) {
       bl.append_zero(remaining);
       break;
     }
@@ -370,6 +373,7 @@ int MemStore::_read_pages(page_set& data, unsigned offset, size_t len,
     page->put();
     ++p;
   }
+  tls_pages.clear(); // drop page refs
   return len;
 }
 
@@ -1072,10 +1076,9 @@ void MemStore::_write_pages(const bufferlist& src, unsigned offset,
   unsigned len = src.length();
 
   // make sure the page range is allocated
-  page_set::page_vector pages;
-  o->data.alloc_range(offset, src.length(), pages);
+  o->data.alloc_range(offset, src.length(), tls_pages);
 
-  auto page = pages.begin();
+  auto page = tls_pages.begin();
 
   // XXX: cast away the const because bufferlist doesn't have a const_iterator
   auto p = const_cast<bufferlist&>(src).begin();
@@ -1089,6 +1092,8 @@ void MemStore::_write_pages(const bufferlist& src, unsigned offset,
     if (count == pageoff)
       ++page;
   }
+
+  tls_pages.clear(); // drop page refs
 }
 
 int MemStore::_zero(coll_t cid, const ghobject_t& oid,

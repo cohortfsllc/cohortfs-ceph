@@ -215,6 +215,10 @@ private:
 
   void _do_transaction(Transaction& t);
 
+  // use a thread-local vector for the pages returned by PageSet, so we
+  // can avoid allocations in _read/write_pages()
+  static thread_local typename page_set::page_vector tls_pages;
+
   int _read_pages(page_set& data, unsigned offset, size_t len,
                   bufferlist& bl);
   void _write_pages(const bufferlist& src, unsigned offset, Object *o);
