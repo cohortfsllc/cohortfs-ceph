@@ -778,6 +778,8 @@ OPTION(osd_bench_max_block_size, OPT_U64, 64 << 20) // cap the block size at 64M
 OPTION(osd_bench_duration, OPT_U32, 30) // duration of 'osd bench', capped at 30s to avoid triggering timeouts
 
 OPTION(memstore_device_bytes, OPT_U64, 1024*1024*1024)
+OPTION(memstore_page_partitions, OPT_INT, 4)
+OPTION(memstore_pages_per_stripe, OPT_INT, 16)
 
 OPTION(filestore_omap_backend, OPT_STR, "leveldb")
 

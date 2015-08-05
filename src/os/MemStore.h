@@ -16,24 +16,39 @@
 #ifndef CEPH_MEMSTORE_H
 #define CEPH_MEMSTORE_H
 
-#include "include/assert.h"
 #include "include/unordered_map.h"
 #include "include/memory.h"
 #include "common/Finisher.h"
 #include "common/RWLock.h"
 #include "ObjectStore.h"
+#include "PartitionedPageSet.h"
+#include "include/assert.h"
 
 class MemStore : public ObjectStore {
+private:
+  static const size_t PageSize = 64 << 10;
+  typedef PartitionedPageSet<PageSize> page_set;
+
+  CephContext *const cct;
+
 public:
   struct Object {
-    bufferlist data;
+    page_set data;
+    size_t data_len;
     map<string,bufferptr> xattr;
     bufferlist omap_header;
     map<string,bufferlist> omap;
 
+    Object(CephContext *cct)
+      : data(cct->_conf->memstore_page_partitions,
+             cct->_conf->memstore_pages_per_stripe),
+        data_len(0)
+    {}
+
     void encode(bufferlist& bl) const {
-      ENCODE_START(1, 1, bl);
-      ::encode(data, bl);
+      ENCODE_START(2, 2, bl);
+      ::encode(data_len, bl);
+      data.encode(bl);
       ::encode(xattr, bl);
       ::encode(omap_header, bl);
       ::encode(omap, bl);
@@ -41,14 +56,15 @@ public:
     }
     void decode(bufferlist::iterator& p) {
       DECODE_START(1, p);
-      ::decode(data, p);
+      ::decode(data_len, p);
+      data.decode(p);
       ::decode(xattr, p);
       ::decode(omap_header, p);
       ::decode(omap, p);
       DECODE_FINISH(p);
     }
     void dump(Formatter *f) const {
-      f->dump_int("data_len", data.length());
+      f->dump_int("data_len", data_len);
       f->dump_int("omap_header_len", omap_header.length());
 
       f->open_array_section("xattrs");
@@ -77,6 +93,7 @@ public:
   typedef ceph::shared_ptr<Object> ObjectRef;
 
   struct Collection {
+    CephContext *cct;
     ceph::unordered_map<ghobject_t, ObjectRef> object_hash;  ///< for lookup
     map<ghobject_t, ObjectRef> object_map;        ///< for iteration
     map<string,bufferptr> xattr;
@@ -115,7 +132,7 @@ public:
       while (s--) {
 	ghobject_t k;
 	::decode(k, p);
-	ObjectRef o(new Object);
+	ObjectRef o(new Object(cct));
 	o->decode(p);
 	object_map.insert(make_pair(k, o));
 	object_hash.insert(make_pair(k, o));
@@ -128,13 +145,14 @@ public:
       for (map<ghobject_t, ObjectRef>::const_iterator p = object_map.begin();
 	   p != object_map.end();
 	   ++p) {
-        result += p->second->data.length();
+        result += p->second->data_len;
       }
 
       return result;
     }
 
-    Collection() : lock("MemStore::Collection::lock") {}
+    Collection(CephContext *cct)
+      : cct(cct), lock("MemStore::Collection::lock") {}
   };
   typedef ceph::shared_ptr<Collection> CollectionRef;
 
@@ -197,7 +215,9 @@ private:
 
   void _do_transaction(Transaction& t);
 
-  void _write_into_bl(const bufferlist& src, unsigned offset, bufferlist *dst);
+  int _read_pages(page_set& data, unsigned offset, size_t len,
+                  bufferlist& bl);
+  void _write_pages(const bufferlist& src, unsigned offset, Object *o);
 
   int _touch(coll_t cid, const ghobject_t& oid);
   int _write(coll_t cid, const ghobject_t& oid, uint64_t offset, size_t len,
@@ -238,6 +258,7 @@ private:
 public:
   MemStore(CephContext *cct, const string& path)
     : ObjectStore(path),
+      cct(cct),
       coll_lock("MemStore::coll_lock"),
       apply_lock("MemStore::apply_lock"),
       finisher(cct),

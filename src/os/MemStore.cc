@@ -170,7 +170,7 @@ int MemStore::_load()
     int r = cbl.read_file(fn.c_str(), &err);
     if (r < 0)
       return r;
-    CollectionRef c(new Collection);
+    CollectionRef c(new Collection(cct));
     bufferlist::iterator p = cbl.begin();
     c->decode(p);
     coll_map[*q] = c;
@@ -293,7 +293,7 @@ int MemStore::stat(
   ObjectRef o = c->get_object(oid);
   if (!o)
     return -ENOENT;
-  st->st_size = o->data.length();
+  st->st_size = o->data_len;
   st->st_blksize = 4096;
   st->st_blocks = (st->st_size + st->st_blksize - 1) / st->st_blksize;
   st->st_nlink = 1;
@@ -319,16 +319,58 @@ int MemStore::read(
   ObjectRef o = c->get_object(oid);
   if (!o)
     return -ENOENT;
-  if (offset >= o->data.length())
+  if (offset >= o->data_len)
     return 0;
   size_t l = len;
   if (l == 0)  // note: len == 0 means read the entire object
-    l = o->data.length();
-  else if (offset + l > o->data.length())
-    l = o->data.length() - offset;
+    l = o->data_len;
+  else if (offset + l > o->data_len)
+    l = o->data_len - offset;
   bl.clear();
-  bl.substr_of(o->data, offset, l);
-  return bl.length();
+  return _read_pages(o->data, offset, l, bl);
+}
+
+int MemStore::_read_pages(page_set& data, unsigned offset, size_t len,
+                          bufferlist& bl)
+{
+  const size_t end = offset + len;
+  size_t remaining = len;
+
+  page_set::page_vector pages;
+  data.get_range(offset, len, pages);
+
+  auto p = pages.begin();
+  while (remaining) {
+    // no more pages in range
+    if (p == pages.end() || (*p)->offset >= end) {
+      bl.append_zero(remaining);
+      break;
+    }
+    auto page = *p;
+
+    // fill any holes between pages with zeroes
+    if (page->offset > offset) {
+      const size_t count = min(remaining, page->offset - offset);
+      bl.append_zero(count);
+      remaining -= count;
+      offset = page->offset;
+      if (!remaining)
+        break;
+    }
+
+    // read from page
+    const uint64_t page_offset = offset - page->offset;
+    const size_t count = min(remaining, PageSize - page_offset);
+
+    bl.append(page->data + page_offset, count);
+
+    remaining -= count;
+    offset += count;
+
+    page->put();
+    ++p;
+  }
+  return len;
 }
 
 int MemStore::fiemap(coll_t cid, const ghobject_t& oid,
@@ -344,11 +386,11 @@ int MemStore::fiemap(coll_t cid, const ghobject_t& oid,
   ObjectRef o = c->get_object(oid);
   if (!o)
     return -ENOENT;
-  if (offset >= o->data.length())
+  if (offset >= o->data_len)
     return 0;
   size_t l = len;
-  if (offset + l > o->data.length())
-    l = o->data.length() - offset;
+  if (offset + l > o->data_len)
+    l = o->data_len - offset;
   map<uint64_t, uint64_t> m;
   m[offset] = l;
   ::encode(m, bl);
@@ -989,7 +1031,7 @@ int MemStore::_touch(coll_t cid, const ghobject_t& oid)
 
   ObjectRef o = c->get_object(oid);
   if (!o) {
-    o.reset(new Object);
+    o.reset(new Object(cct));
     c->object_map[oid] = o;
     c->object_hash[oid] = o;
   }
@@ -1012,44 +1054,41 @@ int MemStore::_write(coll_t cid, const ghobject_t& oid,
   ObjectRef o = c->get_object(oid);
   if (!o) {
     // write implicitly creates a missing object
-    o.reset(new Object);
+    o.reset(new Object(cct));
     c->object_map[oid] = o;
     c->object_hash[oid] = o;
   }
 
-  int old_size = o->data.length();
-  _write_into_bl(bl, offset, &o->data);
-  used_bytes += (o->data.length() - old_size);
+  auto old_size = o->data_len;
+  _write_pages(bl, offset, o.get());
+  used_bytes += (o->data_len - old_size);
 
   return 0;
 }
 
-void MemStore::_write_into_bl(const bufferlist& src, unsigned offset,
-			      bufferlist *dst)
+void MemStore::_write_pages(const bufferlist& src, unsigned offset,
+                            Object *o)
 {
   unsigned len = src.length();
 
-  // before
-  bufferlist newdata;
-  if (dst->length() >= offset) {
-    newdata.substr_of(*dst, 0, offset);
-  } else {
-    newdata.substr_of(*dst, 0, dst->length());
-    bufferptr bp(offset - dst->length());
-    bp.zero();
-    newdata.append(bp);
+  // make sure the page range is allocated
+  page_set::page_vector pages;
+  o->data.alloc_range(offset, src.length(), pages);
+
+  auto page = pages.begin();
+
+  // XXX: cast away the const because bufferlist doesn't have a const_iterator
+  auto p = const_cast<bufferlist&>(src).begin();
+  while (len > 0) {
+    unsigned page_offset = offset - (*page)->offset;
+    unsigned pageoff = PageSize - page_offset;
+    unsigned count = min(len, pageoff);
+    p.copy(count, (*page)->data + page_offset);
+    offset += count;
+    len -= count;
+    if (count == pageoff)
+      ++page;
   }
-
-  newdata.append(src);
-
-  // after
-  if (dst->length() > offset + len) {
-    bufferlist tail;
-    tail.substr_of(*dst, offset + len, dst->length() - (offset + len));
-    newdata.append(tail);
-  }
-
-  dst->claim(newdata);
 }
 
 int MemStore::_zero(coll_t cid, const ghobject_t& oid,
@@ -1075,19 +1114,13 @@ int MemStore::_truncate(coll_t cid, const ghobject_t& oid, uint64_t size)
   ObjectRef o = c->get_object(oid);
   if (!o)
     return -ENOENT;
-  if (o->data.length() > size) {
-    bufferlist bl;
-    bl.substr_of(o->data, 0, size);
-    used_bytes -= o->data.length() - size;
-    o->data.claim(bl);
-  } else if (o->data.length() == size) {
-    // do nothing
-  } else {
-    bufferptr bp(size - o->data.length());
-    bp.zero();
-    used_bytes += bp.length();
-    o->data.append(bp);
+  if (o->data_len > size) {
+    o->data.free_pages_after(size);
+    used_bytes -= o->data_len - size;
+  } else if (o->data_len < size) {
+    used_bytes += size - o->data_len;
   }
+  o->data_len = size;
   return 0;
 }
 
@@ -1105,7 +1138,7 @@ int MemStore::_remove(coll_t cid, const ghobject_t& oid)
   c->object_map.erase(oid);
   c->object_hash.erase(oid);
 
-  used_bytes -= o->data.length();
+  used_bytes -= o->data_len;
 
   return 0;
 }
@@ -1174,16 +1207,12 @@ int MemStore::_clone(coll_t cid, const ghobject_t& oldoid,
     return -ENOENT;
   ObjectRef no = c->get_object(newoid);
   if (!no) {
-    no.reset(new Object);
+    no.reset(new Object(cct));
     c->object_map[newoid] = no;
     c->object_hash[newoid] = no;
   }
-  used_bytes += oo->data.length() - no->data.length();
-  no->data = oo->data;
-  no->omap_header = oo->omap_header;
-  no->omap = oo->omap;
-  no->xattr = oo->xattr;
-  return 0;
+  // TODO: implement clone in PageSet
+  return -ENOTSUP;
 }
 
 int MemStore::_clone_range(coll_t cid, const ghobject_t& oldoid,
@@ -1204,22 +1233,14 @@ int MemStore::_clone_range(coll_t cid, const ghobject_t& oldoid,
     return -ENOENT;
   ObjectRef no = c->get_object(newoid);
   if (!no) {
-    no.reset(new Object);
+    no.reset(new Object(cct));
     c->object_map[newoid] = no;
     c->object_hash[newoid] = no;
   }
-  if (srcoff >= oo->data.length())
+  if (srcoff >= oo->data_len)
     return 0;
-  if (srcoff + len >= oo->data.length())
-    len = oo->data.length() - srcoff;
-  bufferlist bl;
-  bl.substr_of(oo->data, srcoff, len);
-
-  int old_size = no->data.length();
-  _write_into_bl(bl, dstoff, &no->data);
-  used_bytes += (no->data.length() - old_size);
-
-  return len;
+  // TODO: implement clone in PageSet
+  return -ENOTSUP;
 }
 
 int MemStore::_omap_clear(coll_t cid, const ghobject_t &oid)
@@ -1315,7 +1336,7 @@ int MemStore::_create_collection(coll_t cid)
   ceph::unordered_map<coll_t,CollectionRef>::iterator cp = coll_map.find(cid);
   if (cp != coll_map.end())
     return -EEXIST;
-  coll_map[cid].reset(new Collection);
+  coll_map[cid].reset(new Collection(cct));
   return 0;
 }
 
