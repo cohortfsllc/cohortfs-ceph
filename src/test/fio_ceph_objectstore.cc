@@ -163,13 +163,11 @@ static int fio_ceph_os_getevents(struct thread_data *td, unsigned int min,
 static int fio_ceph_os_queue(struct thread_data *td, struct io_u *io_u)
 {
 	int r = -1;
-	char buf[32];
 	struct ceph_os_data *ceph_os_data = (struct ceph_os_data *) td->io_ops->data;
 	uint64_t len = io_u->xfer_buflen;
 	uint64_t off = io_u->offset;
 	ObjectStore *fs = ceph_os_data->fs;
-	snprintf(buf, sizeof(buf), "XXX_%lu_%lu", io_u->start_time.tv_usec, io_u->start_time.tv_sec);
-	ghobject_t oid(spg_t().make_temp_object(buf));
+	ghobject_t oid(spg_t().make_temp_object(io_u->file->file_name));
 
 	fio_ro_check(td, io_u);
 
