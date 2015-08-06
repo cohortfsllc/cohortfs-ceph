@@ -169,7 +169,7 @@ static int fio_ceph_os_queue(struct thread_data *td, struct io_u *io_u)
 	uint64_t off = io_u->offset;
 	ObjectStore *fs = ceph_os_data->fs;
 	snprintf(buf, sizeof(buf), "XXX_%lu_%lu", io_u->start_time.tv_usec, io_u->start_time.tv_sec);
-	hobject_t oid = hobject_t::make_temp(buf);
+	ghobject_t oid(spg_t().make_temp_object(buf));
 
 	fio_ro_check(td, io_u);
 
