@@ -68,15 +68,14 @@ void FakeWriteback::read(const object_t& oid, uint64_t object_no,
   m_finisher->queue(wrapper, len);
 }
 
-ceph_tid_t FakeWriteback::write(const object_t& oid,
-			   const object_locator_t& oloc,
-			   uint64_t off, uint64_t len,
-			   const SnapContext& snapc,
-			   const bufferlist &bl, utime_t mtime,
-			   uint64_t trunc_size, __u32 trunc_seq,
-			   Context *oncommit)
+ceph_tid_t FakeWriteback::write(
+  const object_t& oid, const object_locator_t& oloc,
+  uint64_t off, uint64_t len, const SnapContext& snapc,
+  const bufferlist &bl, ceph::real_time mtime,
+  uint64_t trunc_size, __u32 trunc_seq, Context *oncommit)
 {
-  C_Delay *wrapper = new C_Delay(m_cct, oncommit, m_lock, off, NULL, m_delay_ns);
+  C_Delay *wrapper = new C_Delay(m_cct, oncommit, m_lock, off, NULL,
+				 m_delay_ns);
   m_finisher->queue(wrapper, 0);
   return m_tid.inc();
 }

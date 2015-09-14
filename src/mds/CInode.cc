@@ -964,7 +964,7 @@ void CInode::store(MDSInternalContextBase *fin)
     new C_OnFinisher(new C_IO_Inode_Stored(this, get_version(), fin),
 		     mdcache->mds->finisher);
   mdcache->mds->objecter->mutate(oid, oloc, m, snapc,
-				 ceph_clock_now(g_ceph_context), 0,
+				 ceph::real_clock::now(g_ceph_context), 0,
 				 NULL, newfin);
 }
 
@@ -1153,13 +1153,15 @@ void CInode::store_backtrace(MDSInternalContextBase *fin, int op_prio)
 
   if (!state_test(STATE_DIRTYPOOL) || inode.old_pools.empty()) {
     dout(20) << __func__ << ": no dirtypool or no old pools" << dendl;
-    mdcache->mds->objecter->mutate(oid, oloc, op, snapc, ceph_clock_now(g_ceph_context),
+    mdcache->mds->objecter->mutate(oid, oloc, op, snapc,
+				   ceph::real_clock::now(g_ceph_context),
 				   0, NULL, fin2);
     return;
   }
 
   C_GatherBuilder gather(g_ceph_context, fin2);
-  mdcache->mds->objecter->mutate(oid, oloc, op, snapc, ceph_clock_now(g_ceph_context),
+  mdcache->mds->objecter->mutate(oid, oloc, op, snapc,
+				 ceph::real_clock::now(g_ceph_context),
 				 0, NULL, gather.new_sub());
 
   // In the case where DIRTYPOOL is set, we update all old pools backtraces
@@ -1179,7 +1181,8 @@ void CInode::store_backtrace(MDSInternalContextBase *fin, int op_prio)
     op.setxattr("parent", parent_bl);
 
     object_locator_t oloc(*p);
-    mdcache->mds->objecter->mutate(oid, oloc, op, snapc, ceph_clock_now(g_ceph_context),
+    mdcache->mds->objecter->mutate(oid, oloc, op, snapc,
+				   ceph::real_clock::now(g_ceph_context),
 				   0, NULL, gather.new_sub());
   }
   gather.activate();

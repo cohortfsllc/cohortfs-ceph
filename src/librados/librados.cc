@@ -157,7 +157,7 @@ void librados::ObjectOperation::assert_version(uint64_t ver)
 void librados::ObjectOperation::assert_exists()
 {
   ::ObjectOperation *o = (::ObjectOperation *)impl;
-  o->stat(NULL, (utime_t*)NULL, NULL);
+  o->stat(NULL, (ceph::real_time*) NULL, NULL);
 }
 
 void librados::ObjectOperation::exec(const char *cls, const char *method, bufferlist& inbl)
@@ -4199,7 +4199,7 @@ extern "C" void rados_write_op_assert_version(rados_write_op_t write_op, uint64_
 extern "C" void rados_write_op_assert_exists(rados_write_op_t write_op)
 {
   tracepoint(librados, rados_write_op_assert_exists_enter, write_op);
-  ((::ObjectOperation *)write_op)->stat(NULL, (utime_t *)NULL, NULL);
+  ((::ObjectOperation *)write_op)->stat(NULL, (ceph::real_time *)NULL, NULL);
   tracepoint(librados, rados_write_op_assert_exists_exit);
 }
 
@@ -4461,7 +4461,7 @@ extern "C" void rados_read_op_assert_version(rados_read_op_t read_op, uint64_t v
 extern "C" void rados_read_op_assert_exists(rados_read_op_t read_op)
 {
   tracepoint(librados, rados_read_op_assert_exists_enter, read_op);
-  ((::ObjectOperation *)read_op)->stat(NULL, (utime_t *)NULL, NULL);
+  ((::ObjectOperation *)read_op)->stat(NULL, (ceph::real_time *)NULL, NULL);
   tracepoint(librados, rados_read_op_assert_exists_exit);
 }
 

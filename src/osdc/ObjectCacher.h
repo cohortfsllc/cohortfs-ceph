@@ -79,14 +79,15 @@ class ObjectCacher {
     vector<ObjectExtent> extents;
     SnapContext snapc;
     bufferlist bl;
-    utime_t mtime;
+    ceph::real_time mtime;
     int fadvise_flags;
-    OSDWrite(const SnapContext& sc, const bufferlist& b, utime_t mt, int f)
+    OSDWrite(const SnapContext& sc, const bufferlist& b, ceph::real_time mt,
+	     int f)
       : snapc(sc), bl(b), mtime(mt), fadvise_flags(f) {}
   };
 
   OSDWrite *prepare_write(const SnapContext& sc, const bufferlist &b,
-			  utime_t mt, int f) {
+			  ceph::real_time mt, int f) {
     return new OSDWrite(sc, b, mt, f);
   }
 
@@ -119,7 +120,7 @@ class ObjectCacher {
     bufferlist  bl;
     ceph_tid_t last_write_tid;  // version of bh (if non-zero)
     ceph_tid_t last_read_tid;   // tid of last read op (if any)
-    utime_t last_write;
+    ceph::real_time last_write;
     SnapContext snapc;
     int error; // holds return value for failed reads
 
@@ -366,7 +367,7 @@ class ObjectCacher {
   Mutex& lock;
 
   uint64_t max_dirty, target_dirty, max_size, max_objects;
-  utime_t max_dirty_age;
+  ceph::timespan max_dirty_age;
   bool block_writes_upfront;
 
   flush_set_callback_t flush_set_callback;
@@ -686,7 +687,7 @@ public:
     max_size = v;
   }
   void set_max_dirty_age(double a) {
-    max_dirty_age.set_from_double(a);
+    max_dirty_age = make_timespan(a);
   }
   void set_max_objects(int64_t v) {
     max_objects = v;
@@ -715,7 +716,7 @@ public:
 
   int file_write(ObjectSet *oset, ceph_file_layout *layout,
 		 const SnapContext& snapc, loff_t offset, uint64_t len,
-		 bufferlist& bl, utime_t mtime, int flags) {
+		 bufferlist& bl, ceph::real_time mtime, int flags) {
     OSDWrite *wr = prepare_write(snapc, bl, mtime, flags);
     Striper::file_to_extents(cct, oset->ino, layout, offset, len,
 			     oset->truncate_size, wr->extents);

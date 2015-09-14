@@ -150,22 +150,23 @@ namespace librbd {
   }
 
   ceph_tid_t LibrbdWriteback::write(const object_t& oid,
-			       const object_locator_t& oloc,
-			       uint64_t off, uint64_t len,
-			       const SnapContext& snapc,
-			       const bufferlist &bl, utime_t mtime,
-			       uint64_t trunc_size, __u32 trunc_seq,
-			       Context *oncommit)
+				    const object_locator_t& oloc,
+				    uint64_t off, uint64_t len,
+				    const SnapContext& snapc,
+				    const bufferlist &bl,
+				    ceph::real_time mtime,
+				    uint64_t trunc_size, __u32 trunc_seq,
+				    Context *oncommit)
   {
     assert(m_ictx->owner_lock.is_locked());
     uint64_t object_no = oid_to_object_no(oid.name, m_ictx->object_prefix);
-    
+
     write_result_d *result = new write_result_d(oid.name, oncommit);
     m_writes[oid.name].push(result);
     ldout(m_ictx->cct, 20) << "write will wait for result " << result << dendl;
     C_OrderedWrite *req_comp = new C_OrderedWrite(m_ictx->cct, result, this);
     AioWrite *req = new AioWrite(m_ictx, oid.name, object_no, off, bl, snapc,
-                                 req_comp);
+				 req_comp);
     req->send();
     return ++m_tid;
   }
