@@ -16,10 +16,12 @@
 #ifndef CEPH_COMMON_PERF_COUNTERS_H
 #define CEPH_COMMON_PERF_COUNTERS_H
 
-#include "common/config_obs.h"
-#include "common/Mutex.h"
 #include "include/buffer.h"
 #include "include/utime.h"
+
+#include "common/config_obs.h"
+#include "common/Mutex.h"
+#include "common/ceph_time.h"
 
 #include <stdint.h>
 #include <string>
@@ -92,6 +94,7 @@ public:
 
   void tset(int idx, utime_t v);
   void tinc(int idx, utime_t v);
+  void tinc(int idx, ceph::timespan v);
   utime_t tget(int idx) const;
 
   void reset();
