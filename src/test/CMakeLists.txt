@@ -1823,6 +1823,10 @@ target_link_libraries(test_cls_lock
   radostest
   )
 
+add_executable(test_time test_time.cc)
+set_target_properties(test_time PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
+target_link_libraries(test_time common ${UNITTEST_LIBS})
+
 add_executable(test_cls_hello
   cls_hello/test_cls_hello.cc
   $<TARGET_OBJECTS:heap_profiler_objs>
