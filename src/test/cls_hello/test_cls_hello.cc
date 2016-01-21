@@ -183,3 +183,32 @@ TEST(ClsHello, Filter) {
   ASSERT_EQ(0, destroy_one_pool_pp(pool_name, cluster));
 }
 
+TEST(ClsHello, ReturnMtime) {
+  Rados cluster;
+  std::string pool_name = get_temp_pool_name();
+  ASSERT_EQ("", create_one_pool_pp(pool_name, cluster));
+  IoCtx ioctx;
+  cluster.ioctx_create(pool_name.c_str(), ioctx);
+
+  char buf[128];
+  memset(buf, 0xcc, sizeof(buf));
+  bufferlist obj_content;
+  obj_content.append(buf, sizeof(buf));
+
+  ASSERT_EQ(0, ioctx.write_full("oid", obj_content));
+
+  uint64_t size;
+  time_t mtime;
+
+  ASSERT_EQ(0, ioctx.stat("oid", &size, &mtime));
+  std::cout << "from client: " << mtime << std::endl;
+
+  bufferlist in, out;
+  ASSERT_EQ(0, ioctx.exec("oid", "hello", "return_mtime", in, out));
+
+  bufferlist::iterator it = out.begin();
+  ::decode(mtime, it);
+  std::cout << "   from osd: " << mtime << std::endl;
+
+  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, cluster));
+}

@@ -47,6 +47,7 @@ cls_method_handle_t h_writes_dont_return_data;
 cls_method_handle_t h_turn_it_to_11;
 cls_method_handle_t h_bad_reader;
 cls_method_handle_t h_bad_writer;
+cls_method_handle_t h_return_mtime;
 
 /**
  * say hello - a "read" method that does not depend on the object
@@ -291,6 +292,22 @@ PGLSFilter *hello_filter()
   return new PGLSHelloFilter();
 }
 
+static int return_mtime(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
+{
+  uint64_t size;
+  time_t mtime;
+
+  int ret = cls_cxx_stat(hctx, &size, &mtime);
+  if (ret) {
+    CLS_ERR("ERROR: return_mtime %d", ret);
+    return ret;
+  }
+
+  ::encode(mtime, *out);
+
+  return 0;
+}
+
 
 /**
  * initialize class
@@ -338,6 +355,11 @@ void __cls_init()
 			  bad_reader, &h_bad_reader);
   cls_register_cxx_method(h_class, "bad_writer", CLS_METHOD_RD,
 			  bad_writer, &h_bad_writer);
+
+  // mtime test
+  cls_register_cxx_method(h_class, "return_mtime",
+      CLS_METHOD_RD | CLS_METHOD_WR, return_mtime,
+      &h_return_mtime);
 
   // A PGLS filter
   cls_register_cxx_filter(h_class, "hello", hello_filter);
